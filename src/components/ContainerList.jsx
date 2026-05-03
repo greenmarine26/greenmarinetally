@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Check, RotateCcw, Edit3, Search, Snowflake, Box, Truck, AlertTriangle } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
 import { isoToLabel, formatWt, fmtPos } from '../utils.js';
+import { speakDone } from '../voice.js';
 
-export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector }) {
+export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer }) {
   if (!list || list.length === 0) {
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
@@ -24,13 +25,14 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
           mode={mode}
           voyageKey={voyageKey}
           inspector={inspector}
+          onOpenContainer={onOpenContainer}
         />
       ))}
     </div>
   );
 }
 
-function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector }) {
+function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
 
@@ -49,17 +51,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector }
       await fbCancelComplete(voyageKey, mode, c.cn);
     } else {
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
-      // 음성 출력
-      try {
-        const last4 = c.cn.slice(-4).split('').join(' ');
-        const u = new SpeechSynthesisUtterance(`${last4} 완료`);
-        u.lang = 'ko-KR'; u.rate = 1.4;
-        window.speechSynthesis.speak(u);
-      } catch {}
+      speakDone(c);
     }
   };
 
-  const handleSaveSeal = async () => {
+  const handleSaveSeal = async (e) => {
+    e?.stopPropagation();
     await fbUpdateRecordSeal(voyageKey, mode, c.cn, sealVal.trim());
     setEditingSeal(false);
   };
@@ -70,8 +67,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector }
     await fbToggleXray(voyageKey, c.cn);
   };
 
+  const handleCardClick = () => {
+    if (editingSeal) return;
+    onOpenContainer?.(c);
+  };
+
   return (
-    <div className={`bg-slate-900 border rounded-lg p-2.5 transition ${
+    <div onClick={handleCardClick}
+      className={`bg-slate-900 border rounded-lg p-2.5 transition cursor-pointer hover:bg-slate-800/50 ${
       isDone ? 'border-emerald-700/40 bg-emerald-950/20' :
       isXray ? 'border-purple-700/40 bg-purple-950/20' :
       'border-slate-700'
@@ -107,24 +110,23 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector }
             {comp?.by && <span className="text-emerald-400">[{comp.by}]</span>}
           </div>
 
-          {/* 실번호 */}
           <div className="flex items-center gap-1 mt-1">
             <span className="text-[10px] text-slate-500">실:</span>
             {editingSeal ? (
-              <>
+              <div onClick={e => e.stopPropagation()} className="flex items-center gap-1">
                 <input
                   type="text"
                   value={sealVal}
                   onChange={e => setSealVal(e.target.value.toUpperCase())}
                   className="bg-slate-800 border border-amber-600 rounded px-1.5 py-0.5 text-[11px] mono text-amber-200 w-32 focus:outline-none"
                   autoFocus
-                  onKeyDown={e => e.key === 'Enter' && handleSaveSeal()}
+                  onKeyDown={e => e.key === 'Enter' && handleSaveSeal(e)}
                 />
                 <button onClick={handleSaveSeal} className="text-emerald-400 text-xs">✓</button>
-                <button onClick={() => { setEditingSeal(false); setSealVal(c.sl || ''); }} className="text-slate-500 text-xs">×</button>
-              </>
+                <button onClick={(e) => { e.stopPropagation(); setEditingSeal(false); setSealVal(c.sl || ''); }} className="text-slate-500 text-xs">×</button>
+              </div>
             ) : (
-              <button onClick={() => setEditingSeal(true)} className="flex items-center gap-1 text-[11px] mono">
+              <button onClick={(e) => { e.stopPropagation(); setEditingSeal(true); }} className="flex items-center gap-1 text-[11px] mono">
                 <span className={c.sl ? 'text-amber-200 font-bold' : 'text-slate-600 italic'}>{c.sl || '미입력'}</span>
                 <Edit3 className="w-3 h-3 text-slate-600"/>
               </button>

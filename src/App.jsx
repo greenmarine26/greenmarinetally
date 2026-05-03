@@ -1,5 +1,4 @@
-// 그린마린 평택항 검수 — Master V1
-// 양하 + 선적 통합, 다크 테마, Firebase 실시간 동기화
+// 그린마린 평택항 검수 — Master V1.1
 import React, { useState, useEffect, useCallback } from 'react';
 import { APP_VERSION, _storage, SK } from './utils.js';
 import {
@@ -8,32 +7,35 @@ import {
 } from './firebase.js';
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
+import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
+import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import Header from './components/Header.jsx';
 import InspectorModal from './components/InspectorModal.jsx';
+import ContainerDetailModal from './components/ContainerDetailModal.jsx';
 
 export default function App() {
-  // 라우팅: 'home' | 'voyage'
   const [route, setRoute] = useState({ name: 'home' });
-  const [voyages, setVoyages] = useState({});       // 전체 항차 데이터
-  const [inspectors, setInspectors] = useState({}); // 등록된 검수원
+  const [voyages, setVoyages] = useState({});
+  const [inspectors, setInspectors] = useState({});
   const [inspector, setInspector] = useState(_storage.get(SK.activeInspector) || '');
   const [showInspectorModal, setShowInspectorModal] = useState(!_storage.get(SK.activeInspector));
   const [online, setOnline] = useState(true);
+  const [globalDetail, setGlobalDetail] = useState(null);
 
-  // Firebase 구독
   useEffect(() => {
-    const unsub1 = fbSubscribeVoyages(setVoyages);
-    const unsub2 = fbSubscribeInspectors(setInspectors);
-    const unsub3 = fbSubscribeConnection(setOnline);
-    return () => { unsub1(); unsub2(); unsub3(); };
+    const u1 = fbSubscribeVoyages(setVoyages);
+    const u2 = fbSubscribeInspectors(setInspectors);
+    const u3 = fbSubscribeConnection(setOnline);
+    return () => { u1(); u2(); u3(); };
   }, []);
 
-  // URL hash 라우팅 (#/voyage/XINTAIPING_0521W → 항차 페이지)
   useEffect(() => {
     const sync = () => {
       const h = window.location.hash;
-      const m = h.match(/^#\/voyage\/([^/]+)/);
-      if (m) setRoute({ name: 'voyage', voyageKey: decodeURIComponent(m[1]) });
+      const v = h.match(/^#\/voyage\/([^/]+)/);
+      if (v) setRoute({ name: 'voyage', voyageKey: decodeURIComponent(v[1]) });
+      else if (h === '#/search') setRoute({ name: 'search' });
+      else if (h === '#/chief') setRoute({ name: 'chief' });
       else setRoute({ name: 'home' });
     };
     sync();
@@ -41,7 +43,6 @@ export default function App() {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
-  // 검수원 활동 갱신 (5초마다)
   useEffect(() => {
     if (!inspector) return;
     const tick = () => {
@@ -62,11 +63,10 @@ export default function App() {
   }, []);
 
   const navigate = useCallback((target) => {
-    if (target === 'home') {
-      window.location.hash = '';
-    } else if (target.voyageKey) {
-      window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}`;
-    }
+    if (target === 'home') window.location.hash = '';
+    else if (target === 'search') window.location.hash = '#/search';
+    else if (target === 'chief') window.location.hash = '#/chief';
+    else if (target.voyageKey) window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}`;
   }, []);
 
   return (
@@ -84,13 +84,26 @@ export default function App() {
       <main className="pb-20">
         {route.name === 'home' && (
           <HomePage
-            voyages={voyages}
-            inspectors={inspectors}
-            inspector={inspector}
+            voyages={voyages} inspectors={inspectors} inspector={inspector}
             onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
+            onOpenGlobalSearch={() => navigate('search')}
+            onOpenChiefDashboard={() => navigate('chief')}
           />
         )}
-
+        {route.name === 'search' && (
+          <GlobalSearchPage
+            voyages={voyages}
+            onOpenContainer={(c) => setGlobalDetail(c)}
+            onGoHome={() => navigate('home')}
+          />
+        )}
+        {route.name === 'chief' && (
+          <ChiefDashboard
+            voyages={voyages} inspectors={inspectors}
+            onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
+            onGoHome={() => navigate('home')}
+          />
+        )}
         {route.name === 'voyage' && (
           <VoyagePage
             voyageKey={route.voyageKey}
@@ -111,6 +124,28 @@ export default function App() {
           onClose={() => inspector && setShowInspectorModal(false)}
         />
       )}
+
+      {globalDetail && (() => {
+        const v = voyages[globalDetail.voyageKey];
+        if (!v) return null;
+        const sec = v[globalDetail.mode];
+        const xrayMap = sec?.xrayList || {};
+        const compMap = sec?.completed || {};
+        const xraySeals = sec?.xraySeals || {};
+        return (
+          <ContainerDetailModal
+            c={globalDetail}
+            comp={compMap[globalDetail.cn]}
+            isXray={globalDetail.mode === 'discharge' && !!xrayMap[globalDetail.cn]}
+            xraySeal={xraySeals[globalDetail.cn] || ''}
+            mode={globalDetail.mode}
+            voyageKey={globalDetail.voyageKey}
+            voyageInfo={v.info}
+            inspector={inspector}
+            onClose={() => setGlobalDetail(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

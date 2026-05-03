@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
-  AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download
+  AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download,
+  BarChart3, FileCheck
 } from 'lucide-react';
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
@@ -14,8 +15,11 @@ import {
 } from '../firebase.js';
 import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
-import StatsPanel from '../components/StatsPanel.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
+import BayPlan from '../components/BayPlan.jsx';
+import StatsTab from '../components/StatsTab.jsx';
+import ReportTab from '../components/ReportTab.jsx';
+import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, onGoHome, onModeChange }) {
@@ -24,7 +28,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   const hasLoa = !!voyage?.loading;
   const initMode = voyage?.info?.mode || (hasDis ? 'discharge' : 'loading');
   const [mode, setMode] = useState(initMode);
-  const [tab, setTab] = useState('list'); // 'list' | 'search' | 'bay' | 'data'
+  const [tab, setTab] = useState('list');
+  const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
 
   useEffect(() => { onModeChange?.(mode); }, [mode]);
 
@@ -110,16 +115,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       {/* 탭 네비게이션 */}
       <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
         {[
-          { k: 'list', t: mode === 'discharge' ? '양하리스트' : '선적리스트', i: ListChecks },
+          { k: 'list', t: mode === 'discharge' ? '양하' : '선적', i: ListChecks },
           { k: 'search', t: '검색', i: SearchIcon },
-          { k: 'bay', t: '베이플랜', i: MapPin },
+          { k: 'bay', t: '베이', i: MapPin },
+          { k: 'stats', t: '통계', i: BarChart3 },
+          { k: 'report', t: '보고서', i: FileCheck },
           { k: 'data', t: '자료', i: Upload },
         ].map(({ k, t, i: Icon }) => (
           <button key={k} onClick={() => setTab(k)}
-            className={`flex-1 px-3 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 whitespace-nowrap ${
+            className={`flex-1 px-2 py-2.5 text-[11px] font-bold flex items-center justify-center gap-1 border-b-2 whitespace-nowrap ${
               tab === k ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-400'
             }`}>
-            <Icon className="w-4 h-4"/>{t}
+            <Icon className="w-3.5 h-3.5"/>{t}
           </button>
         ))}
       </nav>
@@ -131,26 +138,55 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           containers={containers} ediMap={ediMap} recMap={recMap}
           xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
           inspector={inspector}
+          onOpenContainer={(c) => setDetailC(c)}
         />
       )}
       {tab === 'search' && (
         <SearchPanel
           containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
           mode={mode} voyageKey={voyageKey} inspector={inspector}
+          onOpenContainer={(c) => setDetailC(c)}
         />
       )}
       {tab === 'bay' && (
-        <BayTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode} />
+        <BayPlan
+          containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}
+          onOpenContainer={(c) => setDetailC(c)}
+        />
+      )}
+      {tab === 'stats' && (
+        <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
+      )}
+      {tab === 'report' && (
+        <ReportTab
+          voyageKey={voyageKey} mode={mode} voyageInfo={voyage.info}
+          containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
+        />
       )}
       {tab === 'data' && (
         <DataTab voyageKey={voyageKey} mode={mode} voyage={voyage} setMode={setMode} />
+      )}
+
+      {/* 컨테이너 상세 모달 */}
+      {detailC && (
+        <ContainerDetailModal
+          c={detailC}
+          comp={compMap[detailC.cn]}
+          isXray={mode === 'discharge' && !!xrayMap[detailC.cn]}
+          xraySeal={xraySeals[detailC.cn] || ''}
+          mode={mode}
+          voyageKey={voyageKey}
+          voyageInfo={voyage.info}
+          inspector={inspector}
+          onClose={() => setDetailC(null)}
+        />
       )}
     </div>
   );
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer }) {
   const [filter, setFilter] = useState('all'); // all | done | undone | xray
   const [search, setSearch] = useState('');
 
@@ -227,62 +263,13 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         mode={mode}
         voyageKey={voyageKey}
         inspector={inspector}
+        onOpenContainer={onOpenContainer}
       />
     </div>
   );
 }
 
-// === 베이 탭 ===
-function BayTab({ containers, compMap, xrayMap, mode }) {
-  const bayGroups = useMemo(() => {
-    const g = {};
-    containers.forEach(c => {
-      const bay = c.bay || '???';
-      if (!g[bay]) g[bay] = [];
-      g[bay].push(c);
-    });
-    return Object.entries(g).sort(([a], [b]) => a.localeCompare(b));
-  }, [containers]);
-
-  return (
-    <div className="space-y-3">
-      {bayGroups.length === 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
-          베이 데이터 없음 — 자료 탭에서 EDI/ASC 업로드
-        </div>
-      )}
-      {bayGroups.map(([bay, list]) => {
-        const done = list.filter(c => compMap[c.cn]).length;
-        return (
-          <div key={bay} className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-bold text-sm text-slate-100">베이 {bay}</div>
-              <div className="text-[11px] text-slate-400">
-                <span className="text-emerald-400 font-bold">{done}</span> / {list.length}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              {list.map(c => {
-                const isDone = !!compMap[c.cn];
-                const isXray = mode === 'discharge' && !!xrayMap[c.cn];
-                return (
-                  <div key={c.cn} className={`px-2 py-1 rounded text-[10px] mono border ${
-                    isDone ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-300' :
-                    isXray ? 'bg-purple-900/30 border-purple-700/40 text-purple-200' :
-                    'bg-slate-800 border-slate-700 text-slate-300'
-                  }`}>
-                    <div className="font-bold truncate">{c.cn}</div>
-                    <div className="text-[9px] text-slate-500">{c.row}-{c.tier}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// 옛 BayTab 제거 (BayPlan 컴포넌트로 대체됨)
 
 // === 자료 탭 ===
 function DataTab({ voyageKey, mode, voyage, setMode }) {

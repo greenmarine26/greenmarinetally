@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight } from 'lucide-react';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3 } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage } from '../firebase.js';
 
-export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage }) {
+export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
@@ -46,6 +46,22 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage 
 
   return (
     <div className="max-w-6xl mx-auto px-3 py-3">
+      {/* 빠른 진입 - 통합검색 + 수석대시보드 */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <button onClick={onOpenGlobalSearch}
+          className="bg-gradient-to-br from-amber-900/40 to-amber-950/40 border border-amber-700/40 rounded-xl p-3 text-left hover:from-amber-900/60 active:scale-95 transition">
+          <Search className="w-5 h-5 text-amber-300 mb-1"/>
+          <div className="font-bold text-sm text-amber-100">통합 검색</div>
+          <div className="text-[10px] text-amber-300/70">모든 항차·양/선적</div>
+        </button>
+        <button onClick={onOpenChiefDashboard}
+          className="bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-xl p-3 text-left hover:from-purple-900/60 active:scale-95 transition">
+          <BarChart3 className="w-5 h-5 text-purple-300 mb-1"/>
+          <div className="font-bold text-sm text-purple-100">수석 대시보드</div>
+          <div className="text-[10px] text-purple-300/70">5명 진행률·통계</div>
+        </button>
+      </div>
+
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
