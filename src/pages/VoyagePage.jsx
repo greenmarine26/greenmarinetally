@@ -1,0 +1,466 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
+  AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download
+} from 'lucide-react';
+import {
+  parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
+  isoToLabel, isoCategory, formatWt, fmtPos
+} from '../utils.js';
+import {
+  fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
+  fbCompleteContainer, fbCancelComplete, fbToggleXray,
+  fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData
+} from '../firebase.js';
+import ContainerList from '../components/ContainerList.jsx';
+import ValidationBox from '../components/ValidationBox.jsx';
+import StatsPanel from '../components/StatsPanel.jsx';
+import SearchPanel from '../components/SearchPanel.jsx';
+import { exportSectionToCSV } from '../components/CSVExport.jsx';
+
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, onGoHome, onModeChange }) {
+  // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
+  const hasDis = !!voyage?.discharge;
+  const hasLoa = !!voyage?.loading;
+  const initMode = voyage?.info?.mode || (hasDis ? 'discharge' : 'loading');
+  const [mode, setMode] = useState(initMode);
+  const [tab, setTab] = useState('list'); // 'list' | 'search' | 'bay' | 'data'
+
+  useEffect(() => { onModeChange?.(mode); }, [mode]);
+
+  if (!voyage) {
+    return (
+      <div className="max-w-3xl mx-auto px-3 py-10 text-center">
+        <div className="text-slate-400">항차를 찾을 수 없습니다</div>
+        <button onClick={onGoHome} className="mt-4 px-4 py-2 bg-slate-800 rounded text-sm">홈으로</button>
+      </div>
+    );
+  }
+
+  const sec = voyage[mode] || {};
+  const ediMap = sec.ediContainers || {};
+  const recMap = sec.records || {};
+  const xrayMap = sec.xrayList || {};
+  const xraySeals = sec.xraySeals || {};
+  const compMap = sec.completed || {};
+
+  // 평택 대상 (양하=POD, 선적=POL)
+  const isPtk = (c) => {
+    if (!c) return false;
+    if (mode === 'discharge') {
+      const pod = (c.pod || '').toUpperCase();
+      return pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
+    } else {
+      const pol = (c.pol || '').toUpperCase();
+      return pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
+    }
+  };
+
+  // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
+  const containers = useMemo(() => {
+    const merged = {};
+    Object.values(ediMap).forEach(c => { if (isPtk(c)) merged[c.cn] = { ...c, _src: 'edi' }; });
+    Object.values(recMap).forEach(r => {
+      merged[r.cn] = { ...(merged[r.cn] || {}), ...r, _src: merged[r.cn] ? 'both' : 'list' };
+    });
+    return Object.values(merged).sort((a, b) => {
+      // 베이/위치 순 정렬
+      const ka = `${a.bay || 'zz'}-${a.row || 'zz'}-${a.tier || 'zz'}`;
+      const kb = `${b.bay || 'zz'}-${b.row || 'zz'}-${b.tier || 'zz'}`;
+      return ka.localeCompare(kb);
+    });
+  }, [ediMap, recMap, mode]);
+
+  return (
+    <div className="max-w-6xl mx-auto px-3 py-2">
+      {/* 모드 탭 (둘 다 있을 때만) */}
+      {hasDis && hasLoa && (
+        <div className="flex gap-1 mb-3 bg-slate-900 border border-slate-800 rounded-lg p-1">
+          <button
+            onClick={() => setMode('discharge')}
+            className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 transition ${
+              mode === 'discharge' ? 'bg-blue-700 text-blue-100' : 'text-slate-400 hover:bg-slate-800'
+            }`}
+          >
+            <ArrowDown className="w-4 h-4"/>양하
+          </button>
+          <button
+            onClick={() => setMode('loading')}
+            className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 transition ${
+              mode === 'loading' ? 'bg-amber-700 text-amber-100' : 'text-slate-400 hover:bg-slate-800'
+            }`}
+          >
+            <ArrowUp className="w-4 h-4"/>선적
+          </button>
+        </div>
+      )}
+      {!hasDis && !hasLoa && <ModeSetup voyageKey={voyageKey} />}
+
+      {/* 모드 라벨 (한 모드만 있을 때) */}
+      {(hasDis !== hasLoa) && (
+        <div className="mb-2">
+          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-black ${
+            mode === 'discharge' ? 'bg-blue-900/50 text-blue-200' : 'bg-amber-900/50 text-amber-200'
+          }`}>
+            {mode === 'discharge' ? <><ArrowDown className="w-3 h-3"/>양하</> : <><ArrowUp className="w-3 h-3"/>선적</>}
+          </span>
+        </div>
+      )}
+
+      {/* 탭 네비게이션 */}
+      <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
+        {[
+          { k: 'list', t: mode === 'discharge' ? '양하리스트' : '선적리스트', i: ListChecks },
+          { k: 'search', t: '검색', i: SearchIcon },
+          { k: 'bay', t: '베이플랜', i: MapPin },
+          { k: 'data', t: '자료', i: Upload },
+        ].map(({ k, t, i: Icon }) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={`flex-1 px-3 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 whitespace-nowrap ${
+              tab === k ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-400'
+            }`}>
+            <Icon className="w-4 h-4"/>{t}
+          </button>
+        ))}
+      </nav>
+
+      {/* 탭 본문 */}
+      {tab === 'list' && (
+        <ListTab
+          voyageKey={voyageKey} mode={mode}
+          containers={containers} ediMap={ediMap} recMap={recMap}
+          xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
+          inspector={inspector}
+        />
+      )}
+      {tab === 'search' && (
+        <SearchPanel
+          containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
+          mode={mode} voyageKey={voyageKey} inspector={inspector}
+        />
+      )}
+      {tab === 'bay' && (
+        <BayTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode} />
+      )}
+      {tab === 'data' && (
+        <DataTab voyageKey={voyageKey} mode={mode} voyage={voyage} setMode={setMode} />
+      )}
+    </div>
+  );
+}
+
+// === 리스트 탭 ===
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector }) {
+  const [filter, setFilter] = useState('all'); // all | done | undone | xray
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    let arr = containers;
+    if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
+    else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
+    else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
+    if (search) {
+      const q = search.toUpperCase();
+      arr = arr.filter(c => c.cn?.includes(q) || c.l4?.includes(q) || c.bay?.includes(q));
+    }
+    return arr;
+  }, [containers, filter, search, compMap, xrayMap]);
+
+  const stats = useMemo(() => ({
+    total: containers.length,
+    done: containers.filter(c => compMap[c.cn]).length,
+    xray: mode === 'discharge' ? containers.filter(c => xrayMap[c.cn]).length : 0,
+  }), [containers, compMap, xrayMap, mode]);
+
+  const handleExport = () => {
+    exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals);
+  };
+
+  return (
+    <div className="space-y-3">
+      <ValidationBox
+        ediContainers={Object.values(ediMap)}
+        records={Object.values(recMap)}
+        mode={mode}
+      />
+
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2">
+        <div className="relative flex-1">
+          <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"/>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value.toUpperCase())}
+            placeholder="끝4자리 / 컨번호 / 베이"
+            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-1.5 text-sm mono focus:outline-none focus:border-amber-500"
+          />
+          {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
+        </div>
+        <button
+          onClick={handleExport}
+          className="bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700/40 text-emerald-200 px-2 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+          title="CSV 내보내기"
+        >
+          <Download className="w-3.5 h-3.5"/>CSV
+        </button>
+      </div>
+
+      <div className="flex gap-1 flex-wrap text-[11px]">
+        {[
+          { k: 'all', t: `전체 ${stats.total}` },
+          { k: 'undone', t: `미완 ${stats.total - stats.done}` },
+          { k: 'done', t: `완료 ${stats.done}` },
+          ...(mode === 'discharge' ? [{ k: 'xray', t: `🔍 X-RAY ${stats.xray}` }] : []),
+        ].map(({ k, t }) => (
+          <button key={k} onClick={() => setFilter(k)}
+            className={`px-2.5 py-1 rounded font-bold ${
+              filter === k ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            }`}>{t}</button>
+        ))}
+      </div>
+
+      <ContainerList
+        list={filtered}
+        compMap={compMap}
+        xrayMap={xrayMap}
+        xraySeals={xraySeals}
+        mode={mode}
+        voyageKey={voyageKey}
+        inspector={inspector}
+      />
+    </div>
+  );
+}
+
+// === 베이 탭 ===
+function BayTab({ containers, compMap, xrayMap, mode }) {
+  const bayGroups = useMemo(() => {
+    const g = {};
+    containers.forEach(c => {
+      const bay = c.bay || '???';
+      if (!g[bay]) g[bay] = [];
+      g[bay].push(c);
+    });
+    return Object.entries(g).sort(([a], [b]) => a.localeCompare(b));
+  }, [containers]);
+
+  return (
+    <div className="space-y-3">
+      {bayGroups.length === 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
+          베이 데이터 없음 — 자료 탭에서 EDI/ASC 업로드
+        </div>
+      )}
+      {bayGroups.map(([bay, list]) => {
+        const done = list.filter(c => compMap[c.cn]).length;
+        return (
+          <div key={bay} className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-bold text-sm text-slate-100">베이 {bay}</div>
+              <div className="text-[11px] text-slate-400">
+                <span className="text-emerald-400 font-bold">{done}</span> / {list.length}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {list.map(c => {
+                const isDone = !!compMap[c.cn];
+                const isXray = mode === 'discharge' && !!xrayMap[c.cn];
+                return (
+                  <div key={c.cn} className={`px-2 py-1 rounded text-[10px] mono border ${
+                    isDone ? 'bg-emerald-900/30 border-emerald-700/40 text-emerald-300' :
+                    isXray ? 'bg-purple-900/30 border-purple-700/40 text-purple-200' :
+                    'bg-slate-800 border-slate-700 text-slate-300'
+                  }`}>
+                    <div className="font-bold truncate">{c.cn}</div>
+                    <div className="text-[9px] text-slate-500">{c.row}-{c.tier}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// === 자료 탭 ===
+function DataTab({ voyageKey, mode, voyage, setMode }) {
+  const [status, setStatus] = useState('');
+  const ediRef = useRef(null);
+  const listRef = useRef(null);
+  const xrayRef = useRef(null);
+  const sec = voyage[mode] || {};
+
+  const handleEdiUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setStatus(`${files.length}개 파일 처리 중...`);
+    const results = [];
+    let allCns = {};
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text();
+        const isAsc = /\.asc$/i.test(file.name) || /^\$604/.test(text.slice(0, 10));
+        const r = isAsc ? parseAscFile(text) : parseBAPLIE(text);
+        const total = r.containers.length;
+        // 평택 필터
+        const ptk = r.containers.filter(c => {
+          if (mode === 'discharge') return (c.pod || '').toUpperCase().endsWith('PTK');
+          return (c.pol || '').toUpperCase().endsWith('PTK');
+        });
+        ptk.forEach(c => { allCns[c.cn] = c; });
+        results.push(`✅ ${file.name}: 평택 ${ptk.length}대 (전체 ${total})`);
+        // 항차 정보 자동 보완
+        if (r.vsl && r.voy) {
+          await fbUpdateVoyageInfo(voyageKey, {
+            etd: r.etd || voyage.info.etd || '',
+            carrier: r.carrier || voyage.info.carrier || '',
+          });
+        }
+      } catch (e) {
+        results.push(`❌ ${file.name}: ${e.message}`);
+      }
+    }
+    if (Object.keys(allCns).length > 0) {
+      // 기존 + 신규 병합
+      const existing = sec.ediContainers || {};
+      await fbSaveEdiContainers(voyageKey, mode, { ...existing, ...allCns });
+    }
+    setStatus(results.join('\n') + `\n\n총 평택 대상: ${Object.keys(allCns).length}대`);
+    if (ediRef.current) ediRef.current.value = '';
+  };
+
+  const handleListUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setStatus(`${files.length}개 파일 처리 중...`);
+    const results = [];
+    let cnMap = { ...(sec.records || {}) };
+    let added = 0;
+    for (const file of Array.from(files)) {
+      try {
+        const buf = await file.arrayBuffer();
+        const { records } = await parseListExcel(buf);
+        if (records.length === 0) {
+          if (/cbf|booking|bkg|confirm/i.test(file.name)) {
+            results.push(`ℹ️ ${file.name}: 예약 양식 (Booking) — 컨번호 없음, 정상`);
+          } else {
+            results.push(`❌ ${file.name}: 컨번호 인식 실패 (양식 확인 필요)`);
+          }
+          continue;
+        }
+        for (const r of records) {
+          if (!cnMap[r.cn]) added++;
+          cnMap[r.cn] = { ...cnMap[r.cn], ...r };
+        }
+        results.push(`✅ ${file.name}: +${records.length}대`);
+      } catch (e) {
+        results.push(`❌ ${file.name}: ${e.message}`);
+      }
+    }
+    await fbSaveListRecords(voyageKey, mode, cnMap);
+    setStatus(results.join('\n') + `\n\n전체 ${Object.keys(cnMap).length}대 (신규 ${added})`);
+    if (listRef.current) listRef.current.value = '';
+  };
+
+  const handleXrayUpload = async (files) => {
+    if (!files || files.length === 0 || mode !== 'discharge') return;
+    setStatus(`${files.length}개 파일 처리 중...`);
+    let cnObj = { ...(sec.xrayList || {}) };
+    let added = 0;
+    for (const file of Array.from(files)) {
+      try {
+        const buf = await file.arrayBuffer();
+        const { containers } = await parseXrayList(buf);
+        containers.forEach(cn => {
+          if (!cnObj[cn]) { cnObj[cn] = { at: Date.now() }; added++; }
+        });
+      } catch (e) {}
+    }
+    await fbSaveXrayList(voyageKey, cnObj);
+    setStatus(`✅ X-RAY: +${added}대 (전체 ${Object.keys(cnObj).length}대)`);
+    if (xrayRef.current) xrayRef.current.value = '';
+  };
+
+  // 양하/선적 섹션 추가 (다른 모드)
+  const otherMode = mode === 'discharge' ? 'loading' : 'discharge';
+  const hasOther = !!voyage[otherMode];
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+        <div className="text-sm font-bold mb-2 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-blue-400"/>
+          1. EDI / ASC (필수)
+        </div>
+        <input ref={ediRef} type="file" multiple accept=".edi,.EDI,.asc,.ASC,.txt"
+          onChange={e => handleEdiUpload(e.target.files)}
+          className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-700 file:text-blue-100 file:font-bold file:cursor-pointer"/>
+        <div className="text-[10px] text-slate-500 mt-1">
+          현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+        <div className="text-sm font-bold mb-2 flex items-center gap-2">
+          <FileSpreadsheet className="w-4 h-4 text-emerald-400"/>
+          2. {mode === 'discharge' ? '양하' : '선적'} 리스트 (Excel)
+        </div>
+        <input ref={listRef} type="file" multiple accept=".xls,.xlsx,.csv"
+          onChange={e => handleListUpload(e.target.files)}
+          className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-700 file:text-emerald-100 file:font-bold file:cursor-pointer"/>
+        <div className="text-[10px] text-slate-500 mt-1">
+          현재 리스트: {Object.keys(sec.records || {}).length}대
+        </div>
+      </div>
+
+      {mode === 'discharge' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="text-sm font-bold mb-2 flex items-center gap-2">
+            🔍 3. X-RAY 리스트 (양하만)
+          </div>
+          <input ref={xrayRef} type="file" multiple accept=".xls,.xlsx"
+            onChange={e => handleXrayUpload(e.target.files)}
+            className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-purple-700 file:text-purple-100 file:font-bold file:cursor-pointer"/>
+          <div className="text-[10px] text-slate-500 mt-1">
+            현재 X-RAY: {Object.keys(sec.xrayList || {}).length}대
+          </div>
+        </div>
+      )}
+
+      {!hasOther && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="text-xs text-slate-400 mb-2">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
+          <button
+            onClick={async () => {
+              await fbUpdateVoyageInfo(voyageKey, {});
+              await fbSaveSectionData(voyageKey, otherMode, { _created: Date.now() });
+              setMode(otherMode);
+            }}
+            className={`w-full py-2 rounded text-sm font-bold ${
+              otherMode === 'discharge'
+                ? 'bg-blue-900/50 hover:bg-blue-800 text-blue-100 border border-blue-700/40'
+                : 'bg-amber-900/50 hover:bg-amber-800 text-amber-100 border border-amber-700/40'
+            }`}
+          >
+            + {otherMode === 'discharge' ? '양하' : '선적'} 섹션 추가
+          </button>
+        </div>
+      )}
+
+      {status && (
+        <pre className="bg-slate-950 border border-slate-800 rounded p-2 text-[11px] text-slate-300 whitespace-pre-wrap mono">
+{status}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function ModeSetup({ voyageKey }) {
+  return (
+    <div className="bg-amber-900/30 border border-amber-800 rounded-lg p-4 text-center mb-3">
+      <div className="text-amber-200 text-sm mb-2">자료를 업로드해주세요</div>
+      <div className="text-[11px] text-amber-300/70">자료 탭에서 EDI/ASC 파일부터 시작하세요</div>
+    </div>
+  );
+}
