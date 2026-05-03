@@ -61,7 +61,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (c.dg) k.dg++;
       if (xrayMap[c.cn]) k.xray++;
       const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
-      if (c.rf && hasTmp && c.fe === 'F') k.rf++;
+      if (c.rf && hasTmp) k.rf++;
       if (c.tk) k.tk++;
       if (c.oog || c.fr) k.oog++;
       if (c.fe === 'F') k.full++;
@@ -138,7 +138,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'tk40' && lbl !== '40TK') return false;
       if (f === 'rf') {
         const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
-        if (!(c.rf && hasTmp && c.fe === 'F')) return false;
+        if (!(c.rf && hasTmp)) return false;
       }
       if (f === 'dg' && !c.dg) return false;
       if (f === 'tk' && !c.tk) return false;
@@ -269,7 +269,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const isDone = !!comp;
   const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
   const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
-  const isReeferF = c.rf && hasTmp && c.fe === 'F';
+  const isReeferF = c.rf && hasTmp;
   const isDG = c.dg;
 
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;

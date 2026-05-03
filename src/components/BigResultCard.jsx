@@ -11,8 +11,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   const sealError = c.sl && slOrig && c.sl !== slOrig;
   const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
   const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
-  // 핵심: Empty는 온도 표시 X — 빈 컨은 냉장/냉동 안 함
-  const showTmp = isReefer && hasTmp && c.fe === 'F';
+  // 리퍼 + 온도 있으면 무조건 표시 (Empty + 온도는 현장에 없음)
+  // 온도 자체가 Full의 증거 - F/E 데이터가 잘못되어 있어도 온도 표시
+  const showTmp = isReefer && hasTmp;
 
   const labelMap = {
     amber: 'bg-amber-700 text-amber-50',
@@ -104,7 +105,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         {(isReefer || c.dg || c.fr || c.ot || c.tk) && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {showTmp && <span className="bg-cyan-600 text-cyan-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><Snowflake className="w-3.5 h-3.5"/>RF {c.tmp}°C</span>}
-            {!showTmp && isReefer && <span className="bg-cyan-700/60 text-cyan-100 px-2 py-1 rounded font-black text-xs flex items-center gap-1"><Snowflake className="w-3 h-3"/>리퍼{c.fe === 'E' ? ' (Empty)' : ''}</span>}
+            {!showTmp && isReefer && <span className="bg-cyan-700/60 text-cyan-100 px-2 py-1 rounded font-black text-xs flex items-center gap-1"><Snowflake className="w-3 h-3"/>리퍼 (온도 미입력)</span>}
             {c.dg && <span className="bg-red-600 text-red-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
             {c.fr && <span className="bg-orange-600 text-orange-50 px-2 py-1 rounded font-black text-sm">FR (Flat Rack)</span>}
             {c.ot && <span className="bg-yellow-600 text-yellow-50 px-2 py-1 rounded font-black text-sm">OT (Open Top)</span>}

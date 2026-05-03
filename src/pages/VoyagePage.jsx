@@ -62,11 +62,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   };
 
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
+  // 핵심 원칙: records가 EDI를 덮어쓰지만, records의 빈 값(0, '', null, undefined)은 EDI 보존
   const containers = useMemo(() => {
     const merged = {};
     Object.values(ediMap).forEach(c => { if (isPtk(c)) merged[c.cn] = { ...c, _src: 'edi' }; });
     Object.values(recMap).forEach(r => {
-      merged[r.cn] = { ...(merged[r.cn] || {}), ...r, _src: merged[r.cn] ? 'both' : 'list' };
+      const ediBase = merged[r.cn] || {};
+      const safeR = {};
+      // records의 값이 비어있지 않을 때만 사용 (EDI 데이터 보존)
+      Object.keys(r).forEach(k => {
+        const v = r[k];
+        // 의미있는 값만 채택 (빈 값/0/null이면 EDI 값 유지)
+        if (v !== '' && v !== 0 && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
+          safeR[k] = v;
+        }
+      });
+      merged[r.cn] = { ...ediBase, ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
     });
     return Object.values(merged).sort((a, b) => {
       // 베이/위치 순 정렬

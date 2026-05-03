@@ -28,7 +28,14 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       const compMap = sec.completed || {};
       const merged = {};
       Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c }; });
-      Object.values(recMap).forEach(r => { merged[r.cn] = { ...(merged[r.cn] || {}), ...r }; });
+      Object.values(recMap).forEach(r => {
+        const safeR = {};
+        Object.keys(r).forEach(k => {
+          const v = r[k];
+          if (v !== '' && v !== 0 && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) safeR[k] = v;
+        });
+        merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR };
+      });
       Object.values(merged).forEach(c => {
         if (!c.cn) return;
         arr.push({
