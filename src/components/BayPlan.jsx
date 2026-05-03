@@ -1,24 +1,242 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, MapPin, Snowflake, AlertTriangle } from 'lucide-react';
-import { isoToLabel } from '../utils.js';
+// V37 BaySection 100% 이식 (다크 테마 매핑)
+// 핵심 디테일 모두 보존:
+//  - 짝수/홀수 베이 페어링 (40ft 짝수 + 20ft 홀수)
+//  - 40ft 컨이 점유한 자리에 X 표시 (단, 컨테이너 있는 자리엔 X 안 그림)
+//  - DECK (TIER ≥ 80) / HOLD 분리 + 해치커버
+//  - ROW 정렬: 좌현 짝수 ↓, 00 가운데, 우현 홀수 ↑
+//  - 좌우 5:5 균형 (globalRowRange)
+//  - 상하 5:5 균형 (TIER padding)
+//  - PDF 5줄 셀 (POL/POD, 컨번호, 선사 F/E 무게 타입, 특수정보, 위치)
+//  - 셀 색상: 평택=노랑, X-RAY=보라, 시프팅=주황, 완료=흰색, 통과=회색
+//  - 시프팅 계산 (양하 위에 있는 컨 = needsShift)
+//  - 줌 + 핀치 줌 + Ctrl+휠 + 마우스/터치 드래그
+//  - 모바일/데스크톱 자동 셀 크기
 
-// 입체적 베이플랜 — V37 알고리즘 + 다크 + 색상 코드 + 깊이감
-// 색상 의미:
-//   회색 = 통과/타지역 (완료된 것 X)
-//   파랑 = 미완 (양하)
-//   주황 = 미완 (선적)
-//   초록 = 완료
-//   보라 = X-RAY 대상
-//   노랑테 = 평택 (POD/POL)
-//   빨강 = DG (위험물)
-//   하늘 = RF (리퍼)
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { isoToLabel, isoToPdfLabel, fmtPos } from '../utils.js';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
-  const [zoom, setZoom] = useState(1);
-  const [activeBay, setActiveBay] = useState(null);
+  const [pageIdx, setPageIdx] = useState(0);
+  const [zoom, setZoom] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.6;
+    return 1.0;
+  });
+  const scrollRef = useRef(null);
 
-  // 베이별 컨테이너 그룹
-  const bayPages = useMemo(() => buildBayPages(containers), [containers]);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // 평택 대상 (모드별)
+  const isPtk = (c) => {
+    if (mode === 'discharge') {
+      const pod = (c.pod || '').toUpperCase();
+      return pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
+    } else {
+      const pol = (c.pol || '').toUpperCase();
+      return pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
+    }
+  };
+
+  // 평택 컨번호 set
+  const dischargeCns = useMemo(() => {
+    const s = new Set();
+    containers.forEach(c => { if (isPtk(c)) s.add(c.cn); });
+    return s;
+  }, [containers, mode]);
+
+  // 베이별 그룹화 (전체 EDI 컨테이너로)
+  const bayGroups = useMemo(() => {
+    const g = {};
+    containers.forEach(c => {
+      if (!c.bay) return;
+      if (!g[c.bay]) g[c.bay] = [];
+      g[c.bay].push(c);
+    });
+    return g;
+  }, [containers]);
+
+  // 베이별 구조 (행/단 모두)
+  const bayStructureMap = useMemo(() => {
+    const map = {};
+    Object.entries(bayGroups).forEach(([bay, list]) => {
+      const rows = new Set();
+      const tiers = new Set();
+      list.forEach(c => {
+        if (c.row) rows.add(c.row);
+        if (c.tier) tiers.add(c.tier);
+      });
+      map[bay] = { rows: Array.from(rows), tiers: Array.from(tiers) };
+    });
+    return map;
+  }, [bayGroups]);
+
+  // 시프팅 분석 (양하 모드일 때만 의미있음)
+  const shiftingMap = useMemo(() => {
+    const result = { needsShift: {}, shiftCns: {} };
+    if (!dischargeCns || dischargeCns.size === 0) return result;
+    const tierZone = (t) => parseInt(t) >= 80 ? 'deck' : 'hold';
+    for (const c of containers) {
+      if (!dischargeCns.has(c.cn)) continue;
+      if (!c.bay || !c.tier) continue;
+      const zone = tierZone(c.tier);
+      const tier = parseInt(c.tier);
+      const above = containers.filter(o =>
+        o.cn !== c.cn && !dischargeCns.has(o.cn) &&
+        o.bay === c.bay && o.row === c.row && tierZone(o.tier) === zone &&
+        parseInt(o.tier) > tier
+      );
+      if (above.length > 0) {
+        result.needsShift[c.cn] = above.length;
+        above.forEach(s => { result.shiftCns[s.cn] = true; });
+      }
+    }
+    return result;
+  }, [containers, dischargeCns]);
+
+  // 좌우 균형 (전 베이 통일)
+  const globalRowRange = useMemo(() => {
+    let maxLeft = 0, maxRight = 0;
+    for (const c of containers) {
+      if (!c.row) continue;
+      const n = parseInt(c.row);
+      if (n === 0) continue;
+      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+      else maxRight = Math.max(maxRight, n);
+    }
+    return { maxLeft, maxRight };
+  }, [containers]);
+
+  // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
+  const pages = useMemo(() => {
+    const bays = Object.keys(bayGroups).sort();
+    if (bays.length === 0) return [];
+    const bayLen = bays[0].length;
+    const maxBay = Math.max(...bays.map(b => parseInt(b)));
+    const out = [];
+    const usedOddBays = new Set();
+    for (let n = 2; n <= maxBay; n++) {
+      if (n % 2 === 0) {
+        const evenStr = String(n).padStart(bayLen, '0');
+        const oddAfter = String(n + 1).padStart(bayLen, '0');
+        const hasEven = bays.includes(evenStr);
+        const hasOdd = bays.includes(oddAfter);
+        if (hasEven || hasOdd) {
+          out.push({
+            title: hasEven && hasOdd ? `BAY ${evenStr} (40ft) / BAY ${oddAfter} (20ft)` :
+                   hasEven ? `BAY ${evenStr} (40ft)` :
+                   `BAY ${oddAfter} (20ft)`,
+            evenBay: hasEven ? evenStr : null,
+            oddBay: hasOdd ? oddAfter : null,
+          });
+          if (hasOdd) usedOddBays.add(oddAfter);
+        }
+      } else {
+        const oddStr = String(n).padStart(bayLen, '0');
+        if (bays.includes(oddStr) && !usedOddBays.has(oddStr)) {
+          out.push({
+            title: `BAY ${oddStr} (20ft)`,
+            evenBay: null,
+            oddBay: oddStr,
+          });
+        }
+      }
+    }
+    return out;
+  }, [bayGroups]);
+
+  // 셀 색상 — V37 cellColor 다크 매핑
+  const cellColor = (c) => {
+    if (compMap[c.cn]) {
+      // 완료 = 어두운 흰색 (다크 배경 위 잘 보이게)
+      return 'bg-slate-300 text-slate-900 border-slate-500';
+    }
+    if (xrayMap[c.cn]) {
+      // X-RAY = 보라 (강조)
+      return 'bg-purple-700 text-purple-50 border-purple-400 ring-1 ring-purple-300';
+    }
+    if (shiftingMap.shiftCns[c.cn]) {
+      // 시프팅 대상 = 주황
+      return 'bg-orange-600 text-orange-50 border-orange-400';
+    }
+    if (isPtk(c) || dischargeCns.has(c.cn)) {
+      // 평택 양하/선적 = 노랑 (형광펜)
+      return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
+    }
+    // 통과 화물 = 옅은 회색
+    return 'bg-slate-700 text-slate-300 border-slate-600';
+  };
+
+  // 셀 크기 (zoom 적용) - PDF 5줄 다 보이게
+  const baseW = isMobile ? 110 : 140;
+  const baseH = isMobile ? 88 : 108;
+  const cellW = Math.round(baseW * zoom);
+  const cellH = Math.round(baseH * zoom);
+  const fontSize = Math.max(8, Math.round(10 * zoom));
+
+  // 마우스/터치 드래그 + 휠 + 핀치 줌
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let isDown = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
+    let pinchStartDist = 0, pinchStartZoom = 1;
+
+    const onMouseDown = (e) => {
+      if (e.target.closest('button')) return;
+      isDown = true;
+      startX = e.pageX - el.offsetLeft;
+      startY = e.pageY - el.offsetTop;
+      scrollLeft = el.scrollLeft;
+      scrollTop = el.scrollTop;
+      el.style.cursor = 'grabbing';
+    };
+    const onMouseUp = () => { isDown = false; el.style.cursor = 'grab'; };
+    const onMouseMove = (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      el.scrollLeft = scrollLeft - ((e.pageX - el.offsetLeft) - startX);
+      el.scrollTop = scrollTop - ((e.pageY - el.offsetTop) - startY);
+    };
+    const onWheel = (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        setZoom(z => Math.max(0.3, Math.min(3, z - e.deltaY * 0.001)));
+      } else if (e.shiftKey) {
+        el.scrollLeft += e.deltaY;
+        e.preventDefault();
+      }
+    };
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        pinchStartDist = dist(e.touches);
+        pinchStartZoom = zoom;
+      }
+    };
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const newDist = dist(e.touches);
+        const ratio = newDist / pinchStartDist;
+        setZoom(Math.max(0.3, Math.min(3, pinchStartZoom * ratio)));
+      }
+    };
+    el.style.cursor = 'grab';
+    el.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('mousemove', onMouseMove);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+
+    return () => {
+      el.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [zoom]);
 
   if (containers.length === 0) {
     return (
@@ -28,69 +246,82 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     );
   }
 
+  if (pages.length === 0) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
+        베이 정보 없음
+      </div>
+    );
+  }
+
+  const curPage = pages[pageIdx] || pages[0];
+
   return (
     <div className="space-y-2">
-      {/* 줌 컨트롤 + 베이 점프 */}
+      {/* 컨트롤 바 */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2 flex-wrap sticky top-0 z-10">
         <div className="flex items-center gap-1">
-          <button onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}
+          <button onClick={() => setZoom(z => Math.max(0.3, z - 0.2))}
             className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
             <ZoomOut className="w-4 h-4"/>
           </button>
           <span className="text-xs mono text-slate-400 w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(2, z + 0.2))}
+          <button onClick={() => setZoom(z => Math.min(3, z + 0.2))}
             className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
             <ZoomIn className="w-4 h-4"/>
           </button>
-          <button onClick={() => setZoom(1)}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
+          <button onClick={() => setZoom(1)} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
             <Maximize2 className="w-4 h-4"/>
           </button>
         </div>
 
-        <div className="flex items-center gap-1 overflow-x-auto flex-1 max-w-full">
-          <span className="text-[10px] text-slate-500 font-bold uppercase flex-shrink-0">베이</span>
-          {bayPages.map((p, i) => (
-            <button key={i}
-              onClick={() => {
-                const el = document.getElementById(`bay-page-${i}`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                setActiveBay(i);
-              }}
-              className={`px-1.5 py-0.5 rounded text-[10px] mono font-black flex-shrink-0 ${
-                activeBay === i
-                  ? 'bg-amber-600 text-amber-100'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-              }`}>
-              {p.label}
-            </button>
+        {/* 페이지 네비 */}
+        <button onClick={() => setPageIdx(i => Math.max(0, i - 1))}
+          disabled={pageIdx === 0}
+          className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">◀</button>
+        <span className="text-xs mono text-slate-300 font-bold">{pageIdx + 1} / {pages.length}</span>
+        <button onClick={() => setPageIdx(i => Math.min(pages.length - 1, i + 1))}
+          disabled={pageIdx === pages.length - 1}
+          className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">▶</button>
+
+        {/* 베이 점프 (선택) */}
+        <select value={pageIdx} onChange={e => setPageIdx(parseInt(e.target.value))}
+          className="bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 mono px-1 py-1">
+          {pages.map((p, i) => (
+            <option key={i} value={i}>{p.title}</option>
           ))}
-        </div>
+        </select>
       </div>
 
       {/* 범례 */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2 flex-wrap text-[10px]">
         <span className="text-slate-500 font-bold uppercase">범례:</span>
-        <Legend color={mode === 'discharge' ? 'bg-blue-600' : 'bg-amber-600'} label="평택 미완"/>
-        <Legend color="bg-emerald-600" label="완료"/>
-        <Legend color="bg-purple-600" label="X-RAY"/>
-        <Legend color="bg-cyan-600" label="RF"/>
-        <Legend color="bg-red-600" label="DG"/>
+        <Legend color="bg-amber-500" label="평택 미완"/>
+        <Legend color="bg-purple-700" label="X-RAY"/>
+        <Legend color="bg-orange-600" label="시프팅 대상"/>
+        <Legend color="bg-slate-300" label="완료"/>
         <Legend color="bg-slate-700" label="통과"/>
       </div>
 
-      {/* 베이 페이지들 */}
-      <div className="space-y-3" style={{ fontSize: `${zoom}rem` }}>
-        {bayPages.map((page, i) => (
-          <BayPage key={i} id={`bay-page-${i}`}
-            page={page}
-            compMap={compMap}
-            xrayMap={xrayMap}
-            mode={mode}
-            zoom={zoom}
-            onOpenContainer={onOpenContainer}
-          />
-        ))}
+      {/* 베이 그리드 본체 */}
+      <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto" style={{ maxHeight: '70vh' }}>
+        <BayPage
+          page={curPage}
+          bayGroups={bayGroups}
+          completedMap={compMap}
+          xrayList={xrayMap}
+          dischargeCns={dischargeCns}
+          shiftingMap={shiftingMap}
+          isPtk={isPtk}
+          onCellClick={onOpenContainer}
+          cellW={cellW}
+          cellH={cellH}
+          fontSize={fontSize}
+          isMobile={isMobile}
+          cellColor={cellColor}
+          globalRowRange={globalRowRange}
+          bayStructureMap={bayStructureMap}
+        />
       </div>
     </div>
   );
@@ -99,282 +330,217 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 function Legend({ color, label }) {
   return (
     <span className="flex items-center gap-1">
-      <span className={`${color} w-2.5 h-2.5 rounded-sm`}/>
+      <span className={`${color} w-3 h-3 rounded-sm border border-slate-600`}/>
       <span className="text-slate-400">{label}</span>
     </span>
   );
 }
 
-function BayPage({ id, page, compMap, xrayMap, mode, zoom, onOpenContainer }) {
-  const evenContainers = page.evenBay ? page.bayGroups[page.evenBay] || [] : [];
-  const oddContainers = page.oddBay ? page.bayGroups[page.oddBay] || [] : [];
+// V37 BaySection 100% 이식
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap }) {
+  const evenContainers = page.evenBay ? (bayGroups[page.evenBay] || []) : [];
+  const oddContainers = page.oddBay ? (bayGroups[page.oddBay] || []) : [];
   const allContainers = [...evenContainers, ...oddContainers];
 
   // 40피트 X 마크
   const xMarks = useMemo(() => {
     const marks = new Set();
     const occupied = new Set();
-    allContainers.forEach(c => {
+    for (const c of allContainers) {
       if (c.row && c.tier) occupied.add(`${c.row}-${c.tier}`);
-    });
-    evenContainers.forEach(c => {
-      if (!c.row || !c.tier) return;
+    }
+    for (const c of evenContainers) {
+      if (!c.row || !c.tier) continue;
       const evenN = parseInt(c.row);
-      if (evenN === 0 || evenN % 2 !== 0) return;
-      const oddRow = String(evenN - 1).padStart(2, '0');
-      const k = `${oddRow}-${c.tier}`;
-      if (occupied.has(k)) return;
-      marks.add(k);
-    });
+      if (evenN === 0 || evenN % 2 !== 0) continue;
+      const oddN = evenN - 1;
+      if (oddN < 0) continue;
+      const oddRow = String(oddN).padStart(2, '0');
+      const xKey = `${oddRow}-${c.tier}`;
+      if (occupied.has(xKey)) continue;
+      marks.add(xKey);
+    }
     return marks;
   }, [evenContainers, allContainers]);
 
-  // ROW 정렬 (좌현 짝수 ↓, 00, 우현 홀수 ↑)
-  const allRows = useMemo(() => {
-    const rowSet = new Set();
-    allContainers.forEach(c => c.row && rowSet.add(c.row));
-    Array.from(xMarks).forEach(k => rowSet.add(k.split('-')[0]));
-    const arr = Array.from(rowSet);
-    const left = arr.filter(r => parseInt(r) > 0 && parseInt(r) % 2 === 0).sort((a,b) => parseInt(b) - parseInt(a));
-    const right = arr.filter(r => parseInt(r) > 0 && parseInt(r) % 2 === 1).sort((a,b) => parseInt(a) - parseInt(b));
-    const center = arr.includes('00') ? ['00'] : [];
-    return [...left, ...center, ...right];
-  }, [allContainers, xMarks]);
+  // 좌우 균형 (전 베이 통일 폭)
+  const maxLeft = globalRowRange?.maxLeft || 0;
+  const maxRight = globalRowRange?.maxRight || 0;
 
-  // TIER (DECK / HOLD)
-  const allTiers = useMemo(() => {
-    const tierSet = new Set();
-    allContainers.forEach(c => c.tier && tierSet.add(c.tier));
-    Array.from(xMarks).forEach(k => tierSet.add(k.split('-')[1]));
-    return Array.from(tierSet);
-  }, [allContainers, xMarks]);
-
-  const deckTiers = allTiers.filter(t => parseInt(t) >= 80).sort((a,b) => parseInt(b) - parseInt(a));
-  const holdTiers = allTiers.filter(t => parseInt(t) < 80).sort((a,b) => parseInt(b) - parseInt(a));
-
-  const cellW = Math.round(56 * zoom);
-  const cellH = Math.round(56 * zoom);
-
-  const getCell = (row, tier) => allContainers.find(c => c.row === row && c.tier === tier);
-  const isXmark = (row, tier) => xMarks.has(`${row}-${tier}`);
-
-  const totalCells = allContainers.length;
-  const doneCells = allContainers.filter(c => compMap[c.cn]).length;
-  const xrayCount = allContainers.filter(c => xrayMap[c.cn]).length;
-  const pct = totalCells > 0 ? Math.round((doneCells / totalCells) * 100) : 0;
-
-  return (
-    <div id={id} className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-700 rounded-xl shadow-lg overflow-hidden">
-      {/* 베이 헤더 */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-3 py-2 border-b border-slate-700 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-amber-400"/>
-          <div>
-            <div className="font-black text-base text-amber-300 mono">베이 {page.label}</div>
-            <div className="text-[10px] text-slate-500">{page.evenBay && `40ft: ${page.evenBay}`}{page.evenBay && page.oddBay && ' · '}{page.oddBay && `20ft: ${page.oddBay}`}</div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] text-slate-500">진행</div>
-          <div className="text-sm font-black mono">
-            <span className="text-emerald-400">{doneCells}</span>
-            <span className="text-slate-600">/{totalCells}</span>
-            <span className="text-slate-400 ml-1">({pct}%)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 진행 바 */}
-      <div className="bg-slate-800 h-1 overflow-hidden">
-        <div className={`h-full ${mode === 'discharge' ? 'bg-blue-500' : 'bg-amber-500'} transition-all`} style={{ width: `${pct}%` }}/>
-      </div>
-
-      {/* 그리드 본체 */}
-      <div className="overflow-x-auto p-2">
-        <div className="inline-block">
-          {/* DECK */}
-          {deckTiers.length > 0 && (
-            <>
-              <div className="text-[9px] text-cyan-400 font-bold uppercase mb-0.5 ml-8">▴ Deck</div>
-              {deckTiers.map(tier => (
-                <TierRow key={`d-${tier}`}
-                  tier={tier} rows={allRows} getCell={getCell} isXmark={isXmark}
-                  compMap={compMap} xrayMap={xrayMap} mode={mode} cellW={cellW} cellH={cellH}
-                  onOpenContainer={onOpenContainer}
-                />
-              ))}
-              {holdTiers.length > 0 && (
-                <div className="border-t-2 border-dashed border-slate-600 my-1 relative">
-                  <span className="absolute -top-2 left-2 bg-slate-900 text-[9px] text-slate-500 px-1">─ Hatch ─</span>
-                </div>
-              )}
-            </>
-          )}
-          {/* HOLD */}
-          {holdTiers.length > 0 && (
-            <>
-              {holdTiers.map(tier => (
-                <TierRow key={`h-${tier}`}
-                  tier={tier} rows={allRows} getCell={getCell} isXmark={isXmark}
-                  compMap={compMap} xrayMap={xrayMap} mode={mode} cellW={cellW} cellH={cellH}
-                  onOpenContainer={onOpenContainer}
-                />
-              ))}
-              <div className="text-[9px] text-amber-500 font-bold uppercase mt-0.5 ml-8">▾ Hold</div>
-            </>
-          )}
-
-          {/* ROW 헤더 (하단) */}
-          <div className="flex items-center mt-1 ml-8 gap-0">
-            {allRows.map(row => (
-              <div key={row} className="flex-shrink-0 flex items-center justify-center text-[9px] text-slate-500 font-bold mono"
-                style={{ width: cellW }}>
-                {row}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 푸터 — 통계 */}
-      {(xrayCount > 0 || allContainers.some(c => c.rf || c.dg)) && (
-        <div className="px-3 py-2 border-t border-slate-800 flex items-center gap-2 flex-wrap text-[10px]">
-          {xrayCount > 0 && (
-            <span className="bg-purple-900/40 text-purple-300 px-1.5 py-0.5 rounded font-bold">🔍 X-RAY {xrayCount}</span>
-          )}
-          {allContainers.filter(c => c.rf).length > 0 && (
-            <span className="bg-cyan-900/40 text-cyan-300 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
-              <Snowflake className="w-2.5 h-2.5"/>RF {allContainers.filter(c => c.rf).length}
-            </span>
-          )}
-          {allContainers.filter(c => c.dg).length > 0 && (
-            <span className="bg-red-900/40 text-red-300 px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
-              <AlertTriangle className="w-2.5 h-2.5"/>DG {allContainers.filter(c => c.dg).length}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TierRow({ tier, rows, getCell, isXmark, compMap, xrayMap, mode, cellW, cellH, onOpenContainer }) {
-  return (
-    <div className="flex items-center gap-0">
-      {/* TIER 라벨 (좌측) */}
-      <div className="flex-shrink-0 text-[9px] text-slate-500 mono font-bold w-8 text-center">{tier}</div>
-      {rows.map(row => {
-        const c = getCell(row, tier);
-        const isX = !c && isXmark(row, tier);
-        return (
-          <Cell key={`${row}-${tier}`}
-            c={c}
-            isX={isX}
-            isDone={c && !!compMap[c.cn]}
-            isXray={c && mode === 'discharge' && !!xrayMap[c.cn]}
-            mode={mode}
-            cellW={cellW}
-            cellH={cellH}
-            onClick={c ? () => onOpenContainer(c) : null}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function Cell({ c, isX, isDone, isXray, mode, cellW, cellH, onClick }) {
-  // 빈 셀
-  if (!c && !isX) {
-    return (
-      <div className="flex-shrink-0 border border-slate-800/50 bg-slate-950/40"
-        style={{ width: cellW, height: cellH }}/>
-    );
+  const allLeftRows = [];
+  for (let n = maxLeft; n >= 2; n -= 2) {
+    allLeftRows.push(String(n).padStart(2, '0'));
   }
-  // X 마크 (40피트 점유)
-  if (isX) {
-    return (
-      <div className="flex-shrink-0 border border-slate-700 bg-slate-800/60 flex items-center justify-center"
-        style={{ width: cellW, height: cellH }}>
-        <span className="text-slate-600 font-black" style={{ fontSize: cellH * 0.4 }}>×</span>
-      </div>
-    );
+  const allRightRows = [];
+  for (let n = 1; n <= maxRight; n += 2) {
+    allRightRows.push(String(n).padStart(2, '0'));
   }
+  const centerRows = ['00'];
+  const allRows = [...allLeftRows, ...centerRows, ...allRightRows];
 
-  // 컨테이너 셀
-  const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
-  const isDG = c.dg;
-  const isPtk = mode === 'discharge'
-    ? (c.pod || '').toUpperCase().endsWith('PTK')
-    : (c.pol || '').toUpperCase().endsWith('PTK');
+  // DECK / HOLD 분리 + 상하 균형
+  const allTiers = Array.from(new Set([
+    ...allContainers.map(c => c.tier),
+    ...Array.from(xMarks).map(k => k.split('-')[1])
+  ]));
+  const deckTiers = allTiers.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
+  const holdTiers = allTiers.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
-  // 색 결정 (우선순위: 완료 > X-RAY > 특수 > 평택 > 통과)
-  let bg, border, text;
-  if (isDone) {
-    bg = 'bg-emerald-700'; border = 'border-emerald-400'; text = 'text-emerald-50';
-  } else if (isXray) {
-    bg = 'bg-purple-700'; border = 'border-purple-400'; text = 'text-purple-50';
-  } else if (isDG) {
-    bg = 'bg-red-700'; border = 'border-red-400'; text = 'text-red-50';
-  } else if (isReefer) {
-    bg = 'bg-cyan-700'; border = 'border-cyan-400'; text = 'text-cyan-50';
-  } else if (isPtk) {
-    bg = mode === 'discharge' ? 'bg-blue-700' : 'bg-amber-700';
-    border = mode === 'discharge' ? 'border-blue-400' : 'border-amber-400';
-    text = mode === 'discharge' ? 'text-blue-50' : 'text-amber-50';
-  } else {
-    bg = 'bg-slate-700'; border = 'border-slate-600'; text = 'text-slate-300';
-  }
+  const tierMax = Math.max(deckTiers.length, holdTiers.length);
+  const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
+  const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
 
-  const last4 = c.l4 || c.cn?.slice(-4) || '';
-  const op = (c.op || '').slice(0, 3);
-  const lbl = isoToLabel(c.iso) || c.tp || '';
+  const getCell = (row, tier) => {
+    if (!row || !tier) return null;
+    return allContainers.find(c => c.row === row && c.tier === tier);
+  };
+  const isXmark = (row, tier) => {
+    if (!row || !tier) return false;
+    return xMarks.has(`${row}-${tier}`);
+  };
 
-  return (
-    <button onClick={onClick}
-      className={`flex-shrink-0 border-2 ${border} ${bg} ${text} flex flex-col items-center justify-center mono text-[8px] hover:brightness-125 active:brightness-90 transition leading-tight overflow-hidden p-0.5 shadow-md`}
-      style={{ width: cellW, height: cellH }}
-      title={`${c.cn} ${c.bay}-${c.row}-${c.tier} ${lbl} ${c.fe || ''}`}
-    >
-      {isXray && <span className="absolute top-0 right-0 text-[7px]">🔍</span>}
-      <div className="font-black truncate w-full text-center" style={{ fontSize: cellH * 0.18 }}>
-        {last4}
-      </div>
-      <div className="opacity-80 truncate w-full text-center" style={{ fontSize: cellH * 0.12 }}>
-        {op || lbl}
-      </div>
-      <div className="opacity-60 truncate w-full text-center" style={{ fontSize: cellH * 0.11 }}>
-        {c.fe} {c.wt > 0 ? (c.wt/1000).toFixed(1) : ''}
-      </div>
-    </button>
-  );
-}
-
-// V37 알고리즘: 짝수+홀수 베이 페어로 묶기
-function buildBayPages(containers) {
-  const bayGroups = {};
-  containers.forEach(c => {
-    if (!c.bay) return;
-    if (!bayGroups[c.bay]) bayGroups[c.bay] = [];
-    bayGroups[c.bay].push(c);
-  });
-  const bays = Object.keys(bayGroups).sort((a, b) => parseInt(a) - parseInt(b));
-  const pages = [];
-  const used = new Set();
-  bays.forEach(bay => {
-    if (used.has(bay)) return;
-    const n = parseInt(bay);
-    if (n % 2 === 0) {
-      // 짝수 (40ft) — 인접 홀수 (n-1, n+1) 찾기
-      const oddBay = String(n - 1).padStart(2, '0');
-      pages.push({ label: `${bay} / ${oddBay}`, evenBay: bay, oddBay: bays.includes(oddBay) ? oddBay : null, bayGroups });
-      used.add(bay);
-      if (bays.includes(oddBay)) used.add(oddBay);
-    } else {
-      // 홀수 단독 (20ft only)
-      pages.push({ label: bay, evenBay: null, oddBay: bay, bayGroups });
-      used.add(bay);
+  // 한 셀 렌더링 — V37 PDF 5줄 형식
+  const renderCell = (row, tier) => {
+    const key = `${row || '_'}-${tier || '_'}`;
+    if (!row || !tier) {
+      return <div key={key} className="border border-dashed border-slate-800 flex-shrink-0 bg-slate-950"
+        style={{ width: cellW, height: cellH }}/>;
     }
-  });
-  return pages;
+    const c = getCell(row, tier);
+    if (!c && isXmark(row, tier)) {
+      return (
+        <div key={key} className="border border-slate-700 bg-slate-800 flex-shrink-0 flex items-center justify-center"
+          style={{ width: cellW, height: cellH }}>
+          <span className="text-slate-500 font-black" style={{ fontSize: fontSize * 2.5 }}>×</span>
+        </div>
+      );
+    }
+    if (!c) {
+      return <div key={key} className="border border-dashed border-slate-800 flex-shrink-0 bg-slate-950/40"
+        style={{ width: cellW, height: cellH }}/>;
+    }
+
+    const needsShift = shiftingMap.needsShift[c.cn];
+    const ptk = isPtk(c);
+    const fe = c.fe || 'F';
+    const wt = c.wt > 0 ? (c.wt / 1000).toFixed(1) : '0.0';
+    const typeLabel = isoToPdfLabel ? isoToPdfLabel(c.iso, c.tp) : (isoToLabel(c.iso) || '');
+    const polLabel = (c.pol || '').replace(/^KR/, '').slice(0, 3).padEnd(3, ' ');
+    const podLabel = (c.pod || '').replace(/^KR/, '').slice(0, 3);
+    const transit = (c.transit || c.tr || '').slice(0, 3);
+    const opLabel = (c.op || '').slice(0, 3).padEnd(3, ' ');
+    const bay2 = String(parseInt(c.bay || '0')).padStart(2, '0');
+    const posStr = `....${bay2}${row}${tier}`;
+
+    let specialLine = '';
+    let specialColor = 'text-slate-500';
+    if (c.dg) {
+      specialLine = c.un ? `DG UN${c.un}` : 'DG';
+      specialColor = 'text-red-300 font-bold';
+    } else if (c.rf && c.tmp) {
+      specialLine = `${c.tmp}C`;
+      specialColor = 'text-cyan-200 font-bold';
+    } else if (c.rf) {
+      specialLine = 'REEFER';
+      specialColor = 'text-cyan-200 font-bold';
+    } else if (c.tk) {
+      specialLine = 'TANK';
+      specialColor = 'text-orange-200 font-bold';
+    } else if (c.fr) {
+      specialLine = 'FR';
+      specialColor = 'text-purple-200 font-bold';
+    } else if (c.oog) {
+      specialLine = 'OOG';
+      specialColor = 'text-purple-200 font-bold';
+    }
+
+    return (
+      <button
+        key={key}
+        onClick={() => onCellClick?.(c)}
+        className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden`}
+        style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize }}
+      >
+        {needsShift && (
+          <div className="absolute top-0 left-0 bg-amber-400 text-slate-900 px-0.5 font-black leading-none rounded-br z-10"
+            style={{ fontSize: fontSize - 1 }}>
+            ⬆{needsShift}
+          </div>
+        )}
+        <div className="text-left mono leading-tight w-full" style={{ whiteSpace: 'pre', fontFamily: 'Consolas, "Courier New", monospace' }}>
+          <div className="font-bold" style={{ fontSize: fontSize - 1 }}>
+            {polLabel}/{transit ? transit : '   '}<span className={ptk ? 'text-red-700 font-black' : ''}>*{podLabel}</span>
+          </div>
+          <div className="font-black" style={{ fontSize }}>
+            {c.cn || ''}
+          </div>
+          <div style={{ fontSize: fontSize - 1 }}>
+            {opLabel} {fe}{wt.padStart(4, ' ')} {typeLabel}
+          </div>
+          <div className={specialColor} style={{ fontSize: fontSize - 1, minHeight: fontSize }}>
+            {specialLine || '\u00A0'}
+          </div>
+          <div className="text-slate-600" style={{ fontSize: fontSize - 1 }}>
+            {posStr}
+          </div>
+        </div>
+      </button>
+    );
+  };
+
+  return (
+    <div className="space-y-1 inline-block min-w-full">
+      {/* 페이지 제목 */}
+      <div className="text-center font-black text-amber-300 mb-1" style={{ fontSize: fontSize + 4 }}>
+        {page.title}
+      </div>
+
+      {/* DECK */}
+      <div>
+        <div className="text-[10px] text-cyan-400 mb-0.5 font-bold">⬆ DECK</div>
+        <div className="flex gap-0.5 mb-0.5">
+          <div style={{ width: 24 }}></div>
+          {allRows.map((row, idx) => (
+            <div key={`dh-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
+              style={{ width: cellW }}>{row || ''}</div>
+          ))}
+          <div style={{ width: 24 }}></div>
+        </div>
+        {deckTiersPadded.map((tier, ti) => (
+          <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center">
+            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
+            {allRows.map((row, ri) => (
+              <React.Fragment key={`d-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
+            ))}
+            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 해치커버 */}
+      <div className="border-t-4 border-slate-100 my-2"></div>
+
+      {/* HOLD */}
+      <div>
+        <div className="text-[10px] text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
+        {holdTiersPadded.map((tier, ti) => (
+          <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center">
+            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
+            {allRows.map((row, ri) => (
+              <React.Fragment key={`h-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
+            ))}
+            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
+          </div>
+        ))}
+        <div className="flex gap-0.5 mt-0.5">
+          <div style={{ width: 24 }}></div>
+          {allRows.map((row, idx) => (
+            <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
+              style={{ width: cellW }}>{row || ''}</div>
+          ))}
+          <div style={{ width: 24 }}></div>
+        </div>
+      </div>
+    </div>
+  );
 }

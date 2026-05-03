@@ -1,6 +1,6 @@
-// 한국어 음성 출력 유틸 (V37 핵심 디테일)
-// - 숫자: 공/일/이/삼/사/오/육/칠/팔/구
-// - 알파벳: 에이/비/씨/디/이/에프/지/에이치/아이/제이/케이/엘/엠/엔/오/피/큐/알/에스/티/유/브이/더블유/엑스/와이/지
+// V37 음성 함수 100% 이식 — 검증된 한 글자씩 한국어 발음
+// 숫자: 공/일/이/삼/사/오/육/칠/팔/구
+// 알파벳: 에이/비/씨/디/...
 
 const NUM_KO = ['공', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
 const ALPHA_KO = {
@@ -10,6 +10,7 @@ const ALPHA_KO = {
   U: '유', V: '브이', W: '더블유', X: '엑스', Y: '와이', Z: '지',
 };
 
+// 한 글자씩 한국어로 풀어 읽기 (공백으로 구분)
 export function spellKo(text) {
   if (!text) return '';
   return String(text).toUpperCase().split('').map(ch => {
@@ -19,15 +20,35 @@ export function spellKo(text) {
   }).join(' ');
 }
 
-let lastSpeak = 0;
+// 음성 인식용: 한국어 숫자 → 아라비아
+const KOR_DIGITS_RECOGNIZE = [
+  ['영','0'],['공','0'],['일','1'],['이','2'],['삼','3'],['사','4'],
+  ['오','5'],['육','6'],['칠','7'],['팔','8'],['구','9'],
+  ['하나','1'],['둘','2'],['셋','3'],['넷','4'],['다섯','5'],
+  ['여섯','6'],['일곱','7'],['여덟','8'],['아홉','9'],['열','']
+];
+
+export function parseSpokenDigits(text) {
+  if (!text) return '';
+  let s = text.toLowerCase();
+  const ENG = [['zero','0'],['oh','0'],['one','1'],['two','2'],['three','3'],
+               ['four','4'],['five','5'],['six','6'],['seven','7'],['eight','8'],['nine','9']];
+  for (const [k, v] of ENG) s = s.split(k).join(v);
+  s = s.replace(/\s+/g, '');
+  const sorted = [...KOR_DIGITS_RECOGNIZE].sort((a,b) => b[0].length - a[0].length);
+  for (const [k, v] of sorted) s = s.split(k).join(v);
+  const matches = s.match(/\d+/g);
+  if (!matches) return '';
+  const allDigits = matches.join('');
+  if (allDigits.length >= 4) return allDigits.slice(-4);
+  return allDigits;
+}
+
+// 일반 텍스트 음성 (디바운스 X — V37처럼 즉시)
 export function speak(text, opts = {}) {
   if (!text) return;
-  // 너무 빠른 연속 호출 방지 (200ms 디바운스)
-  const now = Date.now();
-  if (now - lastSpeak < 200 && !opts.urgent) return;
-  lastSpeak = now;
   try {
-    if (window.speechSynthesis.speaking) {
+    if (window.speechSynthesis.speaking && !opts.append) {
       window.speechSynthesis.cancel();
     }
     const u = new SpeechSynthesisUtterance(text);
@@ -39,22 +60,71 @@ export function speak(text, opts = {}) {
   } catch (e) {}
 }
 
-// 컨테이너 한 글자씩 + 위치 + 추가 정보
-export function speakContainer(c, extras = {}) {
+// 컨테이너 음성 — V37 speakContainer 100% 이식
+// 컨번호, 실번호, 위치, X-RAY 모두 안내
+export function speakContainer(c, opts = {}) {
   if (!c) return;
-  const last4 = c.l4 || c.cn?.slice(-4) || '';
-  const parts = [spellKo(last4)];
-  if (c.bay) parts.push(`${parseInt(c.bay)} 베이 ${parseInt(c.row)} 열 ${parseInt(c.tier)} 단`);
-  if (extras.xray) parts.push('엑스레이');
-  if (c.rf) parts.push(`리퍼${c.tmp ? ' ' + c.tmp + '도' : ''}`);
-  if (c.dg) parts.push('위험물');
-  if (extras.suffix) parts.push(extras.suffix);
-  speak(parts.join(', '));
+  try {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+
+    const cn = c.cn || '';
+    const last4 = c.l4 || cn.slice(-4);
+    const cnSpoken = spellKo(last4);
+
+    const parts = [];
+
+    // X-RAY 우선 안내
+    if (opts.xray) {
+      parts.push('엑스레이 대상');
+    }
+
+    // 컨번호 끝 4자리
+    parts.push(cnSpoken);
+
+    // 위치
+    if (c.bay) {
+      parts.push(`베이 ${parseInt(c.bay)}`);
+      if (c.row) parts.push(`로우 ${parseInt(c.row)}`);
+      if (c.tier) parts.push(`티어 ${parseInt(c.tier)}`);
+    }
+
+    // 실번호 (있으면)
+    if (c.sl && c.sl.trim()) {
+      parts.push(`실번호 ${spellKo(c.sl.trim())}`);
+    }
+
+    // 특수 화물
+    if (c.dg) parts.push(`디지`);
+    if (c.rf && c.tmp) parts.push(`리퍼 ${c.tmp}도`);
+    else if (c.rf) parts.push('리퍼');
+    if (c.fr) parts.push('에프알');
+    if (c.ot) parts.push('오티');
+    if (c.tk) parts.push('탱크');
+
+    // POD (선적 모드일 때 유용)
+    if (opts.suffix) parts.push(opts.suffix);
+
+    const text = parts.join(', ');
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR';
+    u.rate = opts.rate || 1.2;
+    u.pitch = 1.0;
+    window.speechSynthesis.speak(u);
+  } catch (e) {}
 }
 
+// 검수 완료 — 짧고 빠르게
 export function speakDone(c) {
+  if (!c) return;
   const last4 = c.l4 || c.cn?.slice(-4) || '';
   speak(`${spellKo(last4)} 완료`, { rate: 1.5 });
+}
+
+// 오류 음성
+export function speakError(text) {
+  speak(text, { rate: 1.2, pitch: 0.9 });
 }
 
 export function stopSpeak() {

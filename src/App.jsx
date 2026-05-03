@@ -12,6 +12,7 @@ import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import Header from './components/Header.jsx';
 import InspectorModal from './components/InspectorModal.jsx';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
+import UpdatePrompt from './components/UpdatePrompt.jsx';
 
 export default function App() {
   const [route, setRoute] = useState({ name: 'home' });
@@ -71,6 +72,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
+      <UpdatePrompt/>
       <Header
         version={APP_VERSION}
         inspector={inspector}
