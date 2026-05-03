@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V38 (2026.05.03)
-export const APP_VERSION = 'M2.0';
+export const APP_VERSION = 'M2.1';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -252,13 +252,15 @@ export function parseBAPLIE(ediText) {
       // status — V37 raw element 5
       const rawStatus = (parts[5] || '').trim();
       cur.st = rawStatus;
-      // BAPLIE 통상: 4=Full(Loaded), 5=Empty 또는 그 반대(carrier마다 다름)
-      // → 명시적 'E'/'F' 우선, 숫자 코드는 기본 매핑 후 무게로 검증
-      if (rawStatus === 'E') cur.fe = 'E';
-      else if (rawStatus === 'F') cur.fe = 'F';
-      else if (rawStatus === '5') cur.fe = 'E';
-      else if (rawStatus === '4') cur.fe = 'F';
-      else cur.fe = 'F';
+      // BAPLIE EDIFACT 표준 (실측 검증):
+      //  5 = Full (Loaded) — 8~28톤
+      //  4 = Empty — 컨 자체 무게만 (3.8톤 등)
+      // 명시적 'F'/'E' 우선
+      if (rawStatus === 'F') cur.fe = 'F';
+      else if (rawStatus === 'E') cur.fe = 'E';
+      else if (rawStatus === '5') cur.fe = 'F';   // 5 = Full
+      else if (rawStatus === '4') cur.fe = 'E';   // 4 = Empty
+      else cur.fe = 'F'; // 기본 Full
 
       // 화면 표시용 tp
       if (cur.iso.startsWith('22')) cur.tp = "20'GP";
