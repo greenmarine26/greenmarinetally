@@ -116,7 +116,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', i: ListChecks },
-          { k: 'search', t: '검색', i: SearchIcon },
+          { k: 'search', t: '검색 🎤', i: SearchIcon },
           { k: 'bay', t: '베이', i: MapPin },
           { k: 'stats', t: '통계', i: BarChart3 },
           { k: 'report', t: '보고서', i: FileCheck },
@@ -143,8 +143,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       )}
       {tab === 'search' && (
         <SearchPanel
-          containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
-          mode={mode} voyageKey={voyageKey} inspector={inspector}
+          voyage={voyage}
+          voyageKey={voyageKey}
+          inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
         />
       )}
@@ -168,19 +169,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       )}
 
       {/* 컨테이너 상세 모달 */}
-      {detailC && (
-        <ContainerDetailModal
-          c={detailC}
-          comp={compMap[detailC.cn]}
-          isXray={mode === 'discharge' && !!xrayMap[detailC.cn]}
-          xraySeal={xraySeals[detailC.cn] || ''}
-          mode={mode}
-          voyageKey={voyageKey}
-          voyageInfo={voyage.info}
-          inspector={inspector}
-          onClose={() => setDetailC(null)}
-        />
-      )}
+      {detailC && (() => {
+        // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
+        const cMode = detailC._mode || mode;
+        const cSec = voyage[cMode] || {};
+        return (
+          <ContainerDetailModal
+            c={detailC}
+            comp={cSec.completed?.[detailC.cn]}
+            isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
+            xraySeal={cSec.xraySeals?.[detailC.cn] || null}
+            mode={cMode}
+            voyageKey={voyageKey}
+            voyageInfo={voyage.info}
+            inspector={inspector}
+            onClose={() => setDetailC(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

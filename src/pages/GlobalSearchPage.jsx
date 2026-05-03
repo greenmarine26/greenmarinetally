@@ -1,12 +1,19 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Search as SearchIcon, X, Volume2, ArrowDown, ArrowUp, MapPin, ChevronRight } from 'lucide-react';
-import { isoToLabel } from '../utils.js';
-import { speakContainer, spellKo, speak } from '../voice.js';
+// 모든 항차 + 양/선적 통합 검색 + 음성 입력
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight } from 'lucide-react';
+import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
+import { isoToLabel, fmtPos } from '../utils.js';
 
-export default function GlobalSearchPage({ voyages, onOpenContainer, onGoHome }) {
-  const [q, setQ] = useState('');
+export default function GlobalSearchPage({ voyages, onOpenContainer }) {
+  const [query, setQuery] = useState('');
+  const [transcript, setTranscript] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+  const [autoSpeak, setAutoSpeak] = useState(true);
+  const recognitionRef = useRef(null);
+  const lastSpokenRef = useRef(null);
 
-  // 모든 항차 양/선적 컨테이너 펼치기
+  // 모든 항차 양/선적 펼치기
   const flat = useMemo(() => {
     const arr = [];
     Object.entries(voyages || {}).forEach(([vKey, v]) => {
@@ -17,6 +24,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, onGoHome })
         const ediMap = sec.ediContainers || {};
         const recMap = sec.records || {};
         const xrayMap = sec.xrayList || {};
+        const xraySeals = sec.xraySeals || {};
         const compMap = sec.completed || {};
         const merged = {};
         Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c }; });
@@ -31,6 +39,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, onGoHome })
             mode,
             isXray: mode === 'discharge' && !!xrayMap[c.cn],
             comp: compMap[c.cn] || null,
+            xraySeal: xraySeals[c.cn] || null,
           });
         });
       });
@@ -39,48 +48,126 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, onGoHome })
   }, [voyages]);
 
   const matches = useMemo(() => {
-    if (!q || q.length < 2) return [];
-    const Q = q.toUpperCase();
+    if (!query || query.length < 2) return [];
+    const Q = query.toUpperCase();
     return flat.filter(c =>
       c.cn?.includes(Q) || c.l4?.includes(Q) ||
       c.bay?.includes(Q) || c.op?.includes(Q) ||
       c.sl?.includes(Q) || c.vsl?.includes(Q)
-    ).slice(0, 50); // 너무 많으면 50개로 제한
-  }, [flat, q]);
+    ).slice(0, 50);
+  }, [flat, query]);
 
-  // 4자리 숫자 정확 + 결과 1개 → 자동 음성
+  // Web Speech API
   useEffect(() => {
-    if (q.length === 4 && /^\d{4}$/.test(q) && matches.length === 1) {
+    if (typeof window === 'undefined') return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setVoiceSupported(false); return; }
+    const r = new SR();
+    r.lang = 'ko-KR';
+    r.continuous = false;
+    r.interimResults = true;
+    r.maxAlternatives = 3;
+    r.onresult = (e) => {
+      const last = e.results[e.results.length - 1];
+      const text = last[0].transcript;
+      setTranscript(text);
+      if (last.isFinal) {
+        const digits = parseSpokenDigits(text);
+        if (digits && digits.length >= 2) setQuery(digits);
+        else speak('숫자를 인식하지 못했습니다.');
+      }
+    };
+    r.onend = () => setIsListening(false);
+    r.onerror = (e) => {
+      setIsListening(false);
+      if (e.error === 'not-allowed') speak('마이크 권한이 필요합니다.');
+    };
+    recognitionRef.current = r;
+    return () => { try { r.abort(); } catch(_) {} };
+  }, []);
+
+  // 자동 음성 안내
+  useEffect(() => {
+    if (!autoSpeak) return;
+    if (!query || query.length < 2) return;
+    const sig = `${query}-${matches.length}-${matches[0]?.cn || 'none'}`;
+    if (lastSpokenRef.current === sig) return;
+    lastSpokenRef.current = sig;
+
+    if (matches.length === 0) {
+      speak(`${spellKo(query.replace(/\D/g, ''))}, 일치하는 컨테이너가 없습니다.`);
+    } else if (matches.length === 1) {
       const c = matches[0];
-      speakContainer(c, { xray: c.isXray });
+      const modeLabel = c.mode === 'discharge' ? '양하' : '선적';
+      speakContainer(c, { xray: c.isXray, suffix: `${c.vsl} ${modeLabel}` });
+    } else if (matches.length <= 5) {
+      speak(`${matches.length}개 일치. 첫 번째. ${spellKo(matches[0].cn?.slice(-4) || '')}`);
+    } else {
+      speak(`${matches.length}개 일치. 더 자세한 번호를 말씀해주세요.`);
     }
-  }, [q, matches]);
+  }, [matches, query, autoSpeak]);
+
+  const startListening = () => {
+    if (!recognitionRef.current) return;
+    setTranscript('');
+    setIsListening(true);
+    stopSpeak();
+    try { recognitionRef.current.start(); }
+    catch (e) { setIsListening(false); }
+  };
+  const stopListening = () => {
+    try { recognitionRef.current?.stop(); } catch (e) {}
+    setIsListening(false);
+  };
 
   return (
     <div className="max-w-2xl mx-auto px-3 py-3">
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 mb-3">
-        <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center gap-1">
-          <SearchIcon className="w-3 h-3"/>통합 검색 — 모든 항차·양하·선적
+        <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between">
+          <span>통합 검색 — 모든 항차·양/선적</span>
+          <span className="text-slate-400 mono">전체 {flat.length.toLocaleString()}대</span>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={q}
-            onChange={e => setQ(e.target.value.toUpperCase())}
-            placeholder="끝 4자리 / 컨번호 / 베이 / 선사"
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
+          <input type="text" value={query}
+            onChange={e => setQuery(e.target.value.toUpperCase())}
+            placeholder="🎤 마이크 / 끝4자리 / 컨번호 / 선박명"
             inputMode="numeric"
             autoComplete="off"
             autoFocus
-            className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-3 text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"
-          />
-          {q && <button onClick={() => setQ('')} className="p-2"><X className="w-5 h-5 text-slate-500"/></button>}
+            className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"/>
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {voiceSupported && (
+              <button onClick={isListening ? stopListening : startListening}
+                className={`w-10 h-10 rounded flex items-center justify-center transition ${
+                  isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'
+                }`}>
+                {isListening ? <MicOff className="w-5 h-5"/> : <Mic className="w-5 h-5"/>}
+              </button>
+            )}
+            <button onClick={() => setAutoSpeak(!autoSpeak)}
+              className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-slate-500'}`}>
+              {autoSpeak ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
+            </button>
+            {query && (
+              <button onClick={() => { setQuery(''); stopSpeak(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
+                <X className="w-4 h-4 text-slate-500"/>
+              </button>
+            )}
+          </div>
         </div>
+        {isListening && transcript && (
+          <div className="mt-2 text-xs text-red-300 mono bg-red-900/20 px-2 py-1.5 rounded border border-red-800/40">
+            🎙 {transcript}
+          </div>
+        )}
         <div className="text-[11px] text-slate-500 text-center mt-2">
-          {q.length === 0 && `전체 ${flat.length.toLocaleString()}대 중 검색`}
-          {q.length > 0 && q.length < 2 && '2자리 이상 입력'}
-          {q.length >= 2 && matches.length === 0 && '일치 없음'}
-          {q.length >= 2 && matches.length === 1 && <span className="text-emerald-400 font-bold">✓ 1개 일치 — 자동 음성</span>}
-          {q.length >= 2 && matches.length > 1 && <span className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 50 ? '+ ' : ''} — 정확히 입력 권장</span>}
+          {!isListening && query.length === 0 && '🎤 마이크 누르고 "공구일오" 식으로 또박또박'}
+          {!isListening && query.length > 0 && query.length < 2 && '2자리 이상 입력'}
+          {!isListening && query.length >= 2 && matches.length === 0 && '일치 없음'}
+          {!isListening && query.length >= 2 && matches.length === 1 && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
+          {!isListening && query.length >= 2 && matches.length > 1 && <span className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 50 ? '+' : ''}</span>}
+          {isListening && '🎙 듣는 중... 또박또박 말씀하세요'}
         </div>
       </div>
 
@@ -102,10 +189,13 @@ function GlobalResultCard({ c, onOpen }) {
         c.isXray ? 'border-purple-700/30 bg-purple-950/10' :
         'border-slate-700 hover:bg-slate-800/50'
       }`}>
-      <div className={`flex-shrink-0 px-2 py-1 rounded text-[10px] font-black ${
+      <div className={`flex-shrink-0 px-2 py-1.5 rounded text-[10px] font-black flex flex-col items-center gap-0.5 ${
         c.mode === 'discharge' ? 'bg-blue-900/60 text-blue-200' : 'bg-amber-900/60 text-amber-200'
       }`}>
-        {c.mode === 'discharge' ? <ArrowDown className="w-3 h-3 inline"/> : <ArrowUp className="w-3 h-3 inline"/>}
+        {c.mode === 'discharge'
+          ? <ArrowDown className="w-3.5 h-3.5"/>
+          : <ArrowUp className="w-3.5 h-3.5"/>}
+        <span>{c.mode === 'discharge' ? '양하' : '선적'}</span>
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -118,7 +208,7 @@ function GlobalResultCard({ c, onOpen }) {
           <span className="text-slate-300 font-bold">{c.vsl}</span>
           <span>·</span>
           <span>{c.voy}</span>
-          {c.bay && <><span>·</span><MapPin className="w-2.5 h-2.5"/><span className="text-amber-300">{c.bay}-{c.row}-{c.tier}</span></>}
+          {c.bay && <><span>·</span><MapPin className="w-2.5 h-2.5"/><span className="text-amber-300">{fmtPos(c)}</span></>}
           {c.op && <><span>·</span><span className="text-slate-400">{c.op}</span></>}
         </div>
       </div>
