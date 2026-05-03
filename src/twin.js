@@ -1,42 +1,90 @@
-// 트윈 짝꿍 찾기 (EDI 분석 결과 기반)
+// 트윈 짝꿍 (V2 - EDI 베이 분포 기반 자동 분석)
 //
-// 평택항 컨테이너 적재 패턴:
-//  - 짝수 베이 (002, 004, 006...) = 40ft
-//  - 홀수 베이 (001, 003, 005...) = 20ft
-//  - 트윈 트레일러 = 20ft 2개를 한 트럭에 = 같은 짝수 위치를 차지하는 인접 두 홀수 베이의 컨
+// 알고리즘:
+// 1. EDI에 있는 모든 베이 분석
+// 2. 짝수 베이(40ft 슬롯)가 있으면 → 양 옆 홀수 베이가 짝꿍
+// 3. 짝수 베이가 없으면(통로) → 그 양옆 홀수 베이는 단독
 //
-// 예: 베이 005 (20ft 짝수 베이) row=02, tier=04
-//     → 짝꿍 = 베이 003 또는 007 (인접 홀수 베이) 같은 row=02, tier=04
+// 예: EDI 베이 = [01, 02, 03, 05, 06, 07, 09, 11]
+//   - 02 짝수 → 01-03 짝꿍
+//   - 04 없음(통로) → 03 다음 짝꿍 시작점
+//   - 06 짝수 → 05-07 짝꿍
+//   - 08 없음(통로) → 07 다음
+//   - 10 없음(통로) → 09 단독
+//   - 11도 단독
 //
-// 100% 자동은 아님 — 같은 자리에 컨이 없을 수도 있고, 트럭이 트윈이 아닐 수도 있음
-// 검수원이 보고 다르면 수정
+// 한 번 계산하면 캐시 (성능)
 
-export function findTwinCandidate(target, allContainers) {
+const cache = new WeakMap();
+
+function buildBayPairs(allContainers) {
+  if (cache.has(allContainers)) return cache.get(allContainers);
+
+  // 모든 베이 수집
+  const bays = new Set();
+  for (const c of allContainers) {
+    if (c.bay) bays.add(c.bay);
+  }
+  const bayInts = Array.from(bays).map(b => parseInt(b)).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+  const baySet = new Set(bayInts);
+
+  // 짝꿍 매핑: 홀수 베이 → 짝꿍 베이
+  const pairs = {}; // 'XXX' → 'YYY' or null (단독)
+  for (const b of bayInts) {
+    if (b % 2 === 0) continue; // 짝수(40ft 슬롯)는 짝꿍 대상 X
+
+    const bStr = String(b).padStart(3, '0');
+    const evenLeft = b - 1;   // -1 짝수 (작은 쪽)
+    const evenRight = b + 1;  // +1 짝수 (큰 쪽)
+
+    let pairBay = null;
+    // 우선: +1 짝수 슬롯 있으면 → b+2가 짝
+    if (baySet.has(evenRight) && baySet.has(b + 2)) {
+      pairBay = String(b + 2).padStart(3, '0');
+    }
+    // 차선: -1 짝수 슬롯 있으면 → b-2가 짝
+    else if (baySet.has(evenLeft) && baySet.has(b - 2)) {
+      pairBay = String(b - 2).padStart(3, '0');
+    }
+    pairs[bStr] = pairBay; // null이면 단독
+  }
+
+  cache.set(allContainers, pairs);
+  return pairs;
+}
+
+// 짝꿍 후보 찾기 (모드별, 위치별)
+//   target: 검색된 컨테이너
+//   allContainers: 전체 컨테이너
+//   excludeCns: 이미 페어링된 컨번호 set (제외)
+export function findTwinCandidate(target, allContainers, excludeCns = new Set()) {
   if (!target?.bay || !target?.row || !target?.tier) return null;
 
   const targetBay = parseInt(target.bay);
   if (!Number.isFinite(targetBay)) return null;
-  if (targetBay % 2 === 0) return null; // 40ft 베이 (짝수)는 트윈 대상 아님
+  if (targetBay % 2 === 0) return null; // 짝수 베이는 트윈 대상 아님
 
-  // 인접 홀수 베이 = ±2
-  const candidateBays = [
-    String(targetBay - 2).padStart(target.bay.length, '0'),
-    String(targetBay + 2).padStart(target.bay.length, '0'),
-  ];
+  const pairs = buildBayPairs(allContainers);
+  const targetBayStr = String(targetBay).padStart(3, '0');
+  const pairBayStr = pairs[targetBayStr];
 
-  // 같은 row + 같은 tier
-  for (const bay of candidateBays) {
-    const found = allContainers.find(c =>
-      c.cn !== target.cn &&
-      c.bay === bay &&
-      c.row === target.row &&
-      c.tier === target.tier &&
-      c._mode === target._mode  // 같은 양/선적 모드
-    );
-    if (found) return found;
-  }
+  if (!pairBayStr) return null; // 단독 베이
 
-  return null;
+  // 짝꿍 베이의 같은 row/tier 컨 찾기
+  const found = allContainers.find(c =>
+    c.cn !== target.cn &&
+    !excludeCns.has(c.cn) &&
+    c.bay === pairBayStr &&
+    c.row === target.row &&
+    c.tier === target.tier &&
+    c._mode === target._mode
+  );
+  return found || null;
+}
+
+// 베이 짝꿍 맵 가져오기 (UI에서 표시용)
+export function getBayPairs(allContainers) {
+  return buildBayPairs(allContainers);
 }
 
 // 같은 슬롯에 적재된 다른 컨 찾기 (FR 4개 한 자리 등)

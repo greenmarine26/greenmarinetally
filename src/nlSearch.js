@@ -11,15 +11,22 @@ export function parseNaturalQuery(text) {
     size: null,
     fe: null,
     type: null,
-    isAll: false,   // "컨테이너 몇 개" 같은 전체 질의
+    temp: null,        // 온도 정확 일치 (예: -18)
+    tempRange: null,   // 온도 범위 (예: { min: -25, max: -10 })
+    isAll: false,
     isStat: false,
   };
   if (!text) return result;
   const t = String(text).toLowerCase();
 
-  // 끝 4자리 (숫자 추출)
-  const digits = String(text).replace(/\D/g, '');
-  if (digits.length >= 2) result.digits = digits.slice(-4);
+  // 끝 4자리 (숫자 추출) — 온도 표현 제외용으로 별도 판정
+  // "리퍼 -18도" 같은 경우엔 -18을 컨번호로 잡으면 안 됨
+  // → 온도 키워드 ('도', '°', '온도', '영하', '영상', 'reefer')가 있으면 digits 추출 X
+  const hasTempCtx = /도\s|도$|°|온도|영하|영상|마이너스|temperature|reefer|리퍼|냉장|냉동/i.test(t);
+  if (!hasTempCtx) {
+    const digits = String(text).replace(/\D/g, '');
+    if (digits.length >= 2) result.digits = digits.slice(-4);
+  }
 
   // 사이즈 — 숫자 단독 매칭 (40만 또는 40피트, 40HC 등)
   // 우선순위: 명시적 ('피트', 'HC') > 단순 숫자
@@ -49,6 +56,40 @@ export function parseNaturalQuery(text) {
 
   // 통계 질의 ("몇 개", "몇 대", "얼마나")
   if (/몇\s*(개|대|건)|얼마나|개수|대수|총\s*몇/i.test(t)) result.isStat = true;
+
+  // 온도 파싱
+  // "영하 18도" / "-18도" / "마이너스 18도" → -18
+  // "영상 5도" / "+5도" / "5도" → 5 (단, 리퍼 컨텍스트일 때만)
+  // "0도" → 0
+  if (hasTempCtx) {
+    let tempMatch = null;
+    // 1. 영하/마이너스/- 부호
+    let m = t.match(/(?:영하|마이너스|minus)\s*(\d+(?:\.\d+)?)/);
+    if (m) tempMatch = -parseFloat(m[1]);
+    if (tempMatch === null) {
+      m = t.match(/-\s*(\d+(?:\.\d+)?)\s*도?/);
+      if (m) tempMatch = -parseFloat(m[1]);
+    }
+    // 2. 영상/플러스/+ 부호
+    if (tempMatch === null) {
+      m = t.match(/(?:영상|플러스|plus)\s*(\d+(?:\.\d+)?)/);
+      if (m) tempMatch = parseFloat(m[1]);
+      else {
+        m = t.match(/\+\s*(\d+(?:\.\d+)?)\s*도?/);
+        if (m) tempMatch = parseFloat(m[1]);
+      }
+    }
+    // 3. "18도" 단독 (부호 없음)
+    if (tempMatch === null) {
+      m = t.match(/(\d+(?:\.\d+)?)\s*도/);
+      if (m) tempMatch = parseFloat(m[1]);
+    }
+    if (tempMatch !== null && Number.isFinite(tempMatch)) {
+      result.temp = tempMatch;
+      // 온도 질문은 자동으로 리퍼 대상 (다른 type 미지정 시)
+      if (!result.type) result.type = 'rf';
+    }
+  }
 
   return result;
 }
@@ -101,6 +142,17 @@ export function applyNLFilter(containers, parsed) {
     r = r.filter(c => c.ot || /OT$/.test(isoToLabel(c.iso) || ''));
   }
   else if (parsed.type === 'oog') r = r.filter(c => c.oog || c.fr || c.ot);
+
+  // 온도 정확 일치
+  if (parsed.temp !== null && Number.isFinite(parsed.temp)) {
+    r = r.filter(c => {
+      if (!c.tmp) return false;
+      const ctmp = parseFloat(String(c.tmp).replace(/[^\d.\-+]/g, ''));
+      if (!Number.isFinite(ctmp)) return false;
+      // 0.1 도 이내 일치
+      return Math.abs(ctmp - parsed.temp) < 0.5;
+    });
+  }
   return r;
 }
 
@@ -117,6 +169,11 @@ export function describeQuery(parsed) {
   if (parsed.type === 'fr') desc.push('플랫랙 FR');
   if (parsed.type === 'ot') desc.push('오픈탑 OT');
   if (parsed.type === 'oog') desc.push('OOG');
+  if (parsed.temp !== null) {
+    if (parsed.temp < 0) desc.push(`영하 ${Math.abs(parsed.temp)}도`);
+    else if (parsed.temp > 0) desc.push(`영상 ${parsed.temp}도`);
+    else desc.push('0도');
+  }
   if (parsed.digits) desc.push(`끝4자리 ${parsed.digits}`);
 
   // 조건 없고 isAll만 있으면 "전체 컨테이너"
@@ -126,5 +183,5 @@ export function describeQuery(parsed) {
 
 // 어떤 조건이든 잡혔는지 (isAll 포함)
 export function hasAnyCondition(parsed) {
-  return !!(parsed.digits || parsed.size || parsed.fe || parsed.type || parsed.isAll);
+  return !!(parsed.digits || parsed.size || parsed.fe || parsed.type || parsed.isAll || parsed.temp !== null);
 }

@@ -11,8 +11,10 @@ import {
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbCompleteContainer, fbCancelComplete, fbToggleXray,
-  fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData
+  fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData,
+  fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats
 } from '../firebase.js';
+import { extractShipInfo, analyzeShipStructure, compareStructures } from '../shipStructure.js';
 import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
@@ -301,12 +303,36 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
     setStatus(`${files.length}개 파일 처리 중...`);
     const results = [];
     let allCns = {};
+    let shipInfo = null;          // EDI에서 추출한 선박 정보
+    let allEdiContainers = [];    // 베이 분석용 (평택 필터 X 전체)
+    let prevStruct = null;        // 기존 학습된 구조
+
     for (const file of Array.from(files)) {
       try {
         const text = await file.text();
         const isAsc = /\.asc$/i.test(file.name) || /^\$604/.test(text.slice(0, 10));
         const r = isAsc ? parseAscFile(text) : parseBAPLIE(text);
         const total = r.containers.length;
+
+        // 선박 정보 추출 (BAPLIE만, 첫 파일에서)
+        if (!isAsc && !shipInfo) {
+          shipInfo = extractShipInfo(text);
+          if (shipInfo) {
+            // 학습된 선박 구조 조회
+            try {
+              prevStruct = await fbGetShipStructure(shipInfo.imo);
+              if (prevStruct?.structure) {
+                results.push(`📚 학습된 선박: ${shipInfo.name} (IMO ${shipInfo.imo}) — 이전 분석 ${prevStruct.voyages ? Object.keys(prevStruct.voyages).length : 0}개 항차`);
+              } else {
+                results.push(`🆕 새 선박: ${shipInfo.name} (IMO ${shipInfo.imo})`);
+              }
+            } catch (e) {}
+          }
+        }
+
+        // 베이 분석용 전체 컨테이너 누적
+        allEdiContainers.push(...r.containers);
+
         // 평택 필터
         const ptk = r.containers.filter(c => {
           if (mode === 'discharge') return (c.pod || '').toUpperCase().endsWith('PTK');
@@ -325,11 +351,45 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         results.push(`❌ ${file.name}: ${e.message}`);
       }
     }
+
     if (Object.keys(allCns).length > 0) {
-      // 기존 + 신규 병합
       const existing = sec.ediContainers || {};
       await fbSaveEdiContainers(voyageKey, mode, { ...existing, ...allCns });
     }
+
+    // 선박 구조 분석 + 저장 (전체 컨테이너 기반, 평택 필터 X)
+    if (shipInfo && allEdiContainers.length > 0) {
+      try {
+        const newStruct = analyzeShipStructure(allEdiContainers);
+        const cmp = compareStructures(prevStruct?.structure, newStruct);
+        if (cmp.isFirst) {
+          results.push(`📊 선박 구조 학습: 베이 ${newStruct.bay_count}개, 짝꿍 ${Object.keys(newStruct.pairs).length / 2}쌍, 단독 ${newStruct.singles.length}개`);
+        } else if (cmp.hasChanges) {
+          results.push(`📊 선박 구조 업데이트: ${cmp.changes.join(' / ')}`);
+        } else {
+          results.push(`📊 선박 구조 일치 (이전 분석과 동일)`);
+        }
+        // 저장
+        await fbSaveShipStructure(shipInfo.imo, {
+          imo: shipInfo.imo,
+          name: shipInfo.name,
+          structure: newStruct,
+        });
+        await fbAddShipVoyage(shipInfo.imo, voyageKey, {
+          voy: shipInfo.voyage,
+          vsl: shipInfo.name,
+          mode,
+          container_count: allEdiContainers.length,
+          ptk_count: Object.keys(allCns).length,
+        });
+        await fbAddShipStats(shipInfo.imo, {
+          [mode]: Object.keys(allCns).length,
+        });
+      } catch (e) {
+        console.error('Ship structure save failed:', e);
+      }
+    }
+
     setStatus(results.join('\n') + `\n\n총 평택 대상: ${Object.keys(allCns).length}대`);
     if (ediRef.current) ediRef.current.value = '';
   };

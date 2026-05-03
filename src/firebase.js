@@ -194,4 +194,59 @@ export function fbSubscribeConnection(callback) {
   return () => off(r);
 }
 
+// ─── 선박 라이브러리 (수석 검수 통계 자료) ───
+// IMO 번호로 선박 식별 (절대 안 변함, 전 세계 유일)
+// 한 번 분석된 선박 구조는 다음 항차에서 즉시 활용
+
+// 선박 구조 저장 (전체 또는 일부 업데이트)
+export async function fbSaveShipStructure(imo, structureData) {
+  if (!imo) return;
+  const r = ref(db, `ships/${imo}`);
+  const snap = await get(r);
+  const cur = snap.val() || {};
+  await set(r, {
+    ...cur,
+    ...structureData,
+    last_updated: Date.now(),
+  });
+}
+
+// 선박 구조 조회
+export async function fbGetShipStructure(imo) {
+  if (!imo) return null;
+  const snap = await get(ref(db, `ships/${imo}`));
+  return snap.val() || null;
+}
+
+// 모든 선박 라이브러리 조회 (수석 대시보드용)
+export function fbSubscribeShipLibrary(callback) {
+  const r = ref(db, 'ships');
+  const handler = onValue(r, (snap) => callback(snap.val() || {}));
+  return () => off(r);
+}
+
+// 분석된 항차 추가 (분석 이력)
+export async function fbAddShipVoyage(imo, voyageKey, voyageMeta) {
+  if (!imo || !voyageKey) return;
+  const r = ref(db, `ships/${imo}/voyages/${voyageKey}`);
+  await set(r, {
+    ...voyageMeta,
+    analyzed_at: Date.now(),
+  });
+}
+
+// 선박 통계 업데이트 (양하/선적 누적)
+export async function fbAddShipStats(imo, stats) {
+  if (!imo) return;
+  const r = ref(db, `ships/${imo}/stats`);
+  const snap = await get(r);
+  const cur = snap.val() || { total_discharge: 0, total_loading: 0, total_voyages: 0 };
+  await set(r, {
+    total_discharge: (cur.total_discharge || 0) + (stats.discharge || 0),
+    total_loading: (cur.total_loading || 0) + (stats.loading || 0),
+    total_voyages: (cur.total_voyages || 0) + 1,
+    last_voyage_at: Date.now(),
+  });
+}
+
 export { db };

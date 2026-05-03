@@ -1,7 +1,14 @@
-import React, { useMemo } from 'react';
-import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship } from 'lucide-react';
+import { fbSubscribeShipLibrary } from '../firebase.js';
 
 export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGoHome }) {
+  const [shipLib, setShipLib] = useState({});
+  useEffect(() => {
+    const u = fbSubscribeShipLibrary(setShipLib);
+    return () => u();
+  }, []);
+
   // 항차별 통계
   const voyageStats = useMemo(() => {
     return Object.entries(voyages || {})
@@ -113,6 +120,61 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
           </div>
         )}
       </div>
+
+      {/* 선박 라이브러리 (학습된 선박 구조) */}
+      <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3">
+        <div className="flex items-center gap-2 mb-3">
+          <Library className="w-4 h-4 text-purple-400"/>
+          <div className="text-sm font-bold text-slate-100">선박 라이브러리 ({Object.keys(shipLib).length}척)</div>
+        </div>
+        <div className="text-[10px] text-slate-500 mb-2">EDI 분석된 선박은 자동 저장 → 다음 항차에서 즉시 활용</div>
+        {Object.keys(shipLib).length === 0 ? (
+          <div className="text-xs text-slate-500 text-center py-4">아직 학습된 선박 없음 (EDI 업로드 시 자동 저장)</div>
+        ) : (
+          <div className="space-y-2">
+            {Object.entries(shipLib).sort((a,b) => (b[1].last_updated||0) - (a[1].last_updated||0)).map(([imo, ship]) => (
+              <ShipLibraryRow key={imo} imo={imo} ship={ship}/>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ShipLibraryRow({ imo, ship }) {
+  const struct = ship.structure || {};
+  const stats = ship.stats || {};
+  const voyageCount = ship.voyages ? Object.keys(ship.voyages).length : 0;
+  const pairCount = struct.pairs ? Object.keys(struct.pairs).length / 2 : 0;
+  return (
+    <div className="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
+      <div className="flex items-center gap-2 mb-1">
+        <Ship className="w-3.5 h-3.5 text-purple-400"/>
+        <span className="font-bold text-sm text-purple-200">{ship.name || '(이름 없음)'}</span>
+        <span className="text-[10px] text-slate-500 mono">IMO {imo}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1 text-[10px] text-slate-400">
+        <div>베이 <span className="text-slate-200 font-bold">{struct.bay_count || 0}</span>개</div>
+        <div>짝꿍 <span className="text-emerald-300 font-bold">{pairCount}</span>쌍</div>
+        <div>단독 <span className="text-amber-300 font-bold">{struct.singles?.length || 0}</span>개</div>
+        <div>분석 항차 <span className="text-slate-200 font-bold">{voyageCount}</span></div>
+        <div>양하 누적 <span className="text-blue-300 font-bold">{stats.total_discharge || 0}</span></div>
+        <div>선적 누적 <span className="text-amber-300 font-bold">{stats.total_loading || 0}</span></div>
+      </div>
+      {struct.pairs && Object.keys(struct.pairs).length > 0 && (
+        <details className="mt-2">
+          <summary className="text-[10px] text-purple-400 cursor-pointer">짝꿍 베이 상세</summary>
+          <div className="mt-1 text-[10px] text-slate-400 mono space-y-0.5">
+            {[...new Set(Object.entries(struct.pairs).map(([a,b]) => [a,b].sort().join('↔')))].map(p => (
+              <div key={p}>{p}</div>
+            ))}
+            {struct.singles?.length > 0 && (
+              <div className="text-amber-400 mt-1">단독: {struct.singles.join(', ')}</div>
+            )}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

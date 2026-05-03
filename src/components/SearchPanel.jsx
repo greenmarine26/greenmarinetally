@@ -294,6 +294,16 @@ function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
   const [autoTwin, setAutoTwin] = useState(true); // 자동 짝꿍 ON/OFF
 
+  // 이미 검수 완료된 컨번호 = 짝 후보에서 제외
+  // 같은 트윈 작업으로 묶이지 않도록
+  const excludeCns = useMemo(() => {
+    const s = new Set();
+    allContainers.forEach(c => {
+      if (c._comp) s.add(c.cn);
+    });
+    return s;
+  }, [allContainers]);
+
   const r1 = useMemo(() => {
     if (!q1 || q1.length < 2) return [];
     const Q = q1.toUpperCase();
@@ -309,13 +319,14 @@ function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
     if (r1.length === 1 && autoTwin) {
       const front = r1[0];
       setC1(front);
-      const twin = findTwinCandidate(front, allContainers);
+      // 페어링되지 않은 컨만 짝 후보로
+      const twin = findTwinCandidate(front, allContainers, excludeCns);
       setC2(twin);
     } else if (r1.length === 0 || r1.length > 1) {
       setC1(null);
       setC2(null);
     }
-  }, [r1, autoTwin, allContainers]);
+  }, [r1, autoTwin, allContainers, excludeCns]);
 
   // 두 컨 모두 완료되면 자동 비우기
   const handleAfterComplete = () => {
@@ -325,14 +336,14 @@ function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
   };
 
   const handleSwapTwin = () => {
-    // 짝꿍 다른 후보로 변경 (수동 입력)
     setC2(null);
   };
 
   return (
     <>
       <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
-        🚛 트윈: 앞 컨 입력 → 짝꿍 자동 추천 (틀리면 수정 가능)
+        🚛 트윈: 앞 컨 입력 → EDI 베이 분석으로 짝꿍 자동 추천
+        <div className="text-[10px] text-blue-400/70 mt-0.5">완료된 컨은 짝 후보 제외 · 통로 사이 단독 베이는 짝 없음</div>
       </div>
 
       <div className="bg-slate-900 border border-amber-700/40 rounded-lg p-3">

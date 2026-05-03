@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V38 (2026.05.03)
-export const APP_VERSION = 'M2.3';
+export const APP_VERSION = 'M2.6';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -291,7 +291,15 @@ export function parseBAPLIE(ediText) {
       }
     } else if (cur && (seg.startsWith('TMP+2+') || seg.startsWith('TMP+'))) {
       const v = seg.substring(6).split(':')[0];
-      if (v) { cur.tmp = v; cur.rf = true; }
+      if (v) {
+        // 정규화: "-018" → "-18", "000" → "0", "-02.5" → "-2.5"
+        // 부호 있으면 부호 유지하면서 앞 0 제거
+        let norm = v.trim();
+        const m = norm.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
+        if (m) norm = (m[1] || '') + m[2];
+        cur.tmp = norm;
+        cur.rf = true;
+      }
     } else if (cur && seg.startsWith('RNG+5+')) {
       const parts = seg.split(':');
       if (parts.length >= 3) {
