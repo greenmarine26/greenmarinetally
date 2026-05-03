@@ -18,6 +18,7 @@ import { isoToLabel, isoToPdfLabel, fmtPos } from '../utils.js';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
   const [pageIdx, setPageIdx] = useState(0);
+  const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   const [zoom, setZoom] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.6;
     return 1.0;
@@ -275,18 +276,37 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           </button>
         </div>
 
-        {/* 페이지 네비 */}
-        <button onClick={() => setPageIdx(i => Math.max(0, i - 1))}
-          disabled={pageIdx === 0}
-          className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">◀</button>
-        <span className="text-xs mono text-slate-300 font-bold">{pageIdx + 1} / {pages.length}</span>
-        <button onClick={() => setPageIdx(i => Math.min(pages.length - 1, i + 1))}
-          disabled={pageIdx === pages.length - 1}
-          className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">▶</button>
+        {/* 전체 모드 토글 (기본 ON) */}
+        <button onClick={() => setAllBaysMode(!allBaysMode)}
+          className={`px-2 py-1.5 rounded text-xs font-bold ${
+            allBaysMode ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-800 text-slate-400'
+          }`}>
+          {allBaysMode ? '✓ 전체 세로' : '단일 페이지'}
+        </button>
 
-        {/* 베이 점프 (선택) */}
-        <select value={pageIdx} onChange={e => setPageIdx(parseInt(e.target.value))}
-          className="bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 mono px-1 py-1">
+        {/* 페이지 네비 (단일 모드일 때만) */}
+        {!allBaysMode && (
+          <>
+            <button onClick={() => setPageIdx(i => Math.max(0, i - 1))}
+              disabled={pageIdx === 0}
+              className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">◀</button>
+            <span className="text-xs mono text-slate-300 font-bold">{pageIdx + 1} / {pages.length}</span>
+            <button onClick={() => setPageIdx(i => Math.min(pages.length - 1, i + 1))}
+              disabled={pageIdx === pages.length - 1}
+              className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">▶</button>
+          </>
+        )}
+
+        {/* 베이 점프 */}
+        <select value={pageIdx} onChange={e => {
+            const i = parseInt(e.target.value);
+            setPageIdx(i);
+            if (allBaysMode) {
+              const el = document.getElementById(`bay-page-${i}`);
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }}
+          className="bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 mono px-1 py-1 ml-auto">
           {pages.map((p, i) => (
             <option key={i} value={i}>{p.title}</option>
           ))}
@@ -304,24 +324,52 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       </div>
 
       {/* 베이 그리드 본체 */}
-      <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto" style={{ maxHeight: '70vh' }}>
-        <BayPage
-          page={curPage}
-          bayGroups={bayGroups}
-          completedMap={compMap}
-          xrayList={xrayMap}
-          dischargeCns={dischargeCns}
-          shiftingMap={shiftingMap}
-          isPtk={isPtk}
-          onCellClick={onOpenContainer}
-          cellW={cellW}
-          cellH={cellH}
-          fontSize={fontSize}
-          isMobile={isMobile}
-          cellColor={cellColor}
-          globalRowRange={globalRowRange}
-          bayStructureMap={bayStructureMap}
-        />
+      <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto" style={{ maxHeight: '78vh' }}>
+        {allBaysMode ? (
+          // 전체 베이 세로 스크롤 (V37 기본 모드)
+          <div className="space-y-6">
+            {pages.map((page, pIdx) => (
+              <div key={pIdx} id={`bay-page-${pIdx}`}>
+                <BayPage
+                  page={page}
+                  bayGroups={bayGroups}
+                  completedMap={compMap}
+                  xrayList={xrayMap}
+                  dischargeCns={dischargeCns}
+                  shiftingMap={shiftingMap}
+                  isPtk={isPtk}
+                  onCellClick={onOpenContainer}
+                  cellW={cellW}
+                  cellH={cellH}
+                  fontSize={fontSize}
+                  isMobile={isMobile}
+                  cellColor={cellColor}
+                  globalRowRange={globalRowRange}
+                  bayStructureMap={bayStructureMap}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          // 단일 페이지 모드
+          <BayPage
+            page={curPage}
+            bayGroups={bayGroups}
+            completedMap={compMap}
+            xrayList={xrayMap}
+            dischargeCns={dischargeCns}
+            shiftingMap={shiftingMap}
+            isPtk={isPtk}
+            onCellClick={onOpenContainer}
+            cellW={cellW}
+            cellH={cellH}
+            fontSize={fontSize}
+            isMobile={isMobile}
+            cellColor={cellColor}
+            globalRowRange={globalRowRange}
+            bayStructureMap={bayStructureMap}
+          />
+        )}
       </div>
     </div>
   );
