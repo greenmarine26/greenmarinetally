@@ -347,10 +347,10 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               <span className="text-[9px] mono px-1 py-0.5 rounded font-bold bg-blue-900 text-blue-300">{isoToLabel(c.iso) || c.tp || ''}</span>
               {isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1.5 py-0.5 rounded font-black">🔍 XRAY</span>}
               {isDG && <span className="bg-red-700/60 text-red-100 text-[9px] px-1.5 py-0.5 rounded font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
-              {/* 리퍼 — 온도 강조 */}
-              {isReeferF
+              {/* 리퍼 - 온도 있으면 항상 큰 뱃지 (F/E 무관) */}
+              {isReefer && hasTmp
                 ? <span className="bg-cyan-600 text-cyan-50 text-[10px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {c.tmp}°C</span>
-                : isReefer && <span className="bg-cyan-900/70 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded font-bold border border-cyan-700/50">RE</span>}
+                : isReefer && <span className="bg-cyan-900/70 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded font-bold border border-cyan-700/50">RF</span>}
               {c.fr && <span className="bg-orange-700/60 text-orange-100 text-[9px] px-1.5 py-0.5 rounded font-black">FR</span>}
               {c.ot && <span className="bg-yellow-700/60 text-yellow-100 text-[9px] px-1.5 py-0.5 rounded font-black">OT</span>}
               {c.tk && <span className="bg-pink-700/60 text-pink-100 text-[9px] px-1.5 py-0.5 rounded font-black">TK</span>}

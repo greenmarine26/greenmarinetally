@@ -11,6 +11,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer }) {
   const [searchMode, setSearchMode] = useState('single');
@@ -94,7 +95,14 @@ function SingleSearch({ allContainers, onOpenContainer }) {
   const recognitionRef = useRef(null);
   const lastSpokenRef = useRef(null);
 
-  const results = useMemo(() => searchByCn(allContainers, query), [allContainers, query]);
+  // 자연어 파싱: "40피트 4777" 또는 "리퍼 몇개"
+  const parsed = useMemo(() => parseNaturalQuery(query), [query]);
+
+  const results = useMemo(() => {
+    if (!query || query.length < 2) return [];
+    if (!hasAnyCondition(parsed)) return [];
+    return applyNLFilter(allContainers, parsed);
+  }, [allContainers, query, parsed]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -107,9 +115,14 @@ function SingleSearch({ allContainers, onOpenContainer }) {
       const text = last[0].transcript;
       setTranscript(text);
       if (last.isFinal) {
-        const digits = parseSpokenDigits(text);
-        if (digits && digits.length >= 2) setQuery(digits);
-        else speak('숫자 인식 실패');
+        // 자연어 그대로 저장 (숫자만이 아닐 수 있음)
+        const t = text.trim();
+        if (t.length >= 2) setQuery(t);
+        else {
+          const digits = parseSpokenDigits(text);
+          if (digits && digits.length >= 2) setQuery(digits);
+          else speak('인식 실패');
+        }
       }
     };
     r.onend = () => setIsListening(false);
@@ -121,14 +134,27 @@ function SingleSearch({ allContainers, onOpenContainer }) {
   useEffect(() => {
     if (!autoSpeak) return;
     if (!query || query.length < 2) return;
-    const sig = `${query}-${results.length}-${results[0]?.cn || 'none'}`;
+    const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
-    if (results.length === 0) speak(`${spellKo(query.replace(/\D/g, ''))}, 컨테이너 없음`);
-    else if (results.length === 1) announceContainer(results[0]);
-    else if (results.length <= 5) speak(`${results.length}개 일치`);
-    else speak(`${results.length}개 일치, 더 자세히`);
-  }, [results, query, autoSpeak]);
+
+    // 통계 질의 → "○○○ N대"
+    if (parsed.isStat) {
+      const desc = describeQuery(parsed);
+      speak(`${desc} ${results.length}대`);
+      return;
+    }
+    // 일반 검색
+    if (results.length === 0) {
+      speak(`${describeQuery(parsed)} 없음`);
+    } else if (results.length === 1) {
+      announceContainer(results[0]);
+    } else if (results.length <= 5) {
+      speak(`${results.length}개 일치`);
+    } else {
+      speak(`${results.length}개 일치, 더 자세히`);
+    }
+  }, [results, query, parsed, autoSpeak]);
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -144,15 +170,15 @@ function SingleSearch({ allContainers, onOpenContainer }) {
     <>
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
         <div className="text-[10px] text-slate-500 font-bold mb-2">
-          싱글 — 컨번호 끝4자리 검색 · 전체 {allContainers.length}대
+          🤖 AI 검색 — 4자리 / 40피트 4777 / 리퍼 몇개 · 전체 {allContainers.length}대
         </div>
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
           <input type="text" value={query}
-            onChange={e => setQuery(e.target.value.toUpperCase())}
-            placeholder="🎤 / 끝 4자리"
-            inputMode="numeric" autoComplete="off"
-            className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"/>
+            onChange={e => setQuery(e.target.value)}
+            placeholder="🎤 / 4777 / 40피트 리퍼 / 엑스레이 몇개"
+            autoComplete="off"
+            className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {voiceSupported && (
               <button onClick={isListening ? stopListening : startListening}
@@ -178,20 +204,48 @@ function SingleSearch({ allContainers, onOpenContainer }) {
             🎙 {transcript}
           </div>
         )}
+        {/* 파싱 결과 표시 (조건 잡혔으면) */}
+        {hasAnyCondition(parsed) && (
+          <div className="mt-2 text-[11px] text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
+            🤖 인식: <span className="font-bold">{describeQuery(parsed)}</span>
+            {parsed.isStat && <span className="ml-1 text-amber-300">(개수 질의)</span>}
+          </div>
+        )}
         <div className="text-[11px] text-center mt-2">
           {!isListening && query.length === 0 && <span className="text-slate-500">🎤 마이크 또는 키보드</span>}
-          {!isListening && query.length >= 2 && results.length === 0 && <span className="text-red-400 font-bold">⚠ 컨테이너 없음 (실번호 ≠ 컨번호)</span>}
-          {!isListening && query.length >= 2 && results.length === 1 && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
-          {!isListening && query.length >= 2 && results.length > 1 && <span className="text-amber-400 font-bold">⚠ {results.length}개 일치</span>}
+          {!isListening && query.length >= 2 && results.length === 0 && hasAnyCondition(parsed) && <span className="text-red-400 font-bold">⚠ 조건 일치 없음</span>}
+          {!isListening && query.length >= 2 && results.length === 1 && !parsed.isStat && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
+          {!isListening && query.length >= 2 && results.length > 1 && !parsed.isStat && <span className="text-amber-400 font-bold">⚠ {results.length}개 일치</span>}
           {isListening && <span className="text-red-300 font-bold">🎙 듣는 중...</span>}
         </div>
       </div>
 
-      {results.length === 1 && <BigResultCard c={results[0]} onOpen={() => onOpenContainer?.(results[0])}/>}
-      {results.length > 1 && results.slice(0, 20).map(c => (
+      {/* 통계 답변 카드 (큰 숫자) */}
+      {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && (
+        <StatAnswerCard parsed={parsed} count={results.length} />
+      )}
+
+      {/* 일반 검색 결과 */}
+      {!parsed.isStat && results.length === 1 && <BigResultCard c={results[0]} onOpen={() => onOpenContainer?.(results[0])}/>}
+      {!parsed.isStat && results.length > 1 && results.slice(0, 30).map(c => (
         <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
       ))}
     </>
+  );
+}
+
+// 통계 답변 카드 (큰 숫자)
+function StatAnswerCard({ parsed, count }) {
+  return (
+    <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-xl p-4 text-center">
+      <div className="text-[11px] text-cyan-400 font-bold uppercase mb-1">🤖 AI 답변</div>
+      <div className="text-base text-slate-300 mb-2">{describeQuery(parsed)}</div>
+      <div className="text-6xl sm:text-7xl font-black mono text-cyan-300 my-2"
+        style={{ textShadow: '0 0 30px rgba(34, 211, 238, 0.6)' }}>
+        {count}
+      </div>
+      <div className="text-lg text-cyan-400 font-bold">대</div>
+    </div>
   );
 }
 
@@ -371,8 +425,8 @@ function BigResultCard({ c, onOpen, label, labelColor = 'amber' }) {
       {/* 3순위: 특수화물 */}
       {(isReefer || c.dg || c.fr || c.ot || c.tk) && (
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {isReeferF && <span className="bg-cyan-600 text-cyan-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><Snowflake className="w-3.5 h-3.5"/>RF {c.tmp}°C</span>}
-          {!isReeferF && isReefer && <span className="bg-cyan-700/60 text-cyan-100 px-2 py-1 rounded font-black text-xs"><Snowflake className="w-3 h-3 inline mr-0.5"/>리퍼</span>}
+          {isReefer && hasTmp && <span className="bg-cyan-600 text-cyan-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><Snowflake className="w-3.5 h-3.5"/>RF {c.tmp}°C</span>}
+          {isReefer && !hasTmp && <span className="bg-cyan-700/60 text-cyan-100 px-2 py-1 rounded font-black text-xs"><Snowflake className="w-3 h-3 inline mr-0.5"/>리퍼</span>}
           {c.dg && <span className="bg-red-600 text-red-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
           {c.fr && <span className="bg-orange-600 text-orange-50 px-2 py-1 rounded font-black text-sm">FR (Flat Rack)</span>}
           {c.ot && <span className="bg-yellow-600 text-yellow-50 px-2 py-1 rounded font-black text-sm">OT (Open Top)</span>}
@@ -396,6 +450,8 @@ function BigResultCard({ c, onOpen, label, labelColor = 'amber' }) {
 // 다중 결과 시 작은 카드
 function SmallResultCard({ c, onOpen }) {
   const isDone = !!c._comp;
+  const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+  const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
   return (
     <button onClick={onOpen}
       className={`w-full text-left bg-slate-900 border rounded-lg p-2 flex items-center gap-2 ${
@@ -406,8 +462,17 @@ function SmallResultCard({ c, onOpen }) {
       }`}>{c._mode === 'discharge' ? '양하' : '선적'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
       <span className="text-[10px] text-slate-400 mono truncate flex-1">{c.cn}</span>
-      {c._xray && <span className="text-purple-400">🔍</span>}
-      {isDone && <span className="text-emerald-400">✓</span>}
+      <span className="text-[9px] mono text-slate-400">{isoToLabel(c.iso) || c.tp || ''}</span>
+      <span className={`text-[9px] mono px-1 rounded font-bold ${
+        c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :
+        c.fe === 'E' ? 'bg-slate-700 text-slate-300' :
+        'bg-amber-900/60 text-amber-300'
+      }`}>{c.fe || '?'}</span>
+      {isReefer && hasTmp && <span className="bg-cyan-700/60 text-cyan-100 text-[9px] px-1 rounded font-bold">❄{c.tmp}°</span>}
+      {isReefer && !hasTmp && <span className="text-cyan-400 text-xs">❄</span>}
+      {c.dg && <span className="text-red-400 text-xs">🔥</span>}
+      {c._xray && <span className="text-purple-400 text-xs">🔍</span>}
+      {isDone && <span className="text-emerald-400 text-xs">✓</span>}
     </button>
   );
 }
