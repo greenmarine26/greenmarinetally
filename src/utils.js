@@ -568,7 +568,7 @@ export async function parseListExcel(arrayBuffer) {
               }
             }
             records.push({
-              cn, l4: cn.slice(-4), sl, wt, iso, pol, pod,
+              cn, l4: cn.slice(-4), sl, sl_orig: sl, wt, iso, pol, pod,
               op: '', bl: '', sh: '', gi: '',
               fe: '', dg: false, rf: false, fr: false, ot: false, tk: false, tmp: ''
             });
@@ -685,6 +685,7 @@ export async function parseListExcel(arrayBuffer) {
       records.push({
         cn, l4: cn.slice(-4),
         sl,
+        sl_orig: sl,
         bl: bl_i >= 0 ? String(row[bl_i] || '').trim() : '',
         sh: sh_i >= 0 ? String(row[sh_i] || '').trim() : '',
         gi: gi_i >= 0 ? String(row[gi_i] || '').trim() : '',
