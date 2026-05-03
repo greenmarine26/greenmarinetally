@@ -50,11 +50,15 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   const matches = useMemo(() => {
     if (!query || query.length < 2) return [];
     const Q = query.toUpperCase();
-    return flat.filter(c =>
-      c.cn?.includes(Q) || c.l4?.includes(Q) ||
-      c.bay?.includes(Q) || c.op?.includes(Q) ||
-      c.sl?.includes(Q) || c.vsl?.includes(Q)
-    ).slice(0, 50);
+    // 숫자만 입력 → 컨번호 + 끝4자리만 (실번호/베이/B/L 제외)
+    // 알파벳 포함 → 컨번호 + 끝4자리 + 선박명 (선박 찾기 가능)
+    const isOnlyDigits = /^\d+$/.test(Q);
+    return flat.filter(c => {
+      if (isOnlyDigits) {
+        return c.cn?.includes(Q) || c.l4?.includes(Q);
+      }
+      return c.cn?.includes(Q) || c.l4?.includes(Q) || c.vsl?.includes(Q);
+    }).slice(0, 50);
   }, [flat, query]);
 
   // Web Speech API
@@ -95,15 +99,19 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     lastSpokenRef.current = sig;
 
     if (matches.length === 0) {
-      speak(`${spellKo(query.replace(/\D/g, ''))}, 일치하는 컨테이너가 없습니다.`);
+      speak(`${spellKo(query.replace(/\D/g, ''))}, 컨테이너 없음`);
     } else if (matches.length === 1) {
       const c = matches[0];
-      const modeLabel = c.mode === 'discharge' ? '양하' : '선적';
-      speakContainer(c, { xray: c.isXray, suffix: `${c.vsl} ${modeLabel}` });
+      const last4 = c.l4 || c.cn?.slice(-4) || '';
+      const parts = [spellKo(last4)];
+      if (c.sl) parts.push(`실번호 ${spellKo(c.sl)}`);
+      else parts.push('실번호 미입력');
+      if (c.isXray) parts.push('엑스레이');
+      speak(parts.join(', '));
     } else if (matches.length <= 5) {
-      speak(`${matches.length}개 일치. 첫 번째. ${spellKo(matches[0].cn?.slice(-4) || '')}`);
+      speak(`${matches.length}개 일치. 첫번째. ${spellKo(matches[0].cn?.slice(-4) || '')}`);
     } else {
-      speak(`${matches.length}개 일치. 더 자세한 번호를 말씀해주세요.`);
+      speak(`${matches.length}개 일치. 더 자세히`);
     }
   }, [matches, query, autoSpeak]);
 
