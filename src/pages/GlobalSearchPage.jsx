@@ -1,8 +1,9 @@
-// 모든 항차 + 양/선적 통합 검색 + 음성 입력
+// 모든 항차 + 양/선적 통합 검색 + 음성 입력 + AI 자연어 (M1.9)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight } from 'lucide-react';
+import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake } from 'lucide-react';
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';
 
 export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   const [query, setQuery] = useState('');
@@ -37,8 +38,11 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
             vsl: v.info.vsl,
             voy: v.info.voy,
             mode,
+            _mode: mode,
             isXray: mode === 'discharge' && !!xrayMap[c.cn],
+            _xray: mode === 'discharge' && !!xrayMap[c.cn],
             comp: compMap[c.cn] || null,
+            _comp: compMap[c.cn] || null,
             xraySeal: xraySeals[c.cn] || null,
           });
         });
@@ -47,19 +51,24 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     return arr;
   }, [voyages]);
 
+  // 자연어 파싱
+  const parsed = useMemo(() => parseNaturalQuery(query), [query]);
+
+  // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
     if (!query || query.length < 2) return [];
+    if (!hasAnyCondition(parsed)) return [];
+    // 알파벳 포함 → 선박명 검색도 포함
     const Q = query.toUpperCase();
-    // 숫자만 입력 → 컨번호 + 끝4자리만 (실번호/베이/B/L 제외)
-    // 알파벳 포함 → 컨번호 + 끝4자리 + 선박명 (선박 찾기 가능)
-    const isOnlyDigits = /^\d+$/.test(Q);
-    return flat.filter(c => {
-      if (isOnlyDigits) {
-        return c.cn?.includes(Q) || c.l4?.includes(Q);
-      }
-      return c.cn?.includes(Q) || c.l4?.includes(Q) || c.vsl?.includes(Q);
-    }).slice(0, 50);
-  }, [flat, query]);
+    const isOnlyDigits = /^\d+$/.test(Q.replace(/\s/g, ''));
+    let r = applyNLFilter(flat, parsed);
+    // 자연어 조건이 없는 알파벳 → 선박명 매칭도 시도
+    if (!parsed.size && !parsed.fe && !parsed.type && !parsed.isAll && !isOnlyDigits) {
+      const vslMatches = flat.filter(c => c.vsl?.toUpperCase().includes(Q));
+      r = [...new Set([...r, ...vslMatches])];
+    }
+    return r.slice(0, 100);
+  }, [flat, query, parsed]);
 
   // Web Speech API
   useEffect(() => {
@@ -76,9 +85,14 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
       const text = last[0].transcript;
       setTranscript(text);
       if (last.isFinal) {
-        const digits = parseSpokenDigits(text);
-        if (digits && digits.length >= 2) setQuery(digits);
-        else speak('숫자를 인식하지 못했습니다.');
+        // 자연어 그대로 저장
+        const t = text.trim();
+        if (t.length >= 2) setQuery(t);
+        else {
+          const digits = parseSpokenDigits(text);
+          if (digits && digits.length >= 2) setQuery(digits);
+          else speak('인식 실패');
+        }
       }
     };
     r.onend = () => setIsListening(false);
@@ -94,12 +108,17 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   useEffect(() => {
     if (!autoSpeak) return;
     if (!query || query.length < 2) return;
-    const sig = `${query}-${matches.length}-${matches[0]?.cn || 'none'}`;
+    const sig = `${query}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
 
+    if (parsed.isStat) {
+      speak(`${describeQuery(parsed)} ${matches.length}대`);
+      return;
+    }
+
     if (matches.length === 0) {
-      speak(`${spellKo(query.replace(/\D/g, ''))}, 컨테이너 없음`);
+      speak(`${describeQuery(parsed)} 없음`);
     } else if (matches.length === 1) {
       const c = matches[0];
       const last4 = c.l4 || c.cn?.slice(-4) || '';
@@ -113,15 +132,14 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     } else {
       speak(`${matches.length}개 일치. 더 자세히`);
     }
-  }, [matches, query, autoSpeak]);
+  }, [matches, query, parsed, autoSpeak]);
 
   const startListening = () => {
     if (!recognitionRef.current) return;
     setTranscript('');
     setIsListening(true);
     stopSpeak();
-    try { recognitionRef.current.start(); }
-    catch (e) { setIsListening(false); }
+    try { recognitionRef.current.start(); } catch (e) { setIsListening(false); }
   };
   const stopListening = () => {
     try { recognitionRef.current?.stop(); } catch (e) {}
@@ -132,18 +150,17 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     <div className="max-w-2xl mx-auto px-3 py-3">
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 mb-3">
         <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between">
-          <span>통합 검색 — 모든 항차·양/선적</span>
+          <span>🤖 AI 통합 검색 — 모든 항차·양/선적</span>
           <span className="text-slate-400 mono">전체 {flat.length.toLocaleString()}대</span>
         </div>
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
           <input type="text" value={query}
-            onChange={e => setQuery(e.target.value.toUpperCase())}
-            placeholder="🎤 마이크 / 끝4자리 / 컨번호 / 선박명"
-            inputMode="numeric"
+            onChange={e => setQuery(e.target.value)}
+            placeholder="🎤 / 4777 / 40피트 4777 / 리퍼 몇개"
             autoComplete="off"
             autoFocus
-            className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"/>
+            className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {voiceSupported && (
               <button onClick={isListening ? stopListening : startListening}
@@ -169,27 +186,51 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
             🎙 {transcript}
           </div>
         )}
-        <div className="text-[11px] text-slate-500 text-center mt-2">
-          {!isListening && query.length === 0 && '🎤 마이크 누르고 "공구일오" 식으로 또박또박'}
-          {!isListening && query.length > 0 && query.length < 2 && '2자리 이상 입력'}
-          {!isListening && query.length >= 2 && matches.length === 0 && '일치 없음'}
-          {!isListening && query.length >= 2 && matches.length === 1 && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
-          {!isListening && query.length >= 2 && matches.length > 1 && <span className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 50 ? '+' : ''}</span>}
-          {isListening && '🎙 듣는 중... 또박또박 말씀하세요'}
+        {/* AI 인식 결과 표시 */}
+        {hasAnyCondition(parsed) && (
+          <div className="mt-2 text-[11px] text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
+            🤖 인식: <span className="font-bold">{describeQuery(parsed)}</span>
+            {parsed.isStat && <span className="ml-1 text-amber-300">(개수 질의)</span>}
+          </div>
+        )}
+        <div className="text-[11px] text-center mt-2">
+          {!isListening && query.length === 0 && <span className="text-slate-500">🎤 마이크 또는 키보드</span>}
+          {!isListening && query.length >= 2 && matches.length === 0 && hasAnyCondition(parsed) && <span className="text-red-400 font-bold">⚠ 일치 없음</span>}
+          {!isListening && query.length >= 2 && matches.length === 1 && !parsed.isStat && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
+          {!isListening && query.length >= 2 && matches.length > 1 && !parsed.isStat && <span className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 100 ? '+' : ''}</span>}
+          {isListening && <span className="text-red-300 font-bold">🎙 듣는 중...</span>}
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        {matches.map(c => (
-          <GlobalResultCard key={`${c.voyageKey}/${c.mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer(c)} />
-        ))}
-      </div>
+      {/* 통계 답변 카드 */}
+      {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && (
+        <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-xl p-4 text-center mb-3">
+          <div className="text-[11px] text-cyan-400 font-bold uppercase mb-1">🤖 AI 답변</div>
+          <div className="text-base text-slate-300 mb-2">{describeQuery(parsed)}</div>
+          <div className="text-6xl sm:text-7xl font-black mono text-cyan-300 my-2"
+            style={{ textShadow: '0 0 30px rgba(34, 211, 238, 0.6)' }}>
+            {matches.length}
+          </div>
+          <div className="text-lg text-cyan-400 font-bold">대</div>
+        </div>
+      )}
+
+      {/* 일반 결과 */}
+      {!parsed.isStat && (
+        <div className="space-y-1.5">
+          {matches.map(c => (
+            <GlobalResultCard key={`${c.voyageKey}/${c.mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer(c)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function GlobalResultCard({ c, onOpen }) {
   const isDone = !!c.comp;
+  const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+  const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
   return (
     <button onClick={onOpen}
       className={`w-full text-left bg-slate-900 border rounded-lg p-2.5 flex items-center gap-2 ${
@@ -200,17 +241,22 @@ function GlobalResultCard({ c, onOpen }) {
       <div className={`flex-shrink-0 px-2 py-1.5 rounded text-[10px] font-black flex flex-col items-center gap-0.5 ${
         c.mode === 'discharge' ? 'bg-blue-900/60 text-blue-200' : 'bg-amber-900/60 text-amber-200'
       }`}>
-        {c.mode === 'discharge'
-          ? <ArrowDown className="w-3.5 h-3.5"/>
-          : <ArrowUp className="w-3.5 h-3.5"/>}
+        {c.mode === 'discharge' ? <ArrowDown className="w-3.5 h-3.5"/> : <ArrowUp className="w-3.5 h-3.5"/>}
         <span>{c.mode === 'discharge' ? '양하' : '선적'}</span>
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="font-black text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
           <span className="text-[11px] text-slate-400 mono truncate">{c.cn}</span>
-          {c.isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1 rounded font-black">🔍</span>}
-          {isDone && <span className="bg-emerald-700/60 text-emerald-100 text-[9px] px-1 rounded font-black">✓</span>}
+          <span className={`text-[9px] mono px-1 rounded font-bold ${
+            c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :
+            c.fe === 'E' ? 'bg-slate-700 text-slate-300' :
+            'bg-amber-900/60 text-amber-300'
+          }`}>{c.fe || '?'}</span>
+          {isReefer && hasTmp && <span className="bg-cyan-700/60 text-cyan-100 text-[9px] px-1 rounded font-bold flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>{c.tmp}°</span>}
+          {c.isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1 rounded font-bold">🔍</span>}
+          {c.dg && <span className="text-red-400 text-xs">🔥</span>}
+          {isDone && <span className="bg-emerald-700/60 text-emerald-100 text-[9px] px-1 rounded font-bold">✓</span>}
         </div>
         <div className="flex items-center gap-2 text-[10px] text-slate-500 mono mt-0.5">
           <span className="text-slate-300 font-bold">{c.vsl}</span>
