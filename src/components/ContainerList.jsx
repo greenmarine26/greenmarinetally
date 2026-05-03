@@ -60,7 +60,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (c.tk) k.tk++;
       if (c.oog || c.fr) k.oog++;
       if (c.fe === 'F') k.full++;
-      else k.empty++;
+      else if (c.fe === 'E') k.empty++;
+      // 빈 값('')은 카운트 안 함 (F/E 미정)
 
       const lbl = isoToLabel(c.iso);
       if (lbl === '40HC') k.hc++;
@@ -338,7 +339,11 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                   <AlertOctagon className="w-2.5 h-2.5"/>실오류
                 </span>
               )}
-              <span className={`text-[9px] mono px-1 py-0.5 rounded font-bold ${c.fe === 'F' ? 'bg-emerald-900 text-emerald-300' : 'bg-slate-700 text-slate-300'}`}>{c.fe || 'F'}</span>
+              <span className={`text-[9px] mono px-1 py-0.5 rounded font-bold ${
+                c.fe === 'F' ? 'bg-emerald-700 text-emerald-100' :
+                c.fe === 'E' ? 'bg-slate-600 text-slate-200' :
+                'bg-amber-800/60 text-amber-200 border border-amber-600/40'
+              }`}>{c.fe || '⚠?'}</span>
               <span className="text-[9px] mono px-1 py-0.5 rounded font-bold bg-blue-900 text-blue-300">{isoToLabel(c.iso) || c.tp || ''}</span>
               {isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1.5 py-0.5 rounded font-black">🔍 XRAY</span>}
               {isDG && <span className="bg-red-700/60 text-red-100 text-[9px] px-1.5 py-0.5 rounded font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}

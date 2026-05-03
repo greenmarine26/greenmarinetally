@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V38 (2026.05.03)
-export const APP_VERSION = 'M1.5';
+export const APP_VERSION = 'M1.6';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -598,7 +598,8 @@ export async function parseListExcel(arrayBuffer) {
     const pol_i = findCol([/^pol$|load.*port|loading.*port/, /적재항/, /선적항/, /^lp$|^lwharf$/]);
     const pod_i = findCol([/^pod$|dis.*port|dis.*cy|discharge|destination/, /최종항/, /양하항/, /도착항/, /^dp$|^dlv$/]);
     const fe_i = findCol([/^f\/?e$|^full\/?empty$|^fe$|^full\/empty$|^l\/?s$|^l\/s$/, /^적공$/, /^empty\/full$/, /^f\/m$/]);
-    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^size$/, /^규격$/, /^타입$/, /^컨.*규격/]);
+    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$/, /^타입$/, /^컨.*규격/, /^kind$/]);
+    const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
     const op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
     const dg_i = findCol([/^dg$|hazmat|imdg/, /위험물/]);
     const tmp_i = findCol([/^temp|^temperature|^reefer/, /온도/, /냉장/]);
@@ -628,12 +629,32 @@ export async function parseListExcel(arrayBuffer) {
       if (seen.has(cn)) continue;
       seen.add(cn);
 
-      // F/E
+      // F/E 추출 (V38.5: SIZE/TYPE/F/E 세 컬럼 종합)
+      // 1순위: 명시적 F/E 컬럼
+      // 2순위: TYPE 컬럼 끝 글자 (예: "20DCF", "40HCE", "22GPE")
+      // 3순위: SIZE 컬럼 끝 글자 (예: "20F", "40E")
+      // 4순위: 무게 기반 추정
       let fe = '';
       if (fe_i >= 0) {
         const feRaw = String(row[fe_i] || '').trim().toUpperCase();
         if (feRaw === 'F' || feRaw === 'FULL' || feRaw === 'L' || feRaw === 'LOADED') fe = 'F';
         else if (feRaw === 'E' || feRaw === 'EMPTY' || feRaw === 'MT' || feRaw === 'M') fe = 'E';
+      }
+      // TYPE 끝 글자
+      if (!fe && type_i >= 0) {
+        const tRaw = String(row[type_i] || '').trim().toUpperCase().replace(/[\s\-]/g, '');
+        // "20DCF", "40HCE", "22GPF", "DCHC035F" 등
+        if (/^([A-Z]{2}\d{2}|[A-Z]{2,4}|\d{2}[A-Z]{2,3}|\d{4})\d{0,3}([FE])$/.test(tRaw)) {
+          fe = tRaw.slice(-1);
+        }
+      }
+      // SIZE 끝 글자
+      if (!fe && size_i >= 0) {
+        const sRaw = String(row[size_i] || '').trim().toUpperCase().replace(/[\s\-]/g, '');
+        // "20F", "40E", "20FT-F"
+        if (/^(20|40|45)(FT)?([FE])$/.test(sRaw)) {
+          fe = sRaw.slice(-1);
+        }
       }
 
       // 타입
@@ -702,6 +723,18 @@ export async function parseListExcel(arrayBuffer) {
         tk: isTk,
         tmp: tmpVal,
       });
+    }
+  }
+  // V38.5: 무게 기반 F/E 검증 (4순위) — 위에서 못 잡은 경우
+  // 20피트 Empty ≈ 2.2t, 40피트 Empty ≈ 3.8t (현장 실측)
+  for (const r of records) {
+    if (r.fe) continue; // 이미 F/E 결정됨
+    if (r.wt > 0) {
+      const is20 = r.iso && (r.iso.startsWith('22') || r.iso.startsWith('25'));
+      const is40 = r.iso && (r.iso.startsWith('42') || r.iso.startsWith('44') || r.iso.startsWith('45'));
+      if (is20 && r.wt <= 2500) r.fe = 'E';
+      else if (is40 && r.wt <= 4500) r.fe = 'E';
+      else if (r.wt > 5000) r.fe = 'F';
     }
   }
   return { records };
