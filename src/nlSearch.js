@@ -57,7 +57,15 @@ export function parseNaturalQuery(text) {
 export function applyNLFilter(containers, parsed) {
   let r = containers;
   if (parsed.digits) {
-    r = r.filter(c => c.cn?.includes(parsed.digits) || c.l4?.includes(parsed.digits));
+    const d = parsed.digits;
+    r = r.filter(c => {
+      const last4 = c.l4 || c.cn?.slice(-4) || '';
+      // 4자리 정확 입력 → 끝4자리 정확 일치
+      if (d.length === 4) return last4 === d;
+      // 2~3자리 부분 입력 → 끝쪽에서 시작하는 매칭만
+      // 예: "777" → 끝4자리가 X777 또는 7777인 것만
+      return last4.endsWith(d);
+    });
   }
   if (parsed.size === '20') {
     r = r.filter(c => {
@@ -77,12 +85,21 @@ export function applyNLFilter(containers, parsed) {
   }
   if (parsed.fe) r = r.filter(c => c.fe === parsed.fe);
   if (parsed.type === 'rf') {
-    r = r.filter(c => c.rf || (c.iso && c.iso[2] === 'R') || (c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0'));
+    r = r.filter(c => {
+      const lbl = isoToLabel(c.iso) || '';
+      return c.rf || (c.iso && c.iso[2] === 'R') || /RF$/.test(lbl) || (c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0');
+    });
   } else if (parsed.type === 'dg') r = r.filter(c => c.dg);
   else if (parsed.type === 'xray') r = r.filter(c => c._xray);
-  else if (parsed.type === 'tk') r = r.filter(c => c.tk);
-  else if (parsed.type === 'fr') r = r.filter(c => c.fr);
-  else if (parsed.type === 'ot') r = r.filter(c => c.ot);
+  else if (parsed.type === 'tk') {
+    r = r.filter(c => c.tk || /TK$/.test(isoToLabel(c.iso) || ''));
+  }
+  else if (parsed.type === 'fr') {
+    r = r.filter(c => c.fr || /FR$/.test(isoToLabel(c.iso) || ''));
+  }
+  else if (parsed.type === 'ot') {
+    r = r.filter(c => c.ot || /OT$/.test(isoToLabel(c.iso) || ''));
+  }
   else if (parsed.type === 'oog') r = r.filter(c => c.oog || c.fr || c.ot);
   return r;
 }

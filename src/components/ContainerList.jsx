@@ -20,12 +20,16 @@ const FILTERS = [
   { key: '20', label: '20DC', color: 'bg-blue-600' },
   { key: '40', label: '40DC', color: 'bg-blue-600' },
   { key: 'hc', label: '40HC', color: 'bg-blue-600' },
+  { key: 'hc45', label: '45HC', color: 'bg-blue-600' },
   { key: 'rf20', label: '❄ 20RF', color: 'bg-cyan-600' },
   { key: 'rf40', label: '❄ 40RF', color: 'bg-cyan-600' },
+  { key: 'rf45', label: '❄ 45RF', color: 'bg-cyan-600' },
   { key: 'fr20', label: '▱ 20FR', color: 'bg-yellow-600' },
   { key: 'fr40', label: '▱ 40FR', color: 'bg-yellow-600' },
+  { key: 'fr45', label: '▱ 45FR', color: 'bg-yellow-600' },
   { key: 'ot20', label: '△ 20OT', color: 'bg-pink-600' },
   { key: 'ot40', label: '△ 40OT', color: 'bg-pink-600' },
+  { key: 'ot45', label: '△ 45OT', color: 'bg-pink-600' },
   { key: 'tk20', label: '⬛ 20TK', color: 'bg-orange-600' },
   { key: 'tk40', label: '⬛ 40TK', color: 'bg-orange-600' },
   { key: 'rf', label: '❄ 리퍼(F+온도)', color: 'bg-cyan-600' },
@@ -46,7 +50,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       all: list.length,
       completed: 0, remaining: 0, full: 0, empty: 0, xray: 0, dg: 0, rf: 0, tk: 0, oog: 0,
       hc: 0, dc20: 0, dc40: 0,
-      rf20: 0, rf40: 0, fr20: 0, fr40: 0, ot20: 0, ot40: 0, tk20: 0, tk40: 0,
+      rf20: 0, rf40: 0, rf45: 0, fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
+      hc45: 0,
       sealerr: 0,
     };
     list.forEach(c => {
@@ -71,10 +76,14 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       else if (lbl === '40RF') k.rf40++;
       if (lbl === '20FR') k.fr20++;
       else if (lbl === '40FR') k.fr40++;
+      else if (lbl === '45FR') k.fr45++;
       if (lbl === '20OT') k.ot20++;
       else if (lbl === '40OT') k.ot40++;
+      else if (lbl === '45OT') k.ot45++;
       if (lbl === '20TK') k.tk20++;
       else if (lbl === '40TK') k.tk40++;
+      if (lbl === '45RF') k.rf45++;
+      if (lbl === '45HC') k.hc45++;
 
       // 실오류
       const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
@@ -119,8 +128,12 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'rf40' && lbl !== '40RF') return false;
       if (f === 'fr20' && lbl !== '20FR') return false;
       if (f === 'fr40' && lbl !== '40FR') return false;
+      if (f === 'fr45' && lbl !== '45FR') return false;
       if (f === 'ot20' && lbl !== '20OT') return false;
       if (f === 'ot40' && lbl !== '40OT') return false;
+      if (f === 'ot45' && lbl !== '45OT') return false;
+      if (f === 'rf45' && lbl !== '45RF') return false;
+      if (f === 'hc45' && lbl !== '45HC') return false;
       if (f === 'tk20' && lbl !== '20TK') return false;
       if (f === 'tk40' && lbl !== '40TK') return false;
       if (f === 'rf') {

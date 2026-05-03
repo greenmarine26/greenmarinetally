@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V38 (2026.05.03)
-export const APP_VERSION = 'M1.10';
+export const APP_VERSION = 'M2.0';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -42,6 +42,26 @@ export const formatWt = (wt) => {
 export const isoToLabel = (iso) => {
   if (!iso) return '';
   const p = String(iso).toUpperCase().trim().replace(/\s+/g, '');
+
+  // === 45ft 컨테이너 (둘째 자리 = 5,6,8,9 = 45ft 영역) ===
+  // 4500=40HC, 4600/4610=45HC, 46P0~46P3=45FR, 46U0=45OT 등
+  if (/^4[5689][0-9][0-9]$/.test(p)) {
+    if (/^4[5689]P/.test(p)) return '45FR';     // 46P3 = 45FR
+    if (/^4[5689]U/.test(p)) return '45OT';
+    if (/^4[5689]R/.test(p)) return '45RF';
+    if (/^4[5689]T/.test(p)) return '45TK';
+    return '45HC';                               // 4600, 4610 등
+  }
+  // 알파벳 ISO 코드 (45G1, 45P3 등)
+  if (/^45[GP]/.test(p)) {
+    if (/^45P/.test(p)) return '45FR';
+    return '45HC';
+  }
+  if (/^45[RT]/.test(p)) {
+    if (/^45R/.test(p)) return '45RF';
+    return '45TK';
+  }
+  if (/^45U/.test(p)) return '45OT';
 
   // === V38 신규: 4자리 숫자 ISO 코드 (ISO 6346 size+type code) ===
   // 4500/4510/4530 = 40' HC GP, 4200/4210 = 40' GP, 2500 = 20' HC GP, 2200 = 20' GP
@@ -673,10 +693,11 @@ export async function parseListExcel(arrayBuffer) {
 
       const tmpVal = tmp_i >= 0 ? String(row[tmp_i] || '').trim() : '';
       const isoUpper = (iso || isoRaw || '').toUpperCase();
-      const isRf = (tmpVal && tmpVal !== '0' && tmpVal !== '-') || /^[24][245]R/.test(isoUpper) || /^[24]0R/.test(isoUpper) || /^[24]58[2-5]$/.test(isoUpper);
-      const isFr = /^[24][024]P/.test(isoUpper) || /^[24]0F[PR]/.test(isoUpper);
-      const isOt = /^[24][024]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^45O/.test(isoUpper);
-      const isTk = /^[24][024]T/.test(isoUpper);
+      // 특수화물 태그 (45ft 영역 4[5689] 포함, 예: 46P3=45FR)
+      const isRf = (tmpVal && tmpVal !== '0' && tmpVal !== '-') || /^[24][245689]R/.test(isoUpper) || /^[24]0R/.test(isoUpper) || /^[24]58[2-5]$/.test(isoUpper);
+      const isFr = /^[24][0245689]P/.test(isoUpper) || /^[24]0F[PR]/.test(isoUpper) || /^45P/.test(isoUpper);
+      const isOt = /^[24][0245689]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^4[5689]O/.test(isoUpper);
+      const isTk = /^[24][0245689]T/.test(isoUpper);
 
       // 실번호: 헤더로 못 찾으면 같은 행에서 자동 탐색 (V38: 병합셀 대응)
       let sl = '';

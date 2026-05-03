@@ -44,6 +44,25 @@ export default function App() {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
+  // 뒤로가기 가로채기 - 홈에서 뒤로가기 누르면 앱 종료 막기
+  useEffect(() => {
+    if (route.name !== 'home') return;
+    // 홈일 때만 가짜 history 추가 → 뒤로가기 시 그냥 홈에 머무름
+    const handler = () => {
+      // 홈에서 뒤로가기 누름 → 다시 홈으로 강제
+      if (window.location.hash !== '' && window.location.hash !== '#/') {
+        // 다른 페이지로 이동된 경우는 무시 (정상 라우팅)
+        return;
+      }
+      // 가짜 항목 다시 추가
+      window.history.pushState({ home: true }, '', '#/');
+    };
+    // 진입 시 1번 가짜 항목 추가
+    window.history.pushState({ home: true }, '', '#/');
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, [route.name]);
+
   useEffect(() => {
     if (!inspector) return;
     const tick = () => {

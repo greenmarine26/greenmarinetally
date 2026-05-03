@@ -1,5 +1,6 @@
 import React from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power } from 'lucide-react';
+import { exitApp } from '../backHandler.js';
 
 export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome }) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
@@ -42,6 +43,13 @@ export default function Header({ version, inspector, online, route, voyages, onC
             </span>
             <span className="font-bold text-amber-200 max-w-[60px] truncate">{inspector || '검수원'}</span>
             <RefreshCw className="w-3 h-3 text-amber-400"/>
+          </button>
+          <button
+            onClick={exitApp}
+            title="앱 종료"
+            className="p-1.5 rounded bg-red-900/30 hover:bg-red-900/60 active:bg-red-900/80 border border-red-700/40"
+          >
+            <Power className="w-4 h-4 text-red-400"/>
           </button>
         </div>
       </div>

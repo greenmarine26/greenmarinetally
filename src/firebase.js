@@ -81,6 +81,32 @@ export async function fbUpdateRecordSeal(voyageKey, mode, cn, newSl, by) {
   });
 }
 
+// 임의 필드 수정 (ISO/F/E/리퍼/FR 등) — 원본 보관 + 이력
+// 사용 예: fbUpdateRecordField(voyageKey, mode, cn, 'iso', '46P3', by)
+//         → records/{cn}/iso = '46P3'
+//         → records/{cn}/iso_orig = (변경 없으면 그대로)
+//         → records/{cn}/edits.iso = [{from,to,by,at}, ...]
+export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, by) {
+  const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const snap = await get(r);
+  const cur = snap.val() || {};
+  const oldValue = cur[field];
+  const origField = `${field}_orig`;
+  const orig = cur[origField] !== undefined ? cur[origField] : (oldValue !== undefined ? oldValue : '');
+
+  if (oldValue === newValue) return;
+
+  const edits = cur.edits || {};
+  const fieldHistory = Array.isArray(edits[field]) ? [...edits[field]] : [];
+  fieldHistory.push({ from: oldValue, to: newValue, by: by || '', at: Date.now() });
+
+  await update(r, {
+    [field]: newValue,
+    [origField]: orig,
+    edits: { ...edits, [field]: fieldHistory },
+  });
+}
+
 // X-RAY 봉인 수정 — seal (세관봉인) + eseal (전자봉인) 2개 필드
 export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by) {
   const r = ref(db, `voyages/${voyageKey}/discharge/xraySeals/${cn}`);

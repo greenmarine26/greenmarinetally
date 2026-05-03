@@ -20,7 +20,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   const [zoom, setZoom] = useState(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.6;
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.3;
     return 1.0;
   });
   const scrollRef = useRef(null);
@@ -262,16 +262,19 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       {/* 컨트롤 바 */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2 flex-wrap sticky top-0 z-10">
         <div className="flex items-center gap-1">
-          <button onClick={() => setZoom(z => Math.max(0.3, z - 0.2))}
+          <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))}
             className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
             <ZoomOut className="w-4 h-4"/>
           </button>
           <span className="text-xs mono text-slate-400 w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(3, z + 0.2))}
+          <button onClick={() => setZoom(z => Math.min(3, z + 0.1))}
             className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
             <ZoomIn className="w-4 h-4"/>
           </button>
-          <button onClick={() => setZoom(1)} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
+          <button onClick={() => {
+            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+            setZoom(isMobile ? 0.3 : 1.0);
+          }} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" title="기본 배율">
             <Maximize2 className="w-4 h-4"/>
           </button>
         </div>
