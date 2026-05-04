@@ -23,6 +23,7 @@ import StatsTab from '../components/StatsTab.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
+import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import { runDiagnostics } from '../diagnostics.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 
@@ -81,25 +82,47 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   };
 
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
-  // 핵심 원칙: records가 EDI를 덮어쓰지만, records의 빈 값(0, '', null, undefined)은 EDI 보존
+  // M3.5.4-fix2: EDI = 단일 진실 원칙 강화
+  //   - 리스트는 sl/wt 같은 보강 필드만 채울 수 있음
+  //   - ISO, rf, fe, dg, bay/row/tier 등 핵심 필드는 EDI 절대 우선
+  //   - 리스트가 EDI 리퍼를 일반 컨으로 덮어쓰는 사고 방지
   const containers = useMemo(() => {
     const merged = {};
     Object.values(ediMap).forEach(c => { if (isPtk(c)) merged[c.cn] = { ...c, _src: 'edi' }; });
+
+    // 리스트가 채울 수 있는 필드 (보강 정보만)
+    // EDI 핵심 필드(iso, rf, fr, ot, tk, dg, fe, bay, row, tier, pol, pod 등)는 제외
+    const ALLOWED_LIST_FIELDS = new Set([
+      'sl', 'sl_orig', 'sl_history', 'wt',
+      'bl', 'sh', 'gi', 'op',  // B/L, Shipper, Gross Index, Operator
+      'tmp',  // 온도는 리스트가 보강 가능 (단, 비어있을 때만)
+    ]);
+
     Object.values(recMap).forEach(r => {
-      const ediBase = merged[r.cn] || {};
+      const ediBase = merged[r.cn];
       const safeR = {};
-      // records의 값이 비어있지 않을 때만 사용 (EDI 데이터 보존)
       Object.keys(r).forEach(k => {
         const v = r[k];
-        // 의미있는 값만 채택 (빈 값/0/null이면 EDI 값 유지)
-        if (v !== '' && v !== 0 && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) {
+        // 의미있는 값만
+        if (v === '' || v === null || v === undefined) return;
+        if (Array.isArray(v) && v.length === 0) return;
+
+        if (ediBase) {
+          // EDI 매칭됨 → 핵심 필드는 보호, 보강 필드만 허용
+          if (!ALLOWED_LIST_FIELDS.has(k)) return;  // 핵심 필드 무시
+          // tmp는 EDI에 이미 있으면 덮어쓰지 않음 (EDI가 진실)
+          if (k === 'tmp' && ediBase.tmp && !ediBase.tmp_missing) return;
+          // wt는 EDI 값이 0일 때만 채움
+          if (k === 'wt' && parseInt(ediBase.wt, 10) > 0) return;
           safeR[k] = v;
+        } else {
+          // EDI에 없는 컨번호 → 리스트만 있는 항목 (참고용으로 허용)
+          if (v !== 0) safeR[k] = v;
         }
       });
-      merged[r.cn] = { ...ediBase, ...safeR, _src: merged[r.cn] ? 'both' : 'list' };
+      merged[r.cn] = { ...(ediBase || {}), ...safeR, _src: ediBase ? 'both' : 'list' };
     });
     return Object.values(merged).sort((a, b) => {
-      // 베이/위치 순 정렬
       const ka = `${a.bay || 'zz'}-${a.row || 'zz'}-${a.tier || 'zz'}`;
       const kb = `${b.bay || 'zz'}-${b.row || 'zz'}-${b.tier || 'zz'}`;
       return ka.localeCompare(kb);
@@ -193,6 +216,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
             autoSpeak={diagAutoSpeak}
             onToggleSpeak={() => setDiagAutoSpeak(v => !v)}
             onDismiss={() => setDiagDismissed(true)}
+            onOpenContainer={(cn) => {
+              // 평택 EDI에서 해당 컨 찾아서 상세 모달 열기
+              const c = (containers || []).find(x => x.cn === cn);
+              if (c) setDetailC(c);
+            }}
           />
         </div>
       )}
@@ -347,6 +375,8 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // === 자료 탭 ===
 function DataTab({ voyageKey, mode, voyage, setMode }) {
   const [status, setStatus] = useState('');
+  // M3.5.4-fix2: 업로드 충돌 검토 모달
+  const [conflictData, setConflictData] = useState(null);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
@@ -409,7 +439,51 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
 
     if (Object.keys(allCns).length > 0) {
       const existing = sec.ediContainers || {};
-      await fbSaveEdiContainers(voyageKey, mode, { ...existing, ...allCns });
+      const existingCount = Object.keys(existing).length;
+      const newCount = Object.keys(allCns).length;
+
+      // M3.5.4-fix2: 기존 EDI 데이터 있으면 사용자에게 처리 방식 묻기
+      if (existingCount > 0) {
+        const overlap = Object.keys(allCns).filter(cn => existing[cn]).length;
+        const onlyNew = newCount - overlap;
+        const choice = window.prompt(
+          `기존 EDI ${existingCount}대가 있습니다.\n` +
+          `새로 업로드: ${newCount}대 (중복 ${overlap}대, 신규 ${onlyNew}대)\n\n` +
+          `1 = 교체 (기존 모두 삭제 후 새 것만)  ★ 같은 EDI 다시 올릴 때\n` +
+          `2 = 추가 병합 (중복은 새 값으로 덮어쓰기)\n` +
+          `3 = 신규만 추가 (중복은 기존 유지)\n` +
+          `취소 = 빈칸\n\n` +
+          `숫자 입력:`
+        );
+        if (!choice) {
+          setStatus('취소됨');
+          if (ediRef.current) ediRef.current.value = '';
+          return;
+        }
+        if (choice === '1') {
+          // 교체: 기존 완전 삭제 후 새 것만
+          await fbSaveEdiContainers(voyageKey, mode, allCns);
+          results.push(`🔄 교체 완료: ${existingCount}대 → ${newCount}대`);
+        } else if (choice === '2') {
+          await fbSaveEdiContainers(voyageKey, mode, { ...existing, ...allCns });
+          results.push(`📥 병합: 기존 ${existingCount}대 + 신규 ${onlyNew}대 (중복 ${overlap}대 덮어씀)`);
+        } else if (choice === '3') {
+          // 신규만 추가
+          const onlyNewObj = {};
+          Object.entries(allCns).forEach(([cn, c]) => {
+            if (!existing[cn]) onlyNewObj[cn] = c;
+          });
+          await fbSaveEdiContainers(voyageKey, mode, { ...existing, ...onlyNewObj });
+          results.push(`➕ 신규만 추가: ${Object.keys(onlyNewObj).length}대 (기존 ${existingCount}대 유지)`);
+        } else {
+          setStatus('잘못된 입력 (1, 2, 3 중 선택)');
+          if (ediRef.current) ediRef.current.value = '';
+          return;
+        }
+      } else {
+        // 기존 데이터 없으면 그냥 저장
+        await fbSaveEdiContainers(voyageKey, mode, allCns);
+      }
     }
 
     // 선박 구조 분석 + 저장 (전체 컨테이너 기반, 평택 필터 X)
@@ -451,9 +525,41 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
 
   const handleListUpload = async (files) => {
     if (!files || files.length === 0) return;
+
+    // M3.5.4-fix2: 기존 리스트 데이터 있으면 사용자에게 묻기
+    const existing = sec.records || {};
+    const existingCount = Object.keys(existing).length;
+    let startMap = { ...existing };
+    if (existingCount > 0) {
+      const choice = window.prompt(
+        `기존 리스트 ${existingCount}대가 있습니다.\n\n` +
+        `1 = 교체 (기존 모두 삭제 후 새 것만)  ★ 같은 리스트 다시 올릴 때\n` +
+        `2 = 추가 병합 (중복은 새 값으로 덮어쓰기)\n` +
+        `3 = 신규만 추가 (중복은 기존 유지)\n` +
+        `취소 = 빈칸\n\n` +
+        `숫자 입력:`
+      );
+      if (!choice) {
+        setStatus('취소됨');
+        if (listRef.current) listRef.current.value = '';
+        return;
+      }
+      if (choice === '1') {
+        startMap = {};  // 교체: 기존 비우고 시작
+      } else if (choice === '2' || choice === '3') {
+        // 시작 맵은 그대로, 처리 모드만 기억
+      } else {
+        setStatus('잘못된 입력 (1, 2, 3 중 선택)');
+        if (listRef.current) listRef.current.value = '';
+        return;
+      }
+      // 신규만 모드는 cn별 처리 시 기존 값 보존
+      var skipExisting = choice === '3';
+    }
+
     setStatus(`${files.length}개 파일 처리 중...`);
     const results = [];
-    let cnMap = { ...(sec.records || {}) };
+    let cnMap = startMap;
     let added = 0;
 
     // M3.5.3: PDF/사진 자동 분기 (mixerUpload 모듈 활용)
@@ -508,11 +614,16 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           }
         }
 
-        // 공통: cnMap에 병합
+        // 공통: cnMap에 병합 (skipExisting이면 기존 컨번호는 건너뜀)
         for (const r of records) {
           if (!r.cn) continue;
-          if (!cnMap[r.cn]) added++;
-          cnMap[r.cn] = { ...cnMap[r.cn], ...r };
+          if (cnMap[r.cn]) {
+            if (skipExisting) continue;  // 신규만 모드 → 기존 유지
+            cnMap[r.cn] = { ...cnMap[r.cn], ...r };
+          } else {
+            added++;
+            cnMap[r.cn] = r;
+          }
         }
         const typeLabel = ftype === 'pdf' ? '📄 PDF' : ftype === 'image' ? '📷 사진' : '📊 엑셀';
         results.push(`✅ ${typeLabel} ${file.name}: +${records.length}대`);
@@ -520,9 +631,98 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         results.push(`❌ ${file.name}: ${e.message}`);
       }
     }
+
+    // M3.5.4-fix2: 충돌 검출 — EDI vs 리스트 비교
+    const ediMap = sec.ediContainers || {};
+    const newRecords = {};
+    Object.values(cnMap).forEach(r => {
+      // 신규 업로드된 것만 비교 (기존 records에 없던 것)
+      if (r.cn) newRecords[r.cn] = r;
+    });
+
+    const unmatched = [];      // EDI에 없는 컨번호
+    const weightDiffs = [];    // 무게 차이 1톤 이상
+    const sealDiffs = [];      // 실번호 불일치
+
+    Object.values(newRecords).forEach(r => {
+      const ediC = ediMap[r.cn];
+      if (!ediC) {
+        // EDI에 없는 컨 (단, 기존에 records로 있던 것은 이미 처리된 거니 신규만)
+        const wasInRecords = (sec.records || {})[r.cn];
+        if (!wasInRecords) {
+          unmatched.push({ cn: r.cn, sl: r.sl || '', wt: r.wt || 0, iso: r.iso || '', fe: r.fe || '' });
+        }
+        return;
+      }
+      // 무게 차이
+      const ediW = parseInt(ediC.wt, 10) || 0;
+      const lrW = parseInt(r.wt, 10) || 0;
+      if (ediW > 0 && lrW > 0 && Math.abs(ediW - lrW) >= 1000) {
+        weightDiffs.push({ cn: r.cn, ediW, listW: lrW });
+      }
+      // 실번호 불일치 (EDI에 sl 있고 리스트에도 있는데 다름)
+      const ediSl = String(ediC.sl || '').trim();
+      const lrSl = String(r.sl || '').trim();
+      if (ediSl && lrSl && ediSl !== lrSl) {
+        sealDiffs.push({ cn: r.cn, ediSl, listSl: lrSl });
+      }
+    });
+
+    const totalConflicts = unmatched.length + weightDiffs.length + sealDiffs.length;
+
+    if (totalConflicts > 0) {
+      // 충돌 있음 → 모달로 검수원에게 확인
+      setStatus(results.join('\n') + `\n\n⚠️ 검토 필요 ${totalConflicts}건 — 확인 후 저장`);
+      setConflictData({
+        cnMap,             // 임시 저장 (적용 시 사용)
+        results,
+        added,
+        conflicts: { unmatched, weightDiffs, sealDiffs },
+      });
+      if (listRef.current) listRef.current.value = '';
+      return;
+    }
+
+    // 충돌 없음 → 그대로 저장
     await fbSaveListRecords(voyageKey, mode, cnMap);
     setStatus(results.join('\n') + `\n\n전체 ${Object.keys(cnMap).length}대 (신규 ${added})`);
     if (listRef.current) listRef.current.value = '';
+  };
+
+  // M3.5.4-fix2: 충돌 검토 결과 적용
+  const applyConflictResolution = async (resolution) => {
+    if (!conflictData) return;
+    const { cnMap, results, added } = conflictData;
+    const ediMap = sec.ediContainers || {};
+    const finalMap = { ...cnMap };
+
+    // 1. EDI에 없는 컨: ignore면 제거, add면 유지
+    resolution.unmatchedActions.forEach(a => {
+      if (a.action === 'ignore') {
+        delete finalMap[a.cn];
+      }
+      // add는 그대로 두면 됨 (이미 cnMap에 있음)
+    });
+
+    // 2. 무게: 'edi' 선택 시 EDI 무게로, 'list'면 리스트 무게 그대로
+    resolution.weightActions.forEach(a => {
+      if (a.action === 'edi' && finalMap[a.cn]) {
+        finalMap[a.cn].wt = a.ediW;
+      }
+      // list는 그대로 (이미 리스트 값)
+    });
+
+    // 3. 실번호: 'edi' 선택 시 EDI 실번호로
+    resolution.sealActions.forEach(a => {
+      if (a.action === 'edi' && finalMap[a.cn]) {
+        finalMap[a.cn].sl = a.ediSl;
+      }
+    });
+
+    await fbSaveListRecords(voyageKey, mode, finalMap);
+    const ignoredCount = resolution.unmatchedActions.filter(a => a.action === 'ignore').length;
+    setStatus(results.join('\n') + `\n\n✅ 저장 완료 — 전체 ${Object.keys(finalMap).length}대${ignoredCount > 0 ? ` (무시 ${ignoredCount}대)` : ''}`);
+    setConflictData(null);
   };
 
   const handleXrayUpload = async (files) => {
@@ -632,6 +832,17 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
 {status}
         </pre>
       )}
+
+      {/* M3.5.4-fix2: 충돌 검토 모달 */}
+      <ConflictReviewModal
+        open={!!conflictData}
+        conflicts={conflictData?.conflicts}
+        onClose={() => {
+          setConflictData(null);
+          setStatus(prev => prev + '\n\n❌ 저장 취소됨');
+        }}
+        onResolve={applyConflictResolution}
+      />
     </div>
   );
 }

@@ -2,11 +2,29 @@ import React, { useState } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History } from 'lucide-react';
 import { isoToLabel, formatWt } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField } from '../firebase.js';
+
+// ISO 코드 옵션 (현장에서 자주 쓰는 것)
+const ISO_OPTIONS = [
+  { iso: '22G1', label: '20DC (20피트 일반)', flags: {} },
+  { iso: '42G1', label: '40DC (40피트 일반)', flags: {} },
+  { iso: '45G1', label: '45HC (45피트 하이큐브)', flags: {} },
+  { iso: '22R1', label: '20RF (20피트 리퍼)', flags: { rf: true } },
+  { iso: '42R1', label: '40RF (40피트 리퍼)', flags: { rf: true } },
+  { iso: '45R1', label: '45RF (45피트 리퍼)', flags: { rf: true } },
+  { iso: '22P1', label: '20FR (20피트 플랫랙)', flags: { fr: true } },
+  { iso: '42P1', label: '40FR (40피트 플랫랙)', flags: { fr: true } },
+  { iso: '45P1', label: '45FR (45피트 플랫랙)', flags: { fr: true } },
+  { iso: '22U1', label: '20OT (20피트 오픈탑)', flags: { ot: true } },
+  { iso: '42U1', label: '40OT (40피트 오픈탑)', flags: { ot: true } },
+  { iso: '22T1', label: '20TK (20피트 탱크)', flags: { tk: true } },
+  { iso: '42T1', label: '40TK (40피트 탱크)', flags: { tk: true } },
+];
 
 export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
+  const [editingIso, setEditingIso] = useState(false);  // M3.5.4-fix2: 규격 수정
   const [showHistory, setShowHistory] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
@@ -43,6 +61,24 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const handleSaveXSeal = async () => {
     await fbSetXraySeal(voyageKey, c.cn, xSealVal.trim(), xEsealVal.trim(), inspector);
     setEditingXSeal(false);
+  };
+
+  // M3.5.4-fix2: 규격(ISO) 수정 — rf/fr/ot/tk 플래그 자동 갱신
+  const handleChangeIso = async (newIso) => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const opt = ISO_OPTIONS.find(o => o.iso === newIso);
+    if (!opt) return;
+    if (!confirm(`규격을 "${opt.label}"로 변경하시겠습니까?\n\n현재: ${c.iso || '?'} (${isoToLabel(c.iso) || '?'})\n변경: ${opt.iso} (${opt.label})\n\n변경 이력에 기록됩니다.`)) return;
+
+    // ISO 자체 변경
+    await fbUpdateRecordField(voyageKey, mode, c.cn, 'iso', opt.iso, inspector);
+    // 플래그 갱신 (rf/fr/ot/tk 모두 명시 - 이전 잘못된 플래그 정리)
+    await fbUpdateRecordField(voyageKey, mode, c.cn, 'rf', !!opt.flags.rf, inspector);
+    await fbUpdateRecordField(voyageKey, mode, c.cn, 'fr', !!opt.flags.fr, inspector);
+    await fbUpdateRecordField(voyageKey, mode, c.cn, 'ot', !!opt.flags.ot, inspector);
+    await fbUpdateRecordField(voyageKey, mode, c.cn, 'tk', !!opt.flags.tk, inspector);
+    setEditingIso(false);
+    alert(`✅ 규격 변경 완료: ${opt.label}`);
   };
 
   const handleToggleXray = async () => {
@@ -104,15 +140,64 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         </div>
 
         {/* 화물 */}
-        <div className="px-4 py-3 border-b border-slate-800 grid grid-cols-2 gap-3 text-sm">
-          <Field label="규격" value={isoToLabel(c.iso) || c.tp || '-'} mono/>
-          <Field label="ISO" value={c.iso || '-'} mono/>
-          <Field label="F/E" value={c.fe || '-'} highlight={c.fe === 'F' ? 'rose' : ''}/>
-          <Field label="무게" value={c.wt > 0 ? formatWt(c.wt) : '-'}/>
-          <Field label="검수업체" value={c.op || '-'} mono/>
-          <Field label="POL" value={c.pol || '-'} mono/>
-          <Field label="POD" value={c.pod || '-'} mono/>
-          {c.npod && <Field label="환적" value={c.npod} mono/>}
+        <div className="px-4 py-3 border-b border-slate-800">
+          {/* M3.5.4-fix2: 규격 수정 영역 */}
+          <div className={`mb-3 rounded p-2 ${editingIso ? 'bg-amber-900/20 border border-amber-700/40' : ''}`}>
+            <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+              <span>규격 (ISO)</span>
+              {!editingIso && (
+                <button onClick={() => setEditingIso(true)}
+                  className="text-amber-400 hover:text-amber-300 flex items-center gap-1 text-[10px]">
+                  <Edit3 className="w-3 h-3"/>실물과 다름?
+                </button>
+              )}
+            </div>
+            {!editingIso ? (
+              <div className="flex items-center gap-2">
+                <span className="text-base font-bold mono text-slate-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
+                <span className="text-xs text-slate-500 mono">({c.iso || '-'})</span>
+                {c.iso_orig && c.iso_orig !== c.iso && (
+                  <span className="text-[10px] text-amber-400 mono">원본: {c.iso_orig} → 수정됨</span>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-amber-300 mb-2">
+                  실물에 맞는 규격을 선택하세요. 검수원이 본 실물이 정답입니다.
+                </div>
+                <div className="grid grid-cols-1 gap-1 max-h-72 overflow-y-auto">
+                  {ISO_OPTIONS.map(opt => (
+                    <button key={opt.iso}
+                      onClick={() => handleChangeIso(opt.iso)}
+                      className={`px-3 py-2 rounded text-left text-xs font-bold border ${
+                        c.iso === opt.iso
+                          ? 'bg-amber-900/40 border-amber-500 text-amber-200'
+                          : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                      }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="mono">{opt.iso}</span>
+                        <span className="text-[10px] text-slate-400">{opt.label}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setEditingIso(false)}
+                  className="w-full mt-2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
+                  취소
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 나머지 필드 */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <Field label="F/E" value={c.fe || '-'} highlight={c.fe === 'F' ? 'rose' : ''}/>
+            <Field label="무게" value={c.wt > 0 ? formatWt(c.wt) : '-'}/>
+            <Field label="검수업체" value={c.op || '-'} mono/>
+            <Field label="POL" value={c.pol || '-'} mono/>
+            <Field label="POD" value={c.pod || '-'} mono/>
+            {c.npod && <Field label="환적" value={c.npod} mono/>}
+          </div>
         </div>
 
         {/* 실번호 */}

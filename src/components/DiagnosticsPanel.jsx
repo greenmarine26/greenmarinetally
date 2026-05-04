@@ -9,7 +9,7 @@ import { AlertTriangle, AlertCircle, Info, Volume2, VolumeX, ChevronDown, Chevro
 import { speak, stopSpeak } from '../voice.js';
 import { buildVoiceMessage, summarizeAlerts } from '../diagnostics.js';
 
-export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss }) {
+export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onDismiss, onOpenContainer }) {
   const [expanded, setExpanded] = useState(false);
   const lastAlertSig = useRef('');
 
@@ -90,14 +90,14 @@ export default function DiagnosticsPanel({ alerts, autoSpeak, onToggleSpeak, onD
 
       <div className="space-y-1.5">
         {alerts.map((a, i) => (
-          <AlertRow key={i} alert={a} forceOpen={expanded}/>
+          <AlertRow key={i} alert={a} forceOpen={expanded} onOpenContainer={onOpenContainer}/>
         ))}
       </div>
     </div>
   );
 }
 
-function AlertRow({ alert, forceOpen }) {
+function AlertRow({ alert, forceOpen, onOpenContainer }) {
   const [open, setOpen] = useState(false);
   const isOpen = open || forceOpen;
   const colorClass = alert.level === 'critical'
@@ -118,22 +118,48 @@ function AlertRow({ alert, forceOpen }) {
         )}
       </button>
       {isOpen && hasDetails && (
-        <AlertDetails alert={alert}/>
+        <AlertDetails alert={alert} onOpenContainer={onOpenContainer}/>
       )}
     </div>
   );
 }
 
-function AlertDetails({ alert }) {
+function AlertDetails({ alert, onOpenContainer }) {
   const d = alert.details;
+
+  if (alert.code === 'iso_unknown') {
+    return (
+      <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
+        <div className="text-amber-300 mb-1">📌 클릭하면 컨테이너 모달에서 규격 수정 가능</div>
+        {(Array.isArray(d) ? d : []).slice(0, 30).map((c, i) => (
+          <button key={i}
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
+          >
+            <span className="font-bold">{c.cn}</span>
+            <span className="text-slate-400">ISO: {c.iso} @ {c.bay || '?'}-{c.row || '?'}-{c.tier || '?'}</span>
+            <span className="text-amber-400 text-[9px]">✏️ 수정</span>
+          </button>
+        ))}
+        {Array.isArray(d) && d.length > 30 && (
+          <div className="text-slate-500">... 외 {d.length - 30}대</div>
+        )}
+      </div>
+    );
+  }
 
   if (alert.code === 'reefer_no_temp' || alert.code === 'dg_no_class' || alert.code === 'dg_no_un') {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
         {(Array.isArray(d) ? d : []).slice(0, 20).map((c, i) => (
-          <div key={i} className="mono">
-            {c.cn} @ {c.bay || '?'}-{c.row || '?'}-{c.tier || '?'}
-          </div>
+          <button key={i}
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
+          >
+            <span className="font-bold">{c.cn}</span>
+            <span className="text-slate-400">@ {c.bay || '?'}-{c.row || '?'}-{c.tier || '?'}</span>
+            <span className="text-amber-400 text-[9px]">✏️ 수정</span>
+          </button>
         ))}
         {Array.isArray(d) && d.length > 20 && (
           <div className="text-slate-500">... 외 {d.length - 20}대</div>
@@ -145,7 +171,7 @@ function AlertDetails({ alert }) {
   if (alert.code === 'list_short' || alert.code === 'list_extra') {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px]">
-        EDI {d.ediCount || '?'}대 / 리스트 {d.listCount || '?'}대
+        EDI {d.ediCount || '?'}대 / 리스트 {d.listCount || '?'}대 (매칭 {d.matchedCount ?? '?'}대)
         {d.extraCns && d.extraCns.length > 0 && (
           <div className="mt-1">
             <div className="text-slate-400 mb-0.5">EDI에 없는 컨번호:</div>
@@ -161,10 +187,14 @@ function AlertDetails({ alert }) {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
         {d.slice(0, 20).map((w, i) => (
-          <div key={i} className="mono flex justify-between">
-            <span>{w.cn}</span>
+          <button key={i}
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(w.cn); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
+          >
+            <span className="font-bold">{w.cn}</span>
             <span className="text-slate-400">EDI {(w.ediW/1000).toFixed(1)}t / 리스트 {(w.lrW/1000).toFixed(1)}t</span>
-          </div>
+            <span className="text-amber-400 text-[9px]">✏️</span>
+          </button>
         ))}
       </div>
     );
@@ -174,10 +204,16 @@ function AlertDetails({ alert }) {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
         {d.slice(0, 20).map((s, i) => (
-          <div key={i} className="mono">
-            <div>{s.cn}</div>
+          <button key={i}
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(s.cn); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700"
+          >
+            <div className="font-bold flex items-center justify-between">
+              <span>{s.cn}</span>
+              <span className="text-amber-400 text-[9px]">✏️</span>
+            </div>
             <div className="text-slate-400 ml-2">EDI: {s.ediSl} | 리스트: {s.lrSl}</div>
-          </div>
+          </button>
         ))}
       </div>
     );
@@ -189,7 +225,12 @@ function AlertDetails({ alert }) {
         {d.slice(0, 10).map((v, i) => (
           <div key={i}>
             <div className="font-bold">위치 {v.location} · 클래스 {v.classes}</div>
-            {v.containers.map((cn, j) => <div key={j} className="mono ml-2">• {cn}</div>)}
+            {v.containers.map((cn, j) => (
+              <button key={j}
+                onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }}
+                className="mono ml-2 hover:text-amber-300"
+              >• {cn} ✏️</button>
+            ))}
           </div>
         ))}
       </div>
@@ -200,7 +241,13 @@ function AlertDetails({ alert }) {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
         {(Array.isArray(d) ? d : []).slice(0, 20).map((cn, i) => (
-          <div key={i} className="mono">• {cn}</div>
+          <button key={i}
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(cn); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between"
+          >
+            <span>• {cn}</span>
+            <span className="text-amber-400 text-[9px]">✏️</span>
+          </button>
         ))}
       </div>
     );

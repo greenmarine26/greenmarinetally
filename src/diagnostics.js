@@ -143,31 +143,41 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   }
 
   // ─── 🟡 4. EDI vs 리스트 카운트 차이 ───
-  if (ediCount > 0 && listCount > 0) {
-    const diff = ediCount - listCount;
-    const carrierStr = carrierLabel ? ` ${carrierLabel}` : '';
-    if (diff > 0) {
-      // 리스트 부족
-      alerts.push({
-        level: 'warning',
-        code: 'list_short',
-        msg: `EDI ${ediCount}대 중 리스트 ${listCount}대 (${diff}개 부족)`,
-        voice: `${carrierStr ? carrierStr + ' ' : ''}EDI ${ediCount}개인데 리스트는 ${listCount}개입니다. ${diff}개 부족합니다. 리스트 보완 필요`,
-        count: diff,
-        details: { ediCount, listCount, diff },
-      });
-    } else if (diff < 0) {
-      // 리스트 초과 (EDI에 없는 컨이 리스트에 있음)
-      const ediCns = new Set(ediArr.map(c => c.cn));
-      const extraCns = Object.keys(listRecords).filter(cn => !ediCns.has(cn));
-      alerts.push({
-        level: 'warning',
-        code: 'list_extra',
-        msg: `리스트가 EDI보다 ${-diff}개 많음`,
-        voice: `리스트가 EDI보다 ${-diff}개 많습니다. EDI에 없는 컨테이너가 있습니다. 확인 필요`,
-        count: -diff,
-        details: { extraCns: extraCns.slice(0, 20) },
-      });
+  // M3.5.4-fix2: 평택 EDI 기준으로만 비교
+  //   - listCount = 리스트 전체가 아니라, 진짜 컨번호만 카운트
+  //   - 매칭된 컨테이너 (EDI 평택 ∩ 리스트) 기준
+  if (ediCount > 0) {
+    // 진짜 컨번호만 (4자영문+7자숫자)
+    const validListCns = Object.keys(listRecords || {}).filter(cn => /^[A-Z]{4}\d{7}$/i.test(cn));
+    const realListCount = validListCns.length;
+    const ediPtkCnSet = new Set(ediPtk.map(c => c.cn));
+    const matchedCount = validListCns.filter(cn => ediPtkCnSet.has(cn.toUpperCase())).length;
+
+    if (realListCount > 0) {
+      const diff = ediCount - matchedCount;
+      const carrierStr = carrierLabel ? ` ${carrierLabel}` : '';
+      if (diff > 0) {
+        alerts.push({
+          level: 'warning',
+          code: 'list_short',
+          msg: `EDI ${ediCount}대 중 리스트 매칭 ${matchedCount}대 (${diff}개 부족)`,
+          voice: `${carrierStr ? carrierStr + ' ' : ''}EDI ${ediCount}개인데 리스트 매칭 ${matchedCount}개입니다. ${diff}개 부족합니다. 리스트 보완 필요`,
+          count: diff,
+          details: { ediCount, listCount: realListCount, matchedCount, diff },
+        });
+      }
+      // 리스트에는 있는데 EDI 평택에 없는 컨 (통과화물이거나 다른 항차)
+      const extraCns = validListCns.filter(cn => !ediPtkCnSet.has(cn.toUpperCase()));
+      if (extraCns.length > 0) {
+        alerts.push({
+          level: 'warning',
+          code: 'list_extra',
+          msg: `리스트에 EDI 평택과 매칭 안되는 컨 ${extraCns.length}개`,
+          voice: `리스트에 EDI에 없는 컨테이너가 ${extraCns.length}개 있습니다. 확인 필요`,
+          count: extraCns.length,
+          details: { extraCns: extraCns.slice(0, 20) },
+        });
+      }
     }
   }
 
@@ -219,19 +229,53 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
 
   // ─── 🔵 7. X-RAY 매칭 (양하만) ───
   if (mode === 'discharge' && xrayList && Object.keys(xrayList).length > 0) {
-    const xrayCns = Object.keys(xrayList);
-    const ediCns = new Set(ediArr.map(c => c.cn));
-    const noLocation = xrayCns.filter(cn => !ediCns.has(cn));
-    if (noLocation.length > 0) {
-      alerts.push({
-        level: 'info',
-        code: 'xray_no_location',
-        msg: `X-RAY ${xrayCns.length}대 중 ${noLocation.length}대 EDI 매칭 안됨`,
-        voice: '',
-        count: noLocation.length,
-        details: noLocation,
-      });
+    // M3.5.4-fix2: 진짜 컨테이너 번호만 카운트 (4자 영문 + 7자 숫자)
+    const xrayCns = Object.keys(xrayList).filter(cn => /^[A-Z]{4}\d{7}$/i.test(cn));
+    if (xrayCns.length > 0) {
+      // 평택 EDI 컨번호와 비교 (전체 EDI 아님)
+      const ediPtkCns = new Set(ediPtk.map(c => c.cn));
+      const noLocation = xrayCns.filter(cn => !ediPtkCns.has(cn.toUpperCase()));
+      if (noLocation.length > 0) {
+        alerts.push({
+          level: 'info',
+          code: 'xray_no_location',
+          msg: `X-RAY ${xrayCns.length}대 중 ${noLocation.length}대 EDI 매칭 안됨`,
+          voice: '',
+          count: noLocation.length,
+          details: noLocation,
+        });
+      }
     }
+  }
+
+  // ─── 🟡 8. 알 수 없는/이상한 ISO 규격 감지 (M3.5.4-fix2) ───
+  // 표준 ISO 코드가 아닌 컨테이너는 검수원에게 확인 요청
+  // 알려진 패턴: 22G1, 42G1, 45G1, 22R1, 42R1, 45R1, 22P1, 42P1, 45P1,
+  //              22U1, 42U1, 22T1, 42T1, 4582, 2282, 4500, 4200, 2200, 2500 등
+  const unknownIso = ediPtk.filter(c => {
+    const iso = String(c.iso || '').toUpperCase().trim();
+    if (!iso) return true;  // ISO 없음
+    // 표준 패턴: 알파벳 ISO (예: 22G1)
+    if (/^[2-4][024568][GRPUTH][0-9PQ]?$/.test(iso)) return false;
+    // 표준 패턴: 4자리 숫자 ISO (예: 4500, 2282)
+    if (/^[2-4][024568][0-9][0-9]$/.test(iso)) return false;
+    // 표준 패턴: 영문약어 (예: 40HC, 20DC)
+    if (/^(20|22|40|42|45|46)(DC|HC|GP|RF|FR|OT|TK|HQ)$/.test(iso)) return false;
+    return true;  // 알 수 없는 패턴
+  });
+  if (unknownIso.length > 0) {
+    alerts.push({
+      level: 'warning',
+      code: 'iso_unknown',
+      msg: `규격 확인 필요: ${unknownIso.length}대 (표준 ISO 아님)`,
+      voice: `규격 확인 필요한 컨테이너 ${unknownIso.length}대 발견. 실물 확인 후 수정 필요`,
+      count: unknownIso.length,
+      details: unknownIso.slice(0, 30).map(c => ({
+        cn: c.cn,
+        iso: c.iso || '(없음)',
+        bay: c.bay, row: c.row, tier: c.tier,
+      })),
+    });
   }
 
   // 정렬: critical → warning → info
