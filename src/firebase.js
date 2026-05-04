@@ -249,4 +249,36 @@ export async function fbAddShipStats(imo, stats) {
   });
 }
 
+// ─── M3.4: 답변 오답 신고 (검수원 → 다음 버전 개선용) ───
+// /feedback/{ts} 노드에 저장
+//   { ts, inspector, voyageKey, voyageVsl, query, answerType, answerText,
+//     parsedSummary, userNote, appVersion, resolved }
+
+export async function fbReportWrongAnswer(data) {
+  const ts = Date.now();
+  const r = ref(db, `feedback/${ts}`);
+  await set(r, {
+    ts,
+    resolved: false,
+    ...data,
+  });
+  return ts;
+}
+
+export function fbSubscribeFeedback(callback) {
+  const r = ref(db, 'feedback');
+  const handler = onValue(r, (snap) => callback(snap.val() || {}));
+  return () => off(r);
+}
+
+export async function fbResolveFeedback(ts, resolved = true) {
+  const r = ref(db, `feedback/${ts}/resolved`);
+  await set(r, !!resolved);
+}
+
+export async function fbDeleteFeedback(ts) {
+  const r = ref(db, `feedback/${ts}`);
+  await set(r, null);
+}
+
 export { db };

@@ -13,6 +13,7 @@ import { findTwinCandidate } from '../twin.js';
 import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
+import WrongAnswerModal from './WrongAnswerModal.jsx';
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null }) {
   const [searchMode, setSearchMode] = useState('single');
@@ -92,6 +93,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
   const [aiAnswer, setAiAnswer] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [wrongOpen, setWrongOpen] = useState(false);
+  const [wrongPayload, setWrongPayload] = useState(null);
   const recognitionRef = useRef(null);
   const lastSpokenRef = useRef(null);
 
@@ -285,9 +288,18 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
       {/* AI 답변 카드 */}
       {aiAnswer && (
         <div className="bg-gradient-to-br from-purple-950 via-slate-900 to-cyan-950 border-2 border-purple-500 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-4 h-4 text-purple-300"/>
-            <div className="text-[11px] text-purple-300 font-bold uppercase">AI 답변 (Gemini)</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-300"/>
+              <div className="text-[11px] text-purple-300 font-bold uppercase">AI 답변 (Gemini)</div>
+            </div>
+            <button onClick={() => {
+              setWrongPayload({ query, answerType: 'ai', answerText: aiAnswer, parsed });
+              setWrongOpen(true);
+            }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-[10px] font-bold border border-red-700/40">
+              ❌ 오답
+            </button>
           </div>
           <div className="text-base text-slate-100 whitespace-pre-wrap leading-relaxed">{aiAnswer}</div>
         </div>
@@ -296,9 +308,18 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
       {/* M3.2: 로컬 답변 카드 (베이/POL/POD/구역/무게합/위치 등 - AI 의존 X) */}
       {localAnswer && !aiAnswer && (
         <div className="bg-gradient-to-br from-emerald-950 to-slate-900 border-2 border-emerald-600 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Check className="w-4 h-4 text-emerald-300"/>
-            <div className="text-[11px] text-emerald-300 font-bold uppercase">즉답 (로컬 분석)</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-300"/>
+              <div className="text-[11px] text-emerald-300 font-bold uppercase">즉답 (로컬 분석)</div>
+            </div>
+            <button onClick={() => {
+              setWrongPayload({ query, answerType: 'local', answerText: localAnswer, parsed });
+              setWrongOpen(true);
+            }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-[10px] font-bold border border-red-700/40">
+              ❌ 오답
+            </button>
           </div>
           <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
         </div>
@@ -330,6 +351,17 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
       ))}
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
+      <WrongAnswerModal
+        open={wrongOpen}
+        onClose={() => setWrongOpen(false)}
+        query={wrongPayload?.query || ''}
+        answerType={wrongPayload?.answerType || 'unknown'}
+        answerText={wrongPayload?.answerText || ''}
+        parsed={wrongPayload?.parsed || null}
+        voyageKey={voyageKey}
+        voyageVsl={voyage?.info?.vsl || ''}
+        inspector={inspector}
+      />
     </>
   );
 }

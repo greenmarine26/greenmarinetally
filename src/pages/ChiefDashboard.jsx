@@ -1,13 +1,31 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship } from 'lucide-react';
-import { fbSubscribeShipLibrary } from '../firebase.js';
+import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback } from '../firebase.js';
 
 export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGoHome }) {
   const [shipLib, setShipLib] = useState({});
+  const [feedback, setFeedback] = useState({});
+  const [showResolved, setShowResolved] = useState(false);
   useEffect(() => {
-    const u = fbSubscribeShipLibrary(setShipLib);
-    return () => u();
+    const u1 = fbSubscribeShipLibrary(setShipLib);
+    const u2 = fbSubscribeFeedback(setFeedback);
+    return () => { u1(); u2(); };
   }, []);
+
+  // 오답 리포트 정렬 (최신순, 미해결 먼저)
+  const feedbackList = useMemo(() => {
+    return Object.values(feedback || {})
+      .filter(f => f && f.ts)
+      .filter(f => showResolved || !f.resolved)
+      .sort((a, b) => {
+        // 미해결 먼저
+        if (!!a.resolved !== !!b.resolved) return a.resolved ? 1 : -1;
+        return (b.ts || 0) - (a.ts || 0);
+      });
+  }, [feedback, showResolved]);
+
+  const unresolvedCount = useMemo(() =>
+    Object.values(feedback || {}).filter(f => f && !f.resolved).length, [feedback]);
 
   // 항차별 통계
   const voyageStats = useMemo(() => {
@@ -121,23 +139,95 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
-      {/* 선박 라이브러리 (학습된 선박 구조) */}
-      <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3">
-        <div className="flex items-center gap-2 mb-3">
-          <Library className="w-4 h-4 text-purple-400"/>
-          <div className="text-sm font-bold text-slate-100">선박 라이브러리 ({Object.keys(shipLib).length}척)</div>
+      {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) */}
+      <div className="bg-slate-900 border border-red-800/40 rounded-xl p-3 mt-3">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-400"/>
+            <div className="text-sm font-bold text-slate-100">오답 리포트</div>
+            {unresolvedCount > 0 && (
+              <span className="bg-red-700 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                미해결 {unresolvedCount}
+              </span>
+            )}
+          </div>
+          <button onClick={() => setShowResolved(v => !v)}
+            className="text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-slate-700">
+            {showResolved ? '미해결만' : '해결된 것도'}
+          </button>
         </div>
-        <div className="text-[10px] text-slate-500 mb-2">EDI 분석된 선박은 자동 저장 → 다음 항차에서 즉시 활용</div>
-        {Object.keys(shipLib).length === 0 ? (
-          <div className="text-xs text-slate-500 text-center py-4">아직 학습된 선박 없음 (EDI 업로드 시 자동 저장)</div>
+        <div className="text-[10px] text-slate-500 mb-2">
+          검수원이 잘못된 답변에 ❌ 오답 버튼 누르면 여기 모입니다 → 다음 버전에서 패턴 보강
+        </div>
+        {feedbackList.length === 0 ? (
+          <div className="text-xs text-slate-500 text-center py-4">
+            {showResolved ? '오답 리포트 없음' : '미해결 오답 없음 ✓'}
+          </div>
         ) : (
           <div className="space-y-2">
-            {Object.entries(shipLib).sort((a,b) => (b[1].last_updated||0) - (a[1].last_updated||0)).map(([imo, ship]) => (
-              <ShipLibraryRow key={imo} imo={imo} ship={ship}/>
+            {feedbackList.slice(0, 50).map(f => (
+              <FeedbackRow key={f.ts} feedback={f}/>
             ))}
+            {feedbackList.length > 50 && (
+              <div className="text-[10px] text-slate-500 text-center pt-1">
+                ... {feedbackList.length - 50}건 더 있음
+              </div>
+            )}
           </div>
         )}
       </div>
+
+    </div>
+  );
+}
+
+// 오답 리포트 한 줄
+function FeedbackRow({ feedback: f }) {
+  const [expanded, setExpanded] = useState(false);
+  const date = new Date(f.ts);
+  const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const typeColor = f.answerType === 'ai' ? 'text-purple-300' : 'text-emerald-300';
+  const typeLabel = f.answerType === 'ai' ? 'AI' : f.answerType === 'local' ? '즉답' : '?';
+
+  return (
+    <div className={`bg-slate-950 border ${f.resolved ? 'border-slate-800 opacity-60' : 'border-red-900/40'} rounded-lg p-2.5`}>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          {f.resolved && <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0"/>}
+          <span className="text-[10px] text-slate-500">{dateStr}</span>
+          <span className="text-[10px] text-amber-300 font-bold">{f.inspector}</span>
+          <span className={`text-[10px] font-bold ${typeColor}`}>[{typeLabel}]</span>
+          {f.voyageVsl && <span className="text-[10px] text-slate-500 truncate">{f.voyageVsl}</span>}
+          <span className="text-[9px] text-slate-600 mono">v{f.appVersion}</span>
+        </div>
+        <div className="flex gap-1 flex-shrink-0">
+          <button onClick={() => fbResolveFeedback(f.ts, !f.resolved)}
+            title={f.resolved ? '미해결로 되돌리기' : '해결됨 표시'}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-700/40">
+            {f.resolved ? '↩' : '✓'}
+          </button>
+          <button onClick={() => { if (confirm('삭제?')) fbDeleteFeedback(f.ts); }}
+            title="삭제"
+            className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-700/40">
+            <Trash2 className="w-2.5 h-2.5"/>
+          </button>
+        </div>
+      </div>
+      <div className="text-xs text-amber-200 mono break-all mb-1">Q: {f.query}</div>
+      {f.userNote && (
+        <div className="text-xs text-slate-300 bg-slate-900/60 rounded px-2 py-1 mb-1 leading-relaxed">
+          💬 {f.userNote}
+        </div>
+      )}
+      <button onClick={() => setExpanded(v => !v)}
+        className="text-[10px] text-slate-500 hover:text-slate-300">
+        {expanded ? '▼ 답변 숨기기' : '▶ 앱 답변 보기'}
+      </button>
+      {expanded && (
+        <div className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap leading-relaxed bg-slate-900/40 rounded p-2 max-h-40 overflow-y-auto">
+          {f.answerText || '(없음)'}
+        </div>
+      )}
     </div>
   );
 }

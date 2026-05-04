@@ -3,27 +3,34 @@
 // IMO 번호로 식별 (전 세계 유일, 절대 안 변함)
 
 // EDI 텍스트에서 선박 정보 추출
-// TDT+20+2622E+++SKR:172:20+++9388417:146:11:ATLANTIC PIONEER
-//                                   ↑ IMO        ↑ 선박명
+// 표준: TDT+20+2622E+++SKR:172:20+++9388417:146:11:ATLANTIC PIONEER
+//                                     ↑ IMO        ↑ 선박명
+// 변형: TDT+20+2608S+++CMA:172:20+++3E8980:103::SUNNY KALMIA
+//                                   ↑ Lloyd's 번호 (영숫자)
+//
+// M3.4 버그 수정:
+//   1) parts[7]만 보던 버그 → 끝에서부터 비어있지 않은 part 찾기 (보통 parts[8])
+//   2) IMO를 7자리 숫자로만 받던 제한 → 영숫자 5-9자리 허용 (Lloyd's 등)
 export function extractShipInfo(ediText) {
   if (!ediText) return null;
-  // 작은따옴표 또는 줄바꿈으로 구분
-  const segs = ediText.replace(/\n/g, '').split("'");
+  const segs = ediText.replace(/[\r\n]/g, '').split("'");
   for (const s of segs) {
-    if (s.startsWith('TDT+')) {
-      // TDT+20+VOY+++CARRIER:172:20+++IMO:146:11:VESSEL_NAME
-      const parts = s.split('+');
-      // parts[7]: "IMO:146:11:NAME"
-      if (parts.length >= 8) {
-        const last = parts[7];
-        const tokens = last.split(':');
+    if (!s.startsWith('TDT+')) continue;
+    const parts = s.split('+');
+    // IMO 자리 = parts[6] 이후 비어있지 않은 마지막 part (보통 parts[8])
+    for (let i = parts.length - 1; i >= 6; i--) {
+      if (!parts[i]) continue;
+      const tokens = parts[i].split(':');
+      if (tokens.length < 2) continue;
+      const imo = tokens[0].trim();
+      // IMO 패턴: 7자리 숫자(표준) 또는 영숫자 5-9자리(Lloyd's/Q-code 등)
+      if (/^[A-Z0-9]{5,9}$/i.test(imo)) {
+        // 선박명: tokens[3] 이후 (':'로 구분, 빈 토큰 무시)
+        let name = '';
         if (tokens.length >= 4) {
-          const imo = tokens[0].trim();
-          const name = tokens.slice(3).join(':').trim();
-          if (/^\d{7}$/.test(imo)) {
-            return { imo, name, voyage: parts[2] || '' };
-          }
+          name = tokens.slice(3).filter(t => t).join(':').trim();
         }
+        return { imo: imo.toUpperCase(), name, voyage: parts[2] || '' };
       }
     }
   }
