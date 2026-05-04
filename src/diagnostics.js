@@ -41,12 +41,13 @@ function extractDg(containers) {
 // ─── 메인 진단 함수 ───
 // 인자:
 //   ediContainers: { cn → {...} }  (EDI 파싱 결과, 평택 분만 필터된 상태 추천)
-//   listRecords:   { cn → {sl, wt, ...} }
+//   listRecords:   { cn → {sl, wt, eseal, ...} }
 //   xrayList:      { cn → {} }
 //   mode:          'discharge' | 'loading'
 //   carrier:       선사 코드 (TDT에서)
+//   sealPolicy:    선박 엠티 실 정책 (matchShipPolicy 결과) — M3.5.5
 // 결과: 경고 배열
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy }) {
   const alerts = [];
   const ediArr = Object.values(ediContainers || {});
   const ediPtk = filterPyeongtaek(ediContainers || {}, mode);
@@ -276,6 +277,51 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
         bay: c.bay, row: c.row, tier: c.tier,
       })),
     });
+  }
+
+  // ─── 🔴 9. 엠티 실 부착/확인 누락 (M3.5.5) ───
+  if (sealPolicy) {
+    // 정책 적용 대상 컨테이너 추출
+    const targetContainers = ediPtk.filter(c => {
+      const fe = String(c.fe || '').toUpperCase();
+      if (fe !== 'E') return false;
+      if (sealPolicy.target === 'all_empty') return true;
+      if (sealPolicy.target === 'empty_with_pod') {
+        const pod = String(c.pod || '').toUpperCase();
+        const targetPods = (sealPolicy.pod || []).map(p => p.toUpperCase());
+        return targetPods.includes(pod);
+      }
+      return false;
+    });
+
+    if (targetContainers.length > 0) {
+      // 부착/확인 진행 상황
+      const missing = targetContainers.filter(c => {
+        const lr = listRecords?.[c.cn] || {};
+        const eseal = String(lr.eseal || c.eseal || '').trim();
+        return !eseal;
+      });
+
+      if (missing.length > 0) {
+        const isAttach = sealPolicy.mode === 'attach';
+        const action = isAttach ? '부착' : '확인';
+        const podStr = sealPolicy.pod && sealPolicy.pod.length > 0 ? `${sealPolicy.pod.join('/')}행 ` : '';
+        alerts.push({
+          level: 'critical',
+          code: 'empty_seal_pending',
+          msg: `${podStr}엠티 실 ${action}: ${targetContainers.length}대 중 ${missing.length}대 미${action}`,
+          voice: `${sealPolicy.name || '선박'} ${podStr}엠티 ${targetContainers.length}대 중 ${missing.length}대 실 ${action} 남음. 작업 필요`,
+          count: missing.length,
+          details: missing.slice(0, 30).map(c => ({
+            cn: c.cn,
+            iso: c.iso || '?',
+            pod: c.pod || '?',
+            bay: c.bay, row: c.row, tier: c.tier,
+            sealMode: sealPolicy.mode,
+          })),
+        });
+      }
+    }
   }
 
   // 정렬: critical → warning → info

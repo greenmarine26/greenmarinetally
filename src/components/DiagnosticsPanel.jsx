@@ -127,6 +127,30 @@ function AlertRow({ alert, forceOpen, onOpenContainer }) {
 function AlertDetails({ alert, onOpenContainer }) {
   const d = alert.details;
 
+  if (alert.code === 'empty_seal_pending') {
+    const isAttach = (Array.isArray(d) ? d[0]?.sealMode : null) === 'attach';
+    return (
+      <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
+        <div className={`mb-1 ${isAttach ? 'text-red-300' : 'text-cyan-300'}`}>
+          📌 클릭하면 컨테이너 모달에서 실 {isAttach ? '부착' : '확인'} 입력 가능
+        </div>
+        {(Array.isArray(d) ? d : []).slice(0, 30).map((c, i) => (
+          <button key={i}
+            onClick={(e) => { e.stopPropagation(); onOpenContainer?.(c.cn); }}
+            className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
+          >
+            <span className="font-bold">{c.cn}</span>
+            <span className="text-slate-400 text-[9px]">{c.iso} · POD {c.pod} · @{c.bay || '?'}-{c.row || '?'}-{c.tier || '?'}</span>
+            <span className={`text-[9px] ${isAttach ? 'text-red-400' : 'text-cyan-400'}`}>🔒 입력</span>
+          </button>
+        ))}
+        {Array.isArray(d) && d.length > 30 && (
+          <div className="text-slate-500">... 외 {d.length - 30}대</div>
+        )}
+      </div>
+    );
+  }
+
   if (alert.code === 'iso_unknown') {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">

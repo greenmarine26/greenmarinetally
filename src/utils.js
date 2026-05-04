@@ -1,5 +1,5 @@
-// 공통 유틸리티 — V38 (2026.05.05 / M3.5.4-fix3)
-export const APP_VERSION = 'M3.5.4-fix3';
+// 공통 유틸리티 — V38 (2026.05.05 / M3.5.5)
+export const APP_VERSION = 'M3.5.5';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -445,7 +445,10 @@ export function parseAscFile(text) {
     const slot = line.substring(0, 6).trim();
     if (!/^\d{6}$/.test(slot)) continue;
     const cn = line.substring(7, 18).replace(/[\s\-]/g, '').toUpperCase();
-    if (!/^[A-Z]{4}\d{7}$/.test(cn)) continue;
+    // M3.5.5: 컨번호 빈 라인(선적 엠티)도 허용 — F/E와 POL/POD 정보는 유효
+    //   엠티 실 부착 작업에서는 컨번호 없는 엠티 슬롯도 표시 대상
+    const hasCn = /^[A-Z]{4}\d{7}$/.test(cn);
+    if (cn && !hasCn) continue;  // 컨번호가 있는데 형식 이상이면 스킵
 
     const bay = normalizeBay(slot.substring(0, 2));
     const row = slot.substring(2, 4);

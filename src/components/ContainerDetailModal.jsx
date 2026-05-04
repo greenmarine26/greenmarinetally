@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History } from 'lucide-react';
+import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock } from 'lucide-react';
 import { isoToLabel, formatWt } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal } from '../firebase.js';
 
 // ISO 코드 옵션 (현장에서 자주 쓰는 것)
 const ISO_OPTIONS = [
@@ -16,17 +16,20 @@ const ISO_OPTIONS = [
   { iso: '42P1', label: '40FR (40피트 플랫랙)', flags: { fr: true } },
   { iso: '45P1', label: '45FR (45피트 플랫랙)', flags: { fr: true } },
   { iso: '22U1', label: '20OT (20피트 오픈탑)', flags: { ot: true } },
-  { iso: '42U1', label: '40OT (40피트 오픈탑)', flags: { ot: true } },
   { iso: '22T1', label: '20TK (20피트 탱크)', flags: { tk: true } },
   { iso: '42T1', label: '40TK (40피트 탱크)', flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose }) {
+export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
-  const [editingTmp, setEditingTmp] = useState(false);  // M3.5.4-fix3: 온도 수정
+  const [editingTmp, setEditingTmp] = useState(false);
   const [tmpVal, setTmpVal] = useState(c.tmp || '');
+  const [editingEseal, setEditingEseal] = useState(false);
+  const [esealVal, setEsealVal] = useState(c.eseal || '');
+  const [resealVal, setResealVal] = useState(c.reseal || '');
+  const [esealType, setEsealType] = useState('reseal');  // M3.5.5: 'reseal' | 'wrong'
   const [showHistory, setShowHistory] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
@@ -88,6 +91,44 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
       await fbUpdateRecordField(voyageKey, mode, c.cn, 'rf', true, inspector);
     }
     setEditingTmp(false);
+  };
+
+  // M3.5.5: 엠티 실 부착/확인 저장
+  // 케이스:
+  //   1) 처음 입력: eseal에 저장
+  //   2) verify 모드 + 이미 입력된 상태에서 수정:
+  //      - reseal 종류: 기존 eseal 유지 + reseal에 새 값
+  //      - wrong 종류:  기존 eseal 유지 + eseal_wrong에 새 값
+  //   3) attach 모드 + 이미 입력된 상태에서 수정: eseal 단순 변경
+  const handleSaveEseal = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const newVal = String(esealVal || '').trim().toUpperCase();
+    if (!newVal && sealMode === 'attach') {
+      alert('엠티실번호를 입력하세요');
+      return;
+    }
+
+    let fields;
+    const hasExisting = !!(c.eseal || '').trim();
+
+    if (!hasExisting) {
+      // 처음 입력
+      fields = { eseal: newVal };
+    } else if (sealMode === 'verify') {
+      // verify 모드 + 이미 있음 → 종류에 따라
+      if (esealType === 'reseal') {
+        fields = { eseal: c.eseal, reseal: newVal };
+      } else {
+        // wrong
+        fields = { eseal: c.eseal, eseal_wrong: newVal };
+      }
+    } else {
+      // attach 모드 + 수정 (단순 교체)
+      fields = { eseal: newVal };
+    }
+
+    await fbSetEmptySeal(voyageKey, mode, c.cn, fields, inspector, sealMode);
+    setEditingEseal(false);
   };
 
   // M3.5.4-fix2: 규격(ISO) 수정 — rf/fr/ot/tk 플래그 자동 갱신
@@ -274,6 +315,129 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                     </button>
                     <button onClick={handleSaveTmp}
                       className="py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold">
+                      💾 저장
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* M3.5.5: 엠티 실 부착/확인 (sealMode 있을 때만) */}
+          {sealMode && (
+            <div className={`mb-3 rounded p-2 ${
+              editingEseal
+                ? (sealMode === 'attach' ? 'bg-red-900/20 border border-red-700/40' : 'bg-cyan-900/20 border border-cyan-700/40')
+                : (sealMode === 'attach' && !c.eseal ? 'bg-red-950/30 border-2 border-red-600 animate-pulse' : '')
+            }`}>
+              <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Lock className={`w-3 h-3 ${sealMode === 'attach' ? 'text-red-400' : 'text-cyan-400'}`}/>
+                  엠티 실 {sealMode === 'attach' ? '부착 (작업 필요)' : '확인 (이미 부착됨)'}
+                </span>
+                {!editingEseal && (
+                  <button onClick={() => { setEsealVal(c.eseal || ''); setEditingEseal(true); }}
+                    className={`hover:opacity-80 flex items-center gap-1 text-[10px] ${
+                      sealMode === 'attach' ? 'text-red-300' : 'text-cyan-400'
+                    }`}>
+                    <Edit3 className="w-3 h-3"/>{c.eseal ? '수정' : '실번호 입력'}
+                  </button>
+                )}
+              </div>
+              {!editingEseal ? (
+                <div className="space-y-1">
+                  {/* 기본 엠티실번호 */}
+                  {c.eseal ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-base font-bold mono ${sealMode === 'attach' ? 'text-red-200' : 'text-cyan-200'}`}>
+                        🔒 {c.eseal}
+                      </span>
+                      {c.eseal_by && (
+                        <span className="text-[10px] text-slate-400">
+                          ({c.eseal_by}, {c.eseal_at ? new Date(c.eseal_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''})
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className={`text-sm font-bold animate-pulse ${
+                      sealMode === 'attach' ? 'text-red-300' : 'text-amber-300'
+                    }`}>
+                      ⚠️ {sealMode === 'attach' ? '실 부착 필요' : '실 확인 필요'}
+                    </span>
+                  )}
+                  {/* 틀린실번호 (있으면) */}
+                  {c.eseal_wrong && (
+                    <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-amber-950/40 border border-amber-700/40 rounded">
+                      <span className="text-[10px] text-amber-400 font-bold">⚠️ 틀린실</span>
+                      <span className="text-sm font-bold mono text-amber-200">{c.eseal_wrong}</span>
+                    </div>
+                  )}
+                  {/* 리씰번호 (있으면) */}
+                  {c.reseal && (
+                    <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-purple-950/40 border border-purple-700/40 rounded">
+                      <span className="text-[10px] text-purple-400 font-bold">🔄 리씰</span>
+                      <span className="text-sm font-bold mono text-purple-200">{c.reseal}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className={`text-[10px] ${sealMode === 'attach' ? 'text-red-300' : 'text-cyan-300'}`}>
+                    {sealMode === 'attach'
+                      ? '실 부착 후 실번호를 입력하세요. POD: ' + (c.pod || '?')
+                      : (c.eseal
+                          ? '기존 실: ' + c.eseal + ' / 새 번호 입력 후 종류 선택'
+                          : '엠티에 부착된 실번호를 입력하세요')}
+                  </div>
+                  <input
+                    type="text"
+                    value={esealVal}
+                    onChange={e => setEsealVal(e.target.value.toUpperCase())}
+                    placeholder="실번호 (예: ABC1234)"
+                    className={`w-full bg-slate-800 border-2 rounded px-3 py-2 text-base font-bold mono focus:outline-none ${
+                      sealMode === 'attach'
+                        ? 'border-red-700 text-red-100 focus:border-red-400'
+                        : 'border-cyan-700 text-cyan-100 focus:border-cyan-400'
+                    }`}
+                    autoFocus
+                  />
+                  {/* M3.5.5: verify 모드 + 이미 입력된 상태에서 수정 시 종류 선택 */}
+                  {sealMode === 'verify' && c.eseal && (
+                    <div className="bg-slate-800/50 border border-slate-700 rounded p-2 space-y-1">
+                      <div className="text-[10px] text-slate-400 font-bold">새 번호의 구분:</div>
+                      <label className="flex items-center gap-2 px-2 py-1 hover:bg-slate-700/50 rounded cursor-pointer">
+                        <input
+                          type="radio"
+                          name="esealType"
+                          value="reseal"
+                          checked={esealType === 'reseal'}
+                          onChange={e => setEsealType(e.target.value)}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm font-bold text-purple-300">🔄 리씰 (손상 등으로 재부착)</span>
+                      </label>
+                      <label className="flex items-center gap-2 px-2 py-1 hover:bg-slate-700/50 rounded cursor-pointer">
+                        <input
+                          type="radio"
+                          name="esealType"
+                          value="wrong"
+                          checked={esealType === 'wrong'}
+                          onChange={e => setEsealType(e.target.value)}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm font-bold text-amber-300">⚠️ 틀린실 (예상과 다른 번호 발견)</span>
+                      </label>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => setEditingEseal(false)}
+                      className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
+                      취소
+                    </button>
+                    <button onClick={handleSaveEseal}
+                      className={`py-2 rounded text-xs font-bold text-white ${
+                        sealMode === 'attach' ? 'bg-red-700 hover:bg-red-600' : 'bg-cyan-700 hover:bg-cyan-600'
+                      }`}>
                       💾 저장
                     </button>
                   </div>

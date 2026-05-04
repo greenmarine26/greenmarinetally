@@ -1,16 +1,74 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback } from '../firebase.js';
+import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet } from 'lucide-react';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db } from '../firebase.js';
+import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
+import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 
 export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGoHome }) {
   const [shipLib, setShipLib] = useState({});
   const [feedback, setFeedback] = useState({});
   const [showResolved, setShowResolved] = useState(false);
+  const [extraPolicies, setExtraPolicies] = useState({});
   useEffect(() => {
     const u1 = fbSubscribeShipLibrary(setShipLib);
     const u2 = fbSubscribeFeedback(setFeedback);
-    return () => { u1(); u2(); };
+    const u3 = fbSubscribeShipPolicies(db, setExtraPolicies);
+    return () => { u1(); u2(); u3(); };
   }, []);
+
+  // M3.5.5: 엠티 실 작업 중인 항차 (실시간 부착 현황)
+  const sealVoyages = useMemo(() => {
+    const list = [];
+    Object.entries(voyages || {}).forEach(([key, v]) => {
+      const policy = matchShipPolicy(v?.info?.vsl || '', extraPolicies);
+      if (!policy) return;
+      // 양하/선적 모두 검사
+      ['discharge', 'loading'].forEach(mode => {
+        const sec = v[mode];
+        if (!sec) return;
+        const ediMap = sec.ediContainers || {};
+        const recMap = sec.records || {};
+        const targets = [];
+        Object.values(ediMap).forEach(c => {
+          // 평택만 (mode에 맞춰)
+          const isPtk = mode === 'discharge' ? (c.pod || '').endsWith('PTK') : (c.pol || '').endsWith('PTK');
+          if (!isPtk) return;
+          const sm = applyPolicyToContainer(policy, c);
+          if (!sm) return;
+          // record로 보강 (eseal 등)
+          const r = recMap[c.cn] || {};
+          targets.push({
+            ...c,
+            eseal: r.eseal || c.eseal || '',
+            eseal_wrong: r.eseal_wrong || '',
+            reseal: r.reseal || '',
+            eseal_by: r.eseal_by || '',
+            eseal_at: r.eseal_at || 0,
+            _sealMode: sm,
+          });
+        });
+        if (targets.length > 0) {
+          // 최근 활동순 정렬 (eseal 있는 것 먼저, 없는 것은 위치순)
+          targets.sort((a, b) => {
+            if (a.eseal && b.eseal) return (b.eseal_at || 0) - (a.eseal_at || 0);
+            if (a.eseal) return -1;
+            if (b.eseal) return 1;
+            return `${a.bay}-${a.row}-${a.tier}`.localeCompare(`${b.bay}-${b.row}-${b.tier}`);
+          });
+          list.push({
+            voyageKey: key,
+            voyage: v,
+            mode,
+            policy,
+            targets,
+            done: targets.filter(c => c.eseal).length,
+            total: targets.length,
+          });
+        }
+      });
+    });
+    return list;
+  }, [voyages, extraPolicies]);
 
   // 오답 리포트 정렬 (최신순, 미해결 먼저)
   const feedbackList = useMemo(() => {
@@ -157,6 +215,22 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
+      {/* M3.5.5: 엠티 실 작업 실시간 현황 */}
+      {sealVoyages.length > 0 && (
+        <div className="bg-slate-900 border border-amber-700/40 rounded-xl p-3 mt-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Lock className="w-4 h-4 text-amber-400"/>
+            <div className="text-sm font-bold text-amber-100">엠티 실 작업 실시간 현황</div>
+            <span className="text-[10px] text-slate-500">실시간 갱신</span>
+          </div>
+          <div className="space-y-3">
+            {sealVoyages.map(sv => (
+              <SealVoyageCard key={`${sv.voyageKey}-${sv.mode}`} sv={sv} onOpenVoyage={onOpenVoyage}/>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) */}
       <div className="bg-slate-900 border border-red-800/40 rounded-xl p-3 mt-3">
         <div className="flex items-center justify-between mb-3">
@@ -195,6 +269,105 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
+    </div>
+  );
+}
+
+// M3.5.5: 엠티 실 작업 항차 카드 (실시간 표)
+function SealVoyageCard({ sv, onOpenVoyage }) {
+  const [downloading, setDownloading] = useState(false);
+  const isAttach = sv.policy.mode === 'attach';
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const result = await generateEmptySealReport({
+        voyage: sv.voyage,
+        sealTargets: sv.targets,
+        sealMode: sv.policy.mode,
+      });
+      alert(`✅ 다운로드: ${result.filename}\n${result.rowCount}대`);
+    } catch (e) {
+      alert('실패: ' + e.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className={`border-2 rounded-lg p-2.5 ${isAttach ? 'border-red-700/50 bg-red-950/15' : 'border-cyan-700/50 bg-cyan-950/15'}`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-slate-100">
+            {isAttach ? '🔧' : '🔍'} {sv.voyage?.info?.vsl} <span className="text-slate-400">{sv.voyage?.info?.voy_l || sv.voyage?.info?.voy}</span>
+          </div>
+          <div className="text-[10px] text-slate-500">{sv.policy.label}</div>
+        </div>
+        <div className="text-right">
+          <div className={`text-lg font-black ${sv.done === sv.total ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {sv.done} / {sv.total}
+          </div>
+          <div className="text-[10px] text-slate-500">{sv.total - sv.done}대 남음</div>
+        </div>
+      </div>
+
+      {/* 실시간 표 (최대 50줄) */}
+      <div className="bg-slate-950 rounded border border-slate-700 overflow-hidden">
+        <table className="w-full text-[11px]">
+          <thead className="bg-slate-800 text-slate-400">
+            <tr>
+              <th className="px-1.5 py-1 text-left w-8">No</th>
+              <th className="px-1.5 py-1 text-left">컨번호</th>
+              <th className="px-1.5 py-1 text-left w-20">엠티실</th>
+              {sv.policy.mode === 'verify' && <th className="px-1.5 py-1 text-left w-20">리씰/틀린</th>}
+              <th className="px-1.5 py-1 text-left w-14">검수자</th>
+              <th className="px-1.5 py-1 text-left w-12">시각</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sv.targets.slice(0, 50).map((c, i) => {
+              const filled = !!c.eseal;
+              return (
+                <tr key={i} className={`border-t border-slate-800 ${filled ? '' : 'opacity-50'}`}>
+                  <td className="px-1.5 py-1 text-slate-500 mono">{i + 1}</td>
+                  <td className="px-1.5 py-1 mono text-slate-200">{c.cn || '(현장부여)'}</td>
+                  <td className="px-1.5 py-1 mono">
+                    {c.eseal ? <span className="text-emerald-300 font-bold">{c.eseal}</span> : <span className="text-slate-600">⏳ 대기</span>}
+                  </td>
+                  {sv.policy.mode === 'verify' && (
+                    <td className="px-1.5 py-1 mono">
+                      {c.reseal && <span className="text-purple-300">🔄{c.reseal}</span>}
+                      {c.eseal_wrong && <span className="text-amber-300 ml-1">⚠️{c.eseal_wrong}</span>}
+                    </td>
+                  )}
+                  <td className="px-1.5 py-1 text-slate-400 text-[10px]">{c.eseal_by || '-'}</td>
+                  <td className="px-1.5 py-1 text-slate-500 text-[10px] mono">
+                    {c.eseal_at ? new Date(c.eseal_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {sv.targets.length > 50 && (
+          <div className="text-[10px] text-slate-500 text-center py-1 border-t border-slate-800">
+            ... 외 {sv.targets.length - 50}대 (엑셀 다운로드로 전체 확인)
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button onClick={() => onOpenVoyage?.(sv.voyageKey)}
+          className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-bold">
+          항차 열기
+        </button>
+        <button onClick={handleDownload} disabled={downloading}
+          className={`py-2 rounded text-xs font-bold text-white flex items-center justify-center gap-1 ${
+            isAttach ? 'bg-red-700 hover:bg-red-600' : 'bg-cyan-700 hover:bg-cyan-600'
+          } disabled:opacity-50`}>
+          <FileSpreadsheet className="w-3 h-3"/>
+          {downloading ? '...' : '엑셀'}
+        </button>
+      </div>
     </div>
   );
 }

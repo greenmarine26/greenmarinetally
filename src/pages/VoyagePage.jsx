@@ -24,7 +24,11 @@ import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
+import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
+import EmptySealReportButton from '../components/EmptySealReport.jsx';
 import { runDiagnostics } from '../diagnostics.js';
+import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
+import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, onGoHome, onModeChange }) {
@@ -39,6 +43,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   // M3.5.4: 자동 진단 state (메인 컴포넌트에 두어야 useMemo에서 접근 가능)
   const [diagAutoSpeak, setDiagAutoSpeak] = useState(true);
   const [diagDismissed, setDiagDismissed] = useState(false);
+  // M3.5.5: 선박 엠티 실 정책
+  const [extraPolicies, setExtraPolicies] = useState({});
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [policyAsked, setPolicyAsked] = useState(false);
+
+  // 선박 정책 Firebase 구독
+  useEffect(() => {
+    const unsub = fbSubscribeShipPolicies(db, (data) => setExtraPolicies(data || {}));
+    return () => { try { unsub && unsub(); } catch (e) {} };
+  }, []);
 
   useEffect(() => { onModeChange?.(mode); }, [mode]);
 
@@ -129,6 +143,39 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
     });
   }, [ediMap, recMap, mode]);
 
+  // M3.5.5: 선박 정책 매칭 (DEFAULT + Firebase extra)
+  const shipPolicy = useMemo(() => {
+    const vsl = voyage?.info?.vsl || '';
+    return matchShipPolicy(vsl, extraPolicies);
+  }, [voyage, extraPolicies]);
+
+  // M3.5.5: 정책 적용 대상 컨테이너 (sealMode 표시용)
+  const sealTargets = useMemo(() => {
+    if (!shipPolicy) return { byCn: {}, list: [] };
+    const byCn = {};
+    const list = [];
+    (containers || []).forEach(c => {
+      const sm = applyPolicyToContainer(shipPolicy, c);
+      if (sm) {
+        byCn[c.cn] = sm;
+        list.push({ ...c, _sealMode: sm });
+      }
+    });
+    return { byCn, list };
+  }, [shipPolicy, containers]);
+
+  // 새 선박 정책 묻기 (한 번만)
+  useEffect(() => {
+    if (policyAsked) return;
+    if (!voyage?.info?.vsl) return;
+    if (shipPolicy) return;  // 이미 매칭됨
+    const hasEdi = (containers || []).length > 0;
+    if (hasEdi) {
+      setShowPolicyModal(true);
+      setPolicyAsked(true);
+    }
+  }, [voyage, shipPolicy, policyAsked, containers]);
+
   // M3.5.4: 자동 진단 (containers/recMap/xrayMap 변경 시 재계산)
   const diagAlerts = useMemo(() => {
     if (!containers || containers.length === 0) return [];
@@ -150,8 +197,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       xrayList: xrayMap,
       mode,
       carrier: voyage?.info?.carrier || '',
+      sealPolicy: shipPolicy,  // M3.5.5
     });
-  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage]);
+  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
 
   return (
     <div className="max-w-6xl mx-auto px-3 py-2">
@@ -208,7 +256,55 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         ))}
       </nav>
 
-      {/* M3.5.4: 자동 진단 경고 패널 (모든 탭 위에 표시) */}
+      {/* M3.5.5: 선박 엠티 실 정책 배너 + 보고서 */}
+      {shipPolicy && sealTargets.list.length > 0 && (
+        <div className="mb-3 space-y-2">
+          <div className={`rounded-lg p-3 border-2 flex items-center justify-between gap-2 ${
+            shipPolicy.mode === 'attach'
+              ? 'bg-red-950/30 border-red-700/50'
+              : 'bg-cyan-950/30 border-cyan-700/50'
+          }`}>
+            <div className="flex items-center gap-2 flex-1">
+              <span className={`text-xl ${shipPolicy.mode === 'attach' ? 'text-red-400' : 'text-cyan-400'}`}>🔧</span>
+              <div className="flex-1 min-w-0">
+                <div className={`text-sm font-black ${shipPolicy.mode === 'attach' ? 'text-red-200' : 'text-cyan-200'}`}>
+                  {shipPolicy.name || voyage?.info?.vsl} · {shipPolicy.label}
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  대상 {sealTargets.list.length}대 · 완료 {sealTargets.list.filter(c => c.eseal).length}대 · 남음 {sealTargets.list.filter(c => !c.eseal).length}대
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setShowPolicyModal(true)}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold text-slate-300">
+              정책 변경
+            </button>
+          </div>
+
+          {/* 엠티 실 보고서 */}
+          <EmptySealReportButton
+            vsl={voyage?.info?.vsl || ''}
+            voy={voyage?.info?.voy || voyage?.info?.voy_l || voyage?.info?.voy_d || ''}
+            loadDate={voyage?.info?.loadDate || ''}
+            containers={sealTargets.list}
+            mode={mode}
+            sealMode={shipPolicy.mode}
+          />
+        </div>
+      )}
+
+      {/* M3.5.5: 선박 정책 배너 (엠티 실 작업 모드일 때) */}
+      {shipPolicy && sealTargets.list.length > 0 && (
+        <div className="mb-3">
+          <SealPolicyBanner
+            policy={shipPolicy}
+            targets={sealTargets.list}
+            voyage={voyage}
+          />
+        </div>
+      )}
+
+      {/* M3.5.4: 자동 진단 경고 패널 */}
       {diagAlerts.length > 0 && (
         <div className="mb-3">
           <DiagnosticsPanel
@@ -217,7 +313,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
             onToggleSpeak={() => setDiagAutoSpeak(v => !v)}
             onDismiss={() => setDiagDismissed(true)}
             onOpenContainer={(cn) => {
-              // 평택 EDI에서 해당 컨 찾아서 상세 모달 열기
               const c = (containers || []).find(x => x.cn === cn);
               if (c) setDetailC(c);
             }}
@@ -278,10 +373,21 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
             voyageKey={voyageKey}
             voyageInfo={voyage.info}
             inspector={inspector}
+            sealMode={sealTargets.byCn[detailC.cn] || null}
             onClose={() => setDetailC(null)}
           />
         );
       })()}
+
+      {/* M3.5.5: 새 선박 정책 등록 모달 */}
+      <ShipPolicyModal
+        open={showPolicyModal}
+        vsl={voyage?.info?.vsl || ''}
+        code={voyage?.info?.imo || ''}
+        inspector={inspector}
+        onSaved={() => { /* Firebase 구독으로 자동 반영 */ }}
+        onClose={() => setShowPolicyModal(false)}
+      />
     </div>
   );
 }
@@ -423,7 +529,12 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           if (mode === 'discharge') return (c.pod || '').toUpperCase().endsWith('PTK');
           return (c.pol || '').toUpperCase().endsWith('PTK');
         });
-        ptk.forEach(c => { allCns[c.cn] = c; });
+        // M3.5.5: 컨번호 없는 엠티는 위치를 키로 사용 (선적 시점에는 컨번호 미배정)
+        //   현장에서 컨번호 부여되면 위치-기반 record를 매칭해서 컨번호 채움
+        ptk.forEach(c => {
+          const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
+          allCns[key] = { ...c, _slotKey: key };
+        });
         results.push(`✅ ${file.name}: 평택 ${ptk.length}대 (전체 ${total})`);
         // 항차 정보 자동 보완
         if (r.vsl && r.voy) {
@@ -852,6 +963,45 @@ function ModeSetup({ voyageKey }) {
     <div className="bg-amber-900/30 border border-amber-800 rounded-lg p-4 text-center mb-3">
       <div className="text-amber-200 text-sm mb-2">자료를 업로드해주세요</div>
       <div className="text-[11px] text-amber-300/70">자료 탭에서 EDI/ASC 파일부터 시작하세요</div>
+    </div>
+  );
+}
+
+// M3.5.5: 엠티 실 작업 정책 배너
+function SealPolicyBanner({ policy, targets, voyage }) {
+  const total = targets.length;
+  const done = targets.filter(c => c.eseal).length;
+  const pending = total - done;
+  const isAttach = policy.mode === 'attach';
+
+  return (
+    <div className={`border-2 rounded-xl p-3 ${
+      isAttach
+        ? 'border-red-600 bg-red-950/30'
+        : 'border-cyan-600 bg-cyan-950/30'
+    }`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{isAttach ? '🔧' : '🔍'}</span>
+          <div>
+            <div className="font-black text-base">
+              {isAttach ? '엠티 실 부착 작업' : '엠티 실 확인 작업'}
+            </div>
+            <div className="text-[11px] text-slate-400">{policy.label}</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className={`text-2xl font-black ${pending === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {done} / {total}
+          </div>
+          {pending > 0 && (
+            <div className="text-[10px] text-amber-300 font-bold animate-pulse">
+              {pending}대 남음
+            </div>
+          )}
+        </div>
+      </div>
+      <EmptySealReportButton voyage={voyage} sealTargets={targets} sealMode={policy.mode}/>
     </div>
   );
 }

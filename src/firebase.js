@@ -335,4 +335,49 @@ export async function fbDeleteFeedback(ts) {
   await set(r, null);
 }
 
+// M3.5.5: 엠티 실 부착/확인 (records의 eseal 관련 필드)
+//   - eseal: 기본 엠티실번호 (verify=원래 부착된 실, attach=새로 부착한 실)
+//   - eseal_wrong: 틀린 실 발견 시 그 번호 (verify 모드만)
+//   - reseal: 리씰한 새 실번호 (verify 모드만, 다시 부착한 경우)
+//   - eseal_at, eseal_by, eseal_mode
+export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) {
+  // fields: { eseal, eseal_wrong, reseal }
+  const eseal = String(fields.eseal || '').trim();
+  const eseal_wrong = String(fields.eseal_wrong || '').trim();
+  const reseal = String(fields.reseal || '').trim();
+
+  const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const snap = await get(r);
+  const cur = snap.val() || {};
+  const oldEseal = cur.eseal || '';
+  const oldWrong = cur.eseal_wrong || '';
+  const oldReseal = cur.reseal || '';
+  const eseal_orig = cur.eseal_orig != null ? cur.eseal_orig : oldEseal;
+
+  const history = Array.isArray(cur.eseal_history) ? [...cur.eseal_history] : [];
+  if (oldEseal !== eseal || oldWrong !== eseal_wrong || oldReseal !== reseal) {
+    history.push({
+      from: { eseal: oldEseal, wrong: oldWrong, reseal: oldReseal },
+      to: { eseal, wrong: eseal_wrong, reseal },
+      by: by || '', at: Date.now(), mode: sealMode,
+    });
+  }
+
+  await update(r, {
+    eseal, eseal_wrong, reseal,
+    eseal_orig,
+    eseal_at: Date.now(),
+    eseal_by: by || '',
+    eseal_mode: sealMode || '',
+    eseal_history: history,
+  });
+
+  // ediContainers에도 즉시 반영
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  const ediSnap = await get(ediRef);
+  if (ediSnap.exists()) {
+    await update(ediRef, { eseal, eseal_wrong, reseal });
+  }
+}
+
 export { db };

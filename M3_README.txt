@@ -1,111 +1,120 @@
 ═══════════════════════════════════════════════════════════════════
-  GREENMARINE TALLY — M3.5.4-fix3 (2026-05-05)
-  규격/온도 수정 + Gemini 2.5 Pro 업그레이드
+  GREENMARINE TALLY — M3.5.5 (2026-05-05)
+  엠티 실 작업 시스템 통합 + Gemini 2.5 Pro
   🌊 그린마린 검수팀 전용
 ═══════════════════════════════════════════════════════════════════
 
-■ 변경 사항 (3가지)
+■ M3.5.5 신규 기능 (엠티 실 작업)
 
-[1] 🐛 규격 수정이 화면에 반영 안 되던 버그 수정 ★ 핵심
-    원인: fbUpdateRecordField가 records 노드만 수정했는데
-          화면은 ediContainers 노드를 보고 있어서 변경 안 보임
-    수정: records + ediContainers 둘 다 동시 업데이트
-    효과:
-      - 규격(ISO) 변경 즉시 화면 반영
-      - 진단 경고에서 "수정"한 것도 즉시 반영
-      - 모든 fbUpdateRecordField 호출 영향 (규격/F-E/리퍼/온도 등)
-
-[2] ❄️ 리퍼 온도 직접 수정 UI 추가 ★ 신규
-    검수원이 현장에서 실물 온도계 보고 즉시 입력 가능
+[1] 선박별 정책 사전
+    하드코딩 3척:
+    - TEN JUPITER (TNJP/LYTJ): 모든 엠티 실 확인 (verify)
+    - RIZHAO ORIENT (RZOR):    모든 엠티 실 확인 (verify)
+    - ATLANTIC PIONEER (ATRP/ATPR): 위해(CNWEH/CNWEI)행 엠티 실 부착 (attach)
     
-    ContainerDetailModal에 "리퍼 온도" 영역:
-      - 현재 값 표시 (있으면 -18°C, 없으면 빨강 점멸 ⚠️ 미입력)
-      - "온도 입력/수정" 버튼
-      - 숫자 입력 + °C
-      - 빠른 선택: -25 / -18 / -15 / 0 / 4
-      - 빈칸 = 미입력 처리 (tmp_missing 플래그)
-      - 저장 시 rf=true 자동 (실 있는 리퍼 보장)
-      - 변경 이력 영구 저장
+    선박명 변형 표기 자동 처리 (ATPR/ATRP, LYTJ/TNJP)
+    POD 코드 변형 자동 처리 (CNWEI/CNWEH)
+
+[2] 자동 매칭 + 새 선박 등록
+    EDI 업로드 → 정책 자동 적용
+    처음 보는 선박 → ShipPolicyModal 자동 등장
+    검수원이 선택 → Firebase 영구 저장 → 다음부터 자동
+
+[3] 엠티 실 입력 UI (ContainerDetailModal)
+    🔧 attach 모드 (ATRP):
+       - 빨강 강조 + 점멸 (미부착 시)
+       - 실번호 입력 → 저장
     
-    리퍼인 컨테이너에서만 표시 (rf=true 또는 ISO[2]='R')
+    🔍 verify 모드 (TNJP/RZOR):
+       - 시안색 강조
+       - 엠티실번호 입력 (원래 부착된 실)
+       - 수정 시 라디오 버튼:
+         * 🔄 리씰 (손상 등으로 재부착) → reseal 필드
+         * ⚠️ 틀린실 (예상과 다른 번호 발견) → eseal_wrong 필드
+       - 3개 컬럼 모두 표시 (기존/틀린실/리씰)
 
-[3] 🤖 Gemini 모델 업그레이드: 2.0 Flash → 2.5 Pro
-    효과:
-      - 자연어 답변 품질 향상 (더 정확한 한국어, 깊은 추론)
-      - 사진 OCR 정확도 향상 (선적 종이 리스트)
-      - 컨텍스트 1M 토큰 (4000대 컨테이너 통째로 분석 가능)
-      - 무료 한도 충분 (현재 운영 규모 대응)
-    적용:
-      - gemini.js: 자연어 답변
-      - mixerUpload.js: 사진 OCR
+[4] 항차 페이지 정책 배너
+    엠티 실 작업 모드 진입 시 상단에 큰 배너:
+    - 모드 (부착/확인) + 정책 라벨
+    - 진행 카운트 (35/50)
+    - 엑셀 다운로드 버튼
 
-■ 버그 수정 흐름 (사용자 보고)
+[5] 자동 진단 + 음성 (diagnostics.js)
+    "ATRP 위해행 엠티 50대 중 5대 미부착. 작업 필요"
+    누락 컨번호 클릭 → 모달 즉시 열림
 
-  보고 1: "규격을 바꿀 창은 열리는데 바뀌지 않음"
-    → fbUpdateRecordField가 ediContainers 안 건드린 게 원인
-    → 화면이 보는 노드(ediContainers)도 함께 업데이트하도록 수정
-  
-  보고 2: "냉동 온도도 바꿀 수 있어야 하는데 수정할 방법이 없음"
-    → ContainerDetailModal에 온도 입력 필드 신규 추가
-    → 빠른 선택 버튼 + 자유 입력 + 빈칸=미입력
-  
-  보고 3: "경고에 떴던거 수정해도 안 되었던 거"
-    → 1번 버그와 같은 원인 (모든 fbUpdateRecordField 호출 영향)
-    → 자동으로 같이 해결됨
+[6] 수석 대시보드 실시간 부착 현황 ★ 핵심
+    모든 활성 항차 중 정책 매칭되는 것 자동 표시
+    실시간 표:
+    ┌────┬──────────────┬──────────┬──────┬────┐
+    │ No │ 컨번호       │ 엠티실   │ 검수자 │ 시각│
+    ├────┼──────────────┼──────────┼──────┼────┤
+    │  1 │ BEAU4211950  │ ABC1234  │ 성일  │14:23│
+    │  2 │ BMOU5404178  │ ABC1235  │ 성일  │14:25│
+    │  3 │ BMOU5909787  │ ⏳ 대기  │  -   │  - │
+    └────┴──────────────┴──────────┴──────┴────┘
+    Firebase 실시간 구독 → 부착할 때마다 자동 갱신
 
-■ 작동 흐름 (검수원 현장)
+[7] 엑셀 보고서 (사용자 형식)
+    상단: 선박이름 / 항차수 / 선적일자 / 총 대수
+    
+    attach 모드 (ATRP):
+      순번 | 컨번호 | 규격 | E | 엠티실번호 | 검수자 | 시각
+    
+    verify 모드 (TNJP/RZOR):
+      순번 | 컨번호 | 규격 | E | 엠티실번호 | 틀린실 | 리씰 | 검수자 | 시각
 
-  자료 업로드 → 자동 진단
-      ↓
-  🟡 "리퍼 8대 중 1대 온도 미입력" 경고 + 음성
-      ↓
-  검수원이 경고 탭 → 컨번호 클릭
-      ↓
-  컨테이너 모달 열림
-      ↓
-  "리퍼 온도" 영역 → "온도 입력" 클릭
-      ↓
-  -18 입력 또는 [-18] 빠른 버튼 → 💾 저장
-      ↓
-  records + ediContainers 둘 다 업데이트
-      ↓
-  화면 즉시 반영: ⚠️ → -18°C
-      ↓
-  진단 자동 재실행 → 경고 사라짐
+■ 검증 데이터 (실제 EDI/엑셀)
 
-■ AI 모델 비교 (참고)
+  ATRP 2621W (BAPLIE + Excel):
+    - 평택 선적 474대 (Full 23 / Empty 451)
+    - 위해행 엠티: 50대 (정책 적용 대상) ✅
+    - 대련행 엠티: 401대 (일반 검수, 정책 X) ✅
+    - 컨번호: 엑셀에서 자동 매칭 (BEAU4211950 등)
+    - 실번호: 빈칸 (현장 부착 후 입력)
 
-  Gemini 2.0 Flash (이전):
-    - 빠르지만 답변 얕음
-    - 무료, 일 1500회
+  TNJP 25333W (ASC):
+    - 평택 선적 275대 (Full 62 / Empty 213)
+    - 엠티 213대 모두 LYG행 (정책 적용 대상) ✅
+    - 컨번호: ASC에 모두 있음
+    - 실번호: 검수원이 현장 확인/리씰
 
-  Gemini 2.5 Pro (현재):
-    - 깊은 추론, 한국어 정확
-    - 1M 컨텍스트 토큰
-    - 무료 한도 충분
-    - 사용자 보고: "한 번에 깊은 분석" 우수
+■ 보강 사항 (이전 채팅 미해결)
 
-  Gemini 3.1 Pro (신모델):
-    - 더 비쌈 (2배), 무료 한도 적음
-    - 일부 시나리오에서 답변 얕다는 보고
-    - 검수 앱에는 2.5 Pro가 더 적합 (검증됨)
+[A] 규격(ISO) 수정 화면 반영 ✅
+    fbUpdateRecordField → records + ediContainers 둘 다 업데이트
+    모든 진단 경고에서 수정한 것 즉시 반영
+
+[B] 리퍼 온도 수정 UI ✅
+    -25/-18/-15/0/4 빠른 선택 + 자유 입력
+    빈칸 = 미입력 처리 자동
+
+[C] Gemini 2.5 Pro 업그레이드 ✅
+    자연어 답변 + 사진 OCR 둘 다
+    무료 한도 충분
 
 ■ 변경 파일
 
-  src/utils.js                          → APP_VERSION='M3.5.4-fix3'
-  src/firebase.js                       → fbUpdateRecordField가 ediContainers도 업데이트
-  src/gemini.js                         → gemini-2.5-pro
-  src/mixerUpload.js                    → OCR 모델 gemini-2.5-pro
-  src/components/ContainerDetailModal.jsx → 리퍼 온도 수정 UI
+  src/utils.js                          → APP_VERSION='M3.5.5', parseAscFile 빈 컨번호 허용
+  src/firebase.js                       → fbSetEmptySeal (eseal/eseal_wrong/reseal)
+  src/diagnostics.js                    → 엠티 실 누락 검사 + 음성
+  src/shipPolicies.js                   → ★ 신규 (정책 사전 + 매칭 + Firebase)
+  src/components/ShipPolicyModal.jsx    → ★ 신규 (새 선박 등록)
+  src/components/EmptySealReport.jsx    → ★ 신규 (엑셀 보고서)
+  src/components/ContainerDetailModal.jsx → 엠티 실 입력 UI (attach/verify)
+  src/components/DiagnosticsPanel.jsx   → 엠티 실 경고 + 컨번호 클릭
+  src/pages/VoyagePage.jsx              → 정책 자동 적용 + 배너
+  src/pages/ChiefDashboard.jsx          → ★ 실시간 부착 현황
 
 ■ 누적 이력
 
-  M3.5.4-fix3 ★ 규격/온도 수정 + Gemini 2.5 Pro
+  M3.5.5 ★ 엠티 실 작업 시스템 + 실시간 모니터링
+  M3.5.4-fix3   규격/온도 수정 + Gemini 2.5 Pro
   M3.5.4-fix2   ISO 수정 UI + 중복 처리 + EDI 진실 원칙
-  M3.5.4-fix1   양하 검정 에러 수정
+  M3.5.4-fix1   양하 검정 에러
   M3.5.4         자동 진단 + 음성 경고 + 리퍼 강조
   M3.5.3         믹서 제거 + Firebase 청크 + 모든 형식
-  M3.5           믹서 업로드 (롤백)
+  M3.5           믹서 (롤백)
   M3.4           EDI 핫픽스 + 오답 신고
 
 ═══════════════════════════════════════════════════════════════════
