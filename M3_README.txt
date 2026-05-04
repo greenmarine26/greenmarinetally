@@ -1,128 +1,80 @@
 ═══════════════════════════════════════════════════════════════════
-  GREENMARINE TALLY — M3.5 (2026.05.04)
-  믹서 업로드 시스템 + 폰 친화 UI 대폭 개편
+  GREENMARINE TALLY — M3.5.2 핫픽스 (2026-05-04)
+  믹서 업로드 성능 5~6배 개선
   🌊 그린마린 검수팀 전용
 ═══════════════════════════════════════════════════════════════════
 
-■ 핵심 변경 (대규모 업데이트)
+■ 사용자 보고
+  "믹서기 가동이 너무 오래 걸린다"
+  "선적 따로 양하 따로 하면 빠른데 동시 작업하면 더 빨라야 하는 것 아닌가?"
 
-[1] 🌪️ 믹서 업로드 시스템 (M3.5 핵심 기능)
+■ 원인 분석 결과 (4가지 병목)
 
-  EDI/엑셀/PDF/사진 한 곳에 던지면 자동 분류/매칭
-  
-  지원 형식:
-    ✅ EDI (BAPLIE) — 기존
-    ✅ 엑셀 (.xls, .xlsx) — 기존
-    ✅ CSV — 신규
-    ✅ PDF (동진해운 양식 검증, 다른 선사도 일반 양식이면 작동) — 신규
-    ✅ 사진 (JPG/PNG/HEIC, Gemini Vision OCR) — 신규
-  
-  자동 판별:
-    - 확장자 우선
-    - 매직바이트 확인 (PDF/ZIP/JPEG/PNG)
-    - 텍스트 내용 분석 (BAPLIE/ASC/CSV)
-  
-  데이터 병합 원칙:
-    - EDI = 단일 진실 (위치/POL/POD/컨번호 기준)
-    - 리스트/PDF/사진 = 보강 정보 (실번호/무게/X-RAY 플래그)
-    - 충돌 발생 시 검수원 확인 (다음 단계 작업)
+  1. Firebase 쓰기 5번 순차 (await × 5)
+     - 양하 EDI / 양하 list / 양하 xray / 선적 EDI / 선적 list
+     - 각 1~3초 × 5 = 5~15초
 
-[2] 📱 폰 친화 UI 대대적 개편
+  2. 파일 분석 순차 (for 루프)
+     - 5개 파일 × 5초 = 25초
 
-  ❌ 제거: prompt() / confirm() 작은 다이얼로그
-  ❌ 제거: 텍스트 직접 입력 의존
-  ❌ 제거: 작은 아이콘 버튼
-  
-  ✅ 추가: 풀 화면 모달 (44px+ 큰 버튼)
-  ✅ 추가: 카드형 항차 선택
-  ✅ 추가: 카메라 직접 호출 (capture="environment")
-  ✅ 추가: 단계별 워크플로 (setup → upload → process → result)
+  3. 'both' 모드에서 리스트 중복 처리
+     - 양하/선적 양쪽 lists에 push → mergeWithEdi 2번 실행
+     - 25,200번 비교 × 2 = 50,400번
 
-[3] 🗑️ 항차 삭제 모달 (폰 친화)
+  4. 이미지 처리 비효율
+     - 원본 4MB 그대로 Gemini로 전송
+     - btoa(spread) 연산자 → 메인 스레드 블락 + 큰 이미지 스택 오버플로우 위험
 
-  - prompt() 제거
-  - 양하만 삭제 / 선적만 삭제 / 항차 전체 3개 큰 버튼
-  - 2단계 확인 (선택 → 확인)
-  - 양하/선적 둘 중 하나만 있으면 자동 단순화
+  5. PDF.js CDN 첫 로드 대기 (~2초)
+     - 첫 PDF 처리 시마다 다운로드 대기
 
-[4] 📊 데이터 모델 확장
+■ 수정 (M3.5.2)
 
-  voyages/{key}/info에 필드 추가:
-    - voy_d: 양하 항차번호 (예: SUNNY KALMIA 양하 2608N)
-    - voy_l: 선적 항차번호 (예: SUNNY KALMIA 선적 2608S)
-    - voy: 공통 항차번호 (양하/선적 같은 경우, 동진 등)
-  
-  → 큰 선박(양하/선적 항차번호 다름) + 작은 선박(같음) 모두 지원
+  [수정 1] Firebase 쓰기 병렬화 ★ 가장 큰 효과
+    - persistData()에서 await 5번 → Promise.all 1번
+    - 5~15초 → 1~2초
+    - 위치: components/MixerUploadModal.jsx
 
-[5] 🚢 항차 매칭 자동화
+  [수정 2] 파일 분석 병렬화
+    - for 루프 → Promise.all(files.map())
+    - 25초 → 5초
+    - 위치: processFiles() in MixerUploadModal.jsx
 
-  새 EDI 업로드 시:
-    - 선박명 + 항차번호 일치 → 같은 항차 (자동 보강)
-    - 선박명 일치 + 항차번호 비슷 (2608N vs 2608S) → 검수원에게 묻기
-    - 선박명만 일치 → 검수원 확인
-    - 모두 다름 → 새 항차 자동 생성
+  [수정 3] 리스트 중복 제거
+    - 'both' 모드에서도 컨번호 매칭율로 한쪽에만 배치
+    - dischargeMatch vs loadingMatch 비교 → 더 많이 매칭되는 쪽
+    - mergeWithEdi 호출 횟수 절반
+    - 위치: processFiles() listFiles.forEach
 
-[6] 🤖 Gemini Vision OCR
+  [수정 4] 이미지 자동 축소 + 효율적 base64
+    - compressImage(): Canvas로 1600px 축소 + JPEG 90%
+    - blobToBase64(): FileReader 사용 (UI 안 막힘)
+    - 4MB → 0.5~1MB (업로드 80% 감소)
+    - 위치: mixerUpload.js
 
-  사진 업로드 시 Gemini 2.0 Flash 멀티모달로 처리:
-    - 컨번호 (4자 영문 + 7자 숫자)
-    - 실번호 (Seal No)
-    - 무게 (kg)
-    - 타입 코드 (D5/D2/R5 등)
-    - F/E 자동 판정 (무게 기준)
-  
-  무료 한도 충분 (분당 15회, 일 1500회)
+  [수정 5] PDF.js / SheetJS 사전 로드
+    - preloadLibraries() 함수 추가
+    - useEffect로 모달 열 때 백그라운드 다운로드
+    - 첫 PDF 처리 ~2초 단축
+    - 위치: mixerUpload.js + MixerUploadModal.jsx
 
-[7] 📁 업로드 진입점
+■ 예상 성능 (5개 파일 + 둘다 모드)
 
-  홈 화면 상단에 큰 "📁 자료 업로드 (믹서)" 버튼
-  탭하면 풀스크린 모달:
-    1️⃣ 모드 선택 (양하만/선적만/둘다)
-    2️⃣ 항차 선택 (➕ 새 항차 또는 기존 항차 카드)
-    3️⃣ 파일 추가 (파일 선택 또는 카메라 촬영)
-    4️⃣ 분석 진행 (실시간 progress bar)
-    5️⃣ 결과 확인 (양하/선적별 컨 수, 에러 파일)
+  이전 (M3.5):  30~40초
+  이후 (M3.5.2): 5~8초  (약 5~6배 빠름)
 
+■ 변경 파일
 
-■ 신규/변경 파일
-
-  src/utils.js                      → APP_VERSION = 'M3.5'
-  src/firebase.js                   → fbDeleteSection (모드별 삭제)
-  src/gemini.js                     → GEMINI_API_KEY export 추가
-  src/mixerUpload.js                → ★ 신규 (파일 판별/PDF/OCR/병합)
-  src/components/MixerUploadModal.jsx → ★ 신규 (폰 친화 풀스크린)
-  src/pages/HomePage.jsx            → 믹서 진입 버튼 + DeleteVoyageModal
-
-
-■ 사용 워크플로
-
-  현장 검수원:
-    1) 홈 → "📁 자료 업로드 (믹서)" 큰 버튼 탭
-    2) 모드 선택: 양하만/선적만/둘다 (큰 카드 버튼)
-    3) 항차 선택: ➕ 새 항차 또는 기존 항차 카드 탭
-    4) 파일 추가:
-       - "파일에서 선택" → EDI/엑셀/PDF 등
-       - "카메라로 촬영" → 종이 리스트 즉시 사진
-    5) "🚀 분석 시작" 탭
-    6) 자동 처리 (progress bar)
-    7) 결과 확인 → "항차 열기" 또는 "닫기"
-
-
-■ 주의사항
-
-  - 사진 OCR은 Gemini API 호출 (인터넷 필수)
-  - PDF.js는 첫 사용 시 CDN에서 자동 로드 (~2MB)
-  - 동진해운 외 PDF 양식은 테스트 필요 (KMTC, SM Line 등)
-  - 충돌 확인 UI는 다음 버전에서 추가 예정
-
+  src/utils.js                       → APP_VERSION = 'M3.5.2'
+  src/mixerUpload.js                 → compressImage/blobToBase64/preloadLibraries
+  src/components/MixerUploadModal.jsx → 병렬 처리 + 사전 로드 + 중복 제거
 
 ■ 누적 이력
 
-  M3.5 ★ 믹서 업로드 + 폰 친화 UI + 항차 모델 확장
-  M3.4   EDI 파싱 핫픽스 + 오답 신고
-  M3.3   진행/단수/바닥/꼭대기/용량 + 그린마린 전용
-  M3.2   자연어 대폭 확장 + 인앱 매뉴얼
-  M3.1   베이 좌표 정규화
-  M3.0   AI 도메인 지식
+  M3.5.2 ★ 믹서 성능 5~6배 개선
+  M3.5     믹서 업로드 + 폰 친화 UI + 데이터 모델 확장
+  M3.4     EDI 파싱 핫픽스 + 오답 신고
+  M3.3     진행/단수/바닥/꼭대기/용량
+  M3.2     자연어 대폭 확장 + 인앱 매뉴얼
 
 ═══════════════════════════════════════════════════════════════════

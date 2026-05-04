@@ -200,13 +200,63 @@ export function parsePdfContainers(text) {
 }
 
 // ─── 이미지 OCR (Gemini Vision) ───
+// M3.5.2: 자동 축소 (1600px) + FileReader base64 (UI 안 막힘)
+async function compressImage(file, maxDim = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1);
+      const w = Math.round(img.width * ratio);
+      const h = Math.round(img.height * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      // JPEG 90% 품질 (OCR에 충분, 크기 50~70% 절감)
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('이미지 압축 실패'));
+      }, 'image/jpeg', 0.9);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('이미지 로드 실패'));
+    };
+    img.src = url;
+  });
+}
+
+async function blobToBase64(blob) {
+  // M3.5.2: FileReader 사용 (메인 스레드 안 막힘, 큰 이미지에서 spread 스택 오버플로우 방지)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function ocrImageContainers(file, geminiApiKey) {
   if (!geminiApiKey) throw new Error('Gemini API 키 없음');
 
-  // 이미지를 base64로
-  const buf = await file.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
-  const mimeType = file.type || 'image/jpeg';
+  // 자동 축소 (4032×3024 → 1600×1200 정도, OCR 정확도 유지)
+  let imageBlob;
+  try {
+    imageBlob = await compressImage(file, 1600);
+  } catch (e) {
+    // 압축 실패 시 원본 사용
+    imageBlob = file;
+  }
+
+  const base64 = await blobToBase64(imageBlob);
+  const mimeType = 'image/jpeg';
 
   const prompt = `이 이미지는 컨테이너 적재 리스트(양하 또는 선적용)입니다.
 표 형태로 컨테이너 정보가 적혀있습니다.
@@ -296,6 +346,17 @@ export async function ocrImageContainers(file, geminiApiKey) {
   });
 
   return result;
+}
+
+// M3.5.2: 모달 열 때 호출 → PDF.js/SheetJS 미리 다운로드
+//   첫 PDF/엑셀 처리 시 CDN 다운로드 대기 시간 제거 (~2초 절감)
+export function preloadLibraries() {
+  // 비동기로 실행 (await X) - 백그라운드에서 로드
+  loadPdfJs().catch(() => {});
+  // SheetJS는 utils.js에서 처리하지만 미리 호출
+  if (!window.XLSX) {
+    import('./utils.js').then(m => m.loadSheetJS && m.loadSheetJS().catch(() => {}));
+  }
 }
 
 // ─── 통합 파일 처리 ───

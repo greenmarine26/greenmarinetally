@@ -5,21 +5,26 @@
 //   2. 파일 던지기 (한 곳, 모든 형식)
 //   3. 자동 분석 진행 표시
 //   4. 결과 요약 + 충돌/매칭 실패 확인
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Loader2, CheckCircle2, AlertTriangle, FileText, Image as ImageIcon, Trash2, Camera, Plus } from 'lucide-react';
-import { processSingleFile, mergeWithEdi, matchVoyage } from '../mixerUpload.js';
+import { processSingleFile, mergeWithEdi, matchVoyage, preloadLibraries } from '../mixerUpload.js';
 import { fbCreateVoyage, fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList, fbUpdateVoyageInfo } from '../firebase.js';
 import { GEMINI_API_KEY } from '../gemini.js';
 
 export default function MixerUploadModal({ open, onClose, voyages, inspector, onOpenVoyage }) {
-  const [step, setStep] = useState('setup'); // 'setup' | 'upload' | 'process' | 'result'
-  const [mode, setMode] = useState(null); // 'discharge' | 'loading' | 'both' | null
-  const [targetVoyage, setTargetVoyage] = useState(null); // null = 새 항차, key = 기존
+  const [step, setStep] = useState('setup');
+  const [mode, setMode] = useState(null);
+  const [targetVoyage, setTargetVoyage] = useState(null);
   const [files, setFiles] = useState([]);
   const [progress, setProgress] = useState({ done: 0, total: 0, current: '' });
-  const [results, setResults] = useState(null); // { fileResults, summary, voyageKey }
+  const [results, setResults] = useState(null);
   const fileRef = useRef(null);
   const cameraRef = useRef(null);
+
+  // M3.5.2: 모달 열 때 PDF.js / SheetJS 사전 로드 (첫 처리 시 다운로드 대기 X)
+  useEffect(() => {
+    if (open) preloadLibraries();
+  }, [open]);
 
   if (!open) return null;
 
@@ -238,18 +243,21 @@ function ModeButton({ active, onClick, color, icon, label }) {
   );
 }
 
-// ─── 파일 처리 메인 함수 ───
+// ─── 파일 처리 메인 함수 (M3.5.2 최적화) ───
 async function processFiles({ files, mode, targetVoyage, voyages, inspector, setStep, setProgress, setResults }) {
   setStep('process');
-  setProgress({ done: 0, total: files.length, current: '시작...' });
+  setProgress({ done: 0, total: files.length, current: '병렬 분석 시작...' });
 
-  const fileResults = [];
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    setProgress({ done: i, total: files.length, current: f.name });
-    const r = await processSingleFile(f, { geminiApiKey: GEMINI_API_KEY });
-    fileResults.push(r);
-  }
+  // M3.5.2: 파일 병렬 처리 (이전: 순차 5초×5=25초 → 이후: 동시 5초)
+  let doneCount = 0;
+  const fileResults = await Promise.all(
+    files.map(async (f) => {
+      const r = await processSingleFile(f, { geminiApiKey: GEMINI_API_KEY });
+      doneCount++;
+      setProgress({ done: doneCount, total: files.length, current: f.name });
+      return r;
+    })
+  );
   setProgress({ done: files.length, total: files.length, current: '병합 중...' });
 
   // 모드별 EDI/리스트/X-RAY 분류
@@ -265,14 +273,12 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
   ediFiles.forEach(r => {
     const data = r.data;
     if (!data?.containers) return;
-    // EDI 컨테이너의 POL/POD로 양하/선적 판정
     Object.values(data.containers).forEach(c => {
       const isDischarge = (c.pod || '').endsWith('PTK') || (c.pod || '').endsWith('KRPTK');
       const isLoading = (c.pol || '').endsWith('PTK') || (c.pol || '').endsWith('KRPTK');
       if (isDischarge) dischargeData.edi[c.cn] = { ...c, _mode: 'discharge' };
       if (isLoading) loadingData.edi[c.cn] = { ...c, _mode: 'loading' };
     });
-    // 선박 정보
     if (data._ship) {
       dischargeData._ship = data._ship;
       loadingData._ship = data._ship;
@@ -287,31 +293,62 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
     }
   });
 
+  // M3.5.2: 리스트는 mode 정보 또는 컨번호 매칭으로 한쪽에만 배치
+  // (이전: 'both'에서 양쪽 모두 push → 중복 처리 → 2배 시간)
   listFiles.forEach(r => {
     const data = r.data;
     if (!data?.containers) return;
-    if (data.mode === 'loading') loadingData.lists.push(data);
-    else if (data.mode === 'discharge') dischargeData.lists.push(data);
-    else {
-      // 모드 불명 → 사전 선택된 모드로
-      if (mode === 'loading') loadingData.lists.push(data);
-      else if (mode === 'discharge') dischargeData.lists.push(data);
-      else {
-        // both인 경우 양쪽 모두에 시도 (컨번호 매칭으로 자연스럽게 분리)
-        loadingData.lists.push(data);
-        dischargeData.lists.push(data);
-      }
+
+    // 1순위: 파일 자체의 mode (PDF/OCR이 알려준 것)
+    if (data.mode === 'loading') {
+      loadingData.lists.push(data);
+      return;
+    }
+    if (data.mode === 'discharge') {
+      dischargeData.lists.push(data);
+      return;
+    }
+
+    // 2순위: 사전 선택 모드
+    if (mode === 'loading') {
+      loadingData.lists.push(data);
+      return;
+    }
+    if (mode === 'discharge') {
+      dischargeData.lists.push(data);
+      return;
+    }
+
+    // 3순위 (both): 컨번호 일치율로 한쪽에만 배치 (중복 X)
+    const listCns = Object.keys(data.containers);
+    if (listCns.length === 0) return;
+    let dischargeMatch = 0, loadingMatch = 0;
+    listCns.forEach(cn => {
+      if (dischargeData.edi[cn]) dischargeMatch++;
+      if (loadingData.edi[cn]) loadingMatch++;
+    });
+    if (dischargeMatch > loadingMatch) {
+      dischargeData.lists.push(data);
+    } else if (loadingMatch > dischargeMatch) {
+      loadingData.lists.push(data);
+    } else if (dischargeMatch > 0) {
+      // 동률 + 매칭 있으면 양하 우선 (보통 양하가 메인)
+      dischargeData.lists.push(data);
+    } else {
+      // 매칭 0 → 사전 모드 또는 양하 기본
+      (mode === 'loading' ? loadingData : dischargeData).lists.push(data);
     }
   });
 
   xrayFiles.forEach(r => {
     const data = r.data;
     if (!data) return;
-    // X-RAY는 보통 양하만
     dischargeData.xrays.push(data);
   });
 
-  // 항차 매칭 + 저장
+  setProgress({ done: files.length, total: files.length, current: 'Firebase 저장 중...' });
+
+  // 항차 매칭 + 저장 (Firebase 쓰기 병렬화)
   const voyageKey = await persistData({
     mode, targetVoyage, voyages, inspector,
     dischargeData, loadingData,
@@ -336,10 +373,10 @@ async function persistData({ mode, targetVoyage, voyages, inspector, dischargeDa
   // 항차 키 결정
   let voyageKey = targetVoyage;
   if (!voyageKey) {
-    // 새 항차 자동 생성
     const vsl = (dischargeData._vsl || loadingData._vsl || 'UNKNOWN').toUpperCase().replace(/\s+/g, '');
     const voy = (dischargeData._voy || loadingData._voy || `V${Date.now().toString().slice(-6)}`).toUpperCase();
     voyageKey = `${vsl}_${voy}`;
+    // 새 항차 생성은 동기적으로 (이후 모든 쓰기가 이 키에 의존)
     await fbCreateVoyage(voyageKey, {
       vsl: dischargeData._vsl || loadingData._vsl || 'UNKNOWN',
       voy,
@@ -349,48 +386,48 @@ async function persistData({ mode, targetVoyage, voyages, inspector, dischargeDa
     });
   }
 
-  // 항차번호 분리 저장 (voy_d/voy_l)
+  // M3.5.2: 모든 Firebase 쓰기를 병렬로 처리 (5~10배 빠름)
+  const writePromises = [];
+
+  // 항차번호 정보 업데이트
   const infoUpdates = {};
   if (dischargeData._voy) infoUpdates.voy_d = dischargeData._voy;
   if (loadingData._voy && loadingData._voy !== dischargeData._voy) infoUpdates.voy_l = loadingData._voy;
   if (Object.keys(infoUpdates).length > 0) {
-    await fbUpdateVoyageInfo(voyageKey, infoUpdates);
+    writePromises.push(fbUpdateVoyageInfo(voyageKey, infoUpdates));
   }
 
-  // 양하 저장
+  // 양하 데이터
   if ((mode === 'discharge' || mode === 'both') && Object.keys(dischargeData.edi).length > 0) {
-    // 리스트/X-RAY 병합
     const listMerged = {};
     dischargeData.lists.forEach(l => Object.assign(listMerged, l.containers));
     const xrayMerged = {};
     dischargeData.xrays.forEach(x => Object.assign(xrayMerged, x));
 
     const { merged } = mergeWithEdi(dischargeData.edi, listMerged, xrayMerged, {});
-    await fbSaveEdiContainers(voyageKey, 'discharge', merged);
+    writePromises.push(fbSaveEdiContainers(voyageKey, 'discharge', merged));
 
-    // 리스트 records (실번호/무게)
     if (Object.keys(listMerged).length > 0) {
       const records = {};
       Object.values(listMerged).forEach(c => {
         if (!c.cn) return;
         records[c.cn] = { sl: c.sl || '', wt: c.wt || 0 };
       });
-      await fbSaveListRecords(voyageKey, 'discharge', records);
+      writePromises.push(fbSaveListRecords(voyageKey, 'discharge', records));
     }
 
-    // X-RAY (양하 전용)
     if (Object.keys(xrayMerged).length > 0) {
-      await fbSaveXrayList(voyageKey, xrayMerged);
+      writePromises.push(fbSaveXrayList(voyageKey, xrayMerged));
     }
   }
 
-  // 선적 저장
+  // 선적 데이터
   if ((mode === 'loading' || mode === 'both') && Object.keys(loadingData.edi).length > 0) {
     const listMerged = {};
     loadingData.lists.forEach(l => Object.assign(listMerged, l.containers));
 
     const { merged } = mergeWithEdi(loadingData.edi, listMerged, {}, {});
-    await fbSaveEdiContainers(voyageKey, 'loading', merged);
+    writePromises.push(fbSaveEdiContainers(voyageKey, 'loading', merged));
 
     if (Object.keys(listMerged).length > 0) {
       const records = {};
@@ -398,9 +435,12 @@ async function persistData({ mode, targetVoyage, voyages, inspector, dischargeDa
         if (!c.cn) return;
         records[c.cn] = { sl: c.sl || '', wt: c.wt || 0 };
       });
-      await fbSaveListRecords(voyageKey, 'loading', records);
+      writePromises.push(fbSaveListRecords(voyageKey, 'loading', records));
     }
   }
+
+  // 모든 쓰기 동시 실행 (5~10초 → 1~2초)
+  await Promise.all(writePromises);
 
   return voyageKey;
 }
