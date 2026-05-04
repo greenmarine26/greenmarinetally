@@ -1,10 +1,12 @@
-import React from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power } from 'lucide-react';
+import React, { useState } from 'react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
+import HelpModal from './HelpModal.jsx';
 
 export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome }) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
+  const [helpOpen, setHelpOpen] = useState(false);
 
   return (
     <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
@@ -35,6 +37,13 @@ export default function Header({ version, inspector, online, route, voyages, onC
             : <CloudOff className="w-3.5 h-3.5 text-red-400" title="오프라인"/>}
           <span className="bg-emerald-900/40 border border-emerald-600/40 text-emerald-300 text-[10px] font-black px-1.5 py-0.5 rounded mono" title="앱 버전">{version}</span>
           <button
+            onClick={() => setHelpOpen(true)}
+            title="사용 매뉴얼"
+            className="p-1.5 rounded bg-amber-900/30 hover:bg-amber-900/60 active:bg-amber-900/80 border border-amber-700/40"
+          >
+            <HelpCircle className="w-4 h-4 text-amber-300"/>
+          </button>
+          <button
             onClick={onChangeInspector}
             className="bg-amber-900/40 border border-amber-700/40 px-2 py-1 rounded text-xs flex items-center gap-1 active:bg-amber-900/60"
           >
@@ -53,6 +62,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
           </button>
         </div>
       </div>
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
     </header>
   );
 }

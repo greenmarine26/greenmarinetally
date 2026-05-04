@@ -1,0 +1,385 @@
+// 사용자 매뉴얼 (M3.2)
+// 검수원 초보 사용자를 위한 인앱 도움말
+// 카테고리 탭으로 구성, 실제 사용 예시 50+개
+import React, { useState } from 'react';
+import { X, Search, MessageCircle, Mic, Container, Anchor, Truck, AlertTriangle, MapPin, Settings } from 'lucide-react';
+
+const TABS = [
+  { id: 'basic',   label: '기본',     icon: Search },
+  { id: 'count',   label: '개수',     icon: Container },
+  { id: 'bay',     label: '베이',     icon: MapPin },
+  { id: 'port',    label: '항구',     icon: Anchor },
+  { id: 'special', label: '특수화물', icon: AlertTriangle },
+  { id: 'voice',   label: '음성',     icon: Mic },
+  { id: 'ai',      label: 'AI 질문',  icon: MessageCircle },
+  { id: 'twin',    label: '트윈',     icon: Truck },
+  { id: 'tips',    label: '팁',       icon: Settings },
+];
+
+const CONTENT = {
+  basic: [
+    {
+      title: '🔍 기본 검색 — 컨번호 끝 4자리',
+      examples: [
+        { q: '4777', a: '컨번호 끝 4자리가 4777인 컨테이너 1개 표시 (실번호/위치/X-RAY 자동 표시)' },
+        { q: '777',  a: '끝 3자리가 777인 컨 검색 (여러 개면 리스트)' },
+        { q: '47',   a: '끝 2자리 매칭 (좁히려면 더 입력)' },
+      ],
+    },
+    {
+      title: '🔍 컨번호 + 추가 조건',
+      examples: [
+        { q: '4777 풀',         a: '4777 중 Full만' },
+        { q: '4777 위치',       a: '4777의 위치(베이-row-tier) 답변' },
+        { q: '4777 어디',       a: '위와 동일' },
+      ],
+    },
+    {
+      title: '⚙️ 검색 결과 종류',
+      examples: [
+        { q: '결과 1개',        a: '🟡 큰 카드(BigResultCard) — 실번호 거대 표시 + 검수완료 버튼' },
+        { q: '결과 여러 개',    a: '작은 카드 리스트 (탭하면 상세)' },
+        { q: '통계 질문',       a: '🔵 시안색 큰 숫자 카드 (몇 대)' },
+        { q: '베이/항구/구역',  a: '🟢 에메랄드색 즉답 카드 (M3.2 신규)' },
+        { q: '자유 질문',       a: '🟣 보라색 AI 카드 (Gemini 호출)' },
+      ],
+    },
+  ],
+
+  count: [
+    {
+      title: '📊 사이즈/상태별 카운트',
+      examples: [
+        { q: '20피트 몇대',       a: '20피트 컨 총수' },
+        { q: '20풀 몇대',         a: '20피트 Full만' },
+        { q: '20엠티 몇대',       a: '20피트 Empty만' },
+        { q: '40피트 몇대',       a: '40피트 컨 총수' },
+        { q: '45피트 몇대',       a: '45피트 컨 총수' },
+        { q: '40풀 몇대',         a: '40피트 Full만' },
+        { q: '40엠티 몇대',       a: '40피트 Empty만' },
+        { q: '풀 몇대',           a: '전체 Full' },
+        { q: '엠티 몇대',         a: '전체 Empty' },
+      ],
+    },
+    {
+      title: '📊 특수화물 카운트',
+      examples: [
+        { q: '리퍼 몇대',         a: '리퍼(RF) 컨 수' },
+        { q: '위험물 몇대',       a: 'DG 컨 수' },
+        { q: 'XRAY 몇대',         a: 'X-RAY 대상 수' },
+        { q: 'FR 몇대',           a: '플랫랙 수' },
+        { q: 'OT 몇대',           a: '오픈탑 수' },
+        { q: '탱크 몇대',         a: '탱크 수' },
+      ],
+    },
+    {
+      title: '📊 모드별 (M3.2 신규)',
+      examples: [
+        { q: '양하 몇대',         a: '양하 모드 전체' },
+        { q: '선적 몇대',         a: '선적 모드 전체' },
+        { q: '양하 리퍼 몇대',    a: '양하 중 리퍼만' },
+        { q: '선적 위험물 몇대',  a: '선적 중 DG만' },
+      ],
+    },
+  ],
+
+  bay: [
+    {
+      title: '📍 베이 단독 질문 (M3.2 신규)',
+      examples: [
+        { q: '16번 베이',         a: '16번 베이 통계 카드 (총수/F·E/갑판·창내/총중량/특수화물)' },
+        { q: '베이 16',           a: '동일' },
+        { q: '20번베이',          a: '동일' },
+        { q: '100번 베이',        a: '큰 베이도 동일' },
+        { q: '1번 베이',          a: '한 자리 베이도 인식' },
+      ],
+    },
+    {
+      title: '📍 베이 + 조건 결합 (M3.2 신규)',
+      examples: [
+        { q: '16번 베이 풀 몇대',     a: '16번 베이 Full 카운트' },
+        { q: '20번 베이 위험물',      a: '20번 베이 DG 컨 리스트' },
+        { q: '16번 베이 갑판',        a: '16번 베이 중 tier≥80' },
+        { q: '20번 베이 창내',        a: '20번 베이 중 tier<80' },
+        { q: '16번 베이 무게 합',     a: '16번 베이 총중량 합계' },
+        { q: '16번 베이 위치',        a: '16번 베이 컨들의 위치 리스트' },
+        { q: '16번 베이 리퍼',        a: '16번 베이 리퍼만' },
+      ],
+    },
+    {
+      title: '📍 구역 (갑판/창내) (M3.2 신규)',
+      examples: [
+        { q: '갑판 컨 몇대',          a: 'tier≥80 (DECK)' },
+        { q: '창내 컨 몇대',          a: 'tier<80 (HOLD)' },
+        { q: '갑판 풀 몇대',          a: '갑판의 Full만' },
+        { q: '창내 위험물',           a: '창내 DG 리스트' },
+        { q: '창내 리퍼 어디',        a: '창내 리퍼 위치' },
+      ],
+    },
+  ],
+
+  port: [
+    {
+      title: '🌐 한국어 항구명으로 검색 (M3.2 신규)',
+      examples: [
+        { q: '대련에서 온 컨',        a: 'POL=CNDLC' },
+        { q: '대련 발 양하',          a: 'POL=CNDLC, 양하 모드' },
+        { q: '청도행 몇대',           a: 'POD=CNQDG' },
+        { q: '청도 가는 컨',          a: '동일' },
+        { q: '위해 출발',             a: 'POL=CNWEI' },
+        { q: '상해행 위치',           a: 'POD=CNSHA 컨 위치 리스트' },
+        { q: '평택 양하',             a: 'POD=KRPTK + 양하' },
+      ],
+    },
+    {
+      title: '🌐 항구명만 (양쪽 모두 검색)',
+      examples: [
+        { q: '대련',                  a: 'POL 또는 POD에 CNDLC 있는 컨' },
+        { q: '청도',                  a: '동일하게 CNQDG' },
+      ],
+    },
+    {
+      title: '🌐 영문 코드도 가능',
+      examples: [
+        { q: 'CNDLC 몇대',            a: '대련 = CNDLC 직접 입력' },
+        { q: 'PTK 양하',              a: '평택 줄임' },
+        { q: 'KRPTK 행',              a: '평택행 (POD)' },
+      ],
+    },
+    {
+      title: '🌐 지원 항구 목록',
+      examples: [
+        { q: '한국',  a: '평택 인천 부산 광양 울산 여수 군산 목포' },
+        { q: '중국',  a: '대련 청도 위해 상해 천진 닝보 연태 연운항 하문 광주 심천' },
+        { q: '일본',  a: '도쿄 요코하마 오사카 나고야 고베 하카타' },
+        { q: '동남아', a: '카오슝 싱가포르 호치민 하이퐁 방콕 클랑 마닐라 자카르타' },
+        { q: '미주/유럽', a: '엘에이(LA) 롱비치 뉴욕 시애틀 함부르크 로테르담' },
+      ],
+    },
+  ],
+
+  special: [
+    {
+      title: '❄️ 리퍼 (온도 검색)',
+      examples: [
+        { q: '리퍼',                  a: '리퍼 전체' },
+        { q: '리퍼 영하 18도',        a: '-18°C' },
+        { q: '리퍼 -25도',            a: '-25°C' },
+        { q: '리퍼 마이너스 20도',    a: '-20°C' },
+        { q: '리퍼 영상 5도',         a: '+5°C' },
+        { q: '리퍼 0도',              a: '0°C' },
+        { q: '리퍼 어디',             a: '리퍼 컨 위치 리스트' },
+      ],
+    },
+    {
+      title: '☢️ 위험물 (DG)',
+      examples: [
+        { q: '위험물',                a: 'DG 전체' },
+        { q: '위험물 어디',           a: 'DG 위치 리스트' },
+        { q: '클래스 3',              a: 'DG class 3 (인화성 액체)' },
+        { q: '클래스 9',              a: 'DG class 9 (기타)' },
+        { q: '3급 위험물',            a: 'class 3과 동일' },
+        { q: 'UN1234',                a: '특정 UN 번호' },
+        { q: 'UN 3082',               a: '동일 (공백 OK)' },
+      ],
+    },
+    {
+      title: '🚧 X-RAY',
+      examples: [
+        { q: 'XRAY 몇대',             a: 'X-RAY 대상 수 (양하만)' },
+        { q: '엑스레이',              a: '동일' },
+        { q: 'XRAY 위치',             a: 'X-RAY 컨 위치 리스트' },
+      ],
+    },
+    {
+      title: '📦 기타 특수화물',
+      examples: [
+        { q: 'FR',     a: '플랫랙' },
+        { q: 'OT',     a: '오픈탑' },
+        { q: '탱크',   a: '탱크' },
+        { q: 'OOG',    a: 'Out Of Gauge (FR/OT 포함)' },
+      ],
+    },
+  ],
+
+  voice: [
+    {
+      title: '🎤 음성 검색',
+      examples: [
+        { q: '🎤 버튼 누르고 "사칠칠칠"', a: '"4777" 인식 → 자동 검색' },
+        { q: '🎤 "공일오공"',              a: '"0150" 인식' },
+        { q: '🎤 "이십번 베이"',           a: '"20번 베이" 인식' },
+        { q: '🎤 "리퍼 몇 대"',           a: '리퍼 카운트 즉답' },
+      ],
+    },
+    {
+      title: '🔊 음성 답변 (자동)',
+      examples: [
+        { q: '결과 1개',          a: '컨번호+위치+실번호+특수정보 음성 안내' },
+        { q: '통계',              a: '"20피트 풀 47대" 식으로 안내' },
+        { q: '베이 답변 (M3.2)',  a: '"16번 베이 24대, Full 18 Empty 4..." 자동' },
+        { q: '좌표 (M3.1)',       a: '"16-01-86" → "십육번 베이 공일에 팔육"' },
+      ],
+    },
+    {
+      title: '🔊 음성 ON/OFF',
+      examples: [
+        { q: '검색창 오른쪽 🔊',   a: '탭하면 음성 안내 OFF (🔇로 변함)' },
+        { q: '한 번 더 탭',        a: '다시 ON' },
+      ],
+    },
+  ],
+
+  ai: [
+    {
+      title: '🤖 AI 질문 버튼 (Gemini)',
+      examples: [
+        { q: 'AI 버튼 표시 조건', a: '4글자 이상 입력 + 통계 키워드("몇대") 아닐 때' },
+        { q: '호출 방식',         a: '검수원이 명시적으로 ★AI★ 버튼 탭할 때만 (자동 호출 X)' },
+        { q: '비용',              a: '무료 (분당 15회, 일 1500회)' },
+      ],
+    },
+    {
+      title: '🤖 AI에 적합한 질문 (정말 자유 형식)',
+      examples: [
+        { q: '이 선박 평소 양하 몇 대?',          a: '선박 라이브러리 평균' },
+        { q: '위험물 3/1234와 5/2468 트윈 가능?', a: 'IMDG 격리 판단' },
+        { q: '검수 마무리에 대한 조언',           a: 'AI 자유 답변' },
+      ],
+    },
+    {
+      title: '⚠️ AI보다 즉답이 더 정확한 경우',
+      examples: [
+        { q: '20피트 몇대',       a: '→ 즉답 카드 (AI 호출 X)' },
+        { q: '16번 베이',         a: '→ 즉답 카드 (M3.2)' },
+        { q: '대련에서 온 컨',    a: '→ 즉답 카드 (M3.2)' },
+        { q: '갑판 위험물',       a: '→ 즉답 카드 (M3.2)' },
+        { q: '리퍼 영하 18도',    a: '→ 즉답 카드' },
+      ],
+    },
+  ],
+
+  twin: [
+    {
+      title: '🚛 트윈 모드 (20피트 두 개)',
+      examples: [
+        { q: '검색창 위 [트윈] 탭', a: '트윈 모드로 전환' },
+        { q: '앞 컨 4자리 입력',    a: '자동으로 짝꿍 컨 찾아줌 (M2.5: 베이 자동 분석)' },
+        { q: '예: 003 베이 컨 입력', a: '001 베이가 짝꿍 자동 추천' },
+        { q: '둘 다 표시되면',      a: '같이 검수완료 처리 가능' },
+      ],
+    },
+    {
+      title: '🚛 트윈 짝꿍 알고리즘 (M2.5)',
+      examples: [
+        { q: '짝수 베이 있음',  a: '양옆 홀수 베이가 짝꿍' },
+        { q: '짝수 베이 없음',  a: '통로 → 단독 처리 (트윈 X)' },
+        { q: '이미 완료된 컨',  a: '짝 후보에서 자동 제외' },
+      ],
+    },
+  ],
+
+  tips: [
+    {
+      title: '💡 빠른 검수 팁',
+      examples: [
+        { q: '4자리 입력 → 자동 음성', a: '음성 안내 ON 상태에서 결과 자동 안내 (눈 안 봐도 됨)' },
+        { q: '🎤 음성 검색',          a: '키 입력 없이 손에 컨테이너 들고 검색' },
+        { q: '검수완료 버튼',         a: '결과 카드의 ✅ 버튼 탭 → 즉시 완료 처리' },
+        { q: '컨번호 끝 4자리만',     a: '한국 모든 검수 표준 — 더 길게 칠 필요 없음' },
+      ],
+    },
+    {
+      title: '💡 데이터/통계 검토',
+      examples: [
+        { q: '베이별 무게',           a: '"16번 베이 무게 합" — 즉답 (M3.2)' },
+        { q: '항구별 컨 수',          a: '"대련", "청도행" 등 — 즉답 (M3.2)' },
+        { q: '구역별',                a: '"갑판 풀 몇대", "창내 위험물" — 즉답 (M3.2)' },
+        { q: 'CSV 내보내기',          a: '리스트 탭 → CSV 다운로드 (결재용/세관용)' },
+      ],
+    },
+    {
+      title: '💡 안전/위험물',
+      examples: [
+        { q: '클래스별 확인',         a: '"클래스 3", "클래스 9" 즉답 (M3.2)' },
+        { q: '특정 UN',               a: '"UN1234" 즉답 (M3.2)' },
+        { q: '트윈 가부 (위험물)',    a: 'AI에 "3/1234와 5/2468 트윈 가능?" → IMDG 격리 판단' },
+      ],
+    },
+    {
+      title: '💡 문제 해결',
+      examples: [
+        { q: '결과 없음',             a: '검색어 너무 좁게 잡힘 → 조건 줄이거나 음성 다시 시도' },
+        { q: '베이그림 어긋남',       a: 'M3.1에서 정수 기반 페어링 → 자동 호환' },
+        { q: '음성 인식 안됨',        a: '마이크 권한 확인 / 한 번에 한 단어씩 또박또박' },
+        { q: 'AI 오류',               a: '"네트워크 오류" 또는 "API 오류" 표시 — 분당 15회 한도 가능' },
+      ],
+    },
+  ],
+};
+
+export default function HelpModal({ open, onClose }) {
+  const [tab, setTab] = useState('basic');
+  if (!open) return null;
+
+  const sections = CONTENT[tab] || [];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-2 sm:p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full sm:max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-950">
+          <div>
+            <div className="text-lg font-black text-amber-300">📖 사용 매뉴얼</div>
+            <div className="text-[11px] text-slate-400">평택항 검수앱 · 초보 검수원용</div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg">
+            <X className="w-5 h-5 text-slate-300"/>
+          </button>
+        </div>
+
+        {/* 탭 (가로 스크롤) */}
+        <div className="flex gap-1 overflow-x-auto px-2 py-2 border-b border-slate-700 bg-slate-900/80 scrollbar-hide">
+          {TABS.map(T => {
+            const Icon = T.icon;
+            return (
+              <button key={T.id} onClick={() => setTab(T.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition ${
+                  tab === T.id ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}>
+                <Icon className="w-3.5 h-3.5"/>
+                {T.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 본문 */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4">
+          {sections.map((sec, si) => (
+            <div key={si} className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
+              <div className="text-base font-black text-amber-200 mb-2">{sec.title}</div>
+              <div className="space-y-1.5">
+                {sec.examples.map((ex, ei) => (
+                  <div key={ei} className="grid grid-cols-1 sm:grid-cols-5 gap-2 py-1.5 border-b border-slate-700/50 last:border-0">
+                    <code className="sm:col-span-2 text-xs sm:text-sm font-bold mono text-cyan-300 bg-slate-950/60 px-2 py-1 rounded break-all">
+                      {ex.q}
+                    </code>
+                    <div className="sm:col-span-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                      {ex.a}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 푸터 */}
+        <div className="px-4 py-2 border-t border-slate-700 bg-slate-950 text-[10px] text-slate-500 text-center">
+          M3.2 · 즉답이 안 되는 자유 질문은 ★AI 버튼★ 탭하면 Gemini 호출
+        </div>
+      </div>
+    </div>
+  );
+}

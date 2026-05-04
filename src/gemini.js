@@ -6,8 +6,13 @@
 //   4) 베이별 컨 개수/F·E/무게 미리 집계
 //   5) 위험물(DG) 별도 리스트 + 클래스별 집계
 //   6) 선박 라이브러리(이전 항차 평균) 컨텍스트 활용
+// M3.1 — 베이 좌표 정규화:
+//   - 좌표는 모두 정규화된 형식(##-##-## or ###-##-##)으로 AI에게 전달
+//   - AI가 위치 답변 시 한국어 음성형으로 풀어서 답하도록 시스템 프롬프트에 규칙 추가
 //
 // 무료 할당량: 분당 15 / 일 1500 (15명 × 50회 = 750회 → 50% 사용)
+
+import { fmtPos, normalizeBay } from './utils.js';
 
 const GEMINI_API_KEY = 'AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY';
 const GEMINI_MODEL = 'gemini-2.0-flash';
@@ -108,10 +113,11 @@ const DOMAIN_KNOWLEDGE = `
 
 // ─── 컨테이너 압축 (토큰 절약) ───────────────────────────────
 // allContainers 전체를 AI에게 보내되, 필수 필드만 추려서
+// M3.1: 좌표는 정규화된 형식(##-##-## or ###-##-##)으로 전달
 function compactContainer(c) {
   const o = {
     cn: c.cn,
-    p: c.bay ? `${c.bay}-${c.row}-${c.tier}` : '',  // 위치
+    p: fmtPos(c),  // 정규화된 위치 (앞 0 제거된 베이)
     iso: c.iso,
     fe: c.fe,
     m: c._mode === 'discharge' ? 'D' : 'L',  // D=양하, L=선적
@@ -138,11 +144,13 @@ function compactContainer(c) {
 }
 
 // ─── 베이별 통계 미리 집계 ───────────────────────────────
+// M3.1: 베이 키도 정규화된 정수 문자열로 통일
 function buildBayStats(allContainers) {
   const bayMap = {};
   allContainers.forEach(c => {
     if (!c.bay) return;
-    const b = c.bay;
+    const b = normalizeBay(c.bay);
+    if (!b) return;
     if (!bayMap[b]) {
       bayMap[b] = { total: 0, F: 0, E: 0, deck: 0, hold: 0, wt: 0, rf: 0, dg: 0 };
     }
@@ -180,7 +188,7 @@ function buildDgList(allContainers) {
     byClass[cls] = (byClass[cls] || 0) + 1;
     list.push({
       cn: c.cn,
-      pos: c.bay ? `${c.bay}-${c.row}-${c.tier}` : '',
+      pos: fmtPos(c),  // M3.1: 정규화된 위치
       cls,
       un: c.un || '',
       fe: c.fe,
@@ -258,10 +266,13 @@ ${DOMAIN_KNOWLEDGE}
 1. 데이터에 없는 내용은 절대 추측하지 말고 "데이터에 없음"이라고 답하세요.
 2. 답변은 한국어로 짧고 명확하게 (2~4문장 이내, 단 리스트는 더 길어도 됨).
 3. 숫자는 정확히 표시하고, 컨번호는 4자리 끝번호 위주로 알려주세요.
-4. 위치는 베이-row-tier (예: 020-04-84) 형식으로 답하세요.
-5. 검수원이 손에 폰 들고 빠르게 읽을 수 있도록 핵심만 답하세요.
-6. 위험물 트윈 가부 질문 시 IMDG 격리 등급으로 판단하되, "정확한 판단은 IMDG Code 격리표 확인 필요" 한 줄 추가하세요.
-7. 베이별 답변, POL/POD별 집계, 무게 합계 등 계산이 필요하면 제공된 데이터로 직접 계산하세요.`;
+4. 위치는 베이-row-tier 형식 (예: 16-01-86, 또는 100-04-82) — 베이는 앞 0 없는 정수입니다.
+5. ★ 음성 안내 친화 답변: 위치를 말할 때는 "16-01-86"처럼 숫자 형식으로 답하세요.
+   (음성 합성기가 자동으로 "십육번 베이 공일에 팔육"으로 변환합니다)
+6. 검수원이 손에 폰 들고 빠르게 읽을 수 있도록 핵심만 답하세요.
+7. 위험물 트윈 가부 질문 시 IMDG 격리 등급으로 판단하되, "정확한 판단은 IMDG Code 격리표 확인 필요" 한 줄 추가하세요.
+8. 베이별 답변, POL/POD별 집계, 무게 합계 등 계산이 필요하면 제공된 데이터로 직접 계산하세요.
+9. 베이 번호는 정수("1", "16", "100")이며 앞에 0을 붙이지 마세요.`;
 
   const shipLibBlock = shipLib ? `
 [선박 라이브러리 — 이전 항차 평균 (학습된 패턴)]

@@ -4,14 +4,15 @@
 // - 결과 카드: 실번호 거대 + 완료 버튼
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2 } from 'lucide-react';
+import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer } from '../nlSearch.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate } from '../twin.js';
 import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
+import HelpModal from './HelpModal.jsx';
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null }) {
   const [searchMode, setSearchMode] = useState('single');
@@ -90,6 +91,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
   const [autoSpeak, setAutoSpeak] = useState(true);
   const [aiAnswer, setAiAnswer] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const recognitionRef = useRef(null);
   const lastSpokenRef = useRef(null);
 
@@ -99,6 +101,21 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
     if (!hasAnyCondition(parsed)) return [];
     return applyNLFilter(allContainers, parsed);
   }, [allContainers, query, parsed]);
+
+  // M3.2: 로컬 답변 (AI 의존 없이 즉답)
+  // 베이/POL/POD/구역/무게합/위치 질문은 모두 여기서 처리
+  // 단, 단순 컨번호 검색(digits만)이거나 결과가 단 1개면 BigResultCard 우선
+  const localAnswer = useMemo(() => {
+    if (!query || query.length < 2) return null;
+    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery) return null;
+    // 단순 컨번호만 입력한 경우는 BigResultCard 우선
+    const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
+                       !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
+                       !parsed.size && !parsed.fe && !parsed.type && !parsed.weightSum &&
+                       !parsed.posQuery && !parsed.listQuery && !parsed.isStat;
+    if (onlyDigits) return null;
+    return generateLocalAnswer(parsed, results, allContainers);
+  }, [parsed, results, allContainers, query]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -131,9 +148,17 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
     if (!autoSpeak) return;
     if (!query || query.length < 2) return;
     if (aiLoading || aiAnswer) return; // AI 답변 중엔 안내 X
-    const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}`;
+    const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}-${localAnswer ? '1' : '0'}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
+
+    // M3.2: 로컬 답변이 있으면 첫 두 줄만 읽기 (좌표는 voice.js가 자동 한국어화)
+    if (localAnswer) {
+      const lines = localAnswer.split('\n').filter(l => l.trim());
+      const head = lines.slice(0, 2).join('. ').replace(/[📊📍📭⚖️•·]/g, '').trim();
+      if (head) speak(head);
+      return;
+    }
 
     if (parsed.isStat) {
       speak(`${describeQuery(parsed)} ${results.length}대`);
@@ -148,7 +173,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
     } else {
       speak(`${results.length}개 일치, 더 자세히`);
     }
-  }, [results, query, parsed, autoSpeak, aiLoading, aiAnswer]);
+  }, [results, query, parsed, autoSpeak, aiLoading, aiAnswer, localAnswer]);
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -189,8 +214,15 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
   return (
     <>
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
-        <div className="text-[10px] text-slate-500 font-bold mb-2">
-          🤖 검색/AI — 4자리 / "리퍼 몇개" / 자유 질문 · 전체 {allContainers.length}대
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[10px] text-slate-500 font-bold">
+            🤖 검색/AI — 4자리 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 전체 {allContainers.length}대
+          </div>
+          <button onClick={() => setHelpOpen(true)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-[10px] font-bold border border-amber-700/40">
+            <HelpCircle className="w-3 h-3"/>
+            예시
+          </button>
         </div>
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
@@ -261,8 +293,19 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
         </div>
       )}
 
-      {/* 통계 답변 카드 */}
-      {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && !aiAnswer && (
+      {/* M3.2: 로컬 답변 카드 (베이/POL/POD/구역/무게합/위치 등 - AI 의존 X) */}
+      {localAnswer && !aiAnswer && (
+        <div className="bg-gradient-to-br from-emerald-950 to-slate-900 border-2 border-emerald-600 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Check className="w-4 h-4 text-emerald-300"/>
+            <div className="text-[11px] text-emerald-300 font-bold uppercase">즉답 (로컬 분석)</div>
+          </div>
+          <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
+        </div>
+      )}
+
+      {/* 통계 답변 카드 (단순 카운트) — 로컬 답변이 없을 때만 */}
+      {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && !aiAnswer && !localAnswer && (
         <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-xl p-4 text-center">
           <div className="text-[11px] text-cyan-400 font-bold uppercase mb-1">개수 답변</div>
           <div className="text-base text-slate-300 mb-2">{describeQuery(parsed)}</div>
@@ -274,17 +317,19 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
         </div>
       )}
 
-      {/* 일반 결과 */}
-      {!parsed.isStat && !aiAnswer && results.length === 1 && (
+      {/* 일반 결과 (로컬 답변/통계 카드 없을 때만 표시) */}
+      {!parsed.isStat && !aiAnswer && !localAnswer && results.length === 1 && (
         <BigResultCard c={results[0]}
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(results[0])}
           onAfterComplete={() => { setQuery(''); stopSpeak(); }}
         />
       )}
-      {!parsed.isStat && !aiAnswer && results.length > 1 && results.slice(0, 30).map(c => (
+      {!parsed.isStat && !aiAnswer && !localAnswer && results.length > 1 && results.slice(0, 30).map(c => (
         <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
       ))}
+
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
     </>
   );
 }

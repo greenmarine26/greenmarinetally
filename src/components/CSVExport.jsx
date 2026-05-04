@@ -1,5 +1,5 @@
 // CSV 내보내기 — 결재용 + 세관 신고용
-import { isoToLabel, formatWt } from '../utils.js';
+import { isoToLabel, formatWt, fmtPos } from '../utils.js';
 
 export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals) {
   const headers = [
@@ -26,7 +26,7 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
 
     rows.push([
       i + 1,
-      c.bay ? `${c.bay}-${c.row}-${c.tier}` : '',
+      fmtPos(c),
       c.cn || '',
       slOrig, c.sl || '', slErr,
       xSealOrig, xs.seal || '', xs.eseal || '', xErr,
@@ -69,7 +69,7 @@ export function exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, x
       const last = (c.sl_history || []).slice(-1)[0];
       rows.push([
         voyageKey, voyageInfo?.vsl || '', voyageInfo?.voy || '', mode === 'discharge' ? '양하' : '선적',
-        no++, c.bay ? `${c.bay}-${c.row}-${c.tier}` : '',
+        no++, fmtPos(c),
         c.cn,
         '실번호',
         slOrig, c.sl,
@@ -85,7 +85,7 @@ export function exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, x
         const last = (xs.history || []).slice(-1)[0];
         rows.push([
           voyageKey, voyageInfo?.vsl || '', voyageInfo?.voy || '', '양하',
-          no++, c.bay ? `${c.bay}-${c.row}-${c.tier}` : '',
+          no++, fmtPos(c),
           c.cn,
           'X-RAY 세관봉인',
           xSealOrig, xs.seal,

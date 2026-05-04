@@ -1,5 +1,5 @@
-// 공통 유틸리티 — V38 (2026.05.04 / M3.0)
-export const APP_VERSION = 'M3.0';
+// 공통 유틸리티 — V38 (2026.05.04 / M3.2)
+export const APP_VERSION = 'M3.2';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -32,7 +32,66 @@ export const SK = {
 };
 
 // === Helpers ===
-export const fmtPos = (c) => `${c.bay}-${c.row}-${c.tier}`;
+// M3.1: bay 정규화 — EDI는 BBBRRTT 7자리지만 검수원 표시는 ##-##-## 형식
+// "016" → "16", "001" → "1", "100" → "100" (3자리 베이는 보존)
+export const normalizeBay = (b) => {
+  if (b === null || b === undefined || b === '') return '';
+  const s = String(b).trim();
+  const n = parseInt(s, 10);
+  return isNaN(n) ? '' : String(n);
+};
+
+// 위치 표시: 베이는 정규화(앞 0 제거), row/tier는 원본 2자리 유지
+export const fmtPos = (c) => {
+  if (!c || !c.bay) return '';
+  return `${normalizeBay(c.bay)}-${c.row || ''}-${c.tier || ''}`;
+};
+
+// M3.1: 한국어 음성 읽기 헬퍼 — "16-01-86" → "십육번 베이 공일에 팔육"
+// 베이 = 한국어 정수 (16 → 십육), row/tier = 자릿수별 (01 → 공일, 86 → 팔육)
+const KR_DIGIT = ['공','일','이','삼','사','오','육','칠','팔','구'];
+const sinoKorean = (n) => {
+  if (n === null || n === undefined || isNaN(n)) return '';
+  if (n === 0) return '공';
+  if (n < 10) return KR_DIGIT[n];
+  if (n < 20) return n === 10 ? '십' : '십' + KR_DIGIT[n - 10];
+  if (n < 100) {
+    const t = Math.floor(n / 10);
+    const r = n % 10;
+    return KR_DIGIT[t] + '십' + (r === 0 ? '' : KR_DIGIT[r]);
+  }
+  if (n < 1000) {
+    const h = Math.floor(n / 100);
+    const rest = n % 100;
+    return (h === 1 ? '백' : KR_DIGIT[h] + '백') + (rest === 0 ? '' : sinoKorean(rest));
+  }
+  return String(n);
+};
+const spellDigits = (s) => {
+  if (!s) return '';
+  return String(s).split('').map(d => {
+    const n = parseInt(d, 10);
+    return isNaN(n) ? d : KR_DIGIT[n];
+  }).join('');
+};
+// 위치를 한국어 음성으로 ("십육번 베이 공일에 팔육")
+export const spellPos = (c) => {
+  if (!c || !c.bay) return '';
+  const bayN = parseInt(normalizeBay(c.bay), 10);
+  if (isNaN(bayN)) return '';
+  return `${sinoKorean(bayN)}번 베이 ${spellDigits(c.row)}에 ${spellDigits(c.tier)}`;
+};
+// 좌표 문자열("16-01-86")을 음성용으로 변환 (AI 답변 후처리에 사용)
+export const spellPosString = (str) => {
+  if (!str) return '';
+  // "16-01-86" 또는 "016-01-86" 패턴 매칭
+  return String(str).replace(/(\d{1,3})-(\d{2})-(\d{2})/g, (m, b, r, t) => {
+    const bayN = parseInt(b, 10);
+    if (isNaN(bayN)) return m;
+    return `${sinoKorean(bayN)}번 베이 ${spellDigits(r)}에 ${spellDigits(t)}`;
+  });
+};
+
 export const formatWt = (wt) => {
   if (!wt) return '0kg';
   if (wt > 1000) return `${(wt/1000).toFixed(1)}t`;
@@ -220,13 +279,14 @@ export function parseBAPLIE(ediText) {
         tmp: '',
         st: '',                                // V38: raw status code
       };
-      // 위치는 보통 7자리(0BBRRTT) 또는 6자리(BBRRTT)
+      // 위치는 보통 7자리(BBBRRTT) 또는 6자리(BBRRTT)
+      // M3.1: bay는 정규화해서 저장 (앞 0 제거, "016"→"16", "001"→"1")
       if (slot.length >= 7) {
-        cur.bay = slot.substring(0, 3);
+        cur.bay = normalizeBay(slot.substring(0, 3));
         cur.row = slot.substring(3, 5);
         cur.tier = slot.substring(5, 7);
       } else if (slot.length === 6) {
-        cur.bay = '0' + slot.substring(0, 2);
+        cur.bay = normalizeBay(slot.substring(0, 2));
         cur.row = slot.substring(2, 4);
         cur.tier = slot.substring(4, 6);
       }
@@ -373,7 +433,7 @@ export function parseAscFile(text) {
     const cn = line.substring(7, 18).replace(/[\s\-]/g, '').toUpperCase();
     if (!/^[A-Z]{4}\d{7}$/.test(cn)) continue;
 
-    const bay = slot.substring(0, 2).padStart(3, '0');
+    const bay = normalizeBay(slot.substring(0, 2));
     const row = slot.substring(2, 4);
     const tier = slot.substring(4, 6);
     // V38: NAD 위치 19~21 (3글자 표준), 그 다음 추가 KRPTK 5자가 있을 수도

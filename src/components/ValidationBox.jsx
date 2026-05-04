@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
+import { fmtPos } from '../utils.js';
 
 export default function ValidationBox({ ediContainers, records, mode }) {
   const v = useMemo(() => {
@@ -92,7 +93,7 @@ export default function ValidationBox({ ediContainers, records, mode }) {
           <div className="text-[10px] text-orange-300/70 mb-0.5">샘플:</div>
           {v.missingDetails.map((c, i) => (
             <div key={i} className="text-[10px] text-orange-200 mono">
-              • {c.cn} ({c.op || '?'}) {c.bay ? `${c.bay}-${c.row}-${c.tier}` : ''}
+              • {c.cn} ({c.op || '?'}) {fmtPos(c)}
             </div>
           ))}
           {v.missingCount > 5 && <div className="text-[10px] text-red-400/60">... 외 {v.missingCount - 5}대</div>}

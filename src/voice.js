@@ -1,6 +1,9 @@
 // V37 음성 함수 100% 이식 — 검증된 한 글자씩 한국어 발음
 // 숫자: 공/일/이/삼/사/오/육/칠/팔/구
 // 알파벳: 에이/비/씨/디/...
+// M3.1: speak() 시 좌표 패턴(16-01-86)을 자동으로 한국어로 변환
+
+import { spellPosString } from './utils.js';
 
 const NUM_KO = ['공', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
 const ALPHA_KO = {
@@ -45,13 +48,16 @@ export function parseSpokenDigits(text) {
 }
 
 // 일반 텍스트 음성 (디바운스 X — V37처럼 즉시)
+// M3.1: 좌표 패턴(16-01-86) 발견 시 "십육번 베이 공일에 팔육"으로 자동 변환
 export function speak(text, opts = {}) {
   if (!text) return;
   try {
     if (window.speechSynthesis.speaking && !opts.append) {
       window.speechSynthesis.cancel();
     }
-    const u = new SpeechSynthesisUtterance(text);
+    // M3.1: 좌표 자동 한국어화 (AI 답변 등 자유 텍스트에서 좌표를 자연스럽게 읽기)
+    const spoken = spellPosString(text);
+    const u = new SpeechSynthesisUtterance(spoken);
     u.lang = 'ko-KR';
     u.rate = opts.rate || 1.3;
     u.pitch = opts.pitch || 1.0;
@@ -83,11 +89,12 @@ export function speakContainer(c, opts = {}) {
     // 컨번호 끝 4자리
     parts.push(cnSpoken);
 
-    // 위치
+    // 위치 (M3.1: 베이는 정수, row/tier는 자릿수별 발음)
     if (c.bay) {
-      parts.push(`베이 ${parseInt(c.bay)}`);
-      if (c.row) parts.push(`로우 ${parseInt(c.row)}`);
-      if (c.tier) parts.push(`티어 ${parseInt(c.tier)}`);
+      const bayN = parseInt(c.bay, 10);
+      if (!isNaN(bayN)) parts.push(`${bayN}번 베이`);
+      if (c.row) parts.push(spellKo(c.row) + '에');
+      if (c.tier) parts.push(spellKo(c.tier));
     }
 
     // 실번호 (있으면)

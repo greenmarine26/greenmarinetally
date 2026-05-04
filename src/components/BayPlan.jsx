@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { isoToLabel, isoToPdfLabel, fmtPos } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay } from '../utils.js';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
   const [pageIdx, setPageIdx] = useState(0);
@@ -46,12 +46,15 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   }, [containers, mode]);
 
   // 베이별 그룹화 (전체 EDI 컨테이너로)
+  // M3.1: 키를 정규화된 정수 문자열("016"→"16")로 통일 — 이전 데이터/혼합 형식 호환
   const bayGroups = useMemo(() => {
     const g = {};
     containers.forEach(c => {
       if (!c.bay) return;
-      if (!g[c.bay]) g[c.bay] = [];
-      g[c.bay].push(c);
+      const key = normalizeBay(c.bay);
+      if (!key) return;
+      if (!g[key]) g[key] = [];
+      g[key].push(c);
     });
     return g;
   }, [containers]);
@@ -108,36 +111,45 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   }, [containers]);
 
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
+  // M3.1: bay 키가 정규화된 정수 문자열("1","16","100" 등) 형태이므로 정수 기반 페어링
   const pages = useMemo(() => {
-    const bays = Object.keys(bayGroups).sort();
+    const bays = Object.keys(bayGroups);
     if (bays.length === 0) return [];
-    const bayLen = bays[0].length;
-    const maxBay = Math.max(...bays.map(b => parseInt(b)));
+    const bayInts = bays.map(b => parseInt(b, 10)).filter(n => !isNaN(n));
+    if (bayInts.length === 0) return [];
+    const maxBay = Math.max(...bayInts);
+    const baySet = new Set(bays); // 키는 문자열 그대로 (bayGroups 매칭용)
+    // 화면 표시용: 베이 번호는 항상 2자리 padStart (보기 좋게), 100+는 3자리 그대로
+    const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
+    // 키 매칭용: 정규화된 형태("16", "100")
+    const keyBay = (n) => String(n);
     const out = [];
     const usedOddBays = new Set();
     for (let n = 2; n <= maxBay; n++) {
       if (n % 2 === 0) {
-        const evenStr = String(n).padStart(bayLen, '0');
-        const oddAfter = String(n + 1).padStart(bayLen, '0');
-        const hasEven = bays.includes(evenStr);
-        const hasOdd = bays.includes(oddAfter);
+        const evenKey = keyBay(n);
+        const oddKey = keyBay(n + 1);
+        const hasEven = baySet.has(evenKey);
+        const hasOdd = baySet.has(oddKey);
         if (hasEven || hasOdd) {
+          const evenDisp = dispBay(n);
+          const oddDisp = dispBay(n + 1);
           out.push({
-            title: hasEven && hasOdd ? `BAY ${evenStr} (40ft) / BAY ${oddAfter} (20ft)` :
-                   hasEven ? `BAY ${evenStr} (40ft)` :
-                   `BAY ${oddAfter} (20ft)`,
-            evenBay: hasEven ? evenStr : null,
-            oddBay: hasOdd ? oddAfter : null,
+            title: hasEven && hasOdd ? `BAY ${evenDisp} (40ft) / BAY ${oddDisp} (20ft)` :
+                   hasEven ? `BAY ${evenDisp} (40ft)` :
+                   `BAY ${oddDisp} (20ft)`,
+            evenBay: hasEven ? evenKey : null,
+            oddBay: hasOdd ? oddKey : null,
           });
-          if (hasOdd) usedOddBays.add(oddAfter);
+          if (hasOdd) usedOddBays.add(oddKey);
         }
       } else {
-        const oddStr = String(n).padStart(bayLen, '0');
-        if (bays.includes(oddStr) && !usedOddBays.has(oddStr)) {
+        const oddKey = keyBay(n);
+        if (baySet.has(oddKey) && !usedOddBays.has(oddKey)) {
           out.push({
-            title: `BAY ${oddStr} (20ft)`,
+            title: `BAY ${dispBay(n)} (20ft)`,
             evenBay: null,
-            oddBay: oddStr,
+            oddBay: oddKey,
           });
         }
       }
