@@ -125,11 +125,12 @@ export async function fbUpdateRecordSeal(voyageKey, mode, cn, newSl, by) {
   });
 }
 
-// 임의 필드 수정 (ISO/F/E/리퍼/FR 등) — 원본 보관 + 이력
+// 임의 필드 수정 (ISO/F/E/리퍼/FR/온도 등) — 원본 보관 + 이력
+// M3.5.4-fix3: records 노드와 ediContainers 노드 둘 다 업데이트
+//   화면이 ediContainers를 보고 있어서 records만 수정하면 변경 안 보였던 버그 수정
 // 사용 예: fbUpdateRecordField(voyageKey, mode, cn, 'iso', '46P3', by)
-//         → records/{cn}/iso = '46P3'
-//         → records/{cn}/iso_orig = (변경 없으면 그대로)
-//         → records/{cn}/edits.iso = [{from,to,by,at}, ...]
+//   → records/{cn}/iso = '46P3' + iso_orig + edits.iso 이력
+//   → ediContainers/{cn}/iso = '46P3' (화면 즉시 반영)
 export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, by) {
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const snap = await get(r);
@@ -144,11 +145,20 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
   const fieldHistory = Array.isArray(edits[field]) ? [...edits[field]] : [];
   fieldHistory.push({ from: oldValue, to: newValue, by: by || '', at: Date.now() });
 
+  // records 업데이트 (이력 보관용)
   await update(r, {
     [field]: newValue,
     [origField]: orig,
     edits: { ...edits, [field]: fieldHistory },
   });
+
+  // M3.5.4-fix3: ediContainers도 동시 업데이트 (화면 즉시 반영)
+  // ediContainers에 해당 컨이 있으면 그 필드만 갱신
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  const ediSnap = await get(ediRef);
+  if (ediSnap.exists()) {
+    await update(ediRef, { [field]: newValue });
+  }
 }
 
 // X-RAY 봉인 수정 — seal (세관봉인) + eseal (전자봉인) 2개 필드

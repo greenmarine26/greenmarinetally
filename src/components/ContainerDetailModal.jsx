@@ -24,7 +24,9 @@ const ISO_OPTIONS = [
 export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
-  const [editingIso, setEditingIso] = useState(false);  // M3.5.4-fix2: 규격 수정
+  const [editingIso, setEditingIso] = useState(false);
+  const [editingTmp, setEditingTmp] = useState(false);  // M3.5.4-fix3: 온도 수정
+  const [tmpVal, setTmpVal] = useState(c.tmp || '');
   const [showHistory, setShowHistory] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
@@ -61,6 +63,31 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const handleSaveXSeal = async () => {
     await fbSetXraySeal(voyageKey, c.cn, xSealVal.trim(), xEsealVal.trim(), inspector);
     setEditingXSeal(false);
+  };
+
+  // M3.5.4-fix3: 리퍼 온도 직접 수정
+  const handleSaveTmp = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const newTmp = String(tmpVal).trim();
+    // 유효성: 빈값(미입력) 또는 숫자(소수점 포함, 부호 가능)
+    if (newTmp !== '' && !/^[+-]?\d+(\.\d+)?$/.test(newTmp)) {
+      alert('온도는 숫자만 입력하세요 (예: -18, 4.5, 0)\n빈칸은 미입력 처리됩니다');
+      return;
+    }
+    // 정규화: "-018" → "-18"
+    let norm = newTmp;
+    if (norm) {
+      const m = norm.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
+      if (m) norm = (m[1] || '') + m[2];
+    }
+    await fbUpdateRecordField(voyageKey, mode, c.cn, 'tmp', norm, inspector);
+    // 미입력 플래그도 갱신
+    await fbUpdateRecordField(voyageKey, mode, c.cn, 'tmp_missing', norm === '', inspector);
+    // 리퍼로 인식되도록 rf=true 명시 (실 있는 리퍼 케이스)
+    if (norm !== '' || c.rf) {
+      await fbUpdateRecordField(voyageKey, mode, c.cn, 'rf', true, inspector);
+    }
+    setEditingTmp(false);
   };
 
   // M3.5.4-fix2: 규격(ISO) 수정 — rf/fr/ot/tk 플래그 자동 갱신
@@ -188,6 +215,72 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               </div>
             )}
           </div>
+
+          {/* M3.5.4-fix3: 리퍼 온도 수정 (리퍼인 경우만 표시) */}
+          {isReefer && (
+            <div className={`mb-3 rounded p-2 ${editingTmp ? 'bg-cyan-900/20 border border-cyan-700/40' : ''}`}>
+              <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1">
+                  <Snowflake className="w-3 h-3 text-cyan-400"/>리퍼 온도
+                </span>
+                {!editingTmp && (
+                  <button onClick={() => { setTmpVal(c.tmp || ''); setEditingTmp(true); }}
+                    className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 text-[10px]">
+                    <Edit3 className="w-3 h-3"/>{c.tmp_missing || !c.tmp ? '온도 입력' : '수정'}
+                  </button>
+                )}
+              </div>
+              {!editingTmp ? (
+                <div className="flex items-center gap-2">
+                  {c.tmp && !c.tmp_missing ? (
+                    <span className="text-base font-bold mono text-cyan-200">{c.tmp}°C</span>
+                  ) : (
+                    <span className="text-sm font-bold text-red-300 animate-pulse">⚠️ 온도 미입력 (현장 확인 필요)</span>
+                  )}
+                  {c.tmp_orig !== undefined && c.tmp_orig !== c.tmp && (
+                    <span className="text-[10px] text-amber-400 mono">원본: {c.tmp_orig || '(없음)'} → 수정됨</span>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-[10px] text-cyan-300">
+                    실물 온도계를 보고 입력하세요. 빈칸 = 미입력 처리.
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={tmpVal}
+                      onChange={e => setTmpVal(e.target.value)}
+                      placeholder="예: -18, 4.5, 0"
+                      className="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-base font-bold text-cyan-100 focus:outline-none focus:border-cyan-400 mono"
+                      autoFocus
+                    />
+                    <span className="text-slate-400 text-sm font-bold">°C</span>
+                  </div>
+                  {/* 빠른 선택 버튼 */}
+                  <div className="grid grid-cols-5 gap-1">
+                    {['-25', '-18', '-15', '0', '4'].map(t => (
+                      <button key={t} onClick={() => setTmpVal(t)}
+                        className="py-1.5 bg-slate-800 hover:bg-cyan-900/40 border border-slate-700 rounded text-xs font-bold text-slate-200 mono">
+                        {t}°
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => setEditingTmp(false)}
+                      className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
+                      취소
+                    </button>
+                    <button onClick={handleSaveTmp}
+                      className="py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold">
+                      💾 저장
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 나머지 필드 */}
           <div className="grid grid-cols-2 gap-3 text-sm">
