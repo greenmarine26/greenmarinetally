@@ -87,7 +87,7 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         <BigStat label="누락 (선사 추가 필요)" value={total.missing} sub={`평택 ${total.ptkAll}대 중`} color={total.missing > 0 ? "red" : "slate"}/>
       </div>
 
-      {/* 검수원 5명 진행률 */}
+      {/* 전체 검수원 진행률 (인원 무제한) */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
         <div className="flex items-center gap-2 mb-3">
           <Users className="w-4 h-4 text-amber-400"/>

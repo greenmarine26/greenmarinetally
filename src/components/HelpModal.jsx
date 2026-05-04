@@ -2,18 +2,20 @@
 // 검수원 초보 사용자를 위한 인앱 도움말
 // 카테고리 탭으로 구성, 실제 사용 예시 50+개
 import React, { useState } from 'react';
-import { X, Search, MessageCircle, Mic, Container, Anchor, Truck, AlertTriangle, MapPin, Settings } from 'lucide-react';
+import { X, Search, MessageCircle, Mic, Container, Anchor, Truck, AlertTriangle, MapPin, Settings, Check } from 'lucide-react';
 
 const TABS = [
-  { id: 'basic',   label: '기본',     icon: Search },
-  { id: 'count',   label: '개수',     icon: Container },
-  { id: 'bay',     label: '베이',     icon: MapPin },
-  { id: 'port',    label: '항구',     icon: Anchor },
-  { id: 'special', label: '특수화물', icon: AlertTriangle },
-  { id: 'voice',   label: '음성',     icon: Mic },
-  { id: 'ai',      label: 'AI 질문',  icon: MessageCircle },
-  { id: 'twin',    label: '트윈',     icon: Truck },
-  { id: 'tips',    label: '팁',       icon: Settings },
+  { id: 'basic',    label: '기본',     icon: Search },
+  { id: 'count',    label: '개수',     icon: Container },
+  { id: 'progress', label: '진행',     icon: Check },
+  { id: 'bay',      label: '베이',     icon: MapPin },
+  { id: 'capacity', label: '용량',     icon: Container },
+  { id: 'port',     label: '항구',     icon: Anchor },
+  { id: 'special',  label: '특수화물', icon: AlertTriangle },
+  { id: 'voice',    label: '음성',     icon: Mic },
+  { id: 'ai',       label: 'AI 질문',  icon: MessageCircle },
+  { id: 'twin',     label: '트윈',     icon: Truck },
+  { id: 'tips',     label: '팁',       icon: Settings },
 ];
 
 const CONTENT = {
@@ -107,13 +109,94 @@ const CONTENT = {
       ],
     },
     {
-      title: '📍 구역 (갑판/창내) (M3.2 신규)',
+      title: '📐 단수/바닥/꼭대기 (M3.3 신규)',
       examples: [
-        { q: '갑판 컨 몇대',          a: 'tier≥80 (DECK)' },
-        { q: '창내 컨 몇대',          a: 'tier<80 (HOLD)' },
-        { q: '갑판 풀 몇대',          a: '갑판의 Full만' },
-        { q: '창내 위험물',           a: '창내 DG 리스트' },
-        { q: '창내 리퍼 어디',        a: '창내 리퍼 위치' },
+        { q: '16번 베이 몇단 쌓았어', a: 'row별 최소/최대/평균 단수 + 가장 높이 쌓인 tier' },
+        { q: '몇단 쌓았지',           a: '전체 베이 단수 분석 + TOP 10' },
+        { q: '바닥에 몇개 있어',      a: '각 row의 최저 tier 컨 수' },
+        { q: '홀드 바닥에 몇개',      a: '홀드(tier<80) 바닥' },
+        { q: '갑판 꼭대기 몇대',      a: '갑판(tier≥80) 가장 높이 쌓인 컨' },
+        { q: '꼭대기 어디',           a: '베이/row별 최고 tier 컨 위치' },
+      ],
+    },
+    {
+      title: '📊 베이별 분포 (M3.3 신규)',
+      examples: [
+        { q: '베이별 갯수',           a: '모든 베이 분포 (베이당 컨 수, F/E, 완료수)' },
+        { q: '베이마다 몇대',         a: '동일' },
+        { q: '베이별 풀 분포',        a: '베이별 Full만 분포' },
+      ],
+    },
+  ],
+
+  capacity: [
+    {
+      title: '📦 베이 적재 용량 (M3.3 신규)',
+      examples: [
+        { q: '28번 베이에 몇개 실을 수 있어', a: '베이 적재 분석 + 짝꿍 베이 (트윈) + 합산' },
+        { q: '20번 베이 용량',                a: '동일' },
+        { q: '16번 베이 수용 가능',           a: '동일' },
+        { q: '실을 수 있어',                  a: '전체 빈 슬롯 + TOP 10 베이' },
+      ],
+    },
+    {
+      title: '🟢 빈자리 (M3.3 신규)',
+      examples: [
+        { q: '빈자리 어디',           a: '전체 빈 슬롯 분포' },
+        { q: '16번 베이 빈자리',      a: '특정 베이 빈 슬롯' },
+        { q: '바닥 빈자리는',         a: '각 row의 최저 tier 중 비어있는 곳' },
+        { q: '홀드 바닥 빈자리',      a: '홀드 바닥의 빈 슬롯' },
+      ],
+    },
+    {
+      title: '⚠️ 용량 답변 주의사항',
+      examples: [
+        { q: '슬롯 수 기준',  a: '"이번 항차에 컨이 적재된 적 있는 위치" 기준 (도면 X)' },
+        { q: '짝꿍 베이',     a: '짝수 베이는 양옆 홀수와 트윈 가능 → 합산 표시' },
+        { q: '실제 도면 용량', a: '선박 도면 별도 확인 필요 (경고 메시지 포함)' },
+      ],
+    },
+  ],
+
+  progress: [
+    {
+      title: '✅ 완료 작업 (M3.3 신규)',
+      examples: [
+        { q: '선적 완료 몇대',         a: '선적 모드 완료 / 전체 + 진행률' },
+        { q: '양하 완료',              a: '양하 모드 완료 분석' },
+        { q: '18번 베이 들어갔지',    a: '18번 베이 완료 컨 + 비율' },
+        { q: '18번 베이 실은',         a: '동일' },
+        { q: '몇개 쌓았어',            a: '쌓은(완료) 컨 수' },
+        { q: '오늘 끝낸 거',           a: '완료된 컨 (전체 모드)' },
+      ],
+    },
+    {
+      title: '⏳ 미완료 작업 (M3.3 신규)',
+      examples: [
+        { q: '양하분 몇개 남았어',     a: '양하 미완료 / 전체 + 비율' },
+        { q: '몇개 더 들어가야 돼',    a: '전체 미완료 (남은 작업)' },
+        { q: '선적 더 해야',           a: '선적 미완료' },
+        { q: '얼마나 남았어',          a: '전체 남은 작업' },
+        { q: '미완료 컨',              a: '동일' },
+        { q: '18번 베이 남았어',       a: '18번 베이 미완료' },
+      ],
+    },
+    {
+      title: '🎯 조건 결합 진행 상황',
+      examples: [
+        { q: '리퍼 남은 거',           a: '리퍼 미완료' },
+        { q: '갑판 양하 남은',         a: '갑판 + 양하 미완료' },
+        { q: '대련발 들어간 거',       a: '대련 출발 완료된 것' },
+        { q: '위험물 남은',            a: '위험물 미완료' },
+        { q: '홀드 바닥에 몇개 남았어', a: '홀드 + 바닥 미완료 (M3.3 복합)' },
+      ],
+    },
+    {
+      title: '📊 답변 형식',
+      examples: [
+        { q: '진행률 표시',            a: '"완료 N대 / 전체 N대 (XX%)" 형식' },
+        { q: '미리보기',               a: '결과 처음 10대 위치 표시' },
+        { q: '전체 컨텍스트',          a: '같은 조건의 전체 N대를 분모로 비교' },
       ],
     },
   ],

@@ -26,7 +26,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
               {info ? info.vsl : '평택항 검수'}
             </div>
             <div className="text-[10px] text-slate-500 truncate leading-tight">
-              {info ? `${info.voy} · ${info.carrier || ''}` : 'Master · 5명 동시 검수'}
+              {info ? `${info.voy} · ${info.carrier || ''}` : '🌊 그린마린 검수팀 전용'}
             </div>
           </div>
         </div>

@@ -46,6 +46,12 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
 
   return (
     <div className="max-w-6xl mx-auto px-3 py-3">
+      {/* 그린마린 검수팀 전용 배지 */}
+      <div className="bg-gradient-to-r from-emerald-900/30 via-teal-900/30 to-cyan-900/30 border border-emerald-700/40 rounded-lg px-3 py-2 mb-3 text-center">
+        <div className="text-[10px] text-emerald-400 font-bold tracking-wider">🌊 GREEN MARINE TALLY 🌊</div>
+        <div className="text-xs text-emerald-200 font-bold">그린마린 검수팀 전용 · 평택항</div>
+      </div>
+
       {/* 빠른 진입 - 통합검색 + 수석대시보드 */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         <button onClick={onOpenGlobalSearch}
@@ -58,7 +64,7 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
           className="bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-xl p-3 text-left hover:from-purple-900/60 active:scale-95 transition">
           <BarChart3 className="w-5 h-5 text-purple-300 mb-1"/>
           <div className="font-bold text-sm text-purple-100">수석 대시보드</div>
-          <div className="text-[10px] text-purple-300/70">5명 진행률·통계</div>
+          <div className="text-[10px] text-purple-300/70">전체 검수원 진행률·통계</div>
         </button>
       </div>
 
