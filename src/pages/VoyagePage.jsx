@@ -22,6 +22,8 @@ import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
+import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
+import { runDiagnostics } from '../diagnostics.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, onGoHome, onModeChange }) {
@@ -101,6 +103,30 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
     });
   }, [ediMap, recMap, mode]);
 
+  // M3.5.4: 자동 진단 (containers/recMap/xrayMap 변경 시 재계산)
+  const diagAlerts = useMemo(() => {
+    if (!containers || containers.length === 0) return [];
+    if (diagDismissed) return [];
+    // 평택 화물만 필터된 ediMap 만들기
+    const ediPtkObj = {};
+    Object.values(ediMap || {}).forEach(c => {
+      const pol = (c.pol || '').toUpperCase();
+      const pod = (c.pod || '').toUpperCase();
+      if (mode === 'discharge' && (pod === 'KRPTK' || pod.endsWith('PTK'))) {
+        ediPtkObj[c.cn] = c;
+      } else if (mode === 'loading' && (pol === 'KRPTK' || pol.endsWith('PTK'))) {
+        ediPtkObj[c.cn] = c;
+      }
+    });
+    return runDiagnostics({
+      ediContainers: ediPtkObj,
+      listRecords: recMap,
+      xrayList: xrayMap,
+      mode,
+      carrier: voyage?.info?.carrier || '',
+    });
+  }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage]);
+
   return (
     <div className="max-w-6xl mx-auto px-3 py-2">
       {/* 모드 탭 (둘 다 있을 때만) */}
@@ -155,6 +181,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           </button>
         ))}
       </nav>
+
+      {/* M3.5.4: 자동 진단 경고 패널 (모든 탭 위에 표시) */}
+      {diagAlerts.length > 0 && (
+        <div className="mb-3">
+          <DiagnosticsPanel
+            alerts={diagAlerts}
+            autoSpeak={diagAutoSpeak}
+            onToggleSpeak={() => setDiagAutoSpeak(v => !v)}
+            onDismiss={() => setDiagDismissed(true)}
+          />
+        </div>
+      )}
 
       {/* 탭 본문 */}
       {tab === 'list' && (
@@ -306,6 +344,9 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // === 자료 탭 ===
 function DataTab({ voyageKey, mode, voyage, setMode }) {
   const [status, setStatus] = useState('');
+  // M3.5.4: 진단 시스템 state
+  const [diagAutoSpeak, setDiagAutoSpeak] = useState(true);
+  const [diagDismissed, setDiagDismissed] = useState(false);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);

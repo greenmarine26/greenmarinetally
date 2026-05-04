@@ -105,7 +105,13 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         {(isReefer || c.dg || c.fr || c.ot || c.tk) && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {showTmp && <span className="bg-cyan-600 text-cyan-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><Snowflake className="w-3.5 h-3.5"/>RF {c.tmp}°C</span>}
-            {!showTmp && isReefer && <span className="bg-cyan-700/60 text-cyan-100 px-2 py-1 rounded font-black text-xs flex items-center gap-1"><Snowflake className="w-3 h-3"/>리퍼 (온도 미입력)</span>}
+            {!showTmp && isReefer && (
+              <span className="bg-red-700 text-white px-2 py-1 rounded font-black text-sm flex items-center gap-1 animate-pulse border-2 border-red-400">
+                <Snowflake className="w-3.5 h-3.5"/>
+                <AlertTriangle className="w-3 h-3"/>
+                리퍼 · 온도 미입력 ⚠️
+              </span>
+            )}
             {c.dg && <span className="bg-red-600 text-red-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
             {c.fr && <span className="bg-orange-600 text-orange-50 px-2 py-1 rounded font-black text-sm">FR (Flat Rack)</span>}
             {c.ot && <span className="bg-yellow-600 text-yellow-50 px-2 py-1 rounded font-black text-sm">OT (Open Top)</span>}

@@ -1,5 +1,5 @@
-// 공통 유틸리티 — V38 (2026.05.04 / M3.5.3)
-export const APP_VERSION = 'M3.5.3';
+// 공통 유틸리티 — V38 (2026.05.04 / M3.5.4)
+export const APP_VERSION = 'M3.5.4';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -353,12 +353,26 @@ export function parseBAPLIE(ediText) {
       const v = seg.substring(6).split(':')[0];
       if (v) {
         // 정규화: "-018" → "-18", "000" → "0", "-02.5" → "-2.5"
-        // 부호 있으면 부호 유지하면서 앞 0 제거
         let norm = v.trim();
         const m = norm.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
         if (m) norm = (m[1] || '') + m[2];
-        cur.tmp = norm;
+
+        // M3.5.4: EDI의 "000"/"0"은 "온도 미입력" 처리
+        //   - 선사가 진짜 0도면 보통 "+0" 또는 명시 형식
+        //   - "000" 단독은 미정/입력안됨 관행 (실제 영하 0도 화물 매우 드뭄)
+        //   - 검수원이 "0°C"로 오인하는 것 방지
+        cur.rf = true;  // 리퍼 자체는 맞음 (TMP 세그먼트 있음)
+        if (norm === '0' || norm === '0.0' || norm === '+0') {
+          cur.tmp = '';
+          cur.tmp_missing = true;  // 명시적 미입력 플래그
+        } else {
+          cur.tmp = norm;
+        }
+      } else {
+        // TMP 세그먼트는 있는데 값 없는 경우
         cur.rf = true;
+        cur.tmp = '';
+        cur.tmp_missing = true;
       }
     } else if (cur && seg.startsWith('RNG+5+')) {
       const parts = seg.split(':');
@@ -761,10 +775,18 @@ export async function parseListExcel(arrayBuffer) {
       const dgVal = dg_i >= 0 ? String(row[dg_i] || '').trim() : '';
       const isDg = dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal);
 
-      const tmpVal = tmp_i >= 0 ? String(row[tmp_i] || '').trim() : '';
+      let tmpValRaw = tmp_i >= 0 ? String(row[tmp_i] || '').trim() : '';
+      // M3.5.4: 엑셀의 "0", "000", "-" 등은 온도 미입력으로 처리
+      let tmpVal = tmpValRaw;
+      let tmpMissing = false;
+      if (tmpValRaw === '' || tmpValRaw === '-' || /^[+-]?0+(\.0+)?$/.test(tmpValRaw)) {
+        tmpVal = '';
+        tmpMissing = true;
+      }
       const isoUpper = (iso || isoRaw || '').toUpperCase();
       // 특수화물 태그 (45ft 영역 4[5689] 포함, 예: 46P3=45FR)
-      const isRf = (tmpVal && tmpVal !== '0' && tmpVal !== '-') || /^[24][245689]R/.test(isoUpper) || /^[24]0R/.test(isoUpper) || /^[24]58[2-5]$/.test(isoUpper);
+      // 리퍼 판정: ISO 기준 우선, 온도가 진짜 있으면 + 표기
+      const isRf = (tmpVal && tmpVal !== '-') || /^[24][245689]R/.test(isoUpper) || /^[24]0R/.test(isoUpper) || /^[24]58[2-5]$/.test(isoUpper);
       const isFr = /^[24][0245689]P/.test(isoUpper) || /^[24]0F[PR]/.test(isoUpper) || /^45P/.test(isoUpper);
       const isOt = /^[24][0245689]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^4[5689]O/.test(isoUpper);
       const isTk = /^[24][0245689]T/.test(isoUpper);
@@ -813,6 +835,7 @@ export async function parseListExcel(arrayBuffer) {
         ot: isOt,
         tk: isTk,
         tmp: tmpVal,
+        tmp_missing: tmpMissing && isRf,  // 리퍼인데 온도 미입력
       });
     }
   }

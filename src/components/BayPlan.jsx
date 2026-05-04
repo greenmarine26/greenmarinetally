@@ -495,17 +495,21 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const bay2 = String(parseInt(c.bay || '0')).padStart(2, '0');
     const posStr = `....${bay2}${row}${tier}`;
 
+    const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+    const tmpStr = String(c.tmp || '').trim();
+    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '' || tmpStr === '0' || tmpStr === '0.0');
+
     let specialLine = '';
     let specialColor = 'text-slate-500';
     if (c.dg) {
       specialLine = c.un ? `DG UN${c.un}` : 'DG';
       specialColor = 'text-red-300 font-bold';
-    } else if (c.rf && c.tmp) {
-      specialLine = `${c.tmp}C`;
+    } else if (isReefer && !tmpMissing) {
+      specialLine = `${tmpStr}C`;
       specialColor = 'text-cyan-200 font-bold';
-    } else if (c.rf) {
-      specialLine = 'REEFER';
-      specialColor = 'text-cyan-200 font-bold';
+    } else if (isReefer) {
+      specialLine = '⚠NO TEMP';
+      specialColor = 'text-red-300 font-black animate-pulse';
     } else if (c.tk) {
       specialLine = 'TANK';
       specialColor = 'text-orange-200 font-bold';
@@ -521,13 +525,24 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       <button
         key={key}
         onClick={() => onCellClick?.(c)}
-        className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden`}
+        className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
+          isReefer ? 'ring-2 ring-cyan-400 ring-inset' : ''
+        }`}
         style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize }}
       >
         {needsShift && (
           <div className="absolute top-0 left-0 bg-amber-400 text-slate-900 px-0.5 font-black leading-none rounded-br z-10"
             style={{ fontSize: fontSize - 1 }}>
             ⬆{needsShift}
+          </div>
+        )}
+        {isReefer && (
+          <div className="absolute top-0 right-0 z-10 flex items-center"
+               style={{ fontSize: fontSize - 1 }}>
+            <span className="text-cyan-300 font-black bg-slate-900/80 px-0.5 leading-none">❄</span>
+            {tmpMissing && (
+              <span className="text-red-400 font-black bg-slate-900/80 px-0.5 leading-none animate-pulse">❗</span>
+            )}
           </div>
         )}
         <div className="text-left mono leading-tight w-full" style={{ whiteSpace: 'pre', fontFamily: 'Consolas, "Courier New", monospace' }}>

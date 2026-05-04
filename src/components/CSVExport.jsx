@@ -7,7 +7,7 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
     '원실번호', '실제실번호', '실오류',
     '원XRAY세관봉인', '실제XRAY세관봉인', '실제XRAY전자봉인', 'XRAY오류',
     '규격', 'F/E', '무게(kg)', '검수업체', 'POL', 'POD',
-    '리퍼온도', 'X-RAY대상', '검수완료', '검수자', '완료시각',
+    '리퍼온도', '온도미입력', 'X-RAY대상', '검수완료', '검수자', '완료시각',
     '실번호수정자', '실번호수정시각', 'XRAY수정자', 'XRAY수정시각'
   ];
 
@@ -24,6 +24,11 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
     const lastXHist = (xs.history || []).slice(-1)[0];
     const completedAt = comp?.at ? new Date(comp.at).toLocaleString('ko-KR') : '';
 
+    // M3.5.4: 온도 미입력 체크 (리퍼인데 온도 없거나 0)
+    const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+    const tmpStr = String(c.tmp || '').trim();
+    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '' || tmpStr === '0' || tmpStr === '0.0');
+
     rows.push([
       i + 1,
       fmtPos(c),
@@ -36,7 +41,8 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
       c.op || '',
       c.pol || '',
       c.pod || '',
-      c.tmp || '',
+      tmpMissing ? '' : (c.tmp || ''),
+      tmpMissing ? '⚠️미입력' : '',
       isX ? 'O' : '',
       comp ? 'O' : '',
       comp?.by || '',
