@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3 } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage } from '../firebase.js';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, Upload } from 'lucide-react';
+import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection } from '../firebase.js';
+import MixerUploadModal from '../components/MixerUploadModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
@@ -39,9 +40,23 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
     onOpenVoyage(key);
   };
 
-  const handleDelete = async (key, vsl, voy) => {
-    if (!confirm(`항차 "${vsl} ${voy}" 를 삭제하시겠습니까?\n검수 데이터도 모두 삭제됩니다.`)) return;
-    await fbDeleteVoyage(key);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showMixer, setShowMixer] = useState(false);
+
+  const handleDelete = (key, vsl, voy) => {
+    const v = voyages[key];
+    const hasD = v?.discharge && Object.keys(v.discharge).length > 0;
+    const hasL = v?.loading && Object.keys(v.loading).length > 0;
+    setDeleteTarget({ key, vsl, voy, hasD, hasL });
+  };
+
+  const performDelete = async (action) => {
+    if (!deleteTarget) return;
+    const { key } = deleteTarget;
+    if (action === 'discharge') await fbDeleteSection(key, 'discharge');
+    else if (action === 'loading') await fbDeleteSection(key, 'loading');
+    else if (action === 'all') await fbDeleteVoyage(key);
+    setDeleteTarget(null);
   };
 
   return (
@@ -73,7 +88,13 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
           <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
           <div className="text-lg font-bold text-slate-100">{list.length}건</div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowMixer(true)}
+            className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-black flex items-center gap-1.5 shadow-lg"
+          >
+            <Upload className="w-4 h-4"/>📁 자료 업로드 (믹서)
+          </button>
           <button
             onClick={() => setShowCreate('discharge')}
             className="bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
@@ -119,6 +140,108 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
           onCreate={handleCreate}
         />
       )}
+
+      {/* M3.5: 항차 삭제 모달 (폰 친화) */}
+      {deleteTarget && (
+        <DeleteVoyageModal
+          target={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={performDelete}
+        />
+      )}
+
+      {/* M3.5: 믹서 업로드 모달 */}
+      <MixerUploadModal
+        open={showMixer}
+        onClose={() => setShowMixer(false)}
+        voyages={voyages}
+        inspector={inspector}
+        onOpenVoyage={onOpenVoyage}
+      />
+    </div>
+  );
+}
+
+// M3.5: 항차 삭제 모달 - 큰 버튼, 폰 친화
+function DeleteVoyageModal({ target, onClose, onConfirm }) {
+  const { vsl, voy, hasD, hasL } = target;
+  const [confirming, setConfirming] = useState(null); // 'discharge' | 'loading' | 'all'
+
+  // 둘 다 비어있으면 → 항차 전체 삭제만
+  // 하나만 있으면 → 항차 전체 삭제
+  // 둘 다 있으면 → 3택
+  const showSplit = hasD && hasL;
+
+  if (confirming) {
+    const labels = {
+      discharge: { title: '양하 데이터 삭제', desc: '선적 데이터는 유지됩니다.', color: 'amber' },
+      loading: { title: '선적 데이터 삭제', desc: '양하 데이터는 유지됩니다.', color: 'blue' },
+      all: { title: '항차 전체 삭제', desc: '양하/선적/검수 데이터 모두 삭제됩니다. 복구 불가.', color: 'red' },
+    };
+    const L = labels[confirming];
+    return (
+      <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-2 sm:p-4">
+        <div className="bg-slate-900 border-2 border-red-700/50 rounded-2xl w-full sm:max-w-md overflow-hidden">
+          <div className="p-4 border-b border-slate-700 bg-red-950/40">
+            <div className="text-base font-black text-red-200">⚠️ {L.title}</div>
+            <div className="text-xs text-slate-400 mt-1">{vsl} {voy}</div>
+          </div>
+          <div className="p-4">
+            <div className="text-sm text-slate-200 mb-4">{L.desc}</div>
+            <div className="text-xs text-slate-400">정말 진행하시겠습니까?</div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 p-3 border-t border-slate-700 bg-slate-950">
+            <button onClick={() => setConfirming(null)}
+              className="py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold rounded">
+              ← 뒤로
+            </button>
+            <button onClick={() => onConfirm(confirming)}
+              className="py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded">
+              삭제
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-2 sm:p-4">
+      <div className="bg-slate-900 border-2 border-slate-700 rounded-2xl w-full sm:max-w-md overflow-hidden">
+        <div className="p-4 border-b border-slate-700">
+          <div className="text-base font-black text-slate-100">항차 삭제</div>
+          <div className="text-xs text-slate-400 mt-1">{vsl} {voy}</div>
+        </div>
+        <div className="p-3 space-y-2">
+          {showSplit && (
+            <>
+              <button onClick={() => setConfirming('discharge')}
+                className="w-full py-4 bg-amber-900/30 hover:bg-amber-900/50 border-2 border-amber-700/40 rounded-lg text-left px-4">
+                <div className="text-base font-bold text-amber-300">⬇️ 양하만 삭제</div>
+                <div className="text-xs text-amber-400/70 mt-0.5">선적은 유지됩니다</div>
+              </button>
+              <button onClick={() => setConfirming('loading')}
+                className="w-full py-4 bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-700/40 rounded-lg text-left px-4">
+                <div className="text-base font-bold text-blue-300">⬆️ 선적만 삭제</div>
+                <div className="text-xs text-blue-400/70 mt-0.5">양하는 유지됩니다</div>
+              </button>
+            </>
+          )}
+          <button onClick={() => setConfirming('all')}
+            className="w-full py-4 bg-red-900/30 hover:bg-red-900/50 border-2 border-red-700/40 rounded-lg text-left px-4">
+            <div className="text-base font-bold text-red-300">🗑 항차 전체 삭제</div>
+            <div className="text-xs text-red-400/70 mt-0.5">
+              {showSplit ? '양하 + 선적 + 정보 모두 삭제' : '모든 데이터 삭제'}
+            </div>
+          </button>
+        </div>
+        <div className="p-3 border-t border-slate-700">
+          <button onClick={onClose}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded">
+            취소
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

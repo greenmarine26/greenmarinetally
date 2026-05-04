@@ -31,6 +31,15 @@ export async function fbDeleteVoyage(voyageKey) {
   await remove(voyageRef(voyageKey));
 }
 
+// M3.4.2: 양하 또는 선적 한 모드만 삭제 (다른 모드는 유지)
+// 사용 예: 같은 항차에 양하/선적 둘 다 있는데 양하만 삭제
+export async function fbDeleteSection(voyageKey, mode) {
+  if (mode !== 'discharge' && mode !== 'loading') {
+    throw new Error('mode must be discharge or loading');
+  }
+  await remove(ref(db, `voyages/${voyageKey}/${mode}`));
+}
+
 export async function fbUpdateVoyageInfo(voyageKey, patch) {
   await update(ref(db, `voyages/${voyageKey}/info`), patch);
 }

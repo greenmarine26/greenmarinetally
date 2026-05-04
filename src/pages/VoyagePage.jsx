@@ -469,11 +469,12 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           <FileText className="w-4 h-4 text-blue-400"/>
           1. EDI / ASC (필수)
         </div>
-        <input ref={ediRef} type="file" multiple accept=".edi,.EDI,.asc,.ASC,.txt"
+        <input ref={ediRef} type="file" multiple accept="*/*"
           onChange={e => handleEdiUpload(e.target.files)}
           className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-700 file:text-blue-100 file:font-bold file:cursor-pointer"/>
         <div className="text-[10px] text-slate-500 mt-1">
           현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
+          <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
         </div>
       </div>
 
@@ -482,11 +483,13 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           <FileSpreadsheet className="w-4 h-4 text-emerald-400"/>
           2. {mode === 'discharge' ? '양하' : '선적'} 리스트 (Excel)
         </div>
-        <input ref={listRef} type="file" multiple accept=".xls,.xlsx,.csv"
+        <input ref={listRef} type="file" multiple
+          accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,*/*"
           onChange={e => handleListUpload(e.target.files)}
           className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-700 file:text-emerald-100 file:font-bold file:cursor-pointer"/>
         <div className="text-[10px] text-slate-500 mt-1">
           현재 리스트: {Object.keys(sec.records || {}).length}대
+          <br/>지원: .xls .xlsx .csv
         </div>
       </div>
 
@@ -495,11 +498,13 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           <div className="text-sm font-bold mb-2 flex items-center gap-2">
             🔍 3. X-RAY 리스트 (양하만)
           </div>
-          <input ref={xrayRef} type="file" multiple accept=".xls,.xlsx"
+          <input ref={xrayRef} type="file" multiple
+            accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"
             onChange={e => handleXrayUpload(e.target.files)}
             className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-purple-700 file:text-purple-100 file:font-bold file:cursor-pointer"/>
           <div className="text-[10px] text-slate-500 mt-1">
             현재 X-RAY: {Object.keys(sec.xrayList || {}).length}대
+            <br/>지원: .xls .xlsx
           </div>
         </div>
       )}

@@ -14,7 +14,7 @@
 
 import { fmtPos, normalizeBay } from './utils.js';
 
-const GEMINI_API_KEY = 'AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY';
+export const GEMINI_API_KEY = 'AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY';
 const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
