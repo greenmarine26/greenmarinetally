@@ -35,6 +35,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   const [tab, setTab] = useState('list');
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
   const [shipLib, setShipLib] = useState(null); // M3.0: 선박 라이브러리 (AI 컨텍스트용)
+  // M3.5.4: 자동 진단 state (메인 컴포넌트에 두어야 useMemo에서 접근 가능)
+  const [diagAutoSpeak, setDiagAutoSpeak] = useState(true);
+  const [diagDismissed, setDiagDismissed] = useState(false);
 
   useEffect(() => { onModeChange?.(mode); }, [mode]);
 
@@ -344,9 +347,6 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // === 자료 탭 ===
 function DataTab({ voyageKey, mode, voyage, setMode }) {
   const [status, setStatus] = useState('');
-  // M3.5.4: 진단 시스템 state
-  const [diagAutoSpeak, setDiagAutoSpeak] = useState(true);
-  const [diagDismissed, setDiagDismissed] = useState(false);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
