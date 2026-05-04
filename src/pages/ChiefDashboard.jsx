@@ -139,6 +139,24 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
+      {/* 선박 라이브러리 (학습된 선박 구조) */}
+      <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
+        <div className="flex items-center gap-2 mb-3">
+          <Library className="w-4 h-4 text-purple-400"/>
+          <div className="text-sm font-bold text-slate-100">선박 라이브러리 ({Object.keys(shipLib).length}척)</div>
+        </div>
+        <div className="text-[10px] text-slate-500 mb-2">EDI 분석된 선박은 자동 저장 → 다음 항차에서 즉시 활용</div>
+        {Object.keys(shipLib).length === 0 ? (
+          <div className="text-xs text-slate-500 text-center py-4">아직 학습된 선박 없음 (EDI 업로드 시 자동 저장)</div>
+        ) : (
+          <div className="space-y-2">
+            {Object.entries(shipLib).sort((a,b) => (b[1].last_updated||0) - (a[1].last_updated||0)).map(([imo, ship]) => (
+              <ShipLibraryRow key={imo} imo={imo} ship={ship}/>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) */}
       <div className="bg-slate-900 border border-red-800/40 rounded-xl p-3 mt-3">
         <div className="flex items-center justify-between mb-3">
