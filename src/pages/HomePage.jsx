@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, Upload } from 'lucide-react';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3 } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection } from '../firebase.js';
-import MixerUploadModal from '../components/MixerUploadModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
@@ -41,7 +40,6 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
   };
 
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [showMixer, setShowMixer] = useState(false);
 
   const handleDelete = (key, vsl, voy) => {
     const v = voyages[key];
@@ -90,12 +88,6 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={() => setShowMixer(true)}
-            className="bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-black flex items-center gap-1.5 shadow-lg"
-          >
-            <Upload className="w-4 h-4"/>📁 자료 업로드 (믹서)
-          </button>
-          <button
             onClick={() => setShowCreate('discharge')}
             className="bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
           >
@@ -141,7 +133,7 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
         />
       )}
 
-      {/* M3.5: 항차 삭제 모달 (폰 친화) */}
+      {/* 항차 삭제 모달 (폰 친화) */}
       {deleteTarget && (
         <DeleteVoyageModal
           target={deleteTarget}
@@ -149,15 +141,6 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
           onConfirm={performDelete}
         />
       )}
-
-      {/* M3.5: 믹서 업로드 모달 */}
-      <MixerUploadModal
-        open={showMixer}
-        onClose={() => setShowMixer(false)}
-        voyages={voyages}
-        inspector={inspector}
-        onOpenVoyage={onOpenVoyage}
-      />
     </div>
   );
 }

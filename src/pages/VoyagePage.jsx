@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
-  AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download,
+  AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
   BarChart3, FileCheck
 } from 'lucide-react';
 import {
@@ -308,6 +308,7 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
   const [status, setStatus] = useState('');
   const ediRef = useRef(null);
   const listRef = useRef(null);
+  const cameraRef = useRef(null);
   const xrayRef = useRef(null);
   const sec = voyage[mode] || {};
 
@@ -413,23 +414,67 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
     const results = [];
     let cnMap = { ...(sec.records || {}) };
     let added = 0;
+
+    // M3.5.3: PDF/사진 자동 분기 (mixerUpload 모듈 활용)
+    const { detectFileType, extractPdfText, parsePdfContainers, ocrImageContainers } = await import('../mixerUpload.js');
+    const { GEMINI_API_KEY } = await import('../gemini.js');
+
     for (const file of Array.from(files)) {
       try {
-        const buf = await file.arrayBuffer();
-        const { records } = await parseListExcel(buf);
-        if (records.length === 0) {
-          if (/cbf|booking|bkg|confirm/i.test(file.name)) {
-            results.push(`ℹ️ ${file.name}: 예약 양식 (Booking) — 컨번호 없음, 정상`);
-          } else {
-            results.push(`❌ ${file.name}: 컨번호 인식 실패 (양식 확인 필요)`);
+        const ftype = await detectFileType(file);
+        let records = [];
+
+        if (ftype === 'pdf') {
+          // PDF 처리
+          setStatus(`📄 ${file.name} PDF 분석 중...`);
+          const text = await extractPdfText(file);
+          const parsed = parsePdfContainers(text);
+          records = Object.values(parsed.containers || {});
+          if (records.length === 0) {
+            results.push(`❌ ${file.name}: PDF에서 컨번호 인식 실패`);
+            continue;
           }
-          continue;
+        } else if (ftype === 'image') {
+          // 사진 OCR
+          setStatus(`📷 ${file.name} 사진 분석 중 (Gemini Vision)...`);
+          if (!GEMINI_API_KEY) {
+            results.push(`❌ ${file.name}: Gemini API 키 없음`);
+            continue;
+          }
+          try {
+            const parsed = await ocrImageContainers(file, GEMINI_API_KEY);
+            records = Object.values(parsed.containers || {});
+            if (records.length === 0) {
+              results.push(`❌ ${file.name}: 사진에서 컨번호 인식 실패 (선명한 사진 권장)`);
+              continue;
+            }
+          } catch (e) {
+            results.push(`❌ ${file.name} 사진 OCR 실패: ${e.message}`);
+            continue;
+          }
+        } else {
+          // 엑셀/CSV (기존 로직)
+          const buf = await file.arrayBuffer();
+          const parseResult = await parseListExcel(buf);
+          records = parseResult.records || [];
+          if (records.length === 0) {
+            if (/cbf|booking|bkg|confirm/i.test(file.name)) {
+              results.push(`ℹ️ ${file.name}: 예약 양식 (Booking) — 컨번호 없음, 정상`);
+            } else {
+              results.push(`❌ ${file.name}: 컨번호 인식 실패 (양식 확인 필요)`);
+            }
+            continue;
+          }
         }
+
+        // 공통: cnMap에 병합
         for (const r of records) {
+          if (!r.cn) continue;
           if (!cnMap[r.cn]) added++;
           cnMap[r.cn] = { ...cnMap[r.cn], ...r };
         }
-        results.push(`✅ ${file.name}: +${records.length}대`);
+        const typeLabel = ftype === 'pdf' ? '📄 PDF' : ftype === 'image' ? '📷 사진' : '📊 엑셀';
+        results.push(`✅ ${typeLabel} ${file.name}: +${records.length}대`);
       } catch (e) {
         results.push(`❌ ${file.name}: ${e.message}`);
       }
@@ -481,15 +526,27 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileSpreadsheet className="w-4 h-4 text-emerald-400"/>
-          2. {mode === 'discharge' ? '양하' : '선적'} 리스트 (Excel)
+          2. {mode === 'discharge' ? '양하' : '선적'} 리스트
         </div>
-        <input ref={listRef} type="file" multiple
-          accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,*/*"
-          onChange={e => handleListUpload(e.target.files)}
-          className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-700 file:text-emerald-100 file:font-bold file:cursor-pointer"/>
-        <div className="text-[10px] text-slate-500 mt-1">
+        <div className="flex items-center gap-2 mb-2">
+          <input ref={listRef} type="file" multiple
+            accept="*/*"
+            onChange={e => handleListUpload(e.target.files)}
+            className="flex-1 text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-700 file:text-emerald-100 file:font-bold file:cursor-pointer"/>
+          <button
+            onClick={() => cameraRef.current?.click()}
+            className="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 flex-shrink-0"
+            title="카메라로 종이 리스트 촬영"
+          >
+            <Camera className="w-3.5 h-3.5"/>📷
+          </button>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+            onChange={e => { handleListUpload(e.target.files); if (cameraRef.current) cameraRef.current.value = ''; }}
+            className="hidden"/>
+        </div>
+        <div className="text-[10px] text-slate-500">
           현재 리스트: {Object.keys(sec.records || {}).length}대
-          <br/>지원: .xls .xlsx .csv
+          <br/>📊 엑셀 (.xls .xlsx .csv) · 📄 PDF · 📷 사진 (자동 인식)
         </div>
       </div>
 

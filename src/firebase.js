@@ -50,18 +50,53 @@ export async function fbSaveSectionData(voyageKey, mode, data) {
 }
 
 // EDI 컨테이너 저장 (객체로: { cn1: {...}, cn2: {...} } 구조)
+// M3.5.3: 큰 데이터는 청크 분할 (set 통째 → set+update 분할)
+//   - 504대 set() 한 번에 = 5~30초 (Firebase가 모든 child 검증)
+//   - 50대씩 분할 = 1~2초 (트랜잭션 한도 회피)
 export async function fbSaveEdiContainers(voyageKey, mode, containersObj) {
-  await set(ref(db, `voyages/${voyageKey}/${mode}/ediContainers`), containersObj);
+  await chunkedReplace(`voyages/${voyageKey}/${mode}/ediContainers`, containersObj);
 }
 
 // 양하/선적 리스트 저장 (실번호 등)
 export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
-  await set(ref(db, `voyages/${voyageKey}/${mode}/records`), recordsObj);
+  await chunkedReplace(`voyages/${voyageKey}/${mode}/records`, recordsObj);
 }
 
 // X-RAY (양하만)
 export async function fbSaveXrayList(voyageKey, xrayObj) {
-  await set(ref(db, `voyages/${voyageKey}/discharge/xrayList`), xrayObj);
+  await chunkedReplace(`voyages/${voyageKey}/discharge/xrayList`, xrayObj);
+}
+
+// M3.5.3 핵심: 큰 객체를 청크로 분할해서 안전/빠르게 저장
+//   50대 이하: 한 번에 set
+//   50대 초과: 첫 청크 set (기존 데이터 정리) → 나머지 update 병렬
+async function chunkedReplace(path, obj) {
+  const keys = Object.keys(obj || {});
+  if (keys.length === 0) {
+    await set(ref(db, path), null);
+    return;
+  }
+  const CHUNK = 50;
+  const baseRef = ref(db, path);
+
+  if (keys.length <= CHUNK) {
+    await set(baseRef, obj);
+    return;
+  }
+
+  // 첫 청크: set (기존 완전 교체)
+  const firstChunk = {};
+  keys.slice(0, CHUNK).forEach(k => { firstChunk[k] = obj[k]; });
+  await set(baseRef, firstChunk);
+
+  // 나머지: 병렬 update (추가 가능)
+  const restPromises = [];
+  for (let i = CHUNK; i < keys.length; i += CHUNK) {
+    const chunk = {};
+    keys.slice(i, i + CHUNK).forEach(k => { chunk[k] = obj[k]; });
+    restPromises.push(update(baseRef, chunk));
+  }
+  await Promise.all(restPromises);
 }
 export async function fbToggleXray(voyageKey, cn) {
   const r = ref(db, `voyages/${voyageKey}/discharge/xrayList/${cn}`);

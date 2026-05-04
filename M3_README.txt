@@ -1,79 +1,97 @@
 ═══════════════════════════════════════════════════════════════════
-  GREENMARINE TALLY — M3.5.2 핫픽스 (2026-05-04)
-  믹서 업로드 성능 5~6배 개선
+  GREENMARINE TALLY — M3.5.3 (2026-05-04)
+  믹서기 제거 + 기존 시스템 안정성/형식 지원 보강
   🌊 그린마린 검수팀 전용
 ═══════════════════════════════════════════════════════════════════
 
-■ 사용자 보고
-  "믹서기 가동이 너무 오래 걸린다"
-  "선적 따로 양하 따로 하면 빠른데 동시 작업하면 더 빨라야 하는 것 아닌가?"
+■ 변경 배경
 
-■ 원인 분석 결과 (4가지 병목)
+  M3.5/M3.5.2 믹서 시스템은 야심차게 만들었으나
+  현장 사용 중 "Firebase 저장에서 계속 돌고만 있음" 보고.
+  복잡한 통합 처리보다 기존 검증된 흐름 + 핵심 보강이 안전.
 
-  1. Firebase 쓰기 5번 순차 (await × 5)
-     - 양하 EDI / 양하 list / 양하 xray / 선적 EDI / 선적 list
-     - 각 1~3초 × 5 = 5~15초
+  → 믹서 UI 제거, 기존 분리 업로드 유지
+  → 필수 보강: Firebase 안정성 + 모든 자료 형식 지원
 
-  2. 파일 분석 순차 (for 루프)
-     - 5개 파일 × 5초 = 25초
+■ 변경 사항 (3가지)
 
-  3. 'both' 모드에서 리스트 중복 처리
-     - 양하/선적 양쪽 lists에 push → mergeWithEdi 2번 실행
-     - 25,200번 비교 × 2 = 50,400번
+  [1] 믹서 UI 제거
+      - HomePage 상단 큰 "믹서" 버튼 제거
+      - 기존 양하/선적 흐름으로 복귀
+      - mixerUpload.js / MixerUploadModal.jsx 파일은 보관
+        (PDF 파서, OCR 함수 등 재사용)
 
-  4. 이미지 처리 비효율
-     - 원본 4MB 그대로 Gemini로 전송
-     - btoa(spread) 연산자 → 메인 스레드 블락 + 큰 이미지 스택 오버플로우 위험
+  [2] Firebase 청크 분할 ★ 안정성 핵심
+      - 504대 통째 set() → 50대씩 분할 (set + update 병렬)
+      - 5~30초 hang → 1~2초 안정
+      - 적용: fbSaveEdiContainers / fbSaveListRecords / fbSaveXrayList
 
-  5. PDF.js CDN 첫 로드 대기 (~2초)
-     - 첫 PDF 처리 시마다 다운로드 대기
+  [3] 모든 자료 형식 지원 (리스트 입력칸)
+      ✅ 엑셀 (.xls .xlsx .csv) — 기존
+      ✅ PDF (.pdf) — 신규 (pdfjs-dist 동적 로드)
+      ✅ 사진 (.jpg .png 등) — 신규 (Gemini Vision OCR)
+      ✅ 카메라 촬영 버튼 추가 (📷, 후면 카메라 즉시)
 
-■ 수정 (M3.5.2)
+  → 폰에서 받은 어떤 형식이든 바로 업로드 가능
+  → "오늘 같은 일 (자료 형식 때문에 막힘) 반복 X"
 
-  [수정 1] Firebase 쓰기 병렬화 ★ 가장 큰 효과
-    - persistData()에서 await 5번 → Promise.all 1번
-    - 5~15초 → 1~2초
-    - 위치: components/MixerUploadModal.jsx
+■ 사용법
 
-  [수정 2] 파일 분석 병렬화
-    - for 루프 → Promise.all(files.map())
-    - 25초 → 5초
-    - 위치: processFiles() in MixerUploadModal.jsx
+  [기존과 동일]
+  1. 항차 생성 (양하 또는 선적)
+  2. 항차 페이지 진입
+  3. 1번 칸: EDI/ASC 업로드 (필수)
+  4. 2번 칸: 리스트 업로드
+     - 엑셀이면 그대로
+     - PDF면 자동 텍스트 추출
+     - 사진이면 자동 OCR (Gemini Vision)
+     - 📷 버튼 누르면 카메라로 즉시 촬영
+  5. 3번 칸: X-RAY (양하만)
 
-  [수정 3] 리스트 중복 제거
-    - 'both' 모드에서도 컨번호 매칭율로 한쪽에만 배치
-    - dischargeMatch vs loadingMatch 비교 → 더 많이 매칭되는 쪽
-    - mergeWithEdi 호출 횟수 절반
-    - 위치: processFiles() listFiles.forEach
+  [폰에서 모든 파일 보임]
+  accept="*/*" 그대로 유지 (M3.4.1 핫픽스 포함)
 
-  [수정 4] 이미지 자동 축소 + 효율적 base64
-    - compressImage(): Canvas로 1600px 축소 + JPEG 90%
-    - blobToBase64(): FileReader 사용 (UI 안 막힘)
-    - 4MB → 0.5~1MB (업로드 80% 감소)
-    - 위치: mixerUpload.js
+■ 기술 세부
 
-  [수정 5] PDF.js / SheetJS 사전 로드
-    - preloadLibraries() 함수 추가
-    - useEffect로 모달 열 때 백그라운드 다운로드
-    - 첫 PDF 처리 ~2초 단축
-    - 위치: mixerUpload.js + MixerUploadModal.jsx
+  [Firebase 청크 분할]
+  function chunkedReplace(path, obj):
+    if size <= 50:
+      set(path, obj)              ← 작은 데이터는 한 번에
+    else:
+      set(path, firstChunk)       ← 첫 50대 (기존 정리)
+      Promise.all([                ← 나머지 병렬 update
+        update(path, chunk2),
+        update(path, chunk3),
+        ...
+      ])
 
-■ 예상 성능 (5개 파일 + 둘다 모드)
+  [PDF 처리 흐름]
+  파일 업로드 → detectFileType() → 'pdf'
+    → extractPdfText() (pdfjs-dist)
+    → parsePdfContainers() (행 단위 컨번호 추출)
+    → records 배열 → fbSaveListRecords (청크 분할)
 
-  이전 (M3.5):  30~40초
-  이후 (M3.5.2): 5~8초  (약 5~6배 빠름)
+  [사진 처리 흐름]
+  카메라/파일 업로드 → detectFileType() → 'image'
+    → compressImage() (1600px 축소, JPEG 90%)
+    → ocrImageContainers() (Gemini Vision API)
+    → records 배열 → fbSaveListRecords (청크 분할)
 
 ■ 변경 파일
 
-  src/utils.js                       → APP_VERSION = 'M3.5.2'
-  src/mixerUpload.js                 → compressImage/blobToBase64/preloadLibraries
-  src/components/MixerUploadModal.jsx → 병렬 처리 + 사전 로드 + 중복 제거
+  src/utils.js                 → APP_VERSION = 'M3.5.3'
+  src/firebase.js              → chunkedReplace 함수, 3개 저장 함수 청크 적용
+  src/pages/HomePage.jsx       → 믹서 버튼/state/마운트 제거
+  src/pages/VoyagePage.jsx     → handleListUpload 확장 (PDF/사진), 카메라 버튼
+  (보관) src/mixerUpload.js                  → PDF/OCR 함수 재사용
+  (보관) src/components/MixerUploadModal.jsx → 향후 재활용 가능
 
 ■ 누적 이력
 
-  M3.5.2 ★ 믹서 성능 5~6배 개선
-  M3.5     믹서 업로드 + 폰 친화 UI + 데이터 모델 확장
-  M3.4     EDI 파싱 핫픽스 + 오답 신고
+  M3.5.3 ★ 믹서 제거 + Firebase 청크 + 모든 형식 지원
+  M3.5.2   믹서 성능 5~6배 (실패한 시도)
+  M3.5     믹서 업로드 시도
+  M3.4     EDI 핫픽스 + 오답 신고
   M3.3     진행/단수/바닥/꼭대기/용량
   M3.2     자연어 대폭 확장 + 인앱 매뉴얼
 
