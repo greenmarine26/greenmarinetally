@@ -32,8 +32,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
+  const [shipLib, setShipLib] = useState(null); // M3.0: 선박 라이브러리 (AI 컨텍스트용)
 
   useEffect(() => { onModeChange?.(mode); }, [mode]);
+
+  // M3.0: 항차 IMO로 선박 라이브러리 로드 (AI에게 이전 항차 패턴 컨텍스트 제공)
+  useEffect(() => {
+    const imo = voyage?.info?.imo;
+    if (!imo) { setShipLib(null); return; }
+    let cancelled = false;
+    fbGetShipStructure(imo).then(data => {
+      if (!cancelled) setShipLib(data);
+    }).catch(() => { if (!cancelled) setShipLib(null); });
+    return () => { cancelled = true; };
+  }, [voyage?.info?.imo]);
 
   if (!voyage) {
     return (
@@ -160,6 +172,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           voyageKey={voyageKey}
           inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
+          shipLib={shipLib}
         />
       )}
       {tab === 'bay' && (

@@ -13,7 +13,7 @@ import { findTwinCandidate } from '../twin.js';
 import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer }) {
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null }) {
   const [searchMode, setSearchMode] = useState('single');
 
   const allContainers = useMemo(() => {
@@ -161,14 +161,16 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
     setIsListening(false);
   };
 
-  // AI 자유 질문
+  // AI 자유 질문 (M3.0: 전체 컨테이너 데이터 + 선박 라이브러리 전달)
   const handleAskAI = async () => {
     if (!query) return;
     setAiLoading(true);
     setAiAnswer(null);
     stopSpeak();
     try {
-      const res = await askGemini(query, voyage, allContainers, results);
+      // M3.0: results(검색결과 30개) → allContainers(전체) 로 변경
+      // 베이별/POL별/위험물 격리 등 모든 자유 질문에 답할 수 있도록
+      const res = await askGemini(query, voyage, allContainers, shipLib);
       if (res.ok) {
         setAiAnswer(res.answer);
         if (autoSpeak) speak(res.answer);

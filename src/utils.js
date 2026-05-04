@@ -1,5 +1,5 @@
-// 공통 유틸리티 — V38 (2026.05.03)
-export const APP_VERSION = 'M2.6';
+// 공통 유틸리티 — V38 (2026.05.04 / M3.0)
+export const APP_VERSION = 'M3.0';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
