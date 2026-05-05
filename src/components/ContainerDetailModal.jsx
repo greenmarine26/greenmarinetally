@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock } from 'lucide-react';
-import { isoToLabel, formatWt } from '../utils.js';
+import { isoToLabel, formatWt, getEquipNumber } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal } from '../firebase.js';
+import PhotoReportModal from './PhotoReportModal.jsx';
 
 // ISO 코드 옵션 (현장에서 자주 쓰는 것)
 const ISO_OPTIONS = [
@@ -29,7 +30,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [editingEseal, setEditingEseal] = useState(false);
   const [esealVal, setEsealVal] = useState(c.eseal || '');
   const [resealVal, setResealVal] = useState(c.reseal || '');
-  const [esealType, setEsealType] = useState('reseal');  // M3.5.5: 'reseal' | 'wrong'
+  const [esealType, setEsealType] = useState('reseal');
+  const [photoMode, setPhotoMode] = useState(null);  // M3.5.6: 'seal_error' | 'damage'
   const [showHistory, setShowHistory] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
@@ -190,6 +192,17 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             {c.fr && <Badge color="orange">Flat Rack</Badge>}
             {c.ot && <Badge color="yellow">Open Top</Badge>}
             {c.tk && <Badge color="pink">Tank</Badge>}
+          </div>
+          {/* M3.5.6: 사진 보고 버튼 (실오류 / 데미지) */}
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <button onClick={() => setPhotoMode('seal_error')}
+              className="py-2 bg-red-900/40 hover:bg-red-900/60 active:bg-red-900/80 border border-red-700/50 text-red-200 rounded text-xs font-bold flex items-center justify-center gap-1">
+              📷 실오류 보고
+            </button>
+            <button onClick={() => setPhotoMode('damage')}
+              className="py-2 bg-amber-900/40 hover:bg-amber-900/60 active:bg-amber-900/80 border border-amber-700/50 text-amber-200 rounded text-xs font-bold flex items-center justify-center gap-1">
+              📷 데미지 보고
+            </button>
           </div>
         </div>
 
@@ -608,6 +621,19 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           </button>
         </div>
       </div>
+
+      {/* M3.5.6: 사진 보고 모달 */}
+      {photoMode && (
+        <PhotoReportModal
+          open={!!photoMode}
+          type={photoMode}
+          c={c}
+          voyageKey={voyageKey}
+          voyage={{ info: voyageInfo }}
+          equipNo={getEquipNumber()}
+          onClose={() => setPhotoMode(null)}
+        />
+      )}
     </div>
   );
 }

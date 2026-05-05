@@ -380,4 +380,56 @@ export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) 
   }
 }
 
+// M3.5.6: 작업 보고 저장 (양하/선적/해치/콘박스/실오류/데미지)
+//   /voyages/{key}/reports/{ts} = {
+//     ts, type, action, equip, by, message, ...details
+//   }
+export async function fbAddWorkReport(voyageKey, report) {
+  const ts = Date.now();
+  const r = ref(db, `voyages/${voyageKey}/reports/${ts}`);
+  await set(r, {
+    ...report,
+    ts,
+    created_at: new Date(ts).toISOString(),
+  });
+  return ts;
+}
+
+export function fbSubscribeWorkReports(voyageKey, callback) {
+  const r = ref(db, `voyages/${voyageKey}/reports`);
+  const handler = onValue(r, (snap) => callback(snap.val() || {}));
+  return () => off(r);
+}
+
+// 모든 항차 보고 (수석 대시보드용 - 최근 N건)
+export function fbSubscribeAllReports(callback, limit = 100) {
+  const r = ref(db, 'voyages');
+  const handler = onValue(r, (snap) => {
+    const all = [];
+    const voyages = snap.val() || {};
+    Object.entries(voyages).forEach(([vk, v]) => {
+      const reports = v?.reports || {};
+      Object.entries(reports).forEach(([ts, rep]) => {
+        all.push({ ...rep, voyageKey: vk, vsl: v?.info?.vsl, voy: v?.info?.voy_l || v?.info?.voy });
+      });
+    });
+    all.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    callback(all.slice(0, limit));
+  });
+  return () => off(r);
+}
+
+// 사진 데이터 저장 (Firebase Realtime DB - base64, 작은 사진만)
+//   대용량은 별도 Storage 권장이지만 일단 RTDB로
+export async function fbAddPhotoReport(voyageKey, photoData, meta) {
+  const ts = Date.now();
+  const r = ref(db, `voyages/${voyageKey}/photos/${ts}`);
+  await set(r, {
+    ts,
+    data: photoData,  // base64 string
+    ...meta,
+  });
+  return ts;
+}
+
 export { db };

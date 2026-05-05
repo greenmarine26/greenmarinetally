@@ -1,0 +1,487 @@
+// 작업 보고 모달 (M3.5.6)
+// 흐름: 작업 시작 → 장비+작업종류 선택 → 카톡 발송
+//       이후 중단/완료/해치/콘박스는 활성 장비 자동 사용
+import React, { useState, useEffect } from 'react';
+import { X, Play, Pause, CheckCircle2, Lock, Unlock, Box, Send, Truck, RefreshCw } from 'lucide-react';
+import {
+  shareText,
+  buildWorkStatusMessage,
+  buildHatchMessage,
+  buildConBoxMessage,
+  EQUIPMENT_NUMBERS,
+} from '../kakaoShare.js';
+import { fbAddWorkReport } from '../firebase.js';
+import { ref, set, get, onValue, off } from 'firebase/database';
+import { db } from '../firebase.js';
+
+// 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
+
+export default function WorkReportModal({ open, voyageKey, voyage, onClose, lastEquip }) {
+  const [view, setView] = useState('main');  // main | start | pause | hatch | conbox
+  const [activeWork, setActiveWork] = useState({});  // {1호기: {mode, started, paused, reason}, ...}
+  // 시작 화면
+  const [selectedEquip, setSelectedEquip] = useState(lastEquip || '1호기');
+  const [selectedMode, setSelectedMode] = useState('discharge');  // 'discharge' | 'load'
+  // 중단 사유
+  const [pauseReason, setPauseReason] = useState('');
+  const [pauseTarget, setPauseTarget] = useState({ equip: '', mode: '' });
+  // 해치
+  const [hatchAction, setHatchAction] = useState('open');
+  const [bayInput, setBayInput] = useState('');
+  const [hatchEquip, setHatchEquip] = useState('');
+  // 콘박스
+  const [conBoxType, setConBoxType] = useState('20');
+  const [conBoxCount, setConBoxCount] = useState(1);
+  const [conBoxEquip, setConBoxEquip] = useState('');
+
+  // Firebase에서 활성 작업 구독
+  useEffect(() => {
+    if (!voyageKey) return;
+    const r = ref(db, `activeWork/${voyageKey}`);
+    const unsub = onValue(r, (snap) => {
+      setActiveWork(snap.val() || {});
+    });
+    return () => off(r);
+  }, [voyageKey]);
+
+  if (!open) return null;
+
+  const vsl = voyage?.info?.vsl || '';
+  const voy = voyage?.info?.voy_l || voyage?.info?.voy || '';
+
+  // 활성 작업: [equipNo, mode, awData] 배열로 평탄화
+  const activeWorkList = [];
+  Object.entries(activeWork || {}).forEach(([equip, modes]) => {
+    if (!modes || typeof modes !== 'object') return;
+    Object.entries(modes).forEach(([mode, data]) => {
+      if (data && (data.status === 'running' || data.status === 'paused')) {
+        activeWorkList.push({ equip, mode, ...data });
+      }
+    });
+  });
+  // 장비별로 그룹화
+  const activeByEquip = {};
+  activeWorkList.forEach(w => {
+    if (!activeByEquip[w.equip]) activeByEquip[w.equip] = [];
+    activeByEquip[w.equip].push(w);
+  });
+
+  const handleStartWork = async () => {
+    if (!selectedEquip) { alert('장비를 선택하세요'); return; }
+    const time = Date.now();
+    const action = `${selectedMode}_start`;
+    const message = buildWorkStatusMessage({
+      vsl, voy, action, time, equip: selectedEquip,
+    });
+
+    // M3.5.6-fix: mode별로 별도 저장 (장비 1대가 양하+선적 동시 가능)
+    await set(ref(db, `activeWork/${voyageKey}/${selectedEquip}/${selectedMode}`), {
+      mode: selectedMode,
+      status: 'running',
+      startedAt: time,
+      vsl, voy,
+    });
+
+    // 보고 이력 저장
+    await fbAddWorkReport(voyageKey, {
+      type: 'work_status',
+      action,
+      mode: selectedMode,
+      equip: selectedEquip,
+      message,
+    });
+
+    await shareText(message, '검수 보고');
+    setView('main');
+    onClose();
+  };
+
+  const handlePause = async (equipNo, modeArg) => {
+    if (!pauseReason.trim()) { alert('중단 사유를 입력하세요'); return; }
+    const time = Date.now();
+    const aw = activeWork[equipNo]?.[modeArg];
+    if (!aw) return;
+    const action = `${modeArg}_pause`;
+    const message = buildWorkStatusMessage({
+      vsl, voy, action, time, reason: pauseReason, equip: equipNo,
+    });
+
+    await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), {
+      ...aw,
+      status: 'paused',
+      pausedAt: time,
+      pauseReason,
+    });
+
+    await fbAddWorkReport(voyageKey, {
+      type: 'work_status',
+      action,
+      mode: modeArg,
+      equip: equipNo,
+      reason: pauseReason,
+      message,
+    });
+
+    await shareText(message, '검수 보고');
+    setPauseReason('');
+    setView('main');
+    onClose();
+  };
+
+  const handleResume = async (equipNo, modeArg) => {
+    const time = Date.now();
+    const aw = activeWork[equipNo]?.[modeArg];
+    if (!aw) return;
+    const action = `${modeArg}_start`;
+    const message = buildWorkStatusMessage({
+      vsl, voy, action, time, equip: equipNo,
+    }) + '\n(재개)';
+
+    await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), {
+      ...aw,
+      status: 'running',
+      resumedAt: time,
+      pauseReason: null,
+    });
+
+    await fbAddWorkReport(voyageKey, {
+      type: 'work_status',
+      action: `${modeArg}_resume`,
+      mode: modeArg,
+      equip: equipNo,
+      message,
+    });
+
+    await shareText(message, '검수 보고');
+    onClose();
+  };
+
+  const handleDone = async (equipNo, modeArg) => {
+    const modeLabel = modeArg === 'discharge' ? '양하' : '선적';
+    if (!confirm(`${equipNo} ${modeLabel} 완료 보고하시겠습니까?`)) return;
+    const time = Date.now();
+    const aw = activeWork[equipNo]?.[modeArg];
+    if (!aw) return;
+    const action = `${modeArg}_done`;
+    const message = buildWorkStatusMessage({
+      vsl, voy, action, time, equip: equipNo,
+    });
+
+    // mode별로 활성 작업 종료
+    await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), null);
+
+    await fbAddWorkReport(voyageKey, {
+      type: 'work_status',
+      action,
+      mode: modeArg,
+      equip: equipNo,
+      message,
+    });
+
+    await shareText(message, '검수 보고');
+    onClose();
+  };
+
+  const handleHatch = async () => {
+    const equip = hatchEquip || Object.keys(activeByEquip)[0] || '';
+    if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
+    const bays = bayInput.split(/[,\s]+/).filter(b => b.trim()).map(b => b.trim());
+    if (bays.length === 0) { alert('베이 번호를 입력하세요'); return; }
+
+    const time = Date.now();
+    const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip });
+
+    await fbAddWorkReport(voyageKey, {
+      type: 'hatch',
+      action: hatchAction,
+      bays,
+      equip,
+      message,
+    });
+
+    await shareText(message, '해치커버');
+    setBayInput('');
+    setView('main');
+    onClose();
+  };
+
+  const handleConBox = async () => {
+    const equip = conBoxEquip || Object.keys(activeByEquip)[0] || '';
+    if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
+    const time = Date.now();
+    const message = buildConBoxMessage({ vsl, voy, type: conBoxType, count: conBoxCount, time, equip });
+
+    await fbAddWorkReport(voyageKey, {
+      type: 'conbox',
+      conBoxType, conBoxCount, equip,
+      message,
+    });
+
+    await shareText(message, '콘박스');
+    setView('main');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 p-0 md:p-4" onClick={onClose}>
+      <div className="bg-slate-900 border-2 border-slate-700 rounded-t-2xl md:rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Send className="w-5 h-5 text-emerald-400"/>
+            <span className="font-bold text-emerald-300">작업 보고</span>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded">
+            <X className="w-5 h-5"/>
+          </button>
+        </div>
+
+        {/* 메인 화면: 활성 작업 + 새 작업 시작 */}
+        {view === 'main' && (
+          <div className="p-3 space-y-3">
+            {/* 활성 작업 카드 - 장비별 양하/선적 분리 */}
+            {Object.keys(activeByEquip).length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-slate-300">진행 중인 작업</div>
+                {Object.entries(activeByEquip).map(([equip, works]) => (
+                  <div key={equip} className="bg-slate-800/40 border border-slate-700 rounded-lg p-2 space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Truck className="w-4 h-4 text-orange-400"/>
+                      <span className="font-bold text-base text-orange-200">{equip}</span>
+                    </div>
+                    {works.map(w => {
+                      const isPaused = w.status === 'paused';
+                      const modeLabel = w.mode === 'discharge' ? '양하' : '선적';
+                      const modeIcon = w.mode === 'discharge' ? '⬇' : '⬆';
+                      return (
+                        <div key={w.mode} className={`border-2 rounded p-2 ${isPaused ? 'border-amber-700 bg-amber-950/30' : 'border-emerald-700 bg-emerald-950/30'}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-sm">{modeIcon} {modeLabel}</span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPaused ? 'bg-amber-700 text-white' : 'bg-emerald-700 text-white'}`}>
+                                {isPaused ? '⏸ 중단' : '🟢 진행'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            시작: {w.startedAt ? new Date(w.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                            {w.pauseReason && <div className="text-amber-300 mt-0.5">사유: {w.pauseReason}</div>}
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 mt-2">
+                            {!isPaused ? (
+                              <button onClick={() => { setPauseTarget({ equip, mode: w.mode }); setView('pause'); }}
+                                className="py-2 bg-amber-700 hover:bg-amber-600 text-white rounded text-xs font-bold flex items-center justify-center gap-1">
+                                <Pause className="w-3.5 h-3.5"/> {modeLabel} 중단
+                              </button>
+                            ) : (
+                              <button onClick={() => handleResume(equip, w.mode)}
+                                className="py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold flex items-center justify-center gap-1">
+                                <Play className="w-3.5 h-3.5"/> {modeLabel} 재개
+                              </button>
+                            )}
+                            <button onClick={() => handleDone(equip, w.mode)}
+                              className="py-2 bg-blue-700 hover:bg-blue-600 text-white rounded text-xs font-bold flex items-center justify-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5"/> {modeLabel} 완료
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 새 작업 시작 */}
+            <button onClick={() => setView('start')}
+              className="w-full py-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-base flex items-center justify-center gap-2">
+              <Play className="w-5 h-5"/> 새 작업 시작
+            </button>
+
+            {/* 추가 보고 (해치/콘박스) */}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setView('hatch')}
+                className="py-3 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1">
+                <Unlock className="w-4 h-4"/> 해치커버
+              </button>
+              <button onClick={() => setView('conbox')}
+                className="py-3 bg-purple-700 hover:bg-purple-600 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1">
+                <Box className="w-4 h-4"/> 콘박스
+              </button>
+            </div>
+
+            <div className="text-[10px] text-slate-500 text-center">
+              💡 카톡 공유창이 열리면 단톡방을 선택하세요
+            </div>
+          </div>
+        )}
+
+        {/* 작업 시작 화면 */}
+        {view === 'start' && (
+          <div className="p-3 space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-2">1) 장비 선택</div>
+              <div className="grid grid-cols-2 gap-2">
+                {EQUIPMENT_NUMBERS.map(n => (
+                  <button key={n} onClick={() => setSelectedEquip(n)}
+                    className={`py-3 rounded-lg font-bold ${selectedEquip === n ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-slate-800 text-slate-300'}`}>
+                    🏗 {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-2">2) 작업 종류</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setSelectedMode('discharge')}
+                  className={`py-3 rounded-lg font-bold ${selectedMode === 'discharge' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
+                  ⬇ 양하
+                </button>
+                <button onClick={() => setSelectedMode('load')}
+                  className={`py-3 rounded-lg font-bold ${selectedMode === 'load' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
+                  ⬆ 선적
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-slate-800 rounded p-2 text-xs text-slate-300">
+              <div>📍 {vsl} {voy}</div>
+              <div>🏗 {selectedEquip} - {selectedMode === 'discharge' ? '양하' : '선적'} 시작</div>
+            </div>
+
+            <button onClick={handleStartWork}
+              className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              <Send className="w-4 h-4"/> ▶ 시작 + 카톡 보고
+            </button>
+          </div>
+        )}
+
+        {/* 중단 화면 */}
+        {view === 'pause' && (
+          <div className="p-3 space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <div className="bg-amber-950/30 border border-amber-700 rounded p-2 text-sm">
+              <div className="font-bold text-amber-200">
+                {pauseTarget.equip} {pauseTarget.mode === 'discharge' ? '양하' : '선적'} 중단
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">중단 사유 (필수)</div>
+              <input
+                type="text"
+                value={pauseReason}
+                onChange={e => setPauseReason(e.target.value)}
+                placeholder="예: 강풍 10m/s, 우천, 화물 이상"
+                className="w-full bg-slate-800 border border-amber-600 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-400"
+                autoFocus
+              />
+            </div>
+            <button onClick={() => handlePause(pauseTarget.equip, pauseTarget.mode)}
+              className="w-full py-3 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              <Pause className="w-4 h-4"/> 중단 보고
+            </button>
+          </div>
+        )}
+
+        {/* 해치 화면 */}
+        {view === 'hatch' && (
+          <div className="p-3 space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
+              <div className="grid grid-cols-4 gap-1">
+                {EQUIPMENT_NUMBERS.map(n => (
+                  <button key={n} onClick={() => setHatchEquip(n)}
+                    className={`py-2 rounded text-xs font-bold ${(hatchEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setHatchAction('open')}
+                className={`py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${hatchAction === 'open' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                <Unlock className="w-4 h-4"/> OPEN
+              </button>
+              <button onClick={() => setHatchAction('close')}
+                className={`py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${hatchAction === 'close' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                <Lock className="w-4 h-4"/> CLOSE
+              </button>
+            </div>
+
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">베이 번호</div>
+              <input
+                type="text"
+                value={bayInput}
+                onChange={e => setBayInput(e.target.value)}
+                placeholder="예: 1, 3, 5"
+                className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-3 text-base mono text-slate-100 focus:outline-none focus:border-cyan-500"
+              />
+              <div className="text-[10px] text-slate-500 mt-1">총 {bayInput.split(/[,\s]+/).filter(b => b.trim()).length}장</div>
+            </div>
+
+            <button onClick={handleHatch}
+              className={`w-full py-3 rounded-lg font-bold text-white flex items-center justify-center gap-2 ${hatchAction === 'open' ? 'bg-emerald-700' : 'bg-blue-700'}`}>
+              <Send className="w-4 h-4"/> 해치 {hatchAction === 'open' ? 'OPEN' : 'CLOSE'} 보고
+            </button>
+          </div>
+        )}
+
+        {/* 콘박스 화면 */}
+        {view === 'conbox' && (
+          <div className="p-3 space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
+              <div className="grid grid-cols-4 gap-1">
+                {EQUIPMENT_NUMBERS.map(n => (
+                  <button key={n} onClick={() => setConBoxEquip(n)}
+                    className={`py-2 rounded text-xs font-bold ${(conBoxEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">규격</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setConBoxType('20')}
+                  className={`py-3 rounded-lg font-bold ${conBoxType === '20' ? 'bg-purple-700 text-white' : 'bg-slate-800 text-slate-400'}`}>20자</button>
+                <button onClick={() => setConBoxType('40')}
+                  className={`py-3 rounded-lg font-bold ${conBoxType === '40' ? 'bg-purple-700 text-white' : 'bg-slate-800 text-slate-400'}`}>40자</button>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">개수</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map(n => (
+                  <button key={n} onClick={() => setConBoxCount(n)}
+                    className={`py-3 rounded-lg font-bold text-lg ${conBoxCount === n ? 'bg-purple-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    {n}개
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-slate-800 rounded p-2 text-center text-sm font-bold">
+              📦 콘박스 {conBoxType}자 {conBoxCount}개
+            </div>
+
+            <button onClick={handleConBox}
+              className="w-full py-3 bg-purple-700 hover:bg-purple-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              <Send className="w-4 h-4"/> 콘박스 보고
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

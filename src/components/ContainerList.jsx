@@ -17,6 +17,7 @@ const FILTERS = [
   { key: 'completed', label: '완료', color: 'bg-emerald-700' },
   { key: 'full', label: 'F (적컨)', color: 'bg-emerald-600' },
   { key: 'empty', label: 'E (공컨)', color: 'bg-slate-500' },
+  { key: 'feUnknown', label: '? (미정)', color: 'bg-amber-600' },
   { key: '20', label: '20DC', color: 'bg-blue-600' },
   { key: '40', label: '40DC', color: 'bg-blue-600' },
   { key: 'hc', label: '40HC', color: 'bg-blue-600' },
@@ -37,6 +38,7 @@ const FILTERS = [
   { key: 'oog', label: '📐 OOG', color: 'bg-purple-600' },
   { key: 'xray', label: '🔍 X-RAY', color: 'bg-purple-600' },
   { key: 'sealerr', label: '🚨 실오류', color: 'bg-red-700' },
+  { key: 'isoOther', label: '⚠️ 기타 ISO', color: 'bg-amber-700' },
 ];
 
 export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer }) {
@@ -48,10 +50,12 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   const counts = useMemo(() => {
     const k = {
       all: list.length,
-      completed: 0, remaining: 0, full: 0, empty: 0, xray: 0, dg: 0, rf: 0, tk: 0, oog: 0,
+      completed: 0, remaining: 0, full: 0, empty: 0, feUnknown: 0, xray: 0, dg: 0, rf: 0, tk: 0, oog: 0,
       hc: 0, dc20: 0, dc40: 0,
       rf20: 0, rf40: 0, rf45: 0, fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
       hc45: 0,
+      isoOther: 0,
+      isoOtherList: [],
       sealerr: 0,
     };
     list.forEach(c => {
@@ -66,24 +70,33 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (c.oog || c.fr) k.oog++;
       if (c.fe === 'F') k.full++;
       else if (c.fe === 'E') k.empty++;
-      // 빈 값('')은 카운트 안 함 (F/E 미정)
+      else k.feUnknown++;  // M3.5.6: F/E 미정 카운트
 
       const lbl = isoToLabel(c.iso);
-      if (lbl === '40HC') k.hc++;
-      else if (lbl === '20DC' || lbl === '20GP') k.dc20++;
-      else if (lbl === '40DC' || lbl === '40GP') k.dc40++;
-      if (lbl === '20RF') k.rf20++;
-      else if (lbl === '40RF') k.rf40++;
-      if (lbl === '20FR') k.fr20++;
-      else if (lbl === '40FR') k.fr40++;
-      else if (lbl === '45FR') k.fr45++;
-      if (lbl === '20OT') k.ot20++;
-      else if (lbl === '40OT') k.ot40++;
-      else if (lbl === '45OT') k.ot45++;
-      if (lbl === '20TK') k.tk20++;
-      else if (lbl === '40TK') k.tk40++;
-      if (lbl === '45RF') k.rf45++;
-      if (lbl === '45HC') k.hc45++;
+      let knownLbl = false;
+      if (lbl === '40HC') { k.hc++; knownLbl = true; }
+      else if (lbl === '20DC' || lbl === '20GP') { k.dc20++; knownLbl = true; }
+      else if (lbl === '40DC' || lbl === '40GP') { k.dc40++; knownLbl = true; }
+      if (lbl === '20RF') { k.rf20++; knownLbl = true; }
+      else if (lbl === '40RF') { k.rf40++; knownLbl = true; }
+      if (lbl === '20FR') { k.fr20++; knownLbl = true; }
+      else if (lbl === '40FR') { k.fr40++; knownLbl = true; }
+      else if (lbl === '45FR') { k.fr45++; knownLbl = true; }
+      if (lbl === '20OT') { k.ot20++; knownLbl = true; }
+      else if (lbl === '40OT') { k.ot40++; knownLbl = true; }
+      else if (lbl === '45OT') { k.ot45++; knownLbl = true; }
+      if (lbl === '20TK') { k.tk20++; knownLbl = true; }
+      else if (lbl === '40TK') { k.tk40++; knownLbl = true; }
+      if (lbl === '45RF') { k.rf45++; knownLbl = true; }
+      if (lbl === '45HC') { k.hc45++; knownLbl = true; }
+
+      // M3.5.6: 알려진 카테고리에 없는 ISO 카운트 (검수원 확인 필요)
+      if (!knownLbl) {
+        k.isoOther++;
+        if (k.isoOtherList.length < 50) {
+          k.isoOtherList.push({ cn: c.cn, iso: c.iso, label: lbl });
+        }
+      }
 
       // 실오류
       const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
@@ -121,6 +134,18 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'remaining' && isDone) return false;
       if (f === 'full' && c.fe !== 'F') return false;
       if (f === 'empty' && c.fe !== 'E') return false;
+      if (f === 'feUnknown' && (c.fe === 'F' || c.fe === 'E')) return false;
+      if (f === 'isoOther') {
+        const lbl = isoToLabel(c.iso);
+        const known = ['20DC','20GP','40DC','40GP','40HC','45HC','20RF','40RF','45RF','20FR','40FR','45FR','20OT','40OT','45OT','20TK','40TK'];
+        if (known.includes(lbl)) return false;
+      }
+      if (f === 'feUnknown' && (c.fe === 'F' || c.fe === 'E')) return false;
+      if (f === 'isoOther') {
+        const lbl = isoToLabel(c.iso);
+        const known = ['40HC', '20DC', '20GP', '40DC', '40GP', '20RF', '40RF', '45RF', '20FR', '40FR', '45FR', '20OT', '40OT', '45OT', '20TK', '40TK', '45HC'];
+        if (known.includes(lbl)) return false;
+      }
       if (f === '20' && !['20DC','20GP'].includes(lbl)) return false;
       if (f === '40' && !['40DC','40GP'].includes(lbl)) return false;
       if (f === 'hc' && lbl !== '40HC') return false;
@@ -171,6 +196,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   // 화면에 표시할 필터 (count > 0인 것만)
   const visibleFilters = FILTERS.filter(f => {
     if (['all', 'remaining', 'completed', 'full', 'empty'].includes(f.key)) return true;
+    if (f.key === 'feUnknown') return counts.feUnknown > 0;  // M3.5.6: F/E 미정 있을 때만
+    if (f.key === 'isoOther') return counts.isoOther > 0;    // M3.5.6: 알 수 없는 ISO 있을 때만
     if (f.key === '20') return counts.dc20 > 0;
     if (f.key === '40') return counts.dc40 > 0;
     if (f.key === 'hc') return counts.hc > 0;

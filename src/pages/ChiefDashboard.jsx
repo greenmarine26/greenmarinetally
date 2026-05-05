@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db } from '../firebase.js';
+import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera } from 'lucide-react';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 
@@ -9,12 +9,40 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
   const [feedback, setFeedback] = useState({});
   const [showResolved, setShowResolved] = useState(false);
   const [extraPolicies, setExtraPolicies] = useState({});
+  const [allReports, setAllReports] = useState([]);  // M3.5.6: 작업 보고 이력
   useEffect(() => {
     const u1 = fbSubscribeShipLibrary(setShipLib);
     const u2 = fbSubscribeFeedback(setFeedback);
     const u3 = fbSubscribeShipPolicies(db, setExtraPolicies);
-    return () => { u1(); u2(); u3(); };
+    const u4 = fbSubscribeAllReports(setAllReports, 100);
+    return () => { u1(); u2(); u3(); u4(); };
   }, []);
+
+  // M3.5.6: 오늘 장비별 작업 보고 통계
+  const equipStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+    const stats = {};
+    (allReports || []).forEach(r => {
+      if (!r.ts || r.ts < todayMs) return;
+      const equip = r.equip || '미지정';
+      if (!stats[equip]) stats[equip] = { total: 0, status: 0, hatch: 0, conbox: 0, damage: 0, sealError: 0, latest: 0 };
+      stats[equip].total++;
+      if (r.type === 'work_status') stats[equip].status++;
+      else if (r.type === 'hatch') stats[equip].hatch++;
+      else if (r.type === 'conbox') stats[equip].conbox++;
+      else if (r.type === 'damage') stats[equip].damage++;
+      else if (r.type === 'seal_error') stats[equip].sealError++;
+      if (r.ts > stats[equip].latest) stats[equip].latest = r.ts;
+    });
+    return stats;
+  }, [allReports]);
+
+  // 최근 작업 보고 (시간순)
+  const recentReports = useMemo(() => {
+    return (allReports || []).slice(0, 30);
+  }, [allReports]);
 
   // M3.5.5: 엠티 실 작업 중인 항차 (실시간 부착 현황)
   const sealVoyages = useMemo(() => {
@@ -214,6 +242,71 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
           </div>
         )}
       </div>
+
+      {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
+      {Object.keys(equipStats).length > 0 && (
+        <div className="bg-slate-900 border border-orange-700/40 rounded-xl p-3 mt-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Truck className="w-4 h-4 text-orange-400"/>
+            <div className="text-sm font-bold text-orange-100">오늘 장비별 작업 보고</div>
+            <span className="text-[10px] text-slate-500">실시간</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {['1호기', '2호기', '3호기', '4호기'].map(eq => {
+              const s = equipStats[eq];
+              if (!s) return (
+                <div key={eq} className="bg-slate-800/40 border border-slate-700/40 rounded p-2 opacity-50">
+                  <div className="text-sm font-bold text-slate-400">🏗 {eq}</div>
+                  <div className="text-[10px] text-slate-500">작업 없음</div>
+                </div>
+              );
+              return (
+                <div key={eq} className="bg-orange-900/20 border border-orange-700/40 rounded p-2">
+                  <div className="text-sm font-bold text-orange-200">🏗 {eq}</div>
+                  <div className="text-lg font-black text-orange-100">{s.total}건</div>
+                  <div className="text-[10px] text-slate-400 space-y-0.5 mt-1">
+                    {s.status > 0 && <div>📤 작업상태 {s.status}</div>}
+                    {s.hatch > 0 && <div>🔓 해치 {s.hatch}</div>}
+                    {s.conbox > 0 && <div>📦 콘박스 {s.conbox}</div>}
+                    {s.damage > 0 && <div className="text-amber-300">⚠️ 데미지 {s.damage}</div>}
+                    {s.sealError > 0 && <div className="text-red-300">🚨 실오류 {s.sealError}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* M3.5.6: 최근 작업 보고 (시간순) */}
+      {recentReports.length > 0 && (
+        <div className="bg-slate-900 border border-emerald-700/40 rounded-xl p-3 mt-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Send className="w-4 h-4 text-emerald-400"/>
+            <div className="text-sm font-bold text-emerald-100">최근 작업 보고</div>
+            <span className="text-[10px] text-slate-500">최근 30건</span>
+          </div>
+          <div className="space-y-1 max-h-96 overflow-y-auto">
+            {recentReports.map((r, i) => {
+              const time = r.ts ? new Date(r.ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+              const icon = r.type === 'work_status' ? '📤' : r.type === 'hatch' ? '🔓' : r.type === 'conbox' ? '📦' : r.type === 'damage' ? '⚠️' : r.type === 'seal_error' ? '🚨' : '📋';
+              return (
+                <div key={i} className="bg-slate-950 border border-slate-800 rounded p-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-1">
+                      <span>{icon}</span>
+                      <span className="font-bold text-slate-200">{r.vsl} {r.voy}</span>
+                      {r.equip && <span className="text-[10px] bg-orange-700 text-white px-1 py-0.5 rounded font-bold">{r.equip}</span>}
+                    </div>
+                    <span className="text-[10px] text-slate-500 mono">{time}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-300 whitespace-pre-line ml-4">{r.message || ''}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* M3.5.5: 엠티 실 작업 실시간 현황 */}
       {sealVoyages.length > 0 && (

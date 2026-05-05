@@ -22,6 +22,8 @@ import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
+import WorkReportModal from '../components/WorkReportModal.jsx';
+import { getEquipNumber } from '../utils.js';
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
@@ -39,6 +41,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
+  const [showWorkReport, setShowWorkReport] = useState(false);  // M3.5.6: 작업 보고 모달
   const [shipLib, setShipLib] = useState(null); // M3.0: 선박 라이브러리 (AI 컨텍스트용)
   // M3.5.4: 자동 진단 state (메인 컴포넌트에 두어야 useMemo에서 접근 가능)
   const [diagAutoSpeak, setDiagAutoSpeak] = useState(true);
@@ -237,6 +240,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         </div>
       )}
 
+      {/* M3.5.6: 작업 보고 큰 버튼 */}
+      <button onClick={() => setShowWorkReport(true)}
+        className="w-full mb-3 py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+        📤 작업 보고 (시작/중단/완료/해치/콘박스)
+      </button>
+      )}
+
       {/* 탭 네비게이션 */}
       <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
         {[
@@ -387,6 +397,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         inspector={inspector}
         onSaved={() => { /* Firebase 구독으로 자동 반영 */ }}
         onClose={() => setShowPolicyModal(false)}
+      />
+
+      {/* M3.5.6: 작업 보고 모달 (양하/선적/해치/콘박스 + 카톡 공유) */}
+      <WorkReportModal
+        open={showWorkReport}
+        voyageKey={voyageKey}
+        voyage={voyage}
+        lastEquip={getEquipNumber()}
+        onClose={() => setShowWorkReport(false)}
       />
     </div>
   );

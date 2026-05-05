@@ -1,5 +1,5 @@
-// 공통 유틸리티 — V38 (2026.05.05 / M3.5.5)
-export const APP_VERSION = 'M3.5.5';
+// 공통 유틸리티 — V38 (2026.05.05 / M3.5.6)
+export const APP_VERSION = 'M3.5.6';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -596,7 +596,7 @@ export async function parseListExcel(arrayBuffer) {
   const records = [];
   const seen = new Set();
 
-  // 컨번호 헤더 패턴 (V38 확장)
+  // 컨번호 헤더 패턴 (V38 확장 + M3.5.6 중국어/한국어 보강)
   const CN_HEAD = [
     /^container$/, /^containerno$/, /container\s*no/, /^containerno\.?$/,
     /^cntr$/, /^cntrno$/, /cntr\s*no/, /^cntrno\.?$/,
@@ -605,6 +605,9 @@ export async function parseListExcel(arrayBuffer) {
     /컨테이너.*번호/, /^컨테이너$/, /^콘테이너/,
     /^c\/?no$/, /^cont(ainer)?\.?\s*no\.?$/,
     /container.*number/, /^container\s*#/,
+    /^cntrno\.$/, /^cntr\s*no\.$/,
+    /^箱号$/, /^货柜号$/,  // M3.5.6: 중국어 (VGM 등)
+    /^cntno$/i, /^cntr\.?no\.?$/i,
   ];
   // 실번호 헤더 패턴 (V38 확장)
   const SL_HEAD = [
@@ -704,7 +707,7 @@ export async function parseListExcel(arrayBuffer) {
     const gi_i = findCol([/gate.*in/, /반입/]);
     const pol_i = findCol([/^pol$|load.*port|loading.*port/, /적재항/, /선적항/, /^lp$|^lwharf$/]);
     const pod_i = findCol([/^pod$|dis.*port|dis.*cy|discharge|destination/, /최종항/, /양하항/, /도착항/, /^dp$|^dlv$/]);
-    const fe_i = findCol([/^f\/?e$|^full\/?empty$|^fe$|^full\/empty$|^l\/?s$|^l\/s$/, /^적공$/, /^empty\/full$/, /^f\/m$/]);
+    const fe_i = findCol([/^f\/?e$|^full\/?empty$|^fe$|^full\/empty$|^l\/?s$|^l\/s$/, /^적공$/, /^empty\/full$/, /^f\/m$/, /soc.*[ef]|[ef].*soc|soc\/e\/f|e\/f|status/]);
     const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$/, /^타입$/, /^컨.*규격/, /^kind$/]);
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
     const op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
@@ -761,6 +764,17 @@ export async function parseListExcel(arrayBuffer) {
         // "20F", "40E", "20FT-F"
         if (/^(20|40|45)(FT)?([FE])$/.test(sRaw)) {
           fe = sRaw.slice(-1);
+        }
+      }
+      // M3.5.6: 무게 기반 추정 (VGM 파일처럼 F/E 컬럼 없는 경우)
+      // VGM은 적컨만 신고하므로 무게가 컨테이너 자체 무게(타이어웨이트)보다 크면 Full
+      if (!fe && wt_i >= 0) {
+        const wgt = parseFloat(String(row[wt_i] || '').replace(/,/g, ''));
+        if (!isNaN(wgt) && wgt > 0) {
+          // 20피트 빈 컨 약 2.3톤, 40피트 약 3.8톤, 45피트 약 4.8톤
+          // 무게가 5톤 초과면 Full로 판정 (안전 마진)
+          // 단, 너무 작은 무게(VGM 신고 안한 빈 컨일 수도)는 미정으로 둠
+          if (wgt > 5000) fe = 'F';
         }
       }
 
@@ -888,3 +902,17 @@ export const podColorMap = {
   'JPYOK': { bg: 'bg-teal-600', text: 'text-teal-50' },
   'KRPUS': { bg: 'bg-yellow-600', text: 'text-yellow-50' },
 };
+
+// M3.5.6: 장비 번호 (localStorage)
+export function getEquipNumber() {
+  try {
+    return localStorage.getItem('gm_equip_no') || '';
+  } catch (e) { return ''; }
+}
+
+export function setEquipNumber(num) {
+  try {
+    if (num) localStorage.setItem('gm_equip_no', num);
+    else localStorage.removeItem('gm_equip_no');
+  } catch (e) {}
+}

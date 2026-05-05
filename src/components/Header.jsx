@@ -1,12 +1,24 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
+import { getEquipNumber, setEquipNumber } from '../utils.js';
+import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
 
 export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome }) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   const [helpOpen, setHelpOpen] = useState(false);
+  const [equipOpen, setEquipOpen] = useState(false);
+  const [equipNo, setEquipNoState] = useState(getEquipNumber());
+
+  const handleSelectEquip = (num) => {
+    setEquipNumber(num);
+    setEquipNoState(num);
+    setEquipOpen(false);
+    // 다른 컴포넌트 알림
+    window.dispatchEvent(new CustomEvent('equipChanged', { detail: num }));
+  };
 
   return (
     <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
@@ -43,6 +55,19 @@ export default function Header({ version, inspector, online, route, voyages, onC
           >
             <HelpCircle className="w-4 h-4 text-amber-300"/>
           </button>
+          {/* M3.5.6: 장비 번호 빠른 변경 */}
+          <button
+            onClick={() => setEquipOpen(true)}
+            title="장비 번호 변경"
+            className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 ${
+              equipNo
+                ? 'bg-orange-700 text-white border border-orange-500'
+                : 'bg-slate-800 text-slate-400 border border-slate-600 animate-pulse'
+            }`}
+          >
+            <Truck className="w-3 h-3"/>
+            {equipNo || '장비?'}
+          </button>
           <button
             onClick={onChangeInspector}
             className="bg-amber-900/40 border border-amber-700/40 px-2 py-1 rounded text-xs flex items-center gap-1 active:bg-amber-900/60"
@@ -63,6 +88,35 @@ export default function Header({ version, inspector, online, route, voyages, onC
         </div>
       </div>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
+
+      {/* M3.5.6: 장비 번호 선택 모달 */}
+      {equipOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setEquipOpen(false)}>
+          <div className="bg-slate-900 border-2 border-orange-700 rounded-2xl w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <Truck className="w-5 h-5 text-orange-400"/>
+              <span className="font-bold text-orange-300">장비 번호 선택</span>
+            </div>
+            <div className="text-[11px] text-slate-400 mb-3">현재 작업 중인 장비를 선택하세요. 작업 보고에 자동 포함됩니다.</div>
+            <div className="grid grid-cols-2 gap-2">
+              {EQUIPMENT_NUMBERS.map(num => (
+                <button key={num} onClick={() => handleSelectEquip(num)}
+                  className={`py-4 rounded-lg font-black text-lg ${
+                    equipNo === num ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}>
+                  {num}
+                </button>
+              ))}
+            </div>
+            {equipNo && (
+              <button onClick={() => handleSelectEquip('')}
+                className="w-full mt-2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs">
+                장비 번호 해제
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
