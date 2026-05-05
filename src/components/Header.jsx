@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, Languages } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
+import ContainerPhrasebook from './ContainerPhrasebook.jsx';
 import { getEquipNumber, setEquipNumber } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
 
@@ -9,6 +10,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   const [helpOpen, setHelpOpen] = useState(false);
+  const [phraseOpen, setPhraseOpen] = useState(false);  // M3.5.6: 영어 회화집
   const [equipOpen, setEquipOpen] = useState(false);
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
 
@@ -16,7 +18,6 @@ export default function Header({ version, inspector, online, route, voyages, onC
     setEquipNumber(num);
     setEquipNoState(num);
     setEquipOpen(false);
-    // 다른 컴포넌트 알림
     window.dispatchEvent(new CustomEvent('equipChanged', { detail: num }));
   };
 
@@ -55,6 +56,14 @@ export default function Header({ version, inspector, online, route, voyages, onC
           >
             <HelpCircle className="w-4 h-4 text-amber-300"/>
           </button>
+          {/* M3.5.6: 영어 회화집 (외국 선원/도선사 소통용) */}
+          <button
+            onClick={() => setPhraseOpen(true)}
+            title="검수 영어 회화집"
+            className="p-1.5 rounded bg-blue-900/30 hover:bg-blue-900/60 active:bg-blue-900/80 border border-blue-700/40"
+          >
+            <Languages className="w-4 h-4 text-blue-300"/>
+          </button>
           {/* M3.5.6: 장비 번호 빠른 변경 */}
           <button
             onClick={() => setEquipOpen(true)}
@@ -88,6 +97,8 @@ export default function Header({ version, inspector, online, route, voyages, onC
         </div>
       </div>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
+      {/* M3.5.6: 검수 영어 회화집 */}
+      <ContainerPhrasebook open={phraseOpen} onClose={() => setPhraseOpen(false)}/>
 
       {/* M3.5.6: 장비 번호 선택 모달 */}
       {equipOpen && (
