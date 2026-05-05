@@ -39,10 +39,20 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
   const toggleType = (code) => setDamageTypes(t => t.includes(code) ? t.filter(x => x !== code) : [...t, code]);
 
   const handleSend = async () => {
+    // 검증을 명확히 - 어떤 게 빠졌는지 즉시 알려줌
     if (!photoBlob) {
-      alert('사진을 먼저 촬영하세요');
+      alert('⚠️ 사진을 먼저 촬영하세요');
       return;
     }
+    if (type === 'damage' && damageTypes.length === 0) {
+      alert('⚠️ 데미지 종류를 1개 이상 선택하세요');
+      return;
+    }
+    if (type === 'seal_error' && !sealNew.trim()) {
+      alert('⚠️ 발견된 실번호를 입력하세요');
+      return;
+    }
+
     setSending(true);
     try {
       const time = Date.now();
@@ -52,52 +62,55 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           vsl, voy, cn, sealOrig, sealNew, time, equip: equipNo, note,
         });
       } else {
-        if (damageTypes.length === 0) {
-          alert('데미지 종류를 1개 이상 선택하세요');
-          setSending(false);
-          return;
-        }
         message = buildDamageMessage({
           vsl, voy, cn, types: damageTypes, parts: damageParts, note, time, equip: equipNo,
         });
       }
 
-      // Firebase 저장 (사진 base64)
-      const reader = new FileReader();
-      reader.readAsDataURL(photoBlob);
-      reader.onload = async () => {
-        const base64 = reader.result;
-        try {
-          await fbAddPhotoReport(voyageKey, base64, {
-            type, cn, mode: voyage?.mode || 'unknown',
-            equip: equipNo,
-            damageTypes: type === 'damage' ? damageTypes : null,
-            damageParts: type === 'damage' ? damageParts : null,
-            sealOrig: type === 'seal_error' ? sealOrig : null,
-            sealNew: type === 'seal_error' ? sealNew : null,
-            note,
-            message,
-          });
-          await fbAddWorkReport(voyageKey, {
-            type,
-            cn,
-            equip: equipNo,
-            message,
-            hasPhoto: true,
-          });
-        } catch (e) {
-          console.error('Firebase 저장 실패:', e);
-        }
-      };
-
-      // 카톡 공유 (사진 + 메시지)
+      // 1단계: 카톡 공유 먼저 (검수원에게 즉시 반응)
+      console.log('[PhotoReport] 카톡 공유 시작', { message });
       const result = await shareWithPhoto(message, photoBlob, type === 'seal_error' ? '실오류' : '데미지');
-      if (result.photoSeparate) {
-        alert('사진은 따로 첨부해주세요');
+      console.log('[PhotoReport] 카톡 공유 결과', result);
+
+      // 2단계: Firebase 저장 (백그라운드, 실패해도 카톡은 이미 보냄)
+      try {
+        const reader = new FileReader();
+        const base64 = await new Promise((res, rej) => {
+          reader.onload = () => res(reader.result);
+          reader.onerror = () => rej(new Error('파일 읽기 실패'));
+          reader.readAsDataURL(photoBlob);
+        });
+        await fbAddPhotoReport(voyageKey, base64, {
+          type, cn, mode: voyage?.mode || 'unknown',
+          equip: equipNo,
+          damageTypes: type === 'damage' ? damageTypes : null,
+          damageParts: type === 'damage' ? damageParts : null,
+          sealOrig: type === 'seal_error' ? sealOrig : null,
+          sealNew: type === 'seal_error' ? sealNew : null,
+          note, message,
+        });
+        await fbAddWorkReport(voyageKey, {
+          type, cn, equip: equipNo, message, hasPhoto: true,
+        });
+        console.log('[PhotoReport] Firebase 저장 완료');
+      } catch (fbErr) {
+        console.error('[PhotoReport] Firebase 저장 실패 (카톡은 이미 발송됨):', fbErr);
       }
-      onClose();
+
+      // 결과 안내
+      if (result?.cancelled) {
+        // 사용자가 공유창에서 취소
+        // 모달은 그대로 두기
+      } else if (result?.method === 'clipboard' || result?.method === 'alert') {
+        // 클립보드 복사됨 - alert가 이미 뜸
+        onClose();
+      } else {
+        // 정상 공유 완료
+        onClose();
+      }
     } catch (e) {
-      alert('전송 실패: ' + e.message);
+      console.error('[PhotoReport] 전송 오류:', e);
+      alert('전송 중 오류: ' + (e?.message || e));
     } finally {
       setSending(false);
     }
@@ -229,14 +242,33 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
         </div>
 
         <div className="sticky bottom-0 bg-slate-900 border-t border-slate-700 p-3">
-          <button onClick={handleSend} disabled={sending || !photoBlob}
+          {/* 검증 상태 표시 */}
+          {(() => {
+            const missing = [];
+            if (!photoBlob) missing.push('📷 사진');
+            if (type === 'damage' && damageTypes.length === 0) missing.push('데미지 종류');
+            if (type === 'seal_error' && !sealNew.trim()) missing.push('발견 실번호');
+            if (missing.length > 0) {
+              return (
+                <div className="mb-2 px-3 py-2 bg-red-950/40 border border-red-700/50 rounded text-[11px] text-red-200 font-bold">
+                  ⚠️ 입력 필요: {missing.join(', ')}
+                </div>
+              );
+            }
+            return (
+              <div className="mb-2 px-3 py-2 bg-emerald-950/40 border border-emerald-700/50 rounded text-[11px] text-emerald-200 font-bold">
+                ✅ 전송 준비 완료
+              </div>
+            );
+          })()}
+          <button onClick={handleSend} disabled={sending}
             className={`w-full py-3 rounded-lg font-bold text-white flex items-center justify-center gap-2 ${
-              isError ? 'bg-red-700 hover:bg-red-600' : 'bg-amber-700 hover:bg-amber-600'
+              isError ? 'bg-red-700 hover:bg-red-600 active:bg-red-800' : 'bg-amber-700 hover:bg-amber-600 active:bg-amber-800'
             } disabled:opacity-50`}>
             <Send className="w-5 h-5"/> {sending ? '전송 중...' : '카톡으로 전송'}
           </button>
           <div className="text-[10px] text-slate-500 text-center mt-1">
-            💡 사진 + 메시지가 카톡 공유창에 자동 들어갑니다
+            💡 사진 위에 정보가 합성되어 한 장으로 카톡 발송
           </div>
         </div>
       </div>

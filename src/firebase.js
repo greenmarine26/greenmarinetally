@@ -381,9 +381,6 @@ export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) 
 }
 
 // M3.5.6: 작업 보고 저장 (양하/선적/해치/콘박스/실오류/데미지)
-//   /voyages/{key}/reports/{ts} = {
-//     ts, type, action, equip, by, message, ...details
-//   }
 export async function fbAddWorkReport(voyageKey, report) {
   const ts = Date.now();
   const r = ref(db, `voyages/${voyageKey}/reports/${ts}`);
@@ -430,6 +427,40 @@ export async function fbAddPhotoReport(voyageKey, photoData, meta) {
     ...meta,
   });
   return ts;
+}
+
+// M3.5.6-fix: 테스트 데이터 삭제 함수들 (수석검수만 사용)
+// 단일 보고 삭제
+export async function fbDeleteWorkReport(voyageKey, ts) {
+  await set(ref(db, `voyages/${voyageKey}/reports/${ts}`), null);
+}
+
+// 단일 사진 삭제
+export async function fbDeletePhotoReport(voyageKey, ts) {
+  await set(ref(db, `voyages/${voyageKey}/photos/${ts}`), null);
+}
+
+// 한 항차의 모든 작업 보고 삭제
+export async function fbClearAllReports(voyageKey) {
+  await set(ref(db, `voyages/${voyageKey}/reports`), null);
+  await set(ref(db, `voyages/${voyageKey}/photos`), null);
+}
+
+// 모든 항차의 작업 보고 일괄 삭제 (테스트 정리용)
+export async function fbClearAllReportsAllVoyages() {
+  const snap = await get(ref(db, 'voyages'));
+  const voyages = snap.val() || {};
+  const ops = [];
+  Object.keys(voyages).forEach(vk => {
+    ops.push(set(ref(db, `voyages/${vk}/reports`), null));
+    ops.push(set(ref(db, `voyages/${vk}/photos`), null));
+  });
+  await Promise.all(ops);
+}
+
+// 활성 작업 일괄 삭제 (테스트 정리용)
+export async function fbClearAllActiveWork() {
+  await set(ref(db, 'activeWork'), null);
 }
 
 export { db };

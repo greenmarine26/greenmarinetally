@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports } from '../firebase.js';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 
@@ -281,24 +281,49 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
       {/* M3.5.6: 최근 작업 보고 (시간순) */}
       {recentReports.length > 0 && (
         <div className="bg-slate-900 border border-emerald-700/40 rounded-xl p-3 mt-3">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Send className="w-4 h-4 text-emerald-400"/>
             <div className="text-sm font-bold text-emerald-100">최근 작업 보고</div>
             <span className="text-[10px] text-slate-500">최근 30건</span>
+            <div className="flex-1"/>
+            <button onClick={async () => {
+              if (!confirm('⚠️ 모든 항차의 작업 보고/사진을 삭제합니다.\n테스트 데이터 정리용입니다.\n계속하시겠습니까?')) return;
+              if (!confirm('정말로 모두 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+              try {
+                await fbClearAllReportsAllVoyages();
+                await fbClearAllActiveWork();
+                alert('✅ 모든 작업 보고가 삭제되었습니다');
+              } catch (e) { alert('삭제 실패: ' + e.message); }
+            }}
+              className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-[10px] font-bold flex items-center gap-1">
+              <Trash2 className="w-3 h-3"/> 전체 삭제 (테스트용)
+            </button>
           </div>
           <div className="space-y-1 max-h-96 overflow-y-auto">
             {recentReports.map((r, i) => {
               const time = r.ts ? new Date(r.ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
               const icon = r.type === 'work_status' ? '📤' : r.type === 'hatch' ? '🔓' : r.type === 'conbox' ? '📦' : r.type === 'damage' ? '⚠️' : r.type === 'seal_error' ? '🚨' : '📋';
               return (
-                <div key={i} className="bg-slate-950 border border-slate-800 rounded p-2 text-xs">
+                <div key={i} className="bg-slate-950 border border-slate-800 rounded p-2 text-xs group">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-1">
                       <span>{icon}</span>
                       <span className="font-bold text-slate-200">{r.vsl} {r.voy}</span>
                       {r.equip && <span className="text-[10px] bg-orange-700 text-white px-1 py-0.5 rounded font-bold">{r.equip}</span>}
                     </div>
-                    <span className="text-[10px] text-slate-500 mono">{time}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-500 mono">{time}</span>
+                      <button onClick={async () => {
+                        if (!confirm('이 보고를 삭제하시겠습니까?')) return;
+                        try {
+                          await fbDeleteWorkReport(r.voyageKey, r.ts);
+                        } catch (e) { alert('삭제 실패: ' + e.message); }
+                      }}
+                        className="p-0.5 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded opacity-50 group-hover:opacity-100"
+                        title="이 보고 삭제">
+                        <Trash2 className="w-3 h-3"/>
+                      </button>
+                    </div>
                   </div>
                   <div className="text-[11px] text-slate-300 whitespace-pre-line ml-4">{r.message || ''}</div>
                 </div>
