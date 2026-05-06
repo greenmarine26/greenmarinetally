@@ -245,7 +245,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         className="w-full mb-3 py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
         📤 작업 보고 (시작/중단/완료/해치/콘박스)
       </button>
-      )}
 
       {/* 탭 네비게이션 */}
       <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
