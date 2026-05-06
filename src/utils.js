@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.72';
+export const APP_VERSION = 'M3.73';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -447,21 +447,24 @@ export function parseBAPLIE(ediText) {
   }
   if (cur) result.containers.push(cur);
 
-  // M3.69: 무게 기반 F/E 추정 - fe가 빈 값(미정)일 때만 적용
-  // 원칙: EDI/리스트에 명시된 F/E는 검수원의 정답. 무게로 절대 덮어쓰지 않음
-  // (이전 M3.67 로직: 무게 우선 → 엠티 명시된 컨테이너가 무게 있다고 풀로 변경되는 버그 발생)
+  // M3.73: 무게 기반 F/E 추정 완전 제거
+  // 원칙: EDI status 코드만이 진실. 무게로 절대 추정하지 않음.
+  // status 없으면 검수원이 현장에서 확인.
+  //
+  // ISO 끝자리 동기화: fe와 ISO 끝자리가 다르면 fe 우선 (ISO 끝자리 보정)
+  //   45RF + fe='E' → 45RE (Empty 표시)
+  //   45RE + fe='F' → 45RF (Full 표시)
   for (const c of result.containers) {
-    // 이미 fe가 명시되어 있으면 그대로 (검수원의 정답)
-    if (c.fe === 'F' || c.fe === 'E') continue;
-
-    // fe가 빈 값(미정)일 때만 무게로 추정
-    if (c.wt > 0) {
-      const is20 = c.iso && (c.iso.startsWith('22') || c.iso.startsWith('25'));
-      const is40 = c.iso && (c.iso.startsWith('42') || c.iso.startsWith('44') || c.iso.startsWith('45'));
-      if (is20 && c.wt <= 2500) c.fe = 'E';
-      else if (is40 && c.wt <= 4500) c.fe = 'E';
-      else if (c.wt > 5000) c.fe = 'F';
-      // 그 외 (애매한 무게)는 fe 빈 값 그대로 → 검수원이 현장 확인
+    if (!c.iso || c.iso.length < 4) continue;
+    const last = c.iso[c.iso.length - 1];
+    if (c.fe === 'E' && last !== 'E') {
+      // F/E가 Empty인데 ISO 끝이 F 등 → E로 변경
+      c.iso_orig_parsed = c.iso;
+      c.iso = c.iso.slice(0, -1) + 'E';
+    } else if (c.fe === 'F' && last === 'E') {
+      // F/E가 Full인데 ISO 끝이 E → F로 변경
+      c.iso_orig_parsed = c.iso;
+      c.iso = c.iso.slice(0, -1) + 'F';
     }
   }
 
@@ -564,26 +567,30 @@ export function parseAscFile(text) {
       }
     }
 
-    // M3.69: 무게 기반 F/E 추정 - fe가 빈 값일 때만
-    // 원칙: ASC에 명시된 F/E는 검수원의 정답. 무게로 덮지 않음
+    // M3.73: 무게 기반 F/E 추정 완전 제거
+    // 원칙: ASC의 F/E 명시값만 사용. 무게로 추정 X.
     let feFinal = fe;
-    if (!feFinal && wt > 0) {  // fe 미정인 경우만
-      const is20 = (tp && (tp.endsWith('20') || tp === 'DC20' || tp === 'RF20' || tp === 'TK20'))
-                || (iso && iso.startsWith('22'));
-      const is40 = (tp && (tp.endsWith('40') || tp === 'DC40' || tp === 'RF40' || tp === 'HC40'))
-                || (iso && (iso.startsWith('42') || iso.startsWith('44') || iso.startsWith('45')));
-      if (is20 && wt <= 2500) feFinal = 'E';
-      else if (is40 && wt <= 4500) feFinal = 'E';
-      else if (wt > 5000) feFinal = 'F';
+    let isoFinal = iso;
+
+    // ISO 끝자리 동기화: F/E와 ISO 끝자리가 다르면 F/E 우선
+    if (isoFinal && isoFinal.length >= 4) {
+      const last = isoFinal[isoFinal.length - 1];
+      if (feFinal === 'E' && last !== 'E') {
+        isoFinal = isoFinal.slice(0, -1) + 'E';
+      } else if (feFinal === 'F' && last === 'E') {
+        isoFinal = isoFinal.slice(0, -1) + 'F';
+      }
     }
 
     containers.push({
-      cn, bay, row, tier, iso, tp,
+      cn, bay, row, tier,
+      iso: isoFinal,
+      tp,
       fe: feFinal,
       wt, op, pol, pod,
       dg: false, dgc: '', un: '',
-      rf: (tp && tp.startsWith('RF')) || (iso && iso[2] === 'R'),
-      tk: (tp && tp.startsWith('TK')) || (iso && iso[2] === 'T'),
+      rf: (tp && tp.startsWith('RF')) || (isoFinal && isoFinal[2] === 'R'),
+      tk: (tp && tp.startsWith('TK')) || (isoFinal && isoFinal[2] === 'T'),
       oog: false,
       sl: '', sh: '', bl: '', tmp: '',
     });
@@ -914,16 +921,16 @@ export async function parseListExcel(arrayBuffer) {
       });
     }
   }
-  // V38.5: 무게 기반 F/E 검증 (4순위) — 위에서 못 잡은 경우
-  // 20피트 Empty ≈ 2.2t, 40피트 Empty ≈ 3.8t (현장 실측)
+  // M3.73: 무게 기반 F/E 추정 완전 제거
+  // 원칙: 리스트의 F/E 명시값만 사용. 무게로 추정 X.
+  // ISO 끝자리 동기화: F/E와 ISO 끝자리가 다르면 F/E 우선
   for (const r of records) {
-    if (r.fe) continue; // 이미 F/E 결정됨
-    if (r.wt > 0) {
-      const is20 = r.iso && (r.iso.startsWith('22') || r.iso.startsWith('25'));
-      const is40 = r.iso && (r.iso.startsWith('42') || r.iso.startsWith('44') || r.iso.startsWith('45'));
-      if (is20 && r.wt <= 2500) r.fe = 'E';
-      else if (is40 && r.wt <= 4500) r.fe = 'E';
-      else if (r.wt > 5000) r.fe = 'F';
+    if (!r.iso || r.iso.length < 4) continue;
+    const last = r.iso[r.iso.length - 1];
+    if (r.fe === 'E' && last !== 'E') {
+      r.iso = r.iso.slice(0, -1) + 'E';
+    } else if (r.fe === 'F' && last === 'E') {
+      r.iso = r.iso.slice(0, -1) + 'F';
     }
   }
   return { records };

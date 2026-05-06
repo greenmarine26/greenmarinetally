@@ -57,17 +57,11 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
 
   // ─── 🔴 1. 리퍼 온도 미입력 (양하 모드의 풀 리퍼만) ───
   // M3.71: 선적 모드는 검사 제외 (적재 전이라 온도 정보 없는 게 정상)
-  // 양하 모드만 검사 - 이미 적재된 풀 리퍼는 온도 명시되어야 함
+  // M3.73: 무게 추정 제거 - fe='F' 명시된 리퍼만 검사
   if (mode === 'discharge') {
     const reefers = extractReefers(ediPtk);
-    // 풀 리퍼만 추출 (fe='F'이거나, 무게 5톤 초과)
-    const fullReefers = reefers.filter(c => {
-      if (c.fe === 'E') return false;  // 명시적 엠티는 제외
-      if (c.fe === 'F') return true;   // 명시적 풀은 포함
-      // fe 미정인 경우: 무게로 판단
-      const wt = Number(c.wt) || 0;
-      return wt > 5000;  // 5톤 초과만 풀로 간주 (그 외는 미정 → 검사 제외)
-    });
+    // 풀 리퍼만 추출 - fe='F'로 명시된 것만
+    const fullReefers = reefers.filter(c => c.fe === 'F');
     if (fullReefers.length > 0) {
       const missingTmp = fullReefers.filter(c => {
         if (c.tmp_missing) return true;
