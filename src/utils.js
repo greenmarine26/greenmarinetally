@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.75';
+export const APP_VERSION = 'M3.76';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -951,18 +951,76 @@ export async function parseXrayList(arrayBuffer) {
   return { containers: Array.from(containers) };
 }
 
-// === POD 색깔 ===
+// === POD/POL 색깔 (M3.76 대폭 확장) ===
+// 평택항 자주 쓰는 모든 항구 색깔 지정 - 베이플랜에서 셀 색깔로 행선지 즉시 식별
+// 지역별 톤 통일 (구분 + 그룹 인지):
+//   중국 = 청-남청 계열
+//   일본 = 분홍-장미 계열
+//   한국 = 노랑-amber 계열
+//   대만/홍콩 = 보라-인디고 계열
+//   동남아 = 청록 계열
+//   미주/유럽 = 슬레이트 계열
 export const podColorMap = {
-  'CNTAG': { bg: 'bg-blue-600', text: 'text-blue-50' },
-  'CNNTG': { bg: 'bg-green-600', text: 'text-green-50' },
-  'CNSHA': { bg: 'bg-purple-600', text: 'text-purple-50' },
-  'CNNGB': { bg: 'bg-pink-600', text: 'text-pink-50' },
-  'CNQZH': { bg: 'bg-cyan-600', text: 'text-cyan-50' },
-  'HKHKG': { bg: 'bg-indigo-600', text: 'text-indigo-50' },
-  'JPHKT': { bg: 'bg-rose-600', text: 'text-rose-50' },
-  'JPYOK': { bg: 'bg-teal-600', text: 'text-teal-50' },
-  'KRPUS': { bg: 'bg-yellow-600', text: 'text-yellow-50' },
+  // 중국 (청-남청 톤) - 평택 주력 항로
+  'CNDLC': { bg: 'bg-blue-600', text: 'text-blue-50' },        // 대련
+  'CNQDG': { bg: 'bg-blue-500', text: 'text-blue-50' },        // 청도
+  'CNTAO': { bg: 'bg-blue-500', text: 'text-blue-50' },        // 청도(별칭)
+  'CNWEI': { bg: 'bg-sky-600', text: 'text-sky-50' },          // 위해
+  'CNYAT': { bg: 'bg-sky-500', text: 'text-sky-50' },          // 연태
+  'CNLYG': { bg: 'bg-cyan-700', text: 'text-cyan-50' },        // 연운항
+  'CNXMN': { bg: 'bg-cyan-600', text: 'text-cyan-50' },        // 하문
+  'CNTSN': { bg: 'bg-cyan-500', text: 'text-cyan-50' },        // 천진
+  'CNSHA': { bg: 'bg-indigo-600', text: 'text-indigo-50' },    // 상해
+  'CNNGB': { bg: 'bg-indigo-500', text: 'text-indigo-50' },    // 닝보
+  'CNQZH': { bg: 'bg-teal-600', text: 'text-teal-50' },        // 친저우
+  'CNCAN': { bg: 'bg-teal-500', text: 'text-teal-50' },        // 광주
+  'CNSZN': { bg: 'bg-teal-700', text: 'text-teal-50' },        // 심천
+  'CNTAG': { bg: 'bg-blue-700', text: 'text-blue-50' },        // (기존)
+  'CNNTG': { bg: 'bg-cyan-800', text: 'text-cyan-50' },        // (기존)
+  'CNWEH': { bg: 'bg-sky-700', text: 'text-sky-50' },          // 웨이하이
+  // 일본 (분홍-장미 톤)
+  'JPHKT': { bg: 'bg-rose-600', text: 'text-rose-50' },        // 하카타
+  'JPYOK': { bg: 'bg-pink-600', text: 'text-pink-50' },        // 요코하마
+  'JPTYO': { bg: 'bg-rose-500', text: 'text-rose-50' },        // 도쿄
+  'JPOSA': { bg: 'bg-pink-500', text: 'text-pink-50' },        // 오사카
+  'JPNGO': { bg: 'bg-rose-700', text: 'text-rose-50' },        // 나고야
+  'JPUKB': { bg: 'bg-pink-700', text: 'text-pink-50' },        // 고베
+  // 한국 (노랑 톤)
+  'KRPUS': { bg: 'bg-yellow-600', text: 'text-yellow-50' },    // 부산
+  'KRINC': { bg: 'bg-amber-600', text: 'text-amber-50' },      // 인천
+  'KRPTK': { bg: 'bg-amber-500', text: 'text-amber-950' },     // 평택 (자기)
+  // 대만/홍콩 (보라-인디고)
+  'TWKHH': { bg: 'bg-violet-600', text: 'text-violet-50' },    // 카오슝
+  'TWTPE': { bg: 'bg-violet-500', text: 'text-violet-50' },    // 타이베이
+  'HKHKG': { bg: 'bg-purple-600', text: 'text-purple-50' },    // 홍콩
+  // 동남아 (청록)
+  'SGSIN': { bg: 'bg-emerald-600', text: 'text-emerald-50' },  // 싱가포르
+  'VNSGN': { bg: 'bg-emerald-700', text: 'text-emerald-50' },  // 호치민
+  'VNHPH': { bg: 'bg-emerald-500', text: 'text-emerald-50' },  // 하이퐁
+  'THBKK': { bg: 'bg-green-600', text: 'text-green-50' },      // 방콕
+  'MYPKG': { bg: 'bg-green-700', text: 'text-green-50' },      // 클랑
+  // 미주/유럽 (슬레이트)
+  'USLAX': { bg: 'bg-slate-600', text: 'text-slate-50' },      // LA
+  'USNYC': { bg: 'bg-slate-500', text: 'text-slate-50' },      // 뉴욕
+  'USSEA': { bg: 'bg-slate-700', text: 'text-slate-50' },      // 시애틀
+  'DEHAM': { bg: 'bg-zinc-600', text: 'text-zinc-50' },        // 함부르크
+  'NLRTM': { bg: 'bg-zinc-500', text: 'text-zinc-50' },        // 로테르담
 };
+
+// 항구 코드 → 색깔 (3자/5자 모두 매핑)
+// 예: 'KRPTK' → 정확 매칭, 'PTK' → 끝 3자 매칭 (LOC+11이 3자만 줄 때)
+export function getPortColor(code) {
+  if (!code) return null;
+  const upper = String(code).toUpperCase().trim();
+  if (podColorMap[upper]) return podColorMap[upper];
+  // 끝 3자로 재시도 (예: 'PTK' → 'KRPTK')
+  if (upper.length === 3) {
+    for (const k of Object.keys(podColorMap)) {
+      if (k.endsWith(upper)) return podColorMap[k];
+    }
+  }
+  return null;
+}
 
 // M3.5.6: 장비 번호 (localStorage)
 export function getEquipNumber() {

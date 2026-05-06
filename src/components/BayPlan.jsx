@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor } from '../utils.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
@@ -160,7 +160,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return out;
   }, [bayGroups]);
 
-  // 셀 색상 — V37 cellColor 다크 매핑
+  // 셀 색상 — V37 cellColor + M3.76: 선적 모드 POD 색깔 적용
   const cellColor = (c) => {
     if (compMap[c.cn]) {
       // 완료 = 어두운 흰색 (다크 배경 위 잘 보이게)
@@ -175,7 +175,13 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       return 'bg-orange-600 text-orange-50 border-orange-400';
     }
     if (isPtk(c) || dischargeCns.has(c.cn)) {
-      // 평택 양하/선적 = 노랑 (형광펜)
+      // M3.76: 선적 모드면 POD(목적지) 색깔로 채워서 행선지 즉시 식별
+      // 양하 모드는 amber(노랑) 그대로 (평택 도착이라 행선지 무의미)
+      if (mode === 'loading' && c.pod) {
+        const pc = getPortColor(c.pod);
+        if (pc) return `${pc.bg} ${pc.text} border-slate-300 ring-1 ring-amber-300`;
+      }
+      // 평택 양하/선적 기본 = 노랑 (형광펜)
       return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
     }
     // 통과 화물 = 옅은 회색
@@ -331,14 +337,27 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         </select>
       </div>
 
-      {/* 범례 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2 flex-wrap text-[10px]">
-        <span className="text-slate-500 font-bold uppercase">범례:</span>
-        <Legend color="bg-amber-500" label="평택 미완"/>
-        <Legend color="bg-purple-700" label="X-RAY"/>
-        <Legend color="bg-orange-600" label="시프팅 대상"/>
-        <Legend color="bg-slate-300" label="완료"/>
-        <Legend color="bg-slate-700" label="통과"/>
+      {/* 범례 - M3.76 확장: 셀 색깔 + 컨 종류 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
+        <div className="flex items-center gap-2 flex-wrap text-[10px]">
+          <span className="text-slate-500 font-bold uppercase w-12">셀색:</span>
+          <Legend color="bg-amber-500" label="평택"/>
+          <Legend color="bg-purple-700" label="X-RAY"/>
+          <Legend color="bg-orange-600" label="시프팅"/>
+          <Legend color="bg-slate-300" label="완료"/>
+          <Legend color="bg-slate-700" label="통과"/>
+          {mode === 'loading' && (
+            <span className="text-cyan-400 font-bold ml-1">+ POD별 색깔</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap text-[10px]">
+          <span className="text-slate-500 font-bold uppercase w-12">종류:</span>
+          <span className="flex items-center gap-1"><span className="bg-red-500 w-1 h-3 inline-block rounded-sm"/><span className="text-red-300 font-bold">⚠ DG</span></span>
+          <span className="flex items-center gap-1"><span className="bg-cyan-400 w-1 h-3 inline-block rounded-sm"/><span className="text-cyan-300 font-bold">❄ 리퍼</span></span>
+          <span className="flex items-center gap-1"><span className="bg-purple-500 w-1 h-3 inline-block rounded-sm"/><span className="text-purple-300 font-bold">⊞ FR</span></span>
+          <span className="flex items-center gap-1"><span className="bg-orange-500 w-1 h-3 inline-block rounded-sm"/><span className="text-orange-300 font-bold">▣ TK</span></span>
+          <span className="flex items-center gap-1"><span className="bg-fuchsia-500 w-1 h-3 inline-block rounded-sm"/><span className="text-fuchsia-300 font-bold">△ OT</span></span>
+        </div>
       </div>
 
       {/* 베이 그리드 본체 */}
@@ -582,6 +601,26 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       }
     };
 
+    // M3.76: 컨 종류별 좌측 컬러 바 (확대 안 해도 식별)
+    let typeBarColor = ''; // 빈값=일반 컨 (바 안 그림)
+    let typeSymbol = '';   // 우상단 큰 심볼
+    if (c.dg) {
+      typeBarColor = 'bg-red-500';
+      typeSymbol = '⚠';
+    } else if (isReefer) {
+      typeBarColor = c.fe === 'E' ? 'bg-cyan-500/60' : 'bg-cyan-400';
+      typeSymbol = '❄';
+    } else if (c.fr) {
+      typeBarColor = 'bg-purple-500';
+      typeSymbol = '⊞';
+    } else if (c.tk) {
+      typeBarColor = 'bg-orange-500';
+      typeSymbol = '▣';
+    } else if (c.ot || c.oog) {
+      typeBarColor = 'bg-fuchsia-500';
+      typeSymbol = '△';
+    }
+
     return (
       <button
         key={key}
@@ -591,25 +630,37 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         }`}
         style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize }}
       >
+        {/* M3.76: 좌측 컬러 바 (특수화물 종류) - 확대 안 해도 식별 */}
+        {typeBarColor && (
+          <div className={`absolute top-0 left-0 bottom-0 ${typeBarColor} z-10`}
+               style={{ width: Math.max(3, Math.round(cellW * 0.06)) }}/>
+        )}
+        {/* M3.76: 우상단 큰 심볼 (특수화물 종류) - 확대 안 해도 식별 */}
+        {typeSymbol && !isReefer && (
+          <div className="absolute top-0 right-0 z-20 bg-slate-900/90 text-white font-black leading-none px-1 rounded-bl"
+               style={{ fontSize: Math.max(10, fontSize * 1.5), padding: '1px 3px' }}>
+            {typeSymbol}
+          </div>
+        )}
         {needsShift && (
           <div className="absolute top-0 left-0 bg-amber-400 text-slate-900 px-0.5 font-black leading-none rounded-br z-10"
-            style={{ fontSize: fontSize - 1 }}>
+            style={{ fontSize: fontSize - 1, marginLeft: typeBarColor ? Math.max(3, Math.round(cellW * 0.06)) : 0 }}>
             ⬆{needsShift}
           </div>
         )}
         {/* M3.74: 다중 적재 ⊕N 배지 (우상단, 리퍼 ❄ 옆) */}
         {stackCount >= 2 && (
-          <div className="absolute top-0 right-0 z-20 bg-amber-500 text-slate-900 font-black leading-none rounded-bl px-0.5"
-            style={{ fontSize: fontSize, marginRight: isReefer ? fontSize + 4 : 0 }}>
+          <div className="absolute top-0 right-0 z-30 bg-amber-500 text-slate-900 font-black leading-none rounded-bl px-0.5"
+            style={{ fontSize: fontSize, marginRight: isReefer ? fontSize + 4 : (typeSymbol ? fontSize * 1.5 + 6 : 0) }}>
             ⊕{stackCount - 1}
           </div>
         )}
         {isReefer && (
-          <div className="absolute top-0 right-0 z-10 flex items-center"
-               style={{ fontSize: fontSize - 1 }}>
-            <span className="text-cyan-300 font-black bg-slate-900/80 px-0.5 leading-none">❄</span>
+          <div className="absolute top-0 right-0 z-20 flex items-center"
+               style={{ fontSize: Math.max(10, fontSize * 1.5) }}>
+            <span className="text-cyan-200 font-black bg-slate-900/90 px-1 leading-none rounded-bl">❄</span>
             {tmpMissing && (
-              <span className="text-red-400 font-black bg-slate-900/80 px-0.5 leading-none animate-pulse">❗</span>
+              <span className="text-red-400 font-black bg-slate-900/90 px-0.5 leading-none animate-pulse">❗</span>
             )}
           </div>
         )}
