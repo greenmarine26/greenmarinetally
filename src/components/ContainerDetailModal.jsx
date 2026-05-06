@@ -4,6 +4,7 @@ import { isoToLabel, formatWt, getEquipNumber, isUnknownIso } from '../utils.js'
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
 // ISO 코드 옵션 (현장에서 자주 쓰는 것)
 const ISO_OPTIONS = [
@@ -37,6 +38,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
 
+  // M3.74: confirm() → ConfirmModal
+  const [confirmState, askConfirm] = useConfirm();
+
   const isDone = !!comp;
   const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
   const isDG = c.dg;
@@ -52,8 +56,15 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const handleComplete = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (isDone) {
-      if (!confirm(`${c.cn} 완료를 취소하시겠습니까?`)) return;
-      await fbCancelComplete(voyageKey, mode, c.cn);
+      askConfirm({
+        title: '완료 취소',
+        message: `${c.cn}\n검수 완료를 취소하시겠습니까?`,
+        confirmLabel: '취소',
+        cancelLabel: '닫기',
+        onConfirm: async () => {
+          await fbCancelComplete(voyageKey, mode, c.cn);
+        },
+      });
     } else {
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
       speakDone(c);
@@ -138,17 +149,26 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const opt = ISO_OPTIONS.find(o => o.iso === newIso);
     if (!opt) return;
-    if (!confirm(`규격을 "${opt.label}"로 변경하시겠습니까?\n\n현재: ${c.iso || '?'} (${isoToLabel(c.iso) || '?'})\n변경: ${opt.iso} (${opt.label})\n\n변경 이력에 기록됩니다.`)) return;
-
-    // ISO 자체 변경
-    await fbUpdateRecordField(voyageKey, mode, c.cn, 'iso', opt.iso, inspector);
-    // 플래그 갱신 (rf/fr/ot/tk 모두 명시 - 이전 잘못된 플래그 정리)
-    await fbUpdateRecordField(voyageKey, mode, c.cn, 'rf', !!opt.flags.rf, inspector);
-    await fbUpdateRecordField(voyageKey, mode, c.cn, 'fr', !!opt.flags.fr, inspector);
-    await fbUpdateRecordField(voyageKey, mode, c.cn, 'ot', !!opt.flags.ot, inspector);
-    await fbUpdateRecordField(voyageKey, mode, c.cn, 'tk', !!opt.flags.tk, inspector);
-    setEditingIso(false);
-    alert(`✅ 규격 변경 완료: ${opt.label}`);
+    askConfirm({
+      title: '규격 변경',
+      message:
+        `현재: ${c.iso || '?'} (${isoToLabel(c.iso) || '?'})\n` +
+        `변경: ${opt.iso} (${opt.label})\n\n` +
+        `변경 이력에 기록됩니다.`,
+      confirmLabel: '변경',
+      cancelLabel: '취소',
+      onConfirm: async () => {
+        // ISO 자체 변경
+        await fbUpdateRecordField(voyageKey, mode, c.cn, 'iso', opt.iso, inspector);
+        // 플래그 갱신 (rf/fr/ot/tk 모두 명시 - 이전 잘못된 플래그 정리)
+        await fbUpdateRecordField(voyageKey, mode, c.cn, 'rf', !!opt.flags.rf, inspector);
+        await fbUpdateRecordField(voyageKey, mode, c.cn, 'fr', !!opt.flags.fr, inspector);
+        await fbUpdateRecordField(voyageKey, mode, c.cn, 'ot', !!opt.flags.ot, inspector);
+        await fbUpdateRecordField(voyageKey, mode, c.cn, 'tk', !!opt.flags.tk, inspector);
+        setEditingIso(false);
+        alert(`✅ 규격 변경 완료: ${opt.label}`);
+      },
+    });
   };
 
   const handleToggleXray = async () => {
@@ -654,6 +674,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           onClose={() => setPhotoMode(null)}
         />
       )}
+
+      {/* M3.74: confirm() → ConfirmModal */}
+      <ConfirmModal {...confirmState} />
     </div>
   );
 }

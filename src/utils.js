@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.73';
+export const APP_VERSION = 'M3.74';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -310,7 +310,7 @@ export function parseBAPLIE(ediText) {
         bay: '', row: '', tier: '',
         op: '',
         dg: false, dgc: '', un: '',
-        rf: false, tk: false, oog: false,
+        rf: false, fr: false, tk: false, oog: false,
         sl: '', sh: '', bl: '',
         tmp: '',
         st: '',                                // V38: raw status code
@@ -339,11 +339,15 @@ export function parseBAPLIE(ediText) {
         if (t === 'R') cur.rf = true;
         if (t === 'U' || t === 'O') cur.oog = true;
         if (t === 'T' || (t >= '7' && t <= '9')) cur.tk = true;
-        if (t === 'P' || t === 'F') cur.oog = true;   // FR
+        // M3.74 fix: FR(P=Platform/F=Flatrack)은 fr 명시 + oog는 호환성 유지
+        // 기존: oog만 true → 베이플랜에 'OOG'로 표시 + 상세모달/카드에 FR 배지 안 뜸
+        if (t === 'P' || t === 'F') { cur.fr = true; cur.oog = true; }
       }
       // 4자리 숫자 코드 (4582 등) reefer
       if (/^[24]58[2-5]$/.test(cur.iso)) cur.rf = true;
       if (/^[24]59/.test(cur.iso)) cur.oog = true;
+      // M3.74 fix: 4자리 숫자 FR 코드 (4583/4584/2283/2284) = FR
+      if (/^[24]58[34]$/.test(cur.iso)) { cur.fr = true; cur.oog = true; }
 
       // status — BAPLIE EDIFACT: EQD+CN+컨번호+ISO+++status
       // 형식에 따라 parts[5] 또는 parts[6]에 위치
@@ -803,7 +807,8 @@ export async function parseListExcel(arrayBuffer) {
       // 1순위: 명시적 F/E 컬럼
       // 2순위: TYPE 컬럼 끝 글자 (예: "20DCF", "40HCE", "22GPE")
       // 3순위: SIZE 컬럼 끝 글자 (예: "20F", "40E")
-      // 4순위: 무게 기반 추정
+      // M3.74: 무게 기반 추정 완전 제거 (M3.73 정책과 일치)
+      //   원칙: 명시값만 신뢰. 명시값 없으면 빈 값 → 검수원 현장 확인
       let fe = '';
       if (fe_i >= 0) {
         const feRaw = String(row[fe_i] || '').trim().toUpperCase();
@@ -826,17 +831,8 @@ export async function parseListExcel(arrayBuffer) {
           fe = sRaw.slice(-1);
         }
       }
-      // M3.5.6: 무게 기반 추정 (VGM 파일처럼 F/E 컬럼 없는 경우)
-      // VGM은 적컨만 신고하므로 무게가 컨테이너 자체 무게(타이어웨이트)보다 크면 Full
-      if (!fe && wt_i >= 0) {
-        const wgt = parseFloat(String(row[wt_i] || '').replace(/,/g, ''));
-        if (!isNaN(wgt) && wgt > 0) {
-          // 20피트 빈 컨 약 2.3톤, 40피트 약 3.8톤, 45피트 약 4.8톤
-          // 무게가 5톤 초과면 Full로 판정 (안전 마진)
-          // 단, 너무 작은 무게(VGM 신고 안한 빈 컨일 수도)는 미정으로 둠
-          if (wgt > 5000) fe = 'F';
-        }
-      }
+      // M3.74: 무게 기반 추정 제거됨 (이전: wgt > 5000이면 fe='F'로 강제)
+      //   → VGM 같은 F/E 미명시 파일은 fe 빈 값으로 두고 EDI/검수원 확인
 
       // 타입
       let iso = '';

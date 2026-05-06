@@ -13,6 +13,7 @@ import {
 import { fbAddWorkReport } from '../firebase.js';
 import { ref, set, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase.js';
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
 // 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
 
@@ -33,6 +34,9 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [conBoxType, setConBoxType] = useState('20');
   const [conBoxCount, setConBoxCount] = useState(1);
   const [conBoxEquip, setConBoxEquip] = useState('');
+
+  // M3.74: confirm() → ConfirmModal
+  const [confirmState, askConfirm] = useConfirm();
 
   // Firebase에서 활성 작업 구독
   useEffect(() => {
@@ -158,28 +162,35 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   const handleDone = async (equipNo, modeArg) => {
     const modeLabel = modeArg === 'discharge' ? '양하' : '선적';
-    if (!confirm(`${equipNo} ${modeLabel} 완료 보고하시겠습니까?`)) return;
-    const time = Date.now();
     const aw = activeWork[equipNo]?.[modeArg];
     if (!aw) return;
-    const action = `${modeArg}_done`;
-    const message = buildWorkStatusMessage({
-      vsl, voy, action, time, equip: equipNo,
+    askConfirm({
+      title: '작업 완료 보고',
+      message: `${equipNo} ${modeLabel}\n완료 보고하시겠습니까?`,
+      confirmLabel: '완료 보고',
+      cancelLabel: '취소',
+      onConfirm: async () => {
+        const time = Date.now();
+        const action = `${modeArg}_done`;
+        const message = buildWorkStatusMessage({
+          vsl, voy, action, time, equip: equipNo,
+        });
+
+        // mode별로 활성 작업 종료
+        await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), null);
+
+        await fbAddWorkReport(voyageKey, {
+          type: 'work_status',
+          action,
+          mode: modeArg,
+          equip: equipNo,
+          message,
+        });
+
+        await shareText(message, '검수 보고');
+        onClose();
+      },
     });
-
-    // mode별로 활성 작업 종료
-    await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), null);
-
-    await fbAddWorkReport(voyageKey, {
-      type: 'work_status',
-      action,
-      mode: modeArg,
-      equip: equipNo,
-      message,
-    });
-
-    await shareText(message, '검수 보고');
-    onClose();
   };
 
   const handleHatch = async () => {

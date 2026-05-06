@@ -4,6 +4,7 @@ import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon } from 'lucide
 import { isoToLabel, fmtPos } from '../utils.js';
 import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
 import { speakDone } from '../voice.js';
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
 export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber' }) {
   const isDone = !!c._comp;
@@ -15,6 +16,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   // 온도 자체가 Full의 증거 - F/E 데이터가 잘못되어 있어도 온도 표시
   const showTmp = isReefer && hasTmp;
 
+  // M3.74: confirm() → ConfirmModal
+  const [confirmState, askConfirm] = useConfirm();
+
   const labelMap = {
     amber: 'bg-amber-700 text-amber-50',
     cyan: 'bg-cyan-700 text-cyan-50',
@@ -24,8 +28,15 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
     e.stopPropagation();
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (isDone) {
-      if (!confirm(`${c.cn} 완료 취소하시겠습니까?`)) return;
-      await fbCancelComplete(voyageKey, c._mode, c.cn);
+      askConfirm({
+        title: '완료 취소',
+        message: `${c.cn}\n검수 완료를 취소하시겠습니까?`,
+        confirmLabel: '취소',
+        cancelLabel: '닫기',
+        onConfirm: async () => {
+          await fbCancelComplete(voyageKey, c._mode, c.cn);
+        },
+      });
     } else {
       await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector);
       speakDone(c);
@@ -139,6 +150,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         }`}>
         {isDone ? <><RotateCcw className="w-5 h-5"/>완료 취소</> : <><Check className="w-5 h-5"/>검수 완료</>}
       </button>
+
+      {/* M3.74: confirm() → ConfirmModal */}
+      <ConfirmModal {...confirmState} />
     </div>
   );
 }

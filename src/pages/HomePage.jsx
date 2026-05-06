@@ -156,9 +156,10 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   const showSplit = hasD && hasL;
 
   if (confirming) {
+    // M3.74: 색깔 표준 통일 - 양하=blue, 선적=amber (VoyagePage와 일치)
     const labels = {
-      discharge: { title: '양하 데이터 삭제', desc: '선적 데이터는 유지됩니다.', color: 'amber' },
-      loading: { title: '선적 데이터 삭제', desc: '양하 데이터는 유지됩니다.', color: 'blue' },
+      discharge: { title: '양하 데이터 삭제', desc: '선적 데이터는 유지됩니다.', color: 'blue' },
+      loading: { title: '선적 데이터 삭제', desc: '양하 데이터는 유지됩니다.', color: 'amber' },
       all: { title: '항차 전체 삭제', desc: '양하/선적/검수 데이터 모두 삭제됩니다. 복구 불가.', color: 'red' },
     };
     const L = labels[confirming];
@@ -175,11 +176,13 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
           </div>
           <div className="grid grid-cols-2 gap-2 p-3 border-t border-slate-700 bg-slate-950">
             <button onClick={() => setConfirming(null)}
-              className="py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold rounded">
+              className="py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold rounded"
+              style={{ minHeight: 48 }}>
               ← 뒤로
             </button>
             <button onClick={() => onConfirm(confirming)}
-              className="py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded">
+              className="py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded"
+              style={{ minHeight: 48 }}>
               삭제
             </button>
           </div>
@@ -198,15 +201,19 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
         <div className="p-3 space-y-2">
           {showSplit && (
             <>
+              {/* M3.74: 색깔 통일 - 양하=blue (VoyagePage 모드 탭과 일치) */}
               <button onClick={() => setConfirming('discharge')}
-                className="w-full py-4 bg-amber-900/30 hover:bg-amber-900/50 border-2 border-amber-700/40 rounded-lg text-left px-4">
-                <div className="text-base font-bold text-amber-300">⬇️ 양하만 삭제</div>
-                <div className="text-xs text-amber-400/70 mt-0.5">선적은 유지됩니다</div>
+                className="w-full py-4 bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-700/40 rounded-lg text-left px-4"
+                style={{ minHeight: 56 }}>
+                <div className="text-base font-bold text-blue-300">⬇️ 양하만 삭제</div>
+                <div className="text-xs text-blue-400/70 mt-0.5">선적은 유지됩니다</div>
               </button>
+              {/* M3.74: 색깔 통일 - 선적=amber */}
               <button onClick={() => setConfirming('loading')}
-                className="w-full py-4 bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-700/40 rounded-lg text-left px-4">
-                <div className="text-base font-bold text-blue-300">⬆️ 선적만 삭제</div>
-                <div className="text-xs text-blue-400/70 mt-0.5">양하는 유지됩니다</div>
+                className="w-full py-4 bg-amber-900/30 hover:bg-amber-900/50 border-2 border-amber-700/40 rounded-lg text-left px-4"
+                style={{ minHeight: 56 }}>
+                <div className="text-base font-bold text-amber-300">⬆️ 선적만 삭제</div>
+                <div className="text-xs text-amber-400/70 mt-0.5">양하는 유지됩니다</div>
               </button>
             </>
           )}

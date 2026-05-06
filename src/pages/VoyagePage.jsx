@@ -26,6 +26,7 @@ import WorkReportModal from '../components/WorkReportModal.jsx';
 import { getEquipNumber } from '../utils.js';
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
+import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import EmptySealReportButton from '../components/EmptySealReport.jsx';
 import { runDiagnostics } from '../diagnostics.js';
@@ -501,6 +502,8 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
   const [status, setStatus] = useState('');
   // M3.5.4-fix2: 업로드 충돌 검토 모달
   const [conflictData, setConflictData] = useState(null);
+  // M3.74: prompt() 대체 - 카드형 3택 모달
+  const [choiceState, askChoice] = useChoice();
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
@@ -572,18 +575,35 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
       const newCount = Object.keys(allCns).length;
 
       // M3.5.4-fix2: 기존 EDI 데이터 있으면 사용자에게 처리 방식 묻기
+      // M3.74: window.prompt() → ChoiceModal (풀 너비 카드 버튼)
       if (existingCount > 0) {
         const overlap = Object.keys(allCns).filter(cn => existing[cn]).length;
         const onlyNew = newCount - overlap;
-        const choice = window.prompt(
-          `기존 EDI ${existingCount}대가 있습니다.\n` +
-          `새로 업로드: ${newCount}대 (중복 ${overlap}대, 신규 ${onlyNew}대)\n\n` +
-          `1 = 교체 (기존 모두 삭제 후 새 것만)  ★ 같은 EDI 다시 올릴 때\n` +
-          `2 = 추가 병합 (중복은 새 값으로 덮어쓰기)\n` +
-          `3 = 신규만 추가 (중복은 기존 유지)\n` +
-          `취소 = 빈칸\n\n` +
-          `숫자 입력:`
-        );
+        const choice = await askChoice({
+          title: '기존 EDI 데이터 처리',
+          description:
+            `기존 EDI: ${existingCount}대\n` +
+            `새로 업로드: ${newCount}대 (중복 ${overlap}대, 신규 ${onlyNew}대)\n\n` +
+            `어떻게 할까요?`,
+          options: [
+            {
+              key: '1',
+              label: '🔄 교체',
+              desc: '기존 모두 삭제 후 새 것만',
+              recommended: true,  // 같은 EDI 다시 올릴 때가 가장 흔함
+            },
+            {
+              key: '2',
+              label: '📥 추가 병합',
+              desc: '중복은 새 값으로 덮어쓰기',
+            },
+            {
+              key: '3',
+              label: '➕ 신규만 추가',
+              desc: '중복은 기존 유지',
+            },
+          ],
+        });
         if (!choice) {
           setStatus('취소됨');
           if (ediRef.current) ediRef.current.value = '';
@@ -604,10 +624,6 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           });
           await fbSaveEdiContainers(voyageKey, mode, { ...existing, ...onlyNewObj });
           results.push(`➕ 신규만 추가: ${Object.keys(onlyNewObj).length}대 (기존 ${existingCount}대 유지)`);
-        } else {
-          setStatus('잘못된 입력 (1, 2, 3 중 선택)');
-          if (ediRef.current) ediRef.current.value = '';
-          return;
         }
       } else {
         // 기존 데이터 없으면 그냥 저장
@@ -656,18 +672,34 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
     if (!files || files.length === 0) return;
 
     // M3.5.4-fix2: 기존 리스트 데이터 있으면 사용자에게 묻기
+    // M3.74: window.prompt() → ChoiceModal
     const existing = sec.records || {};
     const existingCount = Object.keys(existing).length;
     let startMap = { ...existing };
+    let skipExisting = false;
     if (existingCount > 0) {
-      const choice = window.prompt(
-        `기존 리스트 ${existingCount}대가 있습니다.\n\n` +
-        `1 = 교체 (기존 모두 삭제 후 새 것만)  ★ 같은 리스트 다시 올릴 때\n` +
-        `2 = 추가 병합 (중복은 새 값으로 덮어쓰기)\n` +
-        `3 = 신규만 추가 (중복은 기존 유지)\n` +
-        `취소 = 빈칸\n\n` +
-        `숫자 입력:`
-      );
+      const choice = await askChoice({
+        title: '기존 리스트 데이터 처리',
+        description: `기존 리스트: ${existingCount}대\n\n어떻게 할까요?`,
+        options: [
+          {
+            key: '1',
+            label: '🔄 교체',
+            desc: '기존 모두 삭제 후 새 것만',
+            recommended: true,
+          },
+          {
+            key: '2',
+            label: '📥 추가 병합',
+            desc: '중복은 새 값으로 덮어쓰기',
+          },
+          {
+            key: '3',
+            label: '➕ 신규만 추가',
+            desc: '중복은 기존 유지',
+          },
+        ],
+      });
       if (!choice) {
         setStatus('취소됨');
         if (listRef.current) listRef.current.value = '';
@@ -675,15 +707,9 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
       }
       if (choice === '1') {
         startMap = {};  // 교체: 기존 비우고 시작
-      } else if (choice === '2' || choice === '3') {
-        // 시작 맵은 그대로, 처리 모드만 기억
-      } else {
-        setStatus('잘못된 입력 (1, 2, 3 중 선택)');
-        if (listRef.current) listRef.current.value = '';
-        return;
       }
       // 신규만 모드는 cn별 처리 시 기존 값 보존
-      var skipExisting = choice === '3';
+      skipExisting = choice === '3';
     }
 
     setStatus(`${files.length}개 파일 처리 중...`);
@@ -972,6 +998,9 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         }}
         onResolve={applyConflictResolution}
       />
+
+      {/* M3.74: prompt() 대체 - EDI/리스트 업로드 충돌 처리 */}
+      <ChoiceModal {...choiceState} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, Lan
 import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
 import ContainerPhrasebook from './ContainerPhrasebook.jsx';
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
 
@@ -13,6 +14,22 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const [phraseOpen, setPhraseOpen] = useState(false);  // M3.5.6: 영어 회화집
   const [equipOpen, setEquipOpen] = useState(false);
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
+  // M3.74: confirm() → ConfirmModal
+  const [confirmState, askConfirm] = useConfirm();
+
+  const handleLogoutOrExit = () => {
+    if (onLogout) {
+      onLogout();
+    } else {
+      askConfirm({
+        title: '검수앱 종료',
+        message: '검수앱을 종료하시겠습니까?\n\n(완전 종료는 폰 홈 버튼이나 앱 스위처에서 닫아주세요)',
+        confirmLabel: '종료',
+        cancelLabel: '취소',
+        onConfirm: () => exitApp(),
+      });
+    }
+  };
 
   const handleSelectEquip = (num) => {
     setEquipNumber(num);
@@ -88,7 +105,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <RefreshCw className="w-3 h-3 text-amber-400"/>
           </button>
           <button
-            onClick={onLogout || exitApp}
+            onClick={handleLogoutOrExit}
             title={onLogout ? '로그아웃 (인사 후 종료)' : '앱 종료'}
             className="p-1.5 rounded bg-purple-900/40 hover:bg-purple-900/70 active:bg-purple-900/90 border border-purple-600/50"
           >
@@ -128,6 +145,9 @@ export default function Header({ version, inspector, online, route, voyages, onC
           </div>
         </div>
       )}
+
+      {/* M3.74: confirm() → ConfirmModal */}
+      <ConfirmModal {...confirmState} />
     </header>
   );
 }

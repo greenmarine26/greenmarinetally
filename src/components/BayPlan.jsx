@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay } from '../utils.js';
+import SlotPickerModal from './SlotPickerModal.jsx';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
   const [pageIdx, setPageIdx] = useState(0);
@@ -23,6 +24,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.3;
     return 1.0;
   });
+  // M3.74: 다중 적재 슬롯 선택 모달
+  const [slotPicker, setSlotPicker] = useState(null);  // { slot: {bay,row,tier}, containers: [...] }
   const scrollRef = useRef(null);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -353,7 +356,14 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   dischargeCns={dischargeCns}
                   shiftingMap={shiftingMap}
                   isPtk={isPtk}
-                  onCellClick={onOpenContainer}
+                  onCellClick={(c, multi) => {
+                    // M3.74: 다중 적재면 SlotPickerModal, 단일이면 기존 동작
+                    if (multi?.multi && multi.containers?.length >= 2) {
+                      setSlotPicker({ slot: multi.slot, containers: multi.containers });
+                    } else {
+                      onOpenContainer?.(c);
+                    }
+                  }}
                   cellW={cellW}
                   cellH={cellH}
                   fontSize={fontSize}
@@ -375,7 +385,13 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             dischargeCns={dischargeCns}
             shiftingMap={shiftingMap}
             isPtk={isPtk}
-            onCellClick={onOpenContainer}
+            onCellClick={(c, multi) => {
+              if (multi?.multi && multi.containers?.length >= 2) {
+                setSlotPicker({ slot: multi.slot, containers: multi.containers });
+              } else {
+                onOpenContainer?.(c);
+              }
+            }}
             cellW={cellW}
             cellH={cellH}
             fontSize={fontSize}
@@ -386,6 +402,18 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           />
         )}
       </div>
+
+      {/* M3.74: 다중 적재 슬롯 컨테이너 선택 모달 */}
+      <SlotPickerModal
+        open={!!slotPicker}
+        slot={slotPicker?.slot}
+        containers={slotPicker?.containers}
+        onPick={(c) => {
+          setSlotPicker(null);
+          onOpenContainer?.(c);
+        }}
+        onClose={() => setSlotPicker(null)}
+      />
     </div>
   );
 }
@@ -453,9 +481,22 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
   const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
 
+  // M3.74: 다중 적재 지원 - 같은 슬롯 컨테이너 모두 반환
+  // 우선순위: 평택 화물 > 다른 화물 (평택이 첫 번째로 표시)
+  const getCellAll = (row, tier) => {
+    if (!row || !tier) return [];
+    const matches = allContainers.filter(c => c.row === row && c.tier === tier);
+    if (matches.length <= 1) return matches;
+    // 평택 화물 우선 정렬
+    return [...matches].sort((a, b) => {
+      const aPtk = isPtk(a) ? 0 : 1;
+      const bPtk = isPtk(b) ? 0 : 1;
+      return aPtk - bPtk;
+    });
+  };
   const getCell = (row, tier) => {
-    if (!row || !tier) return null;
-    return allContainers.find(c => c.row === row && c.tier === tier);
+    const all = getCellAll(row, tier);
+    return all.length > 0 ? all[0] : null;
   };
   const isXmark = (row, tier) => {
     if (!row || !tier) return false;
@@ -469,7 +510,10 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       return <div key={key} className="border border-dashed border-slate-800 flex-shrink-0 bg-slate-950"
         style={{ width: cellW, height: cellH }}/>;
     }
-    const c = getCell(row, tier);
+    // M3.74: 다중 적재 검출
+    const cellList = getCellAll(row, tier);
+    const c = cellList[0] || null;
+    const stackCount = cellList.length;  // 1이면 단일, 2+면 다중
     if (!c && isXmark(row, tier)) {
       return (
         <div key={key} className="border border-slate-700 bg-slate-800 flex-shrink-0 flex items-center justify-center"
@@ -521,10 +565,19 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       specialColor = 'text-purple-200 font-bold';
     }
 
+    // M3.74: 클릭 핸들러 - 다중이면 SlotPickerModal, 단일이면 기존 동작
+    const handleCellClick = () => {
+      if (stackCount >= 2) {
+        onCellClick?.(c, { multi: true, slot: { bay: c.bay, row, tier }, containers: cellList });
+      } else {
+        onCellClick?.(c);
+      }
+    };
+
     return (
       <button
         key={key}
-        onClick={() => onCellClick?.(c)}
+        onClick={handleCellClick}
         className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
           isReefer ? 'ring-2 ring-cyan-400 ring-inset' : ''
         }`}
@@ -534,6 +587,13 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
           <div className="absolute top-0 left-0 bg-amber-400 text-slate-900 px-0.5 font-black leading-none rounded-br z-10"
             style={{ fontSize: fontSize - 1 }}>
             ⬆{needsShift}
+          </div>
+        )}
+        {/* M3.74: 다중 적재 ⊕N 배지 (우상단, 리퍼 ❄ 옆) */}
+        {stackCount >= 2 && (
+          <div className="absolute top-0 right-0 z-20 bg-amber-500 text-slate-900 font-black leading-none rounded-bl px-0.5"
+            style={{ fontSize: fontSize, marginRight: isReefer ? fontSize + 4 : 0 }}>
+            ⊕{stackCount - 1}
           </div>
         )}
         {isReefer && (

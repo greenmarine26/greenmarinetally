@@ -26,23 +26,21 @@ export function useBackHandler(onBack, enabled = true) {
 }
 
 // 앱 종료 (PWA에서는 window.close가 작동하지 않음 — 사용자에게 안내)
+// M3.74: confirm() 제거 - 호출자에서 ConfirmModal로 미리 확인 후 호출
 export function exitApp() {
-  // PWA는 강제 종료 안 됨. 사용자에게 안내
-  if (confirm('검수앱을 종료하시겠습니까?\n\n(완전 종료는 폰 홈 버튼이나 앱 스위처에서 닫아주세요)')) {
-    try {
-      window.close();
-    } catch (e) {}
-    // window.close가 안 되면 빈 페이지로 이동
-    setTimeout(() => {
-      document.body.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#94a3b8;font-family:sans-serif;text-align:center;padding:20px;">
-          <div>
-            <div style="font-size:48px;margin-bottom:16px;">👋</div>
-            <div style="font-size:18px;font-weight:bold;margin-bottom:8px;">검수앱 종료됨</div>
-            <div style="font-size:14px;opacity:0.7;">탭을 닫거나 다시 들어오려면 새로고침</div>
-          </div>
+  try {
+    window.close();
+  } catch (e) {}
+  // window.close가 안 되면 빈 페이지로 이동
+  setTimeout(() => {
+    document.body.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0f172a;color:#94a3b8;font-family:sans-serif;text-align:center;padding:20px;">
+        <div>
+          <div style="font-size:48px;margin-bottom:16px;">👋</div>
+          <div style="font-size:18px;font-weight:bold;margin-bottom:8px;">검수앱 종료됨</div>
+          <div style="font-size:14px;opacity:0.7;">탭을 닫거나 다시 들어오려면 새로고침</div>
         </div>
-      `;
-    }, 200);
-  }
+      </div>
+    `;
+  }, 200);
 }

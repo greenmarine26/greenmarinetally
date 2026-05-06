@@ -3,6 +3,7 @@ import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, 
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
+import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 
 export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGoHome }) {
   const [shipLib, setShipLib] = useState({});
@@ -10,6 +11,8 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
   const [showResolved, setShowResolved] = useState(false);
   const [extraPolicies, setExtraPolicies] = useState({});
   const [allReports, setAllReports] = useState([]);  // M3.5.6: 작업 보고 이력
+  // M3.74: confirm() → ConfirmModal
+  const [confirmState, askConfirm] = useConfirm();
   useEffect(() => {
     const u1 = fbSubscribeShipLibrary(setShipLib);
     const u2 = fbSubscribeFeedback(setFeedback);
@@ -286,14 +289,21 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
             <div className="text-sm font-bold text-emerald-100">최근 작업 보고</div>
             <span className="text-[10px] text-slate-500">최근 30건</span>
             <div className="flex-1"/>
-            <button onClick={async () => {
-              if (!confirm('⚠️ 모든 항차의 작업 보고/사진을 삭제합니다.\n테스트 데이터 정리용입니다.\n계속하시겠습니까?')) return;
-              if (!confirm('정말로 모두 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
-              try {
-                await fbClearAllReportsAllVoyages();
-                await fbClearAllActiveWork();
-                alert('✅ 모든 작업 보고가 삭제되었습니다');
-              } catch (e) { alert('삭제 실패: ' + e.message); }
+            <button onClick={() => {
+              askConfirm({
+                title: '⚠️ 모든 작업 보고 삭제',
+                message: '모든 항차의 작업 보고와 사진을 삭제합니다.\n테스트 데이터 정리용입니다.\n\n되돌릴 수 없습니다. 계속하시겠습니까?',
+                confirmLabel: '모두 삭제',
+                cancelLabel: '취소',
+                danger: true,
+                onConfirm: async () => {
+                  try {
+                    await fbClearAllReportsAllVoyages();
+                    await fbClearAllActiveWork();
+                    alert('✅ 모든 작업 보고가 삭제되었습니다');
+                  } catch (e) { alert('삭제 실패: ' + e.message); }
+                },
+              });
             }}
               className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-[10px] font-bold flex items-center gap-1">
               <Trash2 className="w-3 h-3"/> 전체 삭제 (테스트용)
@@ -313,11 +323,19 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-slate-500 mono">{time}</span>
-                      <button onClick={async () => {
-                        if (!confirm('이 보고를 삭제하시겠습니까?')) return;
-                        try {
-                          await fbDeleteWorkReport(r.voyageKey, r.ts);
-                        } catch (e) { alert('삭제 실패: ' + e.message); }
+                      <button onClick={() => {
+                        askConfirm({
+                          title: '보고 삭제',
+                          message: `${r.vsl} ${r.voy}\n${r.equip || ''} 보고를 삭제하시겠습니까?`,
+                          confirmLabel: '삭제',
+                          cancelLabel: '취소',
+                          danger: true,
+                          onConfirm: async () => {
+                            try {
+                              await fbDeleteWorkReport(r.voyageKey, r.ts);
+                            } catch (e) { alert('삭제 실패: ' + e.message); }
+                          },
+                        });
                       }}
                         className="p-0.5 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded opacity-50 group-hover:opacity-100"
                         title="이 보고 삭제">
@@ -387,6 +405,8 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
+      {/* M3.74: confirm() → ConfirmModal */}
+      <ConfirmModal {...confirmState} />
     </div>
   );
 }
@@ -493,6 +513,8 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
 // 오답 리포트 한 줄
 function FeedbackRow({ feedback: f }) {
   const [expanded, setExpanded] = useState(false);
+  // M3.74: confirm() → ConfirmModal
+  const [confirmState, askConfirm] = useConfirm();
   const date = new Date(f.ts);
   const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   const typeColor = f.answerType === 'ai' ? 'text-purple-300' : 'text-emerald-300';
@@ -515,13 +537,21 @@ function FeedbackRow({ feedback: f }) {
             className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-700/40">
             {f.resolved ? '↩' : '✓'}
           </button>
-          <button onClick={() => { if (confirm('삭제?')) fbDeleteFeedback(f.ts); }}
+          <button onClick={() => askConfirm({
+            title: '오답 리포트 삭제',
+            message: `Q: ${(f.query || '').slice(0, 50)}\n\n이 오답 리포트를 삭제하시겠습니까?`,
+            confirmLabel: '삭제',
+            cancelLabel: '취소',
+            danger: true,
+            onConfirm: async () => { await fbDeleteFeedback(f.ts); },
+          })}
             title="삭제"
             className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-700/40">
             <Trash2 className="w-2.5 h-2.5"/>
           </button>
         </div>
       </div>
+      <ConfirmModal {...confirmState} />
       <div className="text-xs text-amber-200 mono break-all mb-1">Q: {f.query}</div>
       {f.userNote && (
         <div className="text-xs text-slate-300 bg-slate-900/60 rounded px-2 py-1 mb-1 leading-relaxed">

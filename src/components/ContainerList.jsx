@@ -9,6 +9,7 @@ import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
 import { isoToLabel, formatWt, fmtPos } from '../utils.js';
 import { speakDone } from '../voice.js';
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
 // 필터 정의 (V37 cargoFilter 그대로 + 다크 매핑)
 const FILTERS = [
@@ -292,6 +293,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
+  // M3.74: confirm() → ConfirmModal
+  const [confirmState, askConfirm] = useConfirm();
 
   const isDone = !!comp;
   const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
@@ -318,8 +321,15 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
     e.stopPropagation();
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (isDone) {
-      if (!confirm(`${c.cn} 검수 완료를 취소하시겠습니까?`)) return;
-      await fbCancelComplete(voyageKey, mode, c.cn);
+      askConfirm({
+        title: '완료 취소',
+        message: `${c.cn}\n검수 완료를 취소하시겠습니까?`,
+        confirmLabel: '취소',
+        cancelLabel: '닫기',
+        onConfirm: async () => {
+          await fbCancelComplete(voyageKey, mode, c.cn);
+        },
+      });
     } else {
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
       speakDone(c);
@@ -489,6 +499,9 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
           )}
         </div>
       </div>
+
+      {/* M3.74: confirm() → ConfirmModal */}
+      <ConfirmModal {...confirmState} />
     </div>
   );
 }

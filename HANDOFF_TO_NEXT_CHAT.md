@@ -1,6 +1,6 @@
-# 새 채팅 인계 지침 (M3.70 시점, 2026.05.06 KST)
+# 새 채팅 인계 지침 (M3.74 시점, 2026.05.06 KST)
 
-> 새 채팅에서 Claude가 이 문서 먼저 읽고 즉시 이어가도록.
+> 새 채팅에서 Claude가 이 문서를 먼저 읽고 즉시 이어가도록 만든 인계 문서.
 
 ---
 
@@ -14,48 +14,103 @@
 | GitHub | greenmarine26/greenmarinetally |
 | 사이트 | https://greenmarine26.github.io/greenmarinetally/ |
 | Firebase | greenmarinetally (asia-southeast1, Spark 무료) |
-| Firebase URL | https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app |
-| Gemini API | AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY (2.5 Pro, 무료) |
-| Open-Meteo | 인증키 X (평택항 36.98°N, 126.82°E) |
+| Gemini API | gemini-2.5-pro (무료 한도) |
 | 운영 규모 | 4척 동시, 척당 ~1000대, 검수원 최대 15명 |
 
 ---
 
 ## 현재 버전 / 정책
 
-**현재: M3.70** (2026.05.06 KST 작성)
-- 사용자 측 저장: M3.66 부터 정식 카운트
-- 매 수정 +0.01 → 다음 수정 시 **M3.71**부터
+**현재: M3.74** (2026.05.06 KST)
+- 매 수정 +0.01 → 다음 수정 시 **M3.75**부터
 - ZIP 파일명에 정확한 버전 표기 필수
+- ZIP 한 번 받으면 이전 버전 따로 적용할 필요 X (누적)
 
 ---
 
-## 절대 원칙
+## 🆕 M3.74 변경 사항 (이번 빌드)
+
+### 🔴 데이터 정확도 수정
+1. **EDI 파싱 FR 분류 fix** (`utils.js`)
+   - 이전: `cur.iso[2] === 'P'` → `cur.oog = true`만 (fr=false 유지)
+   - 변경: `cur.fr = true; cur.oog = true;` 둘 다 set
+   - 컨테이너 객체 초기화에 `fr: false` 필드 추가
+   - 4자리 숫자 코드 4583/4584/2283/2284 = FR 처리 추가
+   - **영향**: 베이플랜에서 FR이 "OOG" 대신 "FR"로 정확히 표시, 상세모달/카드에 FR 배지 정상 표시
+
+2. **무게 추정 완전 제거** (`utils.js` parseListExcel)
+   - 이전: 라인 829-839, fe 명시값 없으면 wgt > 5000kg → fe='F' 강제
+   - 변경: 무게 기반 추정 코드 통째 삭제 (M3.73 정책과 일치)
+   - **영향**: VGM 같은 F/E 미명시 파일에서 빈컨도 강제 Full로 잘못 판정되던 케이스 제거
+
+### 🟡 UX 모달화 (UI 원칙: prompt/confirm 금지)
+3. **신규 컴포넌트** `src/components/`
+   - `ChoiceModal.jsx` + `useChoice` 훅 — prompt() 대체 (3택 카드)
+   - `ConfirmModal.jsx` + `useConfirm` 훅 — confirm() 대체 (예/아니오 풀너비)
+
+4. **prompt() 2건 → ChoiceModal** (`VoyagePage.jsx`)
+   - EDI 업로드 충돌 처리 (1=교체 2=병합 3=신규)
+   - 리스트 업로드 충돌 처리 (1=교체 2=병합 3=신규)
+
+5. **confirm() 11건 → ConfirmModal**
+   - `BigResultCard.jsx`: 완료 취소
+   - `ContainerDetailModal.jsx`: 완료 취소, 규격(ISO) 변경
+   - `ContainerList.jsx`: 완료 취소
+   - `WorkReportModal.jsx`: 작업 완료 보고
+   - `ChiefDashboard.jsx`: 전체 보고 삭제 (2단계 → 1단계로 간소화), 단일 보고 삭제, FeedbackRow 삭제
+   - `Header.jsx`: 앱 종료
+   - `backHandler.js`: exitApp confirm 제거 (호출자에서 사전 확인)
+
+### 🟡 색깔 일관성
+6. **HomePage 삭제 모달 색깔 통일** (`HomePage.jsx`)
+   - 이전: 양하=amber, 선적=blue (앱 표준과 반대)
+   - 변경: 양하=blue, 선적=amber (VoyagePage 모드 탭과 일치)
+   - **영향**: 4척 동시 작업 시 색깔 혼동으로 양하/선적 잘못 삭제 위험 제거
+
+### 🔵 베이플랜 다중 적재
+7. **신규 컴포넌트** `SlotPickerModal.jsx`
+   - 같은 슬롯에 컨테이너 2개 이상 (FR 4개 다중 적재) 선택 모달
+
+8. **베이플랜 셀 ⊕N 표시** (`BayPlan.jsx`)
+   - `getCell` → `getCellAll` (배열 반환)으로 변경, 평택 화물 우선 정렬
+   - 셀 우상단에 `⊕N` 배지 (N = 추가 컨 수)
+   - 다중 셀 클릭 시 SlotPickerModal로 컨테이너 선택 → 기존 ContainerDetailModal로 진입
+   - 단일 적재 동작은 변경 없음 (배지 안 뜸)
+
+### 빌드 결과
+- ✅ npm install 성공
+- ✅ vite build 성공 (1631 modules, 8.25초)
+- ✅ EDI 테스트 데이터로 FR 분류/ISO 동기화/status 변환 모두 정상 동작 확인
+
+---
+
+## 절대 원칙 (반드시 지킬 것)
 
 ### 작업 원칙
 1. **EDI 우선**, ASC는 검증용
 2. **추론 금지** — 실제 데이터 검증 후 답변
 3. "만들지 마세요" 명령 시 **즉시 중단**
-4. records 수정 시 ediContainers도 함께
-5. **위법성 우려 시 즉시 보류**
-6. **개인 명의 인증키 회피** (회사 인계 안전)
-7. 매 수정마다 **버전 +0.01**, ZIP에 정확히 표기
-8. **시간 표기 KST 통일** (UTC 사용 금지)
-9. ZIP 배포 시 항상 HANDOFF_TO_NEXT_CHAT.md 함께
-10. **검수원이 본 실물이 정답** — 앱은 보조 도구
-11. 데이터 우선순위: 검수원 실물 > EDI/ASC/리스트 명시값 > 무게 추정
+4. **위법성 우려 시 즉시 보류**
+5. **개인 명의 인증키 회피** (회사 인계 안전)
+6. 매 수정마다 **버전 +0.01**, ZIP에 정확히 표기
+7. **시간 표기 KST 통일** (UTC 사용 금지)
+8. ZIP 배포 시 항상 HANDOFF_TO_NEXT_CHAT.md 함께
+9. **검수원이 본 실물이 정답** — 앱은 보조 도구
+10. **데이터 우선순위: 검수원 실물 > EDI/ASC/리스트 명시값 > (무게 추정 X)**
+11. **수정 후 사용자에게 ZIP 주기 전에 제가 먼저 검증** (사용자 테스트 반복 X)
 
 ### UI 원칙 (현장 폰 환경)
+- **prompt() / confirm() 금지** (모달 사용) — M3.74에서 잔존 11건 모두 제거
 - 풀 화면 모달 + 풀 너비 큰 버튼 (44px+)
-- prompt() / confirm() 금지 (모달 사용)
 - capture="environment" (후면 카메라)
 - 카드형 세로 스크롤
 - 음성: pitch 1.4, rate 1.1 (밝고 청아하게), 한국어 여성 음성 우선
 - 인사에서 이름/검수원님 모두 제거 ("안녕하세요!" "수고하셨어요!")
+- **모드 색깔 표준: 양하 = blue, 선적 = amber** (M3.74 통일)
 
 ---
 
-## 핵심 도메인 지식 (사용자가 알려준 것 — 절대 잊지 말 것)
+## 핵심 도메인 지식
 
 ### ISO 6346 길이 코드 (절대 원칙)
 ```
@@ -65,227 +120,266 @@
 ```
 
 ### 함정 표기
-- **45G0 = 40피트 Hi-Cube** (45피트 아님!)
-- **45R0 = 40피트 Hi-Cube Reefer**
-- **4500/4510/4530 = 40피트 Hi-Cube**
-- **L5G0/L0G1 = 45피트 GP/HC**
+- 45G0 = 40피트 Hi-Cube (45피트 아님!)
+- 45R0 = 40피트 Hi-Cube Reefer
+- L5G0/L0G1 = 45피트 GP/HC
 
-### 4510 의미 (사용자 설명)
-- 4 = 40피트
-- 5 = Hi-Cube
-- 1 = 변형 (통풍구 유무)
-- 0 = 추가 변형
-
-### 45피트 현실
-- **드라이(GP/HC)만 존재**
-- 45피트 리퍼/FR/OT/TK **실존 X**
-- 45RF/L5R 같은 표기는 모두 40RF로 자동 변환
+### FR (Flat Rack) 표기 (M3.74 정립)
+- **3번째 글자 P/F = FR** (예: 22P1, 42P1, 45P1)
+- **4자리 숫자 4583/4584/2283/2284 = FR**
+- 46P3 = 45피트 FR / 42PC = 40피트 FR
+- M3.74부터 EDI 파싱 시 `cur.fr = true` 명시 + `cur.oog = true` 호환성 유지
 
 ### 0°C는 실제 온도
-- 신선 채소(양배추 등), 일부 의약품 운반
-- "0", "0.0", "+0" 모두 **실제 0°C**로 인식
+- 신선 채소, 의약품 등 "0", "0.0", "+0" 모두 실제 0°C
 - 진짜 미입력은 빈 값 / "-" 만
 
-### 무게 vs 풀/엠티
-- **1톤 차이는 정상 범위** (서류 vs 실측)
-- 무게 차이 경고 임계값: **5톤 이상**
-- 무게는 **fe 빈 값일 때만** 추정 (명시값 절대 덮지 않음)
+### F/E 판정 (M3.73~M3.74 정립)
+- **무게 추정 절대 사용 X** (M3.74에서 parseListExcel 잔존분 마저 제거)
+- EDI status 코드 / 리스트 명시값만이 진실
+- 명시값 없으면 빈 값 (검수원 현장 확인)
 
-### EDI Status 코드
-- F = Full
-- E = Empty
-- 5 = Full
-- 4 = Empty
-- 미명시 → **빈 값** (기본 'F' 사용 금지)
+### EDI BAPLIE Status 코드
+```
+EQD+CN+컨번호+ISO+++STATUS
+M3.71: 가장 마지막 비어있지 않은 요소를 status로 사용
+F/5 = Full,  E/4 = Empty
+```
 
-### 표기 차이 사례 (STSE 2633E 514대 검증)
-```
-EDI 형식    ASC 형식   통일 결과   수량
-20G0       20GP       20DC        249대
-45G0       40HC       40HC        228대
-45R0       40HR       40RF         36대
-45G0       45GP       40HC vs 45HC  1대 (선사 모순)
-```
+### ISO 끝자리 E = Empty 표시 (선사 관행)
+- 22RE/45RE = Empty 자동 인식 (M3.72)
+- fe와 ISO 끝자리 자동 동기화 (M3.73)
+
+### 다중 적재 (M3.74 신규 지원)
+- 같은 베이-row-tier에 컨테이너 2개 이상 가능 (FR 다중 적재)
+- 베이플랜 셀에 `⊕N` 배지로 추가 컨 수 표시
+- 클릭 시 SlotPickerModal로 컨테이너 선택
 
 ### 선박별 엠티 실 정책 (M3.5.5)
 - TNJP/RZOR: verify (모든 엠티 확인)
 - ATRP: attach (POD=CNWEH인 엠티만 실 부착)
-- 새 선박 자동 ShipPolicyModal 띄움
 
 ---
 
 ## 시스템 구조
 
-### 신규 파일 (M3.5.5+)
+### 신규 파일 (M3.74)
 ```
-src/kakaoShare.js              - 카톡 공유 + 사진 합성
-src/greeting.js                - 인사 + Open-Meteo 날씨/예보
-src/shipPolicies.js            - 선박별 엠티 실 정책
-src/diagnostics.js             - 자동 진단/경고
-src/components/WorkReportModal.jsx
-src/components/PhotoReportModal.jsx
-src/components/GreetingModal.jsx
-src/components/ContainerPhrasebook.jsx  - 영어 회화집 v2 (사용자 제공)
-src/components/ShipPolicyModal.jsx
-src/components/EmptySealReport.jsx
+src/components/ConfirmModal.jsx   - confirm() 대체 + useConfirm 훅
+src/components/ChoiceModal.jsx    - prompt() 대체 (3택 카드) + useChoice 훅
+src/components/SlotPickerModal.jsx - 다중 적재 슬롯 컨 선택 모달
 ```
 
 ### Firebase 데이터 구조
 ```
 voyages/{voyageKey}/
-  info: {vsl, voy_d, voy_l, voy}      // 항차 정보
-  ediContainers/{cn}                   // EDI 파싱 결과
-  records/{cn}                         // 검수원 입력
-  reports/{ts}                         // 작업 보고 (M3.5.6)
-  photos/{ts}                          // 사진 보고
+  info: {vsl, voy_d, voy_l, voy}
+  discharge/                          ← 양하 모드
+    ediContainers/{cn}                 - EDI 파싱 결과
+    records/{cn}                       - 검수원 입력
+    xrayList/{cn}                      - X-RAY 대상
+  loading/                            ← 선적 모드 (별도)
+  reports/{ts}                         - 작업 보고
+  photos/{ts}                          - 사진 보고
 
-activeWork/{voyageKey}/{equipNo}/
-  discharge: {status, startedAt, ...}
-  load: {status, startedAt, ...}
-
-shipLib/{imo}                          // 선박 라이브러리
-shipPolicies/{vsl}                     // 선박별 정책
-inspectors/{name}                      // 활동 검수원
+activeWork/{voyageKey}/{equipNo}/      - 장비별 활성 작업
+shipLib/{imo}                          - 선박 라이브러리
+shipPolicies/{vsl}                     - 선박별 정책
+inspectors/{name}                      - 활동 검수원
 ```
 
-### 항차 패턴
-- 패턴A: 1항차 = 1번호 (양하/선적 같이)
-- 패턴B: 양하/선적 분리 (예: 2608N/2608S)
-- info: voy_d / voy_l / voy 3필드
+**중요**: 양하/선적은 같은 항차 안에서 별도 노드. 새 항차 만들면 동시 작업 안 됨!
 
-### 데미지 표준 용어 (M3.5.6)
-**종류 16**: DENTED, BENT, BULGED, PUSHED IN, HOLE, TORN, CUT, SCRATCH, CRACKED, BROKEN, LOOSE, MISSING, RUST, DIRTY, WET, CONTAMINATED
-**부위 13**: ROOF, FLOOR, LEFT/RIGHT SIDE, FRONT/BACK END, DOOR HANDLE, DOOR LATCH, DOOR HINGE, DOOR GASKET, CORNER POST, LOCK ROD, SEAL
+### EDI vs records 병합
+```
+ALLOWED_LIST_FIELDS = ['sl', 'sl_orig', 'sl_history', 'wt', 'bl', 'sh', 'gi', 'op', 'tmp']
+- 리스트는 위 필드만 EDI에 보강 가능
+- fe, iso, rf, fr, ot, tk, dg 등 핵심 필드는 EDI만
+- tmp: EDI에 이미 있으면 리스트가 못 덮음 (EDI 우선)
+- wt: EDI 값이 0일 때만 리스트로 채움
+```
 
 ---
 
-## 완성된 기능 체크리스트 (M3.70)
+## 완성된 기능 체크리스트 (M3.74)
 
 ### 검수 본업
-- ✅ EDI(BAPLIE) 파싱
+- ✅ EDI(BAPLIE) 파싱 (status 코드 정확 추출 - M3.71)
 - ✅ 엑셀 리스트 매칭
 - ✅ ISO 6346 정확 변환 (4=40피트 절대 원칙)
+- ✅ ISO 끝자리 E ↔ fe 자동 동기화 (M3.73)
+- ✅ FR 정확 분류 (fr=true 명시) **(M3.74)**
+- ✅ 무게 추정 완전 제거 (M3.74로 잔존분 모두 제거)
 - ✅ 알 수 없는 ISO → 사진 보고 유도 + 빨간 배너
 - ✅ 0°C 리퍼 정상 인식
 - ✅ 트윈 짝꿍 자동 분석
-- ✅ 자동 진단/음성 경고 (리퍼/위험물/실/규격)
-- ✅ 무게 명시값 절대 안 덮음 (M3.69)
+- ✅ 자동 진단/음성 경고
+- ✅ 베이플랜 다중 적재 ⊕N 표시 **(M3.74)**
 
-### 작업 보고
+### UI/UX
+- ✅ 모든 prompt()/confirm() 모달화 **(M3.74)**
+- ✅ 양하/선적 색깔 통일 (양하=blue, 선적=amber) **(M3.74)**
+- ✅ 풀 너비 큰 버튼 (44px+) 정책 일관 적용
+
+### 작업 보고/인사/대시보드
 - ✅ 카톡 양하/선적 시작/중단/재개/완료
 - ✅ 한 장비 양하+선적 동시 진행
-- ✅ 해치커버 OPEN/CLOSE
-- ✅ 콘박스 (20자/40자, 1~3개)
-- ✅ 사진 + 정보 자막 합성 (Canvas)
-- ✅ 실오류/데미지 사진 보고
-- ✅ 메시지 맨 앞 [🏗 N호기] 표시
-
-### 인사 시스템 (M3.6)
-- ✅ 자동 로그인 제거
-- ✅ 시간대 6단계 (새벽/오전/점심/오후/저녁/야간)
 - ✅ Open-Meteo 평택항 실시간 날씨
-- ✅ 12시간 예보 + 근무 시간대 4슬롯 표시
-- ✅ 위험 기상 우선 (천둥/강풍/호우/눈)
-- ✅ 음성 (TTS, 한국어 여성, 밝고 청아)
-- ✅ 로그아웃 [🚪] 보라 버튼 강제
-
-### 영어 회화집 (사용자 제공 v2)
-- ✅ 13개 카테고리 (인사/양하/선적/출항/컨테이너/손상/위치/리퍼/특수화물/크레인/X-RAY/안전/마무리)
-- ✅ 'p' 단일 + 'q' 질문+답변 두 타입
-- ✅ TTS 음성 / 검색 / 즐겨찾기 / 속도 조절
-
-### 대시보드
+- ✅ 12시간 예보 + 근무 시간대 4슬롯
+- ✅ 음성 (TTS, 한국어 여성)
+- ✅ 영어 회화집 (13개 카테고리)
 - ✅ 장비별 통계 (1~4호기)
-- ✅ 최근 보고 30건 실시간
-- ✅ 개별/전체 삭제 (테스트용)
 
 ---
 
-## 다음 작업 후보 (M3.71+)
+## M3.6 → M3.74 핵심 수정 히스토리
+
+- M3.6: 0°C 인식, ISO 6346 정확화, 알 수 없는 ISO 유도
+- M3.66: 진단 중복 제거
+- M3.67: 리퍼 엠티 풀 잘못 분류 시도 1
+- M3.69: 무게 명시값 절대 안 덮음 시도 2
+- M3.70: 화면 ")}" 노출 버그 수정
+- M3.71: EDI status 위치 버그 수정 ⭐ 핵심
+- M3.72: ISO 끝 E도 Empty 인식
+- M3.73: 무게 추정 완전 제거 (EDI/ASC만) + ISO/fe 동기화
+- **M3.74: parseListExcel 무게 추정 잔존분 제거 + FR 분류 fix + UI 모달화 11건 + 색깔 통일 + 다중 적재 ⊕N** ⭐ 정밀화
+
+---
+
+## 다음 작업 후보 (M3.75+)
 
 ### 최우선
-1. **현장 야간 투입 결과** (사용자 모레 보고 예정)
-2. 검수원 도메인 추가 발견사항 반영
+1. **현장 야간 투입 결과** (M3.74 적용 후 결과 받기)
 
 ### 통계/관리
-3. 검수원/장비별 작업량 통계
-4. 시간대별/일/주/월 통계
-5. Firebase 자동 백업/아카이브 (1GB 대비)
+2. 검수원/장비별 작업량 통계
+3. 시간대별/일/주/월 통계
+4. Firebase 자동 백업/아카이브 (1GB 대비)
 
 ### UI 개선
-6. ISO 변경 추적 UI (M3.5.5 미완)
-7. 베이플랜 다중 적재 ⊕N 표시
-8. 특수화물 그룹 필터
-9. 통합 검색 항차별 분리
+5. ISO 변경 추적 UI (M3.5.5 미완)
+6. 특수화물 그룹 필터
+7. 통합 검색 항차별 분리
 
-### 항차 관리
-10. 항차 삭제 양하/선적 분리 (fbDeleteSection 미완)
-
-### 회사 인계 준비
-11. 시스템 구조도
-12. 정식 운영 매뉴얼
-13. 회사 명의 Gemini API 키 교체 가이드
+### 회사 인계 준비 (보류 중)
+8. API 키 노출 해소 (Firebase config / Gemini key)
+9. Firebase 보안 규칙 설정 (현재 인증 없이 읽기/쓰기 가능)
+10. 시스템 구조도, 정식 운영 매뉴얼
 
 ---
 
 ## 보류된 기능 (다시 꺼내지 말 것)
 
-- PORT-MIS 평택 스케줄 (개인 명의 인증키 회피, 회사 결정 사항)
+- PORT-MIS 평택 스케줄 (개인 명의 인증키 회피)
 - 카카오 알림톡 자동 (사업자등록 필요)
 - 명단 시스템 (사용자 결정 보류)
-- DG/무게 1항사 결정 영역 (검수원 의견 제기 도구만 검토)
+- DG/무게 1항사 결정 영역
 
 ---
 
 ## 트러블슈팅 가이드
 
-### 화면이 이전 버전
+### 화면이 이전 버전 그대로
 1. Ctrl+Shift+R (강제 새로고침)
-2. 헤더 버전 확인 (M3.70 등 표시 확인)
+2. 헤더 버전 확인 (M3.74)
+3. 시크릿 창에서 열기
 
-### 카톡 발송 안 됨
-- Android Chrome: Web Share API 정상
-- iPhone Safari: 정상 (iOS 15+)
-- PC: 클립보드 자동 복사 폴백
+### 데이터 그대로 (코드 바뀌었는데)
+- EDI 다시 업로드 필수 (이전 파싱 결과 갱신)
+- 변경된 모드(예: 선적)만 다시 업로드 가능
+- 새 항차 생성 X (동시 작업 불가능해짐)
 
-### 사진 보고 [전송] 버튼 안 눌려 보임
-- 검증 상태 카드 확인 (빨간색이면 입력 필요)
-- 버튼 항상 활성화 (sending 중일 때만 비활성)
+### FR 컨테이너가 베이플랜에 "OOG"로 표시
+- **M3.74에서 fix됨** — `cur.fr = true` 명시
+- 이전 빌드 데이터는 EDI 재업로드 필요
 
-### 0°C 리퍼 "온도 미입력" 경고
-- M3.66+에서 수정 (이전 버전이면 새로고침)
+### 같은 슬롯 컨테이너가 1개만 보임
+- **M3.74에서 fix됨** — 베이플랜 셀에 `⊕N` 배지 표시
+- 다중 셀 클릭 시 SlotPickerModal로 선택
 
 ### 리퍼 엠티가 풀로 잘못 분류
-- M3.69에서 수정 (무게 명시값 안 덮음)
+- M3.71: EDI status 추출 수정
+- M3.73: 무게 추정 EDI/ASC 제거
+- **M3.74: parseListExcel 잔존분도 제거 → 100% 명시값만**
 
-### 진단 메시지 중복/잘못
-- M3.66에서 중복 제거 (40HR 표기 누락 등)
+### 카톡 발송 안 됨
+- Android Chrome / iPhone Safari (iOS 15+) 정상
+- PC: 클립보드 자동 복사 폴백
 
-### JSX 코드가 화면에 노출
-- M3.70에서 수정 (`)}`  → 제거)
+### 0°C 리퍼 "온도 미입력" 경고
+- M3.66+에서 수정됨
 
 ---
 
 ## 새 채팅 시작 시 Claude 행동 지침
 
-1. **사용자 마지막 메시지** → 문제/요청 파악
-2. **메모리 + 이 문서**로 컨텍스트 즉시 복원
-3. **처음부터 설명 X** — 즉시 작업 모드로
+1. 사용자 마지막 메시지 → 문제/요청 파악
+2. 메모리 + 이 문서로 컨텍스트 즉시 복원
+3. 처음부터 설명 X — 즉시 작업 모드로
 4. 새로운 문제면 신중히 검증 후 코드 수정
-5. 수정 시 **버전 +0.01 후 ZIP 생성** + present_files
-6. HANDOFF에 변경 사항 기록 (이 문서 업데이트)
-7. 시간 언급 시 **KST**로 통일
+5. 수정 후 직접 테스트 → ZIP 생성 + present_files
+6. HANDOFF에 변경 사항 기록
+7. 시간 언급 시 KST로 통일
+
+### 절대 금지
+- ❌ 추측만으로 코드 수정
+- ❌ "캐시 문제일 수 있다" 같은 변명
+- ❌ 사용자에게 반복 테스트 요청
+- ❌ 같은 버전 번호로 ZIP 두 번 보내기
+- ❌ UTC 시간 표기
+- ❌ **prompt()/confirm() 새로 추가** (M3.74에서 모두 제거됨)
 
 ---
 
 ## 마지막 빌드
 
-- **파일**: `greenmarinetally-M3.70.zip`
-- **크기**: 258KB
-- **빌드**: 43/43 모든 파일 통과
-- **시간**: 2026-05-06 KST 새벽
+- **파일**: `greenmarinetally-M3.74.zip`
+- **빌드**: 1631 modules transformed, 8.25초 (vite v6.4.2)
+- **시간**: 2026-05-06 KST
+
+### M3.74 자체 검증 (가짜 EDI 4컨)
+```
+HJSU1234567 (45P1, F)        → fr:true ✅ oog:true ✅ rf:false
+HJSU1234568 (46P3, E)        → fr:true ✅ oog:true ✅ ISO 자동 동기화 → 46PE ✅
+TLLU8765432 (22P1, status=5) → fr:true ✅ fe:F (5→F 변환) ✅
+HJSU9999999 (45R1, F)        → rf:true ✅ fr:false ✅ tmp:-18 ✅ (리퍼 정상)
+```
+
+### M3.74에서 제거된 잔존 코드
+```
+src/utils.js:829-839 (이전): 무게 5톤 초과 → fe='F' 강제 ❌ 삭제
+src/backHandler.js:31 (이전): confirm('검수앱을 종료하시겠습니까?') ❌ 삭제
+```
+
+### M3.74 신규 파일
+- `src/components/ConfirmModal.jsx` (~95줄)
+- `src/components/ChoiceModal.jsx` (~100줄)
+- `src/components/SlotPickerModal.jsx` (~95줄)
 
 ---
 
-*이 문서는 매 세션에 ZIP과 함께 업데이트됩니다.*
-*다음 채팅에서 이 문서를 보면 즉시 컨텍스트가 복원됩니다.*
+## 사용자 측 주의사항
+
+### 야간 투입
+- 검수업 본업이 최우선
+- 앱은 보조 도구
+- 위험 상황 시 무조건 안전 우선
+- 현장에서 디버깅 X (메모만 하고 넘어가기)
+- 새 채팅에서 결과 보고
+
+### 새 채팅 시작 방법
+**방법 A: 메모리만 활용 (간단)**
+```
+"성일이에요. M3.74 야간 결과 보고할게요."
+```
+
+**방법 B: 인계 문서 첨부 (확실)**
+이 HANDOFF_TO_NEXT_CHAT.md 첨부 + 한 줄:
+```
+"이거 먼저 읽고 시작합시다. M3.74 야간 결과:..."
+```
+
+---
+
+*이 문서는 매 세션마다 ZIP과 함께 업데이트됩니다.*
+*다음 채팅에서 이 문서를 보면 즉시 컨텍스트 복원 가능.*
