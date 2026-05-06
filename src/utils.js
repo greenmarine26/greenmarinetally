@@ -128,25 +128,22 @@ export const isoToLabel = (iso) => {
     if (/^459/.test(p)) return '40OT';
     return '40HC';   // 4500, 4510, 4530 등
   }
-  // === 46XX (45피트) - 알파벳/숫자 모두 처리 ===
-  // 45피트는 GP/HC(드라이)만 존재. 리퍼/FR/OT/TK 실존 X
-  // 잘못된 표기(46R, 46P 등)도 45HC로 처리
+  // === 46XX (4로 시작 = 40피트, 잘못된 표기) ===
+  // M3.6: ISO 6346 표준상 4XXX는 무조건 40피트. 45피트는 L 시작이어야 함.
   if (/^46/.test(p)) {
-    return '45HC';
+    return '40HC';
   }
-  // 알파벳 형식: 45G0, 45G1, 45R0, 45R1, 45RF, 45HC 등
-  // M3.6: 신표기 vs ISO 6346 형식 구분
-  //   - 45HC/45GP (직접 신표기) → 45피트로 해석
-  //   - 45RF → 40RF (45피트 리퍼는 실존하지 않음, 모두 40피트 Hi-Cube 리퍼)
-  //   - 45R0/45R1/45G0/45G1 (ISO 6346 4자리) → 40HC/40RF (4=40ft, 5=Hi-Cube)
-  if (/^45RF/.test(p)) return '40RF';   // ⭐ 45RF는 항상 40피트 Hi-Cube Reefer (45피트 리퍼 없음)
-  if (/^45HC/.test(p)) return '45HC';   // 신표기 직접
-  if (/^45GP/.test(p)) return '45HC';   // 신표기 직접 (45GP = 45피트 GP)
+  // 알파벳 형식: 4로 시작하면 무조건 40피트
+  //   45RF/45HC/45GP (신표기) → 모두 40피트 (4=40ft 원칙)
+  //   45R0/45R1/45G0/45G1 (ISO 6346) → 40HC/40RF
+  if (/^45RF/.test(p)) return '40RF';
+  if (/^45HC/.test(p)) return '40HC';
+  if (/^45GP/.test(p)) return '40HC';
   if (/^45[GRPU]/.test(p)) {
-    if (/^45P/.test(p)) return '40FR';   // 45P0 = 40피트 Hi-Cube FR
+    if (/^45P/.test(p)) return '40FR';
     if (/^45U/.test(p)) return '40OT';
-    if (/^45R/.test(p)) return '40RF';   // 45R0/45R1 = 40피트 Hi-Cube Reefer
-    return '40HC';                        // 45G0/45G1 = 40피트 Hi-Cube GP
+    if (/^45R/.test(p)) return '40RF';
+    return '40HC';
   }
 
   // === V38 신규: 4자리 숫자 ISO 코드 (4200, 4210, 2200, 2280 등) ===
