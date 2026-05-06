@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.83';
+export const APP_VERSION = 'M3.85';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -41,10 +41,14 @@ export const normalizeBay = (b) => {
   return isNaN(n) ? '' : String(n);
 };
 
-// 위치 표시: 베이는 정규화(앞 0 제거), row/tier는 원본 2자리 유지
+// 위치 표시: ##-##-## 형식 (베이 1자리는 0 padding, row/tier는 2자리 그대로 텍스트)
+// M3.85: 베이 단위 자리수 보장 — bay=1 → "01", bay=16 → "16", bay=100 → "100"
+//   row/tier는 EDI에서 이미 2자리 substring으로 저장 ("00", "04", "82" 등 텍스트)
 export const fmtPos = (c) => {
   if (!c || !c.bay) return '';
-  return `${normalizeBay(c.bay)}-${c.row || ''}-${c.tier || ''}`;
+  const b = normalizeBay(c.bay);  // "1", "16", "100"
+  const bayPad = b.length === 1 ? '0' + b : b;  // 2자리 강제
+  return `${bayPad}-${c.row || '00'}-${c.tier || '00'}`;
 };
 
 // M3.1: 한국어 음성 읽기 헬퍼 — "16-01-86" → "십육번 베이 공일에 팔육"
@@ -233,7 +237,7 @@ export const isUnknownIso = (iso) => {
   return false;
 };
 
-// M3.79+M3.83: 통합 리퍼 판정 헬퍼
+// M3.79+M3.85: 통합 리퍼 판정 헬퍼
 //   목표: EDI/ASC/리스트 어떤 양식으로 ISO가 들어오든 정확히 리퍼만 식별
 //   ISO 6346에서 리퍼 표기:
 //     - "20RF", "40RF", "22RE", "45RE" (정식 표준)
@@ -241,7 +245,7 @@ export const isUnknownIso = (iso) => {
 //     - "40HR", "20HR" (ASC m2 변형 - H+R)
 //     - "RFHC", "RFHQ", "RF20" (ASC m4 4글자 tp)
 //     - "4582"~"4585", "2282"~"2285" (4자리 숫자 코드)
-//   M3.83 fix: FR(Flat Rack)이 R로 끝나서 리퍼로 잘못 인식되던 버그 잡음
+//   M3.85 fix: FR(Flat Rack)이 R로 끝나서 리퍼로 잘못 인식되던 버그 잡음
 //     - "20FR", "40FR", "FR" 등은 리퍼 아님
 //     - 안전한 정확 패턴만 사용 (광범위한 /R[FE]?$/ 제거)
 export function isReeferIso(iso) {
@@ -318,7 +322,7 @@ export function parseBAPLIE(ediText) {
     if (seg.startsWith('TDT+')) {
       // TDT+20+VOY++CARRIER...:::VESSEL_NAME...
       // 양식 1: TDT+20+0521W+++CKL:172:20+++BSDU:103:11:XIN TAI PING (선박명 = 마지막)
-      // 양식 2: TDT+20+2633E++VRSC3:103::SITC SENDAI++:172:20 (M3.83: 선박명 = 중간)
+      // 양식 2: TDT+20+2633E++VRSC3:103::SITC SENDAI++:172:20 (M3.85: 선박명 = 중간)
       const parts = seg.split('+');
       result.voy = parts[2] || '';
       // carrier (5번째 element의 첫 token)
@@ -326,7 +330,7 @@ export function parseBAPLIE(ediText) {
         const cc = parts[5].split(':')[0];
         if (cc) result.carrier = cc;
       }
-      // M3.83: 모든 element의 모든 sub-token에서 선박명 후보 검색 (역순)
+      // M3.85: 모든 element의 모든 sub-token에서 선박명 후보 검색 (역순)
       //   양식 1/2 둘 다 처리. 영문 포함 + 숫자만 아닌 토큰을 선박명으로 인정
       let vsl = '';
       for (let p = parts.length - 1; p >= 3; p--) {
@@ -405,7 +409,7 @@ export function parseBAPLIE(ediText) {
       if (/^[24]59/.test(cur.iso)) cur.oog = true;
       // M3.74 fix: 4자리 숫자 FR 코드 (4583/4584/2283/2284) = FR
       if (/^[24]58[34]$/.test(cur.iso)) { cur.fr = true; cur.oog = true; }
-      // M3.83: 변형 ISO 표기 (40HR 등 ASC식 표기가 EDI에 들어온 경우) 리퍼 보강 인식
+      // M3.85: 변형 ISO 표기 (40HR 등 ASC식 표기가 EDI에 들어온 경우) 리퍼 보강 인식
       if (!cur.rf && isReeferIso(cur.iso)) cur.rf = true;
 
       // status — BAPLIE EDIFACT: EQD+CN+컨번호+ISO+++status
@@ -444,10 +448,12 @@ export function parseBAPLIE(ediText) {
       else if (cur.iso.startsWith('45')) cur.tp = "40'HC";
       else if (/^458[2-5]$/.test(cur.iso)) cur.tp = "40'RF";
       else if (/^228[2-5]$/.test(cur.iso)) cur.tp = "20'RF";
-    } else if (cur && seg.startsWith('LOC+9+')) {
-      cur.pol = seg.substring(6).split(':')[0];
-    } else if (cur && seg.startsWith('LOC+11+')) {
-      cur.pod = seg.substring(7).split(':')[0];
+    } else if (cur && (seg.startsWith('LOC+9+') || seg.startsWith('LOC+6+'))) {
+      // M3.85: SITC SENDAI 양식은 LOC+6을 POL로 사용 (표준은 LOC+9)
+      cur.pol = seg.substring(seg.indexOf('+', 4) + 1).split(':')[0];
+    } else if (cur && (seg.startsWith('LOC+11+') || seg.startsWith('LOC+12+'))) {
+      // M3.85: SITC SENDAI 양식은 LOC+12를 POD로 사용 (표준은 LOC+11)
+      cur.pod = seg.substring(seg.indexOf('+', 4) + 1).split(':')[0];
     } else if (cur && seg.startsWith('LOC+76+')) {
       // V38 신규: 환적/추가 POL
       cur.npod = seg.substring(7).split(':')[0];
@@ -652,7 +658,7 @@ export function parseAscFile(text) {
       fe: feFinal,
       wt, op, pol, pod,
       dg: false, dgc: '', un: '',
-      // M3.83: 통합 헬퍼로 리퍼 판정 (40HR, RFHC, 458x 등 모든 변형 인식)
+      // M3.85: 통합 헬퍼로 리퍼 판정 (40HR, RFHC, 458x 등 모든 변형 인식)
       rf: (tp && tp.startsWith('RF')) || isReeferIso(isoFinal),
       tk: (tp && tp.startsWith('TK')) || (isoFinal && isoFinal[2] === 'T'),
       oog: false,
@@ -836,7 +842,7 @@ export async function parseListExcel(arrayBuffer) {
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
     const op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
     const dg_i = findCol([/^dg$|hazmat|imdg/, /위험물/]);
-    // M3.83: SITC SENDAI 양식의 [40] "냉동" 컬럼이 실제 온도값(-18, -2.5 등)인데
+    // M3.85: SITC SENDAI 양식의 [40] "냉동" 컬럼이 실제 온도값(-18, -2.5 등)인데
     //   기존 /냉장/만 있어서 매칭 안 되어 26대 풀 리퍼 모두 미입력 처리되던 버그 수정.
     //   추가로 "set temp", "setpoint", "carry temp", "rf temp" 등 흔한 변형도 인식.
     const tmp_i = findCol([
@@ -914,7 +920,7 @@ export async function parseListExcel(arrayBuffer) {
       const dgVal = dg_i >= 0 ? String(row[dg_i] || '').trim() : '';
       const isDg = dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal);
 
-      // M3.83 fix: row[tmp_i]가 숫자 0이면 `0 || ''` = '' 로 사라지던 버그
+      // M3.85 fix: row[tmp_i]가 숫자 0이면 `0 || ''` = '' 로 사라지던 버그
       // JavaScript falsy 함정 (0, '', null, undefined 모두 falsy)
       // 해결: nullish 체크로 숫자 0 보존
       const tmpRawCell = tmp_i >= 0 ? row[tmp_i] : null;
@@ -936,7 +942,7 @@ export async function parseListExcel(arrayBuffer) {
       const isoUpper = (iso || isoRaw || '').toUpperCase();
       // 특수화물 태그 (45ft 영역 4[5689] 포함, 예: 46P3=45FR)
       // 리퍼 판정: ISO 기준 우선, 온도가 진짜 있으면 + 표기
-      // M3.83: 통합 헬퍼로 리퍼 판정 (40HR/RFHC 등 모든 변형 인식)
+      // M3.85: 통합 헬퍼로 리퍼 판정 (40HR/RFHC 등 모든 변형 인식)
       const isRf = (tmpVal && tmpVal !== '-') || isReeferIso(isoUpper);
       const isFr = /^[24][0245689]P/.test(isoUpper) || /^[24]0F[PR]/.test(isoUpper) || /^45P/.test(isoUpper);
       const isOt = /^[24][0245689]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^4[5689]O/.test(isoUpper);
@@ -1024,7 +1030,7 @@ export async function parseXrayList(arrayBuffer) {
   return { containers: Array.from(containers) };
 }
 
-// === POD/POL 색깔 (M3.83 대폭 확장) ===
+// === POD/POL 색깔 (M3.85 대폭 확장) ===
 // 평택항 자주 쓰는 모든 항구 색깔 지정 - 베이플랜에서 셀 색깔로 행선지 즉시 식별
 // 지역별 톤 통일 (구분 + 그룹 인지):
 //   중국 = 청-남청 계열

@@ -1,3 +1,4 @@
+import { fmtPos } from '../utils';
 // 자동 진단 경고 패널 (M3.5.4)
 //   - 자료 업로드 후 자동 호출
 //   - critical: 빨강 점멸 + 자동 음성
@@ -140,7 +141,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
           >
             <span className="font-bold">{c.cn}</span>
-            <span className="text-slate-400 text-[9px]">{c.iso} · POD {c.pod} · @{c.bay || '?'}-{c.row || '?'}-{c.tier || '?'}</span>
+            <span className="text-slate-400 text-[9px]">{c.iso} · POD {c.pod} · @{fmtPos(c) || '?-?-?'}</span>
             <span className={`text-[9px] ${isAttach ? 'text-red-400' : 'text-cyan-400'}`}>🔒 입력</span>
           </button>
         ))}
@@ -161,7 +162,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
           >
             <span className="font-bold">{c.cn}</span>
-            <span className="text-slate-400">ISO: {c.iso} @ {c.bay || '?'}-{c.row || '?'}-{c.tier || '?'}</span>
+            <span className="text-slate-400">ISO: {c.iso} @ {fmtPos(c) || '?-?-?'}</span>
             <span className="text-amber-400 text-[9px]">✏️ 수정</span>
           </button>
         ))}
@@ -181,7 +182,7 @@ function AlertDetails({ alert, onOpenContainer }) {
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
           >
             <span className="font-bold">{c.cn}</span>
-            <span className="text-slate-400">@ {c.bay || '?'}-{c.row || '?'}-{c.tier || '?'}</span>
+            <span className="text-slate-400">@ {fmtPos(c) || '?-?-?'}</span>
             <span className="text-amber-400 text-[9px]">✏️ 수정</span>
           </button>
         ))}

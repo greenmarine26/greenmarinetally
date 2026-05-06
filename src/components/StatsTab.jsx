@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { isoToLabel } from '../utils.js';
+import { isoToLabel, fmtPos} from '../utils.js';
 import { Snowflake, AlertTriangle, Box } from 'lucide-react';
 
 export default function StatsTab({ containers, compMap, xrayMap, mode }) {
@@ -74,7 +74,7 @@ export default function StatsTab({ containers, compMap, xrayMap, mode }) {
               <div className="font-bold mb-1">X-RAY 위치:</div>
               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mono">
                 {stats.xrayList.slice(0, 10).map(c => (
-                  <div key={c.cn}>• <span className="text-amber-300">{c.bay}-{c.row}-{c.tier}</span> <span className="text-slate-500">{c.cn?.slice(-4)}</span></div>
+                  <div key={c.cn}>• <span className="text-amber-300">{fmtPos(c)}</span> <span className="text-slate-500">{c.cn?.slice(-4)}</span></div>
                 ))}
                 {stats.xrayList.length > 10 && <div className="text-slate-500">... 외 {stats.xrayList.length - 10}대</div>}
               </div>
@@ -156,7 +156,7 @@ function SpecialRow({ type, stats, containers }) {
         <div className="text-[10px] mono space-y-0.5">
           {containers.slice(0, 5).map(c => (
             <div key={c.cn} className="text-slate-400">
-              • <span className="text-amber-300">{c.bay}-{c.row}-{c.tier}</span>
+              • <span className="text-amber-300">{fmtPos(c)}</span>
               <span className="text-slate-500 ml-1">{c.cn}</span>
               {c.tmp && <span className="text-cyan-300 ml-1">{c.tmp}°C</span>}
               {c.un && <span className="text-red-300 ml-1">UN{c.un}</span>}
