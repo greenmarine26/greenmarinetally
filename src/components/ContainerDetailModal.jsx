@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber } from '../utils.js';
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
@@ -234,11 +234,31 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               )}
             </div>
             {!editingIso ? (
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold mono text-slate-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
-                <span className="text-xs text-slate-500 mono">({c.iso || '-'})</span>
-                {c.iso_orig && c.iso_orig !== c.iso && (
-                  <span className="text-[10px] text-amber-400 mono">원본: {c.iso_orig} → 수정됨</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold mono text-slate-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
+                  <span className="text-xs text-slate-500 mono">({c.iso || '-'})</span>
+                  {c.iso_orig && c.iso_orig !== c.iso && (
+                    <span className="text-[10px] text-amber-400 mono">원본: {c.iso_orig} → 수정됨</span>
+                  )}
+                </div>
+                {/* M3.6: 알 수 없는 ISO 표기 → 사진 보고 강력 유도 */}
+                {isUnknownIso(c.iso) && (
+                  <div className="mt-2 px-3 py-2 bg-red-950/50 border-2 border-red-600 rounded-lg animate-pulse">
+                    <div className="flex items-start gap-2">
+                      <span className="text-xl">⚠️</span>
+                      <div className="flex-1">
+                        <div className="text-xs font-black text-red-200">알 수 없는 규격 표기</div>
+                        <div className="text-[11px] text-red-300 mt-0.5">
+                          "{c.iso}"는 처음 보는 표기입니다. 실물 사진 촬영 + 1항사 확인 부탁드립니다.
+                        </div>
+                        <button onClick={() => setPhotoMode('damage')}
+                          className="mt-2 w-full py-2 bg-red-700 hover:bg-red-600 text-white rounded text-xs font-bold flex items-center justify-center gap-1">
+                          📷 사진 촬영하기
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (

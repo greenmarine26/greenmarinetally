@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoToLabel } from './utils.js';
+import { isoToLabel, isUnknownIso } from './utils.js';
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 function filterPyeongtaek(containers, mode) {
@@ -75,6 +75,23 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
         details: missingTmp.map(c => ({ cn: c.cn, bay: c.bay, row: c.row, tier: c.tier })),
       });
     }
+  }
+
+  // ─── 🔴 1.5. M3.6: 알 수 없는 ISO 표기 검출 ───
+  // 검수원이 사진 찍어 증거 남기고 1항사 확인 필요
+  const unknownIsoConts = ediPtk.filter(c => isUnknownIso(c.iso));
+  if (unknownIsoConts.length > 0) {
+    alerts.push({
+      level: 'critical',
+      code: 'unknown_iso',
+      msg: `알 수 없는 규격 표기 ${unknownIsoConts.length}대 - 사진 촬영 + 현장 확인 필요`,
+      voice: `알 수 없는 규격 표기 ${unknownIsoConts.length}대 발견. 사진 촬영하고 1항사 확인 부탁드립니다`,
+      count: unknownIsoConts.length,
+      details: unknownIsoConts.map(c => ({
+        cn: c.cn, bay: c.bay, row: c.row, tier: c.tier,
+        iso: c.iso, label: isoToLabel(c.iso)
+      })),
+    });
   }
 
   // ─── 🔴 2. 위험물 정보 누락 ───

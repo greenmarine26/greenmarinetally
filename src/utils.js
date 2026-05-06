@@ -102,64 +102,82 @@ export const isoToLabel = (iso) => {
   if (!iso) return '';
   const p = String(iso).toUpperCase().trim().replace(/\s+/g, '');
 
-  // === 45ft 컨테이너 (둘째 자리 = 5,6,8,9 = 45ft 영역) ===
-  // 4500=40HC, 4600/4610=45HC, 46P0~46P3=45FR, 46U0=45OT 등
-  if (/^4[5689][0-9][0-9]$/.test(p)) {
-    if (/^4[5689]P/.test(p)) return '45FR';     // 46P3 = 45FR
-    if (/^4[5689]U/.test(p)) return '45OT';
-    if (/^4[5689]R/.test(p)) return '45RF';
-    if (/^4[5689]T/.test(p)) return '45TK';
-    return '45HC';                               // 4600, 4610 등
+  // M3.6: ISO 6346 정확 해석
+  // 첫 자리: 길이 (2=20ft, 4=40ft, L=45ft)
+  // 둘째 자리: 높이 (0,2=8'6"표준, 5=9'6"Hi-Cube)
+  // 셋째 자리: 타입 (G=GP, R=Reefer, P=Platform/FR, U=OT, T=Tank, B=Bulk)
+  //
+  // 주의:
+  //   45G0/45G1 = 40피트 Hi-Cube (45가 45피트 아님!)
+  //   45R0/45R1 = 40피트 Hi-Cube Reefer
+  //   L5G0/L5G1 = 45피트 GP
+  //   L5R0/L5R1 = 45피트 Reefer
+
+  // === 45피트 컨테이너 (첫 자리 = L) ===
+  // 현실: 45피트는 GP/HC(드라이)만 존재. 리퍼/FR/OT/TK 컨테이너는 없음.
+  // 잘못된 표기(L5R 등)도 45HC로 처리 (검수원이 현장에서 실물 재확인)
+  if (/^L[0-9]/.test(p) || /^L[GRPUT]/.test(p)) {
+    return '45HC';   // L5G0, L5G1, L5HC 등 = 45피트 드라이
   }
-  // 알파벳 ISO 코드 (45G1, 45P3 등)
-  if (/^45[GP]/.test(p)) {
-    if (/^45P/.test(p)) return '45FR';
+
+  // === 40피트 Hi-Cube (4500-4699 숫자 + 45GX/45RX 알파벳) ===
+  // 4500=40HC, 4582=40RF, 4583=40FR, 4590=40OT
+  if (/^45[0-9][0-9]$/.test(p)) {
+    if (/^458[3-4]$/.test(p)) return '40FR';   // 4583/4584 = FR (먼저 좁은 범위)
+    if (/^458[25]$/.test(p)) return '40RF';    // 4582/4585 = RF
+    if (/^459/.test(p)) return '40OT';
+    return '40HC';   // 4500, 4510, 4530 등
+  }
+  // === 46XX (45피트) - 알파벳/숫자 모두 처리 ===
+  // 45피트는 GP/HC(드라이)만 존재. 리퍼/FR/OT/TK 실존 X
+  // 잘못된 표기(46R, 46P 등)도 45HC로 처리
+  if (/^46/.test(p)) {
     return '45HC';
   }
-  if (/^45[RT]/.test(p)) {
-    if (/^45R/.test(p)) return '45RF';
-    return '45TK';
+  // 알파벳 형식: 45G0, 45G1, 45R0, 45R1, 45RF, 45HC 등
+  // M3.6: 신표기 vs ISO 6346 형식 구분
+  //   - 45HC/45GP (직접 신표기) → 45피트로 해석
+  //   - 45RF → 40RF (45피트 리퍼는 실존하지 않음, 모두 40피트 Hi-Cube 리퍼)
+  //   - 45R0/45R1/45G0/45G1 (ISO 6346 4자리) → 40HC/40RF (4=40ft, 5=Hi-Cube)
+  if (/^45RF/.test(p)) return '40RF';   // ⭐ 45RF는 항상 40피트 Hi-Cube Reefer (45피트 리퍼 없음)
+  if (/^45HC/.test(p)) return '45HC';   // 신표기 직접
+  if (/^45GP/.test(p)) return '45HC';   // 신표기 직접 (45GP = 45피트 GP)
+  if (/^45[GRPU]/.test(p)) {
+    if (/^45P/.test(p)) return '40FR';   // 45P0 = 40피트 Hi-Cube FR
+    if (/^45U/.test(p)) return '40OT';
+    if (/^45R/.test(p)) return '40RF';   // 45R0/45R1 = 40피트 Hi-Cube Reefer
+    return '40HC';                        // 45G0/45G1 = 40피트 Hi-Cube GP
   }
-  if (/^45U/.test(p)) return '45OT';
 
-  // === V38 신규: 4자리 숫자 ISO 코드 (ISO 6346 size+type code) ===
-  // 4500/4510/4530 = 40' HC GP, 4200/4210 = 40' GP, 2500 = 20' HC GP, 2200 = 20' GP
-  // 4582/4585 = 40HC Reefer, 2280/2285 = 20 Reefer, 4583/4584 = 40 PL/FR
-  if (/^45[0-9][0-9]$/.test(p)) {
-    if (/^458[2-5]$/.test(p)) return '40RF';
-    if (/^458[3-4]$/.test(p)) return '40FR';
-    if (/^459/.test(p)) return '40OT';
-    return '40HC';
-  }
+  // === V38 신규: 4자리 숫자 ISO 코드 (4200, 4210, 2200, 2280 등) ===
   if (/^42[0-9][0-9]$/.test(p)) {
-    if (/^428[2-5]$/.test(p)) return '40RF';
-    if (/^428[3-4]$/.test(p)) return '40FR';
+    if (/^428[3-4]$/.test(p)) return '40FR';   // 4283/4284 먼저 (좁은 범위)
+    if (/^428[25]$/.test(p)) return '40RF';
     return '40DC';
   }
-  if (/^25[0-9][0-9]$/.test(p)) return '20DC';   // 20HC drymain용
+  if (/^25[0-9][0-9]$/.test(p)) return '20DC';   // 25xx (20HC) = 20DC fallback
   if (/^22[0-9][0-9]$/.test(p)) {
-    if (/^228[2-5]$/.test(p)) return '20RF';
-    if (/^228[3-4]$/.test(p)) return '20FR';
+    if (/^228[3-4]$/.test(p)) return '20FR';   // 2283/2284 = FR (먼저 좁은 범위)
+    if (/^228[25]$/.test(p)) return '20RF';    // 2282/2285 = RF
     return '20DC';
   }
 
-  // === 기존 패턴 (V37과 동일) ===
+  // === 알파벳 형식 - 40피트 Standard Height ===
   if (/^40HR/.test(p)) return '40RF';
-  if (/^4[245]R/.test(p)) return '40RF';
+  if (/^4[24]R/.test(p)) return '40RF';
   if (/^40R/.test(p)) return '40RF';
   if (/^40F[PR]/.test(p)) return '40FR';
   if (/^4[24]P/.test(p)) return '40FR';
-  if (/^4[245]O/.test(p)) return '40OT';
+  if (/^4[24]O/.test(p)) return '40OT';
   if (/^40O/.test(p)) return '40OT';
   if (/^4[24]U/.test(p)) return '40OT';
   if (/^40T/.test(p)) return '40TK';
   if (/^4[24]T/.test(p)) return '40TK';
   if (/^40HC/.test(p)) return '40HC';
   if (/^4[24]H/.test(p)) return '40HC';
-  if (/^45G/.test(p)) return '40HC';
   if (/^43/.test(p)) return '40HC';
   if (/^40[DG]/.test(p)) return '40DC';
-  if (/^4[24][G][P012]/.test(p)) return '40DC';
+  if (/^4[24][G][P0-9]/.test(p)) return '40DC';
 
   if (/^20R/.test(p)) return '20RF';
   if (/^2[02][R]/.test(p)) return '20RF';
@@ -194,7 +212,28 @@ export const isoToLabel = (iso) => {
     if (t === '0') return '20DC';
     return '20' + (t || '?');
   }
+  // M3.6: 알 수 없는 표기 → 그대로 반환 (UI에서 ⚠️ 마킹 + 사진 보고 유도)
   return p;
+};
+
+// M3.6: ISO 코드가 알려진 규격으로 변환되는지 확인
+// 변환 안 되거나 ?가 포함되면 "미지" 표기 → 검수원이 현장 확인 + 사진 필요
+export const isUnknownIso = (iso) => {
+  if (!iso) return false;
+  const label = isoToLabel(iso);
+  if (!label) return true;
+  // 정상 변환된 라벨 화이트리스트
+  const known = new Set([
+    '20DC', '20HC', '20RF', '20FR', '20OT', '20TK',
+    '40DC', '40HC', '40RF', '40FR', '40OT', '40TK',
+    '45HC', '45GP'
+  ]);
+  if (known.has(label)) return false;
+  // ?가 포함되거나 알 수 없는 길이/타입
+  if (label.includes('?')) return true;
+  // 라벨이 정확한 형식 (XXYY, XX 길이 + YY 타입)이 아니면 미지
+  if (!/^(20|40|45)[A-Z]{2}$/.test(label)) return true;
+  return false;
 };
 
 export const isoToPdfLabel = (iso, tp) => {
