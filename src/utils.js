@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.6.1';
+export const APP_VERSION = 'M3.67';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -356,7 +356,8 @@ export function parseBAPLIE(ediText) {
       else if (rawStatus === 'E') cur.fe = 'E';
       else if (rawStatus === '5') cur.fe = 'F';   // 5 = Full
       else if (rawStatus === '4') cur.fe = 'E';   // 4 = Empty
-      else cur.fe = 'F'; // 기본 Full
+      // M3.67: 기본값 '' (미정) - 무게로 추정 또는 검수원 확인
+      // 이전: 'F' 기본값 → 리퍼 엠티가 풀로 잘못 분류되는 문제
 
       // 화면 표시용 tp
       if (cur.iso.startsWith('22')) cur.tp = "20'GP";

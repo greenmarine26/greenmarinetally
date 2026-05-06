@@ -55,11 +55,20 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   const listCount = Object.keys(listRecords || {}).length;
   const carrierLabel = carrier ? `${carrier}` : '';
 
-  // ─── 🔴 1. 리퍼 온도 미입력 ───
+  // ─── 🔴 1. 리퍼 온도 미입력 (풀 리퍼만) ───
   // M3.6: 0°C는 실제 온도 (신선 채소, 의약품 등). 진짜 미입력만 판정
+  // M3.67: 엠티 리퍼는 온도 없는 게 정상 → 풀 리퍼만 검사
   const reefers = extractReefers(ediPtk);
-  if (reefers.length > 0) {
-    const missingTmp = reefers.filter(c => {
+  // 풀 리퍼만 추출 (fe='F'이거나, 무게 5톤 초과)
+  const fullReefers = reefers.filter(c => {
+    if (c.fe === 'E') return false;  // 명시적 엠티는 제외
+    if (c.fe === 'F') return true;   // 명시적 풀은 포함
+    // fe 미정인 경우: 무게로 판단
+    const wt = Number(c.wt) || 0;
+    return wt > 5000;  // 5톤 초과만 풀로 간주 (그 외는 미정 → 검사 제외)
+  });
+  if (fullReefers.length > 0) {
+    const missingTmp = fullReefers.filter(c => {
       if (c.tmp_missing) return true;
       const t = String(c.tmp || '').trim();
       if (!t) return true;  // 빈 값만 미입력
@@ -69,8 +78,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       alerts.push({
         level: 'critical',
         code: 'reefer_no_temp',
-        msg: `리퍼 ${reefers.length}대 중 ${missingTmp.length}대 온도 미입력`,
-        voice: `리퍼 ${reefers.length}대 중 ${missingTmp.length}대 온도 미입력입니다. 현장 확인 필요`,
+        msg: `풀 리퍼 ${fullReefers.length}대 중 ${missingTmp.length}대 온도 미입력`,
+        voice: `풀 리퍼 ${missingTmp.length}대 온도 미입력입니다. 현장 확인 필요`,
         count: missingTmp.length,
         details: missingTmp.map(c => ({ cn: c.cn, bay: c.bay, row: c.row, tier: c.tier })),
       });
@@ -200,14 +209,15 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     }
   }
 
-  // ─── 🟡 5. 무게 큰 차이 (1톤 이상) ───
+  // ─── 🟡 5. 무게 큰 차이 (5톤 이상 - 풀/엠티 구분 의심 수준) ───
+  // M3.67: 1톤 차이는 정상 범위 (서류 vs 실측). 풀/엠티 구분에 영향 줄 정도(5톤+)만 경고
   const wtDiffs = [];
   ediPtk.forEach(c => {
     const lr = listRecords?.[c.cn];
     if (!lr) return;
     const ediW = parseInt(c.wt, 10) || 0;
     const lrW = parseInt(lr.wt, 10) || 0;
-    if (ediW > 0 && lrW > 0 && Math.abs(ediW - lrW) >= 1000) {
+    if (ediW > 0 && lrW > 0 && Math.abs(ediW - lrW) >= 5000) {
       wtDiffs.push({
         cn: c.cn,
         ediW, lrW,
@@ -219,8 +229,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     alerts.push({
       level: 'warning',
       code: 'weight_diff',
-      msg: `무게 차이 ${wtDiffs.length}건 (1톤 이상)`,
-      voice: `무게 차이 ${wtDiffs.length}건 발생. 확인 필요`,
+      msg: `무게 큰 차이 ${wtDiffs.length}건 (5톤 이상 - 풀/엠티 구분 확인 필요)`,
+      voice: `무게 큰 차이 ${wtDiffs.length}건 발생. 풀 엠티 구분 확인 필요`,
       count: wtDiffs.length,
       details: wtDiffs.slice(0, 20),
     });
