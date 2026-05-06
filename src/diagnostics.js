@@ -267,35 +267,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     }
   }
 
-  // ─── 🟡 8. 알 수 없는/이상한 ISO 규격 감지 (M3.5.4-fix2) ───
-  // 표준 ISO 코드가 아닌 컨테이너는 검수원에게 확인 요청
-  // 알려진 패턴: 22G1, 42G1, 45G1, 22R1, 42R1, 45R1, 22P1, 42P1, 45P1,
-  //              22U1, 42U1, 22T1, 42T1, 4582, 2282, 4500, 4200, 2200, 2500 등
-  const unknownIso = ediPtk.filter(c => {
-    const iso = String(c.iso || '').toUpperCase().trim();
-    if (!iso) return true;  // ISO 없음
-    // 표준 패턴: 알파벳 ISO (예: 22G1)
-    if (/^[2-4][024568][GRPUTH][0-9PQ]?$/.test(iso)) return false;
-    // 표준 패턴: 4자리 숫자 ISO (예: 4500, 2282)
-    if (/^[2-4][024568][0-9][0-9]$/.test(iso)) return false;
-    // 표준 패턴: 영문약어 (예: 40HC, 20DC)
-    if (/^(20|22|40|42|45|46)(DC|HC|GP|RF|FR|OT|TK|HQ)$/.test(iso)) return false;
-    return true;  // 알 수 없는 패턴
-  });
-  if (unknownIso.length > 0) {
-    alerts.push({
-      level: 'warning',
-      code: 'iso_unknown',
-      msg: `규격 확인 필요: ${unknownIso.length}대 (표준 ISO 아님)`,
-      voice: `규격 확인 필요한 컨테이너 ${unknownIso.length}대 발견. 실물 확인 후 수정 필요`,
-      count: unknownIso.length,
-      details: unknownIso.slice(0, 30).map(c => ({
-        cn: c.cn,
-        iso: c.iso || '(없음)',
-        bay: c.bay, row: c.row, tier: c.tier,
-      })),
-    });
-  }
+  // ─── 8. ISO 규격 검사 (M3.6.1: 위 1.5번 unknown_iso로 통일됨, 중복 제거) ───
+  // (기존 코드 제거 - isUnknownIso 함수가 위에서 검사)
 
   // ─── 🔴 9. 엠티 실 부착/확인 누락 (M3.5.5) ───
   if (sealPolicy) {
