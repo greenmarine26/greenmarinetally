@@ -116,14 +116,14 @@ export function buildGreetingMessage(name, weather) {
   }
 
   const lines = [
-    `안녕하세요, ${name} 검수원님!`,
+    `안녕하세요!`,
     greeting,
   ];
   if (weatherLine) lines.push(weatherLine);
 
   // 음성용 (이모지/기호 제거)
   const voiceLines = [
-    `안녕하세요 ${name} 검수원님`,
+    `안녕하세요`,
     greeting.replace(/[☀️🌅🌞💪🍱🥤🌤☕🌆🌙⭐]/g, '').trim(),
   ];
   if (voiceWeather) voiceLines.push(voiceWeather);
@@ -142,8 +142,8 @@ export function buildFarewellMessage(name, weather, workDurationMs) {
   const hour = now.getHours();
   const tod = getTimeOfDay(hour);
 
-  const lines = [`수고하셨어요, ${name} 검수원님!`];
-  const voiceLines = [`수고하셨어요 ${name} 검수원님`];
+  const lines = [`수고하셨어요!`];
+  const voiceLines = [`수고하셨어요`];
 
   // 작업 시간이 길었으면 강조
   if (workDurationMs && workDurationMs > 0) {
@@ -202,7 +202,7 @@ export function buildFarewellMessage(name, weather, workDurationMs) {
   };
 }
 
-// 음성 출력 (Web Speech API)
+// 음성 출력 (Web Speech API) - M3.6-fix3: 밝고 청아한 목소리
 export function speakGreeting(text) {
   if (!('speechSynthesis' in window)) return;
   if (!text) return;
@@ -210,9 +210,23 @@ export function speakGreeting(text) {
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'ko-KR';
-    utter.rate = 1.0;
-    utter.pitch = 1.05;
+    utter.rate = 1.1;       // 약간 빠르게 (낭랑하게)
+    utter.pitch = 1.4;      // 높이 (밝고 청아하게)
     utter.volume = 1.0;
+
+    // 한국어 여성 음성 우선 선택 (밝은 음색)
+    const voices = window.speechSynthesis.getVoices();
+    if (voices && voices.length > 0) {
+      // 우선순위: 한국어 여성 > 한국어 > 시스템 기본
+      const koVoices = voices.filter(v => v.lang && v.lang.startsWith('ko'));
+      // 여성 음성 찾기 (이름에 "Female", "Heami", "Yuna", "Sora", "Sun-Hi" 등)
+      const female = koVoices.find(v =>
+        /female|heami|yuna|sora|sun-hi|seoyeon|jiwon|innai|narae/i.test(v.name)
+      );
+      const koVoice = female || koVoices[0];
+      if (koVoice) utter.voice = koVoice;
+    }
+
     window.speechSynthesis.speak(utter);
   } catch (e) {
     console.warn('[speakGreeting] 음성 출력 실패:', e);
