@@ -185,11 +185,12 @@ export default function App() {
         />
       )}
 
-      {/* M3.6: 로그인/로그아웃 인사 모달 */}
+      {/* M3.68: 로그인/로그아웃 인사 모달 + 근무 시간대 예보 */}
       {greeting && (
         <GreetingModal
           type={greeting.type}
           lines={greeting.lines}
+          workForecast={greeting.workForecast}
           onClose={handleCloseGreeting}
         />
       )}

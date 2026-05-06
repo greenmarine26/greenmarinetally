@@ -1,9 +1,9 @@
 // 로그인/로그아웃 인사 모달 (M3.6)
 import React, { useEffect, useState } from 'react';
 
-export default function GreetingModal({ type, lines, onClose }) {
-  // 자동 닫힘 카운트다운 (로그인 시 8초, 로그아웃 시 5초)
-  const totalSec = type === 'login' ? 8 : 5;
+export default function GreetingModal({ type, lines, workForecast, onClose }) {
+  // 자동 닫힘 카운트다운 (로그인 시 12초, 로그아웃 시 5초 - 예보 보는 시간)
+  const totalSec = type === 'login' ? 12 : 5;
   const [remaining, setRemaining] = useState(totalSec);
 
   useEffect(() => {
@@ -26,14 +26,14 @@ export default function GreetingModal({ type, lines, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className={`bg-gradient-to-br ${bgGradient} border-2 ${borderColor} rounded-2xl w-full max-w-md p-6 shadow-2xl`}
+        className={`bg-gradient-to-br ${bgGradient} border-2 ${borderColor} rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto`}
         onClick={e => e.stopPropagation()}
       >
         <div className={`text-xs font-bold ${titleColor} mb-3 uppercase tracking-wider`}>
           {title}
         </div>
 
-        <div className="space-y-3 mb-5">
+        <div className="space-y-3 mb-4">
           {lines.map((line, i) => (
             <div
               key={i}
@@ -43,6 +43,20 @@ export default function GreetingModal({ type, lines, onClose }) {
             </div>
           ))}
         </div>
+
+        {/* M3.68: 근무 시간대 예보 (로그인 시만) */}
+        {isLogin && workForecast && workForecast.length > 0 && (
+          <div className="mb-4 p-3 bg-slate-900/50 border border-slate-600 rounded-lg">
+            <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase">근무 시간 예보</div>
+            <div className="space-y-1.5">
+              {workForecast.map((line, i) => (
+                <div key={i} className="text-sm font-mono text-slate-200">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-2 mb-3 text-[11px] text-slate-400">
           <div className="flex-1 bg-slate-800 rounded-full h-1 overflow-hidden">

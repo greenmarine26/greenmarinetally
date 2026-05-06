@@ -7,21 +7,31 @@
 const PYEONGTAEK_LAT = 36.9826;
 const PYEONGTAEK_LON = 126.8244;
 
-// Open-Meteo API에서 평택항 현재 날씨 조회
+// Open-Meteo API에서 평택항 현재 날씨 + 시간별 예보 조회
 export async function fetchPyeongtaekWeather() {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${PYEONGTAEK_LAT}&longitude=${PYEONGTAEK_LON}&current=temperature_2m,weather_code,wind_speed_10m,precipitation,relative_humidity_2m&timezone=Asia%2FSeoul`;
+    // M3.68: 현재 + 12시간 예보 함께 조회
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${PYEONGTAEK_LAT}&longitude=${PYEONGTAEK_LON}&current=temperature_2m,weather_code,wind_speed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weather_code,precipitation,wind_speed_10m&forecast_hours=12&timezone=Asia%2FSeoul`;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error('weather api ' + res.status);
     const data = await res.json();
     const c = data.current;
+    const h = data.hourly;
     return {
-      temp: c.temperature_2m,             // °C
-      windSpeed: c.wind_speed_10m,        // m/s? km/h?
-      precipitation: c.precipitation,     // mm
-      weatherCode: c.weather_code,        // WMO code
+      temp: c.temperature_2m,
+      windSpeed: c.wind_speed_10m,
+      precipitation: c.precipitation,
+      weatherCode: c.weather_code,
       humidity: c.relative_humidity_2m,
       time: c.time,
+      // 시간별 예보 (현재 시각부터 12시간)
+      hourly: h ? h.time.map((t, i) => ({
+        time: t,
+        temp: h.temperature_2m[i],
+        weatherCode: h.weather_code[i],
+        precipitation: h.precipitation[i],
+        windSpeed: h.wind_speed_10m[i],
+      })) : [],
     };
   } catch (e) {
     console.warn('[weather] 날씨 조회 실패:', e);
@@ -47,12 +57,146 @@ function describeWeather(code) {
 
 // 시간대 분류
 function getTimeOfDay(hour) {
-  if (hour >= 5 && hour < 9) return 'dawn';     // 새벽/아침
-  if (hour >= 9 && hour < 12) return 'morning'; // 오전
-  if (hour >= 12 && hour < 14) return 'lunch';  // 점심
-  if (hour >= 14 && hour < 18) return 'afternoon'; // 오후
-  if (hour >= 18 && hour < 22) return 'evening';   // 저녁
-  return 'night'; // 야간 (22~5시)
+  if (hour >= 5 && hour < 9) return 'dawn';
+  if (hour >= 9 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 14) return 'lunch';
+  if (hour >= 14 && hour < 18) return 'afternoon';
+  if (hour >= 18 && hour < 22) return 'evening';
+  return 'night';
+}
+
+// M3.68: 예보 변화 멘트 (듣기 좋게)
+// hourly 12시간 데이터에서 의미있는 변화 찾아 한 줄로 요약
+function buildForecastNarration(hourly, currentKind) {
+  if (!hourly || hourly.length < 2) return '';
+
+  // 1) 위험 기상 시작 (천둥/눈/강풍/호우)
+  for (let i = 1; i < hourly.length; i++) {
+    const h = hourly[i];
+    const w = describeWeather(h.weatherCode);
+    const t = new Date(h.time);
+    const hourStr = t.getHours();
+
+    if (w.kind === 'thunder') {
+      return `⚠️ ${hourStr}시쯤 천둥번개 예보 - 작업 안전 주의`;
+    }
+    if (w.kind === 'snow') {
+      return `❄️ ${hourStr}시쯤 눈 소식 - 미끄럼 주의`;
+    }
+    if (h.windSpeed >= 12) {
+      return `💨 ${hourStr}시쯤 강풍 ${Math.round(h.windSpeed)}m/s - 안전 주의`;
+    }
+    if (h.precipitation >= 5) {
+      return `🌧 ${hourStr}시쯤 비 강해질 예정 (${h.precipitation.toFixed(0)}mm)`;
+    }
+  }
+
+  // 2) 비/이슬비 시작 (현재 안 오는데 예보에 있음)
+  if (currentKind === 'clear' || currentKind === 'partly' || currentKind === 'cloudy') {
+    for (let i = 1; i < hourly.length; i++) {
+      const h = hourly[i];
+      const w = describeWeather(h.weatherCode);
+      if (w.kind === 'rain' || w.kind === 'drizzle' || h.precipitation >= 0.5) {
+        const hourStr = new Date(h.time).getHours();
+        return `☔ ${hourStr}시쯤 비 소식이 있어요. 우비 챙기세요`;
+      }
+    }
+  }
+
+  // 3) 비 그침 (현재 비 오는데 예보에 멈춤)
+  if (currentKind === 'rain' || currentKind === 'drizzle') {
+    for (let i = 1; i < hourly.length; i++) {
+      const h = hourly[i];
+      const w = describeWeather(h.weatherCode);
+      if (w.kind !== 'rain' && w.kind !== 'drizzle' && h.precipitation < 0.3) {
+        const hourStr = new Date(h.time).getHours();
+        return `🌤 ${hourStr}시쯤 비 그칠 예정. 조금만 더 힘내세요`;
+      }
+    }
+  }
+
+  // 4) 기온 큰 변화 (10도 이상)
+  const temps = hourly.map(h => h.temp);
+  const minT = Math.min(...temps);
+  const maxT = Math.max(...temps);
+  if (maxT - minT >= 10) {
+    return `🌡 기온 변화 큰 날 (${Math.round(minT)}°C ~ ${Math.round(maxT)}°C). 옷 차림 신경 쓰세요`;
+  }
+
+  // 5) 평온
+  return '✨ 앞으로 평온한 날씨예요';
+}
+
+// M3.68: 8시간 근무 시간대 예보 라인 생성
+// 접속 시점부터 2~3시간 간격으로 4~5개 표시
+function buildWorkHoursForecast(hourly) {
+  if (!hourly || hourly.length === 0) return [];
+
+  const lines = [];
+  const indexes = [0, 3, 6, 9];
+  for (const i of indexes) {
+    if (i >= hourly.length) break;
+    const h = hourly[i];
+    const t = new Date(h.time);
+    const w = describeWeather(h.weatherCode);
+    const hour = t.getHours().toString().padStart(2, '0');
+
+    let note = '';
+    if (h.precipitation >= 5) note = ' ⚠️ 호우';
+    else if (h.precipitation >= 1) note = ` ${h.precipitation.toFixed(0)}mm`;
+    else if (h.windSpeed >= 12) note = ` ⚠️ 강풍`;
+    else if (h.windSpeed >= 8) note = ` 💨${Math.round(h.windSpeed)}m/s`;
+
+    lines.push(`${hour}시  ${w.emoji} ${Math.round(h.temp)}°C${note}`);
+  }
+  return lines;
+}
+
+// M3.68: 근무 시간대 음성 요약 (자연스러운 한 문장)
+function buildWorkForecastVoice(hourly) {
+  if (!hourly || hourly.length < 4) return '';
+
+  // 3시간, 6시간, 9시간 후의 의미있는 변화 찾기
+  const slots = [
+    { i: 3, label: '3시간 후' },
+    { i: 6, label: '6시간 후' },
+    { i: 9, label: '9시간 후' },
+  ].filter(s => s.i < hourly.length);
+
+  const temps = slots.map(s => hourly[s.i].temp);
+  const tempMin = Math.min(...temps);
+  const tempMax = Math.max(...temps);
+
+  // 1) 큰 기온 변화
+  if (tempMax - tempMin >= 8) {
+    return `근무 중 기온은 ${Math.round(tempMin)}도에서 ${Math.round(tempMax)}도까지 변할 예정입니다`;
+  }
+
+  // 2) 평균 기온 안내
+  const avgTemp = Math.round((temps.reduce((a, b) => a + b, 0)) / temps.length);
+
+  // 3) 비/눈 발생 시각 찾기
+  for (const s of slots) {
+    const h = hourly[s.i];
+    const w = describeWeather(h.weatherCode);
+    const hour = new Date(h.time).getHours();
+
+    if (w.kind === 'thunder') {
+      return `${hour}시쯤 천둥번개 예보, 안전 주의하세요`;
+    }
+    if (w.kind === 'snow') {
+      return `${hour}시쯤 눈 예보, 미끄럼 주의하세요`;
+    }
+    if (h.precipitation >= 5) {
+      return `${hour}시쯤 비가 강해질 예정입니다`;
+    }
+    if (h.windSpeed >= 12) {
+      return `${hour}시쯤 강풍 ${Math.round(h.windSpeed)}미터 예보입니다`;
+    }
+  }
+
+  // 4) 평온
+  return `근무 시간 동안 ${avgTemp}도 안팎으로 평온합니다. 좋은 하루 되세요`;
 }
 
 // 로그인 인사 메시지 생성
@@ -121,15 +265,39 @@ export function buildGreetingMessage(name, weather) {
   ];
   if (weatherLine) lines.push(weatherLine);
 
+  // M3.68: 예보 변화 멘트 (듣기 좋게)
+  let forecastLine = '';
+  let voiceForecast = '';
+  if (weather && weather.hourly && weather.hourly.length > 0) {
+    const w = describeWeather(weather.weatherCode);
+    forecastLine = buildForecastNarration(weather.hourly, w.kind);
+    if (forecastLine) {
+      // 음성용 (이모지 제거)
+      voiceForecast = forecastLine.replace(/[⚠️⛈❄️💨🌧☔🌤🌡✨⭐]/g, '').trim();
+      lines.push(forecastLine);
+    }
+  }
+
+  // M3.68: 근무 시간대 예보 라인 (8~9시간)
+  const workForecast = weather ? buildWorkHoursForecast(weather.hourly) : [];
+
   // 음성용 (이모지/기호 제거)
   const voiceLines = [
     `안녕하세요`,
     greeting.replace(/[☀️🌅🌞💪🍱🥤🌤☕🌆🌙⭐]/g, '').trim(),
   ];
   if (voiceWeather) voiceLines.push(voiceWeather);
+  if (voiceForecast) voiceLines.push(voiceForecast);
+
+  // M3.68: 근무 시간대 음성 - 의미있는 변화만 짧게
+  if (workForecast && workForecast.length >= 2) {
+    const summary = buildWorkForecastVoice(weather.hourly);
+    if (summary) voiceLines.push(summary);
+  }
 
   return {
     lines,                          // 화면 표시용
+    workForecast,                   // M3.68: 근무 시간대 예보 라인 배열
     voice: voiceLines.join('. '),   // 음성용
     timeOfDay: tod,
     weather,
