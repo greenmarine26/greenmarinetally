@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.68';
+export const APP_VERSION = 'M3.69';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -432,15 +432,21 @@ export function parseBAPLIE(ediText) {
   }
   if (cur) result.containers.push(cur);
 
-  // 무게 기반 F/E 검증 (현장 경험: 20피트 Empty ≈ 2.2t, 40피트 Empty ≈ 3.8t)
-  // status 코드와 무게가 충돌하면 무게 우선 (현장 실측)
+  // M3.69: 무게 기반 F/E 추정 - fe가 빈 값(미정)일 때만 적용
+  // 원칙: EDI/리스트에 명시된 F/E는 검수원의 정답. 무게로 절대 덮어쓰지 않음
+  // (이전 M3.67 로직: 무게 우선 → 엠티 명시된 컨테이너가 무게 있다고 풀로 변경되는 버그 발생)
   for (const c of result.containers) {
+    // 이미 fe가 명시되어 있으면 그대로 (검수원의 정답)
+    if (c.fe === 'F' || c.fe === 'E') continue;
+
+    // fe가 빈 값(미정)일 때만 무게로 추정
     if (c.wt > 0) {
       const is20 = c.iso && (c.iso.startsWith('22') || c.iso.startsWith('25'));
       const is40 = c.iso && (c.iso.startsWith('42') || c.iso.startsWith('44') || c.iso.startsWith('45'));
       if (is20 && c.wt <= 2500) c.fe = 'E';
       else if (is40 && c.wt <= 4500) c.fe = 'E';
       else if (c.wt > 5000) c.fe = 'F';
+      // 그 외 (애매한 무게)는 fe 빈 값 그대로 → 검수원이 현장 확인
     }
   }
 
@@ -543,9 +549,10 @@ export function parseAscFile(text) {
       }
     }
 
-    // 무게 기반 F/E 검증
+    // M3.69: 무게 기반 F/E 추정 - fe가 빈 값일 때만
+    // 원칙: ASC에 명시된 F/E는 검수원의 정답. 무게로 덮지 않음
     let feFinal = fe;
-    if (wt > 0) {
+    if (!feFinal && wt > 0) {  // fe 미정인 경우만
       const is20 = (tp && (tp.endsWith('20') || tp === 'DC20' || tp === 'RF20' || tp === 'TK20'))
                 || (iso && iso.startsWith('22'));
       const is40 = (tp && (tp.endsWith('40') || tp === 'DC40' || tp === 'RF40' || tp === 'HC40'))
