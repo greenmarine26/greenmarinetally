@@ -497,7 +497,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
 
     const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
     const tmpStr = String(c.tmp || '').trim();
-    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '' || tmpStr === '0' || tmpStr === '0.0');
+    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '');
 
     let specialLine = '';
     let specialColor = 'text-slate-500';

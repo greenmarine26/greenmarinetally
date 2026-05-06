@@ -544,7 +544,7 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
 function SmallResultCard({ c, onOpen }) {
   const isDone = !!c._comp;
   const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
-  const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
+  const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
   const isReeferF = c.rf && hasTmp && c.fe === 'F';
   return (
     <button onClick={onOpen}

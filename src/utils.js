@@ -357,19 +357,13 @@ export function parseBAPLIE(ediText) {
         const m = norm.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
         if (m) norm = (m[1] || '') + m[2];
 
-        // M3.5.4: EDI의 "000"/"0"은 "온도 미입력" 처리
-        //   - 선사가 진짜 0도면 보통 "+0" 또는 명시 형식
-        //   - "000" 단독은 미정/입력안됨 관행 (실제 영하 0도 화물 매우 드뭄)
-        //   - 검수원이 "0°C"로 오인하는 것 방지
-        cur.rf = true;  // 리퍼 자체는 맞음 (TMP 세그먼트 있음)
-        if (norm === '0' || norm === '0.0' || norm === '+0') {
-          cur.tmp = '';
-          cur.tmp_missing = true;  // 명시적 미입력 플래그
-        } else {
-          cur.tmp = norm;
-        }
+        // M3.6: 0°C는 실제 온도 (신선 채소, 의약품 등 0도 운반 화물 존재)
+        //   - 검수원이 직접 입력한 0도와 EDI 0도 모두 그대로 0°C로 인식
+        //   - 진짜 미입력은 빈 값(공백)인 경우만
+        cur.rf = true;
+        cur.tmp = norm;  // "0"이든 "-18"이든 그대로
       } else {
-        // TMP 세그먼트는 있는데 값 없는 경우
+        // TMP 세그먼트는 있는데 값이 진짜 비어있는 경우만 미입력
         cur.rf = true;
         cur.tmp = '';
         cur.tmp_missing = true;
@@ -793,12 +787,17 @@ export async function parseListExcel(arrayBuffer) {
       const isDg = dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal);
 
       let tmpValRaw = tmp_i >= 0 ? String(row[tmp_i] || '').trim() : '';
-      // M3.5.4: 엑셀의 "0", "000", "-" 등은 온도 미입력으로 처리
+      // M3.6: 0°C는 실제 온도 (신선 채소, 의약품 등)
+      // 진짜 미입력은 빈 값/"-" 만
       let tmpVal = tmpValRaw;
       let tmpMissing = false;
-      if (tmpValRaw === '' || tmpValRaw === '-' || /^[+-]?0+(\.0+)?$/.test(tmpValRaw)) {
+      if (tmpValRaw === '' || tmpValRaw === '-') {
         tmpVal = '';
         tmpMissing = true;
+      } else {
+        // "0", "0.0", "+0", "-0", "000" 모두 정규화 → 그대로 0°C
+        const m = tmpValRaw.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
+        if (m) tmpVal = (m[1] || '') + m[2];
       }
       const isoUpper = (iso || isoRaw || '').toUpperCase();
       // 특수화물 태그 (45ft 영역 4[5689] 포함, 예: 46P3=45FR)

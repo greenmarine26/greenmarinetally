@@ -27,7 +27,7 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
     // M3.5.4: 온도 미입력 체크 (리퍼인데 온도 없거나 0)
     const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
     const tmpStr = String(c.tmp || '').trim();
-    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '' || tmpStr === '0' || tmpStr === '0.0');
+    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '');
 
     rows.push([
       i + 1,

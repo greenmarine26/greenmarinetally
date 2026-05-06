@@ -56,12 +56,13 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   const carrierLabel = carrier ? `${carrier}` : '';
 
   // ─── 🔴 1. 리퍼 온도 미입력 ───
+  // M3.6: 0°C는 실제 온도 (신선 채소, 의약품 등). 진짜 미입력만 판정
   const reefers = extractReefers(ediPtk);
   if (reefers.length > 0) {
     const missingTmp = reefers.filter(c => {
       if (c.tmp_missing) return true;
       const t = String(c.tmp || '').trim();
-      if (!t || t === '0' || t === '0.0') return true;
+      if (!t) return true;  // 빈 값만 미입력
       return false;
     });
     if (missingTmp.length > 0) {
