@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.71';
+export const APP_VERSION = 'M3.72';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -365,6 +365,13 @@ export function parseBAPLIE(ediText) {
       else if (rawStatus === 'E') cur.fe = 'E';
       else if (rawStatus === '5') cur.fe = 'F';   // 5 = Full
       else if (rawStatus === '4') cur.fe = 'E';   // 4 = Empty
+      // M3.72: ISO 끝자리 E (45RE, 22RE 등)도 Empty 표시 (선사 관행)
+      // 일부 선사는 EQD status 없이 ISO 코드에만 E 표시
+      else if (cur.iso && cur.iso.length >= 4 && /[A-Z][A-Z][A-Z]E$/.test(cur.iso)) {
+        // 끝 4자리가 [문자][문자][문자]E (45RE, 22RE 같은 패턴)
+        cur.fe = 'E';
+        cur.st = 'E(ISO)';
+      }
       // M3.67: 기본값 '' (미정) - 무게로 추정 또는 검수원 확인
 
       // 화면 표시용 tp
