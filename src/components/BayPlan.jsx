@@ -160,7 +160,12 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return out;
   }, [bayGroups]);
 
-  // 셀 색상 — V37 cellColor + M3.76: 선적 모드 POD 색깔 적용
+  // 셀 색상 — V37 cellColor + M3.77: 양하/선적 통일 POL/POD 색깔
+  // 정책:
+  //   - 양하 모드: 셀 = POL(출발지) 색깔, 평택 도착이면 노랑 ring 강조
+  //   - 선적 모드: 셀 = POD(목적지) 색깔, 평택 출발이면 노랑 ring 강조
+  //   - 노랑 ring = 우리 작업 대상 식별
+  //   - X-RAY/시프팅/완료는 우선순위 더 높음
   const cellColor = (c) => {
     if (compMap[c.cn]) {
       // 완료 = 어두운 흰색 (다크 배경 위 잘 보이게)
@@ -174,17 +179,23 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       // 시프팅 대상 = 주황
       return 'bg-orange-600 text-orange-50 border-orange-400';
     }
-    if (isPtk(c) || dischargeCns.has(c.cn)) {
-      // M3.76: 선적 모드면 POD(목적지) 색깔로 채워서 행선지 즉시 식별
-      // 양하 모드는 amber(노랑) 그대로 (평택 도착이라 행선지 무의미)
-      if (mode === 'loading' && c.pod) {
-        const pc = getPortColor(c.pod);
-        if (pc) return `${pc.bg} ${pc.text} border-slate-300 ring-1 ring-amber-300`;
-      }
-      // 평택 양하/선적 기본 = 노랑 (형광펜)
+
+    // M3.77: 양하 = POL 색깔, 선적 = POD 색깔
+    const portCode = mode === 'discharge' ? c.pol : c.pod;
+    const pc = portCode ? getPortColor(portCode) : null;
+    const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
+
+    if (pc) {
+      // 색깔 매칭됨 - 평택 작업 대상이면 노랑 ring 추가
+      return `${pc.bg} ${pc.text} ${isOurContainer
+        ? 'border-amber-300 ring-2 ring-amber-400'
+        : 'border-slate-600'}`;
+    }
+
+    // 색깔 없는 항구 - 평택 작업 대상이면 노랑(기본), 통과면 슬레이트
+    if (isOurContainer) {
       return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
     }
-    // 통과 화물 = 옅은 회색
     return 'bg-slate-700 text-slate-300 border-slate-600';
   };
 
@@ -337,18 +348,18 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         </select>
       </div>
 
-      {/* 범례 - M3.76 확장: 셀 색깔 + 컨 종류 */}
+      {/* 범례 - M3.77: 양하/선적 통일 (POL/POD 색깔 + 평택 노랑 ring) */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
         <div className="flex items-center gap-2 flex-wrap text-[10px]">
           <span className="text-slate-500 font-bold uppercase w-12">셀색:</span>
-          <Legend color="bg-amber-500" label="평택"/>
+          <span className="text-cyan-300 font-bold">
+            {mode === 'discharge' ? 'POL(출발지)' : 'POD(목적지)'} 색깔
+          </span>
+          <span className="text-amber-300 font-bold">+ 노랑 ring = 평택</span>
           <Legend color="bg-purple-700" label="X-RAY"/>
           <Legend color="bg-orange-600" label="시프팅"/>
           <Legend color="bg-slate-300" label="완료"/>
-          <Legend color="bg-slate-700" label="통과"/>
-          {mode === 'loading' && (
-            <span className="text-cyan-400 font-bold ml-1">+ POD별 색깔</span>
-          )}
+          <Legend color="bg-slate-700" label="통과(색깔없음)"/>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-[10px]">
           <span className="text-slate-500 font-bold uppercase w-12">종류:</span>
