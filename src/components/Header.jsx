@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, Languages } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, Languages, LogOut } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
 import ContainerPhrasebook from './ContainerPhrasebook.jsx';
 import { getEquipNumber, setEquipNumber } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
 
-export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome }) {
+export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout }) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   const [helpOpen, setHelpOpen] = useState(false);
@@ -88,11 +88,11 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <RefreshCw className="w-3 h-3 text-amber-400"/>
           </button>
           <button
-            onClick={exitApp}
-            title="앱 종료"
-            className="p-1.5 rounded bg-red-900/30 hover:bg-red-900/60 active:bg-red-900/80 border border-red-700/40"
+            onClick={onLogout || exitApp}
+            title={onLogout ? '로그아웃 (인사 후 종료)' : '앱 종료'}
+            className="p-1.5 rounded bg-purple-900/40 hover:bg-purple-900/70 active:bg-purple-900/90 border border-purple-600/50"
           >
-            <Power className="w-4 h-4 text-red-400"/>
+            <LogOut className="w-4 h-4 text-purple-200"/>
           </button>
         </div>
       </div>

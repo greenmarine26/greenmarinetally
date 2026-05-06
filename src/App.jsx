@@ -11,6 +11,8 @@ import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import Header from './components/Header.jsx';
 import InspectorModal from './components/InspectorModal.jsx';
+import GreetingModal from './components/GreetingModal.jsx';
+import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, speakGreeting, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
 import UpdatePrompt from './components/UpdatePrompt.jsx';
 
@@ -18,10 +20,14 @@ export default function App() {
   const [route, setRoute] = useState({ name: 'home' });
   const [voyages, setVoyages] = useState({});
   const [inspectors, setInspectors] = useState({});
-  const [inspector, setInspector] = useState(_storage.get(SK.activeInspector) || '');
-  const [showInspectorModal, setShowInspectorModal] = useState(!_storage.get(SK.activeInspector));
+  // M3.6: 자동 로그인 제거 - 매번 검수원 입력
+  const [inspector, setInspector] = useState('');
+  const [showInspectorModal, setShowInspectorModal] = useState(true);
   const [online, setOnline] = useState(true);
   const [globalDetail, setGlobalDetail] = useState(null);
+  // M3.6: 인사 모달
+  const [greeting, setGreeting] = useState(null);  // {type: 'login'|'logout', lines, voice, ...}
+  const [weather, setWeather] = useState(null);
 
   useEffect(() => {
     const u1 = fbSubscribeVoyages(setVoyages);
@@ -80,7 +86,39 @@ export default function App() {
     _storage.set(SK.activeInspector, name);
     await fbSetInspector(name);
     setShowInspectorModal(false);
+    // M3.6: 로그인 시각 저장 + 날씨 + 인사
+    saveLoginTime(name);
+    const w = await fetchPyeongtaekWeather();
+    setWeather(w);
+    const g = buildGreetingMessage(name, w);
+    setGreeting({ type: 'login', ...g });
+    // 음성 출력 (약간 딜레이 - 모달 표시 후)
+    setTimeout(() => speakGreeting(g.voice), 300);
   }, []);
+
+  // M3.6: 로그아웃 처리
+  const handleLogout = useCallback(async () => {
+    if (!inspector) return;
+    const loginTime = getLoginTime();
+    const workDuration = loginTime ? (Date.now() - loginTime) : 0;
+    // 최신 날씨 다시 조회
+    const w = await fetchPyeongtaekWeather();
+    const f = buildFarewellMessage(inspector, w, workDuration);
+    setGreeting({ type: 'logout', ...f, inspectorName: inspector });
+    setTimeout(() => speakGreeting(f.voice), 300);
+  }, [inspector]);
+
+  // 인사 모달 닫기 + 로그아웃 시 실제 로그아웃 진행
+  const handleCloseGreeting = useCallback(() => {
+    if (greeting?.type === 'logout') {
+      // 실제 로그아웃 진행
+      clearLoginTime();
+      _storage.set(SK.activeInspector, '');
+      setInspector('');
+      setShowInspectorModal(true);
+    }
+    setGreeting(null);
+  }, [greeting]);
 
   const navigate = useCallback((target) => {
     if (target === 'home') window.location.hash = '';
@@ -100,6 +138,7 @@ export default function App() {
         voyages={voyages}
         onChangeInspector={() => setShowInspectorModal(true)}
         onGoHome={() => navigate('home')}
+        onLogout={handleLogout}
       />
 
       <main className="pb-20">
@@ -143,6 +182,15 @@ export default function App() {
           inspectors={inspectors}
           onSelect={handleSelectInspector}
           onClose={() => inspector && setShowInspectorModal(false)}
+        />
+      )}
+
+      {/* M3.6: 로그인/로그아웃 인사 모달 */}
+      {greeting && (
+        <GreetingModal
+          type={greeting.type}
+          lines={greeting.lines}
+          onClose={handleCloseGreeting}
         />
       )}
 
