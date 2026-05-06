@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.70';
+export const APP_VERSION = 'M3.71';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -345,8 +345,17 @@ export function parseBAPLIE(ediText) {
       if (/^[24]58[2-5]$/.test(cur.iso)) cur.rf = true;
       if (/^[24]59/.test(cur.iso)) cur.oog = true;
 
-      // status — V37 raw element 5
-      const rawStatus = (parts[5] || '').trim();
+      // status — BAPLIE EDIFACT: EQD+CN+컨번호+ISO+++status
+      // 형식에 따라 parts[5] 또는 parts[6]에 위치
+      // M3.71: 가장 마지막 비어있지 않은 요소를 status로 사용 (안전)
+      let rawStatus = '';
+      for (let i = parts.length - 1; i >= 4; i--) {
+        const p = (parts[i] || '').trim();
+        if (p && (p === 'F' || p === 'E' || p === '4' || p === '5')) {
+          rawStatus = p;
+          break;
+        }
+      }
       cur.st = rawStatus;
       // BAPLIE EDIFACT 표준 (실측 검증):
       //  5 = Full (Loaded) — 8~28톤
@@ -357,7 +366,6 @@ export function parseBAPLIE(ediText) {
       else if (rawStatus === '5') cur.fe = 'F';   // 5 = Full
       else if (rawStatus === '4') cur.fe = 'E';   // 4 = Empty
       // M3.67: 기본값 '' (미정) - 무게로 추정 또는 검수원 확인
-      // 이전: 'F' 기본값 → 리퍼 엠티가 풀로 잘못 분류되는 문제
 
       // 화면 표시용 tp
       if (cur.iso.startsWith('22')) cur.tp = "20'GP";

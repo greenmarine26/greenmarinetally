@@ -55,36 +55,39 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   const listCount = Object.keys(listRecords || {}).length;
   const carrierLabel = carrier ? `${carrier}` : '';
 
-  // ─── 🔴 1. 리퍼 온도 미입력 (풀 리퍼만) ───
-  // M3.6: 0°C는 실제 온도 (신선 채소, 의약품 등). 진짜 미입력만 판정
-  // M3.67: 엠티 리퍼는 온도 없는 게 정상 → 풀 리퍼만 검사
-  const reefers = extractReefers(ediPtk);
-  // 풀 리퍼만 추출 (fe='F'이거나, 무게 5톤 초과)
-  const fullReefers = reefers.filter(c => {
-    if (c.fe === 'E') return false;  // 명시적 엠티는 제외
-    if (c.fe === 'F') return true;   // 명시적 풀은 포함
-    // fe 미정인 경우: 무게로 판단
-    const wt = Number(c.wt) || 0;
-    return wt > 5000;  // 5톤 초과만 풀로 간주 (그 외는 미정 → 검사 제외)
-  });
-  if (fullReefers.length > 0) {
-    const missingTmp = fullReefers.filter(c => {
-      if (c.tmp_missing) return true;
-      const t = String(c.tmp || '').trim();
-      if (!t) return true;  // 빈 값만 미입력
-      return false;
+  // ─── 🔴 1. 리퍼 온도 미입력 (양하 모드의 풀 리퍼만) ───
+  // M3.71: 선적 모드는 검사 제외 (적재 전이라 온도 정보 없는 게 정상)
+  // 양하 모드만 검사 - 이미 적재된 풀 리퍼는 온도 명시되어야 함
+  if (mode === 'discharge') {
+    const reefers = extractReefers(ediPtk);
+    // 풀 리퍼만 추출 (fe='F'이거나, 무게 5톤 초과)
+    const fullReefers = reefers.filter(c => {
+      if (c.fe === 'E') return false;  // 명시적 엠티는 제외
+      if (c.fe === 'F') return true;   // 명시적 풀은 포함
+      // fe 미정인 경우: 무게로 판단
+      const wt = Number(c.wt) || 0;
+      return wt > 5000;  // 5톤 초과만 풀로 간주 (그 외는 미정 → 검사 제외)
     });
-    if (missingTmp.length > 0) {
-      alerts.push({
-        level: 'critical',
-        code: 'reefer_no_temp',
-        msg: `풀 리퍼 ${fullReefers.length}대 중 ${missingTmp.length}대 온도 미입력`,
-        voice: `풀 리퍼 ${missingTmp.length}대 온도 미입력입니다. 현장 확인 필요`,
-        count: missingTmp.length,
-        details: missingTmp.map(c => ({ cn: c.cn, bay: c.bay, row: c.row, tier: c.tier })),
+    if (fullReefers.length > 0) {
+      const missingTmp = fullReefers.filter(c => {
+        if (c.tmp_missing) return true;
+        const t = String(c.tmp || '').trim();
+        if (!t) return true;  // 빈 값만 미입력
+        return false;
       });
+      if (missingTmp.length > 0) {
+        alerts.push({
+          level: 'critical',
+          code: 'reefer_no_temp',
+          msg: `풀 리퍼 ${fullReefers.length}대 중 ${missingTmp.length}대 온도 미입력`,
+          voice: `풀 리퍼 ${missingTmp.length}대 온도 미입력입니다. 현장 확인 필요`,
+          count: missingTmp.length,
+          details: missingTmp.map(c => ({ cn: c.cn, bay: c.bay, row: c.row, tier: c.tier })),
+        });
+      }
     }
   }
+  // 선적 모드는 리퍼 온도 검사 X (현장에서 입력 단계)
 
   // ─── 🔴 1.5. M3.6: 알 수 없는 ISO 표기 검출 ───
   // 검수원이 사진 찍어 증거 남기고 1항사 확인 필요
