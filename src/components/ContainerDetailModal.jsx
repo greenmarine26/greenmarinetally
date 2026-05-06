@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber, isUnknownIso } from '../utils.js';
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
@@ -42,7 +42,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [confirmState, askConfirm] = useConfirm();
 
   const isDone = !!comp;
-  const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+  const isReefer = isReeferContainer(c);
   const isDG = c.dg;
 
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;

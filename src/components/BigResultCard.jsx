@@ -1,7 +1,7 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
 import React from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon } from 'lucide-react';
-import { isoToLabel, fmtPos } from '../utils.js';
+import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
 import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -10,7 +10,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   const isDone = !!c._comp;
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
   const sealError = c.sl && slOrig && c.sl !== slOrig;
-  const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+  const isReefer = isReeferContainer(c);
   const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
   // 리퍼 + 온도 있으면 무조건 표시 (Empty + 온도는 현장에 없음)
   // 온도 자체가 Full의 증거 - F/E 데이터가 잘못되어 있어도 온도 표시

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.78';
+export const APP_VERSION = 'M3.79';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -233,6 +233,32 @@ export const isUnknownIso = (iso) => {
   return false;
 };
 
+// M3.79: 통합 리퍼 판정 헬퍼
+//   기존 c.iso[2] === 'R' 판정의 한계:
+//     - "45R0", "22R5" → [2]='R' OK
+//     - "40HR", "20HR" (ASC m2 매칭) → [2]='H', [3]='R' ❌ 누락됨
+//     - "RFHC", "RFHQ" (ASC m4 tp 그대로) → [0]='R' ❌ 누락됨
+//   해결: ISO 정규화(isoToLabel) 후 끝이 RF/RE인지 확인
+export function isReeferIso(iso) {
+  if (!iso) return false;
+  const upper = String(iso).toUpperCase().trim();
+  // 빠른 경로: 정규화 없이 흔한 패턴 직접 체크
+  if (/R[FE]?$/.test(upper)) return true;        // 22RF, 22RE, 40HR 끝
+  if (/^RF/.test(upper)) return true;            // RFHC, RFHQ, RF20, RFHR
+  if (/^[24]58[2-5]$/.test(upper)) return true;  // 4582, 4585, 2282 등 4자리
+  // 정밀: isoToLabel 결과로 판단 (ISO 6346 표준 변환)
+  const lbl = isoToLabel(upper);
+  if (!lbl) return false;
+  return lbl.endsWith('RF') || lbl.endsWith('RE');
+}
+
+// 통합 컨테이너 종류 판정 (rf 플래그 + ISO 모두 검사)
+export function isReeferContainer(c) {
+  if (!c) return false;
+  if (c.rf) return true;
+  return isReeferIso(c.iso);
+}
+
 export const isoToPdfLabel = (iso, tp) => {
   if (tp && tp.length >= 3) return tp.toUpperCase().trim();
   const lbl = isoToLabel(iso);
@@ -348,6 +374,8 @@ export function parseBAPLIE(ediText) {
       if (/^[24]59/.test(cur.iso)) cur.oog = true;
       // M3.74 fix: 4자리 숫자 FR 코드 (4583/4584/2283/2284) = FR
       if (/^[24]58[34]$/.test(cur.iso)) { cur.fr = true; cur.oog = true; }
+      // M3.79: 변형 ISO 표기 (40HR 등 ASC식 표기가 EDI에 들어온 경우) 리퍼 보강 인식
+      if (!cur.rf && isReeferIso(cur.iso)) cur.rf = true;
 
       // status — BAPLIE EDIFACT: EQD+CN+컨번호+ISO+++status
       // 형식에 따라 parts[5] 또는 parts[6]에 위치
@@ -593,7 +621,8 @@ export function parseAscFile(text) {
       fe: feFinal,
       wt, op, pol, pod,
       dg: false, dgc: '', un: '',
-      rf: (tp && tp.startsWith('RF')) || (isoFinal && isoFinal[2] === 'R'),
+      // M3.79: 통합 헬퍼로 리퍼 판정 (40HR, RFHC, 458x 등 모든 변형 인식)
+      rf: (tp && tp.startsWith('RF')) || isReeferIso(isoFinal),
       tk: (tp && tp.startsWith('TK')) || (isoFinal && isoFinal[2] === 'T'),
       oog: false,
       sl: '', sh: '', bl: '', tmp: '',
@@ -864,7 +893,8 @@ export async function parseListExcel(arrayBuffer) {
       const isoUpper = (iso || isoRaw || '').toUpperCase();
       // 특수화물 태그 (45ft 영역 4[5689] 포함, 예: 46P3=45FR)
       // 리퍼 판정: ISO 기준 우선, 온도가 진짜 있으면 + 표기
-      const isRf = (tmpVal && tmpVal !== '-') || /^[24][245689]R/.test(isoUpper) || /^[24]0R/.test(isoUpper) || /^[24]58[2-5]$/.test(isoUpper);
+      // M3.79: 통합 헬퍼로 리퍼 판정 (40HR/RFHC 등 모든 변형 인식)
+      const isRf = (tmpVal && tmpVal !== '-') || isReeferIso(isoUpper);
       const isFr = /^[24][0245689]P/.test(isoUpper) || /^[24]0F[PR]/.test(isoUpper) || /^45P/.test(isoUpper);
       const isOt = /^[24][0245689]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^4[5689]O/.test(isoUpper);
       const isTk = /^[24][0245689]T/.test(isoUpper);
@@ -951,7 +981,7 @@ export async function parseXrayList(arrayBuffer) {
   return { containers: Array.from(containers) };
 }
 
-// === POD/POL 색깔 (M3.78 대폭 확장) ===
+// === POD/POL 색깔 (M3.79 대폭 확장) ===
 // 평택항 자주 쓰는 모든 항구 색깔 지정 - 베이플랜에서 셀 색깔로 행선지 즉시 식별
 // 지역별 톤 통일 (구분 + 그룹 인지):
 //   중국 = 청-남청 계열

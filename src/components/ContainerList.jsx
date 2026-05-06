@@ -7,7 +7,7 @@
 import React, { useState, useMemo } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
-import { isoToLabel, formatWt, fmtPos } from '../utils.js';
+import { isoToLabel, formatWt, fmtPos, isReeferContainer } from '../utils.js';
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
@@ -297,7 +297,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const [confirmState, askConfirm] = useConfirm();
 
   const isDone = !!comp;
-  const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+  const isReefer = isReeferContainer(c);
   const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
   const isReeferF = c.rf && hasTmp;
   const isDG = c.dg;

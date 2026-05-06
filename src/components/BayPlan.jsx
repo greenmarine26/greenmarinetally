@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer } from '../utils.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
@@ -570,7 +570,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const bay2 = String(parseInt(c.bay || '0')).padStart(2, '0');
     const posStr = `....${bay2}${row}${tier}`;
 
-    const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
+    const isReefer = isReeferContainer(c);
     const tmpStr = String(c.tmp || '').trim();
     // M3.75 fix: 엠티 리퍼는 온도 없는 게 정상 → 경고 X (Full 또는 fe 미정만 경고)
     const isFullReefer = isReefer && (c.fe === 'F' || c.fe === '' || c.fe == null);

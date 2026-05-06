@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso } from './utils.js';
+import { isoToLabel, isUnknownIso, isReeferContainer } from './utils.js';
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 function filterPyeongtaek(containers, mode) {
@@ -30,7 +30,7 @@ function filterPyeongtaek(containers, mode) {
 
 // 리퍼 컨테이너 추출 (rf 플래그 또는 ISO에 R)
 function extractReefers(containers) {
-  return containers.filter(c => c.rf || (c.iso && c.iso[2] === 'R'));
+  return containers.filter(c => isReeferContainer(c));
 }
 
 // 위험물 컨테이너 추출
