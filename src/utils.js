@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.77';
+export const APP_VERSION = 'M3.78';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -951,7 +951,7 @@ export async function parseXrayList(arrayBuffer) {
   return { containers: Array.from(containers) };
 }
 
-// === POD/POL 색깔 (M3.77 대폭 확장) ===
+// === POD/POL 색깔 (M3.78 대폭 확장) ===
 // 평택항 자주 쓰는 모든 항구 색깔 지정 - 베이플랜에서 셀 색깔로 행선지 즉시 식별
 // 지역별 톤 통일 (구분 + 그룹 인지):
 //   중국 = 청-남청 계열

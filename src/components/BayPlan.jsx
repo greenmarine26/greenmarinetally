@@ -21,7 +21,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   const [zoom, setZoom] = useState(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.3;
+    // M3.78: 모바일 기본 zoom 0.3 → 0.5로 (❄/⚠ 같은 종류 심볼 잘 보이게)
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.5;
     return 1.0;
   });
   // M3.74: 다중 적재 슬롯 선택 모달
@@ -612,70 +613,86 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       }
     };
 
-    // M3.76: 컨 종류별 좌측 컬러 바 (확대 안 해도 식별)
-    let typeBarColor = ''; // 빈값=일반 컨 (바 안 그림)
-    let typeSymbol = '';   // 우상단 큰 심볼
+    // M3.76+M3.78: 컨 종류별 좌측 컬러 바 + 우상단 큰 심볼 (강한 대비)
+    // 어떤 셀 배경색(POL/POD 색깔)에서도 명확히 보이도록 흰색 배경 + 컬러 외곽선/글씨
+    let typeBarBg = '';      // 좌측 바 배경 (강한 색깔)
+    let typeBarBorder = '';  // 좌측 바 우측 테두리 (대비용)
+    let typeSymbol = '';
+    let typeSymbolColor = '';  // 심볼 글씨색
     if (c.dg) {
-      typeBarColor = 'bg-red-500';
+      typeBarBg = 'bg-red-600';
+      typeBarBorder = 'border-r-2 border-white';
       typeSymbol = '⚠';
+      typeSymbolColor = 'text-red-700';
     } else if (isReefer) {
-      typeBarColor = c.fe === 'E' ? 'bg-cyan-500/60' : 'bg-cyan-400';
+      // 엠티 리퍼는 약간 흐리게, 풀 리퍼는 강하게
+      typeBarBg = c.fe === 'E' ? 'bg-cyan-600' : 'bg-cyan-500';
+      typeBarBorder = 'border-r-2 border-white';
       typeSymbol = '❄';
+      typeSymbolColor = c.fe === 'E' ? 'text-cyan-700' : 'text-cyan-600';
     } else if (c.fr) {
-      typeBarColor = 'bg-purple-500';
+      typeBarBg = 'bg-purple-600';
+      typeBarBorder = 'border-r-2 border-white';
       typeSymbol = '⊞';
+      typeSymbolColor = 'text-purple-700';
     } else if (c.tk) {
-      typeBarColor = 'bg-orange-500';
+      typeBarBg = 'bg-orange-600';
+      typeBarBorder = 'border-r-2 border-white';
       typeSymbol = '▣';
+      typeSymbolColor = 'text-orange-700';
     } else if (c.ot || c.oog) {
-      typeBarColor = 'bg-fuchsia-500';
+      typeBarBg = 'bg-fuchsia-600';
+      typeBarBorder = 'border-r-2 border-white';
       typeSymbol = '△';
+      typeSymbolColor = 'text-fuchsia-700';
     }
 
     return (
       <button
         key={key}
         onClick={handleCellClick}
-        className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
-          isReefer ? 'ring-2 ring-cyan-400 ring-inset' : ''
-        }`}
+        className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden`}
         style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize }}
       >
-        {/* M3.76: 좌측 컬러 바 (특수화물 종류) - 확대 안 해도 식별 */}
-        {typeBarColor && (
-          <div className={`absolute top-0 left-0 bottom-0 ${typeBarColor} z-10`}
-               style={{ width: Math.max(3, Math.round(cellW * 0.06)) }}/>
+        {/* M3.78: 좌측 컬러 바 - 두껍고 흰색 테두리로 어떤 셀 색깔에도 잘 보임 */}
+        {typeBarBg && (
+          <div className={`absolute top-0 left-0 bottom-0 ${typeBarBg} ${typeBarBorder} z-10`}
+               style={{ width: Math.max(6, Math.round(cellW * 0.1)) }}/>
         )}
-        {/* M3.76: 우상단 큰 심볼 (특수화물 종류) - 확대 안 해도 식별 */}
-        {typeSymbol && !isReefer && (
-          <div className="absolute top-0 right-0 z-20 bg-slate-900/90 text-white font-black leading-none px-1 rounded-bl"
-               style={{ fontSize: Math.max(10, fontSize * 1.5), padding: '1px 3px' }}>
+        {/* M3.78: 우상단 큰 심볼 - 흰색 배경 + 컬러 글씨 + 컬러 외곽선 (강한 대비) */}
+        {typeSymbol && (
+          <div className={`absolute top-0 right-0 z-20 bg-white ${typeSymbolColor} font-black leading-none rounded-bl border-2 ${
+            isReefer ? 'border-cyan-500' :
+            c.dg ? 'border-red-600' :
+            c.fr ? 'border-purple-600' :
+            c.tk ? 'border-orange-600' :
+            'border-fuchsia-600'
+          }`}
+               style={{ fontSize: Math.max(13, fontSize * 2), padding: '1px 4px', lineHeight: 1 }}>
             {typeSymbol}
+            {tmpMissing && (
+              <span className="text-red-600 ml-0.5 animate-pulse">!</span>
+            )}
           </div>
         )}
         {needsShift && (
           <div className="absolute top-0 left-0 bg-amber-400 text-slate-900 px-0.5 font-black leading-none rounded-br z-10"
-            style={{ fontSize: fontSize - 1, marginLeft: typeBarColor ? Math.max(3, Math.round(cellW * 0.06)) : 0 }}>
+            style={{ fontSize: fontSize - 1, marginLeft: typeBarBg ? Math.max(6, Math.round(cellW * 0.1)) + 2 : 0 }}>
             ⬆{needsShift}
           </div>
         )}
-        {/* M3.74: 다중 적재 ⊕N 배지 (우상단, 리퍼 ❄ 옆) */}
+        {/* M3.74: 다중 적재 ⊕N 배지 (우상단, 심볼 옆) */}
         {stackCount >= 2 && (
           <div className="absolute top-0 right-0 z-30 bg-amber-500 text-slate-900 font-black leading-none rounded-bl px-0.5"
-            style={{ fontSize: fontSize, marginRight: isReefer ? fontSize + 4 : (typeSymbol ? fontSize * 1.5 + 6 : 0) }}>
+            style={{ fontSize: fontSize + 1, marginRight: typeSymbol ? Math.max(13, fontSize * 2) + 10 : 0 }}>
             ⊕{stackCount - 1}
           </div>
         )}
-        {isReefer && (
-          <div className="absolute top-0 right-0 z-20 flex items-center"
-               style={{ fontSize: Math.max(10, fontSize * 1.5) }}>
-            <span className="text-cyan-200 font-black bg-slate-900/90 px-1 leading-none rounded-bl">❄</span>
-            {tmpMissing && (
-              <span className="text-red-400 font-black bg-slate-900/90 px-0.5 leading-none animate-pulse">❗</span>
-            )}
-          </div>
-        )}
-        <div className="text-left mono leading-tight w-full" style={{ whiteSpace: 'pre', fontFamily: 'Consolas, "Courier New", monospace' }}>
+        <div className="text-left mono leading-tight w-full" style={{
+          whiteSpace: 'pre',
+          fontFamily: 'Consolas, "Courier New", monospace',
+          paddingLeft: typeBarBg ? Math.max(6, Math.round(cellW * 0.1)) + 2 : 0,
+        }}>
           <div className="font-bold" style={{ fontSize: fontSize - 1 }}>
             {polLabel}/{transit ? transit : '   '}<span className={ptk ? 'text-red-700 font-black' : ''}>*{podLabel}</span>
           </div>
