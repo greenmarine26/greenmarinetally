@@ -25,9 +25,11 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
     const completedAt = comp?.at ? new Date(comp.at).toLocaleString('ko-KR') : '';
 
     // M3.5.4: 온도 미입력 체크 (리퍼인데 온도 없거나 0)
+    // M3.75: 엠티 리퍼는 정상 (온도 없는 게 맞음) → 풀 리퍼만 경고
     const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
     const tmpStr = String(c.tmp || '').trim();
-    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '');
+    const isFullReefer = isReefer && (c.fe === 'F' || c.fe === '' || c.fe == null);
+    const tmpMissing = isFullReefer && (c.tmp_missing || tmpStr === '');
 
     rows.push([
       i + 1,

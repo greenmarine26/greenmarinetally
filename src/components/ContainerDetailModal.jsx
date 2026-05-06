@@ -328,6 +328,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                 <div className="flex items-center gap-2">
                   {c.tmp && !c.tmp_missing ? (
                     <span className="text-base font-bold mono text-cyan-200">{c.tmp}°C</span>
+                  ) : c.fe === 'E' ? (
+                    /* M3.75: 엠티 리퍼는 온도 없는 게 정상 */
+                    <span className="text-sm font-bold text-cyan-400/80">엠티 리퍼 (온도 표시 정상)</span>
                   ) : (
                     <span className="text-sm font-bold text-red-300 animate-pulse">⚠️ 온도 미입력 (현장 확인 필요)</span>
                   )}

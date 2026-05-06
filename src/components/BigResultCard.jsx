@@ -116,7 +116,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         {(isReefer || c.dg || c.fr || c.ot || c.tk) && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {showTmp && <span className="bg-cyan-600 text-cyan-50 px-2 py-1 rounded font-black text-sm flex items-center gap-1"><Snowflake className="w-3.5 h-3.5"/>RF {c.tmp}°C</span>}
-            {!showTmp && isReefer && (
+            {/* M3.75: 엠티 리퍼는 정상 - 경고 X */}
+            {!showTmp && isReefer && c.fe === 'E' && (
+              <span className="bg-cyan-800/60 text-cyan-200 px-2 py-1 rounded font-bold text-sm flex items-center gap-1">
+                <Snowflake className="w-3.5 h-3.5"/>
+                리퍼 엠티
+              </span>
+            )}
+            {!showTmp && isReefer && c.fe !== 'E' && (
               <span className="bg-red-700 text-white px-2 py-1 rounded font-black text-sm flex items-center gap-1 animate-pulse border-2 border-red-400">
                 <Snowflake className="w-3.5 h-3.5"/>
                 <AlertTriangle className="w-3 h-3"/>

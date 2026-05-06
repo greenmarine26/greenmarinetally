@@ -541,17 +541,25 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
 
     const isReefer = c.rf || (c.iso && c.iso[2] === 'R');
     const tmpStr = String(c.tmp || '').trim();
-    const tmpMissing = isReefer && (c.tmp_missing || tmpStr === '');
+    // M3.75 fix: 엠티 리퍼는 온도 없는 게 정상 → 경고 X (Full 또는 fe 미정만 경고)
+    const isFullReefer = isReefer && (c.fe === 'F' || c.fe === '' || c.fe == null);
+    const tmpMissing = isFullReefer && (c.tmp_missing || tmpStr === '');
 
     let specialLine = '';
     let specialColor = 'text-slate-500';
     if (c.dg) {
       specialLine = c.un ? `DG UN${c.un}` : 'DG';
       specialColor = 'text-red-300 font-bold';
-    } else if (isReefer && !tmpMissing) {
+    } else if (isReefer && tmpStr) {
+      // 온도 있으면 무조건 표시 (엠티 리퍼도 온도 입력 가능)
       specialLine = `${tmpStr}C`;
       specialColor = 'text-cyan-200 font-bold';
+    } else if (isReefer && c.fe === 'E') {
+      // M3.75: 엠티 리퍼는 정상 (온도 없는 게 맞음)
+      specialLine = 'RF EMPTY';
+      specialColor = 'text-cyan-400/70 font-bold';
     } else if (isReefer) {
+      // 풀 리퍼 또는 fe 미정 + 온도 없음 → 경고
       specialLine = '⚠NO TEMP';
       specialColor = 'text-red-300 font-black animate-pulse';
     } else if (c.tk) {
