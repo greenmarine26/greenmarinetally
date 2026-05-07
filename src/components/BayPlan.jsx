@@ -16,6 +16,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer } from '../utils.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
+import UnassignedListModal from './UnassignedListModal.jsx';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
   const [pageIdx, setPageIdx] = useState(0);
@@ -27,6 +28,10 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   });
   // M3.74: 다중 적재 슬롯 선택 모달
   const [slotPicker, setSlotPicker] = useState(null);  // { slot: {bay,row,tier}, containers: [...] }
+  // M3.87: 선적대상(미배정) 모달
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  const unassignedCount = useMemo(() =>
+    containers.filter(c => !c.bay).length, [containers]);
   const scrollRef = useRef(null);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -114,6 +119,17 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return { maxLeft, maxRight };
   }, [containers]);
 
+  // M3.87: 선박 전체 tier 풀 (베이가 한 컨만 있어도 모든 tier 슬롯 표시)
+  //   원칙: "베이는 풀로 차있다고 생각하고 다 보여줘야 함"
+  //   이전: BayPage 내부에서 그 페이지의 컨테이너만 보고 tier 추출 → 달랑 한 줄
+  const globalTiers = useMemo(() => {
+    const ts = new Set();
+    for (const c of containers) {
+      if (c.tier) ts.add(c.tier);
+    }
+    return Array.from(ts);
+  }, [containers]);
+
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
   // M3.1: bay 키가 정규화된 정수 문자열("1","16","100" 등) 형태이므로 정수 기반 페어링
   const pages = useMemo(() => {
@@ -129,7 +145,9 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     const keyBay = (n) => String(n);
     const out = [];
     const usedOddBays = new Set();
-    for (let n = 2; n <= maxBay; n++) {
+    // M3.86 fix: 루프 시작 n=1 (이전: n=2 → 1번 베이가 페이지에 절대 추가 안 됨)
+    //   1번 베이는 짝꿍이 0번(존재 안 함)이라 단독으로 처리되어야 함
+    for (let n = 1; n <= maxBay; n++) {
       if (n % 2 === 0) {
         const evenKey = keyBay(n);
         const oddKey = keyBay(n + 1);
@@ -320,6 +338,14 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           {allBaysMode ? '✓ 전체 세로' : '단일 페이지'}
         </button>
 
+        {/* M3.87: 선적 모드 - 미배정(선적대상) 배지 */}
+        {mode === 'loading' && unassignedCount > 0 && (
+          <button onClick={() => setShowUnassigned(true)}
+            className="px-2 py-1.5 rounded text-xs font-black bg-orange-700 hover:bg-orange-600 text-orange-50 flex items-center gap-1">
+            🚛 선적대상 {unassignedCount}대
+          </button>
+        )}
+
         {/* 페이지 네비 (단일 모드일 때만) */}
         {!allBaysMode && (
           <>
@@ -401,6 +427,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   isMobile={isMobile}
                   cellColor={cellColor}
                   globalRowRange={globalRowRange}
+                  globalTiers={globalTiers}
                   bayStructureMap={bayStructureMap}
                 />
               </div>
@@ -429,6 +456,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             isMobile={isMobile}
             cellColor={cellColor}
             globalRowRange={globalRowRange}
+                  globalTiers={globalTiers}
             bayStructureMap={bayStructureMap}
           />
         )}
@@ -445,6 +473,17 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         }}
         onClose={() => setSlotPicker(null)}
       />
+
+      {/* M3.87: 선적대상(미배정) 목록 모달 */}
+      <UnassignedListModal
+        open={showUnassigned}
+        containers={containers}
+        onClose={() => setShowUnassigned(false)}
+        onPickContainer={(c) => {
+          setShowUnassigned(false);
+          onOpenContainer?.(c);  // ContainerDetailModal 열림 → 거기서 위치 수정
+        }}
+      />
     </div>
   );
 }
@@ -459,7 +498,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap }) {
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap, globalTiers = [] }) {
   const evenContainers = page.evenBay ? (bayGroups[page.evenBay] || []) : [];
   const oddContainers = page.oddBay ? (bayGroups[page.oddBay] || []) : [];
   const allContainers = [...evenContainers, ...oddContainers];
@@ -501,8 +540,11 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const allRows = [...allLeftRows, ...centerRows, ...allRightRows];
 
   // DECK / HOLD 분리 + 상하 균형
+  // M3.87: globalTiers 사용 (선박 전체 tier 풀) — 베이가 한 컨만 있어도 모든 슬롯 표시
+  //   "베이는 풀로 차있다고 생각하고 다 보여줘야 함" 원칙
   const allTiers = Array.from(new Set([
-    ...allContainers.map(c => c.tier),
+    ...globalTiers,
+    ...allContainers.map(c => c.tier).filter(Boolean),
     ...Array.from(xMarks).map(k => k.split('-')[1])
   ]));
   const deckTiers = allTiers.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));

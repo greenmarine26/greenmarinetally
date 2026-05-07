@@ -340,7 +340,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
 
       {/* 일반 결과 (로컬 답변/통계 카드 없을 때만 표시) */}
       {!parsed.isStat && !aiAnswer && !localAnswer && results.length === 1 && (
-        <BigResultCard c={results[0]}
+        <BigResultCard c={results[0]} allContainers={allContainers}
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(results[0])}
           onAfterComplete={() => { setQuery(''); stopSpeak(); }}
@@ -456,7 +456,7 @@ function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
       </div>
 
       {c1 && (
-        <BigResultCard c={c1}
+        <BigResultCard c={c1} allContainers={allContainers}
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(c1)}
           onAfterComplete={handleAfterComplete}
@@ -476,7 +476,7 @@ function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
       )}
 
       {c1 && c2 && (
-        <BigResultCard c={c2}
+        <BigResultCard c={c2} allContainers={allContainers}
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(c2)}
           onAfterComplete={handleAfterComplete}

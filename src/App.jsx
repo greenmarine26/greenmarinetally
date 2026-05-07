@@ -202,6 +202,15 @@ export default function App() {
         const xrayMap = sec?.xrayList || {};
         const compMap = sec?.completed || {};
         const xraySeals = sec?.xraySeals || {};
+        // M3.87: 위치 수정 충돌 검사용 - 같은 모드의 모든 컨테이너 (EDI + records 머지)
+        const ediMap = sec?.ediContainers || {};
+        const recMap = sec?.records || {};
+        const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+        const allContainers = [...allCnSet].map(cn => {
+          const e = ediMap[cn] || {};
+          const r = recMap[cn] || {};
+          return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
+        });
         return (
           <ContainerDetailModal
             c={globalDetail}
@@ -213,6 +222,7 @@ export default function App() {
             voyageInfo={v.info}
             inspector={inspector}
             onClose={() => setGlobalDetail(null)}
+            allContainers={allContainers}
           />
         );
       })()}

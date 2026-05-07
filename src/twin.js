@@ -21,30 +21,36 @@ function buildBayPairs(allContainers) {
   if (cache.has(allContainers)) return cache.get(allContainers);
 
   // 모든 베이 수집
+  // M3.86 fix2: c.bay도 normalize (Firebase zero-padded "025" 같은 옛 데이터 호환)
   const bays = new Set();
   for (const c of allContainers) {
-    if (c.bay) bays.add(c.bay);
+    if (c.bay) {
+      const n = parseInt(c.bay, 10);
+      if (Number.isFinite(n)) bays.add(String(n));
+    }
   }
   const bayInts = Array.from(bays).map(b => parseInt(b)).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
   const baySet = new Set(bayInts);
 
   // 짝꿍 매핑: 홀수 베이 → 짝꿍 베이
-  const pairs = {}; // 'XXX' → 'YYY' or null (단독)
+  // M3.86 fix: pairs 키와 값을 정수 문자열로 통일 (이전: 3자리 padded "025" 였는데
+  //   c.bay는 normalizeBay 결과 "25"라 비교 시 절대 매칭 안 됨 → 트윈 100% 실패)
+  const pairs = {}; // 'XX' → 'YY' or null (단독)
   for (const b of bayInts) {
     if (b % 2 === 0) continue; // 짝수(40ft 슬롯)는 짝꿍 대상 X
 
-    const bStr = String(b).padStart(3, '0');
+    const bStr = String(b);
     const evenLeft = b - 1;   // -1 짝수 (작은 쪽)
     const evenRight = b + 1;  // +1 짝수 (큰 쪽)
 
     let pairBay = null;
     // 우선: +1 짝수 슬롯 있으면 → b+2가 짝
     if (baySet.has(evenRight) && baySet.has(b + 2)) {
-      pairBay = String(b + 2).padStart(3, '0');
+      pairBay = String(b + 2);
     }
     // 차선: -1 짝수 슬롯 있으면 → b-2가 짝
     else if (baySet.has(evenLeft) && baySet.has(b - 2)) {
-      pairBay = String(b - 2).padStart(3, '0');
+      pairBay = String(b - 2);
     }
     pairs[bStr] = pairBay; // null이면 단독
   }
@@ -65,20 +71,24 @@ export function findTwinCandidate(target, allContainers, excludeCns = new Set())
   if (targetBay % 2 === 0) return null; // 짝수 베이는 트윈 대상 아님
 
   const pairs = buildBayPairs(allContainers);
-  const targetBayStr = String(targetBay).padStart(3, '0');
+  // M3.86 fix: padStart 제거 (pairs 키도 정수 문자열)
+  const targetBayStr = String(targetBay);
   const pairBayStr = pairs[targetBayStr];
 
   if (!pairBayStr) return null; // 단독 베이
 
   // 짝꿍 베이의 같은 row/tier 컨 찾기
-  const found = allContainers.find(c =>
-    c.cn !== target.cn &&
-    !excludeCns.has(c.cn) &&
-    c.bay === pairBayStr &&
-    c.row === target.row &&
-    c.tier === target.tier &&
-    c._mode === target._mode
-  );
+  // M3.86 fix2: c.bay도 normalize 후 비교 (Firebase에 zero-padded "025"로 저장된 옛 데이터 호환)
+  //   pairBayStr는 정수 문자열("25")이라 c.bay가 "025"이면 직접 비교 시 매칭 실패
+  const found = allContainers.find(c => {
+    if (c.cn === target.cn) return false;
+    if (excludeCns.has(c.cn)) return false;
+    const cBayNorm = c.bay ? String(parseInt(c.bay, 10)) : '';
+    return cBayNorm === pairBayStr &&
+      c.row === target.row &&
+      c.tier === target.tier &&
+      c._mode === target._mode;
+  });
   return found || null;
 }
 
@@ -88,13 +98,16 @@ export function getBayPairs(allContainers) {
 }
 
 // 같은 슬롯에 적재된 다른 컨 찾기 (FR 4개 한 자리 등)
+// M3.86 fix2: c.bay normalize
 export function findStackMates(target, allContainers) {
   if (!target?.bay || !target?.row || !target?.tier) return [];
-  return allContainers.filter(c =>
-    c.cn !== target.cn &&
-    c.bay === target.bay &&
-    c.row === target.row &&
-    c.tier === target.tier &&
-    c._mode === target._mode
-  );
+  const tBayNorm = String(parseInt(target.bay, 10));
+  return allContainers.filter(c => {
+    if (c.cn === target.cn) return false;
+    const cBayNorm = c.bay ? String(parseInt(c.bay, 10)) : '';
+    return cBayNorm === tBayNorm &&
+      c.row === target.row &&
+      c.tier === target.tier &&
+      c._mode === target._mode;
+  });
 }

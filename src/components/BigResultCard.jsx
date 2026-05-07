@@ -1,12 +1,13 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
-import React from 'react';
-import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
-import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
+import PositionEditModal from './PositionEditModal.jsx';
 
-export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber' }) {
+export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [] }) {
   const isDone = !!c._comp;
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
   const sealError = c.sl && slOrig && c.sl !== slOrig;
@@ -18,6 +19,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  // M3.87: 위치 수정 모달 (선적 모드)
+  const [showPosEdit, setShowPosEdit] = useState(false);
+  const isLoading = c._mode === 'loading';
 
   const labelMap = {
     amber: 'bg-amber-700 text-amber-50',
@@ -55,16 +59,20 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       'border-amber-600 bg-amber-950/10'
     }`}>
       <button onClick={onOpen} className="w-full text-left">
-        <div className="flex items-center gap-2 flex-wrap mb-3">
+        {/* M3.86: 라벨/모드 배지만 한 줄에 (컨번호는 다음 줄에 크게) */}
+        <div className="flex items-center gap-2 flex-wrap mb-2">
           {label && <span className={`${labelMap[labelColor]} px-2 py-0.5 rounded text-[10px] font-black`}>{label}</span>}
           <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
             c._mode === 'discharge' ? 'bg-blue-900 text-blue-200' : 'bg-amber-900 text-amber-200'
           }`}>
             {c._mode === 'discharge' ? '양하' : '선적'}
           </span>
-          <span className="font-black text-base text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-          <span className="text-[11px] text-slate-400 mono truncate flex-1">{c.cn}</span>
           {isDone && <span className="bg-emerald-700 text-emerald-100 text-[10px] px-1.5 py-0.5 rounded font-black">✓완료</span>}
+        </div>
+        {/* M3.86: 컨번호 한 줄 별도, 크게 표시 (끝4 + 전체 컨번호) */}
+        <div className="flex items-baseline gap-2 mb-3 px-1">
+          <span className="text-3xl font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
+          <span className="text-lg sm:text-xl font-bold mono text-slate-200 truncate flex-1">{c.cn}</span>
         </div>
 
         {/* 1순위: 실번호 거대 + 반짝임 */}
@@ -158,8 +166,29 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         {isDone ? <><RotateCcw className="w-5 h-5"/>완료 취소</> : <><Check className="w-5 h-5"/>검수 완료</>}
       </button>
 
+      {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}
+      {isLoading && (
+        <button onClick={() => setShowPosEdit(true)}
+          className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-amber-700 hover:bg-amber-600 text-amber-50 flex items-center justify-center gap-1.5">
+          <MapPin className="w-4 h-4"/>위치 수정 / 다른 자리에 배정
+        </button>
+      )}
+
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
+
+      {/* M3.87: 위치 수정 모달 */}
+      <PositionEditModal
+        open={showPosEdit}
+        container={c}
+        allContainers={allContainers}
+        onClose={() => setShowPosEdit(false)}
+        onSave={async (newBay, newRow, newTier) => {
+          if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
+          const result = await fbReassignContainerPosition(voyageKey, c._mode, c.cn, newBay, newRow, newTier, inspector);
+          return result;
+        }}
+      />
     </div>
   );
 }

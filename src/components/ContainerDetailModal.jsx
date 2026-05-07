@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
+import PositionEditModal from './PositionEditModal.jsx';
 
 // ISO 코드 옵션 (현장에서 자주 쓰는 것)
 const ISO_OPTIONS = [
@@ -22,7 +23,7 @@ const ISO_OPTIONS = [
   { iso: '42T1', label: '40TK (40피트 탱크)', flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode }) {
+export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [] }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
@@ -37,6 +38,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
+  // M3.87: 위치 수정 모달 (선적 모드 전용)
+  const [showPosEdit, setShowPosEdit] = useState(false);
 
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
@@ -228,7 +231,16 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
 
         {/* 위치 */}
         <div className="px-4 py-3 border-b border-slate-800">
-          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">선내 위치</div>
+          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+            <span>선내 위치</span>
+            {/* M3.87: 선적 모드만 위치 수정 버튼 (양하 시 위치 변경은 의미 없음) */}
+            {mode === 'loading' && (
+              <button onClick={() => setShowPosEdit(true)}
+                className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-2 py-1 rounded text-[10px] font-black flex items-center gap-1">
+                <Edit3 className="w-3 h-3"/>위치 수정
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-amber-400"/>
             <span className="text-2xl font-black mono text-amber-300">{c.bay || '-'}</span>
@@ -236,6 +248,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             <span className="text-xl font-bold mono text-slate-300">{c.row || '--'}</span>
             <span className="text-slate-500">/</span>
             <span className="text-xl font-bold mono text-slate-300">{c.tier || '--'}</span>
+            {!c.bay && mode === 'loading' && (
+              <span className="ml-2 bg-orange-700 text-orange-50 text-[10px] px-1.5 py-0.5 rounded font-black">선적대상</span>
+            )}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">베이 / 열 / 단</div>
         </div>
@@ -680,6 +695,19 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
+
+      {/* M3.87: 위치 수정 모달 (선적 모드) */}
+      <PositionEditModal
+        open={showPosEdit}
+        container={{ ...c, _comp: comp }}
+        allContainers={allContainers}
+        onClose={() => setShowPosEdit(false)}
+        onSave={async (newBay, newRow, newTier) => {
+          if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
+          const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector);
+          return result;
+        }}
+      />
     </div>
   );
 }

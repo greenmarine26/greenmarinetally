@@ -200,6 +200,105 @@ export async function fbCancelComplete(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
 }
 
+// M3.87: 컨테이너 위치 재배정 (선적 모드용)
+//   - 새 위치(bay/row/tier)로 이동
+//   - 새 위치에 다른 컨이 있으면 그 컨은 미배정 처리(bay 빈 값) + 완료 취소
+//   - 이력 추적 (edits.bay, edits.row, edits.tier)
+//   - 빈 문자열로 새 위치를 주면 → 미배정으로 변경
+//
+// 반환: { ok: true, displaced?: <빠진 컨번호> }
+export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by) {
+  // 1) 같은 자리에 있는 다른 컨 찾기 (충돌 검사)
+  let displaced = null;
+  if (newBay && newRow && newTier) {
+    const ediMapRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers`);
+    const recMapRef = ref(db, `voyages/${voyageKey}/${mode}/records`);
+    const [ediSnap, recSnap] = await Promise.all([get(ediMapRef), get(recMapRef)]);
+    const ediMap = ediSnap.val() || {};
+    const recMap = recSnap.val() || {};
+    // ediContainers + records 양쪽 봐서 같은 위치 컨 검색
+    const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+    const newBayInt = String(parseInt(newBay, 10));  // normalize
+    for (const otherCn of allCnSet) {
+      if (otherCn === cn) continue;
+      const ediC = ediMap[otherCn] || {};
+      const recC = recMap[otherCn] || {};
+      const oBay = recC.bay || ediC.bay || '';
+      const oRow = recC.row || ediC.row || '';
+      const oTier = recC.tier || ediC.tier || '';
+      if (!oBay) continue;
+      const oBayInt = String(parseInt(oBay, 10));
+      if (oBayInt === newBayInt && oRow === newRow && oTier === newTier) {
+        displaced = otherCn;
+        break;
+      }
+    }
+  }
+
+  // 2) 충돌 컨이 있으면 그 컨을 미배정 처리 + 완료 취소
+  if (displaced) {
+    await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+    await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
+  }
+
+  // 3) target 컨 위치 변경
+  await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
+
+  return { ok: true, displaced };
+}
+
+// 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화
+async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by) {
+  const recR = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const ediR = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  const [recSnap, ediSnap] = await Promise.all([get(recR), get(ediR)]);
+  const cur = recSnap.val() || {};
+  const ediCur = ediSnap.val() || {};
+
+  // normalize bay (정수 String)
+  const nb = newBay ? String(parseInt(newBay, 10)) : '';
+  const nr = newRow || '';
+  const nt = newTier || '';
+
+  const oldBay = cur.bay !== undefined ? cur.bay : (ediCur.bay || '');
+  const oldRow = cur.row !== undefined ? cur.row : (ediCur.row || '');
+  const oldTier = cur.tier !== undefined ? cur.tier : (ediCur.tier || '');
+
+  const edits = cur.edits || {};
+  const pushHist = (field, oldV, newV) => {
+    if (oldV === newV) return;
+    const hist = Array.isArray(edits[field]) ? [...edits[field]] : [];
+    hist.push({ from: oldV, to: newV, by: by || '', at: Date.now() });
+    edits[field] = hist;
+  };
+  pushHist('bay', oldBay, nb);
+  pushHist('row', oldRow, nr);
+  pushHist('tier', oldTier, nt);
+
+  // _orig 보존 (최초 EDI 위치)
+  const patch = {
+    bay: nb, row: nr, tier: nt,
+    bay_orig: cur.bay_orig !== undefined ? cur.bay_orig : oldBay,
+    row_orig: cur.row_orig !== undefined ? cur.row_orig : oldRow,
+    tier_orig: cur.tier_orig !== undefined ? cur.tier_orig : oldTier,
+    edits,
+  };
+
+  // records가 없으면 새로 만듦 (cn은 키이지만 안전하게)
+  if (!recSnap.exists()) {
+    patch.cn = cn;
+    patch.l4 = cn.slice(-4);
+    await set(recR, patch);
+  } else {
+    await update(recR, patch);
+  }
+
+  // ediContainers 동기화 (화면 즉시 반영)
+  if (ediSnap.exists()) {
+    await update(ediR, { bay: nb, row: nr, tier: nt });
+  }
+}
+
 // (실번호 / X-RAY 봉인 수정 함수는 위에서 정의됨 — 이력 추적 포함)
 
 // === 항차 전체 구독 ===

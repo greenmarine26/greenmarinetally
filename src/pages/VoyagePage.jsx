@@ -373,6 +373,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
         const cMode = detailC._mode || mode;
         const cSec = voyage[cMode] || {};
+        // M3.87: 위치 수정 충돌 검사용 - 같은 모드 전체 컨테이너 머지
+        const ediMap = cSec.ediContainers || {};
+        const recMap = cSec.records || {};
+        const compMap = cSec.completed || {};
+        const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+        const allContainersForMode = [...allCnSet].map(cn => {
+          const e = ediMap[cn] || {};
+          const r = recMap[cn] || {};
+          return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
+        });
         return (
           <ContainerDetailModal
             c={detailC}
@@ -385,6 +395,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
             inspector={inspector}
             sealMode={sealTargets.byCn[detailC.cn] || null}
             onClose={() => setDetailC(null)}
+            allContainers={allContainersForMode}
           />
         );
       })()}
