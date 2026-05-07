@@ -93,15 +93,22 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 {c.sl}
               </div>
             </div>
-          ) : c.sl ? (
+          ) : (c.sl && (c.fe !== 'E' || c.sl.length >= 5)) ? (
+            // 풀(또는 미정)일 때만 sl 표시. 엠티+짧은 sl(<5자)은 잘못된 데이터로 간주
             <div className="text-4xl sm:text-5xl font-black mono text-amber-300 tracking-wider text-center py-1 animate-pulse"
               style={{ textShadow: '0 0 20px rgba(251, 191, 36, 0.6)' }}>
               {c.sl}
             </div>
           ) : c.fe === 'E' ? (
             // M3.88: 엠티 컨테이너는 실번호 없는 게 정상 → 엠티 표시
+            // M3.88.1: 엠티에 짧은/이상 sl이 들어있어도 무시 ("1", "TJM" 같은 잘못된 데이터)
             <div className="text-3xl font-black mono text-slate-300 text-center py-2 bg-slate-800/40 rounded">
               📦 엠티 (실번호 없음 정상)
+              {c.sl && c.sl.length < 5 && (
+                <div className="text-[10px] text-slate-500 italic mt-1">
+                  (데이터 sl="{c.sl}" 무시 - 의심값)
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-2xl font-bold mono text-slate-600 italic text-center py-2">

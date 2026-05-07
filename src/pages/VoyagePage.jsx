@@ -99,6 +99,29 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
     }
   };
 
+  // M3.89: 베이플랜 전용 - 전체 EDI 컨테이너 (isPtk 필터 X)
+  //   원칙: 베이플랜은 선박 적부도 = 모든 화물 표시. 평택 화물 0대 베이도 누락 X
+  //   기존 containers는 평택만 (검색/통계/검수용)
+  //   베이플랜에만 이 allEdiContainers 전달 → 어떤 EDI 와도 베이 누락 X
+  const allEdiContainers = useMemo(() => {
+    const merged = {};
+    Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, _src: 'edi' }; });
+    // recMap에서 EDI에 없는 컨도 포함 (참고용)
+    Object.values(recMap).forEach(r => {
+      if (!merged[r.cn]) {
+        merged[r.cn] = { ...r, _src: 'list' };
+      } else {
+        // EDI 매칭된 컨은 sl 보강만
+        const safeR = {};
+        if (r.sl) safeR.sl = r.sl;
+        if (r.sl_orig) safeR.sl_orig = r.sl_orig;
+        if (r.wt && !merged[r.cn].wt) safeR.wt = r.wt;
+        merged[r.cn] = { ...merged[r.cn], ...safeR };
+      }
+    });
+    return Object.values(merged);
+  }, [ediMap, recMap]);
+
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
   // M3.5.4-fix2: EDI = 단일 진실 원칙 강화
   //   - 리스트는 sl/wt 같은 보강 필드만 채울 수 있음
@@ -351,7 +374,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       )}
       {tab === 'bay' && (
         <BayPlan
-          containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}
+          containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} mode={mode}
           onOpenContainer={(c) => setDetailC(c)}
         />
       )}

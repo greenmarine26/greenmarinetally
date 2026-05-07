@@ -442,7 +442,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                       <span className="text-red-300 font-black">{c.sl}</span>
                     </>
                   ) : (
-                    <span className={c.sl ? 'text-amber-200 font-bold' : 'text-slate-600 italic'}>{c.sl || '미입력'}</span>
+                    // M3.88.1: 엠티 컨이고 sl이 짧으면(<5자) 의심값으로 무시 → "엠티" 표시
+                    c.sl && (c.fe !== 'E' || c.sl.length >= 5) ? (
+                      <span className="text-amber-200 font-bold">{c.sl}</span>
+                    ) : c.fe === 'E' ? (
+                      <span className="text-slate-300">📦 엠티{c.sl && c.sl.length < 5 ? ` (sl="${c.sl}" 무시)` : ''}</span>
+                    ) : (
+                      <span className="text-slate-600 italic">미입력</span>
+                    )
                   )}
                   <Edit3 className="w-3 h-3 text-slate-600"/>
                 </button>
