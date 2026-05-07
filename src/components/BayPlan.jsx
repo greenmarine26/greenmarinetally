@@ -134,40 +134,40 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // M3.1: bay 키가 정규화된 정수 문자열("1","16","100" 등) 형태이므로 정수 기반 페어링
   const pages = useMemo(() => {
     const bays = Object.keys(bayGroups);
-    if (bays.length === 0) return [];
     const bayInts = bays.map(b => parseInt(b, 10)).filter(n => !isNaN(n));
-    if (bayInts.length === 0) return [];
-    const maxBay = Math.max(...bayInts);
-    const baySet = new Set(bays); // 키는 문자열 그대로 (bayGroups 매칭용)
     // 화면 표시용: 베이 번호는 항상 2자리 padStart (보기 좋게), 100+는 3자리 그대로
     const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
     // 키 매칭용: 정규화된 형태("16", "100")
     const keyBay = (n) => String(n);
+
+    // M3.89.1 근본 fix: 사용자 원칙 #8
+    //   "EDI 파악할 때 모든 베이를 풀로 채운 것처럼 생각해서 만들어라"
+    //   → 선박 구조 전체 (1번~maxBay)를 무조건 페이지로 추가. EDI 데이터는 그 위에 채워짐.
+    //   → 빈 베이도 페이지로 표시 (빈 그리드). 베이 누락 절대 X.
+    const maxBay = bayInts.length > 0 ? Math.max(...bayInts) : 0;
+    if (maxBay === 0) return [];  // EDI 자체가 비어있을 때만 빈 배열
+
     const out = [];
     const usedOddBays = new Set();
-    // M3.86 fix: 루프 시작 n=1 (이전: n=2 → 1번 베이가 페이지에 절대 추가 안 됨)
-    //   1번 베이는 짝꿍이 0번(존재 안 함)이라 단독으로 처리되어야 함
     for (let n = 1; n <= maxBay; n++) {
       if (n % 2 === 0) {
+        // 짝수 = 40ft 베이 + 다음 홀수(20ft) 짝꿍 페어
         const evenKey = keyBay(n);
         const oddKey = keyBay(n + 1);
-        const hasEven = baySet.has(evenKey);
-        const hasOdd = baySet.has(oddKey);
-        if (hasEven || hasOdd) {
-          const evenDisp = dispBay(n);
-          const oddDisp = dispBay(n + 1);
-          out.push({
-            title: hasEven && hasOdd ? `BAY ${evenDisp} (40ft) / BAY ${oddDisp} (20ft)` :
-                   hasEven ? `BAY ${evenDisp} (40ft)` :
-                   `BAY ${oddDisp} (20ft)`,
-            evenBay: hasEven ? evenKey : null,
-            oddBay: hasOdd ? oddKey : null,
-          });
-          if (hasOdd) usedOddBays.add(oddKey);
-        }
+        const evenDisp = dispBay(n);
+        const oddDisp = dispBay(n + 1);
+        // 짝꿍 홀수가 maxBay 이내면 페어, 초과면 단독
+        const oddInRange = (n + 1) <= maxBay;
+        out.push({
+          title: oddInRange ? `BAY ${evenDisp} (40ft) / BAY ${oddDisp} (20ft)` : `BAY ${evenDisp} (40ft)`,
+          evenBay: evenKey,
+          oddBay: oddInRange ? oddKey : null,
+        });
+        if (oddInRange) usedOddBays.add(oddKey);
       } else {
+        // 홀수 = 20ft 단독 (이미 페어로 처리되지 않은 경우만)
         const oddKey = keyBay(n);
-        if (baySet.has(oddKey) && !usedOddBays.has(oddKey)) {
+        if (!usedOddBays.has(oddKey)) {
           out.push({
             title: `BAY ${dispBay(n)} (20ft)`,
             evenBay: null,
