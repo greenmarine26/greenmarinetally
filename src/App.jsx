@@ -92,8 +92,7 @@ export default function App() {
     setWeather(w);
     const g = buildGreetingMessage(name, w);
     setGreeting({ type: 'login', ...g });
-    // 음성 출력 (약간 딜레이 - 모달 표시 후)
-    setTimeout(() => speakGreeting(g.voice), 300);
+    // M3.88: 로그인 인사 음성 제거 (호불호 많음 - 사용자 요청)
   }, []);
 
   // M3.6: 로그아웃 처리
@@ -105,7 +104,7 @@ export default function App() {
     const w = await fetchPyeongtaekWeather();
     const f = buildFarewellMessage(inspector, w, workDuration);
     setGreeting({ type: 'logout', ...f, inspectorName: inspector });
-    setTimeout(() => speakGreeting(f.voice), 300);
+    // M3.88: 로그아웃 인사 음성도 제거
   }, [inspector]);
 
   // 인사 모달 닫기 + 로그아웃 시 실제 로그아웃 진행

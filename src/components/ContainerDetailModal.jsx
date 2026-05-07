@@ -552,7 +552,14 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             </div>
           ) : (
             <button onClick={() => setEditingSeal(true)} className="flex items-center gap-2 w-full text-left">
-              <span className={`text-lg mono font-bold ${c.sl ? (sealError ? 'text-red-300' : 'text-amber-200') : 'text-slate-600 italic'}`}>{c.sl || '미입력'}</span>
+              {c.sl ? (
+                <span className={`text-lg mono font-bold ${sealError ? 'text-red-300' : 'text-amber-200'}`}>{c.sl}</span>
+              ) : c.fe === 'E' ? (
+                // M3.88: 엠티는 실번호 없는 게 정상
+                <span className="text-lg mono font-bold text-slate-300">📦 엠티 (실번호 없음)</span>
+              ) : (
+                <span className="text-lg mono font-bold text-slate-600 italic">미입력</span>
+              )}
               <Edit3 className="w-4 h-4 text-slate-500"/>
             </button>
           )}

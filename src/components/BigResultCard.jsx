@@ -98,6 +98,11 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
               style={{ textShadow: '0 0 20px rgba(251, 191, 36, 0.6)' }}>
               {c.sl}
             </div>
+          ) : c.fe === 'E' ? (
+            // M3.88: 엠티 컨테이너는 실번호 없는 게 정상 → 엠티 표시
+            <div className="text-3xl font-black mono text-slate-300 text-center py-2 bg-slate-800/40 rounded">
+              📦 엠티 (실번호 없음 정상)
+            </div>
           ) : (
             <div className="text-2xl font-bold mono text-slate-600 italic text-center py-2">
               ⚠ 실번호 미입력

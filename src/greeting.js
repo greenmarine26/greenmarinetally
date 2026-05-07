@@ -11,7 +11,8 @@ const PYEONGTAEK_LON = 126.8244;
 export async function fetchPyeongtaekWeather() {
   try {
     // M3.68: 현재 + 12시간 예보 함께 조회
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${PYEONGTAEK_LAT}&longitude=${PYEONGTAEK_LON}&current=temperature_2m,weather_code,wind_speed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weather_code,precipitation,wind_speed_10m&forecast_hours=12&timezone=Asia%2FSeoul`;
+    // M3.88 fix: wind_speed_unit=ms 명시 (기본 km/h라 12km/h=3.3m/s를 강풍으로 오판하던 버그)
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${PYEONGTAEK_LAT}&longitude=${PYEONGTAEK_LON}&current=temperature_2m,weather_code,wind_speed_10m,precipitation,relative_humidity_2m&hourly=temperature_2m,weather_code,precipitation,wind_speed_10m&forecast_hours=12&timezone=Asia%2FSeoul&wind_speed_unit=ms`;
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error('weather api ' + res.status);
     const data = await res.json();
@@ -246,16 +247,21 @@ export function buildGreetingMessage(name, weather) {
       weatherLine = `🌫 안개 - 시야 확보 주의`;
       voiceWeather = `안개입니다. 시야 확보 주의하세요`;
     } else if (t >= 30) {
-      weatherLine = `🥵 ${t.toFixed(0)}°C 더위 - 수분 보충 잊지 마세요`;
+      const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
+      weatherLine = `🥵 ${t.toFixed(0)}°C 더위${windInfo} - 수분 보충 잊지 마세요`;
       voiceWeather = `오늘 ${t.toFixed(0)}도. 더우니 수분 보충 잊지 마세요`;
     } else if (t <= 0) {
-      weatherLine = `🥶 ${t.toFixed(0)}°C 추위 - 따뜻하게 입으세요`;
+      const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
+      weatherLine = `🥶 ${t.toFixed(0)}°C 추위${windInfo} - 따뜻하게 입으세요`;
       voiceWeather = `오늘 영하 ${Math.abs(t).toFixed(0)}도. 추우니 따뜻하게 입으세요`;
     } else if (t <= 5) {
-      weatherLine = `❄️ ${t.toFixed(0)}°C 쌀쌀 - 따뜻하게`;
+      const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
+      weatherLine = `❄️ ${t.toFixed(0)}°C 쌀쌀${windInfo} - 따뜻하게`;
       voiceWeather = `오늘 ${t.toFixed(0)}도. 쌀쌀하니 따뜻하게 입으세요`;
     } else {
-      weatherLine = `${w.emoji} ${w.label} ${t.toFixed(0)}°C`;
+      // M3.88: 평온한 날씨에도 풍속 정보 표시 (작업 도움)
+      const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
+      weatherLine = `${w.emoji} ${w.label} ${t.toFixed(0)}°C${windInfo}`;
     }
   }
 
