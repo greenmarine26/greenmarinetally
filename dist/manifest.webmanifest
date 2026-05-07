@@ -1,0 +1,18 @@
+{
+  "name": "그린마린 평택항 검수",
+  "short_name": "평택검수",
+  "description": "Tallyman Master · 양하 + 선적 통합 검수",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij48cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgcng9IjI0IiBmaWxsPSIjMGY0NDdjIi8+PHRleHQgeD0iNjQiIHk9IjcwIiBmb250LWZhbWlseT0ic3lzdGVtLXVpIiBmb250LXNpemU9IjMyIiBmb250LXdlaWdodD0iOTAwIiBmaWxsPSIjYmZkYmZlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj7tj4Ttg50KPC90ZXh0Pjx0ZXh0IHg9IjY0IiB5PSI5OCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSIgZm9udC1zaXplPSIxNiIgZm9udC13ZWlnaHQ9IjUwMCIgZmlsbD0iIzkxYjVlOCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+R01UPC90ZXh0Pjwvc3ZnPg==",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

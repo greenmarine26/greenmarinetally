@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M3.85';
+export const APP_VERSION = 'M3.86';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -746,16 +746,76 @@ export async function parseListExcel(arrayBuffer) {
     /^실번호/, /^실$/, /^봉인/, /봉인.*번호/, /^seal#?\d?$/,
   ];
 
+  // M3.86: 헤더 정규화 통일 (점/콤마/괄호 제거 → "Cntr.No", "Seal No.", "Tp/Sz" 등 인식)
+  // 슬래시는 유지(F/E, L/S 같은 의미 구분에 필요)
+  const normHeader = (s) => String(s || '').trim().toLowerCase()
+    .replace(/[\.\,]/g, '').replace(/[\(\)\[\]]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+
+  // M3.86: ISO 합성 함수 (Size + Type 분리 컬럼, "DC43" 합쳐진 표기, 표준 ISO 모두 처리)
+  // 평택항 표준 (메모리 #15): 22G1=20DC, 42G1=40DC, 45G1=40HC, L5G1=45HC(진짜), 22R1=20RF, 45R1=40RF, L5R1=45RF
+  const composeIso = (lenS, cat) => {
+    let prefix = '';
+    if (lenS === '20' || lenS === '22') prefix = '22';
+    else if (lenS === '40' || lenS === '42') prefix = '42';
+    else if (lenS === '40HC' || lenS === '43' || lenS === '4H' || lenS === '4G') prefix = '45';
+    else if (lenS === '45') prefix = 'L5';
+    if (!prefix) return '';
+    const c = String(cat || '').toUpperCase().trim();
+    if (/^(DC|GP)$/.test(c)) return prefix + 'G1';
+    if (/^HC$/.test(c)) return prefix === '42' ? '45G1' : (prefix + 'G1');
+    if (/^(RF|REEF|REEFER|RH)$/.test(c)) return prefix + 'R1';
+    if (/^(RHC|RFHC)$/.test(c)) return prefix === '42' ? '45R1' : (prefix + 'R1');
+    if (/^(TC|TK|TANK)$/.test(c)) return prefix + 'T6';
+    if (/^(OT|OPEN|OP)$/.test(c)) return prefix + 'U1';
+    if (/^(FR|PL|PF|FLAT|FLATRACK)$/.test(c)) return prefix + 'P1';
+    if (/^(BU|BULK)$/.test(c)) return prefix + 'B0';
+    return '';
+  };
+  const deriveIso = (sizeRaw, typeRaw) => {
+    const clean = (v) => String(v || '').toUpperCase().replace(/[\s\-\/]/g, '').replace(/FT$/, '');
+    const sz = clean(sizeRaw);
+    const tp = clean(typeRaw);
+    // 1) 입력 자체가 표준 ISO (42HQ, 22G1, L5G1 등)
+    for (const v of [tp, sz]) {
+      if (/^\d{2}[A-Z]\d$|^\d{2}[A-Z]{2}$|^L\d[A-Z]\d$/.test(v)) return v;
+    }
+    // 2) "DC43", "RF40" 같은 합쳐진 표기 (CDL Tp/Sz 양식)
+    for (const v of [tp, sz]) {
+      let m = v.match(/^([A-Z]{2,4})(\d{2,3})$/);   // "DC43"
+      if (m) { const r = composeIso(m[2], m[1]); if (r) return r; }
+      m = v.match(/^(\d{2,3})([A-Z]{2,4})$/);       // "43DC"
+      if (m) { const r = composeIso(m[1], m[2]); if (r) return r; }
+    }
+    // 3) Size + Type 분리 컬럼 (NGB/SHA: "20"+"DC", "4H"+"RF")
+    if (sz && tp) {
+      let lenS = '';
+      if (/^(20|22)/.test(sz)) lenS = '20';
+      else if (/^(40|42)/.test(sz)) lenS = '40';
+      else if (/^4[HG]/.test(sz)) lenS = '40HC';
+      else if (/^45/.test(sz)) lenS = '45';
+      else if (/^4L/.test(sz)) lenS = '45';
+      if (lenS) { const r = composeIso(lenS, tp); if (r) return r; }
+    }
+    return '';
+  };
+
   for (const sheetName of wb.SheetNames) {
     const ws = fixSheetRange(wb.Sheets[sheetName], XLSX);   // V38: !ref 보정
     const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
 
+    // M3.86: SOC 양식 감지 (R0~R5 메타 행에 "SOC" 키워드 있으면 SOC 양식으로 판정)
+    // SOC는 풀/엠티 모두 가능, F/E 미명시면 Seal 유무로 판정
+    let isSocSheet = false;
+    for (let i = 0; i < Math.min(6, grid.length); i++) {
+      const rowText = (grid[i] || []).map(v => String(v || '')).join(' ').toUpperCase();
+      if (/\bSOC\b|SOC\s*NO\.?\s*LIST/.test(rowText)) { isSocSheet = true; break; }
+    }
+
     // 1단계: 헤더 행 찾기 (50줄까지, 한 행에 컨번호 키워드가 있는 셀이 1개라도 있으면 OK)
     let headerRow = -1, headers = null;
     for (let i = 0; i < Math.min(50, grid.length); i++) {
-      const row = (grid[i] || []).map(s =>
-        String(s || '').trim().toLowerCase().replace(/\.+$/, '').replace(/\s+/g, ' ')
-      );
+      const row = (grid[i] || []).map(normHeader);
       const hasCN = row.some(c => CN_HEAD.some(p => p.test(c)));
       if (hasCN) {
         headerRow = i;
@@ -792,11 +852,12 @@ export async function parseListExcel(arrayBuffer) {
               const n = parseInt(String(v).replace(/[,\s]/g, ''));
               if (!isNaN(n) && n >= 1000 && n <= 50000) { wt = n; break; }
             }
-            // ISO
+            // ISO (M3.86: 4자리 숫자 매칭 제거 - 무게값 "3800"/"2660"이 ISO로 잘못 들어가는 사고 차단)
             let iso = '';
             for (const v of allCells) {
-              const t = String(v).trim().toUpperCase();
-              if (/^\d{2}[A-Z]\d$|^\d{2}[A-Z]{2}$|^\d{4}$/.test(t)) { iso = t; break; }
+              const t = String(v).trim().toUpperCase().replace(/[\s\-]/g, '');
+              // 표준 ISO 6346 형식만: 22G1, 42HQ, L5G1 등
+              if (/^\d{2}[A-Z]\d$|^\d{2}[A-Z]{2}$|^L\d[A-Z]\d$/.test(t)) { iso = t; break; }
             }
             // POL/POD
             let pol = '', pod = '';
@@ -819,10 +880,10 @@ export async function parseListExcel(arrayBuffer) {
       continue;
     }
 
-    // 헤더 키워드로 컬럼 인덱스 찾기
+    // 헤더 키워드로 컬럼 인덱스 찾기 (M3.86: normHeader로 통일)
     const findCol = (patterns) => {
       for (let i = 0; i < headers.length; i++) {
-        const h = headers[i].toLowerCase().replace(/\.+$/, '').replace(/\s+/g, ' ').trim();
+        const h = normHeader(headers[i]);
         if (!h) continue;
         for (const p of patterns) if (p.test(h)) return i;
       }
@@ -831,14 +892,18 @@ export async function parseListExcel(arrayBuffer) {
 
     const cn_i = findCol(CN_HEAD);
     const sl_i = findCol(SL_HEAD);
-    const bl_i = findCol([/^b\/?l/, /^bl\s*no/, /^m-?b\/?l/, /master.*b\/?l/, /^b\/?l\s*no\.?$/, /^blno$/]);
-    const wt_i = findCol([/gross.*wt|t\.?wgt|total.*wt|^weight|^wgt|^g\.?weight|^t\.?weight/, /무게/, /중량/, /^kg/, /^kgs/]);
+    const bl_i = findCol([/^b\/?l/, /^bl\s*no/, /^m-?b\/?l/, /master.*b\/?l/, /^b\/?l\s*no$/, /^blno$/]);
+    const wt_i = findCol([/^cargo\s*weight$|^total\s*weight$/, /gross.*wt|t\.?wgt|total.*wt|^weight|^wgt|^g\.?weight|^t\.?weight/, /무게/, /중량/, /^kg/, /^kgs/]);
     const sh_i = findCol([/shipper|forward|화주|consignor/]);
     const gi_i = findCol([/gate.*in/, /반입/]);
     const pol_i = findCol([/^pol$|load.*port|loading.*port/, /적재항/, /선적항/, /^lp$|^lwharf$/]);
     const pod_i = findCol([/^pod$|dis.*port|dis.*cy|discharge|destination/, /최종항/, /양하항/, /도착항/, /^dp$|^dlv$/]);
-    const fe_i = findCol([/^f\/?e$|^full\/?empty$|^fe$|^full\/empty$|^l\/?s$|^l\/s$/, /^적공$/, /^empty\/full$/, /^f\/m$/, /soc.*[ef]|[ef].*soc|soc\/e\/f|e\/f|status/]);
-    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$/, /^타입$/, /^컨.*규격/, /^kind$/]);
+    // M3.86: F/E 패턴에서 L/S 제거 (L/S는 Local/SOC 구분이라 F/E 무관)
+    const fe_i = findCol([/^f\/?e$|^full\/?empty$|^fe$|^full\/empty$/, /^적공$/, /^empty\/full$/, /^f\/m$/, /soc.*[ef]|[ef].*soc|soc\/e\/f|e\/f|status/]);
+    // M3.86: L/S(Local/SOC) 컬럼 별도 추출 — SOC 식별용
+    const ls_i = findCol([/^l\/?s$/]);
+    // M3.86: type_i에 "Tp/Sz", "Tp.Sz", "Type/Size" 추가 (CDL 양식)
+    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^tp\/?sz$|^tp\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
     const op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
     const dg_i = findCol([/^dg$|hazmat|imdg/, /위험물/]);
@@ -875,80 +940,8 @@ export async function parseListExcel(arrayBuffer) {
       if (seen.has(cn)) continue;
       seen.add(cn);
 
-      // F/E 추출 (V38.5: SIZE/TYPE/F/E 세 컬럼 종합)
-      // 1순위: 명시적 F/E 컬럼
-      // 2순위: TYPE 컬럼 끝 글자 (예: "20DCF", "40HCE", "22GPE")
-      // 3순위: SIZE 컬럼 끝 글자 (예: "20F", "40E")
-      // M3.74: 무게 기반 추정 완전 제거 (M3.73 정책과 일치)
-      //   원칙: 명시값만 신뢰. 명시값 없으면 빈 값 → 검수원 현장 확인
-      let fe = '';
-      if (fe_i >= 0) {
-        const feRaw = String(row[fe_i] || '').trim().toUpperCase();
-        if (feRaw === 'F' || feRaw === 'FULL' || feRaw === 'L' || feRaw === 'LOADED') fe = 'F';
-        else if (feRaw === 'E' || feRaw === 'EMPTY' || feRaw === 'MT' || feRaw === 'M') fe = 'E';
-      }
-      // TYPE 끝 글자
-      if (!fe && type_i >= 0) {
-        const tRaw = String(row[type_i] || '').trim().toUpperCase().replace(/[\s\-]/g, '');
-        // "20DCF", "40HCE", "22GPF", "DCHC035F" 등
-        if (/^([A-Z]{2}\d{2}|[A-Z]{2,4}|\d{2}[A-Z]{2,3}|\d{4})\d{0,3}([FE])$/.test(tRaw)) {
-          fe = tRaw.slice(-1);
-        }
-      }
-      // SIZE 끝 글자
-      if (!fe && size_i >= 0) {
-        const sRaw = String(row[size_i] || '').trim().toUpperCase().replace(/[\s\-]/g, '');
-        // "20F", "40E", "20FT-F"
-        if (/^(20|40|45)(FT)?([FE])$/.test(sRaw)) {
-          fe = sRaw.slice(-1);
-        }
-      }
-      // M3.74: 무게 기반 추정 제거됨 (이전: wgt > 5000이면 fe='F'로 강제)
-      //   → VGM 같은 F/E 미명시 파일은 fe 빈 값으로 두고 EDI/검수원 확인
-
-      // 타입
-      let iso = '';
-      let isoRaw = type_i >= 0 ? String(row[type_i] || '').trim().toUpperCase() : '';
-      isoRaw = isoRaw.replace(/[\s\-]/g, '');
-      if (/^\d{2}[A-Z]\d$|^\d{2}[A-Z]{2}$|^\d{4}$/.test(isoRaw)) iso = isoRaw;
-      else if (/20.*DC|20.*GP/.test(isoRaw)) iso = '22GP';
-      else if (/40.*HC/.test(isoRaw)) iso = '45GP';
-      else if (/40.*DC|40.*GP/.test(isoRaw)) iso = '42GP';
-      else if (/RF|REEFER/.test(isoRaw)) iso = isoRaw.includes('20') ? '22R5' : '45R1';
-      else if (/TK|TANK/.test(isoRaw)) iso = '22T6';
-
-      const dgVal = dg_i >= 0 ? String(row[dg_i] || '').trim() : '';
-      const isDg = dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal);
-
-      // M3.85 fix: row[tmp_i]가 숫자 0이면 `0 || ''` = '' 로 사라지던 버그
-      // JavaScript falsy 함정 (0, '', null, undefined 모두 falsy)
-      // 해결: nullish 체크로 숫자 0 보존
-      const tmpRawCell = tmp_i >= 0 ? row[tmp_i] : null;
-      let tmpValRaw = (tmpRawCell != null && tmpRawCell !== '')
-        ? String(tmpRawCell).trim()
-        : '';
-      // M3.6: 0°C는 실제 온도 (신선 채소, 의약품 등)
-      // 진짜 미입력은 빈 값/"-" 만
-      let tmpVal = tmpValRaw;
-      let tmpMissing = false;
-      if (tmpValRaw === '' || tmpValRaw === '-') {
-        tmpVal = '';
-        tmpMissing = true;
-      } else {
-        // "0", "0.0", "+0", "-0", "000" 모두 정규화 → 그대로 0°C
-        const m = tmpValRaw.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
-        if (m) tmpVal = (m[1] || '') + m[2];
-      }
-      const isoUpper = (iso || isoRaw || '').toUpperCase();
-      // 특수화물 태그 (45ft 영역 4[5689] 포함, 예: 46P3=45FR)
-      // 리퍼 판정: ISO 기준 우선, 온도가 진짜 있으면 + 표기
-      // M3.85: 통합 헬퍼로 리퍼 판정 (40HR/RFHC 등 모든 변형 인식)
-      const isRf = (tmpVal && tmpVal !== '-') || isReeferIso(isoUpper);
-      const isFr = /^[24][0245689]P/.test(isoUpper) || /^[24]0F[PR]/.test(isoUpper) || /^45P/.test(isoUpper);
-      const isOt = /^[24][0245689]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^4[5689]O/.test(isoUpper);
-      const isTk = /^[24][0245689]T/.test(isoUpper);
-
       // 실번호: 헤더로 못 찾으면 같은 행에서 자동 탐색 (V38: 병합셀 대응)
+      // M3.86: SOC fallback에 sl이 필요하므로 fe보다 먼저 추출
       let sl = '';
       if (sl_i >= 0) {
         sl = String(row[sl_i] || '').trim();
@@ -972,6 +965,85 @@ export async function parseListExcel(arrayBuffer) {
           }
         }
       }
+
+      // F/E 추출 (V38.5: SIZE/TYPE/F/E 세 컬럼 종합)
+      // 1순위: 명시적 F/E 컬럼
+      // 2순위: TYPE 컬럼 끝 글자 (예: "20DCF", "40HCE", "22GPE")
+      // 3순위: SIZE 컬럼 끝 글자 (예: "20F", "40E")
+      // M3.74: 무게 기반 추정 완전 제거 (M3.73 정책과 일치)
+      // M3.86: SOC fallback 추가 (F/E 미명시 + SOC면 Seal 유무로 판정)
+      let fe = '';
+      if (fe_i >= 0) {
+        const feRaw = String(row[fe_i] || '').trim().toUpperCase();
+        if (feRaw === 'F' || feRaw === 'FULL' || feRaw === 'L' || feRaw === 'LOADED') fe = 'F';
+        else if (feRaw === 'E' || feRaw === 'EMPTY' || feRaw === 'MT' || feRaw === 'M') fe = 'E';
+      }
+      // TYPE 끝 글자
+      if (!fe && type_i >= 0) {
+        const tRaw = String(row[type_i] || '').trim().toUpperCase().replace(/[\s\-]/g, '');
+        if (/^([A-Z]{2}\d{2}|[A-Z]{2,4}|\d{2}[A-Z]{2,3}|\d{4})\d{0,3}([FE])$/.test(tRaw)) {
+          fe = tRaw.slice(-1);
+        }
+      }
+      // SIZE 끝 글자
+      if (!fe && size_i >= 0) {
+        const sRaw = String(row[size_i] || '').trim().toUpperCase().replace(/[\s\-]/g, '');
+        if (/^(20|40|45)(FT)?([FE])$/.test(sRaw)) {
+          fe = sRaw.slice(-1);
+        }
+      }
+      // M3.86: SOC 양식이고 F/E 미명시면 Seal 유무로 판정 (실 있음=풀, 실 없음=엠티)
+      if (!fe && isSocSheet) {
+        const lsVal = ls_i >= 0 ? String(row[ls_i] || '').trim().toUpperCase() : '';
+        // 시트 전체가 SOC거나, 이 행의 L/S='S'면 SOC 행으로 판정
+        const isSocRow = (ls_i < 0) || lsVal === 'S' || lsVal === 'SOC';
+        if (isSocRow) fe = sl ? 'F' : 'E';
+      }
+
+      // 타입 (M3.86: deriveIso로 표준화 - "DC43"/"4H+RF"/"42HQ" 모두 처리)
+      const sizeRaw = size_i >= 0 ? String(row[size_i] || '').trim() : '';
+      const typeRaw = type_i >= 0 ? String(row[type_i] || '').trim() : '';
+      let iso = deriveIso(sizeRaw, typeRaw);
+      // fallback: 기존 키워드 매칭 (deriveIso가 못 잡은 케이스용)
+      if (!iso) {
+        const isoRaw = (typeRaw + ' ' + sizeRaw).toUpperCase().replace(/[\s\-\/]/g, '');
+        if (/20.*DC|20.*GP/.test(isoRaw)) iso = '22G1';
+        else if (/40.*HC/.test(isoRaw)) iso = '45G1';
+        else if (/40.*DC|40.*GP/.test(isoRaw)) iso = '42G1';
+        else if (/RF|REEFER/.test(isoRaw)) iso = isoRaw.includes('20') ? '22R1' : '45R1';
+        else if (/TK|TANK/.test(isoRaw)) iso = '22T6';
+      }
+
+      const dgVal = dg_i >= 0 ? String(row[dg_i] || '').trim() : '';
+      const isDg = dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal);
+
+      // M3.85 fix: row[tmp_i]가 숫자 0이면 `0 || ''` = '' 로 사라지던 버그
+      // JavaScript falsy 함정 (0, '', null, undefined 모두 falsy)
+      // 해결: nullish 체크로 숫자 0 보존
+      const tmpRawCell = tmp_i >= 0 ? row[tmp_i] : null;
+      let tmpValRaw = (tmpRawCell != null && tmpRawCell !== '')
+        ? String(tmpRawCell).trim()
+        : '';
+      // M3.6: 0°C는 실제 온도 (신선 채소, 의약품 등)
+      // 진짜 미입력은 빈 값/"-" 만
+      let tmpVal = tmpValRaw;
+      let tmpMissing = false;
+      if (tmpValRaw === '' || tmpValRaw === '-') {
+        tmpVal = '';
+        tmpMissing = true;
+      } else {
+        // "0", "0.0", "+0", "-0", "000" 모두 정규화 → 그대로 0°C
+        const m = tmpValRaw.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
+        if (m) tmpVal = (m[1] || '') + m[2];
+      }
+      const isoUpper = (iso || '').toUpperCase();
+      // 특수화물 태그 (45ft 영역 4[5689] 포함, 예: 46P3=45FR)
+      // 리퍼 판정: ISO 기준 우선, 온도가 진짜 있으면 + 표기
+      // M3.85: 통합 헬퍼로 리퍼 판정 (40HR/RFHC 등 모든 변형 인식)
+      const isRf = (tmpVal && tmpVal !== '-') || isReeferIso(isoUpper);
+      const isFr = /^[24][0245689]P/.test(isoUpper) || /^[24]0F[PR]/.test(isoUpper) || /^45P/.test(isoUpper) || /^L5P/.test(isoUpper);
+      const isOt = /^[24][0245689]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^4[5689]O/.test(isoUpper) || /^L5U/.test(isoUpper);
+      const isTk = /^[24][0245689]T/.test(isoUpper) || /^L5T/.test(isoUpper);
 
       records.push({
         cn, l4: cn.slice(-4),
