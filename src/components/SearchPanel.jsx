@@ -552,8 +552,10 @@ function SmallResultCard({ c, onOpen }) {
         isDone ? 'border-emerald-700/30' : c._xray ? 'border-purple-700/30' : 'border-slate-700 hover:bg-slate-800/50'
       }`}>
       <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
-        c._mode === 'discharge' ? 'bg-blue-900 text-blue-200' : 'bg-amber-900 text-amber-200'
-      }`}>{c._mode === 'discharge' ? '양하' : '선적'}</span>
+        c._mode === 'discharge' ? 'bg-blue-900 text-blue-200'
+        : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
+        : 'bg-gray-700 text-gray-300'
+      }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
       <span className="text-[10px] text-slate-400 mono truncate flex-1">{c.cn}</span>
       <span className="text-[9px] mono text-slate-400">{isoToLabel(c.iso) || c.tp || ''}</span>

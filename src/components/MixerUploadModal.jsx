@@ -276,8 +276,22 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
     Object.values(data.containers).forEach(c => {
       const isDischarge = (c.pod || '').endsWith('PTK') || (c.pod || '').endsWith('KRPTK');
       const isLoading = (c.pol || '').endsWith('PTK') || (c.pol || '').endsWith('KRPTK');
-      if (isDischarge) dischargeData.edi[c.cn] = { ...c, _mode: 'discharge' };
-      if (isLoading) loadingData.edi[c.cn] = { ...c, _mode: 'loading' };
+
+      // M3.91: 평택 필터 fix - transit 컨테이너(평택 무관)도 저장
+      // 이전 버그: isDischarge도 isLoading도 아닌 컨이 양쪽에서 누락 → 베이 누락
+      // 수정: 모든 컨을 양쪽에 저장하되 _mode 태그로 구분
+      //   discharge = 평택 양하 (POD=KRPTK)
+      //   loading   = 평택 선적 (POL=KRPTK)
+      //   transit   = 평택 무관 (선박이 평택 들렀지만 평택과 무관한 화물)
+      // 통계/필터 계산 시 _mode='transit' 분기 처리, 베이플랜은 모두 표시
+      let containerMode;
+      if (isDischarge) containerMode = 'discharge';
+      else if (isLoading) containerMode = 'loading';
+      else containerMode = 'transit';
+
+      const tagged = { ...c, _mode: containerMode };
+      dischargeData.edi[c.cn] = tagged;
+      loadingData.edi[c.cn] = tagged;
     });
     if (data._ship) {
       dischargeData._ship = data._ship;
@@ -354,14 +368,20 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
     dischargeData, loadingData,
   });
 
+  // M3.91: transit 컨테이너 카운트 분리 (베이 누락 fix)
+  const dischargeRealCount = Object.values(dischargeData.edi).filter(c => c._mode === 'discharge').length;
+  const loadingRealCount = Object.values(loadingData.edi).filter(c => c._mode === 'loading').length;
+  const transitCount = Object.values(dischargeData.edi).filter(c => c._mode === 'transit').length;
+
   const summary = {
     totalFiles: files.length,
     ediCount: ediFiles.length,
     listCount: listFiles.length,
     xrayCount: xrayFiles.length,
     errorCount: errorFiles.length,
-    dischargeContainers: Object.keys(dischargeData.edi).length,
-    loadingContainers: Object.keys(loadingData.edi).length,
+    dischargeContainers: dischargeRealCount,
+    loadingContainers: loadingRealCount,
+    transitContainers: transitCount,  // 신규: 평택 무관 화물 (베이 골격 표시용)
   };
 
   setResults({ fileResults, summary, voyageKey, errorFiles });

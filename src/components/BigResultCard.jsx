@@ -63,9 +63,13 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         <div className="flex items-center gap-2 flex-wrap mb-2">
           {label && <span className={`${labelMap[labelColor]} px-2 py-0.5 rounded text-[10px] font-black`}>{label}</span>}
           <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-            c._mode === 'discharge' ? 'bg-blue-900 text-blue-200' : 'bg-amber-900 text-amber-200'
+            c._mode === 'discharge' ? 'bg-blue-900 text-blue-200'
+            : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
+            : 'bg-gray-700 text-gray-300'
           }`}>
-            {c._mode === 'discharge' ? '양하' : '선적'}
+            {c._mode === 'discharge' ? '양하'
+              : c._mode === 'loading' ? '선적'
+              : '중계'}
           </span>
           {isDone && <span className="bg-emerald-700 text-emerald-100 text-[10px] px-1.5 py-0.5 rounded font-black">✓완료</span>}
         </div>
