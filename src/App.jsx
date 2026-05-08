@@ -90,8 +90,16 @@ export default function App() {
     saveLoginTime(name);
     const w = await fetchPyeongtaekWeather();
     setWeather(w);
-    const g = buildGreetingMessage(name, w);
-    setGreeting({ type: 'login', ...g });
+    // M4.2: 인사말 하루 1회 — 같은 날(YYYY-MM-DD) 재로그인 시 인사말 스킵
+    //   사용자 요청: 수시로 접속하는데 매번 인사가 나와서 보기 불편
+    //   날짜가 바뀌면 다시 표시 (자정 지나면 새로 인사)
+    const today = new Date().toISOString().slice(0, 10);
+    const lastGreetingDay = _storage.get(SK.lastGreetingDay);
+    if (lastGreetingDay !== today) {
+      const g = buildGreetingMessage(name, w);
+      setGreeting({ type: 'login', ...g });
+      _storage.set(SK.lastGreetingDay, today);
+    }
     // M3.88: 로그인 인사 음성 제거 (호불호 많음 - 사용자 요청)
   }, []);
 

@@ -429,6 +429,14 @@ async function persistData({ mode, targetVoyage, voyages, inspector, dischargeDa
     writePromises.push(fbUpdateVoyageInfo(voyageKey, infoUpdates));
   }
 
+  // M4.2 진단: transit 컨 손실 추적용 단계별 카운트
+  console.log(`[persistData] dischargeData.edi 시작: ${Object.keys(dischargeData.edi).length}대`);
+  console.log(`[persistData] _mode 분포:`,
+    Object.values(dischargeData.edi).reduce((a, c) => {
+      a[c._mode || 'unknown'] = (a[c._mode || 'unknown'] || 0) + 1;
+      return a;
+    }, {}));
+
   // 양하 데이터
   if ((mode === 'discharge' || mode === 'both') && Object.keys(dischargeData.edi).length > 0) {
     const listMerged = {};
@@ -437,6 +445,7 @@ async function persistData({ mode, targetVoyage, voyages, inspector, dischargeDa
     dischargeData.xrays.forEach(x => Object.assign(xrayMerged, x));
 
     const { merged } = mergeWithEdi(dischargeData.edi, listMerged, xrayMerged, {});
+    console.log(`[persistData] mergeWithEdi 결과: ${Object.keys(merged).length}대 → fbSaveEdiContainers 호출`);
     writePromises.push(fbSaveEdiContainers(voyageKey, 'discharge', merged));
 
     // M4.1: XRAY 매칭률 검증 (잘못된 파일 업로드 감지)

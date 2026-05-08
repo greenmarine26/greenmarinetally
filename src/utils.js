@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M4.1';
+export const APP_VERSION = 'M4.2';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -29,6 +29,8 @@ export const SK = {
   loadingVoyages: 'loading_voyages_v1',
   loadingActive: 'loading_active_v1',
   loadingCompleted: 'loading_completed_v1',
+  // M4.2: 인사말 하루 1회 — 마지막 인사 날짜(YYYY-MM-DD) 저장
+  lastGreetingDay: 'master_last_greeting_day_v1',
 };
 
 // === Helpers ===
