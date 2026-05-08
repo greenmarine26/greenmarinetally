@@ -594,18 +594,30 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         // 베이 분석용 전체 컨테이너 누적
         allEdiContainers.push(...r.containers);
 
-        // 평택 필터
-        const ptk = r.containers.filter(c => {
-          if (mode === 'discharge') return (c.pod || '').toUpperCase().endsWith('PTK');
-          return (c.pol || '').toUpperCase().endsWith('PTK');
-        });
-        // M3.5.5: 컨번호 없는 엠티는 위치를 키로 사용 (선적 시점에는 컨번호 미배정)
-        //   현장에서 컨번호 부여되면 위치-기반 record를 매칭해서 컨번호 채움
-        ptk.forEach(c => {
+        // M4.3 ★ 진짜 베이 누락 root cause fix
+        //   이전 버그: 이 EDI 업로드 경로(VoyagePage 자체 업로드)에 평택 필터가 살아있었음
+        //   M3.91 fix는 MixerUploadModal에만 적용 → 이 경로는 여전히 평택 297대만 저장
+        //   증상: 사용자님 보고 "새 EDI 업로드해도 297대만 보임" — 진짜 원인이 여기였음
+        //   수정: 모든 컨 저장 + _mode 태그로 구분 (discharge/loading/transit)
+        let ptkCount = 0;
+        r.containers.forEach(c => {
+          const podPtk = (c.pod || '').toUpperCase().endsWith('PTK');
+          const polPtk = (c.pol || '').toUpperCase().endsWith('PTK');
+          let containerMode;
+          if (mode === 'discharge') {
+            // 양하 모드: 평택 양하면 'discharge', 아니면 'transit'
+            if (podPtk) { containerMode = 'discharge'; ptkCount++; }
+            else containerMode = 'transit';
+          } else {
+            // 선적 모드: 평택 선적이면 'loading', 아니면 'transit'
+            if (polPtk) { containerMode = 'loading'; ptkCount++; }
+            else containerMode = 'transit';
+          }
+          // M3.5.5: 컨번호 없는 엠티는 위치를 키로 사용
           const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
-          allCns[key] = { ...c, _slotKey: key };
+          allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
         });
-        results.push(`✅ ${file.name}: 평택 ${ptk.length}대 (전체 ${total})`);
+        results.push(`✅ ${file.name}: 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
         // 항차 정보 자동 보완
         if (r.vsl && r.voy) {
           await fbUpdateVoyageInfo(voyageKey, {
