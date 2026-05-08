@@ -33,10 +33,11 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const unassignedCount = useMemo(() =>
     containers.filter(c => !c.bay).length, [containers]);
 
-  // M4.1: 컨테이너 분포 카운트 (transit 화물 가시화)
+  // M4.0: 컨테이너 분포 카운트 (transit 화물 + X-RAY 가시화)
   const containerStats = useMemo(() => {
     let ptkCount = 0;     // 평택 양하/선적
     let transitCount = 0; // 통과 (POL/POD 둘 다 평택 아님)
+    let xrayCount = 0;    // X-RAY 대상 (xrayMap에 있는 컨)
     if (Array.isArray(containers)) {
       containers.forEach(c => {
         if (!c) return;
@@ -46,15 +47,16 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         const isPodPtk = pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
         if (isPolPtk || isPodPtk) ptkCount++;
         else transitCount++;
+        if (xrayMap && xrayMap[c.cn]) xrayCount++;
       });
     }
-    const stats = { total: Array.isArray(containers) ? containers.length : 0, ptk: ptkCount, transit: transitCount };
-    // M4.2: 콘솔에도 출력 (F12 → Console에서 확인 가능)
-    if (typeof console !== 'undefined') {
-      console.log('[BayPlan] container stats:', stats);
-    }
-    return stats;
-  }, [containers]);
+    return {
+      total: Array.isArray(containers) ? containers.length : 0,
+      ptk: ptkCount,
+      transit: transitCount,
+      xray: xrayCount,
+    };
+  }, [containers, xrayMap]);
   const scrollRef = useRef(null);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -222,21 +224,18 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       return 'bg-orange-600 text-orange-50 border-orange-400';
     }
 
-    // M3.77: 양하 = POL 색깔, 선적 = POD 색깔
-    const portCode = mode === 'discharge' ? c.pol : c.pod;
-    const pc = portCode ? getPortColor(portCode) : null;
+    // M4.5: 옛 정책 복원 - 평택 = 노랑 셀 (한눈에 식별), 통과 = POL/POD 항구 색
     const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
-
-    if (pc) {
-      // 색깔 매칭됨 - 평택 작업 대상이면 노랑 ring 추가
-      return `${pc.bg} ${pc.text} ${isOurContainer
-        ? 'border-amber-300 ring-2 ring-amber-400'
-        : 'border-slate-600'}`;
+    if (isOurContainer) {
+      // 평택 작업 대상 = 노랑 셀
+      return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
     }
 
-    // 색깔 없는 항구 - 평택 작업 대상이면 노랑(기본), 통과면 슬레이트
-    if (isOurContainer) {
-      return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
+    // 통과(transit) = POL/POD 항구 색 (어느 라인 화물인지 식별)
+    const portCode = mode === 'discharge' ? c.pol : c.pod;
+    const pc = portCode ? getPortColor(portCode) : null;
+    if (pc) {
+      return `${pc.bg} ${pc.text} border-slate-600`;
     }
     return 'bg-slate-700 text-slate-300 border-slate-600';
   };
@@ -381,6 +380,12 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             color: '#ffffff'
           }} title="통과 화물 (베이 골격용)">
             통과 {containerStats?.transit ?? 0}
+          </span>
+          <span style={{
+            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
+            background: '#7e22ce', color: '#faf5ff'
+          }} title="X-RAY 대상">
+            X-RAY {containerStats?.xray ?? 0}
           </span>
         </div>
 
