@@ -14,7 +14,7 @@ import {
   fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData,
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats
 } from '../firebase.js';
-import { extractShipInfo, analyzeShipStructure, compareStructures } from '../shipStructure.js';
+import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict } from '../shipStructure.js';
 import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
@@ -668,7 +668,14 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
     // 선박 구조 분석 + 저장 (전체 컨테이너 기반, 평택 필터 X)
     if (shipInfo && allEdiContainers.length > 0) {
       try {
-        const newStruct = analyzeShipStructure(allEdiContainers);
+        const baseStruct = analyzeShipStructure(allEdiContainers);
+
+        // M3.90: 베이사전(.def 파일 기반) 자동 매칭
+        const newStruct = augmentStructureWithBayDict(baseStruct, shipInfo.imo, shipInfo.name);
+        if (newStruct.bayDictApplied) {
+          results.push(`📚 베이사전 매칭: ${shipInfo.name} (${shipInfo.imo}) - .def 데이터 적용됨`);
+        }
+
         const cmp = compareStructures(prevStruct?.structure, newStruct);
         if (cmp.isFirst) {
           results.push(`📊 선박 구조 학습: 베이 ${newStruct.bay_count}개, 짝꿍 ${Object.keys(newStruct.pairs).length / 2}쌍, 단독 ${newStruct.singles.length}개`);
