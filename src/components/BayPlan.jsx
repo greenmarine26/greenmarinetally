@@ -37,15 +37,23 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const containerStats = useMemo(() => {
     let ptkCount = 0;     // 평택 양하/선적
     let transitCount = 0; // 통과 (POL/POD 둘 다 평택 아님)
-    containers.forEach(c => {
-      const pol = (c.pol || '').toUpperCase();
-      const pod = (c.pod || '').toUpperCase();
-      const isPolPtk = pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
-      const isPodPtk = pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
-      if (isPolPtk || isPodPtk) ptkCount++;
-      else transitCount++;
-    });
-    return { total: containers.length, ptk: ptkCount, transit: transitCount };
+    if (Array.isArray(containers)) {
+      containers.forEach(c => {
+        if (!c) return;
+        const pol = (c.pol || '').toUpperCase();
+        const pod = (c.pod || '').toUpperCase();
+        const isPolPtk = pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
+        const isPodPtk = pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
+        if (isPolPtk || isPodPtk) ptkCount++;
+        else transitCount++;
+      });
+    }
+    const stats = { total: Array.isArray(containers) ? containers.length : 0, ptk: ptkCount, transit: transitCount };
+    // M4.2: 콘솔에도 출력 (F12 → Console에서 확인 가능)
+    if (typeof console !== 'undefined') {
+      console.log('[BayPlan] container stats:', stats);
+    }
+    return stats;
   }, [containers]);
   const scrollRef = useRef(null);
 
@@ -353,18 +361,26 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           {allBaysMode ? '✓ 전체 세로' : '단일 페이지'}
         </button>
 
-        {/* M4.1: 컨테이너 분포 위젯 — 베이플랜에 transit 살아있는지 한눈에 확인 */}
-        <div className="flex items-center gap-1 ml-auto">
-          <span className="px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-100">
-            전체 {containerStats.total}
+        {/* M4.2: 컨테이너 분포 위젯 — inline style로 안전하게 (Tailwind 동적 클래스 회피) */}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          <span style={{
+            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
+            background: '#475569', color: '#f1f5f9'
+          }}>
+            전체 {containerStats?.total ?? 0}
           </span>
-          <span className="px-2 py-1 rounded text-xs font-bold bg-yellow-700 text-yellow-50" title="평택 양하/선적">
-            평택 {containerStats.ptk}
+          <span style={{
+            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
+            background: '#a16207', color: '#fef3c7'
+          }} title="평택 양하/선적">
+            평택 {containerStats?.ptk ?? 0}
           </span>
-          <span className={`px-2 py-1 rounded text-xs font-bold ${
-            containerStats.transit > 0 ? 'bg-slate-500 text-white' : 'bg-red-700 text-red-100'
-          }`} title="통과 화물 (베이 골격용)">
-            통과 {containerStats.transit}
+          <span style={{
+            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
+            background: (containerStats?.transit ?? 0) > 0 ? '#64748b' : '#b91c1c',
+            color: '#ffffff'
+          }} title="통과 화물 (베이 골격용)">
+            통과 {containerStats?.transit ?? 0}
           </span>
         </div>
 
