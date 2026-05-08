@@ -67,23 +67,16 @@ export async function fbSaveXrayList(voyageKey, xrayObj) {
   await chunkedReplace(`voyages/${voyageKey}/discharge/xrayList`, xrayObj);
 }
 
-// M3.5.3 핵심: 큰 객체를 청크로 분할해서 안전/빠르게 저장
-//   M4.2 fix: 청크 분할 시 race condition으로 일부 데이터 손실 가능성 발견
-//             (transit 컨 607대가 사라지는 현상의 의심 지점)
-//             단일 set으로 변경 - Firebase는 16MB까지 단일 트랜잭션 가능
-//             904대 컨테이너 ≈ 1MB 미만이라 단일 set 안전
+// M3.5.3: 큰 객체를 안전하게 저장
+//   M4.2 fix: 청크 분할(50대씩 set+병렬 update) → race condition으로 데이터 손실 의심
+//             단일 set으로 변경 (Firebase 16MB 제한 내, 904대 ≈ 1MB라 안전)
 async function chunkedReplace(path, obj) {
   const keys = Object.keys(obj || {});
   if (keys.length === 0) {
     await set(ref(db, path), null);
     return;
   }
-  // M4.2: 단일 set으로 변경 (이전 청크 분할 → race condition 의심)
-  // 진단 로그: 실제 저장되는 키 개수 확인용
-  const baseRef = ref(db, path);
-  console.log(`[chunkedReplace] path=${path} keys=${keys.length}`);
-  await set(baseRef, obj);
-  console.log(`[chunkedReplace] ✅ saved ${keys.length} keys to ${path}`);
+  await set(ref(db, path), obj);
 }
 export async function fbToggleXray(voyageKey, cn) {
   const r = ref(db, `voyages/${voyageKey}/discharge/xrayList/${cn}`);
