@@ -278,12 +278,6 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
       const isLoading = (c.pol || '').endsWith('PTK') || (c.pol || '').endsWith('KRPTK');
 
       // M3.91: 평택 필터 fix - transit 컨테이너(평택 무관)도 저장
-      // 이전 버그: isDischarge도 isLoading도 아닌 컨이 양쪽에서 누락 → 베이 누락
-      // 수정: 모든 컨을 양쪽에 저장하되 _mode 태그로 구분
-      //   discharge = 평택 양하 (POD=KRPTK)
-      //   loading   = 평택 선적 (POL=KRPTK)
-      //   transit   = 평택 무관 (선박이 평택 들렀지만 평택과 무관한 화물)
-      // 통계/필터 계산 시 _mode='transit' 분기 처리, 베이플랜은 모두 표시
       let containerMode;
       if (isDischarge) containerMode = 'discharge';
       else if (isLoading) containerMode = 'loading';
@@ -361,6 +355,7 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
   });
 
   setProgress({ done: files.length, total: files.length, current: 'Firebase 저장 중...' });
+
 
   // 항차 매칭 + 저장 (Firebase 쓰기 병렬화)
   const voyageKey = await persistData({
