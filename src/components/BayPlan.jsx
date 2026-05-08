@@ -32,6 +32,21 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const [showUnassigned, setShowUnassigned] = useState(false);
   const unassignedCount = useMemo(() =>
     containers.filter(c => !c.bay).length, [containers]);
+
+  // M4.1: 컨테이너 분포 카운트 (transit 화물 가시화)
+  const containerStats = useMemo(() => {
+    let ptkCount = 0;     // 평택 양하/선적
+    let transitCount = 0; // 통과 (POL/POD 둘 다 평택 아님)
+    containers.forEach(c => {
+      const pol = (c.pol || '').toUpperCase();
+      const pod = (c.pod || '').toUpperCase();
+      const isPolPtk = pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
+      const isPodPtk = pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
+      if (isPolPtk || isPodPtk) ptkCount++;
+      else transitCount++;
+    });
+    return { total: containers.length, ptk: ptkCount, transit: transitCount };
+  }, [containers]);
   const scrollRef = useRef(null);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -337,6 +352,21 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           }`}>
           {allBaysMode ? '✓ 전체 세로' : '단일 페이지'}
         </button>
+
+        {/* M4.1: 컨테이너 분포 위젯 — 베이플랜에 transit 살아있는지 한눈에 확인 */}
+        <div className="flex items-center gap-1 ml-auto">
+          <span className="px-2 py-1 rounded text-xs font-bold bg-slate-700 text-slate-100">
+            전체 {containerStats.total}
+          </span>
+          <span className="px-2 py-1 rounded text-xs font-bold bg-yellow-700 text-yellow-50" title="평택 양하/선적">
+            평택 {containerStats.ptk}
+          </span>
+          <span className={`px-2 py-1 rounded text-xs font-bold ${
+            containerStats.transit > 0 ? 'bg-slate-500 text-white' : 'bg-red-700 text-red-100'
+          }`} title="통과 화물 (베이 골격용)">
+            통과 {containerStats.transit}
+          </span>
+        </div>
 
         {/* M3.87: 선적 모드 - 미배정(선적대상) 배지 */}
         {mode === 'loading' && unassignedCount > 0 && (
