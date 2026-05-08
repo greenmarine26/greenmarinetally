@@ -153,11 +153,22 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
   });
 
   // M3.5.4-fix3: ediContainers도 동시 업데이트 (화면 즉시 반영)
-  // ediContainers에 해당 컨이 있으면 그 필드만 갱신
+  // M4.1: ediContainers에 cn이 없으면 records 데이터로 새로 생성 (ISO 변경 화면 미반영 fix)
+  //   - 이전: ediContainers/{cn}이 없으면 update 무시 → 화면에 옛 값 표시
+  //   - 수정: 없으면 records 데이터 + 새 값으로 ediContainers/{cn} 생성 → 화면 즉시 반영
   const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
   const ediSnap = await get(ediRef);
   if (ediSnap.exists()) {
     await update(ediRef, { [field]: newValue });
+  } else {
+    // ediContainers에 없으면 records의 데이터로 신규 생성
+    const newEdi = { ...cur, [field]: newValue };
+    // _orig 필드들 제거 (records 전용)
+    delete newEdi.edits;
+    Object.keys(newEdi).forEach(k => {
+      if (k.endsWith('_orig') || k.endsWith('_history')) delete newEdi[k];
+    });
+    await set(ediRef, newEdi);
   }
 }
 

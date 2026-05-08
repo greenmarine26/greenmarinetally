@@ -36,7 +36,7 @@ const FILTERS = [
   { key: 'tk40', label: '⬛ 40TK', color: 'bg-orange-600' },
   { key: 'rf', label: '❄ 리퍼(F+온도)', color: 'bg-cyan-600' },
   { key: 'dg', label: '🔥 DG', color: 'bg-red-600' },
-  { key: 'oog', label: '📐 OOG', color: 'bg-purple-600' },
+  { key: 'oog', label: '📐 OOG', color: 'bg-fuchsia-600' },
   { key: 'xray', label: '🔍 X-RAY', color: 'bg-purple-600' },
   { key: 'sealerr', label: '🚨 실오류', color: 'bg-red-700' },
   { key: 'isoOther', label: '⚠️ 기타 ISO', color: 'bg-amber-700' },

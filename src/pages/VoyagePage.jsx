@@ -20,6 +20,8 @@ import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
 import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
+import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
+import BayDictStatusWidget from '../components/BayDictStatusWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import WorkReportModal from '../components/WorkReportModal.jsx';
@@ -373,13 +375,26 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         />
       )}
       {tab === 'bay' && (
-        <BayPlan
-          containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} mode={mode}
-          onOpenContainer={(c) => setDetailC(c)}
-        />
+        <div className="space-y-2">
+          <BayDictStatusWidget
+            shipImo={voyage?.info?.imo}
+            shipName={voyage?.info?.vsl}
+            ediContainerCount={allEdiContainers.length}
+          />
+          <BayPlan
+            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} mode={mode}
+            onOpenContainer={(c) => setDetailC(c)}
+          />
+        </div>
       )}
       {tab === 'stats' && (
-        <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
+        <div className="space-y-3">
+          <BayDictVerifyWidget
+            shipInfo={voyage?.info ? { imo: voyage.info.imo, name: voyage.info.vsl } : null}
+            ediContainers={Object.values(ediMap)}
+          />
+          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
+        </div>
       )}
       {tab === 'report' && (
         <ReportTab
@@ -579,33 +594,18 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         // 베이 분석용 전체 컨테이너 누적
         allEdiContainers.push(...r.containers);
 
-        // M4.4: 평택 필터 fix (진짜 root cause) - transit 컨테이너도 저장 (베이 골격 완성용)
-        // 이전 버그: 평택 양하/선적만 allCns에 저장 → transit 누락 → 베이플랜에 누락된 베이 발생
-        // 수정: 전체 컨을 allCns에 저장하되 _mode 태그로 구분
-        //   discharge / loading = 평택 검수 대상
-        //   transit             = 평택 무관 (베이 골격용, 검수 대상 아님)
-        let ptkRealCount = 0;
-        let transitRealCount = 0;
-        r.containers.forEach(c => {
-          const pod = (c.pod || '').toUpperCase();
-          const pol = (c.pol || '').toUpperCase();
-          const isDischarge = pod.endsWith('PTK');
-          const isLoading = pol.endsWith('PTK');
-
-          let containerMode;
-          if (mode === 'discharge') {
-            if (isDischarge) { containerMode = 'discharge'; ptkRealCount++; }
-            else { containerMode = 'transit'; transitRealCount++; }
-          } else {
-            if (isLoading) { containerMode = 'loading'; ptkRealCount++; }
-            else { containerMode = 'transit'; transitRealCount++; }
-          }
-
-          // M3.5.5: 컨번호 없는 엠티는 위치를 키로 사용 (선적 시점에는 컨번호 미배정)
-          const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
-          allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
+        // 평택 필터
+        const ptk = r.containers.filter(c => {
+          if (mode === 'discharge') return (c.pod || '').toUpperCase().endsWith('PTK');
+          return (c.pol || '').toUpperCase().endsWith('PTK');
         });
-        results.push(`✅ ${file.name}: 평택 ${ptkRealCount}대 + 통과 ${transitRealCount}대 (전체 ${total})`);
+        // M3.5.5: 컨번호 없는 엠티는 위치를 키로 사용 (선적 시점에는 컨번호 미배정)
+        //   현장에서 컨번호 부여되면 위치-기반 record를 매칭해서 컨번호 채움
+        ptk.forEach(c => {
+          const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
+          allCns[key] = { ...c, _slotKey: key };
+        });
+        results.push(`✅ ${file.name}: 평택 ${ptk.length}대 (전체 ${total})`);
         // 항차 정보 자동 보완
         if (r.vsl && r.voy) {
           await fbUpdateVoyageInfo(voyageKey, {

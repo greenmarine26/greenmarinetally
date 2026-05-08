@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M4.4';
+export const APP_VERSION = 'M4.1';
 
 // 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
@@ -1084,22 +1084,36 @@ export async function parseListExcel(arrayBuffer) {
 }
 
 // === X-RAY Parser ===
+// M4.1: 정규식 강화 (ISO 6346 표준 - 4번째 글자는 U/J/Z만)
+//   이전 버그: [A-Z]{4}\d{6,7}이 너무 느슨해서 봉인번호/일련번호 등도 컨번호로 잘못 인식
+//   → 평택 양하 297대가 모두 XRAY로 표시되는 현상
+//   수정: 4번째 글자 = U(컨테이너) / J(분리식) / Z(트레일러) 중 하나
+//   ISO 6346: [owner 3자][category 1자][serial 6자][check 1자] = 11자 정확
 export async function parseXrayList(arrayBuffer) {
   const XLSX = await loadSheetJS();
   const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
   const containers = new Set();
+  const allMatches = [];  // 디버그: 매칭된 모든 후보
   for (const sheetName of wb.SheetNames) {
     const ws = fixSheetRange(wb.Sheets[sheetName], XLSX);   // V38: !ref 보정
     const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
     for (const row of grid) {
       for (const cell of (row || [])) {
         const text = String(cell || '').replace(/[\s\-]/g, '').toUpperCase();
-        const m = text.match(/([A-Z]{4}\d{6,7})/);
-        if (m) containers.add(m[1]);
+        // M4.1: ISO 6346 표준 적용 - 4번째 글자는 U/J/Z만 허용
+        // 이로써 봉인번호(KRPN0001234 등)와 일련번호 잘못 매칭 차단
+        const m = text.match(/\b([A-Z]{3}[UJZ]\d{6,7})\b/);
+        if (m) {
+          containers.add(m[1]);
+          allMatches.push(m[1]);
+        }
       }
     }
   }
-  return { containers: Array.from(containers) };
+  return {
+    containers: Array.from(containers),
+    _matchCount: allMatches.length,  // 진단용: 잘못된 매칭 추적
+  };
 }
 
 // === POD/POL 색깔 (M3.85 대폭 확장) ===

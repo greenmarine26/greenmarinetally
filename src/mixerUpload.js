@@ -44,8 +44,14 @@ export async function detectFileType(file) {
   // 텍스트로 시도
   try {
     const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    // M4.1: BAPLIE / IFCSUM 자동 판별
+    //   BAPLIE = 적부도 (베이 위치 포함)
+    //   IFCSUM = 컨테이너 명세서 (일부 선사가 BAPLIE 없이 이것만 전송)
+    if (/UNH\+\d+\+BAPLIE/i.test(text)) return 'edi';
+    if (/UNH\+\d+\+IFCSUM/i.test(text)) return 'edi-ifcsum';
     if (/UN[BH]\+/i.test(text) && /TDT\+/i.test(text)) return 'edi';
     if (/BAPLIE/i.test(text)) return 'edi';
+    if (/IFCSUM/i.test(text)) return 'edi-ifcsum';
     if (/^[A-Z]{4}\d{7}\s/m.test(text)) return 'asc';
     if (text.includes(',') && /^[A-Z]{4}\d{7}/m.test(text)) return 'csv';
   } catch (e) {}
@@ -379,6 +385,21 @@ export async function processSingleFile(file, options = {}) {
         if (ship) data._ship = ship;
         out.role = 'edi-base';
         out.data = data;
+        break;
+      }
+      case 'edi-ifcsum': {
+        // M4.1: IFCSUM 양식 (일부 선사가 BAPLIE 없이 이것만 전송)
+        // BAPLIE 파서로 시도. 컨테이너 정보(EQD, NAD, MEA, FTX)는 동일 형식이라 일부 추출 가능.
+        // 단, LOC(베이 위치)는 IFCSUM에 없을 수 있어 위치 정보 누락 가능.
+        const text = await file.text();
+        const data = parseBAPLIE(text);
+        const ship = extractShipInfo(text);
+        if (ship) data._ship = ship;
+        out.role = 'edi-base';
+        out.data = data;
+        // 경고 표시용 플래그
+        out._ifcsum = true;
+        out._warning = 'IFCSUM 양식 - BAPLIE 파서로 처리됨. 베이 위치 정보 누락 가능 (베이사전 매칭으로 보강).';
         break;
       }
       case 'asc': {

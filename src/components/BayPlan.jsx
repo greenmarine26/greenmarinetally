@@ -32,29 +32,6 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const [showUnassigned, setShowUnassigned] = useState(false);
   const unassignedCount = useMemo(() =>
     containers.filter(c => !c.bay).length, [containers]);
-
-  // M4.1: 컨테이너 분포 카운트 (transit 화물 가시화)
-  const containerStats = useMemo(() => {
-    let ptkCount = 0;     // 평택 양하/선적
-    let transitCount = 0; // 통과 (POL/POD 둘 다 평택 아님)
-    if (Array.isArray(containers)) {
-      containers.forEach(c => {
-        if (!c) return;
-        const pol = (c.pol || '').toUpperCase();
-        const pod = (c.pod || '').toUpperCase();
-        const isPolPtk = pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
-        const isPodPtk = pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
-        if (isPolPtk || isPodPtk) ptkCount++;
-        else transitCount++;
-      });
-    }
-    const stats = { total: Array.isArray(containers) ? containers.length : 0, ptk: ptkCount, transit: transitCount };
-    // M4.2: 콘솔에도 출력 (F12 → Console에서 확인 가능)
-    if (typeof console !== 'undefined') {
-      console.log('[BayPlan] container stats:', stats);
-    }
-    return stats;
-  }, [containers]);
   const scrollRef = useRef(null);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -207,30 +184,42 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   //   - 양하 모드: 셀 = POL(출발지) 색깔, 평택 도착이면 노랑 ring 강조
   //   - 선적 모드: 셀 = POD(목적지) 색깔, 평택 출발이면 노랑 ring 강조
   //   - 노랑 ring = 우리 작업 대상 식별
-  //   - X-RAY/시프팅/완료는 우선순위 더 높음
+  // M4.1: XRAY를 완료보다 우선순위 높게 변경 (XRAY 시각적 누락 fix)
+  //   - 이전: 완료된 XRAY 컨 → 흰색으로만 표시되어 XRAY 인지 못함
+  //   - 수정: XRAY = 보라 (완료여도 XRAY 우선), 완료 마크는 ✓로 별도 표시
   const cellColor = (c) => {
+    if (xrayMap[c.cn]) {
+      // M4.1: XRAY 최우선 (완료여도 XRAY 표시 유지)
+      // 완료 시 보라+밝은 ring으로 구분
+      if (compMap[c.cn]) {
+        return 'bg-purple-700 text-purple-50 border-purple-300 ring-2 ring-emerald-400';
+      }
+      return 'bg-purple-700 text-purple-50 border-purple-400 ring-1 ring-purple-300';
+    }
     if (compMap[c.cn]) {
       // 완료 = 어두운 흰색 (다크 배경 위 잘 보이게)
       return 'bg-slate-300 text-slate-900 border-slate-500';
-    }
-    if (xrayMap[c.cn]) {
-      // X-RAY = 보라 (강조)
-      return 'bg-purple-700 text-purple-50 border-purple-400 ring-1 ring-purple-300';
     }
     if (shiftingMap.shiftCns[c.cn]) {
       // 시프팅 대상 = 주황
       return 'bg-orange-600 text-orange-50 border-orange-400';
     }
 
-    // M4.4-color: 평택 = 노랑 셀 (한눈에 식별), 통과 = POL/POD 항구 색
-    const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
-    if (isOurContainer) {
-      return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
-    }
+    // M3.77: 양하 = POL 색깔, 선적 = POD 색깔
     const portCode = mode === 'discharge' ? c.pol : c.pod;
     const pc = portCode ? getPortColor(portCode) : null;
+    const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
+
     if (pc) {
-      return `${pc.bg} ${pc.text} border-slate-600`;
+      // 색깔 매칭됨 - 평택 작업 대상이면 노랑 ring 추가
+      return `${pc.bg} ${pc.text} ${isOurContainer
+        ? 'border-amber-300 ring-2 ring-amber-400'
+        : 'border-slate-600'}`;
+    }
+
+    // 색깔 없는 항구 - 평택 작업 대상이면 노랑(기본), 통과면 슬레이트
+    if (isOurContainer) {
+      return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
     }
     return 'bg-slate-700 text-slate-300 border-slate-600';
   };
@@ -354,29 +343,6 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           }`}>
           {allBaysMode ? '✓ 전체 세로' : '단일 페이지'}
         </button>
-
-        {/* M4.2: 컨테이너 분포 위젯 — inline style로 안전하게 (Tailwind 동적 클래스 회피) */}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          <span style={{
-            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
-            background: '#475569', color: '#f1f5f9'
-          }}>
-            전체 {containerStats?.total ?? 0}
-          </span>
-          <span style={{
-            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
-            background: '#a16207', color: '#fef3c7'
-          }} title="평택 양하/선적">
-            평택 {containerStats?.ptk ?? 0}
-          </span>
-          <span style={{
-            padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold',
-            background: (containerStats?.transit ?? 0) > 0 ? '#64748b' : '#b91c1c',
-            color: '#ffffff'
-          }} title="통과 화물 (베이 골격용)">
-            통과 {containerStats?.transit ?? 0}
-          </span>
-        </div>
 
         {/* M3.87: 선적 모드 - 미배정(선적대상) 배지 */}
         {mode === 'loading' && unassignedCount > 0 && (

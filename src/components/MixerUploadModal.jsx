@@ -278,6 +278,12 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
       const isLoading = (c.pol || '').endsWith('PTK') || (c.pol || '').endsWith('KRPTK');
 
       // M3.91: 평택 필터 fix - transit 컨테이너(평택 무관)도 저장
+      // 이전 버그: isDischarge도 isLoading도 아닌 컨이 양쪽에서 누락 → 베이 누락
+      // 수정: 모든 컨을 양쪽에 저장하되 _mode 태그로 구분
+      //   discharge = 평택 양하 (POD=KRPTK)
+      //   loading   = 평택 선적 (POL=KRPTK)
+      //   transit   = 평택 무관 (선박이 평택 들렀지만 평택과 무관한 화물)
+      // 통계/필터 계산 시 _mode='transit' 분기 처리, 베이플랜은 모두 표시
       let containerMode;
       if (isDischarge) containerMode = 'discharge';
       else if (isLoading) containerMode = 'loading';
@@ -351,11 +357,22 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
   xrayFiles.forEach(r => {
     const data = r.data;
     if (!data) return;
-    dischargeData.xrays.push(data);
+    // M4.1 critical fix: parseXrayList는 { containers: [배열] }을 반환
+    // 이전: dischargeData.xrays.push({containers:[...]}) → Object.assign 시 키 충돌로 마지막만 남음
+    //       → mergeWithEdi에서 Object.keys()='containers' 하나만 처리 → XRAY 매칭 깨짐
+    // 수정: 컨번호를 키로 한 평면 객체로 변환 → Object.assign 정상 작동
+    if (Array.isArray(data.containers)) {
+      const flat = {};
+      data.containers.forEach(cn => {
+        flat[String(cn).toUpperCase()] = true;
+      });
+      dischargeData.xrays.push(flat);
+    } else {
+      dischargeData.xrays.push(data);
+    }
   });
 
   setProgress({ done: files.length, total: files.length, current: 'Firebase 저장 중...' });
-
 
   // 항차 매칭 + 저장 (Firebase 쓰기 병렬화)
   const voyageKey = await persistData({
@@ -421,6 +438,24 @@ async function persistData({ mode, targetVoyage, voyages, inspector, dischargeDa
 
     const { merged } = mergeWithEdi(dischargeData.edi, listMerged, xrayMerged, {});
     writePromises.push(fbSaveEdiContainers(voyageKey, 'discharge', merged));
+
+    // M4.1: XRAY 매칭률 검증 (잘못된 파일 업로드 감지)
+    // XRAY 리스트는 양하 화물의 일부일 뿐 (보통 5~30%)
+    // 90%+ 매칭 시 = 일반 양하 리스트가 잘못 분류된 것일 가능성 높음
+    const xrayCount = Object.keys(xrayMerged).length;
+    const dischargeCount = Object.values(dischargeData.edi).filter(c => c._mode === 'discharge').length;
+    if (xrayCount > 0 && dischargeCount > 0) {
+      const xrayRate = xrayCount / dischargeCount;
+      if (xrayRate > 0.9) {
+        const msg = `⚠️ XRAY 매칭률 ${(xrayRate * 100).toFixed(0)}% (${xrayCount}/${dischargeCount}) - 정상보다 높음. XRAY 파일 재확인 권장.`;
+        console.warn(msg);
+        // 사용자가 볼 수 있게 alert (한 번만, 데이터 저장 전)
+        if (typeof window !== 'undefined' && xrayRate > 0.9) {
+          // eslint-disable-next-line no-alert
+          window.alert(msg + '\n\n실수로 양하 리스트를 XRAY 파일로 업로드한 것은 아닌지 확인하세요.');
+        }
+      }
+    }
 
     if (Object.keys(listMerged).length > 0) {
       const records = {};
