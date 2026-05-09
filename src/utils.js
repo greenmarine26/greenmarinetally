@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V43 (2026.05.09 / M4.7)
-export const APP_VERSION = 'M4.7';
+export const APP_VERSION = 'M4.8';
 
 // M4.7 변경점:
 //   - PrintableCargoPlan.jsx 전면 재작성:
