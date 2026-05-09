@@ -150,6 +150,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       'eseal_at', 'eseal_by', 'eseal_mode', 'eseal_history',
       // M4.9b-fix: ISO403 사진 마킹
       'iso403_photo_ts', 'iso403_photo_by', 'iso403_photo_history',
+      // M4.9d-fix: 선적 실체 위치 (계획 c.bay/row/tier는 보존, 실체는 별도)
+      'bay_actual', 'row_actual', 'tier_actual',
+      'actual_at', 'actual_by',
     ]);
 
     Object.values(recMap).forEach(r => {

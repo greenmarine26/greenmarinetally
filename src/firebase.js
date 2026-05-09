@@ -191,6 +191,33 @@ export async function fbCancelComplete(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
 }
 
+// M4.9d-fix: 선적 실체 위치 저장 (사용자 도메인: 선적 EDI는 계획만, 선적확인 시 실체 발생)
+//   - 계획 위치 c.bay/row/tier는 보존 (EDI 단일 진실)
+//   - 실체 위치 c.bay_actual/row_actual/tier_actual에 별도 저장
+//   - 수정 안 하면 actual = 계획 (정상 흐름)
+//   - 위치 변경 시에만 actual ≠ 계획 (현장 적치 다름)
+export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actualRow, actualTier, by) {
+  const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  await update(r, {
+    bay_actual: actualBay || '',
+    row_actual: actualRow || '',
+    tier_actual: actualTier || '',
+    actual_at: Date.now(),
+    actual_by: by || '',
+  });
+}
+// 실체 위치 삭제 (수정 취소)
+export async function fbClearActualPosition(voyageKey, mode, cn) {
+  const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  await update(r, {
+    bay_actual: null,
+    row_actual: null,
+    tier_actual: null,
+    actual_at: null,
+    actual_by: null,
+  });
+}
+
 // M3.87: 컨테이너 위치 재배정 (선적 모드용)
 //   - 새 위치(bay/row/tier)로 이동
 //   - 새 위치에 다른 컨이 있으면 그 컨은 미배정 처리(bay 빈 값) + 완료 취소

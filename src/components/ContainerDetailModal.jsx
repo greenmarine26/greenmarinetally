@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -46,6 +46,31 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
   // M3.87: 위치 수정 모달 (선적 모드 전용)
   const [showPosEdit, setShowPosEdit] = useState(false);
+
+  // M4.9d-fix: 선적 실체 위치 입력 state
+  const [editingActualPos, setEditingActualPos] = useState(false);
+  const [actualBay, setActualBay] = useState('');
+  const [actualRow, setActualRow] = useState('');
+  const [actualTier, setActualTier] = useState('');
+
+  // M4.9d-fix: 실체 위치 저장
+  const handleSaveActualPosition = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const b = String(actualBay || '').trim().toUpperCase();
+    const r = String(actualRow || '').trim().toUpperCase();
+    const t = String(actualTier || '').trim().toUpperCase();
+    if (!b || !r || !t) { alert('베이/열/단 모두 입력하세요'); return; }
+    await fbSetActualPosition(voyageKey, mode, c.cn, b, r, t, inspector);
+    setEditingActualPos(false);
+    setActualBay(''); setActualRow(''); setActualTier('');
+  };
+
+  // M4.9d-fix: 실체 위치 삭제 (수정 취소 - 계획대로 돌아감)
+  const handleClearActualPosition = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!confirm('수정 위치 기록을 삭제하시겠습니까?\n계획 위치대로 처리됩니다.')) return;
+    await fbClearActualPosition(voyageKey, mode, c.cn);
+  };
 
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
@@ -312,12 +337,12 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         {/* 위치 */}
         <div className="px-4 py-3 border-b border-slate-800">
           <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
-            <span>선내 위치</span>
+            <span>{mode === 'loading' ? '선내 위치 (계획)' : '선내 위치'}</span>
             {/* M3.87: 선적 모드만 위치 수정 버튼 (양하 시 위치 변경은 의미 없음) */}
             {mode === 'loading' && (
               <button onClick={() => setShowPosEdit(true)}
                 className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-2 py-1 rounded text-[10px] font-black flex items-center gap-1">
-                <Edit3 className="w-3 h-3"/>위치 수정
+                <Edit3 className="w-3 h-3"/>위치 변경
               </button>
             )}
           </div>
@@ -333,6 +358,91 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             )}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">베이 / 열 / 단</div>
+
+          {/* M4.9d-fix: 선적 실체 위치 — 사용자 도메인:
+              선적 EDI 위치는 계획(예정), 선적확인 시 실체 발생.
+              현장에서 다른 위치에 적치된 경우 여기에 입력. */}
+          {mode === 'loading' && (
+            <div className="mt-3 pt-3 border-t border-slate-700">
+              <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between">
+                <span>실체 위치 (선적확인 시)</span>
+                {!editingActualPos && (c.bay_actual || c.row_actual || c.tier_actual) ? (
+                  <button onClick={handleClearActualPosition}
+                    className="text-[10px] text-rose-400 hover:text-rose-300">삭제</button>
+                ) : !editingActualPos ? (
+                  <button onClick={() => {
+                    setActualBay(c.bay_actual || c.bay || '');
+                    setActualRow(c.row_actual || c.row || '');
+                    setActualTier(c.tier_actual || c.tier || '');
+                    setEditingActualPos(true);
+                  }}
+                  className="bg-cyan-700 hover:bg-cyan-600 text-cyan-50 px-2 py-1 rounded text-[10px] font-black flex items-center gap-1">
+                    <Edit3 className="w-3 h-3"/>수정 위치 입력
+                  </button>
+                ) : null}
+              </div>
+
+              {!editingActualPos ? (
+                (c.bay_actual || c.row_actual || c.tier_actual) ? (
+                  // 수정된 실체 위치 표시 — 본위치 → 수정위치
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm mono text-slate-400">{c.bay || '--'}/{c.row || '--'}/{c.tier || '--'}</span>
+                    <span className="text-cyan-400 font-bold">→</span>
+                    <MapPin className="w-4 h-4 text-cyan-400"/>
+                    <span className="text-lg font-black mono text-cyan-200">{c.bay_actual || '--'}</span>
+                    <span className="text-slate-500">/</span>
+                    <span className="text-base font-bold mono text-cyan-200">{c.row_actual || '--'}</span>
+                    <span className="text-slate-500">/</span>
+                    <span className="text-base font-bold mono text-cyan-200">{c.tier_actual || '--'}</span>
+                    {c.actual_by && (
+                      <span className="text-[10px] text-slate-400 ml-1">({c.actual_by})</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500">
+                    미입력 (계획 위치대로 선적 예정)
+                  </div>
+                )
+              ) : (
+                // 입력 모드
+                <div className="space-y-2">
+                  <div className="text-[10px] text-cyan-300">
+                    계획: {c.bay || '--'}/{c.row || '--'}/{c.tier || '--'} → 실제 적치 위치 입력
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <div className="text-[9px] text-slate-500 mb-0.5">베이</div>
+                      <input type="text" value={actualBay}
+                        onChange={e => setActualBay(e.target.value.toUpperCase())}
+                        placeholder="01"
+                        className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"
+                        autoFocus/>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-500 mb-0.5">열(row)</div>
+                      <input type="text" value={actualRow}
+                        onChange={e => setActualRow(e.target.value.toUpperCase())}
+                        placeholder="00"
+                        className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-slate-500 mb-0.5">단(tier)</div>
+                      <input type="text" value={actualTier}
+                        onChange={e => setActualTier(e.target.value.toUpperCase())}
+                        placeholder="02"
+                        className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={() => { setEditingActualPos(false); setActualBay(''); setActualRow(''); setActualTier(''); }}
+                      className="py-2 bg-slate-700 text-slate-300 rounded text-xs font-bold">취소</button>
+                    <button onClick={handleSaveActualPosition}
+                      className="py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold">저장</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 화물 */}

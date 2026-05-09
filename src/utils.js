@@ -1,6 +1,16 @@
-// 공통 유틸리티 — V47 (2026.05.09 / M4.9d)
-export const APP_VERSION = 'M4.9d';
+// 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
+export const APP_VERSION = 'M4.9e';
 
+// M4.9e 변경점:
+//   [신규] 선적 실체 위치 1단계 (사용자 도메인 지식 반영)
+//          · 선적 EDI 위치 = 계획 (예정), 실체 없음
+//          · 선적확인 시 실체 발생 — 실체 위치 c.bay_actual/row_actual/tier_actual 별도 저장
+//          · ContainerDetailModal에 "실체 위치 (선적확인 시)" 박스 추가
+//          · 본위치 → 수정위치 표시 + 삭제 버튼
+//          · ALLOWED_LIST_FIELDS에 actual position 필드 추가
+//          · firebase: fbSetActualPosition / fbClearActualPosition 신규
+//          · 화면 그리드는 변경 없음 (다음 빌드 2단계)
+//
 // M4.9d 변경점:
 //   [수정] 베이 라벨 단순화 — "(20ft 전용)", "(40ft)", "(20ft)" 등 잘못된 단정 라벨 제거
 //          사용자 도메인 지식: 선박 BOW/STERN 단독 베이도 40ft(20ft 트윈) 가능
