@@ -373,7 +373,7 @@ export default function PrintableCargoPlan({
           .no-print { display: none !important; }
           .cargo-plan-page { margin: 0 !important; padding: 0 !important; }
           /* 사용자 요청: 여백 1.5cm */
-          @page { size: A4 landscape; margin: 1.5cm; }
+          @page { size: A4 landscape; margin: 0; }
         }
         .cargo-plan-page {
           color: black; background: white;

@@ -543,18 +543,25 @@ export function mergeWithEdi(ediContainers, listResults, xrayResults, ocrResults
   const conflicts = [];
   const unmatched = {};
 
-  // 1. 리스트 데이터 (실번호/무게 보강)
+  // 1. 리스트 데이터 (실번호/엠티실/무게 보강)
   Object.values(listResults || {}).forEach(c => {
     if (!c.cn) return;
     const cn = c.cn.toUpperCase();
     if (merged[cn]) {
       // EDI에 있음 → 보강
       const ediC = merged[cn];
-      // 실번호: EDI에 없으면 추가 (이미 있으면 충돌 검사)
+      // 풀씰(sl): EDI에 없으면 추가 (이미 있으면 충돌 검사)
       if (c.sl) {
         if (!ediC.sl) ediC.sl = c.sl;
         else if (ediC.sl !== c.sl) {
           conflicts.push({ cn, field: 'sl', ediVal: ediC.sl, otherVal: c.sl, source: c._source || 'list' });
+        }
+      }
+      // M4.9c-fix: 엠티실(eseal) 보강 — 사용자 신고: 선적 리스트의 엠티실번호 매핑 안 됨
+      if (c.eseal) {
+        if (!ediC.eseal) ediC.eseal = c.eseal;
+        else if (ediC.eseal !== c.eseal) {
+          conflicts.push({ cn, field: 'eseal', ediVal: ediC.eseal, otherVal: c.eseal, source: c._source || 'list' });
         }
       }
       // 무게: 차이 큰 경우만 충돌

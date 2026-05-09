@@ -450,7 +450,7 @@ export default function PrintableBayDetail({
             break-after: auto !important;
           }
           /* 사용자 요청: 여백 1.5cm */
-          @page { size: A4 landscape; margin: 1.5cm; }
+          @page { size: A4 landscape; margin: 0; }
         }
         .bd-page {
           color: black; background: white;

@@ -876,11 +876,24 @@ export async function parseListExcel(arrayBuffer) {
     /^箱号$/, /^货柜号$/,  // M3.5.6: 중국어 (VGM 등)
     /^cntno$/i, /^cntr\.?no\.?$/i,
   ];
-  // 실번호 헤더 패턴 (V38 확장)
+  // 실번호 헤더 패턴 (V38 확장 + M4.9c "엠티실번호" 등 변형)
+  // M4.9c-fix: 사용자 신고 — 우리 앱 보고서 양식("엠티실번호" 헤더)을 다음 항차 선적 리스트로
+  //            재사용하는 검수원 워크플로우. /^실번호/는 "실번호"로 시작해야 매칭 (엠티실번호 X).
+  //            → "실번호$" (끝나는 패턴) 추가, "엠티실" 명시 추가.
   const SL_HEAD = [
     /^seal$/, /^sealno$/, /seal\s*no/, /^seal\s*no\.?$/,
     /^seal#$/, /^seal\s*number/, /^seal\.?\s*no\.?\s*1?$/,
-    /^실번호/, /^실$/, /^봉인/, /봉인.*번호/, /^seal#?\d?$/,
+    /^실번호/, /실번호$/, /^실$/, /^봉인/, /봉인.*번호/, /^seal#?\d?$/,
+    // 풀 컨테이너 실 (full container seal)
+    /^full.*seal$/, /^f.*seal$/,
+  ];
+
+  // M4.9c-fix: 엠티 실 별도 헤더 — c.eseal에 매핑
+  //   "엠티실번호", "Empty Seal", "E-Seal" 등 명시적 엠티실 컬럼
+  const ESEAL_HEAD = [
+    /^엠티실번호/, /^엠티\s*실$/, /^엠티봉인/,
+    /^empty.*seal/, /^e[-\s]?seal/, /^reefer.*seal/,
+    /엠티.*실/, /empty.*실/,
   ];
 
   // M3.86: 헤더 정규화 통일 (점/콤마/괄호 제거 → "Cntr.No", "Seal No.", "Tp/Sz" 등 인식)
@@ -1029,6 +1042,8 @@ export async function parseListExcel(arrayBuffer) {
 
     const cn_i = findCol(CN_HEAD);
     const sl_i = findCol(SL_HEAD);
+    // M4.9c-fix: 엠티실 별도 컬럼 (예: "엠티실번호") — c.eseal로 매핑
+    const eseal_i = findCol(ESEAL_HEAD);
     const bl_i = findCol([/^b\/?l/, /^bl\s*no/, /^m-?b\/?l/, /master.*b\/?l/, /^b\/?l\s*no$/, /^blno$/]);
     const wt_i = findCol([/^cargo\s*weight$|^total\s*weight$/, /gross.*wt|t\.?wgt|total.*wt|^weight|^wgt|^g\.?weight|^t\.?weight/, /무게/, /중량/, /^kg/, /^kgs/]);
     const sh_i = findCol([/shipper|forward|화주|consignor/]);
@@ -1182,10 +1197,45 @@ export async function parseListExcel(arrayBuffer) {
       const isOt = /^[24][0245689]U/.test(isoUpper) || /^[24]0O/.test(isoUpper) || /^4[5689]O/.test(isoUpper) || /^L5U/.test(isoUpper);
       const isTk = /^[24][0245689]T/.test(isoUpper) || /^L5T/.test(isoUpper);
 
+      // M4.9c-fix: 엠티실 별도 컬럼에서 추출
+      let esealFromCol = '';
+      if (eseal_i >= 0) {
+        esealFromCol = String(row[eseal_i] || '').trim();
+        if (!esealFromCol) {
+          for (const off of [-1, 1, -2, 2]) {
+            const c = eseal_i + off;
+            if (c < 0 || c >= row.length || c === cnColActual) continue;
+            const v = String(row[c] || '').trim();
+            if (v && v.toUpperCase() !== cn) { esealFromCol = v; break; }
+          }
+        }
+      }
+
+      // M4.9c-fix: sl/eseal 분기 결정
+      //   - SL_HEAD 매칭 + ESEAL_HEAD 매칭: 둘 다 별도 → 각자 매핑
+      //   - SL_HEAD만 매칭, fe='E': 데이터를 eseal로 (사용자가 일반 "실번호" 컬럼에 엠티실 적은 경우)
+      //   - ESEAL_HEAD만 매칭, fe='F': 데이터를 sl로 (드물지만 안전)
+      //   - 한 컬럼만 있고 fe 미정: sl/eseal 동일 데이터 (어느 쪽이든 보임)
+      let finalSl = sl;
+      let finalEseal = esealFromCol;
+      if (eseal_i < 0 && sl_i >= 0 && fe === 'E' && finalSl) {
+        // SL 컬럼이지만 엠티 → eseal로 옮김
+        finalEseal = finalSl;
+        finalSl = '';
+      } else if (sl_i < 0 && eseal_i >= 0 && fe === 'F' && finalEseal) {
+        finalSl = finalEseal;
+        finalEseal = '';
+      } else if (sl_i < 0 && eseal_i < 0) {
+        // 둘 다 안 잡힘 — 자동 탐색된 sl을 fe에 따라 분기
+        if (fe === 'E') { finalEseal = finalSl; finalSl = ''; }
+      }
+
       records.push({
         cn, l4: cn.slice(-4),
-        sl,
-        sl_orig: sl,
+        sl: finalSl,
+        sl_orig: finalSl,
+        eseal: finalEseal,
+        eseal_orig: finalEseal,
         bl: bl_i >= 0 ? String(row[bl_i] || '').trim() : '',
         sh: sh_i >= 0 ? String(row[sh_i] || '').trim() : '',
         gi: gi_i >= 0 ? String(row[gi_i] || '').trim() : '',
