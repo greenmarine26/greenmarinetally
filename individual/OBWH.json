@@ -1,0 +1,344 @@
+{
+  "ok": true,
+  "fileSize": 2122448,
+  "header": {
+    "version": "6.50",
+    "created": "20171109",
+    "vessel": "OBWHOCEAN BLUE WHALE              D5MO4 4",
+    "identifier": "463722538"
+  },
+  "bayCount": 15,
+  "bayList": [
+    "01",
+    "02",
+    "03",
+    "05",
+    "06",
+    "07",
+    "09",
+    "10",
+    "11",
+    "13",
+    "14",
+    "15",
+    "17",
+    "18",
+    "19"
+  ],
+  "blockSize": 189,
+  "blockConsistent": true,
+  "markerLen": 7,
+  "grade": "verified",
+  "bays": [
+    {
+      "bay": "01",
+      "section": 1,
+      "cellCode": ",,;;",
+      "hasHold": true,
+      "holdRowsMax": 11,
+      "holdTiersMax": 15,
+      "hasDeck": true,
+      "deckRowsMax": 11,
+      "deckTiersMax": 14,
+      "pairIndices": [
+        256,
+        768,
+        256,
+        768
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "02",
+      "section": 1,
+      "cellCode": ",,;;",
+      "hasHold": true,
+      "holdRowsMax": 11,
+      "holdTiersMax": 15,
+      "hasDeck": true,
+      "deckRowsMax": 11,
+      "deckTiersMax": 14,
+      "pairIndices": [
+        256,
+        768,
+        256,
+        768
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "03",
+      "section": 1,
+      "cellCode": "((??",
+      "hasHold": true,
+      "holdRowsMax": 10,
+      "holdTiersMax": 16,
+      "hasDeck": true,
+      "deckRowsMax": 10,
+      "deckTiersMax": 15,
+      "pairIndices": [
+        256,
+        768,
+        256,
+        768
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "05",
+      "section": 2,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        1024,
+        1536,
+        1024,
+        1536
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "06",
+      "section": 2,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        1024,
+        1536,
+        1024,
+        1536
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "07",
+      "section": 2,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        1024,
+        1536,
+        1024,
+        1536
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "09",
+      "section": 3,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        1792,
+        2304,
+        1792,
+        2304
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "10",
+      "section": 3,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        1792,
+        2304,
+        1792,
+        2304
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "11",
+      "section": 3,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        1792,
+        2304,
+        1792,
+        2304
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "13",
+      "section": 4,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        2560,
+        3072,
+        2560,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "14",
+      "section": 4,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        2560,
+        3072,
+        2560,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "15",
+      "section": 4,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        2560,
+        3072,
+        2560,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "17",
+      "section": 5,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        3328,
+        3840,
+        3328,
+        3840
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "18",
+      "section": 5,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        3328,
+        3840,
+        3328,
+        3840
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "19",
+      "section": 5,
+      "cellCode": "##DD",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 17,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 17,
+      "pairIndices": [
+        3328,
+        3840,
+        3328,
+        3840
+      ],
+      "isStandalone": false
+    }
+  ],
+  "structure": {
+    "oddCount": 10,
+    "evenCount": 5,
+    "trios": [
+      {
+        "left": "01",
+        "mid": "02",
+        "right": "03"
+      },
+      {
+        "left": "05",
+        "mid": "06",
+        "right": "07"
+      },
+      {
+        "left": "09",
+        "mid": "10",
+        "right": "11"
+      },
+      {
+        "left": "13",
+        "mid": "14",
+        "right": "15"
+      },
+      {
+        "left": "17",
+        "mid": "18",
+        "right": "19"
+      }
+    ],
+    "standalone": [],
+    "sectionCount": 5
+  },
+  "cellCodeDistribution": {
+    ",,;;": 2,
+    "((??": 1,
+    "##DD": 12
+  },
+  "_fileName": "OBWH.def",
+  "_code": "OBWH"
+}

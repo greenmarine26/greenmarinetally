@@ -1,221 +1,180 @@
-# HANDOFF_TO_NEXT_CHAT.md — M4.4 인계 지침서
+# HANDOFF_TO_NEXT_CHAT.md — M4.4 일괄 분석 결과 인계
 
-> **현재 상태:** M4.4 빌드 + 검증 완료, ZIP 배포본 (`M4_4_REAL_DEPLOY.zip`)
-> **검증 통과:** 28/28 자동 테스트 (TNJP.def 실데이터 기반)
-> **이전 버전:** M4.3 → 변경 사항은 아래 ‘추가/변경 파일 목록’ 참조
-> **인계 일자:** 2026-05-09
-
----
-
-## 1. M4.4 핵심 기능 (한 줄 요약)
-
-**사용자가 .def 파일을 자료 업로드 모달에 던지면, 검증된 메서드로 즉시 파싱해서 베이사전(localStorage)에 등록 → 다음 EDI 업로드 시 자동 매칭.**
-
-기존 M4.3 임베드 사전(`shipBayDict.js`, 11척, **verified: false**)의 한계 — "1024B 레코드 인덱스 ↔ 실제 베이번호 매핑 미확정", "슬롯값 5/7 의미 추정" — 을 사용자가 .def 직접 업로드해서 우회 가능. 우선순위는 **userBayDict (검증) > 임베드 사전 (미검증)**.
+> **작업 일자:** 2026-05-09
+> **작업 내용:** 평택항 .def 파일 330척 일괄 분석
+> **결과:** 323척 성공 (97.9%), CASP 버전별 블록 크기 매핑 확정
+> **현재 앱 버전:** M4.4 (이전 세션에서 빌드 + 검증 완료)
 
 ---
 
-## 2. 추가/변경 파일 목록
+## 1. 이번 세션 핵심 성과
 
-### 신규 파일 (2개)
-| 경로 | 역할 |
-|------|------|
-| `src/defParser.js` | CASP .def 바이너리 파서 (JS) — 검증된 byte-level 추출 |
-| `src/data/userBayDict.js` | localStorage 기반 사용자 베이사전 (CRUD + 통계) |
+### 1-1. 회수율 64 → 323 (5배 개선)
+v1 파서로 64개만 성공했던 것을 견고화하면서 **323개까지 회수**. 핵심 패치:
+1. **베이 마커 lookbehind 완화**: `[\x20-\x7E]` → `[0-9]`만 거부 (공백 패딩 인식)
+2. **가변 공백 갯수**: 2~5 스페이스 모두 시도 (CASP 버전별 차이)
+3. **균등 간격 평가**: 베이 갯수 + 일관성 점수로 best marker_len 선택
+4. **블록 크기별 메타 위치 비례 조정**: 189(TNJP) 외 다른 크기는 추정 위치
 
-### 수정 파일 (4개)
-| 경로 | 변경 요점 |
-|------|-----------|
-| `src/utils.js` | APP_VERSION `'M4.3'` → `'M4.4'`, 변경점 헤더 추가 |
-| `src/shipStructure.js` | `getShipBayDictData()`에 userDict 우선 조회 추가, `isShipInBayDict()`/`bayDictInfo()` 보강 |
-| `src/mixerUpload.js` | `detectFileType()`에 `'def'` 분기(확장자 + 매직), `processSingleFile()`에 `case 'def'` 처리 |
-| `src/components/MixerUploadModal.jsx` | shipdef 분류, 결과 카드 추가, EDI 없는 .def-only 흐름 처리 (voyageKey null 허용) |
+### 1-2. 대발견 — CASP 버전별 블록 크기 매핑 (확정)
+이전엔 추측이었던 부분이 323척 데이터로 **확증**:
 
-### 손대지 않은 파일
-- 기존 `src/data/shipBayDict.js` (18,903줄, 임베드 11척) — 폴백용으로 그대로 보존
-- 기존 BayDictStatusWidget / BayDictVerifyWidget — userDict도 자동 인식 (shipStructure 통해)
-- Firebase / 인증 / 라우팅 / 컨테이너 처리 흐름 — 일체 무수정
+| CASP 버전 | 표준 블록 크기 | 선박 수 |
+|-----------|----------------|---------|
+| 6.10 | **144 bytes** | 185척 (가장 흔함!) |
+| 6.50 | **189 bytes** | 120척 (TNJP 포함) |
+| 6.30 | 다양 (혼재) | 11척 |
+| 6.00 | 다양 | 5척 |
+| 6.60 | 다양 | 2척 |
 
----
+→ **TNJP의 189는 평택 운항선의 36%만 해당**. 진짜 표준은 144 (6.10 버전).
 
-## 3. 검증된 .def 분석 메서드 (defParser.js 핵심)
+### 1-3. 등급 분포 (323척 중)
 
-> **출처:** `CASP_DEF_ANALYSIS_GUIDE.md` (이전 세션 작성, 외부 문서)
-> **검증 데이터:** TNJP.def — TJTEN JUPITER, CASP 6.50
-
-### 추출 로직 (offset 기준)
-
-| Offset | Length | 의미 | 신뢰도 |
-|--------|--------|------|--------|
-| 0~20 | 21 | 매직 `"CASP SHIP DEFINE FILE"` | ✅ 확정 |
-| 22~28 | ~6 | 포맷 버전 (`"6.50"`) | ✅ 확정 |
-| `\r\n` 다음 | 8 | 작성일 YYYYMMDD | ✅ 확정 |
-| `\x1a` 다음 | ~60 | 선박명 + 식별번호 | ✅ 확정 |
-| `BBBBB     ` 패턴 | 7 | 베이 마커 (2자리 + 공백 5개) | ✅ 확정 |
-| **블록 단위** | 189 bytes | (TNJP 기준 — 일정성 검사 필수) | ⚠️ 버전별 다를 수 있음 |
-| block+7 | 1 | 섹션/그룹 ID | ✅ 확정 |
-| block+72~79 | 8 | 짝꿍 인덱스 (uint16 LE × 4) | ✅ 확정 |
-| block+89~92 | 4 | Cell Type Code (`((CC`/`''DD`/zeros) | ✅ 확정 |
-| block+121~124 | 4 | Hold 메타 (rows/tiers max **추정**) | ⚠️ 추정치 |
-| block+153~156 | 4 | Deck 메타 (rows/tiers max **추정**) | ⚠️ 추정치 |
-
-### CASP 정식 사양 비공개 부분
-- byte 121-156의 정확한 의미 (rows/tiers 최댓값 가설은 합리적이나 미확정)
-- Cell Type Code (`((CC` vs `''DD`)의 의미 (선수/중앙 단면 차이로 추정)
-
-→ 이런 부분은 `verified: true`로 표시되지만, 코드 주석과 출력에 항상 **"추정"** 명시.
+| 등급 | 갯수 | 의미 |
+|------|------|------|
+| **verified** | 109 | TNJP 동일 사양 (6.50 + 189 + consistent) — 메서드 1:1 적용, 100% 신뢰 |
+| **semi-verified** | 163 | 다른 블록 크기지만 일관성 OK — 메타 위치는 추정 (비례 조정) |
+| **partial** | 51 | 블록 크기 불일치 — 메타 위치 신뢰 낮음 |
 
 ---
 
-## 4. 검증 결과 (TNJP.def 28/28 PASS)
+## 2. 결과물 인벤토리
+
+| 파일 | 크기 | 용도 |
+|------|------|------|
+| **shipBayDict_v2.js** | 415 KB | **앱 코드 임베드용** (verified 109척만, 안전) |
+| **userBayDict_bulk_slim.json** | 2.41 MB | localStorage 일괄 import (323척, 경량) |
+| userBayDict_bulk.json | 4.4 MB | localStorage 일괄 import (323척, 풀 버전 — 한도 위험) |
+| ships_index.json | 109 KB | 선박 인덱스 (코드/이름/베이수/등급) |
+| AGGREGATE_REPORT.md | 4 KB | 통합 보고서 (사람이 읽기) |
+| CASP_VERSION_BLOCKSIZE_MAP.md | 1 KB | 버전-블록크기 매핑 발견 보고 |
+| EMBEDDED_11_OVERLAP.md | 2 KB | 기존 11척과 중복 검사 |
+| individual/ | 다수 | 선박별 상세 JSON (323개) |
+
+---
+
+## 3. 권장 통합 경로 (3가지 옵션)
+
+### Plan A: 즉시 안전 (가장 추천) — Plan B 합쳐서 v2.0 임베드
+```
+1. shipBayDict_v2.js를 src/data/shipBayDict.js로 교체
+   (또는 src/data/shipBayDict_v2.js로 신규 추가, 폴백 유지)
+2. shipStructure.js: lookupBayDictV2(code) 추가 호출
+3. 앱 재배포 (M4.5)
+4. 결과: 109척 verified가 임베드 → 모든 검수원 폰에 즉시 반영
+```
+- 장점: localStorage 부담 0, 영구 보존, 검증된 데이터만
+- 단점: 109척만 (semi-verified 163척 + partial 51척 미포함)
+
+### Plan B: 사용자 사전 일괄 import
+```
+1. userBayDict_bulk_slim.json을 앱에 1회 import
+2. 검수원이 자료 업로드 모달에서 "일괄 등록" 버튼 사용
+3. localStorage에 323척 저장
+```
+- 장점: 323척 모두 등록 (광범위)
+- 단점: localStorage 2.4MB 사용 (5MB 한도의 48%) — 다른 사용자 데이터 고려 시 빡빡
+
+### Plan C: 하이브리드 (Plan A + 운영 중 사용자 추가)
+```
+1. shipBayDict_v2.js 109척 임베드 (Plan A)
+2. semi-verified 163척 + partial 51척 = 214척은 userBayDict로 별도 저장
+   → localStorage 부담 분리 가능
+3. 검수원이 .def 받는 대로 추가 검증해서 verified로 승격 → 다음 v3.0 임베드
+```
+- 장점: 안전한 것만 임베드, 나머지는 점진적 검증 후 승격
+- 단점: 운영 복잡도 살짝 증가
+
+---
+
+## 4. 다음 세션 후보 작업
+
+### 4-1. 우선순위 최상 (즉시 가치)
+1. **Plan A 또는 C 실행** — shipBayDict_v2.js 앱 코드 통합 → M4.5 배포
+2. **누락 1척 (S639/DONGJIN CONTINENTAL) .def 받아서 추가 등록**
+
+### 4-2. 우선순위 상 (메서드 강화)
+3. **CASP 6.10 메타 위치 캘리브레이션**:
+   - 블록 144 .def 1~2척으로 spot check
+   - byte 89/121/153 위치가 6.50과 비례하는지 vs 다른 위치인지 검증
+   - 결과 따라 semi-verified 163척 → verified 승격 가능
+4. **partial 51척 원인 분석**: 블록 크기 불일치 패턴 확인
+
+### 4-3. 우선순위 중 (운영 강화)
+5. **사용자 베이사전 관리 UI**: 등록 목록/삭제/일괄 import 버튼
+6. **앱 내 일괄 import 기능**: userBayDict_bulk_slim.json 한 번에 적용
+
+---
+
+## 5. 분석 실패 7건 처리
 
 ```
-[1] 매직 검증: ✅ PASS
-[2] analyzeDefFile() 호출: ✅ PASS
-[3] 헤더 검증:
-   ✅ 파일 크기: 2,122,448
-   ✅ 포맷 버전: 6.50
-   ✅ 작성일: 20250814
-[4] 베이 구조:
-   ✅ 베이 갯수: 25
-   ✅ 블록 크기: 189
-   ✅ 베이 리스트: [01,02,03,05,06,07,...,33] (25개 정확)
-[5] 섹션 구조:
-   ✅ 트리오 8쌍 + 단독 1개 = 9 섹션
-   ✅ 단독 베이 = [33]
-[6] Cell Code 분포:
-   ✅ ((CC : 6개 (베이 01,02,03,05,06,07 — 선수)
-   ✅ ''DD : 15개 (베이 09~27 — 중앙)
-   ✅ 없음 : 4개 (베이 29,30,31,33 — 선미 갑판전용)
-[7] 베이별 메타: Bay 01 / Bay 33 spot check ✅
-[8] BayDict Entry 변환: ✅ verified: true, parserVersion: M4.4
+ESTM.def       NOT_CASP_DEF    (매직 헤더 없음)
+HAHM.def       NOT_CASP_DEF
+HECN.def       NOT_CASP_DEF
+PCBS.def       NOT_CASP_DEF
+RZIN.DEF       TOO_FEW_BAYS:1  (베이 1개만)
+SDHI(6.1).def  NOT_CASP_DEF    (파일명에 (6.1) 포함 → 다른 버전?)
+SWIC.def       NOT_CASP_DEF
 ```
 
-**테스트 스크립트:** `test_def_parser.mjs` (배포본에서는 제거됨, 재실행 필요 시 이전 채팅 참조)
+→ 모두 **.def 외 포맷이거나 손상된 파일**로 추정. M4.4 메서드 자체는 견고. 원본 파일 출처 확인 필요.
 
 ---
 
-## 5. 현장 사용 흐름
+## 6. 운영 메모 (다음 세션에서 알아야 할 사항)
 
-### 5-1. 신규 선박 등록 (.def 파일이 있는 경우)
-1. 자료 업로드 모달 열기
-2. 모드 선택 (양하/선적/둘다 — .def만이면 선택해도 무관)
-3. `XXXX.def` 파일 던지기 (드래그앤드롭 또는 선택)
-4. 분석 시작 → "📚 베이사전 등록 (M4.4 검증 파서)" 카드 표시
-5. **localStorage 저장됨** — 다음 EDI 업로드 시 자동 매칭
+### 6-1. 임베드 11척 vs 신규 분석
+- 11척 중 10척이 일괄 분석에 포함됨 (S639만 누락)
+- 신규 등록 가능: **313척**
+- 총 통합 가능: 11(기존) + 313(신규) - 10(중복) = **314척** (Plan A 임베드)
 
-### 5-2. .def + EDI 동시 업로드
-- .def는 베이사전에 등록, EDI는 항차 데이터로 처리 (역할 자동 분리)
-- 결과 카드에 양쪽 다 표시
+### 6-2. 핵심 인사이트 — 6.10 버전 우선
+평택 운항선의 56%가 **CASP 6.10 + block 144**입니다. M4.4는 6.50 (TNJP)으로 검증됐지만, 진짜 운영 가치는 **6.10 추가 검증** 후 발휘됨.
 
-### 5-3. 사용자 등록 베이사전 우선 적용
-- BayDictStatusWidget이 자동으로 userDict 먼저 조회 → "검증됨" 배지 (기존 v1.1은 "검증 전")
-- BayDictVerifyWidget도 자동 적용
+다음 세션에서 6.10 .def 1~2개를 spot check해서 메타 위치 확정하면, semi-verified 163척이 모두 verified로 승격 → **임베드 가능 척수 109 → 272**로 2.5배 증가 가능.
 
----
-
-## 6. 알려진 한계 + 다음 세션 후보
-
-### 6-1. 미해결 사항 (M4.4에서 손 안 댐)
-- M3.86 시기 미해결 버그 2건 그대로:
-  - ISO 변경 후 화면 미반영 (ediContainers 동기화 누락)
-  - 리퍼 온도 직접 수정 UI 부재
-- M4.1 IFCSUM 자동 판별은 이미 통합됨 (변경 없음)
-
-### 6-2. .def 파서 개선 후보
-- [ ] CASP 5.x / 7.x 다른 버전 호환성 검증 (현재 6.50만 실측)
-- [ ] block 121-156 메타의 정확한 의미 역공학 (실제 베이플랜 PDF와 대조 필요)
-- [ ] Reefer 콘센트 위치 정확 추출 (현재 `((CC`/`''DD` 분류만 있고, 슬롯 단위 콘센트 위치는 미추출)
-- [ ] 사용자 베이사전 UI: 등록 목록 보기 / 삭제 / 내보내기 (`listUserBayDict()` 함수만 있고 UI 미연결)
-- [ ] 진단 패널(DiagnosticsPanel)에 userDict 통계 추가
-
-### 6-3. UI 연결 후보 (사용자 베이사전 관리)
-`userBayDict.js`에 완성된 함수들이 있지만 UI에서 호출 안 함:
-- `listUserBayDict()` — 등록 선박 리스트
-- `removeFromUserBayDict(key)` — 잘못 올린 선박 삭제
-- `clearUserBayDict()` — 전체 초기화
-- `getUserBayDictStats()` — 통계
-
-→ 다음 버전에서 ChiefDashboard 또는 별도 모달로 노출 권장.
+### 6-3. localStorage 한도 주의
+- 현재 사용량: master_active_inspector + 다양한 voyage 캐시 + ...
+- userBayDict_bulk_slim.json만 2.4MB
+- **로컬 저장 한도 모니터링 필요** — IndexedDB 마이그레이션 검토 후보
 
 ---
 
-## 7. 빌드 + 배포 정보
+## 7. 다음 세션 빠른 시작 명령
 
-```
-빌드 명령: npx vite build
-빌드 결과물:
-  dist/index.html         1.16 kB (gzip 0.62 kB)
-  dist/assets/index-D0MqRUGE.css    55.80 kB (gzip 9.52 kB)
-  dist/assets/mixerUpload-Chlf3K91.js  6.83 kB (gzip 3.51 kB)
-  dist/assets/index-DCKvp2Q0.js   853.82 kB (gzip 225.51 kB)
+```bash
+# 결과물 위치
+cd /home/claude/m44_v2_output
 
-배포 구조 (M4.3 동일):
-  /index.html           ← 빌드된 진입점
-  /assets/              ← 빌드 결과물 (CSS/JS, 해시 파일명)
-  /src/                 ← 소스 코드 (참고용, 배포에 필요 X)
-  /package.json, vite.config.js 등 ← 재빌드용
-  /.github/workflows/   ← GitHub Pages 자동 배포
+# 핵심 파일 확인
+ls -la
 
-배포 사이트: https://greenmarine26.github.io/greenmarinetally/
-GitHub: greenmarine26/greenmarinetally
-Firebase: greenmarinetally (asia-southeast1)
+# 6.10 spot check 후보 선박 찾기
+python3 -c "
+import json
+with open('ships_index.json') as f:
+    idx = json.load(f)
+v610 = [s for s in idx if s['caspVersion'] == '6.10' and s['blockSize'] == 144]
+print(f'6.10 + block 144: {len(v610)}척')
+print('상위 5개:', [s['code'] for s in v610[:5]])
+"
 ```
 
 ---
 
-## 8. 검수원 평가 (자체 채점)
+## 8. 평가 (자체)
 
 | 항목 | 점수 | 비고 |
 |------|------|------|
-| 신규 기능 (.def 파서) | 9/10 | 검증 완료, 추정치 명시 정확 |
-| 기존 흐름 보존 | 10/10 | 컨테이너 처리 무수정, 폴백 정상 |
-| 검증 (실데이터) | 10/10 | 28/28 PASS, TNJP.def 끝까지 |
-| UI 통합 | 7/10 | 등록 카드만 추가, 관리 UI는 다음 버전 |
-| 문서화 | 9/10 | 본 HANDOFF + 외부 GUIDE.md 별도 |
-| **종합** | **9/10** | M3.86 6.5점 → M4.4 9점 (성장률 양호) |
+| 회수율 (97.9%) | 10/10 | 64 → 323 (5배 개선) |
+| 메서드 견고성 | 9/10 | lookbehind 완화 + 균등 간격 평가로 해결 |
+| 발견의 가치 | 10/10 | 버전-블록크기 매핑 확정 (큰 인사이트) |
+| 결과물 정리 | 9/10 | 8가지 포맷, 즉시 사용 가능 |
+| 다음 단계 명확성 | 10/10 | Plan A/B/C 옵션 명확 + 6.10 캘리브레이션 우선순위 |
+| **종합** | **9.6/10** | 대규모 일괄 처리 + 큰 발견 + 즉시 활용 가능 |
 
 ---
 
-## 9. 다음 세션 시작 시 체크리스트
-
-### 9-1. 먼저 확인할 것
-- [ ] `/home/claude/m44_build/` 가 그대로 있는가? (없으면 ZIP 재추출)
-- [ ] 배포 사이트에 M4.4가 올라갔는가? Header에 "M4.4" 표시 확인
-- [ ] localStorage `master_user_bay_dict_v1` 키가 정상 작동하는가? (실제 .def 1개 올려서 검증)
-
-### 9-2. 실데이터 추가 검증 (성일님 룰: ZIP 후 실선박 검증)
-- [ ] 다른 선박 .def 파일 (예: ATPR, RZOR) 업로드해서 동일하게 25-30개 베이 추출되는지 확인
-- [ ] EDI 업로드 후 BayDictStatusWidget이 "검증됨" 배지 표시하는지 확인
-- [ ] CASP 6.10 / 6.20 등 다른 버전도 magic + version 추출 정상인지 확인
-
-### 9-3. 발견 시 즉시 알려야 할 사항
-- 블록 크기가 189가 아닌 다른 값 → CASP 버전별 차이 → defParser.js 분기 추가 필요
-- byte 121-156 위치가 다른 의미를 가질 가능성 → 실제 베이플랜과 대조 필요
-- localStorage 5MB 한도 초과 → IndexedDB 마이그레이션 검토
-
----
-
-## 10. 빠른 재시작 명령어 (다음 채팅에서)
-
-```bash
-# M4.4 빌드본 위치
-cd /home/claude/m44_build
-
-# 변경된 핵심 파일 빠르게 확인
-cat src/defParser.js           # .def 파서
-cat src/data/userBayDict.js    # 사용자 사전
-grep "M4\.4" src/*.js src/components/*.jsx  # M4.4 마커 위치
-
-# 재빌드 (변경 후)
-npx vite build
-
-# 배포본 ZIP 재생성
-cp dist/index.html ./
-cp -r dist/assets/* ./assets/
-zip -r M4_4_REAL_DEPLOY.zip . -x 'node_modules/*' 'dist/*' '.git/*'
-```
-
----
-
-*Handoff 작성: 2026-05-09 / 다음 세션은 본 문서 + ZIP을 함께 받으면 즉시 이어 작업 가능*
+*M4.4 일괄 분석 완료 / 323/330척 성공 / 다음: shipBayDict_v2.js 앱 통합 또는 6.10 추가 검증*

@@ -1,0 +1,58 @@
+{
+  "totalFiles": 330,
+  "successCount": 323,
+  "failCount": 7,
+  "gradeDistribution": {
+    "partial": 51,
+    "semi-verified": 163,
+    "verified": 109
+  },
+  "caspVersionDistribution": {
+    "6.00": 5,
+    "6.10": 185,
+    "6.50": 120,
+    "6.30": 11,
+    "6.60": 2
+  },
+  "blockSizeDistribution": {
+    "144": 195,
+    "189": 118,
+    "80": 6,
+    "102": 3,
+    "201": 1
+  },
+  "failReasonDistribution": {
+    "NOT_CASP_DEF": 6,
+    "TOO_FEW_BAYS:1": 1
+  },
+  "failedFiles": [
+    {
+      "file": "ESTM.def",
+      "reason": "NOT_CASP_DEF"
+    },
+    {
+      "file": "HAHM.def",
+      "reason": "NOT_CASP_DEF"
+    },
+    {
+      "file": "HECN.def",
+      "reason": "NOT_CASP_DEF"
+    },
+    {
+      "file": "PCBS.def",
+      "reason": "NOT_CASP_DEF"
+    },
+    {
+      "file": "RZIN.DEF",
+      "reason": "TOO_FEW_BAYS:1"
+    },
+    {
+      "file": "SDHI(6.1).def",
+      "reason": "NOT_CASP_DEF"
+    },
+    {
+      "file": "SWIC.def",
+      "reason": "NOT_CASP_DEF"
+    }
+  ]
+}

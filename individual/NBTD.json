@@ -1,0 +1,508 @@
+{
+  "ok": true,
+  "fileSize": 2122448,
+  "header": {
+    "version": "6.50",
+    "created": "20220509",
+    "vessel": "NBTDNINGBO TRADER                 V7A4949",
+    "identifier": "V7A4949347968"
+  },
+  "bayCount": 23,
+  "bayList": [
+    "02",
+    "03",
+    "05",
+    "06",
+    "07",
+    "11",
+    "12",
+    "13",
+    "15",
+    "16",
+    "17",
+    "19",
+    "20",
+    "21",
+    "23",
+    "24",
+    "25",
+    "29",
+    "30",
+    "31",
+    "33",
+    "34",
+    "35"
+  ],
+  "blockSize": 189,
+  "blockConsistent": true,
+  "markerLen": 7,
+  "grade": "verified",
+  "bays": [
+    {
+      "bay": "02",
+      "section": 1,
+      "cellCode": "**22",
+      "hasHold": true,
+      "holdRowsMax": 10,
+      "holdTiersMax": 12,
+      "hasDeck": true,
+      "deckRowsMax": 10,
+      "deckTiersMax": 12,
+      "pairIndices": [
+        256,
+        768,
+        256,
+        768
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "03",
+      "section": 1,
+      "cellCode": "**22",
+      "hasHold": true,
+      "holdRowsMax": 10,
+      "holdTiersMax": 12,
+      "hasDeck": true,
+      "deckRowsMax": 10,
+      "deckTiersMax": 12,
+      "pairIndices": [
+        256,
+        768,
+        256,
+        768
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "05",
+      "section": 2,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1024,
+        1536,
+        1024,
+        1536
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "06",
+      "section": 2,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1024,
+        1536,
+        1024,
+        1536
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "07",
+      "section": 2,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1024,
+        1536,
+        1024,
+        1536
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "11",
+      "section": 3,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1792,
+        3072,
+        1792,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "12",
+      "section": 3,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1792,
+        3072,
+        1792,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "13",
+      "section": 3,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1792,
+        3072,
+        1792,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "15",
+      "section": 4,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1792,
+        3072,
+        1792,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "16",
+      "section": 4,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1792,
+        3072,
+        1792,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "17",
+      "section": 4,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        1792,
+        3072,
+        1792,
+        3072
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "19",
+      "section": 5,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        3328,
+        4608,
+        3328,
+        4608
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "20",
+      "section": 5,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        3328,
+        4608,
+        3328,
+        4608
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "21",
+      "section": 5,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        3328,
+        4608,
+        3328,
+        4608
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "23",
+      "section": 6,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        3328,
+        4608,
+        3328,
+        4608
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "24",
+      "section": 6,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        3328,
+        4608,
+        3328,
+        4608
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "25",
+      "section": 6,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        3328,
+        4608,
+        3328,
+        4608
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "29",
+      "section": 7,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        4864,
+        5376,
+        4864,
+        5376
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "30",
+      "section": 7,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        4864,
+        5376,
+        4864,
+        5376
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "31",
+      "section": 7,
+      "cellCode": "&&44",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 13,
+      "hasDeck": true,
+      "deckRowsMax": 9,
+      "deckTiersMax": 13,
+      "pairIndices": [
+        4864,
+        5376,
+        4864,
+        5376
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "33",
+      "section": 8,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        5632,
+        6144,
+        5632,
+        6144
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "34",
+      "section": 8,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        5632,
+        6144,
+        5632,
+        6144
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "35",
+      "section": 8,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        5632,
+        6144,
+        5632,
+        6144
+      ],
+      "isStandalone": false
+    }
+  ],
+  "structure": {
+    "oddCount": 15,
+    "evenCount": 8,
+    "trios": [
+      {
+        "left": "05",
+        "mid": "06",
+        "right": "07"
+      },
+      {
+        "left": "11",
+        "mid": "12",
+        "right": "13"
+      },
+      {
+        "left": "15",
+        "mid": "16",
+        "right": "17"
+      },
+      {
+        "left": "19",
+        "mid": "20",
+        "right": "21"
+      },
+      {
+        "left": "23",
+        "mid": "24",
+        "right": "25"
+      },
+      {
+        "left": "29",
+        "mid": "30",
+        "right": "31"
+      },
+      {
+        "left": "33",
+        "mid": "34",
+        "right": "35"
+      }
+    ],
+    "standalone": [
+      "03"
+    ],
+    "sectionCount": 8
+  },
+  "cellCodeDistribution": {
+    "**22": 2,
+    "&&44": 18,
+    "(없음)": 3
+  },
+  "_fileName": "NBTD.def",
+  "_code": "NBTD"
+}

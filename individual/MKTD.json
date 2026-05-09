@@ -1,0 +1,534 @@
+{
+  "ok": true,
+  "fileSize": 2122448,
+  "header": {
+    "version": "6.50",
+    "created": "20171229",
+    "vessel": "MKTDMERKUR TIDE                   ELVP2A",
+    "identifier": "ELVP2A"
+  },
+  "bayCount": 24,
+  "bayList": [
+    "08",
+    "09",
+    "10",
+    "11",
+    "13",
+    "14",
+    "15",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29",
+    "30",
+    "31",
+    "33",
+    "34",
+    "35"
+  ],
+  "blockSize": 189,
+  "blockConsistent": true,
+  "markerLen": 7,
+  "grade": "verified",
+  "bays": [
+    {
+      "bay": "08",
+      "section": 3,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        1792,
+        1792,
+        1792,
+        1792
+      ],
+      "isStandalone": true
+    },
+    {
+      "bay": "09",
+      "section": 4,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        2048,
+        2560,
+        2048,
+        2560
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "10",
+      "section": 4,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        2048,
+        2560,
+        2048,
+        2560
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "11",
+      "section": 4,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        2048,
+        2560,
+        2048,
+        2560
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "13",
+      "section": 5,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        2816,
+        3328,
+        2816,
+        3328
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "14",
+      "section": 5,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        2816,
+        3328,
+        2816,
+        3328
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "15",
+      "section": 5,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        2816,
+        3328,
+        2816,
+        3328
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "17",
+      "section": 6,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        3584,
+        4096,
+        3584,
+        4096
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "18",
+      "section": 6,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        3584,
+        4096,
+        3584,
+        4096
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "19",
+      "section": 6,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        3584,
+        4096,
+        3584,
+        4096
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "20",
+      "section": 7,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        4352,
+        4352,
+        4352,
+        4352
+      ],
+      "isStandalone": true
+    },
+    {
+      "bay": "21",
+      "section": 8,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        4608,
+        5120,
+        4608,
+        5120
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "22",
+      "section": 8,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        4608,
+        5120,
+        4608,
+        5120
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "23",
+      "section": 8,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        4608,
+        5120,
+        4608,
+        5120
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "25",
+      "section": 9,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        5376,
+        5888,
+        5376,
+        5888
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "26",
+      "section": 9,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        5376,
+        5888,
+        5376,
+        5888
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "27",
+      "section": 9,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        5376,
+        5888,
+        5376,
+        5888
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "28",
+      "section": 10,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        6144,
+        6144,
+        6144,
+        6144
+      ],
+      "isStandalone": true
+    },
+    {
+      "bay": "29",
+      "section": 11,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        6400,
+        6912,
+        6400,
+        6912
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "30",
+      "section": 11,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        6400,
+        6912,
+        6400,
+        6912
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "31",
+      "section": 11,
+      "cellCode": "\"\",,",
+      "hasHold": true,
+      "holdRowsMax": 9,
+      "holdTiersMax": 11,
+      "hasDeck": true,
+      "deckRowsMax": 8,
+      "deckTiersMax": 11,
+      "pairIndices": [
+        6400,
+        6912,
+        6400,
+        6912
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "33",
+      "section": 12,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        7168,
+        7680,
+        7168,
+        7680
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "34",
+      "section": 12,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        7168,
+        7680,
+        7168,
+        7680
+      ],
+      "isStandalone": false
+    },
+    {
+      "bay": "35",
+      "section": 12,
+      "cellCode": "",
+      "hasHold": false,
+      "holdRowsMax": 0,
+      "holdTiersMax": 25,
+      "hasDeck": true,
+      "deckRowsMax": 0,
+      "deckTiersMax": 25,
+      "pairIndices": [
+        7168,
+        7680,
+        7168,
+        7680
+      ],
+      "isStandalone": false
+    }
+  ],
+  "structure": {
+    "oddCount": 14,
+    "evenCount": 10,
+    "trios": [
+      {
+        "left": "09",
+        "mid": "10",
+        "right": "11"
+      },
+      {
+        "left": "13",
+        "mid": "14",
+        "right": "15"
+      },
+      {
+        "left": "17",
+        "mid": "18",
+        "right": "19"
+      },
+      {
+        "left": "19",
+        "mid": "20",
+        "right": "21"
+      },
+      {
+        "left": "21",
+        "mid": "22",
+        "right": "23"
+      },
+      {
+        "left": "25",
+        "mid": "26",
+        "right": "27"
+      },
+      {
+        "left": "27",
+        "mid": "28",
+        "right": "29"
+      },
+      {
+        "left": "29",
+        "mid": "30",
+        "right": "31"
+      },
+      {
+        "left": "33",
+        "mid": "34",
+        "right": "35"
+      }
+    ],
+    "standalone": [],
+    "sectionCount": 9
+  },
+  "cellCodeDistribution": {
+    "(없음)": 6,
+    "\"\",,": 18
+  },
+  "_fileName": "MKTD.def",
+  "_code": "MKTD"
+}
