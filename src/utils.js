@@ -1,6 +1,15 @@
-// 공통 유틸리티 — V45 (2026.05.09 / M4.9)
-export const APP_VERSION = 'M4.9';
+// 공통 유틸리티 — V45 (2026.05.09 / M4.9b)
+export const APP_VERSION = 'M4.9b';
 
+// M4.9b 변경점 (인쇄 가로 + 출력물 샘플 매칭):
+//   [수정] PrintableBayDetail @page portrait → landscape
+//   [수정] 베이 페이지네이션 룰 — 7,8,9 → 07 단독 + (08)09 짝꿍 (샘플 PDF 패턴)
+//   [수정] voyageInfo 체인 연결 (VoyagePage → BayPlan → 인쇄 컴포넌트)
+//   [수정] 항차 번호 양하/선적 분리 시 둘 다 표시
+//   [수정] 셀 크기 가로 모드 최적화 (32px → 48px, 폰트 5.5pt → 7pt)
+//   [수정] PrintableCargoPlan 그리드 — AFT 페어 행 5열 통일, legend는 footer로
+//          (이전: AFT 페어 행에 빈2+페어4=6슬롯 → 5열 그리드에서 1개 잘려나감)
+//
 // M4.9 변경점 (긴급 픽스 + ISO403):
 //   [긴급] 베이 상세 모달 크래시 수정
 //     · PrintableBayDetail.jsx 271줄 useMemo deps의 selectedKey → selectedKeys 오타

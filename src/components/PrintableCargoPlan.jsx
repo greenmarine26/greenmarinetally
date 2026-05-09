@@ -237,10 +237,14 @@ export default function PrintableCargoPlan({
     voy = voyD || voyL || voyFallback;
   }
 
+  // M4.9b: AFT 영역 5-col로 확장 (legend는 footer로)
+  //   이전: AFT singles slice(0,4) + AFT pairs slice(0,4)에서 페어 행 5-col에 빈2+페어4=6슬롯이 들어가
+  //         (22)23이 다음 행/페이지로 밀려나는 버그
+  //   수정: AFT 영역을 5-col로 통일하여 5개까지 깔끔히 들어가게
   const foreSinglesByCol = forePages.singles.slice(0, 5);
   const forePairsByCol = forePages.pairs.slice(0, 5);
-  const aftSinglesByCol = aftPages.singles.slice(0, 4);
-  const aftPairsByCol = aftPages.pairs.slice(0, 4);
+  const aftSinglesByCol = aftPages.singles.slice(0, 5);
+  const aftPairsByCol = aftPages.pairs.slice(0, 5);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
@@ -289,12 +293,33 @@ export default function PrintableCargoPlan({
           </div>
 
           <div className="bay-row five-col">
+            {aftSinglesByCol.map((p, i) => (
+              <BayBox key={`as-${i}`} even={null} odd={p.bay} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[p.bay]} />
+            ))}
+            {Array.from({ length: 5 - aftSinglesByCol.length }).map((_, i) =>
+              <div key={`ase-${i}`}></div>
+            )}
+          </div>
+
+          <div className="bay-row five-col">
+            {aftPairsByCol.map((p, i) => (
+              <BayBox key={`ap-${i}`} even={p.even} odd={p.odd} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[p.even]} />
+            ))}
+            {Array.from({ length: 5 - aftPairsByCol.length }).map((_, i) =>
+              <div key={`ape-${i}`}></div>
+            )}
+          </div>
+
+          {/* M4.9b: legend를 footer로 분리 (페이지 좌하단) */}
+          <div className="cargo-footer">
             <div className="legend-box">
               <div className="legend-title">20'/40'/45'</div>
               {mode === 'discharge' ? (
                 <div className="legend-row">
                   <span className="legend-mark mark-o">o</span>
-                  <span className="legend-label">None</span>
+                  <span className="legend-label">PTK</span>
                   <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
                 </div>
               ) : (
@@ -317,25 +342,6 @@ export default function PrintableCargoPlan({
                 </>
               )}
             </div>
-            {aftSinglesByCol.map((p, i) => (
-              <BayBox key={`as-${i}`} even={null} odd={p.bay} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.bay]} />
-            ))}
-            {Array.from({ length: 4 - aftSinglesByCol.length }).map((_, i) =>
-              <div key={`ase-${i}`}></div>
-            )}
-          </div>
-
-          <div className="bay-row five-col">
-            <div></div>
-            <div></div>
-            {aftPairsByCol.map((p, i) => (
-              <BayBox key={`ap-${i}`} even={p.even} odd={p.odd} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.even]} />
-            ))}
-            {Array.from({ length: 3 - aftPairsByCol.length }).map((_, i) =>
-              <div key={`ape-${i}`}></div>
-            )}
           </div>
         </div>
       </div>
@@ -428,6 +434,17 @@ export default function PrintableCargoPlan({
         .legend-empty-mark { color: transparent; }
         .legend-label { width: 32px; }
         .legend-count { font-weight: 500; }
+        /* M4.9b: cargo-footer - legend를 페이지 하단 좌측에 배치 */
+        .cargo-footer {
+          margin-top: 6px;
+          display: flex;
+          justify-content: flex-start;
+        }
+        .cargo-footer .legend-box {
+          min-width: 200px;
+          border-top: 0.5px solid #000;
+          padding-top: 4px;
+        }
       `}</style>
     </div>
   );
