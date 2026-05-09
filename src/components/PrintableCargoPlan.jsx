@@ -347,16 +347,30 @@ export default function PrintableCargoPlan({
       </div>
 
       <style>{`
+        /* M4.9c: 인쇄 표준 패턴 — visibility 토글 */
         @media print {
-          .no-print { display: none !important; }
-          /* M4.9b-fix: 부모 wrapper의 fixed/flex/black 배경 해제 */
-          .bd-print-modal {
-            position: static !important;
-            background: white !important;
-            display: block !important;
-            height: auto !important;
-            overflow: visible !important;
+          /* 1. 모든 컨텐츠 숨김 */
+          body * {
+            visibility: hidden !important;
           }
+          /* 2. 인쇄 모달과 그 자식만 보이게 */
+          .bd-print-modal,
+          .bd-print-modal * {
+            visibility: visible !important;
+          }
+          /* 3. 모달 위치 절대 좌상단 */
+          .bd-print-modal {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            background: white !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+          .no-print { display: none !important; }
           .cargo-plan-page { margin: 0 !important; padding: 0 !important; }
           /* 사용자 요청: 여백 1.5cm */
           @page { size: A4 landscape; margin: 1.5cm; }

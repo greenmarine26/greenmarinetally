@@ -1,6 +1,22 @@
-// 공통 유틸리티 — V45 (2026.05.09 / M4.9b)
-export const APP_VERSION = 'M4.9b';
+// 공통 유틸리티 — V46 (2026.05.09 / M4.9c)
+export const APP_VERSION = 'M4.9c';
 
+// M4.9c 변경점 (인쇄 출력 정상화 + 실 표기 데이터 흐름):
+//   [긴급] "출력 시 엄한 화면이 출력됨" 버그 수정
+//     · 원인: M4.9b에서 모달 fixed 해제(position: static) → 메인 페이지가 인쇄 캔버스에 함께 그려짐
+//     · 해결: 인쇄 표준 패턴(visibility 토글)으로 변경
+//       - body * { visibility: hidden } → 모든 컨텐츠 숨김
+//       - .bd-print-modal, * { visibility: visible } → 모달만 보임
+//       - 모달 위치 absolute로 페이지 좌상단 배치
+//   [긴급] 엠티/풀 실 표기 데이터 흐름 수정
+//     · 원인: VoyagePage.jsx ALLOWED_LIST_FIELDS 화이트리스트에 'eseal' 등 누락
+//             → 검수원이 입력한 실번호가 records에는 저장되지만 화면/보고서로 못 흘러감
+//     · 해결: eseal/eseal_wrong/reseal/eseal_at/eseal_by/eseal_history,
+//             iso403_photo_ts/iso403_photo_by 모두 화이트리스트에 추가
+//   [신규] 실오류/리씰 별도 액션 버튼 (사용자 요청)
+//     · ⚠️ 실오류 등록 — 발견된 잘못된 번호 (eseal_wrong, 별도 보존)
+//     · 🔄 리씰 등록 — 실 없거나 손상되어 새로 부착한 번호 (reseal)
+//
 // M4.9b 변경점 (인쇄 가로 + 출력물 샘플 매칭 + 엠티 실 단순화):
 //   [수정] PrintableBayDetail @page portrait → landscape
 //   [수정] 베이별 페이지 분리 강제 (break-after: page + flex 부모 우회)

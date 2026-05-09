@@ -397,22 +397,34 @@ export default function PrintableBayDetail({
       </div>
 
       <style>{`
-        /* M4.9b-fix: 베이별 페이지 분리 + 여백 1.5cm로 페이지 가득 활용
-           - @page margin 0.3 → 1.5cm (사용자 요청)
-           - 페이지 자체 padding 제거 (margin이 이미 여백 처리)
-           - 셀 크기/폰트 확대로 가용 영역 (267×180mm) 가득 활용
-           - 9단 그리드 약 540px (180mm-헤더~10mm = 약 170mm = 645px 중 ~85% 활용)
-           - 이전 min-height: 100vh 같은 베이 2장 출력 버그는 제거 상태 유지 */
+        /* M4.9c: 인쇄 표준 패턴 — visibility 토글
+           이전 (M4.9b) 문제: position: static !important로 모달 fixed 해제 →
+                            메인 페이지가 인쇄 캔버스에 함께 그려져 "엄한 화면이 출력됨"
+           해결: body의 모든 자식을 visibility: hidden으로 숨기고,
+                인쇄 모달과 그 자식만 visible로 처리 (표준 패턴) */
         @media print {
-          .no-print { display: none !important; }
-          /* 부모 wrapper의 fixed/flex/black 배경 해제 */
-          .bd-print-modal {
-            position: static !important;
-            background: white !important;
-            display: block !important;
-            height: auto !important;
-            overflow: visible !important;
+          /* 1. 모든 컨텐츠 숨김 (visibility만 변경 — display: none이면 모달도 영향) */
+          body * {
+            visibility: hidden !important;
           }
+          /* 2. 인쇄 모달과 그 모든 자식만 보이게 */
+          .bd-print-modal,
+          .bd-print-modal * {
+            visibility: visible !important;
+          }
+          /* 3. 모달 위치를 페이지 좌상단으로 (fixed → absolute) */
+          .bd-print-modal {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            background: white !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+          /* 4. 모달 안의 컨테이너도 일반 block */
           .bd-print-container {
             display: block !important;
             overflow: visible !important;
@@ -420,12 +432,17 @@ export default function PrintableBayDetail({
             flex: none !important;
             background: white !important;
           }
+          /* 5. no-print 영역 (헤더/버튼바) 숨기기 */
+          .no-print {
+            display: none !important;
+          }
+          /* 6. 베이별 페이지 분리 */
           .bd-page {
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            padding: 0 !important;  /* @page margin이 여백 처리 */
+            padding: 0 !important;
             border-bottom: none !important;
           }
           .bd-page:last-child {

@@ -31,6 +31,10 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [editingTmp, setEditingTmp] = useState(false);
   const [tmpVal, setTmpVal] = useState(c.tmp || '');
   const [editingEseal, setEditingEseal] = useState(false);
+  // M4.9b-fix: 실오류 / 리씰 별도 입력 모드
+  const [editingEsealWrong, setEditingEsealWrong] = useState(false);
+  const [editingReseal, setEditingReseal] = useState(false);
+  const [esealWrongVal, setEsealWrongVal] = useState('');
   const [esealVal, setEsealVal] = useState(c.eseal || '');
   const [resealVal, setResealVal] = useState(c.reseal || '');
   const [esealType, setEsealType] = useState('reseal');
@@ -129,6 +133,56 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     // 단순 덮어쓰기 (verify/attach 동일). 이력은 firebase에서 자동 저장.
     await fbSetEmptySeal(voyageKey, mode, c.cn, { eseal: newVal }, inspector, sealMode);
     setEditingEseal(false);
+  };
+
+  // M4.9b-fix: 실오류 보고 — 발견된 잘못된 번호를 c.eseal_wrong에 별도 기록
+  //   기존 c.eseal은 유지 (계획상 번호), eseal_wrong에 현장 발견 번호
+  const handleSaveEsealWrong = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const newVal = String(esealWrongVal || '').trim().toUpperCase();
+    if (!newVal) { alert('실제 발견된 실번호를 입력하세요'); return; }
+    await fbSetEmptySeal(voyageKey, mode, c.cn, {
+      eseal: c.eseal || '',
+      eseal_wrong: newVal,
+      reseal: c.reseal || '',
+    }, inspector, sealMode);
+    setEditingEsealWrong(false);
+    setEsealWrongVal('');
+  };
+
+  // M4.9b-fix: 리씰 등록 — 실이 없거나 손상되어 새로 부착한 번호를 c.reseal에 기록
+  //   기존 c.eseal은 유지, reseal에 새로 부착한 번호
+  const handleSaveReseal = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const newVal = String(resealVal || '').trim().toUpperCase();
+    if (!newVal) { alert('새로 부착한 실번호를 입력하세요'); return; }
+    await fbSetEmptySeal(voyageKey, mode, c.cn, {
+      eseal: c.eseal || '',
+      eseal_wrong: c.eseal_wrong || '',
+      reseal: newVal,
+    }, inspector, sealMode);
+    setEditingReseal(false);
+    setResealVal('');
+  };
+
+  // M4.9b-fix: 실오류/리씰 삭제 (잘못 등록한 경우)
+  const handleClearEsealWrong = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!confirm('실오류 기록을 삭제하시겠습니까?')) return;
+    await fbSetEmptySeal(voyageKey, mode, c.cn, {
+      eseal: c.eseal || '',
+      eseal_wrong: '',
+      reseal: c.reseal || '',
+    }, inspector, sealMode);
+  };
+  const handleClearReseal = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!confirm('리씰 기록을 삭제하시겠습니까?')) return;
+    await fbSetEmptySeal(voyageKey, mode, c.cn, {
+      eseal: c.eseal || '',
+      eseal_wrong: c.eseal_wrong || '',
+      reseal: '',
+    }, inspector, sealMode);
   };
 
   // M3.5.4-fix2: 규격(ISO) 수정 — rf/fr/ot/tk 플래그 자동 갱신
@@ -480,14 +534,80 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                   {/* M4.9b: verify 모드의 옛 틀린실/리씰 표시는 호환 위해 유지 (이미 저장된 데이터 있을 수 있음) */}
                   {c.eseal_wrong && (
                     <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-amber-950/40 border border-amber-700/40 rounded">
-                      <span className="text-[10px] text-amber-400 font-bold">⚠️ 틀린실</span>
+                      <span className="text-[10px] text-amber-400 font-bold">⚠️ 실오류</span>
                       <span className="text-sm font-bold mono text-amber-200">{c.eseal_wrong}</span>
+                      <button onClick={handleClearEsealWrong}
+                        className="ml-auto text-[10px] text-amber-400 hover:text-amber-200">삭제</button>
                     </div>
                   )}
                   {c.reseal && (
                     <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-purple-950/40 border border-purple-700/40 rounded">
                       <span className="text-[10px] text-purple-400 font-bold">🔄 리씰</span>
                       <span className="text-sm font-bold mono text-purple-200">{c.reseal}</span>
+                      <button onClick={handleClearReseal}
+                        className="ml-auto text-[10px] text-purple-400 hover:text-purple-200">삭제</button>
+                    </div>
+                  )}
+
+                  {/* M4.9b-fix: 실오류 / 리씰 액션 버튼 — 사용자 요청
+                      - 실오류: 발견된 잘못된 번호를 별도 기록 (eseal_wrong)
+                      - 리씰:   실 없거나 손상되어 새로 부착한 번호 (reseal) */}
+                  {!editingEsealWrong && !editingReseal && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <button onClick={() => { setEsealWrongVal(''); setEditingEsealWrong(true); }}
+                        className="py-1.5 bg-amber-900/40 hover:bg-amber-900/60 border border-amber-700/50 text-amber-200 rounded text-xs font-bold flex items-center justify-center gap-1">
+                        ⚠️ 실오류 등록
+                      </button>
+                      <button onClick={() => { setResealVal(''); setEditingReseal(true); }}
+                        className="py-1.5 bg-purple-900/40 hover:bg-purple-900/60 border border-purple-700/50 text-purple-200 rounded text-xs font-bold flex items-center justify-center gap-1">
+                        🔄 리씰 등록
+                      </button>
+                    </div>
+                  )}
+
+                  {/* 실오류 입력 폼 */}
+                  {editingEsealWrong && (
+                    <div className="mt-2 p-2 bg-amber-950/30 border border-amber-700/50 rounded space-y-2">
+                      <div className="text-[10px] text-amber-300 font-bold">
+                        ⚠️ 실오류 — 현장에서 발견한 실제 번호 입력 (계획 번호와 다름)
+                      </div>
+                      <input
+                        type="text"
+                        value={esealWrongVal}
+                        onChange={e => setEsealWrongVal(e.target.value.toUpperCase())}
+                        placeholder="실제 발견 실번호"
+                        className="w-full bg-slate-800 border-2 border-amber-700 rounded px-3 py-2 text-base font-bold mono text-amber-100 focus:outline-none focus:border-amber-400"
+                        autoFocus
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => { setEditingEsealWrong(false); setEsealWrongVal(''); }}
+                          className="py-2 bg-slate-700 text-slate-300 rounded text-xs font-bold">취소</button>
+                        <button onClick={handleSaveEsealWrong}
+                          className="py-2 bg-amber-700 hover:bg-amber-600 text-white rounded text-xs font-bold">저장</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 리씰 입력 폼 */}
+                  {editingReseal && (
+                    <div className="mt-2 p-2 bg-purple-950/30 border border-purple-700/50 rounded space-y-2">
+                      <div className="text-[10px] text-purple-300 font-bold">
+                        🔄 리씰 — 실이 없거나 손상되어 새로 부착한 실번호 입력
+                      </div>
+                      <input
+                        type="text"
+                        value={resealVal}
+                        onChange={e => setResealVal(e.target.value.toUpperCase())}
+                        placeholder="새로 부착한 실번호"
+                        className="w-full bg-slate-800 border-2 border-purple-700 rounded px-3 py-2 text-base font-bold mono text-purple-100 focus:outline-none focus:border-purple-400"
+                        autoFocus
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => { setEditingReseal(false); setResealVal(''); }}
+                          className="py-2 bg-slate-700 text-slate-300 rounded text-xs font-bold">취소</button>
+                        <button onClick={handleSaveReseal}
+                          className="py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs font-bold">저장</button>
+                      </div>
                     </div>
                   )}
                 </div>

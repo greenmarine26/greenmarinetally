@@ -138,10 +138,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
 
     // 리스트가 채울 수 있는 필드 (보강 정보만)
     // EDI 핵심 필드(iso, rf, fr, ot, tk, dg, fe, bay, row, tier, pol, pod 등)는 제외
+    // M4.9b-fix: 검수원이 폰에서 입력한 엠티실/ISO403 사진 필드도 records 단일 진실 원천
+    //   → 이전: 화이트리스트에 없어서 c.eseal 등이 화면/보고서에서 누락되던 치명적 버그
+    //   → 사용자 신고: "엠티에 실 다 입력했는데 표기 안 되고 보고서에도 비어있음"
     const ALLOWED_LIST_FIELDS = new Set([
       'sl', 'sl_orig', 'sl_history', 'wt',
       'bl', 'sh', 'gi', 'op',  // B/L, Shipper, Gross Index, Operator
       'tmp',  // 온도는 리스트가 보강 가능 (단, 비어있을 때만)
+      // M4.9b-fix: 엠티 실 — EDI에 봉인 정보 없는 게 일반적, records가 진실
+      'eseal', 'eseal_orig', 'eseal_wrong', 'reseal',
+      'eseal_at', 'eseal_by', 'eseal_mode', 'eseal_history',
+      // M4.9b-fix: ISO403 사진 마킹
+      'iso403_photo_ts', 'iso403_photo_by', 'iso403_photo_history',
     ]);
 
     Object.values(recMap).forEach(r => {
