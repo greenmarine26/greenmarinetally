@@ -377,7 +377,7 @@ export default function PrintableBayDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white">
+      <div className="flex-1 overflow-auto bg-white bd-print-container">
         {filteredPages.length === 0 ? (
           <div className="p-8 text-center text-slate-500">
             출력할 페이지가 없습니다. 모드를 변경하거나 베이를 선택하세요.
@@ -397,9 +397,31 @@ export default function PrintableBayDetail({
       </div>
 
       <style>{`
+        /* M4.9b: 베이별 페이지 분리 강제 — 폰 Chrome에서 page-break-after 무시 이슈 해결 */
         @media print {
           .no-print { display: none !important; }
-          .bd-page { page-break-after: always; padding: 0.3cm !important; }
+          /* flex 부모가 page-break을 막는 문제 → 인쇄 시 일반 block으로 강제 */
+          .bd-print-container {
+            display: block !important;
+            overflow: visible !important;
+            height: auto !important;
+            flex: none !important;
+          }
+          .bd-page {
+            /* 구식(page-break-*) + 모던(break-*) 둘 다 명시 — 폰 Chrome 호환성 */
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            padding: 0.3cm !important;
+            border-bottom: none !important;  /* 화면용 점선 제거 */
+            min-height: calc(100vh - 0.6cm);  /* 페이지 가득 채워 break 강제 */
+          }
+          /* 마지막 페이지 page-break-after 무용 */
+          .bd-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
           @page { size: A4 landscape; margin: 0.3cm; }
         }
         .bd-page {
@@ -407,6 +429,7 @@ export default function PrintableBayDetail({
           font-family: Arial, sans-serif;
           padding: 10px 16px;
           page-break-after: always;
+          break-after: page;
           border-bottom: 1px dashed #ddd;
         }
         .bd-title {
