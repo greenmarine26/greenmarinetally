@@ -314,7 +314,7 @@ export default function PrintableBayDetail({
   }, [allPages, bayMap, printMode, selectedKeys, mode]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">
       <div className="no-print flex flex-col p-3 bg-slate-900 border-b border-slate-700 gap-2">
         <div className="flex items-center justify-between">
           <div className="text-base font-bold text-slate-100">📋 베이 상세 인쇄 미리보기 ({filteredPages.length}페이지)</div>
@@ -397,53 +397,63 @@ export default function PrintableBayDetail({
       </div>
 
       <style>{`
-        /* M4.9b: 베이별 페이지 분리 강제 — 폰 Chrome에서 page-break-after 무시 이슈 해결 */
+        /* M4.9b-fix: 베이별 페이지 분리 + 여백 1.5cm로 페이지 가득 활용
+           - @page margin 0.3 → 1.5cm (사용자 요청)
+           - 페이지 자체 padding 제거 (margin이 이미 여백 처리)
+           - 셀 크기/폰트 확대로 가용 영역 (267×180mm) 가득 활용
+           - 9단 그리드 약 540px (180mm-헤더~10mm = 약 170mm = 645px 중 ~85% 활용)
+           - 이전 min-height: 100vh 같은 베이 2장 출력 버그는 제거 상태 유지 */
         @media print {
           .no-print { display: none !important; }
-          /* flex 부모가 page-break을 막는 문제 → 인쇄 시 일반 block으로 강제 */
+          /* 부모 wrapper의 fixed/flex/black 배경 해제 */
+          .bd-print-modal {
+            position: static !important;
+            background: white !important;
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
           .bd-print-container {
             display: block !important;
             overflow: visible !important;
             height: auto !important;
             flex: none !important;
+            background: white !important;
           }
           .bd-page {
-            /* 구식(page-break-*) + 모던(break-*) 둘 다 명시 — 폰 Chrome 호환성 */
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            padding: 0.3cm !important;
-            border-bottom: none !important;  /* 화면용 점선 제거 */
-            min-height: calc(100vh - 0.6cm);  /* 페이지 가득 채워 break 강제 */
+            padding: 0 !important;  /* @page margin이 여백 처리 */
+            border-bottom: none !important;
           }
-          /* 마지막 페이지 page-break-after 무용 */
           .bd-page:last-child {
             page-break-after: auto !important;
             break-after: auto !important;
           }
-          @page { size: A4 landscape; margin: 0.3cm; }
+          /* 사용자 요청: 여백 1.5cm */
+          @page { size: A4 landscape; margin: 1.5cm; }
         }
         .bd-page {
           color: black; background: white;
           font-family: Arial, sans-serif;
           padding: 10px 16px;
-          page-break-after: always;
-          break-after: page;
           border-bottom: 1px dashed #ddd;
         }
         .bd-title {
-          text-align: center; font-size: 16pt; font-weight: 500;
-          margin-bottom: 4px;
+          /* 페이지 가득 활용 — 베이 제목 더 크게 */
+          text-align: center; font-size: 22pt; font-weight: 500;
+          margin-bottom: 8px;
         }
         .bd-header {
           display: flex; justify-content: space-between;
-          font-size: 10pt; margin-bottom: 8px;
+          font-size: 11pt; margin-bottom: 10px;
         }
         .bd-row-labels-top, .bd-row-labels-bot {
           display: flex; justify-content: space-evenly;
-          font-size: 8pt;
-          margin: 1px 14px;
+          font-size: 9pt;
+          margin: 2px 14px;
         }
         .bd-rl { flex: 1; text-align: center; }
         .bd-grid-wrap {
@@ -456,7 +466,14 @@ export default function PrintableBayDetail({
         }
         .bd-cell {
           border: 0.3px solid #555;
-          height: 48px;
+          /* 가용 세로 공간 활용 — 9단 × 60px = 540px */
+          height: 60px;
+          padding: 2px 4px;
+          font-size: 8.5pt;
+          line-height: 1.15;
+          font-family: 'Courier New', monospace;
+          overflow: hidden;
+        }
           padding: 2px 3px;
           font-size: 7pt;
           line-height: 1.1;
@@ -473,10 +490,10 @@ export default function PrintableBayDetail({
         .bd-tier-labels {
           display: flex; flex-direction: column;
           padding-left: 8px;
-          font-size: 9pt;
+          font-size: 10pt;
         }
         .bd-tier-labels span {
-          height: 48px; line-height: 48px;
+          height: 60px; line-height: 60px;
         }
         .bd-tier-gap { height: 8px !important; }
       `}</style>

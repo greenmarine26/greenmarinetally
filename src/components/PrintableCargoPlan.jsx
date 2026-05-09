@@ -247,7 +247,7 @@ export default function PrintableCargoPlan({
   const aftPairsByCol = aftPages.pairs.slice(0, 5);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">
       <div className="no-print flex items-center justify-between p-3 bg-slate-900 border-b border-slate-700">
         <div className="text-base font-bold text-slate-100">📄 카고 플랜 인쇄 미리보기</div>
         <div className="flex gap-2">
@@ -279,7 +279,7 @@ export default function PrintableCargoPlan({
                 mode={mode} dictBay={dictBaysSummary[p.bay]} />
             ))}
             {Array.from({ length: 5 - foreSinglesByCol.length }).map((_, i) =>
-              <div key={`fse-${i}`}></div>
+              <div key={`fse-${i}`} className="bay-box-placeholder"></div>
             )}
           </div>
           <div className="bay-row five-col">
@@ -288,7 +288,7 @@ export default function PrintableCargoPlan({
                 mode={mode} dictBay={dictBaysSummary[p.even]} />
             ))}
             {Array.from({ length: 5 - forePairsByCol.length }).map((_, i) =>
-              <div key={`fpe-${i}`}></div>
+              <div key={`fpe-${i}`} className="bay-box-placeholder"></div>
             )}
           </div>
 
@@ -298,7 +298,7 @@ export default function PrintableCargoPlan({
                 mode={mode} dictBay={dictBaysSummary[p.bay]} />
             ))}
             {Array.from({ length: 5 - aftSinglesByCol.length }).map((_, i) =>
-              <div key={`ase-${i}`}></div>
+              <div key={`ase-${i}`} className="bay-box-placeholder"></div>
             )}
           </div>
 
@@ -308,7 +308,7 @@ export default function PrintableCargoPlan({
                 mode={mode} dictBay={dictBaysSummary[p.even]} />
             ))}
             {Array.from({ length: 5 - aftPairsByCol.length }).map((_, i) =>
-              <div key={`ape-${i}`}></div>
+              <div key={`ape-${i}`} className="bay-box-placeholder"></div>
             )}
           </div>
 
@@ -349,32 +349,50 @@ export default function PrintableCargoPlan({
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .cargo-plan-page { margin: 0 !important; padding: 0.4cm !important; }
-          @page { size: A4 landscape; margin: 0.4cm; }
+          /* M4.9b-fix: 부모 wrapper의 fixed/flex/black 배경 해제 */
+          .bd-print-modal {
+            position: static !important;
+            background: white !important;
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .cargo-plan-page { margin: 0 !important; padding: 0 !important; }
+          /* 사용자 요청: 여백 1.5cm */
+          @page { size: A4 landscape; margin: 1.5cm; }
         }
         .cargo-plan-page {
           color: black; background: white;
           font-family: Arial, sans-serif;
-          font-size: 9pt;
+          font-size: 10pt;
           padding: 12px 16px;
-          max-width: 1400px;
           margin: 0 auto;
         }
         .cargo-header {
           display: flex; justify-content: space-between; align-items: baseline;
-          margin-bottom: 4px;
+          margin-bottom: 6px;
         }
-        .cargo-title { font-size: 14pt; font-weight: 500; }
+        .cargo-title { font-size: 18pt; font-weight: 500; }
         .cargo-subheader {
           display: flex; justify-content: center; gap: 80px;
-          font-size: 10pt; margin-bottom: 12px;
+          font-size: 12pt; margin-bottom: 14px;
         }
-        .bay-row { display: grid; gap: 4px; margin-bottom: 4px; }
+        /* M4.9b-fix: 행 그리드 — 좌측 기준 stretch 정렬 명시 */
+        .bay-row { display: grid; gap: 4px; margin-bottom: 4px; align-items: stretch; }
         .five-col { grid-template-columns: repeat(5, 1fr); }
+        /* M4.9b-fix: 모든 베이 박스 동일 min-height 통일.
+           가용 세로 ~180mm = 약 680px 중 헤더~50px → 4행 × ~155px = 620px (가용 91%) */
         .bay-box {
           border: 0.5px solid #000; background: white;
-          font-size: 7pt;
+          font-size: 9pt;
           page-break-inside: avoid;
+          min-height: 150px;
+          display: flex;
+          flex-direction: column;
+        }
+        .bay-box-placeholder {
+          min-height: 150px;
+          visibility: hidden;
         }
         .bay-title-row {
           display: flex; justify-content: space-between;
@@ -386,7 +404,7 @@ export default function PrintableCargoPlan({
           display: flex; justify-content: center;
           font-size: 6pt; padding: 0 1px;
         }
-        .bay-row-label { width: 7px; text-align: center; font-size: 5pt; }
+        .bay-row-label { width: 11px; text-align: center; font-size: 7pt; }
         .bay-grid-wrap {
           display: flex; align-items: stretch; padding: 1px;
           justify-content: center;
@@ -394,10 +412,10 @@ export default function PrintableCargoPlan({
         .bay-grid { display: flex; flex-direction: column; align-items: center; }
         .bay-grid-row { display: flex; }
         .bay-cell {
-          width: 7px; height: 6px;
+          width: 11px; height: 9px;
           border: 0.3px solid #aaa;
           text-align: center;
-          font-size: 5pt; line-height: 6px;
+          font-size: 7pt; line-height: 9px;
           font-family: 'Courier New', monospace;
         }
         .mark-X { color: #000; }
@@ -409,9 +427,9 @@ export default function PrintableCargoPlan({
         }
         .bay-tier-labels {
           display: flex; flex-direction: column;
-          font-size: 6pt; padding-left: 2px;
+          font-size: 7pt; padding-left: 2px;
         }
-        .bay-tier-labels span { height: 6px; line-height: 6px; font-size: 5pt; }
+        .bay-tier-labels span { height: 9px; line-height: 9px; font-size: 7pt; }
         .tier-gap { height: 3px !important; }
         .legend-box {
           padding: 6px 4px;
