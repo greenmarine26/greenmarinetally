@@ -344,11 +344,13 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-amber-400"/>
-            <span className="text-2xl font-black mono text-amber-300">{c.bay || '-'}</span>
+            {/* M4.9e-fix 2단계: 선적 모드에서 c.bay는 effective 위치(actual로 치환됨).
+                계획 위치 표시는 _bay_planned 우선, 없으면 c.bay (양하 모드는 그대로) */}
+            <span className="text-2xl font-black mono text-amber-300">{c._bay_planned || c.bay || '-'}</span>
             <span className="text-slate-500">/</span>
-            <span className="text-xl font-bold mono text-slate-300">{c.row || '--'}</span>
+            <span className="text-xl font-bold mono text-slate-300">{c._row_planned || c.row || '--'}</span>
             <span className="text-slate-500">/</span>
-            <span className="text-xl font-bold mono text-slate-300">{c.tier || '--'}</span>
+            <span className="text-xl font-bold mono text-slate-300">{c._tier_planned || c.tier || '--'}</span>
             {!c.bay && mode === 'loading' && (
               <span className="ml-2 bg-orange-700 text-orange-50 text-[10px] px-1.5 py-0.5 rounded font-black">선적대상</span>
             )}
@@ -382,7 +384,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                 (c.bay_actual || c.row_actual || c.tier_actual) ? (
                   // 수정된 실체 위치 표시 — 본위치 → 수정위치
                   <div className="flex items-center gap-2">
-                    <span className="text-sm mono text-slate-400">{c.bay || '--'}/{c.row || '--'}/{c.tier || '--'}</span>
+                    <span className="text-sm mono text-slate-400">{c._bay_planned || c.bay || '--'}/{c._row_planned || c.row || '--'}/{c._tier_planned || c.tier || '--'}</span>
                     <span className="text-cyan-400 font-bold">→</span>
                     <MapPin className="w-4 h-4 text-cyan-400"/>
                     <span className="text-lg font-black mono text-cyan-200">{c.bay_actual || '--'}</span>
@@ -403,7 +405,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                 // 입력 모드
                 <div className="space-y-2">
                   <div className="text-[10px] text-cyan-300">
-                    계획: {c.bay || '--'}/{c.row || '--'}/{c.tier || '--'} → 실제 적치 위치 입력
+                    계획: {c._bay_planned || c.bay || '--'}/{c._row_planned || c.row || '--'}/{c._tier_planned || c.tier || '--'} → 실제 적치 위치 입력
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>

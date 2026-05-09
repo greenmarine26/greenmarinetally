@@ -179,11 +179,36 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       });
       merged[r.cn] = { ...(ediBase || {}), ...safeR, _src: ediBase ? 'both' : 'list' };
     });
-    return Object.values(merged).sort((a, b) => {
+    const baseContainers = Object.values(merged).sort((a, b) => {
       const ka = `${a.bay || 'zz'}-${a.row || 'zz'}-${a.tier || 'zz'}`;
       const kb = `${b.bay || 'zz'}-${b.row || 'zz'}-${b.tier || 'zz'}`;
       return ka.localeCompare(kb);
     });
+
+    // M4.9e-fix 2단계: 선적 모드 — 실체 위치 적용
+    //   actual 있으면 → 실체 위치로 그리드에 그려짐
+    //   계획 위치는 _bay_planned/_row_planned/_tier_planned에 보존 (보고서/UI용)
+    //   양하 모드는 변경 없음 (EDI가 실체)
+    if (mode === 'loading') {
+      return baseContainers.map(c => {
+        if (c.bay_actual && c.row_actual && c.tier_actual) {
+          return {
+            ...c,
+            // 그리드/검색용 effective 위치
+            bay: c.bay_actual,
+            row: c.row_actual,
+            tier: c.tier_actual,
+            // 계획 위치 보존 (보고서/모달 표시용)
+            _bay_planned: c.bay,
+            _row_planned: c.row,
+            _tier_planned: c.tier,
+            _position_moved: true,
+          };
+        }
+        return c;
+      });
+    }
+    return baseContainers;
   }, [ediMap, recMap, mode]);
 
   // M3.5.5: 선박 정책 매칭 (DEFAULT + Firebase extra)
