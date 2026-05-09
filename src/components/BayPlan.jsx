@@ -18,10 +18,15 @@ import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReefer
 import { getShipBayDictData } from '../shipStructure.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
+// M4.6: 인쇄 컴포넌트
+import PrintableCargoPlan from './PrintableCargoPlan.jsx';
+import PrintableBayDetail from './PrintableBayDetail.jsx';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
+  // M4.6: 인쇄 모달 상태
+  const [printMode, setPrintMode] = useState(null);  // null | 'cargo' | 'detail'
   const [zoom, setZoom] = useState(() => {
     // M3.78: 모바일 기본 zoom 0.3 → 0.5로 (❄/⚠ 같은 종류 심볼 잘 보이게)
     if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.5;
@@ -416,6 +421,18 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           {allBaysMode ? '✓ 전체 세로' : '단일 페이지'}
         </button>
 
+        {/* M4.6: 인쇄 버튼 2종 */}
+        <button onClick={() => setPrintMode('cargo')}
+          className="px-2 py-1.5 rounded text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-100"
+          title="요약 카고 플랜 (1페이지)">
+          📄 플랜
+        </button>
+        <button onClick={() => setPrintMode('detail')}
+          className="px-2 py-1.5 rounded text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-100"
+          title="베이 상세 (베이당 1페이지)">
+          📋 베이상세
+        </button>
+
         {/* M3.87: 선적 모드 - 미배정(선적대상) 배지 */}
         {mode === 'loading' && unassignedCount > 0 && (
           <button onClick={() => setShowUnassigned(true)}
@@ -562,6 +579,28 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           onOpenContainer?.(c);  // ContainerDetailModal 열림 → 거기서 위치 수정
         }}
       />
+
+      {/* M4.6: 인쇄 모달 */}
+      {printMode === 'cargo' && (
+        <PrintableCargoPlan
+          containers={containers}
+          mode={mode}
+          voyageInfo={null /* TODO: pass voyageInfo from parent */}
+          shipImo={shipImo}
+          shipName={shipName}
+          onClose={() => setPrintMode(null)}
+        />
+      )}
+      {printMode === 'detail' && (
+        <PrintableBayDetail
+          containers={containers}
+          mode={mode}
+          voyageInfo={null}
+          shipImo={shipImo}
+          shipName={shipName}
+          onClose={() => setPrintMode(null)}
+        />
+      )}
     </div>
   );
 }
