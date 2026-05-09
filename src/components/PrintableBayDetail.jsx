@@ -19,10 +19,9 @@ import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 
-// M4.9d-fix: STD_ROWS는 BayDetailPage 내부에서 globalRowRange 기준 동적 계산
-//   (이전 7개 또는 11개 하드코딩은 베이/선박마다 row 수 달라 잘못)
-const STD_DECK = ['88', '86', '84', '82'];
-const STD_HOLD = ['08', '06', '04', '02'];
+// M4.9e-fix: STD_DECK/STD_HOLD/STD_ROWS 모두 동적 (globalTiers + globalRowRange 기준)
+//   사용자 지적: "베이마다 / 선박마다 row/tier 다름, 일괄 X, 화면과 같게"
+// (STD_DECK / STD_HOLD 제거됨 — globalTiers 동적 사용)
 
 const isPtk = (c, mode) => {
   const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
@@ -158,7 +157,7 @@ function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers }) {
   // M4.9d-fix: globalRowRange 기준 동적 row 생성 — 화면 BayPlan과 통일
   //   maxLeft (예: 10) → 짝수 큰→작은 [10, 08, 06, 04, 02]
   //   maxRight (예: 09) → 홀수 작은→큰 [01, 03, 05, 07, 09]
@@ -187,10 +186,17 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   });
 
   const allTiers = new Set();
+  // M4.9e-fix: 화면 BayPlan과 동일하게 globalTiers (선박 전체 tier 풀) 사용
+  //   사용자 지적: "티어도 안 맞음, 베이마다 / 선박마다 다름"
+  //   이전: STD_DECK/STD_HOLD 하드코딩과 합쳐 사용 → 선박마다 안 맞음
+  //   수정: globalTiers 우선, 그 다음 컨테이너 데이터의 tier (보강)
+  if (Array.isArray(globalTiers) && globalTiers.length > 0) {
+    globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
+  }
   allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-  const deckTiers = [...new Set([...STD_DECK, ...[...allTiers].filter(t => parseInt(t) >= 80)])]
+  const deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
     .sort((a, b) => parseInt(b) - parseInt(a));
-  const holdTiers = [...new Set([...STD_HOLD, ...[...allTiers].filter(t => parseInt(t) < 80)])]
+  const holdTiers = [...allTiers].filter(t => parseInt(t) < 80)
     .sort((a, b) => parseInt(b) - parseInt(a));
 
   const hasHold = dictBay ? dictBay.hasHold !== false : allConts.some(c => parseInt(c.tier) < 80);
@@ -273,7 +279,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 }
 
 export default function PrintableBayDetail({
-  containers, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, onClose
+  containers, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, globalTiers, onClose
 }) {
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
@@ -407,7 +413,8 @@ export default function PrintableBayDetail({
                 bayMap={bayMap} mode={mode}
                 voyageInfo={voyageInfo} voyageKey={voyageKey}
                 shipName={shipName} dictBay={dictBay}
-                globalRowRange={globalRowRange} />
+                globalRowRange={globalRowRange}
+                globalTiers={globalTiers} />
             );
           })
         )}
