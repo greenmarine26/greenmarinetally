@@ -30,8 +30,10 @@ const isPtk = (c, mode) => {
 
 function groupByBay(containers) {
   const m = {};
+  // M4.9: containers 검증 (배열 아니면 빈 객체 반환)
+  if (!Array.isArray(containers)) return m;
   containers.forEach(c => {
-    if (!c.bay) return;
+    if (!c || !c.bay) return;
     const k = normalizeBay(c.bay);
     if (k) (m[k] = m[k] || []).push(c);
   });
@@ -92,38 +94,55 @@ function buildBayPages(bays) {
 }
 
 // 컨테이너 4-5줄 텍스트 포맷
+// M4.9: 모든 입력 String 변환 + try-catch로 방어 (한 셀 에러가 전체 페이지 크래시 방지)
 function formatCellLines(c) {
-  const pol = (c.pol || '').replace(/^KR/, '').slice(0, 3) || '   ';
-  const pod = (c.pod || '').replace(/^KR/, '').slice(0, 3) || '   ';
-  const via = c.via || '';
-  // POL POD via 표기 — 샘플 PDF에서 "PTK/ *LYG" 또는 "PTK/PTK*LYG"
-  // POL/POD가 둘 다 PTK면 "PTK/PTK*via", 한쪽만이면 "POL/ *via"
-  let line1;
-  if (pol === pod) {
-    line1 = `${pol}/${pod}*${via || ' '}`;
-  } else {
-    line1 = `${pol}/${' '}*${via || pod}`;
-  }
-  const line2 = c.cn || '';
-  // 선사 약어
-  const carrierRaw = (c.line || c.carrier || '').toUpperCase();
-  let carrier = 'C_K';
-  if (carrierRaw === 'CKL' || carrierRaw === 'CK') carrier = 'C_K';
-  else if (carrierRaw === 'SOC' || carrierRaw.includes('SOC')) carrier = 'SOC';
-  else if (carrierRaw) carrier = carrierRaw.slice(0, 3);
+  try {
+    const pol = String(c.pol || '').replace(/^KR/, '').slice(0, 3) || '   ';
+    const pod = String(c.pod || '').replace(/^KR/, '').slice(0, 3) || '   ';
+    const via = String(c.via || '');
+    // POL POD via 표기
+    let line1;
+    if (pol === pod) {
+      line1 = `${pol}/${pod}*${via || ' '}`;
+    } else {
+      line1 = `${pol}/${' '}*${via || pod}`;
+    }
+    const line2 = String(c.cn || '');
+    // 선사 약어
+    const carrierRaw = String(c.line || c.carrier || '').toUpperCase();
+    let carrier = 'C_K';
+    if (carrierRaw === 'CKL' || carrierRaw === 'CK') carrier = 'C_K';
+    else if (carrierRaw === 'SOC' || carrierRaw.includes('SOC')) carrier = 'SOC';
+    else if (carrierRaw) carrier = carrierRaw.slice(0, 3);
 
-  const fe = c.fe || (c.iso?.endsWith('0') ? 'E' : 'F');
-  const wt = c.wt ? (parseFloat(c.wt) / 1000).toFixed(1) : '0.0';
-  const isoLbl = isoToPdfLabel(c.iso) || '';
-  const line3 = `${carrier} ${fe}${wt.padStart(5)} ${isoLbl}`;
-  // IMDG/위험물: c.imdg 있으면
-  const line4 = c.imdg ? ` ${c.imdg}` : '';
-  // 위치
-  const bay = String(c.bay).padStart(3, '0').slice(-3);
-  const row = String(c.row || '00').padStart(2, '0');
-  const tier = String(c.tier || '00').padStart(2, '0');
-  const lineLast = `....${bay}${row}${tier}`;
-  return { line1, line2, line3, line4, lineLast };
+    const fe = c.fe || (String(c.iso || '').endsWith('0') ? 'E' : 'F');
+    // M4.9: wt 안전 처리 (number/string/null 모두 OK)
+    let wt = '0.0';
+    try {
+      const wtNum = parseFloat(c.wt);
+      if (Number.isFinite(wtNum)) wt = (wtNum / 1000).toFixed(1);
+    } catch (_) {}
+    const isoLbl = String(isoToPdfLabel(c.iso) || '');
+    const line3 = `${carrier} ${fe}${String(wt).padStart(5)} ${isoLbl}`;
+    // IMDG/위험물
+    const line4 = c.imdg ? ` ${String(c.imdg)}` : '';
+    // 위치
+    const bay = String(c.bay ?? '0').padStart(3, '0').slice(-3);
+    const row = String(c.row ?? '00').padStart(2, '0');
+    const tier = String(c.tier ?? '00').padStart(2, '0');
+    const lineLast = `....${bay}${row}${tier}`;
+    return { line1, line2, line3, line4, lineLast };
+  } catch (e) {
+    // 한 컨테이너 에러가 전체 페이지를 무너뜨리지 않게
+    console.error('[formatCellLines] error', e, c);
+    return {
+      line1: '?',
+      line2: String(c?.cn || '?'),
+      line3: '? ?',
+      line4: '',
+      lineLast: '?',
+    };
+  }
 }
 
 function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay }) {
@@ -268,7 +287,7 @@ export default function PrintableBayDetail({
       return allPages.filter(p => selectedKeys.includes(p.key));
     }
     return [];
-  }, [allPages, bayMap, printMode, selectedKey, mode]);
+  }, [allPages, bayMap, printMode, selectedKeys, mode]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">

@@ -519,6 +519,68 @@ export async function fbAddPhotoReport(voyageKey, photoData, meta) {
   return ts;
 }
 
+// M4.9: ISO403 사진 저장 (컨테이너별 1장)
+//   - photos 노드에 사진 저장 (기존과 동일)
+//   - 컨테이너 records/ediContainers에 iso403_photo_ts, iso403_photo_url 마킹
+//   - 동일 컨번호 재촬영 가능 (덮어쓰기, 이력은 photos에 누적)
+export async function fbSaveISO403Photo(voyageKey, mode, cn, photoData, by) {
+  const ts = Date.now();
+  // 1) 사진 본체 저장
+  const photoRef = ref(db, `voyages/${voyageKey}/photos/${ts}`);
+  await set(photoRef, {
+    ts,
+    data: photoData,  // base64 string
+    type: 'iso403',
+    cn,
+    by: by || '',
+    voyageKey,
+    mode,
+  });
+  // 2) records 마킹 (이력 보관)
+  const recRef = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const recSnap = await get(recRef);
+  const cur = recSnap.val() || {};
+  const photoHistory = Array.isArray(cur.iso403_photo_history) ? [...cur.iso403_photo_history] : [];
+  photoHistory.push({ ts, by: by || '' });
+  await update(recRef, {
+    iso403_photo_ts: ts,
+    iso403_photo_by: by || '',
+    iso403_photo_history: photoHistory,
+  });
+  // 3) ediContainers 마킹 (화면 즉시 반영)
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  const ediSnap = await get(ediRef);
+  if (ediSnap.exists()) {
+    await update(ediRef, {
+      iso403_photo_ts: ts,
+      iso403_photo_by: by || '',
+    });
+  }
+  return ts;
+}
+
+// M4.9: ISO403 사진 삭제 (실수 등록 시 취소용)
+export async function fbDeleteISO403Photo(voyageKey, mode, cn, photoTs) {
+  // 사진 본체 삭제
+  if (photoTs) {
+    await set(ref(db, `voyages/${voyageKey}/photos/${photoTs}`), null);
+  }
+  // records 마킹 해제 — null 사용 시 RTDB가 필드 삭제
+  const recRef = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  await update(recRef, {
+    iso403_photo_ts: null,
+    iso403_photo_by: null,
+  });
+  const ediRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
+  const ediSnap = await get(ediRef);
+  if (ediSnap.exists()) {
+    await update(ediRef, {
+      iso403_photo_ts: null,
+      iso403_photo_by: null,
+    });
+  }
+}
+
 // M3.5.6-fix: 테스트 데이터 삭제 함수들 (수석검수만 사용)
 // 단일 보고 삭제
 export async function fbDeleteWorkReport(voyageKey, ts) {

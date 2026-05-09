@@ -1,6 +1,22 @@
-// 공통 유틸리티 — V44 (2026.05.09 / M4.8)
-export const APP_VERSION = 'M4.8';
+// 공통 유틸리티 — V45 (2026.05.09 / M4.9)
+export const APP_VERSION = 'M4.9';
 
+// M4.9 변경점 (긴급 픽스 + ISO403):
+//   [긴급] 베이 상세 모달 크래시 수정
+//     · PrintableBayDetail.jsx 271줄 useMemo deps의 selectedKey → selectedKeys 오타
+//       정의 안 된 변수 참조 → ReferenceError → 컴포넌트 마운트 즉시 크래시
+//     · 화면이 사라지고 페이지 리프레시해야 복구되던 증상 해결
+//   [방어] formatCellLines 모든 입력 안전 처리 (wt, iso, bay, row, tier 모두 String 변환 후 패딩)
+//   [방어] ErrorBoundary 컴포넌트 추가 - PrintableBayDetail 등 위험 영역 래핑
+//   [신규] isISO403(c) - 사진 촬영 의무 대상 검출
+//     · 4530 류 (4530, 4531~4539): 40ft 리퍼 HC (일부 선사 표준 외 코드)
+//     · 9500 류 (9500~9509): 45ft HC (L5)
+//     · L5XX 류: 45ft 표기
+//     · 정확한 룰은 사용자 검증 필요 - 검출 결과를 화면에 표시해 검수원이 확인
+//   [신규] ISO403 사진 추적 - 컨테이너별 photoUrl 저장 (Firebase RTDB)
+//     · 미촬영 잔여 카운트 배너 (BayPlan 상단)
+//     · 컨테이너 상세 모달 → 📷 ISO403 사진 버튼 (촬영 완료 ✓ 표시)
+//
 // M4.8 변경점:
 //   - splitForeAft 알고리즘 수정 (트리오 [홀,짝,홀] 그룹화 후 중간 분할)
 //     · 이전: 첫 갭을 분리점 → TNJP 같이 모든 갭 동일하면 잘못 분할
@@ -334,6 +350,34 @@ export function isReeferContainer(c) {
   if (!c) return false;
   if (c.rf) return true;
   return isReeferIso(c.iso);
+}
+
+// M4.9: ISO403 사진 촬영 의무 대상 검출
+//   사용자 정의: "리퍼 L5 포함" + "26대" (TNJP 26334W 기준)
+//   EDI 분석 결과 패턴:
+//     - 4530 류 (4530~4539): 40ft 리퍼 HC (일부 선사가 표준 외 코드로 사용)
+//     - 9500 류 (9500~9509): 45ft HC (L5G1 등을 4자리 숫자로 변환한 코드)
+//     - L5XX 류 (L5G0, L5G1, L5HC 등): 45피트 표기
+//   주의: 실제 룰은 선사/항만별 다를 수 있음. 검출 결과를 화면에 표시해
+//         검수원이 1차 확인 후 사진 촬영하도록 함.
+export function isISO403(c) {
+  if (!c) return false;
+  const code = String(c.iso || '').toUpperCase().trim().replace(/\s+/g, '');
+  if (!code) return false;
+  // 4530 류: 40ft 리퍼 HC (4530, 4531~4539 모두 포함)
+  if (/^45[3]\d$/.test(code)) return true;
+  // 9500 류: 45ft HC 4자리 숫자 표기
+  if (/^950\d$/.test(code)) return true;
+  // L5 시작: 45ft 표기 (L5G0, L5G1, L5HC 등)
+  if (/^L5/.test(code)) return true;
+  return false;
+}
+
+// M4.9: 컨테이너 사진 촬영 완료 여부 판정
+//   c.iso403_photo_url 또는 c.iso403_photo_ts가 있으면 촬영 완료
+export function isISO403PhotoTaken(c) {
+  if (!c) return false;
+  return !!(c.iso403_photo_url || c.iso403_photo_ts);
 }
 
 export const isoToPdfLabel = (iso, tp) => {

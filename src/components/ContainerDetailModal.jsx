@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer } from '../utils.js';
+import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
+import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
 
@@ -34,6 +35,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [resealVal, setResealVal] = useState(c.reseal || '');
   const [esealType, setEsealType] = useState('reseal');
   const [photoMode, setPhotoMode] = useState(null);  // M3.5.6: 'seal_error' | 'damage'
+  const [iso403PhotoOpen, setIso403PhotoOpen] = useState(false);  // M4.9: ISO403 사진 모달
   const [showHistory, setShowHistory] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
@@ -47,6 +49,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const isDone = !!comp;
   const isReefer = isReeferContainer(c);
   const isDG = c.dg;
+  // M4.9: ISO403 (사진 촬영 의무 대상)
+  const needsISO403Photo = isISO403(c);
+  const iso403PhotoTaken = isISO403PhotoTaken(c);
 
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
   const sealError = c.sl && slOrig && c.sl !== slOrig;
@@ -215,7 +220,49 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             {c.fr && <Badge color="orange">Flat Rack</Badge>}
             {c.ot && <Badge color="yellow">Open Top</Badge>}
             {c.tk && <Badge color="pink">Tank</Badge>}
+            {/* M4.9: ISO403 배지 */}
+            {needsISO403Photo && (
+              iso403PhotoTaken
+                ? <Badge color="emerald"><Camera className="w-3 h-3"/>ISO403 ✓</Badge>
+                : <Badge color="blue"><Camera className="w-3 h-3"/>ISO403 사진 필요</Badge>
+            )}
           </div>
+
+          {/* M4.9: ISO403 사진 의무 강조 박스 (미촬영 시) */}
+          {needsISO403Photo && !iso403PhotoTaken && (
+            <div className="mt-3 px-3 py-2 bg-blue-950/50 border-2 border-blue-600 rounded-lg">
+              <div className="flex items-start gap-2">
+                <span className="text-xl">📷</span>
+                <div className="flex-1">
+                  <div className="text-xs font-black text-blue-200">ISO403 사진 촬영 필요</div>
+                  <div className="text-[11px] text-blue-300 mt-0.5">
+                    이 컨테이너는 ISO403 대상입니다 (코드 {c.iso}). 사진 1장 촬영이 필요합니다.
+                  </div>
+                  <button onClick={() => setIso403PhotoOpen(true)}
+                    className="mt-2 w-full py-2.5 bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white rounded font-bold text-sm flex items-center justify-center gap-1.5">
+                    <Camera className="w-4 h-4"/>📷 ISO403 사진 촬영
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* M4.9: ISO403 사진 촬영 완료 시 - 다시 촬영/보기 */}
+          {needsISO403Photo && iso403PhotoTaken && (
+            <div className="mt-2 px-3 py-2 bg-emerald-950/30 border border-emerald-700/50 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400"/>
+                <span className="text-xs font-bold text-emerald-200">ISO403 사진 촬영 완료</span>
+                {c.iso403_photo_by && (
+                  <span className="text-[10px] text-emerald-400/80">({c.iso403_photo_by})</span>
+                )}
+              </div>
+              <button onClick={() => setIso403PhotoOpen(true)}
+                className="px-2 py-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-50 rounded text-[10px] font-bold flex items-center gap-1">
+                <Camera className="w-3 h-3"/>보기/재촬영
+              </button>
+            </div>
+          )}
+
           {/* M3.5.6: 사진 보고 버튼 (실오류 / 데미지) */}
           <div className="grid grid-cols-2 gap-2 mt-2">
             <button onClick={() => setPhotoMode('seal_error')}
@@ -700,6 +747,16 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         />
       )}
 
+      {/* M4.9: ISO403 사진 촬영 모달 */}
+      <ISO403PhotoModal
+        open={iso403PhotoOpen}
+        c={c}
+        voyageKey={voyageKey}
+        mode={mode}
+        inspector={inspector}
+        onClose={() => setIso403PhotoOpen(false)}
+      />
+
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
 
@@ -728,6 +785,7 @@ function Badge({ color, children }) {
     orange: 'bg-orange-700/60 text-orange-100',
     yellow: 'bg-yellow-700/60 text-yellow-100',
     pink: 'bg-pink-700/60 text-pink-100',
+    blue: 'bg-blue-700/60 text-blue-100',
   };
   return <span className={`${map[color]} text-[11px] px-2 py-0.5 rounded font-black flex items-center gap-1`}>{children}</span>;
 }

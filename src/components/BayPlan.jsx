@@ -14,13 +14,14 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 // M4.6: 인쇄 컴포넌트
 import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
+import ErrorBoundary from './ErrorBoundary.jsx';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName }) {
   const [pageIdx, setPageIdx] = useState(0);
@@ -38,6 +39,19 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const [showUnassigned, setShowUnassigned] = useState(false);
   const unassignedCount = useMemo(() =>
     containers.filter(c => !c.bay).length, [containers]);
+  // M4.9: ISO403 사진 촬영 통계
+  const iso403Stats = useMemo(() => {
+    const targets = containers.filter(c => isISO403(c));
+    const taken = targets.filter(c => isISO403PhotoTaken(c));
+    return {
+      total: targets.length,
+      taken: taken.length,
+      pending: targets.length - taken.length,
+      pendingList: targets.filter(c => !isISO403PhotoTaken(c)),
+    };
+  }, [containers]);
+  // M4.9: ISO403 미촬영 목록 펼치기
+  const [showISO403List, setShowISO403List] = useState(false);
   const scrollRef = useRef(null);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -433,6 +447,20 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           📋 베이상세
         </button>
 
+        {/* M4.9: ISO403 사진 미촬영 배지 */}
+        {iso403Stats.total > 0 && (
+          <button onClick={() => setShowISO403List(v => !v)}
+            className={`px-2 py-1.5 rounded text-xs font-black flex items-center gap-1 ${
+              iso403Stats.pending > 0
+                ? 'bg-blue-700 hover:bg-blue-600 text-blue-50 animate-pulse'
+                : 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100'
+            }`}
+            title="ISO403 사진 촬영 의무 대상">
+            📷 ISO403 {iso403Stats.taken}/{iso403Stats.total}
+            {iso403Stats.pending > 0 && <span className="bg-blue-900/60 px-1 rounded text-[10px]">미촬영 {iso403Stats.pending}</span>}
+          </button>
+        )}
+
         {/* M3.87: 선적 모드 - 미배정(선적대상) 배지 */}
         {mode === 'loading' && unassignedCount > 0 && (
           <button onClick={() => setShowUnassigned(true)}
@@ -469,6 +497,59 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           ))}
         </select>
       </div>
+
+      {/* M4.9: ISO403 미촬영 목록 펼침 패널 */}
+      {showISO403List && iso403Stats.total > 0 && (
+        <div className={`border-2 rounded-lg p-3 ${
+          iso403Stats.pending > 0
+            ? 'bg-blue-950/40 border-blue-700'
+            : 'bg-emerald-950/30 border-emerald-700'
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-black flex items-center gap-2">
+              <span className="text-lg">📷</span>
+              <span className={iso403Stats.pending > 0 ? 'text-blue-200' : 'text-emerald-200'}>
+                ISO403 사진 촬영
+              </span>
+              <span className="text-xs font-bold text-slate-400 mono">
+                {iso403Stats.taken}/{iso403Stats.total} 완료
+              </span>
+              {iso403Stats.pending > 0 && (
+                <span className="bg-blue-700 text-white text-[10px] px-2 py-0.5 rounded font-black">
+                  미촬영 {iso403Stats.pending}대
+                </span>
+              )}
+            </div>
+            <button onClick={() => setShowISO403List(false)}
+              className="text-xs text-slate-400 hover:text-slate-200">접기 ▲</button>
+          </div>
+          {iso403Stats.pending === 0 ? (
+            <div className="text-xs text-emerald-300 font-bold flex items-center gap-1">
+              ✅ ISO403 대상 컨테이너 모두 사진 촬영 완료
+            </div>
+          ) : (
+            <>
+              <div className="text-[11px] text-blue-300 mb-2">
+                아래 컨테이너를 탭해 사진 촬영 모달을 여세요.
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
+                {iso403Stats.pendingList.map(c => (
+                  <button key={c.cn} onClick={() => onOpenContainer && onOpenContainer(c)}
+                    className="px-2 py-1.5 bg-slate-800 hover:bg-blue-900 active:bg-blue-800 border border-slate-700 hover:border-blue-600 rounded text-left flex items-center gap-2">
+                    <span className="text-blue-400 text-base">📷</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-black mono text-slate-100 truncate">{c.cn}</div>
+                      <div className="text-[10px] text-slate-400 mono">
+                        {c.iso || '-'} · {c.bay || '-'}/{c.row || '-'}/{c.tier || '-'}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* 범례 - M3.77: 양하/선적 통일 (POL/POD 색깔 + 평택 노랑 ring) */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
@@ -580,26 +661,30 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         }}
       />
 
-      {/* M4.6: 인쇄 모달 */}
+      {/* M4.6: 인쇄 모달 — M4.9: ErrorBoundary로 격리 */}
       {printMode === 'cargo' && (
-        <PrintableCargoPlan
-          containers={containers}
-          mode={mode}
-          voyageInfo={null /* TODO: pass voyageInfo from parent */}
-          shipImo={shipImo}
-          shipName={shipName}
-          onClose={() => setPrintMode(null)}
-        />
+        <ErrorBoundary name="카고 플랜 인쇄" onClose={() => setPrintMode(null)}>
+          <PrintableCargoPlan
+            containers={containers}
+            mode={mode}
+            voyageInfo={null /* TODO: pass voyageInfo from parent */}
+            shipImo={shipImo}
+            shipName={shipName}
+            onClose={() => setPrintMode(null)}
+          />
+        </ErrorBoundary>
       )}
       {printMode === 'detail' && (
-        <PrintableBayDetail
-          containers={containers}
-          mode={mode}
-          voyageInfo={null}
-          shipImo={shipImo}
-          shipName={shipName}
-          onClose={() => setPrintMode(null)}
-        />
+        <ErrorBoundary name="베이 상세 인쇄" onClose={() => setPrintMode(null)}>
+          <PrintableBayDetail
+            containers={containers}
+            mode={mode}
+            voyageInfo={null}
+            shipImo={shipImo}
+            shipName={shipName}
+            onClose={() => setPrintMode(null)}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );
