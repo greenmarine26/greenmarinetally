@@ -1,17 +1,24 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
 export const APP_VERSION = 'M4.9e';
 
-// M4.9e 변경점:
-//   [신규] 선적 실체 위치 1단계 (사용자 도메인 지식 반영)
-//          · 선적 EDI 위치 = 계획 (예정), 실체 없음
-//          · 선적확인 시 실체 발생 — 실체 위치 c.bay_actual/row_actual/tier_actual 별도 저장
-//          · ContainerDetailModal에 "실체 위치 (선적확인 시)" 박스 추가
-//          · 본위치 → 수정위치 표시 + 삭제 버튼
-//          · ALLOWED_LIST_FIELDS에 actual position 필드 추가
-//          · firebase: fbSetActualPosition / fbClearActualPosition 신규
-//          · 화면 그리드는 변경 없음 (다음 빌드 2단계)
+// M4.9e 변경점 (선적 실체 위치 1+2+3단계):
+//   [1단계] 컨테이너 모달에 "실체 위치 (선적확인 시)" 박스
+//          본위치 → 수정위치 입력, firebase에 c.bay_actual 등 별도 저장
+//          M3.87 "위치 변경" 버튼 제거 → "수정 위치 입력" 단일 진입점
+//   [2단계] 베이그리드/검색에 effective 위치 적용
+//          allEdiContainers + containers 양쪽 모두 변환 (베이=검색 동일 동작)
+//          ALLOWED_LIST_FIELDS에 actual 위치 필드 추가
+//   [3단계] 자리 뺏긴 컨테이너 자동 검출 + 사이드바 표시
+//          컨 X가 다른 위치로 이동 → 그 자리 원래 컨 Y는 자리 뺏김
+//          DisplacedSidebar에 노란 박스로 표시, 카드 클릭 시 모달 열림
+//   [기타] 베이상세 row/tier 동적 (globalRowRange/globalTiers props)
+//          카고 플랜 AFT 우측 정렬 (트리오 짝꿍 매칭)
+//          "20ft 전용" 단정 라벨 제거 → 단순 "BAY NN"
+//          "검수 완료" → "양하확인"/"선적확인" 모드별 라벨
 //
-// M4.9d 변경점:
+// 다음 빌드 예정: PC 마우스 영역 선택 + DnD (보관박스 ↔ 셀)
+
+// M4.9d 변경점 (이전):
 //   [수정] 베이 라벨 단순화 — "(20ft 전용)", "(40ft)", "(20ft)" 등 잘못된 단정 라벨 제거
 //          사용자 도메인 지식: 선박 BOW/STERN 단독 베이도 40ft(20ft 트윈) 가능
 //          → "BAY NN" 또는 "BAY (NN-1)NN" 형태로 단순화

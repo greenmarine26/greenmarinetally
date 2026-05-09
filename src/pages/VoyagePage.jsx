@@ -34,6 +34,7 @@ import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import EmptySealReportButton from '../components/EmptySealReport.jsx';
+import DisplacedSidebar from '../components/DisplacedSidebar.jsx';
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
@@ -111,21 +112,59 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   const allEdiContainers = useMemo(() => {
     const merged = {};
     Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, _src: 'edi' }; });
-    // recMap에서 EDI에 없는 컨도 포함 (참고용)
+    // recMap에서 EDI에 없는 컨도 포함 (참고용) + EDI 매칭된 컨에는 records 전체 필드 보강
     Object.values(recMap).forEach(r => {
       if (!merged[r.cn]) {
         merged[r.cn] = { ...r, _src: 'list' };
       } else {
-        // EDI 매칭된 컨은 sl 보강만
+        // M4.9e-fix: 베이그리드용 컨테이너에도 records 핵심 필드 전부 보강
+        //   사용자 신고: "검색은 수정 반영되는데 베이는 안 됨"
+        //   원인: allEdiContainers가 sl/wt만 보강하고 bay_actual/eseal 등 누락
         const safeR = {};
         if (r.sl) safeR.sl = r.sl;
         if (r.sl_orig) safeR.sl_orig = r.sl_orig;
         if (r.wt && !merged[r.cn].wt) safeR.wt = r.wt;
+        // 엠티실/리씰
+        if (r.eseal) safeR.eseal = r.eseal;
+        if (r.eseal_wrong) safeR.eseal_wrong = r.eseal_wrong;
+        if (r.reseal) safeR.reseal = r.reseal;
+        if (r.eseal_at) safeR.eseal_at = r.eseal_at;
+        if (r.eseal_by) safeR.eseal_by = r.eseal_by;
+        if (r.eseal_history) safeR.eseal_history = r.eseal_history;
+        // ISO403 사진
+        if (r.iso403_photo_ts) safeR.iso403_photo_ts = r.iso403_photo_ts;
+        if (r.iso403_photo_by) safeR.iso403_photo_by = r.iso403_photo_by;
+        // 실체 위치 (선적)
+        if (r.bay_actual) safeR.bay_actual = r.bay_actual;
+        if (r.row_actual) safeR.row_actual = r.row_actual;
+        if (r.tier_actual) safeR.tier_actual = r.tier_actual;
+        if (r.actual_at) safeR.actual_at = r.actual_at;
+        if (r.actual_by) safeR.actual_by = r.actual_by;
         merged[r.cn] = { ...merged[r.cn], ...safeR };
       }
     });
-    return Object.values(merged);
-  }, [ediMap, recMap]);
+    const list = Object.values(merged);
+
+    // M4.9e-fix 2단계: 선적 모드 effective 위치 적용 (베이그리드도 실체 위치에 그려지게)
+    if (mode === 'loading') {
+      return list.map(c => {
+        if (c.bay_actual && c.row_actual && c.tier_actual) {
+          return {
+            ...c,
+            bay: c.bay_actual,
+            row: c.row_actual,
+            tier: c.tier_actual,
+            _bay_planned: c.bay,
+            _row_planned: c.row,
+            _tier_planned: c.tier,
+            _position_moved: true,
+          };
+        }
+        return c;
+      });
+    }
+    return list;
+  }, [ediMap, recMap, mode]);
 
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
   // M3.5.4-fix2: EDI = 단일 진실 원칙 강화
@@ -413,23 +452,63 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           shipLib={shipLib}
         />
       )}
-      {tab === 'bay' && (
-        <div className="space-y-2">
-          <BayDictStatusWidget
-            shipImo={voyage?.info?.imo}
-            shipName={voyage?.info?.vsl}
-            ediContainerCount={allEdiContainers.length}
-          />
-          <BayPlan
-            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} mode={mode}
-            onOpenContainer={(c) => setDetailC(c)}
-            shipImo={voyage?.info?.imo}
-            shipName={voyage?.info?.vsl}
-            voyageInfo={voyage?.info}
-            voyageKey={voyageKey}
-          />
-        </div>
-      )}
+      {tab === 'bay' && (() => {
+        // M4.9e 3단계: 자리 뺏긴 컨테이너 검출 (사용자 요청)
+        //   컨 X가 actual 위치(11/11/11)로 이동 → 거기 원래 계획된 컨 Y는 자리 뺏김
+        //   Y는 actual 없고, Y의 계획 위치를 다른 컨이 actual로 점유
+        const displaced = (() => {
+          if (mode !== 'loading') return [];
+          // 1) actual 위치 → 점유한 컨번호 맵
+          const occupiedBy = new Map();
+          allEdiContainers.forEach(c => {
+            if (c._position_moved && c.bay_actual) {
+              const key = `${c.bay_actual}-${c.row_actual}-${c.tier_actual}`;
+              occupiedBy.set(key, c.cn);
+            }
+          });
+          // 2) 자기 계획 위치를 다른 컨이 점유했는데 자기는 actual 없음
+          return allEdiContainers.filter(c => {
+            if (c._position_moved) return false;  // 이미 옮긴 컨 제외
+            // _bay_planned가 있으면 그것이 진짜 계획 (effective 변환된 경우)
+            // 없으면 c.bay (원본 그대로)
+            const planBay = c._bay_planned || c.bay;
+            const planRow = c._row_planned || c.row;
+            const planTier = c._tier_planned || c.tier;
+            if (!planBay || !planRow || !planTier) return false;
+            const key = `${planBay}-${planRow}-${planTier}`;
+            const occupier = occupiedBy.get(key);
+            if (!occupier || occupier === c.cn) return false;
+            // 점유자 컨번호 부착 (UI 표시용)
+            c._displacedBy = occupier;
+            return true;
+          });
+        })();
+
+        return (
+          <div className="space-y-2">
+            <BayDictStatusWidget
+              shipImo={voyage?.info?.imo}
+              shipName={voyage?.info?.vsl}
+              ediContainerCount={allEdiContainers.length}
+            />
+            {/* 선적 모드 + 자리 뺏긴 컨 있을 때만 표시 */}
+            {mode === 'loading' && displaced.length > 0 && (
+              <DisplacedSidebar
+                displaced={displaced}
+                onOpenContainer={(c) => setDetailC(c)}
+              />
+            )}
+            <BayPlan
+              containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} mode={mode}
+              onOpenContainer={(c) => setDetailC(c)}
+              shipImo={voyage?.info?.imo}
+              shipName={voyage?.info?.vsl}
+              voyageInfo={voyage?.info}
+              voyageKey={voyageKey}
+            />
+          </div>
+        );
+      })()}
       {tab === 'stats' && (
         <div className="space-y-3">
           <BayDictVerifyWidget
