@@ -469,33 +469,36 @@ export default function PrintableBayDetail({
         }
         .bd-row-labels-top, .bd-row-labels-bot {
           display: flex; justify-content: space-evenly;
-          font-size: 9pt;
-          margin: 2px 14px;
+          font-size: 8pt;
+          margin: 1px 18px;
         }
         .bd-rl { flex: 1; text-align: center; }
         .bd-grid-wrap {
           display: flex; align-items: stretch;
-        }
-        .bd-grid { flex: 1; }
-        .bd-tier-row {
-          display: grid; grid-template-columns: repeat(7, 1fr);
-          border: 0.5px solid #000;
-        }
-        .bd-cell {
-          border: 0.3px solid #555;
-          /* 가용 세로 공간 활용 — 9단 × 60px = 540px */
-          height: 60px;
-          padding: 2px 4px;
-          font-size: 8.5pt;
-          line-height: 1.15;
-          font-family: 'Courier New', monospace;
+          /* M4.9c-fix: 좌우 짤림 방지 — 컨테이너가 페이지 폭 초과 못함 */
+          width: 100%;
+          max-width: 100%;
           overflow: hidden;
         }
-          padding: 2px 3px;
-          font-size: 7pt;
+        .bd-grid {
+          flex: 1;
+          min-width: 0;  /* flex item이 컨텐츠보다 작아질 수 있게 */
+          overflow: hidden;
+        }
+        .bd-tier-row {
+          display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+          border: 0.5px solid #000;
+        }
+        /* M4.9c-fix: 셀 padding/폰트 축소로 11자리 컨번호 안전하게 들어가게 */
+        .bd-cell {
+          border: 0.3px solid #555;
+          height: 58px;
+          padding: 1px 2px;
+          font-size: 7.5pt;
           line-height: 1.1;
           font-family: 'Courier New', monospace;
           overflow: hidden;
+          min-width: 0;
         }
         .bd-cell.empty { background: white; }
         .bd-cell.filled.ptk { background: #fef3c7; }
@@ -506,11 +509,12 @@ export default function PrintableBayDetail({
         }
         .bd-tier-labels {
           display: flex; flex-direction: column;
-          padding-left: 8px;
-          font-size: 10pt;
+          padding-left: 6px;
+          font-size: 9pt;
+          flex-shrink: 0;
         }
         .bd-tier-labels span {
-          height: 60px; line-height: 60px;
+          height: 58px; line-height: 58px;
         }
         .bd-tier-gap { height: 8px !important; }
       `}</style>

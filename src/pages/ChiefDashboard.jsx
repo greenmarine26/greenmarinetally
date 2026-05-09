@@ -190,7 +190,7 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
 
       {/* 전체 카운터 */}
       <div className="grid grid-cols-2 gap-2">
-        <BigStat label="전체 검수 완료" value={total.done.toLocaleString()} sub={`/ ${total.all.toLocaleString()}대`} color="emerald"/>
+        <BigStat label="전체 확인" value={total.done.toLocaleString()} sub={`/ ${total.all.toLocaleString()}대`} color="emerald"/>
         <BigStat label="누락 (선사 추가 필요)" value={total.missing} sub={`평택 ${total.ptkAll}대 중`} color={total.missing > 0 ? "red" : "slate"}/>
       </div>
 

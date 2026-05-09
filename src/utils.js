@@ -1,7 +1,17 @@
-// 공통 유틸리티 — V46 (2026.05.09 / M4.9c)
-export const APP_VERSION = 'M4.9c';
+// 공통 유틸리티 — V47 (2026.05.09 / M4.9d)
+export const APP_VERSION = 'M4.9d';
 
-// M4.9c 변경점 (인쇄 출력 정상화 + 실 표기 데이터 흐름):
+// M4.9d 변경점:
+//   [수정] 베이 라벨 단순화 — "(20ft 전용)", "(40ft)", "(20ft)" 등 잘못된 단정 라벨 제거
+//          사용자 도메인 지식: 선박 BOW/STERN 단독 베이도 40ft(20ft 트윈) 가능
+//          → "BAY NN" 또는 "BAY (NN-1)NN" 형태로 단순화
+//   [수정] 베이상세 인쇄 좌우 짤림 픽스 — 셀 width: minmax(0, 1fr), min-width: 0
+//          폰트 8.5pt → 7.5pt, padding 4px → 2px, tier-label 정리
+//          잔재 코드 (이전 변경에서 깔끔히 안 닫힘) 제거
+//   [수정] "검수 완료" → mode에 따라 "양하확인" / "선적확인"
+//          ContainerDetailModal, BigResultCard, ContainerList 일괄 변경
+//
+// M4.9c 변경점:
 //   [긴급] "출력 시 엄한 화면이 출력됨" 버그 수정
 //     · 원인: M4.9b에서 모달 fixed 해제(position: static) → 메인 페이지가 인쇄 캔버스에 함께 그려짐
 //     · 해결: 인쇄 표준 패턴(visibility 토글)으로 변경

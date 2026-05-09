@@ -31,10 +31,12 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   const handleComplete = async (e) => {
     e.stopPropagation();
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const isDischarge = c._mode === 'discharge';
+    const verb = isDischarge ? '양하확인' : '선적확인';
     if (isDone) {
       askConfirm({
-        title: '완료 취소',
-        message: `${c.cn}\n검수 완료를 취소하시겠습니까?`,
+        title: `${verb} 취소`,
+        message: `${c.cn}\n${verb}을 취소하시겠습니까?`,
         confirmLabel: '취소',
         cancelLabel: '닫기',
         onConfirm: async () => {
@@ -179,7 +181,10 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
             ? 'bg-rose-800 hover:bg-rose-700 text-rose-100'
             : 'bg-emerald-700 hover:bg-emerald-600 text-emerald-100'
         }`}>
-        {isDone ? <><RotateCcw className="w-5 h-5"/>완료 취소</> : <><Check className="w-5 h-5"/>검수 완료</>}
+        {isDone
+          ? <><RotateCcw className="w-5 h-5"/>{c._mode === 'discharge' ? '양하확인 취소' : '선적확인 취소'}</>
+          : <><Check className="w-5 h-5"/>{c._mode === 'discharge' ? '양하확인' : '선적확인'}</>
+        }
       </button>
 
       {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}

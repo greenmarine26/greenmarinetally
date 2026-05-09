@@ -323,7 +323,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
     if (isDone) {
       askConfirm({
         title: '완료 취소',
-        message: `${c.cn}\n검수 완료를 취소하시겠습니까?`,
+        message: `${c.cn}\n${mode === 'discharge' ? '양하확인을' : '선적확인을'} 취소하시겠습니까?`,
         confirmLabel: '취소',
         cancelLabel: '닫기',
         onConfirm: async () => {

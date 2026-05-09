@@ -194,44 +194,48 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       // .def 기반: 등록된 베이만 순회 (통로/건물 자동 생략)
       for (const n of bayInts) {
         if (n % 2 === 0) {
-          // 짝수 = 보통 40ft 슬롯 위치. 양쪽 홀수 검사로 실제 종류 결정
+          // 짝수 = 40ft 또는 20ft 트윈 슬롯
+          // M4.9c-fix: 사용자 도메인 지식 반영 — 선박 BOW/STERN 단독 베이라도
+          //   40ft(또는 20ft 트윈)를 넣을 수 있음. "20ft 전용" 같은 단정 라벨 제거.
+          //   라벨은 단순히 베이 번호만 표기, 슬롯 종류는 실제 컨테이너 데이터로 판단.
           const evenKey = keyBay(n);
           const evenDisp = dispBay(n);
           const leftOddIn = baySet.has(n - 1);
           const rightOddIn = baySet.has(n + 1);
 
           if (!leftOddIn && !rightOddIn) {
-            // M4.5: 양쪽 홀수 없음 = 20ft 전용 베이
-            //   짝수지만 40ft 슬롯이 들어갈 인접 홀수 베이가 없으므로 실질 20ft 전용
-            //   예: [..25, 26, 28, 30..] 에서 28의 양쪽(27, 29) 둘 다 .def에 없음 → 20ft 전용
+            // 양쪽 홀수 모두 .def에 없음 — 단독 짝수 베이
+            //   이전: "20ft 전용"이라 단정했지만 실제로는 40ft도 들어갈 수 있음
+            //   수정: 단순히 "BAY NN"으로 표기, 그리드는 일반 데크처럼 처리
             out.push({
-              title: `BAY ${evenDisp} (20ft 전용)`,
-              evenBay: null,
-              oddBay: evenKey,  // 20ft 슬롯 데이터는 이 베이 번호로 들어감
-              isStandalone20ft: true,
+              title: `BAY ${evenDisp}`,
+              evenBay: evenKey,
+              oddBay: null,
+              isStandalone: true,
             });
           } else if (rightOddIn) {
-            // 표준 트리오 짝꿍 (오른쪽 홀수와 페어)
+            // 표준 트리오 짝꿍 (짝수와 오른쪽 홀수)
             out.push({
-              title: `BAY ${evenDisp} (40ft) / BAY ${dispBay(n + 1)} (20ft)`,
+              title: `BAY (${evenDisp})${dispBay(n + 1)}`,
               evenBay: evenKey,
               oddBay: keyBay(n + 1),
             });
             usedOddBays.add(keyBay(n + 1));
           } else {
-            // leftOddIn만 있음 (n-1만 .def에 있음) — 단독 40ft (왼쪽 홀수는 이미 별도 페이지로 추가됨)
+            // leftOddIn만 있음 — 단독 짝수 (왼쪽 홀수는 별도 페이지)
             out.push({
-              title: `BAY ${evenDisp} (40ft)`,
+              title: `BAY ${evenDisp}`,
               evenBay: evenKey,
               oddBay: null,
             });
           }
         } else {
-          // 홀수 = 20ft. 페어로 이미 처리됐으면 건너뜀, 아니면 단독 페이지
+          // 홀수 베이 - 짝꿍 처리 안 됐으면 단독 페이지
+          //   M4.9c-fix: 단독 홀수도 BOW/STERN에선 40ft 가능 → "20ft" 라벨 제거
           const oddKey = keyBay(n);
           if (!usedOddBays.has(oddKey)) {
             out.push({
-              title: `BAY ${dispBay(n)} (20ft)`,
+              title: `BAY ${dispBay(n)}`,
               evenBay: null,
               oddBay: oddKey,
             });
@@ -249,7 +253,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           const oddDisp = dispBay(n + 1);
           const oddInRange = (n + 1) <= maxBay;
           out.push({
-            title: oddInRange ? `BAY ${evenDisp} (40ft) / BAY ${oddDisp} (20ft)` : `BAY ${evenDisp} (40ft)`,
+            title: oddInRange ? `BAY (${evenDisp})${oddDisp}` : `BAY ${evenDisp}`,
             evenBay: evenKey,
             oddBay: oddInRange ? oddKey : null,
           });
@@ -258,7 +262,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           const oddKey = keyBay(n);
           if (!usedOddBays.has(oddKey)) {
             out.push({
-              title: `BAY ${dispBay(n)} (20ft)`,
+              title: `BAY ${dispBay(n)}`,
               evenBay: null,
               oddBay: oddKey,
             });

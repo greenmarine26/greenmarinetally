@@ -70,7 +70,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     if (isDone) {
       askConfirm({
         title: '완료 취소',
-        message: `${c.cn}\n검수 완료를 취소하시겠습니까?`,
+        message: `${c.cn}\n${mode === 'discharge' ? '양하확인을' : '선적확인을'} 취소하시겠습니까?`,
         confirmLabel: '취소',
         cancelLabel: '닫기',
         onConfirm: async () => {
@@ -815,7 +815,10 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                 ? 'bg-rose-800 hover:bg-rose-700 text-rose-100'
                 : 'bg-emerald-700 hover:bg-emerald-600 text-emerald-100'
             }`}>
-            {isDone ? <><RotateCcw className="w-5 h-5 inline mr-1"/>완료 취소</> : <><Check className="w-5 h-5 inline mr-1"/>검수 완료</>}
+            {isDone
+              ? <><RotateCcw className="w-5 h-5 inline mr-1"/>{mode === 'discharge' ? '양하확인 취소' : '선적확인 취소'}</>
+              : <><Check className="w-5 h-5 inline mr-1"/>{mode === 'discharge' ? '양하확인' : '선적확인'}</>
+            }
           </button>
         </div>
       </div>
