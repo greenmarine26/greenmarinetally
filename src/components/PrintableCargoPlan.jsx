@@ -1,188 +1,213 @@
-// 카고 플랜 인쇄 컴포넌트 (M4.6 신규)
-// PDF 형식: TNJP25323E.pdf / TNJP25323W.pdf와 동일 레이아웃
-// - A4 1페이지에 모든 베이를 격자로 표시
-// - X = 일반/통과 화물 (POD/POL 평택 아님)
-// - o = 양하 대상 (POD=PTK)
-// - L = 선적 대상 (POL=PTK)
-// - 비어있음 = 화물 없음
-// - 각 베이 헤더: 베이 번호 + 평택 카운트 (20'/40'/45')
+// 카고 플랜 인쇄 (M4.7) — 샘플 PDF 1:1 재현
+// TNJP25323E.pdf / TNJP25323W.pdf 형식
+// - 5컬럼 그리드 (FORE 위 / AFT 아래)
+// - AFT 좌측 legend 박스
+// - 베이 상단: 제목 + 카운트 (20'/40'/45')
+// - 데크/홀드 5:5 비율 + 굵은 hatch break
+// - row 라벨 상하단, tier 라벨 우측
 
 import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 
+const STD_ROWS = ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
+const STD_DECK = ['90', '88', '86', '84', '82'];
+const STD_HOLD = ['08', '06', '04', '02'];
+
+const isPtk = (c, mode) => {
+  const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
+  return t === 'PTK' || t === 'KRPTK' || t.endsWith('PTK');
+};
+
+const sizeOf = (c) => {
+  const lbl = (isoToPdfLabel(c.iso) || '').toUpperCase();
+  if (lbl.includes('45')) return '45';
+  if (lbl.includes('40')) return '40';
+  return '20';
+};
+
+function groupByBay(containers) {
+  const m = {};
+  containers.forEach(c => {
+    if (!c.bay) return;
+    const k = normalizeBay(c.bay);
+    if (k) (m[k] = m[k] || []).push(c);
+  });
+  return m;
+}
+
+function splitForeAft(bayList) {
+  if (bayList.length === 0) return { fore: [], aft: [] };
+  let bestGap = 0, splitPoint = bayList[Math.floor(bayList.length / 2)];
+  for (let i = 0; i < bayList.length - 1; i++) {
+    const gap = bayList[i + 1] - bayList[i];
+    if (gap > bestGap) { bestGap = gap; splitPoint = bayList[i]; }
+  }
+  return {
+    fore: bayList.filter(b => b <= splitPoint),
+    aft: bayList.filter(b => b > splitPoint),
+  };
+}
+
+function buildBayPages(bays) {
+  const baySet = new Set(bays);
+  const used = new Set();
+  const singles = [];
+  const pairs = [];
+  for (const n of bays) {
+    if (n % 2 === 0) {
+      const leftIn = baySet.has(n - 1);
+      const rightIn = baySet.has(n + 1);
+      if (rightIn) {
+        pairs.push({ even: n, odd: n + 1 });
+        used.add(n + 1);
+      } else if (!leftIn) {
+        singles.push({ bay: n });  // 20ft 전용
+      } else {
+        pairs.push({ even: n, odd: null });
+      }
+    }
+  }
+  for (const n of bays) {
+    if (n % 2 === 1 && !used.has(n)) singles.push({ bay: n });
+  }
+  // 베이 번호 큰 것이 좌측 (STERN 방향)
+  singles.sort((a, b) => b.bay - a.bay);
+  pairs.sort((a, b) => b.even - a.even);
+  return { singles, pairs };
+}
+
+function getMark(c, mode) {
+  if (isPtk(c, mode)) return mode === 'discharge' ? 'o' : 'L';
+  return 'X';
+}
+
+function BayBox({ even, odd, containers, mode, dictBay }) {
+  const allConts = [
+    ...(even != null && containers[String(even)] || []),
+    ...(odd != null && containers[String(odd)] || []),
+  ];
+
+  const cellMap = {};
+  allConts.forEach(c => {
+    const t = String(c.tier).padStart(2, '0');
+    const r = String(c.row).padStart(2, '0');
+    cellMap[`${t}-${r}`] = c;
+  });
+
+  const allTiers = new Set();
+  allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
+  const deckTiers = [...new Set([...STD_DECK, ...[...allTiers].filter(t => parseInt(t) >= 80)])]
+    .sort((a, b) => parseInt(b) - parseInt(a));
+  const holdTiers = [...new Set([...STD_HOLD, ...[...allTiers].filter(t => parseInt(t) < 80)])]
+    .sort((a, b) => parseInt(b) - parseInt(a));
+
+  const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
+  const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
+
+  const cnt = { c20: 0, c40: 0, c45: 0 };
+  allConts.forEach(c => {
+    if (!isPtk(c, mode)) return;
+    const sz = sizeOf(c);
+    cnt[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
+  });
+
+  const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
+  let title;
+  if (even != null && odd != null) title = `BAY (${dispBay(even)})${dispBay(odd)}`;
+  else if (even != null) title = `BAY ${dispBay(even)}`;
+  else title = `BAY ${dispBay(odd)}`;
+
+  // 카운트: 페어이거나 짝수 단독 → "20/40/45", 홀수 단독 → 합계
+  const isPaired = even != null;
+  const total = cnt.c20 + cnt.c40 + cnt.c45;
+  const countStr = isPaired ? `${cnt.c20} / ${cnt.c40} / ${cnt.c45}` : String(total);
+
+  return (
+    <div className="bay-box">
+      <div className="bay-title-row">
+        <span className="bay-title-label">{title}</span>
+        <span className="bay-count">{countStr}</span>
+      </div>
+      <div className="bay-row-labels">
+        {STD_ROWS.map(r => <span key={r} className="bay-row-label">{r}</span>)}
+      </div>
+      <div className="bay-grid-wrap">
+        <div className="bay-grid">
+          {hasDeck && deckTiers.map(t => (
+            <div key={t} className="bay-grid-row">
+              {STD_ROWS.map(r => {
+                const c = cellMap[`${t}-${r}`];
+                const m = c ? getMark(c, mode) : '';
+                return <span key={r} className={`bay-cell mark-${m || 'empty'}`}>{m}</span>;
+              })}
+            </div>
+          ))}
+          {hasDeck && hasHold && <div className="hatch-break"></div>}
+          {hasHold && holdTiers.map(t => (
+            <div key={t} className="bay-grid-row">
+              {STD_ROWS.map(r => {
+                const c = cellMap[`${t}-${r}`];
+                const m = c ? getMark(c, mode) : '';
+                return <span key={r} className={`bay-cell mark-${m || 'empty'}`}>{m}</span>;
+              })}
+            </div>
+          ))}
+        </div>
+        <div className="bay-tier-labels">
+          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
+          {hasDeck && hasHold && <span className="tier-gap"></span>}
+          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+        </div>
+      </div>
+      <div className="bay-row-labels">
+        {STD_ROWS.map(r => <span key={r} className="bay-row-label">{r}</span>)}
+      </div>
+    </div>
+  );
+}
+
 export default function PrintableCargoPlan({
   containers, mode, voyageInfo, shipImo, shipName, voyageKey, onClose
 }) {
-  // 평택 대상 식별
-  const isPtk = (c) => {
-    const target = mode === 'discharge' ? (c.pod || '') : (c.pol || '');
-    const t = target.toUpperCase();
-    return t === 'PTK' || t === 'KRPTK' || t.endsWith('PTK');
-  };
+  const bayMap = useMemo(() => groupByBay(containers), [containers]);
 
-  // 베이 그룹 (컨테이너 → 베이별 분류)
-  const bayMap = useMemo(() => {
-    const m = {};
-    containers.forEach(c => {
-      if (!c.bay) return;
-      const k = normalizeBay(c.bay);
-      if (!k) return;
-      if (!m[k]) m[k] = [];
-      m[k].push(c);
-    });
-    return m;
-  }, [containers]);
-
-  // .def 사전 베이 리스트 (없으면 EDI 기반 폴백)
-  const dictBayList = useMemo(() => {
+  const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const dict = getShipBayDictData(shipImo, shipName);
-    if (!dict?.bayDef) return null;
-    const list = dict.bayDef.bayList || (dict.bayDef.bays?.map(b => b.bayNo)) || null;
-    if (!list || list.length < 2) return null;
-    return list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+    return getShipBayDictData(shipImo, shipName);
   }, [shipImo, shipName]);
 
-  // 페이지 구성 (BayPlan.jsx와 동일 로직)
-  const pages = useMemo(() => {
-    const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
-    const keyBay = (n) => String(n);
+  const dictBayList = useMemo(() => {
+    if (!dictData?.bayDef?.bayList) return null;
+    return dictData.bayDef.bayList.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n));
+  }, [dictData]);
 
-    let bayInts;
-    if (dictBayList && dictBayList.length > 0) {
-      bayInts = [...dictBayList];
-    } else {
-      const bays = Object.keys(bayMap);
-      bayInts = bays.map(b => parseInt(b, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
-    }
-    if (bayInts.length === 0) return [];
+  const dictBaysSummary = useMemo(() => {
+    if (!dictData?.bayDef?.baysSummary) return {};
+    const m = {};
+    dictData.bayDef.baysSummary.forEach(b => { m[parseInt(b.bayNo, 10)] = b; });
+    return m;
+  }, [dictData]);
 
-    const baySet = new Set(bayInts);
-    const out = [];
-    const usedOddBays = new Set();
-    for (const n of bayInts) {
-      if (n % 2 === 0) {
-        const evenKey = keyBay(n);
-        const evenDisp = dispBay(n);
-        const leftIn = baySet.has(n - 1);
-        const rightIn = baySet.has(n + 1);
-        if (!leftIn && !rightIn) {
-          out.push({ title: `BAY ${evenDisp}`, label: `${evenDisp}`, evenBay: null, oddBay: evenKey, kind: '20only' });
-        } else if (rightIn) {
-          out.push({ title: `BAY (${evenDisp})${dispBay(n + 1)}`, label: `(${evenDisp})${dispBay(n + 1)}`,
-                     evenBay: evenKey, oddBay: keyBay(n + 1), kind: 'pair' });
-          usedOddBays.add(keyBay(n + 1));
-        } else {
-          out.push({ title: `BAY ${evenDisp}`, label: `${evenDisp}`, evenBay: evenKey, oddBay: null, kind: '40only' });
-        }
-      } else {
-        const oddKey = keyBay(n);
-        if (!usedOddBays.has(oddKey)) {
-          out.push({ title: `BAY ${dispBay(n)}`, label: `${dispBay(n)}`, evenBay: null, oddBay: oddKey, kind: 'single' });
-        }
-      }
-    }
-    return out;
-  }, [bayMap, dictBayList]);
+  const bayList = useMemo(() => {
+    if (dictBayList && dictBayList.length > 0) return [...dictBayList].sort((a, b) => a - b);
+    return Object.keys(bayMap).map(b => parseInt(b, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+  }, [dictBayList, bayMap]);
 
-  // 전역 row/tier 풀
-  const globalRows = useMemo(() => {
-    const s = new Set(['00']);
-    containers.forEach(c => { if (c.row) s.add(String(c.row).padStart(2, '0')); });
-    return Array.from(s);
-  }, [containers]);
+  const { fore, aft } = useMemo(() => splitForeAft(bayList), [bayList]);
+  const forePages = useMemo(() => buildBayPages(fore), [fore]);
+  const aftPages = useMemo(() => buildBayPages(aft), [aft]);
 
-  const globalTiers = useMemo(() => {
-    const s = new Set();
-    containers.forEach(c => { if (c.tier) s.add(String(c.tier).padStart(2, '0')); });
-    return Array.from(s);
-  }, [containers]);
-
-  // ROW 정렬: 좌현 짝수 ↓, 00 중앙, 우현 홀수 ↑
-  const sortedRows = useMemo(() => {
-    const all = globalRows.map(r => parseInt(r));
-    const lefts = all.filter(n => n > 0 && n % 2 === 0).sort((a, b) => b - a);
-    const rights = all.filter(n => n > 0 && n % 2 === 1).sort((a, b) => a - b);
-    const result = [...lefts, 0, ...rights];
-    return result.map(n => String(n).padStart(2, '0'));
-  }, [globalRows]);
-
-  // TIER 정렬: 갑판 위 (큰 짝수, 80+) → 해치커버 → 홀드 (작은 짝수)
-  const sortedTiers = useMemo(() => {
-    const all = globalTiers.map(t => parseInt(t)).filter(n => !isNaN(n));
-    const deck = all.filter(n => n >= 80).sort((a, b) => b - a); // 큰 것이 위
-    const hold = all.filter(n => n < 80).sort((a, b) => b - a);  // 큰 것이 위 (홀드 천장이 위)
-    return [...deck, ...hold].map(n => String(n).padStart(2, '0'));
-  }, [globalTiers]);
-
-  const isHatchBoundary = (tierIdx) => {
-    if (tierIdx === 0) return false;
-    const cur = parseInt(sortedTiers[tierIdx]);
-    const prev = parseInt(sortedTiers[tierIdx - 1]);
-    return prev >= 80 && cur < 80;
-  };
-
-  // 한 셀 마크 결정
-  const getCellMark = (page, row, tier) => {
-    // 베이 우선순위: even 우선 (40ft가 슬롯 차지), 그 다음 odd
-    const candidates = [];
-    if (page.evenBay) {
-      const list = bayMap[page.evenBay] || [];
-      list.forEach(c => {
-        if (String(c.row).padStart(2, '0') === row && String(c.tier).padStart(2, '0') === tier) {
-          candidates.push({ c, isEven: true });
-        }
-      });
-    }
-    if (page.oddBay && candidates.length === 0) {
-      const list = bayMap[page.oddBay] || [];
-      list.forEach(c => {
-        if (String(c.row).padStart(2, '0') === row && String(c.tier).padStart(2, '0') === tier) {
-          candidates.push({ c, isEven: false });
-        }
-      });
-    }
-    if (candidates.length === 0) return '';
-    const c = candidates[0].c;
-    if (mode === 'discharge') {
-      return isPtk(c) ? 'o' : 'X';
-    } else {
-      return isPtk(c) ? 'L' : 'X';
-    }
-  };
-
-  // 베이별 평택 카운트 (20'/40'/45')
-  const bayCounts = (page) => {
-    let c20 = 0, c40 = 0, c45 = 0;
-    const acc = (cn) => {
-      if (!cn) return;
-      const list = bayMap[cn] || [];
-      list.forEach(c => {
-        if (!isPtk(c)) return;
-        const lbl = (isoToPdfLabel(c.iso) || '').toUpperCase();
-        if (lbl.includes('45')) c45++;
-        else if (lbl.includes('40')) c40++;
-        else c20++;
-      });
-    };
-    acc(page.evenBay); acc(page.oddBay);
-    return { c20, c40, c45 };
-  };
-
-  // 전체 카운트
   const totalCounts = useMemo(() => {
-    let c20 = 0, c40 = 0, c45 = 0;
-    containers.forEach(c => {
-      if (!isPtk(c)) return;
-      const lbl = (isoToPdfLabel(c.iso) || '').toUpperCase();
-      if (lbl.includes('45')) c45++;
-      else if (lbl.includes('40')) c40++;
-      else c20++;
+    const c = { c20: 0, c40: 0, c45: 0 };
+    containers.forEach(ct => {
+      if (!isPtk(ct, mode)) return;
+      const sz = sizeOf(ct);
+      c[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
     });
-    return { c20, c40, c45 };
-  }, [containers]);
+    return c;
+  }, [containers, mode]);
 
   const titleText = mode === 'discharge' ? 'CARGO DISCHARGING PLAN' : 'STOWAGE INSTRUCTION';
   const portText = mode === 'discharge' ? 'POD : PTK' : 'POL : PTK';
@@ -190,9 +215,13 @@ export default function PrintableCargoPlan({
   const vsl = voyageInfo?.vsl || shipName || 'VESSEL';
   const voy = voyageInfo?.voy_d || voyageInfo?.voy_l || voyageInfo?.voy || voyageKey || '';
 
+  const foreSinglesByCol = forePages.singles.slice(0, 5);
+  const forePairsByCol = forePages.pairs.slice(0, 5);
+  const aftSinglesByCol = aftPages.singles.slice(0, 4);
+  const aftPairsByCol = aftPages.pairs.slice(0, 4);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
-      {/* 화면 컨트롤 (인쇄 시 숨김) */}
       <div className="no-print flex items-center justify-between p-3 bg-slate-900 border-b border-slate-700">
         <div className="text-base font-bold text-slate-100">📄 카고 플랜 인쇄 미리보기</div>
         <div className="flex gap-2">
@@ -206,131 +235,177 @@ export default function PrintableCargoPlan({
         </div>
       </div>
 
-      {/* 인쇄 영역 */}
       <div className="flex-1 overflow-auto bg-white">
-        <div className="cargo-plan-page p-4 mx-auto" style={{ maxWidth: '1100px' }}>
-          {/* 헤더 */}
-          <div className="text-center mb-2">
-            <div className="text-base font-bold">{titleText}</div>
-            <div className="text-xs">
-              {vsl} VOY NO : {voy} {portText} DATE : {todayStr}
-            </div>
+        <div className="cargo-plan-page">
+          <div className="cargo-header">
+            <span>{vsl}</span>
+            <span className="cargo-title">{titleText}</span>
+            <span>DATE : {todayStr}</span>
+          </div>
+          <div className="cargo-subheader">
+            <span>VOY NO : {voy}</span>
+            <span>{portText}</span>
           </div>
 
-          {/* 베이 격자 — 한 줄에 5~6개씩 자동 wrap */}
-          <div className="bay-grid">
-            {pages.map((page, idx) => {
-              const counts = bayCounts(page);
-              const totalForBay = counts.c20 + counts.c40 + counts.c45;
-              return (
-                <div key={idx} className="bay-box">
-                  <div className="bay-cells">
-                    {sortedTiers.map((tier, ti) => (
-                      <div key={tier} className={`bay-row ${isHatchBoundary(ti) ? 'hatch' : ''}`}>
-                        {sortedRows.map(row => {
-                          const mark = getCellMark(page, row, tier);
-                          return (
-                            <span key={row} className={`bay-cell mark-${mark || 'empty'}`}>
-                              {mark}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ))}
-                    {/* row 라벨 (밑) */}
-                    <div className="bay-row-labels">
-                      {sortedRows.map(r => (
-                        <span key={r} className="bay-cell row-label">{r}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="bay-title">
-                    BAY {page.label} {totalForBay > 0
-                      ? `${counts.c20} / ${counts.c40} / ${counts.c45}`
-                      : '0'}
-                  </div>
+          <div className="bay-row five-col">
+            {foreSinglesByCol.map((p, i) => (
+              <BayBox key={`fs-${i}`} even={null} odd={p.bay} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[p.bay]} />
+            ))}
+            {Array.from({ length: 5 - foreSinglesByCol.length }).map((_, i) =>
+              <div key={`fse-${i}`}></div>
+            )}
+          </div>
+          <div className="bay-row five-col">
+            {forePairsByCol.map((p, i) => (
+              <BayBox key={`fp-${i}`} even={p.even} odd={p.odd} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[p.even]} />
+            ))}
+            {Array.from({ length: 5 - forePairsByCol.length }).map((_, i) =>
+              <div key={`fpe-${i}`}></div>
+            )}
+          </div>
+
+          <div className="bay-row five-col">
+            <div className="legend-box">
+              <div className="legend-title">20'/40'/45'</div>
+              {mode === 'discharge' ? (
+                <div className="legend-row">
+                  <span className="legend-mark mark-o">o</span>
+                  <span className="legend-label">None</span>
+                  <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
                 </div>
-              );
-            })}
+              ) : (
+                <>
+                  <div className="legend-row">
+                    <span className="legend-mark mark-L">L</span>
+                    <span className="legend-label">LYG</span>
+                    <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
+                  </div>
+                  <div className="legend-row">
+                    <span className="legend-mark legend-empty-mark">□</span>
+                    <span className="legend-label">OPT</span>
+                    <span className="legend-count">0 / 0 / 0</span>
+                  </div>
+                  <div className="legend-row">
+                    <span className="legend-mark legend-empty-mark">□</span>
+                    <span className="legend-label">TTL</span>
+                    <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
+                  </div>
+                </>
+              )}
+            </div>
+            {aftSinglesByCol.map((p, i) => (
+              <BayBox key={`as-${i}`} even={null} odd={p.bay} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[p.bay]} />
+            ))}
+            {Array.from({ length: 4 - aftSinglesByCol.length }).map((_, i) =>
+              <div key={`ase-${i}`}></div>
+            )}
           </div>
 
-          {/* 합계 */}
-          <div className="text-xs text-right mt-2 pr-2">
-            20' / 40' / 45'<br />
-            {mode === 'discharge' ? 'o = 양하 대상' : 'L = 선적 대상'} ·
-            X = 통과 화물 ·
-            <strong> 합계: {totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</strong>
+          <div className="bay-row five-col">
+            <div></div>
+            <div></div>
+            {aftPairsByCol.map((p, i) => (
+              <BayBox key={`ap-${i}`} even={p.even} odd={p.odd} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[p.even]} />
+            ))}
+            {Array.from({ length: 3 - aftPairsByCol.length }).map((_, i) =>
+              <div key={`ape-${i}`}></div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 인쇄 CSS */}
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .cargo-plan-page {
-            margin: 0; padding: 0.4cm;
-            color: black; background: white;
-            font-family: 'Courier New', monospace;
-          }
+          .cargo-plan-page { margin: 0 !important; padding: 0.4cm !important; }
           @page { size: A4 landscape; margin: 0.4cm; }
         }
         .cargo-plan-page {
           color: black; background: white;
-          font-family: 'Courier New', monospace;
-          font-size: 7pt;
+          font-family: Arial, sans-serif;
+          font-size: 9pt;
+          padding: 12px 16px;
+          max-width: 1400px;
+          margin: 0 auto;
         }
-        .bay-grid {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 4px;
+        .cargo-header {
+          display: flex; justify-content: space-between; align-items: baseline;
+          margin-bottom: 4px;
         }
+        .cargo-title { font-size: 14pt; font-weight: 500; }
+        .cargo-subheader {
+          display: flex; justify-content: center; gap: 80px;
+          font-size: 10pt; margin-bottom: 12px;
+        }
+        .bay-row { display: grid; gap: 4px; margin-bottom: 4px; }
+        .five-col { grid-template-columns: repeat(5, 1fr); }
         .bay-box {
-          border: 1px solid #ccc;
-          padding: 2px;
+          border: 0.5px solid #000; background: white;
+          font-size: 7pt;
           page-break-inside: avoid;
         }
-        .bay-title {
-          text-align: center;
-          font-weight: bold;
-          font-size: 7pt;
-          margin-top: 2px;
-          border-top: 1px solid #999;
-          padding-top: 1px;
+        .bay-title-row {
+          display: flex; justify-content: space-between;
+          padding: 1px 4px; font-size: 10pt;
         }
-        .bay-row {
-          display: flex;
-          justify-content: center;
-          gap: 0px;
-          line-height: 1;
-        }
-        .bay-row.hatch {
-          border-top: 2px solid #444;
-          margin-top: 1px;
-          padding-top: 1px;
-        }
+        .bay-title-label { font-weight: 500; }
+        .bay-count { font-size: 9pt; }
         .bay-row-labels {
-          border-top: 1px solid #999;
-          padding-top: 1px;
-          display: flex;
+          display: flex; justify-content: center;
+          font-size: 6pt; padding: 0 1px;
+        }
+        .bay-row-label { width: 11px; text-align: center; }
+        .bay-grid-wrap {
+          display: flex; align-items: stretch; padding: 1px;
           justify-content: center;
         }
+        .bay-grid { display: flex; flex-direction: column; align-items: center; }
+        .bay-grid-row { display: flex; }
         .bay-cell {
-          display: inline-block;
-          width: 11px;
+          width: 11px; height: 9px;
+          border: 0.3px solid #aaa;
           text-align: center;
-          font-size: 6pt;
-          font-weight: bold;
+          font-size: 7pt; line-height: 9px;
+          font-family: 'Courier New', monospace;
         }
-        .bay-cell.row-label {
-          font-size: 5pt;
-          color: #666;
-          font-weight: normal;
-        }
-        .mark-X { color: #555; }
-        .mark-o { color: #d97706; }
-        .mark-L { color: #1e40af; }
+        .mark-X { color: #000; }
+        .mark-o { color: #d97706; font-weight: 500; }
+        .mark-L { color: #c026d3; font-weight: 500; background: #fce7f3 !important; }
         .mark-empty { color: transparent; }
+        .hatch-break {
+          height: 2px; background: #000; margin: 1px 0; width: 100%;
+        }
+        .bay-tier-labels {
+          display: flex; flex-direction: column;
+          font-size: 6pt; padding-left: 2px;
+        }
+        .bay-tier-labels span { height: 9px; line-height: 9px; }
+        .tier-gap { height: 3px !important; }
+        .legend-box {
+          padding: 6px 4px;
+          display: flex; flex-direction: column; justify-content: flex-end;
+          font-family: Arial, sans-serif;
+          font-size: 9pt;
+        }
+        .legend-title { margin-bottom: 6px; }
+        .legend-row {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 9pt; margin-bottom: 3px;
+        }
+        .legend-mark {
+          width: 14px; height: 14px;
+          border: 0.5px solid #000;
+          text-align: center; line-height: 14px;
+          font-size: 9pt;
+          font-family: 'Courier New', monospace;
+        }
+        .legend-empty-mark { color: transparent; }
+        .legend-label { width: 32px; }
+        .legend-count { font-weight: 500; }
       `}</style>
     </div>
   );

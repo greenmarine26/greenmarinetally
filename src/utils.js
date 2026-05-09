@@ -1,6 +1,24 @@
-// 공통 유틸리티 — V42 (2026.05.09 / M4.6)
-export const APP_VERSION = 'M4.6';
+// 공통 유틸리티 — V43 (2026.05.09 / M4.7)
+export const APP_VERSION = 'M4.7';
 
+// M4.7 변경점:
+//   - PrintableCargoPlan.jsx 전면 재작성:
+//     · 5컬럼 그리드 (FORE 위 / AFT 아래)
+//     · AFT 좌하단 legend 박스 (양하: o None / 선적: L LYG + OPT + TTL)
+//     · 데크/홀드 5:5 비율 + 굵은 hatch break
+//     · 베이 상단 제목 + 카운트 (20'/40'/45')
+//     · row 라벨 상하단, tier 라벨 우측
+//     · BAY 33/29 같은 deck-only 자동 인식 (작은 박스)
+//   - PrintableBayDetail.jsx 전면 재작성:
+//     · 베이당 1페이지, 제목 BAY05/(02)03 상단 중앙
+//     · 셀 4-5줄 정보 (POL/POD, 컨번호, 선사·F/E·중량·ISO, [IMDG], 위치)
+//     · 굵은 hatch break, tier 라벨 우측
+//     · 평택 대상 노란 강조
+//   - 출력 모드 3종 (베이 상세):
+//     · 전체 일괄 (all): 모든 베이
+//     · 평택분만 (ptk): PTK 컨테이너 있는 베이만
+//     · 베이 지정 (single): 1개 베이 선택 (드롭다운)
+//
 // M4.6 변경점:
 //   - PrintableCargoPlan.jsx 신규: 카고 플랜 1페이지 인쇄 (TNJP25323E.pdf 형식)
 //     · 모든 베이를 격자로 표시 (X=일반, o=양하대상, L=선적대상)
