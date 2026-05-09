@@ -303,13 +303,17 @@ export default function PrintableCargoPlan({
           </div>
 
           <div className="bay-row five-col">
+            {/* M4.9d-fix: AFT pairs 우측 정렬 — 트리오 짝꿍이 단독 홀수와 같은 컬럼에 정렬됨
+               예: (34)35는 트리오 [33,34,35]의 짝꿍 → 단독 33과 같은 컬럼
+                   (30)31는 트리오 [29,30,31]의 짝꿍 → 단독 29와 같은 컬럼
+               빈 placeholder를 앞에 두면 우측 정렬 효과로 자동 매칭 */}
+            {Array.from({ length: 5 - aftPairsByCol.length }).map((_, i) =>
+              <div key={`ape-${i}`} className="bay-box-placeholder"></div>
+            )}
             {aftPairsByCol.map((p, i) => (
               <BayBox key={`ap-${i}`} even={p.even} odd={p.odd} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.even]} />
             ))}
-            {Array.from({ length: 5 - aftPairsByCol.length }).map((_, i) =>
-              <div key={`ape-${i}`} className="bay-box-placeholder"></div>
-            )}
           </div>
 
           {/* M4.9b: legend를 footer로 분리 (페이지 좌하단) */}
@@ -347,33 +351,39 @@ export default function PrintableCargoPlan({
       </div>
 
       <style>{`
-        /* M4.9c: 인쇄 표준 패턴 — visibility 토글 */
+        /* M4.9d-fix: 카고 플랜 인쇄 — box-sizing 전역 + visibility 토글 */
         @media print {
-          /* 1. 모든 컨텐츠 숨김 */
+          *, *::before, *::after {
+            box-sizing: border-box !important;
+          }
           body * {
             visibility: hidden !important;
           }
-          /* 2. 인쇄 모달과 그 자식만 보이게 */
           .bd-print-modal,
           .bd-print-modal * {
             visibility: visible !important;
           }
-          /* 3. 모달 위치 절대 좌상단 */
           .bd-print-modal {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
-            right: 0 !important;
             width: 100% !important;
+            max-width: 100% !important;
             height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
             background: white !important;
             overflow: visible !important;
             display: block !important;
           }
           .no-print { display: none !important; }
-          .cargo-plan-page { margin: 0 !important; padding: 0 !important; }
-          /* 사용자 요청: 여백 1.5cm */
-          @page { size: A4 landscape; margin: 0; }
+          .cargo-plan-page {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          @page { size: A4 landscape; margin: 0.5cm; }
         }
         .cargo-plan-page {
           color: black; background: white;

@@ -19,7 +19,8 @@ import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 
-const STD_ROWS = ['06', '04', '02', '00', '01', '03', '05'];
+// M4.9d-fix: STD_ROWS는 BayDetailPage 내부에서 globalRowRange 기준 동적 계산
+//   (이전 7개 또는 11개 하드코딩은 베이/선박마다 row 수 달라 잘못)
 const STD_DECK = ['88', '86', '84', '82'];
 const STD_HOLD = ['08', '06', '04', '02'];
 
@@ -157,7 +158,22 @@ function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange }) {
+  // M4.9d-fix: globalRowRange 기준 동적 row 생성 — 화면 BayPlan과 통일
+  //   maxLeft (예: 10) → 짝수 큰→작은 [10, 08, 06, 04, 02]
+  //   maxRight (예: 09) → 홀수 작은→큰 [01, 03, 05, 07, 09]
+  //   center ['00']
+  //   사용자 지적: "베이마다 다름, 일괄 적용 X, 베이사전 준해 화면과 같게"
+  const STD_ROWS = useMemo(() => {
+    const maxLeft = globalRowRange?.maxLeft || 6;
+    const maxRight = globalRowRange?.maxRight || 5;
+    const left = [];
+    for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
+    const right = [];
+    for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
+    return [...left, '00', ...right];
+  }, [globalRowRange]);
+  const colCount = STD_ROWS.length;
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
     ...(odd != null && bayMap[String(odd)] || []),
@@ -231,13 +247,13 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       <div className="bd-grid-wrap">
         <div className="bd-grid">
           {hasDeck && deckTiers.map(t => (
-            <div key={t} className="bd-tier-row">
+            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
               {STD_ROWS.map(r => renderCell(t, r))}
             </div>
           ))}
           {hasDeck && hasHold && <div className="bd-hatch"></div>}
           {hasHold && holdTiers.map(t => (
-            <div key={t} className="bd-tier-row">
+            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
               {STD_ROWS.map(r => renderCell(t, r))}
             </div>
           ))}
@@ -257,7 +273,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 }
 
 export default function PrintableBayDetail({
-  containers, mode, voyageInfo, shipImo, shipName, voyageKey, onClose
+  containers, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, onClose
 }) {
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
@@ -390,67 +406,79 @@ export default function PrintableBayDetail({
                 even={p.even} odd={p.odd}
                 bayMap={bayMap} mode={mode}
                 voyageInfo={voyageInfo} voyageKey={voyageKey}
-                shipName={shipName} dictBay={dictBay} />
+                shipName={shipName} dictBay={dictBay}
+                globalRowRange={globalRowRange} />
             );
           })
         )}
       </div>
 
       <style>{`
-        /* M4.9c: 인쇄 표준 패턴 — visibility 토글
-           이전 (M4.9b) 문제: position: static !important로 모달 fixed 해제 →
-                            메인 페이지가 인쇄 캔버스에 함께 그려져 "엄한 화면이 출력됨"
-           해결: body의 모든 자식을 visibility: hidden으로 숨기고,
-                인쇄 모달과 그 자식만 visible로 처리 (표준 패턴) */
+        /* M4.9d-fix: 베이상세 인쇄 — 좌우 짤림 종합 픽스
+           1. box-sizing: border-box 전역 적용 (padding/border가 width에 포함되어 폭 초과 방지)
+           2. visibility 토글 패턴으로 메인 화면 숨김 (M4.9c)
+           3. @page margin 0.5cm — 폰/프린터 자체 minimum margin 절충
+           4. 셀 폰트/패딩 축소로 11자리 컨번호 안전 표시 */
         @media print {
-          /* 1. 모든 컨텐츠 숨김 (visibility만 변경 — display: none이면 모달도 영향) */
+          /* 0. 모든 요소에 box-sizing 강제 — padding/border 폭 초과 방지 */
+          *, *::before, *::after {
+            box-sizing: border-box !important;
+          }
+          /* 1. 모든 컨텐츠 숨김 */
           body * {
             visibility: hidden !important;
           }
-          /* 2. 인쇄 모달과 그 모든 자식만 보이게 */
+          /* 2. 인쇄 모달과 그 자식만 보이게 */
           .bd-print-modal,
           .bd-print-modal * {
             visibility: visible !important;
           }
-          /* 3. 모달 위치를 페이지 좌상단으로 (fixed → absolute) */
+          /* 3. 모달 위치 절대 좌상단 — width 100% 명시로 페이지 폭에 맞춤 */
           .bd-print-modal {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
-            right: 0 !important;
             width: 100% !important;
+            max-width: 100% !important;
             height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
             background: white !important;
             overflow: visible !important;
             display: block !important;
           }
-          /* 4. 모달 안의 컨테이너도 일반 block */
           .bd-print-container {
             display: block !important;
             overflow: visible !important;
             height: auto !important;
             flex: none !important;
             background: white !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
-          /* 5. no-print 영역 (헤더/버튼바) 숨기기 */
           .no-print {
             display: none !important;
           }
-          /* 6. 베이별 페이지 분리 */
           .bd-page {
             page-break-after: always !important;
             break-after: page !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             padding: 0 !important;
+            margin: 0 !important;
             border-bottom: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            overflow: hidden !important;
           }
           .bd-page:last-child {
             page-break-after: auto !important;
             break-after: auto !important;
           }
-          /* 사용자 요청: 여백 1.5cm */
-          @page { size: A4 landscape; margin: 0; }
+          /* 폰/프린터 minimum margin 대응 */
+          @page { size: A4 landscape; margin: 0.5cm; }
         }
         .bd-page {
           color: black; background: white;
@@ -469,36 +497,43 @@ export default function PrintableBayDetail({
         }
         .bd-row-labels-top, .bd-row-labels-bot {
           display: flex; justify-content: space-evenly;
-          font-size: 8pt;
-          margin: 1px 18px;
+          font-size: 7pt;
+          margin: 1px 4px;
         }
         .bd-rl { flex: 1; text-align: center; }
         .bd-grid-wrap {
           display: flex; align-items: stretch;
-          /* M4.9c-fix: 좌우 짤림 방지 — 컨테이너가 페이지 폭 초과 못함 */
+          /* M4.9c/d-fix: 좌우 짤림 방지 — 컨테이너가 페이지 폭 초과 못함 */
           width: 100%;
           max-width: 100%;
           overflow: hidden;
+          box-sizing: border-box;
         }
         .bd-grid {
           flex: 1;
-          min-width: 0;  /* flex item이 컨텐츠보다 작아질 수 있게 */
+          min-width: 0;
+          max-width: 100%;
           overflow: hidden;
         }
         .bd-tier-row {
-          display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+          display: grid;
+          /* grid-template-columns은 inline style로 동적 적용 (베이/선박별) */
           border: 0.5px solid #000;
         }
         /* M4.9c-fix: 셀 padding/폰트 축소로 11자리 컨번호 안전하게 들어가게 */
+        /* M4.9d-fix: 셀 폰트/패딩 최소화로 11자리 컨번호 안전하게 표시
+           가용 폭 297mm - margin 10mm = 287mm. 7컬럼 = 41mm 각자.
+           폰트 7pt courier, padding 1px = 컨텐츠 영역 약 38mm. 컨번호 11자 약 28mm OK. */
         .bd-cell {
           border: 0.3px solid #555;
           height: 58px;
-          padding: 1px 2px;
-          font-size: 7.5pt;
-          line-height: 1.1;
+          padding: 1px;
+          font-size: 7pt;
+          line-height: 1.05;
           font-family: 'Courier New', monospace;
           overflow: hidden;
           min-width: 0;
+          word-break: break-all;  /* 단어 짤려도 페이지 안에 들어가게 */
         }
         .bd-cell.empty { background: white; }
         .bd-cell.filled.ptk { background: #fef3c7; }
