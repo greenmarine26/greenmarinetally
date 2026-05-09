@@ -338,13 +338,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         <div className="px-4 py-3 border-b border-slate-800">
           <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
             <span>{mode === 'loading' ? '선내 위치 (계획)' : '선내 위치'}</span>
-            {/* M3.87: 선적 모드만 위치 수정 버튼 (양하 시 위치 변경은 의미 없음) */}
-            {mode === 'loading' && (
-              <button onClick={() => setShowPosEdit(true)}
-                className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-2 py-1 rounded text-[10px] font-black flex items-center gap-1">
-                <Edit3 className="w-3 h-3"/>위치 변경
-              </button>
-            )}
+            {/* M4.9e-fix: M3.87 "위치 변경" 버튼 제거.
+                사용자 도메인 흐름: 계획은 EDI 단일 진실, 검수원은 실체만 결정.
+                수정은 아래 "수정 위치 입력" (실체 위치) 한 곳에서만 처리. */}
           </div>
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-amber-400"/>
