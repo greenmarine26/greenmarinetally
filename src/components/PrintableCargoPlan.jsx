@@ -226,7 +226,16 @@ export default function PrintableCargoPlan({
   const portText = mode === 'discharge' ? 'POD : PTK' : 'POL : PTK';
   const todayStr = new Date().toISOString().slice(0, 10);
   const vsl = voyageInfo?.vsl || shipName || 'VESSEL';
-  const voy = voyageInfo?.voy_d || voyageInfo?.voy_l || voyageInfo?.voy || voyageKey || '';
+  // M4.9b: 항차 번호 - 양하/선적 분리 시 둘 다 표시
+  const voyD = voyageInfo?.voy_d || '';
+  const voyL = voyageInfo?.voy_l || '';
+  const voyFallback = voyageInfo?.voy || voyageKey || '';
+  let voy;
+  if (voyD && voyL && voyD !== voyL) {
+    voy = `양하 ${voyD} / 선적 ${voyL}`;
+  } else {
+    voy = voyD || voyL || voyFallback;
+  }
 
   const foreSinglesByCol = forePages.singles.slice(0, 5);
   const forePairsByCol = forePages.pairs.slice(0, 5);

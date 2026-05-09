@@ -66,30 +66,42 @@ function splitForeAft(bayList) {
   };
 }
 
+// M4.9b: 페이지 빌드 룰 변경
+//   요구사항: 7,8,9 베이 → "BAY 07 단독" + "BAY (08)09 짝꿍" = 2페이지
+//   샘플 PDF 패턴 분석: 짝꿍은 항상 (even-1)(odd) 형태 (작은 짝수가 큰 홀수와)
+//     - (02)03, (06)07, (08)09, (10)11, (14)15, (18)19, (22)23, (26)27, (30)31
+//     - 단독은 항상 odd 단독 (01, 05, 09 또는 짝꿍 없는 odd)
+//   알고리즘:
+//     1) 홀수 n에 대해 (n-1)이 있으면 짝꿍 (n-1)n
+//     2) 홀수 n에 대해 (n-1)이 없으면 n 단독
+//     3) 짝수 중 양옆 홀수 모두 없는 것만 단독 처리 (예외 케이스)
 function buildBayPages(bays) {
   const baySet = new Set(bays);
   const used = new Set();
   const pages = [];
+  // 1) 홀수 베이 처리 - left(n-1) 짝수와 짝꿍 시도
   for (const n of bays) {
-    if (n % 2 === 0) {
-      const leftIn = baySet.has(n - 1);
-      const rightIn = baySet.has(n + 1);
-      if (rightIn) {
-        pages.push({ even: n, odd: n + 1, key: `${n}-${n+1}` });
-        used.add(n + 1);
-      } else if (!leftIn) {
-        pages.push({ even: null, odd: n, key: `${n}` });
-      } else {
-        pages.push({ even: n, odd: null, key: `${n}` });
-      }
-    }
-  }
-  for (const n of bays) {
-    if (n % 2 === 1 && !used.has(n)) {
+    if (n % 2 !== 1) continue;
+    if (used.has(n)) continue;
+    if (baySet.has(n - 1) && !used.has(n - 1)) {
+      // (n-1)n 짝꿍 페이지
+      pages.push({ even: n - 1, odd: n, key: `${n-1}-${n}` });
+      used.add(n - 1);
+      used.add(n);
+    } else {
+      // 홀수 단독 페이지
       pages.push({ even: null, odd: n, key: `${n}` });
+      used.add(n);
     }
   }
-  pages.sort((a, b) => (a.even || a.odd) - (b.even || b.odd));
+  // 2) 짝꿍에 들어가지 못한 짝수 (양옆 홀수 없는 케이스)
+  for (const n of bays) {
+    if (n % 2 !== 0 || used.has(n)) continue;
+    pages.push({ even: n, odd: null, key: `${n}` });
+    used.add(n);
+  }
+  // 작은 베이 → 큰 베이 순서로 정렬 (FORE → AFT)
+  pages.sort((a, b) => (a.even ?? a.odd) - (b.even ?? b.odd));
   return pages;
 }
 
@@ -174,7 +186,19 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   else if (even != null) title = `BAY${dispBay(even)}`;
   else title = `BAY${dispBay(odd)}`;
 
-  const portLabel = mode === 'discharge' ? 'POL : ' : 'POL : PTK';
+  // M4.9b: 항차 번호 표기 (양하 + 선적 분리 시 둘 다 표시)
+  const voyD = voyageInfo?.voy_d || '';
+  const voyL = voyageInfo?.voy_l || '';
+  const voyFallback = voyageInfo?.voy || voyageKey || '';
+  let voyDisplay;
+  if (voyD && voyL && voyD !== voyL) {
+    voyDisplay = `양하 ${voyD} / 선적 ${voyL}`;
+  } else {
+    voyDisplay = voyD || voyL || voyFallback;
+  }
+
+  // M4.9b: POL 빈칸 (샘플 PDF와 동일 — 검수원이 수기 또는 향후 자동 채움)
+  const portLabel = 'POL : ';
 
   const renderCell = (t, r) => {
     const c = cellMap[`${t}-${r}`];
@@ -196,7 +220,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       <div className="bd-title">{title}</div>
       <div className="bd-header">
         <span>{voyageInfo?.vsl || shipName || ''}</span>
-        <span>VOY NO : {voyageInfo?.voy_d || voyageInfo?.voy_l || voyageKey || ''}</span>
+        <span>VOY NO : {voyDisplay}</span>
         <span>{portLabel}</span>
       </div>
 
@@ -375,30 +399,30 @@ export default function PrintableBayDetail({
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .bd-page { page-break-after: always; padding: 0.4cm !important; }
-          @page { size: A4 portrait; margin: 0.4cm; }
+          .bd-page { page-break-after: always; padding: 0.3cm !important; }
+          @page { size: A4 landscape; margin: 0.3cm; }
         }
         .bd-page {
           color: black; background: white;
           font-family: Arial, sans-serif;
-          padding: 14px 20px;
+          padding: 10px 16px;
           page-break-after: always;
           border-bottom: 1px dashed #ddd;
         }
         .bd-title {
-          text-align: center; font-size: 14pt; font-weight: 500;
-          margin-bottom: 6px;
+          text-align: center; font-size: 16pt; font-weight: 500;
+          margin-bottom: 4px;
         }
         .bd-header {
           display: flex; justify-content: space-between;
-          font-size: 9pt; margin-bottom: 12px;
+          font-size: 10pt; margin-bottom: 8px;
         }
         .bd-row-labels-top, .bd-row-labels-bot {
           display: flex; justify-content: space-evenly;
-          font-size: 7pt;
-          margin: 2px 14px;
+          font-size: 8pt;
+          margin: 1px 14px;
         }
-        .bd-rl { width: 90px; text-align: center; }
+        .bd-rl { flex: 1; text-align: center; }
         .bd-grid-wrap {
           display: flex; align-items: stretch;
         }
@@ -409,10 +433,10 @@ export default function PrintableBayDetail({
         }
         .bd-cell {
           border: 0.3px solid #555;
-          height: 32px;
-          padding: 1px 2px;
-          font-size: 5.5pt;
-          line-height: 1.05;
+          height: 48px;
+          padding: 2px 3px;
+          font-size: 7pt;
+          line-height: 1.1;
           font-family: 'Courier New', monospace;
           overflow: hidden;
         }
@@ -425,11 +449,11 @@ export default function PrintableBayDetail({
         }
         .bd-tier-labels {
           display: flex; flex-direction: column;
-          padding-left: 6px;
-          font-size: 8pt;
+          padding-left: 8px;
+          font-size: 9pt;
         }
         .bd-tier-labels span {
-          height: 32px; line-height: 32px;
+          height: 48px; line-height: 48px;
         }
         .bd-tier-gap { height: 8px !important; }
       `}</style>

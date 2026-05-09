@@ -389,6 +389,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
             onOpenContainer={(c) => setDetailC(c)}
             shipImo={voyage?.info?.imo}
             shipName={voyage?.info?.vsl}
+            voyageInfo={voyage?.info}
+            voyageKey={voyageKey}
           />
         </div>
       )}

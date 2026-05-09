@@ -23,7 +23,7 @@ import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
-export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName }) {
+export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   // M4.6: 인쇄 모달 상태
@@ -667,7 +667,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           <PrintableCargoPlan
             containers={containers}
             mode={mode}
-            voyageInfo={null /* TODO: pass voyageInfo from parent */}
+            voyageInfo={voyageInfo}
+            voyageKey={voyageKey}
             shipImo={shipImo}
             shipName={shipName}
             onClose={() => setPrintMode(null)}
@@ -679,7 +680,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           <PrintableBayDetail
             containers={containers}
             mode={mode}
-            voyageInfo={null}
+            voyageInfo={voyageInfo}
+            voyageKey={voyageKey}
             shipImo={shipImo}
             shipName={shipName}
             onClose={() => setPrintMode(null)}
