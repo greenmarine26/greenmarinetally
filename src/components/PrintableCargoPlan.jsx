@@ -1,14 +1,10 @@
-// 카고 플랜 인쇄 (M4.8) — 샘플 PDF 1:1 재현 (PCSG2616W.pdf 기준)
-//
-// M4.8 변경:
-//   - 5col → 4col 그리드 (PDF와 일치)
-//   - 마크 = 카운터파트 항만 첫 글자 (D=DLC, W=WEI 등)
-//     · PTK 화물: discharge 모드 'o', load 모드 'L'
-//     · 외부 화물: load 모드 → c.pod 첫 글자, discharge 모드 → c.pol 첫 글자
-//   - max-width 제거 (화면 100% width)
-//   - Legend = row 4 마지막 칸 (우하단)
-//   - AFT pairs ≤3개 가정 (4개 이상 시 자동 줄바꿈)
-//   - Legend 항만 라벨 동적 (DLC/WEI 등 실 컨테이너 데이터 기반)
+// 카고 플랜 인쇄 (M4.7) — 샘플 PDF 1:1 재현
+// TNJP25323E.pdf / TNJP25323W.pdf 형식
+// - 5컬럼 그리드 (FORE 위 / AFT 아래)
+// - AFT 좌측 legend 박스
+// - 베이 상단: 제목 + 카운트 (20'/40'/45')
+// - 데크/홀드 5:5 비율 + 굵은 hatch break
+// - row 라벨 상하단, tier 라벨 우측
 
 import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
@@ -31,13 +27,6 @@ const sizeOf = (c) => {
   return '20';
 };
 
-// M4.8: 카운터파트 항만 (load=POD, discharge=POL)의 정규화 코드 (3자, KR 접두 제거)
-const counterpartPort = (c, mode) => {
-  const raw = mode === 'discharge' ? c.pol : c.pod;
-  if (!raw) return '';
-  return String(raw).replace(/^KR/, '').slice(0, 3).toUpperCase();
-};
-
 function groupByBay(containers) {
   const m = {};
   containers.forEach(c => {
@@ -50,14 +39,27 @@ function groupByBay(containers) {
 
 function splitForeAft(bayList) {
   if (bayList.length === 0) return { fore: [], aft: [] };
-  let bestGap = 0, splitPoint = bayList[Math.floor(bayList.length / 2)];
-  for (let i = 0; i < bayList.length - 1; i++) {
-    const gap = bayList[i + 1] - bayList[i];
-    if (gap > bestGap) { bestGap = gap; splitPoint = bayList[i]; }
+  const baySet = new Set(bayList);
+  const used = new Set();
+  const groups = [];
+  // 1) 트리오 [홀, 짝, 홀] 그룹화 — 표준 페어
+  for (const n of bayList) {
+    if (used.has(n) || n % 2 === 0) continue;
+    if (baySet.has(n + 1) && baySet.has(n + 2)) {
+      groups.push([n, n + 1, n + 2]);
+      used.add(n); used.add(n + 1); used.add(n + 2);
+    }
   }
+  // 2) 남은 베이 (단독 홀수, 20ft 전용 짝수)
+  for (const n of bayList) {
+    if (!used.has(n)) { groups.push([n]); used.add(n); }
+  }
+  groups.sort((a, b) => a[0] - b[0]);
+  // 3) 그룹 갯수의 중간으로 분할 — TNJP는 9그룹 → FORE 5 / AFT 4
+  const mid = Math.ceil(groups.length / 2);
   return {
-    fore: bayList.filter(b => b <= splitPoint),
-    aft: bayList.filter(b => b > splitPoint),
+    fore: groups.slice(0, mid).flat().sort((a, b) => a - b),
+    aft: groups.slice(mid).flat().sort((a, b) => a - b),
   };
 }
 
@@ -74,7 +76,7 @@ function buildBayPages(bays) {
         pairs.push({ even: n, odd: n + 1 });
         used.add(n + 1);
       } else if (!leftIn) {
-        singles.push({ bay: n });
+        singles.push({ bay: n });  // 20ft 전용
       } else {
         pairs.push({ even: n, odd: null });
       }
@@ -83,23 +85,21 @@ function buildBayPages(bays) {
   for (const n of bays) {
     if (n % 2 === 1 && !used.has(n)) singles.push({ bay: n });
   }
-  // 큰 베이가 좌측 (선미 방향)
+  // 베이 번호 큰 것이 좌측 (STERN 방향)
   singles.sort((a, b) => b.bay - a.bay);
   pairs.sort((a, b) => b.even - a.even);
   return { singles, pairs };
 }
 
-// M4.8: 마크 결정 — 카운터파트 항만 첫 글자
 function getMark(c, mode) {
   if (isPtk(c, mode)) return mode === 'discharge' ? 'o' : 'L';
-  const port = counterpartPort(c, mode);
-  return port ? port.charAt(0) : 'X';
+  return 'X';
 }
 
 function BayBox({ even, odd, containers, mode, dictBay }) {
   const allConts = [
-    ...((even != null && containers[String(even)]) || []),
-    ...((odd != null && containers[String(odd)]) || []),
+    ...(even != null && containers[String(even)] || []),
+    ...(odd != null && containers[String(odd)] || []),
   ];
 
   const cellMap = {};
@@ -119,8 +119,6 @@ function BayBox({ even, odd, containers, mode, dictBay }) {
   const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
 
-  // M4.8: 카운트는 PTK가 아니라 mode의 카운터파트 (PTK 컨테이너 = stowage 대상)
-  // 단순화: PTK 컨테이너 카운트만 표시 (기존 로직 유지)
   const cnt = { c20: 0, c40: 0, c45: 0 };
   allConts.forEach(c => {
     if (!isPtk(c, mode)) return;
@@ -130,10 +128,11 @@ function BayBox({ even, odd, containers, mode, dictBay }) {
 
   const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
   let title;
-  if (even != null && odd != null) title = `BAY (${dispBay(even)}) ${dispBay(odd)}`;
+  if (even != null && odd != null) title = `BAY (${dispBay(even)})${dispBay(odd)}`;
   else if (even != null) title = `BAY ${dispBay(even)}`;
   else title = `BAY ${dispBay(odd)}`;
 
+  // 카운트: 페어이거나 짝수 단독 → "20/40/45", 홀수 단독 → 합계
   const isPaired = even != null;
   const total = cnt.c20 + cnt.c40 + cnt.c45;
   const countStr = isPaired ? `${cnt.c20} / ${cnt.c40} / ${cnt.c45}` : String(total);
@@ -154,8 +153,7 @@ function BayBox({ even, odd, containers, mode, dictBay }) {
               {STD_ROWS.map(r => {
                 const c = cellMap[`${t}-${r}`];
                 const m = c ? getMark(c, mode) : '';
-                const cls = m ? `mark-${/^[A-Z]$/.test(m) ? 'letter' : m}` : 'mark-empty';
-                return <span key={r} className={`bay-cell ${cls}`}>{m}</span>;
+                return <span key={r} className={`bay-cell mark-${m || 'empty'}`}>{m}</span>;
               })}
             </div>
           ))}
@@ -165,8 +163,7 @@ function BayBox({ even, odd, containers, mode, dictBay }) {
               {STD_ROWS.map(r => {
                 const c = cellMap[`${t}-${r}`];
                 const m = c ? getMark(c, mode) : '';
-                const cls = m ? `mark-${/^[A-Z]$/.test(m) ? 'letter' : m}` : 'mark-empty';
-                return <span key={r} className={`bay-cell ${cls}`}>{m}</span>;
+                return <span key={r} className={`bay-cell mark-${m || 'empty'}`}>{m}</span>;
               })}
             </div>
           ))}
@@ -215,47 +212,15 @@ export default function PrintableCargoPlan({
   const forePages = useMemo(() => buildBayPages(fore), [fore]);
   const aftPages = useMemo(() => buildBayPages(aft), [aft]);
 
-  // M4.8: 카운트 — 카운터파트 항만별로 그룹화 (PTK 외 화물 + PTK 분리)
-  const portCounts = useMemo(() => {
-    const byPort = {};
-    let ptk20 = 0, ptk40 = 0, ptk45 = 0;
-    let optAll20 = 0, optAll40 = 0, optAll45 = 0;
-    containers.forEach(c => {
-      const sz = sizeOf(c);
-      const key = sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20';
-      if (isPtk(c, mode)) {
-        if (key === 'c20') ptk20++; else if (key === 'c40') ptk40++; else ptk45++;
-      } else {
-        const port = counterpartPort(c, mode);
-        if (!port) {
-          if (key === 'c20') optAll20++; else if (key === 'c40') optAll40++; else optAll45++;
-          return;
-        }
-        if (!byPort[port]) byPort[port] = { c20: 0, c40: 0, c45: 0 };
-        byPort[port][key]++;
-      }
+  const totalCounts = useMemo(() => {
+    const c = { c20: 0, c40: 0, c45: 0 };
+    containers.forEach(ct => {
+      if (!isPtk(ct, mode)) return;
+      const sz = sizeOf(ct);
+      c[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
     });
-    return { byPort, ptk: { c20: ptk20, c40: ptk40, c45: ptk45 }, opt: { c20: optAll20, c40: optAll40, c45: optAll45 } };
+    return c;
   }, [containers, mode]);
-
-  const portsSorted = useMemo(() => {
-    return Object.entries(portCounts.byPort)
-      .sort(([, a], [, b]) => (b.c20 + b.c40 + b.c45) - (a.c20 + a.c40 + a.c45));
-  }, [portCounts]);
-
-  const totalAll = useMemo(() => {
-    let c20 = portCounts.ptk.c20 + portCounts.opt.c20;
-    let c40 = portCounts.ptk.c40 + portCounts.opt.c40;
-    let c45 = portCounts.ptk.c45 + portCounts.opt.c45;
-    portsSorted.forEach(([, v]) => { c20 += v.c20; c40 += v.c40; c45 += v.c45; });
-    return { c20, c40, c45 };
-  }, [portCounts, portsSorted]);
-
-  // M4.8: 4 col 레이아웃 — fore/aft 각 행에 최대 4개
-  const foreSinglesByCol = forePages.singles.slice(0, 4);
-  const forePairsByCol = forePages.pairs.slice(0, 4);
-  const aftSinglesByCol = aftPages.singles.slice(0, 4);
-  const aftPairsByCol = aftPages.pairs.slice(0, 4);
 
   const titleText = mode === 'discharge' ? 'CARGO DISCHARGING PLAN' : 'STOWAGE INSTRUCTION';
   const portText = mode === 'discharge' ? 'POD : PTK' : 'POL : PTK';
@@ -263,9 +228,10 @@ export default function PrintableCargoPlan({
   const vsl = voyageInfo?.vsl || shipName || 'VESSEL';
   const voy = voyageInfo?.voy_d || voyageInfo?.voy_l || voyageInfo?.voy || voyageKey || '';
 
-  // Legend가 row 4 마지막 칸에 들어가도록 padding 계산
-  // row 4: aft pairs + (4 - aft pairs.length - 1) 빈칸 + legend
-  const aftPairsRowFillers = Math.max(0, 4 - aftPairsByCol.length - 1);
+  const foreSinglesByCol = forePages.singles.slice(0, 5);
+  const forePairsByCol = forePages.pairs.slice(0, 5);
+  const aftSinglesByCol = aftPages.singles.slice(0, 4);
+  const aftPairsByCol = aftPages.pairs.slice(0, 4);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
@@ -294,78 +260,73 @@ export default function PrintableCargoPlan({
             <span>{portText}</span>
           </div>
 
-          {/* Row 1: Fore singles */}
-          <div className="bay-row four-col">
+          <div className="bay-row five-col">
             {foreSinglesByCol.map((p, i) => (
               <BayBox key={`fs-${i}`} even={null} odd={p.bay} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.bay]} />
             ))}
-            {Array.from({ length: Math.max(0, 4 - foreSinglesByCol.length) }).map((_, i) =>
+            {Array.from({ length: 5 - foreSinglesByCol.length }).map((_, i) =>
               <div key={`fse-${i}`}></div>
             )}
           </div>
-          {/* Row 2: Fore pairs */}
-          <div className="bay-row four-col">
+          <div className="bay-row five-col">
             {forePairsByCol.map((p, i) => (
               <BayBox key={`fp-${i}`} even={p.even} odd={p.odd} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.even]} />
             ))}
-            {Array.from({ length: Math.max(0, 4 - forePairsByCol.length) }).map((_, i) =>
+            {Array.from({ length: 5 - forePairsByCol.length }).map((_, i) =>
               <div key={`fpe-${i}`}></div>
             )}
           </div>
-          {/* Row 3: Aft singles */}
-          <div className="bay-row four-col">
+
+          <div className="bay-row five-col">
+            <div className="legend-box">
+              <div className="legend-title">20'/40'/45'</div>
+              {mode === 'discharge' ? (
+                <div className="legend-row">
+                  <span className="legend-mark mark-o">o</span>
+                  <span className="legend-label">None</span>
+                  <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="legend-row">
+                    <span className="legend-mark mark-L">L</span>
+                    <span className="legend-label">LYG</span>
+                    <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
+                  </div>
+                  <div className="legend-row">
+                    <span className="legend-mark legend-empty-mark">□</span>
+                    <span className="legend-label">OPT</span>
+                    <span className="legend-count">0 / 0 / 0</span>
+                  </div>
+                  <div className="legend-row">
+                    <span className="legend-mark legend-empty-mark">□</span>
+                    <span className="legend-label">TTL</span>
+                    <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
+                  </div>
+                </>
+              )}
+            </div>
             {aftSinglesByCol.map((p, i) => (
               <BayBox key={`as-${i}`} even={null} odd={p.bay} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.bay]} />
             ))}
-            {Array.from({ length: Math.max(0, 4 - aftSinglesByCol.length) }).map((_, i) =>
+            {Array.from({ length: 4 - aftSinglesByCol.length }).map((_, i) =>
               <div key={`ase-${i}`}></div>
             )}
           </div>
-          {/* Row 4: Aft pairs + (fillers) + Legend */}
-          <div className="bay-row four-col">
+
+          <div className="bay-row five-col">
+            <div></div>
+            <div></div>
             {aftPairsByCol.map((p, i) => (
               <BayBox key={`ap-${i}`} even={p.even} odd={p.odd} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.even]} />
             ))}
-            {Array.from({ length: aftPairsRowFillers }).map((_, i) =>
+            {Array.from({ length: 3 - aftPairsByCol.length }).map((_, i) =>
               <div key={`ape-${i}`}></div>
             )}
-            <div className="legend-box">
-              <div className="legend-title">20'/40'/45'</div>
-              {portsSorted.map(([port, v]) => (
-                <div key={port} className="legend-row">
-                  <span className="legend-mark mark-letter">{port.charAt(0)}</span>
-                  <span className="legend-label">{port}</span>
-                  <span className="legend-count">{v.c20} / {v.c40} / {v.c45}</span>
-                </div>
-              ))}
-              {portCounts.ptk.c20 + portCounts.ptk.c40 + portCounts.ptk.c45 > 0 && (
-                <div className="legend-row">
-                  <span className={`legend-mark mark-${mode === 'discharge' ? 'o' : 'L'}`}>
-                    {mode === 'discharge' ? 'o' : 'L'}
-                  </span>
-                  <span className="legend-label">PTK</span>
-                  <span className="legend-count">
-                    {portCounts.ptk.c20} / {portCounts.ptk.c40} / {portCounts.ptk.c45}
-                  </span>
-                </div>
-              )}
-              <div className="legend-row">
-                <span className="legend-mark legend-empty-mark">□</span>
-                <span className="legend-label">OPT</span>
-                <span className="legend-count">
-                  {portCounts.opt.c20} / {portCounts.opt.c40} / {portCounts.opt.c45}
-                </span>
-              </div>
-              <div className="legend-row legend-total">
-                <span className="legend-mark legend-empty-mark"></span>
-                <span className="legend-label">TTL</span>
-                <span className="legend-count">{totalAll.c20} / {totalAll.c40} / {totalAll.c45}</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -373,33 +334,28 @@ export default function PrintableCargoPlan({
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          .cargo-plan-page {
-            margin: 0 !important;
-            padding: 0.3cm !important;
-            max-width: none !important;
-            width: 100% !important;
-          }
-          @page { size: A4 landscape; margin: 0.3cm; }
+          .cargo-plan-page { margin: 0 !important; padding: 0.4cm !important; }
+          @page { size: A4 landscape; margin: 0.4cm; }
         }
         .cargo-plan-page {
           color: black; background: white;
           font-family: Arial, sans-serif;
           font-size: 9pt;
           padding: 12px 16px;
-          width: 100%;
-          box-sizing: border-box;
+          max-width: 1400px;
+          margin: 0 auto;
         }
         .cargo-header {
           display: flex; justify-content: space-between; align-items: baseline;
-          margin-bottom: 2px;
+          margin-bottom: 4px;
         }
-        .cargo-title { font-size: 13pt; font-weight: 500; }
+        .cargo-title { font-size: 14pt; font-weight: 500; }
         .cargo-subheader {
           display: flex; justify-content: center; gap: 80px;
-          font-size: 10pt; margin-bottom: 8px;
+          font-size: 10pt; margin-bottom: 12px;
         }
         .bay-row { display: grid; gap: 4px; margin-bottom: 4px; }
-        .four-col { grid-template-columns: repeat(4, 1fr); }
+        .five-col { grid-template-columns: repeat(5, 1fr); }
         .bay-box {
           border: 0.5px solid #000; background: white;
           font-size: 7pt;
@@ -407,15 +363,15 @@ export default function PrintableCargoPlan({
         }
         .bay-title-row {
           display: flex; justify-content: space-between;
-          padding: 1px 6px; font-size: 9pt;
+          padding: 1px 3px; font-size: 8pt;
         }
         .bay-title-label { font-weight: 500; }
-        .bay-count { font-size: 9pt; }
+        .bay-count { font-size: 7pt; }
         .bay-row-labels {
           display: flex; justify-content: center;
           font-size: 6pt; padding: 0 1px;
         }
-        .bay-row-label { width: 14px; text-align: center; }
+        .bay-row-label { width: 7px; text-align: center; font-size: 5pt; }
         .bay-grid-wrap {
           display: flex; align-items: stretch; padding: 1px;
           justify-content: center;
@@ -423,13 +379,12 @@ export default function PrintableCargoPlan({
         .bay-grid { display: flex; flex-direction: column; align-items: center; }
         .bay-grid-row { display: flex; }
         .bay-cell {
-          width: 14px; height: 11px;
+          width: 7px; height: 6px;
           border: 0.3px solid #aaa;
           text-align: center;
-          font-size: 7pt; line-height: 11px;
+          font-size: 5pt; line-height: 6px;
           font-family: 'Courier New', monospace;
         }
-        .mark-letter { color: #000; font-weight: 500; }
         .mark-X { color: #000; }
         .mark-o { color: #d97706; font-weight: 500; }
         .mark-L { color: #c026d3; font-weight: 500; background: #fce7f3 !important; }
@@ -441,21 +396,19 @@ export default function PrintableCargoPlan({
           display: flex; flex-direction: column;
           font-size: 6pt; padding-left: 2px;
         }
-        .bay-tier-labels span { height: 11px; line-height: 11px; }
+        .bay-tier-labels span { height: 6px; line-height: 6px; font-size: 5pt; }
         .tier-gap { height: 3px !important; }
         .legend-box {
-          padding: 4px 6px;
+          padding: 6px 4px;
           display: flex; flex-direction: column; justify-content: flex-end;
           font-family: Arial, sans-serif;
           font-size: 9pt;
-          border: 0.5px solid #000;
         }
-        .legend-title { margin-bottom: 4px; font-weight: 500; }
+        .legend-title { margin-bottom: 6px; }
         .legend-row {
           display: flex; align-items: center; gap: 6px;
-          font-size: 9pt; margin-bottom: 2px;
+          font-size: 9pt; margin-bottom: 3px;
         }
-        .legend-total { border-top: 0.5px solid #000; padding-top: 2px; margin-top: 2px; }
         .legend-mark {
           width: 14px; height: 14px;
           border: 0.5px solid #000;
@@ -463,9 +416,9 @@ export default function PrintableCargoPlan({
           font-size: 9pt;
           font-family: 'Courier New', monospace;
         }
-        .legend-empty-mark { color: transparent; border: none !important; }
-        .legend-label { width: 36px; font-weight: 500; }
-        .legend-count { font-weight: 500; font-family: 'Courier New', monospace; }
+        .legend-empty-mark { color: transparent; }
+        .legend-label { width: 32px; }
+        .legend-count { font-weight: 500; }
       `}</style>
     </div>
   );
