@@ -1,7 +1,14 @@
-// 공통 유틸리티 — V39 (2026.05.05 / M3.6)
-export const APP_VERSION = 'M4.3';
+// 공통 유틸리티 — V40 (2026.05.09 / M4.4)
+export const APP_VERSION = 'M4.4';
 
-// 변경점:
+// M4.4 변경점:
+//   - .def 파일 (CASP SHIP DEFINE FILE) 런타임 파서 추가 (defParser.js)
+//   - 사용자 베이사전 (userBayDict.js, localStorage 누적 저장)
+//   - mixerUpload: .def 자동 감지 + 처리, 컨테이너 머지 우회
+//   - shipStructure: userBayDict 우선 조회 (검증된 M4.4 메서드 우선)
+//   - MixerUploadModal: .def 등록 결과 카드 표시, 컨 없는 .def-only 업로드 지원
+//
+// V39 (M4.3) 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
 //                  TDT 캐리어 추출, ISO 4500/4200/2500/2200 등 4자리 숫자 코드 매핑,
 //                  EQD status 4/5 → F/E 매핑 강화

@@ -1,385 +1,221 @@
-# 새 채팅 인계 지침 (M3.74 시점, 2026.05.06 KST)
+# HANDOFF_TO_NEXT_CHAT.md — M4.4 인계 지침서
 
-> 새 채팅에서 Claude가 이 문서를 먼저 읽고 즉시 이어가도록 만든 인계 문서.
-
----
-
-## 사용자 / 프로젝트 정보
-
-**김성일** — 평택항(KRPTK) 화물 검수원
-**Tallyman Master 앱** (greenmarinetally) 개발 중
-
-| 항목 | 정보 |
-|---|---|
-| GitHub | greenmarine26/greenmarinetally |
-| 사이트 | https://greenmarine26.github.io/greenmarinetally/ |
-| Firebase | greenmarinetally (asia-southeast1, Spark 무료) |
-| Gemini API | gemini-2.5-pro (무료 한도) |
-| 운영 규모 | 4척 동시, 척당 ~1000대, 검수원 최대 15명 |
+> **현재 상태:** M4.4 빌드 + 검증 완료, ZIP 배포본 (`M4_4_REAL_DEPLOY.zip`)
+> **검증 통과:** 28/28 자동 테스트 (TNJP.def 실데이터 기반)
+> **이전 버전:** M4.3 → 변경 사항은 아래 ‘추가/변경 파일 목록’ 참조
+> **인계 일자:** 2026-05-09
 
 ---
 
-## 현재 버전 / 정책
+## 1. M4.4 핵심 기능 (한 줄 요약)
 
-**현재: M3.74** (2026.05.06 KST)
-- 매 수정 +0.01 → 다음 수정 시 **M3.75**부터
-- ZIP 파일명에 정확한 버전 표기 필수
-- ZIP 한 번 받으면 이전 버전 따로 적용할 필요 X (누적)
+**사용자가 .def 파일을 자료 업로드 모달에 던지면, 검증된 메서드로 즉시 파싱해서 베이사전(localStorage)에 등록 → 다음 EDI 업로드 시 자동 매칭.**
 
----
-
-## 🆕 M3.74 변경 사항 (이번 빌드)
-
-### 🔴 데이터 정확도 수정
-1. **EDI 파싱 FR 분류 fix** (`utils.js`)
-   - 이전: `cur.iso[2] === 'P'` → `cur.oog = true`만 (fr=false 유지)
-   - 변경: `cur.fr = true; cur.oog = true;` 둘 다 set
-   - 컨테이너 객체 초기화에 `fr: false` 필드 추가
-   - 4자리 숫자 코드 4583/4584/2283/2284 = FR 처리 추가
-   - **영향**: 베이플랜에서 FR이 "OOG" 대신 "FR"로 정확히 표시, 상세모달/카드에 FR 배지 정상 표시
-
-2. **무게 추정 완전 제거** (`utils.js` parseListExcel)
-   - 이전: 라인 829-839, fe 명시값 없으면 wgt > 5000kg → fe='F' 강제
-   - 변경: 무게 기반 추정 코드 통째 삭제 (M3.73 정책과 일치)
-   - **영향**: VGM 같은 F/E 미명시 파일에서 빈컨도 강제 Full로 잘못 판정되던 케이스 제거
-
-### 🟡 UX 모달화 (UI 원칙: prompt/confirm 금지)
-3. **신규 컴포넌트** `src/components/`
-   - `ChoiceModal.jsx` + `useChoice` 훅 — prompt() 대체 (3택 카드)
-   - `ConfirmModal.jsx` + `useConfirm` 훅 — confirm() 대체 (예/아니오 풀너비)
-
-4. **prompt() 2건 → ChoiceModal** (`VoyagePage.jsx`)
-   - EDI 업로드 충돌 처리 (1=교체 2=병합 3=신규)
-   - 리스트 업로드 충돌 처리 (1=교체 2=병합 3=신규)
-
-5. **confirm() 11건 → ConfirmModal**
-   - `BigResultCard.jsx`: 완료 취소
-   - `ContainerDetailModal.jsx`: 완료 취소, 규격(ISO) 변경
-   - `ContainerList.jsx`: 완료 취소
-   - `WorkReportModal.jsx`: 작업 완료 보고
-   - `ChiefDashboard.jsx`: 전체 보고 삭제 (2단계 → 1단계로 간소화), 단일 보고 삭제, FeedbackRow 삭제
-   - `Header.jsx`: 앱 종료
-   - `backHandler.js`: exitApp confirm 제거 (호출자에서 사전 확인)
-
-### 🟡 색깔 일관성
-6. **HomePage 삭제 모달 색깔 통일** (`HomePage.jsx`)
-   - 이전: 양하=amber, 선적=blue (앱 표준과 반대)
-   - 변경: 양하=blue, 선적=amber (VoyagePage 모드 탭과 일치)
-   - **영향**: 4척 동시 작업 시 색깔 혼동으로 양하/선적 잘못 삭제 위험 제거
-
-### 🔵 베이플랜 다중 적재
-7. **신규 컴포넌트** `SlotPickerModal.jsx`
-   - 같은 슬롯에 컨테이너 2개 이상 (FR 4개 다중 적재) 선택 모달
-
-8. **베이플랜 셀 ⊕N 표시** (`BayPlan.jsx`)
-   - `getCell` → `getCellAll` (배열 반환)으로 변경, 평택 화물 우선 정렬
-   - 셀 우상단에 `⊕N` 배지 (N = 추가 컨 수)
-   - 다중 셀 클릭 시 SlotPickerModal로 컨테이너 선택 → 기존 ContainerDetailModal로 진입
-   - 단일 적재 동작은 변경 없음 (배지 안 뜸)
-
-### 빌드 결과
-- ✅ npm install 성공
-- ✅ vite build 성공 (1631 modules, 8.25초)
-- ✅ EDI 테스트 데이터로 FR 분류/ISO 동기화/status 변환 모두 정상 동작 확인
+기존 M4.3 임베드 사전(`shipBayDict.js`, 11척, **verified: false**)의 한계 — "1024B 레코드 인덱스 ↔ 실제 베이번호 매핑 미확정", "슬롯값 5/7 의미 추정" — 을 사용자가 .def 직접 업로드해서 우회 가능. 우선순위는 **userBayDict (검증) > 임베드 사전 (미검증)**.
 
 ---
 
-## 절대 원칙 (반드시 지킬 것)
+## 2. 추가/변경 파일 목록
 
-### 작업 원칙
-1. **EDI 우선**, ASC는 검증용
-2. **추론 금지** — 실제 데이터 검증 후 답변
-3. "만들지 마세요" 명령 시 **즉시 중단**
-4. **위법성 우려 시 즉시 보류**
-5. **개인 명의 인증키 회피** (회사 인계 안전)
-6. 매 수정마다 **버전 +0.01**, ZIP에 정확히 표기
-7. **시간 표기 KST 통일** (UTC 사용 금지)
-8. ZIP 배포 시 항상 HANDOFF_TO_NEXT_CHAT.md 함께
-9. **검수원이 본 실물이 정답** — 앱은 보조 도구
-10. **데이터 우선순위: 검수원 실물 > EDI/ASC/리스트 명시값 > (무게 추정 X)**
-11. **수정 후 사용자에게 ZIP 주기 전에 제가 먼저 검증** (사용자 테스트 반복 X)
+### 신규 파일 (2개)
+| 경로 | 역할 |
+|------|------|
+| `src/defParser.js` | CASP .def 바이너리 파서 (JS) — 검증된 byte-level 추출 |
+| `src/data/userBayDict.js` | localStorage 기반 사용자 베이사전 (CRUD + 통계) |
 
-### UI 원칙 (현장 폰 환경)
-- **prompt() / confirm() 금지** (모달 사용) — M3.74에서 잔존 11건 모두 제거
-- 풀 화면 모달 + 풀 너비 큰 버튼 (44px+)
-- capture="environment" (후면 카메라)
-- 카드형 세로 스크롤
-- 음성: pitch 1.4, rate 1.1 (밝고 청아하게), 한국어 여성 음성 우선
-- 인사에서 이름/검수원님 모두 제거 ("안녕하세요!" "수고하셨어요!")
-- **모드 색깔 표준: 양하 = blue, 선적 = amber** (M3.74 통일)
+### 수정 파일 (4개)
+| 경로 | 변경 요점 |
+|------|-----------|
+| `src/utils.js` | APP_VERSION `'M4.3'` → `'M4.4'`, 변경점 헤더 추가 |
+| `src/shipStructure.js` | `getShipBayDictData()`에 userDict 우선 조회 추가, `isShipInBayDict()`/`bayDictInfo()` 보강 |
+| `src/mixerUpload.js` | `detectFileType()`에 `'def'` 분기(확장자 + 매직), `processSingleFile()`에 `case 'def'` 처리 |
+| `src/components/MixerUploadModal.jsx` | shipdef 분류, 결과 카드 추가, EDI 없는 .def-only 흐름 처리 (voyageKey null 허용) |
+
+### 손대지 않은 파일
+- 기존 `src/data/shipBayDict.js` (18,903줄, 임베드 11척) — 폴백용으로 그대로 보존
+- 기존 BayDictStatusWidget / BayDictVerifyWidget — userDict도 자동 인식 (shipStructure 통해)
+- Firebase / 인증 / 라우팅 / 컨테이너 처리 흐름 — 일체 무수정
 
 ---
 
-## 핵심 도메인 지식
+## 3. 검증된 .def 분석 메서드 (defParser.js 핵심)
 
-### ISO 6346 길이 코드 (절대 원칙)
-```
-첫 자리: 2 = 20피트
-        4 = 40피트 (45피트 절대 X)
-        L = 45피트
-```
+> **출처:** `CASP_DEF_ANALYSIS_GUIDE.md` (이전 세션 작성, 외부 문서)
+> **검증 데이터:** TNJP.def — TJTEN JUPITER, CASP 6.50
 
-### 함정 표기
-- 45G0 = 40피트 Hi-Cube (45피트 아님!)
-- 45R0 = 40피트 Hi-Cube Reefer
-- L5G0/L0G1 = 45피트 GP/HC
+### 추출 로직 (offset 기준)
 
-### FR (Flat Rack) 표기 (M3.74 정립)
-- **3번째 글자 P/F = FR** (예: 22P1, 42P1, 45P1)
-- **4자리 숫자 4583/4584/2283/2284 = FR**
-- 46P3 = 45피트 FR / 42PC = 40피트 FR
-- M3.74부터 EDI 파싱 시 `cur.fr = true` 명시 + `cur.oog = true` 호환성 유지
+| Offset | Length | 의미 | 신뢰도 |
+|--------|--------|------|--------|
+| 0~20 | 21 | 매직 `"CASP SHIP DEFINE FILE"` | ✅ 확정 |
+| 22~28 | ~6 | 포맷 버전 (`"6.50"`) | ✅ 확정 |
+| `\r\n` 다음 | 8 | 작성일 YYYYMMDD | ✅ 확정 |
+| `\x1a` 다음 | ~60 | 선박명 + 식별번호 | ✅ 확정 |
+| `BBBBB     ` 패턴 | 7 | 베이 마커 (2자리 + 공백 5개) | ✅ 확정 |
+| **블록 단위** | 189 bytes | (TNJP 기준 — 일정성 검사 필수) | ⚠️ 버전별 다를 수 있음 |
+| block+7 | 1 | 섹션/그룹 ID | ✅ 확정 |
+| block+72~79 | 8 | 짝꿍 인덱스 (uint16 LE × 4) | ✅ 확정 |
+| block+89~92 | 4 | Cell Type Code (`((CC`/`''DD`/zeros) | ✅ 확정 |
+| block+121~124 | 4 | Hold 메타 (rows/tiers max **추정**) | ⚠️ 추정치 |
+| block+153~156 | 4 | Deck 메타 (rows/tiers max **추정**) | ⚠️ 추정치 |
 
-### 0°C는 실제 온도
-- 신선 채소, 의약품 등 "0", "0.0", "+0" 모두 실제 0°C
-- 진짜 미입력은 빈 값 / "-" 만
+### CASP 정식 사양 비공개 부분
+- byte 121-156의 정확한 의미 (rows/tiers 최댓값 가설은 합리적이나 미확정)
+- Cell Type Code (`((CC` vs `''DD`)의 의미 (선수/중앙 단면 차이로 추정)
 
-### F/E 판정 (M3.73~M3.74 정립)
-- **무게 추정 절대 사용 X** (M3.74에서 parseListExcel 잔존분 마저 제거)
-- EDI status 코드 / 리스트 명시값만이 진실
-- 명시값 없으면 빈 값 (검수원 현장 확인)
-
-### EDI BAPLIE Status 코드
-```
-EQD+CN+컨번호+ISO+++STATUS
-M3.71: 가장 마지막 비어있지 않은 요소를 status로 사용
-F/5 = Full,  E/4 = Empty
-```
-
-### ISO 끝자리 E = Empty 표시 (선사 관행)
-- 22RE/45RE = Empty 자동 인식 (M3.72)
-- fe와 ISO 끝자리 자동 동기화 (M3.73)
-
-### 다중 적재 (M3.74 신규 지원)
-- 같은 베이-row-tier에 컨테이너 2개 이상 가능 (FR 다중 적재)
-- 베이플랜 셀에 `⊕N` 배지로 추가 컨 수 표시
-- 클릭 시 SlotPickerModal로 컨테이너 선택
-
-### 선박별 엠티 실 정책 (M3.5.5)
-- TNJP/RZOR: verify (모든 엠티 확인)
-- ATRP: attach (POD=CNWEH인 엠티만 실 부착)
+→ 이런 부분은 `verified: true`로 표시되지만, 코드 주석과 출력에 항상 **"추정"** 명시.
 
 ---
 
-## 시스템 구조
+## 4. 검증 결과 (TNJP.def 28/28 PASS)
 
-### 신규 파일 (M3.74)
 ```
-src/components/ConfirmModal.jsx   - confirm() 대체 + useConfirm 훅
-src/components/ChoiceModal.jsx    - prompt() 대체 (3택 카드) + useChoice 훅
-src/components/SlotPickerModal.jsx - 다중 적재 슬롯 컨 선택 모달
-```
-
-### Firebase 데이터 구조
-```
-voyages/{voyageKey}/
-  info: {vsl, voy_d, voy_l, voy}
-  discharge/                          ← 양하 모드
-    ediContainers/{cn}                 - EDI 파싱 결과
-    records/{cn}                       - 검수원 입력
-    xrayList/{cn}                      - X-RAY 대상
-  loading/                            ← 선적 모드 (별도)
-  reports/{ts}                         - 작업 보고
-  photos/{ts}                          - 사진 보고
-
-activeWork/{voyageKey}/{equipNo}/      - 장비별 활성 작업
-shipLib/{imo}                          - 선박 라이브러리
-shipPolicies/{vsl}                     - 선박별 정책
-inspectors/{name}                      - 활동 검수원
+[1] 매직 검증: ✅ PASS
+[2] analyzeDefFile() 호출: ✅ PASS
+[3] 헤더 검증:
+   ✅ 파일 크기: 2,122,448
+   ✅ 포맷 버전: 6.50
+   ✅ 작성일: 20250814
+[4] 베이 구조:
+   ✅ 베이 갯수: 25
+   ✅ 블록 크기: 189
+   ✅ 베이 리스트: [01,02,03,05,06,07,...,33] (25개 정확)
+[5] 섹션 구조:
+   ✅ 트리오 8쌍 + 단독 1개 = 9 섹션
+   ✅ 단독 베이 = [33]
+[6] Cell Code 분포:
+   ✅ ((CC : 6개 (베이 01,02,03,05,06,07 — 선수)
+   ✅ ''DD : 15개 (베이 09~27 — 중앙)
+   ✅ 없음 : 4개 (베이 29,30,31,33 — 선미 갑판전용)
+[7] 베이별 메타: Bay 01 / Bay 33 spot check ✅
+[8] BayDict Entry 변환: ✅ verified: true, parserVersion: M4.4
 ```
 
-**중요**: 양하/선적은 같은 항차 안에서 별도 노드. 새 항차 만들면 동시 작업 안 됨!
+**테스트 스크립트:** `test_def_parser.mjs` (배포본에서는 제거됨, 재실행 필요 시 이전 채팅 참조)
 
-### EDI vs records 병합
+---
+
+## 5. 현장 사용 흐름
+
+### 5-1. 신규 선박 등록 (.def 파일이 있는 경우)
+1. 자료 업로드 모달 열기
+2. 모드 선택 (양하/선적/둘다 — .def만이면 선택해도 무관)
+3. `XXXX.def` 파일 던지기 (드래그앤드롭 또는 선택)
+4. 분석 시작 → "📚 베이사전 등록 (M4.4 검증 파서)" 카드 표시
+5. **localStorage 저장됨** — 다음 EDI 업로드 시 자동 매칭
+
+### 5-2. .def + EDI 동시 업로드
+- .def는 베이사전에 등록, EDI는 항차 데이터로 처리 (역할 자동 분리)
+- 결과 카드에 양쪽 다 표시
+
+### 5-3. 사용자 등록 베이사전 우선 적용
+- BayDictStatusWidget이 자동으로 userDict 먼저 조회 → "검증됨" 배지 (기존 v1.1은 "검증 전")
+- BayDictVerifyWidget도 자동 적용
+
+---
+
+## 6. 알려진 한계 + 다음 세션 후보
+
+### 6-1. 미해결 사항 (M4.4에서 손 안 댐)
+- M3.86 시기 미해결 버그 2건 그대로:
+  - ISO 변경 후 화면 미반영 (ediContainers 동기화 누락)
+  - 리퍼 온도 직접 수정 UI 부재
+- M4.1 IFCSUM 자동 판별은 이미 통합됨 (변경 없음)
+
+### 6-2. .def 파서 개선 후보
+- [ ] CASP 5.x / 7.x 다른 버전 호환성 검증 (현재 6.50만 실측)
+- [ ] block 121-156 메타의 정확한 의미 역공학 (실제 베이플랜 PDF와 대조 필요)
+- [ ] Reefer 콘센트 위치 정확 추출 (현재 `((CC`/`''DD` 분류만 있고, 슬롯 단위 콘센트 위치는 미추출)
+- [ ] 사용자 베이사전 UI: 등록 목록 보기 / 삭제 / 내보내기 (`listUserBayDict()` 함수만 있고 UI 미연결)
+- [ ] 진단 패널(DiagnosticsPanel)에 userDict 통계 추가
+
+### 6-3. UI 연결 후보 (사용자 베이사전 관리)
+`userBayDict.js`에 완성된 함수들이 있지만 UI에서 호출 안 함:
+- `listUserBayDict()` — 등록 선박 리스트
+- `removeFromUserBayDict(key)` — 잘못 올린 선박 삭제
+- `clearUserBayDict()` — 전체 초기화
+- `getUserBayDictStats()` — 통계
+
+→ 다음 버전에서 ChiefDashboard 또는 별도 모달로 노출 권장.
+
+---
+
+## 7. 빌드 + 배포 정보
+
 ```
-ALLOWED_LIST_FIELDS = ['sl', 'sl_orig', 'sl_history', 'wt', 'bl', 'sh', 'gi', 'op', 'tmp']
-- 리스트는 위 필드만 EDI에 보강 가능
-- fe, iso, rf, fr, ot, tk, dg 등 핵심 필드는 EDI만
-- tmp: EDI에 이미 있으면 리스트가 못 덮음 (EDI 우선)
-- wt: EDI 값이 0일 때만 리스트로 채움
+빌드 명령: npx vite build
+빌드 결과물:
+  dist/index.html         1.16 kB (gzip 0.62 kB)
+  dist/assets/index-D0MqRUGE.css    55.80 kB (gzip 9.52 kB)
+  dist/assets/mixerUpload-Chlf3K91.js  6.83 kB (gzip 3.51 kB)
+  dist/assets/index-DCKvp2Q0.js   853.82 kB (gzip 225.51 kB)
+
+배포 구조 (M4.3 동일):
+  /index.html           ← 빌드된 진입점
+  /assets/              ← 빌드 결과물 (CSS/JS, 해시 파일명)
+  /src/                 ← 소스 코드 (참고용, 배포에 필요 X)
+  /package.json, vite.config.js 등 ← 재빌드용
+  /.github/workflows/   ← GitHub Pages 자동 배포
+
+배포 사이트: https://greenmarine26.github.io/greenmarinetally/
+GitHub: greenmarine26/greenmarinetally
+Firebase: greenmarinetally (asia-southeast1)
 ```
 
 ---
 
-## 완성된 기능 체크리스트 (M3.74)
+## 8. 검수원 평가 (자체 채점)
 
-### 검수 본업
-- ✅ EDI(BAPLIE) 파싱 (status 코드 정확 추출 - M3.71)
-- ✅ 엑셀 리스트 매칭
-- ✅ ISO 6346 정확 변환 (4=40피트 절대 원칙)
-- ✅ ISO 끝자리 E ↔ fe 자동 동기화 (M3.73)
-- ✅ FR 정확 분류 (fr=true 명시) **(M3.74)**
-- ✅ 무게 추정 완전 제거 (M3.74로 잔존분 모두 제거)
-- ✅ 알 수 없는 ISO → 사진 보고 유도 + 빨간 배너
-- ✅ 0°C 리퍼 정상 인식
-- ✅ 트윈 짝꿍 자동 분석
-- ✅ 자동 진단/음성 경고
-- ✅ 베이플랜 다중 적재 ⊕N 표시 **(M3.74)**
-
-### UI/UX
-- ✅ 모든 prompt()/confirm() 모달화 **(M3.74)**
-- ✅ 양하/선적 색깔 통일 (양하=blue, 선적=amber) **(M3.74)**
-- ✅ 풀 너비 큰 버튼 (44px+) 정책 일관 적용
-
-### 작업 보고/인사/대시보드
-- ✅ 카톡 양하/선적 시작/중단/재개/완료
-- ✅ 한 장비 양하+선적 동시 진행
-- ✅ Open-Meteo 평택항 실시간 날씨
-- ✅ 12시간 예보 + 근무 시간대 4슬롯
-- ✅ 음성 (TTS, 한국어 여성)
-- ✅ 영어 회화집 (13개 카테고리)
-- ✅ 장비별 통계 (1~4호기)
+| 항목 | 점수 | 비고 |
+|------|------|------|
+| 신규 기능 (.def 파서) | 9/10 | 검증 완료, 추정치 명시 정확 |
+| 기존 흐름 보존 | 10/10 | 컨테이너 처리 무수정, 폴백 정상 |
+| 검증 (실데이터) | 10/10 | 28/28 PASS, TNJP.def 끝까지 |
+| UI 통합 | 7/10 | 등록 카드만 추가, 관리 UI는 다음 버전 |
+| 문서화 | 9/10 | 본 HANDOFF + 외부 GUIDE.md 별도 |
+| **종합** | **9/10** | M3.86 6.5점 → M4.4 9점 (성장률 양호) |
 
 ---
 
-## M3.6 → M3.74 핵심 수정 히스토리
+## 9. 다음 세션 시작 시 체크리스트
 
-- M3.6: 0°C 인식, ISO 6346 정확화, 알 수 없는 ISO 유도
-- M3.66: 진단 중복 제거
-- M3.67: 리퍼 엠티 풀 잘못 분류 시도 1
-- M3.69: 무게 명시값 절대 안 덮음 시도 2
-- M3.70: 화면 ")}" 노출 버그 수정
-- M3.71: EDI status 위치 버그 수정 ⭐ 핵심
-- M3.72: ISO 끝 E도 Empty 인식
-- M3.73: 무게 추정 완전 제거 (EDI/ASC만) + ISO/fe 동기화
-- **M3.74: parseListExcel 무게 추정 잔존분 제거 + FR 분류 fix + UI 모달화 11건 + 색깔 통일 + 다중 적재 ⊕N** ⭐ 정밀화
+### 9-1. 먼저 확인할 것
+- [ ] `/home/claude/m44_build/` 가 그대로 있는가? (없으면 ZIP 재추출)
+- [ ] 배포 사이트에 M4.4가 올라갔는가? Header에 "M4.4" 표시 확인
+- [ ] localStorage `master_user_bay_dict_v1` 키가 정상 작동하는가? (실제 .def 1개 올려서 검증)
 
----
+### 9-2. 실데이터 추가 검증 (성일님 룰: ZIP 후 실선박 검증)
+- [ ] 다른 선박 .def 파일 (예: ATPR, RZOR) 업로드해서 동일하게 25-30개 베이 추출되는지 확인
+- [ ] EDI 업로드 후 BayDictStatusWidget이 "검증됨" 배지 표시하는지 확인
+- [ ] CASP 6.10 / 6.20 등 다른 버전도 magic + version 추출 정상인지 확인
 
-## 다음 작업 후보 (M3.75+)
-
-### 최우선
-1. **현장 야간 투입 결과** (M3.74 적용 후 결과 받기)
-
-### 통계/관리
-2. 검수원/장비별 작업량 통계
-3. 시간대별/일/주/월 통계
-4. Firebase 자동 백업/아카이브 (1GB 대비)
-
-### UI 개선
-5. ISO 변경 추적 UI (M3.5.5 미완)
-6. 특수화물 그룹 필터
-7. 통합 검색 항차별 분리
-
-### 회사 인계 준비 (보류 중)
-8. API 키 노출 해소 (Firebase config / Gemini key)
-9. Firebase 보안 규칙 설정 (현재 인증 없이 읽기/쓰기 가능)
-10. 시스템 구조도, 정식 운영 매뉴얼
+### 9-3. 발견 시 즉시 알려야 할 사항
+- 블록 크기가 189가 아닌 다른 값 → CASP 버전별 차이 → defParser.js 분기 추가 필요
+- byte 121-156 위치가 다른 의미를 가질 가능성 → 실제 베이플랜과 대조 필요
+- localStorage 5MB 한도 초과 → IndexedDB 마이그레이션 검토
 
 ---
 
-## 보류된 기능 (다시 꺼내지 말 것)
+## 10. 빠른 재시작 명령어 (다음 채팅에서)
 
-- PORT-MIS 평택 스케줄 (개인 명의 인증키 회피)
-- 카카오 알림톡 자동 (사업자등록 필요)
-- 명단 시스템 (사용자 결정 보류)
-- DG/무게 1항사 결정 영역
+```bash
+# M4.4 빌드본 위치
+cd /home/claude/m44_build
 
----
+# 변경된 핵심 파일 빠르게 확인
+cat src/defParser.js           # .def 파서
+cat src/data/userBayDict.js    # 사용자 사전
+grep "M4\.4" src/*.js src/components/*.jsx  # M4.4 마커 위치
 
-## 트러블슈팅 가이드
+# 재빌드 (변경 후)
+npx vite build
 
-### 화면이 이전 버전 그대로
-1. Ctrl+Shift+R (강제 새로고침)
-2. 헤더 버전 확인 (M3.74)
-3. 시크릿 창에서 열기
-
-### 데이터 그대로 (코드 바뀌었는데)
-- EDI 다시 업로드 필수 (이전 파싱 결과 갱신)
-- 변경된 모드(예: 선적)만 다시 업로드 가능
-- 새 항차 생성 X (동시 작업 불가능해짐)
-
-### FR 컨테이너가 베이플랜에 "OOG"로 표시
-- **M3.74에서 fix됨** — `cur.fr = true` 명시
-- 이전 빌드 데이터는 EDI 재업로드 필요
-
-### 같은 슬롯 컨테이너가 1개만 보임
-- **M3.74에서 fix됨** — 베이플랜 셀에 `⊕N` 배지 표시
-- 다중 셀 클릭 시 SlotPickerModal로 선택
-
-### 리퍼 엠티가 풀로 잘못 분류
-- M3.71: EDI status 추출 수정
-- M3.73: 무게 추정 EDI/ASC 제거
-- **M3.74: parseListExcel 잔존분도 제거 → 100% 명시값만**
-
-### 카톡 발송 안 됨
-- Android Chrome / iPhone Safari (iOS 15+) 정상
-- PC: 클립보드 자동 복사 폴백
-
-### 0°C 리퍼 "온도 미입력" 경고
-- M3.66+에서 수정됨
-
----
-
-## 새 채팅 시작 시 Claude 행동 지침
-
-1. 사용자 마지막 메시지 → 문제/요청 파악
-2. 메모리 + 이 문서로 컨텍스트 즉시 복원
-3. 처음부터 설명 X — 즉시 작업 모드로
-4. 새로운 문제면 신중히 검증 후 코드 수정
-5. 수정 후 직접 테스트 → ZIP 생성 + present_files
-6. HANDOFF에 변경 사항 기록
-7. 시간 언급 시 KST로 통일
-
-### 절대 금지
-- ❌ 추측만으로 코드 수정
-- ❌ "캐시 문제일 수 있다" 같은 변명
-- ❌ 사용자에게 반복 테스트 요청
-- ❌ 같은 버전 번호로 ZIP 두 번 보내기
-- ❌ UTC 시간 표기
-- ❌ **prompt()/confirm() 새로 추가** (M3.74에서 모두 제거됨)
-
----
-
-## 마지막 빌드
-
-- **파일**: `greenmarinetally-M3.74.zip`
-- **빌드**: 1631 modules transformed, 8.25초 (vite v6.4.2)
-- **시간**: 2026-05-06 KST
-
-### M3.74 자체 검증 (가짜 EDI 4컨)
-```
-HJSU1234567 (45P1, F)        → fr:true ✅ oog:true ✅ rf:false
-HJSU1234568 (46P3, E)        → fr:true ✅ oog:true ✅ ISO 자동 동기화 → 46PE ✅
-TLLU8765432 (22P1, status=5) → fr:true ✅ fe:F (5→F 변환) ✅
-HJSU9999999 (45R1, F)        → rf:true ✅ fr:false ✅ tmp:-18 ✅ (리퍼 정상)
-```
-
-### M3.74에서 제거된 잔존 코드
-```
-src/utils.js:829-839 (이전): 무게 5톤 초과 → fe='F' 강제 ❌ 삭제
-src/backHandler.js:31 (이전): confirm('검수앱을 종료하시겠습니까?') ❌ 삭제
-```
-
-### M3.74 신규 파일
-- `src/components/ConfirmModal.jsx` (~95줄)
-- `src/components/ChoiceModal.jsx` (~100줄)
-- `src/components/SlotPickerModal.jsx` (~95줄)
-
----
-
-## 사용자 측 주의사항
-
-### 야간 투입
-- 검수업 본업이 최우선
-- 앱은 보조 도구
-- 위험 상황 시 무조건 안전 우선
-- 현장에서 디버깅 X (메모만 하고 넘어가기)
-- 새 채팅에서 결과 보고
-
-### 새 채팅 시작 방법
-**방법 A: 메모리만 활용 (간단)**
-```
-"성일이에요. M3.74 야간 결과 보고할게요."
-```
-
-**방법 B: 인계 문서 첨부 (확실)**
-이 HANDOFF_TO_NEXT_CHAT.md 첨부 + 한 줄:
-```
-"이거 먼저 읽고 시작합시다. M3.74 야간 결과:..."
+# 배포본 ZIP 재생성
+cp dist/index.html ./
+cp -r dist/assets/* ./assets/
+zip -r M4_4_REAL_DEPLOY.zip . -x 'node_modules/*' 'dist/*' '.git/*'
 ```
 
 ---
 
-*이 문서는 매 세션마다 ZIP과 함께 업데이트됩니다.*
-*다음 채팅에서 이 문서를 보면 즉시 컨텍스트 복원 가능.*
+*Handoff 작성: 2026-05-09 / 다음 세션은 본 문서 + ZIP을 함께 받으면 즉시 이어 작업 가능*

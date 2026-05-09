@@ -12,15 +12,20 @@ import {
   isoToLabel, normalizeBay,
 } from './utils.js';
 import { extractShipInfo } from './shipStructure.js';
+// M4.4: CASP .def 파서
+import { analyzeDefFile, analysisToBayDictEntry } from './defParser.js';
+import { addToUserBayDict } from './data/userBayDict.js';
 
 // ─── 파일 종류 자동 판별 ───
-// 결과: 'edi' | 'asc' | 'excel' | 'csv' | 'pdf' | 'image' | 'unknown'
+// 결과: 'edi' | 'asc' | 'excel' | 'csv' | 'pdf' | 'image' | 'def' | 'unknown'
+// M4.4: 'def' (CASP SHIP DEFINE FILE) 추가
 export async function detectFileType(file) {
   const name = (file.name || '').toLowerCase();
   const ext = name.split('.').pop();
 
   if (ext === 'edi') return 'edi';
   if (ext === 'asc') return 'asc';
+  if (ext === 'def') return 'def';   // M4.4: CASP 선박 정의 파일
   if (['xls', 'xlsx'].includes(ext)) return 'excel';
   if (['csv', 'tsv'].includes(ext)) return 'csv';
   if (ext === 'pdf') return 'pdf';
@@ -29,6 +34,17 @@ export async function detectFileType(file) {
   // 매직바이트로 판별
   const buf = await file.slice(0, 4096).arrayBuffer();
   const bytes = new Uint8Array(buf);
+
+  // M4.4: CASP SHIP DEFINE FILE 매직 검사 (확장자 누락 대비)
+  // "CASP SHIP DEFINE FILE" = 21바이트 ASCII
+  if (bytes.length >= 21) {
+    let isCasp = true;
+    const magic = 'CASP SHIP DEFINE FILE';
+    for (let i = 0; i < magic.length; i++) {
+      if (bytes[i] !== magic.charCodeAt(i)) { isCasp = false; break; }
+    }
+    if (isCasp) return 'def';
+  }
 
   // PDF: %PDF
   if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) return 'pdf';
@@ -400,6 +416,34 @@ export async function processSingleFile(file, options = {}) {
         // 경고 표시용 플래그
         out._ifcsum = true;
         out._warning = 'IFCSUM 양식 - BAPLIE 파서로 처리됨. 베이 위치 정보 누락 가능 (베이사전 매칭으로 보강).';
+        break;
+      }
+      case 'def': {
+        // M4.4: CASP SHIP DEFINE FILE — 선박 구조 정의 파일
+        // 컨테이너 데이터는 없음, 베이사전(userBayDict)에 등록만 수행
+        const buf = await file.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const analysis = analyzeDefFile(bytes);
+        const entry = analysisToBayDictEntry(analysis, file.name);
+        const saved = addToUserBayDict(entry);
+        out.role = 'shipdef';   // 컨테이너 머지에서 제외
+        out.data = {
+          analysis,
+          entry,
+          saved,
+          summary: {
+            vessel: analysis.header.vesselName,
+            identifier: analysis.header.identifier,
+            version: analysis.header.version,
+            created: analysis.header.created,
+            bayCount: analysis.bayCount,
+            sectionCount: analysis.structure.sectionCount,
+            trios: analysis.structure.trios.length,
+            standalone: analysis.structure.standalone.length,
+            cellCodes: analysis.cellCodeDistribution,
+          },
+        };
+        if (analysis.warning) out._warning = analysis.warning;
         break;
       }
       case 'asc': {

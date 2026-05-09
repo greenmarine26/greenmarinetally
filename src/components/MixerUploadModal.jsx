@@ -264,6 +264,8 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
   const ediFiles = fileResults.filter(r => r.role === 'edi-base' && !r.error);
   const listFiles = fileResults.filter(r => r.role === 'list' && !r.error);
   const xrayFiles = fileResults.filter(r => r.role === 'xray' && !r.error);
+  // M4.4: .def 파일 (선박 구조 정의 — 컨테이너 없음, 베이사전에만 등록)
+  const shipdefFiles = fileResults.filter(r => r.role === 'shipdef' && !r.error);
   const errorFiles = fileResults.filter(r => r.error);
 
   // 양하/선적 분리 (EDI의 POL/POD 또는 PDF/OCR의 mode)
@@ -374,11 +376,17 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
 
   setProgress({ done: files.length, total: files.length, current: 'Firebase 저장 중...' });
 
+  // M4.4: .def 파일만 있고 EDI/리스트가 없으면 항차 저장 스킵 (컨테이너 데이터 없음)
+  const hasContainerData = ediFiles.length > 0 || listFiles.length > 0 || xrayFiles.length > 0;
+
   // 항차 매칭 + 저장 (Firebase 쓰기 병렬화)
-  const voyageKey = await persistData({
-    mode, targetVoyage, voyages, inspector,
-    dischargeData, loadingData,
-  });
+  let voyageKey = null;
+  if (hasContainerData) {
+    voyageKey = await persistData({
+      mode, targetVoyage, voyages, inspector,
+      dischargeData, loadingData,
+    });
+  }
 
   // M3.91: transit 컨테이너 카운트 분리 (베이 누락 fix)
   const dischargeRealCount = Object.values(dischargeData.edi).filter(c => c._mode === 'discharge').length;
@@ -390,10 +398,19 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
     ediCount: ediFiles.length,
     listCount: listFiles.length,
     xrayCount: xrayFiles.length,
+    shipdefCount: shipdefFiles.length,   // M4.4
     errorCount: errorFiles.length,
     dischargeContainers: dischargeRealCount,
     loadingContainers: loadingRealCount,
     transitContainers: transitCount,  // 신규: 평택 무관 화물 (베이 골격 표시용)
+    // M4.4: .def 등록 결과 (이름/베이수 표시용)
+    shipdefRegistered: shipdefFiles.map(r => ({
+      file: r.fileName,
+      vessel: r.data?.summary?.vessel,
+      bayCount: r.data?.summary?.bayCount,
+      sectionCount: r.data?.summary?.sectionCount,
+      saved: r.data?.saved,
+    })),
   };
 
   setResults({ fileResults, summary, voyageKey, errorFiles });
@@ -498,6 +515,9 @@ async function persistData({ mode, targetVoyage, voyages, inspector, dischargeDa
 // ─── 결과 화면 ───
 function ResultView({ results, onOpenVoyage, onClose }) {
   const { summary, fileResults, errorFiles, voyageKey } = results;
+  const hasShipdef = summary.shipdefCount > 0;
+  const hasContainers = summary.dischargeContainers > 0 || summary.loadingContainers > 0;
+
   return (
     <div className="p-4 space-y-3">
       <div className="bg-emerald-900/30 border-2 border-emerald-700/40 rounded-lg p-4">
@@ -507,15 +527,48 @@ function ResultView({ results, onOpenVoyage, onClose }) {
         </div>
         <div className="text-xs text-slate-300 space-y-1">
           <div>• 총 파일: {summary.totalFiles}개</div>
-          <div>• EDI 분석: {summary.ediCount}개</div>
-          <div>• 리스트(엑셀/PDF/사진): {summary.listCount}개</div>
-          <div>• X-RAY: {summary.xrayCount}개</div>
-          <div className="pt-2 border-t border-emerald-700/30">
-            <div className="font-bold text-amber-300">⬇️ 양하: {summary.dischargeContainers}대</div>
-            <div className="font-bold text-blue-300">⬆️ 선적: {summary.loadingContainers}대</div>
-          </div>
+          {summary.ediCount > 0 && <div>• EDI 분석: {summary.ediCount}개</div>}
+          {summary.listCount > 0 && <div>• 리스트(엑셀/PDF/사진): {summary.listCount}개</div>}
+          {summary.xrayCount > 0 && <div>• X-RAY: {summary.xrayCount}개</div>}
+          {hasShipdef && (
+            <div>• 📚 선박 구조(.def): {summary.shipdefCount}개 → 베이사전 등록</div>
+          )}
+          {hasContainers && (
+            <div className="pt-2 border-t border-emerald-700/30">
+              <div className="font-bold text-amber-300">⬇️ 양하: {summary.dischargeContainers}대</div>
+              <div className="font-bold text-blue-300">⬆️ 선적: {summary.loadingContainers}대</div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* M4.4: .def 등록 상세 카드 */}
+      {hasShipdef && summary.shipdefRegistered && summary.shipdefRegistered.length > 0 && (
+        <div className="bg-cyan-950/40 border-2 border-cyan-700/50 rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-cyan-300 text-base">📚</span>
+            <div className="text-sm font-black text-cyan-200">베이사전 등록 (M4.4 검증 파서)</div>
+          </div>
+          <div className="space-y-2">
+            {summary.shipdefRegistered.map((r, i) => (
+              <div key={i} className="bg-cyan-900/30 border border-cyan-700/40 rounded p-2 text-xs">
+                <div className="font-bold text-cyan-100 truncate">{r.vessel || '(이름 없음)'}</div>
+                <div className="text-cyan-300/80 mt-0.5">
+                  {r.bayCount}개 베이 · {r.sectionCount}섹션 · 파일: {r.file}
+                </div>
+                {r.saved ? (
+                  <div className="text-emerald-400 text-[10px] mt-1">✓ localStorage 저장됨</div>
+                ) : (
+                  <div className="text-amber-400 text-[10px] mt-1">⚠ 저장 실패 (브라우저 저장소 제한)</div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-cyan-400/70 mt-2">
+            ※ 다음 항차 EDI 업로드 시 자동 매칭됨 (IMO/코드 우선순위)
+          </div>
+        </div>
+      )}
 
       {errorFiles && errorFiles.length > 0 && (
         <div className="bg-red-900/30 border-2 border-red-700/40 rounded-lg p-3">
@@ -536,10 +589,17 @@ function ResultView({ results, onOpenVoyage, onClose }) {
           className="py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold rounded">
           닫기
         </button>
-        <button onClick={() => onOpenVoyage(voyageKey)}
-          className="py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded">
-          항차 열기 →
-        </button>
+        {voyageKey ? (
+          <button onClick={() => onOpenVoyage(voyageKey)}
+            className="py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded">
+            항차 열기 →
+          </button>
+        ) : (
+          <button onClick={onClose}
+            className="py-3 bg-cyan-700 hover:bg-cyan-600 text-white font-bold rounded">
+            완료
+          </button>
+        )}
       </div>
     </div>
   );

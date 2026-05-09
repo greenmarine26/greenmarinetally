@@ -9,6 +9,7 @@
 //   - 컨테이너 데이터는 기존 EDI 흐름 유지 (변경 없음)
 
 import { lookupBayDict, getBayDictStats } from './data/shipBayDict.js';
+import { lookupUserBayDict, getUserBayDictStats } from './data/userBayDict.js';
 
 // EDI 텍스트에서 선박 정보 추출
 // 표준: TDT+20+2622E+++SKR:172:20+++9388417:146:11:ATLANTIC PIONEER
@@ -143,9 +144,28 @@ export function compareStructures(oldStruct, newStruct) {
  * 베이사전에서 선박 구조 보강 데이터 가져오기
  * @param {string} imo - IMO 번호
  * @param {string} code - CASP 코드 (선박명 약어)
- * @returns {object|null} { name, callsign, specs, bayDef } 또는 null
+ * @returns {object|null} { name, callsign, specs, bayDef, source } 또는 null
+ *
+ * M4.4 변경: userBayDict 먼저 조회 (사용자 업로드 .def 우선)
+ *   1순위: userBayDict (검증된 M4.4 파서)
+ *   2순위: SHIP_BAY_DICT (임베드된 v1.1, 미검증)
  */
 export function getShipBayDictData(imo, code) {
+  // M4.4: 사용자 업로드 베이사전 우선 조회
+  const userData = lookupUserBayDict(imo, code);
+  if (userData) {
+    return {
+      source: 'USER_UPLOAD_M4_4',
+      name: userData.name,
+      callsign: userData.callsign,
+      specs: userData.specs || {},
+      bayDef: userData.bayDef,
+      verified: userData.bayDef?.verified || false,
+      code: userData.code,
+    };
+  }
+
+  // 임베드된 베이사전 (기존 v1.1)
   const data = lookupBayDict(imo, code);
   if (!data) return null;
 
@@ -156,6 +176,7 @@ export function getShipBayDictData(imo, code) {
     specs: data.specs,
     bayDef: data.bayDef,
     verified: data.bayDef.verified || false,
+    code: data.code,
   };
 }
 
@@ -209,14 +230,22 @@ export function augmentStructureWithBayDict(structure, imo, code) {
 
 /**
  * 베이사전 등록 여부 확인 (UI에 배지 표시용)
+ * M4.4: 사용자 업로드 사전도 포함해서 확인
  */
 export function isShipInBayDict(imo, code) {
-  return lookupBayDict(imo, code) !== null;
+  return lookupUserBayDict(imo, code) !== null || lookupBayDict(imo, code) !== null;
 }
 
 /**
  * 베이사전 통계 (디버그/진단용)
+ * M4.4: 사용자 사전 + 임베드 사전 합산
  */
 export function bayDictInfo() {
-  return getBayDictStats();
+  const embedded = getBayDictStats();
+  const user = getUserBayDictStats();
+  return {
+    embedded,
+    user,
+    totalShips: embedded.totalShips + user.totalShips,
+  };
 }
