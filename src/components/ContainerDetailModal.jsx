@@ -114,13 +114,11 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     setEditingTmp(false);
   };
 
-  // M3.5.5: 엠티 실 부착/확인 저장
-  // 케이스:
-  //   1) 처음 입력: eseal에 저장
-  //   2) verify 모드 + 이미 입력된 상태에서 수정:
-  //      - reseal 종류: 기존 eseal 유지 + reseal에 새 값
-  //      - wrong 종류:  기존 eseal 유지 + eseal_wrong에 새 값
-  //   3) attach 모드 + 이미 입력된 상태에서 수정: eseal 단순 변경
+  // M3.5.5/M4.9b: 엠티 실 저장 (단순화)
+  //   verify 모드(TNJP/RZOR): 단순 덮어쓰기. 수정 이력은 fbSetEmptySeal에서 자동 저장.
+  //                           수정 발생 시 별도 "엠티 수정 리포트"로 출력.
+  //   attach 모드(ATRP): 단순 덮어쓰기.
+  //   M4.9b 변경: 리씰/틀린실 라디오 강제 선택 제거 (사용자 요청 — 경고 메시지 불필요)
   const handleSaveEseal = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const newVal = String(esealVal || '').trim().toUpperCase();
@@ -128,27 +126,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
       alert('엠티실번호를 입력하세요');
       return;
     }
-
-    let fields;
-    const hasExisting = !!(c.eseal || '').trim();
-
-    if (!hasExisting) {
-      // 처음 입력
-      fields = { eseal: newVal };
-    } else if (sealMode === 'verify') {
-      // verify 모드 + 이미 있음 → 종류에 따라
-      if (esealType === 'reseal') {
-        fields = { eseal: c.eseal, reseal: newVal };
-      } else {
-        // wrong
-        fields = { eseal: c.eseal, eseal_wrong: newVal };
-      }
-    } else {
-      // attach 모드 + 수정 (단순 교체)
-      fields = { eseal: newVal };
-    }
-
-    await fbSetEmptySeal(voyageKey, mode, c.cn, fields, inspector, sealMode);
+    // 단순 덮어쓰기 (verify/attach 동일). 이력은 firebase에서 자동 저장.
+    await fbSetEmptySeal(voyageKey, mode, c.cn, { eseal: newVal }, inspector, sealMode);
     setEditingEseal(false);
   };
 
@@ -442,6 +421,10 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           )}
 
           {/* M3.5.5: 엠티 실 부착/확인 (sealMode 있을 때만) */}
+          {/* M4.9b: verify 모드 단순화 — TNJP/RZOR 등 verify 선박에서는
+              경고 깜빡임 / 리씰·틀린실 라디오 강제 선택 제거.
+              실 입력만 받고, 수정 이력은 자동 저장 (eseal_history),
+              수정된 것만 별도 "엠티 수정 리포트"로 출력 가능 */}
           {sealMode && (
             <div className={`mb-3 rounded p-2 ${
               editingEseal
@@ -451,7 +434,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1">
                   <Lock className={`w-3 h-3 ${sealMode === 'attach' ? 'text-red-400' : 'text-cyan-400'}`}/>
-                  엠티 실 {sealMode === 'attach' ? '부착 (작업 필요)' : '확인 (이미 부착됨)'}
+                  엠티 실 {sealMode === 'attach' ? '부착 (작업 필요)' : '표기'}
                 </span>
                 {!editingEseal && (
                   <button onClick={() => { setEsealVal(c.eseal || ''); setEditingEseal(true); }}
@@ -475,22 +458,32 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                           ({c.eseal_by}, {c.eseal_at ? new Date(c.eseal_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''})
                         </span>
                       )}
+                      {/* M4.9b: 수정 이력 있으면 작은 표시 (경고 아님, 단순 정보) */}
+                      {Array.isArray(c.eseal_history) && c.eseal_history.length > 0 && (
+                        <span className="text-[10px] text-slate-500 font-bold">
+                          (수정 {c.eseal_history.length}회)
+                        </span>
+                      )}
                     </div>
                   ) : (
-                    <span className={`text-sm font-bold animate-pulse ${
-                      sealMode === 'attach' ? 'text-red-300' : 'text-amber-300'
-                    }`}>
-                      ⚠️ {sealMode === 'attach' ? '실 부착 필요' : '실 확인 필요'}
-                    </span>
+                    /* M4.9b: verify 모드는 깜빡 경고 제거. attach만 깜빡임 (실제 부착 작업 필요) */
+                    sealMode === 'attach' ? (
+                      <span className="text-sm font-bold animate-pulse text-red-300">
+                        ⚠️ 실 부착 필요
+                      </span>
+                    ) : (
+                      <span className="text-sm text-slate-400">
+                        실번호 미입력
+                      </span>
+                    )
                   )}
-                  {/* 틀린실번호 (있으면) */}
+                  {/* M4.9b: verify 모드의 옛 틀린실/리씰 표시는 호환 위해 유지 (이미 저장된 데이터 있을 수 있음) */}
                   {c.eseal_wrong && (
                     <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-amber-950/40 border border-amber-700/40 rounded">
                       <span className="text-[10px] text-amber-400 font-bold">⚠️ 틀린실</span>
                       <span className="text-sm font-bold mono text-amber-200">{c.eseal_wrong}</span>
                     </div>
                   )}
-                  {/* 리씰번호 (있으면) */}
                   {c.reseal && (
                     <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-purple-950/40 border border-purple-700/40 rounded">
                       <span className="text-[10px] text-purple-400 font-bold">🔄 리씰</span>
@@ -504,7 +497,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                     {sealMode === 'attach'
                       ? '실 부착 후 실번호를 입력하세요. POD: ' + (c.pod || '?')
                       : (c.eseal
-                          ? '기존 실: ' + c.eseal + ' / 새 번호 입력 후 종류 선택'
+                          ? '기존: ' + c.eseal + ' → 새 번호 입력 (이력 자동 기록)'
                           : '엠티에 부착된 실번호를 입력하세요')}
                   </div>
                   <input
@@ -519,34 +512,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                     }`}
                     autoFocus
                   />
-                  {/* M3.5.5: verify 모드 + 이미 입력된 상태에서 수정 시 종류 선택 */}
-                  {sealMode === 'verify' && c.eseal && (
-                    <div className="bg-slate-800/50 border border-slate-700 rounded p-2 space-y-1">
-                      <div className="text-[10px] text-slate-400 font-bold">새 번호의 구분:</div>
-                      <label className="flex items-center gap-2 px-2 py-1 hover:bg-slate-700/50 rounded cursor-pointer">
-                        <input
-                          type="radio"
-                          name="esealType"
-                          value="reseal"
-                          checked={esealType === 'reseal'}
-                          onChange={e => setEsealType(e.target.value)}
-                          className="w-4 h-4"
-                        />
-                        <span className="text-sm font-bold text-purple-300">🔄 리씰 (손상 등으로 재부착)</span>
-                      </label>
-                      <label className="flex items-center gap-2 px-2 py-1 hover:bg-slate-700/50 rounded cursor-pointer">
-                        <input
-                          type="radio"
-                          name="esealType"
-                          value="wrong"
-                          checked={esealType === 'wrong'}
-                          onChange={e => setEsealType(e.target.value)}
-                          className="w-4 h-4"
-                        />
-                        <span className="text-sm font-bold text-amber-300">⚠️ 틀린실 (예상과 다른 번호 발견)</span>
-                      </label>
-                    </div>
-                  )}
+                  {/* M4.9b: 라디오 강제 선택 제거 — 단순 덮어쓰기, 이력 자동 저장 */}
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setEditingEseal(false)}
                       className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
@@ -556,7 +522,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                       className={`py-2 rounded text-xs font-bold text-white ${
                         sealMode === 'attach' ? 'bg-red-700 hover:bg-red-600' : 'bg-cyan-700 hover:bg-cyan-600'
                       }`}>
-                      💾 저장
+                      저장
                     </button>
                   </div>
                 </div>
