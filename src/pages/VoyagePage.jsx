@@ -15,6 +15,9 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats
 } from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict } from '../shipStructure.js';
+// M4.4: CASP .def 런타임 파서 + 사용자 베이사전
+import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
+import { addToUserBayDict } from '../data/userBayDict.js';
 import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
@@ -384,6 +387,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           <BayPlan
             containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} mode={mode}
             onOpenContainer={(c) => setDetailC(c)}
+            shipImo={voyage?.info?.imo}
+            shipName={voyage?.info?.vsl}
           />
         </div>
       )}
@@ -568,7 +573,48 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
     let allEdiContainers = [];    // 베이 분석용 (평택 필터 X 전체)
     let prevStruct = null;        // 기존 학습된 구조
 
+    // M4.4: .def 파일 분리 처리 — 컨테이너 데이터 없음, 베이사전만 등록
+    const defFiles = [];
+    const ediCandidates = [];
     for (const file of Array.from(files)) {
+      const isDefByExt = /\.def$/i.test(file.name);
+      if (isDefByExt) {
+        defFiles.push(file);
+        continue;
+      }
+      // 매직 바이트로 .def 추가 검사 (확장자 다른 경우 대비)
+      try {
+        const head = await file.slice(0, 21).arrayBuffer();
+        const headBytes = new Uint8Array(head);
+        if (isCaspDefFile(headBytes)) {
+          defFiles.push(file);
+          continue;
+        }
+      } catch (e) {}
+      ediCandidates.push(file);
+    }
+
+    // .def 파일 먼저 처리 (베이사전 등록)
+    for (const file of defFiles) {
+      try {
+        const buf = await file.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const analysis = analyzeDefFile(bytes);
+        const entry = analysisToBayDictEntry(analysis, file.name);
+        const saved = addToUserBayDict(entry);
+        const verifiedMark = saved ? '✅' : '⚠️';
+        results.push(
+          `${verifiedMark} 📚 ${file.name}: ${analysis.header.vesselName} — ` +
+          `${analysis.bayCount}개 베이, ${analysis.structure.sectionCount}섹션 ` +
+          `(트리오 ${analysis.structure.trios.length}, 단독 ${analysis.structure.standalone.length}) ` +
+          `→ 베이사전 등록${saved ? '됨' : ' 실패'}`
+        );
+      } catch (e) {
+        results.push(`❌ ${file.name} (.def): ${e.message}`);
+      }
+    }
+
+    for (const file of ediCandidates) {
       try {
         const text = await file.text();
         const isAsc = /\.asc$/i.test(file.name) || /^\$604/.test(text.slice(0, 10));
@@ -732,7 +778,20 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
       }
     }
 
-    setStatus(results.join('\n') + `\n\n총 평택 대상: ${Object.keys(allCns).length}대`);
+    // M4.4: .def만 업로드한 경우와 EDI도 같이 한 경우 모두 적절히 표시
+    let summary;
+    const cnCount = Object.keys(allCns).length;
+    const defCount = defFiles.length;
+    if (cnCount > 0 && defCount > 0) {
+      summary = `\n\n총 평택 대상: ${cnCount}대 · 베이사전 등록: ${defCount}척`;
+    } else if (cnCount > 0) {
+      summary = `\n\n총 평택 대상: ${cnCount}대`;
+    } else if (defCount > 0) {
+      summary = `\n\n📚 베이사전 등록: ${defCount}척 (다음 EDI 업로드 시 자동 매칭)`;
+    } else {
+      summary = '';
+    }
+    setStatus(results.join('\n') + summary);
     if (ediRef.current) ediRef.current.value = '';
   };
 
@@ -976,7 +1035,7 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400"/>
-          1. EDI / ASC (필수)
+          1. EDI / ASC (필수) <span className="text-[10px] text-cyan-400 font-normal">+ .def (선박 구조)</span>
         </div>
         <input ref={ediRef} type="file" multiple accept="*/*"
           onChange={e => handleEdiUpload(e.target.files)}
@@ -984,6 +1043,7 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         <div className="text-[10px] text-slate-500 mt-1">
           현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
           <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
+          <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
         </div>
       </div>
 

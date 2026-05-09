@@ -9,7 +9,61 @@
 //   - 컨테이너 데이터는 기존 EDI 흐름 유지 (변경 없음)
 
 import { lookupBayDict, getBayDictStats } from './data/shipBayDict.js';
+import { SHIP_BAY_DICT_V2, lookupBayDictV2 } from './data/shipBayDict_v2.js';
 import { lookupUserBayDict, getUserBayDictStats } from './data/userBayDict.js';
+
+// M4.5: 선박 식별자 정규화 (퍼지 매칭용)
+//   "TJ TEN JUPITER" → "TJTENJUPITER"
+//   "TEN JUPITER" → "TENJUPITER"
+//   "MSC OSCAR " → "MSCOSCAR"
+function normalizeShipKey(s) {
+  if (!s) return '';
+  return String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+// M4.5: 사전(임베드 v2 + v1 + userBayDict) 통합 퍼지 조회
+//   1) IMO 정확 매칭 (가장 신뢰)
+//   2) code 정확 매칭
+//   3) 정규화된 선박명 부분 매칭 (양방향) — "TJ TEN JUPITER" ↔ "TEN JUPITER"
+//   4) 모두 실패 시 null
+//
+// 동작 우선순위:
+//   userBayDict > SHIP_BAY_DICT_V2 (109척, verified) > SHIP_BAY_DICT (11척, v1.1)
+function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
+  const targets = [
+    { name: 'user', dict: null, lookup: () => lookupUserBayDict(imo, vesselNameOrCode) },
+    { name: 'v2',   dict: SHIP_BAY_DICT_V2, lookup: () => lookupBayDictV2(vesselNameOrCode) },
+    { name: 'v1',   dict: null, lookup: () => lookupBayDict(imo, vesselNameOrCode) },
+  ];
+
+  // 1차: 각 사전에서 표준 lookup (IMO/code 정확 매칭)
+  for (const t of targets) {
+    const r = t.lookup();
+    if (r) return { source: t.name, data: r };
+  }
+
+  // 2차: 정규화된 선박명 부분 매칭 (가장 흔한 케이스 — EDI vsl="TJ TEN JUPITER" vs 사전 name="TEN JUPITER")
+  const targetKey = normalizeShipKey(vesselNameOrCode);
+  if (!targetKey || targetKey.length < 3) return null;
+
+  // v2 사전 부분 매칭
+  for (const k of Object.keys(SHIP_BAY_DICT_V2)) {
+    const entry = SHIP_BAY_DICT_V2[k];
+    const dictKey = normalizeShipKey(entry.name || '');
+    const codeKey = normalizeShipKey(entry.code || '');
+    if (!dictKey && !codeKey) continue;
+    // 양방향 substring (둘 중 더 긴 쪽이 짧은 쪽 포함)
+    if ((dictKey && (targetKey.includes(dictKey) || dictKey.includes(targetKey))) ||
+        (codeKey && targetKey.includes(codeKey) && codeKey.length >= 4)) {
+      return { source: 'v2-fuzzy', data: entry };
+    }
+  }
+
+  // 임베드 v1 사전 부분 매칭 (폴백)
+  // 주의: shipBayDict.js는 SHIP_BAY_DICT export하지만 여기서는 lookupBayDict만 import
+  // 직접 fuzzy 검색하려면 SHIP_BAY_DICT도 import 필요 — 일단 v2에 없으면 종료
+  return null;
+}
 
 // EDI 텍스트에서 선박 정보 추출
 // 표준: TDT+20+2622E+++SKR:172:20+++9388417:146:11:ATLANTIC PIONEER
@@ -143,40 +197,41 @@ export function compareStructures(oldStruct, newStruct) {
 /**
  * 베이사전에서 선박 구조 보강 데이터 가져오기
  * @param {string} imo - IMO 번호
- * @param {string} code - CASP 코드 (선박명 약어)
- * @returns {object|null} { name, callsign, specs, bayDef, source } 또는 null
+ * @param {string} code - CASP 코드 또는 선박명 (둘 다 시도)
+ * @returns {object|null}
  *
- * M4.4 변경: userBayDict 먼저 조회 (사용자 업로드 .def 우선)
- *   1순위: userBayDict (검증된 M4.4 파서)
- *   2순위: SHIP_BAY_DICT (임베드된 v1.1, 미검증)
+ * M4.5: fuzzyLookupAcrossDicts 사용 — userBayDict > v2(109척) > v1(11척, 폴백) + 정규화 부분매칭
  */
 export function getShipBayDictData(imo, code) {
-  // M4.4: 사용자 업로드 베이사전 우선 조회
-  const userData = lookupUserBayDict(imo, code);
-  if (userData) {
-    return {
-      source: 'USER_UPLOAD_M4_4',
-      name: userData.name,
-      callsign: userData.callsign,
-      specs: userData.specs || {},
-      bayDef: userData.bayDef,
-      verified: userData.bayDef?.verified || false,
-      code: userData.code,
-    };
+  const result = fuzzyLookupAcrossDicts(imo, code);
+  if (!result) return null;
+
+  const data = result.data;
+
+  // user / v1 / v2 사전 형식이 약간 다름 — 정규화해서 반환
+  // (모두 bayDef 객체를 가짐)
+  const bayDef = data.bayDef || {};
+
+  // bayList 추출 (v2: bayList, v1: bays.idx로 추정, user: bayList 또는 bays)
+  let bayList = bayDef.bayList;
+  if (!bayList && Array.isArray(bayDef.bays) && bayDef.bays.length > 0) {
+    // 객체 배열에서 bayNo 또는 idx 추출
+    bayList = bayDef.bays
+      .map(b => b.bayNo || (typeof b.idx === 'number' ? String(b.idx).padStart(2, '0') : null))
+      .filter(Boolean);
   }
 
-  // 임베드된 베이사전 (기존 v1.1)
-  const data = lookupBayDict(imo, code);
-  if (!data) return null;
-
   return {
-    source: 'CASP_SHIP_DEFINE',
+    source: result.source,  // 'user' / 'v2' / 'v1' / 'v2-fuzzy'
     name: data.name,
     callsign: data.callsign,
-    specs: data.specs,
-    bayDef: data.bayDef,
-    verified: data.bayDef.verified || false,
+    specs: data.specs || {},
     code: data.code,
+    bayDef: {
+      ...bayDef,
+      bayList: bayList || [],  // 정규화된 bayList 항상 포함
+    },
+    verified: bayDef.verified || result.source === 'v2' || result.source === 'v2-fuzzy',
   };
 }
 
@@ -230,22 +285,24 @@ export function augmentStructureWithBayDict(structure, imo, code) {
 
 /**
  * 베이사전 등록 여부 확인 (UI에 배지 표시용)
- * M4.4: 사용자 업로드 사전도 포함해서 확인
+ * M4.5: user + v2(109척) + v1(11척, 폴백) + fuzzy 매칭
  */
 export function isShipInBayDict(imo, code) {
-  return lookupUserBayDict(imo, code) !== null || lookupBayDict(imo, code) !== null;
+  return getShipBayDictData(imo, code) !== null;
 }
 
 /**
  * 베이사전 통계 (디버그/진단용)
- * M4.4: 사용자 사전 + 임베드 사전 합산
+ * M4.5: 사용자 사전 + v2(109척) + v1(11척) 합산
  */
 export function bayDictInfo() {
-  const embedded = getBayDictStats();
+  const v1 = getBayDictStats();
   const user = getUserBayDictStats();
+  const v2Count = Object.keys(SHIP_BAY_DICT_V2).length;
   return {
-    embedded,
+    v1: { totalShips: v1.totalShips, version: '1.1-draft', verified: false },
+    v2: { totalShips: v2Count, version: '2.0', verified: true },
     user,
-    totalShips: embedded.totalShips + user.totalShips,
+    totalShips: v1.totalShips + v2Count + user.totalShips,
   };
 }

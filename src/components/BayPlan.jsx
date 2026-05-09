@@ -15,10 +15,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer } from '../utils.js';
+import { getShipBayDictData } from '../shipStructure.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 
-export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer }) {
+export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   const [zoom, setZoom] = useState(() => {
@@ -130,54 +131,125 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return Array.from(ts);
   }, [containers]);
 
+  // M4.5: .def 베이사전 조회 (진짜 선박 골격 정보)
+  //   - 있으면: .def에 등록된 베이만 페이지로 → 빈 베이도 표시, 통로(.def에 없는 짝수)는 자동 생략
+  //   - 없으면: 기존 EDI 기반 폴백 (M3.89.1 동작)
+  const dictBayList = useMemo(() => {
+    if (!shipImo && !shipName) return null;
+    const dict = getShipBayDictData(shipImo, shipName);
+    if (!dict?.bayDef) return null;
+    const list = dict.bayDef.bayList || (dict.bayDef.bays?.map(b => b.bayNo)) || null;
+    if (!list || list.length < 2) return null;
+    // 정수 정규화 ("01" → 1, "33" → 33)
+    return list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+  }, [shipImo, shipName]);
+
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
-  // M3.1: bay 키가 정규화된 정수 문자열("1","16","100" 등) 형태이므로 정수 기반 페어링
+  // M4.5: .def 베이사전 우선 사용. 사용자 원칙 #8 + 통로 구분 추가
+  //   - .def에 있는 베이만 페이지로 (빈 베이도 포함)
+  //   - 트리오 [홀수, 짝수, 홀수]: 짝수 베이 = 40ft 페어 페이지
+  //   - 단독 홀수 (페어 없음): 단독 페이지
+  //   - .def에 없는 짝수 (예: TNJP의 04, 08, 12...) = 통로 → 페이지 생략
   const pages = useMemo(() => {
-    const bays = Object.keys(bayGroups);
-    const bayInts = bays.map(b => parseInt(b, 10)).filter(n => !isNaN(n));
-    // 화면 표시용: 베이 번호는 항상 2자리 padStart (보기 좋게), 100+는 3자리 그대로
     const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
-    // 키 매칭용: 정규화된 형태("16", "100")
     const keyBay = (n) => String(n);
 
-    // M3.89.1 근본 fix: 사용자 원칙 #8
-    //   "EDI 파악할 때 모든 베이를 풀로 채운 것처럼 생각해서 만들어라"
-    //   → 선박 구조 전체 (1번~maxBay)를 무조건 페이지로 추가. EDI 데이터는 그 위에 채워짐.
-    //   → 빈 베이도 페이지로 표시 (빈 그리드). 베이 누락 절대 X.
-    const maxBay = bayInts.length > 0 ? Math.max(...bayInts) : 0;
-    if (maxBay === 0) return [];  // EDI 자체가 비어있을 때만 빈 배열
+    // 베이 정수 리스트 결정: .def 우선, 없으면 EDI 기반 (폴백)
+    let bayInts;
+    let usingDictBays = false;
+    if (dictBayList && dictBayList.length > 0) {
+      bayInts = [...dictBayList];
+      usingDictBays = true;
+    } else {
+      const bays = Object.keys(bayGroups);
+      bayInts = bays.map(b => parseInt(b, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    }
 
+    if (bayInts.length === 0) return [];
+
+    const baySet = new Set(bayInts);
     const out = [];
     const usedOddBays = new Set();
-    for (let n = 1; n <= maxBay; n++) {
-      if (n % 2 === 0) {
-        // 짝수 = 40ft 베이 + 다음 홀수(20ft) 짝꿍 페어
-        const evenKey = keyBay(n);
-        const oddKey = keyBay(n + 1);
-        const evenDisp = dispBay(n);
-        const oddDisp = dispBay(n + 1);
-        // 짝꿍 홀수가 maxBay 이내면 페어, 초과면 단독
-        const oddInRange = (n + 1) <= maxBay;
-        out.push({
-          title: oddInRange ? `BAY ${evenDisp} (40ft) / BAY ${oddDisp} (20ft)` : `BAY ${evenDisp} (40ft)`,
-          evenBay: evenKey,
-          oddBay: oddInRange ? oddKey : null,
-        });
-        if (oddInRange) usedOddBays.add(oddKey);
-      } else {
-        // 홀수 = 20ft 단독 (이미 페어로 처리되지 않은 경우만)
-        const oddKey = keyBay(n);
-        if (!usedOddBays.has(oddKey)) {
+
+    if (usingDictBays) {
+      // .def 기반: 등록된 베이만 순회 (통로/건물 자동 생략)
+      for (const n of bayInts) {
+        if (n % 2 === 0) {
+          // 짝수 = 보통 40ft 슬롯 위치. 양쪽 홀수 검사로 실제 종류 결정
+          const evenKey = keyBay(n);
+          const evenDisp = dispBay(n);
+          const leftOddIn = baySet.has(n - 1);
+          const rightOddIn = baySet.has(n + 1);
+
+          if (!leftOddIn && !rightOddIn) {
+            // M4.5: 양쪽 홀수 없음 = 20ft 전용 베이
+            //   짝수지만 40ft 슬롯이 들어갈 인접 홀수 베이가 없으므로 실질 20ft 전용
+            //   예: [..25, 26, 28, 30..] 에서 28의 양쪽(27, 29) 둘 다 .def에 없음 → 20ft 전용
+            out.push({
+              title: `BAY ${evenDisp} (20ft 전용)`,
+              evenBay: null,
+              oddBay: evenKey,  // 20ft 슬롯 데이터는 이 베이 번호로 들어감
+              isStandalone20ft: true,
+            });
+          } else if (rightOddIn) {
+            // 표준 트리오 짝꿍 (오른쪽 홀수와 페어)
+            out.push({
+              title: `BAY ${evenDisp} (40ft) / BAY ${dispBay(n + 1)} (20ft)`,
+              evenBay: evenKey,
+              oddBay: keyBay(n + 1),
+            });
+            usedOddBays.add(keyBay(n + 1));
+          } else {
+            // leftOddIn만 있음 (n-1만 .def에 있음) — 단독 40ft (왼쪽 홀수는 이미 별도 페이지로 추가됨)
+            out.push({
+              title: `BAY ${evenDisp} (40ft)`,
+              evenBay: evenKey,
+              oddBay: null,
+            });
+          }
+        } else {
+          // 홀수 = 20ft. 페어로 이미 처리됐으면 건너뜀, 아니면 단독 페이지
+          const oddKey = keyBay(n);
+          if (!usedOddBays.has(oddKey)) {
+            out.push({
+              title: `BAY ${dispBay(n)} (20ft)`,
+              evenBay: null,
+              oddBay: oddKey,
+            });
+          }
+        }
+      }
+    } else {
+      // 폴백: 기존 M3.89.1 로직 (EDI 기반)
+      const maxBay = Math.max(...bayInts);
+      for (let n = 1; n <= maxBay; n++) {
+        if (n % 2 === 0) {
+          const evenKey = keyBay(n);
+          const oddKey = keyBay(n + 1);
+          const evenDisp = dispBay(n);
+          const oddDisp = dispBay(n + 1);
+          const oddInRange = (n + 1) <= maxBay;
           out.push({
-            title: `BAY ${dispBay(n)} (20ft)`,
-            evenBay: null,
-            oddBay: oddKey,
+            title: oddInRange ? `BAY ${evenDisp} (40ft) / BAY ${oddDisp} (20ft)` : `BAY ${evenDisp} (40ft)`,
+            evenBay: evenKey,
+            oddBay: oddInRange ? oddKey : null,
           });
+          if (oddInRange) usedOddBays.add(oddKey);
+        } else {
+          const oddKey = keyBay(n);
+          if (!usedOddBays.has(oddKey)) {
+            out.push({
+              title: `BAY ${dispBay(n)} (20ft)`,
+              evenBay: null,
+              oddBay: oddKey,
+            });
+          }
         }
       }
     }
+
     return out;
-  }, [bayGroups]);
+  }, [bayGroups, dictBayList]);
 
   // 셀 색상 — V37 cellColor + M3.77: 양하/선적 통일 POL/POD 색깔
   // 정책:
