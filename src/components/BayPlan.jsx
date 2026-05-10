@@ -693,12 +693,15 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       </div>
 
       {/* 베이 그리드 본체 */}
-      <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto" style={{ maxHeight: '78vh' }}>
+      <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto"
+           style={{ maxHeight: '78vh', scrollSnapType: 'y mandatory' }}>
         {allBaysMode ? (
           // 전체 베이 세로 스크롤 (V37 기본 모드)
+          // M5.17: 한 베이 = 한 화면 (scroll-snap mandatory) — 베이 끼리 겹치지 않게 스냅
           <div className="space-y-6">
             {pages.map((page, pIdx) => (
-              <div key={pIdx} id={`bay-page-${pIdx}`}>
+              <div key={pIdx} id={`bay-page-${pIdx}`}
+                   style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}>
                 <BayPage
                   page={page}
                   bayGroups={bayGroups}
