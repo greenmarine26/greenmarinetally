@@ -359,6 +359,23 @@ export default function PrintableCargoPlan({
           {/* M4.9b: legend를 footer로 분리 (페이지 좌하단) */}
           <div className="cargo-footer">
             <div className="legend-box">
+              {/* M5.18: 범례를 합계 위로 + 가로 2열 컴팩트 (페이지 벗어남 fix) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 6px',
+                            marginBottom: 4, paddingBottom: 3,
+                            borderBottom: '0.5px solid #999' }}>
+                <div className="legend-row"><span className="legend-mark mark-E">E</span><span className="legend-label">Empty</span></div>
+                <div className="legend-row"><span className="legend-mark mark-R type-reefer">R</span><span className="legend-label">Reefer</span></div>
+                <div className="legend-row"><span className="legend-mark mark-D type-dg">D</span><span className="legend-label">DG</span></div>
+                <div className="legend-row"><span className="legend-mark mark-F type-fr">F</span><span className="legend-label">FR</span></div>
+                <div className="legend-row"><span className="legend-mark mark-A type-ot">A</span><span className="legend-label">OT</span></div>
+                <div className="legend-row"><span className="legend-mark mark-T type-tk">T</span><span className="legend-label">TK</span></div>
+                {mode === 'discharge' && (
+                  <div className="legend-row" style={{ gridColumn: '1 / -1' }}>
+                    <span className="legend-mark xray">o</span><span className="legend-label">X-RAY</span>
+                  </div>
+                )}
+              </div>
+              {/* 합계표 (PDF STOWAGE INSTRUCTION 표준 위치) */}
               <div className="legend-title">20'/40'/45'</div>
               {mode === 'discharge' ? (
                 <div className="legend-row">
@@ -385,18 +402,6 @@ export default function PrintableCargoPlan({
                   </div>
                 </>
               )}
-              {/* M5.16: 특수화물 + X-RAY 범례 */}
-              <div style={{ borderTop: '0.5px solid #999', marginTop: 4, paddingTop: 4 }}>
-                <div className="legend-row"><span className="legend-mark mark-E">E</span><span className="legend-label">Empty</span></div>
-                <div className="legend-row"><span className="legend-mark mark-R type-reefer">R</span><span className="legend-label">Reefer</span></div>
-                <div className="legend-row"><span className="legend-mark mark-D type-dg">D</span><span className="legend-label">DG</span></div>
-                <div className="legend-row"><span className="legend-mark mark-F type-fr">F</span><span className="legend-label">FR</span></div>
-                <div className="legend-row"><span className="legend-mark mark-A type-ot">A</span><span className="legend-label">OT</span></div>
-                <div className="legend-row"><span className="legend-mark mark-T type-tk">T</span><span className="legend-label">TK</span></div>
-                {mode === 'discharge' && (
-                  <div className="legend-row"><span className="legend-mark xray">o</span><span className="legend-label">X-RAY</span></div>
-                )}
-              </div>
             </div>
           </div>
         </div>
