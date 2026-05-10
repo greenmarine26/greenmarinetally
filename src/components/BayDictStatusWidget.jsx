@@ -45,6 +45,7 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
   const bayDef = dictData.bayDef || {};
   const bayCount = bayDef.recordCount || (bayDef.bayList?.length || 0);
   const verified = bayDef.verified || dictData.verified || false;
+  const needsReview = bayDef.grade === 'needs-review';  // M5.13: 자동 추출 데이터 (검토 필요)
   const matchedBy = dictData.matchedBy || dictData.source || '';
   const matchTier = matchedBy === 'imo' ? '🟢 IMO 정확'
     : matchedBy === 'callsign' ? '🟢 콜사인'
@@ -64,6 +65,10 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
             {verified ? (
               <span className="bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded text-[9px] font-black flex items-center gap-0.5">
                 <CheckCircle2 className="w-2.5 h-2.5" />검증
+              </span>
+            ) : needsReview ? (
+              <span className="bg-orange-700 text-orange-100 px-1.5 py-0.5 rounded text-[9px] font-black">
+                ⚠️ 검토필요
               </span>
             ) : (
               <span className="bg-amber-700/60 text-amber-100 px-1.5 py-0.5 rounded text-[9px] font-black">미검증</span>
