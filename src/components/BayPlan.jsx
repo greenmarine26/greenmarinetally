@@ -23,7 +23,10 @@ import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
-export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey }) {
+export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
+  // M4.9f: 5단계(이동) + 4단계(영역 선택)
+  pendingMove, onCancelMove, onCommitMove
+}) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   // M4.6: 인쇄 모달 상태
@@ -55,6 +58,9 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const scrollRef = useRef(null);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // M4.9f 5단계 (단순): 이동 진행 중에는 자동으로 단일 페이지 모드 OFF 시그널 — 안내 바가 sticky라 충분
+  // 4단계(영역 선택) + DnD는 다음 빌드(M4.9g)에서 추가
 
   // 평택 대상 (모드별)
   const isPtk = (c) => {
@@ -411,6 +417,24 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   return (
     <div className="space-y-2">
+      {/* M4.9f 5단계: 이동 진행 중 안내 바 — pendingMove 활성 시만 */}
+      {pendingMove && (
+        <div className="bg-amber-500 text-slate-900 rounded-lg p-3 flex items-center gap-3 sticky top-0 z-30 shadow-lg border-2 border-amber-300">
+          <span className="text-xl">📦</span>
+          <div className="flex-1">
+            <div className="text-sm font-black mono">{pendingMove.cn}</div>
+            <div className="text-[11px] font-bold leading-tight">
+              본위치 {pendingMove.fromBay}/{pendingMove.fromRow}/{pendingMove.fromTier} →
+              <span className="ml-1 underline">베이그리드에서 빈 셀(점선/X)을 누르세요</span>
+            </div>
+          </div>
+          <button onClick={() => onCancelMove && onCancelMove()}
+            className="px-3 py-2 bg-slate-900 text-amber-200 hover:bg-slate-800 rounded text-xs font-black">
+            취소
+          </button>
+        </div>
+      )}
+
       {/* 컨트롤 바 */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2 flex-wrap sticky top-0 z-10">
         <div className="flex items-center gap-1">
@@ -609,6 +633,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
                   bayStructureMap={bayStructureMap}
+                  pendingMove={pendingMove}
+                  onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
                 />
               </div>
             ))}
@@ -638,6 +664,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
             bayStructureMap={bayStructureMap}
+            pendingMove={pendingMove}
+            onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
           />
         )}
       </div>
@@ -708,7 +736,10 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap, globalTiers = [] }) {
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap, globalTiers = [],
+  // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
+  pendingMove, onEmptyCellClick
+}) {
   const evenContainers = page.evenBay ? (bayGroups[page.evenBay] || []) : [];
   const oddContainers = page.oddBay ? (bayGroups[page.oddBay] || []) : [];
   const allContainers = [...evenContainers, ...oddContainers];
@@ -764,6 +795,18 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
   const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
 
+  // M4.9f 5단계: pendingMove 타겟 베이 결정
+  //   원본 베이가 짝수면 페이지의 evenBay로, 홀수면 oddBay로 (같은 종류 슬롯 보장)
+  //   매칭 안 되면 이 페이지에서는 클릭 못 함 (다른 페이지로 스크롤해서 옮기기)
+  const moveTargetBay = (() => {
+    if (!pendingMove?.fromBay) return null;
+    const fromN = parseInt(pendingMove.fromBay);
+    if (!fromN) return null;
+    if (fromN % 2 === 0) return page.evenBay || null;
+    return page.oddBay || null;
+  })();
+  const isMoveActiveHere = !!pendingMove && !!moveTargetBay;
+
   // M3.74: 다중 적재 지원 - 같은 슬롯 컨테이너 모두 반환
   // 우선순위: 평택 화물 > 다른 화물 (평택이 첫 번째로 표시)
   const getCellAll = (row, tier) => {
@@ -798,6 +841,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const c = cellList[0] || null;
     const stackCount = cellList.length;  // 1이면 단일, 2+면 다중
     if (!c && isXmark(row, tier)) {
+      // M4.9f 5단계: 이동 모드에서도 X마크는 다른 컨이 점유 → 비활성 (클릭 무시)
       return (
         <div key={key} className="border border-slate-700 bg-slate-800 flex-shrink-0 flex items-center justify-center"
           style={{ width: cellW, height: cellH }}>
@@ -806,6 +850,18 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       );
     }
     if (!c) {
+      // M4.9f 5단계: 이동 모드 + 같은 종류(짝/홀) 베이 페이지에서만 빈 셀 클릭 가능
+      if (isMoveActiveHere) {
+        return (
+          <button key={key}
+            onClick={() => onEmptyCellClick?.(moveTargetBay, row, tier)}
+            className="border-2 border-amber-400 bg-amber-500/20 hover:bg-amber-400/40 active:bg-amber-300/60 flex-shrink-0 flex items-center justify-center transition cursor-pointer"
+            style={{ width: cellW, height: cellH }}
+            title={`${moveTargetBay}/${row}/${tier} 로 이동`}>
+            <span className="text-amber-200 font-black" style={{ fontSize: Math.max(10, fontSize) }}>📦+</span>
+          </button>
+        );
+      }
       return <div key={key} className="border border-dashed border-slate-800 flex-shrink-0 bg-slate-950/40"
         style={{ width: cellW, height: cellH }}/>;
     }

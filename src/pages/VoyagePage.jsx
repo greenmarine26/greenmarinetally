@@ -12,7 +12,8 @@ import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbCompleteContainer, fbCancelComplete, fbToggleXray,
   fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData,
-  fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats
+  fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
+  fbSetActualPosition, fbClearActualPosition
 } from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
@@ -57,6 +58,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   const [extraPolicies, setExtraPolicies] = useState({});
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [policyAsked, setPolicyAsked] = useState(false);
+  // M4.9f 5단계 단순: 이동 진행 중 상태 (선적 모드 전용)
+  //   { cn, fromBay, fromRow, fromTier } 또는 null
+  //   pendingMove 설정 시 → 베이그리드 빈 셀 클릭 → 그 자리로 fbSetActualPosition
+  const [pendingMove, setPendingMove] = useState(null);
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
@@ -496,6 +501,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
               <DisplacedSidebar
                 displaced={displaced}
                 onOpenContainer={(c) => setDetailC(c)}
+                onStartMove={(c) => {
+                  // M4.9f 5단계: 이동 모드 진입 (토글)
+                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
+                  setPendingMove({
+                    cn: c.cn,
+                    fromBay: c._bay_planned || c.bay || '',
+                    fromRow: c._row_planned || c.row || '',
+                    fromTier: c._tier_planned || c.tier || '',
+                    fe: c.fe || '',
+                  });
+                }}
+                pendingMoveCn={pendingMove?.cn}
               />
             )}
             <BayPlan
@@ -505,6 +522,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
               shipName={voyage?.info?.vsl}
               voyageInfo={voyage?.info}
               voyageKey={voyageKey}
+              pendingMove={pendingMove}
+              onCancelMove={() => setPendingMove(null)}
+              onCommitMove={async (bay, row, tier) => {
+                // M4.9f 5단계: 빈 셀 클릭 시 그 자리로 이동
+                if (!pendingMove) return;
+                if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                try {
+                  await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
+                    String(bay).padStart(2,'0'),
+                    String(row).padStart(2,'0'),
+                    String(tier).padStart(2,'0'),
+                    inspector);
+                  setPendingMove(null);
+                } catch (e) {
+                  console.error(e);
+                  alert('이동 저장 실패: ' + (e?.message || e));
+                }
+              }}
             />
           </div>
         );
