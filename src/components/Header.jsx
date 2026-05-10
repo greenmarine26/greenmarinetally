@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, Languages, LogOut } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, LogOut } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
-import ContainerPhrasebook from './ContainerPhrasebook.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
@@ -11,7 +10,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   const [helpOpen, setHelpOpen] = useState(false);
-  const [phraseOpen, setPhraseOpen] = useState(false);  // M3.5.6: 영어 회화집
+  // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
   const [equipOpen, setEquipOpen] = useState(false);
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
   // M3.74: confirm() → ConfirmModal
@@ -68,19 +67,12 @@ export default function Header({ version, inspector, online, route, voyages, onC
           <span className="bg-emerald-900/40 border border-emerald-600/40 text-emerald-300 text-[10px] font-black px-1.5 py-0.5 rounded mono" title="앱 버전">{version}</span>
           <button
             onClick={() => setHelpOpen(true)}
-            title="사용 매뉴얼"
+            title="사용 매뉴얼 (영어회화 포함)"
             className="p-1.5 rounded bg-amber-900/30 hover:bg-amber-900/60 active:bg-amber-900/80 border border-amber-700/40"
           >
             <HelpCircle className="w-4 h-4 text-amber-300"/>
           </button>
-          {/* M3.5.6: 영어 회화집 (외국 선원/도선사 소통용) */}
-          <button
-            onClick={() => setPhraseOpen(true)}
-            title="검수 영어 회화집"
-            className="p-1.5 rounded bg-blue-900/30 hover:bg-blue-900/60 active:bg-blue-900/80 border border-blue-700/40"
-          >
-            <Languages className="w-4 h-4 text-blue-300"/>
-          </button>
+          {/* M5.0: 영어회화집 버튼 제거 → 도움말 안 [영어회화] 탭으로 흡수 */}
           {/* M3.5.6: 장비 번호 빠른 변경 */}
           <button
             onClick={() => setEquipOpen(true)}
@@ -114,8 +106,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
         </div>
       </div>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
-      {/* M3.5.6: 검수 영어 회화집 */}
-      <ContainerPhrasebook open={phraseOpen} onClose={() => setPhraseOpen(false)}/>
+      {/* M5.0: ContainerPhrasebook은 HelpModal 안에서 호출됨 */}
 
       {/* M3.5.6: 장비 번호 선택 모달 */}
       {equipOpen && (

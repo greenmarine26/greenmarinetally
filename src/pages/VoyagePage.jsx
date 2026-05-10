@@ -36,6 +36,7 @@ import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import EmptySealReportButton from '../components/EmptySealReport.jsx';
 import DisplacedSidebar from '../components/DisplacedSidebar.jsx';
+import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
@@ -349,21 +350,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         </div>
       )}
 
+      {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
+      <VoyageSummaryCard voyage={voyage} mode={mode} />
+
       {/* M3.5.6: 작업 보고 큰 버튼 */}
       <button onClick={() => setShowWorkReport(true)}
         className="w-full mb-3 py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
         📤 작업 보고 (시작/중단/완료/해치/콘박스)
       </button>
 
-      {/* 탭 네비게이션 */}
+      {/* 탭 네비게이션 — M5.0: 명칭 산뜻하게 정리 */}
       <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', i: ListChecks },
-          { k: 'search', t: '검색 🎤', i: SearchIcon },
+          { k: 'search', t: '🎤 자연어', i: SearchIcon },
           { k: 'bay', t: '베이', i: MapPin },
           { k: 'stats', t: '통계', i: BarChart3 },
-          { k: 'report', t: '보고서', i: FileCheck },
-          { k: 'data', t: '자료', i: Upload },
+          { k: 'report', t: '결과', i: FileCheck },
+          { k: 'data', t: '업로드', i: Upload },
         ].map(({ k, t, i: Icon }) => (
           <button key={k} onClick={() => setTab(k)}
             className={`flex-1 px-2 py-2.5 text-[11px] font-bold flex items-center justify-center gap-1 border-b-2 whitespace-nowrap ${
@@ -794,7 +798,7 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
 
         // M4.3 ★ 진짜 베이 누락 root cause fix
         //   이전 버그: 이 EDI 업로드 경로(VoyagePage 자체 업로드)에 평택 필터가 살아있었음
-        //   M3.91 fix는 MixerUploadModal에만 적용 → 이 경로는 여전히 평택 297대만 저장
+        //   M3.91 fix는 별도 경로에만 적용 → 이 경로는 여전히 평택 297대만 저장
         //   증상: 사용자님 보고 "새 EDI 업로드해도 297대만 보임" — 진짜 원인이 여기였음
         //   수정: 모든 컨 저장 + _mode 태그로 구분 (discharge/loading/transit)
         let ptkCount = 0;

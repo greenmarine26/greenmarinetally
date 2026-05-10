@@ -1,0 +1,156 @@
+// M5.0: 항차 요약 카드
+//   진입 시 즉시 상황 파악 가능 — 통계 탭 가지 않아도 보임
+//   표시: 모드별 진행률 / 리퍼·X-RAY·ISO403·자리뺏긴 등 주의 항목
+//   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
+import React, { useMemo } from 'react';
+import { CheckCircle2, AlertTriangle, Snowflake, Shield, Camera, MoveRight } from 'lucide-react';
+import { isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
+
+export default function VoyageSummaryCard({ voyage, mode }) {
+  const summary = useMemo(() => {
+    const sec = voyage?.[mode] || {};
+    const ediMap = sec.ediContainers || {};
+    const recMap = sec.records || {};
+    const compMap = sec.completed || {};
+    const xrayMap = sec.xrayList || {};
+
+    // 머지 로직 (VoyagePage와 동일)
+    const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+    const containers = [...allCnSet].map(cn => {
+      const e = ediMap[cn] || {};
+      const r = recMap[cn] || {};
+      return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn };
+    });
+
+    const total = containers.length;
+    const done = Object.keys(compMap).length;
+    const reefers = containers.filter(isReeferContainer);
+    const reeferTempMissing = reefers.filter(c =>
+      (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
+    );
+    const xrayCount = mode === 'discharge' ? Object.keys(xrayMap).length : 0;
+    const xraySealed = mode === 'discharge'
+      ? Object.entries(sec.xraySeals || {}).filter(([_, v]) => v?.seal).length
+      : 0;
+    const iso403Targets = containers.filter(isISO403);
+    const iso403Pending = iso403Targets.filter(c => !isISO403PhotoTaken(c));
+
+    // M4.9e: 자리 뺏긴 검출 (선적 모드만, VoyagePage와 동일 로직)
+    let displaced = 0;
+    if (mode === 'loading') {
+      const occupiedBy = new Map();
+      containers.forEach(c => {
+        if ((c.bay_actual || c.row_actual || c.tier_actual) && c.bay_actual) {
+          occupiedBy.set(`${c.bay_actual}-${c.row_actual}-${c.tier_actual}`, c.cn);
+        }
+      });
+      containers.forEach(c => {
+        if (c.bay_actual) return;
+        const k = `${c.bay || ''}-${c.row || ''}-${c.tier || ''}`;
+        const occ = occupiedBy.get(k);
+        if (occ && occ !== c.cn) displaced++;
+      });
+    }
+
+    return {
+      total, done,
+      pct: total ? Math.round(done / total * 100) : 0,
+      reeferTotal: reefers.length,
+      reeferTempMissing: reeferTempMissing.length,
+      xrayCount, xraySealed,
+      iso403Total: iso403Targets.length,
+      iso403Pending: iso403Pending.length,
+      displaced,
+    };
+  }, [voyage, mode]);
+
+  if (summary.total === 0) return null;
+
+  const modeLabel = mode === 'discharge' ? '양하' : '선적';
+  const modeColor = mode === 'discharge' ? 'blue' : 'amber';
+
+  return (
+    <div className={`mb-3 rounded-xl border-2 overflow-hidden ${
+      mode === 'discharge' ? 'border-blue-700/50 bg-blue-950/30' : 'border-amber-700/50 bg-amber-950/30'
+    }`}>
+      {/* 진행률 바 */}
+      <div className={`px-4 py-3 ${mode === 'discharge' ? 'bg-blue-900/30' : 'bg-amber-900/30'}`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className={`w-5 h-5 ${mode === 'discharge' ? 'text-blue-300' : 'text-amber-300'}`}/>
+            <span className={`font-black text-lg ${mode === 'discharge' ? 'text-blue-100' : 'text-amber-100'}`}>
+              {modeLabel} {summary.done}/{summary.total}
+            </span>
+            <span className={`text-sm font-bold ${mode === 'discharge' ? 'text-blue-300' : 'text-amber-300'}`}>
+              ({summary.pct}%)
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-400 font-bold uppercase">현황 요약</span>
+        </div>
+        <div className="h-2 bg-slate-900/60 rounded-full overflow-hidden">
+          <div className={`h-full transition-all ${
+            summary.pct === 100 ? 'bg-emerald-500' : (mode === 'discharge' ? 'bg-blue-500' : 'bg-amber-500')
+          }`}
+            style={{ width: `${summary.pct}%` }}/>
+        </div>
+      </div>
+
+      {/* 주의 항목 칩 — 0이면 숨김 */}
+      <div className="px-3 py-2 flex flex-wrap gap-1.5">
+        {summary.reeferTotal > 0 && (
+          <Chip
+            icon={Snowflake}
+            color={summary.reeferTempMissing > 0 ? 'red' : 'cyan'}
+            label="리퍼"
+            value={`${summary.reeferTotal}대${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
+          />
+        )}
+        {summary.xrayCount > 0 && (
+          <Chip
+            icon={Shield}
+            color="purple"
+            label="X-RAY"
+            value={`${summary.xraySealed}/${summary.xrayCount}`}
+          />
+        )}
+        {summary.iso403Total > 0 && (
+          <Chip
+            icon={Camera}
+            color={summary.iso403Pending > 0 ? 'blue' : 'emerald'}
+            label="ISO403 사진"
+            value={`${summary.iso403Total - summary.iso403Pending}/${summary.iso403Total}${summary.iso403Pending > 0 ? ` · ⚠${summary.iso403Pending}` : ''}`}
+          />
+        )}
+        {mode === 'loading' && summary.displaced > 0 && (
+          <Chip
+            icon={MoveRight}
+            color="orange"
+            label="자리 뺏김"
+            value={`${summary.displaced}대`}
+          />
+        )}
+        {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.iso403Total === 0 && summary.displaced === 0 && (
+          <span className="text-[11px] text-slate-500 px-2 py-1">특이 항목 없음</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Chip({ icon: Icon, color, label, value }) {
+  const colorMap = {
+    cyan:    'bg-cyan-900/40 border-cyan-700/40 text-cyan-200',
+    red:     'bg-red-900/40 border-red-700/50 text-red-200 animate-pulse',
+    purple:  'bg-purple-900/40 border-purple-700/40 text-purple-200',
+    blue:    'bg-blue-900/40 border-blue-700/40 text-blue-200',
+    emerald: 'bg-emerald-900/40 border-emerald-700/40 text-emerald-200',
+    orange:  'bg-orange-900/40 border-orange-700/50 text-orange-200',
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-bold ${colorMap[color] || colorMap.cyan}`}>
+      <Icon className="w-3 h-3"/>
+      <span className="text-slate-300/80">{label}</span>
+      <span className="mono">{value}</span>
+    </span>
+  );
+}

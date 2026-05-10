@@ -13,7 +13,7 @@
 //  - 모바일/데스크톱 자동 셀 크기
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
@@ -31,6 +31,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
   // M4.6: 인쇄 모달 상태
   const [printMode, setPrintMode] = useState(null);  // null | 'cargo' | 'detail'
+  // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)
+  const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(() => {
     // M3.78: 모바일 기본 zoom 0.3 → 0.5로 (❄/⚠ 같은 종류 심볼 잘 보이게)
     if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.5;
@@ -435,65 +437,95 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         </div>
       )}
 
-      {/* 컨트롤 바 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2 flex-wrap sticky top-0 z-10">
-        <div className="flex items-center gap-1">
+      {/* 컨트롤 바 — M5.0: 산뜻하게 정리 (줌 컴팩트 + 인쇄 드롭다운 + 시각적 분리) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-0 z-10">
+        {/* 줌 그룹 (3버튼만 — 100% 표시는 가운데에) */}
+        <div className="flex items-center bg-slate-800 rounded-lg overflow-hidden">
           <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
+            className="p-1.5 hover:bg-slate-700 text-slate-300" title="축소">
             <ZoomOut className="w-4 h-4"/>
-          </button>
-          <span className="text-xs mono text-slate-400 w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(3, z + 0.1))}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">
-            <ZoomIn className="w-4 h-4"/>
           </button>
           <button onClick={() => {
             const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
             setZoom(isMobile ? 0.3 : 1.0);
-          }} className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300" title="기본 배율">
-            <Maximize2 className="w-4 h-4"/>
+          }} className="text-xs mono text-slate-300 font-bold px-2 py-1.5 hover:bg-slate-700 border-x border-slate-700"
+             title="기본 배율로 리셋">
+            {Math.round(zoom * 100)}%
+          </button>
+          <button onClick={() => setZoom(z => Math.min(3, z + 0.1))}
+            className="p-1.5 hover:bg-slate-700 text-slate-300" title="확대">
+            <ZoomIn className="w-4 h-4"/>
           </button>
         </div>
 
+        {/* 시각적 분리선 */}
+        <div className="w-px h-6 bg-slate-700"/>
+
         {/* 전체 모드 토글 (기본 ON) */}
         <button onClick={() => setAllBaysMode(!allBaysMode)}
-          className={`px-2 py-1.5 rounded text-xs font-bold ${
-            allBaysMode ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-800 text-slate-400'
+          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
+            allBaysMode ? 'bg-emerald-700 text-emerald-50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}>
-          {allBaysMode ? '✓ 전체 세로' : '단일 페이지'}
+          {allBaysMode ? '✓ 전체' : '단일'}
         </button>
 
-        {/* M4.6: 인쇄 버튼 2종 */}
-        <button onClick={() => setPrintMode('cargo')}
-          className="px-2 py-1.5 rounded text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-100"
-          title="요약 카고 플랜 (1페이지)">
-          📄 플랜
-        </button>
-        <button onClick={() => setPrintMode('detail')}
-          className="px-2 py-1.5 rounded text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-100"
-          title="베이 상세 (베이당 1페이지)">
-          📋 베이상세
-        </button>
+        {/* M5.0: 인쇄 드롭다운 — 2개 버튼 → 1개 메뉴 */}
+        <div className="relative">
+          <button onClick={() => setPrintMenuOpen(v => !v)}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-50 flex items-center gap-1"
+            title="인쇄 옵션">
+            <Printer className="w-3.5 h-3.5"/>인쇄 ▾
+          </button>
+          {printMenuOpen && (
+            <>
+              {/* 백드롭 — 바깥 클릭으로 닫기 */}
+              <div className="fixed inset-0 z-20" onClick={() => setPrintMenuOpen(false)}/>
+              <div className="absolute top-full left-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-30 min-w-[180px] overflow-hidden">
+                <button onClick={() => { setPrintMode('cargo'); setPrintMenuOpen(false); }}
+                  className="w-full px-3 py-2 text-left hover:bg-cyan-900 text-xs text-cyan-100 border-b border-slate-700 flex items-center gap-2">
+                  <span className="text-base">📄</span>
+                  <div>
+                    <div className="font-black">카고 플랜</div>
+                    <div className="text-[10px] text-slate-400">요약 1페이지</div>
+                  </div>
+                </button>
+                <button onClick={() => { setPrintMode('detail'); setPrintMenuOpen(false); }}
+                  className="w-full px-3 py-2 text-left hover:bg-cyan-900 text-xs text-cyan-100 flex items-center gap-2">
+                  <span className="text-base">📋</span>
+                  <div>
+                    <div className="font-black">베이 상세</div>
+                    <div className="text-[10px] text-slate-400">베이당 1페이지</div>
+                  </div>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 시각적 분리선 — 알림 배지 영역 시작 */}
+        {(iso403Stats.total > 0 || (mode === 'loading' && unassignedCount > 0)) && (
+          <div className="w-px h-6 bg-slate-700"/>
+        )}
 
         {/* M4.9: ISO403 사진 미촬영 배지 */}
         {iso403Stats.total > 0 && (
           <button onClick={() => setShowISO403List(v => !v)}
-            className={`px-2 py-1.5 rounded text-xs font-black flex items-center gap-1 ${
+            className={`px-2 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 ${
               iso403Stats.pending > 0
                 ? 'bg-blue-700 hover:bg-blue-600 text-blue-50 animate-pulse'
                 : 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100'
             }`}
             title="ISO403 사진 촬영 의무 대상">
-            📷 ISO403 {iso403Stats.taken}/{iso403Stats.total}
-            {iso403Stats.pending > 0 && <span className="bg-blue-900/60 px-1 rounded text-[10px]">미촬영 {iso403Stats.pending}</span>}
+            📷 {iso403Stats.taken}/{iso403Stats.total}
+            {iso403Stats.pending > 0 && <span className="bg-blue-900/60 px-1 rounded text-[10px]">⚠{iso403Stats.pending}</span>}
           </button>
         )}
 
         {/* M3.87: 선적 모드 - 미배정(선적대상) 배지 */}
         {mode === 'loading' && unassignedCount > 0 && (
           <button onClick={() => setShowUnassigned(true)}
-            className="px-2 py-1.5 rounded text-xs font-black bg-orange-700 hover:bg-orange-600 text-orange-50 flex items-center gap-1">
-            🚛 선적대상 {unassignedCount}대
+            className="px-2 py-1.5 rounded-lg text-xs font-black bg-orange-700 hover:bg-orange-600 text-orange-50 flex items-center gap-1">
+            🚛 선적대상 {unassignedCount}
           </button>
         )}
 

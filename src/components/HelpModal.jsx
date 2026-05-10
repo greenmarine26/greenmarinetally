@@ -1,8 +1,9 @@
-// 사용자 매뉴얼 (M3.2)
+// 사용자 매뉴얼 (M3.2 → M5.0: 영어회화집 흡수)
 // 검수원 초보 사용자를 위한 인앱 도움말
 // 카테고리 탭으로 구성, 실제 사용 예시 50+개
 import React, { useState } from 'react';
-import { X, Search, MessageCircle, Mic, Container, Anchor, Truck, AlertTriangle, MapPin, Settings, Check } from 'lucide-react';
+import { X, Search, MessageCircle, Mic, Container, Anchor, Truck, AlertTriangle, MapPin, Settings, Check, Languages } from 'lucide-react';
+import ContainerPhrasebook from './ContainerPhrasebook.jsx';
 
 const TABS = [
   { id: 'basic',    label: '기본',     icon: Search },
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'ai',       label: 'AI 질문',  icon: MessageCircle },
   { id: 'twin',     label: '트윈',     icon: Truck },
   { id: 'tips',     label: '팁',       icon: Settings },
+  { id: 'english',  label: '영어회화', icon: Languages },  // M5.0: 헤더에서 흡수
 ];
 
 const CONTENT = {
@@ -377,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M5.0 변경 사항 (2026-05)',
+      examples: [
+        { q: '항차 진입 즉시',          a: '진행률 + 리퍼/X-RAY/ISO403/자리뺏긴 등 주의 항목이 한 카드에 요약 표시 (통계 탭 안 가도 됨)' },
+        { q: '탭 명칭 정리',            a: '"검색 🎤" → "🎤 자연어", "보고서" → "결과", "자료" → "업로드"' },
+        { q: '베이 컨트롤 바',          a: '줌 그룹 컴팩트화 (3버튼 합침), 인쇄 2개 → [🖨️ 인쇄 ▾] 드롭다운 1개' },
+        { q: '영어회화집 위치 변경',    a: '헤더 [🌐 Languages] 버튼 제거 → 도움말의 [영어회화] 탭에서 열기' },
+        { q: '죽은 코드 정리',          a: 'MixerUploadModal 삭제 (번들 -27KB) — 사용자 인터페이스에는 영향 없음' },
+        { q: '계속 사용 가능',          a: 'M4.9f의 자리 뺏긴 컨 [📦 이동] → 빈 셀 클릭 그대로' },
+      ],
+    },
+    {
       title: '💡 빠른 검수 팁',
       examples: [
         { q: '4자리 입력 → 자동 음성', a: '음성 안내 ON 상태에서 결과 자동 안내 (눈 안 봐도 됨)' },
@@ -510,6 +523,7 @@ const CONTENT = {
 
 export default function HelpModal({ open, onClose }) {
   const [tab, setTab] = useState('basic');
+  const [phraseOpen, setPhraseOpen] = useState(false);  // M5.0: 영어회화집 모달
   if (!open) return null;
 
   const sections = CONTENT[tab] || [];
@@ -546,30 +560,55 @@ export default function HelpModal({ open, onClose }) {
 
         {/* 본문 */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4">
-          {sections.map((sec, si) => (
-            <div key={si} className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
-              <div className="text-base font-black text-amber-200 mb-2">{sec.title}</div>
-              <div className="space-y-1.5">
-                {sec.examples.map((ex, ei) => (
-                  <div key={ei} className="grid grid-cols-1 sm:grid-cols-5 gap-2 py-1.5 border-b border-slate-700/50 last:border-0">
-                    <code className="sm:col-span-2 text-xs sm:text-sm font-bold mono text-cyan-300 bg-slate-950/60 px-2 py-1 rounded break-all">
-                      {ex.q}
-                    </code>
-                    <div className="sm:col-span-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
-                      {ex.a}
-                    </div>
-                  </div>
-                ))}
+          {/* M5.0: 영어회화 탭 — ContainerPhrasebook 안내 + 큰 버튼으로 모달 열기 */}
+          {tab === 'english' ? (
+            <div className="bg-blue-950/40 border-2 border-blue-700/50 rounded-lg p-6 text-center space-y-4">
+              <div className="text-5xl">🌐</div>
+              <div>
+                <div className="text-xl font-black text-blue-200 mb-2">검수 영어 회화집</div>
+                <div className="text-sm text-blue-300/80 leading-relaxed">
+                  외국 선원/도선사 만났을 때 즉시 사용하는 검수 표현 모음<br/>
+                  카테고리 13개 · 음성 재생 · 즐겨찾기 · 답변 옵션 제공
+                </div>
+              </div>
+              <button onClick={() => setPhraseOpen(true)}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-black rounded-lg text-base shadow-lg flex items-center justify-center gap-2">
+                <Languages className="w-5 h-5"/>
+                회화집 열기
+              </button>
+              <div className="text-[11px] text-blue-400/70">
+                M5.0부터 헤더의 별도 [🌐 Languages] 버튼은 도움말 안으로 통합되었습니다
               </div>
             </div>
-          ))}
+          ) : (
+            sections.map((sec, si) => (
+              <div key={si} className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
+                <div className="text-base font-black text-amber-200 mb-2">{sec.title}</div>
+                <div className="space-y-1.5">
+                  {sec.examples.map((ex, ei) => (
+                    <div key={ei} className="grid grid-cols-1 sm:grid-cols-5 gap-2 py-1.5 border-b border-slate-700/50 last:border-0">
+                      <code className="sm:col-span-2 text-xs sm:text-sm font-bold mono text-cyan-300 bg-slate-950/60 px-2 py-1 rounded break-all">
+                        {ex.q}
+                      </code>
+                      <div className="sm:col-span-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                        {ex.a}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* 푸터 */}
         <div className="px-4 py-2 border-t border-slate-700 bg-slate-950 text-[10px] text-slate-500 text-center">
-          M3.2 · 즉답이 안 되는 자유 질문은 ★AI 버튼★ 탭하면 Gemini 호출
+          M5.0 · 즉답이 안 되는 자유 질문은 ★AI 버튼★ 탭하면 Gemini 호출
         </div>
       </div>
+
+      {/* M5.0: 영어회화집 (도움말 안에서 호출) */}
+      <ContainerPhrasebook open={phraseOpen} onClose={() => setPhraseOpen(false)}/>
     </div>
   );
 }

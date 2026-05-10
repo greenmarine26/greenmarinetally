@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M4.9f';
+export const APP_VERSION = 'M5.0';
 
 // M4.9e 변경점 (선적 실체 위치 1+2+3단계):
 //   [1단계] 컨테이너 모달에 "실체 위치 (선적확인 시)" 박스
@@ -133,7 +133,7 @@ export const APP_VERSION = 'M4.9f';
 //   - 사용자 베이사전 (userBayDict.js, localStorage 누적 저장)
 //   - mixerUpload: .def 자동 감지 + 처리, 컨테이너 머지 우회
 //   - shipStructure: userBayDict 우선 조회 (검증된 M4.4 메서드 우선)
-//   - MixerUploadModal: .def 등록 결과 카드 표시, 컨 없는 .def-only 업로드 지원
+//   - .def-only 업로드도 처리 (컨 없이 베이사전만 등록)
 //
 // V39 (M4.3) 변경점:
 //   - parseBAPLIE: NAD+CA+ 처리 추가 (V37은 NAD+CF만), LOC+76(환적) 처리,
