@@ -273,40 +273,38 @@ export default function PrintableCargoPlan({
             <span>{portText}</span>
           </div>
 
+          {/* M4.9e-fix: 모든 4행 우측 정렬로 통일 (사용자 신고: 좌측 기준 남은 곳 → 베이 정렬 어긋남)
+             빈 placeholder를 앞에, 데이터를 뒤에 — 트리오 짝꿍이 단독과 같은 컬럼에 자동 매칭 */}
           <div className="bay-row five-col">
+            {Array.from({ length: 5 - foreSinglesByCol.length }).map((_, i) =>
+              <div key={`fse-${i}`} className="bay-box-placeholder"></div>
+            )}
             {foreSinglesByCol.map((p, i) => (
               <BayBox key={`fs-${i}`} even={null} odd={p.bay} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.bay]} />
             ))}
-            {Array.from({ length: 5 - foreSinglesByCol.length }).map((_, i) =>
-              <div key={`fse-${i}`} className="bay-box-placeholder"></div>
-            )}
           </div>
           <div className="bay-row five-col">
+            {Array.from({ length: 5 - forePairsByCol.length }).map((_, i) =>
+              <div key={`fpe-${i}`} className="bay-box-placeholder"></div>
+            )}
             {forePairsByCol.map((p, i) => (
               <BayBox key={`fp-${i}`} even={p.even} odd={p.odd} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.even]} />
             ))}
-            {Array.from({ length: 5 - forePairsByCol.length }).map((_, i) =>
-              <div key={`fpe-${i}`} className="bay-box-placeholder"></div>
-            )}
           </div>
 
           <div className="bay-row five-col">
+            {Array.from({ length: 5 - aftSinglesByCol.length }).map((_, i) =>
+              <div key={`ase-${i}`} className="bay-box-placeholder"></div>
+            )}
             {aftSinglesByCol.map((p, i) => (
               <BayBox key={`as-${i}`} even={null} odd={p.bay} containers={bayMap}
                 mode={mode} dictBay={dictBaysSummary[p.bay]} />
             ))}
-            {Array.from({ length: 5 - aftSinglesByCol.length }).map((_, i) =>
-              <div key={`ase-${i}`} className="bay-box-placeholder"></div>
-            )}
           </div>
 
           <div className="bay-row five-col">
-            {/* M4.9d-fix: AFT pairs 우측 정렬 — 트리오 짝꿍이 단독 홀수와 같은 컬럼에 정렬됨
-               예: (34)35는 트리오 [33,34,35]의 짝꿍 → 단독 33과 같은 컬럼
-                   (30)31는 트리오 [29,30,31]의 짝꿍 → 단독 29와 같은 컬럼
-               빈 placeholder를 앞에 두면 우측 정렬 효과로 자동 매칭 */}
             {Array.from({ length: 5 - aftPairsByCol.length }).map((_, i) =>
               <div key={`ape-${i}`} className="bay-box-placeholder"></div>
             )}
