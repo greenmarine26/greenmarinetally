@@ -379,6 +379,13 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M5.15 변경 사항 (2026-05) — ATRP 매칭 fix',
+      examples: [
+        { q: '✅ ATRP / ATPR 같은 선박 인식', a: '평택항 일부 시스템 EDI에 ATRP 코드로 들어와도 ATPR(ATLANTIC PIONEER) 베이사전이 매칭됨. URL ATRP_2623E 같은 항차도 정상 매칭' },
+        { q: '메인 화면 vs 인쇄 베이 불일치', a: 'M5.14까지 ATRP 코드는 매칭 실패 → 메인 화면은 EDI 폴백 패턴으로 잘못 표시. M5.15부터 두 화면 모두 정확한 21개 베이로 통일' },
+      ],
+    },
+    {
       title: '🆕 M5.14 변경 사항 (2026-05) — PDF로 정확히 정정',
       examples: [
         { q: '✅ TMPZ 정정 → 21개',     a: '이전: 19개. PDF STOWAGE INSTRUCTION 검증 결과 BAY 5, 7도 정상 베이로 확인됨 (자동 추출에서 노이즈 처리됐던 케이스). 이제 ✅ 검증 배지' },
