@@ -806,6 +806,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             voyageKey={voyageKey}
             shipImo={shipImo}
             shipName={shipName}
+            xrayMap={xrayMap}
             onClose={() => setPrintMode(null)}
           />
         </ErrorBoundary>

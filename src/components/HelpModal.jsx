@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M5.16 변경 사항 (2026-05) — 카고플랜 특수화물/X-RAY',
+      examples: [
+        { q: '카고플랜 인쇄 — 특수화물 표시', a: '베이 메인화면 [인쇄] → 카고 플랜에서 셀 안 글자가 강화됨. R(리퍼), r(엠티 리퍼), D(DG), F(FR), A(OT/Awkward), T(TK), E(엠티) — 각 셀 배경색도 종류별로 구분' },
+        { q: '카고플랜 X-RAY 표시',         a: '평택 양하 X-RAY 대상 컨테이너는 노란 배경 + 우상단 ★ 마커. 이전엔 인쇄에 X-RAY 정보 빠져있었음' },
+        { q: '범례 강화',                    a: '카고플랜 좌하단 범례에 Empty/Reefer/DG/FR/OT/TK/X-RAY 모두 추가됨' },
+        { q: '베이 화면(BayPlan)',          a: '기존부터 X-RAY(보라 셀+ring), 특수화물(좌측 컬러바+우상단 큰 심볼) 표시되어 있음. 이번엔 변경 X' },
+      ],
+    },
+    {
       title: '🆕 M5.15 변경 사항 (2026-05) — ATRP 매칭 fix',
       examples: [
         { q: '✅ ATRP / ATPR 같은 선박 인식', a: '평택항 일부 시스템 EDI에 ATRP 코드로 들어와도 ATPR(ATLANTIC PIONEER) 베이사전이 매칭됨. URL ATRP_2623E 같은 항차도 정상 매칭' },

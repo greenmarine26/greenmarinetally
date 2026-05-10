@@ -8,7 +8,7 @@
 
 import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
-import { normalizeBay, isoToPdfLabel } from '../utils.js';
+import { normalizeBay, isoToPdfLabel, isReeferContainer } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 
 const STD_ROWS = ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
@@ -91,12 +91,50 @@ function buildBayPages(bays) {
   return { singles, pairs };
 }
 
-function getMark(c, mode) {
-  if (isPtk(c, mode)) return mode === 'discharge' ? 'o' : 'L';
-  return 'X';
+// M5.16: 특수화물 + X-RAY 표시 정보 반환
+//   기존: 'o' / 'L' / 'X' 한 글자만
+//   강화: { letter, type, isXray } — type별 셀 색상 + X-RAY 마커
+//   type: 'reefer' / 'dg' / 'fr' / 'ot' / 'tk' / null (일반)
+//   letter: 평택 양하 'o', 평택 선적 'L', 통과 'X'
+//   특수: 리퍼='R', DG='D', FR='F', OT='A'(Awkward), TK='T' (PDF 표준 표기)
+//   isXray: 평택 양하 X-RAY 대상 (true 시 셀에 별표 마커 추가)
+function getMark(c, mode, xrayMap) {
+  const ptk = isPtk(c, mode);
+  const baseLetter = ptk ? (mode === 'discharge' ? 'o' : 'L') : 'X';
+
+  // 특수화물 분류 (BayPlan과 동일 우선순위: DG > 리퍼 > FR > TK > OT)
+  const isReefer = isReeferContainer(c);
+  let type = null;
+  let letter = baseLetter;
+  if (c.dg) {
+    type = 'dg';
+    letter = ptk ? 'D' : 'D';  // DG는 평택/통과 모두 D
+  } else if (isReefer) {
+    type = 'reefer';
+    letter = c.fe === 'E' ? 'r' : 'R';  // 엠티 리퍼는 소문자
+  } else if (c.fr) {
+    type = 'fr';
+    letter = 'F';
+  } else if (c.tk) {
+    type = 'tk';
+    letter = 'T';
+  } else if (c.ot || c.oog) {
+    type = 'ot';
+    letter = 'A';  // PDF 표준: A = Awkward
+  }
+
+  // 엠티 표기 (특수화물 아닌 일반 엠티)
+  if (!type && c.fe === 'E' && ptk) {
+    letter = 'E';
+  }
+
+  // X-RAY (평택 양하만)
+  const isXray = mode === 'discharge' && ptk && xrayMap && xrayMap[c.cn];
+
+  return { letter, type, isXray };
 }
 
-function BayBox({ even, odd, containers, mode, dictBay }) {
+function BayBox({ even, odd, containers, mode, dictBay, xrayMap }) {
   const allConts = [
     ...(even != null && containers[String(even)] || []),
     ...(odd != null && containers[String(odd)] || []),
@@ -152,8 +190,10 @@ function BayBox({ even, odd, containers, mode, dictBay }) {
             <div key={t} className="bay-grid-row">
               {STD_ROWS.map(r => {
                 const c = cellMap[`${t}-${r}`];
-                const m = c ? getMark(c, mode) : '';
-                return <span key={r} className={`bay-cell mark-${m || 'empty'}`}>{m}</span>;
+                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                const m = getMark(c, mode, xrayMap);
+                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                return <span key={r} className={cls}>{m.letter}</span>;
               })}
             </div>
           ))}
@@ -162,8 +202,10 @@ function BayBox({ even, odd, containers, mode, dictBay }) {
             <div key={t} className="bay-grid-row">
               {STD_ROWS.map(r => {
                 const c = cellMap[`${t}-${r}`];
-                const m = c ? getMark(c, mode) : '';
-                return <span key={r} className={`bay-cell mark-${m || 'empty'}`}>{m}</span>;
+                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                const m = getMark(c, mode, xrayMap);
+                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                return <span key={r} className={cls}>{m.letter}</span>;
               })}
             </div>
           ))}
@@ -182,7 +224,7 @@ function BayBox({ even, odd, containers, mode, dictBay }) {
 }
 
 export default function PrintableCargoPlan({
-  containers, mode, voyageInfo, shipImo, shipName, voyageKey, onClose
+  containers, mode, voyageInfo, shipImo, shipName, voyageKey, xrayMap = {}, onClose
 }) {
   const bayMap = useMemo(() => groupByBay(containers), [containers]);
 
@@ -281,7 +323,7 @@ export default function PrintableCargoPlan({
             )}
             {foreSinglesByCol.map((p, i) => (
               <BayBox key={`fs-${i}`} even={null} odd={p.bay} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.bay]} />
+                mode={mode} dictBay={dictBaysSummary[p.bay]} xrayMap={xrayMap} />
             ))}
           </div>
           <div className="bay-row five-col">
@@ -290,7 +332,7 @@ export default function PrintableCargoPlan({
             )}
             {forePairsByCol.map((p, i) => (
               <BayBox key={`fp-${i}`} even={p.even} odd={p.odd} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.even]} />
+                mode={mode} dictBay={dictBaysSummary[p.even]} xrayMap={xrayMap} />
             ))}
           </div>
 
@@ -300,7 +342,7 @@ export default function PrintableCargoPlan({
             )}
             {aftSinglesByCol.map((p, i) => (
               <BayBox key={`as-${i}`} even={null} odd={p.bay} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.bay]} />
+                mode={mode} dictBay={dictBaysSummary[p.bay]} xrayMap={xrayMap} />
             ))}
           </div>
 
@@ -310,7 +352,7 @@ export default function PrintableCargoPlan({
             )}
             {aftPairsByCol.map((p, i) => (
               <BayBox key={`ap-${i}`} even={p.even} odd={p.odd} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.even]} />
+                mode={mode} dictBay={dictBaysSummary[p.even]} xrayMap={xrayMap} />
             ))}
           </div>
 
@@ -343,6 +385,18 @@ export default function PrintableCargoPlan({
                   </div>
                 </>
               )}
+              {/* M5.16: 특수화물 + X-RAY 범례 */}
+              <div style={{ borderTop: '0.5px solid #999', marginTop: 4, paddingTop: 4 }}>
+                <div className="legend-row"><span className="legend-mark mark-E">E</span><span className="legend-label">Empty</span></div>
+                <div className="legend-row"><span className="legend-mark mark-R type-reefer">R</span><span className="legend-label">Reefer</span></div>
+                <div className="legend-row"><span className="legend-mark mark-D type-dg">D</span><span className="legend-label">DG</span></div>
+                <div className="legend-row"><span className="legend-mark mark-F type-fr">F</span><span className="legend-label">FR</span></div>
+                <div className="legend-row"><span className="legend-mark mark-A type-ot">A</span><span className="legend-label">OT</span></div>
+                <div className="legend-row"><span className="legend-mark mark-T type-tk">T</span><span className="legend-label">TK</span></div>
+                {mode === 'discharge' && (
+                  <div className="legend-row"><span className="legend-mark xray">o</span><span className="legend-label">X-RAY</span></div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -444,6 +498,36 @@ export default function PrintableCargoPlan({
         .mark-o { color: #d97706; font-weight: 500; }
         .mark-L { color: #c026d3; font-weight: 500; background: #fce7f3 !important; }
         .mark-empty { color: transparent; }
+        /* M5.16: 특수화물 추가 mark */
+        .mark-E { color: #6b7280; font-weight: 500; }  /* 엠티 */
+        .mark-R { color: #0891b2; font-weight: 700; }  /* 풀 리퍼 */
+        .mark-r { color: #67e8f9; font-weight: 500; }  /* 엠티 리퍼 */
+        .mark-D { color: #dc2626; font-weight: 700; }  /* DG */
+        .mark-F { color: #9333ea; font-weight: 700; }  /* FR */
+        .mark-T { color: #ea580c; font-weight: 700; }  /* TK */
+        .mark-A { color: #c026d3; font-weight: 700; }  /* OT (Awkward) */
+
+        /* M5.16: type별 셀 배경 (특수화물 강조) */
+        .bay-cell.type-reefer { background: #cffafe !important; }  /* 연시안 */
+        .bay-cell.type-dg     { background: #fee2e2 !important; }  /* 연빨강 */
+        .bay-cell.type-fr     { background: #f3e8ff !important; }  /* 연보라 */
+        .bay-cell.type-tk     { background: #ffedd5 !important; }  /* 연주황 */
+        .bay-cell.type-ot     { background: #fae8ff !important; }  /* 연마젠타 */
+
+        /* M5.16: X-RAY 마커 (셀 우상단 빨간 점) */
+        .bay-cell.xray {
+          position: relative;
+          background: #fef08a !important;  /* 연노랑 (X-RAY 표시) */
+          color: #b91c1c !important;
+          font-weight: 700 !important;
+        }
+        .bay-cell.xray::after {
+          content: '★';
+          position: absolute;
+          top: -2px; right: 0px;
+          font-size: 6pt; line-height: 6pt;
+          color: #dc2626;
+        }
         .hatch-break {
           height: 2px; background: #000; margin: 1px 0; width: 100%;
         }
