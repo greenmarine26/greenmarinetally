@@ -13,7 +13,8 @@ import {
   fbCompleteContainer, fbCancelComplete, fbToggleXray,
   fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData,
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
-  fbSetActualPosition, fbClearActualPosition
+  fbSetActualPosition, fbClearActualPosition,
+  fbBatchMoveToStorage, fbBatchClearActual
 } from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
@@ -36,7 +37,9 @@ import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
 import EmptySealReportButton from '../components/EmptySealReport.jsx';
 import DisplacedSidebar from '../components/DisplacedSidebar.jsx';
+import StorageBox from '../components/StorageBox.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
+import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
@@ -63,6 +66,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   //   { cn, fromBay, fromRow, fromTier } 또는 null
   //   pendingMove 설정 시 → 베이그리드 빈 셀 클릭 → 그 자리로 fbSetActualPosition
   const [pendingMove, setPendingMove] = useState(null);
+  // M5.1 G: 작업 마감 체크리스트 모달
+  const [closingOpen, setClosingOpen] = useState(false);
+  // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
+  const [listFilter, setListFilter] = useState('all');
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
@@ -152,8 +159,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
     const list = Object.values(merged);
 
     // M4.9e-fix 2단계: 선적 모드 effective 위치 적용 (베이그리드도 실체 위치에 그려지게)
+    // M5.1 I: STG 보관 컨은 베이 그리드에서 숨김 (bay='' 처리, _in_storage 플래그)
     if (mode === 'loading') {
       return list.map(c => {
+        if (c.bay_actual === '__STG__') {
+          // 보관함으로 빠진 컨 — 그리드에는 안 보이고 별도 StorageBox에서 처리
+          return {
+            ...c,
+            _bay_planned: c.bay,
+            _row_planned: c.row,
+            _tier_planned: c.tier,
+            bay: '',  // 그리드에서 빠짐 (bayGroups에 안 들어감)
+            row: '',
+            tier: '',
+            _in_storage: true,
+          };
+        }
         if (c.bay_actual && c.row_actual && c.tier_actual) {
           return {
             ...c,
@@ -353,11 +374,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
       <VoyageSummaryCard voyage={voyage} mode={mode} />
 
-      {/* M3.5.6: 작업 보고 큰 버튼 */}
-      <button onClick={() => setShowWorkReport(true)}
-        className="w-full mb-3 py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
-        📤 작업 보고 (시작/중단/완료/해치/콘박스)
-      </button>
+      {/* M5.1 G: 작업 보고 + 마감 점검 두 큰 버튼 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+        <button onClick={() => setShowWorkReport(true)}
+          className="py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+          📤 작업 보고
+        </button>
+        <button onClick={() => setClosingOpen(true)}
+          className="py-3 bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+          🏁 마감 점검
+        </button>
+      </div>
 
       {/* 탭 네비게이션 — M5.0: 명칭 산뜻하게 정리 */}
       <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
@@ -450,6 +477,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
           inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
+          externalFilter={listFilter}
         />
       )}
       {tab === 'search' && (
@@ -493,6 +521,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           });
         })();
 
+        // M5.1 I: STG 보관 컨 검출 (선적 전용)
+        const storedContainers = mode === 'loading'
+          ? allEdiContainers.filter(c => c._in_storage)
+          : [];
+
         return (
           <div className="space-y-2">
             <BayDictStatusWidget
@@ -519,6 +552,34 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
                 pendingMoveCn={pendingMove?.cn}
               />
             )}
+            {/* M5.1 I: 보관함 박스 (선적 전용) */}
+            {mode === 'loading' && storedContainers.length > 0 && (
+              <StorageBox
+                stored={storedContainers}
+                onOpenContainer={(c) => setDetailC(c)}
+                onStartMove={(c) => {
+                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
+                  // 보관함에서 이동: 본위치는 계획 위치 사용 (짝/홀 매칭용)
+                  setPendingMove({
+                    cn: c.cn,
+                    fromBay: c._bay_planned || '',
+                    fromRow: c._row_planned || '',
+                    fromTier: c._tier_planned || '',
+                    fe: c.fe || '',
+                  });
+                }}
+                pendingMoveCn={pendingMove?.cn}
+                onBatchRestore={async () => {
+                  if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                  if (!confirm(`보관함의 ${storedContainers.length}대를 모두 계획 위치로 복원하시겠습니까?`)) return;
+                  try {
+                    await fbBatchClearActual(voyageKey, mode, storedContainers.map(c => c.cn));
+                  } catch (e) {
+                    alert('복원 실패: ' + (e?.message || e));
+                  }
+                }}
+              />
+            )}
             <BayPlan
               containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} mode={mode}
               onOpenContainer={(c) => setDetailC(c)}
@@ -542,6 +603,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
                 } catch (e) {
                   console.error(e);
                   alert('이동 저장 실패: ' + (e?.message || e));
+                }
+              }}
+              // M5.1 I: 영역 선택 → 일괄 보관 (선적 전용)
+              enableSelection={mode === 'loading'}
+              onBatchToStorage={async (cns) => {
+                if (!cns || cns.length === 0) return;
+                if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                if (!confirm(`선택된 ${cns.length}대를 보관함으로 보내시겠습니까?\n(언제든 보관함에서 [이동] 버튼으로 다시 배치 가능)`)) return;
+                try {
+                  await fbBatchMoveToStorage(voyageKey, mode, cns, inspector);
+                } catch (e) {
+                  console.error(e);
+                  alert('보관 실패: ' + (e?.message || e));
                 }
               }}
             />
@@ -617,14 +691,33 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
         lastEquip={getEquipNumber()}
         onClose={() => setShowWorkReport(false)}
       />
+
+      {/* M5.1 G: 작업 마감 체크리스트 */}
+      <WorkClosingChecklist
+        open={closingOpen}
+        voyage={voyage}
+        mode={mode}
+        onClose={() => setClosingOpen(false)}
+        onJump={(target) => {
+          // target: { tab, filter?, search? }
+          if (target.tab) setTab(target.tab);
+          if (target.filter) setListFilter(target.filter);
+          // search는 일단 미지원 (리퍼는 list 안에서 자체 검색하면 됨)
+        }}
+      />
     </div>
   );
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter }) {
   const [filter, setFilter] = useState('all'); // all | done | undone | xray
   const [search, setSearch] = useState('');
+
+  // M5.1: 외부 filter (마감 체크리스트 점프) 동기화
+  useEffect(() => {
+    if (externalFilter && externalFilter !== filter) setFilter(externalFilter);
+  }, [externalFilter]);
 
   const filtered = useMemo(() => {
     let arr = containers;

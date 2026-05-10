@@ -218,6 +218,38 @@ export async function fbClearActualPosition(voyageKey, mode, cn) {
   });
 }
 
+// M5.1 I: 보관함 처리 — bay_actual='__STG__' 로 마킹
+//   - 베이 그리드에서 숨겨지고 보관함 박스에만 표시
+//   - 일괄 처리 (영역 선택분 → 보관함)
+export const STORAGE_BAY = '__STG__';
+
+export async function fbBatchMoveToStorage(voyageKey, mode, cns, by) {
+  const updates = {};
+  const now = Date.now();
+  cns.forEach(cn => {
+    const path = `voyages/${voyageKey}/${mode}/records/${cn}`;
+    updates[`${path}/bay_actual`] = STORAGE_BAY;
+    updates[`${path}/row_actual`] = '00';
+    updates[`${path}/tier_actual`] = '00';
+    updates[`${path}/actual_at`] = now;
+    updates[`${path}/actual_by`] = by || '';
+  });
+  await update(ref(db), updates);
+}
+
+export async function fbBatchClearActual(voyageKey, mode, cns) {
+  const updates = {};
+  cns.forEach(cn => {
+    const path = `voyages/${voyageKey}/${mode}/records/${cn}`;
+    updates[`${path}/bay_actual`] = null;
+    updates[`${path}/row_actual`] = null;
+    updates[`${path}/tier_actual`] = null;
+    updates[`${path}/actual_at`] = null;
+    updates[`${path}/actual_by`] = null;
+  });
+  await update(ref(db), updates);
+}
+
 // M3.87: 컨테이너 위치 재배정 (선적 모드용)
 //   - 새 위치(bay/row/tier)로 이동
 //   - 새 위치에 다른 컨이 있으면 그 컨은 미배정 처리(bay 빈 값) + 완료 취소

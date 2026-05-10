@@ -24,8 +24,9 @@ import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
-  // M4.9f: 5단계(이동) + 4단계(영역 선택)
-  pendingMove, onCancelMove, onCommitMove
+  // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
+  pendingMove, onCancelMove, onCommitMove,
+  enableSelection = false, onBatchToStorage
 }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
@@ -61,8 +62,23 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
-  // M4.9f 5단계 (단순): 이동 진행 중에는 자동으로 단일 페이지 모드 OFF 시그널 — 안내 바가 sticky라 충분
-  // 4단계(영역 선택) + DnD는 다음 빌드(M4.9g)에서 추가
+  // M5.1 I: 영역 선택 모드 — PC 마우스 드래그로 셀 다중 선택
+  //   selectionMode: 토글 (PC만, isMobile에선 자동 OFF)
+  //   selectedCns: Set<컨번호> — 선택된 컨테이너들
+  //   pendingMove 활성 시 자동 OFF (충돌 방지)
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedCns, setSelectedCns] = useState(() => new Set());
+  useEffect(() => { if (!selectionMode) setSelectedCns(new Set()); }, [selectionMode]);
+  useEffect(() => { if (isMobile && selectionMode) setSelectionMode(false); }, [isMobile, selectionMode]);
+  useEffect(() => { if (pendingMove && selectionMode) setSelectionMode(false); }, [pendingMove, selectionMode]);
+
+  const toggleCnSelection = (cn) => {
+    setSelectedCns(prev => {
+      const next = new Set(prev);
+      if (next.has(cn)) next.delete(cn); else next.add(cn);
+      return next;
+    });
+  };
 
   // 평택 대상 (모드별)
   const isPtk = (c) => {
@@ -161,14 +177,17 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // M4.5: .def 베이사전 조회 (진짜 선박 골격 정보)
   //   - 있으면: .def에 등록된 베이만 페이지로 → 빈 베이도 표시, 통로(.def에 없는 짝수)는 자동 생략
   //   - 없으면: 기존 EDI 기반 폴백 (M3.89.1 동작)
+  // M5.01 fix: 중복 제거 (Set) — .def 데이터에 베이 번호가 두 번 들어간 케이스 방지
+  //   증상: 베이 점프 select에 "BAY 01"이 두 번 나오던 버그
   const dictBayList = useMemo(() => {
     if (!shipImo && !shipName) return null;
     const dict = getShipBayDictData(shipImo, shipName);
     if (!dict?.bayDef) return null;
     const list = dict.bayDef.bayList || (dict.bayDef.bays?.map(b => b.bayNo)) || null;
     if (!list || list.length < 2) return null;
-    // 정수 정규화 ("01" → 1, "33" → 33)
-    return list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+    // 정수 정규화 ("01" → 1, "33" → 33) + 중복 제거 + 정렬
+    const ints = list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n));
+    return [...new Set(ints)].sort((a, b) => a - b);
   }, [shipImo, shipName]);
 
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
@@ -206,15 +225,17 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           // M4.9c-fix: 사용자 도메인 지식 반영 — 선박 BOW/STERN 단독 베이라도
           //   40ft(또는 20ft 트윈)를 넣을 수 있음. "20ft 전용" 같은 단정 라벨 제거.
           //   라벨은 단순히 베이 번호만 표기, 슬롯 종류는 실제 컨테이너 데이터로 판단.
+          // M5.01 도메인 지식 보강: 짝수 단독 베이는 4곳에서 정상 —
+          //   (1) BOW 선수, (2) STERN 선미, (3) 선원건물 앞, (4) 선원건물 뒤
+          //   양옆 홀수 모두 없는 경우만이 아니라 한쪽만 있어도 정상.
+          //   .def 데이터 그대로 표시하는 게 원칙 (사용자 도메인 지식 우선).
           const evenKey = keyBay(n);
           const evenDisp = dispBay(n);
           const leftOddIn = baySet.has(n - 1);
           const rightOddIn = baySet.has(n + 1);
 
           if (!leftOddIn && !rightOddIn) {
-            // 양쪽 홀수 모두 .def에 없음 — 단독 짝수 베이
-            //   이전: "20ft 전용"이라 단정했지만 실제로는 40ft도 들어갈 수 있음
-            //   수정: 단순히 "BAY NN"으로 표기, 그리드는 일반 데크처럼 처리
+            // 양쪽 홀수 모두 .def에 없음 — 단독 짝수 베이 (BOW/STERN/선원건물 앞뒤 가능)
             out.push({
               title: `BAY ${evenDisp}`,
               evenBay: evenKey,
@@ -231,6 +252,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             usedOddBays.add(keyBay(n + 1));
           } else {
             // leftOddIn만 있음 — 단독 짝수 (왼쪽 홀수는 별도 페이지)
+            //   예: 26-27 페어 후 28번. 27이 used라 28은 페어 못함.
+            //   이는 선원건물 앞/뒤의 단독 짝수일 가능성 높음 — .def 데이터 그대로 표시.
             out.push({
               title: `BAY ${evenDisp}`,
               evenBay: evenKey,
@@ -437,6 +460,30 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         </div>
       )}
 
+      {/* M5.1 I: 영역 선택 진행 바 — 선택 모드 + 1개 이상 */}
+      {selectionMode && selectedCns.size > 0 && (
+        <div className="bg-sky-700 text-sky-50 rounded-lg p-3 flex items-center gap-2 sticky top-0 z-20 shadow-lg border-2 border-sky-400 flex-wrap">
+          <span className="text-base">🔲</span>
+          <span className="text-sm font-black">선택 {selectedCns.size}대</span>
+          <span className="text-[11px] text-sky-200 flex-1 leading-tight min-w-[120px]">
+            컨 셀을 더 클릭해서 추가/제외하세요
+          </span>
+          <button onClick={() => {
+              const cns = Array.from(selectedCns);
+              onBatchToStorage?.(cns);
+              setSelectedCns(new Set());
+              setSelectionMode(false);
+            }}
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-black">
+            📦 보관함으로
+          </button>
+          <button onClick={() => setSelectedCns(new Set())}
+            className="px-2 py-1.5 bg-sky-900 hover:bg-sky-800 rounded text-[11px] font-bold">
+            해제
+          </button>
+        </div>
+      )}
+
       {/* 컨트롤 바 — M5.0: 산뜻하게 정리 (줌 컴팩트 + 인쇄 드롭다운 + 시각적 분리) */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-0 z-10">
         {/* 줌 그룹 (3버튼만 — 100% 표시는 가운데에) */}
@@ -501,6 +548,17 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             </>
           )}
         </div>
+
+        {/* M5.1 I: PC 영역 선택 토글 (모바일/이동중 비활성, 선적 전용) */}
+        {enableSelection && !isMobile && !pendingMove && (
+          <button onClick={() => setSelectionMode(v => !v)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
+              selectionMode ? 'bg-sky-600 text-sky-50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            }`}
+            title="선택 모드 — 컨 셀 클릭하여 다중 선택 → 보관함으로 일괄 이동">
+            🔲 {selectionMode ? '선택 ✓' : '선택'}
+          </button>
+        )}
 
         {/* 시각적 분리선 — 알림 배지 영역 시작 */}
         {(iso403Stats.total > 0 || (mode === 'loading' && unassignedCount > 0)) && (
@@ -650,6 +708,11 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   shiftingMap={shiftingMap}
                   isPtk={isPtk}
                   onCellClick={(c, multi) => {
+                    // M5.1: 선택 모드면 컨 토글 (모달 안 열림)
+                    if (selectionMode && c?.cn) {
+                      toggleCnSelection(c.cn);
+                      return;
+                    }
                     // M3.74: 다중 적재면 SlotPickerModal, 단일이면 기존 동작
                     if (multi?.multi && multi.containers?.length >= 2) {
                       setSlotPicker({ slot: multi.slot, containers: multi.containers });
@@ -667,6 +730,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   bayStructureMap={bayStructureMap}
                   pendingMove={pendingMove}
                   onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
+                  selectionMode={selectionMode}
+                  selectedCns={selectedCns}
                 />
               </div>
             ))}
@@ -682,6 +747,10 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             shiftingMap={shiftingMap}
             isPtk={isPtk}
             onCellClick={(c, multi) => {
+              if (selectionMode && c?.cn) {
+                toggleCnSelection(c.cn);
+                return;
+              }
               if (multi?.multi && multi.containers?.length >= 2) {
                 setSlotPicker({ slot: multi.slot, containers: multi.containers });
               } else {
@@ -698,6 +767,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             bayStructureMap={bayStructureMap}
             pendingMove={pendingMove}
             onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
+            selectionMode={selectionMode}
+            selectedCns={selectedCns}
           />
         )}
       </div>
@@ -770,7 +841,9 @@ function Legend({ color, label }) {
 // V37 BaySection 100% 이식
 function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap, globalTiers = [],
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
-  pendingMove, onEmptyCellClick
+  pendingMove, onEmptyCellClick,
+  // M5.1 I: 영역 선택 모드 (선적 전용, PC)
+  selectionMode = false, selectedCns
 }) {
   const evenContainers = page.evenBay ? (bayGroups[page.evenBay] || []) : [];
   const oddContainers = page.oddBay ? (bayGroups[page.oddBay] || []) : [];
@@ -987,11 +1060,16 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       typeSymbolColor = 'text-fuchsia-700';
     }
 
+    // M5.1 I: 선택 모드 시 선택된 컨 시각 표시
+    const isSelected = selectionMode && selectedCns && selectedCns.has(c.cn);
+
     return (
       <button
         key={key}
         onClick={handleCellClick}
-        className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden`}
+        className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
+          isSelected ? 'ring-4 ring-sky-400 ring-inset' : ''
+        }`}
         style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize }}
       >
         {/* M3.78: 좌측 컬러 바 - 두껍고 흰색 테두리로 어떤 셀 색깔에도 잘 보임 */}
