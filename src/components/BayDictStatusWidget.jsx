@@ -1,61 +1,96 @@
-// 베이사전 검증 위젯 (M4.1 신규)
-// 현재 항차의 선박이 베이사전(.def)에 등록되어 있는지 표시 + 매핑률 통계
-// 데이터 흐름: VoyagePage → 이 위젯이 voyage.info.imo로 베이사전 조회
-
-import React, { useMemo } from 'react';
-import { Database, CheckCircle2, AlertCircle } from 'lucide-react';
-import { isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
+// 베이사전 검증 위젯 (M4.1 신규, M5.11 강화)
+// M5.11: matchedBy 표시 — 어떤 키/방식으로 매칭됐는지 보여줘서 진단 가능하게
+import React, { useMemo, useState } from 'react';
+import { Database, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { getShipBayDictData } from '../shipStructure.js';
 
 export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCount = 0 }) {
+  const [expanded, setExpanded] = useState(false);
+
   const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
     return getShipBayDictData(shipImo, shipName);
   }, [shipImo, shipName]);
 
   if (!dictData) {
-    // 베이사전 미등록 선박
+    // 베이사전 미등록 — 명확한 진단 표시
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2.5 flex items-center gap-2 text-xs">
-        <AlertCircle className="w-4 h-4 text-slate-500 shrink-0" />
-        <div className="flex-1">
-          <span className="text-slate-400 font-bold">베이사전 미등록</span>
-          <span className="text-slate-500 ml-2">EDI 좌표 기반 베이 골격으로 작동</span>
+      <div className="bg-amber-950/30 border-2 border-amber-700/60 rounded-lg p-2.5 text-xs">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-amber-200 font-black">⚠️ 베이사전 매칭 실패</span>
+            <span className="text-amber-400/80 ml-2 text-[10px]">EDI 폴백 (빈 베이 식별 X)</span>
+          </div>
+          <button onClick={() => setExpanded(v => !v)} className="text-amber-300 px-1">
+            {expanded ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+          </button>
         </div>
-        <span className="text-[10px] text-slate-600 mono">v1.1</span>
+        {expanded && (
+          <div className="mt-2 pt-2 border-t border-amber-700/40 text-[10px] text-amber-300/80 space-y-1">
+            <div>EDI IMO: <span className="mono text-amber-100">{shipImo || '(없음)'}</span></div>
+            <div>EDI 선박명: <span className="mono text-amber-100">{shipName || '(없음)'}</span></div>
+            <div className="text-amber-400/60 italic mt-1">
+              4글자 코드 · IMO · callsign · 이름 fuzzy 모두 시도 후 실패
+            </div>
+            <div className="text-amber-400/60 italic">
+              → .def 파일 직접 업로드(자료 탭) 또는 다음 빌드에서 사전 추가
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  // 베이사전 등록된 선박
   const bayDef = dictData.bayDef || {};
-  const bayCount = bayDef.recordCount || 0;
-  const verified = bayDef.verified || false;
+  const bayCount = bayDef.recordCount || (bayDef.bayList?.length || 0);
+  const verified = bayDef.verified || dictData.verified || false;
+  const matchedBy = dictData.matchedBy || dictData.source || '';
+  const matchTier = matchedBy === 'imo' ? '🟢 IMO 정확'
+    : matchedBy === 'callsign' ? '🟢 콜사인'
+    : matchedBy === 'code' ? '🟢 코드 정확'
+    : matchedBy.startsWith('name-fuzzy') ? '🟡 이름 fuzzy'
+    : matchedBy === 'user-dict' ? '🔵 사용자 사전'
+    : matchedBy === 'v1-lookup' ? '🟠 v1 폴백'
+    : '⚪ ' + matchedBy;
 
   return (
-    <div className="bg-cyan-950/30 border border-cyan-700/50 rounded-lg p-2.5 flex items-center gap-2 text-xs">
-      <Database className="w-4 h-4 text-cyan-400 shrink-0" />
-      <div className="flex-1">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-cyan-300 font-black">📚 베이사전 매칭</span>
-          {verified ? (
-            <span className="bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded text-[9px] font-black flex items-center gap-0.5">
-              <CheckCircle2 className="w-2.5 h-2.5" />검증됨
-            </span>
-          ) : (
-            <span className="bg-amber-700/60 text-amber-100 px-1.5 py-0.5 rounded text-[9px] font-black">
-              검증 전 (v1.1)
-            </span>
-          )}
+    <div className="bg-cyan-950/30 border border-cyan-700/50 rounded-lg p-2.5 text-xs">
+      <div className="flex items-center gap-2">
+        <Database className="w-4 h-4 text-cyan-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-cyan-300 font-black">📚 베이사전 매칭됨</span>
+            {verified ? (
+              <span className="bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded text-[9px] font-black flex items-center gap-0.5">
+                <CheckCircle2 className="w-2.5 h-2.5" />검증
+              </span>
+            ) : (
+              <span className="bg-amber-700/60 text-amber-100 px-1.5 py-0.5 rounded text-[9px] font-black">미검증</span>
+            )}
+          </div>
+          <div className="text-[10px] text-cyan-400/80 mt-0.5 truncate">
+            {(dictData.name || '').substring(0, 30).trim()} · {bayCount}개 베이
+            {ediContainerCount > 0 && ` · EDI ${ediContainerCount}대`}
+          </div>
         </div>
-        <div className="text-[10px] text-cyan-400/80 mt-0.5 mono">
-          {dictData.name} · {bayCount}개 베이 정의
-          {ediContainerCount > 0 && ` · EDI ${ediContainerCount}대`}
+        <button onClick={() => setExpanded(v => !v)} className="text-cyan-300 px-1">
+          {expanded ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-2 pt-2 border-t border-cyan-700/40 text-[10px] text-cyan-300/80 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-cyan-500/70">매칭 방식:</span>
+            <span className="font-bold text-cyan-100">{matchTier}</span>
+          </div>
+          <div>EDI IMO: <span className="mono text-cyan-100">{shipImo || '(없음)'}</span></div>
+          <div>EDI 선박명: <span className="mono text-cyan-100">{shipName || '(없음)'}</span></div>
+          <div>사전 코드: <span className="mono text-cyan-100">{dictData.code || '?'}</span></div>
+          {dictData.callsign && <div>사전 콜사인: <span className="mono text-cyan-100">{dictData.callsign}</span></div>}
+          <div>사전 출처: <span className="mono text-cyan-100">{dictData.source}</span></div>
         </div>
-      </div>
-      <div className="text-right text-[10px] text-cyan-500/70">
-        <div className="mono">{dictData.code || '?'}</div>
-        {dictData.specs?.loa && <div>LOA {dictData.specs.loa}m</div>}
-      </div>
+      )}
     </div>
   );
 }

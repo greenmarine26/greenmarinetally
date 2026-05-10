@@ -128,6 +128,78 @@ export function lookupBayDictV2(code) {
   return SHIP_BAY_DICT_V2[code] || null;
 }
 
+// M5.11: 강화된 매칭 — IMO + callsign + 4글자 코드 + 선박명 4가지로 시도
+//   기존 lookupBayDictV2(code)가 단순 키 매칭만 하는 문제 해결
+//   반환: { entry, matchedBy } | null
+//   matchedBy: 'code' | 'imo' | 'callsign' | 'name-fuzzy(KEY)'
+export function lookupBayDictV2Enhanced(imo, vesselName) {
+  if (!imo && !vesselName) return null;
+
+  // 1. 4글자 코드 직접 키 매칭 (vesselName이 코드일 때)
+  if (vesselName && SHIP_BAY_DICT_V2[vesselName]) {
+    return { entry: SHIP_BAY_DICT_V2[vesselName], matchedBy: 'code' };
+  }
+  if (vesselName) {
+    const upper = String(vesselName).toUpperCase();
+    if (SHIP_BAY_DICT_V2[upper]) {
+      return { entry: SHIP_BAY_DICT_V2[upper], matchedBy: 'code' };
+    }
+  }
+
+  // 2. IMO 매칭 — name 또는 callsign 필드에 IMO 숫자가 포함된 entry 찾기
+  if (imo) {
+    const imoDigits = String(imo).replace(/[^0-9]/g, '');
+    if (imoDigits.length >= 6) {
+      for (const k of Object.keys(SHIP_BAY_DICT_V2)) {
+        const e = SHIP_BAY_DICT_V2[k];
+        const haystack = ((e.name || '') + ' ' + (e.callsign || '')).replace(/[^0-9]/g, '');
+        if (haystack.includes(imoDigits)) {
+          return { entry: e, matchedBy: 'imo' };
+        }
+      }
+    }
+  }
+
+  // 3. 콜사인 매칭 — 양방향 (선박명에 콜사인 포함되거나, 사전 callsign이 정확히 일치)
+  if (vesselName) {
+    const vUpper = String(vesselName).toUpperCase();
+    for (const k of Object.keys(SHIP_BAY_DICT_V2)) {
+      const e = SHIP_BAY_DICT_V2[k];
+      const callsign = (e.callsign || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      if (callsign && callsign.length >= 4 && vUpper.replace(/[^A-Z0-9]/g, '').includes(callsign)) {
+        return { entry: e, matchedBy: 'callsign' };
+      }
+    }
+  }
+
+  // 4. 선박명 fuzzy 매칭 — 4글자 prefix 제거 + garbage 제거 후 양방향 substring
+  if (vesselName) {
+    const targetKey = String(vesselName).toUpperCase().replace(/[^A-Z]/g, '');
+    if (targetKey.length >= 3) {
+      for (const k of Object.keys(SHIP_BAY_DICT_V2)) {
+        const e = SHIP_BAY_DICT_V2[k];
+        let entryName = e.name || '';
+        // garbage 바이트 제거 (\x00-\x1F, \x7F-\xFF)
+        entryName = entryName.replace(/[\x00-\x1F\x7F-\xFF]+/g, ' ');
+        // 4글자 코드 prefix 제거 (예: "AKGAA KEIGA..." → 키가 "AKGA"면 "A KEIGA..."로)
+        const k4 = k.toUpperCase().substring(0, 4);
+        if (entryName.toUpperCase().startsWith(k4)) {
+          entryName = entryName.substring(4);
+        }
+        // 알파벳만 남김
+        const entryKey = entryName.toUpperCase().replace(/[^A-Z]/g, '');
+        if (entryKey.length < 3) continue;
+        // 양방향 substring 매칭 (둘 다 충분히 길어야)
+        if (targetKey.includes(entryKey) || entryKey.includes(targetKey)) {
+          return { entry: e, matchedBy: `name-fuzzy(${k})` };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 export function listAllShipsV2() {
   return Object.values(SHIP_BAY_DICT_V2).map(s => ({
     code: s.code, name: s.name, bayCount: s.bayDef.recordCount,

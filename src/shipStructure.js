@@ -9,7 +9,7 @@
 //   - 컨테이너 데이터는 기존 EDI 흐름 유지 (변경 없음)
 
 import { lookupBayDict, getBayDictStats } from './data/shipBayDict.js';
-import { SHIP_BAY_DICT_V2, lookupBayDictV2 } from './data/shipBayDict_v2.js';
+import { SHIP_BAY_DICT_V2, lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
 import { lookupUserBayDict, getUserBayDictStats } from './data/userBayDict.js';
 
 // M4.5: 선박 식별자 정규화 (퍼지 매칭용)
@@ -29,39 +29,25 @@ function normalizeShipKey(s) {
 //
 // 동작 우선순위:
 //   userBayDict > SHIP_BAY_DICT_V2 (109척, verified) > SHIP_BAY_DICT (11척, v1.1)
+//
+// M5.11: v2에 대해 lookupBayDictV2Enhanced 사용 — IMO/callsign/code/이름 4가지 매칭
+//   기존 fuzzy 매칭이 prefix 4글자 + garbage 콜사인 때문에 자주 실패하던 문제 해결
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
-  const targets = [
-    { name: 'user', dict: null, lookup: () => lookupUserBayDict(imo, vesselNameOrCode) },
-    { name: 'v2',   dict: SHIP_BAY_DICT_V2, lookup: () => lookupBayDictV2(vesselNameOrCode) },
-    { name: 'v1',   dict: null, lookup: () => lookupBayDict(imo, vesselNameOrCode) },
-  ];
+  // 1. user 사전 (최우선)
+  const userResult = lookupUserBayDict(imo, vesselNameOrCode);
+  if (userResult) return { source: 'user', data: userResult, matchedBy: 'user-dict' };
 
-  // 1차: 각 사전에서 표준 lookup (IMO/code 정확 매칭)
-  for (const t of targets) {
-    const r = t.lookup();
-    if (r) return { source: t.name, data: r };
+  // 2. v2 사전 — 강화된 매칭 (IMO + callsign + code + name 4가지 시도)
+  const v2Enhanced = lookupBayDictV2Enhanced(imo, vesselNameOrCode);
+  if (v2Enhanced) {
+    return { source: v2Enhanced.matchedBy.startsWith('name-fuzzy') ? 'v2-fuzzy' : 'v2',
+             data: v2Enhanced.entry, matchedBy: v2Enhanced.matchedBy };
   }
 
-  // 2차: 정규화된 선박명 부분 매칭 (가장 흔한 케이스 — EDI vsl="TJ TEN JUPITER" vs 사전 name="TEN JUPITER")
-  const targetKey = normalizeShipKey(vesselNameOrCode);
-  if (!targetKey || targetKey.length < 3) return null;
+  // 3. v1 사전 (legacy 폴백)
+  const v1Result = lookupBayDict(imo, vesselNameOrCode);
+  if (v1Result) return { source: 'v1', data: v1Result, matchedBy: 'v1-lookup' };
 
-  // v2 사전 부분 매칭
-  for (const k of Object.keys(SHIP_BAY_DICT_V2)) {
-    const entry = SHIP_BAY_DICT_V2[k];
-    const dictKey = normalizeShipKey(entry.name || '');
-    const codeKey = normalizeShipKey(entry.code || '');
-    if (!dictKey && !codeKey) continue;
-    // 양방향 substring (둘 중 더 긴 쪽이 짧은 쪽 포함)
-    if ((dictKey && (targetKey.includes(dictKey) || dictKey.includes(targetKey))) ||
-        (codeKey && targetKey.includes(codeKey) && codeKey.length >= 4)) {
-      return { source: 'v2-fuzzy', data: entry };
-    }
-  }
-
-  // 임베드 v1 사전 부분 매칭 (폴백)
-  // 주의: shipBayDict.js는 SHIP_BAY_DICT export하지만 여기서는 lookupBayDict만 import
-  // 직접 fuzzy 검색하려면 SHIP_BAY_DICT도 import 필요 — 일단 v2에 없으면 종료
   return null;
 }
 
@@ -223,6 +209,7 @@ export function getShipBayDictData(imo, code) {
 
   return {
     source: result.source,  // 'user' / 'v2' / 'v1' / 'v2-fuzzy'
+    matchedBy: result.matchedBy || result.source,  // M5.11: 매칭 방식 ('code' / 'imo' / 'callsign' / 'name-fuzzy(KEY)')
     name: data.name,
     callsign: data.callsign,
     specs: data.specs || {},

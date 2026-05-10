@@ -10,6 +10,7 @@ import {
 } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
+  fbSaveEdiRaw, fbGetEdiRaw,
   fbCompleteContainer, fbCancelComplete, fbToggleXray,
   fbUpdateRecordSeal, fbUpdateVoyageInfo, fbSaveSectionData,
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
@@ -813,6 +814,77 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
   const xrayRef = useRef(null);
   const sec = voyage[mode] || {};
 
+  // M5.11: 보관된 EDI 원본 메타데이터 (재처리 가능 여부)
+  const [rawMeta, setRawMeta] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    fbGetEdiRaw(voyageKey, mode).then(d => {
+      if (alive) setRawMeta(d);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [voyageKey, mode]);
+
+  // M5.11: EDI 원본 재처리 — 앱 업데이트 후 자료 재업로드 없이 새 로직 적용
+  //   1. 보관된 원본 텍스트 가져옴
+  //   2. ----- FILE: ... ----- 구분자로 분할
+  //   3. 각 텍스트를 parseBAPLIE/parseAscFile로 다시 파싱
+  //   4. ediContainers 덮어쓰기 (records, completed, xrayList 등은 보존)
+  const handleReprocess = async () => {
+    if (!rawMeta?.text) {
+      alert('보관된 EDI 원본이 없습니다.\n다음 EDI 업로드부터 자동으로 보관됩니다.');
+      return;
+    }
+    if (!confirm(
+      `보관된 EDI 원본(${(rawMeta.sizeBytes/1024).toFixed(1)}KB)을 현재 앱 로직으로 다시 파싱합니다.\n\n` +
+      `· EDI 컨테이너 데이터(베이/위치/POL/POD)는 새로 파싱됨\n` +
+      `· 검수원 입력 데이터(실번호/완료/사진/X-RAY)는 보존됨\n` +
+      `· 진행 중 작업에 영향 없음\n\n` +
+      `진행하시겠습니까?`
+    )) return;
+
+    try {
+      setStatus('🔄 EDI 원본 재파싱 중...');
+      const text = rawMeta.text;
+      // 파일 구분자로 분할
+      const sections = text.split(/----- FILE: ([^-]+) -----\n/).filter(s => s.trim());
+      // 짝수 인덱스: 파일명, 홀수: 내용 (split 결과)
+      const files = [];
+      for (let i = 0; i < sections.length; i += 2) {
+        files.push({ name: sections[i].trim(), text: sections[i + 1] || '' });
+      }
+      if (files.length === 0) {
+        // 구분자 없는 단일 텍스트 (이전 형식)
+        files.push({ name: rawMeta.fileName || 'edi', text });
+      }
+
+      const allCns = {};
+      const messages = [];
+      for (const f of files) {
+        const isAsc = /\.asc$/i.test(f.name) || /^\$604/.test(f.text.slice(0, 10));
+        const r = isAsc ? parseAscFile(f.text) : parseBAPLIE(f.text);
+        r.containers.forEach(c => {
+          const podPtk = (c.pod || '').toUpperCase().endsWith('PTK');
+          const polPtk = (c.pol || '').toUpperCase().endsWith('PTK');
+          let containerMode;
+          if (mode === 'discharge') {
+            containerMode = podPtk ? 'discharge' : 'transit';
+          } else {
+            containerMode = polPtk ? 'loading' : 'transit';
+          }
+          const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
+          allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
+        });
+        messages.push(`${f.name}: ${r.containers.length}대`);
+      }
+
+      // ediContainers 덮어쓰기 (records 등은 그대로)
+      await fbSaveEdiContainers(voyageKey, mode, allCns);
+      setStatus(`✅ 재처리 완료 — ${messages.join(', ')}\n검수 입력 데이터(실번호 등)는 보존됨`);
+    } catch (e) {
+      setStatus(`❌ 재처리 실패: ${e?.message || e}`);
+    }
+  };
+
   const handleEdiUpload = async (files) => {
     if (!files || files.length === 0) return;
     setStatus(`${files.length}개 파일 처리 중...`);
@@ -863,9 +935,16 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
       }
     }
 
+    // M5.11: EDI 원본 텍스트 누적 — 미래 [🔄 자료 재처리]를 위한 보관
+    const rawEdiTexts = [];
+    const rawEdiFileNames = [];
+
     for (const file of ediCandidates) {
       try {
         const text = await file.text();
+        // M5.11: 원본 보관 (BAPLIE/ASC 모두)
+        rawEdiTexts.push(text);
+        rawEdiFileNames.push(file.name);
         const isAsc = /\.asc$/i.test(file.name) || /^\$604/.test(text.slice(0, 10));
         const r = isAsc ? parseAscFile(text) : parseBAPLIE(text);
         const total = r.containers.length;
@@ -984,6 +1063,24 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
       } else {
         // 기존 데이터 없으면 그냥 저장
         await fbSaveEdiContainers(voyageKey, mode, allCns);
+      }
+    }
+
+    // M5.11: EDI 원본 텍스트 보관 (미래 [🔄 자료 재처리]에 사용)
+    //   여러 파일 합쳐서 단일 텍스트로 저장 (구분자: \n----- FILE: ... -----\n)
+    if (rawEdiTexts.length > 0) {
+      try {
+        const combined = rawEdiTexts.map((t, i) =>
+          `----- FILE: ${rawEdiFileNames[i]} -----\n${t}`
+        ).join('\n\n');
+        await fbSaveEdiRaw(voyageKey, mode, combined, {
+          fileName: rawEdiFileNames.join(', '),
+          parserVersion: 'M5.11',
+        });
+        results.push(`💾 EDI 원본 보관됨 (${(combined.length / 1024).toFixed(1)}KB) — 자료 탭에서 재처리 가능`);
+      } catch (e) {
+        // 원본 저장 실패해도 메인 흐름엔 영향 없음
+        console.warn('EDI raw save failed:', e);
       }
     }
 
@@ -1294,6 +1391,32 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
           <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
         </div>
+
+        {/* M5.11: 보관된 EDI 원본 + 재처리 버튼 */}
+        {rawMeta?.text ? (
+          <div className="mt-2 pt-2 border-t border-slate-800/60">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-emerald-400 font-bold">💾 EDI 원본 보관됨</span>
+              <span className="text-[10px] text-slate-500 mono">
+                {(rawMeta.sizeBytes / 1024).toFixed(1)}KB
+                · {rawMeta.parserVersion || '?'}
+                {rawMeta.uploadedAt && ` · ${new Date(rawMeta.uploadedAt).toLocaleString('ko-KR', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}`}
+              </span>
+            </div>
+            <button onClick={handleReprocess}
+              className="mt-1.5 w-full bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white px-3 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5">
+              🔄 EDI 원본으로 자료 재처리 (앱 업데이트 후 적용용)
+            </button>
+            <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+              앱 업데이트 후 베이/ISO/POL/POD 등 EDI 파싱 결과 갱신.
+              검수 입력(실번호/사진/완료/X-RAY)은 보존됨.
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 pt-2 border-t border-slate-800/60 text-[10px] text-slate-500">
+            💾 다음 EDI 업로드부터 원본이 자동 보관됩니다 → 미래 앱 업데이트 시 자료 재업로드 없이 [🔄 재처리]로 적용 가능
+          </div>
+        )}
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">

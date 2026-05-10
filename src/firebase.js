@@ -57,6 +57,30 @@ export async function fbSaveEdiContainers(voyageKey, mode, containersObj) {
   await chunkedReplace(`voyages/${voyageKey}/${mode}/ediContainers`, containersObj);
 }
 
+// M5.11: EDI 원본 텍스트 보관 — 앱 업데이트 후 자료 재업로드 없이 [🔄 자료 재처리] 가능하게
+//   raw: 원본 EDI 텍스트 (압축 안함, 가독성 우선)
+//   meta: { uploadedAt, fileName, parserVersion } 등 메타데이터
+//   path: voyages/{key}/{mode}/raw/edi
+export async function fbSaveEdiRaw(voyageKey, mode, rawText, meta) {
+  if (!rawText) return;
+  const r = ref(db, `voyages/${voyageKey}/${mode}/raw/edi`);
+  await set(r, {
+    text: String(rawText).slice(0, 5_000_000),  // 5MB 안전 제한
+    uploadedAt: Date.now(),
+    fileName: meta?.fileName || '',
+    parserVersion: meta?.parserVersion || '',
+    sizeBytes: String(rawText).length,
+  });
+}
+
+// M5.11: 보관된 EDI 원본 조회 (재처리용)
+export async function fbGetEdiRaw(voyageKey, mode) {
+  const r = ref(db, `voyages/${voyageKey}/${mode}/raw/edi`);
+  const snap = await get(r);
+  if (!snap.exists()) return null;
+  return snap.val();
+}
+
 // 양하/선적 리스트 저장 (실번호 등)
 export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
   await chunkedReplace(`voyages/${voyageKey}/${mode}/records`, recordsObj);
