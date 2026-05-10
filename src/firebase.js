@@ -378,19 +378,19 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
 // === 항차 전체 구독 ===
 export function fbSubscribeVoyages(callback) {
   const r = ref(db, 'voyages');
-  const handler = onValue(r, (snap) => {
+  const unsub = onValue(r, (snap) => {
     callback(snap.val() || {});
   });
-  return () => off(r);
+  return unsub;
 }
 
 // 단일 항차 구독
 export function fbSubscribeVoyage(voyageKey, callback) {
   const r = voyageRef(voyageKey);
-  const handler = onValue(r, (snap) => {
+  const unsub = onValue(r, (snap) => {
     callback(snap.val() || null);
   });
-  return () => off(r);
+  return unsub;
 }
 
 // === 검수원 ===
@@ -403,8 +403,8 @@ export async function fbSetInspector(name) {
 }
 export function fbSubscribeInspectors(callback) {
   const r = ref(db, 'inspectors');
-  const handler = onValue(r, (snap) => callback(snap.val() || {}));
-  return () => off(r);
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
 }
 export async function fbSetInspectorActivity(name, voyageKey, mode) {
   await update(ref(db, `inspectors/${name}`), {
@@ -417,8 +417,8 @@ export async function fbSetInspectorActivity(name, voyageKey, mode) {
 // 연결 상태
 export function fbSubscribeConnection(callback) {
   const r = ref(db, '.info/connected');
-  const handler = onValue(r, (snap) => callback(!!snap.val()));
-  return () => off(r);
+  const unsub = onValue(r, (snap) => callback(!!snap.val()));
+  return unsub;
 }
 
 // ─── 선박 라이브러리 (수석 검수 통계 자료) ───
@@ -448,8 +448,8 @@ export async function fbGetShipStructure(imo) {
 // 모든 선박 라이브러리 조회 (수석 대시보드용)
 export function fbSubscribeShipLibrary(callback) {
   const r = ref(db, 'ships');
-  const handler = onValue(r, (snap) => callback(snap.val() || {}));
-  return () => off(r);
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
 }
 
 // 분석된 항차 추가 (분석 이력)
@@ -494,8 +494,8 @@ export async function fbReportWrongAnswer(data) {
 
 export function fbSubscribeFeedback(callback) {
   const r = ref(db, 'feedback');
-  const handler = onValue(r, (snap) => callback(snap.val() || {}));
-  return () => off(r);
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
 }
 
 export async function fbResolveFeedback(ts, resolved = true) {
@@ -567,14 +567,14 @@ export async function fbAddWorkReport(voyageKey, report) {
 
 export function fbSubscribeWorkReports(voyageKey, callback) {
   const r = ref(db, `voyages/${voyageKey}/reports`);
-  const handler = onValue(r, (snap) => callback(snap.val() || {}));
-  return () => off(r);
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
 }
 
 // 모든 항차 보고 (수석 대시보드용 - 최근 N건)
 export function fbSubscribeAllReports(callback, limit = 100) {
   const r = ref(db, 'voyages');
-  const handler = onValue(r, (snap) => {
+  const unsub = onValue(r, (snap) => {
     const all = [];
     const voyages = snap.val() || {};
     Object.entries(voyages).forEach(([vk, v]) => {
@@ -586,7 +586,7 @@ export function fbSubscribeAllReports(callback, limit = 100) {
     all.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     callback(all.slice(0, limit));
   });
-  return () => off(r);
+  return unsub;
 }
 
 // 사진 데이터 저장 (Firebase Realtime DB - base64, 작은 사진만)

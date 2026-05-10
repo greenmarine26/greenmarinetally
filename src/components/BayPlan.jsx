@@ -35,9 +35,9 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(() => {
-    // M3.78: 모바일 기본 zoom 0.3 → 0.5로 (❄/⚠ 같은 종류 심볼 잘 보이게)
-    if (typeof window !== 'undefined' && window.innerWidth < 768) return 0.5;
-    return 1.0;
+    // M5.19: 모바일/PC 모두 기본 30% (사용자 요청 — 한 화면에 더 많은 베이 보이게)
+    //   필요 시 +/- 버튼 또는 핀치/휠로 확대 가능
+    return 0.3;
   });
   // M3.74: 다중 적재 슬롯 선택 모달
   const [slotPicker, setSlotPicker] = useState(null);  // { slot: {bay,row,tier}, containers: [...] }
