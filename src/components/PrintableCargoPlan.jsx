@@ -176,13 +176,14 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     cellMap[`${t}-${r}`] = c;
   });
 
-  // M5.39: 베이사전 절대 우선 — bayDef.rowMaxEven/rowMaxOdd/deckTiers/holdTiers
-  //   1순위: dictShipMeta (PDF에서 추출된 명시 필드)
-  //   2순위: globalRowRange / globalTiers (EDI fallback)
-  //   3순위: fallback 배열
+  // M5.42: 베이별 로컬 오버라이드 절대 우선 — dictBay.{rowMaxEvenLocal/Odd, deckTiersLocal, holdTiersLocal}
+  //   1순위: dictBay.{필드}Local (베이별 PDF 검증값 — 선수/선미 좁은 베이)
+  //   2순위: dictShipMeta (선박 전역 PDF 검증)
+  //   3순위: globalRowRange / globalTiers (EDI fallback)
+  //   4순위: fallback 배열
   const dynRows = (() => {
-    const maxEven = dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
-    const maxOdd = dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
+    const maxEven = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
+    const maxOdd = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
     if (maxEven || maxOdd) {
       const left = [], right = [];
       for (let r = maxEven || 0; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
@@ -193,8 +194,11 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
-  // tier: 베이사전 deckTiers/holdTiers 명시 정보 우선
+  // tier: 베이별 로컬 → 선박 전역 → EDI fallback
   const deckTiers = (() => {
+    if (dictBay?.deckTiersLocal && dictBay.deckTiersLocal.length > 0) {
+      return dictBay.deckTiersLocal.map(t => String(t).padStart(2, '0'));
+    }
     if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
       return dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
     }
@@ -214,6 +218,9 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
   })();
 
   const holdTiers = (() => {
+    if (dictBay?.holdTiersLocal && dictBay.holdTiersLocal.length > 0) {
+      return dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0'));
+    }
     if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
       return dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
     }

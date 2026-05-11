@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M5.42 변경 사항 (2026-05) — 베이별 tier/row 로컬 오버라이드 + DJCF·XTPG 정정',
+      examples: [
+        { q: '🎯 핵심 fix', a: '베이사전이 선박 전역(deckTiers/holdTiers/rowMax) 하나만 가지고 있어, 같은 선박 안에서도 선수·선미가 좁아지는 베이(BAY 01, 38 등)가 phantom 슬롯으로 출력되던 문제. 이제 베이별 로컬 값이 우선 적용됨' },
+        { q: '🛠️ 신규 스키마 (baysSummary)', a: '각 베이 엔트리에 4개 선택 필드 추가: rowMaxEvenLocal / rowMaxOddLocal (행 폭), deckTiersLocal / holdTiersLocal (단). 없으면 선박 전역값 사용. 우선순위: 베이별 → 선박 전역 → EDI fallback' },
+        { q: '🚢 DJCF (DONGJIN CONFIDENT) 정정', a: '전역 rowMaxOdd 11→9 (파싱 오류 수정). BAY 01 (선수): rows 6/5 + deck [88,86,84,82] + hold [10,8,6]. BAY 02·03: rows 4/3. BAY 05~19: rows 8/7. BAY 21~35: rows 10/9 (기존 유지). BAY 38 (선미 standalone): deck [90,88,86,84] (82 제외)' },
+        { q: '🚢 XTPG (XIN TAI PING) 정정', a: '전역 holdTiers [8,6,4,2]→[6,4,2] (실제 hold는 3단). BAY 01: rows 4/3 + deck [86,84,82]. BAY 03·04·05: 좁은 선수. BAY 21: deck [90,88,86,84,82] (이 베이만 tier 90). BAY 25: deck [88,86,84,82,80] (이 베이만 tier 80)' },
+        { q: '📍 적용 컴포넌트', a: 'PrintableCargoPlan + PrintableBayDetail 두 곳 모두 dictBay 로컬 우선 처리. M5.40에서 통일했던 dictShipMeta 처리에 베이별 우선순위 한 단계 추가' },
+        { q: '✅ 검증', a: 'DJCF2 37개 오버라이드 필드, XTPG 14개. BAY 38은 deckTiersLocal로 tier 82 제외 처리됨' },
+      ],
+    },
+    {
       title: '🆕 M5.28 변경 사항 (2026-05) — 검수 리스트 양식 수정 + 화물 구분 fix + X-RAY 표시',
       examples: [
         { q: '🔥 화물 구분 fix (CRITICAL)', a: 'ISO 6346 셋째 글자 기준으로 정확히 판별. 이전: iso.includes("P")가 GP의 P까지 잡아 22GP/42GP 일반 컨테이너를 FR로 오분류 (사용자: 145개 중 138개 특수화물). 현재: 22G1→일반, 22R1→리퍼, 42PF→FR, 22UT→OT, 22T0→Tank' },

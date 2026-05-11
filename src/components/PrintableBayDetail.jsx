@@ -158,18 +158,19 @@ function formatCellLines(c) {
 }
 
 function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers, dictShipMeta }) {
-  // M5.40: 베이사전 명시 필드(dictShipMeta) 절대 우선 — rowMaxEven/rowMaxOdd
-  //   1순위: dictShipMeta.rowMaxEven/rowMaxOdd (PDF 검증)
-  //   2순위: globalRowRange (EDI fallback)
+  // M5.42: 베이별 로컬 오버라이드 절대 우선 — dictBay.{rowMaxEvenLocal/Odd, deckTiersLocal, holdTiersLocal}
+  //   1순위: dictBay.{필드}Local (베이별 PDF 검증값)
+  //   2순위: dictShipMeta.{필드} (선박 전역)
+  //   3순위: globalRowRange / globalTiers (EDI fallback)
   const STD_ROWS = useMemo(() => {
-    const maxLeft = dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft ?? 6;
-    const maxRight = dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight ?? 5;
+    const maxLeft = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft ?? 6;
+    const maxRight = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight ?? 5;
     const left = [];
     for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
     const right = [];
     for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
     return [...left, '00', ...right];
-  }, [globalRowRange, dictShipMeta]);
+  }, [globalRowRange, dictShipMeta, dictBay]);
   const colCount = STD_ROWS.length;
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -183,11 +184,14 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     cellMap[`${t}-${r}`] = c;
   });
 
-  // M5.40: 베이사전 deckTiers/holdTiers 절대 우선 (XTPG deck 6단, hold 4단 등 정확 표시)
-  //   1순위: dictShipMeta.deckTiers/holdTiers (PDF 검증)
-  //   2순위: globalTiers + EDI 컨테이너 (fallback)
+  // M5.42: 베이별 deckTiersLocal/holdTiersLocal 절대 우선
+  //   1순위: dictBay.deckTiersLocal/holdTiersLocal (베이별 PDF 검증)
+  //   2순위: dictShipMeta.deckTiers/holdTiers (선박 전역)
+  //   3순위: globalTiers + EDI 컨테이너 (fallback)
   let deckTiers, holdTiers;
-  if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
+  if (dictBay?.deckTiersLocal && dictBay.deckTiersLocal.length > 0) {
+    deckTiers = dictBay.deckTiersLocal.map(t => String(t).padStart(2, '0'));
+  } else if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
     deckTiers = dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
   } else {
     const allTiers = new Set();
@@ -198,7 +202,9 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
       .sort((a, b) => parseInt(b) - parseInt(a));
   }
-  if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
+  if (dictBay?.holdTiersLocal && dictBay.holdTiersLocal.length > 0) {
+    holdTiers = dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0'));
+  } else if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
     holdTiers = dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
   } else {
     const allTiers = new Set();
