@@ -157,21 +157,19 @@ function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers }) {
-  // M4.9d-fix: globalRowRange 기준 동적 row 생성 — 화면 BayPlan과 통일
-  //   maxLeft (예: 10) → 짝수 큰→작은 [10, 08, 06, 04, 02]
-  //   maxRight (예: 09) → 홀수 작은→큰 [01, 03, 05, 07, 09]
-  //   center ['00']
-  //   사용자 지적: "베이마다 다름, 일괄 적용 X, 베이사전 준해 화면과 같게"
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers, dictShipMeta }) {
+  // M5.40: 베이사전 명시 필드(dictShipMeta) 절대 우선 — rowMaxEven/rowMaxOdd
+  //   1순위: dictShipMeta.rowMaxEven/rowMaxOdd (PDF 검증)
+  //   2순위: globalRowRange (EDI fallback)
   const STD_ROWS = useMemo(() => {
-    const maxLeft = globalRowRange?.maxLeft || 6;
-    const maxRight = globalRowRange?.maxRight || 5;
+    const maxLeft = dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft ?? 6;
+    const maxRight = dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight ?? 5;
     const left = [];
     for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
     const right = [];
     for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
     return [...left, '00', ...right];
-  }, [globalRowRange]);
+  }, [globalRowRange, dictShipMeta]);
   const colCount = STD_ROWS.length;
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -185,19 +183,32 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     cellMap[`${t}-${r}`] = c;
   });
 
-  const allTiers = new Set();
-  // M4.9e-fix: 화면 BayPlan과 동일하게 globalTiers (선박 전체 tier 풀) 사용
-  //   사용자 지적: "티어도 안 맞음, 베이마다 / 선박마다 다름"
-  //   이전: STD_DECK/STD_HOLD 하드코딩과 합쳐 사용 → 선박마다 안 맞음
-  //   수정: globalTiers 우선, 그 다음 컨테이너 데이터의 tier (보강)
-  if (Array.isArray(globalTiers) && globalTiers.length > 0) {
-    globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
+  // M5.40: 베이사전 deckTiers/holdTiers 절대 우선 (XTPG deck 6단, hold 4단 등 정확 표시)
+  //   1순위: dictShipMeta.deckTiers/holdTiers (PDF 검증)
+  //   2순위: globalTiers + EDI 컨테이너 (fallback)
+  let deckTiers, holdTiers;
+  if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
+    deckTiers = dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
+  } else {
+    const allTiers = new Set();
+    if (Array.isArray(globalTiers) && globalTiers.length > 0) {
+      globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
+    }
+    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
+    deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
+      .sort((a, b) => parseInt(b) - parseInt(a));
   }
-  allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-  const deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
-    .sort((a, b) => parseInt(b) - parseInt(a));
-  const holdTiers = [...allTiers].filter(t => parseInt(t) < 80)
-    .sort((a, b) => parseInt(b) - parseInt(a));
+  if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
+    holdTiers = dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
+  } else {
+    const allTiers = new Set();
+    if (Array.isArray(globalTiers) && globalTiers.length > 0) {
+      globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
+    }
+    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
+    holdTiers = [...allTiers].filter(t => parseInt(t) < 80)
+      .sort((a, b) => parseInt(b) - parseInt(a));
+  }
 
   const hasHold = dictBay ? dictBay.hasHold !== false : allConts.some(c => parseInt(c.tier) < 80);
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
@@ -302,6 +313,14 @@ export default function PrintableBayDetail({
     dictData.bayDef.baysSummary.forEach(b => { m[parseInt(b.bayNo, 10)] = b; });
     return m;
   }, [dictData]);
+
+  // M5.40: 베이사전 명시 필드 (PDF 추출 row/tier) — 절대 기준
+  const dictShipMeta = useMemo(() => ({
+    rowMaxEven: dictData?.bayDef?.rowMaxEven,
+    rowMaxOdd: dictData?.bayDef?.rowMaxOdd,
+    deckTiers: dictData?.bayDef?.deckTiers,
+    holdTiers: dictData?.bayDef?.holdTiers,
+  }), [dictData]);
 
   const bayList = useMemo(() => {
     if (dictBayList && dictBayList.length > 0) return [...dictBayList].sort((a, b) => a - b);
@@ -414,7 +433,8 @@ export default function PrintableBayDetail({
                 voyageInfo={voyageInfo} voyageKey={voyageKey}
                 shipName={shipName} dictBay={dictBay}
                 globalRowRange={globalRowRange}
-                globalTiers={globalTiers} />
+                globalTiers={globalTiers}
+                dictShipMeta={dictShipMeta} />
             );
           })
         )}
