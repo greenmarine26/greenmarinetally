@@ -17,7 +17,7 @@ import {
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
 } from '../firebase.js';
-import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict } from '../shipStructure.js';
+import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
@@ -46,7 +46,7 @@ import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from
 import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, onGoHome, onModeChange }) {
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange }) {
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   const hasDis = !!voyage?.discharge;
   const hasLoa = !!voyage?.loading;
@@ -458,6 +458,51 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
           />
         </div>
       )}
+
+      {/* M5.21: PORT-MIS 입출항 정보 (Chrome 확장이 자동 수집한 데이터) */}
+      {(() => {
+        // 호출부호 매칭: 1) shipBayDictData의 callsign, 2) portMisData의 vesselName 부분 매칭
+        const vsl = (voyage?.info?.vsl || '').toUpperCase();
+        const dictCallsign = (() => {
+          try {
+            const data = getShipBayDictData(voyage?.info?.imo, voyage?.info?.vsl);
+            return data?.callsign || data?.bayDef?.callsign;
+          } catch { return null; }
+        })();
+        let pm = null;
+        if (dictCallsign && portMisData[dictCallsign]) {
+          pm = portMisData[dictCallsign];
+        } else if (vsl) {
+          // 선박명 부분 매칭 fallback
+          pm = Object.values(portMisData).find(p => {
+            const pn = (p.vesselName || '').toUpperCase();
+            return pn && (vsl.includes(pn) || pn.includes(vsl));
+          });
+        }
+        if (!pm) return null;
+        const fmtDT = (s) => {
+          if (!s) return '-';
+          // "2026-05-23 23:00" → "05/23 23:00"
+          const m = String(s).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+          return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : s;
+        };
+        return (
+          <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 flex items-center gap-4 text-sm">
+            <span className="text-cyan-300 font-bold">⚓ PORT-MIS</span>
+            <span className="text-slate-200">
+              입항 <span className="font-bold text-emerald-300">{fmtDT(pm.eta)}</span>
+            </span>
+            <span className="text-slate-500">·</span>
+            <span className="text-slate-200">
+              출항 <span className="font-bold text-amber-300">{fmtDT(pm.etd)}</span>
+            </span>
+            {pm.port && pm.port !== '평택' && (
+              <span className="text-orange-400 text-xs ml-auto">⚠ {pm.port}</span>
+            )}
+            {pm.voyageType && <span className="text-slate-400 text-xs">[{pm.voyageType}]</span>}
+          </div>
+        );
+      })()}
 
       {/* M3.5.4: 자동 진단 경고 패널 */}
       {diagAlerts.length > 0 && (

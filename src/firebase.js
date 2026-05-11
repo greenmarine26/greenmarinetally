@@ -698,4 +698,13 @@ export async function fbClearAllActiveWork() {
   await set(ref(db, 'activeWork'), null);
 }
 
+// M5.21: PORT-MIS 데이터 구독 (Chrome 확장이 저장한 입출항 정보)
+//   경로: port_mis_data/{호출부호} = { callsign, vesselName, port, eta, etd, ... }
+//   사용: 항차 카드 상단에 입출항 시간 자동 표시 (호출부호로 매칭)
+export function fbSubscribePortMis(callback) {
+  const r = ref(db, 'port_mis_data');
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
+}
+
 export { db };

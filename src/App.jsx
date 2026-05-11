@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { APP_VERSION, _storage, SK } from './utils.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
-  fbSubscribeConnection, fbSetInspectorActivity
+  fbSubscribeConnection, fbSetInspectorActivity, fbSubscribePortMis
 } from './firebase.js';
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
@@ -20,6 +20,8 @@ export default function App() {
   const [route, setRoute] = useState({ name: 'home' });
   const [voyages, setVoyages] = useState({});
   const [inspectors, setInspectors] = useState({});
+  // M5.21: PORT-MIS 입출항 데이터 (Chrome 확장이 저장 — 호출부호로 매칭)
+  const [portMisData, setPortMisData] = useState({});
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력
   const [inspector, setInspector] = useState('');
   const [showInspectorModal, setShowInspectorModal] = useState(true);
@@ -33,7 +35,8 @@ export default function App() {
     const u1 = fbSubscribeVoyages(setVoyages);
     const u2 = fbSubscribeInspectors(setInspectors);
     const u3 = fbSubscribeConnection(setOnline);
-    return () => { u1(); u2(); u3(); };
+    const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
+    return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
   useEffect(() => {
@@ -177,6 +180,7 @@ export default function App() {
             voyage={voyages[route.voyageKey] || null}
             inspector={inspector}
             inspectors={inspectors}
+            portMisData={portMisData}
             onGoHome={() => navigate('home')}
             onModeChange={(mode) => setRoute(r => ({ ...r, mode }))}
           />
