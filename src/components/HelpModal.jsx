@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M5.25 변경 사항 (2026-05) — PORT-MIS 캡처 OCR (폰 전용)',
+      examples: [
+        { q: '📸 폰만으로 입출항 등록', a: '메인 화면 상단 [📸 PORT-MIS 캡처] 버튼. Chrome 확장 없이도 폰으로 가능' },
+        { q: '사용 흐름',               a: '1) 폰 Chrome으로 PORT-MIS 평택 입출항현황 검색 2) 화면 캡처 3) Tallyman에서 [📸 PORT-MIS 캡처] → 사진 선택 4) Gemini Vision이 자동 추출 5) 검토 후 [Firebase 저장] 클릭 → 모든 검수원에게 ⚓ 카드 자동 표시' },
+        { q: '✅ 누구나 사용',           a: 'Chrome 확장은 데스크톱만. 이 기능은 폰만으로 가능 (안드로이드/iOS 모두)' },
+        { q: '💰 비용',                  a: 'Gemini API (사용자 키, 무료 한도 충분). 하루 1~2번 캡처면 영향 없음' },
+      ],
+    },
+    {
       title: '🆕 M5.24 변경 사항 (2026-05) — ATPR/ATRP 콜사인 정정 (D5RR5 → 9V7919)',
       examples: [
         { q: '✅ ATPR/ATRP 콜사인 정정', a: 'PORT-MIS 확인 결과 ATLANTIC PIONEER의 현재 콜사인은 9V7919. ATPR.def 헤더의 D5RR5는 옛 데이터(2023년 4월). oldCallsign 필드에 D5RR5 보존' },

@@ -661,3 +661,87 @@ export function matchVoyage(ediVsl, ediVoy, existingVoyages) {
 
   return { matched: null, candidates: [], suggestion: 'create-new' };
 }
+
+// ─── M5.25: PORT-MIS 캡처 OCR (폰에서 활용) ───
+// 검수원이 폰 Chrome으로 PORT-MIS 입출항현황 캡처 → Gemini Vision으로 데이터 추출
+// 결과를 Firebase port_mis_data에 저장 → Chrome 확장 없이도 ⚓ 카드 표시
+export async function ocrPortMisCapture(file, geminiApiKey) {
+  if (!geminiApiKey) throw new Error('Gemini API 키 없음');
+
+  let imageBlob;
+  try { imageBlob = await compressImage(file, 1600); }
+  catch { imageBlob = file; }
+
+  const base64 = await blobToBase64(imageBlob);
+  const prompt = `이 이미지는 한국 PORT-MIS의 선박입출항현황 화면입니다.
+표 형태로 선박들의 입출항 정보가 나열되어 있습니다.
+
+다음 JSON 형식으로 응답하세요. JSON만 출력. 다른 설명 없음:
+{
+  "ships": [
+    {
+      "port": "항만 (평택/부산/마산 등)",
+      "callsign": "호출부호 (영문/숫자 4-7자)",
+      "vesselName": "선박명 (정확히, 잘리지 않게)",
+      "voyageType": "항해구분 (최초/변경/최종 등)",
+      "voyageInOut": "외내항 (외항/내항)",
+      "ibobprtSe": "입출 (입항/출항)",
+      "eta": "입항일시 (YYYY-MM-DD HH:MM)",
+      "etd": "출항일시 (YYYY-MM-DD HH:MM)"
+    },
+    ...
+  ]
+}
+
+규칙:
+- 표의 각 행에서 한 선박씩 추출
+- 호출부호는 영문/숫자 (예: D7MV, V7A5451, 3FTE6)
+- 선박명에 "..." 같이 잘려 보이는 부분이 있어도 보이는 글자만 정확히 추출
+- 입항/출항 일시는 YYYY-MM-DD HH:MM 형식, 없으면 빈 문자열
+- 항만은 한글 그대로 (예: 평택, 부산)
+- 순번 컬럼은 무시`;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiApiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }],
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini API 오류 ${response.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+  let json;
+  try {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('JSON 못 찾음');
+    json = JSON.parse(m[0]);
+  } catch (e) {
+    throw new Error(`OCR 결과 파싱 실패: ${e.message}\n응답: ${text.slice(0, 200)}`);
+  }
+
+  const ships = (json.ships || []).filter(s => s.callsign || s.vesselName);
+  // 정규화
+  return ships.map(s => ({
+    callsign: (s.callsign || '').trim(),
+    vesselName: (s.vesselName || '').trim(),
+    port: (s.port || '').trim(),
+    eta: (s.eta || '').trim(),
+    etd: (s.etd || '').trim(),
+    voyageType: (s.voyageType || '').trim(),
+    voyageInOut: (s.voyageInOut || '').trim(),
+    ibobprtSe: (s.ibobprtSe || '').trim(),
+  }));
+}

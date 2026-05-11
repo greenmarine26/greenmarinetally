@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3 } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection } from '../firebase.js';
+import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
+  const [showPortMisCapture, setShowPortMisCapture] = useState(false);  // M5.25
 
   const list = useMemo(() => {
     return Object.entries(voyages || {})
@@ -65,8 +67,8 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
         <div className="text-xs text-emerald-200 font-bold">그린마린 검수팀 전용 · 평택항</div>
       </div>
 
-      {/* 빠른 진입 - 통합검색 + 수석대시보드 */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
+      {/* 빠른 진입 - 통합검색 + 수석대시보드 + PORT-MIS 캡처 (M5.25) */}
+      <div className="grid grid-cols-3 gap-2 mb-3">
         <button onClick={onOpenGlobalSearch}
           className="bg-gradient-to-br from-amber-900/40 to-amber-950/40 border border-amber-700/40 rounded-xl p-3 text-left hover:from-amber-900/60 active:scale-95 transition">
           <Search className="w-5 h-5 text-amber-300 mb-1"/>
@@ -78,6 +80,12 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
           <BarChart3 className="w-5 h-5 text-purple-300 mb-1"/>
           <div className="font-bold text-sm text-purple-100">수석 대시보드</div>
           <div className="text-[10px] text-purple-300/70">전체 검수원 진행률·통계</div>
+        </button>
+        <button onClick={() => setShowPortMisCapture(true)}
+          className="bg-gradient-to-br from-cyan-900/40 to-cyan-950/40 border border-cyan-700/40 rounded-xl p-3 text-left hover:from-cyan-900/60 active:scale-95 transition">
+          <span className="text-xl mb-1 block">📸</span>
+          <div className="font-bold text-sm text-cyan-100">PORT-MIS 캡처</div>
+          <div className="text-[10px] text-cyan-300/70">⚓ 입출항 자동 등록</div>
         </button>
       </div>
 
@@ -140,6 +148,11 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
           onClose={() => setDeleteTarget(null)}
           onConfirm={performDelete}
         />
+      )}
+
+      {/* M5.25: PORT-MIS 캡처 업로드 모달 */}
+      {showPortMisCapture && (
+        <PortMisCaptureModal onClose={() => setShowPortMisCapture(false)} />
       )}
     </div>
   );

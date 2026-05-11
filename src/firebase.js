@@ -707,4 +707,27 @@ export function fbSubscribePortMis(callback) {
   return unsub;
 }
 
+// M5.25: PORT-MIS 캡처 OCR 결과 일괄 저장 (Chrome 확장과 동일 구조)
+//   폰에서 캡처 → OCR → 추출된 ships 배열을 Firebase port_mis_data에 PUT
+//   key는 sanitized callsign. callsign 없으면 vesselName 사용 (안전망)
+export async function fbSavePortMisBatch(ships) {
+  if (!Array.isArray(ships) || ships.length === 0) return { saved: 0, failed: 0 };
+  let saved = 0, failed = 0;
+  const now = Date.now();
+  await Promise.all(ships.map(async (s) => {
+    const rawKey = s.callsign || s.vesselName;
+    if (!rawKey) { failed++; return; }
+    const key = String(rawKey).replace(/[.#$/[\]\s'"]/g, '_').trim();
+    if (!key) { failed++; return; }
+    try {
+      await set(ref(db, `port_mis_data/${key}`), { ...s, updatedAt: now });
+      saved++;
+    } catch (e) {
+      console.error('[fbSavePortMisBatch] 저장 실패', key, e);
+      failed++;
+    }
+  }));
+  return { saved, failed };
+}
+
 export { db };
