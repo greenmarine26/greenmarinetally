@@ -91,6 +91,35 @@ function buildBayPages(bays) {
   return { singles, pairs };
 }
 
+// M5.33: 단독 베이와 짝꿍 베이를 컬럼 단위로 매칭
+//   사용자 명세: "1번이 단독이면 그 밑 짝꿍 자리 비워둠 — 다른 짝꿍이 끼어들지 않음"
+//   매칭 규칙: single.bay + 1 === pair.even (예: single 01의 컬럼 아래 = pair (02, 03))
+//             통로 (짝수 없음)면 양 홀수 모두 단독 → 그 컬럼 아래 빈 칸
+//   결과: [{ single, pair }] 배열 (베이 번호 큰 것이 좌측)
+function matchColumns(singles, pairs) {
+  const usedPairs = new Set();
+  const columns = [];
+  // 작은 베이부터 매칭 (우측이 작은 베이 = 01부터)
+  const sortedSingles = [...singles].sort((a, b) => a.bay - b.bay);
+  for (const single of sortedSingles) {
+    // 매칭 짝꿍: pair.even === single.bay + 1
+    const pair = pairs.find(p => !usedPairs.has(p.even) && p.even === single.bay + 1);
+    if (pair) usedPairs.add(pair.even);
+    columns.push({ single, pair: pair || null });
+  }
+  // 매칭 안 된 짝꿍 (예: 양옆 홀수 없는 경우, 또는 single 없는 짝꿍)
+  for (const pair of pairs) {
+    if (!usedPairs.has(pair.even)) columns.push({ single: null, pair });
+  }
+  // 정렬: 큰 베이 좌측, 작은 베이 우측
+  columns.sort((a, b) => {
+    const aBay = a.single?.bay ?? a.pair?.even ?? 0;
+    const bBay = b.single?.bay ?? b.pair?.even ?? 0;
+    return bBay - aBay;
+  });
+  return columns;
+}
+
 // M5.16: 특수화물 + X-RAY 표시 정보 반환
 //   기존: 'o' / 'L' / 'X' 한 글자만
 //   강화: { letter, type, isXray } — type별 셀 색상 + X-RAY 마커
@@ -279,14 +308,9 @@ export default function PrintableCargoPlan({
     voy = voyD || voyL || voyFallback;
   }
 
-  // M4.9b: AFT 영역 5-col로 확장 (legend는 footer로)
-  //   이전: AFT singles slice(0,4) + AFT pairs slice(0,4)에서 페어 행 5-col에 빈2+페어4=6슬롯이 들어가
-  //         (22)23이 다음 행/페이지로 밀려나는 버그
-  //   수정: AFT 영역을 5-col로 통일하여 5개까지 깔끔히 들어가게
-  const foreSinglesByCol = forePages.singles.slice(0, 5);
-  const forePairsByCol = forePages.pairs.slice(0, 5);
-  const aftSinglesByCol = aftPages.singles.slice(0, 5);
-  const aftPairsByCol = aftPages.pairs.slice(0, 5);
+  // M5.33: 컬럼 매칭 (단독 N의 컬럼 아래 = 짝꿍 (N+1)/(N+2) 또는 빈)
+  const foreColumns = matchColumns(forePages.singles, forePages.pairs).slice(0, 5);
+  const aftColumns = matchColumns(aftPages.singles, aftPages.pairs).slice(0, 5);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">
@@ -315,40 +339,49 @@ export default function PrintableCargoPlan({
             <span>{portText}</span>
           </div>
 
-          {/* M4.9e-fix: 모든 4행 우측 정렬로 통일 (사용자 신고: 좌측 기준 남은 곳 → 베이 정렬 어긋남)
-             빈 placeholder를 앞에, 데이터를 뒤에 — 트리오 짝꿍이 단독과 같은 컬럼에 자동 매칭 */}
+          {/* M5.33: 컬럼 매칭 — 단독 행과 짝꿍 행이 같은 컬럼 인덱스 (베이 그룹별) */}
+          {/* FORE 단독 행 */}
           <div className="bay-row five-col">
-            {Array.from({ length: 5 - foreSinglesByCol.length }).map((_, i) =>
+            {Array.from({ length: 5 - foreColumns.length }).map((_, i) =>
               <div key={`fse-${i}`} className="bay-box-placeholder"></div>
             )}
-            {foreSinglesByCol.map((p, i) => (
-              <BayBox key={`fs-${i}`} even={null} odd={p.bay} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.bay]} xrayMap={xrayMap} />
+            {foreColumns.map((col, i) => col.single ? (
+              <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} />
+            ) : (
+              <div key={`fs-${i}`} className="bay-box-placeholder"></div>
             ))}
           </div>
+          {/* FORE 짝꿍 행 */}
           <div className="bay-row five-col">
-            {Array.from({ length: 5 - forePairsByCol.length }).map((_, i) =>
+            {Array.from({ length: 5 - foreColumns.length }).map((_, i) =>
               <div key={`fpe-${i}`} className="bay-box-placeholder"></div>
             )}
-            {forePairsByCol.map((p, i) => (
-              <BayBox key={`fp-${i}`} even={p.even} odd={p.odd} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.even]} xrayMap={xrayMap} />
+            {foreColumns.map((col, i) => col.pair ? (
+              <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} />
+            ) : (
+              <div key={`fp-${i}`} className="bay-box-placeholder"></div>
             ))}
           </div>
 
+          {/* AFT 단독 행 */}
           <div className="bay-row five-col">
-            {Array.from({ length: 5 - aftSinglesByCol.length }).map((_, i) =>
+            {Array.from({ length: 5 - aftColumns.length }).map((_, i) =>
               <div key={`ase-${i}`} className="bay-box-placeholder"></div>
             )}
-            {aftSinglesByCol.map((p, i) => (
-              <BayBox key={`as-${i}`} even={null} odd={p.bay} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.bay]} xrayMap={xrayMap} />
+            {aftColumns.map((col, i) => col.single ? (
+              <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} />
+            ) : (
+              <div key={`as-${i}`} className="bay-box-placeholder"></div>
             ))}
           </div>
 
+          {/* AFT 짝꿍 행 + 통계 박스 (좌측 끝) */}
           <div className="bay-row five-col">
-            {/* M5.32: 통계 박스를 마지막 행 좌측 끝 placeholder 자리에 (베이 박스 크기 보존) */}
-            {aftPairsByCol.length < 5 && (
+            {/* M5.32: 통계 박스 = 좌측 끝 (placeholder 자리 활용) */}
+            {aftColumns.length < 5 && (
               <div className="bay-stats-inline">
                 <div className="stats-title">20'/40'/45'</div>
                 <div className="stats-line">
@@ -357,12 +390,14 @@ export default function PrintableCargoPlan({
                 <div className="stats-total">총 {totalCounts.c20 + totalCounts.c40 + totalCounts.c45}대</div>
               </div>
             )}
-            {Array.from({ length: Math.max(0, 5 - aftPairsByCol.length - (aftPairsByCol.length < 5 ? 1 : 0)) }).map((_, i) =>
+            {Array.from({ length: Math.max(0, 5 - aftColumns.length - (aftColumns.length < 5 ? 1 : 0)) }).map((_, i) =>
               <div key={`ape-${i}`} className="bay-box-placeholder"></div>
             )}
-            {aftPairsByCol.map((p, i) => (
-              <BayBox key={`ap-${i}`} even={p.even} odd={p.odd} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[p.even]} xrayMap={xrayMap} />
+            {aftColumns.map((col, i) => col.pair ? (
+              <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap}
+                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} />
+            ) : (
+              <div key={`ap-${i}`} className="bay-box-placeholder"></div>
             ))}
           </div>
 
