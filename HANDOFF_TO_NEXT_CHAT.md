@@ -1,75 +1,77 @@
-# M5.29 → 다음 세션 인계 (HANDOFF)
+# M5.31 → 다음 세션 인계 (HANDOFF)
 
-## 현재 상태 (M5.29) — 검수 리스트 양식 + 인쇄 버튼
+## 현재 상태 (M5.31) — 별첨 위치 + 빈 슬롯 표시 한 번에
 
-사용자 요청 모두 반영:
-1. 좌상단 선박명 / 중상단 항차+모드 / 우상단 날짜·페이지
-2. [시트1] 정렬 설명 제거
-3. 인쇄 버튼 추가 (HTML 다운로드는 사용자 요청으로 제거)
-4. 사용자 양식 시안 미리 확인 후 빌드 (Imagine 모달로 미리보기)
+사용자 보고:
+1. ✅ 검수 리스트 75행/단 보장 (M5.30 완료)
+2. ✅ 베이 단위 필터 (M5.30 완료)
+3. ✅ 별첨 위치 — 마지막 베이 좌측에 absolute (M5.31)
+4. ✅ 개별 베이 빈 슬롯 표시 — globalRowRange/Tiers 전달 (M5.31)
 
-## ✅ 변경 사항 (M5.28 → M5.29)
+## ✅ M5.31 적용
 
-### 각 페이지 상단 헤더 (3분할)
+### 1. 카고플랜 별첨 위치 (페이지 추가 방지)
 
-```
-[XIN TAI PING]    [XTPG 0522E 양하]    [2026.05.11 · 1/2]
-   좌측 (선박명)        중앙 (항차+배지)          우측 (날짜·페이지)
-─────────────────────────────────────────────────────────────
-```
+cargo-footer (범례 + 합계)를 페이지 좌하단 absolute로:
 
-- 좌측: `font-size: 11pt, font-weight: bold` (선박명 강조)
-- 중앙: `font-size: 10pt, bold` + 모드 배지 (`background: #fde68a` 노랑)
-- 우측: `font-size: 9pt, color: #555` (날짜·페이지)
-
-### 제거된 부분
-- ❌ cover page (별도 첫 페이지 큰 H1 "검수 리스트")
-- ❌ [시트1] "...정렬: 20F → 20E → ..." 텍스트
-- ❌ HTML 다운로드 버튼 (사용자 요청)
-
-### 인쇄 버튼
-
-```html
-<div class="actions no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
-</div>
+```css
+.cargo-plan-page { position: relative; }
+.cargo-footer {
+  position: absolute;
+  bottom: 8px;
+  left: 16px;
+  max-width: 220px;
+}
+@media print {
+  .cargo-footer { position: absolute; bottom: 8px; left: 16px; }
+}
 ```
 
-- 새 창 상단 sticky (스크롤해도 항상 보임)
-- @media print 시 자동 숨김 (인쇄물에 안 찍힘)
-- 폰에서도 동작 (window.print → 폰 인쇄/PDF 저장 UI)
+→ 별첨이 베이 영역 다음에 따로 페이지 차지 X. 마지막 베이가 끝나도 그 페이지 좌하단에 자동 배치.
 
-### 날짜 포맷
-- `2026.05.11` (한국식 점 구분)
+### 2. 개별 베이 빈 슬롯 표시
+
+PrintHubModal에서 globalRowRange + globalTiers 계산 + PrintableBayDetail에 전달 (BayPlan과 동일 패턴):
+
+```js
+let maxLeft = 0, maxRight = 0;
+const tierSet = new Set();
+printContainers.forEach(c => {
+  if (c.row) {
+    const n = parseInt(c.row);
+    if (n > 0) {
+      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+      else maxRight = Math.max(maxRight, n);
+    }
+  }
+  if (c.tier) tierSet.add(c.tier);
+});
+const globalRowRange = { maxLeft, maxRight };
+const globalTiers = Array.from(tierSet);
+```
+
+PrintableBayDetail은 이미 빈 슬롯 처리 로직 있음 (`renderCell`에서 c 없으면 `<div className="bd-cell empty">` 출력). globalRowRange/Tiers 전달되면 화면 BayPlan과 동일하게 모든 슬롯 표시.
 
 ## 변경 파일
 
 | 파일 | 변경 |
 |---|---|
-| src/utils.js | APP_VERSION 'M5.29' |
-| **src/inspectionList.js** | 헤더 3분할 + cover page 제거 + 시트1 설명 제거 + 인쇄 버튼 + 날짜 포맷 |
+| src/utils.js | APP_VERSION 'M5.31' |
+| src/components/PrintHubModal.jsx | globalRowRange/Tiers 계산 + 전달 (null → 실제 값) |
+| src/components/PrintableCargoPlan.jsx | cargo-footer absolute 좌하단 + cargo-plan-page position:relative |
 
-## 검증 결과
+## ⚠️ 주의사항
 
-- M5.29: 1회 (utils.js만) ✓
-- phdr (헤더 3분할 CSS): 8회 ✓
-- btn-print: 3회 ✓
-- 인쇄 / PDF: 3회 ✓
-- HTML 다운로드: 0회 (제거됨) ✓
-- ★XRAY 2회 / 특수화물·X-RAY 1회 (M5.28 잔존) ✓
+1. **CSS @media print에서 position:absolute 동작**: 일부 브라우저는 absolute footer를 print 시 마지막 페이지에 자동 배치. Chrome/Edge는 정상. Firefox/Safari는 다를 수 있음. 사용자 확인 필요.
+2. **베이사전 활용 한계**: 현재 globalRowRange/Tiers는 containers 데이터 기반. 베이사전(dictBay) 자체에 row/tier 정보가 더 정확하다면 그것으로 계산하는 방법도 가능. 현재는 BayPlan과 동일 동작 보장.
+3. **별첨 영역 크기**: 베이가 너무 크면 좌하단 absolute footer와 겹칠 수 있음. max-width 220px로 제한했지만 베이 박스 디자인 따라 조정 필요할 수도.
 
-## 사용자 시점 핵심 메시지
+## 영구 규칙 (메모리)
 
-1. **양식 검증 후 빌드** — 미리보기로 확인 후 진행 (영구 규칙으로 적합)
-2. **인쇄 버튼 1개만** — HTML 다운로드는 제거. 인쇄/PDF로 충분
-3. **각 페이지마다 헤더** — cover page 없이도 각 페이지에 선박/항차/날짜·페이지 정보
+(이전과 동일)
 
 ## 🔜 다음 세션 후보
 
-1. **실제 인쇄 결과 검증** — 폰트/색상/여백 등 미세 조정
-2. **사용자 양식 미세 변경** — 컬럼 너비, 페이지 번호 위치 등 피드백 반영
-3. **출력 시 검수원 명 자동 입력** (현장 추적 용도)
-
-## 영구 규칙 (메모리, 추가 후보)
-
-- **양식 변경 시 미리보기 우선**: 빌드 전 Imagine으로 시안 보여주고 사용자 확인 받은 후 빌드 (이번 케이스의 좋은 패턴)
+1. 사용자 실제 인쇄 결과 확인 → 별첨 위치 미세 조정
+2. 빈 슬롯 표시 검증 — 검수원 현장 사용성 확인
+3. 베이사전(dictBay.bayDef)의 row/tier 정보 직접 사용 (containers 데이터 무관하게)

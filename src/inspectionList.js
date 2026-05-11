@@ -202,23 +202,23 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .actions button { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
 .btn-print { background: #0369a1; color: white; }
 .btn-print:hover { background: #075985; }
-.btn-save { background: #15803d; color: white; }
-.btn-save:hover { background: #166534; }
 .content { padding: 4mm; }
-.phdr { display: flex; align-items: center; padding: 1mm 2mm; border-bottom: 2px solid #333; margin-bottom: 2mm; font-size: 9pt; }
-.phdr-l { flex: 1; font-weight: bold; font-size: 11pt; text-align: left; }
-.phdr-c { flex: 1; font-weight: bold; font-size: 10pt; text-align: center; }
-.phdr-r { flex: 1; text-align: right; font-size: 9pt; color: #555; }
-.modetag { background: #fde68a; padding: 1px 6px; border-radius: 3px; font-size: 8pt; margin-left: 4px; }
-.ititle { font-weight: bold; text-align: center; padding: 6px 0; font-size: 11pt; page-break-before: always; }
+/* M5.30: 페이지 헤더 컴팩트화 — 75행 보장 위해 padding 최소화 */
+.phdr { display: flex; align-items: center; padding: 0.5mm 2mm; border-bottom: 1pt solid #333; margin-bottom: 1mm; font-size: 8.5pt; }
+.phdr-l { flex: 1; font-weight: bold; font-size: 10pt; text-align: left; }
+.phdr-c { flex: 1; font-weight: bold; font-size: 9pt; text-align: center; }
+.phdr-r { flex: 1; text-align: right; font-size: 8pt; color: #555; }
+.modetag { background: #fde68a; padding: 0px 5px; border-radius: 2px; font-size: 7.5pt; margin-left: 3px; }
+.ititle { font-weight: bold; text-align: center; padding: 4px 0; font-size: 10pt; page-break-before: always; }
 .ipage { page-break-after: always; }
 .ipage:last-child { page-break-after: auto; }
-.icols { display: flex; gap: 2mm; }
+.icols { display: flex; gap: 1.5mm; }
 .icol { flex: 1; min-width: 0; }
-table.ilist { width: 100%; border-collapse: collapse; font-size: 8pt; }
-table.ilist th, table.ilist td { border: 1px solid #333; padding: 1px 2px; text-align: center; line-height: 1.1; }
-table.ilist th { background: #ddd; font-size: 7.5pt; }
-table.ilist td.cn { font-family: monospace; font-size: 7.5pt; }
+/* M5.30: 행 컴팩트 — 75행/단 보장 (이전 7.5pt + 1px padding으로 72행만 들어감) */
+table.ilist { width: 100%; border-collapse: collapse; font-size: 7pt; }
+table.ilist th, table.ilist td { border: 0.5pt solid #333; padding: 0 1px; text-align: center; line-height: 1.0; height: 3.4mm; }
+table.ilist th { background: #ddd; font-size: 6.5pt; font-weight: bold; height: 3.2mm; }
+table.ilist td.cn { font-family: monospace; font-size: 6.5pt; letter-spacing: -0.3px; }
 @media print {
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .actions { display: none; }

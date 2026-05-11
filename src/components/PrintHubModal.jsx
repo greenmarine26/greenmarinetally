@@ -13,9 +13,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const [mode, setMode] = useState('discharge');  // 'discharge' | 'loading'
   const [printSub, setPrintSub] = useState(null);  // 'cargo' | 'detail' | null
 
-  // M5.26-fix: ediContainers + records 머지 (VoyagePage와 동일 패턴)
-  //   원인: 컨테이너 데이터는 ediContainers/records로 분산 저장됨. .containers 단일 키 없음
-  //   평택분 필터: 양하=POD, 선적=POL이 PTK/KRPTK
+  // M5.30-fix: 카고플랜/베이상세는 전체 컨테이너 (평택+통과), 검수리스트는 평택만
+  //   원인: 카고플랜은 선박 적부도라 모든 화물 표시 필요. 평택 필터 X
+  //         빈 슬롯도 베이사전 기준으로 표시 (영구 규칙 #30)
   const sec = voyage?.[mode] || {};
   const ediMap = sec.ediContainers || {};
   const recMap = sec.records || {};
@@ -33,35 +33,75 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     }
   };
 
-  // 머지: EDI + records (records가 EDI 컨에 추가 필드, 또는 list-only 컨)
+  // 머지 (모든 컨테이너)
   const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
-  const containers = [...allCnSet]
-    .map(cn => {
-      const e = ediMap[cn] || {};
-      const r = recMap[cn] || {};
-      const merged = { ...e };
-      // records의 비어있지 않은 필드만 덮어씀
-      Object.entries(r).forEach(([k, v]) => {
-        if (v !== '' && v != null) merged[k] = v;
-      });
-      merged.cn = cn;
-      merged._comp = compMap[cn] || null;
-      // X-RAY 대상 표시
-      if (xrayMap[cn]) merged._xray = true;
-      return merged;
-    })
-    .filter(isPtk);  // 평택분만
+  const allContainers = [...allCnSet].map(cn => {
+    const e = ediMap[cn] || {};
+    const r = recMap[cn] || {};
+    const merged = { ...e };
+    Object.entries(r).forEach(([k, v]) => {
+      if (v !== '' && v != null) merged[k] = v;
+    });
+    merged.cn = cn;
+    merged._comp = compMap[cn] || null;
+    if (xrayMap[cn]) merged._xray = true;
+    return merged;
+  });
+
+  // M5.30-fix: 베이 단위 필터
+  //   평택 화물이 1개라도 있는 베이의 전체 슬롯 표시 (그 베이의 통과 화물 + 빈 슬롯 포함)
+  //   사용자 명세: "평택분 화물이 하나라도 있다면 그 베이 전체 티어/로우를 다 보여줘야 함"
+  //   베이 번호 추출: bay_actual (검수원 수정) 우선, 없으면 pos[0:3]
+  const getBay = (c) => {
+    if (!c) return '';
+    const b = c.bay_actual || c.bay || (c.pos ? String(c.pos).slice(0, 3) : '');
+    return String(b).padStart(3, '0').slice(0, 3);
+  };
+
+  // 평택분 컨테이너의 베이 set (포함된 베이만 표시 대상)
+  const ptkBays = new Set();
+  allContainers.forEach(c => {
+    if (isPtk(c)) {
+      const b = getBay(c);
+      if (b && b !== '000') ptkBays.add(b);
+    }
+  });
+
+  // 카고플랜/베이상세용: 평택 화물 있는 베이의 전체 컨테이너
+  const printContainers = allContainers.filter(c => {
+    const b = getBay(c);
+    return b && ptkBays.has(b);
+  });
+
+  // 검수 리스트용 — 평택분만
+  const ptkContainers = allContainers.filter(isPtk);
+
+  // M5.31: 베이상세용 row/tier 계산 (BayPlan과 동일 패턴)
+  //   "빈 슬롯도 표시"를 위해 — 베이가 한 컨만 있어도 모든 tier/row 슬롯 표시
+  let maxLeft = 0, maxRight = 0;
+  const tierSet = new Set();
+  printContainers.forEach(c => {
+    if (c.row) {
+      const n = parseInt(c.row);
+      if (n > 0) {
+        if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+        else maxRight = Math.max(maxRight, n);
+      }
+    }
+    if (c.tier) tierSet.add(c.tier);
+  });
+  const globalRowRange = { maxLeft, maxRight };
+  const globalTiers = Array.from(tierSet);
 
   const voyageInfo = voyage?.info || {};
   const shipImo = voyageInfo.imo || '';
   const shipName = voyageInfo.vsl || '';
-  const globalRowRange = null;
-  const globalTiers = null;
 
-  const count = containers.length;
+  const count = ptkContainers.length;        // 검수 리스트 카운트 (평택만)
+  const allCount = allContainers.length;     // 카고플랜/베이상세 카운트 (전체)
   const modeKo = mode === 'discharge' ? '양하' : '선적';
 
-  // 양하/선적 카운트 (탭 라벨용)
+  // 양하/선적 카운트 (탭 라벨용 — 평택만)
   const countMode = (m) => {
     const s = voyage?.[m] || {};
     const ed = s.ediContainers || {};
@@ -83,7 +123,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       alert(`${modeKo} 컨테이너가 없습니다`);
       return;
     }
-    openInspectionListPrint(containers, mode, voyageInfo);
+    openInspectionListPrint(ptkContainers, mode, voyageInfo);
   };
 
   // 서브 모달 (카고플랜/베이 상세) 표시 중이면 그것만
@@ -91,7 +131,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     return (
       <ErrorBoundary name="카고 플랜 인쇄" onClose={() => setPrintSub(null)}>
         <PrintableCargoPlan
-          containers={containers}
+          containers={printContainers}
           mode={mode}
           voyageInfo={voyageInfo}
           voyageKey={voyageKey}
@@ -107,7 +147,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     return (
       <ErrorBoundary name="베이 상세 인쇄" onClose={() => setPrintSub(null)}>
         <PrintableBayDetail
-          containers={containers}
+          containers={printContainers}
           mode={mode}
           voyageInfo={voyageInfo}
           voyageKey={voyageKey}

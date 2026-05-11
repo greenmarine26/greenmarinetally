@@ -347,7 +347,17 @@ export default function PrintableCargoPlan({
           </div>
 
           <div className="bay-row five-col">
-            {Array.from({ length: 5 - aftPairsByCol.length }).map((_, i) =>
+            {/* M5.32: 통계 박스를 마지막 행 좌측 끝 placeholder 자리에 (베이 박스 크기 보존) */}
+            {aftPairsByCol.length < 5 && (
+              <div className="bay-stats-inline">
+                <div className="stats-title">20'/40'/45'</div>
+                <div className="stats-line">
+                  {mode === 'discharge' ? 'PTK' : 'LYG'}: <b>{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</b>
+                </div>
+                <div className="stats-total">총 {totalCounts.c20 + totalCounts.c40 + totalCounts.c45}대</div>
+              </div>
+            )}
+            {Array.from({ length: Math.max(0, 5 - aftPairsByCol.length - (aftPairsByCol.length < 5 ? 1 : 0)) }).map((_, i) =>
               <div key={`ape-${i}`} className="bay-box-placeholder"></div>
             )}
             {aftPairsByCol.map((p, i) => (
@@ -356,54 +366,7 @@ export default function PrintableCargoPlan({
             ))}
           </div>
 
-          {/* M4.9b: legend를 footer로 분리 (페이지 좌하단) */}
-          <div className="cargo-footer">
-            <div className="legend-box">
-              {/* M5.18: 범례를 합계 위로 + 가로 2열 컴팩트 (페이지 벗어남 fix) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 6px',
-                            marginBottom: 4, paddingBottom: 3,
-                            borderBottom: '0.5px solid #999' }}>
-                <div className="legend-row"><span className="legend-mark mark-E">E</span><span className="legend-label">Empty</span></div>
-                <div className="legend-row"><span className="legend-mark mark-R type-reefer">R</span><span className="legend-label">Reefer</span></div>
-                <div className="legend-row"><span className="legend-mark mark-D type-dg">D</span><span className="legend-label">DG</span></div>
-                <div className="legend-row"><span className="legend-mark mark-F type-fr">F</span><span className="legend-label">FR</span></div>
-                <div className="legend-row"><span className="legend-mark mark-A type-ot">A</span><span className="legend-label">OT</span></div>
-                <div className="legend-row"><span className="legend-mark mark-T type-tk">T</span><span className="legend-label">TK</span></div>
-                {mode === 'discharge' && (
-                  <div className="legend-row" style={{ gridColumn: '1 / -1' }}>
-                    <span className="legend-mark xray">o</span><span className="legend-label">X-RAY</span>
-                  </div>
-                )}
-              </div>
-              {/* 합계표 (PDF STOWAGE INSTRUCTION 표준 위치) */}
-              <div className="legend-title">20'/40'/45'</div>
-              {mode === 'discharge' ? (
-                <div className="legend-row">
-                  <span className="legend-mark mark-o">o</span>
-                  <span className="legend-label">PTK</span>
-                  <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
-                </div>
-              ) : (
-                <>
-                  <div className="legend-row">
-                    <span className="legend-mark mark-L">L</span>
-                    <span className="legend-label">LYG</span>
-                    <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
-                  </div>
-                  <div className="legend-row">
-                    <span className="legend-mark legend-empty-mark">□</span>
-                    <span className="legend-label">OPT</span>
-                    <span className="legend-count">0 / 0 / 0</span>
-                  </div>
-                  <div className="legend-row">
-                    <span className="legend-mark legend-empty-mark">□</span>
-                    <span className="legend-label">TTL</span>
-                    <span className="legend-count">{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          {/* M5.32: cargo-footer 영역 제거 — 통계는 마지막 짝꿍 행 좌측에 인라인 / 범례 제거 */}
         </div>
       </div>
 
@@ -448,6 +411,7 @@ export default function PrintableCargoPlan({
           font-size: 10pt;
           padding: 12px 16px;
           margin: 0 auto;
+          position: relative;  /* M5.31: footer absolute 기준 */
         }
         .cargo-header {
           display: flex; justify-content: space-between; align-items: baseline;
@@ -563,16 +527,42 @@ export default function PrintableCargoPlan({
         .legend-empty-mark { color: transparent; }
         .legend-label { width: 32px; }
         .legend-count { font-weight: 500; }
-        /* M4.9b: cargo-footer - legend를 페이지 하단 좌측에 배치 */
-        .cargo-footer {
-          margin-top: 6px;
+        /* M5.32: 통계 박스 - 마지막 짝꿍 행의 좌측 placeholder 자리 (베이 박스와 같은 flex) */
+        .bay-stats-inline {
+          flex: 1;
           display: flex;
-          justify-content: flex-start;
+          flex-direction: column;
+          justify-content: center;
+          padding: 4px 8px;
+          font-size: 10pt;
+          line-height: 1.5;
+          border: 0.5px dashed #999;
+          background: #fafafa;
+        }
+        .bay-stats-inline .stats-title { font-weight: bold; margin-bottom: 4px; font-size: 9pt; }
+        .bay-stats-inline .stats-line { font-size: 9pt; }
+        .bay-stats-inline .stats-total { 
+          font-weight: bold; 
+          margin-top: 4px; 
+          padding-top: 3px;
+          border-top: 0.5px solid #999;
+          font-size: 9pt;
+        }
+        /* M5.31: cargo-footer를 페이지 좌하단 absolute로 (별첨 페이지 추가 방지) */
+        .cargo-footer {
+          position: absolute;
+          bottom: 8px;
+          left: 16px;
+          max-width: 220px;
         }
         .cargo-footer .legend-box {
           min-width: 200px;
           border-top: 0.5px solid #000;
           padding-top: 4px;
+          background: white;
+        }
+        @media print {
+          .cargo-footer { position: absolute; bottom: 8px; left: 16px; }
         }
       `}</style>
     </div>
