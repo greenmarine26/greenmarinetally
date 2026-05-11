@@ -140,36 +140,77 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
     const rows = chunk.map((c, j) => renderRow(c, i + j + 1));
     allPages.push(rows);
   }
-  const sheet1Pages = allPages.map((rows, i) => renderPage(rows, i + 1, allPages.length)).join('');
+  // sheet1Pages는 아래 renderPageWithHdr로 계산 (헤더 포함)
 
-  // 시트2: 특수화물 (리퍼/FR/OT/TK) — X-RAY는 일반 화물도 가능하니 별도 처리
+  // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
   const special = list.filter(c => {
     const { type } = getContainerCategory(c);
-    return type !== 'normal' || c._xray;  // 특수화물 + X-RAY 대상도 포함
+    return type !== 'normal' || c._xray;
   });
-  let sheet2Html = '';
-  if (special.length > 0) {
-    const sheet2Pages = [];
-    for (let i = 0; i < special.length; i += PER_PAGE) {
-      const chunk = special.slice(i, i + PER_PAGE);
-      const rows = chunk.map((c, j) => renderRow(c, i + j + 1));
-      sheet2Pages.push(rows);
-    }
-    sheet2Html = `<div class="ititle">[별첨] 특수화물·X-RAY (${special.length}대)</div>` +
-      sheet2Pages.map((rows, i) => renderPage(rows, i + 1, sheet2Pages.length)).join('');
-  }
+
+  let sheet2Html = special.length > 0 ? 'PENDING' : '';  // 아래에서 헤더 있는 버전으로 생성
 
   const modeKo = mode === 'discharge' ? '양하' : '선적';
   const vsl = voyageInfo?.vsl || '';
   const voy = voyageInfo?.voy || voyageInfo?.voy_l || voyageInfo?.voy_d || '';
+  // 날짜: 2026.05.11 형식
+  const d = new Date();
+  const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+
+  // M5.29: 각 페이지 상단 헤더 (좌: 선박명 / 중: 항차 / 우: 날짜+페이지) — cover page 제거
+  // 페이지 헤더 렌더링을 위해 renderPage에 정보 전달 필요 → 메인 함수에서 직접 조립
+  const renderPageWithHdr = (rows, pageNum, totalPages) => {
+    const left = rows.slice(0, 75);
+    const right = rows.slice(75);
+    const col = (rs) => `<table class="ilist">
+      <thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th></tr></thead>
+      <tbody>${rs.join('')}</tbody>
+    </table>`;
+    return `<div class="ipage">
+      <div class="phdr">
+        <div class="phdr-l">${vsl}</div>
+        <div class="phdr-c">${voy} <span class="modetag">${modeKo}</span></div>
+        <div class="phdr-r">${dateStr} · ${pageNum}/${totalPages}</div>
+      </div>
+      <div class="icols">
+        <div class="icol">${col(left)}</div>
+        <div class="icol">${col(right)}</div>
+      </div>
+    </div>`;
+  };
+
+  const sheet1Pages = allPages.map((rows, i) => renderPageWithHdr(rows, i + 1, allPages.length)).join('');
+
+  // 시트2 페이지도 헤더 포함 (전체 페이지 수는 시트1+시트2 합산하여 표기 가능하나, 별첨이라 별도 카운트)
+  if (sheet2Html) {
+    const sheet2PagesList = [];
+    for (let i = 0; i < special.length; i += PER_PAGE) {
+      const chunk = special.slice(i, i + PER_PAGE);
+      const rows = chunk.map((c, j) => renderRow(c, i + j + 1));
+      sheet2PagesList.push(rows);
+    }
+    sheet2Html = `<div class="ititle">[별첨] 특수화물·X-RAY (${special.length}대)</div>` +
+      sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length)).join('');
+  }
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>검수 리스트 - ${modeKo}</title>
+<title>검수 리스트 ${modeKo} - ${vsl} ${voy}</title>
 <style>
 @page { size: A4 portrait; margin: 0.4cm; }
 body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #000; font-size: 9pt; }
-.ititle { font-weight: bold; text-align: center; padding: 8px 0; font-size: 11pt; page-break-before: always; }
-.ihdr { text-align: right; font-size: 8pt; color: #666; margin-bottom: 2mm; }
+.actions { position: sticky; top: 0; background: #1e293b; padding: 8px; display: flex; gap: 8px; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+.actions button { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
+.btn-print { background: #0369a1; color: white; }
+.btn-print:hover { background: #075985; }
+.btn-save { background: #15803d; color: white; }
+.btn-save:hover { background: #166534; }
+.content { padding: 4mm; }
+.phdr { display: flex; align-items: center; padding: 1mm 2mm; border-bottom: 2px solid #333; margin-bottom: 2mm; font-size: 9pt; }
+.phdr-l { flex: 1; font-weight: bold; font-size: 11pt; text-align: left; }
+.phdr-c { flex: 1; font-weight: bold; font-size: 10pt; text-align: center; }
+.phdr-r { flex: 1; text-align: right; font-size: 9pt; color: #555; }
+.modetag { background: #fde68a; padding: 1px 6px; border-radius: 3px; font-size: 8pt; margin-left: 4px; }
+.ititle { font-weight: bold; text-align: center; padding: 6px 0; font-size: 11pt; page-break-before: always; }
 .ipage { page-break-after: always; }
 .ipage:last-child { page-break-after: auto; }
 .icols { display: flex; gap: 2mm; }
@@ -180,23 +221,18 @@ table.ilist th { background: #ddd; font-size: 7.5pt; }
 table.ilist td.cn { font-family: monospace; font-size: 7.5pt; }
 @media print {
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .actions { display: none; }
+  .content { padding: 0; }
 }
-.coverpage { padding: 20mm; text-align: center; page-break-after: always; }
-.coverpage h1 { font-size: 18pt; margin: 0 0 8mm; }
-.coverpage .info { font-size: 12pt; line-height: 1.8; }
 </style>
 </head><body>
-<div class="coverpage">
-  <h1>검수 리스트</h1>
-  <div class="info">
-    <strong>${modeKo}</strong> · ${vsl} ${voy}<br>
-    총 ${list.length}대 (특수화물 ${special.length}대)<br>
-    <small style="color:#666">${new Date().toLocaleString('ko-KR')}</small>
-  </div>
+<div class="actions no-print">
+  <button class="btn-print" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
 </div>
-<div class="ititle">[시트1] 전체 (${list.length}대) — 정렬: 20F → 20E → 20특수 → 40F → 40E → 40특수</div>
+<div class="content">
 ${sheet1Pages}
 ${sheet2Html}
+</div>
 </body></html>`;
 }
 
