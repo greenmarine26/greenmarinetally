@@ -460,29 +460,48 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
 
       {/* M5.21: PORT-MIS 입출항 정보 (Chrome 확장이 자동 수집한 데이터) */}
+      {/* M5.23: 매칭 로직 강화 — 콜사인 prefix + IMO 매칭 fallback 추가 */}
       {(() => {
-        // 호출부호 매칭: 1) shipBayDictData의 callsign, 2) portMisData의 vesselName 부분 매칭
         const vsl = (voyage?.info?.vsl || '').toUpperCase();
-        const dictCallsign = (() => {
-          try {
-            const data = getShipBayDictData(voyage?.info?.imo, voyage?.info?.vsl);
-            return data?.callsign || data?.bayDef?.callsign;
-          } catch { return null; }
+        const dictData = (() => {
+          try { return getShipBayDictData(voyage?.info?.imo, voyage?.info?.vsl); }
+          catch { return null; }
         })();
+        const dictCallsign = dictData?.callsign || dictData?.bayDef?.callsign || '';
+        const dictImo = dictData?.imo || voyage?.info?.imo || '';
         let pm = null;
+        let matchedBy = '';
+
+        // 1) 콜사인 정확 매칭
         if (dictCallsign && portMisData[dictCallsign]) {
           pm = portMisData[dictCallsign];
-        } else if (vsl) {
-          // 선박명 부분 매칭 fallback
+          matchedBy = 'callsign';
+        }
+        // 2) 콜사인 prefix 매칭 (D5RR5 ↔ D5RR5xx)
+        if (!pm && dictCallsign && dictCallsign.length >= 4) {
+          const cs = dictCallsign.toUpperCase();
+          pm = Object.values(portMisData).find(p => {
+            const pcs = (p.callsign || '').toUpperCase();
+            return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
+          });
+          if (pm) matchedBy = 'callsign-prefix';
+        }
+        // 3) IMO 매칭 (PORT-MIS 데이터에 IMO 컬럼 없을 수도 있어 보조)
+        if (!pm && dictImo && /^\d{7}$/.test(dictImo)) {
+          pm = Object.values(portMisData).find(p => p.imo === dictImo);
+          if (pm) matchedBy = 'imo';
+        }
+        // 4) 선박명 부분 매칭 fallback
+        if (!pm && vsl) {
           pm = Object.values(portMisData).find(p => {
             const pn = (p.vesselName || '').toUpperCase();
             return pn && (vsl.includes(pn) || pn.includes(vsl));
           });
+          if (pm) matchedBy = 'name';
         }
         if (!pm) return null;
         const fmtDT = (s) => {
           if (!s) return '-';
-          // "2026-05-23 23:00" → "05/23 23:00"
           const m = String(s).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
           return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : s;
         };

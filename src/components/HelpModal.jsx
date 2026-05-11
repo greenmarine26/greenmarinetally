@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M5.23 변경 사항 (2026-05) — 베이사전 대규모 보강 + 매칭 로직 강화',
+      examples: [
+        { q: '🔥 192척 신규 추가',         a: '사용자가 보내준 Define.zip의 .def 파일 일괄 분석. 누락된 192척 추가 (베이 자동 추출, grade=needs-review). 총 entry 108 → 300' },
+        { q: '🔧 콜사인 정정 68건',        a: '기존 사전의 callsign 필드가 선박명/IMO로 잘못 등록된 entry 68건 정확한 콜사인으로 정정 (예: CNJL "LONDON" → "A8SN4")' },
+        { q: '🎯 매칭 로직 4단계 강화',   a: '1) 콜사인 정확 → 2) 콜사인 prefix → 3) IMO 매칭 → 4) 선박명 fuzzy. PORT-MIS와 .def 콜사인 형식 차이도 자동 해결 (예: D5RR5 ↔ D5RR5xx)' },
+        { q: '🟠 needs-review 192개',     a: '자동 추출 베이라 부정확 가능. 작업 중 베이 누락 발견되면 PDF STOWAGE INSTRUCTION으로 정확 정정 (DJCT/TMPZ/NSDC 케이스처럼)' },
+      ],
+    },
+    {
       title: '🆕 M5.22 변경 사항 (2026-05) — NSDC (STARSHIP DRACO) 추가',
       examples: [
         { q: '✅ NSDC 베이사전 등록',     a: 'STARSHIP DRACO (CASP 6.50, 26개 베이 자동 추출). 콜사인 V7A5451 등록 → ⚓ PORT-MIS 카드 자동 매칭됨' },
