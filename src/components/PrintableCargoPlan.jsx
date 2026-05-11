@@ -577,9 +577,11 @@ export default function PrintableCargoPlan({
           display: flex;
           flex-direction: column;
           overflow: hidden;
+          height: 100%;
         }
         .bay-box-placeholder {
           visibility: hidden;
+          height: 100%;
         }
         .bay-title-row {
           display: flex; justify-content: space-between;
