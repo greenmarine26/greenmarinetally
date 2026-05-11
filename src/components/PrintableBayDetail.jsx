@@ -158,24 +158,34 @@ function formatCellLines(c) {
 }
 
 function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers, dictShipMeta }) {
-  // M5.42: 베이별 로컬 오버라이드 절대 우선 — dictBay.{rowMaxEvenLocal/Odd, deckTiersLocal, holdTiersLocal}
-  //   1순위: dictBay.{필드}Local (베이별 PDF 검증값)
-  //   2순위: dictShipMeta.{필드} (선박 전역)
-  //   3순위: globalRowRange / globalTiers (EDI fallback)
+  // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
+  const allConts = [
+    ...(even != null && bayMap[String(even)] || []),
+    ...(odd != null && bayMap[String(odd)] || []),
+  ];
+
+  // M5.47: row를 베이사전 + 실제 컨테이너 row union으로
   const STD_ROWS = useMemo(() => {
-    const maxLeft = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft ?? 6;
-    const maxRight = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight ?? 5;
+    const dictLeft = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
+    const dictRight = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
+    // 실제 컨테이너 max row
+    let actualEven = 0, actualOdd = 0;
+    allConts.forEach(c => {
+      const r = parseInt(c.row);
+      if (!isNaN(r) && r > 0) {
+        if (r % 2 === 0 && r > actualEven) actualEven = r;
+        if (r % 2 === 1 && r > actualOdd) actualOdd = r;
+      }
+    });
+    const maxLeft = Math.max(dictLeft || 0, actualEven, 6);
+    const maxRight = Math.max(dictRight || 0, actualOdd, 5);
     const left = [];
     for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
     const right = [];
     for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
     return [...left, '00', ...right];
-  }, [globalRowRange, dictShipMeta, dictBay]);
+  }, [globalRowRange, dictShipMeta, dictBay, even, odd, bayMap]);
   const colCount = STD_ROWS.length;
-  const allConts = [
-    ...(even != null && bayMap[String(even)] || []),
-    ...(odd != null && bayMap[String(odd)] || []),
-  ];
 
   const cellMap = {};
   allConts.forEach(c => {

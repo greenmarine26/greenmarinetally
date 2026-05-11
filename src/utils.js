@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M5.46';
+export const APP_VERSION = 'M5.48';
 
 // M4.9e 변경점 (선적 실체 위치 1+2+3단계):
 //   [1단계] 컨테이너 모달에 "실체 위치 (선적확인 시)" 박스

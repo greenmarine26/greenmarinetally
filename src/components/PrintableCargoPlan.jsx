@@ -176,19 +176,31 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     cellMap[`${t}-${r}`] = c;
   });
 
-  // M5.42: 베이별 로컬 오버라이드 절대 우선 — dictBay.{rowMaxEvenLocal/Odd, deckTiersLocal, holdTiersLocal}
-  //   1순위: dictBay.{필드}Local (베이별 PDF 검증값 — 선수/선미 좁은 베이)
-  //   2순위: dictShipMeta (선박 전역 PDF 검증)
-  //   3순위: globalRowRange / globalTiers (EDI fallback)
-  //   4순위: fallback 배열
+  // M5.47: row를 베이사전 Local + 실제 컨테이너 row union으로
+  //   베이사전 값이 작아도 실제 컨테이너가 더 크면 확장 → row 부족 방지
   const dynRows = (() => {
-    const maxEven = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
-    const maxOdd = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
+    const dictMaxEven = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
+    const dictMaxOdd = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
+    
+    // 실제 컨테이너의 최대 row (짝수/홀수)
+    let actualMaxEven = 0, actualMaxOdd = 0;
+    allConts.forEach(c => {
+      const r = parseInt(c.row);
+      if (!isNaN(r) && r > 0) {
+        if (r % 2 === 0 && r > actualMaxEven) actualMaxEven = r;
+        if (r % 2 === 1 && r > actualMaxOdd) actualMaxOdd = r;
+      }
+    });
+    
+    // union — 베이사전 + 실제 데이터 중 큰 값
+    const maxEven = Math.max(dictMaxEven || 0, actualMaxEven);
+    const maxOdd = Math.max(dictMaxOdd || 0, actualMaxOdd);
+    
     if (maxEven || maxOdd) {
       const left = [], right = [];
-      for (let r = maxEven || 0; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
+      for (let r = maxEven; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
       left.push('00');
-      for (let r = 1; r <= (maxOdd || 0); r += 2) right.push(String(r).padStart(2, '0'));
+      for (let r = 1; r <= maxOdd; r += 2) right.push(String(r).padStart(2, '0'));
       return [...left, ...right];
     }
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
@@ -581,7 +593,7 @@ export default function PrintableCargoPlan({
           font-size: 6pt; padding: 0 1px;
           flex-shrink: 0;
         }
-        .bay-row-label { width: 11px; text-align: center; font-size: 7pt; }
+        .bay-row-label { flex: 1; text-align: center; font-size: 7pt; min-width: 0; }
         /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
         .bay-grid-wrap {
           display: flex; align-items: stretch; padding: 1px;
