@@ -49,12 +49,23 @@ export function parseSpokenDigits(text) {
 
 // 일반 텍스트 음성 (디바운스 X — V37처럼 즉시)
 // M3.1: 좌표 패턴(16-01-86) 발견 시 "십육번 베이 공일에 팔육"으로 자동 변환
+// M5.20: priority='high'면 현재 'high' 음성을 cancel 못 함 (완료 음성 보호용)
+//   - speakDone은 priority='high'로 호출 → 진단/검색 음성이 와도 끊기지 않음
+//   - 일반 speak (opts 없이)는 기존 동작 그대로 (새 음성이 이전 cancel)
+let currentSpeakPriority = null;  // 현재 출력 중인 음성의 priority
+
 export function speak(text, opts = {}) {
   if (!text) return;
   try {
+    const isHigh = opts.priority === 'high';
     if (window.speechSynthesis.speaking && !opts.append) {
+      // 현재 'high' 음성이 출력 중이고 새 음성은 'high'가 아니면 무시 (높은 우선순위 보호)
+      if (currentSpeakPriority === 'high' && !isHigh) {
+        return;
+      }
       window.speechSynthesis.cancel();
     }
+    currentSpeakPriority = isHigh ? 'high' : null;
     // M3.1: 좌표 자동 한국어화 (AI 답변 등 자유 텍스트에서 좌표를 자연스럽게 읽기)
     const spoken = spellPosString(text);
     const u = new SpeechSynthesisUtterance(spoken);
@@ -62,8 +73,10 @@ export function speak(text, opts = {}) {
     u.rate = opts.rate || 1.3;
     u.pitch = opts.pitch || 1.0;
     u.volume = opts.volume || 1.0;
+    u.onend = () => { currentSpeakPriority = null; };
+    u.onerror = () => { currentSpeakPriority = null; };
     window.speechSynthesis.speak(u);
-  } catch (e) {}
+  } catch (e) { currentSpeakPriority = null; }
 }
 
 // 컨테이너 음성 — V37 speakContainer 100% 이식
@@ -123,10 +136,11 @@ export function speakContainer(c, opts = {}) {
 }
 
 // 검수 완료 — 짧고 빠르게
+// M5.20: priority='high'로 보호 — 진단/검색 등 다른 음성이 와도 끊기지 않음
 export function speakDone(c) {
   if (!c) return;
   const last4 = c.l4 || c.cn?.slice(-4) || '';
-  speak(`${spellKo(last4)} 완료`, { rate: 1.5 });
+  speak(`${spellKo(last4)} 완료`, { rate: 1.5, priority: 'high' });
 }
 
 // 오류 음성

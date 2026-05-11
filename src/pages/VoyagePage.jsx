@@ -57,7 +57,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, o
   const [showWorkReport, setShowWorkReport] = useState(false);  // M3.5.6: 작업 보고 모달
   const [shipLib, setShipLib] = useState(null); // M3.0: 선박 라이브러리 (AI 컨텍스트용)
   // M3.5.4: 자동 진단 state (메인 컴포넌트에 두어야 useMemo에서 접근 가능)
-  const [diagAutoSpeak, setDiagAutoSpeak] = useState(true);
+  // M5.20: 기본값 false — 자동 진단 음성이 사용자 완료 음성을 cancel하지 않게.
+  //   사용자가 필요 시 DiagnosticsPanel의 스피커 아이콘으로 켤 수 있음.
+  //   배경: M5.19 listener fix 후 voyage 갱신 → DiagnosticsPanel useEffect 트리거 →
+  //         600ms 후 진단 음성 호출 → speak()가 speaking=true 시 cancel() →
+  //         사용자가 방금 시작한 "3050 완료" 음성이 끊김
+  const [diagAutoSpeak, setDiagAutoSpeak] = useState(false);
   const [diagDismissed, setDiagDismissed] = useState(false);
   // M3.5.5: 선박 엠티 실 정책
   const [extraPolicies, setExtraPolicies] = useState({});
