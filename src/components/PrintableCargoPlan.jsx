@@ -378,27 +378,46 @@ export default function PrintableCargoPlan({
             ))}
           </div>
 
-          {/* AFT 짝꿍 행 + 통계 박스 (좌측 끝) */}
+          {/* AFT 짝꿍 행 + 통계 박스 (좌측 끝 또는 pair null 자리) */}
           <div className="bay-row five-col">
-            {/* M5.32: 통계 박스 = 좌측 끝 (placeholder 자리 활용) */}
-            {aftColumns.length < 5 && (
-              <div className="bay-stats-inline">
-                <div className="stats-title">20'/40'/45'</div>
-                <div className="stats-line">
-                  {mode === 'discharge' ? 'PTK' : 'LYG'}: <b>{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</b>
+            {/* M5.34: 통계 박스 위치 결정 — 짝꿍 행에 빈 자리(pair=null) 또는 placeholder 자리 */}
+            {/* 외부 placeholder가 있는 경우 (aftColumns < 5) 좌측 끝에 / 없는 경우 첫 pair=null 자리에 */}
+            {(() => {
+              const hasOuterPlaceholder = aftColumns.length < 5;
+              const firstEmptyPairIdx = hasOuterPlaceholder ? -1 : aftColumns.findIndex(c => !c.pair);
+              const statsBox = (
+                <div className="bay-stats-inline" key="stats">
+                  <div className="stats-title">20'/40'/45'</div>
+                  <div className="stats-line">
+                    {mode === 'discharge' ? 'PTK' : 'LYG'}: <b>{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</b>
+                  </div>
+                  <div className="stats-total">총 {totalCounts.c20 + totalCounts.c40 + totalCounts.c45}대</div>
                 </div>
-                <div className="stats-total">총 {totalCounts.c20 + totalCounts.c40 + totalCounts.c45}대</div>
-              </div>
-            )}
-            {Array.from({ length: Math.max(0, 5 - aftColumns.length - (aftColumns.length < 5 ? 1 : 0)) }).map((_, i) =>
-              <div key={`ape-${i}`} className="bay-box-placeholder"></div>
-            )}
-            {aftColumns.map((col, i) => col.pair ? (
-              <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap}
-                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} />
-            ) : (
-              <div key={`ap-${i}`} className="bay-box-placeholder"></div>
-            ))}
+              );
+              const out = [];
+              // 외부 placeholder (aftColumns가 5보다 적을 때)
+              if (hasOuterPlaceholder) {
+                out.push(statsBox);
+                for (let i = 0; i < Math.max(0, 5 - aftColumns.length - 1); i++) {
+                  out.push(<div key={`ape-${i}`} className="bay-box-placeholder"></div>);
+                }
+              }
+              // 각 컬럼 (pair 또는 빈)
+              aftColumns.forEach((col, i) => {
+                if (col.pair) {
+                  out.push(
+                    <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap}
+                      mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} />
+                  );
+                } else if (i === firstEmptyPairIdx) {
+                  // 첫 번째 pair=null 자리에 통계 박스
+                  out.push(<React.Fragment key={`ap-${i}`}>{statsBox}</React.Fragment>);
+                } else {
+                  out.push(<div key={`ap-${i}`} className="bay-box-placeholder"></div>);
+                }
+              });
+              return out;
+            })()}
           </div>
 
           {/* M5.32: cargo-footer 영역 제거 — 통계는 마지막 짝꿍 행 좌측에 인라인 / 범례 제거 */}
