@@ -13,19 +13,70 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const [mode, setMode] = useState('discharge');  // 'discharge' | 'loading'
   const [printSub, setPrintSub] = useState(null);  // 'cargo' | 'detail' | null
 
-  const modeData = voyage?.[mode];
-  const containers = modeData?.containers ? Object.values(modeData.containers) : [];
-  const xrayMap = modeData?.xray || {};
+  // M5.26-fix: ediContainers + records 머지 (VoyagePage와 동일 패턴)
+  //   원인: 컨테이너 데이터는 ediContainers/records로 분산 저장됨. .containers 단일 키 없음
+  //   평택분 필터: 양하=POD, 선적=POL이 PTK/KRPTK
+  const sec = voyage?.[mode] || {};
+  const ediMap = sec.ediContainers || {};
+  const recMap = sec.records || {};
+  const compMap = sec.completed || {};
+  const xrayMap = sec.xrayList || {};
+
+  const isPtk = (c) => {
+    if (!c) return false;
+    if (mode === 'discharge') {
+      const pod = String(c.pod || '').toUpperCase();
+      return !pod || pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
+    } else {
+      const pol = String(c.pol || '').toUpperCase();
+      return !pol || pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
+    }
+  };
+
+  // 머지: EDI + records (records가 EDI 컨에 추가 필드, 또는 list-only 컨)
+  const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+  const containers = [...allCnSet]
+    .map(cn => {
+      const e = ediMap[cn] || {};
+      const r = recMap[cn] || {};
+      const merged = { ...e };
+      // records의 비어있지 않은 필드만 덮어씀
+      Object.entries(r).forEach(([k, v]) => {
+        if (v !== '' && v != null) merged[k] = v;
+      });
+      merged.cn = cn;
+      merged._comp = compMap[cn] || null;
+      // X-RAY 대상 표시
+      if (xrayMap[cn]) merged._xray = true;
+      return merged;
+    })
+    .filter(isPtk);  // 평택분만
+
   const voyageInfo = voyage?.info || {};
   const shipImo = voyageInfo.imo || '';
   const shipName = voyageInfo.vsl || '';
-
-  // 베이 인쇄용 globalRange (BayPlan에서 사용하는 것)
-  const globalRowRange = null;  // PrintableBayDetail 내부에서 계산
+  const globalRowRange = null;
   const globalTiers = null;
 
   const count = containers.length;
   const modeKo = mode === 'discharge' ? '양하' : '선적';
+
+  // 양하/선적 카운트 (탭 라벨용)
+  const countMode = (m) => {
+    const s = voyage?.[m] || {};
+    const ed = s.ediContainers || {};
+    const rc = s.records || {};
+    const cnSet = new Set([...Object.keys(ed), ...Object.keys(rc)]);
+    let n = 0;
+    cnSet.forEach(cn => {
+      const c = { ...(ed[cn] || {}), ...(rc[cn] || {}) };
+      const target = m === 'discharge' ? String(c.pod || '').toUpperCase() : String(c.pol || '').toUpperCase();
+      if (!target || target === 'PTK' || target === 'KRPTK' || target.endsWith('PTK')) n++;
+    });
+    return n;
+  };
+  const dischargeCount = countMode('discharge');
+  const loadingCount = countMode('loading');
 
   const handlePrintInspection = () => {
     if (count === 0) {
@@ -95,7 +146,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
             }`}
           >
             <ArrowDown className="w-4 h-4" />
-            양하 {voyage?.discharge?.containers ? `(${Object.keys(voyage.discharge.containers).length})` : '(0)'}
+            양하 ({dischargeCount})
           </button>
           <button
             onClick={() => setMode('loading')}
@@ -106,7 +157,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
             }`}
           >
             <ArrowUp className="w-4 h-4" />
-            선적 {voyage?.loading?.containers ? `(${Object.keys(voyage.loading.containers).length})` : '(0)'}
+            선적 ({loadingCount})
           </button>
         </div>
 

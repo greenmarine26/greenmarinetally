@@ -1,83 +1,87 @@
-# M5.26 → 다음 세션 인계 (HANDOFF)
+# M5.27 → 다음 세션 인계 (HANDOFF)
 
-## 현재 상태 (M5.26) — 검수 자료 출력 통합 허브
+## 현재 상태 (M5.27) — 자료 못 읽어옴 fix + 재업로드 부담 제거
 
-사용자 발견: M3.86에서 작업한 inspectionList.js가 코드베이스에 머지 안 됨. 복구 + 통합 출력 허브로 확장.
+M5.26 첫 빌드의 두 가지 문제 hotfix.
 
-## ✅ 변경 사항 (M5.25 → M5.26)
+## ✅ 변경 사항 (M5.26 → M5.27)
 
-### 1. inspectionList.js 복구 (M3.86 명세 그대로)
+### 1. PrintHubModal 자료 못 읽어옴 fix (CRITICAL)
 
-| 항목 | 명세 |
-|---|---|
-| 용지 | A4 세로, 여백 0.4cm |
-| 레이아웃 | 좌우 2단 |
-| 페이지당 | 140대 (단당 70대) |
-| 컬럼 | 순번/컨번호/실번호/규격/F/E/비고 |
-| 정렬 | 20풀 → 20엠티 → 20특수 → 40풀 → 40엠티 → 40특수 |
-| 색상 | 풀=흰색 / 엠티=#e5e5e5 / 리퍼=#cce6ff / FR=#d4edda / OT=#fff3cd / TK=#ffe5d0 |
-| 시트1 | 전체 |
-| 시트2 | 특수화물 별첨 |
-| 출력 | 새 창에 HTML → Ctrl+P → 인쇄 또는 PDF |
+**원인**: PrintHubModal에서 `voyage[mode].containers`로 가져오려 했는데 실제 구조는 `ediContainers + records`로 분산.
 
-### 2. PrintHubModal — 통합 출력 허브
+**Fix**:
+```js
+// 이전 (잘못된 접근)
+const containers = modeData?.containers ? Object.values(modeData.containers) : [];
 
+// 현재 (VoyagePage와 동일 머지 패턴)
+const ediMap = sec.ediContainers || {};
+const recMap = sec.records || {};
+const compMap = sec.completed || {};
+const xrayMap = sec.xrayList || {};
+
+const isPtk = (c) => {
+  const target = mode === 'discharge' ? c.pod : c.pol;
+  const t = String(target || '').toUpperCase();
+  return !t || t === 'PTK' || t === 'KRPTK' || t.endsWith('PTK');
+};
+
+const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+const containers = [...allCnSet]
+  .map(cn => { ...edi 머지 + records 보강 ... })
+  .filter(isPtk);  // 평택분만
 ```
-[📄 검수 자료 출력]
-├─ 양하 탭 (개수 표시)
-│   ├─ 📋 검수 리스트 (inspectionList.js)
-│   ├─ 📐 카고플랜 (PrintableCargoPlan)
-│   └─ 🚢 베이 상세 (PrintableBayDetail)
-└─ 선적 탭 (개수 표시)
-    └─ (양하와 동일 3가지)
-```
 
-**진입점**: 자료 탭 맨 위 [📄 검수 자료 출력] 버튼 (대형 amber 카드)
+→ 검수 리스트 + 카고플랜 + 베이상세 모두 정상 데이터 받음
 
-각 항목 클릭 → 모달 내부에서 카고플랜/베이상세 ErrorBoundary 감싸 표시 / 검수 리스트는 새 창
+### 2. 재업로드 안내 메시지 제거
 
-### 3. 평택분만 처리
+**문제**: 자료 탭의 "💾 다음 EDI 업로드부터 원본이 자동 보관됩니다 → 미래 앱 업데이트 시 자료 재업로드 없이 [🔄 재처리]로 적용 가능" 메시지가 검수원에게 "매 업데이트마다 재업로드 필요"로 오해받음.
 
-- 양하 mode 컨테이너 = 평택 양하 대상 (voyage.discharge.containers)
-- 선적 mode = 평택 선적 대상 (voyage.loading.containers)
-- 기존 mode 분리 그대로 사용 → 다른 항만 통과분 자동 제외
+**Fix**: 
+- 이 안내 메시지 제거 (line 1508-1510)
+- 재처리 버튼 텍스트 부드럽게: 
+  - 이전: "🔄 EDI 원본으로 자료 재처리 (앱 업데이트 후 적용용)" + amber 색상 (눈에 띔 → 부담)
+  - 현재: "🔄 EDI 다시 분석 (선택사항)" + slate 색상 (선택사항임 강조)
+- EDI 업로드 status: "💾 EDI 원본 보관됨 — 자료 탭에서 재처리 가능" → "💾 EDI 원본 자동 보관됨"
+
+**운영 원칙 명확화**: EDI 한 번 업로드 → Firebase 영구 보관 → 앱 업데이트마다 재업로드 X.
+
+## 검증
+
+- 버전 M5.27: 2회 ✓
+- 새 텍스트 "EDI 다시 분석" / "선택사항" / "EDI 원본 자동 보관됨" 적용 ✓
+- isPtk 머지 로직 적용 (PrintHubModal) ✓
+- 기존 기능 모두 잔존 (검수 자료 출력 5회, 검수 리스트 5회, BULK_AUTO 192회 등)
 
 ## 변경 파일
 
 | 파일 | 변경 |
 |---|---|
-| src/utils.js | APP_VERSION 'M5.26' |
-| **src/inspectionList.js** | 신규 (검수 리스트 HTML 생성, M3.86 복구) |
-| **src/components/PrintHubModal.jsx** | 신규 (양하/선적 × 3항목 통합) |
-| src/pages/VoyagePage.jsx | DataTab에 [📄 검수 자료 출력] 진입 버튼 + showPrintHub state + PrintHubModal import |
-| src/components/HelpModal.jsx | M5.26 변경사항 |
+| src/utils.js | APP_VERSION 'M5.27' |
+| src/components/PrintHubModal.jsx | **ediContainers + records 머지 + isPtk 필터 추가** |
+| src/pages/VoyagePage.jsx | 재업로드 안내 메시지 제거 + [재처리] 버튼 부드럽게 + status 메시지 정리 |
+| src/components/HelpModal.jsx | M5.27 변경사항 |
 
 ## 사용자 시점 핵심 메시지
 
-1. **검수 리스트 복구** — M3.86 명세 그대로
-2. **통합 출력 허브** — 양하/선적 × 3가지 출력 = 6가지를 한 곳에
-3. **자료 탭 맨 위** [📄 검수 자료 출력] 버튼
+1. **검수 자료 출력 정상 동작** — 양하/선적 탭에서 컨테이너 카운트 + 출력 모두 정상
+2. **재업로드 부담 없음** — EDI는 자동 보관됨. 매 업데이트마다 다시 안 올려도 됨
+3. **재처리 버튼은 선택사항** — 필요시에만 누르고, 안 눌러도 옛 결과 그대로 사용
 
-## 검증 결과
+## ⚠️ 잠재 운영 이슈 / 후속 작업
 
-- 버전 M5.26: 2회 ✓
-- 검수 자료 출력 / 검수 리스트 / 시트1 / 시트2 / 특수화물 별첨 모두 적용 ✓
-- 기존 기능 (M5.25 OCR, M5.24 9V7919, M5.23 BULK_AUTO 192, M5.20 priority) 잔존 ✓
-
-## ⚠️ 잠재 이슈
-
-1. **팝업 차단**: 검수 리스트는 새 창에서 열림 → 브라우저 팝업 차단 시 안 열림. 안내 메시지 포함
-2. **카고플랜/베이상세 인쇄**: 기존 컴포넌트 그대로 활용 (ErrorBoundary 감쌈)
-3. **베이 상세 globalRowRange**: 현재 null로 전달 — 컴포넌트 내부에서 자동 계산 가정. 안 되면 BayPlan에서 사용하는 값 전달 필요
-4. **컬러 인쇄**: 색상 구분이 핵심. 흑백 인쇄면 정보 손실
+1. **M5.11 이전 자료** — EDI 원본 보관 안 됐을 수 있음. 새 업데이트 적용 후 BAY/ISO 등 변경되면 자료 한 번만 재업로드 필요. 그 후엔 영구 자동.
+2. **자동 재처리 옵션** — 향후 빌드 업데이트 감지 시 자동 재처리 토글 추가 가능 (현재는 수동만)
+3. **인쇄 결과 검증** — M5.26 검수 리스트 양식 실제 인쇄해보고 미세 조정 필요할 수 있음
 
 ## 🔜 다음 세션 후보
 
-1. 사용자 실제 인쇄 결과 확인 → 양식 미세 조정
-2. inspectionList의 ISO 코드 → 규격 변환 로직 검증 (R/P/U/T 판별)
-3. 출력 양식별 옵션 (예: 검수원명 자동 입력, 페이지 번호 형식)
+1. 사용자 인쇄 결과 따라 검수 리스트 양식 미세 조정
+2. ISO 코드 → 규격 변환 로직 검증 (R/P/U/T 판별 정확도)
+3. 자동 재처리 옵션 (사용자 설정)
 
 ## 영구 규칙 (메모리)
 
-(이전과 동일)
-1~12: 빌드/시뮬 원칙, 베이 구조, alias, listener, 음성 priority, Chrome 확장, EDI vs PORT-MIS, 매칭 우선순위, 베이사전 300척, 베이 표시 절대 원칙, PORT-MIS 매칭
+(이전과 동일 — 베이사전 우선, PORT-MIS 매칭 4단계, Chrome 확장 등)

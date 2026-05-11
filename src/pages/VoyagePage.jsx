@@ -1147,7 +1147,7 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           fileName: rawEdiFileNames.join(', '),
           parserVersion: 'M5.11',
         });
-        results.push(`💾 EDI 원본 보관됨 (${(combined.length / 1024).toFixed(1)}KB) — 자료 탭에서 재처리 가능`);
+        results.push(`💾 EDI 원본 자동 보관됨 (${(combined.length / 1024).toFixed(1)}KB)`);
       } catch (e) {
         // 원본 저장 실패해도 메인 흐름엔 영향 없음
         console.warn('EDI raw save failed:', e);
@@ -1496,19 +1496,14 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
               </span>
             </div>
             <button onClick={handleReprocess}
-              className="mt-1.5 w-full bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white px-3 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5">
-              🔄 EDI 원본으로 자료 재처리 (앱 업데이트 후 적용용)
+              className="mt-1.5 w-full bg-slate-700/60 hover:bg-slate-700 active:bg-slate-800 text-slate-200 px-3 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5">
+              🔄 EDI 다시 분석 <span className="text-slate-400 font-normal">(선택사항)</span>
             </button>
             <div className="text-[10px] text-slate-500 mt-1 leading-tight">
-              앱 업데이트 후 베이/ISO/POL/POD 등 EDI 파싱 결과 갱신.
-              검수 입력(실번호/사진/완료/X-RAY)은 보존됨.
+              필요시에만. 검수 입력(실번호/사진/완료/X-RAY)은 항상 보존됨.
             </div>
           </div>
-        ) : (
-          <div className="mt-2 pt-2 border-t border-slate-800/60 text-[10px] text-slate-500">
-            💾 다음 EDI 업로드부터 원본이 자동 보관됩니다 → 미래 앱 업데이트 시 자료 재업로드 없이 [🔄 재처리]로 적용 가능
-          </div>
-        )}
+        ) : null /* M5.27: "다음 EDI 업로드부터..." 안내 메시지 제거 — 사용자 혼란 유발 */}
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
