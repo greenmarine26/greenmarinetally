@@ -45,6 +45,7 @@ import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
+import PrintHubModal from '../components/PrintHubModal.jsx';
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange }) {
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
@@ -1445,8 +1446,30 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
   const otherMode = mode === 'discharge' ? 'loading' : 'discharge';
   const hasOther = !!voyage[otherMode];
 
+  // M5.26: 통합 출력 허브 모달
+  const [showPrintHub, setShowPrintHub] = useState(false);
+
   return (
     <div className="space-y-3">
+      {/* M5.26: 통합 출력 진입 */}
+      <button
+        onClick={() => setShowPrintHub(true)}
+        className="w-full bg-gradient-to-br from-amber-900/40 to-orange-900/40 hover:from-amber-900/60 border border-amber-700/50 rounded-lg p-3 flex items-center gap-3 active:scale-[0.98] transition"
+      >
+        <span className="text-2xl">📄</span>
+        <div className="flex-1 text-left">
+          <div className="font-bold text-amber-100">검수 자료 출력</div>
+          <div className="text-[10px] text-amber-300/80">양하/선적 × 검수리스트 / 카고플랜 / 베이상세 통합</div>
+        </div>
+        <span className="text-amber-300">›</span>
+      </button>
+      {showPrintHub && (
+        <PrintHubModal
+          voyage={voyage}
+          voyageKey={voyageKey}
+          onClose={() => setShowPrintHub(false)}
+        />
+      )}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400"/>

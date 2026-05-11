@@ -1,113 +1,83 @@
-# M5.25 → 다음 세션 인계 (HANDOFF)
+# M5.26 → 다음 세션 인계 (HANDOFF)
 
-## 현재 상태 (M5.25) — PORT-MIS 캡처 OCR (폰 전용)
+## 현재 상태 (M5.26) — 검수 자료 출력 통합 허브
 
-Chrome 확장은 데스크톱 전용. 사용자가 폰만으로도 PORT-MIS 데이터 입력 가능하게 OCR 추가.
+사용자 발견: M3.86에서 작업한 inspectionList.js가 코드베이스에 머지 안 됨. 복구 + 통합 출력 허브로 확장.
 
-## ✅ 변경 사항 (M5.24 → M5.25)
+## ✅ 변경 사항 (M5.25 → M5.26)
 
-### PORT-MIS 캡처 업로드 기능
+### 1. inspectionList.js 복구 (M3.86 명세 그대로)
 
-**진입점**: HomePage 상단 [📸 PORT-MIS 캡처] 버튼 (통합 검색/수석 대시보드 옆)
-
-**사용 흐름**:
-```
-[폰]
-  1. Chrome으로 PORT-MIS 평택 입출항현황 검색
-  2. 화면 캡처 1장
-[Tallyman 앱]
-  3. HomePage → [📸 PORT-MIS 캡처] 클릭
-  4. 사진 선택 (capture="environment"로 카메라 직접 호출 가능)
-  5. Gemini Vision OCR 자동 분석 (10~20초)
-  6. 추출 결과 검토 (선박명/콜사인/입출항시간 리스트)
-  7. [Firebase 저장] → port_mis_data에 PUT
-[모든 검수원]
-  8. 항차 화면에 ⚓ PORT-MIS 카드 자동 표시
-```
-
-### 새 파일
-
-| 파일 | 역할 |
+| 항목 | 명세 |
 |---|---|
-| src/components/PortMisCaptureModal.jsx | 5단계 모달 (pick → analyzing → review → saving → done) |
+| 용지 | A4 세로, 여백 0.4cm |
+| 레이아웃 | 좌우 2단 |
+| 페이지당 | 140대 (단당 70대) |
+| 컬럼 | 순번/컨번호/실번호/규격/F/E/비고 |
+| 정렬 | 20풀 → 20엠티 → 20특수 → 40풀 → 40엠티 → 40특수 |
+| 색상 | 풀=흰색 / 엠티=#e5e5e5 / 리퍼=#cce6ff / FR=#d4edda / OT=#fff3cd / TK=#ffe5d0 |
+| 시트1 | 전체 |
+| 시트2 | 특수화물 별첨 |
+| 출력 | 새 창에 HTML → Ctrl+P → 인쇄 또는 PDF |
 
-### 기존 파일 수정
+### 2. PrintHubModal — 통합 출력 허브
+
+```
+[📄 검수 자료 출력]
+├─ 양하 탭 (개수 표시)
+│   ├─ 📋 검수 리스트 (inspectionList.js)
+│   ├─ 📐 카고플랜 (PrintableCargoPlan)
+│   └─ 🚢 베이 상세 (PrintableBayDetail)
+└─ 선적 탭 (개수 표시)
+    └─ (양하와 동일 3가지)
+```
+
+**진입점**: 자료 탭 맨 위 [📄 검수 자료 출력] 버튼 (대형 amber 카드)
+
+각 항목 클릭 → 모달 내부에서 카고플랜/베이상세 ErrorBoundary 감싸 표시 / 검수 리스트는 새 창
+
+### 3. 평택분만 처리
+
+- 양하 mode 컨테이너 = 평택 양하 대상 (voyage.discharge.containers)
+- 선적 mode = 평택 선적 대상 (voyage.loading.containers)
+- 기존 mode 분리 그대로 사용 → 다른 항만 통과분 자동 제외
+
+## 변경 파일
 
 | 파일 | 변경 |
 |---|---|
-| src/utils.js | APP_VERSION 'M5.25' |
-| src/mixerUpload.js | `ocrPortMisCapture(file, geminiApiKey)` 함수 추가 (PORT-MIS 전용 프롬프트) |
-| src/firebase.js | `fbSavePortMisBatch(ships)` 함수 추가 (Chrome 확장과 동일 구조) |
-| src/pages/HomePage.jsx | [📸 PORT-MIS 캡처] 버튼 + 모달 통합 (그리드 2→3 컬럼) |
-| src/components/HelpModal.jsx | M5.25 변경사항 |
+| src/utils.js | APP_VERSION 'M5.26' |
+| **src/inspectionList.js** | 신규 (검수 리스트 HTML 생성, M3.86 복구) |
+| **src/components/PrintHubModal.jsx** | 신규 (양하/선적 × 3항목 통합) |
+| src/pages/VoyagePage.jsx | DataTab에 [📄 검수 자료 출력] 진입 버튼 + showPrintHub state + PrintHubModal import |
+| src/components/HelpModal.jsx | M5.26 변경사항 |
 
-## Gemini Vision 프롬프트
+## 사용자 시점 핵심 메시지
 
-```
-이 이미지는 한국 PORT-MIS의 선박입출항현황 화면입니다.
-표 형태로 선박들의 입출항 정보가 나열되어 있습니다.
+1. **검수 리스트 복구** — M3.86 명세 그대로
+2. **통합 출력 허브** — 양하/선적 × 3가지 출력 = 6가지를 한 곳에
+3. **자료 탭 맨 위** [📄 검수 자료 출력] 버튼
 
-JSON 형식:
-{
-  "ships": [
-    {
-      "port": "평택",
-      "callsign": "V7A5451",
-      "vesselName": "STARSHIP DRACO",
-      "voyageType": "최초/변경/최종",
-      "voyageInOut": "외항/내항",
-      "ibobprtSe": "입항/출항",
-      "eta": "YYYY-MM-DD HH:MM",
-      "etd": "YYYY-MM-DD HH:MM"
-    }
-  ]
-}
-```
+## 검증 결과
 
-## Firebase 저장 구조
+- 버전 M5.26: 2회 ✓
+- 검수 자료 출력 / 검수 리스트 / 시트1 / 시트2 / 특수화물 별첨 모두 적용 ✓
+- 기존 기능 (M5.25 OCR, M5.24 9V7919, M5.23 BULK_AUTO 192, M5.20 priority) 잔존 ✓
 
-Chrome 확장과 완전 동일:
-```
-port_mis_data/{sanitized_callsign}: {
-  callsign, vesselName, port, eta, etd, voyageType, ...,
-  updatedAt: <timestamp>
-}
-```
+## ⚠️ 잠재 이슈
 
-→ 두 방식이 같은 노드를 공유. 어느 쪽으로 저장해도 동일하게 ⚓ 카드 매칭됨.
-
-## 핵심 장점
-
-| 항목 | Chrome 확장 | 캡처 OCR |
-|---|---|---|
-| 사용 기기 | 데스크톱 PC만 | 폰 (안드로이드+iOS) |
-| 설치 필요 | 한 명만 (5분) | X (앱 자체 기능) |
-| 자동도 | PORT-MIS 검색만 | 캡처 1장 추가 |
-| 정확도 | 100% (DOM 파싱) | 95%+ (Gemini Vision) |
-| 비용 | 0 | Gemini 무료 한도 (충분) |
-
-두 방식 병행 가능. 검수반장 PC에 확장 + 다른 검수원은 폰 OCR 활용.
-
-## 검증
-
-- 버전 M5.25: 2회 ✓
-- ocrPortMisCapture, fbSavePortMisBatch, 📸 모두 적용 ✓
-- 기존 기능 잔존 (M5.24 name-fuzzy/9V7919, M5.23 BULK_AUTO 192, needs-review 198, M5.20 priority)
-
-## 잠재 이슈
-
-1. **Gemini API 키 필수**: 사용자가 키 설정 안 했으면 모달이 에러 표시. 기존 설정 메뉴 활용
-2. **캡처 품질**: 흐릿한 사진은 OCR 정확도 ↓. 모달에 "선명한 캡처" 안내 포함
-3. **Gemini 한도**: 하루 50~100회 정도 한도. 한 검수반장이 하루 2~3번 사용이면 영향 없음
-4. **저장 후 매칭**: M5.24의 매칭 4단계 그대로 동작. 선박명 정확 매칭이 첫 단계라 OCR 추출 선박명만 정확하면 즉시 매칭
+1. **팝업 차단**: 검수 리스트는 새 창에서 열림 → 브라우저 팝업 차단 시 안 열림. 안내 메시지 포함
+2. **카고플랜/베이상세 인쇄**: 기존 컴포넌트 그대로 활용 (ErrorBoundary 감쌈)
+3. **베이 상세 globalRowRange**: 현재 null로 전달 — 컴포넌트 내부에서 자동 계산 가정. 안 되면 BayPlan에서 사용하는 값 전달 필요
+4. **컬러 인쇄**: 색상 구분이 핵심. 흑백 인쇄면 정보 손실
 
 ## 🔜 다음 세션 후보
 
-1. **사용자 첫 테스트 결과 따라 조정**: OCR 정확도, 모달 UX
-2. **자동 검색 안내**: 사용자가 PORT-MIS 검색 안 했을 때 안내 메시지
-3. **검수반장 운영 패턴 정착**: 누가 / 언제 / 얼마나 자주 캡처할지 운영 규칙
+1. 사용자 실제 인쇄 결과 확인 → 양식 미세 조정
+2. inspectionList의 ISO 코드 → 규격 변환 로직 검증 (R/P/U/T 판별)
+3. 출력 양식별 옵션 (예: 검수원명 자동 입력, 페이지 번호 형식)
 
 ## 영구 규칙 (메모리)
 
-(M5.24와 동일)
-1~12: 빌드 원칙, 베이 구조, alias, listener, 음성 priority, Chrome 확장, EDI vs PORT-MIS, 매칭 우선순위, 베이사전 300척, 베이 표시 절대 원칙
+(이전과 동일)
+1~12: 빌드/시뮬 원칙, 베이 구조, alias, listener, 음성 priority, Chrome 확장, EDI vs PORT-MIS, 매칭 우선순위, 베이사전 300척, 베이 표시 절대 원칙, PORT-MIS 매칭
