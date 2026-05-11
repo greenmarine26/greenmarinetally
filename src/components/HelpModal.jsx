@@ -379,6 +379,14 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M5.22 변경 사항 (2026-05) — NSDC (STARSHIP DRACO) 추가',
+      examples: [
+        { q: '✅ NSDC 베이사전 등록',     a: 'STARSHIP DRACO (CASP 6.50, 26개 베이 자동 추출). 콜사인 V7A5451 등록 → ⚓ PORT-MIS 카드 자동 매칭됨' },
+        { q: '🟠 needs-review 배지',     a: '자동 추출 베이라 일부 부정확 가능 (특히 7, 9, 13, 37 누락). 실제 PDF STOWAGE INSTRUCTION 받으면 정확히 정정 가능 (DJCT/TMPZ 케이스처럼)' },
+        { q: '⚓ PORT-MIS 카드 표시',     a: '확장이 전송한 V7A5451 데이터와 자동 매칭. 입항/출항 시간이 항차 화면 상단에 표시됨' },
+      ],
+    },
+    {
       title: '🆕 M5.21 변경 사항 (2026-05) — PORT-MIS 입출항 자동 표시',
       examples: [
         { q: '⚓ 입출항 시간 자동 표시', a: '항차 화면 상단에 입항/출항 시간이 자동으로 표시됨. 호출부호로 PORT-MIS 데이터와 매칭. 예: ⚓ PORT-MIS 입항 05/23 23:00 · 출항 05/25 09:00' },
