@@ -1,87 +1,93 @@
-# M5.27 → 다음 세션 인계 (HANDOFF)
+# M5.28 → 다음 세션 인계 (HANDOFF)
 
-## 현재 상태 (M5.27) — 자료 못 읽어옴 fix + 재업로드 부담 제거
+## 현재 상태 (M5.28) — 검수 리스트 3가지 fix
 
-M5.26 첫 빌드의 두 가지 문제 hotfix.
+사용자 보고:
+1. "양하 145개 중 138개가 특수화물로 잘못 분류됨" → 화물 구분 로직 버그
+2. "양식 바뀐 듯" → 페이지당 140 → 150으로 수정
+3. "X-RAY 표기 안 됨" → 비고 컬럼 + 시트2에 X-RAY 추가
 
-## ✅ 변경 사항 (M5.26 → M5.27)
+## ✅ 변경 사항 (M5.27 → M5.28)
 
-### 1. PrintHubModal 자료 못 읽어옴 fix (CRITICAL)
+### 1. 화물 구분 로직 fix (CRITICAL)
 
-**원인**: PrintHubModal에서 `voyage[mode].containers`로 가져오려 했는데 실제 구조는 `ediContainers + records`로 분산.
+**버그**: `iso.includes('P')`가 **GP(General Purpose)의 P까지 잡아서** 22GP/42GP 일반 컨테이너를 모두 FR로 잘못 분류
 
-**Fix**:
+**Fix**: ISO 6346 표준대로 **셋째 글자**로 판별
 ```js
-// 이전 (잘못된 접근)
-const containers = modeData?.containers ? Object.values(modeData.containers) : [];
-
-// 현재 (VoyagePage와 동일 머지 패턴)
-const ediMap = sec.ediContainers || {};
-const recMap = sec.records || {};
-const compMap = sec.completed || {};
-const xrayMap = sec.xrayList || {};
-
-const isPtk = (c) => {
-  const target = mode === 'discharge' ? c.pod : c.pol;
-  const t = String(target || '').toUpperCase();
-  return !t || t === 'PTK' || t === 'KRPTK' || t.endsWith('PTK');
-};
-
-const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
-const containers = [...allCnSet]
-  .map(cn => { ...edi 머지 + records 보강 ... })
-  .filter(isPtk);  // 평택분만
+const third = iso[2] || '';
+let type = 'normal';
+if (third === 'R') type = 'reefer';
+else if (third === 'P') type = 'fr';       // Platform/Flat Rack
+else if (third === 'U') type = 'ot';       // Open Top
+else if (third === 'T') type = 'tk';       // Tank
+// G(GP) / B / S = normal
 ```
 
-→ 검수 리스트 + 카고플랜 + 베이상세 모두 정상 데이터 받음
+길이 판별도 정확화:
+- 첫 자리 4 또는 9 (45') → 40ft 슬롯
+- 첫 자리 1 또는 2 → 20ft
 
-### 2. 재업로드 안내 메시지 제거
+리퍼 우선 판별 유지 (EDI에 `reefer:true` 또는 `temp` 값 있으면 ISO 무관하게 reefer)
 
-**문제**: 자료 탭의 "💾 다음 EDI 업로드부터 원본이 자동 보관됩니다 → 미래 앱 업데이트 시 자료 재업로드 없이 [🔄 재처리]로 적용 가능" 메시지가 검수원에게 "매 업데이트마다 재업로드 필요"로 오해받음.
+### 2. 페이지 양식 수정
 
-**Fix**: 
-- 이 안내 메시지 제거 (line 1508-1510)
-- 재처리 버튼 텍스트 부드럽게: 
-  - 이전: "🔄 EDI 원본으로 자료 재처리 (앱 업데이트 후 적용용)" + amber 색상 (눈에 띔 → 부담)
-  - 현재: "🔄 EDI 다시 분석 (선택사항)" + slate 색상 (선택사항임 강조)
-- EDI 업로드 status: "💾 EDI 원본 보관됨 — 자료 탭에서 재처리 가능" → "💾 EDI 원본 자동 보관됨"
+```
+PER_COL = 75 (단당)
+PER_PAGE = 150 (페이지당, 좌 75 + 우 75)
 
-**운영 원칙 명확화**: EDI 한 번 업로드 → Firebase 영구 보관 → 앱 업데이트마다 재업로드 X.
+예: 155개 → 2페이지
+  p1: 1~150 (좌 75 + 우 75)
+  p2: 151~155 (좌 5 + 우 0)
+```
 
-## 검증
+마지막 페이지는 좌측부터 순서대로 채움.
 
-- 버전 M5.27: 2회 ✓
-- 새 텍스트 "EDI 다시 분석" / "선택사항" / "EDI 원본 자동 보관됨" 적용 ✓
-- isPtk 머지 로직 적용 (PrintHubModal) ✓
-- 기존 기능 모두 잔존 (검수 자료 출력 5회, 검수 리스트 5회, BULK_AUTO 192회 등)
+### 3. X-RAY 표시 추가
+
+**비고 컬럼**:
+- X-RAY 대상: 빨강 `★XRAY` 표시
+- 리퍼 온도: `-18°C`
+- 특수화물 라벨: `FR` / `OT` / `TK`
+
+**시트2 (특수화물 별첨)**:
+- 리퍼/FR/OT/TK + **X-RAY 대상 일반 컨테이너도 포함**
+- 제목: "특수화물·X-RAY (N대)"
+
+PrintHubModal에서 머지 시 `xrayMap[cn]` 있으면 `merged._xray = true` 설정 (M5.27 이미 적용됨).
+
+### 시뮬레이션 결과
+
+- **ISO 구분 15/15** 통과 — 22G1/22GP/42G1/42GP/45G1 모두 normal, 22R1/45R1 reefer, 42PF FR, 22UT OT 등 정확
+- **페이지 분할 5/5** — 145/150/155/300/301 케이스 모두 정확
 
 ## 변경 파일
 
 | 파일 | 변경 |
 |---|---|
-| src/utils.js | APP_VERSION 'M5.27' |
-| src/components/PrintHubModal.jsx | **ediContainers + records 머지 + isPtk 필터 추가** |
-| src/pages/VoyagePage.jsx | 재업로드 안내 메시지 제거 + [재처리] 버튼 부드럽게 + status 메시지 정리 |
-| src/components/HelpModal.jsx | M5.27 변경사항 |
+| src/utils.js | APP_VERSION 'M5.28' |
+| **src/inspectionList.js** | getContainerCategory ISO 셋째 글자 기준 / PER_PAGE 140→150 / X-RAY 비고 표시 / 시트2 X-RAY 포함 |
+| src/components/HelpModal.jsx | M5.28 변경사항 |
 
 ## 사용자 시점 핵심 메시지
 
-1. **검수 자료 출력 정상 동작** — 양하/선적 탭에서 컨테이너 카운트 + 출력 모두 정상
-2. **재업로드 부담 없음** — EDI는 자동 보관됨. 매 업데이트마다 다시 안 올려도 됨
-3. **재처리 버튼은 선택사항** — 필요시에만 누르고, 안 눌러도 옛 결과 그대로 사용
+1. **145개 중 138개 특수화물 → 정정 후 약 7~10개 정도로 정상화** (실제 비율로)
+2. **페이지당 150대** — 좌 75 + 우 75 표준
+3. **X-RAY ★ 빨강 표시** — 검수 현장에서 즉시 식별 가능
+4. **시트2에 X-RAY 포함** — 일반 컨테이너라도 X-RAY 대상이면 별첨에 표시
 
-## ⚠️ 잠재 운영 이슈 / 후속 작업
+## ⚠️ 잠재 후속 이슈
 
-1. **M5.11 이전 자료** — EDI 원본 보관 안 됐을 수 있음. 새 업데이트 적용 후 BAY/ISO 등 변경되면 자료 한 번만 재업로드 필요. 그 후엔 영구 자동.
-2. **자동 재처리 옵션** — 향후 빌드 업데이트 감지 시 자동 재처리 토글 추가 가능 (현재는 수동만)
-3. **인쇄 결과 검증** — M5.26 검수 리스트 양식 실제 인쇄해보고 미세 조정 필요할 수 있음
+1. **출력 양식 디테일**: 사용자가 "양식 바뀐 듯"이라 했는데 폰트/색상/여백 등 더 미세한 차이 있을 수 있음. 인쇄 결과 캡처 받으면 추가 조정 가능
+2. **리퍼 온도 추출**: c.temp 필드가 모든 EDI에서 정확히 추출되는지 확인 필요. 일부 케이스 누락 가능
+3. **X-RAY 매칭**: xrayList[cn] 키 매칭. 풀 번호(컨번호) 정확히 일치해야 함
 
 ## 🔜 다음 세션 후보
 
-1. 사용자 인쇄 결과 따라 검수 리스트 양식 미세 조정
-2. ISO 코드 → 규격 변환 로직 검증 (R/P/U/T 판별 정확도)
-3. 자동 재처리 옵션 (사용자 설정)
+1. 실제 인쇄 결과 캡처 받고 양식 세부 조정 (폰트 크기, 행 높이, 색상 톤)
+2. ISO 코드 분포 통계 (어떤 코드가 많이 들어오는지)
+3. 검수 리스트에 검수원 명/체크박스 추가 (현장에서 표시 용도)
 
 ## 영구 규칙 (메모리)
 
-(이전과 동일 — 베이사전 우선, PORT-MIS 매칭 4단계, Chrome 확장 등)
+(이전과 동일)

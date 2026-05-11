@@ -16,23 +16,39 @@ const COLOR = {
   tk: '#ffe5d0',
 };
 
-// 컨테이너 타입 판별 (iso 코드 기준)
+// 컨테이너 타입 판별 (ISO 6346 표준)
+//   ISO 4글자 코드: [크기][높이][종류1][종류2]
+//   예: 22G1 = 20' 일반 GP, 42G1 = 40' 일반, 22R1 = 20' 리퍼, 45R1 = 45' 리퍼
+//        42PF = 40' 플랫폼(FR), 22UT = 20' Open Top, 22T0 = 20' Tank
+//   첫 자리 = 길이: 1/2=20', 3=30', 4=40', 9=45'(40ft 슬롯)
+//   셋째 자리 = 종류: G=GP(일반) / R=리퍼 / P=Platform(FR) / U=OT / T=Tank / B=Bulk / S=Special
+// ⚠️ M5.28 fix: iso.includes('P')는 GP의 P까지 잡아서 22GP/42GP 일반 컨테이너를 FR로 오분류함
 function getContainerCategory(c) {
-  const iso = String(c.iso || '').toUpperCase();
-  // 길이: iso 첫 글자 4=40ft, 2=20ft / iso[2] 첫 자리
-  // ISO 6346: 4글자 코드 (예: 22G1, 45R1)
-  const len = iso.startsWith('4') ? 40 : (iso.startsWith('2') ? 20 : (parseInt(c.cn?.[10]) >= 4 ? 40 : 20));
-  
-  // 특수 타입: R(reefer), R1(45R1), P(FR), U(OT), T(tank)
-  let type = 'normal';
-  if (iso.includes('R') && !iso.startsWith('R')) type = 'reefer';
-  else if (iso.includes('P') || iso.endsWith('PF') || iso.endsWith('P1') || iso.endsWith('P3')) type = 'fr';
-  else if (iso.includes('U')) type = 'ot';
-  else if (iso.startsWith('T') || iso.includes('TK')) type = 'tk';
-  // 리퍼: iso에 R 또는 reefer 표시
+  const iso = String(c.iso || '').toUpperCase().trim();
+  const first = iso[0] || '';
+  const third = iso[2] || '';
+
+  // 길이: 첫 자리 기준 (4/9 = 40ft 슬롯, 1/2 = 20ft)
+  let len = 20;
+  if (first === '4' || first === '9') len = 40;
+  else if (first === '1' || first === '2') len = 20;
+  else if (c.cn && /^[A-Z]{4}\d{7}$/.test(c.cn)) {
+    // ISO 없으면 cn 끝자리로 추정 (옛 호환)
+    len = parseInt(c.cn[10]) >= 4 ? 40 : 20;
+  }
+
+  // 종류: ISO 셋째 글자 기준 (정확한 ISO 6346)
+  let type = 'normal';  // G(GP) = 일반
+  if (third === 'R') type = 'reefer';
+  else if (third === 'P') type = 'fr';        // Platform/Flat Rack
+  else if (third === 'U') type = 'ot';        // Open Top
+  else if (third === 'T') type = 'tk';        // Tank
+  // G/B/S 또는 빈값 = normal (일반 처리)
+
+  // 리퍼 우선 판별 (EDI에 리퍼 플래그 있으면 ISO와 무관하게 reefer)
   if (c.reefer === true || c.temp != null) type = 'reefer';
-  
-  const fe = (c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
+
+  const fe = String(c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
   return { len, type, fe };
 }
 
@@ -59,9 +75,16 @@ function renderRow(c, idx) {
   const { len, type } = getContainerCategory(c);
   const spec = `${len}${type === 'normal' ? '' : type === 'reefer' ? 'R' : type === 'fr' ? 'F' : type === 'ot' ? 'O' : 'T'}`;
   const fe = (c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
-  const sl = (c.sl || '').slice(0, 12);  // 너무 길면 잘림
+  const sl = (c.sl || '').slice(0, 12);
   const cn = c.cn || '';
-  const note = type === 'reefer' && c.temp != null ? `${c.temp}°C` : '';
+  // 비고: X-RAY ★ + 리퍼 온도 + 기타 표시
+  const notes = [];
+  if (c._xray) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
+  if (type === 'reefer' && c.temp != null) notes.push(`${c.temp}°C`);
+  if (type === 'fr') notes.push('FR');
+  if (type === 'ot') notes.push('OT');
+  if (type === 'tk') notes.push('TK');
+  const note = notes.join(' ');
   return `<tr style="background:${bg}">
     <td>${idx}</td>
     <td class="cn">${cn}</td>
@@ -73,11 +96,16 @@ function renderRow(c, idx) {
   </tr>`;
 }
 
-// 한 페이지 (좌+우 단) HTML
+// 한 페이지 (좌 75 + 우 75 = 150대) HTML
+// M5.28: 페이지당 150대 명시 (좌 75 + 우 75)
+//   예: 155대 → 2페이지 (1페이지 150 + 2페이지 5)
+//   마지막 페이지에 5개만 있으면 좌 5 + 우 0 (좌측부터 순서대로 채움)
+const PER_COL = 75;
+const PER_PAGE = PER_COL * 2;  // 150
+
 function renderPage(rows, pageNum, totalPages) {
-  const half = Math.ceil(rows.length / 2);
-  const left = rows.slice(0, half);
-  const right = rows.slice(half);
+  const left = rows.slice(0, PER_COL);
+  const right = rows.slice(PER_COL);
 
   const renderColumn = (rs) => `<table class="ilist">
     <thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th></tr></thead>
@@ -105,8 +133,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
     return (a.cn || '').localeCompare(b.cn || '');
   });
 
-  // 시트1: 전체 (140대씩 페이지)
-  const PER_PAGE = 140;
+  // 시트1: 전체 (페이지당 150대씩 — 좌 75 + 우 75)
   const allPages = [];
   for (let i = 0; i < list.length; i += PER_PAGE) {
     const chunk = list.slice(i, i + PER_PAGE);
@@ -115,10 +142,10 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
   }
   const sheet1Pages = allPages.map((rows, i) => renderPage(rows, i + 1, allPages.length)).join('');
 
-  // 시트2: 특수화물 (리퍼/FR/OT/TK)
+  // 시트2: 특수화물 (리퍼/FR/OT/TK) — X-RAY는 일반 화물도 가능하니 별도 처리
   const special = list.filter(c => {
     const { type } = getContainerCategory(c);
-    return type !== 'normal';
+    return type !== 'normal' || c._xray;  // 특수화물 + X-RAY 대상도 포함
   });
   let sheet2Html = '';
   if (special.length > 0) {
@@ -128,7 +155,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
       const rows = chunk.map((c, j) => renderRow(c, i + j + 1));
       sheet2Pages.push(rows);
     }
-    sheet2Html = `<div class="ititle">[별첨] 특수화물 (${special.length}대)</div>` +
+    sheet2Html = `<div class="ititle">[별첨] 특수화물·X-RAY (${special.length}대)</div>` +
       sheet2Pages.map((rows, i) => renderPage(rows, i + 1, sheet2Pages.length)).join('');
   }
 
