@@ -485,62 +485,74 @@ export default function PrintableBayDetail({
             break-after: auto !important;
           }
           /* 폰/프린터 minimum margin 대응 */
-          @page { size: A4 landscape; margin: 0.5cm; }
+          @page { size: A4 landscape; margin: 0.3cm; }
         }
         .bd-page {
           color: black; background: white;
           font-family: Arial, sans-serif;
-          padding: 10px 16px;
+          padding: 4px 8px;
           border-bottom: 1px dashed #ddd;
+          /* M5.37: 페이지 고정 + flex column → 선박별 티어/로우 수에 따라 셀이 자동 분배 */
+          width: 291mm;
+          min-height: 204mm;
+          height: 204mm;
+          display: flex;
+          flex-direction: column;
+          box-sizing: border-box;
+          page-break-after: always;
         }
         .bd-title {
-          /* 페이지 가득 활용 — 베이 제목 더 크게 */
-          text-align: center; font-size: 22pt; font-weight: 500;
-          margin-bottom: 8px;
+          text-align: center; font-size: 20pt; font-weight: 500;
+          margin-bottom: 3px;
+          flex-shrink: 0;
         }
         .bd-header {
           display: flex; justify-content: space-between;
-          font-size: 11pt; margin-bottom: 10px;
+          font-size: 10pt; margin-bottom: 3px;
+          flex-shrink: 0;
         }
         .bd-row-labels-top, .bd-row-labels-bot {
           display: flex; justify-content: space-evenly;
           font-size: 7pt;
           margin: 1px 4px;
+          flex-shrink: 0;
         }
         .bd-rl { flex: 1; text-align: center; }
+        /* M5.37: 그리드가 페이지 안 빈 세로 공간 자동 차지 */
         .bd-grid-wrap {
           display: flex; align-items: stretch;
-          /* M4.9c/d-fix: 좌우 짤림 방지 — 컨테이너가 페이지 폭 초과 못함 */
           width: 100%;
           max-width: 100%;
           overflow: hidden;
           box-sizing: border-box;
+          flex: 1;
+          min-height: 0;
         }
         .bd-grid {
           flex: 1;
           min-width: 0;
           max-width: 100%;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
         }
+        /* M5.37: 각 tier 행이 자동 균등 분할 → 티어 수에 따라 셀 높이 자동 */
         .bd-tier-row {
           display: grid;
-          /* grid-template-columns은 inline style로 동적 적용 (베이/선박별) */
           border: 0.5px solid #000;
+          flex: 1;
+          min-height: 0;
         }
-        /* M4.9c-fix: 셀 padding/폰트 축소로 11자리 컨번호 안전하게 들어가게 */
-        /* M4.9d-fix: 셀 폰트/패딩 최소화로 11자리 컨번호 안전하게 표시
-           가용 폭 297mm - margin 10mm = 287mm. 7컬럼 = 41mm 각자.
-           폰트 7pt courier, padding 1px = 컨텐츠 영역 약 38mm. 컨번호 11자 약 28mm OK. */
+        /* M5.37: 셀 height auto — flex 부모가 자동 결정 */
         .bd-cell {
           border: 0.3px solid #555;
-          height: 58px;
           padding: 1px;
           font-size: 7pt;
           line-height: 1.05;
           font-family: 'Courier New', monospace;
           overflow: hidden;
           min-width: 0;
-          word-break: break-all;  /* 단어 짤려도 페이지 안에 들어가게 */
+          word-break: break-all;
         }
         .bd-cell.empty { background: white; }
         .bd-cell.filled.ptk { background: #fef3c7; }

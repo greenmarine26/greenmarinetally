@@ -457,56 +457,72 @@ export default function PrintableCargoPlan({
             width: 100% !important;
             max-width: 100% !important;
           }
-          @page { size: A4 landscape; margin: 0.5cm; }
+          @page { size: A4 landscape; margin: 0.3cm; }
         }
         .cargo-plan-page {
           color: black; background: white;
           font-family: Arial, sans-serif;
           font-size: 10pt;
-          padding: 12px 16px;
+          padding: 4px 8px;
           margin: 0 auto;
-          position: relative;  /* M5.31: footer absolute 기준 */
+          position: relative;
+          /* M5.37: 페이지 고정 높이 + flex column → 선박별 베이 갯수와 무관하게 자동 분배 */
+          width: 291mm;
+          min-height: 204mm;
+          height: 204mm;
+          display: flex;
+          flex-direction: column;
+          box-sizing: border-box;
         }
         .cargo-header {
           display: flex; justify-content: space-between; align-items: baseline;
-          margin-bottom: 6px;
+          margin-bottom: 2px;
+          flex-shrink: 0;
         }
-        .cargo-title { font-size: 18pt; font-weight: 500; }
+        .cargo-title { font-size: 16pt; font-weight: 500; }
         .cargo-subheader {
           display: flex; justify-content: center; gap: 80px;
-          font-size: 12pt; margin-bottom: 14px;
+          font-size: 11pt; margin-bottom: 4px;
+          flex-shrink: 0;
         }
-        /* M4.9b-fix: 행 그리드 — 좌측 기준 stretch 정렬 명시 */
-        .bay-row { display: grid; gap: 4px; margin-bottom: 4px; align-items: stretch; }
+        /* M5.37: 4행이 헤더 외 가용 세로를 자동 균등 분할 (선박별 베이 수와 무관) */
+        .bay-row { 
+          display: grid; gap: 2px; margin-bottom: 2px; 
+          align-items: stretch;
+          flex: 1;
+          min-height: 0;
+        }
         .five-col { grid-template-columns: repeat(5, 1fr); }
-        /* M4.9b-fix: 모든 베이 박스 동일 min-height 통일.
-           가용 세로 ~180mm = 약 680px 중 헤더~50px → 4행 × ~155px = 620px (가용 91%) */
         .bay-box {
           border: 0.5px solid #000; background: white;
           font-size: 9pt;
           page-break-inside: avoid;
-          min-height: 150px;
           display: flex;
           flex-direction: column;
+          overflow: hidden;
         }
         .bay-box-placeholder {
-          min-height: 150px;
           visibility: hidden;
         }
         .bay-title-row {
           display: flex; justify-content: space-between;
           padding: 1px 3px; font-size: 8pt;
+          flex-shrink: 0;
         }
         .bay-title-label { font-weight: 500; }
         .bay-count { font-size: 7pt; }
         .bay-row-labels {
           display: flex; justify-content: center;
           font-size: 6pt; padding: 0 1px;
+          flex-shrink: 0;
         }
         .bay-row-label { width: 11px; text-align: center; font-size: 7pt; }
+        /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
         .bay-grid-wrap {
-          display: flex; align-items: stretch; padding: 1px;
+          display: flex; align-items: center; padding: 1px;
           justify-content: center;
+          flex: 1;
+          min-height: 0;
         }
         .bay-grid { display: flex; flex-direction: column; align-items: center; }
         .bay-grid-row { display: flex; }
