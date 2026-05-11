@@ -138,6 +138,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
           shipImo={shipImo}
           shipName={shipName}
           xrayMap={xrayMap}
+          globalRowRange={globalRowRange}
+          globalTiers={globalTiers}
           onClose={() => setPrintSub(null)}
         />
       </ErrorBoundary>

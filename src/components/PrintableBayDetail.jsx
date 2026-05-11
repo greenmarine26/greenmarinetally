@@ -157,21 +157,20 @@ function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers }) {
-  // M4.9d-fix: globalRowRange 기준 동적 row 생성 — 화면 BayPlan과 통일
-  //   maxLeft (예: 10) → 짝수 큰→작은 [10, 08, 06, 04, 02]
-  //   maxRight (예: 09) → 홀수 작은→큰 [01, 03, 05, 07, 09]
-  //   center ['00']
-  //   사용자 지적: "베이마다 다름, 일괄 적용 X, 베이사전 준해 화면과 같게"
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers, dictShipMeta }) {
+  // M5.42: 베이별 로컬 오버라이드 절대 우선 — dictBay.{rowMaxEvenLocal/Odd, deckTiersLocal, holdTiersLocal}
+  //   1순위: dictBay.{필드}Local (베이별 PDF 검증값)
+  //   2순위: dictShipMeta.{필드} (선박 전역)
+  //   3순위: globalRowRange / globalTiers (EDI fallback)
   const STD_ROWS = useMemo(() => {
-    const maxLeft = globalRowRange?.maxLeft || 6;
-    const maxRight = globalRowRange?.maxRight || 5;
+    const maxLeft = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft ?? 6;
+    const maxRight = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight ?? 5;
     const left = [];
     for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
     const right = [];
     for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
     return [...left, '00', ...right];
-  }, [globalRowRange]);
+  }, [globalRowRange, dictShipMeta, dictBay]);
   const colCount = STD_ROWS.length;
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -185,19 +184,37 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     cellMap[`${t}-${r}`] = c;
   });
 
-  const allTiers = new Set();
-  // M4.9e-fix: 화면 BayPlan과 동일하게 globalTiers (선박 전체 tier 풀) 사용
-  //   사용자 지적: "티어도 안 맞음, 베이마다 / 선박마다 다름"
-  //   이전: STD_DECK/STD_HOLD 하드코딩과 합쳐 사용 → 선박마다 안 맞음
-  //   수정: globalTiers 우선, 그 다음 컨테이너 데이터의 tier (보강)
-  if (Array.isArray(globalTiers) && globalTiers.length > 0) {
-    globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
+  // M5.42: 베이별 deckTiersLocal/holdTiersLocal 절대 우선
+  //   1순위: dictBay.deckTiersLocal/holdTiersLocal (베이별 PDF 검증)
+  //   2순위: dictShipMeta.deckTiers/holdTiers (선박 전역)
+  //   3순위: globalTiers + EDI 컨테이너 (fallback)
+  let deckTiers, holdTiers;
+  if (dictBay?.deckTiersLocal && dictBay.deckTiersLocal.length > 0) {
+    deckTiers = dictBay.deckTiersLocal.map(t => String(t).padStart(2, '0'));
+  } else if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
+    deckTiers = dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
+  } else {
+    const allTiers = new Set();
+    if (Array.isArray(globalTiers) && globalTiers.length > 0) {
+      globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
+    }
+    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
+    deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
+      .sort((a, b) => parseInt(b) - parseInt(a));
   }
-  allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-  const deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
-    .sort((a, b) => parseInt(b) - parseInt(a));
-  const holdTiers = [...allTiers].filter(t => parseInt(t) < 80)
-    .sort((a, b) => parseInt(b) - parseInt(a));
+  if (dictBay?.holdTiersLocal && dictBay.holdTiersLocal.length > 0) {
+    holdTiers = dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0'));
+  } else if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
+    holdTiers = dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
+  } else {
+    const allTiers = new Set();
+    if (Array.isArray(globalTiers) && globalTiers.length > 0) {
+      globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
+    }
+    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
+    holdTiers = [...allTiers].filter(t => parseInt(t) < 80)
+      .sort((a, b) => parseInt(b) - parseInt(a));
+  }
 
   const hasHold = dictBay ? dictBay.hasHold !== false : allConts.some(c => parseInt(c.tier) < 80);
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
@@ -302,6 +319,14 @@ export default function PrintableBayDetail({
     dictData.bayDef.baysSummary.forEach(b => { m[parseInt(b.bayNo, 10)] = b; });
     return m;
   }, [dictData]);
+
+  // M5.40: 베이사전 명시 필드 (PDF 추출 row/tier) — 절대 기준
+  const dictShipMeta = useMemo(() => ({
+    rowMaxEven: dictData?.bayDef?.rowMaxEven,
+    rowMaxOdd: dictData?.bayDef?.rowMaxOdd,
+    deckTiers: dictData?.bayDef?.deckTiers,
+    holdTiers: dictData?.bayDef?.holdTiers,
+  }), [dictData]);
 
   const bayList = useMemo(() => {
     if (dictBayList && dictBayList.length > 0) return [...dictBayList].sort((a, b) => a - b);
@@ -414,7 +439,8 @@ export default function PrintableBayDetail({
                 voyageInfo={voyageInfo} voyageKey={voyageKey}
                 shipName={shipName} dictBay={dictBay}
                 globalRowRange={globalRowRange}
-                globalTiers={globalTiers} />
+                globalTiers={globalTiers}
+                dictShipMeta={dictShipMeta} />
             );
           })
         )}
@@ -485,62 +511,74 @@ export default function PrintableBayDetail({
             break-after: auto !important;
           }
           /* 폰/프린터 minimum margin 대응 */
-          @page { size: A4 landscape; margin: 0.5cm; }
+          @page { size: A4 landscape; margin: 0.3cm; }
         }
         .bd-page {
           color: black; background: white;
           font-family: Arial, sans-serif;
-          padding: 10px 16px;
+          padding: 4px 8px;
           border-bottom: 1px dashed #ddd;
+          /* M5.37: 페이지 고정 + flex column → 선박별 티어/로우 수에 따라 셀이 자동 분배 */
+          width: 291mm;
+          min-height: 204mm;
+          height: 204mm;
+          display: flex;
+          flex-direction: column;
+          box-sizing: border-box;
+          page-break-after: always;
         }
         .bd-title {
-          /* 페이지 가득 활용 — 베이 제목 더 크게 */
-          text-align: center; font-size: 22pt; font-weight: 500;
-          margin-bottom: 8px;
+          text-align: center; font-size: 20pt; font-weight: 500;
+          margin-bottom: 3px;
+          flex-shrink: 0;
         }
         .bd-header {
           display: flex; justify-content: space-between;
-          font-size: 11pt; margin-bottom: 10px;
+          font-size: 10pt; margin-bottom: 3px;
+          flex-shrink: 0;
         }
         .bd-row-labels-top, .bd-row-labels-bot {
           display: flex; justify-content: space-evenly;
           font-size: 7pt;
           margin: 1px 4px;
+          flex-shrink: 0;
         }
         .bd-rl { flex: 1; text-align: center; }
+        /* M5.37: 그리드가 페이지 안 빈 세로 공간 자동 차지 */
         .bd-grid-wrap {
           display: flex; align-items: stretch;
-          /* M4.9c/d-fix: 좌우 짤림 방지 — 컨테이너가 페이지 폭 초과 못함 */
           width: 100%;
           max-width: 100%;
           overflow: hidden;
           box-sizing: border-box;
+          flex: 1;
+          min-height: 0;
         }
         .bd-grid {
           flex: 1;
           min-width: 0;
           max-width: 100%;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
         }
+        /* M5.37: 각 tier 행이 자동 균등 분할 → 티어 수에 따라 셀 높이 자동 */
         .bd-tier-row {
           display: grid;
-          /* grid-template-columns은 inline style로 동적 적용 (베이/선박별) */
           border: 0.5px solid #000;
+          flex: 1;
+          min-height: 0;
         }
-        /* M4.9c-fix: 셀 padding/폰트 축소로 11자리 컨번호 안전하게 들어가게 */
-        /* M4.9d-fix: 셀 폰트/패딩 최소화로 11자리 컨번호 안전하게 표시
-           가용 폭 297mm - margin 10mm = 287mm. 7컬럼 = 41mm 각자.
-           폰트 7pt courier, padding 1px = 컨텐츠 영역 약 38mm. 컨번호 11자 약 28mm OK. */
+        /* M5.37: 셀 height auto — flex 부모가 자동 결정 */
         .bd-cell {
           border: 0.3px solid #555;
-          height: 58px;
           padding: 1px;
           font-size: 7pt;
           line-height: 1.05;
           font-family: 'Courier New', monospace;
           overflow: hidden;
           min-width: 0;
-          word-break: break-all;  /* 단어 짤려도 페이지 안에 들어가게 */
+          word-break: break-all;
         }
         .bd-cell.empty { background: white; }
         .bd-cell.filled.ptk { background: #fef3c7; }
