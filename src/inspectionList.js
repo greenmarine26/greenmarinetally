@@ -28,23 +28,23 @@ const COLOR = {
 const CARRIER_MAP = {
   'DJSC': 'DJS', 'NSSL': 'NSL', 'HASL': 'HAS', 'SNKO': 'SKR',
   'HSLI': 'HSL', 'JEON': 'HSL',
-  // M5.633 추가
-  'DWIC': 'DWS', 'EAS': 'EASK', 'TJM': 'TJMS', 'WDF': 'WDFC', 'SCLK': 'SIT',
+  // M5.68 — 4자 → 3자 (voucher와 동일)
+  'DWIC': 'DWS', 'EASK': 'EAS', 'TJMS': 'TJM', 'WDFC': 'WDF', 'SCLK': 'SIT',
 };
 function normalizeCarrier(c) {
-  // 1순위: c.op (EDI NAD+CA 또는 LIST 선사부호 컬럼)
+  // M5.68 — 3자 강제 (voucher와 통일)
+  const to3 = (s) => String(s || '').slice(0, 3).toUpperCase();
+
   if (c.op) {
     const op = String(c.op).toUpperCase().trim();
     if (CARRIER_MAP[op]) return CARRIER_MAP[op];
-    if (op) return op;
+    if (op) return to3(op);
   }
-  // 2순위: BL 번호 prefix (4자)
   if (c.bl && c.bl.length >= 4) {
     const blp = String(c.bl).slice(0, 4).toUpperCase();
     if (CARRIER_MAP[blp]) return CARRIER_MAP[blp];
   }
-  // 폴백: cn prefix (owner code)
-  if (c.cn && c.cn.length >= 4) return c.cn.slice(0, 4).toUpperCase();
+  if (c.cn && c.cn.length >= 3) return c.cn.slice(0, 3).toUpperCase();
   return '?';
 }
 

@@ -556,7 +556,7 @@ const CONTENT = {
         { q: '📊 모든 출력물 3가지 옵션 — M5.66', a: '모든 출력물(voucher/검수리스트/카고플랜/베이상세 등) 상단에 3개 버튼: (1) 🖨 프린터 인쇄 (2) 📄 PDF 저장 (인쇄 대화상자에서 PDF 선택) (3) 📊 엑셀 다운로드 (.xlsx 자동). 새 창 또는 인쇄 페이지 상단 툴바.' },
         { q: '📄 voucher 데이터 기준 — M5.58', a: 'LIST 기반 (section.records). EDI 전체 컨테이너(선박 전체) 아닌 평택 작업 대상만. 컨테이너 데이터는 records 우선 + EDI 보강 (빈 값은 덮어쓰지 않음, M5.59).' },
         { q: '🚢 voucher 선박명/항차 — M5.59', a: 'voyage.info.vsl (선박명), info.voy (항차번호), info.carrier 자동 채움. 양하+선적 두 항차면 voy_d & voy_l 형식.' },
-        { q: '🏢 선사 표시 통일 — M5.60', a: '검수리스트와 voucher의 선사가 동일한 3자 약어 (DJS/NSL/HAS/SKR/HSL). normalizeCarrier 함수: c.op (EDI/리스트 코드) > BL prefix > cn prefix 순서. 매핑: DJSC→DJS, NSSL→NSL, HASL→HAS, SNKO→SKR, HSLI→HSL, DWIC→DWS, EAS→EASK, TJM→TJMS, WDF→WDFC, SCLK→SIT.' },
+        { q: '🏢 선사 표시 통일 — M5.60', a: '검수리스트와 voucher의 선사가 동일한 3자 약어 (DJS/NSL/HAS/SKR/HSL). normalizeCarrier 함수: c.op (EDI/리스트 코드) > BL prefix > cn prefix 순서. 매핑: DJSC→DJS, NSSL→NSL, HASL→HAS, SNKO→SKR, HSLI→HSL, DWIC→DWS, EASK→EAS, TJMS→TJM, WDFC→WDF, SCLK→SIT. **영구 규칙(M5.68): voucher/검수리스트 선사 약자는 항상 3자** (4자 약자는 앞 3자만).' },
         { q: '👤 검수원 정확 매칭 — M5.61', a: '이름은 한글/영문 2~10자만, 공백·콤마·마침표 등 특수문자 차단. "이종현"과 "이종현 ,"는 같은 사람으로 통합. 정규화 후 기존 명단과 비교.' },
         { q: '🛡 직원 화이트리스트 — M5.62', a: '(주)그린마린 29명 직원 명단만 접속 가능 (staffList.js + Firebase staffList). 명단 외 이름 입력 시 차단 + 비슷한 이름 힌트 제공. 이름 옆에 직책 표시 (회장/대표이사/부장/대리/검수 등).' },
         { q: '👑 관리자 권한 (김성일 전용) — M5.62-63', a: '삭제(🗑): 다른 검수원 카드 우측 빨강 휴지통 버튼 → Firebase inspectors + staffList에서 제거. 추가: 명단 외 새 직원 추가 가능 (직책 입력 후 Firebase staffList 영구 저장) → 등록 즉시 전 직원 접속 가능. 다른 직원은 이 권한 없음.' },

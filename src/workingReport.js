@@ -28,8 +28,8 @@ const PORT_MAP = {
 const CARRIER_MAP = {
   'DJSC': 'DJS', 'NSSL': 'NSL', 'HASL': 'HAS', 'SNKO': 'SKR',
   'HSLI': 'HSL', 'JEON': 'HSL',
-  // M5.633 추가
-  'DWIC': 'DWS', 'EAS': 'EASK', 'TJM': 'TJMS', 'WDF': 'WDFC', 'SCLK': 'SIT',
+  // M5.68 — 4자 약자 → 3자 변환 (voucher OPERATOR는 항상 3자)
+  'DWIC': 'DWS', 'EASK': 'EAS', 'TJMS': 'TJM', 'WDFC': 'WDF', 'SCLK': 'SIT',
 };
 
 // 사진 양식의 선사 표시 순서
@@ -52,11 +52,14 @@ function normalizePort(code) {
 }
 
 function normalizeOp(c) {
+  // M5.68 — 영구 규칙: voucher OPERATOR는 항상 3자 (4자 약자는 앞 3자만)
+  const to3 = (s) => String(s || '').slice(0, 3).toUpperCase();
+
   // 1순위: EDI에서 추출된 op (NAD+CA)
   if (c.op) {
     const op = String(c.op).toUpperCase();
-    if (CARRIER_MAP[op]) return CARRIER_MAP[op];
-    return op;
+    if (CARRIER_MAP[op]) return CARRIER_MAP[op];  // 매핑된 값은 이미 3자
+    return to3(op);
   }
   // 2순위: BL 번호 prefix (4자)
   if (c.bl && c.bl.length >= 4) {
@@ -67,10 +70,10 @@ function normalizeOp(c) {
   if (c.carrierCode) {
     const cc = String(c.carrierCode).toUpperCase();
     if (CARRIER_MAP[cc]) return CARRIER_MAP[cc];
-    return cc;
+    return to3(cc);
   }
-  // 폴백: cn prefix
-  if (c.cn && c.cn.length >= 4) return c.cn.slice(0, 4).toUpperCase();
+  // 폴백: cn prefix (앞 3자)
+  if (c.cn && c.cn.length >= 3) return c.cn.slice(0, 3).toUpperCase();
   return '?';
 }
 

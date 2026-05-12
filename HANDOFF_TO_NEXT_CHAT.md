@@ -228,3 +228,20 @@
 ### 2. Remarks 박스 좌우 비율
 - 원인: bottom-row가 1fr 1fr (50/50). 표의 DISCH/LOAD 경계는 약 46/54 (OPERATOR+PORT+F/E+DISCH 7컬럼 : LOAD+SHIFT 8컬럼) → 경계 불일치
 - 수정: grid-template-columns 7fr 8fr (표 컬럼 비율과 정확히 일치)
+
+## M5.69 - 선사 약자 3자 영구 규칙
+### 영구 규칙
+- voucher OPERATOR / 검수리스트 선사 = **항상 3자**
+- 4자 약자는 앞 3자만 표시 (뒷자리 자름)
+
+### CARRIER_MAP 정정 (4자 → 3자)
+- EASK → EAS (이전 잘못: EAS→EASK)
+- TJMS → TJM (이전 잘못: TJM→TJMS)
+- WDFC → WDF (이전 잘못: WDF→WDFC)
+- DWIC → DWS, SNKO → SKR, DJSC → DJS 등 기존 3자 유지
+
+### normalizeOp / normalizeCarrier 3자 강제
+- to3 헬퍼: String(s).slice(0, 3).toUpperCase()
+- CARRIER_MAP 매핑된 값은 이미 3자 → 그대로
+- 매핑 안 된 값은 앞 3자만
+- workingReport.js + inspectionList.js 양쪽 동기화
