@@ -1,61 +1,44 @@
-# M5.55 인계 - voucher 양식 영구 반영
+# M5.55 인계 - voucher 양식 + sw.js fix
 
 ## 완료 작업
-1. **workingReport.js 완전 재작성** (370줄)
-   - DJCF 0145N&0146S 양식 확정판
-   - 사진 양식 정확 매칭 (DISCH 199, LOAD 255 검증)
-   - A4 1페이지 강제, 굵은 선 구분
-   - 셀 11.5pt, line-height 1.05, 폰트 9pt
-   - Remarks 좌우 반반 (gap 0), 서명란 margin 20pt
-   - PAD=45 빈 행, OPERATOR 셀 rowspan="3"
-   - 양하/선적 데이터에 따라 Remarks 동적 표시
+1. workingReport.js 완전 재작성 (370줄) - DJCF 양식 확정판
+2. parseListExcel - 선사부호/TSPORT/PRINTPOD/CARGO TYPE 컬럼 추가
+3. **public/sw.js 신규** - service worker (이전엔 파일 자체가 없어서 업데이트 안 됨)
+4. HelpModal voucher 매뉴얼 3개 추가
+5. **build.sh로 빌드** - vite 진입점 복원 + 캐시 제거 후 빌드 필수
 
-2. **선사 매핑 룰** (workingReport.js + parseListExcel)
-   - CARRIER_MAP: DJSC→DJS, NSSL→NSL, HASL→HAS, SNKO→SKR, HSLI→HSL, JEON→HSL
-   - 우선순위: EDI(c.op) > BL prefix > 선사부호 컬럼 > cn prefix 폴백
-   - OP 표시 순서: SKR → NSL → DJS → HAS → HSL → 기타
-
-3. **PORT 매핑 + 추출 룰**
-   - 양하: PORT = POL (출발지)
-   - 선적: PORT = TSPORT(환적) > PRINTPOD > POD
-   - NSL JDCF: BL prefix NSSLPT[XXX]에서 추출 (BSE→PUS, HCC→SGN, LCC→LCH)
-
-4. **사이즈/F-E 다중 양식 처리**
-   - 표준 ISO 6346 (22GP, 45GP 등)
-   - 비표준 DJS 양식 (D2→20, D5→HC, D4→40, R5→HC)
-   - SZTY 양식 (20DC, 4HDC, 4HRF)
-   - F/E 추론: c.fe → c.cargoType (F/P) → ISO 끝자리
-
-5. **parseListExcel 컬럼 인식 보강**
-   - 선사부호, TSPORT, PRINTPOD, CARGO TYPE 컬럼 추가
-   - record 객체에 tsport/printpod/cargoType 필드 저장
-
-6. **HelpModal**: voucher 매뉴얼 3개 항목 추가
-
-## 빌드
-- M5.55 버전, dist/ 생성 완료
-- 1.43MB JS (gzip 297KB)
-
-## 검증
-- DJCF 0145N(199대) + 0146S(255대) 실제 데이터로 voucher 생성 → 사진 양식과 100% 일치
-- 1페이지 강제 확인
-- 모든 선사 정확 분류 (SKR 62, NSL 47, DJS 134, HAS 9, HSL 3)
-
-## 미해결 (선택 작업)
-- 사진의 양하 분포 일부 (NSL LCH 25 사이즈 모호, DJS BKK 7 등) — LIST1 데이터와 사진의 실제 작업 결과(수기) 차이
-- 사용자 검증 후 조정 가능
-
-## M5.55 추가 fix
-- **public/sw.js 신규 생성** — service worker 파일 자체가 없어서 UpdatePrompt가 작동 안 함 (M5.55 업데이트 안 보임 원인)
-- VERSION = 'M5.55' 명시. 매 빌드마다 변경 → 새 버전 자동 감지 → "🆕 새 버전 출시" 배너 표시 → 탭 하면 즉시 적용
-- network-first 전략 (캐시 X) — 항상 최신 파일 fetch
-- skipWaiting + clients.claim — 즉시 활성화
+## 빌드 후 검증 결과 (dist/assets/index-Co61nTNB.js)
+- M5.55: 2회 ✓
+- DJSC (CARRIER_MAP): 2회 ✓
+- GREEN MARINE (voucher 제목): 2회 ✓
+- tsport (parseListExcel 필드): 2회 ✓
+- SNKO: 2회 ✓
 
 ## 사용자 작업 (배포)
-1. ZIP 풀기 → m555_build/dist/ 폴더 내용을 GitHub Pages에 push
-2. 또는 m555_build 전체를 push 후 GitHub Actions 빌드
-3. 브라우저에서 새로고침 → "🆕 새 버전 출시" 배너 → 탭 → M5.55 적용
+### A. GitHub Actions로 자동 배포 (권장)
+1. ZIP 풀기
+2. m555_build/ 폴더의 src/, public/, package.json, vite.config.js, index.html 등을 GitHub repo에 push
+3. main 브랜치에 push되면 .github/workflows/deploy.yml이 자동 실행 → 빌드 → GitHub Pages 배포
+4. 1-3분 후 사이트에서 새 버전 보임
 
-만약 배너 안 보이면:
-- 브라우저 개발자 도구 → Application → Service Workers → Unregister 후 새로고침
-- 또는 Ctrl+Shift+R (강제 새로고침)
+### B. 수동 배포 (Actions 안 될 때)
+1. ZIP의 dist/ 폴더 내용 (index.html, assets/, sw.js)을 직접 GitHub Pages 배포 경로에 푸시
+
+## 사용자 폰에서 새 버전 안 보이면
+1. Ctrl+Shift+R (강제 새로고침)
+2. 또는 개발자 도구 → Application → Service Workers → Unregister 후 새로고침
+3. 또는 사이트 1시간 후 자동 (SW가 1시간마다 update 확인)
+
+## 검증된 데이터 (DJCF 0145N&0146S)
+- DISCH 199, LOAD 255 사진 양식과 100% 일치
+- 선사: SKR 62, NSL 47, DJS 134, HAS 9, HSL 3
+- DJS DONGJIN 양식 (D2/D5, Cargo Type F/P) 인식
+- NSL JDCF 양식 (BL prefix BSE→PUS, HCC→SGN, LCC→LCH) 인식
+- SKR 마스터 TSPORT 우선 처리 (KAN 환적 12대 정확)
+
+## 이전 빌드 함정 메모
+- index.html이 옛 빌드 산출물 (./assets/index-XXX.js) 가리키면 vite 7 modules만 transform → 변경 안 반영
+- 매 빌드 전 build.sh 실행 또는 수동으로:
+  1. index.html 진입점 복원 (`/src/main.jsx`)
+  2. dist + node_modules/.vite + 옛 assets 삭제
+  3. npm run build
