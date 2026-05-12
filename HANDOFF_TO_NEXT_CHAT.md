@@ -44,3 +44,18 @@
 ## 미해결 (선택 작업)
 - 사진의 양하 분포 일부 (NSL LCH 25 사이즈 모호, DJS BKK 7 등) — LIST1 데이터와 사진의 실제 작업 결과(수기) 차이
 - 사용자 검증 후 조정 가능
+
+## M5.55 추가 fix
+- **public/sw.js 신규 생성** — service worker 파일 자체가 없어서 UpdatePrompt가 작동 안 함 (M5.55 업데이트 안 보임 원인)
+- VERSION = 'M5.55' 명시. 매 빌드마다 변경 → 새 버전 자동 감지 → "🆕 새 버전 출시" 배너 표시 → 탭 하면 즉시 적용
+- network-first 전략 (캐시 X) — 항상 최신 파일 fetch
+- skipWaiting + clients.claim — 즉시 활성화
+
+## 사용자 작업 (배포)
+1. ZIP 풀기 → m555_build/dist/ 폴더 내용을 GitHub Pages에 push
+2. 또는 m555_build 전체를 push 후 GitHub Actions 빌드
+3. 브라우저에서 새로고침 → "🆕 새 버전 출시" 배너 → 탭 → M5.55 적용
+
+만약 배너 안 보이면:
+- 브라우저 개발자 도구 → Application → Service Workers → Unregister 후 새로고침
+- 또는 Ctrl+Shift+R (강제 새로고침)
