@@ -23,6 +23,29 @@ const COLOR = {
 //   첫 자리 = 길이: 1/2=20', 3=30', 4=40', 9=45'(40ft 슬롯)
 //   셋째 자리 = 종류: G=GP(일반) / R=리퍼 / P=Platform(FR) / U=OT / T=Tank / B=Bulk / S=Special
 // ⚠️ M5.28 fix: iso.includes('P')는 GP의 P까지 잡아서 22GP/42GP 일반 컨테이너를 FR로 오분류함
+// M5.59: 선사 매핑 통일 (voucher와 동일) — LIST/BL/EDI 코드 → voucher 약어
+const CARRIER_MAP = {
+  'DJSC': 'DJS', 'NSSL': 'NSL', 'HASL': 'HAS', 'SNKO': 'SKR',
+  'HSLI': 'HSL', 'JEON': 'HSL',
+};
+function normalizeCarrier(c) {
+  // 1순위: c.op (EDI NAD+CA 또는 LIST 선사부호 컬럼)
+  if (c.op) {
+    const op = String(c.op).toUpperCase().trim();
+    if (CARRIER_MAP[op]) return CARRIER_MAP[op];
+    if (op) return op;
+  }
+  // 2순위: BL 번호 prefix (4자)
+  if (c.bl && c.bl.length >= 4) {
+    const blp = String(c.bl).slice(0, 4).toUpperCase();
+    if (CARRIER_MAP[blp]) return CARRIER_MAP[blp];
+  }
+  // 폴백: cn prefix (owner code)
+  if (c.cn && c.cn.length >= 4) return c.cn.slice(0, 4).toUpperCase();
+  return '?';
+}
+
+
 function getContainerCategory(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   const first = iso[0] || '';
@@ -55,7 +78,7 @@ function getContainerCategory(c) {
 function getSortKey(c) {
   const { len, type, fe } = getContainerCategory(c);
   // M5.52: 선사별 정렬 (1차 키) + 기존 사이즈/F-E (2차 키)
-  const line = (c.op || (c.cn ? c.cn.slice(0, 4) : '')).toUpperCase();
+  const line = normalizeCarrier(c);
   // 20풀(0) → 20엠티(1) → 20특수(2) → 40풀(3) → 40엠티(4) → 40특수(5)
   const sizeGroup = len === 20 ? 0 : 3;
   const typeOrder = type === 'normal' ? (fe === 'F' ? 0 : 1) : 2;
@@ -80,7 +103,7 @@ function renderRow(c, idx) {
   const sl = (c.sl || '').slice(0, 10);  // M5.52: 12→10자 (선사 칸 공간 확보)
   const cn = c.cn || '';
   // M5.52: 선사 (c.op = EDI NAD+CA 또는 리스트 carrier 컬럼) 우선, 폴백 cn prefix(owner code)
-  const line = (c.op || (cn ? cn.slice(0, 4) : '')).slice(0, 5);
+  const line = normalizeCarrier(c).slice(0, 5);
   // 비고: X-RAY ★ + 리퍼 온도 + 기타 표시
   const notes = [];
   if (c._xray) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
@@ -142,7 +165,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
   // M5.52: 선사별로 순번 1부터 재시작
   let lineIdxMap = {};
   list.forEach(c => {
-    const line = (c.op || (c.cn ? c.cn.slice(0, 4) : '')).toUpperCase();
+    const line = normalizeCarrier(c);
     lineIdxMap[line] = (lineIdxMap[line] || 0) + 1;
     c._lineIdx = lineIdxMap[line];
   });

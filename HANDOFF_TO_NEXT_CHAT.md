@@ -90,3 +90,11 @@
   - 이전: `{...ediC, ...recC}` — recC의 모든 필드(빈 값 포함) 덮어씀
   - 수정: 빈 값(null/undefined/'')은 덮어쓰지 않음. EDI 데이터 보존
 - 우선순위: records 채워진 값 > EDI 데이터 > cn prefix
+
+## M5.60 - 검수리스트 + voucher 선사 매핑 통일
+- **이슈**: 같은 컨테이너가 검수리스트엔 "DJSC", voucher엔 "DJS"로 다르게 표시
+- **원인**: 검수리스트는 `c.op` 그대로, voucher는 CARRIER_MAP 변환 적용
+- **수정**: inspectionList.js에 normalizeCarrier 함수 추가 (voucher와 동일 매핑)
+  - DJSC → DJS, NSSL → NSL, HASL → HAS, SNKO → SKR, HSLI → HSL
+  - 우선순위: c.op > BL prefix > cn prefix
+- 결과: 검수리스트와 voucher의 선사가 동일하게 3자 약어로 표시
