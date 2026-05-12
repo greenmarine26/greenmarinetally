@@ -376,10 +376,29 @@ export default function PrintableBayDetail({
         <div className="flex items-center justify-between">
           <div className="text-base font-bold text-slate-100">📋 베이 상세 인쇄 미리보기 ({filteredPages.length}페이지)</div>
           <div className="flex gap-2">
-            <button onClick={() => window.print()}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded text-sm">
-              🖨️ 인쇄 / PDF 저장
-            </button>
+            <div className="flex gap-2 print:hidden">
+            <button onClick={() => window.print()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded">🖨 인쇄</button>
+            <button onClick={() => { alert('인쇄 창에서 "PDF로 저장" 선택하세요'); setTimeout(() => window.print(), 100); }} className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded">📄 PDF</button>
+            <button onClick={async () => {
+              if (typeof window.XLSX === 'undefined') {
+                const s = document.createElement('script');
+                s.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+                document.head.appendChild(s);
+                await new Promise(r => s.onload = r);
+              }
+              try {
+                const tables = document.querySelectorAll('table');
+                if (!tables.length) { alert('테이블 없음'); return; }
+                const wb = window.XLSX.utils.book_new();
+                tables.forEach((t, i) => {
+                  const ws = window.XLSX.utils.table_to_sheet(t);
+                  window.XLSX.utils.book_append_sheet(wb, ws, 'Sheet' + (i+1));
+                });
+                const d = new Date().toISOString().slice(0,10);
+                window.XLSX.writeFile(wb, document.title + '_' + d + '.xlsx');
+              } catch (e) { alert('엑셀 실패: ' + e.message); }
+            }} className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">📊 엑셀</button>
+          </div>
             <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded">
               <X className="w-5 h-5 text-slate-300" />
             </button>

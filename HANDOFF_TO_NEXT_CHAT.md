@@ -178,3 +178,29 @@
   - '20' 시작/포함 → 20
   - '4' 시작 (HC 매칭 안 됨) → 40
 - 결과: 4HDC/4HRF/40HC 모두 HC로 정확 분류
+
+## M5.66 — 모든 출력물 3가지 옵션 (인쇄/PDF/엑셀)
+### 공통 헬퍼 src/printHelper.js
+- openPrintWindow(html, title) — 새 창 열고 자동 toolbar 주입
+- injectPrintToolbar(w) — 기존 창에 toolbar 추가
+- TOOLBAR_HTML/CSS/JS — 재사용 가능 상수
+
+### 적용된 출력물
+- workingReport.js (voucher 결제용/작업용) — openPrintWindow 사용
+- inspectionList.js (검수리스트) — openPrintWindow 사용
+- PrintableCargoPlan.jsx (카고플랜) — 페이지 내 3개 버튼
+- PrintableBayDetail.jsx (베이상세) — 페이지 내 3개 버튼
+
+### Toolbar 구성
+- 🖨 프린터 인쇄 (emerald) → window.print()
+- 📄 PDF 저장 (sky) → 인쇄 대화상자 + 안내 alert
+- 📊 엑셀 다운로드 (amber) → SheetJS CDN 동적 로드 + table_to_sheet
+- ✕ 닫기 (slate)
+
+### 엑셀 다운로드 동작
+- 페이지 내 모든 table 자동 감지 → 각각 시트로
+- 파일명: {title}_{날짜}.xlsx
+- @media print 에서 toolbar 자동 숨김
+
+### 다른 인쇄 함수 (미적용 — 차후 단계)
+- EmptySealReport, WorkClosingChecklist 등은 React 컴포넌트 형식 — 필요시 동일 패턴 적용 가능

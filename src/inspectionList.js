@@ -7,6 +7,7 @@
 //   - 색상: 풀=흰색 / 엠티=#e5e5e5 / 리퍼=#cce6ff / FR=#d4edda / OT=#fff3cd / TK=#ffe5d0
 //   - 시트1=전체, 시트2=특수화물 별첨
 
+import { openPrintWindow } from './printHelper.js';
 const COLOR = {
   full: '#ffffff',
   empty: '#e5e5e5',
@@ -266,7 +267,7 @@ table.ilist td.cn { font-family: monospace; font-size: 6.5pt; letter-spacing: -0
 </style>
 </head><body>
 <div class="actions no-print">
-  <button class="btn-print" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+  
 </div>
 <div class="content">
 ${sheet1Pages}
