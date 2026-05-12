@@ -245,3 +245,49 @@
 - CARRIER_MAP 매핑된 값은 이미 3자 → 그대로
 - 매핑 안 된 값은 앞 3자만
 - workingReport.js + inspectionList.js 양쪽 동기화
+
+## M5.70 - PORT-MIS 캡처 Gemini 키 자동 폴백
+- 이슈: PortMisCaptureModal이 localStorage(_storage)의 키만 확인 → 사용자가 직접 입력 안 했으면 "Gemini API 키 없음" 에러
+- 수정: src/gemini.js의 GEMINI_API_KEY를 폴백으로 사용
+  - 사용자 입력 키 우선 (커스텀 키 있으면)
+  - 없으면 내장 키 사용 → 별도 설정 불필요
+- 결과: 별도 설정 없이 PORT-MIS 캡처 → OCR 즉시 작동
+
+## M5.71 - PORT-MIS 매칭 강화 + 디버그
+### 5단계 매칭 (기존 4단계 + 정규화)
+1. callsign 정확
+2. callsign prefix
+3. IMO
+4. 선박명 includes
+5. **선박명 정규화 매칭 (M5.71 신규)** — 공백/특수문자 제거 + 5자 이상 부분 일치
+
+### 매칭 실패 시 디버그 카드
+- "⚠ PORT-MIS 매칭 미확인" orange 카드 표시
+- 현재 선박명 + 콜사인 + PORT-MIS 후보 3개 표시
+- 사용자가 어떤 선박이 안 매칭되는지 즉시 파악
+- 베이사전 callsign/선박명 정정하면 자동 매칭
+
+### 다음 단계 (사용자 필요 시)
+- 어떤 선박이 매칭 안 되는지 알려주시면 그 선박 callsign 정확 등록
+- shipBayDict_v2.js 또는 dictShipMeta에 추가
+
+## M5.72 - PORT-MIS 베이사전 풀네임 매칭
+### 이슈
+- 앱 voyage.info.vsl = 약자 "DJCF"
+- PORT-MIS vesselName = 풀네임 "DONGJIN CONFIDENT"
+- 약자-풀네임 매칭 안 됨
+
+### 해결
+- 베이사전(SHIP_BAY_DICT_V2)의 name 필드에 풀네임 포함됨 (예: "DJCFDONGJIN CONFIDENT D7XF 4")
+- 매칭 6단계 추가: 베이사전 name과 PORT-MIS vesselName 정규화 매칭
+- dictData.name 안에 portMisData.vesselName 포함되거나, PORT-MIS 풀네임이 dictData.name의 코드(4자) 다음 부분과 매칭
+
+### 6단계 전체 매칭 순서
+1. callsign 정확 매칭
+2. callsign prefix
+3. IMO
+4. 선박명 includes
+5. 선박명 정규화 (M5.71)
+6. **베이사전 풀네임 매칭 (M5.72 신규)** — 약자↔풀네임 변환
+
+매칭 실패 시 orange 디버그 카드로 PORT-MIS 후보 표시 (M5.71)

@@ -431,6 +431,7 @@ const CONTENT = {
       examples: [
         { q: '✅ ATPR/ATRP 콜사인 정정', a: 'PORT-MIS 확인 결과 ATLANTIC PIONEER의 현재 콜사인은 9V7919. ATPR.def 헤더의 D5RR5는 옛 데이터(2023년 4월). oldCallsign 필드에 D5RR5 보존' },
         { q: '⚓ ATRP ⚓ 카드 매칭됨',    a: '이제 PORT-MIS에 ATRP 입출항 일정 있으면 자동 표시. 매칭 4단계 중 첫 단계(콜사인 정확)로 즉시 매칭' },
+        { q: '⚓ PORT-MIS 매칭 6단계 — M5.72', a: '앱(약자 DJCF)과 PORT-MIS(풀네임 DONGJIN CONFIDENT) 매칭 단계: 1)콜사인 정확 2)콜사인 prefix 3)IMO 4)선박명 includes 5)정규화 매칭(공백 제거 5자 이상) 6)베이사전 name에서 풀네임 추출 매칭. 실패 시 orange 디버그 카드로 후보 표시.' },
         { q: '🔍 옛 콜사인 보존',         a: 'oldCallsign 필드에 D5RR5 보존 — 다른 시스템에서 옛 콜사인으로 들어와도 향후 매칭 가능 (필요시 매칭 로직에 추가)' },
         { q: '⚠️ 일반 원칙',              a: '.def 파일은 작성 시점의 콜사인. PORT-MIS는 최신. 매칭 안 되는 선박 발견 시 PORT-MIS의 현재 콜사인을 사전에 등록하는 게 진실' },
       ],

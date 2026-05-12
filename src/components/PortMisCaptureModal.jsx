@@ -6,6 +6,7 @@ import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-re
 import { ocrPortMisCapture } from '../mixerUpload.js';
 import { fbSavePortMisBatch } from '../firebase.js';
 import { _storage, SK } from '../utils.js';
+import { GEMINI_API_KEY } from '../gemini.js';
 
 export default function PortMisCaptureModal({ onClose }) {
   const [step, setStep] = useState('pick');  // pick → analyzing → review → saving → done
@@ -21,9 +22,10 @@ export default function PortMisCaptureModal({ onClose }) {
     setError(null);
     setStep('analyzing');
 
-    const key = _storage.get(SK.geminiKey);
+    // M5.70: 사용자 입력 키 > 내장 키 폴백
+    const key = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
     if (!key) {
-      setError('Gemini API 키가 설정되지 않았습니다. 설정에서 입력해주세요.');
+      setError('Gemini API 키 없음 (관리자에게 문의)');
       setStep('pick');
       return;
     }

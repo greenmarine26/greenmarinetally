@@ -500,7 +500,44 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           });
           if (pm) matchedBy = 'name';
         }
-        if (!pm) return null;
+        // 5) M5.71 — 선박명 정규화 매칭 (공백/특수문자 제거 + 부분 단어)
+        if (!pm && vsl) {
+          const normVsl = vsl.toUpperCase().replace(/[\s\-_\.]/g, '');
+          pm = Object.values(portMisData).find(p => {
+            const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
+            if (!pn) return false;
+            return pn.length >= 5 && normVsl.length >= 5 && (pn.includes(normVsl.slice(0,5)) || normVsl.includes(pn.slice(0,5)));
+          });
+          if (pm) matchedBy = 'name-norm';
+        }
+        // 6) M5.72 — 베이사전 풀네임 매칭 (앱: 약자 DJCF / PORT-MIS: 풀네임 DONGJIN CONFIDENT)
+        if (!pm && dictData?.name) {
+          const dictNameNorm = String(dictData.name).toUpperCase().replace(/\s+/g, '');
+          pm = Object.values(portMisData).find(p => {
+            const pn = (p.vesselName || '').toUpperCase().replace(/\s+/g, '');
+            if (!pn || pn.length < 5) return false;
+            // 베이사전 name 안에 PORT-MIS 풀네임 포함되는지
+            return dictNameNorm.includes(pn) || pn.includes(dictNameNorm.slice(4, 4 + Math.min(pn.length, 8)));
+          });
+          if (pm) matchedBy = 'dict-fullname';
+        }
+
+        // M5.71: 매칭 실패 시 디버그 카드 (어떤 선박이 안 잡히는지 보여줌)
+        if (!pm) {
+          if (Object.keys(portMisData).length === 0) return null;
+          // 현재 항차와 비슷한 PORT-MIS 후보 찾기
+          const candidates = Object.values(portMisData).slice(0, 3).map(p =>
+            `${p.vesselName || '?'} (${p.callsign || 'no-callsign'})`
+          ).join(', ');
+          return (
+            <div className="mb-3 bg-orange-950/40 border border-orange-700/50 rounded-lg px-3 py-2 text-xs">
+              <span className="text-orange-300 font-bold">⚠ PORT-MIS 매칭 미확인</span>
+              <span className="text-slate-300 ml-2">선박명: <b>{vsl}</b> · 콜사인: <b>{dictCallsign || '없음'}</b></span>
+              <div className="text-slate-400 mt-1">PORT-MIS 후보: {candidates}</div>
+              <div className="text-slate-500 text-[10px] mt-0.5">베이사전 callsign 또는 선박명을 PORT-MIS와 일치시키면 자동 매칭됩니다</div>
+            </div>
+          );
+        }
         const fmtDT = (s) => {
           if (!s) return '-';
           const m = String(s).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
