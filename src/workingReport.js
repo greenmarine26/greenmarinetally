@@ -27,6 +27,8 @@ const PORT_MAP = {
 const CARRIER_MAP = {
   'DJSC': 'DJS', 'NSSL': 'NSL', 'HASL': 'HAS', 'SNKO': 'SKR',
   'HSLI': 'HSL', 'JEON': 'HSL',
+  // M5.633 추가
+  'DWIC': 'DWS', 'EAS': 'EASK', 'TJM': 'TJMS', 'WDF': 'WDFC', 'SCLK': 'SIT',
 };
 
 // 사진 양식의 선사 표시 순서
@@ -270,8 +272,15 @@ function generateVoucherHTML(voyage, mode = 'settlement') {
   // info는 voyage.info 또는 discharge/loading의 info에서
   const info = voyage.info || voyage.discharge?.info || voyage.loading?.info || {};
   const vesselName = info.vsl || info.vessel || info.vesselName || 'VESSEL';
-  const voyNo = info.voy || info.voyNo
-    || ((info.voy_d && info.voy_l) ? `${info.voy_d} & ${info.voy_l}` : (info.voy_d || info.voy_l || ''));
+
+  // M5.634: 양하+선적 항차 둘 다 있으면 모두 표시
+  const dVoy = voyage.discharge?.info?.voy || voyage.discharge?.info?.voyNo || info.voy_d || '';
+  const lVoy = voyage.loading?.info?.voy || voyage.loading?.info?.voyNo || info.voy_l || '';
+  let voyNo;
+  if (dVoy && lVoy && dVoy !== lVoy) voyNo = `${dVoy} & ${lVoy}`;
+  else if (dVoy) voyNo = dVoy;
+  else if (lVoy) voyNo = lVoy;
+  else voyNo = info.voy || info.voyNo || '';
   const date = info.date || new Date().toISOString().slice(0, 10);
   const pier = info.pier || 'PCTC';
   const berth = info.berth || '-';

@@ -143,3 +143,20 @@
 - fbSubscribeStaffList — 실시간 구독
 - 코드 STAFF_NAMES + Firebase extraStaff 합쳐서 화이트리스트
 - 새 직원 입사 시 김성일이 추가 → 즉시 전 직원 접속 가능
+
+## M5.633 - CARRIER_MAP 추가 매핑
+- DWIC → DWS
+- EAS → EASK
+- TJM → TJMS
+- WDF → WDFC
+- SCLK → SIT
+- workingReport.js + inspectionList.js 양쪽 동기화
+- HelpModal 매핑 정보 갱신
+
+## M5.634 - voucher 항차 표시 양하+선적 통합
+- 이전: info.voy 단일 항차만 표시 (양하 또는 선적)
+- 수정: voyage.discharge.info.voy + voyage.loading.info.voy 둘 다 가져와서 합침
+  - 둘 다 있고 다르면: "0145N & 0146S"
+  - 양하만: "0145N"
+  - 선적만: "0146S"
+  - 둘 다 같으면 한 번만

@@ -27,6 +27,8 @@ const COLOR = {
 const CARRIER_MAP = {
   'DJSC': 'DJS', 'NSSL': 'NSL', 'HASL': 'HAS', 'SNKO': 'SKR',
   'HSLI': 'HSL', 'JEON': 'HSL',
+  // M5.633 추가
+  'DWIC': 'DWS', 'EAS': 'EASK', 'TJM': 'TJMS', 'WDF': 'WDFC', 'SCLK': 'SIT',
 };
 function normalizeCarrier(c) {
   // 1순위: c.op (EDI NAD+CA 또는 LIST 선사부호 컬럼)
