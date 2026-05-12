@@ -170,51 +170,57 @@ function buildBuckets(voyage, mode = 'settlement') {
   // 양하 + 선적 처리 — 실제 구조: voyage.discharge / voyage.loading 객체
   //   각 section = { ediContainers: {cn: c, ...}, records: {cn: r, ...}, ... }
   if (voyage) {
-    // 양하
-    const dischSection = voyage.discharge || voyage.disch || null;
-    if (dischSection) {
-      const ediCs = dischSection.ediContainers || dischSection.containers || {};
-      // 결제용: ediContainers 전체 (계획). 작업용: records의 cn만 (실제 작업)
-      const containers = Array.isArray(ediCs) ? ediCs : Object.values(ediCs);
-      // 작업용 actualCns를 voyage.records 대신 section.records 기준으로
-      const sectionRecordCns = mode === 'actual'
-        ? new Set(Object.keys(dischSection.records || {}).map(k => String(k).toUpperCase()))
-        : null;
-      containers.forEach(c => {
-        if (!c) return;
-        if (sectionRecordCns && c.cn && !sectionRecordCns.has(String(c.cn).toUpperCase())) return;
-        const op = normalizeOp(c);
-        const port = getPort(c, 'disch');
-        const size = getSizeKey(c);
-        const fe = getFE(c);
-        if (!disch[op]) disch[op] = {};
-        if (!disch[op][port]) disch[op][port] = {};
-        if (!disch[op][port][size]) disch[op][port][size] = { F: 0, E: 0 };
-        disch[op][port][size][fe]++;
-      });
-    }
+    // 양하/선적 공통 처리 — LIST 기반 (records의 cn)
+    //   결제용(settlement): records 전체 (LIST 컨테이너 = 평택 대상)
+    //   작업용(actual): completed 또는 records 중 작업 완료된 것
+    const processSection = (section, bucket, dlMode) => {
+      if (!section) return;
+      const ediCs = section.ediContainers || {};
+      const recs = section.records || {};
+      const completedCns = section.completed ? new Set(Object.keys(section.completed).map(k => String(k).toUpperCase())) : null;
 
-    // 선적
-    const loadSection = voyage.loading || voyage.load || null;
-    if (loadSection) {
-      const ediCs = loadSection.ediContainers || loadSection.containers || {};
-      const containers = Array.isArray(ediCs) ? ediCs : Object.values(ediCs);
-      const sectionRecordCns = mode === 'actual'
-        ? new Set(Object.keys(loadSection.records || {}).map(k => String(k).toUpperCase()))
-        : null;
-      containers.forEach(c => {
-        if (!c) return;
-        if (sectionRecordCns && c.cn && !sectionRecordCns.has(String(c.cn).toUpperCase())) return;
+      // 결제용: records의 모든 cn (LIST 데이터). 작업용: completed의 cn (실제 작업)
+      let targetCns;
+      if (mode === 'actual') {
+        // 작업용: completed 있으면 그것, 없으면 records
+        targetCns = section.completed && Object.keys(section.completed).length > 0
+          ? Object.keys(section.completed)
+          : Object.keys(recs);
+      } else {
+        // 결제용: records 전체 (LIST 평택 대상)
+        targetCns = Object.keys(recs);
+        // records가 비어 있으면 ediContainers의 PTK 필터로 폴백
+        if (targetCns.length === 0) {
+          targetCns = Object.values(ediCs)
+            .filter(c => {
+              const pol = String(c.pol || '').toUpperCase();
+              const pod = String(c.pod || '').toUpperCase();
+              return pol.endsWith('PTK') || pod.endsWith('PTK');
+            })
+            .map(c => c.cn);
+        }
+      }
+
+      targetCns.forEach(cn => {
+        // 컨테이너 데이터: records 우선 + ediContainers 보강 (둘 다 있으면 병합)
+        const cnUpper = String(cn).toUpperCase();
+        const ediC = ediCs[cnUpper] || ediCs[cn] || {};
+        const recC = recs[cnUpper] || recs[cn] || {};
+        const c = { ...ediC, ...recC, cn };  // records가 우선
+        if (!c.cn) return;
         const op = normalizeOp(c);
-        const port = getPort(c, 'load');
+        const port = getPort(c, dlMode);
         const size = getSizeKey(c);
         const fe = getFE(c);
-        if (!load[op]) load[op] = {};
-        if (!load[op][port]) load[op][port] = {};
-        if (!load[op][port][size]) load[op][port][size] = { F: 0, E: 0 };
-        load[op][port][size][fe]++;
+        if (!bucket[op]) bucket[op] = {};
+        if (!bucket[op][port]) bucket[op][port] = {};
+        if (!bucket[op][port][size]) bucket[op][port][size] = { F: 0, E: 0 };
+        bucket[op][port][size][fe]++;
       });
-    }
+    };
+
+    processSection(voyage.discharge || voyage.disch, disch, 'disch');
+    processSection(voyage.loading || voyage.load, load, 'load');
   }
 
   // Total 합계

@@ -72,3 +72,11 @@
   - voyage.discharge.ediContainers / voyage.loading.ediContainers 객체에서 Object.values()로 컨테이너 추출
   - 작업용(actual): section.records의 cn 기준 필터링 (전체 voyage.records 아님)
   - processContainers 함수 인라인 처리로 변경
+
+## M5.58 - voucher LIST 기반 계산
+- **이슈**: M5.57은 ediContainers 전체 사용 → 선박 전체 컨테이너 포함 (평택 외도)
+- **수정**: LIST 기반(section.records) 사용
+  - 결제용(settlement): section.records의 모든 cn (LIST = 평택 대상)
+  - 작업용(actual): section.completed의 cn (실제 작업 완료)
+  - records 비어 있으면 ediContainers의 PTK 필터로 폴백
+  - 컨테이너 데이터: records 우선 + ediContainers 보강 (병합)
