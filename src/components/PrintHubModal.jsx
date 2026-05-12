@@ -106,6 +106,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const modeKo = mode === 'discharge' ? '양하' : '선적';
 
   // 양하/선적 카운트 (탭 라벨용 — 평택만)
+  // M5.51: 리스트 등록 컨테이너는 무조건 평택분 (isPtk와 동기화)
   const countMode = (m) => {
     const s = voyage?.[m] || {};
     const ed = s.ediContainers || {};
@@ -113,7 +114,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     const cnSet = new Set([...Object.keys(ed), ...Object.keys(rc)]);
     let n = 0;
     cnSet.forEach(cn => {
-      const c = { ...(ed[cn] || {}), ...(rc[cn] || {}) };
+      if (rc[cn]) { n++; return; }  // M5.51: 리스트에 있으면 무조건 평택
+      const c = { ...(ed[cn] || {}) };
       const target = m === 'discharge' ? String(c.pod || '').toUpperCase() : String(c.pol || '').toUpperCase();
       if (!target || target === 'PTK' || target === 'KRPTK' || target.endsWith('PTK')) n++;
     });
