@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M5.52';
+export const APP_VERSION = 'M5.55';
 
 // M4.9e 변경점 (선적 실체 위치 1+2+3단계):
 //   [1단계] 컨테이너 모달에 "실체 위치 (선적확인 시)" 박스
@@ -1085,6 +1085,10 @@ export async function parseListExcel(arrayBuffer) {
     const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^tp\/?sz$|^tp\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
     const op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
+    // M5.55: voucher 보강 — TSPORT(환적), PRINTPOD(실제 양하 항구), CARGO TYPE(DJS 양식 F/P)
+    const tsport_i = findCol([/^tsport$|^ts.*port$|^transhipment.*port$/, /환적/]);
+    const printpod_i = findCol([/^printpod$|^print.*pod$/, /^실제.*양하/]);
+    const cargotype_i = findCol([/^cargo.*type$|^cargo\s*type$/, /화물구분/]);
     const dg_i = findCol([/^dg$|hazmat|imdg/, /위험물/]);
     // M3.85: SITC SENDAI 양식의 [40] "냉동" 컬럼이 실제 온도값(-18, -2.5 등)인데
     //   기존 /냉장/만 있어서 매칭 안 되어 26대 풀 리퍼 모두 미입력 처리되던 버그 수정.
@@ -1272,6 +1276,9 @@ export async function parseListExcel(arrayBuffer) {
         fe,
         iso,
         op: op_i >= 0 ? String(row[op_i] || '').trim() : '',
+        tsport: tsport_i >= 0 ? String(row[tsport_i] || '').trim() : '',
+        printpod: printpod_i >= 0 ? String(row[printpod_i] || '').trim() : '',
+        cargoType: cargotype_i >= 0 ? String(row[cargotype_i] || '').trim() : '',
         dg: isDg,
         rf: isRf,
         fr: isFr,

@@ -1,0 +1,381 @@
+// M5.55: FINAL WORKING REPORT (VOUCHER) — DJCF 0145N&0146S 양식 확정판
+//   - GREEN MARINE CO., LTD. / FINAL WORKING REPORT (VOUCHER)
+//   - OPERATOR(선사 순서: SKR→NSL→DJS→HAS→HSL→기타) × PORT × F/E × SIZE
+//   - DISCH(양하) / LOAD(선적) / SHIFT(이적)
+//   - A4 풀 1페이지 강제, 굵은 선 구분, 빈 행 OPERATOR rowspan=3
+
+// ============ 매핑 테이블 ============
+// PORT 코드 매핑
+const PORT_MAP = {
+  // 표준 5자
+  'KRPUS': 'PUS', 'KRKAN': 'KAN', 'KRPTK': 'PTK', 'KRINC': 'INC',
+  'VNSGN': 'SGN', 'VNHPP': 'HPP',
+  'THLCH': 'LCH', 'THBKK': 'BKK',
+  'JPTYO': 'TYO', 'JPYOK': 'YOK',
+  'MYPEN': 'PEN', 'MYPKG': 'PKG',
+  'CNTAG': 'TAG', 'CNNTG': 'NTG',
+  // BL prefix 변형 (NSL JDCF 등)
+  'BSE': 'PUS', 'HCC': 'SGN', 'LCC': 'LCH',
+  // 3자 그대로
+  'PUS': 'PUS', 'KAN': 'KAN', 'PTK': 'PTK', 'SGN': 'SGN',
+  'LCH': 'LCH', 'BKK': 'BKK', 'TYO': 'TYO', 'PEN': 'PEN',
+  'PKG': 'PKG', 'INC': 'INC', 'HPP': 'HPP', 'YOK': 'YOK',
+  'TAG': 'TAG', 'NTG': 'NTG',
+};
+
+// 선사 코드 매핑 (BL prefix / 선사부호 → voucher 약자)
+const CARRIER_MAP = {
+  'DJSC': 'DJS', 'NSSL': 'NSL', 'HASL': 'HAS', 'SNKO': 'SKR',
+  'HSLI': 'HSL', 'JEON': 'HSL',
+};
+
+// 사진 양식의 선사 표시 순서
+const OP_ORDER = ['SKR', 'NSL', 'DJS', 'HAS', 'HSL'];
+
+// PORT 표시 순서 (voucher)
+const PORT_VOUCHER_ORDER = ['PUS', 'KAN', 'SGN', 'LCH', 'BKK', 'PKG', 'PEN', 'TYO', 'YOK', 'HPP', 'INC', 'TAG', 'NTG'];
+
+// 비표준 사이즈 코드 (DJS DONGJIN 양식)
+const SIZE_MAP_DJS = { 'D2':'20', 'D5':'HC', 'D4':'40', 'R5':'HC', 'R2':'20' };
+
+// ============ 헬퍼 ============
+function normalizePort(code) {
+  if (!code) return '?';
+  const c = String(code).trim().toUpperCase();
+  if (PORT_MAP[c]) return PORT_MAP[c];
+  // 5자 unknown은 마지막 3자
+  if (c.length >= 3) return c.slice(-3);
+  return '?';
+}
+
+function normalizeOp(c) {
+  // 1순위: EDI에서 추출된 op (NAD+CA)
+  if (c.op) {
+    const op = String(c.op).toUpperCase();
+    if (CARRIER_MAP[op]) return CARRIER_MAP[op];
+    return op;
+  }
+  // 2순위: BL 번호 prefix (4자)
+  if (c.bl && c.bl.length >= 4) {
+    const blp = c.bl.slice(0, 4).toUpperCase();
+    if (CARRIER_MAP[blp]) return CARRIER_MAP[blp];
+  }
+  // 3순위: 선사부호 컬럼
+  if (c.carrierCode) {
+    const cc = String(c.carrierCode).toUpperCase();
+    if (CARRIER_MAP[cc]) return CARRIER_MAP[cc];
+    return cc;
+  }
+  // 폴백: cn prefix
+  if (c.cn && c.cn.length >= 4) return c.cn.slice(0, 4).toUpperCase();
+  return '?';
+}
+
+function getSizeKey(c) {
+  // 1순위: 비표준 코드 (D2/D5 등)
+  const iso = String(c.iso || '').toUpperCase().trim();
+  if (SIZE_MAP_DJS[iso]) return SIZE_MAP_DJS[iso];
+
+  // 2순위: ISO 6346 (22GP, 45GP 등)
+  if (iso) {
+    const first = iso[0];
+    const second = iso[1] || '';
+    if (first === '2') return '20';
+    if (first === 'L') return '45';
+    if (first === '4') return second === '5' ? 'HC' : '40';
+    // SZTY 양식 (20DC, 4HDC, 4HRF 등)
+    const iu = iso.replace(/\s/g, '');
+    if (iu.includes('20')) return '20';
+    if (iu.includes('4H') || iu.includes('40HC') || iu.includes('45')) return 'HC';
+    if (iu.includes('40')) return '40';
+  }
+  // 폴백: cn 끝자리
+  if (c.cn && /^[A-Z]{4}\d{7}$/.test(c.cn)) {
+    return parseInt(c.cn[10]) >= 4 ? '40' : '20';
+  }
+  return '20';
+}
+
+function getFE(c) {
+  // 1순위: c.fe 직접 (F/E)
+  if (c.fe) {
+    const fe = String(c.fe).toUpperCase().trim();
+    if (fe === 'E' || fe === 'EMPTY' || fe === 'MT' || fe === 'P') return 'E';
+    return 'F';
+  }
+  // 2순위: cargo type (DJS 양식: F=Full, P=Empty)
+  if (c.cargoType) {
+    return String(c.cargoType).toUpperCase() === 'F' ? 'F' : 'E';
+  }
+  // 3순위: ISO 끝자리 (E)
+  const iso = String(c.iso || '').toUpperCase();
+  if (iso.endsWith('E')) return 'E';
+  return 'F';
+}
+
+// PORT 결정: 양하면 POL(출발지), 선적이면 TSPORT(환적) > POD(목적지)
+function getPort(c, mode) {
+  if (mode === 'disch') {
+    return normalizePort(c.pol);
+  } else {
+    // 선적: TSPORT(환적 항구) 우선, 없으면 POD/printpod
+    const target = c.tsport || c.printpod || c.pod;
+    let port = normalizePort(target);
+    // BL prefix에서 항구 추출 (NSL JDCF: NSSLPT[XXX] 패턴)
+    if (port === '?' && c.bl) {
+      const m = String(c.bl).toUpperCase().match(/^[A-Z]{4}PT([A-Z]{3})/);
+      if (m && PORT_MAP[m[1]]) port = PORT_MAP[m[1]];
+    }
+    return port;
+  }
+}
+
+function orderPorts(ports) {
+  const arr = Array.from(ports);
+  const inOrder = PORT_VOUCHER_ORDER.filter(p => arr.includes(p));
+  const rest = arr.filter(p => !PORT_VOUCHER_ORDER.includes(p)).sort();
+  return [...inOrder, ...rest];
+}
+
+// ============ 데이터 집계 ============
+function buildBuckets(voyage) {
+  const disch = {}, load = {};
+
+  const addToBucket = (bucket, op, port, size, fe) => {
+    if (!bucket[op]) bucket[op] = {};
+    if (!bucket[op][port]) bucket[op][port] = {};
+    if (!bucket[op][port][size]) bucket[op][port][size] = { F: 0, E: 0 };
+    bucket[op][port][size][fe]++;
+  };
+
+  const processContainers = (containers, mode) => {
+    const bucket = mode === 'disch' ? disch : load;
+    (containers || []).forEach(c => {
+      if (!c) return;
+      const op = normalizeOp(c);
+      const port = getPort(c, mode);
+      const size = getSizeKey(c);
+      const fe = getFE(c);
+      addToBucket(bucket, op, port, size, fe);
+    });
+  };
+
+  // 양하 + 선적 처리 (voyage 객체에서 따로)
+  if (voyage) {
+    if (voyage.disch || voyage.discharge || voyage.dischargeContainers) {
+      processContainers(voyage.disch || voyage.discharge || voyage.dischargeContainers, 'disch');
+    }
+    if (voyage.load || voyage.loadContainers) {
+      processContainers(voyage.load || voyage.loadContainers, 'load');
+    }
+    // 통합 containers + mode 필드
+    if (voyage.containers) {
+      voyage.containers.forEach(c => {
+        const m = (c.mode || c.loadDisch || '').toLowerCase();
+        if (m.includes('disch') || m === 'd' || m === '양하') processContainers([c], 'disch');
+        else processContainers([c], 'load');
+      });
+    }
+  }
+
+  // Total 합계
+  const totalDS = { '20':{F:0,E:0}, '40':{F:0,E:0}, 'HC':{F:0,E:0}, '45':{F:0,E:0} };
+  const totalLD = { '20':{F:0,E:0}, '40':{F:0,E:0}, 'HC':{F:0,E:0}, '45':{F:0,E:0} };
+  for (const op of Object.keys(disch)) {
+    for (const port of Object.keys(disch[op])) {
+      for (const sz of Object.keys(disch[op][port])) {
+        if (totalDS[sz]) {
+          totalDS[sz].F += disch[op][port][sz].F;
+          totalDS[sz].E += disch[op][port][sz].E;
+        }
+      }
+    }
+  }
+  for (const op of Object.keys(load)) {
+    for (const port of Object.keys(load[op])) {
+      for (const sz of Object.keys(load[op][port])) {
+        if (totalLD[sz]) {
+          totalLD[sz].F += load[op][port][sz].F;
+          totalLD[sz].E += load[op][port][sz].E;
+        }
+      }
+    }
+  }
+  const dischTotal = Object.values(totalDS).reduce((a,t) => a+t.F+t.E, 0);
+  const loadTotal = Object.values(totalLD).reduce((a,t) => a+t.F+t.E, 0);
+
+  return { disch, load, totalDS, totalLD, dischTotal, loadTotal };
+}
+
+// ============ HTML 생성 ============
+function getCells(op, port, fe, dataset) {
+  const sd = (dataset[op] || {})[port] || {};
+  return ['20','40','HC','45'].map(sz => {
+    const v = (sd[sz] || {})[fe] || 0;
+    return v > 0 ? String(v) : '';
+  });
+}
+
+function generateVoucherHTML(voyage) {
+  const { disch, load, totalDS, totalLD, dischTotal, loadTotal } = buildBuckets(voyage);
+  const info = voyage.info || {};
+  const vesselName = info.vesselName || info.vessel || 'VESSEL';
+  const voyNo = info.voy || info.voyNo || ((info.voy_d && info.voy_l) ? `${info.voy_d} & ${info.voy_l}` : '');
+  const date = info.date || new Date().toISOString().slice(0, 10);
+  const pier = info.pier || 'PCTC';
+  const berth = info.berth || '-';
+  const port = info.port || 'PYEONGTAEK, KOREA';
+
+  // op 등장 set (실제 데이터)
+  const presentOps = new Set([...Object.keys(disch), ...Object.keys(load)]);
+  const sortedOps = [...OP_ORDER.filter(o => presentOps.has(o)),
+                     ...Array.from(presentOps).filter(o => !OP_ORDER.includes(o)).sort()];
+
+  // 본문 행
+  const rows = [];
+  for (const op of sortedOps) {
+    const opPorts = new Set([
+      ...Object.keys(disch[op] || {}),
+      ...Object.keys(load[op] || {})
+    ]);
+    if (opPorts.size === 0) continue;
+    const ports = orderPorts(opPorts);
+    const rs = ports.length * 2;
+    let opAdded = false;
+    ports.forEach((p, pi) => {
+      const isLast = pi === ports.length - 1;
+      ['F', 'E'].forEach(fe => {
+        const cells = [];
+        if (!opAdded) { cells.push(`<td rowspan="${rs}" class="op-cell">${op}</td>`); opAdded = true; }
+        if (fe === 'F') cells.push(`<td rowspan="2" class="port-cell">${p}</td>`);
+        cells.push(`<td class="fe-cell">${fe}</td>`);
+        const dc = getCells(op, p, fe, disch);
+        cells.push(`<td class="disch-first">${dc[0]}</td>`);
+        cells.push(...dc.slice(1).map(v => `<td>${v}</td>`));
+        const lc = getCells(op, p, fe, load);
+        cells.push(`<td class="load-first">${lc[0]}</td>`);
+        cells.push(...lc.slice(1).map(v => `<td>${v}</td>`));
+        cells.push('<td class="shift-first"></td><td></td><td></td><td></td>');
+        const cls = (isLast && fe === 'E') ? ' class="op-end"' : '';
+        rows.push(`<tr${cls}>${cells.join('')}</tr>`);
+      });
+    });
+  }
+
+  // Total 행
+  const totalRow = (fe, first) => {
+    const c = [];
+    if (first) c.push('<td colspan="2" rowspan="2" class="total-label">Total</td>');
+    c.push(`<td class="fe-cell">${fe}</td>`);
+    ['20','40','HC','45'].forEach(sz => {
+      const v = totalDS[sz][fe];
+      const cls = sz === '20' ? ' class="disch-first"' : '';
+      c.push(`<td${cls}>${v || '-'}</td>`);
+    });
+    ['20','40','HC','45'].forEach(sz => {
+      const v = totalLD[sz][fe];
+      const cls = sz === '20' ? ' class="load-first"' : '';
+      c.push(`<td${cls}>${v || '-'}</td>`);
+    });
+    for (let k = 0; k < 4; k++) {
+      const cls = k === 0 ? ' class="shift-first"' : '';
+      c.push(`<td${cls}>-</td>`);
+    }
+    return `<tr class="total-row">${c.join('')}</tr>`;
+  };
+
+  // 빈 행 (A4 풀 채우기, OPERATOR 셀 rowspan=3)
+  const PAD_TARGET = 45;
+  const needed = Math.max(0, PAD_TARGET - rows.length - 2);
+  const emptyRows = [];
+  for (let idx = 0; idx < needed; idx++) {
+    const c = [];
+    if (idx % 3 === 0) c.push('<td rowspan="3" class="op-cell"></td>');
+    c.push('<td></td>');  // PORT
+    c.push('<td></td>');  // F/E
+    c.push('<td class="disch-first"></td>','<td></td>','<td></td>','<td></td>');
+    c.push('<td class="load-first"></td>','<td></td>','<td></td>','<td></td>');
+    c.push('<td class="shift-first"></td>','<td></td>','<td></td>','<td></td>');
+    emptyRows.push(`<tr class="empty-row">${c.join('')}</tr>`);
+  }
+
+  // Remarks 동적: 양하 + 선적 모두면 둘 다, 한쪽만이면 그 한쪽만
+  let remarksHtml;
+  if (dischTotal > 0 && loadTotal > 0) {
+    remarksHtml = `<div class="bottom-row"><div><b>Remarks : Discharging</b></div><div><b>Remarks : Loading</b></div></div>`;
+  } else if (loadTotal > 0) {
+    remarksHtml = `<div class="bottom-single"><div><b>Remarks : Loading</b></div></div>`;
+  } else {
+    remarksHtml = `<div class="bottom-single"><div><b>Remarks : Discharging</b></div></div>`;
+  }
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>FINAL WORKING REPORT (VOUCHER)</title>
+<style>
+@page { size: A4 portrait; margin: 0.8cm; }
+body { font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 0; font-size: 9pt; color: #000; }
+.content { padding: 4mm; }
+.title { text-align: center; font-size: 18pt; font-weight: bold; margin-bottom: 4pt; }
+.subtitle { text-align: center; font-size: 13pt; font-weight: bold; border: 1pt solid #000; padding: 3pt; margin-bottom: 6pt; }
+.info-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8pt; margin-bottom: 6pt; font-size: 10pt; }
+.info-row b { display: inline-block; min-width: 60pt; }
+table.voucher { width: 100%; border-collapse: collapse; font-size: 9pt; border: 1.5pt solid #000; }
+table.voucher th, table.voucher td { border: 0.5pt solid #000; text-align: center; padding: 0 2pt; height: 11.5pt; line-height: 1.05; }
+table.voucher th { background: #f0f0f0; font-weight: bold; font-size: 8pt; }
+.op-cell { font-weight: bold; vertical-align: middle; font-size: 10pt; }
+.port-cell { font-weight: bold; vertical-align: middle; }
+.fe-cell { font-weight: bold; }
+.total-row { font-weight: bold; background: #f8f8f8; }
+.total-label { text-align: right; font-weight: bold; vertical-align: middle; }
+table.voucher .disch-first { border-left: 1.5pt solid #000; }
+table.voucher .load-first { border-left: 1.5pt solid #000; }
+table.voucher .shift-first { border-left: 1.5pt solid #000; }
+table.voucher thead th[colspan="4"] { border-left: 1.5pt solid #000; border-right: 1.5pt solid #000; }
+table.voucher tr.op-end > td { border-bottom: 1.5pt solid #000; }
+table.voucher tr.total-row:first-of-type > td { border-top: 1.5pt solid #000; }
+.bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.bottom-row > div { border: 1pt solid #000; min-height: 55pt; padding: 4pt; font-size: 9pt; }
+.bottom-row > div:nth-child(2) { border-left: none; }
+.bottom-single > div { border: 1pt solid #000; min-height: 55pt; padding: 4pt; font-size: 9pt; }
+.signs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 20pt; }
+.signs > div { text-align: center; padding-top: 4pt; font-weight: bold; font-size: 10pt; border-top: 0.5pt solid #000; }
+</style></head><body><div class="content">
+<div class="title">GREEN MARINE CO., LTD.</div>
+<div class="subtitle">FINAL WORKING REPORT (VOUCHER)</div>
+<div class="info-row">
+<div><b>M/V :</b> ${vesselName}</div>
+<div><b>VOY # :</b> ${voyNo}</div>
+<div><b>DATE :</b> ${date}</div>
+<div><b>PIER :</b> ${pier}</div>
+<div><b>BERTH :</b> ${berth}</div>
+<div><b>PORT :</b> ${port}</div>
+</div>
+<table class="voucher">
+<thead><tr>
+<th rowspan="2">OPERATOR</th><th rowspan="2">PORT</th><th rowspan="2">FULL (F)<br>EMPTY (E)</th>
+<th colspan="4">DISCH (${dischTotal})</th>
+<th colspan="4">LOAD (${loadTotal})</th>
+<th colspan="4">SHIFT (0)</th>
+</tr><tr>
+<th class="disch-first">20'</th><th>40'</th><th>HC</th><th>45'</th>
+<th class="load-first">20'</th><th>40'</th><th>HC</th><th>45'</th>
+<th class="shift-first">20'</th><th>40'</th><th>HC</th><th>45'</th>
+</tr></thead>
+<tbody>${rows.join('')}${emptyRows.join('')}${totalRow('F', true)}${totalRow('E', false)}</tbody></table>
+${remarksHtml}
+<div class="signs"><div>CHIEF CHECKER</div><div>CHIEF OFFICER</div></div>
+</div></body></html>`;
+}
+
+export { generateVoucherHTML, buildBuckets, normalizeOp, normalizePort, getSizeKey, getFE, getPort };
+export default generateVoucherHTML;
+
+// 새 창에 voucher 출력 (PrintHubModal에서 호출)
+export function openWorkingReportPrint(voyage) {
+  const html = generateVoucherHTML(voyage);
+  const w = window.open('', '_blank', 'width=900,height=1200');
+  if (!w) { alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.'); return; }
+  w.document.write(html);
+  w.document.close();
+  // 자동 인쇄 다이얼로그
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 500);
+}

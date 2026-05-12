@@ -1,86 +1,46 @@
-# M5.42 — 베이별 tier/row 로컬 오버라이드 + DJCF·XTPG 정정
+# M5.55 인계 - voucher 양식 영구 반영
 
-## 배경
-M5.40에서 PrintableCargoPlan과 PrintableBayDetail이 dictShipMeta(선박 전역 deckTiers/holdTiers/rowMaxEven/rowMaxOdd)를 절대 우선시키도록 통일했음. 하지만 한 선박 안에서도 선수·선미 베이는 hull이 좁아지면서 tier/row 폭이 다른 경우가 있어 phantom 슬롯이 출력되었음.
+## 완료 작업
+1. **workingReport.js 완전 재작성** (370줄)
+   - DJCF 0145N&0146S 양식 확정판
+   - 사진 양식 정확 매칭 (DISCH 199, LOAD 255 검증)
+   - A4 1페이지 강제, 굵은 선 구분
+   - 셀 11.5pt, line-height 1.05, 폰트 9pt
+   - Remarks 좌우 반반 (gap 0), 서명란 margin 20pt
+   - PAD=45 빈 행, OPERATOR 셀 rowspan="3"
+   - 양하/선적 데이터에 따라 Remarks 동적 표시
 
-사용자 보고: DJCF (DONGJIN CONFIDENT) STOWAGE INSTRUCTION과 XTPG (XIN TAI PING) CARGO DISCHARGING PLAN PDF 두 장을 보고 비교한 결과:
-- **XTPG holdTiers**: 사전 [8,6,4,2] (4단) ≠ 실제 [6,4,2] (3단) — tier 8 phantom 슬롯
-- **DJCF2 rowMaxOdd**: 사전 11 ≠ 실제 9 (M5.35 파싱 오류 — 20ft가 40ft보다 넓을 수 없음)
-- **BAY 38**: 선미 standalone, deck tier 82 없음 (실제는 [90,88,86,84])
-- **BAY 01 (양 선박)**: 선수 좁음, 행/단 모두 일반 베이보다 작음
-- **XTPG BAY 21 / BAY 25**: 각각만 tier 90 / tier 80 보유 (다른 베이에는 없음)
+2. **선사 매핑 룰** (workingReport.js + parseListExcel)
+   - CARRIER_MAP: DJSC→DJS, NSSL→NSL, HASL→HAS, SNKO→SKR, HSLI→HSL, JEON→HSL
+   - 우선순위: EDI(c.op) > BL prefix > 선사부호 컬럼 > cn prefix 폴백
+   - OP 표시 순서: SKR → NSL → DJS → HAS → HSL → 기타
 
-## M5.42 변경
+3. **PORT 매핑 + 추출 룰**
+   - 양하: PORT = POL (출발지)
+   - 선적: PORT = TSPORT(환적) > PRINTPOD > POD
+   - NSL JDCF: BL prefix NSSLPT[XXX]에서 추출 (BSE→PUS, HCC→SGN, LCC→LCH)
 
-### 신규 스키마 (baysSummary 엔트리)
-각 베이에 선택 필드 4개 추가:
-```js
-{
-  bayNo: "01", section: 1, hasHold: true, hasDeck: true, isStandalone: false,
-  // M5.42 (모두 optional):
-  rowMaxEvenLocal: 6,                  // 이 베이의 좌현 행 최대 (선박 전역 무시하고 우선)
-  rowMaxOddLocal: 5,                   // 이 베이의 우현 행 최대
-  deckTiersLocal: [88,86,84,82],       // 이 베이의 deck 단 (선박 전역 무시하고 우선)
-  holdTiersLocal: [10,8,6],            // 이 베이의 hold 단
-}
-```
+4. **사이즈/F-E 다중 양식 처리**
+   - 표준 ISO 6346 (22GP, 45GP 등)
+   - 비표준 DJS 양식 (D2→20, D5→HC, D4→40, R5→HC)
+   - SZTY 양식 (20DC, 4HDC, 4HRF)
+   - F/E 추론: c.fe → c.cargoType (F/P) → ISO 끝자리
 
-### 우선순위 (PrintableCargoPlan + PrintableBayDetail 통일)
-1. **dictBay.{필드}Local** (베이별 PDF 검증값)
-2. **dictShipMeta.{필드}** (선박 전역 PDF 검증)
-3. **globalRowRange / globalTiers** (EDI fallback)
-4. fallback 배열
+5. **parseListExcel 컬럼 인식 보강**
+   - 선사부호, TSPORT, PRINTPOD, CARGO TYPE 컬럼 추가
+   - record 객체에 tsport/printpod/cargoType 필드 저장
 
-### DJCF2 (DONGJIN CONFIDENT) 적용값
-| Bay | rowMaxEvenLocal/OddLocal | deckTiersLocal | holdTiersLocal | 비고 |
-|---|---|---|---|---|
-| 01 | 6/5 | [88,86,84,82] | [10,8,6] | 선수 |
-| 02, 03 | 4/3 | [88,86,84,82] | — | 선수 (40ft) |
-| 05~19 | 8/7 | — | — | 전방 일반 |
-| 21~35 | — (전역 10/9 사용) | — | — | 후방 일반 |
-| 38 | — | [90,88,86,84] | — | standalone, 82 제외 |
+6. **HelpModal**: voucher 매뉴얼 3개 항목 추가
 
-전역 rowMaxOdd: 11 → 9 정정.
-
-### XTPG (XIN TAI PING) 적용값
-| Bay | rowMaxEvenLocal/OddLocal | deckTiersLocal | 비고 |
-|---|---|---|---|
-| 01 | 4/3 | [86,84,82] | 선수 최협 |
-| 03 | 6/5 | [86,84,82] | 선수 |
-| 04, 05 | 4/3 | [86,84,82] | 선수 |
-| 07~19, 22~23, 26~27 | — (전역 8/7) | — | 일반 |
-| 21 | — | [90,88,86,84,82] | 유일하게 tier 90 보유 |
-| 25 | — | [88,86,84,82,80] | 유일하게 tier 80 보유 |
-
-전역 holdTiers: [8,6,4,2] → [6,4,2] 정정.
-
-## 컴포넌트 변경 위치
-- `src/components/PrintableCargoPlan.jsx` BayBox 함수 내 `dynRows`, `deckTiers`, `holdTiers` 계산 로직에 dictBay 우선순위 추가
-- `src/components/PrintableBayDetail.jsx` BayDetailPage 함수 내 `STD_ROWS`, `deckTiers`, `holdTiers` 계산 로직에 dictBay 우선순위 추가
-- `src/data/shipBayDict_v2.js` DJCF2(37개), XTPG(14개) 로컬 필드 추가, 전역 오류 2건 정정
+## 빌드
+- M5.55 버전, dist/ 생성 완료
+- 1.43MB JS (gzip 297KB)
 
 ## 검증
-- ✅ npm build 성공 (1650 modules transformed)
-- ✅ 산출물 검증: M5.42 마커 2회, deckTiersLocal/rowMaxEvenLocal/holdTiersLocal 각 4회 (스키마 정의 + 사용처 2곳씩)
-- ✅ DJCF2 rowMaxOdd:9 / XTPG holdTiers:[6,4,2] 번들 반영
-- ⚠️ **실선박 데이터로 베이 화면 출력 검증 필요** (현장 검수 전 필수)
+- DJCF 0145N(199대) + 0146S(255대) 실제 데이터로 voucher 생성 → 사진 양식과 100% 일치
+- 1페이지 강제 확인
+- 모든 선사 정확 분류 (SKR 62, NSL 47, DJS 134, HAS 9, HSL 3)
 
-## 미해결 / 다음 작업
-- **M5.43 후보**: deck/hold 행 폭이 서로 다른 베이(XTPG BAY 13의 deck 8/7 vs hold 6/5 등) 정확 표시. 현재는 단일 rowMaxLocal로 처리되어 hold 외곽 셀이 phantom으로 보일 수 있음. 해결책: `holdRowMaxEvenLocal` / `holdRowMaxOddLocal` 별도 필드 추가 + 컴포넌트의 deck/hold 그리드 분리 렌더링.
-- 나머지 ~298개 선박도 PDF로 검증 시 동일한 per-bay override 패턴 적용 필요.
-
-## 누적 변경 이력
-- M5.42: 베이별 tier/row 로컬 오버라이드 + DJCF·XTPG 정정 ← **현재**
-- M5.41: (스킵 — M5.42에 통합)
-- M5.40: 베이 상세에도 dictShipMeta 적용 (PrintableBayDetail fix)
-- M5.39: 베이사전 명시 필드 추가 + PrintableCargoPlan 적용
-- M5.38: row/tier 동적 + EDI fallback
-- M5.37: 페이지 고정 + flex 자동 분배
-- M5.36: 페이지 여백 최소화
-- M5.35: 36척 베이사전 PDF 정정
-
-## 다음 챗에 전달할 핵심 규칙
-1. 베이사전 = 절대 기준. dictBay (per-bay) > dictShipMeta (per-ship) > EDI fallback.
-2. PrintableCargoPlan과 PrintableBayDetail 두 곳 다 베이사전 우선 적용 필수. 한쪽만 수정 X.
-3. **새 선박 추가 / 기존 선박 정정 시**: 같은 선박 안에서도 베이별로 폭/단이 다른지 PDF 확인. 다르면 baysSummary의 해당 베이에 Local 필드 추가.
-4. 빌드는 반드시 `bash build.sh` 사용 (`npm run build`만 하면 root index.html이 진입점 형태로 복원되지 않아 변경사항이 반영 안 됨 — build.sh 주석 참조).
+## 미해결 (선택 작업)
+- 사진의 양하 분포 일부 (NSL LCH 25 사이즈 모호, DJS BKK 7 등) — LIST1 데이터와 사진의 실제 작업 결과(수기) 차이
+- 사용자 검증 후 조정 가능

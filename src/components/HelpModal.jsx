@@ -549,6 +549,9 @@ const CONTENT = {
       title: '🆕 M5.1 변경 사항 (2026-05) — 마감 점검 + 보관함',
       examples: [
         { q: '🏁 작업 마감 점검',     a: '항차 진입 시 [📤 작업 보고] 옆 [🏁 마감 점검] 버튼. 미완 항목(미완료/리퍼/ISO403/X-RAY/자리뺏긴/풀씰 미입력)을 한 화면에 표시. 항목 클릭 시 해당 탭으로 자동 점프' },
+        { q: '📄 FINAL WORKING REPORT (VOUCHER) — M5.55', a: '[📐 인쇄] → [📄 FINAL WORKING REPORT (VOUCHER)]. 양하+선적 통합 voucher 자동 생성. A4 1페이지 강제, 사진 양식 (SKR→NSL→DJS→HAS→HSL 순서). 선사 자동 분류: EDI 우선(NAD+CA), 없으면 BL 번호 prefix (DJSC→DJS, NSSL→NSL, HASL→HAS, SNKO→SKR, HSLI→HSL), 또는 양하 LIST의 선사부호 컬럼.' },
+        { q: '🚢 voucher PORT 인식', a: 'PORT 컬럼: 양하면 POL(출발지), 선적이면 TSPORT(환적) > PRINTPOD/POD 우선순위. NSL JDCF 양식은 BL prefix에서 항구 추출 (BSE→PUS, HCC→SGN, LCC→LCH). DJS DONGJIN 양식은 비표준 사이즈 자동 인식 (D2→20, D5→HC, D4→40, R5→HC) + Cargo Type F/P 인식.' },
+        { q: '📝 voucher 빈 칸', a: '선사 추가 작성용. 첫 번째 OPERATOR 셀은 3행 합병 — 새 선사 들어가면 그 자리에 손글씨 작성. PORT/F/E/데이터 빈칸은 행마다 별도. 작업 끝나면 Remarks 박스에 특이사항 기록 (양하/선적 각자).' },
         { q: '🏁 모두 0이면',         a: '큰 ✅ "마감 가능" 화면 — 안전하게 작업 종료 OK' },
         { q: '📦 보관함 (선적 전용)', a: '베이 탭 상단에 자동 표시 — bay_actual="__STG__" 로 마킹된 컨들 모음. 자리 뺏긴 컨, 잘못 적치된 컨 임시 보관용' },
         { q: '📦 보관함 → 베이 그리드', a: '카드 우측 [📦 이동] 버튼 → 안내 바 → 빈 셀 클릭 (자리 뺏긴 컨과 같은 흐름)' },
