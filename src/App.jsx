@@ -12,6 +12,7 @@ import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import Header from './components/Header.jsx';
 import InspectorModal from './components/InspectorModal.jsx';
+import StaffManagerModal from './components/StaffManagerModal.jsx';
 import GreetingModal from './components/GreetingModal.jsx';
 import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, speakGreeting, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
@@ -27,6 +28,7 @@ export default function App() {
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력
   const [inspector, setInspector] = useState('');
   const [showInspectorModal, setShowInspectorModal] = useState(true);
+  const [showStaffManager, setShowStaffManager] = useState(false);  // M5.73
   const [online, setOnline] = useState(true);
   const [globalDetail, setGlobalDetail] = useState(null);
   // M3.6: 인사 모달
@@ -150,6 +152,7 @@ export default function App() {
         route={route}
         voyages={voyages}
         onChangeInspector={() => setShowInspectorModal(true)}
+        onOpenStaffManager={inspector === '김성일' ? () => setShowStaffManager(true) : null}
         onGoHome={() => navigate('home')}
         onLogout={handleLogout}
       />
@@ -197,6 +200,15 @@ export default function App() {
           extraStaff={extraStaff}
           onSelect={handleSelectInspector}
           onClose={() => inspector && setShowInspectorModal(false)}
+        />
+      )}
+
+      {showStaffManager && (
+        <StaffManagerModal
+          current={inspector}
+          inspectors={inspectors}
+          extraStaff={extraStaff}
+          onClose={() => setShowStaffManager(false)}
         />
       )}
 

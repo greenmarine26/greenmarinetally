@@ -6,7 +6,7 @@ import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
 
-export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout }) {
+export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager}) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   const [helpOpen, setHelpOpen] = useState(false);
@@ -96,6 +96,13 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <span className="font-bold text-amber-200 max-w-[60px] truncate">{inspector || '검수원'}</span>
             <RefreshCw className="w-3 h-3 text-amber-400"/>
           </button>
+          {onOpenStaffManager && (
+            <button
+              onClick={onOpenStaffManager}
+              className="ml-1 px-2 py-1.5 bg-amber-900/40 hover:bg-amber-800/60 border border-amber-700 rounded text-amber-300 text-xs font-bold"
+              title="인원 관리"
+            >⚙ 관리</button>
+          )}
           <button
             onClick={handleLogoutOrExit}
             title={onLogout ? '로그아웃 (인사 후 종료)' : '앱 종료'}
