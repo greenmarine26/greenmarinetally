@@ -209,3 +209,13 @@
 - 원인: openWorkingReportPrint가 옛 코드 그대로 (window.open + write + 자동 print). printHelper 적용 안 됨.
 - 수정: openPrintWindow(html, 'FINAL_WORKING_REPORT') 사용 + import 추가
 - 결과: voucher 새 창에 toolbar (인쇄/PDF/엑셀/닫기) 표시
+
+## M5.67 - voucher 사이즈/목적항 EDI 우선
+- 이슈: voucher의 사이즈(40 vs HC) + 목적항(POD)이 EDI와 다름
+- 원인: LIST(records) 데이터가 EDI 위에 덮어씀 → LIST의 부정확한 ISO/POD 사용
+- 수정 (workingReport.js만):
+  - 컨테이너 필터: records (LIST 평택 대상) 그대로
+  - 컨테이너 속성: **EDI 우선** (POD/ISO/OP 정확)
+  - LIST에만 있는 컨테이너(33개)는 LIST 데이터 사용
+  - 검수리스트는 records 그대로 (다른 곳에선 변경 없음)
+- 결과: voucher의 사이즈/목적항이 EDI와 일치

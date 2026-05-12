@@ -201,13 +201,22 @@ function buildBuckets(voyage, mode = 'settlement') {
       }
 
       targetCns.forEach(cn => {
-        // 컨테이너 데이터: records + ediContainers 병합 (빈 값은 덮어쓰지 않음)
+        // M5.67: voucher는 EDI 우선 (ISO/POD/사이즈 정확). LIST는 필터링용 + 폴백.
         const cnUpper = String(cn).toUpperCase();
         const ediC = ediCs[cnUpper] || ediCs[cn] || {};
         const recC = recs[cnUpper] || recs[cn] || {};
-        const c = { ...ediC };
-        for (const [k, v] of Object.entries(recC)) {
-          if (v !== null && v !== undefined && v !== '') c[k] = v;
+        // EDI에 컨테이너 있으면 EDI 데이터 (POD/ISO/OP 정확)
+        // EDI에 없으면 LIST 데이터 사용
+        let c;
+        if (ediC && ediC.cn) {
+          // EDI 데이터 우선, LIST는 빈 필드만 보강
+          c = { ...ediC };
+          for (const [k, v] of Object.entries(recC)) {
+            if ((c[k] === null || c[k] === undefined || c[k] === '') && v) c[k] = v;
+          }
+        } else {
+          // EDI에 없는 컨테이너 = LIST 단독
+          c = { ...recC };
         }
         c.cn = cn;
         if (!c.cn) return;
