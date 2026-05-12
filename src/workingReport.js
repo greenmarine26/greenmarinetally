@@ -350,13 +350,17 @@ function generateVoucherHTML(voyage, mode = 'settlement', overrides = {}) {
     return `<tr class="total-row">${c.join('')}</tr>`;
   };
 
-  // 빈 행 (A4 풀 채우기, OPERATOR 셀 rowspan=3)
+  // 빈 행 (A4 풀 채우기, OPERATOR 셀 rowspan — Total 침범 방지)
   const PAD_TARGET = 45;
   const needed = Math.max(0, PAD_TARGET - rows.length - 2);
   const emptyRows = [];
   for (let idx = 0; idx < needed; idx++) {
     const c = [];
-    if (idx % 3 === 0) c.push('<td rowspan="3" class="op-cell"></td>');
+    if (idx % 3 === 0) {
+      // 마지막 그룹이 3 미만이면 남은 행 수에 맞춤 (Total 행 침범 방지)
+      const rs = Math.min(3, needed - idx);
+      c.push(`<td rowspan="${rs}" class="op-cell"></td>`);
+    }
     c.push('<td></td>');  // PORT
     c.push('<td></td>');  // F/E
     c.push('<td class="disch-first"></td>','<td></td>','<td></td>','<td></td>');
@@ -398,7 +402,7 @@ table.voucher .shift-first { border-left: 1.5pt solid #000; }
 table.voucher thead th[colspan="4"] { border-left: 1.5pt solid #000; border-right: 1.5pt solid #000; }
 table.voucher tr.op-end > td { border-bottom: 1.5pt solid #000; }
 table.voucher tr.total-row:first-of-type > td { border-top: 1.5pt solid #000; }
-.bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.bottom-row { display: grid; grid-template-columns: 7fr 8fr; gap: 0; }
 .bottom-row > div { border: 1pt solid #000; min-height: 55pt; padding: 4pt; font-size: 9pt; }
 .bottom-row > div:nth-child(2) { border-left: none; }
 .bottom-single > div { border: 1pt solid #000; min-height: 55pt; padding: 4pt; font-size: 9pt; }

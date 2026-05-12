@@ -219,3 +219,12 @@
   - LIST에만 있는 컨테이너(33개)는 LIST 데이터 사용
   - 검수리스트는 records 그대로 (다른 곳에선 변경 없음)
 - 결과: voucher의 사이즈/목적항이 EDI와 일치
+
+## M5.68 - voucher 양식 fix (E 정렬 + Remarks 비율)
+### 1. Total E 행 컬럼 정렬 오류
+- 원인: 빈 행의 OPERATOR rowspan="3"이 고정값. 빈 행 갯수가 3의 배수 아니면 마지막 그룹 rowspan이 Total 행 침범 → E 셀이 OPERATOR 위치로 밀려남
+- 수정: 마지막 그룹 rowspan을 남은 행 수에 맞춰 동적 조정 (`Math.min(3, needed - idx)`)
+
+### 2. Remarks 박스 좌우 비율
+- 원인: bottom-row가 1fr 1fr (50/50). 표의 DISCH/LOAD 경계는 약 46/54 (OPERATOR+PORT+F/E+DISCH 7컬럼 : LOAD+SHIFT 8컬럼) → 경계 불일치
+- 수정: grid-template-columns 7fr 8fr (표 컬럼 비율과 정확히 일치)
