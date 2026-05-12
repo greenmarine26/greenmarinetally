@@ -1,24 +1,105 @@
 import React, { useState } from 'react';
-import { X, UserPlus, User } from 'lucide-react';
+import { X, UserPlus, User, Trash2 } from 'lucide-react';
+import { isStaff, getStaffRole, STAFF_NAMES } from '../staffList.js';
+import { fbDeleteInspector, fbAddStaff, fbDeleteStaff } from '../firebase.js';
 
-export default function InspectorModal({ current, inspectors, onSelect, onClose }) {
+// 삭제 권한자 (오직 한 사람)
+const ADMIN_NAME = '김성일';
+
+export default function InspectorModal({ current, inspectors, extraStaff = {}, onSelect, onClose }) {
   const [newName, setNewName] = useState('');
   const list = Object.values(inspectors || {})
     .filter(i => i && i.name)
     .sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
 
-  const handleAdd = () => {
-    const n = newName.trim();
-    if (!n) return;
-    onSelect(n);
+  // M5.61: 이름 정규화 — 공백/콤마/특수문자 제거 후 비교 (이종현 vs "이종현 ," 동일 인식)
+  const normalizeName = (s) => String(s || '')
+    .trim()
+    .replace(/[,\s\.\-_\/\\]/g, '')  // 공백/콤마/마침표/대시/언더바/슬래시 제거
+    .toLowerCase();
+
+  // 화이트리스트 합치기 (코드 명단 + Firebase 동적 명단)
+  const extraNames = Object.values(extraStaff || {}).map(s => s.name).filter(Boolean);
+  const allWhitelist = [...STAFF_NAMES, ...extraNames];
+  const isAllowed = (name) => allWhitelist.some(n => normalizeName(n) === normalizeName(name));
+
+  const handleAdd = async () => {
+    const raw = newName.trim();
+    if (!raw) return;
+
+    // 한글/영문 기본 검사
+    if (!/^[가-힣a-zA-Z0-9]{2,10}$/.test(raw)) {
+      alert('이름은 한글/영문/숫자 2~10자만 가능합니다.');
+      return;
+    }
+
+    const norm = normalizeName(raw);
+
+    // 김성일(관리자)인 경우 — 화이트리스트 우회 + 동적 추가
+    if (current === ADMIN_NAME) {
+      if (isAllowed(raw)) {
+        // 이미 명단에 있음
+        const exactName = allWhitelist.find(n => normalizeName(n) === norm);
+        onSelect(exactName);
+        setNewName('');
+        return;
+      }
+      // 신규 직원 추가 (Firebase staffList 영구 등록)
+      if (!confirm(`"${raw}" — 신규 직원으로 추가합니다.\n(전 직원이 이 이름으로 접속 가능)\n계속하시겠습니까?`)) return;
+      const role = prompt('직책 (예: 검수, 대리, 과장):', '검수') || '검수';
+      try {
+        await fbAddStaff(raw, role);
+        onSelect(raw);
+        setNewName('');
+      } catch (e) {
+        alert('추가 실패: ' + e.message);
+      }
+      return;
+    }
+
+    // 일반 직원 — 화이트리스트 검사 필수
+    if (!isAllowed(raw)) {
+      const hint = allWhitelist.filter(n => n.includes(raw.slice(0,2)) || raw.includes(n.slice(0,2)));
+      const hintTxt = hint.length > 0 ? `\n\n비슷한 이름: ${hint.slice(0,5).join(', ')}` : '';
+      alert(`"${raw}" — 그린마린 직원 명단에 없습니다.\n정확한 이름으로 입력하세요.${hintTxt}\n\n새 직원 등록은 관리자(${ADMIN_NAME})에게 요청하세요.`);
+      return;
+    }
+
+    // 명단의 정확한 이름으로 통합
+    const exactName = allWhitelist.find(n => normalizeName(n) === norm);
+    onSelect(exactName);
     setNewName('');
   };
+
+  // M5.62: 김성일만 삭제 권한
+  const handleDelete = async (name, e) => {
+    e.stopPropagation();
+    if (current !== ADMIN_NAME) return;
+    if (!confirm(`"${name}" 검수원을 삭제하시겠습니까?\n(기록은 남고 명단에서만 제거)`)) return;
+    try {
+      await fbDeleteInspector(name);
+      // Firebase 동적 명단에도 있으면 같이 삭제
+      if (extraStaff[name]) await fbDeleteStaff(name);
+    } catch (err) {
+      alert('삭제 실패: ' + err.message);
+    }
+  };
+
+  const isAdmin = current === ADMIN_NAME;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 w-full max-w-sm">
         <div className="flex items-center justify-between mb-4">
-          <div className="font-bold text-lg text-amber-200">검수원 선택</div>
+          <div>
+            <div className="font-bold text-lg text-amber-200">검수원 선택</div>
+            {(() => {
+              const active = list.filter(i => i.lastActive && (Date.now() - i.lastActive) < 60000);
+              return active.length > 0 ? (
+                <div className="text-[11px] text-emerald-300 mt-0.5">● 현재 {active.length}명 작업중: {active.map(a => a.name).join(', ')}</div>
+              ) : null;
+            })()}
+          </div>
           {current && (
             <button onClick={onClose} className="p-1 rounded hover:bg-slate-800">
               <X className="w-5 h-5 text-slate-400"/>
@@ -29,23 +110,40 @@ export default function InspectorModal({ current, inspectors, onSelect, onClose 
         {list.length > 0 && (
           <div className="space-y-1.5 mb-4 max-h-72 overflow-y-auto">
             {list.map(i => (
-              <button
-                key={i.name}
-                onClick={() => onSelect(i.name)}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border transition ${
-                  i.name === current
-                    ? 'bg-amber-900/40 border-amber-600/60 text-amber-100'
-                    : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 text-slate-200'
-                }`}
-              >
-                <span className="w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center text-slate-900 text-xs font-black flex-shrink-0">
-                  {i.name[0]}
-                </span>
-                <span className="font-bold text-sm truncate flex-1 text-left">{i.name}</span>
-                {i.lastActive && (Date.now() - i.lastActive) < 60000 && (
-                  <span className="bg-emerald-700/40 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded font-bold">●작업중</span>
+              <div key={i.name} className={`flex items-center gap-1 rounded-lg border transition ${
+                i.name === current
+                  ? 'bg-amber-900/40 border-amber-600/60'
+                  : 'bg-slate-800/50 border-slate-700'
+              }`}>
+                <button
+                  onClick={() => onSelect(i.name)}
+                  className={`flex-1 flex items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-800/50 rounded-lg ${
+                    i.name === current ? 'text-amber-100' : 'text-slate-200'
+                  }`}
+                >
+                  <span className="w-7 h-7 bg-amber-500 rounded-full flex items-center justify-center text-slate-900 text-xs font-black flex-shrink-0">
+                    {i.name[0]}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate">{i.name}</div>
+                    {getStaffRole(i.name) && (
+                      <div className="text-[10px] text-slate-400 truncate">{getStaffRole(i.name)}</div>
+                    )}
+                  </div>
+                  {i.lastActive && (Date.now() - i.lastActive) < 60000 && (
+                    <span className="bg-emerald-700/40 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded font-bold">●작업중</span>
+                  )}
+                </button>
+                {isAdmin && i.name !== current && (
+                  <button
+                    onClick={(e) => handleDelete(i.name, e)}
+                    className="p-2 hover:bg-red-900/40 rounded-r-lg text-slate-500 hover:text-red-400"
+                    title="삭제 (관리자)"
+                  >
+                    <Trash2 className="w-4 h-4"/>
+                  </button>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         )}

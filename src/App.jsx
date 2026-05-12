@@ -20,6 +20,7 @@ export default function App() {
   const [route, setRoute] = useState({ name: 'home' });
   const [voyages, setVoyages] = useState({});
   const [inspectors, setInspectors] = useState({});
+  const [extraStaff, setExtraStaff] = useState({});  // M5.62: 김성일이 추가한 동적 명단
   // M5.21: PORT-MIS 입출항 데이터 (Chrome 확장이 저장 — 호출부호로 매칭)
   const [portMisData, setPortMisData] = useState({});
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력
@@ -34,6 +35,7 @@ export default function App() {
   useEffect(() => {
     const u1 = fbSubscribeVoyages(setVoyages);
     const u2 = fbSubscribeInspectors(setInspectors);
+    const unsub2 = fbSubscribeStaffList(setExtraStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
     return () => { u1(); u2(); u3(); u4(); };
@@ -191,6 +193,7 @@ export default function App() {
         <InspectorModal
           current={inspector}
           inspectors={inspectors}
+          extraStaff={extraStaff}
           onSelect={handleSelectInspector}
           onClose={() => inspector && setShowInspectorModal(false)}
         />

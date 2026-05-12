@@ -98,3 +98,48 @@
   - DJSC → DJS, NSSL → NSL, HASL → HAS, SNKO → SKR, HSLI → HSL
   - 우선순위: c.op > BL prefix > cn prefix
 - 결과: 검수리스트와 voucher의 선사가 동일하게 3자 약어로 표시
+
+## M5.61 - 검수원 이름 정확 매칭 + 현 접속자 명단
+### 정확한 이름 매칭
+- **이슈**: "이종현"과 "이종현 ,"가 다른 사용자로 등록됨
+- **수정**: InspectorModal에 normalizeName + handleAdd 강화
+  - 한글/영문/숫자만 허용 (2~10자), 특수문자 차단
+  - 정규화(공백/콤마/마침표/대시/언더바/슬래시 제거 + 소문자) 후 기존 사용자와 비교
+  - 정규화 같지만 표기 다르면 기존 이름으로 통합 (사용자 확인)
+  - 신규 이름은 추가 전 확인 다이얼로그
+
+### 현 접속자 명단 (헤더)
+- InspectorModal 상단에 "● 현재 N명 작업중: 이름1, 이름2" 표시 (emerald 색상)
+- 60초 내 활동한 검수원 기준 (기존 lastActive 로직)
+- 다른 폰으로 새 접속 시 자기 이름 선택 → 진입 후 다른 작업자 누구 있는지 즉시 확인 가능
+
+## 미해결 (다음 단계)
+- **회사 직원 화이트리스트** — 사용자가 직원 이름 명단 제공해야 적용 가능
+  - 명단 받으면 src/staffList.js에 export const STAFF_NAMES = [...] 형태 등록
+  - InspectorModal handleAdd에서 STAFF_NAMES.includes(norm) 검사 추가
+  - 명단 외 이름 접속 차단
+
+## M5.62-M5.63 — 직원 화이트리스트 + 관리자 권한
+### staffList.js (29명 그린마린 직원 명단)
+- 임원: 최관묵(회장), 신성호(대표이사), 표인수(상무이사), 황창웅(이사)
+- 부장~과장 8명, 대리 4명, 검수 13명
+- isStaff(name) / getStaffRole(name) / isChief(name) export
+
+### InspectorModal 화이트리스트 검사
+- 정확한 이름만 접속 ("이종현 ,"같이 콤마/공백 변형 차단)
+- 명단에 없으면 alert + 비슷한 이름 힌트
+- 정규화(공백/콤마/마침표 등 제거) 후 비교
+- 직책 표시 (이름 아래 작은 글씨)
+
+### 관리자(김성일) 전용 권한
+- ADMIN_NAME = '김성일' (코드 상수)
+- **삭제**: 다른 검수원 옆에 🗑 버튼 (Firebase inspectors 노드 + staffList 노드)
+- **추가**: 명단 외 새 직원 추가 (Firebase staffList 노드에 영구 저장 — 전 직원 접속 가능)
+- 다른 사람이면 화이트리스트 검사 필수, 명단 외 입력 시 차단
+
+### Firebase 동적 명단 (M5.62)
+- fbAddStaff(name, role) — 신규 직원 추가
+- fbDeleteStaff(name) — 명단 삭제
+- fbSubscribeStaffList — 실시간 구독
+- 코드 STAFF_NAMES + Firebase extraStaff 합쳐서 화이트리스트
+- 새 직원 입사 시 김성일이 추가 → 즉시 전 직원 접속 가능

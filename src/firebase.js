@@ -414,6 +414,31 @@ export async function fbSetInspectorActivity(name, voyageKey, mode) {
   });
 }
 
+// M5.62: 검수원 삭제 (관리자만 — UI에서 김성일만 호출)
+export async function fbDeleteInspector(name) {
+  if (!name) return;
+  await remove(ref(db, `inspectors/${name}`));
+}
+
+// M5.62: 직원 명단 동적 추가/삭제 (김성일만)
+export async function fbAddStaff(name, role) {
+  if (!name) return;
+  await update(ref(db, `staffList/${name}`), {
+    name,
+    role: role || '검수',
+    addedAt: Date.now(),
+  });
+}
+export async function fbDeleteStaff(name) {
+  if (!name) return;
+  await remove(ref(db, `staffList/${name}`));
+}
+export function fbSubscribeStaffList(callback) {
+  const r = ref(db, 'staffList');
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
+}
+
 // 연결 상태
 export function fbSubscribeConnection(callback) {
   const r = ref(db, '.info/connected');
