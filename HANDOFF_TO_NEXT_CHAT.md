@@ -169,3 +169,12 @@
   - BERTH input
   - [📄 결제용] / [📄 작업용] 두 버튼 — 입력값 overrides로 전달
 - workingReport.js: openWorkingReportPrint(voyage, info, mode, overrides) — overrides {dischVoy, loadVoy, berth, date}
+
+## M5.65 - voucher 사이즈 인식 fix (40HC를 40으로 잘못 분류)
+- 이슈: NSL JDCF의 SZTY '4HDC'/'4HRF'가 first='4', second='H' (≠'5')로 '40' 잘못 분류
+- 수정: SZTY 양식 우선 검사 (includes 매칭이 먼저)
+  - '4H' / '40HC' / '45' 패턴 → HC
+  - 'L' 시작 → 45
+  - '20' 시작/포함 → 20
+  - '4' 시작 (HC 매칭 안 됨) → 40
+- 결과: 4HDC/4HRF/40HC 모두 HC로 정확 분류

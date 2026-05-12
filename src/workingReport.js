@@ -78,20 +78,16 @@ function getSizeKey(c) {
   const iso = String(c.iso || '').toUpperCase().trim();
   if (SIZE_MAP_DJS[iso]) return SIZE_MAP_DJS[iso];
 
-  // 2순위: ISO 6346 (22GP, 45GP 등)
   if (iso) {
-    const first = iso[0];
-    const second = iso[1] || '';
-    if (first === '2') return '20';
-    if (first === 'L') return '45';
-    if (first === '4') return second === '5' ? 'HC' : '40';
-    // SZTY 양식 (20DC, 4HDC, 4HRF 등)
     const iu = iso.replace(/\s/g, '');
-    if (iu.includes('20')) return '20';
+    // M5.65: SZTY 양식 우선 검사 (4HDC, 4HRF, 40HC, 45 등 → HC)
     if (iu.includes('4H') || iu.includes('40HC') || iu.includes('45')) return 'HC';
-    if (iu.includes('40')) return '40';
+    if (iu.startsWith('L')) return '45';
+    if (iu.startsWith('2') || iu.includes('20')) return '20';
+    // 40' DC만 (4DC, 42xx 등) → 40
+    if (iu.startsWith('4')) return '40';
   }
-  // 폴백: cn 끝자리
+  // 폴백
   if (c.cn && /^[A-Z]{4}\d{7}$/.test(c.cn)) {
     return parseInt(c.cn[10]) >= 4 ? '40' : '20';
   }
