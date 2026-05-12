@@ -202,11 +202,15 @@ function buildBuckets(voyage, mode = 'settlement') {
       }
 
       targetCns.forEach(cn => {
-        // 컨테이너 데이터: records 우선 + ediContainers 보강 (둘 다 있으면 병합)
+        // 컨테이너 데이터: records + ediContainers 병합 (빈 값은 덮어쓰지 않음)
         const cnUpper = String(cn).toUpperCase();
         const ediC = ediCs[cnUpper] || ediCs[cn] || {};
         const recC = recs[cnUpper] || recs[cn] || {};
-        const c = { ...ediC, ...recC, cn };  // records가 우선
+        const c = { ...ediC };
+        for (const [k, v] of Object.entries(recC)) {
+          if (v !== null && v !== undefined && v !== '') c[k] = v;
+        }
+        c.cn = cn;
         if (!c.cn) return;
         const op = normalizeOp(c);
         const port = getPort(c, dlMode);
@@ -263,9 +267,11 @@ function getCells(op, port, fe, dataset) {
 
 function generateVoucherHTML(voyage, mode = 'settlement') {
   const { disch, load, totalDS, totalLD, dischTotal, loadTotal } = buildBuckets(voyage, mode);
-  const info = voyage.info || {};
-  const vesselName = info.vesselName || info.vessel || 'VESSEL';
-  const voyNo = info.voy || info.voyNo || ((info.voy_d && info.voy_l) ? `${info.voy_d} & ${info.voy_l}` : '');
+  // info는 voyage.info 또는 discharge/loading의 info에서
+  const info = voyage.info || voyage.discharge?.info || voyage.loading?.info || {};
+  const vesselName = info.vsl || info.vessel || info.vesselName || 'VESSEL';
+  const voyNo = info.voy || info.voyNo
+    || ((info.voy_d && info.voy_l) ? `${info.voy_d} & ${info.voy_l}` : (info.voy_d || info.voy_l || ''));
   const date = info.date || new Date().toISOString().slice(0, 10);
   const pier = info.pier || 'PCTC';
   const berth = info.berth || '-';

@@ -80,3 +80,13 @@
   - 작업용(actual): section.completed의 cn (실제 작업 완료)
   - records 비어 있으면 ediContainers의 PTK 필터로 폴백
   - 컨테이너 데이터: records 우선 + ediContainers 보강 (병합)
+
+## M5.59 - 선박 이름 + 선사 매핑 fix
+- **선박 이름 안 나옴**: info.vesselName 사용 → 실제 필드 info.vsl 로 수정
+  - vesselName: info.vsl || info.vessel || info.vesselName || 'VESSEL'
+  - voyNo: info.voy 등
+  - info 폴백: voyage.info → voyage.discharge.info → voyage.loading.info
+- **선사 매핑 안 됨**: records의 빈 op(''')가 EDI의 op('DJS')를 덮어쓰는 버그
+  - 이전: `{...ediC, ...recC}` — recC의 모든 필드(빈 값 포함) 덮어씀
+  - 수정: 빈 값(null/undefined/'')은 덮어쓰지 않음. EDI 데이터 보존
+- 우선순위: records 채워진 값 > EDI 데이터 > cn prefix
