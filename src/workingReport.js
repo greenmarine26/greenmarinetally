@@ -267,23 +267,23 @@ function getCells(op, port, fe, dataset) {
   });
 }
 
-function generateVoucherHTML(voyage, mode = 'settlement') {
+function generateVoucherHTML(voyage, mode = 'settlement', overrides = {}) {
   const { disch, load, totalDS, totalLD, dischTotal, loadTotal } = buildBuckets(voyage, mode);
   // info는 voyage.info 또는 discharge/loading의 info에서
   const info = voyage.info || voyage.discharge?.info || voyage.loading?.info || {};
   const vesselName = info.vsl || info.vessel || info.vesselName || 'VESSEL';
 
-  // M5.634: 양하+선적 항차 둘 다 있으면 모두 표시
-  const dVoy = voyage.discharge?.info?.voy || voyage.discharge?.info?.voyNo || info.voy_d || '';
-  const lVoy = voyage.loading?.info?.voy || voyage.loading?.info?.voyNo || info.voy_l || '';
+  // M5.634: 양하+선적 항차 둘 다 있으면 모두 표시 / M5.64: overrides 우선
+  const dVoy = overrides.dischVoy || voyage.discharge?.info?.voy || voyage.discharge?.info?.voyNo || info.voy_d || '';
+  const lVoy = overrides.loadVoy || voyage.loading?.info?.voy || voyage.loading?.info?.voyNo || info.voy_l || '';
   let voyNo;
   if (dVoy && lVoy && dVoy !== lVoy) voyNo = `${dVoy} & ${lVoy}`;
   else if (dVoy) voyNo = dVoy;
   else if (lVoy) voyNo = lVoy;
-  else voyNo = info.voy || info.voyNo || '';
-  const date = info.date || new Date().toISOString().slice(0, 10);
+  else voyNo = overrides.voy || info.voy || info.voyNo || '';
+  const date = overrides.date || info.date || new Date().toISOString().slice(0, 10);
   const pier = info.pier || 'PCTC';
-  const berth = info.berth || '-';
+  const berth = overrides.berth || info.berth || '-';
   const port = info.port || 'PYEONGTAEK, KOREA';
 
   // op 등장 set (실제 데이터)
@@ -430,9 +430,9 @@ export { generateVoucherHTML, buildBuckets, normalizeOp, normalizePort, getSizeK
 export default generateVoucherHTML;
 
 // 새 창에 voucher 출력 (PrintHubModal에서 호출)
-export function openWorkingReportPrint(voyage, info = {}, mode = 'settlement') {
-  // info는 voyage.info 그대로일 수 있음 - 호환성용
-  const html = generateVoucherHTML(voyage, mode);
+export function openWorkingReportPrint(voyage, info = {}, mode = 'settlement', overrides = {}) {
+  // info는 voyage.info 그대로일 수 있음 - 호환성용 / overrides: { dischVoy, loadVoy, berth, date }
+  const html = generateVoucherHTML(voyage, mode, overrides);
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) { alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.'); return; }
   w.document.write(html);

@@ -160,3 +160,12 @@
   - 양하만: "0145N"
   - 선적만: "0146S"
   - 둘 다 같으면 한 번만
+
+## M5.64 - voucher 입력 폼 (선적 항차 + BERTH 수동 입력)
+- 이슈: 양하 항차만 자동 인식, 선적 항차 누락. BERTH도 정보 부족.
+- 수정: PrintHubModal의 voucher 버튼을 입력 폼으로 변경
+  - 양하 항차 input (자동값 + 수정 가능)
+  - 선적 항차 input (자동값 + 수정 가능)
+  - BERTH input
+  - [📄 결제용] / [📄 작업용] 두 버튼 — 입력값 overrides로 전달
+- workingReport.js: openWorkingReportPrint(voyage, info, mode, overrides) — overrides {dischVoy, loadVoy, berth, date}

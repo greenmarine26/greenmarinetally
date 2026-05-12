@@ -552,7 +552,7 @@ const CONTENT = {
         { q: '📄 FINAL WORKING REPORT (결제용/작업용) — M5.56', a: '[📐 인쇄] → 두 가지 옵션: (1) 📄 결제용 — 작업 완료 가정, EDI/LIST 전체 (선사 제출용). (2) 📄 작업용 — 현재 검수 완료된 컨테이너만 (records 기반, 현장용). A4 1페이지 강제, 사진 양식 (SKR→NSL→DJS→HAS→HSL 순서). 선사 자동 분류: EDI 우선(NAD+CA), 없으면 BL 번호 prefix (DJSC→DJS, NSSL→NSL, HASL→HAS, SNKO→SKR, HSLI→HSL), 또는 양하 LIST의 선사부호 컬럼.' },
         { q: '🚢 voucher PORT 인식', a: 'PORT 컬럼: 양하면 POL(출발지), 선적이면 TSPORT(환적) > PRINTPOD/POD 우선순위. NSL JDCF 양식은 BL prefix에서 항구 추출 (BSE→PUS, HCC→SGN, LCC→LCH). DJS DONGJIN 양식은 비표준 사이즈 자동 인식 (D2→20, D5→HC, D4→40, R5→HC) + Cargo Type F/P 인식.' },
         { q: '📝 voucher 빈 칸', a: '선사 추가 작성용. 첫 번째 OPERATOR 셀은 3행 합병 — 새 선사 들어가면 그 자리에 손글씨 작성. PORT/F/E/데이터 빈칸은 행마다 별도. 작업 끝나면 Remarks 박스에 특이사항 기록 (양하/선적 각자).' },
-        { q: '📄 voucher 두 가지 모드 — M5.56+', a: '결제용(amber) = 작업 완료 가정 (records 전체, 선사 제출용 깔끔). 작업용(blue) = 현재 검수 완료된 컨테이너만 (completed 기반, 현장 진행 확인용). [📐 인쇄] 진입 후 맨 위 두 버튼.' },
+        { q: '📄 voucher 두 가지 모드 — M5.56+', a: '결제용(amber) = 작업 완료 가정 (records 전체, 선사 제출용 깔끔). 작업용(blue) = 현재 검수 완료된 컨테이너만 (completed 기반, 현장 진행 확인용). [📐 인쇄] 진입 후 맨 위 입력 폼 (양하 항차/선적 항차/BERTH 직접 입력 후 출력 — M5.64) + 두 버튼.' },
         { q: '📄 voucher 데이터 기준 — M5.58', a: 'LIST 기반 (section.records). EDI 전체 컨테이너(선박 전체) 아닌 평택 작업 대상만. 컨테이너 데이터는 records 우선 + EDI 보강 (빈 값은 덮어쓰지 않음, M5.59).' },
         { q: '🚢 voucher 선박명/항차 — M5.59', a: 'voyage.info.vsl (선박명), info.voy (항차번호), info.carrier 자동 채움. 양하+선적 두 항차면 voy_d & voy_l 형식.' },
         { q: '🏢 선사 표시 통일 — M5.60', a: '검수리스트와 voucher의 선사가 동일한 3자 약어 (DJS/NSL/HAS/SKR/HSL). normalizeCarrier 함수: c.op (EDI/리스트 코드) > BL prefix > cn prefix 순서. 매핑: DJSC→DJS, NSSL→NSL, HASL→HAS, SNKO→SKR, HSLI→HSL, DWIC→DWS, EAS→EASK, TJM→TJMS, WDF→WDFC, SCLK→SIT.' },

@@ -11,6 +11,11 @@ import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
+  // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
+  const [voucherLoadVoy, setVoucherLoadVoy] = useState(voyage?.loading?.info?.voy || '');
+  const [voucherDischVoy, setVoucherDischVoy] = useState(voyage?.discharge?.info?.voy || '');
+  const [voucherBerth, setVoucherBerth] = useState(voyage?.info?.berth || voyage?.discharge?.info?.berth || '');
+
   const [mode, setMode] = useState('discharge');  // 'discharge' | 'loading'
   const [printSub, setPrintSub] = useState(null);  // 'cargo' | 'detail' | null
 
@@ -212,35 +217,64 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
 
         {/* 항목 리스트 */}
         <div className="p-4 space-y-3">
-          {/* FINAL WORKING REPORT (VOUCHER) — 결제용 (전체 계획) */}
-          <button
-            onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'settlement')}
-            className="w-full bg-amber-900/30 hover:bg-amber-900/50 border-2 border-amber-600/50 rounded-lg p-4 text-left flex items-center gap-3"
-          >
-            <FileText className="w-8 h-8 text-amber-400 shrink-0" />
-            <div className="flex-1">
-              <div className="font-bold text-amber-100">📄 FINAL WORKING REPORT (결제용)</div>
-              <div className="text-xs text-amber-200/70 mt-0.5">
-                작업 완료 가정 (EDI/LIST 전체) · 선사 제출용 · A4 1장
+          {/* FINAL WORKING REPORT (VOUCHER) — 입력 폼 + 두 버튼 */}
+          <div className="bg-slate-800/50 border-2 border-amber-600/30 rounded-lg p-3 space-y-2">
+            <div className="text-sm font-bold text-amber-200 mb-2">📄 FINAL WORKING REPORT 출력</div>
+            {/* 항차 + BERTH 입력 */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-0.5">양하 항차</label>
+                <input
+                  type="text"
+                  value={voucherDischVoy}
+                  onChange={(e) => setVoucherDischVoy(e.target.value)}
+                  placeholder="예: 0145N"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-400 block mb-0.5">선적 항차</label>
+                <input
+                  type="text"
+                  value={voucherLoadVoy}
+                  onChange={(e) => setVoucherLoadVoy(e.target.value)}
+                  placeholder="예: 0146S"
+                  className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"
+                />
               </div>
             </div>
-            <Printer className="w-4 h-4 text-amber-400" />
-          </button>
-
-          {/* FINAL WORKING REPORT (VOUCHER) — 작업용 (현재 진행) */}
-          <button
-            onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'actual')}
-            className="w-full bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-600/50 rounded-lg p-4 text-left flex items-center gap-3"
-          >
-            <FileText className="w-8 h-8 text-blue-400 shrink-0" />
-            <div className="flex-1">
-              <div className="font-bold text-blue-100">📄 FINAL WORKING REPORT (작업용)</div>
-              <div className="text-xs text-blue-200/70 mt-0.5">
-                현재 검수 완료된 컨테이너만 (records 기반) · 현장용
-              </div>
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-0.5">BERTH</label>
+              <input
+                type="text"
+                value={voucherBerth}
+                onChange={(e) => setVoucherBerth(e.target.value)}
+                placeholder="예: 6"
+                className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"
+              />
             </div>
-            <Printer className="w-4 h-4 text-blue-400" />
-          </button>
+            {/* 출력 버튼 두 개 */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'settlement', {
+                  dischVoy: voucherDischVoy, loadVoy: voucherLoadVoy, berth: voucherBerth
+                })}
+                className="bg-amber-900/40 hover:bg-amber-900/60 border border-amber-600/50 rounded p-2 text-center"
+              >
+                <div className="font-bold text-amber-100 text-xs">📄 결제용</div>
+                <div className="text-[10px] text-amber-200/70">완료 가정</div>
+              </button>
+              <button
+                onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'actual', {
+                  dischVoy: voucherDischVoy, loadVoy: voucherLoadVoy, berth: voucherBerth
+                })}
+                className="bg-blue-900/40 hover:bg-blue-900/60 border border-blue-600/50 rounded p-2 text-center"
+              >
+                <div className="font-bold text-blue-100 text-xs">📄 작업용</div>
+                <div className="text-[10px] text-blue-200/70">진행 현황</div>
+              </button>
+            </div>
+          </div>
 
           {count === 0 ? (
             <div className="text-center py-8 text-slate-400">
