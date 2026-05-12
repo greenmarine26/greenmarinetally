@@ -212,6 +212,36 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
 
         {/* 항목 리스트 */}
         <div className="p-4 space-y-3">
+          {/* FINAL WORKING REPORT (VOUCHER) — 결제용 (전체 계획) */}
+          <button
+            onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'settlement')}
+            className="w-full bg-amber-900/30 hover:bg-amber-900/50 border-2 border-amber-600/50 rounded-lg p-4 text-left flex items-center gap-3"
+          >
+            <FileText className="w-8 h-8 text-amber-400 shrink-0" />
+            <div className="flex-1">
+              <div className="font-bold text-amber-100">📄 FINAL WORKING REPORT (결제용)</div>
+              <div className="text-xs text-amber-200/70 mt-0.5">
+                작업 완료 가정 (EDI/LIST 전체) · 선사 제출용 · A4 1장
+              </div>
+            </div>
+            <Printer className="w-4 h-4 text-amber-400" />
+          </button>
+
+          {/* FINAL WORKING REPORT (VOUCHER) — 작업용 (현재 진행) */}
+          <button
+            onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'actual')}
+            className="w-full bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-600/50 rounded-lg p-4 text-left flex items-center gap-3"
+          >
+            <FileText className="w-8 h-8 text-blue-400 shrink-0" />
+            <div className="flex-1">
+              <div className="font-bold text-blue-100">📄 FINAL WORKING REPORT (작업용)</div>
+              <div className="text-xs text-blue-200/70 mt-0.5">
+                현재 검수 완료된 컨테이너만 (records 기반) · 현장용
+              </div>
+            </div>
+            <Printer className="w-4 h-4 text-blue-400" />
+          </button>
+
           {count === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <p>이 모드에 컨테이너 자료가 없습니다</p>
@@ -233,21 +263,6 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                   <div className="font-bold text-slate-100">📋 검수 리스트</div>
                   <div className="text-xs text-slate-400 mt-0.5">
                     A4 세로, 좌우 2단, 페이지당 140대 · 시트1(전체) + 시트2(특수화물 별첨)
-                  </div>
-                </div>
-                <Printer className="w-4 h-4 text-slate-500" />
-              </button>
-
-              {/* 1.5. FINAL WORKING REPORT (M5.53) — 양하+선적 통합 */}
-              <button
-                onClick={() => openWorkingReportPrint(voyage, voyage?.info || {})}
-                className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-4 text-left flex items-center gap-3"
-              >
-                <FileText className="w-8 h-8 text-amber-400 shrink-0" />
-                <div className="flex-1">
-                  <div className="font-bold text-slate-100">📄 FINAL WORKING REPORT (VOUCHER)</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    작업 완료 보고서 · 양하+선적 통합 · 선사×항구×F/E×사이즈 집계
                   </div>
                 </div>
                 <Printer className="w-4 h-4 text-slate-500" />

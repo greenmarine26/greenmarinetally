@@ -138,7 +138,7 @@ function orderPorts(ports) {
 }
 
 // ============ 데이터 집계 ============
-function buildBuckets(voyage) {
+function buildBuckets(voyage, mode = 'settlement') {
   const disch = {}, load = {};
 
   const addToBucket = (bucket, op, port, size, fe) => {
@@ -148,10 +148,17 @@ function buildBuckets(voyage) {
     bucket[op][port][size][fe]++;
   };
 
-  const processContainers = (containers, mode) => {
-    const bucket = mode === 'disch' ? disch : load;
+  // 작업용(actual): records에 있는 cn만 (실제 검수 완료된 것)
+  const actualCns = mode === 'actual' && voyage.records
+    ? new Set(Object.keys(voyage.records).map(k => String(k).toUpperCase()))
+    : null;
+
+  const processContainers = (containers, dlMode) => {
+    const bucket = dlMode === 'disch' ? disch : load;
     (containers || []).forEach(c => {
       if (!c) return;
+      // 작업용 모드: records에 없으면 skip
+      if (actualCns && c.cn && !actualCns.has(String(c.cn).toUpperCase())) return;
       const op = normalizeOp(c);
       const port = getPort(c, mode);
       const size = getSizeKey(c);
@@ -216,8 +223,8 @@ function getCells(op, port, fe, dataset) {
   });
 }
 
-function generateVoucherHTML(voyage) {
-  const { disch, load, totalDS, totalLD, dischTotal, loadTotal } = buildBuckets(voyage);
+function generateVoucherHTML(voyage, mode = 'settlement') {
+  const { disch, load, totalDS, totalLD, dischTotal, loadTotal } = buildBuckets(voyage, mode);
   const info = voyage.info || {};
   const vesselName = info.vesselName || info.vessel || 'VESSEL';
   const voyNo = info.voy || info.voyNo || ((info.voy_d && info.voy_l) ? `${info.voy_d} & ${info.voy_l}` : '');
@@ -340,7 +347,7 @@ table.voucher tr.total-row:first-of-type > td { border-top: 1.5pt solid #000; }
 .signs > div { text-align: center; padding-top: 4pt; font-weight: bold; font-size: 10pt; border-top: 0.5pt solid #000; }
 </style></head><body><div class="content">
 <div class="title">GREEN MARINE CO., LTD.</div>
-<div class="subtitle">FINAL WORKING REPORT (VOUCHER)</div>
+<div class="subtitle">FINAL WORKING REPORT (VOUCHER)${mode === 'actual' ? ' — 작업용 (현재 진행)' : ''}</div>
 <div class="info-row">
 <div><b>M/V :</b> ${vesselName}</div>
 <div><b>VOY # :</b> ${voyNo}</div>
@@ -370,8 +377,9 @@ export { generateVoucherHTML, buildBuckets, normalizeOp, normalizePort, getSizeK
 export default generateVoucherHTML;
 
 // 새 창에 voucher 출력 (PrintHubModal에서 호출)
-export function openWorkingReportPrint(voyage) {
-  const html = generateVoucherHTML(voyage);
+export function openWorkingReportPrint(voyage, info = {}, mode = 'settlement') {
+  // info는 voyage.info 그대로일 수 있음 - 호환성용
+  const html = generateVoucherHTML(voyage, mode);
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) { alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.'); return; }
   w.document.write(html);

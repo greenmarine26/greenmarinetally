@@ -42,3 +42,26 @@
   1. index.html 진입점 복원 (`/src/main.jsx`)
   2. dist + node_modules/.vite + 옛 assets 삭제
   3. npm run build
+
+## M5.55 추가 fix #2
+- **voucher 버튼 안 보임 문제 해결** — PrintHubModal에서 voucher 버튼이 `{count === 0 ? ... : (...)}` 조건 안에 있어서 현재 모드(양하/선적)에 데이터 없으면 안 보임
+- **수정**: voucher 버튼을 항목 리스트 최상단으로 이동 + 항상 표시 (mode 무관)
+- 노란 강조 색상 적용 (border-amber, bg-amber-900/30) — 다른 버튼과 시각적 구분
+
+## M5.56 - voucher 두 가지 모드
+- **결제용 (settlement)**: EDI/LIST 전체 컨테이너로 voucher 생성 (작업 완료 가정) — 선사 제출용
+- **작업용 (actual)**: records에 등록된 (실제 검수 완료) 컨테이너만 — 현장 진행 확인용
+
+### 구현
+- workingReport.js: `buildBuckets(voyage, mode)` + `generateVoucherHTML(voyage, mode)` + `openWorkingReportPrint(voyage, info, mode)`
+- mode='actual'이면 voyage.records의 cn에 있는 컨테이너만 필터링
+- subtitle에 "— 작업용 (현재 진행)" 표시 (actual 모드)
+
+### UI
+- PrintHubModal에 두 버튼:
+  - 🟡 "📄 FINAL WORKING REPORT (결제용)" — amber 색상
+  - 🔵 "📄 FINAL WORKING REPORT (작업용)" — blue 색상
+- 항목 리스트 최상단, 양하/선적 모드 무관 항상 표시
+
+### 빌드 검증
+- M5.56: 2회 / settlement: 2회 / 결제용/작업용: 5회 — 모두 dist 반영 ✓
