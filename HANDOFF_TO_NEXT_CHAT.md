@@ -65,3 +65,10 @@
 
 ### 빌드 검증
 - M5.56: 2회 / settlement: 2회 / 결제용/작업용: 5회 — 모두 dist 반영 ✓
+
+## M5.57 - voucher 빈 화면 원인 fix
+- **원인**: 실제 voyage 구조는 `voyage.discharge.ediContainers` / `voyage.loading.ediContainers` 객체. 내 코드는 `voyage.disch / voyage.load`로 찾아서 빈 화면.
+- **수정**: 
+  - voyage.discharge.ediContainers / voyage.loading.ediContainers 객체에서 Object.values()로 컨테이너 추출
+  - 작업용(actual): section.records의 cn 기준 필터링 (전체 voyage.records 아님)
+  - processContainers 함수 인라인 처리로 변경

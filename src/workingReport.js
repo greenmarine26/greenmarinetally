@@ -167,20 +167,52 @@ function buildBuckets(voyage, mode = 'settlement') {
     });
   };
 
-  // 양하 + 선적 처리 (voyage 객체에서 따로)
+  // 양하 + 선적 처리 — 실제 구조: voyage.discharge / voyage.loading 객체
+  //   각 section = { ediContainers: {cn: c, ...}, records: {cn: r, ...}, ... }
   if (voyage) {
-    if (voyage.disch || voyage.discharge || voyage.dischargeContainers) {
-      processContainers(voyage.disch || voyage.discharge || voyage.dischargeContainers, 'disch');
+    // 양하
+    const dischSection = voyage.discharge || voyage.disch || null;
+    if (dischSection) {
+      const ediCs = dischSection.ediContainers || dischSection.containers || {};
+      // 결제용: ediContainers 전체 (계획). 작업용: records의 cn만 (실제 작업)
+      const containers = Array.isArray(ediCs) ? ediCs : Object.values(ediCs);
+      // 작업용 actualCns를 voyage.records 대신 section.records 기준으로
+      const sectionRecordCns = mode === 'actual'
+        ? new Set(Object.keys(dischSection.records || {}).map(k => String(k).toUpperCase()))
+        : null;
+      containers.forEach(c => {
+        if (!c) return;
+        if (sectionRecordCns && c.cn && !sectionRecordCns.has(String(c.cn).toUpperCase())) return;
+        const op = normalizeOp(c);
+        const port = getPort(c, 'disch');
+        const size = getSizeKey(c);
+        const fe = getFE(c);
+        if (!disch[op]) disch[op] = {};
+        if (!disch[op][port]) disch[op][port] = {};
+        if (!disch[op][port][size]) disch[op][port][size] = { F: 0, E: 0 };
+        disch[op][port][size][fe]++;
+      });
     }
-    if (voyage.load || voyage.loadContainers) {
-      processContainers(voyage.load || voyage.loadContainers, 'load');
-    }
-    // 통합 containers + mode 필드
-    if (voyage.containers) {
-      voyage.containers.forEach(c => {
-        const m = (c.mode || c.loadDisch || '').toLowerCase();
-        if (m.includes('disch') || m === 'd' || m === '양하') processContainers([c], 'disch');
-        else processContainers([c], 'load');
+
+    // 선적
+    const loadSection = voyage.loading || voyage.load || null;
+    if (loadSection) {
+      const ediCs = loadSection.ediContainers || loadSection.containers || {};
+      const containers = Array.isArray(ediCs) ? ediCs : Object.values(ediCs);
+      const sectionRecordCns = mode === 'actual'
+        ? new Set(Object.keys(loadSection.records || {}).map(k => String(k).toUpperCase()))
+        : null;
+      containers.forEach(c => {
+        if (!c) return;
+        if (sectionRecordCns && c.cn && !sectionRecordCns.has(String(c.cn).toUpperCase())) return;
+        const op = normalizeOp(c);
+        const port = getPort(c, 'load');
+        const size = getSizeKey(c);
+        const fe = getFE(c);
+        if (!load[op]) load[op] = {};
+        if (!load[op][port]) load[op][port] = {};
+        if (!load[op][port][size]) load[op][port][size] = { F: 0, E: 0 };
+        load[op][port][size][fe]++;
       });
     }
   }
