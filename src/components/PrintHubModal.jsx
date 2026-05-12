@@ -24,6 +24,10 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
 
   const isPtk = (c) => {
     if (!c) return false;
+    // M5.50: 리스트에 있는 컨테이너는 무조건 평택 화물로 인식
+    //   (사용자가 평택에서 검수하는 모든 컨테이너 = 리스트 등록 = 검수 대상)
+    //   EDI POL/POD가 KRPTK 아닌 환적 표기여도 리스트 등록되면 평택분
+    if (c.cn && recMap[c.cn]) return true;
     if (mode === 'discharge') {
       const pod = String(c.pod || '').toUpperCase();
       return !pod || pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
