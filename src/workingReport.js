@@ -6,6 +6,7 @@
 
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
+import { openPrintWindow } from './printHelper.js';
 const PORT_MAP = {
   // 표준 5자
   'KRPUS': 'PUS', 'KRKAN': 'KAN', 'KRPTK': 'PTK', 'KRINC': 'INC',
@@ -427,12 +428,7 @@ export default generateVoucherHTML;
 
 // 새 창에 voucher 출력 (PrintHubModal에서 호출)
 export function openWorkingReportPrint(voyage, info = {}, mode = 'settlement', overrides = {}) {
-  // info는 voyage.info 그대로일 수 있음 - 호환성용 / overrides: { dischVoy, loadVoy, berth, date }
+  // M5.661: printHelper 사용 — toolbar 3가지 옵션 (인쇄/PDF/엑셀)
   const html = generateVoucherHTML(voyage, mode, overrides);
-  const w = window.open('', '_blank', 'width=900,height=1200');
-  if (!w) { alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.'); return; }
-  w.document.write(html);
-  w.document.close();
-  // 자동 인쇄 다이얼로그
-  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 500);
+  openPrintWindow(html, 'FINAL_WORKING_REPORT');
 }

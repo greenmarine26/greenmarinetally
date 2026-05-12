@@ -204,3 +204,8 @@
 
 ### 다른 인쇄 함수 (미적용 — 차후 단계)
 - EmptySealReport, WorkClosingChecklist 등은 React 컴포넌트 형식 — 필요시 동일 패턴 적용 가능
+
+## M5.661 hotfix — voucher에 엑셀 옵션 안 나오던 문제
+- 원인: openWorkingReportPrint가 옛 코드 그대로 (window.open + write + 자동 print). printHelper 적용 안 됨.
+- 수정: openPrintWindow(html, 'FINAL_WORKING_REPORT') 사용 + import 추가
+- 결과: voucher 새 창에 toolbar (인쇄/PDF/엑셀/닫기) 표시
