@@ -6,7 +6,7 @@ import { isStaff, getStaffRole, STAFF_NAMES } from '../staffList.js';
 // 삭제 권한자 (오직 한 사람)
 const ADMIN_NAME = '김성일';
 
-export default function InspectorModal({ current, inspectors, extraStaff = {}, onSelect, onClose }) {
+export default function InspectorModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onSelect, onClose }) {
   const [newName, setNewName] = useState('');
   const list = Object.values(inspectors || {})
     .filter(i => i && i.name)
@@ -18,9 +18,9 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, o
     .replace(/[,\s\.\-_\/\\]/g, '')  // 공백/콤마/마침표/대시/언더바/슬래시 제거
     .toLowerCase();
 
-  // 화이트리스트 합치기 (코드 명단 + Firebase 동적 명단)
+  // 화이트리스트 (코드 명단 + Firebase 동적 명단 - 퇴사자 제외)
   const extraNames = Object.values(extraStaff || {}).map(s => s.name).filter(Boolean);
-  const allWhitelist = [...STAFF_NAMES, ...extraNames];
+  const allWhitelist = [...STAFF_NAMES, ...extraNames].filter(n => !deletedStaff[n]);
   const isAllowed = (name) => allWhitelist.some(n => normalizeName(n) === normalizeName(name));
 
   // M5.73: 선택만 처리 (관리는 별도 StaffManagerModal)

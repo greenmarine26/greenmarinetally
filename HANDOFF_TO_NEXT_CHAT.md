@@ -312,3 +312,24 @@
 - 관리 권한 모두 제거 → StaffManagerModal로 이동
 - 삭제 버튼 제거 (현재 검수원 카드 단순)
 - 권한 충돌 가능성 사라짐
+
+## M5.74 - 퇴사자 처리 (deletedStaff 마커)
+### 이슈
+- 이전: fbDeleteStaff는 Firebase staffList에만 작동 → 코드 STAFF_LIST 29명은 삭제 불가
+- 결과: 퇴사자가 코드 명단에 있으면 그대로 표시 + 접속 가능
+
+### 수정 (deletedStaff 마커 방식)
+- 새 Firebase 노드: `deletedStaff/{name}` — 퇴사자 마커
+- 코드 명단 + 동적 명단 모두에 적용 가능
+- 삭제 시: extraStaff(있으면) + inspectors + deletedStaff 마커 추가
+- 화이트리스트(InspectorModal) + 명단(StaffManagerModal)에서 자동 제외
+
+### UI 갱신
+- 필터 탭: 재직 / 접속 / **퇴사** (3개)
+- 퇴사자 카드: [퇴사] 빨강 라벨 + [복구] 버튼 (emerald)
+- 영구 삭제가 아닌 마커 — 실수해도 복구 가능
+
+### firebase.js 신규 함수
+- fbMarkDeletedStaff(name) — 퇴사 처리
+- fbUnmarkDeletedStaff(name) — 복구
+- fbSubscribeDeletedStaff(cb) — 실시간 구독

@@ -420,6 +420,24 @@ export async function fbDeleteInspector(name) {
   await remove(ref(db, `inspectors/${name}`));
 }
 
+// M5.74: 퇴사자 마커 (코드 명단 직원도 제외 가능)
+export async function fbMarkDeletedStaff(name) {
+  if (!name) return;
+  await update(ref(db, `deletedStaff/${name}`), {
+    name,
+    deletedAt: Date.now(),
+  });
+}
+export async function fbUnmarkDeletedStaff(name) {
+  if (!name) return;
+  await remove(ref(db, `deletedStaff/${name}`));
+}
+export function fbSubscribeDeletedStaff(callback) {
+  const r = ref(db, 'deletedStaff');
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
+}
+
 // M5.62: 직원 명단 동적 추가/삭제 (김성일만)
 export async function fbAddStaff(name, role) {
   if (!name) return;

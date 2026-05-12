@@ -3,11 +3,11 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Trash2, Shield, RefreshCw } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector } from '../firebase.js';
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff } from '../firebase.js';
 
 const ADMIN_NAME = '김성일';
 
-export default function StaffManagerModal({ current, inspectors, extraStaff = {}, onClose }) {
+export default function StaffManagerModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onClose }) {
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('검수');
   const [filter, setFilter] = useState('all'); // all | inspectors | staff
@@ -36,12 +36,12 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   const inspectorList = Object.values(inspectors || {}).filter(i => i && i.name);
   const inspectorMap = Object.fromEntries(inspectorList.map(i => [i.name, i]));
 
-  // 필터링
-  const filtered = filter === 'inspectors'
-    ? allStaff.filter(s => inspectorMap[s.name])
-    : filter === 'staff'
-      ? allStaff
-      : allStaff;
+  // 필터링 (퇴사자 제외 기본 / 별도 보기 가능)
+  const isDeleted = (name) => !!deletedStaff[name];
+  let filtered;
+  if (filter === 'inspectors') filtered = allStaff.filter(s => inspectorMap[s.name] && !isDeleted(s.name));
+  else if (filter === 'deleted') filtered = allStaff.filter(s => isDeleted(s.name));
+  else filtered = allStaff.filter(s => !isDeleted(s.name));
 
   const handleAdd = async () => {
     const raw = newName.trim();
@@ -66,14 +66,26 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
 
   const handleDeleteStaff = async (name) => {
     if (name === ADMIN_NAME) { alert('관리자 본인은 삭제할 수 없습니다.'); return; }
-    if (!confirm(`"${name}" — 명단에서 삭제하시겠습니까?`)) return;
+    if (!confirm(`"${name}" — 퇴사 처리하시겠습니까?\n(접속 차단 + 명단 숨김. 복구 가능)`)) return;
     try {
       // Firebase 동적 명단에 있으면 삭제
       if (extraStaff[name]) await fbDeleteStaff(name);
-      // 검수원 활동 기록도 삭제 (Firebase inspectors)
+      // 검수원 활동 기록 삭제
       if (inspectorMap[name]) await fbDeleteInspector(name);
+      // M5.74: 코드 명단도 deletedStaff 마커로 제외 (퇴사자 처리)
+      await fbMarkDeletedStaff(name);
     } catch (e) {
       alert('삭제 실패: ' + e.message);
+    }
+  };
+
+  // M5.74: 퇴사 처리 복구
+  const handleRestore = async (name) => {
+    if (!confirm(`"${name}" — 복구하시겠습니까?\n(다시 접속 가능)`)) return;
+    try {
+      await fbUnmarkDeletedStaff(name);
+    } catch (e) {
+      alert('복구 실패: ' + e.message);
     }
   };
 
@@ -108,11 +120,15 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
         <div className="flex gap-1 p-2 border-b border-slate-700">
           <button onClick={() => setFilter('all')}
             className={`flex-1 py-2 text-xs rounded ${filter === 'all' ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-300'}`}>
-            전체 ({allStaff.length})
+            재직 ({allStaff.filter(s => !deletedStaff[s.name]).length})
           </button>
           <button onClick={() => setFilter('inspectors')}
             className={`flex-1 py-2 text-xs rounded ${filter === 'inspectors' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-300'}`}>
-            현재 접속 ({inspectorList.length})
+            접속 ({inspectorList.filter(i => !deletedStaff[i.name]).length})
+          </button>
+          <button onClick={() => setFilter('deleted')}
+            className={`flex-1 py-2 text-xs rounded ${filter === 'deleted' ? 'bg-red-800 text-white' : 'bg-slate-800 text-slate-300'}`}>
+            퇴사 ({Object.keys(deletedStaff).length})
           </button>
         </div>
 
@@ -151,6 +167,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     {s.name}
                     {s.name === ADMIN_NAME && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
                     {isDynamic && <span className="text-[9px] bg-purple-900 text-purple-300 px-1 rounded">추가됨</span>}
+                    {isDeleted(s.name) && <span className="text-[9px] bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
                   </div>
                   <div className="text-[10px] text-slate-400">{s.role}</div>
                 </div>
@@ -159,16 +176,25 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                 {/* 액션 버튼 */}
                 {s.name !== ADMIN_NAME && (
                   <div className="flex gap-1">
-                    {isOnline && (
-                      <button onClick={() => handleKickInspector(s.name)}
-                        className="p-1.5 hover:bg-orange-900/40 rounded text-orange-400" title="접속 기록 제거">
-                        <RefreshCw className="w-3.5 h-3.5"/>
+                    {isDeleted(s.name) ? (
+                      <button onClick={() => handleRestore(s.name)}
+                        className="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 rounded text-white text-xs font-bold" title="복구 (재입사)">
+                        복구
                       </button>
+                    ) : (
+                      <>
+                        {isOnline && (
+                          <button onClick={() => handleKickInspector(s.name)}
+                            className="p-1.5 hover:bg-orange-900/40 rounded text-orange-400" title="접속 기록 제거">
+                            <RefreshCw className="w-3.5 h-3.5"/>
+                          </button>
+                        )}
+                        <button onClick={() => handleDeleteStaff(s.name)}
+                          className="p-1.5 hover:bg-red-900/40 rounded text-red-400" title="퇴사 처리">
+                          <Trash2 className="w-3.5 h-3.5"/>
+                        </button>
+                      </>
                     )}
-                    <button onClick={() => handleDeleteStaff(s.name)}
-                      className="p-1.5 hover:bg-red-900/40 rounded text-red-400" title="명단 삭제">
-                      <Trash2 className="w-3.5 h-3.5"/>
-                    </button>
                   </div>
                 )}
               </div>
@@ -177,7 +203,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
         </div>
 
         <div className="p-3 border-t border-slate-700 text-[10px] text-slate-500">
-          🗑 명단 삭제 (영구) · 🔄 접속 기록만 제거 (다시 접속 가능)
+          🗑 퇴사 처리 (접속 차단, 복구 가능) · 🔄 접속 기록만 제거
         </div>
       </div>
     </div>
