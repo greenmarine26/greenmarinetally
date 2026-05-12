@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { APP_VERSION, _storage, SK } from './utils.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
-  fbSubscribeConnection, fbSetInspectorActivity, fbSubscribePortMis
+  fbSubscribeConnection, fbSetInspectorActivity, fbSubscribePortMis,
+  fbSubscribeStaffList
 } from './firebase.js';
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
@@ -38,7 +39,7 @@ export default function App() {
     const unsub2 = fbSubscribeStaffList(setExtraStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
-    return () => { u1(); u2(); u3(); u4(); };
+    return () => { u1(); u2(); u3(); u4(); unsub2(); };
   }, []);
 
   useEffect(() => {
