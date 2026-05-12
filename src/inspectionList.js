@@ -54,10 +54,12 @@ function getContainerCategory(c) {
 
 function getSortKey(c) {
   const { len, type, fe } = getContainerCategory(c);
+  // M5.52: 선사별 정렬 (1차 키) + 기존 사이즈/F-E (2차 키)
+  const line = (c.op || (c.cn ? c.cn.slice(0, 4) : '')).toUpperCase();
   // 20풀(0) → 20엠티(1) → 20특수(2) → 40풀(3) → 40엠티(4) → 40특수(5)
   const sizeGroup = len === 20 ? 0 : 3;
   const typeOrder = type === 'normal' ? (fe === 'F' ? 0 : 1) : 2;
-  return sizeGroup + typeOrder;
+  return { line, secondary: sizeGroup + typeOrder };
 }
 
 function getRowColor(c) {
@@ -75,8 +77,10 @@ function renderRow(c, idx) {
   const { len, type } = getContainerCategory(c);
   const spec = `${len}${type === 'normal' ? '' : type === 'reefer' ? 'R' : type === 'fr' ? 'F' : type === 'ot' ? 'O' : 'T'}`;
   const fe = (c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
-  const sl = (c.sl || '').slice(0, 12);
+  const sl = (c.sl || '').slice(0, 10);  // M5.52: 12→10자 (선사 칸 공간 확보)
   const cn = c.cn || '';
+  // M5.52: 선사 (c.op = EDI NAD+CA 또는 리스트 carrier 컬럼) 우선, 폴백 cn prefix(owner code)
+  const line = (c.op || (cn ? cn.slice(0, 4) : '')).slice(0, 5);
   // 비고: X-RAY ★ + 리퍼 온도 + 기타 표시
   const notes = [];
   if (c._xray) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
@@ -93,6 +97,7 @@ function renderRow(c, idx) {
     <td>${fe === 'F' ? 'F' : ''}</td>
     <td>${fe === 'E' ? 'E' : ''}</td>
     <td>${note}</td>
+    <td class="line">${line}</td>
   </tr>`;
 }
 
@@ -108,7 +113,7 @@ function renderPage(rows, pageNum, totalPages) {
   const right = rows.slice(PER_COL);
 
   const renderColumn = (rs) => `<table class="ilist">
-    <thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th></tr></thead>
+    <colgroup><col style="width:4%"><col style="width:20%"><col style="width:16%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:31%"><col style="width:12%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th><th>선사</th></tr></thead>
     <tbody>${rs.join('')}</tbody>
   </table>`;
 
@@ -126,18 +131,27 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
   const list = Array.isArray(containers) ? [...containers] : Object.values(containers || {});
   if (list.length === 0) return '<p>컨테이너 없음</p>';
 
-  // 정렬
+  // M5.52: 선사별 정렬 (1차) → 사이즈/F-E (2차) → 컨번호 (3차)
   list.sort((a, b) => {
     const ka = getSortKey(a), kb = getSortKey(b);
-    if (ka !== kb) return ka - kb;
+    if (ka.line !== kb.line) return ka.line.localeCompare(kb.line);
+    if (ka.secondary !== kb.secondary) return ka.secondary - kb.secondary;
     return (a.cn || '').localeCompare(b.cn || '');
+  });
+
+  // M5.52: 선사별로 순번 1부터 재시작
+  let lineIdxMap = {};
+  list.forEach(c => {
+    const line = (c.op || (c.cn ? c.cn.slice(0, 4) : '')).toUpperCase();
+    lineIdxMap[line] = (lineIdxMap[line] || 0) + 1;
+    c._lineIdx = lineIdxMap[line];
   });
 
   // 시트1: 전체 (페이지당 150대씩 — 좌 75 + 우 75)
   const allPages = [];
   for (let i = 0; i < list.length; i += PER_PAGE) {
     const chunk = list.slice(i, i + PER_PAGE);
-    const rows = chunk.map((c, j) => renderRow(c, i + j + 1));
+    const rows = chunk.map(c => renderRow(c, c._lineIdx));  // 전체 idx 대신 선사별 idx
     allPages.push(rows);
   }
   // sheet1Pages는 아래 renderPageWithHdr로 계산 (헤더 포함)
@@ -163,7 +177,7 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
     const left = rows.slice(0, 75);
     const right = rows.slice(75);
     const col = (rs) => `<table class="ilist">
-      <thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th></tr></thead>
+      <colgroup><col style="width:4%"><col style="width:20%"><col style="width:16%"><col style="width:7%"><col style="width:5%"><col style="width:5%"><col style="width:31%"><col style="width:12%"></colgroup><thead><tr><th>#</th><th>컨번호</th><th>실번호</th><th>규격</th><th>F</th><th>E</th><th>비고</th><th>선사</th></tr></thead>
       <tbody>${rs.join('')}</tbody>
     </table>`;
     return `<div class="ipage">
