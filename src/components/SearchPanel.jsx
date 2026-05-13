@@ -17,6 +17,8 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null }) {
   const [searchMode, setSearchMode] = useState('single');
+  // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
+  const [workFilter, setWorkFilter] = useState('discharge');  // 'discharge' | 'loading' | 'completed'
 
   const allContainers = useMemo(() => {
     const arr = [];
@@ -51,8 +53,45 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     return arr;
   }, [voyage]);
 
+  // M5.75: 작업 모드 필터 적용 — 양하 작업 중엔 양하만, 선적엔 선적만, 완료는 별도
+  const filteredContainers = useMemo(() => {
+    if (workFilter === 'completed') {
+      return allContainers.filter(c => c._comp);  // 양하/선적 구분 없이 완료된 것
+    }
+    return allContainers.filter(c => c._mode === workFilter && !c._comp);
+  }, [allContainers, workFilter]);
+
+  // 갯수 표시용
+  const dischCount = useMemo(() => allContainers.filter(c => c._mode === 'discharge' && !c._comp).length, [allContainers]);
+  const loadCount = useMemo(() => allContainers.filter(c => c._mode === 'loading' && !c._comp).length, [allContainers]);
+  const completedCount = useMemo(() => allContainers.filter(c => c._comp).length, [allContainers]);
+
   return (
     <div className="space-y-3">
+      {/* M5.75: 작업 모드 탭 (양하/선적/완료) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
+        <button onClick={() => setWorkFilter('discharge')}
+          className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
+            workFilter === 'discharge' ? 'bg-rose-700 text-rose-100' : 'text-slate-400 hover:bg-slate-800'
+          }`}>
+          <span>⬇ 양하 작업</span>
+          <span className="text-[10px] opacity-80">대기 {dischCount}대</span>
+        </button>
+        <button onClick={() => setWorkFilter('loading')}
+          className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
+            workFilter === 'loading' ? 'bg-sky-700 text-sky-100' : 'text-slate-400 hover:bg-slate-800'
+          }`}>
+          <span>⬆ 선적 작업</span>
+          <span className="text-[10px] opacity-80">대기 {loadCount}대</span>
+        </button>
+        <button onClick={() => setWorkFilter('completed')}
+          className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
+            workFilter === 'completed' ? 'bg-emerald-700 text-emerald-100' : 'text-slate-400 hover:bg-slate-800'
+          }`}>
+          <span>✓ 완료</span>
+          <span className="text-[10px] opacity-80">{completedCount}대</span>
+        </button>
+      </div>
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
         <button onClick={() => setSearchMode('single')}
           className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${
@@ -69,8 +108,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}/>
-        : <TwinSearch voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}/>}
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>
+        : <TwinSearch voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
     </div>
   );
 }

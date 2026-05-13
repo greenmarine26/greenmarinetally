@@ -333,3 +333,24 @@
 - fbMarkDeletedStaff(name) — 퇴사 처리
 - fbUnmarkDeletedStaff(name) — 복구
 - fbSubscribeDeletedStaff(cb) — 실시간 구독
+
+## M5.75 - 검색 작업 모드 분리 (양하/선적/완료)
+### 이슈
+- 양하 작업 중에도 선적 컨테이너 검색됨 (혼란)
+- 완료된 컨테이너도 검색되어 같은 컨테이너 중복 처리 위험
+
+### 수정 (SearchPanel.jsx)
+- 새 탭 3개 추가: ⬇ 양하 작업 / ⬆ 선적 작업 / ✓ 완료
+- 각 탭에 대기 갯수 표시 (실시간)
+- 필터링 로직:
+  - 양하 작업: _mode === 'discharge' && !_comp
+  - 선적 작업: _mode === 'loading' && !_comp
+  - 완료: _comp (양하+선적 모두)
+- SingleSearch + TwinSearch에 filteredContainers 전달 (allContainers 그대로 X)
+
+### UI 색상
+- 양하: rose-700 (붉은계열)
+- 선적: sky-700 (파란계열)
+- 완료: emerald-700 (녹색)
+
+기존 싱글/트윈 탭은 그대로 유지 (작업 모드와 별개)
