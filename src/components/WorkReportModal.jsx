@@ -2,7 +2,7 @@
 // 흐름: 작업 시작 → 장비+작업종류 선택 → 카톡 발송
 //       이후 중단/완료/해치/콘박스는 활성 장비 자동 사용
 import React, { useState, useEffect } from 'react';
-import { X, Play, Pause, CheckCircle2, Lock, Unlock, Box, Send, Truck, RefreshCw } from 'lucide-react';
+import { AlertTriangle, X, Play, Pause, CheckCircle2, Lock, Unlock, Box, Send, Truck, RefreshCw } from 'lucide-react';
 import {
   shareText,
   buildWorkStatusMessage,
@@ -25,6 +25,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [selectedMode, setSelectedMode] = useState('discharge');  // 'discharge' | 'load'
   // 중단 사유
   const [pauseReason, setPauseReason] = useState('');
+  const [externalReason, setExternalReason] = useState('');
+  const [externalDetail, setExternalDetail] = useState('');
   const [pauseTarget, setPauseTarget] = useState({ equip: '', mode: '' });
   // 해치
   const [hatchAction, setHatchAction] = useState('open');
@@ -128,6 +130,25 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
     await shareText(message, '검수 보고');
     setPauseReason('');
+    setView('main');
+    onClose();
+  };
+
+  // M5.76: 외부 요인 작업 중단 (작업 시작 안 한 상태에서도 보고 가능)
+  const handleExternalPause = async () => {
+    const reason = externalReason === '기타' ? externalDetail.trim() : externalReason;
+    if (!reason) return;
+    const time = Date.now();
+    const timeStr = new Date(time).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const message = `[작업 중단 보고]\n선박: ${vsl}\n항차: ${voy}\n시간: ${timeStr}\n사유: ${reason}`;
+    await fbAddWorkReport(voyageKey, {
+      type: 'external_pause',
+      reason,
+      message,
+    });
+    await shareText(message, '검수 보고');
+    setExternalReason('');
+    setExternalDetail('');
     setView('main');
     onClose();
   };
@@ -319,6 +340,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 <Box className="w-4 h-4"/> 콘박스
               </button>
             </div>
+            {/* M5.76: 외부 요인 작업 중단 (장비고장/강풍/안개/기타) */}
+            <button onClick={() => setView('external')}
+              className="w-full py-3 bg-red-800 hover:bg-red-700 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-red-600">
+              <AlertTriangle className="w-4 h-4"/> 작업 중단 (장비고장 / 강풍 / 안개 / 기타)
+            </button>
 
             <div className="text-[10px] text-slate-500 text-center">
               💡 카톡 공유창이 열리면 단톡방을 선택하세요
@@ -379,19 +405,52 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               </div>
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">중단 사유 (필수)</div>
-              <input
-                type="text"
-                value={pauseReason}
-                onChange={e => setPauseReason(e.target.value)}
-                placeholder="예: 강풍 10m/s, 우천, 화물 이상"
-                className="w-full bg-slate-800 border border-amber-600 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-400"
-                autoFocus
-              />
+              <div className="text-xs font-bold text-slate-300 mb-1">중단 사유 — 빠른 선택</div>
+              <div className="grid grid-cols-2 gap-1.5 mb-2">
+                {['장비 고장', '강풍 대기', '안개 대기', '우천 대기', '화물 이상', '점심 식사'].map(r => (
+                  <button key={r} type="button" onClick={() => setPauseReason(r)}
+                    className={`py-2 rounded text-xs font-bold border ${pauseReason === r ? 'bg-amber-700 text-white border-amber-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>{r}</button>
+                ))}
+              </div>
+              <input type="text" value={pauseReason} onChange={e => setPauseReason(e.target.value)}
+                placeholder="또는 기타 사유 직접 입력"
+                className="w-full bg-slate-800 border border-amber-600 rounded px-3 py-2 text-sm text-slate-100"/>
             </div>
             <button onClick={() => handlePause(pauseTarget.equip, pauseTarget.mode)}
               className="w-full py-3 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
               <Pause className="w-4 h-4"/> 중단 보고
+            </button>
+          </div>
+        )}
+
+        {/* M5.76: 외부 요인 작업 중단 화면 */}
+        {view === 'external' && (
+          <div className="p-3 space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <div className="bg-red-950/40 border border-red-700 rounded p-2">
+              <div className="font-bold text-red-200 text-sm flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4"/> 작업 중단 보고 (외부 요인)
+              </div>
+              <div className="text-[11px] text-red-300/80 mt-1">전체 작업 중단 — 작업 시작 안 한 상태에서도 보고 가능</div>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">중단 사유</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {['장비 고장', '강풍 대기', '안개 대기', '우천 대기', '항만 사정', '기타'].map(r => (
+                  <button key={r} type="button" onClick={() => setExternalReason(r)}
+                    className={`py-2.5 rounded text-xs font-bold border ${externalReason === r ? 'bg-red-700 text-white border-red-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>{r}</button>
+                ))}
+              </div>
+              {externalReason === '기타' && (
+                <input type="text" value={externalDetail} onChange={e => setExternalDetail(e.target.value)}
+                  placeholder="세부 사유 입력"
+                  className="w-full mt-2 bg-slate-800 border border-red-600 rounded px-3 py-2 text-sm text-slate-100" autoFocus/>
+              )}
+            </div>
+            <button onClick={handleExternalPause}
+              disabled={!externalReason || (externalReason === '기타' && !externalDetail.trim())}
+              className="w-full py-3 bg-red-700 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              <AlertTriangle className="w-4 h-4"/> 작업 중단 보고
             </button>
           </div>
         )}

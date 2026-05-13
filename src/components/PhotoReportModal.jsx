@@ -12,15 +12,19 @@ import { fbAddWorkReport, fbAddPhotoReport } from '../firebase.js';
 
 export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equipNo, onClose }) {
   // type: 'seal_error' | 'damage'
-  const [photoBlob, setPhotoBlob] = useState(null);
-  const [photoUrl, setPhotoUrl] = useState('');
+  // M5.77: 사진 2장 (컨번호 사진 + 상세 사진 — 데미지부분 or 액츄얼실)
+  const [cnPhotoBlob, setCnPhotoBlob] = useState(null);
+  const [cnPhotoUrl, setCnPhotoUrl] = useState('');
+  const [detailPhotoBlob, setDetailPhotoBlob] = useState(null);
+  const [detailPhotoUrl, setDetailPhotoUrl] = useState('');
   const [damageTypes, setDamageTypes] = useState([]);
   const [damageParts, setDamageParts] = useState([]);
   const [note, setNote] = useState('');
   const [sealOrig, setSealOrig] = useState(c?.sl_orig || c?.sl || '');
   const [sealNew, setSealNew] = useState('');
   const [sending, setSending] = useState(false);
-  const fileInputRef = useRef(null);
+  const cnInputRef = useRef(null);
+  const detailInputRef = useRef(null);
 
   if (!open) return null;
 
@@ -28,11 +32,17 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
   const voy = voyage?.info?.voy_l || voyage?.info?.voy || '';
   const cn = c?.cn || '';
 
-  const handlePhotoSelect = (e) => {
+  const handleCnPhoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhotoBlob(file);
-    setPhotoUrl(URL.createObjectURL(file));
+    setCnPhotoBlob(file);
+    setCnPhotoUrl(URL.createObjectURL(file));
+  };
+  const handleDetailPhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDetailPhotoBlob(file);
+    setDetailPhotoUrl(URL.createObjectURL(file));
   };
 
   const togglePart = (code) => setDamageParts(p => p.includes(code) ? p.filter(x => x !== code) : [...p, code]);
@@ -40,8 +50,12 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
 
   const handleSend = async () => {
     // 검증을 명확히 - 어떤 게 빠졌는지 즉시 알려줌
-    if (!photoBlob) {
-      alert('⚠️ 사진을 먼저 촬영하세요');
+    if (!cnPhotoBlob) {
+      alert('⚠️ 컨테이너 번호 사진을 촬영하세요 (필수)');
+      return;
+    }
+    if (!detailPhotoBlob) {
+      alert(`⚠️ ${type === 'damage' ? '데미지 부분' : '액츄얼 실'} 사진을 촬영하세요 (필수)`);
       return;
     }
     if (type === 'damage' && damageTypes.length === 0) {
@@ -69,18 +83,23 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
 
       // 1단계: 카톡 공유 먼저 (검수원에게 즉시 반응)
       console.log('[PhotoReport] 카톡 공유 시작', { message });
-      const result = await shareWithPhoto(message, photoBlob, type === 'seal_error' ? '실오류' : '데미지');
+      // M5.77: 사진 2장 전송 (컨번호 + 상세)
+      const result = await shareWithPhoto(message, [cnPhotoBlob, detailPhotoBlob], type === 'seal_error' ? '실오류' : '데미지');
       console.log('[PhotoReport] 카톡 공유 결과', result);
 
       // 2단계: Firebase 저장 (백그라운드, 실패해도 카톡은 이미 보냄)
       try {
-        const reader = new FileReader();
-        const base64 = await new Promise((res, rej) => {
-          reader.onload = () => res(reader.result);
-          reader.onerror = () => rej(new Error('파일 읽기 실패'));
-          reader.readAsDataURL(photoBlob);
+        const toBase64 = (blob) => new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result);
+          r.onerror = () => rej(new Error('파일 읽기 실패'));
+          r.readAsDataURL(blob);
         });
-        await fbAddPhotoReport(voyageKey, base64, {
+        const cnB64 = await toBase64(cnPhotoBlob);
+        const detailB64 = await toBase64(detailPhotoBlob);
+        await fbAddPhotoReport(voyageKey, cnB64, {
+          photoKind: 'cn',
+          detailPhoto: detailB64,
           type, cn, mode: voyage?.mode || 'unknown',
           equip: equipNo,
           damageTypes: type === 'damage' ? damageTypes : null,
@@ -141,30 +160,42 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
             <div className="text-base font-bold mono text-slate-100">{cn}</div>
           </div>
 
-          {/* 사진 촬영 */}
+          {/* M5.77: 사진 2장 필수 */}
+          <input ref={cnInputRef} type="file" accept="image/*" capture="environment" onChange={handleCnPhoto} className="hidden"/>
+          <input ref={detailInputRef} type="file" accept="image/*" capture="environment" onChange={handleDetailPhoto} className="hidden"/>
+
+          {/* 사진 1: 컨테이너 번호 */}
           <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handlePhotoSelect}
-              className="hidden"
-            />
-            {photoUrl ? (
-              <div className="space-y-2">
-                <img src={photoUrl} alt="" className="w-full rounded-lg border-2 border-slate-700"/>
-                <button onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
-                  📷 다시 촬영
-                </button>
+            <div className="text-xs font-bold text-amber-300 mb-1">📷 1/2 컨테이너 번호 (필수)</div>
+            {cnPhotoUrl ? (
+              <div className="relative">
+                <img src={cnPhotoUrl} alt="" className="w-full rounded-lg border-2 border-emerald-700"/>
+                <div className="absolute top-1 right-1 bg-emerald-700 text-white text-[10px] px-2 py-0.5 rounded font-bold">✓ 촬영됨</div>
+                <button onClick={() => cnInputRef.current?.click()}
+                  className="mt-1 w-full py-1.5 bg-slate-700 text-slate-300 rounded text-xs font-bold">📷 다시 촬영</button>
               </div>
             ) : (
-              <button onClick={() => fileInputRef.current?.click()}
-                className={`w-full py-6 rounded-lg font-bold text-white flex items-center justify-center gap-2 ${
-                  isError ? 'bg-red-700 hover:bg-red-600' : 'bg-amber-700 hover:bg-amber-600'
-                }`}>
-                <Camera className="w-6 h-6"/> 사진 촬영
+              <button onClick={() => cnInputRef.current?.click()}
+                className={`w-full py-5 rounded-lg font-bold text-white flex items-center justify-center gap-2 ${isError ? 'bg-red-700' : 'bg-amber-700'}`}>
+                <Camera className="w-5 h-5"/> 컨테이너 번호 촬영
+              </button>
+            )}
+          </div>
+
+          {/* 사진 2: 상세 (데미지 부분 또는 액츄얼 실) */}
+          <div>
+            <div className="text-xs font-bold text-amber-300 mb-1">📷 2/2 {isError ? '액츄얼 실 (필수)' : '데미지 부분 (필수)'}</div>
+            {detailPhotoUrl ? (
+              <div className="relative">
+                <img src={detailPhotoUrl} alt="" className="w-full rounded-lg border-2 border-emerald-700"/>
+                <div className="absolute top-1 right-1 bg-emerald-700 text-white text-[10px] px-2 py-0.5 rounded font-bold">✓ 촬영됨</div>
+                <button onClick={() => detailInputRef.current?.click()}
+                  className="mt-1 w-full py-1.5 bg-slate-700 text-slate-300 rounded text-xs font-bold">📷 다시 촬영</button>
+              </div>
+            ) : (
+              <button onClick={() => detailInputRef.current?.click()}
+                className={`w-full py-5 rounded-lg font-bold text-white flex items-center justify-center gap-2 ${isError ? 'bg-red-700' : 'bg-amber-700'}`}>
+                <Camera className="w-5 h-5"/> {isError ? '액츄얼 실' : '데미지 부분'} 촬영
               </button>
             )}
           </div>
