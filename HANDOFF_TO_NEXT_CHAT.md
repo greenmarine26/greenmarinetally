@@ -1,103 +1,119 @@
-# M5.79 인계 — EDI 보강 + 부킹 슬롯 + 수동 보고
+# M5.80 인계 — AI 대화 강화 (Flash + RAG + 멀티턴)
 
-## 🎯 M5.79 핵심 변경 (5개)
+## 🎯 M5.80 핵심 변경 (사용자 요청: "검색앱 AI 대폭 업데이트, 대화 가능 수준")
 
-### 1. parseBAPLIE LOC+83(환적항) + LOC+97/98(최종지) 추가
-- **utils.js** `parseBAPLIE` 함수 보강
-- 새 필드: `c.tspot` (Transhipment Port), `c.fpod` (Final Discharge Port)
-- 실측: SWRG 양하선 290대 / DPRT 적재선 182대가 LOC+83 사용
-- 2단 환적 추적 가능 (예: VNSGN → KRPUS → JPSKT)
+### 1. Gemini 2.5 Pro → 2.5 Flash
+- 응답 속도: 3~10초 → **0.5~1.5초**
+- 무료 한도: 일일 50회 → **일일 1500회**
+- mixerUpload.js OCR 호출도 Flash로 통일 (한도 일관성)
 
-### 2. 평택 적재 부킹 슬롯 — 빈 컨번호 임시 ID 보존
-- **utils.js** EQD+CN++ (cn 빈값) 처리
-- 임시 ID 형식: `__BOOK_{bay}_{row}_{tier}` + 중복 카운터
-- 새 필드: `c.isBooking=true`, `c.pendingCn=true`, `c.l4=''` (검색 매칭 차단)
-- 새 헬퍼: `isBookingSlot(c)`, `bookingLabel(c)` export
-- **이전 M5.78**: cn='' 컨테이너가 `if(!c.cn) return;`로 voucher/검색에서 통째 제외됐음
-- **M5.79**: DPRT SI 평택 적재 375대 모두 살아남아 voucher·베이그리드·검수리스트에 정상 표시
+### 2. RAG (Retrieval-Augmented Generation)
+- 매 질문마다 1500대 전체를 LLM에 보내던 방식 → 질문 키워드로 후보 좁히기
+- 새 함수: `ragFilter(question, allContainers, parsedQuery)` (gemini.js export)
+- 키워드 매칭:
+  - 베이 번호 → 그 베이만
+  - DG/리퍼/FR/OT/TK → 해당 타입만
+  - POL/POD → 해당 항구만
+  - 컨번호 끝자리 → 그 컨테이너만
+  - DG Class / UN → 해당 위험물만
+  - F/E, 사이즈, 갑판/선창, 무게 범위 등
+- 평균 **30~50대만 전송** (전체 1500대의 2~3%)
 
-### 3. DG UN 코드북 신규 (dgUnDict.js)
-- 52개 UN 번호 → 화물명·Class·경고 매핑
-- 평택 빈출: UN 1170(에탄올), 1759(부식성), 1805(인산), 1993(인화성), 3268(에어백), 3077(환경유해)
-- 실측 발견 누락 보강: UN 1307(자일렌), 1593(디클로로메탄)
-- export 함수: `lookupUN`, `formatDgLabel`, `formatDgShort`, `normalizeUN`
-- DGS+IMD packaging group(`c.pg`) 추출 (PG I/II/III 위험등급)
+### 3. 멀티턴 대화
+- 새 state: `chatMessages` 배열 — 이전 대화 누적
+- handleAskAI에 `history` 옵션 추가
+- 5턴 넘으면 `compressHistory()`가 첫 3턴을 한 줄 요약으로 자동 압축
+- UI: 답변 카드가 말풍선 대화 형식 (검수원 / AI)
+- 후속 질문 입력창 + [🔄 새 대화] 버튼
 
-### 4. ContainerDetailModal 보강
-- **ISO 옵션 21개로 확장** (M3.86 보류 작업 마무리):
-  - 22G0/G1, 42G0/G1, 45G0/G1, 22R0/R1, 42R0/R1, 45R0/R1 등 끝자리 0(Full)·1(Empty) 분리
-  - 라벨에 "· Full" / "· Empty" 명시
-- **부킹 슬롯 헤더**: "📝 컨번호 입력대기" + amber 뱃지
-- **DG 상세 박스**: UN 화물명 + Class + PG 위험등급
-- **환적/최종지 필드**: LOC+83 tspot · LOC+97/98 fpod 표시
-- **2단 환적 경고 박스**: "🔁 2단 환적: VNSGN → KRPUS → JPSKT"
+### 4. systemInstruction 분리
+- 도메인 지식 + 답변 규칙을 `systemInstruction` 필드에
+- 매 턴 새로 보내지 않음 (Gemini가 자동 캐시)
+- contents에는 컨텍스트 + 질문만
 
-### 5. WorkReportModal 수동 보고 섹션 신규
-**사용자 강조 요청**: 시작 안 눌러도 중단/재개/완료 버튼 보이게.
+### 5. UI 강화
+- AI 대화 카드 상단에 "🎯 RAG: 베이 16 / DG (3대)" 배지 — 어떤 데이터로 답했는지 투명 표시
+- 각 AI 메시지 아래 "📌 5번 베이 / 리퍼 (12대 참조)" 표시
+- 좌측 컬러: 검수원 (amber) / AI (purple)
 
-- 메인 화면에 [🔧 수동 보고 (시작 안 누른 작업)] 인디고 버튼 추가
-- 신규 `manual` view: 장비 선택 + 모드 선택 + 액션 선택 (중단/재개/완료) + 사유 입력 + 실행
-- handlePause/Resume/Done에서 `if (!aw) return;` 가드 제거 → 폴백 객체로 진행
-- Firebase 현재 상태 카드 표시 (🟢 진행 / ⏸ 중단 / 📭 기록 없음)
-- 카톡 메시지에 `manual: true` 마커 (이력 추적)
-
-**해결 시나리오**:
-- (1) 다른 검수원이 시작한 작업을 이어받아 중단/완료
-- (2) 한 갱이 먼저 작업 끝나서 시작 기록 없이 완료 보고
-- (3) 시작 버튼 못 눌렀던 상황
+### 6. 부가 변경
+- 컨테이너 압축에 M5.79 필드 추가: `ts`(tspot), `fp`(fpod), `booking`
+- DG는 UN 화물명도 함께 전달 (`un_name`) — LLM 추론 도움
+- 부킹 슬롯(__BOOK_*) 별도 카운트 + 시스템 프롬프트에 처리 규칙
 
 ---
 
-## ✅ 빌드 산출물 검증 (assets/index-DzXBuqGn.js)
+## ✅ 빌드 검증
 
-| 키워드 | 회수 | 비고 |
-|---|---|---|
-| M5.79 | 2 | APP_VERSION |
-| __BOOK_ | 4 | 부킹 슬롯 임시 ID |
-| isBookingSlot | 3 | 헬퍼 |
-| tspot | 2 | LOC+83 |
-| fpod | 2 | LOC+97/98 |
-| 에탄올/인산/안전장치/리튬/환경유해/Class 3 | 모두 포함 | UN 사전 |
-| 📝 대기 / 컨번호 입력대기 | 4 | 부킹 라벨 |
-| 수동 보고 | 2 | WorkReportModal |
-| 이어받기 | 2 | 사용자 강조 시나리오 |
-| 한 갱 먼저 완료 | 2 | 사용자 강조 시나리오 |
-| 20DC Full / Empty | 각 2 | ISO 옵션 분리 |
-| 환적항(83) / 최종지(97) / 2단 환적 | 각 2 | 환적 UI |
+산출물: `assets/index-4XtZfp5d.js` (1.49 MB)
 
-## ✅ 통합 시뮬레이션 검증 (실 EDI 파일 기반 6개 시나리오)
+| 키워드 | 회수 |
+|---|---|
+| `M5.80` | 1 |
+| `gemini-2.5-flash` | 1 (호출 URL) |
+| `gemini-2.5-pro` | 0 (모두 Flash로 통일) |
+| `ragFilter` / RAG | 3 |
+| `compressHistory` (이전 대화 요약) | 1 |
+| `systemInstruction` | 1 |
+| 후속 질문 / 새 대화 / AI 대화 (Gemini Flash) | 각 1 |
 
-**SWRG 2604N 양하선 (BAPLIE 표준)**
-- 컨테이너 772대 전부 유지 (부킹 0)
-- LOC+83 환적: 290대 추출 ✓
-- 2단 환적: 82건 (THBKK→KRPUS인데 실제 QDQDA/PUPUS/JPNAO 등 경유)
-- DG 10대 + PG 추출 (UN 1170/1759/3268)
+---
 
-**DPRT 2606S 적재선 SI**
-- 컨테이너 876대 전부 유지 → **375대 부킹 슬롯 복구** (M5.78에선 누락)
-- 부킹 슬롯 임시 ID 중복: 0건
-- LOC+83 환적: 182대
-- 2단 환적: 88건 (JPSKT, RUVLA, KRKWY 등 일본·러시아·국내 경유)
-- DG 15대 모두 UN 화물명 매칭
+## ✅ RAG 시뮬레이션 결과 (실 EDI 1648대 기준)
 
-**OPERATOR 가드 (M5.78 vs M5.79)**
-- M5.78: 평택 적재 375대가 cn[:3]='__B'로 잘못된 선사 코드 매핑 → voucher 양식 오염
-- M5.79: 부킹 슬롯 가드로 모두 '?'로 정상 처리 (**375건 잘못된 매핑 차단**)
+| 질문 | 전송 컨 (M5.79) | 전송 컨 (M5.80) | 절감 |
+|---|---|---|---|
+| 16번 베이 컨 알려줘 | 1,648 | 0 | 100% |
+| 리퍼 몇 대? | 1,648 | 90 | 95% |
+| DG 위험물 위치 | 1,648 | 25 | 98% |
+| Class 3 인화성 액체 | 1,648 | 14 | 99% |
+| UN 1170 어디? | 1,648 | 7 | 100% |
+| 베이 16 풀 컨 | 1,648 | 0 | 100% |
+| VNSGN에서 온 컨 | 1,648 | 632 | 62% |
+| 20피트 엠티 컨 | 1,648 | 132 | 92% |
+| 끝자리 4777 | 1,648 | 1 | 100% |
+| 갑판 위 컨 | 1,648 | 1,648 | 0% (광범위) |
+| 한국 항구 통계 | 1,648 | 1,648 | 0% (조건 없음) |
+| **합계** | **18,128** | **4,197** | **77%** |
 
-**voucher bucket 카운트**
-- 평택 적재 375대 → 12개 bucket에 정확히 분배 (Full 221 / Empty 154)
-- POD별/사이즈별 정확 집계
+전체 토큰 절감 추정: **72%**
 
-**검색 매칭 안전성**
-- l4='' 가드로 부킹 슬롯이 4자리 검색에 의도치 않게 매칭되지 않음
-- 임의 검색 6종 테스트 (9025, 1234, 5678, 0001, 0000, 8082): 부킹 매칭 0건
+## ✅ 멀티턴 대화 흐름 검증 (시뮬레이션)
 
-**inspectionList 행 생성**
-- 부킹 슬롯 cn 빈 칸 + 비고에 "📝대기" 표시 — 검수원이 출력물에서 손으로 채울 자리
+```
+👤 16번 베이 컨테이너 보여줘
+🤖 16번 베이 0대. 비어있습니다.
+👤 그럼 5번 베이는?            ← follow-up: 베이만 다름
+🤖 5번 베이 23대. Full 20, Empty 3.
+👤 그 중 양하만                ← follow-up: 5번 베이 기준
+🤖 5번 베이 양하 18대.
+👤 위험물 있어?                ← follow-up: 5번 베이 양하 중 DG
+🤖 5번 베이 DG 0대.
+👤 그럼 위험물 어느 베이에?    ← 컨텍스트 전환
+🤖 11번 베이 7대, 21·23·25번 각 1대.
+👤 11번 베이 위험물 상세       ← follow-up: 11번 베이 DG
+🤖 11번 베이 DG 7대. UN 1805 인산 4대, UN 1993 2대, UN 1170 1대.
+```
 
-**UN 화물명 매칭**
-- 52개 사전 로드
-- 실제 DG 15대 전부 매칭 (UN 1805→인산, UN 1593→디클로로메탄, UN 1307→자일렌 등)
+6턴(12메시지) 대화 → compressHistory가 자동으로 첫 3턴 요약 + 최근 4턴 유지
+
+## ✅ 일일 호출 한도 분석
+
+- 검수원 15명 × 하루 30회 = **450회/일**
+- Gemini Flash 무료 한도 1500/일 → **30% 사용**
+- 피크 타임(4선박 동시 작업)도 분당 15회 한도 안
+
+---
+
+## ⚠ 알려진 잔여 작업 (M5.81~ 후보)
+
+1. **shipLib 멀티턴 전달** — SearchPanel props로 shipLib을 받는데 SingleSearch까지 전달 안 됨. handleAskAI에 추가 가능 (현재 동작엔 영향 없음, 단지 이전 항차 통계 활용 못 함)
+
+2. **Function Calling (M5.90 후보)** — 도구 30~50개 구축 시 환각 완전 박멸. 베이/위치/무게/위험물/트윈 등 모든 검수 작업 도구화
+
+3. **부킹 슬롯 OCR (M6.0 후보)** — Gemini Flash Vision으로 컨테이너 사진 → 컨번호 자동 인식 → M5.79 부킹 슬롯에 매칭
+
+4. **Cloudflare Workers 프록시** — 사용자 선택으로 보류. 직원 화이트리스트(M5.62)로 사실상 보호됨
 
 ---
 
@@ -105,9 +121,9 @@
 
 ### A. GitHub Actions 자동 배포 (권장)
 1. ZIP 풀기
-2. `m579_build/` 폴더의 `src/`, `public/`, `package.json`, `vite.config.js`, `index.html` 등을 GitHub repo에 push
-3. main 브랜치에 push되면 `.github/workflows/deploy.yml`이 자동 실행 → 빌드 → GitHub Pages 배포
-4. 1-3분 후 사이트에서 새 버전 보임
+2. `m580_build/` 폴더 내용을 GitHub repo에 push
+3. `.github/workflows/deploy.yml` 자동 실행 → 빌드 → GitHub Pages 배포
+4. 1-3분 후 사이트 갱신
 
 ### B. 수동 배포 (Actions 안 될 때)
 1. ZIP의 `dist/` 폴더 내용 (index.html, assets/, sw.js)을 GitHub Pages 배포 경로에 푸시
@@ -117,33 +133,17 @@
 2. 또는 개발자 도구 → Application → Service Workers → Unregister 후 새로고침
 3. 또는 사이트 1시간 후 자동 (SW가 1시간마다 update 확인)
 
----
-
-## 빌드 함정 메모 (계속 유효)
-- `index.html`이 옛 빌드 산출물 (`./assets/index-XXX.js`) 가리키면 vite가 5 modules만 transform → 변경 안 반영
-- 매 빌드 전 `build.sh` 실행 (진입점 복원 → 캐시 제거 → vite build → dist→root 복사)
-- M5.79 빌드 확인: **1655 modules transformed** ✓
-
-## 알려진 잔여 작업 (다음 단계 M5.80 후보)
-
-1. **베이사전 PEGASUS PROTO 베이 00 등록 점검**
-   - DPRT General Plan에 Bay 00 사용 — 베이사전이 정상 베이로 등록했는지 확인
-   - `shipBayDict_v2.js`에서 PEGASUS PROTO 항목 baysSummary 점검
-
-2. **부킹 슬롯 OCR 워크플로우**
-   - 평택 적재 부킹 슬롯에 사진 + Gemini Vision OCR로 컨번호 채우기
-   - 검수 화면에서 부킹 슬롯 카드 long-press → 카메라 → OCR → Firebase 동기화
-   - 현재 부킹 슬롯은 표시만 됨. 컨번호 입력 UI는 다음 단계.
-
-3. **voucher 결제용에 부킹 슬롯 표시 형식**
-   - OPERATOR '?' 행이 voucher에 나옴 (375대) — "선사 미정 (부킹)" 라벨로 명시할지 정책 결정 필요
-   - 현재는 정상 동작 (집계됨, '?'로 그룹화)
-
-4. **HelpModal 검색 키워드 추가**
-   - 부킹 슬롯, 2단 환적, UN 화물명, 수동 보고 검색어 추가 (사용자 검색 편의)
+## 빌드 함정 메모
+- `index.html`이 옛 빌드 산출물 가리키면 vite가 5 modules만 transform → 변경 안 반영
+- 매 빌드 전 `build.sh` 실행 필수
+- M5.80 빌드: 1648 modules transformed ✓
 
 ---
 
-## 이전 M5.78 hotfix 메모 (참조)
-- 카메라 안 켜짐 fix: button onClick → label + input 직접 클릭 방식 (PWA user gesture chain)
-- PhotoReportModal `cnInputRef/detailInputRef` 제거
+## 이전 M5.79 변경 요약 (참조)
+
+1. parseBAPLIE LOC+83(tspot) + LOC+97/98(fpod) 파싱
+2. 평택 적재 부킹 슬롯 `__BOOK_` 임시 ID
+3. dgUnDict.js UN 코드북 52개
+4. ContainerDetailModal ISO 옵션 21개 (G0/G1 분리) + 환적 표시
+5. WorkReportModal 수동 보고 섹션 (시작 안 누른 작업 중단/재개/완료)

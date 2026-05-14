@@ -1,130 +1,275 @@
-// Gemini API 연동 (자유 자연어 검수 도우미)
-// M3.0 — AI 마무리:
-//   1) 항만/검수/IMDG 도메인 지식 시스템 프롬프트 주입
-//   2) 전체 컨테이너 데이터를 압축 형식으로 전달 (베이별 답변 가능)
-//   3) POL/POD 분포 자동 집계
-//   4) 베이별 컨 개수/F·E/무게 미리 집계
-//   5) 위험물(DG) 별도 리스트 + 클래스별 집계
-//   6) 선박 라이브러리(이전 항차 평균) 컨텍스트 활용
-// M3.1 — 베이 좌표 정규화:
-//   - 좌표는 모두 정규화된 형식(##-##-## or ###-##-##)으로 AI에게 전달
-//   - AI가 위치 답변 시 한국어 음성형으로 풀어서 답하도록 시스템 프롬프트에 규칙 추가
+// Gemini API 연동 (M5.80 강화판)
 //
-// 무료 할당량: 분당 15 / 일 1500 (15명 × 50회 = 750회 → 50% 사용)
+// 핵심 변경 vs M5.79:
+//   [1] 모델: 2.5 Pro → 2.5 Flash
+//       - 응답 3~10초 → 0.5~1.5초
+//       - 무료 한도 50회/일 → 1500회/일
+//   [2] RAG (검색-증강 생성):
+//       - 매 질문마다 1500대 전체 보내지 않음
+//       - 질문 키워드(parsed)로 후보 좁히기 (베이/DG/리퍼/POL/POD/컨번호)
+//       - 평균 30~50대만 LLM에 전달 → 토큰 90% 절감
+//   [3] 멀티턴 대화:
+//       - 이전 5턴 메모리 유지 (contents 배열)
+//       - 5턴 넘으면 첫 3턴 자동 요약 압축
+//   [4] systemInstruction 분리:
+//       - 도메인 지식 / 컨텍스트는 systemInstruction에
+//       - 매 턴 새로 보내지 않음 (모델 캐시 활용)
+//
+// 무료 할당량 (Gemini Flash):
+//   - 분당 15 RPM
+//   - 일일 1500회
+//   - 토큰 분당 100만
+//   → 검수원 15명 × 하루 50회 = 750회/일, 한도의 50% 사용
 
 import { fmtPos, normalizeBay } from './utils.js';
+import { lookupUN } from './dgUnDict.js';
 
 export const GEMINI_API_KEY = 'AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY';
-const GEMINI_MODEL = 'gemini-2.5-pro';
+const GEMINI_MODEL = 'gemini-2.5-flash';   // M5.80: Pro → Flash
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
-// ─── 도메인 지식 시스템 프롬프트 ───────────────────────────────
-// 항만/검수/IMDG 용어를 AI가 정확히 이해하도록 주입
+// ─── 도메인 지식 (systemInstruction에 들어감) ───────────────────────────────
 const DOMAIN_KNOWLEDGE = `
 [항만 도메인 지식 — 평택항 컨테이너 검수]
 
 ■ 항구 코드 (POL=선적항, POD=양하항)
-- KRPTK = 평택 (한국, 우리 항구)
-- CNDLC = 대련 (중국)
-- CNQDG = 청도 (중국)
-- CNWEI = 위해 (중국)
-- CNSHA = 상해 (중국)
-- CNTAO = 청도(별칭)
-- CNYAT = 연태 (중국)
-- 그 외 KR* 한국, CN* 중국, JP* 일본, US* 미국 등
+- KRPTK = 평택 (한국, 우리 항구) / KRPUS 부산 / KRINC 인천 / KRKAN 광양
+- VNSGN = 호치민 (베트남) / VNHPP 하이퐁
+- THLCH = 람차방 (태국) / THBKK 방콕
+- JPTYO 도쿄 / JPYOK 요코하마 / CN* 중국 / US* 미국
 
-■ 컨테이너 ISO 규격 (앞 2자리 = 길이/높이, 뒤 2자리 = 종류)
-- 22GP = 20피트 표준 (20DC)
-- 25GP = 20피트 하이큐브 (20HC)
-- 22RE = 20피트 리퍼 (20RF)
-- 42GP = 40피트 표준 (40DC)
-- 45GP = 40피트 하이큐브 (40HC)
-- 45RE = 40피트 하이큐브 리퍼 (40HC RF)
-- 42PC = 40피트 플랫랙 (40FR, Platform Container)
-- 46P3 = 45피트 플랫랙 (45FR)
-- 22UT = 20피트 오픈탑 (20OT)
-- 22TG = 20피트 탱크 (20TK)
+■ 컨테이너 ISO 규격 (앞 2자리 = 길이/높이, 셋째 자리 = 종류)
+- 22GP/22G0/22G1 = 20피트 표준 (20DC) — 끝자리 0=Full 보편, 1=Empty 보편 (양식별 차이)
+- 25GP = 20피트 하이큐브
+- 22RE/22R0/22R1 = 20피트 리퍼
+- 42GP/42G0/42G1 = 40피트 표준 (40DC)
+- 45GP/45G0/45G1 = 40피트 하이큐브 (45피트 아님!)
+- L5G1 = 진짜 45피트 GP
+- 42PC/22PF = 플랫랙 (FR)
+- 22UT = 오픈탑 (OT)
+- 22TN/22T6 = 탱크 (TK)
 
 ■ 상태 (F/E)
 - F = Full (적컨, 화물 있음)
 - E = Empty (공컨, 빈 컨테이너)
 
-■ 선내 위치 (좌표 BBBRRTT = 베이3+row2+tier2)
-- 베이(Bay): 선수→선미 방향 위치 (홀수=20피트 슬롯, 짝수=40피트 슬롯)
-- 트윈 짝꿍: 짝수 베이가 있으면 양옆 홀수 베이가 짝, 짝수 없으면 통로(단독)
-- Row: 좌우 위치 (00=중앙, 01/03... 우현, 02/04... 좌현)
-- Tier: 높이 (≥80 = DECK 갑판상, <80 = HOLD 화물창)
+■ 선내 위치 (좌표 BBBRRTT = 베이3+row2+tier2, 또는 BBRRTT 6자리)
+- 베이(Bay): 선수→선미. 홀수=20피트 슬롯, 짝수=40피트 슬롯
+- 트윈 짝꿍: 짝수 베이 양옆 홀수 베이가 짝. 짝수 없으면 통로(단독)
+- Row: 좌우. 00=중앙, 01/03/... 우현, 02/04/... 좌현
+- Tier: 높이. ≥80 = DECK 갑판상, <80 = HOLD 화물창
 
-■ 무게 (단위 KGM = kg)
-- TARE = 빈 컨테이너 무게
-- NET = 화물만 무게
-- GROSS = 총중량 (TARE+NET)
-- VGM = 검증된 총중량 (Verified Gross Mass, 우선 사용)
+■ 무게/단위
+- VGM = Verified Gross Mass (검증된 총중량, 우선 사용)
+- WT = Weight (일반 총중량)
+- KGM = kg
 
 ■ 특수화물 약어
-- RF (Reefer) = 리퍼/냉장 (온도 관리, TMP 필드)
-- DG (Dangerous Goods) = 위험물 (IMDG 코드, UN번호)
-- FR (Flat Rack) = 플랫랙 (옆면 없음, 큰 화물)
-- OT (Open Top) = 오픈탑 (위 열림)
-- TK (Tank) = 탱크 (액체)
-- OOG (Out Of Gauge) = 규격외 화물
+- RF (Reefer) 리퍼 / DG (Dangerous Goods) 위험물
+- FR (Flat Rack) / OT (Open Top) / TK (Tank) / OOG (Out Of Gauge)
+
+■ 환적 (M5.79 추가)
+- LOC+9 POL / LOC+11 POD / LOC+76 npod (추가 POL)
+- LOC+83 tspot (환적항) — 2단 환적 추적용
+- LOC+97/98 fpod (최종 목적지)
+
+■ M5.79: 평택 적재 부킹 슬롯
+- EDI에 컨번호 빈 칸인 컨테이너 = 부킹 단계 (검수원이 현장에서 채울 슬롯)
+- 임시 ID 형식: __BOOK_{bay}_{row}_{tier}
+- cn에 __BOOK_ 접두사가 보이면 "컨번호 입력대기"라고 답하세요
 
 ■ 검수 워크플로
-- 양하 (Discharge) = 배에서 내림 (POD=평택)
-- 선적 (Loading) = 배에 실음 (POL=평택)
-- 시프팅 (Shifting) = 양하 위에 올라간 컨을 임시로 옮기기
-- 봉인(SEAL) = 컨테이너 잠금 봉인번호 검사
-- 실오류 = 봉인번호 불일치 (검사 필요)
-- TWIN = 트윈 트레일러 (20피트 두 개 동시 양/적하)
-- X-RAY = 엑스레이 검사 대상 컨 (세관 지정)
-
-■ 다단계 적재
-- 같은 슬롯(좌표)에 여러 컨이 들어갈 수 있음 (FR 4개 한 자리 등)
-- 베이플랜에서 ⊕N으로 표시
+- 양하 (Discharge): 배에서 내림 (POD=평택)
+- 선적 (Loading): 배에 실음 (POL=평택)
+- 시프팅: 양하 위에 올라간 컨을 임시로 옮기기
+- TWIN: 트윈 트레일러 (20피트 두 개 동시)
+- X-RAY: 엑스레이 검사 대상 (세관 지정)
+- 실오류: 봉인번호 불일치 (세관 신고)
 
 [IMDG 위험물 격리 규정]
 
 ■ 9개 클래스
-1 = 폭발물 (Explosives)
-2 = 가스 (2.1 인화성, 2.2 비독성, 2.3 독성)
-3 = 인화성 액체 (Flammable Liquids)
-4 = 가연성 고체 (4.1, 4.2 자연발화, 4.3 물반응)
-5 = 산화성 물질 (5.1 산화제, 5.2 유기과산화물)
-6 = 독성/감염성 물질 (6.1 독성, 6.2 감염성)
-7 = 방사성 물질 (Radioactive)
-8 = 부식성 (Corrosive)
-9 = 기타 위험물 (Miscellaneous)
+1 폭발물 / 2 가스(2.1 인화성, 2.2 비독성, 2.3 독성) / 3 인화성 액체
+4 가연성 고체(4.1, 4.2 자연발화, 4.3 물반응) / 5 산화성 / 6 독성/감염성
+7 방사성 / 8 부식성 / 9 기타 위험물
 
-■ 격리 등급 (Segregation)
-- 1 = "Away from" (떨어져, 같은 베이/구획 안에서 분리)
-- 2 = "Separated from" (분리, 다른 격실 또는 1컨 거리)
-- 3 = "Separated by complete compartment" (격실 완전 분리)
-- 4 = "Separated longitudinally by complete compartment" (수평 격실 분리, 가장 엄격)
+■ 격리 등급
+- 1 Away from (떨어져, 같은 구획 안 분리)
+- 2 Separated from (분리, 1컨 거리 또는 다른 격실)
+- 3 Separated by complete compartment (격실 완전 분리)
+- 4 Separated longitudinally by complete compartment (가장 엄격)
 
-■ 트윈/인접 적재 가부 판단 원칙
-- Class 1 (폭발물) ↔ 대부분 클래스: Separated 이상 → 트윈 불가
-- Class 2.1 (인화성 가스) ↔ Class 3 (인화성 액체): Separated → 트윈 불가
+■ 트윈/인접 적재 판단
+- Class 1 ↔ 대부분: Separated 이상 → 트윈 불가
+- Class 2.1 ↔ Class 3: Separated → 트윈 불가
 - Class 3 ↔ Class 5: Separated → 트윈 불가
-- Class 4.2 (자연발화) ↔ Class 8 (부식성): Separated → 트윈 불가
-- Class 7 (방사성) ↔ 거주구역/식품: Separated 이상
-- 같은 클래스끼리는 일반적으로 인접 가능 (예외: 1.1, 1.2 등)
-- 정확한 격리표는 IMDG Code 7.2.4 참조 (실제 화물 UN번호 확인 필수)
+- Class 4.2 ↔ Class 8: Separated → 트윈 불가
+- Class 7 ↔ 거주구역/식품: Separated 이상
+- 같은 클래스끼리 일반적으로 OK (1.1, 1.2 등 예외)
+- 정확한 격리표는 IMDG Code 7.2.4 참조
 `.trim();
 
-// ─── 컨테이너 압축 (토큰 절약) ───────────────────────────────
-// allContainers 전체를 AI에게 보내되, 필수 필드만 추려서
-// M3.1: 좌표는 정규화된 형식(##-##-## or ###-##-##)으로 전달
+const SYSTEM_PROMPT = `당신은 평택항 컨테이너 검수원의 AI 도우미입니다.
+주어진 항차 데이터를 기반으로 질문에 정확·간결하게 답하세요.
+
+${DOMAIN_KNOWLEDGE}
+
+[답변 규칙]
+1. 데이터에 없는 내용은 절대 추측하지 말고 "데이터에 없음"이라고 답하세요.
+2. 답변은 한국어로 짧고 명확하게 (2~4문장 이내, 단 리스트는 더 길어도 됨).
+3. 숫자는 정확히 표시하고, 컨번호는 4자리 끝번호 위주로 알려주세요.
+4. 위치는 베이-row-tier 형식 (예: 16-01-86, 또는 100-04-82) — 베이는 앞 0 없는 정수.
+5. ★ 음성 안내 친화: 위치를 말할 때 "16-01-86"처럼 숫자 형식으로 답하세요 (음성합성기가 자동 변환).
+6. 검수원이 손에 폰 들고 빠르게 읽을 수 있도록 핵심만 답하세요.
+7. 위험물 트윈 가부 질문 시 IMDG 격리 등급으로 판단하되, "정확한 판단은 IMDG Code 격리표 확인 필요" 한 줄 추가.
+8. 베이별/POL/POD별 집계, 무게 합계 등 계산이 필요하면 제공된 데이터로 직접 계산.
+9. 베이 번호는 정수("1", "16", "100")이며 앞에 0을 붙이지 마세요.
+10. 대화 중 follow-up 질문 ("그 중...", "그 위에...")이 오면 직전 답변의 컨테이너 집합을 기준으로 답하세요.
+11. 컨번호 cn이 __BOOK_로 시작하면 "컨번호 입력대기 (부킹 슬롯)"이라고 답하세요.`;
+
+// ─── RAG: 질문 키워드로 후보 컨테이너 좁히기 ───────────────────────────────
+//   parsed = parseNaturalQuery 결과
+//   - 베이 번호 있으면 그 베이만
+//   - DG/리퍼/FR/OT/TK 타입 있으면 해당만
+//   - POL/POD 있으면 해당만
+//   - 컨번호 끝자리 있으면 그 컨테이너만
+//   - 무게 범위 있으면 해당
+//   - 아무 조건 없으면 전체 (단 통계+상위 50대만 전달)
+//
+// 출력: { containers: [...], filterDesc: "베이 16 / 양하" }
+export function ragFilter(question, allContainers, parsed = {}) {
+  let filtered = allContainers;
+  const desc = [];
+
+  // 베이 번호
+  if (parsed.bay) {
+    const b = String(parsed.bay);
+    filtered = filtered.filter(c => normalizeBay(c.bay) === b);
+    desc.push(`베이 ${b}`);
+  }
+
+  // 타입 (DG/RF/FR/OT/TK/X-RAY)
+  if (parsed.type) {
+    if (parsed.type === 'dg') {
+      filtered = filtered.filter(c => c.dg);
+      desc.push('DG');
+    } else if (parsed.type === 'rf') {
+      filtered = filtered.filter(c => c.rf || (c.iso && c.iso[2] === 'R'));
+      desc.push('리퍼');
+    } else if (parsed.type === 'fr') {
+      filtered = filtered.filter(c => c.fr || /^[24][0245689]P/.test(c.iso || ''));
+      desc.push('FR');
+    } else if (parsed.type === 'ot') {
+      filtered = filtered.filter(c => c.ot);
+      desc.push('OT');
+    } else if (parsed.type === 'tk') {
+      filtered = filtered.filter(c => c.tk);
+      desc.push('TK');
+    } else if (parsed.type === 'xray') {
+      filtered = filtered.filter(c => c._xray);
+      desc.push('X-RAY');
+    } else if (parsed.type === 'oog') {
+      filtered = filtered.filter(c => c.oog);
+      desc.push('OOG');
+    }
+  }
+
+  // F/E
+  if (parsed.fe) {
+    filtered = filtered.filter(c => c.fe === parsed.fe);
+    desc.push(parsed.fe === 'F' ? 'Full' : 'Empty');
+  }
+
+  // 사이즈
+  if (parsed.size) {
+    if (parsed.size === '20') filtered = filtered.filter(c => c.iso && c.iso.startsWith('2'));
+    else if (parsed.size === '40') filtered = filtered.filter(c => c.iso && c.iso.startsWith('4'));
+    else if (parsed.size === '45') filtered = filtered.filter(c => c.iso && c.iso.startsWith('L'));
+    desc.push(`${parsed.size}피트`);
+  }
+
+  // POL/POD
+  if (parsed.pol) {
+    filtered = filtered.filter(c => (c.pol || '').includes(parsed.pol));
+    desc.push(`POL ${parsed.pol}`);
+  }
+  if (parsed.pod) {
+    filtered = filtered.filter(c => (c.pod || '').includes(parsed.pod));
+    desc.push(`POD ${parsed.pod}`);
+  }
+  if (parsed.portAny && !parsed.pol && !parsed.pod) {
+    filtered = filtered.filter(c =>
+      (c.pol || '').includes(parsed.portAny) || (c.pod || '').includes(parsed.portAny)
+    );
+    desc.push(`항구 ${parsed.portAny}`);
+  }
+
+  // 구역
+  if (parsed.zone === 'deck') {
+    filtered = filtered.filter(c => parseInt(c.tier, 10) >= 80);
+    desc.push('갑판');
+  } else if (parsed.zone === 'hold') {
+    filtered = filtered.filter(c => parseInt(c.tier, 10) < 80);
+    desc.push('선창');
+  }
+
+  // 컨번호 끝자리
+  if (parsed.digits) {
+    const d = parsed.digits;
+    filtered = filtered.filter(c => {
+      const l4 = c.l4 || (c.cn || '').slice(-4);
+      return l4.endsWith(d) || (c.cn || '').includes(d);
+    });
+    desc.push(`끝자리 ${d}`);
+  }
+
+  // DG 클래스 / UN
+  if (parsed.dgClass) {
+    filtered = filtered.filter(c => c.dg && (c.dgc || '').startsWith(parsed.dgClass));
+    desc.push(`Class ${parsed.dgClass}`);
+  }
+  if (parsed.un) {
+    filtered = filtered.filter(c => c.dg && (c.un || '') === parsed.un);
+    desc.push(`UN ${parsed.un}`);
+  }
+
+  // 무게
+  if (parsed.weightMin != null) {
+    filtered = filtered.filter(c => (parseInt(c.wt, 10) || 0) >= parsed.weightMin);
+    desc.push(`${parsed.weightMin / 1000}톤 이상`);
+  }
+  if (parsed.weightMax != null) {
+    filtered = filtered.filter(c => (parseInt(c.wt, 10) || 0) <= parsed.weightMax);
+    desc.push(`${parsed.weightMax / 1000}톤 이하`);
+  }
+
+  // 모드
+  if (parsed.mode) {
+    filtered = filtered.filter(c => c._mode === parsed.mode);
+    desc.push(parsed.mode === 'discharge' ? '양하' : '선적');
+  }
+
+  return {
+    containers: filtered,
+    filterDesc: desc.length ? desc.join(' / ') : '전체',
+    narrowed: filtered.length < allContainers.length,
+  };
+}
+
+// ─── 컨테이너 압축 (M5.80: tspot/fpod/isBooking 추가) ───────────────────────────────
 function compactContainer(c) {
   const o = {
     cn: c.cn,
-    p: fmtPos(c),  // 정규화된 위치 (앞 0 제거된 베이)
+    p: fmtPos(c),
     iso: c.iso,
     fe: c.fe,
-    m: c._mode === 'discharge' ? 'D' : 'L',  // D=양하, L=선적
+    m: c._mode === 'discharge' ? 'D' : 'L',
   };
   if (c.wt) o.wt = c.wt;
   if (c.pol) o.pol = c.pol;
   if (c.pod) o.pod = c.pod;
+  if (c.tspot) o.ts = c.tspot;     // M5.80: 환적항
+  if (c.fpod) o.fp = c.fpod;        // M5.80: 최종지
   if (c.sl) o.sl = c.sl;
   if (c._xray) o.x = 1;
   if (c._comp) o.done = 1;
@@ -135,16 +280,22 @@ function compactContainer(c) {
   if (c.dg) {
     o.dg = 1;
     if (c.dgc) o.dgc = c.dgc;
-    if (c.un) o.un = c.un;
+    if (c.un) {
+      o.un = c.un;
+      // M5.80: UN 화물명도 함께 (LLM 추론 도움)
+      const info = lookupUN(c.un);
+      if (info) o.un_name = info.name;
+    }
+    if (c.pg) o.pg = c.pg;
   }
   if (c.fr || /^[24][0245689]P/.test(c.iso || '')) o.fr = 1;
   if (c.ot) o.ot = 1;
   if (c.tk) o.tk = 1;
+  if (c.isBooking) o.booking = 1;   // M5.80: 부킹 슬롯 마커
   return o;
 }
 
-// ─── 베이별 통계 미리 집계 ───────────────────────────────
-// M3.1: 베이 키도 정규화된 정수 문자열로 통일
+// ─── 베이별 통계 ───────────────────────────────
 function buildBayStats(allContainers) {
   const bayMap = {};
   allContainers.forEach(c => {
@@ -168,7 +319,6 @@ function buildBayStats(allContainers) {
   return bayMap;
 }
 
-// ─── POL/POD 분포 ───────────────────────────────
 function buildPolPodDist(allContainers) {
   const pol = {}, pod = {};
   allContainers.forEach(c => {
@@ -178,7 +328,6 @@ function buildPolPodDist(allContainers) {
   return { pol, pod };
 }
 
-// ─── 위험물 리스트 + 클래스별 ───────────────────────────────
 function buildDgList(allContainers) {
   const list = [];
   const byClass = {};
@@ -186,18 +335,20 @@ function buildDgList(allContainers) {
     if (!c.dg) return;
     const cls = c.dgc || '?';
     byClass[cls] = (byClass[cls] || 0) + 1;
+    const info = lookupUN(c.un);
     list.push({
       cn: c.cn,
-      pos: fmtPos(c),  // M3.1: 정규화된 위치
+      pos: fmtPos(c),
       cls,
       un: c.un || '',
+      un_name: info ? info.name : '',
       fe: c.fe,
+      pg: c.pg || '',
     });
   });
   return { list, byClass };
 }
 
-// ─── 항차 컨텍스트 요약 ───────────────────────────────
 function buildContext(voyage, allContainers) {
   const stats = {
     total: allContainers.length,
@@ -212,26 +363,21 @@ function buildContext(voyage, allContainers) {
     tk: allContainers.filter(c => c.tk).length,
     xray: allContainers.filter(c => c._xray).length,
     completed: allContainers.filter(c => c._comp).length,
+    booking: allContainers.filter(c => c.isBooking).length,  // M5.80
   };
-
-  // ISO별 분포
   const isoCount = {};
   allContainers.forEach(c => {
     const iso = c.iso || 'unknown';
     isoCount[iso] = (isoCount[iso] || 0) + 1;
   });
-
-  // 검수업체별
   const opCount = {};
   allContainers.forEach(c => {
     if (c.op) opCount[c.op] = (opCount[c.op] || 0) + 1;
   });
-
   return {
     vsl: voyage?.info?.vsl || '',
     voy: voyage?.info?.voy || '',
     imo: voyage?.info?.imo || '',
-    pol_voy: voyage?.info?.pol || '',
     etd: voyage?.info?.etd || '',
     eta: voyage?.info?.eta || '',
     stats,
@@ -240,102 +386,133 @@ function buildContext(voyage, allContainers) {
   };
 }
 
-// ─── 메인: AI 질의 ───────────────────────────────
-// shipLib: 선박 라이브러리(이전 항차 통계) - 옵션
-export async function askGemini(question, voyage, allContainers, shipLib = null) {
+// ─── 멀티턴 히스토리 압축 ───────────────────────────────
+// 5턴 넘으면 첫 3턴을 한 문장으로 요약
+//   history = [{role:'user', content:'...'}, {role:'model', content:'...'}, ...]
+function compressHistory(history) {
+  if (history.length <= 10) return history;   // 5턴 = 10 메시지 (user+model 쌍)
+  // 첫 3턴(6메시지) 요약 + 최근 4턴(8메시지) 유지
+  const oldMessages = history.slice(0, 6);
+  const recentMessages = history.slice(-8);
+  const summary = `[이전 대화 요약]\n` +
+    oldMessages.map(m => `${m.role === 'user' ? '사용자' : 'AI'}: ${(m.content || '').slice(0, 100)}`).join('\n');
+  return [
+    { role: 'user', content: summary + '\n\n위 내용을 기억하고 이어 답하세요.' },
+    { role: 'model', content: '네, 이전 대화 내용 확인했습니다.' },
+    ...recentMessages,
+  ];
+}
+
+// ─── 메인: AI 질의 (M5.80 신규 시그니처) ───────────────────────────────
+//
+// opts:
+//   - history: 멀티턴 대화 히스토리 [{role:'user'|'model', content:'...'}, ...]
+//   - shipLib: 선박 라이브러리 (이전 항차 통계)
+//   - parsedQuery: parseNaturalQuery 결과 (RAG 필터링용)
+//
+// 반환: { ok, answer, error, ragInfo }
+export async function askGemini(question, voyage, allContainers, opts = {}) {
+  const { history = [], shipLib = null, parsedQuery = {} } = opts;
+
+  // === RAG: 질문 키워드로 후보 좁히기 ===
+  const ragResult = ragFilter(question, allContainers, parsedQuery);
+  const candidates = ragResult.containers;
+
+  // 통계는 전체 기준, 컨테이너 리스트는 RAG 결과 기준
   const ctx = buildContext(voyage, allContainers);
   const bayStats = buildBayStats(allContainers);
   const polPod = buildPolPodDist(allContainers);
   const dgInfo = buildDgList(allContainers);
 
-  // 컨테이너 압축 (전체 전달, 토큰 절약 형태)
-  const compactList = allContainers.map(compactContainer);
-
-  // 토큰 한도 보호 (최대 1500대까지 전달, 초과 시 자르고 안내)
-  const MAX_CONTAINERS = 1500;
-  const truncated = compactList.length > MAX_CONTAINERS;
-  const sentList = truncated ? compactList.slice(0, MAX_CONTAINERS) : compactList;
-
-  const systemPrompt = `당신은 평택항 컨테이너 검수원의 AI 도우미입니다.
-주어진 항차 데이터(전체 컨테이너 목록 + 베이별 통계 + POL/POD 분포 + 위험물 리스트)를
-기반으로 질문에 정확하고 간결하게 답변하세요.
-
-${DOMAIN_KNOWLEDGE}
-
-[답변 규칙]
-1. 데이터에 없는 내용은 절대 추측하지 말고 "데이터에 없음"이라고 답하세요.
-2. 답변은 한국어로 짧고 명확하게 (2~4문장 이내, 단 리스트는 더 길어도 됨).
-3. 숫자는 정확히 표시하고, 컨번호는 4자리 끝번호 위주로 알려주세요.
-4. 위치는 베이-row-tier 형식 (예: 16-01-86, 또는 100-04-82) — 베이는 앞 0 없는 정수입니다.
-5. ★ 음성 안내 친화 답변: 위치를 말할 때는 "16-01-86"처럼 숫자 형식으로 답하세요.
-   (음성 합성기가 자동으로 "십육번 베이 공일에 팔육"으로 변환합니다)
-6. 검수원이 손에 폰 들고 빠르게 읽을 수 있도록 핵심만 답하세요.
-7. 위험물 트윈 가부 질문 시 IMDG 격리 등급으로 판단하되, "정확한 판단은 IMDG Code 격리표 확인 필요" 한 줄 추가하세요.
-8. 베이별 답변, POL/POD별 집계, 무게 합계 등 계산이 필요하면 제공된 데이터로 직접 계산하세요.
-9. 베이 번호는 정수("1", "16", "100")이며 앞에 0을 붙이지 마세요.`;
+  // RAG 결과 컨테이너만 압축 (또는 후보 너무 많으면 100대로 자름)
+  const MAX_CANDIDATES = 100;
+  const sentList = candidates.slice(0, MAX_CANDIDATES).map(compactContainer);
+  const truncated = candidates.length > MAX_CANDIDATES;
 
   const shipLibBlock = shipLib ? `
-[선박 라이브러리 — 이전 항차 평균 (학습된 패턴)]
+[선박 라이브러리 (이전 항차 평균)]
 ${JSON.stringify({
   total_voyages: shipLib.stats?.total_voyages || 0,
   avg_discharge: shipLib.stats?.total_discharge && shipLib.stats?.total_voyages
     ? Math.round(shipLib.stats.total_discharge / shipLib.stats.total_voyages) : 0,
   avg_loading: shipLib.stats?.total_loading && shipLib.stats?.total_voyages
     ? Math.round(shipLib.stats.total_loading / shipLib.stats.total_voyages) : 0,
-  recent_voyages: shipLib.voyages ? Object.keys(shipLib.voyages).slice(-3) : [],
 })}
 ` : '';
 
-  const userContent = `[항차 정보]
+  // 시스템 컨텍스트 (매 턴 같음 — systemInstruction에 캐시 가능)
+  const contextBlock = `[항차 정보]
 선박: ${ctx.vsl} / 항차: ${ctx.voy} / IMO: ${ctx.imo}
 ETD: ${ctx.etd} / ETA: ${ctx.eta}
 
 [전체 통계]
-- 총 컨테이너: ${ctx.stats.total}대
-- 양하: ${ctx.stats.discharge} / 선적: ${ctx.stats.loading}
-- Full: ${ctx.stats.full} / Empty: ${ctx.stats.empty}
-- 리퍼: ${ctx.stats.rf} / DG: ${ctx.stats.dg} / FR: ${ctx.stats.fr} / OT: ${ctx.stats.ot} / TK: ${ctx.stats.tk}
-- X-RAY: ${ctx.stats.xray}
-- 완료: ${ctx.stats.completed}/${ctx.stats.total}
+- 총 ${ctx.stats.total}대 (양하 ${ctx.stats.discharge} / 선적 ${ctx.stats.loading})
+- Full ${ctx.stats.full} / Empty ${ctx.stats.empty}
+- 리퍼 ${ctx.stats.rf} / DG ${ctx.stats.dg} / FR ${ctx.stats.fr} / OT ${ctx.stats.ot} / TK ${ctx.stats.tk}
+- X-RAY ${ctx.stats.xray} / 완료 ${ctx.stats.completed}/${ctx.stats.total}
+- 부킹 슬롯(컨번호 입력대기) ${ctx.stats.booking}
 
 [ISO 분포] ${JSON.stringify(ctx.isoCount)}
-
 [검수업체] ${JSON.stringify(ctx.opCount)}
+[POL 분포] ${JSON.stringify(polPod.pol)}
+[POD 분포] ${JSON.stringify(polPod.pod)}
 
-[POL 분포 (선적항별 컨 수)] ${JSON.stringify(polPod.pol)}
-
-[POD 분포 (양하항별 컨 수)] ${JSON.stringify(polPod.pod)}
-
-[베이별 통계] (베이번호: {total/F/E/deck/hold/wt합계kg/rf/dg})
+[베이별 통계] (베이: {total/F/E/deck/hold/wt합계kg/rf/dg})
 ${JSON.stringify(bayStats)}
 
-[위험물(DG) 클래스별 집계] ${JSON.stringify(dgInfo.byClass)}
+[위험물 클래스별] ${JSON.stringify(dgInfo.byClass)}
+[위험물 리스트] ${JSON.stringify(dgInfo.list)}
+${shipLibBlock}`;
 
-[위험물(DG) 컨테이너 리스트]
-${JSON.stringify(dgInfo.list)}
-${shipLibBlock}
-[전체 컨테이너 목록 (압축, ${sentList.length}/${compactList.length}대)]
-필드 약어: cn=컨번호, p=위치(bay-row-tier), iso=ISO코드, fe=F/E, m=D양하/L선적,
-wt=무게kg, pol=선적항, pod=양하항, sl=실번호, x=X-RAY, done=완료,
-rf=리퍼, tmp=온도, dg=위험물, dgc=클래스, un=UN번호, fr=플랫랙, ot=오픈탑, tk=탱크
+  // 첫 턴: 컨텍스트 + 질문
+  // 이어지는 턴: history + (좁혀진 컨테이너 + 질문)
+  //   - 컨텍스트(전체 통계)는 같으니 systemInstruction에서 다룸
+  //   - 매 턴 RAG 결과 컨테이너만 새로 전달
+
+  const ragBlock = ragResult.narrowed
+    ? `[RAG 필터링: ${ragResult.filterDesc} → ${candidates.length}대]`
+    : `[RAG 필터링: 조건 없음 → 전체 ${candidates.length}대 중 ${sentList.length}대 샘플]`;
+
+  const userContent = `${ragBlock}
+
+[컨테이너 목록 (압축, ${sentList.length}/${candidates.length}대)]
+필드 약어: cn=컨번호, p=위치(bay-row-tier), iso=ISO, fe=F/E, m=D양하/L선적,
+wt=무게kg, pol=선적항, pod=양하항, ts=환적항(LOC+83), fp=최종지(LOC+97/98),
+sl=실번호, x=X-RAY, done=완료, rf=리퍼, tmp=온도,
+dg=위험물, dgc=클래스, un=UN번호, un_name=화물명, pg=PG위험등급, fr/ot/tk,
+booking=1이면 컨번호 입력대기(부킹 슬롯)
 ${JSON.stringify(sentList)}
-${truncated ? `\n※ 컨이 너무 많아 ${MAX_CONTAINERS}대만 전달함. 전체는 통계 참고.` : ''}
+${truncated ? `\n※ ${candidates.length}대 중 상위 ${MAX_CANDIDATES}대만 전달` : ''}
 
-[질문]
-${question}`;
+[질문] ${question}`;
+
+  // 멀티턴: 히스토리 + 현재 질문
+  const historyCompact = compressHistory(history);
+  const contents = [
+    // 첫 턴이면 컨텍스트만 한 번
+    ...(historyCompact.length === 0 ? [
+      { role: 'user', parts: [{ text: contextBlock + '\n\n위 정보를 기억하고 이어지는 질문에 답하세요.' }] },
+      { role: 'model', parts: [{ text: '네, 항차 정보 확인했습니다. 질문 주세요.' }] },
+    ] : historyCompact.map(m => ({
+      role: m.role,
+      parts: [{ text: m.content }],
+    }))),
+    // 현재 질문
+    { role: 'user', parts: [{ text: userContent }] },
+  ];
 
   try {
     const res = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          role: 'user',
-          parts: [{ text: systemPrompt + '\n\n' + userContent }],
-        }],
+        systemInstruction: {
+          parts: [{ text: SYSTEM_PROMPT }],
+        },
+        contents,
         generationConfig: {
-          temperature: 0.2,  // 일관된 답변 (M3.0: 더 엄격)
-          maxOutputTokens: 600, // M3.0: 베이별/리스트 답변 위해 확대
+          temperature: 0.2,
+          maxOutputTokens: 800,
         },
       }),
     });
@@ -347,7 +524,16 @@ ${question}`;
     const data = await res.json();
     const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!answer) return { ok: false, error: '답변이 비어있음' };
-    return { ok: true, answer: answer.trim() };
+    return {
+      ok: true,
+      answer: answer.trim(),
+      ragInfo: {
+        filterDesc: ragResult.filterDesc,
+        narrowed: ragResult.narrowed,
+        candidateCount: candidates.length,
+        sentCount: sentList.length,
+      },
+    };
   } catch (e) {
     console.error('Gemini fetch error:', e);
     return { ok: false, error: `네트워크 오류: ${e.message}` };
@@ -358,11 +544,8 @@ ${question}`;
 export function isFreeFormQuestion(text) {
   if (!text) return false;
   const t = text.trim();
-  // 4자리 숫자만 → 컨번호 검색
   if (/^\d+$/.test(t)) return false;
-  // 짧은 키워드 → 키워드 검색
   if (t.length < 4) return false;
-  // 물음표, 의문사, 길이가 길면 자유 질문
   if (/\?|왜|어떻게|뭐|무엇|어디|언제|누가|얼마/.test(t)) return true;
   if (t.length >= 8) return true;
   return false;

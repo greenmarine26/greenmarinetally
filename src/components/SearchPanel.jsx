@@ -134,6 +134,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
   const [helpOpen, setHelpOpen] = useState(false);
   const [wrongOpen, setWrongOpen] = useState(false);
   const [wrongPayload, setWrongPayload] = useState(null);
+  // M5.80: 멀티턴 대화 state
+  const [chatMessages, setChatMessages] = useState([]);  // [{role:'user'|'model', content, ragInfo?}]
+  const [followupQuery, setFollowupQuery] = useState('');
+  const [ragInfo, setRagInfo] = useState(null);
   const recognitionRef = useRef(null);
   const lastSpokenRef = useRef(null);
 
@@ -190,6 +194,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
     if (!autoSpeak) return;
     if (!query || query.length < 2) return;
     if (aiLoading || aiAnswer) return; // AI 답변 중엔 안내 X
+    if (chatMessages.length > 0) return;  // M5.80: 대화 중에도 안내 X (AI 답변에 자동 발음됨)
     const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}-${localAnswer ? '1' : '0'}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
@@ -228,18 +233,34 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
     setIsListening(false);
   };
 
-  // AI 자유 질문 (M3.0: 전체 컨테이너 데이터 + 선박 라이브러리 전달)
-  const handleAskAI = async () => {
-    if (!query) return;
+  // M5.80: AI 자유 질문 — 멀티턴 + RAG
+  //   첫 질문: chatMessages 비어있음 → 새 대화 시작
+  //   후속 질문 (followupQuery): chatMessages에 누적된 history 전달
+  const handleAskAI = async (questionOverride = null) => {
+    const q = questionOverride || query;
+    if (!q) return;
     setAiLoading(true);
     setAiAnswer(null);
     stopSpeak();
+
+    // 멀티턴 히스토리 구성 (chatMessages → askGemini용 history)
+    const history = chatMessages.map(m => ({ role: m.role, content: m.content }));
+
     try {
-      // M3.0: results(검색결과 30개) → allContainers(전체) 로 변경
-      // 베이별/POL별/위험물 격리 등 모든 자유 질문에 답할 수 있도록
-      const res = await askGemini(query, voyage, allContainers, shipLib);
+      const res = await askGemini(q, voyage, allContainers, {
+        history,
+        parsedQuery: questionOverride ? parseNaturalQuery(q) : parsed,
+        // shipLib 옵션은 SearchPanel props로 받으면 여기 추가
+      });
       if (res.ok) {
         setAiAnswer(res.answer);
+        setRagInfo(res.ragInfo);
+        // 대화 히스토리에 추가
+        setChatMessages(prev => [
+          ...prev,
+          { role: 'user', content: q },
+          { role: 'model', content: res.answer, ragInfo: res.ragInfo },
+        ]);
         if (autoSpeak) speak(res.answer);
       } else {
         setAiAnswer(`오류: ${res.error}`);
@@ -248,7 +269,24 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
       setAiAnswer(`오류: ${e.message}`);
     } finally {
       setAiLoading(false);
+      setFollowupQuery('');
     }
+  };
+
+  // M5.80: 새 대화 시작 (대화 히스토리 초기화)
+  const handleNewChat = () => {
+    setChatMessages([]);
+    setAiAnswer(null);
+    setRagInfo(null);
+    setFollowupQuery('');
+    stopSpeak();
+  };
+
+  // M5.80: 후속 질문 보내기
+  const handleSendFollowup = () => {
+    const q = followupQuery.trim();
+    if (!q) return;
+    handleAskAI(q);
   };
 
   const showAIButton = query.length >= 4 && !parsed.isStat;
@@ -269,7 +307,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
           <input type="text" value={query}
-            onChange={e => { setQuery(e.target.value); setAiAnswer(null); }}
+            onChange={e => { setQuery(e.target.value); }}
             placeholder="🎤 / 4777 / 40피트 4777 / 자유 질문"
             autoComplete="off"
             className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
@@ -286,8 +324,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
               className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-slate-500'}`}>
               {autoSpeak ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
             </button>
-            {query && (
-              <button onClick={() => { setQuery(''); setAiAnswer(null); stopSpeak(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
+            {(query || chatMessages.length > 0) && (
+              <button onClick={() => { setQuery(''); handleNewChat(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
                 <X className="w-4 h-4 text-slate-500"/>
               </button>
             )}
@@ -300,7 +338,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
           </div>
         )}
 
-        {hasAnyCondition(parsed) && !aiAnswer && (
+        {hasAnyCondition(parsed) && !aiAnswer && chatMessages.length === 0 && (
           <div className="mt-2 text-[11px] text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
             🤖 인식: <span className="font-bold">{describeQuery(parsed)}</span>
             {parsed.isStat && <span className="ml-1 text-amber-300">(개수)</span>}
@@ -324,28 +362,103 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
         </div>
       </div>
 
-      {/* AI 답변 카드 */}
-      {aiAnswer && (
+      {/* M5.80: 멀티턴 AI 대화 카드 */}
+      {chatMessages.length > 0 && (
         <div className="bg-gradient-to-br from-purple-950 via-slate-900 to-cyan-950 border-2 border-purple-500 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-300"/>
-              <div className="text-[11px] text-purple-300 font-bold uppercase">AI 답변 (Gemini)</div>
+              <div className="text-[11px] text-purple-300 font-bold uppercase">
+                AI 대화 (Gemini Flash)
+              </div>
+              {ragInfo && ragInfo.narrowed && (
+                <span className="text-[10px] text-cyan-300 bg-cyan-950/50 px-1.5 py-0.5 rounded font-bold">
+                  🎯 RAG: {ragInfo.filterDesc} ({ragInfo.candidateCount}대)
+                </span>
+              )}
             </div>
-            <button onClick={() => {
-              setWrongPayload({ query, answerType: 'ai', answerText: aiAnswer, parsed });
-              setWrongOpen(true);
-            }}
-              className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-[10px] font-bold border border-red-700/40">
-              ❌ 오답
-            </button>
+            <div className="flex items-center gap-1">
+              <button onClick={() => {
+                const lastModel = [...chatMessages].reverse().find(m => m.role === 'model');
+                const lastUser = [...chatMessages].reverse().find(m => m.role === 'user');
+                setWrongPayload({
+                  query: lastUser?.content || query,
+                  answerType: 'ai',
+                  answerText: lastModel?.content || aiAnswer,
+                  parsed,
+                });
+                setWrongOpen(true);
+              }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-[10px] font-bold border border-red-700/40">
+                ❌ 오답
+              </button>
+              <button onClick={handleNewChat}
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-200 text-[10px] font-bold border border-slate-600/40">
+                🔄 새 대화
+              </button>
+            </div>
           </div>
-          <div className="text-base text-slate-100 whitespace-pre-wrap leading-relaxed">{aiAnswer}</div>
+
+          {/* 대화 메시지들 (말풍선) */}
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+            {chatMessages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] px-3 py-2 rounded-lg ${
+                  m.role === 'user'
+                    ? 'bg-amber-700/40 border border-amber-600/40 text-amber-100 text-sm'
+                    : 'bg-slate-800/60 border border-purple-600/30 text-slate-100 text-base'
+                }`}>
+                  <div className="text-[9px] uppercase font-bold mb-0.5 opacity-70">
+                    {m.role === 'user' ? '검수원' : 'AI'}
+                  </div>
+                  <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                  {m.role === 'model' && m.ragInfo && m.ragInfo.narrowed && (
+                    <div className="mt-1 text-[9px] text-cyan-400/80 font-bold">
+                      📌 {m.ragInfo.filterDesc} ({m.ragInfo.candidateCount}대 참조)
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {aiLoading && (
+              <div className="flex justify-start">
+                <div className="px-3 py-2 rounded-lg bg-slate-800/60 border border-purple-600/30">
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-300 inline"/>
+                  <span className="ml-2 text-xs text-slate-400">AI 생각 중...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 후속 질문 입력창 */}
+          {!aiLoading && (
+            <div className="mt-3 flex gap-2">
+              <input
+                type="text"
+                value={followupQuery}
+                onChange={e => setFollowupQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && followupQuery.trim()) handleSendFollowup();
+                }}
+                placeholder="후속 질문 (예: 그 중 양하만, 위험물은?)"
+                className="flex-1 px-3 py-2 bg-slate-800 border border-purple-700/40 rounded text-sm text-slate-100 focus:outline-none focus:border-purple-500"
+              />
+              <button onClick={handleSendFollowup}
+                disabled={!followupQuery.trim()}
+                className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded font-bold text-sm">
+                보내기
+              </button>
+            </div>
+          )}
+
+          <div className="mt-2 text-[10px] text-slate-500">
+            💡 이전 대화 기억함 — "그 중...", "위에 뭐 있어?" 같은 후속 질문 가능 · {chatMessages.length / 2}턴
+          </div>
         </div>
       )}
 
       {/* M3.2: 로컬 답변 카드 (베이/POL/POD/구역/무게합/위치 등 - AI 의존 X) */}
-      {localAnswer && !aiAnswer && (
+      {localAnswer && chatMessages.length === 0 && (
         <div className="bg-gradient-to-br from-emerald-950 to-slate-900 border-2 border-emerald-600 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -365,7 +478,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
       )}
 
       {/* 통계 답변 카드 (단순 카운트) — 로컬 답변이 없을 때만 */}
-      {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && !aiAnswer && !localAnswer && (
+      {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && !aiAnswer && !localAnswer && chatMessages.length === 0 && (
         <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-xl p-4 text-center">
           <div className="text-[11px] text-cyan-400 font-bold uppercase mb-1">개수 답변</div>
           <div className="text-base text-slate-300 mb-2">{describeQuery(parsed)}</div>
@@ -378,14 +491,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
       )}
 
       {/* 일반 결과 (로컬 답변/통계 카드 없을 때만 표시) */}
-      {!parsed.isStat && !aiAnswer && !localAnswer && results.length === 1 && (
+      {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && results.length === 1 && (
         <BigResultCard c={results[0]} allContainers={allContainers}
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(results[0])}
           onAfterComplete={() => { setQuery(''); stopSpeak(); }}
         />
       )}
-      {!parsed.isStat && !aiAnswer && !localAnswer && results.length > 1 && results.slice(0, 30).map(c => (
+      {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && results.length > 1 && results.slice(0, 30).map(c => (
         <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
       ))}
 

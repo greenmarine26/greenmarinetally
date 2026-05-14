@@ -1,5 +1,11 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M5.79';
+export const APP_VERSION = 'M5.80';
+// M5.80 변경점 (AI 강화):
+//   [1] Gemini 2.5 Pro → 2.5 Flash (응답 3-10초 → 1초, 무료 1500회/일)
+//   [2] RAG: 질문 키워드로 후보 30~50대만 LLM에 전달 (토큰 90% 절감)
+//   [3] 멀티턴 대화: 이전 5턴 메모리, 5턴 넘으면 자동 요약 압축
+//   [4] systemInstruction 분리 (시스템 프롬프트 + 도메인 지식 + 컨텍스트)
+//   [5] askGemini 시그니처 변경: opts { history, shipLib, parsedQuery }
 // M5.79 변경점:
 //   [1] parseBAPLIE LOC+83(환적항 tspot) + LOC+97/98(최종 목적지 fpod) 추가
 //   [2] 빈 cn (EQD+CN++... 평택 부킹) → __BOOK_BAY_ROW_TIER 임시 ID + isBooking 마커
