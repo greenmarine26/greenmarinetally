@@ -18,7 +18,9 @@ import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 // 활성 작업 Firebase 경로: /activeWork/{voyageKey}/{equipNo} = { mode, startedAt, ... }
 
 export default function WorkReportModal({ open, voyageKey, voyage, onClose, lastEquip }) {
-  const [view, setView] = useState('main');  // main | start | pause | hatch | conbox
+  // M5.79: view에 'manual' 추가 — 시작 안 눌러도 중단/재개/완료 직접 보고
+  //  사유: (1) 전 작업을 이어받을 때 (다른 검수원이 시작한 작업) (2) 한 갱 먼저 작업 완료
+  const [view, setView] = useState('main');  // main | start | pause | hatch | conbox | external | manual
   const [activeWork, setActiveWork] = useState({});  // {1호기: {mode, started, paused, reason}, ...}
   // 시작 화면
   const [selectedEquip, setSelectedEquip] = useState(lastEquip || '1호기');
@@ -28,6 +30,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [externalReason, setExternalReason] = useState('');
   const [externalDetail, setExternalDetail] = useState('');
   const [pauseTarget, setPauseTarget] = useState({ equip: '', mode: '' });
+  // M5.79 수동 보고용
+  const [manualEquip, setManualEquip] = useState(lastEquip || '1호기');
+  const [manualMode, setManualMode] = useState('discharge');
+  const [manualAction, setManualAction] = useState('');   // 'pause' | 'resume' | 'done'
+  const [manualReason, setManualReason] = useState('');
   // 해치
   const [hatchAction, setHatchAction] = useState('open');
   const [bayInput, setBayInput] = useState('');
@@ -105,8 +112,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const handlePause = async (equipNo, modeArg) => {
     if (!pauseReason.trim()) { alert('중단 사유를 입력하세요'); return; }
     const time = Date.now();
-    const aw = activeWork[equipNo]?.[modeArg];
-    if (!aw) return;
+    // M5.79: aw 없으면(시작 기록 없음) 폴백 객체로 진행 — 이어받기/수동 보고 케이스
+    const aw = activeWork[equipNo]?.[modeArg] || { mode: modeArg, vsl, voy };
     const action = `${modeArg}_pause`;
     const message = buildWorkStatusMessage({
       vsl, voy, action, time, reason: pauseReason, equip: equipNo,
@@ -155,8 +162,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   const handleResume = async (equipNo, modeArg) => {
     const time = Date.now();
-    const aw = activeWork[equipNo]?.[modeArg];
-    if (!aw) return;
+    // M5.79: aw 없으면 폴백 (이어받기 시 시작 기록 부재 가능)
+    const aw = activeWork[equipNo]?.[modeArg] || { mode: modeArg, vsl, voy };
     const action = `${modeArg}_start`;
     const message = buildWorkStatusMessage({
       vsl, voy, action, time, equip: equipNo,
@@ -183,11 +190,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   const handleDone = async (equipNo, modeArg) => {
     const modeLabel = modeArg === 'discharge' ? '양하' : '선적';
-    const aw = activeWork[equipNo]?.[modeArg];
-    if (!aw) return;
+    // M5.79: aw 없어도 완료 보고 가능 — 한 갱 먼저 작업 끝났을 때 시작 기록 없는 케이스
+    const aw = activeWork[equipNo]?.[modeArg] || null;
     askConfirm({
       title: '작업 완료 보고',
-      message: `${equipNo} ${modeLabel}\n완료 보고하시겠습니까?`,
+      message: `${equipNo} ${modeLabel}\n완료 보고하시겠습니까?${aw ? '' : '\n(시작 기록 없이 수동 완료)'}`,
       confirmLabel: '완료 보고',
       cancelLabel: '취소',
       onConfirm: async () => {
@@ -197,7 +204,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
           vsl, voy, action, time, equip: equipNo,
         });
 
-        // mode별로 활성 작업 종료
+        // mode별로 활성 작업 종료 (이미 없는 경우도 null 세팅으로 안전)
         await set(ref(db, `activeWork/${voyageKey}/${equipNo}/${modeArg}`), null);
 
         await fbAddWorkReport(voyageKey, {
@@ -206,6 +213,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
           mode: modeArg,
           equip: equipNo,
           message,
+          ...(aw ? {} : { manual: true }),   // M5.79: 수동 완료 마커
         });
 
         await shareText(message, '검수 보고');
@@ -340,6 +348,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 <Box className="w-4 h-4"/> 콘박스
               </button>
             </div>
+            {/* M5.79: 수동 보고 (시작 안 누른 작업) — 이어받기 / 한 갱 먼저 완료 케이스 */}
+            <button onClick={() => { setManualAction(''); setManualReason(''); setView('manual'); }}
+              className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-indigo-500">
+              <RefreshCw className="w-4 h-4"/> 🔧 수동 보고 (시작 안 누른 작업)
+            </button>
             {/* M5.76: 외부 요인 작업 중단 (장비고장/강풍/안개/기타) */}
             <button onClick={() => setView('external')}
               className="w-full py-3 bg-red-800 hover:bg-red-700 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-red-600">
@@ -451,6 +464,147 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               disabled={!externalReason || (externalReason === '기타' && !externalDetail.trim())}
               className="w-full py-3 bg-red-700 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
               <AlertTriangle className="w-4 h-4"/> 작업 중단 보고
+            </button>
+          </div>
+        )}
+
+        {/* M5.79: 수동 보고 화면 — 시작 안 누른 작업의 중단/재개/완료 */}
+        {view === 'manual' && (
+          <div className="p-3 space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <div className="bg-indigo-950/40 border border-indigo-700/50 rounded-lg p-3">
+              <div className="text-base font-black text-indigo-200 flex items-center gap-2 mb-1">
+                <RefreshCw className="w-4 h-4"/> 수동 보고
+              </div>
+              <div className="text-[11px] text-indigo-300/90 leading-relaxed">
+                • 다른 검수원이 시작한 작업을 <b>이어받아</b> 중단/완료할 때<br/>
+                • 한 갱이 먼저 완료하여 <b>시작 기록 없이 완료 보고</b>가 필요할 때<br/>
+                • 시작 버튼을 못 누른 상태에서 <b>장비/모드 직접 선택</b>해 보고
+              </div>
+            </div>
+
+            {/* 장비 선택 */}
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
+              <div className="grid grid-cols-4 gap-1">
+                {EQUIPMENT_NUMBERS.map(n => (
+                  <button key={n} onClick={() => setManualEquip(n)}
+                    className={`py-2 rounded font-bold text-xs ${manualEquip === n ? 'bg-indigo-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 모드 선택 */}
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">작업 종류</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setManualMode('discharge')}
+                  className={`py-3 rounded-lg font-bold text-sm ${manualMode === 'discharge' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  ⬇ 양하
+                </button>
+                <button onClick={() => setManualMode('loading')}
+                  className={`py-3 rounded-lg font-bold text-sm ${manualMode === 'loading' ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  ⬆ 선적
+                </button>
+              </div>
+            </div>
+
+            {/* 현재 Firebase 상태 표시 */}
+            {(() => {
+              const aw = activeWork[manualEquip]?.[manualMode];
+              if (aw) {
+                const isPaused = aw.status === 'paused';
+                return (
+                  <div className={`px-3 py-2 rounded border ${isPaused ? 'bg-amber-950/40 border-amber-700/50' : 'bg-emerald-950/40 border-emerald-700/50'}`}>
+                    <div className="text-xs font-bold mb-0.5">
+                      {isPaused ? '⏸ 중단 상태' : '🟢 진행 중'} — Firebase에 기록 있음
+                    </div>
+                    {aw.startedAt && <div className="text-[10px] text-slate-400">시작: {new Date(aw.startedAt).toLocaleString('ko-KR')}</div>}
+                    {aw.pauseReason && <div className="text-[10px] text-amber-300">사유: {aw.pauseReason}</div>}
+                  </div>
+                );
+              }
+              return (
+                <div className="px-3 py-2 rounded border bg-slate-800/40 border-slate-700">
+                  <div className="text-xs font-bold text-slate-300">📭 Firebase에 시작 기록 없음</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">수동 완료/중단 보고 가능 (이어받기·한 갱 먼저 완료 케이스)</div>
+                </div>
+              );
+            })()}
+
+            {/* 액션 선택 */}
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">보고 종류</div>
+              <div className="grid grid-cols-3 gap-2">
+                <button onClick={() => setManualAction('pause')}
+                  className={`py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'pause' ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  <Pause className="w-3.5 h-3.5"/> 중단
+                </button>
+                <button onClick={() => setManualAction('resume')}
+                  className={`py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'resume' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  <Play className="w-3.5 h-3.5"/> 재개
+                </button>
+                <button onClick={() => setManualAction('done')}
+                  className={`py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'done' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  <CheckCircle2 className="w-3.5 h-3.5"/> 완료
+                </button>
+              </div>
+            </div>
+
+            {/* 중단 사유 (pause만) */}
+            {manualAction === 'pause' && (
+              <div>
+                <div className="text-xs font-bold text-slate-300 mb-1">중단 사유 — 빠른 선택</div>
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  {['장비 고장', '강풍 대기', '안개 대기', '우천 대기', '화물 이상', '점심 식사'].map(r => (
+                    <button key={r} onClick={() => setManualReason(r)}
+                      className={`py-2 rounded text-xs font-bold ${manualReason === r ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <input type="text" value={manualReason} onChange={(e) => setManualReason(e.target.value)}
+                  placeholder="또는 직접 입력"
+                  className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100"/>
+              </div>
+            )}
+
+            {/* 실행 버튼 */}
+            <button
+              disabled={!manualAction || (manualAction === 'pause' && !manualReason.trim())}
+              onClick={async () => {
+                if (manualAction === 'pause') {
+                  setPauseReason(manualReason);
+                  // 직접 handlePause 호출 (pauseReason state 비동기 반영 회피)
+                  if (!manualReason.trim()) return;
+                  const time = Date.now();
+                  const aw = activeWork[manualEquip]?.[manualMode] || { mode: manualMode, vsl, voy };
+                  const action = `${manualMode}_pause`;
+                  const message = buildWorkStatusMessage({ vsl, voy, action, time, reason: manualReason, equip: manualEquip });
+                  await set(ref(db, `activeWork/${voyageKey}/${manualEquip}/${manualMode}`), {
+                    ...aw, status: 'paused', pausedAt: time, pauseReason: manualReason,
+                  });
+                  await fbAddWorkReport(voyageKey, {
+                    type: 'work_status', action, mode: manualMode, equip: manualEquip,
+                    reason: manualReason, message, manual: true,
+                  });
+                  await shareText(message, '검수 보고');
+                  setManualReason(''); setManualAction(''); setView('main'); onClose();
+                } else if (manualAction === 'resume') {
+                  await handleResume(manualEquip, manualMode);
+                  setManualAction(''); setView('main');
+                } else if (manualAction === 'done') {
+                  await handleDone(manualEquip, manualMode);
+                  setManualAction(''); setView('main');
+                }
+              }}
+              className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              <Send className="w-4 h-4"/>
+              {manualAction === 'pause' ? '중단 보고' :
+               manualAction === 'resume' ? '재개 보고' :
+               manualAction === 'done' ? '완료 보고' : '보고 종류 선택'}
             </button>
           </div>
         )}

@@ -55,6 +55,11 @@ function normalizeOp(c) {
   // M5.68 — 영구 규칙: voucher OPERATOR는 항상 3자 (4자 약자는 앞 3자만)
   const to3 = (s) => String(s || '').slice(0, 3).toUpperCase();
 
+  // M5.79: 부킹 슬롯 (평택 적재 컨번호 미입력)은 선사 코드도 미정
+  //   __BOOK_ 임시 ID의 앞 3자(__B/_BO)가 선사로 잡히는 사고 방지
+  const isBooking = c.isBooking === true || c.pendingCn === true ||
+                    (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_'));
+
   // 1순위: EDI에서 추출된 op (NAD+CA)
   if (c.op) {
     const op = String(c.op).toUpperCase();
@@ -72,8 +77,8 @@ function normalizeOp(c) {
     if (CARRIER_MAP[cc]) return CARRIER_MAP[cc];
     return to3(cc);
   }
-  // 폴백: cn prefix (앞 3자)
-  if (c.cn && c.cn.length >= 3) return c.cn.slice(0, 3).toUpperCase();
+  // 폴백: cn prefix (앞 3자) — 부킹 슬롯이면 차단
+  if (!isBooking && c.cn && c.cn.length >= 3) return c.cn.slice(0, 3).toUpperCase();
   return '?';
 }
 

@@ -14,10 +14,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
+import { formatDgShort } from '../dgUnDict.js';
 // M4.6: 인쇄 컴포넌트
 import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
@@ -996,8 +997,13 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     let specialLine = '';
     let specialColor = 'text-slate-500';
     if (c.dg) {
-      specialLine = c.un ? `DG UN${c.un}` : 'DG';
+      // M5.79: UN 코드북에서 짧은 화물명 (예: "에탄올 (Cl.3)") - 베이 셀이 좁아서 짧게
+      specialLine = c.un ? formatDgShort(c.un) : 'DG';
       specialColor = 'text-red-300 font-bold';
+    } else if (isBookingSlot(c)) {
+      // M5.79: 평택 적재 부킹 슬롯 (컨번호 미입력) — 베이그리드에 표시
+      specialLine = '📝대기';
+      specialColor = 'text-amber-300 font-bold';
     } else if (isReefer && tmpStr) {
       // 온도 있으면 무조건 표시 (엠티 리퍼도 온도 입력 가능)
       specialLine = `${tmpStr}C`;
@@ -1119,7 +1125,9 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
             {polLabel}/{transit ? transit : '   '}<span className={ptk ? 'text-red-700 font-black' : ''}>*{podLabel}</span>
           </div>
           <div className="font-black" style={{ fontSize }}>
-            {c.cn || ''}
+            {isBookingSlot(c) ? (
+              <span className="text-amber-300">📝 대기</span>
+            ) : (c.cn || '')}
           </div>
           <div style={{ fontSize: fontSize - 1 }}>
             {opLabel} {fe}{wt.padStart(4, ' ')} {typeLabel}

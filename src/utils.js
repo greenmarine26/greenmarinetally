@@ -1,5 +1,10 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M5.781';
+export const APP_VERSION = 'M5.79';
+// M5.79 변경점:
+//   [1] parseBAPLIE LOC+83(환적항 tspot) + LOC+97/98(최종 목적지 fpod) 추가
+//   [2] 빈 cn (EQD+CN++... 평택 부킹) → __BOOK_BAY_ROW_TIER 임시 ID + isBooking 마커
+//   [3] DGS+IMD packaging group 추출 (cur.pg)
+//   [4] dgUnDict.js 연동 (UN 번호 → 화물명/Class/경고)
 
 // M4.9e 변경점 (선적 실체 위치 1+2+3단계):
 //   [1단계] 컨테이너 모달에 "실체 위치 (선적확인 시)" 박스
@@ -409,6 +414,24 @@ export function isReeferContainer(c) {
   return isReeferIso(c.iso);
 }
 
+// M5.79: 부킹 슬롯(컨번호 미입력) 판정
+//   parseBAPLIE에서 EQD+CN++... 빈 컨번호 → __BOOK_ 임시 ID 부여
+//   검수원이 현장에서 컨번호 입력하면 isBooking=false, cn=실제 번호로 교체
+export function isBookingSlot(c) {
+  if (!c) return false;
+  if (c.isBooking === true) return true;
+  if (c.pendingCn === true) return true;
+  if (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_')) return true;
+  return false;
+}
+
+// M5.79: 부킹 슬롯 화면 표시용 라벨
+//   "(컨번호 입력대기)" 또는 짧게 "📝 대기"
+export function bookingLabel(c, short = false) {
+  if (!isBookingSlot(c)) return '';
+  return short ? '📝 대기' : '📝 컨번호 입력대기';
+}
+
 // M4.9: ISO403 사진 촬영 의무 대상 검출
 //   사용자 정의: "리퍼 L5 포함" + "26대" (TNJP 26334W 기준)
 //   EDI 분석 결과 패턴:
@@ -531,14 +554,18 @@ export function parseBAPLIE(ediText) {
       cur = {
         cn: '', l4: '', iso: '', tp: '', fe: 'F',
         pol: '', pod: '', npod: '',           // npod = next POD (LOC+76)
+        tspot: '',                             // M5.79: 환적항 (LOC+83)
+        fpod: '',                              // M5.79: 최종 목적지 (LOC+97 또는 LOC+98)
         wt: 0, wtt: '',
         bay: '', row: '', tier: '',
         op: '',
-        dg: false, dgc: '', un: '',
+        dg: false, dgc: '', un: '', pg: '',   // M5.79: pg = packaging group
         rf: false, fr: false, tk: false, oog: false,
         sl: '', sh: '', bl: '',
         tmp: '',
         st: '',                                // V38: raw status code
+        isBooking: false,                      // M5.79: 평택 부킹 슬롯 (컨번호 미입력)
+        pendingCn: false,                      // M5.79: 컨번호 입력 대기 마커
       };
       // 위치는 보통 7자리(BBBRRTT) 또는 6자리(BBRRTT)
       // M3.1: bay는 정규화해서 저장 (앞 0 제거, "016"→"16", "001"→"1")
@@ -554,7 +581,26 @@ export function parseBAPLIE(ediText) {
     } else if (cur && seg.startsWith('EQD+CN+')) {
       const parts = seg.split('+');
       cur.cn = (parts[2] || '').replace(/[\s\-]/g, '').toUpperCase().trim();
-      cur.l4 = cur.cn.slice(-4);
+      // M5.79: 빈 컨번호 (평택 적재 부킹 슬롯) — 임시 ID로 살려둠
+      //   기존: cn='' → workingReport/SearchPanel에서 if(!c.cn) return 으로 통째 제외됨
+      //   수정: __BOOK_{bay}_{row}_{tier}_{idx} 임시 ID 부여, 검수원이 폰에서 컨번호 채울 수 있게 보존
+      //   동일 위치에 여러 부킹이 들어올 수 있으므로 (희박) 카운터 보강
+      if (!cur.cn) {
+        const slotKey = `${cur.bay || '00'}_${cur.row || '00'}_${cur.tier || '00'}`;
+        let bookId = `__BOOK_${slotKey}`;
+        // 중복 방지 (같은 슬롯에 두 줄이 들어오는 비정상 케이스 보호)
+        let dup = 0;
+        while (result.containers.some(x => x.cn === bookId)) {
+          dup++;
+          bookId = `__BOOK_${slotKey}_${dup}`;
+        }
+        cur.cn = bookId;
+        cur.isBooking = true;
+        cur.pendingCn = true;
+        cur.l4 = '';   // 검색 매칭에서 제외 (임시 ID 끝자리가 실 컨번호와 충돌 방지)
+      } else {
+        cur.l4 = cur.cn.slice(-4);
+      }
       const isoField = parts[3] || '';
       cur.iso = (isoField.split(':')[0] || '').toUpperCase();
 
@@ -621,6 +667,16 @@ export function parseBAPLIE(ediText) {
     } else if (cur && seg.startsWith('LOC+76+')) {
       // V38 신규: 환적/추가 POL
       cur.npod = seg.substring(7).split(':')[0];
+    } else if (cur && seg.startsWith('LOC+83+')) {
+      // M5.79: 환적항 (Transhipment Port)
+      //   실측: SWRG 양하선 290대, DPRT 적재선 182대가 LOC+83 사용
+      //   예: LOC+83+KRPUS  → 부산 환적
+      //       LOC+83+JPSKT  → 일본 야츠시로 환적 (2차 환적)
+      cur.tspot = seg.substring(7).split(':')[0];
+    } else if (cur && (seg.startsWith('LOC+97+') || seg.startsWith('LOC+98+'))) {
+      // M5.79: 최종 목적지 (Final Destination)
+      //   LOC+97 = Place of Delivery, LOC+98 = Final Port of Discharge
+      cur.fpod = seg.substring(seg.indexOf('+', 4) + 1).split(':')[0];
     } else if (cur && seg.startsWith('MEA+')) {
       // MEA+WT++KGM:2100  또는  MEA+VGM++KGM:17272
       const parts = seg.split(':');
@@ -664,6 +720,11 @@ export function parseBAPLIE(ediText) {
       const parts = seg.split('+');
       cur.dgc = parts[2] || '';
       cur.un = parts[3] || '';
+      // M5.79: packaging group (DGS+IMD+클래스+UN++packageGroup)
+      //   실측: DGS+IMD+3+1170++2  → PG II (중간 위험)
+      //         DGS+IMD+9+3268     → PG 없음 (Class 9 통상)
+      //   I = 가장 높은 위험, II = 중간, III = 낮음
+      if (parts.length >= 6 && parts[5]) cur.pg = parts[5].trim();
     } else if (cur && seg.startsWith('DIM+')) {
       cur.oog = true;
     } else if (cur && seg.startsWith('FTX+AAY+++')) {

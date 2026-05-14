@@ -1,27 +1,47 @@
 import React, { useState } from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
+import { formatDgLabel, lookupUN } from '../dgUnDict.js';
 
-// ISO 코드 옵션 (현장에서 자주 쓰는 것)
+// ISO 코드 옵션 — M5.79 확장
+//   끝자리 0 = Full(적재), 1 = Empty(공컨) 통상. EDI 양식에 따라 둘 다 입력 가능.
+//   드롭다운에서 G0/G1 분리 → "잘못된 ISO 일괄 검토 리스트"가 G0↔G1 변경도 잡아낼 수 있게 함.
 const ISO_OPTIONS = [
-  { iso: '22G1', label: '20DC (20피트 일반)', flags: {} },
-  { iso: '42G1', label: '40DC (40피트 일반)', flags: {} },
-  { iso: '45G1', label: '45HC (45피트 하이큐브)', flags: {} },
-  { iso: '22R1', label: '20RF (20피트 리퍼)', flags: { rf: true } },
-  { iso: '42R1', label: '40RF (40피트 리퍼)', flags: { rf: true } },
-  { iso: '45R1', label: '45RF (45피트 리퍼)', flags: { rf: true } },
-  { iso: '22P1', label: '20FR (20피트 플랫랙)', flags: { fr: true } },
-  { iso: '42P1', label: '40FR (40피트 플랫랙)', flags: { fr: true } },
-  { iso: '45P1', label: '45FR (45피트 플랫랙)', flags: { fr: true } },
-  { iso: '22U1', label: '20OT (20피트 오픈탑)', flags: { ot: true } },
-  { iso: '22T1', label: '20TK (20피트 탱크)', flags: { tk: true } },
-  { iso: '42T1', label: '40TK (40피트 탱크)', flags: { tk: true } },
+  // 20피트 GP (DC) — Full / Empty
+  { iso: '22G0', label: '20DC (20피트 일반) · Full',  flags: {} },
+  { iso: '22G1', label: '20DC (20피트 일반) · Empty', flags: {} },
+  // 40피트 GP — Full / Empty
+  { iso: '42G0', label: '40DC (40피트 일반) · Full',  flags: {} },
+  { iso: '42G1', label: '40DC (40피트 일반) · Empty', flags: {} },
+  // 40피트 HC (45XX = 40HC in 평택항 표준) — Full / Empty
+  { iso: '45G0', label: '40HC (40피트 하이큐브) · Full',  flags: {} },
+  { iso: '45G1', label: '40HC (40피트 하이큐브) · Empty', flags: {} },
+  // 45피트 (진짜 45피트)
+  { iso: 'L5G1', label: '45HC (45피트 하이큐브)',     flags: {} },
+  // 리퍼 — Full / Empty
+  { iso: '22R0', label: '20RF (20피트 리퍼) · Full',  flags: { rf: true } },
+  { iso: '22R1', label: '20RF (20피트 리퍼) · Empty', flags: { rf: true } },
+  { iso: '42R0', label: '40RF (40피트 리퍼) · Full',  flags: { rf: true } },
+  { iso: '42R1', label: '40RF (40피트 리퍼) · Empty', flags: { rf: true } },
+  { iso: '45R0', label: '40HC 리퍼 · Full',           flags: { rf: true } },
+  { iso: '45R1', label: '40HC 리퍼 · Empty',          flags: { rf: true } },
+  // 플랫랙
+  { iso: '22P1', label: '20FR (20피트 플랫랙)',       flags: { fr: true } },
+  { iso: '42P1', label: '40FR (40피트 플랫랙)',       flags: { fr: true } },
+  { iso: '45P1', label: '45FR (45피트 플랫랙)',       flags: { fr: true } },
+  // 오픈탑
+  { iso: '22U1', label: '20OT (20피트 오픈탑)',       flags: { ot: true } },
+  { iso: '42U1', label: '40OT (40피트 오픈탑)',       flags: { ot: true } },
+  // 탱크
+  { iso: '22T1', label: '20TK (20피트 탱크)',         flags: { tk: true } },
+  { iso: '22T6', label: '20TK 위험물 탱크',            flags: { tk: true } },
+  { iso: '42T1', label: '40TK (40피트 탱크)',         flags: { tk: true } },
 ];
 
 export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [] }) {
@@ -264,16 +284,32 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         </div>
 
         <div className="px-4 py-3 border-b border-slate-800">
-          <div className="text-base mono text-slate-200 font-bold mb-2">{c.cn}</div>
+          <div className="text-base mono text-slate-200 font-bold mb-2">
+            {isBookingSlot(c) ? (
+              <span className="text-amber-300">📝 컨번호 입력대기 <span className="text-[11px] text-slate-400 ml-1">({c.cn})</span></span>
+            ) : c.cn}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {(sealError || xSealError) && (
               <span className="bg-red-700 text-red-50 text-[11px] px-2 py-0.5 rounded font-black flex items-center gap-1">
                 <AlertOctagon className="w-3 h-3"/>실오류 (세관 신고 대상)
               </span>
             )}
+            {/* M5.79: 부킹 슬롯 (평택 적재 컨번호 미입력) */}
+            {isBookingSlot(c) && <Badge color="amber">📝 컨번호 대기</Badge>}
             {isDone && <Badge color="emerald">✓ 완료 [{comp.by}]</Badge>}
             {isXray && <Badge color="purple">🔍 X-RAY</Badge>}
-            {isDG && <Badge color="red"><AlertTriangle className="w-3 h-3"/>DG {c.dgc} {c.un}</Badge>}
+            {/* M5.79: DG 뱃지에 UN 화물명 짧게 — 길어서 다른 뱃지와 별도 줄 처리는 아래 박스에서 */}
+            {isDG && (() => {
+              const info = lookupUN(c.un);
+              return (
+                <Badge color="red">
+                  <AlertTriangle className="w-3 h-3"/>
+                  DG Cl.{info?.cls || c.dgc || '?'} UN{c.un}
+                  {info && <span className="ml-1 opacity-90">· {info.name.split(/[\/(]/)[0].trim()}</span>}
+                </Badge>
+              );
+            })()}
             {isReefer && <Badge color="cyan"><Snowflake className="w-3 h-3"/>RF{c.tmp ? ` ${c.tmp}°C` : ''}</Badge>}
             {c.fr && <Badge color="orange">Flat Rack</Badge>}
             {c.ot && <Badge color="yellow">Open Top</Badge>}
@@ -285,6 +321,21 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                 : <Badge color="blue"><Camera className="w-3 h-3"/>ISO403 사진 필요</Badge>
             )}
           </div>
+
+          {/* M5.79: DG 상세 정보 박스 (UN 화물명 + 위험 등급 + PG) */}
+          {isDG && (
+            <div className="mt-2 px-3 py-2 bg-red-950/40 border border-red-700/40 rounded-lg">
+              <div className="text-[11px] text-red-200 leading-relaxed">
+                <span className="font-black">⚠ 위험물: </span>
+                {formatDgLabel(c.dgc, c.un)}
+                {c.pg && (
+                  <span className="ml-2 text-red-300/90">
+                    · PG {c.pg === '1' ? 'I (높음)' : c.pg === '2' ? 'II (중간)' : c.pg === '3' ? 'III (낮음)' : c.pg}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* M4.9: ISO403 사진 의무 강조 박스 (미촬영 시) */}
           {needsISO403Photo && !iso403PhotoTaken && (
@@ -765,8 +816,22 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             <Field label="검수업체" value={c.op || '-'} mono/>
             <Field label="POL" value={c.pol || '-'} mono/>
             <Field label="POD" value={c.pod || '-'} mono/>
-            {c.npod && <Field label="환적" value={c.npod} mono/>}
+            {c.npod && <Field label="환적(76)" value={c.npod} mono/>}
+            {/* M5.79: LOC+83 환적항 + LOC+97/98 최종 목적지 */}
+            {c.tspot && c.tspot !== c.pod && (
+              <Field label="환적항(83)" value={c.tspot} mono highlight="amber"/>
+            )}
+            {c.fpod && c.fpod !== c.pod && c.fpod !== c.tspot && (
+              <Field label="최종지(97)" value={c.fpod} mono highlight="purple"/>
+            )}
           </div>
+          {/* M5.79: 2단 환적 경고 — POD를 거쳐 다시 환적되는 화물 */}
+          {c.tspot && c.tspot !== c.pod && c.pod && (
+            <div className="mt-2 px-2 py-1.5 bg-amber-950/40 border border-amber-700/40 rounded text-[11px] text-amber-200 font-bold">
+              🔁 2단 환적: <span className="mono">{c.pol}</span> → <span className="mono">{c.pod}</span> → <span className="mono">{c.tspot}</span>
+              {c.fpod && c.fpod !== c.tspot && <> → <span className="mono">{c.fpod}</span></>}
+            </div>
+          )}
         </div>
 
         {/* 실번호 */}

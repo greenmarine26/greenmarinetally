@@ -35,6 +35,10 @@ function normalizeCarrier(c) {
   // M5.68 — 3자 강제 (voucher와 통일)
   const to3 = (s) => String(s || '').slice(0, 3).toUpperCase();
 
+  // M5.79: 부킹 슬롯 가드
+  const isBooking = c.isBooking === true || c.pendingCn === true ||
+                    (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_'));
+
   if (c.op) {
     const op = String(c.op).toUpperCase().trim();
     if (CARRIER_MAP[op]) return CARRIER_MAP[op];
@@ -44,7 +48,7 @@ function normalizeCarrier(c) {
     const blp = String(c.bl).slice(0, 4).toUpperCase();
     if (CARRIER_MAP[blp]) return CARRIER_MAP[blp];
   }
-  if (c.cn && c.cn.length >= 3) return c.cn.slice(0, 3).toUpperCase();
+  if (!isBooking && c.cn && c.cn.length >= 3) return c.cn.slice(0, 3).toUpperCase();
   return '?';
 }
 
@@ -104,11 +108,15 @@ function renderRow(c, idx) {
   const spec = `${len}${type === 'normal' ? '' : type === 'reefer' ? 'R' : type === 'fr' ? 'F' : type === 'ot' ? 'O' : 'T'}`;
   const fe = (c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
   const sl = (c.sl || '').slice(0, 10);  // M5.52: 12→10자 (선사 칸 공간 확보)
-  const cn = c.cn || '';
+  // M5.79: 부킹 슬롯이면 컨번호 빈 칸 (검수원이 손으로 채울 자리)
+  const isBooking = c.isBooking === true || c.pendingCn === true ||
+                    (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_'));
+  const cn = isBooking ? '' : (c.cn || '');
   // M5.52: 선사 (c.op = EDI NAD+CA 또는 리스트 carrier 컬럼) 우선, 폴백 cn prefix(owner code)
   const line = normalizeCarrier(c).slice(0, 5);
   // 비고: X-RAY ★ + 리퍼 온도 + 기타 표시
   const notes = [];
+  if (isBooking) notes.push('<span style="color:#b45309;font-weight:bold">📝대기</span>');
   if (c._xray) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
   if (type === 'reefer' && c.temp != null) notes.push(`${c.temp}°C`);
   if (type === 'fr') notes.push('FR');

@@ -7,7 +7,7 @@
 import React, { useState, useMemo } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
-import { isoToLabel, formatWt, fmtPos, isReeferContainer } from '../utils.js';
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot } from '../utils.js';
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
@@ -301,6 +301,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
   const isReeferF = c.rf && hasTmp;
   const isDG = c.dg;
+  // M5.79: 평택 적재 부킹 슬롯 (컨번호 미입력)
+  const isBooking = isBookingSlot(c);
 
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
   const sealError = c.sl && slOrig && c.sl !== slOrig;
@@ -310,7 +312,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
 
   // 좌측 색깔 띠 (V37 typeBar)
   let typeBar = 'bg-slate-700';
-  if (isDG) typeBar = 'bg-red-500';
+  if (isBooking) typeBar = 'bg-amber-500';   // M5.79: 부킹 슬롯
+  else if (isDG) typeBar = 'bg-red-500';
   else if (isReefer) typeBar = 'bg-cyan-500';
   else if (c.tk) typeBar = 'bg-orange-500';
   else if (c.fr || c.oog) typeBar = 'bg-purple-500';
@@ -382,8 +385,17 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-black text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-              <span className="text-[11px] text-slate-400 mono truncate">{c.cn}</span>
+              {isBooking ? (
+                <>
+                  <span className="font-black text-sm text-amber-300 mono">📝 대기</span>
+                  <span className="text-[10px] text-amber-400/80 font-bold">컨번호 입력대기</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-black text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
+                  <span className="text-[11px] text-slate-400 mono truncate">{c.cn}</span>
+                </>
+              )}
               {(sealError || xSealError) && (
                 <span className="bg-red-700/80 text-red-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
                   <AlertOctagon className="w-2.5 h-2.5"/>실오류
