@@ -381,3 +381,11 @@
 ### Firebase 저장
 - fbAddPhotoReport에 detailPhoto (base64) 추가
 - 두 장 모두 영구 저장
+
+## M5.78 hotfix - 카메라 안 켜짐 fix
+- 이슈: button onClick → fileInputRef.current.click() 방식이 PWA에서 카메라 안 켜지는 경우
+- 원인: 모바일 PWA에서 hidden input의 .click() 호출이 user gesture chain에서 분리될 수 있음 (특히 iOS Safari)
+- 수정: button + ref → label > input 직접 방식 (HTML 표준 클릭 위임)
+  - input이 label 안에 있으면 label 클릭 = input 클릭 (브라우저 네이티브)
+  - user gesture 분리 없음 → 카메라 즉시 호출
+- 변수명 정리: cnInputRef/detailInputRef 제거 (불필요)
