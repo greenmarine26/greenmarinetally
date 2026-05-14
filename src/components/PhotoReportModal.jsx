@@ -270,7 +270,8 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           {/* 검증 상태 표시 */}
           {(() => {
             const missing = [];
-            if (!photoBlob) missing.push('📷 사진');
+            if (!cnPhotoBlob) missing.push('📷 컨번호 사진');
+            if (!detailPhotoBlob) missing.push(`📷 ${type === 'damage' ? '데미지' : '액츄얼 실'} 사진`);
             if (type === 'damage' && damageTypes.length === 0) missing.push('데미지 종류');
             if (type === 'seal_error' && !sealNew.trim()) missing.push('발견 실번호');
             if (missing.length > 0) {

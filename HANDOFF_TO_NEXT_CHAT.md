@@ -389,3 +389,8 @@
   - input이 label 안에 있으면 label 클릭 = input 클릭 (브라우저 네이티브)
   - user gesture 분리 없음 → 카메라 즉시 호출
 - 변수명 정리: cnInputRef/detailInputRef 제거 (불필요)
+
+## M5.781 hotfix - 데미지 화면 먹통 fix
+- 원인: M5.77에서 photoBlob → cnPhotoBlob/detailPhotoBlob 변수명 변경했지만 line 273의 validation 부분(missing 검증)에 옛 변수명 photoBlob 잔존 → ReferenceError → 화면 crash
+- 수정: cnPhotoBlob + detailPhotoBlob 둘 다 검증
+  - "📷 컨번호 사진" + "📷 데미지/액츄얼 실 사진" 명확히 표시
