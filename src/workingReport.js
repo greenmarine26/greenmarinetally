@@ -91,14 +91,21 @@ function getSizeKey(c) {
     const iu = iso.replace(/\s/g, '');
     // M5.65: SZTY 양식 우선 검사 (4HDC, 4HRF, 40HC, 45 등 → HC)
     if (iu.includes('4H') || iu.includes('40HC') || iu.includes('45')) return 'HC';
+    // 진짜 45피트 (L로 시작)
     if (iu.startsWith('L')) return '45';
+    // 20피트
     if (iu.startsWith('2') || iu.includes('20')) return '20';
-    // 40' DC만 (4DC, 42xx 등) → 40
-    if (iu.startsWith('4')) return '40';
+    // M5.81: 명시적 40DC 표기만 '40'으로 분류 (평택항 도메인 - 40DC 매우 드묾)
+    //   42xx = 40DC (42GP/42G0/42G1/42RE/42UT 등)
+    //   기타 4로 시작은 모두 HC로 분류 (안전 디폴트)
+    if (/^4[02]/.test(iu)) return '40';   // 42xx 또는 40xx만 진짜 40DC
+    if (iu.startsWith('4')) return 'HC';  // 그 외 4로 시작 → HC (평택 도메인)
   }
-  // 폴백
+  // M5.81 폴백: ISO 정보 없어 cn 끝자리로 추정
+  //   평택항 도메인 반영 — 40DC는 하루 1-2개 매우 드묾
+  //   따라서 모호한 경우 40 standard 대신 HC로 분류 (안전)
   if (c.cn && /^[A-Z]{4}\d{7}$/.test(c.cn)) {
-    return parseInt(c.cn[10]) >= 4 ? '40' : '20';
+    return parseInt(c.cn[10]) >= 4 ? 'HC' : '20';   // 이전: '40' / '20' → 변경: 'HC' / '20'
   }
   return '20';
 }

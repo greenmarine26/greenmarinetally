@@ -1,5 +1,16 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M5.80';
+export const APP_VERSION = 'M5.81';
+// M5.81 변경점 (voucher 사이즈 분류 hotfix):
+//   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
+//     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
+//     - DJS "D5" → deriveIso 매칭 실패 → 같은 문제
+//   [1] deriveIso 보강: DJS 코드(D2/D5/D4/R2/R5) + NSL 영문(4HDC/20DC/4HRF 등) 인식
+//   [2] parseListExcel fallback 매칭 보강: '4HDC' / 'D5' 패턴 추가
+//   [3] workingReport.js getSizeKey 정확도 향상:
+//        - 42xx만 진짜 '40'으로 분류 (42GP/42G0/42G1/42RE 등)
+//        - 그 외 4로 시작은 'HC' (평택 도메인 - 40DC 매우 드묾)
+//   [4] cn 폴백 평택 도메인 반영: '40' → 'HC' (모호하면 HC가 안전)
+//   효과: NSL 4HDC 108대 + DJS D5 35대 = 143대 모두 정확히 'HC'로 분류
 // M5.80 변경점 (AI 강화):
 //   [1] Gemini 2.5 Pro → 2.5 Flash (응답 3-10초 → 1초, 무료 1500회/일)
 //   [2] RAG: 질문 키워드로 후보 30~50대만 LLM에 전달 (토큰 90% 절감)
@@ -1024,6 +1035,40 @@ export async function parseListExcel(arrayBuffer) {
     for (const v of [tp, sz]) {
       if (/^\d{2}[A-Z]\d$|^\d{2}[A-Z]{2}$|^L\d[A-Z]\d$/.test(v)) return v;
     }
+    // M5.81 신규: DJS DONGJIN 비표준 코드 (D2/D5/D4/R2/R5)
+    //   D2=22G1 (20DC), D5=45G1 (40HC), D4=42G1 (40DC), R2=22R1 (20RF), R5=45R1 (40HC RF)
+    for (const v of [tp, sz]) {
+      if (v === 'D2') return '22G1';
+      if (v === 'D5') return '45G1';
+      if (v === 'D4') return '42G1';
+      if (v === 'R2') return '22R1';
+      if (v === 'R5') return '45R1';
+    }
+    // M5.81 신규: NSL 영문 자연어 양식 (4HDC=40HC, 20DC, 20RF, 4HRF 등)
+    //   "4H"는 40HC를 의미하는 NSL 특유의 약어 (4=40ft, H=High Cube)
+    for (const v of [tp, sz]) {
+      // 40HC 변형
+      if (/^(4HDC|40HC|40HQ|4HGP|45DC|45GP|4HC)$/.test(v)) return '45G1';
+      // 40HC 리퍼
+      if (/^(4HRF|4HRH|40HR|40RH|45RF|45RE|4HRE)$/.test(v)) return '45R1';
+      // 40DC (드물지만 정확히 표기된 경우)
+      if (/^(40DC|40GP|42DC|42GP|4DC|4GP)$/.test(v)) return '42G1';
+      // 40DC 리퍼
+      if (/^(40RF|42RF|42RE|40RE)$/.test(v)) return '42R1';
+      // 20DC
+      if (/^(20DC|20GP|22DC|22GP|2DC|2GP)$/.test(v)) return '22G1';
+      // 20RF
+      if (/^(20RF|20RH|22RF|22RE|20RE)$/.test(v)) return '22R1';
+      // 특수
+      if (/^(4HFR|40FR|45FR|42PC|42PF)$/.test(v)) return '45P1';
+      if (/^(20FR|22PC|22PF)$/.test(v)) return '22P1';
+      if (/^(4HOT|40OT|45OT|42UT)$/.test(v)) return '45U1';
+      if (/^(20OT|22UT)$/.test(v)) return '22U1';
+      if (/^(20TK|22TN|22T6)$/.test(v)) return '22T1';
+      if (/^(40TK|42TN|42T6)$/.test(v)) return '42T1';
+      // 진짜 45피트
+      if (/^(L5GP|L5DC|45L|L45|45FT)$/.test(v)) return 'L5G1';
+    }
     // 2) "DC43", "RF40" 같은 합쳐진 표기 (CDL Tp/Sz 양식)
     for (const v of [tp, sz]) {
       let m = v.match(/^([A-Z]{2,4})(\d{2,3})$/);   // "DC43"
@@ -1255,12 +1300,14 @@ export async function parseListExcel(arrayBuffer) {
       const typeRaw = type_i >= 0 ? String(row[type_i] || '').trim() : '';
       let iso = deriveIso(sizeRaw, typeRaw);
       // fallback: 기존 키워드 매칭 (deriveIso가 못 잡은 케이스용)
+      // M5.81: NSL "4HDC", DJS "D5" 등 명시적 패턴 추가 (40DC 잘못 분류 방지)
       if (!iso) {
         const isoRaw = (typeRaw + ' ' + sizeRaw).toUpperCase().replace(/[\s\-\/]/g, '');
-        if (/20.*DC|20.*GP/.test(isoRaw)) iso = '22G1';
-        else if (/40.*HC/.test(isoRaw)) iso = '45G1';
-        else if (/40.*DC|40.*GP/.test(isoRaw)) iso = '42G1';
-        else if (/RF|REEFER/.test(isoRaw)) iso = isoRaw.includes('20') ? '22R1' : '45R1';
+        // 40HC 패턴 (가장 흔한 평택항 케이스, 먼저 검사)
+        if (/40.*HC|40HQ|4HDC|45GP|45DC|^D5$|^R5$/.test(isoRaw)) iso = '45G1';
+        else if (/20.*DC|20.*GP|^D2$/.test(isoRaw)) iso = '22G1';
+        else if (/40.*DC|40.*GP|^D4$/.test(isoRaw)) iso = '42G1';
+        else if (/RF|REEFER|^R[25]$/.test(isoRaw)) iso = isoRaw.includes('20') || isoRaw.includes('22') ? '22R1' : '45R1';
         else if (/TK|TANK/.test(isoRaw)) iso = '22T6';
       }
 
