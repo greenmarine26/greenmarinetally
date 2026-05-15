@@ -474,52 +474,82 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         let matchedBy = '';
 
         // 1) 콜사인 정확 매칭
+        let matchedKey = '';   // M5.83: 매칭된 Firebase 키 추적
         if (dictCallsign && portMisData[dictCallsign]) {
           pm = portMisData[dictCallsign];
           matchedBy = 'callsign';
+          matchedKey = dictCallsign;
         }
         // 2) 콜사인 prefix 매칭 (D5RR5 ↔ D5RR5xx)
+        // M5.86: 여러 후보 중 vesselName이 베이사전 풀네임과 일치하는 것 우선
+        //   예: V7A545 → V7A5451(STARSHIP DRACO) + V7A5452(PEGASUS PROTO) 둘 다 prefix 매치
+        //       베이사전 name "DPRTPEGASUS PROTO V7A545"와 vesselName "PEGASUS PROTO" 비교 → V7A5452 우선
         if (!pm && dictCallsign && dictCallsign.length >= 4) {
           const cs = dictCallsign.toUpperCase();
-          pm = Object.values(portMisData).find(p => {
+          const dictName = String(dictData?.name || voyage?.info?.vsl || '').toUpperCase().replace(/\s+/g, '');
+          // prefix 매칭 후보 모두 수집
+          const candidates = Object.entries(portMisData).filter(([k, p]) => {
             const pcs = (p.callsign || '').toUpperCase();
             return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
           });
-          if (pm) matchedBy = 'callsign-prefix';
+          // 베스트 후보 선택
+          let best = null;
+          if (candidates.length === 1) {
+            best = candidates[0];
+          } else if (candidates.length > 1 && dictName) {
+            // vesselName 매칭으로 정확한 후보 선택
+            for (const entry of candidates) {
+              const pn = String(entry[1].vesselName || '').toUpperCase().replace(/\s+/g, '');
+              if (!pn || pn.length < 4) continue;
+              // 베이사전 name 안에 vesselName 일부가 포함되는지
+              if (dictName.includes(pn.slice(0, 5)) || pn.includes(dictName.slice(4, 4 + Math.min(pn.length, 8)))) {
+                best = entry;
+                break;
+              }
+            }
+            // vesselName 매칭 못 찾으면 berth 있는 (M5.82 이후 새 데이터) 우선
+            if (!best) {
+              best = candidates.find(([k, p]) => p.berth) || candidates[0];
+            }
+          } else if (candidates.length > 1) {
+            // dictName 없으면 berth 있는 새 데이터 우선
+            best = candidates.find(([k, p]) => p.berth) || candidates[0];
+          }
+          if (best) { pm = best[1]; matchedBy = 'callsign-prefix'; matchedKey = best[0]; }
         }
         // 3) IMO 매칭 (PORT-MIS 데이터에 IMO 컬럼 없을 수도 있어 보조)
         if (!pm && dictImo && /^\d{7}$/.test(dictImo)) {
-          pm = Object.values(portMisData).find(p => p.imo === dictImo);
-          if (pm) matchedBy = 'imo';
+          const entry = Object.entries(portMisData).find(([k, p]) => p.imo === dictImo);
+          if (entry) { pm = entry[1]; matchedBy = 'imo'; matchedKey = entry[0]; }
         }
         // 4) 선박명 부분 매칭 fallback
         if (!pm && vsl) {
-          pm = Object.values(portMisData).find(p => {
+          const entry = Object.entries(portMisData).find(([k, p]) => {
             const pn = (p.vesselName || '').toUpperCase();
             return pn && (vsl.includes(pn) || pn.includes(vsl));
           });
-          if (pm) matchedBy = 'name';
+          if (entry) { pm = entry[1]; matchedBy = 'name'; matchedKey = entry[0]; }
         }
         // 5) M5.71 — 선박명 정규화 매칭 (공백/특수문자 제거 + 부분 단어)
         if (!pm && vsl) {
           const normVsl = vsl.toUpperCase().replace(/[\s\-_\.]/g, '');
-          pm = Object.values(portMisData).find(p => {
+          const entry = Object.entries(portMisData).find(([k, p]) => {
             const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
             if (!pn) return false;
             return pn.length >= 5 && normVsl.length >= 5 && (pn.includes(normVsl.slice(0,5)) || normVsl.includes(pn.slice(0,5)));
           });
-          if (pm) matchedBy = 'name-norm';
+          if (entry) { pm = entry[1]; matchedBy = 'name-norm'; matchedKey = entry[0]; }
         }
         // 6) M5.72 — 베이사전 풀네임 매칭 (앱: 약자 DJCF / PORT-MIS: 풀네임 DONGJIN CONFIDENT)
         if (!pm && dictData?.name) {
           const dictNameNorm = String(dictData.name).toUpperCase().replace(/\s+/g, '');
-          pm = Object.values(portMisData).find(p => {
+          const entry = Object.entries(portMisData).find(([k, p]) => {
             const pn = (p.vesselName || '').toUpperCase().replace(/\s+/g, '');
             if (!pn || pn.length < 5) return false;
             // 베이사전 name 안에 PORT-MIS 풀네임 포함되는지
             return dictNameNorm.includes(pn) || pn.includes(dictNameNorm.slice(4, 4 + Math.min(pn.length, 8)));
           });
-          if (pm) matchedBy = 'dict-fullname';
+          if (entry) { pm = entry[1]; matchedBy = 'dict-fullname'; matchedKey = entry[0]; }
         }
 
         // M5.71: 매칭 실패 시 디버그 카드 (어떤 선박이 안 잡히는지 보여줌)
@@ -564,35 +594,67 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           }
         }
         return (
-          <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 flex items-center gap-3 text-sm flex-wrap">
-            <span className="text-cyan-300 font-bold">⚓ PORT-MIS</span>
-            {/* M5.82: 부두 정보 강조 표시 (가장 왼쪽) */}
-            {pm.pier === 'PCTC' && (
-              <span className="bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded font-bold text-xs">
-                📍 PCTC · {pm.berth}
+          <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 text-sm">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-cyan-300 font-bold">⚓ PORT-MIS</span>
+              {/* M5.82: 부두 정보 강조 표시 (가장 왼쪽) */}
+              {pm.pier === 'PCTC' && (
+                <span className="bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded font-bold text-xs">
+                  📍 PCTC · {pm.berth}
+                </span>
+              )}
+              {pm.pier === 'PNCT' && (
+                <span className="bg-purple-900/60 border border-purple-700/50 text-purple-200 px-2 py-0.5 rounded font-bold text-xs">
+                  📍 PNCT · {pm.berth}
+                </span>
+              )}
+              {!pm.pier && pm.berth && (
+                <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs">
+                  📍 {pm.berth}
+                </span>
+              )}
+              {!pm.berth && (
+                <span className="bg-red-900/40 border border-red-700/40 text-red-300 px-2 py-0.5 rounded text-xs font-bold">
+                  ⚠ 부두 정보 없음 (옛 데이터)
+                </span>
+              )}
+              <span className="text-slate-200">
+                입항 <span className="font-bold text-emerald-300">{fmtDT(pm.eta)}</span>
               </span>
-            )}
-            {pm.pier === 'PNCT' && (
-              <span className="bg-purple-900/60 border border-purple-700/50 text-purple-200 px-2 py-0.5 rounded font-bold text-xs">
-                📍 PNCT · {pm.berth}
+              <span className="text-slate-500">·</span>
+              <span className="text-slate-200">
+                출항 <span className="font-bold text-amber-300">{fmtDT(pm.etd)}</span>
               </span>
-            )}
-            {!pm.pier && pm.berth && (
-              <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs">
-                📍 {pm.berth}
-              </span>
-            )}
-            <span className="text-slate-200">
-              입항 <span className="font-bold text-emerald-300">{fmtDT(pm.eta)}</span>
-            </span>
-            <span className="text-slate-500">·</span>
-            <span className="text-slate-200">
-              출항 <span className="font-bold text-amber-300">{fmtDT(pm.etd)}</span>
-            </span>
-            {pm.port && pm.port !== '평택' && (
-              <span className="text-orange-400 text-xs ml-auto">⚠ {pm.port}</span>
-            )}
-            {pm.voyageType && <span className="text-slate-400 text-xs">[{pm.voyageType}]</span>}
+              {pm.port && pm.port !== '평택' && (
+                <span className="text-orange-400 text-xs ml-auto">⚠ {pm.port}</span>
+              )}
+              {pm.voyageType && <span className="text-slate-400 text-xs">[{pm.voyageType}]</span>}
+            </div>
+            {/* M5.83: 매칭 진단 정보 (작은 글씨로 카드 아래) */}
+            <div className="text-[10px] text-slate-500 mt-1 font-mono flex gap-3 flex-wrap">
+              <span>매칭: <span className="text-cyan-400">{matchedBy}</span></span>
+              <span>키: <span className="text-amber-400">{matchedKey || '?'}</span></span>
+              <span>선박명: <span className="text-emerald-400">{pm.vesselName || '?'}</span></span>
+              <span>저장: <span className="text-purple-400">{pm.updatedAt ? new Date(pm.updatedAt).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?'}</span></span>
+              {!pm.berth && (
+                <button
+                  onClick={async () => {
+                    if (!confirm(`옛 데이터(키: ${matchedKey})를 Firebase에서 삭제하시겠습니까?\n\n새 PORT-MIS 엑셀로 다시 업로드 후 정상 매칭됩니다.`)) return;
+                    try {
+                      const { ref, remove } = await import('firebase/database');
+                      const { db } = await import('../firebase.js');
+                      await remove(ref(db, `port_mis_data/${matchedKey}`));
+                      alert(`✓ ${matchedKey} 삭제 완료. 화면 새로고침하세요.`);
+                    } catch (e) {
+                      alert(`삭제 실패: ${e.message}`);
+                    }
+                  }}
+                  className="text-red-400 hover:text-red-300 underline"
+                >
+                  🗑 이 옛 데이터 삭제
+                </button>
+              )}
+            </div>
           </div>
         );
       })()}

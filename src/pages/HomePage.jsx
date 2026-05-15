@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2 } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
@@ -145,7 +145,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     <div className="max-w-6xl mx-auto px-3 py-3">
       {/* 그린마린 검수팀 전용 배지 */}
       <div className="bg-gradient-to-r from-emerald-900/30 via-teal-900/30 to-cyan-900/30 border border-emerald-700/40 rounded-lg px-3 py-2 mb-3 text-center">
-        <div className="text-[10px] text-emerald-400 font-bold tracking-wider">🌊 GREEN MARINE TALLY 🌊</div>
+        <div className="text-[10px] text-emerald-400 font-bold tracking-wider">🌊 GREEN MARINE TALLY 🌊 <span className="text-amber-300 ml-1">{APP_VERSION}</span></div>
         <div className="text-xs text-emerald-200 font-bold">그린마린 검수팀 전용 · 평택항</div>
       </div>
 

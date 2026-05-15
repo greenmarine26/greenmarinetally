@@ -1,21 +1,55 @@
 // M5.25: PORT-MIS 캡처 업로드 모달 (폰 전용 활용)
 // M5.82: PORT-MIS 엑셀 업로드 옵션 추가 (캡처보다 100% 정확 + 비용 0)
 // M5.82 hotfix: [평택 전체 교체] 옵션 추가 — 옛 데이터 자동 삭제
-import React, { useState } from 'react';
-import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Trash2 } from 'lucide-react';
+// M5.84: 현재 Firebase에 저장된 PORT-MIS 데이터 직접 보기 + 일괄 정리 + 개별 삭제
+import React, { useState, useEffect } from 'react';
+import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Trash2, Eye, Database } from 'lucide-react';
 import { ocrPortMisCapture } from '../mixerUpload.js';
-import { fbSavePortMisBatch, fbReplacePortMisBatch } from '../firebase.js';
-import { _storage, SK, parsePortMisExcel } from '../utils.js';
+import { fbSavePortMisBatch, fbReplacePortMisBatch, fbSubscribePortMis, db } from '../firebase.js';
+import { ref, remove } from 'firebase/database';
+import { _storage, SK, parsePortMisExcel, getPierFromBerth } from '../utils.js';
 import { GEMINI_API_KEY } from '../gemini.js';
 
 export default function PortMisCaptureModal({ onClose }) {
-  const [step, setStep] = useState('pick');  // pick → analyzing → review → saving → done
+  const [step, setStep] = useState('pick');  // pick → analyzing → review → saving → done | view
   const [imageUrl, setImageUrl] = useState(null);
   const [ships, setShips] = useState([]);
   const [error, setError] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
   const [sourceType, setSourceType] = useState('');  // M5.82: 'excel' | 'capture'
   const [replaceAll, setReplaceAll] = useState(true);  // M5.82 hotfix: 평택 전체 교체 기본 ON
+  const [currentData, setCurrentData] = useState({});  // M5.84: Firebase 현재 데이터
+  const [searchTerm, setSearchTerm] = useState('');     // M5.84: 검색
+
+  // M5.84: Firebase port_mis_data 실시간 구독
+  useEffect(() => {
+    if (step !== 'view') return;
+    const unsub = fbSubscribePortMis(setCurrentData);
+    return () => { try { unsub(); } catch (e) {} };
+  }, [step]);
+
+  // M5.84: 단일 키 삭제
+  const handleDeleteOne = async (key) => {
+    if (!confirm(`"${key}" PORT-MIS 데이터를 삭제하시겠습니까?`)) return;
+    try {
+      await remove(ref(db, `port_mis_data/${key}`));
+    } catch (e) {
+      alert(`삭제 실패: ${e.message}`);
+    }
+  };
+
+  // M5.84: 모든 데이터 삭제 (위험)
+  const handleDeleteAll = async () => {
+    const count = Object.keys(currentData || {}).length;
+    if (!confirm(`⚠ 전체 PORT-MIS 데이터 ${count}건을 모두 삭제하시겠습니까?\n\n복구 불가. 새 엑셀로 다시 업로드해야 합니다.`)) return;
+    if (!confirm(`정말 ${count}건 모두 삭제? 다시 한번 확인`)) return;
+    try {
+      await remove(ref(db, 'port_mis_data'));
+      alert(`✓ ${count}건 모두 삭제 완료`);
+    } catch (e) {
+      alert(`삭제 실패: ${e.message}`);
+    }
+  };
 
   // M5.82: 엑셀 직접 업로드 (Gemini 없이, 100% 정확)
   const handleExcelFile = async (e) => {
@@ -131,6 +165,107 @@ export default function PortMisCaptureModal({ onClose }) {
                 💡 팁: 평택항 + 입출항 기간으로 검색 후 <b>엑셀 다운로드</b>가 가장 정확합니다.
                 캡처는 빠르지만 작은 글씨 인식 어려울 수 있음.
               </p>
+
+              {/* M5.84: 현재 Firebase에 저장된 PORT-MIS 데이터 보기 */}
+              <div className="text-center mt-4 pt-3 border-t border-slate-700">
+                <button onClick={() => setStep('view')}
+                  className="text-xs text-slate-400 hover:text-amber-300 underline">
+                  📋 현재 Firebase에 저장된 PORT-MIS 데이터 보기 (진단)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* M5.84: 단계 0 - 현재 Firebase 데이터 보기 */}
+          {step === 'view' && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-amber-300 font-bold">📋 현재 Firebase 데이터</p>
+                  <p className="text-xs text-slate-500">총 {Object.keys(currentData || {}).length}건 등록</p>
+                </div>
+                <button onClick={() => setStep('pick')}
+                  className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded">
+                  ← 돌아가기
+                </button>
+              </div>
+              {/* 검색 */}
+              <input type="text" placeholder="🔍 콜사인 / 선박명 검색"
+                value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200 mb-3"/>
+              {/* 통계 */}
+              <div className="flex gap-2 mb-3 text-xs flex-wrap">
+                {(() => {
+                  const all = Object.values(currentData || {});
+                  const pctc = all.filter(v => v?.pier === 'PCTC').length;
+                  const pnct = all.filter(v => v?.pier === 'PNCT').length;
+                  const noBerth = all.filter(v => !v?.berth).length;
+                  return (
+                    <>
+                      <span className="bg-blue-900/50 border border-blue-700/50 text-blue-200 px-2 py-1 rounded font-bold">
+                        PCTC {pctc}
+                      </span>
+                      <span className="bg-purple-900/50 border border-purple-700/50 text-purple-200 px-2 py-1 rounded font-bold">
+                        PNCT {pnct}
+                      </span>
+                      {noBerth > 0 && (
+                        <span className="bg-red-900/50 border border-red-700/50 text-red-200 px-2 py-1 rounded font-bold">
+                          ⚠ 부두 없음 (옛 데이터) {noBerth}
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+              {/* 데이터 목록 */}
+              <div className="space-y-1 max-h-80 overflow-y-auto mb-3">
+                {Object.entries(currentData || {})
+                  .filter(([k, v]) => {
+                    if (!searchTerm) return true;
+                    const q = searchTerm.toLowerCase();
+                    return k.toLowerCase().includes(q) ||
+                           (v?.vesselName || '').toLowerCase().includes(q) ||
+                           (v?.callsign || '').toLowerCase().includes(q);
+                  })
+                  .sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0))
+                  .map(([key, val]) => {
+                    const isOld = !val?.berth;
+                    return (
+                      <div key={key} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${
+                        isOld ? 'bg-red-950/30 border border-red-800/40' : 'bg-slate-800/50'
+                      }`}>
+                        <span className="font-mono text-amber-400 w-20 truncate">{key}</span>
+                        <span className="text-slate-200 flex-1 truncate">{val?.vesselName || '?'}</span>
+                        {val?.berth ? (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                            val.pier === 'PCTC' ? 'bg-blue-900/60 text-blue-200' :
+                            val.pier === 'PNCT' ? 'bg-purple-900/60 text-purple-200' :
+                            'bg-slate-700 text-slate-400'
+                          }`}>{val.pier || '?'} · {val.berth}</span>
+                        ) : (
+                          <span className="text-[10px] text-red-400">⚠ 옛 데이터</span>
+                        )}
+                        <button onClick={() => handleDeleteOne(key)}
+                          className="text-red-400 hover:text-red-300 p-1">
+                          <Trash2 className="w-3 h-3"/>
+                        </button>
+                      </div>
+                    );
+                  })}
+                {Object.keys(currentData || {}).length === 0 && (
+                  <div className="text-center text-slate-500 py-8">
+                    저장된 PORT-MIS 데이터 없음<br/>
+                    <span className="text-xs">엑셀 업로드로 등록하세요</span>
+                  </div>
+                )}
+              </div>
+              {/* 전체 삭제 (위험) */}
+              {Object.keys(currentData || {}).length > 0 && (
+                <button onClick={handleDeleteAll}
+                  className="w-full bg-red-900/40 hover:bg-red-800/60 border border-red-700 text-red-200 py-2 rounded text-xs font-bold">
+                  ⚠ 모든 PORT-MIS 데이터 삭제 (위험)
+                </button>
+              )}
             </div>
           )}
 
