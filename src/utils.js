@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M5.86';
+export const APP_VERSION = 'M5.87';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -512,10 +512,14 @@ export const isoCategory = (iso) => {
 // 표준 EDIFACT D.95B SMDG22.
 // V38 변경: NAD+CA 추가, LOC+76 처리, TDT carrier, 4자리 숫자 ISO 매핑,
 //           status 4=Empty/5=Full 매핑 강화 (현장 BAPLIE 통상)
+// M5.87: TDT 세그먼트에서 callsign(호출부호) 자동 추출
+//   예: TDT+20+2604N+++:172:20+++V7A576:103::SAWASDEE RIGEL
+//        → callsign='V7A576', vsl='SAWASDEE RIGEL'
 export function parseBAPLIE(ediText) {
   const result = {
     vsl: '', voy: '', pol: '', etd: '', eta: '',
     carrier: '',                       // V38 신규
+    callsign: '',                      // M5.87 신규
     containers: [], errors: [],
   };
   const text = ediText.replace(/\r?\n/g, '');
@@ -527,6 +531,7 @@ export function parseBAPLIE(ediText) {
       // TDT+20+VOY++CARRIER...:::VESSEL_NAME...
       // 양식 1: TDT+20+0521W+++CKL:172:20+++BSDU:103:11:XIN TAI PING (선박명 = 마지막)
       // 양식 2: TDT+20+2633E++VRSC3:103::SITC SENDAI++:172:20 (M3.85: 선박명 = 중간)
+      // 양식 3: TDT+20+2604N+++:172:20+++V7A576:103::SAWASDEE RIGEL (M5.87: 콜사인 추출)
       const parts = seg.split('+');
       result.voy = parts[2] || '';
       // carrier (5번째 element의 첫 token)
@@ -560,6 +565,26 @@ export function parseBAPLIE(ediText) {
         }
       }
       result.vsl = vsl;
+      // M5.87: 콜사인(호출부호) 추출
+      //   TDT 세그먼트에서 ":103::" 패턴 앞의 토큰이 콜사인 (qualifier 103 = call sign)
+      //   예: V7A576:103::SAWASDEE RIGEL → V7A576
+      //   양식: 영문+숫자 4-7자, 선박명 패턴이 아닌 토큰
+      for (let p = 3; p < parts.length; p++) {
+        const fld = parts[p] || '';
+        const subs = fld.split(':');
+        for (let i = 0; i < subs.length; i++) {
+          const t = subs[i].trim().replace(/['"]/g, '');
+          // 콜사인 패턴: 영문/숫자 4-7자, 영문 1자 이상, 공백 없음, 선박명 아님
+          if (t && t.length >= 4 && t.length <= 7 && /^[A-Z0-9]+$/i.test(t) &&
+              /[A-Z]/i.test(t) && t !== vsl && t !== result.carrier &&
+              // 다음 sub가 '103'이면 더 확실 (콜사인 qualifier)
+              (subs[i+1] === '103' || /^[A-Z]\d/.test(t) || /\d[A-Z]/.test(t))) {
+            result.callsign = t.toUpperCase();
+            break;
+          }
+        }
+        if (result.callsign) break;
+      }
     } else if (seg.startsWith('LOC+5+') && !cur) {
       result.pol = seg.substring(6).split(':')[0];
     } else if (seg.startsWith('DTM+178:') || seg.startsWith('DTM+136:')) {

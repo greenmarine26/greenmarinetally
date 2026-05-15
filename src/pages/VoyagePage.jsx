@@ -462,13 +462,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
       {/* M5.21: PORT-MIS 입출항 정보 (Chrome 확장이 자동 수집한 데이터) */}
       {/* M5.23: 매칭 로직 강화 — 콜사인 prefix + IMO 매칭 fallback 추가 */}
+      {/* M5.87: voyage.info의 callsign + vslFull 우선 사용 (베이사전 의존도 제거, EDI 자동 추출) */}
       {(() => {
         const vsl = (voyage?.info?.vsl || '').toUpperCase();
+        const vslFull = (voyage?.info?.vslFull || '').toUpperCase();  // M5.87: EDI에서 자동 추출된 풀네임
         const dictData = (() => {
           try { return getShipBayDictData(voyage?.info?.imo, voyage?.info?.vsl); }
           catch { return null; }
         })();
-        const dictCallsign = dictData?.callsign || dictData?.bayDef?.callsign || '';
+        // M5.87: voyage.info.callsign 우선 (EDI 자동 추출), 없으면 베이사전
+        const dictCallsign = voyage?.info?.callsign || dictData?.callsign || dictData?.bayDef?.callsign || '';
         const dictImo = dictData?.imo || voyage?.info?.imo || '';
         let pm = null;
         let matchedBy = '';
@@ -523,20 +526,23 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (entry) { pm = entry[1]; matchedBy = 'imo'; matchedKey = entry[0]; }
         }
         // 4) 선박명 부분 매칭 fallback
-        if (!pm && vsl) {
+        // M5.87: vslFull (EDI 추출 풀네임) 우선, 그 다음 vsl (사용자 입력 약자)
+        if (!pm && (vslFull || vsl)) {
+          const searchVsl = vslFull || vsl;
           const entry = Object.entries(portMisData).find(([k, p]) => {
             const pn = (p.vesselName || '').toUpperCase();
-            return pn && (vsl.includes(pn) || pn.includes(vsl));
+            return pn && (searchVsl.includes(pn) || pn.includes(searchVsl));
           });
           if (entry) { pm = entry[1]; matchedBy = 'name'; matchedKey = entry[0]; }
         }
         // 5) M5.71 — 선박명 정규화 매칭 (공백/특수문자 제거 + 부분 단어)
-        if (!pm && vsl) {
-          const normVsl = vsl.toUpperCase().replace(/[\s\-_\.]/g, '');
+        // M5.87: vslFull 우선 사용
+        if (!pm && (vslFull || vsl)) {
+          const searchVsl = (vslFull || vsl).toUpperCase().replace(/[\s\-_\.]/g, '');
           const entry = Object.entries(portMisData).find(([k, p]) => {
             const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
             if (!pn) return false;
-            return pn.length >= 5 && normVsl.length >= 5 && (pn.includes(normVsl.slice(0,5)) || normVsl.includes(pn.slice(0,5)));
+            return pn.length >= 5 && searchVsl.length >= 5 && (pn.includes(searchVsl.slice(0,5)) || searchVsl.includes(pn.slice(0,5)));
           });
           if (entry) { pm = entry[1]; matchedBy = 'name-norm'; matchedKey = entry[0]; }
         }
@@ -1198,11 +1204,21 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         });
         results.push(`✅ ${file.name}: 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
         // 항차 정보 자동 보완
+        // M5.87: callsign + vsl도 자동 저장 (EDI TDT 세그먼트에서 추출 → PORT-MIS 매칭 자동화)
         if (r.vsl && r.voy) {
-          await fbUpdateVoyageInfo(voyageKey, {
+          const infoPatch = {
             etd: r.etd || voyage.info.etd || '',
             carrier: r.carrier || voyage.info.carrier || '',
-          });
+          };
+          // M5.87: callsign 자동 저장 (EDI에서 새로 추출됐고 voyage.info에 없거나 다르면)
+          if (r.callsign && r.callsign !== voyage.info.callsign) {
+            infoPatch.callsign = r.callsign;
+          }
+          // M5.87: 풀네임 자동 저장 (베이사전 매칭 없어도 PORT-MIS 매칭 가능하게)
+          if (r.vsl && r.vsl !== voyage.info.vsl && !voyage.info.vslFull) {
+            infoPatch.vslFull = r.vsl;  // 별도 필드 (vsl은 사용자 입력 약자 유지)
+          }
+          await fbUpdateVoyageInfo(voyageKey, infoPatch);
         }
       } catch (e) {
         results.push(`❌ ${file.name}: ${e.message}`);
