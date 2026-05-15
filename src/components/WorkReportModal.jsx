@@ -706,6 +706,9 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
           </div>
         )}
       </div>
+      {/* M5.92 fix: ConfirmModal 렌더 누락 — handleDone의 askConfirm 다이얼로그가 안 떠서
+          완료 보고가 카톡으로 전송 안 되던 버그 수정 */}
+      <ConfirmModal {...confirmState} />
     </div>
   );
 }
