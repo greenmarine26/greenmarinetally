@@ -574,6 +574,7 @@ const CONTENT = {
         { q: '🤖 AI 대화 강화 — M5.80', a: 'Gemini 2.5 Pro → 2.5 Flash 변경 (응답 3~10초 → 1초, 무료 한도 일일 50회 → 1500회). 멀티턴 대화 가능 — "16번 베이 컨 보여줘" → "그 중 양하만" → "위험물은?" 흐름으로 이어짐. 5턴 넘으면 자동 요약 압축. 새 대화는 [🔄 새 대화] 버튼.' },
         { q: '🎯 RAG 토큰 절감 — M5.80', a: '매 질문마다 1500대 전체를 LLM에 보내던 방식 → 질문 키워드(베이/DG/리퍼/POL/POD/컨번호/사이즈)로 후보 좁혀서 평균 30~50대만 전송. 토큰 90% 절감, 응답 더 빠르고 정확. AI 답변 카드 상단에 "🎯 RAG: 베이 16 / DG (3대)" 표시 — 어떤 데이터로 답한지 투명하게 보임.' },
         { q: '🔧 voucher 사이즈 분류 hotfix — M5.81', a: '⚠ 발견된 버그: voucher가 LIST의 40HC를 40 standard로 잘못 분류 (DPRT 2605N voucher에 40 standard 103대 표시, 실제 0대). 원인: NSL의 "4HDC", DJS의 "D5" 표기를 deriveIso가 못 잡아 iso=빈 칸 → cn 폴백이 끝자리 보고 "40" 분류. 수정: (1) deriveIso에 DJS 코드(D2/D5/D4/R2/R5) + NSL 영문(4HDC/4HRF/20DC/20RF) 추가 (2) workingReport getSizeKey: 42xx만 진짜 40으로, 그 외 4xx는 모두 HC로 (평택 도메인 - 40DC 매우 드묾) (3) cn 폴백 "40" → "HC" 변경. 효과: NSL 108대 + DJS 35대 = 143대 정확히 HC로 분류.' },
+        { q: '🔧 도움말 탭 가림 hotfix — M5.81', a: '⚠ 발견된 버그: 도움말 모달의 탭이 가로 스크롤이라 "팁" 다음 "영어회화" 탭이 화면 밖에서 잘려 클릭 안 됨. 수정: flex-wrap으로 줄바꿈 + 활성 탭 자동 스크롤(scrollIntoView). 이제 모든 탭이 한 번에 보이고 클릭 가능.' },
         { q: '🏁 모두 0이면',         a: '큰 ✅ "마감 가능" 화면 — 안전하게 작업 종료 OK' },
         { q: '📦 보관함 (선적 전용)', a: '베이 탭 상단에 자동 표시 — bay_actual="__STG__" 로 마킹된 컨들 모음. 자리 뺏긴 컨, 잘못 적치된 컨 임시 보관용' },
         { q: '📦 보관함 → 베이 그리드', a: '카드 우측 [📦 이동] 버튼 → 안내 바 → 빈 셀 클릭 (자리 뺏긴 컨과 같은 흐름)' },
@@ -747,12 +748,13 @@ export default function HelpModal({ open, onClose }) {
           </button>
         </div>
 
-        {/* 탭 (가로 스크롤) */}
-        <div className="flex gap-1 overflow-x-auto px-2 py-2 border-b border-slate-700 bg-slate-900/80 scrollbar-hide">
+        {/* 탭 (M5.81 hotfix: flex-wrap으로 줄바꿈 + 활성 탭 자동 스크롤) */}
+        <div className="flex flex-wrap gap-1 px-2 py-2 border-b border-slate-700 bg-slate-900/80">
           {TABS.map(T => {
             const Icon = T.icon;
             return (
               <button key={T.id} onClick={() => setTab(T.id)}
+                ref={el => { if (el && tab === T.id) el.scrollIntoView({ block: 'nearest', inline: 'center' }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition ${
                   tab === T.id ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                 }`}>
