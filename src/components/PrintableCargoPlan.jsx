@@ -360,14 +360,41 @@ export default function PrintableCargoPlan({
   const forePages = useMemo(() => buildBayPages(fore), [fore]);
   const aftPages = useMemo(() => buildBayPages(aft), [aft]);
 
+  // M5.91: 선적 모드는 POD별로 그룹화 (양하는 PTK 단일)
+  //   기존: { c20, c40, c45 } 단일 카운트 + 표시는 'LYG' 하드코딩 (버그)
+  //   변경: { byPod: { POD: { c20, c40, c45 } }, total: {...} } — 각 목적지별 분류
   const totalCounts = useMemo(() => {
-    const c = { c20: 0, c40: 0, c45: 0 };
+    if (mode === 'discharge') {
+      // 양하: 모두 PTK 도착 (POD = PTK)
+      const c = { c20: 0, c40: 0, c45: 0 };
+      containers.forEach(ct => {
+        if (!isPtk(ct, mode)) return;
+        const sz = sizeOf(ct);
+        c[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
+      });
+      return { byPod: { PTK: c }, total: c };
+    }
+    // 선적: POD별로 그룹화
+    const byPod = {};
+    const total = { c20: 0, c40: 0, c45: 0 };
     containers.forEach(ct => {
       if (!isPtk(ct, mode)) return;
+      // POD 정규화 — CNLYG/KRPTK 같은 5자리 UN/LOCODE는 마지막 3자리(LYG/PTK)로 축약
+      let pod = String(ct.pod || '').toUpperCase().trim();
+      if (!pod) pod = '?';
+      else if (pod.length === 5 && pod.startsWith('CN') || pod.startsWith('KR') || pod.startsWith('JP') ||
+               pod.startsWith('TW') || pod.startsWith('VN') || pod.startsWith('TH') || pod.startsWith('MY') ||
+               pod.startsWith('ID') || pod.startsWith('PH') || pod.startsWith('SG') || pod.startsWith('HK') ||
+               pod.startsWith('US') || pod.startsWith('RU')) {
+        pod = pod.slice(-3);
+      }
+      if (!byPod[pod]) byPod[pod] = { c20: 0, c40: 0, c45: 0 };
       const sz = sizeOf(ct);
-      c[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
+      const key = sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20';
+      byPod[pod][key]++;
+      total[key]++;
     });
-    return c;
+    return { byPod, total };
   }, [containers, mode]);
 
   const titleText = mode === 'discharge' ? 'CARGO DISCHARGING PLAN' : 'STOWAGE INSTRUCTION';
@@ -481,13 +508,22 @@ export default function PrintableCargoPlan({
             {(() => {
               const hasOuterPlaceholder = aftColumns.length < 5;
               const firstEmptyPairIdx = hasOuterPlaceholder ? -1 : aftColumns.findIndex(c => !c.pair);
+              const totalAll = totalCounts.total.c20 + totalCounts.total.c40 + totalCounts.total.c45;
+              const sortedPods = Object.entries(totalCounts.byPod)
+                .sort((a, b) => {
+                  const ta = a[1].c20 + a[1].c40 + a[1].c45;
+                  const tb = b[1].c20 + b[1].c40 + b[1].c45;
+                  return tb - ta;  // 많은 순
+                });
               const statsBox = (
                 <div className="bay-stats-inline" key="stats">
                   <div className="stats-title">20'/40'/45'</div>
-                  <div className="stats-line">
-                    {mode === 'discharge' ? 'PTK' : 'LYG'}: <b>{totalCounts.c20} / {totalCounts.c40} / {totalCounts.c45}</b>
-                  </div>
-                  <div className="stats-total">총 {totalCounts.c20 + totalCounts.c40 + totalCounts.c45}대</div>
+                  {sortedPods.map(([pod, c]) => (
+                    <div key={pod} className="stats-line">
+                      {pod}: <b>{c.c20} / {c.c40} / {c.c45}</b>
+                    </div>
+                  ))}
+                  <div className="stats-total">총 {totalAll}대</div>
                 </div>
               );
               const out = [];
@@ -715,21 +751,25 @@ export default function PrintableCargoPlan({
           display: flex;
           flex-direction: column;
           justify-content: center;
-          padding: 4px 8px;
-          font-size: 10pt;
-          line-height: 1.5;
+          padding: 3px 6px;
+          font-size: 9pt;
+          line-height: 1.25;
           border: 0.5px dashed #999;
           background: #fafafa;
+          overflow: hidden;
         }
-        .bay-stats-inline .stats-title { font-weight: bold; margin-bottom: 4px; font-size: 9pt; }
-        .bay-stats-inline .stats-line { font-size: 9pt; }
+        .bay-stats-inline .stats-title { font-weight: bold; margin-bottom: 2px; font-size: 8pt; }
+        /* M5.91: POD별 한 줄씩 표시 — 압축 폰트 */
+        .bay-stats-inline .stats-line { font-size: 8pt; white-space: nowrap; }
         .bay-stats-inline .stats-total { 
           font-weight: bold; 
-          margin-top: 4px; 
-          padding-top: 3px;
+          margin-top: 2px; 
+          padding-top: 2px;
           border-top: 0.5px solid #999;
-          font-size: 9pt;
+          font-size: 8pt;
         }
+        /* M5.91: POD가 많을 때 (5개 이상) 더 작게 */
+        .bay-stats-inline:has(.stats-line:nth-child(7)) .stats-line { font-size: 7pt; line-height: 1.15; }
         /* M5.31: cargo-footer를 페이지 좌하단 absolute로 (별첨 페이지 추가 방지) */
         .cargo-footer {
           position: absolute;
