@@ -42,7 +42,9 @@ export default function Header({ version, inspector, online, route, voyages, onC
       <div className="max-w-6xl mx-auto px-3 py-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {route.name !== 'home' ? (
-            <button onClick={onGoHome} className="p-1.5 -ml-1 rounded hover:bg-slate-800 active:bg-slate-700 flex-shrink-0">
+            <button onClick={onGoHome}
+              title="홈으로 (항차 선택 화면)"
+              className="p-1.5 rounded bg-blue-900/40 hover:bg-blue-900/70 active:bg-blue-900/90 border border-blue-700/50 flex-shrink-0">
               <Home className="w-5 h-5 text-blue-300"/>
             </button>
           ) : (
