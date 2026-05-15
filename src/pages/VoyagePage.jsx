@@ -543,18 +543,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           const m = String(s).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
           return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : s;
         };
-        // M5.82: PORT-MIS의 berth/pier를 voyage.info에 자동 저장 (한 번만)
-        //   - 이미 저장되어 있으면 건너뜀
+        // M5.82: PORT-MIS의 berth/pier를 voyage.info에 자동 저장
+        //   - voyage.info의 berth/pier가 PORT-MIS와 다르면 갱신 (선박 부두 이동 대응)
         //   - 다른 검수원도 즉시 공유 (Firebase 동기화)
         //   - voucher의 PIER/BERTH 자동 채움 효과
         if (pm.berth && voyage?.info) {
-          const currentBerth = voyage.info.berth;
-          const currentPier = voyage.info.pier;
-          const needsUpdate = (!currentBerth && pm.berth) || (!currentPier && pm.pier);
+          const currentBerth = voyage.info.berth || '';
+          const currentPier = voyage.info.pier || '';
+          // M5.82 hotfix: 같은 값 아니면 갱신 (이전: 비어있을 때만 갱신했음)
+          const needsUpdate = (pm.berth && currentBerth !== pm.berth) ||
+                              (pm.pier && currentPier !== pm.pier);
           if (needsUpdate) {
             const patch = {};
-            if (!currentBerth && pm.berth) patch.berth = pm.berth;
-            if (!currentPier && pm.pier) patch.pier = pm.pier;
+            if (pm.berth && currentBerth !== pm.berth) patch.berth = pm.berth;
+            if (pm.pier && currentPier !== pm.pier) patch.pier = pm.pier;
             // 비동기 업데이트 (블로킹 X)
             fbUpdateVoyageInfo(voyageKey, patch).catch(e =>
               console.warn('[M5.82] voyage.info berth 자동 저장 실패:', e)

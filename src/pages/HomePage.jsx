@@ -51,41 +51,38 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     );
   }, []);
 
-  // M5.82: 항차마다 부두 정보 매칭 (voyage.info.berth 또는 PORT-MIS)
+  // M5.82: 항차마다 부두 정보 매칭
+  //   M5.82 hotfix: PORT-MIS를 voyage.info보다 우선 (더 최신 데이터)
+  //                 선박이 부두를 옮기면 PORT-MIS 갱신만으로 즉시 반영
   const voyagesWithPier = useMemo(() => {
     return Object.entries(voyages || {})
       .filter(([k, v]) => v && v.info)
       .map(([k, v]) => {
         const info = v.info || {};
-        let berth = info.berth || '';
-        let pier = info.pier || '';
-        // PORT-MIS에서 매칭 시도 (voyage에 저장된 정보 없을 때)
-        if (!berth || !pier) {
-          const callsign = info.callsign || '';
-          const imo = info.imo || '';
-          const vsl = (info.vsl || '').toUpperCase();
-          let pm = null;
-          if (callsign && portMisData[callsign]) pm = portMisData[callsign];
-          if (!pm && callsign) {
-            const cs = callsign.toUpperCase();
-            pm = Object.values(portMisData).find(p => {
-              const pcs = (p.callsign || '').toUpperCase();
-              return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
-            });
-          }
-          if (!pm && imo) pm = Object.values(portMisData).find(p => p.imo === imo);
-          if (!pm && vsl) {
-            const normVsl = vsl.replace(/[\s\-_\.]/g, '');
-            pm = Object.values(portMisData).find(p => {
-              const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
-              return pn && pn.length >= 5 && (pn.includes(normVsl.slice(0, 5)) || normVsl.includes(pn.slice(0, 5)));
-            });
-          }
-          if (pm) {
-            berth = berth || pm.berth || '';
-            pier = pier || pm.pier || getPierFromBerth(pm.berth) || '';
-          }
+        // PORT-MIS에서 매칭 시도 — 우선
+        const callsign = info.callsign || '';
+        const imo = info.imo || '';
+        const vsl = (info.vsl || '').toUpperCase();
+        let pm = null;
+        if (callsign && portMisData[callsign]) pm = portMisData[callsign];
+        if (!pm && callsign) {
+          const cs = callsign.toUpperCase();
+          pm = Object.values(portMisData).find(p => {
+            const pcs = (p.callsign || '').toUpperCase();
+            return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
+          });
         }
+        if (!pm && imo) pm = Object.values(portMisData).find(p => p.imo === imo);
+        if (!pm && vsl) {
+          const normVsl = vsl.replace(/[\s\-_\.]/g, '');
+          pm = Object.values(portMisData).find(p => {
+            const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
+            return pn && pn.length >= 5 && (pn.includes(normVsl.slice(0, 5)) || normVsl.includes(pn.slice(0, 5)));
+          });
+        }
+        // PORT-MIS 우선, 없으면 voyage.info 폴백
+        const berth = (pm && pm.berth) || info.berth || '';
+        const pier = (pm && pm.pier) || info.pier || getPierFromBerth(berth) || '';
         return { key: k, ...v, _berth: berth, _pier: pier };
       })
       .sort((a, b) => (b.info.createdAt || 0) - (a.info.createdAt || 0));
