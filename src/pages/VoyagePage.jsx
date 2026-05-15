@@ -1133,13 +1133,27 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         const bytes = new Uint8Array(buf);
         const analysis = analyzeDefFile(bytes);
         const entry = analysisToBayDictEntry(analysis, file.name);
+        // 1단계: localStorage 저장 (기존)
         const saved = addToUserBayDict(entry);
+        // M5.88: 2단계 — Firebase에도 동시 저장 (모든 검수원 공유)
+        let fbSaved = false;
+        try {
+          const { fbSaveShipBayDict } = await import('../firebase.js');
+          fbSaved = await fbSaveShipBayDict(entry.code, {
+            ...entry,
+            source: 'def-upload',
+            _inspector: inspector || '',
+          });
+        } catch (e) {
+          console.warn('[M5.88] Firebase 베이사전 저장 실패:', e);
+        }
         const verifiedMark = saved ? '✅' : '⚠️';
+        const fbMark = fbSaved ? '☁' : '';
         results.push(
           `${verifiedMark} 📚 ${file.name}: ${analysis.header.vesselName} — ` +
           `${analysis.bayCount}개 베이, ${analysis.structure.sectionCount}섹션 ` +
           `(트리오 ${analysis.structure.trios.length}, 단독 ${analysis.structure.standalone.length}) ` +
-          `→ 베이사전 등록${saved ? '됨' : ' 실패'}`
+          `→ 베이사전 등록${saved ? '됨' : ' 실패'}${fbMark ? ` ${fbMark} 클라우드 동기화` : ''}`
         );
       } catch (e) {
         results.push(`❌ ${file.name} (.def): ${e.message}`);
@@ -1219,6 +1233,29 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
             infoPatch.vslFull = r.vsl;  // 별도 필드 (vsl은 사용자 입력 약자 유지)
           }
           await fbUpdateVoyageInfo(voyageKey, infoPatch);
+
+          // M5.89: EDI에서 추출한 콜사인 + 풀네임으로 베이사전 자동 등록
+          //   - 베이사전에 해당 약자(code) 없거나 콜사인이 비어있으면 등록
+          //   - def는 베이 구조 / EDI는 콜사인+풀네임 → 보완 관계
+          //   - 모든 검수원과 즉시 공유 (Firebase)
+          if (r.callsign && (r.vsl || r.carrier)) {
+            try {
+              const { fbSaveShipBayDict } = await import('../firebase.js');
+              const code = (voyage.info.vsl || '').toUpperCase().replace(/\s+/g, '');
+              if (code && code.length >= 2 && code.length <= 8) {
+                await fbSaveShipBayDict(code, {
+                  code,
+                  name: r.vsl,
+                  callsign: r.callsign,
+                  source: 'edi-auto',
+                  _inspector: inspector || '',
+                });
+                results.push(`☁ ${file.name}: 베이사전 자동 등록 (${code} · ${r.callsign} · ${r.vsl})`);
+              }
+            } catch (e) {
+              console.warn('[M5.89] EDI 베이사전 자동 등록 실패:', e);
+            }
+          }
         }
       } catch (e) {
         results.push(`❌ ${file.name}: ${e.message}`);

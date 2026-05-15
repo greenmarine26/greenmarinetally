@@ -4,7 +4,7 @@ import { APP_VERSION, _storage, SK } from './utils.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbSubscribePortMis,
-  fbSubscribeStaffList, fbSubscribeDeletedStaff
+  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict
 } from './firebase.js';
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
@@ -43,7 +43,12 @@ export default function App() {
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
-    return () => { u1(); u2(); u3(); u4(); unsub2(); unsub3(); };
+    // M5.88: Firebase 베이사전 구독 — 전역 객체 window.__fbShipBayDict에 저장
+    //   shipStructure.js가 이 데이터를 우선 조회 (베이사전 매칭 자동화)
+    const u5 = fbSubscribeShipBayDict(data => {
+      window.__fbShipBayDict = data || {};
+    });
+    return () => { u1(); u2(); u3(); u4(); u5(); unsub2(); unsub3(); };
   }, []);
 
   useEffect(() => {

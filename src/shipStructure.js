@@ -28,12 +28,46 @@ function normalizeShipKey(s) {
 //   4) 모두 실패 시 null
 //
 // 동작 우선순위:
-//   userBayDict > SHIP_BAY_DICT_V2 (109척, verified) > SHIP_BAY_DICT (11척, v1.1)
+//   M5.88: Firebase 베이사전(window.__fbShipBayDict) > userBayDict (localStorage) > V2 (109척) > V1 (11척)
+//   Firebase = 모든 검수원 공유 (def/EDI 업로드 시 자동 동기화)
 //
 // M5.11: v2에 대해 lookupBayDictV2Enhanced 사용 — IMO/callsign/code/이름 4가지 매칭
 //   기존 fuzzy 매칭이 prefix 4글자 + garbage 콜사인 때문에 자주 실패하던 문제 해결
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
-  // 1. user 사전 (최우선)
+  // M5.88: 0. Firebase 베이사전 (최우선 — 모든 검수원 공유)
+  try {
+    const fbDict = window.__fbShipBayDict || {};
+    if (Object.keys(fbDict).length > 0) {
+      const search = String(vesselNameOrCode || '').toUpperCase().replace(/\s+/g, '');
+      // 1) code 정확 매칭
+      if (search && fbDict[search]) {
+        return { source: 'firebase', data: fbDict[search], matchedBy: 'fb-code' };
+      }
+      // 2) IMO 매칭
+      if (imo) {
+        const entry = Object.values(fbDict).find(e => e && e.imo === imo);
+        if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-imo' };
+      }
+      // 3) name fuzzy 매칭 (4글자 이상 prefix)
+      if (search && search.length >= 4) {
+        const entry = Object.values(fbDict).find(e => {
+          const en = String(e?.name || '').toUpperCase().replace(/\s+/g, '');
+          return en && (en.includes(search.slice(0, 5)) || search.includes(en.slice(0, 5)));
+        });
+        if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-name-fuzzy' };
+      }
+      // 4) callsign 매칭 (fbDict의 callsign이 search prefix 또는 vice versa)
+      if (search && search.length >= 4) {
+        const entry = Object.values(fbDict).find(e => {
+          const ec = String(e?.callsign || '').toUpperCase();
+          return ec && ec.length >= 4 && (ec.startsWith(search) || search.startsWith(ec));
+        });
+        if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-callsign' };
+      }
+    }
+  } catch (e) { /* fallthrough */ }
+
+  // 1. user 사전 (localStorage)
   const userResult = lookupUserBayDict(imo, vesselNameOrCode);
   if (userResult) return { source: 'user', data: userResult, matchedBy: 'user-dict' };
 

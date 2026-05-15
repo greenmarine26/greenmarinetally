@@ -866,3 +866,80 @@ export async function fbReplacePortMisBatch(ships, opts = {}) {
 }
 
 export { db };
+
+// ─── M5.88: Firebase 베이사전 동기화 (모든 검수원 공유) ───────────────────
+// 노드: ship_bay_dict_v3/{code}
+// 우선순위: Firebase v3 > localStorage userBayDict > shipBayDict_v2 (임베드)
+
+/**
+ * 베이사전에 항목 저장/갱신 (def 또는 EDI 자동 등록)
+ * @param {string} code 선박 코드 (DPRT, SWRG 등)
+ * @param {object} entry { code, name, callsign, imo, source, bayDef, ... }
+ */
+export async function fbSaveShipBayDict(code, entry) {
+  if (!code || !entry) return false;
+  const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
+  if (!cleanCode) return false;
+  try {
+    const r = ref(db, `ship_bay_dict_v3/${cleanCode}`);
+    // 기존 데이터와 병합 (중요한 필드는 기존 보존)
+    const snap = await get(r);
+    const existing = snap.exists() ? snap.val() : {};
+    const merged = {
+      ...existing,
+      ...entry,
+      // 콜사인/IMO는 기존이 있고 새 값이 비어있으면 기존 보존
+      callsign: entry.callsign || existing.callsign || '',
+      imo: entry.imo || existing.imo || '',
+      name: entry.name || existing.name || '',
+      // bayDef는 새 데이터가 있으면 갱신 (def 파일 재업로드 케이스)
+      bayDef: entry.bayDef || existing.bayDef || null,
+      updatedAt: Date.now(),
+      updatedBy: entry._inspector || existing.updatedBy || '',
+    };
+    await set(r, merged);
+    return true;
+  } catch (e) {
+    console.error('[fbSaveShipBayDict] 저장 실패', cleanCode, e);
+    return false;
+  }
+}
+
+/**
+ * 베이사전 실시간 구독 (App.jsx에서 사용)
+ */
+export function fbSubscribeShipBayDict(callback) {
+  const r = ref(db, 'ship_bay_dict_v3');
+  const handler = onValue(r, snap => {
+    callback(snap.exists() ? snap.val() : {});
+  });
+  return () => off(r, 'value', handler);
+}
+
+/**
+ * 베이사전 단일 항목 삭제
+ */
+export async function fbDeleteShipBayDict(code) {
+  const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
+  if (!cleanCode) return false;
+  try {
+    await remove(ref(db, `ship_bay_dict_v3/${cleanCode}`));
+    return true;
+  } catch (e) {
+    console.error('[fbDeleteShipBayDict] 삭제 실패', cleanCode, e);
+    return false;
+  }
+}
+
+/**
+ * 베이사전 전체 일괄 저장 (마이그레이션용)
+ */
+export async function fbBatchSaveShipBayDict(entries) {
+  if (!entries || typeof entries !== 'object') return { saved: 0, failed: 0 };
+  let saved = 0, failed = 0;
+  await Promise.all(Object.entries(entries).map(async ([code, entry]) => {
+    const ok = await fbSaveShipBayDict(code, entry);
+    if (ok) saved++; else failed++;
+  }));
+  return { saved, failed };
+}
