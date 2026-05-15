@@ -256,6 +256,12 @@ export default function PortMisCaptureModal({ onClose }) {
                   🔄 평택 옛 데이터 <b>{saveResult.deleted}건</b> 삭제 후 교체
                 </p>
               )}
+              {/* M5.83: 자동 정리된 prefix 충돌 키 표시 */}
+              {saveResult?.cleaned > 0 && (
+                <p className="text-cyan-300 text-sm mt-1">
+                  🧹 같은 선박 중복 키 <b>{saveResult.cleaned}개</b> 자동 통합 (베이사전 콜사인 길이 불일치 등)
+                </p>
+              )}
               {saveResult?.failed > 0 && (
                 <p className="text-amber-400 text-sm">실패 {saveResult.failed}건</p>
               )}

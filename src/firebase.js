@@ -754,14 +754,17 @@ export function fbSubscribePortMis(callback) {
 //   폰에서 캡처 → OCR → 추출된 ships 배열을 Firebase port_mis_data에 PUT
 //   key는 sanitized callsign. callsign 없으면 vesselName 사용 (안전망)
 export async function fbSavePortMisBatch(ships) {
-  if (!Array.isArray(ships) || ships.length === 0) return { saved: 0, failed: 0 };
-  let saved = 0, failed = 0;
+  if (!Array.isArray(ships) || ships.length === 0) return { saved: 0, failed: 0, cleaned: 0 };
+  let saved = 0, failed = 0, cleaned = 0;
   const now = Date.now();
+  // 1단계: 새 데이터 저장
+  const newKeys = new Set();
   await Promise.all(ships.map(async (s) => {
     const rawKey = s.callsign || s.vesselName;
     if (!rawKey) { failed++; return; }
     const key = String(rawKey).replace(/[.#$/[\]\s'"]/g, '_').trim();
     if (!key) { failed++; return; }
+    newKeys.add(key);
     try {
       await set(ref(db, `port_mis_data/${key}`), { ...s, updatedAt: now });
       saved++;
@@ -770,23 +773,81 @@ export async function fbSavePortMisBatch(ships) {
       failed++;
     }
   }));
-  return { saved, failed };
+
+  // M5.83: 2단계 — 같은 선박의 콜사인 prefix 변형 옛 키 자동 정리
+  //   예: V7A545(옛) ↔ V7A5452(새) → V7A545 삭제
+  //   같은 선박이지만 다른 키로 저장된 옛 데이터 박멸 (베이사전 콜사인 길이 불일치 등)
+  try {
+    const newCallsigns = ships
+      .map(s => (s.callsign || '').toUpperCase().trim())
+      .filter(cs => cs.length >= 4);
+    if (newCallsigns.length > 0) {
+      const snap = await get(ref(db, 'port_mis_data'));
+      if (snap.exists()) {
+        const all = snap.val() || {};
+        await Promise.all(Object.entries(all).map(async ([oldKey, oldVal]) => {
+          if (newKeys.has(oldKey)) return;  // 이번에 저장한 키는 보존
+          if (!oldVal) return;
+          const oldCs = (oldVal.callsign || oldKey).toUpperCase().trim();
+          if (oldCs.length < 4) return;
+          // prefix 충돌 검사: 새 콜사인 중 하나와 prefix 일치
+          for (const newCs of newCallsigns) {
+            if (oldCs === newCs) continue;
+            if (oldCs.startsWith(newCs) || newCs.startsWith(oldCs)) {
+              // 추가 안전 검사: vesselName 비슷한지 (전혀 다른 선박 보호)
+              const newShip = ships.find(s => (s.callsign || '').toUpperCase().trim() === newCs);
+              const oldVn = String(oldVal.vesselName || '').toUpperCase().replace(/\s+/g, '');
+              const newVn = String(newShip?.vesselName || '').toUpperCase().replace(/\s+/g, '');
+              const vnMatch = !oldVn || !newVn ||
+                oldVn.includes(newVn.slice(0, 4)) || newVn.includes(oldVn.slice(0, 4));
+              if (vnMatch) {
+                try {
+                  await remove(ref(db, `port_mis_data/${oldKey}`));
+                  cleaned++;
+                  console.log(`[M5.83 자동 정리] ${oldKey} (${oldCs}) → ${newCs}로 통합`);
+                } catch (e) {
+                  console.warn('[fbSavePortMisBatch] 자동 정리 실패', oldKey, e);
+                }
+                break;
+              }
+            }
+          }
+        }));
+      }
+    }
+  } catch (e) {
+    console.warn('[fbSavePortMisBatch] prefix 충돌 정리 단계 실패', e);
+  }
+
+  return { saved, failed, cleaned };
 }
 
 // M5.82 hotfix: 평택 PORT-MIS 데이터 전체 교체
-//   - 기존 port_mis_data 중 port==='평택'인 데이터 모두 삭제
-//   - 그 후 새 ships 저장
-//   - 다른 항만(부산/마산 등) 데이터는 보존
+// M5.83: 옛 데이터 식별 기준 완화 - port 필드 없는 옛 데이터도 자동 잡음
+//   - 평택으로 간주: port가 '평택'/''/undefined/'PYEONGTAEK'/'평택항'/알 수 없는 값
+//   - 명확한 비-평택: 부산/인천/마산/울산/광양 → 보존
+//   - 다른 항만 데이터는 보존
 export async function fbReplacePortMisBatch(ships, opts = {}) {
-  const targetPort = opts.port || '평택';
   let deleted = 0;
+  // M5.83: 평택 식별 함수 (옛 데이터의 port 필드 빈 칸도 평택으로 간주)
+  const isPyeongtaek = (port) => {
+    if (!port) return true;  // 빈 값 = 옛 데이터 = 평택으로 간주
+    const p = String(port).toUpperCase().trim();
+    if (p === '평택' || p === '평택항' || p === 'PYEONGTAEK' || p === 'PTK' || p === 'KRPTK' || p === '') return true;
+    // 명확한 비-평택 항만은 보존
+    if (p === '부산' || p === '인천' || p === '마산' || p === '울산' || p === '광양' ||
+        p === 'BUSAN' || p === 'INCHEON' || p === 'MASAN' || p === 'ULSAN' || p === 'GWANGYANG') {
+      return false;
+    }
+    return true;  // 알 수 없는 값도 평택으로 (안전 디폴트 — 검수앱은 평택 전용)
+  };
   try {
     // 1) 기존 데이터에서 평택 데이터만 삭제
     const snap = await get(ref(db, 'port_mis_data'));
     if (snap.exists()) {
       const all = snap.val() || {};
       await Promise.all(Object.entries(all).map(async ([k, v]) => {
-        if (v && v.port === targetPort) {
+        if (v && isPyeongtaek(v.port)) {
           try {
             await remove(ref(db, `port_mis_data/${k}`));
             deleted++;
@@ -799,9 +860,9 @@ export async function fbReplacePortMisBatch(ships, opts = {}) {
   } catch (e) {
     console.error('[fbReplacePortMisBatch] 옛 데이터 조회 실패', e);
   }
-  // 2) 새 데이터 저장
-  const { saved, failed } = await fbSavePortMisBatch(ships);
-  return { saved, failed, deleted };
+  // 2) 새 데이터 저장 (prefix 충돌 정리는 fbSavePortMisBatch가 추가 처리)
+  const result = await fbSavePortMisBatch(ships);
+  return { ...result, deleted };
 }
 
 export { db };
