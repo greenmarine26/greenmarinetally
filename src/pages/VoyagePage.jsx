@@ -558,6 +558,50 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (entry) { pm = entry[1]; matchedBy = 'dict-fullname'; matchedKey = entry[0]; }
         }
 
+        // M5.90: 매칭 결과를 후처리 — 평택 우선, 평택 없으면 인천 fallback 표시
+        //   - 같은 선박이 평택 + 인천 둘 다 있으면 평택 데이터 사용
+        //   - 평택만 없으면 인천 데이터 사용하되 "인천 출항 정보" 명시
+        let fallbackInfo = null;  // { fromPort, etd } 평택 외 항만의 출항 정보
+        if (pm) {
+          const isPyeongtaek = (p) => {
+            const port = (p?.port || '').toUpperCase().trim();
+            return !port || port === '평택' || port === '평택항' || port === 'PYEONGTAEK';
+          };
+          // 매칭 결과가 평택이 아니면 같은 선박의 평택 데이터 검색
+          if (!isPyeongtaek(pm)) {
+            const matchedCs = (pm.callsign || '').toUpperCase();
+            const matchedName = String(pm.vesselName || '').toUpperCase().replace(/\s+/g, '');
+            const pyeongtaekEntry = Object.entries(portMisData).find(([k, p]) => {
+              if (!p || k === matchedKey) return false;
+              if (!isPyeongtaek(p)) return false;
+              const pcs = (p.callsign || '').toUpperCase();
+              const pn = String(p.vesselName || '').toUpperCase().replace(/\s+/g, '');
+              // 콜사인 매칭
+              if (pcs && matchedCs) {
+                if (pcs === matchedCs) return true;
+                if (pcs.length >= 4 && matchedCs.length >= 4 &&
+                    (pcs.startsWith(matchedCs) || matchedCs.startsWith(pcs))) return true;
+              }
+              // 선박명 매칭
+              if (pn && matchedName && pn.length >= 5 && matchedName.length >= 5 &&
+                  (pn.includes(matchedName.slice(0, 5)) || matchedName.includes(pn.slice(0, 5)))) {
+                return true;
+              }
+              return false;
+            });
+            if (pyeongtaekEntry) {
+              // 평택 데이터 발견 → 그것을 메인으로 사용
+              fallbackInfo = { fromPort: pm.port, etd: pm.etd, eta: pm.eta };
+              pm = pyeongtaekEntry[1];
+              matchedKey = pyeongtaekEntry[0];
+              matchedBy += '+pyeongtaek-pref';
+            } else {
+              // 평택 데이터 없음 → 인천 등 외부 항만 정보 사용
+              fallbackInfo = { fromPort: pm.port, etd: pm.etd, eta: pm.eta, isFallback: true };
+            }
+          }
+        }
+
         // M5.71: 매칭 실패 시 디버그 카드 (어떤 선박이 안 잡히는지 보여줌)
         if (!pm) {
           if (Object.keys(portMisData).length === 0) return null;
@@ -619,7 +663,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                   📍 {pm.berth}
                 </span>
               )}
-              {!pm.berth && (
+              {!pm.berth && !fallbackInfo?.isFallback && (
                 <span className="bg-red-900/40 border border-red-700/40 text-red-300 px-2 py-0.5 rounded text-xs font-bold">
                   ⚠ 부두 정보 없음 (옛 데이터)
                 </span>
@@ -631,18 +675,27 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               <span className="text-slate-200">
                 출항 <span className="font-bold text-amber-300">{fmtDT(pm.etd)}</span>
               </span>
-              {pm.port && pm.port !== '평택' && (
+              {pm.port && pm.port !== '평택' && !fallbackInfo?.isFallback && (
                 <span className="text-orange-400 text-xs ml-auto">⚠ {pm.port}</span>
               )}
               {pm.voyageType && <span className="text-slate-400 text-xs">[{pm.voyageType}]</span>}
             </div>
+            {/* M5.90: 평택 데이터 없음 — 인천/타항만 출항 정보 fallback */}
+            {fallbackInfo?.isFallback && (
+              <div className="mt-1 bg-amber-950/50 border border-amber-700/50 rounded px-2 py-1 text-xs">
+                <span className="text-amber-300 font-bold">⚠ 평택 PORT-MIS 등록 없음</span>
+                <span className="text-amber-200 ml-2">
+                  → <b>{fallbackInfo.fromPort}</b> 출항 <b>{fmtDT(fallbackInfo.etd)}</b> 정보로 평택 도착 예상 표시
+                </span>
+              </div>
+            )}
             {/* M5.83: 매칭 진단 정보 (작은 글씨로 카드 아래) */}
             <div className="text-[10px] text-slate-500 mt-1 font-mono flex gap-3 flex-wrap">
               <span>매칭: <span className="text-cyan-400">{matchedBy}</span></span>
               <span>키: <span className="text-amber-400">{matchedKey || '?'}</span></span>
               <span>선박명: <span className="text-emerald-400">{pm.vesselName || '?'}</span></span>
               <span>저장: <span className="text-purple-400">{pm.updatedAt ? new Date(pm.updatedAt).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?'}</span></span>
-              {!pm.berth && (
+              {!pm.berth && !fallbackInfo?.isFallback && (
                 <button
                   onClick={async () => {
                     if (!confirm(`옛 데이터(키: ${matchedKey})를 Firebase에서 삭제하시겠습니까?\n\n새 PORT-MIS 엑셀로 다시 업로드 후 정상 매칭됩니다.`)) return;

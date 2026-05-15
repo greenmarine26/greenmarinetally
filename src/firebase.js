@@ -822,32 +822,40 @@ export async function fbSavePortMisBatch(ships) {
   return { saved, failed, cleaned };
 }
 
-// M5.82 hotfix: 평택 PORT-MIS 데이터 전체 교체
+// M5.82 hotfix: PORT-MIS 데이터 항만 교체 (평택/인천/마산 등 동적)
 // M5.83: 옛 데이터 식별 기준 완화 - port 필드 없는 옛 데이터도 자동 잡음
-//   - 평택으로 간주: port가 '평택'/''/undefined/'PYEONGTAEK'/'평택항'/알 수 없는 값
-//   - 명확한 비-평택: 부산/인천/마산/울산/광양 → 보존
-//   - 다른 항만 데이터는 보존
+// M5.90: opts.port를 동적으로 받음 (인천 엑셀 올리면 인천만 교체, 평택 데이터 보존)
 export async function fbReplacePortMisBatch(ships, opts = {}) {
+  const targetPort = opts.port || '평택';
   let deleted = 0;
-  // M5.83: 평택 식별 함수 (옛 데이터의 port 필드 빈 칸도 평택으로 간주)
-  const isPyeongtaek = (port) => {
-    if (!port) return true;  // 빈 값 = 옛 데이터 = 평택으로 간주
-    const p = String(port).toUpperCase().trim();
-    if (p === '평택' || p === '평택항' || p === 'PYEONGTAEK' || p === 'PTK' || p === 'KRPTK' || p === '') return true;
-    // 명확한 비-평택 항만은 보존
-    if (p === '부산' || p === '인천' || p === '마산' || p === '울산' || p === '광양' ||
-        p === 'BUSAN' || p === 'INCHEON' || p === 'MASAN' || p === 'ULSAN' || p === 'GWANGYANG') {
-      return false;
+  // M5.90: 타겟 항만 식별 함수
+  //   - 평택 타겟이면 빈 값/'알 수 없는 값'도 평택으로 (안전 디폴트)
+  //   - 인천 등 다른 타겟이면 정확히 그 항만만
+  const matchTarget = (port) => {
+    const p = String(port || '').toUpperCase().trim();
+    const t = targetPort.toUpperCase();
+    if (t === '평택' || t === 'PYEONGTAEK') {
+      if (!port) return true;
+      if (p === '평택' || p === '평택항' || p === 'PYEONGTAEK' || p === 'PTK' || p === 'KRPTK' || p === '') return true;
+      // 명확한 비-평택은 X
+      if (p === '부산' || p === '인천' || p === '마산' || p === '울산' || p === '광양' ||
+          p === 'BUSAN' || p === 'INCHEON' || p === 'MASAN' || p === 'ULSAN' || p === 'GWANGYANG') {
+        return false;
+      }
+      return true;  // 알 수 없는 값도 평택 (안전 디폴트)
     }
-    return true;  // 알 수 없는 값도 평택으로 (안전 디폴트 — 검수앱은 평택 전용)
+    // 인천/부산 등 타겟: 정확히 매칭만
+    if (t === '인천' || t === 'INCHEON') return p === '인천' || p === 'INCHEON' || p === 'KRINC';
+    if (t === '부산' || t === 'BUSAN') return p === '부산' || p === 'BUSAN' || p === 'KRPUS';
+    return p === t;  // 그 외는 정확 일치만
   };
   try {
-    // 1) 기존 데이터에서 평택 데이터만 삭제
+    // 1) 기존 데이터에서 타겟 항만 삭제
     const snap = await get(ref(db, 'port_mis_data'));
     if (snap.exists()) {
       const all = snap.val() || {};
       await Promise.all(Object.entries(all).map(async ([k, v]) => {
-        if (v && isPyeongtaek(v.port)) {
+        if (v && matchTarget(v.port)) {
           try {
             await remove(ref(db, `port_mis_data/${k}`));
             deleted++;
@@ -862,7 +870,7 @@ export async function fbReplacePortMisBatch(ships, opts = {}) {
   }
   // 2) 새 데이터 저장 (prefix 충돌 정리는 fbSavePortMisBatch가 추가 처리)
   const result = await fbSavePortMisBatch(ships);
-  return { ...result, deleted };
+  return { ...result, deleted, targetPort };
 }
 
 export { db };
