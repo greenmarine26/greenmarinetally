@@ -1,11 +1,13 @@
 // M5.25: PORT-MIS 캡처 업로드 모달 (폰 전용 활용)
-//   사용자가 폰 Chrome으로 PORT-MIS 검색 → 화면 캡처 → 이 모달에 업로드
-//   → Gemini Vision OCR → Firebase port_mis_data 저장 → 모든 검수원에게 ⚓ 카드 표시
+// M5.82: PORT-MIS 엑셀 업로드 옵션 추가 (캡처보다 100% 정확 + 비용 0)
+//   사용자가 폰 Chrome으로 PORT-MIS 검색 → 화면 캡처 또는 엑셀 다운로드 → 이 모달에 업로드
+//   → 엑셀: 직접 파싱 / 캡처: Gemini Vision OCR → Firebase port_mis_data 저장
+//   → 모든 검수원에게 ⚓ 카드 표시 + voucher PIER/BERTH 자동 채움
 import React, { useState } from 'react';
-import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { ocrPortMisCapture } from '../mixerUpload.js';
 import { fbSavePortMisBatch } from '../firebase.js';
-import { _storage, SK } from '../utils.js';
+import { _storage, SK, parsePortMisExcel } from '../utils.js';
 import { GEMINI_API_KEY } from '../gemini.js';
 
 export default function PortMisCaptureModal({ onClose }) {
@@ -14,12 +16,38 @@ export default function PortMisCaptureModal({ onClose }) {
   const [ships, setShips] = useState([]);
   const [error, setError] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
+  const [sourceType, setSourceType] = useState('');  // M5.82: 'excel' | 'capture'
+
+  // M5.82: 엑셀 직접 업로드 (Gemini 없이, 100% 정확)
+  const handleExcelFile = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setError(null);
+    setSourceType('excel');
+    setStep('analyzing');
+
+    try {
+      const buf = await f.arrayBuffer();
+      const result = await parsePortMisExcel(buf);
+      if (!result || result.length === 0) {
+        setError('엑셀에서 선박 정보를 찾지 못했습니다. PORT-MIS 선박입출항현황 엑셀이 맞는지 확인해주세요.');
+        setStep('pick');
+        return;
+      }
+      setShips(result);
+      setStep('review');
+    } catch (err) {
+      setError(`엑셀 파싱 오류: ${err.message || String(err)}`);
+      setStep('pick');
+    }
+  };
 
   const handleFile = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setImageUrl(URL.createObjectURL(f));
     setError(null);
+    setSourceType('capture');
     setStep('analyzing');
 
     // M5.70: 사용자 입력 키 > 내장 키 폴백
@@ -73,8 +101,8 @@ export default function PortMisCaptureModal({ onClose }) {
           {step === 'pick' && (
             <div>
               <p className="text-slate-300 text-sm mb-3">
-                폰 Chrome으로 PORT-MIS 선박입출항현황 검색 후 <strong className="text-amber-300">화면 캡처 1장</strong>을 올려주세요.
-                Gemini Vision이 자동으로 호출부호/선박명/입출항 시간을 추출해 모든 검수원과 공유합니다.
+                PORT-MIS에서 <strong className="text-amber-300">엑셀 다운로드</strong> 또는 <strong className="text-cyan-300">화면 캡처</strong>를 올려주세요.
+                자동으로 호출부호/선박명/입출항/<b className="text-emerald-300">부두(PCTC/PNCT)</b>를 추출해 모든 검수원과 공유합니다.
               </p>
               {error && (
                 <div className="bg-red-950/50 border border-red-700 rounded p-3 mb-3 text-red-300 text-sm flex gap-2">
@@ -82,14 +110,24 @@ export default function PortMisCaptureModal({ onClose }) {
                   <div>{error}</div>
                 </div>
               )}
+              {/* M5.82: 엑셀 업로드 (권장 — Gemini 안 부름, 100% 정확) */}
+              <label className="block bg-emerald-600 hover:bg-emerald-700 text-white text-center font-bold py-4 rounded-lg cursor-pointer flex items-center justify-center gap-2 mb-2">
+                <FileSpreadsheet className="w-5 h-5" />
+                📊 엑셀 업로드 (권장)
+                <input type="file" accept=".xlsx,.xls" onChange={handleExcelFile} className="hidden" />
+              </label>
+              <p className="text-[10px] text-emerald-400/80 mb-3 text-center">
+                ⭐ PORT-MIS 다운로드 엑셀 → 100% 정확 + 부두 자동 추출
+              </p>
+              <div className="text-center text-xs text-slate-500 mb-2">또는</div>
               <label className="block bg-cyan-600 hover:bg-cyan-700 text-white text-center font-bold py-4 rounded-lg cursor-pointer flex items-center justify-center gap-2">
-                <Upload className="w-5 h-5" />
-                캡처 이미지 선택
+                <Camera className="w-5 h-5" />
+                📷 화면 캡처 (AI OCR)
                 <input type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
               </label>
               <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-                💡 팁: 평택항 + 입출항 기간으로 검색 후 결과 표가 잘 보이는 상태에서 캡처하면 정확도 ↑.
-                작업 중인 선박의 호출부호로 직접 검색하면 더 정확합니다.
+                💡 팁: 평택항 + 입출항 기간으로 검색 후 <b>엑셀 다운로드</b>가 가장 정확합니다.
+                캡처는 빠르지만 작은 글씨 인식 어려울 수 있음.
               </p>
             </div>
           )}
@@ -107,19 +145,64 @@ export default function PortMisCaptureModal({ onClose }) {
           {/* 단계 3: 결과 검토 */}
           {step === 'review' && (
             <div>
-              <p className="text-emerald-400 font-bold mb-3">✓ {ships.length}척 추출 완료</p>
+              <p className="text-emerald-400 font-bold mb-3">
+                ✓ {ships.length}척 추출 완료
+                <span className="ml-2 text-xs text-slate-400">
+                  ({sourceType === 'excel' ? '엑셀 — 100% 정확' : 'AI 캡처'})
+                </span>
+              </p>
+              {/* M5.82: 부두별 통계 */}
+              <div className="flex gap-2 mb-3 text-xs">
+                {(() => {
+                  const pctcCnt = ships.filter(s => s.pier === 'PCTC').length;
+                  const pnctCnt = ships.filter(s => s.pier === 'PNCT').length;
+                  const otherCnt = ships.filter(s => !s.pier).length;
+                  return (
+                    <>
+                      <span className="bg-blue-900/50 border border-blue-700/50 text-blue-200 px-2 py-1 rounded font-bold">
+                        PCTC {pctcCnt}척
+                      </span>
+                      <span className="bg-purple-900/50 border border-purple-700/50 text-purple-200 px-2 py-1 rounded font-bold">
+                        PNCT {pnctCnt}척
+                      </span>
+                      {otherCnt > 0 && (
+                        <span className="bg-slate-800 border border-slate-700 text-slate-400 px-2 py-1 rounded font-bold">
+                          기타 {otherCnt}척
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
               <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
                 {ships.map((s, i) => (
                   <div key={i} className="bg-slate-800 rounded p-3 text-sm">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-bold text-cyan-300">{s.callsign || '(콜사인 없음)'}</span>
                       <span className="text-slate-200">{s.vesselName}</span>
+                      {/* M5.82: 부두 배지 */}
+                      {s.pier === 'PCTC' && (
+                        <span className="text-[10px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
+                          PCTC · {s.berth}
+                        </span>
+                      )}
+                      {s.pier === 'PNCT' && (
+                        <span className="text-[10px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
+                          PNCT · {s.berth}
+                        </span>
+                      )}
+                      {!s.pier && s.berth && (
+                        <span className="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">
+                          {s.berth}
+                        </span>
+                      )}
                       {s.port && <span className="text-xs text-slate-400">[{s.port}]</span>}
                     </div>
-                    <div className="text-xs text-slate-400 flex gap-3">
+                    <div className="text-xs text-slate-400 flex gap-3 flex-wrap">
                       {s.eta && <span>입 {s.eta}</span>}
                       {s.etd && <span>출 {s.etd}</span>}
                       {s.voyageType && <span>[{s.voyageType}]</span>}
+                      {s.vesselType && <span className="text-slate-500">{s.vesselType}</span>}
                     </div>
                   </div>
                 ))}
@@ -128,7 +211,7 @@ export default function PortMisCaptureModal({ onClose }) {
                 Firebase 저장 → 모든 검수원에게 공유
               </button>
               <button onClick={() => setStep('pick')} className="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2 rounded-lg text-sm">
-                다른 이미지로 다시
+                다른 파일로 다시
               </button>
             </div>
           )}

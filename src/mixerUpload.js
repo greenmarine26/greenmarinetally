@@ -687,7 +687,9 @@ export async function ocrPortMisCapture(file, geminiApiKey) {
       "voyageInOut": "외내항 (외항/내항)",
       "ibobprtSe": "입출 (입항/출항)",
       "eta": "입항일시 (YYYY-MM-DD HH:MM)",
-      "etd": "출항일시 (YYYY-MM-DD HH:MM)"
+      "etd": "출항일시 (YYYY-MM-DD HH:MM)",
+      "berth": "계선장소 (예: 동부두 7번선석, 동부두 14번선석, 고대부두 3번선석)",
+      "vesselType": "선박용도 (풀컨테이너선/자동차운반선/석유제품운반선 등)"
     },
     ...
   ]
@@ -699,6 +701,7 @@ export async function ocrPortMisCapture(file, geminiApiKey) {
 - 선박명에 "..." 같이 잘려 보이는 부분이 있어도 보이는 글자만 정확히 추출
 - 입항/출항 일시는 YYYY-MM-DD HH:MM 형식, 없으면 빈 문자열
 - 항만은 한글 그대로 (예: 평택, 부산)
+- 계선장소는 "동부두 N번선석" 형식 그대로 (M5.82 추가)
 - 순번 컬럼은 무시`;
 
   const response = await fetch(
@@ -733,15 +736,31 @@ export async function ocrPortMisCapture(file, geminiApiKey) {
   }
 
   const ships = (json.ships || []).filter(s => s.callsign || s.vesselName);
-  // 정규화
-  return ships.map(s => ({
-    callsign: (s.callsign || '').trim(),
-    vesselName: (s.vesselName || '').trim(),
-    port: (s.port || '').trim(),
-    eta: (s.eta || '').trim(),
-    etd: (s.etd || '').trim(),
-    voyageType: (s.voyageType || '').trim(),
-    voyageInOut: (s.voyageInOut || '').trim(),
-    ibobprtSe: (s.ibobprtSe || '').trim(),
-  }));
+  // 정규화 + M5.82: berth → pier 자동 판별
+  return ships.map(s => {
+    const berthRaw = (s.berth || '').trim();
+    // berth 문자열 → 선석번호 → PCTC/PNCT
+    const berthNoMatch = berthRaw.match(/(\d+)\s*번선석/);
+    const berthNo = berthNoMatch ? parseInt(berthNoMatch[1], 10) : null;
+    let pier = null;
+    if (berthNo !== null) {
+      if (berthNo >= 6 && berthNo <= 9) pier = 'PCTC';
+      else if (berthNo >= 13 && berthNo <= 16) pier = 'PNCT';
+    }
+    return {
+      callsign: (s.callsign || '').trim(),
+      vesselName: (s.vesselName || '').trim(),
+      port: (s.port || '').trim(),
+      eta: (s.eta || '').trim(),
+      etd: (s.etd || '').trim(),
+      voyageType: (s.voyageType || '').trim(),
+      voyageInOut: (s.voyageInOut || '').trim(),
+      ibobprtSe: (s.ibobprtSe || '').trim(),
+      // M5.82: 부두 정보
+      berth: berthRaw,
+      berthNo,
+      pier,
+      vesselType: (s.vesselType || '').trim(),
+    };
+  });
 }

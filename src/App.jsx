@@ -163,6 +163,7 @@ export default function App() {
         {route.name === 'home' && (
           <HomePage
             voyages={voyages} inspectors={inspectors} inspector={inspector}
+            portMisData={portMisData}
             onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
             onOpenGlobalSearch={() => navigate('search')}
             onOpenChiefDashboard={() => navigate('chief')}

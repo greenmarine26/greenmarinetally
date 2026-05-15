@@ -1,20 +1,105 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3 } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2 } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection } from '../firebase.js';
+import { detectPierByGps, getPierFromBerth } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
-export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
   const [showPortMisCapture, setShowPortMisCapture] = useState(false);  // M5.25
+  // M5.82: GPS 기반 현 부두 자동 판별
+  const [currentPier, setCurrentPier] = useState(null);    // { code, distance, name }
+  const [gpsState, setGpsState] = useState('idle');         // 'idle' | 'loading' | 'denied' | 'ok' | 'far'
+  const [pierFilter, setPierFilter] = useState('auto');     // 'auto' | 'PCTC' | 'PNCT' | 'all'
 
-  const list = useMemo(() => {
+  // M5.82: GPS로 현 부두 판별 (한 번만)
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setGpsState('denied');
+      return;
+    }
+    // 캐시 확인 (localStorage 5분)
+    try {
+      const cached = localStorage.getItem('gm_current_pier');
+      if (cached) {
+        const { pier, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          setCurrentPier(pier);
+          setGpsState(pier ? 'ok' : 'far');
+          return;
+        }
+      }
+    } catch (e) {}
+
+    setGpsState('loading');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const pier = detectPierByGps(pos.coords.latitude, pos.coords.longitude);
+        setCurrentPier(pier);
+        setGpsState(pier ? 'ok' : 'far');
+        try {
+          localStorage.setItem('gm_current_pier', JSON.stringify({ pier, timestamp: Date.now() }));
+        } catch (e) {}
+      },
+      err => {
+        console.warn('[HomePage] GPS 실패:', err.message);
+        setGpsState('denied');
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  }, []);
+
+  // M5.82: 항차마다 부두 정보 매칭 (voyage.info.berth 또는 PORT-MIS)
+  const voyagesWithPier = useMemo(() => {
     return Object.entries(voyages || {})
       .filter(([k, v]) => v && v.info)
-      .map(([k, v]) => ({ key: k, ...v }))
+      .map(([k, v]) => {
+        const info = v.info || {};
+        let berth = info.berth || '';
+        let pier = info.pier || '';
+        // PORT-MIS에서 매칭 시도 (voyage에 저장된 정보 없을 때)
+        if (!berth || !pier) {
+          const callsign = info.callsign || '';
+          const imo = info.imo || '';
+          const vsl = (info.vsl || '').toUpperCase();
+          let pm = null;
+          if (callsign && portMisData[callsign]) pm = portMisData[callsign];
+          if (!pm && callsign) {
+            const cs = callsign.toUpperCase();
+            pm = Object.values(portMisData).find(p => {
+              const pcs = (p.callsign || '').toUpperCase();
+              return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
+            });
+          }
+          if (!pm && imo) pm = Object.values(portMisData).find(p => p.imo === imo);
+          if (!pm && vsl) {
+            const normVsl = vsl.replace(/[\s\-_\.]/g, '');
+            pm = Object.values(portMisData).find(p => {
+              const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
+              return pn && pn.length >= 5 && (pn.includes(normVsl.slice(0, 5)) || normVsl.includes(pn.slice(0, 5)));
+            });
+          }
+          if (pm) {
+            berth = berth || pm.berth || '';
+            pier = pier || pm.pier || getPierFromBerth(pm.berth) || '';
+          }
+        }
+        return { key: k, ...v, _berth: berth, _pier: pier };
+      })
       .sort((a, b) => (b.info.createdAt || 0) - (a.info.createdAt || 0));
-  }, [voyages]);
+  }, [voyages, portMisData]);
+
+  // M5.82: 부두별 그룹화 + 현 부두 우선
+  const effectivePier = pierFilter === 'auto' ? currentPier?.code : (pierFilter === 'all' ? null : pierFilter);
+  const list = useMemo(() => {
+    if (!effectivePier) return voyagesWithPier;
+    // 현 부두 위로
+    const here = voyagesWithPier.filter(v => v._pier === effectivePier);
+    const others = voyagesWithPier.filter(v => v._pier !== effectivePier);
+    return [...here, ...others];
+  }, [voyagesWithPier, effectivePier]);
 
   const activeInspectors = useMemo(() => {
     const out = {};
@@ -110,6 +195,53 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
         </div>
       </div>
 
+      {/* M5.82: 부두 필터 바 - GPS 자동 판별 + 수동 전환 */}
+      <div className="bg-slate-900/60 border border-slate-700/40 rounded-lg px-3 py-2 mb-2 flex items-center gap-2 flex-wrap text-xs">
+        {gpsState === 'loading' && (
+          <span className="flex items-center gap-1.5 text-slate-400">
+            <Loader2 className="w-3 h-3 animate-spin"/> 위치 확인 중...
+          </span>
+        )}
+        {gpsState === 'ok' && currentPier && (
+          <span className="flex items-center gap-1.5">
+            <MapPin className={`w-3.5 h-3.5 ${currentPier.code === 'PCTC' ? 'text-blue-300' : 'text-purple-300'}`}/>
+            <span className={`font-bold ${currentPier.code === 'PCTC' ? 'text-blue-200' : 'text-purple-200'}`}>
+              현 위치: {currentPier.code}
+            </span>
+            <span className="text-slate-500 text-[10px]">({currentPier.distance}m)</span>
+          </span>
+        )}
+        {gpsState === 'far' && (
+          <span className="flex items-center gap-1.5 text-amber-300">
+            <MapPin className="w-3 h-3"/> 평택항 외부
+          </span>
+        )}
+        {gpsState === 'denied' && (
+          <span className="flex items-center gap-1.5 text-slate-400">
+            <MapPin className="w-3 h-3"/> 위치 안 씀 — 수동 선택 ▶
+          </span>
+        )}
+        <div className="flex gap-1 ml-auto">
+          {[
+            { id: 'auto', label: '자동' },
+            { id: 'PCTC', label: 'PCTC' },
+            { id: 'PNCT', label: 'PNCT' },
+            { id: 'all', label: '전체' },
+          ].map(b => (
+            <button key={b.id} onClick={() => setPierFilter(b.id)}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                pierFilter === b.id
+                  ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
+                     b.id === 'PNCT' ? 'bg-purple-700 text-white' :
+                     'bg-amber-600 text-slate-950')
+                  : 'bg-slate-800 text-slate-400'
+              }`}>
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {list.length === 0 && (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center">
           <div className="text-slate-500 text-sm mb-2">진행 중인 항차가 없습니다</div>
@@ -118,15 +250,33 @@ export default function HomePage({ voyages, inspectors, inspector, onOpenVoyage,
       )}
 
       <div className="space-y-2">
-        {list.map(v => (
-          <VoyageCard
-            key={v.key}
-            voyage={v}
-            activeInspectors={activeInspectors[v.key] || []}
-            onOpen={() => onOpenVoyage(v.key)}
-            onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
-          />
-        ))}
+        {list.map((v, idx) => {
+          const isHerePier = effectivePier && v._pier === effectivePier;
+          const isFirstHere = isHerePier && (idx === 0 || list[idx - 1]._pier !== effectivePier);
+          const isFirstOther = effectivePier && !isHerePier && idx > 0 && list[idx - 1]._pier === effectivePier;
+          return (
+            <React.Fragment key={v.key}>
+              {isFirstHere && effectivePier && (
+                <div className={`text-[10px] font-bold uppercase tracking-wider px-2 ${
+                  effectivePier === 'PCTC' ? 'text-blue-300' : 'text-purple-300'
+                }`}>
+                  📍 {effectivePier} (현 위치)
+                </div>
+              )}
+              {isFirstOther && (
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-2 mt-3">
+                  ── 다른 부두 ──
+                </div>
+              )}
+              <VoyageCard
+                voyage={v}
+                activeInspectors={activeInspectors[v.key] || []}
+                onOpen={() => onOpenVoyage(v.key)}
+                onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
+              />
+            </React.Fragment>
+          );
+        })}
       </div>
 
       {showCreate && (
@@ -256,14 +406,40 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete }) {
   const disStats = computeStats(dis);
   const loaStats = computeStats(loa);
 
+  // M5.82: 부두 정보 (voyage._pier가 HomePage에서 채워짐)
+  const pier = voyage._pier || '';
+  const berth = voyage._berth || '';
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+    <div className={`bg-slate-900 border rounded-xl overflow-hidden ${
+      pier === 'PCTC' ? 'border-blue-700/40' :
+      pier === 'PNCT' ? 'border-purple-700/40' :
+      'border-slate-800'
+    }`}>
       <button
         onClick={onOpen}
         className="w-full px-3 py-2.5 hover:bg-slate-800/50 flex items-center justify-between gap-2"
       >
         <div className="text-left min-w-0 flex-1">
-          <div className="font-bold text-sm text-slate-100 truncate">{voyage.info.vsl}</div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-sm text-slate-100 truncate">{voyage.info.vsl}</span>
+            {/* M5.82: 부두 배지 */}
+            {pier === 'PCTC' && (
+              <span className="text-[9px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
+                📍 PCTC {berth ? `· ${berth}` : ''}
+              </span>
+            )}
+            {pier === 'PNCT' && (
+              <span className="text-[9px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
+                📍 PNCT {berth ? `· ${berth}` : ''}
+              </span>
+            )}
+            {!pier && berth && (
+              <span className="text-[9px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">
+                📍 {berth}
+              </span>
+            )}
+          </div>
           <div className="text-[11px] text-slate-500 truncate">
             {voyage.info.voy} · {voyage.info.carrier || ''}
           </div>

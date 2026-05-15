@@ -543,9 +543,43 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           const m = String(s).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
           return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : s;
         };
+        // M5.82: PORT-MIS의 berth/pier를 voyage.info에 자동 저장 (한 번만)
+        //   - 이미 저장되어 있으면 건너뜀
+        //   - 다른 검수원도 즉시 공유 (Firebase 동기화)
+        //   - voucher의 PIER/BERTH 자동 채움 효과
+        if (pm.berth && voyage?.info) {
+          const currentBerth = voyage.info.berth;
+          const currentPier = voyage.info.pier;
+          const needsUpdate = (!currentBerth && pm.berth) || (!currentPier && pm.pier);
+          if (needsUpdate) {
+            const patch = {};
+            if (!currentBerth && pm.berth) patch.berth = pm.berth;
+            if (!currentPier && pm.pier) patch.pier = pm.pier;
+            // 비동기 업데이트 (블로킹 X)
+            fbUpdateVoyageInfo(voyageKey, patch).catch(e =>
+              console.warn('[M5.82] voyage.info berth 자동 저장 실패:', e)
+            );
+          }
+        }
         return (
-          <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 flex items-center gap-4 text-sm">
+          <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 flex items-center gap-3 text-sm flex-wrap">
             <span className="text-cyan-300 font-bold">⚓ PORT-MIS</span>
+            {/* M5.82: 부두 정보 강조 표시 (가장 왼쪽) */}
+            {pm.pier === 'PCTC' && (
+              <span className="bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded font-bold text-xs">
+                📍 PCTC · {pm.berth}
+              </span>
+            )}
+            {pm.pier === 'PNCT' && (
+              <span className="bg-purple-900/60 border border-purple-700/50 text-purple-200 px-2 py-0.5 rounded font-bold text-xs">
+                📍 PNCT · {pm.berth}
+              </span>
+            )}
+            {!pm.pier && pm.berth && (
+              <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs">
+                📍 {pm.berth}
+              </span>
+            )}
             <span className="text-slate-200">
               입항 <span className="font-bold text-emerald-300">{fmtDT(pm.eta)}</span>
             </span>

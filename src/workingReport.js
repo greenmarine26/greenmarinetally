@@ -303,8 +303,21 @@ function generateVoucherHTML(voyage, mode = 'settlement', overrides = {}) {
   else if (lVoy) voyNo = lVoy;
   else voyNo = overrides.voy || info.voy || info.voyNo || '';
   const date = overrides.date || info.date || new Date().toISOString().slice(0, 10);
-  const pier = info.pier || 'PCTC';
-  const berth = overrides.berth || info.berth || '-';
+  // M5.82: PORT-MIS의 berth → PIER 자동 판별
+  //   info.berth가 "동부두 7번선석" 형식이면 7번 → PCTC 자동
+  //   info.pier가 명시되어 있으면 그것 우선
+  const berthRaw = overrides.berth || info.berth || '';
+  let autoPier = info.pier;
+  if (!autoPier && berthRaw) {
+    const m = String(berthRaw).match(/(\d+)\s*번선석/);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n >= 6 && n <= 9) autoPier = 'PCTC';
+      else if (n >= 13 && n <= 16) autoPier = 'PNCT';
+    }
+  }
+  const pier = autoPier || 'PCTC';   // 폴백: 평택항 주력 부두
+  const berth = berthRaw || '-';
   const port = info.port || 'PYEONGTAEK, KOREA';
 
   // op 등장 set (실제 데이터)

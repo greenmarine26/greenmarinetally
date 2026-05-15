@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M5.81';
+export const APP_VERSION = 'M5.82';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1534,4 +1534,150 @@ export function setEquipNumber(num) {
     if (num) localStorage.setItem('gm_equip_no', num);
     else localStorage.removeItem('gm_equip_no');
   } catch (e) {}
+}
+
+// ─── M5.82: 평택항 부두 판별 + GPS ───────────────────────────────
+// 평택항 PORT-MIS의 "계선장소"는 "동부두 N번선석" 형식
+// PCTC = 동부두 6, 7, 8, 9번선석
+// PNCT = 동부두 13, 14, 15, 16번선석
+
+/**
+ * "계선장소" 문자열에서 선석 번호 추출
+ * @example extractBerthNo("동부두 7번선석") → 7
+ * @example extractBerthNo("동부두 14번선석") → 14
+ */
+export function extractBerthNo(berthRaw) {
+  if (!berthRaw) return null;
+  const m = String(berthRaw).match(/(\d+)\s*번선석/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/**
+ * 계선장소 → 부두 코드 (PCTC / PNCT / null)
+ * @example getPierFromBerth("동부두 7번선석") → "PCTC"
+ * @example getPierFromBerth("동부두 14번선석") → "PNCT"
+ * @example getPierFromBerth("동부두 1번선석") → null (자동차전용 등)
+ */
+export function getPierFromBerth(berthRaw) {
+  const n = extractBerthNo(berthRaw);
+  if (n == null) return null;
+  if (n >= 6 && n <= 9) return 'PCTC';
+  if (n >= 13 && n <= 16) return 'PNCT';
+  return null;
+}
+
+/**
+ * 평택항 부두 좌표 (대략)
+ * 사용자가 현장 GPS로 한 번 측정 후 갱신 권장
+ * PCTC: 동부두 6~9번선석 (구 컨테이너 터미널)
+ * PNCT: 동부두 13~16번선석 (신컨테이너 터미널)
+ */
+export const PIER_COORDS = {
+  PCTC: { lat: 37.005, lng: 126.815, name: '평택 컨테이너터미널' },
+  PNCT: { lat: 36.995, lng: 126.823, name: '평택 신컨테이너터미널' },
+};
+
+/**
+ * 두 좌표 사이 거리 (haversine, 미터)
+ */
+export function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * GPS 좌표로 현 부두 판별
+ * @returns { code: 'PCTC'|'PNCT', distance: 미터 } 또는 null
+ */
+export function detectPierByGps(lat, lng, maxDistance = 2500) {
+  let closest = null;
+  let minDist = Infinity;
+  for (const [code, p] of Object.entries(PIER_COORDS)) {
+    const d = haversineMeters(lat, lng, p.lat, p.lng);
+    if (d < minDist && d <= maxDistance) {
+      minDist = d;
+      closest = { code, distance: Math.round(d), name: p.name };
+    }
+  }
+  return closest;
+}
+
+// ─── M5.82: PORT-MIS 엑셀 파서 ───────────────────────────────
+// 사용자가 PORT-MIS 사이트에서 엑셀 다운로드 → 검수앱 업로드
+// 헤더 행 11 기준 구조 (변형 시 헤더 자동 탐색):
+//   0:항명 1:호출부호 2:선명 3:입항횟수 5:구분 6:외내 7:입출 8:총톤수
+//   9:입항일시 10:출항일시 11:CIQ수속일자 12:수리일시 13:항해구분 14:MRN
+//   15:계선장소부두 16:선석번호 17:계선장소(동부두 N번선석) 18:차항지
+//   19:전출항지 20:선박용도 ...
+export async function parsePortMisExcel(arrayBuffer) {
+  const XLSX = await loadSheetJS();
+  const wb = XLSX.read(arrayBuffer, { type: 'array' });
+  const ships = [];
+
+  for (const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+    // 헤더 행 찾기 — "항명" + "호출부호" + "선명" + "계선장소" 키워드
+    let headerRow = -1;
+    let colMap = {};
+    for (let i = 0; i < Math.min(20, grid.length); i++) {
+      const row = (grid[i] || []).map(v => String(v || '').trim());
+      const idx = {
+        port:      row.findIndex(c => /^항명$|^항\s*명$/.test(c)),
+        callsign:  row.findIndex(c => /호출부호/.test(c)),
+        vessel:    row.findIndex(c => /^선\s*명$|^선명$|^Vessel/i.test(c)),
+        eta:       row.findIndex(c => /입항일시|ETA/.test(c)),
+        etd:       row.findIndex(c => /출항일시|ETD/.test(c)),
+        voyType:   row.findIndex(c => /^구분$/.test(c)),
+        inOut:     row.findIndex(c => /외내|외내항/.test(c)),
+        ibObPrt:   row.findIndex(c => /^입출$/.test(c)),
+        berthRaw:  row.findIndex(c => /계선장소/.test(c)),  // "동부두 7번선석"
+        nextPort:  row.findIndex(c => /차항지/.test(c)),
+        usage:     row.findIndex(c => /선박용도/.test(c)),
+      };
+      if (idx.callsign >= 0 && idx.vessel >= 0 && idx.berthRaw >= 0) {
+        headerRow = i;
+        colMap = idx;
+        break;
+      }
+    }
+
+    if (headerRow < 0) continue;
+
+    // 데이터 행
+    for (let i = headerRow + 1; i < grid.length; i++) {
+      const row = grid[i] || [];
+      const callsign = String(row[colMap.callsign] || '').trim();
+      const vesselName = String(row[colMap.vessel] || '').trim();
+      if (!callsign && !vesselName) continue;
+
+      const berthRaw = colMap.berthRaw >= 0 ? String(row[colMap.berthRaw] || '').trim() : '';
+      const pier = getPierFromBerth(berthRaw);     // PCTC | PNCT | null
+      const berthNo = extractBerthNo(berthRaw);    // 7, 14, etc.
+
+      ships.push({
+        callsign: callsign.toUpperCase(),
+        vesselName: vesselName,
+        port: colMap.port >= 0 ? String(row[colMap.port] || '').trim() : '평택',
+        eta: colMap.eta >= 0 ? String(row[colMap.eta] || '').trim() : '',
+        etd: colMap.etd >= 0 ? String(row[colMap.etd] || '').trim() : '',
+        voyageType: colMap.voyType >= 0 ? String(row[colMap.voyType] || '').trim() : '',
+        voyageInOut: colMap.inOut >= 0 ? String(row[colMap.inOut] || '').trim() : '',
+        ibobprtSe: colMap.ibObPrt >= 0 ? String(row[colMap.ibObPrt] || '').trim() : '',
+        // M5.82: 부두 정보
+        berth: berthRaw,                  // 원본 "동부두 7번선석"
+        berthNo: berthNo,                 // 7
+        pier: pier,                       // PCTC | PNCT | null
+        nextPort: colMap.nextPort >= 0 ? String(row[colMap.nextPort] || '').trim() : '',
+        vesselType: colMap.usage >= 0 ? String(row[colMap.usage] || '').trim() : '',
+      });
+    }
+  }
+  return ships;
 }
