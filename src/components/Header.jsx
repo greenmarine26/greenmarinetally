@@ -62,24 +62,23 @@ export default function Header({ version, inspector, online, route, voyages, onC
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0">
           {online
-            ? <Cloud className="w-3.5 h-3.5 text-emerald-400" title="실시간 연결됨"/>
-            : <CloudOff className="w-3.5 h-3.5 text-red-400" title="오프라인"/>}
-          <span className="bg-emerald-900/40 border border-emerald-600/40 text-emerald-300 text-[10px] font-black px-1.5 py-0.5 rounded mono" title="앱 버전">{version}</span>
+            ? <Cloud className="w-3.5 h-3.5 text-emerald-400" title={`실시간 연결됨 · ${version}`}/>
+            : <CloudOff className="w-3.5 h-3.5 text-red-400" title={`오프라인 · ${version}`}/>}
+          {/* M5.82: 버전 표시 헤더에서 제거 (홈 버튼 가림 해결). 도움말 안에서 확인 가능 */}
           <button
             onClick={() => setHelpOpen(true)}
-            title="사용 매뉴얼 (영어회화 포함)"
+            title={`사용 매뉴얼 · ${version}`}
             className="p-1.5 rounded bg-amber-900/30 hover:bg-amber-900/60 active:bg-amber-900/80 border border-amber-700/40"
           >
             <HelpCircle className="w-4 h-4 text-amber-300"/>
           </button>
-          {/* M5.0: 영어회화집 버튼 제거 → 도움말 안 [영어회화] 탭으로 흡수 */}
           {/* M3.5.6: 장비 번호 빠른 변경 */}
           <button
             onClick={() => setEquipOpen(true)}
             title="장비 번호 변경"
-            className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 ${
+            className={`px-1.5 py-1 rounded text-xs font-bold flex items-center gap-0.5 ${
               equipNo
                 ? 'bg-orange-700 text-white border border-orange-500'
                 : 'bg-slate-800 text-slate-400 border border-slate-600 animate-pulse'
@@ -90,20 +89,19 @@ export default function Header({ version, inspector, online, route, voyages, onC
           </button>
           <button
             onClick={onChangeInspector}
-            className="bg-amber-900/40 border border-amber-700/40 px-2 py-1 rounded text-xs flex items-center gap-1 active:bg-amber-900/60"
+            className="bg-amber-900/40 border border-amber-700/40 px-1.5 py-1 rounded text-xs flex items-center gap-1 active:bg-amber-900/60"
           >
             <span className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center text-slate-900 text-[10px] font-black">
               {(inspector && inspector[0]) || '?'}
             </span>
-            <span className="font-bold text-amber-200 max-w-[60px] truncate">{inspector || '검수원'}</span>
-            <RefreshCw className="w-3 h-3 text-amber-400"/>
+            <span className="font-bold text-amber-200 max-w-[48px] truncate">{inspector || '검수원'}</span>
           </button>
           {onOpenStaffManager && (
             <button
               onClick={onOpenStaffManager}
-              className="ml-1 px-2 py-1.5 bg-amber-900/40 hover:bg-amber-800/60 border border-amber-700 rounded text-amber-300 text-xs font-bold"
+              className="p-1.5 bg-amber-900/40 hover:bg-amber-800/60 border border-amber-700 rounded text-amber-300 text-xs font-bold"
               title="인원 관리"
-            >⚙ 관리</button>
+            >⚙</button>
           )}
           <button
             onClick={handleLogoutOrExit}
