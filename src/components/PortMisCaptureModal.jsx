@@ -1,12 +1,10 @@
 // M5.25: PORT-MIS 캡처 업로드 모달 (폰 전용 활용)
 // M5.82: PORT-MIS 엑셀 업로드 옵션 추가 (캡처보다 100% 정확 + 비용 0)
-//   사용자가 폰 Chrome으로 PORT-MIS 검색 → 화면 캡처 또는 엑셀 다운로드 → 이 모달에 업로드
-//   → 엑셀: 직접 파싱 / 캡처: Gemini Vision OCR → Firebase port_mis_data 저장
-//   → 모든 검수원에게 ⚓ 카드 표시 + voucher PIER/BERTH 자동 채움
+// M5.82 hotfix: [평택 전체 교체] 옵션 추가 — 옛 데이터 자동 삭제
 import React, { useState } from 'react';
-import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { ocrPortMisCapture } from '../mixerUpload.js';
-import { fbSavePortMisBatch } from '../firebase.js';
+import { fbSavePortMisBatch, fbReplacePortMisBatch } from '../firebase.js';
 import { _storage, SK, parsePortMisExcel } from '../utils.js';
 import { GEMINI_API_KEY } from '../gemini.js';
 
@@ -17,6 +15,7 @@ export default function PortMisCaptureModal({ onClose }) {
   const [error, setError] = useState(null);
   const [saveResult, setSaveResult] = useState(null);
   const [sourceType, setSourceType] = useState('');  // M5.82: 'excel' | 'capture'
+  const [replaceAll, setReplaceAll] = useState(true);  // M5.82 hotfix: 평택 전체 교체 기본 ON
 
   // M5.82: 엑셀 직접 업로드 (Gemini 없이, 100% 정확)
   const handleExcelFile = async (e) => {
@@ -76,7 +75,10 @@ export default function PortMisCaptureModal({ onClose }) {
   const handleSave = async () => {
     setStep('saving');
     try {
-      const r = await fbSavePortMisBatch(ships);
+      // M5.82 hotfix: replaceAll = true면 평택 옛 데이터 삭제 후 저장
+      const r = replaceAll
+        ? await fbReplacePortMisBatch(ships, { port: '평택' })
+        : await fbSavePortMisBatch(ships);
       setSaveResult(r);
       setStep('done');
     } catch (err) {
@@ -207,8 +209,25 @@ export default function PortMisCaptureModal({ onClose }) {
                   </div>
                 ))}
               </div>
+              {/* M5.82 hotfix: 평택 전체 교체 옵션 */}
+              <div className="bg-amber-950/40 border border-amber-700/50 rounded-lg px-3 py-2 mb-3">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input type="checkbox" checked={replaceAll}
+                    onChange={e => setReplaceAll(e.target.checked)}
+                    className="mt-0.5 w-4 h-4"/>
+                  <div className="flex-1">
+                    <div className="text-xs font-bold text-amber-200 flex items-center gap-1">
+                      <Trash2 className="w-3 h-3"/> 평택 옛 데이터 삭제 + 새로 저장 (권장)
+                    </div>
+                    <div className="text-[10px] text-amber-300/70 mt-0.5">
+                      체크: 기존 평택 PORT-MIS 데이터 모두 삭제 후 이번 데이터로 교체 (선박 부두 이동 반영)<br/>
+                      해제: 같은 호출부호만 갱신 (옛 데이터 일부 잔존 가능)
+                    </div>
+                  </div>
+                </label>
+              </div>
               <button onClick={handleSave} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg">
-                Firebase 저장 → 모든 검수원에게 공유
+                {replaceAll ? '🔄 평택 데이터 전체 교체' : '💾 추가/갱신 저장'} → 모든 검수원 공유
               </button>
               <button onClick={() => setStep('pick')} className="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2 rounded-lg text-sm">
                 다른 파일로 다시
@@ -231,6 +250,12 @@ export default function PortMisCaptureModal({ onClose }) {
               <p className="text-xl font-bold text-emerald-300 mb-1">
                 {saveResult?.saved || 0}건 저장 완료
               </p>
+              {/* M5.82 hotfix: 삭제된 옛 데이터 카운트 표시 */}
+              {saveResult?.deleted > 0 && (
+                <p className="text-amber-300 text-sm mt-1">
+                  🔄 평택 옛 데이터 <b>{saveResult.deleted}건</b> 삭제 후 교체
+                </p>
+              )}
               {saveResult?.failed > 0 && (
                 <p className="text-amber-400 text-sm">실패 {saveResult.failed}건</p>
               )}

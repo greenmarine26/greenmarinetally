@@ -773,4 +773,35 @@ export async function fbSavePortMisBatch(ships) {
   return { saved, failed };
 }
 
+// M5.82 hotfix: 평택 PORT-MIS 데이터 전체 교체
+//   - 기존 port_mis_data 중 port==='평택'인 데이터 모두 삭제
+//   - 그 후 새 ships 저장
+//   - 다른 항만(부산/마산 등) 데이터는 보존
+export async function fbReplacePortMisBatch(ships, opts = {}) {
+  const targetPort = opts.port || '평택';
+  let deleted = 0;
+  try {
+    // 1) 기존 데이터에서 평택 데이터만 삭제
+    const snap = await get(ref(db, 'port_mis_data'));
+    if (snap.exists()) {
+      const all = snap.val() || {};
+      await Promise.all(Object.entries(all).map(async ([k, v]) => {
+        if (v && v.port === targetPort) {
+          try {
+            await remove(ref(db, `port_mis_data/${k}`));
+            deleted++;
+          } catch (e) {
+            console.warn('[fbReplacePortMisBatch] 삭제 실패', k, e);
+          }
+        }
+      }));
+    }
+  } catch (e) {
+    console.error('[fbReplacePortMisBatch] 옛 데이터 조회 실패', e);
+  }
+  // 2) 새 데이터 저장
+  const { saved, failed } = await fbSavePortMisBatch(ships);
+  return { saved, failed, deleted };
+}
+
 export { db };
