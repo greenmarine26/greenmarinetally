@@ -201,10 +201,16 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     const r = String(c.row).padStart(2, '0');
     cellMap[`${t}-${r}`] = c;
   });
-  // M6.1: 짝수 베이 40피트의 짝꿍 자리에 X 표시 (단독 박스만)
+  // M6.1 → M6.8: 짝수 베이 40피트의 짝꿍 자리에 X 표시 (단독 박스만)
+  //   사용자 의도: row 짝수 (40ft 컨테이너 자리) → row-1 (홀수 row) 자리에 X
+  //   즉 짝꿍 베이 (홀수 row 영역)에만 X 표시. 짝수 row 영역엔 X 표시 안 함
+  //   베이플랜의 xMarks 동작과 동일
   shadow40Conts.forEach(c => {
     const t = String(c.tier).padStart(2, '0');
-    const r = String(c.row).padStart(2, '0');
+    const rEven = parseInt(c.row);
+    if (rEven <= 0 || rEven % 2 !== 0) return;  // 짝수 row만 처리
+    const rOdd = rEven - 1;  // 홀수 row 자리에 X
+    const r = String(rOdd).padStart(2, '0');
     const key = `${t}-${r}`;
     if (!cellMap[key]) {
       cellMap[key] = { ...c, _shadow40: true };
