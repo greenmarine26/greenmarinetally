@@ -213,16 +213,11 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
-  // M5.97: 베이별 정확한 tier만 그림 (사용 안 하는 tier 줄 완전히 없앰)
-  //   사용자 확정: "전체를 없애는게 아니고 80이 없는곳만 없애야함"
-  //   - dictBay.deckTiers/holdTiers (베이사전 베이별) 우선
-  //   - 없으면 dictShipMeta.deckTiers/holdTiers (선박 전역) fallback
-  //   외곽 통일 X, 점선 위치 베이별 다름 (정상)
+  // M6.0: V5 양식 복원 — 외곽 통일 (선박 전역 deckTiers/holdTiers) + 베이별 사용 tier만 visible
+  //   사용자 요구: BAY 33,34,35의 hold 영역도 외곽에 맞춰 visibility:hidden으로 자리 차지
+  //   80(extraTier)은 점선 자리에 그림 (M5.98 그대로)
   const deckTiers = (() => {
-    if (dictBay?.deckTiers && Array.isArray(dictBay.deckTiers) && dictBay.deckTiers.length > 0) {
-      return dictBay.deckTiers.map(t => String(t).padStart(2, '0'));
-    }
-    // Fallback: 선박 전역
+    // 외곽: 선박 전역 max (모든 베이 동일)
     if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
       return dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
     }
@@ -237,14 +232,10 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
       for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
       return out;
     }
-    return ['92', '90', '88', '86', '84', '82', '80'];
+    return ['92', '90', '88', '86', '84', '82'];
   })();
 
   const holdTiers = (() => {
-    if (dictBay?.holdTiers && Array.isArray(dictBay.holdTiers)) {
-      // 빈 배열도 의미 있음 (hold 없음 = BAY 33 등)
-      return dictBay.holdTiers.map(t => String(t).padStart(2, '0'));
-    }
     if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
       return dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
     }
@@ -262,14 +253,22 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     return ['08', '06', '04', '02'];
   })();
 
-  // M5.97: bayDeckTiersUsed/HoldTiersUsed는 더 이상 필요 없음 (deckTiers 자체가 베이별)
-  //   visibility:hidden 로직 제거 — 사용 안 하는 tier는 아예 그리지 않음
-  const bayDeckTiersUsed = useMemo(() => new Set(deckTiers), [deckTiers]);
-  const bayHoldTiersUsed = useMemo(() => new Set(holdTiers), [holdTiers]);
+  // M6.0: 베이별 사용 tier (visibility:hidden 처리용)
+  const bayDeckTiersUsed = useMemo(() => {
+    if (dictBay?.deckTiers && Array.isArray(dictBay.deckTiers) && dictBay.deckTiers.length > 0) {
+      return new Set(dictBay.deckTiers.map(t => String(t).padStart(2, '0')));
+    }
+    return new Set(deckTiers);  // 정보 없으면 모두 사용
+  }, [dictBay, deckTiers]);
+  const bayHoldTiersUsed = useMemo(() => {
+    if (dictBay?.holdTiers && Array.isArray(dictBay.holdTiers)) {
+      // 빈 배열 = hold 없음 (BAY 33,34,35) — 모든 hold 행 visibility:hidden
+      return new Set(dictBay.holdTiers.map(t => String(t).padStart(2, '0')));
+    }
+    return new Set(holdTiers);
+  }, [dictBay, holdTiers]);
 
   // M5.98: extraTier — 점선 위치에 그릴 베이별 특수 tier
-  //   사용자 요구: NBTD BAY 33의 80을 다른 베이의 점선 위치 (deck 끝 다음 한 줄)에 그림
-  //   격자 외곽은 통일 (deck 6 + hold 4), BAY 33의 80은 점선 자리에 셀
   const extraTier = dictBay?.extraTier || null;
 
   const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
@@ -304,20 +303,25 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
       </div>
       <div className="bay-grid-wrap">
         <div className="bay-grid">
-          {hasDeck && deckTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
-          {/* M5.98: 점선/extraTier 영역 — 베이별 extraTier 있으면 그 셀, 없으면 점선
-              사용자 요구: NBTD의 BAY 33 등에서 80을 다른 베이의 점선 위치에 그리기 */}
-          {hasDeck && hasHold && (
+          {hasDeck && deckTiers.map(t => {
+            const isUsed = bayDeckTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
+          {/* M6.0: 점선/extraTier 자리 (모든 베이 동일 위치, 한 줄 차지)
+              - 베이의 extraTier 있으면 그 셀 (BAY 33의 80)
+              - 없으면 점선
+              둘 다 bay-grid-row와 같은 height (외곽 정렬) */}
+          {hasDeck && (
             extraTier ? (
               <div className="bay-grid-row extra-tier-row">
                 {dynRows.map(r => {
@@ -329,26 +333,29 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
                   return <span key={r} className={cls}>{m.letter}</span>;
                 })}
               </div>
-            ) : <div className="hatch-break"></div>
+            ) : <div className="bay-grid-row hatch-break"></div>
           )}
-          {hasHold && holdTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
+          {hasHold && holdTiers.map(t => {
+            const isUsed = bayHoldTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
         </div>
         <div className="bay-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
-          {hasDeck && hasHold && (
+          {hasDeck && deckTiers.map(t => <span key={t} className={!bayDeckTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
+          {hasDeck && (
             extraTier ? <span className="extra-tier-label">{extraTier}</span> : <span className="tier-gap"></span>
           )}
-          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+          {hasHold && holdTiers.map(t => <span key={t} className={!bayHoldTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
         </div>
       </div>
       <div className="bay-row-labels">
@@ -787,25 +794,23 @@ export default function PrintableCargoPlan({
         .bay-row-label { flex: 1; text-align: center; font-size: 7pt; min-width: 0; }
         /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
         .bay-grid-wrap {
-          display: flex; align-items: flex-start; padding: 1px;
+          display: flex; align-items: stretch; padding: 1px;
           justify-content: center;
-          flex: none;
+          flex: 1;
           min-height: 0;
         }
         /* M5.38: 그리드/셀/티어 레이블 동적 분배 (선박별 row/tier 수 다름) */
-        /* M5.99: 줄당 height 고정 (베이별 셀 크기 통일) */
+        /* M6.0: V5 양식 복원 (M5.99의 height:1.3em 잘못 → flex:1, min-height:0) */
         .bay-grid { 
           display: flex; flex-direction: column; align-items: stretch;
-          flex: none;
+          flex: 1; min-width: 0; min-height: 0;
         }
         .bay-grid-row { 
-          display: flex; 
-          flex: none;
-          height: 1.3em;
+          display: flex; flex: 1; min-height: 0;
         }
-        /* M5.96 → M5.97: 베이가 사용 안 하는 tier 행 — display:none으로 자리 자체 없앰 */
-        .bay-grid-row.tier-hidden { display: none; }
-        .bay-tier-labels span.tier-hidden { display: none; }
+        /* M6.0: 사용 안 하는 tier 행 → visibility:hidden (V5 양식, 자리 차지하되 안 보임) */
+        .bay-grid-row.tier-hidden { visibility: hidden; }
+        .bay-tier-labels span.tier-hidden { visibility: hidden; }
         .bay-cell {
           flex: 1;
           border: 0.3px solid #aaa;
@@ -813,7 +818,7 @@ export default function PrintableCargoPlan({
           font-size: 6pt;
           line-height: 1;
           font-family: 'Courier New', monospace;
-          min-width: 0;
+          min-width: 0; min-height: 0;
           display: flex; align-items: center; justify-content: center;
         }
         .mark-X { color: #000; }
@@ -850,8 +855,13 @@ export default function PrintableCargoPlan({
           font-size: 6pt; line-height: 6pt;
           color: #dc2626;
         }
+        /* M6.0: hatch-break는 bay-grid-row 클래스와 함께 사용. 한 줄 height 차지 (외곽 정렬) */
         .hatch-break {
-          height: 2px; background: #000; margin: 1px 0; width: 100%;
+          background: repeating-linear-gradient(90deg, #555 0, #555 4px, transparent 4px, transparent 8px) center / 100% 2px no-repeat;
+        }
+        /* M6.0: extra-tier-label은 점선 자리 라벨 (다른 tier 라벨과 같은 height) */
+        .extra-tier-label {
+          color: #dc2626; font-weight: 600;
         }
         .bay-tier-labels {
           display: flex; flex-direction: column;
@@ -863,7 +873,8 @@ export default function PrintableCargoPlan({
           flex: 1; display: flex; align-items: center;
           font-size: 6pt; min-height: 0;
         }
-        .tier-gap { flex: 0 0 2px !important; background: #000; margin: 1px 0; }
+        /* M6.0: tier-gap도 라벨 한 줄 자리 (점선 자리와 같은 height) */
+        .tier-gap { flex: 1; min-height: 0; }
         .legend-box {
           padding: 6px 4px;
           display: flex; flex-direction: column; justify-content: flex-end;
