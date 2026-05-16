@@ -213,48 +213,53 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
-  // tier: 베이별 로컬 → 선박 전역 → EDI fallback
+  // tier: 베이별 로컬 (dictBay) > EDI 컨테이너 기준 실제 범위 > 선박 전역 (빈 베이용)
+  // M5.95: dictShipMeta.deckTiers는 선박 전체 합집합이라 베이마다 떠있는 효과 발생
+  //   예: 선박 전역 deckTiers=[80,82,84,86,88,90,92] → BAY 5(82~90)도 80,92 줄 그려져 컨테이너가 떠 보임
+  //   해결: EDI 컨테이너의 실제 tier 범위를 우선 사용 (베이별 정확)
   const deckTiers = (() => {
     if (dictBay?.deckTiersLocal && dictBay.deckTiersLocal.length > 0) {
       return dictBay.deckTiersLocal.map(t => String(t).padStart(2, '0'));
     }
+    // M5.95: EDI 컨테이너 기준 베이별 실제 tier 범위 우선
+    const allTiers = new Set();
+    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
+    const deckFromConts = [...allTiers].filter(t => parseInt(t) >= 80);
+    if (deckFromConts.length > 0) {
+      const nums = deckFromConts.map(t => parseInt(t));
+      const min = Math.min(...nums), max = Math.max(...nums);
+      const out = [];
+      for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
+      return out;
+    }
+    // 빈 베이 (컨테이너 0개): 선박 전역 또는 기본
     if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
       return dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
     }
-    // EDI fallback
-    const allTiers = new Set();
-    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-    const src = globalTiers && globalTiers.length > 0
-      ? globalTiers.map(t => String(t).padStart(2, '0'))
-      : [...allTiers];
-    const deck = src.filter(t => parseInt(t) >= 80);
-    if (deck.length === 0) return [];
-    const nums = deck.map(t => parseInt(t));
-    const min = Math.min(...nums), max = Math.max(...nums);
-    const out = [];
-    for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
-    return out;
+    return ['90', '88', '86', '84', '82'];
   })();
 
+  // M5.95: holdTiers도 같은 로직 (베이별 실제 hold 범위 우선)
   const holdTiers = (() => {
     if (dictBay?.holdTiersLocal && dictBay.holdTiersLocal.length > 0) {
       return dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0'));
     }
+    // EDI 컨테이너 기준 베이별 실제 hold 범위
+    const allTiers = new Set();
+    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
+    const holdFromConts = [...allTiers].filter(t => parseInt(t) < 80);
+    if (holdFromConts.length > 0) {
+      const nums = holdFromConts.map(t => parseInt(t));
+      const min = Math.min(...nums), max = Math.max(...nums);
+      const out = [];
+      for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
+      return out;
+    }
+    // 빈 베이
     if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
       return dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
     }
-    const allTiers = new Set();
-    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-    const src = globalTiers && globalTiers.length > 0
-      ? globalTiers.map(t => String(t).padStart(2, '0'))
-      : [...allTiers];
-    const hold = src.filter(t => parseInt(t) < 80);
-    if (hold.length === 0) return [];
-    const nums = hold.map(t => parseInt(t));
-    const min = Math.min(...nums), max = Math.max(...nums);
-    const out = [];
-    for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
-    return out;
+    return ['08', '06', '04', '02'];
   })();
 
   const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
