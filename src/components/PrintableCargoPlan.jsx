@@ -368,46 +368,103 @@ export default function PrintableCargoPlan({
   const aftPages = useMemo(() => buildBayPages(aft), [aft]);
 
   // M5.91: 선적 모드는 POD별로 그룹화 (양하는 PTK 단일)
-  //   기존: { c20, c40, c45 } 단일 카운트 + 표시는 'LYG' 하드코딩 (버그)
-  //   변경: { byPod: { POD: { c20, c40, c45 } }, total: {...} } — 각 목적지별 분류
+  // M5.94: 사이즈별 상세 분류(20DC/20RF/40DC/40HC...) + 통과 화물 카운트 추가
   const totalCounts = useMemo(() => {
-    if (mode === 'discharge') {
-      // 양하: 모두 PTK 도착 (POD = PTK)
-      const c = { c20: 0, c40: 0, c45: 0 };
-      containers.forEach(ct => {
-        if (!isPtk(ct, mode)) return;
-        const sz = sizeOf(ct);
-        c[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
-      });
-      return { byPod: { PTK: c }, total: c };
-    }
-    // 선적: POD별로 그룹화
-    const byPod = {};
-    const total = { c20: 0, c40: 0, c45: 0 };
+    const result = {
+      byPod: {},     // POD별 { c20, c40, c45 }
+      total: { c20: 0, c40: 0, c45: 0 },
+      byCategory: {  // 사이즈+타입별 상세
+        '20DC': 0, '20HC': 0, '20RF': 0, '20FR': 0, '20OT': 0, '20TK': 0,
+        '40DC': 0, '40HC': 0, '40RF': 0, '40FR': 0, '40OT': 0, '40TK': 0,
+        '45HC': 0, '45DC': 0, 'other': 0,
+      },
+      special: { dg: 0, oog: 0, rf: 0 },  // 특수 화물 (별도 마커)
+      ptkTotal: 0,
+      transitTotal: 0,
+      grandTotal: 0,
+    };
     containers.forEach(ct => {
-      if (!isPtk(ct, mode)) return;
-      // POD 정규화 — CNLYG/KRPTK 같은 5자리 UN/LOCODE는 마지막 3자리(LYG/PTK)로 축약
-      let pod = String(ct.pod || '').toUpperCase().trim();
-      if (!pod) pod = '?';
-      else if (pod.length === 5 && pod.startsWith('CN') || pod.startsWith('KR') || pod.startsWith('JP') ||
-               pod.startsWith('TW') || pod.startsWith('VN') || pod.startsWith('TH') || pod.startsWith('MY') ||
-               pod.startsWith('ID') || pod.startsWith('PH') || pod.startsWith('SG') || pod.startsWith('HK') ||
-               pod.startsWith('US') || pod.startsWith('RU')) {
-        pod = pod.slice(-3);
+      result.grandTotal++;
+      const isOurs = isPtk(ct, mode);
+      if (!isOurs) {
+        result.transitTotal++;
+        return;
       }
-      if (!byPod[pod]) byPod[pod] = { c20: 0, c40: 0, c45: 0 };
+      result.ptkTotal++;
+      // 사이즈
       const sz = sizeOf(ct);
       const key = sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20';
-      byPod[pod][key]++;
-      total[key]++;
+      // POD
+      let pod = String(ct.pod || '').toUpperCase().trim();
+      if (mode === 'discharge') {
+        pod = 'PTK';
+      } else if (pod) {
+        if (pod.length === 5 && (pod.startsWith('CN') || pod.startsWith('KR') ||
+            pod.startsWith('JP') || pod.startsWith('TW') || pod.startsWith('VN') ||
+            pod.startsWith('TH') || pod.startsWith('MY') || pod.startsWith('ID') ||
+            pod.startsWith('PH') || pod.startsWith('SG') || pod.startsWith('HK') ||
+            pod.startsWith('US') || pod.startsWith('RU'))) {
+          pod = pod.slice(-3);
+        }
+      } else {
+        pod = '?';
+      }
+      if (!result.byPod[pod]) result.byPod[pod] = { c20: 0, c40: 0, c45: 0 };
+      result.byPod[pod][key]++;
+      result.total[key]++;
+      // 카테고리별
+      const lbl = (isoToLabel(ct.iso) || '').toUpperCase();
+      if (result.byCategory[lbl] !== undefined) {
+        result.byCategory[lbl]++;
+      } else {
+        result.byCategory.other++;
+      }
+      // 특수 화물
+      if (ct.dg || (ct.imdgClass && String(ct.imdgClass).trim())) result.special.dg++;
+      if (ct.oog || lbl.includes('OT') || lbl.includes('FR')) result.special.oog++;
+      if (lbl.includes('RF') || isReeferContainer(ct)) result.special.rf++;
     });
-    return { byPod, total };
+    return result;
   }, [containers, mode]);
 
   const titleText = mode === 'discharge' ? 'CARGO DISCHARGING PLAN' : 'STOWAGE INSTRUCTION';
-  const portText = mode === 'discharge' ? 'POD : PTK' : 'POL : PTK';
+  // M5.94: POL/POD 둘 다 표시 (양하: POL: 외항 → POD: PTK / 적재: POL: PTK → POD: 외항)
+  //   pol/pod 정보를 voyageInfo와 컨테이너에서 추출
+  const inferPol = useMemo(() => {
+    if (mode === 'discharge') {
+      // 양하: 컨테이너의 POL (가장 흔한)
+      const polCounts = {};
+      containers.forEach(c => {
+        const pol = (c.pol || '').toUpperCase().trim();
+        if (!pol) return;
+        const short = pol.length === 5 ? pol.slice(-3) : pol;
+        polCounts[short] = (polCounts[short] || 0) + 1;
+      });
+      const top = Object.entries(polCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+      return top || (voyageInfo?.pol ? voyageInfo.pol.slice(-3) : '?');
+    } else {
+      return 'PTK';  // 적재: 평택
+    }
+  }, [containers, mode, voyageInfo?.pol]);
+  const inferPod = useMemo(() => {
+    if (mode === 'discharge') return 'PTK';
+    // 적재: 가장 흔한 POD
+    const podCounts = {};
+    containers.forEach(c => {
+      const pod = (c.pod || '').toUpperCase().trim();
+      if (!pod) return;
+      const short = pod.length === 5 ? pod.slice(-3) : pod;
+      podCounts[short] = (podCounts[short] || 0) + 1;
+    });
+    const top = Object.entries(podCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return top || '?';
+  }, [containers, mode]);
+  const portText = `POL : ${inferPol}  →  POD : ${inferPod}`;
   const todayStr = new Date().toISOString().slice(0, 10);
-  const vsl = voyageInfo?.vsl || shipName || 'VESSEL';
+  // M5.94: 선박 풀네임 + 약자 (vslFull은 EDI에서 자동 추출된 풀네임, vsl은 사용자 약자)
+  const vslShort = voyageInfo?.vsl || shipName || 'VESSEL';
+  const vslFull = voyageInfo?.vslFull || '';
+  const vsl = vslFull ? `${vslShort} ${vslFull}` : vslShort;
   // M4.9b: 항차 번호 - 양하/선적 분리 시 둘 다 표시
   const voyD = voyageInfo?.voy_d || '';
   const voyL = voyageInfo?.voy_l || '';
@@ -522,6 +579,11 @@ export default function PrintableCargoPlan({
                   const tb = b[1].c20 + b[1].c40 + b[1].c45;
                   return tb - ta;  // 많은 순
                 });
+              // M5.94: 사이즈+타입별 카테고리 (값 0 아닌 것만 표시)
+              const cats = totalCounts.byCategory || {};
+              const cat20 = ['20DC', '20HC', '20RF', '20FR', '20OT', '20TK'].filter(k => cats[k] > 0);
+              const cat40 = ['40DC', '40HC', '40RF', '40FR', '40OT', '40TK'].filter(k => cats[k] > 0);
+              const cat45 = ['45HC', '45DC'].filter(k => cats[k] > 0);
               const statsBox = (
                 <div className="bay-stats-inline" key="stats">
                   <div className="stats-title">20'/40'/45'</div>
@@ -531,6 +593,39 @@ export default function PrintableCargoPlan({
                     </div>
                   ))}
                   <div className="stats-total">총 {totalAll}대</div>
+                  {/* M5.94: 사이즈+타입별 상세 (원본 STOWAGE PLAN 양식) */}
+                  {(cat20.length > 0 || cat40.length > 0 || cat45.length > 0) && (
+                    <div className="stats-detail">
+                      {cat20.length > 0 && (
+                        <div className="stats-detail-line">
+                          {cat20.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}
+                        </div>
+                      )}
+                      {cat40.length > 0 && (
+                        <div className="stats-detail-line">
+                          {cat40.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}
+                        </div>
+                      )}
+                      {cat45.length > 0 && (
+                        <div className="stats-detail-line">
+                          {cat45.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* M5.94: 통과 화물 카운트 (있는 경우만) */}
+                  {totalCounts.transitTotal > 0 && (
+                    <div className="stats-transit">통과 {totalCounts.transitTotal}대 / 전체 {totalCounts.grandTotal}대</div>
+                  )}
+                  {/* M5.94: 컨테이너 기호 레전드 (페이지 하단보다 통계 박스 안에 컴팩트하게) */}
+                  <div className="stats-legend">
+                    <span>o {mode === 'discharge' ? '양하' : '적재'}</span>
+                    <span>X 통과</span>
+                    <span>F FR</span>
+                    <span>D DG</span>
+                    <span>A AWK</span>
+                    <span>G OOG</span>
+                  </div>
                 </div>
               );
               const out = [];
@@ -777,6 +872,38 @@ export default function PrintableCargoPlan({
         }
         /* M5.91: POD가 많을 때 (5개 이상) 더 작게 */
         .bay-stats-inline:has(.stats-line:nth-child(7)) .stats-line { font-size: 7pt; line-height: 1.15; }
+        /* M5.94: 사이즈+타입별 상세 */
+        .bay-stats-inline .stats-detail {
+          margin-top: 3px;
+          padding-top: 2px;
+          border-top: 0.5px dashed #aaa;
+        }
+        .bay-stats-inline .stats-detail-line {
+          font-size: 6.5pt;
+          line-height: 1.2;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 3px;
+        }
+        .bay-stats-inline .stats-detail-line b { font-weight: bold; }
+        .bay-stats-inline .stats-transit {
+          margin-top: 2px;
+          padding-top: 1px;
+          font-size: 6.5pt;
+          color: #666;
+          border-top: 0.5px dotted #ccc;
+        }
+        .bay-stats-inline .stats-legend {
+          margin-top: 2px;
+          padding-top: 2px;
+          font-size: 6pt;
+          line-height: 1.2;
+          color: #555;
+          border-top: 0.5px dotted #ccc;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
         /* M5.31: cargo-footer를 페이지 좌하단 absolute로 (별첨 페이지 추가 방지) */
         .cargo-footer {
           position: absolute;
