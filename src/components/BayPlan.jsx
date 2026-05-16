@@ -854,15 +854,26 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const oddContainers = page.oddBay ? (bayGroups[page.oddBay] || []) : [];
   const allContainers = [...evenContainers, ...oddContainers];
 
-  // 40피트 X 마크
+  // 40피트/45피트 X 마크
+  // M6.2 → M6.3: 카고플랜과 일관성 — size === '40' 또는 '45' 처리 (둘 다 짝꿍 슬롯 차지)
   const xMarks = useMemo(() => {
     const marks = new Set();
     const occupied = new Set();
     for (const c of allContainers) {
       if (c.row && c.tier) occupied.add(`${c.row}-${c.tier}`);
     }
+    // M6.3: 40 또는 45 (긴 컨테이너 = 짝꿍 슬롯 차지)
+    const isLongContainer = (c) => {
+      const iso = c.iso || '';
+      const lbl = (isoToLabel ? isoToLabel(iso) : '') || '';
+      if (lbl.startsWith('40') || lbl.startsWith('45')) return true;
+      if (lbl.startsWith('20')) return false;
+      if (/^[45][0-9][A-Z0-9]{2}$/.test(iso) || iso.startsWith('4') || iso.startsWith('L')) return true;
+      return false;
+    };
     for (const c of evenContainers) {
       if (!c.row || !c.tier) continue;
+      if (!isLongContainer(c)) continue;  // M6.3: 40 또는 45만
       const evenN = parseInt(c.row);
       if (evenN === 0 || evenN % 2 !== 0) continue;
       const oddN = evenN - 1;

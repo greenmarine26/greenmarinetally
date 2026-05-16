@@ -176,16 +176,19 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     ...(odd != null && containers[String(odd)] || []),
   ];
 
-  // M6.1: 단독 박스(even=null)의 경우, 짝꿍 짝수 베이의 40피트가 같은 슬롯을 차지하므로
-  //   그 자리는 다른 컨테이너 적재 불가 → X 표시
+  // M6.1 → M6.3: 단독 박스(even=null)의 경우, 짝꿍 짝수 베이의 40/45피트가 같은 슬롯 차지
+  //   → 짝꿍 자리에 X 표시 (다른 컨테이너 적재 불가)
   //   짝꿍 베이 = odd - 1 (왼쪽 짝수) 또는 odd + 1 (오른쪽 짝수). 양쪽 모두 확인.
   let shadow40Conts = [];
   if (even == null && odd != null) {
     const oddNum = parseInt(odd);
     [oddNum - 1, oddNum + 1].forEach(evenBay => {
       if (evenBay > 0 && containers[String(evenBay)]) {
-        const forties = containers[String(evenBay)].filter(c => sizeOf(c) === '40');
-        shadow40Conts.push(...forties);
+        const longConts = containers[String(evenBay)].filter(c => {
+          const sz = sizeOf(c);
+          return sz === '40' || sz === '45';  // M6.3: 40+45 둘 다
+        });
+        shadow40Conts.push(...longConts);
       }
     });
   }
