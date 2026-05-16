@@ -176,11 +176,34 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     ...(odd != null && containers[String(odd)] || []),
   ];
 
+  // M6.1: 단독 박스(even=null)의 경우, 짝꿍 짝수 베이의 40피트가 같은 슬롯을 차지하므로
+  //   그 자리는 다른 컨테이너 적재 불가 → X 표시
+  //   짝꿍 베이 = odd - 1 (왼쪽 짝수) 또는 odd + 1 (오른쪽 짝수). 양쪽 모두 확인.
+  let shadow40Conts = [];
+  if (even == null && odd != null) {
+    const oddNum = parseInt(odd);
+    [oddNum - 1, oddNum + 1].forEach(evenBay => {
+      if (evenBay > 0 && containers[String(evenBay)]) {
+        const forties = containers[String(evenBay)].filter(c => sizeOf(c) === '40');
+        shadow40Conts.push(...forties);
+      }
+    });
+  }
+
   const cellMap = {};
   allConts.forEach(c => {
     const t = String(c.tier).padStart(2, '0');
     const r = String(c.row).padStart(2, '0');
     cellMap[`${t}-${r}`] = c;
+  });
+  // M6.1: 짝수 베이 40피트의 짝꿍 자리에 X 표시 (단독 박스만)
+  shadow40Conts.forEach(c => {
+    const t = String(c.tier).padStart(2, '0');
+    const r = String(c.row).padStart(2, '0');
+    const key = `${t}-${r}`;
+    if (!cellMap[key]) {
+      cellMap[key] = { ...c, _shadow40: true };
+    }
   });
 
   // M5.47: row를 베이사전 Local + 실제 컨테이너 row union으로
@@ -310,6 +333,7 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
                 {dynRows.map(r => {
                   const c = cellMap[`${t}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
                   const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   return <span key={r} className={cls}>{m.letter}</span>;
@@ -328,6 +352,7 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
                   const tierStr = String(extraTier).padStart(2, '0');
                   const c = cellMap[`${tierStr}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
                   const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   return <span key={r} className={cls}>{m.letter}</span>;
@@ -342,6 +367,7 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
                 {dynRows.map(r => {
                   const c = cellMap[`${t}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
                   const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   return <span key={r} className={cls}>{m.letter}</span>;
@@ -822,6 +848,8 @@ export default function PrintableCargoPlan({
           display: flex; align-items: center; justify-content: center;
         }
         .mark-X { color: #000; }
+        /* M6.1: 짝수 베이 40피트의 짝꿍 자리 X (단독 박스에서, 다른 컨테이너 적재 불가) */
+        .mark-shadow { color: #999; font-style: italic; background: #f0f0f0; }
         .mark-o { color: #d97706; font-weight: 500; }
         .mark-L { color: #c026d3; font-weight: 500; background: #fce7f3 !important; }
         .mark-empty { color: transparent; }
