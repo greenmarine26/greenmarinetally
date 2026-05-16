@@ -176,17 +176,16 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     ...(odd != null && containers[String(odd)] || []),
   ];
 
-  // M6.1 → M6.6: 단독 박스의 경우, 짝꿍 짝수 베이의 40/45피트가 같은 슬롯 차지 → X 표시
-  //   M6.6 수정: pairMap 사용 — 짝수 베이의 실제 짝꿍이 본인일 때만 X 표시
-  //   사용자 버그 (M6.5): BAY 43 단독에서 BAY 44 (실제로 (44)45 짝꿍)의 40피트가 잘못 표시
+  // M6.1 → M6.3 → M6.9: 단독 박스(even=null)의 경우, 양옆 짝수 베이의 40/45피트 컨테이너
+  //   → 그 컨테이너 row+tier 자리에 X 표시 (다른 컨테이너 적재 불가)
+  //   NBTD PDF 답안지 양식: 40ft = 양옆 두 홀수 베이 모두 차지 → 양쪽 모두 X
+  //   짝꿍 베이 (예: BAY 24의 짝꿍 = BAY 25)이라도 BAY 23 (왼쪽 홀수)에도 X 표시
   let shadow40Conts = [];
   if (even == null && odd != null) {
     const oddNum = parseInt(odd);
     [oddNum - 1, oddNum + 1].forEach(evenBay => {
       if (evenBay <= 0) return;
       if (!containers[String(evenBay)]) return;
-      // 이 짝수 베이의 짝꿍이 본인 odd가 아니면 skip (다른 베이와 짝꿍)
-      if (pairMap && pairMap[evenBay] != null && pairMap[evenBay] !== oddNum) return;
       const longConts = containers[String(evenBay)].filter(c => {
         const sz = sizeOf(c);
         return sz === '40' || sz === '45';
@@ -201,16 +200,12 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     const r = String(c.row).padStart(2, '0');
     cellMap[`${t}-${r}`] = c;
   });
-  // M6.1 → M6.8: 짝수 베이 40피트의 짝꿍 자리에 X 표시 (단독 박스만)
-  //   사용자 의도: row 짝수 (40ft 컨테이너 자리) → row-1 (홀수 row) 자리에 X
-  //   즉 짝꿍 베이 (홀수 row 영역)에만 X 표시. 짝수 row 영역엔 X 표시 안 함
-  //   베이플랜의 xMarks 동작과 동일
+  // M6.1 → M6.9: 짝수 베이 40피트의 짝꿍 자리에 X 표시 (단독 박스만)
+  //   NBTD PDF 답안지(NBTD2520E.pdf) 양식 — row 짝수 + row 홀수 모두에 X (row 그대로)
+  //   양옆 짝수 베이의 40ft 컨테이너가 양쪽 홀수 베이 모두 차지
   shadow40Conts.forEach(c => {
     const t = String(c.tier).padStart(2, '0');
-    const rEven = parseInt(c.row);
-    if (rEven <= 0 || rEven % 2 !== 0) return;  // 짝수 row만 처리
-    const rOdd = rEven - 1;  // 홀수 row 자리에 X
-    const r = String(rOdd).padStart(2, '0');
+    const r = String(c.row).padStart(2, '0');
     const key = `${t}-${r}`;
     if (!cellMap[key]) {
       cellMap[key] = { ...c, _shadow40: true };
