@@ -213,18 +213,19 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
-  // M5.96: 외곽 통일 + 베이별 사용 tier 다름 + 안 보이게 처리
-  //   사용자 확정: "최대 높이로 만들고 없는 부분은 안보이게 처리"
-  //   - deckTiers (격자 외곽) = 선박 전역 max (dictShipMeta) — 모든 베이 동일
-  //   - bayDeckTiersUsed (실제 사용) = dictBay.deckTiers (베이사전 베이별)
-  //   - 격자에서 사용 안 하는 tier 행은 visibility:hidden (자리만 차지, 안 보임)
-  //   결과: 외곽 크기/점선 위치 모든 베이 동일 + 떠있는 효과 없음
+  // M5.97: 베이별 정확한 tier만 그림 (사용 안 하는 tier 줄 완전히 없앰)
+  //   사용자 확정: "전체를 없애는게 아니고 80이 없는곳만 없애야함"
+  //   - dictBay.deckTiers/holdTiers (베이사전 베이별) 우선
+  //   - 없으면 dictShipMeta.deckTiers/holdTiers (선박 전역) fallback
+  //   외곽 통일 X, 점선 위치 베이별 다름 (정상)
   const deckTiers = (() => {
-    // 외곽 격자: 선박 전역 max 우선
+    if (dictBay?.deckTiers && Array.isArray(dictBay.deckTiers) && dictBay.deckTiers.length > 0) {
+      return dictBay.deckTiers.map(t => String(t).padStart(2, '0'));
+    }
+    // Fallback: 선박 전역
     if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
       return dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
     }
-    // globalTiers (EDI 전체) fallback
     const src = globalTiers && globalTiers.length > 0
       ? globalTiers.map(t => String(t).padStart(2, '0'))
       : [];
@@ -236,10 +237,14 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
       for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
       return out;
     }
-    return ['92', '90', '88', '86', '84', '82', '80'];  // 안전 기본값
+    return ['92', '90', '88', '86', '84', '82', '80'];
   })();
 
   const holdTiers = (() => {
+    if (dictBay?.holdTiers && Array.isArray(dictBay.holdTiers)) {
+      // 빈 배열도 의미 있음 (hold 없음 = BAY 33 등)
+      return dictBay.holdTiers.map(t => String(t).padStart(2, '0'));
+    }
     if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
       return dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
     }
@@ -254,24 +259,13 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
       for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
       return out;
     }
-    return ['08', '06', '04', '02'];  // 안전 기본값
+    return ['08', '06', '04', '02'];
   })();
 
-  // M5.96: 베이가 실제 사용하는 tier 집합 (베이사전 dictBay.deckTiers/holdTiers, padded)
-  //   없으면 모든 외곽 tier 사용 (= 모든 행 visible)
-  const bayDeckTiersUsed = useMemo(() => {
-    if (dictBay?.deckTiers && Array.isArray(dictBay.deckTiers) && dictBay.deckTiers.length > 0) {
-      return new Set(dictBay.deckTiers.map(t => String(t).padStart(2, '0')));
-    }
-    return new Set(deckTiers);  // 정보 없으면 모두 사용 (이전 동작)
-  }, [dictBay, deckTiers]);
-  const bayHoldTiersUsed = useMemo(() => {
-    if (dictBay?.holdTiers && Array.isArray(dictBay.holdTiers)) {
-      // 빈 배열도 명시적 의미 (hold 없음) — 모든 hold 행 hidden
-      return new Set(dictBay.holdTiers.map(t => String(t).padStart(2, '0')));
-    }
-    return new Set(holdTiers);
-  }, [dictBay, holdTiers]);
+  // M5.97: bayDeckTiersUsed/HoldTiersUsed는 더 이상 필요 없음 (deckTiers 자체가 베이별)
+  //   visibility:hidden 로직 제거 — 사용 안 하는 tier는 아예 그리지 않음
+  const bayDeckTiersUsed = useMemo(() => new Set(deckTiers), [deckTiers]);
+  const bayHoldTiersUsed = useMemo(() => new Set(holdTiers), [holdTiers]);
 
   const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
@@ -790,9 +784,10 @@ export default function PrintableCargoPlan({
         .bay-grid-row { 
           display: flex; flex: 1; min-height: 0;
         }
-        /* M5.96: 베이가 사용 안 하는 tier 행 — 자리만 차지, 안 보이게 (외곽 통일) */
-        .bay-grid-row.tier-hidden { visibility: hidden; }
-        .bay-tier-labels span.tier-hidden { visibility: hidden; }
+        /* M5.96 → M5.97: 베이가 사용 안 하는 tier 행 — display:none으로 자리 자체 없앰
+           (visibility:hidden은 자리 차지해서 80 자리가 떠있어 보이는 문제 해결) */
+        .bay-grid-row.tier-hidden { display: none; }
+        .bay-tier-labels span.tier-hidden { display: none; }
         .bay-cell {
           flex: 1;
           border: 0.3px solid #aaa;
