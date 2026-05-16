@@ -8,7 +8,7 @@
 
 import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
-import { normalizeBay, isoToPdfLabel, isReeferContainer } from '../utils.js';
+import { normalizeBay, isoToPdfLabel, isReeferContainer, isoToLabel } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 
 const STD_ROWS = ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
@@ -20,10 +20,17 @@ const isPtk = (c, mode) => {
   return t === 'PTK' || t === 'KRPTK' || t.endsWith('PTK');
 };
 
+// M5.93: isoToPdfLabel은 40HC → "DCHC", 40RF → "RFHC"로 매핑되어 "40"이 포함 안 됨!
+//   기존 sizeOf가 모두 20으로 분류하던 치명적 버그.
+//   해결: isoToLabel(원본 라벨, 예: "40HC")로 첫 2글자 검사
 const sizeOf = (c) => {
-  const lbl = (isoToPdfLabel(c.iso) || '').toUpperCase();
-  if (lbl.includes('45')) return '45';
-  if (lbl.includes('40')) return '40';
+  const lbl = (isoToLabel(c.iso) || '').toUpperCase();
+  if (lbl.startsWith('45')) return '45';
+  if (lbl.startsWith('40')) return '40';
+  // ISO 라벨 없으면 iso 코드 직접 검사 (4자리 숫자 코드)
+  const iso = String(c.iso || '').trim();
+  if (/^4[5][A-Z0-9]{2}$/.test(iso) || iso.startsWith('45')) return '45';
+  if (/^4[0-9][A-Z0-9]{2}$/.test(iso) || iso.startsWith('4')) return '40';
   return '20';
 };
 
