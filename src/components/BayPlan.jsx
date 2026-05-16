@@ -855,25 +855,27 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const allContainers = [...evenContainers, ...oddContainers];
 
   // 40피트/45피트 X 마크
-  // M6.2 → M6.3: 카고플랜과 일관성 — size === '40' 또는 '45' 처리 (둘 다 짝꿍 슬롯 차지)
+  // M6.2 → M6.3 → M6.7: 짝수 row 컨테이너는 짝꿍 슬롯 차지 → row-1 자리에 X
+  //   사용자 버그 (M6.6): isLongContainer가 너무 엄격해서 ISO/라벨 매핑 실패 시 false → X 표시 안 됨
+  //   복원: 20ft가 명확한 경우만 제외. 짝수 row에 적재된 컨테이너는 40/45ft로 추정 (실무 일관성)
   const xMarks = useMemo(() => {
     const marks = new Set();
     const occupied = new Set();
     for (const c of allContainers) {
       if (c.row && c.tier) occupied.add(`${c.row}-${c.tier}`);
     }
-    // M6.3: 40 또는 45 (긴 컨테이너 = 짝꿍 슬롯 차지)
     const isLongContainer = (c) => {
       const iso = c.iso || '';
       const lbl = (isoToLabel ? isoToLabel(iso) : '') || '';
-      if (lbl.startsWith('40') || lbl.startsWith('45')) return true;
+      // 20ft 명시 → 제외
       if (lbl.startsWith('20')) return false;
-      if (/^[45][0-9][A-Z0-9]{2}$/.test(iso) || iso.startsWith('4') || iso.startsWith('L')) return true;
-      return false;
+      if (/^2/.test(iso)) return false;
+      // 그 외 → 40/45ft로 추정 (짝수 row 컨테이너는 거의 40/45)
+      return true;
     };
     for (const c of evenContainers) {
       if (!c.row || !c.tier) continue;
-      if (!isLongContainer(c)) continue;  // M6.3: 40 또는 45만
+      if (!isLongContainer(c)) continue;
       const evenN = parseInt(c.row);
       if (evenN === 0 || evenN % 2 !== 0) continue;
       const oddN = evenN - 1;
