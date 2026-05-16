@@ -213,54 +213,65 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
-  // tier: 베이별 로컬 (dictBay) > EDI 컨테이너 기준 실제 범위 > 선박 전역 (빈 베이용)
-  // M5.95: dictShipMeta.deckTiers는 선박 전체 합집합이라 베이마다 떠있는 효과 발생
-  //   예: 선박 전역 deckTiers=[80,82,84,86,88,90,92] → BAY 5(82~90)도 80,92 줄 그려져 컨테이너가 떠 보임
-  //   해결: EDI 컨테이너의 실제 tier 범위를 우선 사용 (베이별 정확)
+  // M5.96: 외곽 통일 + 베이별 사용 tier 다름 + 안 보이게 처리
+  //   사용자 확정: "최대 높이로 만들고 없는 부분은 안보이게 처리"
+  //   - deckTiers (격자 외곽) = 선박 전역 max (dictShipMeta) — 모든 베이 동일
+  //   - bayDeckTiersUsed (실제 사용) = dictBay.deckTiers (베이사전 베이별)
+  //   - 격자에서 사용 안 하는 tier 행은 visibility:hidden (자리만 차지, 안 보임)
+  //   결과: 외곽 크기/점선 위치 모든 베이 동일 + 떠있는 효과 없음
   const deckTiers = (() => {
-    if (dictBay?.deckTiersLocal && dictBay.deckTiersLocal.length > 0) {
-      return dictBay.deckTiersLocal.map(t => String(t).padStart(2, '0'));
-    }
-    // M5.95: EDI 컨테이너 기준 베이별 실제 tier 범위 우선
-    const allTiers = new Set();
-    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-    const deckFromConts = [...allTiers].filter(t => parseInt(t) >= 80);
-    if (deckFromConts.length > 0) {
-      const nums = deckFromConts.map(t => parseInt(t));
-      const min = Math.min(...nums), max = Math.max(...nums);
-      const out = [];
-      for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
-      return out;
-    }
-    // 빈 베이 (컨테이너 0개): 선박 전역 또는 기본
+    // 외곽 격자: 선박 전역 max 우선
     if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
       return dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
     }
-    return ['90', '88', '86', '84', '82'];
-  })();
-
-  // M5.95: holdTiers도 같은 로직 (베이별 실제 hold 범위 우선)
-  const holdTiers = (() => {
-    if (dictBay?.holdTiersLocal && dictBay.holdTiersLocal.length > 0) {
-      return dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0'));
-    }
-    // EDI 컨테이너 기준 베이별 실제 hold 범위
-    const allTiers = new Set();
-    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-    const holdFromConts = [...allTiers].filter(t => parseInt(t) < 80);
-    if (holdFromConts.length > 0) {
-      const nums = holdFromConts.map(t => parseInt(t));
+    // globalTiers (EDI 전체) fallback
+    const src = globalTiers && globalTiers.length > 0
+      ? globalTiers.map(t => String(t).padStart(2, '0'))
+      : [];
+    const deck = src.filter(t => parseInt(t) >= 80);
+    if (deck.length > 0) {
+      const nums = deck.map(t => parseInt(t));
       const min = Math.min(...nums), max = Math.max(...nums);
       const out = [];
       for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
       return out;
     }
-    // 빈 베이
+    return ['92', '90', '88', '86', '84', '82', '80'];  // 안전 기본값
+  })();
+
+  const holdTiers = (() => {
     if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
       return dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
     }
-    return ['08', '06', '04', '02'];
+    const src = globalTiers && globalTiers.length > 0
+      ? globalTiers.map(t => String(t).padStart(2, '0'))
+      : [];
+    const hold = src.filter(t => parseInt(t) < 80);
+    if (hold.length > 0) {
+      const nums = hold.map(t => parseInt(t));
+      const min = Math.min(...nums), max = Math.max(...nums);
+      const out = [];
+      for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
+      return out;
+    }
+    return ['08', '06', '04', '02'];  // 안전 기본값
   })();
+
+  // M5.96: 베이가 실제 사용하는 tier 집합 (베이사전 dictBay.deckTiers/holdTiers, padded)
+  //   없으면 모든 외곽 tier 사용 (= 모든 행 visible)
+  const bayDeckTiersUsed = useMemo(() => {
+    if (dictBay?.deckTiers && Array.isArray(dictBay.deckTiers) && dictBay.deckTiers.length > 0) {
+      return new Set(dictBay.deckTiers.map(t => String(t).padStart(2, '0')));
+    }
+    return new Set(deckTiers);  // 정보 없으면 모두 사용 (이전 동작)
+  }, [dictBay, deckTiers]);
+  const bayHoldTiersUsed = useMemo(() => {
+    if (dictBay?.holdTiers && Array.isArray(dictBay.holdTiers)) {
+      // 빈 배열도 명시적 의미 (hold 없음) — 모든 hold 행 hidden
+      return new Set(dictBay.holdTiers.map(t => String(t).padStart(2, '0')));
+    }
+    return new Set(holdTiers);
+  }, [dictBay, holdTiers]);
 
   const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
@@ -294,34 +305,40 @@ function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange,
       </div>
       <div className="bay-grid-wrap">
         <div className="bay-grid">
-          {hasDeck && deckTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
+          {hasDeck && deckTiers.map(t => {
+            const isUsed = bayDeckTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
           {hasDeck && hasHold && <div className="hatch-break"></div>}
-          {hasHold && holdTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
+          {hasHold && holdTiers.map(t => {
+            const isUsed = bayHoldTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
         </div>
         <div className="bay-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
+          {hasDeck && deckTiers.map(t => <span key={t} className={!bayDeckTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
           {hasDeck && hasHold && <span className="tier-gap"></span>}
-          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+          {hasHold && holdTiers.map(t => <span key={t} className={!bayHoldTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
         </div>
       </div>
       <div className="bay-row-labels">
@@ -773,6 +790,9 @@ export default function PrintableCargoPlan({
         .bay-grid-row { 
           display: flex; flex: 1; min-height: 0;
         }
+        /* M5.96: 베이가 사용 안 하는 tier 행 — 자리만 차지, 안 보이게 (외곽 통일) */
+        .bay-grid-row.tier-hidden { visibility: hidden; }
+        .bay-tier-labels span.tier-hidden { visibility: hidden; }
         .bay-cell {
           flex: 1;
           border: 0.3px solid #aaa;
