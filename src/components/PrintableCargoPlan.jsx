@@ -170,26 +170,28 @@ function getMark(c, mode, xrayMap) {
   return { letter, type, isXray };
 }
 
-function BayBox({ even, odd, containers, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta }) {
+function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta }) {
   const allConts = [
     ...(even != null && containers[String(even)] || []),
     ...(odd != null && containers[String(odd)] || []),
   ];
 
-  // M6.1 → M6.3: 단독 박스(even=null)의 경우, 짝꿍 짝수 베이의 40/45피트가 같은 슬롯 차지
-  //   → 짝꿍 자리에 X 표시 (다른 컨테이너 적재 불가)
-  //   짝꿍 베이 = odd - 1 (왼쪽 짝수) 또는 odd + 1 (오른쪽 짝수). 양쪽 모두 확인.
+  // M6.1 → M6.6: 단독 박스의 경우, 짝꿍 짝수 베이의 40/45피트가 같은 슬롯 차지 → X 표시
+  //   M6.6 수정: pairMap 사용 — 짝수 베이의 실제 짝꿍이 본인일 때만 X 표시
+  //   사용자 버그 (M6.5): BAY 43 단독에서 BAY 44 (실제로 (44)45 짝꿍)의 40피트가 잘못 표시
   let shadow40Conts = [];
   if (even == null && odd != null) {
     const oddNum = parseInt(odd);
     [oddNum - 1, oddNum + 1].forEach(evenBay => {
-      if (evenBay > 0 && containers[String(evenBay)]) {
-        const longConts = containers[String(evenBay)].filter(c => {
-          const sz = sizeOf(c);
-          return sz === '40' || sz === '45';  // M6.3: 40+45 둘 다
-        });
-        shadow40Conts.push(...longConts);
-      }
+      if (evenBay <= 0) return;
+      if (!containers[String(evenBay)]) return;
+      // 이 짝수 베이의 짝꿍이 본인 odd가 아니면 skip (다른 베이와 짝꿍)
+      if (pairMap && pairMap[evenBay] != null && pairMap[evenBay] !== oddNum) return;
+      const longConts = containers[String(evenBay)].filter(c => {
+        const sz = sizeOf(c);
+        return sz === '40' || sz === '45';
+      });
+      shadow40Conts.push(...longConts);
     });
   }
 
@@ -435,6 +437,18 @@ export default function PrintableCargoPlan({
   const forePages = useMemo(() => buildBayPages(fore), [fore]);
   const aftPages = useMemo(() => buildBayPages(aft), [aft]);
 
+  // M6.6: 짝수 베이 → 짝꿍 홀수 베이 맵 (shadow40 처리에서 사용)
+  //   사용자 버그: BAY 43 단독 박스에서 BAY 44의 40피트가 X로 잘못 표시
+  //   원인: BAY 44는 (44)45 짝꿍 → 43에 영향 X (45가 짝꿍이라 43은 빈)
+  //   해결: buildBayPages가 결정한 짝꿍 관계 그대로 사용
+  const pairMap = useMemo(() => {
+    const map = {};  // evenBay (number) → pairOdd (number or null)
+    [...forePages.pairs, ...aftPages.pairs].forEach(p => {
+      map[p.even] = p.odd;
+    });
+    return map;
+  }, [forePages, aftPages]);
+
   // M5.91: 선적 모드는 POD별로 그룹화 (양하는 PTK 단일)
   // M5.94: 사이즈별 상세 분류(20DC/20RF/40DC/40HC...) + 통과 화물 카운트 추가
   const totalCounts = useMemo(() => {
@@ -601,7 +615,7 @@ export default function PrintableCargoPlan({
               <div key={`fse-${i}`} className="bay-box-placeholder"></div>
             )}
             {foreColumns.map((col, i) => col.single ? (
-              <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap}
+              <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap}
                 mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
             ) : (
               <div key={`fs-${i}`} className="bay-box-placeholder"></div>
@@ -613,7 +627,7 @@ export default function PrintableCargoPlan({
               <div key={`fpe-${i}`} className="bay-box-placeholder"></div>
             )}
             {foreColumns.map((col, i) => col.pair ? (
-              <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap}
+              <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap}
                 mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
             ) : (
               <div key={`fp-${i}`} className="bay-box-placeholder"></div>
@@ -626,7 +640,7 @@ export default function PrintableCargoPlan({
               <div key={`ase-${i}`} className="bay-box-placeholder"></div>
             )}
             {aftColumns.map((col, i) => col.single ? (
-              <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap}
+              <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap}
                 mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
             ) : (
               <div key={`as-${i}`} className="bay-box-placeholder"></div>
@@ -708,7 +722,7 @@ export default function PrintableCargoPlan({
               aftColumns.forEach((col, i) => {
                 if (col.pair) {
                   out.push(
-                    <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap}
+                    <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap}
                       mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
                   );
                 } else if (i === firstEmptyPairIdx) {
