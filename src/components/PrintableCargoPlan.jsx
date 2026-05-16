@@ -787,21 +787,23 @@ export default function PrintableCargoPlan({
         .bay-row-label { flex: 1; text-align: center; font-size: 7pt; min-width: 0; }
         /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
         .bay-grid-wrap {
-          display: flex; align-items: stretch; padding: 1px;
+          display: flex; align-items: flex-start; padding: 1px;
           justify-content: center;
-          flex: 1;
+          flex: none;
           min-height: 0;
         }
         /* M5.38: 그리드/셀/티어 레이블 동적 분배 (선박별 row/tier 수 다름) */
+        /* M5.99: 줄당 height 고정 (베이별 셀 크기 통일) */
         .bay-grid { 
           display: flex; flex-direction: column; align-items: stretch;
-          flex: 1; min-width: 0; min-height: 0;
+          flex: none;
         }
         .bay-grid-row { 
-          display: flex; flex: 1; min-height: 0;
+          display: flex; 
+          flex: none;
+          height: 1.3em;
         }
-        /* M5.96 → M5.97: 베이가 사용 안 하는 tier 행 — display:none으로 자리 자체 없앰
-           (visibility:hidden은 자리 차지해서 80 자리가 떠있어 보이는 문제 해결) */
+        /* M5.96 → M5.97: 베이가 사용 안 하는 tier 행 — display:none으로 자리 자체 없앰 */
         .bay-grid-row.tier-hidden { display: none; }
         .bay-tier-labels span.tier-hidden { display: none; }
         .bay-cell {
@@ -811,7 +813,7 @@ export default function PrintableCargoPlan({
           font-size: 6pt;
           line-height: 1;
           font-family: 'Courier New', monospace;
-          min-width: 0; min-height: 0;
+          min-width: 0;
           display: flex; align-items: center; justify-content: center;
         }
         .mark-X { color: #000; }
