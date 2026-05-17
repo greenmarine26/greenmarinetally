@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.18';
+export const APP_VERSION = 'M6.18c';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1590,20 +1590,24 @@ export function extractBerthNo(berthRaw) {
  */
 /**
  * M6.18: berth 값이 정상 형식인지 검사 — VoyagePage/HomePage 공통 사용
- * 정상 형식:
- *   - 동/서/남/북부두 N번선석 (PORT-MIS 표준)
- *   - N번선석
- *   - E7, W6 등 단축형 (M6.11)
- *   - 평택항 BCT (외부 부두명)
- * 잘못된 형식:
- *   - MBM, BCT, MIPO 같은 시설 코드 (확장 v1.0.0 또는 옛 파서 버그)
- *   - 빈 값
+ * M6.18c: 화이트리스트 → 블랙리스트 방식 완화
+ *   기존 정규식이 너무 엄격해서 정상 부두명도 차단되는 문제 발생.
+ *   블랙리스트 — 명백한 시설 코드만 차단:
+ *     - 영문 대문자 3-5자만 (MBM, BCT, MIPO, MPCT 등 시설 약어)
+ *     - 빈 값 / 공백만
+ *   그 외 한글/숫자 포함 값은 모두 정상으로 통과 — 정상 부두명 보존
  */
 export function isValidBerth(b) {
   if (!b) return false;
   const s = String(b).trim();
   if (!s) return false;
-  return /[동서남북]부두|\d+번선석|컨테이너|^[ewEW]\d+$/.test(s);
+  // M6.18c: E7/W6 단축형 우선 통과 (2자라도 정상)
+  if (/^[ewEW]\d+$/.test(s)) return true;
+  // 영문 대문자 3-5자만 (시설 약어 코드: MBM, BCT, MIPO 등) → 차단
+  if (/^[A-Z]{3,5}$/.test(s)) return false;
+  // 1-2자 (너무 짧음, 단축형 제외) → 차단
+  if (s.length <= 2) return false;
+  return true;
 }
 
 export function getPierFromBerth(berthRaw) {
@@ -1618,14 +1622,14 @@ export function getPierFromBerth(berthRaw) {
 
 /**
  * M6.11: 부두 표시 양식 단축 — 동부두 → E, 서부두 → W
- * M6.18: 잘못된 형식(MBM 등 시설 코드)은 빈 문자열 반환 — HomePage 카드에서 표시 안 됨
+ * M6.18c: 시설 코드만 빈 문자열 반환, 그 외 모든 부두명 보존
  */
 export function formatBerth(berthRaw) {
   if (!berthRaw) return '';
   const s = String(berthRaw).trim();
-  // M6.18: 잘못된 형식은 표시 안 함
+  // M6.18c: 시설 코드만 차단, 그 외 모두 표시
   if (!isValidBerth(s)) return '';
-  // "동부두 N번선석" or "서부두 N번선석"
+  // "동부두 N번선석" or "서부두 N번선석" → E7/W6 단축형
   const m = s.match(/(동|서)부두\s*(\d+)\s*번\s*선석/);
   if (m) {
     const side = m[1] === '동' ? 'E' : 'W';
@@ -1633,7 +1637,7 @@ export function formatBerth(berthRaw) {
   }
   // 이미 E7/W6 형식이면 대문자로
   if (/^[ewEW]\d+$/.test(s)) return s.toUpperCase();
-  return s;  // 매칭 안 되면 원본 그대로
+  return s;  // 그 외는 원본 그대로 (BCT, "동부두7", "7선석" 등)
 }
 
 /**

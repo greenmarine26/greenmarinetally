@@ -781,12 +781,15 @@ export function fbSubscribePortMis(callback) {
 //   폰에서 캡처 → OCR → 추출된 ships 배열을 Firebase port_mis_data에 PUT
 //   key는 sanitized callsign. callsign 없으면 vesselName 사용 (안전망)
 // M6.18: berth 검증 — utils.js의 isValidBerth와 동일 패턴
-//   여기에 둠 (utils 순환 import 피하기 위해)
+// M6.18c: 블랙리스트 방식 — 명백한 시설 코드(영문 대문자 3-5자)만 차단
 function isValidBerthFb(b) {
   if (!b) return false;
   const s = String(b).trim();
   if (!s) return false;
-  return /[동서남북]부두|\d+번선석|컨테이너|^[ewEW]\d+$/.test(s);
+  if (/^[ewEW]\d+$/.test(s)) return true;       // E7/W6 단축형 예외
+  if (/^[A-Z]{3,5}$/.test(s)) return false;     // MBM/BCT 등 시설 코드
+  if (s.length <= 2) return false;
+  return true;
 }
 
 export async function fbSavePortMisBatch(ships) {

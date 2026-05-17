@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth} from '../utils.js';
+, formatBerth, isValidBerth } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -629,13 +629,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   - 다른 검수원도 즉시 공유 (Firebase 동기화)
         //   - voucher의 PIER/BERTH 자동 채움 효과
         // M6.13: 잘못된 berth 값 (MBM 등 코드) 검증 + 자동 정리
-        //   확장 v1.0.0 또는 옛 PORT-MIS 파서가 "MBM" 같은 시설 코드를 berth로 저장한 경우
-        //   부두 형식 ("동/서/남/북부두" 또는 "N번선석") 아니면 무시 + Firebase 정리
-        const isValidBerth = (b) => {
-          if (!b) return false;
-          const s = String(b).trim();
-          return /[동서남북]부두|\d+번선석|항\s*[A-Z]?\d+컨테이너|^[ewEW]\d+$/.test(s);
-        };
+        // M6.18c: utils.js의 isValidBerth 사용 (블랙리스트 방식)
+        //   확장 v1.0.0 또는 옛 PORT-MIS 파서가 "MBM" 같은 시설 코드를 berth로 저장한 경우 정리
         if (pm.berth && voyage?.info) {
           const currentBerth = voyage.info.berth || '';
           const currentPier = voyage.info.pier || '';
