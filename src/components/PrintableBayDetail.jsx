@@ -235,15 +235,18 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   else if (even != null) title = `BAY${dispBay(even)}`;
   else title = `BAY${dispBay(odd)}`;
 
-  // M4.9b: 항차 번호 표기 (양하 + 선적 분리 시 둘 다 표시)
+  // M6.16: mode 기반 항차번호 단일 표시 (PrintableCargoPlan과 동일 패턴)
   const voyD = voyageInfo?.voy_d || '';
   const voyL = voyageInfo?.voy_l || '';
   const voyFallback = voyageInfo?.voy || voyageKey || '';
   let voyDisplay;
-  if (voyD && voyL && voyD !== voyL) {
-    voyDisplay = `양하 ${voyD} / 선적 ${voyL}`;
+  if (mode === 'discharge') {
+    voyDisplay = voyD || voyFallback;
+  } else if (mode === 'loading') {
+    voyDisplay = voyL || voyFallback;
   } else {
-    voyDisplay = voyD || voyL || voyFallback;
+    if (voyD && voyL && voyD !== voyL) voyDisplay = `양하 ${voyD} / 선적 ${voyL}`;
+    else voyDisplay = voyD || voyL || voyFallback;
   }
 
   // M4.9b: POL 빈칸 (샘플 PDF와 동일 — 검수원이 수기 또는 향후 자동 채움)

@@ -1330,11 +1330,19 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         results.push(`✅ ${file.name}: 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
         // 항차 정보 자동 보완
         // M5.87: callsign + vsl도 자동 저장 (EDI TDT 세그먼트에서 추출 → PORT-MIS 매칭 자동화)
+        // M6.16: voy_d / voy_l 자동 저장 — 양하 EDI는 voy_d, 선적 EDI는 voy_l
+        //        검수원이 항차 등록 시 양하 voy만 입력해도 선적 EDI 업로드하면 선적 voy 자동 채워짐
         if (r.vsl && r.voy) {
           const infoPatch = {
             etd: r.etd || voyage.info.etd || '',
             carrier: r.carrier || voyage.info.carrier || '',
           };
+          // M6.16: mode에 맞는 voy 필드 자동 저장
+          if (mode === 'discharge') {
+            if (r.voy !== voyage.info.voy_d) infoPatch.voy_d = r.voy;
+          } else if (mode === 'loading') {
+            if (r.voy !== voyage.info.voy_l) infoPatch.voy_l = r.voy;
+          }
           // M5.87: callsign 자동 저장 (EDI에서 새로 추출됐고 voyage.info에 없거나 다르면)
           if (r.callsign && r.callsign !== voyage.info.callsign) {
             infoPatch.callsign = r.callsign;

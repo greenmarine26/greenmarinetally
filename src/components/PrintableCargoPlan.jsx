@@ -548,15 +548,22 @@ export default function PrintableCargoPlan({
   const vslShort = voyageInfo?.vsl || shipName || 'VESSEL';
   const vslFull = voyageInfo?.vslFull || '';
   const vsl = vslFull ? `${vslShort} ${vslFull}` : vslShort;
-  // M4.9b: 항차 번호 - 양하/선적 분리 시 둘 다 표시
+  // M6.16: mode 기반 항차번호 단일 표시
+  //   양하 카고플랜 → voy_d (양하 EDI 업로드 시 자동 저장)
+  //   선적 카고플랜 → voy_l (선적 EDI 업로드 시 자동 저장)
+  //   둘 다 없으면 voyage.info.voy (등록 시 입력값) 폴백
   const voyD = voyageInfo?.voy_d || '';
   const voyL = voyageInfo?.voy_l || '';
   const voyFallback = voyageInfo?.voy || voyageKey || '';
   let voy;
-  if (voyD && voyL && voyD !== voyL) {
-    voy = `양하 ${voyD} / 선적 ${voyL}`;
+  if (mode === 'discharge') {
+    voy = voyD || voyFallback;
+  } else if (mode === 'loading') {
+    voy = voyL || voyFallback;
   } else {
-    voy = voyD || voyL || voyFallback;
+    // 모드 미상 (모달 직접 호출 등) — 기존 동작 보존
+    if (voyD && voyL && voyD !== voyL) voy = `양하 ${voyD} / 선적 ${voyL}`;
+    else voy = voyD || voyL || voyFallback;
   }
 
   // M5.33: 컬럼 매칭 (단독 N의 컬럼 아래 = 짝꿍 (N+1)/(N+2) 또는 빈)
