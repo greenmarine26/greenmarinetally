@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.14c';
+export const APP_VERSION = 'M6.14d';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -187,6 +187,11 @@ export const SK = {
   loadingCompleted: 'loading_completed_v1',
   // M4.2: 인사말 하루 1회 — 마지막 인사 날짜(YYYY-MM-DD) 저장
   lastGreetingDay: 'master_last_greeting_day_v1',
+  // M6.14d: 검수원 본인 Gemini API 키 (localStorage)
+  //   M5.70에 패턴만 있고 SK 정의 누락되어 실제로는 작동 안 했던 버그 수정.
+  //   검수원이 폰에서 직접 입력 → 노출 차단되어도 5초 내 본인이 새 키 입력해서 복구.
+  geminiKey: 'master_gemini_api_key_v1',
+  geminiKeyLast6: 'master_gemini_api_key_last6_v1',   // 확인용 마지막 6자리 (UI 표시)
 };
 
 // === Helpers ===

@@ -28,6 +28,21 @@ export const GEMINI_API_KEY = 'AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY';
 const GEMINI_MODEL = 'gemini-2.5-flash';   // M5.80: Pro → Flash
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
+// M6.14d: 매 호출 시 localStorage에서 검수원 본인 키 우선 사용
+//   M5.70에 패턴만 있고 SK 정의/UI 누락되어 실제로는 작동 안 했던 버그 완전 수정.
+//   GEMINI_URL 상수는 폴백용으로 남기되, 활성 호출은 항상 getActiveGeminiUrl() 사용.
+function getActiveGeminiKey() {
+  try {
+    const userKey = localStorage.getItem('master_gemini_api_key_v1');
+    return userKey || GEMINI_API_KEY;
+  } catch {
+    return GEMINI_API_KEY;
+  }
+}
+function getActiveGeminiUrl() {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${getActiveGeminiKey()}`;
+}
+
 // ─── 도메인 지식 (systemInstruction에 들어감) ───────────────────────────────
 const DOMAIN_KNOWLEDGE = `
 [항만 도메인 지식 — 평택항 컨테이너 검수]
@@ -502,7 +517,7 @@ ${truncated ? `\n※ ${candidates.length}대 중 상위 ${MAX_CANDIDATES}대만 
   ];
 
   try {
-    const res = await fetch(GEMINI_URL, {
+    const res = await fetch(getActiveGeminiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

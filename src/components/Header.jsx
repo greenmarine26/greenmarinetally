@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, LogOut } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, LogOut, Key } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
+import GeminiKeyModal from './GeminiKeyModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
-import { getEquipNumber, setEquipNumber } from '../utils.js';
+import { getEquipNumber, setEquipNumber, _storage, SK } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
 
 export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager}) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   const [helpOpen, setHelpOpen] = useState(false);
+  const [keyOpen, setKeyOpen] = useState(false);   // M6.14d: Gemini 키 설정 모달
   // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
   const [equipOpen, setEquipOpen] = useState(false);
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  // M6.14d: 사용자 키 미설정 시 경고 (헤더 키 버튼 점멸)
+  const hasUserKey = !!_storage.get(SK.geminiKey);
 
   const handleLogoutOrExit = () => {
     if (onLogout) {
@@ -74,6 +78,18 @@ export default function Header({ version, inspector, online, route, voyages, onC
           >
             <HelpCircle className="w-4 h-4 text-amber-300"/>
           </button>
+          {/* M6.14d: Gemini API 키 설정 — 사용자 키 미설정 시 빨간 점멸 */}
+          <button
+            onClick={() => setKeyOpen(true)}
+            title={hasUserKey ? 'Gemini API 키 (본인 키 설정됨)' : 'Gemini API 키 설정 필요 (현재 차단된 내장 키 사용)'}
+            className={`p-1.5 rounded border ${
+              hasUserKey
+                ? 'bg-emerald-900/30 hover:bg-emerald-900/60 border-emerald-700/40'
+                : 'bg-red-900/40 hover:bg-red-900/70 border-red-600/60 animate-pulse'
+            }`}
+          >
+            <Key className={`w-4 h-4 ${hasUserKey ? 'text-emerald-300' : 'text-red-300'}`}/>
+          </button>
           {/* M3.5.6: 장비 번호 빠른 변경 */}
           <button
             onClick={() => setEquipOpen(true)}
@@ -113,6 +129,8 @@ export default function Header({ version, inspector, online, route, voyages, onC
         </div>
       </div>
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
+      {/* M6.14d: Gemini API 키 설정 모달 */}
+      {keyOpen && <GeminiKeyModal onClose={() => setKeyOpen(false)} />}
       {/* M5.0: ContainerPhrasebook은 HelpModal 안에서 호출됨 */}
 
       {/* M3.5.6: 장비 번호 선택 모달 */}

@@ -1562,6 +1562,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     // M3.5.3: PDF/사진 자동 분기 (mixerUpload 모듈 활용)
     const { detectFileType, extractPdfText, parsePdfContainers, ocrImageContainers } = await import('../mixerUpload.js');
     const { GEMINI_API_KEY } = await import('../gemini.js');
+    // M6.14d: 검수원 본인 키 우선 사용
+    const { _storage, SK } = await import('../utils.js');
+    const geminiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
 
     for (const file of Array.from(files)) {
       try {
@@ -1581,12 +1584,12 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         } else if (ftype === 'image') {
           // 사진 OCR
           setStatus(`📷 ${file.name} 사진 분석 중 (Gemini Vision)...`);
-          if (!GEMINI_API_KEY) {
-            results.push(`❌ ${file.name}: Gemini API 키 없음`);
+          if (!geminiKey) {
+            results.push(`❌ ${file.name}: Gemini API 키 없음 (헤더 🔑 버튼에서 설정)`);
             continue;
           }
           try {
-            const parsed = await ocrImageContainers(file, GEMINI_API_KEY);
+            const parsed = await ocrImageContainers(file, geminiKey);
             records = Object.values(parsed.containers || {});
             if (records.length === 0) {
               results.push(`❌ ${file.name}: 사진에서 컨번호 인식 실패 (선명한 사진 권장)`);

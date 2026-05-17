@@ -14,6 +14,7 @@ import React, { useState, useEffect } from 'react';
 import { X, FileText, Loader2, CheckCircle2, AlertTriangle, Save, Eye } from 'lucide-react';
 import { ocrStowagePdf, stowageToBayDictEntry, GEMINI_API_KEY } from '../gemini.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
+import { _storage, SK } from '../utils.js';
 
 // NBTD/MCSC 등 절대 덮어쓰면 안 되는 정밀 등록 코드 (사용자 영구 규칙)
 const PROTECTED_CODES = ['NBTD', 'MCSC'];
@@ -33,7 +34,9 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
     (async () => {
       try {
         setPhase('analyzing');
-        const data = await ocrStowagePdf(file, GEMINI_API_KEY);
+        // M6.14d: 검수원 본인 키 우선 사용, 없으면 내장 키 폴백
+        const apiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
+        const data = await ocrStowagePdf(file, apiKey);
         if (cancelled) return;
         setStowageData(data);
         // code 자동 추정
