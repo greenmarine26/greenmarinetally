@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-} from '../utils.js';
+, formatBerth} from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -650,17 +650,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               {/* M5.82: 부두 정보 강조 표시 (가장 왼쪽) */}
               {pm.pier === 'PCTC' && (
                 <span className="bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded font-bold text-xs">
-                  📍 PCTC · {pm.berth}
+                  📍 PCTC · {formatBerth(pm.berth)}
                 </span>
               )}
               {pm.pier === 'PNCT' && (
                 <span className="bg-purple-900/60 border border-purple-700/50 text-purple-200 px-2 py-0.5 rounded font-bold text-xs">
-                  📍 PNCT · {pm.berth}
+                  📍 PNCT · {formatBerth(pm.berth)}
                 </span>
               )}
               {!pm.pier && pm.berth && (
                 <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs">
-                  📍 {pm.berth}
+                  📍 {formatBerth(pm.berth)}
                 </span>
               )}
               {!pm.berth && !fallbackInfo?.isFallback && (

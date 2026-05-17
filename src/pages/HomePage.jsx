@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2 } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION , formatBerth} from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
@@ -423,12 +423,12 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete }) {
             {/* M5.82: 부두 배지 */}
             {pier === 'PCTC' && (
               <span className="text-[9px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
-                📍 PCTC {berth ? `· ${berth}` : ''}
+                📍 PCTC {berth ? `· ${formatBerth(berth)}` : ''}
               </span>
             )}
             {pier === 'PNCT' && (
               <span className="text-[9px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
-                📍 PNCT {berth ? `· ${berth}` : ''}
+                📍 PNCT {berth ? `· ${formatBerth(berth)}` : ''}
               </span>
             )}
             {!pier && berth && (

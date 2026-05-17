@@ -7,6 +7,7 @@
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
+import { formatBerth } from './utils.js';
 const PORT_MAP = {
   // 표준 5자
   'KRPUS': 'PUS', 'KRKAN': 'KAN', 'KRPTK': 'PTK', 'KRINC': 'INC',
@@ -317,7 +318,7 @@ function generateVoucherHTML(voyage, mode = 'settlement', overrides = {}) {
     }
   }
   const pier = autoPier || 'PCTC';   // 폴백: 평택항 주력 부두
-  const berth = berthRaw || '-';
+  const berth = berthRaw ? formatBerth(berthRaw) : '-';  // M6.11: E7/W6 단축 양식
   const port = info.port || 'PYEONGTAEK, KOREA';
 
   // op 등장 set (실제 데이터)

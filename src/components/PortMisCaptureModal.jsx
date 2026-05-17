@@ -7,7 +7,7 @@ import { X, Camera, Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet,
 import { ocrPortMisCapture } from '../mixerUpload.js';
 import { fbSavePortMisBatch, fbReplacePortMisBatch, fbSubscribePortMis, db } from '../firebase.js';
 import { ref, remove } from 'firebase/database';
-import { _storage, SK, parsePortMisExcel, getPierFromBerth } from '../utils.js';
+import { _storage, SK, parsePortMisExcel, getPierFromBerth, formatBerth } from '../utils.js';
 import { GEMINI_API_KEY } from '../gemini.js';
 
 export default function PortMisCaptureModal({ onClose }) {
@@ -249,7 +249,7 @@ export default function PortMisCaptureModal({ onClose }) {
                             val.pier === 'PCTC' ? 'bg-blue-900/60 text-blue-200' :
                             val.pier === 'PNCT' ? 'bg-purple-900/60 text-purple-200' :
                             'bg-slate-700 text-slate-400'
-                          }`}>{val.pier || '?'} · {val.berth}</span>
+                          }`}>{val.pier || '?'} · {formatBerth(val.berth)}</span>
                         ) : (
                           <span className="text-[10px] text-red-400">⚠ 옛 데이터</span>
                         )}
@@ -328,12 +328,12 @@ export default function PortMisCaptureModal({ onClose }) {
                       {/* M5.82: 부두 배지 */}
                       {s.pier === 'PCTC' && (
                         <span className="text-[10px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
-                          PCTC · {s.berth}
+                          PCTC · {formatBerth(s.berth)}
                         </span>
                       )}
                       {s.pier === 'PNCT' && (
                         <span className="text-[10px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
-                          PNCT · {s.berth}
+                          PNCT · {formatBerth(s.berth)}
                         </span>
                       )}
                       {!s.pier && s.berth && (

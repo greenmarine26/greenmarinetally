@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.10';
+export const APP_VERSION = 'M6.11';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1592,6 +1592,26 @@ export function getPierFromBerth(berthRaw) {
 }
 
 /**
+ * M6.11: 부두 표시 양식 단축 — 동부두 → E, 서부두 → W
+ * @example formatBerth("동부두 8번선석") → "E8"
+ * @example formatBerth("서부두 6번선석") → "W6"
+ * @example formatBerth("E7") → "E7" (이미 단축형이면 그대로)
+ */
+export function formatBerth(berthRaw) {
+  if (!berthRaw) return '';
+  const s = String(berthRaw).trim();
+  // "동부두 N번선석" or "서부두 N번선석"
+  const m = s.match(/(동|서)부두\s*(\d+)\s*번\s*선석/);
+  if (m) {
+    const side = m[1] === '동' ? 'E' : 'W';
+    return `${side}${m[2]}`;
+  }
+  // 이미 E7/W6 형식이면 대문자로
+  if (/^[ewEW]\d+$/.test(s)) return s.toUpperCase();
+  return s;  // 매칭 안 되면 원본 그대로
+}
+
+/**
  * 평택항 부두 좌표 (대략)
  * 사용자가 현장 GPS로 한 번 측정 후 갱신 권장
  * PCTC: 동부두 6~9번선석 (구 컨테이너 터미널)
@@ -1662,7 +1682,7 @@ export async function parsePortMisExcel(arrayBuffer) {
         voyType:   row.findIndex(c => /^구분$/.test(c)),
         inOut:     row.findIndex(c => /외내|외내항/.test(c)),
         ibObPrt:   row.findIndex(c => /^입출$/.test(c)),
-        berthRaw:  row.findIndex(c => /계선장소/.test(c)),  // "동부두 7번선석"
+        berthRaw:  row.findIndex(c => /계선장소(?![부두번호코드])/.test(c)),  // "동부두 7번선석" (M6.11: "계선장소부두/번호/코드" 제외, "계선장소"/"계선장소(...)" 매칭)
         nextPort:  row.findIndex(c => /차항지/.test(c)),
         usage:     row.findIndex(c => /선박용도/.test(c)),
       };
