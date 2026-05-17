@@ -79,9 +79,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
   const [listFilter, setListFilter] = useState('all');
 
-  // M6.14: STOWAGE PDF 자동 분석 검토 모달
-  const [stowagePdfFile, setStowagePdfFile] = useState(null);
-
   // 선박 정책 Firebase 구독
   useEffect(() => {
     const unsub = fbSubscribeShipPolicies(db, (data) => setExtraPolicies(data || {}));
@@ -931,7 +928,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
       )}
       {tab === 'data' && (
-        <DataTab voyageKey={voyageKey} mode={mode} voyage={voyage} setMode={setMode} />
+        <DataTab voyageKey={voyageKey} mode={mode} voyage={voyage} setMode={setMode} inspector={inspector} />
       )}
 
       {/* 컨테이너 상세 모달 */}
@@ -1094,12 +1091,14 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // 옛 BayTab 제거 (BayPlan 컴포넌트로 대체됨)
 
 // === 자료 탭 ===
-function DataTab({ voyageKey, mode, voyage, setMode }) {
+function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   const [status, setStatus] = useState('');
   // M3.5.4-fix2: 업로드 충돌 검토 모달
   const [conflictData, setConflictData] = useState(null);
   // M3.74: prompt() 대체 - 카드형 3택 모달
   const [choiceState, askChoice] = useChoice();
+  // M6.14a: STOWAGE PDF 자동 분석 검토 모달 — DataTab 스코프에서만 사용
+  const [stowagePdfFile, setStowagePdfFile] = useState(null);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
