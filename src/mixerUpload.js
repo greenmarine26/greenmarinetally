@@ -126,6 +126,25 @@ export async function extractPdfText(file) {
   return allLines.join('\n');
 }
 
+// ─── M6.14: STOWAGE INSTRUCTION PDF 자동 판별 ───
+// STOWAGE PDF의 특징적 키워드를 PDF 텍스트에서 검색
+// 양하 리스트 PDF와 구분하기 위함
+//   양하 리스트: 컨테이너번호 표 (BEAU4688310 등 4자영문+7자숫자)
+//   STOWAGE: 베이 구조 표 (BAY 01, BAY (04) 05, deck/hold tier 격자)
+export function isStowagePdf(textOrFilename) {
+  const t = String(textOrFilename || '').toUpperCase();
+  // 파일명 또는 내용에 STOWAGE/LOADING PLAN/적재계획/답안지 키워드
+  if (/STOWAGE\s*INSTRUCTION|STOWAGE\s*PLAN|LOADING\s*PLAN|LOAD\s*PLAN|적재\s*계획|답안지|HATCH\s*PLAN/i.test(t)) {
+    return true;
+  }
+  // 베이 패턴 (BAY 01, BAY (04) 05) 다수 + tier 번호 (80, 82, 84, 86, 88, 90)
+  const bayMatches = t.match(/BAY\s*(\(?\d{1,2}\)?\s*)+\d{1,2}/gi) || [];
+  const tierMatches = t.match(/\b(80|82|84|86|88|90|92|94|96)\b/g) || [];
+  // 베이 5개 이상 + tier 10개 이상이면 STOWAGE로 판단
+  if (bayMatches.length >= 5 && tierMatches.length >= 10) return true;
+  return false;
+}
+
 // ─── PDF 텍스트에서 컨테이너 리스트 파싱 ───
 // 동진해운 양식 검증 완료, 다른 선사도 컬럼 패턴 비슷하면 작동
 // 결과: { vsl, voy, pol, pod, mode, containers: { cn: {cn, sl, wt, iso, fe, pol, pod} } }

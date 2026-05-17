@@ -550,3 +550,247 @@ export function isFreeFormQuestion(text) {
   if (t.length >= 8) return true;
   return false;
 }
+
+// ─── M6.14: STOWAGE INSTRUCTION PDF 자동 분석 ──────────────────────────────
+// PDF 파일을 application/pdf MIME으로 Gemini에 직접 전송
+// 사진 변환 단계 없음 — Gemini가 PDF를 네이티브로 처리
+// 다중 페이지/표/도식 모두 한 번에 처리
+
+const STOWAGE_PROMPT = `이 PDF는 컨테이너 선박의 STOWAGE INSTRUCTION (적재/양하 답안지)입니다.
+선박의 모든 베이 구조와 적재 현황이 그려져 있습니다.
+
+이 PDF를 분석해서 다음 JSON 형식으로 응답하세요. JSON만 출력, 다른 설명 없음:
+
+{
+  "vesselName": "선박명 (PDF 헤더에서 추출, 예: XIN TAI PING)",
+  "voyageNo": "항차번호 (예: 458W)",
+  "pol": "POL 코드 (예: PTK 또는 KRPTK)",
+  "date": "날짜 (YYYY-MM-DD)",
+  "bays": [
+    {
+      "bayNo": 1,
+      "bayLabel": "BAY 01 또는 BAY (04) 05",
+      "isPair": false,
+      "pairEvenNo": null,
+      "isStandalone": true,
+      "hasHold": true,
+      "hasDeck": true,
+      "deckTiers": [86, 84, 82],
+      "holdTiers": [6, 4, 2],
+      "extraTier": null,
+      "loadCounts": {"_20": 0, "_40": 0, "_45": 0},
+      "loadSymbols": ["X", "G", "T"]
+    }
+  ],
+  "totals": {"_20": 0, "_40": 0, "_45": 0}
+}
+
+베이 데이터 추출 규칙 (매우 중요):
+1. bayNo: 표시된 홀수 베이 번호 (트윈이면 홀수)
+2. bayLabel: PDF에 적힌 그대로 (BAY 13 또는 BAY (14) 15)
+3. isPair: 짝꿍 짝수가 괄호로 표시되면 true
+4. pairEvenNo: 짝꿍 짝수 번호 (단독이면 null)
+5. isStandalone: 짝수 짝꿍이 없으면 true (BOW/STERN/선원건물 앞뒤 가능)
+6. hasHold: hold tier(02, 04, 06, 08, 10, 12, 14)가 그려져 있으면 true. 비어있으면 false (데크 전용)
+7. hasDeck: deck tier(80, 82, 84, 86, 88, 90, 92, 94, 96)가 그려져 있으면 true
+8. deckTiers: 베이에 실제 표시된 deck tier만 (높→낮 순)
+9. holdTiers: 베이에 실제 표시된 hold tier만 (높→낮 순). 데크 전용이면 []
+10. extraTier: 80 또는 90이 별도 위치에 있으면 그 숫자, 없으면 null
+11. loadCounts: 베이 라벨 옆 "0 / 26 / 0" 패턴 → {_20: 0, _40: 26, _45: 0}
+12. loadSymbols: 베이 내부에 표시된 마크 종류 (중복 제외)
+
+중요:
+- 추론하지 말고 PDF에 그려진 그대로만 추출
+- 베이가 PDF에 없으면 절대 만들어내지 말 것
+- tier 숫자는 PDF에 적힌 그대로 정수 추출
+- 데크와 hold 구분: tier >= 80 이면 deck, < 80 이면 hold`;
+
+export async function ocrStowagePdf(file, geminiApiKey) {
+  if (!geminiApiKey) throw new Error('Gemini API 키 없음');
+  if (!file) throw new Error('PDF 파일 없음');
+
+  // PDF 파일을 base64로 변환 (사진 변환 없음 — 그대로 전송)
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      const b64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(b64);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+  // 파일 크기 체크 (Gemini inline_data 한도 ~20MB)
+  const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+  if (file.size > 20 * 1024 * 1024) {
+    throw new Error(`PDF 크기 초과: ${sizeMB}MB (한도 20MB)`);
+  }
+
+  // M6.14: PDF를 application/pdf MIME으로 직접 전송 — Gemini 네이티브 처리
+  // gemini-2.5-pro 사용 (베이 격자 분석은 정밀도가 더 중요하므로 Pro 모델)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiApiKey}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: STOWAGE_PROMPT },
+          {
+            inline_data: {
+              mime_type: 'application/pdf',
+              data: base64,
+            },
+          },
+        ],
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 32768,
+        responseMimeType: 'application/json',
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini API 오류 ${response.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text) throw new Error('Gemini 응답 비어있음');
+
+  let parsed;
+  try {
+    const clean = text.replace(/```json|```/g, '').trim();
+    parsed = JSON.parse(clean);
+  } catch (e) {
+    throw new Error(`Gemini 응답 JSON 파싱 실패: ${e.message}\n응답: ${text.slice(0, 500)}`);
+  }
+
+  return parsed;
+}
+
+/**
+ * M6.14: Gemini 추출 결과를 shipBayDict_v2 entry 양식으로 변환
+ * NBTD/MCSC 양식과 완전 호환 — addToUserBayDict + fbSaveShipBayDict로 저장 가능
+ *
+ * @param {object} stowageData - ocrStowagePdf 결과
+ * @param {string} fileName - 원본 PDF 파일명
+ * @param {object} extra - { code, callsign, imo } 사용자 보완 정보
+ * @returns {object} entry
+ */
+export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
+  const bays = Array.isArray(stowageData?.bays) ? stowageData.bays : [];
+  const sortedBays = [...bays].sort((a, b) => (a.bayNo || 0) - (b.bayNo || 0));
+
+  const bayList = [];
+  const baysSummary = [];
+  const pairs = [];
+  const standalone = [];
+  let section = 1;
+  let prevDeckSig = '';
+  let prevHoldSig = '';
+  let prevExtra = null;
+
+  sortedBays.forEach((b) => {
+    const deckTiers = Array.isArray(b.deckTiers) ? b.deckTiers : [];
+    const holdTiers = Array.isArray(b.holdTiers) ? b.holdTiers : [];
+    const extraTier = b.extraTier || null;
+    const hasHold = b.hasHold === true && holdTiers.length > 0;
+    const hasDeck = b.hasDeck !== false && deckTiers.length > 0;
+    const isStandalone = b.isStandalone === true || !b.isPair;
+
+    // 섹션 자동 분류 (같은 deck/hold/extraTier 패턴이 묶임)
+    const deckSig = deckTiers.join(',');
+    const holdSig = holdTiers.join(',');
+    if (prevDeckSig !== '' && (deckSig !== prevDeckSig || holdSig !== prevHoldSig || extraTier !== prevExtra)) {
+      section++;
+    }
+    prevDeckSig = deckSig;
+    prevHoldSig = holdSig;
+    prevExtra = extraTier;
+
+    const bayNoStr = String(b.bayNo).padStart(2, '0');
+
+    if (b.isPair && b.pairEvenNo) {
+      const evenStr = String(b.pairEvenNo).padStart(2, '0');
+      bayList.push(evenStr);
+      baysSummary.push({
+        bayNo: evenStr,
+        section,
+        hasHold,
+        hasDeck,
+        isStandalone: false,
+        deckTiers,
+        holdTiers,
+        ...(extraTier ? { extraTier } : {}),
+      });
+      pairs.push([b.pairEvenNo, b.bayNo]);
+    } else if (isStandalone) {
+      standalone.push(b.bayNo);
+    }
+
+    bayList.push(bayNoStr);
+    baysSummary.push({
+      bayNo: bayNoStr,
+      section,
+      hasHold,
+      hasDeck,
+      isStandalone,
+      deckTiers,
+      holdTiers,
+      ...(extraTier ? { extraTier } : {}),
+    });
+  });
+
+  // 선박 전역 max
+  const allDeck = baysSummary.flatMap(b => b.deckTiers);
+  const allHold = baysSummary.flatMap(b => b.holdTiers);
+  const allExtra = baysSummary.map(b => b.extraTier).filter(Boolean);
+  const deckTiersMax = [...new Set(allDeck)].sort((a, b) => b - a);
+  const holdTiersMax = [...new Set(allHold)].sort((a, b) => b - a);
+  const extraDeckTier = allExtra.length > 0 ? Math.max(...allExtra) : null;
+
+  const vesselName = stowageData?.vesselName || '';
+  const code = (extra.code || vesselName.replace(/\s+/g, '').slice(0, 4)).toUpperCase();
+  const callsign = extra.callsign || '';
+  const imo = extra.imo || '';
+
+  return {
+    code,
+    name: vesselName,
+    callsign,
+    imo,
+    caspVersion: '',
+    sourceCreatedDate: stowageData?.date?.replace(/-/g, '') || '',
+    bayDef: {
+      sourceFile: fileName,
+      parsedAt: new Date().toISOString(),
+      parserVersion: 'M6.14-stowage-pdf-ai',
+      methodology: 'STOWAGE_INSTRUCTION_PDF_AI_GEMINI',
+      recordCount: bayList.length,
+      sectionCount: section,
+      blockSize: 0,
+      bayList,
+      baysSummary,
+      rowMaxEven: 8,
+      rowMaxOdd: 7,
+      deckTiers: deckTiersMax,
+      holdTiers: holdTiersMax,
+      ...(extraDeckTier ? { extraDeckTier } : {}),
+      verified: false,         // 사용자 검토 후 true로 변경
+      grade: 'ai-extracted',
+      _stowageMeta: {
+        voyageNo: stowageData?.voyageNo || '',
+        pol: stowageData?.pol || '',
+        totals: stowageData?.totals || null,
+        pairs,
+        standalone,
+      },
+    },
+  };
+}

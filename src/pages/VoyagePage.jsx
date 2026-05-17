@@ -41,6 +41,7 @@ import DisplacedSidebar from '../components/DisplacedSidebar.jsx';
 import StorageBox from '../components/StorageBox.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
+import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
@@ -77,6 +78,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [closingOpen, setClosingOpen] = useState(false);
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
   const [listFilter, setListFilter] = useState('all');
+
+  // M6.14: STOWAGE PDF 자동 분석 검토 모달
+  const [stowagePdfFile, setStowagePdfFile] = useState(null);
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
@@ -1183,7 +1187,9 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
     let prevStruct = null;        // 기존 학습된 구조
 
     // M4.4: .def 파일 분리 처리 — 컨테이너 데이터 없음, 베이사전만 등록
+    // M6.14: STOWAGE PDF도 분리 처리 — Gemini Vision으로 베이 구조 추출
     const defFiles = [];
+    const stowagePdfFiles = [];  // M6.14
     const ediCandidates = [];
     for (const file of Array.from(files)) {
       const isDefByExt = /\.def$/i.test(file.name);
@@ -1200,7 +1206,41 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           continue;
         }
       } catch (e) {}
+
+      // M6.14: PDF면 STOWAGE 여부 자동 판별
+      const isPdfByExt = /\.pdf$/i.test(file.name);
+      if (isPdfByExt) {
+        try {
+          // 파일명에 STOWAGE/LOAD/PLAN/답안지 키워드면 즉시 분리
+          const { isStowagePdf, extractPdfText } = await import('../mixerUpload.js');
+          if (isStowagePdf(file.name)) {
+            stowagePdfFiles.push(file);
+            continue;
+          }
+          // 파일명만으로 판별 어려운 경우, PDF 텍스트 한 번 읽어 검사
+          // (양하 리스트와 STOWAGE 구분)
+          const text = await extractPdfText(file);
+          if (isStowagePdf(text)) {
+            stowagePdfFiles.push(file);
+            continue;
+          }
+        } catch (e) {
+          // 판별 실패 → 일반 EDI 후보로 진행
+        }
+      }
+
       ediCandidates.push(file);
+    }
+
+    // M6.14: STOWAGE PDF 처리 — 첫 번째 파일만 모달로 열기 (사용자 검토)
+    //   여러 PDF면 사용자가 하나씩 처리하도록 (정확성 우선)
+    if (stowagePdfFiles.length > 0) {
+      setStowagePdfFile(stowagePdfFiles[0]);
+      if (stowagePdfFiles.length > 1) {
+        results.push(`📄 STOWAGE PDF ${stowagePdfFiles.length}개 검출 — 첫 번째 처리 후 나머지는 다시 업로드해주세요`);
+      } else {
+        results.push(`📄 STOWAGE PDF 자동 분석 시작: ${stowagePdfFiles[0].name}`);
+      }
     }
 
     // .def 파일 먼저 처리 (베이사전 등록)
@@ -1735,10 +1775,22 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           onClose={() => setShowPrintHub(false)}
         />
       )}
+      {/* M6.14: STOWAGE PDF 자동 분석 검토 모달 */}
+      {stowagePdfFile && (
+        <StowageReviewModal
+          file={stowagePdfFile}
+          inspector={inspector}
+          onClose={() => setStowagePdfFile(null)}
+          onRegistered={() => {
+            // 등록 성공 시 자동으로 모달 닫고 사용자에게 즉시 반영 안내
+            setStatus('✅ 베이사전 등록 완료 — 새로고침하면 베이플랜에 반영됩니다');
+          }}
+        />
+      )}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400"/>
-          1. EDI / ASC (필수) <span className="text-[10px] text-cyan-400 font-normal">+ .def (선박 구조)</span>
+          1. EDI / ASC (필수) <span className="text-[10px] text-cyan-400 font-normal">+ .def / STOWAGE PDF</span>
         </div>
         <input ref={ediRef} type="file" multiple accept="*/*"
           onChange={e => handleEdiUpload(e.target.files)}
@@ -1747,6 +1799,7 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
           <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
           <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
+          <br/><span className="text-purple-300">📄 STOWAGE PDF (답안지) 끌어 놓으면 Gemini가 자동 분석 → 베이사전 정밀 등록 (M6.14)</span>
         </div>
 
         {/* M5.11: 보관된 EDI 원본 + 재처리 버튼 */}
