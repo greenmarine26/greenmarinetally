@@ -627,9 +627,10 @@ export async function ocrStowagePdf(file, geminiApiKey) {
     throw new Error(`PDF 크기 초과: ${sizeMB}MB (한도 20MB)`);
   }
 
-  // M6.14: PDF를 application/pdf MIME으로 직접 전송 — Gemini 네이티브 처리
-  // gemini-2.5-pro 사용 (베이 격자 분석은 정밀도가 더 중요하므로 Pro 모델)
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${geminiApiKey}`;
+  // M6.14c (핫픽스): Pro → Flash (Pro 무료 할당량 50 RPD 즉시 소진 문제)
+  //   Flash: 1500 RPD, 15 RPM — 검수원 15명이 공유해도 충분
+  //   PDF 베이 격자 분석은 Flash로도 정확도 확보 가능 (Flash는 PDF 네이티브 지원)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -656,6 +657,25 @@ export async function ocrStowagePdf(file, geminiApiKey) {
 
   if (!response.ok) {
     const errText = await response.text();
+    // M6.14c: 주요 오류는 검수원이 이해하기 쉬운 메시지로 변환
+    if (response.status === 429) {
+      throw new Error(
+        'Gemini 무료 할당량 초과 (분당 15회 또는 일일 1500회).\n' +
+        '잠시 후(1~5분) 다시 시도하거나, 내일 다시 시도하세요.\n' +
+        '자주 발생하면 관리자에게 빌링 활성화 요청하세요.'
+      );
+    }
+    if (response.status === 400) {
+      throw new Error(
+        'PDF 형식 오류 또는 너무 큼.\n' +
+        '다른 STOWAGE PDF로 재시도하거나 PDF 크기 확인 (한도 20MB).'
+      );
+    }
+    if (response.status >= 500) {
+      throw new Error(
+        'Gemini 서버 일시 오류. 1~2분 후 재시도하세요.'
+      );
+    }
     throw new Error(`Gemini API 오류 ${response.status}: ${errText.slice(0, 300)}`);
   }
 
