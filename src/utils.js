@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.11';
+export const APP_VERSION = 'M6.12';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1694,6 +1694,24 @@ export async function parsePortMisExcel(arrayBuffer) {
     }
 
     if (headerRow < 0) continue;
+
+    // M6.12: PORT-MIS의 "계선장소" 헤더 다음 2개 컬럼이 (선석번호) + (실제 명칭)
+    //   16: 계선장소 코드 ("MBM") ← 헤더 매칭됨
+    //   17: 선석번호 ("07")
+    //   18: 계선장소 명칭 ("동부두 7번선석") ← 진짜 원하는 컬럼
+    //   첫 데이터 행에서 "동/서/남/북부두" 또는 "N번선석" 패턴 있는 컬럼을 찾아 colMap 보정
+    const firstDataRow = grid[headerRow + 1] || [];
+    let berthTextIdx = -1;
+    for (let j = 0; j < firstDataRow.length; j++) {
+      const v = String(firstDataRow[j] || '').trim();
+      if (/[동서남북]부두|N번선석|\d+번선석|항\s*[A-Z]?\d+컨테이너/.test(v)) {
+        berthTextIdx = j;
+        break;
+      }
+    }
+    if (berthTextIdx >= 0) {
+      colMap.berthRaw = berthTextIdx;
+    }
 
     // 데이터 행
     for (let i = headerRow + 1; i < grid.length; i++) {
