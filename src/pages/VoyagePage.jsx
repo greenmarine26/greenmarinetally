@@ -627,21 +627,45 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   - voyage.info의 berth/pier가 PORT-MIS와 다르면 갱신 (선박 부두 이동 대응)
         //   - 다른 검수원도 즉시 공유 (Firebase 동기화)
         //   - voucher의 PIER/BERTH 자동 채움 효과
+        // M6.13: 잘못된 berth 값 (MBM 등 코드) 검증 + 자동 정리
+        //   확장 v1.0.0 또는 옛 PORT-MIS 파서가 "MBM" 같은 시설 코드를 berth로 저장한 경우
+        //   부두 형식 ("동/서/남/북부두" 또는 "N번선석") 아니면 무시 + Firebase 정리
+        const isValidBerth = (b) => {
+          if (!b) return false;
+          const s = String(b).trim();
+          return /[동서남북]부두|\d+번선석|항\s*[A-Z]?\d+컨테이너|^[ewEW]\d+$/.test(s);
+        };
         if (pm.berth && voyage?.info) {
           const currentBerth = voyage.info.berth || '';
           const currentPier = voyage.info.pier || '';
-          // M5.82 hotfix: 같은 값 아니면 갱신 (이전: 비어있을 때만 갱신했음)
-          const needsUpdate = (pm.berth && currentBerth !== pm.berth) ||
-                              (pm.pier && currentPier !== pm.pier);
-          if (needsUpdate) {
-            const patch = {};
-            if (pm.berth && currentBerth !== pm.berth) patch.berth = pm.berth;
-            if (pm.pier && currentPier !== pm.pier) patch.pier = pm.pier;
-            // 비동기 업데이트 (블로킹 X)
-            fbUpdateVoyageInfo(voyageKey, patch).catch(e =>
-              console.warn('[M5.82] voyage.info berth 자동 저장 실패:', e)
+          const pmBerthValid = isValidBerth(pm.berth);
+          const currentBerthInvalid = currentBerth && !isValidBerth(currentBerth);
+          // 케이스 1: pm.berth가 잘못된 형식 (MBM 등) → 갱신 skip
+          // 케이스 2: pm.berth가 정상 + currentBerth가 잘못된 형식 → 갱신
+          // 케이스 3: 둘 다 정상 + 다른 값 → 갱신
+          // 케이스 4: currentBerth가 잘못된 형식 + pm.berth 없음 → Firebase 정리 (berth: null)
+          if (pmBerthValid) {
+            const needsUpdate = (currentBerth !== pm.berth) ||
+                                (pm.pier && currentPier !== pm.pier);
+            if (needsUpdate) {
+              const patch = {};
+              if (currentBerth !== pm.berth) patch.berth = pm.berth;
+              if (pm.pier && currentPier !== pm.pier) patch.pier = pm.pier;
+              fbUpdateVoyageInfo(voyageKey, patch).catch(e =>
+                console.warn('[M6.13] voyage.info berth 자동 저장 실패:', e)
+              );
+            }
+          } else if (currentBerthInvalid) {
+            // 옛 잘못된 값 정리 — berth, pier 둘 다 초기화 (사용자가 엑셀 재업로드 시 정상 채워짐)
+            fbUpdateVoyageInfo(voyageKey, { berth: '', pier: '' }).catch(e =>
+              console.warn('[M6.13] voyage.info berth 자동 정리 실패:', e)
             );
           }
+        } else if (voyage?.info?.berth && !isValidBerth(voyage.info.berth)) {
+          // pm 없어도 voyage.info.berth가 잘못된 형식이면 정리
+          fbUpdateVoyageInfo(voyageKey, { berth: '', pier: '' }).catch(e =>
+            console.warn('[M6.13] voyage.info berth 자동 정리 실패:', e)
+          );
         }
         return (
           <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 text-sm">
