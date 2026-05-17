@@ -1777,6 +1777,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         <StowageReviewModal
           file={stowagePdfFile}
           inspector={inspector}
+          voyage={voyage}  /* M6.14e: 항차 정보 자동 채우기용 */
           onClose={() => setStowagePdfFile(null)}
           onRegistered={() => {
             // 등록 성공 시 자동으로 모달 닫고 사용자에게 즉시 반영 안내

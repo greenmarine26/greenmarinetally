@@ -19,11 +19,18 @@ import { _storage, SK } from '../utils.js';
 // NBTD/MCSC 등 절대 덮어쓰면 안 되는 정밀 등록 코드 (사용자 영구 규칙)
 const PROTECTED_CODES = ['NBTD', 'MCSC'];
 
-export default function StowageReviewModal({ file, onClose, onRegistered, inspector }) {
+export default function StowageReviewModal({ file, onClose, onRegistered, inspector, voyage }) {
   const [phase, setPhase] = useState('analyzing'); // analyzing | review | saving | done | error
   const [error, setError] = useState('');
   const [stowageData, setStowageData] = useState(null);
-  const [extra, setExtra] = useState({ code: '', callsign: '', imo: '' });
+  // M6.14e: 항차 정보 자동 채우기 — 검수원이 항차 생성 시 입력한 코드/콜사인/IMO 그대로 사용
+  //   원인: Gemini는 PDF에서 vesselName만 정확히 추출 가능. 검수원이 평소 쓰는 약자는 모름.
+  //   해결: 자료 탭에서 PDF 등록 시 현재 항차의 voyage.info 데이터를 미리 채워서 매칭 보장.
+  const [extra, setExtra] = useState({
+    code: (voyage?.info?.vsl || '').toUpperCase().replace(/\s+/g, ''),
+    callsign: (voyage?.info?.callsign || '').toUpperCase(),
+    imo: voyage?.info?.imo || '',
+  });
   const [showRaw, setShowRaw] = useState(false);
   const [savedResult, setSavedResult] = useState(null);
 
@@ -39,10 +46,12 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
         const data = await ocrStowagePdf(file, apiKey);
         if (cancelled) return;
         setStowageData(data);
-        // code 자동 추정
-        const vname = data?.vesselName || '';
-        const code = vname.replace(/\s+/g, '').slice(0, 4).toUpperCase();
-        setExtra(prev => ({ ...prev, code }));
+        // M6.14e: 항차 정보가 이미 있으면 그대로 유지, 없으면 Gemini 추정값 사용
+        if (!voyage?.info?.vsl) {
+          const vname = data?.vesselName || '';
+          const code = vname.replace(/\s+/g, '').slice(0, 4).toUpperCase();
+          setExtra(prev => ({ ...prev, code: prev.code || code }));
+        }
         setPhase('review');
       } catch (e) {
         if (!cancelled) {
@@ -52,7 +61,7 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
       }
     })();
     return () => { cancelled = true; };
-  }, [file]);
+  }, [file, voyage]);
 
   // 등록 처리
   const handleRegister = async () => {
@@ -161,10 +170,26 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
           {/* review */}
           {phase === 'review' && stowageData && (
             <>
+              {/* M6.14e: 현재 항차 정보 배너 (검수원이 이미 입력한 코드/콜사인 자동 사용) */}
+              {voyage?.info?.vsl && (
+                <div className="bg-blue-950/40 border border-blue-700/40 rounded p-2 mb-3 text-xs">
+                  <div className="font-bold text-blue-200 mb-1">📌 현재 항차 정보 자동 적용</div>
+                  <div className="text-blue-300 mono">
+                    {voyage.info.vsl}
+                    {voyage.info.vslFull && ` (${voyage.info.vslFull})`}
+                    {voyage.info.callsign && ` · 콜사인 ${voyage.info.callsign}`}
+                    {voyage.info.imo && ` · IMO ${voyage.info.imo}`}
+                  </div>
+                  <div className="text-slate-400 mt-1 text-[10px]">
+                    아래 입력란에 자동 채워졌습니다. 그대로 [등록]하시면 EDI와 정확히 매칭됩니다.
+                  </div>
+                </div>
+              )}
+
               {/* 선박 메타 */}
               <div className="bg-cyan-950/30 border border-cyan-700/40 rounded p-3 mb-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-slate-500 text-xs">선박명:</span> <b className="text-cyan-200">{stowageData.vesselName || '(없음)'}</b></div>
+                  <div><span className="text-slate-500 text-xs">PDF 선박명:</span> <b className="text-cyan-200">{stowageData.vesselName || '(없음)'}</b></div>
                   <div><span className="text-slate-500 text-xs">항차:</span> <b className="text-cyan-200">{stowageData.voyageNo || '-'}</b></div>
                   <div><span className="text-slate-500 text-xs">POL:</span> <b className="text-cyan-200">{stowageData.pol || '-'}</b></div>
                   <div><span className="text-slate-500 text-xs">DATE:</span> <b className="text-cyan-200">{stowageData.date || '-'}</b></div>
@@ -247,6 +272,13 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
                 {PROTECTED_CODES.includes(extra.code) && (
                   <div className="mt-2 text-[11px] text-red-300 font-bold">
                     ⛔ {extra.code}는 정밀 등록 보호 선박입니다. 다른 코드 사용하세요.
+                  </div>
+                )}
+                {/* M6.14e: 항차 코드와 다를 시 경고 */}
+                {voyage?.info?.vsl && extra.code && extra.code !== (voyage.info.vsl || '').toUpperCase().replace(/\s+/g, '') && (
+                  <div className="mt-2 text-[11px] text-amber-300 font-bold bg-amber-950/30 border border-amber-700/40 rounded px-2 py-1">
+                    ⚠️ 현재 항차 코드 "{voyage.info.vsl}"와 다릅니다. 검수앱 EDI 매칭이 안 될 수 있습니다.
+                    <br/>일치시키려면 코드란을 "{(voyage.info.vsl || '').toUpperCase().replace(/\s+/g, '')}"로 변경하세요.
                   </div>
                 )}
               </div>
