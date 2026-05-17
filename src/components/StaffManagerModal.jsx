@@ -1,9 +1,9 @@
 // M5.73: 인원 관리 전용 모달 (김성일만 진입)
 //   InspectorModal과 분리 — 선택과 관리를 명확히 구분
 import React, { useState } from 'react';
-import { X, UserPlus, Trash2, Shield, RefreshCw } from 'lucide-react';
+import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff } from '../firebase.js';
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll } from '../firebase.js';
 
 const ADMIN_NAME = '김성일';
 
@@ -11,6 +11,31 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('검수');
   const [filter, setFilter] = useState('all'); // all | inspectors | staff
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  // M6.10: 전체 데이터 백업 → JSON 다운로드
+  const downloadBackup = async () => {
+    if (backupBusy) return;
+    if (!confirm('Firebase 전체 데이터를 JSON 파일로 다운로드합니다.\n(데이터 크기에 따라 수초 ~ 수십초 소요)\n계속하시겠습니까?')) return;
+    setBackupBusy(true);
+    try {
+      const data = await fbBackupAll();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      a.href = url;
+      a.download = `tallyman_backup_${ts}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      const sizeMb = (blob.size / 1024 / 1024).toFixed(2);
+      alert(`✅ 백업 완료\n파일 크기: ${sizeMb} MB`);
+    } catch (e) {
+      alert(`❌ 백업 실패: ${e.message || e}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
 
   // 관리자 아니면 차단
   if (current !== ADMIN_NAME) {
@@ -111,9 +136,17 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
               <div className="text-[10px] text-slate-400">관리자: {ADMIN_NAME}</div>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded">
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={downloadBackup} disabled={backupBusy}
+              className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded text-xs font-bold flex items-center gap-1"
+              title="Firebase 전체 데이터 JSON 백업">
+              <Download className="w-3.5 h-3.5"/>
+              {backupBusy ? '백업 중...' : '백업'}
+            </button>
+            <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded">
+              <X className="w-5 h-5 text-slate-400" />
+            </button>
+          </div>
         </div>
 
         {/* 필터 탭 */}

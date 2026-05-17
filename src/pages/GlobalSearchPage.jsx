@@ -7,12 +7,20 @@ import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from
 
 export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [autoSpeak, setAutoSpeak] = useState(true);
   const recognitionRef = useRef(null);
   const lastSpokenRef = useRef(null);
+
+  // M6.10: debounce — 키 입력마다 즉시 검색하지 않고 200ms 후 검색
+  //   대용량 (수천 대 컨테이너) 환경에서 입력 반응성 개선
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 200);
+    return () => clearTimeout(t);
+  }, [query]);
 
   // 모든 항차 양/선적 펼치기
   const flat = useMemo(() => {
@@ -58,15 +66,15 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     return arr;
   }, [voyages]);
 
-  // 자연어 파싱
-  const parsed = useMemo(() => parseNaturalQuery(query), [query]);
+  // 자연어 파싱 (M6.10: debouncedQuery 사용)
+  const parsed = useMemo(() => parseNaturalQuery(debouncedQuery), [debouncedQuery]);
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
-    if (!query || query.length < 2) return [];
+    if (!debouncedQuery || debouncedQuery.length < 2) return [];
     if (!hasAnyCondition(parsed)) return [];
     // 알파벳 포함 → 선박명 검색도 포함
-    const Q = query.toUpperCase();
+    const Q = debouncedQuery.toUpperCase();
     const isOnlyDigits = /^\d+$/.test(Q.replace(/\s/g, ''));
     let r = applyNLFilter(flat, parsed);
     // 자연어 조건이 없는 알파벳 → 선박명 매칭도 시도
@@ -75,7 +83,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
       r = [...new Set([...r, ...vslMatches])];
     }
     return r.slice(0, 100);
-  }, [flat, query, parsed]);
+  }, [flat, debouncedQuery, parsed]);
 
   // Web Speech API
   useEffect(() => {
@@ -114,8 +122,8 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   // 자동 음성 안내
   useEffect(() => {
     if (!autoSpeak) return;
-    if (!query || query.length < 2) return;
-    const sig = `${query}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}`;
+    if (!debouncedQuery || debouncedQuery.length < 2) return;
+    const sig = `${debouncedQuery}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
 
@@ -139,7 +147,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     } else {
       speak(`${matches.length}개 일치. 더 자세히`);
     }
-  }, [matches, query, parsed, autoSpeak]);
+  }, [matches, debouncedQuery, parsed, autoSpeak]);
 
   const startListening = () => {
     if (!recognitionRef.current) return;

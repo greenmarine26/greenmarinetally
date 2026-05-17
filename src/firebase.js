@@ -951,3 +951,14 @@ export async function fbBatchSaveShipBayDict(entries) {
   }));
   return { saved, failed };
 }
+
+/**
+ * M6.10: 전체 데이터 백업 — Firebase 전체 루트를 JSON으로 export
+ *   사용: 관리자만 (StaffManagerModal에서 트리거)
+ *   결과: voyages, inspectors, shipBayDict, shipPolicies 등 전체 데이터
+ */
+export async function fbBackupAll() {
+  const snap = await get(ref(db, '/'));
+  return snap.val() || {};
+}
+
