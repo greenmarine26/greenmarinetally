@@ -1,21 +1,36 @@
-# Tallyman Master 핸드오프 — M6.14
+# Tallyman Master 핸드오프 — M6.14a (핫픽스)
 
 ## 📌 현재 상태 (2026-05-17)
 
-- **최신 버전**: **M6.14** (STOWAGE PDF 자동 분석 → 베이사전 정밀 등록)
-- **이전 버전**: M6.13 (BERTH 자동 정리 + 확장 v1.0.1)
+- **최신 버전**: **M6.14a** (M6.14 STOWAGE PDF + 먹통 핫픽스)
+- **이전 버전**: M6.13 (BERTH 자동 정리)
 - **작업 디렉토리**: `/home/claude/app/m6_14_build/`
-- **GitHub**: `greenmarine26/greenmarinetally`
-- **Firebase**: `greenmarinetally` (asia-southeast1, Spark 플랜)
-- **빌드 산출물**: `assets/index-Cja34Gg1.js` (1.59 MB)
 
-## 🎯 M6.14 핵심 변경
+## 🔧 M6.14a 핫픽스 (M6.14 발견 즉시 수정)
 
-### STOWAGE INSTRUCTION PDF 자동 분석 (300척 베이사전 문제 본질 해결)
+### 문제
+M6.14 배포 후 "파일 업로드 누르면 먹통" 보고.
+
+### 원인
+EDI 업로드 시 PDF 자동 검사 로직(`handleEdiUpload` 내부)이 양하 리스트 PDF(50+ 페이지)에 대해 `extractPdfText()` 호출 → PDF.js로 전체 페이지 파싱하느라 수십 초 블로킹 → 사용자 입장에선 먹통.
+
+### 수정
+1. **EDI 업로드 핸들러에서 PDF 텍스트 검사 완전 제거** — 파일명 키워드(STOWAGE/LOAD/PLAN/답안지)만 즉시 판별
+2. **자료 탭에 [📄 STOWAGE PDF 등록 (베이사전)] 별도 보라색 버튼 추가** — EDI 업로드와 완전 분리, 명시적 호출
+3. 양하 리스트 input의 PDF 처리(`1564, 1575번 라인`)는 기존 동작 그대로 유지
+
+### 변경 파일
+- `src/pages/VoyagePage.jsx` — handleEdiUpload PDF 분리 로직 단순화 + 별도 버튼
+- `src/utils.js` — APP_VERSION M6.14 → M6.14a
+- `src/components/HelpModal.jsx` — M6.14a 핫픽스 항목 추가
+
+## 🎯 M6.14 (기존 내용)
+
+### STOWAGE INSTRUCTION PDF 자동 분석
 
 **배경**: NBTD/MCSC만 정밀 등록, 나머지 ~298척은 자동 추정 → 카고플랜 매번 어긋남
 
-**솔루션**: 자료 탭에 STOWAGE PDF 끌어 놓으면 Gemini 2.5 Pro가 PDF를 **네이티브로 분석** → 베이 구조 자동 추출 → 사용자 검토 → localStorage + Firebase 즉시 저장
+**솔루션**: 자료 탭 [📄 STOWAGE PDF 등록] 버튼 → PDF 1개 선택 → Gemini 2.5 Pro가 PDF를 **네이티브로 분석** → 베이 구조 자동 추출 → 사용자 검토 → localStorage + Firebase 즉시 저장
 
 ### 주요 변경 파일
 1. **gemini.js** (신규 함수 2개)

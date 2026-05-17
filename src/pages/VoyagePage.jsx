@@ -1207,20 +1207,15 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
         }
       } catch (e) {}
 
-      // M6.14: PDF면 STOWAGE 여부 자동 판별
+      // M6.14a (핫픽스): 파일명 키워드만으로 즉시 판별 — PDF.js 텍스트 추출 안 함
+      //   이유: 양하 리스트 PDF(50+페이지)에서 extractPdfText가 수십 초 블로킹 → 먹통 현상
+      //   STOWAGE PDF는 파일명에 STOWAGE/LOAD/PLAN/답안지 키워드 사용 권장
+      //   파일명 매칭 안 되면 별도 [📄 STOWAGE PDF 등록] 버튼으로 명시적 처리
       const isPdfByExt = /\.pdf$/i.test(file.name);
       if (isPdfByExt) {
         try {
-          // 파일명에 STOWAGE/LOAD/PLAN/답안지 키워드면 즉시 분리
-          const { isStowagePdf, extractPdfText } = await import('../mixerUpload.js');
+          const { isStowagePdf } = await import('../mixerUpload.js');
           if (isStowagePdf(file.name)) {
-            stowagePdfFiles.push(file);
-            continue;
-          }
-          // 파일명만으로 판별 어려운 경우, PDF 텍스트 한 번 읽어 검사
-          // (양하 리스트와 STOWAGE 구분)
-          const text = await extractPdfText(file);
-          if (isStowagePdf(text)) {
             stowagePdfFiles.push(file);
             continue;
           }
@@ -1799,7 +1794,27 @@ function DataTab({ voyageKey, mode, voyage, setMode }) {
           현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
           <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
           <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
-          <br/><span className="text-purple-300">📄 STOWAGE PDF (답안지) 끌어 놓으면 Gemini가 자동 분석 → 베이사전 정밀 등록 (M6.14)</span>
+        </div>
+
+        {/* M6.14a: STOWAGE PDF 명시적 업로드 버튼 — 별도 호출, 블로킹 없음 */}
+        <div className="mt-2 pt-2 border-t border-slate-800/60">
+          <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/40 rounded text-xs font-bold text-purple-200">
+            📄 STOWAGE PDF 등록 (베이사전)
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setStowagePdfFile(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <div className="text-[10px] text-slate-500 mt-1">
+            답안지 PDF 한 장 선택 → Gemini 2.5 Pro 자동 분석 (M6.14)
+            <br/><span className="text-amber-400/80">⚠️ EDI/양하 리스트 PDF는 이 버튼에 올리지 마세요 (베이사전 등록 전용)</span>
+          </div>
         </div>
 
         {/* M5.11: 보관된 EDI 원본 + 재처리 버튼 */}
