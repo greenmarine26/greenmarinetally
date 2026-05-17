@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.17';
+export const APP_VERSION = 'M6.18';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1588,7 +1588,27 @@ export function extractBerthNo(berthRaw) {
  * @example getPierFromBerth("동부두 14번선석") → "PNCT"
  * @example getPierFromBerth("동부두 1번선석") → null (자동차전용 등)
  */
+/**
+ * M6.18: berth 값이 정상 형식인지 검사 — VoyagePage/HomePage 공통 사용
+ * 정상 형식:
+ *   - 동/서/남/북부두 N번선석 (PORT-MIS 표준)
+ *   - N번선석
+ *   - E7, W6 등 단축형 (M6.11)
+ *   - 평택항 BCT (외부 부두명)
+ * 잘못된 형식:
+ *   - MBM, BCT, MIPO 같은 시설 코드 (확장 v1.0.0 또는 옛 파서 버그)
+ *   - 빈 값
+ */
+export function isValidBerth(b) {
+  if (!b) return false;
+  const s = String(b).trim();
+  if (!s) return false;
+  return /[동서남북]부두|\d+번선석|컨테이너|^[ewEW]\d+$/.test(s);
+}
+
 export function getPierFromBerth(berthRaw) {
+  // M6.18: 잘못된 형식이면 즉시 무시 (MBM 등 시설 코드 차단)
+  if (!isValidBerth(berthRaw)) return null;
   const n = extractBerthNo(berthRaw);
   if (n == null) return null;
   if (n >= 6 && n <= 9) return 'PCTC';
@@ -1598,13 +1618,13 @@ export function getPierFromBerth(berthRaw) {
 
 /**
  * M6.11: 부두 표시 양식 단축 — 동부두 → E, 서부두 → W
- * @example formatBerth("동부두 8번선석") → "E8"
- * @example formatBerth("서부두 6번선석") → "W6"
- * @example formatBerth("E7") → "E7" (이미 단축형이면 그대로)
+ * M6.18: 잘못된 형식(MBM 등 시설 코드)은 빈 문자열 반환 — HomePage 카드에서 표시 안 됨
  */
 export function formatBerth(berthRaw) {
   if (!berthRaw) return '';
   const s = String(berthRaw).trim();
+  // M6.18: 잘못된 형식은 표시 안 함
+  if (!isValidBerth(s)) return '';
   // "동부두 N번선석" or "서부두 N번선석"
   const m = s.match(/(동|서)부두\s*(\d+)\s*번\s*선석/);
   if (m) {

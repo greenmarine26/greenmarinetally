@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords } from '../utils.js';
+import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo } from '../firebase.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
@@ -134,12 +134,28 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           });
         }
         // PORT-MIS 우선, 없으면 voyage.info 폴백
-        const berth = (pm && pm.berth) || info.berth || '';
+        // M6.18: 잘못된 berth 형식 (MBM 등) 필터링 — 표시 + 자동 정리
+        const rawBerth = (pm && pm.berth) || info.berth || '';
+        const berth = isValidBerth(rawBerth) ? rawBerth : '';
         const pier = (pm && pm.pier) || info.pier || getPierFromBerth(berth) || '';
-        return { key: k, ...v, _berth: berth, _pier: pier };
+        return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth };
       })
       .sort((a, b) => (b.info.createdAt || 0) - (a.info.createdAt || 0));
   }, [voyages, portMisData]);
+
+  // M6.18: 잘못된 berth가 voyage.info에 저장되어 있으면 백그라운드 자동 정리
+  //   M6.13 자동 정리는 VoyagePage 진입 시에만 동작 — HomePage에서도 처리
+  useEffect(() => {
+    voyagesWithPier.forEach(v => {
+      const info = v.info || {};
+      const stored = info.berth || '';
+      if (stored && !isValidBerth(stored)) {
+        fbUpdateVoyageInfo(v.key, { berth: '', pier: '' }).catch(e =>
+          console.warn('[M6.18] HomePage berth 자동 정리 실패:', v.key, e)
+        );
+      }
+    });
+  }, [voyagesWithPier]);
 
   // M5.82: 부두별 그룹화 + 현 부두 우선
   const effectivePier = pierFilter === 'auto' ? currentPier?.code : (pierFilter === 'all' ? null : pierFilter);

@@ -780,6 +780,15 @@ export function fbSubscribePortMis(callback) {
 // M5.25: PORT-MIS 캡처 OCR 결과 일괄 저장 (Chrome 확장과 동일 구조)
 //   폰에서 캡처 → OCR → 추출된 ships 배열을 Firebase port_mis_data에 PUT
 //   key는 sanitized callsign. callsign 없으면 vesselName 사용 (안전망)
+// M6.18: berth 검증 — utils.js의 isValidBerth와 동일 패턴
+//   여기에 둠 (utils 순환 import 피하기 위해)
+function isValidBerthFb(b) {
+  if (!b) return false;
+  const s = String(b).trim();
+  if (!s) return false;
+  return /[동서남북]부두|\d+번선석|컨테이너|^[ewEW]\d+$/.test(s);
+}
+
 export async function fbSavePortMisBatch(ships) {
   if (!Array.isArray(ships) || ships.length === 0) return { saved: 0, failed: 0, cleaned: 0 };
   let saved = 0, failed = 0, cleaned = 0;
@@ -793,7 +802,15 @@ export async function fbSavePortMisBatch(ships) {
     if (!key) { failed++; return; }
     newKeys.add(key);
     try {
-      await set(ref(db, `port_mis_data/${key}`), { ...s, updatedAt: now });
+      // M6.18: 잘못된 berth 자동 제거 (MBM 등 시설 코드)
+      //   확장 v1.0.0 / 옛 OCR / 옛 엑셀 파서 무관하게 저장 시점 차단
+      const shipClean = { ...s };
+      if (shipClean.berth && !isValidBerthFb(shipClean.berth)) {
+        console.warn('[M6.18 berth] 잘못된 형식 제거:', shipClean.berth, '(key:', key, ')');
+        shipClean.berth = '';
+        shipClean.pier = '';   // pier도 무효화
+      }
+      await set(ref(db, `port_mis_data/${key}`), { ...shipClean, updatedAt: now });
       saved++;
     } catch (e) {
       console.error('[fbSavePortMisBatch] 저장 실패', key, e);
