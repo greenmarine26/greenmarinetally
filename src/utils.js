@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.16';
+export const APP_VERSION = 'M6.17';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1617,8 +1617,8 @@ export function formatBerth(berthRaw) {
 }
 
 /**
- * 평택항 부두 좌표 (대략)
- * 사용자가 현장 GPS로 한 번 측정 후 갱신 권장
+ * 평택항 부두 좌표 (기본값 — 대략 추정)
+ * M6.17: 검수원이 현장에서 직접 등록한 좌표(localStorage/Firebase)가 있으면 우선 사용
  * PCTC: 동부두 6~9번선석 (구 컨테이너 터미널)
  * PNCT: 동부두 13~16번선석 (신컨테이너 터미널)
  */
@@ -1626,6 +1626,22 @@ export const PIER_COORDS = {
   PCTC: { lat: 37.005, lng: 126.815, name: '평택 컨테이너터미널' },
   PNCT: { lat: 36.995, lng: 126.823, name: '평택 신컨테이너터미널' },
 };
+
+// M6.17: 검수원이 현장 등록한 좌표 우선 — localStorage SK.pierCoords
+//   { PCTC: {lat, lng, registeredBy, registeredAt}, PNCT: {...} }
+function getActivePierCoords() {
+  try {
+    const raw = localStorage.getItem('master_pier_coords_v1');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        PCTC: parsed.PCTC || PIER_COORDS.PCTC,
+        PNCT: parsed.PNCT || PIER_COORDS.PNCT,
+      };
+    }
+  } catch {}
+  return PIER_COORDS;
+}
 
 /**
  * 두 좌표 사이 거리 (haversine, 미터)
@@ -1642,12 +1658,14 @@ export function haversineMeters(lat1, lng1, lat2, lng2) {
 
 /**
  * GPS 좌표로 현 부두 판별
+ * M6.17: maxDistance 2500m → 5000m로 완화 (좌표 오차 마진 + 평택항 부두 범위 고려)
  * @returns { code: 'PCTC'|'PNCT', distance: 미터 } 또는 null
  */
-export function detectPierByGps(lat, lng, maxDistance = 2500) {
+export function detectPierByGps(lat, lng, maxDistance = 5000) {
+  const coords = getActivePierCoords();
   let closest = null;
   let minDist = Infinity;
-  for (const [code, p] of Object.entries(PIER_COORDS)) {
+  for (const [code, p] of Object.entries(coords)) {
     const d = haversineMeters(lat, lng, p.lat, p.lng);
     if (d < minDist && d <= maxDistance) {
       minDist = d;
@@ -1655,6 +1673,41 @@ export function detectPierByGps(lat, lng, maxDistance = 2500) {
     }
   }
   return closest;
+}
+
+/**
+ * M6.17: 현재 GPS 위치를 특정 부두 좌표로 저장
+ *   localStorage에 즉시 저장 → 본인 폰에 적용
+ *   Firebase 동기화는 호출처에서 별도 처리
+ */
+export function savePierCoord(code, lat, lng, registeredBy = '') {
+  try {
+    const raw = localStorage.getItem('master_pier_coords_v1');
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed[code] = {
+      lat: Number(lat),
+      lng: Number(lng),
+      name: PIER_COORDS[code]?.name || code,
+      registeredBy,
+      registeredAt: Date.now(),
+    };
+    localStorage.setItem('master_pier_coords_v1', JSON.stringify(parsed));
+    return parsed[code];
+  } catch (e) {
+    console.error('savePierCoord 실패', e);
+    return null;
+  }
+}
+
+/**
+ * M6.17: 저장된 부두 좌표 조회 (UI 표시용)
+ */
+export function getStoredPierCoords() {
+  try {
+    const raw = localStorage.getItem('master_pier_coords_v1');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {};
 }
 
 // ─── M5.82: PORT-MIS 엑셀 파서 ───────────────────────────────

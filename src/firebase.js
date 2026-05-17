@@ -989,3 +989,29 @@ export async function fbBackupAll() {
   return snap.val() || {};
 }
 
+
+// ─── M6.17: 부두 좌표 공유 (검수원이 현장에서 등록) ───
+// 노드: pier_coords/{PCTC|PNCT}
+//   { lat, lng, name, registeredBy, registeredAt }
+export async function fbSavePierCoord(code, coord) {
+  if (!code || !coord) return null;
+  const r = ref(db, `pier_coords/${code}`);
+  await set(r, {
+    ...coord,
+    registeredAt: Date.now(),
+  });
+  return coord;
+}
+
+export function fbSubscribePierCoords(callback) {
+  const r = ref(db, 'pier_coords');
+  return onValue(r, (snap) => {
+    callback(snap.val() || {});
+  });
+}
+
+export async function fbGetPierCoords() {
+  const r = ref(db, 'pier_coords');
+  const snap = await get(r);
+  return snap.val() || {};
+}

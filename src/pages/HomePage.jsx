@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2 } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION , formatBerth} from '../utils.js';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor } from 'lucide-react';
+import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords } from '../firebase.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
@@ -13,42 +13,95 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const [currentPier, setCurrentPier] = useState(null);    // { code, distance, name }
   const [gpsState, setGpsState] = useState('idle');         // 'idle' | 'loading' | 'denied' | 'ok' | 'far'
   const [pierFilter, setPierFilter] = useState('auto');     // 'auto' | 'PCTC' | 'PNCT' | 'all'
+  // M6.17: 현재 GPS 좌표 (부두 좌표 등록용)
+  const [currentCoord, setCurrentCoord] = useState(null);   // { lat, lng }
+  const [pierRegisterState, setPierRegisterState] = useState({ msg: '', error: false });
 
-  // M5.82: GPS로 현 부두 판별 (한 번만)
+  // M6.17: Firebase 공유 부두 좌표 구독 — 다른 검수원이 등록한 좌표 자동 수신
   useEffect(() => {
+    const unsub = fbSubscribePierCoords((coords) => {
+      if (coords && Object.keys(coords).length > 0) {
+        try {
+          // Firebase 좌표를 localStorage에도 즉시 미러링 (detectPierByGps가 localStorage 봄)
+          localStorage.setItem('master_pier_coords_v1', JSON.stringify(coords));
+        } catch {}
+      }
+    });
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
+
+  // M6.17: GPS 측정 함수 분리 (재측정 가능)
+  const measureGps = (force = false) => {
     if (!navigator.geolocation) {
       setGpsState('denied');
       return;
     }
-    // 캐시 확인 (localStorage 5분)
-    try {
-      const cached = localStorage.getItem('gm_current_pier');
-      if (cached) {
-        const { pier, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          setCurrentPier(pier);
-          setGpsState(pier ? 'ok' : 'far');
-          return;
+    if (!force) {
+      try {
+        const cached = localStorage.getItem('gm_current_pier');
+        if (cached) {
+          const { pier, coord, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 5 * 60 * 1000) {
+            setCurrentPier(pier);
+            setCurrentCoord(coord || null);
+            setGpsState(pier ? 'ok' : 'far');
+            return;
+          }
         }
-      }
-    } catch (e) {}
-
+      } catch (e) {}
+    }
     setGpsState('loading');
     navigator.geolocation.getCurrentPosition(
       pos => {
-        const pier = detectPierByGps(pos.coords.latitude, pos.coords.longitude);
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const coord = { lat, lng };
+        const pier = detectPierByGps(lat, lng);
+        setCurrentCoord(coord);
         setCurrentPier(pier);
         setGpsState(pier ? 'ok' : 'far');
         try {
-          localStorage.setItem('gm_current_pier', JSON.stringify({ pier, timestamp: Date.now() }));
+          localStorage.setItem('gm_current_pier', JSON.stringify({ pier, coord, timestamp: Date.now() }));
         } catch (e) {}
       },
       err => {
         console.warn('[HomePage] GPS 실패:', err.message);
         setGpsState('denied');
       },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: force ? 0 : 300000 }
     );
+  };
+
+  // M6.17: 현재 위치를 부두 좌표로 등록 (검수원이 현장에서 직접)
+  const handleRegisterPier = async (code) => {
+    if (!currentCoord) {
+      setPierRegisterState({ msg: 'GPS 좌표 없음 — 먼저 [위치 다시 측정]', error: true });
+      return;
+    }
+    if (!confirm(`현재 위치(${currentCoord.lat.toFixed(5)}, ${currentCoord.lng.toFixed(5)})를\n${code} 부두 좌표로 등록하시겠습니까?\n\n모든 검수원에게 즉시 공유됩니다.`)) {
+      return;
+    }
+    const saved = savePierCoord(code, currentCoord.lat, currentCoord.lng, inspector || '');
+    if (!saved) {
+      setPierRegisterState({ msg: '저장 실패', error: true });
+      return;
+    }
+    try {
+      await fbSavePierCoord(code, saved);
+      setPierRegisterState({ msg: `✅ ${code} 등록 완료 + Firebase 동기화`, error: false });
+    } catch (e) {
+      setPierRegisterState({ msg: `⚠️ localStorage 저장됨 (Firebase 동기화 실패)`, error: false });
+    }
+    // GPS 캐시 무효화 → 재측정
+    try { localStorage.removeItem('gm_current_pier'); } catch {}
+    setTimeout(() => measureGps(true), 500);
+    setTimeout(() => setPierRegisterState({ msg: '', error: false }), 4000);
+  };
+
+  // M5.82: GPS로 현 부두 판별 (한 번만)
+  useEffect(() => {
+    measureGps(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // M5.82: 항차마다 부두 정보 매칭
@@ -192,51 +245,95 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         </div>
       </div>
 
-      {/* M5.82: 부두 필터 바 - GPS 자동 판별 + 수동 전환 */}
-      <div className="bg-slate-900/60 border border-slate-700/40 rounded-lg px-3 py-2 mb-2 flex items-center gap-2 flex-wrap text-xs">
-        {gpsState === 'loading' && (
-          <span className="flex items-center gap-1.5 text-slate-400">
-            <Loader2 className="w-3 h-3 animate-spin"/> 위치 확인 중...
-          </span>
-        )}
-        {gpsState === 'ok' && currentPier && (
-          <span className="flex items-center gap-1.5">
-            <MapPin className={`w-3.5 h-3.5 ${currentPier.code === 'PCTC' ? 'text-blue-300' : 'text-purple-300'}`}/>
-            <span className={`font-bold ${currentPier.code === 'PCTC' ? 'text-blue-200' : 'text-purple-200'}`}>
-              현 위치: {currentPier.code}
+      {/* M5.82: 부두 필터 바 - GPS 자동 판별 + 수동 전환 / M6.17: 부두 좌표 등록 추가 */}
+      <div className="bg-slate-900/60 border border-slate-700/40 rounded-lg px-3 py-2 mb-2">
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          {gpsState === 'loading' && (
+            <span className="flex items-center gap-1.5 text-slate-400">
+              <Loader2 className="w-3 h-3 animate-spin"/> 위치 확인 중...
             </span>
-            <span className="text-slate-500 text-[10px]">({currentPier.distance}m)</span>
-          </span>
-        )}
-        {gpsState === 'far' && (
-          <span className="flex items-center gap-1.5 text-amber-300">
-            <MapPin className="w-3 h-3"/> 평택항 외부
-          </span>
-        )}
-        {gpsState === 'denied' && (
-          <span className="flex items-center gap-1.5 text-slate-400">
-            <MapPin className="w-3 h-3"/> 위치 안 씀 — 수동 선택 ▶
-          </span>
-        )}
-        <div className="flex gap-1 ml-auto">
-          {[
-            { id: 'auto', label: '자동' },
-            { id: 'PCTC', label: 'PCTC' },
-            { id: 'PNCT', label: 'PNCT' },
-            { id: 'all', label: '전체' },
-          ].map(b => (
-            <button key={b.id} onClick={() => setPierFilter(b.id)}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                pierFilter === b.id
-                  ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
-                     b.id === 'PNCT' ? 'bg-purple-700 text-white' :
-                     'bg-amber-600 text-slate-950')
-                  : 'bg-slate-800 text-slate-400'
-              }`}>
-              {b.label}
-            </button>
-          ))}
+          )}
+          {gpsState === 'ok' && currentPier && (
+            <span className="flex items-center gap-1.5">
+              <MapPin className={`w-3.5 h-3.5 ${currentPier.code === 'PCTC' ? 'text-blue-300' : 'text-purple-300'}`}/>
+              <span className={`font-bold ${currentPier.code === 'PCTC' ? 'text-blue-200' : 'text-purple-200'}`}>
+                현 위치: {currentPier.code}
+              </span>
+              <span className="text-slate-500 text-[10px]">({currentPier.distance}m)</span>
+            </span>
+          )}
+          {gpsState === 'far' && (
+            <span className="flex items-center gap-1.5 text-amber-300">
+              <MapPin className="w-3 h-3"/> 평택항 외부 (저장된 부두에서 5km 이상)
+            </span>
+          )}
+          {gpsState === 'denied' && (
+            <span className="flex items-center gap-1.5 text-slate-400">
+              <MapPin className="w-3 h-3"/> 위치 안 씀 — 수동 선택 ▶
+            </span>
+          )}
+          <div className="flex gap-1 ml-auto">
+            {[
+              { id: 'auto', label: '자동' },
+              { id: 'PCTC', label: 'PCTC' },
+              { id: 'PNCT', label: 'PNCT' },
+              { id: 'all', label: '전체' },
+            ].map(b => (
+              <button key={b.id} onClick={() => setPierFilter(b.id)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  pierFilter === b.id
+                    ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
+                       b.id === 'PNCT' ? 'bg-purple-700 text-white' :
+                       'bg-amber-600 text-slate-950')
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                {b.label}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* M6.17: 현재 좌표 + 부두 등록 버튼 — '외부' 또는 잘못 잡힌 경우 사용 */}
+        {(gpsState === 'far' || gpsState === 'ok') && currentCoord && (
+          <div className="mt-2 pt-2 border-t border-slate-800/60">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] text-slate-500 mono">
+                현재 좌표: {currentCoord.lat.toFixed(5)}, {currentCoord.lng.toFixed(5)}
+              </span>
+              <button
+                onClick={() => measureGps(true)}
+                className="text-[10px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300"
+              >
+                🔄 다시 측정
+              </button>
+              <div className="flex gap-1 ml-auto">
+                <button
+                  onClick={() => handleRegisterPier('PCTC')}
+                  className="text-[10px] px-2 py-1 bg-blue-900/60 hover:bg-blue-800/80 rounded text-blue-200 font-bold border border-blue-700/40"
+                  title="현재 GPS 위치를 PCTC 부두 좌표로 등록"
+                >
+                  <Anchor className="w-3 h-3 inline mr-1"/>
+                  여기를 PCTC로 등록
+                </button>
+                <button
+                  onClick={() => handleRegisterPier('PNCT')}
+                  className="text-[10px] px-2 py-1 bg-purple-900/60 hover:bg-purple-800/80 rounded text-purple-200 font-bold border border-purple-700/40"
+                >
+                  <Anchor className="w-3 h-3 inline mr-1"/>
+                  여기를 PNCT로 등록
+                </button>
+              </div>
+            </div>
+            {pierRegisterState.msg && (
+              <div className={`mt-1 text-[10px] font-bold ${pierRegisterState.error ? 'text-red-300' : 'text-emerald-300'}`}>
+                {pierRegisterState.msg}
+              </div>
+            )}
+            <div className="mt-1 text-[10px] text-slate-500">
+              💡 '외부'로 잡히면 부두에서 위 버튼 클릭 → 좌표 자동 등록 (모든 검수원 공유)
+            </div>
+          </div>
+        )}
       </div>
 
       {list.length === 0 && (
