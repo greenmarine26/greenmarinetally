@@ -1,9 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera } from 'lucide-react';
+import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera, Search, Star, Calendar, UserCheck } from 'lucide-react';
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
+import { isChief, getStaffRole } from '../staffList.js';
+import { isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 
 export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGoHome }) {
   const [shipLib, setShipLib] = useState({});
@@ -228,23 +230,8 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
-      {/* 선박 라이브러리 (학습된 선박 구조) */}
-      <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
-        <div className="flex items-center gap-2 mb-3">
-          <Library className="w-4 h-4 text-purple-400"/>
-          <div className="text-sm font-bold text-slate-100">선박 라이브러리 ({Object.keys(shipLib).length}척)</div>
-        </div>
-        <div className="text-[10px] text-slate-500 mb-2">EDI 분석된 선박은 자동 저장 → 다음 항차에서 즉시 활용</div>
-        {Object.keys(shipLib).length === 0 ? (
-          <div className="text-xs text-slate-500 text-center py-4">아직 학습된 선박 없음 (EDI 업로드 시 자동 저장)</div>
-        ) : (
-          <div className="space-y-2">
-            {Object.entries(shipLib).sort((a,b) => (b[1].last_updated||0) - (a[1].last_updated||0)).map(([imo, ship]) => (
-              <ShipLibraryRow key={imo} imo={imo} ship={ship}/>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* 선박 라이브러리 (학습된 선박 구조) — M6.15: 강화 (정렬/검색/항차 상세/인원/베이사전 상태) */}
+      <ShipLibrarySection shipLib={shipLib} voyages={voyages} />
 
       {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
       {Object.keys(equipStats).length > 0 && (
@@ -571,38 +558,319 @@ function FeedbackRow({ feedback: f }) {
   );
 }
 
-function ShipLibraryRow({ imo, ship }) {
+// M6.15: 선박 라이브러리 섹션 — 검색/정렬 + 강화 표시
+function ShipLibrarySection({ shipLib, voyages }) {
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('frequency'); // frequency | recent | name | discharge | loading
+
+  // 검색 + 정렬된 선박 목록
+  const sortedShips = useMemo(() => {
+    const list = Object.entries(shipLib || {});
+    const q = search.trim().toLowerCase();
+    const filtered = !q ? list : list.filter(([imo, s]) => {
+      const name = String(s?.name || '').toLowerCase();
+      return name.includes(q) || imo.toLowerCase().includes(q);
+    });
+    const getMetric = (s) => {
+      const stats = s.stats || {};
+      const voys = s.voyages || {};
+      const voyKeys = Object.keys(voys);
+      switch (sortBy) {
+        case 'frequency':  return stats.total_voyages || voyKeys.length || 0;
+        case 'recent':     return stats.last_voyage_at || 0;
+        case 'discharge':  return stats.total_discharge || 0;
+        case 'loading':    return stats.total_loading || 0;
+        case 'name':       return String(s.name || '').toLowerCase();
+        default:           return 0;
+      }
+    };
+    return filtered.sort((a, b) => {
+      if (sortBy === 'name') {
+        return getMetric(a[1]).localeCompare(getMetric(b[1]));
+      }
+      return (getMetric(b[1]) || 0) - (getMetric(a[1]) || 0);
+    });
+  }, [shipLib, search, sortBy]);
+
+  return (
+    <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Library className="w-4 h-4 text-purple-400"/>
+        <div className="text-sm font-bold text-slate-100">
+          선박 라이브러리 ({Object.keys(shipLib || {}).length}척 · 표시 {sortedShips.length})
+        </div>
+      </div>
+      <div className="text-[10px] text-slate-500 mb-2">
+        EDI 분석된 선박 자동 누적 (항차 삭제와 무관). 입항 빈도순 정렬로 단골 식별 가능 (M6.15).
+      </div>
+
+      {/* 검색 + 정렬 */}
+      <div className="flex gap-2 mb-2">
+        <div className="flex-1 relative">
+          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2"/>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="선박명 / IMO 검색"
+            className="w-full bg-slate-800 border border-slate-700 rounded pl-7 pr-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+          />
+        </div>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+        >
+          <option value="frequency">📊 입항 빈도순</option>
+          <option value="recent">🕐 최근 작업순</option>
+          <option value="discharge">📥 양하 누적순</option>
+          <option value="loading">📤 선적 누적순</option>
+          <option value="name">🔤 이름순</option>
+        </select>
+      </div>
+
+      {sortedShips.length === 0 ? (
+        <div className="text-xs text-slate-500 text-center py-4">
+          {search ? '검색 결과 없음' : '아직 학습된 선박 없음 (EDI 업로드 시 자동 저장)'}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sortedShips.map(([imo, ship], idx) => (
+            <ShipLibraryRow
+              key={imo}
+              imo={imo}
+              ship={ship}
+              rank={sortBy === 'frequency' ? idx + 1 : null}
+              activeVoyages={voyages}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShipLibraryRow({ imo, ship, rank, activeVoyages }) {
+  const [expanded, setExpanded] = useState(false);
   const struct = ship.structure || {};
   const stats = ship.stats || {};
-  const voyageCount = ship.voyages ? Object.keys(ship.voyages).length : 0;
+  const voys = ship.voyages || {};
+  const voyageCount = Object.keys(voys).length;
   const pairCount = struct.pairs ? Object.keys(struct.pairs).length / 2 : 0;
+
+  // M6.15: 베이사전 등록 상태 (정밀 등록 여부)
+  const bayDictInfo = useMemo(() => {
+    const code = (ship.name || '').toUpperCase().replace(/\s+/g, '').slice(0, 4);
+    const dict = getShipBayDictData(imo, code) || getShipBayDictData(imo, ship.name);
+    if (!dict) return { status: 'none', label: '미등록' };
+    if (dict.verified) return { status: 'verified', label: '정밀 등록', source: dict.source };
+    return { status: 'auto', label: '자동 추정', source: dict.source };
+  }, [imo, ship.name]);
+
+  // M6.15: 첫/최근 작업일 (voyages.analyzed_at 기준)
+  const { firstAt, recentAt, voyageList } = useMemo(() => {
+    const arr = Object.entries(voys).map(([key, v]) => ({
+      voyageKey: key,
+      voy: v.voy || '',
+      vsl: v.vsl || ship.name || '',
+      mode: v.mode || '',
+      container_count: v.container_count || 0,
+      ptk_count: v.ptk_count || 0,
+      analyzed_at: v.analyzed_at || 0,
+      analyzed_by: v.analyzed_by || '',
+      inspectors: v.inspectors || {},  // M6.15: 항차별 검수원 카운트
+    })).sort((a, b) => b.analyzed_at - a.analyzed_at);
+    return {
+      firstAt: arr.length > 0 ? arr[arr.length - 1].analyzed_at : 0,
+      recentAt: arr.length > 0 ? arr[0].analyzed_at : (stats.last_voyage_at || 0),
+      voyageList: arr,
+    };
+  }, [voys, ship.name, stats.last_voyage_at]);
+
+  // M6.15: 전체 검수원 집계 (모든 항차 합산)
+  const allInspectors = useMemo(() => {
+    const acc = {}; // name → { count, chief, modes }
+    voyageList.forEach(v => {
+      // 영구 저장된 inspectors (Phase 2 누적용)
+      Object.values(v.inspectors || {}).forEach(ins => {
+        const n = ins.name;
+        if (!n) return;
+        if (!acc[n]) acc[n] = { name: n, count: 0, modes: {}, isChief: isChief(n) };
+        acc[n].count += ins.count || 0;
+        Object.entries(ins.modes || {}).forEach(([m, c]) => {
+          acc[n].modes[m] = (acc[n].modes[m] || 0) + c;
+        });
+      });
+      // 분석한 사람 (EDI 업로더)도 포함
+      if (v.analyzed_by) {
+        const n = v.analyzed_by;
+        if (!acc[n]) acc[n] = { name: n, count: 0, modes: {}, isChief: isChief(n), analyzed: 1 };
+        else acc[n].analyzed = (acc[n].analyzed || 0) + 1;
+      }
+    });
+    // M6.15: 활성 항차의 검수 완료(by 필드)에서 실시간 집계 — 영구 저장 아직 안 된 데이터 포함
+    if (activeVoyages) {
+      Object.entries(activeVoyages).forEach(([vKey, v]) => {
+        if (!v?.info || String(v.info.imo) !== String(imo)) return;
+        ['discharge', 'loading'].forEach(mode => {
+          const completed = v?.[mode]?.completed || {};
+          Object.values(completed).forEach(c => {
+            const n = c?.by;
+            if (!n) return;
+            if (!acc[n]) acc[n] = { name: n, count: 0, modes: {}, isChief: isChief(n) };
+            acc[n].count += 1;
+            acc[n].modes[mode] = (acc[n].modes[mode] || 0) + 1;
+          });
+        });
+      });
+    }
+    return Object.values(acc).sort((a, b) => b.count - a.count);
+  }, [voyageList, activeVoyages, imo]);
+
+  const chiefs = allInspectors.filter(i => i.isChief);
+  const members = allInspectors.filter(i => !i.isChief);
+
+  const fmtDate = (ts) => {
+    if (!ts) return '-';
+    const d = new Date(ts);
+    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const fmtDateFull = (ts) => {
+    if (!ts) return '-';
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
   return (
     <div className="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
-      <div className="flex items-center gap-2 mb-1">
-        <Ship className="w-3.5 h-3.5 text-purple-400"/>
+      {/* 헤더: 순위 + 이름 + IMO + 베이사전 배지 */}
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        {rank && (
+          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+            rank <= 3 ? 'bg-amber-600 text-white' :
+            rank <= 10 ? 'bg-purple-700 text-purple-100' :
+            'bg-slate-700 text-slate-300'
+          }`}>
+            #{rank}
+          </span>
+        )}
+        <Ship className="w-3.5 h-3.5 text-purple-400 flex-shrink-0"/>
         <span className="font-bold text-sm text-purple-200">{ship.name || '(이름 없음)'}</span>
         <span className="text-[10px] text-slate-500 mono">IMO {imo}</span>
+        {/* 베이사전 상태 배지 */}
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+          bayDictInfo.status === 'verified' ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700/40' :
+          bayDictInfo.status === 'auto' ? 'bg-amber-900/40 text-amber-300 border border-amber-700/40' :
+          'bg-red-900/30 text-red-300 border border-red-700/30'
+        }`}>
+          📚 {bayDictInfo.label}
+        </span>
       </div>
+
+      {/* 주요 통계 */}
       <div className="grid grid-cols-3 gap-1 text-[10px] text-slate-400">
+        <div>입항 <span className="text-cyan-300 font-bold text-xs">{stats.total_voyages || voyageCount}</span>회</div>
+        <div>양하 <span className="text-blue-300 font-bold text-xs">{stats.total_discharge || 0}</span></div>
+        <div>선적 <span className="text-amber-300 font-bold text-xs">{stats.total_loading || 0}</span></div>
         <div>베이 <span className="text-slate-200 font-bold">{struct.bay_count || 0}</span>개</div>
         <div>짝꿍 <span className="text-emerald-300 font-bold">{pairCount}</span>쌍</div>
         <div>단독 <span className="text-amber-300 font-bold">{struct.singles?.length || 0}</span>개</div>
-        <div>분석 항차 <span className="text-slate-200 font-bold">{voyageCount}</span></div>
-        <div>양하 누적 <span className="text-blue-300 font-bold">{stats.total_discharge || 0}</span></div>
-        <div>선적 누적 <span className="text-amber-300 font-bold">{stats.total_loading || 0}</span></div>
       </div>
-      {struct.pairs && Object.keys(struct.pairs).length > 0 && (
-        <details className="mt-2">
-          <summary className="text-[10px] text-purple-400 cursor-pointer">짝꿍 베이 상세</summary>
-          <div className="mt-1 text-[10px] text-slate-400 mono space-y-0.5">
-            {[...new Set(Object.entries(struct.pairs).map(([a,b]) => [a,b].sort().join('↔')))].map(p => (
-              <div key={p}>{p}</div>
-            ))}
-            {struct.singles?.length > 0 && (
-              <div className="text-amber-400 mt-1">단독: {struct.singles.join(', ')}</div>
+
+      {/* 작업 일자 */}
+      <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-500 mt-1 pt-1 border-t border-slate-800/60">
+        <div><Calendar className="w-3 h-3 inline mr-1"/>첫 작업 <span className="text-slate-300 mono">{fmtDate(firstAt)}</span></div>
+        <div><Clock className="w-3 h-3 inline mr-1"/>최근 작업 <span className="text-emerald-300 mono">{fmtDate(recentAt)}</span></div>
+      </div>
+
+      {/* 검수원 요약 (수석 + 검수원) */}
+      {(chiefs.length > 0 || members.length > 0) && (
+        <div className="mt-1 pt-1 border-t border-slate-800/60 text-[10px]">
+          <div className="flex items-start gap-1 flex-wrap">
+            <UserCheck className="w-3 h-3 text-cyan-400 flex-shrink-0 mt-0.5"/>
+            {chiefs.length > 0 && (
+              <span>
+                <span className="text-cyan-400 font-bold">수석:</span>{' '}
+                {chiefs.slice(0, 3).map(c => (
+                  <span key={c.name} className="text-cyan-200 font-bold mr-1.5">
+                    {c.name}({c.count || c.analyzed || 0})
+                  </span>
+                ))}
+              </span>
+            )}
+            {members.length > 0 && (
+              <span>
+                <span className="text-slate-400">검수원:</span>{' '}
+                {members.slice(0, 5).map(m => (
+                  <span key={m.name} className="text-slate-300 mr-1.5">
+                    {m.name}({m.count || 0})
+                  </span>
+                ))}
+                {members.length > 5 && <span className="text-slate-500">외 {members.length - 5}명</span>}
+              </span>
             )}
           </div>
-        </details>
+        </div>
+      )}
+
+      {/* 펼침: 항차 상세 */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="mt-1.5 text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
+      >
+        {expanded ? '▼' : '▶'} 항차 상세 {voyageList.length}건 / 짝꿍 {pairCount}쌍
+      </button>
+
+      {expanded && (
+        <div className="mt-2 space-y-1">
+          {/* 짝꿍 상세 */}
+          {struct.pairs && Object.keys(struct.pairs).length > 0 && (
+            <div className="bg-slate-900/60 rounded p-1.5 text-[10px] text-slate-400 mono">
+              <div className="text-purple-400 font-bold mb-0.5">짝꿍 베이</div>
+              {[...new Set(Object.entries(struct.pairs).map(([a, b]) => [a, b].sort().join('↔')))].join(', ')}
+              {struct.singles?.length > 0 && (
+                <div className="text-amber-400 mt-0.5">단독: {struct.singles.join(', ')}</div>
+              )}
+            </div>
+          )}
+          {/* 항차 리스트 */}
+          {voyageList.length > 0 && (
+            <div className="bg-slate-900/60 rounded p-1.5">
+              <div className="text-[10px] text-purple-400 font-bold mb-1">항차별 작업 이력</div>
+              <table className="w-full text-[10px] mono">
+                <thead className="text-slate-500 border-b border-slate-800">
+                  <tr>
+                    <th className="text-left px-1">작업일</th>
+                    <th className="text-left px-1">항차</th>
+                    <th className="text-left px-1">모드</th>
+                    <th className="text-right px-1">전체</th>
+                    <th className="text-right px-1">PTK</th>
+                    <th className="text-left px-1">분석자</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {voyageList.slice(0, 20).map((v, i) => (
+                    <tr key={i} className="border-b border-slate-800/40">
+                      <td className="px-1 text-slate-300">{fmtDateFull(v.analyzed_at)}</td>
+                      <td className="px-1 text-purple-300">{v.voy || '-'}</td>
+                      <td className="px-1">
+                        {v.mode === 'discharge' ? <span className="text-blue-300">양하</span> :
+                         v.mode === 'loading' ? <span className="text-amber-300">선적</span> :
+                         <span className="text-slate-500">{v.mode || '-'}</span>}
+                      </td>
+                      <td className="px-1 text-right text-slate-300">{v.container_count}</td>
+                      <td className="px-1 text-right text-emerald-300">{v.ptk_count}</td>
+                      <td className="px-1 text-cyan-300">{v.analyzed_by || '-'}</td>
+                    </tr>
+                  ))}
+                  {voyageList.length > 20 && (
+                    <tr><td colSpan="6" className="text-center text-slate-500 px-1 pt-1">… 외 {voyageList.length - 20}건</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -496,12 +496,39 @@ export function fbSubscribeShipLibrary(callback) {
 }
 
 // 분석된 항차 추가 (분석 이력)
+// M6.15: inspector 정보도 함께 저장 — 항차 삭제되어도 ships 노드에 영구 보존
 export async function fbAddShipVoyage(imo, voyageKey, voyageMeta) {
   if (!imo || !voyageKey) return;
   const r = ref(db, `ships/${imo}/voyages/${voyageKey}`);
+  // 기존 데이터 보존 병합 (재업로드 시 inspectors 누적용)
+  const snap = await get(r);
+  const existing = snap.exists() ? snap.val() : {};
   await set(r, {
+    ...existing,
     ...voyageMeta,
+    // M6.15: 분석한 검수원(EDI 업로더) 기본 기록
+    analyzed_by: voyageMeta.analyzed_by || existing.analyzed_by || '',
     analyzed_at: Date.now(),
+  });
+}
+
+// M6.15: 컨테이너 검수 완료 시 ships 노드에 inspector 카운트 추가
+//   동일 inspector 여러 컨 처리 시 카운트 증가
+//   항차 삭제되어도 ships에 누적 보존됨
+export async function fbAddShipVoyageInspector(imo, voyageKey, inspectorName, mode) {
+  if (!imo || !voyageKey || !inspectorName) return;
+  const r = ref(db, `ships/${imo}/voyages/${voyageKey}/inspectors/${inspectorName}`);
+  const snap = await get(r);
+  const cur = snap.exists() ? snap.val() : { count: 0, modes: {}, first_at: Date.now() };
+  await set(r, {
+    name: inspectorName,
+    count: (cur.count || 0) + 1,
+    modes: {
+      ...cur.modes,
+      [mode]: ((cur.modes && cur.modes[mode]) || 0) + 1,
+    },
+    first_at: cur.first_at || Date.now(),
+    last_at: Date.now(),
   });
 }
 

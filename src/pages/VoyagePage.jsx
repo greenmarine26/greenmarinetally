@@ -1484,6 +1484,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           mode,
           container_count: allEdiContainers.length,
           ptk_count: Object.keys(allCns).length,
+          analyzed_by: inspector || '',   // M6.15: EDI 업로드한 검수원
         });
         await fbAddShipStats(shipInfo.imo, {
           [mode]: Object.keys(allCns).length,
