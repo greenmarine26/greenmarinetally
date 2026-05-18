@@ -283,16 +283,26 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   })();
 
   // M6.0: 베이별 사용 tier (visibility:hidden 처리용)
+  // M6.24: v2 정밀 등록 데이터(deckTiersLocal/holdTiersLocal)도 인식
+  //   증상: v2 BAY 25는 deckTiersLocal=[88,86,84,82,80] (5단) 명시되어 있는데
+  //         카고플랜은 dictBay.deckTiers(Local 없는 필드)만 봐서 → 외곽 전체(90 포함 6단) 표시
+  //         베이상세는 deckTiersLocal 보고 정확히 5단 표시 → 두 화면 불일치
+  //   해결: deckTiers || deckTiersLocal fallback
   const bayDeckTiersUsed = useMemo(() => {
-    if (dictBay?.deckTiers && Array.isArray(dictBay.deckTiers) && dictBay.deckTiers.length > 0) {
-      return new Set(dictBay.deckTiers.map(t => String(t).padStart(2, '0')));
+    const local = dictBay?.deckTiers || dictBay?.deckTiersLocal;
+    if (Array.isArray(local) && local.length > 0) {
+      return new Set(local.map(t => String(t).padStart(2, '0')));
     }
     return new Set(deckTiers);  // 정보 없으면 모두 사용
   }, [dictBay, deckTiers]);
   const bayHoldTiersUsed = useMemo(() => {
+    // M6.24: holdTiers 빈 배열 (BAY 33,34,35) vs Local fallback 구분
     if (dictBay?.holdTiers && Array.isArray(dictBay.holdTiers)) {
-      // 빈 배열 = hold 없음 (BAY 33,34,35) — 모든 hold 행 visibility:hidden
+      // 명시적 빈 배열도 의미 있음 — hold 없음
       return new Set(dictBay.holdTiers.map(t => String(t).padStart(2, '0')));
+    }
+    if (Array.isArray(dictBay?.holdTiersLocal)) {
+      return new Set(dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0')));
     }
     return new Set(holdTiers);
   }, [dictBay, holdTiers]);
