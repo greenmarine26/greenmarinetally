@@ -170,7 +170,7 @@ function getMark(c, mode, xrayMap) {
   return { letter, type, isXray };
 }
 
-function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta }) {
+function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta, dictBaysSummary = {} }) {
   const allConts = [
     ...(even != null && containers[String(even)] || []),
     ...(odd != null && containers[String(odd)] || []),
@@ -212,100 +212,55 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     }
   });
 
-  // M5.47: row를 베이사전 Local + 실제 컨테이너 row union으로
-  //   베이사전 값이 작아도 실제 컨테이너가 더 크면 확장 → row 부족 방지
+  // M6.26: 베이플랜 로직 100% 이식 — 사용자 지시 "베이플랜에 다 맞춰주세요"
+  //   1) row: globalRowRange 사용 (전 베이 통일 폭)
+  //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
+  //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
+
   const dynRows = (() => {
-    const dictMaxEven = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
-    const dictMaxOdd = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
-    
-    // 실제 컨테이너의 최대 row (짝수/홀수)
-    let actualMaxEven = 0, actualMaxOdd = 0;
-    allConts.forEach(c => {
-      const r = parseInt(c.row);
-      if (!isNaN(r) && r > 0) {
-        if (r % 2 === 0 && r > actualMaxEven) actualMaxEven = r;
-        if (r % 2 === 1 && r > actualMaxOdd) actualMaxOdd = r;
-      }
-    });
-    
-    // union — 베이사전 + 실제 데이터 중 큰 값
-    const maxEven = Math.max(dictMaxEven || 0, actualMaxEven);
-    const maxOdd = Math.max(dictMaxOdd || 0, actualMaxOdd);
-    
-    if (maxEven || maxOdd) {
-      const left = [], right = [];
-      for (let r = maxEven; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
-      left.push('00');
-      for (let r = 1; r <= maxOdd; r += 2) right.push(String(r).padStart(2, '0'));
-      return [...left, ...right];
+    const maxLeft = globalRowRange?.maxLeft || 0;
+    const maxRight = globalRowRange?.maxRight || 0;
+    if (maxLeft || maxRight) {
+      const left = [];
+      for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
+      const right = [];
+      for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
+      return [...left, '00', ...right];
     }
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
-  // M6.0: V5 양식 복원 — 외곽 통일 (선박 전역 deckTiers/holdTiers) + 베이별 사용 tier만 visible
-  //   사용자 요구: BAY 33,34,35의 hold 영역도 외곽에 맞춰 visibility:hidden으로 자리 차지
-  //   80(extraTier)은 점선 자리에 그림 (M5.98 그대로)
-  const deckTiers = (() => {
-    // 외곽: 선박 전역 max (모든 베이 동일)
-    if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
-      return dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
-    }
-    const src = globalTiers && globalTiers.length > 0
-      ? globalTiers.map(t => String(t).padStart(2, '0'))
-      : [];
-    const deck = src.filter(t => parseInt(t) >= 80);
-    if (deck.length > 0) {
-      const nums = deck.map(t => parseInt(t));
-      const min = Math.min(...nums), max = Math.max(...nums);
-      const out = [];
-      for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
-      return out;
-    }
-    return ['92', '90', '88', '86', '84', '82'];
-  })();
+  // 페이지 두 베이의 dictBay tier union
+  const pageBayDictTiers = useMemo(() => {
+    const deck = new Set();
+    const hold = new Set();
+    [even, odd].forEach(bn => {
+      if (bn == null) return;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) return;
+      (db.deckTiersLocal || db.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
+      (db.holdTiersLocal || db.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
+    });
+    return { deck, hold };
+  }, [even, odd, dictBaysSummary]);
 
-  const holdTiers = (() => {
-    if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
-      return dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
-    }
-    const src = globalTiers && globalTiers.length > 0
-      ? globalTiers.map(t => String(t).padStart(2, '0'))
-      : [];
-    const hold = src.filter(t => parseInt(t) < 80);
-    if (hold.length > 0) {
-      const nums = hold.map(t => parseInt(t));
-      const min = Math.min(...nums), max = Math.max(...nums);
-      const out = [];
-      for (let t = max; t >= min; t -= 2) out.push(String(t).padStart(2, '0'));
-      return out;
-    }
-    return ['08', '06', '04', '02'];
-  })();
+  const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
+  const allTiersSet = hasDictTiers
+    ? Array.from(new Set([
+        ...pageBayDictTiers.deck,
+        ...pageBayDictTiers.hold,
+        ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
+      ]))
+    : Array.from(new Set([
+        ...(Array.isArray(globalTiers) ? globalTiers.map(t => String(t).padStart(2, '0')) : []),
+        ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
+      ]));
+  const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
+  const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
-  // M6.0: 베이별 사용 tier (visibility:hidden 처리용)
-  // M6.24: v2 정밀 등록 데이터(deckTiersLocal/holdTiersLocal)도 인식
-  //   증상: v2 BAY 25는 deckTiersLocal=[88,86,84,82,80] (5단) 명시되어 있는데
-  //         카고플랜은 dictBay.deckTiers(Local 없는 필드)만 봐서 → 외곽 전체(90 포함 6단) 표시
-  //         베이상세는 deckTiersLocal 보고 정확히 5단 표시 → 두 화면 불일치
-  //   해결: deckTiers || deckTiersLocal fallback
-  const bayDeckTiersUsed = useMemo(() => {
-    const local = dictBay?.deckTiers || dictBay?.deckTiersLocal;
-    if (Array.isArray(local) && local.length > 0) {
-      return new Set(local.map(t => String(t).padStart(2, '0')));
-    }
-    return new Set(deckTiers);  // 정보 없으면 모두 사용
-  }, [dictBay, deckTiers]);
-  const bayHoldTiersUsed = useMemo(() => {
-    // M6.24: holdTiers 빈 배열 (BAY 33,34,35) vs Local fallback 구분
-    if (dictBay?.holdTiers && Array.isArray(dictBay.holdTiers)) {
-      // 명시적 빈 배열도 의미 있음 — hold 없음
-      return new Set(dictBay.holdTiers.map(t => String(t).padStart(2, '0')));
-    }
-    if (Array.isArray(dictBay?.holdTiersLocal)) {
-      return new Set(dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0')));
-    }
-    return new Set(holdTiers);
-  }, [dictBay, holdTiers]);
+  // 외곽 통일 양식 폐기 — 베이별 격자 (visibility:hidden 없음)
+  const bayDeckTiersUsed = useMemo(() => new Set(deckTiers), [deckTiers]);
+  const bayHoldTiersUsed = useMemo(() => new Set(holdTiers), [holdTiers]);
 
   // M5.98: extraTier — 점선 위치에 그릴 베이별 특수 tier
   const extraTier = dictBay?.extraTier || null;
@@ -634,7 +589,7 @@ export default function PrintableCargoPlan({
             )}
             {foreColumns.map((col, i) => col.single ? (
               <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap}
-                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
+                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`fs-${i}`} className="bay-box-placeholder"></div>
             ))}
@@ -646,7 +601,7 @@ export default function PrintableCargoPlan({
             )}
             {foreColumns.map((col, i) => col.pair ? (
               <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap}
-                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
+                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`fp-${i}`} className="bay-box-placeholder"></div>
             ))}
@@ -659,7 +614,7 @@ export default function PrintableCargoPlan({
             )}
             {aftColumns.map((col, i) => col.single ? (
               <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap}
-                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
+                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`as-${i}`} className="bay-box-placeholder"></div>
             ))}
@@ -741,7 +696,7 @@ export default function PrintableCargoPlan({
                 if (col.pair) {
                   out.push(
                     <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap}
-                      mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} />
+                      mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
                   );
                 } else if (i === firstEmptyPairIdx) {
                   // 첫 번째 pair=null 자리에 통계 박스

@@ -157,44 +157,26 @@ function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, globalRowRange, globalTiers, dictShipMeta }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
     ...(odd != null && bayMap[String(odd)] || []),
   ];
 
-  // M6.23: 베이상세 row 계산을 카고플랜 dynRows와 100% 동일 로직으로 통일
-  //   카고플랜은 정확히 표시되는데 베이상세만 부정확했던 원인:
-  //   기존 STD_ROWS가 dictBay.rowMaxEven(Local 없는 필드)을 fallback에 포함시켜
-  //   STOWAGE PDF 등록 데이터의 전역 8/7이 잘못 적용됨.
-  //   카고플랜의 dynRows는 dictBay.rowMaxEvenLocal만 보고 → 정확.
-  //   동일 로직 적용 → 베이상세도 정확.
+  // M6.26: 베이플랜과 100% 동일 로직 — 베이플랜만 정확하므로 그것에 맞춤
+  //   사용자 지시: "베이플랜에 다 맞춰주세요. 지금 베이플랜만 아주 정확합니다."
+
+  // STD_ROWS: 베이플랜은 globalRowRange 사용 (전 베이 통일 폭) — 동일 적용
   const STD_ROWS = useMemo(() => {
-    const dictMaxEven = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
-    const dictMaxOdd  = dictBay?.rowMaxOddLocal  ?? dictShipMeta?.rowMaxOdd  ?? globalRowRange?.maxRight;
-
-    let actualMaxEven = 0, actualMaxOdd = 0;
-    allConts.forEach(c => {
-      const r = parseInt(c.row);
-      if (!isNaN(r) && r > 0) {
-        if (r % 2 === 0 && r > actualMaxEven) actualMaxEven = r;
-        if (r % 2 === 1 && r > actualMaxOdd) actualMaxOdd = r;
-      }
-    });
-
-    const maxEven = Math.max(dictMaxEven || 0, actualMaxEven);
-    const maxOdd  = Math.max(dictMaxOdd  || 0, actualMaxOdd);
-
-    if (maxEven || maxOdd) {
-      const left = [];
-      for (let r = maxEven; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
-      const right = [];
-      for (let r = 1; r <= maxOdd; r += 2) right.push(String(r).padStart(2, '0'));
-      return [...left, '00', ...right];
-    }
-    return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
-  }, [dictBay, dictShipMeta, globalRowRange, allConts]);
+    const maxLeft = globalRowRange?.maxLeft || 0;
+    const maxRight = globalRowRange?.maxRight || 0;
+    const left = [];
+    for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
+    const right = [];
+    for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
+    return [...left, '00', ...right];
+  }, [globalRowRange]);
   const colCount = STD_ROWS.length;
 
   const cellMap = {};
@@ -204,41 +186,35 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     cellMap[`${t}-${r}`] = c;
   });
 
-  // M5.42: 베이별 deckTiersLocal/holdTiersLocal 절대 우선
-  // M6.19: STOWAGE PDF로 등록된 데이터는 deckTiers/holdTiers 필드 사용 → fallback 추가
-  //   1순위: dictBay.deckTiersLocal (v2 PDF 수동 정밀 등록)
-  //   2순위: dictBay.deckTiers       (STOWAGE PDF AI 등록 — M6.14)
-  //   3순위: dictShipMeta.deckTiers  (선박 전역)
-  //   4순위: globalTiers + EDI 컨테이너 (fallback)
-  let deckTiers, holdTiers;
-  const localDeck = dictBay?.deckTiersLocal || dictBay?.deckTiers;
-  const localHold = dictBay?.holdTiersLocal || dictBay?.holdTiers;
-  if (Array.isArray(localDeck) && localDeck.length > 0) {
-    deckTiers = localDeck.map(t => String(t).padStart(2, '0'));
-  } else if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
-    deckTiers = dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
-  } else {
-    const allTiers = new Set();
-    if (Array.isArray(globalTiers) && globalTiers.length > 0) {
-      globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
-    }
-    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-    deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
-      .sort((a, b) => parseInt(b) - parseInt(a));
-  }
-  if (Array.isArray(localHold) && localHold.length > 0) {
-    holdTiers = localHold.map(t => String(t).padStart(2, '0'));
-  } else if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
-    holdTiers = dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
-  } else {
-    const allTiers = new Set();
-    if (Array.isArray(globalTiers) && globalTiers.length > 0) {
-      globalTiers.forEach(t => allTiers.add(String(t).padStart(2, '0')));
-    }
-    allConts.forEach(c => allTiers.add(String(c.tier).padStart(2, '0')));
-    holdTiers = [...allTiers].filter(t => parseInt(t) < 80)
-      .sort((a, b) => parseInt(b) - parseInt(a));
-  }
+  // M6.26: 베이플랜 로직 그대로 이식 — 페이지 두 베이의 dictBay tier union + 실제 컨 tier + 80 기준 분리
+  //   사용자 지시: "베이플랜에 다 맞춰주세요. 지금 베이플랜만 아주 정확합니다."
+  //   BayPlan.jsx:926-953의 로직 100% 동일
+  const pageBayDictTiers = useMemo(() => {
+    const deck = new Set();
+    const hold = new Set();
+    [even, odd].forEach(bn => {
+      if (bn == null) return;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) return;
+      (db.deckTiersLocal || db.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
+      (db.holdTiersLocal || db.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
+    });
+    return { deck, hold };
+  }, [even, odd, dictBaysSummary]);
+
+  const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
+  const allTiersSet = hasDictTiers
+    ? Array.from(new Set([
+        ...pageBayDictTiers.deck,
+        ...pageBayDictTiers.hold,
+        ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
+      ]))
+    : Array.from(new Set([
+        ...(Array.isArray(globalTiers) ? globalTiers.map(t => String(t).padStart(2, '0')) : []),
+        ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
+      ]));
+  const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
+  const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
   const hasHold = dictBay ? dictBay.hasHold !== false : allConts.some(c => parseInt(c.tier) < 80);
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
@@ -484,6 +460,7 @@ export default function PrintableBayDetail({
                 bayMap={bayMap} mode={mode}
                 voyageInfo={voyageInfo} voyageKey={voyageKey}
                 shipName={shipName} dictBay={dictBay}
+                dictBaysSummary={dictBaysSummary}
                 globalRowRange={globalRowRange}
                 globalTiers={globalTiers}
                 dictShipMeta={dictShipMeta} />
