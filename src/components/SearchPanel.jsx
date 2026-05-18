@@ -109,7 +109,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
       {searchMode === 'single'
         ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>
-        : <TwinSearch voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
+        : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
     </div>
   );
 }
@@ -519,7 +519,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
 }
 
 // ─── 트윈 모드 (자동 짝꿍) ───
-function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
+function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer }) {
   const [q1, setQ1] = useState('');
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
