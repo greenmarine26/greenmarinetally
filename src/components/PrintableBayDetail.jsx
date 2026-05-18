@@ -253,7 +253,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       <div key={`${t}-${r}`} className={`bd-cell filled ${isPtk(c, mode) ? 'ptk' : ''}`}>
         <div>{lines.line1}</div>
         <div>{lines.line2}</div>
-        <div>{lines.line3}</div>
+        <div className="bd-line3">{lines.line3}</div>
         {lines.line4 && <div>{lines.line4}</div>}
         <div className="bd-pos">{lines.lineLast}</div>
       </div>
@@ -611,18 +611,29 @@ export default function PrintableBayDetail({
           font-family: 'Courier New', monospace;
           overflow: hidden;
           min-width: 0;
-          /* M6.31: word-break 정책 변경
-             기존 break-all → "20" 같은 짧은 텍스트도 문자 단위 분리됨 (2와 0 다른 줄)
-             변경 keep-all + overflow-wrap:anywhere
-               → 영문/숫자 단어 사이는 한 단위로 유지 ("20" 안 깨짐)
-               → 단, 컨번호 11자 같은 긴 단일 단어는 끝에서 wrap (셀 폭 보장) */
+          /* M6.32: 단어 절대 안 깨짐 — "DC20", "BEAU2917911" 한 단위 유지
+             기존 anywhere가 keep-all을 무력화 → "DC"와 "20" 분리 발생
+             변경: normal — 공백/하이픈에서만 wrap, 단어 내부는 절대 안 깨짐
+             단어가 셀 폭보다 길면 overflow: hidden으로 잘림 (4줄 보장 우선) */
           word-break: keep-all;
-          overflow-wrap: anywhere;
+          overflow-wrap: normal;
           height: 100%;
           box-sizing: border-box;
           display: flex;
           flex-direction: column;
           justify-content: center;
+        }
+        /* M6.32: 셀 안 각 줄도 nowrap 보장 — 한 항목이 두 줄로 안 나뉨 */
+        .bd-cell > div {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: clip;
+        }
+        /* M6.33: 3번째 줄(상태+무게+규격)만 폰트 축소 — 정보 밀도 높아 한 줄에 안 들어감
+           예: "C_K E 2.2 DC20" → 14자 + 공백 → 6pt로 줄여서 한 줄 보장 */
+        .bd-cell .bd-line3 {
+          font-size: 6pt;
+          letter-spacing: -0.2px;
         }
         .bd-cell.empty { background: white; }
         .bd-cell.filled.ptk { background: #fef3c7; }
