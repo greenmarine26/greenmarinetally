@@ -611,7 +611,13 @@ export default function PrintableBayDetail({
           font-family: 'Courier New', monospace;
           overflow: hidden;
           min-width: 0;
-          word-break: break-all;
+          /* M6.31: word-break 정책 변경
+             기존 break-all → "20" 같은 짧은 텍스트도 문자 단위 분리됨 (2와 0 다른 줄)
+             변경 keep-all + overflow-wrap:anywhere
+               → 영문/숫자 단어 사이는 한 단위로 유지 ("20" 안 깨짐)
+               → 단, 컨번호 11자 같은 긴 단일 단어는 끝에서 wrap (셀 폭 보장) */
+          word-break: keep-all;
+          overflow-wrap: anywhere;
           height: 100%;
           box-sizing: border-box;
           display: flex;
