@@ -546,18 +546,21 @@ function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
   }, [q1, allContainers]);
 
   // 앞 컨이 1개로 좁혀지면 자동 선택 + 짝꿍 찾기
+  // M6.22: voyage.info의 imo/vsl 전달 → 베이사전 활용으로 매칭 정확도 향상
+  //        (EDI에 짝수 베이 누락된 경우에도 짝꿍 매칭 보장)
+  const shipImo = voyage?.info?.imo || '';
+  const shipName = voyage?.info?.vsl || '';
   useEffect(() => {
     if (r1.length === 1 && autoTwin) {
       const front = r1[0];
       setC1(front);
-      // 페어링되지 않은 컨만 짝 후보로
-      const twin = findTwinCandidate(front, allContainers, excludeCns);
+      const twin = findTwinCandidate(front, allContainers, excludeCns, shipImo, shipName);
       setC2(twin);
     } else if (r1.length === 0 || r1.length > 1) {
       setC1(null);
       setC2(null);
     }
-  }, [r1, autoTwin, allContainers, excludeCns]);
+  }, [r1, autoTwin, allContainers, excludeCns, shipImo, shipName]);
 
   // 두 컨 모두 완료되면 자동 비우기
   const handleAfterComplete = () => {
@@ -597,7 +600,7 @@ function TwinSearch({ voyageKey, inspector, allContainers, onOpenContainer }) {
             {r1.length}개 일치 — 정확히 입력 또는 선택:
             <div className="flex flex-wrap gap-1 mt-1 justify-center">
               {r1.slice(0, 8).map(c => (
-                <button key={c.cn} onClick={() => { setC1(c); setC2(findTwinCandidate(c, allContainers)); }}
+                <button key={c.cn} onClick={() => { setC1(c); setC2(findTwinCandidate(c, allContainers, new Set(), shipImo, shipName)); }}
                   className="bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-[10px] mono text-amber-300">
                   {c.cn}
                 </button>

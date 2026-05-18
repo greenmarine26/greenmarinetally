@@ -164,36 +164,37 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     ...(odd != null && bayMap[String(odd)] || []),
   ];
 
-  // M5.47: row를 베이사전 + 실제 컨테이너 row union으로
-  // M6.19: STOWAGE PDF 등록 데이터(rowMax* Local 없음)도 인식
-  // M6.20: dict 명시값 있으면 강제 최소값(6/5) 적용 안 함 — BAY 01 같은 좁은 베이 정확히 표시
+  // M6.23: 베이상세 row 계산을 카고플랜 dynRows와 100% 동일 로직으로 통일
+  //   카고플랜은 정확히 표시되는데 베이상세만 부정확했던 원인:
+  //   기존 STD_ROWS가 dictBay.rowMaxEven(Local 없는 필드)을 fallback에 포함시켜
+  //   STOWAGE PDF 등록 데이터의 전역 8/7이 잘못 적용됨.
+  //   카고플랜의 dynRows는 dictBay.rowMaxEvenLocal만 보고 → 정확.
+  //   동일 로직 적용 → 베이상세도 정확.
   const STD_ROWS = useMemo(() => {
-    const dictLeft = dictBay?.rowMaxEvenLocal ?? dictBay?.rowMaxEven ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
-    const dictRight = dictBay?.rowMaxOddLocal ?? dictBay?.rowMaxOdd ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
-    // 실제 컨테이너 max row
-    let actualEven = 0, actualOdd = 0;
+    const dictMaxEven = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
+    const dictMaxOdd  = dictBay?.rowMaxOddLocal  ?? dictShipMeta?.rowMaxOdd  ?? globalRowRange?.maxRight;
+
+    let actualMaxEven = 0, actualMaxOdd = 0;
     allConts.forEach(c => {
       const r = parseInt(c.row);
       if (!isNaN(r) && r > 0) {
-        if (r % 2 === 0 && r > actualEven) actualEven = r;
-        if (r % 2 === 1 && r > actualOdd) actualOdd = r;
+        if (r % 2 === 0 && r > actualMaxEven) actualMaxEven = r;
+        if (r % 2 === 1 && r > actualMaxOdd) actualMaxOdd = r;
       }
     });
-    // M6.20: 베이별 dict 명시값(rowMaxEvenLocal/rowMaxOddLocal)이 있으면 그 값 우선
-    //   강제 최소값(6/5) 적용 안 함 — BAY 01 같은 좁은 베이도 답안지 그대로 표시
-    const hasBayLocalRow = dictBay?.rowMaxEvenLocal != null || dictBay?.rowMaxOddLocal != null;
-    const maxLeft = hasBayLocalRow
-      ? Math.max(dictLeft || 0, actualEven)            // 베이별 명시 → 그대로 (실제 컨이 더 크면 그만큼)
-      : Math.max(dictLeft || 0, actualEven, 6);        // 명시 없음 → 최소 6 마진
-    const maxRight = hasBayLocalRow
-      ? Math.max(dictRight || 0, actualOdd)
-      : Math.max(dictRight || 0, actualOdd, 5);
-    const left = [];
-    for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
-    const right = [];
-    for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
-    return [...left, '00', ...right];
-  }, [globalRowRange, dictShipMeta, dictBay, even, odd, bayMap]);
+
+    const maxEven = Math.max(dictMaxEven || 0, actualMaxEven);
+    const maxOdd  = Math.max(dictMaxOdd  || 0, actualMaxOdd);
+
+    if (maxEven || maxOdd) {
+      const left = [];
+      for (let r = maxEven; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
+      const right = [];
+      for (let r = 1; r <= maxOdd; r += 2) right.push(String(r).padStart(2, '0'));
+      return [...left, '00', ...right];
+    }
+    return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
+  }, [dictBay, dictShipMeta, globalRowRange, allConts]);
   const colCount = STD_ROWS.length;
 
   const cellMap = {};

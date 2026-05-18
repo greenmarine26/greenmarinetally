@@ -1,24 +1,24 @@
 // 트윈 짝꿍 (V2 - EDI 베이 분포 기반 자동 분석)
+// M6.22: 베이사전 bayList도 통합 — EDI에 짝수 베이(22 등) 누락 시에도 짝꿍 매칭 보장
 //
 // 알고리즘:
-// 1. EDI에 있는 모든 베이 분석
+// 1. EDI에 있는 모든 베이 + 베이사전 bayList 통합
 // 2. 짝수 베이(40ft 슬롯)가 있으면 → 양 옆 홀수 베이가 짝꿍
 // 3. 짝수 베이가 없으면(통로) → 그 양옆 홀수 베이는 단독
 //
-// 예: EDI 베이 = [01, 02, 03, 05, 06, 07, 09, 11]
-//   - 02 짝수 → 01-03 짝꿍
-//   - 04 없음(통로) → 03 다음 짝꿍 시작점
-//   - 06 짝수 → 05-07 짝꿍
-//   - 08 없음(통로) → 07 다음
-//   - 10 없음(통로) → 09 단독
-//   - 11도 단독
-//
-// 한 번 계산하면 캐시 (성능)
+// 예: XTPG section 7: bayList = [21, 22, 23]
+//   - EDI에 22번 컨이 없어도 베이사전에 있으면 baySet.has(22)=true
+//   - 21번 짝꿍 = 23 정상 매칭
 
+import { getShipBayDictData } from './shipStructure.js';
+
+// M6.22: cache 구조 변경 — (allContainers, shipKey) 조합으로 캐싱
 const cache = new WeakMap();
 
-function buildBayPairs(allContainers) {
-  if (cache.has(allContainers)) return cache.get(allContainers);
+function buildBayPairs(allContainers, shipImo = '', shipName = '') {
+  const shipKey = `${shipImo || ''}|${shipName || ''}`;
+  const containerCache = cache.get(allContainers);
+  if (containerCache?.[shipKey]) return containerCache[shipKey];
 
   // 모든 베이 수집
   // M3.86 fix2: c.bay도 normalize (Firebase zero-padded "025" 같은 옛 데이터 호환)
@@ -26,36 +26,46 @@ function buildBayPairs(allContainers) {
   for (const c of allContainers) {
     if (c.bay) {
       const n = parseInt(c.bay, 10);
-      if (Number.isFinite(n)) bays.add(String(n));
+      if (Number.isFinite(n)) bays.add(n);
     }
   }
-  const bayInts = Array.from(bays).map(b => parseInt(b)).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+  // M6.22: 베이사전 bayList도 추가 (EDI에 컨 없는 짝수 베이 보완)
+  //   예: XTPG에서 22번 짝수 슬롯에 실제 컨테이너 없으면 EDI에는 22 누락,
+  //       그러나 베이사전엔 22 존재 → 21↔23 짝꿍 매칭 필요
+  if (shipImo || shipName) {
+    const dict = getShipBayDictData(shipImo, shipName);
+    if (dict?.bayDef?.bayList) {
+      dict.bayDef.bayList.forEach(b => {
+        const n = parseInt(b, 10);
+        if (Number.isFinite(n)) bays.add(n);
+      });
+    }
+  }
+  const bayInts = Array.from(bays).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
   const baySet = new Set(bayInts);
 
   // 짝꿍 매핑: 홀수 베이 → 짝꿍 베이
-  // M3.86 fix: pairs 키와 값을 정수 문자열로 통일 (이전: 3자리 padded "025" 였는데
-  //   c.bay는 normalizeBay 결과 "25"라 비교 시 절대 매칭 안 됨 → 트윈 100% 실패)
+  // M3.86 fix: pairs 키와 값을 정수 문자열로 통일
   const pairs = {}; // 'XX' → 'YY' or null (단독)
   for (const b of bayInts) {
-    if (b % 2 === 0) continue; // 짝수(40ft 슬롯)는 짝꿍 대상 X
+    if (b % 2 === 0) continue;
 
     const bStr = String(b);
-    const evenLeft = b - 1;   // -1 짝수 (작은 쪽)
-    const evenRight = b + 1;  // +1 짝수 (큰 쪽)
+    const evenLeft = b - 1;
+    const evenRight = b + 1;
 
     let pairBay = null;
-    // 우선: +1 짝수 슬롯 있으면 → b+2가 짝
     if (baySet.has(evenRight) && baySet.has(b + 2)) {
       pairBay = String(b + 2);
     }
-    // 차선: -1 짝수 슬롯 있으면 → b-2가 짝
     else if (baySet.has(evenLeft) && baySet.has(b - 2)) {
       pairBay = String(b - 2);
     }
-    pairs[bStr] = pairBay; // null이면 단독
+    pairs[bStr] = pairBay;
   }
 
-  cache.set(allContainers, pairs);
+  if (!containerCache) cache.set(allContainers, {});
+  cache.get(allContainers)[shipKey] = pairs;
   return pairs;
 }
 
@@ -63,23 +73,20 @@ function buildBayPairs(allContainers) {
 //   target: 검색된 컨테이너
 //   allContainers: 전체 컨테이너
 //   excludeCns: 이미 페어링된 컨번호 set (제외)
-export function findTwinCandidate(target, allContainers, excludeCns = new Set()) {
+// M6.22: shipImo/shipName 추가 — 베이사전 활용으로 매칭 정확도 향상
+export function findTwinCandidate(target, allContainers, excludeCns = new Set(), shipImo = '', shipName = '') {
   if (!target?.bay || !target?.row || !target?.tier) return null;
 
   const targetBay = parseInt(target.bay);
   if (!Number.isFinite(targetBay)) return null;
-  if (targetBay % 2 === 0) return null; // 짝수 베이는 트윈 대상 아님
+  if (targetBay % 2 === 0) return null;
 
-  const pairs = buildBayPairs(allContainers);
-  // M3.86 fix: padStart 제거 (pairs 키도 정수 문자열)
+  const pairs = buildBayPairs(allContainers, shipImo, shipName);
   const targetBayStr = String(targetBay);
   const pairBayStr = pairs[targetBayStr];
 
-  if (!pairBayStr) return null; // 단독 베이
+  if (!pairBayStr) return null;
 
-  // 짝꿍 베이의 같은 row/tier 컨 찾기
-  // M3.86 fix2: c.bay도 normalize 후 비교 (Firebase에 zero-padded "025"로 저장된 옛 데이터 호환)
-  //   pairBayStr는 정수 문자열("25")이라 c.bay가 "025"이면 직접 비교 시 매칭 실패
   const found = allContainers.find(c => {
     if (c.cn === target.cn) return false;
     if (excludeCns.has(c.cn)) return false;
@@ -93,8 +100,9 @@ export function findTwinCandidate(target, allContainers, excludeCns = new Set())
 }
 
 // 베이 짝꿍 맵 가져오기 (UI에서 표시용)
-export function getBayPairs(allContainers) {
-  return buildBayPairs(allContainers);
+// M6.22: shipImo/shipName 추가
+export function getBayPairs(allContainers, shipImo = '', shipName = '') {
+  return buildBayPairs(allContainers, shipImo, shipName);
 }
 
 // 같은 슬롯에 적재된 다른 컨 찾기 (FR 4개 한 자리 등)
