@@ -139,7 +139,13 @@ function formatCellLines(c) {
     // IMDG/위험물
     const line4 = c.imdg ? ` ${String(c.imdg)}` : '';
     // 위치
-    const bay = String(c.bay ?? '0').padStart(3, '0').slice(-3);
+    // M6.35: BAY 2자리 정규화 (100+ 만 3자리 유지) — 7자리(0010002) → 6자리(010082)
+    //   기존: padStart(3,'0') → "001" → ....0010002 7자리
+    //   변경: 100 미만이면 2자리, 이상이면 3자리 그대로
+    const bayInt = parseInt(c.bay, 10);
+    const bay = Number.isFinite(bayInt) && bayInt >= 100
+      ? String(bayInt)
+      : String(Number.isFinite(bayInt) ? bayInt : 0).padStart(2, '0');
     const row = String(c.row ?? '00').padStart(2, '0');
     const tier = String(c.tier ?? '00').padStart(2, '0');
     const lineLast = `....${bay}${row}${tier}`;
