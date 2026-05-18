@@ -139,9 +139,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         merged[r.cn] = { ...r, _src: 'list' };
       } else {
         // M4.9e-fix: 베이그리드용 컨테이너에도 records 핵심 필드 전부 보강
-        //   사용자 신고: "검색은 수정 반영되는데 베이는 안 됨"
+        //   사용자 신고: "검색은 수정 반영되는다 베이는 안 됨"
         //   원인: allEdiContainers가 sl/wt만 보강하고 bay_actual/eseal 등 누락
+        // M6.21: ISO/op/pol/pod 보강
+        //   증상: 같은 컨이 자연어 검색은 ISO "20DC" / 검수업체 "KMTC" / POL "CNAQG" 정상,
+        //         베이 클릭은 ISO "XXXX" / 검수업체 "KMD" / POL "CNTCA" 비정상
+        //   원인: EDI(BAPLIE)에 placeholder/약어/부정확 정보가 들어옴.
+        //         LIST(IFCSUM/엑셀)에는 정확한 정보 → 보강 시 누락되어 베이 클릭 시 EDI 그대로 표시.
+        //   해결: LIST 데이터가 있으면 항상 우선 (검수원이 직접 다루는 정확한 자료).
+        //         단 LIST가 비어있으면 EDI 값 보존.
         const safeR = {};
+        if (r.iso) safeR.iso = r.iso;
+        if (r.op)  safeR.op  = r.op;
+        if (r.pol) safeR.pol = r.pol;
+        if (r.pod) safeR.pod = r.pod;
         if (r.sl) safeR.sl = r.sl;
         if (r.sl_orig) safeR.sl_orig = r.sl_orig;
         if (r.wt && !merged[r.cn].wt) safeR.wt = r.wt;
