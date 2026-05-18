@@ -592,6 +592,8 @@ const STOWAGE_PROMPT = `이 PDF는 컨테이너 선박의 STOWAGE INSTRUCTION (�
       "hasDeck": true,
       "deckTiers": [86, 84, 82],
       "holdTiers": [6, 4, 2],
+      "rowMaxEven": 4,
+      "rowMaxOdd": 3,
       "extraTier": null,
       "loadCounts": {"_20": 0, "_40": 0, "_45": 0},
       "loadSymbols": ["X", "G", "T"]
@@ -605,16 +607,29 @@ const STOWAGE_PROMPT = `이 PDF는 컨테이너 선박의 STOWAGE INSTRUCTION (�
 2. bayLabel: PDF에 적힌 그대로 (BAY 13 또는 BAY (14) 15)
 3. isPair: 짝꿍 짝수가 괄호로 표시되면 true
 4. pairEvenNo: 짝꿍 짝수 번호 (단독이면 null)
-5. isStandalone: 짝수 짝꿍이 없으면 true (BOW/STERN/선원건물 앞뒤 가능)
-6. hasHold: hold tier(02, 04, 06, 08, 10, 12, 14)가 그려져 있으면 true. 비어있으면 false (데크 전용)
+5. isStandalone: 짝수 짝꿍이 없으면 true
+6. hasHold: hold tier(02, 04, 06, 08, 10, 12, 14)가 그려져 있으면 true. 비어있으면 false
 7. hasDeck: deck tier(80, 82, 84, 86, 88, 90, 92, 94, 96)가 그려져 있으면 true
 8. deckTiers: 베이에 실제 표시된 deck tier만 (높→낮 순)
 9. holdTiers: 베이에 실제 표시된 hold tier만 (높→낮 순). 데크 전용이면 []
-10. extraTier: 80 또는 90이 별도 위치에 있으면 그 숫자, 없으면 null
-11. loadCounts: 베이 라벨 옆 "0 / 26 / 0" 패턴 → {_20: 0, _40: 26, _45: 0}
-12. loadSymbols: 베이 내부에 표시된 마크 종류 (중복 제외)
+10. **rowMaxEven**: 베이의 가장 큰 짝수 row 번호 (베이별 답안지에 보이는 그대로)
+   - 예: row 표시가 "06 04 02 00 01 03 05" → rowMaxEven=6
+   - 예: row 표시가 "04 02 00 01 03" → rowMaxEven=4
+   - 예: row 표시가 "08 06 04 02 00 01 03 05 07" → rowMaxEven=8
+11. **rowMaxOdd**: 베이의 가장 큰 홀수 row 번호 (베이별 답안지에 보이는 그대로)
+   - 예: row 표시가 "06 04 02 00 01 03 05" → rowMaxOdd=5
+   - 예: row 표시가 "04 02 00 01 03" → rowMaxOdd=3
+   - 예: row 표시가 "08 06 04 02 00 01 03 05 07" → rowMaxOdd=7
+12. extraTier: 80 또는 90이 별도 위치에 있으면 그 숫자, 없으면 null
+13. loadCounts: 베이 라벨 옆 "0 / 26 / 0" 패턴 → {_20: 0, _40: 26, _45: 0}
+14. loadSymbols: 베이 내부에 표시된 마크 종류 (중복 제외)
 
-중요:
+매우 중요: row 폭은 베이별로 다릅니다.
+   - 선수(BOW) 쪽 좁은 베이(예: BAY 01, 03): row 폭 작음 (3-4개씩)
+   - 중앙 베이: row 폭 큼 (7-9개씩)
+   - 답안지에 그려진 그대로 베이별로 정확히 추출하세요. 다른 베이 값을 복사하지 마세요.
+
+기타:
 - 추론하지 말고 PDF에 그려진 그대로만 추출
 - 베이가 PDF에 없으면 절대 만들어내지 말 것
 - tier 숫자는 PDF에 적힌 그대로 정수 추출
@@ -738,6 +753,9 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
     const hasHold = b.hasHold === true && holdTiers.length > 0;
     const hasDeck = b.hasDeck !== false && deckTiers.length > 0;
     const isStandalone = b.isStandalone === true || !b.isPair;
+    // M6.20: 베이별 row 폭 — Gemini가 추출, 없으면 default
+    const rowMaxEvenLocal = Number.isFinite(b.rowMaxEven) ? b.rowMaxEven : null;
+    const rowMaxOddLocal = Number.isFinite(b.rowMaxOdd) ? b.rowMaxOdd : null;
 
     // 섹션 자동 분류 (같은 deck/hold/extraTier 패턴이 묶임)
     const deckSig = deckTiers.join(',');
@@ -765,6 +783,9 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
         holdTiers,
         deckTiersLocal: deckTiers,
         holdTiersLocal: holdTiers,
+        // M6.20: 베이별 row 폭
+        ...(rowMaxEvenLocal != null ? { rowMaxEvenLocal, rowMaxEven: rowMaxEvenLocal } : {}),
+        ...(rowMaxOddLocal != null ? { rowMaxOddLocal, rowMaxOdd: rowMaxOddLocal } : {}),
         ...(extraTier ? { extraTier } : {}),
       });
       pairs.push([b.pairEvenNo, b.bayNo]);
@@ -779,11 +800,14 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
       hasHold,
       hasDeck,
       isStandalone,
-      // M6.19: 양쪽 호환 (위와 동일)
+      // M6.19: 양쪽 호환
       deckTiers,
       holdTiers,
       deckTiersLocal: deckTiers,
       holdTiersLocal: holdTiers,
+      // M6.20: 베이별 row 폭
+      ...(rowMaxEvenLocal != null ? { rowMaxEvenLocal, rowMaxEven: rowMaxEvenLocal } : {}),
+      ...(rowMaxOddLocal != null ? { rowMaxOddLocal, rowMaxOdd: rowMaxOddLocal } : {}),
       ...(extraTier ? { extraTier } : {}),
     });
   });

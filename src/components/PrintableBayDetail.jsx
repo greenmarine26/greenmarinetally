@@ -166,6 +166,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 
   // M5.47: row를 베이사전 + 실제 컨테이너 row union으로
   // M6.19: STOWAGE PDF 등록 데이터(rowMax* Local 없음)도 인식
+  // M6.20: dict 명시값 있으면 강제 최소값(6/5) 적용 안 함 — BAY 01 같은 좁은 베이 정확히 표시
   const STD_ROWS = useMemo(() => {
     const dictLeft = dictBay?.rowMaxEvenLocal ?? dictBay?.rowMaxEven ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
     const dictRight = dictBay?.rowMaxOddLocal ?? dictBay?.rowMaxOdd ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
@@ -178,8 +179,15 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
         if (r % 2 === 1 && r > actualOdd) actualOdd = r;
       }
     });
-    const maxLeft = Math.max(dictLeft || 0, actualEven, 6);
-    const maxRight = Math.max(dictRight || 0, actualOdd, 5);
+    // M6.20: 베이별 dict 명시값(rowMaxEvenLocal/rowMaxOddLocal)이 있으면 그 값 우선
+    //   강제 최소값(6/5) 적용 안 함 — BAY 01 같은 좁은 베이도 답안지 그대로 표시
+    const hasBayLocalRow = dictBay?.rowMaxEvenLocal != null || dictBay?.rowMaxOddLocal != null;
+    const maxLeft = hasBayLocalRow
+      ? Math.max(dictLeft || 0, actualEven)            // 베이별 명시 → 그대로 (실제 컨이 더 크면 그만큼)
+      : Math.max(dictLeft || 0, actualEven, 6);        // 명시 없음 → 최소 6 마진
+    const maxRight = hasBayLocalRow
+      ? Math.max(dictRight || 0, actualOdd)
+      : Math.max(dictRight || 0, actualOdd, 5);
     const left = [];
     for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
     const right = [];
