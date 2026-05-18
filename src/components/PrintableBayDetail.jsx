@@ -216,6 +216,12 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
+  // M6.28: BayPlan과 동일 — deck/hold 갯수 다를 때 상하 균형 패딩
+  //   deck 5단 + hold 3단 → hold에 빈 자리 2단 추가해서 5:5 균형
+  const tierMax = Math.max(deckTiers.length, holdTiers.length);
+  const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
+  const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
+
   const hasHold = dictBay ? dictBay.hasHold !== false : allConts.some(c => parseInt(c.tier) < 80);
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
 
@@ -272,22 +278,22 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 
       <div className="bd-grid-wrap">
         <div className="bd-grid">
-          {hasDeck && deckTiers.map(t => (
-            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {STD_ROWS.map(r => renderCell(t, r))}
+          {hasDeck && deckTiersPadded.map((t, ti) => (
+            <div key={`d-${ti}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+              {t ? STD_ROWS.map(r => renderCell(t, r)) : STD_ROWS.map((r, ri) => <span key={`d-${ti}-${ri}`} className="bd-cell-empty"></span>)}
             </div>
           ))}
           {hasDeck && hasHold && <div className="bd-hatch"></div>}
-          {hasHold && holdTiers.map(t => (
-            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {STD_ROWS.map(r => renderCell(t, r))}
+          {hasHold && holdTiersPadded.map((t, ti) => (
+            <div key={`h-${ti}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+              {t ? STD_ROWS.map(r => renderCell(t, r)) : STD_ROWS.map((r, ri) => <span key={`h-${ti}-${ri}`} className="bd-cell-empty"></span>)}
             </div>
           ))}
         </div>
         <div className="bd-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
+          {hasDeck && deckTiersPadded.map((t, ti) => <span key={`dl-${ti}`}>{t || ''}</span>)}
           {hasDeck && hasHold && <span className="bd-tier-gap"></span>}
-          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+          {hasHold && holdTiersPadded.map((t, ti) => <span key={`hl-${ti}`}>{t || ''}</span>)}
         </div>
       </div>
 
@@ -606,6 +612,14 @@ export default function PrintableBayDetail({
         .bd-cell.empty { background: white; }
         .bd-cell.filled.ptk { background: #fef3c7; }
         .bd-cell.filled { background: white; }
+        /* M6.28: 패딩 행의 빈 자리 — 격자 자리만 차지, 테두리/배경 없음 */
+        .bd-cell-empty {
+          padding: 1px;
+          font-size: 7pt;
+          line-height: 1.05;
+          min-width: 0;
+          visibility: hidden;
+        }
         .bd-pos { color: #555; }
         .bd-hatch {
           height: 4px; background: #000; margin: 2px 0;

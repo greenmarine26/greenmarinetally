@@ -258,6 +258,11 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
+  // M6.28: BayPlan과 동일 — deck/hold 갯수 다를 때 상하 균형 패딩
+  const tierMax = Math.max(deckTiers.length, holdTiers.length);
+  const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
+  const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
+
   // 외곽 통일 양식 폐기 — 베이별 격자 (visibility:hidden 없음)
   const bayDeckTiersUsed = useMemo(() => new Set(deckTiers), [deckTiers]);
   const bayHoldTiersUsed = useMemo(() => new Set(holdTiers), [holdTiers]);
@@ -297,10 +302,14 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       </div>
       <div className="bay-grid-wrap">
         <div className="bay-grid">
-          {hasDeck && deckTiers.map(t => {
-            const isUsed = bayDeckTiersUsed.has(t);
+          {hasDeck && deckTiersPadded.map((t, ti) => {
+            if (!t) {
+              return <div key={`d-${ti}`} className="bay-grid-row tier-hidden">
+                {dynRows.map((r, ri) => <span key={ri} className="bay-cell mark-empty"></span>)}
+              </div>;
+            }
             return (
-              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+              <div key={`d-${ti}`} className="bay-grid-row">
                 {dynRows.map(r => {
                   const c = cellMap[`${t}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
@@ -312,10 +321,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
               </div>
             );
           })}
-          {/* M6.0: 점선/extraTier 자리 (모든 베이 동일 위치, 한 줄 차지)
-              - 베이의 extraTier 있으면 그 셀 (BAY 33의 80)
-              - 없으면 점선
-              둘 다 bay-grid-row와 같은 height (외곽 정렬) */}
+          {/* M6.0: 점선/extraTier 자리 */}
           {hasDeck && (
             extraTier ? (
               <div className="bay-grid-row extra-tier-row">
@@ -331,10 +337,14 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
               </div>
             ) : <div className="bay-grid-row hatch-break"></div>
           )}
-          {hasHold && holdTiers.map(t => {
-            const isUsed = bayHoldTiersUsed.has(t);
+          {hasHold && holdTiersPadded.map((t, ti) => {
+            if (!t) {
+              return <div key={`h-${ti}`} className="bay-grid-row tier-hidden">
+                {dynRows.map((r, ri) => <span key={ri} className="bay-cell mark-empty"></span>)}
+              </div>;
+            }
             return (
-              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+              <div key={`h-${ti}`} className="bay-grid-row">
                 {dynRows.map(r => {
                   const c = cellMap[`${t}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
@@ -348,11 +358,11 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
           })}
         </div>
         <div className="bay-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t} className={!bayDeckTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
+          {hasDeck && deckTiersPadded.map((t, ti) => <span key={`dl-${ti}`} className={!t ? 'tier-hidden' : ''}>{t || ''}</span>)}
           {hasDeck && (
             extraTier ? <span className="extra-tier-label">{extraTier}</span> : <span className="tier-gap"></span>
           )}
-          {hasHold && holdTiers.map(t => <span key={t} className={!bayHoldTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
+          {hasHold && holdTiersPadded.map((t, ti) => <span key={`hl-${ti}`} className={!t ? 'tier-hidden' : ''}>{t || ''}</span>)}
         </div>
       </div>
       <div className="bay-row-labels">
