@@ -191,6 +191,19 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return [...new Set(ints)].sort((a, b) => a - b);
   }, [shipImo, shipName]);
 
+  // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
+  //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
+  const dictBaysSummary = useMemo(() => {
+    if (!shipImo && !shipName) return {};
+    const dict = getShipBayDictData(shipImo, shipName);
+    if (!dict?.bayDef?.baysSummary) return {};
+    const m = {};
+    dict.bayDef.baysSummary.forEach(b => {
+      m[parseInt(b.bayNo, 10)] = b;
+    });
+    return m;
+  }, [shipImo, shipName]);
+
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
   // M4.5: .def 베이사전 우선 사용. 사용자 원칙 #8 + 통로 구분 추가
   //   - .def에 있는 베이만 페이지로 (빈 베이도 포함)
@@ -731,6 +744,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   cellColor={cellColor}
                   globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
+                  dictBaysSummary={dictBaysSummary}
                   bayStructureMap={bayStructureMap}
                   pendingMove={pendingMove}
                   onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
@@ -768,6 +782,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             cellColor={cellColor}
             globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
+                  dictBaysSummary={dictBaysSummary}
             bayStructureMap={bayStructureMap}
             pendingMove={pendingMove}
             onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
@@ -826,6 +841,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             shipName={shipName}
             globalRowRange={globalRowRange}
             globalTiers={globalTiers}
+                  dictBaysSummary={dictBaysSummary}
             onClose={() => setPrintMode(null)}
           />
         </ErrorBoundary>
@@ -844,7 +860,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap, globalTiers = [],
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap, globalTiers = [], dictBaysSummary = {},
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -905,12 +921,34 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
 
   // DECK / HOLD 분리 + 상하 균형
   // M3.87: globalTiers 사용 (선박 전체 tier 풀) — 베이가 한 컨만 있어도 모든 슬롯 표시
-  //   "베이는 풀로 차있다고 생각하고 다 보여줘야 함" 원칙
-  const allTiers = Array.from(new Set([
-    ...globalTiers,
-    ...allContainers.map(c => c.tier).filter(Boolean),
-    ...Array.from(xMarks).map(k => k.split('-')[1])
-  ]));
+  // M6.19: 페이지 베이의 베이사전 정밀 tier 데이터 우선 포함
+  //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF(deckTiers/holdTiers) 양쪽 인식
+  const pageBayDictTiers = useMemo(() => {
+    const deck = new Set();
+    const hold = new Set();
+    [page.evenBay, page.oddBay].forEach(bn => {
+      if (bn == null) return;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) return;
+      (db.deckTiersLocal || db.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
+      (db.holdTiersLocal || db.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
+    });
+    return { deck, hold };
+  }, [page.evenBay, page.oddBay, dictBaysSummary]);
+
+  const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
+  const allTiers = hasDictTiers
+    ? Array.from(new Set([
+        ...pageBayDictTiers.deck,
+        ...pageBayDictTiers.hold,
+        ...allContainers.map(c => c.tier).filter(Boolean),
+        ...Array.from(xMarks).map(k => k.split('-')[1])
+      ]))
+    : Array.from(new Set([
+        ...globalTiers,
+        ...allContainers.map(c => c.tier).filter(Boolean),
+        ...Array.from(xMarks).map(k => k.split('-')[1])
+      ]));
   const deckTiers = allTiers.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiers.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 

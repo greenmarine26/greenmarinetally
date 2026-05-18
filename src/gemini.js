@@ -760,8 +760,11 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
         hasHold,
         hasDeck,
         isStandalone: false,
+        // M6.19: PrintableCargoPlan(deckTiers/holdTiers) + PrintableBayDetail(deckTiersLocal/holdTiersLocal) 양쪽 호환
         deckTiers,
         holdTiers,
+        deckTiersLocal: deckTiers,
+        holdTiersLocal: holdTiers,
         ...(extraTier ? { extraTier } : {}),
       });
       pairs.push([b.pairEvenNo, b.bayNo]);
@@ -776,8 +779,11 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
       hasHold,
       hasDeck,
       isStandalone,
+      // M6.19: 양쪽 호환 (위와 동일)
       deckTiers,
       holdTiers,
+      deckTiersLocal: deckTiers,
+      holdTiersLocal: holdTiers,
       ...(extraTier ? { extraTier } : {}),
     });
   });

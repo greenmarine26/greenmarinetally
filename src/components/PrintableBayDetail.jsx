@@ -165,9 +165,10 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   ];
 
   // M5.47: row를 베이사전 + 실제 컨테이너 row union으로
+  // M6.19: STOWAGE PDF 등록 데이터(rowMax* Local 없음)도 인식
   const STD_ROWS = useMemo(() => {
-    const dictLeft = dictBay?.rowMaxEvenLocal ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
-    const dictRight = dictBay?.rowMaxOddLocal ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
+    const dictLeft = dictBay?.rowMaxEvenLocal ?? dictBay?.rowMaxEven ?? dictShipMeta?.rowMaxEven ?? globalRowRange?.maxLeft;
+    const dictRight = dictBay?.rowMaxOddLocal ?? dictBay?.rowMaxOdd ?? dictShipMeta?.rowMaxOdd ?? globalRowRange?.maxRight;
     // 실제 컨테이너 max row
     let actualEven = 0, actualOdd = 0;
     allConts.forEach(c => {
@@ -195,12 +196,16 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   });
 
   // M5.42: 베이별 deckTiersLocal/holdTiersLocal 절대 우선
-  //   1순위: dictBay.deckTiersLocal/holdTiersLocal (베이별 PDF 검증)
-  //   2순위: dictShipMeta.deckTiers/holdTiers (선박 전역)
-  //   3순위: globalTiers + EDI 컨테이너 (fallback)
+  // M6.19: STOWAGE PDF로 등록된 데이터는 deckTiers/holdTiers 필드 사용 → fallback 추가
+  //   1순위: dictBay.deckTiersLocal (v2 PDF 수동 정밀 등록)
+  //   2순위: dictBay.deckTiers       (STOWAGE PDF AI 등록 — M6.14)
+  //   3순위: dictShipMeta.deckTiers  (선박 전역)
+  //   4순위: globalTiers + EDI 컨테이너 (fallback)
   let deckTiers, holdTiers;
-  if (dictBay?.deckTiersLocal && dictBay.deckTiersLocal.length > 0) {
-    deckTiers = dictBay.deckTiersLocal.map(t => String(t).padStart(2, '0'));
+  const localDeck = dictBay?.deckTiersLocal || dictBay?.deckTiers;
+  const localHold = dictBay?.holdTiersLocal || dictBay?.holdTiers;
+  if (Array.isArray(localDeck) && localDeck.length > 0) {
+    deckTiers = localDeck.map(t => String(t).padStart(2, '0'));
   } else if (dictShipMeta?.deckTiers && dictShipMeta.deckTiers.length > 0) {
     deckTiers = dictShipMeta.deckTiers.map(t => String(t).padStart(2, '0'));
   } else {
@@ -212,8 +217,8 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     deckTiers = [...allTiers].filter(t => parseInt(t) >= 80)
       .sort((a, b) => parseInt(b) - parseInt(a));
   }
-  if (dictBay?.holdTiersLocal && dictBay.holdTiersLocal.length > 0) {
-    holdTiers = dictBay.holdTiersLocal.map(t => String(t).padStart(2, '0'));
+  if (Array.isArray(localHold) && localHold.length > 0) {
+    holdTiers = localHold.map(t => String(t).padStart(2, '0'));
   } else if (dictShipMeta?.holdTiers && dictShipMeta.holdTiers.length > 0) {
     holdTiers = dictShipMeta.holdTiers.map(t => String(t).padStart(2, '0'));
   } else {
