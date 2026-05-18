@@ -229,31 +229,102 @@ export function getShipBayDictData(imo, code) {
   const data = result.data;
 
   // user / v1 / v2 사전 형식이 약간 다름 — 정규화해서 반환
-  // (모두 bayDef 객체를 가짐)
   const bayDef = data.bayDef || {};
 
   // bayList 추출 (v2: bayList, v1: bays.idx로 추정, user: bayList 또는 bays)
   let bayList = bayDef.bayList;
   if (!bayList && Array.isArray(bayDef.bays) && bayDef.bays.length > 0) {
-    // 객체 배열에서 bayNo 또는 idx 추출
     bayList = bayDef.bays
       .map(b => b.bayNo || (typeof b.idx === 'number' ? String(b.idx).padStart(2, '0') : null))
       .filter(Boolean);
   }
 
+  // M6.25: v3(Firebase)/user 데이터에 v2 정밀 데이터 union 보완
+  //   증상: 사용자가 STOWAGE PDF로 등록한 v3 데이터에서 Gemini가 일부 tier 누락 (예: BAY 25 80 tier).
+  //         v2 임베드엔 수동 정밀 등록 데이터 있음.
+  //         v3 우선이라 v2의 정확한 정보가 가려짐.
+  //   해결: v3/user 데이터 사용 시 v2와 union — baysSummary의 deck/holdTiers 합쳐서 더 완전한 데이터
+  let finalBayDef = { ...bayDef, bayList: bayList || [] };
+  if (result.source === 'firebase' || result.source === 'user') {
+    try {
+      const v2Backup = lookupBayDictV2Enhanced(imo, code);
+      if (v2Backup?.entry?.bayDef?.baysSummary) {
+        finalBayDef = mergeBayDef(finalBayDef, v2Backup.entry.bayDef);
+      }
+    } catch (e) { /* fallback: 기존 데이터 그대로 */ }
+  }
+
   return {
-    source: result.source,  // 'user' / 'v2' / 'v1' / 'v2-fuzzy'
-    matchedBy: result.matchedBy || result.source,  // M5.11: 매칭 방식 ('code' / 'imo' / 'callsign' / 'name-fuzzy(KEY)')
+    source: result.source,
+    matchedBy: result.matchedBy || result.source,
     name: data.name,
     callsign: data.callsign,
     specs: data.specs || {},
     code: data.code,
-    bayDef: {
-      ...bayDef,
-      bayList: bayList || [],  // 정규화된 bayList 항상 포함
-    },
+    bayDef: finalBayDef,
     verified: bayDef.verified || result.source === 'v2' || result.source === 'v2-fuzzy',
   };
+}
+
+// M6.25: v3 + v2 baysSummary union
+//   각 베이의 deckTiers/holdTiers는 두 소스의 union (더 완전한 데이터)
+//   rowMaxEvenLocal/rowMaxOddLocal은 v3 우선 (사용자 등록 신뢰), v3에 없으면 v2
+function mergeBayDef(v3BayDef, v2BayDef) {
+  const merged = { ...v3BayDef };
+  if (!v2BayDef?.baysSummary || !v3BayDef?.baysSummary) return merged;
+
+  // 베이별 v2 맵
+  const v2Map = {};
+  v2BayDef.baysSummary.forEach(b => {
+    v2Map[String(parseInt(b.bayNo, 10))] = b;
+  });
+
+  // v3 baysSummary 순회 — 각 베이별로 v2 정보 보완
+  merged.baysSummary = v3BayDef.baysSummary.map(v3Bay => {
+    const bayKey = String(parseInt(v3Bay.bayNo, 10));
+    const v2Bay = v2Map[bayKey];
+    if (!v2Bay) return v3Bay;
+
+    // deck tier union (v2의 누락 tier 보완)
+    const deckSet = new Set();
+    (v3Bay.deckTiers || v3Bay.deckTiersLocal || []).forEach(t => deckSet.add(parseInt(t, 10)));
+    (v2Bay.deckTiersLocal || v2Bay.deckTiers || []).forEach(t => deckSet.add(parseInt(t, 10)));
+    const deckUnion = Array.from(deckSet).filter(Number.isFinite).sort((a,b)=>b-a);
+
+    // hold tier union
+    const holdSet = new Set();
+    (v3Bay.holdTiers || v3Bay.holdTiersLocal || []).forEach(t => holdSet.add(parseInt(t, 10)));
+    (v2Bay.holdTiersLocal || v2Bay.holdTiers || []).forEach(t => holdSet.add(parseInt(t, 10)));
+    const holdUnion = Array.from(holdSet).filter(Number.isFinite).sort((a,b)=>b-a);
+
+    return {
+      ...v3Bay,
+      deckTiers: deckUnion,
+      holdTiers: holdUnion,
+      deckTiersLocal: deckUnion,
+      holdTiersLocal: holdUnion,
+      // row 정보는 v3(사용자 등록) 우선, 없으면 v2(정밀)
+      rowMaxEvenLocal: v3Bay.rowMaxEvenLocal ?? v3Bay.rowMaxEven ?? v2Bay.rowMaxEvenLocal ?? v2Bay.rowMaxEven,
+      rowMaxOddLocal:  v3Bay.rowMaxOddLocal  ?? v3Bay.rowMaxOdd  ?? v2Bay.rowMaxOddLocal  ?? v2Bay.rowMaxOdd,
+    };
+  });
+
+  // 선박 전역 tier도 union
+  const allDeck = new Set();
+  (v3BayDef.deckTiers || []).forEach(t => allDeck.add(parseInt(t, 10)));
+  (v2BayDef.deckTiers || []).forEach(t => allDeck.add(parseInt(t, 10)));
+  merged.deckTiers = Array.from(allDeck).filter(Number.isFinite).sort((a,b)=>b-a);
+
+  const allHold = new Set();
+  (v3BayDef.holdTiers || []).forEach(t => allHold.add(parseInt(t, 10)));
+  (v2BayDef.holdTiers || []).forEach(t => allHold.add(parseInt(t, 10)));
+  merged.holdTiers = Array.from(allHold).filter(Number.isFinite).sort((a,b)=>b-a);
+
+  // 전역 rowMax도 v3 우선, 없으면 v2
+  merged.rowMaxEven = v3BayDef.rowMaxEven ?? v2BayDef.rowMaxEven;
+  merged.rowMaxOdd  = v3BayDef.rowMaxOdd  ?? v2BayDef.rowMaxOdd;
+
+  return merged;
 }
 
 /**
