@@ -588,23 +588,26 @@ export default function PrintableBayDetail({
           display: flex;
           flex-direction: column;
         }
-        /* M6.29: 셀 높이 고정 — 모든 tier 행이 같은 높이 (격자 균일)
-           기존 flex:1 자동 분할 → grid 내용에 따라 행마다 다름 → tier 어긋남
-           해결: 명시적 fixed height + 셀에도 동일 height 강제 */
+        /* M6.30: 셀 높이 CSS 변수로 통합 — 한 곳만 바꾸면 셀+tier 라벨 자동 동기화
+           --bd-row-h: 셀 한 행 높이 (인쇄 기준).
+           셀 안 텍스트 4-5줄 (CNT/PTK, 컨번호, ISO/무게, 실번호, 위치) 들어가도록 충분히 크게.
+           7pt × 1.05 × 5줄 ≈ 49px + padding/border ≈ 52px */
+        .bd-grid-wrap, .bd-tier-labels {
+          --bd-row-h: 52px;
+        }
         .bd-tier-row {
           display: grid;
           border: 0.5px solid #000;
-          height: 38px;          /* 모든 행 동일 높이 (인쇄 기준) */
-          min-height: 38px;
-          max-height: 38px;
+          height: var(--bd-row-h);
+          min-height: var(--bd-row-h);
+          max-height: var(--bd-row-h);
           box-sizing: border-box;
         }
-        /* M6.29: 셀 height 100% 강제 — tier 행과 동일 */
         .bd-cell {
           border: 0.3px solid #555;
-          padding: 1px;
+          padding: 1px 2px;
           font-size: 7pt;
-          line-height: 1.05;
+          line-height: 1.1;
           font-family: 'Courier New', monospace;
           overflow: hidden;
           min-width: 0;
@@ -628,11 +631,11 @@ export default function PrintableBayDetail({
           font-size: 9pt;
           flex-shrink: 0;
         }
-        /* M6.29: tier label 높이 = .bd-tier-row 높이 (38px) — 정렬 일치 */
+        /* tier 라벨 높이도 동일 변수 사용 — 셀 행과 항상 일치 */
         .bd-tier-labels span {
-          height: 38px; line-height: 38px;
+          height: var(--bd-row-h);
+          line-height: var(--bd-row-h);
         }
-        /* hatch break(deck-hold 구분선) 높이만큼 gap */
         .bd-tier-gap { height: 8px !important; }
       `}</style>
     </div>
