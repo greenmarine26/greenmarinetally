@@ -216,11 +216,8 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
-  // M6.28: BayPlan과 동일 — deck/hold 갯수 다를 때 상하 균형 패딩
-  //   deck 5단 + hold 3단 → hold에 빈 자리 2단 추가해서 5:5 균형
-  const tierMax = Math.max(deckTiers.length, holdTiers.length);
-  const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
-  const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
+  // M6.29: 베이상세는 deck/hold 별도 격자 — 패딩 제거 (02 아래 빈 줄 안 보임)
+  //   각 영역은 자체 정렬, deck/hold 갯수 다른 베이에서도 자연스럽게 표시
 
   const hasHold = dictBay ? dictBay.hasHold !== false : allConts.some(c => parseInt(c.tier) < 80);
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
@@ -278,22 +275,22 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 
       <div className="bd-grid-wrap">
         <div className="bd-grid">
-          {hasDeck && deckTiersPadded.map((t, ti) => (
-            <div key={`d-${ti}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {t ? STD_ROWS.map(r => renderCell(t, r)) : STD_ROWS.map((r, ri) => <span key={`d-${ti}-${ri}`} className="bd-cell-empty"></span>)}
+          {hasDeck && deckTiers.map(t => (
+            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+              {STD_ROWS.map(r => renderCell(t, r))}
             </div>
           ))}
           {hasDeck && hasHold && <div className="bd-hatch"></div>}
-          {hasHold && holdTiersPadded.map((t, ti) => (
-            <div key={`h-${ti}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {t ? STD_ROWS.map(r => renderCell(t, r)) : STD_ROWS.map((r, ri) => <span key={`h-${ti}-${ri}`} className="bd-cell-empty"></span>)}
+          {hasHold && holdTiers.map(t => (
+            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+              {STD_ROWS.map(r => renderCell(t, r))}
             </div>
           ))}
         </div>
         <div className="bd-tier-labels">
-          {hasDeck && deckTiersPadded.map((t, ti) => <span key={`dl-${ti}`}>{t || ''}</span>)}
+          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
           {hasDeck && hasHold && <span className="bd-tier-gap"></span>}
-          {hasHold && holdTiersPadded.map((t, ti) => <span key={`hl-${ti}`}>{t || ''}</span>)}
+          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
         </div>
       </div>
 
@@ -591,14 +588,18 @@ export default function PrintableBayDetail({
           display: flex;
           flex-direction: column;
         }
-        /* M5.37: 각 tier 행이 자동 균등 분할 → 티어 수에 따라 셀 높이 자동 */
+        /* M6.29: 셀 높이 고정 — 모든 tier 행이 같은 높이 (격자 균일)
+           기존 flex:1 자동 분할 → grid 내용에 따라 행마다 다름 → tier 어긋남
+           해결: 명시적 fixed height + 셀에도 동일 height 강제 */
         .bd-tier-row {
           display: grid;
           border: 0.5px solid #000;
-          flex: 1;
-          min-height: 0;
+          height: 38px;          /* 모든 행 동일 높이 (인쇄 기준) */
+          min-height: 38px;
+          max-height: 38px;
+          box-sizing: border-box;
         }
-        /* M5.37: 셀 height auto — flex 부모가 자동 결정 */
+        /* M6.29: 셀 height 100% 강제 — tier 행과 동일 */
         .bd-cell {
           border: 0.3px solid #555;
           padding: 1px;
@@ -608,18 +609,15 @@ export default function PrintableBayDetail({
           overflow: hidden;
           min-width: 0;
           word-break: break-all;
+          height: 100%;
+          box-sizing: border-box;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
         }
         .bd-cell.empty { background: white; }
         .bd-cell.filled.ptk { background: #fef3c7; }
         .bd-cell.filled { background: white; }
-        /* M6.28: 패딩 행의 빈 자리 — 격자 자리만 차지, 테두리/배경 없음 */
-        .bd-cell-empty {
-          padding: 1px;
-          font-size: 7pt;
-          line-height: 1.05;
-          min-width: 0;
-          visibility: hidden;
-        }
         .bd-pos { color: #555; }
         .bd-hatch {
           height: 4px; background: #000; margin: 2px 0;
@@ -630,9 +628,11 @@ export default function PrintableBayDetail({
           font-size: 9pt;
           flex-shrink: 0;
         }
+        /* M6.29: tier label 높이 = .bd-tier-row 높이 (38px) — 정렬 일치 */
         .bd-tier-labels span {
-          height: 58px; line-height: 58px;
+          height: 38px; line-height: 38px;
         }
+        /* hatch break(deck-hold 구분선) 높이만큼 gap */
         .bd-tier-gap { height: 8px !important; }
       `}</style>
     </div>

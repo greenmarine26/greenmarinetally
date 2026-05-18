@@ -258,10 +258,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
-  // M6.28: BayPlan과 동일 — deck/hold 갯수 다를 때 상하 균형 패딩
-  const tierMax = Math.max(deckTiers.length, holdTiers.length);
-  const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
-  const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
+  // M6.29: 패딩 제거 — deck/hold 별도 격자라 패딩 불필요. 02 아래 빈 줄 없음.
 
   // 외곽 통일 양식 폐기 — 베이별 격자 (visibility:hidden 없음)
   const bayDeckTiersUsed = useMemo(() => new Set(deckTiers), [deckTiers]);
@@ -302,26 +299,18 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       </div>
       <div className="bay-grid-wrap">
         <div className="bay-grid">
-          {hasDeck && deckTiersPadded.map((t, ti) => {
-            if (!t) {
-              return <div key={`d-${ti}`} className="bay-grid-row tier-hidden">
-                {dynRows.map((r, ri) => <span key={ri} className="bay-cell mark-empty"></span>)}
-              </div>;
-            }
-            return (
-              <div key={`d-${ti}`} className="bay-grid-row">
-                {dynRows.map(r => {
-                  const c = cellMap[`${t}-${r}`];
-                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                  const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  return <span key={r} className={cls}>{m.letter}</span>;
-                })}
-              </div>
-            );
-          })}
-          {/* M6.0: 점선/extraTier 자리 */}
+          {hasDeck && deckTiers.map(t => (
+            <div key={t} className="bay-grid-row">
+              {dynRows.map(r => {
+                const c = cellMap[`${t}-${r}`];
+                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
+                const m = getMark(c, mode, xrayMap);
+                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                return <span key={r} className={cls}>{m.letter}</span>;
+              })}
+            </div>
+          ))}
           {hasDeck && (
             extraTier ? (
               <div className="bay-grid-row extra-tier-row">
@@ -337,32 +326,25 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
               </div>
             ) : <div className="bay-grid-row hatch-break"></div>
           )}
-          {hasHold && holdTiersPadded.map((t, ti) => {
-            if (!t) {
-              return <div key={`h-${ti}`} className="bay-grid-row tier-hidden">
-                {dynRows.map((r, ri) => <span key={ri} className="bay-cell mark-empty"></span>)}
-              </div>;
-            }
-            return (
-              <div key={`h-${ti}`} className="bay-grid-row">
-                {dynRows.map(r => {
-                  const c = cellMap[`${t}-${r}`];
-                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                  const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  return <span key={r} className={cls}>{m.letter}</span>;
-                })}
-              </div>
-            );
-          })}
+          {hasHold && holdTiers.map(t => (
+            <div key={t} className="bay-grid-row">
+              {dynRows.map(r => {
+                const c = cellMap[`${t}-${r}`];
+                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
+                const m = getMark(c, mode, xrayMap);
+                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                return <span key={r} className={cls}>{m.letter}</span>;
+              })}
+            </div>
+          ))}
         </div>
         <div className="bay-tier-labels">
-          {hasDeck && deckTiersPadded.map((t, ti) => <span key={`dl-${ti}`} className={!t ? 'tier-hidden' : ''}>{t || ''}</span>)}
+          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
           {hasDeck && (
             extraTier ? <span className="extra-tier-label">{extraTier}</span> : <span className="tier-gap"></span>
           )}
-          {hasHold && holdTiersPadded.map((t, ti) => <span key={`hl-${ti}`} className={!t ? 'tier-hidden' : ''}>{t || ''}</span>)}
+          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
         </div>
       </div>
       <div className="bay-row-labels">
