@@ -379,7 +379,18 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.53 (2026-05) — 근본 원인 해결: parseAscFile BAY 00 메타 라인 차단',
+      title: '🆕 M6.54 (2026-05) — 점선 위치 통일 (사용자 선택 A: 카고플랜 페이지 단위 deck/hold 영역 통일)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '카고플랜에서 박스마다 점선 높이가 다름. tier 82↔08 경계선이 박스별로 다른 위치 → 시각적 불일치. 사용자 원칙: "기본은 tier 82, 80은 특수(extraTier)"' },
+        { q: '🔍 원인', a: 'PrintableCargoPlan의 pageBayDictTiers가 박스의 even+odd 베이만 합쳐서 박스별 deck/hold tier 풀이 다름 → 박스 안 셀 수 다름 → 점선 위치 다름. M6.26 변경 "외곽 통일 양식 폐기 → 베이별 격자 (visibility:hidden 없음)"가 원인' },
+        { q: '✅ 해결', a: 'pageBayDictTiers를 카고플랜 전체(dictBaysSummary 전체) deck/hold tier 합치기로 변경. bayDeckTiersUsed/bayHoldTiersUsed는 박스별 사용 tier (베이사전 + 컨테이너) — tier-hidden 처리용. CSS의 .tier-hidden { visibility: hidden } 그대로. 자리는 차지하되 안 보임 → 모든 박스 점선 위치 동일 (tier 82↔08 라인)' },
+        { q: '💡 작동 양식', a: '예: KSKM 카고플랜 — 모든 박스가 deck tier(92,90,88,86,84,82) + 점선 + hold tier(08,06,04,02) 자리 가짐. BAY 11은 92~82 모두 사용 → 모두 표시. BAY 03은 88,86,84,82만 사용 → 92,90 자리는 hidden (보이지 않으나 자리 차지). 점선 위치 = 모든 박스 동일' },
+        { q: '⚠ extraTier (BAY 33 등)', a: '80 tier는 특수 베이의 extraTier. 점선 자리에 그려짐. 사용자: "80이 있는 자리는 hold가 없는 경우가 많음" — BAY 27, 28/29 같은 짝수 단독 베이. extra-tier-row 처리는 그대로' },
+        { q: '🚫 영향 범위', a: 'PrintableCargoPlan.jsx 한 함수(BayBox) 내부 30줄. PrintHubModal/BayPlan/PrintableBayDetail은 안 건드림. 새 ASC/EDI 재로드 불필요 — 출력만 변경' },
+      ],
+    },
+    {
+      title: '🪦 M6.53 (2026-05) — parseAscFile BAY 00 메타 차단 + M6.51/M6.52 롤백',
       examples: [
         { q: '🔥 사용자 보고', a: '카고플랜/베이플랜/베이상세에서 row 11~37 유령 row + tier 비정상값(20/30/40/50/60/70). 사용자 단언: "그런 컨테이너선 존재 불가능, 디파인 보면 KSKM은 row 10/09까지". KSKM PDF baseline 양식: 10 08 06 04 02 00 01 03 05 07 09' },
         { q: '🔍 근본 원인 (.def 없이 ASC raw로 증명)', a: 'ASC 파일 끝부분에 BAY 00 그리드 좌표 점검용 메타 데이터. 예: KSKM2505S.ASC L298~L447에 150건. 형식: "000010", "000020", ..., "001500" (bay=00, row 00~15, tier 00~90, 10씩 증가). parseAscFile line 849 ("M3.5.5: 컨번호 빈 라인=선적 엠티 허용")이 이 메타까지 컨테이너로 처리 → 유령 row 11~15, tier 20~70 생성' },

@@ -233,19 +233,19 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
-  // 페이지 두 베이의 dictBay tier union
+  // M6.54: 점선 위치 통일 (사용자 선택 A)
+  //   카고플랜 전체 베이의 deck/hold tier 합치기 → 모든 박스에 같은 자리
+  //   박스별 사용 안 하는 tier는 hidden (자리 차지) → tier 82↔08 라인 모든 박스 정렬
   const pageBayDictTiers = useMemo(() => {
     const deck = new Set();
     const hold = new Set();
-    [even, odd].forEach(bn => {
-      if (bn == null) return;
-      const db = dictBaysSummary[parseInt(bn, 10)];
+    Object.values(dictBaysSummary).forEach(db => {
       if (!db) return;
       (db.deckTiersLocal || db.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
       (db.holdTiersLocal || db.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
     });
     return { deck, hold };
-  }, [even, odd, dictBaysSummary]);
+  }, [dictBaysSummary]);
 
   const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
   const allTiersSet = hasDictTiers
@@ -261,11 +261,36 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
-  // M6.29: 패딩 제거 — deck/hold 별도 격자라 패딩 불필요. 02 아래 빈 줄 없음.
+  // M6.54: 박스별 사용 tier (베이사전 deckTiersLocal/holdTiersLocal + 컨테이너 보강) — hidden 처리용
+  const bayDeckTiersUsed = useMemo(() => {
+    const set = new Set();
+    [even, odd].forEach(bn => {
+      if (bn == null) return;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) return;
+      (db.deckTiersLocal || db.deckTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
+    });
+    allConts.forEach(c => {
+      const t = String(c.tier).padStart(2, '0');
+      if (parseInt(t) >= 80) set.add(t);
+    });
+    return set;
+  }, [even, odd, dictBaysSummary, allConts]);
 
-  // 외곽 통일 양식 폐기 — 베이별 격자 (visibility:hidden 없음)
-  const bayDeckTiersUsed = useMemo(() => new Set(deckTiers), [deckTiers]);
-  const bayHoldTiersUsed = useMemo(() => new Set(holdTiers), [holdTiers]);
+  const bayHoldTiersUsed = useMemo(() => {
+    const set = new Set();
+    [even, odd].forEach(bn => {
+      if (bn == null) return;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) return;
+      (db.holdTiersLocal || db.holdTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
+    });
+    allConts.forEach(c => {
+      const t = String(c.tier).padStart(2, '0');
+      if (parseInt(t) < 80) set.add(t);
+    });
+    return set;
+  }, [even, odd, dictBaysSummary, allConts]);
 
   // M5.98: extraTier — 점선 위치에 그릴 베이별 특수 tier
   const extraTier = dictBay?.extraTier || null;
