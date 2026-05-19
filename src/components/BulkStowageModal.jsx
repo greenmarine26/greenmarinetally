@@ -1,24 +1,65 @@
 // M6.42: STOWAGE PDF 일괄 분석/등록
 //   여러 PDF를 한 번에 업로드 → Gemini 순차 분석 → 검토 → 일괄 등록
 //   진정한 베이사전 라이브러리 구축 (1:1 매칭 부담 제거)
-import React, { useState, useRef } from 'react';
-import { X, Upload, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+// M6.44: 이미 등록된 선박 자동 식별 + 스킵
+//   - 분석 후 ship_bay_dict_v3와 매칭 → 카드에 "이미 등록" 배지
+//   - 등록 단계에서 "신규만" / "전체 (덮어쓰기)" 선택 가능
+//   - Gemini 비용은 분석 시 발생 (사전 매칭 어려움 — 파일명 신뢰도 낮음)
+//     단, 등록 시간/덮어쓰기 결정은 자동
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Upload, AlertTriangle, CheckCircle2, Loader2, Sparkles, RotateCw } from 'lucide-react';
 import { ocrStowagePdf, stowageToBayDictEntry, GEMINI_API_KEY } from '../gemini.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
 import { _storage, SK } from '../utils.js';
+import { fbSubscribeShipBayDict } from '../firebase.js';
 
-const PROTECTED_CODES = ['NBTD', 'MCSC', 'ATRP', 'S639'];  // 정밀 등록 보호 선박
+const PROTECTED_CODES = ['NBTD', 'MCSC', 'ATRP', 'S639'];
 
 export default function BulkStowageModal({ open, onClose, onCompleted, inspector }) {
   const [files, setFiles] = useState([]);
   const [analyzed, setAnalyzed] = useState([]);
-  const [phase, setPhase] = useState('select');  // select | analyzing | review | saving | done
+  const [phase, setPhase] = useState('select');
   const [progress, setProgress] = useState({ done: 0, total: 0, current: '' });
   const [savedResults, setSavedResults] = useState(null);
-  const [overwriteMode, setOverwriteMode] = useState(true);  // 이미 등록된 선박 덮어쓰기
+  const [registerMode, setRegisterMode] = useState('new_only');  // M6.44: new_only | all
+  const [bayDict, setBayDict] = useState({});  // M6.44: 매칭용
   const fileRef = useRef(null);
 
+  // M6.44: 베이사전 구독 (매칭용)
+  useEffect(() => {
+    if (!open) return;
+    const unsub = fbSubscribeShipBayDict(setBayDict);
+    return () => { try { unsub && unsub(); } catch (_) {} };
+  }, [open]);
+
   if (!open) return null;
+
+  // M6.44: 이미 등록된 선박 식별 — vesselName/callsign/IMO/code 4가지 매칭
+  const checkRegistered = (data) => {
+    if (!data) return null;
+    const vname = String(data.vesselName || '').toUpperCase().replace(/\s+/g, '');
+    const code4 = vname.slice(0, 4);
+    const callsign = String(data.callsign || '').toUpperCase();
+    const imo = String(data.imo || '');
+    for (const [key, entry] of Object.entries(bayDict || {})) {
+      if (imo && entry.imo && String(entry.imo) === imo) {
+        return { code: entry.code || key, name: entry.name, matchBy: 'IMO' };
+      }
+      if (callsign && entry.callsign && String(entry.callsign).toUpperCase() === callsign) {
+        return { code: entry.code || key, name: entry.name, matchBy: '콜사인' };
+      }
+      const eCode = String(entry.code || key).toUpperCase();
+      if (code4 && code4.length >= 3 && (eCode === code4 || eCode === code4.slice(0, 3))) {
+        return { code: entry.code || key, name: entry.name, matchBy: '코드' };
+      }
+      // 이름 fuzzy
+      const eName = String(entry.name || '').toUpperCase().replace(/\s+/g, '');
+      if (vname && eName && vname.length >= 5 && (eName.includes(vname.slice(0, 6)) || vname.includes(eName.slice(0, 6)))) {
+        return { code: entry.code || key, name: entry.name, matchBy: '이름' };
+      }
+    }
+    return null;
+  };
 
   const onSelectFiles = (e) => {
     const selected = Array.from(e.target.files || []);
@@ -34,9 +75,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
     const apiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
     const results = [];
 
-    // M6.43: rate limit 대응 — Gemini 무료 한도 분당 15회
-    //   각 분석 사이 5초 대기 (= 12 RPM, 안전 마진 3회)
-    //   429 (rate limit) 에러 시 60초 대기 후 자동 재시도 (최대 2회)
+    // M6.43: rate limit 대응
     const DELAY_BETWEEN_MS = 5000;
     const RETRY_DELAY_MS = 60000;
     const MAX_RETRIES = 2;
@@ -49,8 +88,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
         const msg = (e?.message || String(e)).toLowerCase();
         const isRateLimit = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('limit');
         if (isRateLimit && retryCount < MAX_RETRIES) {
-          // rate limit — 60초 대기 후 재시도
-          setProgress(p => ({ ...p, current: `${file.name} (Rate limit 대기 ${60}초...)` }));
+          setProgress(p => ({ ...p, current: `${file.name} (Rate limit 대기 60초...)` }));
           await sleep(RETRY_DELAY_MS);
           return analyzeWithRetry(file, retryCount + 1);
         }
@@ -65,15 +103,17 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
         const data = await analyzeWithRetry(file);
         const vname = (data?.vesselName || '').toUpperCase();
         const code = vname.replace(/\s+/g, '').slice(0, 4);
+        const matched = checkRegistered(data);  // M6.44
         results.push({
           file,
           data,
-          code,
+          code: matched?.code || code,  // 이미 등록된 코드 우선
           callsign: data?.callsign || '',
           imo: data?.imo || '',
           bayCount: data?.bays?.length || 0,
           status: 'pending',
           error: null,
+          alreadyRegistered: matched,  // M6.44: { code, name, matchBy } 또는 null
         });
       } catch (e) {
         results.push({
@@ -85,10 +125,10 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
           bayCount: 0,
           status: 'failed',
           error: e.message || String(e),
+          alreadyRegistered: null,
         });
       }
 
-      // M6.43: 다음 분석 전 대기 (마지막 파일은 대기 안 함)
       if (i < files.length - 1) {
         setProgress({ done: i + 1, total: files.length, current: `다음 파일 대기 중 (${DELAY_BETWEEN_MS / 1000}초)...` });
         await sleep(DELAY_BETWEEN_MS);
@@ -109,14 +149,25 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
     const { fbSaveShipBayDict, fbUploadStowagePdf } = await import('../firebase.js');
     const results = { saved: 0, skipped: 0, failed: 0, protected: 0, details: [] };
 
-    for (let i = 0; i < analyzed.length; i++) {
-      const item = analyzed[i];
-      setProgress({ done: i, total: analyzed.length, current: item.file.name });
-
-      if (item.status === 'failed' || !item.data) {
-        results.failed++;
-        continue;
+    // M6.44: 등록 대상 결정
+    const targets = analyzed.filter(item => {
+      if (item.status === 'failed' || !item.data) return false;
+      if (registerMode === 'new_only' && item.alreadyRegistered) {
+        return false;  // 이미 등록된 건 스킵
       }
+      return true;
+    });
+    const skippedCount = analyzed.filter(item =>
+      item.status !== 'failed' && item.data && item.alreadyRegistered && registerMode === 'new_only'
+    ).length;
+    results.skipped = skippedCount;
+
+    setProgress({ done: 0, total: targets.length, current: '' });
+
+    for (let i = 0; i < targets.length; i++) {
+      const item = targets[i];
+      setProgress({ done: i, total: targets.length, current: item.file.name });
+
       const code = (item.code || '').toUpperCase().trim();
       if (!code || code.length < 2) {
         results.failed++;
@@ -125,7 +176,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
       }
       if (PROTECTED_CODES.includes(code)) {
         results.protected++;
-        results.details.push({ file: item.file.name, error: `${code} 보호 선박 (정밀 등록)` });
+        results.details.push({ file: item.file.name, error: `${code} 보호 선박 (정밀 등록 — 수동만)` });
         continue;
       }
 
@@ -136,7 +187,6 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
         entry.bayDef.verified = true;
         entry.bayDef.grade = 'user-verified-stowage';
 
-        // M6.42: PDF Firebase Storage 업로드 — 같은 선박 이전 자동 삭제 (덮어쓰기)
         let pdfMeta = null;
         try {
           pdfMeta = await fbUploadStowagePdf(code, item.file);
@@ -161,10 +211,18 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
       }
     }
 
-    setProgress({ done: analyzed.length, total: analyzed.length, current: '' });
+    setProgress({ done: targets.length, total: targets.length, current: '' });
     setSavedResults(results);
     setPhase('done');
     if (onCompleted) onCompleted(results);
+  };
+
+  // M6.44: 카운트
+  const counts = {
+    total: analyzed.length,
+    failed: analyzed.filter(a => a.status === 'failed').length,
+    new: analyzed.filter(a => a.status !== 'failed' && !a.alreadyRegistered).length,
+    already: analyzed.filter(a => a.status !== 'failed' && a.alreadyRegistered).length,
   };
 
   return (
@@ -182,8 +240,8 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
           {phase === 'select' && (
             <>
               <div className="text-xs text-slate-300 leading-relaxed">
-                여러 STOWAGE PDF를 한 번에 등록합니다. <br/>
-                Gemini AI가 순차적으로 분석 → 검토 → 일괄 저장.
+                여러 STOWAGE PDF를 한 번에 등록합니다.<br/>
+                Gemini AI가 순차 분석 → 이미 등록된 선박 자동 식별 → 검토 → 일괄 저장.
               </div>
               <input
                 ref={fileRef}
@@ -213,7 +271,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
                     <span className="text-slate-500"> (PDF당 분석 ~8초 + Rate limit 대기 5초)</span>
                   </div>
                   <div className="text-emerald-300 text-[10px]">
-                    💡 100개 이상도 안정 처리 — Gemini 분당 15회 한도 자동 준수
+                    💡 분석 후 이미 등록된 선박은 자동 식별됨 (스킵 또는 덮어쓰기 선택 가능)
                   </div>
                 </div>
               )}
@@ -249,13 +307,54 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
           {/* Phase: review */}
           {phase === 'review' && (
             <>
-              <div className="text-xs text-purple-200 font-bold">
-                ✅ 분석 완료: {analyzed.filter(a => a.status !== 'failed').length}개 성공 /
-                {' '}{analyzed.filter(a => a.status === 'failed').length}개 실패
+              {/* M6.44: 요약 + 등록 모드 선택 */}
+              <div className="bg-slate-800/60 rounded p-2.5 space-y-2">
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div>
+                    <div className="text-emerald-400 font-black text-lg">{counts.new}</div>
+                    <div className="text-[10px] text-slate-400">✨ 신규</div>
+                  </div>
+                  <div>
+                    <div className="text-amber-400 font-black text-lg">{counts.already}</div>
+                    <div className="text-[10px] text-slate-400">🔁 이미 등록</div>
+                  </div>
+                  <div>
+                    <div className="text-red-400 font-black text-lg">{counts.failed}</div>
+                    <div className="text-[10px] text-slate-400">❌ 실패</div>
+                  </div>
+                </div>
+                {counts.already > 0 && (
+                  <div className="pt-2 border-t border-slate-700/50">
+                    <div className="text-[10px] text-slate-300 mb-1.5">이미 등록된 선박 처리:</div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setRegisterMode('new_only')}
+                        className={`flex-1 px-2 py-1.5 rounded text-[10px] font-bold ${
+                          registerMode === 'new_only'
+                            ? 'bg-emerald-700 text-emerald-50'
+                            : 'bg-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <Sparkles className="w-3 h-3 inline mr-1"/>
+                        신규만 등록 (스킵)
+                      </button>
+                      <button
+                        onClick={() => setRegisterMode('all')}
+                        className={`flex-1 px-2 py-1.5 rounded text-[10px] font-bold ${
+                          registerMode === 'all'
+                            ? 'bg-amber-700 text-amber-50'
+                            : 'bg-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <RotateCw className="w-3 h-3 inline mr-1"/>
+                        전체 덮어쓰기
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="text-[10px] text-slate-400 leading-relaxed">
-                각 카드의 코드/콜사인/IMO를 확인하세요. 코드는 vessel name 앞 4글자로 자동 채워졌습니다.
-                필요하면 정확한 코드(예: XINT → XTPG)로 수정.
+                각 카드의 코드/콜사인/IMO 확인하세요.
               </div>
               <div className="space-y-2">
                 {analyzed.map((item, i) => (
@@ -264,19 +363,34 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
                     className={`rounded p-2.5 border ${
                       item.status === 'failed'
                         ? 'bg-red-950/40 border-red-700/50'
-                        : 'bg-slate-800/60 border-slate-700/50'
+                        : item.alreadyRegistered
+                          ? 'bg-amber-950/30 border-amber-700/40'
+                          : 'bg-emerald-950/20 border-emerald-800/40'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1.5">
                       {item.status === 'failed' ? (
                         <AlertTriangle className="w-4 h-4 text-red-400 shrink-0"/>
+                      ) : item.alreadyRegistered ? (
+                        <RotateCw className="w-4 h-4 text-amber-400 shrink-0"/>
                       ) : (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0"/>
+                        <Sparkles className="w-4 h-4 text-emerald-400 shrink-0"/>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="text-xs text-slate-200 truncate">{item.file.name}</div>
                         {item.error && (
                           <div className="text-[10px] text-red-300">{item.error}</div>
+                        )}
+                        {item.alreadyRegistered && (
+                          <div className="text-[10px] text-amber-300 mt-0.5">
+                            🔁 이미 등록: <span className="font-bold">{item.alreadyRegistered.code}</span>
+                            <span className="text-amber-400/70"> ({item.alreadyRegistered.matchBy} 매칭)</span>
+                            {registerMode === 'new_only' && <span className="ml-1 text-slate-400">→ 스킵</span>}
+                            {registerMode === 'all' && <span className="ml-1 text-orange-300">→ 덮어쓰기</span>}
+                          </div>
+                        )}
+                        {!item.alreadyRegistered && item.status !== 'failed' && (
+                          <div className="text-[10px] text-emerald-300 mt-0.5">✨ 신규 등록 예정</div>
                         )}
                       </div>
                     </div>
@@ -327,7 +441,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
                 onClick={saveAll}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold sticky bottom-0"
               >
-                💾 일괄 등록 ({analyzed.filter(a => a.status !== 'failed').length}개)
+                💾 {registerMode === 'new_only' ? `신규만 등록 (${counts.new}개)` : `전체 등록 (${counts.new + counts.already}개)`}
               </button>
             </>
           )}
@@ -343,7 +457,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
               <div className="w-full bg-slate-800 rounded-full h-2">
                 <div
                   className="bg-emerald-500 h-2 rounded-full transition-all"
-                  style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                  style={{ width: progress.total > 0 ? `${(progress.done / progress.total) * 100}%` : '0%' }}
                 ></div>
               </div>
             </div>
@@ -357,7 +471,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
                 <div className="space-y-1 text-xs">
                   <div className="text-emerald-300">✅ 등록 성공: {savedResults.saved}개</div>
                   {savedResults.skipped > 0 && (
-                    <div className="text-amber-300">⏭ 스킵: {savedResults.skipped}개</div>
+                    <div className="text-amber-300">⏭ 이미 등록 (스킵): {savedResults.skipped}개</div>
                   )}
                   {savedResults.protected > 0 && (
                     <div className="text-orange-300">⛔ 보호 선박 (수동만): {savedResults.protected}개</div>
