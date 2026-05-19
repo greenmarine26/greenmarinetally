@@ -34,11 +34,35 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
     const apiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
     const results = [];
 
+    // M6.43: rate limit 대응 — Gemini 무료 한도 분당 15회
+    //   각 분석 사이 5초 대기 (= 12 RPM, 안전 마진 3회)
+    //   429 (rate limit) 에러 시 60초 대기 후 자동 재시도 (최대 2회)
+    const DELAY_BETWEEN_MS = 5000;
+    const RETRY_DELAY_MS = 60000;
+    const MAX_RETRIES = 2;
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    const analyzeWithRetry = async (file, retryCount = 0) => {
+      try {
+        return await ocrStowagePdf(file, apiKey);
+      } catch (e) {
+        const msg = (e?.message || String(e)).toLowerCase();
+        const isRateLimit = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('limit');
+        if (isRateLimit && retryCount < MAX_RETRIES) {
+          // rate limit — 60초 대기 후 재시도
+          setProgress(p => ({ ...p, current: `${file.name} (Rate limit 대기 ${60}초...)` }));
+          await sleep(RETRY_DELAY_MS);
+          return analyzeWithRetry(file, retryCount + 1);
+        }
+        throw e;
+      }
+    };
+
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       setProgress({ done: i, total: files.length, current: file.name });
       try {
-        const data = await ocrStowagePdf(file, apiKey);
+        const data = await analyzeWithRetry(file);
         const vname = (data?.vesselName || '').toUpperCase();
         const code = vname.replace(/\s+/g, '').slice(0, 4);
         results.push({
@@ -62,6 +86,12 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
           status: 'failed',
           error: e.message || String(e),
         });
+      }
+
+      // M6.43: 다음 분석 전 대기 (마지막 파일은 대기 안 함)
+      if (i < files.length - 1) {
+        setProgress({ done: i + 1, total: files.length, current: `다음 파일 대기 중 (${DELAY_BETWEEN_MS / 1000}초)...` });
+        await sleep(DELAY_BETWEEN_MS);
       }
     }
 
@@ -179,7 +209,11 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
                     ))}
                   </ul>
                   <div className="text-amber-300 text-[10px] mt-1.5">
-                    ⏱ 예상 시간: 약 {Math.ceil(files.length * 8 / 60)}분 (PDF당 약 8초)
+                    ⏱ 예상 시간: 약 {Math.ceil(files.length * 13 / 60)}분
+                    <span className="text-slate-500"> (PDF당 분석 ~8초 + Rate limit 대기 5초)</span>
+                  </div>
+                  <div className="text-emerald-300 text-[10px]">
+                    💡 100개 이상도 안정 처리 — Gemini 분당 15회 한도 자동 준수
                   </div>
                 </div>
               )}
