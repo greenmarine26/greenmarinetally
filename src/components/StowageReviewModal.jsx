@@ -91,29 +91,12 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
 
       // 2단계: Firebase
       let fbSaved = false;
-      let pdfMeta = null;
       try {
-        const { fbSaveShipBayDict, fbUploadStowagePdf } = await import('../firebase.js');
-
-        // M6.40: PDF 자체 Firebase Storage 보관 (30일 자동 폐기)
-        //   - 같은 선박 새 PDF 등록 시 이전 자동 삭제 (덮어쓰기)
-        //   - 베이사전 형식 변경/재분석 필요 시 클릭 1번으로 재처리 가능
-        //   - 검수원 PDF 재업로드 부담 0
-        try {
-          pdfMeta = await fbUploadStowagePdf(code, file);
-        } catch (e) {
-          console.warn('[M6.40] PDF Storage 업로드 실패 (베이사전은 정상 저장):', e);
-        }
-
+        const { fbSaveShipBayDict } = await import('../firebase.js');
         fbSaved = await fbSaveShipBayDict(entry.code, {
           ...entry,
           source: 'stowage-pdf-ai',
           _inspector: inspector || '',
-          // M6.40: PDF 메타
-          pdfUrl: pdfMeta?.url || '',
-          pdfPath: pdfMeta?.path || '',
-          pdfName: pdfMeta?.name || file.name,
-          pdfUploadedAt: pdfMeta?.uploadedAt || Date.now(),
         });
       } catch (e) {
         console.warn('[M6.14] Firebase 저장 실패:', e);

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.40';
+export const APP_VERSION = 'M6.35';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -792,19 +792,18 @@ export function parseBAPLIE(ediText) {
   // 원칙: EDI status 코드만이 진실. 무게로 절대 추정하지 않음.
   // status 없으면 검수원이 현장에서 확인.
   //
-  // ISO 끝자리 동기화 + M6.39: result.voy를 각 컨테이너에 c.voy로 복사
-  //   목적: 향후 항차 진입 시 ediContainers의 컨 한 개에서 voy 추출 → voy_d/voy_l 자동 백필
-  //   사용자 추가 액션 0 — EDI 한 번 업로드하면 영구히 자동 정확
+  // ISO 끝자리 동기화: fe와 ISO 끝자리가 다르면 fe 우선 (ISO 끝자리 보정)
+  //   45RF + fe='E' → 45RE (Empty 표시)
+  //   45RE + fe='F' → 45RF (Full 표시)
   for (const c of result.containers) {
-    // M6.39: voy 메타 저장
-    if (result.voy && !c.voy) c.voy = result.voy;
-
     if (!c.iso || c.iso.length < 4) continue;
     const last = c.iso[c.iso.length - 1];
     if (c.fe === 'E' && last !== 'E') {
+      // F/E가 Empty인데 ISO 끝이 F 등 → E로 변경
       c.iso_orig_parsed = c.iso;
       c.iso = c.iso.slice(0, -1) + 'E';
     } else if (c.fe === 'F' && last === 'E') {
+      // F/E가 Full인데 ISO 끝이 E → F로 변경
       c.iso_orig_parsed = c.iso;
       c.iso = c.iso.slice(0, -1) + 'F';
     }

@@ -60,15 +60,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   if (!open) return null;
 
   const vsl = voyage?.info?.vsl || '';
-  // M6.37: mode 기반 voy 선택 — 양하 보고는 voy_d (양하 항차), 선적 보고는 voy_l (선적 항차)
-  //   예: XTPG 양하 0523E, 선적 0523W → 양하 보고에 0523E, 선적 보고에 0523W
-  //   각 핸들러 진입 시 자신의 mode로 voy를 shadowing해서 정확한 항차 전달
-  const getVoy = (m) => {
-    if (m === 'discharge') return voyage?.info?.voy_d || voyage?.info?.voy || '';
-    if (m === 'loading')   return voyage?.info?.voy_l || voyage?.info?.voy || '';
-    return voyage?.info?.voy_d || voyage?.info?.voy_l || voyage?.info?.voy || '';
-  };
-  const voy = getVoy();  // 기본 fallback (UI 표시용)
+  const voy = voyage?.info?.voy_l || voyage?.info?.voy || '';
 
   // 활성 작업: [equipNo, mode, awData] 배열로 평탄화
   const activeWorkList = [];
@@ -89,7 +81,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   const handleStartWork = async () => {
     if (!selectedEquip) { alert('장비를 선택하세요'); return; }
-    const voy = getVoy(selectedMode);  // M6.37: mode 기반 voy
     const time = Date.now();
     const action = `${selectedMode}_start`;
     const message = buildWorkStatusMessage({
@@ -120,7 +111,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   const handlePause = async (equipNo, modeArg) => {
     if (!pauseReason.trim()) { alert('중단 사유를 입력하세요'); return; }
-    const voy = getVoy(modeArg);  // M6.37
     const time = Date.now();
     // M5.79: aw 없으면(시작 기록 없음) 폴백 객체로 진행 — 이어받기/수동 보고 케이스
     const aw = activeWork[equipNo]?.[modeArg] || { mode: modeArg, vsl, voy };
@@ -171,7 +161,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   };
 
   const handleResume = async (equipNo, modeArg) => {
-    const voy = getVoy(modeArg);  // M6.37
     const time = Date.now();
     // M5.79: aw 없으면 폴백 (이어받기 시 시작 기록 부재 가능)
     const aw = activeWork[equipNo]?.[modeArg] || { mode: modeArg, vsl, voy };
@@ -209,7 +198,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       confirmLabel: '완료 보고',
       cancelLabel: '취소',
       onConfirm: async () => {
-        const voy = getVoy(modeArg);  // M6.37
         const time = Date.now();
         const action = `${modeArg}_done`;
         const message = buildWorkStatusMessage({
@@ -239,8 +227,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
     const bays = bayInput.split(/[,\s]+/).filter(b => b.trim()).map(b => b.trim());
     if (bays.length === 0) { alert('베이 번호를 입력하세요'); return; }
-    // M6.37: equip의 첫 활성 작업 mode 기반 voy
-    const voy = getVoy(activeByEquip[equip]?.[0]?.mode);
 
     const time = Date.now();
     const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip });
@@ -262,7 +248,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const handleConBox = async () => {
     const equip = conBoxEquip || Object.keys(activeByEquip)[0] || '';
     if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
-    const voy = getVoy(activeByEquip[equip]?.[0]?.mode);  // M6.37
     const time = Date.now();
     const message = buildConBoxMessage({ vsl, voy, type: conBoxType, count: conBoxCount, time, equip });
 
@@ -590,7 +575,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             <button
               disabled={!manualAction || (manualAction === 'pause' && !manualReason.trim())}
               onClick={async () => {
-                const voy = getVoy(manualMode);  // M6.37
                 if (manualAction === 'pause') {
                   setPauseReason(manualReason);
                   // 직접 handlePause 호출 (pauseReason state 비동기 반영 회피)

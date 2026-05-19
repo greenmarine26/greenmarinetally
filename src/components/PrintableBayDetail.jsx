@@ -235,18 +235,17 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   else title = `BAY${dispBay(odd)}`;
 
   // M6.16: mode 기반 항차번호 단일 표시 (PrintableCargoPlan과 동일 패턴)
-  // M6.37: voyageKey fallback 제거 — key는 voy가 아님 ("XTPG_0523E" 같은 키 형식이 표시되면 잘못)
   const voyD = voyageInfo?.voy_d || '';
   const voyL = voyageInfo?.voy_l || '';
-  const voyGeneric = voyageInfo?.voy || '';
+  const voyFallback = voyageInfo?.voy || voyageKey || '';
   let voyDisplay;
   if (mode === 'discharge') {
-    voyDisplay = voyD || voyGeneric;
+    voyDisplay = voyD || voyFallback;
   } else if (mode === 'loading') {
-    voyDisplay = voyL || voyGeneric;
+    voyDisplay = voyL || voyFallback;
   } else {
     if (voyD && voyL && voyD !== voyL) voyDisplay = `양하 ${voyD} / 선적 ${voyL}`;
-    else voyDisplay = voyD || voyL || voyGeneric;
+    else voyDisplay = voyD || voyL || voyFallback;
   }
 
   // M4.9b: POL 빈칸 (샘플 PDF와 동일 — 검수원이 수기 또는 향후 자동 채움)

@@ -263,11 +263,6 @@ export function getShipBayDictData(imo, code) {
     code: data.code,
     bayDef: finalBayDef,
     verified: bayDef.verified || result.source === 'v2' || result.source === 'v2-fuzzy',
-    // M6.40: STOWAGE PDF 메타 (Firebase 사전에서만 — v1/v2 임베드에는 없음)
-    pdfUrl: data.pdfUrl || '',
-    pdfName: data.pdfName || '',
-    pdfPath: data.pdfPath || '',
-    pdfUploadedAt: data.pdfUploadedAt || 0,
   };
 }
 
