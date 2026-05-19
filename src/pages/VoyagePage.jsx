@@ -1315,38 +1315,49 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         //   M3.91 fix는 별도 경로에만 적용 → 이 경로는 여전히 평택 297대만 저장
         //   증상: 사용자님 보고 "새 EDI 업로드해도 297대만 보임" — 진짜 원인이 여기였음
         //   수정: 모든 컨 저장 + _mode 태그로 구분 (discharge/loading/transit)
+        // M6.38: EDI 자체에서 양하/선적 자동 판정 — mode 화면 의존 제거 (자동화 원칙)
+        //   사용자가 mode 잘못 선택하고 EDI 업로드해도 EDI 내용으로 자동 판정
+        //   양하 EDI: POD가 PTK인 컨이 다수 (도착 항구가 평택)
+        //   선적 EDI: POL이 PTK인 컨이 다수 (출발 항구가 평택)
+        let podPtkTotal = 0;
+        let polPtkTotal = 0;
+        r.containers.forEach(c => {
+          if ((c.pod || '').toUpperCase().endsWith('PTK')) podPtkTotal++;
+          if ((c.pol || '').toUpperCase().endsWith('PTK')) polPtkTotal++;
+        });
+        const ediKind = podPtkTotal > polPtkTotal ? 'discharge'
+                      : polPtkTotal > podPtkTotal ? 'loading'
+                      : mode;  // 동률 — 화면 mode fallback
+
         let ptkCount = 0;
         r.containers.forEach(c => {
           const podPtk = (c.pod || '').toUpperCase().endsWith('PTK');
           const polPtk = (c.pol || '').toUpperCase().endsWith('PTK');
           let containerMode;
-          if (mode === 'discharge') {
-            // 양하 모드: 평택 양하면 'discharge', 아니면 'transit'
+          if (ediKind === 'discharge') {
             if (podPtk) { containerMode = 'discharge'; ptkCount++; }
             else containerMode = 'transit';
           } else {
-            // 선적 모드: 평택 선적이면 'loading', 아니면 'transit'
             if (polPtk) { containerMode = 'loading'; ptkCount++; }
             else containerMode = 'transit';
           }
-          // M3.5.5: 컨번호 없는 엠티는 위치를 키로 사용
           const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
           allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
         });
-        results.push(`✅ ${file.name}: 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
+        const ediKindLabel = ediKind === 'discharge' ? '양하' : '선적';
+        results.push(`✅ ${file.name}: ${ediKindLabel} EDI 자동 판정 — 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
         // 항차 정보 자동 보완
         // M5.87: callsign + vsl도 자동 저장 (EDI TDT 세그먼트에서 추출 → PORT-MIS 매칭 자동화)
-        // M6.16: voy_d / voy_l 자동 저장 — 양하 EDI는 voy_d, 선적 EDI는 voy_l
-        //        검수원이 항차 등록 시 양하 voy만 입력해도 선적 EDI 업로드하면 선적 voy 자동 채워짐
+        // M6.16: voy_d / voy_l 자동 저장
+        // M6.38: ediKind 기준 — mode 화면 의존 제거
         if (r.vsl && r.voy) {
           const infoPatch = {
             etd: r.etd || voyage.info.etd || '',
             carrier: r.carrier || voyage.info.carrier || '',
           };
-          // M6.16: mode에 맞는 voy 필드 자동 저장
-          if (mode === 'discharge') {
+          if (ediKind === 'discharge') {
             if (r.voy !== voyage.info.voy_d) infoPatch.voy_d = r.voy;
-          } else if (mode === 'loading') {
+          } else if (ediKind === 'loading') {
             if (r.voy !== voyage.info.voy_l) infoPatch.voy_l = r.voy;
           }
           // M5.87: callsign 자동 저장 (EDI에서 새로 추출됐고 voyage.info에 없거나 다르면)
