@@ -94,6 +94,29 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
           <div>사전 코드: <span className="mono text-cyan-100">{dictData.code || '?'}</span></div>
           {dictData.callsign && <div>사전 콜사인: <span className="mono text-cyan-100">{dictData.callsign}</span></div>}
           <div>사전 출처: <span className="mono text-cyan-100">{dictData.source}</span></div>
+          {/* M6.40: STOWAGE PDF 원본 (30일 보관) */}
+          {dictData.pdfUrl && (
+            <div className="mt-2 pt-2 border-t border-cyan-700/40">
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-cyan-500/70">📄 원본 PDF:</span>
+                <span className="text-cyan-100 truncate flex-1">{dictData.pdfName || 'STOWAGE.pdf'}</span>
+              </div>
+              {dictData.pdfUploadedAt && (
+                <div className="text-cyan-400/60 text-[9px] mb-1.5">
+                  업로드: {new Date(dictData.pdfUploadedAt).toLocaleDateString('ko-KR')}
+                  {' · '}만료: {new Date(dictData.pdfUploadedAt + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')}
+                </div>
+              )}
+              <a
+                href={dictData.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-cyan-50 rounded text-[10px] font-bold"
+              >
+                📄 PDF 다시 보기
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>

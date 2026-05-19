@@ -98,6 +98,38 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return () => { cancelled = true; };
   }, [voyage?.info?.imo]);
 
+  // M6.39: 항차 진입 시 voy_d/voy_l 자동 복구 — 사용자 액션 0
+  //   ediContainers의 첫 컨테이너에서 c.voy 추출 → voy_d/voy_l 자동 백필
+  //   목적: 이전에 잘못 저장된 voy_d/voy_l을 EDI 재업로드 없이 자동 정정
+  //   조건: c.voy가 있는 경우 (M6.39 이후 업로드된 EDI는 c.voy 메타 포함)
+  useEffect(() => {
+    if (!voyage?.info || !voyageKey) return;
+    const info = voyage.info;
+    const patch = {};
+
+    // 양하 EDI 분석
+    const dischConts = Object.values(voyage?.discharge?.ediContainers || {});
+    if (dischConts.length > 0) {
+      const sample = dischConts.find(c => c.voy);
+      if (sample?.voy && sample.voy !== info.voy_d) {
+        patch.voy_d = sample.voy;
+      }
+    }
+
+    // 선적 EDI 분석
+    const loadConts = Object.values(voyage?.loading?.ediContainers || {});
+    if (loadConts.length > 0) {
+      const sample = loadConts.find(c => c.voy);
+      if (sample?.voy && sample.voy !== info.voy_l) {
+        patch.voy_l = sample.voy;
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      fbUpdateVoyageInfo(voyageKey, patch).catch(e => console.error('[voy 자동 복구]', e));
+    }
+  }, [voyageKey, voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers]);
+
   if (!voyage) {
     return (
       <div className="max-w-3xl mx-auto px-3 py-10 text-center">

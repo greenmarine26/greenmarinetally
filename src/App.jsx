@@ -96,6 +96,24 @@ export default function App() {
     return () => clearInterval(id);
   }, [inspector, route]);
 
+  // M6.40: 만료된 STOWAGE PDF 자동 폐기 (30일 초과) — 앱 마운트 시 1회, 백그라운드
+  //   Spark 플랜에 Cloud Function 없어 클라이언트 측 정리
+  //   사용자 액션 0, UI 영향 0 (백그라운드 비동기)
+  useEffect(() => {
+    if (!inspector) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fbCleanupExpiredStowagePdfs } = await import('./firebase.js');
+        const removed = await fbCleanupExpiredStowagePdfs();
+        if (!cancelled && removed > 0) {
+          console.log(`[M6.40] 만료 STOWAGE PDF ${removed}개 자동 폐기됨`);
+        }
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [inspector]);
+
   const handleSelectInspector = useCallback(async (name) => {
     setInspector(name);
     _storage.set(SK.activeInspector, name);
