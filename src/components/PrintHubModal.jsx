@@ -9,6 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
+import { getShipBayDictData } from '../shipStructure.js'; // M6.51: 베이사전 우선 rowMax
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -86,26 +87,51 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // 검수 리스트용 — 평택분만
   const ptkContainers = allContainers.filter(isPtk);
 
+  // M6.51: 베이사전 우선 (절대 기준) — voyageInfo를 row 계산 전에 미리 추출
+  //   기존 M6.49: EDI 컨테이너 row max만으로 globalRowRange 계산
+  //              → EDI에 비정상 row(예: row 37) 1개라도 있으면 카고플랜/베이상세에
+  //                row 라벨 11~37까지 빈 슬롯이 추가로 그려지는 버그
+  //   수정: 베이사전(rowMaxEven/rowMaxOdd, deckTiers/holdTiers)이 있으면 무조건 그것 사용,
+  //         없을 때만 EDI 폴백. EDI에서 베이사전 max 초과 row는 무시(클리핑)
+  const voyageInfo = voyage?.info || {};
+  const shipImo = voyageInfo.imo || '';
+  const shipName = voyageInfo.vsl || '';
+  const dictData = (shipImo || shipName) ? getShipBayDictData(shipImo, shipName) : null;
+  const dictRowMaxEven = dictData?.bayDef?.rowMaxEven;
+  const dictRowMaxOdd = dictData?.bayDef?.rowMaxOdd;
+  const dictDeckTiers = dictData?.bayDef?.deckTiers;
+  const dictHoldTiers = dictData?.bayDef?.holdTiers;
+
   // M5.31: 베이상세용 row/tier 계산 (BayPlan과 동일 패턴)
   //   "빈 슬롯도 표시"를 위해 — 베이가 한 컨만 있어도 모든 tier/row 슬롯 표시
   let maxLeft = 0, maxRight = 0;
   const tierSet = new Set();
-  printContainers.forEach(c => {
-    if (c.row) {
-      const n = parseInt(c.row);
-      if (n > 0) {
-        if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
-        else maxRight = Math.max(maxRight, n);
-      }
+  if (dictRowMaxEven != null && dictRowMaxOdd != null) {
+    // M6.51: 베이사전 우선 — 외계 EDI 값에 흔들리지 않음
+    maxLeft = dictRowMaxEven;
+    maxRight = dictRowMaxOdd;
+    // tier도 베이사전에서 (있을 때만, 폴백은 EDI tier set)
+    if (Array.isArray(dictDeckTiers)) dictDeckTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
+    if (Array.isArray(dictHoldTiers)) dictHoldTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
+    // tier 폴백: 베이사전에 tier 정의 없으면 EDI에서 보강
+    if (tierSet.size === 0) {
+      printContainers.forEach(c => { if (c.tier) tierSet.add(c.tier); });
     }
-    if (c.tier) tierSet.add(c.tier);
-  });
+  } else {
+    // M6.51: 베이사전 없을 때만 EDI 폴백 (이전 동작 보존)
+    printContainers.forEach(c => {
+      if (c.row) {
+        const n = parseInt(c.row);
+        if (n > 0) {
+          if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+          else maxRight = Math.max(maxRight, n);
+        }
+      }
+      if (c.tier) tierSet.add(c.tier);
+    });
+  }
   const globalRowRange = { maxLeft, maxRight };
   const globalTiers = Array.from(tierSet);
-
-  const voyageInfo = voyage?.info || {};
-  const shipImo = voyageInfo.imo || '';
-  const shipName = voyageInfo.vsl || '';
 
   const count = ptkContainers.length;        // 검수 리스트 카운트 (평택만)
   const allCount = allContainers.length;     // 카고플랜/베이상세 카운트 (전체)

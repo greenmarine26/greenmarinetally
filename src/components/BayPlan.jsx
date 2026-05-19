@@ -152,7 +152,19 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   }, [containers, dischargeCns]);
 
   // 좌우 균형 (전 베이 통일)
+  // M6.51: 베이사전(rowMaxEven/rowMaxOdd)이 있으면 무조건 그것 사용 — 절대 기준 원칙
+  //   기존 버그: EDI 컨테이너 row max만 사용 → 비정상 row(예: 37)가 1개라도 있으면
+  //              row 라벨 11~37까지 빈 슬롯이 추가로 그려짐 (사용자 보고)
+  //   변경: 베이사전 우선, 없을 때만 EDI 폴백
   const globalRowRange = useMemo(() => {
+    const dict = (shipImo || shipName) ? getShipBayDictData(shipImo, shipName) : null;
+    const dRowMaxEven = dict?.bayDef?.rowMaxEven;
+    const dRowMaxOdd = dict?.bayDef?.rowMaxOdd;
+    if (dRowMaxEven != null && dRowMaxOdd != null) {
+      // 베이사전 우선 — 외계 EDI 값 무시
+      return { maxLeft: dRowMaxEven, maxRight: dRowMaxOdd };
+    }
+    // 폴백 — 베이사전 없을 때만 EDI에서 계산
     let maxLeft = 0, maxRight = 0;
     for (const c of containers) {
       if (!c.row) continue;
@@ -162,18 +174,23 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       else maxRight = Math.max(maxRight, n);
     }
     return { maxLeft, maxRight };
-  }, [containers]);
+  }, [containers, shipImo, shipName]);
 
-  // M3.87: 선박 전체 tier 풀 (베이가 한 컨만 있어도 모든 tier 슬롯 표시)
-  //   원칙: "베이는 풀로 차있다고 생각하고 다 보여줘야 함"
-  //   이전: BayPage 내부에서 그 페이지의 컨테이너만 보고 tier 추출 → 달랑 한 줄
+  // M6.51: 베이사전의 deck/holdTiers를 우선 사용 (글로벌 tier 슬롯)
   const globalTiers = useMemo(() => {
+    const dict = (shipImo || shipName) ? getShipBayDictData(shipImo, shipName) : null;
+    const dDeck = dict?.bayDef?.deckTiers;
+    const dHold = dict?.bayDef?.holdTiers;
     const ts = new Set();
+    if (Array.isArray(dDeck)) dDeck.forEach(t => ts.add(String(t).padStart(2, '0')));
+    if (Array.isArray(dHold)) dHold.forEach(t => ts.add(String(t).padStart(2, '0')));
+    if (ts.size > 0) return Array.from(ts);
+    // 폴백
     for (const c of containers) {
       if (c.tier) ts.add(c.tier);
     }
     return Array.from(ts);
-  }, [containers]);
+  }, [containers, shipImo, shipName]);
 
   // M4.5: .def 베이사전 조회 (진짜 선박 골격 정보)
   //   - 있으면: .def에 등록된 베이만 페이지로 → 빈 베이도 표시, 통로(.def에 없는 짝수)는 자동 생략

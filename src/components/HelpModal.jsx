@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.51 변경 사항 (2026-05) — 베이사전 우선 row max (11~37 유령 row 버그 fix)',
+      examples: [
+        { q: '🔥 버그 (사용자 보고)', a: '카고플랜 / 베이플랜 / 베이상세에서 row 라벨이 정상(10 08 06 04 02 00 01 03 05 07 09) 뒤에 11~37까지 유령 row가 추가로 그려지는 문제. KSKM(SUNNY KALMIA)는 PDF상 row 최대 10/9인데 라벨이 37까지 길어짐' },
+        { q: '🔍 원인', a: 'M6.49의 "글로벌 max 사용 복원" 변경에서 globalRowRange를 EDI 컨테이너의 row 필드 max로만 계산. EDI에 비정상 row(파싱 오류, 다른 선박 좌표 섞임 등) 1개라도 있으면 그것이 max가 되어 모든 베이에 유령 row 슬롯 11~37 그려짐. PrintHubModal.jsx + BayPlan.jsx 두 곳' },
+        { q: '✅ 수정', a: '베이사전(rowMaxEven/rowMaxOdd, deckTiers/holdTiers)을 절대 기준으로 우선 사용. 베이사전 있으면 EDI 무시, 없을 때만 EDI 폴백. KSKM 같이 베이사전 검증된 선박은 즉시 정상 라벨 (10 08 06 04 02 00 01 03 05 07 09)로 출력' },
+        { q: '📍 적용 파일', a: 'PrintHubModal.jsx (카고플랜·베이상세 → PrintableCargoPlan/PrintableBayDetail로 전달되는 globalRowRange) + BayPlan.jsx (베이플랜 화면 출력). tier도 동일하게 베이사전 deckTiers/holdTiers 우선' },
+        { q: '⚠️ 베이사전 없는 선박', a: '여전히 EDI 폴백으로 작동. 진단 위젯(M6.50)에서 미등록/필드 부족 선박 확인하고 PDF 재등록 권장' },
+      ],
+    },
+    {
       title: '🆕 M6.50 변경 사항 (2026-05) — KSKM 베이사전 PDF 검증 + 베이사전 진단 위젯',
       examples: [
         { q: '🚢 KSKM (SUNNY KALMIA) 정정', a: '2604S PDF 기준 6건 오류 수정. BAY 01: deck-only 짧은 베이로 정정 (hasHold:false, isStandalone:true, deckTiers 4단). BAY 03: 짝수(02) 없는 단독 베이로 정정 (isStandalone:true). BAY 27/28/29: deck-only 선미 베이로 정정 (hasHold:false). holdTiers [10,8,6,4,2]→[8,6,4,2] (tier 10 제거). section 묶음 8→15개 (단독 베이 분리). BAY 15는 PDF대로 deck 5단 유지 (양옆은 6단)' },
