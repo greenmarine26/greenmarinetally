@@ -96,23 +96,10 @@ export default function App() {
     return () => clearInterval(id);
   }, [inspector, route]);
 
-  // M6.40: 만료된 STOWAGE PDF 자동 폐기 (30일 초과) — 앱 마운트 시 1회, 백그라운드
-  //   Spark 플랜에 Cloud Function 없어 클라이언트 측 정리
-  //   사용자 액션 0, UI 영향 0 (백그라운드 비동기)
-  useEffect(() => {
-    if (!inspector) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { fbCleanupExpiredStowagePdfs } = await import('./firebase.js');
-        const removed = await fbCleanupExpiredStowagePdfs();
-        if (!cancelled && removed > 0) {
-          console.log(`[M6.40] 만료 STOWAGE PDF ${removed}개 자동 폐기됨`);
-        }
-      } catch (_) {}
-    })();
-    return () => { cancelled = true; };
-  }, [inspector]);
+  // M6.42: STOWAGE PDF는 영구 보관 — 시간 기반 자동 폐기 제거
+  //   비용 분석: 300척 × 3MB = 900MB → 월 ₩25 (매우 적음)
+  //   사용자 결정: 자동 폐기보다 라이브러리로 영구 보관이 더 가치 있음
+  //   같은 선박 새 PDF 등록 시 이전 자동 삭제 (덮어쓰기) 정책은 유지 — fbUploadStowagePdf 내부 로직
 
   const handleSelectInspector = useCallback(async (name) => {
     setInspector(name);

@@ -108,7 +108,6 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
               {dictData.pdfUploadedAt && (
                 <div className="text-cyan-400/60 text-[9px] mb-1.5">
                   업로드: {new Date(dictData.pdfUploadedAt).toLocaleDateString('ko-KR')}
-                  {' · '}만료: {new Date(dictData.pdfUploadedAt + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR')}
                 </div>
               )}
               <a
