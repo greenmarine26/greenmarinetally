@@ -87,12 +87,13 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // 검수 리스트용 — 평택분만
   const ptkContainers = allContainers.filter(isPtk);
 
-  // M6.51: 베이사전 우선 (절대 기준) — voyageInfo를 row 계산 전에 미리 추출
-  //   기존 M6.49: EDI 컨테이너 row max만으로 globalRowRange 계산
-  //              → EDI에 비정상 row(예: row 37) 1개라도 있으면 카고플랜/베이상세에
-  //                row 라벨 11~37까지 빈 슬롯이 추가로 그려지는 버그
-  //   수정: 베이사전(rowMaxEven/rowMaxOdd, deckTiers/holdTiers)이 있으면 무조건 그것 사용,
-  //         없을 때만 EDI 폴백. EDI에서 베이사전 max 초과 row는 무시(클리핑)
+  // M6.52: 베이사전 max + EDI max 결합 (둘 중 큰 값, 단 EDI는 베이사전 max로 클리핑)
+  //   배경:
+  //     M6.49 — EDI max만 사용 → 유령 row 37 버그
+  //     M6.51 — 베이사전 우선 → Firebase 옛 데이터에 rowMaxEven<10이면 row 10/09 사라짐
+  //     M6.52 — 둘 다 살림. EDI에서 max 계산하되 베이사전 max 초과는 무시(클리핑)
+  //             → row 10/09 EDI에 있으면 표시, 비정상 row 11~37은 차단
+  //             → Firebase가 잘못돼도 EDI가 정상이면 화면 정상
   const voyageInfo = voyage?.info || {};
   const shipImo = voyageInfo.imo || '';
   const shipName = voyageInfo.vsl || '';
@@ -102,34 +103,38 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const dictDeckTiers = dictData?.bayDef?.deckTiers;
   const dictHoldTiers = dictData?.bayDef?.holdTiers;
 
-  // M5.31: 베이상세용 row/tier 계산 (BayPlan과 동일 패턴)
-  //   "빈 슬롯도 표시"를 위해 — 베이가 한 컨만 있어도 모든 tier/row 슬롯 표시
-  let maxLeft = 0, maxRight = 0;
+  // EDI에서 row max 계산 — 베이사전 max의 2배 이내만 유효 (outlier만 차단)
+  //   예: 베이사전 10/9 + EDI row 10/9 → 살림 (10 ≤ 20)
+  //       Firebase 옛 8/7 + EDI row 10/9 → 살림 (10 ≤ 16) ← 핵심 — 옛 데이터에도 정상 EDI 살림
+  //       베이사전 10/9 + EDI 비정상 37 → 차단 (37 > 20)
+  //       베이사전 없음 → 모든 EDI 허용 (폴백)
+  let ediMaxLeft = 0, ediMaxRight = 0;
   const tierSet = new Set();
-  if (dictRowMaxEven != null && dictRowMaxOdd != null) {
-    // M6.51: 베이사전 우선 — 외계 EDI 값에 흔들리지 않음
-    maxLeft = dictRowMaxEven;
-    maxRight = dictRowMaxOdd;
-    // tier도 베이사전에서 (있을 때만, 폴백은 EDI tier set)
-    if (Array.isArray(dictDeckTiers)) dictDeckTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
-    if (Array.isArray(dictHoldTiers)) dictHoldTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
-    // tier 폴백: 베이사전에 tier 정의 없으면 EDI에서 보강
-    if (tierSet.size === 0) {
-      printContainers.forEach(c => { if (c.tier) tierSet.add(c.tier); });
-    }
-  } else {
-    // M6.51: 베이사전 없을 때만 EDI 폴백 (이전 동작 보존)
-    printContainers.forEach(c => {
-      if (c.row) {
-        const n = parseInt(c.row);
-        if (n > 0) {
-          if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
-          else maxRight = Math.max(maxRight, n);
+  printContainers.forEach(c => {
+    if (c.row) {
+      const n = parseInt(c.row);
+      if (n > 0) {
+        if (n % 2 === 0) {
+          // 베이사전 max 있으면 그 2배 이내만 카운트 (outlier 차단)
+          if (dictRowMaxEven == null || dictRowMaxEven <= 0 || n <= dictRowMaxEven * 2) {
+            ediMaxLeft = Math.max(ediMaxLeft, n);
+          }
+        } else {
+          if (dictRowMaxOdd == null || dictRowMaxOdd <= 0 || n <= dictRowMaxOdd * 2) {
+            ediMaxRight = Math.max(ediMaxRight, n);
+          }
         }
       }
-      if (c.tier) tierSet.add(c.tier);
-    });
-  }
+    }
+    if (c.tier) tierSet.add(c.tier);
+  });
+  // 최종 max = max(베이사전 max, EDI max≤베이사전max). 베이사전 없으면 EDI만.
+  const maxLeft = Math.max(dictRowMaxEven || 0, ediMaxLeft);
+  const maxRight = Math.max(dictRowMaxOdd || 0, ediMaxRight);
+  // tier도 베이사전 + EDI union (베이사전 정의는 모두 포함, EDI는 정의된 값 그대로)
+  if (Array.isArray(dictDeckTiers)) dictDeckTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
+  if (Array.isArray(dictHoldTiers)) dictHoldTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
+
   const globalRowRange = { maxLeft, maxRight };
   const globalTiers = Array.from(tierSet);
 

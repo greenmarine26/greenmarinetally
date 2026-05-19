@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.52 변경 사항 (2026-05) — row 10/09 사라짐 hotfix (베이사전+EDI 결합)',
+      examples: [
+        { q: '🔥 M6.51 부작용', a: 'M6.51에서 베이사전 우선으로 바꿨더니 row 10/09가 사라지는 경우 발생. 원인: Firebase에 옛 KSKM 데이터(Gemini 자동 분석본)가 v2(M6.50 패치본)보다 우선 매칭됨. 매칭 우선순위: Firebase > User > V2 > V1 (shipStructure.js L31)' },
+        { q: '✅ M6.52 수정 — 둘 다 살림', a: 'globalRowRange = max(베이사전 max, EDI max). 단 EDI는 베이사전 max 이내로 클리핑(cap). 결과:\n• 베이사전 정상(10/9) + EDI 정상(10/9) → 10/9 ✓\n• Firebase 옛값(8/7) + EDI 정상(10/9) → 10/9 ✓ (EDI가 살림)\n• 베이사전 정상(10/9) + EDI 비정상 row 37 → 10/9 ✓ (37 클리핑)\n• 둘 다 없음 → 0' },
+        { q: '📍 적용 파일', a: 'PrintHubModal.jsx + BayPlan.jsx 두 곳. PrintableCargoPlan/PrintableBayDetail은 globalRowRange를 prop으로 받으므로 자동 적용. tier도 동일하게 베이사전 + EDI union으로 변경 (베이사전 정의는 모두 표시 + EDI 보강)' },
+        { q: '💡 Firebase 옛 KSKM 데이터 정리는?', a: 'M6.52는 표시만 정상화. Firebase의 옛 KSKM 데이터 자체는 그대로 남음. 진단 위젯(M6.50)에서 KSKM 점수가 여전히 낮게 나오면 Firebase 데이터를 v2(M6.50 패치)로 덮어쓰는 별도 기능 필요 — 다음 작업' },
+      ],
+    },
+    {
       title: '🆕 M6.51 변경 사항 (2026-05) — 베이사전 우선 row max (11~37 유령 row 버그 fix)',
       examples: [
         { q: '🔥 버그 (사용자 보고)', a: '카고플랜 / 베이플랜 / 베이상세에서 row 라벨이 정상(10 08 06 04 02 00 01 03 05 07 09) 뒤에 11~37까지 유령 row가 추가로 그려지는 문제. KSKM(SUNNY KALMIA)는 PDF상 row 최대 10/9인데 라벨이 37까지 길어짐' },
