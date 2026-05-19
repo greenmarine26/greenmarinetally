@@ -152,51 +152,28 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   }, [containers, dischargeCns]);
 
   // 좌우 균형 (전 베이 통일)
-  // M6.52: 베이사전 max + EDI max 결합. EDI는 베이사전 max의 2배 이내만 유효 (outlier만 차단)
-  //   M6.51 베이사전 우선 → Firebase 옛값(8/7)이면 EDI 정상 10/9도 잘림 (사용자 보고)
-  //   수정: max(베이사전 max, EDI max). EDI는 베이사전 max*2 초과 outlier만 차단
-  //         → 정상 EDI(10/9)는 Firebase 옛값(8/7)이라도 살림 → 화면 10/9 표시
-  //         → 비정상 EDI(37)는 베이사전(10/9)*2=20 초과라 차단
-  //         → 베이사전 없으면 EDI 그대로 (폴백)
   const globalRowRange = useMemo(() => {
-    const dict = (shipImo || shipName) ? getShipBayDictData(shipImo, shipName) : null;
-    const dRowMaxEven = dict?.bayDef?.rowMaxEven;
-    const dRowMaxOdd = dict?.bayDef?.rowMaxOdd;
-    let ediLeft = 0, ediRight = 0;
+    let maxLeft = 0, maxRight = 0;
     for (const c of containers) {
       if (!c.row) continue;
       const n = parseInt(c.row);
       if (n === 0) continue;
-      if (n % 2 === 0) {
-        if (dRowMaxEven == null || dRowMaxEven <= 0 || n <= dRowMaxEven * 2) {
-          ediLeft = Math.max(ediLeft, n);
-        }
-      } else {
-        if (dRowMaxOdd == null || dRowMaxOdd <= 0 || n <= dRowMaxOdd * 2) {
-          ediRight = Math.max(ediRight, n);
-        }
-      }
+      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+      else maxRight = Math.max(maxRight, n);
     }
-    return {
-      maxLeft: Math.max(dRowMaxEven || 0, ediLeft),
-      maxRight: Math.max(dRowMaxOdd || 0, ediRight),
-    };
-  }, [containers, shipImo, shipName]);
+    return { maxLeft, maxRight };
+  }, [containers]);
 
-  // M6.52: tier도 베이사전 + EDI union (베이사전 정의는 모두 포함, EDI도 보강)
+  // M3.87: 선박 전체 tier 풀 (베이가 한 컨만 있어도 모든 tier 슬롯 표시)
+  //   원칙: "베이는 풀로 차있다고 생각하고 다 보여줘야 함"
+  //   이전: BayPage 내부에서 그 페이지의 컨테이너만 보고 tier 추출 → 달랑 한 줄
   const globalTiers = useMemo(() => {
-    const dict = (shipImo || shipName) ? getShipBayDictData(shipImo, shipName) : null;
-    const dDeck = dict?.bayDef?.deckTiers;
-    const dHold = dict?.bayDef?.holdTiers;
     const ts = new Set();
-    if (Array.isArray(dDeck)) dDeck.forEach(t => ts.add(String(t).padStart(2, '0')));
-    if (Array.isArray(dHold)) dHold.forEach(t => ts.add(String(t).padStart(2, '0')));
-    // EDI도 보강 (베이사전 누락분 채움)
     for (const c of containers) {
       if (c.tier) ts.add(c.tier);
     }
     return Array.from(ts);
-  }, [containers, shipImo, shipName]);
+  }, [containers]);
 
   // M4.5: .def 베이사전 조회 (진짜 선박 골격 정보)
   //   - 있으면: .def에 등록된 베이만 페이지로 → 빈 베이도 표시, 통로(.def에 없는 짝수)는 자동 생략

@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Database, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Upload, FolderOpen } from 'lucide-react';
 import { fbSubscribeShipBayDict, fbSubscribeShipLibrary } from '../firebase.js';
 
-export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload, onAscUpload }) {
+export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload }) {
   const [bayDict, setBayDict] = useState({});
   const [ships, setShips] = useState({});
   const [expanded, setExpanded] = useState(false);
@@ -123,36 +123,26 @@ export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload, onA
 
       {expanded && (
         <div className="border-t border-cyan-700/40 p-2.5 space-y-2">
-          {/* PDF/ASC 등록 버튼 — 위젯 안에서 직접 */}
-          <div className="space-y-1.5">
-            {/* M6.47: ASC 일괄 — Gemini 0, 즉시 */}
+          {/* PDF 등록 버튼 — 위젯 안에서 직접 */}
+          <div className="flex flex-wrap gap-1.5">
             <button
-              onClick={() => onAscUpload && onAscUpload()}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold"
+              onClick={() => onBulkUpload && onBulkUpload()}
+              className="flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs font-bold"
             >
-              ⚡ ASC 일괄 등록 (Gemini 0, 즉시)
+              <FolderOpen className="w-3.5 h-3.5"/>
+              📚 PDF 일괄 등록
             </button>
-            {/* PDF 옵션 — Gemini 사용 */}
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={() => onBulkUpload && onBulkUpload()}
-                className="flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs font-bold"
-              >
-                <FolderOpen className="w-3.5 h-3.5"/>
-                📚 PDF 일괄 (Gemini)
-              </button>
-              <label className="flex-1 min-w-[120px] cursor-pointer inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-purple-900/50 hover:bg-purple-800/50 border border-purple-700/50 rounded text-xs font-bold text-purple-200">
-                <Upload className="w-3.5 h-3.5"/>
-                📄 PDF 1개
-                <input
-                  ref={singleRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="hidden"
-                  onChange={handleSingleSelect}
-                />
-              </label>
-            </div>
+            <label className="flex-1 min-w-[120px] cursor-pointer inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-purple-900/50 hover:bg-purple-800/50 border border-purple-700/50 rounded text-xs font-bold text-purple-200">
+              <Upload className="w-3.5 h-3.5"/>
+              📄 PDF 1개 등록
+              <input
+                ref={singleRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={handleSingleSelect}
+              />
+            </label>
           </div>
 
           {/* 필터 탭 */}

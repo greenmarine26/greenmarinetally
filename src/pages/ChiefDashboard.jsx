@@ -929,15 +929,7 @@ function VoyageStatRow({ v, onOpen }) {
       <div className="flex items-center justify-between mb-1.5">
         <div className="min-w-0 flex-1">
           <div className="font-bold text-sm text-slate-200 truncate">{v.info.vsl}</div>
-          <div className="text-[10px] text-slate-500">
-            {/* M6.45: voy_d / voy_l 다르면 둘 다 */}
-            {(() => {
-              const d = v.info.voy_d, l = v.info.voy_l, vv = v.info.voy;
-              if (d && l && d !== l) return `${d} / ${l}`;
-              return d || l || vv || '';
-            })()}
-            {' · '}{v.info.carrier || ''}
-          </div>
+          <div className="text-[10px] text-slate-500">{v.info.voy} · {v.info.carrier || ''}</div>
         </div>
         <ChevronRight className="w-4 h-4 text-slate-600"/>
       </div>

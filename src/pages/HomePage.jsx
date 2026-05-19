@@ -181,20 +181,13 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const handleCreate = async () => {
     if (!vsl.trim() || !voy.trim()) return;
     const key = `${vsl.trim().toUpperCase().replace(/\s+/g, '')}_${voy.trim().toUpperCase()}`;
-    const upVoy = voy.trim().toUpperCase();
-    // M6.46: mode별로 voy_d / voy_l 명시 저장 (EDI에 의존하지 않음)
-    //   양하 항차 생성 → voy_d 정확. 선적 항차 생성 → voy_l 정확.
-    //   "다른 mode 섹션 추가" 시 별도 voy 입력 받음 (VoyagePage)
-    const info = {
+    await fbCreateVoyage(key, {
       vsl: vsl.trim().toUpperCase(),
-      voy: upVoy,
+      voy: voy.trim().toUpperCase(),
       mode: showCreate,
       createdAt: Date.now(),
       createdBy: inspector || '',
-    };
-    if (showCreate === 'discharge') info.voy_d = upVoy;
-    else if (showCreate === 'loading') info.voy_l = upVoy;
-    await fbCreateVoyage(key, info);
+    });
     setVsl(''); setVoy(''); setShowCreate(null);
     onOpenVoyage(key);
   };
@@ -558,13 +551,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete }) {
             )}
           </div>
           <div className="text-[11px] text-slate-500 truncate">
-            {/* M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W) */}
-            {(() => {
-              const d = voyage.info.voy_d, l = voyage.info.voy_l, v = voyage.info.voy;
-              if (d && l && d !== l) return `${d} / ${l}`;
-              return d || l || v || '';
-            })()}
-            {' · '}{voyage.info.carrier || ''}
+            {voyage.info.voy} · {voyage.info.carrier || ''}
           </div>
         </div>
         <ChevronRight className="w-5 h-5 text-slate-600 flex-shrink-0"/>
