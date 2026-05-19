@@ -45,6 +45,7 @@ import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import BulkStowageModal from '../components/BulkStowageModal.jsx'; // M6.42
 import BulkAscModal from '../components/BulkAscModal.jsx'; // M6.47
 import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6.43
+import BayDictDiagnosticsWidget from '../components/BayDictDiagnosticsWidget.jsx'; // M6.50
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
@@ -1873,6 +1874,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         onBulkUpload={() => setBulkStowageOpen(true)}
         onAscUpload={() => setBulkAscOpen(true)}
       />
+      {/* M6.50: 베이사전 진단 위젯 — 등록 entry 필드 완성도 + 잠재 오류 자동 감지 */}
+      <BayDictDiagnosticsWidget/>
       {/* M5.26: 통합 출력 진입 */}
       <button
         onClick={() => setShowPrintHub(true)}

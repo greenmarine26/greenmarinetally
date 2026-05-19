@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.50 변경 사항 (2026-05) — KSKM 베이사전 PDF 검증 + 베이사전 진단 위젯',
+      examples: [
+        { q: '🚢 KSKM (SUNNY KALMIA) 정정', a: '2604S PDF 기준 6건 오류 수정. BAY 01: deck-only 짧은 베이로 정정 (hasHold:false, isStandalone:true, deckTiers 4단). BAY 03: 짝수(02) 없는 단독 베이로 정정 (isStandalone:true). BAY 27/28/29: deck-only 선미 베이로 정정 (hasHold:false). holdTiers [10,8,6,4,2]→[8,6,4,2] (tier 10 제거). section 묶음 8→15개 (단독 베이 분리). BAY 15는 PDF대로 deck 5단 유지 (양옆은 6단)' },
+        { q: '🩺 베이사전 진단 위젯 (신규)', a: '자료 탭 베이사전 라이브러리 아래에 추가. 등록된 모든 선박 entry의 필드 완성도와 잠재 오류를 한눈에 표시. 점수 100점 기준: baysSummary 30 + deckTiersLocal 20 + holdTiersLocal 20 + rowMaxLocal 10 + hatchCount 10 + PDF 5 + verified 5' },
+        { q: '🔍 자동 감지 항목', a: '(1) baysSummary 미존재 (2) baysSummary ≠ bayList 길이 (3) holdTiers에 tier 10 포함 — 자동 파싱 오류 가능성 (4) 짝수 짝 없는 홀수 베이가 isStandalone:false (5) 베이별 deckTiersLocal/holdTiersLocal/rowMaxLocal/hatchCount 보강률' },
+        { q: '💡 사용 방법', a: '자료 탭 → 🩺 베이사전 진단 펼치기 → 오류/경고/전체 필터 → 척 클릭하여 상세. 점수 낮은 순으로 정렬되어 보강 우선순위 명확. 진단만 하고 자동 수정은 안 함 — 사용자가 PDF 재등록 또는 다음 패치로 처리' },
+        { q: '⚠️ 명세 #7 (hatchCount)', a: '아직 베이사전에 hatchCount 필드 없음 — 진단 위젯이 보강률 0/N으로 표시. 다음 작업에서 베이사전 위젯에 hatchCount 입력 UI 추가 예정 (M6.49 명세 #7 확정 사항)' },
+      ],
+    },
+    {
       title: '🆕 M5.42 변경 사항 (2026-05) — 베이별 tier/row 로컬 오버라이드 + DJCF·XTPG 정정',
       examples: [
         { q: '🎯 핵심 fix', a: '베이사전이 선박 전역(deckTiers/holdTiers/rowMax) 하나만 가지고 있어, 같은 선박 안에서도 선수·선미가 좁아지는 베이(BAY 01, 38 등)가 phantom 슬롯으로 출력되던 문제. 이제 베이별 로컬 값이 우선 적용됨' },
