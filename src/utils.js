@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.52';
+export const APP_VERSION = 'M6.53';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -851,6 +851,13 @@ export function parseAscFile(text) {
     const bay = normalizeBay(slot.substring(0, 2));
     const row = slot.substring(2, 4);
     const tier = slot.substring(4, 6);
+    // M6.53: BAY 00 그리드 메타 라인 차단
+    //   ASC 끝부분의 좌표 점검용 메타 데이터(bay=00, 컨번호 빈 라인)가
+    //   "선적 엠티" 허용 로직(line 849)을 우회하여 컨테이너로 처리되던 버그.
+    //   영향: KSKM2505S 150건, KSKM2508N 더 많음. row 11~15 + tier 20~70 유령 데이터.
+    //   해결: cn='' AND bay='0' 동시 → 메타 라인, 제외.
+    //   선적 엠티(bay≠00, NAD 있음)는 영향 없음.
+    if (!cn && bay === '0') continue;
     // V38: NAD 위치 19~21 (3글자 표준), 그 다음 추가 KRPTK 5자가 있을 수도
     const nad = line.substring(19, 22).trim();
     const ext = line.substring(22, 27);                 // 공백 또는 KRPTK (확장)

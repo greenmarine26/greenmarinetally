@@ -379,7 +379,18 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.52 변경 사항 (2026-05) — row 10/09 사라짐 hotfix (베이사전+EDI 결합)',
+      title: '🆕 M6.53 (2026-05) — 근본 원인 해결: parseAscFile BAY 00 메타 라인 차단',
+      examples: [
+        { q: '🔥 사용자 보고', a: '카고플랜/베이플랜/베이상세에서 row 11~37 유령 row + tier 비정상값(20/30/40/50/60/70). 사용자 단언: "그런 컨테이너선 존재 불가능, 디파인 보면 KSKM은 row 10/09까지". KSKM PDF baseline 양식: 10 08 06 04 02 00 01 03 05 07 09' },
+        { q: '🔍 근본 원인 (.def 없이 ASC raw로 증명)', a: 'ASC 파일 끝부분에 BAY 00 그리드 좌표 점검용 메타 데이터. 예: KSKM2505S.ASC L298~L447에 150건. 형식: "000010", "000020", ..., "001500" (bay=00, row 00~15, tier 00~90, 10씩 증가). parseAscFile line 849 ("M3.5.5: 컨번호 빈 라인=선적 엠티 허용")이 이 메타까지 컨테이너로 처리 → 유령 row 11~15, tier 20~70 생성' },
+        { q: '✅ 해결 (한 줄 추가)', a: 'parseAscFile 컨번호 검증 다음에 1줄 추가: if (!cn && bay === \'0\') continue; 조건: 컨번호 빈 라인 AND bay=00 동시 → BAY 00 메타 판정, 차단. 선적 엠티(bay≠00, NAD 있음)는 영향 없음' },
+        { q: '📊 검증 시뮬레이션 결과', a: 'KSKM2505S.ASC: 441건(메타 150 포함) → 291건(정상). row 분포 01~10 ✓, tier 02/04/06/08/82/84/86/88 ✓\nKSKM2508N.ASC: 795건 → 363건. 모두 정상 분포\n→ KSKM PDF baseline과 정확히 일치' },
+        { q: '🔁 M6.52 변경 롤백', a: 'PrintHubModal.jsx + BayPlan.jsx를 M6.49 양식으로 복원. M6.51/M6.52의 베이사전+EDI 결합 로직은 표면 패치 — 근본 원인 해결되면 불필요. 출력 컴포넌트(PrintableCargoPlan, PrintableBayDetail)는 안 건드림 — 사용자 원칙 "기본 구조 건드리지 마라" 준수' },
+        { q: '🌐 다른 선박 자동 적용', a: 'parseAscFile 1줄 수정으로 모든 ASC 파일의 BAY 00 메타 자동 차단. 사용자 수동 작업 불필요. EDI(parseBAPLIE)도 동일 패턴 의심되나 일단 ASC만 적용 — 사용자 환경 검증 후 별도 결정' },
+      ],
+    },
+    {
+      title: '🪦 M6.52 (2026-05) — row 10/09 hotfix [M6.53에서 롤백 — 표면 패치였음]',
       examples: [
         { q: '🔥 M6.51 부작용', a: 'M6.51에서 베이사전 우선으로 바꿨더니 row 10/09가 사라지는 경우 발생. 원인: Firebase에 옛 KSKM 데이터(Gemini 자동 분석본)가 v2(M6.50 패치본)보다 우선 매칭됨. 매칭 우선순위: Firebase > User > V2 > V1 (shipStructure.js L31)' },
         { q: '✅ M6.52 수정 — 둘 다 살림', a: 'globalRowRange = max(베이사전 max, EDI max). 단 EDI는 베이사전 max 이내로 클리핑(cap). 결과:\n• 베이사전 정상(10/9) + EDI 정상(10/9) → 10/9 ✓\n• Firebase 옛값(8/7) + EDI 정상(10/9) → 10/9 ✓ (EDI가 살림)\n• 베이사전 정상(10/9) + EDI 비정상 row 37 → 10/9 ✓ (37 클리핑)\n• 둘 다 없음 → 0' },
