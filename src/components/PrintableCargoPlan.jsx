@@ -509,18 +509,22 @@ export default function PrintableCargoPlan({
   //   양하 카고플랜 → voy_d (양하 EDI 업로드 시 자동 저장)
   //   선적 카고플랜 → voy_l (선적 EDI 업로드 시 자동 저장)
   //   둘 다 없으면 voyage.info.voy (등록 시 입력값) 폴백
+  // M6.37: voyageKey("XTPG_0523E" 같은 키)는 voy가 아니므로 fallback에서 제거
+  //   사용자 보고: 카고플랜에 양하/선적 항차 정확히 안 나옴
+  //   원인: voy_d 또는 voy_l이 비어있을 때 voyageKey가 표시되거나
+  //         다른 mode의 voy가 generic으로 fallback되어 잘못 표시
   const voyD = voyageInfo?.voy_d || '';
   const voyL = voyageInfo?.voy_l || '';
-  const voyFallback = voyageInfo?.voy || voyageKey || '';
+  const voyGeneric = voyageInfo?.voy || '';
   let voy;
   if (mode === 'discharge') {
-    voy = voyD || voyFallback;
+    voy = voyD || voyGeneric;
   } else if (mode === 'loading') {
-    voy = voyL || voyFallback;
+    voy = voyL || voyGeneric;
   } else {
-    // 모드 미상 (모달 직접 호출 등) — 기존 동작 보존
+    // 모드 미상 (모달 직접 호출 등) — 양/선 둘 다 보이게
     if (voyD && voyL && voyD !== voyL) voy = `양하 ${voyD} / 선적 ${voyL}`;
-    else voy = voyD || voyL || voyFallback;
+    else voy = voyD || voyL || voyGeneric;
   }
 
   // M5.33: 컬럼 매칭 (단독 N의 컬럼 아래 = 짝꿍 (N+1)/(N+2) 또는 빈)
