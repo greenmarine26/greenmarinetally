@@ -217,17 +217,45 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
+  // M6.49 보강: dynRows를 베이별 자체 row 폭으로
+  //   기존: globalRowRange(페이지 전체 max) → 큰 선박에서 모든 박스 27 row 표시 → 글자 겹침
+  //   변경: 각 베이의 실제 컨테이너 + 베이사전 row max 만 사용
+  //         박스 외곽은 페이지 그리드(flex)로 통일, 박스 안 그리드만 자체 row
   const dynRows = (() => {
-    const maxLeft = globalRowRange?.maxLeft || 0;
-    const maxRight = globalRowRange?.maxRight || 0;
-    if (maxLeft || maxRight) {
+    const set = new Set();
+    allConts.forEach(c => {
+      const r = String(c.row).padStart(2, '0');
+      if (r && r !== 'NaN') set.add(r);
+    });
+    // 베이사전 row max 보강 (사용 안 한 row도 격자 표시용)
+    [even, odd].forEach(bn => {
+      if (bn == null) return;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) return;
+      const rmE = db.rowMaxEvenLocal || db.rowMaxEven;
+      const rmO = db.rowMaxOddLocal || db.rowMaxOdd;
+      if (Number.isFinite(rmE)) {
+        for (let r = 2; r <= rmE; r += 2) set.add(String(r).padStart(2, '0'));
+      }
+      if (Number.isFinite(rmO)) {
+        for (let r = 1; r <= rmO; r += 2) set.add(String(r).padStart(2, '0'));
+      }
+    });
+    if (set.size === 0) {
+      // 폴백: globalRowRange 또는 기본
+      const maxLeft = globalRowRange?.maxLeft || 8;
+      const maxRight = globalRowRange?.maxRight || 7;
       const left = [];
       for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
       const right = [];
       for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
       return [...left, '00', ...right];
     }
-    return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
+    set.add('00');
+    const arr = Array.from(set);
+    const left = arr.filter(r => parseInt(r) > 0 && parseInt(r) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
+    const right = arr.filter(r => parseInt(r) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
+    return [...left, '00', ...right];
   })();
 
   // 페이지 두 베이의 dictBay tier union
