@@ -43,6 +43,7 @@ import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import BulkStowageModal from '../components/BulkStowageModal.jsx'; // M6.42
+import BulkAscModal from '../components/BulkAscModal.jsx'; // M6.47
 import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6.43
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
@@ -1186,6 +1187,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   const [stowagePdfFile, setStowagePdfFile] = useState(null);
   // M6.42: 일괄 STOWAGE PDF 등록 모달
   const [bulkStowageOpen, setBulkStowageOpen] = useState(false);
+  // M6.47: 일괄 ASC 등록 모달 (Gemini 0)
+  const [bulkAscOpen, setBulkAscOpen] = useState(false);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
@@ -1868,6 +1871,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       <BayDictLibraryWidget
         onSingleUpload={(file) => setStowagePdfFile(file)}
         onBulkUpload={() => setBulkStowageOpen(true)}
+        onAscUpload={() => setBulkAscOpen(true)}
       />
       {/* M5.26: 통합 출력 진입 */}
       <button
@@ -1909,6 +1913,17 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           onClose={() => setBulkStowageOpen(false)}
           onCompleted={(res) => {
             setStatus(`✅ 베이사전 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패`);
+          }}
+        />
+      )}
+      {/* M6.47: ASC 일괄 등록 (Gemini 0) */}
+      {bulkAscOpen && (
+        <BulkAscModal
+          open={bulkAscOpen}
+          inspector={inspector}
+          onClose={() => setBulkAscOpen(false)}
+          onCompleted={(res) => {
+            setStatus(`⚡ ASC 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패 (Gemini 0회)`);
           }}
         />
       )}

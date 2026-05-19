@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.46';
+export const APP_VERSION = 'M6.48';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -858,11 +858,26 @@ export function parseAscFile(text) {
     const typeBlock = line.substring(44, 54).trim();
     let tp = '', iso = '', fe = 'F', wt = 0;
 
+    // M6.48: FR/OT/TK/PL 등 특수 컨테이너 코드 우선 인식
+    //   universal_asc_analyzer 참조 — 평면(FR), 오픈탑(OT), 탱크(TK), 플랫(PL)
+    let mSpec = typeBlock.match(/^(FR40|FR20|OT40|OT20|PL40|PL20)(\d{3})([FE])/);
     let m1 = typeBlock.match(/^([A-Z]{2}\d{2})(\d{3})([FE])/);
     let m2 = typeBlock.match(/^(\d{2}[A-Z]{2})(\d{3})([FE])/);
     let m4 = typeBlock.match(/^([A-Z]{4})(\d{3})([FE])/);
 
-    if (m1) {
+    if (mSpec) {
+      tp = mSpec[1];
+      fe = mSpec[3];
+      const isoMap = {
+        FR40: '42PF', FR20: '22PF',
+        OT40: '42UT', OT20: '22UT',
+        PL40: '42PL', PL20: '22PL',
+      };
+      iso = isoMap[tp] || tp;
+      wt = parseInt(mSpec[2]) * 100;
+      const wtMatch = line.substring(54, 100).match(/(\d{5})/);
+      if (wtMatch) wt = parseInt(wtMatch[1]);
+    } else if (m1) {
       tp = m1[1]; iso = m1[2] + 'GP'; fe = m1[3];
       if (tp.startsWith('TK')) iso = '22T6';
       if (tp.startsWith('RF')) iso = tp.endsWith('20') ? '22R5' : '45R1';
@@ -924,6 +939,41 @@ export function parseAscFile(text) {
       }
     }
 
+    // M6.48: 추가 메타 자동 추출 — universal_asc_analyzer 참조
+    //   1) 리퍼 온도: -25C, +05C 등 (RF 컨테이너만, -30~+30 현실 범위)
+    //   2) OOG 감지: 'AK' 토큰 (FR/OT의 out-of-gauge 표시)
+    //   3) OOG 치수: AK 다음 6자리 숫자
+    //   4) routeCode: 끝 10-11자 영문 (POL+VIA+POD)
+    const metaArea = line.substring(54).trim();
+    let tmp = '';
+    if (tp && tp.startsWith('RF')) {
+      // M6.48 보강: 리퍼 온도 추출 — 사용자 명시: 반드시 소수점 1자리 (-18.0℃, 15.0℃)
+      //   ASC 산업 표준: 3자리 정수 = 소수점 한 자리 표기 (-180 → -18.0)
+      //   C 뒤에 숫자 가능 (예: '30C0013' — 온도+시퀀스), lookahead로 처리
+      const tmpMatch3 = metaArea.match(/(?:^|\s)(-?\d{3})C(?=\d|\s|$)/);
+      if (tmpMatch3) {
+        const raw = parseInt(tmpMatch3[1], 10);
+        tmp = (raw / 10).toFixed(1) + '℃';
+      } else {
+        // 2자리 (드문 케이스) — 그대로 정수 해석 + .0
+        const tmpMatch2 = metaArea.match(/(?:^|\s)(-?\d{1,2})C(?=\d|\s|$)/);
+        if (tmpMatch2) tmp = parseFloat(tmpMatch2[1]).toFixed(1) + '℃';
+      }
+    }
+    const oog = /\bAK\b/.test(metaArea);
+    let oogDim = '';
+    if (oog) {
+      const oogM = metaArea.match(/AK\s*(\d{6})/);
+      if (oogM) oogDim = oogM[1];
+    }
+    // routeCode (끝 10-11자) — POD 백업용
+    const rcMatch = line.match(/([A-Z]{10,11})\s*$/);
+    const routeCode = rcMatch ? rcMatch[1] : '';
+    const podFinal = routeCode.length >= 3 ? routeCode.slice(-3) : '';
+
+    // FR/OT 자동 oog 판정 — 장비 코드만으로도 OOG 처리
+    const isFROrOT = tp && (tp.startsWith('FR') || tp.startsWith('OT') || tp.startsWith('PL'));
+
     containers.push({
       cn, bay, row, tier,
       iso: isoFinal,
@@ -934,14 +984,129 @@ export function parseAscFile(text) {
       // M3.85: 통합 헬퍼로 리퍼 판정 (40HR, RFHC, 458x 등 모든 변형 인식)
       rf: (tp && tp.startsWith('RF')) || isReeferIso(isoFinal),
       tk: (tp && tp.startsWith('TK')) || (isoFinal && isoFinal[2] === 'T'),
-      oog: false,
-      sl: '', sh: '', bl: '', tmp: '',
+      oog: oog || isFROrOT,
+      sl: '', sh: '', bl: '',
+      tmp,
+      oogDim,
+      routeCode,
+      podFinal,
     });
   }
   return { vsl, voy, containers };
 }
 
-// === SheetJS Loader ===
+// === M6.47: ASC 파일 → 베이사전 엔트리 변환 (Gemini 호출 0) ===
+//   ASC의 컨테이너 좌표(BBBRRTT)로부터 베이 구조 자동 추출:
+//   - 사용된 베이 목록
+//   - 각 베이의 hold(tier ≤10) / deck(tier ≥80) 분리
+//   - 짝수 베이(40ft) / 홀수 베이(20ft) 식별
+//   - 홀수 베이의 짝꿍(인접 짝수) 자동 매칭
+//   - 짝수 단독 베이(isStandalone) 자동 판정
+//
+//   한계: 항차마다 "사용된 슬롯"만 반영 (전체 베이 구조는 여러 ASC 누적 시 정확해짐)
+//   장점: Gemini 0, 무료, 즉시, 정확도 100% (구조화 데이터)
+export function ascToBayDictEntry(ascResult, fileName, extra = {}) {
+  // M6.47: 컨번호 있는 실제 컨테이너만 사용 (정렬용 빈 슬롯 라인 무시)
+  //   ASC에 종종 "000010", "000020" 같은 빈 슬롯 라인 있음 — BAY 00 오인 원인
+  const containers = (ascResult?.containers || []).filter(c => c.cn && /^[A-Z]{4}\d{7}$/.test(c.cn));
+  if (containers.length === 0) {
+    return null;
+  }
+
+  // 1) 각 베이별 좌표 수집
+  const bayMap = {};  // { bayNo: { rowsEven, rowsOdd, holdTiers, deckTiers } }
+  containers.forEach(c => {
+    if (!c.bay) return;
+    const bayNo = parseInt(c.bay, 10);
+    if (!Number.isFinite(bayNo)) return;
+    const row = parseInt(c.row, 10);
+    const tier = parseInt(c.tier, 10);
+    if (!Number.isFinite(row) || !Number.isFinite(tier)) return;
+
+    if (!bayMap[bayNo]) {
+      bayMap[bayNo] = {
+        rowsEven: new Set(),  // 짝수 row (40ft 슬롯)
+        rowsOdd: new Set(),   // 홀수 row (20ft 슬롯)
+        holdTiers: new Set(),
+        deckTiers: new Set(),
+      };
+    }
+    const b = bayMap[bayNo];
+    if (row % 2 === 0 && row !== 0) b.rowsEven.add(row);
+    else b.rowsOdd.add(row);
+    if (tier <= 20) b.holdTiers.add(tier);     // hold: tier 02~20
+    else b.deckTiers.add(tier);                 // deck: tier 80~98
+  });
+
+  // 2) baysSummary 생성
+  const sortedBays = Object.keys(bayMap).map(Number).sort((a, b) => a - b);
+  const baysSummary = [];
+  const standalone = [];
+  const pairs = [];
+
+  sortedBays.forEach(bayNo => {
+    const b = bayMap[bayNo];
+    // tier 큰 순으로 정렬 (deck: 88, 86, 84, 82 / hold: 08, 06, 04, 02)
+    const deckTiers = Array.from(b.deckTiers).sort((a, b) => b - a);
+    const holdTiers = Array.from(b.holdTiers).sort((a, b) => b - a);
+    const hasHold = holdTiers.length > 0;
+    const hasDeck = deckTiers.length > 0;
+
+    const isEven = bayNo % 2 === 0;
+    // 짝수 베이 단독: 인접 홀수 베이(N-1, N+1) 데이터 없으면 standalone
+    const isStandalone = isEven && !bayMap[bayNo - 1] && !bayMap[bayNo + 1];
+
+    // row 폭 (사용된 max row)
+    const rowMaxEven = b.rowsEven.size > 0 ? Math.max(...b.rowsEven) : null;
+    const rowMaxOdd = b.rowsOdd.size > 0 ? Math.max(...b.rowsOdd) : null;
+
+    if (isStandalone) standalone.push(bayNo);
+
+    const entry = {
+      bayNo: String(bayNo).padStart(2, '0'),
+      section: 1,                                  // 단순화 (모두 section 1)
+      hasHold,
+      hasDeck,
+      isStandalone,
+      // PrintableCargoPlan/BayDetail 양쪽 호환
+      deckTiers,
+      holdTiers,
+      deckTiersLocal: deckTiers,
+      holdTiersLocal: holdTiers,
+    };
+    if (rowMaxEven != null) { entry.rowMaxEvenLocal = rowMaxEven; entry.rowMaxEven = rowMaxEven; }
+    if (rowMaxOdd != null) { entry.rowMaxOddLocal = rowMaxOdd; entry.rowMaxOdd = rowMaxOdd; }
+    baysSummary.push(entry);
+  });
+
+  // 3) 짝꿍 쌍 식별 (짝수 + 홀수 인접)
+  sortedBays.forEach(bayNo => {
+    if (bayNo % 2 === 0 && bayMap[bayNo - 1]) pairs.push([bayNo, bayNo - 1]);
+    if (bayNo % 2 === 0 && bayMap[bayNo + 1]) pairs.push([bayNo, bayNo + 1]);
+  });
+
+  // 4) 코드/이름 추출
+  const vname = (ascResult?.vsl || extra.code || '').toUpperCase();
+  const code = (extra.code || vname.replace(/\s+/g, '').slice(0, 4)).toUpperCase();
+
+  return {
+    name: ascResult?.vsl || vname,
+    code,
+    callsign: extra.callsign || '',
+    imo: extra.imo || '',
+    voy: ascResult?.voy || '',
+    bayDef: {
+      baysSummary,
+      pairs,
+      standalone,
+      grade: 'user-verified-asc',
+      verified: true,
+      source: 'asc-file',
+      sourceFile: fileName || '',
+      generatedAt: Date.now(),
+    },
+  };
+}
 export async function loadSheetJS() {
   if (window.XLSX) return window.XLSX;
   await new Promise((resolve, reject) => {
