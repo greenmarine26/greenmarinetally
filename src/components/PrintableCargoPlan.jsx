@@ -299,18 +299,21 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       </div>
       <div className="bay-grid-wrap">
         <div className="bay-grid">
-          {hasDeck && deckTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
+          {hasDeck && deckTiers.map(t => {
+            const isUsed = bayDeckTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
           {hasDeck && (
             extraTier ? (
               <div className="bay-grid-row extra-tier-row">
@@ -326,25 +329,28 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
               </div>
             ) : <div className="bay-grid-row hatch-break"></div>
           )}
-          {hasHold && holdTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
+          {hasHold && holdTiers.map(t => {
+            const isUsed = bayHoldTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
         </div>
         <div className="bay-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
+          {hasDeck && deckTiers.map(t => <span key={t} className={!bayDeckTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
           {hasDeck && (
             extraTier ? <span className="extra-tier-label">{extraTier}</span> : <span className="tier-gap"></span>
           )}
-          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+          {hasHold && holdTiers.map(t => <span key={t} className={!bayHoldTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
         </div>
       </div>
       <div className="bay-row-labels">
