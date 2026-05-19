@@ -93,6 +93,26 @@ export async function fbDeleteStowagePdf(path) {
   }
 }
 
+// M6.45: 단순 get/set (정책 1일 1회 등 단순 키-값 저장용)
+export async function fbGetSimple(path) {
+  try {
+    const r = ref(db, path);
+    const snap = await get(r);
+    return snap.exists() ? snap.val() : null;
+  } catch (e) {
+    return null;
+  }
+}
+export async function fbSetSimple(path, value) {
+  try {
+    const r = ref(db, path);
+    await set(r, value);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 // === 공통 헬퍼 ===
 const voyageRef = (key) => ref(db, `voyages/${key}`);
 const sectionRef = (key, mode) => ref(db, `voyages/${key}/${mode}`);

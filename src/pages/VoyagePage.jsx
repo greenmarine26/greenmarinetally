@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth } from '../utils.js';
+, formatBerth, isValidBerth, _storage } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -116,6 +116,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       if (sample?.voy && sample.voy !== info.voy_d) {
         patch.voy_d = sample.voy;
       }
+      // M6.45: c.voy 메타 없는 옛 EDI 데이터 자동 복구
+      //   양하 EDI가 있고 voy_d 비어있고 voyage.info.voy가 voy_l과 다르면
+      //   → voyage.info.voy를 voy_d로 추정 (등록 시 양하 voy 입력 가정)
+      else if (!info.voy_d && info.voy && info.voy !== info.voy_l) {
+        patch.voy_d = info.voy;
+      }
     }
 
     // 선적 EDI 분석
@@ -124,6 +130,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       const sample = loadConts.find(c => c.voy);
       if (sample?.voy && sample.voy !== info.voy_l) {
         patch.voy_l = sample.voy;
+      }
+      // M6.45: 동일하게 voy_l 자동 복구
+      else if (!info.voy_l && info.voy && info.voy !== info.voy_d) {
+        patch.voy_l = info.voy;
       }
     }
 
@@ -351,17 +361,56 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return { byCn, list };
   }, [shipPolicy, containers]);
 
-  // 새 선박 정책 묻기 (한 번만)
+  // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
+  //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
+  //   - 등록 안 하고 닫기 → 같은 날 다시 안 뜸, 다음 날부터 다시 표시
+  //   - 선박별 키 (IMO 또는 vsl)로 구분 — 다른 선박 작업하면 그건 또 뜰 수 있음
+  // M6.45: Firebase 백업 추가 — localStorage 작동 안 하는 환경에서도 적용
+  //   다른 폰/브라우저에서 같은 검수원이 접속해도 1일 1회 보장
   useEffect(() => {
     if (policyAsked) return;
     if (!voyage?.info?.vsl) return;
     if (shipPolicy) return;  // 이미 매칭됨
     const hasEdi = (containers || []).length > 0;
-    if (hasEdi) {
+    if (!hasEdi) return;
+
+    const policyAskKey = voyage?.info?.imo || voyage?.info?.vsl || voyageKey;
+    const todayStr = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD
+    const lastAskedKey = `policyAsked:${policyAskKey}`;
+
+    // M6.45: localStorage 우선, 다음 Firebase 백업
+    (async () => {
+      const lsLastAsked = _storage.get(lastAskedKey);
+      if (lsLastAsked === todayStr) {
+        setPolicyAsked(true);
+        return;
+      }
+      // Firebase 백업 확인 (다른 기기에서 오늘 이미 물어봤을 가능성)
+      try {
+        const { default: fb } = await import('../firebase.js');
+        // inspectorActivity에 정책 확인 기록 — 검수원별
+        const inspName = inspector || 'anon';
+        const fbKey = `policyAsked/${inspName}/${policyAskKey}`;
+        const snap = await fb.fbGetSimple ? await fb.fbGetSimple(fbKey) : null;
+        if (snap === todayStr) {
+          setPolicyAsked(true);
+          _storage.set(lastAskedKey, todayStr);  // 로컬에도 동기화
+          return;
+        }
+      } catch (_) { /* Firebase 실패해도 localStorage로 폴백 */ }
+
       setShowPolicyModal(true);
       setPolicyAsked(true);
-    }
-  }, [voyage, shipPolicy, policyAsked, containers]);
+      _storage.set(lastAskedKey, todayStr);  // 로컬 기록
+      // Firebase 백업 저장 (실패해도 무시)
+      try {
+        const fb = await import('../firebase.js');
+        if (fb.fbSetSimple) {
+          await fb.fbSetSimple(`policyAsked/${inspector || 'anon'}/${policyAskKey}`, todayStr);
+        }
+      } catch (_) {}
+    })();
+  }, [voyage, shipPolicy, policyAsked, containers, voyageKey, inspector]);
 
   // M3.5.4: 자동 진단 (containers/recMap/xrayMap 변경 시 재계산)
   const diagAlerts = useMemo(() => {

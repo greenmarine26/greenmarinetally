@@ -551,7 +551,13 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete }) {
             )}
           </div>
           <div className="text-[11px] text-slate-500 truncate">
-            {voyage.info.voy} · {voyage.info.carrier || ''}
+            {/* M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W) */}
+            {(() => {
+              const d = voyage.info.voy_d, l = voyage.info.voy_l, v = voyage.info.voy;
+              if (d && l && d !== l) return `${d} / ${l}`;
+              return d || l || v || '';
+            })()}
+            {' · '}{voyage.info.carrier || ''}
           </div>
         </div>
         <ChevronRight className="w-5 h-5 text-slate-600 flex-shrink-0"/>
