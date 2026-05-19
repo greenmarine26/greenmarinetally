@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth } from '../utils.js';
+, formatBerth, isValidBerth, _storage } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -42,6 +42,11 @@ import StorageBox from '../components/StorageBox.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
+import BulkStowageModal from '../components/BulkStowageModal.jsx'; // M6.42
+import BulkAscModal from '../components/BulkAscModal.jsx'; // M6.47
+import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6.43
+import BayDictDiagnosticsWidget from '../components/BayDictDiagnosticsWidget.jsx'; // M6.50
+import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
@@ -97,6 +102,43 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     }).catch(() => { if (!cancelled) setShipLib(null); });
     return () => { cancelled = true; };
   }, [voyage?.info?.imo]);
+
+  // M6.39: 항차 진입 시 voy_d/voy_l 자동 복구 — 사용자 액션 0
+  //   ediContainers의 첫 컨테이너에서 c.voy 추출 → voy_d/voy_l 자동 백필
+  //   목적: 이전에 잘못 저장된 voy_d/voy_l을 EDI 재업로드 없이 자동 정정
+  //   조건: c.voy가 있는 경우 (M6.39 이후 업로드된 EDI는 c.voy 메타 포함)
+  useEffect(() => {
+    if (!voyage?.info || !voyageKey) return;
+    const info = voyage.info;
+    const patch = {};
+
+    // M6.46: 자동 복구 정책 변경
+    //   - EDI의 c.voy로 voy_d/voy_l 덮어쓰기 ❌ (송신측 voy일 수도 있음 — 인천 등에서 양하 EDI 줄 때 자기네 선적 voy 포함)
+    //   - 사용자가 항차 생성 시 입력한 voy (mode 일치) 신뢰
+    //   - voy_d/voy_l 비어있는 케이스만 자동 채우기 시도
+    //
+    //   양하 EDI 있고 voy_d 비어있음:
+    //     - mode='discharge'이면 voyage.info.voy = 양하 voy → voy_d로 백필
+    //     - mode!='discharge'이면 voyage.info.voy = 다른 mode voy → 자동 백필 안 함 (사용자 입력 필요)
+    const dischConts = Object.values(voyage?.discharge?.ediContainers || {});
+    if (dischConts.length > 0 && !info.voy_d) {
+      if (info.mode === 'discharge' && info.voy) {
+        patch.voy_d = info.voy;
+      }
+      // mode !== 'discharge' 케이스는 자동 백필 안 함 — 자료 탭 정정 UI에서 사용자 입력
+    }
+
+    const loadConts = Object.values(voyage?.loading?.ediContainers || {});
+    if (loadConts.length > 0 && !info.voy_l) {
+      if (info.mode === 'loading' && info.voy) {
+        patch.voy_l = info.voy;
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      fbUpdateVoyageInfo(voyageKey, patch).catch(e => console.error('[voy 자동 복구]', e));
+    }
+  }, [voyageKey, voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers]);
 
   if (!voyage) {
     return (
@@ -317,17 +359,56 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return { byCn, list };
   }, [shipPolicy, containers]);
 
-  // 새 선박 정책 묻기 (한 번만)
+  // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
+  //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
+  //   - 등록 안 하고 닫기 → 같은 날 다시 안 뜸, 다음 날부터 다시 표시
+  //   - 선박별 키 (IMO 또는 vsl)로 구분 — 다른 선박 작업하면 그건 또 뜰 수 있음
+  // M6.45: Firebase 백업 추가 — localStorage 작동 안 하는 환경에서도 적용
+  //   다른 폰/브라우저에서 같은 검수원이 접속해도 1일 1회 보장
   useEffect(() => {
     if (policyAsked) return;
     if (!voyage?.info?.vsl) return;
     if (shipPolicy) return;  // 이미 매칭됨
     const hasEdi = (containers || []).length > 0;
-    if (hasEdi) {
+    if (!hasEdi) return;
+
+    const policyAskKey = voyage?.info?.imo || voyage?.info?.vsl || voyageKey;
+    const todayStr = new Date().toISOString().slice(0, 10);  // YYYY-MM-DD
+    const lastAskedKey = `policyAsked:${policyAskKey}`;
+
+    // M6.45: localStorage 우선, 다음 Firebase 백업
+    (async () => {
+      const lsLastAsked = _storage.get(lastAskedKey);
+      if (lsLastAsked === todayStr) {
+        setPolicyAsked(true);
+        return;
+      }
+      // Firebase 백업 확인 (다른 기기에서 오늘 이미 물어봤을 가능성)
+      try {
+        const { default: fb } = await import('../firebase.js');
+        // inspectorActivity에 정책 확인 기록 — 검수원별
+        const inspName = inspector || 'anon';
+        const fbKey = `policyAsked/${inspName}/${policyAskKey}`;
+        const snap = await fb.fbGetSimple ? await fb.fbGetSimple(fbKey) : null;
+        if (snap === todayStr) {
+          setPolicyAsked(true);
+          _storage.set(lastAskedKey, todayStr);  // 로컬에도 동기화
+          return;
+        }
+      } catch (_) { /* Firebase 실패해도 localStorage로 폴백 */ }
+
       setShowPolicyModal(true);
       setPolicyAsked(true);
-    }
-  }, [voyage, shipPolicy, policyAsked, containers]);
+      _storage.set(lastAskedKey, todayStr);  // 로컬 기록
+      // Firebase 백업 저장 (실패해도 무시)
+      try {
+        const fb = await import('../firebase.js');
+        if (fb.fbSetSimple) {
+          await fb.fbSetSimple(`policyAsked/${inspector || 'anon'}/${policyAskKey}`, todayStr);
+        }
+      } catch (_) {}
+    })();
+  }, [voyage, shipPolicy, policyAsked, containers, voyageKey, inspector]);
 
   // M3.5.4: 자동 진단 (containers/recMap/xrayMap 변경 시 재계산)
   const diagAlerts = useMemo(() => {
@@ -1105,6 +1186,10 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   const [choiceState, askChoice] = useChoice();
   // M6.14a: STOWAGE PDF 자동 분석 검토 모달 — DataTab 스코프에서만 사용
   const [stowagePdfFile, setStowagePdfFile] = useState(null);
+  // M6.42: 일괄 STOWAGE PDF 등록 모달
+  const [bulkStowageOpen, setBulkStowageOpen] = useState(false);
+  // M6.47: 일괄 ASC 등록 모달 (Gemini 0)
+  const [bulkAscOpen, setBulkAscOpen] = useState(false);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
@@ -1315,38 +1400,49 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         //   M3.91 fix는 별도 경로에만 적용 → 이 경로는 여전히 평택 297대만 저장
         //   증상: 사용자님 보고 "새 EDI 업로드해도 297대만 보임" — 진짜 원인이 여기였음
         //   수정: 모든 컨 저장 + _mode 태그로 구분 (discharge/loading/transit)
+        // M6.38: EDI 자체에서 양하/선적 자동 판정 — mode 화면 의존 제거 (자동화 원칙)
+        //   사용자가 mode 잘못 선택하고 EDI 업로드해도 EDI 내용으로 자동 판정
+        //   양하 EDI: POD가 PTK인 컨이 다수 (도착 항구가 평택)
+        //   선적 EDI: POL이 PTK인 컨이 다수 (출발 항구가 평택)
+        let podPtkTotal = 0;
+        let polPtkTotal = 0;
+        r.containers.forEach(c => {
+          if ((c.pod || '').toUpperCase().endsWith('PTK')) podPtkTotal++;
+          if ((c.pol || '').toUpperCase().endsWith('PTK')) polPtkTotal++;
+        });
+        const ediKind = podPtkTotal > polPtkTotal ? 'discharge'
+                      : polPtkTotal > podPtkTotal ? 'loading'
+                      : mode;  // 동률 — 화면 mode fallback
+
         let ptkCount = 0;
         r.containers.forEach(c => {
           const podPtk = (c.pod || '').toUpperCase().endsWith('PTK');
           const polPtk = (c.pol || '').toUpperCase().endsWith('PTK');
           let containerMode;
-          if (mode === 'discharge') {
-            // 양하 모드: 평택 양하면 'discharge', 아니면 'transit'
+          if (ediKind === 'discharge') {
             if (podPtk) { containerMode = 'discharge'; ptkCount++; }
             else containerMode = 'transit';
           } else {
-            // 선적 모드: 평택 선적이면 'loading', 아니면 'transit'
             if (polPtk) { containerMode = 'loading'; ptkCount++; }
             else containerMode = 'transit';
           }
-          // M3.5.5: 컨번호 없는 엠티는 위치를 키로 사용
           const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
           allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
         });
-        results.push(`✅ ${file.name}: 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
+        const ediKindLabel = ediKind === 'discharge' ? '양하' : '선적';
+        results.push(`✅ ${file.name}: ${ediKindLabel} EDI 자동 판정 — 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
         // 항차 정보 자동 보완
         // M5.87: callsign + vsl도 자동 저장 (EDI TDT 세그먼트에서 추출 → PORT-MIS 매칭 자동화)
-        // M6.16: voy_d / voy_l 자동 저장 — 양하 EDI는 voy_d, 선적 EDI는 voy_l
-        //        검수원이 항차 등록 시 양하 voy만 입력해도 선적 EDI 업로드하면 선적 voy 자동 채워짐
+        // M6.16: voy_d / voy_l 자동 저장
+        // M6.38: ediKind 기준 — mode 화면 의존 제거
         if (r.vsl && r.voy) {
           const infoPatch = {
             etd: r.etd || voyage.info.etd || '',
             carrier: r.carrier || voyage.info.carrier || '',
           };
-          // M6.16: mode에 맞는 voy 필드 자동 저장
-          if (mode === 'discharge') {
+          if (ediKind === 'discharge') {
             if (r.voy !== voyage.info.voy_d) infoPatch.voy_d = r.voy;
-          } else if (mode === 'loading') {
+          } else if (ediKind === 'loading') {
             if (r.voy !== voyage.info.voy_l) infoPatch.voy_l = r.voy;
           }
           // M5.87: callsign 자동 저장 (EDI에서 새로 추출됐고 voyage.info에 없거나 다르면)
@@ -1762,12 +1858,24 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   // 양하/선적 섹션 추가 (다른 모드)
   const otherMode = mode === 'discharge' ? 'loading' : 'discharge';
   const hasOther = !!voyage[otherMode];
+  // M6.46: 다른 mode 섹션 추가 시 voy 입력
+  const [otherVoyInput, setOtherVoyInput] = useState('');
 
   // M5.26: 통합 출력 허브 모달
   const [showPrintHub, setShowPrintHub] = useState(false);
 
   return (
     <div className="space-y-3">
+      {/* M6.46: 항차 번호 확인/정정 위젯 — 정확한 voy_d/voy_l 보장 */}
+      <VoyFixWidget voyage={voyage} voyageKey={voyageKey}/>
+      {/* M6.43: 베이사전 라이브러리 위젯 — PDF 등록 + 누락 선박 식별 통합 */}
+      <BayDictLibraryWidget
+        onSingleUpload={(file) => setStowagePdfFile(file)}
+        onBulkUpload={() => setBulkStowageOpen(true)}
+        onAscUpload={() => setBulkAscOpen(true)}
+      />
+      {/* M6.50: 베이사전 진단 위젯 — 등록 entry 필드 완성도 + 잠재 오류 자동 감지 */}
+      <BayDictDiagnosticsWidget/>
       {/* M5.26: 통합 출력 진입 */}
       <button
         onClick={() => setShowPrintHub(true)}
@@ -1800,6 +1908,28 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           }}
         />
       )}
+      {/* M6.42: STOWAGE PDF 일괄 등록 */}
+      {bulkStowageOpen && (
+        <BulkStowageModal
+          open={bulkStowageOpen}
+          inspector={inspector}
+          onClose={() => setBulkStowageOpen(false)}
+          onCompleted={(res) => {
+            setStatus(`✅ 베이사전 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패`);
+          }}
+        />
+      )}
+      {/* M6.47: ASC 일괄 등록 (Gemini 0) */}
+      {bulkAscOpen && (
+        <BulkAscModal
+          open={bulkAscOpen}
+          inspector={inspector}
+          onClose={() => setBulkAscOpen(false)}
+          onCompleted={(res) => {
+            setStatus(`⚡ ASC 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패 (Gemini 0회)`);
+          }}
+        />
+      )}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400"/>
@@ -1814,26 +1944,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
         </div>
 
-        {/* M6.14a: STOWAGE PDF 명시적 업로드 버튼 — 별도 호출, 블로킹 없음 */}
-        <div className="mt-2 pt-2 border-t border-slate-800/60">
-          <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/40 rounded text-xs font-bold text-purple-200">
-            📄 STOWAGE PDF 등록 (베이사전)
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) setStowagePdfFile(f);
-                e.target.value = '';
-              }}
-            />
-          </label>
-          <div className="text-[10px] text-slate-500 mt-1">
-            답안지 PDF 한 장 선택 → Gemini 2.5 Pro 자동 분석 (M6.14)
-            <br/><span className="text-amber-400/80">⚠️ EDI/양하 리스트 PDF는 이 버튼에 올리지 마세요 (베이사전 등록 전용)</span>
-          </div>
-        </div>
+        {/* M6.43: PDF 등록 + 베이사전 라이브러리 현황 통합 위젯 (자료 탭 상단으로 이동) */}
 
         {/* M5.11: 보관된 EDI 원본 + 재처리 버튼 */}
         {rawMeta?.text ? (
@@ -1901,18 +2012,36 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       )}
 
       {!hasOther && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-          <div className="text-xs text-slate-400 mb-2">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
+          <div className="text-xs text-slate-400">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
+          {/* M6.46: voy 입력 받기 — 추측하지 않음 */}
+          <input
+            type="text"
+            value={otherVoyInput}
+            onChange={e => setOtherVoyInput(e.target.value.toUpperCase())}
+            placeholder={`${otherMode === 'discharge' ? '양하' : '선적'} 항차 번호 (예: ${otherMode === 'discharge' ? '0521E' : '0521W'})`}
+            className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs uppercase mono focus:outline-none focus:border-blue-500"
+          />
           <button
             onClick={async () => {
-              await fbUpdateVoyageInfo(voyageKey, {});
+              const upVoy = otherVoyInput.trim().toUpperCase();
+              if (!upVoy) {
+                setStatus('❌ 항차 번호를 입력해주세요');
+                return;
+              }
+              const patch = {};
+              if (otherMode === 'discharge') patch.voy_d = upVoy;
+              else patch.voy_l = upVoy;
+              await fbUpdateVoyageInfo(voyageKey, patch);
               await fbSaveSectionData(voyageKey, otherMode, { _created: Date.now() });
+              setOtherVoyInput('');
               setMode(otherMode);
             }}
+            disabled={!otherVoyInput.trim()}
             className={`w-full py-2 rounded text-sm font-bold ${
               otherMode === 'discharge'
-                ? 'bg-blue-900/50 hover:bg-blue-800 text-blue-100 border border-blue-700/40'
-                : 'bg-amber-900/50 hover:bg-amber-800 text-amber-100 border border-amber-700/40'
+                ? 'bg-blue-900/50 hover:bg-blue-800 disabled:bg-slate-800 text-blue-100 border border-blue-700/40 disabled:text-slate-500'
+                : 'bg-amber-900/50 hover:bg-amber-800 disabled:bg-slate-800 text-amber-100 border border-amber-700/40 disabled:text-slate-500'
             }`}
           >
             + {otherMode === 'discharge' ? '양하' : '선적'} 섹션 추가

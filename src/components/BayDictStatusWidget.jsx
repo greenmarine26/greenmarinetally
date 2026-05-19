@@ -57,7 +57,11 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
 
   return (
     <div className="bg-cyan-950/30 border border-cyan-700/50 rounded-lg p-2.5 text-xs">
-      <div className="flex items-center gap-2">
+      {/* M6.41: 헤더 전체 영역 탭으로 펼침 — 모바일에서 작은 버튼 못 찾는 문제 해결 */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="flex items-center gap-2 w-full text-left"
+      >
         <Database className="w-4 h-4 text-cyan-400 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -79,10 +83,10 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
             {ediContainerCount > 0 && ` · EDI ${ediContainerCount}대`}
           </div>
         </div>
-        <button onClick={() => setExpanded(v => !v)} className="text-cyan-300 px-1">
-          {expanded ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
-        </button>
-      </div>
+        <span className="text-cyan-300 px-1 shrink-0">
+          {expanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
+        </span>
+      </button>
       {expanded && (
         <div className="mt-2 pt-2 border-t border-cyan-700/40 text-[10px] text-cyan-300/80 space-y-1">
           <div className="flex items-center gap-2">
@@ -94,6 +98,28 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
           <div>사전 코드: <span className="mono text-cyan-100">{dictData.code || '?'}</span></div>
           {dictData.callsign && <div>사전 콜사인: <span className="mono text-cyan-100">{dictData.callsign}</span></div>}
           <div>사전 출처: <span className="mono text-cyan-100">{dictData.source}</span></div>
+          {/* M6.40: STOWAGE PDF 원본 (30일 보관) */}
+          {dictData.pdfUrl && (
+            <div className="mt-2 pt-2 border-t border-cyan-700/40">
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-cyan-500/70">📄 원본 PDF:</span>
+                <span className="text-cyan-100 truncate flex-1">{dictData.pdfName || 'STOWAGE.pdf'}</span>
+              </div>
+              {dictData.pdfUploadedAt && (
+                <div className="text-cyan-400/60 text-[9px] mb-1.5">
+                  업로드: {new Date(dictData.pdfUploadedAt).toLocaleDateString('ko-KR')}
+                </div>
+              )}
+              <a
+                href={dictData.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-cyan-50 rounded text-[10px] font-bold"
+              >
+                📄 PDF 다시 보기
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>

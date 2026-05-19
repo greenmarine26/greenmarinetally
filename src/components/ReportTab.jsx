@@ -6,6 +6,13 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
   const [groupBy, setGroupBy] = useState('time');
   const [section, setSection] = useState('main'); // main | errors
 
+  // M6.37: mode 기반 voy — 양하 보고는 voy_d, 선적 보고는 voy_l
+  const voy = mode === 'discharge'
+    ? (voyageInfo?.voy_d || voyageInfo?.voy || '')
+    : mode === 'loading'
+      ? (voyageInfo?.voy_l || voyageInfo?.voy || '')
+      : (voyageInfo?.voy || '');
+
   const records = useMemo(() => {
     return Object.entries(compMap || {})
       .map(([cn, c]) => {
@@ -80,7 +87,7 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
   const handleCopyErrorReport = () => {
     if (sealErrors.length === 0) return;
     const lines = [
-      `==== ${voyageInfo?.vsl} ${voyageInfo?.voy} 실오류 신고 ====`,
+      `==== ${voyageInfo?.vsl} ${voy} 실오류 신고 ====`,
       `모드: ${mode === 'discharge' ? '양하' : '선적'}`,
       `날짜: ${new Date().toLocaleString('ko-KR')}`,
       `총 ${sealErrors.length}건`,
@@ -203,7 +210,7 @@ function SealErrorReport({ errors, voyageInfo, mode, onExport, onCopy }) {
             <FileWarning className="w-5 h-5 text-red-400"/>
             <div>
               <div className="font-black text-red-200">🚨 세관 신고 대상</div>
-              <div className="text-[10px] text-red-300/70">항차: {voyageInfo?.vsl} {voyageInfo?.voy} · 모드: {mode === 'discharge' ? '양하' : '선적'}</div>
+              <div className="text-[10px] text-red-300/70">항차: {voyageInfo?.vsl} {voy} · 모드: {mode === 'discharge' ? '양하' : '선적'}</div>
             </div>
           </div>
           <div className="text-right">

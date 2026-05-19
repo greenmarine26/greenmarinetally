@@ -379,6 +379,35 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.52 변경 사항 (2026-05) — row 10/09 사라짐 hotfix (베이사전+EDI 결합)',
+      examples: [
+        { q: '🔥 M6.51 부작용', a: 'M6.51에서 베이사전 우선으로 바꿨더니 row 10/09가 사라지는 경우 발생. 원인: Firebase에 옛 KSKM 데이터(Gemini 자동 분석본)가 v2(M6.50 패치본)보다 우선 매칭됨. 매칭 우선순위: Firebase > User > V2 > V1 (shipStructure.js L31)' },
+        { q: '✅ M6.52 수정 — 둘 다 살림', a: 'globalRowRange = max(베이사전 max, EDI max). 단 EDI는 베이사전 max 이내로 클리핑(cap). 결과:\n• 베이사전 정상(10/9) + EDI 정상(10/9) → 10/9 ✓\n• Firebase 옛값(8/7) + EDI 정상(10/9) → 10/9 ✓ (EDI가 살림)\n• 베이사전 정상(10/9) + EDI 비정상 row 37 → 10/9 ✓ (37 클리핑)\n• 둘 다 없음 → 0' },
+        { q: '📍 적용 파일', a: 'PrintHubModal.jsx + BayPlan.jsx 두 곳. PrintableCargoPlan/PrintableBayDetail은 globalRowRange를 prop으로 받으므로 자동 적용. tier도 동일하게 베이사전 + EDI union으로 변경 (베이사전 정의는 모두 표시 + EDI 보강)' },
+        { q: '💡 Firebase 옛 KSKM 데이터 정리는?', a: 'M6.52는 표시만 정상화. Firebase의 옛 KSKM 데이터 자체는 그대로 남음. 진단 위젯(M6.50)에서 KSKM 점수가 여전히 낮게 나오면 Firebase 데이터를 v2(M6.50 패치)로 덮어쓰는 별도 기능 필요 — 다음 작업' },
+      ],
+    },
+    {
+      title: '🆕 M6.51 변경 사항 (2026-05) — 베이사전 우선 row max (11~37 유령 row 버그 fix)',
+      examples: [
+        { q: '🔥 버그 (사용자 보고)', a: '카고플랜 / 베이플랜 / 베이상세에서 row 라벨이 정상(10 08 06 04 02 00 01 03 05 07 09) 뒤에 11~37까지 유령 row가 추가로 그려지는 문제. KSKM(SUNNY KALMIA)는 PDF상 row 최대 10/9인데 라벨이 37까지 길어짐' },
+        { q: '🔍 원인', a: 'M6.49의 "글로벌 max 사용 복원" 변경에서 globalRowRange를 EDI 컨테이너의 row 필드 max로만 계산. EDI에 비정상 row(파싱 오류, 다른 선박 좌표 섞임 등) 1개라도 있으면 그것이 max가 되어 모든 베이에 유령 row 슬롯 11~37 그려짐. PrintHubModal.jsx + BayPlan.jsx 두 곳' },
+        { q: '✅ 수정', a: '베이사전(rowMaxEven/rowMaxOdd, deckTiers/holdTiers)을 절대 기준으로 우선 사용. 베이사전 있으면 EDI 무시, 없을 때만 EDI 폴백. KSKM 같이 베이사전 검증된 선박은 즉시 정상 라벨 (10 08 06 04 02 00 01 03 05 07 09)로 출력' },
+        { q: '📍 적용 파일', a: 'PrintHubModal.jsx (카고플랜·베이상세 → PrintableCargoPlan/PrintableBayDetail로 전달되는 globalRowRange) + BayPlan.jsx (베이플랜 화면 출력). tier도 동일하게 베이사전 deckTiers/holdTiers 우선' },
+        { q: '⚠️ 베이사전 없는 선박', a: '여전히 EDI 폴백으로 작동. 진단 위젯(M6.50)에서 미등록/필드 부족 선박 확인하고 PDF 재등록 권장' },
+      ],
+    },
+    {
+      title: '🆕 M6.50 변경 사항 (2026-05) — KSKM 베이사전 PDF 검증 + 베이사전 진단 위젯',
+      examples: [
+        { q: '🚢 KSKM (SUNNY KALMIA) 정정', a: '2604S PDF 기준 6건 오류 수정. BAY 01: deck-only 짧은 베이로 정정 (hasHold:false, isStandalone:true, deckTiers 4단). BAY 03: 짝수(02) 없는 단독 베이로 정정 (isStandalone:true). BAY 27/28/29: deck-only 선미 베이로 정정 (hasHold:false). holdTiers [10,8,6,4,2]→[8,6,4,2] (tier 10 제거). section 묶음 8→15개 (단독 베이 분리). BAY 15는 PDF대로 deck 5단 유지 (양옆은 6단)' },
+        { q: '🩺 베이사전 진단 위젯 (신규)', a: '자료 탭 베이사전 라이브러리 아래에 추가. 등록된 모든 선박 entry의 필드 완성도와 잠재 오류를 한눈에 표시. 점수 100점 기준: baysSummary 30 + deckTiersLocal 20 + holdTiersLocal 20 + rowMaxLocal 10 + hatchCount 10 + PDF 5 + verified 5' },
+        { q: '🔍 자동 감지 항목', a: '(1) baysSummary 미존재 (2) baysSummary ≠ bayList 길이 (3) holdTiers에 tier 10 포함 — 자동 파싱 오류 가능성 (4) 짝수 짝 없는 홀수 베이가 isStandalone:false (5) 베이별 deckTiersLocal/holdTiersLocal/rowMaxLocal/hatchCount 보강률' },
+        { q: '💡 사용 방법', a: '자료 탭 → 🩺 베이사전 진단 펼치기 → 오류/경고/전체 필터 → 척 클릭하여 상세. 점수 낮은 순으로 정렬되어 보강 우선순위 명확. 진단만 하고 자동 수정은 안 함 — 사용자가 PDF 재등록 또는 다음 패치로 처리' },
+        { q: '⚠️ 명세 #7 (hatchCount)', a: '아직 베이사전에 hatchCount 필드 없음 — 진단 위젯이 보강률 0/N으로 표시. 다음 작업에서 베이사전 위젯에 hatchCount 입력 UI 추가 예정 (M6.49 명세 #7 확정 사항)' },
+      ],
+    },
+    {
       title: '🆕 M5.42 변경 사항 (2026-05) — 베이별 tier/row 로컬 오버라이드 + DJCF·XTPG 정정',
       examples: [
         { q: '🎯 핵심 fix', a: '베이사전이 선박 전역(deckTiers/holdTiers/rowMax) 하나만 가지고 있어, 같은 선박 안에서도 선수·선미가 좁아지는 베이(BAY 01, 38 등)가 phantom 슬롯으로 출력되던 문제. 이제 베이별 로컬 값이 우선 적용됨' },

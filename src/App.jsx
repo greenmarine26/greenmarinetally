@@ -96,6 +96,11 @@ export default function App() {
     return () => clearInterval(id);
   }, [inspector, route]);
 
+  // M6.42: STOWAGE PDF는 영구 보관 — 시간 기반 자동 폐기 제거
+  //   비용 분석: 300척 × 3MB = 900MB → 월 ₩25 (매우 적음)
+  //   사용자 결정: 자동 폐기보다 라이브러리로 영구 보관이 더 가치 있음
+  //   같은 선박 새 PDF 등록 시 이전 자동 삭제 (덮어쓰기) 정책은 유지 — fbUploadStowagePdf 내부 로직
+
   const handleSelectInspector = useCallback(async (name) => {
     setInspector(name);
     _storage.set(SK.activeInspector, name);

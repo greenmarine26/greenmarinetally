@@ -217,6 +217,9 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
+  // M6.49 재수정: 박스 외곽 통일이 더 중요 — 글로벌 max 사용 복원
+  //   (사용자: "박스마다 row 폭 다르면 전보다 나빠짐")
+  //   라벨 겹침은 폰트 축소(CSS)로 해결
   const dynRows = (() => {
     const maxLeft = globalRowRange?.maxLeft || 0;
     const maxRight = globalRowRange?.maxRight || 0;
@@ -299,18 +302,21 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       </div>
       <div className="bay-grid-wrap">
         <div className="bay-grid">
-          {hasDeck && deckTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
+          {hasDeck && deckTiers.map(t => {
+            const isUsed = bayDeckTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
           {hasDeck && (
             extraTier ? (
               <div className="bay-grid-row extra-tier-row">
@@ -326,25 +332,28 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
               </div>
             ) : <div className="bay-grid-row hatch-break"></div>
           )}
-          {hasHold && holdTiers.map(t => (
-            <div key={t} className="bay-grid-row">
-              {dynRows.map(r => {
-                const c = cellMap[`${t}-${r}`];
-                if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                const m = getMark(c, mode, xrayMap);
-                const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                return <span key={r} className={cls}>{m.letter}</span>;
-              })}
-            </div>
-          ))}
+          {hasHold && holdTiers.map(t => {
+            const isUsed = bayHoldTiersUsed.has(t);
+            return (
+              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {dynRows.map(r => {
+                  const c = cellMap[`${t}-${r}`];
+                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
+                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
+                  const m = getMark(c, mode, xrayMap);
+                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  return <span key={r} className={cls}>{m.letter}</span>;
+                })}
+              </div>
+            );
+          })}
         </div>
         <div className="bay-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
+          {hasDeck && deckTiers.map(t => <span key={t} className={!bayDeckTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
           {hasDeck && (
             extraTier ? <span className="extra-tier-label">{extraTier}</span> : <span className="tier-gap"></span>
           )}
-          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+          {hasHold && holdTiers.map(t => <span key={t} className={!bayHoldTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
         </div>
       </div>
       <div className="bay-row-labels">
@@ -509,18 +518,22 @@ export default function PrintableCargoPlan({
   //   양하 카고플랜 → voy_d (양하 EDI 업로드 시 자동 저장)
   //   선적 카고플랜 → voy_l (선적 EDI 업로드 시 자동 저장)
   //   둘 다 없으면 voyage.info.voy (등록 시 입력값) 폴백
+  // M6.37: voyageKey("XTPG_0523E" 같은 키)는 voy가 아니므로 fallback에서 제거
+  //   사용자 보고: 카고플랜에 양하/선적 항차 정확히 안 나옴
+  //   원인: voy_d 또는 voy_l이 비어있을 때 voyageKey가 표시되거나
+  //         다른 mode의 voy가 generic으로 fallback되어 잘못 표시
   const voyD = voyageInfo?.voy_d || '';
   const voyL = voyageInfo?.voy_l || '';
-  const voyFallback = voyageInfo?.voy || voyageKey || '';
+  const voyGeneric = voyageInfo?.voy || '';
   let voy;
   if (mode === 'discharge') {
-    voy = voyD || voyFallback;
+    voy = voyD || voyGeneric;
   } else if (mode === 'loading') {
-    voy = voyL || voyFallback;
+    voy = voyL || voyGeneric;
   } else {
-    // 모드 미상 (모달 직접 호출 등) — 기존 동작 보존
+    // 모드 미상 (모달 직접 호출 등) — 양/선 둘 다 보이게
     if (voyD && voyL && voyD !== voyL) voy = `양하 ${voyD} / 선적 ${voyL}`;
-    else voy = voyD || voyL || voyFallback;
+    else voy = voyD || voyL || voyGeneric;
   }
 
   // M5.33: 컬럼 매칭 (단독 N의 컬럼 아래 = 짝꿍 (N+1)/(N+2) 또는 빈)
@@ -796,10 +809,11 @@ export default function PrintableCargoPlan({
         .bay-count { font-size: 7pt; }
         .bay-row-labels {
           display: flex; justify-content: center;
-          font-size: 6pt; padding: 0 1px;
+          font-size: 5pt; padding: 0 1px;
           flex-shrink: 0;
         }
-        .bay-row-label { flex: 1; text-align: center; font-size: 7pt; min-width: 0; }
+        /* M6.49: row 라벨 폰트 축소 (7pt→5pt) — 큰 선박 27 row까지 겹침 해소 */
+        .bay-row-label { flex: 1; text-align: center; font-size: 5pt; min-width: 0; letter-spacing: -0.3px; line-height: 1; }
         /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
         .bay-grid-wrap {
           display: flex; align-items: stretch; padding: 1px;

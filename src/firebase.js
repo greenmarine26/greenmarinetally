@@ -4,6 +4,10 @@ import { initializeApp } from 'firebase/app';
 import {
   getDatabase, ref, onValue, push, set, update, remove, get, child, off
 } from 'firebase/database';
+// M6.40: STOWAGE PDF 보관 — Firebase Storage
+import {
+  getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
+} from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -17,6 +21,97 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const storage = getStorage(app);  // M6.40
+
+// === M6.40: STOWAGE PDF 보관 (30일 자동 폐기) ===
+const STOWAGE_PDF_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;  // 30일
+
+// 선박 코드별 PDF 업로드 — 같은 선박 새 PDF 등록 시 이전 자동 삭제
+export async function fbUploadStowagePdf(shipCode, file) {
+  if (!shipCode || !file) throw new Error('shipCode와 file 필요');
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^\w.\-]/g, '_');
+  const path = `stowage-pdf/${shipCode}_${ts}_${safeName}`;
+
+  // 기존 같은 선박 PDF 삭제 (덮어쓰기 정책)
+  try {
+    const folderRef = storageRef(storage, 'stowage-pdf');
+    const list = await listAll(folderRef);
+    const oldFiles = list.items.filter(item => item.name.startsWith(`${shipCode}_`));
+    for (const oldFile of oldFiles) {
+      try { await deleteObject(oldFile); } catch (_) {}
+    }
+  } catch (e) {
+    console.warn('[M6.40] 기존 PDF 정리 실패 (무시):', e);
+  }
+
+  // 새 PDF 업로드
+  const newRef = storageRef(storage, path);
+  await uploadBytes(newRef, file, { contentType: 'application/pdf' });
+  const url = await getDownloadURL(newRef);
+  return { url, path, name: file.name, uploadedAt: ts };
+}
+
+// 만료된 PDF 자동 폐기 (30일 초과)
+// 클라이언트 측 정리 — Spark 플랜에 Cloud Function 없음
+//   앱 진입 시 백그라운드로 호출, 사용자 액션 0
+export async function fbCleanupExpiredStowagePdfs() {
+  try {
+    const folderRef = storageRef(storage, 'stowage-pdf');
+    const list = await listAll(folderRef);
+    const now = Date.now();
+    let removed = 0;
+    for (const item of list.items) {
+      // 파일명에서 timestamp 추출: {shipCode}_{ts}_{originalName}
+      const m = item.name.match(/^[^_]+_(\d+)_/);
+      if (!m) continue;
+      const ts = parseInt(m[1], 10);
+      if (!Number.isFinite(ts)) continue;
+      if (now - ts > STOWAGE_PDF_RETENTION_MS) {
+        try {
+          await deleteObject(item);
+          removed++;
+        } catch (_) {}
+      }
+    }
+    return removed;
+  } catch (e) {
+    console.warn('[M6.40] PDF 자동 정리 실패:', e);
+    return 0;
+  }
+}
+
+// PDF 삭제 (개별)
+export async function fbDeleteStowagePdf(path) {
+  try {
+    const r = storageRef(storage, path);
+    await deleteObject(r);
+    return true;
+  } catch (e) {
+    console.warn('[M6.40] PDF 삭제 실패:', e);
+    return false;
+  }
+}
+
+// M6.45: 단순 get/set (정책 1일 1회 등 단순 키-값 저장용)
+export async function fbGetSimple(path) {
+  try {
+    const r = ref(db, path);
+    const snap = await get(r);
+    return snap.exists() ? snap.val() : null;
+  } catch (e) {
+    return null;
+  }
+}
+export async function fbSetSimple(path, value) {
+  try {
+    const r = ref(db, path);
+    await set(r, value);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 // === 공통 헬퍼 ===
 const voyageRef = (key) => ref(db, `voyages/${key}`);

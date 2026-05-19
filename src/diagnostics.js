@@ -85,7 +85,17 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
 
   // ─── 🔴 1.5. M3.6: 알 수 없는 ISO 표기 검출 ───
   // 검수원이 사진 찍어 증거 남기고 1항사 확인 필요
-  const unknownIsoConts = ediPtk.filter(c => isUnknownIso(c.iso));
+  // M6.36: 진단 시점에도 listRecords로 ISO 보강 (베이 그리드 M6.21과 동일 정책)
+  //   원인: 통과(transit) 컨테이너는 EDI에 ISO가 'XXXX' 또는 비표준으로 들어오는데
+  //         LIST(PORT-MIS)에 정확한 ISO 있음 → 베이 그리드는 LIST 우선 보강 후 정상 표시
+  //         그러나 diagnostics는 raw EDI만 봐서 unknown으로 잘못 카운트 (67대 경고)
+  //   해결: 진단 전에 listRecords의 iso로 보강
+  const ediPtkBoosted = ediPtk.map(c => {
+    const r = (listRecords || {})[c.cn];
+    if (r && r.iso) return { ...c, iso: r.iso };
+    return c;
+  });
+  const unknownIsoConts = ediPtkBoosted.filter(c => isUnknownIso(c.iso));
   if (unknownIsoConts.length > 0) {
     alerts.push({
       level: 'critical',

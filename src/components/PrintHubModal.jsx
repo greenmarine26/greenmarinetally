@@ -9,6 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
+import { getShipBayDictData } from '../shipStructure.js'; // M6.51: 베이사전 우선 rowMax
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -86,26 +87,56 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // 검수 리스트용 — 평택분만
   const ptkContainers = allContainers.filter(isPtk);
 
-  // M5.31: 베이상세용 row/tier 계산 (BayPlan과 동일 패턴)
-  //   "빈 슬롯도 표시"를 위해 — 베이가 한 컨만 있어도 모든 tier/row 슬롯 표시
-  let maxLeft = 0, maxRight = 0;
+  // M6.52: 베이사전 max + EDI max 결합 (둘 중 큰 값, 단 EDI는 베이사전 max로 클리핑)
+  //   배경:
+  //     M6.49 — EDI max만 사용 → 유령 row 37 버그
+  //     M6.51 — 베이사전 우선 → Firebase 옛 데이터에 rowMaxEven<10이면 row 10/09 사라짐
+  //     M6.52 — 둘 다 살림. EDI에서 max 계산하되 베이사전 max 초과는 무시(클리핑)
+  //             → row 10/09 EDI에 있으면 표시, 비정상 row 11~37은 차단
+  //             → Firebase가 잘못돼도 EDI가 정상이면 화면 정상
+  const voyageInfo = voyage?.info || {};
+  const shipImo = voyageInfo.imo || '';
+  const shipName = voyageInfo.vsl || '';
+  const dictData = (shipImo || shipName) ? getShipBayDictData(shipImo, shipName) : null;
+  const dictRowMaxEven = dictData?.bayDef?.rowMaxEven;
+  const dictRowMaxOdd = dictData?.bayDef?.rowMaxOdd;
+  const dictDeckTiers = dictData?.bayDef?.deckTiers;
+  const dictHoldTiers = dictData?.bayDef?.holdTiers;
+
+  // EDI에서 row max 계산 — 베이사전 max의 2배 이내만 유효 (outlier만 차단)
+  //   예: 베이사전 10/9 + EDI row 10/9 → 살림 (10 ≤ 20)
+  //       Firebase 옛 8/7 + EDI row 10/9 → 살림 (10 ≤ 16) ← 핵심 — 옛 데이터에도 정상 EDI 살림
+  //       베이사전 10/9 + EDI 비정상 37 → 차단 (37 > 20)
+  //       베이사전 없음 → 모든 EDI 허용 (폴백)
+  let ediMaxLeft = 0, ediMaxRight = 0;
   const tierSet = new Set();
   printContainers.forEach(c => {
     if (c.row) {
       const n = parseInt(c.row);
       if (n > 0) {
-        if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
-        else maxRight = Math.max(maxRight, n);
+        if (n % 2 === 0) {
+          // 베이사전 max 있으면 그 2배 이내만 카운트 (outlier 차단)
+          if (dictRowMaxEven == null || dictRowMaxEven <= 0 || n <= dictRowMaxEven * 2) {
+            ediMaxLeft = Math.max(ediMaxLeft, n);
+          }
+        } else {
+          if (dictRowMaxOdd == null || dictRowMaxOdd <= 0 || n <= dictRowMaxOdd * 2) {
+            ediMaxRight = Math.max(ediMaxRight, n);
+          }
+        }
       }
     }
     if (c.tier) tierSet.add(c.tier);
   });
+  // 최종 max = max(베이사전 max, EDI max≤베이사전max). 베이사전 없으면 EDI만.
+  const maxLeft = Math.max(dictRowMaxEven || 0, ediMaxLeft);
+  const maxRight = Math.max(dictRowMaxOdd || 0, ediMaxRight);
+  // tier도 베이사전 + EDI union (베이사전 정의는 모두 포함, EDI는 정의된 값 그대로)
+  if (Array.isArray(dictDeckTiers)) dictDeckTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
+  if (Array.isArray(dictHoldTiers)) dictHoldTiers.forEach(t => tierSet.add(String(t).padStart(2, '0')));
+
   const globalRowRange = { maxLeft, maxRight };
   const globalTiers = Array.from(tierSet);
-
-  const voyageInfo = voyage?.info || {};
-  const shipImo = voyageInfo.imo || '';
-  const shipName = voyageInfo.vsl || '';
 
   const count = ptkContainers.length;        // 검수 리스트 카운트 (평택만)
   const allCount = allContainers.length;     // 카고플랜/베이상세 카운트 (전체)
