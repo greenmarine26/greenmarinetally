@@ -57,7 +57,11 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
 
   return (
     <div className="bg-cyan-950/30 border border-cyan-700/50 rounded-lg p-2.5 text-xs">
-      <div className="flex items-center gap-2">
+      {/* M6.41: 헤더 전체 영역 탭으로 펼침 — 모바일에서 작은 버튼 못 찾는 문제 해결 */}
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="flex items-center gap-2 w-full text-left"
+      >
         <Database className="w-4 h-4 text-cyan-400 shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -79,10 +83,10 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
             {ediContainerCount > 0 && ` · EDI ${ediContainerCount}대`}
           </div>
         </div>
-        <button onClick={() => setExpanded(v => !v)} className="text-cyan-300 px-1">
-          {expanded ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
-        </button>
-      </div>
+        <span className="text-cyan-300 px-1 shrink-0">
+          {expanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
+        </span>
+      </button>
       {expanded && (
         <div className="mt-2 pt-2 border-t border-cyan-700/40 text-[10px] text-cyan-300/80 space-y-1">
           <div className="flex items-center gap-2">
