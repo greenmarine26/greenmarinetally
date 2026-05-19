@@ -821,12 +821,13 @@ export function parseBAPLIE(ediText) {
 export function parseAscFile(text) {
   const lines = text.split(/\r?\n/);
   const containers = [];
-  let vsl = '', voy = '';
+  let vsl = '', voy = '', serviceCode = '';
 
   for (const ln of lines) {
     if (ln.startsWith('$604')) {
       const parts = ln.substring(4).split('/');
       if (parts.length >= 3) {
+        serviceCode = (parts[0] || '').trim();  // M6.48: KSKM 등 선사/서비스 코드
         vsl = (parts[1] || '').trim();
         voy = (parts[2] || '').trim();
       }
@@ -992,10 +993,11 @@ export function parseAscFile(text) {
       podFinal,
     });
   }
-  return { vsl, voy, containers };
+  return { vsl, voy, serviceCode, containers };
 }
 
 // === M6.47: ASC 파일 → 베이사전 엔트리 변환 (Gemini 호출 0) ===
+//   M6.48 보강: serviceCode 우선 사용 (KSKM 등 ASC 헤더 코드)
 //   ASC의 컨테이너 좌표(BBBRRTT)로부터 베이 구조 자동 추출:
 //   - 사용된 베이 목록
 //   - 각 베이의 hold(tier ≤10) / deck(tier ≥80) 분리
@@ -1085,13 +1087,20 @@ export function ascToBayDictEntry(ascResult, fileName, extra = {}) {
     if (bayNo % 2 === 0 && bayMap[bayNo + 1]) pairs.push([bayNo, bayNo + 1]);
   });
 
-  // 4) 코드/이름 추출
-  const vname = (ascResult?.vsl || extra.code || '').toUpperCase();
-  const code = (extra.code || vname.replace(/\s+/g, '').slice(0, 4)).toUpperCase();
+  // 4) 코드/이름 추출 — M6.48: 우선순위
+  //   1순위: 사용자 입력 (extra.code)
+  //   2순위: ASC 헤더 serviceCode (예: KSKM)
+  //   3순위: vesselName 앞 4글자 (예: SUNN from SUNNY KALMIA)
+  const serviceCode = (ascResult?.serviceCode || '').toUpperCase().trim();
+  const vname = (ascResult?.vsl || '').toUpperCase();
+  const vname4 = vname.replace(/\s+/g, '').slice(0, 4);
+  const code = (extra.code || serviceCode || vname4).toUpperCase();
 
   return {
     name: ascResult?.vsl || vname,
     code,
+    serviceCode,                            // M6.48: 헤더 코드 별도 저장
+    vesselCode: vname4,                     // M6.48: 이름 기반 코드 별도 저장
     callsign: extra.callsign || '',
     imo: extra.imo || '',
     voy: ascResult?.voy || '',

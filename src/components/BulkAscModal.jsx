@@ -185,6 +185,8 @@ export default function BulkAscModal({ open, onClose, onCompleted, inspector }) 
     failed: analyzed.filter(a => a.status === 'failed').length,
     new: analyzed.filter(a => a.status !== 'failed' && !a.alreadyRegistered).length,
     already: analyzed.filter(a => a.status !== 'failed' && a.alreadyRegistered).length,
+    // M6.48: 코드 누락 (분석 성공했으나 코드 비어있음)
+    codeMissing: analyzed.filter(a => a.status !== 'failed' && !a.code).length,
   };
 
   return (
@@ -306,6 +308,12 @@ export default function BulkAscModal({ open, onClose, onCompleted, inspector }) 
                     </div>
                   </div>
                 )}
+                {counts.codeMissing > 0 && (
+                  <div className="text-[10px] text-amber-300 bg-amber-950/40 rounded p-1.5">
+                    ⚠️ 코드 누락 {counts.codeMissing}개 — 빨간 테두리 카드의 "코드" 입력 필요
+                    <br/>추천 코드 버튼 클릭 또는 직접 입력
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 {analyzed.map((item, i) => (
@@ -345,14 +353,46 @@ export default function BulkAscModal({ open, onClose, onCompleted, inspector }) 
                           {' · '}컨테이너: <span className="text-cyan-300">{item.containerCount}대</span>
                           {item.entry?.voy && <> {' · '}VOY: <span className="text-cyan-300">{item.entry.voy}</span></>}
                         </div>
+                        {/* M6.48: 코드 후보 표시 + 누락 강조 */}
+                        {(item.entry?.serviceCode || item.entry?.vesselCode) && (
+                          <div className="text-[10px] text-slate-500 mb-1.5 flex flex-wrap gap-1">
+                            추천 코드:
+                            {item.entry?.serviceCode && (
+                              <button
+                                onClick={() => updateCard(i, 'code', item.entry.serviceCode)}
+                                className="px-1.5 py-0.5 bg-cyan-900/40 hover:bg-cyan-800/50 border border-cyan-700/40 rounded text-cyan-200 font-mono"
+                              >
+                                {item.entry.serviceCode} <span className="text-cyan-400/60 text-[8px]">(헤더)</span>
+                              </button>
+                            )}
+                            {item.entry?.vesselCode && item.entry.vesselCode !== item.entry?.serviceCode && (
+                              <button
+                                onClick={() => updateCard(i, 'code', item.entry.vesselCode)}
+                                className="px-1.5 py-0.5 bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/40 rounded text-purple-200 font-mono"
+                              >
+                                {item.entry.vesselCode} <span className="text-purple-400/60 text-[8px]">(선박명)</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {!item.code && (
+                          <div className="text-[10px] text-red-300 bg-red-950/40 rounded p-1.5 mb-1.5">
+                            ⚠️ 코드 누락 — 등록하려면 코드 입력 필수
+                          </div>
+                        )}
                         <div className="grid grid-cols-3 gap-1.5">
                           <div>
-                            <label className="text-[9px] text-emerald-300 block">코드</label>
+                            <label className="text-[9px] text-emerald-300 block">
+                              코드 {!item.code && <span className="text-red-400">*</span>}
+                            </label>
                             <input
                               type="text"
                               value={item.code}
                               onChange={e => updateCard(i, 'code', e.target.value.toUpperCase())}
-                              className="w-full px-1.5 py-1 bg-slate-900 border border-slate-700 rounded text-xs font-mono"
+                              placeholder="필수"
+                              className={`w-full px-1.5 py-1 bg-slate-900 border rounded text-xs font-mono ${
+                                !item.code ? 'border-red-600/60' : 'border-slate-700'
+                              }`}
                               maxLength={6}
                             />
                           </div>
