@@ -44,6 +44,7 @@ import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import BulkStowageModal from '../components/BulkStowageModal.jsx'; // M6.42
 import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6.43
+import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
@@ -109,30 +110,25 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     const info = voyage.info;
     const patch = {};
 
-    // 양하 EDI 분석
+    // M6.46: 자동 복구 정책 변경
+    //   - EDI의 c.voy로 voy_d/voy_l 덮어쓰기 ❌ (송신측 voy일 수도 있음 — 인천 등에서 양하 EDI 줄 때 자기네 선적 voy 포함)
+    //   - 사용자가 항차 생성 시 입력한 voy (mode 일치) 신뢰
+    //   - voy_d/voy_l 비어있는 케이스만 자동 채우기 시도
+    //
+    //   양하 EDI 있고 voy_d 비어있음:
+    //     - mode='discharge'이면 voyage.info.voy = 양하 voy → voy_d로 백필
+    //     - mode!='discharge'이면 voyage.info.voy = 다른 mode voy → 자동 백필 안 함 (사용자 입력 필요)
     const dischConts = Object.values(voyage?.discharge?.ediContainers || {});
-    if (dischConts.length > 0) {
-      const sample = dischConts.find(c => c.voy);
-      if (sample?.voy && sample.voy !== info.voy_d) {
-        patch.voy_d = sample.voy;
-      }
-      // M6.45: c.voy 메타 없는 옛 EDI 데이터 자동 복구
-      //   양하 EDI가 있고 voy_d 비어있고 voyage.info.voy가 voy_l과 다르면
-      //   → voyage.info.voy를 voy_d로 추정 (등록 시 양하 voy 입력 가정)
-      else if (!info.voy_d && info.voy && info.voy !== info.voy_l) {
+    if (dischConts.length > 0 && !info.voy_d) {
+      if (info.mode === 'discharge' && info.voy) {
         patch.voy_d = info.voy;
       }
+      // mode !== 'discharge' 케이스는 자동 백필 안 함 — 자료 탭 정정 UI에서 사용자 입력
     }
 
-    // 선적 EDI 분석
     const loadConts = Object.values(voyage?.loading?.ediContainers || {});
-    if (loadConts.length > 0) {
-      const sample = loadConts.find(c => c.voy);
-      if (sample?.voy && sample.voy !== info.voy_l) {
-        patch.voy_l = sample.voy;
-      }
-      // M6.45: 동일하게 voy_l 자동 복구
-      else if (!info.voy_l && info.voy && info.voy !== info.voy_d) {
+    if (loadConts.length > 0 && !info.voy_l) {
+      if (info.mode === 'loading' && info.voy) {
         patch.voy_l = info.voy;
       }
     }
@@ -1858,12 +1854,16 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   // 양하/선적 섹션 추가 (다른 모드)
   const otherMode = mode === 'discharge' ? 'loading' : 'discharge';
   const hasOther = !!voyage[otherMode];
+  // M6.46: 다른 mode 섹션 추가 시 voy 입력
+  const [otherVoyInput, setOtherVoyInput] = useState('');
 
   // M5.26: 통합 출력 허브 모달
   const [showPrintHub, setShowPrintHub] = useState(false);
 
   return (
     <div className="space-y-3">
+      {/* M6.46: 항차 번호 확인/정정 위젯 — 정확한 voy_d/voy_l 보장 */}
+      <VoyFixWidget voyage={voyage} voyageKey={voyageKey}/>
       {/* M6.43: 베이사전 라이브러리 위젯 — PDF 등록 + 누락 선박 식별 통합 */}
       <BayDictLibraryWidget
         onSingleUpload={(file) => setStowagePdfFile(file)}
@@ -1994,18 +1994,36 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       )}
 
       {!hasOther && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-          <div className="text-xs text-slate-400 mb-2">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
+          <div className="text-xs text-slate-400">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
+          {/* M6.46: voy 입력 받기 — 추측하지 않음 */}
+          <input
+            type="text"
+            value={otherVoyInput}
+            onChange={e => setOtherVoyInput(e.target.value.toUpperCase())}
+            placeholder={`${otherMode === 'discharge' ? '양하' : '선적'} 항차 번호 (예: ${otherMode === 'discharge' ? '0521E' : '0521W'})`}
+            className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs uppercase mono focus:outline-none focus:border-blue-500"
+          />
           <button
             onClick={async () => {
-              await fbUpdateVoyageInfo(voyageKey, {});
+              const upVoy = otherVoyInput.trim().toUpperCase();
+              if (!upVoy) {
+                setStatus('❌ 항차 번호를 입력해주세요');
+                return;
+              }
+              const patch = {};
+              if (otherMode === 'discharge') patch.voy_d = upVoy;
+              else patch.voy_l = upVoy;
+              await fbUpdateVoyageInfo(voyageKey, patch);
               await fbSaveSectionData(voyageKey, otherMode, { _created: Date.now() });
+              setOtherVoyInput('');
               setMode(otherMode);
             }}
+            disabled={!otherVoyInput.trim()}
             className={`w-full py-2 rounded text-sm font-bold ${
               otherMode === 'discharge'
-                ? 'bg-blue-900/50 hover:bg-blue-800 text-blue-100 border border-blue-700/40'
-                : 'bg-amber-900/50 hover:bg-amber-800 text-amber-100 border border-amber-700/40'
+                ? 'bg-blue-900/50 hover:bg-blue-800 disabled:bg-slate-800 text-blue-100 border border-blue-700/40 disabled:text-slate-500'
+                : 'bg-amber-900/50 hover:bg-amber-800 disabled:bg-slate-800 text-amber-100 border border-amber-700/40 disabled:text-slate-500'
             }`}
           >
             + {otherMode === 'discharge' ? '양하' : '선적'} 섹션 추가

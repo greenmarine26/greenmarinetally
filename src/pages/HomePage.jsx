@@ -181,13 +181,20 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const handleCreate = async () => {
     if (!vsl.trim() || !voy.trim()) return;
     const key = `${vsl.trim().toUpperCase().replace(/\s+/g, '')}_${voy.trim().toUpperCase()}`;
-    await fbCreateVoyage(key, {
+    const upVoy = voy.trim().toUpperCase();
+    // M6.46: mode별로 voy_d / voy_l 명시 저장 (EDI에 의존하지 않음)
+    //   양하 항차 생성 → voy_d 정확. 선적 항차 생성 → voy_l 정확.
+    //   "다른 mode 섹션 추가" 시 별도 voy 입력 받음 (VoyagePage)
+    const info = {
       vsl: vsl.trim().toUpperCase(),
-      voy: voy.trim().toUpperCase(),
+      voy: upVoy,
       mode: showCreate,
       createdAt: Date.now(),
       createdBy: inspector || '',
-    });
+    };
+    if (showCreate === 'discharge') info.voy_d = upVoy;
+    else if (showCreate === 'loading') info.voy_l = upVoy;
+    await fbCreateVoyage(key, info);
     setVsl(''); setVoy(''); setShowCreate(null);
     onOpenVoyage(key);
   };
