@@ -42,8 +42,6 @@ import StorageBox from '../components/StorageBox.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
-import BulkStowageModal from '../components/BulkStowageModal.jsx'; // M6.42
-import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6.43
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { db } from '../firebase.js';
@@ -1139,8 +1137,6 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   const [choiceState, askChoice] = useChoice();
   // M6.14a: STOWAGE PDF 자동 분석 검토 모달 — DataTab 스코프에서만 사용
   const [stowagePdfFile, setStowagePdfFile] = useState(null);
-  // M6.42: 일괄 STOWAGE PDF 등록 모달
-  const [bulkStowageOpen, setBulkStowageOpen] = useState(false);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
@@ -1815,11 +1811,6 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
 
   return (
     <div className="space-y-3">
-      {/* M6.43: 베이사전 라이브러리 위젯 — PDF 등록 + 누락 선박 식별 통합 */}
-      <BayDictLibraryWidget
-        onSingleUpload={(file) => setStowagePdfFile(file)}
-        onBulkUpload={() => setBulkStowageOpen(true)}
-      />
       {/* M5.26: 통합 출력 진입 */}
       <button
         onClick={() => setShowPrintHub(true)}
@@ -1852,17 +1843,6 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           }}
         />
       )}
-      {/* M6.42: STOWAGE PDF 일괄 등록 */}
-      {bulkStowageOpen && (
-        <BulkStowageModal
-          open={bulkStowageOpen}
-          inspector={inspector}
-          onClose={() => setBulkStowageOpen(false)}
-          onCompleted={(res) => {
-            setStatus(`✅ 베이사전 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패`);
-          }}
-        />
-      )}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400"/>
@@ -1877,7 +1857,26 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
         </div>
 
-        {/* M6.43: PDF 등록 + 베이사전 라이브러리 현황 통합 위젯 (자료 탭 상단으로 이동) */}
+        {/* M6.14a: STOWAGE PDF 명시적 업로드 버튼 — 별도 호출, 블로킹 없음 */}
+        <div className="mt-2 pt-2 border-t border-slate-800/60">
+          <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/40 rounded text-xs font-bold text-purple-200">
+            📄 STOWAGE PDF 등록 (베이사전)
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) setStowagePdfFile(f);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <div className="text-[10px] text-slate-500 mt-1">
+            답안지 PDF 한 장 선택 → Gemini 2.5 Pro 자동 분석 (M6.14)
+            <br/><span className="text-amber-400/80">⚠️ EDI/양하 리스트 PDF는 이 버튼에 올리지 마세요 (베이사전 등록 전용)</span>
+          </div>
+        </div>
 
         {/* M5.11: 보관된 EDI 원본 + 재처리 버튼 */}
         {rawMeta?.text ? (
