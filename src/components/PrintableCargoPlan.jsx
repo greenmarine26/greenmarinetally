@@ -217,45 +217,20 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
-  // M6.49 보강: dynRows를 베이별 자체 row 폭으로
-  //   기존: globalRowRange(페이지 전체 max) → 큰 선박에서 모든 박스 27 row 표시 → 글자 겹침
-  //   변경: 각 베이의 실제 컨테이너 + 베이사전 row max 만 사용
-  //         박스 외곽은 페이지 그리드(flex)로 통일, 박스 안 그리드만 자체 row
+  // M6.49 재수정: 박스 외곽 통일이 더 중요 — 글로벌 max 사용 복원
+  //   (사용자: "박스마다 row 폭 다르면 전보다 나빠짐")
+  //   라벨 겹침은 폰트 축소(CSS)로 해결
   const dynRows = (() => {
-    const set = new Set();
-    allConts.forEach(c => {
-      const r = String(c.row).padStart(2, '0');
-      if (r && r !== 'NaN') set.add(r);
-    });
-    // 베이사전 row max 보강 (사용 안 한 row도 격자 표시용)
-    [even, odd].forEach(bn => {
-      if (bn == null) return;
-      const db = dictBaysSummary[parseInt(bn, 10)];
-      if (!db) return;
-      const rmE = db.rowMaxEvenLocal || db.rowMaxEven;
-      const rmO = db.rowMaxOddLocal || db.rowMaxOdd;
-      if (Number.isFinite(rmE)) {
-        for (let r = 2; r <= rmE; r += 2) set.add(String(r).padStart(2, '0'));
-      }
-      if (Number.isFinite(rmO)) {
-        for (let r = 1; r <= rmO; r += 2) set.add(String(r).padStart(2, '0'));
-      }
-    });
-    if (set.size === 0) {
-      // 폴백: globalRowRange 또는 기본
-      const maxLeft = globalRowRange?.maxLeft || 8;
-      const maxRight = globalRowRange?.maxRight || 7;
+    const maxLeft = globalRowRange?.maxLeft || 0;
+    const maxRight = globalRowRange?.maxRight || 0;
+    if (maxLeft || maxRight) {
       const left = [];
       for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
       const right = [];
       for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
       return [...left, '00', ...right];
     }
-    set.add('00');
-    const arr = Array.from(set);
-    const left = arr.filter(r => parseInt(r) > 0 && parseInt(r) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
-    const right = arr.filter(r => parseInt(r) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
-    return [...left, '00', ...right];
+    return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
   })();
 
   // 페이지 두 베이의 dictBay tier union
@@ -834,10 +809,11 @@ export default function PrintableCargoPlan({
         .bay-count { font-size: 7pt; }
         .bay-row-labels {
           display: flex; justify-content: center;
-          font-size: 6pt; padding: 0 1px;
+          font-size: 5pt; padding: 0 1px;
           flex-shrink: 0;
         }
-        .bay-row-label { flex: 1; text-align: center; font-size: 7pt; min-width: 0; }
+        /* M6.49: row 라벨 폰트 축소 (7pt→5pt) — 큰 선박 27 row까지 겹침 해소 */
+        .bay-row-label { flex: 1; text-align: center; font-size: 5pt; min-width: 0; letter-spacing: -0.3px; line-height: 1; }
         /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
         .bay-grid-wrap {
           display: flex; align-items: stretch; padding: 1px;
