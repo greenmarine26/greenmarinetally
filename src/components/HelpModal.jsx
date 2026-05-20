@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.56 (2026-05) — 박스 크기/점선 일치 (PCBJ 같은 베이별 tier 미등록 선박 fallback)',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'PCBJ 양하 카고플랜에서 BAY 15(hold만), BAY 23(hold만), BAY 01/03/34(deck만) 같은 박스가 다른 박스보다 작게 그려짐. 점선 위치도 일치 안 됨. M6.54 점선 통일 효과가 일부 선박에서만 작동' },
+        { q: '🔍 원인', a: 'v2 베이사전 PCBJ entry의 baysSummary 각 베이가 {bayNo, section, hasHold, hasDeck, isStandalone}만 있고 deckTiersLocal/holdTiersLocal/deckTiers/holdTiers가 베이 entry 내부에 없음. M6.54 로직 line 244는 entry에서만 tier를 모으니 set이 비어있고, 결과적으로 hasDictTiers=false → 박스별 실제 컨테이너 tier만 그림 → 박스 크기와 점선 위치 다 다름' },
+        { q: '✅ 해결', a: 'pageBayDictTiers 계산에 2차 fallback 추가. baysSummary entry에서 tier 못 모으면 dictShipMeta.deckTiers/holdTiers(사전 level 전체)로 fallback. PCBJ의 경우 [92,90,88,86,84,82,80] + [8,6,4,2] 자동 채워짐 → deck 7 tier + hold 4 tier 자리 모든 박스에 확보 → M6.54 tier-hidden으로 자리 통일 효과 정상 작동' },
+        { q: '🔁 회귀 없음', a: 'M6.56 fallback은 1차(베이 entry tier)가 비어있을 때만 발동. KSKM/NBTD/PAVA/HSHG처럼 베이별 deckTiersLocal/holdTiersLocal 채워진 선박은 1차에서 처리 → 변화 없음. shipBayDict_v2.js 일체 미수정 (M6.14 보호 규칙 준수)' },
+        { q: '🛡 영향 범위', a: 'PrintableCargoPlan.jsx 한 useMemo 11줄 추가. PrintableBayDetail/BayPlan/PrintHubModal 미변경. EDI 재업로드 불필요 — 다음 카고플랜 출력부터 자동 적용' },
+        { q: '⚠ M6.55 v5 매트릭스 활용은?', a: 'v5 _v5Matrix는 카고플랜 lookup 결과에 첨부되어 있음(getShipBayDictData 반환 객체). 다만 PCBJ는 6.10 포맷이라 v5의 hasHold가 모두 false (Phase 7 미해결 — 6.10 hold 검출 별도 작업 필요). v5 매트릭스의 row 폭(cells_per_row)도 활용 가능하지만 M6.49 사용자 명시 원칙 "박스마다 row 폭 다르면 전보다 나빠짐" 때문에 도입 보류. 다음 세션에서 v5의 6.10 hold 검출 알고리즘 완성 후 본격 활용 권장' },
+      ],
+    },
+    {
       title: '🆕 M6.55 (2026-05) — .def 매트릭스 디코드 + 베이사전 v5 통합 (신규 13척 + 311척 매트릭스 보강)',
       examples: [
         { q: '🎯 한 줄 요약', a: '329개 .def 원본을 정밀 분석해서 311척 베이사전을 자동 추출. v2에 없던 13척을 보조 사전에 추가하고, 298+13=311척에 row 폭/cells_per_row 매트릭스 정보를 보강 첨부' },

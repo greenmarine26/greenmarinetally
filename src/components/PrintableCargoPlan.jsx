@@ -236,6 +236,13 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   // M6.54: 점선 위치 통일 (사용자 선택 A)
   //   카고플랜 전체 베이의 deck/hold tier 합치기 → 모든 박스에 같은 자리
   //   박스별 사용 안 하는 tier는 hidden (자리 차지) → tier 82↔08 라인 모든 박스 정렬
+  //
+  // M6.56: PCBJ 같은 선박 — v2 baysSummary 각 베이 entry가 {} 빈 객체라
+  //        deckTiersLocal/holdTiersLocal/deckTiers/holdTiers를 entry에서 못 가져오는 케이스 fallback.
+  //        해결책 (v2 미수정):
+  //          1차) baysSummary 각 entry의 tier 필드 (M6.54 그대로)
+  //          2차) dictShipMeta.deckTiers/holdTiers (전체, bayDef 사전 level)
+  //          3차) _v5Matrix 매트릭스 (.def 자동 추출 베이별 정보)
   const pageBayDictTiers = useMemo(() => {
     const deck = new Set();
     const hold = new Set();
@@ -244,8 +251,13 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       (db.deckTiersLocal || db.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
       (db.holdTiersLocal || db.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
     });
+    // M6.56 2차 fallback: 베이별 tier 비어있으면 사전 level 전체 deckTiers/holdTiers
+    if (deck.size === 0 && hold.size === 0 && dictShipMeta) {
+      (dictShipMeta.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
+      (dictShipMeta.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
+    }
     return { deck, hold };
-  }, [dictBaysSummary]);
+  }, [dictBaysSummary, dictShipMeta]);
 
   const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
   const allTiersSet = hasDictTiers
