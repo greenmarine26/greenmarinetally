@@ -16,6 +16,8 @@ import { lookupUserBayDict, getUserBayDictStats } from './data/userBayDict.js';
 //   - matrix: 311척의 row 폭/cells_per_row 정보 (v2 verified 데이터에 보조 첨부)
 import { lookupBayDictV5SupplementEnhanced } from './data/shipBayDict_v5_supplement.js';
 import { getMatrixV5 } from './data/shipBayDict_v5_matrix.js';
+// M6.57: 베이사전 자동 보정 — verified 보존, 비어있는 필드만 다단계 fallback으로 채움
+import { enrichBayDef } from './bayDictAutoEnrich.js';
 
 // M4.5: 선박 식별자 정규화 (퍼지 매칭용)
 //   "TJ TEN JUPITER" → "TJTENJUPITER"
@@ -278,6 +280,13 @@ export function getShipBayDictData(imo, code) {
     } catch (e) { /* fallback: 기존 데이터 그대로 */ }
   }
 
+  // M6.57: 자동 보정 — 베이별 비어있는 필드를 다단계 fallback으로 채움
+  //   verified는 절대 덮어쓰지 않음. _enrichedFrom 메타로 출처 표시.
+  //   원본 entry 미수정 (deep clone 후 보강).
+  const matrixV5 = getMatrixV5(data.code);
+  const wrappedEntry = enrichBayDef({ bayDef: finalBayDef }, matrixV5);
+  const enrichedBayDef = wrappedEntry.bayDef;
+
   return {
     source: result.source,
     matchedBy: result.matchedBy || result.source,
@@ -285,7 +294,7 @@ export function getShipBayDictData(imo, code) {
     callsign: data.callsign,
     specs: data.specs || {},
     code: data.code,
-    bayDef: finalBayDef,
+    bayDef: enrichedBayDef,
     verified: bayDef.verified || result.source === 'v2' || result.source === 'v2-fuzzy',
     // M6.40: STOWAGE PDF 메타 (Firebase 사전에서만 — v1/v2 임베드에는 없음)
     pdfUrl: data.pdfUrl || '',
@@ -295,7 +304,9 @@ export function getShipBayDictData(imo, code) {
     // M6.55: v5 매트릭스 보강 (베이별 cells_per_row + rows + maxRow + hasHold)
     //   v2 verified 데이터를 override하지 않는 보조 정보
     //   카고플랜 표시에서 row 폭 default(8/7) 대신 실측값 사용 가능
-    _v5Matrix: getMatrixV5(data.code) || null,
+    _v5Matrix: matrixV5,
+    // M6.57: 자동 보정 메타 (디버그용 — _enrichMeta는 enrichedBayDef를 통해 접근)
+    _enrichMeta: wrappedEntry._enrichMeta || null,
   };
 }
 

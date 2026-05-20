@@ -379,6 +379,19 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🎯 M6.57 (2026-05) — 베이사전 자동 보정 시스템 (관점 전환: 오류 검출 → 자동 보정)',
+      examples: [
+        { q: '🔥 사용자 관점 전환', a: '기존: 사용자가 카고플랜에서 오류 발견 → 스크린샷 → 클로드 → 수정. 매번 번거로움. 새 방향: 앱이 자동으로 데이터 정밀 분석 + 누락 필드 자체 보정 → 사용자 발견 못 해도 정상 출력. 클로드 세션은 새 패턴 추가/복잡 디버깅에만 사용' },
+        { q: '✅ 핵심 — Multi-level Fallback Enrichment', a: '신규 모듈 bayDictAutoEnrich.js. 각 베이 entry의 비어있는 필드를 다단계 fallback으로 자동 채움. verified 데이터는 절대 미수정 (비어있는 필드만). _enrichedFrom 메타로 보정 출처 명시 (디버그/검수용)' },
+        { q: '📊 Fallback 우선순위 (필드별)', a: 'L1 베이 entry 자체값(verified) > L2 v5 매트릭스(.def 자동 추출) > L3 v2 사전 level(전체 deckTiers/holdTiers/rowMaxEven/Odd) > L4 안전한 default. 어떤 소스든 가용하면 즉시 사용' },
+        { q: '🎯 보정 대상 필드 (베이별)', a: 'deckTiersLocal/holdTiersLocal (박스 크기 + 점선 자리), rowMaxEvenLocal/rowMaxOddLocal (row 폭). hasHold/hasDeck/isStandalone은 보존' },
+        { q: '📈 효과 검증', a: 'PCBJ: 24 베이 × 3필드 = 72개 자동 보정 ★ PDF 박스 크기 문제 완전 해결. KSKM: 보정 불필요 (이미 verified). NBTD: 27개 부분 보정 (비어있는 일부 베이만). PAVA: rowMax 22개 보정 (tier는 비어있어도 sourceLevel 없으면 보강 안 함 — 안전)' },
+        { q: '🌐 적용 범위 (M6.56과 비교)', a: 'M6.56: PrintableCargoPlan 한 곳 fallback. M6.57: getShipBayDictData 반환 직전 보정 → 9개 호출처 모두 혜택 (PrintableCargoPlan, PrintableBayDetail, BayPlan, BayDictStatusWidget, VoyagePage, ChiefDashboard, twin.js 등). 베이상세/베이플랜에서도 같은 문제 자동 해결' },
+        { q: '🛡 보호 규칙 준수', a: 'shipBayDict_v2.js 일체 미수정 (M6.14 + M6.55 보호). NBTD/MCSC verified 그대로. enrichBayDef는 deep clone 후 보강 (원본 미수정). M6.56 PrintableCargoPlan fallback은 그대로 유지 (방어 코드 — M6.57 작동 안 하는 케이스 대비)' },
+        { q: '💡 이후 확장 가능 (M6.58~)', a: 'L4 EDI 실측 fallback (현재 항차 컨테이너 row/tier 분포 분석 → 사전 데이터 없는 베이 자동 추정). v5 6.10 hold 검출 (181척 hasHold 정확화). 자동 보정 메타 표시 위젯 (검수원이 "이 베이는 자동 보정됨"을 시각적으로 인지)' },
+      ],
+    },
+    {
       title: '🆕 M6.56 (2026-05) — 박스 크기/점선 일치 (PCBJ 같은 베이별 tier 미등록 선박 fallback)',
       examples: [
         { q: '🔥 사용자 보고', a: 'PCBJ 양하 카고플랜에서 BAY 15(hold만), BAY 23(hold만), BAY 01/03/34(deck만) 같은 박스가 다른 박스보다 작게 그려짐. 점선 위치도 일치 안 됨. M6.54 점선 통일 효과가 일부 선박에서만 작동' },
