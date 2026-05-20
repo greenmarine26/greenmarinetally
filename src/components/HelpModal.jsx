@@ -390,6 +390,16 @@ const CONTENT = {
       ],
     },
     {
+      title: '🎯 M6.63 (2026-05) — BAY (34)35 extraTier 80 두 번 표시 버그 수정',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'M6.62 적용 후 PCBJ 카고플랜 대부분 정상 작동. BAY 15/11/05/01/19/23/29/33 등 모든 박스 점선 위치 통일. 단 BAY (34)35만 tier 라벨에 80이 두 번 표시됨: [92,90,88,86,84,82,80,80]' },
+        { q: '🔍 원인', a: 'BAY 34/35의 EDI 컨테이너가 tier=80이라 allConts에 80 추가 → allTiersSet에 80 들어감 → deckTiers (>=80 필터)에 80 포함. 동시에 dictBay.extraTier=80이라 extra-tier-row로 또 그려짐 → 80 두 번 표시' },
+        { q: '✅ 해결', a: 'PrintableCargoPlan에서 deckTiers 계산 후 extraTier가 있으면 그 값을 deckTiers에서 제외. extra-tier-row에서만 그려짐. const extraTierStr = extraTier ? padStart(2,0) : null; const deckTiers = extraTierStr ? deckTiersAll.filter(t => t !== extraTierStr) : deckTiersAll' },
+        { q: '🚫 영향 범위', a: 'PrintableCargoPlan.jsx 한 함수(BayBox) 내부 5줄 수정. 다른 모든 카고플랜 양식 그대로. extraTier 없는 베이는 영향 없음. 새 ASC/EDI 재로드 불필요' },
+        { q: '💡 검증', a: 'BAY 34/35: 라벨 [92,90,88,86,84,82] (6단 deck) + 80 (extraTier 1 row) = 7개 라벨. BAY 33도 동일. 다른 베이 (BAY 19 등): 라벨 [92,90,88,86,84,82] + 점선 + [08,06,04,02] = 10개 라벨' },
+      ],
+    },
+    {
       title: '🎯 M6.62 (2026-05) — v2 verified 최신본이 Firebase 옛 정정본보다 우선 (PCBJ 적용 양식)',
       examples: [
         { q: '🔥 사용자 보고', a: 'M6.61에서 PCBJ 베이사전 STOWAGE PDF로 정확 재등록. 그런데 카고플랜 출력 결과는 여전히 부정확 — 박스마다 tier 영역 크기 다름. 사용자: "아직도 카고플랜에서 나오질 못하고 있네요"' },

@@ -271,8 +271,14 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
         ...(Array.isArray(globalTiers) ? globalTiers.map(t => String(t).padStart(2, '0')) : []),
         ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
       ]));
-  const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
+  const deckTiersAll = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
+  // M6.63: extraTier(예: 80)가 deckTiers에 이미 있으면 제외 — extra-tier-row로 별도 그려져 중복 방지
+  //   BAY (34)35의 EDI 컨테이너가 tier=80이면 allConts에 80 추가됨 → deckTiers에 80 들어감
+  //   동시에 extraTier=80이라 또 그려짐 → 80 두 번 표시되는 버그
+  const extraTier = dictBay?.extraTier || null;
+  const extraTierStr = extraTier ? String(extraTier).padStart(2, '0') : null;
+  const deckTiers = extraTierStr ? deckTiersAll.filter(t => t !== extraTierStr) : deckTiersAll;
 
   // M6.54: 박스별 사용 tier (베이사전 deckTiersLocal/holdTiersLocal + 컨테이너 보강) — hidden 처리용
   const bayDeckTiersUsed = useMemo(() => {
@@ -305,8 +311,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     return set;
   }, [even, odd, dictBaysSummary, allConts]);
 
-  // M5.98: extraTier — 점선 위치에 그릴 베이별 특수 tier
-  const extraTier = dictBay?.extraTier || null;
+  // M5.98 → M6.63: extraTier는 deckTiers/holdTiers 계산 후 위쪽에서 처리됨
 
   const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
   const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
