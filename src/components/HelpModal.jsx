@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🔥 M6.61 (2026-05) — PCBJ 베이사전 STOWAGE PDF 기반 완전 재등록 (24 베이 베이별 verified)',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'M6.60 카고플랜 출력 PDF에서 PCBJ 박스마다 deck/hold 영역 크기 다름. BAY 19/15/11 hold만 표시 (deck 누락). 점선 통일 양식 작동 안 함. 사용자 좌절 — 여러 채팅방에서 반복 시도 후 근본 원인 PCBJ 베이사전 부정확임을 확인' },
+        { q: '🔍 진짜 원인 (M6.60 코드 ✓, PCBJ 데이터 ✗)', a: 'M6.60 카고플랜 코드는 정상. M6.56 글로벌 fallback도 정상. 진짜 문제 — PCBJ.entry baysSummary 24개 모두 5필드만 (bayNo, section, hasHold, hasDeck, isStandalone) — 베이별 deckTiersLocal/holdTiersLocal/rowMax 모두 누락. M5.35-pdf-batch 등록 시 추출 못함' },
+        { q: '✅ 해결 — STOWAGE INSTRUCTION PDF로 정확 재등록', a: '사용자가 PCBJ2601W.pdf (STOWAGE_INSTRUCTION) 1장 제공. PDF에서 베이별 정확 정보 추출: 24 베이, 8 section, BAY 01-02-03 작은 베이 (row 4/5, deck 4단), BAY 05-17 (row 8/7, deck 5단), BAY 19-31 (deck 6단 — 92 포함), BAY 33-35 (extraTier 80, hold 없음). isStandalone 정확히: BAY 01,05,11,15,19,23,29,33 단독' },
+        { q: '🎯 카고플랜 양식 결과 (예상)', a: '글로벌 deckTiers [92,90,88,86,84,82,80] + holdTiers [8,6,4,2] 9단. 베이별 deckTiersLocal/holdTiersLocal 각 베이마다 정확. 모든 박스 점선 위치 통일 (M6.54 양식 작동). BAY 19 박스 = 6단 deck + 4단 hold 자리, 위쪽 92/80 hidden. BAY 01 박스 = 4단 deck + 4단 hold (row 5만)' },
+        { q: '🚫 영향 범위', a: 'shipBayDict_v2.js PCBJ entry 1개만 교체. 카고플랜/베이상세 코드 안 건드림 (M6.60 그대로). 다른 선박 영향 없음. 새 ASC/EDI 재로드 불필요 — 출력만 즉시 변경' },
+        { q: '💡 사용자 의의', a: '"어쩌다 오는 선박" 정확 등록 양식 검증 완료. STOWAGE PDF 1장이면 5분 안에 베이사전 영구 등록 — 검수원 실수 방지. 이 양식을 다른 선박에도 적용 가능 (사용자가 STOWAGE PDF 보내주시면)' },
+      ],
+    },
+    {
       title: '🔧 M6.60 (2026-05) — PCBJ BAY 15 deck 자리 차지 안 됨 + 빈 셀 점 위치 수정',
       examples: [
         { q: '🔥 사용자 보고 (이미지 직접 확인)', a: 'M6.58 PCBJ 카고플랜에서 BAY 15(hold만), BAY 23(hold만), BAY 01(deck만), BAY 34(deck만) 박스 크기 + 점선 위치 + 9 cells 균등 다 안 됨. PDF 텍스트 추출만 보던 한계가 드러남 — 이미지로 확인 후 사용자 지적이 모두 맞음을 확인' },
