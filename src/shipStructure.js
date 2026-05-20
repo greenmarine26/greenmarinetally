@@ -11,6 +11,11 @@
 import { lookupBayDict, getBayDictStats } from './data/shipBayDict.js';
 import { SHIP_BAY_DICT_V2, lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
 import { lookupUserBayDict, getUserBayDictStats } from './data/userBayDict.js';
+// M6.55: v5 — .def 매트릭스 디코드 자동 추출
+//   - supplement: v2에 없는 13척 (DAP, DBM, DHA, ESTM, FN7, FSR, HAHM, HECN, MDB, MEB, ORT, PCBS, WBC)
+//   - matrix: 311척의 row 폭/cells_per_row 정보 (v2 verified 데이터에 보조 첨부)
+import { lookupBayDictV5SupplementEnhanced } from './data/shipBayDict_v5_supplement.js';
+import { getMatrixV5 } from './data/shipBayDict_v5_matrix.js';
 
 // M4.5: 선박 식별자 정규화 (퍼지 매칭용)
 //   "TJ TEN JUPITER" → "TJTENJUPITER"
@@ -72,10 +77,29 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
   if (userResult) return { source: 'user', data: userResult, matchedBy: 'user-dict' };
 
   // 2. v2 사전 — 강화된 매칭 (IMO + callsign + code + name 4가지 시도)
+  //   M6.55: 정확 매칭(code/IMO/callsign)과 fuzzy(name-fuzzy) 분리.
+  //          정확 매칭 v2 > 정확 매칭 v5 > fuzzy v2 > fuzzy v5 순.
+  //          이전엔 v2 fuzzy가 v5 정확보다 먼저라 DHA → CNGS 같은 오매칭 발생.
   const v2Enhanced = lookupBayDictV2Enhanced(imo, vesselNameOrCode);
+  // 2a. v2 정확 매칭 (code/IMO/callsign) — 즉시 사용
+  if (v2Enhanced && !v2Enhanced.matchedBy.startsWith('name-fuzzy')) {
+    return { source: 'v2', data: v2Enhanced.entry, matchedBy: v2Enhanced.matchedBy };
+  }
+
+  // 2b. M6.55: v5 supplement 정확 코드 매칭 — v2 fuzzy보다 우선 (정확 > 추측)
+  const v5Result = lookupBayDictV5SupplementEnhanced(imo, vesselNameOrCode);
+  if (v5Result && v5Result.matchedBy === 'v5-code') {
+    return { source: 'v5-supplement', data: v5Result.entry, matchedBy: v5Result.matchedBy };
+  }
+
+  // 2c. v2 fuzzy 매칭 (name-fuzzy) — 정확 매칭 모두 실패 후
   if (v2Enhanced) {
-    return { source: v2Enhanced.matchedBy.startsWith('name-fuzzy') ? 'v2-fuzzy' : 'v2',
-             data: v2Enhanced.entry, matchedBy: v2Enhanced.matchedBy };
+    return { source: 'v2-fuzzy', data: v2Enhanced.entry, matchedBy: v2Enhanced.matchedBy };
+  }
+
+  // 2d. M6.55: v5 supplement fuzzy 매칭
+  if (v5Result) {
+    return { source: 'v5-supplement', data: v5Result.entry, matchedBy: v5Result.matchedBy };
   }
 
   // 3. v1 사전 (legacy 폴백)
@@ -268,6 +292,10 @@ export function getShipBayDictData(imo, code) {
     pdfName: data.pdfName || '',
     pdfPath: data.pdfPath || '',
     pdfUploadedAt: data.pdfUploadedAt || 0,
+    // M6.55: v5 매트릭스 보강 (베이별 cells_per_row + rows + maxRow + hasHold)
+    //   v2 verified 데이터를 override하지 않는 보조 정보
+    //   카고플랜 표시에서 row 폭 default(8/7) 대신 실측값 사용 가능
+    _v5Matrix: getMatrixV5(data.code) || null,
   };
 }
 

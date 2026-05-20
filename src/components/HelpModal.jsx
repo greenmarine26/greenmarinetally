@@ -379,6 +379,20 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.55 (2026-05) — .def 매트릭스 디코드 + 베이사전 v5 통합 (신규 13척 + 311척 매트릭스 보강)',
+      examples: [
+        { q: '🎯 한 줄 요약', a: '329개 .def 원본을 정밀 분석해서 311척 베이사전을 자동 추출. v2에 없던 13척을 보조 사전에 추가하고, 298+13=311척에 row 폭/cells_per_row 매트릭스 정보를 보강 첨부' },
+        { q: '✅ Phase 8 돌파: 베이 번호 자동 추출', a: '이전엔 ".def 파일에 베이 번호 없음"으로 결론냈으나, offset ~135,900 부근 ASCII 영역 (" NN    " 형식, 189 bytes record 간격)에 명시 저장 발견. KSKM 22 베이 정답 [1,3,4,5,7,8,9,11,12,13,15,16,17,19,20,21,23,24,25,27,28,29] 100% 일치 — 311척 중 306척 (98.4%) 자동 추출 성공' },
+        { q: '✅ Phase 6: row × cell 매트릭스 디코드', a: '베이 record 안 uint16 LE 스트림에서 연속 non-zero cluster = 한 row. 값 1=일반, 3=hatch cover 경계 marker, 5/7=특수 marker(가설). 큰 zero gap (>100 bytes) = deck/hold 분리. KSKM hold 베이 = 11/12/13/15 정확히 4개 자동 식별' },
+        { q: '✅ Phase 7: STSE 6.10 변형 검증', a: 'STSE는 표준 6.10 포맷. 별도 처리 불필요. 동일 디코더로 정상 처리. 단 6.10 포맷(181척)은 zero gap이 작아 hold 분리 미검출 — 다음 세션 후속 작업' },
+        { q: '📁 통합 방식 (보호 규칙 준수)', a: 'shipBayDict_v2.js는 일체 미수정. 신규 파일 2개 추가: (1) shipBayDict_v5_supplement.js — v2에 없는 13척 (DAP/DBM/DHA/ESTM/FN7/FSR/HAHM/HECN/MDB/MEB/ORT/PCBS/WBC), (2) shipBayDict_v5_matrix.js — 311척 row 폭/cells 보강. NBTD/MCSC 보호 — v2 우선이라 영향 없음' },
+        { q: '🔍 lookup 우선순위 (M6.55)', a: 'Firebase → userBayDict → v2 verified → v2-fuzzy → **v5-supplement (M6.55 신규)** → v1 → 동적 추정. v5-supplement는 v2 fall-through만 됨 (verified는 아니지만 자동 추출 + ASCII 검증 통과)' },
+        { q: '💡 매트릭스 보강 활용', a: 'getShipBayDictData 반환 객체에 _v5Matrix 필드 첨부 (어떤 source든 자동). 베이별 cells_per_row 실측값 사용 가능. 카고플랜 표시에서 기존 default 8/7 대신 v5 maxRow로 row 폭 결정 가능 (M6.56 후속 작업)' },
+        { q: '⚠ 누락 5척 (M6.56 작업)', a: 'HAHM, KANP, RZIN, SDHI, SWIC, TSPS — 베이 번호 ASCII 영역이 다른 위치이거나 비표준 형식. 별도 분석 필요. supplement에는 HAHM만 포함 (1/30 추출, 부분 매칭)' },
+        { q: '🛡 보호 규칙 준수 검증', a: 'shipBayDict_v2.js 일체 미수정 ✓, NBTD/MCSC v2 그대로 ✓, 모든 v5 데이터는 v2 fall-through 또는 보조 첨부 ✓, 기존 lookup 우선순위 유지 ✓' },
+      ],
+    },
+    {
       title: '🆕 M6.54 (2026-05) — 점선 위치 통일 (사용자 선택 A: 카고플랜 페이지 단위 deck/hold 영역 통일)',
       examples: [
         { q: '🔥 사용자 보고', a: '카고플랜에서 박스마다 점선 높이가 다름. tier 82↔08 경계선이 박스별로 다른 위치 → 시각적 불일치. 사용자 원칙: "기본은 tier 82, 80은 특수(extraTier)"' },
