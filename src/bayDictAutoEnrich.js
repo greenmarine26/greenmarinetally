@@ -27,11 +27,13 @@
 /**
  * 베이사전 entry를 자동 보정.
  *
- * @param {object} entry      v2/v5/user/firebase의 베이사전 entry
- * @param {object} v5Matrix   v5 매트릭스 정보 (없으면 null)
- * @returns {object}          보정된 entry (deep clone, 원본 미수정)
+ * @param {object} entry         v2/v5/user/firebase의 베이사전 entry
+ * @param {object} v5Matrix      v5 매트릭스 정보 (없으면 null)
+ * @param {Array}  ediContainers M6.59: 현재 항차 EDI 컨테이너 배열 (없으면 null)
+ *                                있으면 베이별 deckTiersLocal/holdTiersLocal을 EDI 실측 분포로 채움
+ * @returns {object}             보정된 entry (deep clone, 원본 미수정)
  */
-export function enrichBayDef(entry, v5Matrix) {
+export function enrichBayDef(entry, v5Matrix, ediContainers = null) {
   if (!entry || !entry.bayDef) return entry;
 
   // deep clone (원본 보호)
@@ -198,6 +200,94 @@ export function enrichBayDef(entry, v5Matrix) {
     return bay;
   });
 
+  // M6.59: L4 EDI 실측 fallback — 베이별 deckTiersLocal/holdTiersLocal이 비어있고
+  //   ediContainers가 주어졌으면 베이별 컨테이너 tier 분포로 자동 채움.
+  //   80 기준 분리 (>=80 deck, <80 hold) — 카고플랜 표시 로직과 동일 규칙.
+  //   짝수 베이는 양옆 홀수 베이의 40ft 컨테이너도 포함 (짝꿍 처리).
+  if (Array.isArray(ediContainers) && ediContainers.length > 0) {
+    // 베이별 컨테이너 인덱싱
+    const contsByBay = new Map();
+    ediContainers.forEach(c => {
+      const bn = parseInt(c.bay_actual || c.bay, 10);
+      if (isNaN(bn) || bn === 0) return;
+      if (!contsByBay.has(bn)) contsByBay.set(bn, []);
+      contsByBay.get(bn).push(c);
+    });
+
+    let l4Enriched = 0;
+    bd.baysSummary.forEach(bay => {
+      const bayNum = parseInt(bay.bayNo, 10);
+      if (isNaN(bayNum)) return;
+
+      // 자기 베이 + 짝꿍 처리: 짝수면 양옆 홀수 베이의 40ft 컨테이너도 포함
+      //   (실제 컨테이너가 짝수 베이를 차지하면 양옆 홀수 베이 좌표로 표시됨)
+      const candidates = [];
+      if (contsByBay.has(bayNum)) candidates.push(...contsByBay.get(bayNum));
+      const isEvenBay = bayNum % 2 === 0;
+      if (isEvenBay) {
+        [bayNum - 1, bayNum + 1].forEach(odd => {
+          if (odd <= 0) return;
+          if (!contsByBay.has(odd)) return;
+          // 40/45ft 컨테이너만 (짝꿍)
+          contsByBay.get(odd).forEach(c => {
+            const iso = String(c.iso || '').toUpperCase();
+            const len = iso.charAt(0);
+            if (len === '4' || len === 'L' || len === 'M' || len === 'N') candidates.push(c);
+          });
+        });
+      }
+      if (candidates.length === 0) return;
+
+      // tier 분리
+      const deckSet = new Set();
+      const holdSet = new Set();
+      candidates.forEach(c => {
+        const t = parseInt(c.tier, 10);
+        if (isNaN(t) || t <= 0) return;
+        if (t >= 80) deckSet.add(t);
+        else holdSet.add(t);
+      });
+
+      const sourcesUsed = bay._enrichedFrom || {};
+      let bayUpdated = false;
+
+      // deckTiersLocal 비어있으면 EDI에서 보강
+      if ((!Array.isArray(bay.deckTiersLocal) || bay.deckTiersLocal.length === 0) && deckSet.size > 0) {
+        bay.deckTiersLocal = [...deckSet].sort((a, b) => b - a);
+        sourcesUsed.deckTiersLocal = 'L4-edi-actual';
+        l4Enriched++;
+        bayUpdated = true;
+      }
+      // holdTiersLocal 비어있으면 EDI에서 보강
+      if ((!Array.isArray(bay.holdTiersLocal) || bay.holdTiersLocal.length === 0) && holdSet.size > 0) {
+        bay.holdTiersLocal = [...holdSet].sort((a, b) => b - a);
+        sourcesUsed.holdTiersLocal = 'L4-edi-actual';
+        l4Enriched++;
+        bayUpdated = true;
+      }
+      // hasHold/hasDeck도 EDI에서 보정 (false로 자동 생성됐다가 실제 컨테이너 있으면 true)
+      if (holdSet.size > 0 && !bay.hasHold) {
+        bay.hasHold = true;
+        sourcesUsed.hasHold = 'L4-edi-actual';
+        bayUpdated = true;
+      }
+      if (deckSet.size > 0 && !bay.hasDeck) {
+        bay.hasDeck = true;
+        sourcesUsed.hasDeck = 'L4-edi-actual';
+        bayUpdated = true;
+      }
+
+      if (bayUpdated) {
+        bay._enrichedFrom = sourcesUsed;
+      }
+    });
+
+    if (l4Enriched > 0) {
+      totalEnriched += l4Enriched;
+      enrichSources['L4-edi-actual'] = (enrichSources['L4-edi-actual'] || 0) + l4Enriched;
+    }
+  }
+
   // 사전 level _enrichedMeta (디버그용) - M6.58: 기존 메타 보존하면서 누적
   if (totalEnriched > 0) {
     const prev = enriched._enrichMeta || {};
@@ -206,6 +296,7 @@ export function enrichBayDef(entry, v5Matrix) {
       totalFieldsEnriched: totalEnriched,
       sourceCounts: { ...(prev.sourceCounts || {}), ...enrichSources },
       v5MatrixUsed: v5MaT_used(v5Matrix),
+      ediUsed: Array.isArray(ediContainers) && ediContainers.length > 0,
     };
   }
 

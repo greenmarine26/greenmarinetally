@@ -18,6 +18,7 @@ import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
+import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
 // M4.9e-fix: STD_DECK/STD_HOLD/STD_ROWS 모두 동적 (globalTiers + globalRowRange 기준)
 //   사용자 지적: "베이마다 / 선박마다 row/tier 다름, 일괄 X, 화면과 같게"
@@ -318,8 +319,20 @@ export default function PrintableBayDetail({
 
   const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    return getShipBayDictData(shipImo, shipName);
-  }, [shipImo, shipName]);
+    const baseDict = getShipBayDictData(shipImo, shipName);
+    if (!baseDict) return null;
+    // M6.59: EDI 컨테이너로 L4 fallback 추가 보정
+    const enrichedEntry = enrichBayDef(
+      { bayDef: baseDict.bayDef },
+      baseDict._v5Matrix,
+      containers
+    );
+    return {
+      ...baseDict,
+      bayDef: enrichedEntry.bayDef,
+      _enrichMeta: enrichedEntry._enrichMeta || baseDict._enrichMeta,
+    };
+  }, [shipImo, shipName, containers]);
 
   const dictBayList = useMemo(() => {
     if (!dictData?.bayDef?.bayList) return null;

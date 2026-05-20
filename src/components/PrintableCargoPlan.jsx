@@ -10,6 +10,7 @@ import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, isReeferContainer, isoToLabel } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
+import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
 const STD_ROWS = ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
 const STD_DECK = ['90', '88', '86', '84', '82'];
@@ -408,8 +409,22 @@ export default function PrintableCargoPlan({
 
   const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    return getShipBayDictData(shipImo, shipName);
-  }, [shipImo, shipName]);
+    const baseDict = getShipBayDictData(shipImo, shipName);
+    if (!baseDict) return null;
+    // M6.59: EDI 컨테이너로 L4 fallback 추가 보정
+    //   STSE 같은 선박 — baysSummary 자동 생성됐지만 deckTiersLocal/holdTiersLocal 비어있음
+    //   EDI 실측 컨테이너 tier 분포에서 베이별 deck(>=80)/hold(<80) 자동 분리
+    const enrichedEntry = enrichBayDef(
+      { bayDef: baseDict.bayDef },
+      baseDict._v5Matrix,
+      containers
+    );
+    return {
+      ...baseDict,
+      bayDef: enrichedEntry.bayDef,
+      _enrichMeta: enrichedEntry._enrichMeta || baseDict._enrichMeta,
+    };
+  }, [shipImo, shipName, containers]);
 
   const dictBayList = useMemo(() => {
     if (!dictData?.bayDef?.bayList) return null;

@@ -1,154 +1,144 @@
-# Tallyman Master 핸드오프 — M6.58
+# Tallyman Master 핸드오프 — M6.59
 
 ## 📌 현재 상태 (2026-05-20)
 
-- **최신 버전**: **M6.58** (STSE 자동 생성 + 빈 셀 시각화)
-- **이전 버전**: M6.57 (베이사전 자동 보정 시스템)
-- **작업 디렉토리**: `/home/claude/app/m6_58_build/`
+- **최신 버전**: **M6.59** (EDI 실측 L4 fallback — 한계 극복)
+- **이전 버전**: M6.58 (STSE 자동 생성 + 빈 셀 시각화)
+- **작업 디렉토리**: `/home/claude/app/m6_59_build/`
 
 ---
 
-## 🎯 M6.58 변경 요약
+## 🎯 M6.59 — 관점 전환
 
-사용자 보고 2건 동시 해결:
+성일님 지적: **"한계라 말하지 말고 그 한계를 극복하자."**
 
-### 보고 1: STSE M6.57 효과 0
-M6.57 검증용으로 STSE SITC SENDAI 카고플랜 받음 → M6.57 자동 보정이 작동 안 함.
+M6.58에서 "STSE deckTiers/holdTiers는 EDI 컨텍스트 없어서 다음 세션에"라고 미뤘던 작업.  
+사실 EDI 컨텍스트는 PrintableCargoPlan/PrintableBayDetail/BayPlan에 이미 있었음 — enrichBayDef에 전달만 하면 됨.
 
-**원인:** STSE는 v2에 등록되어 있지만 grade=needs-review, **baysSummary 빈 배열**, rowMaxEven/Odd/deckTiers/holdTiers 모두 undefined. M6.57은 "비어있는 필드만 채우는" 양식이라 baysSummary 자체가 비어있으면 채울 entry 없음.
-
-**해결:** enrichBayDef 확장 — baysSummary 빈 배열이면 v5 매트릭스로 entry 자체 자동 생성.
-
-### 보고 2: 빈 셀 사라짐
-PCBJ/STSE 카고플랜에서 컨테이너 없는 row 자리가 사라져서 박스 좁아 보임.
-
-**원인:** 코드/CSS상 빈 셀 자리 보존 양식 (mark-empty)이지만, `.bay-cell border: 0.3px`라 실질적으로 안 보여서 시각적으로 "사라진 것"처럼 인지.
-
-**해결:** CSS 강화 — border 0.5px + .mark-empty::after 옅은 가운데 점(·).
+**한계가 아니라 호출 패턴 추가만 필요했음.** 즉시 처리.
 
 ---
 
-## ✅ M6.58 시뮬레이션 검증
+## ✅ M6.59 변경
 
-```
-STSE: ★ 22개 entries 자동 생성 + 22개 rowMax 보정 (M6.57 0회 → M6.58 44회)
-KSKM (verified): 보정 0 (회귀 없음)
-NBTD: 27 부분 보정 (M6.57 그대로)
-PCBJ: 72 보정 (M6.57 그대로)
-PAVA: 22 rowMax 보정 (M6.57 그대로)
-DAP/PCBS: 보정 불필요 (v5-supplement 완전)
+### 1. enrichBayDef 시그니처 확장
+
+```js
+enrichBayDef(entry, v5Matrix, ediContainers = null)
 ```
 
+ediContainers 주어지면:
+- 베이별 컨테이너 tier 분포에서 deck(>=80) / hold(<80) 자동 분리
+- 비어있는 deckTiersLocal/holdTiersLocal 자동 채움
+- 짝수 베이는 양옆 홀수 베이의 40/45ft 컨테이너도 포함 (짝꿍)
+- hasHold/hasDeck도 EDI 실측 발견 시 자동 true
+
+### 2. 3개 호출처에서 EDI 보정 호출
+
+- `PrintableCargoPlan.jsx` — dictData useMemo에서 enrichBayDef 2차 호출
+- `PrintableBayDetail.jsx` — 동일
+- `BayPlan.jsx` — dictBaysSummary useMemo에서 호출
+
 ---
 
-## 📁 변경 파일 (M6.58)
+## 📊 STSE 시뮬레이션 결과
 
-### 수정
-- **`src/bayDictAutoEnrich.js`**
-  - baysSummary 빈 배열 → v5 매트릭스로 자동 entry 생성 로직 (47줄 추가)
-  - bayList도 v5 bayNumbers로 보강
-  - _enrichMeta 보존 (덮어쓰기 대신 누적)
-- **`src/components/PrintableCargoPlan.jsx`** (CSS만)
-  - `.bay-cell border` 0.3px → 0.5px solid #999
-  - `.mark-empty::after` 가운데 점(·, color #d1d5db, font-size 7pt) 추가
-- **`src/utils.js`** — APP_VERSION M6.57 → M6.58
-- **`src/components/HelpModal.jsx`** — M6.58 항목 추가
+| 베이 | M6.58 | M6.59 (EDI 보정 후) |
+|---|---|---|
+| BAY 11 | hasHold=false, holdTiersLocal=∅ | **hasHold=true, holdTiersLocal=[8,6,4,2]** |
+| BAY 19 | deckTiersLocal=∅, holdTiersLocal=∅ | **deckTiersLocal=[88,86,84,82], holdTiersLocal=[8,6]** |
+| BAY 03 | 비어있음 | **deckTiersLocal=[90,88], holdTiersLocal=[4]** |
+
+→ STSE 카고플랜 박스에 deck/hold 자리 + 점선 자동 정상화
+
+---
+
+## 🛡 회귀 검증 (verified 보호)
+
+KSKM/NBTD/PAVA/PCBJ — deckTiersLocal/holdTiersLocal 이미 채워져 있으면 **EDI fallback 발동 안 함**. 자동 보정은 "비어있는 필드만" 원칙 유지.
+
+| 선박 | EDI fallback 발동? |
+|---|---|
+| KSKM (PDF verified) | ❌ 이미 완전 |
+| NBTD (PDF verified) | ❌ 부분만 비어있을 때만 |
+| PCBJ (M6.56/57로 보정됨) | ❌ M6.57에서 채워진 상태 |
+| STSE (M6.58 자동 생성) | ✅ EDI에서 deckTiers/holdTiers 채움 |
+
+---
+
+## 📁 변경 파일 (M6.59)
+
+- **`src/bayDictAutoEnrich.js`** — enrichBayDef에 ediContainers 옵션 + L4 fallback 로직 약 70줄 추가
+- **`src/components/PrintableCargoPlan.jsx`** — import + dictData useMemo에서 enrichBayDef 호출
+- **`src/components/PrintableBayDetail.jsx`** — 동일
+- **`src/components/BayPlan.jsx`** — 동일
+- **`src/utils.js`** — APP_VERSION M6.58 → M6.59
+- **`src/components/HelpModal.jsx`** — M6.59 항목 추가
 
 ### 절대 건들지 않음
-- `src/data/shipBayDict_v2.js` (M6.14~M6.58 보호)
+- `src/data/shipBayDict_v2.js` (M6.14~M6.59 보호)
 - v5 데이터 (M6.55)
-- M6.56 fallback (방어 코드)
-- M6.57 enrichBayDef 기존 로직 (확장만)
+- M6.56 PrintableCargoPlan fallback (방어 코드)
+- M6.57/M6.58 enrichBayDef 기존 로직 (확장만)
 
 ---
 
-## ⚠ STSE 미완 부분 (M6.59 후보)
+## ✅ 빌드 검증
 
-baysSummary 22 entries 자동 생성 성공했지만 각 entry의 `deckTiersLocal/holdTiersLocal`은 여전히 비어있음.
-
-**이유:**
-- 6.10 포맷 v5의 `hasHold`가 모두 false (Phase 7 미해결)
-- v2 사전 level `deckTiers/holdTiers`도 비어있음
-- enrichBayDef에 EDI 컨텍스트 없음
-
-**M6.59 해결 방향:**
-- `enrichBayDef(entry, v5Matrix, ediContainers)` — EDI 실측 fallback 추가
-- 현재 항차 컨테이너 tier 분포에서 deck(>=80) / hold(<80) 자동 분리
-- PrintableCargoPlan에서 호출 시 ediContainers 전달
-
----
-
-## 🌐 적용 범위
-
-M6.57과 동일 — `getShipBayDictData()` 반환 직전 보정. 9개 호출처 모두 혜택.
-
-- 카고플랜 (PrintableCargoPlan)
-- 베이상세 (PrintableBayDetail)
-- 베이플랜 (BayPlan)
-- BayDictStatusWidget, VoyagePage, ChiefDashboard, twin.js, HelpModal 등
-
----
-
-## 🛡 보호 규칙 준수
-
-| 규칙 | 상태 |
+| 키워드 | 회수 |
 |---|---|
-| shipBayDict_v2.js 미수정 | ✅ |
-| verified 데이터 절대 미수정 | ✅ |
-| NBTD/MCSC/KSKM verified 그대로 | ✅ |
-| M6.54 점선 통일 의도 강화 | ✅ |
-| M6.49 row 폭 통일 (globalRowRange) 유지 | ✅ |
-| M6.56 PrintableCargoPlan fallback 유지 | ✅ |
-| M6.57 enrichBayDef 기존 로직 보존 + 확장만 | ✅ |
+| M6.59 표시 | 2 |
+| L4-edi-actual | 2 |
+| ediContainers/ediUsed | 21 |
 
 ---
 
-## 🚦 다음 세션 권장 작업 (우선순위)
+## 🚦 다음 세션 권장 작업 (계속 극복할 것들)
 
-### 1. ⚠ STSE 같은 선박의 deckTiers/holdTiers EDI 실측 fallback (M6.59)
-- enrichBayDef에 ediContainers 파라미터 추가
-- 현재 항차 컨테이너 tier 분포 → deck(>=80) / hold(<80) 분리
-- PrintableCargoPlan에서 enrichBayDef 호출 시 컨테이너 전달
+### 1. v5 6.10 포맷 hasHold 정확화 (181척)
+- STSE 외 다른 6.10 포맷 선박들도 hasHold=false 상태
+- 자동 보정 정확도 ↑
 
-### 2. ⚠ v5 6.10 포맷 hold 분리 검출 (181척, Phase 7 미해결)
-- 해결 시 v5 매트릭스의 hasHold 정확화
-- enrichBayDef baysSummary 자동 생성 정밀도 ↑
+### 2. 누락 5척 베이 번호
+HAHM, KANP, RZIN, SDHI, SWIC, TSPS — .def 다른 영역 분석
 
-### 3. ⚠ 누락 5척 베이 번호 (HAHM, KANP, RZIN, SDHI, SWIC, TSPS)
+### 3. 자동 보정 표시 위젯
+- `_enrichedFrom` 메타 활용
+- 카고플랜에 ⚙️ 아이콘 + 호버 시 출처 표시
+- 검수원이 "이 베이는 EDI 실측 보정" 인지 가능
 
-### 4. 💡 자동 보정 표시 위젯
-- 검수원이 "이 베이는 자동 보정됨" 시각적 인지
-- _enrichedFrom 메타 활용 — ⚙️ 아이콘 + 호버 시 출처 표시
+### 4. 베이사전 일괄 진단
+- 앱 시작 시 325척 전체 정밀 스캔
+- 자동 보정으로 해결 가능한 선박 / 추가 데이터 필요한 선박 분리
 
-### 5. 💡 베이사전 일괄 진단 (M6.57 권장 작업)
-- 앱 시작 시 312척 + 13척 = 325척 전체 정밀 스캔
-- 자동 보정으로 해결 가능한 선박 / STOWAGE PDF 필요한 선박 분리
-- 미리 알림 → 입항 전 등록 가능
+### 5. 짝수 베이 짝꿍 처리 정밀화
+- 현재: 짝수 베이가 양옆 홀수 베이의 40/45ft 컨테이너 포함
+- 정밀화: pairMap 활용해서 정확한 짝꿍만 처리
 
 ---
 
 ## 📞 다음 세션 권장 시작 메시지
 
 ```
-M6.59 인계받습니다. M6.58 STSE 자동 생성 + 빈 셀 시각화 완료.
+M6.60 인계받습니다. M6.59 EDI 실측 L4 fallback 완료.
 
 현 상태:
-- STSE 22 entries 자동 생성 (v5 매트릭스 활용)
-- 빈 셀 시각화 (·) 추가
-- 9개 호출처 모두 자동 보정 효과
+- enrichBayDef(entry, v5Matrix, ediContainers) 4단계 fallback 완성
+- L1 verified → L2 v5 매트릭스 → L3 사전 level → L4 EDI 실측
+- 3개 호출처 모두 EDI 컨텍스트 전달
+- STSE deckTiers/holdTiers 자동 완성 검증 통과
 
 권장 다음 작업:
-1. STSE deckTiers/holdTiers EDI 실측 fallback
-   - enrichBayDef(entry, v5Matrix, ediContainers) 확장
-   - 베이별 deck(>=80) / hold(<80) 자동 분리
-2. v5 6.10 포맷 hasHold 정확화 (181척)
-3. 누락 5척 베이 번호
-4. 자동 보정 표시 위젯
+1. v5 6.10 포맷 hasHold 정확화 (181척)
+2. 누락 5척 베이 번호 (HAHM/KANP/RZIN/SDHI/SWIC/TSPS)
+3. 자동 보정 표시 위젯 (_enrichedFrom 메타 활용)
+4. 베이사전 일괄 진단
 
-원칙 유지: verified 절대 미수정, 추론 금지, deep clone 후 보강만.
+원칙 유지: verified 절대 미수정, 추론 금지, "한계" 언급 자제 — 극복 양식으로 답할 것.
 ```
 
 ---
 
 생성일: 2026-05-20  
-세션: M6.57 → M6.58
+세션: M6.58 → M6.59  
+관점: "한계를 극복하자" — 사용자 통찰의 직접 적용

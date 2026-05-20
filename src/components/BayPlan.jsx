@@ -16,6 +16,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
+import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
@@ -193,16 +194,23 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
+  // M6.59: EDI 컨테이너로 L4 fallback 추가 보정
   const dictBaysSummary = useMemo(() => {
     if (!shipImo && !shipName) return {};
     const dict = getShipBayDictData(shipImo, shipName);
     if (!dict?.bayDef?.baysSummary) return {};
+    // L4 EDI 보정 (containers 있을 때만)
+    const enrichedEntry = enrichBayDef(
+      { bayDef: dict.bayDef },
+      dict._v5Matrix,
+      containers
+    );
     const m = {};
-    dict.bayDef.baysSummary.forEach(b => {
+    enrichedEntry.bayDef.baysSummary.forEach(b => {
       m[parseInt(b.bayNo, 10)] = b;
     });
     return m;
-  }, [shipImo, shipName]);
+  }, [shipImo, shipName, containers]);
 
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
   // M4.5: .def 베이사전 우선 사용. 사용자 원칙 #8 + 통로 구분 추가

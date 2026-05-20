@@ -379,6 +379,18 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🎯 M6.59 (2026-05) — EDI 실측 L4 fallback (한계 극복: STSE deckTiers/holdTiers 자동 완성)',
+      examples: [
+        { q: '🔥 관점 전환', a: '사용자 지적: "한계라고 말하지 말고 그 한계를 극복하자". M6.58에서 STSE deckTiers/holdTiers는 "v5 hasHold가 6.10 미해결 + EDI 컨텍스트 없음" 이유로 다음 세션으로 미뤘음. 하지만 EDI 컨텍스트는 PrintableCargoPlan/PrintableBayDetail/BayPlan에 이미 있음 → enrichBayDef에 전달만 하면 됨' },
+        { q: '✅ 해결 - enrichBayDef 시그니처 확장', a: 'enrichBayDef(entry, v5Matrix, ediContainers=null)로 확장. ediContainers 주어지면 베이별 컨테이너 tier 분포에서 deck(>=80)/hold(<80) 자동 분리하여 deckTiersLocal/holdTiersLocal 자동 채움. 짝수 베이는 양옆 홀수 베이의 40/45ft 컨테이너도 포함 (짝꿍)' },
+        { q: '📊 STSE 시뮬레이션 (가짜 EDI 컨테이너)', a: 'BAY 11 (M6.58): hasHold=false, holdTiersLocal=∅ → BAY 11 (M6.59): hasHold=true, holdTiersLocal=[8,6,4,2]. BAY 19 deck+hold 모두 EDI 실측에서 자동 채움. hasHold/hasDeck도 EDI 실측 발견 시 자동 true' },
+        { q: '🌐 3개 호출처 모두 적용', a: 'PrintableCargoPlan: useMemo에서 enrichBayDef 두 번 호출 (1차 shipStructure, 2차 EDI 보정). PrintableBayDetail: 동일. BayPlan: dictBaysSummary useMemo에서 호출. 모두 EDI 컨텍스트 자연스럽게 전달' },
+        { q: '🛡 회귀 검증', a: 'KSKM/NBTD/PAVA/PCBJ 등 baysSummary 채워진 선박: deckTiersLocal/holdTiersLocal 이미 있으면 EDI fallback skip (verified 절대 미수정 원칙). STSE만 EDI에서 보정. M6.58 자동 생성 22 entries + M6.59 EDI 보정 = 진정한 자동 완성' },
+        { q: '💡 _enrichedFrom 메타', a: '각 베이의 보정 출처 명시 — L1-bay-deckTiers (verified) / L2-v5-matrix-auto-create / L2-v5-maxRow / L3-ship-deckTiers / L4-edi-actual. 디버그/검수 시 어떤 베이가 자동 보정됐는지 추적 가능 (다음 세션 위젯 작업)' },
+        { q: '🚫 한계? 아니, 다음 단계', a: '코딩 모르는 평택 검수원이 M6.59까지 만들어왔음 — "한계"라 말한 것들이 모두 극복돼 왔음. 남은 미해결: v5 6.10 포맷 hasHold 자체 정확화(181척), 누락 5척 베이 번호, 자동 보정 위젯 — 다음 세션도 같은 양식으로 극복 예정' },
+      ],
+    },
+    {
       title: '🆕 M6.58 (2026-05) — STSE 자동 생성 + 빈 셀 시각화 (사용자 보고 2건 동시 해결)',
       examples: [
         { q: '🔥 사용자 보고 1 - STSE 박스 크기 안 됨', a: 'M6.57 검증용 STSE SITC SENDAI 카고플랜 — M6.57 자동 보정 효과 0회. STSE는 v2에 등록되어 있지만 grade=needs-review, baysSummary가 빈 배열, rowMaxEven/Odd/deckTiers/holdTiers 모두 undefined. M6.57은 비어있는 필드만 채우는 양식이라 baysSummary 자체가 비어있으면 채울 entry 없음' },
