@@ -137,7 +137,22 @@ function matchColumns(singles, pairs) {
 //   isXray: 평택 양하 X-RAY 대상 (true 시 셀에 별표 마커 추가)
 function getMark(c, mode, xrayMap) {
   const ptk = isPtk(c, mode);
-  const baseLetter = ptk ? (mode === 'discharge' ? 'o' : 'L') : 'X';
+  // M6.65: 적재 mode에서 'L' 대신 POD 3자 약어 표시 (DLC, LYG, INC 등)
+  //   LYG/DLC 같이 L로 시작하는 약어가 헷갈리는 것 방지
+  //   KR/CN/VN 같은 2자 국가 코드 제거 후 3자 표기
+  let baseLetter;
+  if (ptk) {
+    baseLetter = mode === 'discharge' ? 'o' : 'L';
+  } else {
+    // 통과 또는 적재 시 다른 항구 양하
+    if (mode === 'loading' && c.pod) {
+      const pod = String(c.pod).toUpperCase();
+      // KRPTK → PTK, CNDLC → DLC, CNLYG → LYG (5자 코드의 마지막 3자)
+      baseLetter = pod.length >= 5 ? pod.slice(2) : (pod.length === 3 ? pod : 'X');
+    } else {
+      baseLetter = 'X';
+    }
+  }
 
   // 특수화물 분류 (BayPlan과 동일 우선순위: DG > 리퍼 > FR > TK > OT)
   const isReefer = isReeferContainer(c);
@@ -354,7 +369,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   return <span key={r} className={cls}>{m.letter}</span>;
                 })}
               </div>
@@ -369,7 +384,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   return <span key={r} className={cls}>{m.letter}</span>;
                 })}
               </div>
@@ -384,7 +399,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   return <span key={r} className={cls}>{m.letter}</span>;
                 })}
               </div>
@@ -743,6 +758,39 @@ export default function PrintableCargoPlan({
                     <span>A AWK</span>
                     <span>G OOG</span>
                   </div>
+                  {/* M6.65: 적재 mode에서 등장하는 POD 3자 약어 목록 */}
+                  {mode === 'loading' && (() => {
+                    const podMap = {
+                      'KRPTK': '평택', 'KRPYT': '평택신항', 'KRINC': '인천',
+                      'KRPUS': '부산', 'KRKAN': '광양', 'KRMSN': '마산',
+                      'CNDLC': '다롄', 'CNLYG': '연운항', 'CNXMN': '샤먼',
+                      'CNSHK': '산터우', 'CNSHA': '상하이', 'CNTAO': '칭다오',
+                      'CNTSN': '톈진', 'CNNGB': '닝보', 'CNXGG': '신강',
+                      'JPTYO': '도쿄', 'JPOSA': '오사카', 'JPNGO': '나고야',
+                      'JPYOK': '요코하마', 'JPKBE': '고베', 'JPHKT': '하카타',
+                      'VNHPH': '하이퐁', 'VNSGN': '호치민', 'VNDAD': '다낭',
+                      'HKHKG': '홍콩', 'TWKEL': '지룽', 'TWKHH': '카오슝',
+                      'THLCH': '램차방', 'THBKK': '방콕', 'SGSIN': '싱가포르',
+                      'PHMNL': '마닐라', 'MYPKG': '포트클랑',
+                    };
+                    const pods = new Set();
+                    Object.values(bayMap).forEach(arr => arr.forEach(c => {
+                      const p = (c.pod || '').toUpperCase();
+                      if (p && p.length >= 5 && !isPtk(c, mode)) pods.add(p);
+                    }));
+                    const podList = Array.from(pods).sort();
+                    if (podList.length === 0) return null;
+                    return (
+                      <div className="stats-pods">
+                        <span style={{fontWeight: 600, marginRight: '4px'}}>목적지:</span>
+                        {podList.map(p => {
+                          const short = p.length >= 5 ? p.slice(2) : p;
+                          const kr = podMap[p] || p;
+                          return <span key={p}>{short}={kr}</span>;
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
               const out = [];
@@ -904,6 +952,8 @@ export default function PrintableCargoPlan({
           min-width: 0; min-height: 0;
           display: flex; align-items: center; justify-content: center;
         }
+        /* M6.65: 3자 POD 약어 (DLC, LYG, PTK 등) 셀에 들어가도록 폰트 축소 */
+        .bay-cell.mark-multi { font-size: 3.8pt; font-weight: 600; letter-spacing: -0.3px; }
         .mark-X { color: #000; }
         /* M6.1: 짝수 베이 40피트의 짝꿍 자리 X (단독 박스에서, 다른 컨테이너 적재 불가) */
         .mark-shadow { color: #999; font-style: italic; background: #f0f0f0; }
@@ -1047,6 +1097,18 @@ export default function PrintableCargoPlan({
           display: flex;
           flex-wrap: wrap;
           gap: 4px;
+        }
+        /* M6.65: 목적지 약어 풀네임 표 (적재 mode) */
+        .bay-stats-inline .stats-pods {
+          margin-top: 2px;
+          padding-top: 2px;
+          font-size: 5.5pt;
+          line-height: 1.3;
+          color: #444;
+          border-top: 0.5px dotted #ccc;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
         }
         /* M5.31: cargo-footer를 페이지 좌하단 absolute로 (별첨 페이지 추가 방지) */
         .cargo-footer {
