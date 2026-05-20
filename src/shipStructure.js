@@ -41,6 +41,34 @@ function normalizeShipKey(s) {
 // M5.11: v2에 대해 lookupBayDictV2Enhanced 사용 — IMO/callsign/code/이름 4가지 매칭
 //   기존 fuzzy 매칭이 prefix 4글자 + garbage 콜사인 때문에 자주 실패하던 문제 해결
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
+  // M6.62: v2 verified 최신본이 Firebase 옛 정정본보다 우선
+  //   같은 선박이 Firebase + v2 양쪽에 있을 때
+  //   - v2의 parsedAt이 Firebase보다 최신 + verified=true → v2 사용
+  //   - 안 그러면 기존 우선순위 (Firebase > user > v2)
+  //   이유: PCBJ 같은 케이스 — Firebase에 옛 부정확 entry, v2에 STOWAGE PDF 재정정.
+  //   클로드가 v2 정정해도 Firebase가 가려서 사용자가 새 버전 못 봄.
+  try {
+    const v2Enhanced = lookupBayDictV2Enhanced(imo, vesselNameOrCode);
+    if (v2Enhanced && !v2Enhanced.matchedBy.startsWith('name-fuzzy')) {
+      const def = v2Enhanced.entry?.bayDef;
+      if (def?.verified === true && def?.parsedAt) {
+        const fbDict = window.__fbShipBayDict || {};
+        // 같은 선박 Firebase entry 찾기
+        const fbEntry = Object.values(fbDict).find(e => 
+          e && ((imo && e.imo === imo) || (v2Enhanced.entry.code && e.code === v2Enhanced.entry.code))
+        );
+        const fbParsedAt = fbEntry?.bayDef?.parsedAt;
+        if (!fbParsedAt || def.parsedAt > fbParsedAt) {
+          return { 
+            source: 'v2-verified-newer', 
+            data: v2Enhanced.entry, 
+            matchedBy: 'v2-verified-override-firebase-' + v2Enhanced.matchedBy
+          };
+        }
+      }
+    }
+  } catch (e) { /* fallthrough */ }
+
   // M5.88: 0. Firebase 베이사전 (최우선 — 모든 검수원 공유)
   try {
     const fbDict = window.__fbShipBayDict || {};
@@ -270,11 +298,18 @@ export function getShipBayDictData(imo, code) {
   //         v2 임베드엔 수동 정밀 등록 데이터 있음.
   //         v3 우선이라 v2의 정확한 정보가 가려짐.
   //   해결: v3/user 데이터 사용 시 v2와 union — baysSummary의 deck/holdTiers 합쳐서 더 완전한 데이터
+  //   M6.62: v3 baysSummary가 빈/없으면 v2를 강제 우선 (PCBJ 케이스 — Firebase에 빈 entry 있을 때)
   let finalBayDef = { ...bayDef, bayList: bayList || [] };
   if (result.source === 'firebase' || result.source === 'user') {
     try {
       const v2Backup = lookupBayDictV2Enhanced(imo, code);
-      if (v2Backup?.entry?.bayDef?.baysSummary) {
+      const v2HasData = v2Backup?.entry?.bayDef?.baysSummary && v2Backup.entry.bayDef.baysSummary.length > 0;
+      const v3HasData = finalBayDef.baysSummary && finalBayDef.baysSummary.length > 0;
+      if (v2HasData && !v3HasData) {
+        // M6.62: Firebase/User entry가 baysSummary 빈 — v2 정밀 데이터로 완전 교체
+        finalBayDef = { ...v2Backup.entry.bayDef, bayList: v2Backup.entry.bayDef.bayList || bayList || [] };
+      } else if (v2HasData && v3HasData) {
+        // 둘 다 있으면 union (기존 M6.25 동작)
         finalBayDef = mergeBayDef(finalBayDef, v2Backup.entry.bayDef);
       }
     } catch (e) { /* fallback: 기존 데이터 그대로 */ }

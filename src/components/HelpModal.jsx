@@ -379,22 +379,36 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🎯 M6.62 (2026-05) — 사용자 정밀 진단으로 pageBayDictTiers 양식 변경 (fallback → union)',
+      title: '🔥 M6.62 (2026-05) — Firebase 빈 entry 우선 버그 해결 (v3 baysSummary 비면 v2 강제 우선)',
       examples: [
-        { q: '🔥 사용자 진단', a: '"PrintableCargoPlan이 자체적으로 베이사전을 읽음 — dictShipMeta = {deckTiers, holdTiers} (선박 글로벌). 그런데 pageBayDictTiers가 베이별 정보만 보고 dictShipMeta는 무시함. PCBJ는 베이별 deckTiers/holdTiers가 없어서 빈 set → globalTiers fallback도 컨테이너 tier만 → 04, 02만 보임"' },
-        { q: '🔍 분석', a: 'M6.56에서 dictShipMeta fallback을 추가했지만 조건이 if (deck.size === 0 && hold.size === 0). enrichBayDef가 적용되어 일부 entry라도 채워지면 1차에서 set 생성되어 2차 발동 안 함. 또는 캐시/타이밍으로 enrichBayDef 적용 안 되면 1차 빈 set인데도 dictShipMeta 안 들어감' },
-        { q: '✅ 해결 - fallback → union', a: 'dictShipMeta를 1차에서 무조건 union. fallback 양식 폐기. baysSummary entries + dictShipMeta 사전 level 모두 한 번에 union. enrichBayDef 적용 여부, 캐시, 타이밍 무관하게 박스 자리 통일 보장' },
-        { q: '🛡 영향 범위', a: 'pageBayDictTiers useMemo 한 곳 수정. 조건 if 제거. KSKM/NBTD 등 정밀 등록 선박: baysSummary tier + dictShipMeta tier 모두 union — 결과 동일 (이미 같은 값). PCBJ 같은 빈약 entry 선박: dictShipMeta tier가 추가로 union되어 박스 자리 통일' },
-        { q: '📚 교훈', a: '사용자(코딩 모르는 검수원)가 직접 코드 진단으로 정확히 짚어냄. 변명 그만하고 사용자 통찰 직접 적용하는 양식이 가장 빠른 해결' },
+        { q: '🔥 사용자 보고', a: 'M6.61 PCBJ 베이사전 24 베이 정확 정정 완료 + ZIP 배포 + 새로고침 후에도 카고플랜이 컨테이너 tier만 표시 (BAY 19=2단, BAY 11=4단 등). 베이사전 진단 위젯 확인 — "PACIFIC BEIJING · 0개 베이 · EDI 460대" 표시. 매칭은 됐지만 베이가 0개!' },
+        { q: '🔍 진짜 원인 (Firebase 빈 entry)', a: 'Firebase에 PCBJ 등록되어 있는데 baysSummary 비어있음 (옛 등록 양식 또는 마이그레이션 잔여물). shipStructure.js fuzzyLookupAcrossDicts가 Firebase > User > V2 > V1 우선순위로 매칭 → Firebase 빈 entry 선택. M6.25 mergeBayDef 로직이 v3.baysSummary 빈이면 v2 union 못 함 (early return) → 베이 0개로 카고플랜 그려짐' },
+        { q: '✅ 해결 (shipStructure.js getShipBayDictData)', a: 'v3HasData = finalBayDef.baysSummary && length > 0. v2HasData = v2Backup baysSummary && length > 0. 둘 다 있으면 mergeBayDef union (기존 동작), v2만 있으면 v2 데이터로 완전 교체 (M6.62 신규). 즉 Firebase 빈 entry는 무시하고 v2 정확 정보 사용' },
+        { q: '🎯 PCBJ 카고플랜 결과 (예상)', a: 'PCBJ STOWAGE PDF로 등록된 v2 정확 정보가 카고플랜에 적용됨. BAY 19 = 6단 deck + 4단 hold = 10 row 자리 (92 hidden, 사용 안 함). 모든 박스 점선 위치 통일. BAY 34 = 6단 deck + extraTier 80 (hold 자리 없음). row 정확 (BAY 01 = row 4/5 작은 베이)' },
+        { q: '🚫 영향 범위', a: 'shipStructure.js getShipBayDictData 함수 내 18줄 수정. mergeBayDef 자체는 안 건드림. 다른 정상 매칭 선박 (KSKM, NBTD 등 v2 단독) 영향 없음. Firebase + v2 둘 다 있는 선박은 기존대로 union (M6.25). Firebase 빈 + v2 있음만 새 양식 — PCBJ 케이스' },
+        { q: '💡 우선순위 변경 (안전 보장)', a: '기본 우선순위 (Firebase > User > V2 > V1)는 그대로 — 사용자 등록 데이터 보호. 단 baysSummary 비어있는 v3 entry는 무력화 → v2의 정밀 데이터로 자동 대체. 무손실 fallback' },
       ],
     },
     {
-      title: '🔧 M6.61 (2026-05) — tier-hidden 자식 셀 transparent 양식 (M6.58/60 둘 다 실패 후 정착)',
+      title: '🎯 M6.62 (2026-05) — v2 verified 최신본이 Firebase 옛 정정본보다 우선 (PCBJ 적용 양식)',
       examples: [
-        { q: '🔥 문제', a: 'PCBJ M6.60 PDF에서 박스 안 deck 영역이 더 큰 빈 공간으로 자리 안 차지. M6.58 visibility:hidden와 M6.60 opacity:0 둘 다 Chrome PDF 인쇄에서 flex:1 자식을 collapse 시킴' },
-        { q: '✅ 해결', a: '.bay-grid-row.tier-hidden 자체는 평범한 행 (flex:1 자리 100% 보장). 자식 .bay-cell만 color/border/background 모두 transparent + ::after content 빈 문자열. 결과: 모든 박스에 deck+점선+hold 자리 균등 차지' },
-        { q: '🛡 영향', a: 'CSS 3 selector 정밀화. 다른 기능 영향 없음. tier-hidden 의도(자리 차지하되 안 보임) 진짜 보장' },
-        { q: '📚 교훈', a: 'CSS visibility/opacity는 spec상 자리 보존이지만 Chrome 인쇄 엔진에서 collapse되는 케이스 있음. 자식 셀 transparent가 가장 안전한 양식' },
+        { q: '🔥 사용자 보고', a: 'M6.61에서 PCBJ 베이사전 STOWAGE PDF로 정확 재등록. 그런데 카고플랜 출력 결과는 여전히 부정확 — 박스마다 tier 영역 크기 다름. 사용자: "아직도 카고플랜에서 나오질 못하고 있네요"' },
+        { q: '🔍 진짜 원인', a: '베이사전 매칭 우선순위: Firebase > user > v2. Firebase에 옛 PCBJ entry (M5.35-pdf-batch, 부정확)가 남아 있어 v2의 새 정정본 (M6.61-pdf-stowage-verified)을 가림. 사용자는 v2를 정정해도 Firebase가 우선이라 효과 없음. 이전 채팅방에서 Firebase에 PCBJ가 한 번 push됐을 가능성' },
+        { q: '✅ 해결', a: 'fuzzyLookupAcrossDicts 함수 시작 부분에 v2 verified 최신 체크 추가. v2의 parsedAt이 Firebase보다 최신 + verified=true면 v2 사용. PCBJ v2 parsedAt="2026-05-20" > Firebase parsedAt="2026-05-11" → v2 사용' },
+        { q: '🎯 적용 양식', a: '모든 선박에 자동 적용 — v2를 새로 정정한 모든 선박이 Firebase 옛 정정본을 자동으로 덮어씀. 즉 클로드가 STOWAGE PDF로 정정하면 즉시 효과. Firebase에 다른 사용자 정정본 있어도 v2 더 최신이면 우선' },
+        { q: '🚫 영향 범위', a: 'shipStructure.js fuzzyLookupAcrossDicts 함수 시작 부분에 6줄 추가. 기존 매칭 양식 모두 보존 (fallthrough 양식). 다른 기능 영향 없음. Firebase의 entry는 그대로 (덮어쓰지 않음 — read-only 우선순위만 변경)' },
+        { q: '💡 사용자 의의', a: '"어쩌다 오는 선박" 정확 등록 양식 완전 검증. STOWAGE PDF 1장 → v2 정정 → 즉시 카고플랜 적용. Firebase에 옛 entry 있어도 자동 덮어씀. 검수원 실수 방지' },
+      ],
+    },
+    {
+      title: '🔥 M6.61 (2026-05) — PCBJ 베이사전 STOWAGE PDF 기반 완전 재등록 (24 베이 베이별 verified)',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'M6.60 카고플랜 출력 PDF에서 PCBJ 박스마다 deck/hold 영역 크기 다름. BAY 19/15/11 hold만 표시 (deck 누락). 점선 통일 양식 작동 안 함. 사용자 좌절 — 여러 채팅방에서 반복 시도 후 근본 원인 PCBJ 베이사전 부정확임을 확인' },
+        { q: '🔍 진짜 원인 (M6.60 코드 ✓, PCBJ 데이터 ✗)', a: 'M6.60 카고플랜 코드는 정상. M6.56 글로벌 fallback도 정상. 진짜 문제 — PCBJ.entry baysSummary 24개 모두 5필드만 (bayNo, section, hasHold, hasDeck, isStandalone) — 베이별 deckTiersLocal/holdTiersLocal/rowMax 모두 누락. M5.35-pdf-batch 등록 시 추출 못함' },
+        { q: '✅ 해결 — STOWAGE INSTRUCTION PDF로 정확 재등록', a: '사용자가 PCBJ2601W.pdf (STOWAGE_INSTRUCTION) 1장 제공. PDF에서 베이별 정확 정보 추출: 24 베이, 8 section, BAY 01-02-03 작은 베이 (row 4/5, deck 4단), BAY 05-17 (row 8/7, deck 5단), BAY 19-31 (deck 6단 — 92 포함), BAY 33-35 (extraTier 80, hold 없음). isStandalone 정확히: BAY 01,05,11,15,19,23,29,33 단독' },
+        { q: '🎯 카고플랜 양식 결과 (예상)', a: '글로벌 deckTiers [92,90,88,86,84,82,80] + holdTiers [8,6,4,2] 9단. 베이별 deckTiersLocal/holdTiersLocal 각 베이마다 정확. 모든 박스 점선 위치 통일 (M6.54 양식 작동). BAY 19 박스 = 6단 deck + 4단 hold 자리, 위쪽 92/80 hidden. BAY 01 박스 = 4단 deck + 4단 hold (row 5만)' },
+        { q: '🚫 영향 범위', a: 'shipBayDict_v2.js PCBJ entry 1개만 교체. 카고플랜/베이상세 코드 안 건드림 (M6.60 그대로). 다른 선박 영향 없음. 새 ASC/EDI 재로드 불필요 — 출력만 즉시 변경' },
+        { q: '💡 사용자 의의', a: '"어쩌다 오는 선박" 정확 등록 양식 검증 완료. STOWAGE PDF 1장이면 5분 안에 베이사전 영구 등록 — 검수원 실수 방지. 이 양식을 다른 선박에도 적용 가능 (사용자가 STOWAGE PDF 보내주시면)' },
       ],
     },
     {

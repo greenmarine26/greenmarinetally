@@ -238,22 +238,22 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   카고플랜 전체 베이의 deck/hold tier 합치기 → 모든 박스에 같은 자리
   //   박스별 사용 안 하는 tier는 hidden (자리 차지) → tier 82↔08 라인 모든 박스 정렬
   //
-  // M6.62: 사용자 정밀 진단 — "pageBayDictTiers가 베이별 정보만 보고 dictShipMeta는 무시함"
-  //   M6.56 fallback이 deck.size === 0 && hold.size === 0 일 때만 작동했지만,
-  //   enrichBayDef 적용 여부에 의존하는 양식이라 캐시/타이밍에 따라 안 발동될 수 있음.
-  //   해결: dictShipMeta를 fallback이 아니라 1차에서 무조건 union → enrichBayDef 적용 여부와 무관하게
-  //         박스 자리 통일 보장 (PCBJ 같이 사전 level deckTiers/holdTiers 있는 모든 선박)
+  // M6.56: PCBJ 같은 선박 — v2 baysSummary 각 베이 entry가 {} 빈 객체라
+  //        deckTiersLocal/holdTiersLocal/deckTiers/holdTiers를 entry에서 못 가져오는 케이스 fallback.
+  //        해결책 (v2 미수정):
+  //          1차) baysSummary 각 entry의 tier 필드 (M6.54 그대로)
+  //          2차) dictShipMeta.deckTiers/holdTiers (전체, bayDef 사전 level)
+  //          3차) _v5Matrix 매트릭스 (.def 자동 추출 베이별 정보)
   const pageBayDictTiers = useMemo(() => {
     const deck = new Set();
     const hold = new Set();
-    // 1) baysSummary 각 entry의 tier (M6.54)
     Object.values(dictBaysSummary).forEach(db => {
       if (!db) return;
       (db.deckTiersLocal || db.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
       (db.holdTiersLocal || db.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
     });
-    // 2) M6.62: dictShipMeta 사전 level 무조건 union (1차에서 같이, fallback 양식 폐기)
-    if (dictShipMeta) {
+    // M6.56 2차 fallback: 베이별 tier 비어있으면 사전 level 전체 deckTiers/holdTiers
+    if (deck.size === 0 && hold.size === 0 && dictShipMeta) {
       (dictShipMeta.deckTiers || []).forEach(t => deck.add(String(t).padStart(2, '0')));
       (dictShipMeta.holdTiers || []).forEach(t => hold.add(String(t).padStart(2, '0')));
     }
@@ -882,22 +882,13 @@ export default function PrintableCargoPlan({
         .bay-grid-row { 
           display: flex; flex: 1; min-height: 0;
         }
-        /* M6.61: tier-hidden 처리 변경 — 행 자체에 opacity/visibility 적용하면
-           Chrome PDF 인쇄에서 flex:1 자식이 collapse되는 양식 발견 (M6.58 visibility, M6.60 opacity 모두 동일 문제).
-           해결: 행 자체는 평범한 .bay-grid-row 그대로 두고 (flex:1 자리 100% 보장),
-                 자식 셀들만 모두 transparent 처리. ::after 점도 안 보이게.
-           결과: 모든 박스가 deck 자리 + 점선 + hold 자리 균등 차지 → 박스 크기/점선 통일 */
-        .bay-grid-row.tier-hidden > .bay-cell {
-          color: transparent !important;
-          border-color: transparent !important;
-          background: transparent !important;
-        }
-        .bay-grid-row.tier-hidden > .bay-cell::after {
-          content: '' !important;
-        }
-        .bay-tier-labels span.tier-hidden {
-          color: transparent;
-        }
+        /* M6.0: 사용 안 하는 tier 행 → 자리 차지하되 안 보임 (V5 양식)
+           M6.60: visibility:hidden → opacity:0
+           이유: Chrome PDF 인쇄에서 flex:1 + visibility:hidden 자식이 자리를 collapse하는 케이스 발견
+                 (PCBJ BAY 15 deck 부분이 박스에 자리 차지 못 함)
+                 opacity:0은 자리 100% 보장 + 자식 ::after까지 모두 투명 */
+        .bay-grid-row.tier-hidden { opacity: 0; pointer-events: none; }
+        .bay-tier-labels span.tier-hidden { opacity: 0; }
         .bay-cell {
           flex: 1;
           border: 0.5px solid #999;
