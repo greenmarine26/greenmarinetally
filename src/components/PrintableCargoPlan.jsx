@@ -302,12 +302,15 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const extraTierStr = extraTier ? String(extraTier).padStart(2, '0') : null;
   const deckTiers = extraTierStr ? deckTiersAll.filter(t => t !== extraTierStr) : deckTiersAll;
 
-  // M6.54 → M6.66: 박스별 사용 tier (베이별 + 컨테이너 + shadow40) — hidden 처리용
+  // M6.54 → M6.66 → M6.67: 박스별 사용 tier
+  //   M6.67: 페이지 전체 베이 union도 used 처리 — 양하 mode에 40피트 컨 없어도
+  //     짝수 베이가 hold 4단이면 홀수 단독 박스도 hold 4단 자리 표시 (구조적 일관성)
+  //     이전: 박스 자기 베이 + 컨테이너 + shadow40만 → 컨이 없으면 자리 hidden
+  //     변경: 페이지 union 베이의 tier도 used → 구조상 가능한 모든 자리 표시
   const bayDeckTiersUsed = useMemo(() => {
     const set = new Set();
-    [even, odd].forEach(bn => {
-      if (bn == null) return;
-      const db = dictBaysSummary[parseInt(bn, 10)];
+    // M6.67: 페이지 전체 union (모든 베이의 deckTiersLocal/Tiers)
+    Object.values(dictBaysSummary).forEach(db => {
       if (!db) return;
       (db.deckTiersLocal || db.deckTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
     });
@@ -321,13 +324,12 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       if (parseInt(t) >= 80) set.add(t);
     });
     return set;
-  }, [even, odd, dictBaysSummary, allConts, shadow40Conts]);
+  }, [dictBaysSummary, allConts, shadow40Conts]);
 
   const bayHoldTiersUsed = useMemo(() => {
     const set = new Set();
-    [even, odd].forEach(bn => {
-      if (bn == null) return;
-      const db = dictBaysSummary[parseInt(bn, 10)];
+    // M6.67: 페이지 전체 union
+    Object.values(dictBaysSummary).forEach(db => {
       if (!db) return;
       (db.holdTiersLocal || db.holdTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
     });
@@ -341,7 +343,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       if (parseInt(t) < 80) set.add(t);
     });
     return set;
-  }, [even, odd, dictBaysSummary, allConts, shadow40Conts]);
+  }, [dictBaysSummary, allConts, shadow40Conts]);
 
   // M5.98 → M6.63: extraTier는 deckTiers/holdTiers 계산 후 위쪽에서 처리됨
 
