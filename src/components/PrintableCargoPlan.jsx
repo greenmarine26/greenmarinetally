@@ -882,9 +882,13 @@ export default function PrintableCargoPlan({
         .bay-grid-row { 
           display: flex; flex: 1; min-height: 0;
         }
-        /* M6.0: 사용 안 하는 tier 행 → visibility:hidden (V5 양식, 자리 차지하되 안 보임) */
-        .bay-grid-row.tier-hidden { visibility: hidden; }
-        .bay-tier-labels span.tier-hidden { visibility: hidden; }
+        /* M6.0: 사용 안 하는 tier 행 → 자리 차지하되 안 보임 (V5 양식)
+           M6.60: visibility:hidden → opacity:0
+           이유: Chrome PDF 인쇄에서 flex:1 + visibility:hidden 자식이 자리를 collapse하는 케이스 발견
+                 (PCBJ BAY 15 deck 부분이 박스에 자리 차지 못 함)
+                 opacity:0은 자리 100% 보장 + 자식 ::after까지 모두 투명 */
+        .bay-grid-row.tier-hidden { opacity: 0; pointer-events: none; }
+        .bay-tier-labels span.tier-hidden { opacity: 0; }
         .bay-cell {
           flex: 1;
           border: 0.5px solid #999;
@@ -900,15 +904,16 @@ export default function PrintableCargoPlan({
         .mark-shadow { color: #999; font-style: italic; background: #f0f0f0; }
         .mark-o { color: #d97706; font-weight: 500; }
         .mark-L { color: #c026d3; font-weight: 500; background: #fce7f3 !important; }
-        /* M6.58: 빈 셀 시각화 - 사용자 요청 "빈 셀로 남겨놔야 함"
-           이전 .mark-empty { color: transparent }는 글자만 투명이라 0.3px border만 남아 화면에서 사실상 안 보임.
-           해결: 빈 셀에 옅은 가운데 점 표시 → row 폭 통일이 시각적으로 명확. X/o 가독성 영향 최소. */
-        .mark-empty { color: transparent; position: relative; }
+        /* M6.58→M6.60: 빈 셀 시각화 - 사용자 요청 "빈 셀로 남겨놔야 함"
+           이전 .mark-empty { color: transparent }는 0.3px border만 남아 화면에서 사실상 안 보임.
+           M6.58: ::after에 position:absolute로 점 추가 → PDF 인쇄 시 점들이 페이지 하단으로 흘러나오는 버그 발생
+           M6.60: position 제거. .bay-cell이 이미 flex+center 정렬이라 ::after가 셀 안에 자연스럽게 가운데 배치 */
+        .mark-empty { color: transparent; }
         .mark-empty::after {
           content: '·';
           color: #d1d5db;
-          font-size: 7pt;
-          position: absolute;
+          font-size: 8pt;
+          line-height: 1;
         }
         /* M5.16: 특수화물 추가 mark */
         .mark-E { color: #6b7280; font-weight: 500; }  /* 엠티 */

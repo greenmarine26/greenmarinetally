@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🔧 M6.60 (2026-05) — PCBJ BAY 15 deck 자리 차지 안 됨 + 빈 셀 점 위치 수정',
+      examples: [
+        { q: '🔥 사용자 보고 (이미지 직접 확인)', a: 'M6.58 PCBJ 카고플랜에서 BAY 15(hold만), BAY 23(hold만), BAY 01(deck만), BAY 34(deck만) 박스 크기 + 점선 위치 + 9 cells 균등 다 안 됨. PDF 텍스트 추출만 보던 한계가 드러남 — 이미지로 확인 후 사용자 지적이 모두 맞음을 확인' },
+        { q: '🔍 원인 (이론 vs 실제 불일치)', a: 'M6.57 자동 보정이 PCBJ에 72개 필드 채움 (시뮬레이션 확인). pageBayDictTiers.deck/hold 채워지고 hasDictTiers=true. M6.54 의도대로 모든 박스 deck/hold 자리 통일되어야 함. 그러나 PDF에선 BAY 15 deck 부분이 박스에 자리 자체를 차지 안 함' },
+        { q: '✅ 실제 원인 — visibility:hidden + flex:1 collapse', a: 'CSS .bay-grid-row.tier-hidden { visibility: hidden } 가 Chrome PDF 인쇄에서 flex:1 자식과 함께 쓰일 때 자리가 collapse되는 케이스. 스펙상 visibility:hidden은 자리 보존이지만 일부 인쇄 엔진에서 다르게 처리됨' },
+        { q: '✅ 해결 - opacity:0', a: 'visibility:hidden → opacity:0 변경. opacity는 자리 100% 보장 + pointer-events:none으로 클릭/호버 차단. 자식 ::after(빈 셀 점)까지 모두 투명 처리. 박스 크기/점선 위치 통일 의도 정상 작동' },
+        { q: '📚 교훈', a: 'PDF 텍스트 추출만 보고 진단하는 양식의 한계. 앞으로 PDF 받을 때마다 pdftoppm으로 이미지 변환해서 시각적 확인. 추측 진단 금지' },
+        { q: '🛡 영향 범위', a: 'CSS 2줄 수정. M6.57 enrichBayDef 동작 보존 (이미 정상). M6.58 빈 셀 점 표시 보존. 다른 기능 영향 없음' },
+      ],
+    },
+    {
       title: '🎯 M6.59 (2026-05) — EDI 실측 L4 fallback (한계 극복: STSE deckTiers/holdTiers 자동 완성)',
       examples: [
         { q: '🔥 관점 전환', a: '사용자 지적: "한계라고 말하지 말고 그 한계를 극복하자". M6.58에서 STSE deckTiers/holdTiers는 "v5 hasHold가 6.10 미해결 + EDI 컨텍스트 없음" 이유로 다음 세션으로 미뤘음. 하지만 EDI 컨텍스트는 PrintableCargoPlan/PrintableBayDetail/BayPlan에 이미 있음 → enrichBayDef에 전달만 하면 됨' },
