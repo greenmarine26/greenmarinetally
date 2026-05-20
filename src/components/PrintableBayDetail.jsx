@@ -26,7 +26,7 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
 const isPtk = (c, mode) => {
   const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
-  return t === 'PTK' || t === 'KRPTK' || t.endsWith('PTK');
+  return t === 'PTK' || t === 'KRPTK' || t === 'KRPYT' || t.endsWith('PTK');
 };
 
 function groupByBay(containers) {

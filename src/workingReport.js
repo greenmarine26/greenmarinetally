@@ -10,7 +10,7 @@ import { openPrintWindow } from './printHelper.js';
 import { formatBerth } from './utils.js';
 const PORT_MAP = {
   // 표준 5자
-  'KRPUS': 'PUS', 'KRKAN': 'KAN', 'KRPTK': 'PTK', 'KRINC': 'INC',
+  'KRPUS': 'PUS', 'KRKAN': 'KAN', 'KRPTK': 'PTK', 'KRPYT': 'PTK', 'KRINC': 'INC',
   'VNSGN': 'SGN', 'VNHPP': 'HPP',
   'THLCH': 'LCH', 'THBKK': 'BKK',
   'JPTYO': 'TYO', 'JPYOK': 'YOK',

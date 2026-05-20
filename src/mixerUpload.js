@@ -164,8 +164,8 @@ export function parsePdfContainers(text) {
   if (podMatch) result.pod = podMatch[1];
 
   // 모드 판정
-  if (result.pol === 'KRPTK') result.mode = 'loading';
-  else if (result.pod === 'KRPTK') result.mode = 'discharge';
+  if (result.pol === 'KRPTK' || result.pol === 'KRPYT') result.mode = 'loading';
+  else if (result.pod === 'KRPTK' || result.pod === 'KRPYT') result.mode = 'discharge';
 
   // 컨테이너 행 추출
   // 패턴: "1 BEAU4688310 D5 0 3,890 0 DJSCPTK260000659 KRPTK KRPTK KRINC KRINC ..."
@@ -368,8 +368,8 @@ export async function ocrImageContainers(file, geminiApiKey) {
     mode: null,
     containers: {},
   };
-  if (result.pol === 'KRPTK') result.mode = 'loading';
-  else if (result.pod === 'KRPTK') result.mode = 'discharge';
+  if (result.pol === 'KRPTK' || result.pol === 'KRPYT') result.mode = 'loading';
+  else if (result.pod === 'KRPTK' || result.pod === 'KRPYT') result.mode = 'discharge';
 
   (json.containers || []).forEach(c => {
     if (!c.cn || !/^[A-Z]{4}\d{7}$/i.test(c.cn)) return;

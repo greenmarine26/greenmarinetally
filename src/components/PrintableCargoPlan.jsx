@@ -18,7 +18,7 @@ const STD_HOLD = ['08', '06', '04', '02'];
 
 const isPtk = (c, mode) => {
   const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
-  return t === 'PTK' || t === 'KRPTK' || t.endsWith('PTK');
+  return t === 'PTK' || t === 'KRPTK' || t === 'KRPYT' || t.endsWith('PTK');
 };
 
 // M5.93: isoToPdfLabel은 40HC → "DCHC", 40RF → "RFHC"로 매핑되어 "40"이 포함 안 됨!

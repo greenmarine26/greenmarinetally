@@ -86,10 +86,10 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const isPtk = (c) => {
     if (mode === 'discharge') {
       const pod = (c.pod || '').toUpperCase();
-      return pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
+      return pod === 'PTK' || pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
     } else {
       const pol = (c.pol || '').toUpperCase();
-      return pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
+      return pol === 'PTK' || pol === 'KRPTK' || pod === 'KRPYT' || pol.endsWith('PTK');
     }
   };
 

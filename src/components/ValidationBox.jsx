@@ -6,8 +6,8 @@ export default function ValidationBox({ ediContainers, records, mode }) {
   const v = useMemo(() => {
     if (!ediContainers || ediContainers.length === 0) return null;
     const isPtk = (c) => {
-      if (mode === 'discharge') return (c.pod || '').toUpperCase().endsWith('PTK');
-      return (c.pol || '').toUpperCase().endsWith('PTK');
+      if (mode === 'discharge') return (c.pod || '').toUpperCase().match(/(PTK|PYT)$/);
+      return (c.pol || '').toUpperCase().match(/(PTK|PYT)$/);
     };
     const ptkInEdi = ediContainers.filter(isPtk);
     const recCns = new Set((records || []).map(r => r.cn));

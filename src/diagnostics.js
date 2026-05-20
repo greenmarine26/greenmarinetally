@@ -19,10 +19,10 @@ function filterPyeongtaek(containers, mode) {
   return Object.values(containers).filter(c => {
     if (mode === 'discharge') {
       const pod = (c.pod || '').toUpperCase();
-      return pod === 'KRPTK' || pod.endsWith('PTK');
+      return pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
     } else if (mode === 'loading') {
       const pol = (c.pol || '').toUpperCase();
-      return pol === 'KRPTK' || pol.endsWith('PTK');
+      return pol === 'KRPTK' || pod === 'KRPYT' || pol.endsWith('PTK');
     }
     return true;
   });
