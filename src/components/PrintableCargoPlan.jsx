@@ -872,7 +872,7 @@ export default function PrintableCargoPlan({
         .bay-tier-labels span.tier-hidden { visibility: hidden; }
         .bay-cell {
           flex: 1;
-          border: 0.3px solid #aaa;
+          border: 0.5px solid #999;
           text-align: center;
           font-size: 6pt;
           line-height: 1;
@@ -885,7 +885,16 @@ export default function PrintableCargoPlan({
         .mark-shadow { color: #999; font-style: italic; background: #f0f0f0; }
         .mark-o { color: #d97706; font-weight: 500; }
         .mark-L { color: #c026d3; font-weight: 500; background: #fce7f3 !important; }
-        .mark-empty { color: transparent; }
+        /* M6.58: 빈 셀 시각화 - 사용자 요청 "빈 셀로 남겨놔야 함"
+           이전 .mark-empty { color: transparent }는 글자만 투명이라 0.3px border만 남아 화면에서 사실상 안 보임.
+           해결: 빈 셀에 옅은 가운데 점 표시 → row 폭 통일이 시각적으로 명확. X/o 가독성 영향 최소. */
+        .mark-empty { color: transparent; position: relative; }
+        .mark-empty::after {
+          content: '·';
+          color: #d1d5db;
+          font-size: 7pt;
+          position: absolute;
+        }
         /* M5.16: 특수화물 추가 mark */
         .mark-E { color: #6b7280; font-weight: 500; }  /* 엠티 */
         .mark-R { color: #0891b2; font-weight: 700; }  /* 풀 리퍼 */

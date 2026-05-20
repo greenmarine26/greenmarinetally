@@ -379,6 +379,18 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.58 (2026-05) — STSE 자동 생성 + 빈 셀 시각화 (사용자 보고 2건 동시 해결)',
+      examples: [
+        { q: '🔥 사용자 보고 1 - STSE 박스 크기 안 됨', a: 'M6.57 검증용 STSE SITC SENDAI 카고플랜 — M6.57 자동 보정 효과 0회. STSE는 v2에 등록되어 있지만 grade=needs-review, baysSummary가 빈 배열, rowMaxEven/Odd/deckTiers/holdTiers 모두 undefined. M6.57은 비어있는 필드만 채우는 양식이라 baysSummary 자체가 비어있으면 채울 entry 없음' },
+        { q: '✅ 해결 1', a: 'enrichBayDef 확장 — baysSummary가 빈 배열이면 v5 매트릭스로 entry 자체 자동 생성. STSE 0개 → 22 entries 생성 (.def 파일에서 자동 추출한 bayNumbers 활용). 각 entry에 rowMaxEvenLocal/rowMaxOddLocal 자동 채움. bayList도 v5로 보강 (20개 → 22개). _enrichedFrom: L2-v5-matrix-auto-create 메타로 출처 명시' },
+        { q: '🔥 사용자 보고 2 - 빈 셀 사라짐', a: 'PCBJ/STSE 카고플랜에서 컨테이너 없는 row 자리가 사라져서 박스가 좁아 보임. 코드/CSS는 빈 셀 자리 보존 양식 (mark-empty class). 그러나 .bay-cell border가 0.3px라 실질적으로 안 보여서 사용자가 "사라진 것"으로 인지' },
+        { q: '✅ 해결 2', a: 'CSS 두 곳 수정: .bay-cell border 0.3px → 0.5px solid #999 (셀 격자 명확), .mark-empty에 ::after 옅은 가운데 점 (·, color #d1d5db) 추가. row 폭이 시각적으로 명확. X/o 가독성 영향 없음' },
+        { q: '🔁 회귀 검증', a: 'KSKM(verified): 자동 생성 안 발동, 보정 0. NBTD/PCBJ/PAVA: M6.57 그대로 (27/72/22 부분 보정). DAP/PCBS: v5-supplement에 이미 완전. STSE: ★ 22개 entries 자동 생성 + 22개 rowMax 보정' },
+        { q: '⚠ STSE deckTiers/holdTiers는 미완', a: 'baysSummary 자동 생성 성공했지만 각 entry의 deckTiersLocal/holdTiersLocal은 여전히 비어있음. 이유: 6.10 포맷 v5의 hasHold가 모두 false (Phase 7 미해결), v2 사전 level deckTiers도 비어있음. 해결책: EDI 실측 컨테이너 tier 분포로 fallback (M6.59 작업 — enrichBayDef에 ediContainers 파라미터 추가)' },
+        { q: '🛡 보호 규칙', a: 'shipBayDict_v2.js 일체 미수정. enrichBayDef deep clone 후 보강. verified 데이터 절대 미수정. M6.56/M6.57 fallback 모두 유지 (방어 코드)' },
+      ],
+    },
+    {
       title: '🎯 M6.57 (2026-05) — 베이사전 자동 보정 시스템 (관점 전환: 오류 검출 → 자동 보정)',
       examples: [
         { q: '🔥 사용자 관점 전환', a: '기존: 사용자가 카고플랜에서 오류 발견 → 스크린샷 → 클로드 → 수정. 매번 번거로움. 새 방향: 앱이 자동으로 데이터 정밀 분석 + 누락 필드 자체 보정 → 사용자 발견 못 해도 정상 출력. 클로드 세션은 새 패턴 추가/복잡 디버깅에만 사용' },

@@ -37,6 +37,57 @@ export function enrichBayDef(entry, v5Matrix) {
   // deep clone (원본 보호)
   const enriched = JSON.parse(JSON.stringify(entry));
   const bd = enriched.bayDef;
+
+  // M6.58: baysSummary가 빈 배열이거나 없으면 v5 매트릭스로 자동 생성
+  //   STSE 같은 grade='needs-review' 선박이 v2에 등록되어 있지만 데이터가 빈약한 경우 대응
+  //   v2 미수정 (deep clone 후 보강).
+  const isBaysSummaryEmpty = !Array.isArray(bd.baysSummary) || bd.baysSummary.length === 0;
+  if (isBaysSummaryEmpty && v5Matrix && Array.isArray(v5Matrix.matrixBays) && v5Matrix.matrixBays.length > 0) {
+    bd.baysSummary = v5Matrix.matrixBays
+      .filter(b => b.bayNum != null && typeof b.bayNum === 'number')
+      .map(b => {
+        const bayNum = b.bayNum;
+        const isEvenBay = bayNum % 2 === 0;
+        const entry = {
+          bayNo: String(bayNum).padStart(2, '0'),
+          // hasHold/hasDeck/isStandalone는 v5 정보로 가능한 만큼 (6.10 포맷은 hasHold 미정확)
+          hasHold: !!b.hasHold,
+          hasDeck: true,
+          isStandalone: false,
+          _enrichedFrom: { entry: 'L2-v5-matrix-auto-create' },
+        };
+        // row 폭 자동 계산
+        if (b.maxRow > 0) {
+          if (isEvenBay) {
+            entry.rowMaxEvenLocal = b.maxRow % 2 === 0 ? b.maxRow : b.maxRow + 1;
+            entry.rowMaxOddLocal = Math.max(entry.rowMaxEvenLocal - 1, 1);
+          } else {
+            entry.rowMaxOddLocal = b.maxRow % 2 === 1 ? b.maxRow : Math.max(b.maxRow - 1, 1);
+            entry.rowMaxEvenLocal = entry.rowMaxOddLocal + 1;
+          }
+          entry._enrichedFrom.rowMaxEvenLocal = 'L2-v5-maxRow';
+          entry._enrichedFrom.rowMaxOddLocal = 'L2-v5-maxRow';
+        }
+        return entry;
+      });
+
+    // bayList도 v5 bayNumbers로 보강
+    if (Array.isArray(v5Matrix.bayNumbers) && v5Matrix.bayNumbers.length > 0) {
+      bd.bayList = v5Matrix.bayNumbers
+        .filter(n => n != null)
+        .map(n => String(n).padStart(2, '0'))
+        .sort();
+    }
+
+    // 보강 메타
+    enriched._enrichMeta = {
+      totalFieldsEnriched: bd.baysSummary.length,
+      sourceCounts: { 'baysSummary-auto-create': bd.baysSummary.length },
+      v5MatrixUsed: true,
+      baysSummaryAutoCreated: true,
+    };
+  }
+
   if (!Array.isArray(bd.baysSummary)) return enriched;
 
   // 사전 level fallback 소스
@@ -53,9 +104,9 @@ export function enrichBayDef(entry, v5Matrix) {
     });
   }
 
-  // 각 베이 entry 보정
-  let totalEnriched = 0;
-  const enrichSources = {};
+  // 각 베이 entry 보정 (기존 로직)
+  let totalEnriched = enriched._enrichMeta?.totalFieldsEnriched || 0;
+  const enrichSources = enriched._enrichMeta?.sourceCounts || {};
 
   bd.baysSummary = bd.baysSummary.map(orig => {
     const bay = { ...orig };
@@ -147,11 +198,13 @@ export function enrichBayDef(entry, v5Matrix) {
     return bay;
   });
 
-  // 사전 level _enrichedMeta (디버그용)
+  // 사전 level _enrichedMeta (디버그용) - M6.58: 기존 메타 보존하면서 누적
   if (totalEnriched > 0) {
+    const prev = enriched._enrichMeta || {};
     enriched._enrichMeta = {
+      ...prev,
       totalFieldsEnriched: totalEnriched,
-      sourceCounts: enrichSources,
+      sourceCounts: { ...(prev.sourceCounts || {}), ...enrichSources },
       v5MatrixUsed: v5MaT_used(v5Matrix),
     };
   }
