@@ -276,15 +276,22 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   }, [dictBaysSummary, dictShipMeta]);
 
   const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
+  // M6.66: shadow40Conts의 tier도 포함 — 짝수 베이 40피트 컨이 인접 홀수 베이에 그림자 표시 시
+  //   기존: shadow40Conts가 cellMap에만 추가되어 allTiersSet 미포함 → hold tier 자리 없음 → 그림자 X 안 보임
+  //   사용자 사례: BAY 23 (홀수 단독)에서 BAY 24의 40피트 hold 08 컨테이너 → BAY 23 hold 08 자리 + X 표시
+  const allTierSources = [
+    ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN'),
+    ...shadow40Conts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN'),
+  ];
   const allTiersSet = hasDictTiers
     ? Array.from(new Set([
         ...pageBayDictTiers.deck,
         ...pageBayDictTiers.hold,
-        ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
+        ...allTierSources
       ]))
     : Array.from(new Set([
         ...(Array.isArray(globalTiers) ? globalTiers.map(t => String(t).padStart(2, '0')) : []),
-        ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
+        ...allTierSources
       ]));
   const deckTiersAll = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
@@ -295,7 +302,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const extraTierStr = extraTier ? String(extraTier).padStart(2, '0') : null;
   const deckTiers = extraTierStr ? deckTiersAll.filter(t => t !== extraTierStr) : deckTiersAll;
 
-  // M6.54: 박스별 사용 tier (베이사전 deckTiersLocal/holdTiersLocal + 컨테이너 보강) — hidden 처리용
+  // M6.54 → M6.66: 박스별 사용 tier (베이별 + 컨테이너 + shadow40) — hidden 처리용
   const bayDeckTiersUsed = useMemo(() => {
     const set = new Set();
     [even, odd].forEach(bn => {
@@ -308,8 +315,13 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       const t = String(c.tier).padStart(2, '0');
       if (parseInt(t) >= 80) set.add(t);
     });
+    // M6.66: shadow40 tier (짝수 베이 40피트) 자리도 used 처리
+    shadow40Conts.forEach(c => {
+      const t = String(c.tier).padStart(2, '0');
+      if (parseInt(t) >= 80) set.add(t);
+    });
     return set;
-  }, [even, odd, dictBaysSummary, allConts]);
+  }, [even, odd, dictBaysSummary, allConts, shadow40Conts]);
 
   const bayHoldTiersUsed = useMemo(() => {
     const set = new Set();
@@ -323,8 +335,13 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       const t = String(c.tier).padStart(2, '0');
       if (parseInt(t) < 80) set.add(t);
     });
+    // M6.66: shadow40 hold tier 자리도 used 처리 (사용자 요청 — deck처럼 hold도 동일 양식)
+    shadow40Conts.forEach(c => {
+      const t = String(c.tier).padStart(2, '0');
+      if (parseInt(t) < 80) set.add(t);
+    });
     return set;
-  }, [even, odd, dictBaysSummary, allConts]);
+  }, [even, odd, dictBaysSummary, allConts, shadow40Conts]);
 
   // M5.98 → M6.63: extraTier는 deckTiers/holdTiers 계산 후 위쪽에서 처리됨
 
