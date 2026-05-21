@@ -465,16 +465,17 @@ export default function PrintableCargoPlan({
   containers, mode, voyageInfo, shipImo, shipName, voyageKey, xrayMap = {}, 
   globalRowRange, globalTiers, onClose
 }) {
-  // M6.72 → M6.73: 자체 globalRowRange + deck/hold 별 row 범위
-  //   사용자: 카스피 양식 — deck 8칸 (좌4+우4) / hold 7칸 (좌3+우4) — 좌우 대칭
-  //   해결: deck/hold 별 row 컨테이너 좌표 검사 → 박스 안 deck/hold 영역 column 따로
+  // M6.72 → M6.73 → M6.74: deck/hold 별 row 범위 + tier 검증
+  //   사용자: DXQD 카고플랜에 00 row 잘못 표시 → 컨테이너에 row=0 있지만 tier 없는 미배정 양식
+  //   해결: row + tier 모두 있어야 진짜 좌표 (미배정 row=0 무시)
   const computedRowRange = useMemo(() => {
     let deckLeft = 0, deckRight = 0, deckHas00 = false;
     let holdLeft = 0, holdRight = 0, holdHas00 = false;
     for (const c of containers) {
-      if (!c.row) continue;
+      if (!c.row || !c.tier) continue;  // M6.74: tier 없으면 미배정 — 무시
       const n = parseInt(c.row);
       const tier = parseInt(c.tier || 0);
+      if (!tier) continue;
       const isDeck = tier >= 80;
       if (n === 0) {
         if (isDeck) deckHas00 = true; else holdHas00 = true;
@@ -489,11 +490,9 @@ export default function PrintableCargoPlan({
       }
     }
     return {
-      // legacy (전체 max)
       maxLeft: Math.max(deckLeft, holdLeft),
       maxRight: Math.max(deckRight, holdRight),
       has00: deckHas00 || holdHas00,
-      // M6.73: deck/hold 별
       deck: { maxLeft: deckLeft, maxRight: deckRight, has00: deckHas00 },
       hold: { maxLeft: holdLeft, maxRight: holdRight, has00: holdHas00 },
     };

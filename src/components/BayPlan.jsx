@@ -154,15 +154,33 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   // 좌우 균형 (전 베이 통일)
   const globalRowRange = useMemo(() => {
-    let maxLeft = 0, maxRight = 0, has00 = false;
+    let deckLeft = 0, deckRight = 0, deckHas00 = false;
+    let holdLeft = 0, holdRight = 0, holdHas00 = false;
     for (const c of containers) {
-      if (!c.row) continue;
+      if (!c.row || !c.tier) continue;
       const n = parseInt(c.row);
-      if (n === 0) { has00 = true; continue; }
-      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
-      else maxRight = Math.max(maxRight, n);
+      const tier = parseInt(c.tier || 0);
+      if (!tier) continue;
+      const isDeck = tier >= 80;
+      if (n === 0) {
+        if (isDeck) deckHas00 = true; else holdHas00 = true;
+        continue;
+      }
+      if (isDeck) {
+        if (n % 2 === 0) deckLeft = Math.max(deckLeft, n);
+        else deckRight = Math.max(deckRight, n);
+      } else {
+        if (n % 2 === 0) holdLeft = Math.max(holdLeft, n);
+        else holdRight = Math.max(holdRight, n);
+      }
     }
-    return { maxLeft, maxRight, has00 };
+    return {
+      maxLeft: Math.max(deckLeft, holdLeft),
+      maxRight: Math.max(deckRight, holdRight),
+      has00: deckHas00 || holdHas00,
+      deck: { maxLeft: deckLeft, maxRight: deckRight, has00: deckHas00 },
+      hold: { maxLeft: holdLeft, maxRight: holdRight, has00: holdHas00 },
+    };
   }, [containers]);
 
   // M3.87: 선박 전체 tier 풀 (베이가 한 컨만 있어도 모든 tier 슬롯 표시)
