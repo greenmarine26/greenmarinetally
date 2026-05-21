@@ -154,15 +154,15 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   // 좌우 균형 (전 베이 통일)
   const globalRowRange = useMemo(() => {
-    let maxLeft = 0, maxRight = 0;
+    let maxLeft = 0, maxRight = 0, has00 = false;
     for (const c of containers) {
       if (!c.row) continue;
       const n = parseInt(c.row);
-      if (n === 0) continue;
+      if (n === 0) { has00 = true; continue; }
       if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
       else maxRight = Math.max(maxRight, n);
     }
-    return { maxLeft, maxRight };
+    return { maxLeft, maxRight, has00 };
   }, [containers]);
 
   // M3.87: 선박 전체 tier 풀 (베이가 한 컨만 있어도 모든 tier 슬롯 표시)
@@ -918,6 +918,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   // 좌우 균형 (전 베이 통일 폭)
   const maxLeft = globalRowRange?.maxLeft || 0;
   const maxRight = globalRowRange?.maxRight || 0;
+  const has00 = globalRowRange?.has00 || false;  // M6.72: 00 자리 자동 감지
 
   const allLeftRows = [];
   for (let n = maxLeft; n >= 2; n -= 2) {
@@ -927,7 +928,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   for (let n = 1; n <= maxRight; n += 2) {
     allRightRows.push(String(n).padStart(2, '0'));
   }
-  const centerRows = ['00'];
+  // M6.72: 컨테이너에 row=00 있을 때만 중앙 표시
+  const centerRows = has00 ? ['00'] : [];
   const allRows = [...allLeftRows, ...centerRows, ...allRightRows];
 
   // DECK / HOLD 분리 + 상하 균형

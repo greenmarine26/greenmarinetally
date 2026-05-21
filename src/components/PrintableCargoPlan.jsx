@@ -249,14 +249,16 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const dynRows = (() => {
     const maxLeft = globalRowRange?.maxLeft || 0;
     const maxRight = globalRowRange?.maxRight || 0;
+    const has00 = globalRowRange?.has00 || false;  // M6.72: 컨테이너에 row=00 있을 때만 표시
     if (maxLeft || maxRight) {
       const left = [];
       for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
       const right = [];
       for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
-      return [...left, '00', ...right];
+      return has00 ? [...left, '00', ...right] : [...left, ...right];
     }
-    return ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
+    // M6.72: fallback도 00 제거 — 사용자 양식 (카스피)
+    return ['08', '06', '04', '02', '01', '03', '05', '07'];
   })();
 
   // M6.54: 점선 위치 통일 (사용자 선택 A)
@@ -462,6 +464,23 @@ export default function PrintableCargoPlan({
   containers, mode, voyageInfo, shipImo, shipName, voyageKey, xrayMap = {}, 
   globalRowRange, globalTiers, onClose
 }) {
+  // M6.72: 자체 globalRowRange 계산 (has00 포함)
+  //   사용자: 중형 선박은 00 자리 다수 사용. 컨테이너에 row=00 있으면 표시, 없으면 제거.
+  //   카스피 양식 — 00 자리 없는 베이는 좌우 row 연속 표시
+  const computedRowRange = useMemo(() => {
+    let maxLeft = 0, maxRight = 0, has00 = false;
+    for (const c of containers) {
+      if (!c.row) continue;
+      const n = parseInt(c.row);
+      if (n === 0) { has00 = true; continue; }
+      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+      else maxRight = Math.max(maxRight, n);
+    }
+    return { maxLeft, maxRight, has00 };
+  }, [containers]);
+
+  const effectiveRowRange = globalRowRange || computedRowRange;
+
   const bayMap = useMemo(() => groupByBay(containers), [containers]);
 
   const dictData = useMemo(() => {
@@ -724,7 +743,7 @@ export default function PrintableCargoPlan({
             )}
             {foreColumns.map((col, i) => col.single ? (
               <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
+                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`fs-${i}`} className="bay-box-placeholder"></div>
             ))}
@@ -736,7 +755,7 @@ export default function PrintableCargoPlan({
             )}
             {foreColumns.map((col, i) => col.pair ? (
               <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
+                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`fp-${i}`} className="bay-box-placeholder"></div>
             ))}
@@ -749,7 +768,7 @@ export default function PrintableCargoPlan({
             )}
             {aftColumns.map((col, i) => col.single ? (
               <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
+                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`as-${i}`} className="bay-box-placeholder"></div>
             ))}
@@ -877,7 +896,7 @@ export default function PrintableCargoPlan({
                 if (col.pair) {
                   out.push(
                     <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                      mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
+                      mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
                   );
                 } else if (i === firstEmptyPairIdx) {
                   // 첫 번째 pair=null 자리에 통계 박스
