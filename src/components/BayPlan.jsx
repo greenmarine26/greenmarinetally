@@ -963,6 +963,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     };
   }, [allContainers]);
 
+  // M6.76: deck/hold row 양식 통일 (페이지 max)
+  //   사용자 양식: 박스 안 모든 row 자리 — 셀(border) 표시
   const buildPageRows = (range) => {
     const ml = range?.maxLeft || 0, mr = range?.maxRight || 0;
     if (!ml && !mr) return [];
@@ -970,8 +972,15 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const right = []; for (let n = 1; n <= mr; n += 2) right.push(String(n).padStart(2, '0'));
     return range.has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  const deckRowsArr = buildPageRows(pageRange.deck);
-  const holdRowsArr = buildPageRows(pageRange.hold);
+  // 페이지 max (deck+hold union) — 모든 row 자리 셀 표시
+  const unifiedRange = {
+    maxLeft: Math.max(pageRange.deck.maxLeft, pageRange.hold.maxLeft),
+    maxRight: Math.max(pageRange.deck.maxRight, pageRange.hold.maxRight),
+    has00: pageRange.deck.has00 || pageRange.hold.has00,
+  };
+  const unifiedRowsArr = buildPageRows(unifiedRange);
+  const deckRowsArr = unifiedRowsArr;
+  const holdRowsArr = unifiedRowsArr;
 
   // 좌우 균형 (전 베이 통일 폭) — fallback 양식 (deck/hold 분리 안 됐을 때)
   const maxLeft = globalRowRange?.maxLeft || 0;
@@ -988,7 +997,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   }
   // M6.72: 컨테이너에 row=00 있을 때만 중앙 표시
   const centerRows = has00 ? ['00'] : [];
-  const allRows = [...allLeftRows, ...centerRows, ...allRightRows];
+  const allRows = unifiedRowsArr.length > 0 ? unifiedRowsArr : [...allLeftRows, ...centerRows, ...allRightRows];
 
   // DECK / HOLD 분리 + 상하 균형
   // M3.87: globalTiers 사용 (선박 전체 tier 풀) — 베이가 한 컨만 있어도 모든 슬롯 표시

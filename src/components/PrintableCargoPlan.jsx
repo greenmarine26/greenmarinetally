@@ -273,28 +273,34 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
-  // M6.49 → M6.72 → M6.73 → M6.75: 박스별 row 양식 (베이마다 다름)
-  //   박스 자체 컨테이너 max 사용 → 박스마다 row 영역 다름
-  //   페이지 max cols로 셀 너비 고정 → 적은 박스는 가운데 정렬
+  // M6.49 → M6.72 → M6.73 → M6.75 → M6.76: row 양식 통일
+  //   사용자 양식: 박스 안 모든 row 자리 — 셀(border) 표시 (컨 없으면 빈 셀)
+  //   deck/hold 분리 X — 같은 row 양식. 페이지/박스 max 자동
   const buildRows = (range) => {
     const maxLeft = range?.maxLeft || 0;
     const maxRight = range?.maxRight || 0;
     const has00 = range?.has00 || false;
-    if (!maxLeft && !maxRight) return [];  // M6.75: 컨 없으면 빈 — render 안 됨
+    if (!maxLeft && !maxRight) return [];
     const left = [];
     for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
     const right = [];
     for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
     return has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  const deckDynRows = buildRows(boxRange.deck);
-  const holdDynRows = buildRows(boxRange.hold);
-
-  // M6.75: 페이지 max cols — globalRowRange 또는 — fallback 8
-  const pageRange = globalRowRange || { deck: boxRange.deck, hold: boxRange.hold };
-  const pageDeckCols = buildRows(pageRange.deck || pageRange).length;
-  const pageHoldCols = buildRows(pageRange.hold || pageRange).length;
-  const maxCols = Math.max(pageDeckCols, pageHoldCols, 1);
+  // 페이지 max (deck+hold 통합) — 박스 안 모든 row 자리 셀 표시
+  const pageRangeUnified = globalRowRange ? {
+    maxLeft: Math.max(globalRowRange.deck?.maxLeft || 0, globalRowRange.hold?.maxLeft || 0),
+    maxRight: Math.max(globalRowRange.deck?.maxRight || 0, globalRowRange.hold?.maxRight || 0),
+    has00: (globalRowRange.deck?.has00 || globalRowRange.hold?.has00) || false,
+  } : {
+    maxLeft: Math.max(boxRange.deck.maxLeft, boxRange.hold.maxLeft),
+    maxRight: Math.max(boxRange.deck.maxRight, boxRange.hold.maxRight),
+    has00: boxRange.deck.has00 || boxRange.hold.has00,
+  };
+  const unifiedRows = buildRows(pageRangeUnified);
+  const deckDynRows = unifiedRows;  // M6.76: deck/hold 같은 row 양식
+  const holdDynRows = unifiedRows;
+  const maxCols = Math.max(unifiedRows.length, 1);
   const colWidthPct = 100 / maxCols;
 
   // M6.54: 점선 위치 통일 (사용자 선택 A)
