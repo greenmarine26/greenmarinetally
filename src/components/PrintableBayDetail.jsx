@@ -175,15 +175,34 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   //   사용자 지시: "베이플랜에 다 맞춰주세요. 지금 베이플랜만 아주 정확합니다."
 
   // STD_ROWS: 베이플랜은 globalRowRange 사용 (전 베이 통일 폭) — 동일 적용
+  // M6.77: has00 자동 감지 + tier 검증 + 컨 없는 박스 voyage 전체 fallback
   const STD_ROWS = useMemo(() => {
-    const maxLeft = globalRowRange?.maxLeft || 0;
-    const maxRight = globalRowRange?.maxRight || 0;
+    // 자체 계산 (globalRowRange props 없거나 빈일 때)
+    let maxLeft = globalRowRange?.maxLeft || 0;
+    let maxRight = globalRowRange?.maxRight || 0;
+    let has00 = globalRowRange?.has00 || false;
+    // 박스 자체 검사 (자체 fallback)
+    if (!maxLeft && !maxRight) {
+      for (const c of allConts) {
+        if (!c.row || !c.tier) continue;
+        const n = parseInt(c.row);
+        const tier = parseInt(c.tier);
+        if (!tier) continue;
+        if (n === 0) { has00 = true; continue; }
+        if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+        else maxRight = Math.max(maxRight, n);
+      }
+    }
+    if (!maxLeft && !maxRight) {
+      // 박스도 빈 — 기본 8 col 양식
+      return ['08', '06', '04', '02', '01', '03', '05', '07'];
+    }
     const left = [];
     for (let n = maxLeft; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
     const right = [];
     for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
-    return [...left, '00', ...right];
-  }, [globalRowRange]);
+    return has00 ? [...left, '00', ...right] : [...left, ...right];
+  }, [globalRowRange, allConts]);
   const colCount = STD_ROWS.length;
 
   const cellMap = {};
@@ -314,6 +333,22 @@ export default function PrintableBayDetail({
 }) {
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
+
+  // M6.77: voyage 전체 row range 자체 계산 (props 없을 때 fallback)
+  const computedRowRange = useMemo(() => {
+    let maxLeft = 0, maxRight = 0, has00 = false;
+    for (const c of containers) {
+      if (!c.row || !c.tier) continue;
+      const n = parseInt(c.row);
+      const tier = parseInt(c.tier);
+      if (!tier) continue;
+      if (n === 0) { has00 = true; continue; }
+      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+      else maxRight = Math.max(maxRight, n);
+    }
+    return { maxLeft, maxRight, has00 };
+  }, [containers]);
+  const effectiveRowRange = globalRowRange || computedRowRange;
 
   const bayMap = useMemo(() => groupByBay(containers), [containers]);
 
@@ -484,7 +519,7 @@ export default function PrintableBayDetail({
                 voyageInfo={voyageInfo} voyageKey={voyageKey}
                 shipName={shipName} dictBay={dictBay}
                 dictBaysSummary={dictBaysSummary}
-                globalRowRange={globalRowRange}
+                globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
                 dictShipMeta={dictShipMeta} />
             );

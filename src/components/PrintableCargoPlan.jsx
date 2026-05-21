@@ -273,9 +273,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
-  // M6.49 → M6.72 → M6.73 → M6.75 → M6.76: row 양식 통일
-  //   사용자 양식: 박스 안 모든 row 자리 — 셀(border) 표시 (컨 없으면 빈 셀)
-  //   deck/hold 분리 X — 같은 row 양식. 페이지/박스 max 자동
+  // M6.76 → M6.77: voyage 전체 globalRowRange 우선 + 빈 박스 fallback
+  //   사용자 양식: 컨 없는 박스 (BAY 01)도 — voyage 전체 row 자리 셀 표시
   const buildRows = (range) => {
     const maxLeft = range?.maxLeft || 0;
     const maxRight = range?.maxRight || 0;
@@ -287,18 +286,31 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
     return has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  // 페이지 max (deck+hold 통합) — 박스 안 모든 row 자리 셀 표시
-  const pageRangeUnified = globalRowRange ? {
-    maxLeft: Math.max(globalRowRange.deck?.maxLeft || 0, globalRowRange.hold?.maxLeft || 0),
-    maxRight: Math.max(globalRowRange.deck?.maxRight || 0, globalRowRange.hold?.maxRight || 0),
-    has00: (globalRowRange.deck?.has00 || globalRowRange.hold?.has00) || false,
-  } : {
-    maxLeft: Math.max(boxRange.deck.maxLeft, boxRange.hold.maxLeft),
-    maxRight: Math.max(boxRange.deck.maxRight, boxRange.hold.maxRight),
-    has00: boxRange.deck.has00 || boxRange.hold.has00,
-  };
-  const unifiedRows = buildRows(pageRangeUnified);
-  const deckDynRows = unifiedRows;  // M6.76: deck/hold 같은 row 양식
+  // voyage 전체 (globalRowRange) 우선 — 모든 박스 동일 양식
+  //   globalRowRange.deck/hold 합산 + globalRowRange.maxLeft 둘 다 시도
+  const voyageRangeUnified = (() => {
+    if (globalRowRange) {
+      const dLeft = globalRowRange.deck?.maxLeft || 0;
+      const hLeft = globalRowRange.hold?.maxLeft || 0;
+      const dRight = globalRowRange.deck?.maxRight || 0;
+      const hRight = globalRowRange.hold?.maxRight || 0;
+      const dHas00 = globalRowRange.deck?.has00 || false;
+      const hHas00 = globalRowRange.hold?.has00 || false;
+      return {
+        maxLeft: Math.max(dLeft, hLeft, globalRowRange.maxLeft || 0),
+        maxRight: Math.max(dRight, hRight, globalRowRange.maxRight || 0),
+        has00: dHas00 || hHas00 || globalRowRange.has00 || false,
+      };
+    }
+    // fallback — 박스 자체 (BAY 01 컨 없으면 빈)
+    return {
+      maxLeft: Math.max(boxRange.deck.maxLeft, boxRange.hold.maxLeft),
+      maxRight: Math.max(boxRange.deck.maxRight, boxRange.hold.maxRight),
+      has00: boxRange.deck.has00 || boxRange.hold.has00,
+    };
+  })();
+  const unifiedRows = buildRows(voyageRangeUnified);
+  const deckDynRows = unifiedRows;
   const holdDynRows = unifiedRows;
   const maxCols = Math.max(unifiedRows.length, 1);
   const colWidthPct = 100 / maxCols;

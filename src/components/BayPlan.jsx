@@ -963,8 +963,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     };
   }, [allContainers]);
 
-  // M6.76: deck/hold row 양식 통일 (페이지 max)
-  //   사용자 양식: 박스 안 모든 row 자리 — 셀(border) 표시
+  // M6.76 → M6.77: 페이지 빈이면 voyage 전체 fallback
+  //   사용자: 컨 없는 페이지도 — 자리(셀)는 항상 존재
   const buildPageRows = (range) => {
     const ml = range?.maxLeft || 0, mr = range?.maxRight || 0;
     if (!ml && !mr) return [];
@@ -972,13 +972,13 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const right = []; for (let n = 1; n <= mr; n += 2) right.push(String(n).padStart(2, '0'));
     return range.has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  // 페이지 max (deck+hold union) — 모든 row 자리 셀 표시
-  const unifiedRange = {
-    maxLeft: Math.max(pageRange.deck.maxLeft, pageRange.hold.maxLeft),
-    maxRight: Math.max(pageRange.deck.maxRight, pageRange.hold.maxRight),
-    has00: pageRange.deck.has00 || pageRange.hold.has00,
+  // 페이지 컨 + voyage 전체 fallback
+  const voyageUnified = {
+    maxLeft: Math.max(pageRange.deck.maxLeft, pageRange.hold.maxLeft, globalRowRange?.maxLeft || 0),
+    maxRight: Math.max(pageRange.deck.maxRight, pageRange.hold.maxRight, globalRowRange?.maxRight || 0),
+    has00: pageRange.deck.has00 || pageRange.hold.has00 || globalRowRange?.has00 || false,
   };
-  const unifiedRowsArr = buildPageRows(unifiedRange);
+  const unifiedRowsArr = buildPageRows(voyageUnified);
   const deckRowsArr = unifiedRowsArr;
   const holdRowsArr = unifiedRowsArr;
 
