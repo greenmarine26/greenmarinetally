@@ -312,52 +312,43 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const extraTierStr = extraTier ? String(extraTier).padStart(2, '0') : null;
   const deckTiers = extraTierStr ? deckTiersAll.filter(t => t !== extraTierStr) : deckTiersAll;
 
-  // M6.54 → M6.66 → M6.67 → M6.70h: 박스별 사용 tier
-  //   M6.70h: M6.67의 페이지 전체 union이 28+베이 선박(DJCF)에서 폰 먹통 유발 → 박스 + 인접만
-  //   박스 베이 + 짝꿍 인접 짝수 베이 (40피트 그림자 영역)
-  //   양하 mode hold 4단 표시는 shadow40Conts로 충분
-  const bayDeckTiersUsed = useMemo(() => {
+  // M6.54 → M6.66 → M6.67 → M6.70h → M6.70m: 박스별 사용 tier
+  //   M6.70m: 페이지 전체 union으로 모든 박스 같은 행 수 → 정렬 일치 + 셀 크기 일관
+  //     단점 - 빈 행 존재 → CSS visibility:hidden로 셀 자체 안 보임 (자리 차지)
+  //     useMemo로 캐시해서 폰 먹통 방지
+  const pageDeckUnion = useMemo(() => {
     const set = new Set();
-    const relevantBays = new Set();
-    [even, odd].forEach(bn => {
-      if (bn == null) return;
-      relevantBays.add(parseInt(bn, 10));
-      // 짝꿍 인접 베이 (40피트 그림자 영역)
-      relevantBays.add(parseInt(bn, 10) - 1);
-      relevantBays.add(parseInt(bn, 10) + 1);
-    });
-    relevantBays.forEach(bn => {
-      if (bn == null || bn <= 0) return;
-      const db = dictBaysSummary[bn];
+    Object.values(dictBaysSummary).forEach(db => {
       if (!db) return;
       (db.deckTiersLocal || db.deckTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
     });
-    allConts.forEach(c => {
-      const t = String(c.tier).padStart(2, '0');
-      if (parseInt(t) >= 80) set.add(t);
-    });
-    shadow40Conts.forEach(c => {
-      const t = String(c.tier).padStart(2, '0');
-      if (parseInt(t) >= 80) set.add(t);
-    });
     return set;
-  }, [even, odd, dictBaysSummary, allConts, shadow40Conts]);
+  }, [dictBaysSummary]);
 
-  const bayHoldTiersUsed = useMemo(() => {
+  const pageHoldUnion = useMemo(() => {
     const set = new Set();
-    const relevantBays = new Set();
-    [even, odd].forEach(bn => {
-      if (bn == null) return;
-      relevantBays.add(parseInt(bn, 10));
-      relevantBays.add(parseInt(bn, 10) - 1);
-      relevantBays.add(parseInt(bn, 10) + 1);
-    });
-    relevantBays.forEach(bn => {
-      if (bn == null || bn <= 0) return;
-      const db = dictBaysSummary[bn];
+    Object.values(dictBaysSummary).forEach(db => {
       if (!db) return;
       (db.holdTiersLocal || db.holdTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
     });
+    return set;
+  }, [dictBaysSummary]);
+
+  const bayDeckTiersUsed = useMemo(() => {
+    const set = new Set(pageDeckUnion);
+    allConts.forEach(c => {
+      const t = String(c.tier).padStart(2, '0');
+      if (parseInt(t) >= 80) set.add(t);
+    });
+    shadow40Conts.forEach(c => {
+      const t = String(c.tier).padStart(2, '0');
+      if (parseInt(t) >= 80) set.add(t);
+    });
+    return set;
+  }, [pageDeckUnion, allConts, shadow40Conts]);
+
+  const bayHoldTiersUsed = useMemo(() => {
+    const set = new Set(pageHoldUnion);
     allConts.forEach(c => {
       const t = String(c.tier).padStart(2, '0');
       if (parseInt(t) < 80) set.add(t);
@@ -367,7 +358,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       if (parseInt(t) < 80) set.add(t);
     });
     return set;
-  }, [even, odd, dictBaysSummary, allConts, shadow40Conts]);
+  }, [pageHoldUnion, allConts, shadow40Conts]);
 
   // M5.98 → M6.63: extraTier는 deckTiers/holdTiers 계산 후 위쪽에서 처리됨
 
@@ -786,11 +777,14 @@ export default function PrintableCargoPlan({
               const statsBox = (
                 <div className="bay-stats-inline" key="stats">
                   <div className="stats-title">20'/40'/45'</div>
-                  {sortedPods.map(([pod, c]) => (
-                    <div key={pod} className="stats-line">
-                      {pod}: <b>{c.c20} / {c.c40} / {c.c45}</b>
-                    </div>
-                  ))}
+                  {sortedPods.map(([pod, c]) => {
+                    const podColor = podColorMap[pod];
+                    return (
+                      <div key={pod} className="stats-line">
+                        <span style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{pod}</span>: <b>{c.c20} / {c.c40} / {c.c45}</b>
+                      </div>
+                    );
+                  })}
                   <div className="stats-total">총 {totalAll}대</div>
                   {/* M5.94: 사이즈+타입별 상세 (원본 STOWAGE PLAN 양식) */}
                   {(cat20.length > 0 || cat40.length > 0 || cat45.length > 0) && (
@@ -1017,8 +1011,8 @@ export default function PrintableCargoPlan({
            이유: Chrome PDF 인쇄에서 flex:1 + visibility:hidden 자식이 자리를 collapse하는 케이스 발견
                  (PCBJ BAY 15 deck 부분이 박스에 자리 차지 못 함)
                  opacity:0은 자리 100% 보장 + 자식 ::after까지 모두 투명 */
-        .bay-grid-row.tier-hidden { display: none; }
-        .bay-tier-labels span.tier-hidden { display: none; }
+        .bay-grid-row.tier-hidden { visibility: hidden; }
+        .bay-tier-labels span.tier-hidden { visibility: hidden; }
         .bay-cell {
           flex: 1;
           border: 0.5px solid #999;
