@@ -250,6 +250,10 @@ body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 0; color: #
 .actions button { flex: 1; padding: 10px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; }
 .btn-print { background: #0369a1; color: white; }
 .btn-print:hover { background: #075985; }
+.btn-excel { background: #15803d; color: white; }
+.btn-excel:hover { background: #166534; }
+.btn-close { background: #475569; color: white; }
+.btn-close:hover { background: #334155; }
 .content { padding: 4mm; }
 /* M5.30: 페이지 헤더 컴팩트화 — 75행 보장 위해 padding 최소화 */
 .phdr { display: flex; align-items: center; padding: 0.5mm 2mm; border-bottom: 1pt solid #333; margin-bottom: 1mm; font-size: 8.5pt; }
@@ -275,7 +279,9 @@ table.ilist td.cn { font-family: monospace; font-size: 6.5pt; letter-spacing: -0
 </style>
 </head><body>
 <div class="actions no-print">
-  
+  <button class="btn-print" onclick="window.print()">🖨 인쇄 / PDF 저장</button>
+  <button class="btn-excel" onclick="window.__exportExcel()">📊 엑셀 다운로드</button>
+  <button class="btn-close" onclick="window.close()">✕ 닫기</button>
 </div>
 <div class="content">
 ${sheet1Pages}
@@ -294,5 +300,46 @@ export function openInspectionListPrint(containers, mode, voyageInfo) {
   }
   w.document.write(html);
   w.document.close();
+  // M6.71: 엑셀 export 함수 새 창에 주입
+  const sortedConts = [...containers].sort((a, b) => {
+    const ka = getSortKey(a), kb = getSortKey(b);
+    if (ka !== kb) return ka - kb;
+    return (a.cn || '').localeCompare(b.cn || '');
+  });
+  const vsl = voyageInfo?.vsl || voyageInfo?.vslFull || 'VESSEL';
+  const voy = voyageInfo?.voy || '';
+  const modeKo = mode === 'discharge' ? '양하' : '선적';
+  const dateStr = new Date().toISOString().slice(0, 10);
+  w.__inspectionData = { containers: sortedConts, vsl, voy, modeKo, dateStr };
+  w.__exportExcel = function() {
+    const d = w.__inspectionData;
+    // 엑셀 호환 양식 — CSV (UTF-8 BOM + 한글 헤더)
+    let csv = '\uFEFF';
+    csv += '순번,컨테이너번호,실번호,규격,F/E,선사,비고\n';
+    d.containers.forEach((c, i) => {
+      const cn = (c.cn || '').replace(/,/g, '');
+      const seal = (c.seal || '').replace(/,/g, '');
+      const iso = (c.iso || '').replace(/,/g, '');
+      const fe = c.fe === 'E' ? 'E' : 'F';
+      const op = normalizeCarrier(c);
+      const cat = getContainerCategory(c);
+      const memo = [];
+      if (c.dg) memo.push('DG');
+      if (cat.type === 'reefer') memo.push('R' + (c.temp != null ? c.temp + '℃' : ''));
+      if (cat.type === 'fr') memo.push('FR');
+      if (cat.type === 'ot') memo.push('OT');
+      if (cat.type === 'tk') memo.push('TK');
+      csv += `${i+1},${cn},${seal},${iso},${fe},${op},${memo.join(' ')}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = w.document.createElement('a');
+    a.href = url;
+    a.download = `검수리스트_${d.vsl}_${d.voy}_${d.modeKo}_${d.dateStr}.csv`;
+    w.document.body.appendChild(a);
+    a.click();
+    w.document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   // 자동 인쇄 시 사용자가 당황할 수 있어 자동 호출 X. 직접 Ctrl+P
 }
