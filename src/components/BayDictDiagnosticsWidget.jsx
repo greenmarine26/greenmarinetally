@@ -12,7 +12,7 @@
 // 사용자 원칙: 보여주기식 X, 실제 데이터 기반, 사용자 검증 후 결정
 import React, { useEffect, useMemo, useState } from 'react';
 import { Stethoscope, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, FileText } from 'lucide-react';
-import { fbSubscribeShipBayDict } from '../firebase.js';
+import { fbSubscribeShipBayDict, fbDeleteShipBayDict } from '../firebase.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
 // 단일 entry 진단 — 실제 필드만 본다, 추론 X
@@ -199,6 +199,24 @@ export default function BayDictDiagnosticsWidget() {
             >
               전체 ({stats.total})
             </button>
+            {/* M6.70g: 0점 entry 일괄 삭제 — 베이 구조 데이터 없는 잘못된 entry 정리 */}
+            {filter === 'issues' && stats.withIssues > 0 && (
+              <button
+                onClick={async () => {
+                  const zeroEntries = diagnostics.filter(d => d.score === 0);
+                  if (zeroEntries.length === 0) return;
+                  const codes = zeroEntries.map(d => d.code).join(', ');
+                  if (!confirm(`0점 entry ${zeroEntries.length}척 삭제하시겠습니까?\n\n${codes}\n\n(자체 파서 실패 또는 잘못 등록된 entry입니다. 삭제 후 다시 PDF 일괄 등록 가능)`)) return;
+                  for (const d of zeroEntries) {
+                    try { await fbDeleteShipBayDict(d.code); } catch (e) { console.error(e); }
+                  }
+                  alert(`${zeroEntries.length}척 삭제 완료. Firebase 동기화 후 자동 반영됩니다.`);
+                }}
+                className="ml-auto px-2 py-1 rounded bg-red-900/60 hover:bg-red-800/70 text-red-200 border border-red-700/50"
+              >
+                🗑️ 0점 entry 일괄 삭제
+              </button>
+            )}
           </div>
 
           {/* 척별 진단 카드 */}
