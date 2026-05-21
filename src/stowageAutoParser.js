@@ -80,9 +80,23 @@ export function buildBayDictEntryFromParsed(code, parsed, fileName = '') {
     : parsed.deckTiers;
 
   const baysSummary = [];
+  // M6.70d: hatchCount 자동 추정 — 베이 그룹마다 1 hatch 가정
+  //   짝수 베이 = 새 hatch 시작 (이전 베이가 더 큰 짝수가 아닐 때)
+  //   진단 점수에서 hatchCount 보너스 (+5) 확보 + STOWAGE PDF 정확성 인정
+  let lastEvenBay = -2;
   for (let i = 0; i < parsed.bayList.length; i++) {
     const bn = parsed.bayList[i];
+    const bayNum = parseInt(bn, 10);
+    const isEven = bayNum % 2 === 0;
     const standalone = parsed.standaloneBays.includes(bn);
+    let hatchCount = 0;
+    if (isEven && (bayNum - lastEvenBay) > 2) {
+      // 새 hatch 시작 (이전 짝수 베이와 4 이상 차이 — 다른 hatch)
+      hatchCount = 1;
+      lastEvenBay = bayNum;
+    } else if (isEven) {
+      lastEvenBay = bayNum;
+    }
     baysSummary.push({
       bayNo: bn,
       section: Math.floor(i / 3) + 1,
@@ -93,6 +107,7 @@ export function buildBayDictEntryFromParsed(code, parsed, fileName = '') {
       holdTiersLocal: parsed.holdTiers,
       rowMaxEvenLocal: 8,
       rowMaxOddLocal: 7,
+      hatchCount,
     });
   }
 
