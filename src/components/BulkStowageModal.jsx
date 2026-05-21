@@ -257,7 +257,8 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
             <>
               <div className="text-xs text-slate-300 leading-relaxed">
                 여러 STOWAGE PDF를 한 번에 등록합니다.<br/>
-                Gemini AI가 순차 분석 → 이미 등록된 선박 자동 식별 → 검토 → 일괄 저장.
+                <span className="text-emerald-300">M6.70 앱 내장 자동 파서가 분석</span> → 이미 등록된 선박 자동 식별 → 검토 → 일괄 저장.<br/>
+                <span className="text-xs text-slate-400">(Gemini API 의존 없음. 자체 파서 실패 시에만 Gemini 사용)</span>
               </div>
               <input
                 ref={fileRef}

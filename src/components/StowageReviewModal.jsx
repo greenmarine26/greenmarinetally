@@ -180,7 +180,7 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
           {phase === 'analyzing' && (
             <div className="py-12 text-center">
               <Loader2 className="w-12 h-12 text-cyan-400 mx-auto animate-spin mb-4" />
-              <div className="text-cyan-200 font-bold mb-1">Gemini 2.5 Pro 분석 중...</div>
+              <div className="text-cyan-200 font-bold mb-1">M6.70 자동 파서 분석 중...</div>
               <div className="text-xs text-slate-500">PDF 페이지 수에 따라 10~30초 소요</div>
             </div>
           )}
