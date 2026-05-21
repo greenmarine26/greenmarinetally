@@ -243,23 +243,24 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
-  // M6.49 재수정: 박스 외곽 통일이 더 중요 — 글로벌 max 사용 복원
-  //   (사용자: "박스마다 row 폭 다르면 전보다 나빠짐")
-  //   라벨 겹침은 폰트 축소(CSS)로 해결
-  const dynRows = (() => {
-    const maxLeft = globalRowRange?.maxLeft || 0;
-    const maxRight = globalRowRange?.maxRight || 0;
-    const has00 = globalRowRange?.has00 || false;  // M6.72: 컨테이너에 row=00 있을 때만 표시
-    if (maxLeft || maxRight) {
-      const left = [];
-      for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
-      const right = [];
-      for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
-      return has00 ? [...left, '00', ...right] : [...left, ...right];
-    }
-    // M6.72: fallback도 00 제거 — 사용자 양식 (카스피)
-    return ['08', '06', '04', '02', '01', '03', '05', '07'];
-  })();
+  // M6.49 재수정 → M6.72 → M6.73: deck/hold 별 row 양식
+  //   카스피 양식 — deck/hold column 수 다름 (deck 8칸 / hold 7칸 등)
+  const buildRows = (range) => {
+    const maxLeft = range?.maxLeft || 0;
+    const maxRight = range?.maxRight || 0;
+    const has00 = range?.has00 || false;
+    if (!maxLeft && !maxRight) return ['08', '06', '04', '02', '01', '03', '05', '07'];
+    const left = [];
+    for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
+    const right = [];
+    for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
+    return has00 ? [...left, '00', ...right] : [...left, ...right];
+  };
+  const deckDynRows = buildRows(globalRowRange?.deck || globalRowRange);
+  const holdDynRows = buildRows(globalRowRange?.hold || globalRowRange);
+  // M6.73: 박스 최대 column 수 (deck/hold max) — 셀 너비 고정용
+  const maxCols = Math.max(deckDynRows.length, holdDynRows.length);
+  const colWidthPct = 100 / maxCols;
 
   // M6.54: 점선 위치 통일 (사용자 선택 A)
   //   카고플랜 전체 베이의 deck/hold tier 합치기 → 모든 박스에 같은 자리
@@ -386,21 +387,21 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const countStr = isPaired ? `${cnt.c20} / ${cnt.c40} / ${cnt.c45}` : String(total);
 
   return (
-    <div className="bay-box">
+    <div className="bay-box" style={{'--col-width': `${colWidthPct}%`}}>
       <div className="bay-title-row">
         <span className="bay-title-label">{title}</span>
         <span className="bay-count">{countStr}</span>
       </div>
-      <div className="bay-row-labels">
-        {dynRows.map(r => <span key={r} className="bay-row-label">{r}</span>)}
+      <div className="bay-row-labels deck-row-labels">
+        {deckDynRows.map(r => <span key={r} className="bay-row-label">{r}</span>)}
       </div>
       <div className="bay-grid-wrap">
         <div className="bay-grid">
           {hasDeck && deckTiers.map(t => {
             const isUsed = bayDeckTiersUsed.has(t);
             return (
-              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
-                {dynRows.map(r => {
+              <div key={t} className={`bay-grid-row deck-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {deckDynRows.map(r => {
                   const c = cellMap[`${t}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
@@ -414,8 +415,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
           })}
           {hasDeck && (
             extraTier ? (
-              <div className="bay-grid-row extra-tier-row">
-                {dynRows.map(r => {
+              <div className="bay-grid-row deck-row extra-tier-row">
+                {deckDynRows.map(r => {
                   const tierStr = String(extraTier).padStart(2, '0');
                   const c = cellMap[`${tierStr}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
@@ -431,8 +432,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
           {hasHold && holdTiers.map(t => {
             const isUsed = bayHoldTiersUsed.has(t);
             return (
-              <div key={t} className={`bay-grid-row ${!isUsed ? 'tier-hidden' : ''}`}>
-                {dynRows.map(r => {
+              <div key={t} className={`bay-grid-row hold-row ${!isUsed ? 'tier-hidden' : ''}`}>
+                {holdDynRows.map(r => {
                   const c = cellMap[`${t}-${r}`];
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
@@ -453,8 +454,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
           {hasHold && holdTiers.map(t => <span key={t} className={!bayHoldTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
         </div>
       </div>
-      <div className="bay-row-labels">
-        {dynRows.map(r => <span key={r} className="bay-row-label">{r}</span>)}
+      <div className="bay-row-labels hold-row-labels">
+        {holdDynRows.map(r => <span key={r} className="bay-row-label">{r}</span>)}
       </div>
     </div>
   );
@@ -464,19 +465,38 @@ export default function PrintableCargoPlan({
   containers, mode, voyageInfo, shipImo, shipName, voyageKey, xrayMap = {}, 
   globalRowRange, globalTiers, onClose
 }) {
-  // M6.72: 자체 globalRowRange 계산 (has00 포함)
-  //   사용자: 중형 선박은 00 자리 다수 사용. 컨테이너에 row=00 있으면 표시, 없으면 제거.
-  //   카스피 양식 — 00 자리 없는 베이는 좌우 row 연속 표시
+  // M6.72 → M6.73: 자체 globalRowRange + deck/hold 별 row 범위
+  //   사용자: 카스피 양식 — deck 8칸 (좌4+우4) / hold 7칸 (좌3+우4) — 좌우 대칭
+  //   해결: deck/hold 별 row 컨테이너 좌표 검사 → 박스 안 deck/hold 영역 column 따로
   const computedRowRange = useMemo(() => {
-    let maxLeft = 0, maxRight = 0, has00 = false;
+    let deckLeft = 0, deckRight = 0, deckHas00 = false;
+    let holdLeft = 0, holdRight = 0, holdHas00 = false;
     for (const c of containers) {
       if (!c.row) continue;
       const n = parseInt(c.row);
-      if (n === 0) { has00 = true; continue; }
-      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
-      else maxRight = Math.max(maxRight, n);
+      const tier = parseInt(c.tier || 0);
+      const isDeck = tier >= 80;
+      if (n === 0) {
+        if (isDeck) deckHas00 = true; else holdHas00 = true;
+        continue;
+      }
+      if (isDeck) {
+        if (n % 2 === 0) deckLeft = Math.max(deckLeft, n);
+        else deckRight = Math.max(deckRight, n);
+      } else {
+        if (n % 2 === 0) holdLeft = Math.max(holdLeft, n);
+        else holdRight = Math.max(holdRight, n);
+      }
     }
-    return { maxLeft, maxRight, has00 };
+    return {
+      // legacy (전체 max)
+      maxLeft: Math.max(deckLeft, holdLeft),
+      maxRight: Math.max(deckRight, holdRight),
+      has00: deckHas00 || holdHas00,
+      // M6.73: deck/hold 별
+      deck: { maxLeft: deckLeft, maxRight: deckRight, has00: deckHas00 },
+      hold: { maxLeft: holdLeft, maxRight: holdRight, has00: holdHas00 },
+    };
   }, [containers]);
 
   const effectiveRowRange = globalRowRange || computedRowRange;
@@ -1008,7 +1028,8 @@ export default function PrintableCargoPlan({
           flex-shrink: 0;
         }
         /* M6.49: row 라벨 폰트 축소 (7pt→5pt) — 큰 선박 27 row까지 겹침 해소 */
-        .bay-row-label { flex: 1; text-align: center; font-size: 5pt; min-width: 0; letter-spacing: -0.3px; line-height: 1; }
+        /* M6.73: 셀 너비 고정 + 가운데 정렬 — deck 8칸/hold 7칸 좌우 대칭 (카스피 양식) */
+        .bay-row-label { flex: 0 0 var(--col-width, 12.5%); text-align: center; font-size: 5pt; min-width: 0; letter-spacing: -0.3px; line-height: 1; }
         /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
         .bay-grid-wrap {
           display: flex; align-items: stretch; padding: 1px;
@@ -1022,8 +1043,10 @@ export default function PrintableCargoPlan({
           display: flex; flex-direction: column; align-items: stretch;
           flex: 1; min-width: 0; min-height: 0;
         }
+        /* M6.73: deck/hold row 가운데 정렬 — column 수 다를 때 좌우 대칭 */
         .bay-grid-row { 
           display: flex; flex: 1; min-height: 0;
+          justify-content: center;
         }
         /* M6.0: 사용 안 하는 tier 행 → 자리 차지하되 안 보임 (V5 양식)
            M6.60: visibility:hidden → opacity:0
@@ -1033,7 +1056,7 @@ export default function PrintableCargoPlan({
         .bay-grid-row.tier-hidden { visibility: hidden; }
         .bay-tier-labels span.tier-hidden { visibility: hidden; }
         .bay-cell {
-          flex: 1;
+          flex: 0 0 var(--col-width, 12.5%);
           border: 0.5px solid #999;
           text-align: center;
           font-size: 6pt;
