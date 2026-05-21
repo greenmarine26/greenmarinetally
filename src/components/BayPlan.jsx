@@ -933,10 +933,50 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     return marks;
   }, [evenContainers, allContainers]);
 
-  // 좌우 균형 (전 베이 통일 폭)
+  // M6.75: deck/hold 별 row 양식 — 베이별 다름
+  //   페이지 단위 — page.evenBay + page.oddBay 컨테이너 검사
+  //   카스피 양식 — deck 8칸 / hold 7칸 (또는 다른) 좌우 대칭
+  const pageRange = useMemo(() => {
+    let deckLeft = 0, deckRight = 0, deckHas00 = false;
+    let holdLeft = 0, holdRight = 0, holdHas00 = false;
+    for (const c of allContainers) {
+      if (!c.row || !c.tier) continue;
+      const n = parseInt(c.row);
+      const tier = parseInt(c.tier);
+      if (!tier) continue;
+      const isDeck = tier >= 80;
+      if (n === 0) {
+        if (isDeck) deckHas00 = true; else holdHas00 = true;
+        continue;
+      }
+      if (isDeck) {
+        if (n % 2 === 0) deckLeft = Math.max(deckLeft, n);
+        else deckRight = Math.max(deckRight, n);
+      } else {
+        if (n % 2 === 0) holdLeft = Math.max(holdLeft, n);
+        else holdRight = Math.max(holdRight, n);
+      }
+    }
+    return {
+      deck: { maxLeft: deckLeft, maxRight: deckRight, has00: deckHas00 },
+      hold: { maxLeft: holdLeft, maxRight: holdRight, has00: holdHas00 },
+    };
+  }, [allContainers]);
+
+  const buildPageRows = (range) => {
+    const ml = range?.maxLeft || 0, mr = range?.maxRight || 0;
+    if (!ml && !mr) return [];
+    const left = []; for (let n = ml; n >= 2; n -= 2) left.push(String(n).padStart(2, '0'));
+    const right = []; for (let n = 1; n <= mr; n += 2) right.push(String(n).padStart(2, '0'));
+    return range.has00 ? [...left, '00', ...right] : [...left, ...right];
+  };
+  const deckRowsArr = buildPageRows(pageRange.deck);
+  const holdRowsArr = buildPageRows(pageRange.hold);
+
+  // 좌우 균형 (전 베이 통일 폭) — fallback 양식 (deck/hold 분리 안 됐을 때)
   const maxLeft = globalRowRange?.maxLeft || 0;
   const maxRight = globalRowRange?.maxRight || 0;
-  const has00 = globalRowRange?.has00 || false;  // M6.72: 00 자리 자동 감지
+  const has00 = globalRowRange?.has00 || false;
 
   const allLeftRows = [];
   for (let n = maxLeft; n >= 2; n -= 2) {
@@ -1235,18 +1275,18 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       {/* DECK */}
       <div>
         <div className="text-[10px] text-cyan-400 mb-0.5 font-bold">⬆ DECK</div>
-        <div className="flex gap-0.5 mb-0.5">
+        <div className="flex gap-0.5 mb-0.5 justify-center">
           <div style={{ width: 24 }}></div>
-          {allRows.map((row, idx) => (
+          {deckRowsArr.map((row, idx) => (
             <div key={`dh-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
           <div style={{ width: 24 }}></div>
         </div>
         {deckTiersPadded.map((tier, ti) => (
-          <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center">
+          <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
-            {allRows.map((row, ri) => (
+            {deckRowsArr.map((row, ri) => (
               <React.Fragment key={`d-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
             ))}
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
@@ -1261,17 +1301,17 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       <div>
         <div className="text-[10px] text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
         {holdTiersPadded.map((tier, ti) => (
-          <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center">
+          <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
-            {allRows.map((row, ri) => (
+            {holdRowsArr.map((row, ri) => (
               <React.Fragment key={`h-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
             ))}
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
           </div>
         ))}
-        <div className="flex gap-0.5 mt-0.5">
+        <div className="flex gap-0.5 mt-0.5 justify-center">
           <div style={{ width: 24 }}></div>
-          {allRows.map((row, idx) => (
+          {holdRowsArr.map((row, idx) => (
             <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}

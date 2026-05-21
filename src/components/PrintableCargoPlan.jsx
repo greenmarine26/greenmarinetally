@@ -238,28 +238,63 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     }
   });
 
+  // M6.75: 박스 자체 row range (베이별로 다른 양식 — 카스피)
+  //   페이지 max cols로 셀 너비 고정 → row 적은 박스는 가운데 정렬
+  const boxRange = (() => {
+    let deckLeft = 0, deckRight = 0, deckHas00 = false;
+    let holdLeft = 0, holdRight = 0, holdHas00 = false;
+    const checkConts = [...allConts, ...shadow40Conts];
+    for (const c of checkConts) {
+      if (!c.row || !c.tier) continue;
+      const n = parseInt(c.row);
+      const tier = parseInt(c.tier);
+      if (!tier) continue;
+      const isDeck = tier >= 80;
+      if (n === 0) {
+        if (isDeck) deckHas00 = true; else holdHas00 = true;
+        continue;
+      }
+      if (isDeck) {
+        if (n % 2 === 0) deckLeft = Math.max(deckLeft, n);
+        else deckRight = Math.max(deckRight, n);
+      } else {
+        if (n % 2 === 0) holdLeft = Math.max(holdLeft, n);
+        else holdRight = Math.max(holdRight, n);
+      }
+    }
+    return {
+      deck: { maxLeft: deckLeft, maxRight: deckRight, has00: deckHas00 },
+      hold: { maxLeft: holdLeft, maxRight: holdRight, has00: holdHas00 },
+    };
+  })();
+
   // M6.26: 베이플랜 로직 100% 이식 — 사용자 지시 "베이플랜에 다 맞춰주세요"
   //   1) row: globalRowRange 사용 (전 베이 통일 폭)
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
-  // M6.49 재수정 → M6.72 → M6.73: deck/hold 별 row 양식
-  //   카스피 양식 — deck/hold column 수 다름 (deck 8칸 / hold 7칸 등)
+  // M6.49 → M6.72 → M6.73 → M6.75: 박스별 row 양식 (베이마다 다름)
+  //   박스 자체 컨테이너 max 사용 → 박스마다 row 영역 다름
+  //   페이지 max cols로 셀 너비 고정 → 적은 박스는 가운데 정렬
   const buildRows = (range) => {
     const maxLeft = range?.maxLeft || 0;
     const maxRight = range?.maxRight || 0;
     const has00 = range?.has00 || false;
-    if (!maxLeft && !maxRight) return ['08', '06', '04', '02', '01', '03', '05', '07'];
+    if (!maxLeft && !maxRight) return [];  // M6.75: 컨 없으면 빈 — render 안 됨
     const left = [];
     for (let r = maxLeft; r >= 2; r -= 2) left.push(String(r).padStart(2, '0'));
     const right = [];
     for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
     return has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  const deckDynRows = buildRows(globalRowRange?.deck || globalRowRange);
-  const holdDynRows = buildRows(globalRowRange?.hold || globalRowRange);
-  // M6.73: 박스 최대 column 수 (deck/hold max) — 셀 너비 고정용
-  const maxCols = Math.max(deckDynRows.length, holdDynRows.length);
+  const deckDynRows = buildRows(boxRange.deck);
+  const holdDynRows = buildRows(boxRange.hold);
+
+  // M6.75: 페이지 max cols — globalRowRange 또는 — fallback 8
+  const pageRange = globalRowRange || { deck: boxRange.deck, hold: boxRange.hold };
+  const pageDeckCols = buildRows(pageRange.deck || pageRange).length;
+  const pageHoldCols = buildRows(pageRange.hold || pageRange).length;
+  const maxCols = Math.max(pageDeckCols, pageHoldCols, 1);
   const colWidthPct = 100 / maxCols;
 
   // M6.54: 점선 위치 통일 (사용자 선택 A)
