@@ -22,7 +22,7 @@ function filterPyeongtaek(containers, mode) {
       return pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
     } else if (mode === 'loading') {
       const pol = (c.pol || '').toUpperCase();
-      return pol === 'KRPTK' || pod === 'KRPYT' || pol.endsWith('PTK');
+      return pol === 'KRPTK' || pol === 'KRPYT' || pol.endsWith('PTK');
     }
     return true;
   });

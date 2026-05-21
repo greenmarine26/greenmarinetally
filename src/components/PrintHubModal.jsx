@@ -39,7 +39,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       return !pod || pod === 'PTK' || pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
     } else {
       const pol = String(c.pol || '').toUpperCase();
-      return !pol || pol === 'PTK' || pol === 'KRPTK' || pod === 'KRPYT' || pol.endsWith('PTK');
+      return !pol || pol === 'PTK' || pol === 'KRPTK' || pol === 'KRPYT' || pol.endsWith('PTK');
     }
   };
 
@@ -123,7 +123,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       if (rc[cn]) { n++; return; }  // M5.51: 리스트에 있으면 무조건 평택
       const c = { ...(ed[cn] || {}) };
       const target = m === 'discharge' ? String(c.pod || '').toUpperCase() : String(c.pol || '').toUpperCase();
-      if (!target || target === 'PTK' || target === 'KRPTK' || pod === 'KRPYT' || target.endsWith('PTK')) n++;
+      if (!target || target === 'PTK' || target === 'KRPTK' || target === 'KRPYT' || target.endsWith('PTK')) n++;
     });
     return n;
   };

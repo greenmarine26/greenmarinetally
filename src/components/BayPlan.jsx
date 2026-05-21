@@ -89,7 +89,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       return pod === 'PTK' || pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
     } else {
       const pol = (c.pol || '').toUpperCase();
-      return pol === 'PTK' || pol === 'KRPTK' || pod === 'KRPYT' || pol.endsWith('PTK');
+      return pol === 'PTK' || pol === 'KRPTK' || pol === 'KRPYT' || pol.endsWith('PTK');
     }
   };
 
