@@ -134,9 +134,35 @@ export function buildBayDictEntryFromParsed(code, parsed, fileName = '') {
   };
 }
 
+// 파일명에서 4글자 code 추출 — STOWAGE/INSTRUCTION/CARGO 같은 일반 단어 제외
+function extractCodeFromFileName(fileName) {
+  if (!fileName) return null;
+  const cleaned = fileName.replace(/\.pdf$/i, '');
+  // 파일명 첫 단어 (분리자: _ 공백 - .)
+  const firstWord = cleaned.split(/[_\s\-.]/)[0].toUpperCase();
+  // 일반 단어 제외
+  const GENERIC = ['STOWAGE', 'INSTRUCTION', 'CARGO', 'DISCHARGING', 'PLAN', 'LOADING', 'LIST', 'DOCUMENT'];
+  if (GENERIC.includes(firstWord)) return null;
+  return firstWord.slice(0, 4);
+}
+
 // 전체 양식 — PDF file → entry (한 번에)
 export async function autoBuildEntryFromPdf(file, code) {
   const parsed = await parseStowagePdfAuto(file);
-  const detectedCode = code || (file.name || '').slice(0, 4).toUpperCase();
+  // baysSummary 추출 못 했으면 명시적 오류
+  if (!parsed.bayList || parsed.bayList.length === 0) {
+    throw new Error(`자체 파서: ${file.name}에서 베이 0개 — PDF 양식 인식 실패`);
+  }
+  // code 우선순위: 사용자 지정 > 파일명 (정상) > PDF vesselName
+  let detectedCode = code;
+  if (!detectedCode || ['STOW', 'CARG', 'INST', 'PLAN', 'LOAD'].includes(detectedCode)) {
+    detectedCode = extractCodeFromFileName(file.name);
+  }
+  if (!detectedCode && parsed.shipName) {
+    // PDF의 vesselName에서 4글자 약자 추출 (단어 첫 글자들)
+    const words = parsed.shipName.split(/\s+/).filter(w => /^[A-Z]/.test(w));
+    detectedCode = words.slice(0, 4).map(w => w[0]).join('').slice(0, 4);
+  }
+  if (!detectedCode) detectedCode = 'UNKN';
   return buildBayDictEntryFromParsed(detectedCode, parsed, file.name);
 }

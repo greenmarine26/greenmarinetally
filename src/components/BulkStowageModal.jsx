@@ -22,7 +22,7 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
   const [phase, setPhase] = useState('select');
   const [progress, setProgress] = useState({ done: 0, total: 0, current: '' });
   const [savedResults, setSavedResults] = useState(null);
-  const [registerMode, setRegisterMode] = useState('new_only');  // M6.44: new_only | all
+  const [registerMode, setRegisterMode] = useState('all');  // M6.70e: 기본 'all' (덮어쓰기) — 자체 파서가 ASC보다 정확
   const [bayDict, setBayDict] = useState({});  // M6.44: 매칭용
   const fileRef = useRef(null);
 
@@ -207,6 +207,10 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
         let entry;
         if (item.data?._source === 'auto-parser' && item.data?._entry) {
           entry = { ...item.data._entry };
+          // M6.70f: baysSummary 없으면 등록 거부 (오류)
+          if (!entry.bayDef?.baysSummary?.length) {
+            throw new Error('자체 파서 실패 — baysSummary 0개');
+          }
           entry.code = code;
           entry.callsign = item.callsign.toUpperCase().trim();
           entry.imo = item.imo.trim();
