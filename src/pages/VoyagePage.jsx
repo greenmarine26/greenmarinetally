@@ -214,6 +214,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (r.tier_actual) safeR.tier_actual = r.tier_actual;
         if (r.actual_at) safeR.actual_at = r.actual_at;
         if (r.actual_by) safeR.actual_by = r.actual_by;
+        // M6.72: 위치 수정 — bay/row/tier (빈 문자열도 명시 삭제로 인정)
+        if (r.bay !== undefined) safeR.bay = r.bay;
+        if (r.row !== undefined) safeR.row = r.row;
+        if (r.tier !== undefined) safeR.tier = r.tier;
         merged[r.cn] = { ...merged[r.cn], ...safeR };
       }
     });
@@ -280,15 +284,23 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       // M4.9d-fix: 선적 실체 위치 (계획 c.bay/row/tier는 보존, 실체는 별도)
       'bay_actual', 'row_actual', 'tier_actual',
       'actual_at', 'actual_by',
+      // M6.72: 선적 위치 수정 — bay/row/tier records 우선 (사용자 위치 변경 + displaced 미배정)
+      'bay', 'row', 'tier',
+      'bay_orig', 'row_orig', 'tier_orig',
+      'edits',
     ]);
+    // M6.72: 빈 문자열을 명시 삭제로 인정할 필드 (위치 수정 시 displaced 컨 보관상자 이동)
+    const POSITION_FIELDS = new Set(['bay', 'row', 'tier']);
 
     Object.values(recMap).forEach(r => {
       const ediBase = merged[r.cn];
       const safeR = {};
       Object.keys(r).forEach(k => {
         const v = r[k];
-        // 의미있는 값만
-        if (v === '' || v === null || v === undefined) return;
+        const isPositionField = POSITION_FIELDS.has(k);
+        // M6.72: bay/row/tier 빈 문자열은 명시 삭제 (보관상자 이동 의도)
+        if (v === null || v === undefined) return;
+        if (v === '' && !isPositionField) return;
         if (Array.isArray(v) && v.length === 0) return;
 
         if (ediBase) {
