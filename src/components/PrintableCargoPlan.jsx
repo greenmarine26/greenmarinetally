@@ -141,14 +141,24 @@ function getMark(c, mode, xrayMap) {
   //   LYG/DLC 같이 L로 시작하는 약어가 헷갈리는 것 방지
   //   KR/CN/VN 같은 2자 국가 코드 제거 후 3자 표기
   let baseLetter;
+  let pod3 = null;  // M6.70k: POD 3자 약자 (셀 색상용, 글자는 'L'/'E' 그대로)
   if (ptk) {
-    baseLetter = mode === 'discharge' ? 'o' : 'L';
+    if (mode === 'discharge') {
+      baseLetter = 'o';
+    } else {
+      baseLetter = 'L';
+      // 적재 mode — POD 3자 (DLC, WEI 등) 색상용 정보
+      if (c.pod) {
+        const podUp = String(c.pod).toUpperCase();
+        pod3 = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : null);
+      }
+    }
   } else {
-    // 통과 또는 적재 시 다른 항구 양하
+    // 통과 (평택 미관여)
     if (mode === 'loading' && c.pod) {
-      const pod = String(c.pod).toUpperCase();
-      // KRPTK → PTK, CNDLC → DLC, CNLYG → LYG (5자 코드의 마지막 3자)
-      baseLetter = pod.length >= 5 ? pod.slice(2) : (pod.length === 3 ? pod : 'X');
+      const podUp = String(c.pod).toUpperCase();
+      baseLetter = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : 'X');
+      pod3 = baseLetter !== 'X' ? baseLetter : null;
     } else {
       baseLetter = 'X';
     }
@@ -175,7 +185,7 @@ function getMark(c, mode, xrayMap) {
     letter = 'A';  // PDF 표준: A = Awkward
   }
 
-  // 엠티 표기 (특수화물 아닌 일반 엠티)
+  // 엠티 표기 — 양하 + 적재 모두 (사용자 양식: E 글자 + POD 색)
   if (!type && c.fe === 'E' && ptk) {
     letter = 'E';
   }
@@ -183,10 +193,10 @@ function getMark(c, mode, xrayMap) {
   // X-RAY (평택 양하만)
   const isXray = mode === 'discharge' && ptk && xrayMap && xrayMap[c.cn];
 
-  return { letter, type, isXray };
+  return { letter, type, isXray, pod3 };
 }
 
-function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta, dictBaysSummary = {} }) {
+function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta, dictBaysSummary = {}, podColorMap = {} }) {
   const allConts = [
     ...(even != null && containers[String(even)] || []),
     ...(odd != null && containers[String(odd)] || []),
@@ -403,7 +413,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
                   const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  return <span key={r} className={cls}>{m.letter}</span>;
+                  const podColor = m.pod3 && podColorMap[m.pod3];
+                  return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
                 })}
               </div>
             );
@@ -418,7 +429,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
                   const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  return <span key={r} className={cls}>{m.letter}</span>;
+                  const podColor = m.pod3 && podColorMap[m.pod3];
+                  return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
                 })}
               </div>
             ) : <div className="bay-grid-row hatch-break"></div>
@@ -433,7 +445,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
                   const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  return <span key={r} className={cls}>{m.letter}</span>;
+                  const podColor = m.pod3 && podColorMap[m.pod3];
+                  return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
                 })}
               </div>
             );
@@ -520,6 +533,27 @@ export default function PrintableCargoPlan({
     });
     return map;
   }, [forePages, aftPages]);
+
+  // M6.70k: POD 3자 약자별 색상 매핑 (등장 순서대로 8색 순환)
+  //   카고플랜 셀에 색 표시 → 한눈에 POD 구분 + 범례로 풀네임 매핑
+  const POD_PALETTE = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+  const podColorMap = useMemo(() => {
+    if (mode !== 'loading') return {};
+    const pods = new Set();
+    containers.forEach(c => {
+      if (!isPtk(c, mode)) return;  // 평택 출발만
+      if (c.pod) {
+        const podUp = String(c.pod).toUpperCase();
+        const pod3 = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : null);
+        if (pod3 && pod3 !== 'PTK') pods.add(pod3);
+      }
+    });
+    const map = {};
+    Array.from(pods).sort().forEach((p, i) => {
+      map[p] = POD_PALETTE[i % POD_PALETTE.length];
+    });
+    return map;
+  }, [containers, mode]);
 
   // M5.91: 선적 모드는 POD별로 그룹화 (양하는 PTK 단일)
   // M5.94: 사이즈별 상세 분류(20DC/20RF/40DC/40HC...) + 통과 화물 카운트 추가
@@ -698,7 +732,7 @@ export default function PrintableCargoPlan({
               <div key={`fse-${i}`} className="bay-box-placeholder"></div>
             )}
             {foreColumns.map((col, i) => col.single ? (
-              <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap}
+              <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
                 mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`fs-${i}`} className="bay-box-placeholder"></div>
@@ -710,7 +744,7 @@ export default function PrintableCargoPlan({
               <div key={`fpe-${i}`} className="bay-box-placeholder"></div>
             )}
             {foreColumns.map((col, i) => col.pair ? (
-              <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap}
+              <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
                 mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`fp-${i}`} className="bay-box-placeholder"></div>
@@ -723,7 +757,7 @@ export default function PrintableCargoPlan({
               <div key={`ase-${i}`} className="bay-box-placeholder"></div>
             )}
             {aftColumns.map((col, i) => col.single ? (
-              <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap}
+              <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
                 mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
             ) : (
               <div key={`as-${i}`} className="bay-box-placeholder"></div>
@@ -791,7 +825,7 @@ export default function PrintableCargoPlan({
                     <span>A AWK</span>
                     <span>G OOG</span>
                   </div>
-                  {/* M6.65: 적재 mode에서 등장하는 POD 3자 약어 목록 */}
+                  {/* M6.70k: 적재 mode POD 색 + 풀네임 범례 */}
                   {mode === 'loading' && (() => {
                     const podMap = {
                       'KRPTK': '평택', 'KRPYT': '평택신항', 'KRINC': '인천',
@@ -799,6 +833,7 @@ export default function PrintableCargoPlan({
                       'CNDLC': '다롄', 'CNLYG': '연운항', 'CNXMN': '샤먼',
                       'CNSHK': '산터우', 'CNSHA': '상하이', 'CNTAO': '칭다오',
                       'CNTSN': '톈진', 'CNNGB': '닝보', 'CNXGG': '신강',
+                      'CNWEI': '웨이하이', 'CNYTN': '옌톈',
                       'JPTYO': '도쿄', 'JPOSA': '오사카', 'JPNGO': '나고야',
                       'JPYOK': '요코하마', 'JPKBE': '고베', 'JPHKT': '하카타',
                       'VNHPH': '하이퐁', 'VNSGN': '호치민', 'VNDAD': '다낭',
@@ -806,20 +841,29 @@ export default function PrintableCargoPlan({
                       'THLCH': '램차방', 'THBKK': '방콕', 'SGSIN': '싱가포르',
                       'PHMNL': '마닐라', 'MYPKG': '포트클랑',
                     };
-                    const pods = new Set();
+                    // 페이지에 등장하는 POD (podColorMap의 key와 일치)
+                    const fullByShort = {};
                     Object.values(bayMap).forEach(arr => arr.forEach(c => {
-                      const p = (c.pod || '').toUpperCase();
-                      if (p && p.length >= 5 && !isPtk(c, mode)) pods.add(p);
+                      if (!c.pod || !isPtk(c, mode)) return;
+                      const podUp = String(c.pod).toUpperCase();
+                      if (podUp.length < 3) return;
+                      const short = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : null);
+                      if (short && short !== 'PTK') fullByShort[short] = podUp;
                     }));
-                    const podList = Array.from(pods).sort();
+                    const podList = Object.keys(podColorMap).sort();
                     if (podList.length === 0) return null;
                     return (
                       <div className="stats-pods">
                         <span style={{fontWeight: 600, marginRight: '4px'}}>목적지:</span>
-                        {podList.map(p => {
-                          const short = p.length >= 5 ? p.slice(2) : p;
-                          const kr = podMap[p] || p;
-                          return <span key={p}>{short}={kr}</span>;
+                        {podList.map(short => {
+                          const full = fullByShort[short] || short;
+                          const kr = podMap[full] || short;
+                          const color = podColorMap[short];
+                          return (
+                            <span key={short} style={{display: 'inline-block', marginRight: '6px'}}>
+                              <span style={{color, fontWeight: 700}}>{short}</span>={kr}
+                            </span>
+                          );
                         })}
                       </div>
                     );
@@ -838,7 +882,7 @@ export default function PrintableCargoPlan({
               aftColumns.forEach((col, i) => {
                 if (col.pair) {
                   out.push(
-                    <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap}
+                    <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
                       mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={globalRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
                   );
                 } else if (i === firstEmptyPairIdx) {
@@ -973,8 +1017,8 @@ export default function PrintableCargoPlan({
            이유: Chrome PDF 인쇄에서 flex:1 + visibility:hidden 자식이 자리를 collapse하는 케이스 발견
                  (PCBJ BAY 15 deck 부분이 박스에 자리 차지 못 함)
                  opacity:0은 자리 100% 보장 + 자식 ::after까지 모두 투명 */
-        .bay-grid-row.tier-hidden { opacity: 0; pointer-events: none; }
-        .bay-tier-labels span.tier-hidden { opacity: 0; }
+        .bay-grid-row.tier-hidden { display: none; }
+        .bay-tier-labels span.tier-hidden { display: none; }
         .bay-cell {
           flex: 1;
           border: 0.5px solid #999;
