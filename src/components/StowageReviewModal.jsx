@@ -13,6 +13,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Loader2, CheckCircle2, AlertTriangle, Save, Eye } from 'lucide-react';
 import { ocrStowagePdf, stowageToBayDictEntry, GEMINI_API_KEY } from '../gemini.js';
+import { autoBuildEntryFromPdf } from '../stowageAutoParser.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
 import { _storage, SK } from '../utils.js';
 
@@ -41,9 +42,23 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
     (async () => {
       try {
         setPhase('analyzing');
-        // M6.14d: 검수원 본인 키 우선 사용, 없으면 내장 키 폴백
-        const apiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
-        const data = await ocrStowagePdf(file, apiKey);
+        // M6.70: 자체 파서 우선 (Gemini API 의존 0)
+        let data;
+        try {
+          const code = (file.name || '').slice(0, 4).toUpperCase();
+          const entry = await autoBuildEntryFromPdf(file, code);
+          data = {
+            vesselName: entry.name,
+            bayDef: entry.bayDef,
+            _entry: entry,
+            _source: 'auto-parser',
+          };
+        } catch (parserErr) {
+          // 2차 fallback — Gemini (자체 파서 실패 시)
+          const apiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
+          if (!apiKey) throw parserErr;
+          data = await ocrStowagePdf(file, apiKey);
+        }
         if (cancelled) return;
         setStowageData(data);
         // M6.14e: 항차 정보가 이미 있으면 그대로 유지, 없으면 Gemini 추정값 사용

@@ -9,6 +9,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, AlertTriangle, CheckCircle2, Loader2, Sparkles, RotateCw } from 'lucide-react';
 import { ocrStowagePdf, stowageToBayDictEntry, GEMINI_API_KEY } from '../gemini.js';
+import { autoBuildEntryFromPdf } from '../stowageAutoParser.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
 import { _storage, SK } from '../utils.js';
 import { fbSubscribeShipBayDict } from '../firebase.js';
@@ -75,24 +76,39 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
     const apiKey = _storage.get(SK.geminiKey) || GEMINI_API_KEY;
     const results = [];
 
-    // M6.43: rate limit 대응
-    const DELAY_BETWEEN_MS = 5000;
+    // M6.70: 자체 파서 우선 — Gemini API 의존 0, rate limit 없음
+    const DELAY_BETWEEN_MS = 100;  // 자체 파서는 빠르므로 작은 delay
     const RETRY_DELAY_MS = 60000;
     const MAX_RETRIES = 2;
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     const analyzeWithRetry = async (file, retryCount = 0) => {
+      // M6.70: 1차 — 앱 내장 자체 파서 (Gemini API 불필요)
       try {
-        return await ocrStowagePdf(file, apiKey);
+        const code = (file.name || '').slice(0, 4).toUpperCase();
+        const entry = await autoBuildEntryFromPdf(file, code);
+        // 자체 파서 결과를 Gemini 형식과 동일하게 변환 (호환성)
+        return {
+          vesselName: entry.name,
+          bayDef: entry.bayDef,
+          _entry: entry,  // 직접 사용용
+          _source: 'auto-parser',
+        };
       } catch (e) {
-        const msg = (e?.message || String(e)).toLowerCase();
-        const isRateLimit = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('limit');
-        if (isRateLimit && retryCount < MAX_RETRIES) {
-          setProgress(p => ({ ...p, current: `${file.name} (Rate limit 대기 60초...)` }));
-          await sleep(RETRY_DELAY_MS);
-          return analyzeWithRetry(file, retryCount + 1);
+        // 2차 — Gemini fallback (자체 파서 실패 시)
+        if (!apiKey) throw e;
+        try {
+          return await ocrStowagePdf(file, apiKey);
+        } catch (e2) {
+          const msg = (e2?.message || String(e2)).toLowerCase();
+          const isRateLimit = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('limit');
+          if (isRateLimit && retryCount < MAX_RETRIES) {
+            setProgress(p => ({ ...p, current: `${file.name} (Rate limit 대기 60초...)` }));
+            await sleep(RETRY_DELAY_MS);
+            return analyzeWithRetry(file, retryCount + 1);
+          }
+          throw e2;
         }
-        throw e;
       }
     };
 
