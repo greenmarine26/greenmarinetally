@@ -13,10 +13,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Stethoscope, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, FileText } from 'lucide-react';
 import { fbSubscribeShipBayDict } from '../firebase.js';
+import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
 // 단일 entry 진단 — 실제 필드만 본다, 추론 X
+// M6.68: enrichBayDef 자동 보강 적용 후 평가 — 런타임 효과 인정
+//   PCBJ 같이 STOWAGE PDF로 완전 정정 안 했어도, deckTiers/holdTiers (글로벌) 있으면
+//   enrichBayDef가 모든 베이에 baseDeck/holdTiersLocal 자동 복사 → 카고플랜 정상 작동
+//   이 자동 보강 효과를 점수에 반영
 function diagnoseEntry(entry) {
-  const bayDef = entry?.bayDef || {};
+  // 자동 보강 적용 (런타임과 동일 양식)
+  let enrichedEntry = entry;
+  try {
+    enrichedEntry = enrichBayDef(entry, entry?._v5Matrix || entry?.bayDef?._v5Matrix, []) || entry;
+  } catch (e) { /* fallback to raw entry */ }
+
+  const bayDef = enrichedEntry?.bayDef || entry?.bayDef || {};
   const baysSummary = Array.isArray(bayDef.baysSummary) ? bayDef.baysSummary : [];
   const bayList = Array.isArray(bayDef.bayList) ? bayDef.bayList : [];
   const holdTiers = bayDef.holdTiers || [];
@@ -72,14 +83,15 @@ function diagnoseEntry(entry) {
     grade: bayDef.grade || '(없음)',
   };
 
-  // 점수 (0~100) — 단순 가중합
-  let score = 30;  // baysSummary 있으면 기본
+  // 점수 (0~100) — M6.68 양식 합리화: 핵심 필드 위주, hatchCount는 보너스
+  //   기본 50점 (baysSummary 존재) + 핵심 필드 가중치
+  let score = 50;  // baysSummary 있으면 기본 (M6.50 30점 → M6.68 50점)
   if (hasDeckTiersLocal === baysSummary.length) score += 20;
-  if (hasHoldTiersLocal === baysSummary.length) score += 20;
-  if (hasRowMaxLocal === baysSummary.length) score += 10;
-  if (hasHatchCount === baysSummary.length) score += 10;
-  if (entry.pdfUrl) score += 5;
-  if (fields.verified) score += 5;
+  if (hasHoldTiersLocal === baysSummary.length) score += 15;
+  if (hasRowMaxLocal === baysSummary.length) score += 5;
+  if (hasHatchCount === baysSummary.length) score += 5;  // 보너스 (선택적 필드)
+  if (entry.pdfUrl) score += 3;
+  if (fields.verified) score += 2;
 
   return { issues, warnings, score, fields };
 }
