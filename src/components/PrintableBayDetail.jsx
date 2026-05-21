@@ -334,19 +334,35 @@ export default function PrintableBayDetail({
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
 
-  // M6.77: voyage 전체 row range 자체 계산 (props 없을 때 fallback)
+  // M6.77 → M6.78: voyage 전체 deck/hold 별 row range
   const computedRowRange = useMemo(() => {
-    let maxLeft = 0, maxRight = 0, has00 = false;
+    let deckLeft = 0, deckRight = 0, deckHas00 = false;
+    let holdLeft = 0, holdRight = 0, holdHas00 = false;
     for (const c of containers) {
       if (!c.row || !c.tier) continue;
       const n = parseInt(c.row);
       const tier = parseInt(c.tier);
       if (!tier) continue;
-      if (n === 0) { has00 = true; continue; }
-      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
-      else maxRight = Math.max(maxRight, n);
+      const isDeck = tier >= 80;
+      if (n === 0) {
+        if (isDeck) deckHas00 = true; else holdHas00 = true;
+        continue;
+      }
+      if (isDeck) {
+        if (n % 2 === 0) deckLeft = Math.max(deckLeft, n);
+        else deckRight = Math.max(deckRight, n);
+      } else {
+        if (n % 2 === 0) holdLeft = Math.max(holdLeft, n);
+        else holdRight = Math.max(holdRight, n);
+      }
     }
-    return { maxLeft, maxRight, has00 };
+    return {
+      maxLeft: Math.max(deckLeft, holdLeft),
+      maxRight: Math.max(deckRight, holdRight),
+      has00: deckHas00 || holdHas00,
+      deck: { maxLeft: deckLeft, maxRight: deckRight, has00: deckHas00 },
+      hold: { maxLeft: holdLeft, maxRight: holdRight, has00: holdHas00 },
+    };
   }, [containers]);
   const effectiveRowRange = globalRowRange || computedRowRange;
 

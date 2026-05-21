@@ -963,8 +963,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     };
   }, [allContainers]);
 
-  // M6.76 → M6.77: 페이지 빈이면 voyage 전체 fallback
-  //   사용자: 컨 없는 페이지도 — 자리(셀)는 항상 존재
+  // M6.79 → M6.80: deck/hold 별 row 양식 (특이 선박 지원)
+  //   일반: deck/hold 같음 / 특이: deck에 00 있고 hold에 없음 등
   const buildPageRows = (range) => {
     const ml = range?.maxLeft || 0, mr = range?.maxRight || 0;
     if (!ml && !mr) return [];
@@ -972,17 +972,13 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const right = []; for (let n = 1; n <= mr; n += 2) right.push(String(n).padStart(2, '0'));
     return range.has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  // 페이지 컨 + voyage 전체 fallback
-  const voyageUnified = {
-    maxLeft: Math.max(pageRange.deck.maxLeft, pageRange.hold.maxLeft, globalRowRange?.maxLeft || 0),
-    maxRight: Math.max(pageRange.deck.maxRight, pageRange.hold.maxRight, globalRowRange?.maxRight || 0),
-    has00: pageRange.deck.has00 || pageRange.hold.has00 || globalRowRange?.has00 || false,
-  };
-  const unifiedRowsArr = buildPageRows(voyageUnified);
-  const deckRowsArr = unifiedRowsArr;
-  const holdRowsArr = unifiedRowsArr;
+  // voyage 전체 deck/hold 별
+  const voyDeck = globalRowRange?.deck || pageRange.deck;
+  const voyHold = globalRowRange?.hold || pageRange.hold;
+  const deckRowsArr = buildPageRows(voyDeck);
+  const holdRowsArr = buildPageRows(voyHold);
 
-  // 좌우 균형 (전 베이 통일 폭) — fallback 양식 (deck/hold 분리 안 됐을 때)
+  // 좌우 균형 (전 베이 통일 폭) — fallback 양식
   const maxLeft = globalRowRange?.maxLeft || 0;
   const maxRight = globalRowRange?.maxRight || 0;
   const has00 = globalRowRange?.has00 || false;
@@ -995,9 +991,20 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   for (let n = 1; n <= maxRight; n += 2) {
     allRightRows.push(String(n).padStart(2, '0'));
   }
-  // M6.72: 컨테이너에 row=00 있을 때만 중앙 표시
   const centerRows = has00 ? ['00'] : [];
-  const allRows = unifiedRowsArr.length > 0 ? unifiedRowsArr : [...allLeftRows, ...centerRows, ...allRightRows];
+  // allRows (legacy fallback) — deck/hold union
+  const allRows = (deckRowsArr.length || holdRowsArr.length)
+    ? [...new Set([...deckRowsArr, ...holdRowsArr])].sort((a, b) => {
+        const an = a === '00' ? 0 : parseInt(a);
+        const bn = b === '00' ? 0 : parseInt(b);
+        const aIsEven = an > 0 && an % 2 === 0;
+        const bIsEven = bn > 0 && bn % 2 === 0;
+        if (aIsEven && !bIsEven) return -1;
+        if (!aIsEven && bIsEven) return 1;
+        if (aIsEven) return bn - an;
+        return an - bn;
+      })
+    : [...allLeftRows, ...centerRows, ...allRightRows];
 
   // DECK / HOLD 분리 + 상하 균형
   // M3.87: globalTiers 사용 (선박 전체 tier 풀) — 베이가 한 컨만 있어도 모든 슬롯 표시

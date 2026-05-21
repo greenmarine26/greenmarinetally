@@ -273,8 +273,10 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   2) tier: 페이지 두 베이 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   V5 외곽 통일 양식 → 베이플랜 양식으로 변경 (베이별 격자)
 
-  // M6.76 → M6.77: voyage 전체 globalRowRange 우선 + 빈 박스 fallback
-  //   사용자 양식: 컨 없는 박스 (BAY 01)도 — voyage 전체 row 자리 셀 표시
+  // M6.77 → M6.78 → M6.79 → M6.80: deck/hold 별 row 양식 (사용자 PDF 검증)
+  //   일반 선박: deck/hold 같은 row 양식 (DJCF, TMPZ 등)
+  //   특이 선박: hold에 00 없는데 deck에 00 있음 → 별도 양식
+  //   각 영역 안 모든 row 자리 셀 (border) — 컨 없으면 빈 셀
   const buildRows = (range) => {
     const maxLeft = range?.maxLeft || 0;
     const maxRight = range?.maxRight || 0;
@@ -286,33 +288,17 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
     for (let r = 1; r <= maxRight; r += 2) right.push(String(r).padStart(2, '0'));
     return has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  // voyage 전체 (globalRowRange) 우선 — 모든 박스 동일 양식
-  //   globalRowRange.deck/hold 합산 + globalRowRange.maxLeft 둘 다 시도
-  const voyageRangeUnified = (() => {
-    if (globalRowRange) {
-      const dLeft = globalRowRange.deck?.maxLeft || 0;
-      const hLeft = globalRowRange.hold?.maxLeft || 0;
-      const dRight = globalRowRange.deck?.maxRight || 0;
-      const hRight = globalRowRange.hold?.maxRight || 0;
-      const dHas00 = globalRowRange.deck?.has00 || false;
-      const hHas00 = globalRowRange.hold?.has00 || false;
-      return {
-        maxLeft: Math.max(dLeft, hLeft, globalRowRange.maxLeft || 0),
-        maxRight: Math.max(dRight, hRight, globalRowRange.maxRight || 0),
-        has00: dHas00 || hHas00 || globalRowRange.has00 || false,
-      };
-    }
-    // fallback — 박스 자체 (BAY 01 컨 없으면 빈)
-    return {
-      maxLeft: Math.max(boxRange.deck.maxLeft, boxRange.hold.maxLeft),
-      maxRight: Math.max(boxRange.deck.maxRight, boxRange.hold.maxRight),
-      has00: boxRange.deck.has00 || boxRange.hold.has00,
-    };
-  })();
-  const unifiedRows = buildRows(voyageRangeUnified);
-  const deckDynRows = unifiedRows;
-  const holdDynRows = unifiedRows;
-  const maxCols = Math.max(unifiedRows.length, 1);
+  // voyage 전체 deck/hold 별 (globalRowRange.deck/hold) — 모든 박스 동일
+  const voyDeck = globalRowRange?.deck || {
+    maxLeft: boxRange.deck.maxLeft, maxRight: boxRange.deck.maxRight, has00: boxRange.deck.has00
+  };
+  const voyHold = globalRowRange?.hold || {
+    maxLeft: boxRange.hold.maxLeft, maxRight: boxRange.hold.maxRight, has00: boxRange.hold.has00
+  };
+  const deckDynRows = buildRows(voyDeck);
+  const holdDynRows = buildRows(voyHold);
+  // 셀 너비 — deck/hold max 기준 (큰 쪽 기준 + 가운데 정렬)
+  const maxCols = Math.max(deckDynRows.length, holdDynRows.length, 1);
   const colWidthPct = 100 / maxCols;
 
   // M6.54: 점선 위치 통일 (사용자 선택 A)
