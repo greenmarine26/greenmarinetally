@@ -87,14 +87,20 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
       try {
         const code = (file.name || '').slice(0, 4).toUpperCase();
         const entry = await autoBuildEntryFromPdf(file, code);
-        // 자체 파서 결과를 Gemini 형식과 동일하게 변환 (호환성)
+        const bayCount = entry?.bayDef?.baysSummary?.length || 0;
+        console.log(`[M6.70 parser] ${file.name}: ${bayCount} 베이 추출`);
+        // Gemini 결과 형식과 호환 (bays 키로 bayCount 계산)
         return {
           vesselName: entry.name,
+          callsign: '',
+          imo: '',
+          bays: entry.bayDef.baysSummary || [],  // bayCount 계산용
           bayDef: entry.bayDef,
-          _entry: entry,  // 직접 사용용
+          _entry: entry,
           _source: 'auto-parser',
         };
       } catch (e) {
+        console.warn(`[M6.70 parser] ${file.name} 실패:`, e?.message);
         // 2차 — Gemini fallback (자체 파서 실패 시)
         if (!apiKey) throw e;
         try {
@@ -197,9 +203,18 @@ export default function BulkStowageModal({ open, onClose, onCompleted, inspector
       }
 
       try {
-        const entry = stowageToBayDictEntry(item.data, item.file.name, {
-          code, callsign: item.callsign.toUpperCase().trim(), imo: item.imo.trim(),
-        });
+        // M6.70: 자체 파서 결과는 이미 entry — 변환 불필요
+        let entry;
+        if (item.data?._source === 'auto-parser' && item.data?._entry) {
+          entry = { ...item.data._entry };
+          entry.code = code;
+          entry.callsign = item.callsign.toUpperCase().trim();
+          entry.imo = item.imo.trim();
+        } else {
+          entry = stowageToBayDictEntry(item.data, item.file.name, {
+            code, callsign: item.callsign.toUpperCase().trim(), imo: item.imo.trim(),
+          });
+        }
         entry.bayDef.verified = true;
         entry.bayDef.grade = 'user-verified-stowage';
 

@@ -10,6 +10,11 @@ import { extractPdfText } from './mixerUpload.js';
 export async function parseStowagePdfAuto(file) {
   const text = await extractPdfText(file);
 
+  // 디버그 — 사용자 콘솔에서 확인
+  console.log(`[M6.70 parser] ${file.name} — 텍스트 길이: ${text.length}`);
+  console.log(`[M6.70 parser] 첫 300자:`, text.slice(0, 300).replace(/\n/g, ' | '));
+  console.log(`[M6.70 parser] 'BAY' 등장 횟수:`, (text.match(/BAY/g) || []).length);
+
   const bayList = new Set();
   const standaloneBays = new Set();
   const pairBays = new Set();
@@ -35,6 +40,8 @@ export async function parseStowagePdfAuto(file) {
       standaloneBays.add(bn);
     }
   }
+
+  console.log(`[M6.70 parser] 베이 추출: ${bayList.size}개`, Array.from(bayList).sort());
 
   // tier 추출 — 짝수만 (deck 80-98, hold 02-08)
   const deckTiers = new Set();

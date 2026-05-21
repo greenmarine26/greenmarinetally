@@ -132,18 +132,18 @@ export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload, onA
             >
               ⚡ ASC 일괄 등록 (Gemini 0, 즉시)
             </button>
-            {/* PDF 옵션 — Gemini 사용 */}
+            {/* M6.70: PDF 옵션 — 앱 내장 자체 파서 (Gemini 의존 0) */}
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => onBulkUpload && onBulkUpload()}
                 className="flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs font-bold"
               >
                 <FolderOpen className="w-3.5 h-3.5"/>
-                📚 PDF 일괄 (Gemini)
+                📚 PDF 일괄 (M6.70 자체)
               </button>
               <label className="flex-1 min-w-[120px] cursor-pointer inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-purple-900/50 hover:bg-purple-800/50 border border-purple-700/50 rounded text-xs font-bold text-purple-200">
                 <Upload className="w-3.5 h-3.5"/>
-                📄 PDF 1개
+                📄 PDF 1개 (자체)
                 <input
                   ref={singleRef}
                   type="file"
