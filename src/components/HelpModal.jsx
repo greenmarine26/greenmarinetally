@@ -379,6 +379,20 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🔥 M6.86.5 (2026-05-22) — 카스피 양식 진짜 약속 회복 + KKLC.def 등록',
+      examples: [
+        { q: '🎯 배경', a: '사용자: "앱 출력물이 샘플과 같다고 하셨나요?" 후 KKLC2604S PDF + KKLC.def 직접 첨부. 이전 메모리 "표준 6 deck + 4 hold baseline. 실제 없는 자리는 invisible" 약속이 잘못된 메모리였음을 확인. 진짜 약속: 각 베이는 베이사전(.def) / EDI 실 hull 구조 그대로. baseline 강제 X. 가짜 셀 X. 단독 베이 hold 없으면 hold 영역 자체 없음. A4 한 장. 마크는 모드별 (선적=POD첫글자 셀에, 양하=선사 색만 셀에+별첨 3자리).' },
+        { q: '[1] STD_DECK/STD_HOLD baseline 강제 제거', a: 'allTiersSet에서 STD_DECK/STD_HOLD/pageBayDictTiers/globalTiers 전부 제거. 베이별 dictBay(베이사전 entry)의 deckTiersLocal/holdTiersLocal만 사용 + EDI 실 컨테이너 tier 추가. 페어(짝수+홀수)는 둘 entry의 union. 페이지 전체 union 제거 → 베이마다 독립적인 tier 구성.' },
+        { q: '[2] area-invisible 복원 + dictBay 페어 체크', a: 'hold-area / deck-area 클래스에 ${!hasHold ? area-invisible : ""} 복원. hasHold 결정: 페어인 경우 dictBayEven, dictBayOdd, dictBay 셋 중 하나라도 hasHold!==false면 true. 셋 다 hasHold===false (BAY (38)39 KKLC 등)면 false → hold 영역 자체 안 그림.' },
+        { q: '[3] 별첨 페이지(appendix-page) 통째 삭제', a: 'M6.86.4의 별도 페이지 별첨1·별첨2를 JSX + CSS 통째 제거 (102줄). A4 한 장 유지. 선사/POD 통계는 좌측 하단 mini-legend(.bay-stats-inline)에 통합.' },
+        { q: '[4] 마크 모드별 분기 (getMark 재작성)', a: '선적(loading) 일반 컨 = POD 첫 글자 letter (K=KAN, P=PUS, S=SGN, M=MIP 등) + 글자 색 (podFirstColorMap). 양하(discharge) 일반 컨 = letter 없음, 셀 배경색만 (opColorMap, 선사 3자리 코드별 8색 순환). 양 모드 공통: 특수화물(R/D/F/T/A/E) letter 최우선 표기 + 자체 색. 우선순위: DG > Reefer > FR > Tank > OT > 엠티 > 일반.' },
+        { q: '[5] mini-legend 모드별 + 동적 자동 축소', a: '선적: POD 첫 글자(색) + POD 3자 코드 + 풀명 + 20/40/45 카운트. 양하: 색박스(op-swatch) + 선사 3자리 + 20/40/45 카운트. 선사 수 7~10 = carrier-mid (폰트 축소), 11~16 = carrier-small (풀명 숨김), 17+ = carrier-tiny (사이즈 상세 숨김). A4 한 장 유지.' },
+        { q: '[6] KKLC 베이사전 v2 .def + PDF 검증판 등록', a: 'KKLC.def 사용자 첨부본 분석: 30 베이 (BAY 01-39), 10 섹션, KMTC LAEM CHABANG, D5MP9, IMO 9772230. BAY 33-39 hasHold=false 확정 (PDF 일치). BAY 37-39 deck에 94 있고 82 없음. 기존 v2 KKLC(BAY 00 포함, 22 베이만 등록, BAY 33-39 hasHold=true 오류) → 새 30 베이 .def 검증판으로 통째 교체.' },
+        { q: '✅ 결과', a: 'KKLC2605S 카고플랜 출력 = KKLC2604S 샘플 PDF 양식 일치 (A4 한 장, 가짜 셀 없음, BAY 33-39 hold 영역 없음, BAY 37-39 deck tier 94 포함). 선적 항차는 POD 첫 글자가 셀에 보임, 양하 항차는 셀에 색만 + mini-legend에 선사별 카운트. 다른 선박(STSE, TNJP 등)도 동일 원칙 적용 — 베이사전 우선, 강제 baseline 없음.' },
+        { q: '🛡 회귀 방지', a: 'PrintableCargoPlan.jsx + utils.js + HelpModal.jsx + shipBayDict_v2.js(KKLC만 정정). 다른 선박 베이사전 entry는 무변경. M6.86.4의 carrierBreakdown/cargoTypeBreakdown useMemo는 양하 mini-legend에서 carrierBreakdown 재활용(별첨 JSX는 삭제됨).' },
+      ],
+    },
+    {
       title: '🔥 M6.86.4 (2026-05-22) — 카고플랜 약속 위반 6건 회복',
       examples: [
         { q: '🎯 배경', a: '사용자 보고: "약속된 플랜 작업방식을 무시하고 만듬". KKLC 카스피 469컨 카고플랜에서 (1) 모든 베이 카운트 0/0/0 (2) "총 0대" 표시 (3) PUS/MIP/SGN/PTK/BS POD 3자가 셀에 박힘 — legend엔 없음 (4) BAY 33, 37 박스 높이가 BAY 21과 달라 정렬 깨짐 (5) 별첨1·별첨2 영역 자체 부재. 메모리 #2 + #24 약속 위반.' },

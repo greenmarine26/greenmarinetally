@@ -1,181 +1,149 @@
-# Tallyman Master M6.86.4 — HANDOFF
+# Tallyman Master M6.86.5 — HANDOFF
 
 **Date**: 2026-05-22
-**Previous**: M6.86.3
-**Build**: `vite v6.4.2` · 성공 · `dist/assets/index-DvvizN0d.js` (2,444 kB / gzip 432 kB)
+**Previous**: M6.86.4
+**Build**: `vite v6.4.2` · 성공 · `dist/assets/index-ZQ_yjlE8.js` (2,447 kB / gzip 434 kB)
 
 ---
 
 ## 🎯 사용자 보고
 
-> "이파일들이 잘못되었습니다. 뭐가 잘못되었는지 분석 바랍니다. 약속된 플랜 작업방식을 무시하고 만듬"
+> "앱 출력물이 샘플과 같다고 하셨나요?" → KKLC2604S.pdf + KKLC.def 직접 첨부
 
-KKLC 카스피 469컨 카고플랜 (M6.86.3) 출력에서 다음 6건이 약속(메모리 #2 + #24) 위반.
-
-| # | 위반 항목 | 약속 |
-|---|---|---|
-| 1 | 모든 베이 카운트 0/0/0 | 베이당 실제 컨 수 표시 |
-| 2 | "총 0대" 표시 (실제 469대) | 전체 컨 수가 한눈에 |
-| 3 | PUS/MIP/SGN/PTK/BS POD 3자가 셀에 박힘 (legend엔 없음) | 마크는 o/X/R/D/F/T/A/E 표준만 |
-| 4 | BAY 33, 37 박스 높이가 BAY 21과 달라 정렬 깨짐 | "실제 없는 자리는 invisible (자리만, 모든 박스 정렬)" |
-| 5 | 마크 letter (F=FR, A=OT) | 메모리 #24 원본 P/U와 다름 — 사용자 위임으로 F/A 유지 |
-| 6 | 별첨1 (선사별), 별첨2 (화물종류별) 부재 | 별첨 영역 필수 |
+**핵심 정정**: 이전 메모리 "표준 6 deck + 4 hold baseline. 실제 없는 자리는 invisible"이 잘못된 메모리였음.
+샘플 PDF 검증 결과 진짜 약속은:
+1. **각 베이는 베이사전(.def) / EDI 실 hull 구조 그대로** — baseline 강제 X, 가짜 셀 X
+2. **단독 베이 hold 없으면 hold 영역 자체 없음** (BAY 33-39 등)
+3. **A4 한 장 fit** — 별첨 별도 페이지 X
+4. **마크는 모드별**: 선적=POD 첫 글자 셀 표기, 양하=선사 색만 셀에 + 별첨에 선사 3자리
 
 ---
 
-## 🔧 수정 내역 (M6.86.4)
+## 🔧 수정 내역 (M6.86.5)
 
-### [1] 베이 카운트 = 전체 컨 (PTK + 통과)
+### [1] STD_DECK/STD_HOLD baseline 강제 제거 + 페이지 union 제거
 
-**파일**: `src/components/PrintableCargoPlan.jsx` (BayBox 내부, 약 538행)
-
-```jsx
-// 이전 (M6.86.3 회귀 버그)
-const cnt = { c20: 0, c40: 0, c45: 0 };
-allConts.forEach(c => {
-  if (!isPtk(c, mode)) return;   // ← 통과 컨은 제외 → KKLC 전부 0
-  const sz = sizeOf(c);
-  cnt[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
-});
-
-// M6.86.4
-const cnt = { c20: 0, c40: 0, c45: 0 };
-const cntPtk = { c20: 0, c40: 0, c45: 0 };
-allConts.forEach(c => {
-  const sz = sizeOf(c);
-  const k = sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20';
-  cnt[k]++;
-  if (isPtk(c, mode)) cntPtk[k]++;
-});
-```
-
-**효과**: 베이 헤더에 베이 전체 컨 수 표시. PTK/통과 구분 정보는 좌측 하단 통계 박스에서 별도 표시.
-
-### [2] 좌측 하단 "총 N대" = grandTotal
-
-**파일**: 같은 파일, statsBox 블록 (약 983행)
-
-```jsx
-// M6.86.4
-const totalPtk     = totalCounts.total.c20 + totalCounts.total.c40 + totalCounts.total.c45;
-const totalTransit = totalCounts.transitTotal;
-const totalAll     = totalCounts.grandTotal;
-```
-
-표시:
-```
-20'/40'/45'
-총 N대                                ← grandTotal
-적재 X / 통과 Y                       ← 신규 stats-breakdown
-20DC ... 40HC ...
-o 적재  X 통과  R 리퍼 ... E 엠티
-```
-
-`stats-transit` 블록은 제거 (정보 중복 회피).
-
-### [3] POD 3자 셀 표기 제거 (메모리 #24 표준 마크 복귀)
-
-**파일**: 같은 파일, `getMark` 함수 (약 260행)
+**파일**: `src/components/PrintableCargoPlan.jsx` BayBox (약 447행)
 
 ```js
-// 이전 (M6.65~M6.86.3)
-} else {
-    if (mode === 'loading' && c.pod) {
-      baseLetter = POD 3자 (PUS/MIP/SGN/PTK/BS);   // ← legend에 없음
-    } else {
-      baseLetter = 'X';
-    }
-}
-
-// M6.86.4
-} else {
-    // 통과(평택 미관여)는 항상 'X' 단일. POD 3자 표기 제거.
-    baseLetter = 'X';
-}
+// 이전 (M6.86.4): allTiersSet에 STD_DECK/STD_HOLD 강제 + pageBayDictTiers/globalTiers union
+// M6.86.5: 베이별 dictBay.deckTiersLocal/holdTiersLocal만 사용 + 페어(짝수+홀수) union + EDI 실 컨 추가
+const localDeckTiers = new Set();
+const localHoldTiers = new Set();
+[dictBayEven, dictBayOdd, dictBay].forEach(db => {
+  if (!db) return;
+  (db.deckTiersLocal || []).forEach(t => localDeckTiers.add(...));
+  (db.holdTiersLocal || []).forEach(t => localHoldTiers.add(...));
+});
+// 베이사전 + EDI 실 tier — 페이지 union 제거 (베이마다 독립)
 ```
 
-**유지**: PTK 적재 컨의 `pod3` (POD 색상용)은 그대로. 즉 평택 출발 컨은 'L' 글자 + POD 색상으로 목적지 가독성 유지. 통과만 깔끔한 X.
+**효과**: BAY 33-39처럼 hold 없는 베이는 hold 영역 자체 안 그려짐. BAY 37-39처럼 deck tier 94 있고 82 없는 베이도 정확히 표시.
 
-### [4] 박스 정렬 회복 (M6.86.1 동작 복원)
+### [2] area-invisible 클래스 복원 + 페어 dictBay 체크
 
-**파일**: 같은 파일
+**파일**: 같은 파일, 약 540, 605, 635행
 
-(a) `STD_HOLD` baseline 복귀 (약 444행):
-```js
-const allTiersSet = Array.from(new Set([
-  ...STD_DECK,
-  ...STD_HOLD,   // ← M6.86.4 복귀. 모든 박스 동일 deck 7단 + hold 4단.
-  ...pageBayDictTiers.deck,
-  ...pageBayDictTiers.hold,
-  ...
-]));
-```
-
-(b) `area-invisible` 클래스 적용 제거 (약 576, 606행):
 ```jsx
-// 이전: <div className={`hold-area ${!hasHold ? 'area-invisible' : ''}`}>
-// M6.86.4: <div className="hold-area">
+// hasHold: 페어인 경우 even/odd entry 둘 다 체크
+const hasHold = anyDictBay
+  ? (dictHasHold(dictBayEven) || dictHasHold(dictBayOdd) || dictHasHold(dictBay))
+  : hasHoldCont;
+// hold-area에 area-invisible 클래스 (M6.86.4에서 제거했던 것 복원)
+<div className={`hold-area ${!hasHold ? 'area-invisible' : ''}`}>
 ```
 
-**효과**: BAY 33, 37 단독 박스도 BAY 21과 동일한 deck 7단 + hold 4단 구조. 컨 없는 자리는 셀 border만 (visibility:hidden 없음).
+### [3] 별첨 페이지(appendix-page) 통째 삭제 — A4 한 장 유지
 
-**M6.86.3 변경과의 관계**: M6.86.3은 "가짜 hold 자리(33-39)" 문제 해결을 위해 `STD_HOLD`를 제거했으나, 영역 통째 invisible은 메모리 #24 "모든 박스 정렬" 원칙 위배. M6.86.4의 해법은 "영역은 항상 보이되 셀은 비어있는 border만"이라 정렬도 유지하고 가짜 컨테이너 자리 환상도 없음 (실 컨테이너 없으면 마크 없음).
+**파일**: 같은 파일, 약 1312~1412 (102줄 JSX 삭제) + 약 1825~1885 (CSS 통째 삭제)
 
-### [5] F=FR, A=OT 유지
+선사/POD 통계는 좌측 하단 mini-legend(`.bay-stats-inline`)에 통합.
 
-Legend에 이미 정착한 letter 그대로. 메모리 #24의 P/U와는 다르지만 사용자 위임("5는 어느것이든 문제 없음").
+### [4] getMark — 모드별 분기 전면 재작성
 
-### [6] 별첨1·별첨2 페이지 신설
+**파일**: 같은 파일, 약 240행
 
-**파일**: 같은 파일, 메모 + JSX + CSS 모두 추가.
+```js
+// 특수화물 우선순위 (양 모드 공통): DG > Reefer > FR > Tank > OT > 엠티
+// 그 외 일반 컨:
+//   - mode === 'loading': letter = POD 첫 글자, podFirst = 색상 키
+//   - mode === 'discharge': letter = '' (빈 공백), opCode = c.op (선사 색상 키)
+return { letter, type, isXray, pod3, podFirst, opCode };
+```
 
-(a) 메모 (약 906행):
-- `carrierBreakdown` — `c.op` (NAD+CA / NAD+CF / 엑셀 operator) 별로 `{ '20F', '20E', '40F', '40E', '45F', '45E', total, ptk, transit }`
-- `cargoTypeBreakdown` — 우선순위(DG > Reefer > FR > Tank > OT > 엠티 > 일반)별로 `{ ptk, transit, total }`. mark 키 포함(R/D/F/T/A/E/o)으로 베이마크 셀 색상과 동일 표시.
+### [5] 셀 렌더 모드별 — renderCell 재작성
 
-(b) JSX (특수화물 페이지 뒤, 별첨 페이지 추가):
-- 별첨1 — `<table className="appendix-carrier">`. 행: 선사별 + 합계 행
-- 별첨2 — `<table className="appendix-type">`. 행: 종류별(7행) + 합계 행. mark 셀은 `<span className="cell mark-X">`로 베이마크 색상 그대로
+```jsx
+// 특수화물: mark-R/D/F/T/A/E 자체 색
+// 선적 일반: <span className="cell mark-pod" style={{color, fontWeight:700}}>K</span>
+// 양하 일반: <span className="cell mark-op" style={{background: '#3b82f633', borderColor:'#3b82f6'}}>&nbsp;</span>
+```
 
-(c) CSS:
-- `.appendix-page` — A4 landscape 291mm × 204mm
-- `.appendix-grid` — 2fr 1fr (별첨1 넓게, 별첨2 좁게)
-- `.appendix-table` — 9pt, border-collapse, totals-row 강조
-- `.appendix-page @media print` — page-break-before
+### [6] mini-legend 모드별 + 자동 축소 (carrier-mid/small/tiny)
+
+- 선적: POD 첫 글자(색) + POD 3자 + 풀명 + 20/40/45
+- 양하: op-swatch(색박스) + 선사 3자리 + 20/40/45
+- 동적 클래스:
+  - 6 선사 이하: 기본
+  - 7~10: `carrier-mid` (폰트 7→6.8pt)
+  - 11~16: `carrier-small` (풀명 숨김, 6pt)
+  - 17+: `carrier-tiny` (사이즈 상세도 숨김, 5.2pt)
+
+A4 한 장 유지를 위해 별첨이 1페이지 안에 자동 축소.
+
+### [7] KKLC 베이사전 v2 통째 교체
+
+**파일**: `src/data/shipBayDict_v2.js` 19행 (KKLC entry)
+
+| 항목 | 기존 (M6.71 PDF 자동 파서) | M6.86.5 (.def + PDF 검증) |
+|---|---|---|
+| 베이 수 | 22 (BAY 00 포함, 일부 누락) | **30** (BAY 01-39 모두) |
+| BAY 00 | hasHold:true, isStandalone:false | **제거** (실제 없음) |
+| BAY 33-35 | hasHold:**true**, hold:[8,6,4]/[8,6] | **hasHold:false**, hold:[] |
+| BAY 37-39 | hasHold:**true**, hold:[2], deck:[94,92,90,88,86,84] | **hasHold:false**, hold:[], deck:[94,92,90,88,86,84] |
+| 콜사인/IMO | 없음 | **D5MP9** / **9772230** |
+| grade | auto-box-region | **user-def-verified** |
 
 ### 버전 + HelpModal
 
-- `src/utils.js`: `APP_VERSION = 'M6.86.4'`
-- `src/components/HelpModal.jsx`: M6.86.4 tips 최상단 항목 추가 (M6.86.3 이전 항목 그대로 유지)
+- `src/utils.js`: `APP_VERSION = 'M6.86.5'`
+- `src/components/HelpModal.jsx`: M6.86.5 tips 최상단 항목 추가
 
 ---
 
-## ✅ 검증 체크리스트 (KKLC2605S 469컨)
+## ✅ 검증 체크리스트 (KKLC2605S 양하 + KKLC2604S 선적)
 
-다음 항목은 카고플랜 출력으로 확인:
+**구조**:
+- [ ] BAY 33-39 hold 영역 자체 안 보임 (단독 박스 키도 짧음)
+- [ ] BAY 37/(38)39 deck에 tier 94 보이고 82 안 보임
+- [ ] BAY 21~31 deck/hold 정상 (tier 92~82 + 10~02)
+- [ ] BAY 01~03 작은 베이 정상
+- [ ] A4 한 장 안에 모두 들어감 (별첨 별도 페이지 없음)
 
-- [ ] 베이 헤더에 0 아닌 실제 컨 수 표시 (예: `BAY (22)23 5/12/0` 같은 형태)
-- [ ] 좌측 하단 "총 469대" 표시 + 그 아래 "적재 0 / 통과 469"
-- [ ] 셀에 PUS/MIP/SGN/PTK/BS 안 박혀 있음 — 모두 X 또는 R/D/F/T/A/E
-- [ ] BAY 33, 37 단독 박스 높이가 BAY 21 단독 박스와 동일
-- [ ] BAY 33, 37 hold 영역에 빈 셀 4단 보임 (자리만, 컨 없음)
-- [ ] 2페이지 별첨 — 선사별 표 + 화물종류별 표
-- [ ] 인쇄 시 별첨 페이지가 새 페이지로 분리 (page-break-before)
+**마크 (선적 KKLC2604S 양식)**:
+- [ ] 셀에 K/P/S/M 글자 + 색 표시
+- [ ] 좌측 하단 mini-legend에 "K KAN 40/15/0", "P PUS 0/8/0" 등
+- [ ] 특수화물 R/D/F/T/A/E는 글자+자체색 그대로
 
-일반 평택 항차(STSE, TNJP 등)에서도 동작 동일:
-- [ ] PTK 적재 컨은 'L' + POD 색상으로 표시
-- [ ] PTK 양하 컨은 'o' 마크
-- [ ] 베이 카운트는 베이 전체 컨 (PTK 비중 다수)
-- [ ] 통과 0대면 좌측 하단 "적재 N / 통과 0"
+**마크 (양하 KKLC2605S)**:
+- [ ] 셀에 글자 없음, 배경색만 (선사별)
+- [ ] 좌측 하단에 색박스 + 선사 3자리 + 카운트
+- [ ] 선사 많으면 자동 축소 (10+ → mid, 16+ → small, 17+ → tiny)
+- [ ] 특수화물은 글자+자체색 그대로
+
+**다른 선박 동작 (회귀 방지)**:
+- [ ] STSE, TNJP, RZOR, ATRP 카고플랜 정상 (각자 베이사전 deckTiersLocal/holdTiersLocal 그대로 사용)
+- [ ] PCBJ, DJCF 등 PDF 자동 파서 등록 선박도 정상
 
 ---
 
 ## 📁 변경 파일
 
 ```
-src/components/PrintableCargoPlan.jsx  (6건 모두 — getMark, BayBox cnt, area-invisible 제거, statsBox, 별첨 페이지, CSS)
-src/utils.js                            (APP_VERSION M6.86.3 → M6.86.4)
-src/components/HelpModal.jsx           (M6.86.4 tips 추가)
+src/components/PrintableCargoPlan.jsx  (전면 - getMark, BayBox, statsBox, CSS)
+src/utils.js                            (APP_VERSION M6.86.4 → M6.86.5)
+src/components/HelpModal.jsx           (M6.86.5 tips 추가)
+src/data/shipBayDict_v2.js             (KKLC entry .def+PDF 검증판 교체)
 ```
 
 다른 파일 무변경.
@@ -184,40 +152,20 @@ src/components/HelpModal.jsx           (M6.86.4 tips 추가)
 
 ## 🚀 배포 방법
 
-ZIP 풀면 `tallyman_m6864/` 한 디렉토리에 **소스 + 빌드 산출물(dist) + build.sh + HANDOFF**가 모두 들어있습니다.
+ZIP 풀면 `tallyman_m6865/` 한 디렉토리에 **소스 + 빌드 산출물(dist) + build.sh + HANDOFF** 모두 들어있습니다.
 
 ### A. 빌드 산출물 즉시 배포
-
-`tallyman_m6864/dist/` 디렉토리를 정적 호스팅(Firebase Hosting 등)에 그대로 업로드:
-- `dist/index.html`
-- `dist/assets/index-DvvizN0d.js`
-- `dist/assets/index-DpKEwH0I.css`
-- `dist/manifest.webmanifest`
-- `dist/sw.js`
-
-별도 빌드 없이 즉시 배포 가능.
+`tallyman_m6865/dist/` 디렉토리를 정적 호스팅(Firebase Hosting 등)에 통째로 업로드.
 
 ### B. 소스 수정 후 재빌드
-
-`tallyman_m6864/` 안에서:
-```bash
-bash build.sh
-```
-
-산출물은 `dist/`에 새로 생성됨. `dist/` 통째로 정적 호스팅에 업로드.
-
-수동 빌드는:
-```bash
-npm install
-npx vite build
-```
+`tallyman_m6865/` 안에서 `bash build.sh` → 새 `dist/` 생성.
 
 ---
 
 ## 📝 다음 세션 작업 후보
 
-1. **별첨 페이지 페이지 분리 미세조정** — 선사 수가 많을 때(50+) 별첨1이 한 페이지 넘칠 수 있음. `page-break-inside: avoid` 또는 자동 분할.
-2. **별첨2 mark 셀 표시 검증** — `.cell.mark-X` 등이 인라인 span에 적용될 때 색상이 정확히 나오는지 인쇄 결과로 확인.
-3. **KKLC LAEM CHABANG (D5MP9) .def 등록** — M6.86.3 한계 보완. 정확한 hold/deck 구조 + row 분포 학습.
-4. **빈 컬럼 placeholder 시각화** — 현재 col-placeholder는 빈 공간. 가능하면 가벼운 dashed border로 자리 표시.
-5. **마크 P=FR, U=OT 복귀 검토** — 메모리 #24 원본 letter로 복귀할지 (현재 F/A 정착). 향후 사용자 확인 시 변경.
+1. **KKLC 양하 EDI 실데이터 검증** — 선사 c.op 필드 분포 확인. 누락된 선사 NAD+CA 파싱 보강.
+2. **다른 PDF 자동 파서 등록 선박 점검** — BAY hold false 가짜 베이 있는지 (예: ATPR, DPRT, GUBR 등에 hold-region scan 미스가 있을 수 있음).
+3. **선사 풀명 매핑 추가** — opCode 3자(MSC, CMA, HJM 등)별 풀명 매핑 (현재는 코드만 표시).
+4. **새 .def 업로드 UI** — 사용자 첨부한 .def 파일을 앱 내에서 직접 베이사전 v2에 등록(현재는 빌드 시점에 수동 정정).
+5. **A4 fit 자동 폰트 추가 축소** — 베이 수 35+ 선박 (예: HAMB, MCAT 34 베이)에서 카고플랜이 한 장 안 들어가면 셀 12×9 → 10×8로 축소 옵션.
