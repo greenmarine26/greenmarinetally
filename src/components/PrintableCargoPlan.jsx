@@ -1318,12 +1318,6 @@ export default function PrintableCargoPlan({
           color: #dc2626;
         }
         /* M6.0: hatch-break는 bay-grid-row 클래스와 함께 사용. 한 줄 height 차지 (외곽 정렬) */
-        /* M6.82 fix: hatch-break flex 0 → deck:hold = 60:40 정확 유지
-           (이전: hatch가 1 row 차지하여 54:9:36 비율로 어긋남) */
-        .bay-grid-row.hatch-break {
-          flex: 0 0 2px !important;
-          min-height: 2px;
-        }
         .hatch-break {
           background: repeating-linear-gradient(90deg, #555 0, #555 4px, transparent 4px, transparent 8px) center / 100% 2px no-repeat;
         }
@@ -1342,8 +1336,7 @@ export default function PrintableCargoPlan({
           font-size: 6pt; min-height: 0;
         }
         /* M6.0: tier-gap도 라벨 한 줄 자리 (점선 자리와 같은 height) */
-        /* M6.82 fix: hatch-break에 맞춰 0 height (60:40 비율 유지) */
-        .tier-gap { flex: 0 0 2px !important; min-height: 2px; }
+        .tier-gap { flex: 1; min-height: 0; }
         .legend-box {
           padding: 6px 4px;
           display: flex; flex-direction: column; justify-content: flex-end;
