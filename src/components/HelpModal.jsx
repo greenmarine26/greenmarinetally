@@ -379,6 +379,67 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🔥 M6.86.4 (2026-05-22) — 카고플랜 약속 위반 6건 회복',
+      examples: [
+        { q: '🎯 배경', a: '사용자 보고: "약속된 플랜 작업방식을 무시하고 만듬". KKLC 카스피 469컨 카고플랜에서 (1) 모든 베이 카운트 0/0/0 (2) "총 0대" 표시 (3) PUS/MIP/SGN/PTK/BS POD 3자가 셀에 박힘 — legend엔 없음 (4) BAY 33, 37 박스 높이가 BAY 21과 달라 정렬 깨짐 (5) 별첨1·별첨2 영역 자체 부재. 메모리 #2 + #24 약속 위반.' },
+        { q: '[1] 베이 카운트 = 전체 컨 (PTK + 통과)', a: 'BayBox에서 `if (!isPtk(c, mode)) return;` 제거. cnt는 전체, cntPtk는 PTK 전용으로 분리. countStr은 전체 기준. KKLC 같은 전 통과 항차에서도 베이당 실제 컨 수 보임.' },
+        { q: '[2] 좌측 하단 "총 N대" = grandTotal', a: 'totalAll을 totalCounts.grandTotal로 변경. 바로 아래에 "적재 X / 통과 Y" 분리 라인 추가. 사용자가 "0대"라고 오해할 여지 제거.' },
+        { q: '[3] POD 3자 셀 표기 제거 (X 단일)', a: 'getMark의 통과 분기에서 POD 3자(PUS/MIP/SGN/PTK/BS) 부분 삭제. 통과는 무조건 X. 메모리 #24 마크 약속(o/X/R/D/F/T/A/E) 준수. PTK 적재 컨은 L + POD 색상 유지(목적지 가독성). 목적지 약자 풀네임 표(stats-pods)는 legend 하단 그대로.' },
+        { q: '[4] 박스 정렬 회복 (M6.86.1 복원)', a: 'allTiersSet에 STD_HOLD baseline 복귀. deck-area / hold-area의 area-invisible 클래스 적용 코드 제거. 모든 박스가 같은 deck 7단 + hold 4단 구조 → BAY 33, 37 단독도 BAY 21과 같은 높이. 컨 없는 자리는 셀 border만(visibility:hidden 없음).' },
+        { q: '[5] F=FR, A=OT 유지', a: 'legend에 이미 정착한 F/A 그대로 유지(메모리 #24 원본 P/U와는 다르지만 사용자 위임).' },
+        { q: '[6] 별첨1·별첨2 페이지 추가', a: '특수화물 페이지 다음, 새 페이지로 (1) 별첨1 — 선사(NAD+CA/c.op)별 × 20F/20E/40F/40E/45F/45E + 적재/통과 분리 + 합계 행 (2) 별첨2 — 화물종류별(DG/Reefer/FR/Tank/OT/엠티/일반) × 적재/통과 + 베이마크 셀 색상 일치. 메모리 #2 약속 완성.' },
+        { q: '✅ 검증', a: 'KKLC2605S 469컨 (전 통과): 베이 헤더에 실제 컨 수 표시. 총 469대 / 적재 0 / 통과 469. BAY 33-37 단독 박스 BAY 21과 동일 높이. 셀에 PUS/MIP/SGN 안 박힘 — 모두 X. 별첨1에 선사별, 별첨2에 화물종류별 카운트.' },
+        { q: '🛡 회귀 방지', a: 'PrintableCargoPlan.jsx만 수정. utils.js는 APP_VERSION만. HelpModal에 항목 추가. 다른 파일 무변경. 일반 평택 항차(STSE 등)에서도 동작 동일(PTK 컨은 o/L로 잘 분류됨).' },
+      ],
+    },
+    {
+      title: '🔥 M6.86.3 (2026-05-22) — 가짜 hold 자리 제거 (33-39 hold 없음 인식)',
+      examples: [
+        { q: '🎯 배경', a: '사용자 핵심 지적: "33~39번 베이는 홀드가 있었나요?" 카스피 KKLC2604S PDF 검증 - BAY 33, 37, (34)35, (38)39는 HOLD 없음 (선박 hull 후방 구조). M6.86.2는 STD_HOLD baseline 4단 [08, 06, 04, 02] 강제 적용 → 모든 베이에 가짜 hold 영역 생성. 사용자: "가짜 카고 플랜이네요?"' },
+        { q: '🔍 원인', a: '(1) allTiersSet에 STD_HOLD 항상 포함 → 모든 박스에 hold tier 자리 생성. (2) hasHold 결정에서 베이사전 없으면 `(allConts hold 있음) || (!dictBay)` → !dictBay가 항상 true라 hasHold 강제로 true.' },
+        { q: '[1] STD_HOLD baseline 제거', a: 'allTiersSet에서 STD_HOLD 빼기. holdTiers는 베이사전(.def) 또는 EDI 컨테이너의 실제 hold tier만 사용. 가짜 자리 안 만들어짐.' },
+        { q: '[2] hasHold/hasDeck EDI 기반', a: 'dictBay 없으면 hasHoldCont (allConts + shadow40에 tier < 80 컨 있음) 결과 사용. hasDeck는 페이지 전체에 deck 컨 있으면 true (대부분 선박 deck 있음, padding 빈 베이는 다른 박스 정렬용).' },
+        { q: '[3] hold-area 영역 단위 invisible', a: 'hasHold=false면 hold-area에 area-invisible 클래스 적용 → visibility:hidden. 박스 크기 정렬은 유지하되 hold 영역 안 그림.' },
+        { q: '✅ 결과', a: 'KKLC2605S 469컨 검증: BAY 21, 17, 13, 09, (22)23, (18)19, (14)15, (10)11, 25, 29, (26)27, (30)31 → hold 있음. BAY 33, 37, (34)35, (38)39, 05, 01, (06)07, (02)03 → hold 없음 (영역 invisible). 카스피 PDF의 BAY 33-39 hold 없음 인식 ✅.' },
+        { q: '🛡 한계', a: 'BAY 05, 06, 07 같이 카스피 PDF에는 hold 있지만 EDI 컨 0대면 hasHold=false로 판단 → 한계. 진짜 정답은 베이사전(.def) 등록. KKLC LAEM CHABANG (D5MP9) .def 파일 등록 권장 — 사다리꼴 row 분포 + 정확한 deck/hold 영역까지 완성됨.' },
+      ],
+    },
+    {
+      title: '🔥 M6.86.2 (2026-05-22) — 빈 베이도 박스 표시 (BAY 01-39 baseline)',
+      examples: [
+        { q: '🎯 배경', a: '사용자 핵심 지적: 카스피 KKLC2604S PDF + STSE SENDAI 2631E HTML 두 참조 양식 모두 컨테이너 0대인 빈 베이(BAY 01, 05, 13, 17, 37 등)도 박스가 명확히 표시되어 있는데, M6.86.1은 EDI에 있는 베이만 trio 생성했음. 사용자: "그건 이유가 안돼요 아까 카스피 샘플과 stse 빈베이는 왜 보여드렸을까요 참조하라고?"' },
+        { q: '🔍 원인', a: 'buildTriosAndSplit이 EDI bayList만 사용. EDI 최소 베이가 BAY 09면 BAY 01-07 trio 생성 안 됨. 베이사전 KKLC 미등록 상태에서 빈 베이 표시 fallback 없음.' },
+        { q: '[1] 베이 범위 확장 (padding)', a: 'EDI 베이 범위를 1 ~ max+4로 확장. 모든 홀수 자동 추가 → 단독 + 자동 페어 (M6.86 알고리즘으로) 자동 trio 생성. 짝수는 자동 페어로 처리됨. KKLC EDI max=35 → 1~39 범위 → BAY 01, 03, 05, 07, 37, 39 자동 추가.' },
+        { q: '✅ 결과', a: 'KKLC2605S 469컨 검증: FORE 6 trio (BAY 21+22/23, 17+18/19, 13+14/15, 09+10/11, 05+06/07, 01+02/03), AFT 4 trio (BAY 37+38/39, 33+34/35, 29+30/31, 25+26/27). 카스피 PDF와 동일.' },
+        { q: '🛡 한계', a: 'padding +4는 fallback. 진짜 정답은 베이사전(.def) 등록. 베이사전 등록되면 그 선박의 정확한 베이 구조 + 각 베이별 deck/hold tier + row 분포 (사다리꼴 양식) 모두 정확. 현재 KKLC LAEM CHABANG (D5MP9) 베이사전 등록 권장.' },
+      ],
+    },
+    {
+      title: '🔥 M6.86.1 (2026-05-22) — "빈자리도 자리다" 원칙 복원 hotfix',
+      examples: [
+        { q: '🎯 배경', a: 'M6.86 KKLC2605S 실데이터 검증에서 사용자 보고: "빈자리도 자리다 다만 컨테이너가 없을뿐 자리는 있어야 한다고 했는데 컨테이너 없다고 다 사라지게 하셨네요?" 메모리 #24 표준 양식 원칙 위배.' },
+        { q: '🔍 원인', a: '(1) deckTiers/holdTiers를 페이지 베이사전 + 컨테이너 union으로만 계산 → 컨테이너 없는 tier 누락. (2) tier-row.invisible-row 클래스로 컨테이너 없는 tier 자리 통째로 visibility hidden 처리. → BAY 09 박스에서 컨테이너 있는 tier 84, 82만 보이고 90, 88, 86, 92, 94 자리 모두 사라짐.' },
+        { q: '[1] STD baseline 강제', a: 'deckTiers/holdTiers 계산에 STD_DECK (7단 94~82) + STD_HOLD (4단 08~02) 항상 포함. 베이사전이 추가 tier(BAY 21의 tier 10 등) 가지면 union으로 추가. 모든 박스 동일한 tier 수 보장.' },
+        { q: '[2] invisible-row 제거', a: 'BayBox JSX에서 tier-row에 invisible-row 클래스 적용 제거. 모든 tier 항상 visible. 컨테이너 없는 자리는 renderCell이 빈 cell (border 있는 빈 박스)로 표시.' },
+        { q: '[3] 영역 단위 invisible', a: 'tier 단위 → 영역 단위로 변경. hasHold=false (단독 odd 베이) 또는 hasDeck=false인 경우만 deck-area / hold-area 전체에 area-invisible 클래스 → visibility hidden. 정렬용 자리만 차지.' },
+        { q: '✅ 결과', a: 'KKLC2605S EDI 469컨 실데이터 검증: BAY 21 박스 (94 baseline 7 deck + 5 hold), BAY 09 박스 (deck 7 + hold 4, 일부 자리에만 컨테이너), 모두 컨 없는 자리도 빈 박스로 정확히 표시. 사용자 원칙 일치.' },
+      ],
+    },
+    {
+      title: '🚀 M6.86 (2026-05-22) — 카스피 STOWAGE INSTRUCTION 양식 적용 (trio-box 양식)',
+      examples: [
+        { q: '🎯 배경', a: 'KKLC 카스피(KKLC2604S.pdf) 적재본 양식 + 사용자 제공 SITC SENDAI 2631E 카고플랜 HTML(M6.81 Universal Cargo Plan)을 분석한 결과, 현재 앱의 카고플랜 layout이 카스피 양식과 근본적으로 달랐음. 4행 5열 (단독행/페어행 분리) → 2행 6열 trio-box (단독+페어가 한 박스)로 전면 재구성.' },
+        { q: '[1] trio-box 구조', a: '한 박스에 단독 odd 베이(위) + trio-divider + 페어 짝수 베이(아래) = 한 trio-box. 외곽선 1개. 예: BAY 21(위) + BAY (22)23(아래)가 한 박스. 카스피 PDF는 별개 박스로 보이지만 시각적으로 동일. 사용자 표준 양식(메모리 [항상] 빈 카고플랜 표준 양식)에 일치.' },
+        { q: '[2] DECK / HOLD 분리 + 굵은 검은 가로선', a: '한 베이 안 deck-area(상단, flex 6) + hatch-break(굵은 검은 가로선 1.5px solid #000) + hold-area(하단, flex 4) 구조. 기존 점선(repeating-linear-gradient) → 굵은 단일선. 해치 커버 시각화 명확.' },
+        { q: '[3] 빈 자리 처리', a: '컨테이너 없는 자리 = 빈 cell (border 있는 빈 박스, 카스피 양식). 사용 안 되는 tier/row = invisible-row/invisible-label (자리만 차지, 정렬 유지). 기존 점(·) 표시는 제거.' },
+        { q: '[4] 자동 페어 생성', a: '단독 홀수 베이의 짝꿍 페어 자동 생성: BAY 21 → (22)23 자동 추가, BAY 17 → (18)19, ... 카스피 양식은 모든 trio가 single + matched pair. 자동 페어는 expanded baySet 기반 + usedAsPairOdd로 중복 방지.' },
+        { q: '[5] FORE/AFT 분할 - 베이 번호 24 기준', a: '기존 그룹 수 mid 분할 → 베이 번호 < 24 = FORE, >= 24 = AFT. 선박 일반 hatch break 위치가 보통 BAY 23/25 사이. KKLC 카스피 양식과 일치.' },
+        { q: '[6] 통합 함수', a: '기존 splitForeAft + buildBayPages + matchColumns 세 함수를 buildTriosAndSplit 하나로 통합. 일관된 자동 페어 + trio 매칭 + FORE/AFT 분할.' },
+        { q: '🛡 안전성', a: 'PrintableCargoPlan.jsx만 수정. 단독 홀수 자동 페어로 박스 자리 표시 → 양하 0대인 페어도 박스 자리 차지. BayBox 내부 데이터 처리 로직(baySummary/dictBaysSummary/M6.82 baseline 등)은 그대로 유지. M6.85의 BAY 0 필터링도 그대로.' },
+        { q: '검증', a: 'mock 데이터(KKLC2604N 양하 양식)로 시각 검증 완료. FORE 6 trio + AFT legend + 1 placeholder + 4 trio = 2행 6열 카스피 양식 일치. 실제 사용자 검수 데이터로 추가 검증 권장.' },
+      ],
+    },
+    {
       title: '🚨 M6.85 (2026-05-22) — BAY (00)01 잘못 페어링 버그 수정',
       examples: [
         { q: '🎯 배경', a: 'M6.84 KKLC 출력에서 BAY (00)01 잘못된 페어가 셋째 줄에 따로 표시되고 그로 인해 상단 짝꿍 베이들(BAY 17/13/09/05의 짝꿍 18/14/10/06)이 row가 분리되어 높이가 절반으로 줄어드는 layout 깨짐 발생.' },

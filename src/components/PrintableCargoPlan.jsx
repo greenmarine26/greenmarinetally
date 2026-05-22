@@ -67,31 +67,85 @@ function groupByBay(containers) {
   return m;
 }
 
-function splitForeAft(bayList) {
-  // M6.85: BAY 0 무효 베이 필터링 (안전성)
-  const validBayList = bayList.filter(n => Number.isFinite(n) && n > 0);
-  if (validBayList.length === 0) return { fore: [], aft: [] };
-  const baySet = new Set(validBayList);
-  const used = new Set();
-  const groups = [];
-  // 1) 트리오 [홀, 짝, 홀] 그룹화 — 표준 페어
-  for (const n of validBayList) {
-    if (used.has(n) || n % 2 === 0) continue;
-    if (baySet.has(n + 1) && baySet.has(n + 2)) {
-      groups.push([n, n + 1, n + 2]);
-      used.add(n); used.add(n + 1); used.add(n + 2);
+// M6.86: 카스피 양식 trio 빌더 - 단독 holes + 자동 페어 (N+1, N+2)
+//   기존 splitForeAft + buildBayPages + matchColumns 통합
+//   카스피 STOWAGE INSTRUCTION 양식: 모든 trio = single odd + 자기 짝수 페어
+//   예: BAY 21 + (22)23, BAY 17 + (18)19, BAY 13 + (14)15, ...
+//   분할: 베이 번호 24 기준 (< 24 FORE, >= 24 AFT) — 선박 일반 hatch break 위치
+//   M6.86.2: EDI 베이 범위 확장 (사용자: "빈자리도 자리다" - BAY 01부터 모든 자리 표시)
+//     EDI에 BAY 09부터 있어도 BAY 01, 03, 05, 07 자동 추가 → trio 박스 자리 보장
+function buildTriosAndSplit(bayList) {
+  const ediBays = [...new Set(bayList.filter(n => Number.isFinite(n) && n > 0))];
+  if (ediBays.length === 0) return { foreColumns: [], aftColumns: [] };
+
+  // M6.86.2: EDI 베이 범위 확장 - 1부터 EDI 최대값+padding까지 모든 홀수 자동 추가
+  //   카스피 양식: BAY 01~39 모두 자리 표시 (KKLC2604S PDF 검증, max=39)
+  //   EDI에 컨테이너 없는 BAY 01-07, BAY 37-39도 자동 trio 생성 (베이사전 없는 경우 fallback)
+  //   padding 4: EDI max=35라도 BAY 37, 39 자동 추가 (KKLC 양식 일치)
+  const maxBay = Math.max(...ediBays);
+  const expandTo = maxBay + 4;
+  const validBays = new Set(ediBays);
+  for (let n = 1; n <= expandTo; n++) {
+    if (n % 2 === 1) validBays.add(n);  // 모든 홀수 (자동 단독 + 페어 생성)
+  }
+  const sortedBays = [...validBays].sort((a, b) => a - b);
+
+  // 1) 짝수 N → (N, N+1) 페어 강제. odd N+1을 페어 odd로 마킹
+  const pairs = [];
+  const usedAsPairOdd = new Set();
+  for (const n of sortedBays) {
+    if (n % 2 === 0) {
+      pairs.push({ even: n, odd: n + 1 });
+      usedAsPairOdd.add(n + 1);
     }
   }
-  // 2) 남은 베이 (단독 홀수, 20ft 전용 짝수)
-  for (const n of validBayList) {
-    if (!used.has(n)) { groups.push([n]); used.add(n); }
+
+  // 2) 홀수 single + 자동 페어 (N+1, N+2) — 카스피 양식 핵심
+  //   각 홀수 single은 자신의 짝수 짝꿍 페어 (N+1, N+2)를 함께 만든다.
+  //   페어가 만들어지면 N+2를 usedAsPairOdd로 마킹해 다음 홀수가 single 안 되도록.
+  const singles = [];
+  const sortedHoles = sortedBays.filter(n => n % 2 === 1);
+  for (const n of sortedHoles) {
+    if (usedAsPairOdd.has(n)) continue;  // 이미 다른 페어의 odd
+    singles.push({ bay: n });
+    // 자동 페어 (N+1, N+2) — 없으면 추가
+    if (!pairs.find(p => p.even === n + 1)) {
+      pairs.push({ even: n + 1, odd: n + 2 });
+      usedAsPairOdd.add(n + 2);
+    }
   }
-  groups.sort((a, b) => a[0] - b[0]);
-  // 3) 그룹 갯수의 중간으로 분할 — TNJP는 9그룹 → FORE 5 / AFT 4
-  const mid = Math.ceil(groups.length / 2);
+
+  // 3) trio 매칭: single.bay + 1 === pair.even
+  const trios = singles.map(s => {
+    const pair = pairs.find(p => p.even === s.bay + 1) || null;
+    return { single: s, pair };
+  });
+  // 매칭 안 된 페어 (예: 단독 짝수 베이): single null + pair
+  const matchedEvens = new Set(trios.filter(t => t.pair).map(t => t.pair.even));
+  for (const p of pairs) {
+    if (!matchedEvens.has(p.even)) trios.push({ single: null, pair: p });
+  }
+
+  // 4) FORE/AFT 분할 - 베이 번호 24 기준 (선박 hatch break 위치)
+  //   < 24 = FORE, >= 24 = AFT
+  //   주의: 선박마다 다를 수 있으나 일반 컨테이너 선박은 BAY 23/25 사이가 hatch break
+  const triosFore = trios.filter(t => {
+    const b = t.single?.bay ?? t.pair?.even ?? 0;
+    return b < 24;
+  });
+  const triosAft = trios.filter(t => {
+    const b = t.single?.bay ?? t.pair?.even ?? 0;
+    return b >= 24;
+  });
+
+  // 좌측 = 큰 베이 (STERN 방향)
+  const sortBig = (a, b) => (b.single?.bay ?? b.pair?.even ?? 0) - (a.single?.bay ?? a.pair?.even ?? 0);
+  triosFore.sort(sortBig);
+  triosAft.sort(sortBig);
+
   return {
-    fore: groups.slice(0, mid).flat().sort((a, b) => a - b),
-    aft: groups.slice(mid).flat().sort((a, b) => a - b),
+    foreColumns: triosFore.slice(0, 6),
+    aftColumns: triosAft.slice(0, 6),
   };
 }
 
@@ -103,12 +157,22 @@ function buildBayPages(bays) {
   // M6.85 fix: BAY 0 무효 베이 필터링 (선박 도메인상 BAY 01부터 시작)
   //   원인: dictBayList/bayMap에 BAY 0이 포함되면 (00)01 페어 만들어짐 →
   //         used에 BAY 01 들어가 single BAY 01 사라짐 → layout 깨짐
+  // M6.86: 카스피 양식 trio-box 완성을 위해 단독 홀수 베이의 짝수 짝꿍 자동 추가
+  //   원인: 카스피 양식은 BAY 21(단독) + (22)23(페어) = 한 trio-box.
+  //         (22)23 페어가 양하 0이라 EDI에 없어도 박스는 자리 차지해야 함.
+  //   해결: 모든 홀수 N에 대해 N+1 (짝수) 추가 → 그 짝수가 페어 처리 단계에서 (N+1, N+2) 페어 됨.
+  //         단 (1)21 → (22)23 페어처럼 N+2 (홀수)도 expanded에 들어가야 함.
   const validBays = bays.filter(n => Number.isFinite(n) && n > 0);
   const expanded = new Set(validBays);
   for (const n of validBays) {
     if (n % 2 === 0) {
       if (n - 1 > 0) expanded.add(n - 1);
       expanded.add(n + 1);
+    } else {
+      // 홀수 N → (N+1) 짝수 페어의 even 자리, (N+2) 짝수+1 odd 자리
+      // 둘 다 expanded에 추가하면 페어 (N+1, N+2) 만들어짐
+      expanded.add(n + 1);
+      expanded.add(n + 2);
     }
   }
   const expandedBays = [...expanded].filter(n => n > 0).sort((a, b) => a - b);
@@ -194,14 +258,11 @@ function getMark(c, mode, xrayMap) {
       }
     }
   } else {
-    // 통과 (평택 미관여)
-    if (mode === 'loading' && c.pod) {
-      const podUp = String(c.pod).toUpperCase();
-      baseLetter = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : 'X');
-      pod3 = baseLetter !== 'X' ? baseLetter : null;
-    } else {
-      baseLetter = 'X';
-    }
+    // M6.86.4: 통과(평택 미관여)는 항상 'X' 단일 — POD 3자 표기 제거
+    //   메모리 #24 약속: 마크는 o/X/R/D/F/T/A/E 표준만. PUS/MIP/SGN 같은 POD 3자가 셀에
+    //   찍히면 legend와 불일치 + 카스피 STOWAGE INSTRUCTION 양식 위반. POD 정보는
+    //   별첨에서 확인 (legend 하단 "목적지" 안내는 유지 — 적재 PTK 컨에 한정).
+    baseLetter = 'X';
   }
 
   // 특수화물 분류 (BayPlan과 동일 우선순위: DG > 리퍼 > FR > TK > OT)
@@ -368,23 +429,22 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   }, [dictBaysSummary, dictShipMeta]);
 
   const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
-  // M6.66: shadow40Conts의 tier도 포함 — 짝수 베이 40피트 컨이 인접 홀수 베이에 그림자 표시 시
-  //   기존: shadow40Conts가 cellMap에만 추가되어 allTiersSet 미포함 → hold tier 자리 없음 → 그림자 X 안 보임
-  //   사용자 사례: BAY 23 (홀수 단독)에서 BAY 24의 40피트 hold 08 컨테이너 → BAY 23 hold 08 자리 + X 표시
+  // M6.86 fix: 메모리 #24 원칙 "표준 6 deck + 4 hold tier baseline. 실제 없는 자리는 invisible (자리만)"
+  //   기존: 컨테이너 + 베이사전 union → 빈 tier 누락 → 자리 사라짐
+  //   해결: STD_DECK/STD_HOLD baseline 강제 + 페이지 베이사전 union + 컨테이너 tier 합집합
+  //         모든 박스 동일 tier 수 → 정렬 일치 + 빈 자리도 visible 빈 박스로 표시
   const allTierSources = [
     ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN'),
     ...shadow40Conts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN'),
   ];
-  const allTiersSet = hasDictTiers
-    ? Array.from(new Set([
-        ...pageBayDictTiers.deck,
-        ...pageBayDictTiers.hold,
-        ...allTierSources
-      ]))
-    : Array.from(new Set([
-        ...(Array.isArray(globalTiers) ? globalTiers.map(t => String(t).padStart(2, '0')) : []),
-        ...allTierSources
-      ]));
+  const allTiersSet = Array.from(new Set([
+    ...STD_DECK,   // M6.86: deck baseline 강제 (대부분 선박에 deck 영역 있음)
+    ...STD_HOLD,   // M6.86.4: 복귀 (M6.86.1 복원) — 메모리 #24 "모든 박스 정렬". 영역 통째 invisible 금지. 실제 컨 없는 자리는 셀이 비어 있으면 됨(border만).
+    ...pageBayDictTiers.deck,
+    ...pageBayDictTiers.hold,
+    ...(Array.isArray(globalTiers) ? globalTiers.map(t => String(t).padStart(2, '0')) : []),
+    ...allTierSources
+  ]));
   const deckTiersAll = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
   // M6.63: extraTier(예: 80)가 deckTiers에 이미 있으면 제외 — extra-tier-row로 별도 그려져 중복 방지
@@ -451,14 +511,35 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
 
   // M5.98 → M6.63: extraTier는 deckTiers/holdTiers 계산 후 위쪽에서 처리됨
 
-  const hasHold = dictBay ? dictBay.hasHold !== false : (allConts.some(c => parseInt(c.tier) < 80) || (!dictBay));
-  const hasDeck = dictBay ? dictBay.hasDeck !== false : true;
+  // M6.86.3: hasHold/hasDeck 결정 - 베이사전 없으면 EDI 컨 기반
+  //   사용자: "33-39번 베이는 홀드가 있었나요?" 카스피 PDF 검증 - BAY 33-39는 hold 없음
+  //   이전: 베이사전 없으면 hasHold=true 강제 → 가짜 hold 영역 생성
+  //   해결: EDI/페어 컨에 hold 컨 (tier < 80) 있으면 hasHold=true. 없으면 false → hold-area invisible
+  //   페어 자리: pair odd의 컨도 포함 (예: BAY 22의 hold 컨 → BAY (22)23 페어 hold visible)
+  const allBayConts = [...allConts, ...shadow40Conts];
+  const hasHoldCont = allBayConts.some(c => {
+    const t = parseInt(c.tier);
+    return Number.isFinite(t) && t > 0 && t < 80;
+  });
+  const hasDeckCont = allBayConts.some(c => {
+    const t = parseInt(c.tier);
+    return Number.isFinite(t) && t >= 80;
+  });
+  const hasHold = dictBay ? dictBay.hasHold !== false : hasHoldCont;
+  // deck은 거의 모든 베이에 있음 — 베이사전 없고 deck 컨도 없으면 페이지 deck 컨 1개라도 있는지로 결정
+  const pageHasAnyDeck = Object.values(containers || {}).some(arr => arr.some(c => parseInt(c.tier) >= 80));
+  const hasDeck = dictBay ? dictBay.hasDeck !== false : (hasDeckCont || pageHasAnyDeck);
 
+  // M6.86.4: 카운트는 전체 컨테이너 (적재 + 통과). 적재만 세는 기존 로직은 KKLC 카스피처럼
+  //   PTK 미관여 항차에서 모든 베이 0/0/0이 되는 회귀 버그의 원인.
+  //   PTK 분류 정보는 좌측 하단 통계 박스에서 별도 표시.
   const cnt = { c20: 0, c40: 0, c45: 0 };
+  const cntPtk = { c20: 0, c40: 0, c45: 0 };
   allConts.forEach(c => {
-    if (!isPtk(c, mode)) return;
     const sz = sizeOf(c);
-    cnt[sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20']++;
+    const k = sz === '45' ? 'c45' : sz === '40' ? 'c40' : 'c20';
+    cnt[k]++;
+    if (isPtk(c, mode)) cntPtk[k]++;
   });
 
   const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
@@ -472,76 +553,76 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const total = cnt.c20 + cnt.c40 + cnt.c45;
   const countStr = isPaired ? `${cnt.c20} / ${cnt.c40} / ${cnt.c45}` : String(total);
 
+  // M6.86: 참조 양식(SITC SENDAI 2631E, M6.81 Universal Cargo Plan) 적용
+  //   - bay-section: deck-area + hatch-break(굵은 검은선) + hold-area
+  //   - 빈 자리는 cell-empty (visibility:hidden) — 점(·) 표시 제거
+  //   - 사용 안 되는 tier는 invisible-row (자리만 차지, 정렬 유지)
+  //   - HOLD 없는 단독 베이는 hold-area 전체 invisible
+  const renderCell = (c, keyR) => {
+    if (!c) return <span key={keyR} className="cell"></span>;  // 빈 자리 - border 있는 빈 박스
+    if (c._shadow40) return <span key={keyR} className="cell mark-shadow">X</span>;
+    const m = getMark(c, mode, xrayMap);
+    const cls = `cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+    const podColor = m.pod3 && podColorMap[m.pod3];
+    return <span key={keyR} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
+  };
+
   return (
-    <div className="bay-box" style={{'--col-width': `${colWidthPct}%`}}>
+    <div className="bay-section">
       <div className="bay-title-row">
-        <span className="bay-title-label">{title}</span>
+        <span className="bay-title">{title}</span>
         <span className="bay-count">{countStr}</span>
       </div>
-      <div className="bay-row-labels deck-row-labels">
-        {deckDynRows.map(r => <span key={r} className="bay-row-label">{r}</span>)}
-      </div>
-      <div className="bay-grid-wrap">
-        <div className="bay-grid">
-          {hasDeck && deckTiers.map(t => {
-            const isUsed = bayDeckTiersUsed.has(t);
-            return (
-              <div key={t} className={`bay-grid-row deck-row ${!isUsed ? 'tier-hidden' : ''}`}>
-                {deckDynRows.map(r => {
-                  const c = cellMap[`${t}-${r}`];
-                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                  const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  const podColor = m.pod3 && podColorMap[m.pod3];
-                  return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
-                })}
-              </div>
-            );
-          })}
-          {hasDeck && (
-            extraTier ? (
-              <div className="bay-grid-row deck-row extra-tier-row">
-                {deckDynRows.map(r => {
-                  const tierStr = String(extraTier).padStart(2, '0');
-                  const c = cellMap[`${tierStr}-${r}`];
-                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                  const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  const podColor = m.pod3 && podColorMap[m.pod3];
-                  return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
-                })}
-              </div>
-            ) : <div className="bay-grid-row hatch-break"></div>
-          )}
-          {hasHold && holdTiers.map(t => {
-            const isUsed = bayHoldTiersUsed.has(t);
-            return (
-              <div key={t} className={`bay-grid-row hold-row ${!isUsed ? 'tier-hidden' : ''}`}>
-                {holdDynRows.map(r => {
-                  const c = cellMap[`${t}-${r}`];
-                  if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
-                  if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
-                  const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
-                  const podColor = m.pod3 && podColorMap[m.pod3];
-                  return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
-                })}
-              </div>
-            );
-          })}
+      <div className="bay-content">
+        {/* DECK 영역 - 메모리 #24 원칙: baseline 6단 모두 visible 빈 박스로 표시. M6.86.4: area-invisible 제거 (모든 박스 정렬). */}
+        <div className="deck-area">
+          <div className="row-labels">
+            {deckDynRows.map(r => <span key={r}>{r}</span>)}
+          </div>
+          <div className="grid-row-wrap">
+            <div className="grid">
+              {/* M6.86 fix: invisible-row 제거 → 모든 tier 항상 visible. 컨테이너 없는 자리도 빈 박스로 표시 (사용자: "빈자리도 자리다") */}
+              {deckTiers.map(t => (
+                <div key={t} className="tier-row">
+                  {deckDynRows.map(r => renderCell(cellMap[`${t}-${r}`], r))}
+                </div>
+              ))}
+              {extraTier && (
+                <div className="tier-row extra-tier-row">
+                  {deckDynRows.map(r => {
+                    const tierStr = String(extraTier).padStart(2, '0');
+                    return renderCell(cellMap[`${tierStr}-${r}`], r);
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="tier-labels">
+              {deckTiers.map(t => <span key={t}>{t}</span>)}
+              {extraTier && <span className="extra-tier-label">{extraTier}</span>}
+            </div>
+          </div>
         </div>
-        <div className="bay-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t} className={!bayDeckTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
-          {hasDeck && (
-            extraTier ? <span className="extra-tier-label">{extraTier}</span> : <span className="tier-gap"></span>
-          )}
-          {hasHold && holdTiers.map(t => <span key={t} className={!bayHoldTiersUsed.has(t) ? 'tier-hidden' : ''}>{t}</span>)}
+        {/* DECK / HOLD 사이 굵은 검은 가로선 (해치 커버 표시) */}
+        <div className="hatch-break"></div>
+        {/* HOLD 영역 - 메모리 #24: baseline 4단 모두 visible. M6.86.4: area-invisible 제거 (모든 박스 같은 높이). 컨 없는 베이는 셀 border만 보임. */}
+        <div className="hold-area">
+          <div className="grid-row-wrap">
+            <div className="grid">
+              {holdTiers.map(t => (
+                <div key={t} className="tier-row">
+                  {holdDynRows.map(r => renderCell(cellMap[`${t}-${r}`], r))}
+                </div>
+              ))}
+            </div>
+            <div className="tier-labels">
+              {holdTiers.map(t => <span key={t}>{t}</span>)}
+            </div>
+          </div>
+          {/* 하단 row 라벨 자리 (visibility:hidden) — 다음 베이와 정렬 유지 */}
+          <div className="row-labels row-labels-hidden">
+            {holdDynRows.map(r => <span key={r}>{r}</span>)}
+          </div>
         </div>
-      </div>
-      <div className="bay-row-labels hold-row-labels">
-        {holdDynRows.map(r => <span key={r} className="bay-row-label">{r}</span>)}
       </div>
     </div>
   );
@@ -636,21 +717,18 @@ export default function PrintableCargoPlan({
     return Object.keys(bayMap).map(b => parseInt(b, 10)).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
   }, [dictBayList, bayMap]);
 
-  const { fore, aft } = useMemo(() => splitForeAft(bayList), [bayList]);
-  const forePages = useMemo(() => buildBayPages(fore), [fore]);
-  const aftPages = useMemo(() => buildBayPages(aft), [aft]);
+  // M6.86: 통합 trio 빌더 (splitForeAft + buildBayPages + matchColumns 대체)
+  const { foreColumns, aftColumns } = useMemo(() => buildTriosAndSplit(bayList), [bayList]);
 
   // M6.6: 짝수 베이 → 짝꿍 홀수 베이 맵 (shadow40 처리에서 사용)
-  //   사용자 버그: BAY 43 단독 박스에서 BAY 44의 40피트가 X로 잘못 표시
-  //   원인: BAY 44는 (44)45 짝꿍 → 43에 영향 X (45가 짝꿍이라 43은 빈)
-  //   해결: buildBayPages가 결정한 짝꿍 관계 그대로 사용
+  //   M6.86: 새 trio 구조에서 pairMap 추출
   const pairMap = useMemo(() => {
-    const map = {};  // evenBay (number) → pairOdd (number or null)
-    [...forePages.pairs, ...aftPages.pairs].forEach(p => {
-      map[p.even] = p.odd;
+    const map = {};
+    [...foreColumns, ...aftColumns].forEach(col => {
+      if (col.pair) map[col.pair.even] = col.pair.odd;
     });
     return map;
-  }, [forePages, aftPages]);
+  }, [foreColumns, aftColumns]);
 
   // M6.70k: POD 3자 약자별 색상 매핑 (등장 순서대로 8색 순환)
   //   카고플랜 셀에 색 표시 → 한눈에 POD 구분 + 범례로 풀네임 매핑
@@ -827,6 +905,75 @@ export default function PrintableCargoPlan({
     return c;
   }, [specialCargo]);
 
+  // M6.86.4: 별첨1 — 선사(operator)별 카운트 (NAD+CA / c.op)
+  //   메모리 #2: "별첨1=선사별 카운트(NAD+CA)". sz × F/E 매트릭스로 표시.
+  const carrierBreakdown = useMemo(() => {
+    const byCarrier = {};
+    containers.forEach(c => {
+      const op = String(c.op || '').toUpperCase().trim() || '-';
+      const sz = sizeOf(c);
+      const fe = (c.fe === 'E') ? 'E' : 'F';  // 미확정도 F로 (보수적)
+      const key = sz + fe;  // 예: '20F', '40E', '45F'
+      if (!byCarrier[op]) {
+        byCarrier[op] = { '20F': 0, '20E': 0, '40F': 0, '40E': 0, '45F': 0, '45E': 0, total: 0, ptk: 0, transit: 0 };
+      }
+      byCarrier[op][key] = (byCarrier[op][key] || 0) + 1;
+      byCarrier[op].total++;
+      if (isPtk(c, mode)) byCarrier[op].ptk++; else byCarrier[op].transit++;
+    });
+    const rows = Object.entries(byCarrier)
+      .map(([op, v]) => ({ op, ...v }))
+      .sort((a, b) => b.total - a.total);
+    const totals = rows.reduce((acc, r) => {
+      ['20F', '20E', '40F', '40E', '45F', '45E', 'total', 'ptk', 'transit'].forEach(k => {
+        acc[k] = (acc[k] || 0) + r[k];
+      });
+      return acc;
+    }, {});
+    return { rows, totals };
+  }, [containers, mode]);
+
+  // M6.86.4: 별첨2 — 화물종류별 카운트 (베이마크와 색 일치)
+  //   메모리 #2: "별첨2=화물종류별(베이마크와 색 일치)"
+  //   분류 우선순위: DG > Reefer > FR > Tank > OT > Empty(엠티) > 일반
+  //   통과/적재 분리해서 표시 (양쪽 합 = grandTotal)
+  const cargoTypeBreakdown = useMemo(() => {
+    const cats = {
+      reefer: { label: '리퍼 (R)',  mark: 'R', ptk: 0, transit: 0 },
+      dg:     { label: 'DG (D)',    mark: 'D', ptk: 0, transit: 0 },
+      fr:     { label: 'FR (F)',    mark: 'F', ptk: 0, transit: 0 },
+      tk:     { label: 'TK (T)',    mark: 'T', ptk: 0, transit: 0 },
+      ot:     { label: 'OT (A)',    mark: 'A', ptk: 0, transit: 0 },
+      empty:  { label: '엠티 (E)',  mark: 'E', ptk: 0, transit: 0 },
+      general:{ label: '일반 (o/L)',mark: 'o', ptk: 0, transit: 0 },
+    };
+    containers.forEach(c => {
+      const isReefer = isReeferContainer(c);
+      const isDg = !!c.dg || !!c.imdgClass;
+      const isFr = !!c.fr || (isoToLabel(c.iso) || '').toUpperCase().includes('FR');
+      const isOt = !!c.ot || !!c.oog || (isoToLabel(c.iso) || '').toUpperCase().includes('OT');
+      const isTk = !!c.tk || (isoToLabel(c.iso) || '').toUpperCase().includes('TK');
+      let key;
+      if (isDg) key = 'dg';
+      else if (isReefer) key = 'reefer';
+      else if (isFr) key = 'fr';
+      else if (isTk) key = 'tk';
+      else if (isOt) key = 'ot';
+      else if (c.fe === 'E') key = 'empty';
+      else key = 'general';
+      const bucket = isPtk(c, mode) ? 'ptk' : 'transit';
+      cats[key][bucket]++;
+    });
+    const rows = Object.values(cats).map(r => ({ ...r, total: r.ptk + r.transit }));
+    const totals = rows.reduce((acc, r) => ({
+      ptk: (acc.ptk || 0) + r.ptk,
+      transit: (acc.transit || 0) + r.transit,
+      total: (acc.total || 0) + r.total,
+    }), {});
+    return { rows, totals };
+  }, [containers, mode]);
+
+
   // M5.94: 선박 풀네임 + 약자 (vslFull은 EDI에서 자동 추출된 풀네임, vsl은 사용자 약자)
   const vslShort = voyageInfo?.vsl || shipName || 'VESSEL';
   const vslFull = voyageInfo?.vslFull || '';
@@ -853,12 +1000,7 @@ export default function PrintableCargoPlan({
     else voy = voyD || voyL || voyGeneric;
   }
 
-  // M5.33: 컬럼 매칭 (단독 N의 컬럼 아래 = 짝꿍 (N+1)/(N+2) 또는 빈)
-  // M6.84: column 5개 (STSE/KKLC 모두 표준)
-  //   M6.84 slice(0,6) 시도는 render의 `five-col` CSS와 불일치하여 layout 깨짐 → 5로 되돌림
-  //   BAY 0 필터링(M6.85)으로 BAY 01이 정상 single → 5 column 안에 들어감
-  const foreColumns = matchColumns(forePages.singles, forePages.pairs).slice(0, 5);
-  const aftColumns = matchColumns(aftPages.singles, aftPages.pairs).slice(0, 5);
+  // M6.86: foreColumns/aftColumns는 위 useMemo의 buildTriosAndSplit에서 이미 만들어짐
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">
@@ -906,179 +1048,161 @@ export default function PrintableCargoPlan({
             <span>{portText}</span>
           </div>
 
-          {/* M5.33: 컬럼 매칭 — 단독 행과 짝꿍 행이 같은 컬럼 인덱스 (베이 그룹별) */}
-          {/* FORE 단독 행 */}
-          <div className="bay-row five-col">
-            {Array.from({ length: 5 - foreColumns.length }).map((_, i) =>
-              <div key={`fse-${i}`} className="bay-box-placeholder"></div>
-            )}
-            {foreColumns.map((col, i) => col.single ? (
-              <BayBox key={`fs-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
-            ) : (
-              <div key={`fs-${i}`} className="bay-box-placeholder"></div>
-            ))}
-          </div>
-          {/* FORE 짝꿍 행 */}
-          <div className="bay-row five-col">
-            {Array.from({ length: 5 - foreColumns.length }).map((_, i) =>
-              <div key={`fpe-${i}`} className="bay-box-placeholder"></div>
-            )}
-            {foreColumns.map((col, i) => col.pair ? (
-              <BayBox key={`fp-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
-            ) : (
-              <div key={`fp-${i}`} className="bay-box-placeholder"></div>
-            ))}
-          </div>
-
-          {/* AFT 단독 행 */}
-          <div className="bay-row five-col">
-            {Array.from({ length: 5 - aftColumns.length }).map((_, i) =>
-              <div key={`ase-${i}`} className="bay-box-placeholder"></div>
-            )}
-            {aftColumns.map((col, i) => col.single ? (
-              <BayBox key={`as-${i}`} even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
-            ) : (
-              <div key={`as-${i}`} className="bay-box-placeholder"></div>
-            ))}
-          </div>
-
-          {/* AFT 짝꿍 행 + 통계 박스 (좌측 끝 또는 pair null 자리) */}
-          <div className="bay-row five-col">
-            {/* M5.34: 통계 박스 위치 결정 — 짝꿍 행에 빈 자리(pair=null) 또는 placeholder 자리 */}
-            {/* 외부 placeholder가 있는 경우 (aftColumns < 5) 좌측 끝에 / 없는 경우 첫 pair=null 자리에 */}
-            {(() => {
-              const hasOuterPlaceholder = aftColumns.length < 5;
-              const firstEmptyPairIdx = hasOuterPlaceholder ? -1 : aftColumns.findIndex(c => !c.pair);
-              const totalAll = totalCounts.total.c20 + totalCounts.total.c40 + totalCounts.total.c45;
-              const sortedPods = Object.entries(totalCounts.byPod)
-                .sort((a, b) => {
-                  const ta = a[1].c20 + a[1].c40 + a[1].c45;
-                  const tb = b[1].c20 + b[1].c40 + b[1].c45;
-                  return tb - ta;  // 많은 순
-                });
-              // M5.94: 사이즈+타입별 카테고리 (값 0 아닌 것만 표시)
-              const cats = totalCounts.byCategory || {};
-              const cat20 = ['20DC', '20HC', '20RF', '20FR', '20OT', '20TK'].filter(k => cats[k] > 0);
-              const cat40 = ['40DC', '40HC', '40RF', '40FR', '40OT', '40TK'].filter(k => cats[k] > 0);
-              const cat45 = ['45HC', '45DC'].filter(k => cats[k] > 0);
-              const statsBox = (
-                <div className="bay-stats-inline" key="stats">
-                  <div className="stats-title">20'/40'/45'</div>
-                  {sortedPods.map(([pod, c]) => {
-                    const podColor = podColorMap[pod];
-                    return (
-                      <div key={pod} className="stats-line">
-                        <span style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{pod}</span>: <b>{c.c20} / {c.c40} / {c.c45}</b>
-                      </div>
-                    );
-                  })}
-                  <div className="stats-total">총 {totalAll}대</div>
-                  {/* M5.94: 사이즈+타입별 상세 (원본 STOWAGE PLAN 양식) */}
-                  {(cat20.length > 0 || cat40.length > 0 || cat45.length > 0) && (
-                    <div className="stats-detail">
-                      {cat20.length > 0 && (
-                        <div className="stats-detail-line">
-                          {cat20.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}
-                        </div>
-                      )}
-                      {cat40.length > 0 && (
-                        <div className="stats-detail-line">
-                          {cat40.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}
-                        </div>
-                      )}
-                      {cat45.length > 0 && (
-                        <div className="stats-detail-line">
-                          {cat45.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* M5.94: 통과 화물 카운트 (있는 경우만) */}
-                  {totalCounts.transitTotal > 0 && (
-                    <div className="stats-transit">통과 {totalCounts.transitTotal}대 / 전체 {totalCounts.grandTotal}대</div>
-                  )}
-                  {/* M5.94: 컨테이너 기호 레전드 (페이지 하단보다 통계 박스 안에 컴팩트하게) */}
-                  <div className="stats-legend">
-                    <span>o {mode === 'discharge' ? '양하' : '적재'}</span>
-                    <span>X 통과</span>
-                    <span>F FR</span>
-                    <span>D DG</span>
-                    <span>A AWK</span>
-                    <span>G OOG</span>
-                  </div>
-                  {/* M6.70k: 적재 mode POD 색 + 풀네임 범례 */}
-                  {mode === 'loading' && (() => {
-                    const podMap = {
-                      'KRPTK': '평택', 'KRPYT': '평택신항', 'KRINC': '인천',
-                      'KRPUS': '부산', 'KRKAN': '광양', 'KRMSN': '마산',
-                      'CNDLC': '다롄', 'CNLYG': '연운항', 'CNXMN': '샤먼',
-                      'CNSHK': '산터우', 'CNSHA': '상하이', 'CNTAO': '칭다오',
-                      'CNTSN': '톈진', 'CNNGB': '닝보', 'CNXGG': '신강',
-                      'CNWEI': '웨이하이', 'CNYTN': '옌톈',
-                      'JPTYO': '도쿄', 'JPOSA': '오사카', 'JPNGO': '나고야',
-                      'JPYOK': '요코하마', 'JPKBE': '고베', 'JPHKT': '하카타',
-                      'VNHPH': '하이퐁', 'VNSGN': '호치민', 'VNDAD': '다낭',
-                      'HKHKG': '홍콩', 'TWKEL': '지룽', 'TWKHH': '카오슝',
-                      'THLCH': '램차방', 'THBKK': '방콕', 'SGSIN': '싱가포르',
-                      'PHMNL': '마닐라', 'MYPKG': '포트클랑',
-                    };
-                    // 페이지에 등장하는 POD (podColorMap의 key와 일치)
-                    const fullByShort = {};
-                    Object.values(bayMap).forEach(arr => arr.forEach(c => {
-                      if (!c.pod || !isPtk(c, mode)) return;
-                      const podUp = String(c.pod).toUpperCase();
-                      if (podUp.length < 3) return;
-                      const short = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : null);
-                      if (short && short !== 'PTK') fullByShort[short] = podUp;
-                    }));
-                    const podList = Object.keys(podColorMap).sort();
-                    if (podList.length === 0) return null;
-                    return (
-                      <div className="stats-pods">
-                        <span style={{fontWeight: 600, marginRight: '4px'}}>목적지:</span>
-                        {podList.map(short => {
-                          const full = fullByShort[short] || short;
-                          const kr = podMap[full] || short;
-                          const color = podColorMap[short];
-                          return (
-                            <span key={short} style={{display: 'inline-block', marginRight: '6px'}}>
-                              <span style={{color, fontWeight: 700}}>{short}</span>={kr}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+          {/* M6.86: 참조 양식 (SITC SENDAI 2631E, M6.81 Universal Cargo Plan) — 2행 6열 trio-box
+              한 trio-box = 단독 odd (위) + trio-divider + 페어 (아래)
+              FORE/AFT 행 각각 6 컬럼. AFT 좌측에 legend + 통계 박스 (컬럼 부족 시) */}
+          {(() => {
+            // M6.86.4: 총량 = grandTotal (적재 + 통과). 적재/통과는 별도 라인.
+            const totalPtk = totalCounts.total.c20 + totalCounts.total.c40 + totalCounts.total.c45;
+            const totalTransit = totalCounts.transitTotal;
+            const totalAll = totalCounts.grandTotal;
+            const sortedPods = Object.entries(totalCounts.byPod).sort((a, b) => {
+              const ta = a[1].c20 + a[1].c40 + a[1].c45;
+              const tb = b[1].c20 + b[1].c40 + b[1].c45;
+              return tb - ta;
+            });
+            const cats = totalCounts.byCategory || {};
+            const cat20 = ['20DC', '20HC', '20RF', '20FR', '20OT', '20TK'].filter(k => cats[k] > 0);
+            const cat40 = ['40DC', '40HC', '40RF', '40FR', '40OT', '40TK'].filter(k => cats[k] > 0);
+            const cat45 = ['45HC', '45DC'].filter(k => cats[k] > 0);
+            // 베이 박스 한 컬럼 (trio-box: 위 단독, 아래 페어)
+            const renderTrioCol = (col, key) => {
+              const hasSingle = !!col?.single;
+              const hasPair = !!col?.pair;
+              return (
+                <div key={key} className="bay-box trio-box">
+                  {hasSingle ? (
+                    <BayBox even={null} odd={col.single.bay} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
+                      mode={mode} dictBay={dictBaysSummary[col.single.bay]} xrayMap={xrayMap}
+                      globalRowRange={effectiveRowRange} globalTiers={globalTiers}
+                      dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
+                  ) : <div className="bay-section bay-section-empty"></div>}
+                  <div className="trio-divider"></div>
+                  {hasPair ? (
+                    <BayBox even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
+                      mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap}
+                      globalRowRange={effectiveRowRange} globalTiers={globalTiers}
+                      dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
+                  ) : <div className="bay-section bay-section-empty"></div>}
                 </div>
               );
-              const out = [];
-              // 외부 placeholder (aftColumns가 5보다 적을 때)
-              if (hasOuterPlaceholder) {
-                out.push(statsBox);
-                for (let i = 0; i < Math.max(0, 5 - aftColumns.length - 1); i++) {
-                  out.push(<div key={`ape-${i}`} className="bay-box-placeholder"></div>);
-                }
-              }
-              // 각 컬럼 (pair 또는 빈)
-              aftColumns.forEach((col, i) => {
-                if (col.pair) {
-                  out.push(
-                    <BayBox key={`ap-${i}`} even={col.pair.even} odd={col.pair.odd} containers={bayMap} pairMap={pairMap} podColorMap={podColorMap}
-                      mode={mode} dictBay={dictBaysSummary[col.pair.even]} xrayMap={xrayMap} globalRowRange={effectiveRowRange} globalTiers={globalTiers} dictShipMeta={dictShipMeta} dictBaysSummary={dictBaysSummary} />
+            };
+            // 통계 박스 (legend + 카운트)
+            const statsBox = (
+              <div className="bay-stats-inline" key="stats">
+                <div className="stats-title">20'/40'/45'</div>
+                {sortedPods.map(([pod, c]) => {
+                  const podColor = podColorMap[pod];
+                  return (
+                    <div key={pod} className="stats-line">
+                      <span style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{pod}</span>: <b>{c.c20} / {c.c40} / {c.c45}</b>
+                    </div>
                   );
-                } else if (i === firstEmptyPairIdx) {
-                  // 첫 번째 pair=null 자리에 통계 박스
-                  out.push(<React.Fragment key={`ap-${i}`}>{statsBox}</React.Fragment>);
-                } else {
-                  out.push(<div key={`ap-${i}`} className="bay-box-placeholder"></div>);
-                }
-              });
-              return out;
-            })()}
-          </div>
+                })}
+                <div className="stats-total">총 {totalAll}대</div>
+                <div className="stats-breakdown">
+                  적재 <b style={{color: '#d97706'}}>{totalPtk}</b>
+                  {' / '}
+                  통과 <b style={{color: '#6b7280'}}>{totalTransit}</b>
+                </div>
+                {(cat20.length > 0 || cat40.length > 0 || cat45.length > 0) && (
+                  <div className="stats-detail">
+                    {cat20.length > 0 && <div className="stats-detail-line">{cat20.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}</div>}
+                    {cat40.length > 0 && <div className="stats-detail-line">{cat40.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}</div>}
+                    {cat45.length > 0 && <div className="stats-detail-line">{cat45.map(k => <span key={k}>{k.slice(2)} <b>{cats[k]}</b></span>)}</div>}
+                  </div>
+                )}
+                <div className="stats-legend">
+                  <span>o {mode === 'discharge' ? '양하' : '적재'}</span>
+                  <span>X 통과</span>
+                  <span>R 리퍼</span>
+                  <span>D DG</span>
+                  <span>F FR</span>
+                  <span>T TK</span>
+                  <span>A OT</span>
+                  <span>E 엠티</span>
+                </div>
+                {mode === 'loading' && (() => {
+                  const podMap = {
+                    'KRPTK': '평택', 'KRPYT': '평택신항', 'KRINC': '인천',
+                    'KRPUS': '부산', 'KRKAN': '광양', 'KRMSN': '마산',
+                    'CNDLC': '다롄', 'CNLYG': '연운항', 'CNXMN': '샤먼',
+                    'CNSHK': '산터우', 'CNSHA': '상하이', 'CNTAO': '칭다오',
+                    'CNTSN': '톈진', 'CNNGB': '닝보', 'CNXGG': '신강',
+                    'CNWEI': '웨이하이', 'CNYTN': '옌톈',
+                    'JPTYO': '도쿄', 'JPOSA': '오사카', 'JPNGO': '나고야',
+                    'JPYOK': '요코하마', 'JPKBE': '고베', 'JPHKT': '하카타',
+                    'VNHPH': '하이퐁', 'VNSGN': '호치민', 'VNDAD': '다낭',
+                    'HKHKG': '홍콩', 'TWKEL': '지룽', 'TWKHH': '카오슝',
+                    'THLCH': '램차방', 'THBKK': '방콕', 'SGSIN': '싱가포르',
+                    'PHMNL': '마닐라', 'MYPKG': '포트클랑',
+                  };
+                  const fullByShort = {};
+                  Object.values(bayMap).forEach(arr => arr.forEach(c => {
+                    if (!c.pod || !isPtk(c, mode)) return;
+                    const podUp = String(c.pod).toUpperCase();
+                    if (podUp.length < 3) return;
+                    const short = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : null);
+                    if (short && short !== 'PTK') fullByShort[short] = podUp;
+                  }));
+                  const podList = Object.keys(podColorMap).sort();
+                  if (podList.length === 0) return null;
+                  return (
+                    <div className="stats-pods">
+                      <span style={{fontWeight: 600, marginRight: '4px'}}>목적지:</span>
+                      {podList.map(short => {
+                        const full = fullByShort[short] || short;
+                        const kr = podMap[full] || short;
+                        const color = podColorMap[short];
+                        return (
+                          <span key={short} style={{display: 'inline-block', marginRight: '6px'}}>
+                            <span style={{color, fontWeight: 700}}>{short}</span>={kr}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+            // 한 행 (6 컬럼 trio-box 또는 legend 자리)
+            // FORE: 우측 정렬 (작은 베이 우측), AFT: 좌측 placeholder + legend + 페어 컬럼
+            const renderForeRow = () => {
+              // foreColumns가 6보다 적으면 좌측에 placeholder
+              const ph = Math.max(0, 6 - foreColumns.length);
+              return (
+                <div className="page-row">
+                  {Array.from({ length: ph }).map((_, i) => (
+                    <div key={`fph-${i}`} className="col-placeholder"></div>
+                  ))}
+                  {foreColumns.map((col, i) => renderTrioCol(col, `fc-${i}`))}
+                </div>
+              );
+            };
+            const renderAftRow = () => {
+              const ph = Math.max(0, 6 - aftColumns.length);
+              // 좌측 placeholder 1개는 통계 박스로 대체
+              return (
+                <div className="page-row">
+                  {ph > 0 ? (
+                    <>
+                      <div key="legend-col" className="col-placeholder col-legend">{statsBox}</div>
+                      {Array.from({ length: ph - 1 }).map((_, i) => (
+                        <div key={`aph-${i}`} className="col-placeholder"></div>
+                      ))}
+                    </>
+                  ) : null}
+                  {aftColumns.map((col, i) => renderTrioCol(col, `ac-${i}`))}
+                </div>
+              );
+            };
+            return (
+              <div className="page-rows">
+                {renderForeRow()}
+                {renderAftRow()}
+              </div>
+            );
+          })()}
 
           {/* M5.32: cargo-footer 영역 제거 — 통계는 마지막 짝꿍 행 좌측에 인라인 / 범례 제거 */}
         </div>
@@ -1154,6 +1278,108 @@ export default function PrintableCargoPlan({
             </div>
           </div>
         )}
+
+        {/* M6.86.4: 별첨 페이지 — 선사별 + 화물종류별 카운트 (메모리 #2)
+            별첨1 = 선사(NAD+CA / c.op) × 사이즈·F/E 매트릭스
+            별첨2 = 화물종류별 (베이마크 색과 일치) × 적재/통과 분리 */}
+        {carrierBreakdown.rows.length > 0 && (
+          <div className="cargo-plan-page appendix-page">
+            <div className="cargo-header">
+              <span>{vsl}</span>
+              <span className="cargo-title">별첨 — 카운트 요약</span>
+              <span>DATE : {todayStr}</span>
+            </div>
+            <div className="cargo-subheader">
+              <span>VOY NO : {voy}</span>
+              <span>{portText}</span>
+              <span>전체 {carrierBreakdown.totals.total || 0}대</span>
+            </div>
+
+            <div className="appendix-grid">
+              {/* 별첨 1 — 선사별 */}
+              <div className="appendix-section">
+                <h3 className="appendix-title">별첨 1. 선사별 카운트 (NAD+CA)</h3>
+                <table className="appendix-table appendix-carrier">
+                  <thead>
+                    <tr>
+                      <th>선사</th>
+                      <th>20F</th><th>20E</th>
+                      <th>40F</th><th>40E</th>
+                      <th>45F</th><th>45E</th>
+                      <th>소계</th>
+                      <th>적재</th>
+                      <th>통과</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {carrierBreakdown.rows.map((r, i) => (
+                      <tr key={r.op + '-' + i}>
+                        <td className="op-cell"><b>{r.op}</b></td>
+                        <td>{r['20F'] || ''}</td>
+                        <td>{r['20E'] || ''}</td>
+                        <td>{r['40F'] || ''}</td>
+                        <td>{r['40E'] || ''}</td>
+                        <td>{r['45F'] || ''}</td>
+                        <td>{r['45E'] || ''}</td>
+                        <td><b>{r.total}</b></td>
+                        <td style={{color: '#d97706'}}>{r.ptk || ''}</td>
+                        <td style={{color: '#6b7280'}}>{r.transit || ''}</td>
+                      </tr>
+                    ))}
+                    <tr className="totals-row">
+                      <td><b>합계</b></td>
+                      <td>{carrierBreakdown.totals['20F'] || 0}</td>
+                      <td>{carrierBreakdown.totals['20E'] || 0}</td>
+                      <td>{carrierBreakdown.totals['40F'] || 0}</td>
+                      <td>{carrierBreakdown.totals['40E'] || 0}</td>
+                      <td>{carrierBreakdown.totals['45F'] || 0}</td>
+                      <td>{carrierBreakdown.totals['45E'] || 0}</td>
+                      <td><b>{carrierBreakdown.totals.total || 0}</b></td>
+                      <td style={{color: '#d97706'}}><b>{carrierBreakdown.totals.ptk || 0}</b></td>
+                      <td style={{color: '#6b7280'}}><b>{carrierBreakdown.totals.transit || 0}</b></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="appendix-note">※ NAD+CA / NAD+CF segment(EDI) 또는 엑셀 operator 컬럼 기준 · 미상은 '-'.</div>
+              </div>
+
+              {/* 별첨 2 — 화물종류별 */}
+              <div className="appendix-section">
+                <h3 className="appendix-title">별첨 2. 화물종류별 카운트 (베이마크와 색 일치)</h3>
+                <table className="appendix-table appendix-type">
+                  <thead>
+                    <tr>
+                      <th>종류</th>
+                      <th>마크</th>
+                      <th>적재</th>
+                      <th>통과</th>
+                      <th>전체</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cargoTypeBreakdown.rows.map((r) => (
+                      <tr key={r.label}>
+                        <td>{r.label}</td>
+                        <td><span className={`cell mark-${r.mark}`} style={{display: 'inline-flex', width: 18, height: 14}}>{r.mark}</span></td>
+                        <td style={{color: '#d97706'}}>{r.ptk || ''}</td>
+                        <td style={{color: '#6b7280'}}>{r.transit || ''}</td>
+                        <td><b>{r.total || ''}</b></td>
+                      </tr>
+                    ))}
+                    <tr className="totals-row">
+                      <td><b>합계</b></td>
+                      <td></td>
+                      <td style={{color: '#d97706'}}><b>{cargoTypeBreakdown.totals.ptk || 0}</b></td>
+                      <td style={{color: '#6b7280'}}><b>{cargoTypeBreakdown.totals.transit || 0}</b></td>
+                      <td><b>{cargoTypeBreakdown.totals.total || 0}</b></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="appendix-note">※ 우선순위: DG &gt; Reefer &gt; FR &gt; Tank &gt; OT &gt; 엠티 &gt; 일반. 한 컨테이너는 1행에만 카운트.</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -1217,152 +1443,179 @@ export default function PrintableCargoPlan({
           font-size: 11pt; margin-bottom: 4px;
           flex-shrink: 0;
         }
-        /* M5.37: 4행이 헤더 외 가용 세로를 자동 균등 분할 (선박별 베이 수와 무관) */
-        .bay-row { 
-          display: grid; gap: 2px; margin-bottom: 2px; 
-          align-items: stretch;
-          flex: 1;
-          min-height: 0;
+        /* M6.86: 페이지 그리드 — 2행 6열 (참조 SITC SENDAI 2631E 양식)
+           .page-rows = 세로 flex (2 행), .page-row = 가로 flex (6 컬럼) */
+        .page-rows {
+          display: flex; flex-direction: column;
+          flex: 1; min-height: 0;
+          gap: 3px;
         }
-        .five-col { grid-template-columns: repeat(5, 1fr); }
-        .bay-box {
-          border: 0.5px solid #000; background: white;
-          font-size: 9pt;
+        .page-row {
+          display: flex; flex-direction: row;
+          flex: 1 1 0; min-height: 0;
+          gap: 3px;
+        }
+        .page-row > .bay-box,
+        .page-row > .col-placeholder {
+          flex: 1 1 0; width: 0; min-width: 0;
+        }
+        .col-placeholder {
+          /* AFT 좌측 빈 컬럼: legend 또는 진짜 빈 자리 */
+          display: flex; flex-direction: column;
+          justify-content: flex-end; align-items: flex-start;
+        }
+        .col-placeholder.col-legend {
+          justify-content: flex-end;
+        }
+        /* trio-box: 한 박스 안에 단독 (위) + trio-divider + 페어 (아래) */
+        .bay-box.trio-box {
+          border: 1px solid #000; background: white;
+          display: flex; flex-direction: column;
           page-break-inside: avoid;
-          display: flex;
-          flex-direction: column;
           overflow: hidden;
-          height: 100%;
         }
-        .bay-box-placeholder {
-          visibility: hidden;
-          height: 100%;
+        .bay-box.trio-box > .bay-section {
+          flex: 1 1 0; min-height: 0;
         }
+        .trio-divider {
+          border-top: 0.5px solid #999;
+          flex-shrink: 0;
+        }
+        /* bay-section = 한 베이 영역 (단독 또는 페어) */
+        .bay-section {
+          display: flex; flex-direction: column;
+          align-items: center; padding: 3px 3px;
+          min-height: 0; position: relative;
+          font-size: 9pt;
+        }
+        .bay-section-empty { background: transparent; }
         .bay-title-row {
-          display: flex; justify-content: space-between;
-          padding: 1px 3px; font-size: 8pt;
+          position: relative; width: 100%;
+          text-align: center; font-weight: bold;
+          font-size: 10pt; padding: 0 6px;
+          margin-bottom: 1px;
+          box-sizing: border-box;
           flex-shrink: 0;
         }
-        .bay-title-label { font-weight: 500; }
-        .bay-count { font-size: 7pt; }
-        .bay-row-labels {
+        .bay-title { display: inline-block; }
+        .bay-count {
+          position: absolute; right: 6px; top: 0;
+          color: #555; font-size: 8pt; font-weight: normal;
+        }
+        .bay-content {
+          display: flex; flex-direction: column;
+          align-items: center;
+          flex: 1; width: 100%; min-height: 0;
+        }
+        /* deck:hold = 6:4 비율 (BAY 라벨 영역 보호, STSE 2631E 검증) */
+        .deck-area {
+          flex: 6 1 0;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: flex-end;
+          width: 100%; min-height: 0;
+        }
+        .hold-area {
+          flex: 4 1 0;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: flex-start;
+          width: 100%; min-height: 0;
+        }
+        /* row 라벨 (위/아래) */
+        .row-labels {
           display: flex; justify-content: center;
-          font-size: 5pt; padding: 0 1px;
+          font-size: 6pt; color: #444;
+          gap: 0; margin: 1px 0;
+          margin-right: 14px;  /* tier 라벨 자리 보정 */
+        }
+        .row-labels > span {
+          flex: 0 0 16px; width: 16px;
+          text-align: center; line-height: 1.2;
+        }
+        .row-labels-hidden > span { visibility: hidden; }
+        /* 그리드 + tier 라벨 가로 wrap */
+        .grid-row-wrap {
+          display: flex; flex-direction: row;
+          align-items: stretch; gap: 2px;
+        }
+        .grid {
+          display: flex; flex-direction: column;
+          align-items: center; gap: 0;
+        }
+        /* tier-row = 한 줄 (10 칸) */
+        .tier-row {
+          display: flex; gap: 0;
+          height: 12px;
+          justify-content: center;
+        }
+        .tier-row.invisible-row { visibility: hidden; }
+        /* M6.86: hold-area 또는 deck-area 전체 invisible (단독 odd 박스의 hold 영역 등 - 정렬용) */
+        .area-invisible { visibility: hidden; }
+        /* cell = 셀 (16×12px) - 셀 너비는 row-labels와 일치해야 함 */
+        .cell {
+          flex: 0 0 16px; width: 16px; height: 12px;
+          border: 0.5px solid #555;
+          box-sizing: border-box;
+          background: #fff;
+          font-size: 7pt;
+          display: flex; align-items: center; justify-content: center;
+          line-height: 1;
+          font-weight: bold;
+          font-family: 'Courier New', monospace;
+        }
+        .cell-empty {
+          flex: 0 0 16px; width: 16px; height: 12px;
+          visibility: hidden;
+        }
+        /* DECK / HOLD 사이 굵은 검은 가로선 (해치 커버 표시) */
+        .hatch-break {
+          height: 0;
+          border-top: 1.5px solid #000;
+          width: 160px;
+          margin: 1px 0;
           flex-shrink: 0;
         }
-        /* M6.49: row 라벨 폰트 축소 (7pt→5pt) — 큰 선박 27 row까지 겹침 해소 */
-        /* M6.73: 셀 너비 고정 + 가운데 정렬 — deck 8칸/hold 7칸 좌우 대칭 (카스피 양식) */
-        .bay-row-label { flex: 0 0 var(--col-width, 12.5%); text-align: center; font-size: 5pt; min-width: 0; letter-spacing: -0.3px; line-height: 1; }
-        /* M5.37: 베이 그리드가 박스 안 빈 공간을 채움 (선박별 row/tier 다양) */
-        .bay-grid-wrap {
-          display: flex; align-items: stretch; padding: 1px;
-          justify-content: center;
-          flex: 1;
-          min-height: 0;
-        }
-        /* M5.38: 그리드/셀/티어 레이블 동적 분배 (선박별 row/tier 수 다름) */
-        /* M6.0: V5 양식 복원 (M5.99의 height:1.3em 잘못 → flex:1, min-height:0) */
-        .bay-grid { 
-          display: flex; flex-direction: column; align-items: stretch;
-          flex: 1; min-width: 0; min-height: 0;
-        }
-        /* M6.73: deck/hold row 가운데 정렬 — column 수 다를 때 좌우 대칭 */
-        /* M6.82 [A]: deck:hold = 60:40 비율 (STSE 2631E 검증)
-           - STD_DECK 6단 + STD_HOLD 4단 + hatch-break 1행 = 11행
-           - 각 row flex:1 → deck 그룹 6 / hold 그룹 4 = 자연 60:40
-           - BAY 라벨 + count 영역 보호 (이전 5:4 비율 → BAY 라벨 잘림 케이스 해결) */
-        .bay-grid-row { 
-          display: flex; flex: 1; min-height: 0;
+        /* tier 라벨 (우측) */
+        .tier-labels {
+          display: flex; flex-direction: column;
+          align-items: flex-start;
+          font-size: 6pt; color: #444;
+          width: 12px;
           justify-content: center;
         }
-        /* M6.82 [A]: deck/hold 클래스별 명시적 flex (베이별 tier 수 달라도 60:40 보장) */
-        .bay-grid-row.deck-row, .bay-grid-row.extra-tier-row { flex: 1 1 0; }
-        .bay-grid-row.hold-row { flex: 1 1 0; }
-        /* M6.0: 사용 안 하는 tier 행 → 자리 차지하되 안 보임 (V5 양식)
-           M6.60: visibility:hidden → opacity:0
-           이유: Chrome PDF 인쇄에서 flex:1 + visibility:hidden 자식이 자리를 collapse하는 케이스 발견
-                 (PCBJ BAY 15 deck 부분이 박스에 자리 차지 못 함)
-                 opacity:0은 자리 100% 보장 + 자식 ::after까지 모두 투명 */
-        .bay-grid-row.tier-hidden { visibility: hidden; }
-        .bay-tier-labels span.tier-hidden { visibility: hidden; }
-        .bay-cell {
-          flex: 0 0 var(--col-width, 12.5%);
-          border: 0.5px solid #999;
-          text-align: center;
-          font-size: 6pt;
-          line-height: 1;
-          font-family: 'Courier New', monospace;
-          min-width: 0; min-height: 0;
-          display: flex; align-items: center; justify-content: center;
+        .tier-labels > span {
+          height: 12px; line-height: 12px;
+          display: block;
         }
-        /* M6.65: 3자 POD 약어 (DLC, LYG, PTK 등) 셀에 들어가도록 폰트 축소 */
-        .bay-cell.mark-multi { font-size: 3.8pt; font-weight: 600; letter-spacing: -0.3px; }
-        .mark-X { color: #000; }
-        /* M6.1: 짝수 베이 40피트의 짝꿍 자리 X (단독 박스에서, 다른 컨테이너 적재 불가) */
-        .mark-shadow { color: #999; font-style: italic; background: #f0f0f0; }
-        .mark-o { color: #d97706; font-weight: 500; }
-        .mark-L { color: #c026d3; font-weight: 500; background: #fce7f3 !important; }
-        /* M6.58→M6.60: 빈 셀 시각화 - 사용자 요청 "빈 셀로 남겨놔야 함"
-           이전 .mark-empty { color: transparent }는 0.3px border만 남아 화면에서 사실상 안 보임.
-           M6.58: ::after에 position:absolute로 점 추가 → PDF 인쇄 시 점들이 페이지 하단으로 흘러나오는 버그 발생
-           M6.60: position 제거. .bay-cell이 이미 flex+center 정렬이라 ::after가 셀 안에 자연스럽게 가운데 배치 */
-        .mark-empty { color: transparent; }
-        .mark-empty::after {
-          content: '·';
-          color: #d1d5db;
-          font-size: 8pt;
-          line-height: 1;
-        }
-        /* M5.16: 특수화물 추가 mark */
-        .mark-E { color: #6b7280; font-weight: 500; }  /* 엠티 */
-        .mark-R { color: #0891b2; font-weight: 700; }  /* 풀 리퍼 */
-        .mark-r { color: #67e8f9; font-weight: 500; }  /* 엠티 리퍼 */
-        .mark-D { color: #dc2626; font-weight: 700; }  /* DG */
-        .mark-F { color: #9333ea; font-weight: 700; }  /* FR */
-        .mark-T { color: #ea580c; font-weight: 700; }  /* TK */
-        .mark-A { color: #c026d3; font-weight: 700; }  /* OT (Awkward) */
-
-        /* M5.16: type별 셀 배경 (특수화물 강조) */
-        .bay-cell.type-reefer { background: #cffafe !important; }  /* 연시안 */
-        .bay-cell.type-dg     { background: #fee2e2 !important; }  /* 연빨강 */
-        .bay-cell.type-fr     { background: #f3e8ff !important; }  /* 연보라 */
-        .bay-cell.type-tk     { background: #ffedd5 !important; }  /* 연주황 */
-        .bay-cell.type-ot     { background: #fae8ff !important; }  /* 연마젠타 */
-
-        /* M5.16: X-RAY 마커 (셀 우상단 빨간 점) */
-        .bay-cell.xray {
+        .tier-labels > span.invisible-label { visibility: hidden; }
+        /* extra-tier (예: 80) — 빨간 라벨 */
+        .extra-tier-label { color: #dc2626; font-weight: 600; }
+        .tier-row.extra-tier-row { /* deck 마지막 줄로 처리 */ }
+        /* mark 색상 (참조 양식 색) */
+        .cell.mark-X { color: #000; background: #f0f0f0; }
+        .cell.mark-shadow { color: #999; font-style: italic; background: #f0f0f0; }
+        .cell.mark-o { color: #d97706; }
+        .cell.mark-L { color: #c026d3; background: #fce7f3 !important; }
+        .cell.mark-E { color: #6b7280; }
+        .cell.mark-R { color: #006064; background: #b2ebf2 !important; font-weight: bold; }
+        .cell.mark-r { color: #67e8f9; background: #ecfeff !important; }
+        .cell.mark-D { color: #b71c1c; background: #ffcdd2 !important; font-weight: bold; }
+        .cell.mark-F { color: #1b5e20; background: #c8e6c9 !important; font-weight: bold; }
+        .cell.mark-T { color: #e65100; background: #ffe0b2 !important; font-weight: bold; }
+        .cell.mark-A { color: #4a148c; background: #e1bee7 !important; font-weight: bold; }
+        .cell.mark-multi { font-size: 4pt; font-weight: 600; letter-spacing: -0.3px; }
+        /* X-RAY 마커 (셀 우상단 별표) */
+        .cell.xray {
           position: relative;
-          background: #fef08a !important;  /* 연노랑 (X-RAY 표시) */
+          background: #fef08a !important;
           color: #b91c1c !important;
-          font-weight: 700 !important;
         }
-        .bay-cell.xray::after {
+        .cell.xray::after {
           content: '★';
           position: absolute;
           top: -2px; right: 0px;
           font-size: 6pt; line-height: 6pt;
           color: #dc2626;
         }
-        /* M6.0: hatch-break는 bay-grid-row 클래스와 함께 사용. 한 줄 height 차지 (외곽 정렬) */
-        .hatch-break {
-          background: repeating-linear-gradient(90deg, #555 0, #555 4px, transparent 4px, transparent 8px) center / 100% 2px no-repeat;
-        }
-        /* M6.0: extra-tier-label은 점선 자리 라벨 (다른 tier 라벨과 같은 height) */
-        .extra-tier-label {
-          color: #dc2626; font-weight: 600;
-        }
-        .bay-tier-labels {
-          display: flex; flex-direction: column;
-          font-size: 6pt; padding-left: 2px;
-          flex-shrink: 0;
-        }
-        /* M5.38: 티어 레이블 span 각각 flex:1 → 셀 높이와 동기화 */
-        .bay-tier-labels span { 
-          flex: 1; display: flex; align-items: center;
-          font-size: 6pt; min-height: 0;
-        }
-        /* M6.0: tier-gap도 라벨 한 줄 자리 (점선 자리와 같은 height) */
-        .tier-gap { flex: 1; min-height: 0; }
         .legend-box {
           padding: 6px 4px;
           display: flex; flex-direction: column; justify-content: flex-end;
@@ -1407,6 +1660,13 @@ export default function PrintableCargoPlan({
           border-top: 0.5px solid #999;
           font-size: 8pt;
         }
+        /* M6.86.4: 적재/통과 분리 표시 — "총 N대" 바로 아래 */
+        .bay-stats-inline .stats-breakdown {
+          font-size: 7pt;
+          line-height: 1.25;
+          padding-bottom: 1px;
+        }
+        .bay-stats-inline .stats-breakdown b { font-weight: 700; }
         /* M5.91: POD가 많을 때 (5개 이상) 더 작게 */
         .bay-stats-inline:has(.stats-line:nth-child(7)) .stats-line { font-size: 7pt; line-height: 1.15; }
         /* M5.94: 사이즈+타입별 상세 */
@@ -1533,6 +1793,68 @@ export default function PrintableCargoPlan({
         @media print {
           .special-page { page-break-before: always !important; }
           @page { size: A4 landscape; margin: 0.5cm; }
+        }
+        /* M6.86.4: 별첨 페이지 — 선사별 + 화물종류별 카운트 */
+        .appendix-page {
+          color: black; background: white;
+          font-family: Arial, sans-serif;
+          font-size: 10pt;
+          padding: 8px 12px;
+          width: 291mm;
+          min-height: 204mm;
+          box-sizing: border-box;
+        }
+        .appendix-grid {
+          display: grid;
+          grid-template-columns: 2fr 1fr;
+          gap: 16px;
+          margin-top: 10px;
+        }
+        .appendix-section { display: flex; flex-direction: column; }
+        .appendix-title {
+          font-size: 11pt; font-weight: 700;
+          margin: 0 0 6px 0;
+          padding-bottom: 3px;
+          border-bottom: 1px solid #333;
+        }
+        .appendix-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 9pt;
+        }
+        .appendix-table th, .appendix-table td {
+          border: 0.5px solid #555;
+          padding: 3px 6px;
+          text-align: center;
+          line-height: 1.25;
+        }
+        .appendix-table th {
+          background: #f3f4f6;
+          font-weight: 700;
+          font-size: 8.5pt;
+        }
+        .appendix-table td.op-cell {
+          font-family: 'Courier New', monospace;
+          text-align: left;
+          font-weight: 700;
+        }
+        .appendix-table tr.totals-row {
+          background: #fafafa;
+          border-top: 1.5px solid #000;
+        }
+        .appendix-table tr.totals-row td { font-weight: 700; }
+        .appendix-table .cell {
+          /* 별첨2에서 인라인 마크 셀 — 카고플랜 셀과 동일 스타일 사용 (mark-R/D/F/T/A 색상 자동 적용) */
+          font-family: 'Courier New', monospace;
+          font-size: 8pt;
+        }
+        .appendix-note {
+          margin-top: 6px;
+          font-size: 7.5pt;
+          color: #666;
+        }
+        @media print {
+          .appendix-page { page-break-before: always !important; }
         }
       `}</style>
     </div>
