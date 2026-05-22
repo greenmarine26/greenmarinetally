@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.86.5';
+export const APP_VERSION = 'M6.86.6';
 // M6.82 변경점 (Universal Cargo Plan baseline 통합 — STSE 525컨 검증 기반):
 //   배경: M6.81 Python (build_cargo_plan_universal.py)에서 STSE SENDAI 2631E 525컨 검증 완료.
 //         핵심 baseline (6단 deck + 4단 hold + 60:40 비율 + 18×13 셀)을 React에 통합.

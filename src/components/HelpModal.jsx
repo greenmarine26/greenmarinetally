@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.86.6 (2026-05-22) — 양하/통과 명확 구분 + A4 동적 셀 (잘림 해결)',
+      examples: [
+        { q: '🎯 핵심 문제', a: '사용자 지적 2건: (1) "평택것만 색칠해야 하는데 다른데것(통과)도 색칠되어 양하분 구분 안 됨" (2) "통과화물에 X 표시하면 짝수40ft 홀수 shadow X와 겹쳐 버그. 베이마다 양끝이 잘림 - 동적 크기 변환 필요". KKLC2605S PDF 검증: 양하 113대인데 글자(특수화물) 카운트만 약 75개 보이고 38개 일반 양하분이 색칠 안 됨. BAY 25는 양하 5대인데 X밖에 안 보임.' },
+        { q: '[1] 양하 카고플랜 마크 약속 정정 (PTK=컬러, 통과=흑백)', a: 'getMark에 isThrough 플래그 추가 (양하 모드 + POD≠PTK). renderCell 4분기: (a)PTK 일반 = 선사별 컬러배경, opCode 없어도 기본 파랑(#3b82f6)으로 무조건 색 표시 (b)PTK 특수 = 글자+자체컬러 (R=시안, D=빨강 등) (c)통과 일반 = mark-through 클래스 = 회색배경 (#e8e8e8) (d)통과 특수 = 글자는 보이되 through 클래스로 회색 override (#ececec). X는 짝수40ft shadow 전용으로만 사용 - 통과 표시 절대 X 안 씀.' },
+        { q: '[2] 셀 동적 폭 (A4 양끝 잘림 해결)', a: '.cell flex: 0 0 16px → flex: 1 1 0; min-width: 0. 박스 폭에 맞춰 자동 균등 분할. KKLC BAY 21 20컬럼처럼 큰 베이도 박스 폭 안에 fit. row-labels span도 flex 1 1 0으로 셀과 정렬. hatch-break width 160px → 100%. .grid flex 1 1 0, .grid-row-wrap width 100%. row-labels width: calc(100% - 14px). 베이 수 늘어나도(34+ 베이 선박) 자동 fit.' },
+        { q: '✅ 결과', a: '양하 카고플랜에서 검수원 한눈에 식별: 컬러 = 양하분, 회색 = 통과, X = shadow(슬롯점유), 빈칸 = 빈슬롯. 113대 양하분이 모두 컬러로 표시되어 카운트 일치. 베이 수 많은 선박도 잘림 없이 A4 한 장 fit.' },
+        { q: '🛡 회귀 방지', a: 'PrintableCargoPlan.jsx만 변경 (getMark + renderCell + CSS). 다른 파일 무변경. 선적 모드(loading) 로직 무영향. 다음 작업 후보: deck/hold 셀 정렬 통일(현재는 deck/hold 컬럼 수 다르면 셀 폭 달라짐), 박스 수 동적 분배(베이 35+ 선박 6열 → 7열 자동).' },
+      ],
+    },
+    {
       title: '🔥 M6.86.5 (2026-05-22) — 카스피 양식 진짜 약속 회복 + KKLC.def 등록',
       examples: [
         { q: '🎯 배경', a: '사용자: "앱 출력물이 샘플과 같다고 하셨나요?" 후 KKLC2604S PDF + KKLC.def 직접 첨부. 이전 메모리 "표준 6 deck + 4 hold baseline. 실제 없는 자리는 invisible" 약속이 잘못된 메모리였음을 확인. 진짜 약속: 각 베이는 베이사전(.def) / EDI 실 hull 구조 그대로. baseline 강제 X. 가짜 셀 X. 단독 베이 hold 없으면 hold 영역 자체 없음. A4 한 장. 마크는 모드별 (선적=POD첫글자 셀에, 양하=선사 색만 셀에+별첨 3자리).' },

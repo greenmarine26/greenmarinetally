@@ -244,13 +244,16 @@ function matchColumns(singles, pairs) {
 //      40ft shadow(짝수40ft가 양옆 홀수 차지)는 X
 //   ▶ X-RAY (평택 양하만): 셀 우상단 ★ 마커
 //
-// returns: { letter, type, isXray, podFirst, opCode }
+// returns: { letter, type, isXray, podFirst, opCode, isThrough }
 //   - letter: 셀에 표시할 글자 (없으면 빈 문자열). 색은 podFirst(선적) 또는 opCode(양하)로 결정.
 //   - type: 'reefer' / 'dg' / 'fr' / 'ot' / 'tk' / 'empty' / null
 //   - podFirst: 선적 모드 일반 컨의 POD 첫 글자 (cell 색상용)
 //   - opCode: 양하 모드 일반 컨의 선사 3자리 코드 (cell 색상용)
+//   - isThrough: M6.86.6 — 양하 모드에서 PTK 아닌 컨 = 통과 (회색 처리용)
 function getMark(c, mode, xrayMap) {
   const ptk = isPtk(c, mode);
+  // M6.86.6: 양하 카고플랜에서 PTK 아니면 통과 화물 (회색 처리)
+  const isThrough = mode === 'discharge' && !ptk;
 
   // 특수화물 우선순위 (양 모드 공통): DG > Reefer > FR > Tank > OT > 엠티
   const isReefer = isReeferContainer(c);
@@ -288,9 +291,11 @@ function getMark(c, mode, xrayMap) {
     } else {
       // 양하: 일반 컨은 letter 없음, 셀 색만
       //   - PTK 도착 컨 (= 양하 대상): 셀 색만 (선사별 색)
-      //   - 통과 컨 (POD≠PTK): 같은 규칙 (어차피 다 외항으로 가니까 선사로 그룹)
-      const op = String(c.op || '').toUpperCase().trim();
-      if (op) opCode = op;
+      //   - M6.86.6: 통과 컨 (POD≠PTK)은 opCode 안 잡음 → renderCell에서 회색 처리
+      if (ptk) {
+        const op = String(c.op || '').toUpperCase().trim();
+        if (op) opCode = op;
+      }
       letter = '';  // 글자 없음, 색만
     }
   }
@@ -301,7 +306,7 @@ function getMark(c, mode, xrayMap) {
   // pod3 backward compat (기존 호출자 호환용)
   const pod3 = podFirst || null;
 
-  return { letter, type, isXray, pod3, podFirst, opCode };
+  return { letter, type, isXray, pod3, podFirst, opCode, isThrough };
 }
 
 function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta, dictBaysSummary = {}, podColorMap = {}, podFirstColorMap = {}, opColorMap = {} }) {
@@ -583,20 +588,23 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   const total = cnt.c20 + cnt.c40 + cnt.c45;
   const countStr = isPaired ? `${cnt.c20} / ${cnt.c40} / ${cnt.c45}` : String(total);
 
-  // M6.86.5: 셀 렌더 — 선적/양하 모드별
-  //   ▶ 선적: 일반 컨 = POD 첫 글자 letter + 글자색 (podFirstColorMap[m.podFirst])
-  //   ▶ 양하: 일반 컨 = letter 없음, 배경색 적용 (opColorMap[m.opCode])
-  //   ▶ 공통: 특수화물 (R/D/F/T/A/E) letter + 자체 mark-* 클래스 색
-  //   ▶ X-RAY: 우상단 ★ 마커 (양하만)
-  //   ▶ shadow40 (짝수40ft가 양옆 홀수 차지): X
+  // M6.86.6: 셀 렌더 — 양하 카고플랜은 PTK=컬러, 통과=회색(흑백)
+  //   ▶ 양하 PTK 일반: 선사별 컬러 배경 (opCode 없으면 기본 파랑)
+  //   ▶ 양하 PTK 특수: 글자 + 자체 컬러 (R=시안, D=빨강 등)
+  //   ▶ 양하 통과 일반: 회색 배경
+  //   ▶ 양하 통과 특수: 글자 + 회색 (E/R/D 표시는 하되 흑백)
+  //   ▶ 선적: 일반=POD 첫 글자 + 글자색, 특수=글자 + 자체색
+  //   ▶ X-RAY: 우상단 ★ 마커 (양하 PTK만)
+  //   ▶ shadow40: X (짝수40ft가 양옆 홀수 차지) — X는 오직 이 용도
   //   ▶ 빈 자리: 셀 border만 (글자/색 없음)
   const renderCell = (c, keyR) => {
     if (!c) return <span key={keyR} className="cell"></span>;
     if (c._shadow40) return <span key={keyR} className="cell mark-shadow">X</span>;
     const m = getMark(c, mode, xrayMap);
-    // 특수화물: mark-R / mark-D / mark-F / mark-T / mark-A / mark-E / mark-r 자체 색 사용
+    // 특수화물 (R/D/F/T/A/E): 글자 + 색. 양하 통과면 회색.
     if (m.type) {
-      const cls = `cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
+      const throughCls = m.isThrough ? 'through' : '';
+      const cls = `cell mark-${m.letter} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''} ${throughCls}`;
       return <span key={keyR} className={cls}>{m.letter}</span>;
     }
     // 일반 컨: 모드별
@@ -606,12 +614,15 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       const cls = `cell mark-pod ${m.isXray ? 'xray' : ''}`;
       return <span key={keyR} className={cls} style={podColor ? { color: podColor, fontWeight: 700 } : undefined}>{m.letter}</span>;
     } else {
-      // 양하: letter 없음, 배경색만 (선사별)
-      const opColor = m.opCode && opColorMap[m.opCode];
+      // 양하: M6.86.6 — PTK=컬러, 통과=회색
+      if (m.isThrough) {
+        // 통과 컨테이너: 회색 배경 (글자 없음)
+        return <span key={keyR} className="cell mark-through">&nbsp;</span>;
+      }
+      // PTK 양하 대상: 선사별 컬러 (opCode 없으면 기본 파랑 — 색이 무조건 보이게)
+      const opColor = (m.opCode && opColorMap[m.opCode]) || '#3b82f6';
       const cls = `cell mark-op ${m.isXray ? 'xray' : ''}`;
-      const style = opColor
-        ? { background: opColor + '33', borderColor: opColor, color: opColor }  // 33 = 20% opacity
-        : undefined;
+      const style = { background: opColor + '55', borderColor: opColor, color: opColor };  // 55 = 33% opacity (더 잘 보이게)
       return <span key={keyR} className={cls} style={style}>&nbsp;</span>;
     }
   };
@@ -1530,39 +1541,46 @@ export default function PrintableCargoPlan({
           align-items: center; justify-content: flex-start;
           width: 100%; min-height: 0;
         }
-        /* row 라벨 (위/아래) */
+        /* row 라벨 (위/아래) — M6.86.6: span도 flex로 셀과 정렬 */
         .row-labels {
-          display: flex; justify-content: center;
+          display: flex; justify-content: stretch;
           font-size: 6pt; color: #444;
           gap: 0; margin: 1px 0;
           margin-right: 14px;  /* tier 라벨 자리 보정 */
+          width: calc(100% - 14px);  /* tier-labels 12px + gap 2px 빼고 */
+          box-sizing: border-box;
         }
         .row-labels > span {
-          flex: 0 0 16px; width: 16px;
+          flex: 1 1 0; min-width: 0;
           text-align: center; line-height: 1.2;
+          overflow: hidden;
         }
         .row-labels-hidden > span { visibility: hidden; }
         /* 그리드 + tier 라벨 가로 wrap */
         .grid-row-wrap {
           display: flex; flex-direction: row;
           align-items: stretch; gap: 2px;
+          width: 100%;  /* M6.86.6: 박스 폭 채우기 */
         }
         .grid {
           display: flex; flex-direction: column;
-          align-items: center; gap: 0;
+          align-items: stretch; gap: 0;
+          flex: 1 1 0; min-width: 0;  /* M6.86.6: 셀이 박스 폭 채우게 */
         }
-        /* tier-row = 한 줄 (10 칸) */
+        /* tier-row = 한 줄 — M6.86.6: width 100% + 셀이 flex 균등 분할 */
         .tier-row {
           display: flex; gap: 0;
           height: 12px;
-          justify-content: center;
+          width: 100%;
+          box-sizing: border-box;
         }
         .tier-row.invisible-row { visibility: hidden; }
         /* M6.86: hold-area 또는 deck-area 전체 invisible (단독 odd 박스의 hold 영역 등 - 정렬용) */
         .area-invisible { visibility: hidden; }
-        /* cell = 셀 (16×12px) - 셀 너비는 row-labels와 일치해야 함 */
+        /* cell = M6.86.6: 동적 폭 (박스 폭 / 컬럼수로 자동 분할). 양끝 잘림 방지. */
         .cell {
-          flex: 0 0 16px; width: 16px; height: 12px;
+          flex: 1 1 0; min-width: 0; width: auto;
+          height: 12px;
           border: 0.5px solid #555;
           box-sizing: border-box;
           background: #fff;
@@ -1571,16 +1589,18 @@ export default function PrintableCargoPlan({
           line-height: 1;
           font-weight: bold;
           font-family: 'Courier New', monospace;
+          overflow: hidden;
         }
         .cell-empty {
-          flex: 0 0 16px; width: 16px; height: 12px;
+          flex: 1 1 0; min-width: 0; width: auto;
+          height: 12px;
           visibility: hidden;
         }
         /* DECK / HOLD 사이 굵은 검은 가로선 (해치 커버 표시) */
         .hatch-break {
           height: 0;
           border-top: 1.5px solid #000;
-          width: 160px;
+          width: 100%;  /* M6.86.6: 박스 폭 채우기 */
           margin: 1px 0;
           flex-shrink: 0;
         }
@@ -1614,6 +1634,18 @@ export default function PrintableCargoPlan({
         /* M6.86.5: 일반 컨 셀 — 선적 mode(POD 첫 글자, inline color)와 양하 mode(선사 색박스, inline bg) */
         .cell.mark-pod { font-weight: 700; }
         .cell.mark-op { /* inline style: background, borderColor */ }
+        /* M6.86.6: 통과 화물 (양하 카고플랜에서 PTK 아님) — 회색 배경 */
+        .cell.mark-through {
+          background: #e8e8e8;
+          border-color: #aaa;
+        }
+        /* M6.86.6: 특수화물도 통과면 회색 override (글자는 보이게 회색) */
+        .cell.through {
+          background: #ececec !important;
+          color: #888 !important;
+          border-color: #bbb !important;
+          font-weight: normal !important;
+        }
         /* X-RAY 마커 (셀 우상단 별표) */
         .cell.xray {
           position: relative;
