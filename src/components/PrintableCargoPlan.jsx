@@ -3,8 +3,16 @@
 // - 5컬럼 그리드 (FORE 위 / AFT 아래)
 // - AFT 좌측 legend 박스
 // - 베이 상단: 제목 + 카운트 (20'/40'/45')
-// - 데크/홀드 5:5 비율 + 굵은 hatch break
+// - 데크/홀드 6:4 비율 + 굵은 hatch break  ← M6.82: 5:5 → 6:4 (BAY 라벨 보호)
 // - row 라벨 상하단, tier 라벨 우측
+//
+// M6.82 BASELINE (STSE 2631E 525컨 검증 — Python build_cargo_plan_universal.py 이식):
+//   STD_DECK 6단 [92,90,88,86,84,82] (기존 5단에서 92 추가)
+//   STD_HOLD 4단 [08,06,04,02]
+//   deck:hold = 60:40 비율
+//   셀 18×13px, hold 폭 = deck 폭 통일
+//   has_zero 좌우 대칭 row 알고리즘 (09 제외)
+//   모든 박스 데크 라인 정확 정렬 (page union)
 
 import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
@@ -12,9 +20,21 @@ import { normalizeBay, isoToPdfLabel, isReeferContainer, isoToLabel } from '../u
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
+// M6.82 [A]: M6.81 검증된 baseline (6단 deck + 4단 hold) — 빈 카고플랜 표준
+//   기존 STD_DECK 5단 ['90','88','86','84','82'] → 6단 (92 추가)
+//   STSE SENDAI 등 신규 선박 deck tier 92 사용 케이스 검증됨
 const STD_ROWS = ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
-const STD_DECK = ['90', '88', '86', '84', '82'];
+const STD_DECK = ['92', '90', '88', '86', '84', '82'];
 const STD_HOLD = ['08', '06', '04', '02'];
+
+// M6.82: baseline 진단용 상수 (디버그 로깅 및 fallback baseline 적용 시 사용)
+const _M682_BASELINE = {
+  deck: STD_DECK,
+  hold: STD_HOLD,
+  deckHoldRatio: [6, 4],  // flex 비율 (deck-area 6 / hold-area 4)
+  cellW: 18, cellH: 13,    // 표준 셀 크기 (px)
+  validatedBy: 'STSE_2631E (525 containers, 2026-05-22)',
+};
 
 const isPtk = (c, mode) => {
   const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
@@ -358,12 +378,17 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   //   M6.70m: 페이지 전체 union으로 모든 박스 같은 행 수 → 정렬 일치 + 셀 크기 일관
   //     단점 - 빈 행 존재 → CSS visibility:hidden로 셀 자체 안 보임 (자리 차지)
   //     useMemo로 캐시해서 폰 먹통 방지
+  //   M6.82 [B]: 베이사전 부재/부족 시 STD_DECK / STD_HOLD baseline 강제 적용
+  //     dictBaysSummary가 비어있거나 deckTiersLocal이 비어있는 케이스 → 표준 baseline
+  //     모든 선박 동일 양식 통일 (STSE 2631E 525컨 검증 baseline)
   const pageDeckUnion = useMemo(() => {
     const set = new Set();
     Object.values(dictBaysSummary).forEach(db => {
       if (!db) return;
       (db.deckTiersLocal || db.deckTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
     });
+    // M6.82 [B]: 베이사전 데이터 없으면 baseline (6단 deck) 적용
+    if (set.size === 0) STD_DECK.forEach(t => set.add(t));
     return set;
   }, [dictBaysSummary]);
 
@@ -373,6 +398,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
       if (!db) return;
       (db.holdTiersLocal || db.holdTiers || []).forEach(t => set.add(String(t).padStart(2, '0')));
     });
+    // M6.82 [B]: 베이사전 데이터 없으면 baseline (4단 hold) 적용
+    if (set.size === 0) STD_HOLD.forEach(t => set.add(t));
     return set;
   }, [dictBaysSummary]);
 
@@ -717,6 +744,66 @@ export default function PrintableCargoPlan({
   }, [containers, mode]);
   const portText = `POL : ${inferPol}  →  POD : ${inferPod}`;
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  // M6.82 [C]: 페이지 2 — Special Cargo Stowage (베이플랜 기반 특수화물 리스트)
+  //   사용자 핵심 요구 (userPreferences #4): "특수 화물 리스트 = 베이플랜이 기본"
+  //   포함 타입: 리퍼 (R, 온도 포함), DG (D, UN/Class), FR (F), OT (A), Tank (T)
+  //   양하 모드: PTK 양하 컨만 / 적재 모드: PTK 출발 컨만
+  const specialCargo = useMemo(() => {
+    const list = [];
+    containers.forEach(c => {
+      if (!isPtk(c, mode)) return;
+      const isReefer = isReeferContainer(c);
+      const isDg = !!c.dg || !!c.imdgClass;
+      const isFr = !!c.fr || (isoToLabel(c.iso) || '').toUpperCase().includes('FR');
+      const isOt = !!c.ot || !!c.oog || (isoToLabel(c.iso) || '').toUpperCase().includes('OT');
+      const isTk = !!c.tk || (isoToLabel(c.iso) || '').toUpperCase().includes('TK');
+      if (!isReefer && !isDg && !isFr && !isOt && !isTk) return;
+      // 우선순위 분류 (BayPlan과 동일): DG > Reefer > FR > TK > OT
+      let kind;
+      if (isDg) kind = 'DG';
+      else if (isReefer) kind = 'Reefer';
+      else if (isFr) kind = 'FR';
+      else if (isTk) kind = 'Tank';
+      else kind = 'OT';
+      list.push({
+        cn: c.cn || '',
+        bay: c.bay ? String(c.bay).padStart(2, '0') : '',
+        row: c.row != null ? String(c.row).padStart(2, '0') : '',
+        tier: c.tier != null ? String(c.tier).padStart(2, '0') : '',
+        iso: (isoToLabel(c.iso) || c.iso || '').toString(),
+        fe: c.fe || '',
+        weight: c.weight || '',
+        pol: (c.pol || '').toUpperCase(),
+        pod: (c.pod || '').toUpperCase(),
+        kind,
+        temp: c.reefer_temp || c.tmp || c.temp || '',  // 리퍼 온도
+        un: c.un || '',                                  // DG UN 번호
+        imdgClass: c.imdgClass || c.dgc || '',           // DG IMDG class
+        sealNo: c.sealNo || c.seal || '',                // 실 번호 (가능시)
+      });
+    });
+    // 정렬: kind → bay → tier → row
+    const kindOrder = { 'DG': 1, 'Reefer': 2, 'FR': 3, 'Tank': 4, 'OT': 5 };
+    list.sort((a, b) => {
+      const ko = (kindOrder[a.kind] || 9) - (kindOrder[b.kind] || 9);
+      if (ko !== 0) return ko;
+      const ba = parseInt(a.bay) || 0, bb = parseInt(b.bay) || 0;
+      if (ba !== bb) return ba - bb;
+      const ta = parseInt(a.tier) || 0, tb = parseInt(b.tier) || 0;
+      if (ta !== tb) return tb - ta;  // tier 큰 것부터 (상단)
+      return (parseInt(a.row) || 0) - (parseInt(b.row) || 0);
+    });
+    return list;
+  }, [containers, mode]);
+
+  // M6.82 [C]: 종류별 카운트 (페이지 2 상단)
+  const specialCounts = useMemo(() => {
+    const c = { Reefer: 0, DG: 0, FR: 0, Tank: 0, OT: 0 };
+    specialCargo.forEach(s => { c[s.kind] = (c[s.kind] || 0) + 1; });
+    return c;
+  }, [specialCargo]);
+
   // M5.94: 선박 풀네임 + 약자 (vslFull은 EDI에서 자동 추출된 풀네임, vsl은 사용자 약자)
   const vslShort = voyageInfo?.vsl || shipName || 'VESSEL';
   const vslFull = voyageInfo?.vslFull || '';
@@ -969,6 +1056,78 @@ export default function PrintableCargoPlan({
 
           {/* M5.32: cargo-footer 영역 제거 — 통계는 마지막 짝꿍 행 좌측에 인라인 / 범례 제거 */}
         </div>
+
+        {/* M6.82 [C]: 페이지 2 — Special Cargo Stowage (베이플랜 기반 특수화물 리스트)
+            사용자 핵심 요구: "특수 화물 리스트 = 베이플랜이 기본"
+            특수화물 0대면 페이지 자체 미생성 */}
+        {specialCargo.length > 0 && (
+          <div className="cargo-plan-page special-page">
+            <div className="cargo-header">
+              <span>{vsl}</span>
+              <span className="cargo-title">SPECIAL CARGO STOWAGE</span>
+              <span>DATE : {todayStr}</span>
+            </div>
+            <div className="cargo-subheader">
+              <span>VOY NO : {voy}</span>
+              <span>{portText}</span>
+              <span>총 {specialCargo.length}대</span>
+            </div>
+            <div className="special-summary">
+              {specialCounts.Reefer > 0 && <span className="sc-pill sc-reefer">Reefer {specialCounts.Reefer}</span>}
+              {specialCounts.DG > 0 && <span className="sc-pill sc-dg">DG {specialCounts.DG}</span>}
+              {specialCounts.FR > 0 && <span className="sc-pill sc-fr">FR {specialCounts.FR}</span>}
+              {specialCounts.Tank > 0 && <span className="sc-pill sc-tank">Tank {specialCounts.Tank}</span>}
+              {specialCounts.OT > 0 && <span className="sc-pill sc-ot">OT {specialCounts.OT}</span>}
+            </div>
+            <table className="special-table">
+              <thead>
+                <tr>
+                  <th>NO</th>
+                  <th>TYPE</th>
+                  <th>BAY</th>
+                  <th>위치 (R/T)</th>
+                  <th>CN/NO</th>
+                  <th>SIZE</th>
+                  <th>F/E</th>
+                  <th>POL → POD</th>
+                  <th>WT(KG)</th>
+                  <th>특수정보</th>
+                  <th>실번호</th>
+                </tr>
+              </thead>
+              <tbody>
+                {specialCargo.map((s, i) => {
+                  let extraInfo = '';
+                  if (s.kind === 'Reefer' && s.temp) extraInfo = `${s.temp}°C`;
+                  else if (s.kind === 'DG') {
+                    const cls = s.imdgClass ? `Class ${s.imdgClass}` : '';
+                    const un = s.un ? `UN${s.un}` : '';
+                    extraInfo = [cls, un].filter(Boolean).join(' / ');
+                  }
+                  const kindClass = `sc-row sc-row-${s.kind.toLowerCase()}`;
+                  return (
+                    <tr key={`${s.cn}-${i}`} className={kindClass}>
+                      <td>{i + 1}</td>
+                      <td><b>{s.kind}</b></td>
+                      <td>{s.bay}</td>
+                      <td>{s.row}-{s.tier}</td>
+                      <td className="cn-cell">{s.cn}</td>
+                      <td>{s.iso}</td>
+                      <td>{s.fe}</td>
+                      <td>{s.pol} → {s.pod}</td>
+                      <td className="num-cell">{s.weight ? Number(s.weight).toLocaleString() : ''}</td>
+                      <td className="extra-cell">{extraInfo}</td>
+                      <td className="seal-cell">{s.sealNo}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="special-footnote">
+              ※ 베이플랜 기준 추출 · 우선순위: DG &gt; Reefer &gt; FR &gt; Tank &gt; OT · {todayStr}
+            </div>
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -1082,10 +1241,17 @@ export default function PrintableCargoPlan({
           flex: 1; min-width: 0; min-height: 0;
         }
         /* M6.73: deck/hold row 가운데 정렬 — column 수 다를 때 좌우 대칭 */
+        /* M6.82 [A]: deck:hold = 60:40 비율 (STSE 2631E 검증)
+           - STD_DECK 6단 + STD_HOLD 4단 + hatch-break 1행 = 11행
+           - 각 row flex:1 → deck 그룹 6 / hold 그룹 4 = 자연 60:40
+           - BAY 라벨 + count 영역 보호 (이전 5:4 비율 → BAY 라벨 잘림 케이스 해결) */
         .bay-grid-row { 
           display: flex; flex: 1; min-height: 0;
           justify-content: center;
         }
+        /* M6.82 [A]: deck/hold 클래스별 명시적 flex (베이별 tier 수 달라도 60:40 보장) */
+        .bay-grid-row.deck-row, .bay-grid-row.extra-tier-row { flex: 1 1 0; }
+        .bay-grid-row.hold-row { flex: 1 1 0; }
         /* M6.0: 사용 안 하는 tier 행 → 자리 차지하되 안 보임 (V5 양식)
            M6.60: visibility:hidden → opacity:0
            이유: Chrome PDF 인쇄에서 flex:1 + visibility:hidden 자식이 자리를 collapse하는 케이스 발견
@@ -1276,6 +1442,71 @@ export default function PrintableCargoPlan({
         }
         @media print {
           .cargo-footer { position: absolute; bottom: 8px; left: 16px; }
+        }
+
+        /* M6.82 [C]: 페이지 2 — Special Cargo Stowage 양식 */
+        .special-page {
+          page-break-before: always;
+          padding: 12px 16px;
+        }
+        .special-page .cargo-title { color: #b91c1c; }  /* 빨강 — 특수화물 강조 */
+        .special-summary {
+          display: flex; flex-wrap: wrap; gap: 8px;
+          padding: 6px 0; margin-bottom: 6px;
+          border-bottom: 1px solid #999;
+        }
+        .sc-pill {
+          display: inline-block;
+          padding: 3px 10px;
+          font-size: 9pt; font-weight: 700;
+          border: 1px solid #555; border-radius: 4px;
+        }
+        .sc-pill.sc-reefer { background: #cffafe; color: #0e7490; border-color: #06b6d4; }
+        .sc-pill.sc-dg     { background: #fee2e2; color: #b91c1c; border-color: #dc2626; }
+        .sc-pill.sc-fr     { background: #f3e8ff; color: #6b21a8; border-color: #9333ea; }
+        .sc-pill.sc-tank   { background: #ffedd5; color: #c2410c; border-color: #ea580c; }
+        .sc-pill.sc-ot     { background: #fae8ff; color: #86198f; border-color: #c026d3; }
+        .special-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 9pt;
+          margin-top: 4px;
+        }
+        .special-table th, .special-table td {
+          border: 0.5px solid #555;
+          padding: 3px 5px;
+          text-align: left;
+          line-height: 1.2;
+        }
+        .special-table th {
+          background: #f3f4f6;
+          font-weight: 700;
+          text-align: center;
+          font-size: 8.5pt;
+        }
+        .special-table td { vertical-align: middle; }
+        .special-table .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
+        .special-table .cn-cell  { font-family: 'Courier New', monospace; font-weight: 600; }
+        .special-table .seal-cell{ font-family: 'Courier New', monospace; font-size: 8pt; }
+        .special-table .extra-cell { font-weight: 600; }
+        /* 종류별 행 배경 — 카고플랜 1페이지 셀 색과 일관성 */
+        .special-table tr.sc-row-reefer { background: #ecfeff; }
+        .special-table tr.sc-row-dg     { background: #fef2f2; }
+        .special-table tr.sc-row-fr     { background: #faf5ff; }
+        .special-table tr.sc-row-tank   { background: #fff7ed; }
+        .special-table tr.sc-row-ot     { background: #fdf4ff; }
+        .special-table tr.sc-row-dg td:nth-child(10) { font-weight: 700; color: #b91c1c; }
+        .special-table tr.sc-row-reefer td:nth-child(10) { font-weight: 700; color: #0e7490; }
+        .special-footnote {
+          margin-top: 8px;
+          padding-top: 4px;
+          font-size: 8pt; color: #555;
+          border-top: 0.5px dashed #ccc;
+          text-align: right;
+        }
+        @media print {
+          .special-page { page-break-before: always !important; }
+          @page { size: A4 landscape; margin: 0.5cm; }
         }
       `}</style>
     </div>

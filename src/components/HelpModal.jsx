@@ -379,6 +379,19 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🚀 M6.82 (2026-05-22) — Universal Cargo Plan baseline 통합 + Special Cargo 페이지 추가',
+      examples: [
+        { q: '🎯 배경', a: 'M6.81 Python 스크립트(build_cargo_plan_universal.py)에서 STSE SENDAI 2631E 525컨테이너로 검증된 baseline을 React 카고플랜 컴포넌트(PrintableCargoPlan.jsx)에 영구 통합. 메모리 #24/#25 [항상] 원칙(빈 카고플랜 표준 양식 + EDI→실 카고플랜 변환)을 코드에 직접 반영.' },
+        { q: '[A] STD_DECK 6단 확장', a: 'STD_DECK = [\'92\',\'90\',\'88\',\'86\',\'84\',\'82\'] (기존 5단 → 6단, 92 추가). STSE 등 deck tier 92 사용 신규 선박 검증 완료. STD_HOLD = [\'08\',\'06\',\'04\',\'02\'] 그대로 유지.' },
+        { q: '[A] deck:hold = 60:40 비율', a: '6 deck-row + 4 hold-row + hatch-break 1행 = 자연 60:40. CSS .bay-grid-row.deck-row / .hold-row 클래스에 명시적 flex 추가 — BAY 라벨/카운트 영역 보호 (이전 5:4 비율의 라벨 잘림 케이스 해결).' },
+        { q: '[B] 빈 카고플랜 baseline 강제', a: 'pageDeckUnion/pageHoldUnion이 비어있는 케이스(베이사전 dictBaysSummary 없거나 deckTiersLocal 누락) → STD_DECK/STD_HOLD baseline 자동 적용. 모든 선박 동일 양식 통일(STSE 525컨 검증).' },
+        { q: '[C] 페이지 2: SPECIAL CARGO STOWAGE 추가', a: '카고플랜 인쇄 미리보기 두 번째 페이지에 베이플랜 기반 특수화물 리스트 자동 생성. 포함 타입: Reefer(온도)/DG(UN·Class)/FR/Tank/OT. 우선순위 정렬(DG > Reefer > FR > Tank > OT) → 베이 → tier → row 순. 종류별 색상 배경 + 카운트 뱃지.' },
+        { q: '[C] 페이지 2 사용법', a: '기존 카고플랜 모달에서 "🖨 인쇄" 버튼 → 자동으로 2페이지 인쇄. 특수화물 0대인 항차는 페이지 2 자체 미생성 (페이지 낭비 방지). page-break-before로 별도 페이지 보장.' },
+        { q: '🛡 안전성', a: 'PrintableCargoPlan.jsx 외 다른 파일 영향 없음. utils.js APP_VERSION + 주석만 갱신. 기존 ASC/EDI 재로드 불필요. 모든 기존 선박(TNJP/ATPR/PCBJ/MCSC/NBTD 등) 카고플랜 출력은 기존과 동일 + 베이사전 누락 케이스만 baseline 자동 적용.' },
+        { q: '⚠️ 미검증 사항', a: 'STSE 외 신규 선박(RZOR, ATRP 등)에서 페이지 2 출력 직접 검증 필요. EDI에 reefer 온도/DG UN 번호가 들어오는지 선박별 EDI 양식에 따라 다름 — 누락 시 해당 컬럼 빈 칸으로 출력(에러 X).' },
+      ],
+    },
+    {
       title: '🔥 M6.62 (2026-05) — Firebase 빈 entry 우선 버그 해결 (v3 baysSummary 비면 v2 강제 우선)',
       examples: [
         { q: '🔥 사용자 보고', a: 'M6.61 PCBJ 베이사전 24 베이 정확 정정 완료 + ZIP 배포 + 새로고침 후에도 카고플랜이 컨테이너 tier만 표시 (BAY 19=2단, BAY 11=4단 등). 베이사전 진단 위젯 확인 — "PACIFIC BEIJING · 0개 베이 · EDI 460대" 표시. 매칭은 됐지만 베이가 0개!' },

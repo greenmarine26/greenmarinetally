@@ -1,144 +1,123 @@
-# Tallyman Master 핸드오프 — M6.59
+# Tallyman Master 핸드오프 — M6.82
 
-## 📌 현재 상태 (2026-05-20)
+## 📌 현재 상태 (2026-05-22)
 
-- **최신 버전**: **M6.59** (EDI 실측 L4 fallback — 한계 극복)
-- **이전 버전**: M6.58 (STSE 자동 생성 + 빈 셀 시각화)
-- **작업 디렉토리**: `/home/claude/app/m6_59_build/`
-
----
-
-## 🎯 M6.59 — 관점 전환
-
-성일님 지적: **"한계라 말하지 말고 그 한계를 극복하자."**
-
-M6.58에서 "STSE deckTiers/holdTiers는 EDI 컨텍스트 없어서 다음 세션에"라고 미뤘던 작업.  
-사실 EDI 컨텍스트는 PrintableCargoPlan/PrintableBayDetail/BayPlan에 이미 있었음 — enrichBayDef에 전달만 하면 됨.
-
-**한계가 아니라 호출 패턴 추가만 필요했음.** 즉시 처리.
+- **최신 버전**: **M6.82** (Universal Cargo Plan baseline 통합 + Special Cargo 페이지 추가)
+- **이전 버전**: M6.80 (Deck/Hold separator)
+- **건너뛴 버전**: M6.81 (Python 검증용 스크립트 — React 통합 안 됨, 본 버전에서 흡수)
+- **작업 디렉토리**: `m6_82_build/`
 
 ---
 
-## ✅ M6.59 변경
+## 🎯 M6.82 핵심 — 4개 파일 분석 후 통합
 
-### 1. enrichBayDef 시그니처 확장
+### 입력 자료 (이번 세션)
+1. **M6.80 코드베이스** (`M6_80_DECK_HOLD_SEPARATE.zip`) — 현재 앱
+2. **M6.81 검증 스크립트** (`M681_Universal_CargoPlan.zip`) — STSE 525컨 검증된 Python
+3. **검증된 HTML 출력** (`SITC_SENDAI_2631E_카고플랜.html`) — M6.81 결과물
+4. **인계 지침서** (`HANDOFF_2026-05-22.md`) — "다음 세션 작업 후보 #3: React 컴포넌트 통합"
 
-```js
-enrichBayDef(entry, v5Matrix, ediContainers = null)
+### 작업 범위 (옵션 C — 사용자 선택)
+- **A**: M6.81 baseline 양식만 React에 적용 (6단 deck, 60:40, 18×13)
+- **B**: A + 빈 카고플랜 baseline 강제 적용 (모든 선박 통일)
+- **C**: A + B + 페이지 2 (Special Cargo Stowage) 추가 ← 선택됨
+
+---
+
+## 🔧 변경 내역
+
+### [A] M6.81 baseline 양식 React 적용
+
+**`src/components/PrintableCargoPlan.jsx`**
+- `STD_DECK`: `['90','88','86','84','82']` (5단) → `['92','90','88','86','84','82']` (6단)
+- `STD_HOLD`: `['08','06','04','02']` (4단, 변경 없음)
+- CSS `.bay-grid-row.deck-row` / `.hold-row` 명시적 `flex: 1 1 0` 추가
+- 자연 60:40 비율 (6 deck-row + 4 hold-row = 자동)
+- `_M682_BASELINE` 상수 추가 (디버그/검증용)
+
+### [B] 빈 카고플랜 baseline 강제 적용
+
+**`src/components/PrintableCargoPlan.jsx`**
+- `pageDeckUnion` useMemo 끝에 `if (set.size === 0) STD_DECK.forEach(t => set.add(t))` 추가
+- `pageHoldUnion` 동일 처리
+- 베이사전 부재/부족 케이스에서도 모든 박스 통일된 6+4 자리
+
+### [C] 페이지 2: Special Cargo Stowage 추가
+
+**`src/components/PrintableCargoPlan.jsx`**
+- `specialCargo` useMemo 추가 (베이플랜 기반 특수화물 추출)
+  - Reefer(`isReeferContainer`), DG(`c.dg || c.imdgClass`), FR, OT, Tank
+  - 우선순위: DG > Reefer > FR > Tank > OT
+  - 정렬: kind → bay → tier(큰 것부터) → row
+- `specialCounts` useMemo 추가 (종류별 카운트)
+- `.special-page` 렌더링 블록 추가 (page-break-before)
+  - 헤더: 선박 / SPECIAL CARGO STOWAGE / 날짜
+  - 서브헤더: 항차 / POL→POD / 총 N대
+  - 종류별 색상 뱃지 (Reefer 시안, DG 빨강, FR 보라, Tank 주황, OT 마젠타)
+  - 11 컬럼 테이블 (NO/TYPE/BAY/위치/CN/SIZE/F·E/POL→POD/WT/특수정보/실번호)
+  - 종류별 행 배경 색 (1페이지 셀 색과 일관)
+- 특수화물 0대인 항차는 페이지 2 자체 미생성
+
+---
+
+## ✅ 검증 결과
+
+### 빌드
+```
+✓ vite v6.4.2 build in 11.30s
+✓ dist/assets/index-dn6za9X9.js  2,410.74 kB
 ```
 
-ediContainers 주어지면:
-- 베이별 컨테이너 tier 분포에서 deck(>=80) / hold(<80) 자동 분리
-- 비어있는 deckTiersLocal/holdTiersLocal 자동 채움
-- 짝수 베이는 양옆 홀수 베이의 40/45ft 컨테이너도 포함 (짝꿍)
-- hasHold/hasDeck도 EDI 실측 발견 시 자동 true
+### M6.82 페이지 2 분류 로직 ↔ M6.81 검증 결과 (STSE 2631E 525컨)
+| 종류 | M6.82 React | M6.81 Python | 일치 |
+|---|---|---|---|
+| DG | 9 | 9 | ✓ |
+| Reefer | 58 | 58 | ✓ |
+| FR | 8 | 8 | ✓ |
+| OT | 1 | 1 | ✓ |
+| Tank | 0 | 0 | ✓ |
+| **합계** | **76** | **76** | ✓ |
 
-### 2. 3개 호출처에서 EDI 보정 호출
-
-- `PrintableCargoPlan.jsx` — dictData useMemo에서 enrichBayDef 2차 호출
-- `PrintableBayDetail.jsx` — 동일
-- `BayPlan.jsx` — dictBaysSummary useMemo에서 호출
-
----
-
-## 📊 STSE 시뮬레이션 결과
-
-| 베이 | M6.58 | M6.59 (EDI 보정 후) |
-|---|---|---|
-| BAY 11 | hasHold=false, holdTiersLocal=∅ | **hasHold=true, holdTiersLocal=[8,6,4,2]** |
-| BAY 19 | deckTiersLocal=∅, holdTiersLocal=∅ | **deckTiersLocal=[88,86,84,82], holdTiersLocal=[8,6]** |
-| BAY 03 | 비어있음 | **deckTiersLocal=[90,88], holdTiersLocal=[4]** |
-
-→ STSE 카고플랜 박스에 deck/hold 자리 + 점선 자동 정상화
+EDI 직접 파싱(STSE_2631E_KRPTK.EDI) 결과 100% 일치.
 
 ---
 
-## 🛡 회귀 검증 (verified 보호)
-
-KSKM/NBTD/PAVA/PCBJ — deckTiersLocal/holdTiersLocal 이미 채워져 있으면 **EDI fallback 발동 안 함**. 자동 보정은 "비어있는 필드만" 원칙 유지.
-
-| 선박 | EDI fallback 발동? |
-|---|---|
-| KSKM (PDF verified) | ❌ 이미 완전 |
-| NBTD (PDF verified) | ❌ 부분만 비어있을 때만 |
-| PCBJ (M6.56/57로 보정됨) | ❌ M6.57에서 채워진 상태 |
-| STSE (M6.58 자동 생성) | ✅ EDI에서 deckTiers/holdTiers 채움 |
-
----
-
-## 📁 변경 파일 (M6.59)
-
-- **`src/bayDictAutoEnrich.js`** — enrichBayDef에 ediContainers 옵션 + L4 fallback 로직 약 70줄 추가
-- **`src/components/PrintableCargoPlan.jsx`** — import + dictData useMemo에서 enrichBayDef 호출
-- **`src/components/PrintableBayDetail.jsx`** — 동일
-- **`src/components/BayPlan.jsx`** — 동일
-- **`src/utils.js`** — APP_VERSION M6.58 → M6.59
-- **`src/components/HelpModal.jsx`** — M6.59 항목 추가
-
-### 절대 건들지 않음
-- `src/data/shipBayDict_v2.js` (M6.14~M6.59 보호)
-- v5 데이터 (M6.55)
-- M6.56 PrintableCargoPlan fallback (방어 코드)
-- M6.57/M6.58 enrichBayDef 기존 로직 (확장만)
-
----
-
-## ✅ 빌드 검증
-
-| 키워드 | 회수 |
-|---|---|
-| M6.59 표시 | 2 |
-| L4-edi-actual | 2 |
-| ediContainers/ediUsed | 21 |
-
----
-
-## 🚦 다음 세션 권장 작업 (계속 극복할 것들)
-
-### 1. v5 6.10 포맷 hasHold 정확화 (181척)
-- STSE 외 다른 6.10 포맷 선박들도 hasHold=false 상태
-- 자동 보정 정확도 ↑
-
-### 2. 누락 5척 베이 번호
-HAHM, KANP, RZIN, SDHI, SWIC, TSPS — .def 다른 영역 분석
-
-### 3. 자동 보정 표시 위젯
-- `_enrichedFrom` 메타 활용
-- 카고플랜에 ⚙️ 아이콘 + 호버 시 출처 표시
-- 검수원이 "이 베이는 EDI 실측 보정" 인지 가능
-
-### 4. 베이사전 일괄 진단
-- 앱 시작 시 325척 전체 정밀 스캔
-- 자동 보정으로 해결 가능한 선박 / 추가 데이터 필요한 선박 분리
-
-### 5. 짝수 베이 짝꿍 처리 정밀화
-- 현재: 짝수 베이가 양옆 홀수 베이의 40/45ft 컨테이너 포함
-- 정밀화: pairMap 활용해서 정확한 짝꿍만 처리
-
----
-
-## 📞 다음 세션 권장 시작 메시지
+## 📂 변경된 파일 (이 ZIP)
 
 ```
-M6.60 인계받습니다. M6.59 EDI 실측 L4 fallback 완료.
-
-현 상태:
-- enrichBayDef(entry, v5Matrix, ediContainers) 4단계 fallback 완성
-- L1 verified → L2 v5 매트릭스 → L3 사전 level → L4 EDI 실측
-- 3개 호출처 모두 EDI 컨텍스트 전달
-- STSE deckTiers/holdTiers 자동 완성 검증 통과
-
-권장 다음 작업:
-1. v5 6.10 포맷 hasHold 정확화 (181척)
-2. 누락 5척 베이 번호 (HAHM/KANP/RZIN/SDHI/SWIC/TSPS)
-3. 자동 보정 표시 위젯 (_enrichedFrom 메타 활용)
-4. 베이사전 일괄 진단
-
-원칙 유지: verified 절대 미수정, 추론 금지, "한계" 언급 자제 — 극복 양식으로 답할 것.
+src/utils.js                                — APP_VERSION 'M6.80' → 'M6.82' + 변경점 주석
+src/components/PrintableCargoPlan.jsx       — 핵심 변경 (A/B/C 모두 여기)
+src/components/HelpModal.jsx                — M6.82 사용법 항목 (tips 배열 맨 위)
+HANDOFF_TO_NEXT_CHAT.md                     — 이 파일
+dist/                                       — vite build 결과 (배포용)
 ```
 
 ---
 
-생성일: 2026-05-20  
-세션: M6.58 → M6.59  
-관점: "한계를 극복하자" — 사용자 통찰의 직접 적용
+## ⚠️ 미검증 사항 (다음 세션 우선)
+
+1. **다른 선박 페이지 2 출력 직접 검증**
+   - TNJP, RZOR, ATRP, NBTD, MCSC 등 EDI 받으면 즉시 적용 가능
+   - 핵심 확인: 리퍼 온도(`TMP+2+`), DG UN/Class(`DGS+IMD+`) 추출 여부
+2. **실 번호(seal No) 표시 보강**
+   - 현재 `c.sealNo || c.seal` 폴백 — EDI 양식별 필드명 다를 수 있음
+   - C-K BAPLIE의 `51:` 라인, BAPLIE D95B의 `RFF+BN:` 등 확인 필요
+3. **페이지 3 (Special Type Stowage) 양식**
+   - 사이즈+타입별 매트릭스
+4. **PDF 직접 출력**
+   - 현재 HTML → 인쇄 → PDF로 저장 (Chrome 기본)
+
+---
+
+## 🚀 배포
+
+배포 방법: `dist/` 폴더를 정적 호스팅에 업로드 또는 기존 위치에 덮어쓰기.
+
+---
+
+## 🧠 영구 원칙 재확인 (메모리 #24/#25)
+
+- **빈 카고플랜 baseline**: 6 deck [92,90,88,86,84,82] + 4 hold [8,6,4,2]
+- **EDI → 실 카고플랜**: 짝수 베이 40ft → 짝꿍 홀수 박스에 X 표시
+- **단독 홀수 박스**: 자체 마크 + 양옆 짝수 40ft 자리 X
+- **베이사전 = 절대 기준**, EDI는 보조 역할
