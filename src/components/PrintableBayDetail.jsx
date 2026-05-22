@@ -23,6 +23,13 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 // M4.9e-fix: STD_DECK/STD_HOLD/STD_ROWS 모두 동적 (globalTiers + globalRowRange 기준)
 //   사용자 지적: "베이마다 / 선박마다 row/tier 다름, 일괄 X, 화면과 같게"
 // (STD_DECK / STD_HOLD 제거됨 — globalTiers 동적 사용)
+//
+// M6.83: baseline fallback 부활 — 베이사전/컨테이너/globalTiers 모두 비어있을 때만 적용
+//   STSE 2631E 525컨 검증 표준 (PrintableCargoPlan M6.82와 동일)
+//   화면과 같게 원칙은 globalTiers 사용 시 그대로 (M4.9e-fix 의도 유지)
+// M6.84: 7단 확장 (94 추가) — KKLC 카스피 양식 검증
+const BD_STD_DECK = ['94', '92', '90', '88', '86', '84', '82'];
+const BD_STD_HOLD = ['08', '06', '04', '02'];
 
 const isPtk = (c, mode) => {
   const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
@@ -239,6 +246,13 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
         ...(Array.isArray(globalTiers) ? globalTiers.map(t => String(t).padStart(2, '0')) : []),
         ...allConts.map(c => String(c.tier).padStart(2, '0')).filter(t => t !== 'NaN')
       ]));
+  // M6.83: 베이사전 + 컨테이너 + globalTiers 모두 비어있어도 baseline 강제 적용
+  //   결과: 빈 베이 페이지도 표준 6단 deck + 4단 hold 자리 (모든 박스 통일)
+  //   hold 없는 베이는 별도 dictBay.hasHold==false로 처리됨 (강제 보강 X)
+  if (allTiersSet.length === 0) {
+    BD_STD_DECK.forEach(t => allTiersSet.push(t));
+    BD_STD_HOLD.forEach(t => allTiersSet.push(t));
+  }
   const deckTiers = allTiersSet.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiersSet.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 
