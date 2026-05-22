@@ -27,7 +27,8 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 // M6.83: baseline fallback 부활 — 베이사전/컨테이너/globalTiers 모두 비어있을 때만 적용
 //   STSE 2631E 525컨 검증 표준 (PrintableCargoPlan M6.82와 동일)
 //   화면과 같게 원칙은 globalTiers 사용 시 그대로 (M4.9e-fix 의도 유지)
-const BD_STD_DECK = ['92', '90', '88', '86', '84', '82'];
+// M6.84: 7단 확장 (94 추가) — KKLC 카스피 양식 검증
+const BD_STD_DECK = ['94', '92', '90', '88', '86', '84', '82'];
 const BD_STD_HOLD = ['08', '06', '04', '02'];
 
 const isPtk = (c, mode) => {

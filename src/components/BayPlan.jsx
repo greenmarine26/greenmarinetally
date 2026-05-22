@@ -27,7 +27,8 @@ import ErrorBoundary from './ErrorBoundary.jsx';
 
 // M6.83 BASELINE — STSE 2631E 525컨 검증 표준 (PrintableCargoPlan M6.82와 동일)
 //   베이사전 부재/부족 시 강제 적용 → 모든 박스 같은 자리 (6단 deck + 4단 hold)
-const STD_DECK = ['92', '90', '88', '86', '84', '82'];
+// M6.84: 7단 확장 (94 추가) — KKLC 카스피 양식 검증
+const STD_DECK = ['94', '92', '90', '88', '86', '84', '82'];
 const STD_HOLD = ['08', '06', '04', '02'];
 
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,

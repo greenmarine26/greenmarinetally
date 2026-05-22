@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🚀 M6.84 (2026-05-22) — KKLC 카스피 양식 완전 대응',
+      examples: [
+        { q: '🎯 배경', a: 'M6.83 KKLC 카고플랜 출력에서 트리오 박스 페어링이 안 되고(짝수/홀수 별도 단독 박스), deck tier 94 일부 박스만 표시되는 문제 발견. KKLC2604S.pdf 카스피 정답 양식 분석 후 3가지 수정.' },
+        { q: '[1] 짝꿍 자동 추가 (페어링 수정)', a: 'buildBayPages 함수에서 짝수 베이 N의 짝꿍 홀수(N±1)가 양하 0대로 bayMap에 없으면 페어 못 만드는 버그. 짝수 → 양옆 홀수 자동 set 추가하여 트리오 박스 (단독 odd + 페어) 항상 만들어짐.' },
+        { q: '[2] STD_DECK 7단 확장 (94 추가)', a: 'KKLC 등 큰 베이는 deck tier 94 사용. STD_DECK = 94,92,90,88,86,84,82 (7단). 94 없는 베이는 invisible로 자리만 차지 → 모든 박스 데크 라인 정렬 유지. STSE 등 92까지만인 선박도 정상 동작.' },
+        { q: '[3] column 6개 확장', a: 'matchColumns slice(0,5) → slice(0,6). KKLC 카스피 양식 (10 트리오, 위 줄 6박스 + 아래 줄 4박스 + 별첨 2)에 맞춤. STSE 8 트리오는 위 5박스 + 아래 3박스 + 별첨 2 그대로 유지.' },
+        { q: '🛡 안전성', a: 'BayPlan / PrintableBayDetail / PrintableCargoPlan / utils 4개 파일 STD_DECK 7단으로 통일. 짝꿍 자동 추가는 bayMap이 아닌 buildBayPages 내부에서만 처리 → 다른 로직(컨테이너 분류, 카운트)에 영향 없음.' },
+        { q: '미검증', a: 'KKLC 실제 EDI로 페어링 자동 추가 검증 직접 필요. 카스피 양식 비교 검증 권장. 페이지 layout 6/4 분할은 splitForeAft의 mid=ceil(groups/2)로 자동 결정 (10 → fore 5, aft 5; 정답 6/4와 1 차이).' },
+      ],
+    },
+    {
       title: '🚀 M6.83 (2026-05-22) — 베이플랜·베이상세 baseline 통합',
       examples: [
         { q: '🎯 배경', a: 'M6.82에서 카고플랜(PrintableCargoPlan)에만 baseline 강제 적용됐는데, 베이플랜 화면(BayPlan)과 베이 상세도(PrintableBayDetail)도 동일하게 적용. 이제 베이사전/컨테이너/globalTiers 모두 비어있는 빈 항차 케이스에서도 표준 6단 deck + 4단 hold 자리가 표시되어 모든 박스가 일관된 양식.' },

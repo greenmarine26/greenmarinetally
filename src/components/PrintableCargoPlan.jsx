@@ -23,8 +23,10 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 // M6.82 [A]: M6.81 검증된 baseline (6단 deck + 4단 hold) — 빈 카고플랜 표준
 //   기존 STD_DECK 5단 ['90','88','86','84','82'] → 6단 (92 추가)
 //   STSE SENDAI 등 신규 선박 deck tier 92 사용 케이스 검증됨
+// M6.84: 7단 확장 — KKLC 카스피 양식 검증 (KMTC LAEM CHABANG 등 큰 베이 deck tier 94 사용)
+//   안전성: 94 tier 없는 베이는 invisible로 자리만 차지 → 모든 박스 데크 라인 정렬 유지
 const STD_ROWS = ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
-const STD_DECK = ['92', '90', '88', '86', '84', '82'];
+const STD_DECK = ['94', '92', '90', '88', '86', '84', '82'];
 const STD_HOLD = ['08', '06', '04', '02'];
 
 // M6.82: baseline 진단용 상수 (디버그 로깅 및 fallback baseline 적용 시 사용)
@@ -92,11 +94,23 @@ function splitForeAft(bayList) {
 }
 
 function buildBayPages(bays) {
-  const baySet = new Set(bays);
+  // M6.84: 짝수 베이의 짝꿍 홀수 자동 추가 (양하 0대지만 페어 박스 만들기 위해)
+  //   원인: KKLC 카스피 양식 검증 — BAY 14 (40ft 24대) + BAY 15 (양하 0대) → 페어 (14)15
+  //   기존: BAY 15가 bayMap에 없으면 페어 안 만들어짐 → BAY 14가 단독 박스로 (잘못)
+  //   해결: 짝수 N → 양옆 홀수 N-1, N+1 자동 set에 추가 (n > 0 보장)
+  const expanded = new Set(bays);
+  for (const n of bays) {
+    if (n % 2 === 0) {
+      if (n - 1 > 0) expanded.add(n - 1);
+      expanded.add(n + 1);
+    }
+  }
+  const expandedBays = [...expanded].sort((a, b) => a - b);
+  const baySet = new Set(expandedBays);
   const used = new Set();
   const singles = [];
   const pairs = [];
-  for (const n of bays) {
+  for (const n of expandedBays) {
     if (n % 2 === 0) {
       const leftIn = baySet.has(n - 1);
       const rightIn = baySet.has(n + 1);
@@ -110,7 +124,7 @@ function buildBayPages(bays) {
       }
     }
   }
-  for (const n of bays) {
+  for (const n of expandedBays) {
     if (n % 2 === 1 && !used.has(n)) singles.push({ bay: n });
   }
   // 베이 번호 큰 것이 좌측 (STERN 방향)
@@ -831,8 +845,10 @@ export default function PrintableCargoPlan({
   }
 
   // M5.33: 컬럼 매칭 (단독 N의 컬럼 아래 = 짝꿍 (N+1)/(N+2) 또는 빈)
-  const foreColumns = matchColumns(forePages.singles, forePages.pairs).slice(0, 5);
-  const aftColumns = matchColumns(aftPages.singles, aftPages.pairs).slice(0, 5);
+  // M6.84: column 6개까지 — KKLC 카스피 양식 (10 트리오, 위 줄 6박스 + 아래 줄 4박스 + 별첨 2)
+  //   기존 5개는 STSE 8 트리오 (5/3) 기준. 10 트리오 선박에서는 부족 → 6으로 확장
+  const foreColumns = matchColumns(forePages.singles, forePages.pairs).slice(0, 6);
+  const aftColumns = matchColumns(aftPages.singles, aftPages.pairs).slice(0, 6);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">
