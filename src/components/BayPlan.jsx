@@ -25,6 +25,11 @@ import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
+// M6.83 BASELINE — STSE 2631E 525컨 검증 표준 (PrintableCargoPlan M6.82와 동일)
+//   베이사전 부재/부족 시 강제 적용 → 모든 박스 같은 자리 (6단 deck + 4단 hold)
+const STD_DECK = ['92', '90', '88', '86', '84', '82'];
+const STD_HOLD = ['08', '06', '04', '02'];
+
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
@@ -1036,6 +1041,13 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         ...allContainers.map(c => c.tier).filter(Boolean),
         ...Array.from(xMarks).map(k => k.split('-')[1])
       ]));
+  // M6.83: 베이사전 + 컨테이너 + globalTiers 모두 비어있어도 baseline 강제 적용
+  //   결과: 빈 베이 페이지도 표준 6단 deck + 4단 hold 자리 표시 (모든 박스 통일)
+  //   주의: hold 없는 베이(BAY 27 등)는 도메인상 hold 없음 → 강제 보강 X
+  if (allTiers.length === 0) {
+    STD_DECK.forEach(t => allTiers.push(t));
+    STD_HOLD.forEach(t => allTiers.push(t));
+  }
   const deckTiers = allTiers.filter(t => parseInt(t) >= 80).sort((a, b) => parseInt(b) - parseInt(a));
   const holdTiers = allTiers.filter(t => parseInt(t) < 80).sort((a, b) => parseInt(b) - parseInt(a));
 

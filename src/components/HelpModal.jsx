@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🚀 M6.83 (2026-05-22) — 베이플랜·베이상세 baseline 통합',
+      examples: [
+        { q: '🎯 배경', a: 'M6.82에서 카고플랜(PrintableCargoPlan)에만 baseline 강제 적용됐는데, 베이플랜 화면(BayPlan)과 베이 상세도(PrintableBayDetail)도 동일하게 적용. 이제 베이사전/컨테이너/globalTiers 모두 비어있는 빈 항차 케이스에서도 표준 6단 deck + 4단 hold 자리가 표시되어 모든 박스가 일관된 양식.' },
+        { q: 'BayPlan 변경', a: '파일 상단에 STD_DECK/STD_HOLD 상수 추가. allTiers 계산 후 length === 0이면 baseline 강제 적용. hold 없는 베이(BAY 27 등)는 도메인상 hold 없으므로 hold 강제 보강은 X — 자연스럽게 표시.' },
+        { q: 'PrintableBayDetail 변경', a: 'BD_STD_DECK/BD_STD_HOLD 상수 추가 (PrintableCargoPlan과 동일 값). allTiersSet 계산 후 length === 0이면 baseline 강제. M4.9e-fix의 "globalTiers 동적 사용" 원칙은 그대로 유지 — fallback일 때만 baseline 적용.' },
+        { q: '🛡 안전성', a: 'BayPlan/PrintableBayDetail/utils(APP_VERSION) 외 다른 파일 영향 없음. 기존 베이사전 있는 항차는 동일 동작. 빈 항차(EDI 미로드 등)만 baseline 자동 표시.' },
+        { q: '미수정 사항', a: 'M6.82 hatch-break flex 60:40 정확화 시도는 일부 박스에서 layout 깨짐 → 원복. 현재 자연 11row 분배(54:9:36)로 동작 — 시각적 차이 미미.' },
+      ],
+    },
+    {
       title: '🚀 M6.82 (2026-05-22) — Universal Cargo Plan baseline 통합 + Special Cargo 페이지 추가',
       examples: [
         { q: '🎯 배경', a: 'M6.81 Python 스크립트(build_cargo_plan_universal.py)에서 STSE SENDAI 2631E 525컨테이너로 검증된 baseline을 React 카고플랜 컴포넌트(PrintableCargoPlan.jsx)에 영구 통합. 메모리 #24/#25 [항상] 원칙(빈 카고플랜 표준 양식 + EDI→실 카고플랜 변환)을 코드에 직접 반영.' },
