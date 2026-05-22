@@ -68,12 +68,14 @@ function groupByBay(containers) {
 }
 
 function splitForeAft(bayList) {
-  if (bayList.length === 0) return { fore: [], aft: [] };
-  const baySet = new Set(bayList);
+  // M6.85: BAY 0 무효 베이 필터링 (안전성)
+  const validBayList = bayList.filter(n => Number.isFinite(n) && n > 0);
+  if (validBayList.length === 0) return { fore: [], aft: [] };
+  const baySet = new Set(validBayList);
   const used = new Set();
   const groups = [];
   // 1) 트리오 [홀, 짝, 홀] 그룹화 — 표준 페어
-  for (const n of bayList) {
+  for (const n of validBayList) {
     if (used.has(n) || n % 2 === 0) continue;
     if (baySet.has(n + 1) && baySet.has(n + 2)) {
       groups.push([n, n + 1, n + 2]);
@@ -81,7 +83,7 @@ function splitForeAft(bayList) {
     }
   }
   // 2) 남은 베이 (단독 홀수, 20ft 전용 짝수)
-  for (const n of bayList) {
+  for (const n of validBayList) {
     if (!used.has(n)) { groups.push([n]); used.add(n); }
   }
   groups.sort((a, b) => a[0] - b[0]);
@@ -98,14 +100,18 @@ function buildBayPages(bays) {
   //   원인: KKLC 카스피 양식 검증 — BAY 14 (40ft 24대) + BAY 15 (양하 0대) → 페어 (14)15
   //   기존: BAY 15가 bayMap에 없으면 페어 안 만들어짐 → BAY 14가 단독 박스로 (잘못)
   //   해결: 짝수 N → 양옆 홀수 N-1, N+1 자동 set에 추가 (n > 0 보장)
-  const expanded = new Set(bays);
-  for (const n of bays) {
+  // M6.85 fix: BAY 0 무효 베이 필터링 (선박 도메인상 BAY 01부터 시작)
+  //   원인: dictBayList/bayMap에 BAY 0이 포함되면 (00)01 페어 만들어짐 →
+  //         used에 BAY 01 들어가 single BAY 01 사라짐 → layout 깨짐
+  const validBays = bays.filter(n => Number.isFinite(n) && n > 0);
+  const expanded = new Set(validBays);
+  for (const n of validBays) {
     if (n % 2 === 0) {
       if (n - 1 > 0) expanded.add(n - 1);
       expanded.add(n + 1);
     }
   }
-  const expandedBays = [...expanded].sort((a, b) => a - b);
+  const expandedBays = [...expanded].filter(n => n > 0).sort((a, b) => a - b);
   const baySet = new Set(expandedBays);
   const used = new Set();
   const singles = [];
@@ -623,8 +629,11 @@ export default function PrintableCargoPlan({
   }), [dictData]);
 
   const bayList = useMemo(() => {
-    if (dictBayList && dictBayList.length > 0) return [...dictBayList].sort((a, b) => a - b);
-    return Object.keys(bayMap).map(b => parseInt(b, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    // M6.85: BAY 0 무효 베이 필터링 (선박 도메인상 BAY 01부터 시작)
+    if (dictBayList && dictBayList.length > 0) {
+      return [...dictBayList].filter(n => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
+    }
+    return Object.keys(bayMap).map(b => parseInt(b, 10)).filter(n => !isNaN(n) && n > 0).sort((a, b) => a - b);
   }, [dictBayList, bayMap]);
 
   const { fore, aft } = useMemo(() => splitForeAft(bayList), [bayList]);
@@ -845,10 +854,11 @@ export default function PrintableCargoPlan({
   }
 
   // M5.33: 컬럼 매칭 (단독 N의 컬럼 아래 = 짝꿍 (N+1)/(N+2) 또는 빈)
-  // M6.84: column 6개까지 — KKLC 카스피 양식 (10 트리오, 위 줄 6박스 + 아래 줄 4박스 + 별첨 2)
-  //   기존 5개는 STSE 8 트리오 (5/3) 기준. 10 트리오 선박에서는 부족 → 6으로 확장
-  const foreColumns = matchColumns(forePages.singles, forePages.pairs).slice(0, 6);
-  const aftColumns = matchColumns(aftPages.singles, aftPages.pairs).slice(0, 6);
+  // M6.84: column 5개 (STSE/KKLC 모두 표준)
+  //   M6.84 slice(0,6) 시도는 render의 `five-col` CSS와 불일치하여 layout 깨짐 → 5로 되돌림
+  //   BAY 0 필터링(M6.85)으로 BAY 01이 정상 single → 5 column 안에 들어감
+  const foreColumns = matchColumns(forePages.singles, forePages.pairs).slice(0, 5);
+  const aftColumns = matchColumns(aftPages.singles, aftPages.pairs).slice(0, 5);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">

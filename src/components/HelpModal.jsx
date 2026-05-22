@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🚨 M6.85 (2026-05-22) — BAY (00)01 잘못 페어링 버그 수정',
+      examples: [
+        { q: '🎯 배경', a: 'M6.84 KKLC 출력에서 BAY (00)01 잘못된 페어가 셋째 줄에 따로 표시되고 그로 인해 상단 짝꿍 베이들(BAY 17/13/09/05의 짝꿍 18/14/10/06)이 row가 분리되어 높이가 절반으로 줄어드는 layout 깨짐 발생.' },
+        { q: '🔍 원인', a: 'dictBayList 또는 bayMap에 BAY 0이 포함됨 → buildBayPages가 BAY 0을 짝수로 처리하여 짝꿍 BAY 1과 페어 (00)01 만듦 → used.add(1)로 인해 BAY 01 single이 사라짐 → matchColumns 결과 비정상 column 매칭.' },
+        { q: '[1] BAY 0 필터링', a: 'bayList useMemo + splitForeAft + buildBayPages 3곳 모두 BAY 0 이하 무효 베이 차단: `n > 0` 필터링. 선박 도메인상 BAY 01부터 시작이므로 BAY 0/-1 등은 잘못된 데이터.' },
+        { q: '[2] column 5개로 되돌림', a: 'M6.84의 slice(0,6) 시도는 render의 .bay-row.five-col CSS와 불일치하여 6번째 column이 다음 row로 밀림 → 추가 layout 깨짐. BAY 0 필터링 적용 후 BAY 01이 정상 single로 분류되어 5 column 안에 들어감 → slice(0,5)로 되돌림.' },
+        { q: '🛡 안전성', a: 'PrintableCargoPlan.jsx만 수정. BAY 0 필터링은 모든 선박 안전 (BAY 0 자체가 잘못된 데이터). M6.84 STD_DECK 7단(94 포함) + buildBayPages 짝꿍 자동 추가는 그대로 유지.' },
+        { q: '미확인', a: 'BAY 0이 어떻게 dictBayList/bayMap에 들어갔는지 정확한 출처 미파악. EDI LOC+147+0000XXX 또는 베이사전 v2 등록 오류 가능성. 별도 진단 필요시 dictBayList 콘솔 로깅 추가 권장.' },
+      ],
+    },
+    {
       title: '🚀 M6.84 (2026-05-22) — KKLC 카스피 양식 완전 대응',
       examples: [
         { q: '🎯 배경', a: 'M6.83 KKLC 카고플랜 출력에서 트리오 박스 페어링이 안 되고(짝수/홀수 별도 단독 박스), deck tier 94 일부 박스만 표시되는 문제 발견. KKLC2604S.pdf 카스피 정답 양식 분석 후 3가지 수정.' },
