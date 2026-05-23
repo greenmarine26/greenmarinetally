@@ -220,16 +220,27 @@ export function buildPosMap(containers) {
   return posMap;
 }
 
-export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn) {
-  // 반환: Map(tier → Map(rowLbl → mark))
+// 페어 키 형식: "(EE)OO" — 짝수 EE + 홀수 OO 데이터를 합쳐 그림.
+// 단독 키 형식: "OO" — 홀수 OO 자체 + 양옆 짝수 shadow X.
+// xrayMap: { cn: true } 형태. 해당 컨테이너 위치에 xray 플래그 표시.
+export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap) {
   const marks = new Map();
-  const ensureTier = (t) => {
-    if (!marks.has(t)) marks.set(t, new Map());
-    return marks.get(t);
+  const xrays = new Map(); // tier → Map<rowLbl, true>
+  const ensureTier = (tier) => {
+    if (!marks.has(tier)) marks.set(tier, new Map());
+    return marks.get(tier);
+  };
+  const ensureXrayTier = (tier) => {
+    if (!xrays.has(tier)) xrays.set(tier, new Map());
+    return xrays.get(tier);
+  };
+  const tagXray = (c, tier, rowLbl) => {
+    if (xrayMap && c.cn && xrayMap[c.cn]) {
+      ensureXrayTier(tier).set(rowLbl, true);
+    }
   };
 
   if (bayKey.startsWith('(')) {
-    // 페어 박스: 두 베이 모두 자체 마크
     const m = bayKey.replace('(', '').replace(')', '');
     const even = parseInt(m.slice(0, 2), 10);
     const odd = parseInt(m.slice(2), 10);
@@ -240,12 +251,12 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn) {
           const tierMap = ensureTier(tier);
           for (const [rowLbl, c] of rowMap.entries()) {
             tierMap.set(rowLbl, getSelfMarkFn(c, pod));
+            tagXray(c, tier, rowLbl);
           }
         }
       }
     }
   } else {
-    // 단독 홀수 박스: 자체 + 양옆 짝수 컨테이너 → X (40ft shadow)
     const odd = parseInt(bayKey, 10);
     for (const [key, rowMap] of posMap.entries()) {
       const [bb, tier] = key.split('|').map(Number);
@@ -253,6 +264,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn) {
         const tierMap = ensureTier(tier);
         for (const [rowLbl, c] of rowMap.entries()) {
           tierMap.set(rowLbl, getSelfMarkFn(c, pod));
+          tagXray(c, tier, rowLbl);
         }
       }
     }
@@ -270,14 +282,14 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn) {
       }
     }
   }
-  return marks;
+  return { marks, xrays };
 }
 
 // ------------------------------------------------------------
 // 6. 한 베이의 모든 렌더 데이터를 한 번에 계산 (편의 함수)
 // ------------------------------------------------------------
 // 컴포넌트는 이 함수가 반환하는 객체를 그대로 JSX로 렌더.
-export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn) {
+export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap) {
   const pdf = pdfBays[bayKey];
   if (!pdf) return null;
 
@@ -316,7 +328,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nDeckCols = deckRowPos.length;
   const nHoldCols = nDeckCols;
 
-  const bayMarks = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn);
+  const { marks: bayMarks, xrays: bayXrays } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap);
 
   // deck tier별 셀 배열 (자리 통일: STANDARD_DECK 6 tier 모두 렌더)
   const deckRows = STANDARD_DECK.map((stdT) => {
@@ -325,18 +337,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const cc = idx < deckCells.length ? deckCells[idx] : 0;
       const activeSet = getActiveColsSymmetric(cc, nDeckCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
+      const rowXrays = bayXrays.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeSet.has(c)) {
           const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null });
+          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl) });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null }));
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });
@@ -349,18 +362,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       // deck 폭 기준으로 active 결정 (가운데부터 cc 개 활성, 나머지 invisible)
       const activeInDeck = getActiveColsSymmetric(cc, nDeckCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
+      const rowXrays = bayXrays.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeInDeck.has(c)) {
           const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null });
+          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl) });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null }));
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });

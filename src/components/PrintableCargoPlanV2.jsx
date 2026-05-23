@@ -59,30 +59,30 @@ const CSS = `
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
-.cpv2-scaler-wrap { flex: 1 1 0; position: relative; min-height: 0; overflow: hidden; }
-.cpv2-scaler { position: absolute; top: 0; left: 0; width: 1100px; display: flex; flex-direction: column; }
-.cpv2-scaler > .cpv2-page-rows { flex: none; min-height: 700px; }
-.cpv2-page-rows { display: flex; flex-direction: column; gap: 3px; }
-.cpv2-page-row { display: flex; flex-direction: row; gap: 3px; height: 175px; }
+.cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
+.cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-bay-box { flex: 1 1 0; min-width: 0; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
 .cpv2-single-box .cpv2-single-half { flex: 1 1 0; display: flex; flex-direction: column; }
 .cpv2-single-box .cpv2-empty-half { flex: 1 1 0; }
-.cpv2-bay-section { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding: 4px 3px; min-height: 0; position: relative; }
+.cpv2-bay-section { flex: 1 1 0; display: flex; flex-direction: column; padding: 2px 2px; min-height: 0; position: relative; }
 .cpv2-trio-divider { border-top: 0.5px solid #999; }
-.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: 11px; padding: 0 60px 0 6px; margin-bottom: 2px; box-sizing: border-box; flex-shrink: 0; }
+.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: clamp(8px, 0.7vw, 11px); padding: 0 50px 0 4px; margin-bottom: 1px; box-sizing: border-box; flex-shrink: 0; }
 .cpv2-bay-title { display: inline-block; }
-.cpv2-bay-count { position: absolute; right: 4px; top: 1px; color: #555; font-size: 8px; font-weight: normal; white-space: nowrap; }
-.cpv2-bay-content { display: flex; flex-direction: column; align-items: center; flex: 1; width: 100%; }
-.cpv2-deck-area { flex: 6 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%; min-height: 0; }
-.cpv2-hold-area { flex: 4 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100%; min-height: 0; }
-.cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; }
-.cpv2-grid { display: flex; flex-direction: column; align-items: center; gap: 0; }
-.cpv2-tier-row { display: flex; gap: 0; height: 13px; justify-content: center; flex-shrink: 0; }
+.cpv2-bay-count { position: absolute; right: 4px; top: 1px; color: #555; font-size: clamp(6px, 0.5vw, 8px); font-weight: normal; white-space: nowrap; }
+.cpv2-bay-content { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; width: 100%; }
+.cpv2-deck-area { flex: 6 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
+.cpv2-hold-area { flex: 4 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
+.cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-height: 0; }
+.cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
+.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
 .cpv2-tier-row.cpv2-invisible-row { visibility: hidden; }
-.cpv2-tier-row .cpv2-cell { flex: 0 0 18px; width: 18px; height: 13px; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: 8px; display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; }
-.cpv2-tier-row .cpv2-cell-empty { flex: 0 0 18px; width: 18px; height: 13px; visibility: hidden; }
-.cpv2-row-labels { display: flex; justify-content: center; font-size: 7px; color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
-.cpv2-row-labels > span { flex: 0 0 18px; width: 18px; text-align: center; line-height: 1.2; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(6px, 0.8vw, 11px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
+.cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(5px, 0.6vw, 8px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
+.cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
+/* XRAY: 연노랑 배경 + ★ 별표 (V1 양식) */
+.cpv2-cell.cpv2-xray { background: #fef08a !important; }
+.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(4px, 0.6vw, 7px); color: #dc2626; font-weight: bold; pointer-events: none; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; background: #f0f0f0; }
 .cpv2-cell.cpv2-mark-R { color: #006064; background: #b2ebf2; }
@@ -144,7 +144,7 @@ function BayBoxV2({ data, count }) {
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) =>
                     cell.active ? (
-                      <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}`}>
+                      <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}>
                         {cell.mark || ''}
                       </span>
                     ) : (
@@ -173,7 +173,7 @@ function BayBoxV2({ data, count }) {
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) =>
                     cell.active ? (
-                      <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}`}>
+                      <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}>
                         {cell.mark || ''}
                       </span>
                     ) : (
@@ -364,7 +364,7 @@ export default function PrintableCargoPlanV2({
     });
     singles.forEach((s) => allKeys.push(s));
     for (const key of allKeys) {
-      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode));
+      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap);
     }
     return map;
   }, [pdfBays, matrixBays, posMap, pod, mode, trios, singles]);
@@ -397,53 +397,16 @@ export default function PrintableCargoPlanV2({
       ? `${(effShipName || '').toUpperCase()} CARGO DISCHARGING PLAN`
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
-  // M6.86.8.10: Auto-scale (제대로) — inner를 absolute로 띄워 자연 크기 측정
-  //   inner는 width: 1100px (overflow에 영향 없음), scrollWidth/Height = 자연 크기
-  //   페이지 가용 공간에 맞게 scale 적용 → 큰 배도 한 장에
-  const pageRef = useRef(null);
-  const wrapRef = useRef(null);
-  const innerRef = useRef(null);
-  const [scale, setScale] = useState(1);
-  useLayoutEffect(() => {
-    const measure = () => {
-      const wrap = wrapRef.current;
-      const inner = innerRef.current;
-      if (!wrap || !inner) return;
-      const cw = inner.scrollWidth;
-      const ch = inner.scrollHeight;
-      const pw = wrap.clientWidth;
-      const ph = wrap.clientHeight;
-      if (cw <= 0 || ch <= 0 || pw <= 0 || ph <= 0) return;
-      const s = Math.min(pw / cw, ph / ch);
-      setScale(Math.max(0.25, Math.min(1.5, s)));
-    };
-    measure();
-    const obs = new ResizeObserver(measure);
-    if (wrapRef.current) obs.observe(wrapRef.current);
-    if (innerRef.current) obs.observe(innerRef.current);
-    const t = setTimeout(measure, 100);  // 두 번째 측정 (layout 안정화 후)
-    return () => { obs.disconnect(); clearTimeout(t); };
-  }, [containers, layout, legends]);
-
   return (
     <div className="cpv2-overlay">
       <style>{CSS}</style>
       {closeBtn}
-      <div className="cpv2-page" ref={pageRef}>
+      <div className="cpv2-page">
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
           <div className="col">DATE : {today}</div>
         </div>
-        <div className="cpv2-scaler-wrap" ref={wrapRef}>
-        <div
-          className="cpv2-scaler"
-          ref={innerRef}
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left',
-          }}
-        >
         <div className="cpv2-page-rows">
           {layout.map((row, ri) => {
             const isLast = ri === layout.length - 1;
@@ -511,8 +474,6 @@ export default function PrintableCargoPlanV2({
               <div key={ri} className="cpv2-page-row">{slots}</div>
             );
           })}
-        </div>
-        </div>
         </div>
       </div>
     </div>
