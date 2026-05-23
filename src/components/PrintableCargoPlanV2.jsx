@@ -8,6 +8,7 @@
 // 미통합 (다음 패치 예정): 선사별 별첨, 화물 종류별 별첨, 선적 모드 POD 컬러 매핑
 // ============================================================
 import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isReeferContainer } from '../utils.js';
@@ -30,23 +31,31 @@ function getMarkV2(c, pod, mode) {
       ? c.pod && String(c.pod).toUpperCase().includes('PTK')
       : c.pol && String(c.pol).toUpperCase().includes('PTK');
 
+  // M6.86.8.14: 지침서 §4.2 - X는 짝수 40ft shadow 전용. 통과화물엔 X 쓰지 않음.
+  //   통과 일반 → 글자 없음(빈) + 회색 배경 (cell render에서 isThrough로 처리)
+  //   통과 특수 → 종류별 글자 + 회색 배경
+  //   PTK 일반 → 'o' + 선사/POD 컬러 배경
+  //   PTK 특수 → 종류별 글자 + 자체 컬러 또는 선사 컬러
+
+  // 특수화물 종류 우선 판정 (PTK든 통과든 같은 글자)
+  let specialLetter = null;
+  if (c.dg) specialLetter = 'D';
+  else if (isReeferContainer(c)) specialLetter = c.fe === 'E' ? 'r' : 'R';
+  else if (c.fr) specialLetter = 'F';
+  else if (c.tk) specialLetter = 'T';
+  else if (c.ot || c.oog) specialLetter = 'A';
+  else if (c.fe === 'E') specialLetter = 'E';
+
   if (mode === 'discharge') {
-    if (!ptk) return 'X'; // 통과
-    if (c.dg) return 'D';
-    if (isReeferContainer(c)) return c.fe === 'E' ? 'r' : 'R';
-    if (c.fr) return 'F';
-    if (c.tk) return 'T';
-    if (c.ot || c.oog) return 'A'; // OT/OOG = Awkward
-    if (c.fe === 'E') return 'E';
-    return 'o';
+    if (!ptk) return specialLetter || ''; // 통과: 특수면 글자, 일반은 빈 글자 (회색은 cell render)
+    return specialLetter || 'o';
   }
 
-  // loading 모드 — POD 첫 글자 (KAN=K, PUS=P, SGN=S, MIP=M)
-  if (!ptk) return 'X';
-  if (c.dg) return 'D';
-  if (isReeferContainer(c)) return 'R';
+  // loading 모드
+  if (!ptk) return specialLetter || '';
+  if (specialLetter) return specialLetter;
   const podUp = c.pod ? String(c.pod).toUpperCase() : '';
-  if (podUp.length >= 3) return podUp.slice(2, 3); // 5자리(KRKAN)→3번째(K), 3자리(KAN)→첫글자
+  if (podUp.length >= 3) return podUp.slice(2, 3);
   return 'L';
 }
 
@@ -114,9 +123,13 @@ const CSS = `
 .cpv2-legend-ct { font-size: 7.5px; text-align: center; }
 .cpv2-legend-total { background: #f0f0f0; }
 @media print {
-  .cpv2-overlay { position: static; background: white; padding: 0; overflow: visible; }
-  .cpv2-page { box-shadow: none; margin: 0; }
+  /* M6.86.8.14: 인쇄 시 검수앱 메인 화면 안 나오게 — overlay만 보이고 다른 body 자식 모두 숨김.
+     V2가 createPortal로 body 직접 자식이라 body > .cpv2-overlay 패턴 정확히 작동. */
+  body > *:not(.cpv2-overlay) { display: none !important; }
+  .cpv2-overlay { position: static !important; background: white !important; padding: 0 !important; overflow: visible !important; display: block !important; height: auto !important; }
+  .cpv2-page { box-shadow: none !important; margin: 0 !important; height: auto !important; min-height: 0 !important; width: 100% !important; padding: 4mm !important; }
   .cpv2-noprint { display: none !important; }
+  .cpv2-cell, .cpv2-legend-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @page { size: A4 landscape; margin: 6mm; }
 }
 `;
@@ -145,11 +158,17 @@ function BayBoxV2({ data, count, colorMap = {} }) {
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     const bg = cell.colorKey && colorMap[cell.colorKey];
+                    let style;
+                    if (cell.isThrough) {
+                      style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색 (지침서 §4.2)
+                    } else if (bg) {
+                      style = { background: bg, color: '#fff' };
+                    }
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}
-                        style={bg ? { background: bg, color: '#fff' } : undefined}
+                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}`}
+                        style={style}
                       >
                         {cell.mark || ''}
                       </span>
@@ -178,11 +197,17 @@ function BayBoxV2({ data, count, colorMap = {} }) {
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     const bg = cell.colorKey && colorMap[cell.colorKey];
+                    let style;
+                    if (cell.isThrough) {
+                      style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색 (지침서 §4.2)
+                    } else if (bg) {
+                      style = { background: bg, color: '#fff' };
+                    }
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}
-                        style={bg ? { background: bg, color: '#fff' } : undefined}
+                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}`}
+                        style={style}
                       >
                         {cell.mark || ''}
                       </span>
@@ -363,6 +388,8 @@ export default function PrintableCargoPlanV2({
       return (p3 && p3 !== 'PTK') ? p3 : null;
     }
   };
+  // M6.86.8.14: 통과화물 판정 — 양하 mode에서 c.pod가 PTK 아니면 통과, 선적은 c.pol이 PTK 아니면 통과
+  const getIsThrough = (c) => !matchPodC(c);
 
   // M6.86.8.6: 선사별 / 화물종류별 / POD별 카운트
   const legends = useMemo(() => {
@@ -411,7 +438,7 @@ export default function PrintableCargoPlanV2({
     });
     singles.forEach((s) => allKeys.push(s));
     for (const key of allKeys) {
-      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap, getColorKey);
+      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap, getColorKey, getIsThrough);
     }
     return map;
   }, [pdfBays, matrixBays, posMap, pod, mode, trios, singles]);
@@ -444,7 +471,7 @@ export default function PrintableCargoPlanV2({
       ? `${(effShipName || '').toUpperCase()} CARGO DISCHARGING PLAN`
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
-  return (
+  return createPortal(
     <div className="cpv2-overlay">
       <style>{CSS}</style>
       {closeBtn}
@@ -532,7 +559,8 @@ export default function PrintableCargoPlanV2({
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -224,10 +224,11 @@ export function buildPosMap(containers) {
 // 단독 키 형식: "OO" — 홀수 OO 자체 + 양옆 짝수 shadow X.
 // xrayMap: { cn: true } 형태. 해당 컨테이너 위치에 xray 플래그 표시.
 // getColorKeyFn(c): 컨테이너의 컬러 매핑 key 반환 (양하: 선사코드, 선적: POD 3자). 평택분 외엔 null.
-export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn) {
+export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn) {
   const marks = new Map();
   const xrays = new Map();
-  const colors = new Map(); // tier → Map<rowLbl, colorKey>
+  const colors = new Map();
+  const throughs = new Map(); // tier → Map<rowLbl, true>
   const ensureTier = (tier) => {
     if (!marks.has(tier)) marks.set(tier, new Map());
     return marks.get(tier);
@@ -240,6 +241,10 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
     if (!colors.has(tier)) colors.set(tier, new Map());
     return colors.get(tier);
   };
+  const ensureThroughTier = (tier) => {
+    if (!throughs.has(tier)) throughs.set(tier, new Map());
+    return throughs.get(tier);
+  };
   const tagXray = (c, tier, rowLbl) => {
     if (xrayMap && c.cn && xrayMap[c.cn]) {
       ensureXrayTier(tier).set(rowLbl, true);
@@ -249,6 +254,11 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
     if (getColorKeyFn) {
       const k = getColorKeyFn(c);
       if (k) ensureColorTier(tier).set(rowLbl, k);
+    }
+  };
+  const tagThrough = (c, tier, rowLbl) => {
+    if (isThroughFn && isThroughFn(c)) {
+      ensureThroughTier(tier).set(rowLbl, true);
     }
   };
 
@@ -265,6 +275,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
             tierMap.set(rowLbl, getSelfMarkFn(c, pod));
             tagXray(c, tier, rowLbl);
             tagColor(c, tier, rowLbl);
+            tagThrough(c, tier, rowLbl);
           }
         }
       }
@@ -279,6 +290,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           tierMap.set(rowLbl, getSelfMarkFn(c, pod));
           tagXray(c, tier, rowLbl);
           tagColor(c, tier, rowLbl);
+          tagThrough(c, tier, rowLbl);
         }
       }
     }
@@ -289,21 +301,21 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           if (bb === adjEven) {
             const tierMap = ensureTier(tier);
             for (const rowLbl of rowMap.keys()) {
-              if (!tierMap.has(rowLbl)) tierMap.set(rowLbl, 'X');
+              if (!tierMap.has(rowLbl)) tierMap.set(rowLbl, 'X'); // shadow X (40ft 그림자)
             }
           }
         }
       }
     }
   }
-  return { marks, xrays, colors };
+  return { marks, xrays, colors, throughs };
 }
 
 // ------------------------------------------------------------
 // 6. 한 베이의 모든 렌더 데이터를 한 번에 계산 (편의 함수)
 // ------------------------------------------------------------
 // 컴포넌트는 이 함수가 반환하는 객체를 그대로 JSX로 렌더.
-export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn) {
+export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn) {
   const pdf = pdfBays[bayKey];
   if (!pdf) return null;
 
@@ -342,7 +354,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nDeckCols = deckRowPos.length;
   const nHoldCols = nDeckCols;
 
-  const { marks: bayMarks, xrays: bayXrays, colors: bayColors } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn);
+  const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 
   // deck tier별 셀 배열 (자리 통일: STANDARD_DECK 6 tier 모두 렌더)
   const deckRows = STANDARD_DECK.map((stdT) => {
@@ -353,18 +365,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
+      const rowThroughs = bayThroughs.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeSet.has(c)) {
           const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null });
+          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null, isThrough: !!rowThroughs.get(rowLbl) });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null }));
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });
@@ -378,18 +391,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
+      const rowThroughs = bayThroughs.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeInDeck.has(c)) {
           const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null });
+          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null, isThrough: !!rowThroughs.get(rowLbl) });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null }));
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });
