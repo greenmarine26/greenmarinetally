@@ -66,8 +66,9 @@ const CSS = `
 .cpv2-single-box .cpv2-empty-half { flex: 1 1 0; }
 .cpv2-bay-section { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding: 4px 3px; min-height: 0; position: relative; }
 .cpv2-trio-divider { border-top: 0.5px solid #999; }
-.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: 11px; padding: 0 6px; margin-bottom: 2px; box-sizing: border-box; flex-shrink: 0; }
-.cpv2-bay-count { position: absolute; right: 6px; top: 0; color: #555; font-size: 9px; font-weight: normal; }
+.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: 11px; padding: 0 60px 0 6px; margin-bottom: 2px; box-sizing: border-box; flex-shrink: 0; }
+.cpv2-bay-title { display: inline-block; }
+.cpv2-bay-count { position: absolute; right: 4px; top: 1px; color: #555; font-size: 8px; font-weight: normal; white-space: nowrap; }
 .cpv2-bay-content { display: flex; flex-direction: column; align-items: center; flex: 1; width: 100%; }
 .cpv2-deck-area { flex: 6 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%; min-height: 0; }
 .cpv2-hold-area { flex: 4 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100%; min-height: 0; }
@@ -239,9 +240,17 @@ export default function PrintableCargoPlanV2({
   const layout = useMemo(() => autoPageLayout(trios, singles, 5), [trios, singles]);
   const posMap = useMemo(() => buildPosMap(containers), [containers]);
 
-  // 박스별 카운트 (M6.86.8.3 fix: c.bay가 string("01") or number(1) 양쪽 케이스 안전 처리)
+  // 박스별 카운트 (M6.86.8.4: M6.81 정답 포맷)
+  //   단독 베이 (single + trio top) = 총합 단일 숫자
+  //   페어 박스 (trio pair) = "20피트 / 40피트 / 45피트"
+  //   사이즈 판정: ISO 라벨 우선 (45XX → 45, 4XXX → 40, 그 외 → 20)
   const boxCounts = useMemo(() => {
-    const counts = {};
+    const sizeOf = (c) => {
+      const lbl = String(c.isoLabel || c.iso || '').toUpperCase();
+      if (lbl.startsWith('45') || /^4[5][A-Z0-9]{2}$/.test(lbl)) return '45';
+      if (lbl.startsWith('40') || /^4[0-9][A-Z0-9]{2}$/.test(lbl)) return '40';
+      return '20';
+    };
     const matchBay = (c, num) => Number(c.bay) === num;
     const matchPod = (c) => {
       if (!pod) return true;
@@ -249,20 +258,31 @@ export default function PrintableCargoPlanV2({
       const p = String(pod).toUpperCase();
       return cp === p || cp.endsWith(p) || p.endsWith(cp);
     };
+    // 베이별 사이즈 분포 1회 계산
+    const byBay = new Map();
+    for (const c of containers) {
+      if (!matchPod(c)) continue;
+      const n = Number(c.bay);
+      if (!Number.isFinite(n)) continue;
+      if (!byBay.has(n)) byBay.set(n, { '20': 0, '40': 0, '45': 0 });
+      byBay.get(n)[sizeOf(c)]++;
+    }
+    const get = (n) => byBay.get(n) || { '20': 0, '40': 0, '45': 0 };
+
+    const counts = {};
     trios.forEach(([top, pair]) => {
+      const topOdd = parseInt(top, 10);
+      const dt = get(topOdd);
+      counts[top] = String(dt['20'] + dt['40'] + dt['45']);
       const m = pair.replace('(', '').replace(')', '');
       const even = parseInt(m.slice(0, 2), 10);
       const odd = parseInt(m.slice(2), 10);
-      const topOdd = parseInt(top, 10);
-      const cntTop = containers.filter((c) => matchBay(c, topOdd) && matchPod(c)).length;
-      const cntEven = containers.filter((c) => matchBay(c, even) && matchPod(c)).length;
-      const cntOdd = containers.filter((c) => matchBay(c, odd) && matchPod(c)).length;
-      counts[top] = String(cntTop);
-      counts[pair] = `${cntEven + cntOdd}`;
+      const de = get(even), doB = get(odd);
+      counts[pair] = `${de['20'] + doB['20']} / ${de['40'] + doB['40']} / ${de['45'] + doB['45']}`;
     });
     singles.forEach((s) => {
-      const num = parseInt(s, 10);
-      counts[s] = String(containers.filter((c) => matchBay(c, num) && matchPod(c)).length);
+      const d = get(parseInt(s, 10));
+      counts[s] = String(d['20'] + d['40'] + d['45']);
     });
     return counts;
   }, [trios, singles, containers, pod]);
@@ -316,7 +336,7 @@ export default function PrintableCargoPlanV2({
       {closeBtn}
       <div className="cpv2-page">
         <div className="cpv2-banner">
-          <b>✓ M6.86.8.3 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
+          <b>✓ M6.86.8.4 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
         </div>
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
