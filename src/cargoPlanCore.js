@@ -314,14 +314,11 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           if (bb === adjEven) {
             const tierMap = ensureTier(tier);
             for (const [rowLbl, c] of rowMap.entries()) {
-              // M6.86.8.19 (지침서 §4.2 + 사용자 약속):
-              //   짝수 40ft/45ft → 'X' shadow (양옆 홀수 슬롯 점유)
-              //   짝수 20ft → 회색 빈 셀 (글자 없음, 자리 차지) — 시각적 "여기 점유됨" 표시
+              // M6.90.1: ISO 6346 첫 자가 사이즈. 4 = 40ft (모든 높이), L/9 = 45ft, 2 = 20ft
+              //   45R1은 40ft (hi-cube reefer)이므로 shadow X 대상.
               const iso = String(c.isoLabel || c.iso || '').toUpperCase();
-              const is40OrMore =
-                iso.startsWith('45') ||
-                iso.startsWith('L') ||
-                /^4[0-9]/.test(iso);
+              const firstChar = iso[0];
+              const is40OrMore = firstChar === '4' || firstChar === 'L' || firstChar === '9';
               if (tierMap.has(rowLbl)) continue;
               if (is40OrMore) {
                 tierMap.set(rowLbl, 'X');
@@ -432,8 +429,8 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
         const inActive = activeSet.has(c);
         const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
         const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
-        if (inActive || mark || isShadow20) {
-          // hull cells 안 + 양옆 짝수 40ft shadow + 양옆 짝수 20ft shadow 자리 모두 active
+        if (inActive) {
+          // M6.90.3: hull 단면 안쪽만 active. 바깥은 cell-empty (visibility:hidden) — 사용 못하는 셀 안 보임.
           cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
@@ -465,7 +462,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
         const inActive = activeInHold.has(c);
         const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
         const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
-        if (inActive || mark || isShadow20) {
+        if (inActive) {
           cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });

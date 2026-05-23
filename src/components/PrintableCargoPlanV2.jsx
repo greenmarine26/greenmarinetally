@@ -354,7 +354,7 @@ export default function PrintableCargoPlanV2({
       const hasHoldFromEdi = ediTiers.some((t) => t < 80);
       const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : (b.hasDeck !== false || hasDeckFromEdi);
       const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : (b.hasHold || hasHoldFromEdi);
-      const cells = b.cells || [];
+      const cells = b.cells ? [...b.cells].reverse() : []; // M6.90.2: cells는 아래→위 저장 → reverse로 위→아래 변환
       const nDeck = hasDeck ? deckTiersAll.length : 0;
       const nHold = hasHold ? holdTiersAll.length : 0;
       const deckCells = nDeck > 0 ? cells.slice(0, nDeck) : [];
@@ -396,10 +396,17 @@ export default function PrintableCargoPlanV2({
   //   단독 베이 (single + trio top) = 총합 단일 숫자
   //   페어 박스 (trio pair) = "20피트 / 40피트 / 45피트"
   //   사이즈 판정: ISO 라벨 우선 (45XX → 45, 4XXX → 40, 그 외 → 20)
+  // M6.90.1: ISO 6346 표준 사이즈 판정 — 첫 자가 사이즈 코드.
+  //   ISO 4자리: [길이][높이][타입][변형]
+  //   2x = 20ft, 4x = 40ft, Lx/9x = 45ft.  두 번째 자는 높이 (2=8'6", 5=9'6" hi-cube)
+  //   예: 45R1 = 40ft 9'6" reefer (NOT 45ft), 22G1 = 20ft general, L5G1 = 45ft hi-cube general
   const sizeOfC = (c) => {
     const lbl = String(c.isoLabel || c.iso || '').toUpperCase();
-    if (lbl.startsWith('45') || /^4[5][A-Z0-9]{2}$/.test(lbl)) return '45';
-    if (lbl.startsWith('40') || /^4[0-9][A-Z0-9]{2}$/.test(lbl)) return '40';
+    if (!lbl) return '20';
+    const first = lbl[0];
+    if (first === 'L' || first === '9') return '45';
+    if (first === '4') return '40';
+    if (first === '2') return '20';
     return '20';
   };
   // M6.86.8.7: 양하 별첨/카운트는 평택분(PTK)만 강제 (사용자 약속).
