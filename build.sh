@@ -1,64 +1,61 @@
 #!/usr/bin/env bash
-# M6.86.7.2 빌드 자동화 스크립트
+# M6.86.8.25 빌드 자동화 스크립트
 #
-# 운영 실측 (사용자 확인):
-#   - GitHub Pages는 main 브랜치 루트의 index.html을 직접 서빙하는 흐름으로 운영됨
-#   - workflow의 빌드 색깔은 사이트 작동과 무관
-#   - 사용자는 누적 ZIP을 repo 루트에 통째로 덮어쓴 후 commit & push 만 함
+# 실제 운영 흐름 (deploy.yml 검증):
+#   - 사용자가 ZIP을 받아 repo 루트에 덮어쓰고 commit & push
+#   - GitHub Actions(.github/workflows/deploy.yml)가:
+#       1) npm install
+#       2) npm run build  ← 이게 통과해야 사이트가 배포됨
+#       3) ./dist 폴더만 GitHub Pages artifact로 업로드 → 배포
+#   - 즉 production에 서빙되는 건 actions가 새로 빌드한 dist/뿐
+#   - 루트 index.html은 production에서는 안 쓰임 (workflow가 dist/만 배포)
 #
-# 결론: 루트 index.html은 반드시 "빌드본"이어야 사이트 작동
-#   - 루트 index.html = dist/index.html 복사본 (./assets/index-XXX.js 참조, base:'./')
-#   - 절대 소스형(/src/main.jsx 진입점)으로 두지 말 것 — 그러면 production에서 모듈 404
-#
-# M6.86.7.1의 핫픽스(소스형 루트 index.html)는 잘못된 진단이었음 → 본 스크립트로 회귀
+# 결론: 루트 index.html은 반드시 "소스형"(<script src="/src/main.jsx">) 이어야 함
+#   - 빌드본을 루트에 두면 vite 6.x가 entry 충돌로 npm run build 실패
+#   - → GitHub Actions 빌드 실패 → 사이트 배포 실패 → 사용자 입장에선 "또 안 되네"
+#   - 이전 build.sh / HANDOFF의 "루트는 빌드본" 가정은 옛 운영 흐름 흔적 (현 workflow와 불일치)
 
 set -e
 cd "$(dirname "$0")"
 
-echo "[1/5] 옛 빌드 산출물 / vite 캐시 제거..."
-rm -rf dist assets node_modules/.vite
+echo "[1/4] 옛 빌드 산출물 / vite 캐시 제거..."
+rm -rf dist node_modules/.vite
 
-echo "[2/5] 의존성 확인..."
+echo "[2/4] 의존성 확인..."
 [ ! -d node_modules ] && npm install --silent
 
-echo "[3/5] vite build..."
+echo "[3/4] vite build (workflow와 동일)..."
 npx vite build
 
-echo "[4/5] dist → root 복사 (assets + index.html 모두)..."
-cp -r dist/assets ./
-cp dist/index.html ./
+echo "[4/4] 검증..."
+# 루트 index.html이 소스형인지
+if ! grep -q '/src/main.jsx' index.html; then
+  echo "✗ 루트 index.html이 소스형이 아님 — vite build가 entry 충돌로 죽을 위험"
+  echo "  → 다음과 같이 복원해야 함:"
+  echo '  <script type="module" src="/src/main.jsx"></script>'
+  exit 1
+fi
+if grep -q '\./assets/index-' index.html; then
+  echo "✗ 루트 index.html에 빌드본 해시 참조가 남아있음 — production 부정합"
+  exit 1
+fi
+echo "✓ 루트 index.html: 소스형 (workflow npm run build 통과 가능)"
 
-echo "[5/5] 검증..."
-JSFILE=$(ls assets/index-*.js 2>/dev/null | head -1)
-if [ -z "$JSFILE" ]; then
-  echo "✗ assets/index-*.js 없음 - 빌드 실패"
+# dist/ 산출물 검증
+JSFILE=$(ls dist/assets/index-*.js 2>/dev/null | head -1)
+CSSFILE=$(ls dist/assets/index-*.css 2>/dev/null | head -1)
+if [ -z "$JSFILE" ] || [ -z "$CSSFILE" ]; then
+  echo "✗ dist/assets/index-*.js 또는 .css 없음 - 빌드 실패"
   exit 1
 fi
-echo "✓ 빌드 산출물: $JSFILE"
+echo "✓ 빌드 산출물: $JSFILE, $CSSFILE"
 
-# 루트 index.html이 빌드본인지 확인
-if ! grep -q '\./assets/index-' index.html; then
-  echo "✗ 루트 index.html이 빌드본 아님 — production에서 작동 안 함"
+# dist/index.html이 자기 assets 참조하는지
+if ! grep -q '\./assets/index-' dist/index.html; then
+  echo "✗ dist/index.html이 ./assets/ 참조 안 함"
   exit 1
 fi
-if grep -q '/src/main.jsx' index.html; then
-  echo "✗ 루트 index.html에 소스형 진입점이 남아있음"
-  exit 1
-fi
-echo "✓ 루트 index.html: 빌드본 (./assets/index-XXX.js 참조, production 작동)"
-
-# 루트 index.html이 참조하는 해시 파일이 실제 assets/에 존재하는지
-REFJS=$(grep -oE './assets/index-[a-zA-Z0-9_-]+\.js' index.html | head -1 | sed 's|^\./||')
-REFCSS=$(grep -oE './assets/index-[a-zA-Z0-9_-]+\.css' index.html | head -1 | sed 's|^\./||')
-if [ ! -f "$REFJS" ]; then
-  echo "✗ 참조 $REFJS 가 실제 파일 없음"
-  exit 1
-fi
-if [ ! -f "$REFCSS" ]; then
-  echo "✗ 참조 $REFCSS 가 실제 파일 없음"
-  exit 1
-fi
-echo "✓ 루트 참조 파일 존재 확인: $REFJS, $REFCSS"
+echo "✓ dist/index.html: 자체 assets 참조 정상"
 
 echo ""
-echo "ZIP 패키징 가능 상태 (옛 M6.71 흐름과 동일 구조)."
+echo "ZIP 패키징 가능 상태 (GitHub Actions npm run build 동일 환경 통과)."

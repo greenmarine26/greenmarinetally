@@ -379,6 +379,14 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🩹 M6.86.8.25 (2026-05-23) — 페어 박스 hold에 08 잘못 들어가던 버그 픽스',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'DXQD 선박 카고플랜 페어 박스 베이의 HOLD에 row 08이 표시됨. DXQD hold는 항상 단독 홀수 박스 구조(7칸)라 [06,04,02,01,03,05,07]이어야 함 — 08은 짝수 페어 박스 deck(8칸)에만 들어가는 라벨.' },
+        { q: '🔍 진짜 원인', a: 'cargoPlanCore.js computeBayRenderData에서 `holdRowPos = deckRowPos` 한 줄로 deck/hold가 row 라벨을 공유. 페어 박스일 때 deck는 rowMaxEven=8을 쓰는데 hold도 강제로 8칸 라벨을 받아 맨 앞 08이 살아남음. 컨선 구조상 cell은 항상 odd-bay에 속하므로 hold는 페어 박스라도 odd 단독 박스 구조여야 함.' },
+        { q: '✅ 해결', a: 'computeBayRenderData에서 deck/hold 라벨 분리: deckRowPos = getRowPositions(rowMax, hasZero), holdRowPos = getRowPositions(rowMaxOdd || rowMax, hasZero). nHoldCols도 별도 산출. PrintableCargoPlanV2는 이미 nHoldCols/nDeckCols 비율 width + margin auto로 좁은 hold를 deck 박스 안에 가운데 정렬하도록 되어 있어 CSS 변경 없음. DXQD 페어 박스 결과: deck=8칸 [08,06,04,02,01,03,05,07], hold=7칸 [06,04,02,01,03,05,07] ✓' },
+      ],
+    },
+    {
       title: '🆕 M6.86.8 (2026-05-23) — M6.81 Universal 알고리즘 회귀, 카고플랜 V2 도입',
       examples: [
         { q: '🔥 사용자 보고', a: '카스피와 완전히 같았던 M6.81 양식이 M6.86.x로 오면서 또 깨짐. BAY 07이 카스피는 10컬럼인데 검수앱은 5컬럼. BAY 11에 00이 잘못 추가. BAY 28을 트리오 (28)29로 인식 못함 등. 사용자 요청: HTML 방식으로 다른 선박도 다 고쳐달라.' },

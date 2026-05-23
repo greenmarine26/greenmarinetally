@@ -1,84 +1,95 @@
-# Tallyman Master M6.86.8 인계지침서
+# Tallyman Master M6.86.8.25 인계지침서
 
 작성: 2026-05-23
-이전 버전: M6.86.7.2 (검정화면 핫픽스 회귀) → **M6.86.8 (M6.81 알고리즘 회귀, 카고플랜 V2 도입)**
+이전: M6.86.8.15 (DXQD row 라벨 픽스 중) → **M6.86.8.25 (페어 박스 hold에 08 잘못 들어가던 버그 픽스)**
 
 ---
 
-## 0. M6.86.8 핵심 — M6.81 Universal Cargo Plan 알고리즘 회귀
+## 0. M6.86.8.25 핵심 — 페어 박스 hold row 라벨 정정
 
-### 사용자 보고
-> "베이구조가 업데이트 할때 마다 잘 되던것도 바뀝니다. 요근래 실제 카스피와 같게 만들었었는데 그게 또 이렇게 바꼈씁니다. 완벽한 플랜이었는데... 다른 선박도 HTML에 있는 방식으로 바꿀수 있게 다 고쳐주셨으면 합니다."
+### 사용자 보고 (DXQD 선박)
+> "DXQD 선박 홀드는 06 04 02 01 03 05 07 로 구성되어야 합니다."
 
-검수앱 PDF vs 카스피 PDF vs M6.81 HTML 비교 결과 (STSE 2631E):
-- BAY 07: 카스피=10컬럼 / 검수앱=5컬럼 (가운데만)
-- BAY 11: 카스피=10컬럼 / 검수앱=9컬럼 (00 잘못 추가, 양끝 잘림)
-- BAY 28: 카스피=트리오 (28)29 / 검수앱=BAY 28 단독으로 잘못 표기
-- 등 15개 베이 중 12개 불일치
+페어 박스 베이의 HOLD에 row 08이 잘못 표시됨. DXQD hold는 어느 베이든 단독 홀수 박스 구조(7칸)이며 라벨은 `[06,04,02,01,03,05,07]`. 08은 짝수 페어 박스의 DECK(8칸)에만 들어가는 라벨이다.
 
 ### 진짜 원인
-M6.86.7 알고리즘이 **베이사전 hull 정의를 무시하고 EDI 데이터에 있는 컬럼만 그림**. M6.81 정답 알고리즘의 STD 6deck+4hold 자리 통일 + cells 배열 기반 피라미드 단면(`get_active_cols_symmetric`)을 폐기.
+`src/cargoPlanCore.js` `computeBayRenderData`에 한 줄:
+```js
+const holdRowPos = deckRowPos; // 같은 row 라벨 공유  ← 버그
+```
+페어 박스일 때 `rowMax = rowMaxEven = 8`이라 deck가 `[08,06,…,07]` 8칸이 되는데, hold도 그걸 그대로 받아 맨 앞 08이 hold에 박힘.
 
-지침서 §4.1의 "STD_DECK/STD_HOLD 강제 baseline 없음. ⚠️ 이전 '6 deck + 4 hold baseline' 메모는 잘못" 이 메모 자체가 잘못된 진단의 흔적. **사용자 합의로 이 메모를 다음과 같이 정정**:
+컨선 구조상 hold cell은 항상 odd-bay에 속한다 (페어 박스라도 hold는 odd 단독 박스). 그래서 hold는 deck와 별개로 `rowMaxOdd` 기준이어야 함.
 
-> **§4.1 정정**: STD tier 자리 통일 O, hull 모양(컬럼 + 단면) 베이별 cells 기준 O.
-> STANDARD_DECK = [92,90,88,86,84,82], STANDARD_HOLD = [8,6,4,2] tier 자리는 모든 베이가 통일되게 렌더링하되,
-> 그 안에서 베이별 cells 배열 분포로 deck_t/hold_t/active_cols 결정.
-> 페이지 폭 통일 (globalRowRange, pageDeckUnion) 절대 사용 금지.
-
-### M6.86.8 변경
+### M6.86.8.25 변경
 | 파일 | 변경 |
 |------|------|
-| `src/cargoPlanCore.js` | **신규** — M6.81 Python `build_cargo_plan_universal.py`의 4개 핵심 함수 1:1 포팅 |
-| `src/components/PrintableCargoPlanV2.jsx` | **신규** — V1과 병행. M6.81 알고리즘 그대로 + 검수앱 고유 마크 통합 |
-| `src/components/PrintHubModal.jsx` | "🆕 카고플랜 V2 · M6.81 회귀" 버튼 추가 (기존 V1 옆) |
-| `src/components/HelpModal.jsx` | M6.86.8 항목 + M6.86.7.2 항목 추가 |
-| `src/utils.js` | `APP_VERSION = 'M6.86.8'` |
-| `sw.js` | `VERSION = 'M6.86.8'` |
+| `src/cargoPlanCore.js` | `computeBayRenderData`에서 deck/hold row 라벨 분리: `deckRowPos = getRowPositions(rowMax, hasZero)`, `holdRowPos = getRowPositions(rowMaxOdd \|\| rowMax, hasZero)`. `nHoldCols`도 별도 산출. |
+| `src/components/HelpModal.jsx` | M6.86.8.25 항목 최상단 추가 |
+| `src/utils.js` | `APP_VERSION = 'M6.86.8.25'` |
+| `sw.js` | `VERSION = 'M6.86.8.25'` |
+| `build.sh` | 잘못된 운영 가정("루트는 빌드본") 정정 — 실제 workflow는 dist/만 배포하므로 루트는 소스형 필수 |
 
-### 검수앱 고유 마크 (M6.81 7기본 + 확장)
-| 마크 | 의미 | 비고 |
-|------|------|------|
-| `o` | PTK 양하 일반 | M6.81 |
-| `X` | 통과 (또는 짝수40 shadow) | M6.81 |
-| `R` | 리퍼 | M6.81 |
-| `r` | 빈 리퍼 | 검수앱 확장 |
-| `D` | DG | M6.81 |
-| `F` | FR | 검수앱 표기 (M6.81의 P 대체) |
-| `T` | Tank | M6.81 |
-| `A` | OT/OOG (Awkward) | 검수앱 표기 (M6.81의 U 대체) |
-| `E` | Empty | 검수앱 확장 |
-| `K/P/S/M` | 선적 POD (KAN/PUS/SGN/MIP) | 검수앱 확장 |
+### 검증
+- ✅ `getRowPositions(7, false)` = `[06,04,02,01,03,05,07]` (단독 홀수 hold)
+- ✅ `getRowPositions(8, false)` = `[08,06,04,02,01,03,05,07]` (페어 박스 deck)
+- ✅ vite 6.x npm run build 통과 (`dist/index.html`, `dist/assets/index-*.js/css` 정상 생성)
+- ✅ 빌드본에 APP_VERSION 'M6.86.8.25' 포함 확인
+- ✅ `PrintableCargoPlanV2`는 이미 `width: (nHoldCols/nDeckCols)*100%` + `margin auto`로 좁은 hold를 deck 박스 안 가운데 정렬 — CSS 변경 불필요
 
-### 검증 (Phase 1 완료 · Phase 2 시각 확인 필요)
-**Phase 1 (코드 레벨, 자동 검증 통과)**:
-- ✅ STSE 2631E 베이사전 데이터로 `cargoPlanCore.js` 결과를 M6.81 Python 결과와 1:1 비교
-- ✅ autoPairBays: 트리오 7개 + 단독 1개, M6.81과 일치
-- ✅ getRowPositions, getActiveColsSymmetric 케이스 검증 통과
-- ✅ STSE 2631E 15개 베이 row_labels 모두 M6.81 HTML 정답과 1:1 일치 (BAY 07=10컬럼, BAY 03=9컬럼, BAY 01=7컬럼 등)
+### 사용자 시각 확인 단계
+DXQD 페어 박스 베이의 카고플랜에서 hold row 라벨이 `[06,04,02,01,03,05,07]` 7칸 (08 없음)으로 표시되는지 확인.
 
-**Phase 2 (사용자 시각 확인 필요)**:
-- 빌드 통과 (vite 6.4.2, 12.91초, 0 에러)
-- 정적 서버 시뮬레이션 모든 자산 200 응답
-- **사용자 단계**: 검수앱에서 "🆕 카고플랜 V2" 버튼 눌러 V2 출력 확인. 카스피 양식과 같은지 검증.
+---
 
-### 적용 방법
-1. ZIP 풀어서 repo 폴더에 통째로 덮어쓰기
-2. `git add -A && git commit -m "M6.86.8 V2 cargo plan" && git push`
-3. 폰 캐시 비우기 (sw.js VERSION이 M6.86.8로 바뀌어 캐시 자동 무효화되지만 한 번은 강제 새로고침)
-4. 인쇄 허브 → "🆕 카고플랜 V2 · M6.81 회귀" 버튼 → 카스피 양식과 비교
+## 1. 운영 흐름 (반드시 알고 있어야 할 내용)
 
-### 다음 패치 후보 (V2 확장)
+### 실제 배포 메커니즘 (.github/workflows/deploy.yml 검증)
+1. 사용자가 받은 ZIP을 repo 루트에 통째로 덮어쓰고 `git commit && git push`
+2. GitHub Actions가 자동 실행:
+   - `npm install`
+   - `npm run build` ← **이게 통과해야 사이트 배포됨**
+   - `./dist` 폴더만 GitHub Pages artifact로 업로드 → Pages 배포
+3. production에 서빙되는 건 actions가 새로 빌드한 `dist/` 뿐
+
+### 루트 index.html은 반드시 "소스형"
+```html
+<script type="module" src="/src/main.jsx"></script>
+```
+- 빌드본(`./assets/index-XXX.js` 참조)을 루트에 두면 vite가 entry 충돌로 `npm run build` 실패
+- → GitHub Actions 빌드 실패 → 사이트 배포 실패 → 사용자: "또 안 됨"
+- 옛 build.sh / HANDOFF에 적힌 "루트는 빌드본" 가정은 옛 운영 흔적 (현 workflow와 불일치)
+
+### ZIP 패키징 (지침서 §5)
+- 원본 보존: `src/`, `dist/`, `package.json`, `build.sh`, `HANDOFF.md` 등 일체
+- 루트 `index.html`만 소스형
+- FULL ZIP 크기 ≈ 1.5MB 정상
+
+---
+
+## 2. 검증 후 ZIP 배포 (절대 원칙)
+
+1. 코드 수정 후 **반드시** `npm run build` 통과 확인
+2. 빌드본에 변경사항(예: APP_VERSION) 포함 확인
+3. 루트 index.html이 소스형인지 확인
+4. 그 후 ZIP
+
+검증 안 된 ZIP은 절대 사용자에게 주지 말 것.
+
+---
+
+## 3. 다음 패치 후보
 1. **선사별 별첨** (M6.81 별첨1) 통합
 2. **화물 종류별 별첨** (M6.81 별첨2) 통합
-3. **선적 모드** POD 컬러 세부 코딩 (DLC/WEI/LYG 등 다양한 POD)
-4. **X-Ray 표시** (셀 모서리에 별 표시)
-5. **V1 폐기** (V2 시각 확인 완료 후)
+3. **선적 모드** POD 컬러 세부 코딩
+4. **X-Ray 표시** (셀 모서리 별)
+5. **V1 카고플랜 폐기** (V2 시각 확인 완료 후)
 
-### ⚠️ 절대 하지 말 것
-- 루트 index.html을 소스형으로 두지 말 것 (검정 화면, M6.86.7.1 사고)
+---
+
+## 4. ⚠️ 절대 하지 말 것
+- 루트 index.html을 빌드본으로 두지 말 것 (vite build 실패 → 사이트 다운, 사용자 매번 고생의 원인)
 - STD_DECK/STD_HOLD 자리 통일 없애지 말 것 (베이별 hull 단면이 사라짐, M6.86.7 사고)
 - globalRowRange/pageDeckUnion으로 페이지 폭 통일하지 말 것 (베이별 hull 모양 깨짐, M6.86.5 사고)
 - 사용자 사전 확인 없이 베이사전 변경 금지 (M6.86.5 베이사전 오염 사고)
-- 워크플로 빌드 색깔에 휘둘리지 말 것 (사이트 작동은 main 루트 빌드본이 결정)
-
+- **검증되지 않은 ZIP 제공 금지** (지침서 §2.2)
