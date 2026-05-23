@@ -59,11 +59,12 @@ const CSS = `
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
-.cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
-.cpv2-scaler { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
-.cpv2-scaler > .cpv2-page-rows { flex: 1 1 0; }
-.cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
-.cpv2-bay-box { flex: 1 1 0; min-width: 0; width: 0; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
+.cpv2-scaler-wrap { flex: 1 1 0; position: relative; min-height: 0; overflow: hidden; }
+.cpv2-scaler { position: absolute; top: 0; left: 0; width: 1100px; display: flex; flex-direction: column; }
+.cpv2-scaler > .cpv2-page-rows { flex: none; min-height: 700px; }
+.cpv2-page-rows { display: flex; flex-direction: column; gap: 3px; }
+.cpv2-page-row { display: flex; flex-direction: row; gap: 3px; height: 175px; }
+.cpv2-bay-box { flex: 1 1 0; min-width: 0; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
 .cpv2-single-box .cpv2-single-half { flex: 1 1 0; display: flex; flex-direction: column; }
 .cpv2-single-box .cpv2-empty-half { flex: 1 1 0; }
 .cpv2-bay-section { flex: 1 1 0; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding: 4px 3px; min-height: 0; position: relative; }
@@ -74,14 +75,14 @@ const CSS = `
 .cpv2-bay-content { display: flex; flex-direction: column; align-items: center; flex: 1; width: 100%; }
 .cpv2-deck-area { flex: 6 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%; min-height: 0; }
 .cpv2-hold-area { flex: 4 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100%; min-height: 0; }
-.cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-width: 0; width: 100%; }
-.cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
-.cpv2-tier-row { display: flex; gap: 0; height: 13px; flex-shrink: 0; }
+.cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; }
+.cpv2-grid { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.cpv2-tier-row { display: flex; gap: 0; height: 13px; justify-content: center; flex-shrink: 0; }
 .cpv2-tier-row.cpv2-invisible-row { visibility: hidden; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; max-width: 22px; width: auto; height: 13px; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(6px, 1.2vw, 9px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; overflow: hidden; }
-.cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; max-width: 22px; width: auto; height: 13px; visibility: hidden; }
-.cpv2-row-labels { display: flex; justify-content: stretch; font-size: clamp(5px, 0.8vw, 7px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
-.cpv2-row-labels > span { flex: 1 1 0; min-width: 0; max-width: 22px; text-align: center; line-height: 1.2; }
+.cpv2-tier-row .cpv2-cell { flex: 0 0 18px; width: 18px; height: 13px; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: 8px; display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; }
+.cpv2-tier-row .cpv2-cell-empty { flex: 0 0 18px; width: 18px; height: 13px; visibility: hidden; }
+.cpv2-row-labels { display: flex; justify-content: center; font-size: 7px; color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
+.cpv2-row-labels > span { flex: 0 0 18px; width: 18px; text-align: center; line-height: 1.2; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; background: #f0f0f0; }
 .cpv2-cell.cpv2-mark-R { color: #006064; background: #b2ebf2; }
@@ -396,30 +397,32 @@ export default function PrintableCargoPlanV2({
       ? `${(effShipName || '').toUpperCase()} CARGO DISCHARGING PLAN`
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
-  // M6.86.8.8: 동적 auto-scale — 컨텐츠가 페이지에 안 들어가면 자동 축소
-  //   지침서 §4.1 "A4 한 장 안에 모두" 규칙. 큰 배(20컬럼 베이)도 한 장에 들어가도록.
-  //   transform: scale은 layout 영향 없어서 scrollWidth/Height는 안 바뀜 → 무한 루프 X.
+  // M6.86.8.10: Auto-scale (제대로) — inner를 absolute로 띄워 자연 크기 측정
+  //   inner는 width: 1100px (overflow에 영향 없음), scrollWidth/Height = 자연 크기
+  //   페이지 가용 공간에 맞게 scale 적용 → 큰 배도 한 장에
   const pageRef = useRef(null);
+  const wrapRef = useRef(null);
   const innerRef = useRef(null);
   const [scale, setScale] = useState(1);
   useLayoutEffect(() => {
     const measure = () => {
-      const page = pageRef.current;
+      const wrap = wrapRef.current;
       const inner = innerRef.current;
-      if (!page || !inner) return;
-      // inner의 natural (pre-scale) 크기 측정 — scale 무관
+      if (!wrap || !inner) return;
       const cw = inner.scrollWidth;
       const ch = inner.scrollHeight;
-      const pw = page.clientWidth - 8;
-      const ph = page.clientHeight - 60;  // header + 약간의 여백
-      if (cw <= 0 || ch <= 0) return;
-      const s = Math.min(1, pw / cw, ph / ch);
-      setScale(s > 0.3 ? s : 0.3);  // 너무 작게는 안 줄임
+      const pw = wrap.clientWidth;
+      const ph = wrap.clientHeight;
+      if (cw <= 0 || ch <= 0 || pw <= 0 || ph <= 0) return;
+      const s = Math.min(pw / cw, ph / ch);
+      setScale(Math.max(0.25, Math.min(1.5, s)));
     };
     measure();
     const obs = new ResizeObserver(measure);
-    if (pageRef.current) obs.observe(pageRef.current);
-    return () => obs.disconnect();
+    if (wrapRef.current) obs.observe(wrapRef.current);
+    if (innerRef.current) obs.observe(innerRef.current);
+    const t = setTimeout(measure, 100);  // 두 번째 측정 (layout 안정화 후)
+    return () => { obs.disconnect(); clearTimeout(t); };
   }, [containers, layout, legends]);
 
   return (
@@ -432,14 +435,13 @@ export default function PrintableCargoPlanV2({
           <div className="title-center">{title}</div>
           <div className="col">DATE : {today}</div>
         </div>
+        <div className="cpv2-scaler-wrap" ref={wrapRef}>
         <div
           className="cpv2-scaler"
           ref={innerRef}
           style={{
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
-            width: `${100 / scale}%`,
-            height: `${100 / scale}%`,
           }}
         >
         <div className="cpv2-page-rows">
@@ -493,6 +495,7 @@ export default function PrintableCargoPlanV2({
               <div key={ri} className="cpv2-page-row">{slots}</div>
             );
           })}
+        </div>
         </div>
         </div>
       </div>

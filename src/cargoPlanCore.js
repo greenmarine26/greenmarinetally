@@ -303,11 +303,14 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
 
   const deckMax = deckCells.length > 0 ? Math.max(...deckCells) : 10;
-  const holdMax = holdCells.length > 0 ? Math.max(...holdCells) : deckMax;
+  // M6.86.8.10: 카스피 정답 양식 — hold 폭을 deck 폭과 통일.
+  //   M6.81 Python은 hold_max 따로 계산했지만 카스피는 deck/hold 동일 row 라벨.
+  //   hull 단면 차이는 active cells로만 표현 (hold cells가 작으면 active 좁고 나머지 invisible).
+  //   효과: deck/hold has_zero 일관, hold 우측 셀 잘림 없음 (cell-empty 자리만 차지).
   const deckRowPos = getRowPositions(deckMax, hasZero);
-  const holdRowPos = nHold > 0 ? getRowPositions(holdMax, hasZero) : deckRowPos;
+  const holdRowPos = deckRowPos;
   const nDeckCols = deckRowPos.length;
-  const nHoldCols = holdRowPos.length;
+  const nHoldCols = nDeckCols;
 
   const bayMarks = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn);
 
@@ -334,26 +337,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     }
   });
 
-  // hold tier별 셀 배열 (자리 통일: STANDARD_HOLD 4 tier)
-  const offset = (nDeckCols - nHoldCols) / 2;
+  // hold tier별 셀 배열 (카스피 정답: deck 폭과 동일, hull 단면은 active cells로)
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
-      const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
-      const activeInDeck = new Set();
-      for (const a of activeInHold) activeInDeck.add(a + offset);
+      // deck 폭 기준으로 active 결정 (가운데부터 cc 개 활성, 나머지 invisible)
+      const activeInDeck = getActiveColsSymmetric(cc, nDeckCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeInDeck.has(c)) {
-          const holdC = c - offset;
-          if (holdC >= 0 && holdC < nHoldCols) {
-            const rowLbl = holdRowPos[holdC];
-            cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null });
-          } else {
-            cells.push({ active: false, rowLbl: null, mark: null });
-          }
+          const rowLbl = deckRowPos[c];
+          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null });
         }
