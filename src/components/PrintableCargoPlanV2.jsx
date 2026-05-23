@@ -123,14 +123,12 @@ const CSS = `
 .cpv2-legend-ct { font-size: 7.5px; text-align: center; }
 .cpv2-legend-total { background: #f0f0f0; }
 @media print {
-  /* M6.86.8.16: visibility 패턴 — body 전체 invisible, V2 overlay만 visible.
-     이전 display:none은 dark body bg를 가리지 못해 검정 화면. visibility는 background 무시. */
-  html, body { background: white !important; }
-  body * { visibility: hidden !important; }
-  .cpv2-overlay, .cpv2-overlay * { visibility: visible !important; }
+  /* M6.86.8.18: display:none + body bg white 조합.
+     이전 visibility 패턴은 자리 차지 → V2가 페이지 끝에 밀림. 원복 + body 배경만 직접 white. */
+  html, body { background: white !important; background-color: white !important; }
+  body > *:not(.cpv2-overlay) { display: none !important; }
   .cpv2-overlay {
-    position: absolute !important;
-    top: 0 !important; left: 0 !important; right: 0 !important; bottom: auto !important;
+    position: static !important;
     inset: auto !important;
     background: white !important;
     padding: 0 !important;
