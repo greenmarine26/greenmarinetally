@@ -404,16 +404,13 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(10)];
   if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(8)];
 
-  // M6.86.8.25: deck/hold row 라벨 분리.
-  //   페어 박스 베이라도 HOLD는 odd-bay 단독 박스 구조 (cell이 odd-bay에 속함)
-  //   → deck = rowMax(pair면 rowMaxEven), hold = rowMaxOdd 우선 적용
-  //   예) DXQD 페어 박스: deck=8칸 [08,06,04,02,01,03,05,07], hold=7칸 [06,04,02,01,03,05,07] (08 없음)
-  //   PrintableCargoPlanV2에서 nHoldCols/nDeckCols 비율로 hold를 좁게 가운데 정렬.
+  // M6.86.8.23: deck/hold 모두 같은 row 라벨 사용 (베이사전 rowMaxOdd/Even 기준).
+  //   v5_matrix의 cells 숫자는 hull 단면 active 결정용으로만 사용 (없거나 부정확하면 모두 가득).
+  //   row 라벨 자체는 베이사전이 정답.
   const deckRowPos = getRowPositions(rowMax, hasZero);
-  const holdRowMax = rowMaxOdd || rowMax;
-  const holdRowPos = getRowPositions(holdRowMax, hasZero);
+  const holdRowPos = deckRowPos; // 같은 row 라벨 공유
   const nDeckCols = deckRowPos.length;
-  const nHoldCols = holdRowPos.length;
+  const nHoldCols = nDeckCols;
   const holdOffset = 0;
 
   const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
