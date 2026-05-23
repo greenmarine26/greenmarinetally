@@ -355,13 +355,14 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
   const bayData = matrixBays.find(b => b.bayNum === oddNum);
 
-  // M6.86.8.24: EDI 실데이터로 has_zero 검증 + rowMax 적용
-  //   - 단독 홀수 박스: rowMaxOdd (DXQD=7 → 라벨 [06,04,02,01,03,05,07])
-  //   - 페어 박스: rowMaxEven (DXQD=8 → 라벨 [08,06,04,02,01,03,05,07])
-  //   - has_zero: 베이의 EDI 컨테이너에 row 0이 있는지로 결정 (사용자 지적: 추측 X, 실데이터)
+  // M6.90.0: deck/hold 별도 row max (사용자 지적).
+  //   - deck row max = rowMaxEven (예: DXQD=8 → 라벨 [08,06,04,02,01,03,05,07])
+  //   - hold row max = rowMaxOdd (예: DXQD=7 → 라벨 [06,04,02,01,03,05,07])
+  //   페어/단독 박스 구분 없음 (베이의 deck/hold 영역마다 자체 row max).
   const rowMaxOdd = shipBayDef?.rowMaxOdd;
   const rowMaxEven = shipBayDef?.rowMaxEven;
-  const rowMax = isPair ? (rowMaxEven || rowMaxOdd || 10) : (rowMaxOdd || rowMaxEven || 9);
+  const deckRowMax = rowMaxEven || rowMaxOdd || 10;
+  const holdRowMax = rowMaxOdd || rowMaxEven || 9;
 
   // has_zero 검증: posMap에서 해당 베이의 컨테이너 row 집합 확인
   const ediRows = new Set();
@@ -392,27 +393,25 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
   } else {
-    deckCells = new Array(nDeck).fill(rowMax);
+    deckCells = new Array(nDeck).fill(deckRowMax);
   }
   if (bayData?.holdCells && bayData.holdCells.length > 0) {
     holdCells = bayData.holdCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else {
-    holdCells = new Array(nHold).fill(rowMax);
+    holdCells = new Array(nHold).fill(holdRowMax);
   }
   // 길이 보정 (cells 부족하면 rowMax로 채움)
-  if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(rowMax)];
-  if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(rowMax)];
+  if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(deckRowMax)];
+  if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(holdRowMax)];
 
-  // M6.86.8.23: deck/hold 모두 같은 row 라벨 사용 (베이사전 rowMaxOdd/Even 기준).
-  //   v5_matrix의 cells 숫자는 hull 단면 active 결정용으로만 사용 (없거나 부정확하면 모두 가득).
-  //   row 라벨 자체는 베이사전이 정답.
-  const deckRowPos = getRowPositions(rowMax, hasZero);
-  const holdRowPos = deckRowPos; // 같은 row 라벨 공유
+  // M6.90.0: deck/hold row labels 별도. cells 자체 폭 + CSS center로 박스 안 정렬.
+  const deckRowPos = getRowPositions(deckRowMax, hasZero);
+  const holdRowPos = getRowPositions(holdRowMax, hasZero);
   const nDeckCols = deckRowPos.length;
-  const nHoldCols = nDeckCols;
-  const holdOffset = 0;
+  const nHoldCols = holdRowPos.length;
+  const holdOffset = 0; // hold 자체 폭 사용 — CSS center 정렬
 
   const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 
