@@ -7,6 +7,7 @@ import { X, FileText, Grid3x3, Ship, ArrowDown, ArrowUp, Printer } from 'lucide-
 import { openInspectionListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlan from './PrintableCargoPlan.jsx';
+import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
@@ -152,6 +153,21 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
           xrayMap={xrayMap}
           globalRowRange={globalRowRange}
           globalTiers={globalTiers}
+          onClose={() => setPrintSub(null)}
+        />
+      </ErrorBoundary>
+    );
+  }
+  if (printSub === 'cargo-v2') {
+    return (
+      <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintSub(null)}>
+        <PrintableCargoPlanV2
+          containers={printContainers}
+          mode={mode}
+          voyageInfo={voyageInfo}
+          shipImo={shipImo}
+          shipName={shipName}
+          xrayMap={xrayMap}
           onClose={() => setPrintSub(null)}
         />
       </ErrorBoundary>
@@ -309,12 +325,27 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
               >
                 <Grid3x3 className="w-8 h-8 text-cyan-400 shrink-0" />
                 <div className="flex-1">
-                  <div className="font-bold text-slate-100">📐 카고플랜</div>
+                  <div className="font-bold text-slate-100">📐 카고플랜 (기존)</div>
                   <div className="text-xs text-slate-400 mt-0.5">
                     베이별 컨테이너 배치도 · 특수화물 + X-RAY 표시
                   </div>
                 </div>
                 <Printer className="w-4 h-4 text-slate-500" />
+              </button>
+
+              {/* 2-V2. 카고플랜 V2 (M6.81 알고리즘 회귀) */}
+              <button
+                onClick={() => setPrintSub('cargo-v2')}
+                className="w-full bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 rounded-lg p-4 text-left flex items-center gap-3"
+              >
+                <Grid3x3 className="w-8 h-8 text-emerald-300 shrink-0" />
+                <div className="flex-1">
+                  <div className="font-bold text-emerald-100">🆕 카고플랜 V2 · M6.81 회귀</div>
+                  <div className="text-xs text-emerald-200 mt-0.5">
+                    카스피·M6.81 HTML 정답 양식 그대로 · STD 6deck+4hold 자리 통일, 베이별 cells hull 단면
+                  </div>
+                </div>
+                <Printer className="w-4 h-4 text-emerald-400" />
               </button>
 
               {/* 3. 베이 상세 */}

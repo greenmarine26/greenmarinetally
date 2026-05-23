@@ -379,6 +379,26 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.86.8 (2026-05-23) — M6.81 Universal 알고리즘 회귀, 카고플랜 V2 도입',
+      examples: [
+        { q: '🔥 사용자 보고', a: '카스피와 완전히 같았던 M6.81 양식이 M6.86.x로 오면서 또 깨짐. BAY 07이 카스피는 10컬럼인데 검수앱은 5컬럼. BAY 11에 00이 잘못 추가. BAY 28을 트리오 (28)29로 인식 못함 등. 사용자 요청: HTML 방식으로 다른 선박도 다 고쳐달라.' },
+        { q: '🔍 진짜 원인', a: 'M6.86.7 알고리즘이 베이사전 hull 정의 무시하고 EDI 데이터에 있는 컬럼만 그림. M6.81 Python 정답 알고리즘의 STD 6deck+4hold 자리 통일 + cells 기반 피라미드 단면을 폐기. 지침서 §4.1 "STD baseline 없음" 메모가 잘못된 진단의 흔적.' },
+        { q: '✅ 해결 (M6.81 Python을 JS로 1:1 포팅)', a: 'src/cargoPlanCore.js 신규: M6.81 4함수 그대로 (autoPairBays, generatePdfBays, autoPageLayout, getRowPositions, getActiveColsSymmetric, buildBayMarks, computeBayRenderData). STANDARD_DECK=[92,90,88,86,84,82], STANDARD_HOLD=[8,6,4,2] 복원. STSE 2631E 15개 베이 row_labels 모두 M6.81 HTML 정답과 1:1 일치 확인.' },
+        { q: '🆕 V2 도입 (V1과 토글)', a: 'PrintableCargoPlanV2.jsx 신규. 인쇄 허브에 "🆕 카고플랜 V2 · M6.81 회귀" 버튼 추가. V1(기존 회귀판)은 한동안 병행 운영. V2 시각 확인 후 V1 폐기 예정.' },
+        { q: '🔧 검수앱 고유 마크 보존', a: 'AWK→A, OOG→A, Empty→E, 빈 리퍼→r, FR→F (M6.81의 P 아닌 F), Tank→T, DG→D, 통과→X, PTK 일반→o. 선적 모드는 POD 첫글자 (K=KAN, P=PUS, S=SGN, M=MIP).' },
+        { q: '🚫 다음 패치 예정', a: '(1) 선사별/화물종류별 별첨 통합 (M6.81 별첨1/별첨2), (2) 선적 모드 POD 컬러 코딩 세부, (3) X-Ray 표시 점, (4) V1 폐기.' },
+      ],
+    },
+    {
+      title: '🩹 M6.86.7.2 (2026-05-23) — 검정 화면 핫픽스 (M6.86.7.1 잘못된 진단 회귀)',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'M6.86.7.1 push 후 폰/PC 모두 검정 화면. 콘솔: GET /src/main.jsx 404, GET /manifest.webmanifest 404.' },
+        { q: '🔍 진짜 원인', a: 'M6.86.7.1 핫픽스가 "CI가 dist만 GitHub Pages artifact로 업로드"라고 가정해 루트 index.html을 소스형(/src/main.jsx)으로 바꿨음. 실제 운영: 사용자가 누적 ZIP을 main 루트에 덮어쓰기 push, GitHub Pages는 main 루트 index.html을 직접 서빙. 소스형이 production에 그대로 노출되어 모듈 404 → 검정 화면.' },
+        { q: '✅ 해결', a: '루트 index.html을 빌드본(dist/index.html 복사본, ./assets/index-XXX.js 참조)으로 회귀. build.sh의 [5/5]에 cp dist/index.html ./ 복구. sw.js VERSION을 M5.78(옛값) → 현재 버전으로 갱신해 캐시 무효화 트리거 정상화. 옛 M6.71 작동 ZIP과 1바이트까지 동일 구조 확인.' },
+        { q: '⚠️ 운영 원칙 (다음 채팅 위해 명시)', a: '워크플로 빌드 색깔(빨간/초록)은 사이트 작동과 무관. 사이트 작동은 main 루트 index.html이 빌드본인가가 결정. 루트 index.html을 절대 소스형으로 두지 말 것.' },
+      ],
+    },
+    {
       title: '🎯 M6.86.7 (2026-05-23) — globalRowRange 페이지 통일 폐기, 베이별 hull 모양 (사용자 마스터 플랜 양식)',
       examples: [
         { q: '🔥 사용자 보고', a: 'M6.86.5/M6.86.6 카고플랜이 모든 선박에 영향: 없던 베이 생기고, 있어야 할 베이 사라지고, 셀이 없는 곳/더 많은 곳 생김. 베이사전 오염 의심. M6.81 마스터 플랜 HTML 양식이 정답 — 베이마다 hull 모양 (BAY 1=7컬럼, BAY 3=9컬럼, BAY 7+=10컬럼). 편법 수정 No, 일반 알고리즘 Yes.' },
