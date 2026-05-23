@@ -149,38 +149,44 @@ function BayBoxV2({ data, count }) {
             </div>
           </div>
         </div>
-        {nHold > 0 && <div className="cpv2-hatch-break"></div>}
-        {nHold > 0 && (
-          <div className="cpv2-hold-area">
-            <div className="cpv2-grid-row-wrap">
-              <div className="cpv2-grid">
-                {holdRows.map((row, ri) => (
-                  <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
-                    {row.cells.map((cell, ci) =>
-                      cell.active ? (
-                        <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}`}>
-                          {cell.mark || ''}
-                        </span>
-                      ) : (
-                        <span key={ci} className="cpv2-cell-empty"></span>
-                      )
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="cpv2-tier-labels">
-                {STANDARD_HOLD.map((t) => (
-                  <span key={t} className={holdTiers.includes(t) ? '' : 'cpv2-invisible-label'}>
-                    {String(t).padStart(2, '0')}
-                  </span>
-                ))}
-              </div>
+        {/* M6.86.8.3 fix: hold-area는 항상 그림. nHold=0이어도 holdRows가 invisible-row로 자리 차지.
+            M6.81 정답: hold 없는 베이도 hatch-break + hold-area 그려서 박스 높이 통일. */}
+        <div className="cpv2-hatch-break"></div>
+        <div className="cpv2-hold-area">
+          <div className="cpv2-grid-row-wrap">
+            <div className="cpv2-grid">
+              {holdRows.map((row, ri) => (
+                <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
+                  {row.cells.map((cell, ci) =>
+                    cell.active ? (
+                      <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}`}>
+                        {cell.mark || ''}
+                      </span>
+                    ) : (
+                      <span key={ci} className="cpv2-cell-empty"></span>
+                    )
+                  )}
+                </div>
+              ))}
             </div>
+            <div className="cpv2-tier-labels">
+              {STANDARD_HOLD.map((t) => (
+                <span key={t} className={holdTiers.includes(t) ? '' : 'cpv2-invisible-label'}>
+                  {String(t).padStart(2, '0')}
+                </span>
+              ))}
+            </div>
+          </div>
+          {nHold > 0 ? (
             <div className="cpv2-row-labels" style={{ width: `${nHoldCols * 18}px` }}>
               {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="cpv2-row-labels" style={{ width: `${nDeckCols * 18}px`, visibility: 'hidden' }}>
+              {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -233,23 +239,30 @@ export default function PrintableCargoPlanV2({
   const layout = useMemo(() => autoPageLayout(trios, singles, 5), [trios, singles]);
   const posMap = useMemo(() => buildPosMap(containers), [containers]);
 
-  // 박스별 카운트
+  // 박스별 카운트 (M6.86.8.3 fix: c.bay가 string("01") or number(1) 양쪽 케이스 안전 처리)
   const boxCounts = useMemo(() => {
     const counts = {};
+    const matchBay = (c, num) => Number(c.bay) === num;
+    const matchPod = (c) => {
+      if (!pod) return true;
+      const cp = String(c.pod || '').toUpperCase();
+      const p = String(pod).toUpperCase();
+      return cp === p || cp.endsWith(p) || p.endsWith(cp);
+    };
     trios.forEach(([top, pair]) => {
       const m = pair.replace('(', '').replace(')', '');
       const even = parseInt(m.slice(0, 2), 10);
       const odd = parseInt(m.slice(2), 10);
       const topOdd = parseInt(top, 10);
-      const cntTop = containers.filter((c) => c.bay === topOdd && c.pod === pod).length;
-      const cntEven = containers.filter((c) => c.bay === even && c.pod === pod).length;
-      const cntOdd = containers.filter((c) => c.bay === odd && c.pod === pod).length;
+      const cntTop = containers.filter((c) => matchBay(c, topOdd) && matchPod(c)).length;
+      const cntEven = containers.filter((c) => matchBay(c, even) && matchPod(c)).length;
+      const cntOdd = containers.filter((c) => matchBay(c, odd) && matchPod(c)).length;
       counts[top] = String(cntTop);
       counts[pair] = `${cntEven + cntOdd}`;
     });
     singles.forEach((s) => {
       const num = parseInt(s, 10);
-      counts[s] = String(containers.filter((c) => c.bay === num && c.pod === pod).length);
+      counts[s] = String(containers.filter((c) => matchBay(c, num) && matchPod(c)).length);
     });
     return counts;
   }, [trios, singles, containers, pod]);
@@ -303,7 +316,7 @@ export default function PrintableCargoPlanV2({
       {closeBtn}
       <div className="cpv2-page">
         <div className="cpv2-banner">
-          <b>✓ M6.86.8.2 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
+          <b>✓ M6.86.8.3 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
         </div>
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>

@@ -202,10 +202,12 @@ export function getActiveColsSymmetric(cellCount, nTotal) {
 // getSelfMarkFn: (container, pod) => 'o'|'R'|'D'|'P'|'U'|'T'|'A'|'G'|'X'
 //   (검수앱 자체 마크 로직을 호출자가 주입 — AWK, OOG 등 검수앱 고유 마크 보존)
 export function buildPosMap(containers) {
+  // bay/tier는 string("01") or number(1) 양쪽 케이스 안전 처리 — Number로 통일
   const posMap = new Map();
   for (const c of containers) {
-    const bay = c.bay;
-    const tier = c.tier;
+    const bay = Number(c.bay);
+    const tier = Number(c.tier);
+    if (!Number.isFinite(bay) || !Number.isFinite(tier)) continue;
     const rowLbl = String(c.row).padStart(2, '0');
     const key = `${bay}|${tier}`;
     if (!posMap.has(key)) posMap.set(key, new Map());
