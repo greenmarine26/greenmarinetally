@@ -292,7 +292,7 @@ export default function PrintableCargoPlanV2({
       <style>{CSS}</style>
       {closeBtn}
       <div className="cpv2-banner">
-        <b>✓ M6.86.8 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
+        <b>✓ M6.86.8.1 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
       </div>
       <div className="cpv2-page-header">
         <div className="col">VOY NO : {effVoyNo}</div>

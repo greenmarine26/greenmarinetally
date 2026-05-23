@@ -22,6 +22,7 @@ import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
 // M4.6: 인쇄 컴포넌트
 import PrintableCargoPlan from './PrintableCargoPlan.jsx';
+import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
@@ -572,8 +573,16 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   className="w-full px-3 py-2 text-left hover:bg-cyan-900 text-xs text-cyan-100 border-b border-slate-700 flex items-center gap-2">
                   <span className="text-base">📄</span>
                   <div>
-                    <div className="font-black">카고 플랜</div>
+                    <div className="font-black">카고 플랜 (기존)</div>
                     <div className="text-[10px] text-slate-400">요약 1페이지</div>
+                  </div>
+                </button>
+                <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
+                  className="w-full px-3 py-2 text-left hover:bg-emerald-900 text-xs text-emerald-100 border-b border-slate-700 flex items-center gap-2 bg-emerald-950">
+                  <span className="text-base">🆕</span>
+                  <div>
+                    <div className="font-black">카고 플랜 V2 · M6.81 회귀</div>
+                    <div className="text-[10px] text-emerald-300">카스피 양식 그대로</div>
                   </div>
                 </button>
                 <button onClick={() => { setPrintMode('detail'); setPrintMenuOpen(false); }}
@@ -855,6 +864,19 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             globalRowRange={globalRowRange}
             globalTiers={globalTiers}
             dictBaysSummary={dictBaysSummary}
+            onClose={() => setPrintMode(null)}
+          />
+        </ErrorBoundary>
+      )}
+      {printMode === 'cargo-v2' && (
+        <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintMode(null)}>
+          <PrintableCargoPlanV2
+            containers={containers}
+            mode={mode}
+            voyageInfo={voyageInfo}
+            shipImo={shipImo}
+            shipName={shipName}
+            xrayMap={xrayMap}
             onClose={() => setPrintMode(null)}
           />
         </ErrorBoundary>
