@@ -279,11 +279,14 @@ export default function PrintableCargoPlanV2({
     if (lbl.startsWith('40') || /^4[0-9][A-Z0-9]{2}$/.test(lbl)) return '40';
     return '20';
   };
+  // M6.86.8.7: 양하 별첨/카운트는 평택분(PTK)만 강제 (사용자 약속).
+  //   양하 mode → POD가 PTK 포함된 것만
+  //   선적 mode → POL이 PTK 포함된 것만
   const matchPodC = (c) => {
-    if (!pod) return true;
-    const cp = String(c.pod || '').toUpperCase();
-    const p = String(pod).toUpperCase();
-    return cp === p || cp.endsWith(p) || p.endsWith(cp);
+    if (mode === 'discharge') {
+      return c.pod && String(c.pod).toUpperCase().includes('PTK');
+    }
+    return c.pol && String(c.pol).toUpperCase().includes('PTK');
   };
   const boxCounts = useMemo(() => {
     const matchBay = (c, num) => Number(c.bay) === num;
@@ -327,7 +330,9 @@ export default function PrintableCargoPlanV2({
     for (const c of containers) {
       if (!matchPodC(c)) continue;
       const size = sizeOfC(c);
-      const carrier = c.carrier || (c.cn ? String(c.cn).slice(0, 3) : 'UNK');
+      // M6.86.8.7: 선사 = c.op (NAD+CA 파싱 결과, 평택항 선사 10개 초반)
+      //   주의: c.cn 첫 3자는 BIC 코드(컨테이너 소유사)이지 선사가 아님 — 절대 사용 금지
+      const carrier = (c.op && String(c.op).trim()) || 'UNK';
       addTo(carrierCounts, carrier, size);
       let cat = '일반';
       if (c.dg) cat = 'DG';
