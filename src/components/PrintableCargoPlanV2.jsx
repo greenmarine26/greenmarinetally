@@ -74,14 +74,14 @@ const CSS = `
 .cpv2-bay-content { display: flex; flex-direction: column; align-items: center; flex: 1; width: 100%; }
 .cpv2-deck-area { flex: 6 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%; min-height: 0; }
 .cpv2-hold-area { flex: 4 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100%; min-height: 0; }
-.cpv2-row-labels { display: flex; justify-content: center; font-size: 7px; color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
-.cpv2-row-labels > span { flex: 0 0 18px; width: 18px; text-align: center; line-height: 1.2; }
-.cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; }
-.cpv2-grid { display: flex; flex-direction: column; align-items: center; gap: 0; }
-.cpv2-tier-row { display: flex; gap: 0; height: 13px; justify-content: center; }
+.cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-width: 0; width: 100%; }
+.cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
+.cpv2-tier-row { display: flex; gap: 0; height: 13px; flex-shrink: 0; }
 .cpv2-tier-row.cpv2-invisible-row { visibility: hidden; }
-.cpv2-tier-row .cpv2-cell { flex: 0 0 18px; width: 18px; height: 13px; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: 8px; display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; }
-.cpv2-tier-row .cpv2-cell-empty { flex: 0 0 18px; width: 18px; height: 13px; visibility: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; max-width: 22px; width: auto; height: 13px; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(6px, 1.2vw, 9px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; max-width: 22px; width: auto; height: 13px; visibility: hidden; }
+.cpv2-row-labels { display: flex; justify-content: stretch; font-size: clamp(5px, 0.8vw, 7px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
+.cpv2-row-labels > span { flex: 1 1 0; min-width: 0; max-width: 22px; text-align: center; line-height: 1.2; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; background: #f0f0f0; }
 .cpv2-cell.cpv2-mark-R { color: #006064; background: #b2ebf2; }
@@ -134,7 +134,7 @@ function BayBoxV2({ data, count }) {
       </div>
       <div className="cpv2-bay-content">
         <div className="cpv2-deck-area">
-          <div className="cpv2-row-labels" style={{ width: `${nDeckCols * 18}px` }}>
+          <div className="cpv2-row-labels">
             {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
           <div className="cpv2-grid-row-wrap">
@@ -191,11 +191,11 @@ function BayBoxV2({ data, count }) {
             </div>
           </div>
           {nHold > 0 ? (
-            <div className="cpv2-row-labels" style={{ width: `${nHoldCols * 18}px` }}>
+            <div className="cpv2-row-labels">
               {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           ) : (
-            <div className="cpv2-row-labels" style={{ width: `${nDeckCols * 18}px`, visibility: 'hidden' }}>
+            <div className="cpv2-row-labels" style={{ visibility: 'hidden' }}>
               {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           )}
