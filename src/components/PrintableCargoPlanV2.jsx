@@ -7,7 +7,7 @@
 // 보존: 검수앱 고유 마크 (AWK='A', OOG='A', Empty='E', Reefer 빈='r'), POD 컬러
 // 미통합 (다음 패치 예정): 선사별 별첨, 화물 종류별 별첨, 선적 모드 POD 컬러 매핑
 // ============================================================
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isReeferContainer } from '../utils.js';
@@ -60,6 +60,8 @@ const CSS = `
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
 .cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
+.cpv2-scaler { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+.cpv2-scaler > .cpv2-page-rows { flex: 1 1 0; }
 .cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-bay-box { flex: 1 1 0; min-width: 0; width: 0; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
 .cpv2-single-box .cpv2-single-half { flex: 1 1 0; display: flex; flex-direction: column; }
@@ -394,16 +396,52 @@ export default function PrintableCargoPlanV2({
       ? `${(effShipName || '').toUpperCase()} CARGO DISCHARGING PLAN`
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
+  // M6.86.8.8: 동적 auto-scale — 컨텐츠가 페이지에 안 들어가면 자동 축소
+  //   지침서 §4.1 "A4 한 장 안에 모두" 규칙. 큰 배(20컬럼 베이)도 한 장에 들어가도록.
+  //   transform: scale은 layout 영향 없어서 scrollWidth/Height는 안 바뀜 → 무한 루프 X.
+  const pageRef = useRef(null);
+  const innerRef = useRef(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const page = pageRef.current;
+      const inner = innerRef.current;
+      if (!page || !inner) return;
+      // inner의 natural (pre-scale) 크기 측정 — scale 무관
+      const cw = inner.scrollWidth;
+      const ch = inner.scrollHeight;
+      const pw = page.clientWidth - 8;
+      const ph = page.clientHeight - 60;  // header + 약간의 여백
+      if (cw <= 0 || ch <= 0) return;
+      const s = Math.min(1, pw / cw, ph / ch);
+      setScale(s > 0.3 ? s : 0.3);  // 너무 작게는 안 줄임
+    };
+    measure();
+    const obs = new ResizeObserver(measure);
+    if (pageRef.current) obs.observe(pageRef.current);
+    return () => obs.disconnect();
+  }, [containers, layout, legends]);
+
   return (
     <div className="cpv2-overlay">
       <style>{CSS}</style>
       {closeBtn}
-      <div className="cpv2-page">
+      <div className="cpv2-page" ref={pageRef}>
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
           <div className="col">DATE : {today}</div>
         </div>
+        <div
+          className="cpv2-scaler"
+          ref={innerRef}
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+            width: `${100 / scale}%`,
+            height: `${100 / scale}%`,
+          }}
+        >
         <div className="cpv2-page-rows">
           {layout.map((row, ri) => {
             const isLast = ri === layout.length - 1;
@@ -455,6 +493,7 @@ export default function PrintableCargoPlanV2({
               <div key={ri} className="cpv2-page-row">{slots}</div>
             );
           })}
+        </div>
         </div>
       </div>
     </div>
