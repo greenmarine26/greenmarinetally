@@ -345,14 +345,17 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
 
   const deckMax = deckCells.length > 0 ? Math.max(...deckCells) : 10;
-  // M6.86.8.10: 카스피 정답 양식 — hold 폭을 deck 폭과 통일.
-  //   M6.81 Python은 hold_max 따로 계산했지만 카스피는 deck/hold 동일 row 라벨.
-  //   hull 단면 차이는 active cells로만 표현 (hold cells가 작으면 active 좁고 나머지 invisible).
-  //   효과: deck/hold has_zero 일관, hold 우측 셀 잘림 없음 (cell-empty 자리만 차지).
-  const deckRowPos = getRowPositions(deckMax, hasZero);
-  const holdRowPos = deckRowPos;
+  const holdMax = holdCells.length > 0 ? Math.max(...holdCells) : deckMax;
+  // M6.86.8.15: M6.81 Python 정답 그대로 — hold는 자체 폭, deck center에 offset 정렬
+  //   has_zero는 각자 max로 결정 (deck_max%2, hold_max%2 각각)
+  //   offset = (n_deck_cols - n_hold_cols) // 2 → hold cells가 deck 가운데에 hull center 매핑
+  const deckHasZero = deckMax % 2 === 1;
+  const holdHasZero = holdMax % 2 === 1;
+  const deckRowPos = getRowPositions(deckMax, deckHasZero);
+  const holdRowPos = getRowPositions(holdMax, holdHasZero);
   const nDeckCols = deckRowPos.length;
-  const nHoldCols = nDeckCols;
+  const nHoldCols = holdRowPos.length;
+  const holdOffset = Math.floor((nDeckCols - nHoldCols) / 2);
 
   const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 
@@ -382,12 +385,15 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     }
   });
 
-  // hold tier별 셀 배열 (카스피 정답: deck 폭과 동일, hull 단면은 active cells로)
+  // hold tier별 셀 배열 — M6.81 정답: hold 자체 폭에서 hull center → deck 폭 안 offset 위치
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
-      const activeInDeck = getActiveColsSymmetric(cc, nDeckCols);
+      const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
+      // hold 폭 기준 active → deck 폭 안 offset 적용
+      const activeInDeck = new Set();
+      for (const a of activeInHold) activeInDeck.add(a + holdOffset);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
@@ -395,8 +401,9 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeInDeck.has(c)) {
-          const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null, isThrough: !!rowThroughs.get(rowLbl) });
+          const holdC = c - holdOffset;
+          const rowLbl = (holdC >= 0 && holdC < nHoldCols) ? holdRowPos[holdC] : null;
+          cells.push({ active: true, rowLbl, mark: rowLbl ? (rowMarks.get(rowLbl) || null) : null, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false });
         }

@@ -123,13 +123,38 @@ const CSS = `
 .cpv2-legend-ct { font-size: 7.5px; text-align: center; }
 .cpv2-legend-total { background: #f0f0f0; }
 @media print {
-  /* M6.86.8.14: 인쇄 시 검수앱 메인 화면 안 나오게 — overlay만 보이고 다른 body 자식 모두 숨김.
-     V2가 createPortal로 body 직접 자식이라 body > .cpv2-overlay 패턴 정확히 작동. */
-  body > *:not(.cpv2-overlay) { display: none !important; }
-  .cpv2-overlay { position: static !important; background: white !important; padding: 0 !important; overflow: visible !important; display: block !important; height: auto !important; }
-  .cpv2-page { box-shadow: none !important; margin: 0 !important; height: auto !important; min-height: 0 !important; width: 100% !important; padding: 4mm !important; }
+  /* M6.86.8.16: visibility 패턴 — body 전체 invisible, V2 overlay만 visible.
+     이전 display:none은 dark body bg를 가리지 못해 검정 화면. visibility는 background 무시. */
+  html, body { background: white !important; }
+  body * { visibility: hidden !important; }
+  .cpv2-overlay, .cpv2-overlay * { visibility: visible !important; }
+  .cpv2-overlay {
+    position: absolute !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: auto !important;
+    inset: auto !important;
+    background: white !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    height: auto !important;
+    width: 100% !important;
+    box-shadow: none !important;
+  }
+  .cpv2-page {
+    background: white !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    padding: 4mm !important;
+  }
   .cpv2-noprint { display: none !important; }
-  .cpv2-cell, .cpv2-legend-mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cpv2-cell, .cpv2-legend-mark, .cpv2-bay-box {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
   @page { size: A4 landscape; margin: 6mm; }
 }
 `;
