@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isReeferContainer } from '../utils.js';
+import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
   generatePdfBays,
@@ -532,7 +533,7 @@ export default function PrintableCargoPlanV2({
     });
     singles.forEach((s) => allKeys.push(s));
     for (const key of allKeys) {
-      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap, getColorKey, getIsThrough, dictData?.bayDef);
+      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap, getColorKey, getIsThrough, dictData?.bayDef, dictData?.code);
     }
     return map;
   }, [pdfBays, matrixBays, posMap, pod, mode, trios, singles]);

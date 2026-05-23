@@ -339,7 +339,12 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
 // 6. 한 베이의 모든 렌더 데이터를 한 번에 계산 (편의 함수)
 // ------------------------------------------------------------
 // 컴포넌트는 이 함수가 반환하는 객체를 그대로 JSX로 렌더.
-export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shipBayDef) {
+import { getBayOverride } from './data/shipBayDict_pdf_override.js';
+
+// M6.91.0: PDF STOWAGE INSTRUCTION에서 추출한 베이별 정답 데이터 사용 (DJCT/SWAT 우선).
+//   override가 있으면 추측 안 함. 없으면 베이사전 기본 fallback.
+
+export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shipBayDef, shipCode) {
   const pdf = pdfBays[bayKey];
   if (!pdf) return null;
 
@@ -352,32 +357,35 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
   const bayData = matrixBays.find(b => b.bayNum === oddNum);
 
-  // M6.90.0: deck/hold 별도 row max (사용자 지적).
-  //   - deck row max = rowMaxEven (예: DXQD=8 → 라벨 [08,06,04,02,01,03,05,07])
-  //   - hold row max = rowMaxOdd (예: DXQD=7 → 라벨 [06,04,02,01,03,05,07])
-  //   페어/단독 박스 구분 없음 (베이의 deck/hold 영역마다 자체 row max).
+  // M6.91.0: PDF override가 있으면 그대로 사용 (베이마다 다른 row 구조 정확히)
+  const override = getBayOverride(shipCode, oddNum);
   const rowMaxOdd = shipBayDef?.rowMaxOdd;
   const rowMaxEven = shipBayDef?.rowMaxEven;
-  const deckRowMax = rowMaxEven || rowMaxOdd || 10;
-  const holdRowMax = rowMaxOdd || rowMaxEven || 9;
-
-  // has_zero 검증: posMap에서 해당 베이의 컨테이너 row 집합 확인
-  const ediRows = new Set();
-  const bayNumsToCheck = isPair
-    ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
-    : [oddNum];
-  for (const [key, rowMap] of posMap.entries()) {
-    const [bb] = key.split('|').map(Number);
-    if (bayNumsToCheck.includes(bb)) {
-      for (const [rowLbl] of rowMap.entries()) {
-        ediRows.add(Number(rowLbl));
+  // override.rowCount = row 라벨 총 개수 (getRowPositions cellCount 인자)
+  const deckRowMax = override ? override.rowCount : (rowMaxEven || rowMaxOdd || 10);
+  const holdRowMax = override ? override.rowCount : (rowMaxOdd || rowMaxEven || 9);
+  let hasZero;
+  if (override) {
+    hasZero = override.hasZero;
+  } else {
+    // EDI 검증 fallback
+    const ediRows = new Set();
+    const bayNumsToCheck = isPair
+      ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
+      : [oddNum];
+    for (const [key, rowMap] of posMap.entries()) {
+      const [bb] = key.split('|').map(Number);
+      if (bayNumsToCheck.includes(bb)) {
+        for (const [rowLbl] of rowMap.entries()) ediRows.add(Number(rowLbl));
       }
     }
+    hasZero = ediRows.has(0);
   }
-  const hasZero = ediRows.has(0);
 
-  const deckTiers = bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t;
-  const holdTiers = bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t;
+  const deckTiers = override?.deckTiers
+    || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
+  const holdTiers = override?.holdTiers
+    || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
