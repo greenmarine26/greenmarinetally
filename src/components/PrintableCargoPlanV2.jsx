@@ -124,7 +124,7 @@ const CSS = `
 // ------------------------------------------------------------
 // BayBox 단일 베이 렌더
 // ------------------------------------------------------------
-function BayBoxV2({ data, count }) {
+function BayBoxV2({ data, count, colorMap = {} }) {
   if (!data) return null;
   const { bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols, deckRowPos, holdRowPos, deckRows, holdRows } = data;
   return (
@@ -142,15 +142,19 @@ function BayBoxV2({ data, count }) {
             <div className="cpv2-grid">
               {deckRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
-                  {row.cells.map((cell, ci) =>
-                    cell.active ? (
-                      <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}>
+                  {row.cells.map((cell, ci) => {
+                    if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
+                    const bg = cell.colorKey && colorMap[cell.colorKey];
+                    return (
+                      <span
+                        key={ci}
+                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}
+                        style={bg ? { background: bg, color: '#fff' } : undefined}
+                      >
                         {cell.mark || ''}
                       </span>
-                    ) : (
-                      <span key={ci} className="cpv2-cell-empty"></span>
-                    )
-                  )}
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -171,15 +175,19 @@ function BayBoxV2({ data, count }) {
             <div className="cpv2-grid">
               {holdRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
-                  {row.cells.map((cell, ci) =>
-                    cell.active ? (
-                      <span key={ci} className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}>
+                  {row.cells.map((cell, ci) => {
+                    if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
+                    const bg = cell.colorKey && colorMap[cell.colorKey];
+                    return (
+                      <span
+                        key={ci}
+                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}`}
+                        style={bg ? { background: bg, color: '#fff' } : undefined}
+                      >
                         {cell.mark || ''}
                       </span>
-                    ) : (
-                      <span key={ci} className="cpv2-cell-empty"></span>
-                    )
-                  )}
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -320,10 +328,47 @@ export default function PrintableCargoPlanV2({
     return counts;
   }, [trios, singles, containers, pod]);
 
-  // M6.86.8.6: 선사별 / 화물종류별 카운트 (M6.81 정답 별첨1·2)
+  // M6.86.8.13: 선사별/POD별 컬러 매핑 (사용자 약속)
+  //   양하: 평택분 셀 → 선사(c.op)별 배경 컬러, 별첨1 선사명 옆에 같은 컬러
+  //   선적: 평택분 셀 → POD 3자별 배경 컬러, 별첨1 POD명 옆에 같은 컬러
+  const PALETTE = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#0ea5e9'];
+  const podOf = (c) => {
+    const podUp = String(c.pod || '').toUpperCase();
+    return podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : null);
+  };
+  const colorMap = useMemo(() => {
+    const keys = new Set();
+    containers.forEach(c => {
+      if (!matchPodC(c)) return;
+      if (mode === 'discharge') {
+        const op = c.op && String(c.op).trim();
+        if (op) keys.add(op);
+      } else {
+        const p3 = podOf(c);
+        if (p3 && p3 !== 'PTK') keys.add(p3);
+      }
+    });
+    const map = {};
+    Array.from(keys).sort().forEach((k, i) => {
+      map[k] = PALETTE[i % PALETTE.length];
+    });
+    return map;
+  }, [containers, mode]);
+  const getColorKey = (c) => {
+    if (!matchPodC(c)) return null;
+    if (mode === 'discharge') {
+      return c.op && String(c.op).trim() || null;
+    } else {
+      const p3 = podOf(c);
+      return (p3 && p3 !== 'PTK') ? p3 : null;
+    }
+  };
+
+  // M6.86.8.6: 선사별 / 화물종류별 / POD별 카운트
   const legends = useMemo(() => {
     const carrierCounts = new Map();
     const cargoCounts = new Map();
+    const podCounts = new Map();
     const addTo = (map, key, size) => {
       if (!map.has(key)) map.set(key, { '20': 0, '40': 0, '45': 0, total: 0 });
       const e = map.get(key);
@@ -333,8 +378,6 @@ export default function PrintableCargoPlanV2({
     for (const c of containers) {
       if (!matchPodC(c)) continue;
       const size = sizeOfC(c);
-      // M6.86.8.7: 선사 = c.op (NAD+CA 파싱 결과, 평택항 선사 10개 초반)
-      //   주의: c.cn 첫 3자는 BIC 코드(컨테이너 소유사)이지 선사가 아님 — 절대 사용 금지
       const carrier = (c.op && String(c.op).trim()) || 'UNK';
       addTo(carrierCounts, carrier, size);
       let cat = '일반';
@@ -344,6 +387,9 @@ export default function PrintableCargoPlanV2({
       else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
       else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
       addTo(cargoCounts, cat, size);
+      // POD (선적 모드에서 사용)
+      const p3 = podOf(c);
+      if (p3) addTo(podCounts, p3, size);
     }
     const carriers = [...carrierCounts.entries()].sort((a, b) => b[1].total - a[1].total);
     const cargos = [...cargoCounts.entries()].sort((a, b) => {
@@ -351,8 +397,9 @@ export default function PrintableCargoPlanV2({
       if (b[0] === '일반') return 1;
       return b[1].total - a[1].total;
     });
-    return { carriers, cargos };
-  }, [containers, pod]);
+    const pods = [...podCounts.entries()].sort((a, b) => b[1].total - a[1].total);
+    return { carriers, cargos, pods };
+  }, [containers, pod, mode]);
 
   // 모든 베이의 렌더 데이터 미리 계산
   const renderDataMap = useMemo(() => {
@@ -364,7 +411,7 @@ export default function PrintableCargoPlanV2({
     });
     singles.forEach((s) => allKeys.push(s));
     for (const key of allKeys) {
-      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap);
+      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap, getColorKey);
     }
     return map;
   }, [pdfBays, matrixBays, posMap, pod, mode, trios, singles]);
@@ -416,18 +463,27 @@ export default function PrintableCargoPlanV2({
             const topLen = layout[0]?.length || 0;
             const emptySlots = isLast && !isFirst ? Math.max(0, topLen - row.length) : 0;
             const slots = [];
-            // 별첨 배치 (M6.86.8.11: 별첨 자리 수에 따라 자동)
-            //   2자리: 별첨1(선사별) + 별첨2(화물종류별) 분리
-            //   1자리: 두 별첨을 한 박스에 통합
+            // M6.86.8.13: 별첨 구성 mode별
+            //   양하: 별첨1(선사별 + 컬러), 별첨2(화물종류별, 흑백)
+            //   선적: 별첨1(POD별 + 컬러), 별첨2(선사별, 흑백) — 사용자 요청 추가
+            const isDischarge = mode === 'discharge';
+            const leg1Title = isDischarge ? '별첨1 · 선사별 (양하)' : '별첨1 · POD별 (선적)';
+            const leg1Rows = isDischarge ? legends.carriers : legends.pods;
+            const leg1Kind = isDischarge ? 'carrier' : 'pod';
+            const leg1Header = isDischarge ? '선사' : 'POD';
+            const leg2Title = isDischarge ? '별첨2 · 화물 종류별 (양하)' : '별첨2 · 선사별 (선적)';
+            const leg2Rows = isDischarge ? legends.cargos : legends.carriers;
+            const leg2Kind = isDischarge ? 'cargo' : 'carrier-bw';
+            const leg2Header = isDischarge ? '종류' : '선사';
             if (emptySlots >= 2) {
               slots.push(
                 <div key="leg1" className="cpv2-bay-box cpv2-legend-box">
-                  <Legend title="별첨1 · 선사별 (양하)" headers={['선사', "20'", "40'", "45'", '합계']} rows={legends.carriers} totalRow={true} kind="carrier" />
+                  <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
                 </div>
               );
               slots.push(
                 <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
-                  <Legend title="별첨2 · 화물 종류별 (양하)" headers={['', '종류', "20'", "40'", "45'", '합계']} rows={legends.cargos} totalRow={true} kind="cargo" />
+                  <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
                 </div>
               );
             } else if (emptySlots === 1) {
@@ -435,10 +491,10 @@ export default function PrintableCargoPlanV2({
                 <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box">
                   <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <Legend title="별첨1 · 선사별" headers={['선사', "20'", "40'", "45'", '합']} rows={legends.carriers} totalRow={true} kind="carrier" />
+                      <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <Legend title="별첨2 · 화물 종류별" headers={['', '종류', "20'", "40'", "45'", '합']} rows={legends.cargos} totalRow={true} kind="cargo" />
+                      <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
                     </div>
                   </div>
                 </div>
@@ -454,16 +510,16 @@ export default function PrintableCargoPlanV2({
                 const pairData = renderDataMap[box.pairKey];
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} />
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} />
                     <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} />
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} />
                   </div>
                 );
               } else {
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
                     <div className="cpv2-single-half">
-                      <BayBoxV2 data={renderDataMap[box.topKey]} count={boxCounts[box.topKey]} />
+                      <BayBoxV2 data={renderDataMap[box.topKey]} count={boxCounts[box.topKey]} colorMap={colorMap} />
                     </div>
                     <div className="cpv2-empty-half"></div>
                   </div>
@@ -481,7 +537,7 @@ export default function PrintableCargoPlanV2({
 }
 
 // 별첨 렌더링 (선사별 / 화물 종류별)
-function Legend({ title, headers, rows, totalRow, kind }) {
+function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
   const cargoColors = {
     '일반': { bg: '#fff', fg: '#000', mark: 'o' },
     'Reefer': { bg: '#b2ebf2', fg: '#006064', mark: 'R' },
@@ -490,6 +546,10 @@ function Legend({ title, headers, rows, totalRow, kind }) {
     'OT': { bg: '#e1bee7', fg: '#4a148c', mark: 'A' },
     'Tank': { bg: '#ffe0b2', fg: '#e65100', mark: 'T' },
   };
+  // kind: 'carrier' / 'pod' = colorMap 사용 / 'cargo' = cargoColors / 'carrier-bw' = 흑백 (선사 표는 흑백 처리, 사용자 약속)
+  const useColorMap = kind === 'carrier' || kind === 'pod';
+  const useCargoColor = kind === 'cargo';
+  const hasMarkColumn = useColorMap || useCargoColor;
   const tot = rows.reduce((acc, [, v]) => ({
     '20': acc['20'] + v['20'], '40': acc['40'] + v['40'], '45': acc['45'] + v['45'], total: acc.total + v.total,
   }), { '20': 0, '40': 0, '45': 0, total: 0 });
@@ -502,12 +562,17 @@ function Legend({ title, headers, rows, totalRow, kind }) {
         </thead>
         <tbody>
           {rows.map(([name, v]) => {
-            const c = kind === 'cargo' ? (cargoColors[name] || cargoColors['일반']) : null;
+            let markCell = null;
+            if (useCargoColor) {
+              const c = cargoColors[name] || cargoColors['일반'];
+              markCell = <td className="cpv2-legend-mark" style={{ background: c.bg, color: c.fg }}>{c.mark}</td>;
+            } else if (useColorMap) {
+              const bg = colorMap[name];
+              markCell = <td className="cpv2-legend-mark" style={bg ? { background: bg, color: '#fff' } : undefined}>{bg ? '■' : ''}</td>;
+            }
             return (
               <tr key={name}>
-                {kind === 'cargo' && (
-                  <td className="cpv2-legend-mark" style={{ background: c.bg, color: c.fg }}>{c.mark}</td>
-                )}
+                {markCell}
                 <td className="cpv2-legend-nm">{name}</td>
                 <td className="cpv2-legend-ct">{v['20']}</td>
                 <td className="cpv2-legend-ct">{v['40']}</td>
@@ -518,7 +583,7 @@ function Legend({ title, headers, rows, totalRow, kind }) {
           })}
           {totalRow && (
             <tr className="cpv2-legend-total">
-              {kind === 'cargo' && <td></td>}
+              {hasMarkColumn && <td></td>}
               <td className="cpv2-legend-nm"><b>합계</b></td>
               <td className="cpv2-legend-ct"><b>{tot['20']}</b></td>
               <td className="cpv2-legend-ct"><b>{tot['40']}</b></td>

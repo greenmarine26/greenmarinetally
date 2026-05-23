@@ -223,9 +223,11 @@ export function buildPosMap(containers) {
 // 페어 키 형식: "(EE)OO" — 짝수 EE + 홀수 OO 데이터를 합쳐 그림.
 // 단독 키 형식: "OO" — 홀수 OO 자체 + 양옆 짝수 shadow X.
 // xrayMap: { cn: true } 형태. 해당 컨테이너 위치에 xray 플래그 표시.
-export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap) {
+// getColorKeyFn(c): 컨테이너의 컬러 매핑 key 반환 (양하: 선사코드, 선적: POD 3자). 평택분 외엔 null.
+export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn) {
   const marks = new Map();
-  const xrays = new Map(); // tier → Map<rowLbl, true>
+  const xrays = new Map();
+  const colors = new Map(); // tier → Map<rowLbl, colorKey>
   const ensureTier = (tier) => {
     if (!marks.has(tier)) marks.set(tier, new Map());
     return marks.get(tier);
@@ -234,9 +236,19 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap) {
     if (!xrays.has(tier)) xrays.set(tier, new Map());
     return xrays.get(tier);
   };
+  const ensureColorTier = (tier) => {
+    if (!colors.has(tier)) colors.set(tier, new Map());
+    return colors.get(tier);
+  };
   const tagXray = (c, tier, rowLbl) => {
     if (xrayMap && c.cn && xrayMap[c.cn]) {
       ensureXrayTier(tier).set(rowLbl, true);
+    }
+  };
+  const tagColor = (c, tier, rowLbl) => {
+    if (getColorKeyFn) {
+      const k = getColorKeyFn(c);
+      if (k) ensureColorTier(tier).set(rowLbl, k);
     }
   };
 
@@ -252,6 +264,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap) {
           for (const [rowLbl, c] of rowMap.entries()) {
             tierMap.set(rowLbl, getSelfMarkFn(c, pod));
             tagXray(c, tier, rowLbl);
+            tagColor(c, tier, rowLbl);
           }
         }
       }
@@ -265,6 +278,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap) {
         for (const [rowLbl, c] of rowMap.entries()) {
           tierMap.set(rowLbl, getSelfMarkFn(c, pod));
           tagXray(c, tier, rowLbl);
+          tagColor(c, tier, rowLbl);
         }
       }
     }
@@ -282,14 +296,14 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap) {
       }
     }
   }
-  return { marks, xrays };
+  return { marks, xrays, colors };
 }
 
 // ------------------------------------------------------------
 // 6. 한 베이의 모든 렌더 데이터를 한 번에 계산 (편의 함수)
 // ------------------------------------------------------------
 // 컴포넌트는 이 함수가 반환하는 객체를 그대로 JSX로 렌더.
-export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap) {
+export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn) {
   const pdf = pdfBays[bayKey];
   if (!pdf) return null;
 
@@ -328,7 +342,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nDeckCols = deckRowPos.length;
   const nHoldCols = nDeckCols;
 
-  const { marks: bayMarks, xrays: bayXrays } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap);
+  const { marks: bayMarks, xrays: bayXrays, colors: bayColors } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn);
 
   // deck tier별 셀 배열 (자리 통일: STANDARD_DECK 6 tier 모두 렌더)
   const deckRows = STANDARD_DECK.map((stdT) => {
@@ -338,18 +352,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const activeSet = getActiveColsSymmetric(cc, nDeckCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
+      const rowColors = bayColors.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeSet.has(c)) {
           const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl) });
+          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null, isXray: false });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false }));
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null }));
       return { tier: stdT, invisible: true, cells };
     }
   });
@@ -359,22 +374,22 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
-      // deck 폭 기준으로 active 결정 (가운데부터 cc 개 활성, 나머지 invisible)
       const activeInDeck = getActiveColsSymmetric(cc, nDeckCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
+      const rowColors = bayColors.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (activeInDeck.has(c)) {
           const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl) });
+          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null, isXray: false });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false }));
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null }));
       return { tier: stdT, invisible: true, cells };
     }
   });
