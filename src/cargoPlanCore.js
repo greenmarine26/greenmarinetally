@@ -314,11 +314,11 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           if (bb === adjEven) {
             const tierMap = ensureTier(tier);
             for (const [rowLbl, c] of rowMap.entries()) {
-              // M6.90.1: ISO 6346 첫 자가 사이즈. 4 = 40ft (모든 높이), L/9 = 45ft, 2 = 20ft
-              //   45R1은 40ft (hi-cube reefer)이므로 shadow X 대상.
-              const iso = String(c.isoLabel || c.iso || '').toUpperCase();
-              const firstChar = iso[0];
-              const is40OrMore = firstChar === '4' || firstChar === 'L' || firstChar === '9';
+              // M6.91.2: ISO 6346 표준 사이즈 판정.
+              //   isoToLabel로 정규화 (45GP → 40HC, L5G1 → 45HC, 45R1 → 40RF 등)
+              //   → 양하/선적이 다른 표기로 들어와도 일관 분류.
+              const lbl = isoToLabel(c.iso) || '';
+              const is40OrMore = lbl.startsWith('40') || lbl.startsWith('45');
               if (tierMap.has(rowLbl)) continue;
               if (is40OrMore) {
                 tierMap.set(rowLbl, 'X');
@@ -340,6 +340,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
 // ------------------------------------------------------------
 // 컴포넌트는 이 함수가 반환하는 객체를 그대로 JSX로 렌더.
 import { getBayOverride } from './data/shipBayDict_pdf_override.js';
+import { isoToLabel } from './utils.js';
 
 // M6.91.0: PDF STOWAGE INSTRUCTION에서 추출한 베이별 정답 데이터 사용 (DJCT/SWAT 우선).
 //   override가 있으면 추측 안 함. 없으면 베이사전 기본 fallback.

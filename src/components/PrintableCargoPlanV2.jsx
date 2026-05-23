@@ -11,7 +11,7 @@ import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isReeferContainer } from '../utils.js';
+import { isReeferContainer, isoToLabel } from '../utils.js';
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
@@ -399,15 +399,14 @@ export default function PrintableCargoPlanV2({
   //   사이즈 판정: ISO 라벨 우선 (45XX → 45, 4XXX → 40, 그 외 → 20)
   // M6.90.1: ISO 6346 표준 사이즈 판정 — 첫 자가 사이즈 코드.
   //   ISO 4자리: [길이][높이][타입][변형]
-  //   2x = 20ft, 4x = 40ft, Lx/9x = 45ft.  두 번째 자는 높이 (2=8'6", 5=9'6" hi-cube)
-  //   예: 45R1 = 40ft 9'6" reefer (NOT 45ft), 22G1 = 20ft general, L5G1 = 45ft hi-cube general
+  // M6.91.2: isoToLabel로 정규화 후 사이즈 결정.
+  //   양하/선적이 다른 ISO 표기로 들어와도 (45GP vs L5G1 vs 4500) 일관 분류.
+  //   isoToLabel: 45GP/45HC/45R1 → 40HC/40RF, L5G1 → 45HC, 22GP → 20DC 등 ISO 6346 표준 적용.
   const sizeOfC = (c) => {
-    const lbl = String(c.isoLabel || c.iso || '').toUpperCase();
-    if (!lbl) return '20';
-    const first = lbl[0];
-    if (first === 'L' || first === '9') return '45';
-    if (first === '4') return '40';
-    if (first === '2') return '20';
+    const lbl = isoToLabel(c.iso) || '';
+    if (lbl.startsWith('45')) return '45';
+    if (lbl.startsWith('40')) return '40';
+    if (lbl.startsWith('20')) return '20';
     return '20';
   };
   // M6.86.8.7: 양하 별첨/카운트는 평택분(PTK)만 강제 (사용자 약속).
