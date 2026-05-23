@@ -54,8 +54,8 @@ function getMarkV2(c, pod, mode) {
 // CSS (M6.81 HTML 그대로 — 셀 18×13px, tier-row 13px, cell-empty visibility:hidden)
 // ------------------------------------------------------------
 const CSS = `
-.cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; }
-.cpv2-page { width: 277mm; min-height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; margin: 0 auto; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+.cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; display: flex; align-items: stretch; justify-content: center; }
+.cpv2-page { width: 277mm; height: calc(100vh - 16px); min-height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
@@ -98,8 +98,18 @@ const CSS = `
 .cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 7px; color: #444; width: 14px; justify-content: center; }
 .cpv2-tier-labels > span { height: 13px; line-height: 13px; display: block; }
 .cpv2-tier-labels > span.cpv2-invisible-label { visibility: hidden; }
-.cpv2-banner { background: #e8f5e9; border: 1px solid #4caf50; padding: 4px 8px; margin-bottom: 4px; font-size: 9px; border-radius: 4px; }
-.cpv2-banner b { color: #2e7d32; }
+.cpv2-banner { display: none; }
+.cpv2-empty-slot { border: none; background: transparent; }
+.cpv2-legend-box { border: 1px solid #000; background: white; padding: 4px; display: flex; flex-direction: column; overflow: hidden; }
+.cpv2-legend { width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+.cpv2-legend-title { font-size: 9px; font-weight: bold; text-align: center; padding: 2px 0; border-bottom: 0.5px solid #888; margin-bottom: 2px; color: #333; flex-shrink: 0; }
+.cpv2-legend-table { width: 100%; border-collapse: collapse; font-size: 8px; }
+.cpv2-legend-table th, .cpv2-legend-table td { padding: 1px 3px; border: 0.3px solid #aaa; }
+.cpv2-legend-table th { background: #f5f5f5; font-size: 7px; font-weight: bold; }
+.cpv2-legend-mark { width: 14px; text-align: center; font-weight: bold; font-size: 8px; }
+.cpv2-legend-nm { font-size: 8px; font-weight: bold; }
+.cpv2-legend-ct { font-size: 7.5px; text-align: center; }
+.cpv2-legend-total { background: #f0f0f0; }
 @media print {
   .cpv2-overlay { position: static; background: white; padding: 0; overflow: visible; }
   .cpv2-page { box-shadow: none; margin: 0; }
@@ -263,31 +273,29 @@ export default function PrintableCargoPlanV2({
   //   단독 베이 (single + trio top) = 총합 단일 숫자
   //   페어 박스 (trio pair) = "20피트 / 40피트 / 45피트"
   //   사이즈 판정: ISO 라벨 우선 (45XX → 45, 4XXX → 40, 그 외 → 20)
+  const sizeOfC = (c) => {
+    const lbl = String(c.isoLabel || c.iso || '').toUpperCase();
+    if (lbl.startsWith('45') || /^4[5][A-Z0-9]{2}$/.test(lbl)) return '45';
+    if (lbl.startsWith('40') || /^4[0-9][A-Z0-9]{2}$/.test(lbl)) return '40';
+    return '20';
+  };
+  const matchPodC = (c) => {
+    if (!pod) return true;
+    const cp = String(c.pod || '').toUpperCase();
+    const p = String(pod).toUpperCase();
+    return cp === p || cp.endsWith(p) || p.endsWith(cp);
+  };
   const boxCounts = useMemo(() => {
-    const sizeOf = (c) => {
-      const lbl = String(c.isoLabel || c.iso || '').toUpperCase();
-      if (lbl.startsWith('45') || /^4[5][A-Z0-9]{2}$/.test(lbl)) return '45';
-      if (lbl.startsWith('40') || /^4[0-9][A-Z0-9]{2}$/.test(lbl)) return '40';
-      return '20';
-    };
     const matchBay = (c, num) => Number(c.bay) === num;
-    const matchPod = (c) => {
-      if (!pod) return true;
-      const cp = String(c.pod || '').toUpperCase();
-      const p = String(pod).toUpperCase();
-      return cp === p || cp.endsWith(p) || p.endsWith(cp);
-    };
-    // 베이별 사이즈 분포 1회 계산
     const byBay = new Map();
     for (const c of containers) {
-      if (!matchPod(c)) continue;
+      if (!matchPodC(c)) continue;
       const n = Number(c.bay);
       if (!Number.isFinite(n)) continue;
       if (!byBay.has(n)) byBay.set(n, { '20': 0, '40': 0, '45': 0 });
-      byBay.get(n)[sizeOf(c)]++;
+      byBay.get(n)[sizeOfC(c)]++;
     }
     const get = (n) => byBay.get(n) || { '20': 0, '40': 0, '45': 0 };
-
     const counts = {};
     trios.forEach(([top, pair]) => {
       const topOdd = parseInt(top, 10);
@@ -305,6 +313,38 @@ export default function PrintableCargoPlanV2({
     });
     return counts;
   }, [trios, singles, containers, pod]);
+
+  // M6.86.8.6: 선사별 / 화물종류별 카운트 (M6.81 정답 별첨1·2)
+  const legends = useMemo(() => {
+    const carrierCounts = new Map();
+    const cargoCounts = new Map();
+    const addTo = (map, key, size) => {
+      if (!map.has(key)) map.set(key, { '20': 0, '40': 0, '45': 0, total: 0 });
+      const e = map.get(key);
+      e[size]++;
+      e.total++;
+    };
+    for (const c of containers) {
+      if (!matchPodC(c)) continue;
+      const size = sizeOfC(c);
+      const carrier = c.carrier || (c.cn ? String(c.cn).slice(0, 3) : 'UNK');
+      addTo(carrierCounts, carrier, size);
+      let cat = '일반';
+      if (c.dg) cat = 'DG';
+      else if (c.iso && c.iso[2] === 'R') cat = 'Reefer';
+      else if (c.fr || (c.iso && c.iso[2] === 'P')) cat = 'FR';
+      else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
+      else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
+      addTo(cargoCounts, cat, size);
+    }
+    const carriers = [...carrierCounts.entries()].sort((a, b) => b[1].total - a[1].total);
+    const cargos = [...cargoCounts.entries()].sort((a, b) => {
+      if (a[0] === '일반') return -1;
+      if (b[0] === '일반') return 1;
+      return b[1].total - a[1].total;
+    });
+    return { carriers, cargos };
+  }, [containers, pod]);
 
   // 모든 베이의 렌더 데이터 미리 계산
   const renderDataMap = useMemo(() => {
@@ -354,42 +394,116 @@ export default function PrintableCargoPlanV2({
       <style>{CSS}</style>
       {closeBtn}
       <div className="cpv2-page">
-        <div className="cpv2-banner">
-          <b>✓ M6.86.8.5 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
-        </div>
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
           <div className="col">DATE : {today}</div>
         </div>
         <div className="cpv2-page-rows">
-          {layout.map((row, ri) => (
-            <div key={ri} className="cpv2-page-row">
-              {row.map((box, bi) => {
-                if (box.type === 'trio') {
-                  const topData = renderDataMap[box.topKey];
-                  const pairData = renderDataMap[box.pairKey];
-                  return (
-                    <div key={bi} className="cpv2-bay-box cpv2-trio-box">
-                      <BayBoxV2 data={topData} count={boxCounts[box.topKey]} />
-                      <div className="cpv2-trio-divider"></div>
-                      <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} />
-                    </div>
-                  );
-                }
-                return (
-                  <div key={bi} className="cpv2-bay-box cpv2-single-box">
+          {layout.map((row, ri) => {
+            const isLast = ri === layout.length - 1;
+            const isFirst = ri === 0;
+            const emptySlots = isLast && !isFirst ? Math.max(0, 5 - row.length) : 0;
+            const slots = [];
+            // 마지막 row 좌측 빈 자리에 별첨1·2 배치 (M6.81 정답)
+            if (emptySlots >= 1) {
+              slots.push(
+                <div key="leg1" className="cpv2-bay-box cpv2-legend-box">
+                  <Legend title="별첨1 · 선사별 (양하)" headers={['선사', "20'", "40'", "45'", '합계']} rows={legends.carriers} totalRow={true} kind="carrier" />
+                </div>
+              );
+            }
+            if (emptySlots >= 2) {
+              slots.push(
+                <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
+                  <Legend title="별첨2 · 화물 종류별 (양하)" headers={['', '종류', "20'", "40'", "45'", '합계']} rows={legends.cargos} totalRow={true} kind="cargo" />
+                </div>
+              );
+            }
+            for (let i = 2; i < emptySlots; i++) {
+              slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
+            }
+            // 그 다음 실제 박스들
+            row.forEach((box, bi) => {
+              if (box.type === 'trio') {
+                const topData = renderDataMap[box.topKey];
+                const pairData = renderDataMap[box.pairKey];
+                slots.push(
+                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} />
+                    <div className="cpv2-trio-divider"></div>
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} />
+                  </div>
+                );
+              } else {
+                slots.push(
+                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
                     <div className="cpv2-single-half">
                       <BayBoxV2 data={renderDataMap[box.topKey]} count={boxCounts[box.topKey]} />
                     </div>
                     <div className="cpv2-empty-half"></div>
                   </div>
                 );
-              })}
-            </div>
-          ))}
+              }
+            });
+            return (
+              <div key={ri} className="cpv2-page-row">{slots}</div>
+            );
+          })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// 별첨 렌더링 (선사별 / 화물 종류별)
+function Legend({ title, headers, rows, totalRow, kind }) {
+  const cargoColors = {
+    '일반': { bg: '#fff', fg: '#000', mark: 'o' },
+    'Reefer': { bg: '#b2ebf2', fg: '#006064', mark: 'R' },
+    'DG': { bg: '#ffcdd2', fg: '#b71c1c', mark: 'D' },
+    'FR': { bg: '#c8e6c9', fg: '#1b5e20', mark: 'F' },
+    'OT': { bg: '#e1bee7', fg: '#4a148c', mark: 'A' },
+    'Tank': { bg: '#ffe0b2', fg: '#e65100', mark: 'T' },
+  };
+  const tot = rows.reduce((acc, [, v]) => ({
+    '20': acc['20'] + v['20'], '40': acc['40'] + v['40'], '45': acc['45'] + v['45'], total: acc.total + v.total,
+  }), { '20': 0, '40': 0, '45': 0, total: 0 });
+  return (
+    <div className="cpv2-legend">
+      <div className="cpv2-legend-title">{title}</div>
+      <table className="cpv2-legend-table">
+        <thead>
+          <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map(([name, v]) => {
+            const c = kind === 'cargo' ? (cargoColors[name] || cargoColors['일반']) : null;
+            return (
+              <tr key={name}>
+                {kind === 'cargo' && (
+                  <td className="cpv2-legend-mark" style={{ background: c.bg, color: c.fg }}>{c.mark}</td>
+                )}
+                <td className="cpv2-legend-nm">{name}</td>
+                <td className="cpv2-legend-ct">{v['20']}</td>
+                <td className="cpv2-legend-ct">{v['40']}</td>
+                <td className="cpv2-legend-ct">{v['45']}</td>
+                <td className="cpv2-legend-ct"><b>{v.total}</b></td>
+              </tr>
+            );
+          })}
+          {totalRow && (
+            <tr className="cpv2-legend-total">
+              {kind === 'cargo' && <td></td>}
+              <td className="cpv2-legend-nm"><b>합계</b></td>
+              <td className="cpv2-legend-ct"><b>{tot['20']}</b></td>
+              <td className="cpv2-legend-ct"><b>{tot['40']}</b></td>
+              <td className="cpv2-legend-ct"><b>{tot['45']}</b></td>
+              <td className="cpv2-legend-ct"><b>{tot.total}</b></td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
