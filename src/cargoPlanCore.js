@@ -113,6 +113,12 @@ export function generatePdfBays(matrixBays, trios, singles) {
 // 3. 페이지 layout 자동 결정 (auto_page_layout)
 // ------------------------------------------------------------
 // 베이 번호 큰 것이 좌측 (선미가 좌측), 작은 번호=위 줄(선수쪽), 큰 번호=아래 줄(선미쪽)
+// M6.86.8.11: 사용자 약속 layout 규칙 (확정)
+//   상단 박스 수 = ⌈(N+1)/2⌉, 하단 박스 수 = N - 상단
+//   별첨 자리 = 상단 - 하단 (짝수 N → 2자리, 홀수 N → 1자리)
+//   예시: N=10 → 6+4 (별첨 2), N=11 → 6+5 (별첨 1), N=12 → 7+5 (별첨 2)
+//   배치 원칙: 작은 번호(선수쪽) → 위 줄, 큰 번호(선미쪽) → 아래 줄
+//             각 행 안에서 큰 번호 좌측 (카스피 정답 양식)
 export function autoPageLayout(trios, singles, colsPerRow = 5) {
   const allBoxes = [];
   trios.forEach(([topKey, pairKey]) => {
@@ -124,21 +130,19 @@ export function autoPageLayout(trios, singles, colsPerRow = 5) {
   });
 
   const n = allBoxes.length;
-  if (n <= colsPerRow) {
-    // 한 행: 큰 번호가 좌측
-    const sorted = [...allBoxes].sort((a, b) => b.oddNum - a.oddNum);
-    return [sorted];
-  }
+  if (n === 0) return [];
 
-  // 작은 번호(선수쪽)→위 줄, 큰 번호(선미쪽)→아래 줄
+  // 사용자 약속: 상단 = ⌈(N+1)/2⌉
+  const topCount = Math.ceil((n + 1) / 2);
+  // 작은 번호(선수)→위 줄, 큰 번호(선미)→아래 줄
   const sortedAsc = [...allBoxes].sort((a, b) => a.oddNum - b.oddNum);
-  const topBoxes = sortedAsc.slice(0, colsPerRow);
-  const bottomBoxes = sortedAsc.slice(colsPerRow);
+  const topBoxes = sortedAsc.slice(0, topCount);
+  const bottomBoxes = sortedAsc.slice(topCount);
 
-  // 각 행: 큰 번호가 좌측
+  // 각 행 내부: 큰 번호 좌측 (카스피 정답)
   topBoxes.sort((a, b) => b.oddNum - a.oddNum);
   bottomBoxes.sort((a, b) => b.oddNum - a.oddNum);
-  return [topBoxes, bottomBoxes];
+  return bottomBoxes.length > 0 ? [topBoxes, bottomBoxes] : [topBoxes];
 }
 
 // ------------------------------------------------------------

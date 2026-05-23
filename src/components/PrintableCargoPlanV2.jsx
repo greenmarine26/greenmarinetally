@@ -448,24 +448,40 @@ export default function PrintableCargoPlanV2({
           {layout.map((row, ri) => {
             const isLast = ri === layout.length - 1;
             const isFirst = ri === 0;
-            const emptySlots = isLast && !isFirst ? Math.max(0, 5 - row.length) : 0;
+            // M6.86.8.11: 별첨 자리 = 상단 박스 수 - 하단 박스 수
+            //   짝수 N → 2자리 (별첨1 + 별첨2), 홀수 N → 1자리 (별첨1+2 통합)
+            const topLen = layout[0]?.length || 0;
+            const emptySlots = isLast && !isFirst ? Math.max(0, topLen - row.length) : 0;
             const slots = [];
-            // 마지막 row 좌측 빈 자리에 별첨1·2 배치 (M6.81 정답)
-            if (emptySlots >= 1) {
+            // 별첨 배치 (M6.86.8.11: 별첨 자리 수에 따라 자동)
+            //   2자리: 별첨1(선사별) + 별첨2(화물종류별) 분리
+            //   1자리: 두 별첨을 한 박스에 통합
+            if (emptySlots >= 2) {
               slots.push(
                 <div key="leg1" className="cpv2-bay-box cpv2-legend-box">
                   <Legend title="별첨1 · 선사별 (양하)" headers={['선사', "20'", "40'", "45'", '합계']} rows={legends.carriers} totalRow={true} kind="carrier" />
                 </div>
               );
-            }
-            if (emptySlots >= 2) {
               slots.push(
                 <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
                   <Legend title="별첨2 · 화물 종류별 (양하)" headers={['', '종류', "20'", "40'", "45'", '합계']} rows={legends.cargos} totalRow={true} kind="cargo" />
                 </div>
               );
+            } else if (emptySlots === 1) {
+              slots.push(
+                <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box">
+                  <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Legend title="별첨1 · 선사별" headers={['선사', "20'", "40'", "45'", '합']} rows={legends.carriers} totalRow={true} kind="carrier" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Legend title="별첨2 · 화물 종류별" headers={['', '종류', "20'", "40'", "45'", '합']} rows={legends.cargos} totalRow={true} kind="cargo" />
+                    </div>
+                  </div>
+                </div>
+              );
             }
-            for (let i = 2; i < emptySlots; i++) {
+            for (let i = emptySlots; i < emptySlots && i < 0; i++) {  // padding 자리 (현재 없음)
               slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
             }
             // 그 다음 실제 박스들
