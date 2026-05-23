@@ -224,11 +224,13 @@ export function buildPosMap(containers) {
 // 단독 키 형식: "OO" — 홀수 OO 자체 + 양옆 짝수 shadow X.
 // xrayMap: { cn: true } 형태. 해당 컨테이너 위치에 xray 플래그 표시.
 // getColorKeyFn(c): 컨테이너의 컬러 매핑 key 반환 (양하: 선사코드, 선적: POD 3자). 평택분 외엔 null.
+// isThroughFn(c): 통과화물 판정. 회색 셀 처리용.
 export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn) {
   const marks = new Map();
   const xrays = new Map();
   const colors = new Map();
-  const throughs = new Map(); // tier → Map<rowLbl, true>
+  const throughs = new Map();
+  const shadow20s = new Map(); // M6.86.8.19: 양옆 짝수 20ft 자리 = 회색 표시
   const ensureTier = (tier) => {
     if (!marks.has(tier)) marks.set(tier, new Map());
     return marks.get(tier);
@@ -244,6 +246,10 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   const ensureThroughTier = (tier) => {
     if (!throughs.has(tier)) throughs.set(tier, new Map());
     return throughs.get(tier);
+  };
+  const ensureShadow20Tier = (tier) => {
+    if (!shadow20s.has(tier)) shadow20s.set(tier, new Map());
+    return shadow20s.get(tier);
   };
   const tagXray = (c, tier, rowLbl) => {
     if (xrayMap && c.cn && xrayMap[c.cn]) {
@@ -301,15 +307,20 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           if (bb === adjEven) {
             const tierMap = ensureTier(tier);
             for (const [rowLbl, c] of rowMap.entries()) {
-              // M6.86.8.17: shadow X는 40/45ft만 (20ft는 양옆 홀수 침범 안 함)
-              // 지침서 §4.2 (f): "짝수 40ft가 양옆 홀수 슬롯 점유 = X"
+              // M6.86.8.19 (지침서 §4.2 + 사용자 약속):
+              //   짝수 40ft/45ft → 'X' shadow (양옆 홀수 슬롯 점유)
+              //   짝수 20ft → 회색 빈 셀 (글자 없음, 자리 차지) — 시각적 "여기 점유됨" 표시
               const iso = String(c.isoLabel || c.iso || '').toUpperCase();
               const is40OrMore =
                 iso.startsWith('45') ||
                 iso.startsWith('L') ||
                 /^4[0-9]/.test(iso);
-              if (is40OrMore && !tierMap.has(rowLbl)) {
+              if (tierMap.has(rowLbl)) continue;
+              if (is40OrMore) {
                 tierMap.set(rowLbl, 'X');
+              } else {
+                // 20ft 짝수: 셀 자리 차지 + 회색 (마크 없음)
+                ensureShadow20Tier(tier).set(rowLbl, true);
               }
             }
           }
@@ -317,7 +328,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
       }
     }
   }
-  return { marks, xrays, colors, throughs };
+  return { marks, xrays, colors, throughs, shadow20s };
 }
 
 // ------------------------------------------------------------
@@ -366,7 +377,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nHoldCols = holdRowPos.length;
   const holdOffset = Math.floor((nDeckCols - nHoldCols) / 2);
 
-  const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
+  const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 
   // deck tier별 셀 배열 (자리 통일: STANDARD_DECK 6 tier 모두 렌더)
   const deckRows = STANDARD_DECK.map((stdT) => {
@@ -378,48 +389,56 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
+      const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
-        if (activeSet.has(c)) {
-          const rowLbl = deckRowPos[c];
-          cells.push({ active: true, rowLbl, mark: rowMarks.get(rowLbl) || null, isXray: !!rowXrays.get(rowLbl), colorKey: rowColors.get(rowLbl) || null, isThrough: !!rowThroughs.get(rowLbl) });
+        const rowLbl = deckRowPos[c];
+        const inActive = activeSet.has(c);
+        const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
+        const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
+        if (inActive || mark || isShadow20) {
+          // hull cells 안 + 양옆 짝수 40ft shadow + 양옆 짝수 20ft shadow 자리 모두 active
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false }));
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });
 
-  // hold tier별 셀 배열 — M6.81 정답: hold 자체 폭에서 hull center → deck 폭 안 offset 위치
+  // hold tier별 셀 배열 — M6.86.8.20: hold 자체 폭(nHoldCols)으로 cells 생성.
+  //   deck/hold 폭이 1칸 차이일 때 CSS에서 0.5칸씩 좌우 띄어 박스 안 horizontal center.
+  //   이전엔 nDeckCols 폭에 끼워넣어 floor offset으로 비대칭 (좌2/우1 또는 좌0/우1).
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
       const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
-      // hold 폭 기준 active → deck 폭 안 offset 적용
-      const activeInDeck = new Set();
-      for (const a of activeInHold) activeInDeck.add(a + holdOffset);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
+      const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const cells = [];
-      for (let c = 0; c < nDeckCols; c++) {
-        if (activeInDeck.has(c)) {
-          const holdC = c - holdOffset;
-          const rowLbl = (holdC >= 0 && holdC < nHoldCols) ? holdRowPos[holdC] : null;
-          cells.push({ active: true, rowLbl, mark: rowLbl ? (rowMarks.get(rowLbl) || null) : null, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false });
+      for (let c = 0; c < nHoldCols; c++) {
+        const rowLbl = holdRowPos[c];
+        const inActive = activeInHold.has(c);
+        const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
+        const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
+        if (inActive || mark || isShadow20) {
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
-          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false });
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false }));
+      // invisible row도 nHoldCols 폭 (hold-area 자체 폭과 일관)
+      const cells = new Array(nHoldCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });

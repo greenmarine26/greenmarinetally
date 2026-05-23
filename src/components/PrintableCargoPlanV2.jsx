@@ -123,9 +123,10 @@ const CSS = `
 .cpv2-legend-ct { font-size: 7.5px; text-align: center; }
 .cpv2-legend-total { background: #f0f0f0; }
 @media print {
-  /* M6.86.8.18: display:none + body bg white 조합.
-     이전 visibility 패턴은 자리 차지 → V2가 페이지 끝에 밀림. 원복 + body 배경만 직접 white. */
-  html, body { background: white !important; background-color: white !important; }
+  /* M6.86.8.21: M6.81 ref.html과 동일한 인쇄 처리.
+     ref.html은 page height 195mm 고정 (A4 landscape - margin 6mm × 2). 
+     V2는 화면에선 viewport 비례지만 인쇄에선 195mm로 강제. */
+  html, body { background: white !important; background-color: white !important; margin: 0 !important; padding: 0 !important; }
   body > *:not(.cpv2-overlay) { display: none !important; }
   .cpv2-overlay {
     position: static !important;
@@ -134,18 +135,23 @@ const CSS = `
     padding: 0 !important;
     overflow: visible !important;
     display: block !important;
+    width: auto !important;
     height: auto !important;
-    width: 100% !important;
     box-shadow: none !important;
   }
   .cpv2-page {
+    width: 277mm !important;
+    height: 195mm !important;
+    min-height: 195mm !important;
+    max-height: 195mm !important;
     background: white !important;
     box-shadow: none !important;
     margin: 0 !important;
-    height: auto !important;
-    min-height: 0 !important;
-    width: 100% !important;
     padding: 4mm !important;
+    page-break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-inside: avoid !important;
+    break-after: avoid !important;
   }
   .cpv2-noprint { display: none !important; }
   .cpv2-cell, .cpv2-legend-mark, .cpv2-bay-box {
@@ -153,6 +159,8 @@ const CSS = `
     print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
+  .cpv2-cell.cpv2-shadow20 { background: #e5e7eb !important; color: transparent !important; }
+  .cpv2-cell.cpv2-through { background: #d4d4d8 !important; }
   @page { size: A4 landscape; margin: 6mm; }
 }
 `;
@@ -182,18 +190,22 @@ function BayBoxV2({ data, count, colorMap = {} }) {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     const bg = cell.colorKey && colorMap[cell.colorKey];
                     let style;
-                    if (cell.isThrough) {
-                      style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색 (지침서 §4.2)
+                    if (cell.isShadow20) {
+                      // M6.86.8.19: 짝수 20ft shadow = 회색 빈 셀 (자리 차지, 글자 없음)
+                      style = { background: '#e5e7eb', color: 'transparent' };
+                    } else if (cell.isThrough) {
+                      style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {
                       style = { background: bg, color: '#fff' };
                     }
+                    const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
-                        {cell.mark || ''}
+                        {displayMark}
                       </span>
                     );
                   })}
@@ -209,11 +221,18 @@ function BayBoxV2({ data, count, colorMap = {} }) {
             </div>
           </div>
         </div>
-        {/* M6.86.8.3 fix: hold-area는 항상 그림. nHold=0이어도 holdRows가 invisible-row로 자리 차지.
-            M6.81 정답: hold 없는 베이도 hatch-break + hold-area 그려서 박스 높이 통일. */}
+        {/* M6.86.8.20: hold가 deck보다 좁을 때 박스 안 horizontal center.
+            grid width = nHoldCols/nDeckCols 비율, margin auto로 좌우 동일 여백 (0.5칸씩). */}
         <div className="cpv2-hatch-break"></div>
         <div className="cpv2-hold-area">
-          <div className="cpv2-grid-row-wrap">
+          <div
+            className="cpv2-grid-row-wrap"
+            style={{
+              width: nDeckCols > 0 ? `${(nHoldCols / nDeckCols) * 100}%` : '100%',
+              marginLeft: 'auto',
+              marginRight: 'auto'
+            }}
+          >
             <div className="cpv2-grid">
               {holdRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
@@ -221,18 +240,22 @@ function BayBoxV2({ data, count, colorMap = {} }) {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     const bg = cell.colorKey && colorMap[cell.colorKey];
                     let style;
-                    if (cell.isThrough) {
-                      style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색 (지침서 §4.2)
+                    if (cell.isShadow20) {
+                      // M6.86.8.19: 짝수 20ft shadow = 회색 빈 셀 (자리 차지, 글자 없음)
+                      style = { background: '#e5e7eb', color: 'transparent' };
+                    } else if (cell.isThrough) {
+                      style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {
                       style = { background: bg, color: '#fff' };
                     }
+                    const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
-                        {cell.mark || ''}
+                        {displayMark}
                       </span>
                     );
                   })}
