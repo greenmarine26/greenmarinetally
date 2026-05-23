@@ -54,7 +54,8 @@ function getMarkV2(c, pod, mode) {
 // CSS (M6.81 HTML 그대로 — 셀 18×13px, tier-row 13px, cell-empty visibility:hidden)
 // ------------------------------------------------------------
 const CSS = `
-.cpv2-page { width: 277mm; min-height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; }
+.cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; }
+.cpv2-page { width: 277mm; min-height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; margin: 0 auto; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
@@ -99,7 +100,8 @@ const CSS = `
 .cpv2-banner { background: #e8f5e9; border: 1px solid #4caf50; padding: 4px 8px; margin-bottom: 4px; font-size: 9px; border-radius: 4px; }
 .cpv2-banner b { color: #2e7d32; }
 @media print {
-  .cpv2-page { box-shadow: none; }
+  .cpv2-overlay { position: static; background: white; padding: 0; overflow: visible; }
+  .cpv2-page { box-shadow: none; margin: 0; }
   .cpv2-noprint { display: none !important; }
   @page { size: A4 landscape; margin: 6mm; }
 }
@@ -275,10 +277,18 @@ export default function PrintableCargoPlanV2({
   ) : null;
 
   if (!dictData) {
-    return <div style={{ padding: 20 }}>{closeBtn}선박 정보를 찾을 수 없습니다.</div>;
+    return (
+      <div className="cpv2-overlay-fallback" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0f172a', color: '#fff', padding: 20 }}>
+        {closeBtn}<div style={{ marginTop: 60 }}>선박 정보를 찾을 수 없습니다. (shipImo={String(shipImo)}, shipName={String(shipName)})</div>
+      </div>
+    );
   }
   if (matrixBays.length === 0) {
-    return <div style={{ padding: 20 }}>{closeBtn}이 선박은 v5 매트릭스가 등록되어 있지 않습니다.</div>;
+    return (
+      <div className="cpv2-overlay-fallback" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0f172a', color: '#fff', padding: 20 }}>
+        {closeBtn}<div style={{ marginTop: 60 }}>이 선박은 v5 매트릭스가 등록되어 있지 않습니다. (베이사전 v2 entry는 있어도 cells 매트릭스 정보 없음)</div>
+      </div>
+    );
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -288,43 +298,45 @@ export default function PrintableCargoPlanV2({
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
   return (
-    <div className="cpv2-page">
+    <div className="cpv2-overlay">
       <style>{CSS}</style>
       {closeBtn}
-      <div className="cpv2-banner">
-        <b>✓ M6.86.8.1 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
-      </div>
-      <div className="cpv2-page-header">
-        <div className="col">VOY NO : {effVoyNo}</div>
-        <div className="title-center">{title}</div>
-        <div className="col">DATE : {today}</div>
-      </div>
-      <div className="cpv2-page-rows">
-        {layout.map((row, ri) => (
-          <div key={ri} className="cpv2-page-row">
-            {row.map((box, bi) => {
-              if (box.type === 'trio') {
-                const topData = renderDataMap[box.topKey];
-                const pairData = renderDataMap[box.pairKey];
+      <div className="cpv2-page">
+        <div className="cpv2-banner">
+          <b>✓ M6.86.8.2 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
+        </div>
+        <div className="cpv2-page-header">
+          <div className="col">VOY NO : {effVoyNo}</div>
+          <div className="title-center">{title}</div>
+          <div className="col">DATE : {today}</div>
+        </div>
+        <div className="cpv2-page-rows">
+          {layout.map((row, ri) => (
+            <div key={ri} className="cpv2-page-row">
+              {row.map((box, bi) => {
+                if (box.type === 'trio') {
+                  const topData = renderDataMap[box.topKey];
+                  const pairData = renderDataMap[box.pairKey];
+                  return (
+                    <div key={bi} className="cpv2-bay-box cpv2-trio-box">
+                      <BayBoxV2 data={topData} count={boxCounts[box.topKey]} />
+                      <div className="cpv2-trio-divider"></div>
+                      <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} />
+                    </div>
+                  );
+                }
                 return (
-                  <div key={bi} className="cpv2-bay-box cpv2-trio-box">
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} />
-                    <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} />
+                  <div key={bi} className="cpv2-bay-box cpv2-single-box">
+                    <div className="cpv2-single-half">
+                      <BayBoxV2 data={renderDataMap[box.topKey]} count={boxCounts[box.topKey]} />
+                    </div>
+                    <div className="cpv2-empty-half"></div>
                   </div>
                 );
-              }
-              return (
-                <div key={bi} className="cpv2-bay-box cpv2-single-box">
-                  <div className="cpv2-single-half">
-                    <BayBoxV2 data={renderDataMap[box.topKey]} count={boxCounts[box.topKey]} />
-                  </div>
-                  <div className="cpv2-empty-half"></div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
