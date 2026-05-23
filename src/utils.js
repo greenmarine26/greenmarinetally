@@ -1,23 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.86.6';
-// M6.82 변경점 (Universal Cargo Plan baseline 통합 — STSE 525컨 검증 기반):
-//   배경: M6.81 Python (build_cargo_plan_universal.py)에서 STSE SENDAI 2631E 525컨 검증 완료.
-//         핵심 baseline (6단 deck + 4단 hold + 60:40 비율 + 18×13 셀)을 React에 통합.
-//         메모리 #24 "[항상] 빈 카고플랜 표준 양식 (M6.80 baseline)" + #25 "EDI→실 카고플랜 변환" 영구화.
-//   [A] M6.81 baseline 양식을 PrintableCargoPlan에 React 표준으로 적용
-//       - STD_DECK ['92','90','88','86','84','82'] (6단, 기존 5단에서 92 추가)
-//       - STD_HOLD ['08','06','04','02'] (변경 없음)
-//       - .bay-grid-row.deck-row { flex: 6 } / .hold-row { flex: 4 } — 60:40 비율 (BAY 라벨 보호)
-//       - .bay-cell width 18px, height 13px 표준 (인쇄용 baseline)
-//   [B] 빈 카고플랜 baseline 강제 적용 (모든 선박 통일)
-//       - 베이사전 dictBaysSummary 부재 또는 deckTiersLocal 비어있는 케이스:
-//         pageDeckUnion / pageHoldUnion이 빈 Set이면 STD_DECK / STD_HOLD를 baseline으로 사용
-//       - 모든 박스가 같은 6 deck + 4 hold tier 자리 (사용 안 하는 행 invisible)
-//   [C] 페이지 2: Special Cargo Stowage 추가
-//       - 베이플랜 기반 특수화물 리스트 (리퍼+온도, FR, OT, DG, Tank)
-//       - 사용자 핵심 요구 (userPreferences #4): "특수 화물 리스트 = 베이플랜이 기본"
-//       - 인쇄용 별도 페이지 (page-break-before)
-//   [부수] M6.81 검증 결과를 _M681_BASELINE 상수로 코드에 명시 (디버그/검증 용)
+export const APP_VERSION = 'M6.86.7';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
