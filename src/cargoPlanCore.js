@@ -390,17 +390,20 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nHold = holdTiers.length;
 
 
-  // M6.86.8.25: cells가 없거나 비었으면 rowMax로 채움 → hull 모든 자리 active.
-  //   v2 사전만 있고 v5 매트릭스 없는 선박 fallback.
+  // M6.91.0: PDF override의 cells 최우선. 없으면 v5_matrix bayData.deckCells/holdCells. 없으면 가득.
   let deckCells, holdCells;
-  if (bayData?.deckCells && bayData.deckCells.length > 0) {
+  if (override?.deckCells && override.deckCells.length > 0) {
+    deckCells = override.deckCells;
+  } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
     deckCells = bayData.deckCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
   } else {
     deckCells = new Array(nDeck).fill(deckRowMax);
   }
-  if (bayData?.holdCells && bayData.holdCells.length > 0) {
+  if (override?.holdCells && override.holdCells.length > 0) {
+    holdCells = override.holdCells;
+  } else if (bayData?.holdCells && bayData.holdCells.length > 0) {
     holdCells = bayData.holdCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
