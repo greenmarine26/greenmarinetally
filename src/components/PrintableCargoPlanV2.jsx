@@ -64,8 +64,8 @@ function getMarkV2(c, pod, mode) {
 // CSS (M6.81 HTML 그대로 — 셀 18×13px, tier-row 13px, cell-empty visibility:hidden)
 // ------------------------------------------------------------
 const CSS = `
-.cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; display: flex; align-items: stretch; justify-content: center; }
-.cpv2-page { width: 277mm; height: calc(100vh - 16px); min-height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); }
+.cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
+.cpv2-page { width: 277mm; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
