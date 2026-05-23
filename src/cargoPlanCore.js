@@ -148,6 +148,11 @@ export function autoPageLayout(trios, singles, colsPerRow = 5) {
 // ------------------------------------------------------------
 // 4. row 위치 / active cols 단면 (get_row_positions, get_active_cols_symmetric)
 // ------------------------------------------------------------
+// M6.86.8.24: row label 생성. EDI 실데이터 기준 정확한 라벨.
+//   - has_zero=true: evens + ['00'] + odds (가운데 00)
+//   - has_zero=false: evens + odds (00 없음)
+//   - cell_count 홀수 + has_zero=false: 홀수 row가 1개 더 (예: 7개 = evens[06,04,02] + odds[01,03,05,07])
+//   - cell_count 짝수 + has_zero=false: evens = odds 동수 (예: 8개 = [08..02] + [01..07])
 export function getRowPositions(cellCount, hasZero) {
   if (cellCount <= 0) return [];
   const pad = (n) => String(n).padStart(2, '0');
@@ -156,14 +161,16 @@ export function getRowPositions(cellCount, hasZero) {
     const evens = [];
     for (let n = half * 2; n > 0; n -= 2) evens.push(pad(n));
     const odds = [];
-    for (let n = 1; n < half * 2; n += 2) odds.push(pad(n));
+    for (let n = 1; n <= half * 2 - 1; n += 2) odds.push(pad(n));
     return [...evens, '00', ...odds];
   } else {
-    const half = Math.floor(cellCount / 2);
+    // has_zero=false: 홀수 cellCount면 odds가 1개 더, 짝수면 동수
+    const halfEvens = Math.floor(cellCount / 2);
+    const halfOdds = cellCount - halfEvens;
     const evens = [];
-    for (let n = half * 2; n > 0; n -= 2) evens.push(pad(n));
+    for (let n = halfEvens * 2; n > 0; n -= 2) evens.push(pad(n));
     const odds = [];
-    for (let n = 1; n < half * 2; n += 2) odds.push(pad(n));
+    for (let n = 1; n <= halfOdds * 2 - 1; n += 2) odds.push(pad(n));
     return [...evens, ...odds];
   }
 }
@@ -335,47 +342,76 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
 // 6. 한 베이의 모든 렌더 데이터를 한 번에 계산 (편의 함수)
 // ------------------------------------------------------------
 // 컴포넌트는 이 함수가 반환하는 객체를 그대로 JSX로 렌더.
-export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn) {
+export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shipBayDef) {
   const pdf = pdfBays[bayKey];
   if (!pdf) return null;
 
+  const isPair = bayKey.startsWith('(');
   let oddNum;
-  if (bayKey.startsWith('(')) {
+  if (isPair) {
     oddNum = parseInt(bayKey.replace('(', '').replace(')', '').slice(2), 10);
   } else {
     oddNum = parseInt(bayKey, 10);
   }
   const bayData = matrixBays.find(b => b.bayNum === oddNum);
 
-  const deckTiers = pdf.deck_t;
-  const holdTiers = pdf.hold_t;
+  // M6.86.8.24: EDI 실데이터로 has_zero 검증 + rowMax 적용
+  //   - 단독 홀수 박스: rowMaxOdd (DXQD=7 → 라벨 [06,04,02,01,03,05,07])
+  //   - 페어 박스: rowMaxEven (DXQD=8 → 라벨 [08,06,04,02,01,03,05,07])
+  //   - has_zero: 베이의 EDI 컨테이너에 row 0이 있는지로 결정 (사용자 지적: 추측 X, 실데이터)
+  const rowMaxOdd = shipBayDef?.rowMaxOdd;
+  const rowMaxEven = shipBayDef?.rowMaxEven;
+  const rowMax = isPair ? (rowMaxEven || rowMaxOdd || 10) : (rowMaxOdd || rowMaxEven || 9);
+
+  // has_zero 검증: posMap에서 해당 베이의 컨테이너 row 집합 확인
+  const ediRows = new Set();
+  const bayNumsToCheck = isPair
+    ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
+    : [oddNum];
+  for (const [key, rowMap] of posMap.entries()) {
+    const [bb] = key.split('|').map(Number);
+    if (bayNumsToCheck.includes(bb)) {
+      for (const [rowLbl] of rowMap.entries()) {
+        ediRows.add(Number(rowLbl));
+      }
+    }
+  }
+  const hasZero = ediRows.has(0);
+
+  const deckTiers = bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t;
+  const holdTiers = bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t;
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
-  const hasZero = pdf.has_zero;
 
+
+  // cells는 베이사전 v5 매트릭스 그대로. 순서 = 위→아래 (reverse X).
   let deckCells, holdCells;
-  if (bayData && bayData.cells && bayData.cells.length > 0) {
-    const cells = [...bayData.cells].reverse(); // tier 위→아래
-    deckCells = cells.slice(0, nDeck);
-    holdCells = cells.length > nDeck ? cells.slice(nDeck, nDeck + nHold) : new Array(nHold).fill(8);
-    if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(10)];
+  if (bayData?.deckCells && bayData.deckCells.length > 0) {
+    deckCells = bayData.deckCells;
+  } else if (bayData?.cells && bayData.cells.length > 0) {
+    deckCells = bayData.cells.slice(0, nDeck);
   } else {
     deckCells = new Array(nDeck).fill(10);
-    holdCells = new Array(nHold).fill(8);
   }
+  if (bayData?.holdCells && bayData.holdCells.length > 0) {
+    holdCells = bayData.holdCells;
+  } else if (bayData?.cells && bayData.cells.length > 0) {
+    holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
+  } else {
+    holdCells = new Array(nHold).fill(0);
+  }
+  // 길이 보정 (베이사전 누락 케이스)
+  if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(10)];
+  if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(8)];
 
-  const deckMax = deckCells.length > 0 ? Math.max(...deckCells) : 10;
-  const holdMax = holdCells.length > 0 ? Math.max(...holdCells) : deckMax;
-  // M6.86.8.15: M6.81 Python 정답 그대로 — hold는 자체 폭, deck center에 offset 정렬
-  //   has_zero는 각자 max로 결정 (deck_max%2, hold_max%2 각각)
-  //   offset = (n_deck_cols - n_hold_cols) // 2 → hold cells가 deck 가운데에 hull center 매핑
-  const deckHasZero = deckMax % 2 === 1;
-  const holdHasZero = holdMax % 2 === 1;
-  const deckRowPos = getRowPositions(deckMax, deckHasZero);
-  const holdRowPos = getRowPositions(holdMax, holdHasZero);
+  // M6.86.8.23: deck/hold 모두 같은 row 라벨 사용 (베이사전 rowMaxOdd/Even 기준).
+  //   v5_matrix의 cells 숫자는 hull 단면 active 결정용으로만 사용 (없거나 부정확하면 모두 가득).
+  //   row 라벨 자체는 베이사전이 정답.
+  const deckRowPos = getRowPositions(rowMax, hasZero);
+  const holdRowPos = deckRowPos; // 같은 row 라벨 공유
   const nDeckCols = deckRowPos.length;
-  const nHoldCols = holdRowPos.length;
-  const holdOffset = Math.floor((nDeckCols - nHoldCols) / 2);
+  const nHoldCols = nDeckCols;
+  const holdOffset = 0;
 
   const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 

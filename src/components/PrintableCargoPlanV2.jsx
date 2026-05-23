@@ -313,9 +313,18 @@ export default function PrintableCargoPlanV2({
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
     if (raw.length === 0) return raw;
-    // M6.86.8.5: EDI 기반 hasHold 자동 추론
-    //   v5 매트릭스가 hasHold=false라도 EDI에 tier<80 컨테이너 있으면 hold 있다고 처리.
-    //   검수앱 enrichBayDef의 L4 fallback과 동일 원칙.
+    // M6.86.8.22: v2 사전의 deckTiers/holdTiers/baysSummary와 v5 매트릭스의 cells 결합.
+    //   사용자 지적: 자동 분리 X, 베이마다 자기 고유 rows/tiers 정보 그대로 사용.
+    const v2Def = dictData?.bayDef || {};
+    const deckTiersAll = v2Def.deckTiers || [];
+    const holdTiersAll = v2Def.holdTiers || [];
+    const baysSummary = v2Def.baysSummary || [];
+    const summaryByBay = new Map();
+    for (const s of baysSummary) {
+      const n = Number(s.bayNo);
+      if (Number.isFinite(n)) summaryByBay.set(n, s);
+    }
+    // EDI 검증 (선택적 fallback)
     const ediTiersByBay = new Map();
     for (const c of containers) {
       const b = Number(c.bay);
@@ -325,11 +334,35 @@ export default function PrintableCargoPlanV2({
       ediTiersByBay.get(b).add(t);
     }
     return raw.map((b) => {
+      const summary = summaryByBay.get(b.bayNum);
+      const hasDeckFromSummary = summary?.hasDeck;
+      const hasHoldFromSummary = summary?.hasHold;
       const tiers = ediTiersByBay.get(b.bayNum);
-      if (!tiers) return b;
-      const hasHoldFromEdi = [...tiers].some((t) => t < 80);
-      if (b.hasHold || !hasHoldFromEdi) return b;
-      return { ...b, hasHold: true };
+      const ediTiers = tiers ? [...tiers] : [];
+      const hasDeckFromEdi = ediTiers.some((t) => t >= 80);
+      const hasHoldFromEdi = ediTiers.some((t) => t < 80);
+      // 사전 우선, 없으면 EDI fallback
+      const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : hasDeckFromEdi;
+      const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : hasHoldFromEdi;
+      // cells (v5_matrix): 베이의 tier별 row 수 배열. 순서 = 위→아래 (deck 위 tier부터)
+      const cells = b.cells || [];
+      const nDeck = hasDeck ? deckTiersAll.length : 0;
+      const nHold = hasHold ? holdTiersAll.length : 0;
+      // cells 분리: 앞 nDeck개 = deck tiers, 다음 nHold개 = hold tiers
+      const deckCells = nDeck > 0 ? cells.slice(0, nDeck) : [];
+      const holdCells = nHold > 0 ? cells.slice(nDeck, nDeck + nHold) : [];
+      const deckTiers = hasDeck ? deckTiersAll : [];
+      const holdTiers = hasHold ? holdTiersAll : [];
+      return {
+        ...b,
+        hasDeck,
+        hasHold,
+        deckCells,
+        holdCells,
+        deckTiers,
+        holdTiers,
+        isStandalone: summary?.isStandalone || false,
+      };
     });
   }, [dictData, containers]);
 
@@ -484,7 +517,7 @@ export default function PrintableCargoPlanV2({
     });
     singles.forEach((s) => allKeys.push(s));
     for (const key of allKeys) {
-      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap, getColorKey, getIsThrough);
+      map[key] = computeBayRenderData(key, pdfBays, matrixBays, posMap, pod, (c, p) => getMarkV2(c, p, mode), xrayMap, getColorKey, getIsThrough, dictData?.bayDef);
     }
     return map;
   }, [pdfBays, matrixBays, posMap, pod, mode, trios, singles]);
