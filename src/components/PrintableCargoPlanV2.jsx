@@ -24,40 +24,32 @@ import {
 } from '../cargoPlanCore.js';
 
 // ------------------------------------------------------------
-// 검수앱 고유 마크 함수 (M6.81 7기본 + AWK/OOG/Empty/Reefer-Empty 확장)
-// ------------------------------------------------------------
+// 검수앱 마크 규칙 (M6.91.5 사용자 확정):
+//   - 일반 Full = 'F', Empty = 'E'
+//   - 리퍼 Full = 'R/F', Empty = 'R/E'
+//   - FR = 'FR' (2글자), DG = 'D', Tank = 'T', OOG = 'A'
+//   - 양하/선적 동일 마크. 색만 다름 (양하=선사별, 선적=POD별).
+//   - PTK = 컬러 배경 + 글자. 통과 = 회색 + 빈(일반) / 글자(특수).
 function getMarkV2(c, pod, mode) {
   const ptk =
     mode === 'discharge'
       ? c.pod && String(c.pod).toUpperCase().includes('PTK')
       : c.pol && String(c.pol).toUpperCase().includes('PTK');
 
-  // M6.86.8.14: 지침서 §4.2 - X는 짝수 40ft shadow 전용. 통과화물엔 X 쓰지 않음.
-  //   통과 일반 → 글자 없음(빈) + 회색 배경 (cell render에서 isThrough로 처리)
-  //   통과 특수 → 종류별 글자 + 회색 배경
-  //   PTK 일반 → 'o' + 선사/POD 컬러 배경
-  //   PTK 특수 → 종류별 글자 + 자체 컬러 또는 선사 컬러
+  const isEmpty = c.fe === 'E';
 
   // 특수화물 종류 우선 판정 (PTK든 통과든 같은 글자)
   let specialLetter = null;
   if (c.dg) specialLetter = 'D';
-  else if (isReeferContainer(c)) specialLetter = c.fe === 'E' ? 'r' : 'R';
-  else if (c.fr) specialLetter = 'F';
+  else if (isReeferContainer(c)) specialLetter = isEmpty ? 'R/E' : 'R/F';
+  else if (c.fr) specialLetter = 'FR';
   else if (c.tk) specialLetter = 'T';
   else if (c.ot || c.oog) specialLetter = 'A';
-  else if (c.fe === 'E') specialLetter = 'E';
 
-  if (mode === 'discharge') {
-    if (!ptk) return specialLetter || ''; // 통과: 특수면 글자, 일반은 빈 글자 (회색은 cell render)
-    return specialLetter || 'o';
-  }
-
-  // loading 모드
+  // 통과화물: 특수면 글자만 (회색 배경은 cell render), 일반은 빈
   if (!ptk) return specialLetter || '';
-  if (specialLetter) return specialLetter;
-  const podUp = c.pod ? String(c.pod).toUpperCase() : '';
-  if (podUp.length >= 3) return podUp.slice(2, 3);
-  return 'L';
+  // PTK: 특수면 특수글자, 일반이면 F/E
+  return specialLetter || (isEmpty ? 'E' : 'F');
 }
 
 // ------------------------------------------------------------
@@ -86,7 +78,7 @@ const CSS = `
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
 .cpv2-tier-row.cpv2-invisible-row { visibility: hidden; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(6px, 0.8vw, 11px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(5px, 0.7vw, 10px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(5px, 0.6vw, 8px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
