@@ -384,25 +384,26 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nHold = holdTiers.length;
 
 
-  // cells는 베이사전 v5 매트릭스 그대로. 순서 = 위→아래 (reverse X).
+  // M6.86.8.25: cells가 없거나 비었으면 rowMax로 채움 → hull 모든 자리 active.
+  //   v2 사전만 있고 v5 매트릭스 없는 선박 fallback.
   let deckCells, holdCells;
   if (bayData?.deckCells && bayData.deckCells.length > 0) {
     deckCells = bayData.deckCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
   } else {
-    deckCells = new Array(nDeck).fill(10);
+    deckCells = new Array(nDeck).fill(rowMax);
   }
   if (bayData?.holdCells && bayData.holdCells.length > 0) {
     holdCells = bayData.holdCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else {
-    holdCells = new Array(nHold).fill(0);
+    holdCells = new Array(nHold).fill(rowMax);
   }
-  // 길이 보정 (베이사전 누락 케이스)
-  if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(10)];
-  if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(8)];
+  // 길이 보정 (cells 부족하면 rowMax로 채움)
+  if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(rowMax)];
+  if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(rowMax)];
 
   // M6.86.8.23: deck/hold 모두 같은 row 라벨 사용 (베이사전 rowMaxOdd/Even 기준).
   //   v5_matrix의 cells 숫자는 hull 단면 active 결정용으로만 사용 (없거나 부정확하면 모두 가득).

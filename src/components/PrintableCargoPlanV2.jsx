@@ -312,9 +312,6 @@ export default function PrintableCargoPlanV2({
 
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
-    if (raw.length === 0) return raw;
-    // M6.86.8.22: v2 사전의 deckTiers/holdTiers/baysSummary와 v5 매트릭스의 cells 결합.
-    //   사용자 지적: 자동 분리 X, 베이마다 자기 고유 rows/tiers 정보 그대로 사용.
     const v2Def = dictData?.bayDef || {};
     const deckTiersAll = v2Def.deckTiers || [];
     const holdTiersAll = v2Def.holdTiers || [];
@@ -324,7 +321,7 @@ export default function PrintableCargoPlanV2({
       const n = Number(s.bayNo);
       if (Number.isFinite(n)) summaryByBay.set(n, s);
     }
-    // EDI 검증 (선택적 fallback)
+    // EDI tier 검증
     const ediTiersByBay = new Map();
     for (const c of containers) {
       const b = Number(c.bay);
@@ -333,7 +330,21 @@ export default function PrintableCargoPlanV2({
       if (!ediTiersByBay.has(b)) ediTiersByBay.set(b, new Set());
       ediTiersByBay.get(b).add(t);
     }
-    return raw.map((b) => {
+
+    // M6.86.8.25: v5 매트릭스 없어도 v2.baysSummary로 fallback.
+    //   v2.rowMaxOdd/Even으로 row 라벨 결정, cells는 비워서 hull 가득 그림.
+    let bays = raw;
+    if (bays.length === 0 && baysSummary.length > 0) {
+      bays = baysSummary.map((s) => ({
+        bayNum: Number(s.bayNo),
+        cells: [], // 빈 cells → hull active 모두 가득
+        hasHold: !!s.hasHold,
+        hasDeck: s.hasDeck !== false,
+        isStandalone: !!s.isStandalone,
+      }));
+    }
+
+    return bays.map((b) => {
       const summary = summaryByBay.get(b.bayNum);
       const hasDeckFromSummary = summary?.hasDeck;
       const hasHoldFromSummary = summary?.hasHold;
@@ -341,14 +352,11 @@ export default function PrintableCargoPlanV2({
       const ediTiers = tiers ? [...tiers] : [];
       const hasDeckFromEdi = ediTiers.some((t) => t >= 80);
       const hasHoldFromEdi = ediTiers.some((t) => t < 80);
-      // 사전 우선, 없으면 EDI fallback
-      const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : hasDeckFromEdi;
-      const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : hasHoldFromEdi;
-      // cells (v5_matrix): 베이의 tier별 row 수 배열. 순서 = 위→아래 (deck 위 tier부터)
+      const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : (b.hasDeck !== false || hasDeckFromEdi);
+      const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : (b.hasHold || hasHoldFromEdi);
       const cells = b.cells || [];
       const nDeck = hasDeck ? deckTiersAll.length : 0;
       const nHold = hasHold ? holdTiersAll.length : 0;
-      // cells 분리: 앞 nDeck개 = deck tiers, 다음 nHold개 = hold tiers
       const deckCells = nDeck > 0 ? cells.slice(0, nDeck) : [];
       const holdCells = nHold > 0 ? cells.slice(nDeck, nDeck + nHold) : [];
       const deckTiers = hasDeck ? deckTiersAll : [];
@@ -361,7 +369,7 @@ export default function PrintableCargoPlanV2({
         holdCells,
         deckTiers,
         holdTiers,
-        isStandalone: summary?.isStandalone || false,
+        isStandalone: summary?.isStandalone || b.isStandalone || false,
       };
     });
   }, [dictData, containers]);
