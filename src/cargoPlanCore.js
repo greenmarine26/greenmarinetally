@@ -300,8 +300,17 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           const [bb, tier] = key.split('|').map(Number);
           if (bb === adjEven) {
             const tierMap = ensureTier(tier);
-            for (const rowLbl of rowMap.keys()) {
-              if (!tierMap.has(rowLbl)) tierMap.set(rowLbl, 'X'); // shadow X (40ft 그림자)
+            for (const [rowLbl, c] of rowMap.entries()) {
+              // M6.86.8.17: shadow X는 40/45ft만 (20ft는 양옆 홀수 침범 안 함)
+              // 지침서 §4.2 (f): "짝수 40ft가 양옆 홀수 슬롯 점유 = X"
+              const iso = String(c.isoLabel || c.iso || '').toUpperCase();
+              const is40OrMore =
+                iso.startsWith('45') ||
+                iso.startsWith('L') ||
+                /^4[0-9]/.test(iso);
+              if (is40OrMore && !tierMap.has(rowLbl)) {
+                tierMap.set(rowLbl, 'X');
+              }
             }
           }
         }
