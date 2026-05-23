@@ -219,8 +219,27 @@ export default function PrintableCargoPlanV2({
   }, [shipImo, shipName, containers]);
 
   const matrixBays = useMemo(() => {
-    return dictData?._v5Matrix?.matrixBays || [];
-  }, [dictData]);
+    const raw = dictData?._v5Matrix?.matrixBays || [];
+    if (raw.length === 0) return raw;
+    // M6.86.8.5: EDI 기반 hasHold 자동 추론
+    //   v5 매트릭스가 hasHold=false라도 EDI에 tier<80 컨테이너 있으면 hold 있다고 처리.
+    //   검수앱 enrichBayDef의 L4 fallback과 동일 원칙.
+    const ediTiersByBay = new Map();
+    for (const c of containers) {
+      const b = Number(c.bay);
+      const t = Number(c.tier);
+      if (!Number.isFinite(b) || !Number.isFinite(t)) continue;
+      if (!ediTiersByBay.has(b)) ediTiersByBay.set(b, new Set());
+      ediTiersByBay.get(b).add(t);
+    }
+    return raw.map((b) => {
+      const tiers = ediTiersByBay.get(b.bayNum);
+      if (!tiers) return b;
+      const hasHoldFromEdi = [...tiers].some((t) => t < 80);
+      if (b.hasHold || !hasHoldFromEdi) return b;
+      return { ...b, hasHold: true };
+    });
+  }, [dictData, containers]);
 
   // POD 추론 (양하 모드)
   const pod = useMemo(() => {
@@ -336,7 +355,7 @@ export default function PrintableCargoPlanV2({
       {closeBtn}
       <div className="cpv2-page">
         <div className="cpv2-banner">
-          <b>✓ M6.86.8.4 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
+          <b>✓ M6.86.8.5 Universal Cargo Plan (M6.81 알고리즘 회귀)</b> &nbsp;|&nbsp; {containers.length} 컨테이너 &nbsp;|&nbsp; POD: {pod}
         </div>
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
