@@ -189,9 +189,12 @@ export function getActiveColsSymmetric(cellCount, nTotal) {
       const half = Math.floor((cellCount - 1) / 2);
       for (let i = center - half; i <= center + half; i++) active.add(i);
     } else {
-      const half = Math.floor(cellCount / 2);
-      for (let i = center - half; i < center; i++) active.add(i);
-      for (let i = center + 1; i < center + 1 + half; i++) active.add(i);
+      // M6.92.7: 짝수 cellCount + 홀수 nTotal (hasZero=true). row 라벨 [10,08,...,00,01,...,07,09]
+      //   row 00은 idx=center, row 01은 idx=center+1. PDF 정답: 가운데 row 00,01 + 좌우 대칭 채움.
+      //   cellCount=2 → {center, center+1} (row 00,01)
+      //   cellCount=8 → {center-3..center+4} (row 06,04,02,00,01,03,05,07)
+      const half = cellCount / 2;
+      for (let i = center - half + 1; i <= center + half; i++) active.add(i);
     }
   } else {
     const half = Math.floor(cellCount / 2);

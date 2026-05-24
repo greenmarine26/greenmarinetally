@@ -30,25 +30,45 @@ export const PDF_BAY_OVERRIDE = {
 
   // SWAT (SAWASDEE ATLANTIC) — 2524S 기준
   SWAT: {
-    "01": { rowCount: 7,  hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6] },
-    "03": { rowCount: 9,  hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2] },   // (02)03
-    "05": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2] },
-    "07": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2] },   // (06)07
-    "09": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2] },
-    "11": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2] },   // (10)11
-    "13": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2] },
-    "15": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2] },   // (14)15
-    "17": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2] },
-    "19": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2] },   // (18)19
-    "21": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2] },
-    "23": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2] },   // (22)23
-    "25": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4] },
-    "27": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4] },     // (26)27
-    "29": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [10,8,6,4] },
-    "31": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [10,8,6,4] },     // (30)31
-    "33": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [] },
-    "35": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [] },             // (34)35
-    "38": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84],       holdTiers: [] },
+    // M6.92.7: deckCells/holdCells 추가 — PDF SWAT2524S vector path 정밀 추출 (tier별 hull active 개수)
+    "01": { rowCount: 7,  hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6],
+            deckCells: [6,6,6,6,6], holdCells: [5,1,1] },
+    "03": { rowCount: 9,  hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],     // (02)03
+            deckCells: [7,7,7,7,7], holdCells: [6,3,3,1,1] },
+    "05": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],
+            deckCells: [7,8,8,8,8], holdCells: [7,5,5,3,1] },
+    "07": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],     // (06)07
+            deckCells: [8,8,8,8,8], holdCells: [7,6,5,5,3] },
+    "09": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],
+            deckCells: [8,8,8,8,8], holdCells: [8,8,7,7,5] },
+    "11": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],     // (10)11
+            deckCells: [9,9,9,9,9], holdCells: [8,8,8,7,5] },
+    "13": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],
+            deckCells: [8,8,9,9,9], holdCells: [8,8,8,8,7] },
+    "15": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],     // (14)15
+            deckCells: [8,9,9,9,9,9], holdCells: [8,8,8,8,7] },
+    "17": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],
+            deckCells: [8,8,8,8,8,8], holdCells: [8,8,8,8,8] },
+    "19": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],     // (18)19
+            deckCells: [9,9,9,9,9,9], holdCells: [8,8,8,8,8] },
+    "21": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],
+            deckCells: [7,7,7,7,7,7], holdCells: [7,7,7,7,7] },
+    "23": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],     // (22)23
+            deckCells: [8,8,8,8,8,8], holdCells: [7,7,7,7,7] },
+    "25": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4],
+            deckCells: [7,7,7,7,7,7], holdCells: [7,7,7,7] },
+    "27": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4],       // (26)27
+            deckCells: [8,8,8,8,8,8], holdCells: [7,7,7,7] },
+    "29": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [10,8,6,4],
+            deckCells: [8,8,9,8,8,8,8], holdCells: [8,8,8,8] },
+    "31": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [10,8,6,4],       // (30)31
+            deckCells: [9,9,9,9,9,9,9], holdCells: [8,8,8,7] },
+    "33": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [],
+            deckCells: [8,8,9,9,9,9,8], holdCells: [] },
+    "35": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [],               // (34)35
+            deckCells: [9,9,9,9,9,9], holdCells: [] },
+    "38": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84],       holdTiers: [],
+            deckCells: [9,9,9,9,9,9], holdCells: [] },
   },
 
   // TNJP (TEN JUPITER) — 25323W PDF 기준

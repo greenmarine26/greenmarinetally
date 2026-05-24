@@ -963,6 +963,14 @@ const CONTENT = {
       ],
     },
     {
+      title: '🆕 M6.92.7 (2026-05-24) — SWAT hull 단면 정확',
+      items: [
+        { q: 'SWAT 19개 베이 hull cells 정확 입력', a: 'PDF stowage instruction에서 tier별 hull active 셀 개수 정밀 추출 → PDF override에 deckCells/holdCells 등록. BAY 17 등 deck X 가득 / hold V형 정확 표시.' },
+        { q: '짝수 cells 가운데 정렬 fix', a: 'getActiveColsSymmetric 짝수 cellCount 처리 — row 00,01 가운데 정렬 + 좌우 대칭 채움 (좌측 치우침 버그 수정).' },
+        { q: '캡처 문제 해결', a: 'hull 단면 깨짐(가득) / deck셀 사라짐 / hold셀 넘침 모두 해결.' },
+      ],
+    },
+    {
       title: '🆕 M6.91~M6.92 (2026-05-24) — 마크/색 통일 + 쉬프팅 개선',
       items: [
         { q: '컨테이너 마크 새 약속', a: 'Full=F, Empty=E, 리퍼Full=R/F, 리퍼Empty=R/E, FR=FR, DG=D, Tank=T, OOG=A. 양하/선적 모두 동일 기준 적용.' },
