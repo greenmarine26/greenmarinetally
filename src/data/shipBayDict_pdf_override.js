@@ -50,6 +50,46 @@ export const PDF_BAY_OVERRIDE = {
     "35": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [] },             // (34)35
     "38": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84],       holdTiers: [] },
   },
+
+  // TNJP (TEN JUPITER) — 25323W PDF 기준
+  TNJP: {
+    "01": { rowCount: 7, hasZero: true,  deckTiers: [84,82],             holdTiers: [6,4,2] },
+    "03": { rowCount: 7, hasZero: true,  deckTiers: [84,82],             holdTiers: [6,4,2] },
+    "05": { rowCount: 7, hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },
+    "07": { rowCount: 7, hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },
+    "09": { rowCount: 9, hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },
+    "11": { rowCount: 9, hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },
+    "13": { rowCount: 9, hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },
+    "15": { rowCount: 9, hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },
+    "17": { rowCount: 9, hasZero: true,  deckTiers: [90,88,86,84,82],    holdTiers: [8,6,4,2] },
+    "19": { rowCount: 9, hasZero: true,  deckTiers: [90,88,86,84,82],    holdTiers: [8,6,4,2] },
+    "21": { rowCount: 9, hasZero: true,  deckTiers: [90,88,86,84,82],    holdTiers: [8,6,4,2] },
+    "23": { rowCount: 9, hasZero: true,  deckTiers: [90,88,86,84,82],    holdTiers: [8,6,4,2] },
+    "25": { rowCount: 9, hasZero: true,  deckTiers: [90,88,86,84,82],    holdTiers: [8,6,4,2] },
+    "27": { rowCount: 9, hasZero: true,  deckTiers: [90,88,86,84,82],    holdTiers: [8,6,4,2] },
+    "29": { rowCount: 7, hasZero: true,  deckTiers: [92,90,88,86,84,82], holdTiers: [] },
+    "31": { rowCount: 7, hasZero: true,  deckTiers: [92,90,88,86,84,82], holdTiers: [] },
+    "33": { rowCount: 7, hasZero: true,  deckTiers: [92,90,88,86,84,82], holdTiers: [] },
+  },
+
+  // PCSG (PACIFIC TIANJIN) — 2616W PDF 기준
+  PCSG: {
+    "01": { rowCount: 4, hasZero: false, deckTiers: [88,86,84,82],       holdTiers: [] },
+    "03": { rowCount: 6, hasZero: false, deckTiers: [88,86,84],          holdTiers: [8,6,4] },
+    "05": { rowCount: 8, hasZero: false, deckTiers: [88,86,84],          holdTiers: [8,6,4,2] },
+    "07": { rowCount: 8, hasZero: false, deckTiers: [90,88,86,84],       holdTiers: [8,6,4,2] },
+    "09": { rowCount: 8, hasZero: false, deckTiers: [90,88,86,84],       holdTiers: [8,6,4,2] },
+    "11": { rowCount: 8, hasZero: false, deckTiers: [90,88,86,84],       holdTiers: [8,6,4,2] },
+    "13": { rowCount: 8, hasZero: false, deckTiers: [90,88,86,84],       holdTiers: [8,6,4,2] },
+    "15": { rowCount: 8, hasZero: false, deckTiers: [90,88,86,84],       holdTiers: [8,6,4,2] },
+    "17": { rowCount: 3, hasZero: true,  deckTiers: [90,88,86,84],       holdTiers: [] },
+    "19": { rowCount: 8, hasZero: false, deckTiers: [90,88,86,84],       holdTiers: [8,6,4,2] },
+    "21": { rowCount: 8, hasZero: false, deckTiers: [92,90,88,86,84],    holdTiers: [8,6,4,2] },
+    "23": { rowCount: 8, hasZero: false, deckTiers: [92,90,88,86,84],    holdTiers: [8,6,4,2] },
+    "25": { rowCount: 8, hasZero: false, deckTiers: [92,90,88,86,84],    holdTiers: [8,6,4,2] },
+    "27": { rowCount: 8, hasZero: false, deckTiers: [92,90,88,86,84,82], holdTiers: [] },
+    "29": { rowCount: 8, hasZero: false, deckTiers: [92,90,88,86,84,82], holdTiers: [] },
+  },
 };
 
 export function getBayOverride(shipCode, bayNo) {
