@@ -16,7 +16,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import { normalizeBay, isoToPdfLabel } from '../utils.js';
+import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
@@ -164,7 +164,7 @@ function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {} }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -276,8 +276,14 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const c = cellMap[`${t}-${r}`];
     if (!c) return <div key={`${t}-${r}`} className="bd-cell empty"></div>;
     const lines = formatCellLines(c);
+    const ptk = isPtk(c, mode);
+    const colorKey = ptk ? getContainerColorKey(c, mode) : null;
+    const bgColor = colorKey ? colorMap[colorKey] : null;
     return (
-      <div key={`${t}-${r}`} className={`bd-cell filled ${isPtk(c, mode) ? 'ptk' : ''}`}>
+      <div key={`${t}-${r}`}
+        className={`bd-cell filled ${ptk ? 'ptk' : ''}`}
+        style={bgColor ? { background: bgColor, color: '#fff' } : undefined}
+      >
         <div>{lines.line1}</div>
         <div>{lines.line2}</div>
         <div className="bd-line3">{lines.line3}</div>
@@ -333,6 +339,9 @@ export default function PrintableBayDetail({
 }) {
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
+
+  // M6.92.0: 공통 색 함수 — 양하=선사, 선적=POD (베이플랜/카고플랜과 동일)
+  const colorMap = useMemo(() => buildContainerColorMap(containers || [], mode), [containers, mode]);
 
   // M6.77 → M6.78: voyage 전체 deck/hold 별 row range
   const computedRowRange = useMemo(() => {
@@ -537,6 +546,7 @@ export default function PrintableBayDetail({
                 dictBaysSummary={dictBaysSummary}
                 globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
+                colorMap={colorMap}
                 dictShipMeta={dictShipMeta} />
             );
           })

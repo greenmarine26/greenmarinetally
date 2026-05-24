@@ -468,8 +468,8 @@ export default function PrintableCargoPlanV2({
       else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
       else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
       addTo(cargoCounts, cat, size);
-      // POD (선적 모드에서 사용)
-      const p3 = podOf(c);
+      // POD (선적 모드에서 사용) - getContainerColorKey로 통일
+      const p3 = getContainerColorKey(c, 'loading');
       if (p3) addTo(podCounts, p3, size);
     }
     const carriers = [...carrierCounts.entries()].sort((a, b) => b[1].total - a[1].total);

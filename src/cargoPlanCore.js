@@ -391,23 +391,25 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nHold = holdTiers.length;
 
 
-  // M6.91.0: PDF override의 cells 최우선. 없으면 v5_matrix bayData.deckCells/holdCells. 없으면 가득.
+  // M6.92.1: cells 할당 개선 — override.deckTiers 기준으로 정확 slice.
+  //   bayData.deckCells는 v2 전체 deckTiers 기준 (94 포함 7개)이라 override (6개)와 index 어긋남.
+  //   bayData.cells (raw reverse) 우선 → nDeck 기준 slice → index 정확.
   let deckCells, holdCells;
   if (override?.deckCells && override.deckCells.length > 0) {
     deckCells = override.deckCells;
-  } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
-    deckCells = bayData.deckCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
+  } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
+    deckCells = bayData.deckCells.slice(0, nDeck);
   } else {
     deckCells = new Array(nDeck).fill(deckRowMax);
   }
   if (override?.holdCells && override.holdCells.length > 0) {
     holdCells = override.holdCells;
-  } else if (bayData?.holdCells && bayData.holdCells.length > 0) {
-    holdCells = bayData.holdCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
+  } else if (bayData?.holdCells && bayData.holdCells.length > 0) {
+    holdCells = bayData.holdCells.slice(0, nHold);
   } else {
     holdCells = new Array(nHold).fill(holdRowMax);
   }
