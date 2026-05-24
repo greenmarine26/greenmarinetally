@@ -776,6 +776,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
                   selectionMode={selectionMode}
                   selectedCns={selectedCns}
+                  mode={mode}
                 />
               </div>
             ))}
@@ -815,6 +816,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
             selectionMode={selectionMode}
             selectedCns={selectedCns}
+            mode={mode}
           />
         )}
       </div>
@@ -907,7 +909,9 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
-  selectionMode = false, selectedCns
+  selectionMode = false, selectedCns,
+  // M6.92.5: 양하/선적 모드 (needsShift 표시 제어)
+  mode = 'discharge'
 }) {
   const evenContainers = page.evenBay ? (bayGroups[page.evenBay] || []) : [];
   const oddContainers = page.oddBay ? (bayGroups[page.oddBay] || []) : [];
