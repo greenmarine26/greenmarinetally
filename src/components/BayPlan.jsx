@@ -764,6 +764,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   fontSize={fontSize}
                   isMobile={isMobile}
                   cellColor={cellColor}
+                  getCellBg={getCellBg}
                   globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
@@ -802,6 +803,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             fontSize={fontSize}
             isMobile={isMobile}
             cellColor={cellColor}
+            getCellBg={getCellBg}
             globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
@@ -898,7 +900,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, globalRowRange, bayStructureMap, globalTiers = [], dictBaysSummary = {},
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getCellBg, globalRowRange, bayStructureMap, globalTiers = [], dictBaysSummary = {},
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
