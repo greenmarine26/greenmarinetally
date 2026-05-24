@@ -963,6 +963,15 @@ const CONTENT = {
       ],
     },
     {
+      title: '🆕 M6.92.9 (2026-05-24) — 홀수 단독 vs 짝수 페어 deck 차이 정확',
+      items: [
+        { q: '핵심 차이 발견', a: '홀수 단독 베이 (17, 13, 09, 21, 25 등) deck = 9 cells (row 10/09 invisible). 짝수 페어 박스 (19, 11, 07, 23, 27 등) deck = 11 cells 가득.' },
+        { q: 'M6.92.8 버그', a: '자동 추출이 row 09 라벨 영역 잘못 잡아 페어 박스도 9로 줄임. 페어 박스 row 09는 사실 hull 안 active.' },
+        { q: 'hold는 동일', a: '모든 베이 hold는 row 10/09 invisible (max 9). 아래로 V형 좁아짐.' },
+        { q: 'BAY 19 (페어) 정답', a: 'deck 모든 tier = 11 (row 10~09 가득). hold = 9 (양쪽 1씩 invisible).' },
+      ],
+    },
+    {
       title: '🆕 M6.92.8 (2026-05-24) — SWAT cells 영역 버그 fix',
       items: [
         { q: 'cells 1개씩 적게 추출된 버그', a: 'M6.92.7의 자동 추출이 BAY 영역 x>40으로 잡아 좌측 row 08/10 라벨 누락 → cells -1. 영역 수정 후 정확.' },
