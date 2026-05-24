@@ -1,7 +1,7 @@
 # Tallyman Master — HANDOFF.md
 
 **최종 갱신**: 2026-05-24
-**현재 버전**: M6.92.9 (배포 예정)
+**현재 버전**: M6.93.0 (배포 예정)
 **GitHub**: greenmarine26/greenmarinetally
 **작업 디렉토리**: `/home/claude/v2work/`
 
@@ -9,10 +9,11 @@
 
 ## 현재 상태 요약
 
-### 완료된 주요 작업 (M6.91~M6.92)
+### 완료된 주요 작업 (M6.91~M6.93)
 | 버전 | 내용 |
 |------|------|
-| M6.92.9 | 홀수 단독 deck=9 / 짝수 페어 deck=11 정확 분리 (이미지 픽셀 분석) |
+| M6.93.0 | 마스터플랜 기준 전면 재작성: STANDARD_HOLD tier 10 추가 + 베이별 rowCount 다양화 + BAY 34 신설 |
+| M6.92.9 | 홀수 단독 deck=9 / 짝수 페어 deck=11 분리 |
 | M6.92.8 | SWAT cells 영역 버그 fix |
 | M6.92.7 | SWAT 19베이 hull cells 정밀 입력 + 짝수 cells 가운데 정렬 fix |
 | M6.91.0 | PDF override 사전 신설 (DJCT 15베이 + SWAT 19베이) |

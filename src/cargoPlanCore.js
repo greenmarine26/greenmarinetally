@@ -5,13 +5,15 @@
 // 검증된 정답 알고리즘 (STSE 2631E 525 컨테이너 검증 완료).
 //
 // 베이사전 = 절대 기준. 각 베이의 cells 배열로 hull 단면 결정.
-// STANDARD_DECK [92,90,88,86,84,82] + STANDARD_HOLD [8,6,4,2] tier 자리 통일.
+// STANDARD_DECK [94,92,90,88,86,84,82] + STANDARD_HOLD [10,8,6,4,2] tier 자리 통일.
 // 각 베이의 실제 deck_t/hold_t는 그 베이의 cells 분포로 결정.
 // 페이지 폭 통일 (globalRowRange/pageDeckUnion) 절대 사용 금지.
+//
+// M6.93.0: STANDARD_HOLD에 tier 10 추가 (마스터플랜 비교 결과 hold 가장 위 tier 10 누락 버그 fix).
 // ============================================================
 
 export const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82];
-export const STANDARD_HOLD = [8, 6, 4, 2];
+export const STANDARD_HOLD = [10, 8, 6, 4, 2];
 
 // ------------------------------------------------------------
 // 1. 베이 자동 페어링 (auto_pair_bays)

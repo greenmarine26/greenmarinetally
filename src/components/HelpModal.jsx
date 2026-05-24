@@ -963,6 +963,16 @@ const CONTENT = {
       ],
     },
     {
+      title: '🆕 M6.93.0 (2026-05-24) — 마스터플랜 기준 전면 재작성 (STSE 구현법)',
+      items: [
+        { q: 'STANDARD_HOLD에 tier 10 추가', a: '이전 STANDARD_HOLD=[8,6,4,2] (4 tier)에 tier 10 추가 → [10,8,6,4,2] (5 tier). hold 가장 위 tier 누락 버그 fix.' },
+        { q: '베이별 rowCount 통일 → 다양화', a: '이전 모든 베이 rowCount=11. 마스터플랜 정답: 17/19/11/23/27/31/33/38=11, 13/09/15/07/21/25/29=9, 03=8, 01=7, 05/34=5.' },
+        { q: 'BAY 01 hasZero=false', a: '라벨 "06 04 02 01 03 05 07" — 00 없음. 짝수+홀수 섞임 7 row.' },
+        { q: 'BAY 34 신설', a: '마스터플랜에 BAY 34 단독 (5 row "04 02 00 01 03"). PDF stowage의 (34)35 페어와 별도.' },
+        { q: 'deck/hold tier STANDARD 통일', a: '모든 베이 deckTiers=[94,92,90,88,86,84,82] + holdTiers=[10,8,6,4,2]. 베이별 hull은 cells로 표현.' },
+      ],
+    },
+    {
       title: '🆕 M6.92.9 (2026-05-24) — 홀수 단독 vs 짝수 페어 deck 차이 정확',
       items: [
         { q: '핵심 차이 발견', a: '홀수 단독 베이 (17, 13, 09, 21, 25 등) deck = 9 cells (row 10/09 invisible). 짝수 페어 박스 (19, 11, 07, 23, 27 등) deck = 11 cells 가득.' },

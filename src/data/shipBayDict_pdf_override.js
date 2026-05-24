@@ -28,48 +28,54 @@ export const PDF_BAY_OVERRIDE = {
     "29": { rowCount: 10, hasZero: false, deckTiers: [92,90,88,86,84,82], holdTiers: [] },         // (28)29 hold 없음
   },
 
-  // SWAT (SAWASDEE ATLANTIC) — 2524S 기준
+  // SWAT (SAWASDEE ATLANTIC) — 마스터플랜 Tallyman_Master6_929-1.pdf 기준 (2026-05-24)
   SWAT: {
-    // M6.92.9: 이미지 픽셀 분석으로 정확 추출 — 핵심 발견: 홀수 단독 deck=9, 짝수 페어 deck=11 (가득).
-    //   M6.92.8은 row 09 라벨 영역 누락으로 페어 박스도 9로 잘못 추출. 다시 정밀.
-    "01": { rowCount: 7,  hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6],
-            deckCells: [7,7,7,7,7], holdCells: [5,1,1] },
-    "03": { rowCount: 9,  hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],     // (02)03 페어
-            deckCells: [9,9,9,9,9], holdCells: [7,3,3,1,1] },
-    "05": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],
-            deckCells: [9,9,9,9,9], holdCells: [9,5,5,3,1] },
-    "07": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],     // (06)07 페어
-            deckCells: [11,11,11,11,11], holdCells: [9,7,5,5,3] },
-    "09": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],
-            deckCells: [9,9,9,9,9], holdCells: [9,9,7,7,5] },
-    "11": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],     // (10)11 페어
-            deckCells: [11,11,11,11,11], holdCells: [9,9,9,7,5] },
-    "13": { rowCount: 11, hasZero: true,  deckTiers: [90,88,86,84,82],          holdTiers: [10,8,6,4,2],
-            deckCells: [9,9,9,9,9], holdCells: [9,9,9,9,7] },
-    "15": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],     // (14)15 페어
-            deckCells: [10,11,11,11,11,11], holdCells: [9,9,9,9,7] },
-    "17": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],
-            deckCells: [9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
-    "19": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],     // (18)19 페어
-            deckCells: [11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
-    "21": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],
-            deckCells: [9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
-    "23": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4,2],     // (22)23 페어
-            deckCells: [11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
-    "25": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4],
-            deckCells: [9,9,9,9,9,9], holdCells: [9,9,9,9] },
-    "27": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [10,8,6,4],       // (26)27 페어
-            deckCells: [11,11,11,11,11,11], holdCells: [9,9,9,9] },
-    "29": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [10,8,6,4],
-            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9] },
-    "31": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [10,8,6,4],       // (30)31 페어
-            deckCells: [11,11,11,11,11,11,10], holdCells: [9,9,9,7] },
-    "33": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82],    holdTiers: [],
-            deckCells: [10,10,10,10,10,10,9], holdCells: [] },
-    "35": { rowCount: 11, hasZero: true,  deckTiers: [92,90,88,86,84,82],       holdTiers: [],               // (34)35 페어
-            deckCells: [11,11,11,11,11,9], holdCells: [] },
-    "38": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84],       holdTiers: [],
-            deckCells: [11,11,11,11,11,11], holdCells: [] },
+    // M6.93.0: 마스터플랜 전면 재작성.
+    //   - 핵심: rowCount는 베이별로 다름 (9/11/8/7/5). STANDARD_DECK[94~82] + STANDARD_HOLD[10~02] 통일.
+    //   - cells: deck=rowCount 가득 (마스터플랜 모든 deck tier 표시), hold=rowCount 또는 좌1+우1 invisible.
+    //   - BAY 34 신설 (짝수 단독, row 5 "04 02 00 01 03").
+    //   - BAY 01: hasZero=false (라벨 "06 04 02 01 03 05 07" — 00 없음).
+    //   - BAY 03: rowCount=8 (라벨 "08 06 04 02 00 01 03 05" — 07/09 없음).
+    "01": { rowCount: 7,  hasZero: false, deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [7,7,7,7,7,7,7], holdCells: [7,7,7,7,7] },
+    "03": { rowCount: 8,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (02)03 페어
+            deckCells: [8,8,8,8,8,8,8], holdCells: [8,8,8,8,8] },
+    "05": { rowCount: 5,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [5,5,5,5,5,5,5], holdCells: [5,5,5,5,5] },
+    "07": { rowCount: 9,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (06)07 페어
+            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
+    "09": { rowCount: 9,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
+    "11": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (10)11 페어
+            deckCells: [11,11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
+    "13": { rowCount: 9,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
+    "15": { rowCount: 9,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (14)15 페어
+            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
+    "17": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [11,11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
+    "19": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (18)19 페어
+            deckCells: [11,11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
+    "21": { rowCount: 9,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
+    "23": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (22)23 페어
+            deckCells: [11,11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
+    "25": { rowCount: 9,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
+    "27": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (26)27 페어
+            deckCells: [11,11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
+    "29": { rowCount: 9,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],
+            deckCells: [9,9,9,9,9,9,9], holdCells: [9,9,9,9,9] },
+    "31": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [10,8,6,4,2],     // (30)31 페어
+            deckCells: [11,11,11,11,11,11,11], holdCells: [9,9,9,9,9] },
+    "33": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [],
+            deckCells: [11,11,11,11,11,11,11], holdCells: [] },
+    "34": { rowCount: 5,  hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [],               // BAY 34 (짝수 단독, 마스터플랜 신규)
+            deckCells: [5,5,5,5,5,5,5], holdCells: [] },
+    "35": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [],               // (34)35 페어 — PDF stowage 기준 유지
+            deckCells: [11,11,11,11,11,11,11], holdCells: [] },
+    "38": { rowCount: 11, hasZero: true,  deckTiers: [94,92,90,88,86,84,82], holdTiers: [],
+            deckCells: [11,11,11,11,11,11,11], holdCells: [] },
   },
 
   // TNJP (TEN JUPITER) — 25323W PDF 기준
