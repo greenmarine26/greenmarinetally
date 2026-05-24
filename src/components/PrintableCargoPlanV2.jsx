@@ -11,7 +11,7 @@ import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isReeferContainer, isoToLabel } from '../utils.js';
+import { isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap } from '../utils.js';
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
@@ -439,41 +439,9 @@ export default function PrintableCargoPlanV2({
     return counts;
   }, [trios, singles, containers, pod]);
 
-  // M6.86.8.13: 선사별/POD별 컬러 매핑 (사용자 약속)
-  //   양하: 평택분 셀 → 선사(c.op)별 배경 컬러, 별첨1 선사명 옆에 같은 컬러
-  //   선적: 평택분 셀 → POD 3자별 배경 컬러, 별첨1 POD명 옆에 같은 컬러
-  const PALETTE = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#0ea5e9'];
-  const podOf = (c) => {
-    const podUp = String(c.pod || '').toUpperCase();
-    return podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : null);
-  };
-  const colorMap = useMemo(() => {
-    const keys = new Set();
-    containers.forEach(c => {
-      if (!matchPodC(c)) return;
-      if (mode === 'discharge') {
-        const op = c.op && String(c.op).trim();
-        if (op) keys.add(op);
-      } else {
-        const p3 = podOf(c);
-        if (p3 && p3 !== 'PTK') keys.add(p3);
-      }
-    });
-    const map = {};
-    Array.from(keys).sort().forEach((k, i) => {
-      map[k] = PALETTE[i % PALETTE.length];
-    });
-    return map;
-  }, [containers, mode]);
-  const getColorKey = (c) => {
-    if (!matchPodC(c)) return null;
-    if (mode === 'discharge') {
-      return c.op && String(c.op).trim() || null;
-    } else {
-      const p3 = podOf(c);
-      return (p3 && p3 !== 'PTK') ? p3 : null;
-    }
-  };
+  // M6.92.0: 공통 색 함수 (utils.js) 사용 — 베이플랜/카고플랜/베이상세 통일
+  const colorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
+  const getColorKey = (c) => getContainerColorKey(c, mode);
   // M6.86.8.14: 통과화물 판정 — 양하 mode에서 c.pod가 PTK 아니면 통과, 선적은 c.pol이 PTK 아니면 통과
   const getIsThrough = (c) => !matchPodC(c);
 

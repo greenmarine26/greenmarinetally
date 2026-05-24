@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.91.5';
+export const APP_VERSION = 'M6.92.0';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2007,4 +2007,38 @@ export async function parsePortMisExcel(arrayBuffer) {
     }
   }
   return ships;
+}
+
+// ─── M6.92.0: 공통 컨테이너 색 키 함수 ──────────────────────────────
+// 양하: 선사(c.op)별, 선적: POD 3자별. 베이플랜/카고플랜/베이상세 통일.
+export const COLOR_PALETTE = [
+  '#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6',
+  '#ec4899','#06b6d4','#84cc16','#f97316','#0ea5e9'
+];
+
+export function getContainerColorKey(c, mode) {
+  if (mode === 'discharge') {
+    // 양하: pod에 PTK 포함 + 선사코드
+    if (!c.pod || !String(c.pod).toUpperCase().includes('PTK')) return null;
+    return c.op ? String(c.op).trim() : null;
+  } else {
+    // 선적: pol에 PTK 포함 + POD 3자
+    if (!c.pol || !String(c.pol).toUpperCase().includes('PTK')) return null;
+    const p = String(c.pod || '').toUpperCase();
+    const p3 = p.length >= 5 ? p.slice(2, 5) : p.slice(0, 3);
+    return (p3 && p3 !== 'PTK') ? p3 : null;
+  }
+}
+
+export function buildContainerColorMap(containers, mode) {
+  const keys = new Set();
+  for (const c of containers) {
+    const k = getContainerColorKey(c, mode);
+    if (k) keys.add(k);
+  }
+  const map = {};
+  Array.from(keys).sort().forEach((k, i) => {
+    map[k] = COLOR_PALETTE[i % COLOR_PALETTE.length];
+  });
+  return map;
 }

@@ -10,7 +10,7 @@
 // 페이지 폭 통일 (globalRowRange/pageDeckUnion) 절대 사용 금지.
 // ============================================================
 
-export const STANDARD_DECK = [92, 90, 88, 86, 84, 82];
+export const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82];
 export const STANDARD_HOLD = [8, 6, 4, 2];
 
 // ------------------------------------------------------------

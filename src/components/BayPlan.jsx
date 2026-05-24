@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
@@ -130,7 +130,8 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return map;
   }, [bayGroups]);
 
-  // 시프팅 분석 (양하 모드일 때만 의미있음)
+  // 시프팅 분석: 양하 화물 위에 있는 비양하 컨테이너 = 시프팅 대상(주황+⬆)
+  // M6.92.0: compMap 연동 — 시프팅 화물 선적 완료 시 above에서 제외 → ⬆ 사라짐
   const shiftingMap = useMemo(() => {
     const result = { needsShift: {}, shiftCns: {} };
     if (!dischargeCns || dischargeCns.size === 0) return result;
@@ -142,6 +143,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       const tier = parseInt(c.tier);
       const above = containers.filter(o =>
         o.cn !== c.cn && !dischargeCns.has(o.cn) &&
+        !(compMap && compMap[o.cn]) &&
         o.bay === c.bay && o.row === c.row && tierZone(o.tier) === zone &&
         parseInt(o.tier) > tier
       );
@@ -151,7 +153,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       }
     }
     return result;
-  }, [containers, dischargeCns]);
+  }, [containers, dischargeCns, compMap]);
 
   // 좌우 균형 (전 베이 통일)
   const globalRowRange = useMemo(() => {
@@ -346,48 +348,33 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return out;
   }, [bayGroups, dictBayList]);
 
-  // 셀 색상 — V37 cellColor + M3.77: 양하/선적 통일 POL/POD 색깔
-  // 정책:
-  //   - 양하 모드: 셀 = POL(출발지) 색깔, 평택 도착이면 노랑 ring 강조
-  //   - 선적 모드: 셀 = POD(목적지) 색깔, 평택 출발이면 노랑 ring 강조
-  //   - 노랑 ring = 우리 작업 대상 식별
-  // M4.1: XRAY를 완료보다 우선순위 높게 변경 (XRAY 시각적 누락 fix)
-  //   - 이전: 완료된 XRAY 컨 → 흰색으로만 표시되어 XRAY 인지 못함
-  //   - 수정: XRAY = 보라 (완료여도 XRAY 우선), 완료 마크는 ✓로 별도 표시
+  // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
+  const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
+
+  // 셀 배경 hex 색 (일반 컨테이너, xray/comp/shift 제외)
+  const getCellBg = (c) => {
+    if (xrayMap[c.cn] || (compMap && compMap[c.cn]) || shiftingMap.shiftCns[c.cn]) return null;
+    const k = getContainerColorKey(c, mode);
+    return k ? bayColorMap[k] : null;
+  };
+
+  // 셀 Tailwind 클래스 — bg는 getCellBg inline style로 분리
   const cellColor = (c) => {
     if (xrayMap[c.cn]) {
-      // M4.1: XRAY 최우선 (완료여도 XRAY 표시 유지)
-      // 완료 시 보라+밝은 ring으로 구분
-      if (compMap[c.cn]) {
-        return 'bg-purple-700 text-purple-50 border-purple-300 ring-2 ring-emerald-400';
-      }
+      if (compMap && compMap[c.cn]) return 'bg-purple-700 text-purple-50 border-purple-300 ring-2 ring-emerald-400';
       return 'bg-purple-700 text-purple-50 border-purple-400 ring-1 ring-purple-300';
     }
-    if (compMap[c.cn]) {
-      // 완료 = 어두운 흰색 (다크 배경 위 잘 보이게)
-      return 'bg-slate-300 text-slate-900 border-slate-500';
-    }
-    if (shiftingMap.shiftCns[c.cn]) {
-      // 시프팅 대상 = 주황
-      return 'bg-orange-600 text-orange-50 border-orange-400';
-    }
+    if (compMap && compMap[c.cn]) return 'bg-slate-300 text-slate-900 border-slate-500';
+    if (shiftingMap.shiftCns[c.cn]) return 'bg-orange-600 text-orange-50 border-orange-400';
 
-    // M3.77: 양하 = POL 색깔, 선적 = POD 색깔
-    const portCode = mode === 'discharge' ? c.pol : c.pod;
-    const pc = portCode ? getPortColor(portCode) : null;
     const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
-
-    if (pc) {
-      // 색깔 매칭됨 - 평택 작업 대상이면 노랑 ring 추가
-      return `${pc.bg} ${pc.text} ${isOurContainer
-        ? 'border-amber-300 ring-2 ring-amber-400'
-        : 'border-slate-600'}`;
+    const hasBg = !!getContainerColorKey(c, mode);
+    if (hasBg) {
+      return isOurContainer
+        ? 'text-white border-amber-300 ring-2 ring-amber-400'
+        : 'text-white border-slate-500';
     }
-
-    // 색깔 없는 항구 - 평택 작업 대상이면 노랑(기본), 통과면 슬레이트
-    if (isOurContainer) {
-      return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
-    }
+    if (isOurContainer) return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
     return 'bg-slate-700 text-slate-300 border-slate-600';
   };
 
@@ -1240,7 +1227,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
           isSelected ? 'ring-4 ring-sky-400 ring-inset' : ''
         }`}
-        style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize }}
+        style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize, backgroundColor: getCellBg(c) || undefined }}
       >
         {/* M3.78: 좌측 컬러 바 - 두껍고 흰색 테두리로 어떤 셀 색깔에도 잘 보임 */}
         {typeBarBg && (
