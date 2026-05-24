@@ -1,7 +1,7 @@
 # Tallyman Master — HANDOFF.md
 
 **최종 갱신**: 2026-05-24
-**현재 버전**: M6.92.7 (배포 예정)
+**현재 버전**: M6.92.8 (배포 예정)
 **GitHub**: greenmarine26/greenmarinetally
 **작업 디렉토리**: `/home/claude/v2work/`
 
@@ -12,7 +12,8 @@
 ### 완료된 주요 작업 (M6.91~M6.92)
 | 버전 | 내용 |
 |------|------|
-| M6.92.7 | SWAT 19베이 hull cells 정밀 입력 (PDF vector path 자동 추출) + 짝수 cells 가운데 정렬 fix |
+| M6.92.8 | SWAT cells 영역 버그 fix (좌측 row 08/10 라벨 누락 → -1 → 정확 재추출) |
+| M6.92.7 | SWAT 19베이 hull cells 정밀 입력 + 짝수 cells 가운데 정렬 fix |
 | M6.91.0 | PDF override 사전 신설 (DJCT 15베이 + SWAT 19베이) |
 | M6.91.1~4 | viewport fix, 스크롤 복구, PWA manifest 404 fix |
 | M6.91.5 | 마크 규칙 개편 (Full=F, Empty=E, R/F, R/E, FR) |

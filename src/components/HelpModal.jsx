@@ -963,6 +963,14 @@ const CONTENT = {
       ],
     },
     {
+      title: '🆕 M6.92.8 (2026-05-24) — SWAT cells 영역 버그 fix',
+      items: [
+        { q: 'cells 1개씩 적게 추출된 버그', a: 'M6.92.7의 자동 추출이 BAY 영역 x>40으로 잡아 좌측 row 08/10 라벨 누락 → cells -1. 영역 수정 후 정확.' },
+        { q: 'BAY 17 정답', a: 'cells=9 (좌 row 10 + 우 row 09 invisible). row 08은 hull 안 active.' },
+        { q: '단독 베이 deck 가득', a: 'BAY 11, 19 등 deck cells=11 (가운데 가득). BAY 17, 21, 25는 cells=9.' },
+      ],
+    },
+    {
       title: '🆕 M6.92.7 (2026-05-24) — SWAT hull 단면 정확',
       items: [
         { q: 'SWAT 19개 베이 hull cells 정확 입력', a: 'PDF stowage instruction에서 tier별 hull active 셀 개수 정밀 추출 → PDF override에 deckCells/holdCells 등록. BAY 17 등 deck X 가득 / hold V형 정확 표시.' },
