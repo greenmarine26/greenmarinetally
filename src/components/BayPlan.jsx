@@ -351,21 +351,22 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
   const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
 
-  // 셀 배경 hex 색 (일반 컨테이너, xray/comp/shift 제외)
+  // 셀 배경 hex 색 — POD/선사 색. xray/완료 제외. 쉬프팅도 POD색 유지 (마크로만 구분)
   const getCellBg = (c) => {
-    if (xrayMap[c.cn] || (compMap && compMap[c.cn]) || shiftingMap.shiftCns[c.cn]) return null;
+    if (xrayMap[c.cn] || (compMap && compMap[c.cn])) return null;
     const k = getContainerColorKey(c, mode);
     return k ? bayColorMap[k] : null;
   };
 
-  // 셀 Tailwind 클래스 — bg는 getCellBg inline style로 분리
+  // 셀 Tailwind 클래스
   const cellColor = (c) => {
     if (xrayMap[c.cn]) {
       if (compMap && compMap[c.cn]) return 'bg-purple-700 text-purple-50 border-purple-300 ring-2 ring-emerald-400';
       return 'bg-purple-700 text-purple-50 border-purple-400 ring-1 ring-purple-300';
     }
     if (compMap && compMap[c.cn]) return 'bg-slate-300 text-slate-900 border-slate-500';
-    if (shiftingMap.shiftCns[c.cn]) return 'bg-orange-600 text-orange-50 border-orange-400';
+    // 쉬프팅 주황: 양하 모드에서만. 선적 모드에서는 POD 색 유지
+    if (mode === 'discharge' && shiftingMap.shiftCns[c.cn]) return 'bg-orange-600 text-orange-50 border-orange-400';
 
     const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
     const hasBg = !!getContainerColorKey(c, mode);
@@ -1125,7 +1126,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         style={{ width: cellW, height: cellH }}/>;
     }
 
-    const needsShift = shiftingMap.needsShift[c.cn];
+    const needsShift = mode === 'discharge' ? shiftingMap.needsShift[c.cn] : null;
     const ptk = isPtk(c);
     const fe = c.fe || 'F';
     const wt = c.wt > 0 ? (c.wt / 1000).toFixed(1) : '0.0';
