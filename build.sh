@@ -15,8 +15,56 @@
 set -e
 cd "$(dirname "$0")"
 
+echo "[0/5] sw.js VERSION을 APP_VERSION과 동기화..."
+# M6.93.18: utils.js의 APP_VERSION을 public/sw.js의 VERSION으로 자동 주입.
+#   이유: sw.js VERSION이 byte-level 안 바뀌면 브라우저가 새 SW 등록 안 함
+#         → 옛 캐시 영원히 유지 → 사용자 폰에 새 빌드가 도달 못함.
+#   M5.78 → M6.93.18 까지 자동 갱신 안 되어 발생했던 사고 재발 방지.
+APP_VER=$(grep -oE "APP_VERSION = '[^']+'" src/utils.js | sed -E "s/.*'([^']+)'.*/\1/")
+if [ -z "$APP_VER" ]; then
+  echo "✗ src/utils.js에서 APP_VERSION 추출 실패"
+  exit 1
+fi
+sed -i "s/^const VERSION = '[^']*';/const VERSION = '$APP_VER';/" public/sw.js
+sed -i "s/^const VERSION = '[^']*';/const VERSION = '$APP_VER';/" sw.js 2>/dev/null || true
+PUB_VER=$(grep -oE "VERSION = '[^']+'" public/sw.js | sed -E "s/.*'([^']+)'.*/\1/")
+if [ "$PUB_VER" != "$APP_VER" ]; then
+  echo "✗ public/sw.js VERSION 동기화 실패 (APP=$APP_VER, SW=$PUB_VER)"
+  exit 1
+fi
+echo "✓ sw.js VERSION = $APP_VER (APP_VERSION과 동기화됨)"
+
 echo "[1/5] 옛 빌드 산출물 / vite 캐시 제거..."
 rm -rf dist assets node_modules/.vite
+
+# M6.93.18: vite 빌드 직전, root index.html을 dev-source 형태로 임시 교체.
+#   배경: build.sh의 마지막 단계에서 dist/index.html을 root로 복사 → root index.html이
+#         옛 hash 'index-XXXX.js'를 가리키게 됨. 다음 빌드에서 vite가 root index.html을
+#         entry로 읽다가 옛 hash 파일 못 찾아 실패.
+#   해결: 빌드 직전 root index.html을 vite-friendly /src/main.jsx 진입점으로 잠시 교체.
+#         빌드 후 [4/5]에서 dist/index.html (새 hash)로 다시 덮어씀.
+echo "[1.5/5] root index.html을 vite-source 템플릿으로 임시 교체..."
+cat > index.html << 'INDEX_EOF'
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tallyman Master</title>
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Tallyman" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <script type="module" src="/src/main.jsx"></script>
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>
+INDEX_EOF
 
 echo "[2/5] 의존성 확인..."
 [ ! -d node_modules ] && npm install --silent
