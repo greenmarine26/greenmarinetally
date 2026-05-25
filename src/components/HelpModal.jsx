@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.93.1 (2026-05-25) — 신규 선박 베이 매트릭스 빌더 (EDI+사전+PDF+사용자 폼)',
+      examples: [
+        { q: '🎯 목적', a: '신규 선박 입항 시 베이사전 없어도 즉시 카고플랜 사용 가능. EDI에서 자동 베이 구조 추출 → 베이사전 보강 → 부족 시 PDF 업로드 보강 → 사용자 검증 폼 → userBayDict 저장.' },
+        { q: '📍 사용법', a: '자료 탭 > "🚢 신규 선박 베이 매트릭스 빌더" 버튼. 현재 항차 EDI를 자동 분석해서 베이/페어/rowCount/tier 후보 추출. 검토 필요한 베이(노란 테두리)는 사용자가 직접 수정. PDF 있으면 [📄 PDF 업로드 (보강)] 버튼으로 추가 보강. [💾 베이사전 저장] 누르면 즉시 사용 가능.' },
+        { q: '🔍 자동 추출 우선순위 (사용자 가르침)', a: '1순위 EDI(가장 신뢰, 실 적재 데이터) → 2순위 베이사전(EDI 부족분 보강) → 3순위 PDF(베이사전에도 없을 때 사용자 요청). 우선순위가 출처 표시(source: edi+dict+pdf 등)에 반영됨.' },
+        { q: '⚠️ PDF 자동 파싱 한계', a: '베이 발견/페어 100%, rowCount/hasZero 70-95%, cells는 마크만 카운트(빈 셀은 PDF에 없음). 따라서 사용자 검증 폼 필수. 어제 36척 엑셀 입력과 동일한 흐름.' },
+        { q: '💾 저장 형식', a: 'userBayDict (localStorage) 표준 형식. addToUserBayDict() 사용. recordCount, baysSummary[{bay, rowCount, hasZero, deckTiers, holdTiers, deckCells, holdCells, source}]. 기존 베이사전 lookup 우선순위 그대로(Firebase > userBayDict > v2 > v5 > v1).' },
+        { q: '🆕 신규 파일', a: 'src/shipMatrixBuilder.js (EDI/사전/PDF 매트릭스 헬퍼), src/pdfBayParser.js (pdf.js 기반), src/components/ShipMatrixBuilderModal.jsx (UI). pdfjs-dist 의존성 추가.' },
+      ],
+    },
+    {
       title: '🆕 M6.86.8 (2026-05-23) — M6.81 Universal 알고리즘 회귀, 카고플랜 V2 도입',
       examples: [
         { q: '🔥 사용자 보고', a: '카스피와 완전히 같았던 M6.81 양식이 M6.86.x로 오면서 또 깨짐. BAY 07이 카스피는 10컬럼인데 검수앱은 5컬럼. BAY 11에 00이 잘못 추가. BAY 28을 트리오 (28)29로 인식 못함 등. 사용자 요청: HTML 방식으로 다른 선박도 다 고쳐달라.' },

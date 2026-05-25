@@ -44,6 +44,7 @@ import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
 import BulkStowageModal from '../components/BulkStowageModal.jsx'; // M6.42
 import BulkAscModal from '../components/BulkAscModal.jsx'; // M6.47
+import ShipMatrixBuilderModal from '../components/ShipMatrixBuilderModal.jsx'; // M6.93.1
 import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6.43
 import BayDictDiagnosticsWidget from '../components/BayDictDiagnosticsWidget.jsx'; // M6.50
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
@@ -1202,6 +1203,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   const [bulkStowageOpen, setBulkStowageOpen] = useState(false);
   // M6.47: 일괄 ASC 등록 모달 (Gemini 0)
   const [bulkAscOpen, setBulkAscOpen] = useState(false);
+  // M6.93.1: 신규 선박 베이 매트릭스 빌더 (EDI + 사전 + PDF + 사용자 폼)
+  const [matrixBuilderOpen, setMatrixBuilderOpen] = useState(false);
   const ediRef = useRef(null);
   const listRef = useRef(null);
   const cameraRef = useRef(null);
@@ -1886,6 +1889,19 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         onBulkUpload={() => setBulkStowageOpen(true)}
         onAscUpload={() => setBulkAscOpen(true)}
       />
+      {/* M6.93.1: 신규 선박 베이 매트릭스 빌더 */}
+      <button
+        onClick={() => setMatrixBuilderOpen(true)}
+        className="w-full bg-gradient-to-br from-emerald-900/40 to-teal-900/40 hover:from-emerald-900/60 border border-emerald-700/50 rounded-lg p-3 flex items-center gap-3 active:scale-[0.98] transition"
+      >
+        <span className="text-xl">🚢</span>
+        <div className="text-left flex-1">
+          <div className="text-sm font-bold text-emerald-300">신규 선박 베이 매트릭스 빌더</div>
+          <div className="text-[11px] text-emerald-400/70 mt-0.5">
+            현재 EDI 자동 분석 → 베이사전 보강 → PDF 추가 → 사용자 검증 → 즉시 등록
+          </div>
+        </div>
+      </button>
       {/* M6.50: 베이사전 진단 위젯 — 등록 entry 필드 완성도 + 잠재 오류 자동 감지 */}
       <BayDictDiagnosticsWidget/>
       {/* M5.26: 통합 출력 진입 */}
@@ -1939,6 +1955,17 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           onClose={() => setBulkAscOpen(false)}
           onCompleted={(res) => {
             setStatus(`⚡ ASC 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패 (Gemini 0회)`);
+          }}
+        />
+      )}
+      {/* M6.93.1: 신규 선박 베이 매트릭스 빌더 */}
+      {matrixBuilderOpen && (
+        <ShipMatrixBuilderModal
+          voyage={voyage}
+          containers={Object.values(sec.ediContainers || {})}
+          onClose={() => setMatrixBuilderOpen(false)}
+          onSaved={(entry) => {
+            setStatus(`✅ ${entry.code} 베이 매트릭스 저장 (${entry.bayDef.recordCount} 베이)`);
           }}
         />
       )}
