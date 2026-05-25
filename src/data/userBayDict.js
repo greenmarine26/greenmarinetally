@@ -38,13 +38,54 @@ export function loadUserBayDict() {
  * @returns {object|null}
  */
 export function lookupUserBayDict(imo, code) {
+  // M6.93.12: 매칭 보강 — IMO / code / callsign / name fuzzy 모두 시도
+  //   기존 버그: 사용자가 'DXQD' 키로 저장했는데 카고플랜이 (imo='9388417', name='XIN QUN DAO')로 찾아서 MISS.
+  //             → v2 사전이 사용되어 사용자 수정 무시됨. (사용자 보고)
+  //   원칙: 사용자가 저장한 데이터는 사용자 외에 변경 못 함 — 매칭이 가장 폭넓게 동작해야 함.
   const dict = loadUserBayDict();
+  if (!dict || Object.keys(dict).length === 0) return null;
+
+  // 1. dict 키가 IMO일 때
   if (imo && dict[imo]) return dict[imo];
-  if (code) {
-    if (dict[code]) return dict[code];
-    // 키가 IMO인 경우, code 필드로 검색
+  // 2. dict 키가 code일 때 (정확 매칭)
+  if (code && dict[code]) return dict[code];
+  // 3. entry.imo 필드 매칭
+  if (imo) {
     for (const k of Object.keys(dict)) {
-      if (dict[k].code === code) return dict[k];
+      if (dict[k]?.imo && String(dict[k].imo) === String(imo)) return dict[k];
+    }
+  }
+  // 4. entry.code 필드 매칭
+  if (code) {
+    for (const k of Object.keys(dict)) {
+      if (dict[k]?.code === code) return dict[k];
+    }
+  }
+  // 5. entry.callsign 매칭 (code 인자가 callsign일 수도)
+  if (code) {
+    const search = String(code).toUpperCase().trim();
+    for (const k of Object.keys(dict)) {
+      const cs = String(dict[k]?.callsign || '').toUpperCase().trim();
+      if (cs && cs.length >= 3 && cs === search) return dict[k];
+    }
+  }
+  // 6. entry.name fuzzy 매칭 (code 인자가 선박명일 때)
+  //    공백 제거 후 5자 prefix 양방향 포함 (Firebase fuzzy와 동일 규칙)
+  if (code) {
+    const search = String(code).toUpperCase().replace(/\s+/g, '');
+    if (search.length >= 4) {
+      for (const k of Object.keys(dict)) {
+        const en = String(dict[k]?.name || '').toUpperCase().replace(/\s+/g, '');
+        if (!en || en.length < 4) continue;
+        if (en.includes(search.slice(0, 5)) || search.includes(en.slice(0, 5))) {
+          return dict[k];
+        }
+        // entry.code도 부분 매칭 (사용자 입력 code가 선박명 앞 4자일 때 — 예: 'DXQD' vs 선박명 'XINQUNDAO')
+        const ec = String(dict[k]?.code || '').toUpperCase();
+        if (ec && ec.length >= 4 && (search.startsWith(ec) || en.startsWith(ec))) {
+          return dict[k];
+        }
+      }
     }
   }
   return null;

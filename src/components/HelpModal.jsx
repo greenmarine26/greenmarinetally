@@ -379,6 +379,20 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🚨 M6.93.12 (2026-05-25) — 사용자 데이터 보호 (긴급 수정)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"사용자가 입력한 데이터를 어디에선가 수정하고 있습니다. 사용자 데이터는 사용자 외에 변경하지 못하게 해주세요. DXQD 데크 08 ROW가 카고플랜에서 사라져 있습니다. 데크와 홀드 셀들이 사용자가 베이데이터 수정한 대로 되어 있지 않습니다."' },
+        { q: '🔍 진단 (시뮬)', a: '3가지 연쇄 버그 발견. (1) lookupUserBayDict 매칭 실패: 사용자가 \'DXQD\' 키로 저장 → 카고플랜이 (imo=9388417, vsl=XIN QUN DAO)로 찾음 → MISS → v2 사전 사용 → 사용자 수정 무시. (2) cargoPlanCore.js 우선순위 역전: M6.93.10 주석 "override > userBay > v5" — 사용자 입력 보호 원칙 위배. (3) mergeBayDef가 user source일 때 v2와 union → 사용자가 제거한 tier가 v2에서 복원.' },
+        { q: '✅ Fix 1: lookupUserBayDict 6단계 매칭', a: 'data/userBayDict.js — (1) 키=IMO (2) 키=code (3) entry.imo 필드 매칭 (4) entry.code 필드 매칭 (5) entry.callsign 매칭 (6) entry.name fuzzy(5자 prefix 양방향). 사용자가 DXQD로 저장한 데이터를 (9388417, XIN QUN DAO/H3OI/DXQD 등) 어떤 인자로 호출해도 매칭됨.' },
+        { q: '✅ Fix 2: cargoPlanCore.js 우선순위 역전', a: '**userBay > override > v5 > fallback**. rowCount, hasZero, deckTiers, holdTiers, deckCells, holdCells 모두 사용자 데이터 최우선. override는 사용자가 아직 수정 안 한 베이의 fallback.' },
+        { q: '✅ Fix 3: mergeBayDef user union 차단', a: 'shipStructure.js — `result.source !== \'user\'` 조건 추가. user 소스는 v2와 union 안 함. 사용자가 ShipMatrixBuilderModal에서 직접 수정한 데이터는 v2의 다른 tier로 변경되지 않음.' },
+        { q: '✅ Fix 4: PrintableCargoPlanV2 베이별 tier 보존', a: 'matrixBays 생성에서 `deckTiers = summary.deckTiers || deckTiersAll`. 베이별 사용자 수정 deckTiers가 있으면 그것 우선. 없으면 선박 전체 통일(v2 deckTiersAll) fallback.' },
+        { q: '📋 시뮬 검증 (PASS)', a: 'TEST 1: 6가지 호출 시나리오 모두 매칭 ✅. TEST 2: userBay [88,86,84,82,80] 보존, override [90,88,86,84] 덮어쓰기 안 함 ✅. TEST 3: BAY 03 사용자 80 추가 보존, BAY 05 미수정은 deckTiersAll fallback ✅. TEST 4: firebase는 union, user는 union 안 함 ✅.' },
+        { q: '🛡 원칙', a: '사용자가 ShipMatrixBuilderModal에서 입력/수정한 데이터는 사용자 외 변경 금지. EDI 자동 분석, v2 사전, override 모두 사용자 데이터를 덮어쓸 수 없음.' },
+        { q: '📁 영향 범위', a: '4개 파일 수정: data/userBayDict.js (매칭 보강), cargoPlanCore.js (우선순위), shipStructure.js (mergeBayDef 조건), components/PrintableCargoPlanV2.jsx (베이별 tier). 사용자가 저장 안 한 베이/선박은 fallback 그대로 작동 (회귀 없음).' },
+      ],
+    },
+    {
       title: '🆕 M6.93.11 (2026-05-25) — 카고플랜 V2만 사용 + BayPlan/BayDetail 매트릭스 호환',
       examples: [
         { q: '🔥 사용자 요구', a: '"카고 플랜은 V2만 사용. V2에 적용된 자료로 베이플랜도 수정. 베이상세도 수정. 보이는 화면 + 출력 전부."' },

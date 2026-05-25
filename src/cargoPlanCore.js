@@ -372,15 +372,25 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     b.bayNo === oddKey2 || b.bay === oddKey3 || b.bay === oddKey2
   );
 
-  // M6.91.0: PDF override가 있으면 그대로 사용 (베이마다 다른 row 구조 정확히)
+  // M6.93.12: 우선순위 — userBay(사용자 직접 수정) > override(개발자 박아둔 정답) > v5 > fallback
+  //   원칙: 사용자가 ShipMatrixBuilderModal에서 직접 수정한 데이터는 사용자 외에 변경 금지.
+  //         override는 사용자가 아직 수정 안 한 베이의 fallback일 뿐.
+  //   M6.91.0: PDF override는 DJCT/SWAT 등 추측 안 하기 위한 정답 데이터지만,
+  //            사용자가 직접 수정했다면 그 의도가 최우선.
   const override = getBayOverride(shipCode, oddNum);
   const rowMaxOdd = shipBayDef?.rowMaxOdd;
   const rowMaxEven = shipBayDef?.rowMaxEven;
-  // override.rowCount = row 라벨 총 개수 (getRowPositions cellCount 인자)
-  const deckRowMax = override ? override.rowCount : (rowMaxEven || rowMaxOdd || 10);
-  const holdRowMax = override ? override.rowCount : (rowMaxOdd || rowMaxEven || 9);
+
+  // rowCount: userBay 우선
+  const userRowCount = (typeof userBay?.rowCount === 'number' && userBay.rowCount > 0) ? userBay.rowCount : null;
+  const deckRowMax = userRowCount ?? (override ? override.rowCount : (rowMaxEven || rowMaxOdd || 10));
+  const holdRowMax = userRowCount ?? (override ? override.rowCount : (rowMaxOdd || rowMaxEven || 9));
+
+  // hasZero: userBay 우선
   let hasZero;
-  if (override) {
+  if (userBay && typeof userBay.hasZero === 'boolean') {
+    hasZero = userBay.hasZero;
+  } else if (override) {
     hasZero = override.hasZero;
   } else {
     // EDI 검증 fallback
@@ -397,24 +407,27 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     hasZero = ediRows.has(0);
   }
 
-  const deckTiers = override?.deckTiers
-    || (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
+  const deckTiers =
+       (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
     || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
+    || override?.deckTiers
     || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
-  const holdTiers = override?.holdTiers
-    || (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
+  const holdTiers =
+       (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
     || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
+    || override?.holdTiers
     || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
 
-  // M6.93.10: cells 우선순위 — override > userBay > v5 cells > v5 deckCells > fallback
+  // M6.93.12: cells 우선순위 — userBay > override > v5 cells > v5 deckCells > fallback
+  //   사용자 직접 수정 최우선 보호.
   let deckCells, holdCells;
-  if (override?.deckCells && override.deckCells.length > 0) {
-    deckCells = override.deckCells;
-  } else if (userBay?.deckCells && userBay.deckCells.length > 0) {
+  if (userBay?.deckCells && userBay.deckCells.length > 0) {
     deckCells = userBay.deckCells.slice(0, nDeck);
+  } else if (override?.deckCells && override.deckCells.length > 0) {
+    deckCells = override.deckCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
   } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
@@ -422,10 +435,10 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   } else {
     deckCells = new Array(nDeck).fill(deckRowMax);
   }
-  if (override?.holdCells && override.holdCells.length > 0) {
-    holdCells = override.holdCells;
-  } else if (userBay?.holdCells && userBay.holdCells.length > 0) {
+  if (userBay?.holdCells && userBay.holdCells.length > 0) {
     holdCells = userBay.holdCells.slice(0, nHold);
+  } else if (override?.holdCells && override.holdCells.length > 0) {
+    holdCells = override.holdCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else if (bayData?.holdCells && bayData.holdCells.length > 0) {

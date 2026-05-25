@@ -348,12 +348,28 @@ export default function PrintableCargoPlanV2({
       const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : (b.hasDeck !== false || hasDeckFromEdi);
       const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : (b.hasHold || hasHoldFromEdi);
       const cells = b.cells ? [...b.cells].reverse() : []; // M6.90.2: cells는 아래→위 저장 → reverse로 위→아래 변환
-      const nDeck = hasDeck ? deckTiersAll.length : 0;
-      const nHold = hasHold ? holdTiersAll.length : 0;
-      const deckCells = nDeck > 0 ? cells.slice(0, nDeck) : [];
-      const holdCells = nHold > 0 ? cells.slice(nDeck, nDeck + nHold) : [];
-      const deckTiers = hasDeck ? deckTiersAll : [];
-      const holdTiers = hasHold ? holdTiersAll : [];
+      // M6.93.12: 베이별 사용자 deckTiers/holdTiers 우선 (ShipMatrixBuilderModal 저장본).
+      //   기존 버그: deckTiersAll(선박 전체 통일)로만 설정 → 사용자가 BAY 03에 tier 추가해도 무시됨.
+      //   원칙: 사용자 데이터 보호. 베이별 customized tier가 있으면 그것이 정답.
+      const userDeckTiers = (summary?.deckTiers && summary.deckTiers.length > 0) ? summary.deckTiers
+                          : (summary?.deckTiersLocal && summary.deckTiersLocal.length > 0) ? summary.deckTiersLocal
+                          : null;
+      const userHoldTiers = (summary?.holdTiers && summary.holdTiers.length > 0) ? summary.holdTiers
+                          : (summary?.holdTiersLocal && summary.holdTiersLocal.length > 0) ? summary.holdTiersLocal
+                          : null;
+      const deckTiers = hasDeck ? (userDeckTiers || deckTiersAll) : [];
+      const holdTiers = hasHold ? (userHoldTiers || holdTiersAll) : [];
+      const nDeck = deckTiers.length;
+      const nHold = holdTiers.length;
+      // cells: v5에서 가져온 게 우선 (베이별), 없으면 user의 deckCells/holdCells
+      const userDeckCells = (summary?.deckCells && summary.deckCells.length > 0) ? summary.deckCells : null;
+      const userHoldCells = (summary?.holdCells && summary.holdCells.length > 0) ? summary.holdCells : null;
+      const deckCells = nDeck > 0
+        ? (cells.length > 0 ? cells.slice(0, nDeck) : (userDeckCells ? userDeckCells.slice(0, nDeck) : []))
+        : [];
+      const holdCells = nHold > 0
+        ? (cells.length > 0 ? cells.slice(nDeck, nDeck + nHold) : (userHoldCells ? userHoldCells.slice(0, nHold) : []))
+        : [];
       return {
         ...b,
         hasDeck,

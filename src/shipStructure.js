@@ -308,10 +308,13 @@ export function getShipBayDictData(imo, code) {
       if (v2HasData && !v3HasData) {
         // M6.62: Firebase/User entry가 baysSummary 빈 — v2 정밀 데이터로 완전 교체
         finalBayDef = { ...v2Backup.entry.bayDef, bayList: v2Backup.entry.bayDef.bayList || bayList || [] };
-      } else if (v2HasData && v3HasData) {
-        // 둘 다 있으면 union (기존 M6.25 동작)
+      } else if (v2HasData && v3HasData && result.source !== 'user') {
+        // M6.25: 둘 다 있으면 union (Firebase 케이스만)
+        // M6.93.12: user 소스는 union 금지 — 사용자가 ShipMatrixBuilderModal에서 직접 수정한 데이터는
+        //           사용자 외 변경 불가. v2 tier가 v3 union으로 다시 들어오면 사용자가 제거한 행이 복원됨.
         finalBayDef = mergeBayDef(finalBayDef, v2Backup.entry.bayDef);
       }
+      // user 소스에 v2 데이터 있는 경우: finalBayDef 그대로 (사용자 수정 보존)
     } catch (e) { /* fallback: 기존 데이터 그대로 */ }
   }
 
