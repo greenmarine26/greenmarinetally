@@ -223,19 +223,91 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const summary = summarizeMatrix(matrix);
   const bayList = Object.keys(matrix.byBay).sort();
 
+  // M6.93.15: 디버그 패널 토글 (사용자가 데이터 직접 확인 가능)
+  const [showDebug, setShowDebug] = useState(false);
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/70 flex items-start justify-center overflow-auto py-8">
       <div className="bg-zinc-900 rounded-lg text-white w-full max-w-5xl mx-4 flex flex-col" style={{ maxHeight: '90vh' }}>
         {/* 헤더 */}
         <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더</h2>
+            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더 <span className="text-xs text-zinc-400 ml-2">M6.93.15</span></h2>
             <div className="text-xs text-zinc-400 mt-1">
               현재 항차의 EDI에서 선박 정보 자동 추출 + 베이 구조 분석
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white text-2xl px-2">×</button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="text-xs px-2 py-1 bg-amber-700/50 hover:bg-amber-600 rounded"
+              title="현재 저장된 사용자 데이터 확인"
+            >
+              🔍 {showDebug ? '디버그 닫기' : '디버그 보기'}
+            </button>
+            <button onClick={onClose} className="text-zinc-400 hover:text-white text-2xl px-2">×</button>
+          </div>
         </div>
+
+        {/* M6.93.15: 디버그 패널 — 현재 user dict 데이터 확인 */}
+        {showDebug && (() => {
+          const savedNow = lookupUserBayDict(shipMeta.imo, shipMeta.code);
+          const inMemoryMatrix = matrix?.byBay || {};
+          return (
+            <div className="bg-amber-950/30 border-b border-amber-700/50 p-3 text-xs font-mono">
+              <div className="text-amber-300 font-bold mb-2">🔍 디버그 정보 (사용자 검증용)</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-amber-200 mb-1">📦 localStorage 저장본 (lookupUserBayDict)</div>
+                  {savedNow ? (
+                    <>
+                      <div>code: <span className="text-green-300">{savedNow.code}</span></div>
+                      <div>imo: <span className="text-green-300">{savedNow.imo}</span></div>
+                      <div>name: <span className="text-green-300">{savedNow.name}</span></div>
+                      <div>bayDef.deckTiers: <span className="text-cyan-300">[{(savedNow.bayDef?.deckTiers || []).join(',')}]</span></div>
+                      <div>bayDef.holdTiers: <span className="text-cyan-300">[{(savedNow.bayDef?.holdTiers || []).join(',')}]</span></div>
+                      <div>baysSummary 개수: {savedNow.bayDef?.baysSummary?.length || 0}</div>
+                      <div className="mt-1 text-zinc-400">베이별 cells (저장본):</div>
+                      <div className="max-h-32 overflow-auto bg-zinc-900/60 p-1 rounded text-[10px]">
+                        {(savedNow.bayDef?.baysSummary || []).map(b => (
+                          <div key={b.bayNo}>
+                            BAY {b.bayNo}: rowCount={b.rowCount}, hasZero={String(!!b.hasZero)}<br/>
+                            &nbsp;&nbsp;deckTiers=[{(b.deckTiers || []).join(',')}], deckCells=[{(b.deckCells || []).join(',')}]<br/>
+                            &nbsp;&nbsp;holdTiers=[{(b.holdTiers || []).join(',')}], holdCells=[{(b.holdCells || []).join(',')}]
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-red-300">⚠️ 저장본 없음 (lookupUserBayDict가 매칭 못함)</div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-amber-200 mb-1">🛠 현재 모달 매트릭스 (메모리)</div>
+                  <div>byBay 개수: {Object.keys(inMemoryMatrix).length}</div>
+                  <div>fromSaved: {String(matrix?.fromSaved || false)}</div>
+                  <div className="mt-1 text-zinc-400">베이별 cells (현재 입력):</div>
+                  <div className="max-h-32 overflow-auto bg-zinc-900/60 p-1 rounded text-[10px]">
+                    {Object.keys(inMemoryMatrix).sort().map(bay => {
+                      const e = inMemoryMatrix[bay];
+                      return (
+                        <div key={bay}>
+                          BAY {bay.slice(1)}: rowCount={e.rowCount}, hasZero={String(!!e.hasZero)}<br/>
+                          &nbsp;&nbsp;deckCells=[{(e.deckCells || []).join(',')}]<br/>
+                          &nbsp;&nbsp;holdCells=[{(e.holdCells || []).join(',')}]
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 text-amber-200/80">
+                💡 저장본과 현재 매트릭스가 다르면, 저장 버튼을 눌러야 반영됩니다.
+                저장본이 없거나 cells가 [9,9,9,9] 같이 자동 채워졌으면 사용자가 직접 수정 후 저장 필요.
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 본문 */}
         <div className="flex-1 overflow-auto p-4">

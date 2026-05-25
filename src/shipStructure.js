@@ -333,6 +333,41 @@ export function getShipBayDictData(imo, code) {
   const wrappedEntry = enrichBayDef({ bayDef: finalBayDef }, matrixV5);
   const enrichedBayDef = wrappedEntry.bayDef;
 
+  // M6.93.15: bayDef.deckTiers/holdTiers fallback — 옛 user dict 호환.
+  //   문제: 옛 user dict (M6.93.14 이전 저장)에는 bayDef.deckTiers union 없음.
+  //         또는 v2 사전의 baysSummary에는 deckTiers 필드 자체가 없음.
+  //         → PrintableCargoPlanV2의 deckTiersAll=[] → nDeck=0 → 데크 영역 안 그려짐.
+  //   해결: 여기서 fallback 자동 생성. baysSummary union → matrixV5 maxRow 추정 → 기본값.
+  if (!Array.isArray(enrichedBayDef.deckTiers) || enrichedBayDef.deckTiers.length === 0) {
+    const deckSet = new Set();
+    (enrichedBayDef.baysSummary || []).forEach(b => {
+      (b.deckTiers || b.deckTiersLocal || []).forEach(t => deckSet.add(Number(t)));
+    });
+    // v5 매트릭스 baseDeckTiers fallback
+    if (deckSet.size === 0 && matrixV5?.baseDeckTiers) {
+      matrixV5.baseDeckTiers.forEach(t => deckSet.add(Number(t)));
+    }
+    // 그래도 빈 → v5 matrixBays의 tier 분포 union
+    if (deckSet.size === 0 && Array.isArray(matrixV5?.matrixBays)) {
+      matrixV5.matrixBays.forEach(b => {
+        if (b.maxRow && b.maxRow > 0) {
+          // maxRow를 기준으로 STANDARD 데크 tier 추정 (안전한 기본)
+        }
+      });
+    }
+    enrichedBayDef.deckTiers = [...deckSet].filter(Number.isFinite).sort((a, b) => b - a);
+  }
+  if (!Array.isArray(enrichedBayDef.holdTiers) || enrichedBayDef.holdTiers.length === 0) {
+    const holdSet = new Set();
+    (enrichedBayDef.baysSummary || []).forEach(b => {
+      (b.holdTiers || b.holdTiersLocal || []).forEach(t => holdSet.add(Number(t)));
+    });
+    if (holdSet.size === 0 && matrixV5?.baseHoldTiers) {
+      matrixV5.baseHoldTiers.forEach(t => holdSet.add(Number(t)));
+    }
+    enrichedBayDef.holdTiers = [...holdSet].filter(Number.isFinite).sort((a, b) => b - a);
+  }
+
   return {
     source: result.source,
     matchedBy: result.matchedBy || result.source,

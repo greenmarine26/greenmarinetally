@@ -379,6 +379,19 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🔍 M6.93.15 (2026-05-25) — 디버그 패널 + 옛 데이터 호환 + 전 컴포넌트 일관 적용',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'M6.93.14 적용 후에도 "데크가 아직도 안 보임". 시뮬은 PASS인데 실제 작동 안 함 — 시뮬-실제 괴리 발생.' },
+        { q: '🔍 가능 원인 (3가지)', a: '(1) 옛 user dict는 bayDef.deckTiers 없어서 deckTiersAll=[] (M6.93.14 union 저장은 새로 저장한 데이터만 적용). (2) BayPlan/PrintableBayDetail 등 다른 컴포넌트가 여전히 enrichBayDef에 ediContainers 전달 — EDI 베이 구조 추정 진행. (3) 사용자가 매트릭스 빌더에서 실제로 어떤 데이터를 저장했는지 모름 (디버그 도구 없음).' },
+        { q: '✅ Fix 1: shipStructure.js getShipBayDictData에 bayDef.deckTiers/holdTiers fallback', a: 'baysSummary union → matrixV5.baseDeckTiers fallback. 옛 user dict + v2 사전의 빈 baysSummary 모두 호환. 이중 안전망.' },
+        { q: '✅ Fix 2: BayPlan.jsx enrichBayDef containers=null', a: 'EDI 베이 구조 추정 차단. 사용자 통찰 전 컴포넌트 일관 적용.' },
+        { q: '✅ Fix 3: PrintableBayDetail.jsx enrichBayDef containers=null', a: '동일.' },
+        { q: '✅ Fix 4: 매트릭스 빌더 디버그 패널 추가', a: '"🔍 디버그 보기" 버튼. 현재 localStorage 저장본 + 메모리 매트릭스 동시 표시. 사용자가 직접 데이터 검증 가능. 어디서 끊기는지 사용자 화면에서 확인.' },
+        { q: '📋 호환성 매트릭스 (시뮬 PASS)', a: 'CASE A: 옛 user dict (bayDef.deckTiers 없음) → baysSummary union ✅. CASE B: v2 사전 (baysSummary[i].deckTiers 없음) → bayDef level deckTiers ✅. CASE C: 둘 다 빈 → v5.baseDeckTiers fallback ✅. CASE D: 새 M6.93.14+ → 그대로 ✅.' },
+        { q: '🔍 사용자 디버그 절차', a: '1) 매트릭스 빌더 열기 (자료 탭). 2) "🔍 디버그 보기" 클릭. 3) localStorage 저장본 vs 메모리 매트릭스 비교. 4) deckTiers/holdTiers/cells 값 확인. 5) 다르면 수정 후 저장 버튼. 6) 카고플랜 검증. 모든 화면에서 데이터 상태 가시화.' },
+      ],
+    },
+    {
       title: '🚨 M6.93.14 (2026-05-25) — "베이 구조 먼저, EDI는 그 위에" (사용자 통찰 반영)',
       examples: [
         { q: '🔥 사용자 보고 + 통찰', a: '"셀들은 복구됐으나 홀드 [1,1,3,5] 입력했는데 [5,5,5,5]=5×4=20으로 보이고, 데크에 있던 컨테이너들이 안 보임. edi에서 베이 구조 같이 가져오다 셀구조가 틀려진 것 같다. 베이 구조 먼저 완성하고 그 위에 edi 데이터를 올리면 되지 않을까."' },

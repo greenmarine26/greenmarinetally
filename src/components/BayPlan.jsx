@@ -215,23 +215,23 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
-  // M6.59: EDI 컨테이너로 L4 fallback 추가 보정
+  // M6.93.14 일관: EDI는 컨테이너 마크에만, 베이 구조 추정 X
   const dictBaysSummary = useMemo(() => {
     if (!shipImo && !shipName) return {};
     const dict = getShipBayDictData(shipImo, shipName);
     if (!dict?.bayDef?.baysSummary) return {};
-    // L4 EDI 보정 (containers 있을 때만)
+    // M6.93.14: containers=null — EDI 베이 구조 추정 차단 (사용자 통찰)
     const enrichedEntry = enrichBayDef(
       { bayDef: dict.bayDef },
       dict._v5Matrix,
-      containers
+      null
     );
     const m = {};
     enrichedEntry.bayDef.baysSummary.forEach(b => {
       m[parseInt(b.bayNo, 10)] = b;
     });
     return m;
-  }, [shipImo, shipName, containers]);
+  }, [shipImo, shipName]);
 
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
   // M4.5: .def 베이사전 우선 사용. 사용자 원칙 #8 + 통로 구분 추가
