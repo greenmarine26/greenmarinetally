@@ -379,7 +379,20 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🚨 M6.93.12 (2026-05-25) — 사용자 데이터 보호 (긴급 수정)',
+      title: '🚨 M6.93.13 (2026-05-25) — v2-verified-newer 우회 버그 수정 (사용자 데이터 진짜 보호)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"M6.93.12 적용했는데 여전히 데크 08 ROW 누락, 사용자 입력 cells 안 나옴. 데크 ROW 8개 × 4단 = 32 셀이 있어야 하는데 누락된 곳 많음."' },
+        { q: '🔍 진단 (시뮬)', a: 'shipStructure.js fuzzyLookupAcrossDicts 첫 분기 v2-verified-newer가 user dict보다 먼저 실행됨. DXQD가 v2에 verified=true로 등록됐고 Firebase에 없어서 → v2-verified-newer가 무조건 매칭 → user dict 매칭 시도조차 안 됨 → M6.93.12 lookupUserBayDict 6단계 매칭이 무효화됨.' },
+        { q: '🧪 시뮬 결과', a: 'M6.93.12: 4가지 호출 시나리오 모두 source=v2-verified-newer 반환 (0/4 PASS). M6.93.13: 모두 source=user 반환 (4/4 PASS).' },
+        { q: '✅ Fix 1 (CRITICAL): user dict 최우선', a: 'shipStructure.js fuzzyLookupAcrossDicts 맨 위에 user dict 매칭을 두고, 그 후 v2-verified-newer / Firebase / v2 / v5 순. 사용자가 직접 수정한 데이터는 verified=true v2보다도 우선.' },
+        { q: '✅ Fix 2: PrintableCargoPlanV2 user cells 우선', a: 'matrixBays.map에서 user deckCells/holdCells가 v5 cells보다 우선. lookup fail해도 bayData.deckCells/holdCells가 user cells로 채워져 cargoPlanCore에서도 보호됨.' },
+        { q: '✅ Fix 3: cargoPlanCore raw cells 안전화', a: '우선순위: userBay > override > bayData.deckCells/holdCells (분리된 cells) > raw bayData.cells (마지막 fallback). raw cells는 deck/hold 분리 안 된 v5 데이터라 슬라이싱 정확도 낮음 → 마지막 순위.' },
+        { q: '📋 검증', a: 'BAY 03 데크 ROW 8개 × 4단 → deckCells=[8,8,8,8], holdCells=[7,5,3,1] 정확 보존. 사용자 cells 32개 모두 그려짐. userBay=null 엣지케이스에서도 bayData.deckCells가 user cells라 보호됨.' },
+        { q: '🛡 원칙 재확인', a: '사용자가 ShipMatrixBuilderModal에서 입력한 데이터는 v2 verified, Firebase, override 등 어떤 것보다도 우선. 사용자 외에 변경 금지 절대 원칙.' },
+      ],
+    },
+    {
+      title: '🚨 M6.93.12 (2026-05-25) — 사용자 데이터 보호 (불완전 — M6.93.13에서 보강)',
       examples: [
         { q: '🔥 사용자 보고', a: '"사용자가 입력한 데이터를 어디에선가 수정하고 있습니다. 사용자 데이터는 사용자 외에 변경하지 못하게 해주세요. DXQD 데크 08 ROW가 카고플랜에서 사라져 있습니다. 데크와 홀드 셀들이 사용자가 베이데이터 수정한 대로 되어 있지 않습니다."' },
         { q: '🔍 진단 (시뮬)', a: '3가지 연쇄 버그 발견. (1) lookupUserBayDict 매칭 실패: 사용자가 \'DXQD\' 키로 저장 → 카고플랜이 (imo=9388417, vsl=XIN QUN DAO)로 찾음 → MISS → v2 사전 사용 → 사용자 수정 무시. (2) cargoPlanCore.js 우선순위 역전: M6.93.10 주석 "override > userBay > v5" — 사용자 입력 보호 원칙 위배. (3) mergeBayDef가 user source일 때 v2와 union → 사용자가 제거한 tier가 v2에서 복원.' },

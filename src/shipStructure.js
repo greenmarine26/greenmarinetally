@@ -41,12 +41,20 @@ function normalizeShipKey(s) {
 // M5.11: v2에 대해 lookupBayDictV2Enhanced 사용 — IMO/callsign/code/이름 4가지 매칭
 //   기존 fuzzy 매칭이 prefix 4글자 + garbage 콜사인 때문에 자주 실패하던 문제 해결
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
+  // M6.93.13: 🛡 user dict 최우선 — 사용자가 ShipMatrixBuilderModal에서 직접 수정한 데이터 보호.
+  //   기존 버그: v2-verified-newer 분기가 user dict 위에 있어서, DXQD 같은 verified=true 선박은
+  //              user dict 매칭 시도조차 안 되고 v2 데이터 반환 → 사용자 수정 무시.
+  //   원칙: 사용자가 직접 수정한 데이터는 v2 verified, Firebase, override 등 어떤 것보다도 우선.
+  try {
+    const userResult = lookupUserBayDict(imo, vesselNameOrCode);
+    if (userResult) return { source: 'user', data: userResult, matchedBy: 'user-dict' };
+  } catch (e) { /* fallthrough */ }
+
   // M6.62: v2 verified 최신본이 Firebase 옛 정정본보다 우선
   //   같은 선박이 Firebase + v2 양쪽에 있을 때
   //   - v2의 parsedAt이 Firebase보다 최신 + verified=true → v2 사용
   //   - 안 그러면 기존 우선순위 (Firebase > user > v2)
   //   이유: PCBJ 같은 케이스 — Firebase에 옛 부정확 entry, v2에 STOWAGE PDF 재정정.
-  //   클로드가 v2 정정해도 Firebase가 가려서 사용자가 새 버전 못 봄.
   try {
     const v2Enhanced = lookupBayDictV2Enhanced(imo, vesselNameOrCode);
     if (v2Enhanced && !v2Enhanced.matchedBy.startsWith('name-fuzzy')) {
@@ -69,7 +77,7 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
     }
   } catch (e) { /* fallthrough */ }
 
-  // M5.88: 0. Firebase 베이사전 (최우선 — 모든 검수원 공유)
+  // M5.88: 0. Firebase 베이사전 (모든 검수원 공유)
   try {
     const fbDict = window.__fbShipBayDict || {};
     if (Object.keys(fbDict).length > 0) {

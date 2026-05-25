@@ -421,17 +421,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nHold = holdTiers.length;
 
 
-  // M6.93.12: cells 우선순위 — userBay > override > v5 cells > v5 deckCells > fallback
-  //   사용자 직접 수정 최우선 보호.
+  // M6.93.13: cells 우선순위 — userBay > override > bayData.deckCells/holdCells > raw cells > fallback
+  //   원칙: 사용자 직접 수정 최우선 보호. raw v5 cells는 deck/hold 분리 안 된 raw이라 마지막 fallback.
   let deckCells, holdCells;
   if (userBay?.deckCells && userBay.deckCells.length > 0) {
     deckCells = userBay.deckCells.slice(0, nDeck);
   } else if (override?.deckCells && override.deckCells.length > 0) {
     deckCells = override.deckCells;
-  } else if (bayData?.cells && bayData.cells.length > 0) {
-    deckCells = bayData.cells.slice(0, nDeck);
   } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
+    // PrintableCargoPlanV2가 이미 reversed cells에서 deck/hold 분리한 결과
     deckCells = bayData.deckCells.slice(0, nDeck);
+  } else if (bayData?.cells && bayData.cells.length > 0) {
+    // raw v5 cells (아래→위 순서) — 정확하지 않을 수 있으므로 마지막 fallback
+    deckCells = bayData.cells.slice(0, nDeck);
   } else {
     deckCells = new Array(nDeck).fill(deckRowMax);
   }
@@ -439,10 +441,10 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     holdCells = userBay.holdCells.slice(0, nHold);
   } else if (override?.holdCells && override.holdCells.length > 0) {
     holdCells = override.holdCells;
-  } else if (bayData?.cells && bayData.cells.length > 0) {
-    holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else if (bayData?.holdCells && bayData.holdCells.length > 0) {
     holdCells = bayData.holdCells.slice(0, nHold);
+  } else if (bayData?.cells && bayData.cells.length > 0) {
+    holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else {
     holdCells = new Array(nHold).fill(holdRowMax);
   }

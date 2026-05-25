@@ -361,14 +361,18 @@ export default function PrintableCargoPlanV2({
       const holdTiers = hasHold ? (userHoldTiers || holdTiersAll) : [];
       const nDeck = deckTiers.length;
       const nHold = holdTiers.length;
-      // cells: v5에서 가져온 게 우선 (베이별), 없으면 user의 deckCells/holdCells
+      // M6.93.13: user cells가 v5 cells보다 우선 (이중 안전망).
+      //   기존 M6.93.12: v5 cells 우선, user cells fallback.
+      //   문제: lookup이 어떤 이유로 fail해도 사용자 cells 보호되도록 PrintableCargoPlanV2 단계에서도 우선.
       const userDeckCells = (summary?.deckCells && summary.deckCells.length > 0) ? summary.deckCells : null;
       const userHoldCells = (summary?.holdCells && summary.holdCells.length > 0) ? summary.holdCells : null;
       const deckCells = nDeck > 0
-        ? (cells.length > 0 ? cells.slice(0, nDeck) : (userDeckCells ? userDeckCells.slice(0, nDeck) : []))
+        ? (userDeckCells ? userDeckCells.slice(0, nDeck)
+           : (cells.length > 0 ? cells.slice(0, nDeck) : []))
         : [];
       const holdCells = nHold > 0
-        ? (cells.length > 0 ? cells.slice(nDeck, nDeck + nHold) : (userHoldCells ? userHoldCells.slice(0, nHold) : []))
+        ? (userHoldCells ? userHoldCells.slice(0, nHold)
+           : (cells.length > 0 ? cells.slice(nDeck, nDeck + nHold) : []))
         : [];
       return {
         ...b,
