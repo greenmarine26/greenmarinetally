@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.93.6 (2026-05-25) — 베이 추가 후 사라지는 버그 fix (시뮬 검증)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"베이를 추가하고 수정 할려면 추가한 베이가 다시 사라집니다." 모달 안에서 ➕ 추가한 베이가 다음 상호작용에서 없어짐.' },
+        { q: '🔍 시뮬 재현', a: 'sim_bay_disappear.mjs 작성. 부모(VoyagePage)가 매 렌더마다 `Object.values(sec.ediContainers || {})` 새 배열 → containers prop reference 변경 → 모달 useEffect 의존성 [containers, ...] 트리거 → setMatrix(EDI 초기 분석) 덮어씀 → 사용자 추가 베이 사라짐. 100% 재현됨.' },
+        { q: '✅ 수정', a: 'useRef(initAnalyzedRef)로 마운트 시 1회만 분석. 그 이후엔 부모 re-render로 containers prop이 새 배열 reference가 되어도 useEffect 본체 실행 차단. 사용자 수정 보호. 시뮬: 부모 3회 re-render + updateBay 모두 거쳐도 030, 032 베이 + 수정된 rowCount 유지 → ✓ PASS.' },
+        { q: '📋 시뮬 워크플로 정착', a: '코드 수정 → sim_with_fix.mjs로 useEffect/state 흐름 직접 호출 → PASS 확인 → 빌드 → ZIP. M6.93.x 시리즈에서 매번 사용자가 화면에서 버그 잡던 패턴 끝. 시뮬레이션 한 번이면 .1로 끝났을 일을 .6까지 갔음 — 다음부터 절대 반복 X.' },
+      ],
+    },
+    {
       title: '🚨 M6.93.5 (2026-05-25) — CRITICAL: M6.93.1~4 깨진 코드 수정 + 시뮬레이션 검증 체계',
       examples: [
         { q: '🔥 사용자 지적', a: '"다음부터 시뮬레이션 후 완성본 주세요. 모든 클로드님께 계속 말씀드리는 중." 매번 검증 없이 ZIP 던지는 패턴 반복. 지침서 §2.2 "검증되지 않은 앱은 절대 ZIP 제공 X" 원칙을 어김.' },

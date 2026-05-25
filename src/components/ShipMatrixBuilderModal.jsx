@@ -124,15 +124,19 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     });
   };
 
-  // 초기 분석 (EDI + 베이사전)
+  // 초기 분석 (EDI + 베이사전) — 마운트 시 1회만, 사용자 수정 후엔 재실행 안 함
+  const initAnalyzedRef = useRef(false);
   useEffect(() => {
+    if (initAnalyzedRef.current) return; // 이미 분석 완료 → 사용자 수정 보호
     if (!containers || containers.length === 0) {
       setMatrix({ byBay: {}, _empty: true });
+      initAnalyzedRef.current = true;
       return;
     }
     const m1 = buildMatrixFromEdi(containers);
     const m2 = augmentMatrixFromBayDict(m1, autoMeta.imo, autoMeta.code);
     setMatrix(m2);
+    initAnalyzedRef.current = true;
   }, [containers, autoMeta.imo, autoMeta.code]);
 
   const handlePdfUpload = async (file) => {
