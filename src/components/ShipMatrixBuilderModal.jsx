@@ -12,13 +12,15 @@ import {
   augmentMatrixFromBayDict,
   augmentMatrixFromPdf,
   matrixToBayDictEntry,
+  bayDictEntryToMatrix,
   extractShipMetaFromVoyage,
   summarizeMatrix,
   createEmptyBayEntry,
   detectMissingBays,
+  fillEmptyBaysSequential,
 } from '../shipMatrixBuilder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
-import { addToUserBayDict } from '../data/userBayDict.js';
+import { addToUserBayDict, lookupUserBayDict } from '../data/userBayDict.js';
 
 export default function ShipMatrixBuilderModal({ voyage, containers, onClose, onSaved }) {
   const [matrix, setMatrix] = useState(null);
@@ -124,10 +126,21 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     });
   };
 
-  // 초기 분석 (EDI + 베이사전) — 마운트 시 1회만, 사용자 수정 후엔 재실행 안 함
+  // 초기 분석 (저장된 entry 우선 → 없으면 EDI + 베이사전) — 마운트 시 1회만
   const initAnalyzedRef = useRef(false);
   useEffect(() => {
-    if (initAnalyzedRef.current) return; // 이미 분석 완료 → 사용자 수정 보호
+    if (initAnalyzedRef.current) return;
+    // 1) 사용자가 이전에 저장한 매트릭스 있으면 그것 우선 복원 (사용자 작업 보호)
+    const saved = lookupUserBayDict(autoMeta.imo, autoMeta.code);
+    if (saved?.bayDef?.baysSummary?.length > 0) {
+      const restored = bayDictEntryToMatrix(saved);
+      if (restored) {
+        setMatrix(restored);
+        initAnalyzedRef.current = true;
+        return;
+      }
+    }
+    // 2) 저장 없으면 EDI 분석 + 1~max 자동 채움
     if (!containers || containers.length === 0) {
       setMatrix({ byBay: {}, _empty: true });
       initAnalyzedRef.current = true;
@@ -135,7 +148,8 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     }
     const m1 = buildMatrixFromEdi(containers);
     const m2 = augmentMatrixFromBayDict(m1, autoMeta.imo, autoMeta.code);
-    setMatrix(m2);
+    const m3 = fillEmptyBaysSequential(m2);  // 1~max 추정 베이 자동 추가
+    setMatrix(m3);
     initAnalyzedRef.current = true;
   }, [containers, autoMeta.imo, autoMeta.code]);
 
@@ -144,11 +158,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     setPdfStatus('parsing'); setPdfError('');
     try {
       const result = await parsePdfStowage(file);
-      // PDF 헤더의 선박명이 있고 자동 메타에 없으면 보강
       if (result.shipName && !shipMeta.name) {
         setShipMeta(m => ({ ...m, name: result.shipName }));
       }
-      const merged = augmentMatrixFromPdf({ ...matrix }, result);
+      let merged = augmentMatrixFromPdf({ ...matrix }, result);
+      merged = fillEmptyBaysSequential(merged); // PDF 보강 후 1~max 다시 채움
       setMatrix(merged);
       setPdfStatus('done');
     } catch (err) {
@@ -316,6 +330,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 <div className="text-[10px] text-zinc-400">검토 필요</div>
               </div>
             </div>
+            {summary.estimatedCount > 0 && (
+              <div className="text-[11px] text-zinc-400 mt-2">
+                ⚠ 추정 베이 {summary.estimatedCount}개 (EDI/PDF 발견 안 됨, 1~max 자동 채움). [×]로 삭제하거나 수정.
+              </div>
+            )}
             <div className="text-[11px] text-zinc-500 mt-2">
               출처: EDI ({matrix._empty ? '없음' : '✓'}) · 베이사전 ({matrix.bayDictUsed ? '✓ 매칭' : '없음'}) · PDF ({matrix.pdfUsed ? '✓ 보강' : '미사용'})
               {matrix.bayDictMeta?.name && <span className="ml-2 text-cyan-400">(사전: {matrix.bayDictMeta.name})</span>}
@@ -325,9 +344,13 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           {/* === PDF 업로드 (옵션 보강) === */}
           <div className="bg-zinc-800 p-3 rounded mb-4 flex justify-between items-center">
             <div className="text-xs text-zinc-400">
-              {summary.needReviewCount > 0 ? (
+              {matrix.fromSaved && (
+                <span className="text-emerald-400">✓ 저장된 매트릭스 복원됨{matrix.savedAt && ` (${new Date(matrix.savedAt).toLocaleString('ko-KR')})`}</span>
+              )}
+              {!matrix.fromSaved && summary.needReviewCount > 0 && (
                 <span className="text-amber-400">⚠ {summary.needReviewCount}개 베이 검토 필요. PDF 있으면 업로드해서 보강.</span>
-              ) : (
+              )}
+              {!matrix.fromSaved && summary.needReviewCount === 0 && (
                 <span>모든 베이 분석 완료. 필요 시 PDF로 추가 보강 가능.</span>
               )}
             </div>
@@ -339,7 +362,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 📄 PDF 업로드 (선택)
               </button>
               {pdfStatus === 'parsing' && <span className="text-xs text-zinc-400">파싱 중...</span>}
-              {pdfStatus === 'done' && <span className="text-xs text-emerald-400">✓ 보강됨</span>}
+              {pdfStatus === 'done' && matrix.pdfStats && (
+                <span className="text-xs text-emerald-400">
+                  ✓ 신규 {matrix.pdfStats.added} / 보강 {matrix.pdfStats.augmented} (PDF {matrix.pdfStats.totalPdfBays}베이)
+                </span>
+              )}
               {pdfStatus === 'error' && <span className="text-xs text-red-400">{pdfError}</span>}
             </div>
           </div>
@@ -408,12 +435,14 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               {bayList.map(bay => {
                 const e = matrix.byBay[bay];
                 const needsReview = !e.rowCount || e.rowCount < 5 || (!e.deckTiers?.length && !e.holdTiers?.length);
+                const isEst = e.isEstimated;
                 return (
-                  <div key={bay} className={`border ${needsReview ? 'border-amber-600' : 'border-zinc-700'} rounded p-3 bg-zinc-800`}>
+                  <div key={bay} className={`border ${isEst ? 'border-zinc-700 bg-zinc-900/40 opacity-70' : needsReview ? 'border-amber-600 bg-zinc-800' : 'border-zinc-700 bg-zinc-800'} rounded p-3`}>
                     <div className="flex items-center gap-3 mb-2 text-sm">
                       <b className="text-base">BAY {bay}</b>
                       {e.pairEven && <span className="text-zinc-400">({e.pairEven}) 페어</span>}
-                      <span className="text-[10px] px-2 py-0.5 bg-zinc-700 rounded">{e.source || '?'}</span>
+                      {isEst && <span className="text-[10px] px-2 py-0.5 bg-zinc-700 text-zinc-300 rounded">⚠ 추정 (EDI/PDF 없음)</span>}
+                      {!isEst && <span className="text-[10px] px-2 py-0.5 bg-zinc-700 rounded">{e.source || '?'}</span>}
                       <label className="ml-auto flex items-center gap-1">
                         rowCount:
                         <input type="number" value={e.rowCount || ''} onChange={ev => updateBay(bay, 'rowCount', parseInt(ev.target.value) || 0)}

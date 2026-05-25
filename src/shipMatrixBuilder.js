@@ -70,6 +70,35 @@ export function createEmptyBayEntry(bayNum, pairEven = null) {
 }
 
 /**
+ * 1부터 max까지 빠진 베이를 "추정" entry로 채움 (사용자 요청).
+ * 페어 짝꿍 짝수 (이미 홀수에 흡수)는 제외.
+ * 추정 entry는 isEstimated=true 마크 → UI에서 시각 구분.
+ * @param {Object} matrix
+ * @returns {Object}
+ */
+export function fillEmptyBaysSequential(matrix) {
+  const present = Object.keys(matrix.byBay).map(k => parseInt(k)).filter(n => Number.isFinite(n));
+  if (present.length === 0) return matrix;
+  const max = Math.max(...present);
+  // 이미 페어 짝꿍으로 흡수된 짝수 (홀수 entry의 pairEven에 표시됨)
+  const evenInPair = new Set();
+  for (const e of Object.values(matrix.byBay)) {
+    if (e.pairEven) evenInPair.add(parseInt(e.pairEven));
+  }
+  for (let n = 1; n <= max; n++) {
+    if (n % 2 === 0 && evenInPair.has(n)) continue; // 페어 짝꿍은 skip
+    const key = String(n).padStart(3, '0');
+    if (!matrix.byBay[key]) {
+      const e = createEmptyBayEntry(key, null);
+      e.source = '추정';
+      e.isEstimated = true;
+      matrix.byBay[key] = e;
+    }
+  }
+  return matrix;
+}
+
+/**
  * 누락된 베이 추정 (베이 번호 패턴 기반)
  * 예: 01, 03, 05, 09, 11 있음 → 07 누락 의심
  *     02, 06, 08 있음 → 04 누락 의심
@@ -129,6 +158,7 @@ export function summarizeMatrix(matrix) {
   let hasHoldCount = 0;
   let deckOnlyCount = 0;
   let needReviewCount = 0;
+  let estimatedCount = 0;
   for (const b of bays) {
     if (b.pairEven) pairCount++; else singleCount++;
     if (b.holdTiers && b.holdTiers.length > 0) hasHoldCount++;
@@ -136,12 +166,13 @@ export function summarizeMatrix(matrix) {
     if (!b.rowCount || b.rowCount < 5 || (!b.deckTiers?.length && !b.holdTiers?.length)) {
       needReviewCount++;
     }
+    if (b.isEstimated) estimatedCount++;
   }
   return {
     totalBays: bays.length,
     pairCount, singleCount,
     hasHoldCount, deckOnlyCount,
-    needReviewCount,
+    needReviewCount, estimatedCount,
   };
 }
 
@@ -230,6 +261,58 @@ export function buildMatrixFromEdi(containers) {
     entry.rowTierPairs = Array.from(entry.rowTierPairs);
   }
 
+  // ===== Pass 2: 페어링 후처리 (사용자 규칙) =====
+  //   짝수 b의 양옆 (b-1, b+1) 둘 다 있어야 페어 짝꿍.
+  //   페어 시: b는 b+1의 짝꿍 → byBay[b+1].pairEven = b, byBay[b] 삭제
+  //   양옆 한쪽만/둘 다 없음 → b는 단독 (orphan_even, entry 유지)
+  const bayIntsP = Object.keys(byBay).map(k => parseInt(k)).filter(n => Number.isFinite(n)).sort((a,b) => a-b);
+  const baySetP = new Set(bayIntsP);
+  for (const b of bayIntsP) {
+    if (b % 2 !== 0) continue;
+    if (!baySetP.has(b - 1) || !baySetP.has(b + 1)) continue; // 양옆 둘 다 없으면 단독 (orphan_even)
+    const evenStr = pad3(b);
+    const oddStr = pad3(b + 1);
+    const evenE = byBay[evenStr];
+    const oddE = byBay[oddStr];
+    if (!evenE || !oddE) continue;
+
+    // 짝수 row/tier → 홀수 entry에 합치기 (중복 제거)
+    const rowSet = new Set([...oddE.sourceRows, ...evenE.sourceRows]);
+    const tierSet = new Set([...oddE.sourceTiers, ...evenE.sourceTiers]);
+    const pairSet = new Set([...oddE.rowTierPairs, ...evenE.rowTierPairs]);
+    oddE.sourceRows = Array.from(rowSet).sort();
+    oddE.sourceTiers = Array.from(tierSet).sort();
+    oddE.rowTierPairs = Array.from(pairSet);
+
+    // rowCount, hasZero, tier, cells 재계산
+    const rows = oddE.sourceRows;
+    oddE.hasZero = rows.includes('00');
+    const oddMaxR = Math.max(...rows.filter(r => parseInt(r) % 2 === 1).map(Number), 0);
+    const evenMaxR = Math.max(...rows.filter(r => parseInt(r) % 2 === 0).map(Number), 0);
+    const oddCnt = oddMaxR > 0 ? Math.floor(oddMaxR / 2) + 1 : 0;
+    const evenCnt = evenMaxR > 0 ? Math.floor(evenMaxR / 2) : 0;
+    oddE.rowCount = oddCnt + evenCnt + (oddE.hasZero ? 1 : 0);
+
+    const allT = oddE.sourceTiers;
+    oddE.deckTiers = allT.filter(t => parseInt(t) >= 80).map(Number).sort((a, b) => b - a);
+    oddE.holdTiers = allT.filter(t => parseInt(t) < 80).map(Number).sort((a, b) => b - a);
+    oddE.deckCells = oddE.deckTiers.map(t => {
+      const cnt = oddE.rowTierPairs.filter(p => p.endsWith('-' + pad2(t))).length;
+      return cnt > 0 ? cnt : oddE.rowCount;
+    });
+    oddE.holdCells = oddE.holdTiers.map(t => {
+      const cnt = oddE.rowTierPairs.filter(p => p.endsWith('-' + pad2(t))).length;
+      return cnt > 0 ? cnt : oddE.rowCount;
+    });
+
+    // 페어 표시
+    oddE.pairEven = pad2(b);
+    oddE.source = (oddE.source || 'edi') + '+pair';
+
+    // 짝수 entry 삭제 (홀수가 페어 박스 대표)
+    delete byBay[evenStr];
+  }
+
   return { byBay };
 }
 
@@ -301,36 +384,43 @@ export function augmentMatrixFromBayDict(matrix, imo, code) {
 /**
  * PDF 파싱 결과로 매트릭스 보강
  * @param {Object} matrix
- * @param {Object} pdfResult - pdfBayParser.parsePdfStowage 결과 { bays: [{bayNum, rowCount, hasZero, deckTiers, holdTiers, deckCells, holdCells, pairEven}] }
+ * @param {Object} pdfResult - pdfBayParser.parsePdfStowage 결과
  * @returns {Object}
  */
 export function augmentMatrixFromPdf(matrix, pdfResult) {
   if (!pdfResult || !pdfResult.bays) return matrix;
+  let added = 0;
+  let augmented = 0;
   for (const pb of pdfResult.bays) {
     const bay = pad3(pb.bayNum);
-    if (!matrix.byBay[bay]) {
-      matrix.byBay[bay] = { bayNum: bay, source: 'pdf' };
+    const isNew = !matrix.byBay[bay];
+    if (isNew) {
+      matrix.byBay[bay] = { bayNum: bay, source: 'pdf', sourceRows: [], sourceTiers: [], rowTierPairs: [] };
+      added++;
+    } else {
+      augmented++;
     }
     const entry = matrix.byBay[bay];
-    // PDF가 더 큰 rowCount 가지고 있으면 채택
+    // PDF가 더 큰 rowCount 가지고 있으면 채택 (또는 entry.rowCount=0이면 무조건)
     if ((pb.rowCount || 0) > (entry.rowCount || 0)) {
       entry.rowCount = pb.rowCount;
       entry.hasZero = pb.hasZero;
     }
-    // tier: PDF가 더 풍부하면 채택
-    if (pb.deckTiers && pb.deckTiers.length > (entry.deckTiers?.length || 0)) {
+    // tier: PDF가 더 풍부하거나, 기존 비어있으면 채택
+    if (pb.deckTiers && pb.deckTiers.length > 0 && pb.deckTiers.length > (entry.deckTiers?.length || 0)) {
       entry.deckTiers = [...pb.deckTiers].sort((a, b) => b - a);
       entry.deckCells = pb.deckCells || entry.deckTiers.map(() => entry.rowCount);
     }
-    if (pb.holdTiers && pb.holdTiers.length > (entry.holdTiers?.length || 0)) {
+    if (pb.holdTiers && pb.holdTiers.length > 0 && pb.holdTiers.length > (entry.holdTiers?.length || 0)) {
       entry.holdTiers = [...pb.holdTiers].sort((a, b) => b - a);
       entry.holdCells = pb.holdCells || entry.holdTiers.map(() => entry.rowCount);
     }
-    // 페어 정보
+    // 페어 정보 (사용자 규칙: 짝수 양옆 둘 다 있을 때만 페어 — PDF 표기 그대로 신뢰)
     if (pb.pairEven) entry.pairEven = pb.pairEven;
-    entry.source = entry.source ? entry.source + '+pdf' : 'pdf';
+    entry.source = entry.source && entry.source !== 'pdf' ? entry.source + '+pdf' : 'pdf';
   }
   matrix.pdfUsed = true;
+  matrix.pdfStats = { added, augmented, totalPdfBays: pdfResult.bays.length };
   return matrix;
 }
 
@@ -355,6 +445,7 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       holdCells: e.holdCells,
       hasDeck: e.deckTiers && e.deckTiers.length > 0,
       hasHold: e.holdTiers && e.holdTiers.length > 0,
+      pairEven: e.pairEven || null,  // M6.93.7: 페어 정보 보존
       source: e.source,
     };
   });
@@ -367,9 +458,37 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       recordCount: baysSummary.length,
       sourceFile: 'matrix_builder',
       parsedAt: new Date().toISOString(),
-      sourceVersion: 'M6.93.1',
+      sourceVersion: 'M6.93.7',
       verified: true,
       baysSummary,
     },
   };
+}
+
+/**
+ * 저장된 userBayDict entry → 매트릭스 역변환 (모달 재오픈 시 복원용)
+ * @param {Object} entry - lookupUserBayDict 결과
+ * @returns {Object|null} matrix
+ */
+export function bayDictEntryToMatrix(entry) {
+  if (!entry?.bayDef?.baysSummary?.length) return null;
+  const byBay = {};
+  for (const bs of entry.bayDef.baysSummary) {
+    if (!bs.bay) continue;
+    byBay[bs.bay] = {
+      bayNum: bs.bay,
+      rowCount: bs.rowCount || 0,
+      hasZero: !!bs.hasZero,
+      deckTiers: Array.isArray(bs.deckTiers) ? [...bs.deckTiers] : [],
+      holdTiers: Array.isArray(bs.holdTiers) ? [...bs.holdTiers] : [],
+      deckCells: Array.isArray(bs.deckCells) ? [...bs.deckCells] : [],
+      holdCells: Array.isArray(bs.holdCells) ? [...bs.holdCells] : [],
+      pairEven: bs.pairEven || null,
+      source: bs.source || 'saved',
+      sourceRows: [],
+      sourceTiers: [],
+      rowTierPairs: [],
+    };
+  }
+  return { byBay, fromSaved: true, savedAt: entry.bayDef.parsedAt || '' };
 }

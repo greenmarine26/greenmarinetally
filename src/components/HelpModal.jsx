@@ -379,6 +379,26 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.93.8 (2026-05-25) — 1~max 자동 채움 + PDF 파서 작동 확인',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"PDF 파서가 분석을 하긴 하나요? 불과 1초만에 완료 되던데" + "1부터 마지막베이까지 나열하고 1부터 매칭, 의심가는 베이는 남겨놓으세요" (보류 작업).' },
+        { q: '✅ PDF 파서 시뮬 검증', a: 'sim_pdf_complete.mjs로 실제 SWAT PDF (1210 words) Node에서 풀 시뮬. **608ms 만에 19개 베이 정확 추출** (정상 시간). rowCount/hasZero/deckTiers/holdTiers/페어 모두 데이터 있음. 1초는 정상 — PDF 파서 정상 작동.' },
+        { q: '✅ 1~max 자동 채움', a: 'fillEmptyBaysSequential 신규. EDI 분석 후 1~max 빠진 베이를 "추정" entry로 자동 추가. 페어 짝꿍 짝수 (이미 홀수에 흡수)는 skip. 시뮬: DJCT EDI → 실데이터 15 + 추정 7 (002, 006, 010, 014, 018, 022, 026 — 진짜 없는 짝수들).' },
+        { q: '🎨 UI', a: '추정 베이는 회색 카드 + opacity-70 + "⚠ 추정 (EDI/PDF 없음)" 마크. 상태 요약에 "⚠ 추정 베이 N개" 표시. 사용자가 [×]로 정리 또는 수정.' },
+        { q: '📋 시뮬 ALL PASS', a: 'EDI 분석 → fillEmptyBays → 사용자 수정 (005.rowCount=99, 002 삭제) → 저장 → 재오픈 → 005.rowCount=99, 002 없음, 005.pairEven=04 보존, fromSaved=true. 모든 항목 확인.' },
+      ],
+    },
+    {
+      title: '🆕 M6.93.7 (2026-05-25) — 저장-불러오기 복원 + PDF 결과 표시 + 페어링',
+      examples: [
+        { q: '🔥 사용자 보고 (3건)', a: '(1) "저장하고 지금 다시 불러오니 예전 자료로 돌아가 버렸네." (2) "PDF 업로드 해도 바뀌는게 없었음." (3) "베이 1(2)3 페어링 규칙 확립 — 짝수 양옆 둘 다 있어야 페어".' },
+        { q: '🔍 시뮬 진단', a: '(1) matrixToBayDictEntry에서 pairEven 누락 + 모달이 저장된 entry 복원 안 함 → 다시 열면 EDI 기본값으로 복귀. (2) PDF 파서 자체는 19 anchor 정확 추출 (Node 시뮬 확인). 문제는 augmentMatrixFromPdf 조건 엄격 + 결과 통계 미표시. 사용자에게 변화 안 보임. (3) 짝수 페어링 자동 인식 안 됨 → 짝수가 별도 카드로 보임.' },
+        { q: '✅ 수정', a: '(1) matrixToBayDictEntry pairEven 추가. (2) bayDictEntryToMatrix 신규 — 저장된 entry → 매트릭스 역변환. (3) 모달이 lookupUserBayDict 우선 조회 → 있으면 복원 (사용자 작업 보호). (4) augmentMatrixFromPdf 통계 (added/augmented/totalPdfBays) + UI 표시. (5) buildMatrixFromEdi에 페어링 후처리 추가 (짝수 양옆 둘 다 있을 때만 페어 → b+1 흡수, 양옆 한쪽만/없으면 orphan_even으로 단독 유지).' },
+        { q: '📋 시뮬 검증', a: 'STEP1-5 ALL PASS. EDI 분석 15베이 (22→15, 짝수 7 흡수), 사용자 수정 → 저장 → 재오픈 → 005.rowCount=99/005.deckCells=[11,11,11]/005.pairEven=04/030 추가 모두 복원. PDF 보강 시 신규 BAY 38, 40 추가 + pdfStats={added:2,augmented:0}.' },
+        { q: '⏳ 다음 작업 (사용자 요청 보류)', a: '"1부터 마지막 베이까지 나열 + 의심 가는 베이 표시" — detectMissingBays 강화 또는 자동 빈 베이 entry 생성 작업.' },
+      ],
+    },
+    {
       title: '🆕 M6.93.6 (2026-05-25) — 베이 추가 후 사라지는 버그 fix (시뮬 검증)',
       examples: [
         { q: '🔥 사용자 보고', a: '"베이를 추가하고 수정 할려면 추가한 베이가 다시 사라집니다." 모달 안에서 ➕ 추가한 베이가 다음 상호작용에서 없어짐.' },
