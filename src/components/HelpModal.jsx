@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.93.2 (2026-05-25) — 선박 정보 자동 채움 + 베이 분석 상태 카드',
+      examples: [
+        { q: '🔥 사용자 보고', a: 'M6.93.1 모달에서 사용자가 CASP 코드/콜사인을 직접 입력해야 했음. 검수원이 콜사인을 모르므로 자동 추출이 필수. 또한 베이 분석 상태(총 베이/페어/단독/검토 필요 등) 한눈에 안 보였음.' },
+        { q: '✅ 해결', a: '(1) voyage.info에서 선박명/콜사인/IMO/항차 자동 추출 (M5.87 EDI TDT 자동 추출 데이터). (2) CASP 코드 자동 추론 (callsign 앞 4자 → 선박명 약자 → 선박명 앞 4자). (3) 베이 분석 상태 카드 신규: 총 베이 / 페어 / 단독 / Hold 있음 / Deck only / 검토 필요. (4) [✏ 수정] 버튼으로 자동값 수정 가능.' },
+        { q: '📡 자동 추출 우선순위', a: 'voyage.info.code > callsign 앞 4자 (예: V7A576 → V7A5) > vsl 단어 첫 글자 (예: SAWASDEE ATLANTIC → SAAT) > vsl 앞 4자. 사용자가 [✏ 수정]에서 변경 가능.' },
+        { q: '🆕 신규 함수', a: 'shipMatrixBuilder.js: extractShipMetaFromVoyage(voyage), summarizeMatrix(matrix). 모달은 useMemo로 voyage 변경 시 자동 갱신.' },
+      ],
+    },
+    {
       title: '🆕 M6.93.1 (2026-05-25) — 신규 선박 베이 매트릭스 빌더 (EDI+사전+PDF+사용자 폼)',
       examples: [
         { q: '🎯 목적', a: '신규 선박 입항 시 베이사전 없어도 즉시 카고플랜 사용 가능. EDI에서 자동 베이 구조 추출 → 베이사전 보강 → 부족 시 PDF 업로드 보강 → 사용자 검증 폼 → userBayDict 저장.' },

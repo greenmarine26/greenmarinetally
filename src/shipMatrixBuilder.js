@@ -9,6 +9,70 @@
 
 import { getShipBayDictData } from './shipStructure.js';
 
+/**
+ * voyage.info에서 선박 메타데이터 자동 추출
+ *   M5.87: EDI TDT 세그먼트에서 callsign + vsl 자동 추출됨
+ * @param {Object} voyage
+ * @returns {Object} { code, name, imo, callsign, voy }
+ */
+export function extractShipMetaFromVoyage(voyage) {
+  const info = voyage?.info || {};
+  const callsign = (info.callsign || '').toUpperCase().trim();
+  const vsl = info.vsl || info.vesselName || info.name || '';
+  const imo = info.imo || '';
+  const voy = info.voy_d || info.voy_l || info.voy || '';
+
+  // CASP 코드 자동 추론 (사용자가 모르므로 자동)
+  //   우선순위:
+  //   1) info.code (베이사전이 이미 매칭됐으면 갖고 있음)
+  //   2) callsign 처음 4자 (예: V7A576 → V7A5)
+  //   3) vsl 단어들 첫 글자 (예: SAWASDEE ATLANTIC → SAAT)
+  //   4) vsl 처음 4자
+  let code = info.code || '';
+  if (!code && callsign && callsign.length >= 4) {
+    code = callsign.substring(0, 4);
+  }
+  if (!code && vsl) {
+    const words = vsl.toUpperCase().split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      code = words.slice(0, 4).map(w => w[0]).join('');
+      if (code.length < 4 && words[0]) code = (code + words[0].substring(1)).substring(0, 4);
+    } else if (words[0]) {
+      code = words[0].substring(0, 4);
+    }
+  }
+
+  return { code: code || '', name: vsl, imo, callsign, voy };
+}
+
+/**
+ * 매트릭스 분석 요약 (UI 상태 카드용)
+ * @param {Object} matrix
+ * @returns {Object} { totalBays, pairCount, singleCount, hasHoldCount, deckOnlyCount, needReviewCount }
+ */
+export function summarizeMatrix(matrix) {
+  const bays = Object.values(matrix?.byBay || {});
+  let pairCount = 0;
+  let singleCount = 0;
+  let hasHoldCount = 0;
+  let deckOnlyCount = 0;
+  let needReviewCount = 0;
+  for (const b of bays) {
+    if (b.pairEven) pairCount++; else singleCount++;
+    if (b.holdTiers && b.holdTiers.length > 0) hasHoldCount++;
+    if ((!b.holdTiers || b.holdTiers.length === 0) && b.deckTiers && b.deckTiers.length > 0) deckOnlyCount++;
+    if (!b.rowCount || b.rowCount < 5 || (!b.deckTiers?.length && !b.holdTiers?.length)) {
+      needReviewCount++;
+    }
+  }
+  return {
+    totalBays: bays.length,
+    pairCount, singleCount,
+    hasHoldCount, deckOnlyCount,
+    needReviewCount,
+  };
+}
+
 const pad3 = b => String(parseInt(b)).padStart(3, '0');
 const pad2 = n => String(n).padStart(2, '0');
 
