@@ -139,24 +139,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     openInspectionListPrint(ptkContainers, mode, voyageInfo);
   };
 
-  // 서브 모달 (카고플랜/베이 상세) 표시 중이면 그것만
+  // 서브 모달 (카고플랜 V2/베이 상세) 표시 중이면 그것만
+  // M6.93.11: V1 카고플랜 폐기 (사용자 결정). 'cargo' subroute → V2로 redirect.
   if (printSub === 'cargo') {
-    return (
-      <ErrorBoundary name="카고 플랜 인쇄" onClose={() => setPrintSub(null)}>
-        <PrintableCargoPlan
-          containers={printContainers}
-          mode={mode}
-          voyageInfo={voyageInfo}
-          voyageKey={voyageKey}
-          shipImo={shipImo}
-          shipName={shipName}
-          xrayMap={xrayMap}
-          globalRowRange={globalRowRange}
-          globalTiers={globalTiers}
-          onClose={() => setPrintSub(null)}
-        />
-      </ErrorBoundary>
-    );
+    // 호환성: 옛 'cargo' 경로 진입 시 V2로 전환
+    setPrintSub('cargo-v2');
+    return null;
   }
   if (printSub === 'cargo-v2') {
     return (
@@ -318,31 +306,16 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                 <Printer className="w-4 h-4 text-slate-500" />
               </button>
 
-              {/* 2. 카고플랜 */}
-              <button
-                onClick={() => setPrintSub('cargo')}
-                className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-4 text-left flex items-center gap-3"
-              >
-                <Grid3x3 className="w-8 h-8 text-cyan-400 shrink-0" />
-                <div className="flex-1">
-                  <div className="font-bold text-slate-100">📐 카고플랜 (기존)</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
-                    베이별 컨테이너 배치도 · 특수화물 + X-RAY 표시
-                  </div>
-                </div>
-                <Printer className="w-4 h-4 text-slate-500" />
-              </button>
-
-              {/* 2-V2. 카고플랜 V2 (M6.81 알고리즘 회귀) */}
+              {/* 2. 카고플랜 V2 (M6.93.11: V1 폐기, V2만 사용 - 사용자 결정) */}
               <button
                 onClick={() => setPrintSub('cargo-v2')}
                 className="w-full bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 rounded-lg p-4 text-left flex items-center gap-3"
               >
                 <Grid3x3 className="w-8 h-8 text-emerald-300 shrink-0" />
                 <div className="flex-1">
-                  <div className="font-bold text-emerald-100">🆕 카고플랜 V2 · M6.81 회귀</div>
+                  <div className="font-bold text-emerald-100">📐 카고플랜 V2</div>
                   <div className="text-xs text-emerald-200 mt-0.5">
-                    카스피·M6.81 HTML 정답 양식 그대로 · STD 6deck+4hold 자리 통일, 베이별 cells hull 단면
+                    매트릭스 빌더 저장 데이터 우선 · 베이별 cells hull 단면
                   </div>
                 </div>
                 <Printer className="w-4 h-4 text-emerald-400" />

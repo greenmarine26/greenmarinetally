@@ -363,6 +363,15 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
   const bayData = matrixBays.find(b => b.bayNum === oddNum);
 
+  // M6.93.10: 사용자가 매트릭스 빌더로 저장한 cells 우선 사용.
+  //   bayData는 v5 matrixBays라 사용자 수정 cells 무시됨 (사용자 보고).
+  //   shipBayDef.baysSummary에서 직접 lookup. 필드명 호환 (bayNo 2자리 / bay 3자리).
+  const oddKey2 = String(oddNum).padStart(2, '0');
+  const oddKey3 = String(oddNum).padStart(3, '0');
+  const userBay = shipBayDef?.baysSummary?.find(b =>
+    b.bayNo === oddKey2 || b.bay === oddKey3 || b.bay === oddKey2
+  );
+
   // M6.91.0: PDF override가 있으면 그대로 사용 (베이마다 다른 row 구조 정확히)
   const override = getBayOverride(shipCode, oddNum);
   const rowMaxOdd = shipBayDef?.rowMaxOdd;
@@ -389,19 +398,23 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
 
   const deckTiers = override?.deckTiers
+    || (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
+    || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
     || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
   const holdTiers = override?.holdTiers
+    || (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
+    || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
     || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
 
-  // M6.92.1: cells 할당 개선 — override.deckTiers 기준으로 정확 slice.
-  //   bayData.deckCells는 v2 전체 deckTiers 기준 (94 포함 7개)이라 override (6개)와 index 어긋남.
-  //   bayData.cells (raw reverse) 우선 → nDeck 기준 slice → index 정확.
+  // M6.93.10: cells 우선순위 — override > userBay > v5 cells > v5 deckCells > fallback
   let deckCells, holdCells;
   if (override?.deckCells && override.deckCells.length > 0) {
     deckCells = override.deckCells;
+  } else if (userBay?.deckCells && userBay.deckCells.length > 0) {
+    deckCells = userBay.deckCells.slice(0, nDeck);
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
   } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
@@ -411,6 +424,8 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
   if (override?.holdCells && override.holdCells.length > 0) {
     holdCells = override.holdCells;
+  } else if (userBay?.holdCells && userBay.holdCells.length > 0) {
+    holdCells = userBay.holdCells.slice(0, nHold);
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else if (bayData?.holdCells && bayData.holdCells.length > 0) {

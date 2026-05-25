@@ -379,6 +379,35 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.93.11 (2026-05-25) — 카고플랜 V2만 사용 + BayPlan/BayDetail 매트릭스 호환',
+      examples: [
+        { q: '🔥 사용자 요구', a: '"카고 플랜은 V2만 사용. V2에 적용된 자료로 베이플랜도 수정. 베이상세도 수정. 보이는 화면 + 출력 전부."' },
+        { q: '✅ 카고플랜 V1 폐기', a: 'PrintHubModal에서 V1 토글 제거 (📐 카고플랜 기존 버튼 삭제). V2만 표시. 옛 \'cargo\' 진입 경로는 \'cargo-v2\'로 자동 redirect.' },
+        { q: '✅ BayPlan/BayDetail 매트릭스 빌더 호환', a: '두 컴포넌트가 dictBaysSummary에서 db.deckTiers || db.deckTiersLocal 호환 (이미 적용됨). M6.93.10에서 matrixToBayDictEntry에 bayNo 필드 추가 → BayPlan의 `parseInt(b.bayNo, 10)` 매핑 정상 작동.' },
+        { q: '⚠ 다음 확인', a: '사용자가 BayPlan/BayDetail에서 매트릭스 cells (hull 단면) 시각화도 원하면 추가 작업. 현재는 tier 라벨만 표시. 정확한 요구사항 받아서 진행.' },
+      ],
+    },
+    {
+      title: '🆕 M6.93.10 (2026-05-25) — 사용자 저장 cells가 카고플랜 V2에 진짜 반영',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"BAY 01 hold가 [1,1,3,5]인데 [5,5,5,5]로 만들어진 이유? EDI 실제 데이터가 아니고 제가 PDF를 수정해서 저장한 데이터를 말하는 겁니다."' },
+        { q: '🔍 진단 (시뮬)', a: 'cargoPlanCore.js의 `bayData = matrixBays.find(...)` ← **v5_matrix.matrixBays**에서만 찾음. 사용자가 매트릭스 빌더로 저장한 baysSummary 무시. v5 cells가 우선되어 사용자 [1,1,3,5]가 [5,5,5,5]로 덮어씌워짐.' },
+        { q: '✅ Fix', a: 'cargoPlanCore.computeBayRenderData에 `userBay` lookup 추가. shipBayDef.baysSummary에서 직접 검색 (bayNo 2자리 / bay 3자리 호환). 우선순위: override(PDF override) > **userBay (사용자 저장)** > v5 cells > v5 deckCells > fallback. deckTiers/holdTiers도 동일.' },
+        { q: '🔧 entry 형식 호환', a: 'matrixToBayDictEntry에 bayNo (2자리) 필드 추가. v2 표준 (bayNo) + 매트릭스 빌더 (bay 3자리) 모두 검색 가능.' },
+        { q: '📋 시뮬 검증', a: 'BAY 01 holdCells=[1,1,3,5] 저장 → matrixToBayDictEntry → bs.bay="001"/bs.bayNo="01" 저장 → cargoPlanCore의 userBay lookup → userBay.holdCells=[1,1,3,5] 찾음 → 최종 사용. PASS.' },
+      ],
+    },
+    {
+      title: '🆕 M6.93.9 (2026-05-25) — 셀 누락 버그 fix (cells = hull 가득)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"제대로 되긴 했는데 셀이 누락 돠거나 없는셀이 추가된거네요" — 카고플랜 V2 인쇄에서 hull 단면 잘못 그려짐.' },
+        { q: '🔍 진단', a: 'buildMatrixFromEdi의 cells 계산이 **컨테이너 개수 기반**이라 잘못. BAY 005 holdCells=[7,5,3,1] 같이 컨테이너 적은 tier는 좁아져 hull 단면 누락. 정상 hull은 rowCount 가득 (9개 row면 cells=9).' },
+        { q: '✅ Fix', a: 'EDI 분석 cells = rowCount 가득 (hull 기본). 페어링 후처리도 동일. EDI는 컨테이너 분포만 알려주지 hull 단면은 모름. 정확한 cells는 PDF 업로드 또는 사용자 모달에서 직접 수정.' },
+        { q: '📋 시뮬 검증', a: 'DJCT 시뮬: 005 holdCells [7,5,3,1] → [9,9,9,9] / 013 [8,8,8,6] → [10,10,10,10] / 017 [4,8,8,8] → [10,10,10,10]. 모든 베이 hull 가득 정상 그려짐.' },
+        { q: '⚠ 주의', a: 'STSE 같이 진짜 hull 좁은 베이는 cells 직접 입력 필요. PDF override가 가장 정확. v5_matrix cells (있으면) 다음 정확.' },
+      ],
+    },
+    {
       title: '🆕 M6.93.8 (2026-05-25) — 1~max 자동 채움 + PDF 파서 작동 확인',
       examples: [
         { q: '🔥 사용자 보고', a: '"PDF 파서가 분석을 하긴 하나요? 불과 1초만에 완료 되던데" + "1부터 마지막베이까지 나열하고 1부터 매칭, 의심가는 베이는 남겨놓으세요" (보류 작업).' },

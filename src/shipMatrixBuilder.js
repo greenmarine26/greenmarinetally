@@ -232,21 +232,12 @@ export function buildMatrixFromEdi(containers) {
     const deckTiers = tiers.filter(t => parseInt(t) >= 80).map(Number).sort((a, b) => b - a);
     const holdTiers = tiers.filter(t => parseInt(t) < 80).map(Number).sort((a, b) => b - a);
 
-    // cells: 각 tier에 실제 적재된 row 개수 (PDF "셀 마크 카운트"와 동등)
-    const deckCells = deckTiers.map(t => {
-      let cnt = 0;
-      for (const p of entry.rowTierPairs) {
-        if (p.endsWith('-' + pad2(t))) cnt++;
-      }
-      return cnt > 0 ? cnt : rowCount; // 빈 tier는 rowCount 기본값
-    });
-    const holdCells = holdTiers.map(t => {
-      let cnt = 0;
-      for (const p of entry.rowTierPairs) {
-        if (p.endsWith('-' + pad2(t))) cnt++;
-      }
-      return cnt > 0 ? cnt : rowCount;
-    });
+    // M6.93.9: cells 기본 = rowCount (hull 가득).
+    //   이전: 컨테이너 개수 기반 → 적재 적은 tier에서 hull 좁아져 셀 누락 (사용자 보고).
+    //   EDI는 컨테이너 분포만 알려주지 실제 hull 단면은 모름.
+    //   정확한 cells는 PDF 업로드 또는 사용자 모달에서 수정.
+    const deckCells = deckTiers.map(() => rowCount);
+    const holdCells = holdTiers.map(() => rowCount);
 
     entry.rowCount = rowCount;
     entry.hasZero = hasZero;
@@ -296,14 +287,9 @@ export function buildMatrixFromEdi(containers) {
     const allT = oddE.sourceTiers;
     oddE.deckTiers = allT.filter(t => parseInt(t) >= 80).map(Number).sort((a, b) => b - a);
     oddE.holdTiers = allT.filter(t => parseInt(t) < 80).map(Number).sort((a, b) => b - a);
-    oddE.deckCells = oddE.deckTiers.map(t => {
-      const cnt = oddE.rowTierPairs.filter(p => p.endsWith('-' + pad2(t))).length;
-      return cnt > 0 ? cnt : oddE.rowCount;
-    });
-    oddE.holdCells = oddE.holdTiers.map(t => {
-      const cnt = oddE.rowTierPairs.filter(p => p.endsWith('-' + pad2(t))).length;
-      return cnt > 0 ? cnt : oddE.rowCount;
-    });
+    // M6.93.9: cells = rowCount (hull 가득). 컨테이너 분포 기반 X.
+    oddE.deckCells = oddE.deckTiers.map(() => oddE.rowCount);
+    oddE.holdCells = oddE.holdTiers.map(() => oddE.rowCount);
 
     // 페어 표시
     oddE.pairEven = pad2(b);
@@ -436,7 +422,8 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
   const baysSummary = Object.keys(matrix.byBay).sort().map(bay => {
     const e = matrix.byBay[bay];
     return {
-      bay,
+      bay,                                                    // '001' 3자리
+      bayNo: String(parseInt(bay)).padStart(2, '0'),          // '01' 2자리 (v2 호환)
       rowCount: e.rowCount,
       hasZero: e.hasZero,
       deckTiers: e.deckTiers,
@@ -445,7 +432,7 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       holdCells: e.holdCells,
       hasDeck: e.deckTiers && e.deckTiers.length > 0,
       hasHold: e.holdTiers && e.holdTiers.length > 0,
-      pairEven: e.pairEven || null,  // M6.93.7: 페어 정보 보존
+      pairEven: e.pairEven || null,
       source: e.source,
     };
   });
