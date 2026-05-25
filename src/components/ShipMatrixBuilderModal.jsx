@@ -36,6 +36,10 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   // 베이 추가 폼 상태
   const [addBayInput, setAddBayInput] = useState('');
   const [addPairInput, setAddPairInput] = useState('');
+  // M6.93.17: 디버그 패널 토글 — 반드시 조기 return 이전에 선언해야 함 (Rules of Hooks)
+  //   M6.93.15에서 이 useState가 `if (!matrix) return` 아래에 있어서
+  //   첫 렌더(matrix=null) vs 두 번째 렌더(matrix=set) hook 개수가 달라짐 → 컴포넌트 크래시 → 화면 안 보임
+  const [showDebug, setShowDebug] = useState(false);
 
   const addBay = (bayNumRaw, pairEvenRaw) => {
     const n = parseInt(bayNumRaw);
@@ -238,8 +242,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const summary = summarizeMatrix(matrix);
   const bayList = Object.keys(matrix.byBay).sort();
 
-  // M6.93.15: 디버그 패널 토글 (사용자가 데이터 직접 확인 가능)
-  const [showDebug, setShowDebug] = useState(false);
+  // M6.93.17: showDebug는 위에서 선언됨 (Rules of Hooks 준수)
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/70 flex items-start justify-center overflow-auto py-8">
@@ -247,7 +250,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         {/* 헤더 */}
         <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더 <span className="text-xs text-zinc-400 ml-2">M6.93.15</span></h2>
+            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더 <span className="text-xs text-zinc-400 ml-2">M6.93.18</span></h2>
             <div className="text-xs text-zinc-400 mt-1">
               현재 항차의 EDI에서 선박 정보 자동 추출 + 베이 구조 분석
             </div>

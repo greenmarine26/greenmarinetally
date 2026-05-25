@@ -379,6 +379,18 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🩹 M6.93.18 (2026-05-26) — 신규선박 매트릭스 클릭 시 화면 안 보임 (React Hooks 위반 hotfix)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"신규선박 매트릭스를 클릭하면 화면이 안보이는 현상"' },
+        { q: '🐛 진짜 원인 (ShipMatrixBuilderModal.jsx)', a: 'M6.93.15에서 디버그 패널 추가하면서 useState(showDebug)를 `if (!matrix) return ...` 조기 return 아래에 두었음. 첫 렌더(matrix=null): hook 13개 호출 후 조기 return → useState(showDebug)는 호출 안 됨. useEffect가 setMatrix 실행 → 재렌더: 조기 return 건너뛰고 14번째 hook 호출 시도 → React "Rendered more hooks than during the previous render" → 컴포넌트 크래시 → 화면 새하얗게 됨.' },
+        { q: '✅ Fix 1: showDebug useState를 조기 return 위로 이동', a: '다른 useState들과 함께 컴포넌트 최상단 (line 42)에 선언. Rules of Hooks: 모든 hook은 매 렌더마다 같은 순서로 호출되어야 함.' },
+        { q: '🔍 추가 발견: VoyagePage.jsx에도 동일 위반', a: 'line 144 `if (!voyage) return` 이후 line 176, 267, 355, 361, 381, 427에 useMemo/useEffect 6개. voyage가 null→truthy로 토글되면 동일한 크래시 가능. 사용자 보고는 없었지만 잠재 버그라 같이 수정.' },
+        { q: '✅ Fix 2: VoyagePage 조기 return 이동', a: 'const sec/ediMap 등을 voyage-null-safe로 변경 (sec = (voyage && voyage[mode]) || {}). early return을 모든 hook 이후 (line 450)로 이동. 기존 hooks는 이미 voyage?. optional chaining 사용 중이라 안전.' },
+        { q: '🛡 전체 .jsx 스캐너 통과', o: 'AST 기반 검사: 컴포넌트/커스텀 hook 최상위 early return 이후 hook 호출 → 0건. ConfirmModal/ChoiceModal의 useConfirm/useChoice는 별도 함수라 false positive 아님.' },
+        { q: '📋 교훈', a: '디버그 패널이나 추가 기능 넣을 때 useState 위치 주의. 조기 return 아래에 절대 hook 넣지 말 것. eslint-plugin-react-hooks 룰 (rules-of-hooks) 활성화 권장.' },
+      ],
+    },
+    {
       title: '🔧 M6.93.17 (2026-05-26) — 페어 매칭 버그 해결 (제가 짠 autoPairBays 알고리즘 버그)',
       examples: [
         { q: '🔥 사용자 보고', a: '"매칭을 그렇게 시켜서 저한테 준 거 아닙니까" — 페어 매칭 알고리즘 버그로 사전 짝수 베이(04, 08, 12, 16, 20, 24) 데이터가 표시 안 됨. 사용자가 "데크 안 보임"이라 한 진짜 원인.' },
