@@ -299,16 +299,40 @@ export default function PrintableCargoPlanV2({
     if (!shipImo && !shipName) return null;
     const baseDict = getShipBayDictData(shipImo, shipName);
     if (!baseDict) return null;
-    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, containers);
+    // M6.93.14: 사용자 통찰 반영 — EDI는 컨테이너 위치만 사용, 베이 구조는 사용자 입력 그대로.
+    //   기존: enrichBayDef(..., containers)로 EDI에서 베이별 tier 분포 자동 추정.
+    //   문제: EDI는 적재된 컨테이너 위치만 보임. 적재 안 된 빈 칸의 hull 단면 구조는 모름.
+    //         사용자가 매트릭스 빌더로 정밀 등록한 데이터를 EDI 추정 데이터가 덮어쓸 위험.
+    //   해결: user source면 EDI 보강 안 함. 다른 source(v2/Firebase)는 베이사전 fallback만 (EDI 추정 X).
+    const isUserSource = baseDict.source === 'user';
+    const ediForEnrich = isUserSource ? null : null;  // M6.93.14: 모든 source에서 EDI 추정 차단 (사용자 통찰)
+    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, ediForEnrich);
     return { ...baseDict, bayDef: enrichedEntry.bayDef };
   }, [shipImo, shipName, containers]);
 
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
     const v2Def = dictData?.bayDef || {};
-    const deckTiersAll = v2Def.deckTiers || [];
-    const holdTiersAll = v2Def.holdTiers || [];
     const baysSummary = v2Def.baysSummary || [];
+    // M6.93.14: deckTiersAll/holdTiersAll fallback.
+    //   기존 버그: bayDef.deckTiers가 빈 배열이면 deckTiersAll=[] → 모든 베이의 deckTiers=[] → nDeck=0 → 데크 영역 안 그려짐 → 데크 컨테이너 안 보임!
+    //   해결: bayDef level이 비어있으면 baysSummary의 deckTiers/holdTiers union 사용.
+    let deckTiersAll = Array.isArray(v2Def.deckTiers) ? v2Def.deckTiers : [];
+    let holdTiersAll = Array.isArray(v2Def.holdTiers) ? v2Def.holdTiers : [];
+    if (deckTiersAll.length === 0 && baysSummary.length > 0) {
+      const set = new Set();
+      baysSummary.forEach(b => {
+        (b.deckTiers || b.deckTiersLocal || []).forEach(t => set.add(Number(t)));
+      });
+      deckTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
+    }
+    if (holdTiersAll.length === 0 && baysSummary.length > 0) {
+      const set = new Set();
+      baysSummary.forEach(b => {
+        (b.holdTiers || b.holdTiersLocal || []).forEach(t => set.add(Number(t)));
+      });
+      holdTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
+    }
     const summaryByBay = new Map();
     for (const s of baysSummary) {
       const n = Number(s.bayNo);

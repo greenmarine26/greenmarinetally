@@ -379,7 +379,22 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🚨 M6.93.13 (2026-05-25) — v2-verified-newer 우회 버그 수정 (사용자 데이터 진짜 보호)',
+      title: '🚨 M6.93.14 (2026-05-25) — "베이 구조 먼저, EDI는 그 위에" (사용자 통찰 반영)',
+      examples: [
+        { q: '🔥 사용자 보고 + 통찰', a: '"셀들은 복구됐으나 홀드 [1,1,3,5] 입력했는데 [5,5,5,5]=5×4=20으로 보이고, 데크에 있던 컨테이너들이 안 보임. edi에서 베이 구조 같이 가져오다 셀구조가 틀려진 것 같다. 베이 구조 먼저 완성하고 그 위에 edi 데이터를 올리면 되지 않을까."' },
+        { q: '🔍 진단 (시뮬)', a: '3가지 문제: (1) bayDef.deckTiers 빈 배열 → PrintableCargoPlanV2 deckTiersAll=[] → nDeck=0 → 데크 영역 안 그려짐 → 데크 컨테이너 안 보임. (2) augmentMatrixFromBayDict가 deckCells=deckTiers.map(()=>rowCount)로 EDI cells를 [rowCount, rowCount, ...]로 덮어씀 → 사용자 의도 [1,1,3,5]가 [9,9,9,9]로 변질. (3) enrichBayDef가 EDI containers로 베이 구조 추정 → 사용자 데이터 가림.' },
+        { q: '✅ Fix 1: matrixToBayDictEntry bayDef.deckTiers/holdTiers union 저장', a: 'shipMatrixBuilder.js — baysSummary의 모든 deckTiers/holdTiers를 union해서 bayDef level에 저장. PrintableCargoPlanV2의 deckTiersAll = bayDef.deckTiers → 빈 배열 아님 → 데크 영역 정상 그려짐.' },
+        { q: '✅ Fix 2: buildMatrixFromEdi cells 추정 안 함', a: 'EDI는 적재 위치 (sourceRows/Tiers/rowTierPairs)만 추출. cells, deckTiers, holdTiers는 빈 값. 베이사전이 채우거나 사용자가 직접 입력. EDI는 hull 단면 (빈 칸 구조) 모르므로 추정 자체가 부정확.' },
+        { q: '✅ Fix 3: augmentMatrixFromBayDict cells 보존', a: '기존 entry.deckCells가 있으면 보존, 새로 추가된 tier에만 rowCount fallback. 사용자 매트릭스 빌더에서 수정한 cells를 베이사전 덮어쓰기로 사라지지 않게.' },
+        { q: '✅ Fix 4: PrintableCargoPlanV2 EDI 추정 차단', a: 'enrichBayDef(..., null) — ediContainers 전달 안 함. EDI는 컨테이너 마크 표시 (cargoPlanCore buildBayMarks)에만 사용. 베이 구조는 사용자/베이사전이 결정.' },
+        { q: '✅ Fix 5: deckTiersAll fallback', a: 'PrintableCargoPlanV2 — bayDef.deckTiers 빈 배열이면 baysSummary의 deckTiers union으로 자동 복원 (이중 안전망).' },
+        { q: '📋 흐름 (사용자 통찰)', a: '1) 베이사전/사용자가 베이 구조 결정 (deckTiers, holdTiers, cells = hull 단면). 2) EDI는 그 위에 적재 위치만 올림 (bay/row/tier별 마크 표시). 3) EDI는 hull 구조 추정 절대 X.' },
+        { q: '🧪 시뮬 검증 (PASS)', a: 'DXQD BAY 01: 사용자 holdCells=[1,1,3,5], deckCells=[5,5,5,5], rowCount=5 입력 → 저장 → 카고플랜 → 정확히 [1,1,3,5]/[5,5,5,5] 표시. bayDef.deckTiers union 저장으로 데크 영역 정상 그려짐.' },
+        { q: '⚠️ 사용자 확인 필요', a: '새 ZIP 적용 후 (1) 브라우저 강력 새로고침 (Ctrl+Shift+R) (2) PWA 캐시 클리어 (3) 매트릭스 빌더에서 BAY 01 다시 입력 (4) 저장 (5) 카고플랜 검증.' },
+      ],
+    },
+    {
+      title: '🚨 M6.93.13 (2026-05-25) — v2-verified-newer 우회 버그 (부분 fix)',
       examples: [
         { q: '🔥 사용자 보고', a: '"M6.93.12 적용했는데 여전히 데크 08 ROW 누락, 사용자 입력 cells 안 나옴. 데크 ROW 8개 × 4단 = 32 셀이 있어야 하는데 누락된 곳 많음."' },
         { q: '🔍 진단 (시뮬)', a: 'shipStructure.js fuzzyLookupAcrossDicts 첫 분기 v2-verified-newer가 user dict보다 먼저 실행됨. DXQD가 v2에 verified=true로 등록됐고 Firebase에 없어서 → v2-verified-newer가 무조건 매칭 → user dict 매칭 시도조차 안 됨 → M6.93.12 lookupUserBayDict 6단계 매칭이 무효화됨.' },

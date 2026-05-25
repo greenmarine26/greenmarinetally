@@ -189,6 +189,11 @@ const pad2 = n => String(n).padStart(2, '0');
  * @returns {Object} { byBay: { '001': {rowCount, hasZero, deckTiers, holdTiers, sourceRows, sourceTiers, deckCells, holdCells}, ... } }
  */
 export function buildMatrixFromEdi(containers) {
+  // M6.93.14: 사용자 통찰 — "베이 구조 먼저, EDI는 그 위에 올린다"
+  //   기존 버그: EDI에서 cells/tiers를 추정 → 베이사전 위에 덮어쓰기 가능 → 사용자 수정 가려짐
+  //   해결: EDI는 베이 번호와 적재 위치 (sourceRows/Tiers/rowTierPairs)만 추출.
+  //         cells/deckTiers/holdTiers/rowCount는 빈 값으로 두고, augmentMatrixFromBayDict 또는 사용자가 채움.
+  //         EDI는 hull 단면 모름 (적재 안 된 빈 칸의 구조 모름) — 추정 자체가 부정확.
   const byBay = {};
   for (const c of containers) {
     if (!c.bay || !c.row || !c.tier) continue;
@@ -198,7 +203,7 @@ export function buildMatrixFromEdi(containers) {
         bayNum: b,
         sourceRows: new Set(),
         sourceTiers: new Set(),
-        rowTierPairs: new Set(), // "row-tier" — cells 계산용
+        rowTierPairs: new Set(), // "row-tier" — 적재 위치 표시용
       };
     }
     byBay[b].sourceRows.add(pad2(c.row));
@@ -206,50 +211,23 @@ export function buildMatrixFromEdi(containers) {
     byBay[b].rowTierPairs.add(`${pad2(c.row)}-${pad2(c.tier)}`);
   }
 
-  // 각 베이 매트릭스 계산
+  // 각 베이 정리 (Set → Array). 구조는 빈 값 — 베이사전이 채움.
   for (const b of Object.keys(byBay)) {
     const entry = byBay[b];
     const rows = Array.from(entry.sourceRows).sort();
     const tiers = Array.from(entry.sourceTiers).sort();
-
-    // rowCount: 실 적재 row max → 일반 컨선 row 패턴 추정
-    // hasZero: 00 있으면 true
-    const hasZero = rows.includes('00');
-    // row max (홀짝 분리)
-    const oddMax = Math.max(...rows.filter(r => parseInt(r) % 2 === 1).map(Number), 0);
-    const evenMax = Math.max(...rows.filter(r => parseInt(r) % 2 === 0).map(Number), 0);
-    // rowCount 추정: max 짝수 + max 홀수 (+1 if hasZero)
-    // 예: oddMax=9, evenMax=10, hasZero=true → 11 rows (10,8,6,4,2,0,1,3,5,7,9)
-    //     oddMax=9, evenMax=10, hasZero=false → 10 rows
-    let rowCount = 0;
-    if (oddMax > 0 || evenMax > 0) {
-      const odds = oddMax > 0 ? Math.floor(oddMax / 2) + 1 : 0; // 1,3,5,7,9 → max 9면 5개
-      const evens = evenMax > 0 ? Math.floor(evenMax / 2) : 0;  // 2,4,6,8,10 → max 10면 5개
-      rowCount = odds + evens + (hasZero ? 1 : 0);
-    }
-
-    // deck/hold 분리: tier ≥ 80 = deck, < 80 = hold (관행)
-    const deckTiers = tiers.filter(t => parseInt(t) >= 80).map(Number).sort((a, b) => b - a);
-    const holdTiers = tiers.filter(t => parseInt(t) < 80).map(Number).sort((a, b) => b - a);
-
-    // M6.93.9: cells 기본 = rowCount (hull 가득).
-    //   이전: 컨테이너 개수 기반 → 적재 적은 tier에서 hull 좁아져 셀 누락 (사용자 보고).
-    //   EDI는 컨테이너 분포만 알려주지 실제 hull 단면은 모름.
-    //   정확한 cells는 PDF 업로드 또는 사용자 모달에서 수정.
-    const deckCells = deckTiers.map(() => rowCount);
-    const holdCells = holdTiers.map(() => rowCount);
-
-    entry.rowCount = rowCount;
-    entry.hasZero = hasZero;
-    entry.deckTiers = deckTiers;
-    entry.holdTiers = holdTiers;
-    entry.deckCells = deckCells;
-    entry.holdCells = holdCells;
-    entry.source = 'edi';
-    // 정리 (직렬화 위해)
     entry.sourceRows = rows;
     entry.sourceTiers = tiers;
     entry.rowTierPairs = Array.from(entry.rowTierPairs);
+
+    // M6.93.14: 베이 구조는 빈 값. 베이사전 (augmentMatrixFromBayDict)이 채우거나 사용자가 직접 입력.
+    entry.rowCount = 0;
+    entry.hasZero = rows.includes('00');     // hasZero만 EDI에서 (적재 위치로 확인 가능)
+    entry.deckTiers = [];
+    entry.holdTiers = [];
+    entry.deckCells = [];
+    entry.holdCells = [];
+    entry.source = 'edi';
   }
 
   // ===== Pass 2: 페어링 후처리 (사용자 규칙) =====
@@ -351,15 +329,35 @@ export function augmentMatrixFromBayDict(matrix, imo, code) {
       }
     }
     // tier 정보 (사전이 더 풍부하면 채택)
+    // M6.93.14: 사용자 통찰 반영 — "EDI 위에 베이사전이 덮어쓰는 문제"
+    //   기존 버그: 베이사전 deckTiers를 받으면 entry.deckCells = deckTiers.map(() => rowCount)로 전체 덮어씀.
+    //             → EDI에서 가져온 실측 cells 정보가 [rowCount, rowCount, ...] (예: [9,9,9,9])로 변질.
+    //   해결: 기존 EDI cells는 보존하고, 새로 추가된 tier에만 rowCount fallback 사용.
     if (bs.deckTiers && bs.deckTiers.length > entry.deckTiers.length) {
-      entry.deckTiers = [...bs.deckTiers].sort((a, b) => b - a);
-      // cells 재구성 (cells 정보가 사전에 없으면 rowCount로 기본 채움)
-      entry.deckCells = entry.deckTiers.map(() => entry.rowCount);
+      const newDeckTiers = [...bs.deckTiers].sort((a, b) => b - a);
+      // 기존 tier의 cells 값은 보존, 새 tier에만 rowCount fallback
+      const newDeckCells = newDeckTiers.map((t) => {
+        const oldIdx = entry.deckTiers.indexOf(t);
+        if (oldIdx >= 0 && entry.deckCells[oldIdx] !== undefined && entry.deckCells[oldIdx] > 0) {
+          return entry.deckCells[oldIdx];  // EDI 실측 cells 보존
+        }
+        return entry.rowCount || 0;
+      });
+      entry.deckTiers = newDeckTiers;
+      entry.deckCells = newDeckCells;
       entry.source = entry.source.includes('dict') ? entry.source : entry.source + '+dict';
     }
     if (bs.holdTiers && bs.holdTiers.length > entry.holdTiers.length) {
-      entry.holdTiers = [...bs.holdTiers].sort((a, b) => b - a);
-      entry.holdCells = entry.holdTiers.map(() => entry.rowCount);
+      const newHoldTiers = [...bs.holdTiers].sort((a, b) => b - a);
+      const newHoldCells = newHoldTiers.map((t) => {
+        const oldIdx = entry.holdTiers.indexOf(t);
+        if (oldIdx >= 0 && entry.holdCells[oldIdx] !== undefined && entry.holdCells[oldIdx] > 0) {
+          return entry.holdCells[oldIdx];  // EDI 실측 cells 보존
+        }
+        return entry.rowCount || 0;
+      });
+      entry.holdTiers = newHoldTiers;
+      entry.holdCells = newHoldCells;
       entry.source = entry.source.includes('dict') ? entry.source : entry.source + '+dict';
     }
   }
@@ -436,6 +434,24 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       source: e.source,
     };
   });
+
+  // M6.93.14: bayDef에 선박 전체 deckTiers/holdTiers union 추가.
+  //   기존 버그: PrintableCargoPlanV2의 deckTiersAll = v2Def.deckTiers || [] 라
+  //             user dict 저장 시 bayDef.deckTiers 안 들어가면 deckTiersAll=[] → nDeck=0 → 데크 영역 안 그려짐 → 데크 컨테이너 안 보임!
+  //   해결: baysSummary의 모든 deckTiers/holdTiers를 union해서 bayDef level에 저장.
+  const allDeck = new Set();
+  const allHold = new Set();
+  baysSummary.forEach(b => {
+    (b.deckTiers || []).forEach(t => allDeck.add(Number(t)));
+    (b.holdTiers || []).forEach(t => allHold.add(Number(t)));
+  });
+  const deckTiersAll = [...allDeck].filter(Number.isFinite).sort((a, b) => b - a);
+  const holdTiersAll = [...allHold].filter(Number.isFinite).sort((a, b) => b - a);
+
+  // rowMaxEven/Odd 도 baysSummary의 rowCount에서 추정 (선박 전역 fallback용)
+  const rowCounts = baysSummary.map(b => Number(b.rowCount) || 0).filter(n => n > 0);
+  const maxRow = rowCounts.length > 0 ? Math.max(...rowCounts) : 9;
+
   return {
     imo: imo || '',
     code: code || '',
@@ -445,8 +461,13 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       recordCount: baysSummary.length,
       sourceFile: 'matrix_builder',
       parsedAt: new Date().toISOString(),
-      sourceVersion: 'M6.93.7',
+      sourceVersion: 'M6.93.14',
       verified: true,
+      deckTiers: deckTiersAll,       // M6.93.14 신규
+      holdTiers: holdTiersAll,       // M6.93.14 신규
+      rowMaxEven: maxRow % 2 === 0 ? maxRow : maxRow + 1,
+      rowMaxOdd: maxRow % 2 === 1 ? maxRow : Math.max(maxRow - 1, 1),
+      bayList: baysSummary.map(b => b.bayNo),
       baysSummary,
     },
   };
