@@ -200,7 +200,22 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     const entry = matrixToBayDictEntry(matrix, shipMeta.code, shipMeta.name, shipMeta.imo);
     // 콜사인 추가
     entry.callsign = shipMeta.callsign || '';
+    // M6.93.16: alias 정보 보존 — EDI 자동 추출 값(autoMeta)을 entry에 저장.
+    //   문제: 사용자가 code/name을 수정하면 저장 키와 다음 검색 키가 달라짐
+    //         → lookupUserBayDict가 fail → modal 재오픈 시 EDI 재분석 → 사용자 수정 사라짐.
+    //   해결: entry에 aliasCode/aliasName 보존. lookup에서 alias 매칭.
+    if (autoMeta) {
+      entry.aliasCode = autoMeta.code || '';
+      entry.aliasName = autoMeta.name || '';
+      entry.aliasImo = autoMeta.imo || '';
+    }
     const ok = addToUserBayDict(entry);
+    // 추가 안전망: alias 키로도 저장 (autoMeta.code와 shipMeta.code 다르면 양쪽 키 모두 사용)
+    if (ok && autoMeta?.code && autoMeta.code !== entry.code) {
+      try {
+        const aliasOk = addToUserBayDict({ ...entry, code: autoMeta.code });
+      } catch (e) { /* ignore */ }
+    }
     if (ok) {
       setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이`);
       setDone(true);

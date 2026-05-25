@@ -379,6 +379,18 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🔑 M6.93.16 (2026-05-25) — 저장 키 / 검색 키 mismatch 해결 (수정 후 다시 열면 사라짐)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"수동으로 베이를 수정하고 저장후 다시 불러오면 수정전 데이터로 돌아옴"' },
+        { q: '🔍 진단', a: 'ShipMatrixBuilderModal 코드 추적 결과: 저장 시 shipMeta.code (사용자 수정값), 검색 시 autoMeta.code (EDI 자동값). 사용자가 modal에서 code/name/imo를 수정하면 저장 키와 다음 검색 키가 달라짐 → lookupUserBayDict 매칭 fail → modal 재오픈 시 EDI 재분석 → 사용자 수정 사라진 것처럼 보임.' },
+        { q: '✅ Fix 1: entry에 alias 정보 보존', a: 'handleSave에서 entry.aliasCode/aliasName/aliasImo에 autoMeta 값 보존. 저장 시 lookup에서 양쪽 모두 매칭 가능.' },
+        { q: '✅ Fix 2: alias 키로도 저장', a: 'autoMeta.code !== shipMeta.code면 user dict에 두 키로 등록 (entry.code 키 + autoMeta.code 키). 어느 쪽으로 검색해도 동일 entry 반환.' },
+        { q: '✅ Fix 3: lookupUserBayDict alias 매칭', a: '6단계 매칭에 aliasCode/aliasName/aliasImo 비교 추가. (3) entry.imo + aliasImo, (4) entry.code + aliasCode, (6) entry.name + aliasName fuzzy.' },
+        { q: '📋 시뮬 검증 (ALL PASS)', a: '사용자가 EDI 자동 \'9388417\'/\'XIN QUN DAO\'를 \'DXQD\'로 수정 후 저장 → lookup(\'9388417\', \'9388417\')/lookup(\'9388417\', \'XIN QUN DAO\')/lookup(\'\', \'XIN QUN DAO\')/lookup(IMO, NAME) 4가지 호출 모두 매칭 ✅. 옛 데이터 (alias 없음)도 그대로 작동 ✅.' },
+        { q: '⚠️ 적용 후 절차', a: '1) ZIP 적용 + 강력 새로고침 (Ctrl+Shift+R). 2) 매트릭스 빌더 열기. 3) "🔍 디버그 보기" 클릭하여 현재 저장본 확인. 4) 베이 수정 + 저장. 5) modal 닫기 → 다시 열기 → 사용자 수정 데이터 그대로 복원되는지 확인. 6) 카고플랜 검증.' },
+      ],
+    },
+    {
       title: '🔍 M6.93.15 (2026-05-25) — 디버그 패널 + 옛 데이터 호환 + 전 컴포넌트 일관 적용',
       examples: [
         { q: '🔥 사용자 보고', a: 'M6.93.14 적용 후에도 "데크가 아직도 안 보임". 시뮬은 PASS인데 실제 작동 안 함 — 시뮬-실제 괴리 발생.' },

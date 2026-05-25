@@ -38,10 +38,10 @@ export function loadUserBayDict() {
  * @returns {object|null}
  */
 export function lookupUserBayDict(imo, code) {
-  // M6.93.12: 매칭 보강 — IMO / code / callsign / name fuzzy 모두 시도
-  //   기존 버그: 사용자가 'DXQD' 키로 저장했는데 카고플랜이 (imo='9388417', name='XIN QUN DAO')로 찾아서 MISS.
-  //             → v2 사전이 사용되어 사용자 수정 무시됨. (사용자 보고)
-  //   원칙: 사용자가 저장한 데이터는 사용자 외에 변경 못 함 — 매칭이 가장 폭넓게 동작해야 함.
+  // M6.93.16: alias 매칭 추가 — 사용자가 modal에서 code/name 수정한 경우 보호.
+  //   문제: 검색은 autoMeta(EDI 자동), 저장은 shipMeta(사용자 수정) → 키 mismatch
+  //   해결: entry.aliasCode/aliasName/aliasImo로 EDI 자동값 보존. lookup이 양쪽 모두 매칭.
+  // M6.93.13: 매칭 보강 — IMO / code / callsign / name fuzzy 모두 시도
   const dict = loadUserBayDict();
   if (!dict || Object.keys(dict).length === 0) return null;
 
@@ -53,12 +53,16 @@ export function lookupUserBayDict(imo, code) {
   if (imo) {
     for (const k of Object.keys(dict)) {
       if (dict[k]?.imo && String(dict[k].imo) === String(imo)) return dict[k];
+      // M6.93.16: aliasImo 매칭
+      if (dict[k]?.aliasImo && String(dict[k].aliasImo) === String(imo)) return dict[k];
     }
   }
-  // 4. entry.code 필드 매칭
+  // 4. entry.code 필드 매칭 (+ aliasCode)
   if (code) {
     for (const k of Object.keys(dict)) {
       if (dict[k]?.code === code) return dict[k];
+      // M6.93.16: aliasCode 매칭
+      if (dict[k]?.aliasCode === code) return dict[k];
     }
   }
   // 5. entry.callsign 매칭 (code 인자가 callsign일 수도)
@@ -69,21 +73,28 @@ export function lookupUserBayDict(imo, code) {
       if (cs && cs.length >= 3 && cs === search) return dict[k];
     }
   }
-  // 6. entry.name fuzzy 매칭 (code 인자가 선박명일 때)
-  //    공백 제거 후 5자 prefix 양방향 포함 (Firebase fuzzy와 동일 규칙)
+  // 6. entry.name fuzzy 매칭 (code 인자가 선박명일 때) + aliasName
   if (code) {
     const search = String(code).toUpperCase().replace(/\s+/g, '');
     if (search.length >= 4) {
       for (const k of Object.keys(dict)) {
         const en = String(dict[k]?.name || '').toUpperCase().replace(/\s+/g, '');
-        if (!en || en.length < 4) continue;
-        if (en.includes(search.slice(0, 5)) || search.includes(en.slice(0, 5))) {
-          return dict[k];
+        const an = String(dict[k]?.aliasName || '').toUpperCase().replace(/\s+/g, '');
+        // entry.name 매칭
+        if (en && en.length >= 4) {
+          if (en.includes(search.slice(0, 5)) || search.includes(en.slice(0, 5))) {
+            return dict[k];
+          }
+          const ec = String(dict[k]?.code || '').toUpperCase();
+          if (ec && ec.length >= 4 && (search.startsWith(ec) || en.startsWith(ec))) {
+            return dict[k];
+          }
         }
-        // entry.code도 부분 매칭 (사용자 입력 code가 선박명 앞 4자일 때 — 예: 'DXQD' vs 선박명 'XINQUNDAO')
-        const ec = String(dict[k]?.code || '').toUpperCase();
-        if (ec && ec.length >= 4 && (search.startsWith(ec) || en.startsWith(ec))) {
-          return dict[k];
+        // M6.93.16: aliasName 매칭
+        if (an && an.length >= 4) {
+          if (an.includes(search.slice(0, 5)) || search.includes(an.slice(0, 5))) {
+            return dict[k];
+          }
         }
       }
     }
