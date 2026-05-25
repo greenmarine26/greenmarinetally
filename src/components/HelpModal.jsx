@@ -379,7 +379,24 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.93.11 (2026-05-25) — 카고플랜 V2만 사용 + BayPlan/BayDetail 매트릭스 호환',
+      title: '🆕 M6.93.13 (2026-05-25) — BayPlan/BayDetail이 사용자 매트릭스 빌더 데이터 그대로 사용',
+      examples: [
+        { q: '🔥 사용자 요구', a: '"베이플랜 베이상세는 사용자 완성한 데이터를 가져다 쓰게 하면 되는거잖아요" + "01베이도 없습니다"' },
+        { q: '🔍 DXQD 실데이터 시뮬 진단', a: 'EDI 207개 컨테이너, 11개 베이 (BAY 01 적재 0개). 매트릭스 빌더 → BAY 01 추정으로 추가. matrixToBayDictEntry가 **bayList 안 만들어서** BayPlan이 EDI fallback (BAY 01 EDI에 없으니 누락).' },
+        { q: '✅ Fix', a: '(1) matrixToBayDictEntry에 bayList 추가 + v2 호환 필드 (bayNo, deckTiersLocal, holdTiersLocal, rowMaxOddLocal, rowMaxEvenLocal, isStandalone). (2) 페어 짝수 entry도 baysSummary에 추가 (BAY 16 같은 페어 짝수가 dictBaysSummary 맵에 없어서 BayPlan이 tier 못 찾는 버그 추가 발견). (3) 전역 deckTiers/holdTiers/rowMaxOdd/rowMaxEven도 저장.' },
+        { q: '📋 시뮬 검증', a: 'DXQD 실데이터: 매트릭스 24개 → entry baysSummary 25개 (페어 짝수 1개 추가) → bayList 25개 (BAY 01 포함). BayPlan dictBaysSummary 맵 키 [1,2,...,25] (BAY 16 포함). 사용자 cells [1,1,3,5] 카고플랜 lookup ✓. ALL PASS.' },
+      ],
+    },
+    {
+      title: '🆕 M6.93.12 (2026-05-25) — Smart cells 알고리즘 (가운데 row 적재 여부)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"V2가 STSE SWAT처럼 필요없는 셀은 없애야 하는데 그대로 남아서" + "BAY 01 hold가 [1,1,3,5]인데 [5,5,5,5]로"' },
+        { q: '✅ Smart cells 알고리즘', a: '가운데 row(00 또는 01) 적재 여부로 hull 좁음 판단. 가운데 있으면 → cells = 적재 개수 (좁은 hull). 가운데 없으면 → cells = rowCount (가득). BAY 01 (BOW): 1/3/5/7 정확 ✓. BAY 11 (미드십): 7 ✓. BAY 13 (가운데 미적재): 7 (hull 가득 유지) ✓.' },
+        { q: '🎨 시각화', a: 'SVG로 카고플랜 V2 결과 비교 (왼쪽 가득 vs 오른쪽 hull 좁아짐) - 사용자에게 화면 확인.' },
+      ],
+    },
+    {
+      title: '🆕 M6.93.11 (2026-05-25) — V2만 사용 + BayPlan 호환',
       examples: [
         { q: '🔥 사용자 요구', a: '"카고 플랜은 V2만 사용. V2에 적용된 자료로 베이플랜도 수정. 베이상세도 수정. 보이는 화면 + 출력 전부."' },
         { q: '✅ 카고플랜 V1 폐기', a: 'PrintHubModal에서 V1 토글 제거 (📐 카고플랜 기존 버튼 삭제). V2만 표시. 옛 \'cargo\' 진입 경로는 \'cargo-v2\'로 자동 redirect.' },

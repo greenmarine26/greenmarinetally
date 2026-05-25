@@ -232,12 +232,22 @@ export function buildMatrixFromEdi(containers) {
     const deckTiers = tiers.filter(t => parseInt(t) >= 80).map(Number).sort((a, b) => b - a);
     const holdTiers = tiers.filter(t => parseInt(t) < 80).map(Number).sort((a, b) => b - a);
 
-    // M6.93.9: cells 기본 = rowCount (hull 가득).
-    //   이전: 컨테이너 개수 기반 → 적재 적은 tier에서 hull 좁아져 셀 누락 (사용자 보고).
-    //   EDI는 컨테이너 분포만 알려주지 실제 hull 단면은 모름.
-    //   정확한 cells는 PDF 업로드 또는 사용자 모달에서 수정.
-    const deckCells = deckTiers.map(() => rowCount);
-    const holdCells = holdTiers.map(() => rowCount);
+    // M6.93.12: Smart cells - 가운데 row 적재 여부로 hull 좁음 판단
+    //   가운데 row(00 또는 01) 있음 → 가운데부터 좌우 대칭 적재 = hull 좁음 → cells = 적재 개수
+    //   가운데 row 없음 → hull은 가득인데 일부 미적재 → cells = rowCount (가득)
+    //   적재 없음 → rowCount (가득 기본)
+    //   사용자 수정값 우선 (M6.93.10 cargoPlanCore에서 처리)
+    const centerRow = hasZero ? '00' : '01';
+    const smartCells = (t) => {
+      const rowsForTier = [];
+      for (const p of entry.rowTierPairs) {
+        if (p.endsWith('-' + pad2(t))) rowsForTier.push(p.split('-')[0]);
+      }
+      if (rowsForTier.length === 0) return rowCount;
+      return rowsForTier.includes(centerRow) ? rowsForTier.length : rowCount;
+    };
+    const deckCells = deckTiers.map(smartCells);
+    const holdCells = holdTiers.map(smartCells);
 
     entry.rowCount = rowCount;
     entry.hasZero = hasZero;
@@ -287,9 +297,17 @@ export function buildMatrixFromEdi(containers) {
     const allT = oddE.sourceTiers;
     oddE.deckTiers = allT.filter(t => parseInt(t) >= 80).map(Number).sort((a, b) => b - a);
     oddE.holdTiers = allT.filter(t => parseInt(t) < 80).map(Number).sort((a, b) => b - a);
-    // M6.93.9: cells = rowCount (hull 가득). 컨테이너 분포 기반 X.
-    oddE.deckCells = oddE.deckTiers.map(() => oddE.rowCount);
-    oddE.holdCells = oddE.holdTiers.map(() => oddE.rowCount);
+    // M6.93.12: Smart cells (가운데 row 적재 여부 기반)
+    const centerRow = oddE.hasZero ? '00' : '01';
+    const smartCellsP = (t) => {
+      const rowsForTier = oddE.rowTierPairs
+        .filter(p => p.endsWith('-' + pad2(t)))
+        .map(p => p.split('-')[0]);
+      if (rowsForTier.length === 0) return oddE.rowCount;
+      return rowsForTier.includes(centerRow) ? rowsForTier.length : oddE.rowCount;
+    };
+    oddE.deckCells = oddE.deckTiers.map(smartCellsP);
+    oddE.holdCells = oddE.holdTiers.map(smartCellsP);
 
     // 페어 표시
     oddE.pairEven = pad2(b);
@@ -419,23 +437,59 @@ export function augmentMatrixFromPdf(matrix, pdfResult) {
  * @returns {Object} bayDictEntry
  */
 export function matrixToBayDictEntry(matrix, code, name, imo) {
-  const baysSummary = Object.keys(matrix.byBay).sort().map(bay => {
+  const sortedKeys = Object.keys(matrix.byBay).sort();
+  const baseEntries = sortedKeys.map(bay => {
     const e = matrix.byBay[bay];
+    const bayNo = String(parseInt(bay)).padStart(2, '0');
     return {
-      bay,                                                    // '001' 3자리
-      bayNo: String(parseInt(bay)).padStart(2, '0'),          // '01' 2자리 (v2 호환)
+      bay,
+      bayNo,
       rowCount: e.rowCount,
       hasZero: e.hasZero,
       deckTiers: e.deckTiers,
+      deckTiersLocal: e.deckTiers,
       holdTiers: e.holdTiers,
+      holdTiersLocal: e.holdTiers,
       deckCells: e.deckCells,
       holdCells: e.holdCells,
       hasDeck: e.deckTiers && e.deckTiers.length > 0,
       hasHold: e.holdTiers && e.holdTiers.length > 0,
+      isStandalone: !e.pairEven,
       pairEven: e.pairEven || null,
+      rowMaxOddLocal: e.rowCount,
+      rowMaxEvenLocal: e.rowCount + (e.hasZero ? 0 : 1),
       source: e.source,
     };
   });
+  // M6.93.13: 페어 짝수 entry도 baysSummary에 추가 (홀수와 동일 tier).
+  //   BayPlan/BayDetail이 dictBaysSummary[bayNum]으로 짝수 lookup 시 필요.
+  const pairExtras = [];
+  for (const bs of baseEntries) {
+    if (!bs.pairEven) continue;
+    pairExtras.push({
+      ...bs,
+      bayNo: bs.pairEven,
+      bay: String(parseInt(bs.pairEven)).padStart(3, '0'),
+      isStandalone: false,
+      pairOdd: bs.bayNo,  // 짝꿍 홀수 표시
+      source: (bs.source || '') + ':pair-even',
+    });
+  }
+  const baysSummary = [...baseEntries, ...pairExtras].sort(
+    (a, b) => parseInt(a.bayNo, 10) - parseInt(b.bayNo, 10)
+  );
+
+  // bayList (모든 베이 — 홀수 + 페어 짝수 + orphan 짝수)
+  const bayList = Array.from(new Set(baysSummary.map(b => b.bayNo))).sort();
+
+  // 전역 tier union
+  const allDeckTiers = new Set();
+  const allHoldTiers = new Set();
+  baseEntries.forEach(bs => {
+    (bs.deckTiers || []).forEach(t => allDeckTiers.add(t));
+    (bs.holdTiers || []).forEach(t => allHoldTiers.add(t));
+  });
+
   return {
     imo: imo || '',
     code: code || '',
@@ -445,9 +499,14 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       recordCount: baysSummary.length,
       sourceFile: 'matrix_builder',
       parsedAt: new Date().toISOString(),
-      sourceVersion: 'M6.93.7',
+      sourceVersion: 'M6.93.13',
       verified: true,
+      bayList,
       baysSummary,
+      deckTiers: Array.from(allDeckTiers).sort((a,b) => b-a),
+      holdTiers: Array.from(allHoldTiers).sort((a,b) => b-a),
+      rowMaxOdd: Math.max(...baseEntries.map(b => b.rowCount || 0), 0),
+      rowMaxEven: Math.max(...baseEntries.map(b => (b.rowCount || 0) + (b.hasZero ? 0 : 1)), 0),
     },
   };
 }
