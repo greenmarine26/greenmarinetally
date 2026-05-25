@@ -359,7 +359,7 @@ function mergeBayDef(v3BayDef, v2BayDef) {
   });
 
   // v3 baysSummary 순회 — 각 베이별로 v2 정보 보완
-  const mergedV3 = v3BayDef.baysSummary.map(v3Bay => {
+  merged.baysSummary = v3BayDef.baysSummary.map(v3Bay => {
     const bayKey = String(parseInt(v3Bay.bayNo, 10));
     const v2Bay = v2Map[bayKey];
     if (!v2Bay) return v3Bay;
@@ -387,18 +387,6 @@ function mergeBayDef(v3BayDef, v2BayDef) {
       rowMaxOddLocal:  v3Bay.rowMaxOddLocal  ?? v3Bay.rowMaxOdd  ?? v2Bay.rowMaxOddLocal  ?? v2Bay.rowMaxOdd,
     };
   });
-
-  // M6.93.12: v2에만 있는 베이도 추가 (BAY 01 누락 fix - 사용자 매트릭스 빌더 저장본이 일부 베이 빠뜨려도 v2 사전 보완)
-  const v3BaySet = new Set(v3BayDef.baysSummary.map(b => String(parseInt(b.bayNo, 10))));
-  const v2OnlyBays = v2BayDef.baysSummary.filter(b => !v3BaySet.has(String(parseInt(b.bayNo, 10))));
-  merged.baysSummary = [...mergedV3, ...v2OnlyBays].sort((a, b) => parseInt(a.bayNo, 10) - parseInt(b.bayNo, 10));
-
-  // bayList도 union (v2 + v3)
-  const allBayList = new Set([
-    ...(v3BayDef.bayList || []),
-    ...(v2BayDef.bayList || []),
-  ]);
-  merged.bayList = Array.from(allBayList).sort();
 
   // 선박 전역 tier도 union
   const allDeck = new Set();
