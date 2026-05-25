@@ -14,6 +14,8 @@ import {
   matrixToBayDictEntry,
   extractShipMetaFromVoyage,
   summarizeMatrix,
+  createEmptyBayEntry,
+  detectMissingBays,
 } from '../shipMatrixBuilder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
@@ -29,6 +31,40 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const fileInputRef = useRef(null);
   const [savingMsg, setSavingMsg] = useState('');
   const [done, setDone] = useState(false);
+  // 베이 추가 폼 상태
+  const [addBayInput, setAddBayInput] = useState('');
+  const [addPairInput, setAddPairInput] = useState('');
+
+  const addBay = (bayNumRaw, pairEvenRaw) => {
+    const n = parseInt(bayNumRaw);
+    if (!Number.isFinite(n) || n < 1 || n > 999) {
+      alert('베이 번호는 1~999 사이여야 합니다');
+      return;
+    }
+    const bay = String(n).padStart(3, '0');
+    if (matrix.byBay[bay]) {
+      alert(`BAY ${bay}는 이미 존재합니다`);
+      return;
+    }
+    const pairEven = pairEvenRaw && parseInt(pairEvenRaw) > 0
+      ? String(parseInt(pairEvenRaw)).padStart(2, '0')
+      : null;
+    setMatrix(m => ({
+      ...m,
+      byBay: { ...m.byBay, [bay]: createEmptyBayEntry(bay, pairEven) },
+    }));
+    setAddBayInput('');
+    setAddPairInput('');
+  };
+
+  const deleteBay = (bay) => {
+    if (!confirm(`BAY ${bay} 삭제하시겠습니까?`)) return;
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      delete cp.byBay[bay];
+      return cp;
+    });
+  };
 
   // 초기 분석 (EDI + 베이사전)
   useEffect(() => {
@@ -249,9 +285,62 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           {/* === 베이별 검증 폼 === */}
           {!done && (
             <div className="space-y-2">
+              {/* 베이 추가 폼 */}
+              <div className="bg-zinc-900/60 border border-zinc-700 rounded p-3 flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-bold text-emerald-300">➕ 베이 추가</span>
+                <input
+                  type="number" placeholder="BAY 번호 (예: 1)"
+                  value={addBayInput}
+                  onChange={e => setAddBayInput(e.target.value)}
+                  className="w-32 px-2 py-1 bg-zinc-700 rounded text-sm"
+                  min="1" max="999"
+                />
+                <input
+                  type="number" placeholder="페어 짝수 (옵션, 예: 2)"
+                  value={addPairInput}
+                  onChange={e => setAddPairInput(e.target.value)}
+                  className="w-40 px-2 py-1 bg-zinc-700 rounded text-sm"
+                  min="2" max="998" step="2"
+                />
+                <button
+                  onClick={() => addBay(addBayInput, addPairInput)}
+                  disabled={!addBayInput}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 rounded text-sm disabled:opacity-50"
+                >
+                  추가
+                </button>
+                <span className="text-[10px] text-zinc-500">
+                  ※ 페어 비우면 단독, 채우면 페어 (홀수 → 짝수 짝꿍)
+                </span>
+              </div>
+
+              {/* 누락 베이 자동 제안 */}
+              {(() => {
+                const missing = detectMissingBays(matrix);
+                if (missing.length === 0) return null;
+                return (
+                  <div className="bg-amber-900/30 border border-amber-700/50 rounded p-3">
+                    <div className="text-xs text-amber-300 font-bold mb-1">⚠ 누락 의심 베이 (베이 번호 패턴 기반)</div>
+                    <div className="flex flex-wrap gap-1">
+                      {missing.map(s => (
+                        <button
+                          key={s.bayNum}
+                          onClick={() => addBay(s.bayNum, null)}
+                          className="px-2 py-0.5 bg-amber-800/40 hover:bg-amber-700 rounded text-xs"
+                          title={s.reason}
+                        >
+                          BAY {s.bayNum} +
+                        </button>
+                      ))}
+                    </div>
+                    <div className="text-[10px] text-amber-400/70 mt-1">클릭하면 단독 베이로 추가됩니다. 페어가 필요하면 위 폼 사용.</div>
+                  </div>
+                );
+              })()}
+
               {bayList.length === 0 && (
                 <div className="text-center py-8 text-zinc-400">
-                  EDI 데이터가 없습니다. 자료 탭에서 EDI를 먼저 업로드하거나 PDF 업로드 후 진행하세요.
+                  EDI 데이터가 없습니다. 위에서 베이를 직접 추가하거나 PDF 업로드 후 진행하세요.
                 </div>
               )}
               {bayList.map(bay => {
@@ -272,6 +361,13 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                         <input type="checkbox" checked={!!e.hasZero} onChange={ev => updateBay(bay, 'hasZero', ev.target.checked)} />
                         00포함
                       </label>
+                      <button
+                        onClick={() => deleteBay(bay)}
+                        className="px-2 py-0.5 bg-red-900/50 hover:bg-red-700 rounded text-xs"
+                        title="이 베이 삭제"
+                      >
+                        ×
+                      </button>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-3 text-xs">

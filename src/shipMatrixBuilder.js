@@ -46,6 +46,78 @@ export function extractShipMetaFromVoyage(voyage) {
 }
 
 /**
+ * 빈 베이 엔트리 생성 (사용자가 직접 베이 추가 시)
+ * 기본값: 일반 컨선 베이 구조
+ * @param {string} bayNum - "001" 형식
+ * @param {string|null} pairEven - 페어 짝수 번호 (단독이면 null)
+ * @returns {Object} 매트릭스 엔트리
+ */
+export function createEmptyBayEntry(bayNum, pairEven = null) {
+  return {
+    bayNum: String(parseInt(bayNum)).padStart(3, '0'),
+    pairEven,
+    rowCount: 9,
+    hasZero: true,
+    deckTiers: [88, 86, 84, 82],
+    holdTiers: [8, 6, 4, 2],
+    deckCells: [9, 9, 9, 9],
+    holdCells: [9, 9, 9, 9],
+    sourceRows: [],
+    sourceTiers: [],
+    rowTierPairs: [],
+    source: 'user',
+  };
+}
+
+/**
+ * 누락된 베이 추정 (베이 번호 패턴 기반)
+ * 예: 01, 03, 05, 09, 11 있음 → 07 누락 의심
+ *     02, 06, 08 있음 → 04 누락 의심
+ * @param {Object} matrix
+ * @returns {Array} [{bayNum, reason}, ...]
+ */
+export function detectMissingBays(matrix) {
+  const present = Object.keys(matrix?.byBay || {}).map(k => parseInt(k)).filter(n => Number.isFinite(n)).sort((a, b) => a - b);
+  if (present.length < 2) return [];
+
+  const presentSet = new Set(present);
+  const suggestions = [];
+
+  // 홀수 베이 누락 (홀수 베이가 2개 이상 있을 때)
+  const odds = present.filter(n => n % 2 === 1);
+  if (odds.length >= 2) {
+    const minO = odds[0];
+    const maxO = odds[odds.length - 1];
+    for (let n = minO; n <= maxO; n += 2) {
+      if (!presentSet.has(n)) suggestions.push({ bayNum: String(n).padStart(3, '0'), reason: '홀수 패턴 누락' });
+    }
+  }
+
+  // 짝수 베이 누락 (페어의 짝수)
+  const evens = present.filter(n => n % 2 === 0);
+  if (evens.length >= 2) {
+    const minE = evens[0];
+    const maxE = evens[evens.length - 1];
+    for (let n = minE; n <= maxE; n += 2) {
+      if (!presentSet.has(n)) suggestions.push({ bayNum: String(n).padStart(3, '0'), reason: '짝수 패턴 누락' });
+    }
+  }
+
+  // BAY 01 누락 (홀수 패턴이 03부터 시작하는데 01은 베이 통상 있음)
+  if (odds.length > 0 && odds[0] >= 3 && !presentSet.has(1)) {
+    suggestions.unshift({ bayNum: '001', reason: 'BAY 01 통상 존재 (선수)' });
+  }
+
+  // 중복 제거
+  const seen = new Set();
+  return suggestions.filter(s => {
+    if (seen.has(s.bayNum)) return false;
+    seen.add(s.bayNum);
+    return true;
+  });
+}
+
+/**
  * 매트릭스 분석 요약 (UI 상태 카드용)
  * @param {Object} matrix
  * @returns {Object} { totalBays, pairCount, singleCount, hasHoldCount, deckOnlyCount, needReviewCount }
@@ -72,6 +144,9 @@ export function summarizeMatrix(matrix) {
     needReviewCount,
   };
 }
+
+/**
+ * 매트릭스 분석 요약 (UI 상태 카드용)
 
 const pad3 = b => String(parseInt(b)).padStart(3, '0');
 const pad2 = n => String(n).padStart(2, '0');
