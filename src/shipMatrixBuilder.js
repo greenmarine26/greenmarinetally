@@ -146,7 +146,8 @@ export function summarizeMatrix(matrix) {
 }
 
 /**
- * 매트릭스 분석 요약 (UI 상태 카드용)
+ * 매트릭스 분석 요약 (UI 상태 카드용) — pad 헬퍼는 아래
+ */
 
 const pad3 = b => String(parseInt(b)).padStart(3, '0');
 const pad2 = n => String(n).padStart(2, '0');

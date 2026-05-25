@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🚨 M6.93.5 (2026-05-25) — CRITICAL: M6.93.1~4 깨진 코드 수정 + 시뮬레이션 검증 체계',
+      examples: [
+        { q: '🔥 사용자 지적', a: '"다음부터 시뮬레이션 후 완성본 주세요. 모든 클로드님께 계속 말씀드리는 중." 매번 검증 없이 ZIP 던지는 패턴 반복. 지침서 §2.2 "검증되지 않은 앱은 절대 ZIP 제공 X" 원칙을 어김.' },
+        { q: '🔍 진짜 발견된 버그', a: 'shipMatrixBuilder.js에서 JSDoc 주석이 안 닫혀(`*/` 빠짐) const pad3, pad2 정의가 주석 안에 묻힘. 빌드는 성공(주석이라 문법 OK)했지만 런타임에서 `pad3 is not defined` 에러. M6.93.1~4 ZIP 모두 깨진 코드 포함. 사용자가 "베이 매트릭스 빌더" 버튼을 눌렀어도 EDI 분석 자체가 폭발했을 것.' },
+        { q: '✅ 수정', a: '주석 닫음(`*/` 추가). Node에서 모듈 import + DJCT EDI 511 컨테이너로 buildMatrixFromEdi 호출 → 22 베이 정상 추출. extractShipMetaFromVoyage/summarizeMatrix/createEmptyBayEntry/detectMissingBays 모두 정상 PASS. BAY 01 자동 추정도 확인.' },
+        { q: '📋 신규 워크플로 (메모리에 등재)', a: '(1) 코드 작성 → (2) sim_test.mjs로 실제 데이터(DJCT EDI/SWAT PDF) 시뮬레이션 → (3) 모든 함수 정상 호출 + 결과 검증 → (4) 빌드 → (5) ZIP. 빌드 성공만으로 ZIP 제공 금지. 사용자가 매번 화면에서 버그 잡지 않게 함.' },
+      ],
+    },
+    {
       title: '🆕 M6.93.4 (2026-05-25) — 데크/홀드 tier 수정 + 모달 안정화',
       examples: [
         { q: '🔥 사용자 보고', a: '(1) 선박 정보 [✏ 수정] 버튼 누르면 화면 어두워지고 안 보임. (2) 데크가 있는데 없는 걸로 나옴. (3) 데크 tier 수정 불가.' },
