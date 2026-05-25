@@ -379,6 +379,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.93.4 (2026-05-25) — 데크/홀드 tier 수정 + 모달 안정화',
+      examples: [
+        { q: '🔥 사용자 보고', a: '(1) 선박 정보 [✏ 수정] 버튼 누르면 화면 어두워지고 안 보임. (2) 데크가 있는데 없는 걸로 나옴. (3) 데크 tier 수정 불가.' },
+        { q: '✅ 해결', a: '(1) 모든 input value 안전화 (|| \'\') — undefined로 controlled→uncontrolled 전환되며 깨지는 문제. 모달 z-index z-[100]로 상향 (다른 모달 위에 안전 배치). (2),(3) 데크/홀드 tier 각각: 값 inline 수정 + [+ 추가] mini-폼 (Enter도 가능) + [×] 삭제 버튼. tier 추가 시 자동 정렬(큰 수→작은 수) + cells에 rowCount 자동 채움.' },
+        { q: '🆕 핸들러', a: 'addTier(bay, kind, value), deleteTier(bay, kind, idx), updateTier(bay, kind, idx, newVal). kind = "deck" | "hold".' },
+        { q: '💡 사용 흐름', a: 'BAY 카드 안 Deck/Hold 영역에서 각 tier 옆 [×]로 삭제, 헤더 옆 [+ 추가] 입력으로 tier 추가. 값은 자동으로 큰 수부터 정렬됨. EDI 적재 없어 deck=빈 베이도 사용자가 직접 채울 수 있음.' },
+      ],
+    },
+    {
       title: '🆕 M6.93.3 (2026-05-25) — 베이 추가/삭제 + 누락 베이 자동 추정',
       examples: [
         { q: '🔥 사용자 보고', a: 'PDF에 BAY 01 있는데 매트릭스에 안 들어왔다. EDI에 적재 0대인 베이는 자동 추출에서 누락됨. 사용자가 직접 베이를 추가할 방법 없음.' },

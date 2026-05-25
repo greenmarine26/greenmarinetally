@@ -66,6 +66,64 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     });
   };
 
+  const addTier = (bay, kind, tierValueRaw) => {
+    const v = parseInt(tierValueRaw);
+    if (!Number.isFinite(v) || v < 1 || v > 99) {
+      alert('Tier 번호는 1~99 사이여야 합니다');
+      return;
+    }
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      const entry = { ...cp.byBay[bay] };
+      const tKey = kind === 'deck' ? 'deckTiers' : 'holdTiers';
+      const cKey = kind === 'deck' ? 'deckCells' : 'holdCells';
+      const tiers = [...(entry[tKey] || [])];
+      if (tiers.includes(v)) {
+        alert(`Tier ${v}은 이미 존재합니다`);
+        return cp;
+      }
+      tiers.push(v);
+      // 정렬: deck = 큰 수부터, hold = 큰 수부터 (배열 순서가 top→bottom)
+      tiers.sort((a, b) => b - a);
+      // cells 동기화: 동일 인덱스에 rowCount 값 채워넣기
+      const cells = [...(entry[cKey] || [])];
+      const newIdx = tiers.indexOf(v);
+      cells.splice(newIdx, 0, entry.rowCount || 9);
+      entry[tKey] = tiers;
+      entry[cKey] = cells;
+      cp.byBay[bay] = entry;
+      return cp;
+    });
+  };
+
+  const deleteTier = (bay, kind, idx) => {
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      const entry = { ...cp.byBay[bay] };
+      const tKey = kind === 'deck' ? 'deckTiers' : 'holdTiers';
+      const cKey = kind === 'deck' ? 'deckCells' : 'holdCells';
+      entry[tKey] = (entry[tKey] || []).filter((_, i) => i !== idx);
+      entry[cKey] = (entry[cKey] || []).filter((_, i) => i !== idx);
+      cp.byBay[bay] = entry;
+      return cp;
+    });
+  };
+
+  const updateTier = (bay, kind, idx, newVal) => {
+    const v = parseInt(newVal);
+    if (!Number.isFinite(v)) return;
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      const entry = { ...cp.byBay[bay] };
+      const tKey = kind === 'deck' ? 'deckTiers' : 'holdTiers';
+      const tiers = [...(entry[tKey] || [])];
+      tiers[idx] = v;
+      entry[tKey] = tiers;
+      cp.byBay[bay] = entry;
+      return cp;
+    });
+  };
+
   // 초기 분석 (EDI + 베이사전)
   useEffect(() => {
     if (!containers || containers.length === 0) {
@@ -136,7 +194,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
 
   if (!matrix) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
+      <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center">
         <div className="bg-zinc-900 p-6 rounded-lg text-white">
           <div>매트릭스 분석 중...</div>
         </div>
@@ -148,7 +206,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const bayList = Object.keys(matrix.byBay).sort();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center overflow-auto py-8">
+    <div className="fixed inset-0 z-[100] bg-black/70 flex items-start justify-center overflow-auto py-8">
       <div className="bg-zinc-900 rounded-lg text-white w-full max-w-5xl mx-4 flex flex-col" style={{ maxHeight: '90vh' }}>
         {/* 헤더 */}
         <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
@@ -201,22 +259,22 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <label>
                   <div className="text-[10px] text-blue-300/70">선박명</div>
-                  <input value={shipMeta.name} onChange={e => setShipMeta(m => ({ ...m, name: e.target.value }))}
+                  <input value={shipMeta.name || ''} onChange={e => setShipMeta(m => ({ ...m, name: e.target.value }))}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded" />
                 </label>
                 <label>
                   <div className="text-[10px] text-blue-300/70">콜사인</div>
-                  <input value={shipMeta.callsign} onChange={e => setShipMeta(m => ({ ...m, callsign: e.target.value.toUpperCase() }))}
+                  <input value={shipMeta.callsign || ''} onChange={e => setShipMeta(m => ({ ...m, callsign: e.target.value.toUpperCase() }))}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono" />
                 </label>
                 <label>
                   <div className="text-[10px] text-blue-300/70">IMO</div>
-                  <input value={shipMeta.imo} onChange={e => setShipMeta(m => ({ ...m, imo: e.target.value }))}
+                  <input value={shipMeta.imo || ''} onChange={e => setShipMeta(m => ({ ...m, imo: e.target.value }))}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono" />
                 </label>
                 <label>
                   <div className="text-[10px] text-blue-300/70">CASP 코드 *</div>
-                  <input value={shipMeta.code} onChange={e => setShipMeta(m => ({ ...m, code: e.target.value.toUpperCase() }))}
+                  <input value={shipMeta.code || ''} onChange={e => setShipMeta(m => ({ ...m, code: e.target.value.toUpperCase() }))}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono font-bold" />
                 </label>
               </div>
@@ -371,31 +429,55 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                     </div>
                     
                     <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <div className="text-blue-400 font-bold mb-1">Deck Tier ({e.deckTiers?.length || 0}) / cells</div>
+                      {/* Deck */}
+                      <div className="bg-blue-950/20 rounded p-2">
+                        <div className="text-blue-400 font-bold mb-1 flex items-center gap-2">
+                          <span>Deck Tier ({e.deckTiers?.length || 0})</span>
+                          <TierAddInline onAdd={(v) => addTier(bay, 'deck', v)} placeholder="예: 90" />
+                        </div>
                         {(e.deckTiers || []).map((t, idx) => (
-                          <div key={t} className="flex items-center gap-2 mb-0.5">
-                            <span className="w-10 text-zinc-400">D {t}</span>
-                            <span className="text-zinc-500">→</span>
+                          <div key={`d-${bay}-${idx}`} className="flex items-center gap-1 mb-0.5">
+                            <span className="text-zinc-400">D</span>
+                            <input type="number" value={t}
+                                   onChange={ev => updateTier(bay, 'deck', idx, ev.target.value)}
+                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center font-mono" min="1" max="99" />
+                            <span className="text-zinc-500">cells</span>
                             <input type="number" value={e.deckCells?.[idx] || 0}
                                    onChange={ev => updateCells(bay, 'deck', idx, ev.target.value)}
-                                   className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
+                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
+                            <button onClick={() => deleteTier(bay, 'deck', idx)}
+                                    className="ml-auto w-5 h-5 bg-red-900/50 hover:bg-red-700 rounded text-[10px]"
+                                    title="이 tier 삭제">×</button>
                           </div>
                         ))}
-                        {(!e.deckTiers || e.deckTiers.length === 0) && <div className="text-zinc-500">없음</div>}
+                        {(!e.deckTiers || e.deckTiers.length === 0) && (
+                          <div className="text-zinc-500 italic text-[11px]">없음 — 위 [+ 추가] 사용</div>
+                        )}
                       </div>
-                      <div>
-                        <div className="text-green-400 font-bold mb-1">Hold Tier ({e.holdTiers?.length || 0}) / cells</div>
+                      {/* Hold */}
+                      <div className="bg-green-950/20 rounded p-2">
+                        <div className="text-green-400 font-bold mb-1 flex items-center gap-2">
+                          <span>Hold Tier ({e.holdTiers?.length || 0})</span>
+                          <TierAddInline onAdd={(v) => addTier(bay, 'hold', v)} placeholder="예: 6" />
+                        </div>
                         {(e.holdTiers || []).map((t, idx) => (
-                          <div key={t} className="flex items-center gap-2 mb-0.5">
-                            <span className="w-10 text-zinc-400">H {String(t).padStart(2, '0')}</span>
-                            <span className="text-zinc-500">→</span>
+                          <div key={`h-${bay}-${idx}`} className="flex items-center gap-1 mb-0.5">
+                            <span className="text-zinc-400">H</span>
+                            <input type="number" value={t}
+                                   onChange={ev => updateTier(bay, 'hold', idx, ev.target.value)}
+                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center font-mono" min="1" max="99" />
+                            <span className="text-zinc-500">cells</span>
                             <input type="number" value={e.holdCells?.[idx] || 0}
                                    onChange={ev => updateCells(bay, 'hold', idx, ev.target.value)}
-                                   className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
+                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
+                            <button onClick={() => deleteTier(bay, 'hold', idx)}
+                                    className="ml-auto w-5 h-5 bg-red-900/50 hover:bg-red-700 rounded text-[10px]"
+                                    title="이 tier 삭제">×</button>
                           </div>
                         ))}
-                        {(!e.holdTiers || e.holdTiers.length === 0) && <div className="text-zinc-500">없음</div>}
+                        {(!e.holdTiers || e.holdTiers.length === 0) && (
+                          <div className="text-zinc-500 italic text-[11px]">없음 — 위 [+ 추가] 사용</div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -428,5 +510,34 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         </div>
       </div>
     </div>
+  );
+}
+
+// Tier 추가용 inline mini-입력
+function TierAddInline({ onAdd, placeholder }) {
+  const [v, setV] = useState('');
+  const submit = () => {
+    if (!v) return;
+    onAdd(v);
+    setV('');
+  };
+  return (
+    <span className="inline-flex items-center gap-1 ml-2">
+      <input
+        type="number"
+        value={v}
+        onChange={e => setV(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+        placeholder={placeholder || 'tier'}
+        className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center text-[11px]"
+        min="1" max="99"
+      />
+      <button
+        onClick={submit}
+        disabled={!v}
+        className="px-1.5 py-0.5 bg-emerald-700/60 hover:bg-emerald-600 rounded text-[10px] disabled:opacity-30"
+        title="tier 추가"
+      >+ 추가</button>
+    </span>
   );
 }
