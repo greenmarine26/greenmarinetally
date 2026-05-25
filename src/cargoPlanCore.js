@@ -23,7 +23,18 @@ export const STANDARD_HOLD = [10, 8, 6, 4, 2];
 export function autoPairBays(matrixBays) {
   const byNum = new Map();
   matrixBays.forEach(b => byNum.set(b.bayNum, b));
-  const evens = matrixBays.map(b => b.bayNum).filter(n => n % 2 === 0).sort((a, b) => a - b);
+  // M6.93.17: 사전 짝수 우선 정렬. isEstimated=false (사전)가 isEstimated=true (가상)보다 먼저 처리.
+  //   fillEmptyBaysSequential이 1~max에 가상 짝수(예: 02, 06, 10, 14, 18, 22, 26)를 추가하면
+  //   bayNum ascending sort에서 e=2가 가장 먼저 처리되어 trio [01, (02)03] 만들고, e=4 처리 시
+  //   3이 used → 사전 짝수 04가 페어 못 만듦. → 사전 짝수가 먼저 처리되어야.
+  const evens = matrixBays
+    .filter(b => b.bayNum % 2 === 0)
+    .sort((a, b) => {
+      const aEst = !!a.isEstimated; const bEst = !!b.isEstimated;
+      if (aEst !== bEst) return aEst ? 1 : -1; // 사전(!isEstimated) 먼저
+      return a.bayNum - b.bayNum;
+    })
+    .map(b => b.bayNum);
   const odds = matrixBays.map(b => b.bayNum).filter(n => n % 2 === 1).sort((a, b) => a - b);
 
   const trios = [];
@@ -31,6 +42,8 @@ export function autoPairBays(matrixBays) {
   const usedEvens = new Set();
 
   for (const e of evens) {
+    if (usedEvens.has(e)) continue;
+    if (usedOdds.has(e - 1) || usedOdds.has(e + 1)) continue; // overlap 방지
     if (byNum.has(e - 1) && byNum.has(e + 1)) {
       const topKey = String(e - 1).padStart(2, '0');
       const pairKey = `(${String(e).padStart(2, '0')})${String(e + 1).padStart(2, '0')}`;

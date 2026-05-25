@@ -358,6 +358,7 @@ export default function PrintableCargoPlanV2({
         hasHold: !!s.hasHold,
         hasDeck: s.hasDeck !== false,
         isStandalone: !!s.isStandalone,
+        isEstimated: !!s.isEstimated, // M6.93.17: autoPairBays가 사전 짝수 우선 처리하도록
       }));
     }
 
@@ -407,6 +408,7 @@ export default function PrintableCargoPlanV2({
         deckTiers,
         holdTiers,
         isStandalone: summary?.isStandalone || b.isStandalone || false,
+        isEstimated: !!(summary?.isEstimated || b.isEstimated), // M6.93.17
       };
     });
   }, [dictData, containers]);

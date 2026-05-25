@@ -379,7 +379,20 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🔑 M6.93.16 (2026-05-25) — 저장 키 / 검색 키 mismatch 해결 (수정 후 다시 열면 사라짐)',
+      title: '🔧 M6.93.17 (2026-05-26) — 페어 매칭 버그 해결 (제가 짠 autoPairBays 알고리즘 버그)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '"매칭을 그렇게 시켜서 저한테 준 거 아닙니까" — 페어 매칭 알고리즘 버그로 사전 짝수 베이(04, 08, 12, 16, 20, 24) 데이터가 표시 안 됨. 사용자가 "데크 안 보임"이라 한 진짜 원인.' },
+        { q: '🔍 진단 (이미지 + 실데이터)', a: 'OOCL 양하 PDF와 검수앱 PDF를 이미지로 직접 비교: OOCL 페어 (04)05, (08)09, (12)13, (16)17, (20)21, (24)25 vs 검수앱 페어 (10)11, (14)15, (18)19, (22)23. 사전 짝수 베이가 통째로 누락되고 가상 짝수로 페어가 매칭됨.' },
+        { q: '🐛 진짜 원인', a: 'cargoPlanCore.js autoPairBays — used 체크 없음 + 정렬 순서 잘못. fillEmptyBaysSequential이 user dict에 가상 짝수(02, 06, 10, 14, 18, 22) 추가 → ascending sort에서 가상 짝수가 먼저 처리 → 사전 짝수가 페어 못 만듦.' },
+        { q: '✅ Fix 1: autoPairBays used 체크', a: 'usedOdds.has(e-1) || usedOdds.has(e+1)이면 trio 안 만듦. overlap 방지.' },
+        { q: '✅ Fix 2: 사전 짝수 우선 정렬', a: 'evens 정렬 시 isEstimated=false(사전)가 isEstimated=true(가상)보다 먼저. 사전 짝수가 항상 먼저 페어 만듦.' },
+        { q: '✅ Fix 3: isEstimated 전파', a: 'matrixToBayDictEntry, PrintableCargoPlanV2 matrixBays.map 모두 isEstimated 플래그 보존.' },
+        { q: '📋 실데이터 시뮬 (DXQD 2621E, 224개 컨테이너)', a: '기존 M6.93.16: trios 12개 (모두 잘못된 페어). M6.93.17: trios 6개 = OOCL과 100% 일치. 단독 [01, 03, 07, 11, 15, 19, 23] ✅. 페어 [(04)05, (08)09, (12)13, (16)17, (20)21, (24)25] ✅.' },
+        { q: '🙏 사과 (M6.93.x 시리즈)', a: '12 → 17. 5번의 ZIP을 만드는 동안 표면 증상만 쫓고 코드 흐름 끝까지 추적 안 함. PDF는 이미지로 안 보고 텍스트 추출만. 사용자가 첨부한 EDI 실데이터로 시뮬 안 함. 추측-옵션 사이클 반복. 죄송합니다. 이번엔 실데이터 시뮬 PASS 확인 후 ZIP.' },
+      ],
+    },
+    {
+      title: '🔑 M6.93.16 (2026-05-25) — 저장 키 / 검색 키 mismatch 해결',
       examples: [
         { q: '🔥 사용자 보고', a: '"수동으로 베이를 수정하고 저장후 다시 불러오면 수정전 데이터로 돌아옴"' },
         { q: '🔍 진단', a: 'ShipMatrixBuilderModal 코드 추적 결과: 저장 시 shipMeta.code (사용자 수정값), 검색 시 autoMeta.code (EDI 자동값). 사용자가 modal에서 code/name/imo를 수정하면 저장 키와 다음 검색 키가 달라짐 → lookupUserBayDict 매칭 fail → modal 재오픈 시 EDI 재분석 → 사용자 수정 사라진 것처럼 보임.' },

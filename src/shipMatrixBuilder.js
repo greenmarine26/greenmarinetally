@@ -431,6 +431,7 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       hasDeck: e.deckTiers && e.deckTiers.length > 0,
       hasHold: e.holdTiers && e.holdTiers.length > 0,
       pairEven: e.pairEven || null,
+      isEstimated: !!e.isEstimated, // M6.93.17: autoPairBays가 사전 짝수 우선 처리하도록
       source: e.source,
     };
   });
