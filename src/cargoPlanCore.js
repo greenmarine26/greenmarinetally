@@ -428,43 +428,14 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
 
   // M6.93.12 fix #2: userBay tiers > override tiers > bayData > pdf
-  let deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
+  const deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
     || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
     || override?.deckTiers
     || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
-  let holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
+  const holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
     || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
     || override?.holdTiers
     || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
-
-  // M6.93.12 fix #10 (사용자 보고: "특정 hold 4단 컨테이너 누락"):
-  //   원인: shipMatrixBuilder.analyzeMatrix가 EDI tier 분포로 holdTiers 자동 분류
-  //     → EDI에 tier 08 없던 베이는 holdTiers=[6,4,2] 3단 저장
-  //     → 그 베이에 새로 tier 08 컨테이너 들어오면 표시 X (invisible)
-  //   해결: 사용자 입력 holdTiers + EDI 실제 tier 자동 union.
-  //     사용자 입력 우선 (CASPI 빈 구조) + EDI 누락 방지 (컨테이너 절대 안 사라짐).
-  //     사용자가 명시한 tier는 그대로, EDI에 새로 등장한 tier만 추가.
-  const ediHoldSet = new Set();
-  const ediDeckSet = new Set();
-  const bayNumsForTier = isPair
-    ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
-    : [oddNum, oddNum - 1, oddNum + 1].filter(b => b > 0);
-  for (const [key] of posMap.entries()) {
-    const [bb, t] = key.split('|').map(Number);
-    if (bayNumsForTier.includes(bb) && Number.isFinite(t) && t > 0) {
-      if (t >= 80) ediDeckSet.add(t);
-      else ediHoldSet.add(t);
-    }
-  }
-  if (deckTiers && Array.isArray(deckTiers)) {
-    const merged = new Set([...deckTiers.map(Number), ...ediDeckSet]);
-    deckTiers = [...merged].sort((a, b) => b - a);
-  }
-  if (holdTiers && Array.isArray(holdTiers)) {
-    const merged = new Set([...holdTiers.map(Number), ...ediHoldSet]);
-    holdTiers = [...merged].sort((a, b) => b - a);
-  }
-
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
@@ -537,32 +508,26 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     }
   });
 
-  // M6.93.12 fix #11 (사용자 통찰: "데크/홀드 좌우 대칭"):
-  //   M6.81 표준 방식 — hold cells를 nDeckCols 폭으로 그림 (deck와 같은 폭).
-  //   offset = floor((nDeckCols - nHoldCols) / 2)로 hold cells를 가운데 정렬.
-  //   양옆 빈 invisible cell. 좌우 대칭 보장.
-  //   이전: hold cells가 nHoldCols 폭으로만 그려져 hold가 deck보다 좁아 한쪽 쏠림 발생.
-  const offsetHold = Math.floor((nDeckCols - nHoldCols) / 2);
+  // hold tier별 셀 배열 — M6.86.8.20: hold 자체 폭(nHoldCols)으로 cells 생성.
+  //   deck/hold 폭이 1칸 차이일 때 CSS에서 0.5칸씩 좌우 띄어 박스 안 horizontal center.
+  //   이전엔 nDeckCols 폭에 끼워넣어 floor offset으로 비대칭 (좌2/우1 또는 좌0/우1).
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
       const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
-      const activeInDeck = new Set([...activeInHold].map(a => a + offsetHold));
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const cells = [];
-      // nDeckCols 폭으로 그림 (deck와 통일 → 좌우 대칭)
-      for (let c = 0; c < nDeckCols; c++) {
-        const inActive = activeInDeck.has(c);
+      for (let c = 0; c < nHoldCols; c++) {
+        const rowLbl = holdRowPos[c];
+        const inActive = activeInHold.has(c);
+        const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
+        const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
         if (inActive) {
-          const holdC = c - offsetHold;
-          const rowLbl = (holdC >= 0 && holdC < nHoldCols) ? holdRowPos[holdC] : null;
-          const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
-          const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
           cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
@@ -570,8 +535,8 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      // invisible row도 nDeckCols 폭으로 통일
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
+      // invisible row도 nHoldCols 폭 (hold-area 자체 폭과 일관)
+      const cells = new Array(nHoldCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });
