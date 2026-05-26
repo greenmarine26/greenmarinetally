@@ -306,30 +306,32 @@ export default function PrintableCargoPlanV2({
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
     const v2Def = dictData?.bayDef || {};
-    // M6.93.11.LOCK3: baysSummary union을 항상 계산해서 bayDef.deckTiers/holdTiers와 비교.
-    //   기존 LOCK2 fallback은 length===0일 때만 union 사용 → [6,4,2] 같이 일부만 있으면 fallback 안 됨.
-    //   LOCK3: union이 더 크면 무조건 union으로 교체 (08 같은 일부 tier 누락 영구 차단).
+    // M6.93.11.LOCK4: EDI 컨테이너 실측 tier도 union에 포함 — 가장 강한 안전망.
+    //   dict가 어떤 상태든 EDI에 hold 08 컨테이너가 있으면 자동으로 08 보강.
+    //   "베이별 summary.holdTiers" + "bayDef.holdTiers" + "EDI 실측" 모두 합집합.
     const baysSummary = v2Def.baysSummary || [];
     let deckTiersAll = Array.isArray(v2Def.deckTiers) ? v2Def.deckTiers.map(Number).filter(Number.isFinite) : [];
     let holdTiersAll = Array.isArray(v2Def.holdTiers) ? v2Def.holdTiers.map(Number).filter(Number.isFinite) : [];
-    if (baysSummary.length > 0) {
-      const deckSet = new Set();
-      const holdSet = new Set();
-      baysSummary.forEach(b => {
-        (b.deckTiers || b.deckTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
-        (b.holdTiers || b.holdTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
-      });
-      const deckUnion = [...deckSet].sort((a, b) => b - a);
-      const holdUnion = [...holdSet].sort((a, b) => b - a);
-      // union이 bayDef보다 더 많은 tier 포함하면 union으로 교체 (08 같은 누락 tier 자동 복원)
-      if (deckUnion.length > deckTiersAll.length) deckTiersAll = deckUnion;
-      if (holdUnion.length > holdTiersAll.length) holdTiersAll = holdUnion;
-      // bayDef에는 있는데 union에 없는 tier가 있으면 합집합으로 통합 (양쪽 다 보존)
-      const deckMerge = new Set([...deckTiersAll, ...deckUnion]);
-      const holdMerge = new Set([...holdTiersAll, ...holdUnion]);
-      deckTiersAll = [...deckMerge].sort((a, b) => b - a);
-      holdTiersAll = [...holdMerge].sort((a, b) => b - a);
-    }
+    // baysSummary union
+    const summaryDeckSet = new Set();
+    const summaryHoldSet = new Set();
+    baysSummary.forEach(b => {
+      (b.deckTiers || b.deckTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) summaryDeckSet.add(n); });
+      (b.holdTiers || b.holdTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) summaryHoldSet.add(n); });
+    });
+    // EDI 실측 tier (가장 신뢰성 높음 — 실제 컨테이너 있는 위치)
+    const ediDeckSet = new Set();
+    const ediHoldSet = new Set();
+    (containers || []).forEach(c => {
+      const t = Number(c.tier);
+      if (!Number.isFinite(t) || t <= 0) return;
+      if (t >= 80) ediDeckSet.add(t); else ediHoldSet.add(t);
+    });
+    // 3-way 합집합 (bayDef + baysSummary union + EDI 실측)
+    const deckMerge = new Set([...deckTiersAll, ...summaryDeckSet, ...ediDeckSet]);
+    const holdMerge = new Set([...holdTiersAll, ...summaryHoldSet, ...ediHoldSet]);
+    deckTiersAll = [...deckMerge].sort((a, b) => b - a);
+    holdTiersAll = [...holdMerge].sort((a, b) => b - a);
     const summaryByBay = new Map();
     for (const s of baysSummary) {
       const n = Number(s.bayNo);
@@ -369,21 +371,35 @@ export default function PrintableCargoPlanV2({
       const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : (b.hasDeck !== false || hasDeckFromEdi);
       const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : (b.hasHold || hasHoldFromEdi);
       const cells = b.cells ? [...b.cells].reverse() : []; // M6.90.2: cells는 아래→위 저장 → reverse로 위→아래 변환
-      // M6.93.11.LOCK2: 베이별 summary.deckTiers/holdTiers 우선 (선박 전체 통일 deckTiersAll은 fallback)
-      //   사용자 데이터 보호 — 매 베이가 자기 정확한 tier 분포 그대로 그려짐
-      //   예: BAY 01 holdTiers=[8,6,4,2] 4tier / BAY 33 hold 없음 / 다른 베이는 [6,4,2]
+      // M6.93.11.LOCK4: 베이별 tier 결정 — user summary + 베이별 EDI tier 합집합
+      //   user 데이터에 [6,4,2]만 있어도 EDI에 hold 08 컨테이너가 있으면 자동으로 08 추가
       const userDeckTiers = (summary?.deckTiers && summary.deckTiers.length > 0) ? summary.deckTiers.map(Number)
                           : (summary?.deckTiersLocal && summary.deckTiersLocal.length > 0) ? summary.deckTiersLocal.map(Number)
                           : null;
       const userHoldTiers = (summary?.holdTiers && summary.holdTiers.length > 0) ? summary.holdTiers.map(Number)
                           : (summary?.holdTiersLocal && summary.holdTiersLocal.length > 0) ? summary.holdTiersLocal.map(Number)
                           : null;
-      const deckTiers = hasDeck ? (userDeckTiers || deckTiersAll) : [];
-      const holdTiers = hasHold ? (userHoldTiers || holdTiersAll) : [];
+      // 베이별 EDI 실측 tier (이 베이에 있는 컨테이너의 tier만)
+      const bayEdiDeck = ediTiers.filter(t => t >= 80);
+      const bayEdiHold = ediTiers.filter(t => t < 80);
+      // 최종 tier = user + 베이별 EDI 합집합 (없으면 deckTiersAll로 fallback)
+      let deckTiers;
+      let holdTiers;
+      if (hasDeck) {
+        const merge = new Set([...(userDeckTiers || []), ...bayEdiDeck]);
+        deckTiers = merge.size > 0 ? [...merge].sort((a, b) => b - a) : deckTiersAll;
+      } else {
+        deckTiers = [];
+      }
+      if (hasHold) {
+        const merge = new Set([...(userHoldTiers || []), ...bayEdiHold]);
+        holdTiers = merge.size > 0 ? [...merge].sort((a, b) => b - a) : holdTiersAll;
+      } else {
+        holdTiers = [];
+      }
       const nDeck = deckTiers.length;
       const nHold = holdTiers.length;
-      // M6.93.11.LOCK2: 베이별 summary.deckCells/holdCells 우선 (v5 cells fallback)
-      //   사용자가 매트릭스 빌더에서 입력한 cells 값 보호
+      // 베이별 summary.deckCells/holdCells 우선 (v5 cells fallback)
       const userDeckCells = (summary?.deckCells && summary.deckCells.length > 0) ? summary.deckCells : null;
       const userHoldCells = (summary?.holdCells && summary.holdCells.length > 0) ? summary.holdCells : null;
       const deckCells = nDeck > 0
