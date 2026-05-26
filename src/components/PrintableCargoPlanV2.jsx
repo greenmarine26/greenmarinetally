@@ -306,26 +306,29 @@ export default function PrintableCargoPlanV2({
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
     const v2Def = dictData?.bayDef || {};
-    // M6.93.11.LOCK2: bayDef.deckTiers/holdTiers 빈 배열일 때 baysSummary union으로 자동 복원
-    //   기존 버그: bayDef.deckTiers=[6,4,2] (08 누락) 또는 []이면 모든 베이가 [6,4,2]만 그려짐
-    //   사용자 데이터(베이별 summary.holdTiers=[8,6,4,2])가 무시됨
-    //   해결: baysSummary의 모든 deck/holdTiers 합집합(union)으로 fallback
+    // M6.93.11.LOCK3: baysSummary union을 항상 계산해서 bayDef.deckTiers/holdTiers와 비교.
+    //   기존 LOCK2 fallback은 length===0일 때만 union 사용 → [6,4,2] 같이 일부만 있으면 fallback 안 됨.
+    //   LOCK3: union이 더 크면 무조건 union으로 교체 (08 같은 일부 tier 누락 영구 차단).
     const baysSummary = v2Def.baysSummary || [];
-    let deckTiersAll = Array.isArray(v2Def.deckTiers) ? v2Def.deckTiers.map(Number) : [];
-    let holdTiersAll = Array.isArray(v2Def.holdTiers) ? v2Def.holdTiers.map(Number) : [];
-    if (deckTiersAll.length === 0 && baysSummary.length > 0) {
-      const set = new Set();
+    let deckTiersAll = Array.isArray(v2Def.deckTiers) ? v2Def.deckTiers.map(Number).filter(Number.isFinite) : [];
+    let holdTiersAll = Array.isArray(v2Def.holdTiers) ? v2Def.holdTiers.map(Number).filter(Number.isFinite) : [];
+    if (baysSummary.length > 0) {
+      const deckSet = new Set();
+      const holdSet = new Set();
       baysSummary.forEach(b => {
-        (b.deckTiers || b.deckTiersLocal || []).forEach(t => set.add(Number(t)));
+        (b.deckTiers || b.deckTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
+        (b.holdTiers || b.holdTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
       });
-      deckTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
-    }
-    if (holdTiersAll.length === 0 && baysSummary.length > 0) {
-      const set = new Set();
-      baysSummary.forEach(b => {
-        (b.holdTiers || b.holdTiersLocal || []).forEach(t => set.add(Number(t)));
-      });
-      holdTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
+      const deckUnion = [...deckSet].sort((a, b) => b - a);
+      const holdUnion = [...holdSet].sort((a, b) => b - a);
+      // union이 bayDef보다 더 많은 tier 포함하면 union으로 교체 (08 같은 누락 tier 자동 복원)
+      if (deckUnion.length > deckTiersAll.length) deckTiersAll = deckUnion;
+      if (holdUnion.length > holdTiersAll.length) holdTiersAll = holdUnion;
+      // bayDef에는 있는데 union에 없는 tier가 있으면 합집합으로 통합 (양쪽 다 보존)
+      const deckMerge = new Set([...deckTiersAll, ...deckUnion]);
+      const holdMerge = new Set([...holdTiersAll, ...holdUnion]);
+      deckTiersAll = [...deckMerge].sort((a, b) => b - a);
+      holdTiersAll = [...holdMerge].sort((a, b) => b - a);
     }
     const summaryByBay = new Map();
     for (const s of baysSummary) {
