@@ -1,85 +1,97 @@
-# Tallyman Master 핸드오프 — M6.59
+# Tallyman Master 핸드오프 — M6.94.1
 
-## 📌 현재 상태 (2026-05-20)
+## 📌 현재 상태 (2026-05-27)
 
-- **최신 버전**: **M6.59** (EDI 실측 L4 fallback — 한계 극복)
-- **이전 버전**: M6.58 (STSE 자동 생성 + 빈 셀 시각화)
-- **작업 디렉토리**: `/home/claude/app/m6_59_build/`
-
----
-
-## 🎯 M6.59 — 관점 전환
-
-성일님 지적: **"한계라 말하지 말고 그 한계를 극복하자."**
-
-M6.58에서 "STSE deckTiers/holdTiers는 EDI 컨텍스트 없어서 다음 세션에"라고 미뤘던 작업.  
-사실 EDI 컨텍스트는 PrintableCargoPlan/PrintableBayDetail/BayPlan에 이미 있었음 — enrichBayDef에 전달만 하면 됨.
-
-**한계가 아니라 호출 패턴 추가만 필요했음.** 즉시 처리.
+- **최신 버전**: **M6.94.1** (카고플랜 row 그리드 사용자 매트릭스 빌더 우선)
+- **이전 버전**: M6.94.0 (데크-홀드 시각 정렬 새 필드 6개)
+- **작업 디렉토리**: `/home/claude/m6_94_1/`
 
 ---
 
-## ✅ M6.59 변경
+## 🎯 M6.94.1 — 카고플랜이 베이매트릭스대로 표시되도록 fix
 
-### 1. enrichBayDef 시그니처 확장
+성일님 지적: **"베이매트릭스 대로 카고플랜이 만들어지는 것"**
 
-```js
-enrichBayDef(entry, v5Matrix, ediContainers = null)
-```
+어제 새벽 진단된 카고플랜 3대 버그:
+- ① Hold 3 tier (정상 4)
+- ② Deck row 7개 (정상 8)
+- ③ Deck-Hold 좌우 비대칭
 
-ediContainers 주어지면:
-- 베이별 컨테이너 tier 분포에서 deck(>=80) / hold(<80) 자동 분리
-- 비어있는 deckTiersLocal/holdTiersLocal 자동 채움
-- 짝수 베이는 양옆 홀수 베이의 40/45ft 컨테이너도 포함 (짝꿍)
-- hasHold/hasDeck도 EDI 실측 발견 시 자동 true
+### Root cause
 
-### 2. 3개 호출처에서 EDI 보정 호출
+`BayPlan.jsx`의 `globalRowRange`/`globalTiers`가 EDI 적재 컨테이너만 보고 row/tier 폭 결정.
+매트릭스 빌더에 등록한 `rowCount`/`hasZero`/`deckCells`/`holdCells` 무시.
 
-- `PrintableCargoPlan.jsx` — dictData useMemo에서 enrichBayDef 2차 호출
-- `PrintableBayDetail.jsx` — 동일
-- `BayPlan.jsx` — dictBaysSummary useMemo에서 호출
+### Fix
 
----
+`BayPlan.jsx`에 새 useMemo `pageBayDictGrid` 추가:
+- 페이지 베이의 사전 entry에서 `deckCells`/`holdCells`/`rowCount`/`hasZero` + M6.94.0 align/padding 추출
+- 그리드 폭 = `max(deckCells, holdCells, rowCount)` (deck/hold 통일)
+- deck/hold 각자 own width 영역을 align 기준 위치에 배치
+- 영역 밖은 `null` padding → 빈 placeholder 셀로 시각 중앙선 자동 일치
 
-## 📊 STSE 시뮬레이션 결과
+### 사용자 정정 도메인 모델 (중요)
 
-| 베이 | M6.58 | M6.59 (EDI 보정 후) |
-|---|---|---|
-| BAY 11 | hasHold=false, holdTiersLocal=∅ | **hasHold=true, holdTiersLocal=[8,6,4,2]** |
-| BAY 19 | deckTiersLocal=∅, holdTiersLocal=∅ | **deckTiersLocal=[88,86,84,82], holdTiersLocal=[8,6]** |
-| BAY 03 | 비어있음 | **deckTiersLocal=[90,88], holdTiersLocal=[4]** |
-
-→ STSE 카고플랜 박스에 deck/hold 자리 + 점선 자동 정상화
+❌ 잘못된 모델: deck 5 + hold 8 → 양쪽 8칸 통일
+✅ 올바른 모델: 폭은 유지, **중앙선이 일치**하도록 시각 정렬
+  - hold 8칸 중앙 = 4번째 위치
+  - deck 5칸 중앙 = 2.5번째 위치
+  - 이 두 중앙선이 같은 column에 와야 대칭
 
 ---
 
-## 🛡 회귀 검증 (verified 보호)
+## ✅ M6.94.1 변경
 
-KSKM/NBTD/PAVA/PCBJ — deckTiersLocal/holdTiersLocal 이미 채워져 있으면 **EDI fallback 발동 안 함**. 자동 보정은 "비어있는 필드만" 원칙 유지.
+### 1. 새 useMemo `pageBayDictGrid` (BayPlan.jsx)
+- 페이지 베이의 사전 데이터에서 그리드 폭 + align/padding 추출
+- 사전 없으면 `null` → 기존 EDI fallback 그대로 (회귀 없음)
 
-| 선박 | EDI fallback 발동? |
+### 2. 헬퍼 함수 2개 (BayPlan.jsx)
+- `buildGridRowsFromCells(cells, hasZero)`: cells 수 → row 번호 배열
+- `sliceWithAlign(gridRowsArr, ownCells, align, padLeftAdj, padRightAdj)`: 영역 내 위치 배치
+
+### 3. row 배열 결정 변경 (BayPlan.jsx)
+- `deckRowsArr`/`holdRowsArr`: 사전 있으면 그리드+align 적용, 없으면 기존 동작
+- 새 변수 `deckHeaderRowsArr`/`holdHeaderRowsArr`: 헤더용 (그리드 풀폭)
+
+### 4. 헤더 렌더링 2곳 변경 (BayPlan.jsx)
+- DECK 헤더: `deckRowsArr` → `deckHeaderRowsArr`
+- HOLD 헤더: `holdRowsArr` → `holdHeaderRowsArr`
+
+---
+
+## 📊 시뮬레이션 검증 결과
+
+총 20개 케이스 PASS:
+
+| 케이스 | 결과 |
 |---|---|
-| KSKM (PDF verified) | ❌ 이미 완전 |
-| NBTD (PDF verified) | ❌ 부분만 비어있을 때만 |
-| PCBJ (M6.56/57로 보정됨) | ❌ M6.57에서 채워진 상태 |
-| STSE (M6.58 자동 생성) | ✅ EDI에서 deckTiers/holdTiers 채움 |
+| CASE 1 정상 베이 (8 row 대칭) | ✅ PASS |
+| CASE 2 사용자 정정 (deck 5 + hold 8, 중앙선 일치) | ✅ PASS |
+| CASE 3 hasZero=true (9 row + 00) | ✅ PASS |
+| CASE 4 회귀 방지 (사전 미등록 → EDI fallback) | ✅ PASS |
+| CASE 5 align=left/right + padLeftAdj | ✅ PASS |
+| CASE 6 어제 진단 3대 버그 종합 | ✅ PASS |
 
 ---
 
-## 📁 변경 파일 (M6.59)
+## 🛡 회귀 방지 (verified 보호)
 
-- **`src/bayDictAutoEnrich.js`** — enrichBayDef에 ediContainers 옵션 + L4 fallback 로직 약 70줄 추가
-- **`src/components/PrintableCargoPlan.jsx`** — import + dictData useMemo에서 enrichBayDef 호출
-- **`src/components/PrintableBayDetail.jsx`** — 동일
-- **`src/components/BayPlan.jsx`** — 동일
-- **`src/utils.js`** — APP_VERSION M6.58 → M6.59
-- **`src/components/HelpModal.jsx`** — M6.59 항목 추가
+- 사전 미등록 선박 → `pageBayDictGrid=null` → 슬라이싱 로직 미발동 → 기존 동작 그대로
+- 사전 등록 선박 → 사전 우선 (사용자 매트릭스 빌더 데이터 그대로)
+- `userBayDict` 절대 보호: 사용자 데이터 *읽기만* 함, 수정/추론/union 없음
+
+---
+
+## 📁 변경 파일 (M6.94.1)
+
+- **`src/components/BayPlan.jsx`** — 새 useMemo + 헬퍼 2개 + row 배열 결정 변경 + 헤더 2곳
+- **`src/utils.js`** — APP_VERSION M6.94.0 → M6.94.1
 
 ### 절대 건들지 않음
-- `src/data/shipBayDict_v2.js` (M6.14~M6.59 보호)
-- v5 데이터 (M6.55)
-- M6.56 PrintableCargoPlan fallback (방어 코드)
-- M6.57/M6.58 enrichBayDef 기존 로직 (확장만)
+- 다른 모든 파일 (shipStructure.js, bayDictAutoEnrich.js, userBayDict.js, shipMatrixBuilder.js, ShipMatrixBuilderModal.jsx, PrintableCargoPlanV2.jsx 등 모두 미수정)
+- 매트릭스 빌더 데이터 구조 (M6.94.0 그대로)
+- 6단계 fuzzy 매칭 (M6.93.12 그대로)
 
 ---
 
@@ -87,58 +99,50 @@ KSKM/NBTD/PAVA/PCBJ — deckTiersLocal/holdTiersLocal 이미 채워져 있으면
 
 | 키워드 | 회수 |
 |---|---|
-| M6.59 표시 | 2 |
-| L4-edi-actual | 2 |
-| ediContainers/ediUsed | 21 |
+| M6.94.1 (APP_VERSION) | 1 |
+| deckAlign / holdAlign | 6 / 6 |
+| deckPadLeft / holdPadLeft | 6 / 6 |
+| deckCells / holdCells | 7 / 7 |
+
+빌드 산출물 hash: `index-CdfWauNy.js` (이전 M6.94.0과 다름 = src 변경 정상 반영)
 
 ---
 
-## 🚦 다음 세션 권장 작업 (계속 극복할 것들)
+## 🚦 다음 세션 권장 작업
 
-### 1. v5 6.10 포맷 hasHold 정확화 (181척)
-- STSE 외 다른 6.10 포맷 선박들도 hasHold=false 상태
-- 자동 보정 정확도 ↑
+### 1. 실선박 데이터 검증
+- PACIFICSHENZHEN-2609E 등 실제 등록된 베이사전으로 카고플랜 표시 확인
+- 어제 진단 3대 버그 모두 해결됐는지 사용자 확인
 
-### 2. 누락 5척 베이 번호
-HAHM, KANP, RZIN, SDHI, SWIC, TSPS — .def 다른 영역 분석
+### 2. align/padding UI 개선 (M6.94.0 기존 + M6.94.1 활용)
+- 매트릭스 빌더에서 deck/hold align 시각적으로 미리보기 가능
 
-### 3. 자동 보정 표시 위젯
-- `_enrichedFrom` 메타 활용
-- 카고플랜에 ⚙️ 아이콘 + 호버 시 출처 표시
-- 검수원이 "이 베이는 EDI 실측 보정" 인지 가능
-
-### 4. 베이사전 일괄 진단
-- 앱 시작 시 325척 전체 정밀 스캔
-- 자동 보정으로 해결 가능한 선박 / 추가 데이터 필요한 선박 분리
-
-### 5. 짝수 베이 짝꿍 처리 정밀화
-- 현재: 짝수 베이가 양옆 홀수 베이의 40/45ft 컨테이너 포함
-- 정밀화: pairMap 활용해서 정확한 짝꿍만 처리
+### 3. tier별 cells 다양화 (계단식 베이)
+- 현재: max(deckCells) 사용 (가장 넓은 tier 기준)
+- 정밀화: tier별로 다른 폭 (계단식 베이 정확 표시)
 
 ---
 
 ## 📞 다음 세션 권장 시작 메시지
 
 ```
-M6.60 인계받습니다. M6.59 EDI 실측 L4 fallback 완료.
+M6.94.2 인계받습니다. M6.94.1 카고플랜 row 그리드 사용자 매트릭스 빌더 우선 완료.
 
 현 상태:
-- enrichBayDef(entry, v5Matrix, ediContainers) 4단계 fallback 완성
-- L1 verified → L2 v5 매트릭스 → L3 사전 level → L4 EDI 실측
-- 3개 호출처 모두 EDI 컨텍스트 전달
-- STSE deckTiers/holdTiers 자동 완성 검증 통과
+- BayPlan.jsx pageBayDictGrid + 헬퍼 2개 추가
+- 사전 등록 선박 → 매트릭스 빌더 데이터 그대로 표시
+- 사전 미등록 선박 → 기존 EDI fallback (회귀 없음)
+- 시뮬레이션 20/20 PASS, 빌드 검증 통과
 
 권장 다음 작업:
-1. v5 6.10 포맷 hasHold 정확화 (181척)
-2. 누락 5척 베이 번호 (HAHM/KANP/RZIN/SDHI/SWIC/TSPS)
-3. 자동 보정 표시 위젯 (_enrichedFrom 메타 활용)
-4. 베이사전 일괄 진단
+1. 실선박 카고플랜 사용자 확인
+2. tier별 cells 다양화 (계단식 베이)
 
-원칙 유지: verified 절대 미수정, 추론 금지, "한계" 언급 자제 — 극복 양식으로 답할 것.
+원칙 유지: userBayDict 절대 보호, 6단계 fuzzy 매칭, 시뮬→PASS→빌드→ZIP.
 ```
 
 ---
 
-생성일: 2026-05-20  
-세션: M6.58 → M6.59  
-관점: "한계를 극복하자" — 사용자 통찰의 직접 적용
+생성일: 2026-05-27  
+세션: M6.94.0 → M6.94.1  
+키워드: "베이매트릭스 대로 카고플랜이 만들어지는 것" — 성일님 목표 직접 적용

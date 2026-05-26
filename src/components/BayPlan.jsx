@@ -991,11 +991,132 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const right = []; for (let n = 1; n <= mr; n += 2) right.push(String(n).padStart(2, '0'));
     return range.has00 ? [...left, '00', ...right] : [...left, ...right];
   };
-  // voyage 전체 deck/hold 별
+
+  // ═════════════════════════════════════════════════════════════════
+  // M6.94.1: 사전 기반 페이지 그리드 결정 — 사용자 매트릭스 빌더 등록값 우선
+  // ─────────────────────────────────────────────────────────────────
+  // 증상 fix: 어제 새벽 진단된 카고플랜 3대 버그
+  //   ① Hold 3 tier (정상 4) → tier 풀은 pageBayDictTiers로 일부 fix됐으나 row 폭 무관
+  //   ② Deck row 7개 (정상 8) → globalRowRange가 EDI 적재만 봐서 rowCount 무시
+  //   ③ Deck-Hold 좌우 비대칭 → deck/hold 별 maxLeft/maxRight 따로 계산
+  // 해결: 사전이 있으면 deck/hold 통일 그리드 + 시각 중앙선 일치 (사용자 정정 모델)
+  //   사용자 정정: "deck 5 + hold 8 양쪽 8칸 통일은 잘못. 중앙선(2.5와 4)이 같아야 대칭"
+  //   → 그리드 폭 = max(deckCells, holdCells), 좁은 쪽은 align/padding으로 위치 결정
+  //   → 영역 밖 null padding → 빈 placeholder 셀로 시각 정렬 자동
+  // 3대 원칙:
+  //   ① userBayDict 읽기만 (수정/추론/union 없음)
+  //   ② 6단계 fuzzy 매칭은 dictBaysSummary 결정 단계에서 처리됨 (lookupUserBayDict)
+  //   ③ 시뮬레이션 → PASS → 빌드 → ZIP
+  // ═════════════════════════════════════════════════════════════════
+  const pageBayDictGrid = useMemo(() => {
+    const bays = [page.evenBay, page.oddBay].filter(bn => bn != null);
+    if (bays.length === 0) return null;
+
+    let deckMaxCells = 0, holdMaxCells = 0;
+    let pageRowCount = 0;
+    let pageHasZero = false;
+    let deckAlign = 'center', holdAlign = 'center';
+    let deckPadLeft = 0, deckPadRight = 0;
+    let holdPadLeft = 0, holdPadRight = 0;
+    let foundAny = false;
+
+    bays.forEach(bn => {
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) return;
+      foundAny = true;
+      // tier별 cells 중 max (가장 넓은 tier의 폭)
+      if (Array.isArray(db.deckCells) && db.deckCells.length > 0) {
+        const mDeck = Math.max(...db.deckCells.map(n => parseInt(n) || 0));
+        if (mDeck > deckMaxCells) deckMaxCells = mDeck;
+      }
+      if (Array.isArray(db.holdCells) && db.holdCells.length > 0) {
+        const mHold = Math.max(...db.holdCells.map(n => parseInt(n) || 0));
+        if (mHold > holdMaxCells) holdMaxCells = mHold;
+      }
+      // rowCount/hasZero (베이 통일 값) — fallback
+      if (typeof db.rowCount === 'number' && db.rowCount > pageRowCount) {
+        pageRowCount = db.rowCount;
+      }
+      if (db.hasZero) pageHasZero = true;
+      // M6.94.0 align/padding (사용자 시각 편집 필드)
+      if (db.deckAlign) deckAlign = db.deckAlign;
+      if (db.holdAlign) holdAlign = db.holdAlign;
+      if (typeof db.deckPadLeft === 'number') deckPadLeft = db.deckPadLeft;
+      if (typeof db.deckPadRight === 'number') deckPadRight = db.deckPadRight;
+      if (typeof db.holdPadLeft === 'number') holdPadLeft = db.holdPadLeft;
+      if (typeof db.holdPadRight === 'number') holdPadRight = db.holdPadRight;
+    });
+
+    if (!foundAny) return null;
+    // 그리드 폭 = deck/hold/rowCount 중 가장 넓은 값
+    const gridCells = Math.max(deckMaxCells, holdMaxCells, pageRowCount);
+    if (gridCells === 0) return null;
+
+    return {
+      gridCells,
+      hasZero: pageHasZero,
+      deckCells: deckMaxCells || gridCells,
+      holdCells: holdMaxCells || gridCells,
+      deckAlign, holdAlign,
+      deckPadLeft, deckPadRight,
+      holdPadLeft, holdPadRight,
+    };
+  }, [page.evenBay, page.oddBay, dictBaysSummary]);
+
+  // cells 수 → row 번호 배열 (좌측 짝수 + 00? + 우측 홀수)
+  //   N=9 hasZero=true → [08,06,04,02,00,01,03,05,07]
+  //   N=8 hasZero=false → [08,06,04,02,01,03,05,07]
+  const buildGridRowsFromCells = (cells, hasZero) => {
+    if (!cells || cells === 0) return [];
+    const nonZero = hasZero ? Math.max(0, cells - 1) : cells;
+    const leftCount = Math.ceil(nonZero / 2);
+    const rightCount = nonZero - leftCount;
+    const left = [];
+    for (let i = leftCount; i >= 1; i--) left.push(String(i * 2).padStart(2, '0'));
+    const right = [];
+    for (let i = 1; i <= rightCount; i++) right.push(String(i * 2 - 1).padStart(2, '0'));
+    return hasZero ? [...left, '00', ...right] : [...left, ...right];
+  };
+
+  // 그리드 안에서 own 영역을 align/padding 기준 위치에 배치 (영역 밖 = null)
+  //   align='center' default → 중앙선 일치 (사용자 정정 모델)
+  //   align='left'/'right' → padLeft/padRight 미세 조정 가능
+  const sliceWithAlign = (gridRowsArr, ownCells, align, padLeftAdj, padRightAdj) => {
+    const grid = gridRowsArr.length;
+    if (ownCells >= grid) return [...gridRowsArr]; // 풀 차지
+    const remain = grid - ownCells;
+    let padLeft = Math.floor(remain / 2);
+    let padRight = remain - padLeft;
+    if (align === 'left') { padLeft = 0; padRight = remain; }
+    else if (align === 'right') { padLeft = remain; padRight = 0; }
+    padLeft = Math.max(0, Math.min(grid, padLeft + (padLeftAdj || 0)));
+    padRight = Math.max(0, Math.min(grid - padLeft, padRight + (padRightAdj || 0)));
+    const ownStart = padLeft;
+    const ownEnd = grid - padRight;
+    return gridRowsArr.map((r, i) => (i >= ownStart && i < ownEnd) ? r : null);
+  };
+
+  // voyage 전체 deck/hold 별 (EDI 기반 — fallback용)
   const voyDeck = globalRowRange?.deck || pageRange.deck;
   const voyHold = globalRowRange?.hold || pageRange.hold;
-  const deckRowsArr = buildPageRows(voyDeck);
-  const holdRowsArr = buildPageRows(voyHold);
+  const baseDeckRowsArr = buildPageRows(voyDeck);
+  const baseHoldRowsArr = buildPageRows(voyHold);
+
+  // 최종 row 배열: 사전 있으면 그리드+align, 없으면 기존 EDI 동작 (회귀 없음)
+  const gridRowsArr = pageBayDictGrid
+    ? buildGridRowsFromCells(pageBayDictGrid.gridCells, pageBayDictGrid.hasZero)
+    : null;
+  const deckRowsArr = pageBayDictGrid && gridRowsArr
+    ? sliceWithAlign(gridRowsArr, pageBayDictGrid.deckCells, pageBayDictGrid.deckAlign,
+                     pageBayDictGrid.deckPadLeft, pageBayDictGrid.deckPadRight)
+    : baseDeckRowsArr;
+  const holdRowsArr = pageBayDictGrid && gridRowsArr
+    ? sliceWithAlign(gridRowsArr, pageBayDictGrid.holdCells, pageBayDictGrid.holdAlign,
+                     pageBayDictGrid.holdPadLeft, pageBayDictGrid.holdPadRight)
+    : baseHoldRowsArr;
+  // 헤더용 row 배열 — 사전 있으면 그리드 풀폭(null 없음), 없으면 deck/hold 중 더 긴 쪽
+  const deckHeaderRowsArr = gridRowsArr || deckRowsArr;
+  const holdHeaderRowsArr = gridRowsArr || holdRowsArr;
 
   // 좌우 균형 (전 베이 통일 폭) — fallback 양식
   const maxLeft = globalRowRange?.maxLeft || 0;
@@ -1312,7 +1433,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         <div className="text-[10px] text-cyan-400 mb-0.5 font-bold">⬆ DECK</div>
         <div className="flex gap-0.5 mb-0.5 justify-center">
           <div style={{ width: 24 }}></div>
-          {deckRowsArr.map((row, idx) => (
+          {/* M6.94.1: 헤더는 그리드 풀폭 (사전 있으면) — row 번호 항상 표시 */}
+          {deckHeaderRowsArr.map((row, idx) => (
             <div key={`dh-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
@@ -1346,7 +1468,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         ))}
         <div className="flex gap-0.5 mt-0.5 justify-center">
           <div style={{ width: 24 }}></div>
-          {holdRowsArr.map((row, idx) => (
+          {/* M6.94.1: 헤더는 그리드 풀폭 (사전 있으면) — row 번호 항상 표시 */}
+          {holdHeaderRowsArr.map((row, idx) => (
             <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
