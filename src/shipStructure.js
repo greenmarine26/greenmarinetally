@@ -41,20 +41,12 @@ function normalizeShipKey(s) {
 // M5.11: v2에 대해 lookupBayDictV2Enhanced 사용 — IMO/callsign/code/이름 4가지 매칭
 //   기존 fuzzy 매칭이 prefix 4글자 + garbage 콜사인 때문에 자주 실패하던 문제 해결
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
-  // M6.93.13: 🛡 user dict 최우선 — 사용자가 ShipMatrixBuilderModal에서 직접 수정한 데이터 보호.
-  //   기존 버그: v2-verified-newer 분기가 user dict 위에 있어서, DXQD 같은 verified=true 선박은
-  //              user dict 매칭 시도조차 안 되고 v2 데이터 반환 → 사용자 수정 무시.
-  //   원칙: 사용자가 직접 수정한 데이터는 v2 verified, Firebase, override 등 어떤 것보다도 우선.
-  try {
-    const userResult = lookupUserBayDict(imo, vesselNameOrCode);
-    if (userResult) return { source: 'user', data: userResult, matchedBy: 'user-dict' };
-  } catch (e) { /* fallthrough */ }
-
   // M6.62: v2 verified 최신본이 Firebase 옛 정정본보다 우선
   //   같은 선박이 Firebase + v2 양쪽에 있을 때
   //   - v2의 parsedAt이 Firebase보다 최신 + verified=true → v2 사용
   //   - 안 그러면 기존 우선순위 (Firebase > user > v2)
   //   이유: PCBJ 같은 케이스 — Firebase에 옛 부정확 entry, v2에 STOWAGE PDF 재정정.
+  //   클로드가 v2 정정해도 Firebase가 가려서 사용자가 새 버전 못 봄.
   try {
     const v2Enhanced = lookupBayDictV2Enhanced(imo, vesselNameOrCode);
     if (v2Enhanced && !v2Enhanced.matchedBy.startsWith('name-fuzzy')) {
@@ -77,7 +69,7 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
     }
   } catch (e) { /* fallthrough */ }
 
-  // M5.88: 0. Firebase 베이사전 (모든 검수원 공유)
+  // M5.88: 0. Firebase 베이사전 (최우선 — 모든 검수원 공유)
   try {
     const fbDict = window.__fbShipBayDict || {};
     if (Object.keys(fbDict).length > 0) {
@@ -316,13 +308,10 @@ export function getShipBayDictData(imo, code) {
       if (v2HasData && !v3HasData) {
         // M6.62: Firebase/User entry가 baysSummary 빈 — v2 정밀 데이터로 완전 교체
         finalBayDef = { ...v2Backup.entry.bayDef, bayList: v2Backup.entry.bayDef.bayList || bayList || [] };
-      } else if (v2HasData && v3HasData && result.source !== 'user') {
-        // M6.25: 둘 다 있으면 union (Firebase 케이스만)
-        // M6.93.12: user 소스는 union 금지 — 사용자가 ShipMatrixBuilderModal에서 직접 수정한 데이터는
-        //           사용자 외 변경 불가. v2 tier가 v3 union으로 다시 들어오면 사용자가 제거한 행이 복원됨.
+      } else if (v2HasData && v3HasData) {
+        // 둘 다 있으면 union (기존 M6.25 동작)
         finalBayDef = mergeBayDef(finalBayDef, v2Backup.entry.bayDef);
       }
-      // user 소스에 v2 데이터 있는 경우: finalBayDef 그대로 (사용자 수정 보존)
     } catch (e) { /* fallback: 기존 데이터 그대로 */ }
   }
 
@@ -332,41 +321,6 @@ export function getShipBayDictData(imo, code) {
   const matrixV5 = getMatrixV5(data.code);
   const wrappedEntry = enrichBayDef({ bayDef: finalBayDef }, matrixV5);
   const enrichedBayDef = wrappedEntry.bayDef;
-
-  // M6.93.15: bayDef.deckTiers/holdTiers fallback — 옛 user dict 호환.
-  //   문제: 옛 user dict (M6.93.14 이전 저장)에는 bayDef.deckTiers union 없음.
-  //         또는 v2 사전의 baysSummary에는 deckTiers 필드 자체가 없음.
-  //         → PrintableCargoPlanV2의 deckTiersAll=[] → nDeck=0 → 데크 영역 안 그려짐.
-  //   해결: 여기서 fallback 자동 생성. baysSummary union → matrixV5 maxRow 추정 → 기본값.
-  if (!Array.isArray(enrichedBayDef.deckTiers) || enrichedBayDef.deckTiers.length === 0) {
-    const deckSet = new Set();
-    (enrichedBayDef.baysSummary || []).forEach(b => {
-      (b.deckTiers || b.deckTiersLocal || []).forEach(t => deckSet.add(Number(t)));
-    });
-    // v5 매트릭스 baseDeckTiers fallback
-    if (deckSet.size === 0 && matrixV5?.baseDeckTiers) {
-      matrixV5.baseDeckTiers.forEach(t => deckSet.add(Number(t)));
-    }
-    // 그래도 빈 → v5 matrixBays의 tier 분포 union
-    if (deckSet.size === 0 && Array.isArray(matrixV5?.matrixBays)) {
-      matrixV5.matrixBays.forEach(b => {
-        if (b.maxRow && b.maxRow > 0) {
-          // maxRow를 기준으로 STANDARD 데크 tier 추정 (안전한 기본)
-        }
-      });
-    }
-    enrichedBayDef.deckTiers = [...deckSet].filter(Number.isFinite).sort((a, b) => b - a);
-  }
-  if (!Array.isArray(enrichedBayDef.holdTiers) || enrichedBayDef.holdTiers.length === 0) {
-    const holdSet = new Set();
-    (enrichedBayDef.baysSummary || []).forEach(b => {
-      (b.holdTiers || b.holdTiersLocal || []).forEach(t => holdSet.add(Number(t)));
-    });
-    if (holdSet.size === 0 && matrixV5?.baseHoldTiers) {
-      matrixV5.baseHoldTiers.forEach(t => holdSet.add(Number(t)));
-    }
-    enrichedBayDef.holdTiers = [...holdSet].filter(Number.isFinite).sort((a, b) => b - a);
-  }
 
   return {
     source: result.source,

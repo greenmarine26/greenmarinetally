@@ -38,65 +38,13 @@ export function loadUserBayDict() {
  * @returns {object|null}
  */
 export function lookupUserBayDict(imo, code) {
-  // M6.93.16: alias 매칭 추가 — 사용자가 modal에서 code/name 수정한 경우 보호.
-  //   문제: 검색은 autoMeta(EDI 자동), 저장은 shipMeta(사용자 수정) → 키 mismatch
-  //   해결: entry.aliasCode/aliasName/aliasImo로 EDI 자동값 보존. lookup이 양쪽 모두 매칭.
-  // M6.93.13: 매칭 보강 — IMO / code / callsign / name fuzzy 모두 시도
   const dict = loadUserBayDict();
-  if (!dict || Object.keys(dict).length === 0) return null;
-
-  // 1. dict 키가 IMO일 때
   if (imo && dict[imo]) return dict[imo];
-  // 2. dict 키가 code일 때 (정확 매칭)
-  if (code && dict[code]) return dict[code];
-  // 3. entry.imo 필드 매칭
-  if (imo) {
-    for (const k of Object.keys(dict)) {
-      if (dict[k]?.imo && String(dict[k].imo) === String(imo)) return dict[k];
-      // M6.93.16: aliasImo 매칭
-      if (dict[k]?.aliasImo && String(dict[k].aliasImo) === String(imo)) return dict[k];
-    }
-  }
-  // 4. entry.code 필드 매칭 (+ aliasCode)
   if (code) {
+    if (dict[code]) return dict[code];
+    // 키가 IMO인 경우, code 필드로 검색
     for (const k of Object.keys(dict)) {
-      if (dict[k]?.code === code) return dict[k];
-      // M6.93.16: aliasCode 매칭
-      if (dict[k]?.aliasCode === code) return dict[k];
-    }
-  }
-  // 5. entry.callsign 매칭 (code 인자가 callsign일 수도)
-  if (code) {
-    const search = String(code).toUpperCase().trim();
-    for (const k of Object.keys(dict)) {
-      const cs = String(dict[k]?.callsign || '').toUpperCase().trim();
-      if (cs && cs.length >= 3 && cs === search) return dict[k];
-    }
-  }
-  // 6. entry.name fuzzy 매칭 (code 인자가 선박명일 때) + aliasName
-  if (code) {
-    const search = String(code).toUpperCase().replace(/\s+/g, '');
-    if (search.length >= 4) {
-      for (const k of Object.keys(dict)) {
-        const en = String(dict[k]?.name || '').toUpperCase().replace(/\s+/g, '');
-        const an = String(dict[k]?.aliasName || '').toUpperCase().replace(/\s+/g, '');
-        // entry.name 매칭
-        if (en && en.length >= 4) {
-          if (en.includes(search.slice(0, 5)) || search.includes(en.slice(0, 5))) {
-            return dict[k];
-          }
-          const ec = String(dict[k]?.code || '').toUpperCase();
-          if (ec && ec.length >= 4 && (search.startsWith(ec) || en.startsWith(ec))) {
-            return dict[k];
-          }
-        }
-        // M6.93.16: aliasName 매칭
-        if (an && an.length >= 4) {
-          if (an.includes(search.slice(0, 5)) || search.includes(an.slice(0, 5))) {
-            return dict[k];
-          }
-        }
-      }
+      if (dict[k].code === code) return dict[k];
     }
   }
   return null;

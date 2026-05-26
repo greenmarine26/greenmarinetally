@@ -215,22 +215,31 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
-  // M6.93.14 일관: EDI는 컨테이너 마크에만, 베이 구조 추정 X
+  // M6.59: EDI 컨테이너로 L4 fallback 추가 보정
   const dictBaysSummary = useMemo(() => {
     if (!shipImo && !shipName) return {};
     const dict = getShipBayDictData(shipImo, shipName);
     if (!dict?.bayDef?.baysSummary) return {};
-    // M6.93.14: containers=null — EDI 베이 구조 추정 차단 (사용자 통찰)
+    // L4 EDI 보정 (containers 있을 때만)
     const enrichedEntry = enrichBayDef(
       { bayDef: dict.bayDef },
       dict._v5Matrix,
-      null
+      containers
     );
     const m = {};
     enrichedEntry.bayDef.baysSummary.forEach(b => {
       m[parseInt(b.bayNo, 10)] = b;
     });
     return m;
+  }, [shipImo, shipName, containers]);
+
+  // M6.93.11.LOCK1: 잠금 결정 가져오기 (있으면 자체 페어링 우회)
+  const lockedDecisions = useMemo(() => {
+    if (!shipImo && !shipName) return null;
+    const dict = getShipBayDictData(shipImo, shipName);
+    const ld = dict?.bayDef?._lockedDecisions;
+    if (ld && Array.isArray(ld.trios) && Array.isArray(ld.singles)) return ld;
+    return null;
   }, [shipImo, shipName]);
 
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
@@ -239,9 +248,52 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   //   - 트리오 [홀수, 짝수, 홀수]: 짝수 베이 = 40ft 페어 페이지
   //   - 단독 홀수 (페어 없음): 단독 페이지
   //   - .def에 없는 짝수 (예: TNJP의 04, 08, 12...) = 통로 → 페이지 생략
+  // M6.93.11.LOCK1: 잠금 결정 (_lockedDecisions) 있으면 자체 페어링 우회 — 사용자 결정 100% 보존
   const pages = useMemo(() => {
     const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
     const keyBay = (n) => String(n);
+
+    // M6.93.11.LOCK1: 잠금 결정 우선 — 매트릭스 빌더에서 사용자가 잠금 저장한 페어/단독 그대로 사용
+    if (lockedDecisions) {
+      const out = [];
+      // trios 처리: 각 trio = [topOdd, pairKey] — top과 pair를 두 페이지로
+      for (const [top, pair] of lockedDecisions.trios) {
+        // top: 'NN' 형식 홀수 (예: '03')
+        const topNum = parseInt(top, 10);
+        if (Number.isFinite(topNum)) {
+          out.push({
+            title: `BAY ${dispBay(topNum)}`,
+            evenBay: null,
+            oddBay: keyBay(topNum),
+            isStandalone: true,
+          });
+        }
+        // pair: '(EE)OO' 형식 (예: '(04)05')
+        const m = pair.match(/^\((\d+)\)(\d+)$/);
+        if (m) {
+          const evenNum = parseInt(m[1], 10);
+          const pairOddNum = parseInt(m[2], 10);
+          out.push({
+            title: `BAY (${dispBay(evenNum)})${dispBay(pairOddNum)}`,
+            evenBay: keyBay(evenNum),
+            oddBay: keyBay(pairOddNum),
+          });
+        }
+      }
+      // singles 처리
+      for (const s of lockedDecisions.singles) {
+        const n = parseInt(s, 10);
+        if (Number.isFinite(n)) {
+          out.push({
+            title: `BAY ${dispBay(n)}`,
+            evenBay: null,
+            oddBay: keyBay(n),
+            isStandalone: true,
+          });
+        }
+      }
+      return out;
+    }
 
     // 베이 정수 리스트 결정: .def 우선, 없으면 EDI 기반 (폴백)
     let bayInts;
@@ -346,7 +398,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     }
 
     return out;
-  }, [bayGroups, dictBayList]);
+  }, [bayGroups, dictBayList, lockedDecisions]);
 
   // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
   const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);

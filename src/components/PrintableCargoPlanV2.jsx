@@ -299,40 +299,16 @@ export default function PrintableCargoPlanV2({
     if (!shipImo && !shipName) return null;
     const baseDict = getShipBayDictData(shipImo, shipName);
     if (!baseDict) return null;
-    // M6.93.14: 사용자 통찰 반영 — EDI는 컨테이너 위치만 사용, 베이 구조는 사용자 입력 그대로.
-    //   기존: enrichBayDef(..., containers)로 EDI에서 베이별 tier 분포 자동 추정.
-    //   문제: EDI는 적재된 컨테이너 위치만 보임. 적재 안 된 빈 칸의 hull 단면 구조는 모름.
-    //         사용자가 매트릭스 빌더로 정밀 등록한 데이터를 EDI 추정 데이터가 덮어쓸 위험.
-    //   해결: user source면 EDI 보강 안 함. 다른 source(v2/Firebase)는 베이사전 fallback만 (EDI 추정 X).
-    const isUserSource = baseDict.source === 'user';
-    const ediForEnrich = isUserSource ? null : null;  // M6.93.14: 모든 source에서 EDI 추정 차단 (사용자 통찰)
-    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, ediForEnrich);
+    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, containers);
     return { ...baseDict, bayDef: enrichedEntry.bayDef };
   }, [shipImo, shipName, containers]);
 
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
     const v2Def = dictData?.bayDef || {};
+    const deckTiersAll = v2Def.deckTiers || [];
+    const holdTiersAll = v2Def.holdTiers || [];
     const baysSummary = v2Def.baysSummary || [];
-    // M6.93.14: deckTiersAll/holdTiersAll fallback.
-    //   기존 버그: bayDef.deckTiers가 빈 배열이면 deckTiersAll=[] → 모든 베이의 deckTiers=[] → nDeck=0 → 데크 영역 안 그려짐 → 데크 컨테이너 안 보임!
-    //   해결: bayDef level이 비어있으면 baysSummary의 deckTiers/holdTiers union 사용.
-    let deckTiersAll = Array.isArray(v2Def.deckTiers) ? v2Def.deckTiers : [];
-    let holdTiersAll = Array.isArray(v2Def.holdTiers) ? v2Def.holdTiers : [];
-    if (deckTiersAll.length === 0 && baysSummary.length > 0) {
-      const set = new Set();
-      baysSummary.forEach(b => {
-        (b.deckTiers || b.deckTiersLocal || []).forEach(t => set.add(Number(t)));
-      });
-      deckTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
-    }
-    if (holdTiersAll.length === 0 && baysSummary.length > 0) {
-      const set = new Set();
-      baysSummary.forEach(b => {
-        (b.holdTiers || b.holdTiersLocal || []).forEach(t => set.add(Number(t)));
-      });
-      holdTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
-    }
     const summaryByBay = new Map();
     for (const s of baysSummary) {
       const n = Number(s.bayNo);
@@ -358,7 +334,6 @@ export default function PrintableCargoPlanV2({
         hasHold: !!s.hasHold,
         hasDeck: s.hasDeck !== false,
         isStandalone: !!s.isStandalone,
-        isEstimated: !!s.isEstimated, // M6.93.17: autoPairBays가 사전 짝수 우선 처리하도록
       }));
     }
 
@@ -373,32 +348,12 @@ export default function PrintableCargoPlanV2({
       const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : (b.hasDeck !== false || hasDeckFromEdi);
       const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : (b.hasHold || hasHoldFromEdi);
       const cells = b.cells ? [...b.cells].reverse() : []; // M6.90.2: cells는 아래→위 저장 → reverse로 위→아래 변환
-      // M6.93.12: 베이별 사용자 deckTiers/holdTiers 우선 (ShipMatrixBuilderModal 저장본).
-      //   기존 버그: deckTiersAll(선박 전체 통일)로만 설정 → 사용자가 BAY 03에 tier 추가해도 무시됨.
-      //   원칙: 사용자 데이터 보호. 베이별 customized tier가 있으면 그것이 정답.
-      const userDeckTiers = (summary?.deckTiers && summary.deckTiers.length > 0) ? summary.deckTiers
-                          : (summary?.deckTiersLocal && summary.deckTiersLocal.length > 0) ? summary.deckTiersLocal
-                          : null;
-      const userHoldTiers = (summary?.holdTiers && summary.holdTiers.length > 0) ? summary.holdTiers
-                          : (summary?.holdTiersLocal && summary.holdTiersLocal.length > 0) ? summary.holdTiersLocal
-                          : null;
-      const deckTiers = hasDeck ? (userDeckTiers || deckTiersAll) : [];
-      const holdTiers = hasHold ? (userHoldTiers || holdTiersAll) : [];
-      const nDeck = deckTiers.length;
-      const nHold = holdTiers.length;
-      // M6.93.13: user cells가 v5 cells보다 우선 (이중 안전망).
-      //   기존 M6.93.12: v5 cells 우선, user cells fallback.
-      //   문제: lookup이 어떤 이유로 fail해도 사용자 cells 보호되도록 PrintableCargoPlanV2 단계에서도 우선.
-      const userDeckCells = (summary?.deckCells && summary.deckCells.length > 0) ? summary.deckCells : null;
-      const userHoldCells = (summary?.holdCells && summary.holdCells.length > 0) ? summary.holdCells : null;
-      const deckCells = nDeck > 0
-        ? (userDeckCells ? userDeckCells.slice(0, nDeck)
-           : (cells.length > 0 ? cells.slice(0, nDeck) : []))
-        : [];
-      const holdCells = nHold > 0
-        ? (userHoldCells ? userHoldCells.slice(0, nHold)
-           : (cells.length > 0 ? cells.slice(nDeck, nDeck + nHold) : []))
-        : [];
+      const nDeck = hasDeck ? deckTiersAll.length : 0;
+      const nHold = hasHold ? holdTiersAll.length : 0;
+      const deckCells = nDeck > 0 ? cells.slice(0, nDeck) : [];
+      const holdCells = nHold > 0 ? cells.slice(nDeck, nDeck + nHold) : [];
+      const deckTiers = hasDeck ? deckTiersAll : [];
+      const holdTiers = hasHold ? holdTiersAll : [];
       return {
         ...b,
         hasDeck,
@@ -408,7 +363,6 @@ export default function PrintableCargoPlanV2({
         deckTiers,
         holdTiers,
         isStandalone: summary?.isStandalone || b.isStandalone || false,
-        isEstimated: !!(summary?.isEstimated || b.isEstimated), // M6.93.17
       };
     });
   }, [dictData, containers]);
@@ -426,7 +380,13 @@ export default function PrintableCargoPlanV2({
   }, [containers, explicitPod]);
 
   // M6.81 알고리즘 적용
-  const { trios, singles } = useMemo(() => autoPairBays(matrixBays), [matrixBays]);
+  // M6.93.11.LOCK1: dictData.bayDef._lockedDecisions가 있으면 그대로 사용 (사용자 잠금 보호)
+  const lockedDecisions = useMemo(() => {
+    const ld = dictData?.bayDef?._lockedDecisions;
+    if (ld && Array.isArray(ld.trios) && Array.isArray(ld.singles)) return ld;
+    return null;
+  }, [dictData]);
+  const { trios, singles } = useMemo(() => autoPairBays(matrixBays, lockedDecisions), [matrixBays, lockedDecisions]);
   const pdfBays = useMemo(() => generatePdfBays(matrixBays, trios, singles), [matrixBays, trios, singles]);
   const layout = useMemo(() => autoPageLayout(trios, singles, 5), [trios, singles]);
   const posMap = useMemo(() => buildPosMap(containers), [containers]);

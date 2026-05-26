@@ -19,22 +19,24 @@ export const STANDARD_HOLD = [10, 8, 6, 4, 2];
 // 1. 베이 자동 페어링 (auto_pair_bays)
 // ------------------------------------------------------------
 // matrixBays: [{ bayNum, cells, rows, hasHold, ... }, ...]
+// lockedDecisions (선택): { trios: [...], singles: [...] }
+//   사용자가 ShipMatrixBuilderModal에서 잠금 저장한 경우 이걸 그대로 반환.
+//   autoPairBays 추정 알고리즘 우회 = 사용자 결정 100% 보호.
 // 반환: { trios: [[topKey, pairKey], ...], singles: [oddKey, ...], orphanEvens: [evenNum, ...] }
-export function autoPairBays(matrixBays) {
+export function autoPairBays(matrixBays, lockedDecisions = null) {
+  // M6.93.11.LOCK1: 잠금 우선 — 사용자가 명시적으로 결정한 페어/단독은 절대 변형 안 됨
+  if (lockedDecisions && Array.isArray(lockedDecisions.trios) && Array.isArray(lockedDecisions.singles)) {
+    return {
+      trios: lockedDecisions.trios,
+      singles: lockedDecisions.singles,
+      orphanEvens: [],
+      _locked: true,
+    };
+  }
+
   const byNum = new Map();
   matrixBays.forEach(b => byNum.set(b.bayNum, b));
-  // M6.93.17: 사전 짝수 우선 정렬. isEstimated=false (사전)가 isEstimated=true (가상)보다 먼저 처리.
-  //   fillEmptyBaysSequential이 1~max에 가상 짝수(예: 02, 06, 10, 14, 18, 22, 26)를 추가하면
-  //   bayNum ascending sort에서 e=2가 가장 먼저 처리되어 trio [01, (02)03] 만들고, e=4 처리 시
-  //   3이 used → 사전 짝수 04가 페어 못 만듦. → 사전 짝수가 먼저 처리되어야.
-  const evens = matrixBays
-    .filter(b => b.bayNum % 2 === 0)
-    .sort((a, b) => {
-      const aEst = !!a.isEstimated; const bEst = !!b.isEstimated;
-      if (aEst !== bEst) return aEst ? 1 : -1; // 사전(!isEstimated) 먼저
-      return a.bayNum - b.bayNum;
-    })
-    .map(b => b.bayNum);
+  const evens = matrixBays.map(b => b.bayNum).filter(n => n % 2 === 0).sort((a, b) => a - b);
   const odds = matrixBays.map(b => b.bayNum).filter(n => n % 2 === 1).sort((a, b) => a - b);
 
   const trios = [];
@@ -42,8 +44,6 @@ export function autoPairBays(matrixBays) {
   const usedEvens = new Set();
 
   for (const e of evens) {
-    if (usedEvens.has(e)) continue;
-    if (usedOdds.has(e - 1) || usedOdds.has(e + 1)) continue; // overlap 방지
     if (byNum.has(e - 1) && byNum.has(e + 1)) {
       const topKey = String(e - 1).padStart(2, '0');
       const pairKey = `(${String(e).padStart(2, '0')})${String(e + 1).padStart(2, '0')}`;
@@ -59,6 +59,15 @@ export function autoPairBays(matrixBays) {
 
   return { trios, singles, orphanEvens };
 }
+
+// M6.93.11.LOCK1: 매트릭스 → 잠금 결정 변환 헬퍼
+//   ShipMatrixBuilderModal의 "잠금 저장" 시 호출.
+//   현재 매트릭스의 페어/단독 상태를 명시적 trios/singles로 변환하여 저장.
+//   이후 autoPairBays(matrixBays, lockedDecisions) 호출 시 그대로 반환됨.
+export function matrixToLockedDecisions(matrixBays) {
+  return autoPairBays(matrixBays);  // 잠금 없이 한 번 추정 → 그 결과를 잠금으로 저장
+}
+
 
 // ------------------------------------------------------------
 // 2. 표준 PDF_BAYS 자동 생성 (generate_pdf_bays)
@@ -385,25 +394,15 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     b.bayNo === oddKey2 || b.bay === oddKey3 || b.bay === oddKey2
   );
 
-  // M6.93.12: 우선순위 — userBay(사용자 직접 수정) > override(개발자 박아둔 정답) > v5 > fallback
-  //   원칙: 사용자가 ShipMatrixBuilderModal에서 직접 수정한 데이터는 사용자 외에 변경 금지.
-  //         override는 사용자가 아직 수정 안 한 베이의 fallback일 뿐.
-  //   M6.91.0: PDF override는 DJCT/SWAT 등 추측 안 하기 위한 정답 데이터지만,
-  //            사용자가 직접 수정했다면 그 의도가 최우선.
+  // M6.91.0: PDF override가 있으면 그대로 사용 (베이마다 다른 row 구조 정확히)
   const override = getBayOverride(shipCode, oddNum);
   const rowMaxOdd = shipBayDef?.rowMaxOdd;
   const rowMaxEven = shipBayDef?.rowMaxEven;
-
-  // rowCount: userBay 우선
-  const userRowCount = (typeof userBay?.rowCount === 'number' && userBay.rowCount > 0) ? userBay.rowCount : null;
-  const deckRowMax = userRowCount ?? (override ? override.rowCount : (rowMaxEven || rowMaxOdd || 10));
-  const holdRowMax = userRowCount ?? (override ? override.rowCount : (rowMaxOdd || rowMaxEven || 9));
-
-  // hasZero: userBay 우선
+  // override.rowCount = row 라벨 총 개수 (getRowPositions cellCount 인자)
+  const deckRowMax = override ? override.rowCount : (rowMaxEven || rowMaxOdd || 10);
+  const holdRowMax = override ? override.rowCount : (rowMaxOdd || rowMaxEven || 9);
   let hasZero;
-  if (userBay && typeof userBay.hasZero === 'boolean') {
-    hasZero = userBay.hasZero;
-  } else if (override) {
+  if (override) {
     hasZero = override.hasZero;
   } else {
     // EDI 검증 fallback
@@ -420,44 +419,39 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     hasZero = ediRows.has(0);
   }
 
-  const deckTiers =
-       (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
+  const deckTiers = override?.deckTiers
+    || (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
     || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
-    || override?.deckTiers
     || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
-  const holdTiers =
-       (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
+  const holdTiers = override?.holdTiers
+    || (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
     || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
-    || override?.holdTiers
     || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
 
-  // M6.93.13: cells 우선순위 — userBay > override > bayData.deckCells/holdCells > raw cells > fallback
-  //   원칙: 사용자 직접 수정 최우선 보호. raw v5 cells는 deck/hold 분리 안 된 raw이라 마지막 fallback.
+  // M6.93.10: cells 우선순위 — override > userBay > v5 cells > v5 deckCells > fallback
   let deckCells, holdCells;
-  if (userBay?.deckCells && userBay.deckCells.length > 0) {
-    deckCells = userBay.deckCells.slice(0, nDeck);
-  } else if (override?.deckCells && override.deckCells.length > 0) {
+  if (override?.deckCells && override.deckCells.length > 0) {
     deckCells = override.deckCells;
-  } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
-    // PrintableCargoPlanV2가 이미 reversed cells에서 deck/hold 분리한 결과
-    deckCells = bayData.deckCells.slice(0, nDeck);
+  } else if (userBay?.deckCells && userBay.deckCells.length > 0) {
+    deckCells = userBay.deckCells.slice(0, nDeck);
   } else if (bayData?.cells && bayData.cells.length > 0) {
-    // raw v5 cells (아래→위 순서) — 정확하지 않을 수 있으므로 마지막 fallback
     deckCells = bayData.cells.slice(0, nDeck);
+  } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
+    deckCells = bayData.deckCells.slice(0, nDeck);
   } else {
     deckCells = new Array(nDeck).fill(deckRowMax);
   }
-  if (userBay?.holdCells && userBay.holdCells.length > 0) {
-    holdCells = userBay.holdCells.slice(0, nHold);
-  } else if (override?.holdCells && override.holdCells.length > 0) {
+  if (override?.holdCells && override.holdCells.length > 0) {
     holdCells = override.holdCells;
-  } else if (bayData?.holdCells && bayData.holdCells.length > 0) {
-    holdCells = bayData.holdCells.slice(0, nHold);
+  } else if (userBay?.holdCells && userBay.holdCells.length > 0) {
+    holdCells = userBay.holdCells.slice(0, nHold);
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
+  } else if (bayData?.holdCells && bayData.holdCells.length > 0) {
+    holdCells = bayData.holdCells.slice(0, nHold);
   } else {
     holdCells = new Array(nHold).fill(holdRowMax);
   }

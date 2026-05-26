@@ -141,11 +141,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     }
   }, [voyageKey, voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers]);
 
-  // M6.93.17: voyage가 null일 때도 모든 hook이 호출되도록 early return을 hooks 이후로 이동.
-  //   기존: 144줄 `if (!voyage) return ...` 이후 176, 267, 355, 361, 381, 427줄에 hook 있어서
-  //         voyage가 null→truthy로 토글되면 hook 개수가 달라져 React 크래시 (Rules of Hooks).
-  //   수정: const sec/ediMap 등을 voyage-null-safe 하게 만들고, early return은 line 449 hooks 이후로.
-  const sec = (voyage && voyage[mode]) || {};
+  if (!voyage) {
+    return (
+      <div className="max-w-3xl mx-auto px-3 py-10 text-center">
+        <div className="text-slate-400">항차를 찾을 수 없습니다</div>
+        <button onClick={onGoHome} className="mt-4 px-4 py-2 bg-slate-800 rounded text-sm">홈으로</button>
+      </div>
+    );
+  }
+
+  const sec = voyage[mode] || {};
   const ediMap = sec.ediContainers || {};
   const recMap = sec.records || {};
   const xrayMap = sec.xrayList || {};
@@ -442,16 +447,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       sealPolicy: shipPolicy,  // M3.5.5
     });
   }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
-
-  // M6.93.17: 모든 hook 호출 이후의 early return (Rules of Hooks 준수)
-  if (!voyage) {
-    return (
-      <div className="max-w-3xl mx-auto px-3 py-10 text-center">
-        <div className="text-slate-400">항차를 찾을 수 없습니다</div>
-        <button onClick={onGoHome} className="mt-4 px-4 py-2 bg-slate-800 rounded text-sm">홈으로</button>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-6xl mx-auto px-3 py-2">

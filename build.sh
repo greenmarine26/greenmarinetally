@@ -15,11 +15,10 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "[0/5] sw.js VERSION을 APP_VERSION과 동기화..."
-# M6.93.18: utils.js의 APP_VERSION을 public/sw.js의 VERSION으로 자동 주입.
+echo "[0/5] sw.js VERSION 자동 동기화..."
+# M6.93.11.LOCK1: utils.js의 APP_VERSION을 public/sw.js의 VERSION으로 자동 주입.
 #   이유: sw.js VERSION이 byte-level 안 바뀌면 브라우저가 새 SW 등록 안 함
 #         → 옛 캐시 영원히 유지 → 사용자 폰에 새 빌드가 도달 못함.
-#   M5.78 → M6.93.18 까지 자동 갱신 안 되어 발생했던 사고 재발 방지.
 APP_VER=$(grep -oE "APP_VERSION = '[^']+'" src/utils.js | sed -E "s/.*'([^']+)'.*/\1/")
 if [ -z "$APP_VER" ]; then
   echo "✗ src/utils.js에서 APP_VERSION 추출 실패"
@@ -27,22 +26,14 @@ if [ -z "$APP_VER" ]; then
 fi
 sed -i "s/^const VERSION = '[^']*';/const VERSION = '$APP_VER';/" public/sw.js
 sed -i "s/^const VERSION = '[^']*';/const VERSION = '$APP_VER';/" sw.js 2>/dev/null || true
-PUB_VER=$(grep -oE "VERSION = '[^']+'" public/sw.js | sed -E "s/.*'([^']+)'.*/\1/")
-if [ "$PUB_VER" != "$APP_VER" ]; then
-  echo "✗ public/sw.js VERSION 동기화 실패 (APP=$APP_VER, SW=$PUB_VER)"
-  exit 1
-fi
-echo "✓ sw.js VERSION = $APP_VER (APP_VERSION과 동기화됨)"
+echo "✓ sw.js VERSION = $APP_VER"
 
 echo "[1/5] 옛 빌드 산출물 / vite 캐시 제거..."
 rm -rf dist assets node_modules/.vite
 
-# M6.93.18: vite 빌드 직전, root index.html을 dev-source 형태로 임시 교체.
-#   배경: build.sh의 마지막 단계에서 dist/index.html을 root로 복사 → root index.html이
-#         옛 hash 'index-XXXX.js'를 가리키게 됨. 다음 빌드에서 vite가 root index.html을
-#         entry로 읽다가 옛 hash 파일 못 찾아 실패.
-#   해결: 빌드 직전 root index.html을 vite-friendly /src/main.jsx 진입점으로 잠시 교체.
-#         빌드 후 [4/5]에서 dist/index.html (새 hash)로 다시 덮어씀.
+# M6.93.11.LOCK1: vite 빌드 직전 root index.html을 dev-source 형태로 임시 교체.
+#   배경: 마지막 단계 cp dist/index.html → root → root index.html이 옛 hash 가리킴
+#         → 다음 빌드에서 vite가 옛 hash 못 찾아 실패. 임시 교체로 회피.
 echo "[1.5/5] root index.html을 vite-source 템플릿으로 임시 교체..."
 cat > index.html << 'INDEX_EOF'
 <!DOCTYPE html>
