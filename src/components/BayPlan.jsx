@@ -215,16 +215,17 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
-  // M6.59: EDI 컨테이너로 L4 fallback 추가 보정
+  // M6.94.0: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
   const dictBaysSummary = useMemo(() => {
     if (!shipImo && !shipName) return {};
     const dict = getShipBayDictData(shipImo, shipName);
     if (!dict?.bayDef?.baysSummary) return {};
-    // L4 EDI 보정 (containers 있을 때만)
+    // source='user'면 보강 차단, AI 임시는 L4 EDI 보정
     const enrichedEntry = enrichBayDef(
       { bayDef: dict.bayDef },
       dict._v5Matrix,
-      containers
+      containers,
+      dict.source
     );
     const m = {};
     enrichedEntry.bayDef.baysSummary.forEach(b => {

@@ -54,8 +54,9 @@ function getMarkV2(c, pod, mode) {
 
 // ------------------------------------------------------------
 // CSS (M6.81 HTML 그대로 — 셀 18×13px, tier-row 13px, cell-empty visibility:hidden)
+// M6.94.0: export하여 매트릭스 빌더에서도 BayBoxV2와 함께 재사용 (베이플랜 시뮬레이션)
 // ------------------------------------------------------------
-const CSS = `
+export const CARGO_V2_CSS = `
 .cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
 .cpv2-page { width: 277mm; min-width: 1200px; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
@@ -162,10 +163,45 @@ const CSS = `
 
 // ------------------------------------------------------------
 // BayBox 단일 베이 렌더
+// M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-function BayBoxV2({ data, count, colorMap = {} }) {
+export function BayBoxV2({ data, count, colorMap = {} }) {
   if (!data) return null;
-  const { bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols, deckRowPos, holdRowPos, deckRows, holdRows } = data;
+  const {
+    bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
+    deckRowPos, holdRowPos, deckRows, holdRows,
+    deckAlign, deckPadLeft, deckPadRight,
+    holdAlign, holdPadLeft, holdPadRight,
+  } = data;
+
+  // M6.94.0 padding 계산: 사용자 입력 > alignment > 자동 가운데 (fallback)
+  // hold cells가 deck보다 작을 때 hold 영역을 어디에 배치할지 결정.
+  function computePadding(align, padL, padR, smallerN, biggerN) {
+    // 1) 사용자 명시 padding 입력 > 0 이면 그것 우선
+    if (padL > 0 || padR > 0) {
+      return {
+        paddingLeft: `${(padL / biggerN) * 100}%`,
+        paddingRight: `${(padR / biggerN) * 100}%`,
+      };
+    }
+    const diff = biggerN - smallerN;
+    if (diff <= 0) return { paddingLeft: '0', paddingRight: '0' };
+    // 2) alignment 우선
+    if (align === 'left') {
+      return { paddingLeft: '0', paddingRight: `${(diff / biggerN) * 100}%` };
+    }
+    if (align === 'right') {
+      return { paddingLeft: `${(diff / biggerN) * 100}%`, paddingRight: '0' };
+    }
+    // 3) center (기본) — 자동 가운데 (기존 M6.93.12 fix #11 로직)
+    return {
+      paddingLeft: `${Math.floor(diff / 2) / biggerN * 100}%`,
+      paddingRight: `${Math.ceil(diff / 2) / biggerN * 100}%`,
+    };
+  }
+
+  const holdPadStyle = computePadding(holdAlign, holdPadLeft, holdPadRight, nHoldCols, nDeckCols);
+
   return (
     <div className="cpv2-bay-section">
       <div className="cpv2-bay-title-row">
@@ -266,10 +302,9 @@ function BayBoxV2({ data, count, colorMap = {} }) {
             <div
               className="cpv2-row-labels"
               style={{
-                // M6.93.12 fix #11: cells가 nDeckCols 폭이고 hold cells는 offset만큼 가운데.
-                //   라벨도 offset에 맞춰 좌우 padding으로 정렬. cells active 위치 = 라벨 위치.
-                paddingLeft: nDeckCols > nHoldCols ? `${Math.floor((nDeckCols - nHoldCols) / 2) / nDeckCols * 100}%` : '0',
-                paddingRight: nDeckCols > nHoldCols ? `${Math.ceil((nDeckCols - nHoldCols) / 2) / nDeckCols * 100}%` : '0',
+                // M6.94.0: 사용자 입력 padding/alignment 우선, 없으면 자동 가운데
+                paddingLeft: holdPadStyle.paddingLeft,
+                paddingRight: holdPadStyle.paddingRight,
               }}
             >
               {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
@@ -306,9 +341,12 @@ export default function PrintableCargoPlanV2({
     if (!shipImo && !shipName) return null;
     const baseDict = getShipBayDictData(shipImo, shipName);
     if (!baseDict) return null;
-    // M6.93.12 fix #4: source='user'면 enrichBayDef가 EDI 자동 채움 차단
+    // M6.94.0 사용자 원칙 1: source='user'면 enrichBayDef가 즉시 entry 반환 (어떤 보강도 안 함).
+    //   AI 임시 베이사전 (v2/v5/firebase 등)일 때만 EDI 자동 채움 등 보강 동작.
     const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, containers, baseDict.source);
-    return { ...baseDict, bayDef: enrichedEntry.bayDef };
+    // M6.94.0: cargoPlanCore가 user source 판단할 수 있게 bayDef에 source 정보 포함
+    const bayDefWithSource = { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: baseDict.source === 'user' };
+    return { ...baseDict, bayDef: bayDefWithSource };
   }, [shipImo, shipName, containers]);
 
   const matrixBays = useMemo(() => {
@@ -551,7 +589,7 @@ export default function PrintableCargoPlanV2({
 
   return createPortal(
     <div className="cpv2-overlay">
-      <style>{CSS}</style>
+      <style>{CARGO_V2_CSS}</style>
       {closeBtn}
       <div className="cpv2-page">
         <div className="cpv2-page-header">

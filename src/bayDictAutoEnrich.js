@@ -36,6 +36,16 @@
 export function enrichBayDef(entry, v5Matrix, ediContainers = null, source = null) {
   if (!entry || !entry.bayDef) return entry;
 
+  // ═══════════════════════════════════════════════════════════════
+  // M6.94.0 사용자 원칙 1: 사용자가 저장한 베이구조는 AI 절대 수정 금지
+  //   source='user'면 어떤 보강/추론/union도 안 함. entry 그대로 반환.
+  //   L1, L2, L3, L4 모든 fallback 차단.
+  //   사용자가 빈 배열로 입력한 것도 그대로 (의도 존중).
+  // ═══════════════════════════════════════════════════════════════
+  if (source === 'user') {
+    return entry;
+  }
+
   // M6.93.12 fix #4 (사용자 통찰: CASPI=고정 빈 구조, EDI가 베이사전 바꾸면 안 됨):
   //   source='user'면 EDI 자동 채움(L4) 절대 금지. 사용자 입력 그대로 사용.
   //   사용자가 입력한 hold 4단 [08,06,04,02]을 EDI에 없는 tier라고 [6,4,2]로 줄이는 사고 방지.

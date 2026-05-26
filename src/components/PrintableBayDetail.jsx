@@ -381,15 +381,16 @@ export default function PrintableBayDetail({
     if (!shipImo && !shipName) return null;
     const baseDict = getShipBayDictData(shipImo, shipName);
     if (!baseDict) return null;
-    // M6.59: EDI 컨테이너로 L4 fallback 추가 보정
+    // M6.94.0 사용자 원칙: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
     const enrichedEntry = enrichBayDef(
       { bayDef: baseDict.bayDef },
       baseDict._v5Matrix,
-      containers
+      containers,
+      baseDict.source
     );
     return {
       ...baseDict,
-      bayDef: enrichedEntry.bayDef,
+      bayDef: { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: baseDict.source === 'user' },
       _enrichMeta: enrichedEntry._enrichMeta || baseDict._enrichMeta,
     };
   }, [shipImo, shipName, containers]);

@@ -379,6 +379,22 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.94.0 (2026-05-26) — 베이사전 빌더 강화 + 사용자 데이터 절대 보호 (1차 완성본)',
+      examples: [
+        { q: '🔥 사용자 5가지 원칙', a: '(1) 사용자 저장 베이구조는 AI(Claude) 절대 수정 금지. (2) 사용자 저장 없을 때만 AI가 EDI+PDF로 임시 생성 + 사용자에게 수정 요청. (3) 카고플랜·베이플랜·베이상세도 모두 사용자 데이터 > AI 순. (4) 데크-홀드 여백/정렬도 사용자 시각 편집 (AI 자동 계산 폐기). (5) 베이 구조 복사 기능 (같은 사이즈 베이 일괄 적용).' },
+        { q: '✅ 자동 수정 코드 모두 차단', a: 'enrichBayDef: source="user"면 entry 즉시 반환 (모든 보강 차단). computeBayRenderData: userBay 매칭된 베이는 inferredMax + EDI tier union 차단. M6.93.12 fix #10의 EDI union을 AI 임시 데이터에만 적용 (user 데이터 그대로). PrintableCargoPlanV2/BayPlan/PrintableBayDetail 모두 source 정보 cargoPlanCore에 전달.' },
+        { q: '✅ 매트릭스 빌더 좌우 분할', a: '좌측: 베이 편집 영역 (베이 추가/삭제, tier 추가/제거, cells 수정). 우측: 선택한 베이의 시뮬레이션 미리보기 (= 베이플랜, 빈 카고플랜 박스). 모든 베이 합치면 = 카고플랜. BayBoxV2 컴포넌트 재사용 + buildEmptyBayRenderData로 컨테이너 없는 빈 박스 생성.' },
+        { q: '✅ 데크-홀드 정렬 시각 조정', a: '선택한 베이의 우측 패널에서 Hold 정렬 버튼 (좌/가운데/우) + cells 단위 미세 padding 조정 (왼쪽+/오른쪽+ 숫자 입력). 사용자 입력 우선, 빈값이면 자동 가운데 (M6.93.12 fix #11 fallback). baysSummary에 deckAlign/holdAlign/deckPadLeft/deckPadRight/holdPadLeft/holdPadRight 새 필드 6개 저장.' },
+        { q: '✅ 베이 구조 복사', a: '선택한 베이 우측 패널에 "📋 다른 베이에 복사하기" 버튼. 클릭 시 대상 베이 선택 모달 (전체 선택 가능). 복사 필드: rowCount, hasZero, deckTiers, holdTiers, deckCells, holdCells, padding/align 6개. pairEven은 안 복사 (각 베이 고유).' },
+        { q: '✅ 저장 후 리프레쉬 보호', a: 'M6.93.13까지: 사용자가 [8,6,4,2] 저장 → 리프레쉬 → AI 자동 union/추론으로 [6,4,2]로 돌아감. M6.94.0: enrichBayDef + computeBayRenderData 모두 source="user" 체크 → 사용자 데이터 그대로. 시뮬 PASS (Python 시뮬 + 빌드 검증).' },
+        { q: '📋 시뮬 검증 결과', a: 'EDI 224대 + 사용자 dict [8,6,4,2]/padding=0/align=center 입력 → 저장 → 리프레쉬 → lookupUserBayDict → bayDictEntryToMatrix → enrichBayDef(source="user") → computeBayRenderData(isUserOwnedBay=true) → 결과: [8,6,4,2] 그대로. 시뮬 4단계 모두 PASS.' },
+        { q: '📐 데이터 구조 변경 (호환)', a: 'baysSummary entry에 6 필드 추가: deckAlign, holdAlign, deckPadLeft, deckPadRight, holdPadLeft, holdPadRight. 기존 데이터에 없으면 기본값 (center, 0). 기존 user dict 100% 호환. matrixToBayDictEntry + bayDictEntryToMatrix + createEmptyBayEntry 모두 새 필드 처리.' },
+        { q: '🛠 다음 단계 (사용자 4단계 아키텍처)', a: '1. 베이사전 (이 버전 완성) → 2. EDI + 리스트 → STOWPLAN/BAYPLAN/BAYDETAIL → 3. 양하/선적 검수 기능 → 4. 부가기능. 1단계 완성으로 기존 카고플랜 (PrintableCargoPlanV2)이 사용자 베이사전을 정확히 사용 → 자동 정확.' },
+        { q: '🔧 변경 파일 (7개)', a: 'bayDictAutoEnrich.js (source=user skip), cargoPlanCore.js (computeBayRenderData user 보호 + buildEmptyBayRenderData 신규), shipMatrixBuilder.js (createEmpty/matrixToEntry/entryToMatrix에 새 필드), components/PrintableCargoPlanV2.jsx (BayBoxV2 + CARGO_V2_CSS export + padding 사용자 우선), components/PrintableBayDetail.jsx (source 전달), components/BayPlan.jsx (source 전달), components/ShipMatrixBuilderModal.jsx (좌우 분할 + 시뮬 + padding + 베이 복사).' },
+        { q: '⚠ 한계 (다음 작업)', a: '시각 편집 툴은 padding/align만 추가됨. tier별 cells 시각 클릭 편집 (각 셀 활성/비활성 직접 토글)은 다음 버전. 베이별 deckRowMax/holdRowMax 따로 (deck 8 row + hold 6 row 같은 차이)도 다음 버전. 현재는 rowCount 통일.' },
+      ],
+    },
+    {
       title: '🆕 M6.93.13 (2026-05-26) — 카고플랜 V2 가독성 개선 (보기 좋게)',
       examples: [
         { q: '🔥 사용자 요구', a: '"업데이트 후에 카고플랜 베이가 줄어들었음. 원인 파악 말고 보기 좋게 만들어 주세요." → 베이 박스 자체가 좁아진 증상.' },

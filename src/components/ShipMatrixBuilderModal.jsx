@@ -1,10 +1,9 @@
-// src/components/ShipMatrixBuilderModal.jsx — M6.93.2
-// 신규 선박 베이 매트릭스 빌더
-//   - EDI에서 자동 추출된 선박 정보 (콜사인/IMO/선박명) 자동 채움
-//   - 베이 분석 상태 요약 카드
-//   - 자동 추론된 CASP 코드 (callsign 또는 선박명 약자)
-//   - PDF 보강 옵션
-//   - 사용자 검증/수정 후 userBayDict 저장
+// src/components/ShipMatrixBuilderModal.jsx — M6.94.0
+// 베이사전 빌더 (사용자 원칙):
+//   - 좌측: 베이 편집 (선박 메타 + 베이별 tier/cells/padding)
+//   - 우측: 선택한 베이 시뮬레이션 (= 베이플랜, 빈 카고플랜 박스)
+//   - 사용자 저장 후 AI 절대 수정 금지 (M6.94.0)
+//   - 베이 복사 기능 (같은 사이즈 베이 일괄 적용)
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
@@ -21,6 +20,9 @@ import {
 } from '../shipMatrixBuilder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
 import { addToUserBayDict, lookupUserBayDict } from '../data/userBayDict.js';
+// M6.94.0: 빈 카고플랜 박스 시각 미리보기 (베이플랜)
+import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
+import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 
 export default function ShipMatrixBuilderModal({ voyage, containers, onClose, onSaved }) {
   const [matrix, setMatrix] = useState(null);
@@ -192,6 +194,50 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     });
   };
 
+  // M6.94.0: padding/alignment 업데이트
+  const updateAlignPad = (bay, field, value) => {
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      const entry = { ...cp.byBay[bay] };
+      entry[field] = value;
+      cp.byBay[bay] = entry;
+      return cp;
+    });
+  };
+
+  // M6.94.0: 베이 구조 복사 (한 베이 → 선택한 여러 베이)
+  //   소스 베이의 deckTiers/holdTiers/deckCells/holdCells/rowCount/hasZero/padding/align 복사.
+  //   pairEven은 복사 안 함 (각 베이 고유). bay/bayNum도 안 바뀜.
+  const copyBayStructure = (sourceBay, targetBays) => {
+    if (!matrix?.byBay[sourceBay]) return;
+    const src = matrix.byBay[sourceBay];
+    const copyFields = [
+      'rowCount', 'hasZero',
+      'deckTiers', 'holdTiers', 'deckCells', 'holdCells',
+      'deckAlign', 'deckPadLeft', 'deckPadRight',
+      'holdAlign', 'holdPadLeft', 'holdPadRight',
+    ];
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      for (const tgt of targetBays) {
+        if (tgt === sourceBay) continue;
+        if (!cp.byBay[tgt]) continue;
+        const entry = { ...cp.byBay[tgt] };
+        for (const f of copyFields) {
+          if (Array.isArray(src[f])) entry[f] = [...src[f]];
+          else entry[f] = src[f];
+        }
+        cp.byBay[tgt] = entry;
+      }
+      return cp;
+    });
+  };
+
+  // M6.94.0: 선택한 베이 (우측 시뮬에 표시)
+  const [selectedBay, setSelectedBay] = useState(null);
+  // M6.94.0: 베이 복사 모달 상태
+  const [copyMode, setCopyMode] = useState(null); // null | { sourceBay, selectedTargets: Set }
+
   const handleSave = () => {
     if (!shipMeta.code) {
       alert('CASP 코드를 입력하세요 (자동 추론된 값 사용 권장)');
@@ -225,7 +271,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/70 flex items-start justify-center overflow-auto py-8">
-      <div className="bg-zinc-900 rounded-lg text-white w-full max-w-5xl mx-4 flex flex-col" style={{ maxHeight: '90vh' }}>
+      <div className="bg-zinc-900 rounded-lg text-white w-full max-w-7xl mx-2 flex flex-col" style={{ maxHeight: '95vh' }}>
         {/* 헤더 */}
         <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
           <div>
@@ -239,7 +285,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
 
         {/* 본문 */}
         <div className="flex-1 overflow-auto p-4">
-          {/* === 자동 추출 선박 정보 === */}
+          {/* === 자동 추출 선박 정보 (전체 폭) === */}
           <div className="bg-gradient-to-br from-blue-900/40 to-cyan-900/40 border border-blue-700/50 p-4 rounded mb-4">
             <div className="flex justify-between items-start mb-2">
               <div className="text-xs text-blue-300 font-bold">📡 EDI 자동 추출 선박 정보 (수정 가능)</div>
@@ -371,9 +417,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
             </div>
           </div>
 
-          {/* === 베이별 검증 폼 === */}
+          {/* === 베이별 검증 폼 — 좌우 분할: 좌측 편집 + 우측 베이플랜 시뮬 === */}
           {!done && (
-            <div className="space-y-2">
+            <div className="flex gap-3" style={{ minHeight: '60vh' }}>
+              {/* === 좌측: 베이 편집 영역 === */}
+              <div className="flex-1 space-y-2 overflow-y-auto" style={{ maxHeight: '70vh' }}>
               {/* 베이 추가 폼 */}
               <div className="bg-zinc-900/60 border border-zinc-700 rounded p-3 flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-bold text-emerald-300">➕ 베이 추가</span>
@@ -436,10 +484,18 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 const e = matrix.byBay[bay];
                 const needsReview = !e.rowCount || e.rowCount < 5 || (!e.deckTiers?.length && !e.holdTiers?.length);
                 const isEst = e.isEstimated;
+                const isSelected = selectedBay === bay;
                 return (
-                  <div key={bay} className={`border ${isEst ? 'border-zinc-700 bg-zinc-900/40 opacity-70' : needsReview ? 'border-amber-600 bg-zinc-800' : 'border-zinc-700 bg-zinc-800'} rounded p-3`}>
+                  <div key={bay}
+                    className={`border ${isSelected ? 'border-cyan-400 bg-cyan-950/30 ring-2 ring-cyan-500' : isEst ? 'border-zinc-700 bg-zinc-900/40 opacity-70' : needsReview ? 'border-amber-600 bg-zinc-800' : 'border-zinc-700 bg-zinc-800'} rounded p-3 transition-colors`}>
                     <div className="flex items-center gap-3 mb-2 text-sm">
-                      <b className="text-base">BAY {bay}</b>
+                      <button
+                        onClick={() => setSelectedBay(isSelected ? null : bay)}
+                        className={`px-2 py-1 rounded font-bold ${isSelected ? 'bg-cyan-500 text-white' : 'bg-zinc-700 hover:bg-cyan-700'}`}
+                        title="우측 미리보기 표시">
+                        👁 BAY {bay}
+                      </button>
+                      {isSelected && <span className="text-[10px] px-1.5 py-0.5 bg-cyan-600 rounded font-bold">미리보기 →</span>}
                       {e.pairEven && <span className="text-zinc-400">({e.pairEven}) 페어</span>}
                       {isEst && <span className="text-[10px] px-2 py-0.5 bg-zinc-700 text-zinc-300 rounded">⚠ 추정 (EDI/PDF 없음)</span>}
                       {!isEst && <span className="text-[10px] px-2 py-0.5 bg-zinc-700 rounded">{e.source || '?'}</span>}
@@ -516,6 +572,135 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                   </div>
                 );
               })}
+              </div>{/* /좌측 편집 영역 */}
+
+              {/* === 우측: 베이플랜 시뮬레이션 (선택한 베이의 빈 카고플랜 박스) === */}
+              <div className="w-[420px] flex-shrink-0">
+                <style>{CARGO_V2_CSS}</style>
+                <div className="sticky top-0 bg-zinc-800 border border-zinc-600 rounded p-3" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                  <div className="text-sm font-bold text-cyan-300 mb-2 flex items-center justify-between">
+                    <span>🎯 베이플랜 시뮬레이션</span>
+                    {selectedBay && (
+                      <span className="text-xs bg-cyan-900 px-2 py-0.5 rounded">BAY {selectedBay}</span>
+                    )}
+                  </div>
+                  {!selectedBay ? (
+                    <div className="text-center text-zinc-500 text-sm py-12 italic">
+                      ⬅ 좌측 베이를 클릭하면<br/>여기에 미리보기가 나옵니다
+                    </div>
+                  ) : (() => {
+                    const e = matrix.byBay[selectedBay];
+                    if (!e) return <div className="text-red-400">베이 없음</div>;
+                    const bayKey = e.pairEven
+                      ? `(${e.pairEven})${String(parseInt(selectedBay)).padStart(2, '0')}`
+                      : String(parseInt(selectedBay)).padStart(2, '0');
+                    const data = buildEmptyBayRenderData(e, bayKey, !!e.pairEven);
+                    return (
+                      <>
+                        {/* 카고플랜 V2 스타일 박스 (BayBoxV2 재사용) */}
+                        <div className="bg-white rounded p-2 mb-3" style={{ minHeight: '240px' }}>
+                          <div className="cpv2-bay-box" style={{ minWidth: '380px' }}>
+                            <BayBoxV2 data={data} count={null} colorMap={{}} />
+                          </div>
+                        </div>
+
+                        {/* === Padding/Alignment 컨트롤 === */}
+                        <div className="bg-zinc-900/50 rounded p-2 mb-2">
+                          <div className="text-xs text-zinc-300 font-bold mb-2">📐 데크-홀드 정렬</div>
+                          {/* Hold align */}
+                          <div className="mb-2">
+                            <div className="text-[10px] text-zinc-400 mb-1">Hold 정렬</div>
+                            <div className="flex gap-1">
+                              {['left', 'center', 'right'].map(a => (
+                                <button key={a}
+                                  onClick={() => updateAlignPad(selectedBay, 'holdAlign', a)}
+                                  className={`flex-1 px-2 py-1 text-xs rounded ${e.holdAlign === a || (!e.holdAlign && a === 'center') ? 'bg-cyan-600 font-bold' : 'bg-zinc-700 hover:bg-zinc-600'}`}>
+                                  {a === 'left' ? '← 좌' : a === 'center' ? '∙ 가운데' : '우 →'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Hold padding micro */}
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <label className="flex items-center gap-1">
+                              <span className="text-zinc-400">왼쪽 +</span>
+                              <input type="number" min="0" max="20" value={e.holdPadLeft || 0}
+                                onChange={ev => updateAlignPad(selectedBay, 'holdPadLeft', parseInt(ev.target.value) || 0)}
+                                className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" />
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <span className="text-zinc-400">오른쪽 +</span>
+                              <input type="number" min="0" max="20" value={e.holdPadRight || 0}
+                                onChange={ev => updateAlignPad(selectedBay, 'holdPadRight', parseInt(ev.target.value) || 0)}
+                                className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" />
+                            </label>
+                          </div>
+                          <div className="text-[10px] text-zinc-500 mt-1">cells 단위 미세 조정. 0이면 위 정렬 자동.</div>
+                        </div>
+
+                        {/* === 베이 복사 === */}
+                        <div className="bg-amber-900/20 border border-amber-700/50 rounded p-2">
+                          <div className="text-xs text-amber-300 font-bold mb-1">📋 베이 구조 복사</div>
+                          <div className="text-[10px] text-zinc-400 mb-2">
+                            이 베이 (BAY {selectedBay})의 tier/cells/정렬을 다른 베이에 복사
+                          </div>
+                          <button
+                            onClick={() => setCopyMode({ sourceBay: selectedBay, selectedTargets: new Set() })}
+                            className="w-full py-1.5 bg-amber-700 hover:bg-amber-600 rounded text-xs font-bold">
+                            📋 다른 베이에 복사하기
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>{/* /우측 시뮬 */}
+            </div>
+          )}
+
+          {/* === 베이 복사 모달 (대상 베이 선택) === */}
+          {copyMode && (
+            <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4"
+                 onClick={() => setCopyMode(null)}>
+              <div className="bg-zinc-900 rounded-lg p-4 max-w-2xl w-full max-h-[80vh] overflow-auto"
+                   onClick={e => e.stopPropagation()}>
+                <div className="text-base font-bold mb-1">📋 BAY {copyMode.sourceBay} 구조를 복사할 대상 베이 선택</div>
+                <div className="text-xs text-zinc-400 mb-3">tier/cells/정렬/padding 모두 복사. 페어 짝수는 안 바뀜.</div>
+                <div className="grid grid-cols-6 gap-2 mb-4">
+                  {Object.keys(matrix.byBay).sort().map(bay => {
+                    if (bay === copyMode.sourceBay) return null;
+                    const checked = copyMode.selectedTargets.has(bay);
+                    return (
+                      <button key={bay}
+                        onClick={() => {
+                          const next = new Set(copyMode.selectedTargets);
+                          if (checked) next.delete(bay); else next.add(bay);
+                          setCopyMode({ ...copyMode, selectedTargets: next });
+                        }}
+                        className={`p-2 rounded text-sm font-bold ${checked ? 'bg-emerald-600' : 'bg-zinc-700 hover:bg-zinc-600'}`}>
+                        BAY {bay}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-between items-center">
+                  <button onClick={() => setCopyMode({ ...copyMode, selectedTargets: new Set(Object.keys(matrix.byBay).filter(b => b !== copyMode.sourceBay)) })}
+                    className="text-xs px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded">전체 선택</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => setCopyMode(null)}
+                      className="px-4 py-2 bg-zinc-700 rounded">취소</button>
+                    <button
+                      disabled={copyMode.selectedTargets.size === 0}
+                      onClick={() => {
+                        copyBayStructure(copyMode.sourceBay, [...copyMode.selectedTargets]);
+                        setCopyMode(null);
+                      }}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-bold disabled:opacity-30">
+                      {copyMode.selectedTargets.size}개 베이에 복사
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

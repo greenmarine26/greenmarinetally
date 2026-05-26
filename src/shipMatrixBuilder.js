@@ -62,6 +62,13 @@ export function createEmptyBayEntry(bayNum, pairEven = null) {
     holdTiers: [8, 6, 4, 2],
     deckCells: [9, 9, 9, 9],
     holdCells: [9, 9, 9, 9],
+    // M6.94.0 새 필드: 데크-홀드 시각 정렬 + padding (사용자 시각 편집)
+    deckAlign: 'center',  // 'left' | 'center' | 'right'
+    deckPadLeft: 0,        // cells 단위 사용자 미세 조정
+    deckPadRight: 0,
+    holdAlign: 'center',
+    holdPadLeft: 0,
+    holdPadRight: 0,
     sourceRows: [],
     sourceTiers: [],
     rowTierPairs: [],
@@ -434,6 +441,13 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       hasHold: e.holdTiers && e.holdTiers.length > 0,
       pairEven: e.pairEven || null,
       source: e.source,
+      // M6.94.0 새 필드: 데크-홀드 시각 정렬 + padding (사용자 시각 편집 저장)
+      deckAlign: e.deckAlign || 'center',
+      deckPadLeft: typeof e.deckPadLeft === 'number' ? e.deckPadLeft : 0,
+      deckPadRight: typeof e.deckPadRight === 'number' ? e.deckPadRight : 0,
+      holdAlign: e.holdAlign || 'center',
+      holdPadLeft: typeof e.holdPadLeft === 'number' ? e.holdPadLeft : 0,
+      holdPadRight: typeof e.holdPadRight === 'number' ? e.holdPadRight : 0,
     };
   });
   return {
@@ -472,6 +486,13 @@ export function bayDictEntryToMatrix(entry) {
       holdCells: Array.isArray(bs.holdCells) ? [...bs.holdCells] : [],
       pairEven: bs.pairEven || null,
       source: bs.source || 'saved',
+      // M6.94.0 새 필드: 데크-홀드 시각 정렬 + padding (기본값으로 fallback, 기존 데이터 호환)
+      deckAlign: bs.deckAlign || 'center',
+      deckPadLeft: typeof bs.deckPadLeft === 'number' ? bs.deckPadLeft : 0,
+      deckPadRight: typeof bs.deckPadRight === 'number' ? bs.deckPadRight : 0,
+      holdAlign: bs.holdAlign || 'center',
+      holdPadLeft: typeof bs.holdPadLeft === 'number' ? bs.holdPadLeft : 0,
+      holdPadRight: typeof bs.holdPadRight === 'number' ? bs.holdPadRight : 0,
       sourceRows: [],
       sourceTiers: [],
       rowTierPairs: [],

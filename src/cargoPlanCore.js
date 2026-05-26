@@ -358,6 +358,10 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const pdf = pdfBays[bayKey];
   if (!pdf) return null;
 
+  // M6.94.0 사용자 원칙: shipBayDef.source==='user' 또는 entry에 _userOwned 마크 있으면
+  //   AI 자동 보강/추론/union 모두 차단. 사용자 입력 그대로 사용.
+  const isUserSource = shipBayDef?.source === 'user' || shipBayDef?._userOwned === true;
+
   const isPair = bayKey.startsWith('(');
   let oddNum;
   if (isPair) {
@@ -383,28 +387,26 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const override = getBayOverride(shipCode, oddNum);
   const rowMaxOdd = shipBayDef?.rowMaxOdd;
   const rowMaxEven = shipBayDef?.rowMaxEven;
-  // M6.93.12 fix #9 (사용자 통찰):
-  //   "보통 hold = deck - 1, 큰배 -2, 특수 -3 — 선박마다 다르므로 강제 X"
-  //   해결: 선박 전체 baysSummary의 deckCells/holdCells max로 자동 추론.
-  //   사용자가 매트릭스 빌더에 입력한 cells에서 row 갯수를 직접 추론 → 어떤 선박이든 정확.
-  //
-  //   DXQD (보통): deckCells max=8, holdCells max=7 → deck 8 / hold 7 (-1)
-  //   큰 배: deckCells max=10, holdCells max=8 → -2
-  //   특수: deckCells max=12, holdCells max=9 → -3
+  // M6.93.12 fix #9 → M6.94.0 수정:
+  //   사용자 데이터 보호 원칙: userBay 있으면 (사용자가 입력한 베이) rowCount + 사전 통일값만 사용.
+  //   다른 베이 cells max로 추론(inferredMax)은 AI 임시 베이사전일 때만 적용.
+  //   사용자가 BAY 11에 rowCount=8 입력 + BAY 23에 rowCount=10 입력하면, BAY 11은 8 그대로 (BAY 23의 10으로 추론 X).
   const userRowCount = (typeof userBay?.rowCount === 'number' && userBay.rowCount > 0) ? userBay.rowCount : null;
+  const isUserOwnedBay = isUserSource && userBay; // 이 베이는 사용자가 직접 저장한 베이
   const allBays = shipBayDef?.baysSummary || [];
   const allDeckCells = allBays.flatMap(b => Array.isArray(b.deckCells) ? b.deckCells : []).filter(c => c > 0);
   const allHoldCells = allBays.flatMap(b => Array.isArray(b.holdCells) ? b.holdCells : []).filter(c => c > 0);
   const inferredDeckMax = allDeckCells.length > 0 ? Math.max(...allDeckCells) : null;
   const inferredHoldMax = allHoldCells.length > 0 ? Math.max(...allHoldCells) : null;
 
-  const deckRowMax = (rowMaxEven && rowMaxEven > 0 ? rowMaxEven : null)
-    || inferredDeckMax
-    || userRowCount
+  // 사용자 데이터 보호: userRowCount 최우선. user source면 inferredMax 차단.
+  const deckRowMax = userRowCount
+    || (rowMaxEven && rowMaxEven > 0 ? rowMaxEven : null)
+    || (isUserOwnedBay ? null : inferredDeckMax)
     || (override ? override.rowCount : 10);
-  const holdRowMax = (rowMaxOdd && rowMaxOdd > 0 ? rowMaxOdd : null)
-    || inferredHoldMax
-    || userRowCount
+  const holdRowMax = userRowCount
+    || (rowMaxOdd && rowMaxOdd > 0 ? rowMaxOdd : null)
+    || (isUserOwnedBay ? null : inferredHoldMax)
     || (override ? override.rowCount : 9);
   let hasZero;
   if (typeof userBay?.hasZero === 'boolean') {
@@ -437,13 +439,10 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     || override?.holdTiers
     || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
 
-  // M6.93.12 fix #10 (사용자 보고: "특정 hold 4단 컨테이너 누락"):
-  //   원인: shipMatrixBuilder.analyzeMatrix가 EDI tier 분포로 holdTiers 자동 분류
-  //     → EDI에 tier 08 없던 베이는 holdTiers=[6,4,2] 3단 저장
-  //     → 그 베이에 새로 tier 08 컨테이너 들어오면 표시 X (invisible)
-  //   해결: 사용자 입력 holdTiers + EDI 실제 tier 자동 union.
-  //     사용자 입력 우선 (CASPI 빈 구조) + EDI 누락 방지 (컨테이너 절대 안 사라짐).
-  //     사용자가 명시한 tier는 그대로, EDI에 새로 등장한 tier만 추가.
+  // M6.93.12 fix #10 → M6.94.0 수정:
+  //   사용자 데이터 보호 원칙: userBay (사용자가 입력한 베이)는 EDI union 절대 안 함.
+  //   사용자가 빈 배열 [] 입력했어도 그대로 (의도 존중).
+  //   AI 임시 베이사전 (user source 아님)일 때만 EDI 새 tier union (컨테이너 누락 방지).
   const ediHoldSet = new Set();
   const ediDeckSet = new Set();
   const bayNumsForTier = isPair
@@ -456,11 +455,12 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       else ediHoldSet.add(t);
     }
   }
-  if (deckTiers && Array.isArray(deckTiers)) {
+  // user source는 union 차단, AI 임시일 때만 union
+  if (!isUserOwnedBay && deckTiers && Array.isArray(deckTiers)) {
     const merged = new Set([...deckTiers.map(Number), ...ediDeckSet]);
     deckTiers = [...merged].sort((a, b) => b - a);
   }
-  if (holdTiers && Array.isArray(holdTiers)) {
+  if (!isUserOwnedBay && holdTiers && Array.isArray(holdTiers)) {
     const merged = new Set([...holdTiers.map(Number), ...ediHoldSet]);
     holdTiers = [...merged].sort((a, b) => b - a);
   }
@@ -537,12 +537,26 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     }
   });
 
-  // M6.93.12 fix #11 (사용자 통찰: "데크/홀드 좌우 대칭"):
+  // M6.93.12 fix #11 → M6.94.0 확장 (사용자 시각 정렬):
   //   M6.81 표준 방식 — hold cells를 nDeckCols 폭으로 그림 (deck와 같은 폭).
-  //   offset = floor((nDeckCols - nHoldCols) / 2)로 hold cells를 가운데 정렬.
-  //   양옆 빈 invisible cell. 좌우 대칭 보장.
-  //   이전: hold cells가 nHoldCols 폭으로만 그려져 hold가 deck보다 좁아 한쪽 쏠림 발생.
-  const offsetHold = Math.floor((nDeckCols - nHoldCols) / 2);
+  //   offset 계산 우선순위:
+  //     1) 사용자 holdPadLeft > 0이면 그것 (cells 단위 그대로)
+  //     2) holdAlign='left' → offset=0, 'right' → offset=nDeckCols-nHoldCols
+  //     3) 'center' (기본) → 자동 가운데 (M6.93.12 로직)
+  let offsetHold;
+  const _holdPadL = typeof userBay?.holdPadLeft === 'number' ? userBay.holdPadLeft : 0;
+  const _holdPadR = typeof userBay?.holdPadRight === 'number' ? userBay.holdPadRight : 0;
+  const _holdAlign = userBay?.holdAlign || 'center';
+  const _diff = nDeckCols - nHoldCols;
+  if (_holdPadL > 0 || _holdPadR > 0) {
+    offsetHold = _holdPadL;
+  } else if (_holdAlign === 'left') {
+    offsetHold = 0;
+  } else if (_holdAlign === 'right') {
+    offsetHold = Math.max(0, _diff);
+  } else {
+    offsetHold = Math.floor(_diff / 2);
+  }
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
@@ -582,6 +596,13 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     deckTiers, holdTiers, nDeck, nHold, hasZero,
     deckRowPos, holdRowPos, nDeckCols, nHoldCols,
     deckRows, holdRows,
+    // M6.94.0 사용자 시각 정렬/padding (BayBox에서 우선 적용)
+    deckAlign: userBay?.deckAlign || 'center',
+    deckPadLeft: typeof userBay?.deckPadLeft === 'number' ? userBay.deckPadLeft : 0,
+    deckPadRight: typeof userBay?.deckPadRight === 'number' ? userBay.deckPadRight : 0,
+    holdAlign: userBay?.holdAlign || 'center',
+    holdPadLeft: typeof userBay?.holdPadLeft === 'number' ? userBay.holdPadLeft : 0,
+    holdPadRight: typeof userBay?.holdPadRight === 'number' ? userBay.holdPadRight : 0,
   };
 }
 
@@ -599,4 +620,97 @@ export function defaultGetSelfMark(c, pod) {
   if (typeChar === 'U') return 'U';
   if (typeChar === 'T') return 'T';
   return 'o';
+}
+
+// ------------------------------------------------------------
+// M6.94.0: 매트릭스 빌더용 — 컨테이너 없는 빈 베이 박스 데이터 생성
+//   사용자가 베이사전 만들 때 1개 베이씩 시각 미리보기 (베이플랜).
+//   bayEntry: { rowCount, hasZero, deckTiers, holdTiers, deckCells, holdCells,
+//              deckAlign, deckPadLeft, deckPadRight, holdAlign, holdPadLeft, holdPadRight }
+//   bayKey: 단독 '11' 또는 페어 '(12)13'
+// ------------------------------------------------------------
+export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
+  if (!bayEntry) return null;
+  const {
+    rowCount = 9, hasZero = true,
+    deckTiers = [], holdTiers = [],
+    deckCells = [], holdCells = [],
+    deckAlign = 'center', deckPadLeft = 0, deckPadRight = 0,
+    holdAlign = 'center', holdPadLeft = 0, holdPadRight = 0,
+  } = bayEntry;
+
+  const nDeckCols = rowCount + (hasZero ? 1 : 0);
+  const nHoldCols = nDeckCols; // 단순화: hold도 같은 row 갯수 (다르면 cells에서 active 자리만 다름)
+  const deckRowPos = getRowPositions(nDeckCols, hasZero);
+  const holdRowPos = getRowPositions(nHoldCols, hasZero);
+  const nDeck = deckTiers.length;
+  const nHold = holdTiers.length;
+
+  // deck rows: STANDARD_DECK 순서대로, deckTiers에 있으면 active cells 표시, 없으면 invisible row
+  const deckRows = STANDARD_DECK.map((stdT) => {
+    if (deckTiers.map(Number).includes(stdT)) {
+      const idx = deckTiers.map(Number).indexOf(stdT);
+      const cc = idx < deckCells.length ? deckCells[idx] : 0;
+      const active = getActiveColsSymmetric(cc, nDeckCols);
+      const cells = [];
+      for (let c = 0; c < nDeckCols; c++) {
+        if (active.has(c)) {
+          cells.push({ active: true, rowLbl: deckRowPos[c], mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+        } else {
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+        }
+      }
+      return { tier: stdT, invisible: false, cells };
+    } else {
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
+      return { tier: stdT, invisible: true, cells };
+    }
+  });
+
+  // hold offset 계산 (사용자 padding/align 우선)
+  let offsetHold;
+  const _diff = nDeckCols - nHoldCols;
+  if (holdPadLeft > 0 || holdPadRight > 0) {
+    offsetHold = holdPadLeft;
+  } else if (holdAlign === 'left') {
+    offsetHold = 0;
+  } else if (holdAlign === 'right') {
+    offsetHold = Math.max(0, _diff);
+  } else {
+    offsetHold = Math.floor(_diff / 2);
+  }
+
+  const holdRows = STANDARD_HOLD.map((stdT) => {
+    if (holdTiers.map(Number).includes(stdT)) {
+      const idx = holdTiers.map(Number).indexOf(stdT);
+      const cc = idx < holdCells.length ? holdCells[idx] : 0;
+      const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
+      const activeInDeck = new Set([...activeInHold].map(a => a + offsetHold));
+      const cells = [];
+      for (let c = 0; c < nDeckCols; c++) {
+        if (activeInDeck.has(c)) {
+          const holdC = c - offsetHold;
+          const rowLbl = (holdC >= 0 && holdC < nHoldCols) ? holdRowPos[holdC] : null;
+          cells.push({ active: true, rowLbl, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+        } else {
+          cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+        }
+      }
+      return { tier: stdT, invisible: false, cells };
+    } else {
+      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
+      return { tier: stdT, invisible: true, cells };
+    }
+  });
+
+  return {
+    bayKey,
+    isPair,
+    deckTiers: deckTiers.map(Number), holdTiers: holdTiers.map(Number),
+    nDeck, nHold, hasZero,
+    deckRowPos, holdRowPos, nDeckCols, nHoldCols,
+    deckRows, holdRows,
+    deckAlign, deckPadLeft, deckPadRight,
+    holdAlign, holdPadLeft, holdPadRight,
+  };
 }
