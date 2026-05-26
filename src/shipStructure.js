@@ -41,6 +41,14 @@ function normalizeShipKey(s) {
 // M5.11: v2에 대해 lookupBayDictV2Enhanced 사용 — IMO/callsign/code/이름 4가지 매칭
 //   기존 fuzzy 매칭이 prefix 4글자 + garbage 콜사인 때문에 자주 실패하던 문제 해결
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
+  // M6.93.12 fix #2 (검수앱지침서 §6.3): userBayDict가 최우선 (절대 보호).
+  //   사용자가 매트릭스 빌더에서 직접 입력한 정답이 다른 어떤 사전보다 우선.
+  //   이전엔 v2-verified-newer > Firebase > user 순이어서 v2/Firebase가 사용자 데이터를 가리는 사고.
+  try {
+    const userResultFirst = lookupUserBayDict(imo, vesselNameOrCode);
+    if (userResultFirst) return { source: 'user', data: userResultFirst, matchedBy: 'user-dict-priority' };
+  } catch (e) { /* fallthrough */ }
+
   // M6.62: v2 verified 최신본이 Firebase 옛 정정본보다 우선
   //   같은 선박이 Firebase + v2 양쪽에 있을 때
   //   - v2의 parsedAt이 Firebase보다 최신 + verified=true → v2 사용
@@ -299,14 +307,23 @@ export function getShipBayDictData(imo, code) {
   //         v3 우선이라 v2의 정확한 정보가 가려짐.
   //   해결: v3/user 데이터 사용 시 v2와 union — baysSummary의 deck/holdTiers 합쳐서 더 완전한 데이터
   //   M6.62: v3 baysSummary가 빈/없으면 v2를 강제 우선 (PCBJ 케이스 — Firebase에 빈 entry 있을 때)
+  // M6.25: v3(Firebase) 데이터에 v2 정밀 데이터 union 보완
+  //   증상: 사용자가 STOWAGE PDF로 등록한 v3 데이터에서 Gemini가 일부 tier 누락 (예: BAY 25 80 tier).
+  //         v2 임베드엔 수동 정밀 등록 데이터 있음.
+  //         v3 우선이라 v2의 정확한 정보가 가려짐.
+  //   해결: v3 데이터 사용 시 v2와 union — baysSummary의 deck/holdTiers 합쳐서 더 완전한 데이터
+  //   M6.62: v3 baysSummary가 빈/없으면 v2를 강제 우선 (PCBJ 케이스 — Firebase에 빈 entry 있을 때)
+  //   M6.93.12 fix #3 (검수앱지침서 §6.2): user source는 v2 union 절대 금지.
+  //         사용자가 매트릭스 빌더에서 직접 입력한 정답을 v2 사전이 덮어쓰는 것 방지.
+  //         사용자가 명시적으로 제거한 tier도 v2 union으로 복원되는 사고 차단.
   let finalBayDef = { ...bayDef, bayList: bayList || [] };
-  if (result.source === 'firebase' || result.source === 'user') {
+  if (result.source === 'firebase') {
     try {
       const v2Backup = lookupBayDictV2Enhanced(imo, code);
       const v2HasData = v2Backup?.entry?.bayDef?.baysSummary && v2Backup.entry.bayDef.baysSummary.length > 0;
       const v3HasData = finalBayDef.baysSummary && finalBayDef.baysSummary.length > 0;
       if (v2HasData && !v3HasData) {
-        // M6.62: Firebase/User entry가 baysSummary 빈 — v2 정밀 데이터로 완전 교체
+        // M6.62: Firebase entry가 baysSummary 빈 — v2 정밀 데이터로 완전 교체
         finalBayDef = { ...v2Backup.entry.bayDef, bayList: v2Backup.entry.bayDef.bayList || bayList || [] };
       } else if (v2HasData && v3HasData) {
         // 둘 다 있으면 union (기존 M6.25 동작)
@@ -314,12 +331,14 @@ export function getShipBayDictData(imo, code) {
       }
     } catch (e) { /* fallback: 기존 데이터 그대로 */ }
   }
+  // user source는 위 분기에 안 들어옴 — 사용자 데이터 그대로 사용 (절대 보호)
 
   // M6.57: 자동 보정 — 베이별 비어있는 필드를 다단계 fallback으로 채움
   //   verified는 절대 덮어쓰지 않음. _enrichedFrom 메타로 출처 표시.
   //   원본 entry 미수정 (deep clone 후 보강).
+  //   M6.93.12 fix #4: source='user'일 때 enrichBayDef가 EDI 자동 채움 차단.
   const matrixV5 = getMatrixV5(data.code);
-  const wrappedEntry = enrichBayDef({ bayDef: finalBayDef }, matrixV5);
+  const wrappedEntry = enrichBayDef({ bayDef: finalBayDef }, matrixV5, null, result.source);
   const enrichedBayDef = wrappedEntry.bayDef;
 
   return {

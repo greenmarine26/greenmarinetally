@@ -299,39 +299,17 @@ export default function PrintableCargoPlanV2({
     if (!shipImo && !shipName) return null;
     const baseDict = getShipBayDictData(shipImo, shipName);
     if (!baseDict) return null;
-    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, containers);
+    // M6.93.12 fix #4: source='user'면 enrichBayDef가 EDI 자동 채움 차단
+    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, containers, baseDict.source);
     return { ...baseDict, bayDef: enrichedEntry.bayDef };
   }, [shipImo, shipName, containers]);
 
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
     const v2Def = dictData?.bayDef || {};
-    // M6.93.11.LOCK4: EDI 컨테이너 실측 tier도 union에 포함 — 가장 강한 안전망.
-    //   dict가 어떤 상태든 EDI에 hold 08 컨테이너가 있으면 자동으로 08 보강.
-    //   "베이별 summary.holdTiers" + "bayDef.holdTiers" + "EDI 실측" 모두 합집합.
+    const deckTiersAll = v2Def.deckTiers || [];
+    const holdTiersAll = v2Def.holdTiers || [];
     const baysSummary = v2Def.baysSummary || [];
-    let deckTiersAll = Array.isArray(v2Def.deckTiers) ? v2Def.deckTiers.map(Number).filter(Number.isFinite) : [];
-    let holdTiersAll = Array.isArray(v2Def.holdTiers) ? v2Def.holdTiers.map(Number).filter(Number.isFinite) : [];
-    // baysSummary union
-    const summaryDeckSet = new Set();
-    const summaryHoldSet = new Set();
-    baysSummary.forEach(b => {
-      (b.deckTiers || b.deckTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) summaryDeckSet.add(n); });
-      (b.holdTiers || b.holdTiersLocal || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) summaryHoldSet.add(n); });
-    });
-    // EDI 실측 tier (가장 신뢰성 높음 — 실제 컨테이너 있는 위치)
-    const ediDeckSet = new Set();
-    const ediHoldSet = new Set();
-    (containers || []).forEach(c => {
-      const t = Number(c.tier);
-      if (!Number.isFinite(t) || t <= 0) return;
-      if (t >= 80) ediDeckSet.add(t); else ediHoldSet.add(t);
-    });
-    // 3-way 합집합 (bayDef + baysSummary union + EDI 실측)
-    const deckMerge = new Set([...deckTiersAll, ...summaryDeckSet, ...ediDeckSet]);
-    const holdMerge = new Set([...holdTiersAll, ...summaryHoldSet, ...ediHoldSet]);
-    deckTiersAll = [...deckMerge].sort((a, b) => b - a);
-    holdTiersAll = [...holdMerge].sort((a, b) => b - a);
     const summaryByBay = new Map();
     for (const s of baysSummary) {
       const n = Number(s.bayNo);
@@ -371,45 +349,28 @@ export default function PrintableCargoPlanV2({
       const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : (b.hasDeck !== false || hasDeckFromEdi);
       const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : (b.hasHold || hasHoldFromEdi);
       const cells = b.cells ? [...b.cells].reverse() : []; // M6.90.2: cells는 아래→위 저장 → reverse로 위→아래 변환
-      // M6.93.11.LOCK4: 베이별 tier 결정 — user summary + 베이별 EDI tier 합집합
-      //   user 데이터에 [6,4,2]만 있어도 EDI에 hold 08 컨테이너가 있으면 자동으로 08 추가
-      const userDeckTiers = (summary?.deckTiers && summary.deckTiers.length > 0) ? summary.deckTiers.map(Number)
-                          : (summary?.deckTiersLocal && summary.deckTiersLocal.length > 0) ? summary.deckTiersLocal.map(Number)
-                          : null;
-      const userHoldTiers = (summary?.holdTiers && summary.holdTiers.length > 0) ? summary.holdTiers.map(Number)
-                          : (summary?.holdTiersLocal && summary.holdTiersLocal.length > 0) ? summary.holdTiersLocal.map(Number)
-                          : null;
-      // 베이별 EDI 실측 tier (이 베이에 있는 컨테이너의 tier만)
-      const bayEdiDeck = ediTiers.filter(t => t >= 80);
-      const bayEdiHold = ediTiers.filter(t => t < 80);
-      // 최종 tier = user + 베이별 EDI 합집합 (없으면 deckTiersAll로 fallback)
-      let deckTiers;
-      let holdTiers;
-      if (hasDeck) {
-        const merge = new Set([...(userDeckTiers || []), ...bayEdiDeck]);
-        deckTiers = merge.size > 0 ? [...merge].sort((a, b) => b - a) : deckTiersAll;
-      } else {
-        deckTiers = [];
-      }
-      if (hasHold) {
-        const merge = new Set([...(userHoldTiers || []), ...bayEdiHold]);
-        holdTiers = merge.size > 0 ? [...merge].sort((a, b) => b - a) : holdTiersAll;
-      } else {
-        holdTiers = [];
-      }
+      // M6.93.12 fix #5 (검수앱지침서 §6.2 fix #4): 베이별 summary.deckTiers/holdTiers 우선
+      //   사용자가 베이별로 4단/3단 다르게 입력한 정답 보존.
+      //   선박 전체 통일값(deckTiersAll/holdTiersAll)은 fallback으로만.
+      const summaryDeck = (summary?.deckTiers && summary.deckTiers.length > 0)
+        ? summary.deckTiers
+        : (summary?.deckTiersLocal && summary.deckTiersLocal.length > 0 ? summary.deckTiersLocal : null);
+      const summaryHold = (summary?.holdTiers && summary.holdTiers.length > 0)
+        ? summary.holdTiers
+        : (summary?.holdTiersLocal && summary.holdTiersLocal.length > 0 ? summary.holdTiersLocal : null);
+      const deckTiers = hasDeck ? (summaryDeck ? summaryDeck.map(Number) : deckTiersAll) : [];
+      const holdTiers = hasHold ? (summaryHold ? summaryHold.map(Number) : holdTiersAll) : [];
       const nDeck = deckTiers.length;
       const nHold = holdTiers.length;
-      // 베이별 summary.deckCells/holdCells 우선 (v5 cells fallback)
-      const userDeckCells = (summary?.deckCells && summary.deckCells.length > 0) ? summary.deckCells : null;
-      const userHoldCells = (summary?.holdCells && summary.holdCells.length > 0) ? summary.holdCells : null;
-      const deckCells = nDeck > 0
-        ? (userDeckCells ? userDeckCells.slice(0, nDeck)
-           : (cells.length > 0 ? cells.slice(0, nDeck) : []))
-        : [];
-      const holdCells = nHold > 0
-        ? (userHoldCells ? userHoldCells.slice(0, nHold)
-           : (cells.length > 0 ? cells.slice(nDeck, nDeck + nHold) : []))
-        : [];
+      // M6.93.12 fix #5b: deck/hold cells도 summary 우선
+      const summaryDeckCells = (summary?.deckCells && summary.deckCells.length > 0) ? summary.deckCells : null;
+      const summaryHoldCells = (summary?.holdCells && summary.holdCells.length > 0) ? summary.holdCells : null;
+      const deckCells = summaryDeckCells
+        ? summaryDeckCells.slice(0, nDeck).map(Number)
+        : (nDeck > 0 ? cells.slice(0, nDeck) : []);
+      const holdCells = summaryHoldCells
+        ? summaryHoldCells.slice(0, nHold).map(Number)
+        : (nHold > 0 ? cells.slice(nDeck, nDeck + nHold) : []);
       return {
         ...b,
         hasDeck,
@@ -436,13 +397,7 @@ export default function PrintableCargoPlanV2({
   }, [containers, explicitPod]);
 
   // M6.81 알고리즘 적용
-  // M6.93.11.LOCK1: dictData.bayDef._lockedDecisions가 있으면 그대로 사용 (사용자 잠금 보호)
-  const lockedDecisions = useMemo(() => {
-    const ld = dictData?.bayDef?._lockedDecisions;
-    if (ld && Array.isArray(ld.trios) && Array.isArray(ld.singles)) return ld;
-    return null;
-  }, [dictData]);
-  const { trios, singles } = useMemo(() => autoPairBays(matrixBays, lockedDecisions), [matrixBays, lockedDecisions]);
+  const { trios, singles } = useMemo(() => autoPairBays(matrixBays), [matrixBays]);
   const pdfBays = useMemo(() => generatePdfBays(matrixBays, trios, singles), [matrixBays, trios, singles]);
   const layout = useMemo(() => autoPageLayout(trios, singles, 5), [trios, singles]);
   const posMap = useMemo(() => buildPosMap(containers), [containers]);
@@ -591,37 +546,7 @@ export default function PrintableCargoPlanV2({
     <div className="cpv2-overlay">
       <style>{CSS}</style>
       {closeBtn}
-      {/* M6.93.11.LOCK8: 진단 패널 — 실제 user dict 데이터 + computeBayRenderData 결과 비교 */}
-      <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, left: 8, right: 120, zIndex: 10,
-            background: '#fef3c7', border: '2px solid #d97706', padding: '6px 10px', fontSize: 11,
-            fontFamily: 'monospace', maxHeight: '40vh', overflow: 'auto', borderRadius: 4 }}>
-        <div style={{ fontWeight: 'bold', color: '#7c2d12', marginBottom: 4 }}>
-          🔍 진단 (LOCK8) — 카고플랜 그릴 때 실제 사용되는 데이터:
-        </div>
-        <div style={{ marginBottom: 4 }}>
-          <b>dictData.bayDef:</b> deckTiers={JSON.stringify(dictData?.bayDef?.deckTiers || 'null')},
-          holdTiers={JSON.stringify(dictData?.bayDef?.holdTiers || 'null')}
-        </div>
-        <div style={{ marginBottom: 4 }}>
-          <b>baysSummary 처음 3개 베이의 tier 데이터:</b>
-        </div>
-        {(dictData?.bayDef?.baysSummary || []).slice(0, 3).map((b, i) => (
-          <div key={i} style={{ marginLeft: 12 }}>
-            BAY {b.bayNo || b.bay}: deckTiers={JSON.stringify(b.deckTiers)}, holdTiers={JSON.stringify(b.holdTiers)},
-            deckTiersLocal={JSON.stringify(b.deckTiersLocal)}, holdTiersLocal={JSON.stringify(b.holdTiersLocal)}
-          </div>
-        ))}
-        <div style={{ marginTop: 4 }}>
-          <b>renderDataMap 처음 3개 (실제 그리는 데이터):</b>
-        </div>
-        {Object.entries(renderDataMap).slice(0, 3).map(([key, d]) => (
-          <div key={key} style={{ marginLeft: 12 }}>
-            {key}: deckTiers={JSON.stringify(d?.deckTiers)}, holdTiers={JSON.stringify(d?.holdTiers)},
-            nDeck={d?.nDeck}, nHold={d?.nHold}
-          </div>
-        ))}
-      </div>
-      <div className="cpv2-page" style={{ marginTop: '42vh' }}>
+      <div className="cpv2-page">
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>

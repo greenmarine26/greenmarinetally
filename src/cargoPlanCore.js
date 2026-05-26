@@ -12,28 +12,18 @@
 // M6.93.0: STANDARD_HOLD에 tier 10 추가 (마스터플랜 비교 결과 hold 가장 위 tier 10 누락 버그 fix).
 // ============================================================
 
-export const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82];
+// M6.93.12 fix #6 (지침서 TEST 2 PASS): STANDARD_DECK에 80 추가.
+//   사용자가 tier 80을 추가한 케이스 (예: 부두기준점 80 추가)에서 80도 active 가능.
+//   deckTiers에 80 없으면 invisible row → 다른 선박 영향 없음.
+export const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82, 80];
 export const STANDARD_HOLD = [10, 8, 6, 4, 2];
 
 // ------------------------------------------------------------
 // 1. 베이 자동 페어링 (auto_pair_bays)
 // ------------------------------------------------------------
 // matrixBays: [{ bayNum, cells, rows, hasHold, ... }, ...]
-// lockedDecisions (선택): { trios: [...], singles: [...] }
-//   사용자가 ShipMatrixBuilderModal에서 잠금 저장한 경우 이걸 그대로 반환.
-//   autoPairBays 추정 알고리즘 우회 = 사용자 결정 100% 보호.
 // 반환: { trios: [[topKey, pairKey], ...], singles: [oddKey, ...], orphanEvens: [evenNum, ...] }
-export function autoPairBays(matrixBays, lockedDecisions = null) {
-  // M6.93.11.LOCK1: 잠금 우선 — 사용자가 명시적으로 결정한 페어/단독은 절대 변형 안 됨
-  if (lockedDecisions && Array.isArray(lockedDecisions.trios) && Array.isArray(lockedDecisions.singles)) {
-    return {
-      trios: lockedDecisions.trios,
-      singles: lockedDecisions.singles,
-      orphanEvens: [],
-      _locked: true,
-    };
-  }
-
+export function autoPairBays(matrixBays) {
   const byNum = new Map();
   matrixBays.forEach(b => byNum.set(b.bayNum, b));
   const evens = matrixBays.map(b => b.bayNum).filter(n => n % 2 === 0).sort((a, b) => a - b);
@@ -59,15 +49,6 @@ export function autoPairBays(matrixBays, lockedDecisions = null) {
 
   return { trios, singles, orphanEvens };
 }
-
-// M6.93.11.LOCK1: 매트릭스 → 잠금 결정 변환 헬퍼
-//   ShipMatrixBuilderModal의 "잠금 저장" 시 호출.
-//   현재 매트릭스의 페어/단독 상태를 명시적 trios/singles로 변환하여 저장.
-//   이후 autoPairBays(matrixBays, lockedDecisions) 호출 시 그대로 반환됨.
-export function matrixToLockedDecisions(matrixBays) {
-  return autoPairBays(matrixBays);  // 잠금 없이 한 번 추정 → 그 결과를 잠금으로 저장
-}
-
 
 // ------------------------------------------------------------
 // 2. 표준 PDF_BAYS 자동 생성 (generate_pdf_bays)
@@ -108,31 +89,19 @@ export function generatePdfBays(matrixBays, trios, singles) {
     }
 
     const hasHold = bay.hasHold !== undefined ? bay.hasHold : true;
-    // M6.93.11.LOCK7: bay.deckTiers/holdTiers가 있으면 그것 그대로 사용 — hardcoded slice 폐기.
-    //   기존 버그: nHold = min(4, nTotal-4) 같이 cells 갯수만 보고 자동 계산 → 사용자 데이터 무시
-    //   해결: PrintableCargoPlanV2 matrixBays 변환에서 채운 bay.holdTiers([8,6,4,2])를 그대로 사용
-    const userDeckTiers = Array.isArray(bay.deckTiers) ? bay.deckTiers.map(Number).filter(Number.isFinite) : [];
-    const userHoldTiers = Array.isArray(bay.holdTiers) ? bay.holdTiers.map(Number).filter(Number.isFinite) : [];
     let nHold, nDeck;
-    let deck_t, hold_t;
-    if (userDeckTiers.length > 0 || userHoldTiers.length > 0) {
-      // 사용자 데이터 우선 — 그대로 사용
-      deck_t = userDeckTiers.length > 0 ? [...userDeckTiers].sort((a, b) => b - a) : [];
-      hold_t = (hasHold && userHoldTiers.length > 0) ? [...userHoldTiers].sort((a, b) => b - a) : [];
-      nDeck = deck_t.length;
-      nHold = hold_t.length;
-    } else if (hasHold) {
-      // fallback (기존 로직)
+    if (hasHold) {
       nHold = Math.min(4, Math.max(0, nTotal - 4));
       nDeck = nTotal - nHold;
-      deck_t = nDeck > 0 ? STANDARD_DECK.slice(-nDeck) : [];
-      hold_t = nHold > 0 ? STANDARD_HOLD.slice(0, nHold) : [];
     } else {
       nHold = 0;
       nDeck = nTotal;
-      deck_t = nDeck > 0 ? STANDARD_DECK.slice(-nDeck) : [];
-      hold_t = [];
     }
+
+    // deck_t: STANDARD_DECK에서 아래부터 nDeck개
+    const deck_t = nDeck > 0 ? STANDARD_DECK.slice(-nDeck) : [];
+    // hold_t: STANDARD_HOLD에서 위부터 nHold개
+    const hold_t = nHold > 0 ? STANDARD_HOLD.slice(0, nHold) : [];
 
     // has_zero: deck_max가 홀수면 00 row 있음 (좌우 대칭 + 가운데 00)
     const deckCells = cells.slice(0, nDeck);
@@ -407,14 +376,21 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   );
 
   // M6.91.0: PDF override가 있으면 그대로 사용 (베이마다 다른 row 구조 정확히)
+  // M6.93.12 fix #2 (지침서 §6.2): userBay > override 우선순위 역전.
+  //   사용자가 매트릭스 빌더에서 직접 입력한 정답이 개발자가 박은 PDF override보다 우선.
+  //   rowCount, hasZero, deckTiers, holdTiers, deckCells, holdCells 모두 사용자 우선.
   const override = getBayOverride(shipCode, oddNum);
   const rowMaxOdd = shipBayDef?.rowMaxOdd;
   const rowMaxEven = shipBayDef?.rowMaxEven;
-  // override.rowCount = row 라벨 총 개수 (getRowPositions cellCount 인자)
-  const deckRowMax = override ? override.rowCount : (rowMaxEven || rowMaxOdd || 10);
-  const holdRowMax = override ? override.rowCount : (rowMaxOdd || rowMaxEven || 9);
+  // M6.93.12: userBay.rowCount > override.rowCount > shipBayDef rowMax fallback
+  const userRowCount = (typeof userBay?.rowCount === 'number' && userBay.rowCount > 0) ? userBay.rowCount : null;
+  const deckRowMax = userRowCount || (override ? override.rowCount : (rowMaxEven || rowMaxOdd || 10));
+  const holdRowMax = userRowCount || (override ? override.rowCount : (rowMaxOdd || rowMaxEven || 9));
   let hasZero;
-  if (override) {
+  if (typeof userBay?.hasZero === 'boolean') {
+    // M6.93.12 fix #2: userBay.hasZero 우선
+    hasZero = userBay.hasZero;
+  } else if (override) {
     hasZero = override.hasZero;
   } else {
     // EDI 검증 fallback
@@ -431,44 +407,25 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     hasZero = ediRows.has(0);
   }
 
-  // M6.93.11.LOCK9: 모든 tier 소스 합집합 사용 (override + userBay + bayData + bayDef + EDI + pdf)
-  //   기존 우선순위 버그: userBay.holdTiers=[6,4,2]만 있으면 그대로 사용 → bayDef.holdTiers=[8,6,4,2] 무시 → 08 누락
-  //   해결: 모든 소스 합집합 → 어디서든 08이 있으면 표시
-  if (override?.deckTiers) {
-    // override는 명시적 PDF override니까 그대로 사용 (사용자가 정확하게 입력)
-    var deckTiers = override.deckTiers;
-  } else {
-    const deckSet = new Set();
-    if (userBay?.deckTiers) userBay.deckTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
-    if (userBay?.deckTiersLocal) userBay.deckTiersLocal.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
-    if (bayData?.deckTiers) bayData.deckTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
-    if (shipBayDef?.deckTiers) shipBayDef.deckTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
-    if (pdf.deck_t) pdf.deck_t.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
-    var deckTiers = [...deckSet].sort((a, b) => b - a);
-    if (deckTiers.length === 0) deckTiers = pdf.deck_t || [];
-  }
-  if (override?.holdTiers) {
-    var holdTiers = override.holdTiers;
-  } else {
-    const holdSet = new Set();
-    if (userBay?.holdTiers) userBay.holdTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
-    if (userBay?.holdTiersLocal) userBay.holdTiersLocal.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
-    if (bayData?.holdTiers) bayData.holdTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
-    if (shipBayDef?.holdTiers) shipBayDef.holdTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
-    if (pdf.hold_t) pdf.hold_t.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
-    var holdTiers = [...holdSet].sort((a, b) => b - a);
-    if (holdTiers.length === 0) holdTiers = pdf.hold_t || [];
-  }
+  // M6.93.12 fix #2: userBay tiers > override tiers > bayData > pdf
+  const deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
+    || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
+    || override?.deckTiers
+    || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
+  const holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
+    || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
+    || override?.holdTiers
+    || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
 
-  // M6.93.10: cells 우선순위 — override > userBay > v5 cells > v5 deckCells > fallback
+  // M6.93.12 fix #2: cells 우선순위 — userBay > override > v5 cells > v5 deckCells > fallback
   let deckCells, holdCells;
-  if (override?.deckCells && override.deckCells.length > 0) {
-    deckCells = override.deckCells;
-  } else if (userBay?.deckCells && userBay.deckCells.length > 0) {
+  if (userBay?.deckCells && userBay.deckCells.length > 0) {
     deckCells = userBay.deckCells.slice(0, nDeck);
+  } else if (override?.deckCells && override.deckCells.length > 0) {
+    deckCells = override.deckCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
   } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
@@ -476,10 +433,10 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   } else {
     deckCells = new Array(nDeck).fill(deckRowMax);
   }
-  if (override?.holdCells && override.holdCells.length > 0) {
-    holdCells = override.holdCells;
-  } else if (userBay?.holdCells && userBay.holdCells.length > 0) {
+  if (userBay?.holdCells && userBay.holdCells.length > 0) {
     holdCells = userBay.holdCells.slice(0, nHold);
+  } else if (override?.holdCells && override.holdCells.length > 0) {
+    holdCells = override.holdCells;
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else if (bayData?.holdCells && bayData.holdCells.length > 0) {

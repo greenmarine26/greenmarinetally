@@ -452,52 +452,6 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
   };
 }
 
-// M6.93.11.LOCK1: matrix → matrixBays 변환 (autoPairBays 입력용)
-//   ShipMatrixBuilderModal에서 시뮬/잠금 시 호출.
-//   PrintableCargoPlanV2의 raw = _v5Matrix.matrixBays와 동일 형식.
-export function matrixToMatrixBays(matrix) {
-  if (!matrix?.byBay) return [];
-  return Object.keys(matrix.byBay).sort().map(bay => {
-    const e = matrix.byBay[bay];
-    return {
-      bayNum: parseInt(bay, 10),
-      cells: [...(e.deckCells || []), ...(e.holdCells || [])],
-      rows: e.rowCount || 0,
-      hasHold: !!(e.holdTiers && e.holdTiers.length > 0),
-      hasDeck: !!(e.deckTiers && e.deckTiers.length > 0),
-      pairEven: e.pairEven || null,
-    };
-  });
-}
-
-// M6.93.11.LOCK1: EDI 컨테이너 vs 매트릭스 베이 모순 검증
-//   ediContainers의 bay 값이 matrix.byBay에 모두 존재하는지 확인.
-//   반환: { ok: boolean, missingBays: [bayNum, ...], extraBays: [bayNum, ...] }
-//     missingBays: EDI에 컨테이너 있는데 매트릭스에 없는 베이 (반드시 추가 필요)
-//     extraBays: 매트릭스에 있는데 EDI 컨테이너 없는 베이 (정상일 수 있음 — 빈 베이)
-export function validateMatrixAgainstEdi(matrix, ediContainers) {
-  const matrixBays = new Set(
-    Object.keys(matrix?.byBay || {})
-      .map(b => parseInt(b, 10))
-      .filter(Number.isFinite)
-  );
-  const ediBays = new Set();
-  (ediContainers || []).forEach(c => {
-    const b = parseInt(c.bay, 10);
-    if (Number.isFinite(b) && b > 0) ediBays.add(b);
-  });
-  const missingBays = [...ediBays].filter(b => !matrixBays.has(b)).sort((a, b) => a - b);
-  const extraBays = [...matrixBays].filter(b => !ediBays.has(b)).sort((a, b) => a - b);
-  return {
-    ok: missingBays.length === 0,
-    missingBays,
-    extraBays,
-    ediBayCount: ediBays.size,
-    matrixBayCount: matrixBays.size,
-  };
-}
-
-
 /**
  * 저장된 userBayDict entry → 매트릭스 역변환 (모달 재오픈 시 복원용)
  * @param {Object} entry - lookupUserBayDict 결과

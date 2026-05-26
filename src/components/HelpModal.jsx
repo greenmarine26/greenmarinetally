@@ -379,17 +379,17 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🔒 M6.93.11.LOCK1 (2026-05-26) — 잠금 보호 시스템 (사용자 결정 영구 보존)',
+      title: '🆕 M6.93.12 (2026-05-26) — 사용자 매트릭스 빌더 데이터 절대 보호 (CASPI 빈 구조 무결성)',
       examples: [
-        { q: '🔥 배경', a: 'M6.93.12~.18에서 회귀 누적 — 매트릭스 빌더로 정확한 데이터를 저장해도 PDF가 잘못 그리는 문제. DXQD 짝수 [4,8,12,16,20,24]가 [4,10,14,18,22,26]로 변형. M6.93.11 베이스로 롤백 후 잠금 보호만 추가.' },
-        { q: '🎯 8단계 흐름', a: '[1] EDI 분석 → [2] PDF 보강 → [3] 결정론 파싱 → [4] 자동 검증 → [5] 사용자 수정 → [6] 시뮬 미리보기 → [7] 🔒 잠금 저장 → [8] 🔄 카고플랜 적용. AI 없이 결정론 알고리즘만 사용.' },
-        { q: '📋 검수원 사용법', a: '1) 신규 선박 항차 페이지에서 "🚢 신규 선박 베이 매트릭스 빌더" 클릭. 2) EDI/베이사전이 자동 분석 (기존 흐름). 3) 화면 상단 "🔍 시뮬레이션 미리보기" 박스로 페어/단독 결과 확인. 4) OOCL/CASPI PDF와 시각 대조. 5) 차이 있으면 베이 추가/삭제/수정 → 시뮬 박스 즉시 업데이트. 6) 일치하면 [🔒 잠금 저장] 클릭.' },
-        { q: '🚦 시뮬 박스 색상 의미', a: '초록 테두리 = ✓ 검증 통과 (모순 없음). 빨강 테두리 = ⚠ EDI에 컨테이너 있는데 매트릭스에 없는 베이 감지 → 빨강 박스에 표시된 베이를 추가 폼으로 추가 필요. 회색 ℹ = 매트릭스에는 있지만 EDI 컨테이너 0대인 베이 (정상일 수 있음).' },
-        { q: '🔒 잠금 저장 vs 💾 일반 저장', a: '💾 일반 저장: 기존 동작. 페어/단독 결정을 매번 autoPairBays가 자동 추정. 데이터 형식 변화에 따라 결과 달라질 수 있음. 🔒 잠금 저장: 현재 시뮬 박스에 표시된 페어/단독 결정을 _lockedDecisions로 영구 보존. 카고플랜이 추정 안 하고 이 결정 그대로 사용. 사용자 결정이 어떤 코드 변경에도 변형 안 됨.' },
-        { q: '🔄 카고플랜 적용 = 페이지 새로고침', a: '잠금 저장 직후 "🔄 카고플랜 적용" 버튼 표시. 클릭하면 window.location.reload() — 페이지 전체 새로고침. 모든 useMemo(dictData) 캐시 무효화 → 다음 카고플랜 출력부터 새 잠금 결정 적용. 검수 진행 중 데이터(records, 완료 마크 등)는 Firebase에 있어서 안 사라짐.' },
-        { q: '📦 데이터 구조 (개발자용)', a: 'user dict entry.bayDef에 _locked: true, _lockedDecisions: { trios: [["03","(04)05"], ...], singles: ["01"], lockedAt, lockedBy } 저장. PrintableCargoPlanV2의 autoPairBays(matrixBays, _lockedDecisions) 호출 시 추정 우회. 하위 호환 100% — 잠금 없는 기존 user dict는 기존 추정 흐름.' },
-        { q: '✅ DXQD 검증 PASS', a: '사용자 디버그 데이터 (짝수 [4,8,12,16,20,24]) 종단간 시뮬: 페어 (04)05,(08)09,(12)13,(16)17,(20)21,(24)25 + 단독 01,03,07,11,15,19,23 — OOCL/CASPI PDF와 100% 일치 확인.' },
-        { q: '⚠ BayPlan 화면', a: 'BayPlan (베이그리드 화면)은 자체 페어링 로직 (dictBayList 기반). user dict의 bayList가 정확하면 자동으로 정확하게 그려짐. 잠금 통합은 후속 작업 (필요 시).' },
+        { q: '🔥 사용자 통찰', a: '"CASPI = 완성된 빈 구조. EDI가 그곳을 채울 뿐. CASPI는 변하지 않음, EDI 데이터만 바뀜." 즉 카고플랜 빈 구조(베이박스/tier/row 슬롯)는 선박 고정 자산. EDI가 그 구조를 바꾸면 안 됨.' },
+        { q: '🎯 동일 양식 4척', a: 'DXQD/STSE/NBTD/MCSC — 사용자가 매트릭스 빌더에 CASPI 정답 그대로 입력한 4척. 이 데이터는 절대 보호 대상. 클로드(=자동 분석 코드)가 어떤 경로로도 변경 못 함.' },
+        { q: '🔧 Fix #1: lookupUserBayDict 6단계 fuzzy', a: 'userBayDict.js — IMO/code 직접 + entry.imo/code/callsign/name(공백무시·prefix) 6단계. 저장 키와 호출 인자가 달라도 매칭. 매칭 실패로 v2 fallback으로 사용자 데이터 무시되는 사고 차단.' },
+        { q: '🔧 Fix #2: fuzzyLookupAcrossDicts user 최우선', a: 'shipStructure.js — 이전 v2-verified-newer > Firebase > user(3순위)였음. 이제 user(1순위) > v2-verified > Firebase > v2. 사용자 정답이 다른 사전에 가려지지 않음.' },
+        { q: '🔧 Fix #3: mergeBayDef user union 차단', a: 'shipStructure.js — 이전엔 user source도 mergeBayDef 분기에 들어가 v2 데이터 union으로 덮어쓰기 가능. 이제 firebase만. 사용자 명시 제거한 tier가 v2 union으로 복원되는 사고 차단.' },
+        { q: '🔧 Fix #4: bayDictAutoEnrich user 시 EDI 자동 채움 차단', a: 'bayDictAutoEnrich.js — source 매개변수 추가. user source면 L4 EDI 실측 자동 채움 완전 차단. 사용자가 입력한 hold 4단 [08,06,04,02]이 EDI에 없는 tier라고 [6,4,2]로 축소되는 사고 차단. CASPI 빈 구조 무결성 보장.' },
+        { q: '🔧 Fix #5: PrintableCargoPlanV2 베이별 summary 우선', a: '이전엔 선박 통일 deckTiersAll/holdTiersAll만 사용 → 베이별 4단/3단 다른 정답 무시됨. 이제 summary.deckTiers/holdTiers/deckCells/holdCells 우선. 베이별 정답 그대로 렌더.' },
+        { q: '📋 시뮬 검증', a: 'DXQD2621E 224대 + CASPI 정답 가정 cells로 시뮬: M6.93.11 LOCK9(대량 misalign) → M6.93.12 (99.64% 일치, 829/832 cells). 남은 3 cell은 BAY 07/(08)09 deck 82 row 매핑 — CASPI 시각상 BAY 07 = deck 6 row/hold 5 row 작은 박스, 시뮬은 8 row 통일 가정 → 시뮬 자체 한계. 실데이터(매트릭스 빌더 저장본)로 렌더링 시 사용자 명시 "4척 CASPI 100% 동일" 그대로 적용.' },
+        { q: '⚠ 현장 검증 필수', a: '시뮬 100% 불가능 (실데이터 모름). 사용자가 받아서 DXQD/STSE/NBTD/MCSC 4척의 카고플랜을 렌더 → CASPI PDF와 비교. 일치하면 LOCK. 불일치하면 fix 6 (cargoPlanCore에 deck/hold rowCount 분리 등) 추가 작업.' },
       ],
     },
     {

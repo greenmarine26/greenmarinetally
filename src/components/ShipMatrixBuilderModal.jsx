@@ -1,13 +1,10 @@
-// src/components/ShipMatrixBuilderModal.jsx — M6.93.11.LOCK1
-// 신규 선박 베이 매트릭스 빌더 (8단계 흐름 통합)
-//   [1] EDI 분석 (buildMatrixFromEdi) — 마운트 시 자동
-//   [2] 부족 판단 → PDF 업로드 요구 (사용자 결정)
-//   [3] PDF 결정론 파싱 (parsePdfStowage + augmentMatrixFromPdf)
-//   [4] 자동 검증 (validateMatrixAgainstEdi: EDI 컨테이너 ↔ 매트릭스 베이 모순)
-//   [5] 사용자 수정 (베이 추가/삭제, tier/cells 수정 폼)
-//   [6] 가상 시뮬레이션 (페어/단독 결정 + 통계 + 모순 표시)
-//   [7] [🔒 잠금 저장] (autoPairBays 결정을 _lockedDecisions로 user dict에 영구 보존)
-//   [8] [🔄 카고플랜 적용] (window.location.reload + 캐시 무효화)
+// src/components/ShipMatrixBuilderModal.jsx — M6.93.2
+// 신규 선박 베이 매트릭스 빌더
+//   - EDI에서 자동 추출된 선박 정보 (콜사인/IMO/선박명) 자동 채움
+//   - 베이 분석 상태 요약 카드
+//   - 자동 추론된 CASP 코드 (callsign 또는 선박명 약자)
+//   - PDF 보강 옵션
+//   - 사용자 검증/수정 후 userBayDict 저장
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
@@ -15,8 +12,6 @@ import {
   augmentMatrixFromBayDict,
   augmentMatrixFromPdf,
   matrixToBayDictEntry,
-  matrixToMatrixBays,
-  validateMatrixAgainstEdi,
   bayDictEntryToMatrix,
   extractShipMetaFromVoyage,
   summarizeMatrix,
@@ -24,7 +19,6 @@ import {
   detectMissingBays,
   fillEmptyBaysSequential,
 } from '../shipMatrixBuilder.js';
-import { autoPairBays } from '../cargoPlanCore.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
 import { addToUserBayDict, lookupUserBayDict } from '../data/userBayDict.js';
 
@@ -216,58 +210,6 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     }
   };
 
-  // M6.93.11.LOCK1: [7] 잠금 저장 — 페어/단독 결정을 _lockedDecisions로 영구 보존
-  //   PrintableCargoPlanV2의 autoPairBays가 이 결정을 그대로 사용 (추정 우회).
-  //   사용자 결정이 어떤 코드 변경에도 변형되지 않음.
-  const handleLockSave = () => {
-    if (!shipMeta.code) {
-      alert('CASP 코드를 입력하세요 (자동 추론된 값 사용 권장)');
-      return;
-    }
-    const entry = matrixToBayDictEntry(matrix, shipMeta.code, shipMeta.name, shipMeta.imo);
-    entry.callsign = shipMeta.callsign || '';
-    // 잠금 결정 계산 + 저장
-    const matrixBays = matrixToMatrixBays(matrix);
-    const decisions = autoPairBays(matrixBays);  // 잠금 없이 한 번 추정
-    entry.bayDef._lockedDecisions = {
-      trios: decisions.trios,
-      singles: decisions.singles,
-      lockedAt: new Date().toISOString(),
-      lockedBy: 'matrix-builder',
-    };
-    entry.bayDef._locked = true;
-    // M6.93.11.LOCK2: 베이별 baysSummary의 deckTiers/holdTiers union을 bayDef 레벨에 저장.
-    //   카고플랜의 deckTiersAll/holdTiersAll fallback이 이 값 사용 → tier 누락 영구 차단.
-    //   예: BAY 01 hold=[8,6,4,2] 4tier 있는데 bayDef.holdTiers가 [6,4,2]만이면 화면에 08 누락.
-    //       union 저장으로 [8,6,4,2] 모두 보존 → 모든 베이에서 08 tier 정상 표시.
-    const deckSet = new Set();
-    const holdSet = new Set();
-    (entry.bayDef.baysSummary || []).forEach(b => {
-      (b.deckTiers || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
-      (b.holdTiers || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
-    });
-    entry.bayDef.deckTiers = [...deckSet].sort((a, b) => b - a);   // 내림차순 (88,86,84,82)
-    entry.bayDef.holdTiers = [...holdSet].sort((a, b) => b - a);   // 내림차순 (8,6,4,2)
-    const ok = addToUserBayDict(entry);
-    if (ok) {
-      setSavingMsg(
-        `🔒 ${shipMeta.code} 잠금 저장 완료 — ${entry.bayDef.recordCount}개 베이, ` +
-        `페어 ${decisions.trios.length} / 단독 ${decisions.singles.length}. ` +
-        `데크 [${entry.bayDef.deckTiers.join(',')}] · 홀드 [${entry.bayDef.holdTiers.join(',')}]. ` +
-        `[🔄 카고플랜 적용] 누르면 즉시 반영됩니다.`
-      );
-      setDone(true);
-      if (onSaved) onSaved(entry);
-    } else {
-      alert('잠금 저장 실패 — localStorage 용량 확인 필요');
-    }
-  };
-
-  // M6.93.11.LOCK1: [8] 카고플랜 적용 — 페이지 새로고침으로 모든 dictData useMemo 무효화
-  const handleRefresh = () => {
-    window.location.reload();
-  };
-
   if (!matrix) {
     return (
       <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center">
@@ -287,10 +229,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         {/* 헤더 */}
         <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더 <span className="text-xs text-zinc-400 ml-2">M6.93.11.LOCK1</span></h2>
-            <div className="text-[10px] text-emerald-300/70 mt-0.5">
-              [1] EDI 분석 → [2] PDF 보강 → [3] AI 없는 결정론 파싱 → [4] 자동 검증 → [5] 사용자 수정 → [6] 시뮬 → [7] 🔒잠금 저장 → [8] 🔄적용
-            </div>
+            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더</h2>
             <div className="text-xs text-zinc-400 mt-1">
               현재 항차의 EDI에서 선박 정보 자동 추출 + 베이 구조 분석
             </div>
@@ -401,9 +340,6 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               {matrix.bayDictMeta?.name && <span className="ml-2 text-cyan-400">(사전: {matrix.bayDictMeta.name})</span>}
             </div>
           </div>
-
-          {/* M6.93.11.LOCK1: [4][6] 자동 검증 + 시뮬레이션 미리보기 */}
-          <SimulationBox matrix={matrix} containers={containers} />
 
           {/* === PDF 업로드 (옵션 보강) === */}
           <div className="bg-zinc-800 p-3 rounded mb-4 flex justify-between items-center">
@@ -597,116 +533,14 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
             <>
               <button onClick={onClose} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">취소</button>
               <button onClick={handleSave} disabled={!shipMeta.code || bayList.length === 0}
-                      className="px-3 py-2 bg-zinc-600 hover:bg-zinc-500 rounded text-xs disabled:opacity-50"
-                      title="기존 저장 — 페어/단독 결정은 매번 자동 추정">
-                💾 일반 저장
-              </button>
-              <button onClick={handleLockSave} disabled={!shipMeta.code || bayList.length === 0}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold disabled:opacity-50"
-                      title="잠금 저장 — 현재 페어/단독 결정을 영구 보존. 카고플랜이 추정 안 하고 이 결정 그대로 사용">
-                🔒 잠금 저장 ({shipMeta.code || '?'})
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold disabled:opacity-50">
+                💾 베이사전 저장 ({shipMeta.code || '?'})
               </button>
             </>
           ) : (
-            <>
-              <button onClick={handleRefresh} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded text-sm font-bold"
-                      title="페이지 새로고침 — 카고플랜/베이플랜에 즉시 반영">
-                🔄 카고플랜 적용 (새로고침)
-              </button>
-              <button onClick={onClose} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm">완료</button>
-            </>
+            <button onClick={onClose} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm">완료</button>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// M6.93.11.LOCK1: [4][6] 자동 검증 + 시뮬레이션 미리보기 박스
-//   - EDI 컨테이너 ↔ 매트릭스 베이 모순 자동 감지 (빨강 경고)
-//   - autoPairBays 결과 미리보기 (페어/단독 리스트)
-//   - 잠금 저장 시 이 결정이 그대로 카고플랜에 적용됨
-function SimulationBox({ matrix, containers }) {
-  const sim = useMemo(() => {
-    if (!matrix?.byBay) return null;
-    const matrixBays = matrixToMatrixBays(matrix);
-    const decisions = autoPairBays(matrixBays);
-    const validation = validateMatrixAgainstEdi(matrix, containers);
-    return { decisions, validation, matrixBaysCount: matrixBays.length };
-  }, [matrix, containers]);
-
-  if (!sim) return null;
-  const { decisions, validation } = sim;
-  const hasModuChecks = validation.missingBays.length > 0;
-
-  return (
-    <div className={`p-3 rounded mb-4 border-2 ${hasModuChecks ? 'border-red-700 bg-red-950/30' : 'border-emerald-700/40 bg-emerald-950/15'}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-bold flex items-center gap-2">
-          <span>🔍 시뮬레이션 미리보기</span>
-          {hasModuChecks ? (
-            <span className="text-red-300 text-[10px] px-2 py-0.5 bg-red-900/40 rounded">⚠ 모순 감지</span>
-          ) : (
-            <span className="text-emerald-300 text-[10px] px-2 py-0.5 bg-emerald-900/40 rounded">✓ 검증 통과</span>
-          )}
-        </div>
-        <div className="text-[10px] text-zinc-400">잠금 저장 시 이 결정이 카고플랜에 그대로 반영됨</div>
-      </div>
-
-      {/* [4] EDI 모순 자동 검증 */}
-      {hasModuChecks && (
-        <div className="bg-red-900/30 border border-red-700/50 rounded p-2 mb-2 text-xs">
-          <div className="font-bold text-red-200 mb-1">⚠ EDI에 컨테이너 있는데 매트릭스에 없는 베이:</div>
-          <div className="font-mono">
-            {validation.missingBays.map(b => (
-              <span key={b} className="inline-block px-2 py-0.5 m-0.5 bg-red-800/50 rounded">BAY {String(b).padStart(2,'0')}</span>
-            ))}
-          </div>
-          <div className="text-[10px] text-red-300/70 mt-1">→ 위 베이 추가 필요 (베이 추가 폼 사용)</div>
-        </div>
-      )}
-      {validation.extraBays.length > 0 && (
-        <div className="text-[10px] text-zinc-400 mb-2">
-          ℹ 매트릭스에는 있지만 EDI 컨테이너 0대인 베이: {validation.extraBays.map(b => String(b).padStart(2,'0')).join(', ')}
-          <span className="text-zinc-500"> (정상 — 빈 베이일 수 있음)</span>
-        </div>
-      )}
-
-      {/* [6] 시뮬: autoPairBays 결과 미리보기 */}
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <div className="font-bold text-blue-300 mb-1">📦 페어 {decisions.trios.length}개 (40ft 슬롯 표시)</div>
-          <div className="font-mono text-[11px] bg-zinc-900/60 rounded p-2 max-h-32 overflow-auto">
-            {decisions.trios.length === 0 ? (
-              <span className="text-zinc-500">없음</span>
-            ) : (
-              decisions.trios.map(([top, pair], i) => (
-                <div key={i}>BAY {pair} <span className="text-zinc-500">(40ft 짝수 = {pair.slice(1,3)}, 양옆 20ft = {top}, {pair.slice(4,6)})</span></div>
-              ))
-            )}
-          </div>
-        </div>
-        <div>
-          <div className="font-bold text-purple-300 mb-1">📦 단독 {decisions.singles.length}개 (20ft 단독 베이)</div>
-          <div className="font-mono text-[11px] bg-zinc-900/60 rounded p-2 max-h-32 overflow-auto">
-            {decisions.singles.length === 0 ? (
-              <span className="text-zinc-500">없음</span>
-            ) : (
-              <span>{decisions.singles.map(s => `BAY ${s}`).join('  ·  ')}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {decisions.orphanEvens && decisions.orphanEvens.length > 0 && (
-        <div className="mt-2 text-[11px] text-amber-300">
-          ⚠ 짝꿍 못 만든 짝수 베이: {decisions.orphanEvens.map(e => String(e).padStart(2,'0')).join(', ')}
-          <span className="text-zinc-400"> (양옆 홀수 중 1개 누락. 정상일 수도 있음 — BOW/STERN/선원건물 단독 짝수)</span>
-        </div>
-      )}
-
-      <div className="mt-2 text-[10px] text-zinc-400 border-t border-zinc-700 pt-2">
-        💡 위 결과가 OOCL/CASPI PDF와 일치하면 [🔒 잠금 저장] 누르세요. 일치 안 하면 베이를 추가/삭제/수정 후 다시 확인.
       </div>
     </div>
   );

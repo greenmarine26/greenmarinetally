@@ -33,8 +33,13 @@
  *                                있으면 베이별 deckTiersLocal/holdTiersLocal을 EDI 실측 분포로 채움
  * @returns {object}             보정된 entry (deep clone, 원본 미수정)
  */
-export function enrichBayDef(entry, v5Matrix, ediContainers = null) {
+export function enrichBayDef(entry, v5Matrix, ediContainers = null, source = null) {
   if (!entry || !entry.bayDef) return entry;
+
+  // M6.93.12 fix #4 (사용자 통찰: CASPI=고정 빈 구조, EDI가 베이사전 바꾸면 안 됨):
+  //   source='user'면 EDI 자동 채움(L4) 절대 금지. 사용자 입력 그대로 사용.
+  //   사용자가 입력한 hold 4단 [08,06,04,02]을 EDI에 없는 tier라고 [6,4,2]로 줄이는 사고 방지.
+  const isUserSource = source === 'user';
 
   // deep clone (원본 보호)
   const enriched = JSON.parse(JSON.stringify(entry));
@@ -204,7 +209,8 @@ export function enrichBayDef(entry, v5Matrix, ediContainers = null) {
   //   ediContainers가 주어졌으면 베이별 컨테이너 tier 분포로 자동 채움.
   //   80 기준 분리 (>=80 deck, <80 hold) — 카고플랜 표시 로직과 동일 규칙.
   //   짝수 베이는 양옆 홀수 베이의 40ft 컨테이너도 포함 (짝꿍 처리).
-  if (Array.isArray(ediContainers) && ediContainers.length > 0) {
+  //   M6.93.12 fix #4: source='user'면 EDI 자동 채움 차단. 사용자 입력은 절대 변경 안 함.
+  if (!isUserSource && Array.isArray(ediContainers) && ediContainers.length > 0) {
     // 베이별 컨테이너 인덱싱
     const contsByBay = new Map();
     ediContainers.forEach(c => {

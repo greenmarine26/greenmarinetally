@@ -21,6 +21,7 @@ import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
 // M4.6: 인쇄 컴포넌트
+import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
@@ -232,67 +233,15 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return m;
   }, [shipImo, shipName, containers]);
 
-  // M6.93.11.LOCK1: 잠금 결정 가져오기 (있으면 자체 페어링 우회)
-  const lockedDecisions = useMemo(() => {
-    if (!shipImo && !shipName) return null;
-    const dict = getShipBayDictData(shipImo, shipName);
-    const ld = dict?.bayDef?._lockedDecisions;
-    if (ld && Array.isArray(ld.trios) && Array.isArray(ld.singles)) return ld;
-    return null;
-  }, [shipImo, shipName]);
-
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
   // M4.5: .def 베이사전 우선 사용. 사용자 원칙 #8 + 통로 구분 추가
   //   - .def에 있는 베이만 페이지로 (빈 베이도 포함)
   //   - 트리오 [홀수, 짝수, 홀수]: 짝수 베이 = 40ft 페어 페이지
   //   - 단독 홀수 (페어 없음): 단독 페이지
   //   - .def에 없는 짝수 (예: TNJP의 04, 08, 12...) = 통로 → 페이지 생략
-  // M6.93.11.LOCK1: 잠금 결정 (_lockedDecisions) 있으면 자체 페어링 우회 — 사용자 결정 100% 보존
   const pages = useMemo(() => {
     const dispBay = (n) => n >= 100 ? String(n) : String(n).padStart(2, '0');
     const keyBay = (n) => String(n);
-
-    // M6.93.11.LOCK1: 잠금 결정 우선 — 매트릭스 빌더에서 사용자가 잠금 저장한 페어/단독 그대로 사용
-    if (lockedDecisions) {
-      const out = [];
-      // trios 처리: 각 trio = [topOdd, pairKey] — top과 pair를 두 페이지로
-      for (const [top, pair] of lockedDecisions.trios) {
-        // top: 'NN' 형식 홀수 (예: '03')
-        const topNum = parseInt(top, 10);
-        if (Number.isFinite(topNum)) {
-          out.push({
-            title: `BAY ${dispBay(topNum)}`,
-            evenBay: null,
-            oddBay: keyBay(topNum),
-            isStandalone: true,
-          });
-        }
-        // pair: '(EE)OO' 형식 (예: '(04)05')
-        const m = pair.match(/^\((\d+)\)(\d+)$/);
-        if (m) {
-          const evenNum = parseInt(m[1], 10);
-          const pairOddNum = parseInt(m[2], 10);
-          out.push({
-            title: `BAY (${dispBay(evenNum)})${dispBay(pairOddNum)}`,
-            evenBay: keyBay(evenNum),
-            oddBay: keyBay(pairOddNum),
-          });
-        }
-      }
-      // singles 처리
-      for (const s of lockedDecisions.singles) {
-        const n = parseInt(s, 10);
-        if (Number.isFinite(n)) {
-          out.push({
-            title: `BAY ${dispBay(n)}`,
-            evenBay: null,
-            oddBay: keyBay(n),
-            isStandalone: true,
-          });
-        }
-      }
-      return out;
-    }
 
     // 베이 정수 리스트 결정: .def 우선, 없으면 EDI 기반 (폴백)
     let bayInts;
@@ -397,7 +346,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     }
 
     return out;
-  }, [bayGroups, dictBayList, lockedDecisions]);
+  }, [bayGroups, dictBayList]);
 
   // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
   const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
@@ -610,12 +559,12 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
               {/* 백드롭 — 바깥 클릭으로 닫기 */}
               <div className="fixed inset-0 z-20" onClick={() => setPrintMenuOpen(false)}/>
               <div className="absolute top-full left-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-30 min-w-[180px] overflow-hidden">
-                <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
+                <button onClick={() => { setPrintMode('cargo'); setPrintMenuOpen(false); }}
                   className="w-full px-3 py-2 text-left hover:bg-cyan-900 text-xs text-cyan-100 border-b border-slate-700 flex items-center gap-2">
                   <span className="text-base">📄</span>
                   <div>
                     <div className="font-black">카고 플랜 (기존)</div>
-                    <div className="text-[10px] text-slate-400">→ V2로 자동 전환 (M6.93.11.LOCK5)</div>
+                    <div className="text-[10px] text-slate-400">요약 1페이지</div>
                   </div>
                 </button>
                 <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
@@ -896,9 +845,25 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       />
 
       {/* M4.6: 인쇄 모달 — M4.9: ErrorBoundary로 격리 */}
-      {/* M6.93.11.LOCK5: 'cargo' 진입 경로도 V2로 강제 redirect — V1 폐기 */}
-      {(printMode === 'cargo' || printMode === 'cargo-v2') && (
-        <ErrorBoundary name="카고 플랜 V2 (LOCK5)" onClose={() => setPrintMode(null)}>
+      {printMode === 'cargo' && (
+        <ErrorBoundary name="카고 플랜 인쇄" onClose={() => setPrintMode(null)}>
+          <PrintableCargoPlan
+            containers={containers}
+            mode={mode}
+            voyageInfo={voyageInfo}
+            voyageKey={voyageKey}
+            shipImo={shipImo}
+            shipName={shipName}
+            xrayMap={xrayMap}
+            globalRowRange={globalRowRange}
+            globalTiers={globalTiers}
+            dictBaysSummary={dictBaysSummary}
+            onClose={() => setPrintMode(null)}
+          />
+        </ErrorBoundary>
+      )}
+      {printMode === 'cargo-v2' && (
+        <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintMode(null)}>
           <PrintableCargoPlanV2
             containers={containers}
             mode={mode}
