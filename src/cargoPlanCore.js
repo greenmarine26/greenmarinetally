@@ -431,14 +431,34 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     hasZero = ediRows.has(0);
   }
 
-  const deckTiers = override?.deckTiers
-    || (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
-    || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
-    || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
-  const holdTiers = override?.holdTiers
-    || (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
-    || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
-    || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
+  // M6.93.11.LOCK9: 모든 tier 소스 합집합 사용 (override + userBay + bayData + bayDef + EDI + pdf)
+  //   기존 우선순위 버그: userBay.holdTiers=[6,4,2]만 있으면 그대로 사용 → bayDef.holdTiers=[8,6,4,2] 무시 → 08 누락
+  //   해결: 모든 소스 합집합 → 어디서든 08이 있으면 표시
+  if (override?.deckTiers) {
+    // override는 명시적 PDF override니까 그대로 사용 (사용자가 정확하게 입력)
+    var deckTiers = override.deckTiers;
+  } else {
+    const deckSet = new Set();
+    if (userBay?.deckTiers) userBay.deckTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
+    if (userBay?.deckTiersLocal) userBay.deckTiersLocal.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
+    if (bayData?.deckTiers) bayData.deckTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
+    if (shipBayDef?.deckTiers) shipBayDef.deckTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
+    if (pdf.deck_t) pdf.deck_t.forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
+    var deckTiers = [...deckSet].sort((a, b) => b - a);
+    if (deckTiers.length === 0) deckTiers = pdf.deck_t || [];
+  }
+  if (override?.holdTiers) {
+    var holdTiers = override.holdTiers;
+  } else {
+    const holdSet = new Set();
+    if (userBay?.holdTiers) userBay.holdTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
+    if (userBay?.holdTiersLocal) userBay.holdTiersLocal.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
+    if (bayData?.holdTiers) bayData.holdTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
+    if (shipBayDef?.holdTiers) shipBayDef.holdTiers.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
+    if (pdf.hold_t) pdf.hold_t.forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
+    var holdTiers = [...holdSet].sort((a, b) => b - a);
+    if (holdTiers.length === 0) holdTiers = pdf.hold_t || [];
+  }
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
