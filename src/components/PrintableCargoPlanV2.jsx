@@ -306,9 +306,27 @@ export default function PrintableCargoPlanV2({
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
     const v2Def = dictData?.bayDef || {};
-    const deckTiersAll = v2Def.deckTiers || [];
-    const holdTiersAll = v2Def.holdTiers || [];
+    // M6.93.11.LOCK2: bayDef.deckTiers/holdTiers 빈 배열일 때 baysSummary union으로 자동 복원
+    //   기존 버그: bayDef.deckTiers=[6,4,2] (08 누락) 또는 []이면 모든 베이가 [6,4,2]만 그려짐
+    //   사용자 데이터(베이별 summary.holdTiers=[8,6,4,2])가 무시됨
+    //   해결: baysSummary의 모든 deck/holdTiers 합집합(union)으로 fallback
     const baysSummary = v2Def.baysSummary || [];
+    let deckTiersAll = Array.isArray(v2Def.deckTiers) ? v2Def.deckTiers.map(Number) : [];
+    let holdTiersAll = Array.isArray(v2Def.holdTiers) ? v2Def.holdTiers.map(Number) : [];
+    if (deckTiersAll.length === 0 && baysSummary.length > 0) {
+      const set = new Set();
+      baysSummary.forEach(b => {
+        (b.deckTiers || b.deckTiersLocal || []).forEach(t => set.add(Number(t)));
+      });
+      deckTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
+    }
+    if (holdTiersAll.length === 0 && baysSummary.length > 0) {
+      const set = new Set();
+      baysSummary.forEach(b => {
+        (b.holdTiers || b.holdTiersLocal || []).forEach(t => set.add(Number(t)));
+      });
+      holdTiersAll = [...set].filter(Number.isFinite).sort((a, b) => b - a);
+    }
     const summaryByBay = new Map();
     for (const s of baysSummary) {
       const n = Number(s.bayNo);
@@ -348,12 +366,31 @@ export default function PrintableCargoPlanV2({
       const hasDeck = hasDeckFromSummary !== undefined ? hasDeckFromSummary : (b.hasDeck !== false || hasDeckFromEdi);
       const hasHold = hasHoldFromSummary !== undefined ? hasHoldFromSummary : (b.hasHold || hasHoldFromEdi);
       const cells = b.cells ? [...b.cells].reverse() : []; // M6.90.2: cells는 아래→위 저장 → reverse로 위→아래 변환
-      const nDeck = hasDeck ? deckTiersAll.length : 0;
-      const nHold = hasHold ? holdTiersAll.length : 0;
-      const deckCells = nDeck > 0 ? cells.slice(0, nDeck) : [];
-      const holdCells = nHold > 0 ? cells.slice(nDeck, nDeck + nHold) : [];
-      const deckTiers = hasDeck ? deckTiersAll : [];
-      const holdTiers = hasHold ? holdTiersAll : [];
+      // M6.93.11.LOCK2: 베이별 summary.deckTiers/holdTiers 우선 (선박 전체 통일 deckTiersAll은 fallback)
+      //   사용자 데이터 보호 — 매 베이가 자기 정확한 tier 분포 그대로 그려짐
+      //   예: BAY 01 holdTiers=[8,6,4,2] 4tier / BAY 33 hold 없음 / 다른 베이는 [6,4,2]
+      const userDeckTiers = (summary?.deckTiers && summary.deckTiers.length > 0) ? summary.deckTiers.map(Number)
+                          : (summary?.deckTiersLocal && summary.deckTiersLocal.length > 0) ? summary.deckTiersLocal.map(Number)
+                          : null;
+      const userHoldTiers = (summary?.holdTiers && summary.holdTiers.length > 0) ? summary.holdTiers.map(Number)
+                          : (summary?.holdTiersLocal && summary.holdTiersLocal.length > 0) ? summary.holdTiersLocal.map(Number)
+                          : null;
+      const deckTiers = hasDeck ? (userDeckTiers || deckTiersAll) : [];
+      const holdTiers = hasHold ? (userHoldTiers || holdTiersAll) : [];
+      const nDeck = deckTiers.length;
+      const nHold = holdTiers.length;
+      // M6.93.11.LOCK2: 베이별 summary.deckCells/holdCells 우선 (v5 cells fallback)
+      //   사용자가 매트릭스 빌더에서 입력한 cells 값 보호
+      const userDeckCells = (summary?.deckCells && summary.deckCells.length > 0) ? summary.deckCells : null;
+      const userHoldCells = (summary?.holdCells && summary.holdCells.length > 0) ? summary.holdCells : null;
+      const deckCells = nDeck > 0
+        ? (userDeckCells ? userDeckCells.slice(0, nDeck)
+           : (cells.length > 0 ? cells.slice(0, nDeck) : []))
+        : [];
+      const holdCells = nHold > 0
+        ? (userHoldCells ? userHoldCells.slice(0, nHold)
+           : (cells.length > 0 ? cells.slice(nDeck, nDeck + nHold) : []))
+        : [];
       return {
         ...b,
         hasDeck,

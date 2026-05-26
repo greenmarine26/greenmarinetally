@@ -236,11 +236,24 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       lockedBy: 'matrix-builder',
     };
     entry.bayDef._locked = true;
+    // M6.93.11.LOCK2: 베이별 baysSummary의 deckTiers/holdTiers union을 bayDef 레벨에 저장.
+    //   카고플랜의 deckTiersAll/holdTiersAll fallback이 이 값 사용 → tier 누락 영구 차단.
+    //   예: BAY 01 hold=[8,6,4,2] 4tier 있는데 bayDef.holdTiers가 [6,4,2]만이면 화면에 08 누락.
+    //       union 저장으로 [8,6,4,2] 모두 보존 → 모든 베이에서 08 tier 정상 표시.
+    const deckSet = new Set();
+    const holdSet = new Set();
+    (entry.bayDef.baysSummary || []).forEach(b => {
+      (b.deckTiers || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) deckSet.add(n); });
+      (b.holdTiers || []).forEach(t => { const n = Number(t); if (Number.isFinite(n)) holdSet.add(n); });
+    });
+    entry.bayDef.deckTiers = [...deckSet].sort((a, b) => b - a);   // 내림차순 (88,86,84,82)
+    entry.bayDef.holdTiers = [...holdSet].sort((a, b) => b - a);   // 내림차순 (8,6,4,2)
     const ok = addToUserBayDict(entry);
     if (ok) {
       setSavingMsg(
         `🔒 ${shipMeta.code} 잠금 저장 완료 — ${entry.bayDef.recordCount}개 베이, ` +
         `페어 ${decisions.trios.length} / 단독 ${decisions.singles.length}. ` +
+        `데크 [${entry.bayDef.deckTiers.join(',')}] · 홀드 [${entry.bayDef.holdTiers.join(',')}]. ` +
         `[🔄 카고플랜 적용] 누르면 즉시 반영됩니다.`
       );
       setDone(true);
