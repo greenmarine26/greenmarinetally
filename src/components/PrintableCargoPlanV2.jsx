@@ -57,20 +57,20 @@ function getMarkV2(c, pod, mode) {
 // ------------------------------------------------------------
 const CSS = `
 .cpv2-overlay { position: fixed; inset: 0; z-index: 50; background: #475569; overflow: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
-.cpv2-page { width: 277mm; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
+.cpv2-page { width: 277mm; min-width: 1200px; height: 195mm; background: white; padding: 4mm; box-sizing: border-box; display: flex; flex-direction: column; font-family: Helvetica, Arial, sans-serif; color: #000; box-shadow: 0 0 8px rgba(0,0,0,0.3); margin: 0 auto; }
 .cpv2-page-header { border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; }
 .cpv2-page-header .title-center { font-size: 14px; font-weight: bold; flex: 1; text-align: center; }
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
 .cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
-.cpv2-bay-box { flex: 1 1 0; min-width: 0; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
+.cpv2-bay-box { flex: 1 1 0; min-width: 130px; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
 .cpv2-single-box .cpv2-single-half { flex: 1 1 0; display: flex; flex-direction: column; }
 .cpv2-single-box .cpv2-empty-half { flex: 1 1 0; }
 .cpv2-bay-section { flex: 1 1 0; display: flex; flex-direction: column; padding: 2px 2px; min-height: 0; position: relative; }
 .cpv2-trio-divider { border-top: 0.5px solid #999; }
-.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: clamp(8px, 0.7vw, 11px); padding: 0 50px 0 4px; margin-bottom: 1px; box-sizing: border-box; flex-shrink: 0; }
+.cpv2-bay-title-row { position: relative; width: 100%; text-align: center; font-weight: bold; font-size: clamp(10px, 0.85vw, 13px); padding: 0 50px 0 4px; margin-bottom: 1px; box-sizing: border-box; flex-shrink: 0; }
 .cpv2-bay-title { display: inline-block; }
-.cpv2-bay-count { position: absolute; right: 4px; top: 1px; color: #555; font-size: clamp(6px, 0.5vw, 8px); font-weight: normal; white-space: nowrap; }
+.cpv2-bay-count { position: absolute; right: 4px; top: 1px; color: #555; font-size: clamp(8px, 0.65vw, 10px); font-weight: normal; white-space: nowrap; }
 .cpv2-bay-content { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; width: 100%; }
 .cpv2-deck-area { flex: 6 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
 .cpv2-hold-area { flex: 4 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
@@ -78,13 +78,13 @@ const CSS = `
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
 .cpv2-tier-row.cpv2-invisible-row { visibility: hidden; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(4px, 0.6vw, 8px); display: flex; align-items: center; justify-content: center; line-height: 1.1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(7px, 0.9vw, 12px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
-.cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(5px, 0.6vw, 8px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
+.cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
 /* XRAY: 연노랑 배경 + ★ 별표 (V1 양식) */
 .cpv2-cell.cpv2-xray { background: #fef08a !important; }
-.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(4px, 0.6vw, 7px); color: #dc2626; font-weight: bold; pointer-events: none; }
+.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(6px, 0.8vw, 10px); color: #dc2626; font-weight: bold; pointer-events: none; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; background: #f0f0f0; }
 .cpv2-cell.cpv2-mark-R { color: #006064; background: #b2ebf2; }
@@ -100,7 +100,7 @@ const CSS = `
 .cpv2-cell.cpv2-mark-S { color: #2e7d32; background: #e8f5e9; }
 .cpv2-cell.cpv2-mark-M { color: #c62828; background: #ffebee; }
 .cpv2-hatch-break { height: 0; border-top: 1.5px solid #000; width: 180px; margin: 0; flex-shrink: 0; }
-.cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 7px; color: #444; width: 14px; justify-content: center; }
+.cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 9px; color: #444; width: 16px; justify-content: center; }
 .cpv2-tier-labels > span { height: 13px; line-height: 13px; display: block; }
 .cpv2-tier-labels > span.cpv2-invisible-label { visibility: hidden; }
 .cpv2-banner { display: none; }
@@ -134,6 +134,7 @@ const CSS = `
   }
   .cpv2-page {
     width: 277mm !important;
+    min-width: 0 !important;
     height: 195mm !important;
     min-height: 195mm !important;
     max-height: 195mm !important;
@@ -146,6 +147,7 @@ const CSS = `
     break-inside: avoid !important;
     break-after: avoid !important;
   }
+  .cpv2-bay-box { min-width: 0 !important; }
   .cpv2-noprint { display: none !important; }
   .cpv2-cell, .cpv2-legend-mark, .cpv2-bay-box {
     -webkit-print-color-adjust: exact !important;
@@ -214,17 +216,14 @@ function BayBoxV2({ data, count, colorMap = {} }) {
             </div>
           </div>
         </div>
-        {/* M6.86.8.20: hold가 deck보다 좁을 때 박스 안 horizontal center.
-            grid width = nHoldCols/nDeckCols 비율, margin auto로 좌우 동일 여백 (0.5칸씩). */}
+        {/* M6.93.12 fix #11: hold cells가 nDeckCols 폭으로 그려짐 (deck와 통일).
+            cells 안에서 active 위치만 가운데 (offset). width 100%, margin 자동 제거.
+            좌우 대칭 보장. */}
         <div className="cpv2-hatch-break"></div>
         <div className="cpv2-hold-area">
           <div
             className="cpv2-grid-row-wrap"
-            style={{
-              width: nDeckCols > 0 ? `${(nHoldCols / nDeckCols) * 100}%` : '100%',
-              marginLeft: 'auto',
-              marginRight: 'auto'
-            }}
+            style={{ width: '100%' }}
           >
             <div className="cpv2-grid">
               {holdRows.map((row, ri) => (
@@ -264,7 +263,15 @@ function BayBoxV2({ data, count, colorMap = {} }) {
             </div>
           </div>
           {nHold > 0 ? (
-            <div className="cpv2-row-labels">
+            <div
+              className="cpv2-row-labels"
+              style={{
+                // M6.93.12 fix #11: cells가 nDeckCols 폭이고 hold cells는 offset만큼 가운데.
+                //   라벨도 offset에 맞춰 좌우 padding으로 정렬. cells active 위치 = 라벨 위치.
+                paddingLeft: nDeckCols > nHoldCols ? `${Math.floor((nDeckCols - nHoldCols) / 2) / nDeckCols * 100}%` : '0',
+                paddingRight: nDeckCols > nHoldCols ? `${Math.ceil((nDeckCols - nHoldCols) / 2) / nDeckCols * 100}%` : '0',
+              }}
+            >
               {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           ) : (
