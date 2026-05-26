@@ -108,19 +108,31 @@ export function generatePdfBays(matrixBays, trios, singles) {
     }
 
     const hasHold = bay.hasHold !== undefined ? bay.hasHold : true;
+    // M6.93.11.LOCK7: bay.deckTiers/holdTiers가 있으면 그것 그대로 사용 — hardcoded slice 폐기.
+    //   기존 버그: nHold = min(4, nTotal-4) 같이 cells 갯수만 보고 자동 계산 → 사용자 데이터 무시
+    //   해결: PrintableCargoPlanV2 matrixBays 변환에서 채운 bay.holdTiers([8,6,4,2])를 그대로 사용
+    const userDeckTiers = Array.isArray(bay.deckTiers) ? bay.deckTiers.map(Number).filter(Number.isFinite) : [];
+    const userHoldTiers = Array.isArray(bay.holdTiers) ? bay.holdTiers.map(Number).filter(Number.isFinite) : [];
     let nHold, nDeck;
-    if (hasHold) {
+    let deck_t, hold_t;
+    if (userDeckTiers.length > 0 || userHoldTiers.length > 0) {
+      // 사용자 데이터 우선 — 그대로 사용
+      deck_t = userDeckTiers.length > 0 ? [...userDeckTiers].sort((a, b) => b - a) : [];
+      hold_t = (hasHold && userHoldTiers.length > 0) ? [...userHoldTiers].sort((a, b) => b - a) : [];
+      nDeck = deck_t.length;
+      nHold = hold_t.length;
+    } else if (hasHold) {
+      // fallback (기존 로직)
       nHold = Math.min(4, Math.max(0, nTotal - 4));
       nDeck = nTotal - nHold;
+      deck_t = nDeck > 0 ? STANDARD_DECK.slice(-nDeck) : [];
+      hold_t = nHold > 0 ? STANDARD_HOLD.slice(0, nHold) : [];
     } else {
       nHold = 0;
       nDeck = nTotal;
+      deck_t = nDeck > 0 ? STANDARD_DECK.slice(-nDeck) : [];
+      hold_t = [];
     }
-
-    // deck_t: STANDARD_DECK에서 아래부터 nDeck개
-    const deck_t = nDeck > 0 ? STANDARD_DECK.slice(-nDeck) : [];
-    // hold_t: STANDARD_HOLD에서 위부터 nHold개
-    const hold_t = nHold > 0 ? STANDARD_HOLD.slice(0, nHold) : [];
 
     // has_zero: deck_max가 홀수면 00 row 있음 (좌우 대칭 + 가운데 00)
     const deckCells = cells.slice(0, nDeck);
