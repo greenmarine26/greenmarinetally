@@ -591,7 +591,37 @@ export default function PrintableCargoPlanV2({
     <div className="cpv2-overlay">
       <style>{CSS}</style>
       {closeBtn}
-      <div className="cpv2-page">
+      {/* M6.93.11.LOCK8: 진단 패널 — 실제 user dict 데이터 + computeBayRenderData 결과 비교 */}
+      <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, left: 8, right: 120, zIndex: 10,
+            background: '#fef3c7', border: '2px solid #d97706', padding: '6px 10px', fontSize: 11,
+            fontFamily: 'monospace', maxHeight: '40vh', overflow: 'auto', borderRadius: 4 }}>
+        <div style={{ fontWeight: 'bold', color: '#7c2d12', marginBottom: 4 }}>
+          🔍 진단 (LOCK8) — 카고플랜 그릴 때 실제 사용되는 데이터:
+        </div>
+        <div style={{ marginBottom: 4 }}>
+          <b>dictData.bayDef:</b> deckTiers={JSON.stringify(dictData?.bayDef?.deckTiers || 'null')},
+          holdTiers={JSON.stringify(dictData?.bayDef?.holdTiers || 'null')}
+        </div>
+        <div style={{ marginBottom: 4 }}>
+          <b>baysSummary 처음 3개 베이의 tier 데이터:</b>
+        </div>
+        {(dictData?.bayDef?.baysSummary || []).slice(0, 3).map((b, i) => (
+          <div key={i} style={{ marginLeft: 12 }}>
+            BAY {b.bayNo || b.bay}: deckTiers={JSON.stringify(b.deckTiers)}, holdTiers={JSON.stringify(b.holdTiers)},
+            deckTiersLocal={JSON.stringify(b.deckTiersLocal)}, holdTiersLocal={JSON.stringify(b.holdTiersLocal)}
+          </div>
+        ))}
+        <div style={{ marginTop: 4 }}>
+          <b>renderDataMap 처음 3개 (실제 그리는 데이터):</b>
+        </div>
+        {Object.entries(renderDataMap).slice(0, 3).map(([key, d]) => (
+          <div key={key} style={{ marginLeft: 12 }}>
+            {key}: deckTiers={JSON.stringify(d?.deckTiers)}, holdTiers={JSON.stringify(d?.holdTiers)},
+            nDeck={d?.nDeck}, nHold={d?.nHold}
+          </div>
+        ))}
+      </div>
+      <div className="cpv2-page" style={{ marginTop: '42vh' }}>
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
