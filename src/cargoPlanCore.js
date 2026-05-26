@@ -159,15 +159,24 @@ export function autoPageLayout(trios, singles, colsPerRow = 5) {
 //   - has_zero=false: evens + odds (00 없음)
 //   - cell_count 홀수 + has_zero=false: 홀수 row가 1개 더 (예: 7개 = evens[06,04,02] + odds[01,03,05,07])
 //   - cell_count 짝수 + has_zero=false: evens = odds 동수 (예: 8개 = [08..02] + [01..07])
+// M6.93.13 fix #1: 짝수 cellCount + hasZero=true 케이스에서 max row 누락 버그 수정.
+//   이전 버그: cellCount=8 hasZero=true → half=floor(7/2)=3 → evens 3개 + 00 + odds 3개 = 7개 (8개 아님, max row 08 누락)
+//   원인: half * 2 = 6 → evens[06,04,02], max row 08이 라벨에서 빠짐 → 데크에서 ROW 08 컨테이너 안 보임
+//   수정: 짝수 cellCount + hasZero=true 시 nEvens 1개 더 많게 비대칭 처리
+//        cellCount=8 → nEvens=4, nOdds=3 → ['08','06','04','02','00','01','03','05'] (8개, max 08 보존)
+//        cellCount=10 → nEvens=5, nOdds=4 → ['10','08','06','04','02','00','01','03','05','07'] (10개, max 10 보존)
+//   영향: 데크 ROW 8 안 보임 버그 해결. 00은 여전히 정중앙(idx=nEvens).
 export function getRowPositions(cellCount, hasZero) {
   if (cellCount <= 0) return [];
   const pad = (n) => String(n).padStart(2, '0');
   if (hasZero) {
-    const half = Math.floor((cellCount - 1) / 2);
+    const isEven = cellCount % 2 === 0;
+    const nEvens = isEven ? (cellCount / 2) : Math.floor((cellCount - 1) / 2);
+    const nOdds = cellCount - 1 - nEvens;
     const evens = [];
-    for (let n = half * 2; n > 0; n -= 2) evens.push(pad(n));
+    for (let n = nEvens * 2; n > 0; n -= 2) evens.push(pad(n));
     const odds = [];
-    for (let n = 1; n <= half * 2 - 1; n += 2) odds.push(pad(n));
+    for (let n = 1; n <= nOdds * 2 - 1; n += 2) odds.push(pad(n));
     return [...evens, '00', ...odds];
   } else {
     // has_zero=false: 홀수 cellCount면 odds가 1개 더, 짝수면 동수
@@ -398,14 +407,42 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const inferredDeckMax = allDeckCells.length > 0 ? Math.max(...allDeckCells) : null;
   const inferredHoldMax = allHoldCells.length > 0 ? Math.max(...allHoldCells) : null;
 
-  const deckRowMax = (rowMaxEven && rowMaxEven > 0 ? rowMaxEven : null)
+  // M6.93.13 fix #4: EDI 컨테이너의 실제 row max도 rowMax 계산에 반영.
+  //   이전 버그: cells에 없는 큰 row(예: tier 88 row 07, cellsMax=7이지만 EDI에 row 07 존재)
+  //              → deckRowMax=7, hasZero=false → 라벨 [06,04,02,01,03,05,07] 정상
+  //              그러나 deckRowMax=8 hasZero=true에 EDI row 08 컨테이너가 있을 때
+  //              → 이전엔 cells가 8이라도 getRowPositions 버그(fix #1)로 08 라벨 빠짐
+  //   사용자 보고 "데크 ROW 8 안 보임"은 fix #1 + fix #4 두 원인이 결합 가능.
+  //   해결: 이 베이에 속한 EDI 컨테이너의 deck row max / hold row max도 계산 후 max() 처리.
+  const ediDeckRows = new Set();
+  const ediHoldRows = new Set();
+  const bayNumsToCheck = isPair
+    ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
+    : [oddNum];
+  for (const [key, rowMap] of posMap.entries()) {
+    const [bb, tier] = key.split('|').map(Number);
+    if (!bayNumsToCheck.includes(bb)) continue;
+    for (const [rowLbl] of rowMap.entries()) {
+      const r = Number(rowLbl);
+      if (tier >= 80) ediDeckRows.add(r);   // 데크 (STANDARD_DECK 최소 82)
+      else            ediHoldRows.add(r);   // 홀드 (STANDARD_HOLD 최대 10)
+    }
+  }
+  const ediDeckRowMax = ediDeckRows.size > 0 ? Math.max(...ediDeckRows) : 0;
+  const ediHoldRowMax = ediHoldRows.size > 0 ? Math.max(...ediHoldRows) : 0;
+
+  const baseDeckMax = (rowMaxEven && rowMaxEven > 0 ? rowMaxEven : null)
     || inferredDeckMax
     || userRowCount
     || (override ? override.rowCount : 10);
-  const holdRowMax = (rowMaxOdd && rowMaxOdd > 0 ? rowMaxOdd : null)
+  const baseHoldMax = (rowMaxOdd && rowMaxOdd > 0 ? rowMaxOdd : null)
     || inferredHoldMax
     || userRowCount
     || (override ? override.rowCount : 9);
+  // 사용자 데이터 절대 보호 원칙: EDI에 컨테이너가 있으면 그 row는 반드시 표시되어야 함
+  const deckRowMax = Math.max(baseDeckMax, ediDeckRowMax);
+  const holdRowMax = Math.max(baseHoldMax, ediHoldRowMax);
+
   let hasZero;
   if (typeof userBay?.hasZero === 'boolean') {
     // M6.93.12 fix #2: userBay.hasZero 우선
@@ -413,58 +450,19 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   } else if (override) {
     hasZero = override.hasZero;
   } else {
-    // EDI 검증 fallback
-    const ediRows = new Set();
-    const bayNumsToCheck = isPair
-      ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
-      : [oddNum];
-    for (const [key, rowMap] of posMap.entries()) {
-      const [bb] = key.split('|').map(Number);
-      if (bayNumsToCheck.includes(bb)) {
-        for (const [rowLbl] of rowMap.entries()) ediRows.add(Number(rowLbl));
-      }
-    }
-    hasZero = ediRows.has(0);
+    // EDI 검증 fallback — fix #4에서 추출한 ediDeck/Hold rows 재사용
+    hasZero = ediDeckRows.has(0) || ediHoldRows.has(0);
   }
 
   // M6.93.12 fix #2: userBay tiers > override tiers > bayData > pdf
-  let deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
+  const deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
     || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
     || override?.deckTiers
     || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
-  let holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
+  const holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
     || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
     || override?.holdTiers
     || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
-
-  // M6.93.12 fix #10 (사용자 보고: "특정 hold 4단 컨테이너 누락"):
-  //   원인: shipMatrixBuilder.analyzeMatrix가 EDI tier 분포로 holdTiers 자동 분류
-  //     → EDI에 tier 08 없던 베이는 holdTiers=[6,4,2] 3단 저장
-  //     → 그 베이에 새로 tier 08 컨테이너 들어오면 표시 X (invisible)
-  //   해결: 사용자 입력 holdTiers + EDI 실제 tier 자동 union.
-  //     사용자 입력 우선 (CASPI 빈 구조) + EDI 누락 방지 (컨테이너 절대 안 사라짐).
-  //     사용자가 명시한 tier는 그대로, EDI에 새로 등장한 tier만 추가.
-  const ediHoldSet = new Set();
-  const ediDeckSet = new Set();
-  const bayNumsForTier = isPair
-    ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
-    : [oddNum, oddNum - 1, oddNum + 1].filter(b => b > 0);
-  for (const [key] of posMap.entries()) {
-    const [bb, t] = key.split('|').map(Number);
-    if (bayNumsForTier.includes(bb) && Number.isFinite(t) && t > 0) {
-      if (t >= 80) ediDeckSet.add(t);
-      else ediHoldSet.add(t);
-    }
-  }
-  if (deckTiers && Array.isArray(deckTiers)) {
-    const merged = new Set([...deckTiers.map(Number), ...ediDeckSet]);
-    deckTiers = [...merged].sort((a, b) => b - a);
-  }
-  if (holdTiers && Array.isArray(holdTiers)) {
-    const merged = new Set([...holdTiers.map(Number), ...ediHoldSet]);
-    holdTiers = [...merged].sort((a, b) => b - a);
-  }
-
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
@@ -517,6 +515,13 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
+      // M6.93.13 fix #2: mark 있는 row idx 강제 active.
+      //   사용자 데이터 절대 보호: cells가 EDI 컨테이너 위치를 못 덮어도 컨테이너는 반드시 표시.
+      //   부작용: hull 단면이 cells값과 약간 다를 수 있지만, 컨테이너 표시가 우선.
+      for (let c = 0; c < nDeckCols; c++) {
+        const rl = deckRowPos[c];
+        if (rl && rowMarks.has(rl)) activeSet.add(c);
+      }
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         const rowLbl = deckRowPos[c];
@@ -537,32 +542,34 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     }
   });
 
-  // M6.93.12 fix #11 (사용자 통찰: "데크/홀드 좌우 대칭"):
-  //   M6.81 표준 방식 — hold cells를 nDeckCols 폭으로 그림 (deck와 같은 폭).
-  //   offset = floor((nDeckCols - nHoldCols) / 2)로 hold cells를 가운데 정렬.
-  //   양옆 빈 invisible cell. 좌우 대칭 보장.
-  //   이전: hold cells가 nHoldCols 폭으로만 그려져 hold가 deck보다 좁아 한쪽 쏠림 발생.
-  const offsetHold = Math.floor((nDeckCols - nHoldCols) / 2);
+  // hold tier별 셀 배열 — M6.86.8.20: hold 자체 폭(nHoldCols)으로 cells 생성.
+  //   deck/hold 폭이 1칸 차이일 때 CSS에서 0.5칸씩 좌우 띄어 박스 안 horizontal center.
+  //   이전엔 nDeckCols 폭에 끼워넣어 floor offset으로 비대칭 (좌2/우1 또는 좌0/우1).
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
       const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
-      const activeInDeck = new Set([...activeInHold].map(a => a + offsetHold));
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
+      // M6.93.13 fix #2: mark 있는 row idx 강제 active.
+      //   사용자 보고 "홀드 4단 컨테이너 안 보임"의 직접적 해결.
+      //   tier 04 cc=4인데 EDI 컨테이너가 row 03/05 등 active set 밖에 있을 때
+      //   mark가 있으면 그 row를 강제로 active 추가 → 컨테이너 표시됨.
+      for (let c = 0; c < nHoldCols; c++) {
+        const rl = holdRowPos[c];
+        if (rl && rowMarks.has(rl)) activeInHold.add(c);
+      }
       const cells = [];
-      // nDeckCols 폭으로 그림 (deck와 통일 → 좌우 대칭)
-      for (let c = 0; c < nDeckCols; c++) {
-        const inActive = activeInDeck.has(c);
+      for (let c = 0; c < nHoldCols; c++) {
+        const rowLbl = holdRowPos[c];
+        const inActive = activeInHold.has(c);
+        const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
+        const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
         if (inActive) {
-          const holdC = c - offsetHold;
-          const rowLbl = (holdC >= 0 && holdC < nHoldCols) ? holdRowPos[holdC] : null;
-          const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
-          const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
           cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
@@ -570,8 +577,8 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      // invisible row도 nDeckCols 폭으로 통일
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
+      // invisible row도 nHoldCols 폭 (hold-area 자체 폭과 일관)
+      const cells = new Array(nHoldCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });

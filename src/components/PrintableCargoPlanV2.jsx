@@ -78,7 +78,7 @@ const CSS = `
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
 .cpv2-tier-row.cpv2-invisible-row { visibility: hidden; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(4px, 0.55vw, 8px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(4px, 0.6vw, 8px); display: flex; align-items: center; justify-content: center; line-height: 1.1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(5px, 0.6vw, 8px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
@@ -214,14 +214,17 @@ function BayBoxV2({ data, count, colorMap = {} }) {
             </div>
           </div>
         </div>
-        {/* M6.93.12 fix #11: hold cells가 nDeckCols 폭으로 그려짐 (deck와 통일).
-            cells 안에서 active 위치만 가운데 (offset). width 100%, margin 자동 제거.
-            좌우 대칭 보장. */}
+        {/* M6.86.8.20: hold가 deck보다 좁을 때 박스 안 horizontal center.
+            grid width = nHoldCols/nDeckCols 비율, margin auto로 좌우 동일 여백 (0.5칸씩). */}
         <div className="cpv2-hatch-break"></div>
         <div className="cpv2-hold-area">
           <div
             className="cpv2-grid-row-wrap"
-            style={{ width: '100%' }}
+            style={{
+              width: nDeckCols > 0 ? `${(nHoldCols / nDeckCols) * 100}%` : '100%',
+              marginLeft: 'auto',
+              marginRight: 'auto'
+            }}
           >
             <div className="cpv2-grid">
               {holdRows.map((row, ri) => (
@@ -261,15 +264,7 @@ function BayBoxV2({ data, count, colorMap = {} }) {
             </div>
           </div>
           {nHold > 0 ? (
-            <div
-              className="cpv2-row-labels"
-              style={{
-                // M6.93.12 fix #11: cells가 nDeckCols 폭이고 hold cells는 offset만큼 가운데.
-                //   라벨도 offset에 맞춰 좌우 padding으로 정렬. cells active 위치 = 라벨 위치.
-                paddingLeft: nDeckCols > nHoldCols ? `${Math.floor((nDeckCols - nHoldCols) / 2) / nDeckCols * 100}%` : '0',
-                paddingRight: nDeckCols > nHoldCols ? `${Math.ceil((nDeckCols - nHoldCols) / 2) / nDeckCols * 100}%` : '0',
-              }}
-            >
+            <div className="cpv2-row-labels">
               {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           ) : (
