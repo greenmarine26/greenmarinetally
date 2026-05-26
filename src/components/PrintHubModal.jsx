@@ -6,7 +6,6 @@ import React, { useState } from 'react';
 import { X, FileText, Grid3x3, Ship, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
-import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';

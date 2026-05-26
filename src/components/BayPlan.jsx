@@ -21,7 +21,6 @@ import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
 // M4.6: 인쇄 컴포넌트
-import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
@@ -611,12 +610,12 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
               {/* 백드롭 — 바깥 클릭으로 닫기 */}
               <div className="fixed inset-0 z-20" onClick={() => setPrintMenuOpen(false)}/>
               <div className="absolute top-full left-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-30 min-w-[180px] overflow-hidden">
-                <button onClick={() => { setPrintMode('cargo'); setPrintMenuOpen(false); }}
+                <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
                   className="w-full px-3 py-2 text-left hover:bg-cyan-900 text-xs text-cyan-100 border-b border-slate-700 flex items-center gap-2">
                   <span className="text-base">📄</span>
                   <div>
                     <div className="font-black">카고 플랜 (기존)</div>
-                    <div className="text-[10px] text-slate-400">요약 1페이지</div>
+                    <div className="text-[10px] text-slate-400">→ V2로 자동 전환 (M6.93.11.LOCK5)</div>
                   </div>
                 </button>
                 <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
@@ -897,25 +896,9 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       />
 
       {/* M4.6: 인쇄 모달 — M4.9: ErrorBoundary로 격리 */}
-      {printMode === 'cargo' && (
-        <ErrorBoundary name="카고 플랜 인쇄" onClose={() => setPrintMode(null)}>
-          <PrintableCargoPlan
-            containers={containers}
-            mode={mode}
-            voyageInfo={voyageInfo}
-            voyageKey={voyageKey}
-            shipImo={shipImo}
-            shipName={shipName}
-            xrayMap={xrayMap}
-            globalRowRange={globalRowRange}
-            globalTiers={globalTiers}
-            dictBaysSummary={dictBaysSummary}
-            onClose={() => setPrintMode(null)}
-          />
-        </ErrorBoundary>
-      )}
-      {printMode === 'cargo-v2' && (
-        <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintMode(null)}>
+      {/* M6.93.11.LOCK5: 'cargo' 진입 경로도 V2로 강제 redirect — V1 폐기 */}
+      {(printMode === 'cargo' || printMode === 'cargo-v2') && (
+        <ErrorBoundary name="카고 플랜 V2 (LOCK5)" onClose={() => setPrintMode(null)}>
           <PrintableCargoPlanV2
             containers={containers}
             mode={mode}
