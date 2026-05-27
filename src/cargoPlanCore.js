@@ -17,7 +17,9 @@
 //   tier 80은 deck/hold 경계 — DXQD/STSE/NBTD/MCSC 4척에 없으므로 표준 제외.
 //   M6.81 검증된 표준 (build_cargo_plan_universal.py 참조).
 export const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82];
-export const STANDARD_HOLD = [10, 8, 6, 4, 2];
+// M6.94.5: STANDARD_HOLD에 tier 12, 14 추가. BERO, MARS, KMTC 같은 큰 배(7-tier hold)에서
+// holdTiers에 14,12 입력해도 STANDARD_HOLD에 없어서 시뮬레이션에 안 그려지던 버그 fix.
+export const STANDARD_HOLD = [14, 12, 10, 8, 6, 4, 2];
 
 // ------------------------------------------------------------
 // 1. 베이 자동 페어링 (auto_pair_bays)
@@ -644,7 +646,14 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
   } = bayEntry;
 
   const nDeckCols = rowCount + (hasZero ? 1 : 0);
-  const nHoldCols = nDeckCols; // 단순화: hold도 같은 row 갯수 (다르면 cells에서 active 자리만 다름)
+  // M6.94.5: nHoldCols 강제 통일 해제. 실제 hold cells 최대값 기준으로 계산.
+  // 이전 (M6.94.0~4): nHoldCols = nDeckCols → _diff=0 → left/center/right 버튼이 셀에 영향 없음.
+  // hold 폭이 deck보다 작은 게 정상 (선체 형태). 차이만큼 자동 가운데 정렬 + 사용자 override 가능.
+  const _holdCellsNums = holdCells.map(Number).filter(v => !isNaN(v) && v > 0);
+  const _holdCellsMax = _holdCellsNums.length > 0 ? Math.max(..._holdCellsNums) : 0;
+  const nHoldCols = _holdCellsMax > 0
+    ? Math.min(_holdCellsMax + (hasZero ? 1 : 0), nDeckCols)
+    : nDeckCols;
   const deckRowPos = getRowPositions(nDeckCols, hasZero);
   const holdRowPos = getRowPositions(nHoldCols, hasZero);
   const nDeck = deckTiers.length;
@@ -671,16 +680,19 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     }
   });
 
-  // hold offset 계산 (사용자 padding/align 우선)
+  // M6.94.5: offsetHold는 hold cells가 nDeckCols 폭의 어디서 시작하는지 결정.
+  // 이전 (M6.94.0~4): _diff=0이라 align 'left'/'center'/'right' 모두 offsetHold=0 강제.
+  // padLeft를 0.5 같은 비정수 입력시 set 매칭 실패로 셀 모두 사라짐. → Math.round로 정수 강제.
   let offsetHold;
   const _diff = nDeckCols - nHoldCols;
   if (holdPadLeft > 0 || holdPadRight > 0) {
-    offsetHold = holdPadLeft;
+    offsetHold = Math.round(holdPadLeft);
   } else if (holdAlign === 'left') {
     offsetHold = 0;
   } else if (holdAlign === 'right') {
     offsetHold = Math.max(0, _diff);
   } else {
+    // center: 짝/홀 차이 1칸은 왼쪽으로 더 쏠리도록 floor (한국 카고플랜 관례)
     offsetHold = Math.floor(_diff / 2);
   }
 

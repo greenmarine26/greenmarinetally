@@ -15,20 +15,33 @@
 set -e
 cd "$(dirname "$0")"
 
-echo "[1/5] 옛 빌드 산출물 / vite 캐시 제거..."
+echo "[1/6] 옛 빌드 산출물 / vite 캐시 제거..."
 rm -rf dist assets node_modules/.vite
 
-echo "[2/5] 의존성 확인..."
+echo "[2/6] 의존성 확인..."
 [ ! -d node_modules ] && npm install --silent
 
-echo "[3/5] vite build..."
+# M6.94.5: vite build는 root index.html을 진입점으로 사용.
+# 운영용 root index.html은 빌드본 (./assets/index-XXX.js 참조)이라
+# vite가 이미 삭제된 옛 해시 파일을 import하려다 빌드 실패함.
+# 해결: 빌드 직전에 진입 소스형 _index.entry.html을 root로 임시 복사.
+# 빌드 후 dist/index.html (vite 생성 빌드본)을 root로 복원.
+echo "[3/6] 빌드 직전: 진입 소스형으로 임시 교체..."
+[ -f index.html ] && cp index.html index.html.production.bak
+if [ ! -f _index.entry.html ]; then
+  echo "✗ _index.entry.html 없음 — 진입 소스형 파일 누락"
+  exit 1
+fi
+cp _index.entry.html index.html
+
+echo "[4/6] vite build..."
 npx vite build
 
-echo "[4/5] dist → root 복사 (assets + index.html 모두)..."
+echo "[5/6] dist → root 복사 (assets + index.html 모두)..."
 cp -r dist/assets ./
 cp dist/index.html ./
 
-echo "[5/5] 검증..."
+echo "[6/6] 검증..."
 JSFILE=$(ls assets/index-*.js 2>/dev/null | head -1)
 if [ -z "$JSFILE" ]; then
   echo "✗ assets/index-*.js 없음 - 빌드 실패"
@@ -48,8 +61,9 @@ fi
 echo "✓ 루트 index.html: 빌드본 (./assets/index-XXX.js 참조, production 작동)"
 
 # 루트 index.html이 참조하는 해시 파일이 실제 assets/에 존재하는지
-REFJS=$(grep -oE './assets/index-[a-zA-Z0-9_-]+\.js' index.html | head -1 | sed 's|^\./||')
-REFCSS=$(grep -oE './assets/index-[a-zA-Z0-9_-]+\.css' index.html | head -1 | sed 's|^\./||')
+# M6.94.5: grep을 script/link 태그 안으로 한정. 주석 안 placeholder 매칭 방지.
+REFJS=$(grep -oE '<script[^>]*src="\./assets/index-[a-zA-Z0-9_-]+\.js"' index.html | grep -oE 'assets/index-[a-zA-Z0-9_-]+\.js' | head -1)
+REFCSS=$(grep -oE '<link[^>]*href="\./assets/index-[a-zA-Z0-9_-]+\.css"' index.html | grep -oE 'assets/index-[a-zA-Z0-9_-]+\.css' | head -1)
 if [ ! -f "$REFJS" ]; then
   echo "✗ 참조 $REFJS 가 실제 파일 없음"
   exit 1
@@ -59,6 +73,19 @@ if [ ! -f "$REFCSS" ]; then
   exit 1
 fi
 echo "✓ 루트 참조 파일 존재 확인: $REFJS, $REFCSS"
+
+# M6.94.5: 빌드된 JS 안에 APP_VERSION 문자열이 박혀있는지 검증.
+# 이전 실패 (M6.94.5 0건): vite 캐시 문제로 옛 코드가 번들에 들어감.
+# 매 빌드마다 src/utils.js의 APP_VERSION을 자동 추출해 빌드 산출물에서 grep.
+VERSION=$(grep -E "^export const APP_VERSION" src/utils.js | sed -E "s/.*=\s*['\"]([^'\"]+)['\"].*/\1/")
+if [ -n "$VERSION" ]; then
+  VCOUNT=$(grep -c "$VERSION" "$JSFILE" 2>/dev/null || echo 0)
+  if [ "$VCOUNT" -eq 0 ]; then
+    echo "✗ 빌드된 JS에 APP_VERSION ($VERSION) 0건 — 캐시 문제 또는 빌드 누락"
+    exit 1
+  fi
+  echo "✓ 빌드된 JS에 APP_VERSION ($VERSION) $VCOUNT건 박힘"
+fi
 
 echo ""
 echo "ZIP 패키징 가능 상태 (옛 M6.71 흐름과 동일 구조)."

@@ -64,7 +64,7 @@ export const CARGO_V2_CSS = `
 .cpv2-page-header .col { padding: 0 8px; font-size: 9px; }
 .cpv2-page-rows { display: flex; flex-direction: column; flex: 1 1 0; gap: 3px; min-height: 0; }
 .cpv2-page-row { display: flex; flex-direction: row; flex: 1 1 0; gap: 3px; min-height: 0; }
-.cpv2-bay-box { flex: 1 1 0; min-width: 130px; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
+.cpv2-bay-box { flex: 1 1 0; min-width: 95px; border: 1px solid #000; display: flex; flex-direction: column; background: white; overflow: hidden; }
 .cpv2-single-box .cpv2-single-half { flex: 1 1 0; display: flex; flex-direction: column; }
 .cpv2-single-box .cpv2-empty-half { flex: 1 1 0; }
 .cpv2-bay-section { flex: 1 1 0; display: flex; flex-direction: column; padding: 2px 2px; min-height: 0; position: relative; }
