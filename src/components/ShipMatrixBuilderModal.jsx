@@ -598,8 +598,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                     return (
                       <>
                         {/* 카고플랜 V2 스타일 박스 (BayBoxV2 재사용) */}
-                        <div className="bg-white rounded p-2 mb-3" style={{ minHeight: '240px' }}>
-                          <div className="cpv2-bay-box" style={{ minWidth: '380px' }}>
+                        {/* M6.94.2 fix: cpv2-bay-box는 flex:1 1 0 기반이라 부모가 flex container이어야 그려짐.
+                            매트릭스 빌더 시뮬은 일반 div 안이라 height가 0이 되어 빈 박스만 보이던 버그.
+                            해결: 부모를 flex container로 + cpv2-bay-box에 명시적 height. */}
+                        <div className="bg-white rounded p-2 mb-3" style={{ minHeight: '320px', display: 'flex', flexDirection: 'column' }}>
+                          <div className="cpv2-bay-box" style={{ minWidth: '380px', height: '300px', flex: 'none' }}>
                             <BayBoxV2 data={data} count={null} colorMap={{}} />
                           </div>
                         </div>
