@@ -1114,9 +1114,19 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     ? sliceWithAlign(gridRowsArr, pageBayDictGrid.holdCells, pageBayDictGrid.holdAlign,
                      pageBayDictGrid.holdPadLeft, pageBayDictGrid.holdPadRight)
     : baseHoldRowsArr;
-  // 헤더용 row 배열 — 사전 있으면 그리드 풀폭(null 없음), 없으면 deck/hold 중 더 긴 쪽
-  const deckHeaderRowsArr = gridRowsArr || deckRowsArr;
-  const holdHeaderRowsArr = gridRowsArr || holdRowsArr;
+  // M6.94.3 fix: 헤더용 row 배열도 deck/hold 각자 own 폭만 (가운데 정렬)
+  //   증상: hold cells=7인데 헤더에 row 08 (deck 8 grid의 가장 왼쪽)이 표시됨 — 사용자 정정.
+  //   원인: 이전 M6.94.1에서 헤더를 그리드 풀폭(gridRowsArr)으로 통일 → 없는 row까지 라벨 표시.
+  //   해결: 헤더도 own cells 폭으로 만들고 sliceWithAlign으로 가운데 배치 → 중앙선은 유지, 없는 row는 안 보임.
+  //   sliceWithAlign 결과의 null은 row 라벨 렌더링 시 빈 칸으로 처리됨 (cells와 동일 흐름).
+  const deckHeaderRowsArr = pageBayDictGrid && gridRowsArr
+    ? sliceWithAlign(gridRowsArr, pageBayDictGrid.deckCells, pageBayDictGrid.deckAlign,
+                     pageBayDictGrid.deckPadLeft, pageBayDictGrid.deckPadRight)
+    : deckRowsArr;
+  const holdHeaderRowsArr = pageBayDictGrid && gridRowsArr
+    ? sliceWithAlign(gridRowsArr, pageBayDictGrid.holdCells, pageBayDictGrid.holdAlign,
+                     pageBayDictGrid.holdPadLeft, pageBayDictGrid.holdPadRight)
+    : holdRowsArr;
 
   // 좌우 균형 (전 베이 통일 폭) — fallback 양식
   const maxLeft = globalRowRange?.maxLeft || 0;
