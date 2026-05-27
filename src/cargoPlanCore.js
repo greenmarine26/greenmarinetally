@@ -497,12 +497,16 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   if (deckCells.length < nDeck) deckCells = [...deckCells, ...new Array(nDeck - deckCells.length).fill(deckRowMax)];
   if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(holdRowMax)];
 
-  // M6.90.0: deck/hold row labels 별도. cells 자체 폭 + CSS center로 박스 안 정렬.
-  const deckRowPos = getRowPositions(deckRowMax, hasZero);
-  const holdRowPos = getRowPositions(holdRowMax, hasZero);
+  // M6.94.1: deck/hold 그리드 통일 (사용자 정정 모델 — BayPlan의 pageBayDictGrid와 동일 정신)
+  //   기존 (M6.90.0): deck/hold 별도 폭 (deckRowMax vs holdRowMax) → 좌우 비대칭
+  //   변경: 그리드 폭 = max(deckRowMax, holdRowMax) → deck/hold 같은 폭 → 중앙선 일치
+  //   좁은 쪽(deck 또는 hold)은 align/padding으로 위치 결정 (홀 cells 안에서)
+  const gridRowMax = Math.max(deckRowMax, holdRowMax);
+  const deckRowPos = getRowPositions(gridRowMax, hasZero);
+  const holdRowPos = getRowPositions(gridRowMax, hasZero);
   const nDeckCols = deckRowPos.length;
-  const nHoldCols = holdRowPos.length;
-  const holdOffset = 0; // hold 자체 폭 사용 — CSS center 정렬
+  const nHoldCols = nDeckCols; // 통일 그리드
+  const holdOffset = 0; // 사용 안 함 (CSS center 정렬 + hold cells 안의 active만 가운데)
 
   const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 
