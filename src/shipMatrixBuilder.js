@@ -456,10 +456,15 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
     name: name || '',
     callsign: '',
     bayDef: {
+      // M6.94.4: 카고플랜이 사용자 데이터로 인식하도록 source/_userOwned 명시
+      //   원인: 이게 없으면 cargoPlanCore의 isUserSource=false → 자동 보강 분기로 흘러
+      //   사용자 매트릭스 빌더 정의(cells/rowCount/tiers)가 카고플랜에 반영 안 됨.
+      source: 'user',
+      _userOwned: true,
       recordCount: baysSummary.length,
       sourceFile: 'matrix_builder',
       parsedAt: new Date().toISOString(),
-      sourceVersion: 'M6.93.7',
+      sourceVersion: 'M6.94.4',
       verified: true,
       baysSummary,
     },

@@ -418,8 +418,10 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           </div>
 
           {/* === 베이별 검증 폼 — 좌우 분할: 좌측 편집 + 우측 베이플랜 시뮬 === */}
+          {/* M6.94.4: 모바일 반응형 — 좁은 폭(폰)에서는 세로 분할 (좌측 편집 위, 우측 시뮬 아래).
+              이전: flex gap-3 (무조건 가로) → 모바일에서 우측(420px 고정)이 화면 다 차지 → 좌측 안 보임. */}
           {!done && (
-            <div className="flex gap-3" style={{ minHeight: '60vh' }}>
+            <div className="flex flex-col lg:flex-row gap-3" style={{ minHeight: '60vh' }}>
               {/* === 좌측: 베이 편집 영역 === */}
               <div className="flex-1 space-y-2 overflow-y-auto" style={{ maxHeight: '70vh' }}>
               {/* 베이 추가 폼 */}
@@ -575,7 +577,8 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               </div>{/* /좌측 편집 영역 */}
 
               {/* === 우측: 베이플랜 시뮬레이션 (선택한 베이의 빈 카고플랜 박스) === */}
-              <div className="w-[420px] flex-shrink-0">
+              {/* M6.94.4: 모바일은 풀폭(w-full), 데스크탑(lg)만 420px 고정. */}
+              <div className="w-full lg:w-[420px] lg:flex-shrink-0">
                 <style>{CARGO_V2_CSS}</style>
                 <div className="sticky top-0 bg-zinc-800 border border-zinc-600 rounded p-3" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                   <div className="text-sm font-bold text-cyan-300 mb-2 flex items-center justify-between">
@@ -623,22 +626,22 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                               ))}
                             </div>
                           </div>
-                          {/* Hold padding micro */}
+                          {/* Hold padding micro — M6.94.3: 0.5 단위 미세 조정 (사용자 요청) */}
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <label className="flex items-center gap-1">
                               <span className="text-zinc-400">왼쪽 +</span>
-                              <input type="number" min="0" max="20" value={e.holdPadLeft || 0}
-                                onChange={ev => updateAlignPad(selectedBay, 'holdPadLeft', parseInt(ev.target.value) || 0)}
-                                className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" />
+                              <input type="number" min="0" max="20" step="0.5" value={e.holdPadLeft || 0}
+                                onChange={ev => updateAlignPad(selectedBay, 'holdPadLeft', parseFloat(ev.target.value) || 0)}
+                                className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center" />
                             </label>
                             <label className="flex items-center gap-1">
                               <span className="text-zinc-400">오른쪽 +</span>
-                              <input type="number" min="0" max="20" value={e.holdPadRight || 0}
-                                onChange={ev => updateAlignPad(selectedBay, 'holdPadRight', parseInt(ev.target.value) || 0)}
-                                className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" />
+                              <input type="number" min="0" max="20" step="0.5" value={e.holdPadRight || 0}
+                                onChange={ev => updateAlignPad(selectedBay, 'holdPadRight', parseFloat(ev.target.value) || 0)}
+                                className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center" />
                             </label>
                           </div>
-                          <div className="text-[10px] text-zinc-500 mt-1">cells 단위 미세 조정. 0이면 위 정렬 자동.</div>
+                          <div className="text-[10px] text-zinc-500 mt-1">cells 단위 미세 조정 (0.5 가능). 0이면 위 정렬 자동.</div>
                         </div>
 
                         {/* === 베이 복사 === */}
