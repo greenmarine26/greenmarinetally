@@ -423,9 +423,10 @@ export function augmentMatrixFromPdf(matrix, pdfResult) {
  * @param {string} code
  * @param {string} name
  * @param {string} imo
+ * @param {string} callsign  M6.94.5: 추가 — 단일 책임 (호출처에서 따로 보강 X)
  * @returns {Object} bayDictEntry
  */
-export function matrixToBayDictEntry(matrix, code, name, imo) {
+export function matrixToBayDictEntry(matrix, code, name, imo, callsign) {
   const baysSummary = Object.keys(matrix.byBay).sort().map(bay => {
     const e = matrix.byBay[bay];
     return {
@@ -454,7 +455,7 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
     imo: imo || '',
     code: code || '',
     name: name || '',
-    callsign: '',
+    callsign: callsign || '',  // M6.94.5: 인자로 받음 (이전엔 ''로 하드코딩)
     bayDef: {
       // M6.94.4: 카고플랜이 사용자 데이터로 인식하도록 source/_userOwned 명시
       //   원인: 이게 없으면 cargoPlanCore의 isUserSource=false → 자동 보강 분기로 흘러
@@ -464,7 +465,7 @@ export function matrixToBayDictEntry(matrix, code, name, imo) {
       recordCount: baysSummary.length,
       sourceFile: 'matrix_builder',
       parsedAt: new Date().toISOString(),
-      sourceVersion: 'M6.94.4',
+      sourceVersion: 'M6.94.5',
       verified: true,
       baysSummary,
     },

@@ -243,9 +243,14 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       alert('CASP 코드를 입력하세요 (자동 추론된 값 사용 권장)');
       return;
     }
-    const entry = matrixToBayDictEntry(matrix, shipMeta.code, shipMeta.name, shipMeta.imo);
-    // 콜사인 추가
-    entry.callsign = shipMeta.callsign || '';
+    // M6.94.5: callsign을 인자로 직접 전달 (이전엔 사후 보강 → 단일 책임 어김)
+    const entry = matrixToBayDictEntry(
+      matrix,
+      shipMeta.code,
+      shipMeta.name,
+      shipMeta.imo,
+      shipMeta.callsign || ''
+    );
     const ok = addToUserBayDict(entry);
     if (ok) {
       setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이`);

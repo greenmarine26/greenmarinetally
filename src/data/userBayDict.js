@@ -32,9 +32,70 @@ export function loadUserBayDict() {
 }
 
 /**
+ * 6단계 fuzzy 매칭 핵심 로직 (subset에 적용 가능)
+ *   M6.94.5: 2-Phase 구조에서 user-only / 전체 dict 양쪽에서 재사용
+ */
+function _matchInDict(subDict, imo, codeOrName) {
+  if (!subDict || Object.keys(subDict).length === 0) return null;
+  const arg = String(codeOrName || '').trim();
+  const argU = arg.toUpperCase();
+  const argClean = argU.replace(/\s+/g, '');
+  const imoU = String(imo || '').trim().toUpperCase();
+
+  // 1) IMO를 키로 직접
+  if (imoU && subDict[imoU]) return subDict[imoU];
+  // 2) code를 키로 직접
+  if (arg && subDict[arg]) return subDict[arg];
+  if (argU && subDict[argU]) return subDict[argU];
+  // 3) entry.imo 필드
+  if (imoU) {
+    for (const k of Object.keys(subDict)) {
+      const eimo = String(subDict[k]?.imo || '').trim().toUpperCase();
+      if (eimo && eimo === imoU) return subDict[k];
+    }
+  }
+  // 4) entry.code 필드
+  if (argU) {
+    for (const k of Object.keys(subDict)) {
+      const ec = String(subDict[k]?.code || '').trim().toUpperCase();
+      if (ec && ec === argU) return subDict[k];
+    }
+  }
+  // 5) entry.callsign 필드 (imo 또는 codeOrName 인자 어느 쪽에 callsign이 들어와도)
+  if (imoU) {
+    for (const k of Object.keys(subDict)) {
+      const cs = String(subDict[k]?.callsign || '').trim().toUpperCase();
+      if (cs && cs === imoU) return subDict[k];
+    }
+  }
+  if (argU) {
+    for (const k of Object.keys(subDict)) {
+      const cs = String(subDict[k]?.callsign || '').trim().toUpperCase();
+      if (cs && cs === argU) return subDict[k];
+    }
+  }
+  // 6) entry.name fuzzy (공백 무시, prefix 양방향, 5글자+ overlap)
+  if (argClean && argClean.length >= 4) {
+    for (const k of Object.keys(subDict)) {
+      const n = String(subDict[k]?.name || '').toUpperCase().replace(/\s+/g, '');
+      if (!n) continue;
+      if (n === argClean) return subDict[k];
+      if (n.startsWith(argClean) || argClean.startsWith(n)) return subDict[k];
+      if (n.length >= 5 && argClean.length >= 5 && n.slice(0, 5) === argClean.slice(0, 5)) return subDict[k];
+    }
+  }
+  return null;
+}
+
+/**
  * 단일 항목 조회 (M6.93.12 fix #1: 6단계 fuzzy 매칭)
- *   저장은 dict[code]=entry 형식이지만, 호출 인자는 (imo, 선박명) 등 다양함.
- *   매칭 실패 시 v2 fallback으로 사용자 데이터가 무시되는 사고 방지.
+ *   M6.94.5: 2-Phase 구조로 user-source entry 우선 매칭 (원칙 ① 절대 보호).
+ *   같은 배에 대해 PDF 자동 파싱본(source 없음)과 매트릭스 빌더본(source:"user")이
+ *   동시에 존재할 때, user entry가 우선 매칭되도록 보장.
+ *
+ *   배경: M6.94.4 버그 — DXQD 자동 PDF entry가 H3OI matrix_builder entry를 가림.
+ *   카고플랜이 PDF 자동본 사용 → 사용자 매트릭스 빌더 정의 반영 안 됨.
+ *
  * @param {string} imo
  * @param {string} codeOrName  - code 또는 선박명 또는 콜사인
  * @returns {object|null}
@@ -43,72 +104,68 @@ export function lookupUserBayDict(imo, codeOrName) {
   const dict = loadUserBayDict();
   if (!dict || Object.keys(dict).length === 0) return null;
 
-  const arg = String(codeOrName || '').trim();
-  const argU = arg.toUpperCase();
-  const argClean = argU.replace(/\s+/g, '');
-  const imoU = String(imo || '').trim().toUpperCase();
-
-  // 1) IMO를 키로 직접 매칭
-  if (imoU && dict[imoU]) return dict[imoU];
-
-  // 2) code를 키로 직접 매칭 (대소문자 무시 prep)
-  if (arg && dict[arg]) return dict[arg];
-  if (argU && dict[argU]) return dict[argU];
-
-  // 3) entry.imo 필드 매칭
-  if (imoU) {
-    for (const k of Object.keys(dict)) {
-      const eimo = String(dict[k]?.imo || '').trim().toUpperCase();
-      if (eimo && eimo === imoU) return dict[k];
+  // Phase 1: user 소스 entry만 대상으로 6단계 매칭 (원칙 ① 절대 보호)
+  //   bayDef.source === 'user' 또는 bayDef._userOwned === true
+  const userOnly = {};
+  for (const k of Object.keys(dict)) {
+    const e = dict[k];
+    if (e?.bayDef?.source === 'user' || e?.bayDef?._userOwned === true) {
+      userOnly[k] = e;
     }
   }
+  const userMatch = _matchInDict(userOnly, imo, codeOrName);
+  if (userMatch) return userMatch;
 
-  // 4) entry.code 필드 매칭
-  if (argU) {
-    for (const k of Object.keys(dict)) {
-      const ec = String(dict[k]?.code || '').trim().toUpperCase();
-      if (ec && ec === argU) return dict[k];
-    }
-  }
-
-  // 5) entry.callsign 필드 매칭 (imo 또는 codeOrName 인자 어느 쪽에 callsign이 들어와도)
-  if (imoU) {
-    for (const k of Object.keys(dict)) {
-      const cs = String(dict[k]?.callsign || '').trim().toUpperCase();
-      if (cs && cs === imoU) return dict[k];
-    }
-  }
-  if (argU) {
-    for (const k of Object.keys(dict)) {
-      const cs = String(dict[k]?.callsign || '').trim().toUpperCase();
-      if (cs && cs === argU) return dict[k];
-    }
-  }
-
-  // 6) entry.name fuzzy 매칭 (공백 무시, prefix 양방향, 4글자+ overlap)
-  if (argClean && argClean.length >= 4) {
-    for (const k of Object.keys(dict)) {
-      const n = String(dict[k]?.name || '').toUpperCase().replace(/\s+/g, '');
-      if (!n) continue;
-      if (n === argClean) return dict[k];
-      if (n.startsWith(argClean) || argClean.startsWith(n)) return dict[k];
-      // 5글자 prefix overlap (선박명 표기 흔들림 대응)
-      if (n.length >= 5 && argClean.length >= 5 && n.slice(0, 5) === argClean.slice(0, 5)) return dict[k];
-    }
-  }
-
-  return null;
+  // Phase 2: 전체 dict 대상으로 매칭 (PDF 자동 파싱 등 fallback)
+  return _matchInDict(dict, imo, codeOrName);
 }
 
 /**
- * .def 파싱 결과를 사전에 추가 (또는 갱신)
+ * .def 또는 매트릭스 빌더 결과를 사전에 추가 (또는 갱신)
  * 키 우선순위: code (IMO는 .def에 없음)
+ *
+ * M6.94.5 추가: cross-fill 보강
+ *   같은 dict에 다른 키로 이미 같은 배가 등록되어 있을 때(callsign/imo/name 매칭),
+ *   양쪽 entry의 비어있는 식별자 필드를 상호 보완해서 채워줌.
+ *   효과: 후속 lookupUserBayDict의 6단계 fuzzy 매칭이 두 entry를 연결 가능.
+ *
  * @param {object} entry - analysisToBayDictEntry() 결과
  * @returns {boolean} 저장 성공 여부
  */
 export function addToUserBayDict(entry) {
   if (!entry || !entry.code) return false;
   const dict = loadUserBayDict();
+
+  // M6.94.5: 같은 배 다른 키 entry 탐색 (imo/callsign/name 매칭)
+  //   PDF 자동 파싱본과 매트릭스 빌더본이 다른 키로 들어와도 식별자 연결.
+  const entryImoU = String(entry.imo || '').trim().toUpperCase();
+  const entryCsU = String(entry.callsign || '').trim().toUpperCase();
+  const entryNameClean = String(entry.name || '').toUpperCase().replace(/\s+/g, '');
+  for (const k of Object.keys(dict)) {
+    if (k === entry.code) continue;
+    const other = dict[k];
+    if (!other) continue;
+    const oImoU = String(other.imo || '').trim().toUpperCase();
+    const oCsU = String(other.callsign || '').trim().toUpperCase();
+    const oNameClean = String(other.name || '').toUpperCase().replace(/\s+/g, '');
+    // 비어있지 않은 식별자가 하나라도 일치하면 "같은 배" 판정
+    const sameShip =
+      (entryImoU && oImoU && entryImoU === oImoU) ||
+      (entryCsU && oCsU && entryCsU === oCsU) ||
+      (entryNameClean && oNameClean && entryNameClean.length >= 4 &&
+       (entryNameClean === oNameClean ||
+        entryNameClean.startsWith(oNameClean) ||
+        oNameClean.startsWith(entryNameClean)));
+    if (sameShip) {
+      // 양쪽 비어있는 식별자 상호 보완
+      if (!entry.imo && other.imo) entry.imo = other.imo;
+      if (!entry.callsign && other.callsign) entry.callsign = other.callsign;
+      if (!other.imo && entry.imo) other.imo = entry.imo;
+      if (!other.callsign && entry.callsign) other.callsign = entry.callsign;
+      dict[k] = other; // 상대 entry 업데이트 반영
+    }
+  }
+
   dict[entry.code] = entry;
   return _ls.set(STORAGE_KEY, JSON.stringify(dict));
 }
