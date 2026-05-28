@@ -379,6 +379,18 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.94.6 (2026-05-29) — center 자동 정중앙 (정수 칸 한계 → % 단위 전환)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '데크 8 / 홀드 7 같은 1칸 차이에서 center(가운데)가 자동으로 안 됨. 미세조정해도 셀은 안 움직이고 로우 표기(라벨)만 움직임. 게다가 미세조정은 배마다 따로 해야 하는 번거로움.' },
+        { q: '🐛 근본 원인 — 정수 칸 vs % 단위 불일치', a: '홀드 위치를 정수 칸 단위 offsetHold로 이동시켰음. 데크8/홀드7은 1칸 차이라 진짜 가운데는 좌우 0.5칸씩 여백이 필요한데, 정수로는 0.5칸 불가 → offsetHold=Math.floor(1/2)=0 → 왼쪽 쏠림 (center인데 가운데 아님). 반면 라벨은 % 단위 DOM padding(0.5칸=6.25% 가능)이라 따로 움직임 → "셀 안 움직이고 라벨만 움직임".' },
+        { q: '✅ 수정 — 셀도 % 단위 DOM padding으로 전환', a: '(1) buildEmptyBayRenderData: hold cells를 nHoldCols 폭으로만 생성(active 가운데 정렬), 정수 offsetHold 제거. (2) BayBoxV2: hold cells grid(cpv2-grid)에도 라벨과 동일한 holdPadStyle(% padding) 적용 → 셀과 라벨이 같은 단위로 함께 이동. (3) computePadding center: Math.floor/ceil → diff/2 균등 분배. % 단위라 0.5칸(6.25%)도 표현 가능.' },
+        { q: '📐 효과', a: 'center 선택만으로 데크8/홀드7이 좌우 6.25%씩 여백 두고 자동 정중앙. 배마다 미세조정 불필요. 홀드 셀 폭이 데크 셀 폭과 정확히 일치(각 12.5%)해서 같은 베이 번호가 세로로 정렬. left/right/미세조정도 셀+라벨 함께 % 단위로 이동.' },
+        { q: '📋 시뮬레이션 (10/10 PASS)', a: 'sim_align_fix.mjs: T1(hold cells 길이=nHoldCols), T2★(deck8/hold7 center=좌우 6.25% 정중앙), T3~T4(left/right), T5(미세조정 0.5칸=6.25%), T6(hold 셀 폭=deck 셀 폭 12.5% 일치), T7(H3OI bay003 실데이터 각 tier 가운데), T8(차이 없으면 padding 0), T9(deck9/hold7 2칸차이 균등), T10(BERO tier14 회귀 방지).' },
+        { q: '🔧 변경 파일 (2개) + 버전', a: 'src/cargoPlanCore.js (buildEmptyBayRenderData hold cells nHoldCols 생성 + offsetHold 제거), src/components/PrintableCargoPlanV2.jsx (computePadding center 균등 + cpv2-grid에 holdPadStyle 적용). 버전 M6.94.6 (utils.js + sw.js + public/sw.js) — 서비스워커 캐시 강제 갱신.' },
+        { q: '⚙ React Hook 규칙', a: 'PrintableCargoPlanV2.jsx 변경은 computePadding(일반 함수) + JSX style 속성만 — Hook 호출 없음. cargoPlanCore.js는 순수 함수(컴포넌트 아님). 기존 Hook 배치 변경 없음.' },
+      ],
+    },
+    {
       title: '🆕 M6.94.5 (2026-05-28) — DXQD 매트릭스 빌더 + 정렬/tier 14/마지막 베이/빌드 흐름 (7중 결함 수정)',
       examples: [
         { q: '🔥 사용자 보고 (1) DXQD 매트릭스 빌더', a: 'DXQD (XIN QUN DAO, callsign H3OI) 항차 매트릭스 빌더로 18개 베이 저장 후 카고플랜에 반영 안 됨. F12로 확인 결과 master_user_bay_dict_v1 안에 두 entry 분리 존재: dict["DXQD"]는 PDF 자동 파싱본 (sourceFile: "DXQD2615E.pdf", source 마킹 없음), dict["H3OI"]는 매트릭스 빌더 저장본 (source: "user", _userOwned: true, recordCount: 18). 카고플랜이 DXQD 키로 룩업 → PDF 자동본 우선 매칭 → user entry 영원히 미참조.' },

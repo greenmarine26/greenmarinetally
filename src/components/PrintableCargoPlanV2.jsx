@@ -193,10 +193,11 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
     if (align === 'right') {
       return { paddingLeft: `${(diff / biggerN) * 100}%`, paddingRight: '0' };
     }
-    // 3) center (기본) — 자동 가운데 (기존 M6.93.12 fix #11 로직)
+    // 3) center (기본) — 자동 가운데. % 단위라 홀수 diff(예: deck8/hold7)도
+    //    0.5칸씩 좌우 균등 여백으로 진짜 정중앙. 정수 칸 한계 없음 (M6.94.5 fix).
     return {
-      paddingLeft: `${Math.floor(diff / 2) / biggerN * 100}%`,
-      paddingRight: `${Math.ceil(diff / 2) / biggerN * 100}%`,
+      paddingLeft: `${(diff / 2) / biggerN * 100}%`,
+      paddingRight: `${(diff / 2) / biggerN * 100}%`,
     };
   }
 
@@ -261,7 +262,16 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
             className="cpv2-grid-row-wrap"
             style={{ width: '100%' }}
           >
-            <div className="cpv2-grid">
+            <div
+              className="cpv2-grid"
+              style={{
+                // M6.94.5: 셀도 라벨과 동일한 % padding으로 이동.
+                // 이전엔 라벨만 holdPadStyle 받고 셀은 정수 offsetHold라 둘이 어긋나
+                // "셀 안 움직이고 라벨만 움직임" + center 시 왼쪽 쏠림 발생.
+                paddingLeft: holdPadStyle.paddingLeft,
+                paddingRight: holdPadStyle.paddingRight,
+              }}
+            >
               {holdRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) => {

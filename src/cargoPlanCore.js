@@ -680,33 +680,19 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     }
   });
 
-  // M6.94.5: offsetHold는 hold cells가 nDeckCols 폭의 어디서 시작하는지 결정.
-  // 이전 (M6.94.0~4): _diff=0이라 align 'left'/'center'/'right' 모두 offsetHold=0 강제.
-  // padLeft를 0.5 같은 비정수 입력시 set 매칭 실패로 셀 모두 사라짐. → Math.round로 정수 강제.
-  let offsetHold;
-  const _diff = nDeckCols - nHoldCols;
-  if (holdPadLeft > 0 || holdPadRight > 0) {
-    offsetHold = Math.round(holdPadLeft);
-  } else if (holdAlign === 'left') {
-    offsetHold = 0;
-  } else if (holdAlign === 'right') {
-    offsetHold = Math.max(0, _diff);
-  } else {
-    // center: 짝/홀 차이 1칸은 왼쪽으로 더 쏠리도록 floor (한국 카고플랜 관례)
-    offsetHold = Math.floor(_diff / 2);
-  }
-
+  // M6.94.5: hold cells는 nHoldCols 폭으로만 생성 (active 가운데 정렬).
+  // deck(nDeckCols) 안에서의 좌우 위치는 BayBoxV2가 holdPadStyle(% DOM padding)으로 처리.
+  // 이전 (M6.94.0~M6.94.5초안): cells를 nDeckCols 폭 + 정수 offsetHold로 이동시켜서
+  // deck8/hold7 같은 1칸 차이를 0.5칸씩 못 나눠 center가 왼쪽 쏠림 → "중앙정렬 안 됨".
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.map(Number).includes(stdT)) {
       const idx = holdTiers.map(Number).indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
       const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
-      const activeInDeck = new Set([...activeInHold].map(a => a + offsetHold));
       const cells = [];
-      for (let c = 0; c < nDeckCols; c++) {
-        if (activeInDeck.has(c)) {
-          const holdC = c - offsetHold;
-          const rowLbl = (holdC >= 0 && holdC < nHoldCols) ? holdRowPos[holdC] : null;
+      for (let c = 0; c < nHoldCols; c++) {
+        if (activeInHold.has(c)) {
+          const rowLbl = (c >= 0 && c < nHoldCols) ? holdRowPos[c] : null;
           cells.push({ active: true, rowLbl, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
@@ -714,7 +700,7 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
+      const cells = new Array(nHoldCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });
