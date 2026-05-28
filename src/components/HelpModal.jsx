@@ -379,7 +379,18 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.7 (2026-05-29) — 카고플랜/베이상세 deck 폭 불일치 (rowCount → deckCells 기준)',
+      title: '🆕 M6.94.8 (2026-05-29) — 전체 베이 누락 (orphanEvens) + deck/hold 셀 크기 불일치',
+      examples: [
+        { q: '🔥 사용자 보고 (1) 전체 베이 안 나옴', a: '카고플랜에 전체 베이가 나와야 하는데 일부 베이나 마지막 베이가 안 나오는 선박이 많음.' },
+        { q: '🐛 원인 (1) orphanEvens 버림', a: 'autoPairBays는 trio(짝수 e가 e-1,e+1 둘 다 있을 때)에 못 묶인 짝수 단독 베이를 orphanEvens로 반환. 그런데 호출처(PrintableCargoPlanV2)가 { trios, singles }만 구조분해하고 orphanEvens를 버려서, 짝수 단독 베이가 layout에 안 들어가 통째로 누락. singles는 홀수만 담고 있었음.' },
+        { q: '✅ 수정 (1)', a: 'autoPairBays가 unusedOdds + orphanEvens를 합쳐 singles로 반환. 짝수 단독 베이도 single 박스로 렌더 → 전체 베이 커버. 시뮬: 짝수단독/혼합/28베이 큰선박 모두 누락 0 확인.' },
+        { q: '🔥 사용자 보고 (2) 셀 크기 제각각', a: '데크와 홀드의 셀 크기가 다르고 tier/row 표기 위치가 제각각. 베이 특성이 다른데 일괄 적용하는 곳이 있는 듯.' },
+        { q: '🐛 원인 (2) flex 비율 미반영', a: 'M6.94.5에서 STANDARD_HOLD를 5→7 tier로 확장(14,12 추가)했는데, deck-area:hold-area flex 비율이 옛 기준 6:4 그대로. deck 7 tier / hold 7 tier로 같아졌는데 flex 6:4라 deck 셀 높이가 hold의 1.5배 → 셀 크기 불일치, 라벨 위치 어긋남.' },
+        { q: '✅ 수정 (2)', a: 'cpv2-deck-area, cpv2-hold-area flex를 6:4 → 1:1로. STANDARD_DECK 7 : STANDARD_HOLD 7 동일하므로 deck/hold 셀 높이 통일. 셀 폭은 M6.94.6~7에서 이미 통일(% padding). → 셀 크기 완전 일치, 라벨 위치 일관.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/cargoPlanCore.js (autoPairBays: orphanEvens→singles 합침), src/components/PrintableCargoPlanV2.jsx (deck/hold area flex 1:1). 버전 M6.94.8.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 사용자 보고', a: '같은 베이인데 deck row 수가 화면마다 다름 — 카고플랜은 6 row, 베이상세(미리보기)는 8 row. 매트릭스 빌더에서 deck를 6칸으로 줄였는데 한쪽은 8칸으로 표시.' },
         { q: '🐛 원인', a: '매트릭스 빌더에서 deck cells를 6으로 줄여도 rowCount 필드는 옛값(8)으로 남음. buildEmptyBayRenderData(미리보기)는 nDeckCols = rowCount(8)을 써서 8칸, computeBayRenderData(카고플랜)는 다른 경로라 6칸 → 불일치. 사용자 확정: deck 폭 기준 = 매트릭스 빌더에 입력한 deck cells (rowCount 아님).' },

@@ -47,8 +47,14 @@ export function autoPairBays(matrixBays) {
     }
   }
 
-  const singles = odds.filter(o => !usedOdds.has(o)).map(o => String(o).padStart(2, '0'));
+  // M6.94.8: orphanEvens(trio에 못 묶인 짝수 단독 베이)를 singles에 합침.
+  // 이전: orphanEvens를 반환만 하고 호출처가 안 받아서 카고플랜에 통째로 누락
+  //   (일부 베이/마지막 베이 안 나오던 버그 — 짝수 단독 베이가 있는 선박 다수).
+  const unusedOdds = odds.filter(o => !usedOdds.has(o));
   const orphanEvens = evens.filter(e => !usedEvens.has(e));
+  const singles = [...unusedOdds, ...orphanEvens]
+    .sort((a, b) => a - b)
+    .map(n => String(n).padStart(2, '0'));
 
   return { trios, singles, orphanEvens };
 }

@@ -73,8 +73,8 @@ export const CARGO_V2_CSS = `
 .cpv2-bay-title { display: inline-block; }
 .cpv2-bay-count { position: absolute; right: 4px; top: 1px; color: #555; font-size: clamp(8px, 0.65vw, 10px); font-weight: normal; white-space: nowrap; }
 .cpv2-bay-content { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; width: 100%; }
-.cpv2-deck-area { flex: 6 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
-.cpv2-hold-area { flex: 4 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
+.cpv2-deck-area { flex: 1 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
+.cpv2-hold-area { flex: 1 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
 .cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-height: 0; }
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
