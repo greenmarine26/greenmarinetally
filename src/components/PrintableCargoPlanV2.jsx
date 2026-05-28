@@ -211,7 +211,7 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
         {count != null && <span className="cpv2-bay-count">{count}</span>}
       </div>
       <div className="cpv2-bay-content">
-        <div className="cpv2-deck-area" style={{ flex: `${Math.max(nDeck, 1)} 1 0` }}>
+        <div className="cpv2-deck-area" style={{ flex: `${Math.max(deckTiers.length, 1)} 1 0` }}>
           <div className="cpv2-row-labels">
             {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
@@ -258,7 +258,7 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
             cells 안에서 active 위치만 가운데 (offset). width 100%, margin 자동 제거.
             좌우 대칭 보장. */}
         <div className="cpv2-hatch-break"></div>
-        <div className="cpv2-hold-area" style={{ flex: `${Math.max(nHold, 1)} 1 0` }}>
+        <div className="cpv2-hold-area" style={{ flex: `${Math.max(holdTiers.length, 1)} 1 0` }}>
           <div
             className="cpv2-grid-row-wrap"
             style={{ width: '100%' }}

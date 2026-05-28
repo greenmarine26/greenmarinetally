@@ -379,7 +379,14 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.9 (2026-05-29) — 매트릭스 절대 보호 강화 + 카고플랜 여백/tier라벨 정렬 (CASPI 양식)',
+      title: '🆕 M6.94.10 (2026-05-29) — 핫픽스: nDeck is not defined (카고플랜 렌더 에러)',
+      examples: [
+        { q: '🐛 에러', a: 'M6.94.9에서 카고플랜 열면 "nDeck is not defined" 에러로 화면 안 뜸.' },
+        { q: '🔍 원인', a: 'M6.94.9에서 deck-area flex를 nDeck 비례로 넣었는데, BayBoxV2 컴포넌트 destructure에는 nHold만 있고 nDeck이 없었음 (nDeck은 computeBayRenderData 함수 내부 지역변수). BayBoxV2 스코프에서 nDeck 참조 → ReferenceError.' },
+        { q: '✅ 수정', a: 'deck-area는 deckTiers.length, hold-area는 holdTiers.length로 flex 계산 (둘 다 BayBoxV2에 destructure돼 있음). nDeck/nHold 변수 의존 제거. 버전 M6.94.10.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 보고 (1) 수정한 매트릭스가 나중에 바뀜', a: '매트릭스 빌더로 수정한 베이가 저장 직후는 맞는데 나중에 tier 개수/cells 칸 수가 조금씩 바뀜.' },
         { q: '🐛 원인 (1)', a: 'EDI tier union 차단 조건이 isUserOwnedBay = isUserSource && userBay. userBay 베이번호 매칭이 실패하면 보호 풀려 EDI 로드 시 user tier에 EDI tier 합쳐짐. 저장 직후엔 EDI 없어 맞다가 나중에 변형.' },
