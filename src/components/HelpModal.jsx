@@ -379,7 +379,16 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.6 (2026-05-29) — center 자동 정중앙 (정수 칸 한계 → % 단위 전환)',
+      title: '🆕 M6.94.7 (2026-05-29) — 카고플랜/베이상세 deck 폭 불일치 (rowCount → deckCells 기준)',
+      examples: [
+        { q: '🔥 사용자 보고', a: '같은 베이인데 deck row 수가 화면마다 다름 — 카고플랜은 6 row, 베이상세(미리보기)는 8 row. 매트릭스 빌더에서 deck를 6칸으로 줄였는데 한쪽은 8칸으로 표시.' },
+        { q: '🐛 원인', a: '매트릭스 빌더에서 deck cells를 6으로 줄여도 rowCount 필드는 옛값(8)으로 남음. buildEmptyBayRenderData(미리보기)는 nDeckCols = rowCount(8)을 써서 8칸, computeBayRenderData(카고플랜)는 다른 경로라 6칸 → 불일치. 사용자 확정: deck 폭 기준 = 매트릭스 빌더에 입력한 deck cells (rowCount 아님).' },
+        { q: '✅ 수정', a: '두 함수 모두 nDeckCols/nHoldCols를 cells 실제 max 기반으로 통일. buildEmptyBayRenderData: nDeckCols = max(deckCells) + (hasZero?1:0), rowCount는 cells 없을 때만 fallback. computeBayRenderData: deckRowPos/holdRowPos를 deckRowMax/holdRowMax(rowCount 파생) 대신 cells max 기반으로. 두 화면이 같은 계산 → 일치.' },
+        { q: '📋 시뮬 (검증)', a: 'deckCells=[6,6,6]+rowCount=8 → nDeckCols=6 (rowCount 무시), deck cells 길이=6. 회귀: deckCells=[8,8,8]+rowCount=8 → nDeckCols=8 유지. hasZero: V7A2 bay001(deckCells[7..]+hasZero) → nDeckCols=8, nHoldCols=6.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/cargoPlanCore.js (buildEmptyBayRenderData + computeBayRenderData 둘 다 cells max 기반). 버전 M6.94.7 (utils.js + sw.js + public/sw.js).' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 사용자 보고', a: '데크 8 / 홀드 7 같은 1칸 차이에서 center(가운데)가 자동으로 안 됨. 미세조정해도 셀은 안 움직이고 로우 표기(라벨)만 움직임. 게다가 미세조정은 배마다 따로 해야 하는 번거로움.' },
         { q: '🐛 근본 원인 — 정수 칸 vs % 단위 불일치', a: '홀드 위치를 정수 칸 단위 offsetHold로 이동시켰음. 데크8/홀드7은 1칸 차이라 진짜 가운데는 좌우 0.5칸씩 여백이 필요한데, 정수로는 0.5칸 불가 → offsetHold=Math.floor(1/2)=0 → 왼쪽 쏠림 (center인데 가운데 아님). 반면 라벨은 % 단위 DOM padding(0.5칸=6.25% 가능)이라 따로 움직임 → "셀 안 움직이고 라벨만 움직임".' },

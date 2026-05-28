@@ -503,12 +503,15 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   //   기존 (M6.90.0): deck/hold 별도 폭 (deckRowMax vs holdRowMax) → 좌우 비대칭
   //   변경: 그리드 폭 = max(deckRowMax, holdRowMax) → deck/hold 같은 폭 → 중앙선 일치
   //   좁은 쪽(deck 또는 hold)은 align/padding으로 위치 결정 (홀 cells 안에서)
-  const gridRowMax = Math.max(deckRowMax, holdRowMax);
-  const deckRowPos = getRowPositions(gridRowMax, hasZero);
-  const holdRowPos = getRowPositions(gridRowMax, hasZero);
+  // M6.94.7: deck/hold 폭 모두 cells 실제 max 기반 (rowCount/rowMax 아님 — 사용자 확정 원칙).
+  // 매트릭스 빌더에 입력한 deck/hold cells가 폭의 기준. rowCount 필드는 옛값일 수 있어 무시.
+  // 미리보기(buildEmptyBayRenderData)와 동일 계산 → 두 화면 일치.
+  const _deckCellsMax = deckCells.map(Number).filter(v => v > 0).length ? Math.max(...deckCells.map(Number).filter(v => v > 0)) : deckRowMax;
+  const _holdCellsMax = holdCells.map(Number).filter(v => v > 0).length ? Math.max(...holdCells.map(Number).filter(v => v > 0)) : holdRowMax;
+  const deckRowPos = getRowPositions(_deckCellsMax, hasZero);
+  const holdRowPos = getRowPositions(_holdCellsMax, hasZero);
   const nDeckCols = deckRowPos.length;
-  const nHoldCols = nDeckCols; // 통일 그리드
-  const holdOffset = 0; // 사용 안 함 (CSS center 정렬 + hold cells 안의 active만 가운데)
+  const nHoldCols = Math.min(holdRowPos.length, nDeckCols);
 
   const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 
@@ -543,44 +546,23 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     }
   });
 
-  // M6.93.12 fix #11 → M6.94.0 확장 (사용자 시각 정렬):
-  //   M6.81 표준 방식 — hold cells를 nDeckCols 폭으로 그림 (deck와 같은 폭).
-  //   offset 계산 우선순위:
-  //     1) 사용자 holdPadLeft > 0이면 그것 (cells 단위 그대로)
-  //     2) holdAlign='left' → offset=0, 'right' → offset=nDeckCols-nHoldCols
-  //     3) 'center' (기본) → 자동 가운데 (M6.93.12 로직)
-  let offsetHold;
-  const _holdPadL = typeof userBay?.holdPadLeft === 'number' ? userBay.holdPadLeft : 0;
-  const _holdPadR = typeof userBay?.holdPadRight === 'number' ? userBay.holdPadRight : 0;
-  const _holdAlign = userBay?.holdAlign || 'center';
-  const _diff = nDeckCols - nHoldCols;
-  if (_holdPadL > 0 || _holdPadR > 0) {
-    offsetHold = _holdPadL;
-  } else if (_holdAlign === 'left') {
-    offsetHold = 0;
-  } else if (_holdAlign === 'right') {
-    offsetHold = Math.max(0, _diff);
-  } else {
-    offsetHold = Math.floor(_diff / 2);
-  }
+  // M6.94.6: hold cells를 nHoldCols 폭으로만 생성 (active 가운데). 정수 offsetHold 제거.
+  // deck 안에서의 좌우 위치는 BayBoxV2가 holdPadStyle(% DOM padding)으로 처리 → 0.5칸 여백 가능 → center 정중앙.
   const holdRows = STANDARD_HOLD.map((stdT) => {
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
       const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
-      const activeInDeck = new Set([...activeInHold].map(a => a + offsetHold));
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
       const cells = [];
-      // nDeckCols 폭으로 그림 (deck와 통일 → 좌우 대칭)
-      for (let c = 0; c < nDeckCols; c++) {
-        const inActive = activeInDeck.has(c);
+      for (let c = 0; c < nHoldCols; c++) {
+        const inActive = activeInHold.has(c);
         if (inActive) {
-          const holdC = c - offsetHold;
-          const rowLbl = (holdC >= 0 && holdC < nHoldCols) ? holdRowPos[holdC] : null;
+          const rowLbl = (c >= 0 && c < nHoldCols) ? holdRowPos[c] : null;
           const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
           const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
           cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
@@ -590,8 +572,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       }
       return { tier: stdT, invisible: false, cells };
     } else {
-      // invisible row도 nDeckCols 폭으로 통일
-      const cells = new Array(nDeckCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
+      const cells = new Array(nHoldCols).fill(null).map(() => ({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false }));
       return { tier: stdT, invisible: true, cells };
     }
   });
@@ -645,10 +626,16 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     holdAlign = 'center', holdPadLeft = 0, holdPadRight = 0,
   } = bayEntry;
 
-  const nDeckCols = rowCount + (hasZero ? 1 : 0);
-  // M6.94.5: nHoldCols 강제 통일 해제. 실제 hold cells 최대값 기준으로 계산.
-  // 이전 (M6.94.0~4): nHoldCols = nDeckCols → _diff=0 → left/center/right 버튼이 셀에 영향 없음.
-  // hold 폭이 deck보다 작은 게 정상 (선체 형태). 차이만큼 자동 가운데 정렬 + 사용자 override 가능.
+  // M6.94.7: nDeckCols를 deckCells 실제 max 기반으로 계산 (rowCount 필드 아님).
+  // 매트릭스 빌더에서 deck cells를 6으로 줄여도 rowCount 필드는 옛값(8)으로 남아
+  // 미리보기가 8칸으로 그려지던 버그 (카고플랜은 deckCells 기준 6, 베이상세는 rowCount 기준 8 불일치).
+  // 사용자 확정: deck 폭 기준 = 매트릭스 빌더에 입력한 deck cells.
+  const _deckCellsNums = deckCells.map(Number).filter(v => !isNaN(v) && v > 0);
+  const _deckCellsMax = _deckCellsNums.length > 0 ? Math.max(..._deckCellsNums) : 0;
+  const _effDeckRows = _deckCellsMax > 0 ? _deckCellsMax : rowCount;
+  const nDeckCols = _effDeckRows + (hasZero ? 1 : 0);
+  // nHoldCols 강제 통일 해제. 실제 hold cells 최대값 기준으로 계산.
+  // hold 폭이 deck보다 작은 게 정상 (선체 형태). 차이만큼 BayBoxV2가 % padding으로 가운데.
   const _holdCellsNums = holdCells.map(Number).filter(v => !isNaN(v) && v > 0);
   const _holdCellsMax = _holdCellsNums.length > 0 ? Math.max(..._holdCellsNums) : 0;
   const nHoldCols = _holdCellsMax > 0
