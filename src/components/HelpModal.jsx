@@ -379,7 +379,16 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.10 (2026-05-29) — 핫픽스: nDeck is not defined (카고플랜 렌더 에러)',
+      title: '🆕 M6.94.11 (2026-05-29) — 베이마다 셀 폭 통일 (박스 폭 = 칸 수 비례, CASPI식)',
+      examples: [
+        { q: '🔥 보고', a: 'BAY 01과 BAY (2)3 셀 크기가 다름. BAY 01 deck는 6칸, BAY 03 deck는 8칸인데 박스 전체 폭이 동일 → BAY 01 셀이 더 넓음.' },
+        { q: '🔍 CASPI 확인', a: 'CASPI는 BAY 01(6칸)도 BAY 11(8칸)과 셀 하나 폭이 동일. 6칸 베이는 박스가 그만큼 좁고, 셀 크기는 통일. 즉 베이 박스 폭이 칸 수에 비례.' },
+        { q: '🐛 원인', a: '모든 cpv2-bay-box가 flex:1 1 0 (동일 폭). 베이마다 deck 칸 수(nDeckCols)가 6/8로 달라도 박스 폭이 같아서 셀 폭 = 박스폭/칸수가 베이마다 달라짐.' },
+        { q: '✅ 수정', a: 'trio/single 박스 flex를 nDeckCols 비례로 (style flex: nDeckCols 1 0). 행 내에서 칸 수 비례 분배 → 셀 폭 = 페이지폭/총칸수로 모든 베이 통일. legend 박스는 flex 8로 베이와 비슷한 폭 유지.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/components/PrintableCargoPlanV2.jsx (box 렌더: trio/single flex nDeckCols 비례, legend flex 8). 버전 M6.94.11.' },
+      ],
+    },
+    {
       examples: [
         { q: '🐛 에러', a: 'M6.94.9에서 카고플랜 열면 "nDeck is not defined" 에러로 화면 안 뜸.' },
         { q: '🔍 원인', a: 'M6.94.9에서 deck-area flex를 nDeck 비례로 넣었는데, BayBoxV2 컴포넌트 destructure에는 nHold만 있고 nDeck이 없었음 (nDeck은 computeBayRenderData 함수 내부 지역변수). BayBoxV2 스코프에서 nDeck 참조 → ReferenceError.' },

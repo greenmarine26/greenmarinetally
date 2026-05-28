@@ -631,18 +631,18 @@ export default function PrintableCargoPlanV2({
             const leg2Header = isDischarge ? '종류' : '선사';
             if (emptySlots >= 2) {
               slots.push(
-                <div key="leg1" className="cpv2-bay-box cpv2-legend-box">
+                <div key="leg1" className="cpv2-bay-box cpv2-legend-box" style={{ flex: '8 1 0' }}>
                   <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
                 </div>
               );
               slots.push(
-                <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
+                <div key="leg2" className="cpv2-bay-box cpv2-legend-box" style={{ flex: '8 1 0' }}>
                   <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
                 </div>
               );
             } else if (emptySlots === 1) {
               slots.push(
-                <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box">
+                <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box" style={{ flex: '8 1 0' }}>
                   <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
@@ -658,22 +658,27 @@ export default function PrintableCargoPlanV2({
               slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
             }
             // 그 다음 실제 박스들
+            // M6.94.11: 박스 폭을 deck 칸 수(nDeckCols) 비례로 → 베이마다 셀 폭 통일.
+            //   이전 flex 1 1 0(동일 폭)은 6칸 베이 셀이 8칸 베이보다 넓어지던 문제(CASPI 불일치).
             row.forEach((box, bi) => {
               if (box.type === 'trio') {
                 const topData = renderDataMap[box.topKey];
                 const pairData = renderDataMap[box.pairKey];
+                const trioCols = Math.max(topData?.nDeckCols || 1, pairData?.nDeckCols || 1, 1);
                 slots.push(
-                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
+                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box" style={{ flex: `${trioCols} 1 0` }}>
                     <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} />
                     <div className="cpv2-trio-divider"></div>
                     <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} />
                   </div>
                 );
               } else {
+                const sData = renderDataMap[box.topKey];
+                const singleCols = Math.max(sData?.nDeckCols || 1, 1);
                 slots.push(
-                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
+                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box" style={{ flex: `${singleCols} 1 0` }}>
                     <div className="cpv2-single-half">
-                      <BayBoxV2 data={renderDataMap[box.topKey]} count={boxCounts[box.topKey]} colorMap={colorMap} />
+                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} />
                     </div>
                     <div className="cpv2-empty-half"></div>
                   </div>
