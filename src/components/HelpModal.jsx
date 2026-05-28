@@ -379,7 +379,16 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.13 (2026-05-29) — 해치커버 수 입력 + deck/hold 경계 등분 (카고플랜·베이플랜·베이상세)',
+      title: '🆕 M6.94.14 (2026-05-29) — 중앙정렬 복구 + hold 없는 베이 보호 + 셀 폰트 축소',
+      examples: [
+        { q: '🔥 보고', a: 'M6.94.12 후 (1) 중앙정렬 풀림 (2) 매트릭스에 hold 없는 베이인데 hold가 그려짐 (3) 셀 폰트가 큼 — 별첨 숫자 크기로 줄이되 셀/박스 크기는 그대로.' },
+        { q: '🐛+✅ (1) 중앙정렬', a: 'M6.94.12 padCenter(정수 칸 패딩)는 deck/hold 패딩 칸의 홀짝이 다르면 중심이 0.5칸 어긋남. → padCenter 폐기, deck/hold 모두 gridCols 기준 % padding으로 복귀. 셀 폭=박스폭/gridCols 통일 + 0.5칸 정중앙 동시 달성 (M6.94.6 방식 확장).' },
+        { q: '🐛+✅ (2) hold 없는 베이', a: 'computeBayRenderData가 user holdTiers 빈 배열을 null로 보고 pdf.hold_t로 자동 채움 → hold 없는 베이에 hold 그려짐. → isUserSource면 user가 비운 tier(빈 배열)를 그대로 존중(pdf 채움 금지). nHold=0이면 hatch+hold-area 렌더 자체 생략. 시뮬: user 빈→[], v2→pdf 채움(기존).' },
+        { q: '✅ (3) 셀 폰트', a: 'cpv2-cell font-size를 clamp(7px,0.9vw,12px) → clamp(6px,0.55vw,8px)로 (별첨 table 8px 수준). flex 등 셀 크기 결정 속성은 불변 → 셀·박스 크기 변화 없음.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/cargoPlanCore.js (user 빈 tier 존중), src/components/PrintableCargoPlanV2.jsx (% padding 복귀, nHold=0 hold 생략, 셀 폰트). 버전 M6.94.14.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 요청', a: '검수앱 작업보고에 해치커버 오픈/클로즈 수를 보고하는데, 앱에 베이별 해치 수가 없음. 베이 매트릭스에 해치 수를 넣고, 해치 3개면 deck/hold 경계 굵은선을 3등분, 2개면 2등분, 1개면 1개로 표시.' },
         { q: '✅ 데이터', a: '매트릭스 빌더 베이별 입력에 "해치: 1/2/3" 선택 추가. baysSummary.hatchCount로 저장(기본 1), 기존 매트릭스 다시 열 때 복원. 3대 원칙대로 user 입력 보존.' },

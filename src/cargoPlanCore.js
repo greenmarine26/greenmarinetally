@@ -440,14 +440,24 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
 
   // M6.93.12 fix #2: userBay tiers > override tiers > bayData > pdf
-  let deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
-    || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
-    || override?.deckTiers
-    || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
-  let holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
-    || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
-    || override?.holdTiers
-    || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
+  // M6.94.14: isUserSource면 user가 비운 tier(빈 배열)를 그대로 존중 — pdf 자동 채움 금지.
+  //   증상: 매트릭스에서 hold 없는 베이인데 카고플랜에 hold가 pdf.hold_t로 채워져 그려짐.
+  let deckTiers, holdTiers;
+  if (isUserSource && userBay) {
+    deckTiers = (userBay.deckTiers?.length > 0) ? userBay.deckTiers
+      : (userBay.deckTiersLocal?.length > 0) ? userBay.deckTiersLocal : [];
+    holdTiers = (userBay.holdTiers?.length > 0) ? userBay.holdTiers
+      : (userBay.holdTiersLocal?.length > 0) ? userBay.holdTiersLocal : [];
+  } else {
+    deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
+      || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
+      || override?.deckTiers
+      || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
+    holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
+      || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
+      || override?.holdTiers
+      || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
+  }
 
   // M6.93.12 fix #10 → M6.94.0 수정:
   //   사용자 데이터 보호 원칙: userBay (사용자가 입력한 베이)는 EDI union 절대 안 함.

@@ -79,7 +79,7 @@ export const CARGO_V2_CSS = `
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
 .cpv2-tier-row.cpv2-invisible-row { display: none; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(7px, 0.9vw, 12px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(6px, 0.55vw, 8px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
@@ -176,26 +176,13 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
     holdAlign, holdPadLeft, holdPadRight, hatchCount,
   } = data;
 
-  // M6.94.12: 모든 베이를 같은 칸 수(gridCols = 전체 최대)로 그려 셀 폭 통일.
-  //   박스 폭 동일(flex 1) + grid 칸 수 동일 → 셀 하나 폭이 모든 베이/deck/hold에서 같음.
-  //   칸 적은 베이는 좌우 가운데로 빈 칸 패딩 (CASPI식). deck/hold 둘 다 gridCols → 중앙선 일치.
+  // M6.94.14: 셀 폭 통일은 gridCols 기준 % padding으로 (정수 padCenter 폐기).
+  //   M6.94.12 padCenter는 deck/hold 패딩 칸 홀짝이 다르면 중심이 0.5칸 어긋남(중앙정렬 풀림).
+  //   deck/hold 모두 grid를 gridCols 기준 %로 가운데 → 셀 폭=박스폭/gridCols 통일 + 0.5칸 정중앙.
   const gc = Math.max(gridCols || 0, nDeckCols || 0, nHoldCols || 0, 1);
-  function padCenter(arr, target, fill) {
-    const pad = target - arr.length;
-    if (pad <= 0) return arr;
-    const l = Math.floor(pad / 2), r = pad - l;
-    return [...new Array(l).fill(fill), ...arr, ...new Array(r).fill(fill)];
-  }
-  const padRowCells = (cells) => padCenter(cells, gc, { active: false });
-  const deckRowsG = deckRows.map((r) => ({ ...r, cells: padRowCells(r.cells) }));
-  const holdRowsG = holdRows.map((r) => ({ ...r, cells: padRowCells(r.cells) }));
-  const deckRowPosG = padCenter(deckRowPos, gc, '');
-  const holdRowPosG = padCenter(holdRowPos, gc, '');
 
   // M6.94.0 padding 계산: 사용자 입력 > alignment > 자동 가운데 (fallback)
-  // hold cells가 deck보다 작을 때 hold 영역을 어디에 배치할지 결정.
   function computePadding(align, padL, padR, smallerN, biggerN) {
-    // 1) 사용자 명시 padding 입력 > 0 이면 그것 우선
     if (padL > 0 || padR > 0) {
       return {
         paddingLeft: `${(padL / biggerN) * 100}%`,
@@ -204,22 +191,22 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
     }
     const diff = biggerN - smallerN;
     if (diff <= 0) return { paddingLeft: '0', paddingRight: '0' };
-    // 2) alignment 우선
     if (align === 'left') {
       return { paddingLeft: '0', paddingRight: `${(diff / biggerN) * 100}%` };
     }
     if (align === 'right') {
       return { paddingLeft: `${(diff / biggerN) * 100}%`, paddingRight: '0' };
     }
-    // 3) center (기본) — 자동 가운데. % 단위라 홀수 diff(예: deck8/hold7)도
-    //    0.5칸씩 좌우 균등 여백으로 진짜 정중앙. 정수 칸 한계 없음 (M6.94.5 fix).
+    // center (기본) — % 단위라 홀수 diff도 0.5칸씩 좌우 균등 = 진짜 정중앙
     return {
       paddingLeft: `${(diff / 2) / biggerN * 100}%`,
       paddingRight: `${(diff / 2) / biggerN * 100}%`,
     };
   }
 
-  const holdPadStyle = computePadding(holdAlign, holdPadLeft, holdPadRight, nHoldCols, nDeckCols);
+  // deck/hold 둘 다 gridCols(gc) 기준 → 셀 폭 통일 + 중앙선 일치
+  const deckPadStyle = computePadding(deckAlign, deckPadLeft, deckPadRight, nDeckCols, gc);
+  const holdPadStyle = computePadding(holdAlign, holdPadLeft, holdPadRight, nHoldCols, gc);
 
   return (
     <div className="cpv2-bay-section">
@@ -229,12 +216,12 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
       </div>
       <div className="cpv2-bay-content">
         <div className="cpv2-deck-area" style={{ flex: `${Math.max(deckTiers.length, 1)} 1 0` }}>
-          <div className="cpv2-row-labels">
-            {deckRowPosG.map((rl, i) => <span key={i}>{rl}</span>)}
+          <div className="cpv2-row-labels" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
+            {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
           <div className="cpv2-grid-row-wrap">
-            <div className="cpv2-grid">
-              {deckRowsG.map((row, ri) => (
+            <div className="cpv2-grid" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
+              {deckRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
@@ -271,9 +258,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
             </div>
           </div>
         </div>
-        {/* M6.93.12 fix #11: hold cells가 nDeckCols 폭으로 그려짐 (deck와 통일).
-            cells 안에서 active 위치만 가운데 (offset). width 100%, margin 자동 제거.
-            좌우 대칭 보장. */}
+        {/* M6.94.14: hold 없는 베이(nHold=0)는 hatch+hold-area 숨김 (deck만) */}
+        {nHold > 0 && (<>
         <div className="cpv2-hatch-break">
           {Array.from({ length: Math.max(1, Math.min(3, hatchCount || 1)) }).map((_, i) => (
             <div key={i} className="cpv2-hatch-seg"></div>
@@ -284,8 +270,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
             className="cpv2-grid-row-wrap"
             style={{ width: '100%' }}
           >
-            <div className="cpv2-grid">
-              {holdRowsG.map((row, ri) => (
+            <div className="cpv2-grid" style={{ paddingLeft: holdPadStyle.paddingLeft, paddingRight: holdPadStyle.paddingRight }}>
+              {holdRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
@@ -322,15 +308,16 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
             </div>
           </div>
           {nHold > 0 ? (
-            <div className="cpv2-row-labels">
-              {holdRowPosG.map((rl, i) => <span key={i}>{rl}</span>)}
+            <div className="cpv2-row-labels" style={{ paddingLeft: holdPadStyle.paddingLeft, paddingRight: holdPadStyle.paddingRight }}>
+              {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           ) : (
             <div className="cpv2-row-labels" style={{ visibility: 'hidden' }}>
-              {deckRowPosG.map((rl, i) => <span key={i}>{rl}</span>)}
+              {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           )}
         </div>
+        </>)}
       </div>
     </div>
   );
