@@ -1461,8 +1461,22 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         ))}
       </div>
 
-      {/* 해치커버 */}
-      <div className="border-t-4 border-slate-100 my-2"></div>
+      {/* 해치커버 — M6.94.13: 해치 수만큼 굵은선 등분 */}
+      {(() => {
+        let hc = 1;
+        for (const bn of [page.oddBay, page.evenBay]) {
+          if (bn == null) continue;
+          const db = dictBaysSummary[parseInt(bn, 10)];
+          if (db?.hatchCount) { hc = Math.max(1, Math.min(3, db.hatchCount)); break; }
+        }
+        return (
+          <div className="my-2 flex gap-1.5">
+            {Array.from({ length: hc }).map((_, i) => (
+              <div key={i} className="border-t-4 border-slate-100 flex-1"></div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* HOLD */}
       <div>

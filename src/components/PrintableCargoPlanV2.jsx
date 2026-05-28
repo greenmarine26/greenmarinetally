@@ -100,7 +100,8 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-mark-P { color: #6a1b9a; background: #f3e5f5; }
 .cpv2-cell.cpv2-mark-S { color: #2e7d32; background: #e8f5e9; }
 .cpv2-cell.cpv2-mark-M { color: #c62828; background: #ffebee; }
-.cpv2-hatch-break { height: 0; border-top: 1.5px solid #000; width: 180px; margin: 0; flex-shrink: 0; }
+.cpv2-hatch-break { display: flex; gap: 4px; width: 180px; height: 0; margin: 0; flex-shrink: 0; }
+.cpv2-hatch-seg { flex: 1 1 0; border-top: 1.5px solid #000; height: 0; }
 .cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 9px; color: #444; width: 16px; }
 .cpv2-tier-labels > span { flex: 1 1 0; display: flex; align-items: center; line-height: 1; }
 .cpv2-tier-labels > span { height: 13px; line-height: 13px; display: block; }
@@ -172,7 +173,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
     deckRowPos, holdRowPos, deckRows, holdRows,
     deckAlign, deckPadLeft, deckPadRight,
-    holdAlign, holdPadLeft, holdPadRight,
+    holdAlign, holdPadLeft, holdPadRight, hatchCount,
   } = data;
 
   // M6.94.12: 모든 베이를 같은 칸 수(gridCols = 전체 최대)로 그려 셀 폭 통일.
@@ -273,7 +274,11 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
         {/* M6.93.12 fix #11: hold cells가 nDeckCols 폭으로 그려짐 (deck와 통일).
             cells 안에서 active 위치만 가운데 (offset). width 100%, margin 자동 제거.
             좌우 대칭 보장. */}
-        <div className="cpv2-hatch-break"></div>
+        <div className="cpv2-hatch-break">
+          {Array.from({ length: Math.max(1, Math.min(3, hatchCount || 1)) }).map((_, i) => (
+            <div key={i} className="cpv2-hatch-seg"></div>
+          ))}
+        </div>
         <div className="cpv2-hold-area" style={{ flex: `${Math.max(holdTiers.length, 1)} 1 0` }}>
           <div
             className="cpv2-grid-row-wrap"

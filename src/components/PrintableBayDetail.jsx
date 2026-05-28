@@ -229,6 +229,16 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   }, [even, odd, dictBaysSummary]);
 
   const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
+
+  // M6.94.13: 해치커버 수 (deck/hold 경계 등분) — 페이지 베이의 dict hatchCount
+  const hatchCount = useMemo(() => {
+    for (const bn of [odd, even]) {
+      if (bn == null) continue;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (db?.hatchCount) return Math.max(1, Math.min(3, db.hatchCount));
+    }
+    return 1;
+  }, [odd, even, dictBaysSummary]);
   const allTiersSet = hasDictTiers
     ? Array.from(new Set([
         ...pageBayDictTiers.deck,
@@ -313,7 +323,11 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
               {STD_ROWS.map(r => renderCell(t, r))}
             </div>
           ))}
-          {hasDeck && hasHold && <div className="bd-hatch"></div>}
+          {hasDeck && hasHold && (
+            <div className="bd-hatch">
+              {Array.from({ length: hatchCount }).map((_, i) => <div key={i} className="bd-hatch-seg"></div>)}
+            </div>
+          )}
           {hasHold && holdTiers.map(t => (
             <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
               {STD_ROWS.map(r => renderCell(t, r))}
@@ -722,8 +736,9 @@ export default function PrintableBayDetail({
         .bd-cell.filled { background: white; }
         .bd-pos { color: #555; }
         .bd-hatch {
-          height: 4px; background: #000; margin: 2px 0;
+          height: 4px; margin: 2px 0; display: flex; gap: 6px;
         }
+        .bd-hatch-seg { flex: 1 1 0; height: 4px; background: #000; }
         .bd-tier-labels {
           display: flex; flex-direction: column;
           padding-left: 6px;

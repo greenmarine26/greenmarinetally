@@ -379,7 +379,15 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.12 (2026-05-29) — 박스 크기 통일 + 박스 내 셀 크기 통일 (전체 최대 칸 grid)',
+      title: '🆕 M6.94.13 (2026-05-29) — 해치커버 수 입력 + deck/hold 경계 등분 (카고플랜·베이플랜·베이상세)',
+      examples: [
+        { q: '🔥 요청', a: '검수앱 작업보고에 해치커버 오픈/클로즈 수를 보고하는데, 앱에 베이별 해치 수가 없음. 베이 매트릭스에 해치 수를 넣고, 해치 3개면 deck/hold 경계 굵은선을 3등분, 2개면 2등분, 1개면 1개로 표시.' },
+        { q: '✅ 데이터', a: '매트릭스 빌더 베이별 입력에 "해치: 1/2/3" 선택 추가. baysSummary.hatchCount로 저장(기본 1), 기존 매트릭스 다시 열 때 복원. 3대 원칙대로 user 입력 보존.' },
+        { q: '✅ 표시 (3곳 공통)', a: '해치 수만큼 deck/hold 경계 굵은선을 flex로 등분(사이 gap). 카고플랜(cpv2-hatch-break→seg), 베이상세(bd-hatch→seg), 베이플랜(해치커버 div 등분). 1=통선, 2=2조각, 3=3조각.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/shipMatrixBuilder.js (hatchCount 저장/복원), src/components/ShipMatrixBuilderModal.jsx (해치 select), src/cargoPlanCore.js (computeBayRenderData hatchCount 반환), PrintableCargoPlanV2.jsx·PrintableBayDetail.jsx·BayPlan.jsx (경계 등분). 버전 M6.94.13.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 보고', a: '베이별 박스 크기가 같아야 하고, 같은 박스 안에서 셀 크기도 같아야 하는데 둘 다 틀림. (M6.94.11에서 박스를 칸 수 비례로 만든 게 오판)' },
         { q: '🔍 CASPI 재확인', a: 'CASPI는 박스 폭이 모두 동일. BAY 01(6칸)은 8칸 grid에 6칸만 그리고 양끝을 빈 칸으로 둠 → 셀 하나 폭이 8칸 베이와 같음. 박스 비례가 아니라 빈 칸 패딩 방식.' },
