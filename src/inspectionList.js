@@ -75,8 +75,9 @@ function getContainerCategory(c) {
   else if (third === 'T') type = 'tk';        // Tank
   // G/B/S 또는 빈값 = normal (일반 처리)
 
-  // 리퍼 우선 판별 (EDI에 리퍼 플래그 있으면 ISO와 무관하게 reefer)
-  if (c.reefer === true || c.temp != null) type = 'reefer';
+  // 리퍼 우선 판별 (EDI에 리퍼 플래그/실제 온도값 있으면 ISO와 무관하게 reefer)
+  const hasTmpVal = (c.tmp != null && String(c.tmp).trim() !== '') || (c.temp != null && String(c.temp).trim() !== '');
+  if (c.reefer === true || hasTmpVal) type = 'reefer';
 
   const fe = String(c.fe || '').toUpperCase() === 'F' ? 'F' : 'E';
   return { len, type, fe };
@@ -118,7 +119,15 @@ function renderRow(c, idx) {
   const notes = [];
   if (isBooking) notes.push('<span style="color:#b45309;font-weight:bold">📝대기</span>');
   if (c._xray) notes.push('<span style="color:#dc2626;font-weight:bold">★XRAY</span>');
-  if (type === 'reefer' && c.temp != null) notes.push(`${c.temp}°C`);
+  // M6.94.18: 온도 필드는 c.tmp (CSVExport·diagnostics와 동일). 기존 c.temp는 비어서 표기 안 됐음.
+  //   XRAY 대상이 리퍼면 ★XRAY + 온도 둘 다 비고에 표기 (선상 체크용).
+  //   c.tmp는 소스에 따라 "-18"(단위 없음) 또는 "-18.0℃"(단위 포함) → 중복 방지.
+  let reeferTmp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim()
+                : (c.temp != null && String(c.temp).trim() !== '') ? String(c.temp).trim() : null;
+  if (type === 'reefer' && reeferTmp != null) {
+    const hasUnit = /℃|°|C$/i.test(reeferTmp);
+    notes.push(hasUnit ? reeferTmp : `${reeferTmp}℃`);
+  }
   if (type === 'fr') notes.push('FR');
   if (type === 'ot') notes.push('OT');
   if (type === 'tk') notes.push('TK');

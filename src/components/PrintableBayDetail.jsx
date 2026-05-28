@@ -694,9 +694,8 @@ export default function PrintableBayDetail({
         .bd-tier-row {
           display: grid;
           border: 0.5px solid #000;
-          height: var(--bd-row-h);
-          min-height: var(--bd-row-h);
-          max-height: var(--bd-row-h);
+          flex: 1 1 0;                  /* M6.94.17: 페이지 세로 가득 채움 (고정 52px→동적). tier 적은 베이 여백 제거 */
+          min-height: var(--bd-row-h);  /* 텍스트 4-5줄 최소 보장 */
           box-sizing: border-box;
         }
         .bd-cell {
@@ -745,10 +744,11 @@ export default function PrintableBayDetail({
           font-size: 9pt;
           flex-shrink: 0;
         }
-        /* tier 라벨 높이도 동일 변수 사용 — 셀 행과 항상 일치 */
+        /* tier 라벨 높이도 셀 행과 동일하게 flex로 동기화 (M6.94.17) */
         .bd-tier-labels span {
-          height: var(--bd-row-h);
-          line-height: var(--bd-row-h);
+          flex: 1 1 0;
+          min-height: var(--bd-row-h);
+          display: flex; align-items: center; justify-content: center;
         }
         .bd-tier-gap { height: 8px !important; }
       `}</style>
