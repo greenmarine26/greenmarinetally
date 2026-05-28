@@ -78,7 +78,7 @@ export const CARGO_V2_CSS = `
 .cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-height: 0; }
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
-.cpv2-tier-row.cpv2-invisible-row { visibility: hidden; }
+.cpv2-tier-row.cpv2-invisible-row { display: none; }
 .cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(7px, 0.9vw, 12px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
@@ -101,9 +101,10 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-mark-S { color: #2e7d32; background: #e8f5e9; }
 .cpv2-cell.cpv2-mark-M { color: #c62828; background: #ffebee; }
 .cpv2-hatch-break { height: 0; border-top: 1.5px solid #000; width: 180px; margin: 0; flex-shrink: 0; }
-.cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 9px; color: #444; width: 16px; justify-content: center; }
+.cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 9px; color: #444; width: 16px; }
+.cpv2-tier-labels > span { flex: 1 1 0; display: flex; align-items: center; line-height: 1; }
 .cpv2-tier-labels > span { height: 13px; line-height: 13px; display: block; }
-.cpv2-tier-labels > span.cpv2-invisible-label { visibility: hidden; }
+.cpv2-tier-labels > span.cpv2-invisible-label { display: none; }
 .cpv2-banner { display: none; }
 .cpv2-empty-slot { border: none; background: transparent; }
 .cpv2-legend-box { border: 1px solid #000; background: white; padding: 4px; display: flex; flex-direction: column; overflow: hidden; }
@@ -210,7 +211,7 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
         {count != null && <span className="cpv2-bay-count">{count}</span>}
       </div>
       <div className="cpv2-bay-content">
-        <div className="cpv2-deck-area">
+        <div className="cpv2-deck-area" style={{ flex: `${Math.max(nDeck, 1)} 1 0` }}>
           <div className="cpv2-row-labels">
             {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
@@ -257,7 +258,7 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
             cells 안에서 active 위치만 가운데 (offset). width 100%, margin 자동 제거.
             좌우 대칭 보장. */}
         <div className="cpv2-hatch-break"></div>
-        <div className="cpv2-hold-area">
+        <div className="cpv2-hold-area" style={{ flex: `${Math.max(nHold, 1)} 1 0` }}>
           <div
             className="cpv2-grid-row-wrap"
             style={{ width: '100%' }}

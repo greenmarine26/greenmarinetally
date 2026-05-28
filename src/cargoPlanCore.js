@@ -407,14 +407,16 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const inferredDeckMax = allDeckCells.length > 0 ? Math.max(...allDeckCells) : null;
   const inferredHoldMax = allHoldCells.length > 0 ? Math.max(...allHoldCells) : null;
 
-  // 사용자 데이터 보호: userRowCount 최우선. user source면 inferredMax 차단.
+  // 사용자 데이터 보호 (M6.94.9 강화): user dict면 inferredMax 차단.
+  // 이전 isUserOwnedBay(=isUserSource && userBay)는 userBay 베이번호 매칭 실패 시 보호 풀림.
+  // → isUserSource(dict 전체 user)로 넓혀 매칭 실패해도 절대 보호.
   const deckRowMax = userRowCount
     || (rowMaxEven && rowMaxEven > 0 ? rowMaxEven : null)
-    || (isUserOwnedBay ? null : inferredDeckMax)
+    || (isUserSource ? null : inferredDeckMax)
     || (override ? override.rowCount : 10);
   const holdRowMax = userRowCount
     || (rowMaxOdd && rowMaxOdd > 0 ? rowMaxOdd : null)
-    || (isUserOwnedBay ? null : inferredHoldMax)
+    || (isUserSource ? null : inferredHoldMax)
     || (override ? override.rowCount : 9);
   let hasZero;
   if (typeof userBay?.hasZero === 'boolean') {
@@ -463,12 +465,15 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       else ediHoldSet.add(t);
     }
   }
-  // user source는 union 차단, AI 임시일 때만 union
-  if (!isUserOwnedBay && deckTiers && Array.isArray(deckTiers)) {
+  // M6.94.9: user dict면 EDI tier union 절대 차단 (isUserSource 기준).
+  //   이전 (!isUserOwnedBay): userBay 베이번호 매칭 실패 시 union 적용되어
+  //   저장 직후엔 맞다가 나중에 EDI 로드하면 user tier에 EDI tier가 합쳐지던 버그.
+  //   사용자 명시: 수정한 매트릭스는 절대 불변. AI 임시 사전(user 아님)만 EDI union.
+  if (!isUserSource && deckTiers && Array.isArray(deckTiers)) {
     const merged = new Set([...deckTiers.map(Number), ...ediDeckSet]);
     deckTiers = [...merged].sort((a, b) => b - a);
   }
-  if (!isUserOwnedBay && holdTiers && Array.isArray(holdTiers)) {
+  if (!isUserSource && holdTiers && Array.isArray(holdTiers)) {
     const merged = new Set([...holdTiers.map(Number), ...ediHoldSet]);
     holdTiers = [...merged].sort((a, b) => b - a);
   }

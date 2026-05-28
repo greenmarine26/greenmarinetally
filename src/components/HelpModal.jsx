@@ -379,7 +379,18 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.8 (2026-05-29) — 전체 베이 누락 (orphanEvens) + deck/hold 셀 크기 불일치',
+      title: '🆕 M6.94.9 (2026-05-29) — 매트릭스 절대 보호 강화 + 카고플랜 여백/tier라벨 정렬 (CASPI 양식)',
+      examples: [
+        { q: '🔥 보고 (1) 수정한 매트릭스가 나중에 바뀜', a: '매트릭스 빌더로 수정한 베이가 저장 직후는 맞는데 나중에 tier 개수/cells 칸 수가 조금씩 바뀜.' },
+        { q: '🐛 원인 (1)', a: 'EDI tier union 차단 조건이 isUserOwnedBay = isUserSource && userBay. userBay 베이번호 매칭이 실패하면 보호 풀려 EDI 로드 시 user tier에 EDI tier 합쳐짐. 저장 직후엔 EDI 없어 맞다가 나중에 변형.' },
+        { q: '✅ 수정 (1)', a: 'tier union·inferredMax 차단을 isUserSource(dict 전체 user) 기준으로. 베이번호 매칭 성공/실패 무관하게 user dict면 모든 베이 절대 보호. AI 임시 사전(v2 등)만 EDI union 허용. 시뮬: user dict + EDI 새 tier → union 차단 확인.' },
+        { q: '🔥 보고 (2) 카고플랜 여백 많고 협소 + 라벨 어긋남', a: 'CASPI 대비 카고플랜이 여백 많고 협소. tier/row 라벨 위치가 셀과 안 맞음. (DXQD, SWDN PDF 비교 참조)' },
+        { q: '🐛 원인 (2)', a: '(a) invisible tier 행/라벨이 visibility:hidden이라 자리 차지 → STANDARD_DECK 7 + STANDARD_HOLD 7 자리 중 안 쓰는 tier가 빈 여백. (b) tier 라벨 영역 justify-content:center로 visible 라벨이 가운데 몰리는데 셀은 flex 균등 → 라벨-셀 어긋남. (c) deck/hold area flex 고정이라 실제 tier 수와 불일치.' },
+        { q: '✅ 수정 (2) CASPI 양식 정렬', a: '(a) cpv2-invisible-row, cpv2-invisible-label → display:none. 안 쓰는 tier 자리 완전 제거 → 여백 없애고 셀 영역 확대. (b) cpv2-tier-labels span에 flex:1 1 0 부여 + justify-content 제거 → visible 라벨이 visible 셀 행과 1:1 균등 정렬. (c) deck-area/hold-area flex를 실제 tier 수(nDeck/nHold) 비례로 → deck/hold 셀 높이 통일.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/cargoPlanCore.js (tier union·inferred isUserSource 차단), src/components/PrintableCargoPlanV2.jsx (invisible display:none, tier-labels span flex, deck/hold area flex 비례). 버전 M6.94.9. DXQD·SWDN CASPI PDF 양식 참조.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 사용자 보고 (1) 전체 베이 안 나옴', a: '카고플랜에 전체 베이가 나와야 하는데 일부 베이나 마지막 베이가 안 나오는 선박이 많음.' },
         { q: '🐛 원인 (1) orphanEvens 버림', a: 'autoPairBays는 trio(짝수 e가 e-1,e+1 둘 다 있을 때)에 못 묶인 짝수 단독 베이를 orphanEvens로 반환. 그런데 호출처(PrintableCargoPlanV2)가 { trios, singles }만 구조분해하고 orphanEvens를 버려서, 짝수 단독 베이가 layout에 안 들어가 통째로 누락. singles는 홀수만 담고 있었음.' },
