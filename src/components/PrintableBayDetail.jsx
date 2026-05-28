@@ -230,9 +230,9 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 
   const hasDictTiers = pageBayDictTiers.deck.size > 0 || pageBayDictTiers.hold.size > 0;
 
-  // M6.94.13: 해치커버 수 (deck/hold 경계 등분) — 페이지 베이의 dict hatchCount
+  // M6.94.15: 해치는 짝수(even)/단독 베이 기준. even 우선, 없으면 단독 odd.
   const hatchCount = useMemo(() => {
-    for (const bn of [odd, even]) {
+    for (const bn of [even, odd]) {
       if (bn == null) continue;
       const db = dictBaysSummary[parseInt(bn, 10)];
       if (db?.hatchCount) return Math.max(1, Math.min(3, db.hatchCount));

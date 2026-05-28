@@ -167,7 +167,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -261,7 +261,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
         {/* M6.94.14: hold 없는 베이(nHold=0)는 hatch+hold-area 숨김 (deck만) */}
         {nHold > 0 && (<>
         <div className="cpv2-hatch-break">
-          {Array.from({ length: Math.max(1, Math.min(3, hatchCount || 1)) }).map((_, i) => (
+          {Array.from({ length: applyHatch ? Math.max(1, Math.min(3, hatchCount || 1)) : 1 }).map((_, i) => (
             <div key={i} className="cpv2-hatch-seg"></div>
           ))}
         </div>
@@ -669,9 +669,9 @@ export default function PrintableCargoPlanV2({
                 const pairData = renderDataMap[box.pairKey];
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} />
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={false} />
                     <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} />
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={true} />
                   </div>
                 );
               } else {

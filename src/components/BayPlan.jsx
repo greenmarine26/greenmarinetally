@@ -1464,7 +1464,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       {/* 해치커버 — M6.94.13: 해치 수만큼 굵은선 등분 */}
       {(() => {
         let hc = 1;
-        for (const bn of [page.oddBay, page.evenBay]) {
+        for (const bn of [page.evenBay, page.oddBay]) {
           if (bn == null) continue;
           const db = dictBaysSummary[parseInt(bn, 10)];
           if (db?.hatchCount) { hc = Math.max(1, Math.min(3, db.hatchCount)); break; }

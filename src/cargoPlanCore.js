@@ -722,6 +722,6 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     deckRows, holdRows,
     deckAlign, deckPadLeft, deckPadRight,
     holdAlign, holdPadLeft, holdPadRight,
-    hatchCount: Math.max(1, Math.min(3, userBay?.hatchCount || 1)),  // M6.94.13: 해치커버 수 (1~3)
+    hatchCount: Math.max(1, Math.min(3, bayEntry?.hatchCount || 1)),  // M6.94.15: 미리보기는 bayEntry (userBay 없음 — 크래시 수정)
   };
 }

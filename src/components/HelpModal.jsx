@@ -379,7 +379,16 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.14 (2026-05-29) — 중앙정렬 복구 + hold 없는 베이 보호 + 셀 폰트 축소',
+      title: '🆕 M6.94.15 (2026-05-29) — 미리보기 크래시 수정 + 해치 적용 대상 제한 (단독/짝수, 홀드 있는 베이만)',
+      examples: [
+        { q: '🔥 보고 (1) 미리보기 검은 화면', a: '매트릭스 빌더에서 수정 후 미리보기 누르면 화면이 검어짐(크래시).' },
+        { q: '🐛+✅ (1)', a: 'M6.94.13에서 hatchCount 추가 시 buildEmptyBayRenderData(미리보기용)의 return에 userBay?.hatchCount를 잘못 넣음. 이 함수엔 userBay 변수가 없어(computeBayRenderData 전용) ReferenceError로 크래시. → bayEntry?.hatchCount로 수정.' },
+        { q: '🔥 보고 (2) 해치 적용 대상', a: '해치 카운트는 단독 베이와 짝수 베이에만 적용. 홀드 없는 베이는 제외.' },
+        { q: '✅ (2)', a: '카고플랜: BayBoxV2 applyHatch prop 추가. trio top(홀수)=false(등분 안 함, 경계선 1개), trio pair(짝수)·single(단독)=true(hatchCount 등분). nHold=0(홀드 없음)이면 hatch+hold 영역 자체 생략(M6.94.14). 베이상세·베이플랜: 해치 수를 even(짝수) 우선으로 잡음(짝수 베이 기준).' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/cargoPlanCore.js (buildEmptyBayRenderData userBay→bayEntry), PrintableCargoPlanV2.jsx (applyHatch), PrintableBayDetail.jsx·BayPlan.jsx (even 우선). 버전 M6.94.15.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 보고', a: 'M6.94.12 후 (1) 중앙정렬 풀림 (2) 매트릭스에 hold 없는 베이인데 hold가 그려짐 (3) 셀 폰트가 큼 — 별첨 숫자 크기로 줄이되 셀/박스 크기는 그대로.' },
         { q: '🐛+✅ (1) 중앙정렬', a: 'M6.94.12 padCenter(정수 칸 패딩)는 deck/hold 패딩 칸의 홀짝이 다르면 중심이 0.5칸 어긋남. → padCenter 폐기, deck/hold 모두 gridCols 기준 % padding으로 복귀. 셀 폭=박스폭/gridCols 통일 + 0.5칸 정중앙 동시 달성 (M6.94.6 방식 확장).' },
