@@ -167,7 +167,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -318,6 +318,11 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
           )}
         </div>
         </>)}
+        {(() => {
+          const used = deckTiers.length + (nHold > 0 ? holdTiers.length : 0);
+          const sp = Math.max(0, (globalMaxTier || used) - used);
+          return sp > 0 ? <div className="cpv2-tier-spacer" style={{ flex: `${sp} 1 0` }}></div> : null;
+        })()}
       </div>
     </div>
   );
@@ -573,6 +578,17 @@ export default function PrintableCargoPlanV2({
     return Math.max(m, 1);
   }, [renderDataMap]);
 
+  // M6.94.16: 전체 베이 중 (deck tier + hold tier) 최대 → 셀 높이 고정 기준.
+  //   홀드 없는 베이는 deck만 그리되 아래 spacer로 빈 공간 → deck 셀 높이를 다른 베이와 통일.
+  const globalMaxTier = useMemo(() => {
+    let m = 0;
+    for (const d of Object.values(renderDataMap)) {
+      const t = (d?.deckTiers?.length || 0) + (d?.holdTiers?.length || 0);
+      if (t > m) m = t;
+    }
+    return Math.max(m, 1);
+  }, [renderDataMap]);
+
   const closeBtn = onClose ? (
     <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
       <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
@@ -669,9 +685,9 @@ export default function PrintableCargoPlanV2({
                 const pairData = renderDataMap[box.pairKey];
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={false} />
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={false} globalMaxTier={globalMaxTier} />
                     <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={true} />
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={true} globalMaxTier={globalMaxTier} />
                   </div>
                 );
               } else {
@@ -679,7 +695,7 @@ export default function PrintableCargoPlanV2({
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
                     <div className="cpv2-single-half">
-                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} />
+                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} globalMaxTier={globalMaxTier} />
                     </div>
                     <div className="cpv2-empty-half"></div>
                   </div>

@@ -379,7 +379,15 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.15 (2026-05-29) — 미리보기 크래시 수정 + 해치 적용 대상 제한 (단독/짝수, 홀드 있는 베이만)',
+      title: '🆕 M6.94.16 (2026-05-28) — 홀드 없는 베이 셀 세로 길어짐 수정 (카고플랜)',
+      examples: [
+        { q: '🔥 보고', a: '카고플랜에서 홀드 없는 베이의 셀이 세로로 길어져 보기 안 좋음.' },
+        { q: '🐛 원인', a: 'deck/hold area flex가 tier 수 비례인데, 홀드 없는 베이는 deck-area가 박스 전체를 차지 → deck 셀 높이 = 박스/deckTiers로 다른 베이(박스/(deck+hold))보다 큼.' },
+        { q: '✅ 수정', a: '전체 베이 중 (deck+hold) tier 최대값(globalMaxTier) 계산. 각 베이가 그 높이를 채우도록 부족분만큼 아래 spacer(빈 flex) 추가 → 셀 높이 = 박스/globalMaxTier로 모든 베이 통일. 홀드 없는 베이는 deck만 그리고 아래 빈 공간(CASPI식). 베이상세는 셀 높이가 이미 52px 고정이라 해당 없음.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/components/PrintableCargoPlanV2.jsx (globalMaxTier useMemo, BayBoxV2 spacer + prop). 버전 M6.94.16.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 보고 (1) 미리보기 검은 화면', a: '매트릭스 빌더에서 수정 후 미리보기 누르면 화면이 검어짐(크래시).' },
         { q: '🐛+✅ (1)', a: 'M6.94.13에서 hatchCount 추가 시 buildEmptyBayRenderData(미리보기용)의 return에 userBay?.hatchCount를 잘못 넣음. 이 함수엔 userBay 변수가 없어(computeBayRenderData 전용) ReferenceError로 크래시. → bayEntry?.hatchCount로 수정.' },
