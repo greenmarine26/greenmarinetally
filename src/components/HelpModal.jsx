@@ -379,7 +379,16 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.11 (2026-05-29) — 베이마다 셀 폭 통일 (박스 폭 = 칸 수 비례, CASPI식)',
+      title: '🆕 M6.94.12 (2026-05-29) — 박스 크기 통일 + 박스 내 셀 크기 통일 (전체 최대 칸 grid)',
+      examples: [
+        { q: '🔥 보고', a: '베이별 박스 크기가 같아야 하고, 같은 박스 안에서 셀 크기도 같아야 하는데 둘 다 틀림. (M6.94.11에서 박스를 칸 수 비례로 만든 게 오판)' },
+        { q: '🔍 CASPI 재확인', a: 'CASPI는 박스 폭이 모두 동일. BAY 01(6칸)은 8칸 grid에 6칸만 그리고 양끝을 빈 칸으로 둠 → 셀 하나 폭이 8칸 베이와 같음. 박스 비례가 아니라 빈 칸 패딩 방식.' },
+        { q: '🐛 원인', a: 'M6.94.11에서 박스 flex를 nDeckCols 비례로 만들어 박스 크기가 베이마다 달라짐(요구사항 위반). 그 전에는 박스는 같아도 칸 수가 6/8로 달라 셀 폭이 달랐음.' },
+        { q: '✅ 수정', a: '(1) 박스 flex 1 1 0 복원 → 박스 크기 동일. (2) 전체 베이 최대 칸 수(globalMaxCols) 계산 후 BayBoxV2에 전달, deck/hold cells와 row 라벨을 그 칸 수로 좌우 가운데 빈 칸 패딩(padCenter). deck/hold 둘 다 같은 칸 수 → 셀 폭이 박스 내·베이 간 모두 통일. (3) hold 전용 holdPadStyle 제거(칸 수 통일로 불필요).' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/components/PrintableCargoPlanV2.jsx (globalMaxCols useMemo, BayBoxV2 gridCols prop + padCenter, 박스 flex 복원, holdPadStyle 제거). 버전 M6.94.12.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 보고', a: 'BAY 01과 BAY (2)3 셀 크기가 다름. BAY 01 deck는 6칸, BAY 03 deck는 8칸인데 박스 전체 폭이 동일 → BAY 01 셀이 더 넓음.' },
         { q: '🔍 CASPI 확인', a: 'CASPI는 BAY 01(6칸)도 BAY 11(8칸)과 셀 하나 폭이 동일. 6칸 베이는 박스가 그만큼 좁고, 셀 크기는 통일. 즉 베이 박스 폭이 칸 수에 비례.' },

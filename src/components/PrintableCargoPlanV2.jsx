@@ -166,7 +166,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {} }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -174,6 +174,22 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
     deckAlign, deckPadLeft, deckPadRight,
     holdAlign, holdPadLeft, holdPadRight,
   } = data;
+
+  // M6.94.12: 모든 베이를 같은 칸 수(gridCols = 전체 최대)로 그려 셀 폭 통일.
+  //   박스 폭 동일(flex 1) + grid 칸 수 동일 → 셀 하나 폭이 모든 베이/deck/hold에서 같음.
+  //   칸 적은 베이는 좌우 가운데로 빈 칸 패딩 (CASPI식). deck/hold 둘 다 gridCols → 중앙선 일치.
+  const gc = Math.max(gridCols || 0, nDeckCols || 0, nHoldCols || 0, 1);
+  function padCenter(arr, target, fill) {
+    const pad = target - arr.length;
+    if (pad <= 0) return arr;
+    const l = Math.floor(pad / 2), r = pad - l;
+    return [...new Array(l).fill(fill), ...arr, ...new Array(r).fill(fill)];
+  }
+  const padRowCells = (cells) => padCenter(cells, gc, { active: false });
+  const deckRowsG = deckRows.map((r) => ({ ...r, cells: padRowCells(r.cells) }));
+  const holdRowsG = holdRows.map((r) => ({ ...r, cells: padRowCells(r.cells) }));
+  const deckRowPosG = padCenter(deckRowPos, gc, '');
+  const holdRowPosG = padCenter(holdRowPos, gc, '');
 
   // M6.94.0 padding 계산: 사용자 입력 > alignment > 자동 가운데 (fallback)
   // hold cells가 deck보다 작을 때 hold 영역을 어디에 배치할지 결정.
@@ -213,11 +229,11 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
       <div className="cpv2-bay-content">
         <div className="cpv2-deck-area" style={{ flex: `${Math.max(deckTiers.length, 1)} 1 0` }}>
           <div className="cpv2-row-labels">
-            {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
+            {deckRowPosG.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
           <div className="cpv2-grid-row-wrap">
             <div className="cpv2-grid">
-              {deckRows.map((row, ri) => (
+              {deckRowsG.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
@@ -263,17 +279,8 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
             className="cpv2-grid-row-wrap"
             style={{ width: '100%' }}
           >
-            <div
-              className="cpv2-grid"
-              style={{
-                // M6.94.5: 셀도 라벨과 동일한 % padding으로 이동.
-                // 이전엔 라벨만 holdPadStyle 받고 셀은 정수 offsetHold라 둘이 어긋나
-                // "셀 안 움직이고 라벨만 움직임" + center 시 왼쪽 쏠림 발생.
-                paddingLeft: holdPadStyle.paddingLeft,
-                paddingRight: holdPadStyle.paddingRight,
-              }}
-            >
-              {holdRows.map((row, ri) => (
+            <div className="cpv2-grid">
+              {holdRowsG.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
@@ -310,19 +317,12 @@ export function BayBoxV2({ data, count, colorMap = {} }) {
             </div>
           </div>
           {nHold > 0 ? (
-            <div
-              className="cpv2-row-labels"
-              style={{
-                // M6.94.0: 사용자 입력 padding/alignment 우선, 없으면 자동 가운데
-                paddingLeft: holdPadStyle.paddingLeft,
-                paddingRight: holdPadStyle.paddingRight,
-              }}
-            >
-              {holdRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
+            <div className="cpv2-row-labels">
+              {holdRowPosG.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           ) : (
             <div className="cpv2-row-labels" style={{ visibility: 'hidden' }}>
-              {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
+              {deckRowPosG.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           )}
         </div>
@@ -570,6 +570,17 @@ export default function PrintableCargoPlanV2({
     return map;
   }, [pdfBays, matrixBays, posMap, pod, mode, trios, singles]);
 
+  // M6.94.12: 전체 베이 중 최대 칸 수 → 모든 베이 grid를 이 칸 수로 통일 (셀 폭 일치).
+  //   박스 폭은 동일(flex 1), 칸 적은 베이는 빈 칸으로 채워 셀 하나 폭을 모든 베이에서 같게.
+  const globalMaxCols = useMemo(() => {
+    let m = 0;
+    for (const d of Object.values(renderDataMap)) {
+      if (d?.nDeckCols && d.nDeckCols > m) m = d.nDeckCols;
+      if (d?.nHoldCols && d.nHoldCols > m) m = d.nHoldCols;
+    }
+    return Math.max(m, 1);
+  }, [renderDataMap]);
+
   const closeBtn = onClose ? (
     <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
       <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
@@ -631,18 +642,18 @@ export default function PrintableCargoPlanV2({
             const leg2Header = isDischarge ? '종류' : '선사';
             if (emptySlots >= 2) {
               slots.push(
-                <div key="leg1" className="cpv2-bay-box cpv2-legend-box" style={{ flex: '8 1 0' }}>
+                <div key="leg1" className="cpv2-bay-box cpv2-legend-box">
                   <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
                 </div>
               );
               slots.push(
-                <div key="leg2" className="cpv2-bay-box cpv2-legend-box" style={{ flex: '8 1 0' }}>
+                <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
                   <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
                 </div>
               );
             } else if (emptySlots === 1) {
               slots.push(
-                <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box" style={{ flex: '8 1 0' }}>
+                <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box">
                   <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
@@ -658,27 +669,25 @@ export default function PrintableCargoPlanV2({
               slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
             }
             // 그 다음 실제 박스들
-            // M6.94.11: 박스 폭을 deck 칸 수(nDeckCols) 비례로 → 베이마다 셀 폭 통일.
-            //   이전 flex 1 1 0(동일 폭)은 6칸 베이 셀이 8칸 베이보다 넓어지던 문제(CASPI 불일치).
+            // M6.94.12: 박스 폭은 모두 동일(flex 1). 셀 폭 통일은 grid를 전체 최대 칸 수로
+            //   맞추고 칸 적은 베이는 빈 칸으로 채워서 처리 (CASPI식). M6.94.11 박스 비례 폐기.
             row.forEach((box, bi) => {
               if (box.type === 'trio') {
                 const topData = renderDataMap[box.topKey];
                 const pairData = renderDataMap[box.pairKey];
-                const trioCols = Math.max(topData?.nDeckCols || 1, pairData?.nDeckCols || 1, 1);
                 slots.push(
-                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box" style={{ flex: `${trioCols} 1 0` }}>
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} />
+                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} />
                     <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} />
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} />
                   </div>
                 );
               } else {
                 const sData = renderDataMap[box.topKey];
-                const singleCols = Math.max(sData?.nDeckCols || 1, 1);
                 slots.push(
-                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box" style={{ flex: `${singleCols} 1 0` }}>
+                  <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
                     <div className="cpv2-single-half">
-                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} />
+                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} />
                     </div>
                     <div className="cpv2-empty-half"></div>
                   </div>
