@@ -14,9 +14,16 @@
 
 // M6.93.12 표준: 6 deck + 5 hold tier 자리 통일. 박스 간 정렬 보장.
 //   STANDARD_DECK [94,92,90,88,86,84,82] + STANDARD_HOLD [10,8,6,4,2].
-//   tier 80은 deck/hold 경계 — DXQD/STSE/NBTD/MCSC 4척에 없으므로 표준 제외.
+//   M6.94.24: tier 80 추가. deck/hold 경계(>=80=deck)의 최하단 deck 단.
+//     일부 선박이 deck 최하단을 80으로 표기 → 매트릭스 deckTiers에 80 입력해도
+//     STANDARD_DECK.map 루프 밖이라 카고플랜에 안 그려지던 버그 fix
+//     (과거 STANDARD_HOLD 14/12 누락과 동일 패턴). 80 없는 배는 invisible row로 자리만 유지.
 //   M6.81 검증된 표준 (build_cargo_plan_universal.py 참조).
-export const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82];
+export const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82, 80];
+// M6.94.24: 베이 정보 없을 때 fallback용 기본 deck 6단. 80 제외(기존 동작 보존).
+//   STANDARD_DECK에 80을 추가하면서 slice(1)이 7단이 되어 fallback에 80이
+//   끼던 문제 방지 → 명시 상수로 고정.
+const FALLBACK_DECK6 = [92, 90, 88, 86, 84, 82];
 // M6.94.5: STANDARD_HOLD에 tier 12, 14 추가. BERO, MARS, KMTC 같은 큰 배(7-tier hold)에서
 // holdTiers에 14,12 입력해도 STANDARD_HOLD에 없어서 시뮬레이션에 안 그려지던 버그 fix.
 export const STANDARD_HOLD = [14, 12, 10, 8, 6, 4, 2];
@@ -84,7 +91,7 @@ export function generatePdfBays(matrixBays, trios, singles) {
     const oddNum = getKeyToOdd(key);
     const bay = baysByNum.get(oddNum);
     if (!bay) {
-      pdfBays[key] = { deck_t: STANDARD_DECK.slice(1), hold_t: [...STANDARD_HOLD], has_zero: false };
+      pdfBays[key] = { deck_t: [...FALLBACK_DECK6], hold_t: [...STANDARD_HOLD], has_zero: false };
       continue;
     }
 
@@ -93,7 +100,7 @@ export function generatePdfBays(matrixBays, trios, singles) {
     const cells = [...(bay.cells || [])].reverse(); // tier 위→아래
     const nTotal = cells.length;
     if (nTotal === 0) {
-      pdfBays[key] = { deck_t: STANDARD_DECK.slice(1), hold_t: [...STANDARD_HOLD], has_zero: false };
+      pdfBays[key] = { deck_t: [...FALLBACK_DECK6], hold_t: [...STANDARD_HOLD], has_zero: false };
       continue;
     }
 
