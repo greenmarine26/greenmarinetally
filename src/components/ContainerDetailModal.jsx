@@ -16,6 +16,9 @@ const ISO_OPTIONS = [
   // 20피트 GP (DC) — Full / Empty
   { iso: '22G0', label: '20DC (20피트 일반) · Full',  flags: {} },
   { iso: '22G1', label: '20DC (20피트 일반) · Empty', flags: {} },
+  // 20피트 HC (드물지만 존재)
+  { iso: '25H0', label: '20HC (20피트 하이큐브) · Full',  flags: {} },
+  { iso: '25H1', label: '20HC (20피트 하이큐브) · Empty', flags: {} },
   // 40피트 GP — Full / Empty
   { iso: '42G0', label: '40DC (40피트 일반) · Full',  flags: {} },
   { iso: '42G1', label: '40DC (40피트 일반) · Empty', flags: {} },

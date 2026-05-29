@@ -152,7 +152,7 @@ function AlertDetails({ alert, onOpenContainer }) {
     );
   }
 
-  if (alert.code === 'iso_unknown') {
+  if (alert.code === 'unknown_iso') {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
         <div className="text-amber-300 mb-1">📌 클릭하면 컨테이너 모달에서 규격 수정 가능</div>
