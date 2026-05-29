@@ -20,6 +20,10 @@ import {
 } from '../shipMatrixBuilder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
 import { addToUserBayDict, lookupUserBayDict } from '../data/userBayDict.js';
+import {
+  fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSaveShipBayDict,
+} from '../firebase.js';
+import { _storage, SK } from '../utils.js';
 // M6.94.0: 빈 카고플랜 박스 시각 미리보기 (베이플랜)
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
@@ -38,6 +42,28 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   // 베이 추가 폼 상태
   const [addBayInput, setAddBayInput] = useState('');
   const [addPairInput, setAddPairInput] = useState('');
+
+  // ── M6.94.20: 매트릭스 권한자 ──────────────────────────────────────────
+  //   현재 검수자(activeInspector)가 Firebase 권한자 명단에 있어야 저장/명단수정 가능.
+  const currentInspector = useMemo(
+    () => String(_storage.get(SK.activeInspector) || '').trim(),
+    []
+  );
+  const [editors, setEditors] = useState(null);     // null = 로딩중
+  const [showEditorMgr, setShowEditorMgr] = useState(false);
+  const [editorInput, setEditorInput] = useState('');
+  const [editorMsg, setEditorMsg] = useState('');
+
+  useEffect(() => {
+    const unsub = fbSubscribeMatrixEditors(list => setEditors(list || []));
+    return () => { try { unsub && unsub(); } catch { /* noop */ } };
+  }, []);
+
+  // 권한 판정: 명단 로딩 전(null)에는 false로 취급 (안전).
+  const canEdit = useMemo(() => {
+    if (!Array.isArray(editors)) return false;
+    return !!currentInspector && editors.includes(currentInspector);
+  }, [editors, currentInspector]);
 
   const addBay = (bayNumRaw, pairEvenRaw) => {
     const n = parseInt(bayNumRaw);
@@ -239,6 +265,10 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const [copyMode, setCopyMode] = useState(null); // null | { sourceBay, selectedTargets: Set }
 
   const handleSave = () => {
+    if (!canEdit) {
+      alert('매트릭스 저장 권한이 없습니다. 권한자에게 문의하세요.');
+      return;
+    }
     if (!shipMeta.code) {
       alert('CASP 코드를 입력하세요 (자동 추론된 값 사용 권장)');
       return;
@@ -251,13 +281,84 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       shipMeta.imo,
       shipMeta.callsign || ''
     );
+    // M6.94.20: user 소스 + 편집자 + 시각 마킹 (Firebase 보호/충돌 판정 기준)
+    const stamp = Date.now();
+    entry.source = 'user';
+    entry._userOwned = true;
+    entry.editorName = currentInspector;
+    entry.updatedAt = stamp;
+    if (entry.bayDef) {
+      entry.bayDef.source = 'user';
+      entry.bayDef._userOwned = true;
+    }
     const ok = addToUserBayDict(entry);
     if (ok) {
       setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이`);
       setDone(true);
+      // M6.94.20: Firebase 업로드 (다른 기기 수신용) — fire-and-forget
+      fbSaveShipBayDict(entry.code, {
+        code: entry.code,
+        name: entry.name,
+        callsign: entry.callsign || '',
+        imo: entry.imo || '',
+        source: 'user',
+        _userOwned: true,
+        bayDef: entry.bayDef,
+        editorName: currentInspector,
+        updatedAt: stamp,
+        _inspector: currentInspector,
+      }).then(r => {
+        if (r) setSavingMsg(s => s + ' · ☁ 동기화됨 (다른 기기에서도 보임)');
+        else setSavingMsg(s => s + ' · ⚠ 동기화 실패 (이 기기에는 저장됨)');
+      }).catch(() => {
+        setSavingMsg(s => s + ' · ⚠ 동기화 실패 (이 기기에는 저장됨)');
+      });
       if (onSaved) onSaved(entry);
     } else {
       alert('저장 실패 — localStorage 용량 확인 필요');
+    }
+  };
+
+  // M6.94.20: 권한자 추가
+  const handleAddEditor = async () => {
+    const name = String(editorInput || '').trim();
+    if (!name) return;
+    if (!Array.isArray(editors)) return;
+    if (editors.includes(name)) {
+      setEditorMsg(`이미 명단에 있습니다: ${name}`);
+      return;
+    }
+    setEditorMsg('저장 중...');
+    const res = await fbSetMatrixEditors(currentInspector, [...editors, name]);
+    if (res.ok) {
+      setEditorInput('');
+      setEditorMsg(`✅ 추가됨: ${name}`);
+    } else if (res.reason === 'not_authorized') {
+      setEditorMsg('권한이 없어 명단을 수정할 수 없습니다.');
+    } else {
+      setEditorMsg('저장 실패 — 네트워크를 확인하세요.');
+    }
+  };
+
+  // M6.94.20: 권한자 삭제
+  const handleRemoveEditor = async (name) => {
+    if (!Array.isArray(editors)) return;
+    if (editors.length <= 1) {
+      setEditorMsg('마지막 권한자는 삭제할 수 없습니다.');
+      return;
+    }
+    if (!confirm(`권한자에서 "${name}"을(를) 삭제할까요?`)) return;
+    setEditorMsg('저장 중...');
+    const res = await fbSetMatrixEditors(
+      currentInspector,
+      editors.filter(e => e !== name)
+    );
+    if (res.ok) {
+      setEditorMsg(`삭제됨: ${name}`);
+    } else if (res.reason === 'not_authorized') {
+      setEditorMsg('권한이 없어 명단을 수정할 수 없습니다.');
+    } else {
+      setEditorMsg('저장 실패 — 네트워크를 확인하세요.');
     }
   };
 
@@ -733,19 +834,71 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         </div>
 
         {/* 푸터 */}
-        <div className="p-4 border-t border-zinc-700 flex justify-end gap-2">
-          {!done ? (
-            <>
-              <button onClick={onClose} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">취소</button>
-              <button onClick={handleSave} disabled={!shipMeta.code || bayList.length === 0}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold disabled:opacity-50">
-                💾 베이사전 저장 ({shipMeta.code || '?'})
+        <div className="p-4 border-t border-zinc-700 flex justify-between items-center gap-2 flex-wrap">
+          {/* 좌측: 권한자만 명단 관리 버튼 */}
+          <div className="flex items-center gap-2">
+            {canEdit && !done && (
+              <button onClick={() => { setShowEditorMgr(v => !v); setEditorMsg(''); }}
+                      className="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-xs">
+                👤 권한자 관리{Array.isArray(editors) ? ` (${editors.length})` : ''}
               </button>
-            </>
-          ) : (
-            <button onClick={onClose} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm">완료</button>
-          )}
+            )}
+            {!canEdit && editors !== null && (
+              <span className="text-xs text-amber-400">
+                🔒 저장 권한 없음{currentInspector ? ` — 현재: ${currentInspector}` : ' — 검수자 미선택'}
+              </span>
+            )}
+          </div>
+          {/* 우측: 취소/저장 */}
+          <div className="flex justify-end gap-2">
+            {!done ? (
+              <>
+                <button onClick={onClose} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">취소</button>
+                {canEdit && (
+                  <button onClick={handleSave} disabled={!shipMeta.code || bayList.length === 0}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold disabled:opacity-50">
+                    💾 베이사전 저장 ({shipMeta.code || '?'})
+                  </button>
+                )}
+              </>
+            ) : (
+              <button onClick={onClose} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm">완료</button>
+            )}
+          </div>
         </div>
+
+        {/* M6.94.20: 권한자 관리 패널 (권한자만) */}
+        {canEdit && showEditorMgr && (
+          <div className="px-4 pb-4 border-t border-zinc-700 pt-3">
+            <div className="text-sm font-bold text-white mb-2">👤 매트릭스 권한자 명단</div>
+            <div className="text-[11px] text-zinc-400 mb-2">
+              명단에 있는 검수자만 매트릭스를 저장하고 이 명단을 수정할 수 있습니다. 일반 사용자는 자동으로 받아보기만 합니다.
+            </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {Array.isArray(editors) && editors.map(name => (
+                <span key={name} className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-800 rounded text-xs text-white">
+                  {name}
+                  {editors.length > 1 && (
+                    <button onClick={() => handleRemoveEditor(name)}
+                            className="text-red-400 hover:text-red-300 ml-1">×</button>
+                  )}
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input value={editorInput} onChange={e => setEditorInput(e.target.value)}
+                     onKeyDown={e => { if (e.key === 'Enter') handleAddEditor(); }}
+                     placeholder="검수자 이름 (예: 김성일)"
+                     className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-sm text-white" />
+              <button onClick={handleAddEditor}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold">추가</button>
+            </div>
+            {editorMsg && <div className="text-xs text-zinc-300 mt-2">{editorMsg}</div>}
+            <div className="text-[10px] text-amber-400 mt-2">
+              ⚠ 이름은 검수자 로그인 이름과 정확히 일치해야 합니다 (공백·철자 주의).
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

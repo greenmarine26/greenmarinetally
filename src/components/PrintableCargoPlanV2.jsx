@@ -83,9 +83,8 @@ export const CARGO_V2_CSS = `
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
-/* XRAY: 연노랑 배경 + ★ 별표 (V1 양식) */
-.cpv2-cell.cpv2-xray { background: #fef08a !important; }
-.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(6px, 0.8vw, 10px); color: #dc2626; font-weight: bold; pointer-events: none; }
+/* M6.94.19: XRAY는 ★ 별표만 표시, 배경은 선사 색 그대로 (연노랑 강제 제거) */
+.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(6px, 0.8vw, 10px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; background: #f0f0f0; }
 .cpv2-cell.cpv2-mark-R { color: #006064; background: #b2ebf2; }

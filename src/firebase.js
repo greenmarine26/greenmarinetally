@@ -1035,6 +1035,44 @@ export async function fbSaveShipBayDict(code, entry) {
     // 기존 데이터와 병합 (중요한 필드는 기존 보존)
     const snap = await get(r);
     const existing = snap.exists() ? snap.val() : {};
+
+    // ── M6.94.20: userBayDict 절대 보호 (원칙 ①) ──────────────────────────
+    //   기존 entry가 user 소스(매트릭스 빌더 직접 저장)이고,
+    //   새로 들어오는 entry가 user 소스가 아니면(ASC/Stowage/PDF 자동본),
+    //   bayDef·source·_userOwned·updatedBy를 기존(user) 값으로 유지한다.
+    //   → 자동본이 user 매트릭스를 절대 덮어쓰지 못하게 한다.
+    //   이전 결함: `bayDef: entry.bayDef || existing.bayDef` 가
+    //   자동본 bayDef로 user 매트릭스를 덮어쓰던 재발 지점.
+    const existingIsUser =
+      existing?.source === 'user' || existing?.bayDef?.source === 'user' ||
+      existing?._userOwned === true || existing?.bayDef?._userOwned === true;
+    const entryIsUser =
+      entry?.source === 'user' || entry?.bayDef?.source === 'user' ||
+      entry?._userOwned === true || entry?.bayDef?._userOwned === true;
+
+    if (existingIsUser && !entryIsUser) {
+      // 보호: user 매트릭스 보존. 식별자(callsign/imo/name)만 빈 곳 보완 허용.
+      const guarded = {
+        ...existing,
+        callsign: existing.callsign || entry.callsign || '',
+        imo: existing.imo || entry.imo || '',
+        name: existing.name || entry.name || '',
+        // bayDef·source·_userOwned·updatedBy 모두 기존(user) 유지
+      };
+      await set(r, guarded);
+      return true;
+    }
+
+    // 다기기 충돌: 양쪽 user인데 기존이 더 최신이면 덮어쓰지 않음
+    if (existingIsUser && entryIsUser) {
+      const exTs = Number(existing.updatedAt || existing.bayDef?.parsedAt || 0);
+      const enTs = Number(entry.updatedAt || entry.bayDef?.parsedAt || Date.now());
+      if (exTs > enTs) {
+        return true; // 기존이 더 최신 → 보존
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     const merged = {
       ...existing,
       ...entry,
@@ -1045,7 +1083,7 @@ export async function fbSaveShipBayDict(code, entry) {
       // bayDef는 새 데이터가 있으면 갱신 (def 파일 재업로드 케이스)
       bayDef: entry.bayDef || existing.bayDef || null,
       updatedAt: Date.now(),
-      updatedBy: entry._inspector || existing.updatedBy || '',
+      updatedBy: entry._inspector || entry.editorName || existing.updatedBy || '',
     };
     await set(r, merged);
     return true;
@@ -1092,6 +1130,90 @@ export async function fbBatchSaveShipBayDict(entries) {
     if (ok) saved++; else failed++;
   }));
   return { saved, failed };
+}
+
+// ─── M6.94.20: 매트릭스 권한자 명단 (모든 기기 공유) ──────────────────────
+//   노드: matrix_editors  (배열 형태로 검수자 이름 저장)
+//   규칙: 명단에 있는 사람만 매트릭스 빌더 저장 + 명단 수정 가능
+//   초기 권한자: 김성일 (명단이 비어있을 때 자동 시딩)
+const MATRIX_EDITORS_NODE = 'matrix_editors';
+const MATRIX_EDITORS_SEED = ['김성일'];
+
+/**
+ * 권한자 명단 조회 (1회성). 명단이 없으면 김성일로 시딩 후 반환.
+ * @returns {Promise<string[]>}
+ */
+export async function fbGetMatrixEditors() {
+  try {
+    const r = ref(db, MATRIX_EDITORS_NODE);
+    const snap = await get(r);
+    if (!snap.exists()) {
+      // 최초 1회 시딩
+      await set(r, MATRIX_EDITORS_SEED);
+      return [...MATRIX_EDITORS_SEED];
+    }
+    const val = snap.val();
+    const list = Array.isArray(val) ? val : Object.values(val || {});
+    return list.map(n => String(n).trim()).filter(Boolean);
+  } catch (e) {
+    console.error('[fbGetMatrixEditors] 조회 실패', e);
+    // 네트워크 실패 시 안전 기본값 (시드)
+    return [...MATRIX_EDITORS_SEED];
+  }
+}
+
+/**
+ * 권한자 명단 실시간 구독.
+ * 명단이 비어있으면 시드값으로 시딩한다.
+ * @param {(editors: string[]) => void} callback
+ * @returns {() => void} unsubscribe
+ */
+export function fbSubscribeMatrixEditors(callback) {
+  const r = ref(db, MATRIX_EDITORS_NODE);
+  const handler = onValue(r, snap => {
+    if (!snap.exists()) {
+      set(r, MATRIX_EDITORS_SEED).catch(() => {});
+      callback([...MATRIX_EDITORS_SEED]);
+      return;
+    }
+    const val = snap.val();
+    const list = Array.isArray(val) ? val : Object.values(val || {});
+    callback(list.map(n => String(n).trim()).filter(Boolean));
+  });
+  return () => off(r, 'value', handler);
+}
+
+/**
+ * 권한자 명단 전체 교체 저장.
+ *   actor(요청자)가 현재 명단에 있어야만 수정 가능 (명단에 있는 사람만 명단 수정).
+ *   명단이 비어있으면(최초) 시드 기준으로 권한 판정.
+ * @param {string} actor - 수정을 시도하는 현재 검수자 이름
+ * @param {string[]} nextEditors - 새 명단
+ * @returns {Promise<{ok:boolean, reason?:string}>}
+ */
+export async function fbSetMatrixEditors(actor, nextEditors) {
+  const actorName = String(actor || '').trim();
+  if (!actorName) return { ok: false, reason: 'no_actor' };
+  try {
+    const current = await fbGetMatrixEditors();
+    const allowed = current.length === 0 ? MATRIX_EDITORS_SEED : current;
+    if (!allowed.includes(actorName)) {
+      return { ok: false, reason: 'not_authorized' };
+    }
+    // 정규화: 트림 + 중복 제거 + 빈 값 제거
+    const cleaned = [...new Set(
+      (nextEditors || []).map(n => String(n).trim()).filter(Boolean)
+    )];
+    // 안전장치: 명단을 완전히 비우지 못하게 (잠금 방지)
+    if (cleaned.length === 0) {
+      return { ok: false, reason: 'empty_not_allowed' };
+    }
+    await set(ref(db, MATRIX_EDITORS_NODE), cleaned);
+    return { ok: true };
+  } catch (e) {
+    console.error('[fbSetMatrixEditors] 저장 실패', e);
+    return { ok: false, reason: 'fb_error' };
+  }
 }
 
 /**

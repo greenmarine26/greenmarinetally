@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.94.18';
+export const APP_VERSION = 'M6.94.20';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2011,9 +2011,21 @@ export async function parsePortMisExcel(arrayBuffer) {
 
 // ─── M6.92.0: 공통 컨테이너 색 키 함수 ──────────────────────────────
 // 양하: 선사(c.op)별, 선적: POD 3자별. 베이플랜/카고플랜/베이상세 통일.
+// M6.94.20: 인접 색 대비 극대화 (비슷한 색이 나란히 안 오게 색상환 분산).
+//   기존 주황/주황2, 파랑/하늘/청록 중복 → 구분 잘 되는 12색으로 재구성. 모두 흰 글자 가독.
 export const COLOR_PALETTE = [
-  '#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6',
-  '#ec4899','#06b6d4','#84cc16','#f97316','#0ea5e9'
+  '#2563eb', // 파랑
+  '#dc2626', // 빨강
+  '#16a34a', // 초록
+  '#ea580c', // 주황
+  '#9333ea', // 보라
+  '#0d9488', // 청록(teal)
+  '#db2777', // 핑크/마젠타
+  '#ca8a04', // 황토(겨자)
+  '#4f46e5', // 인디고
+  '#65a30d', // 올리브
+  '#0891b2', // 시안
+  '#be123c', // 진홍
 ];
 
 export function getContainerColorKey(c, mode) {

@@ -1,6 +1,7 @@
 // 그린마린 평택항 검수 — Master V1.1
 import React, { useState, useEffect, useCallback } from 'react';
 import { APP_VERSION, _storage, SK } from './utils.js';
+import { loadUserBayDict } from './data/userBayDict.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbSubscribePortMis,
@@ -45,8 +46,41 @@ export default function App() {
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
     // M5.88: Firebase 베이사전 구독 — 전역 객체 window.__fbShipBayDict에 저장
     //   shipStructure.js가 이 데이터를 우선 조회 (베이사전 매칭 자동화)
+    // M6.94.20: user 소스 매트릭스를 localStorage userBayDict에도 머지
+    //   → PC에서 만든 user 매트릭스를 폰에서도 받아서 카고플랜 룩업 가능 (읽기 전용 수신).
+    //   원칙 ① 보호: source==='user'(또는 _userOwned) entry만 머지하고,
+    //   로컬에 이미 더 최신(updatedAt) user entry가 있으면 덮어쓰지 않는다.
     const u5 = fbSubscribeShipBayDict(data => {
       window.__fbShipBayDict = data || {};
+      try {
+        const fb = data || {};
+        const local = loadUserBayDict() || {};
+        let changed = false;
+        for (const code of Object.keys(fb)) {
+          const e = fb[code];
+          const isUser =
+            e?.source === 'user' || e?.bayDef?.source === 'user' ||
+            e?._userOwned === true || e?.bayDef?._userOwned === true;
+          if (!isUser || !e?.bayDef) continue;
+          const cur = local[code];
+          const curIsUser =
+            cur?.source === 'user' || cur?.bayDef?.source === 'user' ||
+            cur?._userOwned === true || cur?.bayDef?._userOwned === true;
+          if (curIsUser) {
+            // 로컬 user entry가 더 최신이면 보존 (다기기 충돌)
+            const curTs = Number(cur.updatedAt || cur.bayDef?.parsedAt || 0);
+            const fbTs = Number(e.updatedAt || e.bayDef?.parsedAt || 0);
+            if (curTs >= fbTs) continue;
+          }
+          local[code] = e;
+          changed = true;
+        }
+        if (changed) {
+          _storage.set('master_user_bay_dict_v1', JSON.stringify(local));
+        }
+      } catch (err) {
+        console.error('[App] user 매트릭스 머지 실패', err);
+      }
     });
     return () => { u1(); u2(); u3(); u4(); u5(); unsub2(); unsub3(); };
   }, []);

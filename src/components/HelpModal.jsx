@@ -379,7 +379,15 @@ const CONTENT = {
 
   tips: [
     {
-      title: '🆕 M6.94.18 (2026-05-28) — 검수 리스트 비고에 리퍼 온도 표기 (XRAY와 함께)',
+      title: '🆕 M6.94.19 (2026-05-28) — 카고플랜 XRAY 별표만 + 선사 색 팔레트 재구성',
+      examples: [
+        { q: '🔥 요청', a: '카고플랜 XRAY 표시는 별표(★)만 하고 셀 색은 선사 색 그대로. 그리고 선사별 색이 비슷한 게 섞여 구분이 어려움 → 비슷한 색 피하기.' },
+        { q: '✅ XRAY', a: 'cpv2-xray의 연노랑 배경 강제(background:#fef08a !important) 제거. 이제 XRAY 셀도 선사 색 배경 유지 + ★ 별표만 오버레이. 색 배경 위 별표 가독 위해 흰 테두리(text-shadow) 추가.' },
+        { q: '✅ 선사 색', a: 'COLOR_PALETTE 재구성. 기존엔 주황/주황2(#f59e0b·#f97316), 파랑/하늘/청록이 섞여 인접 시 구분 어려움. → 색상환에서 멀리 떨어진 12색으로 재배열(파랑·빨강·초록·주황·보라·청록·핑크·황토·인디고·올리브·시안·진홍). 인접 선사끼리 대비 극대화. 카고플랜·베이플랜·베이상세 공통 적용.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/components/PrintableCargoPlanV2.jsx (XRAY 배경 제거), src/utils.js (COLOR_PALETTE). 버전 M6.94.19.' },
+      ],
+    },
+    {
       examples: [
         { q: '🔥 요청', a: '검수 리스트(검수자료출력) 비고란에 ★XRAY는 나오는데 리퍼 온도가 안 나옴. XRAY 대상이 리퍼면 둘 다 표기 필요 (선상 올라가서 체크용).' },
         { q: '🐛 원인', a: 'inspectionList.js가 온도를 c.temp로 읽었는데 실제 필드는 c.tmp (CSVExport·diagnostics·utils 모두 c.tmp). c.temp는 비어서 온도 표기 안 됨. ★XRAY/온도 둘 다 넣는 비고 로직 자체는 이미 있었음.' },
