@@ -19,9 +19,10 @@ import {
   fillEmptyBaysSequential,
 } from '../shipMatrixBuilder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
-import { addToUserBayDict, lookupUserBayDict } from '../data/userBayDict.js';
+import { addToUserBayDict, lookupUserBayDict, loadUserBayDict } from '../data/userBayDict.js';
 import {
   fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSaveShipBayDict,
+  fbBatchSaveShipBayDict,
 } from '../firebase.js';
 import { _storage, SK } from '../utils.js';
 // M6.94.0: 빈 카고플랜 박스 시각 미리보기 (베이플랜)
@@ -53,6 +54,8 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const [showEditorMgr, setShowEditorMgr] = useState(false);
   const [editorInput, setEditorInput] = useState('');
   const [editorMsg, setEditorMsg] = useState('');
+  const [bulkSyncMsg, setBulkSyncMsg] = useState('');
+  const [bulkSyncing, setBulkSyncing] = useState(false);
 
   useEffect(() => {
     const unsub = fbSubscribeMatrixEditors(list => setEditors(list || []));
@@ -316,6 +319,57 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       if (onSaved) onSaved(entry);
     } else {
       alert('저장 실패 — localStorage 용량 확인 필요');
+    }
+  };
+
+  // M6.94.22: 일괄 동기화 — 이 기기 localStorage의 user 매트릭스 전부를 Firebase로 업로드.
+  //   동기화 기능(M6.94.20) 이전에 만든 기존 매트릭스를 폰에서도 보이게 하기 위함.
+  //   권한자만 실행 가능. bayDef 있는 것만 대상(빈 껍데기 제외).
+  const handleBulkSync = async () => {
+    if (!canEdit) {
+      setBulkSyncMsg('권한이 없습니다.');
+      return;
+    }
+    const dict = loadUserBayDict() || {};
+    const stamp = Date.now();
+    const payload = {};
+    let skipped = 0;
+    for (const code of Object.keys(dict)) {
+      const e = dict[code];
+      if (!e || !e.bayDef) { skipped++; continue; }  // 빈 껍데기 제외
+      payload[code] = {
+        code: e.code || code,
+        name: e.name || '',
+        callsign: e.callsign || '',
+        imo: e.imo || '',
+        source: 'user',
+        _userOwned: true,
+        bayDef: { ...e.bayDef, source: 'user', _userOwned: true },
+        editorName: currentInspector,
+        // 기존 updatedAt 보존(있으면) → 다기기 충돌 시 최신 판정 정확.
+        updatedAt: Number(e.updatedAt) || stamp,
+        _inspector: currentInspector,
+      };
+    }
+    const total = Object.keys(payload).length;
+    if (total === 0) {
+      setBulkSyncMsg(`동기화할 매트릭스가 없습니다${skipped ? ` (빈 항목 ${skipped}개 제외)` : ''}.`);
+      return;
+    }
+    if (!confirm(`이 기기의 매트릭스 ${total}개를 전체 동기화할까요?\n(다른 기기에서도 보이게 됩니다)`)) return;
+    setBulkSyncing(true);
+    setBulkSyncMsg(`동기화 중... (0/${total})`);
+    try {
+      const res = await fbBatchSaveShipBayDict(payload);
+      setBulkSyncMsg(
+        `✅ 동기화 완료 — 성공 ${res.saved}개${res.failed ? `, 실패 ${res.failed}개` : ''}` +
+        `${skipped ? ` (빈 항목 ${skipped}개 제외)` : ''}. 폰에서 새로고침하면 보입니다.`
+      );
+    } catch (err) {
+      console.error('[handleBulkSync] 실패', err);
+      setBulkSyncMsg('⚠ 동기화 실패 — 네트워크를 확인하세요.');
+    } finally {
+      setBulkSyncing(false);
     }
   };
 
@@ -843,10 +897,19 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 👤 권한자 관리{Array.isArray(editors) ? ` (${editors.length})` : ''}
               </button>
             )}
+            {canEdit && !done && (
+              <button onClick={handleBulkSync} disabled={bulkSyncing}
+                      className="px-3 py-2 bg-indigo-700 hover:bg-indigo-600 rounded text-xs disabled:opacity-50">
+                {bulkSyncing ? '동기화 중…' : '☁ 전체 동기화'}
+              </button>
+            )}
             {!canEdit && editors !== null && (
               <span className="text-xs text-amber-400">
                 🔒 저장 권한 없음{currentInspector ? ` — 현재: ${currentInspector}` : ' — 검수자 미선택'}
               </span>
+            )}
+            {canEdit && bulkSyncMsg && (
+              <span className="text-[11px] text-indigo-300">{bulkSyncMsg}</span>
             )}
           </div>
           {/* 우측: 취소/저장 */}
