@@ -30,6 +30,16 @@ import {
 //   - FR = 'FR' (2글자), DG = 'D', Tank = 'T', OOG = 'A'
 //   - 양하/선적 동일 마크. 색만 다름 (양하=선사별, 선적=POD별).
 //   - PTK = 컬러 배경 + 글자. 통과 = 회색 + 빈(일반) / 글자(특수).
+// M6.94.23: 특수화물 마크 여부 — true면 선사/포트 색 대신 특수화물 색(기호) 우선.
+//   특수화물: D(위험물) R/r(리퍼) FR(플랫랙) T(탱크) A(OOG/오픈탑).
+//   일반 표기(F/E/o/X/L/K/P/S/M 등 PTK·선사 마커)는 false → 선사색 적용 허용.
+function isSpecialMark(mark) {
+  if (!mark) return false;
+  const m = String(mark).toUpperCase();
+  return m === 'D' || m === 'R' || m === 'R/F' || m === 'R/E' ||
+         m.startsWith('R') || m === 'FR' || m === 'T' || m === 'A';
+}
+
 function getMarkV2(c, pod, mode) {
   const ptk =
     mode === 'discharge'
@@ -84,21 +94,21 @@ export const CARGO_V2_CSS = `
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
 /* M6.94.19: XRAY는 ★ 별표만 표시, 배경은 선사 색 그대로 (연노랑 강제 제거) */
-.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(6px, 0.8vw, 10px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff; }
+.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(6px, 0.8vw, 10px); color: #000; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
-.cpv2-cell.cpv2-mark-X { color: #000; background: #f0f0f0; }
-.cpv2-cell.cpv2-mark-R { color: #006064; background: #b2ebf2; }
-.cpv2-cell.cpv2-mark-r { color: #006064; background: #e0f7fa; }
-.cpv2-cell.cpv2-mark-D { color: #b71c1c; background: #ffcdd2; }
-.cpv2-cell.cpv2-mark-F { color: #1b5e20; background: #c8e6c9; }
-.cpv2-cell.cpv2-mark-A { color: #4a148c; background: #e1bee7; }
-.cpv2-cell.cpv2-mark-T { color: #e65100; background: #ffe0b2; }
-.cpv2-cell.cpv2-mark-E { color: #555; background: #fafafa; }
-.cpv2-cell.cpv2-mark-L { color: #1565c0; background: #bbdefb; }
-.cpv2-cell.cpv2-mark-K { color: #0d47a1; background: #e3f2fd; }
-.cpv2-cell.cpv2-mark-P { color: #6a1b9a; background: #f3e5f5; }
-.cpv2-cell.cpv2-mark-S { color: #2e7d32; background: #e8f5e9; }
-.cpv2-cell.cpv2-mark-M { color: #c62828; background: #ffebee; }
+.cpv2-cell.cpv2-mark-X { color: #000; }
+.cpv2-cell.cpv2-mark-R { color: #006064; }
+.cpv2-cell.cpv2-mark-r { color: #00838f; }
+.cpv2-cell.cpv2-mark-D { color: #b71c1c; }
+.cpv2-cell.cpv2-mark-F { color: #1b5e20; }
+.cpv2-cell.cpv2-mark-A { color: #4a148c; }
+.cpv2-cell.cpv2-mark-T { color: #e65100; }
+.cpv2-cell.cpv2-mark-E { color: #555; }
+.cpv2-cell.cpv2-mark-L { color: #1565c0; }
+.cpv2-cell.cpv2-mark-K { color: #0d47a1; }
+.cpv2-cell.cpv2-mark-P { color: #6a1b9a; }
+.cpv2-cell.cpv2-mark-S { color: #2e7d32; }
+.cpv2-cell.cpv2-mark-M { color: #c62828; }
 .cpv2-hatch-break { display: flex; gap: 4px; width: 180px; height: 0; margin: 0; flex-shrink: 0; }
 .cpv2-hatch-seg { flex: 1 1 0; border-top: 1.5px solid #000; height: 0; }
 .cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 9px; color: #444; width: 16px; }
@@ -231,8 +241,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       style = { background: '#e5e7eb', color: 'transparent' };
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
-                    } else if (bg) {
-                      style = { background: bg, color: '#fff' };
+                    } else if (bg && !isSpecialMark(cell.mark)) {
+                      style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -281,8 +291,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       style = { background: '#e5e7eb', color: 'transparent' };
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
-                    } else if (bg) {
-                      style = { background: bg, color: '#fff' };
+                    } else if (bg && !isSpecialMark(cell.mark)) {
+                      style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -744,7 +754,8 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
               markCell = <td className="cpv2-legend-mark" style={{ background: c.bg, color: c.fg }}>{c.mark}</td>;
             } else if (useColorMap) {
               const bg = colorMap[name];
-              markCell = <td className="cpv2-legend-mark" style={bg ? { background: bg, color: '#fff' } : undefined}>{bg ? '■' : ''}</td>;
+              // M6.94.23: 본문이 텍스트 색이므로 범례 견본도 색 글자 ■로 통일
+              markCell = <td className="cpv2-legend-mark" style={bg ? { color: bg } : undefined}>{bg ? '■' : ''}</td>;
             }
             return (
               <tr key={name}>
