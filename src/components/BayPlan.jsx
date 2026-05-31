@@ -84,10 +84,11 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   };
 
   // 평택 대상 (모드별)
-  // M6.94.30: 리스트 등록(_inList)=평택 + isPyeongtaekPort 단일 출처로 통일.
-  //   기존엔 endsWith('PTK')만 봐서 KRPYOTM(평택 양교터미널)·엠티 285대를 놓쳤다.
-  const isPtk = (c) => c._inList ||
-    isPyeongtaekPort(mode === 'discharge' ? c.pod : c.pol);
+  // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만.
+  //   (양하에서 _inList 인정 시 타항 양하분이 평택으로 잘못 잡힘)
+  const isPtk = (c) => mode === 'discharge'
+    ? isPyeongtaekPort(c.pod)
+    : (c._inList || isPyeongtaekPort(c.pol));
 
   // 평택 컨번호 set
   const dischargeCns = useMemo(() => {

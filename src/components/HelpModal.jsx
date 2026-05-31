@@ -379,6 +379,25 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.94.34 (2026-05-31) — 양하 모드 타항 컨 오조회 fix (_inList는 선적 전용)',
+      examples: [
+        { q: '🔥 증상', a: '양하 자료만 올렸는데 양하 모드에서 다른 항구 컨(예: pod=DVO 다바오)이 평택으로 조회됨. 여러 화면에서 발생.' },
+        { q: '🔍 원인', a: 'M6.94.30~33에서 엠티 선적 문제 풀려고 넣은 "_inList(리스트 등록=평택)"가 양하/선적 구분 없이 적용됨. 양하 자료를 리스트로 올리면 모든 컨이 _inList=true가 되어, 양하항이 DVO/TAO여도 평택으로 잘못 판정. 양하 평택분은 반드시 pod가 평택이어야 함.' },
+        { q: '✅ 수정', a: '_inList는 선적 모드에서만 평택 인정. 양하 모드는 pod가 평택(isPyeongtaekPort)인지로만 판정. 5곳 통일: getMarkV2, getContainerColorKey, matchPodC, BayPlan/PrintableBayDetail isPtk.' },
+        { q: '📋 시뮬 검증', a: '양하: PHDVO/CNTAO(리스트 등록돼도) → 평택 아님, KRPTK/KRPYOTM → 평택. 선적: 엠티(pol오염+_inList)·풀 → 평택 유지, 통과(PHDVO) → 제외. 양하 오염 해결 + 선적 285 수정 유지 확인.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/utils.js, PrintableCargoPlanV2.jsx, BayPlan.jsx, PrintableBayDetail.jsx. 버전 M6.94.34.' },
+      ],
+    },
+    {
+      title: '🆕 M6.94.33 (2026-05-31) — 검정 셀 fix (마크·색 평택 판정 통일)',
+      examples: [
+        { q: '🔥 증상', a: '426개 다 나오는데 일부 엠티가 흰 배경+검정 글자로 흩어져 나옴. 4색(DLC/TAO/DVO/TSN)으로 다 칠해져야 하는데 색을 못 받음.' },
+        { q: '🔍 원인', a: '셀 글자(마크)는 getMarkV2가, 배경색은 getContainerColorKey가 따로 판정. 색키는 _inList/평택항을 인정하게 고쳤는데 마크는 pol.includes("PTK")만 봐서 불일치. 엠티가 글자는 찍히고 배경색은 안 받음.' },
+        { q: '✅ 수정', a: 'getMarkV2 평택 판정을 "_inList || isPyeongtaekPort(항구)"로 색키와 통일. 285개 엠티가 POD 색(DLC/TAO/DVO/TSN)을 그대로 받음. 통과화물은 여전히 회색 유지.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/components/PrintableCargoPlanV2.jsx (getMarkV2). 버전 M6.94.33.' },
+      ],
+    },
+    {
       title: '🆕 M6.94.32 (2026-05-31) — 카고플랜 그림 위치 오염 fix (EDI 위치 = 단일 진실)',
       examples: [
         { q: '🔥 증상', a: 'M6.94.31로 별첨 카운트는 426 정상이 됐는데, 카고플랜 그림(본체)은 여전히 틀림. EDI에 위치가 있는데도 엠티가 제대로 안 그려짐.' },

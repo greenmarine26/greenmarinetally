@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.94.32';
+export const APP_VERSION = 'M6.94.34';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2037,9 +2037,12 @@ export const COLOR_PALETTE = [
 //   기존 getContainerColorKey는 pol.includes('PTK')만 봐서 엠티 285대에 색이 안 칠해져
 //   카고플랜 본체/별첨에서 통째로 누락됐다 (matchPodC만 _inList를 인정하던 비대칭 버그).
 export function getContainerColorKey(c, mode) {
-  // 평택분(=색칠/별첨 대상) 여부: 리스트 등록 또는 항구 코드가 평택.
-  const isPtkC = c._inList ||
-    (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));
+  // 평택분 여부. M6.94.34: _inList(리스트=평택)는 선적 모드에서만 적용.
+  //   양하 모드에서 _inList를 인정하면 타항 양하분(예: pod=PHDVO)이 평택으로 잘못 잡힘.
+  //   양하 평택분은 반드시 pod가 평택이어야 함.
+  const isPtkC = mode === 'discharge'
+    ? isPyeongtaekPort(c.pod)
+    : (c._inList || isPyeongtaekPort(c.pol));
   if (!isPtkC) return null;
   if (mode === 'discharge') {
     // 양하: 선사코드로 컬러

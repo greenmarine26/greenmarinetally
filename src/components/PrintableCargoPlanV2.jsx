@@ -41,10 +41,11 @@ function isSpecialMark(mark) {
 }
 
 function getMarkV2(c, pod, mode) {
-  const ptk =
-    mode === 'discharge'
-      ? c.pod && String(c.pod).toUpperCase().includes('PTK')
-      : c.pol && String(c.pol).toUpperCase().includes('PTK');
+  // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
+  //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 조회됨)
+  const ptk = mode === 'discharge'
+    ? isPyeongtaekPort(c.pod)
+    : (c._inList || isPyeongtaekPort(c.pol));
 
   const isEmpty = c.fe === 'E';
 
@@ -498,11 +499,13 @@ export default function PrintableCargoPlanV2({
   //   원인: 엠티 선적 리스트는 항구 컬럼이 목적지(CNDLC 등)라 pol 인식 안 됨.
   //   하지만 EDI가 KRPTK로 증명하거나 검수 리스트에 등록돼 있으면 평택 선적분이 맞음.
   //   기존엔 pol만 봐서 엠티 285대가 별첨에서 누락됐다.
+  // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
+  //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 잡힘)
   const matchPodC = (c) => {
-    if (c._inList) return true;  // 리스트 등록 = 평택 (검수리스트 isPtk와 동일)
     if (mode === 'discharge') {
       return isPyeongtaekPort(c.pod);
     }
+    if (c._inList) return true;  // 선적: 리스트 등록 = 평택
     return isPyeongtaekPort(c.pol);
   };
   const boxCounts = useMemo(() => {
