@@ -68,6 +68,10 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     });
     merged.cn = cn;
     merged._comp = compMap[cn] || null;
+    // M6.94.29: 리스트(records) 등록 표식 — 카고플랜 별첨이 평택 판정에 사용.
+    //   검수리스트와 동일 원칙: 리스트에 등록되면 무조건 평택분.
+    //   EDI가 KRPTK로 증명하거나 리스트에 있으면 평택 → pol 값에만 의존하지 않음.
+    if (recMap[cn]) merged._inList = true;
     if (xrayMap[cn]) merged._xray = true;
     return merged;
   });

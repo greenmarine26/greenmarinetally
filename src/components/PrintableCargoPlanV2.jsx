@@ -11,7 +11,7 @@ import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap } from '../utils.js';
+import { isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 import {
   autoPairBays,
@@ -493,11 +493,17 @@ export default function PrintableCargoPlanV2({
   // M6.86.8.7: 양하 별첨/카운트는 평택분(PTK)만 강제 (사용자 약속).
   //   양하 mode → POD가 PTK 포함된 것만
   //   선적 mode → POL이 PTK 포함된 것만
+  // M6.94.29: 평택 판정 — 검수리스트와 동일 원칙으로 통일.
+  //   "리스트에 등록(_inList)되면 무조건 평택" + EDI POL/POD가 평택이면 평택.
+  //   원인: 엠티 선적 리스트는 항구 컬럼이 목적지(CNDLC 등)라 pol 인식 안 됨.
+  //   하지만 EDI가 KRPTK로 증명하거나 검수 리스트에 등록돼 있으면 평택 선적분이 맞음.
+  //   기존엔 pol만 봐서 엠티 285대가 별첨에서 누락됐다.
   const matchPodC = (c) => {
+    if (c._inList) return true;  // 리스트 등록 = 평택 (검수리스트 isPtk와 동일)
     if (mode === 'discharge') {
-      return c.pod && String(c.pod).toUpperCase().includes('PTK');
+      return isPyeongtaekPort(c.pod);
     }
-    return c.pol && String(c.pol).toUpperCase().includes('PTK');
+    return isPyeongtaekPort(c.pol);
   };
   const boxCounts = useMemo(() => {
     const matchBay = (c, num) => Number(c.bay) === num;
@@ -557,9 +563,12 @@ export default function PrintableCargoPlanV2({
       else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
       else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
       addTo(cargoCounts, cat, size);
-      // POD (선적 모드에서 사용) - getContainerColorKey로 통일
-      const p3 = getContainerColorKey(c, 'loading');
-      if (p3) addTo(podCounts, p3, size);
+      // M6.94.29: POD 키 직접 추출 (이미 matchPodC 통과 = 평택 확정).
+      //   getContainerColorKey는 pol 재검증을 하는데, 엠티는 pol이 목적지로 오염될 수 있어
+      //   여기서 null이 나면 POD 별첨에서 누락됨 → POD 3자만 직접 뽑는다.
+      const podRaw = String(c.pod || '').toUpperCase();
+      const p3 = podRaw.length >= 5 ? podRaw.slice(2, 5) : podRaw.slice(0, 3);
+      if (p3 && p3 !== 'PTK') addTo(podCounts, p3, size);
     }
     const carriers = [...carrierCounts.entries()].sort((a, b) => b[1].total - a[1].total);
     const cargos = [...cargoCounts.entries()].sort((a, b) => {
