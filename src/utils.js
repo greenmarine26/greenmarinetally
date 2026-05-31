@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.94.26';
+export const APP_VERSION = 'M6.94.27';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2014,7 +2014,7 @@ export async function parsePortMisExcel(arrayBuffer) {
 
 // ─── M6.92.0: 공통 컨테이너 색 키 함수 ──────────────────────────────
 // 양하: 선사(c.op)별, 선적: POD 3자별. 베이플랜/카고플랜/베이상세 통일.
-// M6.94.26: 인접 색 대비 극대화 (비슷한 색이 나란히 안 오게 색상환 분산).
+// M6.94.27: 인접 색 대비 극대화 (비슷한 색이 나란히 안 오게 색상환 분산).
 //   기존 주황/주황2, 파랑/하늘/청록 중복 → 구분 잘 되는 12색으로 재구성. 모두 흰 글자 가독.
 export const COLOR_PALETTE = [
   '#2563eb', // 파랑
@@ -2058,7 +2058,7 @@ export function buildContainerColorMap(containers, mode) {
   return map;
 }
 
-// ─── M6.94.26: 평택항 POL/POD 판정 (단일 출처) ──────────────────────────
+// ─── M6.94.27: 평택항 POL/POD 판정 (단일 출처) ──────────────────────────
 //   평택 코드 변형: KRPTK(평택), KRPYT(평택신항), KRPYOTM(평택 양교터미널),
 //   PTK 약어 등. 기존엔 /(PTK|PYT)$/ 만 봐서 KRPYOTM이 누락됐다
 //   (선적 리스트가 KRPYOTM 표기 → 평택분이 표시 안 되던 버그).

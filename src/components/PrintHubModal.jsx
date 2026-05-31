@@ -291,6 +291,14 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                 {modeKo} <strong className="text-slate-200">{count}대</strong> · 평택항 {modeKo} 대상만 포함
               </p>
 
+              {/* M6.94.27 임시 진단: 각 단계 카운트 (원인 파악용, 다음 버전서 제거) */}
+              <div className="text-[10px] text-amber-300 bg-amber-950/40 rounded px-2 py-1 font-mono leading-relaxed">
+                🔍 진단 · EDI:{Object.keys(ediMap).length} · 리스트:{Object.keys(recMap).length} ·
+                머지전체:{allCount} · 평택(검수):{count} ·
+                카고플랜전달:{printContainers.length} · ptkBay수:{ptkBays.size}
+                <br/>선적탭:{loadingCount} / 양하탭:{dischargeCount} / 현재모드:{mode}
+              </div>
+
               {/* 1. 검수 리스트 */}
               <button
                 onClick={handlePrintInspection}
