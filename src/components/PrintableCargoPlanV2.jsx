@@ -242,7 +242,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       style = { background: '#e5e7eb', color: 'transparent' };
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
-                    } else if (bg && !isSpecialMark(cell.mark)) {
+                    } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
                       style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
@@ -292,7 +292,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       style = { background: '#e5e7eb', color: 'transparent' };
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
-                    } else if (bg && !isSpecialMark(cell.mark)) {
+                    } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
                       style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
