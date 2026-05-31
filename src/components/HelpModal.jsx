@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.94.30 (2026-05-31) — 엠티 285대 카고플랜 누락 fix (리스트 등록=평택 통일)',
+      examples: [
+        { q: '🔥 요청', a: '선적 리스트/EDI에선 426개를 인식하는데 카고플랜·별첨에는 141개만 표시됨. 285대(엠티)는 선적항이 안 보이지만 리스트+EDI에서 매칭됐으므로 평택 선적분으로 인정·표시되어야 함.' },
+        { q: '🔍 원인', a: '비대칭 버그. M6.94.29에서 별첨/카운트용 matchPodC는 "리스트 등록(_inList)=평택"을 인정하도록 고쳤지만, 정작 카고플랜 셀에 색을 칠하는 getContainerColorKey는 여전히 pol.includes("PTK")만 봤다. 엠티 선적 엑셀은 항구 컬럼이 목적지(CNDLC)라 pol이 비거나 오염 → 285대가 색을 못 받아 통째로 누락. 베이플랜·베이상세의 isPtk도 같은 문제(KRPYOTM·_inList 미인정).' },
+        { q: '✅ 수정', a: 'getContainerColorKey(utils.js)·BayPlan isPtk·PrintableBayDetail isPtk를 모두 "_inList || isPyeongtaekPort(항구)" 단일 원칙으로 통일. 카고플랜·베이플랜·베이상세 세 화면 동일 판정. 통과화물(리스트 미등록 + 비평택 항구)은 여전히 null → 회색 통과 처리 정상 유지(과잉 포함 없음).' },
+        { q: '📋 시뮬 검증', a: '실파일 426개(StandardLoadList 141 + MCAT EMPTY 285)로 검증. 수정 전 141 표시(버그 재현) → 수정 후 426 전부 표시. POD 분포 SHA141/DLC30/TAO151/DVO104. 통과화물 2케이스 모두 null 유지 확인.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/utils.js (getContainerColorKey), src/components/BayPlan.jsx (isPtk + import), src/components/PrintableBayDetail.jsx (isPtk). 버전 M6.94.30 (utils.js + sw.js + public/sw.js 동기화).' },
+      ],
+    },
+    {
       title: '🆕 M6.94.19 (2026-05-28) — 카고플랜 XRAY 별표만 + 선사 색 팔레트 재구성',
       examples: [
         { q: '🔥 요청', a: '카고플랜 XRAY 표시는 별표(★)만 하고 셀 색은 선사 색 그대로. 그리고 선사별 색이 비슷한 게 섞여 구분이 어려움 → 비슷한 색 피하기.' },

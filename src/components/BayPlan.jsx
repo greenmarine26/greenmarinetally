@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
@@ -84,15 +84,10 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   };
 
   // 평택 대상 (모드별)
-  const isPtk = (c) => {
-    if (mode === 'discharge') {
-      const pod = (c.pod || '').toUpperCase();
-      return pod === 'PTK' || pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
-    } else {
-      const pol = (c.pol || '').toUpperCase();
-      return pol === 'PTK' || pol === 'KRPTK' || pol === 'KRPYT' || pol.endsWith('PTK');
-    }
-  };
+  // M6.94.30: 리스트 등록(_inList)=평택 + isPyeongtaekPort 단일 출처로 통일.
+  //   기존엔 endsWith('PTK')만 봐서 KRPYOTM(평택 양교터미널)·엠티 285대를 놓쳤다.
+  const isPtk = (c) => c._inList ||
+    isPyeongtaekPort(mode === 'discharge' ? c.pod : c.pol);
 
   // 평택 컨번호 set
   const dischargeCns = useMemo(() => {

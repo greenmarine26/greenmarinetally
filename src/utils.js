@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'M6.94.29';
+export const APP_VERSION = 'M6.94.30';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2031,14 +2031,22 @@ export const COLOR_PALETTE = [
   '#be123c', // 진홍
 ];
 
+// M6.94.30: 평택분 판정을 matchPodC(PrintableCargoPlanV2)와 단일 원칙으로 통일.
+//   "리스트 등록(_inList) = 무조건 평택" + EDI POL/POD가 평택 코드(변형 포함)면 평택.
+//   원인: 엠티 선적 리스트는 항구 컬럼이 목적지(CNDLC 등)라 pol이 비거나 오염됨.
+//   기존 getContainerColorKey는 pol.includes('PTK')만 봐서 엠티 285대에 색이 안 칠해져
+//   카고플랜 본체/별첨에서 통째로 누락됐다 (matchPodC만 _inList를 인정하던 비대칭 버그).
 export function getContainerColorKey(c, mode) {
+  // 평택분(=색칠/별첨 대상) 여부: 리스트 등록 또는 항구 코드가 평택.
+  const isPtkC = c._inList ||
+    (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));
+  if (!isPtkC) return null;
   if (mode === 'discharge') {
-    // 양하: pod에 PTK 포함 + 선사코드
-    if (!c.pod || !String(c.pod).toUpperCase().includes('PTK')) return null;
+    // 양하: 선사코드로 컬러
     return c.op ? String(c.op).trim() : null;
   } else {
-    // 선적: pol에 PTK 포함 + POD 3자
-    if (!c.pol || !String(c.pol).toUpperCase().includes('PTK')) return null;
+    // 선적: POD 3자로 컬러. 엠티는 pol이 목적지로 오염될 수 있으나
+    //   여기선 이미 평택분 확정 → pod에서 직접 3자 추출 (별첨 로직과 동일).
     const p = String(c.pod || '').toUpperCase();
     const p3 = p.length >= 5 ? p.slice(2, 5) : p.slice(0, 3);
     return (p3 && p3 !== 'PTK') ? p3 : null;

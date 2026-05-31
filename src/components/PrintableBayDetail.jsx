@@ -24,7 +24,9 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 //   사용자 지적: "베이마다 / 선박마다 row/tier 다름, 일괄 X, 화면과 같게"
 // (STD_DECK / STD_HOLD 제거됨 — globalTiers 동적 사용)
 
-const isPtk = (c, mode) => isPyeongtaekPort(mode === 'discharge' ? c.pod : c.pol);
+// M6.94.30: 리스트 등록(_inList)=평택 원칙으로 통일 (카고플랜 matchPodC와 동일).
+//   엠티 선적은 항구 컬럼이 목적지라 pol이 비거나 오염 → _inList로 평택 인정.
+const isPtk = (c, mode) => c._inList || isPyeongtaekPort(mode === 'discharge' ? c.pod : c.pol);
 
 function groupByBay(containers) {
   const m = {};
