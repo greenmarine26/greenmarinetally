@@ -16,7 +16,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap } from '../utils.js';
+import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
@@ -24,10 +24,7 @@ import { enrichBayDef } from '../bayDictAutoEnrich.js';
 //   사용자 지적: "베이마다 / 선박마다 row/tier 다름, 일괄 X, 화면과 같게"
 // (STD_DECK / STD_HOLD 제거됨 — globalTiers 동적 사용)
 
-const isPtk = (c, mode) => {
-  const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
-  return t === 'PTK' || t === 'KRPTK' || t === 'KRPYT' || t.endsWith('PTK');
-};
+const isPtk = (c, mode) => isPyeongtaekPort(mode === 'discharge' ? c.pod : c.pol);
 
 function groupByBay(containers) {
   const m = {};

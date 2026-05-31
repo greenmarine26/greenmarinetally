@@ -10,6 +10,7 @@ import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
+import { isPyeongtaekPort } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -35,12 +36,11 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     //   (사용자가 평택에서 검수하는 모든 컨테이너 = 리스트 등록 = 검수 대상)
     //   EDI POL/POD가 KRPTK 아닌 환적 표기여도 리스트 등록되면 평택분
     if (c.cn && recMap[c.cn]) return true;
+    // M6.94.25: 평택 판정 공용 함수 (KRPYOTM 등 변형 포함). POL/POD 비면 평택 간주.
     if (mode === 'discharge') {
-      const pod = String(c.pod || '').toUpperCase();
-      return !pod || pod === 'PTK' || pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
+      return !c.pod || isPyeongtaekPort(c.pod);
     } else {
-      const pol = String(c.pol || '').toUpperCase();
-      return !pol || pol === 'PTK' || pol === 'KRPTK' || pol === 'KRPYT' || pol.endsWith('PTK');
+      return !c.pol || isPyeongtaekPort(c.pol);
     }
   };
 
@@ -123,8 +123,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     cnSet.forEach(cn => {
       if (rc[cn]) { n++; return; }  // M5.51: 리스트에 있으면 무조건 평택
       const c = { ...(ed[cn] || {}) };
-      const target = m === 'discharge' ? String(c.pod || '').toUpperCase() : String(c.pol || '').toUpperCase();
-      if (!target || target === 'PTK' || target === 'KRPTK' || target === 'KRPYT' || target.endsWith('PTK')) n++;
+      const target = m === 'discharge' ? c.pod : c.pol;
+      if (!target || isPyeongtaekPort(target)) n++;
     });
     return n;
   };

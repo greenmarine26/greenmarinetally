@@ -8,7 +8,7 @@
 
 import React, { useMemo } from 'react';
 import { X } from 'lucide-react';
-import { normalizeBay, isoToPdfLabel, isReeferContainer, isoToLabel } from '../utils.js';
+import { normalizeBay, isoToPdfLabel, isReeferContainer, isoToLabel, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
@@ -16,10 +16,7 @@ const STD_ROWS = ['08', '06', '04', '02', '00', '01', '03', '05', '07'];
 const STD_DECK = ['90', '88', '86', '84', '82'];
 const STD_HOLD = ['08', '06', '04', '02'];
 
-const isPtk = (c, mode) => {
-  const t = ((mode === 'discharge' ? c.pod : c.pol) || '').toUpperCase();
-  return t === 'PTK' || t === 'KRPTK' || t === 'KRPYT' || t.endsWith('PTK');
-};
+const isPtk = (c, mode) => isPyeongtaekPort(mode === 'discharge' ? c.pod : c.pol);
 
 // M5.93: isoToPdfLabel은 40HC → "DCHC", 40RF → "RFHC"로 매핑되어 "40"이 포함 안 됨!
 //   기존 sizeOf가 모두 20으로 분류하던 치명적 버그.
