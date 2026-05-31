@@ -219,10 +219,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (r.tier_actual) safeR.tier_actual = r.tier_actual;
         if (r.actual_at) safeR.actual_at = r.actual_at;
         if (r.actual_by) safeR.actual_by = r.actual_by;
-        // M6.72: 위치 수정 — bay/row/tier (빈 문자열도 명시 삭제로 인정)
-        if (r.bay !== undefined) safeR.bay = r.bay;
-        if (r.row !== undefined) safeR.row = r.row;
-        if (r.tier !== undefined) safeR.tier = r.tier;
+        // M6.94.32: EDI에 위치(bay)가 있으면 리스트 bay/row/tier가 덮지 못함.
+        //   원인: 엠티 선적 엑셀(MCAT EMPTY)에는 진짜 선내 위치가 없고 그룹 카운트만 있어,
+        //   파서가 만든 가짜 bay/row/tier가 EDI의 정확한 위치(BAPLIE LOC+147)를 덮어
+        //   카고플랜 그림이 엉뚱하게 그려짐. EDI 위치 = 단일 진실 (카스피도 EDI 위치 그대로 사용).
+        //   사용자가 앱에서 직접 옮긴 위치는 bay_actual 경로(위에서 처리)라 영향 없음.
+        //   EDI에 위치가 없을 때만(리스트 단독 컨 등) 리스트 위치 사용.
+        const ediHasPos = merged[r.cn].bay !== undefined && merged[r.cn].bay !== '';
+        if (!ediHasPos) {
+          if (r.bay !== undefined) safeR.bay = r.bay;
+          if (r.row !== undefined) safeR.row = r.row;
+          if (r.tier !== undefined) safeR.tier = r.tier;
+        }
         merged[r.cn] = { ...merged[r.cn], ...safeR };
       }
     });
@@ -311,6 +319,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (ediBase) {
           // EDI 매칭됨 → 핵심 필드는 보호, 보강 필드만 허용
           if (!ALLOWED_LIST_FIELDS.has(k)) return;  // 핵심 필드 무시
+          // M6.94.32: EDI에 위치(bay)가 있으면 리스트 bay/row/tier가 덮지 못함.
+          //   엠티 선적 엑셀엔 진짜 위치가 없어 가짜 값이 EDI 정확한 위치를 덮으면 그림이 깨짐.
+          //   사용자 직접 위치 수정은 bay_actual 경로로 처리되므로 영향 없음.
+          if (isPositionField && ediBase.bay !== undefined && ediBase.bay !== '') return;
           // tmp는 EDI에 이미 있으면 덮어쓰지 않음 (EDI가 진실)
           if (k === 'tmp' && ediBase.tmp && !ediBase.tmp_missing) return;
           // wt는 EDI 값이 0일 때만 채움

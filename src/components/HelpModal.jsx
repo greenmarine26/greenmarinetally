@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.94.32 (2026-05-31) — 카고플랜 그림 위치 오염 fix (EDI 위치 = 단일 진실)',
+      examples: [
+        { q: '🔥 증상', a: 'M6.94.31로 별첨 카운트는 426 정상이 됐는데, 카고플랜 그림(본체)은 여전히 틀림. EDI에 위치가 있는데도 엠티가 제대로 안 그려짐.' },
+        { q: '🔍 원인', a: '엠티 선적 엑셀에는 진짜 선내 위치가 없고 그룹 카운트(10/1/1 등)만 있음. 파서가 만든 가짜 bay/row/tier가 머지 때 EDI의 정확한 위치(BAPLIE LOC+147)를 덮어씀 → 그림이 깨짐. M6.94.31에서 pol/pod만 보호하고 위치(bay/row/tier) 보호를 빠뜨린 게 원인. 카스피는 EDI 위치를 그대로 써서 정확했음.' },
+        { q: '✅ 수정', a: 'EDI에 위치(bay)가 있으면 리스트의 bay/row/tier가 덮지 못하게 보호. 두 머지(allEdiContainers, containers) 모두 적용. 사용자가 앱에서 직접 옮긴 위치는 bay_actual 경로라 영향 없음. EDI에 위치 없을 때(리스트 단독 컨)만 리스트 위치 사용.' },
+        { q: '📋 시뮬 검증 (실제 앱 파서)', a: '실제 parseBAPLIE/parseListExcel 함수를 Node에서 그대로 실행. 엠티엑셀이 MNBU9105644를 pol=CNDLC·위치없음으로 파싱함 확인. EDI는 bay=2/row=01/tier=84. 수정 후 머지: pol=KRPTK·위치 그대로 보존. 평택 426개 전부 위치가 EDI와 100% 일치, 오염 0건.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/pages/VoyagePage.jsx (allEdiContainers + containers 위치 보호). M6.94.31의 pol/pod 보호 유지. 버전 M6.94.32.' },
+      ],
+    },
+    {
       title: '🆕 M6.94.31 (2026-05-31) — 엠티 285대 누락 진짜 원인 fix (EDI POL/POD 보호)',
       examples: [
         { q: '🔥 증상', a: 'EDI+리스트 다 올렸는데 카고플랜은 141대만. 메인 검색 상단은 426 정상. 컨 상세를 보니 POL=CNDLC, POD=KRPTK로 뒤바뀌어 있었음 (EDI 원본은 POL=KRPTK, POD=CNDLC).' },
