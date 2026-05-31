@@ -117,6 +117,14 @@ export function detectMissingBays(matrix) {
   if (present.length < 2) return [];
 
   const presentSet = new Set(present);
+  // M6.94.36: 페어 짝수(pairEven)도 "존재"로 인정.
+  //   원인: 페어 베이는 홀수 키(023)에 pairEven=22로 들어있고 짝수 키(022)는 없음.
+  //   그래서 이미 (22)23 페어로 존재하는 22가 "짝수 누락"으로 잘못 떴다.
+  for (const k of Object.keys(matrix?.byBay || {})) {
+    const pe = matrix.byBay[k]?.pairEven;
+    const peN = parseInt(pe, 10);
+    if (Number.isFinite(peN) && peN > 0) presentSet.add(peN);
+  }
   const suggestions = [];
 
   // 홀수 베이 누락 (홀수 베이가 2개 이상 있을 때)
@@ -199,6 +207,9 @@ export function buildMatrixFromEdi(containers) {
   const byBay = {};
   for (const c of containers) {
     if (!c.bay || !c.row || !c.tier) continue;
+    // M6.94.36: 비숫자 bay 차단 — parseInt('NaN')/비숫자가 byBay['NaN'] 유령 베이를 만들던 버그.
+    const bayN = parseInt(c.bay, 10);
+    if (!Number.isFinite(bayN) || bayN <= 0) continue;
     const b = pad3(c.bay);
     if (!byBay[b]) {
       byBay[b] = {
@@ -428,7 +439,10 @@ export function augmentMatrixFromPdf(matrix, pdfResult) {
  * @returns {Object} bayDictEntry
  */
 export function matrixToBayDictEntry(matrix, code, name, imo, callsign) {
-  const baysSummary = Object.keys(matrix.byBay).sort().map(bay => {
+  const baysSummary = Object.keys(matrix.byBay)
+    // M6.94.36: 깨진 베이 키(NaN/0/비숫자)는 저장에서 제외 — 유령 entry 영구 제거.
+    .filter(bay => { const n = parseInt(bay, 10); return Number.isFinite(n) && n > 0; })
+    .sort().map(bay => {
     const e = matrix.byBay[bay];
     return {
       bay,                                                    // '001' 3자리
@@ -484,8 +498,12 @@ export function bayDictEntryToMatrix(entry) {
   const byBay = {};
   for (const bs of entry.bayDef.baysSummary) {
     if (!bs.bay) continue;
-    byBay[bs.bay] = {
-      bayNum: bs.bay,
+    // M6.94.36: 깨진 베이 번호(NaN/0/비숫자) 차단 — "BAY NaN" 유령 entry 방지.
+    const bayN = parseInt(bs.bay, 10);
+    if (!Number.isFinite(bayN) || bayN <= 0) continue;
+    const bayKey = String(bayN).padStart(3, '0');
+    byBay[bayKey] = {
+      bayNum: bayKey,
       rowCount: bs.rowCount || 0,
       hasZero: !!bs.hasZero,
       deckTiers: Array.isArray(bs.deckTiers) ? [...bs.deckTiers] : [],

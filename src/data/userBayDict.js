@@ -157,12 +157,22 @@ export function addToUserBayDict(entry) {
         entryNameClean.startsWith(oNameClean) ||
         oNameClean.startsWith(entryNameClean)));
     if (sameShip) {
-      // 양쪽 비어있는 식별자 상호 보완
+      // 양쪽 비어있는 식별자 상호 보완 (식별자는 새 entry로 흡수)
       if (!entry.imo && other.imo) entry.imo = other.imo;
       if (!entry.callsign && other.callsign) entry.callsign = other.callsign;
-      if (!other.imo && entry.imo) other.imo = entry.imo;
-      if (!other.callsign && entry.callsign) other.callsign = entry.callsign;
-      dict[k] = other; // 상대 entry 업데이트 반영
+      // M6.94.36: 새 entry가 사용자 확정본이면 같은 배의 옛 다른 키 entry를 제거.
+      //   원인: 매트릭스 빌더에서 베이를 삭제·확정·저장해도, 같은 배가 다른 키(PDF 자동파싱본 등)로
+      //   남아 있으면 lookupUserBayDict가 옛 키를 잡아 "지운 베이가 다시 살아나" 카고플랜과 불일치.
+      //   확정본 = 유일한 진실 → 옛 중복 entry 삭제. (사용자 확정 저장일 때만, 데이터 보호 위해 user 소스끼리만)
+      const newIsUser = entry.bayDef?._userOwned === true || entry.bayDef?.source === 'user';
+      if (newIsUser) {
+        delete dict[k];  // 옛 중복 제거 → 새 확정본만 남김
+      } else {
+        // 새 entry가 자동본이면 옛 것 보존 (사용자 데이터 보호)
+        if (!other.imo && entry.imo) other.imo = entry.imo;
+        if (!other.callsign && entry.callsign) other.callsign = entry.callsign;
+        dict[k] = other;
+      }
     }
   }
 

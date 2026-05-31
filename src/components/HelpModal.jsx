@@ -379,6 +379,26 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.94.36 (2026-05-31) — 매트릭스 빌더 지운 베이 부활 fix (중복 사전 제거)',
+      examples: [
+        { q: '🔥 증상', a: '베이를 삭제·확정·저장·동기화·배포했는데, 매트릭스 빌더를 다시 열면 지운 베이가 살아있음. 카고플랜(삭제 반영)과 매트릭스 빌더(삭제 안 됨)가 같은 베이를 다르게 그림. 둘 다 같은 사전을 봐야 하는데 다름.' },
+        { q: '🔍 원인', a: '같은 배가 사전(userBayDict)에 두 키로 저장됨 (예: 옛 PDF 자동파싱본 + 새 매트릭스 빌더본). addToUserBayDict가 새 확정본을 저장할 때 같은 배의 옛 다른 키 entry를 안 지움. lookupUserBayDict가 옛 키(지운 베이 살아있는 버전)를 잡으면 부활. 카고플랜과 빌더가 서로 다른 키를 잡아 불일치.' },
+        { q: '✅ 수정', a: '매트릭스 빌더에서 사용자 확정본(_userOwned) 저장 시, 같은 배(IMO/callsign/name 매칭)의 옛 다른 키 entry를 삭제. 확정본 = 유일한 진실. 식별자는 새 entry로 흡수. 자동본 저장 시엔 사용자 데이터 보호 위해 옛 것 보존(기존 동작 유지).' },
+        { q: '📋 시뮬 검증', a: '옛 PDF본(27베이) + 새 빌더본(26베이=1개삭제) 시나리오: 저장 후 옛 27베이본 제거되고 새 26베이본만 남음 확인. 지운 베이 부활 안 함.' },
+        { q: '⚠️ 적용 후', a: '기존에 이미 쌓인 중복은 해당 배를 매트릭스 빌더에서 한 번 더 저장하면 정리됨. 622S 선박도 빌더 열어서 재저장 권장.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/data/userBayDict.js (addToUserBayDict 중복 제거). + src/shipMatrixBuilder.js: BAY NaN 유령 차단(buildMatrixFromEdi에서 비숫자 bay 제외), 페어 짝수(pairEven) 누락 오탐 수정(detectMissingBays). 버전 M6.94.36.' },
+      ],
+    },
+    {
+      title: '🆕 M6.94.36b (2026-05-31) — 매트릭스 빌더 BAY NaN 유령 베이 제거',
+      examples: [
+        { q: '🔥 증상', a: '매트릭스 빌더 맨 끝에 "BAY NaN" 항목이 rowCount 빈 채로 떠 있음. 깨진 베이 entry.' },
+        { q: '🔍 원인', a: 'createEmptyBayEntry/복원 시 베이 번호가 숫자로 파싱 안 되면 parseInt→NaN이 키가 됨("NaN" 문자열 키). bayDictEntryToMatrix가 bs.bay 빈 것만 거르고 NaN/000/비숫자는 안 걸러 유령 베이로 복원됨.' },
+        { q: '✅ 수정', a: 'bayDictEntryToMatrix(복원)·matrixToBayDictEntry(저장) 양쪽에 "유효 베이 번호(parseInt 후 finite & >0)" 가드 추가. 깨진 키는 복원·저장에서 제외 → 재저장하면 영구 제거.' },
+        { q: '🔧 변경 파일', a: 'src/shipMatrixBuilder.js.' },
+      ],
+    },
+    {
       title: '🆕 M6.94.35 (2026-05-31) — 엠티 리퍼 검정 글자 fix (특수마크도 목적지 색 적용)',
       examples: [
         { q: '🔥 증상', a: '카고플랜 선적에서 풀은 목적지 색이 칠해지는데 엠티(285개)는 흰 배경+검정 글자 그대로. 데이터(POL=KRPTK, POD=CNDLC)는 정상인데 색만 안 나옴.' },
