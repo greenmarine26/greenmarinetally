@@ -32,11 +32,18 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       const compMap = sec.completed || {};
       const merged = {};
       Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c }; });
+      // M6.94.31: EDI에 있는 컨은 핵심 필드를 리스트가 덮지 못함 (EDI = 단일 진실).
+      //   원인: 엠티 선적 엑셀(헤더 없는 EMPTY)은 fallback 파서가 목적지(CNDLC)를 pol에 넣음.
+      //   리스트 pol=CNDLC가 EDI pol=KRPTK를 덮어 상세/카고플랜에서 평택 누락.
+      const PROTECTED_EDI = new Set(['pol', 'pod', 'npod', 'fpod', 'iso', 'fe', 'rf', 'fr', 'ot', 'tk', 'dg', 'oog', 'vsl', 'voy']);
       Object.values(recMap).forEach(r => {
+        const hasEdi = !!merged[r.cn];
         const safeR = {};
         Object.keys(r).forEach(k => {
           const v = r[k];
-          if (v !== '' && v !== 0 && v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) safeR[k] = v;
+          if (v === '' || v === 0 || v === null || v === undefined || (Array.isArray(v) && v.length === 0)) return;
+          if (hasEdi && PROTECTED_EDI.has(k)) return;  // EDI 핵심 필드 보호
+          safeR[k] = v;
         });
         merged[r.cn] = { ...(merged[r.cn] || {}), ...safeR };
       });

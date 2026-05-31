@@ -194,8 +194,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         const safeR = {};
         if (r.iso) safeR.iso = r.iso;
         if (r.op)  safeR.op  = r.op;
-        if (r.pol) safeR.pol = r.pol;
-        if (r.pod) safeR.pod = r.pod;
+        // M6.94.31: EDI에 pol/pod 있으면 리스트가 덮지 못함 (EDI = 단일 진실).
+        //   원인: 엠티 선적 엑셀(MCAT EMPTY)은 헤더가 없어 fallback 파서가 목적지(CNDLC 등)를
+        //   pol 자리에 넣음 → 리스트 pol=CNDLC가 EDI pol=KRPTK를 덮어 카고플랜에서 285대 누락.
+        //   EDI에 pol/pod 없을 때만 리스트로 보강.
+        if (r.pol && !merged[r.cn].pol) safeR.pol = r.pol;
+        if (r.pod && !merged[r.cn].pod) safeR.pod = r.pod;
         if (r.sl) safeR.sl = r.sl;
         if (r.sl_orig) safeR.sl_orig = r.sl_orig;
         if (r.wt && !merged[r.cn].wt) safeR.wt = r.wt;

@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 M6.94.31 (2026-05-31) — 엠티 285대 누락 진짜 원인 fix (EDI POL/POD 보호)',
+      examples: [
+        { q: '🔥 증상', a: 'EDI+리스트 다 올렸는데 카고플랜은 141대만. 메인 검색 상단은 426 정상. 컨 상세를 보니 POL=CNDLC, POD=KRPTK로 뒤바뀌어 있었음 (EDI 원본은 POL=KRPTK, POD=CNDLC).' },
+        { q: '🔍 진짜 원인 (실데이터 추적)', a: '엠티 선적 엑셀(MCAT EMPTY)은 헤더가 거의 없어 parseListExcel이 fallback 경로로 감. fallback은 행에서 첫 5글자 항구코드를 무조건 POL에 넣는데, 엠티 엑셀엔 목적지(CNDLC/CNTAO/PHDVO)만 있어 POL=목적지로 오염. 이 리스트가 머지 때 EDI의 정확한 POL=KRPTK를 덮어씀 → 카고플랜 평택 판정에서 285대 탈락. 카스피는 EDI만 봐서 POL=PTK로 정확히 426 그렸는데, 우리 앱은 리스트가 EDI를 오염시켜 더 부정확했던 것.' },
+        { q: '✅ 수정 (EDI = 단일 진실)', a: 'EDI에 컨이 있으면 리스트가 POL/POD(및 iso/fe/위치 등 핵심)를 절대 못 덮게 보호. 두 머지 지점의 구멍을 막음: VoyagePage allEdiContainers(베이플랜용) + SearchPanel(검색/상세용). EDI에 POL 없을 때만 리스트로 보강.' },
+        { q: '📋 시뮬 검증', a: '실파일(EDI 872 = 평택 426 + 통과 446, 엠티엑셀 285)로 검증. fallback 파서가 285개를 pol=목적지로 오염시킴을 직접 재현. 수정 후: 엠티 pol=KRPTK 유지 → 카고플랜 426(엠티282+풀144) 전부 표시. 수정 전 141 재현 확인.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/pages/VoyagePage.jsx, src/components/SearchPanel.jsx. M6.94.30 색 함수 보강 유지. 버전 M6.94.31.' },
+      ],
+    },
+    {
       title: '🆕 M6.94.30 (2026-05-31) — 엠티 285대 카고플랜 누락 fix (리스트 등록=평택 통일)',
       examples: [
         { q: '🔥 요청', a: '선적 리스트/EDI에선 426개를 인식하는데 카고플랜·별첨에는 141개만 표시됨. 285대(엠티)는 선적항이 안 보이지만 리스트+EDI에서 매칭됐으므로 평택 선적분으로 인정·표시되어야 함.' },
