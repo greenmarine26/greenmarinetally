@@ -351,7 +351,17 @@ export default function PrintableCargoPlanV2({
   pod: explicitPod,
   onClose,
 }) {
-  const effVoyNo = voyNo || voyageInfo?.voy || '-';
+  // M6.94.26: mode별 항차 선택 (카고플랜1과 통일).
+  //   선적 카고플랜인데 양하 항차(voy_d)가 표시되던 버그 fix.
+  //   양하 → voy_d, 선적 → voy_l, 폴백 → voy. voyNo prop이 명시되면 그것 우선.
+  const _voyD = voyageInfo?.voy_d || '';
+  const _voyL = voyageInfo?.voy_l || '';
+  const _voyGeneric = voyageInfo?.voy || '';
+  let _voyByMode;
+  if (mode === 'discharge') _voyByMode = _voyD || _voyGeneric;
+  else if (mode === 'loading') _voyByMode = _voyL || _voyGeneric;
+  else _voyByMode = (_voyD && _voyL && _voyD !== _voyL) ? `양하 ${_voyD} / 선적 ${_voyL}` : (_voyD || _voyL || _voyGeneric);
+  const effVoyNo = voyNo || _voyByMode || '-';
   const effShipName = shipName || voyageInfo?.shipName || '';
   // 베이사전 + v5 매트릭스 로딩
   const dictData = useMemo(() => {
