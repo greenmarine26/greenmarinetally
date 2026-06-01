@@ -1261,6 +1261,45 @@ function buildCargoPlan(rows, dictBaysSummary){
   const { trios, singles } = autoPairBays(matrixBays);
   const layout = autoPageLayout(trios, singles);
   const byNum = new Map(); matrixBays.forEach(b=>byNum.set(b.bayNum,b));
+
+  // posMap: "bay|tier|rowLbl" → 컨테이너(size). 셀에 컨테이너 있는지 표시용.
+  const posMap = {};
+  for(const c of rows){
+    const bay=parseInt(c.bay,10), tier=parseInt(c.tier,10);
+    if(!Number.isFinite(bay)||!Number.isFinite(tier)) continue;
+    const rowLbl=String(c.row).padStart(2,'0');
+    posMap[bay+'|'+tier+'|'+rowLbl] = { size: c.size||'40' };
+  }
+  // 페어 키 "(EE)OO" → 짝수 EE(40ft 자리)+홀수 OO(20ft 자리) 둘 다 조회.
+  const keyBaysFor = key => {
+    if(key.startsWith('(')){
+      const m=key.replace('(','').replace(')','');           // "EEOO"
+      return [parseInt(m.slice(0,2),10), parseInt(m.slice(2),10)];
+    }
+    return [parseInt(key,10)];
+  };
+  // 렌더데이터의 각 active 셀에 컨테이너 마크 채우기
+  const _probeKeys = [];  // 격자가 조회한 키 샘플 (진단용)
+  const fillMarks = (data, key) => {
+    if(!data) return;
+    const bays = keyBaysFor(key);
+    const fill = (rowsArr) => {
+      for(const row of rowsArr){
+        if(row.invisible) continue;
+        for(const cell of row.cells){
+          if(!cell.active || !cell.rowLbl) continue;
+          for(const b of bays){
+            const probe = b+'|'+row.tier+'|'+cell.rowLbl;
+            if(_probeKeys.length<6) _probeKeys.push(probe);
+            const hit = posMap[probe];
+            if(hit){ cell.mark = hit.size==='20' ? '▪' : '●'; break; }
+          }
+        }
+      }
+    };
+    fill(data.deckRows); fill(data.holdRows);
+  };
+
   const renderDataMap = {};
   const keyToNum = key => key.startsWith('(') ? parseInt(key.replace('(','').replace(')','').slice(2),10) : parseInt(key,10);
   for(const rowBoxes of layout){
@@ -1268,18 +1307,24 @@ function buildCargoPlan(rows, dictBaysSummary){
       [box.topKey, box.pairKey].filter(Boolean).forEach(k=>{
         const num = keyToNum(k);
         const b = byNum.get(num);
-        renderDataMap[k] = useDict && b && b._summary
+        const data = useDict && b && b._summary
           ? buildBayRenderDataFromSummary(b._summary, k)   // 검수앱과 동일 골격
           : buildBayRenderData(b, k);                       // 좌표 역산 폴백
+        fillMarks(data, k);                                 // 컨테이너 있는 칸 표시
+        renderDataMap[k] = data;
       });
     }
   }
-  let globalMaxCols=1;
+  let globalMaxCols=1, markedCells=0;
   for(const d of Object.values(renderDataMap)){
-    if(d&&d.nDeckCols>globalMaxCols) globalMaxCols=d.nDeckCols;
-    if(d&&d.nHoldCols>globalMaxCols) globalMaxCols=d.nHoldCols;
+    if(!d) continue;
+    if(d.nDeckCols>globalMaxCols) globalMaxCols=d.nDeckCols;
+    if(d.nHoldCols>globalMaxCols) globalMaxCols=d.nHoldCols;
+    for(const r of d.deckRows.concat(d.holdRows)){ for(const c of r.cells){ if(c.mark) markedCells++; } }
   }
-  return { layout, renderDataMap, globalMaxCols };
+  return { layout, renderDataMap, globalMaxCols,
+    stats:{ totalContainers: rows.length, posKeys: Object.keys(posMap).length, markedCells, usedDict: useDict,
+            posSample: Object.keys(posMap).slice(0,6), probeSample: _probeKeys } };
 }
 
 function _buildCargoPlan_OLD(rows){
@@ -1337,7 +1382,8 @@ const CARGO_V2_CSS = `
 .cpv2-grid { display:flex; flex-direction:column; align-items:stretch; gap:0; flex:1 1 0; min-width:0; }
 .cpv2-tier-row { display:flex; gap:0; flex:1 1 0; min-height:0; }
 .cpv2-tier-row.cpv2-invisible-row { display:none; }
-.cpv2-tier-row .cpv2-cell { flex:1 1 0; min-width:0; min-height:0; border:0.5px solid #555; box-sizing:border-box; background:#fff; font-size:clamp(6px,0.55vw,8px); display:flex; align-items:center; justify-content:center; line-height:1; font-weight:bold; color:#000; position:relative; overflow:hidden; }
+.cpv2-tier-row .cpv2-cell { flex:1 1 0; min-width:0; min-height:0; border:0.5px solid #555; box-sizing:border-box; background:#fff; font-size:clamp(8px,1.1vw,16px); display:flex; align-items:center; justify-content:center; line-height:1; font-weight:bold; color:#1565c0; position:relative; overflow:hidden; }
+.cpv2-tier-row .cpv2-cell.cpv2-filled { background:#e3f0ff; }
 .cpv2-tier-row .cpv2-cell-empty { flex:1 1 0; min-width:0; min-height:0; visibility:hidden; }
 .cpv2-row-labels { display:flex; flex:0 0 auto; font-size:clamp(7px,0.75vw,10px); color:#444; gap:0; margin:1px 0; margin-right:16px; }
 .cpv2-row-labels > span { flex:1 1 0; min-width:0; text-align:center; line-height:1.2; }
@@ -1375,7 +1421,7 @@ function _gridHtml(rows, rowPos, nCols, stdTiers, gc){
     let cells='';
     for(const cell of row.cells){
       if(!cell.active) cells += '<span class="cpv2-cell-empty"></span>';
-      else cells += '<span class="cpv2-cell"></span>';
+      else cells += '<span class="cpv2-cell">'+(cell.mark||'')+'</span>';
     }
     gridRows += `<div class="cpv2-tier-row${row.invisible?' cpv2-invisible-row':''}">${cells}</div>`;
   }
@@ -1426,7 +1472,7 @@ function _bayBoxHtml(data, gc, applyHatch){
 function renderCargoPlanHtml(rows, shipName, voyNo, mode, dictBaysSummary){
   const plan = buildCargoPlan(rows, dictBaysSummary);
   if(!plan) return '<div style="padding:20px;color:#fff">표시할 컨테이너가 없습니다.</div>';
-  const { layout, renderDataMap, globalMaxCols } = plan;
+  const { layout, renderDataMap, globalMaxCols, stats } = plan;
   const gc = globalMaxCols;
   const title = `${(shipName||'').toUpperCase()} CARGO ${mode==='disch'?'DISCHARGING':'LOADING'} PLAN`;
   const today = new Date().toISOString().slice(0,10);
@@ -1455,7 +1501,22 @@ function renderCargoPlanHtml(rows, shipName, voyNo, mode, dictBaysSummary){
     pageRows += `<div class="cpv2-page-row">${slots}</div>`;
   });
 
+  const s = stats||{};
+  const ok = s.markedCells>0;
+  let banner;
+  if(ok){
+    banner = `<div style="background:#0f2a16;color:#bfe9c8;font-size:12px;padding:6px 10px;border-radius:6px;margin-bottom:6px">`
+      + `✓ 컨테이너 ${s.totalContainers}대 표시됨 (${s.markedCells}칸) · 골격: ${s.usedDict?'검수앱 베이사전':'좌표 자동'}</div>`;
+  } else {
+    banner = `<div style="background:#2a1010;color:#ffd0d0;font-size:11px;padding:8px 10px;border-radius:6px;margin-bottom:6px;line-height:1.5">`
+      + `⚠ 컨테이너 ${s.totalContainers}대 읽었지만 칸에 표시 안 됨<br>`
+      + `<span style="color:#9fc">컨테이너 위치 키:</span> ${(s.posSample||[]).join(' , ')||'(없음)'}<br>`
+      + `<span style="color:#fc9">격자가 찾은 키:</span> ${(s.probeSample||[]).join(' , ')||'(없음)'}<br>`
+      + `<span style="color:#aaa">↑ 두 줄의 숫자 형식이 다르면 그게 원인입니다. 이 화면을 캡처해 알려주세요.</span></div>`;
+  }
+
   return `<style>${CARGO_V2_CSS}</style>
+  ${banner}
   <div class="cpv2-wrap">
     <div class="cpv2-page">
       <div class="cpv2-page-header">
