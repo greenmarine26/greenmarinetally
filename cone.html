@@ -827,6 +827,95 @@ function bindEvents(){
   const bv=document.getElementById('bayViewBtn'); if(bv) bv.onclick=renderBayView;
 }
 
+// 카고플랜 표시 (양하/선적 각각, 검수앱과 동일 골격)
+async function handleFile(file,slot){
+  if(!file) return;
+  const name=(file.name||'').toLowerCase();
+  showLoading('읽는 중... ('+(file.name||'파일')+')');
+  try{
+    const isPdf = file.type==='application/pdf' || name.endsWith('.pdf');
+    const isImg = (file.type||'').startsWith('image/') || /\.(jpe?g|png|gif|webp|heic)$/.test(name);
+
+    // PDF
+    if(isPdf){
+      const data=await readPDF(file);
+      if(data.kind && data.kind!==slot) slot=data.kind;
+      state[slot]=data; applyVessel(data.vessel); render(); return;
+    }
+    // 이미지
+    if(isImg){
+      const data=await readImage(file);
+      state[slot]=data; render(); return;
+    }
+    // 그 외 전부 텍스트로 읽어 EDI인지 내용으로 판별 (확장자 무관)
+    const text=await file.text();
+    if(isEDI(text)){
+      const d=parseEDI(text);
+      if(d.kind && d.kind!==slot) slot=d.kind;
+      state[slot]={ediRows:d.rows, isEDI:true, fname:file.name, vessel:d.vessel};
+      applyVessel(d.vessel); render(); return;
+    }
+    // 텍스트인데 EDI 아님
+    showErr(slot, '이 파일은 EDI 형식이 아닙니다. EDI(BAPLIE) 또는 PDF·사진을 올려주세요. (읽은 파일: '+(file.name||'?')+')');
+  }catch(err){
+    showErr(slot, '파일을 읽지 못했습니다: '+err.message+' (파일: '+(file.name||'?')+')');
+  }
+}
+function showErr(slot,msg){
+  const ra=document.getElementById('resultArea');
+  if(ra) ra.innerHTML='<div class="card"><p style="color:var(--rem);font-size:14px;line-height:1.6">⚠ '+msg+'</p></div>';
+}
+function showLoading(msg){
+  const ra=document.getElementById('resultArea');
+  if(ra) ra.innerHTML=`<div class="card"><div class="loading"><div class="spinner"></div>${msg}</div></div>`;
+}
+
+function planToGroups(plan){
+  if(!plan) return {};
+  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType);
+  if(!plan.bays || !plan.bays.length){
+    // 사진이거나 베이 텍스트를 못읽음 → 빈 결과(사용자에게 안내됨)
+    return {};
+  }
+  const res=analyzePlan(plan, state.shipType);
+  const groups={};
+  for(const lbl in res){
+    const gk=res[lbl].group; const c=res[lbl].cones;
+    if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0};
+    groups[gk].deck+=c.deck; groups[gk].ele+=c.ele; groups[gk].hold+=c.hold;
+  }
+  return groups;
+}
+function runCalc(){
+  showLoading('계산 중...');
+  setTimeout(()=>{
+    try{
+      // 양하/선적 선박명 다르면 경고(다른 항차 자료일 수 있음)
+      const vs=state.stow&&state.stow.vessel, vd=state.disch&&state.disch.vessel;
+      const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
+      window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
+      const sg=planToGroups(state.stow);
+      const dg=planToGroups(state.disch);
+      const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
+      const groups={};
+      for(const k of allk){
+        groups[k]={
+          stow: sg[k]||{deck:0,ele:0,hold:0},
+          disch: dg[k]||{deck:0,ele:0,hold:0},
+          labels:[k+'번']
+        };
+      }
+      renderResults(groups);
+    }catch(err){
+      document.getElementById('resultArea').innerHTML=
+        `<div class="card"><p style="color:var(--rem)">계산 오류: ${err.message}</p></div>`;
+    }
+  },50);
+}
+
+// ============ 베이 위치 보기 (양하·선적 구분) ============
+// 콘앱이 이미 가진 EDI 위치값(bay/row/tier/size)만으로 베이별 격자를 그린다.
+// 베이사전 불필요. 양하=파랑, 선적=초록, 둘 다=주황.
 function renderBayView(){
   const ra=document.getElementById('resultArea');
   // 컨테이너 수집: bay → { 'row_tier': {d:양하?, l:선적?, size} }
@@ -891,7 +980,6 @@ function renderBayView(){
       g+='</tbody></table>';
       return g;
     };
-    // 한 쪽 패널 (deck+hold)
     const panel=(flag,label,count)=>{
       let p=`<div class="bv-col"><div class="bv-colhd ${flag}">${label} <span class="bv-cnt">${count}대</span></div>`;
       if(deckTiers.length){ p+=`<div class="bv-sec">갑판</div>${grid(deckTiers,flag)}`; }
