@@ -300,6 +300,15 @@ export function getShipBayDictData(imo, code) {
       .map(b => b.bayNo || (typeof b.idx === 'number' ? String(b.idx).padStart(2, '0') : null))
       .filter(Boolean);
   }
+  // M6.94.37: 매트릭스 빌더(matrixToBayDictEntry)는 bayList/bays 없이 baysSummary만 저장한다.
+  //   이 폴백이 없으면 user 매트릭스 저장·동기화 후에도 bayList=[] 로 반환되어,
+  //   BayPlan/인쇄가 베이 목록을 만들지 못하고 EDI 폴백으로 떨어져 "매칭됐는데 베이 안 보임" 발생.
+  if ((!bayList || bayList.length === 0) && Array.isArray(bayDef.baysSummary) && bayDef.baysSummary.length > 0) {
+    bayList = bayDef.baysSummary
+      .map(b => b.bay ?? b.bayNo)
+      .filter(b => b != null && b !== '')
+      .map(b => String(b));
+  }
 
   // M6.25: v3(Firebase)/user 데이터에 v2 정밀 데이터 union 보완
   //   증상: 사용자가 STOWAGE PDF로 등록한 v3 데이터에서 Gemini가 일부 tier 누락 (예: BAY 25 80 tier).
