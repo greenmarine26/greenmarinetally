@@ -202,14 +202,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     if (!shipImo && !shipName) return null;
     const dict = getShipBayDictData(shipImo, shipName);
     if (!dict?.bayDef) return null;
-    // 베이 목록 소스: bayList → bays → baysSummary 순.
-    //   매트릭스 빌더(matrixToBayDictEntry)는 bayList/bays 없이 baysSummary만 저장하므로
-    //   baysSummary 폴백이 없으면 user 매트릭스 저장·동기화 후에도 베이 목록이 null이 되어
-    //   화면이 EDI 폴백으로 떨어져 정의한 베이가 안 보였다. (bay 3자리 또는 bayNo 2자리)
-    const list = dict.bayDef.bayList
-      || (dict.bayDef.bays?.map(b => b.bayNo))
-      || (dict.bayDef.baysSummary?.map(b => b.bay ?? b.bayNo))
-      || null;
+    const list = dict.bayDef.bayList || (dict.bayDef.bays?.map(b => b.bayNo)) || null;
     if (!list || list.length < 2) return null;
     // 정수 정규화 ("01" → 1, "33" → 33) + 중복 제거 + 정렬
     const ints = list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n));

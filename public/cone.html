@@ -44,18 +44,21 @@
   .bv-lg{font-weight:700; padding:3px 9px; border-radius:6px;}
   .bv-lg.d{background:#13344a; color:#7cc4ff;}
   .bv-lg.l{background:#163826; color:#5fe0a0;}
-  .bv-lg.b{background:#3a2a10; color:var(--accent);}
   .bv-bay{margin-bottom:18px; border-top:1px solid var(--line); padding-top:12px;}
-  .bv-bayhd{font-size:15px; font-weight:800; margin-bottom:6px;}
-  .bv-cnt{font-size:11px; color:var(--dim); font-weight:500; margin-left:8px;}
+  .bv-bayhd{font-size:15px; font-weight:800; margin-bottom:8px;}
+  .bv-split{display:flex; gap:14px; align-items:flex-start;}
+  .bv-col{flex:1 1 0; min-width:0; overflow-x:auto;}
+  .bv-colhd{font-size:13px; font-weight:800; padding:3px 8px; border-radius:6px; margin-bottom:6px; display:inline-block;}
+  .bv-colhd.d{background:#13344a; color:#7cc4ff;}
+  .bv-colhd.l{background:#163826; color:#5fe0a0;}
+  .bv-cnt{font-size:11px; font-weight:600; opacity:.85; margin-left:4px;}
   .bv-sec{font-size:11px; color:var(--dim); margin:6px 0 3px;}
   .bv-tab{border-collapse:separate; border-spacing:2px;}
-  .bv-tab td{width:22px; height:22px; text-align:center; font-size:13px; border-radius:4px; line-height:22px;}
+  .bv-tab td{width:18px; height:18px; text-align:center; font-size:11px; border-radius:3px; line-height:18px;}
   .bv-empty{background:transparent;}
   .bv-c{font-weight:700;}
   .bv-c.d{background:#13344a; color:#7cc4ff;}
   .bv-c.l{background:#163826; color:#5fe0a0;}
-  .bv-c.b{background:#3a2a10; color:var(--accent);}
   .btn-up .ic{font-size:26px; display:block; margin-bottom:6px;}
   .btn-up .st{font-size:11px; color:var(--dim); margin-top:5px; font-weight:500;}
   .btn-primary{background:var(--accent); color:#1a1206; width:100%; padding:16px; font-size:16px;}
@@ -799,9 +802,7 @@ function render(){
     <button class="btn-primary" id="calcBtn" style="margin-top:14px" ${(state.stow&&state.disch&&state.shipType)?'':'disabled'}>
       ③ 콘 계산하기
     </button>
-    ${(state.disch||state.stow)?'<button class="btn-up" id="bayViewBtn" style="margin-top:10px;flex:none;width:100%">🗺️ 베이 위치 보기 (양하·선적)</button>':''}
-    ${state.disch?'<button class="btn-up" id="cpDischBtn" style="margin-top:8px;flex:none;width:100%">📄 카고플랜 — 양하</button>':''}
-    ${state.stow?'<button class="btn-up" id="cpStowBtn" style="margin-top:8px;flex:none;width:100%">📄 카고플랜 — 선적</button>':''}
+    ${(state.disch||state.stow)?'<button class="btn-up" id="bayViewBtn" style="margin-top:10px;flex:none;width:100%">🗺️ 베이플랜 보기 (양하·선적 비교)</button>':''}
     ${(state.stow&&state.disch&&!state.shipType)?'<div class="hint" style="color:var(--accent)">위에서 선종을 먼저 선택하세요.</div>':''}
     ${(state.voyageKey&&(!state.disch||!state.stow))?'<div class="hint">'+(!state.disch?'이 작업엔 양하 EDI가 없습니다. ':'')+(!state.stow?'이 작업엔 선적 EDI가 없습니다. ':'')+'한쪽만 있으면 콘 계산을 할 수 없습니다(양하+선적 모두 필요).</div>':''}
   `;
@@ -824,721 +825,7 @@ function bindEvents(){
   });
   const cb=document.getElementById('calcBtn'); if(cb) cb.onclick=runCalc;
   const bv=document.getElementById('bayViewBtn'); if(bv) bv.onclick=renderBayView;
-  const cpd=document.getElementById('cpDischBtn'); if(cpd) cpd.onclick=()=>showCargoPlan('disch');
-  const cps=document.getElementById('cpStowBtn'); if(cps) cps.onclick=()=>showCargoPlan('stow');
 }
-
-// 카고플랜 표시 (양하/선적 각각, 검수앱과 동일 골격)
-async function showCargoPlan(mode){
-  const ra=document.getElementById('resultArea');
-  const plan = mode==='disch' ? state.disch : state.stow;
-  if(!plan || !plan.ediRows || !plan.ediRows.length){
-    ra.innerHTML='<div class="card"><div class="empty-note">'+(mode==='disch'?'양하':'선적')+' 자료가 없습니다.</div></div>';
-    return;
-  }
-  const voyNo = state.voyageKey ? (state.voyageKey.split('_')[1]||'') : '';
-  showLoading('카고플랜 그리는 중...');
-  // 검수앱 베이사전 매칭 시도 → 있으면 검수앱과 동일 골격, 없으면 좌표 역산.
-  let dictBaysSummary = null;
-  try{
-    const fbDict = await fbFetchBayDict();
-    const v = (state.voyages||[]).find(x=>x.key===state.voyageKey);
-    const imo = v && v.imo ? v.imo : '';
-    const code = state.voyageKey ? state.voyageKey.split('_')[0] : '';
-    const entry = lookupBayDef(fbDict, imo, state.shipName||plan.vessel||code);
-    if(entry && entry.bayDef && Array.isArray(entry.bayDef.baysSummary) && entry.bayDef.baysSummary.length>0){
-      dictBaysSummary = entry.bayDef.baysSummary;
-    }
-  }catch(e){ /* 폴백: 좌표 역산 */ }
-
-  try{
-    const html = renderCargoPlanHtml(plan.ediRows, state.shipName||plan.vessel||'', voyNo, mode, dictBaysSummary);
-    // 폰: 가로로 돌리면 한눈에, 작으면 두 손가락 확대. → 축소 안 하고 원본 크기 유지 + 가로 스크롤.
-    enableZoom(true);
-    const srcNote = dictBaysSummary
-      ? '검수앱 베이사전 기준 (검수앱과 동일)'
-      : '좌표 자동 골격 (베이사전 미등록 선박)';
-    ra.innerHTML = '<div class="card" style="padding:6px">'
-      + '<div style="display:flex;gap:8px;margin-bottom:6px">'
-      + '<button class="btn-up" style="flex:1" onclick="window.print()">🖨 인쇄</button>'
-      + '<button class="btn-up" style="flex:1" id="cpBack">← 돌아가기</button>'
-      + '</div>'
-      + '<div class="cp-hint" style="font-size:12px;color:var(--dim);margin-bottom:6px">📱 가로로 돌리면 한눈에. 두 손가락으로 확대/축소. <span style="color:var(--accent2)">'+srcNote+'</span></div>'
-      + '<div id="cpScroll" style="overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px">'
-      +   html
-      + '</div></div>';
-    ra.scrollIntoView({behavior:'smooth',block:'start'});
-    const back=document.getElementById('cpBack');
-    if(back) back.onclick=()=>{ enableZoom(false); ra.innerHTML=''; };
-  }catch(e){
-    enableZoom(false);
-    ra.innerHTML='<div class="card"><p style="color:var(--rem)">카고플랜 오류: '+e.message+'</p></div>';
-  }
-}
-
-// 카고플랜 볼 때만 핀치 줌 허용. 다른 화면에선 원래대로(확대 잠금).
-function enableZoom(on){
-  const vp=document.querySelector('meta[name="viewport"]');
-  if(!vp) return;
-  vp.setAttribute('content', on
-    ? 'width=device-width, initial-scale=1.0'                       // 줌 허용
-    : 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');  // 원복
-}
-
-async function handleFile(file,slot){
-  if(!file) return;
-  const name=(file.name||'').toLowerCase();
-  showLoading('읽는 중... ('+(file.name||'파일')+')');
-  try{
-    const isPdf = file.type==='application/pdf' || name.endsWith('.pdf');
-    const isImg = (file.type||'').startsWith('image/') || /\.(jpe?g|png|gif|webp|heic)$/.test(name);
-
-    // PDF
-    if(isPdf){
-      const data=await readPDF(file);
-      if(data.kind && data.kind!==slot) slot=data.kind;
-      state[slot]=data; applyVessel(data.vessel); render(); return;
-    }
-    // 이미지
-    if(isImg){
-      const data=await readImage(file);
-      state[slot]=data; render(); return;
-    }
-    // 그 외 전부 텍스트로 읽어 EDI인지 내용으로 판별 (확장자 무관)
-    const text=await file.text();
-    if(isEDI(text)){
-      const d=parseEDI(text);
-      if(d.kind && d.kind!==slot) slot=d.kind;
-      state[slot]={ediRows:d.rows, isEDI:true, fname:file.name, vessel:d.vessel};
-      applyVessel(d.vessel); render(); return;
-    }
-    // 텍스트인데 EDI 아님
-    showErr(slot, '이 파일은 EDI 형식이 아닙니다. EDI(BAPLIE) 또는 PDF·사진을 올려주세요. (읽은 파일: '+(file.name||'?')+')');
-  }catch(err){
-    showErr(slot, '파일을 읽지 못했습니다: '+err.message+' (파일: '+(file.name||'?')+')');
-  }
-}
-function showErr(slot,msg){
-  const ra=document.getElementById('resultArea');
-  if(ra) ra.innerHTML='<div class="card"><p style="color:var(--rem);font-size:14px;line-height:1.6">⚠ '+msg+'</p></div>';
-}
-function showLoading(msg){
-  const ra=document.getElementById('resultArea');
-  if(ra) ra.innerHTML=`<div class="card"><div class="loading"><div class="spinner"></div>${msg}</div></div>`;
-}
-
-function planToGroups(plan){
-  if(!plan) return {};
-  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType);
-  if(!plan.bays || !plan.bays.length){
-    // 사진이거나 베이 텍스트를 못읽음 → 빈 결과(사용자에게 안내됨)
-    return {};
-  }
-  const res=analyzePlan(plan, state.shipType);
-  const groups={};
-  for(const lbl in res){
-    const gk=res[lbl].group; const c=res[lbl].cones;
-    if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0};
-    groups[gk].deck+=c.deck; groups[gk].ele+=c.ele; groups[gk].hold+=c.hold;
-  }
-  return groups;
-}
-function runCalc(){
-  showLoading('계산 중...');
-  setTimeout(()=>{
-    try{
-      // 양하/선적 선박명 다르면 경고(다른 항차 자료일 수 있음)
-      const vs=state.stow&&state.stow.vessel, vd=state.disch&&state.disch.vessel;
-      const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
-      window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
-      const sg=planToGroups(state.stow);
-      const dg=planToGroups(state.disch);
-      const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
-      const groups={};
-      for(const k of allk){
-        groups[k]={
-          stow: sg[k]||{deck:0,ele:0,hold:0},
-          disch: dg[k]||{deck:0,ele:0,hold:0},
-          labels:[k+'번']
-        };
-      }
-      renderResults(groups);
-    }catch(err){
-      document.getElementById('resultArea').innerHTML=
-        `<div class="card"><p style="color:var(--rem)">계산 오류: ${err.message}</p></div>`;
-    }
-  },50);
-}
-
-// ============ 베이 위치 보기 (양하·선적 구분) ============
-// 콘앱이 이미 가진 EDI 위치값(bay/row/tier/size)만으로 베이별 격자를 그린다.
-// 베이사전 불필요. 양하=파랑, 선적=초록, 둘 다=주황.
-// ===== 카고플랜 모듈 (검수앱 cargoPlanCore + PrintableCargoPlanV2 포팅) =====
-// ============================================================
-// 카고플랜 코어 — 검수앱 cargoPlanCore.js 포팅 (콘앱용, 빈 골격)
-// CASPI 방식: 컨테이너 좌표 → baysSummary → 레이아웃 → 격자.
-// 표기(컨번호·마크) 없이 검수앱과 동일한 베이 골격만 그린다.
-// ============================================================
-
-const STANDARD_DECK = [94, 92, 90, 88, 86, 84, 82, 80];
-const STANDARD_HOLD = [14, 12, 10, 8, 6, 4, 2];
-
-// 좌표(rows: {bay,row,tier,...}) → baysSummary (ascToBayDictEntry 골격부 포팅)
-function rowsToBaysSummary(rows){
-  const bayMap = {};
-  for(const c of rows){
-    const bayNo = parseInt(c.bay, 10);
-    if(!Number.isFinite(bayNo)) continue;
-    const row = parseInt(c.row, 10);
-    const tier = parseInt(c.tier, 10);
-    if(!Number.isFinite(row) || !Number.isFinite(tier)) continue;
-    if(!bayMap[bayNo]) bayMap[bayNo] = { rowsEven:new Set(), rowsOdd:new Set(), holdTiers:new Set(), deckTiers:new Set() };
-    const b = bayMap[bayNo];
-    if(row % 2 === 0 && row !== 0) b.rowsEven.add(row); else b.rowsOdd.add(row);
-    if(tier <= 20) b.holdTiers.add(tier); else b.deckTiers.add(tier);
-  }
-  const sortedBays = Object.keys(bayMap).map(Number).sort((a,b)=>a-b);
-  const baysSummary = [];
-  for(const bayNo of sortedBays){
-    const b = bayMap[bayNo];
-    const deckTiers = Array.from(b.deckTiers).sort((a,b)=>b-a);
-    const holdTiers = Array.from(b.holdTiers).sort((a,b)=>b-a);
-    const isEven = bayNo % 2 === 0;
-    const isStandalone = isEven && !bayMap[bayNo-1] && !bayMap[bayNo+1];
-    const rowMaxEven = b.rowsEven.size>0 ? Math.max(...b.rowsEven) : null;
-    const rowMaxOdd = b.rowsOdd.size>0 ? Math.max(...b.rowsOdd) : null;
-    const entry = {
-      bayNo: String(bayNo).padStart(2,'0'),
-      hasHold: holdTiers.length>0, hasDeck: deckTiers.length>0, isStandalone,
-      deckTiers, holdTiers,
-    };
-    if(rowMaxEven!=null){ entry.rowMaxEven = rowMaxEven; }
-    if(rowMaxOdd!=null){ entry.rowMaxOdd = rowMaxOdd; }
-    baysSummary.push(entry);
-  }
-  return baysSummary;
-}
-
-// baysSummary → matrixBays (검수앱 fallback 경로: cells 비움 → hull 가득)
-function baysSummaryToMatrixBays(baysSummary, rows){
-  // EDI/ASC tier로 deck/hold 보강
-  const ediTiersByBay = new Map();
-  for(const c of rows){
-    const b = Number(c.bay), t = Number(c.tier);
-    if(!Number.isFinite(b)||!Number.isFinite(t)) continue;
-    if(!ediTiersByBay.has(b)) ediTiersByBay.set(b, new Set());
-    ediTiersByBay.get(b).add(t);
-  }
-  const summaryByBay = new Map();
-  for(const s of baysSummary){ const n=Number(s.bayNo); if(Number.isFinite(n)) summaryByBay.set(n,s); }
-
-  // 어떤 베이 번호들이 실제로 존재하는지 (페어 판정용)
-  const existBays = new Set(baysSummary.map(s=>Number(s.bayNo)).filter(Number.isFinite));
-
-  return baysSummary.map(s=>{
-    const bayNum = Number(s.bayNo);
-    const summary = summaryByBay.get(bayNum);
-    // 페어: 홀수 베이 + 짝수 짝꿍(±1 중 존재하는 짝수). 짝수 베이 컨테이너도 이 격자에 그려짐.
-    //   → 격자 폭/tier를 두 베이 합산으로 계산해야 짝수 row가 빈 칸으로 안 빠짐 (검수앱 union과 동일).
-    let mateBays = [bayNum];
-    if(bayNum % 2 === 1){
-      if(existBays.has(bayNum-1)) mateBays.push(bayNum-1);
-      if(existBays.has(bayNum+1)) mateBays.push(bayNum+1);
-    }
-    // 합산 tier
-    const tierSet = new Set();
-    for(const c of rows){
-      const b=Number(c.bay), t=Number(c.tier);
-      if(mateBays.includes(b) && Number.isFinite(t)) tierSet.add(t);
-    }
-    const ediTiers = [...tierSet];
-    const hasDeckFromEdi = ediTiers.some(t=>t>=80);
-    const hasHoldFromEdi = ediTiers.some(t=>t<80);
-    const hasDeck = summary?.hasDeck !== undefined ? summary.hasDeck : (hasDeckFromEdi);
-    const hasHold = summary?.hasHold !== undefined ? summary.hasHold : (hasHoldFromEdi);
-    const deckTiers = (summary?.deckTiers && summary.deckTiers.length>0) ? summary.deckTiers
-      : ediTiers.filter(t=>t>=80).sort((a,b)=>b-a);
-    const holdTiers = (summary?.holdTiers && summary.holdTiers.length>0) ? summary.holdTiers
-      : ediTiers.filter(t=>t<80).sort((a,b)=>b-a);
-    // 합산 row (페어면 짝수+홀수 베이 모두). deck/hold별 실제 row 집합 — 라벨에 그대로 사용.
-    const deckRowSet = new Set(), holdRowSet = new Set();
-    for(const c of rows){
-      const b=Number(c.bay), t=Number(c.tier), r=parseInt(c.row,10);
-      if(!mateBays.includes(b) || !Number.isFinite(t) || !Number.isFinite(r)) continue;
-      if(t>=80) deckRowSet.add(r); else holdRowSet.add(r);
-    }
-    const allRowsForBay = rows.filter(c=>mateBays.includes(Number(c.bay)))
-      .map(c=>parseInt(c.row,10)).filter(Number.isFinite);
-    const maxRow = allRowsForBay.length>0 ? Math.max(...allRowsForBay) : 0;
-    const hasZero = allRowsForBay.includes(0) || (maxRow % 2 === 1);
-    return {
-      bayNum,
-      hasDeck, hasHold, isStandalone: !!summary?.isStandalone, hasZero,
-      deckTiers, holdTiers,
-      _deckRows: [...deckRowSet], _holdRows: [...holdRowSet],   // 실제 row 집합
-    };
-  });
-}
-
-// 실제 row 집합 → 카고플랜 표준 라벨 순서 (짝수 큰→작은, 00, 홀수 작은→큰).
-function _rowLabelsFromSet(rowSet){
-  const pad=n=>String(n).padStart(2,'0');
-  const evens=rowSet.filter(r=>r>0 && r%2===0).sort((a,b)=>b-a).map(pad);
-  const odds =rowSet.filter(r=>r%2===1).sort((a,b)=>a-b).map(pad);
-  const zero =rowSet.includes(0) ? ['00'] : [];
-  return [...evens, ...zero, ...odds];
-}
-
-// 짝꿍 자동 (검수앱 autoPairBays 포팅)
-function autoPairBays(matrixBays){
-  const byNum = new Map();
-  matrixBays.forEach(b=>byNum.set(b.bayNum, b));
-  const evens = matrixBays.map(b=>b.bayNum).filter(n=>n%2===0).sort((a,b)=>a-b);
-  const odds = matrixBays.map(b=>b.bayNum).filter(n=>n%2===1).sort((a,b)=>a-b);
-  const trios = [];
-  const usedOdds = new Set(), usedEvens = new Set();
-  for(const e of evens){
-    if(byNum.has(e-1) && byNum.has(e+1)){
-      const topKey = String(e-1).padStart(2,'0');
-      const pairKey = `(${String(e).padStart(2,'0')})${String(e+1).padStart(2,'0')}`;
-      trios.push([topKey, pairKey]);
-      usedOdds.add(e-1); usedOdds.add(e+1); usedEvens.add(e);
-    }
-  }
-  const unusedOdds = odds.filter(o=>!usedOdds.has(o));
-  const orphanEvens = evens.filter(e=>!usedEvens.has(e));
-  const singles = [...unusedOdds, ...orphanEvens].sort((a,b)=>a-b).map(n=>String(n).padStart(2,'0'));
-  return { trios, singles };
-}
-
-// 페이지 레이아웃 (검수앱 autoPageLayout 포팅)
-function autoPageLayout(trios, singles){
-  const allBoxes = [];
-  trios.forEach(([topKey,pairKey])=>{
-    allBoxes.push({ type:'trio', oddNum:parseInt(topKey,10), topKey, pairKey });
-  });
-  singles.forEach(s=>{
-    allBoxes.push({ type:'single', oddNum:parseInt(s,10), topKey:s, pairKey:null });
-  });
-  const n = allBoxes.length;
-  if(n===0) return [];
-  const topCount = Math.ceil((n+1)/2);
-  const sortedAsc = [...allBoxes].sort((a,b)=>a.oddNum-b.oddNum);
-  const topBoxes = sortedAsc.slice(0, topCount);
-  const bottomBoxes = sortedAsc.slice(topCount);
-  topBoxes.sort((a,b)=>b.oddNum-a.oddNum);
-  bottomBoxes.sort((a,b)=>b.oddNum-a.oddNum);
-  return bottomBoxes.length>0 ? [topBoxes, bottomBoxes] : [topBoxes];
-}
-
-// row 위치 라벨 (검수앱 getRowPositions 포팅)
-function getRowPositions(cellCount, hasZero){
-  if(cellCount<=0) return [];
-  const pad = n=>String(n).padStart(2,'0');
-  if(hasZero){
-    const half = Math.floor((cellCount-1)/2);
-    const evens=[]; for(let n=half*2;n>0;n-=2) evens.push(pad(n));
-    const odds=[]; for(let n=1;n<=half*2-1;n+=2) odds.push(pad(n));
-    return [...evens,'00',...odds];
-  } else {
-    const halfEvens = Math.floor(cellCount/2);
-    const halfOdds = cellCount-halfEvens;
-    const evens=[]; for(let n=halfEvens*2;n>0;n-=2) evens.push(pad(n));
-    const odds=[]; for(let n=1;n<=halfOdds*2-1;n+=2) odds.push(pad(n));
-    return [...evens,...odds];
-  }
-}
-
-// active cols 대칭 (검수앱 getActiveColsSymmetric 포팅)
-function getActiveColsSymmetric(cellCount, nTotal){
-  const active = new Set();
-  if(cellCount>=nTotal){ for(let i=0;i<nTotal;i++) active.add(i); return active; }
-  if(cellCount<=0) return active;
-  const center = Math.floor(nTotal/2);
-  if(nTotal%2===1){
-    if(cellCount%2===1){
-      const half=Math.floor((cellCount-1)/2);
-      for(let i=center-half;i<=center+half;i++) active.add(i);
-    } else {
-      const half=cellCount/2;
-      for(let i=center-half+1;i<=center+half;i++) active.add(i);
-    }
-  } else {
-    const half=Math.floor(cellCount/2);
-    for(let i=center-half;i<center;i++) active.add(i);
-    for(let i=center;i<center+half;i++) active.add(i);
-    if(cellCount%2===1){ const extra=center+half; if(extra<nTotal) active.add(extra); }
-  }
-  return active;
-}
-
-// 검수앱 buildEmptyBayRenderData 정확 포팅 — baysSummary 엔트리(deckCells/holdCells)로
-//   tier별 정확한 칸 수를 그린다. 베이사전이 있을 때 사용 → 검수앱과 동일 골격.
-function buildBayRenderDataFromSummary(bayEntry, bayKey){
-  if(!bayEntry) return null;
-  const rowCount = bayEntry.rowCount!=null ? bayEntry.rowCount : 9;
-  const hasZero = bayEntry.hasZero!==false;
-  const deckTiers = (bayEntry.deckTiers||[]).map(Number);
-  const holdTiers = (bayEntry.holdTiers||[]).map(Number);
-  const deckCells = bayEntry.deckCells||[];
-  const holdCells = bayEntry.holdCells||[];
-
-  const _deckNums = deckCells.map(Number).filter(v=>!isNaN(v)&&v>0);
-  const _deckMax = _deckNums.length>0 ? Math.max(..._deckNums) : 0;
-  const _effDeckRows = _deckMax>0 ? _deckMax : rowCount;
-  const nDeckCols = _effDeckRows + (hasZero?1:0);
-  const _holdNums = holdCells.map(Number).filter(v=>!isNaN(v)&&v>0);
-  const _holdMax = _holdNums.length>0 ? Math.max(..._holdNums) : 0;
-  const nHoldCols = _holdMax>0 ? Math.min(_holdMax+(hasZero?1:0), nDeckCols) : nDeckCols;
-  const deckRowPos = getRowPositions(nDeckCols, hasZero);
-  const holdRowPos = getRowPositions(nHoldCols, hasZero);
-
-  const deckRows = STANDARD_DECK.map(stdT=>{
-    const di = deckTiers.indexOf(stdT);
-    if(di>=0){
-      const cc = di<deckCells.length ? Number(deckCells[di]) : 0;
-      const active = getActiveColsSymmetric(cc, nDeckCols);
-      const cells=[];
-      for(let c=0;c<nDeckCols;c++) cells.push({active:active.has(c), rowLbl:active.has(c)?deckRowPos[c]:null});
-      return { tier:stdT, invisible:false, cells };
-    }
-    return { tier:stdT, invisible:true, cells:new Array(nDeckCols).fill(0).map(()=>({active:false,rowLbl:null})) };
-  });
-  const holdRows = STANDARD_HOLD.map(stdT=>{
-    const hi = holdTiers.indexOf(stdT);
-    if(hi>=0){
-      const cc = hi<holdCells.length ? Number(holdCells[hi]) : 0;
-      const active = getActiveColsSymmetric(cc, nHoldCols);
-      const cells=[];
-      for(let c=0;c<nHoldCols;c++) cells.push({active:active.has(c), rowLbl:active.has(c)?holdRowPos[c]:null});
-      return { tier:stdT, invisible:false, cells };
-    }
-    return { tier:stdT, invisible:true, cells:new Array(nHoldCols).fill(0).map(()=>({active:false,rowLbl:null})) };
-  });
-
-  return {
-    bayKey, deckTiers, holdTiers, nDeck:deckTiers.length, nHold:holdTiers.length, hasZero,
-    deckRowPos, holdRowPos, nDeckCols, nHoldCols, deckRows, holdRows,
-  };
-}
-
-// 빈 베이 렌더 데이터 (좌표 역산 — 실제 컨테이너 row를 칸으로 직접 배치).
-function buildBayRenderData(bay, bayKey){
-  if(!bay) return null;
-  const deckTiers = (bay.deckTiers||[]).map(Number);
-  const holdTiers = (bay.holdTiers||[]).map(Number);
-  const hasZero = !!bay.hasZero;
-  // deck/hold 각각 실제 존재하는 row를 표준 순서 라벨로
-  const deckRowPos = _rowLabelsFromSet(bay._deckRows || []);
-  const holdRowPos = _rowLabelsFromSet(bay._holdRows || []);
-  // 폭은 더 넓은 쪽(보통 deck)으로 통일, 좁은 쪽은 가운데 정렬(패딩)
-  const nDeckCols = Math.max(deckRowPos.length, 1);
-  const nHoldCols = Math.max(holdRowPos.length, 1);
-
-  const mkRows = (stdTiers, rowPos, tiersHave) => stdTiers.map(stdT=>{
-    if(tiersHave.includes(stdT)){
-      const cells = rowPos.map(lbl=>({active:true, rowLbl:lbl}));
-      return { tier:stdT, invisible:false, cells };
-    }
-    return { tier:stdT, invisible:true, cells:rowPos.map(()=>({active:false, rowLbl:null})) };
-  });
-  const deckRows = mkRows(STANDARD_DECK, deckRowPos, deckTiers);
-  const holdRows = mkRows(STANDARD_HOLD, holdRowPos, holdTiers);
-
-  return {
-    bayKey, deckTiers, holdTiers, nDeck:deckTiers.length, nHold:holdTiers.length, hasZero,
-    deckRowPos, holdRowPos, nDeckCols, nHoldCols, deckRows, holdRows,
-  };
-}
-
-// 전체 파이프라인: 좌표 rows → 렌더에 필요한 모든 것
-//   dictBaysSummary(검수앱 베이사전)가 있으면 그걸로 검수앱과 동일 골격.
-//   없으면 좌표 역산(폴백).
-function buildCargoPlan(rows, dictBaysSummary){
-  const useDict = Array.isArray(dictBaysSummary) && dictBaysSummary.length>0;
-  // matrixBays 구성: 베이사전 우선
-  let matrixBays;
-  if(useDict){
-    matrixBays = dictBaysSummary
-      .map(s=>({ bayNum: parseInt(s.bayNo!=null?s.bayNo:s.bay,10), _summary:s }))
-      .filter(b=>Number.isFinite(b.bayNum) && b.bayNum>0)
-      .sort((a,b)=>a.bayNum-b.bayNum);
-  } else {
-    const baysSummary = rowsToBaysSummary(rows);
-    matrixBays = baysSummaryToMatrixBays(baysSummary, rows);
-  }
-  if(matrixBays.length===0) return null;
-  const { trios, singles } = autoPairBays(matrixBays);
-  const layout = autoPageLayout(trios, singles);
-  const byNum = new Map(); matrixBays.forEach(b=>byNum.set(b.bayNum,b));
-
-  // posMap: "bay|tier|rowLbl" → 컨테이너(size). 셀에 컨테이너 있는지 표시용.
-  const posMap = {};
-  for(const c of rows){
-    const bay=parseInt(c.bay,10), tier=parseInt(c.tier,10);
-    if(!Number.isFinite(bay)||!Number.isFinite(tier)) continue;
-    const rowLbl=String(c.row).padStart(2,'0');
-    posMap[bay+'|'+tier+'|'+rowLbl] = { size: c.size||'40' };
-  }
-  // 페어 키 "(EE)OO" → 짝수 EE(40ft 자리)+홀수 OO(20ft 자리) 둘 다 조회.
-  const keyBaysFor = key => {
-    if(key.startsWith('(')){
-      const m=key.replace('(','').replace(')','');           // "EEOO"
-      return [parseInt(m.slice(0,2),10), parseInt(m.slice(2),10)];
-    }
-    return [parseInt(key,10)];
-  };
-  // 렌더데이터의 각 active 셀에 컨테이너 마크 채우기
-  const _matchedPos = new Set();   // 격자가 hit한 posMap 키
-  const fillMarks = (data, key) => {
-    if(!data) return;
-    const bays = keyBaysFor(key);
-    const fill = (rowsArr) => {
-      for(const row of rowsArr){
-        if(row.invisible) continue;
-        for(const cell of row.cells){
-          if(!cell.active || !cell.rowLbl) continue;
-          for(const b of bays){
-            const probe = b+'|'+row.tier+'|'+cell.rowLbl;
-            const hit = posMap[probe];
-            if(hit){ cell.mark = hit.size==='20' ? '▪' : '●'; _matchedPos.add(probe); break; }
-          }
-        }
-      }
-    };
-    fill(data.deckRows); fill(data.holdRows);
-  };
-
-  const renderDataMap = {};
-  const keyToNum = key => key.startsWith('(') ? parseInt(key.replace('(','').replace(')','').slice(2),10) : parseInt(key,10);
-  for(const rowBoxes of layout){
-    for(const box of rowBoxes){
-      [box.topKey, box.pairKey].filter(Boolean).forEach(k=>{
-        const num = keyToNum(k);
-        const b = byNum.get(num);
-        const data = useDict && b && b._summary
-          ? buildBayRenderDataFromSummary(b._summary, k)   // 검수앱과 동일 골격
-          : buildBayRenderData(b, k);                       // 좌표 역산 폴백
-        fillMarks(data, k);                                 // 컨테이너 있는 칸 표시
-        renderDataMap[k] = data;
-      });
-    }
-  }
-  let globalMaxCols=1, markedCells=0;
-  for(const d of Object.values(renderDataMap)){
-    if(!d) continue;
-    if(d.nDeckCols>globalMaxCols) globalMaxCols=d.nDeckCols;
-    if(d.nHoldCols>globalMaxCols) globalMaxCols=d.nHoldCols;
-    for(const r of d.deckRows.concat(d.holdRows)){ for(const c of r.cells){ if(c.mark) markedCells++; } }
-  }
-  // 미매칭: posMap에는 있는데 어떤 셀도 못 찾은 좌표 (빈 공간 원인)
-  const unmatched = Object.keys(posMap).filter(k=>!_matchedPos.has(k));
-  return { layout, renderDataMap, globalMaxCols,
-    stats:{ totalContainers: rows.length, posKeys: Object.keys(posMap).length, markedCells, usedDict: useDict,
-            unmatchedCount: unmatched.length, unmatchedSample: unmatched.slice(0,10) } };
-}
-
-function _buildCargoPlan_OLD(rows){
-  const baysSummary = rowsToBaysSummary(rows);
-  const matrixBays = baysSummaryToMatrixBays(baysSummary, rows);
-  if(matrixBays.length===0) return null;
-  const { trios, singles } = autoPairBays(matrixBays);
-  const layout = autoPageLayout(trios, singles);
-  // 각 베이 키별 렌더 데이터
-  const byNum = new Map(); matrixBays.forEach(b=>byNum.set(b.bayNum,b));
-  const renderDataMap = {};
-  const keyToNum = key => key.startsWith('(') ? parseInt(key.replace('(','').replace(')','').slice(2),10) : parseInt(key,10);
-  for(const rowBoxes of layout){
-    for(const box of rowBoxes){
-      [box.topKey, box.pairKey].filter(Boolean).forEach(k=>{
-        const num = keyToNum(k);
-        renderDataMap[k] = buildBayRenderData(byNum.get(num), k);
-      });
-    }
-  }
-  // 전역 최대 칸 수 (셀 폭 통일)
-  let globalMaxCols=1;
-  for(const d of Object.values(renderDataMap)){
-    if(d?.nDeckCols>globalMaxCols) globalMaxCols=d.nDeckCols;
-    if(d?.nHoldCols>globalMaxCols) globalMaxCols=d.nHoldCols;
-  }
-  return { layout, renderDataMap, globalMaxCols };
-}
-
-
-// ============================================================
-// 카고플랜 HTML 렌더 — 검수앱 BayBoxV2 + 페이지 조립 포팅 (콘앱용)
-// React JSX → 순수 HTML 문자열. 마크/색/별첨/통과화물 제거, 골격만.
-// CSS는 검수앱 CARGO_V2_CSS 그대로 → 인쇄본과 동일.
-// 의존: cargoplan_core.js (STANDARD_DECK/HOLD, buildCargoPlan)
-// ============================================================
-
-const CARGO_V2_CSS = `
-.cpv2-wrap { background:#475569; overflow:auto; padding:8px; -webkit-overflow-scrolling:touch; }
-.cpv2-page { width:277mm; min-width:1200px; height:195mm; background:white; padding:4mm; box-sizing:border-box; display:flex; flex-direction:column; font-family:Helvetica,Arial,sans-serif; color:#000; box-shadow:0 0 8px rgba(0,0,0,0.3); margin:0 auto 12px; }
-.cpv2-page-header { border-bottom:1px solid #000; padding-bottom:4px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:baseline; font-size:10px; }
-.cpv2-page-header .title-center { font-size:14px; font-weight:bold; flex:1; text-align:center; }
-.cpv2-page-header .col { padding:0 8px; font-size:9px; }
-.cpv2-page-rows { display:flex; flex-direction:column; flex:1 1 0; gap:3px; min-height:0; }
-.cpv2-page-row { display:flex; flex-direction:row; flex:1 1 0; gap:3px; min-height:0; }
-.cpv2-bay-box { flex:1 1 0; min-width:95px; border:1px solid #000; display:flex; flex-direction:column; background:white; overflow:hidden; }
-.cpv2-bay-section { flex:1 1 0; display:flex; flex-direction:column; padding:2px 2px; min-height:0; position:relative; }
-.cpv2-trio-divider { border-top:0.5px solid #999; }
-.cpv2-bay-title-row { position:relative; width:100%; text-align:center; font-weight:bold; font-size:clamp(10px,0.85vw,13px); padding:0 50px 0 4px; margin-bottom:1px; box-sizing:border-box; flex-shrink:0; }
-.cpv2-bay-title { display:inline-block; }
-.cpv2-bay-content { display:flex; flex-direction:column; flex:1 1 0; min-height:0; width:100%; }
-.cpv2-deck-area { flex:1 1 0; display:flex; flex-direction:column; width:100%; min-height:0; }
-.cpv2-hold-area { flex:1 1 0; display:flex; flex-direction:column; width:100%; min-height:0; }
-.cpv2-grid-row-wrap { display:flex; flex-direction:row; align-items:stretch; gap:2px; flex:1 1 0; min-height:0; }
-.cpv2-grid { display:flex; flex-direction:column; align-items:stretch; gap:0; flex:1 1 0; min-width:0; }
-.cpv2-tier-row { display:flex; gap:0; flex:1 1 0; min-height:0; }
-.cpv2-tier-row.cpv2-invisible-row { display:none; }
-.cpv2-tier-row .cpv2-cell { flex:1 1 0; min-width:0; min-height:0; border:0.5px solid #555; box-sizing:border-box; background:#fff; font-size:clamp(8px,1.1vw,16px); display:flex; align-items:center; justify-content:center; line-height:1; font-weight:bold; color:#1565c0; position:relative; overflow:hidden; }
-.cpv2-tier-row .cpv2-cell.cpv2-filled { background:#e3f0ff; }
-.cpv2-tier-row .cpv2-cell-empty { flex:1 1 0; min-width:0; min-height:0; visibility:hidden; }
-.cpv2-row-labels { display:flex; flex:0 0 auto; font-size:clamp(7px,0.75vw,10px); color:#444; gap:0; margin:1px 0; margin-right:16px; }
-.cpv2-row-labels > span { flex:1 1 0; min-width:0; text-align:center; line-height:1.2; }
-.cpv2-hatch-break { display:flex; gap:4px; width:180px; height:0; margin:0; flex-shrink:0; }
-.cpv2-hatch-seg { flex:1 1 0; border-top:1.5px solid #000; height:0; }
-.cpv2-tier-labels { display:flex; flex-direction:column; align-items:flex-start; font-size:9px; color:#444; width:16px; }
-.cpv2-tier-labels > span { height:13px; line-height:13px; display:block; }
-.cpv2-tier-labels > span.cpv2-invisible-label { display:none; }
-.cpv2-empty-slot { border:none; background:transparent; }
-@media print {
-  html, body { background:white !important; margin:0 !important; padding:0 !important; }
-  /* 콘앱 구조: cpScroll 안에 cpv2-wrap. 인쇄 시 카고플랜만 보이게 + 스크롤 박스 해제. */
-  body * { visibility:hidden !important; }
-  #cpScroll, #cpScroll * { visibility:visible !important; }
-  #cpScroll { position:absolute !important; left:0 !important; top:0 !important; width:auto !important; height:auto !important; overflow:visible !important; border:none !important; }
-  .cpv2-wrap { position:static !important; background:white !important; padding:0 !important; overflow:visible !important; }
-  .cpv2-page { width:277mm !important; min-width:0 !important; height:195mm !important; box-shadow:none !important; margin:0 !important; page-break-after:always !important; }
-  .cpv2-bay-box { min-width:0 !important; }
-}
-`;
-
-// padding 계산 (검수앱 computePadding center 포팅)
-function _computePadding(smallerN, biggerN){
-  const diff = biggerN - smallerN;
-  if(diff<=0) return { paddingLeft:'0', paddingRight:'0' };
-  return { paddingLeft:`${(diff/2)/biggerN*100}%`, paddingRight:`${(diff/2)/biggerN*100}%` };
-}
-
-// 한 격자(deck 또는 hold) HTML
-function _gridHtml(rows, rowPos, nCols, stdTiers, gc){
-  const pad = _computePadding(nCols, gc);
-  const padStyle = `padding-left:${pad.paddingLeft};padding-right:${pad.paddingRight}`;
-  let gridRows = '';
-  for(const row of rows){
-    let cells='';
-    for(const cell of row.cells){
-      if(!cell.active) cells += '<span class="cpv2-cell-empty"></span>';
-      else cells += '<span class="cpv2-cell">'+(cell.mark||'')+'</span>';
-    }
-    gridRows += `<div class="cpv2-tier-row${row.invisible?' cpv2-invisible-row':''}">${cells}</div>`;
-  }
-  let tierLabels='';
-  for(const t of stdTiers){
-    const visible = rows.some(r=>!r.invisible && r.tier===t);
-    tierLabels += `<span class="${visible?'':'cpv2-invisible-label'}">${String(t).padStart(2,'0')}</span>`;
-  }
-  return `<div class="cpv2-grid-row-wrap">
-    <div class="cpv2-grid" style="${padStyle}">${gridRows}</div>
-    <div class="cpv2-tier-labels">${tierLabels}</div>
-  </div>`;
-}
-
-// 한 베이 박스 (BayBoxV2 포팅)
-function _bayBoxHtml(data, gc, applyHatch){
-  if(!data) return '<div class="cpv2-bay-section"></div>';
-  const { bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols, deckRowPos, holdRowPos, deckRows, holdRows } = data;
-  const deckPad = _computePadding(nDeckCols, gc);
-  const holdPad = _computePadding(nHoldCols, gc);
-  const deckPadStyle = `padding-left:${deckPad.paddingLeft};padding-right:${deckPad.paddingRight}`;
-  const holdPadStyle = `padding-left:${holdPad.paddingLeft};padding-right:${holdPad.paddingRight}`;
-
-  const deckRowLabels = deckRowPos.map(rl=>`<span>${rl}</span>`).join('');
-  const holdRowLabels = holdRowPos.map(rl=>`<span>${rl}</span>`).join('');
-
-  let html = `<div class="cpv2-bay-section">
-    <div class="cpv2-bay-title-row"><span class="cpv2-bay-title">BAY ${bayKey}</span></div>
-    <div class="cpv2-bay-content">
-      <div class="cpv2-deck-area" style="flex:${Math.max(deckTiers.length,1)} 1 0">
-        <div class="cpv2-row-labels" style="${deckPadStyle}">${deckRowLabels}</div>
-        ${_gridHtml(deckRows, deckRowPos, nDeckCols, [94,92,90,88,86,84,82,80], gc)}
-      </div>`;
-  if(nHold>0){
-    const segs = (applyHatch ? Math.max(1,Math.min(3,1)) : 1);
-    let hatch=''; for(let i=0;i<segs;i++) hatch+='<div class="cpv2-hatch-seg"></div>';
-    html += `<div class="cpv2-hatch-break">${hatch}</div>
-      <div class="cpv2-hold-area" style="flex:${Math.max(holdTiers.length,1)} 1 0">
-        ${_gridHtml(holdRows, holdRowPos, nHoldCols, [14,12,10,8,6,4,2], gc)}
-        <div class="cpv2-row-labels" style="${holdPadStyle}">${holdRowLabels}</div>
-      </div>`;
-  }
-  html += `</div></div>`;
-  return html;
-}
-
-// 전체 카고플랜 페이지 HTML (mode: 'disch'|'stow')
-function renderCargoPlanHtml(rows, shipName, voyNo, mode, dictBaysSummary){
-  const plan = buildCargoPlan(rows, dictBaysSummary);
-  if(!plan) return '<div style="padding:20px;color:#fff">표시할 컨테이너가 없습니다.</div>';
-  const { layout, renderDataMap, globalMaxCols, stats } = plan;
-  const gc = globalMaxCols;
-  const title = `${(shipName||'').toUpperCase()} CARGO ${mode==='disch'?'DISCHARGING':'LOADING'} PLAN`;
-  const today = new Date().toISOString().slice(0,10);
-
-  const topLen = layout[0] ? layout[0].length : 0;
-  let pageRows='';
-  layout.forEach((row, ri)=>{
-    const isLast = ri===layout.length-1, isFirst = ri===0;
-    const emptySlots = (isLast && !isFirst) ? Math.max(0, topLen-row.length) : 0;
-    let slots='';
-    for(let i=0;i<emptySlots;i++) slots += '<div class="cpv2-bay-box cpv2-empty-slot"></div>';
-    for(const box of row){
-      if(box.type==='trio'){
-        const topData = renderDataMap[box.topKey];
-        const pairData = renderDataMap[box.pairKey];
-        slots += `<div class="cpv2-bay-box">
-          ${_bayBoxHtml(topData, gc, false)}
-          <div class="cpv2-trio-divider"></div>
-          ${_bayBoxHtml(pairData, gc, false)}
-        </div>`;
-      } else {
-        const d = renderDataMap[box.topKey];
-        slots += `<div class="cpv2-bay-box">${_bayBoxHtml(d, gc, true)}</div>`;
-      }
-    }
-    pageRows += `<div class="cpv2-page-row">${slots}</div>`;
-  });
-
-  const s = stats||{};
-  let banner;
-  if(s.unmatchedCount===0){
-    banner = `<div style="background:#0f2a16;color:#bfe9c8;font-size:12px;padding:6px 10px;border-radius:6px;margin-bottom:6px">`
-      + `✓ 컨테이너 ${s.totalContainers}대 모두 표시됨 · 골격: ${s.usedDict?'검수앱 베이사전':'좌표 자동'}</div>`;
-  } else {
-    banner = `<div style="background:#2a1c10;color:#ffe0bf;font-size:11px;padding:8px 10px;border-radius:6px;margin-bottom:6px;line-height:1.5">`
-      + `⚠ ${s.totalContainers}대 중 <b>${s.unmatchedCount}대</b>가 빈 칸으로 빠짐 (골격: ${s.usedDict?'검수앱 베이사전':'좌표 자동'})<br>`
-      + `<span style="color:#ffcf9f">못 채운 좌표 (베이|단|열):</span> ${(s.unmatchedSample||[]).join(' , ')}<br>`
-      + `<span style="color:#aaa">↑ 이 좌표들이 왜 격자에 안 들어가는지 — 이 줄을 캡처해 알려주세요.</span></div>`;
-  }
-
-  return `<style>${CARGO_V2_CSS}</style>
-  ${banner}
-  <div class="cpv2-wrap">
-    <div class="cpv2-page">
-      <div class="cpv2-page-header">
-        <div class="col">VOY NO : ${voyNo||''}</div>
-        <div class="title-center">${title}</div>
-        <div class="col">DATE : ${today}</div>
-      </div>
-      <div class="cpv2-page-rows">${pageRows}</div>
-    </div>
-  </div>`;
-}
-
-
 
 function renderBayView(){
   const ra=document.getElementById('resultArea');
@@ -1560,21 +847,22 @@ function renderBayView(){
   const bayKeys=Object.keys(bays).map(Number).sort((a,b)=>a-b);
   if(!bayKeys.length){ ra.innerHTML='<div class="card"><div class="empty-note">표시할 컨테이너가 없습니다.</div></div>'; return; }
 
+  const hasD=!!(state.disch&&state.disch.ediRows&&state.disch.ediRows.length);
+  const hasL=!!(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
   const shipLabel=state.shipName||'선박';
   const today=new Date().toLocaleDateString('ko-KR');
   let html=`<div class="card">
-    <div class="share-head"><div class="sh-title">베이 위치도</div>
+    <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-legend">
       <span class="bv-lg d">양하</span>
       <span class="bv-lg l">선적</span>
-      <span class="bv-lg b">양하+선적</span>
       <span class="bv-lg" style="color:var(--dim)">○20ft ●40ft</span>
     </div>`;
 
   for(const bk of bayKeys){
     const cells=bays[bk];
-    // tier 목록(위→아래), row 목록(좌→우: 짝수 내림 + 00 + 홀수 오름 = 선박 단면 통상 배열)
+    // tier·row 범위는 양하+선적 합집합 → 좌우 같은 위치가 정렬되어 비교 가능
     const tiers=[...new Set(Object.values(cells).map(c=>parseInt(c.tier,10)))].sort((a,b)=>b-a);
     const rowsSet=[...new Set(Object.values(cells).map(c=>c.row))];
     const evens=rowsSet.filter(r=>parseInt(r,10)%2===0 && r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
@@ -1583,31 +871,40 @@ function renderBayView(){
     const rowOrder=[...evens,...zero,...odds];
     const deckTiers=tiers.filter(t=>t>=80), holdTiers=tiers.filter(t=>t<80);
 
-    const cnt={d:0,l:0,b:0};
-    Object.values(cells).forEach(c=>{ if(c.d&&c.l)cnt.b++; else if(c.d)cnt.d++; else if(c.l)cnt.l++; });
+    const cnt={d:0,l:0};
+    Object.values(cells).forEach(c=>{ if(c.d)cnt.d++; if(c.l)cnt.l++; });
 
-    html+=`<div class="bv-bay"><div class="bv-bayhd">BAY ${String(bk).padStart(2,'0')}
-      <span class="bv-cnt">양하 ${cnt.d} · 선적 ${cnt.l}${cnt.b?(' · 공통 '+cnt.b):''}</span></div>`;
-    const grid=(tierList,label)=>{
+    // 한쪽(flag='d' 또는 'l') 격자 — 그 쪽 컨테이너만 표시
+    const grid=(tierList, flag)=>{
       if(!tierList.length) return '';
-      let g=`<div class="bv-sec">${label}</div><table class="bv-tab"><tbody>`;
+      let g='<table class="bv-tab"><tbody>';
       for(const t of tierList){
         g+='<tr>';
         for(const r of rowOrder){
           const c=cells[r+'_'+t];
-          if(!c){ g+='<td class="bv-empty"></td>'; continue; }
-          const cls=c.d&&c.l?'b':(c.d?'d':'l');
+          if(!c || !c[flag]){ g+='<td class="bv-empty"></td>'; continue; }
           const dot=c.size==='40'?'●':'○';
-          g+=`<td class="bv-c ${cls}" title="row ${r} tier ${t}">${dot}</td>`;
+          g+=`<td class="bv-c ${flag}" title="row ${r} tier ${t}">${dot}</td>`;
         }
         g+='</tr>';
       }
       g+='</tbody></table>';
       return g;
     };
-    html+=grid(deckTiers,'갑판 (Deck)');
-    html+=grid(holdTiers,'선창 (Hold)');
-    html+='</div>';
+    // 한 쪽 패널 (deck+hold)
+    const panel=(flag,label,count)=>{
+      let p=`<div class="bv-col"><div class="bv-colhd ${flag}">${label} <span class="bv-cnt">${count}대</span></div>`;
+      if(deckTiers.length){ p+=`<div class="bv-sec">갑판</div>${grid(deckTiers,flag)}`; }
+      if(holdTiers.length){ p+=`<div class="bv-sec">선창</div>${grid(holdTiers,flag)}`; }
+      p+='</div>';
+      return p;
+    };
+
+    html+=`<div class="bv-bay"><div class="bv-bayhd">BAY ${String(bk).padStart(2,'0')}</div>
+      <div class="bv-split">`;
+    if(hasD) html+=panel('d','양하',cnt.d);
+    if(hasL) html+=panel('l','선적',cnt.l);
+    html+='</div></div>';
   }
   html+='</div>';
   ra.innerHTML=html;

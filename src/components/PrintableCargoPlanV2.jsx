@@ -271,7 +271,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         {/* M6.94.14: hold 없는 베이(nHold=0)는 hatch+hold-area 숨김 (deck만) */}
         {nHold > 0 && (<>
         <div className="cpv2-hatch-break">
-          {Array.from({ length: applyHatch ? Math.max(1, Math.min(3, hatchCount || 1)) : 1 }).map((_, i) => (
+          {Array.from({ length: applyHatch ? Math.max(0, Math.min(3, (typeof hatchCount === 'number' ? hatchCount : 1))) : 1 }).map((_, i) => (
             <div key={i} className="cpv2-hatch-seg"></div>
           ))}
         </div>

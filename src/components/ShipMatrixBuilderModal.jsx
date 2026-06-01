@@ -666,10 +666,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                         <input type="number" value={e.rowCount || ''} onChange={ev => updateBay(bay, 'rowCount', parseInt(ev.target.value) || 0)}
                                className="w-14 px-2 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
                       </label>
-                      <label className="flex items-center gap-1" title="해치커버 수 (deck/hold 경계 굵은선 등분)">
+                      <label className="flex items-center gap-1" title="해치커버 수 (deck/hold 경계 굵은선 등분). 0=해치 없음(상시 개방). 홀드 없는 베이는 0.">
                         해치:
-                        <select value={e.hatchCount || 1} onChange={ev => updateBay(bay, 'hatchCount', parseInt(ev.target.value) || 1)}
+                        <select value={(e.hatchCount ?? (e.holdTiers && e.holdTiers.length > 0 ? 1 : 0))} onChange={ev => updateBay(bay, 'hatchCount', parseInt(ev.target.value))}
                                 className="px-1 py-0.5 bg-zinc-700 rounded text-center">
+                          <option value={0}>0</option>
                           <option value={1}>1</option>
                           <option value={2}>2</option>
                           <option value={3}>3</option>

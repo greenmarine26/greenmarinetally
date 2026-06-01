@@ -353,7 +353,7 @@ export function augmentMatrixFromBayDict(matrix, imo, code) {
       };
     }
     const entry = matrix.byBay[bay];
-    if (bs.hatchCount && !entry.hatchCount) entry.hatchCount = bs.hatchCount;  // M6.94.13: 저장된 해치 수 복원
+    if (typeof bs.hatchCount === 'number' && typeof entry.hatchCount !== 'number') entry.hatchCount = bs.hatchCount;  // M6.94.44: 0 포함 복원
     // 베이사전이 더 큰 rowCount/tier 가지고 있으면 그것 사용
     if (bs.rowMaxOdd != null || bs.rowMaxEven != null) {
       // 베이사전 row max 정보로 보강
@@ -455,7 +455,7 @@ export function matrixToBayDictEntry(matrix, code, name, imo, callsign) {
       holdCells: e.holdCells,
       hasDeck: e.deckTiers && e.deckTiers.length > 0,
       hasHold: e.holdTiers && e.holdTiers.length > 0,
-      hatchCount: e.hatchCount || 1,                          // M6.94.13: 해치커버 수 (1/2/3) — deck/hold 경계 등분
+      hatchCount: (typeof e.hatchCount === 'number') ? e.hatchCount : ((e.holdTiers && e.holdTiers.length > 0) ? 1 : 0),  // M6.94.44: 0=해치 없음. 홀드 없는 베이 기본 0.
       pairEven: e.pairEven || null,
       source: e.source,
       // M6.94.0 새 필드: 데크-홀드 시각 정렬 + padding (사용자 시각 편집 저장)
@@ -510,6 +510,7 @@ export function bayDictEntryToMatrix(entry) {
       holdTiers: Array.isArray(bs.holdTiers) ? [...bs.holdTiers] : [],
       deckCells: Array.isArray(bs.deckCells) ? [...bs.deckCells] : [],
       holdCells: Array.isArray(bs.holdCells) ? [...bs.holdCells] : [],
+      hatchCount: (typeof bs.hatchCount === 'number') ? bs.hatchCount : ((Array.isArray(bs.holdTiers) && bs.holdTiers.length > 0) ? 1 : 0),   // M6.94.44: 저장된 해치 수 복원(0 보존). 홀드 없으면 0.
       pairEven: bs.pairEven || null,
       source: bs.source || 'saved',
       // M6.94.0 새 필드: 데크-홀드 시각 정렬 + padding (기본값으로 fallback, 기존 데이터 호환)
