@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>콘 계산기 — 평택항</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a222c; --panel2:#222d3a; --line:#324155;
+    --ink:#eef4fb; --dim:#8fa3b8; --accent:#ffb020; --accent2:#39d98a;
+    --add:#39d98a; --rem:#ff6b6b; --keep:#8fa3b8;
+    --tap:#2d3a4a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;}
+  body{padding:0 0 80px;}
+  header{position:sticky; top:0; z-index:30; background:linear-gradient(180deg,#13202e,#0f1419);
+    border-bottom:1px solid var(--line); padding:14px 16px 12px;}
+  header h1{margin:0; font-size:19px; letter-spacing:-.3px; font-weight:800;}
+  header .sub{font-size:11px; color:var(--dim); margin-top:2px;}
+  .wrap{padding:16px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:16px; margin-bottom:14px;}
+  .card h2{margin:0 0 12px; font-size:14px; color:var(--accent); font-weight:700;
+    letter-spacing:.2px; text-transform:uppercase;}
+  .row{display:flex; gap:10px; flex-wrap:wrap;}
+  button{font-family:inherit; cursor:pointer; border:none; border-radius:10px;
+    font-weight:700; font-size:15px; padding:13px 16px; transition:.12s;}
+  button:active{transform:scale(.97);}
+  .btn-up{flex:1; min-width:140px; background:var(--panel2); color:var(--ink);
+    border:1.5px dashed var(--line); padding:20px 12px; font-size:14px;}
+  .btn-up.loaded{border-style:solid; border-color:var(--accent2); background:#16291f;}
+  .voy-list{display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; margin-bottom:4px;}
+  .voy-item{text-align:left; background:var(--panel2); border:1.5px solid var(--line); color:var(--ink); padding:12px 14px; width:100%;}
+  .voy-item.sel{border-color:var(--accent); background:#2a2410;}
+  .voy-item .vi-top{display:flex; align-items:center; gap:8px; font-size:15px;}
+  .voy-item .vi-sub{font-size:12px; color:var(--dim); margin-top:3px;}
+  .vtag{font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px;}
+  .vtag.d{background:#13344a; color:#7cc4ff;}
+  .vtag.l{background:#163826; color:#5fe0a0;}
+  .bv-legend{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; font-size:12px; align-items:center;}
+  .bv-lg{font-weight:700; padding:3px 9px; border-radius:6px;}
+  .bv-lg.d{background:#13344a; color:#7cc4ff;}
+  .bv-lg.l{background:#163826; color:#5fe0a0;}
+  .bv-lg.b{background:#3a2a10; color:var(--accent);}
+  .bv-bay{margin-bottom:18px; border-top:1px solid var(--line); padding-top:12px;}
+  .bv-bayhd{font-size:15px; font-weight:800; margin-bottom:6px;}
+  .bv-cnt{font-size:11px; color:var(--dim); font-weight:500; margin-left:8px;}
+  .bv-sec{font-size:11px; color:var(--dim); margin:6px 0 3px;}
+  .bv-tab{border-collapse:separate; border-spacing:2px;}
+  .bv-tab td{width:22px; height:22px; text-align:center; font-size:13px; border-radius:4px; line-height:22px;}
+  .bv-empty{background:transparent;}
+  .bv-c{font-weight:700;}
+  .bv-c.d{background:#13344a; color:#7cc4ff;}
+  .bv-c.l{background:#163826; color:#5fe0a0;}
+  .bv-c.b{background:#3a2a10; color:var(--accent);}
+  .btn-up .ic{font-size:26px; display:block; margin-bottom:6px;}
+  .btn-up .st{font-size:11px; color:var(--dim); margin-top:5px; font-weight:500;}
+  .btn-primary{background:var(--accent); color:#1a1206; width:100%; padding:16px; font-size:16px;}
+  .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
+  .seg{display:flex; background:var(--panel2); border-radius:10px; padding:3px; gap:3px;}
+  .seg button{flex:1; background:transparent; color:var(--dim); padding:10px; font-size:13px;}
+  .seg button.on{background:var(--accent); color:#1a1206;}
+  input[type=file]{display:none;}
+  label.fl{font-size:12px; color:var(--dim); display:block; margin-bottom:6px;}
+  .ship-name{width:100%; background:var(--panel2); border:1px solid var(--line);
+    border-radius:10px; padding:12px; color:var(--ink); font-size:15px; font-family:inherit;}
+  .hidden{display:none !important;}
+  .hint{font-size:12px; color:var(--dim); line-height:1.5; margin-top:8px;}
+  canvas{max-width:100%; border-radius:8px; border:1px solid var(--line);}
+  .confirm-bar{background:#2a2410; border:1px solid var(--accent); border-radius:12px;
+    padding:14px; margin-bottom:14px;}
+  .confirm-bar p{margin:0 0 10px; font-size:14px;}
+  /* result table */
+  .bay-result{background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; margin-bottom:12px;}
+  .bay-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;
+    border-bottom:1px solid var(--line); padding-bottom:10px;}
+  .bay-head .num{font-size:22px; font-weight:800; letter-spacing:-.5px;}
+  .bay-head .tag{font-size:11px; color:var(--dim);}
+  .cone-line{display:flex; align-items:center; gap:12px; padding:9px 0;}
+  .cone-line .nm{width:74px; font-size:13px; font-weight:700; color:var(--dim);}
+  .cone-line .body{flex:1; font-size:15px;}
+  .cone-line .act{font-size:15px; font-weight:800; white-space:nowrap;}
+  .act.add{color:var(--add);} .act.rem{color:var(--rem);} .act.keep{color:var(--keep);}
+  .nums{font-size:13px; color:var(--dim);}
+  .nums b{color:var(--ink); font-weight:700;}
+  .empty-note{color:var(--dim); font-size:13px; text-align:center; padding:30px 0;}
+  .total-card{background:linear-gradient(135deg,#1c2937,#16202c); border:1px solid var(--accent);}
+  .editor-cell{display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:26px; border:1px solid var(--line); margin:1px; border-radius:4px;
+    font-size:13px; font-weight:700; background:var(--panel2);}
+  .footer-note{font-size:11px; color:var(--dim); text-align:center; padding:20px 16px; line-height:1.6;}
+  .badge{display:inline-block; font-size:10px; padding:2px 7px; border-radius:20px;
+    background:var(--panel2); color:var(--dim); margin-left:6px;}
+  .loading{text-align:center; padding:40px 0; color:var(--accent);}
+  .spinner{width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--accent);
+    border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 14px;}
+
+  /* 결과 표 */
+  .share-head{margin-bottom:12px;}
+  .sh-title{font-size:20px; font-weight:800;}
+  .sh-sub{font-size:12px; color:var(--dim); margin-top:3px;}
+  .ctab{width:100%; border-collapse:collapse; font-size:15px;}
+  .ctab th{background:var(--accent); color:#1a1206; padding:8px 4px; font-size:12px; font-weight:800; text-align:center; border:1px solid var(--line);}
+  .ctab th small{font-weight:500; font-size:9px; opacity:.8;}
+  .ctab td{border:1px solid var(--line); text-align:center; padding:7px 4px; vertical-align:middle;}
+  .ctab .bay-c{font-size:19px; font-weight:800; background:var(--panel2);}
+  .ctab .big{display:block; font-size:21px; font-weight:800; line-height:1.1;}
+  .ctab .sub{display:block; font-size:10px; color:var(--dim);}
+  .ctab .add-c .big{color:var(--add);}
+  .ctab .rem-c .big{color:var(--rem);}
+  .ctab .keep-c{color:var(--dim);} .ctab .keep-c .big{color:var(--dim);}
+  .legend{margin-top:10px; display:flex; gap:12px; flex-wrap:wrap; font-size:11px;}
+  .lg{color:var(--dim);} .lg.add{color:var(--add);} .lg.rem{color:var(--rem);}
+  .btn-share{flex:1; min-width:130px; background:var(--panel2); color:var(--ink); border:1px solid var(--line); padding:14px;}
+  .btn-share:active{background:var(--accent); color:#1a1206;}
+
+  .steps{list-style:none; padding:0; margin:0;}
+  .steps li{padding:8px 0 8px 30px; position:relative; font-size:14px; color:var(--dim); border-bottom:1px solid var(--line);}
+  .steps li:last-child{border-bottom:none;}
+  .steps li small{font-size:11px; opacity:.7;}
+  .steps li.done{color:var(--add);}
+  .steps li.now{color:var(--ink); font-weight:700;}
+  .steps li.done::before{content:'✓'; position:absolute; left:6px; color:var(--add); font-weight:800;}
+  .steps li.now::before{content:'▶'; position:absolute; left:6px; color:var(--accent); font-size:11px; top:11px;}
+  .ship-line{display:flex; align-items:center; gap:12px; padding:7px 0; font-size:15px;}
+  .ship-line .sk{width:54px; color:var(--dim); font-size:13px;}
+  .mini{margin-left:auto; background:var(--panel2); color:var(--dim); border:1px solid var(--line); padding:5px 12px; font-size:12px; border-radius:8px;}
+  .ask-type{margin-top:12px; background:#2a2410; border:1px solid var(--accent); border-radius:10px; padding:12px;}
+  .ask-type p{margin:0 0 10px; font-size:14px;}
+  .ask-type p small{color:var(--dim); font-size:11px;}
+  .ask-type .seg button{padding:12px 8px; font-size:14px;}
+  .ask-type .seg button small{font-size:10px; font-weight:500; opacity:.8;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<header>
+  <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산</div>
+</header>
+<div class="wrap" id="app"></div>
+<div class="footer-note">
+  무료 배포 · 오프라인 작동 · 비용 없음<br>
+  자동 인식 후 반드시 확인하세요. 콘 작업은 정확도가 생명입니다.
+</div>
+<script>
+// ============ 콘 계산 엔진 (검증됨) ============
+const ROWS=['10','08','06','04','02','01','03','05','07','09'];
+
+function calcCones(deck, hold, shipType){
+  const hold40 = shipType==='container' ? 0 : 4;
+  let dk=0, el=0, hd=0;
+  const occ=(g,t,r)=> g[t] && g[t][r] && g[t][r]!=='.';
+  function area(g,isDeck){
+    const tiers=Object.keys(g).map(Number).sort((a,b)=>a-b);
+    if(!tiers.length) return;
+    const low=tiers[0];
+    for(const t of tiers){
+      if(t===low) continue;
+      for(const r in g[t]){
+        const sz=g[t][r];
+        if(sz!=='O40'&&sz!=='O20') continue;
+        if(!occ(g,t-2,r)) continue;
+        if(isDeck){ if(sz==='O40') dk+=4; else {dk+=2; el+=2;} }
+        else { if(sz==='O40') hd+=hold40; else hd+=1; }
+      }
+    }
+  }
+  area(deck,true); area(hold,false);
+  return {deck:dk, ele:el, hold:hd};
+}
+
+// 베이 합본: 7-8-9 => key 8. label "BAY (08) 09" or "BAY 07"
+function bayGroupKey(label){
+  const nums=(label.match(/\d+/g)||[]).map(Number);
+  if(!nums.length) return label;
+  // 짝수가 있으면 짝수, 없으면 홀수를 짝수로 내림(7->? ) : 7,8,9 묶음의 대표 = 가운데 짝수
+  const even=nums.find(n=>n%2===0);
+  if(even!==undefined) return even;
+  // 홀수만(예: BAY 07) => 짝꿍 짝수 = 홀수-1 or +1? 표기상 07은 (08)09와 한묶음 → 8
+  const odd=nums[0];
+  return odd+1; // 07->8, 23->24
+}
+
+// 배분: 데크콘÷4, 코끼리콘÷2, 홀드콘 트윈합본×2
+function distribute(cones){
+  return {
+    deckPer: Math.round(cones.deck/4),
+    elePer: Math.round(cones.ele/2),
+    holdTotal: cones.hold*2
+  };
+}
+// ============ EDI(BAPLIE) 파서 — 앱 통합용 ============
+function isEDI(text){
+  return /UNB\+|LOC\+147\+/.test(text) && /EQD\+/.test(text);
+}
+
+function parseEDI(text){
+  // 평택 기준: 선적=POL KRPTK, 양하=POD KRPTK. 둘 다 시도해 더 많은 쪽 채택.
+  const segs=text.split("LOC+147+");
+  const rowsAll=[];
+  for(let i=1;i<segs.length;i++){
+    const s=segs[i];
+    const pm=s.match(/^(\d{7})/);
+    if(!pm) continue;
+    const pos=pm[1];
+    const bay=pos.slice(0,3), row=pos.slice(3,5), tier=parseInt(pos.slice(5,7));
+    // ISO: EQD+CN 세그먼트(종결자 ')를 정확히 잘라 + 분리 → parts[3]의 : 앞부분.
+    //   (이전 결함: /EQD\+CN\+\S+\+(\w{4})/ 의 \S+ 가 탐욕적으로 다음 + 까지 삼켜
+    //    11자리 컨번호 뒤 ISO 4자리를 못 잡고 20ft(2xxx)를 40ft로 오판)
+    let iso='';
+    const eqd=s.match(/EQD\+CN\+[^']*/);
+    if(eqd){
+      const parts=eqd[0].split('+');           // ['EQD','CN',컨번호,'45G1:102:5',...]
+      iso=((parts[3]||'').split(':')[0]||'').toUpperCase();
+    }
+    const size=(iso&&iso[0]==='2')?'20':'40';
+    // POL/POD: 코드만(영숫자) — 뒤 : 콜론 한정자 제외
+    const polm=s.match(/LOC\+9\+([A-Za-z0-9]+)/), podm=s.match(/LOC\+11\+([A-Za-z0-9]+)/);
+    rowsAll.push({bay,row,tier,size,pol:polm?polm[1]:null,pod:podm?podm[1]:null});
+  }
+  // 제목/POL·POD로 선적/양하 판별
+  const up=text.toUpperCase();
+  let kind=null, rows;
+  const polPtk=rowsAll.filter(r=>r.pol==='KRPTK');
+  const podPtk=rowsAll.filter(r=>r.pod==='KRPTK');
+  if(up.includes('LOAD')||polPtk.length>podPtk.length){ kind='stow'; rows=polPtk.length?polPtk:rowsAll; }
+  else { kind='disch'; rows=podPtk.length?podPtk:rowsAll; }
+  // 선박명: TDT 세그먼트 끝(11: 다음 토큰). 종결자 ' 또는 줄바꿈까지.
+  let vessel='';
+  const tdt=text.match(/TDT\+[\s\S]*?(?=['~\n\r]|$)/);
+  if(tdt){
+    const parts=tdt[0].split(':');
+    const last=(parts[parts.length-1]||'').trim();
+    // 선박명은 영문자 포함 + 길이>=3. 숫자만(예:"20")이면 무시
+    if(/[A-Za-z]/.test(last) && last.length>=3) vessel=last;
+  }
+  return {rows, kind, isEDI:true, vessel};
+}
+
+// EDI rows → deck/hold tiers (콘엔진 입력). 베이그룹 합본은 결과 단계에서.
+function ediToBayGroups(rows, shipType){
+  const h40 = shipType==='container'?0:4;
+  const filled=new Set(rows.map(r=>r.bay+'_'+r.row+'_'+r.tier));
+  const groups={};
+  for(const r of rows){
+    const bay=parseInt(r.bay), tier=r.tier;
+    const isDeck=tier>=80;
+    if(!filled.has(r.bay+'_'+r.row+'_'+(tier-2))) continue; // 받침/최저단
+    const gk = bay%2===0 ? bay : bay+1;
+    if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0};
+    if(isDeck){ if(r.size==='40') groups[gk].deck+=4; else {groups[gk].deck+=2; groups[gk].ele+=2;} }
+    else { if(r.size==='40') groups[gk].hold+=h40; else groups[gk].hold+=1; }
+  }
+  return groups;
+}
+
+// ============ PDF/이미지 판독 ============
+var PDF_OK=false;
+try{
+  if(typeof pdfjsLib!=='undefined'){
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    PDF_OK=true;
+  }
+}catch(e){ PDF_OK=false; }
+
+const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false,
+  voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'' };
+
+// ============ 검수앱 Firebase 연동 (읽기 전용, REST) ============
+// 검수앱(Tallyman Master)이 voyages/{key}/{mode}/raw/edi 에 보관한 EDI 원문을 직접 읽어온다.
+//   mode: discharge=양하, loading=선적
+const FB_BASE='https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// 항차 목록 (raw EDI가 있는 항차만) 가져오기
+async function fbFetchVoyages(){
+  // info + 양하/선적 raw 존재 여부만 얕게 조회 (전체 컨테이너는 안 받음 → 가벼움)
+  const res=await fetch(`${FB_BASE}/voyages.json?shallow=false`);
+  if(!res.ok) throw new Error('Firebase 응답 오류 ('+res.status+')');
+  const all=await res.json();
+  if(!all) return [];
+  const out=[];
+  for(const key in all){
+    const v=all[key]||{};
+    const info=v.info||{};
+    const hasD=!!(v.discharge&&v.discharge.raw&&v.discharge.raw.edi&&v.discharge.raw.edi.text);
+    const hasL=!!(v.loading&&v.loading.raw&&v.loading.raw.edi&&v.loading.raw.edi.text);
+    if(!hasD&&!hasL) continue; // EDI 원문 없는 항차는 콘 계산 불가 → 제외
+    out.push({
+      key,
+      vsl: info.vsl||key.split('_')[0]||'(선박명 미상)',
+      voy: info.voy_l||info.voy_d||info.voy||'',
+      voy_d: info.voy_d||'', voy_l: info.voy_l||'',
+      hasD, hasL,
+      createdAt: info.createdAt||0,
+    });
+  }
+  out.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); // 최신 항차 먼저
+  return out;
+}
+
+// 특정 항차의 mode별 raw EDI 텍스트 가져오기
+async function fbFetchRawEdi(voyageKey, mode){
+  const res=await fetch(`${FB_BASE}/voyages/${encodeURIComponent(voyageKey)}/${mode}/raw/edi.json`);
+  if(!res.ok) return null;
+  const d=await res.json();
+  return d&&d.text? d.text : null;
+}
+
+async function loadVoyageList(){
+  state.loadingVoyages=true; state.voyErr=''; render();
+  try{
+    state.voyages=await fbFetchVoyages();
+    state.voyErr = state.voyages.length? '' : '검수앱에 EDI가 보관된 작업이 없습니다. 검수앱에서 EDI를 먼저 올려주세요.';
+  }catch(e){
+    state.voyages=[]; state.voyErr='작업 목록을 불러오지 못했습니다: '+e.message+' (인터넷 연결 확인)';
+  }
+  state.loadingVoyages=false; render();
+}
+
+// 항차 선택 → 양하/선적 raw EDI를 받아 기존 parseEDI로 처리
+async function selectVoyage(voyageKey){
+  const v=(state.voyages||[]).find(x=>x.key===voyageKey);
+  if(!v) return;
+  state.voyageKey=voyageKey;
+  state.stow=null; state.disch=null; state.shipType=null; state.shipName=''; state.detected=false;
+  showLoading('검수앱에서 '+v.vsl+' 자료 불러오는 중...');
+  try{
+    if(v.hasD){
+      const txt=await fbFetchRawEdi(voyageKey,'discharge');
+      if(txt&&isEDI(txt)){ const d=parseEDI(txt); state.disch={ediRows:d.rows, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel}; applyVessel(d.vessel); }
+    }
+    if(v.hasL){
+      const txt=await fbFetchRawEdi(voyageKey,'loading');
+      if(txt&&isEDI(txt)){ const d=parseEDI(txt); state.stow={ediRows:d.rows, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel}; applyVessel(d.vessel); }
+    }
+    if(!state.shipName) state.shipName=v.vsl;
+    render();
+  }catch(e){
+    state.voyErr='자료를 불러오지 못했습니다: '+e.message; render();
+  }
+}
+
+async function readPDF(file){
+  if(!PDF_OK) throw new Error('PDF 기능을 쓰려면 인터넷 연결이 필요합니다. EDI나 사진을 사용하거나, 인터넷 연결 후 다시 열어주세요.');
+  showLoading('PDF 여는 중...');
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const page=await pdf.getPage(1);
+  showLoading('PDF 그리는 중...');
+  const scale=180/72;
+  const vp=page.getViewport({scale});
+  const cv=document.createElement('canvas');
+  cv.width=vp.width; cv.height=vp.height;
+  const ctx=cv.getContext('2d');
+  await page.render({canvasContext:ctx, viewport:vp}).promise;
+  const txt=await page.getTextContent();
+  // 제목으로 선적/양하 판별
+  const allText=txt.items.map(i=>i.str).join(' ').toUpperCase();
+  const kind = allText.includes('DISCHARG') ? 'disch'
+             : allText.includes('STOW') ? 'stow' : null;
+  // 베이 위치 + 라벨
+  const bays=[];
+  txt.items.forEach((it,idx)=>{
+    if(it.str.trim()==='BAY'){
+      const x=it.transform[4]*scale, y=(vp.height/scale - it.transform[5])*scale;
+      // 같은 줄 오른쪽 토큰 모으기
+      let lbl='BAY';
+      for(let j=idx+1;j<txt.items.length;j++){
+        const t=txt.items[j];
+        const tx=t.transform[4]*scale, ty=(vp.height/scale-t.transform[5])*scale;
+        if(Math.abs(ty-y)<8 && tx>x && tx<x+150){ lbl+=' '+t.str.trim(); }
+      }
+      bays.push({x,y,label:lbl.replace(/\s+/g,' ').trim()});
+    }
+  });
+  const img=ctx.getImageData(0,0,cv.width,cv.height);
+  // 선박명: 제목 다음 큰 텍스트. "DONGJIN CONTINENTAL" 등. VOY 앞 토큰들 추정
+  let vessel='';
+  const tline=txt.items.map(i=>i.str).join(' ');
+  const vm=tline.match(/(?:INSTRUCTION|PLAN)\s+([A-Z][A-Z ]{3,30}?)\s+VOY/i);
+  if(vm) vessel=vm[1].trim();
+  return {canvas:cv, ctx, img, bays, kind, w:cv.width, h:cv.height, vessel};
+}
+
+async function readImage(file){
+  // 사진: 캔버스에 그려서 같은 픽셀 분석 (텍스트/베이 라벨 없음 → 격자만)
+  const url=URL.createObjectURL(file);
+  const im=await new Promise((res,rej)=>{const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url;});
+  const cv=document.createElement('canvas');
+  const maxW=1600; const sc=Math.min(1,maxW/im.width);
+  cv.width=im.width*sc; cv.height=im.height*sc;
+  const ctx=cv.getContext('2d');
+  ctx.drawImage(im,0,0,cv.width,cv.height);
+  URL.revokeObjectURL(url);
+  const img=ctx.getImageData(0,0,cv.width,cv.height);
+  return {canvas:cv, ctx, img, bays:[], kind:null, w:cv.width, h:cv.height, isPhoto:true};
+}
+
+// 색 무관 그레이스케일 판정
+function gray(img,x,y){
+  const i=(y*img.width+x)*4;
+  return (img.data[i]+img.data[i+1]+img.data[i+2])/3;
+}
+// ============ 셀 격자 검출 (검은선 둘러싸인 사각형) ============
+function findCells(img){
+  const W=img.width,H=img.height;
+  const N=W*H;
+  const dark=new Uint8Array(N);
+  for(let i=0,p=0;p<N;p++){ const r=img.data[p*4],g=img.data[p*4+1],b=img.data[p*4+2];
+    dark[p]= ((r+g+b)/3)<140 ? 0:1; } // 1=밝음, 0=선
+  const seen=new Uint8Array(N);
+  const cells=[];
+  const stack=new Int32Array(40000); // 고정 버퍼
+  for(let p=0;p<N;p++){
+    if(dark[p]!==1 || seen[p]) continue;
+    let sp=0; stack[sp++]=p; seen[p]=1;
+    let minx=p%W,maxx=minx,miny=(p/W)|0,maxy=miny,cnt=0;
+    while(sp>0){
+      const q=stack[--sp]; cnt++;
+      const qx=q%W, qy=(q/W)|0;
+      if(qx<minx)minx=qx; if(qx>maxx)maxx=qx; if(qy<miny)miny=qy; if(qy>maxy)maxy=qy;
+      // 4방향
+      let n;
+      n=q-1; if(qx>0   && dark[n]===1 && !seen[n] && sp<39996){seen[n]=1; stack[sp++]=n;}
+      n=q+1; if(qx<W-1 && dark[n]===1 && !seen[n] && sp<39996){seen[n]=1; stack[sp++]=n;}
+      n=q-W; if(qy>0   && dark[n]===1 && !seen[n] && sp<39996){seen[n]=1; stack[sp++]=n;}
+      n=q+W; if(qy<H-1 && dark[n]===1 && !seen[n] && sp<39996){seen[n]=1; stack[sp++]=n;}
+    }
+    const w=maxx-minx, h=maxy-miny;
+    if(cnt>=300 && cnt<3000 && w>=26&&w<=64 && h>=14&&h<=38){
+      cells.push({x0:minx,y0:miny,x1:maxx,y1:maxy});
+    }
+  }
+  return cells;
+}
+
+// 셀 상태: 빈칸 / 채움(사선=20, 무사선=40). 우리화물 여부는 플랜파일로 구분.
+function cellState(img,c){
+  const pad=3;
+  let darkN=0, tot=0;
+  const xs=c.x0+pad, xe=c.x1-pad, ys=c.y0+pad, ye=c.y1-pad;
+  for(let y=ys;y<ye;y++)for(let x=xs;x<xe;x++){ tot++; if(gray(img,x,y)<130) darkN++; }
+  if(tot===0||darkN/tot<0.03) return '.';
+  // 사선: anti-diagonal 코너(bottom-left + top-right)
+  const w=xe-xs,h=ye-ys; let bl=0,tr=0;
+  for(let y=ys;y<ye;y++)for(let x=xs;x<xe;x++){
+    if(gray(img,x,y)>=130) continue;
+    const yn=(y-ys)/h, xn=(x-xs)/w;
+    if(yn>0.55&&xn<0.45) bl++;
+    if(yn<0.45&&xn>0.55) tr++;
+  }
+  const slash = bl>4 && tr>4;
+  return slash?'F20':'F40';
+}
+
+// 베이별 셀 묶기 + 티어/로우 격자 정렬
+function buildBay(img,cells,bay){
+  const bx=bay.x;
+  const near=cells.filter(c=>{
+    const cx=(c.x0+c.x1)/2, cy=(c.y0+c.y1)/2;
+    return cx>bx-70 && cx<bx+360 && cy>bay.y+10 && cy<bay.y+340;
+  });
+  if(!near.length) return null;
+  // 티어밴드: cy 클러스터
+  const cys=near.map(c=>(c.y0+c.y1)/2).sort((a,b)=>a-b);
+  const bands=[]; let grp=[cys[0]];
+  for(let i=1;i<cys.length;i++){ if(cys[i]-grp[grp.length-1]>14){bands.push(avg(grp)); grp=[cys[i]];} else grp.push(cys[i]); }
+  bands.push(avg(grp));
+  // 로우: cx 클러스터
+  const cxs=near.map(c=>(c.x0+c.x1)/2).sort((a,b)=>a-b);
+  const cols=[]; grp=[cxs[0]];
+  for(let i=1;i<cxs.length;i++){ if(cxs[i]-grp[grp.length-1]>20){cols.push(avg(grp)); grp=[cxs[i]];} else grp.push(cxs[i]); }
+  cols.push(avg(grp));
+  // 해치커버 갭으로 deck/hold 분리
+  let split=0,maxgap=0;
+  for(let i=0;i<bands.length-1;i++){ const g=bands[i+1]-bands[i]; if(g>maxgap){maxgap=g; split=i;} }
+  // 셀을 (band,col) 매핑
+  const grid={};
+  for(const c of near){
+    const cx=(c.x0+c.x1)/2, cy=(c.y0+c.y1)/2;
+    let ti=0,bd=1e9; bands.forEach((b,i)=>{if(Math.abs(b-cy)<bd){bd=Math.abs(b-cy);ti=i;}});
+    let ci=0,cd=1e9; cols.forEach((cc,i)=>{if(Math.abs(cc-cx)<cd){cd=Math.abs(cc-cx);ci=i;}});
+    grid[ti+'_'+ci]={state:cellState(img,c), band:ti, col:ci, cell:c};
+  }
+  return {grid, bands, cols, split, label:bay.label};
+}
+function avg(a){return a.reduce((s,v)=>s+v,0)/a.length;}
+// ============ 그리드 → 콘엔진 입력(deck/hold tiers) ============
+function gridToTiers(bayObj){
+  // band 0=맨위 티어. split이하=deck, 초과=hold. 티어번호는 deck: 위에서부터 ...88,86,84,82 / hold 위 08,06,04,02
+  // 콘엔진은 tier 숫자 클수록 위. 받침은 t-2. 여기선 band index를 티어로 환산.
+  const odd = (bayObj.label.match(/\d+/g)||[]).length===1 && parseInt((bayObj.label.match(/\d+/)||[0])[0])%2===1;
+  const deck={}, hold={};
+  const nBands=bayObj.bands.length;
+  for(const k in bayObj.grid){
+    const g=bayObj.grid[k];
+    if(g.state==='.') continue;
+    const isDeck = g.band<=bayObj.split;
+    // 티어 숫자: 아래일수록 작게. deck 영역 band가 클수록(아래) 티어 작게.
+    // deck band range: 0..split  -> 티어 = (split-band)*2 + 82  (최저=82)
+    // hold band range: split+1..nBands-1 -> 티어 = (nBands-1-band)*2 + 2
+    let tier, sz;
+    if(isDeck){ tier = (bayObj.split - g.band)*2 + 82; }
+    else { tier = (nBands-1 - g.band)*2 + 2; }
+    // 사이즈: 홀수베이는 채움이면 무조건 20ft. X(우리화물아님)은 받침으로만 쓰되 콘계산 제외.
+    if(g.state==='F20') sz='O20';
+    else sz = odd ? 'O20' : 'O40';
+    const tgt=isDeck?deck:hold;
+    if(!tgt[tier]) tgt[tier]={};
+    tgt[tier][k.split('_')[1]]=sz; // col index as row key (받침 비교용으로 일관)
+  }
+  return {deck,hold};
+}
+
+// 전체 플랜 → 베이별 콘
+function analyzePlan(plan,shipType){
+  if(!plan || !plan.bays.length) return {};
+  const cells=findCells(plan.img);
+  const res={};
+  for(const bay of plan.bays){
+    const bo=buildBay(plan.img,cells,bay);
+    if(!bo) continue;
+    const {deck,hold}=gridToTiers(bo);
+    const cones=calcCones(deck,hold,shipType);
+    res[bay.label]={cones, bayObj:bo, group:bayGroupKey(bay.label)};
+  }
+  return res;
+}
+
+// 선적-양하 차감 → 베이그룹별 결과
+function computeResult(stowRes, dischRes){
+  const groups={};
+  function add(res,which){
+    for(const lbl in res){
+      const gk=res[lbl].group;
+      if(!groups[gk]) groups[gk]={stow:{deck:0,ele:0,hold:0}, disch:{deck:0,ele:0,hold:0}, labels:[]};
+      const c=res[lbl].cones;
+      groups[gk][which].deck+=c.deck; groups[gk][which].ele+=c.ele; groups[gk][which].hold+=c.hold;
+      if(!groups[gk].labels.includes(lbl)) groups[gk].labels.push(lbl);
+    }
+  }
+  add(stowRes,'stow'); add(dischRes,'disch');
+  return groups;
+}
+// ============ UI ============
+const app=document.getElementById('app');
+function srcLabel(d){ return d.isEDI?'EDI':(d.isPhoto?'사진':'PDF'); }
+function applyVessel(vessel){
+  if(vessel){ state.shipName=vessel; }
+  // 저장된 선종 있으면 자동 적용 (선박명 정규화: 공백/대소문자 무시)
+  const all=JSON.parse(localStorage.getItem('coneShips')||'{}');
+  const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
+  const key=Object.keys(all).find(k=>norm(k)===norm(state.shipName));
+  if(key){ state.shipType=all[key].shipType; state.detected=true; }
+}
+function setShipType(t){
+  state.shipType=t; state.detected=true;
+  if(state.shipName){
+    const all=JSON.parse(localStorage.getItem('coneShips')||'{}');
+    all[state.shipName]={shipType:t};
+    localStorage.setItem('coneShips',JSON.stringify(all));
+  }
+  render();
+}
+
+function render(){
+  app.innerHTML='';
+
+  // 단계 안내
+  const steps=document.createElement('div');
+  steps.className='card';
+  const s1=state.disch?'done':'now';
+  const s2=state.stow?'done':(state.disch?'now':'');
+  const ready=state.stow&&state.disch;
+  const needType = (state.stow||state.disch) && state.shipName && !state.shipType;
+  steps.innerHTML=`
+    <h2>사용 순서</h2>
+    <ol class="steps">
+      <li class="${state.voyageKey?'done':'now'}">① 아래에서 작업(선박) 선택</li>
+      <li class="${(state.stow&&state.disch)&&!state.shipType?'now':(state.shipType?'done':'')}">② 선종 확인 (처음 한 번)</li>
+      <li class="${ready&&state.shipType?'now':''}">③ 콘 계산하기 누르기</li>
+      <li>④ 표 확인 후 이미지 저장 / 텍스트 복사로 공유</li>
+    </ol>
+    <div class="hint">검수앱에 올라온 EDI를 그대로 읽어옵니다. <b>파일을 올릴 필요가 없습니다.</b></div>
+  `;
+  app.appendChild(steps);
+
+  // 선박 정보 (자동) + 선종 질문 — 파일이 하나라도 올라오면 표시
+  if(state.stow || state.disch){
+    const sv=document.createElement('div');
+    sv.className='card';
+    let typeLabel = state.shipType==='container'?'컨테이너선':state.shipType==='general'?'일반/복합선':'미지정';
+    sv.innerHTML=`
+      <h2>선박 정보 <span class="badge">자동 인식</span></h2>
+      <div class="ship-line"><span class="sk">선박명</span><b>${state.shipName||'(자료에서 못 읽음 — 계산에는 영향 없음)'}</b></div>
+      <div class="ship-line"><span class="sk">선종</span><b>${typeLabel}</b>
+        ${state.shipType?'<button class="mini" id="changeType">변경</button>':''}</div>
+      ${state.shipType===null?`
+        <div class="ask-type">
+          <p>이 선박은 어떤 배인가요? <small>(한 번 선택하면 저장됩니다)</small></p>
+          <div class="seg">
+            <button data-t="container" id="tCont">컨테이너선<br><small>Hold 40ft 콘 0</small></button>
+            <button data-t="general" id="tGen">일반/복합선<br><small>Hold 40ft 콘 4</small></button>
+          </div>
+        </div>`:''}
+    `;
+    app.appendChild(sv);
+  }
+
+  // 작업(항차) 선택 카드 — 검수앱 자료 읽어오기
+  const up=document.createElement('div');
+  up.className='card';
+  let listHtml='';
+  if(state.loadingVoyages){
+    listHtml='<div class="loading"><div class="spinner"></div>작업 목록 불러오는 중...</div>';
+  } else if(state.voyErr){
+    listHtml='<p style="color:var(--rem);font-size:14px;line-height:1.6">⚠ '+state.voyErr+'</p>'
+      +'<button class="btn-up" id="reloadVoy" style="margin-top:10px;flex:none;width:100%">🔄 다시 불러오기</button>';
+  } else if(state.voyages&&state.voyages.length){
+    listHtml='<div class="voy-list">';
+    for(const v of state.voyages){
+      const sel = state.voyageKey===v.key;
+      const tags=[];
+      if(v.hasD) tags.push('<span class="vtag d">양하</span>');
+      if(v.hasL) tags.push('<span class="vtag l">선적</span>');
+      listHtml+=`<button class="voy-item ${sel?'sel':''}" data-vk="${v.key}">
+        <div class="vi-top"><b>${v.vsl}</b> ${tags.join('')}</div>
+        <div class="vi-sub">${v.voy?('항차 '+v.voy):''}</div>
+      </button>`;
+    }
+    listHtml+='</div>';
+    listHtml+='<button class="btn-up" id="reloadVoy" style="margin-top:10px;flex:none;width:100%">🔄 목록 새로고침</button>';
+  } else {
+    listHtml='<button class="btn-up" id="reloadVoy" style="flex:none;width:100%">🔄 작업 목록 불러오기</button>';
+  }
+  up.innerHTML=`
+    <h2>작업 선택 <span class="badge">검수앱 자료</span></h2>
+    ${listHtml}
+    <button class="btn-primary" id="calcBtn" style="margin-top:14px" ${(state.stow&&state.disch&&state.shipType)?'':'disabled'}>
+      ③ 콘 계산하기
+    </button>
+    ${(state.disch||state.stow)?'<button class="btn-up" id="bayViewBtn" style="margin-top:10px;flex:none;width:100%">🗺️ 베이 위치 보기 (양하·선적)</button>':''}
+    ${(state.stow&&state.disch&&!state.shipType)?'<div class="hint" style="color:var(--accent)">위에서 선종을 먼저 선택하세요.</div>':''}
+    ${(state.voyageKey&&(!state.disch||!state.stow))?'<div class="hint">'+(!state.disch?'이 작업엔 양하 EDI가 없습니다. ':'')+(!state.stow?'이 작업엔 선적 EDI가 없습니다. ':'')+'한쪽만 있으면 콘 계산을 할 수 없습니다(양하+선적 모두 필요).</div>':''}
+  `;
+  app.appendChild(up);
+
+  const resultArea=document.createElement('div');
+  resultArea.id='resultArea';
+  app.appendChild(resultArea);
+
+  bindEvents();
+}
+
+function bindEvents(){
+  const cont=document.getElementById('tCont'); if(cont) cont.onclick=()=>setShipType('container');
+  const gen=document.getElementById('tGen'); if(gen) gen.onclick=()=>setShipType('general');
+  const ch=document.getElementById('changeType'); if(ch) ch.onclick=()=>{ state.shipType=null; render(); };
+  const rv=document.getElementById('reloadVoy'); if(rv) rv.onclick=()=>loadVoyageList();
+  document.querySelectorAll('.voy-item').forEach(btn=>{
+    btn.onclick=()=>selectVoyage(btn.getAttribute('data-vk'));
+  });
+  const cb=document.getElementById('calcBtn'); if(cb) cb.onclick=runCalc;
+  const bv=document.getElementById('bayViewBtn'); if(bv) bv.onclick=renderBayView;
+}
+
+async function handleFile(file,slot){
+  if(!file) return;
+  const name=(file.name||'').toLowerCase();
+  showLoading('읽는 중... ('+(file.name||'파일')+')');
+  try{
+    const isPdf = file.type==='application/pdf' || name.endsWith('.pdf');
+    const isImg = (file.type||'').startsWith('image/') || /\.(jpe?g|png|gif|webp|heic)$/.test(name);
+
+    // PDF
+    if(isPdf){
+      const data=await readPDF(file);
+      if(data.kind && data.kind!==slot) slot=data.kind;
+      state[slot]=data; applyVessel(data.vessel); render(); return;
+    }
+    // 이미지
+    if(isImg){
+      const data=await readImage(file);
+      state[slot]=data; render(); return;
+    }
+    // 그 외 전부 텍스트로 읽어 EDI인지 내용으로 판별 (확장자 무관)
+    const text=await file.text();
+    if(isEDI(text)){
+      const d=parseEDI(text);
+      if(d.kind && d.kind!==slot) slot=d.kind;
+      state[slot]={ediRows:d.rows, isEDI:true, fname:file.name, vessel:d.vessel};
+      applyVessel(d.vessel); render(); return;
+    }
+    // 텍스트인데 EDI 아님
+    showErr(slot, '이 파일은 EDI 형식이 아닙니다. EDI(BAPLIE) 또는 PDF·사진을 올려주세요. (읽은 파일: '+(file.name||'?')+')');
+  }catch(err){
+    showErr(slot, '파일을 읽지 못했습니다: '+err.message+' (파일: '+(file.name||'?')+')');
+  }
+}
+function showErr(slot,msg){
+  const ra=document.getElementById('resultArea');
+  if(ra) ra.innerHTML='<div class="card"><p style="color:var(--rem);font-size:14px;line-height:1.6">⚠ '+msg+'</p></div>';
+}
+function showLoading(msg){
+  const ra=document.getElementById('resultArea');
+  if(ra) ra.innerHTML=`<div class="card"><div class="loading"><div class="spinner"></div>${msg}</div></div>`;
+}
+
+function planToGroups(plan){
+  if(!plan) return {};
+  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType);
+  if(!plan.bays || !plan.bays.length){
+    // 사진이거나 베이 텍스트를 못읽음 → 빈 결과(사용자에게 안내됨)
+    return {};
+  }
+  const res=analyzePlan(plan, state.shipType);
+  const groups={};
+  for(const lbl in res){
+    const gk=res[lbl].group; const c=res[lbl].cones;
+    if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0};
+    groups[gk].deck+=c.deck; groups[gk].ele+=c.ele; groups[gk].hold+=c.hold;
+  }
+  return groups;
+}
+function runCalc(){
+  showLoading('계산 중...');
+  setTimeout(()=>{
+    try{
+      // 양하/선적 선박명 다르면 경고(다른 항차 자료일 수 있음)
+      const vs=state.stow&&state.stow.vessel, vd=state.disch&&state.disch.vessel;
+      const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
+      window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
+      const sg=planToGroups(state.stow);
+      const dg=planToGroups(state.disch);
+      const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
+      const groups={};
+      for(const k of allk){
+        groups[k]={
+          stow: sg[k]||{deck:0,ele:0,hold:0},
+          disch: dg[k]||{deck:0,ele:0,hold:0},
+          labels:[k+'번']
+        };
+      }
+      renderResults(groups);
+    }catch(err){
+      document.getElementById('resultArea').innerHTML=
+        `<div class="card"><p style="color:var(--rem)">계산 오류: ${err.message}</p></div>`;
+    }
+  },50);
+}
+
+// ============ 베이 위치 보기 (양하·선적 구분) ============
+// 콘앱이 이미 가진 EDI 위치값(bay/row/tier/size)만으로 베이별 격자를 그린다.
+// 베이사전 불필요. 양하=파랑, 선적=초록, 둘 다=주황.
+function renderBayView(){
+  const ra=document.getElementById('resultArea');
+  // 컨테이너 수집: bay → { 'row_tier': {d:양하?, l:선적?, size} }
+  const bays={};
+  const add=(rows,flag)=>{
+    if(!rows) return;
+    for(const r of rows){
+      const b=parseInt(r.bay,10); if(!Number.isFinite(b)) continue;
+      if(!bays[b]) bays[b]={};
+      const key=r.row+'_'+r.tier;
+      if(!bays[b][key]) bays[b][key]={d:false,l:false,size:r.size,row:r.row,tier:r.tier};
+      bays[b][key][flag]=true;
+    }
+  };
+  add(state.disch&&state.disch.ediRows,'d');
+  add(state.stow&&state.stow.ediRows,'l');
+
+  const bayKeys=Object.keys(bays).map(Number).sort((a,b)=>a-b);
+  if(!bayKeys.length){ ra.innerHTML='<div class="card"><div class="empty-note">표시할 컨테이너가 없습니다.</div></div>'; return; }
+
+  const shipLabel=state.shipName||'선박';
+  const today=new Date().toLocaleDateString('ko-KR');
+  let html=`<div class="card">
+    <div class="share-head"><div class="sh-title">베이 위치도</div>
+      <div class="sh-sub">${shipLabel} · ${today}</div></div>
+    <div class="bv-legend">
+      <span class="bv-lg d">양하</span>
+      <span class="bv-lg l">선적</span>
+      <span class="bv-lg b">양하+선적</span>
+      <span class="bv-lg" style="color:var(--dim)">○20ft ●40ft</span>
+    </div>`;
+
+  for(const bk of bayKeys){
+    const cells=bays[bk];
+    // tier 목록(위→아래), row 목록(좌→우: 짝수 내림 + 00 + 홀수 오름 = 선박 단면 통상 배열)
+    const tiers=[...new Set(Object.values(cells).map(c=>parseInt(c.tier,10)))].sort((a,b)=>b-a);
+    const rowsSet=[...new Set(Object.values(cells).map(c=>c.row))];
+    const evens=rowsSet.filter(r=>parseInt(r,10)%2===0 && r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
+    const zero=rowsSet.filter(r=>r==='00');
+    const odds=rowsSet.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
+    const rowOrder=[...evens,...zero,...odds];
+    const deckTiers=tiers.filter(t=>t>=80), holdTiers=tiers.filter(t=>t<80);
+
+    const cnt={d:0,l:0,b:0};
+    Object.values(cells).forEach(c=>{ if(c.d&&c.l)cnt.b++; else if(c.d)cnt.d++; else if(c.l)cnt.l++; });
+
+    html+=`<div class="bv-bay"><div class="bv-bayhd">BAY ${String(bk).padStart(2,'0')}
+      <span class="bv-cnt">양하 ${cnt.d} · 선적 ${cnt.l}${cnt.b?(' · 공통 '+cnt.b):''}</span></div>`;
+    const grid=(tierList,label)=>{
+      if(!tierList.length) return '';
+      let g=`<div class="bv-sec">${label}</div><table class="bv-tab"><tbody>`;
+      for(const t of tierList){
+        g+='<tr>';
+        for(const r of rowOrder){
+          const c=cells[r+'_'+t];
+          if(!c){ g+='<td class="bv-empty"></td>'; continue; }
+          const cls=c.d&&c.l?'b':(c.d?'d':'l');
+          const dot=c.size==='40'?'●':'○';
+          g+=`<td class="bv-c ${cls}" title="row ${r} tier ${t}">${dot}</td>`;
+        }
+        g+='</tr>';
+      }
+      g+='</tbody></table>';
+      return g;
+    };
+    html+=grid(deckTiers,'갑판 (Deck)');
+    html+=grid(holdTiers,'선창 (Hold)');
+    html+='</div>';
+  }
+  html+='</div>';
+  ra.innerHTML=html;
+  ra.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function renderResults(groups){
+  const ra=document.getElementById('resultArea');
+  const keys=Object.keys(groups).map(Number).sort((a,b)=>a-b)
+    .filter(k=>{const g=groups[k];return (g.stow.deck+g.stow.ele+g.stow.hold+g.disch.deck+g.disch.ele+g.disch.hold)>0;});
+  if(!keys.length){ ra.innerHTML='<div class="card"><div class="empty-note">인식된 베이가 없습니다. EDI를 쓰거나, 사진이면 더 또렷하게 찍어주세요.</div></div>'; return; }
+
+  // 행 데이터 만들기
+  const rows=keys.map(k=>{
+    const g=groups[k];
+    const sd=distribute(g.stow), dd=distribute(g.disch);
+    return {
+      bay:k,
+      deck:{need:sd.deckPer, have:dd.deckPer, diff:sd.deckPer-dd.deckPer},
+      ele:{need:sd.elePer, have:dd.elePer, diff:sd.elePer-dd.elePer},
+      hold:{need:g.stow.hold*2, have:g.disch.hold*2, diff:g.stow.hold*2-g.disch.hold*2},
+    };
+  });
+
+  const shipLabel = state.shipName ? state.shipName : '선박 미입력';
+  const today=new Date().toLocaleDateString('ko-KR');
+
+  let html='';
+  if(window.__vesselWarn){ html+=`<div class="card" style="border-color:var(--rem)"><p style="color:var(--rem);margin:0;font-size:14px">${window.__vesselWarn}</p></div>`; }
+  html+=`<div class="confirm-bar"><p><b>⚠ 인식 결과 확인</b> — 콘 작업 전 반드시 대조하세요.</p></div>`;
+
+  html+=`<div class="card" id="shareCard">
+    <div class="share-head">
+      <div class="sh-title">콘 작업표</div>
+      <div class="sh-sub">${shipLabel} · ${today} · ${state.shipType==='container'?'컨테이너선':'일반/복합선'}</div>
+    </div>
+    <table class="ctab">
+      <thead><tr><th>베이</th><th>데크콘<br><small>4곳·곳당</small></th><th>코끼리콘<br><small>중간·곳당</small></th><th>홀드콘<br><small>중간</small></th></tr></thead>
+      <tbody>`;
+  for(const r of rows){
+    html+=`<tr>
+      <td class="bay-c">${r.bay}</td>
+      ${cell(r.deck)}${cell(r.ele)}${cell(r.hold)}
+    </tr>`;
+  }
+  html+=`</tbody></table>
+    <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span></div>
+  </div>
+  <div class="row" style="margin-bottom:14px">
+    <button class="btn-share" id="btnImg">📷 이미지 저장</button>
+    <button class="btn-share" id="btnTxt">📋 텍스트 복사</button>
+  </div>`;
+  ra.innerHTML=html;
+
+  document.getElementById('btnImg').onclick=()=>saveImage(rows,shipLabel,today);
+  document.getElementById('btnTxt').onclick=()=>copyText(rows,shipLabel,today);
+}
+
+function cell(c){
+  if(c.need===0&&c.have===0) return '<td class="keep-c">·</td>';
+  let cls,txt;
+  if(c.diff>0){cls='add';txt='+'+c.diff;}
+  else if(c.diff<0){cls='rem';txt='−'+(-c.diff);}
+  else {cls='keep';txt='0';}
+  return `<td class="${cls}-c"><span class="big">${txt}</span><span class="sub">${c.have}→${c.need}</span></td>`;
+}
+
+function copyText(rows,ship,today){
+  let t=`[콘 작업표] ${ship} ${today}\n`;
+  t+=`(콘: 데크/코끼리/홀드, +추가 −반납)\n`;
+  for(const r of rows){
+    const f=(c)=> c.diff>0?`+${c.diff}`:c.diff<0?`-${-c.diff}`:'0';
+    t+=`${r.bay}번: 데크${f(r.deck)} 코끼리${f(r.ele)} 홀드${f(r.hold)}\n`;
+  }
+  navigator.clipboard.writeText(t).then(()=>alert('복사됐습니다. 카톡에 붙여넣으세요.'),
+    ()=>{ prompt('아래를 복사하세요:',t); });
+}
+
+function saveImage(rows,ship,today){
+  // 캔버스에 표를 그려 PNG로 저장
+  const W=720, rowH=54, headH=120, foot=40;
+  const H=headH + rows.length*rowH + foot;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const x=cv.getContext('2d');
+  x.fillStyle='#ffffff'; x.fillRect(0,0,W,H);
+  // 헤더
+  x.fillStyle='#0f1419'; x.font='bold 26px sans-serif';
+  x.fillText('콘 작업표', 24, 40);
+  x.fillStyle='#555'; x.font='15px sans-serif';
+  x.fillText(`${ship} · ${today} · ${state.shipType==='container'?'컨테이너선':'일반/복합선'}`, 24, 66);
+  // 열 헤더
+  const cols=[ {t:'베이',x:24,w:90}, {t:'데크콘',x:130,w:190}, {t:'코끼리콘',x:330,w:190}, {t:'홀드콘',x:530,w:170} ];
+  x.fillStyle='#e8a000'; x.fillRect(0,headH-34,W,34);
+  x.fillStyle='#1a1206'; x.font='bold 16px sans-serif';
+  cols.forEach(c=>x.fillText(c.t, c.x+8, headH-12));
+  // 행
+  let y=headH;
+  rows.forEach((r,i)=>{
+    x.fillStyle = i%2? '#f4f7fa':'#ffffff'; x.fillRect(0,y,W,rowH);
+    x.fillStyle='#0f1419'; x.font='bold 22px sans-serif';
+    x.fillText(r.bay+'번', 32, y+34);
+    drawCell(x, r.deck, 130, y, rowH);
+    drawCell(x, r.ele, 330, y, rowH);
+    drawCell(x, r.hold, 530, y, rowH);
+    x.strokeStyle='#dde3ea'; x.beginPath(); x.moveTo(0,y+rowH); x.lineTo(W,y+rowH); x.stroke();
+    y+=rowH;
+  });
+  x.fillStyle='#888'; x.font='13px sans-serif';
+  x.fillText('+추가  −반납  ·그대로   |  콘 작업 전 반드시 확인', 24, y+26);
+  // 다운로드
+  const url=cv.toDataURL('image/png');
+  const a=document.createElement('a');
+  a.href=url; a.download=`콘작업표_${ship}_${today}.png`.replace(/[\\/:*?"<>|]/g,'_');
+  a.click();
+}
+function drawCell(x,c,cx,y,rowH){
+  if(c.need===0&&c.have===0){ x.fillStyle='#bbb'; x.font='20px sans-serif'; x.fillText('·',cx+8,y+34); return; }
+  let col, txt;
+  if(c.diff>0){col='#1a9c5b'; txt='+'+c.diff;}
+  else if(c.diff<0){col='#d83a3a'; txt='−'+(-c.diff);}
+  else {col='#888'; txt='0';}
+  x.fillStyle=col; x.font='bold 24px sans-serif'; x.fillText(txt, cx+8, y+30);
+  x.fillStyle='#999'; x.font='13px sans-serif'; x.fillText(`${c.have}→${c.need}`, cx+8, y+48);
+}
+
+// ============ 선박 설정 저장 (localStorage) ============
+
+try{ render(); loadVoyageList(); }catch(e){
+  document.getElementById('app').innerHTML='<div class="card"><p style="color:var(--rem)">초기화 오류: '+e.message+'</p></div>';
+}
+</script>
+</body>
+</html>
