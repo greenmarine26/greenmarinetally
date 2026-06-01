@@ -55,7 +55,35 @@
   .bv-sec{font-size:11px; color:var(--dim); margin:6px 0 3px;}
   .bv-tab{border-collapse:separate; border-spacing:2px;}
   .bv-tab td{width:18px; height:18px; text-align:center; font-size:11px; border-radius:3px; line-height:18px;}
+  .bv-tab.box td{width:auto; height:auto;}
+  .bv-rl{color:var(--dim); font-size:10px; font-weight:600;}
+  .bv-tl{color:var(--dim); font-size:10px; font-weight:600; min-width:16px;}
+  .bv-slot{border:1px dashed #2c3a4d; background:transparent; min-width:46px; height:34px;}
+  .bv-slot.off{border-color:#232f3e;}
   .bv-empty{background:transparent;}
+  /* 컨테이너 박스 셀 */
+  .bvc{min-width:56px; height:36px; border-radius:3px; padding:2px 4px; vertical-align:top; border:1px solid rgba(255,255,255,.12);}
+  .bvc-in{font-size:8.5px; line-height:1.2; font-family:Consolas,monospace; text-align:left;}
+  .bvc-pp{font-weight:700; white-space:nowrap; overflow:hidden;}
+  .bvc-cn{font-weight:800; font-size:9px; letter-spacing:-.3px; white-space:nowrap; overflow:hidden;}
+  .bvc-l3{font-size:8px; opacity:.9; white-space:nowrap; overflow:hidden;}
+  .bvc-star{color:#ffd23f; margin-left:1px;}
+  /* 평택분 (양하/선적) */
+  .bvc.ptk-d{background:#1d4a66; color:#bfe3ff; border-color:#3a7ca5;}
+  .bvc.ptk-l{background:#1c4a32; color:#bff0d0; border-color:#3a9d63;}
+  /* 통과/타항 (흐리게) */
+  .bvc.oth-d{background:#16242f; color:#6f93a8;}
+  .bvc.oth-l{background:#162a1f; color:#6fa886;}
+  /* 특수화물 */
+  .bvc.sp-rf{background:#0e4d52; color:#7fffe0; border-color:#22b8c4;}
+  .bvc.sp-dg{background:#5a1717; color:#ffb3b3; border-color:#e05656;}
+  .bvc.sp-fr{background:#3a1f5a; color:#d9b3ff; border-color:#9b59d0;}
+  .bvc.sp-tk{background:#5a3410; color:#ffcf9f; border-color:#d08a30;}
+  .bvc.sp-ot{background:#4a1f4a; color:#f0b3f0; border-color:#c050c0;}
+  .bv-lg.ptkd{background:#1d4a66; color:#bfe3ff;}
+  .bv-lg.ptkl{background:#1c4a32; color:#bff0d0;}
+  .bv-lg.rf{background:#0e4d52; color:#7fffe0;}
+  .bv-lg.dg{background:#5a1717; color:#ffb3b3;}
   .bv-c{font-weight:700;}
   .bv-c.d{background:#13344a; color:#7cc4ff;}
   .bv-c.l{background:#163826; color:#5fe0a0;}
@@ -212,19 +240,36 @@ function parseEDI(text){
     if(!pm) continue;
     const pos=pm[1];
     const bay=pos.slice(0,3), row=pos.slice(3,5), tier=parseInt(pos.slice(5,7));
-    // ISO: EQD+CN 세그먼트(종결자 ')를 정확히 잘라 + 분리 → parts[3]의 : 앞부분.
-    //   (이전 결함: /EQD\+CN\+\S+\+(\w{4})/ 의 \S+ 가 탐욕적으로 다음 + 까지 삼켜
-    //    11자리 컨번호 뒤 ISO 4자리를 못 잡고 20ft(2xxx)를 40ft로 오판)
-    let iso='';
+    // ISO + 컨번호: EQD+CN+{컨번호}+{ISO}:... 형태
+    let iso='', cn='';
     const eqd=s.match(/EQD\+CN\+[^']*/);
     if(eqd){
       const parts=eqd[0].split('+');           // ['EQD','CN',컨번호,'45G1:102:5',...]
+      cn=((parts[2]||'').split(':')[0]||'').toUpperCase().trim();
       iso=((parts[3]||'').split(':')[0]||'').toUpperCase();
     }
     const size=(iso&&iso[0]==='2')?'20':'40';
-    // POL/POD: 코드만(영숫자) — 뒤 : 콜론 한정자 제외
+    // POL/POD: 코드만(영숫자)
     const polm=s.match(/LOC\+9\+([A-Za-z0-9]+)/), podm=s.match(/LOC\+11\+([A-Za-z0-9]+)/);
-    rowsAll.push({bay,row,tier,size,pol:polm?polm[1]:null,pod:podm?podm[1]:null});
+    // F/E 상태: EQD ... 뒤 status, 또는 FTX. BAPLIE는 보통 MEA/EQD 뒤. 간이: 'EMPTY'/'5'(full)/'4'(empty) 추정
+    //   EDI status code: 5=Full, 4=Empty (검수앱 역매핑). 세그먼트에 :5 / :4 형태로.
+    let fe='';
+    const fem=s.match(/EQD\+CN\+[^']*\+[A-Z0-9]*\+*([45])(?=[+':])/);
+    // 더 안전: MEA(무게)있으면 Full 경향, 아니면 미정. 우선 status 직접 탐색.
+    if(/\bEMPTY\b/i.test(s)) fe='E';
+    // 온도(리퍼): TMP+2+{온도}:CEL
+    let temp=null;
+    const tm=s.match(/TMP\+2\+(-?\d+(?:\.\d+)?)/);
+    if(tm) temp=tm[1];
+    // 특수타입: ISO 기반
+    const isReefer=/^R[FE]/.test(iso)||/^[24]58[2-5]$/.test(iso)||/^[24][024568L9]R/.test(iso)||temp!=null;
+    const dg=/IMD\+|DGS\+/.test(s);
+    const t3=iso.slice(2);
+    const fr=/^4[0-9]?P/.test(iso)||/PF|PL|PC/.test(t3)||/^[24][0-9]P/.test(iso);  // 플랫랙/플랫폼
+    const ot=/^[24][0-9]U/.test(iso)||/^[24][0-9]T/.test(iso)&&false;             // 오픈탑
+    rowsAll.push({bay,row,tier,size,cn,iso,fe,temp,
+      reefer:isReefer,dg,fr,ot,
+      pol:polm?polm[1]:null,pod:podm?podm[1]:null});
   }
   // 제목/POL·POD로 선적/양하 판별
   const up=text.toUpperCase();
@@ -233,13 +278,11 @@ function parseEDI(text){
   const podPtk=rowsAll.filter(r=>r.pod==='KRPTK');
   if(up.includes('LOAD')||polPtk.length>podPtk.length){ kind='stow'; rows=polPtk.length?polPtk:rowsAll; }
   else { kind='disch'; rows=podPtk.length?podPtk:rowsAll; }
-  // 선박명: TDT 세그먼트 끝(11: 다음 토큰). 종결자 ' 또는 줄바꿈까지.
   let vessel='';
   const tdt=text.match(/TDT\+[\s\S]*?(?=['~\n\r]|$)/);
   if(tdt){
     const parts=tdt[0].split(':');
     const last=(parts[parts.length-1]||'').trim();
-    // 선박명은 영문자 포함 + 길이>=3. 숫자만(예:"20")이면 무시
     if(/[A-Za-z]/.test(last) && last.length>=3) vessel=last;
   }
   return {rows, kind, isEDI:true, vessel};
@@ -391,11 +434,16 @@ async function fbFetchEdiContainers(voyageKey, mode){
   for(const k in obj){
     const c=obj[k]||{};
     if(c.bay==null || c.tier==null) continue;
-    const iso=String(c.iso||'');
+    const iso=String(c.iso||c.tp||'');
     const size = c.size ? String(c.size) : (iso && iso[0]==='2' ? '20' : '40');
+    const isReefer = !!c.rf || /^R[FE]/.test(iso) || /^[24]58[2-5]$/.test(iso) || /^[24][024568L9]R/.test(iso);
     rows.push({
       bay:String(c.bay), row:String(c.row||'').padStart(2,'0'),
       tier:String(c.tier).padStart(2,'0'), size,
+      cn:String(c.cn||'').toUpperCase(), iso,
+      fe:c.fe||'', op:c.op||'', wt:c.wt||0,
+      temp:(c.temp!=null?c.temp:(c.setpoint!=null?c.setpoint:null)),
+      reefer:isReefer, dg:!!c.dg, fr:!!c.fr, tk:!!c.tk, ot:!!(c.ot||c.oog), oog:!!c.oog,
       pol:c.pol||null, pod:c.pod||null,
     });
   }
@@ -918,16 +966,16 @@ function runCalc(){
 // 베이사전 불필요. 양하=파랑, 선적=초록, 둘 다=주황.
 function renderBayView(){
   const ra=document.getElementById('resultArea');
-  // 컨테이너 수집: bay → { 'row_tier': {d:양하?, l:선적?, size} }
+  // 컨테이너 수집: bay → 'row_tier' → { d:{...}|null, l:{...}|null } (양하/선적 각각 컨테이너 정보)
   const bays={};
   const add=(rows,flag)=>{
     if(!rows) return;
     for(const r of rows){
       const b=parseInt(r.bay,10); if(!Number.isFinite(b)) continue;
       if(!bays[b]) bays[b]={};
-      const key=r.row+'_'+r.tier;
-      if(!bays[b][key]) bays[b][key]={d:false,l:false,size:r.size,row:r.row,tier:r.tier};
-      bays[b][key][flag]=true;
+      const key=r.row+'_'+String(r.tier).padStart(2,'0');
+      if(!bays[b][key]) bays[b][key]={row:r.row,tier:String(r.tier).padStart(2,'0')};
+      bays[b][key][flag]=r;  // 그 쪽(양하 d / 선적 l) 컨테이너 전체 정보
     }
   };
   add(state.disch&&state.disch.ediRows,'d');
@@ -940,18 +988,46 @@ function renderBayView(){
   const hasL=!!(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
   const shipLabel=state.shipName||'선박';
   const today=new Date().toLocaleDateString('ko-KR');
+
+  // 평택분 판정 (양하=pod 평택, 선적=pol 평택)
+  const isPtk=(c,flag)=>{
+    if(!c) return false;
+    const p=String((flag==='d'?c.pod:c.pol)||'').toUpperCase();
+    return /PTK|PYT|PYOTM/.test(p) || p==='' ;
+  };
+  // 특수타입 라벨/심볼
+  const special=(c)=>{
+    if(!c) return null;
+    if(c.dg) return {sym:'⚠',label:'DG',cls:'sp-dg'};
+    if(c.reefer) return {sym:'❄',label:(c.temp!=null?(c.temp+'°'):'RF'),cls:'sp-rf'};
+    if(c.fr) return {sym:'▭',label:'FR',cls:'sp-fr'};
+    if(c.tk) return {sym:'▣',label:'TK',cls:'sp-tk'};
+    if(c.ot||c.oog) return {sym:'△',label:'OT',cls:'sp-ot'};
+    return null;
+  };
+  // 셀 색 클래스
+  const cellCls=(c,flag)=>{
+    const sp=special(c);
+    if(sp) return 'bvc '+sp.cls;
+    if(isPtk(c,flag)) return 'bvc '+(flag==='d'?'ptk-d':'ptk-l');  // 평택분 강조
+    return 'bvc '+(flag==='d'?'oth-d':'oth-l');                    // 통과/타항
+  };
+  // POL/POD 짧게 (뒤 3자)
+  const short=p=>{ p=String(p||'').toUpperCase(); return p.length>=5?p.slice(2,5):p; };
+
   let html=`<div class="card">
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-legend">
-      <span class="bv-lg d">양하</span>
-      <span class="bv-lg l">선적</span>
-      <span class="bv-lg" style="color:var(--dim)">○20ft ●40ft</span>
+      <span class="bv-lg ptkd">양하 평택</span>
+      <span class="bv-lg ptkl">선적 평택</span>
+      <span class="bv-lg rf">❄리퍼</span>
+      <span class="bv-lg dg">⚠위험물</span>
+      <span class="bv-lg" style="color:var(--dim)">★평택분</span>
     </div>`;
 
   for(const bk of bayKeys){
     const cells=bays[bk];
-    // tier·row 범위는 양하+선적 합집합 → 좌우 같은 위치가 정렬되어 비교 가능
     const tiers=[...new Set(Object.values(cells).map(c=>parseInt(c.tier,10)))].sort((a,b)=>b-a);
     const rowsSet=[...new Set(Object.values(cells).map(c=>c.row))];
     const evens=rowsSet.filter(r=>parseInt(r,10)%2===0 && r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
@@ -963,17 +1039,37 @@ function renderBayView(){
     const cnt={d:0,l:0};
     Object.values(cells).forEach(c=>{ if(c.d)cnt.d++; if(c.l)cnt.l++; });
 
-    // 한쪽(flag='d' 또는 'l') 격자 — 그 쪽 컨테이너만 표시
+    // 한 칸(컨테이너 박스) — 검수앱 셀 모양: POL/POD, 컨번호, F/E·온도, 평택★
+    const boxCell=(c,flag)=>{
+      const ct=c[flag];
+      if(!ct) return '<td class="bv-slot off"></td>';
+      const sp=special(ct);
+      const ptk=isPtk(ct,flag);
+      const fe=ct.fe==='E'?'E':(ct.fe==='F'?'F':'');
+      const pol=short(ct.pol), pod=short(ct.pod);
+      const cn=(ct.cn||'').slice(0,4)+(ct.cn?'<br>'+(ct.cn||'').slice(4):''); // 2줄
+      const line3 = sp ? sp.label : (ct.size+'ft '+fe);
+      return `<td class="${cellCls(ct,flag)}" title="${ct.cn||''} row ${c.row} tier ${c.tier}">`
+        +`<div class="bvc-in">`
+        +`<div class="bvc-pp">${pol||'·'}/<b>${pod||'·'}</b>${ptk?'<span class="bvc-star">★</span>':''}</div>`
+        +`<div class="bvc-cn">${ct.cn||'—'}</div>`
+        +`<div class="bvc-l3">${sp?sp.sym+' ':''}${line3}</div>`
+        +`</div></td>`;
+    };
+
     const grid=(tierList, flag)=>{
       if(!tierList.length) return '';
-      let g='<table class="bv-tab"><tbody>';
+      let head='<tr><td class="bv-tl"></td>';
+      for(const r of rowOrder) head+=`<td class="bv-rl">${r}</td>`;
+      head+='</tr>';
+      let g='<table class="bv-tab box"><tbody>'+head;
       for(const t of tierList){
-        g+='<tr>';
+        const tk=String(t).padStart(2,'0');
+        g+=`<tr><td class="bv-tl">${tk}</td>`;
         for(const r of rowOrder){
-          const c=cells[r+'_'+t];
-          if(!c || !c[flag]){ g+='<td class="bv-empty"></td>'; continue; }
-          const dot=c.size==='40'?'●':'○';
-          g+=`<td class="bv-c ${flag}" title="row ${r} tier ${t}">${dot}</td>`;
+          const c=cells[r+'_'+tk];
+          if(!c){ g+='<td class="bv-slot"></td>'; continue; }
+          g+=boxCell(c,flag);
         }
         g+='</tr>';
       }
