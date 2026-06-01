@@ -1032,41 +1032,61 @@ function baysSummaryToMatrixBays(baysSummary, rows){
   const summaryByBay = new Map();
   for(const s of baysSummary){ const n=Number(s.bayNo); if(Number.isFinite(n)) summaryByBay.set(n,s); }
 
+  // 어떤 베이 번호들이 실제로 존재하는지 (페어 판정용)
+  const existBays = new Set(baysSummary.map(s=>Number(s.bayNo)).filter(Number.isFinite));
+
   return baysSummary.map(s=>{
     const bayNum = Number(s.bayNo);
     const summary = summaryByBay.get(bayNum);
-    const tiers = ediTiersByBay.get(bayNum);
-    const ediTiers = tiers ? [...tiers] : [];
+    // 페어: 홀수 베이 + 짝수 짝꿍(±1 중 존재하는 짝수). 짝수 베이 컨테이너도 이 격자에 그려짐.
+    //   → 격자 폭/tier를 두 베이 합산으로 계산해야 짝수 row가 빈 칸으로 안 빠짐 (검수앱 union과 동일).
+    let mateBays = [bayNum];
+    if(bayNum % 2 === 1){
+      if(existBays.has(bayNum-1)) mateBays.push(bayNum-1);
+      if(existBays.has(bayNum+1)) mateBays.push(bayNum+1);
+    }
+    // 합산 tier
+    const tierSet = new Set();
+    for(const c of rows){
+      const b=Number(c.bay), t=Number(c.tier);
+      if(mateBays.includes(b) && Number.isFinite(t)) tierSet.add(t);
+    }
+    const ediTiers = [...tierSet];
     const hasDeckFromEdi = ediTiers.some(t=>t>=80);
     const hasHoldFromEdi = ediTiers.some(t=>t<80);
     const hasDeck = summary?.hasDeck !== undefined ? summary.hasDeck : (hasDeckFromEdi);
     const hasHold = summary?.hasHold !== undefined ? summary.hasHold : (hasHoldFromEdi);
-    // 베이별 deck/hold tier (summary 우선, 없으면 EDI tier)
     const deckTiers = (summary?.deckTiers && summary.deckTiers.length>0) ? summary.deckTiers
       : ediTiers.filter(t=>t>=80).sort((a,b)=>b-a);
     const holdTiers = (summary?.holdTiers && summary.holdTiers.length>0) ? summary.holdTiers
       : ediTiers.filter(t=>t<80).sort((a,b)=>b-a);
-    // row 폭: rowMax 기준. deckCells/holdCells = 각 tier 폭(빈 골격이므로 max row 수로 통일)
-    const rowMaxEven = summary?.rowMaxEven || 0;
-    const rowMaxOdd = summary?.rowMaxOdd || 0;
-    // hasZero: deck max row가 홀수면 00 있음 (좌우대칭 + 가운데 00)
-    const allRowsForBay = rows.filter(c=>Number(c.bay)===bayNum).map(c=>parseInt(c.row,10)).filter(Number.isFinite);
+    // 합산 row (페어면 짝수+홀수 베이 모두). deck/hold별 실제 row 집합 — 라벨에 그대로 사용.
+    const deckRowSet = new Set(), holdRowSet = new Set();
+    for(const c of rows){
+      const b=Number(c.bay), t=Number(c.tier), r=parseInt(c.row,10);
+      if(!mateBays.includes(b) || !Number.isFinite(t) || !Number.isFinite(r)) continue;
+      if(t>=80) deckRowSet.add(r); else holdRowSet.add(r);
+    }
+    const allRowsForBay = rows.filter(c=>mateBays.includes(Number(c.bay)))
+      .map(c=>parseInt(c.row,10)).filter(Number.isFinite);
     const maxRow = allRowsForBay.length>0 ? Math.max(...allRowsForBay) : 0;
     const hasZero = allRowsForBay.includes(0) || (maxRow % 2 === 1);
-    // 칸 수 = (max row / 2 올림) 좌우 + (00 있으면 +1). 빈 골격은 폭만 알면 됨.
-    const widthCells = Math.max(rowMaxEven, rowMaxOdd, maxRow);
-    const nCols = Math.ceil(widthCells/2) * 2 + (hasZero?1:0);  // 대략적 폭
-    // deckCells/holdCells: 각 tier마다 nCols-(hasZero?1:0) 폭 (가득). 빈 골격.
-    const fullWidth = hasZero ? nCols-1 : nCols;
     return {
       bayNum,
       hasDeck, hasHold, isStandalone: !!summary?.isStandalone, hasZero,
       deckTiers, holdTiers,
-      // buildEmptyBayRenderData가 쓰는 필드
-      _deckCellsWidth: fullWidth, _holdCellsWidth: fullWidth,
-      rowMaxEven, rowMaxOdd,
+      _deckRows: [...deckRowSet], _holdRows: [...holdRowSet],   // 실제 row 집합
     };
   });
+}
+
+// 실제 row 집합 → 카고플랜 표준 라벨 순서 (짝수 큰→작은, 00, 홀수 작은→큰).
+function _rowLabelsFromSet(rowSet){
+  const pad=n=>String(n).padStart(2,'0');
+  const evens=rowSet.filter(r=>r>0 && r%2===0).sort((a,b)=>b-a).map(pad);
+  const odds =rowSet.filter(r=>r%2===1).sort((a,b)=>a-b).map(pad);
+  const zero =rowSet.includes(0) ? ['00'] : [];
+  return [...evens, ...zero, ...odds];
 }
 
 // 짝꿍 자동 (검수앱 autoPairBays 포팅)
@@ -1202,38 +1222,28 @@ function buildBayRenderDataFromSummary(bayEntry, bayKey){
   };
 }
 
-// 빈 베이 렌더 데이터 (검수앱 buildEmptyBayRenderData 포팅, 빈 골격)
+// 빈 베이 렌더 데이터 (좌표 역산 — 실제 컨테이너 row를 칸으로 직접 배치).
 function buildBayRenderData(bay, bayKey){
   if(!bay) return null;
   const deckTiers = (bay.deckTiers||[]).map(Number);
   const holdTiers = (bay.holdTiers||[]).map(Number);
   const hasZero = !!bay.hasZero;
-  const fullWidth = bay._deckCellsWidth || 8;
-  const nDeckCols = fullWidth + (hasZero?1:0);
-  const holdWidth = bay._holdCellsWidth || fullWidth;
-  const nHoldCols = Math.min(holdWidth + (hasZero?1:0), nDeckCols);
-  const deckRowPos = getRowPositions(nDeckCols, hasZero);
-  const holdRowPos = getRowPositions(nHoldCols, hasZero);
+  // deck/hold 각각 실제 존재하는 row를 표준 순서 라벨로
+  const deckRowPos = _rowLabelsFromSet(bay._deckRows || []);
+  const holdRowPos = _rowLabelsFromSet(bay._holdRows || []);
+  // 폭은 더 넓은 쪽(보통 deck)으로 통일, 좁은 쪽은 가운데 정렬(패딩)
+  const nDeckCols = Math.max(deckRowPos.length, 1);
+  const nHoldCols = Math.max(holdRowPos.length, 1);
 
-  // deck rows: STANDARD_DECK 순회, tier 있으면 active 가득, 없으면 invisible
-  const deckRows = STANDARD_DECK.map(stdT=>{
-    if(deckTiers.includes(stdT)){
-      const active = getActiveColsSymmetric(fullWidth, nDeckCols);  // 가득
-      const cells=[];
-      for(let c=0;c<nDeckCols;c++) cells.push({active:active.has(c), rowLbl:active.has(c)?deckRowPos[c]:null});
+  const mkRows = (stdTiers, rowPos, tiersHave) => stdTiers.map(stdT=>{
+    if(tiersHave.includes(stdT)){
+      const cells = rowPos.map(lbl=>({active:true, rowLbl:lbl}));
       return { tier:stdT, invisible:false, cells };
     }
-    return { tier:stdT, invisible:true, cells:new Array(nDeckCols).fill(0).map(()=>({active:false,rowLbl:null})) };
+    return { tier:stdT, invisible:true, cells:rowPos.map(()=>({active:false, rowLbl:null})) };
   });
-  const holdRows = STANDARD_HOLD.map(stdT=>{
-    if(holdTiers.includes(stdT)){
-      const active = getActiveColsSymmetric(holdWidth, nHoldCols);
-      const cells=[];
-      for(let c=0;c<nHoldCols;c++) cells.push({active:active.has(c), rowLbl:active.has(c)?holdRowPos[c]:null});
-      return { tier:stdT, invisible:false, cells };
-    }
-    return { tier:stdT, invisible:true, cells:new Array(nHoldCols).fill(0).map(()=>({active:false,rowLbl:null})) };
-  });
+  const deckRows = mkRows(STANDARD_DECK, deckRowPos, deckTiers);
+  const holdRows = mkRows(STANDARD_HOLD, holdRowPos, holdTiers);
 
   return {
     bayKey, deckTiers, holdTiers, nDeck:deckTiers.length, nHold:holdTiers.length, hasZero,
@@ -1279,7 +1289,7 @@ function buildCargoPlan(rows, dictBaysSummary){
     return [parseInt(key,10)];
   };
   // 렌더데이터의 각 active 셀에 컨테이너 마크 채우기
-  const _probeKeys = [];  // 격자가 조회한 키 샘플 (진단용)
+  const _matchedPos = new Set();   // 격자가 hit한 posMap 키
   const fillMarks = (data, key) => {
     if(!data) return;
     const bays = keyBaysFor(key);
@@ -1290,9 +1300,8 @@ function buildCargoPlan(rows, dictBaysSummary){
           if(!cell.active || !cell.rowLbl) continue;
           for(const b of bays){
             const probe = b+'|'+row.tier+'|'+cell.rowLbl;
-            if(_probeKeys.length<6) _probeKeys.push(probe);
             const hit = posMap[probe];
-            if(hit){ cell.mark = hit.size==='20' ? '▪' : '●'; break; }
+            if(hit){ cell.mark = hit.size==='20' ? '▪' : '●'; _matchedPos.add(probe); break; }
           }
         }
       }
@@ -1322,9 +1331,11 @@ function buildCargoPlan(rows, dictBaysSummary){
     if(d.nHoldCols>globalMaxCols) globalMaxCols=d.nHoldCols;
     for(const r of d.deckRows.concat(d.holdRows)){ for(const c of r.cells){ if(c.mark) markedCells++; } }
   }
+  // 미매칭: posMap에는 있는데 어떤 셀도 못 찾은 좌표 (빈 공간 원인)
+  const unmatched = Object.keys(posMap).filter(k=>!_matchedPos.has(k));
   return { layout, renderDataMap, globalMaxCols,
     stats:{ totalContainers: rows.length, posKeys: Object.keys(posMap).length, markedCells, usedDict: useDict,
-            posSample: Object.keys(posMap).slice(0,6), probeSample: _probeKeys } };
+            unmatchedCount: unmatched.length, unmatchedSample: unmatched.slice(0,10) } };
 }
 
 function _buildCargoPlan_OLD(rows){
@@ -1502,17 +1513,15 @@ function renderCargoPlanHtml(rows, shipName, voyNo, mode, dictBaysSummary){
   });
 
   const s = stats||{};
-  const ok = s.markedCells>0;
   let banner;
-  if(ok){
+  if(s.unmatchedCount===0){
     banner = `<div style="background:#0f2a16;color:#bfe9c8;font-size:12px;padding:6px 10px;border-radius:6px;margin-bottom:6px">`
-      + `✓ 컨테이너 ${s.totalContainers}대 표시됨 (${s.markedCells}칸) · 골격: ${s.usedDict?'검수앱 베이사전':'좌표 자동'}</div>`;
+      + `✓ 컨테이너 ${s.totalContainers}대 모두 표시됨 · 골격: ${s.usedDict?'검수앱 베이사전':'좌표 자동'}</div>`;
   } else {
-    banner = `<div style="background:#2a1010;color:#ffd0d0;font-size:11px;padding:8px 10px;border-radius:6px;margin-bottom:6px;line-height:1.5">`
-      + `⚠ 컨테이너 ${s.totalContainers}대 읽었지만 칸에 표시 안 됨<br>`
-      + `<span style="color:#9fc">컨테이너 위치 키:</span> ${(s.posSample||[]).join(' , ')||'(없음)'}<br>`
-      + `<span style="color:#fc9">격자가 찾은 키:</span> ${(s.probeSample||[]).join(' , ')||'(없음)'}<br>`
-      + `<span style="color:#aaa">↑ 두 줄의 숫자 형식이 다르면 그게 원인입니다. 이 화면을 캡처해 알려주세요.</span></div>`;
+    banner = `<div style="background:#2a1c10;color:#ffe0bf;font-size:11px;padding:8px 10px;border-radius:6px;margin-bottom:6px;line-height:1.5">`
+      + `⚠ ${s.totalContainers}대 중 <b>${s.unmatchedCount}대</b>가 빈 칸으로 빠짐 (골격: ${s.usedDict?'검수앱 베이사전':'좌표 자동'})<br>`
+      + `<span style="color:#ffcf9f">못 채운 좌표 (베이|단|열):</span> ${(s.unmatchedSample||[]).join(' , ')}<br>`
+      + `<span style="color:#aaa">↑ 이 좌표들이 왜 격자에 안 들어가는지 — 이 줄을 캡처해 알려주세요.</span></div>`;
   }
 
   return `<style>${CARGO_V2_CSS}</style>
