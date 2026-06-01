@@ -344,18 +344,25 @@ const FB_BASE='https://greenmarinetally-default-rtdb.asia-southeast1.firebasedat
 
 // 항차 목록 (raw EDI가 있는 항차만) 가져오기
 async function fbFetchVoyages(){
-  // info + 양하/선적 raw 존재 여부만 얕게 조회 (전체 컨테이너는 안 받음 → 가벼움)
+  // 각 항차에 양하/선적 자료(raw EDI 또는 파싱된 ediContainers)가 있는지 판정.
+  //   기존 항차는 raw가 없고 ediContainers만 있을 수 있음 → 둘 중 하나라도 있으면 포함(재업로드 불필요).
   const res=await fetch(`${FB_BASE}/voyages.json?shallow=false`);
   if(!res.ok) throw new Error('Firebase 응답 오류 ('+res.status+')');
   const all=await res.json();
   if(!all) return [];
   const out=[];
+  const has=(sec)=>{
+    if(!sec) return false;
+    if(sec.raw && sec.raw.edi && sec.raw.edi.text) return true;
+    if(sec.ediContainers && Object.keys(sec.ediContainers).length>0) return true;
+    return false;
+  };
   for(const key in all){
     const v=all[key]||{};
     const info=v.info||{};
-    const hasD=!!(v.discharge&&v.discharge.raw&&v.discharge.raw.edi&&v.discharge.raw.edi.text);
-    const hasL=!!(v.loading&&v.loading.raw&&v.loading.raw.edi&&v.loading.raw.edi.text);
-    if(!hasD&&!hasL) continue; // EDI 원문 없는 항차는 콘 계산 불가 → 제외
+    const hasD=has(v.discharge);
+    const hasL=has(v.loading);
+    if(!hasD&&!hasL) continue;
     out.push({
       key,
       vsl: info.vsl||key.split('_')[0]||'(선박명 미상)',
@@ -369,6 +376,29 @@ async function fbFetchVoyages(){
   out.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); // 최신 항차 먼저
   return out;
 }
+
+// 항차 mode의 ediContainers(이미 파싱된 좌표)를 콘앱 rows 형식으로 가져오기.
+//   검수앱이 저장한 그대로 → 재업로드 불필요, 검수앱과 동일 데이터. 없으면 null(→raw 폴백).
+async function fbFetchEdiContainers(voyageKey, mode){
+  const res=await fetch(`${FB_BASE}/voyages/${encodeURIComponent(voyageKey)}/${mode}/ediContainers.json`);
+  if(!res.ok) return null;
+  const obj=await res.json();
+  if(!obj || typeof obj!=='object') return null;
+  const rows=[];
+  for(const k in obj){
+    const c=obj[k]||{};
+    if(c.bay==null || c.tier==null) continue;
+    const iso=String(c.iso||'');
+    const size = c.size ? String(c.size) : (iso && iso[0]==='2' ? '20' : '40');
+    rows.push({
+      bay:String(c.bay), row:String(c.row||'').padStart(2,'0'),
+      tier:String(c.tier).padStart(2,'0'), size,
+      pol:c.pol||null, pod:c.pod||null,
+    });
+  }
+  return rows.length? rows : null;
+}
+
 
 // 특정 항차의 mode별 raw EDI 텍스트 가져오기
 async function fbFetchRawEdi(voyageKey, mode){
@@ -444,16 +474,26 @@ async function selectVoyage(voyageKey){
   showLoading('검수앱에서 '+v.vsl+' 자료 불러오는 중...');
   try{
     if(v.hasD){
-      const txt=await fbFetchRawEdi(voyageKey,'discharge');
-      const d=txt&&parsePositions(txt);
-      if(d){ state.disch={ediRows:d.rows, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel}; applyVessel(d.vessel); }
+      // 1순위: 이미 파싱된 ediContainers (검수앱과 동일, 재업로드 불필요)
+      let rows=await fbFetchEdiContainers(voyageKey,'discharge');
+      if(rows){ state.disch={ediRows:rows, isEDI:true, fname:'검수앱(양하)', vessel:v.vsl}; }
+      else {  // 2순위: raw EDI/ASC 파싱 폴백
+        const txt=await fbFetchRawEdi(voyageKey,'discharge');
+        const d=txt&&parsePositions(txt);
+        if(d){ state.disch={ediRows:d.rows, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel}; applyVessel(d.vessel); }
+      }
     }
     if(v.hasL){
-      const txt=await fbFetchRawEdi(voyageKey,'loading');
-      const d=txt&&parsePositions(txt);
-      if(d){ state.stow={ediRows:d.rows, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel}; applyVessel(d.vessel); }
+      let rows=await fbFetchEdiContainers(voyageKey,'loading');
+      if(rows){ state.stow={ediRows:rows, isEDI:true, fname:'검수앱(선적)', vessel:v.vsl}; }
+      else {
+        const txt=await fbFetchRawEdi(voyageKey,'loading');
+        const d=txt&&parsePositions(txt);
+        if(d){ state.stow={ediRows:d.rows, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel}; applyVessel(d.vessel); }
+      }
     }
     if(!state.shipName) state.shipName=v.vsl;
+    applyVessel(state.shipName);
     render();
   }catch(e){
     state.voyErr='자료를 불러오지 못했습니다: '+e.message; render();
