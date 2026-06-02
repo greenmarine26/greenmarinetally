@@ -159,8 +159,10 @@
   .bv-zoom input[type=range]{flex:1; min-width:100px; max-width:200px;}
   .bv-zb{background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; width:30px; height:30px; font-size:18px; font-weight:700; line-height:1;}
   #bvZoomPct{min-width:42px; text-align:right; font-weight:700; color:var(--fg);}
-  .bv-zoomwrap{overflow-x:auto;}
+  .bv-zoomwrap{overflow:auto;}
   .bv-zoomarea{transform-origin:top left; transition:transform .1s;}
+  .bv-zoomarea.bv-rot{transform-origin:center center;}
+  .bv-zoomwrap.bv-rotwrap{display:flex; justify-content:center; align-items:flex-start; min-height:70vh;}
   .sh-title{font-size:20px; font-weight:800;}
   .sh-sub{font-size:12px; color:var(--dim); margin-top:3px;}
   .ctab{width:100%; border-collapse:collapse; font-size:15px;}
@@ -1340,9 +1342,10 @@ async function renderBayView(){
     <div class="bv-zoom">
       <span>화면 크기</span>
       <button class="bv-zb" id="bvZoomOut">－</button>
-      <input type="range" id="bvZoomRange" min="40" max="100" value="100" step="5">
+      <input type="range" id="bvZoomRange" min="10" max="100" value="100" step="5">
       <button class="bv-zb" id="bvZoomIn">＋</button>
       <span id="bvZoomPct">100%</span>
+      <button class="bv-zb" id="bvRotate" style="margin-left:8px;width:auto;padding:0 10px;">⟳ 가로</button>
     </div>
     <div class="bv-legend">
       <span class="bv-lg ptkd">양하 평택</span>
@@ -1373,7 +1376,7 @@ async function renderBayView(){
   }
   if(totalBox) html+=`<div class="bv-totals">${totalBox}</div>`;
 
-  html+=`<div class="bv-zoomwrap"><div class="bv-zoomarea" id="bvZoomArea">`;
+  html+=`<div class="bv-zoomwrap" id="bvZoomWrap"><div class="bv-zoomarea" id="bvZoomArea">`;
   for(const bk of bayKeys){
     const cells=bays[bk];
     const memberBays=[...(groupBays[bk]||[bk])].sort((a,b)=>a-b);
@@ -1531,21 +1534,41 @@ async function renderBayView(){
   html+='</div>';
   ra.innerHTML=html;
 
-  // 축소 슬라이더 동작
+  // 축소 슬라이더 + 가로모드 회전
   const zArea=document.getElementById('bvZoomArea');
   const zRange=document.getElementById('bvZoomRange');
   const zPct=document.getElementById('bvZoomPct');
-  const applyZoom=(v)=>{
-    v=Math.max(40,Math.min(100,v));
+  const zRotate=document.getElementById('bvRotate');
+  const zWrap=document.getElementById('bvZoomWrap');
+  let bvRotated=false;
+  const applyView=()=>{
+    let v=parseInt(zRange.value,10);
+    v=Math.max(10,Math.min(100,v));
     zRange.value=v; zPct.textContent=v+'%';
     const s=v/100;
-    zArea.style.transform='scale('+s+')';
-    zArea.style.width=(100/s)+'%';   // 축소 후 가로 폭 보정 (왼쪽 정렬 유지)
+    const rot=bvRotated?' rotate(90deg)':'';
+    zArea.style.transform='scale('+s+')'+rot;
+    if(bvRotated){
+      zArea.classList.add('bv-rot'); zWrap.classList.add('bv-rotwrap');
+      zArea.style.width='';   // 회전 시 폭 보정 해제 (center origin)
+    }else{
+      zArea.classList.remove('bv-rot'); zWrap.classList.remove('bv-rotwrap');
+      zArea.style.width=(100/s)+'%';
+    }
   };
+  const applyZoom=(v)=>{ zRange.value=Math.max(10,Math.min(100,v)); applyView(); };
   if(zRange){
-    zRange.oninput=()=>applyZoom(parseInt(zRange.value,10));
+    zRange.oninput=()=>applyView();
     document.getElementById('bvZoomOut').onclick=()=>applyZoom(parseInt(zRange.value,10)-10);
     document.getElementById('bvZoomIn').onclick=()=>applyZoom(parseInt(zRange.value,10)+10);
+    if(zRotate){
+      zRotate.onclick=()=>{
+        bvRotated=!bvRotated;
+        zRotate.textContent=bvRotated?'⟳ 세로':'⟳ 가로';
+        zRotate.style.background=bvRotated?'var(--accent,#d97706)':'';
+        applyView();
+      };
+    }
     applyZoom(100);
   }
   ra.scrollIntoView({behavior:'smooth',block:'start'});
