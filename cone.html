@@ -1552,9 +1552,11 @@ async function renderBayView(){
       zArea.style.height='';
       const cw=zArea.scrollWidth;   // 원래 가로폭 (베이 01~44 전체)
       const ch=zArea.scrollHeight;  // 원래 세로높이
-      // 2) -90도 회전 후 화면 안으로 내려서 배치
-      zArea.style.transform='translateY('+(cw*s)+'px) rotate(-90deg) scale('+s+')';
-      // 3) wrap에 회전 결과 크기 부여 → 스크롤로 전체 베이 접근
+      // 2) 시계방향 90도 회전. top-left origin 기준 회전 시 콘텐츠가 위로 올라가므로
+      //    먼저 translate로 끌어내린 뒤 회전 (transform은 왼→오 순서로 좌표계에 적용)
+      //    translateX(ch) 로 오른쪽 복귀 + scale
+      zArea.style.transform='translateX('+(ch*s)+'px) rotate(90deg) scale('+s+')';
+      // 3) wrap에 회전 결과 높이 부여 → 위 여백 없이 바로 보이고 끝까지 스크롤
       zWrap.style.width='100%';
       zWrap.style.height=(cw*s)+'px';
       zWrap.scrollLeft=0; zWrap.scrollTop=0;
