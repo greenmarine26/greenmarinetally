@@ -1268,7 +1268,22 @@ async function renderBayView(){
   // POL/POD 짧게 (뒤 3자)
   const short=p=>{ p=String(p||'').toUpperCase(); return p.length>=5?p.slice(2,5):p; };
 
-  let html=`<div class="card">
+  // [임시 진단] 데크(82 초과) 중 바로 밑에 컨테이너 없어 콘 제외된 칸
+  let dbgHtml='';
+  try{
+    const df=new Set(allRows.filter(x=>x.flag==='d').map(x=>x.b+'_'+String(x.r.row).padStart(2,'0')+'_'+String(x.r.tier).padStart(2,'0')));
+    const miss=[];
+    for(const x of allRows){
+      if(x.flag!=='d') continue;
+      const t=parseInt(x.r.tier,10);
+      if(t<=82) continue;
+      if(!df.has(x.b+'_'+String(x.r.row).padStart(2,'0')+'_'+String(t-2).padStart(2,'0')))
+        miss.push('B'+x.b+' R'+String(x.r.row).padStart(2,'0')+' T'+String(x.r.tier).padStart(2,'0')+' '+x.r.size+'ft');
+    }
+    if(miss.length) dbgHtml='<div style="background:#3a1414;color:#ffb0b0;font-size:11px;padding:8px;border-radius:8px;margin-bottom:10px;line-height:1.6"><b>진단: 밑 없어 콘 제외 데크 '+miss.length+'칸</b><br>'+miss.slice(0,24).join('<br>')+(miss.length>24?'<br>…':'')+'</div>';
+  }catch(e){}
+
+  let html=`<div class="card">${dbgHtml}
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-zoom">
