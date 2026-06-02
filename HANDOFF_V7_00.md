@@ -21,3 +21,10 @@
 ## 배포: ZIP을 저장소 루트에 덮어쓰고 push. 새로고침 후 헤더 V7.00 확인.
 
 ## [다음 예정] 베이사전 미등록 안내 메시지 (HANDOFF 이전 기록 참조).
+
+## V7.00 추가 수정 (베이매트릭스 유령 베이)
+- **증상**: 4번 베이가 베이사전에 없는데 카고플랜에 (04)05로 잘못 페어링. "1 (2)3" 다음 "5(6)7" 와야 하는데 "(4)5"가 옴.
+- **근본 원인**: PrintableCargoPlanV2의 matrixBays가 `_v5Matrix.matrixBays`(raw, v5 자동추출)를 우선 사용. 사용자가 베이사전(baysSummary)에서 4번을 빼도 v5 raw에 4번이 남아 카고플랜에 새어 들어옴.
+- **수정**: raw와 baysSummary 둘 다 있으면, baysSummary(사용자 정의)에 있는 bayNum만 남기도록 raw 필터. userBayDict 보호 원칙(사용자 정의 > v5 자동) 준수.
+- **검증(Node 시뮬)**: baysSummary 1,2,3,5,6,7 + v5 raw 1~7 → 필터 후 1,2,3,5,6,7 → 트리오 01-(02)03, 05-(06)07. (04)05 안 나옴. 필터 전(버그) 재현도 확인.
+- 파일: src/components/PrintableCargoPlanV2.jsx (matrixBays useMemo).

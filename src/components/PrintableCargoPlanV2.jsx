@@ -410,6 +410,14 @@ export default function PrintableCargoPlanV2({
         isStandalone: !!s.isStandalone,
       }));
     }
+    // V7.00 fix: 사용자가 수정한 베이사전(baysSummary)이 있으면 그것이 정답.
+    //   v5 raw에는 사용자가 베이사전에서 뺀 베이가 남아있을 수 있어(유령 베이),
+    //   baysSummary에 없는 bayNum은 제외한다. (예: 4번 빼서 (4)5로 잘못 페어링되던 문제)
+    //   userBayDict 보호 원칙: 사용자 정의 > v5 자동 추출.
+    if (raw.length > 0 && baysSummary.length > 0) {
+      const allowed = new Set(baysSummary.map((s) => Number(s.bayNo)).filter(Number.isFinite));
+      bays = raw.filter((b) => allowed.has(Number(b.bayNum)));
+    }
 
     return bays.map((b) => {
       const summary = summaryByBay.get(b.bayNum);
