@@ -46,6 +46,11 @@
   .bv-lg.l{background:#163826; color:#5fe0a0;}
   .bv-bay{margin-bottom:18px; border-top:1px solid var(--line); padding-top:12px;}
   .bv-bayhd{font-size:15px; font-weight:800; margin-bottom:8px;}
+  .bv-totals{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;}
+  .bv-total{flex:1 1 200px; font-size:13px; line-height:1.7; padding:10px 14px; border-radius:8px; font-weight:600;}
+  .bv-total b{font-size:14px;}
+  .bv-total.tot-d{background:#3a2a10; color:#ffd23f;}
+  .bv-total.tot-l{background:#1c3a2a; color:#7fe0b0;}
   .bv-cones{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
   .bv-cone{font-size:12px; font-weight:700; padding:4px 9px; border-radius:6px;}
   .bv-cone.cone-d{background:#3a2a10; color:#ffd23f;}
@@ -129,6 +134,9 @@
     width:34px; height:26px; border:1px solid var(--line); margin:1px; border-radius:4px;
     font-size:13px; font-weight:700; background:var(--panel2);}
   .footer-note{font-size:11px; color:var(--dim); text-align:center; padding:20px 16px; line-height:1.6;}
+  .intro-card{text-align:center; background:linear-gradient(135deg,#1a2a1f,#1c2230); border:1px solid #2a4a38;}
+  .intro-msg{font-size:16px; font-weight:800; color:#7fe0b0; margin:4px 0 10px; line-height:1.5;}
+  .intro-sub{font-size:12.5px; color:var(--dim); line-height:1.7; margin:0;}
   .badge{display:inline-block; font-size:10px; padding:2px 7px; border-radius:20px;
     background:var(--panel2); color:var(--dim); margin-left:6px;}
   .loading{text-align:center; padding:40px 0; color:var(--accent);}
@@ -188,8 +196,13 @@
 // ============ 콘 계산 엔진 (검증됨) ============
 const ROWS=['10','08','06','04','02','01','03','05','07','09'];
 
-function calcCones(deck, hold, shipType){
-  const hold40 = shipType==='container' ? 0 : 4;
+// 홀드콘 개수: 컨테이너선=20ft 1개·40ft 0개 / 복합선=20·40 구분없이 곳당 multiCount(2 or 4)
+function holdConeCount(size, shipType, multiCount){
+  if(shipType==='container'){ return size==='40'||size==='O40' ? 0 : 1; }
+  // 복합선(multi/general): 20·40 구분 없이 곳당 multiCount
+  return multiCount||4;
+}
+function calcCones(deck, hold, shipType, multiCount){
   let dk=0, el=0, hd=0;
   const occ=(g,t,r)=> g[t] && g[t][r] && g[t][r]!=='.';
   function area(g,isDeck){
@@ -203,7 +216,7 @@ function calcCones(deck, hold, shipType){
         if(sz!=='O40'&&sz!=='O20') continue;
         if(!occ(g,t-2,r)) continue;
         if(isDeck){ if(sz==='O40') dk+=4; else {dk+=2; el+=2;} }
-        else { if(sz==='O40') hd+=hold40; else hd+=1; }
+        else { hd+=holdConeCount(sz, shipType, multiCount); }
       }
     }
   }
@@ -228,7 +241,7 @@ function distribute(cones){
   return {
     deckPer: Math.round(cones.deck/4),
     elePer: Math.round(cones.ele/2),
-    holdTotal: cones.hold*2
+    holdTotal: cones.hold        // 이미 (콘대상 대수 × 곳당 개수)로 계산됨 — 추가 배수 없음
   };
 }
 // ============ EDI(BAPLIE) 파서 — 앱 통합용 ============
@@ -361,22 +374,44 @@ function parsePositions(text){
 }
 
 // EDI rows → deck/hold tiers (콘엔진 입력). 베이그룹 합본은 결과 단계에서.
-function ediToBayGroups(rows, shipType){
-  const h40 = shipType==='container'?0:4;
+function ediToBayGroups(rows, shipType, multiCount){
   const filled=new Set(rows.map(r=>r.bay+'_'+r.row+'_'+r.tier));
   const existBays=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
   // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
   const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
+  // 페어(트윈 가능) 베이인지: 짝수 베이는 항상, 홀수는 앞 짝수(bay-1)가 존재하면 페어.
+  //   페어가 아닌 홀수 단독 베이 = 20ft 전용 데크로 간주(데크콘 4).
+  const isPairBay=(bay)=> bay%2===0 ? true : existBays.has(bay-1);
+  // 20ft 데크 트윈 짝꿍 자리: 같은 row·tier에서 짝꿍 베이(짝수↔홀수 ±1)에 컨테이너 있나
+  const hasTwinMate=(bay,row,tier)=>{
+    const mate = bay%2===0 ? bay+1 : bay-1;   // 짝수 e ↔ 홀수 e+1
+    return filled.has(String(mate)+'_'+row+'_'+tier);
+  };
   const groups={};
   for(const r of rows){
     const bay=parseInt(r.bay), tier=r.tier;
-    const isDeck=tier>=80;
-    if(!filled.has(r.bay+'_'+r.row+'_'+(tier-2))) continue; // 받침/최저단
+    const isDeck=parseInt(tier,10)>=80;
+    const belowTier=String(parseInt(tier,10)-2).padStart(2,'0');   // 받침 tier 2자리
+    if(!filled.has(r.bay+'_'+r.row+'_'+belowTier)) continue; // 받침/최저단 없으면 콘 없음
     const gk=groupKeyOf(bay);
     if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0,bays:new Set()};
     groups[gk].bays.add(bay);
-    if(isDeck){ if(r.size==='40') groups[gk].deck+=4; else {groups[gk].deck+=2; groups[gk].ele+=2;} }
-    else { if(r.size==='40') groups[gk].hold+=h40; else groups[gk].hold+=1; }
+    if(isDeck){
+      if(r.size==='40'){
+        groups[gk].deck+=4;                              // 40ft: 데크콘 4
+      } else {
+        // 20ft 데크
+        if(hasTwinMate(bay,r.row,r.tier)){
+          groups[gk].deck+=2; groups[gk].ele+=2;          // 트윈(짝꿍 있음): 자리당 데크2+코끼리2 (두 자리 합쳐 4+4)
+        } else if(!isPairBay(bay)){
+          groups[gk].deck+=4;                             // 20ft 전용 데크(홀수 단독 베이): 데크콘 4
+        } else {
+          groups[gk].deck+=2; groups[gk].ele+=2;          // 페어인데 짝꿍 빈 단독 20ft: 데크2+코끼리2
+        }
+      }
+    } else {
+      groups[gk].hold+=holdConeCount(r.size, shipType, multiCount);
+    }
   }
   for(const k in groups){ groups[k].bays=[...groups[k].bays].sort((a,b)=>a-b); }
   return groups;
@@ -399,7 +434,7 @@ try{
   }
 }catch(e){ PDF_OK=false; }
 
-const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false,
+const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'' };
 
 // ============ 검수앱 Firebase 연동 (읽기 전용, REST) ============
@@ -743,7 +778,7 @@ function gridToTiers(bayObj){
 }
 
 // 전체 플랜 → 베이별 콘
-function analyzePlan(plan,shipType){
+function analyzePlan(plan,shipType,multiCount){
   if(!plan || !plan.bays.length) return {};
   const cells=findCells(plan.img);
   const res={};
@@ -751,7 +786,7 @@ function analyzePlan(plan,shipType){
     const bo=buildBay(plan.img,cells,bay);
     if(!bo) continue;
     const {deck,hold}=gridToTiers(bo);
-    const cones=calcCones(deck,hold,shipType);
+    const cones=calcCones(deck,hold,shipType,multiCount);
     res[bay.label]={cones, bayObj:bo, group:bayGroupKey(bay.label)};
   }
   return res;
@@ -796,6 +831,15 @@ function setShipType(t){
 function render(){
   app.innerHTML='';
 
+  // 인사말 (무료 배포의 뜻)
+  const intro=document.createElement('div');
+  intro.className='card intro-card';
+  intro.innerHTML=`
+    <p class="intro-msg">수고를 덜어 드리고자 이 앱을 드립니다.</p>
+    <p class="intro-sub">오늘도 안전하게, 다치지 말고 집에 가세요.</p>
+  `;
+  app.appendChild(intro);
+
   // 단계 안내
   const steps=document.createElement('div');
   steps.className='card';
@@ -819,7 +863,9 @@ function render(){
   if(state.stow || state.disch){
     const sv=document.createElement('div');
     sv.className='card';
-    let typeLabel = state.shipType==='container'?'컨테이너선':state.shipType==='general'?'일반/복합선':'미지정';
+    let typeLabel = state.shipType==='container'?'컨테이너선'
+      : state.shipType==='multi'?('복합선 (홀드콘 곳당 '+state.multiCount+'개)')
+      : state.shipType==='general'?('복합선 (홀드콘 곳당 '+state.multiCount+'개)'):'미지정';
     sv.innerHTML=`
       <h2>선박 정보 <span class="badge">자동 인식</span></h2>
       <div class="ship-line"><span class="sk">선박명</span><b>${state.shipName||'(자료에서 못 읽음 — 계산에는 영향 없음)'}</b></div>
@@ -827,10 +873,18 @@ function render(){
         ${state.shipType?'<button class="mini" id="changeType">변경</button>':''}</div>
       ${state.shipType===null?`
         <div class="ask-type">
-          <p>이 선박은 어떤 배인가요? <small>(한 번 선택하면 저장됩니다)</small></p>
+          <p>이 선박은 어떤 배인가요? <small>(컨테이너선은 저장됩니다)</small></p>
           <div class="seg">
-            <button data-t="container" id="tCont">컨테이너선<br><small>Hold 40ft 콘 0</small></button>
-            <button data-t="general" id="tGen">일반/복합선<br><small>Hold 40ft 콘 4</small></button>
+            <button data-t="container" id="tCont">컨테이너선<br><small>홀드콘 20ft 1 · 40ft 0</small></button>
+            <button data-t="multi" id="tMulti">복합선<br><small>홀드콘 곳당 2 또는 4</small></button>
+          </div>
+        </div>`:''}
+      ${(state.shipType==='multi'||state.shipType==='general')?`
+        <div class="ask-type" style="margin-top:8px">
+          <p>오늘 홀드콘은 곳당 몇 개? <small>(인력에 따라 매번 선택)</small></p>
+          <div class="seg">
+            <button data-m="2" id="mc2" class="${state.multiCount===2?'on':''}">2개</button>
+            <button data-m="4" id="mc4" class="${state.multiCount===4?'on':''}">4개</button>
           </div>
         </div>`:''}
     `;
@@ -884,7 +938,9 @@ function render(){
 
 function bindEvents(){
   const cont=document.getElementById('tCont'); if(cont) cont.onclick=()=>setShipType('container');
-  const gen=document.getElementById('tGen'); if(gen) gen.onclick=()=>setShipType('general');
+  const multi=document.getElementById('tMulti'); if(multi) multi.onclick=()=>setShipType('multi');
+  const mc2=document.getElementById('mc2'); if(mc2) mc2.onclick=()=>{ state.multiCount=2; render(); };
+  const mc4=document.getElementById('mc4'); if(mc4) mc4.onclick=()=>{ state.multiCount=4; render(); };
   const ch=document.getElementById('changeType'); if(ch) ch.onclick=()=>{ state.shipType=null; render(); };
   const rv=document.getElementById('reloadVoy'); if(rv) rv.onclick=()=>loadVoyageList();
   document.querySelectorAll('.voy-item').forEach(btn=>{
@@ -939,12 +995,12 @@ function showLoading(msg){
 
 function planToGroups(plan){
   if(!plan) return {};
-  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType);
+  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType, state.multiCount);
   if(!plan.bays || !plan.bays.length){
     // 사진이거나 베이 텍스트를 못읽음 → 빈 결과(사용자에게 안내됨)
     return {};
   }
-  const res=analyzePlan(plan, state.shipType);
+  const res=analyzePlan(plan, state.shipType, state.multiCount);
   const groups={};
   for(const lbl in res){
     const gk=res[lbl].group; const c=res[lbl].cones;
@@ -1066,15 +1122,18 @@ async function renderBayView(){
   // 콘 개수 계산 (그룹키 = 베이플랜 그룹키와 동일: 짝수=페어, 단독 홀수)
   //   → 베이별 상단에 필요 콘 수 표기. 양하(현재 배치)·선적(실어야 할) 각각.
   let coneByGroup={};
+  let coneTotal={ disch:{deck:0,ele:0,hold:0}, stow:{deck:0,ele:0,hold:0} };  // 전체 총 콘 개수
   try{
     const sg=planToGroups(state.stow), dg=planToGroups(state.disch);
     for(const k of new Set([...Object.keys(sg||{}),...Object.keys(dg||{})].map(Number))){
       const s=sg[k]||{deck:0,ele:0,hold:0}, d=dg[k]||{deck:0,ele:0,hold:0};
-      const sd=distribute(s), dd=distribute(d);
       coneByGroup[k]={
-        stow:{deck:sd.deckPer,ele:sd.elePer,hold:sd.holdTotal},
-        disch:{deck:dd.deckPer,ele:dd.elePer,hold:dd.holdTotal},
+        stow:{deck:s.deck,ele:s.ele,hold:s.hold},     // 총개수
+        disch:{deck:d.deck,ele:d.ele,hold:d.hold},
       };
+      // 총개수(콘 박스에서 가져올 수량): 원본 콘 수 그대로 합산
+      coneTotal.stow.deck+=s.deck; coneTotal.stow.ele+=s.ele; coneTotal.stow.hold+=s.hold;
+      coneTotal.disch.deck+=d.deck; coneTotal.disch.ele+=d.ele; coneTotal.disch.hold+=d.hold;
     }
   }catch(e){ coneByGroup={}; }
 
@@ -1129,6 +1188,19 @@ async function renderBayView(){
       <span class="bv-lg dg">⚠위험물</span>
       <span class="bv-lg" style="color:var(--dim)">★평택분</span>
     </div>`;
+
+  // 전체 총 콘 개수 (콘 박스에서 한 번에 가져올 수량) + 곳 수
+  const totalLine=(o,label,cls)=>{
+    const segs=[];
+    if(o.deck) segs.push('데크콘 총 '+o.deck+'개 ('+Math.round(o.deck/4)+'곳 ×4)');
+    if(o.ele)  segs.push('코끼리콘 총 '+o.ele+'개 ('+Math.round(o.ele/2)+'곳 ×2)');
+    if(o.hold) segs.push('홀드콘 총 '+o.hold+'개');
+    return segs.length? `<div class="bv-total ${cls}"><b>${label}</b><br>${segs.join('<br>')}</div>` : '';
+  };
+  let totalBox='';
+  if(hasD) totalBox+=totalLine(coneTotal.disch,'양하 총콘','tot-d');
+  if(hasL) totalBox+=totalLine(coneTotal.stow,'선적 총콘','tot-l');
+  if(totalBox) html+=`<div class="bv-totals">${totalBox}</div>`;
 
   for(const bk of bayKeys){
     const cells=bays[bk];
@@ -1238,9 +1310,9 @@ async function renderBayView(){
     if(cone){
       const part=(o,lbl,cls)=>{
         const segs=[];
-        if(o.deck) segs.push('데크 '+o.deck);
-        if(o.ele) segs.push('코끼리 '+o.ele);
-        if(o.hold) segs.push('홀드 '+o.hold);
+        if(o.deck) segs.push('데크콘 '+o.deck);
+        if(o.ele) segs.push('코끼리콘 '+o.ele);
+        if(o.hold) segs.push('홀드콘 '+o.hold);
         return segs.length? `<span class="bv-cone ${cls}">${lbl} ${segs.join(' · ')}</span>` : '';
       };
       const d=part(cone.disch,'양하콘','cone-d'), s=part(cone.stow,'선적콘','cone-l');
