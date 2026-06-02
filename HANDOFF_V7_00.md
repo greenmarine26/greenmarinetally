@@ -69,3 +69,9 @@
 - 근본 원인: 40ft는 짝꿍 베이(±1) 위에 걸쳐 실림. 12-00-84 밑 확인 시 12-00-82만 봤는데, 실제 받침 20ft가 짝꿍 베이(11/13-00-82)에 저장돼 매칭 실패.
 - 수정: 받침 판정을 같은 bay 밑 → 없으면 bay±1의 같은 row·tier도 확인. filled 키 정규화(bay 숫자, row/tier 2자리 패딩). hasTwinMate도 동일 정규화.
 - 검증: 짝꿍 베이 받침 인정 PASS, 데크바닥트윈=0(짝꿍 오인 안 됨), 전체 회귀 PASS.
+
+## V7.00 추가 (콘앱 PWA 설치 + QR)
+- 콘앱(cone.html)에 인라인 manifest + apple-touch-icon + theme-color 추가 → 설치 가능한 PWA.
+- 초기 화면에 "📲 홈 화면에 앱으로 설치" 버튼. 안드로이드=beforeinstallprompt로 즉시 설치, 아이폰=공유→홈화면 추가 3단계 안내 모달. 이미 설치(standalone)면 버튼 숨김.
+- 배포 주소: 검수앱 https://greenmarine26.github.io/greenmarinetally/ , 콘앱 .../cone.html
+- QR 이미지 별도 생성(outputs): 평택항_QR_검수앱_콘앱.png, QR_검수앱.png, QR_콘앱.png

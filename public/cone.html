@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>콘 계산기 — 평택항</title>
+<meta name="theme-color" content="#0f1419">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="콘계산기">
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIuy9mCDqs4TsgrDquLAg4oCUIO2Pie2Dne2VrSIsICJzaG9ydF9uYW1lIjogIuy9mOqzhOyCsOq4sCIsICJkZXNjcmlwdGlvbiI6ICLqs6DsoJXsnqXsuZgg7L2YIOyekOuPmSDqs4TsgrAgKOyWke2VmMK37ISg7KCBKSIsICJzdGFydF91cmwiOiAiLi9jb25lLmh0bWwiLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgIm9yaWVudGF0aW9uIjogInBvcnRyYWl0IiwgImJhY2tncm91bmRfY29sb3IiOiAiIzBmMTQxOSIsICJ0aGVtZV9jb2xvciI6ICIjMGYxNDE5IiwgImljb25zIjogW3sic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbDtiYXNlNjQsUEhOMlp5QjRiV3h1Y3owaWFIUjBjRG92TDNkM2R5NTNNeTV2Y21jdk1qQXdNQzl6ZG1jaUlIWnBaWGRDYjNnOUlqQWdNQ0F4TWpnZ01USTRJajQ4Y21WamRDQjNhV1IwYUQwaU1USTRJaUJvWldsbmFIUTlJakV5T0NJZ2NuZzlJakkwSWlCbWFXeHNQU0lqTUdZeE5ERTVJaTgrUEhCdmJIbG5iMjRnY0c5cGJuUnpQU0kyTkN3eU9DQTROQ3c1TWlBME5DdzVNaUlnWm1sc2JEMGlJMlptWWpBeU1DSXZQanh5WldOMElIZzlJalF3SWlCNVBTSTVNaUlnZDJsa2RHZzlJalE0SWlCb1pXbG5hSFE5SWpFd0lpQnllRDBpTXlJZ1ptbHNiRDBpSTJabVlqQXlNQ0l2UGp4MFpYaDBJSGc5SWpZMElpQjVQU0l4TVRnaUlHWnZiblF0Wm1GdGFXeDVQU0p6ZVhOMFpXMHRkV2tpSUdadmJuUXRjMmw2WlQwaU1UVWlJR1p2Ym5RdGQyVnBaMmgwUFNJNE1EQWlJR1pwYkd3OUlpTXpPV1E1T0dFaUlIUmxlSFF0WVc1amFHOXlQU0p0YVdSa2JHVWlQa05QVGtVOEwzUmxlSFErUEM5emRtYysiLCAic2l6ZXMiOiAiMTI4eDEyOCIsICJ0eXBlIjogImltYWdlL3N2Zyt4bWwiLCAicHVycG9zZSI6ICJhbnkgbWFza2FibGUifV19">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij48cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgcng9IjI0IiBmaWxsPSIjMGYxNDE5Ii8+PHBvbHlnb24gcG9pbnRzPSI2NCwyOCA4NCw5MiA0NCw5MiIgZmlsbD0iI2ZmYjAyMCIvPjxyZWN0IHg9IjQwIiB5PSI5MiIgd2lkdGg9IjQ4IiBoZWlnaHQ9IjEwIiByeD0iMyIgZmlsbD0iI2ZmYjAyMCIvPjx0ZXh0IHg9IjY0IiB5PSIxMTgiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWkiIGZvbnQtc2l6ZT0iMTUiIGZvbnQtd2VpZ2h0PSI4MDAiIGZpbGw9IiMzOWQ5OGEiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNPTkU8L3RleHQ+PC9zdmc+">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
@@ -464,6 +471,44 @@ try{
     PDF_OK=true;
   }
 }catch(e){ PDF_OK=false; }
+
+// PWA 설치 (홈 화면에 앱처럼 추가)
+let deferredPrompt=null;
+const isStandalone=()=> window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+const isIOS=()=> /iphone|ipad|ipod/i.test(navigator.userAgent);
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; const b=document.getElementById('installBtn'); if(b) b.style.display=''; });
+async function doInstall(){
+  if(deferredPrompt){                       // 안드로이드/크롬: 바로 설치창
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt=null;
+    const b=document.getElementById('installBtn'); if(b) b.style.display='none';
+  } else if(isIOS()){                        // 아이폰 사파리: 수동 안내
+    showIosInstallGuide();
+  } else {
+    showIosInstallGuide(true);              // 기타: 일반 안내
+  }
+}
+function showIosInstallGuide(generic){
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px';
+  const body = generic
+    ? '<p style="margin:0 0 10px">브라우저 메뉴(⋮ 또는 공유)에서<br><b>"홈 화면에 추가"</b>를 누르세요.</p>'
+    : '<p style="margin:0 0 14px;font-size:15px">아이폰은 이렇게 설치합니다:</p>'
+      +'<div style="text-align:left;font-size:14px;line-height:2">'
+      +'<div>① 아래 <b>공유 버튼</b> <span style="font-size:18px">⬆️</span> 누르기</div>'
+      +'<div>② 목록에서 <b>"홈 화면에 추가"</b> 선택</div>'
+      +'<div>③ 오른쪽 위 <b>"추가"</b> 누르기</div>'
+      +'</div>';
+  m.innerHTML='<div style="background:#1a222c;border-radius:16px;padding:24px;max-width:340px;text-align:center;color:#eef4fb;border:1px solid #324155">'
+    +'<div style="font-size:34px;margin-bottom:8px">📲</div>'
+    +'<h3 style="margin:0 0 12px;color:#39d98a">홈 화면에 앱 설치</h3>'
+    + body
+    +'<button id="iosGuideClose" style="margin-top:16px;background:#ffb020;color:#1a1206;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:700">확인</button>'
+    +'</div>';
+  document.body.appendChild(m);
+  m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
+}
 
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'' };
@@ -934,6 +979,22 @@ function render(){
     <p class="intro-sub">오늘도 안전하게, 다치지 말고 집에 가세요.</p>
   `;
   app.appendChild(intro);
+
+  // 설치 버튼 (이미 설치된 경우 숨김)
+  if(!isStandalone()){
+    const inst=document.createElement('div');
+    inst.className='card';
+    inst.style.cssText='text-align:center;padding:16px';
+    inst.innerHTML=`
+      <button id="installBtn" style="background:#39d98a;color:#0a1f14;border:none;border-radius:12px;padding:14px 24px;font-size:16px;font-weight:800;width:100%;max-width:320px">
+        📲 홈 화면에 앱으로 설치
+      </button>
+      <p style="margin:10px 0 0;font-size:12px;color:var(--dim)">한 번 설치하면 다음부턴 아이콘만 누르면 바로 열립니다<br>(브라우저를 닫아도 사라지지 않아요)</p>
+    `;
+    app.appendChild(inst);
+    const ib=document.getElementById('installBtn');
+    if(ib){ ib.onclick=doInstall; if(!deferredPrompt && !isIOS()) { /* 데스크탑 등 */ } }
+  }
 
   // 단계 안내
   const steps=document.createElement('div');
