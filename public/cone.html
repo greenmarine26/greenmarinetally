@@ -384,7 +384,7 @@ function parsePositions(text){
 
 // EDI rows → deck/hold tiers (콘엔진 입력). 베이그룹 합본은 결과 단계에서.
 function ediToBayGroups(rows, shipType, multiCount){
-  const filled=new Set(rows.map(r=>r.bay+'_'+r.row+'_'+r.tier));
+  const filled=new Set(rows.map(r=>parseInt(r.bay,10)+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0')));
   const existBays=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
   // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
   const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
@@ -408,17 +408,22 @@ function ediToBayGroups(rows, shipType, multiCount){
   // 20ft 데크 트윈 짝꿍 자리: 같은 row·tier에서 짝꿍 베이(짝수↔홀수 ±1)에 컨테이너 있나
   const hasTwinMate=(bay,row,tier)=>{
     const mate = bay%2===0 ? bay+1 : bay-1;   // 짝수 e ↔ 홀수 e+1
-    return filled.has(String(mate)+'_'+row+'_'+tier);
+    return filled.has(mate+'_'+String(row).padStart(2,'0')+'_'+String(tier).padStart(2,'0'));
   };
   const groups={};
   for(const r of rows){
     const bay=parseInt(r.bay), tier=r.tier;
     const tierN=parseInt(tier,10);
     const isDeck=tierN>=80;
-    // 핵심 원칙: 이 컨테이너 바로 밑(같은 bay·row, 한 단 아래 tier)에 컨테이너가 있어야 콘 장착.
-    //   밑이 비면(=바닥이거나 받침 없음) 콘 없음. 데크/홀드 무관하게 동일.
+    // 핵심 원칙: 이 컨테이너 바로 밑(같은 row, 한 단 아래 tier)에 컨테이너가 있어야 콘 장착.
+    //   40ft는 짝꿍 베이(±1) 위에 걸쳐 실리므로, 같은 bay 밑이 없으면 짝꿍 베이(bay±1)의 같은 row·tier도 확인.
+    //   (예: 12-00-84 밑 확인 → 12-00-82 없으면 → 11-00-82, 13-00-82 확인)
     const belowTier=String(tierN-2).padStart(2,'0');
-    if(!filled.has(r.bay+'_'+r.row+'_'+belowTier)) continue;
+    const rowP=String(r.row).padStart(2,'0');
+    const hasBelow = filled.has(bay+'_'+rowP+'_'+belowTier)
+                  || filled.has((bay-1)+'_'+rowP+'_'+belowTier)
+                  || filled.has((bay+1)+'_'+rowP+'_'+belowTier);
+    if(!hasBelow) continue;
     const gk=groupKeyOf(bay);
     if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0,bays:new Set()};
     groups[gk].bays.add(bay);
@@ -1268,22 +1273,7 @@ async function renderBayView(){
   // POL/POD 짧게 (뒤 3자)
   const short=p=>{ p=String(p||'').toUpperCase(); return p.length>=5?p.slice(2,5):p; };
 
-  // [임시 진단] 데크(82 초과) 중 바로 밑에 컨테이너 없어 콘 제외된 칸
-  let dbgHtml='';
-  try{
-    const df=new Set(allRows.filter(x=>x.flag==='d').map(x=>x.b+'_'+String(x.r.row).padStart(2,'0')+'_'+String(x.r.tier).padStart(2,'0')));
-    const miss=[];
-    for(const x of allRows){
-      if(x.flag!=='d') continue;
-      const t=parseInt(x.r.tier,10);
-      if(t<=82) continue;
-      if(!df.has(x.b+'_'+String(x.r.row).padStart(2,'0')+'_'+String(t-2).padStart(2,'0')))
-        miss.push('B'+x.b+' R'+String(x.r.row).padStart(2,'0')+' T'+String(x.r.tier).padStart(2,'0')+' '+x.r.size+'ft');
-    }
-    if(miss.length) dbgHtml='<div style="background:#3a1414;color:#ffb0b0;font-size:11px;padding:8px;border-radius:8px;margin-bottom:10px;line-height:1.6"><b>진단: 밑 없어 콘 제외 데크 '+miss.length+'칸</b><br>'+miss.slice(0,24).join('<br>')+(miss.length>24?'<br>…':'')+'</div>';
-  }catch(e){}
-
-  let html=`<div class="card">${dbgHtml}
+  let html=`<div class="card">
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-zoom">
