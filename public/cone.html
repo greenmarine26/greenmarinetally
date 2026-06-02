@@ -51,6 +51,8 @@
   .bv-total b{font-size:14px;}
   .bv-total.tot-d{background:#3a2a10; color:#ffd23f;}
   .bv-total.tot-l{background:#1c3a2a; color:#7fe0b0;}
+  .bv-total.tot-diff{background:#3a1414; color:#ff8585; border:1px solid #6a2020;}
+  .bv-cone.cone-diff{background:#3a1414; color:#ff8585;}
   .bv-cones{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
   .bv-cone{font-size:12px; font-weight:700; padding:4px 9px; border-radius:6px;}
   .bv-cone.cone-d{background:#3a2a10; color:#ffd23f;}
@@ -1200,6 +1202,14 @@ async function renderBayView(){
   let totalBox='';
   if(hasD) totalBox+=totalLine(coneTotal.disch,'양하 총콘','tot-d');
   if(hasL) totalBox+=totalLine(coneTotal.stow,'선적 총콘','tot-l');
+  // 전체 가감 (선적 - 양하)
+  if(hasD&&hasL){
+    const diff=(k)=>coneTotal.stow[k]-coneTotal.disch[k];
+    const dd=diff('deck'), de=diff('ele'), dh=diff('hold');
+    const fmt=(v,lbl)=> v===0?'':(lbl+' '+(v>0?'+'+v:v)+'개');
+    const seg=[fmt(dd,'데크콘'),fmt(de,'코끼리콘'),fmt(dh,'홀드콘')].filter(Boolean);
+    if(seg.length) totalBox+=`<div class="bv-total tot-diff"><b>가감 (콘 박스 기준)</b><br>${seg.join('<br>')}</div>`;
+  }
   if(totalBox) html+=`<div class="bv-totals">${totalBox}</div>`;
 
   for(const bk of bayKeys){
@@ -1308,15 +1318,28 @@ async function renderBayView(){
     const cone=coneByGroup[bk];
     let coneBadge='';
     if(cone){
+      // 곳 수: 데크콘 ÷4, 코끼리콘 ÷2, 홀드콘은 받침 대수(곳)와 동일하지 않으니 개수만
+      const spots=(o)=>({ deck:Math.round(o.deck/4), ele:Math.round(o.ele/2), hold:o.hold });
       const part=(o,lbl,cls)=>{
+        const sp=spots(o);
         const segs=[];
-        if(o.deck) segs.push('데크콘 '+o.deck);
-        if(o.ele) segs.push('코끼리콘 '+o.ele);
-        if(o.hold) segs.push('홀드콘 '+o.hold);
+        if(o.deck) segs.push('데크콘 '+o.deck+'개('+sp.deck+'곳)');
+        if(o.ele)  segs.push('코끼리콘 '+o.ele+'개('+sp.ele+'곳)');
+        if(o.hold) segs.push('홀드콘 '+o.hold+'개');
         return segs.length? `<span class="bv-cone ${cls}">${lbl} ${segs.join(' · ')}</span>` : '';
       };
       const d=part(cone.disch,'양하콘','cone-d'), s=part(cone.stow,'선적콘','cone-l');
-      if(d||s) coneBadge=`<div class="bv-cones">${d}${s}</div>`;
+      // 가감: 양하·선적 둘 다 있을 때 차이 (선적 - 양하: +면 추가, -면 반납)
+      let diffStr='';
+      if((hasD&&hasL)){
+        const diff=(k)=>cone.stow[k]-cone.disch[k];
+        const dd=diff('deck'), de=diff('ele'), dh=diff('hold');
+        const seg=[];
+        const fmt=(v,lbl)=> v===0?'':(lbl+' '+(v>0?'+'+v:v));
+        [fmt(dd,'데크콘'),fmt(de,'코끼리콘'),fmt(dh,'홀드콘')].forEach(x=>{ if(x) seg.push(x); });
+        if(seg.length) diffStr=`<span class="bv-cone cone-diff">가감 ${seg.join(' · ')}</span>`;
+      }
+      if(d||s||diffStr) coneBadge=`<div class="bv-cones">${d}${s}${diffStr}</div>`;
     }
     html+=`<div class="bv-bay"><div class="bv-bayhd">BAY ${bayTitle}</div>
       ${coneBadge}
