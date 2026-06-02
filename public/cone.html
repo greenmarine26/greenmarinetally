@@ -1263,6 +1263,22 @@ async function renderBayView(){
       deckRowPos=ro; holdRowPos=ro;
     }
 
+    // 데크·홀드 중앙정렬 (검수앱 cargoPlanCore 방식):
+    //   row 라벨은 가운데(00 또는 02|01 경계) 기준 대칭. 데크·홀드 중 넓은 폭을 기준으로,
+    //   좁은 쪽은 가운데에 맞춰 양옆에 여백(빈 칸). 폭이 달라도 같은 열(row)이 세로로 정렬됨.
+    //   합집합이 아니라, 각 행을 '기준 폭'에 가운데 배치 → 데크 8 / 홀드 7 같은 경우도 정확.
+    const centerAlign=(rowPos, baseWidth)=>{
+      // rowPos를 baseWidth 폭의 가운데에 놓기. 좌우 여백은 null(빈 칸).
+      const pad=baseWidth-rowPos.length;
+      const left=Math.floor(pad/2);
+      const arr=new Array(baseWidth).fill(null);
+      for(let i=0;i<rowPos.length;i++) arr[left+i]=rowPos[i];
+      return arr;
+    };
+    const baseWidth=Math.max(deckRowPos.length, holdRowPos.length);
+    const deckCols=centerAlign(deckRowPos, baseWidth);   // 길이 baseWidth, 빈 칸은 null
+    const holdCols=centerAlign(holdRowPos, baseWidth);
+
     const cnt={d:0,l:0};
     Object.values(cells).forEach(c=>{ if(c.d)cnt.d++; if(c.l)cnt.l++; });
 
@@ -1284,18 +1300,19 @@ async function renderBayView(){
         +`</div></td>`;
     };
 
-    const grid=(tierList, flag, rowPos)=>{
-      if(!tierList.length || !rowPos.length) return '';
+    const grid=(tierList, flag, cols)=>{
+      if(!tierList.length || !cols.length) return '';
       let head='<tr><td class="bv-tl"></td>';
-      for(const r of rowPos) head+=`<td class="bv-rl">${r}</td>`;
+      for(const r of cols) head+=`<td class="bv-rl">${r||''}</td>`;  // null=여백(라벨 없음)
       head+='</tr>';
       let g='<table class="bv-tab box"><tbody>'+head;
       for(const t of tierList){
         const tk=String(t).padStart(2,'0');
         g+=`<tr><td class="bv-tl">${tk}</td>`;
-        for(const r of rowPos){
+        for(const r of cols){
+          if(r===null){ g+='<td class="bv-empty"></td>'; continue; }  // 정렬용 여백 (점선 없음)
           const c=cells[r+'_'+tk];
-          if(!c){ g+='<td class="bv-slot"></td>'; continue; }  // 빈 슬롯 (골격엔 있으나 컨테이너 없음)
+          if(!c){ g+='<td class="bv-slot"></td>'; continue; }          // 골격엔 있으나 컨테이너 없음(점선)
           g+=boxCell(c,flag);
         }
         g+='</tr>';
@@ -1305,8 +1322,8 @@ async function renderBayView(){
     };
     const panel=(flag,label,count)=>{
       let p=`<div class="bv-col"><div class="bv-colhd ${flag}">${label} <span class="bv-cnt">${count}대</span></div>`;
-      if(deckTiers.length){ p+=`<div class="bv-sec">갑판</div>${grid(deckTiers,flag,deckRowPos)}`; }
-      if(holdTiers.length){ p+=`<div class="bv-sec">선창</div>${grid(holdTiers,flag,holdRowPos)}`; }
+      if(deckTiers.length){ p+=`<div class="bv-sec">갑판</div>${grid(deckTiers,flag,deckCols)}`; }
+      if(holdTiers.length){ p+=`<div class="bv-sec">선창</div>${grid(holdTiers,flag,holdCols)}`; }
       p+='</div>';
       return p;
     };
