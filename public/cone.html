@@ -46,6 +46,10 @@
   .bv-lg.l{background:#163826; color:#5fe0a0;}
   .bv-bay{margin-bottom:18px; border-top:1px solid var(--line); padding-top:12px;}
   .bv-bayhd{font-size:15px; font-weight:800; margin-bottom:8px;}
+  .bv-cones{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;}
+  .bv-cone{font-size:12px; font-weight:700; padding:4px 9px; border-radius:6px;}
+  .bv-cone.cone-d{background:#3a2a10; color:#ffd23f;}
+  .bv-cone.cone-l{background:#1c3a2a; color:#7fe0b0;}
   .bv-split{display:flex; gap:14px; align-items:flex-start;}
   .bv-col{flex:1 1 0; min-width:0; overflow-x:auto;}
   .bv-colhd{font-size:13px; font-weight:800; padding:3px 8px; border-radius:6px; margin-bottom:6px; display:inline-block;}
@@ -172,7 +176,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">v47-align</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">v48-cone</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1033,23 +1037,45 @@ function bvDictBays(entry){
 async function renderBayView(){
   const ra=document.getElementById('resultArea');
   ra.innerHTML='<div class="card"><div class="empty-note">베이플랜 불러오는 중...</div></div>';
-  // 컨테이너 수집: bay → 'row_tier' → { d:{...}|null, l:{...}|null } (양하/선적 각각 컨테이너 정보)
-  const bays={};
-  const add=(rows,flag)=>{
-    if(!rows) return;
-    for(const r of rows){
-      const b=parseInt(r.bay,10); if(!Number.isFinite(b)) continue;
-      if(!bays[b]) bays[b]={};
-      const key=r.row+'_'+String(r.tier).padStart(2,'0');
-      if(!bays[b][key]) bays[b][key]={row:r.row,tier:String(r.tier).padStart(2,'0')};
-      bays[b][key][flag]=r;  // 그 쪽(양하 d / 선적 l) 컨테이너 전체 정보
-    }
-  };
-  add(state.disch&&state.disch.ediRows,'d');
-  add(state.stow&&state.stow.ediRows,'l');
+  // 컨테이너 수집: 먼저 존재 베이 파악 → 그룹키(짝수=페어 대표, 단독 홀수)로 묶음.
+  //   40ft는 짝수+홀수 두 베이를 한 자리로 차지 → 한 격자에 그려야 7번이 따로 떠보이지 않음.
+  const allRows=[];
+  const pushRows=(rows,flag)=>{ if(rows) for(const r of rows){ const b=parseInt(r.bay,10); if(Number.isFinite(b)) allRows.push({r,flag,b}); } };
+  pushRows(state.disch&&state.disch.ediRows,'d');
+  pushRows(state.stow&&state.stow.ediRows,'l');
+  const existBays=new Set(allRows.map(x=>x.b));
+  // 그룹키: 짝수 e → e(페어 대표). 홀수 o → 앞 짝수(o-1) 있으면 o-1, 없으면 o(단독).
+  const groupKeyOf=(b)=> b%2===0 ? b : (existBays.has(b-1)?b-1:b);
+
+  const bays={};          // groupKey → 'row_tier' → {d,l,row,tier}
+  const groupBays={};     // groupKey → Set(실제 베이번호) — 제목 표기용
+  for(const {r,flag,b} of allRows){
+    const gk=groupKeyOf(b);
+    if(!bays[gk]) bays[gk]={};
+    if(!groupBays[gk]) groupBays[gk]=new Set();
+    groupBays[gk].add(b);
+    const key=r.row+'_'+String(r.tier).padStart(2,'0');
+    if(!bays[gk][key]) bays[gk][key]={row:r.row,tier:String(r.tier).padStart(2,'0')};
+    bays[gk][key][flag]=r;
+  }
 
   const bayKeys=Object.keys(bays).map(Number).sort((a,b)=>a-b);
   if(!bayKeys.length){ ra.innerHTML='<div class="card"><div class="empty-note">표시할 컨테이너가 없습니다.</div></div>'; return; }
+
+  // 콘 개수 계산 (그룹키 = 베이플랜 그룹키와 동일: 짝수=페어, 단독 홀수)
+  //   → 베이별 상단에 필요 콘 수 표기. 양하(현재 배치)·선적(실어야 할) 각각.
+  let coneByGroup={};
+  try{
+    const sg=planToGroups(state.stow), dg=planToGroups(state.disch);
+    for(const k of new Set([...Object.keys(sg||{}),...Object.keys(dg||{})].map(Number))){
+      const s=sg[k]||{deck:0,ele:0,hold:0}, d=dg[k]||{deck:0,ele:0,hold:0};
+      const sd=distribute(s), dd=distribute(d);
+      coneByGroup[k]={
+        stow:{deck:sd.deckPer,ele:sd.elePer,hold:sd.holdTotal},
+        disch:{deck:dd.deckPer,ele:dd.elePer,hold:dd.holdTotal},
+      };
+    }
+  }catch(e){ coneByGroup={}; }
 
   // 베이사전 골격 로드 (검수앱 전체 구조 — 컨테이너 없는 빈 슬롯까지 표시)
   let dictBays=new Map();
@@ -1105,8 +1131,20 @@ async function renderBayView(){
 
   for(const bk of bayKeys){
     const cells=bays[bk];
-    // 베이사전 골격 우선 (페어면 짝수 베이 또는 자신)
-    const sk = bvBaySkeleton(dictBays.get(bk)) || bvBaySkeleton(dictBays.get(bk%2===1?bk-1:bk));
+    const memberBays=[...(groupBays[bk]||[bk])].sort((a,b)=>a-b);
+    // 베이사전 골격: 이 그룹에 속한 모든 베이(짝수+홀수)의 베이사전을 합침
+    let sk=null;
+    for(const mb of memberBays){
+      const s=bvBaySkeleton(dictBays.get(mb));
+      if(!s) continue;
+      if(!sk){ sk={deckTiers:[...s.deckTiers],holdTiers:[...s.holdTiers],deckRowPos:[...s.deckRowPos],holdRowPos:[...s.holdRowPos]}; }
+      else {
+        sk.deckTiers=[...new Set([...sk.deckTiers,...s.deckTiers])];
+        sk.holdTiers=[...new Set([...sk.holdTiers,...s.holdTiers])];
+        if(s.deckRowPos.length>sk.deckRowPos.length) sk.deckRowPos=[...s.deckRowPos];
+        if(s.holdRowPos.length>sk.holdRowPos.length) sk.holdRowPos=[...s.holdRowPos];
+      }
+    }
     let deckTiers, holdTiers, deckRowPos, holdRowPos;
     if(sk && (sk.deckTiers.length||sk.holdTiers.length)){
       deckTiers=sk.deckTiers.slice(); holdTiers=sk.holdTiers.slice();
@@ -1190,7 +1228,25 @@ async function renderBayView(){
       return p;
     };
 
-    html+=`<div class="bv-bay"><div class="bv-bayhd">BAY ${String(bk).padStart(2,'0')}</div>
+    const bayTitle = memberBays.length>1
+      ? String(memberBays[0]).padStart(2,'0')+'-'+String(memberBays[memberBays.length-1]).padStart(2,'0')
+      : String(memberBays[0]).padStart(2,'0');
+    // 콘 개수 배지 (이 그룹)
+    const cone=coneByGroup[bk];
+    let coneBadge='';
+    if(cone){
+      const part=(o,lbl,cls)=>{
+        const segs=[];
+        if(o.deck) segs.push('데크 '+o.deck);
+        if(o.ele) segs.push('코끼리 '+o.ele);
+        if(o.hold) segs.push('홀드 '+o.hold);
+        return segs.length? `<span class="bv-cone ${cls}">${lbl} ${segs.join(' · ')}</span>` : '';
+      };
+      const d=part(cone.disch,'양하콘','cone-d'), s=part(cone.stow,'선적콘','cone-l');
+      if(d||s) coneBadge=`<div class="bv-cones">${d}${s}</div>`;
+    }
+    html+=`<div class="bv-bay"><div class="bv-bayhd">BAY ${bayTitle}</div>
+      ${coneBadge}
       <div class="bv-split">`;
     if(hasD) html+=panel('d','양하',cnt.d);
     if(hasL) html+=panel('l','선적',cnt.l);
