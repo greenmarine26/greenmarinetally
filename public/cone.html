@@ -137,6 +137,7 @@
     font-size:13px; font-weight:700; background:var(--panel2);}
   .footer-note{font-size:11px; color:var(--dim); text-align:center; padding:20px 16px; line-height:1.6;}
   .intro-card{text-align:center; background:linear-gradient(135deg,#1a2a1f,#1c2230); border:1px solid #2a4a38;}
+  .port-art{margin:-4px -4px 14px; border-radius:10px; overflow:hidden; line-height:0; box-shadow:0 2px 12px rgba(0,0,0,.3);}
   .intro-msg{font-size:16px; font-weight:800; color:#7fe0b0; margin:4px 0 10px; line-height:1.5;}
   .intro-sub{font-size:12.5px; color:var(--dim); line-height:1.7; margin:0;}
   .badge{display:inline-block; font-size:10px; padding:2px 7px; border-radius:20px;
@@ -387,8 +388,22 @@ function ediToBayGroups(rows, shipType, multiCount){
   const existBays=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
   // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
   const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
-  // 페어(트윈 가능) 베이인지: 짝수 베이는 항상, 홀수는 앞 짝수(bay-1)가 존재하면 페어.
-  //   페어가 아닌 홀수 단독 베이 = 20ft 전용 데크로 간주(데크콘 4).
+  // 각 베이의 홀드 유무 (전용 데크 판정용): 홀드(tier<80) 컨테이너가 있는 베이
+  const bayHasHold={};
+  for(const r of rows){
+    const b=parseInt(r.bay,10), t=parseInt(r.tier,10);
+    if(Number.isFinite(b)&&Number.isFinite(t)&&t<80) bayHasHold[b]=true;
+  }
+  // 전용 데크(20ft, 데크콘 4) 판정:
+  //   사용자 기준 — 전용 데크는 (1) 홀드가 없다, (2) 홀드가 있어도 후속 베이가 연속 안 됨.
+  //   즉 홀드가 있으면 일반 베이(데크2+코끼리2). 홀드 없고 짝꿍(±1)도 없으면 전용 데크.
+  const isDedicatedDeck=(bay)=>{
+    if(bay%2===0) return false;                 // 짝수는 전용 데크 아님
+    if(bayHasHold[bay]) return false;           // 홀드 있으면 일반 베이
+    if(existBays.has(bay-1)||existBays.has(bay+1)) return false; // 연속 베이 있으면 일반
+    return true;                                // 홀드 없고 연속도 없음 → 전용 데크
+  };
+  // 페어(트윈 가능) 베이인지: 짝수는 항상, 홀수는 앞 짝수 존재 시.
   const isPairBay=(bay)=> bay%2===0 ? true : existBays.has(bay-1);
   // 20ft 데크 트윈 짝꿍 자리: 같은 row·tier에서 짝꿍 베이(짝수↔홀수 ±1)에 컨테이너 있나
   const hasTwinMate=(bay,row,tier)=>{
@@ -414,10 +429,10 @@ function ediToBayGroups(rows, shipType, multiCount){
         // 20ft 데크
         if(hasTwinMate(bay,r.row,r.tier)){
           groups[gk].deck+=2; groups[gk].ele+=2;          // 트윈(짝꿍 있음): 자리당 데크2+코끼리2 (두 자리 합쳐 4+4)
-        } else if(!isPairBay(bay)){
-          groups[gk].deck+=4;                             // 20ft 전용 데크(홀수 단독 베이): 데크콘 4
+        } else if(isDedicatedDeck(bay)){
+          groups[gk].deck+=4;                             // 20ft 전용 데크(홀드없음+연속없음): 데크콘 4
         } else {
-          groups[gk].deck+=2; groups[gk].ele+=2;          // 페어인데 짝꿍 빈 단독 20ft: 데크2+코끼리2
+          groups[gk].deck+=2; groups[gk].ele+=2;          // 일반 베이 20ft 단독(짝꿍 빔): 데크2+코끼리2
         }
       }
     } else {
@@ -842,10 +857,74 @@ function setShipType(t){
 function render(){
   app.innerHTML='';
 
-  // 인사말 (무료 배포의 뜻)
+  // 인사말 (무료 배포의 뜻) + 컨테이너 항구 일러스트
   const intro=document.createElement('div');
   intro.className='card intro-card';
   intro.innerHTML=`
+    <div class="port-art">
+      <svg viewBox="0 0 400 170" xmlns="http://www.w3.org/2000/svg" width="100%" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1b2a4a"/>
+            <stop offset="0.55" stop-color="#3a4a6a"/>
+            <stop offset="1" stop-color="#c98a4b"/>
+          </linearGradient>
+          <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#27506b"/>
+            <stop offset="1" stop-color="#16323f"/>
+          </linearGradient>
+        </defs>
+        <!-- 하늘 -->
+        <rect x="0" y="0" width="400" height="120" fill="url(#sky)"/>
+        <!-- 해 -->
+        <circle cx="310" cy="78" r="22" fill="#ffd9a0" opacity="0.9"/>
+        <circle cx="310" cy="78" r="32" fill="#ffd9a0" opacity="0.18"/>
+        <!-- 바다 -->
+        <rect x="0" y="118" width="400" height="52" fill="url(#sea)"/>
+        <g opacity="0.25" stroke="#bfe3ff" stroke-width="1" fill="none">
+          <path d="M0 130 q20 -4 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0"/>
+          <path d="M0 144 q20 -4 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0"/>
+        </g>
+        <!-- 부두 -->
+        <rect x="0" y="116" width="400" height="6" fill="#2a3346"/>
+        <!-- 갠트리 크레인 2대 -->
+        <g stroke="#9fb4c9" stroke-width="3" fill="none">
+          <g>
+            <line x1="40" y1="118" x2="40" y2="44"/>
+            <line x1="78" y1="118" x2="78" y2="44"/>
+            <line x1="30" y1="44" x2="120" y2="44"/>
+            <line x1="120" y1="44" x2="120" y2="64"/>
+          </g>
+          <g>
+            <line x1="150" y1="118" x2="150" y2="40"/>
+            <line x1="188" y1="118" x2="188" y2="40"/>
+            <line x1="140" y1="40" x2="232" y2="40"/>
+            <line x1="232" y1="40" x2="232" y2="60"/>
+          </g>
+        </g>
+        <!-- 컨테이너선 + 적재 컨테이너 -->
+        <g>
+          <path d="M150 118 h150 l-14 22 h-122 z" fill="#3a4656"/>
+          <rect x="158" y="98" width="20" height="18" fill="#3a7ca5"/>
+          <rect x="180" y="98" width="20" height="18" fill="#c0654e"/>
+          <rect x="202" y="98" width="20" height="18" fill="#5a9d63"/>
+          <rect x="224" y="98" width="20" height="18" fill="#c9a14b"/>
+          <rect x="246" y="98" width="20" height="18" fill="#7a6fa5"/>
+          <rect x="170" y="80" width="20" height="18" fill="#c0654e"/>
+          <rect x="192" y="80" width="20" height="18" fill="#3a7ca5"/>
+          <rect x="214" y="80" width="20" height="18" fill="#c9a14b"/>
+          <rect x="236" y="80" width="20" height="18" fill="#5a9d63"/>
+        </g>
+        <!-- 부두에 쌓인 컨테이너 -->
+        <g>
+          <rect x="20" y="104" width="22" height="12" fill="#3a7ca5"/>
+          <rect x="44" y="104" width="22" height="12" fill="#c9a14b"/>
+          <rect x="68" y="104" width="22" height="12" fill="#5a9d63"/>
+          <rect x="32" y="92" width="22" height="12" fill="#c0654e"/>
+          <rect x="56" y="92" width="22" height="12" fill="#3a7ca5"/>
+        </g>
+      </svg>
+    </div>
     <p class="intro-msg">수고를 덜어 드리고자 이 앱을 드립니다.</p>
     <p class="intro-sub">오늘도 안전하게, 다치지 말고 집에 가세요.</p>
   `;
