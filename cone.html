@@ -161,8 +161,6 @@
   #bvZoomPct{min-width:42px; text-align:right; font-weight:700; color:var(--fg);}
   .bv-zoomwrap{overflow:auto;}
   .bv-zoomarea{transform-origin:top left; transition:transform .1s;}
-  .bv-zoomarea.bv-rot{transform-origin:center center;}
-  .bv-zoomwrap.bv-rotwrap{display:flex; justify-content:center; align-items:flex-start; min-height:70vh;}
   .sh-title{font-size:20px; font-weight:800;}
   .sh-sub{font-size:12px; color:var(--dim); margin-top:3px;}
   .ctab{width:100%; border-collapse:collapse; font-size:15px;}
@@ -1546,14 +1544,26 @@ async function renderBayView(){
     v=Math.max(10,Math.min(100,v));
     zRange.value=v; zPct.textContent=v+'%';
     const s=v/100;
-    const rot=bvRotated?' rotate(90deg)':'';
-    zArea.style.transform='scale('+s+')'+rot;
+    zArea.style.transformOrigin='top left';
     if(bvRotated){
-      zArea.classList.add('bv-rot'); zWrap.classList.add('bv-rotwrap');
-      zArea.style.width='';   // 회전 시 폭 보정 해제 (center origin)
+      // 1) 회전 없는 원래 콘텐츠 크기 측정
+      zArea.style.transform='none';
+      zArea.style.width='max-content';
+      zArea.style.height='';
+      const cw=zArea.scrollWidth;   // 원래 가로폭 (베이 01~44 전체)
+      const ch=zArea.scrollHeight;  // 원래 세로높이
+      // 2) -90도 회전 후 화면 안으로 내려서 배치
+      zArea.style.transform='translateY('+(cw*s)+'px) rotate(-90deg) scale('+s+')';
+      // 3) wrap에 회전 결과 크기 부여 → 스크롤로 전체 베이 접근
+      zWrap.style.width='100%';
+      zWrap.style.height=(cw*s)+'px';
+      zWrap.scrollLeft=0; zWrap.scrollTop=0;
     }else{
-      zArea.classList.remove('bv-rot'); zWrap.classList.remove('bv-rotwrap');
+      zArea.style.transform='scale('+s+')';
       zArea.style.width=(100/s)+'%';
+      zArea.style.height='';
+      zWrap.style.height='';
+      zWrap.style.width='';
     }
   };
   const applyZoom=(v)=>{ zRange.value=Math.max(10,Math.min(100,v)); applyView(); };
@@ -1569,6 +1579,25 @@ async function renderBayView(){
         applyView();
       };
     }
+    // 핀치(두 손가락) 확대/축소
+    let pinchStartDist=0, pinchStartZoom=100;
+    const pdist=(t)=>Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    zWrap.addEventListener('touchstart',(e)=>{
+      if(e.touches.length===2){
+        pinchStartDist=pdist(e.touches);
+        pinchStartZoom=parseInt(zRange.value,10);
+      }
+    },{passive:true});
+    zWrap.addEventListener('touchmove',(e)=>{
+      if(e.touches.length===2 && pinchStartDist>0){
+        e.preventDefault();
+        const ratio=pdist(e.touches)/pinchStartDist;
+        applyZoom(Math.round(pinchStartZoom*ratio));
+      }
+    },{passive:false});
+    zWrap.addEventListener('touchend',(e)=>{
+      if(e.touches.length<2) pinchStartDist=0;
+    },{passive:true});
     applyZoom(100);
   }
   ra.scrollIntoView({behavior:'smooth',block:'start'});
