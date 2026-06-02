@@ -396,24 +396,12 @@ function ediToBayGroups(rows, shipType, multiCount){
     return filled.has(String(mate)+'_'+row+'_'+tier);
   };
   const groups={};
-  // 각 베이의 데크/홀드 구역별 실제 최하단 tier (그보다 위에 있어야 받침 있음 = 콘 대상)
-  const lowByBayZone={};  // key: bay+'_'+(deck?'D':'H') → 최하단 tier
-  for(const r of rows){
-    const b=parseInt(r.bay,10), t=parseInt(r.tier,10);
-    if(!Number.isFinite(b)||!Number.isFinite(t)) continue;
-    const z=t>=80?'D':'H';
-    const k=b+'_'+z;
-    if(lowByBayZone[k]===undefined || t<lowByBayZone[k]) lowByBayZone[k]=t;
-  }
   for(const r of rows){
     const bay=parseInt(r.bay), tier=r.tier;
     const tierN=parseInt(tier,10);
     const isDeck=tierN>=80;
-    const zone=isDeck?'D':'H';
-    const low=lowByBayZone[bay+'_'+zone];
-    // 구역 최하단(받침 없음)은 콘 제외. 그보다 위 컨테이너만 콘 대상.
-    if(tierN<=low) continue;
-    // 바로 아래 단(받침)이 실제로 있는지도 확인 (중간이 비면 콘 없음)
+    // 핵심 원칙: 이 컨테이너 바로 밑(같은 bay·row, 한 단 아래 tier)에 컨테이너가 있어야 콘 장착.
+    //   밑이 비면(=바닥이거나 받침 없음) 콘 없음. 데크/홀드 무관하게 동일.
     const belowTier=String(tierN-2).padStart(2,'0');
     if(!filled.has(r.bay+'_'+r.row+'_'+belowTier)) continue;
     const gk=groupKeyOf(bay);
