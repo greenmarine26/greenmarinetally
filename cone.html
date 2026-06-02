@@ -171,7 +171,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산</div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">v46-dict</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -358,17 +358,30 @@ function parsePositions(text){
 function ediToBayGroups(rows, shipType){
   const h40 = shipType==='container'?0:4;
   const filled=new Set(rows.map(r=>r.bay+'_'+r.row+'_'+r.tier));
+  const existBays=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
+  // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
+  const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
   const groups={};
   for(const r of rows){
     const bay=parseInt(r.bay), tier=r.tier;
     const isDeck=tier>=80;
     if(!filled.has(r.bay+'_'+r.row+'_'+(tier-2))) continue; // 받침/최저단
-    const gk = bay%2===0 ? bay : bay+1;
-    if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0};
+    const gk=groupKeyOf(bay);
+    if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0,bays:new Set()};
+    groups[gk].bays.add(bay);
     if(isDeck){ if(r.size==='40') groups[gk].deck+=4; else {groups[gk].deck+=2; groups[gk].ele+=2;} }
     else { if(r.size==='40') groups[gk].hold+=h40; else groups[gk].hold+=1; }
   }
+  for(const k in groups){ groups[k].bays=[...groups[k].bays].sort((a,b)=>a-b); }
   return groups;
+}
+
+// 묶인 베이 배열 → 라벨. [5]→"05", [6,7]→"06-07"
+function bayGroupLabel(bays){
+  if(!bays || !bays.length) return '';
+  const pad=n=>String(n).padStart(2,'0');
+  if(bays.length===1) return pad(bays[0]);
+  return pad(bays[0])+'-'+pad(bays[bays.length-1]);
 }
 
 // ============ PDF/이미지 판독 ============
@@ -947,10 +960,14 @@ function runCalc(){
       const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
       const groups={};
       for(const k of allk){
+        const s=sg[k], d=dg[k];
+        const baySet=new Set([...(s&&s.bays||[]),...(d&&d.bays||[])]);
+        const bays=[...baySet].sort((a,b)=>a-b);
+        const lbl=bays.length?bayGroupLabel(bays):(k+'');
         groups[k]={
-          stow: sg[k]||{deck:0,ele:0,hold:0},
-          disch: dg[k]||{deck:0,ele:0,hold:0},
-          labels:[k+'번']
+          stow: s||{deck:0,ele:0,hold:0},
+          disch: d||{deck:0,ele:0,hold:0},
+          labels:[lbl]
         };
       }
       renderResults(groups);
@@ -964,8 +981,57 @@ function runCalc(){
 // ============ 베이 위치 보기 (양하·선적 구분) ============
 // 콘앱이 이미 가진 EDI 위치값(bay/row/tier/size)만으로 베이별 격자를 그린다.
 // 베이사전 불필요. 양하=파랑, 선적=초록, 둘 다=주황.
-function renderBayView(){
+// ===== 베이사전(baysSummary) → 골격 (검수앱 cargoPlanCore 포팅) =====
+const BV_STD_DECK=[94,92,90,88,86,84,82,80];
+const BV_STD_HOLD=[2,4,6,8,10,12,14,16];
+
+// 폭(cellCount) → row 라벨 배열 (검수앱 getRowPositions 동일)
+function bvRowPositions(cellCount, hasZero){
+  if(cellCount<=0) return [];
+  const pad=n=>String(n).padStart(2,'0');
+  if(hasZero){
+    const half=Math.floor((cellCount-1)/2);
+    const evens=[]; for(let n=half*2;n>0;n-=2) evens.push(pad(n));
+    const odds=[]; for(let n=1;n<=half*2-1;n+=2) odds.push(pad(n));
+    return [...evens,'00',...odds];
+  } else {
+    const he=Math.floor(cellCount/2), ho=cellCount-he;
+    const evens=[]; for(let n=he*2;n>0;n-=2) evens.push(pad(n));
+    const odds=[]; for(let n=1;n<=ho*2-1;n+=2) odds.push(pad(n));
+    return [...evens,...odds];
+  }
+}
+
+// baysSummary의 한 베이 → {deckTiers, holdTiers, deckRowPos, holdRowPos, hasZero}
+function bvBaySkeleton(bs){
+  if(!bs) return null;
+  const deckTiers=Array.isArray(bs.deckTiers)&&bs.deckTiers.length?bs.deckTiers.map(Number):[];
+  const holdTiers=Array.isArray(bs.holdTiers)&&bs.holdTiers.length?bs.holdTiers.map(Number):[];
+  const deckCells=Array.isArray(bs.deckCells)?bs.deckCells.map(Number).filter(v=>v>0):[];
+  const holdCells=Array.isArray(bs.holdCells)?bs.holdCells.map(Number).filter(v=>v>0):[];
+  const hasZero=!!bs.hasZero;
+  const deckMax=deckCells.length?Math.max(...deckCells):(bs.rowCount||0);
+  const holdMax=holdCells.length?Math.max(...holdCells):deckMax;
+  return {
+    deckTiers, holdTiers, hasZero,
+    deckRowPos: deckTiers.length? bvRowPositions(deckMax, hasZero):[],
+    holdRowPos: holdTiers.length? bvRowPositions(holdMax, hasZero):[],
+  };
+}
+
+// 베이사전 entry → bayNo(int) → baysSummary 맵
+function bvDictBays(entry){
+  const m=new Map();
+  const list=entry&&entry.bayDef&&entry.bayDef.baysSummary;
+  if(Array.isArray(list)){
+    for(const bs of list){ const n=parseInt(bs.bayNo!=null?bs.bayNo:bs.bay,10); if(Number.isFinite(n)) m.set(n,bs); }
+  }
+  return m;
+}
+
+async function renderBayView(){
   const ra=document.getElementById('resultArea');
+  ra.innerHTML='<div class="card"><div class="empty-note">베이플랜 불러오는 중...</div></div>';
   // 컨테이너 수집: bay → 'row_tier' → { d:{...}|null, l:{...}|null } (양하/선적 각각 컨테이너 정보)
   const bays={};
   const add=(rows,flag)=>{
@@ -983,6 +1049,16 @@ function renderBayView(){
 
   const bayKeys=Object.keys(bays).map(Number).sort((a,b)=>a-b);
   if(!bayKeys.length){ ra.innerHTML='<div class="card"><div class="empty-note">표시할 컨테이너가 없습니다.</div></div>'; return; }
+
+  // 베이사전 골격 로드 (검수앱 전체 구조 — 컨테이너 없는 빈 슬롯까지 표시)
+  let dictBays=new Map();
+  try{
+    const fbDict=await fbFetchBayDict();
+    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
+    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
+    const entry=lookupBayDef(fbDict, imo, nm);
+    if(entry) dictBays=bvDictBays(entry);
+  }catch(e){ /* 베이사전 없으면 컨테이너로 추정(폴백) */ }
 
   const hasD=!!(state.disch&&state.disch.ediRows&&state.disch.ediRows.length);
   const hasL=!!(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
@@ -1028,13 +1104,42 @@ function renderBayView(){
 
   for(const bk of bayKeys){
     const cells=bays[bk];
-    const tiers=[...new Set(Object.values(cells).map(c=>parseInt(c.tier,10)))].sort((a,b)=>b-a);
-    const rowsSet=[...new Set(Object.values(cells).map(c=>c.row))];
-    const evens=rowsSet.filter(r=>parseInt(r,10)%2===0 && r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
-    const zero=rowsSet.filter(r=>r==='00');
-    const odds=rowsSet.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
-    const rowOrder=[...evens,...zero,...odds];
-    const deckTiers=tiers.filter(t=>t>=80), holdTiers=tiers.filter(t=>t<80);
+    // 베이사전 골격 우선 (페어면 짝수 베이 또는 자신)
+    const sk = bvBaySkeleton(dictBays.get(bk)) || bvBaySkeleton(dictBays.get(bk%2===1?bk-1:bk));
+    let deckTiers, holdTiers, deckRowPos, holdRowPos;
+    if(sk && (sk.deckTiers.length||sk.holdTiers.length)){
+      deckTiers=sk.deckTiers.slice(); holdTiers=sk.holdTiers.slice();
+      deckRowPos=sk.deckRowPos.slice(); holdRowPos=sk.holdRowPos.slice();
+      // 실제 컨테이너 tier/row를 골격에 합집합 (베이사전이 실데이터보다 좁아도 누락 방지)
+      const realDeckRows=new Set(deckRowPos), realHoldRows=new Set(holdRowPos);
+      const realDeckTiers=new Set(deckTiers), realHoldTiers=new Set(holdTiers);
+      for(const c of Object.values(cells)){
+        const t=parseInt(c.tier,10);
+        if(t>=80){ realDeckTiers.add(t); realDeckRows.add(c.row); }
+        else { realHoldTiers.add(t); realHoldRows.add(c.row); }
+      }
+      const sortRows=set=>{
+        const arr=[...set];
+        const ev=arr.filter(r=>parseInt(r,10)%2===0&&r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
+        const ze=arr.filter(r=>r==='00');
+        const od=arr.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
+        return [...ev,...ze,...od];
+      };
+      deckTiers=[...realDeckTiers].sort((a,b)=>b-a);
+      holdTiers=[...realHoldTiers].sort((a,b)=>b-a);
+      deckRowPos=sortRows(realDeckRows);
+      holdRowPos=sortRows(realHoldRows);
+    } else {
+      // 폴백: 컨테이너로 추정
+      const tiers=[...new Set(Object.values(cells).map(c=>parseInt(c.tier,10)))].sort((a,b)=>b-a);
+      const rowsSet=[...new Set(Object.values(cells).map(c=>c.row))];
+      const evens=rowsSet.filter(r=>parseInt(r,10)%2===0 && r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
+      const zero=rowsSet.filter(r=>r==='00');
+      const odds=rowsSet.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
+      const ro=[...evens,...zero,...odds];
+      deckTiers=tiers.filter(t=>t>=80); holdTiers=tiers.filter(t=>t<80);
+      deckRowPos=ro; holdRowPos=ro;
+    }
 
     const cnt={d:0,l:0};
     Object.values(cells).forEach(c=>{ if(c.d)cnt.d++; if(c.l)cnt.l++; });
@@ -1057,18 +1162,18 @@ function renderBayView(){
         +`</div></td>`;
     };
 
-    const grid=(tierList, flag)=>{
-      if(!tierList.length) return '';
+    const grid=(tierList, flag, rowPos)=>{
+      if(!tierList.length || !rowPos.length) return '';
       let head='<tr><td class="bv-tl"></td>';
-      for(const r of rowOrder) head+=`<td class="bv-rl">${r}</td>`;
+      for(const r of rowPos) head+=`<td class="bv-rl">${r}</td>`;
       head+='</tr>';
       let g='<table class="bv-tab box"><tbody>'+head;
       for(const t of tierList){
         const tk=String(t).padStart(2,'0');
         g+=`<tr><td class="bv-tl">${tk}</td>`;
-        for(const r of rowOrder){
+        for(const r of rowPos){
           const c=cells[r+'_'+tk];
-          if(!c){ g+='<td class="bv-slot"></td>'; continue; }
+          if(!c){ g+='<td class="bv-slot"></td>'; continue; }  // 빈 슬롯 (골격엔 있으나 컨테이너 없음)
           g+=boxCell(c,flag);
         }
         g+='</tr>';
@@ -1078,8 +1183,8 @@ function renderBayView(){
     };
     const panel=(flag,label,count)=>{
       let p=`<div class="bv-col"><div class="bv-colhd ${flag}">${label} <span class="bv-cnt">${count}대</span></div>`;
-      if(deckTiers.length){ p+=`<div class="bv-sec">갑판</div>${grid(deckTiers,flag)}`; }
-      if(holdTiers.length){ p+=`<div class="bv-sec">선창</div>${grid(holdTiers,flag)}`; }
+      if(deckTiers.length){ p+=`<div class="bv-sec">갑판</div>${grid(deckTiers,flag,deckRowPos)}`; }
+      if(holdTiers.length){ p+=`<div class="bv-sec">선창</div>${grid(holdTiers,flag,holdRowPos)}`; }
       p+='</div>';
       return p;
     };
@@ -1106,7 +1211,7 @@ function renderResults(groups){
     const g=groups[k];
     const sd=distribute(g.stow), dd=distribute(g.disch);
     return {
-      bay:k,
+      bay:(g.labels&&g.labels.length?g.labels.join(','):String(k)),
       deck:{need:sd.deckPer, have:dd.deckPer, diff:sd.deckPer-dd.deckPer},
       ele:{need:sd.elePer, have:dd.elePer, diff:sd.elePer-dd.elePer},
       hold:{need:g.stow.hold*2, have:g.disch.hold*2, diff:g.stow.hold*2-g.disch.hold*2},
