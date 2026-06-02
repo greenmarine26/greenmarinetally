@@ -241,7 +241,7 @@ export default function App() {
       </main>
 
       <footer className="text-center text-[11px] text-slate-600 pb-24 pt-4 leading-relaxed">
-        © 2026 (주)그린마린(Green Marine) · 개발 연지아빠<br/>
+        © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
         <span className="opacity-70">{APP_VERSION}</span>
       </footer>
 
