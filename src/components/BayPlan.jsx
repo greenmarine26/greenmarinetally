@@ -1164,6 +1164,29 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     }
   }, [page.evenBay, page.oddBay, dictBaysSummary, pageRange, allContainers]);
 
+  // 좌표 기반 레이아웃: 데크/홀드를 하나의 통합 row 좌표축에 배치.
+  //   각 셀이 자기 (row, tier) 자리에 독립 위치 → 빈칸이 옆을 안 밀고, 데크/홀드 같은 row가 세로 정렬, 00 제자리.
+  const pageCoordLayout = useMemo(() => {
+    if (!pageMatrixRender) return null;
+    const deckRows = pageMatrixRender.deckRows.filter(r => !r.invisible);
+    const holdRows = pageMatrixRender.holdRows.filter(r => !r.invisible);
+    // 통합 row 축: 모든 active row 라벨 수집 → 짝수 큰→작, 00, 홀수 작→큰
+    const allRows = new Set();
+    deckRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) allRows.add(c.rowLbl); }));
+    holdRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) allRows.add(c.rowLbl); }));
+    const evens = [...allRows].filter(r => r !== '00' && parseInt(r, 10) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
+    const odds = [...allRows].filter(r => r !== '00' && parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
+    const axis = [...evens, ...(allRows.has('00') ? ['00'] : []), ...odds];
+    const rowX = {}; axis.forEach((r, i) => { rowX[r] = i; });
+    // tier 축: 데크(위) → 홀드(아래)
+    const tierList = [
+      ...deckRows.map(r => ({ tier: r.tier, zone: 'deck', cells: r.cells })),
+      ...holdRows.map(r => ({ tier: r.tier, zone: 'hold', cells: r.cells })),
+    ];
+    const nDeck = deckRows.length;
+    return { axis, rowX, tierList, nDeck, nCols: axis.length };
+  }, [pageMatrixRender]);
+
   //   N=8 hasZero=false → [08,06,04,02,01,03,05,07]
   const buildGridRowsFromCells = (cells, hasZero) => {
     if (!cells || cells === 0) return [];
@@ -1537,32 +1560,72 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         {page.title}
       </div>
 
-      {/* DECK */}
+      {pageCoordLayout ? (() => {
+        // ── 좌표 기반 렌더: 각 셀이 통합 row축의 자기 자리에 독립 배치 ──
+        const { axis, rowX, tierList, nDeck, nCols } = pageCoordLayout;
+        const LBL = 24;                       // 좌우 tier 라벨 폭
+        const gridW = nCols * (cellW + 2);     // gap 2px
+        const rowH = cellH + 2;
+        // 해치 수
+        let hc = 1;
+        for (const bn of [page.evenBay, page.oddBay]) {
+          if (bn == null) continue;
+          const db = dictBaysSummary[parseInt(bn, 10)];
+          if (db?.hatchCount) { hc = Math.max(1, Math.min(3, db.hatchCount)); break; }
+        }
+        const HATCH = 10;                      // 해치 구분 높이
+        const deckH = nDeck * rowH;
+        const holdH = (tierList.length - nDeck) * rowH;
+        const totalH = deckH + (holdH > 0 ? HATCH + holdH : 0);
+        const cellAt = (ti) => ti < nDeck ? ti * rowH : deckH + HATCH + (ti - nDeck) * rowH;
+        return (
+          <div>
+            <div className="text-[10px] text-cyan-400 mb-0.5 font-bold">⬆ DECK / ⬇ HOLD</div>
+            {/* 상단 row 라벨 */}
+            <div style={{ position: 'relative', height: 12, marginLeft: LBL, width: gridW }}>
+              {axis.map((r, i) => (
+                <div key={`hl-${i}`} style={{ position: 'absolute', left: i * (cellW + 2), width: cellW, textAlign: 'center', fontSize: 9, fontWeight: 'bold' }} className="text-slate-500 mono">{r}</div>
+              ))}
+            </div>
+            {/* 좌표 평면 */}
+            <div style={{ position: 'relative', height: totalH, marginLeft: LBL, width: gridW }}>
+              {/* 해치 구분선 (데크/홀드 사이) */}
+              {holdH > 0 && (
+                <div style={{ position: 'absolute', top: deckH + HATCH / 2 - 2, left: 0, width: gridW, display: 'flex', gap: 6 }}>
+                  {Array.from({ length: hc }).map((_, i) => <div key={i} className="border-t-4 border-slate-100" style={{ flex: 1 }} />)}
+                </div>
+              )}
+              {/* tier 라벨 (좌우) + 셀 */}
+              {tierList.map((tr, ti) => {
+                const y = cellAt(ti);
+                return (
+                  <React.Fragment key={`tr-${ti}`}>
+                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: cellH, textAlign: 'right', fontSize: 9, lineHeight: `${cellH}px` }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: cellH, fontSize: 9, lineHeight: `${cellH}px` }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    {tr.cells.filter(c => c.active && c.rowLbl != null).map((c) => (
+                      <div key={`c-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: rowX[c.rowLbl] * (cellW + 2), top: y, width: cellW, height: cellH }}>
+                        {renderCell(c.rowLbl, String(tr.tier).padStart(2, '0'))}
+                      </div>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })() : (<>
+      {/* DECK (기존 flex 폴백) */}
       <div>
         <div className="text-[10px] text-cyan-400 mb-0.5 font-bold">⬆ DECK</div>
         <div className="flex gap-0.5 mb-0.5 justify-center">
           <div style={{ width: 24 }}></div>
-          {(pageMatrixRender ? pageMatrixRender.deckRowPos : deckHeaderRowsArr).map((row, idx) => (
+          {deckHeaderRowsArr.map((row, idx) => (
             <div key={`dh-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
           <div style={{ width: 24 }}></div>
         </div>
-        {pageMatrixRender
-          ? pageMatrixRender.deckRows.filter(dr => !dr.invisible).map((dr, ti) => (
-            <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
-              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{dr.tier}</div>
-              {dr.cells.map((cell, ri) => (
-                <React.Fragment key={`d-${ti}-${ri}`}>
-                  {cell.active
-                    ? renderCell(cell.rowLbl, String(dr.tier).padStart(2, '0'))
-                    : <div className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />}
-                </React.Fragment>
-              ))}
-              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{dr.tier}</div>
-            </div>
-          ))
-          : deckTiersPadded.map((tier, ti) => (
+        {deckTiersPadded.map((tier, ti) => (
           <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {deckRowsArr.map((row, ri) => (
@@ -1573,7 +1636,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         ))}
       </div>
 
-      {/* 해치커버 — M6.94.13: 해치 수만큼 굵은선 등분 */}
+      {/* 해치커버 */}
       {(() => {
         let hc = 1;
         for (const bn of [page.evenBay, page.oddBay]) {
@@ -1590,24 +1653,10 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         );
       })()}
 
-      {/* HOLD */}
+      {/* HOLD (기존 flex 폴백) */}
       <div>
         <div className="text-[10px] text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
-        {pageMatrixRender
-          ? pageMatrixRender.holdRows.filter(hr => !hr.invisible).map((hr, ti) => (
-            <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
-              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{hr.tier}</div>
-              {hr.cells.map((cell, ri) => (
-                <React.Fragment key={`h-${ti}-${ri}`}>
-                  {cell.active
-                    ? renderCell(cell.rowLbl, String(hr.tier).padStart(2, '0'))
-                    : <div className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />}
-                </React.Fragment>
-              ))}
-              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{hr.tier}</div>
-            </div>
-          ))
-          : holdTiersPadded.map((tier, ti) => (
+        {holdTiersPadded.map((tier, ti) => (
           <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {holdRowsArr.map((row, ri) => (
@@ -1618,13 +1667,14 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         ))}
         <div className="flex gap-0.5 mt-0.5 justify-center">
           <div style={{ width: 24 }}></div>
-          {(pageMatrixRender ? pageMatrixRender.holdRowPos : holdHeaderRowsArr).map((row, idx) => (
+          {holdHeaderRowsArr.map((row, idx) => (
             <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
           <div style={{ width: 24 }}></div>
         </div>
       </div>
+      </>)}
     </div>
   );
 }

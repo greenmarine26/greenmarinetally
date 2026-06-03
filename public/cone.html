@@ -194,6 +194,9 @@
   .ctab td{border:1px solid var(--line); text-align:center; padding:7px 4px; vertical-align:middle;}
   .ctab .bay-c{font-size:19px; font-weight:800; background:var(--panel2);}
   .ctab .big{display:block; font-size:21px; font-weight:800; line-height:1.1;}
+  .ctab .total{display:block; font-size:13px; font-weight:700; line-height:1.2; margin-top:1px;}
+  .ctab .add-c .total{color:var(--add);}
+  .ctab .rem-c .total{color:var(--rem);}
   .ctab .sub{display:block; font-size:10px; color:var(--dim);}
   .ctab .add-c .big{color:var(--add);}
   .ctab .rem-c .big{color:var(--rem);}
@@ -1999,11 +2002,11 @@ function renderResults(groups){
   for(const r of rows){
     html+=`<tr>
       <td class="bay-c">${r.bay}</td>
-      ${cell(r.deck)}${cell(r.ele)}${cell(r.hold)}
+      ${cell(r.deck,4)}${cell(r.ele,2)}${cell(r.hold,1)}
     </tr>`;
   }
   html+=`</tbody></table>
-    <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span></div>
+    <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span> · <span style="color:#888">큰숫자=곳당, (괄호)=총개수</span></div>
   </div>
   <div class="row" style="margin-bottom:14px">
     <button class="btn-share" id="btnImg">📷 이미지 저장</button>
@@ -2015,21 +2018,29 @@ function renderResults(groups){
   document.getElementById('btnTxt').onclick=()=>copyText(rows,shipLabel,today);
 }
 
-function cell(c){
+// perCount: 곳수 (데크콘 4곳, 코끼리콘 2곳, 홀드콘 1곳=중간). 총개수 = 곳당 × 곳수.
+function cell(c, perCount){
   if(c.need===0&&c.have===0) return '<td class="keep-c">·</td>';
   let cls,txt;
   if(c.diff>0){cls='add';txt='+'+c.diff;}
   else if(c.diff<0){cls='rem';txt='−'+(-c.diff);}
   else {cls='keep';txt='0';}
-  return `<td class="${cls}-c"><span class="big">${txt}</span><span class="sub">${c.have}→${c.need}</span></td>`;
+  // 총개수: 곳당 diff × 곳수 (추가/반납 총량)
+  const totalDiff = c.diff * (perCount||1);
+  const totalTxt = totalDiff>0?`총 +${totalDiff}개`:totalDiff<0?`총 −${-totalDiff}개`:'';
+  return `<td class="${cls}-c"><span class="big">${txt}</span>${totalTxt?`<span class="total">${totalTxt}</span>`:''}<span class="sub">${c.have}→${c.need}</span></td>`;
 }
 
 function copyText(rows,ship,today){
   let t=`[콘 작업표] ${ship} ${today}\n`;
-  t+=`(콘: 데크/코끼리/홀드, +추가 −반납)\n`;
+  t+=`(콘: 데크/코끼리/홀드, +추가 −반납, 곳당 → 총개수)\n`;
   for(const r of rows){
-    const f=(c)=> c.diff>0?`+${c.diff}`:c.diff<0?`-${-c.diff}`:'0';
-    t+=`${r.bay}번: 데크${f(r.deck)} 코끼리${f(r.ele)} 홀드${f(r.hold)}\n`;
+    const f=(c,per)=>{
+      if(c.diff===0) return '0';
+      const sign=c.diff>0?'+':'−', v=Math.abs(c.diff), tot=v*per;
+      return `${sign}${v}(총${sign}${tot})`;
+    };
+    t+=`${r.bay}번: 데크${f(r.deck,4)} 코끼리${f(r.ele,2)} 홀드${f(r.hold,1)}\n`;
   }
   navigator.clipboard.writeText(t).then(()=>alert('복사됐습니다. 카톡에 붙여넣으세요.'),
     ()=>{ prompt('아래를 복사하세요:',t); });
@@ -2037,7 +2048,7 @@ function copyText(rows,ship,today){
 
 function saveImage(rows,ship,today){
   // 캔버스에 표를 그려 PNG로 저장
-  const W=720, rowH=54, headH=120, foot=40;
+  const W=720, rowH=64, headH=120, foot=40;
   const H=headH + rows.length*rowH + foot;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const x=cv.getContext('2d');
@@ -2057,29 +2068,32 @@ function saveImage(rows,ship,today){
   rows.forEach((r,i)=>{
     x.fillStyle = i%2? '#f4f7fa':'#ffffff'; x.fillRect(0,y,W,rowH);
     x.fillStyle='#0f1419'; x.font='bold 22px sans-serif';
-    x.fillText(r.bay+'번', 32, y+34);
-    drawCell(x, r.deck, 130, y, rowH);
-    drawCell(x, r.ele, 330, y, rowH);
-    drawCell(x, r.hold, 530, y, rowH);
+    x.fillText(r.bay+'번', 32, y+38);
+    drawCell(x, r.deck, 130, y, rowH, 4);
+    drawCell(x, r.ele, 330, y, rowH, 2);
+    drawCell(x, r.hold, 530, y, rowH, 1);
     x.strokeStyle='#dde3ea'; x.beginPath(); x.moveTo(0,y+rowH); x.lineTo(W,y+rowH); x.stroke();
     y+=rowH;
   });
   x.fillStyle='#888'; x.font='13px sans-serif';
-  x.fillText('+추가  −반납  ·그대로   |  콘 작업 전 반드시 확인', 24, y+26);
+  x.fillText('+추가  −반납  ·그대로  (큰=곳당, 총=총개수)  |  콘 작업 전 반드시 확인', 24, y+26);
   // 다운로드
   const url=cv.toDataURL('image/png');
   const a=document.createElement('a');
   a.href=url; a.download=`콘작업표_${ship}_${today}.png`.replace(/[\\/:*?"<>|]/g,'_');
   a.click();
 }
-function drawCell(x,c,cx,y,rowH){
-  if(c.need===0&&c.have===0){ x.fillStyle='#bbb'; x.font='20px sans-serif'; x.fillText('·',cx+8,y+34); return; }
+function drawCell(x,c,cx,y,rowH,perCount){
+  if(c.need===0&&c.have===0){ x.fillStyle='#bbb'; x.font='20px sans-serif'; x.fillText('·',cx+8,y+38); return; }
   let col, txt;
   if(c.diff>0){col='#1a9c5b'; txt='+'+c.diff;}
   else if(c.diff<0){col='#d83a3a'; txt='−'+(-c.diff);}
   else {col='#888'; txt='0';}
-  x.fillStyle=col; x.font='bold 24px sans-serif'; x.fillText(txt, cx+8, y+30);
-  x.fillStyle='#999'; x.font='13px sans-serif'; x.fillText(`${c.have}→${c.need}`, cx+8, y+48);
+  x.fillStyle=col; x.font='bold 23px sans-serif'; x.fillText(txt, cx+8, y+26);
+  // 총개수 (곳당 × 곳수)
+  const per=perCount||1, tot=c.diff*per;
+  if(tot!==0){ x.fillStyle=col; x.font='bold 15px sans-serif'; x.fillText(`총 ${tot>0?'+':'−'}${Math.abs(tot)}개`, cx+8, y+44); }
+  x.fillStyle='#999'; x.font='12px sans-serif'; x.fillText(`${c.have}→${c.need}`, cx+8, y+58);
 }
 
 // ============ 선박 설정 저장 (localStorage) ============
