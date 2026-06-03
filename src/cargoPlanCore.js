@@ -544,13 +544,12 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   // 미리보기(buildEmptyBayRenderData)와 동일 계산 → 두 화면 일치.
   const _deckCellsMax = deckCells.map(Number).filter(v => v > 0).length ? Math.max(...deckCells.map(Number).filter(v => v > 0)) : deckRowMax;
   const _holdCellsMax = holdCells.map(Number).filter(v => v > 0).length ? Math.max(...holdCells.map(Number).filter(v => v > 0)) : holdRowMax;
-  // 베이플랜(buildEmptyBayRenderData)과 폭 계산 통일: nCols = cells_max + (has00 ? 1 : 0).
-  //   cells는 00 제외 개수. has00이면 00칸 1개 추가 → 양끝 row 안 빠짐, 00 가운데 정렬.
-  const nDeckCols = (_deckCellsMax > 0 ? _deckCellsMax : 0) + (deckHasZero ? 1 : 0);
-  const nHoldColsRaw = (_holdCellsMax > 0 ? _holdCellsMax : 0) + (holdHasZero ? 1 : 0);
-  const deckRowPos = getRowPositions(nDeckCols, deckHasZero);
-  const holdRowPos = getRowPositions(nHoldColsRaw, holdHasZero);
-  const nHoldCols = Math.min(nHoldColsRaw, nDeckCols);
+  // V7.01 원본 방식 복원: cells_max가 곧 최종 폭(00 포함). +1 중복 금지(셀 늘어남 회귀).
+  //   데크/홀드 hasZero만 따로 적용.
+  const deckRowPos = getRowPositions(_deckCellsMax, deckHasZero);
+  const holdRowPos = getRowPositions(_holdCellsMax, holdHasZero);
+  const nDeckCols = deckRowPos.length;
+  const nHoldCols = Math.min(holdRowPos.length, nDeckCols);
 
   const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
 
@@ -559,8 +558,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     if (deckTiers.includes(stdT)) {
       const idx = deckTiers.indexOf(stdT);
       const cc = idx < deckCells.length ? deckCells[idx] : 0;
-      const ccEff = deckHasZero ? (cc > 0 ? cc + 1 : 1) : cc;
-      const activeSet = getActiveColsSymmetric(ccEff, nDeckCols);
+      const activeSet = getActiveColsSymmetric(cc, nDeckCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
@@ -592,8 +590,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     if (holdTiers.includes(stdT)) {
       const idx = holdTiers.indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
-      const ccEff = holdHasZero ? (cc > 0 ? cc + 1 : 1) : cc;
-      const activeInHold = getActiveColsSymmetric(ccEff, nHoldCols);
+      const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
