@@ -334,6 +334,63 @@ function findSeriesSubstitute(code, ediBayCount) {
   return candidates[0];
 }
 
+// V7.01: 같은 배가 여러 벌(빈 깡통 + 알맹이, 또는 구조 다른 알맹이 둘) 저장된 경우,
+//   EDI 실제 베이 수와 가장 가까운 알맹이 벌을 고른다. (사용자 확인: EDI 베이수 가까운 게 맞음)
+//   매칭된 result가 빈 깡통이거나 베이 수가 EDI와 동떨어진 경우, 더 나은 벌로 교체.
+//   같은 배 판정: IMO / 콜사인 / 정규화 선박명 일치.
+function _normShip(s) { return String(s || '').toUpperCase().replace(/\s+/g, ''); }
+function pickBestVariant(matchedData, imo, ediBayCount) {
+  if (!matchedData) return null;
+  const target = Number.isFinite(ediBayCount) && ediBayCount > 0 ? ediBayCount : null;
+  if (target == null) return matchedData; // EDI 베이수 모르면 기존 매칭 유지
+
+  const imoU = _normShip(imo);
+  const csU = _normShip(matchedData.callsign);
+  const nameU = _normShip(matchedData.name);
+  const codeU = _normShip(matchedData.code);
+
+  const sameShip = (e) => {
+    if (!e) return false;
+    if (imoU && _normShip(e.imo) === imoU) return true;
+    if (csU && _normShip(e.callsign) === csU) return true;
+    if (codeU && _normShip(e.code) === codeU) return true;
+    if (nameU && nameU.length >= 4) {
+      const en = _normShip(e.name);
+      if (en && (en === nameU || en.startsWith(nameU) || nameU.startsWith(en))) return true;
+    }
+    return false;
+  };
+
+  // 후보 수집: localStorage + Firebase
+  const pools = [];
+  try { pools.push(loadUserBayDict() || {}); } catch (e) { /* skip */ }
+  try { if (typeof window !== 'undefined' && window.__fbShipBayDict) pools.push(window.__fbShipBayDict); } catch (e) { /* skip */ }
+
+  const variants = [];
+  for (const pool of pools) {
+    for (const k of Object.keys(pool)) {
+      const e = pool[k];
+      if (!sameShip(e)) continue;
+      const cnt = _realBayCount(e);
+      if (cnt <= 0) continue; // 빈 깡통 제외
+      variants.push({ entry: e, bayCount: cnt });
+    }
+  }
+  // 현재 매칭된 것도 후보에 포함 (알맹이면)
+  const matchedCnt = _realBayCount(matchedData);
+  if (matchedCnt > 0) variants.push({ entry: matchedData, bayCount: matchedCnt });
+
+  if (variants.length === 0) return matchedData; // 알맹이 후보 없음 → 기존 유지
+
+  // EDI 베이수에 가장 가까운 것 (동률이면 베이 많은 쪽)
+  variants.sort((a, b) => {
+    const da = Math.abs(a.bayCount - target), db = Math.abs(b.bayCount - target);
+    if (da !== db) return da - db;
+    return b.bayCount - a.bayCount;
+  });
+  return variants[0].entry;
+}
+
 export function getShipBayDictData(imo, code, opts) {
   let result = fuzzyLookupAcrossDicts(imo, code);
   let _substituted = null;
@@ -351,7 +408,23 @@ export function getShipBayDictData(imo, code, opts) {
     _substituted = { fromCode: String(code || '').toUpperCase(), usedCode: sub.code, usedName: sub.name, bayCount: sub.bayCount };
   }
 
-  const data = result.data;
+  let data = result.data;
+
+  // V7.01: 같은 배가 여러 벌(빈 깡통/구조 다른 중복)이면 EDI 베이수 가까운 알맹이 벌로 보정.
+  //   계열 대체(_substituted)는 이미 베이수로 골랐으므로 제외.
+  if (!_substituted) {
+    const ediBayCount = opts && Number.isFinite(opts.ediBayCount) ? opts.ediBayCount : null;
+    if (ediBayCount != null) {
+      const better = pickBestVariant(data, imo, ediBayCount);
+      if (better && better !== data) {
+        data = better;
+        // 보정된 벌의 source 반영 (user 데이터 보호 판정 정확하게)
+        if (better.bayDef?.source) result.source = better.bayDef.source;
+        else if (better.bayDef?._userOwned) result.source = 'user';
+        result.matchedBy = (result.matchedBy || '') + '+best-variant';
+      }
+    }
+  }
 
   // user / v1 / v2 사전 형식이 약간 다름 — 정규화해서 반환
   const bayDef = data.bayDef || {};
