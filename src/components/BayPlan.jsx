@@ -17,7 +17,7 @@ import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
-import { getActiveColsSymmetric } from '../cargoPlanCore.js';
+import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
@@ -1052,36 +1052,19 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     let deckPadLeft = 0, deckPadRight = 0;
     let holdPadLeft = 0, holdPadRight = 0;
     let foundAny = false;
-    // 티어별 cells 맵 (단면 구조: tier번호 → 그 tier의 cells 수). 여러 베이면 같은 tier는 max.
-    const deckCellsByTier = {}, holdCellsByTier = {};
 
     bays.forEach(bn => {
       const db = dictBaysSummary[parseInt(bn, 10)];
       if (!db) return;
       foundAny = true;
-      // tier별 cells 중 max (가장 넓은 tier의 폭) — 그리드 전체 폭 결정용
+      // tier별 cells 중 max (가장 넓은 tier의 폭)
       if (Array.isArray(db.deckCells) && db.deckCells.length > 0) {
         const mDeck = Math.max(...db.deckCells.map(n => parseInt(n) || 0));
         if (mDeck > deckMaxCells) deckMaxCells = mDeck;
-        // 티어별 cells 보존 (deckTiers[i] ↔ deckCells[i])
-        if (Array.isArray(db.deckTiers)) {
-          db.deckTiers.forEach((t, i) => {
-            const tk = String(t).padStart(2, '0');
-            const cc = parseInt(db.deckCells[i]) || 0;
-            if (cc > (deckCellsByTier[tk] || 0)) deckCellsByTier[tk] = cc;
-          });
-        }
       }
       if (Array.isArray(db.holdCells) && db.holdCells.length > 0) {
         const mHold = Math.max(...db.holdCells.map(n => parseInt(n) || 0));
         if (mHold > holdMaxCells) holdMaxCells = mHold;
-        if (Array.isArray(db.holdTiers)) {
-          db.holdTiers.forEach((t, i) => {
-            const tk = String(t).padStart(2, '0');
-            const cc = parseInt(db.holdCells[i]) || 0;
-            if (cc > (holdCellsByTier[tk] || 0)) holdCellsByTier[tk] = cc;
-          });
-        }
       }
       // rowCount/hasZero (베이 통일 값) — fallback
       if (typeof db.rowCount === 'number' && db.rowCount > pageRowCount) {
@@ -1107,15 +1090,36 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       hasZero: pageHasZero,
       deckCells: deckMaxCells || gridCells,
       holdCells: holdMaxCells || gridCells,
-      deckCellsByTier, holdCellsByTier,   // 티어별 단면 cells (없으면 빈 객체 → 기존 동작)
       deckAlign, holdAlign,
       deckPadLeft, deckPadRight,
       holdPadLeft, holdPadRight,
     };
   }, [page.evenBay, page.oddBay, dictBaysSummary]);
 
-  // cells 수 → row 번호 배열 (좌측 짝수 + 00? + 우측 홀수)
-  //   N=9 hasZero=true → [08,06,04,02,00,01,03,05,07]
+  // ── 매트릭스(베이매트릭스 빌더)와 100% 동일한 단면 렌더 데이터 ──────────
+  //   베이플랜이 자체 계산하지 않고, 매트릭스가 쓰는 buildEmptyBayRenderData를 그대로 호출.
+  //   "각 선박은 자기 베이매트릭스를 갖고 있고, 베이플랜은 그걸 갖다 쓰기만 한다."
+  //   → 매트릭스 미리보기와 베이플랜이 항상 일치. 컨테이너는 active 셀(rowLbl)에 좌표대로 들어감.
+  const pageMatrixRender = useMemo(() => {
+    const evenBn = page.evenBay != null ? parseInt(page.evenBay, 10) : null;
+    const oddBn = page.oddBay != null ? parseInt(page.oddBay, 10) : null;
+    // 대표 베이 entry: 짝수 우선(페어 대표), 없으면 홀수. 매트릭스 byBay와 같은 baysSummary entry.
+    const primaryBn = evenBn != null ? evenBn : oddBn;
+    if (primaryBn == null) return null;
+    const entry = dictBaysSummary[primaryBn];
+    if (!entry) return null;
+    // 페어 여부: 짝수+홀수 둘 다 있으면 pair (매트릭스 bayKey 형식과 동일)
+    const isPair = evenBn != null && oddBn != null;
+    const bayKey = isPair
+      ? `(${String(evenBn).padStart(2, '0')})${String(oddBn).padStart(2, '0')}`
+      : String(primaryBn).padStart(2, '0');
+    try {
+      return buildEmptyBayRenderData(entry, bayKey, isPair);
+    } catch (e) {
+      return null;
+    }
+  }, [page.evenBay, page.oddBay, dictBaysSummary]);
+
   //   N=8 hasZero=false → [08,06,04,02,01,03,05,07]
   const buildGridRowsFromCells = (cells, hasZero) => {
     if (!cells || cells === 0) return [];
@@ -1243,33 +1247,6 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const tierMax = Math.max(deckTiers.length, holdTiers.length);
   const deckTiersPadded = [...Array(tierMax - deckTiers.length).fill(null), ...deckTiers];
   const holdTiersPadded = [...holdTiers, ...Array(tierMax - holdTiers.length).fill(null)];
-
-  // ── 티어별 단면(cells) 적용 ──────────────────────────────
-  //   기본 구조는 베이매트릭스(빌더) 그대로: 각 tier의 cells 수만큼만 가운데 보이게(나머지 invisible).
-  //   컨테이너는 좌표(row/tier)대로 renderCell이 찍음 — 구조만 cells로 한정.
-  //   cells 정보 없으면(빈 객체) null 반환 → 기존 동작(전 폭) 유지 (회귀 없음).
-  //   rowsArr: 그 영역(deck/hold)의 row 배열, cellsByTier: tier→cells맵, tier: 현재 tier
-  const tierActiveRows = (rowsArr, cellsByTier, tier) => {
-    if (!tier || !cellsByTier) return null;
-    const tk = String(tier).padStart(2, '0');
-    const cc = cellsByTier[tk];
-    if (cc == null) return null;                 // 이 tier에 cells 정보 없음 → 전 폭
-    // rowsArr(null 포함 가능)에서 실제 row만 추출 → cells 폭만큼 가운데 active
-    const realRows = rowsArr.filter(r => r != null);
-    const active = getActiveColsSymmetric(cc, realRows.length); // Set<index>
-    const activeSet = new Set();
-    let idx = 0;
-    for (const r of realRows) { if (active.has(idx)) activeSet.add(r); idx++; }
-    return activeSet;                            // 이 tier에서 보일 row 집합
-  };
-  // 단면 적용 렌더: active 아닌 row는 invisible(자리 유지), active면 평소대로 renderCell
-  const renderCellSection = (row, tier, activeSet) => {
-    if (row && tier && activeSet && !activeSet.has(row)) {
-      // 단면 밖: 자리만 차지하고 안 보임 (배 외곽 단면 모양)
-      return <div className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />;
-    }
-    return renderCell(row, tier);
-  };
 
   // M4.9f 5단계: pendingMove 타겟 베이 결정
   //   원본 베이가 짝수면 페이지의 evenBay로, 홀수면 oddBay로 (같은 종류 슬롯 보장)
@@ -1522,24 +1499,35 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         <div className="flex gap-0.5 mb-0.5 justify-center">
           <div style={{ width: 24 }}></div>
           {/* M6.94.1: 헤더는 그리드 풀폭 (사전 있으면) — row 번호 항상 표시 */}
-          {deckHeaderRowsArr.map((row, idx) => (
+          {(pageMatrixRender ? pageMatrixRender.deckRowPos : deckHeaderRowsArr).map((row, idx) => (
             <div key={`dh-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
           <div style={{ width: 24 }}></div>
         </div>
-        {deckTiersPadded.map((tier, ti) => {
-          const activeSet = tierActiveRows(deckRowsArr, pageBayDictGrid?.deckCellsByTier, tier);
-          return (
+        {pageMatrixRender
+          ? pageMatrixRender.deckRows.filter(dr => !dr.invisible).map((dr, ti) => (
+            <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
+              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{dr.tier}</div>
+              {dr.cells.map((cell, ri) => (
+                <React.Fragment key={`d-${ti}-${ri}`}>
+                  {cell.active
+                    ? renderCell(cell.rowLbl, String(dr.tier).padStart(2, '0'))
+                    : <div className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />}
+                </React.Fragment>
+              ))}
+              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{dr.tier}</div>
+            </div>
+          ))
+          : deckTiersPadded.map((tier, ti) => (
           <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {deckRowsArr.map((row, ri) => (
-              <React.Fragment key={`d-${ti}-${ri}`}>{renderCellSection(row, tier, activeSet)}</React.Fragment>
+              <React.Fragment key={`d-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
             ))}
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
           </div>
-          );
-        })}
+        ))}
       </div>
 
       {/* 해치커버 — M6.94.13: 해치 수만큼 굵은선 등분 */}
@@ -1562,22 +1550,56 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       {/* HOLD */}
       <div>
         <div className="text-[10px] text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
-        {holdTiersPadded.map((tier, ti) => {
-          const activeSet = tierActiveRows(holdRowsArr, pageBayDictGrid?.holdCellsByTier, tier);
-          return (
+        {pageMatrixRender
+          ? (() => {
+              // 홀드는 데크보다 좁을 수 있음 → 데크 폭(nDeckCols) 기준 가운데 정렬 (좌우 패딩)
+              const nD = pageMatrixRender.nDeckCols, nH = pageMatrixRender.nHoldCols;
+              const padL = Math.floor((nD - nH) / 2), padR = (nD - nH) - padL;
+              return pageMatrixRender.holdRows.filter(hr => !hr.invisible).map((hr, ti) => (
+                <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
+                  <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{hr.tier}</div>
+                  {Array.from({ length: padL }).map((_, i) => (
+                    <div key={`hpl-${ti}-${i}`} className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />
+                  ))}
+                  {hr.cells.map((cell, ri) => (
+                    <React.Fragment key={`h-${ti}-${ri}`}>
+                      {cell.active
+                        ? renderCell(cell.rowLbl, String(hr.tier).padStart(2, '0'))
+                        : <div className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />}
+                    </React.Fragment>
+                  ))}
+                  {Array.from({ length: padR }).map((_, i) => (
+                    <div key={`hpr-${ti}-${i}`} className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />
+                  ))}
+                  <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{hr.tier}</div>
+                </div>
+              ));
+            })()
+          : holdTiersPadded.map((tier, ti) => (
           <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {holdRowsArr.map((row, ri) => (
-              <React.Fragment key={`h-${ti}-${ri}`}>{renderCellSection(row, tier, activeSet)}</React.Fragment>
+              <React.Fragment key={`h-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
             ))}
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
           </div>
-          );
-        })}
+        ))}
         <div className="flex gap-0.5 mt-0.5 justify-center">
           <div style={{ width: 24 }}></div>
           {/* M6.94.1: 헤더는 그리드 풀폭 (사전 있으면) — row 번호 항상 표시 */}
-          {holdHeaderRowsArr.map((row, idx) => (
+          {pageMatrixRender
+            ? (() => {
+                const nD = pageMatrixRender.nDeckCols, nH = pageMatrixRender.nHoldCols;
+                const padL = Math.floor((nD - nH) / 2), padR = (nD - nH) - padL;
+                return [
+                  ...Array.from({ length: padL }).map((_, i) => <div key={`hbl-${i}`} className="flex-shrink-0" style={{ width: cellW }} />),
+                  ...pageMatrixRender.holdRowPos.map((row, idx) => (
+                    <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0" style={{ width: cellW }}>{row || ''}</div>
+                  )),
+                  ...Array.from({ length: padR }).map((_, i) => <div key={`hbr-${i}`} className="flex-shrink-0" style={{ width: cellW }} />),
+                ];
+              })()
+            : holdHeaderRowsArr.map((row, idx) => (
             <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
