@@ -40,6 +40,8 @@ npx vite build
 echo "[5/6] dist → root 복사 (assets + index.html 모두)..."
 cp -r dist/assets ./
 cp dist/index.html ./
+# 콘앱(독립 파일): dist의 cone.html을 루트로 복사 (Pages가 루트 서빙). 검수앱과 무관.
+[ -f dist/cone.html ] && cp dist/cone.html ./
 
 echo "[6/6] 검증..."
 JSFILE=$(ls assets/index-*.js 2>/dev/null | head -1)

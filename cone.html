@@ -390,9 +390,15 @@ function parsePositions(text){
 }
 
 // EDI rows → deck/hold tiers (콘엔진 입력). 베이그룹 합본은 결과 단계에서.
-function ediToBayGroups(rows, shipType, multiCount){
-  const filled=new Set(rows.map(r=>parseInt(r.bay,10)+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0')));
-  const existBays=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
+function ediToBayGroups(rows, shipType, multiCount, ctx){
+  const filledSelf=new Set(rows.map(r=>parseInt(r.bay,10)+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0')));
+  const existSelf=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
+  // ctx(양하+선적 합본)가 있으면 그룹핑·짝꿍 판정에 전역 베이/슬롯을 사용.
+  //   이유: 40ft 양하는 짝수베이(예 004)에만, 20ft 선적은 홀수베이(005)에만 들어오는 경우가 있어
+  //   각 plan만 보면 004↔005가 다른 그룹(4 vs 5)으로 갈려 가감이 안 됨. 같은 트리오로 묶어야 함.
+  const existBays = ctx&&ctx.bays ? ctx.bays : existSelf;   // 그룹핑·연속판정용(전역)
+  const filled    = filledSelf;                              // hasBelow는 자기 plan 기준(밑단 적재 여부)
+  const filledAll = ctx&&ctx.slots ? ctx.slots : filledSelf; // 트윈 짝꿍은 전역(반대편 plan 포함)
   // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
   const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
   // 각 베이의 홀드 유무 (전용 데크 판정용): 홀드(tier<80) 컨테이너가 있는 베이
@@ -415,7 +421,7 @@ function ediToBayGroups(rows, shipType, multiCount){
   // 20ft 데크 트윈 짝꿍 자리: 같은 row·tier에서 짝꿍 베이(짝수↔홀수 ±1)에 컨테이너 있나
   const hasTwinMate=(bay,row,tier)=>{
     const mate = bay%2===0 ? bay+1 : bay-1;   // 짝수 e ↔ 홀수 e+1
-    return filled.has(mate+'_'+String(row).padStart(2,'0')+'_'+String(tier).padStart(2,'0'));
+    return filledAll.has(mate+'_'+String(row).padStart(2,'0')+'_'+String(tier).padStart(2,'0'));
   };
   const groups={};
   for(const r of rows){
@@ -1149,9 +1155,23 @@ function showLoading(msg){
   if(ra) ra.innerHTML=`<div class="card"><div class="loading"><div class="spinner"></div>${msg}</div></div>`;
 }
 
-function planToGroups(plan){
+// 양하+선적 합본 컨텍스트(그룹핑/짝꿍 판정용 전역 베이·슬롯)
+function buildConeCtx(){
+  const bays=new Set(), slots=new Set();
+  const add=(plan)=>{
+    if(!plan||!plan.isEDI||!plan.ediRows) return;
+    for(const r of plan.ediRows){
+      const b=parseInt(r.bay,10);
+      if(Number.isFinite(b)) bays.add(b);
+      slots.add(b+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0'));
+    }
+  };
+  add(state.stow); add(state.disch);
+  return {bays, slots};
+}
+function planToGroups(plan, ctx){
   if(!plan) return {};
-  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType, state.multiCount);
+  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType, state.multiCount, ctx);
   if(!plan.bays || !plan.bays.length){
     // 사진이거나 베이 텍스트를 못읽음 → 빈 결과(사용자에게 안내됨)
     return {};
@@ -1173,8 +1193,9 @@ function runCalc(){
       const vs=state.stow&&state.stow.vessel, vd=state.disch&&state.disch.vessel;
       const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
       window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
-      const sg=planToGroups(state.stow);
-      const dg=planToGroups(state.disch);
+      const __ctx=buildConeCtx();
+      const sg=planToGroups(state.stow, __ctx);
+      const dg=planToGroups(state.disch, __ctx);
       const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
       const groups={};
       for(const k of allk){
@@ -1247,6 +1268,7 @@ function bvDictBays(entry){
   return m;
 }
 
+// 카고플랜: 전체 화물을 한눈에 (양하/선적 탭). 베이플랜과 동일 판정·색, 표현만 압축.
 async function renderBayView(){
   const ra=document.getElementById('resultArea');
   ra.innerHTML='<div class="card"><div class="empty-note">베이플랜 불러오는 중...</div></div>';
@@ -1280,7 +1302,8 @@ async function renderBayView(){
   let coneByGroup={};
   let coneTotal={ disch:{deck:0,ele:0,hold:0}, stow:{deck:0,ele:0,hold:0} };  // 전체 총 콘 개수
   try{
-    const sg=planToGroups(state.stow), dg=planToGroups(state.disch);
+    const __ctx=buildConeCtx();
+    const sg=planToGroups(state.stow, __ctx), dg=planToGroups(state.disch, __ctx);
     for(const k of new Set([...Object.keys(sg||{}),...Object.keys(dg||{})].map(Number))){
       const s=sg[k]||{deck:0,ele:0,hold:0}, d=dg[k]||{deck:0,ele:0,hold:0};
       coneByGroup[k]={
@@ -1338,12 +1361,12 @@ async function renderBayView(){
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-zoom">
-      <span>화면 크기</span>
+      <button class="bv-zb" id="bvRotate" style="width:auto;padding:0 12px;white-space:nowrap;background:var(--panel2);">⟳ 가로모드</button>
+      <span>크기</span>
       <button class="bv-zb" id="bvZoomOut">－</button>
       <input type="range" id="bvZoomRange" min="10" max="100" value="100" step="5">
       <button class="bv-zb" id="bvZoomIn">＋</button>
       <span id="bvZoomPct">100%</span>
-      <button class="bv-zb" id="bvRotate" style="margin-left:8px;width:auto;padding:0 10px;">⟳ 가로</button>
     </div>
     <div class="bv-legend">
       <span class="bv-lg ptkd">양하 평택</span>
@@ -1576,7 +1599,7 @@ async function renderBayView(){
     if(zRotate){
       zRotate.onclick=()=>{
         bvRotated=!bvRotated;
-        zRotate.textContent=bvRotated?'⟳ 세로':'⟳ 가로';
+        zRotate.textContent=bvRotated?'⟳ 세로모드':'⟳ 가로모드';
         zRotate.style.background=bvRotated?'var(--accent,#d97706)':'';
         applyView();
       };
