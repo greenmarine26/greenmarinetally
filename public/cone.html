@@ -159,7 +159,7 @@
   .bv-zoom input[type=range]{flex:1; min-width:100px; max-width:200px;}
   .bv-zb{background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; width:30px; height:30px; font-size:18px; font-weight:700; line-height:1;}
   #bvZoomPct{min-width:42px; text-align:right; font-weight:700; color:var(--fg);}
-  .bv-zoomwrap{overflow-x:auto;}
+  .bv-zoomwrap{overflow:auto;}
   .bv-zoomarea{transform-origin:top left; transition:transform .1s;}
   .sh-title{font-size:20px; font-weight:800;}
   .sh-sub{font-size:12px; color:var(--dim); margin-top:3px;}
@@ -390,9 +390,15 @@ function parsePositions(text){
 }
 
 // EDI rows → deck/hold tiers (콘엔진 입력). 베이그룹 합본은 결과 단계에서.
-function ediToBayGroups(rows, shipType, multiCount){
-  const filled=new Set(rows.map(r=>parseInt(r.bay,10)+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0')));
-  const existBays=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
+function ediToBayGroups(rows, shipType, multiCount, ctx){
+  const filledSelf=new Set(rows.map(r=>parseInt(r.bay,10)+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0')));
+  const existSelf=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
+  // ctx(양하+선적 합본)가 있으면 그룹핑·짝꿍 판정에 전역 베이/슬롯을 사용.
+  //   이유: 40ft 양하는 짝수베이(예 004)에만, 20ft 선적은 홀수베이(005)에만 들어오는 경우가 있어
+  //   각 plan만 보면 004↔005가 다른 그룹(4 vs 5)으로 갈려 가감이 안 됨. 같은 트리오로 묶어야 함.
+  const existBays = ctx&&ctx.bays ? ctx.bays : existSelf;   // 그룹핑·연속판정용(전역)
+  const filled    = filledSelf;                              // hasBelow는 자기 plan 기준(밑단 적재 여부)
+  const filledAll = ctx&&ctx.slots ? ctx.slots : filledSelf; // 트윈 짝꿍은 전역(반대편 plan 포함)
   // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
   const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
   // 각 베이의 홀드 유무 (전용 데크 판정용): 홀드(tier<80) 컨테이너가 있는 베이
@@ -415,7 +421,7 @@ function ediToBayGroups(rows, shipType, multiCount){
   // 20ft 데크 트윈 짝꿍 자리: 같은 row·tier에서 짝꿍 베이(짝수↔홀수 ±1)에 컨테이너 있나
   const hasTwinMate=(bay,row,tier)=>{
     const mate = bay%2===0 ? bay+1 : bay-1;   // 짝수 e ↔ 홀수 e+1
-    return filled.has(mate+'_'+String(row).padStart(2,'0')+'_'+String(tier).padStart(2,'0'));
+    return filledAll.has(mate+'_'+String(row).padStart(2,'0')+'_'+String(tier).padStart(2,'0'));
   };
   const groups={};
   for(const r of rows){
@@ -1149,9 +1155,23 @@ function showLoading(msg){
   if(ra) ra.innerHTML=`<div class="card"><div class="loading"><div class="spinner"></div>${msg}</div></div>`;
 }
 
-function planToGroups(plan){
+// 양하+선적 합본 컨텍스트(그룹핑/짝꿍 판정용 전역 베이·슬롯)
+function buildConeCtx(){
+  const bays=new Set(), slots=new Set();
+  const add=(plan)=>{
+    if(!plan||!plan.isEDI||!plan.ediRows) return;
+    for(const r of plan.ediRows){
+      const b=parseInt(r.bay,10);
+      if(Number.isFinite(b)) bays.add(b);
+      slots.add(b+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0'));
+    }
+  };
+  add(state.stow); add(state.disch);
+  return {bays, slots};
+}
+function planToGroups(plan, ctx){
   if(!plan) return {};
-  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType, state.multiCount);
+  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType, state.multiCount, ctx);
   if(!plan.bays || !plan.bays.length){
     // 사진이거나 베이 텍스트를 못읽음 → 빈 결과(사용자에게 안내됨)
     return {};
@@ -1173,8 +1193,9 @@ function runCalc(){
       const vs=state.stow&&state.stow.vessel, vd=state.disch&&state.disch.vessel;
       const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
       window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
-      const sg=planToGroups(state.stow);
-      const dg=planToGroups(state.disch);
+      const __ctx=buildConeCtx();
+      const sg=planToGroups(state.stow, __ctx);
+      const dg=planToGroups(state.disch, __ctx);
       const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
       const groups={};
       for(const k of allk){
@@ -1280,7 +1301,8 @@ async function renderBayView(){
   let coneByGroup={};
   let coneTotal={ disch:{deck:0,ele:0,hold:0}, stow:{deck:0,ele:0,hold:0} };  // 전체 총 콘 개수
   try{
-    const sg=planToGroups(state.stow), dg=planToGroups(state.disch);
+    const __ctx=buildConeCtx();
+    const sg=planToGroups(state.stow, __ctx), dg=planToGroups(state.disch, __ctx);
     for(const k of new Set([...Object.keys(sg||{}),...Object.keys(dg||{})].map(Number))){
       const s=sg[k]||{deck:0,ele:0,hold:0}, d=dg[k]||{deck:0,ele:0,hold:0};
       coneByGroup[k]={
@@ -1338,9 +1360,10 @@ async function renderBayView(){
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-zoom">
-      <span>화면 크기</span>
+      <button class="bv-zb" id="bvRotate" style="width:auto;padding:0 12px;white-space:nowrap;background:var(--panel2);">⟳ 가로모드</button>
+      <span>크기</span>
       <button class="bv-zb" id="bvZoomOut">－</button>
-      <input type="range" id="bvZoomRange" min="40" max="100" value="100" step="5">
+      <input type="range" id="bvZoomRange" min="10" max="100" value="100" step="5">
       <button class="bv-zb" id="bvZoomIn">＋</button>
       <span id="bvZoomPct">100%</span>
     </div>
@@ -1373,7 +1396,7 @@ async function renderBayView(){
   }
   if(totalBox) html+=`<div class="bv-totals">${totalBox}</div>`;
 
-  html+=`<div class="bv-zoomwrap"><div class="bv-zoomarea" id="bvZoomArea">`;
+  html+=`<div class="bv-zoomwrap" id="bvZoomWrap"><div class="bv-zoomarea" id="bvZoomArea">`;
   for(const bk of bayKeys){
     const cells=bays[bk];
     const memberBays=[...(groupBays[bk]||[bk])].sort((a,b)=>a-b);
@@ -1531,21 +1554,74 @@ async function renderBayView(){
   html+='</div>';
   ra.innerHTML=html;
 
-  // 축소 슬라이더 동작
+  // 축소 슬라이더 + 가로모드 회전
   const zArea=document.getElementById('bvZoomArea');
   const zRange=document.getElementById('bvZoomRange');
   const zPct=document.getElementById('bvZoomPct');
-  const applyZoom=(v)=>{
-    v=Math.max(40,Math.min(100,v));
+  const zRotate=document.getElementById('bvRotate');
+  const zWrap=document.getElementById('bvZoomWrap');
+  let bvRotated=false;
+  const applyView=()=>{
+    let v=parseInt(zRange.value,10);
+    v=Math.max(10,Math.min(100,v));
     zRange.value=v; zPct.textContent=v+'%';
     const s=v/100;
-    zArea.style.transform='scale('+s+')';
-    zArea.style.width=(100/s)+'%';   // 축소 후 가로 폭 보정 (왼쪽 정렬 유지)
+    zArea.style.transformOrigin='top left';
+    if(bvRotated){
+      // 1) 회전 없는 원래 콘텐츠 크기 측정
+      zArea.style.transform='none';
+      zArea.style.width='max-content';
+      zArea.style.height='';
+      const cw=zArea.scrollWidth;   // 원래 가로폭 (베이 01~44 전체)
+      const ch=zArea.scrollHeight;  // 원래 세로높이
+      // 2) 시계방향 90도 회전. top-left origin 기준 회전 시 콘텐츠가 위로 올라가므로
+      //    먼저 translate로 끌어내린 뒤 회전 (transform은 왼→오 순서로 좌표계에 적용)
+      //    translateX(ch) 로 오른쪽 복귀 + scale
+      zArea.style.transform='translateX('+(ch*s)+'px) rotate(90deg) scale('+s+')';
+      // 3) wrap에 회전 결과 높이 부여 → 위 여백 없이 바로 보이고 끝까지 스크롤
+      zWrap.style.width='100%';
+      zWrap.style.height=(cw*s)+'px';
+      zWrap.scrollLeft=0; zWrap.scrollTop=0;
+    }else{
+      zArea.style.transform='scale('+s+')';
+      zArea.style.width=(100/s)+'%';
+      zArea.style.height='';
+      zWrap.style.height='';
+      zWrap.style.width='';
+    }
   };
+  const applyZoom=(v)=>{ zRange.value=Math.max(10,Math.min(100,v)); applyView(); };
   if(zRange){
-    zRange.oninput=()=>applyZoom(parseInt(zRange.value,10));
+    zRange.oninput=()=>applyView();
     document.getElementById('bvZoomOut').onclick=()=>applyZoom(parseInt(zRange.value,10)-10);
     document.getElementById('bvZoomIn').onclick=()=>applyZoom(parseInt(zRange.value,10)+10);
+    if(zRotate){
+      zRotate.onclick=()=>{
+        bvRotated=!bvRotated;
+        zRotate.textContent=bvRotated?'⟳ 세로모드':'⟳ 가로모드';
+        zRotate.style.background=bvRotated?'var(--accent,#d97706)':'';
+        applyView();
+      };
+    }
+    // 핀치(두 손가락) 확대/축소
+    let pinchStartDist=0, pinchStartZoom=100;
+    const pdist=(t)=>Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+    zWrap.addEventListener('touchstart',(e)=>{
+      if(e.touches.length===2){
+        pinchStartDist=pdist(e.touches);
+        pinchStartZoom=parseInt(zRange.value,10);
+      }
+    },{passive:true});
+    zWrap.addEventListener('touchmove',(e)=>{
+      if(e.touches.length===2 && pinchStartDist>0){
+        e.preventDefault();
+        const ratio=pdist(e.touches)/pinchStartDist;
+        applyZoom(Math.round(pinchStartZoom*ratio));
+      }
+    },{passive:false});
+    zWrap.addEventListener('touchend',(e)=>{
+      if(e.touches.length<2) pinchStartDist=0;
+    },{passive:true});
     applyZoom(100);
   }
   ra.scrollIntoView({behavior:'smooth',block:'start'});
