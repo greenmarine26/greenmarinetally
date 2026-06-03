@@ -1103,18 +1103,51 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const pageMatrixRender = useMemo(() => {
     const evenBn = page.evenBay != null ? parseInt(page.evenBay, 10) : null;
     const oddBn = page.oddBay != null ? parseInt(page.oddBay, 10) : null;
-    // 대표 베이 entry: 짝수 우선(페어 대표), 없으면 홀수. 매트릭스 byBay와 같은 baysSummary entry.
     const primaryBn = evenBn != null ? evenBn : oddBn;
     if (primaryBn == null) return null;
-    const entry = dictBaysSummary[primaryBn];
-    if (!entry) return null;
-    // 페어 여부: 짝수+홀수 둘 다 있으면 pair (매트릭스 bayKey 형식과 동일)
     const isPair = evenBn != null && oddBn != null;
     const bayKey = isPair
       ? `(${String(evenBn).padStart(2, '0')})${String(oddBn).padStart(2, '0')}`
       : String(primaryBn).padStart(2, '0');
-    // EDI 실데이터의 00 유무를 우선 반영 (단일 진실). 사전 holdHasZero가 틀려도 EDI에 00 있으면 00 자리 생성.
-    //   "컨테이너 좌표가 있으니 그 자리에 넣으면 된다" — EDI에 00 컨테이너가 있으면 격자도 00을 가짐.
+
+    let entry = dictBaysSummary[primaryBn];
+
+    // 사전(매트릭스)에 없으면 EDI 실데이터로 단면 골격 생성 (데크/홀드 00 분리 항상 적용).
+    //   "컨테이너 좌표가 있으니 그 자리에 넣으면 된다" — EDI 컨테이너로 tier별 cells(00 제외 row 수)를 직접 셈.
+    if (!entry) {
+      if (!allContainers || allContainers.length === 0) return null;
+      const deckTierSet = new Set(), holdTierSet = new Set();
+      const deckRowsByTier = {}, holdRowsByTier = {};
+      let dHas0 = false, hHas0 = false;
+      for (const c of allContainers) {
+        if (!c.row || !c.tier) continue;
+        const t = parseInt(c.tier, 10);
+        if (!t) continue;
+        const isDeck = t >= 80;
+        const isZero = parseInt(c.row, 10) === 0;
+        if (isDeck) {
+          deckTierSet.add(t);
+          (deckRowsByTier[t] = deckRowsByTier[t] || new Set()).add(c.row);
+          if (isZero) dHas0 = true;
+        } else {
+          holdTierSet.add(t);
+          (holdRowsByTier[t] = holdRowsByTier[t] || new Set()).add(c.row);
+          if (isZero) hHas0 = true;
+        }
+      }
+      const deckTiers = [...deckTierSet].sort((a, b) => b - a);
+      const holdTiers = [...holdTierSet].sort((a, b) => b - a);
+      // tier별 cells = 그 tier의 row 수 (00 제외). buildEmptyBayRenderData가 00칸을 따로 +1.
+      const deckCells = deckTiers.map(t => [...(deckRowsByTier[t] || [])].filter(r => parseInt(r, 10) !== 0).length);
+      const holdCells = holdTiers.map(t => [...(holdRowsByTier[t] || [])].filter(r => parseInt(r, 10) !== 0).length);
+      entry = {
+        bayNo: String(primaryBn).padStart(2, '0'),
+        deckTiers, holdTiers, deckCells, holdCells,
+        deckHasZero: dHas0, holdHasZero: hHas0, hasZero: dHas0 || hHas0,
+      };
+    }
+
+    // EDI 실데이터의 00 유무를 우선 반영 (단일 진실).
     const effEntry = {
       ...entry,
       deckHasZero: pageRange.deck.has00 || (entry.deckHasZero != null ? entry.deckHasZero : entry.hasZero),
@@ -1125,7 +1158,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     } catch (e) {
       return null;
     }
-  }, [page.evenBay, page.oddBay, dictBaysSummary, pageRange]);
+  }, [page.evenBay, page.oddBay, dictBaysSummary, pageRange, allContainers]);
 
   //   N=8 hasZero=false → [08,06,04,02,01,03,05,07]
   const buildGridRowsFromCells = (cells, hasZero) => {

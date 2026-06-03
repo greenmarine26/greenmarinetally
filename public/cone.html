@@ -1269,6 +1269,55 @@ function bvRowPositions(cellCount, hasZero){
 }
 
 // baysSummary의 한 베이 → {deckTiers, holdTiers, deckRowPos, holdRowPos, hasZero}
+// 검수앱 cargoPlanCore와 동일: 티어 cells 수만큼 가운데 active (단면), 나머지 invisible
+function cvActiveCols(cellCount, nTotal){
+  const active=new Set();
+  if(cellCount>=nTotal){ for(let i=0;i<nTotal;i++) active.add(i); return active; }
+  if(cellCount<=0) return active;
+  const center=Math.floor(nTotal/2);
+  if(nTotal%2===1){
+    if(cellCount%2===1){ const half=Math.floor((cellCount-1)/2); for(let i=center-half;i<=center+half;i++) active.add(i); }
+    else { const half=cellCount/2; for(let i=center-half+1;i<=center+half;i++) active.add(i); }
+  } else {
+    const half=Math.floor(cellCount/2);
+    for(let i=center-half;i<center;i++) active.add(i);
+    for(let i=center;i<center+half;i++) active.add(i);
+    if(cellCount%2===1){ const ex=center+half; if(ex<nTotal) active.add(ex); }
+  }
+  return active;
+}
+// 검수앱과 동일한 베이 단면 렌더 데이터 (티어별 cells, 데크/홀드 hasZero 분리)
+//   bs: baysSummary entry, ediDeckHas00/ediHoldHas00: EDI 실데이터 00 유무(단일 진실)
+function cvBayRender(bs, ediDeckHas00, ediHoldHas00){
+  if(!bs) return null;
+  const deckTiers=Array.isArray(bs.deckTiers)?bs.deckTiers.map(Number):[];
+  const holdTiers=Array.isArray(bs.holdTiers)?bs.holdTiers.map(Number):[];
+  const deckCells=Array.isArray(bs.deckCells)?bs.deckCells.map(Number):[];
+  const holdCells=Array.isArray(bs.holdCells)?bs.holdCells.map(Number):[];
+  // 데크/홀드 00: 사전값 > 통합 hasZero, 그리고 EDI에 00 있으면 무조건 true(단일 진실)
+  const dHasZero = !!ediDeckHas00 || (bs.deckHasZero!=null ? !!bs.deckHasZero : !!bs.hasZero);
+  const hHasZero = !!ediHoldHas00 || (bs.holdHasZero!=null ? !!bs.holdHasZero : !!bs.hasZero);
+  const dMax=deckCells.filter(v=>v>0).length?Math.max(...deckCells.filter(v=>v>0)):0;
+  const nDeckCols=(dMax>0?dMax:(bs.rowCount||0))+(dHasZero?1:0);
+  const hMax=holdCells.filter(v=>v>0).length?Math.max(...holdCells.filter(v=>v>0)):0;
+  const nHoldCols=hMax>0?Math.min(hMax+(hHasZero?1:0),nDeckCols):nDeckCols;
+  const deckRowPos=bvRowPositions(nDeckCols,dHasZero);
+  const holdRowPos=bvRowPositions(nHoldCols,hHasZero);
+  const mkRows=(tiers,cells,nCols,hasZero,rowPos)=>tiers.map((t,i)=>{
+    const cc=i<cells.length?cells[i]:0;
+    const ccEff = hasZero ? (cc>0?cc+1:1) : cc;
+    const act=cvActiveCols(ccEff,nCols);
+    const arr=[];
+    for(let c=0;c<nCols;c++) arr.push(act.has(c)?rowPos[c]:null);
+    return {tier:t, rowLbls:arr};
+  });
+  return {
+    deckTiers, holdTiers, nDeckCols, nHoldCols, deckRowPos, holdRowPos,
+    deckRows: mkRows(deckTiers,deckCells,nDeckCols,dHasZero,deckRowPos),
+    holdRows: mkRows(holdTiers,holdCells,nHoldCols,hHasZero,holdRowPos),
+  };
+}
+
 function bvBaySkeleton(bs){
   if(!bs) return null;
   const deckTiers=Array.isArray(bs.deckTiers)&&bs.deckTiers.length?bs.deckTiers.map(Number):[];
@@ -1374,64 +1423,82 @@ async function renderCargoView(){
   const buildGrid=(gk)=>{
     const cells=bays[gk];
     const memberBays=[...(groupBays[gk]||[gk])].sort((a,b)=>a-b);
-    let sk=null;
+
+    // EDI 실데이터에서 데크/홀드 00 유무 (단일 진실)
+    let ediDeckHas00=false, ediHoldHas00=false;
+    for(const v of Object.values(cells)){
+      if(parseInt(v.row,10)===0){ if(parseInt(v.tier,10)>=80) ediDeckHas00=true; else ediHoldHas00=true; }
+    }
+
+    // 대표 베이 사전 entry로 단면(cvBayRender). 페어면 짝수 우선, 멤버 중 cells 있는 것.
+    let render=null;
     for(const mb of memberBays){
-      const s=bvBaySkeleton(dictBays.get(mb));
-      if(!s) continue;
-      if(!sk){ sk={deckTiers:[...s.deckTiers],holdTiers:[...s.holdTiers],deckRowPos:[...s.deckRowPos],holdRowPos:[...s.holdRowPos]}; }
-      else { sk.deckTiers=[...new Set([...sk.deckTiers,...s.deckTiers])]; sk.holdTiers=[...new Set([...sk.holdTiers,...s.holdTiers])];
-        if(s.deckRowPos.length>sk.deckRowPos.length) sk.deckRowPos=[...s.deckRowPos];
-        if(s.holdRowPos.length>sk.holdRowPos.length) sk.holdRowPos=[...s.holdRowPos]; }
+      const bs=dictBays.get(mb);
+      if(bs && ((bs.deckCells&&bs.deckCells.length)||(bs.holdCells&&bs.holdCells.length))){
+        render=cvBayRender(bs, ediDeckHas00, ediHoldHas00); break;
+      }
     }
-    let deckTiers,holdTiers,deckRowPos,holdRowPos;
-    if(sk&&(sk.deckTiers.length||sk.holdTiers.length)){
-      const rDR=new Set(sk.deckRowPos),rHR=new Set(sk.holdRowPos),rDT=new Set(sk.deckTiers),rHT=new Set(sk.holdTiers);
-      for(const v of Object.values(cells)){ const t=parseInt(v.tier,10); if(t>=80){rDT.add(t);rDR.add(v.row);}else{rHT.add(t);rHR.add(v.row);} }
-      deckTiers=[...rDT].sort((a,b)=>b-a); holdTiers=[...rHT].sort((a,b)=>b-a);
-      deckRowPos=sortRows(rDR); holdRowPos=sortRows(rHR);
-    } else {
-      const tiers=[...new Set(Object.values(cells).map(v=>parseInt(v.tier,10)))].sort((a,b)=>b-a);
-      const ro=sortRows(new Set(Object.values(cells).map(v=>v.row)));
-      deckTiers=tiers.filter(t=>t>=80); holdTiers=tiers.filter(t=>t<80);
-      deckRowPos=ro; holdRowPos=ro;
+    // 사전 없으면 EDI 컨테이너로 단면 골격 생성 (검수앱과 동일)
+    if(!render){
+      const dT=new Set(),hT=new Set(),dRows={},hRows={};
+      for(const v of Object.values(cells)){
+        const t=parseInt(v.tier,10), isDeck=t>=80;
+        if(isDeck){dT.add(t);(dRows[t]=dRows[t]||new Set()).add(v.row);}
+        else{hT.add(t);(hRows[t]=hRows[t]||new Set()).add(v.row);}
+      }
+      const deckTiers=[...dT].sort((a,b)=>b-a), holdTiers=[...hT].sort((a,b)=>b-a);
+      const deckCells=deckTiers.map(t=>[...(dRows[t]||[])].filter(r=>parseInt(r,10)!==0).length);
+      const holdCells=holdTiers.map(t=>[...(hRows[t]||[])].filter(r=>parseInt(r,10)!==0).length);
+      render=cvBayRender({deckTiers,holdTiers,deckCells,holdCells,deckHasZero:ediDeckHas00,holdHasZero:ediHoldHas00,hasZero:ediDeckHas00||ediHoldHas00}, ediDeckHas00, ediHoldHas00);
     }
-    const baseWidth=Math.max(deckRowPos.length,holdRowPos.length,1);
+
+    const baseWidth=Math.max(render?render.nDeckCols:1, render?render.nHoldCols:1, 1);
     const title = memberBays.length>=2 ? `(${dd(memberBays[0])})${dd(memberBays[memberBays.length-1])}` : `${dd(memberBays[0])}`;
-    // 공통 tier 사용 (모든 박스 경계 일직선). 박스에 없는 tier도 자리 유지.
-    return { cells, deckTiers:commonDeck, holdTiers:commonHold, baseWidth,
-      deckCols:centerAlign(deckRowPos,baseWidth), holdCols:centerAlign(holdRowPos,baseWidth), title };
+    // render: tier별 active rowLbl 단면. gridHtml이 active 칸에 컨테이너/빈슬롯, 비active는 invisible.
+    return { cells, render, baseWidth, title,
+      deckTiers:commonDeck, holdTiers:commonHold };
   };
 
   // 격자 → HTML (티어/로우 라벨 포함, 데크/홀드 상하)
   const gridHtml=(g, sharedWidth)=>{
+    const R=g.render;
     const cols=Math.max(g.baseWidth, sharedWidth||0);
-    const padCols=(arr)=>{ // 박스 간 폭 통일 위해 좌우 균등 패딩
-      if(arr.length>=cols) return arr;
-      const a=centerAlign(arr.filter(x=>x!==null), cols); return a;
-    };
-    const dCols=padCols(g.deckCols), hCols=padCols(g.holdCols);
-    const sectionRows=(tierList,colArr)=>{
+    if(!R){ return '<table class="cvtab"><tbody></tbody></table>'; }
+    const nD=R.nDeckCols, nH=R.nHoldCols;
+    // 박스 폭 통일(cols) 기준 데크/홀드 좌우 패딩 (가운데 정렬)
+    const dPadL=Math.floor((cols-nD)/2), dPadR=cols-nD-dPadL;
+    const hPadL=Math.floor((cols-nH)/2), hPadR=cols-nH-hPadL;
+    // tier별 active rowLbl 배열을 commonTier 순서로 매핑
+    const deckMap=new Map(R.deckRows.map(r=>[r.tier, r.rowLbls]));
+    const holdMap=new Map(R.holdRows.map(r=>[r.tier, r.rowLbls]));
+    const sectionRows=(tierList, rowMap, nCols, padL, padR)=>{
       let s='';
       for(const t of tierList){
         const tk=String(t).padStart(2,'0');
+        const lbls=rowMap.get(t); // 이 박스에 그 tier가 있으면 rowLbls(null=비active), 없으면 undefined
         s+=`<tr><td class="cvl">${tk}</td>`;
-        for(const r of colArr){
-          if(r===null){ s+='<td class="cvc-gap"></td>'; continue; }
-          const v=g.cells[r+'_'+tk]; const c=v&&v.c;
-          if(!c){ s+='<td class="cvc cv-slot"></td>'; continue; }
-          s+=`<td class="${cellCls(c,flag)}" title="${c.cn||''} ${c.pod||c.pol||''} r${r}t${tk}">${frSym(c)}</td>`;
+        for(let i=0;i<padL;i++) s+='<td class="cvc-gap"></td>';
+        for(let c=0;c<nCols;c++){
+          const r = lbls ? lbls[c] : null;
+          if(r===null || r===undefined){ s+='<td class="cvc-gap"></td>'; continue; } // 비active=단면 바깥(빈 자리)
+          const v=g.cells[r+'_'+tk]; const cc=v&&v.c;
+          if(!cc){ s+='<td class="cvc cv-slot"></td>'; continue; } // active인데 컨테이너 없음=빈슬롯 음영
+          s+=`<td class="${cellCls(cc,flag)}" title="${cc.cn||''} ${cc.pod||cc.pol||''} r${r}t${tk}">${frSym(cc)}</td>`;
         }
+        for(let i=0;i<padR;i++) s+='<td class="cvc-gap"></td>';
         s+='</tr>';
       }
       return s;
     };
     let h='<table class="cvtab"><tbody>';
-    // 로우 라벨 헤더
+    // 데크 로우 라벨 헤더 (데크 폭 기준)
     h+='<tr><td class="cvl"></td>';
-    for(const r of dCols) h+=`<td class="cvrl">${r||''}</td>`;
+    for(let i=0;i<dPadL;i++) h+='<td class="cvrl"></td>';
+    for(const r of R.deckRowPos) h+=`<td class="cvrl">${r||''}</td>`;
+    for(let i=0;i<dPadR;i++) h+='<td class="cvrl"></td>';
     h+='</tr>';
-    if(g.deckTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">갑판</td></tr>`; h+=sectionRows(g.deckTiers,dCols); }
-    if(g.holdTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">선창</td></tr>`; h+=sectionRows(g.holdTiers,hCols); }
+    if(g.deckTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">갑판</td></tr>`; h+=sectionRows(g.deckTiers, deckMap, nD, dPadL, dPadR); }
+    if(g.holdTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">선창</td></tr>`; h+=sectionRows(g.holdTiers, holdMap, nH, hPadL, hPadR); }
     h+='</tbody></table>';
     return h;
   };

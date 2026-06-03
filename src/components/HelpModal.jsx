@@ -385,7 +385,7 @@ const CONTENT = {
         { q: '✅ 수정', a: '베이매트릭스 빌더의 "00포함" 체크박스 하나를 "데크00"·"홀드00" 두 개로 분리. 각각 켜고 끌 수 있고, 베이사전에 deckHasZero/holdHasZero로 그대로 저장됨. buildEmptyBayRenderData가 데크 row는 deckHasZero로, 홀드 row는 holdHasZero로 따로 00 자리를 만듦.' },
         { q: '📋 검증', a: 'ATPR BAY01: 데크00=false → 데크라벨 08,06,04,02,01,03,05,07(00없음). 홀드00=true → 홀드 T10=04,02,00,01,03 / T08=02,00,01 / T06=00 / T04=00 — EDI 실제 컨테이너 위치와 100% 일치. 00이 가운데, 좌우 대칭 자동 정렬. 00 없는 배(9HA3)는 기존대로(회귀 없음).' },
         { q: '➕ 추가 보정', a: 'EDI 실데이터에 00 컨테이너가 있으면 사전 holdHasZero가 꺼져 있어도 자동으로 00칸 생성(EDI=단일 진실). cells는 00 제외 개수로 저장하되, has00이면 active 계산 시 00칸 +1 보정 → 양끝 row 안 빠지고 00 가운데 정렬. 00만 있는 tier(cells=0)도 00 1칸은 표시.' },
-        { q: '🔧 변경 + 버전', a: 'ShipMatrixBuilderModal(체크박스 분리), shipMatrixBuilder(저장/복원), cargoPlanCore(데크/홀드 hasZero 분리 적용). 분리값 없으면 기존 hasZero 폴백(회귀 없음). 버전 V7.03.' },
+        { q: '🔧 변경 + 버전', a: 'ShipMatrixBuilderModal(체크박스 분리), shipMatrixBuilder(저장/복원), cargoPlanCore(데크/홀드 hasZero 분리 — 베이플랜 buildEmptyBayRenderData + 카고플랜 computeBayRenderData 양쪽). 베이플랜은 사전 없어도 EDI 실데이터로 단면 골격 자동 생성(데크/홀드 00 분리 항상 적용). 카고플랜도 동일 폭/단면 → 컨테이너 제자리. 콘앱(cone.html) 카고플랜도 같은 단면+빈슬롯 음영. 분리값 없으면 기존 hasZero 폴백(회귀 없음). 버전 V7.03.' },
       ],
     },
     {
