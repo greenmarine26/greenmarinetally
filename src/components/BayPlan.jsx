@@ -198,23 +198,40 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   //   - 없으면: 기존 EDI 기반 폴백 (M3.89.1 동작)
   // M5.01 fix: 중복 제거 (Set) — .def 데이터에 베이 번호가 두 번 들어간 케이스 방지
   //   증상: 베이 점프 select에 "BAY 01"이 두 번 나오던 버그
+  // V7.01: 계열 대체 시 베이 수 비교용 — 현재 EDI 실제 베이 수
+  const ediBayCount = useMemo(() => {
+    const s = new Set();
+    for (const c of (containers || [])) {
+      const n = parseInt(c.bay, 10);
+      if (Number.isFinite(n) && n > 0) s.add(n);
+    }
+    return s.size;
+  }, [containers]);
+
+  // V7.01: 계열 대체 여부 (배너 표시용)
+  const bayDictSubstituted = useMemo(() => {
+    if (!shipImo && !shipName) return null;
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount });
+    return dict?._substituted || null;
+  }, [shipImo, shipName, ediBayCount]);
+
   const dictBayList = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const dict = getShipBayDictData(shipImo, shipName);
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount });
     if (!dict?.bayDef) return null;
     const list = dict.bayDef.bayList || (dict.bayDef.bays?.map(b => b.bayNo)) || null;
     if (!list || list.length < 2) return null;
     // 정수 정규화 ("01" → 1, "33" → 33) + 중복 제거 + 정렬
     const ints = list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n));
     return [...new Set(ints)].sort((a, b) => a - b);
-  }, [shipImo, shipName]);
+  }, [shipImo, shipName, ediBayCount]);
 
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
   // M6.94.0: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
   const dictBaysSummary = useMemo(() => {
     if (!shipImo && !shipName) return {};
-    const dict = getShipBayDictData(shipImo, shipName);
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount });
     if (!dict?.bayDef?.baysSummary) return {};
     // source='user'면 보강 차단, AI 임시는 L4 EDI 보정
     const enrichedEntry = enrichBayDef(
@@ -470,7 +487,12 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
   return (
     <div className="space-y-2">
-      {/* M4.9f 5단계: 이동 진행 중 안내 바 — pendingMove 활성 시만 */}
+      {/* V7.01: 계열 대체 안내 — 정확한 베이정보 없어 같은 계열 선박으로 대체 시 */}
+      {bayDictSubstituted && (
+        <div className="bg-amber-100 border border-amber-600 text-amber-900 rounded-lg p-2 text-xs">
+          ⚠ {bayDictSubstituted.fromCode} 베이정보가 없어 같은 계열 {bayDictSubstituted.usedName ? `${bayDictSubstituted.usedName}(${bayDictSubstituted.usedCode})` : bayDictSubstituted.usedCode}(으)로 대체했습니다. 구조가 미세하게 다를 수 있습니다.
+        </div>
+      )}
       {pendingMove && (
         <div className="bg-amber-500 text-slate-900 rounded-lg p-3 flex items-center gap-3 sticky top-0 z-30 shadow-lg border-2 border-amber-300">
           <span className="text-xl">📦</span>

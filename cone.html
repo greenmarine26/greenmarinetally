@@ -1338,12 +1338,12 @@ async function renderBayView(){
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-zoom">
-      <button class="bv-zb" id="bvRotate" style="width:auto;padding:0 12px;white-space:nowrap;background:var(--panel2);">⟳ 가로모드</button>
-      <span>크기</span>
+      <span>화면 크기</span>
       <button class="bv-zb" id="bvZoomOut">－</button>
       <input type="range" id="bvZoomRange" min="10" max="100" value="100" step="5">
       <button class="bv-zb" id="bvZoomIn">＋</button>
       <span id="bvZoomPct">100%</span>
+      <button class="bv-zb" id="bvRotate" style="margin-left:8px;width:auto;padding:0 10px;">⟳ 가로</button>
     </div>
     <div class="bv-legend">
       <span class="bv-lg ptkd">양하 평택</span>
@@ -1576,7 +1576,7 @@ async function renderBayView(){
     if(zRotate){
       zRotate.onclick=()=>{
         bvRotated=!bvRotated;
-        zRotate.textContent=bvRotated?'⟳ 세로모드':'⟳ 가로모드';
+        zRotate.textContent=bvRotated?'⟳ 세로':'⟳ 가로';
         zRotate.style.background=bvRotated?'var(--accent,#d97706)':'';
         applyView();
       };

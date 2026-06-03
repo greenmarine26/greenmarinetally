@@ -14,7 +14,7 @@
 //   * 평택분만 (ptk): PTK 컨테이너 있는 베이만
 //   * 베이 지정 (single): 1개 베이 선택
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
@@ -354,6 +354,31 @@ export default function PrintableBayDetail({
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
 
+  // V7.01: 폰 화면용 확대/축소 (핀치 + 버튼). 인쇄에는 영향 없음(@media print에서 무시).
+  const [zoom, setZoom] = useState(1);
+  const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
+  const onTouchStart = (e) => {
+    if (e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchRef.current = { active: true, startDist: Math.hypot(dx, dy), startZoom: zoom };
+    }
+  };
+  const onTouchMove = (e) => {
+    if (pinchRef.current.active && e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      const ratio = dist / (pinchRef.current.startDist || 1);
+      const next = Math.min(3, Math.max(0.4, pinchRef.current.startZoom * ratio));
+      setZoom(next);
+      e.preventDefault();
+    }
+  };
+  const onTouchEnd = (e) => {
+    if (!e.touches || e.touches.length < 2) pinchRef.current.active = false;
+  };
+
   // M6.92.0: 공통 색 함수 — 양하=선사, 선적=POD (베이플랜/카고플랜과 동일)
   const colorMap = useMemo(() => buildContainerColorMap(containers || [], mode), [containers, mode]);
 
@@ -391,9 +416,19 @@ export default function PrintableBayDetail({
 
   const bayMap = useMemo(() => groupByBay(containers), [containers]);
 
+  // V7.01: 계열 대체 시 베이 수 비교용 — 현재 EDI 실제 베이 수
+  const ediBayCount = useMemo(() => {
+    const s = new Set();
+    for (const c of (containers || [])) {
+      const n = parseInt(c.bay, 10);
+      if (Number.isFinite(n) && n > 0) s.add(n);
+    }
+    return s.size;
+  }, [containers]);
+
   const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const baseDict = getShipBayDictData(shipImo, shipName);
+    const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount });
     if (!baseDict) return null;
     // M6.94.0 사용자 원칙: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
     const enrichedEntry = enrichBayDef(
@@ -509,6 +544,15 @@ export default function PrintableBayDetail({
             className={`px-3 py-1.5 rounded text-xs font-bold ${
               printMode === 'single' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'
             }`}>🎯 베이 지정</button>
+          {/* V7.01: 화면 확대/축소 (인쇄 무관) */}
+          <span className="ml-2 text-xs text-slate-400 font-bold">화면크기:</span>
+          <button onClick={() => setZoom(z => Math.max(0.4, +(z - 0.1).toFixed(2)))}
+            className="px-2 py-1.5 rounded text-xs font-bold bg-slate-700 text-white">➖</button>
+          <span className="text-xs text-slate-300 font-bold mono" style={{ minWidth: 38, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))}
+            className="px-2 py-1.5 rounded text-xs font-bold bg-slate-700 text-white">➕</button>
+          <button onClick={() => setZoom(1)}
+            className="px-2 py-1.5 rounded text-xs font-bold bg-slate-600 text-white">100%</button>
           {printMode === 'single' && (
             <div className="flex flex-wrap gap-1 items-center">
               <span className="text-xs text-slate-400">선택({selectedKeys.length}):</span>
@@ -544,7 +588,14 @@ export default function PrintableBayDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white bd-print-container">
+      {dictData && dictData._substituted && (
+        <div className="bg-amber-100 border border-amber-600 text-amber-900 px-3 py-2 text-xs">
+          ⚠ {dictData._substituted.fromCode} 베이정보가 없어 같은 계열 {dictData._substituted.usedName ? `${dictData._substituted.usedName}(${dictData._substituted.usedCode})` : dictData._substituted.usedCode}(으)로 대체했습니다. 구조가 미세하게 다를 수 있습니다.
+        </div>
+      )}
+      <div className="flex-1 overflow-auto bg-white bd-print-container"
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <div className="bd-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: zoom !== 1 ? `${100 / zoom}%` : '100%' }}>
         {filteredPages.length === 0 ? (
           <div className="p-8 text-center text-slate-500">
             출력할 페이지가 없습니다. 모드를 변경하거나 베이를 선택하세요.
@@ -566,6 +617,7 @@ export default function PrintableBayDetail({
             );
           })
         )}
+        </div>
       </div>
 
       <style>{`
@@ -575,6 +627,11 @@ export default function PrintableBayDetail({
            3. @page margin 0.5cm — 폰/프린터 자체 minimum margin 절충
            4. 셀 폰트/패딩 축소로 11자리 컨번호 안전 표시 */
         @media print {
+          /* V7.01: 화면 확대/축소는 인쇄에 영향 없게 — scale 무시 */
+          .bd-zoom-wrap {
+            transform: none !important;
+            width: 100% !important;
+          }
           /* 0. 모든 요소에 box-sizing 강제 — padding/border 폭 초과 방지 */
           *, *::before, *::after {
             box-sizing: border-box !important;
