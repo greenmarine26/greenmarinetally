@@ -101,6 +101,31 @@
   .bvc.sp-ot{background:#4a1f4a; color:#f0b3f0; border-color:#c050c0;}
   .bv-lg.ptkd{background:#1d4a66; color:#bfe3ff;}
   .bv-lg.ptkl{background:#1c4a32; color:#bff0d0;}
+  /* 카고플랜 */
+  .cv-tabs{display:flex; gap:8px; margin:8px 0 10px;}
+  .cv-tabbtn{flex:1; padding:10px; font-size:14px; font-weight:800; border-radius:8px; background:var(--panel2); color:var(--dim); border:1px solid var(--line); cursor:pointer;}
+  .cv-tabbtn.on{background:var(--accent); color:#1a1206; border-color:var(--accent);}
+  .cv-zoom{display:flex; align-items:center; gap:8px; margin:10px 0; font-size:12px; color:var(--dim);}
+  .cv-zoom input[type=range]{flex:1;}
+  .cv-zoomwrap{overflow:auto; border:1px solid var(--line); border-radius:8px; padding:6px; background:#0c0c0e; -webkit-overflow-scrolling:touch;}
+  .cv-zoomarea{transform-origin:top left;}
+  .cv-strip{display:flex; flex-direction:row; gap:4px; align-items:flex-start; width:max-content;}
+  .cv-box{display:flex; flex-direction:column; gap:2px; border:1px solid var(--line); border-radius:4px; padding:2px; background:var(--panel);}
+  .cv-cell{display:flex; flex-direction:column;}
+  .cv-cell.cv-top{border-bottom:1px dashed var(--line); padding-bottom:2px;}
+  .cv-empty-cell{min-height:14px;}
+  .cv-bt{font-size:10px; font-weight:800; text-align:center; color:var(--ink); white-space:nowrap; margin-bottom:1px;}
+  .cvtab{border-collapse:collapse;}
+  .cvtab td{width:13px; height:13px; padding:0; font-size:6px; text-align:center; line-height:13px; font-weight:800;}
+  .cvtab td.cvl{width:auto; min-width:12px; color:var(--dim); font-size:6px; font-weight:600;}
+  .cvtab td.cvrl{color:var(--dim); font-size:6px; font-weight:600; height:9px; line-height:9px;}
+  .cvtab td.cvsec{text-align:center; color:var(--dim); font-size:6px; font-weight:700; padding:1px 0;}
+  .cvtab td.cvc{border:1px solid rgba(255,255,255,.12); border-radius:2px;}
+  .cvtab td.cv-ptkd{background:#1d4a66; color:#bfe3ff; border-color:#3a7ca5;}
+  .cvtab td.cv-ptkl{background:#1c4a32; color:#bff0d0; border-color:#3a9d63;}
+  .cvtab td.cv-shade{background:#2a2a2e; color:#666; border-color:rgba(255,255,255,.06);}
+  .cvtab td.cv-slot{background:transparent; border:1px dashed #2c3a4d;}
+  .cvtab td.cvc-gap{background:transparent; border:none;}
   .bv-lg.rf{background:#0e4d52; color:#7fffe0;}
   .bv-lg.dg{background:#5a1717; color:#ffb3b3;}
   .bv-c{font-weight:700;}
@@ -1085,6 +1110,7 @@ function render(){
     <button class="btn-primary" id="calcBtn" style="margin-top:14px" ${(state.stow&&state.disch&&state.shipType)?'':'disabled'}>
       ③ 콘 계산하기
     </button>
+    ${(state.disch||state.stow)?'<button class="btn-up" id="cargoViewBtn" style="margin-top:10px;flex:none;width:100%">📊 카고플랜 보기 (전체 화물 비교)</button>':''}
     ${(state.disch||state.stow)?'<button class="btn-up" id="bayViewBtn" style="margin-top:10px;flex:none;width:100%">🗺️ 베이플랜 보기 (양하·선적 비교)</button>':''}
     ${(state.stow&&state.disch&&!state.shipType)?'<div class="hint" style="color:var(--accent)">위에서 선종을 먼저 선택하세요.</div>':''}
     ${(state.voyageKey&&(!state.disch||!state.stow))?'<div class="hint">'+(!state.disch?'이 작업엔 양하 EDI가 없습니다. ':'')+(!state.stow?'이 작업엔 선적 EDI가 없습니다. ':'')+'한쪽만 있으면 콘 계산을 할 수 없습니다(양하+선적 모두 필요).</div>':''}
@@ -1109,6 +1135,7 @@ function bindEvents(){
     btn.onclick=()=>selectVoyage(btn.getAttribute('data-vk'));
   });
   const cb=document.getElementById('calcBtn'); if(cb) cb.onclick=runCalc;
+  const cv=document.getElementById('cargoViewBtn'); if(cv) cv.onclick=renderCargoView;
   const bv=document.getElementById('bayViewBtn'); if(bv) bv.onclick=renderBayView;
 }
 
@@ -1269,6 +1296,237 @@ function bvDictBays(entry){
 }
 
 // 카고플랜: 전체 화물을 한눈에 (양하/선적 탭). 베이플랜과 동일 판정·색, 표현만 압축.
+// ============ 카고플랜 (전체 화물 한눈에) ============
+// 베이플랜의 각 베이 격자를 그대로 축소 배열. 박스=위(홀수단독)+아래(짝수페어).
+// 평택분만 강조, 통과분 음영, FR만 표시. 폰: 회전+핀치줌.
+let __cargoFlag='d';  // 'd'=양하, 'l'=선적
+async function renderCargoView(){
+  const ra=document.getElementById('resultArea');
+  ra.innerHTML='<div class="card"><div class="empty-note">카고플랜 불러오는 중...</div></div>';
+  const hasD=!!(state.disch&&state.disch.ediRows&&state.disch.ediRows.length);
+  const hasL=!!(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
+  if(!hasD&&!hasL){ ra.innerHTML='<div class="card"><div class="empty-note">표시할 컨테이너가 없습니다.</div></div>'; return; }
+  if(__cargoFlag==='d'&&!hasD) __cargoFlag='l';
+  if(__cargoFlag==='l'&&!hasL) __cargoFlag='d';
+  const flag=__cargoFlag;
+
+  // 판정 함수 (베이플랜과 동일)
+  const isPtk=(c,f)=>{ if(!c) return false; const p=String((f==='d'?c.pod:c.pol)||'').toUpperCase(); return /PTK|PYT|PYOTM/.test(p)||p===''; };
+  const frSym=(c)=> (c&&c.fr)?'FR':'';
+  const cellCls=(c,f)=> isPtk(c,f) ? ('cvc '+(f==='d'?'cv-ptkd':'cv-ptkl')) : 'cvc cv-shade';
+
+  // 선택 flag의 컨테이너만 수집 (베이플랜 그룹키와 동일)
+  const planRows=(flag==='d'?(state.disch&&state.disch.ediRows):(state.stow&&state.stow.ediRows))||[];
+  const existBays=new Set(planRows.map(r=>parseInt(r.bay,10)).filter(Number.isFinite));
+  const groupKeyOf=(b)=> b%2===0 ? b : (existBays.has(b-1)?b-1:b);
+  const bays={}, groupBays={};
+  let cntPtk=0,cntOther=0,cntFr=0;
+  for(const r of planRows){
+    const b=parseInt(r.bay,10); if(!Number.isFinite(b)) continue;
+    const gk=groupKeyOf(b);
+    if(!bays[gk]) bays[gk]={};
+    if(!groupBays[gk]) groupBays[gk]=new Set();
+    groupBays[gk].add(b);
+    const key=r.row+'_'+String(r.tier).padStart(2,'0');
+    bays[gk][key]={row:r.row,tier:String(r.tier).padStart(2,'0'),c:r};
+    if(isPtk(r,flag)) cntPtk++; else cntOther++;
+    if(r.fr) cntFr++;
+  }
+  const gks=Object.keys(bays).map(Number).sort((a,b)=>a-b);
+
+  // 전체 공통 tier (검수앱 STANDARD 방식): 모든 박스가 같은 데크/홀드 층 격자 사용 → 경계 일직선.
+  //   실제 쓰인 tier의 최대 범위로 공통 격자 구성. 없는 tier는 빈 행으로 자리 유지.
+  const allDeckT=new Set(), allHoldT=new Set();
+  for(const r of planRows){ const t=parseInt(r.tier,10); if(t>=80) allDeckT.add(t); else if(t>0) allHoldT.add(t); }
+  const commonDeck=[...allDeckT].sort((a,b)=>b-a);  // 위→아래 (큰 tier 위)
+  const commonHold=[...allHoldT].sort((a,b)=>b-a);
+
+  // 베이사전 골격
+  let dictBays=new Map();
+  try{
+    const fbDict=await fbFetchBayDict();
+    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
+    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
+    const entry=lookupBayDef(fbDict,imo,nm);
+    if(entry) dictBays=bvDictBays(entry);
+  }catch(e){}
+
+  const shipLabel=state.shipName||'선박';
+  const today=new Date().toLocaleDateString('ko-KR');
+  const dd=n=>n>=100?String(n):String(n).padStart(2,'0');
+
+  // row 정렬 + 중앙정렬 (베이플랜과 동일)
+  const sortRows=set=>{
+    const arr=[...set];
+    const ev=arr.filter(r=>parseInt(r,10)%2===0&&r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
+    const ze=arr.filter(r=>r==='00');
+    const od=arr.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
+    return [...ev,...ze,...od];
+  };
+  const centerAlign=(rowPos,baseWidth)=>{
+    const pad=baseWidth-rowPos.length, left=Math.floor(pad/2);
+    const arr=new Array(baseWidth).fill(null);
+    for(let i=0;i<rowPos.length;i++) arr[left+i]=rowPos[i];
+    return arr;
+  };
+
+  // 한 격자(gk) → {deckTiers,holdTiers,deckCols,holdCols,cells,title}
+  const buildGrid=(gk)=>{
+    const cells=bays[gk];
+    const memberBays=[...(groupBays[gk]||[gk])].sort((a,b)=>a-b);
+    let sk=null;
+    for(const mb of memberBays){
+      const s=bvBaySkeleton(dictBays.get(mb));
+      if(!s) continue;
+      if(!sk){ sk={deckTiers:[...s.deckTiers],holdTiers:[...s.holdTiers],deckRowPos:[...s.deckRowPos],holdRowPos:[...s.holdRowPos]}; }
+      else { sk.deckTiers=[...new Set([...sk.deckTiers,...s.deckTiers])]; sk.holdTiers=[...new Set([...sk.holdTiers,...s.holdTiers])];
+        if(s.deckRowPos.length>sk.deckRowPos.length) sk.deckRowPos=[...s.deckRowPos];
+        if(s.holdRowPos.length>sk.holdRowPos.length) sk.holdRowPos=[...s.holdRowPos]; }
+    }
+    let deckTiers,holdTiers,deckRowPos,holdRowPos;
+    if(sk&&(sk.deckTiers.length||sk.holdTiers.length)){
+      const rDR=new Set(sk.deckRowPos),rHR=new Set(sk.holdRowPos),rDT=new Set(sk.deckTiers),rHT=new Set(sk.holdTiers);
+      for(const v of Object.values(cells)){ const t=parseInt(v.tier,10); if(t>=80){rDT.add(t);rDR.add(v.row);}else{rHT.add(t);rHR.add(v.row);} }
+      deckTiers=[...rDT].sort((a,b)=>b-a); holdTiers=[...rHT].sort((a,b)=>b-a);
+      deckRowPos=sortRows(rDR); holdRowPos=sortRows(rHR);
+    } else {
+      const tiers=[...new Set(Object.values(cells).map(v=>parseInt(v.tier,10)))].sort((a,b)=>b-a);
+      const ro=sortRows(new Set(Object.values(cells).map(v=>v.row)));
+      deckTiers=tiers.filter(t=>t>=80); holdTiers=tiers.filter(t=>t<80);
+      deckRowPos=ro; holdRowPos=ro;
+    }
+    const baseWidth=Math.max(deckRowPos.length,holdRowPos.length,1);
+    const title = memberBays.length>=2 ? `(${dd(memberBays[0])})${dd(memberBays[memberBays.length-1])}` : `${dd(memberBays[0])}`;
+    // 공통 tier 사용 (모든 박스 경계 일직선). 박스에 없는 tier도 자리 유지.
+    return { cells, deckTiers:commonDeck, holdTiers:commonHold, baseWidth,
+      deckCols:centerAlign(deckRowPos,baseWidth), holdCols:centerAlign(holdRowPos,baseWidth), title };
+  };
+
+  // 격자 → HTML (티어/로우 라벨 포함, 데크/홀드 상하)
+  const gridHtml=(g, sharedWidth)=>{
+    const cols=Math.max(g.baseWidth, sharedWidth||0);
+    const padCols=(arr)=>{ // 박스 간 폭 통일 위해 좌우 균등 패딩
+      if(arr.length>=cols) return arr;
+      const a=centerAlign(arr.filter(x=>x!==null), cols); return a;
+    };
+    const dCols=padCols(g.deckCols), hCols=padCols(g.holdCols);
+    const sectionRows=(tierList,colArr)=>{
+      let s='';
+      for(const t of tierList){
+        const tk=String(t).padStart(2,'0');
+        s+=`<tr><td class="cvl">${tk}</td>`;
+        for(const r of colArr){
+          if(r===null){ s+='<td class="cvc-gap"></td>'; continue; }
+          const v=g.cells[r+'_'+tk]; const c=v&&v.c;
+          if(!c){ s+='<td class="cvc cv-slot"></td>'; continue; }
+          s+=`<td class="${cellCls(c,flag)}" title="${c.cn||''} ${c.pod||c.pol||''} r${r}t${tk}">${frSym(c)}</td>`;
+        }
+        s+='</tr>';
+      }
+      return s;
+    };
+    let h='<table class="cvtab"><tbody>';
+    // 로우 라벨 헤더
+    h+='<tr><td class="cvl"></td>';
+    for(const r of dCols) h+=`<td class="cvrl">${r||''}</td>`;
+    h+='</tr>';
+    if(g.deckTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">갑판</td></tr>`; h+=sectionRows(g.deckTiers,dCols); }
+    if(g.holdTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">선창</td></tr>`; h+=sectionRows(g.holdTiers,hCols); }
+    h+='</tbody></table>';
+    return h;
+  };
+
+  // 박스 짝짓기: 위=홀수단독, 아래=짝수페어 (사용자 규칙)
+  const used=new Set();
+  const boxes=[];
+  for(const gk of gks){
+    if(gk%2===0){ // 짝수페어 → 아래칸, 위칸은 (gk-1) 홀수단독
+      const topOdd = (gks.includes(gk-1)&&(gk-1)%2===1) ? gk-1 : null;
+      boxes.push({top:topOdd, bottom:gk});
+      if(topOdd!=null) used.add(topOdd);
+      used.add(gk);
+    }
+  }
+  for(const gk of gks){ if(gk%2===1&&!used.has(gk)){ boxes.push({top:gk, bottom:null}); used.add(gk); } }
+  // 정렬: 박스 대표번호(위 우선) 오름차순
+  boxes.sort((a,b)=>{ const ka=a.top!=null?a.top:a.bottom, kb=b.top!=null?b.top:b.bottom; return ka-kb; });
+
+  // 박스 HTML (위/아래 칸, 폭 통일)
+  // 전체 박스 폭 통일: 모든 격자의 최대 baseWidth → 박스끼리 row 세로 정렬
+  let globalWidth=1;
+  for(const gk of gks){ const g=buildGrid(gk); if(g.baseWidth>globalWidth) globalWidth=g.baseWidth; }
+
+  const boxHtml=(bx)=>{
+    const gTop = bx.top!=null ? buildGrid(bx.top) : null;
+    const gBot = bx.bottom!=null ? buildGrid(bx.bottom) : null;
+    const w=globalWidth;
+    const topTitle = gTop?gTop.title:'';
+    const botTitle = gBot?gBot.title:'';
+    let h='<div class="cv-box">';
+    h+=`<div class="cv-cell cv-top">${gTop?`<div class="cv-bt">BAY ${topTitle}</div>${gridHtml(gTop,w)}`:'<div class="cv-empty-cell"></div>'}</div>`;
+    h+=`<div class="cv-cell cv-bot">${gBot?`<div class="cv-bt">BAY ${botTitle}</div>${gridHtml(gBot,w)}`:'<div class="cv-empty-cell"></div>'}</div>`;
+    h+='</div>';
+    return h;
+  };
+
+  let html=`<div class="card">
+    <div class="share-head"><div class="sh-title">카고플랜 (전체 화물)</div><div class="sh-sub">${shipLabel} · ${today}</div></div>
+    <div class="cv-tabs">
+      ${hasD?`<button class="cv-tabbtn ${flag==='d'?'on':''}" data-cvf="d">양하</button>`:''}
+      ${hasL?`<button class="cv-tabbtn ${flag==='l'?'on':''}" data-cvf="l">선적</button>`:''}
+    </div>
+    <div class="bv-legend">
+      <span class="bv-lg ${flag==='d'?'ptkd':'ptkl'}">평택분 ${cntPtk}</span>
+      <span class="bv-lg" style="background:#2a2a30;color:#9aa">통과/타항 ${cntOther}</span>
+      ${cntFr?`<span class="bv-lg" style="background:#3a1f5a;color:#d9b3ff">FR ${cntFr}</span>`:''}
+    </div>
+    <div class="cv-zoom">
+      <button class="bv-zb" id="cvRotate" style="width:auto;padding:0 12px;white-space:nowrap;background:var(--panel2);">⟳ 가로모드</button>
+      <span>크기</span><button class="bv-zb" id="cvZoomOut">－</button>
+      <input type="range" id="cvZoomRange" min="10" max="100" value="50" step="5">
+      <button class="bv-zb" id="cvZoomIn">＋</button><span id="cvZoomPct">50%</span>
+    </div>`;
+
+  if(!gks.length){ html+=`<div class="empty-note">${flag==='d'?'양하':'선적'} 자료에 컨테이너가 없습니다.</div></div>`; ra.innerHTML=html; bindCargoTabs(); return; }
+
+  html+=`<div class="cv-zoomwrap" id="cvZoomWrap"><div class="cv-zoomarea" id="cvZoomArea"><div class="cv-strip">`;
+  for(const bx of boxes) html+=boxHtml(bx);
+  html+=`</div></div></div></div>`;
+  ra.innerHTML=html;
+  bindCargoTabs();
+
+  // 줌/회전/핀치 (베이플랜과 동일)
+  const zArea=document.getElementById('cvZoomArea'), zRange=document.getElementById('cvZoomRange'),
+        zPct=document.getElementById('cvZoomPct'), zRotate=document.getElementById('cvRotate'), zWrap=document.getElementById('cvZoomWrap');
+  let rotated=false;
+  const applyView=()=>{
+    let v=Math.max(10,Math.min(100,parseInt(zRange.value,10))); zRange.value=v; zPct.textContent=v+'%';
+    const s=v/100; zArea.style.transformOrigin='top left';
+    if(rotated){
+      zArea.style.transform='none'; zArea.style.width='max-content'; zArea.style.height='';
+      const cw=zArea.scrollWidth, ch=zArea.scrollHeight;
+      zArea.style.transform='translateX('+(ch*s)+'px) rotate(90deg) scale('+s+')';
+      zWrap.style.width='100%'; zWrap.style.height=(cw*s)+'px'; zWrap.scrollLeft=0; zWrap.scrollTop=0;
+    } else { zArea.style.transform='scale('+s+')'; zArea.style.width=(100/s)+'%'; zArea.style.height=''; zWrap.style.height=''; zWrap.style.width=''; }
+  };
+  const applyZoom=(v)=>{ zRange.value=Math.max(10,Math.min(100,v)); applyView(); };
+  if(zRange){
+    zRange.oninput=()=>applyView();
+    document.getElementById('cvZoomOut').onclick=()=>applyZoom(parseInt(zRange.value,10)-10);
+    document.getElementById('cvZoomIn').onclick=()=>applyZoom(parseInt(zRange.value,10)+10);
+    if(zRotate) zRotate.onclick=()=>{ rotated=!rotated; zRotate.textContent=rotated?'⟳ 세로모드':'⟳ 가로모드'; zRotate.style.background=rotated?'var(--accent,#d97706)':''; applyView(); };
+    let pd=0,pz=50; const pdist=(t)=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+    zWrap.addEventListener('touchstart',(e)=>{ if(e.touches.length===2){ pd=pdist(e.touches); pz=parseInt(zRange.value,10); } },{passive:true});
+    zWrap.addEventListener('touchmove',(e)=>{ if(e.touches.length===2&&pd>0){ e.preventDefault(); applyZoom(Math.round(pz*pdist(e.touches)/pd)); } },{passive:false});
+    zWrap.addEventListener('touchend',(e)=>{ if(e.touches.length<2) pd=0; },{passive:true});
+    applyZoom(50);
+  }
+  ra.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function bindCargoTabs(){
+  document.querySelectorAll('.cv-tabbtn').forEach(b=>{ b.onclick=()=>{ __cargoFlag=b.getAttribute('data-cvf'); renderCargoView(); }; });
+}
+
 async function renderBayView(){
   const ra=document.getElementById('resultArea');
   ra.innerHTML='<div class="card"><div class="empty-note">베이플랜 불러오는 중...</div></div>';
