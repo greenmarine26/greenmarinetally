@@ -449,6 +449,8 @@ export function matrixToBayDictEntry(matrix, code, name, imo, callsign) {
       bayNo: String(parseInt(bay)).padStart(2, '0'),          // '01' 2자리 (v2 호환)
       rowCount: e.rowCount,
       hasZero: e.hasZero,
+      deckHasZero: e.deckHasZero != null ? e.deckHasZero : e.hasZero,  // 데크 00 (없으면 통합 hasZero 폴백)
+      holdHasZero: e.holdHasZero != null ? e.holdHasZero : e.hasZero,  // 홀드 00
       deckTiers: e.deckTiers,
       holdTiers: e.holdTiers,
       deckCells: e.deckCells,
@@ -506,6 +508,8 @@ export function bayDictEntryToMatrix(entry) {
       bayNum: bayKey,
       rowCount: bs.rowCount || 0,
       hasZero: !!bs.hasZero,
+      deckHasZero: bs.deckHasZero != null ? !!bs.deckHasZero : !!bs.hasZero,
+      holdHasZero: bs.holdHasZero != null ? !!bs.holdHasZero : !!bs.hasZero,
       deckTiers: Array.isArray(bs.deckTiers) ? [...bs.deckTiers] : [],
       holdTiers: Array.isArray(bs.holdTiers) ? [...bs.holdTiers] : [],
       deckCells: Array.isArray(bs.deckCells) ? [...bs.deckCells] : [],

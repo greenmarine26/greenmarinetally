@@ -241,7 +241,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     if (!matrix?.byBay[sourceBay]) return;
     const src = matrix.byBay[sourceBay];
     const copyFields = [
-      'rowCount', 'hasZero',
+      'rowCount', 'hasZero', 'deckHasZero', 'holdHasZero',
       'deckTiers', 'holdTiers', 'deckCells', 'holdCells',
       'deckAlign', 'deckPadLeft', 'deckPadRight',
       'holdAlign', 'holdPadLeft', 'holdPadRight',
@@ -676,9 +676,15 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                           <option value={3}>3</option>
                         </select>
                       </label>
-                      <label className="flex items-center gap-1">
-                        <input type="checkbox" checked={!!e.hasZero} onChange={ev => updateBay(bay, 'hasZero', ev.target.checked)} />
-                        00포함
+                      <label className="flex items-center gap-1" title="데크에 00(가운데 row) 포함">
+                        <input type="checkbox" checked={e.deckHasZero != null ? !!e.deckHasZero : !!e.hasZero}
+                          onChange={ev => updateBay(bay, 'deckHasZero', ev.target.checked)} />
+                        데크00
+                      </label>
+                      <label className="flex items-center gap-1" title="홀드에 00(가운데 row) 포함">
+                        <input type="checkbox" checked={e.holdHasZero != null ? !!e.holdHasZero : !!e.hasZero}
+                          onChange={ev => updateBay(bay, 'holdHasZero', ev.target.checked)} />
+                        홀드00
                       </label>
                       <button
                         onClick={() => deleteBay(bay)}

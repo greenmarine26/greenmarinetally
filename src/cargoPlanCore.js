@@ -652,7 +652,13 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     deckCells = [], holdCells = [],
     deckAlign = 'center', deckPadLeft = 0, deckPadRight = 0,
     holdAlign = 'center', holdPadLeft = 0, holdPadRight = 0,
+    deckHasZero, holdHasZero,
   } = bayEntry;
+
+  // V7.03: 데크/홀드 00(가운데 row) 유무를 따로 적용. 선박에 따라 데크는 00 없고 홀드만 00 있음
+  //   (예: ATPR BAY1 데크 08~07 / 홀드 04,02,00,01,03). 분리값 없으면 기존 통합 hasZero로 폴백(회귀 없음).
+  const _deckHasZero = (deckHasZero != null) ? deckHasZero : hasZero;
+  const _holdHasZero = (holdHasZero != null) ? holdHasZero : hasZero;
 
   // M6.94.7: nDeckCols를 deckCells 실제 max 기반으로 계산 (rowCount 필드 아님).
   // 매트릭스 빌더에서 deck cells를 6으로 줄여도 rowCount 필드는 옛값(8)으로 남아
@@ -661,16 +667,16 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
   const _deckCellsNums = deckCells.map(Number).filter(v => !isNaN(v) && v > 0);
   const _deckCellsMax = _deckCellsNums.length > 0 ? Math.max(..._deckCellsNums) : 0;
   const _effDeckRows = _deckCellsMax > 0 ? _deckCellsMax : rowCount;
-  const nDeckCols = _effDeckRows + (hasZero ? 1 : 0);
+  const nDeckCols = _effDeckRows + (_deckHasZero ? 1 : 0);
   // nHoldCols 강제 통일 해제. 실제 hold cells 최대값 기준으로 계산.
   // hold 폭이 deck보다 작은 게 정상 (선체 형태). 차이만큼 BayBoxV2가 % padding으로 가운데.
   const _holdCellsNums = holdCells.map(Number).filter(v => !isNaN(v) && v > 0);
   const _holdCellsMax = _holdCellsNums.length > 0 ? Math.max(..._holdCellsNums) : 0;
   const nHoldCols = _holdCellsMax > 0
-    ? Math.min(_holdCellsMax + (hasZero ? 1 : 0), nDeckCols)
+    ? Math.min(_holdCellsMax + (_holdHasZero ? 1 : 0), nDeckCols)
     : nDeckCols;
-  const deckRowPos = getRowPositions(nDeckCols, hasZero);
-  const holdRowPos = getRowPositions(nHoldCols, hasZero);
+  const deckRowPos = getRowPositions(nDeckCols, _deckHasZero);
+  const holdRowPos = getRowPositions(nHoldCols, _holdHasZero);
   const nDeck = deckTiers.length;
   const nHold = holdTiers.length;
 
