@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 V7.02 (2026-06-03) — 베이플랜 티어별 단면(cells) 정확화 (베이매트릭스 그대로)',
+      examples: [
+        { q: '🔥 증상', a: '베이매트릭스(빌더)는 맞는데 베이플랜만 데크/홀드 구조가 다름. 티어별 로우 수가 빌더는 단면(예: 9,11,11,11,11,11)인데 베이플랜은 전부 max폭(11)으로 납작하게 그려짐 — 선체 단면(위·아래 좁아지는 모양)이 안 나옴.' },
+        { q: '🔍 원인', a: 'BayPlan의 pageBayDictGrid가 Math.max(...deckCells)로 티어별 cells를 버리고 가장 넓은 폭 하나로 모든 티어를 그림. 컨테이너 좌표(row/tier)는 맞게 찍히지만, 빈 칸이 단면 대신 꽉 찬 직사각형으로 채워져 구조가 달라 보임.' },
+        { q: '✅ 수정', a: '기본 구조는 베이매트릭스 그대로: 티어별 cells 맵(deckCellsByTier/holdCellsByTier) 보존 → 각 tier마다 getActiveColsSymmetric(그 tier cells, 전체폭)로 가운데 active 칸만 표시, 나머지는 invisible(자리 유지). 컨테이너는 좌표대로 renderCell이 찍음. cells 없는 베이는 기존 동작 유지(회귀 없음).' },
+        { q: '📋 검증', a: '3EHZ BAY14 실데이터(deck cells 9,11,11,11,11,11 / hold cells 9,9,9,9,7, hasZero)로 시뮬레이션: deck 맨위 tier92만 좌우1칸 빠짐, hold 맨아래 tier02는 좌우2칸 빠짐 — 빌더 단면과 일치. 선체 외곽 모양 정확히 재현.' },
+        { q: '🔧 변경 파일 + 버전', a: 'src/components/BayPlan.jsx (티어별 cells 단면 적용). 빌더·카고플랜은 안 건드림. 버전 V7.02.' },
+      ],
+    },
+    {
       title: '🆕 V7.01 (2026-06-03) — 빈 깡통 베이사전 무시 (STSE 카고플랜 안 읽히던 문제)',
       examples: [
         { q: '🔥 증상', a: '매트릭스 빌더에서 STSE 베이를 제대로 저장했는데, 카고플랜·베이플랜에서 그 구조가 안 나옴.' },
