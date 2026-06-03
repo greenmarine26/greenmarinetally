@@ -783,12 +783,16 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
   const tot = rows.reduce((acc, [, v]) => ({
     '20': acc['20'] + v['20'], '40': acc['40'] + v['40'], '45': acc['45'] + v['45'], total: acc.total + v.total,
   }), { '20': 0, '40': 0, '45': 0, total: 0 });
+  // M6.94.x fix: carrier-bw(선사별 선적)는 mark 칼럼이 없음.
+  //   헤더는 ['', 선사, 20',40',45',합] 6칸으로 들어오는데 본문은 mark 칸을 안 그려 5칸 → 글씨 밀림.
+  //   → mark 칼럼 없으면 헤더 첫 빈 칸('')도 제거해 칸 수 일치.
+  const effHeaders = hasMarkColumn ? headers : headers.filter((h, i) => !(i === 0 && h === ''));
   return (
     <div className="cpv2-legend">
       <div className="cpv2-legend-title">{title}</div>
       <table className="cpv2-legend-table">
         <thead>
-          <tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
+          <tr>{effHeaders.map((h, i) => <th key={i}>{h}</th>)}</tr>
         </thead>
         <tbody>
           {rows.map(([name, v]) => {

@@ -1032,13 +1032,14 @@ function render(){
   steps.className='card';
   const s1=state.disch?'done':'now';
   const s2=state.stow?'done':(state.disch?'now':'');
-  const ready=state.stow&&state.disch;
+  // 양하+선적 둘 다 또는 한쪽만 있어도 콘 계산 가능 (선적만/양하만 케이스 지원).
+  const ready=!!(state.stow||state.disch);
   const needType = (state.stow||state.disch) && state.shipName && !state.shipType;
   steps.innerHTML=`
     <h2>사용 순서</h2>
     <ol class="steps">
       <li class="${state.voyageKey?'done':'now'}">① 아래에서 작업(선박) 선택</li>
-      <li class="${(state.stow&&state.disch)&&!state.shipType?'now':(state.shipType?'done':'')}">② 선종 확인 (처음 한 번)</li>
+      <li class="${(state.stow||state.disch)&&!state.shipType?'now':(state.shipType?'done':'')}">② 선종 확인 (처음 한 번)</li>
       <li class="${ready&&state.shipType?'now':''}">③ 콘 계산하기 누르기</li>
       <li>④ 표 확인 후 이미지 저장 / 텍스트 복사로 공유</li>
     </ol>
@@ -1107,13 +1108,13 @@ function render(){
   up.innerHTML=`
     <h2>작업 선택 <span class="badge">검수앱 자료</span></h2>
     ${listHtml}
-    <button class="btn-primary" id="calcBtn" style="margin-top:14px" ${(state.stow&&state.disch&&state.shipType)?'':'disabled'}>
+    <button class="btn-primary" id="calcBtn" style="margin-top:14px" ${((state.stow||state.disch)&&state.shipType)?'':'disabled'}>
       ③ 콘 계산하기
     </button>
     ${(state.disch||state.stow)?'<button class="btn-up" id="cargoViewBtn" style="margin-top:10px;flex:none;width:100%">📊 카고플랜 보기 (전체 화물 비교)</button>':''}
     ${(state.disch||state.stow)?'<button class="btn-up" id="bayViewBtn" style="margin-top:10px;flex:none;width:100%">🗺️ 베이플랜 보기 (양하·선적 비교)</button>':''}
-    ${(state.stow&&state.disch&&!state.shipType)?'<div class="hint" style="color:var(--accent)">위에서 선종을 먼저 선택하세요.</div>':''}
-    ${(state.voyageKey&&(!state.disch||!state.stow))?'<div class="hint">'+(!state.disch?'이 작업엔 양하 EDI가 없습니다. ':'')+(!state.stow?'이 작업엔 선적 EDI가 없습니다. ':'')+'한쪽만 있으면 콘 계산을 할 수 없습니다(양하+선적 모두 필요).</div>':''}
+    ${((state.stow||state.disch)&&!state.shipType)?'<div class="hint" style="color:var(--accent)">위에서 선종을 먼저 선택하세요.</div>':''}
+    ${(state.voyageKey&&(!state.disch||!state.stow))?'<div class="hint">'+(!state.disch?'이 작업엔 양하 EDI가 없습니다. ':'')+(!state.stow?'이 작업엔 선적 EDI가 없습니다. ':'')+'있는 자료만으로 콘 계산합니다.</div>':''}
   `;
   app.appendChild(up);
 

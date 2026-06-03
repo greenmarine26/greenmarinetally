@@ -25,10 +25,13 @@ const sizeOf = (c) => {
   const lbl = (isoToLabel(c.iso) || '').toUpperCase();
   if (lbl.startsWith('45')) return '45';
   if (lbl.startsWith('40')) return '40';
-  // ISO 라벨 없으면 iso 코드 직접 검사 (4자리 숫자 코드)
-  const iso = String(c.iso || '').trim();
-  if (/^4[5][A-Z0-9]{2}$/.test(iso) || iso.startsWith('45')) return '45';
-  if (/^4[0-9][A-Z0-9]{2}$/.test(iso) || iso.startsWith('4')) return '40';
+  if (lbl.startsWith('20')) return '20';
+  // ISO 라벨 없으면 iso 코드 직접 검사 — ISO 6346: 첫 자리만 사이즈.
+  //   L/9 = 45ft, 4 = 40ft (45R1/4500 등 '45'로 시작해도 40ft hi-cube!), 2 = 20ft
+  const iso = String(c.iso || '').trim().toUpperCase();
+  if (/^[L9]/.test(iso)) return '45';      // L5G1, 9500 등 = 진짜 45ft
+  if (/^4/.test(iso)) return '40';         // 4500, 45R1, 45G1 등 = 40ft (첫 자 4)
+  if (/^2/.test(iso)) return '20';
   return '20';
 };
 
