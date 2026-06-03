@@ -1147,11 +1147,15 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       };
     }
 
-    // EDI 실데이터의 00 유무를 우선 반영 (단일 진실).
+    // EDI 실데이터를 데크/홀드 00의 단일 진실로 삼음.
+    //   EDI에 그 구역(데크/홀드) 컨테이너가 있으면 → EDI의 00 유무가 정답 (사전값 무시).
+    //   EDI에 그 구역 컨테이너가 아예 없을 때만 사전값 사용 (폴백).
+    const ediHasDeck = pageRange.deck.maxLeft > 0 || pageRange.deck.maxRight > 0 || pageRange.deck.has00;
+    const ediHasHold = pageRange.hold.maxLeft > 0 || pageRange.hold.maxRight > 0 || pageRange.hold.has00;
     const effEntry = {
       ...entry,
-      deckHasZero: pageRange.deck.has00 || (entry.deckHasZero != null ? entry.deckHasZero : entry.hasZero),
-      holdHasZero: pageRange.hold.has00 || (entry.holdHasZero != null ? entry.holdHasZero : entry.hasZero),
+      deckHasZero: ediHasDeck ? pageRange.deck.has00 : (entry.deckHasZero != null ? entry.deckHasZero : entry.hasZero),
+      holdHasZero: ediHasHold ? pageRange.hold.has00 : (entry.holdHasZero != null ? entry.holdHasZero : entry.hasZero),
     };
     try {
       return buildEmptyBayRenderData(effEntry, bayKey, isPair);

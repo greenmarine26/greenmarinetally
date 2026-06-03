@@ -1295,8 +1295,9 @@ function cvBayRender(bs, ediDeckHas00, ediHoldHas00){
   const deckCells=Array.isArray(bs.deckCells)?bs.deckCells.map(Number):[];
   const holdCells=Array.isArray(bs.holdCells)?bs.holdCells.map(Number):[];
   // 데크/홀드 00: 사전값 > 통합 hasZero, 그리고 EDI에 00 있으면 무조건 true(단일 진실)
-  const dHasZero = !!ediDeckHas00 || (bs.deckHasZero!=null ? !!bs.deckHasZero : !!bs.hasZero);
-  const hHasZero = !!ediHoldHas00 || (bs.holdHasZero!=null ? !!bs.holdHasZero : !!bs.hasZero);
+  // EDI 실데이터 00 유무가 단일 진실. buildGrid에서 그 구역 EDI 유무 판단 후 최종값 전달.
+  const dHasZero = (ediDeckHas00!=null) ? !!ediDeckHas00 : (bs.deckHasZero!=null ? !!bs.deckHasZero : !!bs.hasZero);
+  const hHasZero = (ediHoldHas00!=null) ? !!ediHoldHas00 : (bs.holdHasZero!=null ? !!bs.holdHasZero : !!bs.hasZero);
   const dMax=deckCells.filter(v=>v>0).length?Math.max(...deckCells.filter(v=>v>0)):0;
   const nDeckCols=(dMax>0?dMax:(bs.rowCount||0))+(dHasZero?1:0);
   const hMax=holdCells.filter(v=>v>0).length?Math.max(...holdCells.filter(v=>v>0)):0;
@@ -1364,9 +1365,22 @@ async function renderCargoView(){
   const frSym=(c)=> (c&&c.fr)?'FR':'';
   const cellCls=(c,f)=> isPtk(c,f) ? ('cvc '+(f==='d'?'cv-ptkd':'cv-ptkl')) : 'cvc cv-shade';
 
+  // 베이사전 골격 (existBays 짝꿍 판정에 사전 베이도 포함하기 위해 먼저 로드)
+  let dictBays=new Map();
+  try{
+    const fbDict=await fbFetchBayDict();
+    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
+    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
+    const entry=lookupBayDef(fbDict,imo,nm);
+    if(entry) dictBays=bvDictBays(entry);
+  }catch(e){}
+
   // 선택 flag의 컨테이너만 수집 (베이플랜 그룹키와 동일)
   const planRows=(flag==='d'?(state.disch&&state.disch.ediRows):(state.stow&&state.stow.ediRows))||[];
+  // 짝꿍 판정 기준: 컨테이너 있는 베이 + 베이매트릭스(사전)에 있는 베이.
+  //   짝수 베이에 컨테이너가 없어도 사전에 있으면 짝꿍으로 인식 → 홀수가 단독으로 흩어지지 않음.
   const existBays=new Set(planRows.map(r=>parseInt(r.bay,10)).filter(Number.isFinite));
+  for(const bn of dictBays.keys()) existBays.add(bn);
   const groupKeyOf=(b)=> b%2===0 ? b : (existBays.has(b-1)?b-1:b);
   const bays={}, groupBays={};
   let cntPtk=0,cntOther=0,cntFr=0;
@@ -1389,16 +1403,6 @@ async function renderCargoView(){
   for(const r of planRows){ const t=parseInt(r.tier,10); if(t>=80) allDeckT.add(t); else if(t>0) allHoldT.add(t); }
   const commonDeck=[...allDeckT].sort((a,b)=>b-a);  // 위→아래 (큰 tier 위)
   const commonHold=[...allHoldT].sort((a,b)=>b-a);
-
-  // 베이사전 골격
-  let dictBays=new Map();
-  try{
-    const fbDict=await fbFetchBayDict();
-    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
-    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
-    const entry=lookupBayDef(fbDict,imo,nm);
-    if(entry) dictBays=bvDictBays(entry);
-  }catch(e){}
 
   const shipLabel=state.shipName||'선박';
   const today=new Date().toLocaleDateString('ko-KR');
@@ -1424,18 +1428,23 @@ async function renderCargoView(){
     const cells=bays[gk];
     const memberBays=[...(groupBays[gk]||[gk])].sort((a,b)=>a-b);
 
-    // EDI 실데이터에서 데크/홀드 00 유무 (단일 진실)
-    let ediDeckHas00=false, ediHoldHas00=false;
+    // EDI 실데이터에서 데크/홀드 00 유무 + 구역 유무 (단일 진실)
+    let ediDeckHas00=false, ediHoldHas00=false, ediHasDeck=false, ediHasHold=false;
     for(const v of Object.values(cells)){
-      if(parseInt(v.row,10)===0){ if(parseInt(v.tier,10)>=80) ediDeckHas00=true; else ediHoldHas00=true; }
+      const t=parseInt(v.tier,10), isDeck=t>=80;
+      if(isDeck) ediHasDeck=true; else ediHasHold=true;
+      if(parseInt(v.row,10)===0){ if(isDeck) ediDeckHas00=true; else ediHoldHas00=true; }
     }
+    // EDI에 그 구역 컨테이너 있으면 EDI값(true/false), 없으면 null(사전 폴백)
+    const effDeck00 = ediHasDeck ? ediDeckHas00 : null;
+    const effHold00 = ediHasHold ? ediHoldHas00 : null;
 
     // 대표 베이 사전 entry로 단면(cvBayRender). 페어면 짝수 우선, 멤버 중 cells 있는 것.
     let render=null;
     for(const mb of memberBays){
       const bs=dictBays.get(mb);
       if(bs && ((bs.deckCells&&bs.deckCells.length)||(bs.holdCells&&bs.holdCells.length))){
-        render=cvBayRender(bs, ediDeckHas00, ediHoldHas00); break;
+        render=cvBayRender(bs, effDeck00, effHold00); break;
       }
     }
     // 사전 없으면 EDI 컨테이너로 단면 골격 생성 (검수앱과 동일)
@@ -1449,7 +1458,7 @@ async function renderCargoView(){
       const deckTiers=[...dT].sort((a,b)=>b-a), holdTiers=[...hT].sort((a,b)=>b-a);
       const deckCells=deckTiers.map(t=>[...(dRows[t]||[])].filter(r=>parseInt(r,10)!==0).length);
       const holdCells=holdTiers.map(t=>[...(hRows[t]||[])].filter(r=>parseInt(r,10)!==0).length);
-      render=cvBayRender({deckTiers,holdTiers,deckCells,holdCells,deckHasZero:ediDeckHas00,holdHasZero:ediHoldHas00,hasZero:ediDeckHas00||ediHoldHas00}, ediDeckHas00, ediHoldHas00);
+      render=cvBayRender({deckTiers,holdTiers,deckCells,holdCells,deckHasZero:ediDeckHas00,holdHasZero:ediHoldHas00,hasZero:ediDeckHas00||ediHoldHas00}, effDeck00, effHold00);
     }
 
     const baseWidth=Math.max(render?render.nDeckCols:1, render?render.nHoldCols:1, 1);

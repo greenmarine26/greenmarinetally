@@ -427,37 +427,32 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     || (override ? override.rowCount : 9);
   let hasZero;
   let deckHasZero, holdHasZero;
-  if (typeof userBay?.hasZero === 'boolean') {
-    // M6.93.12 fix #2: userBay.hasZero 우선
-    hasZero = userBay.hasZero;
-    deckHasZero = (userBay.deckHasZero != null) ? userBay.deckHasZero : hasZero;
-    holdHasZero = (userBay.holdHasZero != null) ? userBay.holdHasZero : hasZero;
-  } else if (override) {
-    hasZero = override.hasZero;
-    deckHasZero = (override.deckHasZero != null) ? override.deckHasZero : hasZero;
-    holdHasZero = (override.holdHasZero != null) ? override.holdHasZero : hasZero;
-  } else {
-    // EDI 검증 fallback — 데크/홀드 00 따로 (tier로 구분, 단일 진실)
-    const bayNumsToCheck = isPair
-      ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
-      : [oddNum];
-    const ediRows = new Set();
-    let dHas0 = false, hHas0 = false;
-    for (const [key, rowMap] of posMap.entries()) {
-      const [bb, tt] = key.split('|').map(Number);
-      if (bayNumsToCheck.includes(bb)) {
-        const isDeck = tt >= 80;
-        for (const [rowLbl] of rowMap.entries()) {
-          const rn = Number(rowLbl);
-          ediRows.add(rn);
-          if (rn === 0) { if (isDeck) dHas0 = true; else hHas0 = true; }
-        }
+  // EDI 실데이터로 데크/홀드 00 + 구역 유무 먼저 계산 (단일 진실)
+  const bayNumsToCheck = isPair
+    ? [parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10), oddNum]
+    : [oddNum];
+  const ediRows = new Set();
+  let ediDeckHas0 = false, ediHoldHas0 = false, ediHasDeck = false, ediHasHold = false;
+  for (const [key, rowMap] of posMap.entries()) {
+    const [bb, tt] = key.split('|').map(Number);
+    if (bayNumsToCheck.includes(bb)) {
+      const isDeck = tt >= 80;
+      if (isDeck) ediHasDeck = true; else ediHasHold = true;
+      for (const [rowLbl] of rowMap.entries()) {
+        const rn = Number(rowLbl);
+        ediRows.add(rn);
+        if (rn === 0) { if (isDeck) ediDeckHas0 = true; else ediHoldHas0 = true; }
       }
     }
-    hasZero = ediRows.has(0);
-    deckHasZero = dHas0;
-    holdHasZero = hHas0;
   }
+  hasZero = ediRows.has(0);
+  // 사전값 폴백 (EDI에 해당 구역 컨테이너가 없을 때만)
+  const dictHasZero = (typeof userBay?.hasZero === 'boolean') ? userBay.hasZero : (override ? override.hasZero : false);
+  const dictDeckZero = (userBay?.deckHasZero != null) ? userBay.deckHasZero : ((override?.deckHasZero != null) ? override.deckHasZero : dictHasZero);
+  const dictHoldZero = (userBay?.holdHasZero != null) ? userBay.holdHasZero : ((override?.holdHasZero != null) ? override.holdHasZero : dictHasZero);
+  // EDI에 그 구역 컨테이너가 있으면 EDI의 00 유무가 정답 (사전 무시). 없으면 사전 폴백.
+  deckHasZero = ediHasDeck ? ediDeckHas0 : dictDeckZero;
+  holdHasZero = ediHasHold ? ediHoldHas0 : dictHoldZero;
 
   // M6.93.12 fix #2: userBay tiers > override tiers > bayData > pdf
   // M6.94.14: isUserSource면 user가 비운 tier(빈 배열)를 그대로 존중 — pdf 자동 채움 금지.
