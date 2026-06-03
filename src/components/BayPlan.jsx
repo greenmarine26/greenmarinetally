@@ -1113,12 +1113,19 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const bayKey = isPair
       ? `(${String(evenBn).padStart(2, '0')})${String(oddBn).padStart(2, '0')}`
       : String(primaryBn).padStart(2, '0');
+    // EDI 실데이터의 00 유무를 우선 반영 (단일 진실). 사전 holdHasZero가 틀려도 EDI에 00 있으면 00 자리 생성.
+    //   "컨테이너 좌표가 있으니 그 자리에 넣으면 된다" — EDI에 00 컨테이너가 있으면 격자도 00을 가짐.
+    const effEntry = {
+      ...entry,
+      deckHasZero: pageRange.deck.has00 || (entry.deckHasZero != null ? entry.deckHasZero : entry.hasZero),
+      holdHasZero: pageRange.hold.has00 || (entry.holdHasZero != null ? entry.holdHasZero : entry.hasZero),
+    };
     try {
-      return buildEmptyBayRenderData(entry, bayKey, isPair);
+      return buildEmptyBayRenderData(effEntry, bayKey, isPair);
     } catch (e) {
       return null;
     }
-  }, [page.evenBay, page.oddBay, dictBaysSummary]);
+  }, [page.evenBay, page.oddBay, dictBaysSummary, pageRange]);
 
   //   N=8 hasZero=false → [08,06,04,02,01,03,05,07]
   const buildGridRowsFromCells = (cells, hasZero) => {

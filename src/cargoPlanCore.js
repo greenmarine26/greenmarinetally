@@ -685,7 +685,10 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     if (deckTiers.map(Number).includes(stdT)) {
       const idx = deckTiers.map(Number).indexOf(stdT);
       const cc = idx < deckCells.length ? deckCells[idx] : 0;
-      const active = getActiveColsSymmetric(cc, nDeckCols);
+      // V7.03: has00이면 그 tier에 컨테이너가 있을 때 00칸도 차지 → cells에 00 1칸 더해 계산.
+      //   (cells는 00 제외 개수 저장. nDeckCols=cells_max+1과 기준 통일 → 양끝 row 안 빠짐.)
+      const ccEff = _deckHasZero ? (cc > 0 ? cc + 1 : 1) : cc;
+      const active = getActiveColsSymmetric(ccEff, nDeckCols);
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (active.has(c)) {
@@ -709,7 +712,9 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     if (holdTiers.map(Number).includes(stdT)) {
       const idx = holdTiers.map(Number).indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
-      const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
+      // has00이고 cells>0이면 00칸 추가(+1). cells=0이어도 has00이면 가운데 00 1칸은 그림(00만 있는 tier).
+      const ccEff = _holdHasZero ? (cc > 0 ? cc + 1 : 1) : cc;
+      const activeInHold = getActiveColsSymmetric(ccEff, nHoldCols);
       const cells = [];
       for (let c = 0; c < nHoldCols; c++) {
         if (activeInHold.has(c)) {
