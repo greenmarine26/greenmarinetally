@@ -1594,34 +1594,19 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       <div>
         <div className="text-[10px] text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
         {pageMatrixRender
-          ? pageMatrixRender.holdRows.filter(hr => !hr.invisible).map((hr, ti) => {
-              const deckPos = pageMatrixRender.deckRowPos;
-              const holdMap = new Map();
-              hr.cells.forEach(cell => { if (cell.rowLbl != null) holdMap.set(cell.rowLbl, cell.active); });
-              const has00 = holdMap.get('00');                        // 이 tier에 00 있나
-              const splitIdx = deckPos.findIndex(r => parseInt(r, 10) % 2 === 1); // 첫 홀수(01) 위치
-              return (
-                <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
-                  <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{hr.tier}</div>
-                  {deckPos.map((rowLbl, ri) => (
-                    <React.Fragment key={`h-${ti}-${ri}`}>
-                      {/* 첫 홀수 칸 직전에, 00이 있으면 02|01 경계에 0.5칸 걸치는 00 셀 삽입 */}
-                      {has00 && ri === splitIdx && (
-                        <div className="flex-shrink-0" style={{ width: 0, height: cellH, position: 'relative' }}>
-                          <div style={{ position: 'absolute', left: `calc(-${cellW}px / 2 - 0.0625rem)`, top: 0 }}>
-                            {renderCell('00', String(hr.tier).padStart(2, '0'))}
-                          </div>
-                        </div>
-                      )}
-                      {holdMap.get(rowLbl)
-                        ? renderCell(rowLbl, String(hr.tier).padStart(2, '0'))
-                        : <div className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />}
-                    </React.Fragment>
-                  ))}
-                  <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{hr.tier}</div>
-                </div>
-              );
-            })
+          ? pageMatrixRender.holdRows.filter(hr => !hr.invisible).map((hr, ti) => (
+            <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
+              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{hr.tier}</div>
+              {hr.cells.map((cell, ri) => (
+                <React.Fragment key={`h-${ti}-${ri}`}>
+                  {cell.active
+                    ? renderCell(cell.rowLbl, String(hr.tier).padStart(2, '0'))
+                    : <div className="flex-shrink-0" style={{ width: cellW, height: cellH, visibility: 'hidden' }} />}
+                </React.Fragment>
+              ))}
+              <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{hr.tier}</div>
+            </div>
+          ))
           : holdTiersPadded.map((tier, ti) => (
           <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
             <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
@@ -1633,16 +1618,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         ))}
         <div className="flex gap-0.5 mt-0.5 justify-center">
           <div style={{ width: 24 }}></div>
-          {pageMatrixRender
-            ? (() => {
-                const deckPos = pageMatrixRender.deckRowPos;
-                const holdSet = new Set(pageMatrixRender.holdRowPos);
-                return deckPos.map((row, idx) => (
-                  <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
-                    style={{ width: cellW }}>{holdSet.has(row) ? row : ''}</div>
-                ));
-              })()
-            : holdHeaderRowsArr.map((row, idx) => (
+          {(pageMatrixRender ? pageMatrixRender.holdRowPos : holdHeaderRowsArr).map((row, idx) => (
             <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
