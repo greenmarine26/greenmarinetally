@@ -367,7 +367,16 @@ export default function PrintableCargoPlanV2({
   // 베이사전 + v5 매트릭스 로딩
   const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const baseDict = getShipBayDictData(shipImo, shipName);
+    // V7.01: 계열 대체 시 베이 수 비교용으로 현재 EDI의 실제 베이 수를 넘김
+    const ediBayCount = (() => {
+      const s = new Set();
+      for (const c of (containers || [])) {
+        const n = parseInt(c.bay, 10);
+        if (Number.isFinite(n) && n > 0) s.add(n);
+      }
+      return s.size;
+    })();
+    const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount });
     if (!baseDict) return null;
     // M6.94.0 사용자 원칙 1: source='user'면 enrichBayDef가 즉시 entry 반환 (어떤 보강도 안 함).
     //   AI 임시 베이사전 (v2/v5/firebase 등)일 때만 EDI 자동 채움 등 보강 동작.
@@ -666,6 +675,11 @@ export default function PrintableCargoPlanV2({
           <div className="title-center">{title}</div>
           <div className="col">DATE : {today}</div>
         </div>
+        {dictData && dictData._substituted && (
+          <div style={{ background: '#fef3c7', border: '1px solid #d97706', color: '#92400e', padding: '6px 10px', margin: '0 0 6px', fontSize: 12, borderRadius: 4 }}>
+            ⚠ {dictData._substituted.fromCode} 베이정보가 없어 같은 계열 {dictData._substituted.usedName ? `${dictData._substituted.usedName}(${dictData._substituted.usedCode})` : dictData._substituted.usedCode}(으)로 대체했습니다. 구조가 미세하게 다를 수 있습니다.
+          </div>
+        )}
         <div className="cpv2-page-rows">
           {layout.map((row, ri) => {
             const isLast = ri === layout.length - 1;

@@ -35,8 +35,27 @@ export function loadUserBayDict() {
  * 6단계 fuzzy 매칭 핵심 로직 (subset에 적용 가능)
  *   M6.94.5: 2-Phase 구조에서 user-only / 전체 dict 양쪽에서 재사용
  */
-function _matchInDict(subDict, imo, codeOrName) {
-  if (!subDict || Object.keys(subDict).length === 0) return null;
+// V7.01: entry에 실제 베이 데이터가 있는지 (빈 깡통 판별).
+//   원인: 같은 배가 빈 깡통(baysSummary의 bay가 전부 빈 문자열)과 알맹이 두 벌로 저장된 경우,
+//   코드/이름 직접 매칭에서 빈 깡통이 먼저 잡혀 카고플랜 베이가 안 그려짐 (STSE 사례).
+//   유효한 베이가 하나도 없으면 매칭 후보에서 제외 → 알맹이 벌을 잡게 함.
+function _hasRealBays(e) {
+  const bs = e?.bayDef?.baysSummary;
+  if (!Array.isArray(bs) || bs.length === 0) return false;
+  return bs.some(b => {
+    const v = (b && b.bay != null) ? String(b.bay).trim() : '';
+    return v !== '' && Number.isFinite(parseInt(v, 10));
+  });
+}
+
+function _matchInDict(subDictRaw, imo, codeOrName) {
+  if (!subDictRaw || Object.keys(subDictRaw).length === 0) return null;
+  // 빈 깡통 제외한 유효 entry만 매칭 대상으로.
+  const subDict = {};
+  for (const k of Object.keys(subDictRaw)) {
+    if (_hasRealBays(subDictRaw[k])) subDict[k] = subDictRaw[k];
+  }
+  if (Object.keys(subDict).length === 0) return null;
   const arg = String(codeOrName || '').trim();
   const argU = arg.toUpperCase();
   const argClean = argU.replace(/\s+/g, '');

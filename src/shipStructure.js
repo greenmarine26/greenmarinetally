@@ -10,7 +10,7 @@
 
 import { lookupBayDict, getBayDictStats } from './data/shipBayDict.js';
 import { SHIP_BAY_DICT_V2, lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
-import { lookupUserBayDict, getUserBayDictStats } from './data/userBayDict.js';
+import { lookupUserBayDict, getUserBayDictStats, loadUserBayDict } from './data/userBayDict.js';
 // M6.55: v5 — .def 매트릭스 디코드 자동 추출
 //   - supplement: v2에 없는 13척 (DAP, DBM, DHA, ESTM, FN7, FSR, HAHM, HECN, MDB, MEB, ORT, PCBS, WBC)
 //   - matrix: 311척의 row 폭/cells_per_row 정보 (v2 verified 데이터에 보조 첨부)
@@ -284,9 +284,72 @@ export function compareStructures(oldStruct, newStruct) {
  *
  * M4.5: fuzzyLookupAcrossDicts 사용 — userBayDict > v2(109척) > v1(11척, 폴백) + 정규화 부분매칭
  */
-export function getShipBayDictData(imo, code) {
-  const result = fuzzyLookupAcrossDicts(imo, code);
-  if (!result) return null;
+// V7.01: 같은 계열 선박 대체.
+//   정확한 베이사전이 없을 때, 같은 계열(코드 앞 2글자 공유)의 베이 데이터 있는 사전을 빌려 씀.
+//   같은 선사/계열은 구조가 거의 같으므로(SWAT/SWAL, STSE/STSI/STTC) 미세 차이만 있음.
+//   후보 중 베이 수가 ediBayCount와 가장 가까운 것을 선택.
+//   userBayDict + Firebase 사전 모두 후보. 반환 시 _substituted 정보 첨부.
+function _realBayCount(entry) {
+  const bs = entry?.bayDef?.baysSummary;
+  if (!Array.isArray(bs)) return 0;
+  return bs.filter(b => {
+    const v = (b && b.bay != null) ? String(b.bay).trim() : '';
+    return v !== '' && Number.isFinite(parseInt(v, 10));
+  }).length;
+}
+
+function findSeriesSubstitute(code, ediBayCount) {
+  const codeU = String(code || '').trim().toUpperCase();
+  if (codeU.length < 2) return null;
+  const prefix2 = codeU.slice(0, 2);
+
+  // 후보 수집: userBayDict + Firebase 사전
+  const pools = [];
+  try { pools.push(loadUserBayDict() || {}); } catch (e) { /* skip */ }
+  try { if (typeof window !== 'undefined' && window.__fbShipBayDict) pools.push(window.__fbShipBayDict); } catch (e) { /* skip */ }
+
+  const candidates = [];
+  for (const pool of pools) {
+    for (const k of Object.keys(pool)) {
+      const e = pool[k];
+      const ec = String(e?.code || k || '').trim().toUpperCase();
+      if (ec === codeU) continue;            // 자기 자신 제외
+      if (ec.slice(0, 2) !== prefix2) continue; // 계열(앞 2글자) 아니면 제외
+      const cnt = _realBayCount(e);
+      if (cnt <= 0) continue;                // 빈 깡통 제외
+      candidates.push({ key: k, code: ec, name: e?.name || '', entry: e, bayCount: cnt });
+    }
+  }
+  if (candidates.length === 0) return null;
+
+  // 베이 수가 ediBayCount와 가장 가까운 것 선택 (ediBayCount 없으면 베이 수 최대)
+  const target = Number.isFinite(ediBayCount) && ediBayCount > 0 ? ediBayCount : null;
+  candidates.sort((a, b) => {
+    if (target != null) {
+      const da = Math.abs(a.bayCount - target), db = Math.abs(b.bayCount - target);
+      if (da !== db) return da - db;
+    }
+    return b.bayCount - a.bayCount; // 동률이면 베이 많은 쪽
+  });
+  return candidates[0];
+}
+
+export function getShipBayDictData(imo, code, opts) {
+  let result = fuzzyLookupAcrossDicts(imo, code);
+  let _substituted = null;
+  if (!result) {
+    // V7.01: 정확 매칭 실패 → 같은 계열 선박으로 대체 시도.
+    //   대체 entry를 정상 result 형태로 만들어 이후 처리(enrich/v5)를 동일하게 탐.
+    const ediBayCount = opts && Number.isFinite(opts.ediBayCount) ? opts.ediBayCount : null;
+    const sub = findSeriesSubstitute(code, ediBayCount);
+    if (!sub) return null;
+    result = {
+      source: sub.entry?.bayDef?.source || 'user',
+      matchedBy: 'series-substitute',
+      data: sub.entry,
+    };
+    _substituted = { fromCode: String(code || '').toUpperCase(), usedCode: sub.code, usedName: sub.name, bayCount: sub.bayCount };
+  }
 
   const data = result.data;
 
@@ -361,6 +424,8 @@ export function getShipBayDictData(imo, code) {
     _v5Matrix: matrixV5,
     // M6.57: 자동 보정 메타 (디버그용 — _enrichMeta는 enrichedBayDef를 통해 접근)
     _enrichMeta: wrappedEntry._enrichMeta || null,
+    // V7.01: 계열 대체 정보 (대체 안 했으면 null)
+    _substituted,
   };
 }
 
