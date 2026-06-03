@@ -219,10 +219,24 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     if (!shipImo && !shipName) return null;
     const dict = getShipBayDictData(shipImo, shipName, { ediBayCount });
     if (!dict?.bayDef) return null;
-    const list = dict.bayDef.bayList || (dict.bayDef.bays?.map(b => b.bayNo)) || null;
-    if (!list || list.length < 2) return null;
+    // V7.01: 베이 목록은 baysSummary(카고플랜·빌더와 동일 소스)를 우선.
+    //   원인: 일부 사전은 baysSummary가 비었는데 bayList에만 베이 번호가 남아있음(ATRP 등).
+    //   bayList를 쓰면 카고플랜·빌더(baysSummary 사용)와 달리 베이플랜만 유령 베이를 그림.
+    //   baysSummary의 유효 베이를 우선 사용, 없으면 null → EDI 기반 폴백(유령 bayList 안 씀).
+    const summary = dict.bayDef.baysSummary;
+    let list = null;
+    if (Array.isArray(summary) && summary.length > 0) {
+      const sBays = summary
+        .map(b => (b.bayNo != null ? b.bayNo : b.bay))
+        .filter(x => x != null && String(x).trim() !== '');
+      if (sBays.length > 0) list = sBays;
+    }
+    // baysSummary가 비어있으면 EDI 폴백으로 (bayList는 유령일 수 있어 사용 안 함)
+    if (!list) return null;
+    if (list.length < 2) return null;
     // 정수 정규화 ("01" → 1, "33" → 33) + 중복 제거 + 정렬
-    const ints = list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n));
+    const ints = list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n) && n > 0);
+    if (ints.length < 2) return null;
     return [...new Set(ints)].sort((a, b) => a - b);
   }, [shipImo, shipName, ediBayCount]);
 
