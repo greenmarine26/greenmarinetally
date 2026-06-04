@@ -445,3 +445,31 @@
 
 ### 주의
 - 양하·선적 항차번호 다르면(0523E/0523W) 키 갈라져 카드 2개 — 정상. 각 카드가 자기 작업량 누적하니 합산 정확. (total_voyages는 카드당 +1이라 같은 기항이 2회로 셀 수 있음 — 대수는 정확, 횟수만 주의.)
+
+---
+
+## 13. V7.14 (2026-06-04) — 선박 식별 키 분열 해결 (대시보드 3대 버그)
+
+사용자 보고: 대시보드에서 ①같은 선박 중복(SEASPAN CALICANTO #4/#7, SAWASDEE RIGEL #5/#11) ②입항 횟수 ≠ 항차 상세 건수 ③양하/선적 한쪽만 0. 셋 다 근본 원인 해결.
+
+### 근본 원인 (EDI TDT 파싱)
+- TDT 세그먼트의 콜사인(코드 103)을 IMO로 오인. `extractShipInfo`가 뒤에서부터 영숫자 5-9자리를 IMO로 잡아 콜사인(V7A576, 9VMY6)이 IMO 자리에 들어감.
+- 같은 배가 어떤 EDI엔 진짜 IMO(7자리), 어떤 EDI엔 콜사인만 → ships/{진짜IMO} + ships/{콜사인} 둘로 갈라짐.
+- 실측: ATPR TDT = `D5RR5:103::ATLANTIC PIONEER` (103=콜사인). MCAT = `9HA3481:103:11:ARTOTINA`. **둘 다 진짜 IMO 없이 콜사인만 있음.**
+
+### 수정 (4개 파일)
+1. **shipStructure.js extractShipInfo**: 7자리 숫자 IMO 절대 우선(`/^[0-9]{7}$/`). 없을 때만 콜사인 fallback. callsign 별도 보존 + imoIsNumeric 플래그. → 진짜 IMO 있으면 항상 같은 키.
+2. **firebase.js fbAddShipStats(imo, stats, voyageKey)**: stats를 voyages 노드에서 파생. 항차별 discharge_ptk/loading_ptk 덮어쓰기, total은 매번 전체 합산. total_voyages = 항차 키 개수. → 무한 증가 제거, 입항 횟수 = 항차 건수 일치.
+3. **VoyagePage.jsx**: EDI 업로드 시 화면 mode 아니라 EDI 판정(ediKind) 기준 평택분만 양/적하 따로 누적. → 한쪽 0 + 통과화물 오염 버그 해결.
+4. **ChiefDashboard.jsx mergedLib**: 표시 단계에서 IMO 키 분열 병합(Firebase 데이터는 보존). 7자리 IMO 그룹 + 정규화 선박명으로 갈라진 같은 배 합침. 대표키=진짜 IMO 우선.
+
+### 검증 (puppeteer 아닌 로직 시뮬)
+- extractShipInfo: 7자리IMO+콜사인 동시 → IMO 우선(9435038), callsign 보존 ✅. ATPR/MCAT은 콜사인만 있어 imoIsNumeric=false.
+- 병합: 4키(9435038/9VMY6/9943803/V7A576) → 2척. SEASPAN 2항차 양하1690 선적718, SAWASDEE 2항차 양하1916 ✅.
+
+### "콜사인이 왜 필요한가" (사용자 질문)
+콜사인이 목적이 아님. 대시보드에서 선박별 항차를 모으려면 식별자 필요 → 보통 IMO. 그런데 이 EDI들엔 IMO가 없고 콜사인만 있음. 그래서 IMO 있으면 IMO, 없으면 콜사인. 기존 버그는 콜사인을 IMO로 착각해 갈라진 것 → 7자리 IMO 우선으로 해결.
+
+### 콘앱 V7.01 (검수앱과 별개)
+- fbFetchVoyages 항차 목록을 **최근 3일 이내만** 표시. createdAt 3일 초과 제외. createdAt 없는(0) 옛 항차는 보호 차원 포함. 이유: 한참 전 항차까지 다 떠서 보기 힘듦.
+- THREE_DAYS = 3*86400000. 숫자만 바꾸면 기간 조정 가능.

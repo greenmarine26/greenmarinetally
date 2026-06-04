@@ -228,7 +228,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.00</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.01</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -561,6 +561,8 @@ async function fbFetchVoyages(){
   const all=await res.json();
   if(!all) return [];
   const out=[];
+  const THREE_DAYS = 3 * 86400000;
+  const now = Date.now();
   const has=(sec)=>{
     if(!sec) return false;
     if(sec.raw && sec.raw.edi && sec.raw.edi.text) return true;
@@ -573,6 +575,9 @@ async function fbFetchVoyages(){
     const hasD=has(v.discharge);
     const hasL=has(v.loading);
     if(!hasD&&!hasL) continue;
+    // 3일 필터: createdAt이 있으면 최근 3일 이내만. (없으면=0 → 옛 데이터로 보고 일단 포함)
+    const created = info.createdAt || 0;
+    if(created > 0 && (now - created) > THREE_DAYS) continue;
     out.push({
       key,
       vsl: info.vsl||key.split('_')[0]||'(선박명 미상)',
