@@ -641,6 +641,54 @@ export async function fbAddShipStats(imo, stats) {
   });
 }
 
+// 항차 삭제 전: 작업량을 선박 누적 통계에 100% 완료로 기록 (중복방지).
+//   ships/{imo}/voyages/{key}/statsCounted 플래그로 한 항차당 1회만 집계.
+//   삭제돼도 ships/{imo}/stats에 총 양하/선적 대수 영구 보존.
+export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
+  if (!voyage) return;
+  // 양하/선적 컨테이너 수 집계
+  // 전체 작업량 = EDI 전체 컨테이너 수 (실제 처리분 completed 아님).
+  //   예: 양하 EDI 559대면 실제 450만 처리해도 559로 기록. 테스트 중 100% 미처리여도 전체 기준.
+  //   ediContainers: { cn1:{...}, cn2:{...} } 객체 구조.
+  const countSection = (sec) => {
+    if (!sec) return 0;
+    const edi = sec.ediContainers;
+    if (edi && typeof edi === 'object') return Object.keys(edi).length;
+    // 폴백: 옛 구조 (ediRows/containers/rows)
+    const rows = sec.ediRows || sec.containers || sec.rows;
+    if (Array.isArray(rows)) return rows.length;
+    if (rows && typeof rows === 'object') return Object.keys(rows).length;
+    return 0;
+  };
+  const discharge = countSection(voyage.discharge);
+  const loading = countSection(voyage.loading);
+  const info = voyage.info || {};
+  const useImo = imo || info.imo;
+  if (!useImo) return;  // IMO 없으면 선박 식별 불가 — 집계 스킵
+
+  // 중복 집계 방지: 이미 기록된 항차면 스킵
+  const vref = ref(db, `ships/${useImo}/voyages/${voyageKey}`);
+  const snap = await get(vref);
+  const existing = snap.exists() ? snap.val() : null;
+  if (existing && existing.statsCounted) return;  // 이미 집계됨
+
+  // 누적 통계에 더하기
+  await fbAddShipStats(useImo, { discharge, loading });
+  // 항차 메타 기록 (삭제돼도 ships에 이력 남김) + 집계 완료 플래그
+  await fbAddShipVoyage(useImo, voyageKey, {
+    vsl: info.vsl || '',
+    voy_d: info.voy_d || '',
+    voy_l: info.voy_l || '',
+    carrier: info.carrier || '',
+    discharge_count: discharge,
+    loading_count: loading,
+    completed: true,        // 100% 완료 처리
+    completed_at: Date.now(),
+    statsCounted: true,     // 중복 집계 방지 플래그
+    createdAt: info.createdAt || null,
+  });
+}
+
 // ─── M3.4: 답변 오답 신고 (검수원 → 다음 버전 개선용) ───
 // /feedback/{ts} 노드에 저장
 //   { ts, inspector, voyageKey, voyageVsl, query, answerType, answerText,

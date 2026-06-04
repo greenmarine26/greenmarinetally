@@ -378,3 +378,22 @@
 
 ### 남은 결함 (낮은 우선순위)
 - **isoToLabel('9500') 라벨 미변환**: 사이즈 판정(sizeOf 폴백)은 45ft로 정확하나, 라벨 텍스트('45HC')는 못 만들어 '9500' 그대로 노출 가능. 실데이터(ATPR/MCAT)엔 9500 없어 영향 없음. 일부 선사 코드라 추후 isoToLabel에 9첫자리 분기 추가 권장.
+
+---
+
+## 9. V7.10 (2026-06-04) — 항차 자동삭제 + 작업량 누적
+
+### 기능
+- **작업일 표시**: HomePage 항차 카드에 createdAt 표시 ("N일 전", 7일↑ "곧 자동삭제").
+- **자동삭제**: HomePage 마운트 시 createdAt 기준 7일 이상 항차 자동 삭제 (useEffect, 1회). createdAt 없는 옛 항차는 보호.
+- **삭제 전 작업량 누적**: `fbArchiveVoyageBeforeDelete(imo, key, voyage)` → ships/{imo}/stats에 양하/선적 누적 + 100% 완료(completed:true) 기록. 항차 사라져도 총 대수 영구 보존.
+
+### 핵심 주의 (사용자 명시)
+- **전체 작업량 기준 = EDI 전체 컨테이너 수**, 실제 처리분(completed) 아님. 예: 양하 EDI 559대면 실제 450만 처리해도 **559로 기록**. (테스트 중이라 100% 처리 안 됨.)
+- 집계 키: `voyages/{key}/{mode}/ediContainers` (객체 {cn:{...}}). ⚠️ ediRows/containers 아님 — ediContainers가 EDI 전체.
+- **중복 집계 방지**: ships/{imo}/voyages/{key}/statsCounted 플래그. 이미 집계된 항차는 재집계 안 함.
+- IMO 없으면 선박 식별 불가 → 집계 스킵.
+
+### 코드
+- `src/pages/HomePage.jsx`: 자동삭제 useEffect (autoCleanDone state로 1회), 카드에 작업일.
+- `src/firebase.js`: fbArchiveVoyageBeforeDelete (countSection=ediContainers 개수, fbAddShipStats + fbAddShipVoyage 호출).

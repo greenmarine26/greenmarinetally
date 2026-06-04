@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo } from '../firebase.js';
+import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
@@ -16,6 +16,33 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   // M6.17: 현재 GPS 좌표 (부두 좌표 등록용)
   const [currentCoord, setCurrentCoord] = useState(null);   // { lat, lng }
   const [pierRegisterState, setPierRegisterState] = useState({ msg: '', error: false });
+
+  // 1주일(7일) 이상 지난 항차 자동 삭제. voyages 로드 후 1회 실행.
+  //   createdAt 기준. 안전장치: createdAt 없는 항차는 건드리지 않음(옛 데이터 보호).
+  const [autoCleanDone, setAutoCleanDone] = useState(false);
+  useEffect(() => {
+    if (autoCleanDone) return;
+    const entries = Object.entries(voyages || {});
+    if (entries.length === 0) return;              // 아직 로드 전
+    const WEEK = 7 * 86400000;
+    const now = Date.now();
+    const expired = entries.filter(([k, v]) => {
+      const created = v?.info?.createdAt;
+      return typeof created === 'number' && (now - created) > WEEK;
+    });
+    setAutoCleanDone(true);                          // 1회만
+    if (expired.length === 0) return;
+    (async () => {
+      for (const [key, v] of expired) {
+        try {
+          // 삭제 전: 작업량을 선박 누적 통계에 100% 완료로 기록 (총 양하/선적 대수 보존)
+          await fbArchiveVoyageBeforeDelete(v?.info?.imo, key, v);
+          await fbDeleteVoyage(key);
+          console.log(`[자동삭제] 1주일 경과 항차 기록+삭제: ${key} (${v?.info?.vsl || ''})`);
+        } catch (e) { console.error('[자동삭제] 실패:', key, e); }
+      }
+    })();
+  }, [voyages, autoCleanDone]);
 
   // M6.17: Firebase 공유 부두 좌표 구독 — 다른 검수원이 등록한 좌표 자동 수신
   useEffect(() => {
@@ -566,6 +593,18 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete }) {
             })()}
             {' · '}{voyage.info.carrier || ''}
           </div>
+          {/* 작업일 표시 (수동/자동 삭제 구분용) */}
+          {voyage.info.createdAt && (
+            <div className="text-[10px] text-slate-600 mt-0.5">
+              📅 {new Date(voyage.info.createdAt).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              {(() => {
+                const days = Math.floor((Date.now() - voyage.info.createdAt) / 86400000);
+                if (days >= 7) return <span className="text-amber-500 ml-1">· {days}일 전 (곧 자동삭제)</span>;
+                if (days >= 1) return <span className="ml-1">· {days}일 전</span>;
+                return <span className="ml-1">· 오늘</span>;
+              })()}
+            </div>
+          )}
         </div>
         <ChevronRight className="w-5 h-5 text-slate-600 flex-shrink-0"/>
       </button>
