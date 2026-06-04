@@ -1634,17 +1634,18 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           mode,
           container_count: allEdiContainers.length,
           ptk_count: Object.keys(allCns).length,
-          // M7.14: 항차별 평택 양/적하 대수 명시 기록 (화면 집계 정확도용)
+          // M7.15: 항차별 평택 양/적하 대수. _uploadKind로 이번 올린 mode만 덮어쓰기.
           discharge_ptk: statDischargePtk,
           loading_ptk: statLoadingPtk,
+          // 이번 업로드에 포함된 mode (값이 집계된 쪽). 둘 다면 'both'.
+          _uploadKind: (statDischargePtk > 0 && statLoadingPtk > 0) ? 'both'
+                     : statDischargePtk > 0 ? 'discharge'
+                     : statLoadingPtk > 0 ? 'loading'
+                     : (ediKind || mode),
           analyzed_by: inspector || '',   // M6.15: EDI 업로드한 검수원
         });
-        // M7.14: 통계 누적 — 화면 mode가 아니라 EDI 판정 기준 평택분으로 양/적하 따로 누적
-        //   (기존: { [mode]: 전체대수 } → 한쪽 0 + 통과분 오염 버그)
-        await fbAddShipStats(shipInfo.imo, {
-          discharge: statDischargePtk,
-          loading: statLoadingPtk,
-        }, voyageKey);
+        // M7.15: stats는 voyages에서 합산만 (fbAddShipVoyage가 기록 전담)
+        await fbAddShipStats(shipInfo.imo, {}, voyageKey);
       } catch (e) {
         console.error('Ship structure save failed:', e);
       }

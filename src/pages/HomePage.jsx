@@ -35,10 +35,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     (async () => {
       for (const [key, v] of expired) {
         try {
-          // 삭제 전: 작업량을 선박 누적 통계에 100% 완료로 기록 (총 양하/선적 대수 보존)
-          await fbArchiveVoyageBeforeDelete(v?.info?.imo, key, v);
+          // 통계는 EDI 업로드 매칭 시 이미 기록됨. 여기선 항차 카드만 정리(삭제).
           await fbDeleteVoyage(key);
-          console.log(`[자동삭제] 1주일 경과 항차 기록+삭제: ${key} (${v?.info?.vsl || ''})`);
+          console.log(`[자동삭제] 1주일 경과 항차 삭제: ${key} (${v?.info?.vsl || ''})`);
         } catch (e) { console.error('[자동삭제] 실패:', key, e); }
       }
     })();
@@ -250,10 +249,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const performComplete = async () => {
     if (!completeTarget) return;
     const { key } = completeTarget;
-    const v = voyages[key];
     try {
-      await fbArchiveVoyageBeforeDelete(v?.info?.imo, key, v);  // 전체 작업량 누적 기록
-      await fbDeleteVoyage(key);                                 // 기록 후 삭제
+      // 완료 = 작업 확인. 통계는 EDI 업로드 매칭 시 이미 기록됨 → 여기선 항차 카드만 정리(삭제).
+      await fbDeleteVoyage(key);
     } catch (e) { console.error('[완료] 실패:', key, e); }
     setCompleteTarget(null);
   };

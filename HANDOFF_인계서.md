@@ -473,3 +473,58 @@
 ### 콘앱 V7.01 (검수앱과 별개)
 - fbFetchVoyages 항차 목록을 **최근 3일 이내만** 표시. createdAt 3일 초과 제외. createdAt 없는(0) 옛 항차는 보호 차원 포함. 이유: 한참 전 항차까지 다 떠서 보기 힘듦.
 - THREE_DAYS = 3*86400000. 숫자만 바꾸면 기간 조정 가능.
+
+---
+
+## 14. V7.15 (2026-06-04) — 대시보드 양하/선적 대수 버그 2개 수정
+
+사용자 보고: 대시보드 양하/선적 대수 틀림. 카드 요약(123/21)과 항차 표(0/0) 불일치 + 그 123/21도 틀린 값.
+
+### 버그1: 양하/선적 덮어쓰기로 0 됨
+- fbAddShipStats가 voyages[key]에 discharge_ptk/loading_ptk를 **항상 둘 다 덮어씀**.
+- 양하 EDI 먼저 올리고(discharge=540,loading=0 저장) 선적 EDI 나중에 같은 항차에 추가하면(discharge=0,loading=120) → discharge가 0으로 덮여 양하 540 사라짐.
+- 수정(M7.15): >0인 값만 갱신, 0이면 기존 값 보존. 양하·선적 따로 누적 → 둘 다 살아남음.
+
+### 버그2: 표 필드명 불일치
+- 저장 필드 = discharge_ptk/loading_ptk (V7.14). 그런데 ChiefDashboard 항차 표는 discharge_count/loading_count를 읽음 → 항차 표 전부 0.
+- (카드 요약 stats.total_discharge는 line 628서 discharge_ptk로 맞게 합산해 값이 있었음 → 카드↔표 불일치.)
+- 수정: voyageList가 `v.discharge_ptk || v.discharge_count` 우선 읽기. 카드·표 같은 소스 → 일치.
+
+### 주의: 기존 잘못된 데이터
+- 코드는 고쳤으나 이미 0으로 덮인 과거 항차(SUNNY KALMIA 등)는 자동 복구 안 됨. **해당 항차 EDI 재업로드(재처리)하면 올바르게 재계산.** 새 항차부터는 정상.
+
+### 검증
+- 양하540 먼저 + 선적120 나중 → 둘 다 보존 ✅. 표가 discharge_ptk 읽어 540/120 표시 ✅.
+
+---
+
+## 15. V7.16 (2026-06-04) — 통계 기록 방식 재정립 + 미리보기/초기화
+
+사용자 핵심 원칙: "밥 먹은 게 식기 치웠다고 사라지나" = 작업 기록은 항차 삭제와 무관하게 영구 보존.
+
+### 통계 기록 방식 (정립)
+- **기록 시점**: EDI 업로드 매칭 완료 시 즉시 (VoyagePage). 완료/삭제 시점 아님.
+- **완료 버튼 = 확인일 뿐**: 통계 재집계 안 함. 항차 카드만 삭제. (자동삭제도 동일)
+- **같은 항차 재업로드 = 덮어쓰기**: 중복 누적 X, 수정본은 가감(최신값 반영).
+- **양하/선적 따로**: 양하 먼저 + 선적 나중 올려도 둘 다 보존. fbAddShipVoyage가 _uploadKind('discharge'/'loading'/'both')로 이번 올린 mode만 덮어쓰기.
+- **stats는 voyages에서 파생**: fbAddShipStats는 합산만(무한증가 X). total_voyages = 항차 키 개수.
+
+### 핵심 함수 (firebase.js)
+- `fbAddShipVoyage(imo, key, meta)`: meta._uploadKind 기준 해당 mode만 덮어쓰기. discharge_ptk/loading_ptk 기록.
+- `fbAddShipStats(imo, {}, key)`: voyages 합산만 → stats.
+- `fbResetAllShipStats()`: 모든 선박 stats+voyages 제거(structure 보존). 대시보드 [🗑️ 통계 초기화] 버튼.
+- `tallyVoyagesByShip(voyages)`: 현재 항차를 선박명별 양하/선적 집계(미리보기, 저장 안 함). 대시보드 [📋 현재 항차 미리보기] 버튼.
+
+### 검증
+- 미리보기 집계 = 항차 리스트 화면 숫자와 일치 (DJCF 368/396, STSE 535/526, KSKM 159/73, MCAT 511/426).
+- 덮어쓰기: 양하540+선적120 보존, 재업로드 안 늘어남, 480 수정 반영, both 동시 OK.
+- 초기화: structure 보존, stats/voyages만 삭제.
+
+### 사용 흐름 (6월부터 깨끗이)
+1. 대시보드 [📋 현재 항차 미리보기]로 선박명별 양하/선적 확인 (항차 리스트와 일치하는지).
+2. [🗑️ 통계 초기화]로 기존 잘못된 누적 제거 (베이 구조는 보존).
+3. 이후 EDI 업로드부터 자동으로 정확히 기록됨. 같은 항차 재업로드는 덮어쓰기.
+
+### 주의
+- Claude는 사용자 Firebase 직접 접근 불가(allowlist 차단). 실데이터 확인은 앱 미리보기로.
+- MCAT 같은 5/31 createdAt 항차도 실작업은 6월 → 현재 항차 리스트에 있으면 다 포함(날짜 필터 없음).

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera, Search, Star, Calendar, UserCheck } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork } from '../firebase.js';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, fbResetAllShipStats, tallyVoyagesByShip } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
@@ -562,6 +562,10 @@ function FeedbackRow({ feedback: f }) {
 function ShipLibrarySection({ shipLib, voyages }) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('frequency'); // frequency | recent | name | discharge | loading
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetMsg, setResetMsg] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
+  const previewRows = useMemo(() => showPreview ? tallyVoyagesByShip(voyages) : [], [showPreview, voyages]);
 
   // M7.14: IMO 키 분열 병합 (표시 단계) — Firebase 데이터는 보존, 화면에서만 합침.
   //   콜사인이 IMO 자리에 섞여 같은 배가 ships/{진짜IMO} + ships/{콜사인} 둘로 갈라진 과거 데이터 대응.
@@ -684,13 +688,88 @@ function ShipLibrarySection({ shipLib, voyages }) {
     <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
       <div className="flex items-center gap-2 mb-2">
         <Library className="w-4 h-4 text-purple-400"/>
-        <div className="text-sm font-bold text-slate-100">
+        <div className="text-sm font-bold text-slate-100 flex-1">
           선박 라이브러리 ({mergedLib.length}척 · 표시 {sortedShips.length})
         </div>
+        <button
+          onClick={() => setShowPreview(p => !p)}
+          className="text-[10px] px-2 py-1 rounded bg-cyan-900/30 hover:bg-cyan-800/50 text-cyan-300 border border-cyan-800/40 font-bold"
+          title="현재 항차들을 선박명별 양하/선적으로 미리보기"
+        >
+          📋 현재 항차 미리보기
+        </button>
+        <button
+          onClick={() => setShowResetConfirm(true)}
+          className="text-[10px] px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/50 text-red-300 border border-red-800/40 font-bold"
+          title="모든 선박의 양하/선적 통계 초기화 (베이 구조는 보존)"
+        >
+          🗑️ 통계 초기화
+        </button>
       </div>
+
+      {/* 현재 항차 선박명별 미리보기 표 */}
+      {showPreview && (
+        <div className="bg-slate-950/60 border border-cyan-800/30 rounded-lg p-2 mb-2">
+          <div className="text-[11px] text-cyan-300 font-bold mb-1">현재 항차 선박명별 집계 (평택분) — {previewRows.length}척</div>
+          <table className="w-full text-[11px] mono">
+            <thead className="text-slate-500 border-b border-slate-800">
+              <tr><th className="text-left px-1">선박명</th><th className="text-right px-1">양하</th><th className="text-right px-1">선적</th><th className="text-right px-1">항차수</th></tr>
+            </thead>
+            <tbody>
+              {previewRows.map((r, i) => (
+                <tr key={i} className="border-b border-slate-800/40">
+                  <td className="px-1 text-slate-200">{r.vsl}</td>
+                  <td className="px-1 text-right text-blue-300 font-bold">{r.discharge}</td>
+                  <td className="px-1 text-right text-amber-300 font-bold">{r.loading}</td>
+                  <td className="px-1 text-right text-slate-400">{r.voyageKeys.length}</td>
+                </tr>
+              ))}
+              {previewRows.length === 0 && (
+                <tr><td colSpan="4" className="text-center text-slate-500 px-1 py-2">현재 항차 없음</td></tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-slate-700 font-bold">
+                <td className="px-1 text-slate-200">합계</td>
+                <td className="px-1 text-right text-blue-300">{previewRows.reduce((s, r) => s + r.discharge, 0)}</td>
+                <td className="px-1 text-right text-amber-300">{previewRows.reduce((s, r) => s + r.loading, 0)}</td>
+                <td className="px-1 text-right text-slate-400">{previewRows.reduce((s, r) => s + r.voyageKeys.length, 0)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
       <div className="text-[10px] text-slate-500 mb-2">
         EDI 분석된 선박 자동 누적 (항차 삭제와 무관). 입항 빈도순 정렬로 단골 식별 가능 (M6.15).
       </div>
+
+      {/* 통계 초기화 확인 모달 */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowResetConfirm(false)}>
+          <div className="bg-slate-900 border border-red-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-red-300 mb-2">⚠️ 통계 초기화</h3>
+            <p className="text-sm text-slate-300 mb-2">모든 선박의 <b>양하/선적 작업 통계와 항차 기록</b>을 삭제합니다.</p>
+            <p className="text-xs text-slate-400 mb-1">• 베이 구조(베이사전)는 <b className="text-emerald-300">보존</b>됩니다.</p>
+            <p className="text-xs text-slate-400 mb-4">• 6월부터 새로 집계됩니다. 이 작업은 되돌릴 수 없습니다.</p>
+            {resetMsg ? (
+              <div className="text-sm text-emerald-300 mb-3">{resetMsg}</div>
+            ) : null}
+            <div className="flex gap-2">
+              <button onClick={() => { setShowResetConfirm(false); setResetMsg(''); }} className="flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-sm">취소</button>
+              <button
+                onClick={async () => {
+                  setResetMsg('초기화 중…');
+                  try {
+                    const n = await fbResetAllShipStats();
+                    setResetMsg(`✅ ${n}척 통계 초기화 완료. 6월부터 다시 집계됩니다.`);
+                    setTimeout(() => { setShowResetConfirm(false); setResetMsg(''); }, 2500);
+                  } catch (e) { setResetMsg('❌ 실패: ' + (e.message || e)); }
+                }}
+                className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm">초기화 실행</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 검색 + 정렬 */}
       <div className="flex gap-2 mb-2">
@@ -766,8 +845,8 @@ function ShipLibraryRow({ imo, ship, rank, activeVoyages }) {
       mode: v.mode || '',
       container_count: v.container_count || 0,
       ptk_count: v.ptk_count || 0,
-      discharge_count: v.discharge_count || 0,   // 완료 시 기록된 평택 양하 대수
-      loading_count: v.loading_count || 0,       // 완료 시 기록된 평택 선적 대수
+      discharge_count: v.discharge_ptk || v.discharge_count || 0,   // V7.14 저장 필드(discharge_ptk) 우선
+      loading_count: v.loading_ptk || v.loading_count || 0,
       completed: v.completed || false,
       completed_at: v.completed_at || 0,
       analyzed_at: v.analyzed_at || v.completed_at || 0,

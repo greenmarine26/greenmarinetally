@@ -598,10 +598,29 @@ export async function fbAddShipVoyage(imo, voyageKey, voyageMeta) {
   // 기존 데이터 보존 병합 (재업로드 시 inspectors 누적용)
   const snap = await get(r);
   const existing = snap.exists() ? snap.val() : {};
+  // M7.15: 같은 항차 재업로드 = 그 mode 값으로 덮어쓰기(누적 X, 수정본 반영 O).
+  //   단, 이번 업로드에 포함된 mode만 갱신하고 다른 mode는 기존 값 보존.
+  //   voyageMeta._uploadKind: 'discharge' | 'loading' (이번 EDI가 양하인지 선적인지).
+  //   예) 양하 EDI 재업로드 → discharge_ptk만 새 값으로 교체(480→정정 가능), loading_ptk는 그대로.
+  const kind = voyageMeta._uploadKind;
+  let dPtk = existing.discharge_ptk || 0;
+  let lPtk = existing.loading_ptk || 0;
+  if (kind === 'both') {                                              // 양하+선적 같이 올림 → 둘 다 덮어쓰기
+    dPtk = voyageMeta.discharge_ptk || 0;
+    lPtk = voyageMeta.loading_ptk || 0;
+  } else if (kind === 'discharge') dPtk = voyageMeta.discharge_ptk || 0;  // 양하만 → 양하만 덮어쓰기(0 포함)
+  else if (kind === 'loading') lPtk = voyageMeta.loading_ptk || 0;    // 선적만 → 선적만 덮어쓰기
+  else {                                                              // mode 미지정(구버전 호환): >0인 쪽만 갱신
+    if ((voyageMeta.discharge_ptk || 0) > 0) dPtk = voyageMeta.discharge_ptk;
+    if ((voyageMeta.loading_ptk || 0) > 0) lPtk = voyageMeta.loading_ptk;
+  }
+  const meta = { ...voyageMeta };
+  delete meta._uploadKind;
   await set(r, {
     ...existing,
-    ...voyageMeta,
-    // M6.15: 분석한 검수원(EDI 업로더) 기본 기록
+    ...meta,
+    discharge_ptk: dPtk,
+    loading_ptk: lPtk,
     analyzed_by: voyageMeta.analyzed_by || existing.analyzed_by || '',
     analyzed_at: Date.now(),
   });
@@ -628,27 +647,17 @@ export async function fbAddShipVoyageInspector(imo, voyageKey, inspectorName, mo
 }
 
 // 선박 통계 업데이트 (양하/선적 누적)
-// M7.14: voyageKey 단위로 항차별 평택 대수를 기록하고 total은 항차들을 다시 합산.
-//   기존 버그: 재업로드마다 total_voyages +1, total_discharge/loading 무한 증가.
-//   화면 "입항 N회"(stats.total_voyages)와 "항차 상세 N건"(voyages 키 개수)이 어긋나던 원인.
-//   이제 stats는 voyages 노드의 진실에서 파생 → 재업로드/재처리해도 정확.
+// M7.15: 통계는 업로드 매칭 시점에 fbAddShipVoyage가 voyages[key]에 기록한 값에서 합산만.
+//   (완료/삭제 시 재집계 안 함 — 완료 버튼은 '확인'일 뿐. 이중 기록 방지.)
+//   voyages 노드가 단일 진실 → stats는 항상 거기서 파생.
 export async function fbAddShipStats(imo, stats, voyageKey) {
   if (!imo) return;
   const base = ref(db, `ships/${imo}`);
   const snap = await get(base);
   const cur = snap.val() || {};
-  const voys = { ...(cur.voyages || {}) };
+  const voys = cur.voyages || {};
 
-  // 이 항차의 평택 양/적하 대수를 voyages 노드에 기록 (덮어쓰기 — 재업로드 시 누적 아님)
-  if (voyageKey) {
-    voys[voyageKey] = {
-      ...(voys[voyageKey] || {}),
-      discharge_ptk: stats.discharge || 0,
-      loading_ptk: stats.loading || 0,
-    };
-  }
-
-  // total은 모든 항차의 평택 대수를 합산 (무한 증가 불가)
+  // total은 모든 항차의 평택 대수를 합산 (voyages가 진실)
   let totalD = 0, totalL = 0;
   const voyKeys = Object.keys(voys);
   voyKeys.forEach(k => {
@@ -663,6 +672,50 @@ export async function fbAddShipStats(imo, stats, voyageKey) {
     last_voyage_at: Date.now(),
   });
 }
+
+// M7.15: 모든 선박의 작업 통계(stats + voyages 집계)만 초기화. 베이 구조(structure)는 보존.
+//   기존 잘못 쌓인 양하/선적 대수를 깨끗이 지우고 6월부터 다시 집계하기 위함.
+//   ships/{imo}/structure, name, imo 등은 그대로 두고 stats/voyages만 제거.
+export async function fbResetAllShipStats() {
+  const snap = await get(ref(db, 'ships'));
+  const all = snap.val() || {};
+  let cleared = 0;
+  for (const imo of Object.keys(all)) {
+    await set(ref(db, `ships/${imo}/stats`), null);     // 누적 통계 제거
+    await set(ref(db, `ships/${imo}/voyages`), null);   // 항차별 집계 제거
+    cleared++;
+  }
+  return cleared;  // 초기화된 선박 수
+}
+
+// M7.15: 한 섹션(discharge 또는 loading)의 평택분 컨테이너 수.
+//   discharge 섹션 = 양하 평택분, loading 섹션 = 선적 평택분. (pol 또는 pod가 PTK)
+function _ptkCountOfSection(section) {
+  if (!section || !section.ediContainers) return 0;
+  const set = new Set();
+  for (const c of Object.values(section.ediContainers)) {
+    const pol = (c.pol || '').toUpperCase();
+    const pod = (c.pod || '').toUpperCase();
+    if (pol.endsWith('PTK') || pod.endsWith('PTK')) set.add(c.cn || JSON.stringify(c));
+  }
+  return set.size;
+}
+
+// M7.15: 현재 살아있는 항차(voyages)를 선박명별로 양하/선적 집계 (미리보기용, 저장 안 함).
+//   한 항차에 양하·선적 둘 다 있으면 각각 더함. 반환: [{vsl, discharge, loading, voyages:[키...]}]
+export function tallyVoyagesByShip(voyages) {
+  const byShip = {};
+  for (const [key, v] of Object.entries(voyages || {})) {
+    const info = v.info || {};
+    const vsl = (info.vsl || key.split('_')[0] || '(선박명 미상)').toUpperCase();
+    if (!byShip[vsl]) byShip[vsl] = { vsl, discharge: 0, loading: 0, voyageKeys: [] };
+    byShip[vsl].discharge += _ptkCountOfSection(v.discharge);
+    byShip[vsl].loading += _ptkCountOfSection(v.loading);
+    byShip[vsl].voyageKeys.push(key);
+  }
+  return Object.values(byShip).sort((a, b) => (b.discharge + b.loading) - (a.discharge + a.loading));
+}
+
 
 // 항차 삭제 전: 작업량을 선박 누적 통계에 100% 완료로 기록 (중복방지).
 //   ships/{imo}/voyages/{key}/statsCounted 플래그로 한 항차당 1회만 집계.
