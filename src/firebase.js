@@ -647,36 +647,43 @@ export async function fbAddShipStats(imo, stats) {
 export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
   if (!voyage) return;
   // 양하/선적 컨테이너 수 집계
-  // 전체 작업량 = EDI 전체 컨테이너 수 (실제 처리분 completed 아님).
-  //   예: 양하 EDI 559대면 실제 450만 처리해도 559로 기록. 테스트 중 100% 미처리여도 전체 기준.
-  //   ediContainers: { cn1:{...}, cn2:{...} } 객체 구조.
+  // 전체 작업량 = 평택분(PTK) EDI 컨테이너 수. 타지역(타항만 양·적하) 제외.
+  //   항차 리스트의 평택 카운트(computeStats.ptk)와 동일 기준: pol 또는 pod가 PTK로 끝나는 것.
+  //   예: EDI 전체 1000대여도 평택분 559대면 559로 기록.
   const countSection = (sec) => {
     if (!sec) return 0;
     const edi = sec.ediContainers;
-    if (edi && typeof edi === 'object') return Object.keys(edi).length;
-    // 폴백: 옛 구조 (ediRows/containers/rows)
-    const rows = sec.ediRows || sec.containers || sec.rows;
-    if (Array.isArray(rows)) return rows.length;
-    if (rows && typeof rows === 'object') return Object.keys(rows).length;
-    return 0;
+    if (!edi || typeof edi !== 'object') return 0;
+    let n = 0;
+    for (const c of Object.values(edi)) {
+      const pol = (c.pol || '').toUpperCase();
+      const pod = (c.pod || '').toUpperCase();
+      if (pol.endsWith('PTK') || pod.endsWith('PTK')) n++;
+    }
+    return n;
   };
   const discharge = countSection(voyage.discharge);
   const loading = countSection(voyage.loading);
   const info = voyage.info || {};
-  const useImo = imo || info.imo;
-  if (!useImo) return;  // IMO 없으면 선박 식별 불가 — 집계 스킵
+  // 선박 식별: IMO 우선, 없으면 콜사인, 그것도 없으면 선박명. (EDI에 IMO 없는 경우 많음 — 콜사인은 거의 항상 있음)
+  //   IMO 없다고 집계를 통째로 스킵하면 양하/선적 작업량이 누락됨 → 폴백 필수.
+  const shipId = imo || info.imo || info.callsign || (info.vsl ? info.vsl.toUpperCase().replace(/\s+/g, '') : '');
+  if (!shipId) return;            // 선박 식별 완전 불가일 때만 스킵
+  if (discharge === 0 && loading === 0) return;  // 기록할 작업량 없으면 스킵
 
   // 중복 집계 방지: 이미 기록된 항차면 스킵
-  const vref = ref(db, `ships/${useImo}/voyages/${voyageKey}`);
+  const vref = ref(db, `ships/${shipId}/voyages/${voyageKey}`);
   const snap = await get(vref);
   const existing = snap.exists() ? snap.val() : null;
   if (existing && existing.statsCounted) return;  // 이미 집계됨
 
   // 누적 통계에 더하기
-  await fbAddShipStats(useImo, { discharge, loading });
+  await fbAddShipStats(shipId, { discharge, loading });
   // 항차 메타 기록 (삭제돼도 ships에 이력 남김) + 집계 완료 플래그
-  await fbAddShipVoyage(useImo, voyageKey, {
+  await fbAddShipVoyage(shipId, voyageKey, {
     vsl: info.vsl || '',
+    callsign: info.callsign || '',
+    imo: info.imo || '',
     voy_d: info.voy_d || '',
     voy_l: info.voy_l || '',
     carrier: info.carrier || '',

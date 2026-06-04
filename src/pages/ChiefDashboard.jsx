@@ -672,11 +672,17 @@ function ShipLibraryRow({ imo, ship, rank, activeVoyages }) {
     const arr = Object.entries(voys).map(([key, v]) => ({
       voyageKey: key,
       voy: v.voy || '',
+      voy_d: v.voy_d || '',
+      voy_l: v.voy_l || '',
       vsl: v.vsl || ship.name || '',
       mode: v.mode || '',
       container_count: v.container_count || 0,
       ptk_count: v.ptk_count || 0,
-      analyzed_at: v.analyzed_at || 0,
+      discharge_count: v.discharge_count || 0,   // 완료 시 기록된 평택 양하 대수
+      loading_count: v.loading_count || 0,       // 완료 시 기록된 평택 선적 대수
+      completed: v.completed || false,
+      completed_at: v.completed_at || 0,
+      analyzed_at: v.analyzed_at || v.completed_at || 0,
       analyzed_by: v.analyzed_by || '',
       inspectors: v.inspectors || {},  // M6.15: 항차별 검수원 카운트
     })).sort((a, b) => b.analyzed_at - a.analyzed_at);
@@ -836,37 +842,39 @@ function ShipLibraryRow({ imo, ship, rank, activeVoyages }) {
           {/* 항차 리스트 */}
           {voyageList.length > 0 && (
             <div className="bg-slate-900/60 rounded p-1.5">
-              <div className="text-[10px] text-purple-400 font-bold mb-1">항차별 작업 이력</div>
+              <div className="text-[10px] text-purple-400 font-bold mb-1">항차별 작업 이력 (평택분)</div>
               <table className="w-full text-[10px] mono">
                 <thead className="text-slate-500 border-b border-slate-800">
                   <tr>
                     <th className="text-left px-1">작업일</th>
                     <th className="text-left px-1">항차</th>
-                    <th className="text-left px-1">모드</th>
-                    <th className="text-right px-1">전체</th>
-                    <th className="text-right px-1">PTK</th>
+                    <th className="text-right px-1">양하</th>
+                    <th className="text-right px-1">선적</th>
                     <th className="text-left px-1">분석자</th>
                   </tr>
                 </thead>
                 <tbody>
                   {voyageList.slice(0, 20).map((v, i) => (
                     <tr key={i} className="border-b border-slate-800/40">
-                      <td className="px-1 text-slate-300">{fmtDateFull(v.analyzed_at)}</td>
-                      <td className="px-1 text-purple-300">{v.voy || '-'}</td>
-                      <td className="px-1">
-                        {v.mode === 'discharge' ? <span className="text-blue-300">양하</span> :
-                         v.mode === 'loading' ? <span className="text-amber-300">선적</span> :
-                         <span className="text-slate-500">{v.mode || '-'}</span>}
-                      </td>
-                      <td className="px-1 text-right text-slate-300">{v.container_count}</td>
-                      <td className="px-1 text-right text-emerald-300">{v.ptk_count}</td>
+                      <td className="px-1 text-slate-300">{fmtDateFull(v.completed_at || v.analyzed_at)}</td>
+                      <td className="px-1 text-purple-300">{v.voy_d || v.voy_l || v.voy || '-'}</td>
+                      <td className="px-1 text-right text-blue-300 font-bold">{v.discharge_count || 0}</td>
+                      <td className="px-1 text-right text-amber-300 font-bold">{v.loading_count || 0}</td>
                       <td className="px-1 text-cyan-300">{v.analyzed_by || '-'}</td>
                     </tr>
                   ))}
                   {voyageList.length > 20 && (
-                    <tr><td colSpan="6" className="text-center text-slate-500 px-1 pt-1">… 외 {voyageList.length - 20}건</td></tr>
+                    <tr><td colSpan="5" className="text-center text-slate-500 px-1 pt-1">… 외 {voyageList.length - 20}건</td></tr>
                   )}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-700 font-bold">
+                    <td className="px-1 text-slate-200" colSpan="2">합계 {voyageList.length}항차</td>
+                    <td className="px-1 text-right text-blue-300">{voyageList.reduce((s, v) => s + (v.discharge_count || 0), 0)}</td>
+                    <td className="px-1 text-right text-amber-300">{voyageList.reduce((s, v) => s + (v.loading_count || 0), 0)}</td>
+                    <td className="px-1"></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}

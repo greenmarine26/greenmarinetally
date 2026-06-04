@@ -459,19 +459,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         />
       )}
 
-      {/* 완료 확인 모달 — 작업량 저장 후 삭제 */}
+      {/* 완료 확인 모달 — 평택분 작업량 저장 후 삭제 */}
       {completeTarget && (() => {
         const v = voyages[completeTarget.key];
-        const cnt = (sec) => {
-          if (!sec) return 0;
-          const edi = sec.ediContainers;
-          if (edi && typeof edi === 'object') return Object.keys(edi).length;
-          const rows = sec.ediRows || sec.containers || sec.rows;
-          if (Array.isArray(rows)) return rows.length;
-          if (rows && typeof rows === 'object') return Object.keys(rows).length;
-          return 0;
-        };
-        const dCnt = cnt(v?.discharge), lCnt = cnt(v?.loading);
+        // 항차 리스트와 동일 기준: 평택분(PTK)만 (타지역 제외)
+        const dCnt = computeStats(v?.discharge).ptk;
+        const lCnt = computeStats(v?.loading).ptk;
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCompleteTarget(null)}>
             <div className="bg-slate-900 border border-emerald-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>

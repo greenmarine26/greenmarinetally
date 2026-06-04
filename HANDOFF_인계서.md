@@ -409,3 +409,39 @@
 
 - 완료/자동삭제 모두 작업량 = EDI 전체(ediContainers) 기준, completed 아님. 중복방지 statsCounted.
 - 코드: HomePage.jsx (VoyageCard onComplete prop, 완료 모달, performComplete). CheckCircle 아이콘 import.
+
+---
+
+## 11. V7.12 (2026-06-04) — 완료/자동삭제 집계 평택분으로 수정 (중요 버그)
+
+### 버그
+- 완료 버튼/자동삭제의 작업량 집계가 ediContainers **전체**(타지역 타항만 양·적하 포함)를 셈 → 평택분보다 많게 기록됨. 항차 리스트는 평택분만 정확히 보여주는데 완료 모달은 선박 전체를 보여주는 불일치.
+
+### 수정
+- 집계를 **평택분만**으로: `pol.endsWith('PTK') || pod.endsWith('PTK')`인 컨테이너만 카운트.
+- 항차 리스트(computeStats.ptk)와 **동일 기준**으로 통일. 리스트 표시 = 완료 모달 = 실제 누적 저장, 셋 다 일치.
+- firebase.js fbArchiveVoyageBeforeDelete countSection: PTK 필터. HomePage 완료 모달: computeStats(sec).ptk 재사용.
+- 검증: EDI 1000대(평택559+타지역441) → 559만 집계 ✅.
+
+### 핵심 원칙 (다음 클로드)
+- **작업량/카운트는 항상 평택분(PTK) 기준.** pol 또는 pod가 PTK로 끝나는 것만. EDI 전체를 세면 타지역 통과화물까지 포함돼 틀림.
+- 평택분 판정 기준 함수 = HomePage computeStats. 새로 만들지 말고 이걸 재사용.
+
+---
+
+## 12. V7.13 (2026-06-04) — 대시보드 선박별 항차/작업대수 집계
+
+### 목표 (사용자 요청)
+대시보드에서 선박별로 총 몇 항차, 양하 몇 대, 선적 몇 대. MCAT 선택 → 항차 나열 + 항차별 작업대수 + 합계.
+
+### 데이터 흐름 (기존 ships 구조 활용)
+- 완료 버튼/자동삭제 → `fbArchiveVoyageBeforeDelete` → `ships/{선박}/stats`(누계) + `ships/{선박}/voyages/{key}`(항차별 discharge_count/loading_count).
+- 대시보드 `ChiefDashboard` → `fbSubscribeShipLibrary`(ships 노드) → ShipLibrarySection. 카드 요약(입항 N회/양하/선적) + 펼침 항차별 표.
+
+### 핵심 수정
+- **선박 식별 폴백**: IMO → 콜사인(info.callsign) → 선박명. EDI에 IMO 없는 경우 많음(ATPR/MCAT 둘 다 콜사인만). IMO 없다고 집계 스킵하면 누락 → 폴백 필수.
+- **항차별 표**: discharge_count/loading_count 칼럼 + tfoot 합계. (기존 container_count/ptk_count 필드명과 달라 0으로 나오던 것 수정.)
+- 양하만/선적만 있는 항차도 각자 정확히 누적 (카드 갈라져도 누락 없음). 검증: 3항차(450/280, 500/0, 0/300) → 입항3 양하950 선적580 ✅.
+
+### 주의
+- 양하·선적 항차번호 다르면(0523E/0523W) 키 갈라져 카드 2개 — 정상. 각 카드가 자기 작업량 누적하니 합산 정확. (total_voyages는 카드당 +1이라 같은 기항이 2회로 셀 수 있음 — 대수는 정확, 횟수만 주의.)
