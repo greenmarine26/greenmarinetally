@@ -628,15 +628,38 @@ export async function fbAddShipVoyageInspector(imo, voyageKey, inspectorName, mo
 }
 
 // 선박 통계 업데이트 (양하/선적 누적)
-export async function fbAddShipStats(imo, stats) {
+// M7.14: voyageKey 단위로 항차별 평택 대수를 기록하고 total은 항차들을 다시 합산.
+//   기존 버그: 재업로드마다 total_voyages +1, total_discharge/loading 무한 증가.
+//   화면 "입항 N회"(stats.total_voyages)와 "항차 상세 N건"(voyages 키 개수)이 어긋나던 원인.
+//   이제 stats는 voyages 노드의 진실에서 파생 → 재업로드/재처리해도 정확.
+export async function fbAddShipStats(imo, stats, voyageKey) {
   if (!imo) return;
-  const r = ref(db, `ships/${imo}/stats`);
-  const snap = await get(r);
-  const cur = snap.val() || { total_discharge: 0, total_loading: 0, total_voyages: 0 };
-  await set(r, {
-    total_discharge: (cur.total_discharge || 0) + (stats.discharge || 0),
-    total_loading: (cur.total_loading || 0) + (stats.loading || 0),
-    total_voyages: (cur.total_voyages || 0) + 1,
+  const base = ref(db, `ships/${imo}`);
+  const snap = await get(base);
+  const cur = snap.val() || {};
+  const voys = { ...(cur.voyages || {}) };
+
+  // 이 항차의 평택 양/적하 대수를 voyages 노드에 기록 (덮어쓰기 — 재업로드 시 누적 아님)
+  if (voyageKey) {
+    voys[voyageKey] = {
+      ...(voys[voyageKey] || {}),
+      discharge_ptk: stats.discharge || 0,
+      loading_ptk: stats.loading || 0,
+    };
+  }
+
+  // total은 모든 항차의 평택 대수를 합산 (무한 증가 불가)
+  let totalD = 0, totalL = 0;
+  const voyKeys = Object.keys(voys);
+  voyKeys.forEach(k => {
+    totalD += voys[k]?.discharge_ptk || 0;
+    totalL += voys[k]?.loading_ptk || 0;
+  });
+
+  await set(ref(db, `ships/${imo}/stats`), {
+    total_discharge: totalD,
+    total_loading: totalL,
+    total_voyages: voyKeys.length,   // 항차 상세 건수와 항상 일치
     last_voyage_at: Date.now(),
   });
 }

@@ -1,20 +1,26 @@
-<!doctype html>
-<html lang="ko" class="dark">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<title>Tallyman Master</title>
-<meta name="theme-color" content="#0f172a"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="Tallyman"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<link rel="manifest" href="./assets/manifest-CqEN1U-O.webmanifest"/>
-<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
-  <script type="module" crossorigin src="./assets/index-CQOVPo4D.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-ZfAjBwaL.css">
-</head>
-<body>
-<div id="root"></div>
-</body>
+<!DOCTYPE html>
+<!-- 
+  진입 소스형 index.html (vite build 입력용).
+  build.sh가 이 파일을 root index.html로 교체한 후 vite build 실행.
+  빌드 결과 dist/index.html을 다시 root로 복사 → production 운영용 빌드본 완성.
+  
+  운영용 root index.html은 빌드본 (assets 디렉토리의 해시 포함 JS 참조). 
+  이 파일은 빌드 진입용만 — 직접 서빙되지 않음.
+-->
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Tallyman Master</title>
+    <link rel="manifest" href="./assets/manifest-CqEN1U-O.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Tallyman" />
+    <script type="module" crossorigin src="./assets/index-DXodhAVO.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DkFTlXhB.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>

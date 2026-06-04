@@ -162,21 +162,41 @@ export function extractShipInfo(ediText) {
   for (const s of segs) {
     if (!s.startsWith('TDT+')) continue;
     const parts = s.split('+');
-    // IMO 자리 = parts[6] 이후 비어있지 않은 마지막 part (보통 parts[8])
+    // M7.14: IMO 키 분열 방지 — 7자리 숫자 IMO를 절대 우선.
+    //   기존 버그: parts 뒤에서부터 영숫자 5-9자리를 IMO로 잡아 콜사인(V7A576 등)이
+    //   IMO 자리에 들어가 같은 배가 ships/{진짜IMO} + ships/{콜사인} 둘로 갈라졌음.
+    //   해결: 같은 TDT에서 (a)7자리 숫자 IMO와 (b)콜사인 후보를 모두 수집,
+    //         imo는 항상 7자리 숫자 우선, 없을 때만 콜사인 fallback. callsign은 별도 보존.
+    let numericImo = '';
+    let fallbackId = '';
+    let name = '';
+    let callsign = '';
     for (let i = parts.length - 1; i >= 6; i--) {
       if (!parts[i]) continue;
       const tokens = parts[i].split(':');
       if (tokens.length < 2) continue;
-      const imo = tokens[0].trim();
-      // IMO 패턴: 7자리 숫자(표준) 또는 영숫자 5-9자리(Lloyd's/Q-code 등)
-      if (/^[A-Z0-9]{5,9}$/i.test(imo)) {
-        // 선박명: tokens[3] 이후 (':'로 구분, 빈 토큰 무시)
-        let name = '';
-        if (tokens.length >= 4) {
-          name = tokens.slice(3).filter(t => t).join(':').trim();
-        }
-        return { imo: imo.toUpperCase(), name, voyage: parts[2] || '' };
+      const id = tokens[0].trim();
+      // 선박명은 어느 토큰 그룹이든 4번째 이후에서 한 번 잡으면 유지
+      if (!name && tokens.length >= 4) {
+        const cand = tokens.slice(3).filter(t => t).join(':').trim();
+        if (cand) name = cand;
       }
+      if (/^[0-9]{7}$/.test(id)) {
+        numericImo = id;                      // 표준 7자리 IMO
+      } else if (/^[A-Z0-9]{4,9}$/i.test(id)) {
+        if (!fallbackId) fallbackId = id.toUpperCase();   // 콜사인/Q코드 등
+        if (!callsign && /[A-Z]/i.test(id)) callsign = id.toUpperCase();
+      }
+    }
+    const imo = numericImo || fallbackId;
+    if (imo) {
+      return {
+        imo: imo.toUpperCase(),
+        name,
+        voyage: parts[2] || '',
+        callsign,
+        imoIsNumeric: !!numericImo,   // 진짜 IMO인지 여부 (콜사인 fallback 식별용)
+      };
     }
   }
   return null;

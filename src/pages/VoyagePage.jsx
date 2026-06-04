@@ -1397,6 +1397,12 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     const rawEdiTexts = [];
     const rawEdiFileNames = [];
 
+    // M7.14: 선박 통계용 평택분 누적 (화면 mode 의존 제거 — EDI 자동 판정 기준)
+    //   양하/선적 한쪽만 0으로 박히던 버그 root cause: fbAddShipStats가 화면 mode + 전체 대수(통과 포함)를 썼음.
+    //   여기서 EDI 내용으로 판정한 ediKind 기준 평택(PTK)분만 양/적하로 따로 누적.
+    let statDischargePtk = 0;
+    let statLoadingPtk = 0;
+
     for (const file of ediCandidates) {
       try {
         const text = await file.text();
@@ -1461,6 +1467,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           allCns[key] = { ...c, _slotKey: key, _mode: containerMode };
         });
         const ediKindLabel = ediKind === 'discharge' ? '양하' : '선적';
+        // M7.14: 선박 통계용 — 이 파일의 평택분을 ediKind 기준으로 누적
+        if (ediKind === 'discharge') statDischargePtk += ptkCount;
+        else statLoadingPtk += ptkCount;
         results.push(`✅ ${file.name}: ${ediKindLabel} EDI 자동 판정 — 평택 ${ptkCount}대 (전체 ${total}, 통과 ${total - ptkCount}대 포함 저장)`);
         // 항차 정보 자동 보완
         // M5.87: callsign + vsl도 자동 저장 (EDI TDT 세그먼트에서 추출 → PORT-MIS 매칭 자동화)
@@ -1625,11 +1634,17 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           mode,
           container_count: allEdiContainers.length,
           ptk_count: Object.keys(allCns).length,
+          // M7.14: 항차별 평택 양/적하 대수 명시 기록 (화면 집계 정확도용)
+          discharge_ptk: statDischargePtk,
+          loading_ptk: statLoadingPtk,
           analyzed_by: inspector || '',   // M6.15: EDI 업로드한 검수원
         });
+        // M7.14: 통계 누적 — 화면 mode가 아니라 EDI 판정 기준 평택분으로 양/적하 따로 누적
+        //   (기존: { [mode]: 전체대수 } → 한쪽 0 + 통과분 오염 버그)
         await fbAddShipStats(shipInfo.imo, {
-          [mode]: Object.keys(allCns).length,
-        });
+          discharge: statDischargePtk,
+          loading: statLoadingPtk,
+        }, voyageKey);
       } catch (e) {
         console.error('Ship structure save failed:', e);
       }

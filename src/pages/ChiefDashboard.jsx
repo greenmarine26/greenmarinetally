@@ -563,13 +563,101 @@ function ShipLibrarySection({ shipLib, voyages }) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('frequency'); // frequency | recent | name | discharge | loading
 
+  // M7.14: IMO 키 분열 병합 (표시 단계) — Firebase 데이터는 보존, 화면에서만 합침.
+  //   콜사인이 IMO 자리에 섞여 같은 배가 ships/{진짜IMO} + ships/{콜사인} 둘로 갈라진 과거 데이터 대응.
+  //   기준: 7자리 숫자 IMO가 있으면 그 IMO로, 없으면 정규화 선박명(공백/기호 제거 대문자)으로 그룹.
+  //   대표 키: 그룹 내 7자리 숫자 IMO 우선, 없으면 첫 키. voyages 합치고 stats 재합산.
+  const mergedLib = useMemo(() => {
+    const entries = Object.entries(shipLib || {});
+    const groups = {}; // groupKey → { repImo, names:Set, ships:[[imo,s]...] }
+    const normName = (n) => String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    entries.forEach(([imo, s]) => {
+      const isNumericImo = /^[0-9]{7}$/.test(imo);
+      const gk = isNumericImo ? `IMO:${imo}` : `NAME:${normName(s?.name)}` || `KEY:${imo}`;
+      if (!groups[gk]) groups[gk] = { repImo: imo, repIsNumeric: isNumericImo, ships: [], names: new Set() };
+      // 7자리 숫자 IMO를 대표 키로 승격
+      if (isNumericImo && !groups[gk].repIsNumeric) { groups[gk].repImo = imo; groups[gk].repIsNumeric = true; }
+      groups[gk].ships.push([imo, s]);
+      if (s?.name) groups[gk].names.add(s.name);
+    });
+
+    // 같은 정규화 이름이 서로 다른 그룹(IMO그룹 vs NAME그룹)으로 흩어진 경우 추가 병합
+    //   예: ships/{진짜IMO}는 IMO그룹, ships/{콜사인}은 NAME그룹 → 이름으로 다시 묶기
+    const byName = {}; // normName → groupKey (대표)
+    Object.entries(groups).forEach(([gk, g]) => {
+      g.names.forEach(nm => {
+        const nn = normName(nm);
+        if (!nn) return;
+        if (byName[nn] && byName[nn] !== gk) {
+          // 병합: 숫자 IMO 그룹을 살림
+          const target = groups[byName[nn]];
+          if (target && groups[gk]) {
+            target.ships.push(...groups[gk].ships);
+            groups[gk].names.forEach(x => target.names.add(x));
+            if (g.repIsNumeric && !target.repIsNumeric) { target.repImo = g.repImo; target.repIsNumeric = true; }
+            delete groups[gk];
+          }
+        } else if (!byName[nn]) {
+          byName[nn] = gk;
+        }
+      });
+    });
+
+    // 그룹 → 합산 선박 객체
+    return Object.values(groups).map(g => {
+      const mergedVoys = {};
+      let bestStruct = null, bestName = '', lastAt = 0;
+      const aliasImos = [];
+      g.ships.forEach(([imo, s]) => {
+        aliasImos.push(imo);
+        Object.entries(s?.voyages || {}).forEach(([vk, v]) => {
+          // 같은 voyageKey 충돌 시 더 최근(analyzed_at) 우선
+          if (!mergedVoys[vk] || (v?.analyzed_at || 0) > (mergedVoys[vk]?.analyzed_at || 0)) {
+            mergedVoys[vk] = v;
+          }
+        });
+        if (s?.structure && (!bestStruct || (s.structure.bay_count || 0) > (bestStruct.bay_count || 0))) {
+          bestStruct = s.structure;
+        }
+        if (s?.name && s.name.length > bestName.length) bestName = s.name;
+        if ((s?.stats?.last_voyage_at || 0) > lastAt) lastAt = s.stats.last_voyage_at;
+      });
+      // stats 재합산 — 항차별 평택 대수 우선, 없으면 기존 stats 비례 추정
+      let totalD = 0, totalL = 0;
+      Object.values(mergedVoys).forEach(v => {
+        totalD += v?.discharge_ptk || 0;
+        totalL += v?.loading_ptk || 0;
+      });
+      // 구버전 항차(discharge_ptk 없음) 보정: 그룹의 기존 stats 합을 fallback으로
+      if (totalD === 0 && totalL === 0) {
+        g.ships.forEach(([, s]) => {
+          totalD += s?.stats?.total_discharge || 0;
+          totalL += s?.stats?.total_loading || 0;
+        });
+      }
+      return [g.repImo, {
+        name: bestName || [...g.names][0] || '?',
+        structure: bestStruct || {},
+        voyages: mergedVoys,
+        stats: {
+          total_voyages: Object.keys(mergedVoys).length,
+          total_discharge: totalD,
+          total_loading: totalL,
+          last_voyage_at: lastAt,
+        },
+        _aliasImos: aliasImos,   // 병합된 원본 키들 (디버그/검색용)
+      }];
+    });
+  }, [shipLib]);
+
   // 검색 + 정렬된 선박 목록
   const sortedShips = useMemo(() => {
-    const list = Object.entries(shipLib || {});
+    const list = mergedLib;
     const q = search.trim().toLowerCase();
     const filtered = !q ? list : list.filter(([imo, s]) => {
       const name = String(s?.name || '').toLowerCase();
-      return name.includes(q) || imo.toLowerCase().includes(q);
+      const aliases = (s?._aliasImos || []).join(' ').toLowerCase();
+      return name.includes(q) || imo.toLowerCase().includes(q) || aliases.includes(q);
     });
     const getMetric = (s) => {
       const stats = s.stats || {};
@@ -590,14 +678,14 @@ function ShipLibrarySection({ shipLib, voyages }) {
       }
       return (getMetric(b[1]) || 0) - (getMetric(a[1]) || 0);
     });
-  }, [shipLib, search, sortBy]);
+  }, [mergedLib, search, sortBy]);
 
   return (
     <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
       <div className="flex items-center gap-2 mb-2">
         <Library className="w-4 h-4 text-purple-400"/>
         <div className="text-sm font-bold text-slate-100">
-          선박 라이브러리 ({Object.keys(shipLib || {}).length}척 · 표시 {sortedShips.length})
+          선박 라이브러리 ({mergedLib.length}척 · 표시 {sortedShips.length})
         </div>
       </div>
       <div className="text-[10px] text-slate-500 mb-2">
