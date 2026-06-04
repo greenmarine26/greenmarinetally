@@ -1616,7 +1616,18 @@ async function renderBayView(){
   const pushRows=(rows,flag)=>{ if(rows) for(const r of rows){ const b=parseInt(r.bay,10); if(Number.isFinite(b)) allRows.push({r,flag,b}); } };
   pushRows(state.disch&&state.disch.ediRows,'d');
   pushRows(state.stow&&state.stow.ediRows,'l');
+  // 베이사전 골격 로드 (existBays 짝꿍 판정에 사전 베이도 포함 — 빈 짝수 베이로 홀수 흩어짐 방지)
+  let dictBays=new Map();
+  try{
+    const fbDict=await fbFetchBayDict();
+    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
+    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
+    const entry=lookupBayDef(fbDict, imo, nm);
+    if(entry) dictBays=bvDictBays(entry);
+  }catch(e){ /* 베이사전 없으면 컨테이너로 추정(폴백) */ }
+
   const existBays=new Set(allRows.map(x=>x.b));
+  for(const bn of dictBays.keys()) existBays.add(bn);
   // 그룹키: 짝수 e → e(페어 대표). 홀수 o → 앞 짝수(o-1) 있으면 o-1, 없으면 o(단독).
   const groupKeyOf=(b)=> b%2===0 ? b : (existBays.has(b-1)?b-1:b);
 
@@ -1653,16 +1664,6 @@ async function renderBayView(){
       coneTotal.disch.deck+=d.deck; coneTotal.disch.ele+=d.ele; coneTotal.disch.hold+=d.hold;
     }
   }catch(e){ coneByGroup={}; }
-
-  // 베이사전 골격 로드 (검수앱 전체 구조 — 컨테이너 없는 빈 슬롯까지 표시)
-  let dictBays=new Map();
-  try{
-    const fbDict=await fbFetchBayDict();
-    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
-    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
-    const entry=lookupBayDef(fbDict, imo, nm);
-    if(entry) dictBays=bvDictBays(entry);
-  }catch(e){ /* 베이사전 없으면 컨테이너로 추정(폴백) */ }
 
   const hasD=!!(state.disch&&state.disch.ediRows&&state.disch.ediRows.length);
   const hasL=!!(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
