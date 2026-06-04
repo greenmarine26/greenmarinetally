@@ -397,3 +397,15 @@
 ### 코드
 - `src/pages/HomePage.jsx`: 자동삭제 useEffect (autoCleanDone state로 1회), 카드에 작업일.
 - `src/firebase.js`: fbArchiveVoyageBeforeDelete (countSection=ediContainers 개수, fbAddShipStats + fbAddShipVoyage 호출).
+
+---
+
+## 10. V7.11 (2026-06-04) — 항차 완료 버튼
+
+세 가지 항차 정리 방법 (모두 HomePage 카드):
+1. **완료 버튼**(초록 CheckCircle): 작업 끝 → 확인모달(양하/선적 대수) → fbArchiveVoyageBeforeDelete(작업량 100% 기록) + fbDeleteVoyage. `completeTarget` state + performComplete.
+2. **자동삭제**(7일): 완료 안 눌러도 createdAt 7일↑ → 완료와 동일 처리(작업량 기록+삭제).
+3. **삭제 버튼**(빨강 Trash2): 기록 없이 그냥 삭제. 잘못 만든 항차 제거용. handleDelete/performDelete.
+
+- 완료/자동삭제 모두 작업량 = EDI 전체(ediContainers) 기준, completed 아님. 중복방지 statsCounted.
+- 코드: HomePage.jsx (VoyageCard onComplete prop, 완료 모달, performComplete). CheckCircle 아이콘 import.

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor } from 'lucide-react';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
@@ -244,6 +244,20 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     setDeleteTarget(null);
   };
 
+  // 완료 버튼: 작업 끝난 항차 → 전체 작업량을 선박 누적에 100% 완료 기록 후 삭제.
+  //   (삭제 버튼은 기록 없이 그냥 삭제 — 잘못 만든 항차 제거용)
+  const [completeTarget, setCompleteTarget] = useState(null);
+  const performComplete = async () => {
+    if (!completeTarget) return;
+    const { key } = completeTarget;
+    const v = voyages[key];
+    try {
+      await fbArchiveVoyageBeforeDelete(v?.info?.imo, key, v);  // 전체 작업량 누적 기록
+      await fbDeleteVoyage(key);                                 // 기록 후 삭제
+    } catch (e) { console.error('[완료] 실패:', key, e); }
+    setCompleteTarget(null);
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-3 py-3">
       {/* 그린마린 검수팀 전용 배지 */}
@@ -417,6 +431,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 activeInspectors={activeInspectors[v.key] || []}
                 onOpen={() => onOpenVoyage(v.key)}
                 onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
+                onComplete={() => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy })}
               />
             </React.Fragment>
           );
@@ -443,6 +458,41 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           onConfirm={performDelete}
         />
       )}
+
+      {/* 완료 확인 모달 — 작업량 저장 후 삭제 */}
+      {completeTarget && (() => {
+        const v = voyages[completeTarget.key];
+        const cnt = (sec) => {
+          if (!sec) return 0;
+          const edi = sec.ediContainers;
+          if (edi && typeof edi === 'object') return Object.keys(edi).length;
+          const rows = sec.ediRows || sec.containers || sec.rows;
+          if (Array.isArray(rows)) return rows.length;
+          if (rows && typeof rows === 'object') return Object.keys(rows).length;
+          return 0;
+        };
+        const dCnt = cnt(v?.discharge), lCnt = cnt(v?.loading);
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCompleteTarget(null)}>
+            <div className="bg-slate-900 border border-emerald-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="w-6 h-6 text-emerald-400"/>
+                <h3 className="text-lg font-bold text-slate-100">작업 완료</h3>
+              </div>
+              <p className="text-sm text-slate-300 mb-1">{completeTarget.vsl} {completeTarget.voy}</p>
+              <p className="text-sm text-slate-400 mb-3">이 항차의 전체 작업량을 선박 기록에 저장하고 목록에서 제거합니다.</p>
+              <div className="bg-slate-800/60 rounded-lg p-3 mb-4 text-sm">
+                <div className="flex justify-between"><span className="text-blue-300">양하</span><span className="font-bold text-slate-100">{dCnt}대</span></div>
+                <div className="flex justify-between mt-1"><span className="text-amber-300">선적</span><span className="font-bold text-slate-100">{lCnt}대</span></div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setCompleteTarget(null)} className="flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-sm">취소</button>
+                <button onClick={performComplete} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">완료 저장</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* M5.25: PORT-MIS 캡처 업로드 모달 */}
       {showPortMisCapture && (
@@ -543,7 +593,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete }) {
+function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete }) {
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
@@ -625,13 +675,24 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete }) {
               </>
             ) : <span className="text-slate-600">대기 중</span>}
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"
-            title="항차 삭제"
-          >
-            <Trash2 className="w-3.5 h-3.5"/>
-          </button>
+          <div className="flex items-center gap-1">
+            {onComplete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onComplete(); }}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 hover:text-emerald-300 text-[10px] font-bold border border-emerald-800/40"
+                title="작업 완료 — 작업량 저장 후 삭제"
+              >
+                <CheckCircle className="w-3.5 h-3.5"/>완료
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"
+              title="항차 삭제 (기록 없이 제거)"
+            >
+              <Trash2 className="w-3.5 h-3.5"/>
+            </button>
+          </div>
         </div>
       )}
     </div>
