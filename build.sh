@@ -22,6 +22,10 @@ APPVER=$(grep -E "^export const APP_VERSION" src/utils.js | sed -E "s/.*=\s*['\"
 if [ -n "$APPVER" ]; then
   sed -i "s/^const VERSION = '.*';/const VERSION = '$APPVER';/" public/sw.js
   echo "✓ sw.js VERSION → $APPVER 동기화"
+  # 콘앱 화면 버전 라벨도 동기화 — 라벨로 신/구버전 구분 가능하게.
+  #   (이전: 코드는 고쳐도 라벨이 V7.01로 박혀 업데이트 여부를 화면에서 알 수 없었음)
+  sed -i "s/(주)그린마린 · V[0-9.]*/(주)그린마린 · $APPVER/" public/cone.html
+  echo "✓ cone.html 화면 버전 → $APPVER 동기화"
 else
   echo "⚠ APP_VERSION 추출 실패 — sw.js 수동 확인 필요"
 fi
