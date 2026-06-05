@@ -582,6 +582,8 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
         discharge: dPtk, loading: lPtk,
         imo: info.imo || '',
         createdAt: info.createdAt || 0,
+        inspectorDone: !!info.inspectorDone,
+        inspectorDoneAt: info.inspectorDoneAt || 0,
       });
     }
     return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -628,7 +630,7 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
                 </button>
                 {confirmKey === r.key ? (
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-amber-300 mr-1">완료 저장?</span>
+                    <span className="text-[10px] text-amber-300 mr-1">최종 저장?</span>
                     <button
                       onClick={() => doComplete(r)}
                       disabled={busyKey === r.key}
@@ -639,17 +641,25 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
                       className="text-[11px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200"
                     >취소</button>
                   </div>
-                ) : (
+                ) : r.inspectorDone ? (
                   <button
                     onClick={() => setConfirmKey(r.key)}
                     className="text-[11px] px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
-                    title="수석 최종 확인 후 완료 저장 (보관소로 이동)"
-                  >✓ 완료 저장</button>
+                    title="검수사 완료 확인됨 — 수석 최종 저장 (보관소로 이동)"
+                  >✓ 수석 완료 저장</button>
+                ) : (
+                  <span
+                    className="text-[10px] px-2 py-1 rounded bg-slate-700/40 text-slate-400 border border-slate-600/40"
+                    title="검수사가 항차 화면에서 '검수 완료'를 눌러야 수석이 최종 저장할 수 있습니다"
+                  >검수 진행 중</span>
                 )}
               </div>
               <div className="flex items-center gap-3 mt-1 text-xs">
                 <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b></span>
                 <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b></span>
+                {r.inspectorDone && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
+                )}
                 {(r.voyD || r.voyL) && (
                   <span className="text-slate-500 text-[10px]">
                     {r.voyD && `양하 ${r.voyD}`}{r.voyD && r.voyL && ' · '}{r.voyL && `선적 ${r.voyL}`}
@@ -693,13 +703,23 @@ function ShipArchiveSection({ shipLib }) {
         discharge: v?.discharge_ptk || 0,
         loading: v?.loading_ptk || 0,
         at: v?.completed_at || v?.analyzed_at || 0,
+        vsl: v?.vsl || '',
       })).filter(r => r.discharge > 0 || r.loading > 0);
       if (voyRows.length === 0) continue;   // 완료 항차 없는 배(구조만)는 보관소에 안 보임
       voyRows.sort((a, b) => (b.at || 0) - (a.at || 0));
       const totalD = voyRows.reduce((s, r) => s + r.discharge, 0);
       const totalL = voyRows.reduce((s, r) => s + r.loading, 0);
       const lastAt = voyRows[0]?.at || 0;
-      out.push({ imo, name: s?.name || imo, voyRows, totalD, totalL, lastAt });
+      // 선박명 결정: ships.name이 진짜 선박명이면 사용. 비었거나 콜사인 패턴이면
+      //   항차들의 vsl 중 진짜 선박명(공백 포함 또는 4자 초과 영문명)을 우선. 그래도 없으면 키.
+      //   (이전: ships/{콜사인}/name이 비어 키(콜사인)가 그대로 표시되던 문제)
+      const looksLikeName = (n) => n && (/\s/.test(n) || /[A-Za-z].*[A-Za-z].*[A-Za-z]/.test(n)) && !/^[A-Z0-9]{4,7}$/.test(String(n).replace(/\s/g, ''));
+      let shipName = s?.name && looksLikeName(s.name) ? s.name : '';
+      if (!shipName) {
+        const vslCand = voyRows.map(r => r.vsl).find(v => looksLikeName(v));
+        shipName = vslCand || s?.name || imo;
+      }
+      out.push({ imo, name: shipName, voyRows, totalD, totalL, lastAt });
     }
     return out.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));   // 최근 완료순
   }, [shipLib]);
