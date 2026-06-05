@@ -232,7 +232,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.19</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.20</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -632,7 +632,11 @@ async function fbFetchEdiContainers(voyageKey, mode){
       pol:c.pol||null, pod:c.pod||null,
     });
   }
-  return rows.length? rows : null;
+  // 평택분만 — 검수앱 ediContainers는 전체(타지역 포함)라 여기서 걸러야 함.
+  //   (이전: 이 경로엔 필터가 없어 작업 없는 타지역 베이까지 콘 계산에 들어가던 버그)
+  //   양하(discharge) = POD가 평택, 선적(loading) = POL이 평택. parseEDI와 동일 기준.
+  const ptk = rows.filter(r => mode==='discharge' ? isPtkPort(r.pod) : isPtkPort(r.pol));
+  return ptk.length ? ptk : null;
 }
 
 
