@@ -704,21 +704,20 @@ function ShipArchiveSection({ shipLib }) {
         loading: v?.loading_ptk || 0,
         at: v?.completed_at || v?.analyzed_at || 0,
         vsl: v?.vsl || '',
+        vslFull: v?.vslFull || '',
       })).filter(r => r.discharge > 0 || r.loading > 0);
       if (voyRows.length === 0) continue;   // 완료 항차 없는 배(구조만)는 보관소에 안 보임
       voyRows.sort((a, b) => (b.at || 0) - (a.at || 0));
       const totalD = voyRows.reduce((s, r) => s + r.discharge, 0);
       const totalL = voyRows.reduce((s, r) => s + r.loading, 0);
       const lastAt = voyRows[0]?.at || 0;
-      // 선박명 결정: ships.name이 진짜 선박명이면 사용. 비었거나 콜사인 패턴이면
-      //   항차들의 vsl 중 진짜 선박명(공백 포함 또는 4자 초과 영문명)을 우선. 그래도 없으면 키.
-      //   (이전: ships/{콜사인}/name이 비어 키(콜사인)가 그대로 표시되던 문제)
-      const looksLikeName = (n) => n && (/\s/.test(n) || /[A-Za-z].*[A-Za-z].*[A-Za-z]/.test(n)) && !/^[A-Z0-9]{4,7}$/.test(String(n).replace(/\s/g, ''));
-      let shipName = s?.name && looksLikeName(s.name) ? s.name : '';
-      if (!shipName) {
-        const vslCand = voyRows.map(r => r.vsl).find(v => looksLikeName(v));
-        shipName = vslCand || s?.name || imo;
-      }
+      // 선박명 결정 (M7.24c): 사용자 입력 약자(vsl, 예 PCBJ/TNJP) 최우선 — 검수사가
+      //   약자만 봐도 선박을 식별함. 약자 없으면 ships.name → vslFull(풀네임) → 키 순.
+      const pick = (arr) => arr.find(v => v && String(v).trim()) || '';
+      let shipName = pick(voyRows.map(r => r.vsl));        // 약자 우선
+      if (!shipName) shipName = s?.name && !/^[0-9]{7}$/.test(s.name) ? s.name : '';
+      if (!shipName) shipName = pick(voyRows.map(r => r.vslFull));
+      if (!shipName) shipName = s?.name || imo;
       out.push({ imo, name: shipName, voyRows, totalD, totalL, lastAt });
     }
     return out.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));   // 최근 완료순
