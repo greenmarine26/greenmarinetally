@@ -15,6 +15,17 @@
 set -e
 cd "$(dirname "$0")"
 
+# 캐시 자동 무효화: sw.js의 VERSION을 utils.js의 APP_VERSION과 동기화.
+# sw.js VERSION이 바뀌면 서비스워커가 새 버전으로 인식 → 옛 캐시 삭제 + 자동 새로고침.
+# (이전: sw.js가 V7.13에 멈춰 새 배포해도 캐시 안 비워지던 문제 해결)
+APPVER=$(grep -E "^export const APP_VERSION" src/utils.js | sed -E "s/.*=\s*['\"]([^'\"]+)['\"].*/\1/")
+if [ -n "$APPVER" ]; then
+  sed -i "s/^const VERSION = '.*';/const VERSION = '$APPVER';/" public/sw.js
+  echo "✓ sw.js VERSION → $APPVER 동기화"
+else
+  echo "⚠ APP_VERSION 추출 실패 — sw.js 수동 확인 필요"
+fi
+
 echo "[1/6] 옛 빌드 산출물 / vite 캐시 제거..."
 rm -rf dist assets node_modules/.vite
 
@@ -42,6 +53,10 @@ cp -r dist/assets ./
 cp dist/index.html ./
 # 콘앱(독립 파일): dist의 cone.html을 루트로 복사 (Pages가 루트 서빙). 검수앱과 무관.
 [ -f dist/cone.html ] && cp dist/cone.html ./
+# M7.18b: sw.js·manifest도 루트로 복사. 이게 빠져서 루트 sw.js가 V7.13에 멈춰
+#   새 배포해도 캐시 무효화가 안 되던 문제 해결. 서비스워커 버전 갱신은 루트 sw.js 기준.
+[ -f dist/sw.js ] && cp dist/sw.js ./ && echo "  ✓ 루트 sw.js 갱신 (캐시 무효화 반영)"
+[ -f dist/manifest.webmanifest ] && cp dist/manifest.webmanifest ./
 
 echo "[6/6] 검증..."
 JSFILE=$(ls assets/index-*.js 2>/dev/null | head -1)

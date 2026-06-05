@@ -689,14 +689,18 @@ export async function fbResetAllShipStats() {
 }
 
 // M7.15: 한 섹션(discharge 또는 loading)의 평택분 컨테이너 수.
-//   discharge 섹션 = 양하 평택분, loading 섹션 = 선적 평택분. (pol 또는 pod가 PTK)
+//   discharge 섹션 = 양하 평택분, loading 섹션 = 선적 평택분. (pol 또는 pod가 평택)
+//   M7.18b: 평택 판정을 isPyeongtaekPort 기준으로 통일 — PTK/PYT/PYOTM/PYO 변종 포괄.
+//          (이전 endsWith('PTK')는 KRPYO/KRPYOTM 등을 누락시켜 통계 과소집계 위험)
+function _isPtk(code) {
+  if (!code) return false;
+  return /(PTK|PYT|PYOTM|PYO)$/.test(String(code).toUpperCase().trim());
+}
 function _ptkCountOfSection(section) {
   if (!section || !section.ediContainers) return 0;
   const set = new Set();
   for (const c of Object.values(section.ediContainers)) {
-    const pol = (c.pol || '').toUpperCase();
-    const pod = (c.pod || '').toUpperCase();
-    if (pol.endsWith('PTK') || pod.endsWith('PTK')) set.add(c.cn || JSON.stringify(c));
+    if (_isPtk(c.pol) || _isPtk(c.pod)) set.add(c.cn || JSON.stringify(c));
   }
   return set.size;
 }
@@ -721,55 +725,120 @@ export function tallyVoyagesByShip(voyages) {
 //   ships/{imo}/voyages/{key}/statsCounted 플래그로 한 항차당 1회만 집계.
 //   삭제돼도 ships/{imo}/stats에 총 양하/선적 대수 영구 보존.
 export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
-  if (!voyage) return;
-  // 양하/선적 컨테이너 수 집계
-  // 전체 작업량 = 평택분(PTK) EDI 컨테이너 수. 타지역(타항만 양·적하) 제외.
-  //   항차 리스트의 평택 카운트(computeStats.ptk)와 동일 기준: pol 또는 pod가 PTK로 끝나는 것.
-  //   예: EDI 전체 1000대여도 평택분 559대면 559로 기록.
+  if (!voyage) return false;
+  // 양하/선적 평택분 컨테이너 수 집계 (변종 포함 기준)
   const countSection = (sec) => {
     if (!sec) return 0;
     const edi = sec.ediContainers;
     if (!edi || typeof edi !== 'object') return 0;
     let n = 0;
     for (const c of Object.values(edi)) {
-      const pol = (c.pol || '').toUpperCase();
-      const pod = (c.pod || '').toUpperCase();
-      if (pol.endsWith('PTK') || pod.endsWith('PTK')) n++;
+      if (_isPtk(c.pol) || _isPtk(c.pod)) n++;
     }
     return n;
   };
   const discharge = countSection(voyage.discharge);
   const loading = countSection(voyage.loading);
   const info = voyage.info || {};
-  // 선박 식별: IMO 우선, 없으면 콜사인, 그것도 없으면 선박명. (EDI에 IMO 없는 경우 많음 — 콜사인은 거의 항상 있음)
-  //   IMO 없다고 집계를 통째로 스킵하면 양하/선적 작업량이 누락됨 → 폴백 필수.
   const shipId = imo || info.imo || info.callsign || (info.vsl ? info.vsl.toUpperCase().replace(/\s+/g, '') : '');
-  if (!shipId) return;            // 선박 식별 완전 불가일 때만 스킵
-  if (discharge === 0 && loading === 0) return;  // 기록할 작업량 없으면 스킵
 
-  // 중복 집계 방지: 이미 기록된 항차면 스킵
-  const vref = ref(db, `ships/${shipId}/voyages/${voyageKey}`);
-  const snap = await get(vref);
-  const existing = snap.exists() ? snap.val() : null;
-  if (existing && existing.statsCounted) return;  // 이미 집계됨
+  // ── M7.18b 핵심: 삭제 전 실제 데이터 전체를 archive 노드에 통째 백업 ──
+  //   기존엔 개수(통계)만 ships에 기록하고 실데이터는 그냥 삭제됨 → 복구 불가였음.
+  //   이제 records·ediContainers·info·xray 등 항차 전체를 archive/{voyageKey}에 복사.
+  //   archive는 어떤 일반 쓰기 경로도 건드리지 않음(읽기/복원 전용 보관소).
+  //   반환값: 백업 성공 true / 실패 false → 호출부(HomePage)는 true일 때만 삭제 진행.
+  try {
+    const archivePayload = {
+      ...voyage,                       // 항차 데이터 전체(discharge/loading/info/records 등)
+      _archivedAt: Date.now(),
+      _archiveVersion: 1,
+      _discharge_ptk: discharge,
+      _loading_ptk: loading,
+      _shipId: shipId || '',
+    };
+    await set(ref(db, `archive/${voyageKey}`), archivePayload);
+    // 백업 검증: 다시 읽어 실제로 저장됐는지 확인 (검증 없는 삭제 금지 원칙)
+    const verify = await get(ref(db, `archive/${voyageKey}/_archivedAt`));
+    if (!verify.exists()) {
+      console.error('[archive] 백업 검증 실패 — 삭제 중단:', voyageKey);
+      return false;
+    }
+  } catch (e) {
+    console.error('[archive] 백업 실패 — 삭제 중단:', voyageKey, e);
+    return false;            // 백업 실패 시 false → 호출부가 삭제 안 함
+  }
 
-  // 누적 통계에 더하기
-  await fbAddShipStats(shipId, { discharge, loading });
-  // 항차 메타 기록 (삭제돼도 ships에 이력 남김) + 집계 완료 플래그
-  await fbAddShipVoyage(shipId, voyageKey, {
-    vsl: info.vsl || '',
-    callsign: info.callsign || '',
-    imo: info.imo || '',
-    voy_d: info.voy_d || '',
-    voy_l: info.voy_l || '',
-    carrier: info.carrier || '',
-    discharge_count: discharge,
-    loading_count: loading,
-    completed: true,        // 100% 완료 처리
-    completed_at: Date.now(),
-    statsCounted: true,     // 중복 집계 방지 플래그
-    createdAt: info.createdAt || null,
-  });
+  // 통계 기록 (백업 성공 후). 기록할 작업량 없거나 선박 식별 불가여도 백업은 됐으므로 true.
+  if (shipId && (discharge > 0 || loading > 0)) {
+    await fbAddShipVoyage(shipId, voyageKey, {
+      vsl: info.vsl || '',
+      callsign: info.callsign || '',
+      imo: info.imo || '',
+      voy_d: info.voy_d || '',
+      voy_l: info.voy_l || '',
+      carrier: info.carrier || '',
+      discharge_ptk: discharge,
+      loading_ptk: loading,
+      _uploadKind: (discharge > 0 && loading > 0) ? 'both' : discharge > 0 ? 'discharge' : 'loading',
+      completed: true,
+      completed_at: Date.now(),
+      createdAt: info.createdAt || null,
+    });
+    await fbAddShipStats(shipId, {}, voyageKey);
+  }
+  return true;               // 백업 완료 — 호출부 삭제 진행 가능
+}
+
+// ── M7.18b: archive에서 항차 복원 ──
+//   완료/자동삭제로 voyages에서 사라진 항차를 archive에서 되살림.
+//   archive 메타(_로 시작하는 키)는 제거하고 원래 voyage 구조만 voyages/{key}로 복원.
+export async function fbRestoreVoyageFromArchive(voyageKey) {
+  const snap = await get(ref(db, `archive/${voyageKey}`));
+  if (!snap.exists()) return false;
+  const data = snap.val() || {};
+  const restored = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k === '_archivedAt' || k === '_archiveVersion' ||
+        k === '_discharge_ptk' || k === '_loading_ptk' || k === '_shipId') continue;
+    restored[k] = v;
+  }
+  await set(ref(db, `voyages/${voyageKey}`), restored);
+  return true;
+}
+
+// ── M7.18b: archive 목록 조회 (복원 UI용) ──
+export async function fbListArchive() {
+  const snap = await get(ref(db, 'archive'));
+  if (!snap.exists()) return [];
+  const out = [];
+  for (const [key, v] of Object.entries(snap.val() || {})) {
+    const info = v.info || {};
+    out.push({
+      voyageKey: key,
+      vsl: info.vsl || key.split('_')[0] || '',
+      archivedAt: v._archivedAt || 0,
+      discharge_ptk: v._discharge_ptk || 0,
+      loading_ptk: v._loading_ptk || 0,
+    });
+  }
+  return out.sort((a, b) => b.archivedAt - a.archivedAt);
+}
+
+// ── M7.18b: 1년 경과 archive 자동 정리 ──
+//   완료된 항차는 감사 자료로 1년 보관 후 자동 삭제. 앱 시작 시 1회 호출 권장.
+export async function fbCleanupArchive(maxAgeDays = 365) {
+  const snap = await get(ref(db, 'archive'));
+  if (!snap.exists()) return 0;
+  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+  let removed = 0;
+  for (const [key, v] of Object.entries(snap.val() || {})) {
+    const at = v._archivedAt || 0;
+    if (at && at < cutoff) {
+      await set(ref(db, `archive/${key}`), null);
+      removed++;
+    }
+  }
+  return removed;
 }
 
 // ─── M3.4: 답변 오답 신고 (검수원 → 다음 버전 개선용) ───

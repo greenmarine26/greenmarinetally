@@ -35,9 +35,15 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     (async () => {
       for (const [key, v] of expired) {
         try {
-          // 통계는 EDI 업로드 매칭 시 이미 기록됨. 여기선 항차 카드만 정리(삭제).
+          // 1주일 경과 = 작업 끝난 것으로 보고 archive 백업 → 성공 시에만 카드 삭제.
+          //   M7.18b: 백업 실패 시 삭제 보류 — 다음 기회에 재시도(데이터 유실 방지).
+          const ok = await fbArchiveVoyageBeforeDelete(v?.info?.imo, key, v);
+          if (!ok) {
+            console.warn(`[자동삭제] 백업 실패로 삭제 보류: ${key} (${v?.info?.vsl || ''})`);
+            continue;
+          }
           await fbDeleteVoyage(key);
-          console.log(`[자동삭제] 1주일 경과 항차 삭제: ${key} (${v?.info?.vsl || ''})`);
+          console.log(`[자동삭제] 1주일 경과 항차 백업+삭제: ${key} (${v?.info?.vsl || ''})`);
         } catch (e) { console.error('[자동삭제] 실패:', key, e); }
       }
     })();
@@ -249,10 +255,21 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const performComplete = async () => {
     if (!completeTarget) return;
     const { key } = completeTarget;
+    const v = voyages[key];
     try {
-      // 완료 = 작업 확인. 통계는 EDI 업로드 매칭 시 이미 기록됨 → 여기선 항차 카드만 정리(삭제).
+      // 완료 = 항차 데이터 전체를 archive에 백업 → 백업 성공 확인 후에만 카드 삭제.
+      //   M7.18b: 백업 실패(false) 시 삭제하지 않음 — 데이터 유실 방지.
+      const ok = await fbArchiveVoyageBeforeDelete(v?.info?.imo, key, v);
+      if (!ok) {
+        alert('완료 처리 실패: 백업이 저장되지 않아 항차를 삭제하지 않았습니다. 네트워크 확인 후 다시 시도하세요.');
+        setCompleteTarget(null);
+        return;
+      }
       await fbDeleteVoyage(key);
-    } catch (e) { console.error('[완료] 실패:', key, e); }
+    } catch (e) {
+      console.error('[완료] 실패:', key, e);
+      alert('완료 처리 중 오류가 발생해 항차를 삭제하지 않았습니다.');
+    }
     setCompleteTarget(null);
   };
 

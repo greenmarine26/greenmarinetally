@@ -450,9 +450,10 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const dictHasZero = (typeof userBay?.hasZero === 'boolean') ? userBay.hasZero : (override ? override.hasZero : false);
   const dictDeckZero = (userBay?.deckHasZero != null) ? userBay.deckHasZero : ((override?.deckHasZero != null) ? override.deckHasZero : dictHasZero);
   const dictHoldZero = (userBay?.holdHasZero != null) ? userBay.holdHasZero : ((override?.holdHasZero != null) ? override.holdHasZero : dictHasZero);
-  // EDI에 그 구역 컨테이너가 있으면 EDI의 00 유무가 정답 (사전 무시). 없으면 사전 폴백.
-  deckHasZero = ediHasDeck ? ediDeckHas0 : dictDeckZero;
-  holdHasZero = ediHasHold ? ediHoldHas0 : dictHoldZero;
+  // 베이매트릭스가 기본(진실): 매트릭스 명시값(null 아님) 우선 → 없을 때만 EDI 판정.
+  //   사용자가 데크00 체크 → EDI에 00 화물 없어도(선적 등) 09 안 생김.
+  deckHasZero = (dictDeckZero != null) ? dictDeckZero : (ediHasDeck ? ediDeckHas0 : false);
+  holdHasZero = (dictHoldZero != null) ? dictHoldZero : (ediHasHold ? ediHoldHas0 : false);
 
   // M6.93.12 fix #2: userBay tiers > override tiers > bayData > pdf
   // M6.94.14: isUserSource면 user가 비운 tier(빈 배열)를 그대로 존중 — pdf 자동 채움 금지.
@@ -677,13 +678,16 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
   const _deckCellsNums = deckCells.map(Number).filter(v => !isNaN(v) && v > 0);
   const _deckCellsMax = _deckCellsNums.length > 0 ? Math.max(..._deckCellsNums) : 0;
   const _effDeckRows = _deckCellsMax > 0 ? _deckCellsMax : rowCount;
-  const nDeckCols = _effDeckRows + (_deckHasZero ? 1 : 0);
+  // 사용자 매트릭스 입력 기준: cells = 00 포함 전체 칸 수.
+  //   데크00 체크 = 그 단에 00 row 있음 = cells(9) 안에 이미 00 포함(08,06,04,02,00,01,03,05,07).
+  //   → +1 하면 00을 두 번 세서 10칸이 되고 없는 09가 생김(버그). cells 그대로가 폭.
+  const nDeckCols = _effDeckRows;
   // nHoldCols 강제 통일 해제. 실제 hold cells 최대값 기준으로 계산.
   // hold 폭이 deck보다 작은 게 정상 (선체 형태). 차이만큼 BayBoxV2가 % padding으로 가운데.
   const _holdCellsNums = holdCells.map(Number).filter(v => !isNaN(v) && v > 0);
   const _holdCellsMax = _holdCellsNums.length > 0 ? Math.max(..._holdCellsNums) : 0;
   const nHoldCols = _holdCellsMax > 0
-    ? Math.min(_holdCellsMax + (_holdHasZero ? 1 : 0), nDeckCols)
+    ? Math.min(_holdCellsMax, nDeckCols)
     : nDeckCols;
   const deckRowPos = getRowPositions(nDeckCols, _deckHasZero);
   const holdRowPos = getRowPositions(nHoldCols, _holdHasZero);
@@ -695,9 +699,8 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     if (deckTiers.map(Number).includes(stdT)) {
       const idx = deckTiers.map(Number).indexOf(stdT);
       const cc = idx < deckCells.length ? deckCells[idx] : 0;
-      // V7.03: has00이면 그 tier에 컨테이너가 있을 때 00칸도 차지 → cells에 00 1칸 더해 계산.
-      //   (cells는 00 제외 개수 저장. nDeckCols=cells_max+1과 기준 통일 → 양끝 row 안 빠짐.)
-      const ccEff = _deckHasZero ? (cc > 0 ? cc + 1 : 1) : cc;
+      // cells = 00 포함 개수 → 그 tier의 active 칸 수 그대로 (00 자리 추가 안 함).
+      const ccEff = cc;
       const active = getActiveColsSymmetric(ccEff, nDeckCols);
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
@@ -722,8 +725,8 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     if (holdTiers.map(Number).includes(stdT)) {
       const idx = holdTiers.map(Number).indexOf(stdT);
       const cc = idx < holdCells.length ? holdCells[idx] : 0;
-      // has00이고 cells>0이면 00칸 추가(+1). cells=0이어도 has00이면 가운데 00 1칸은 그림(00만 있는 tier).
-      const ccEff = _holdHasZero ? (cc > 0 ? cc + 1 : 1) : cc;
+      // cells = 00 포함 개수 → 그대로. (홀드00 미체크면 00 없는 cells)
+      const ccEff = cc;
       const activeInHold = getActiveColsSymmetric(ccEff, nHoldCols);
       const cells = [];
       for (let c = 0; c < nHoldCols; c++) {

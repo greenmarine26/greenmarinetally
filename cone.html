@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- 캐시 방지: 새 버전 배포 시 옛 코드가 캐시에서 뜨는 것 차단 -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>콘 계산기 — 평택항</title>
 <meta name="theme-color" content="#0f1419">
 <meta name="mobile-web-app-capable" content="yes">
@@ -240,6 +244,16 @@
 // ============ 콘 계산 엔진 (검증됨) ============
 const ROWS=['10','08','06','04','02','01','03','05','07','09'];
 
+// 평택항 판정 — 메인 검수앱 isPyeongtaekPort()와 동일 기준.
+//   PTK/PYT/PYOTM/PYO 로 끝나면 평택 (KRPTK, KRPYO, KRPYOTM 등 변종 포괄).
+//   콘 계산은 평택분만 — 폴백으로 전체를 세지 않음.
+function isPtkPort(code){
+  if(!code) return false;
+  const t=String(code).toUpperCase().trim();
+  if(!t) return false;
+  return /(PTK|PYT|PYOTM|PYO)$/.test(t);
+}
+
 // 홀드콘 개수: 컨테이너선=20ft 1개·40ft 0개 / 복합선=20·40 구분없이 곳당 multiCount(2 or 4)
 function holdConeCount(size, shipType, multiCount){
   if(shipType==='container'){ return size==='40'||size==='O40' ? 0 : 1; }
@@ -337,10 +351,11 @@ function parseEDI(text){
   // 제목/POL·POD로 선적/양하 판별
   const up=text.toUpperCase();
   let kind=null, rows;
-  const polPtk=rowsAll.filter(r=>r.pol==='KRPTK');
-  const podPtk=rowsAll.filter(r=>r.pod==='KRPTK');
-  if(up.includes('LOAD')||polPtk.length>podPtk.length){ kind='stow'; rows=polPtk.length?polPtk:rowsAll; }
-  else { kind='disch'; rows=podPtk.length?podPtk:rowsAll; }
+  const polPtk=rowsAll.filter(r=>isPtkPort(r.pol));
+  const podPtk=rowsAll.filter(r=>isPtkPort(r.pod));
+  // 평택분만 계산. 폴백(rowsAll) 금지 — 평택분 0이면 0이 정답.
+  if(up.includes('LOAD')||polPtk.length>podPtk.length){ kind='stow'; rows=polPtk; }
+  else { kind='disch'; rows=podPtk; }
   let vessel='';
   const tdt=text.match(/TDT\+[\s\S]*?(?=['~\n\r]|$)/);
   if(tdt){
@@ -402,11 +417,12 @@ function parseASC(text){
     if(pp){ pol=pp[1]; pod=pp[2]; }
     rowsAll.push({bay,row,tier,size,pol,pod});
   }
-  const polPtk=rowsAll.filter(r=>r.pol==='KRPTK');
-  const podPtk=rowsAll.filter(r=>r.pod==='KRPTK');
+  const polPtk=rowsAll.filter(r=>isPtkPort(r.pol));
+  const podPtk=rowsAll.filter(r=>isPtkPort(r.pod));
   let kind, rows;
-  if(polPtk.length>podPtk.length){ kind='stow'; rows=polPtk.length?polPtk:rowsAll; }
-  else { kind='disch'; rows=podPtk.length?podPtk:rowsAll; }
+  // 평택분만 계산. 폴백(rowsAll) 금지 — 평택분 0이면 0이 정답.
+  if(polPtk.length>podPtk.length){ kind='stow'; rows=polPtk; }
+  else { kind='disch'; rows=podPtk; }
   return {rows, kind, isEDI:true, vessel};  // isEDI:true = 위치 rows 보유(다운스트림 동일 처리)
 }
 

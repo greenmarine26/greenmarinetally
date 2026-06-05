@@ -528,3 +528,48 @@
 ### 주의
 - Claude는 사용자 Firebase 직접 접근 불가(allowlist 차단). 실데이터 확인은 앱 미리보기로.
 - MCAT 같은 5/31 createdAt 항차도 실작업은 6월 → 현재 항차 리스트에 있으면 다 포함(날짜 필터 없음).
+
+---
+
+## 16. V7.17 (2026-06-04) — 완료 버튼이 통계 기록하도록 복구 (중요)
+
+### 문제
+V7.16에서 "완료=확인일 뿐, 통계는 업로드 때"로 바꿨더니 → 기존 6월 항차(V7.16 전 업로드)는 업로드 기록도 없고 완료해도 기록 안 되는 사각지대. 사용자가 완료 처리해도 통계에 안 나옴.
+
+### 수정
+- **완료 버튼 → 통계 기록(덮어쓰기) 후 삭제**로 복구. fbArchiveVoyageBeforeDelete 호출.
+- 자동삭제(7일)도 동일 (작업 기록 보존).
+- fbArchiveVoyageBeforeDelete를 V7.16 방식에 정합: discharge_ptk/loading_ptk 필드로 덮어쓰기(기존 discharge_count 필드명 불일치 수정), _uploadKind both/discharge/loading, statsCounted 중복스킵 제거(덮어쓰기라 불필요), fbAddShipStats는 voyages 합산.
+
+### 핵심: 덮어쓰기라 중복 안 됨
+- 같은 항차 여러 번 완료해도 discharge_ptk 덮어쓰기 → 안 늘어남. 검증: DJCF 368/396 재완료해도 368/396 1항차 유지 ✅.
+- 업로드 때 기록 + 완료 때 기록 둘 다 같은 voyageKey에 덮어쓰기 → 이중 안 됨.
+
+### 정리된 통계 흐름 (최종)
+1. EDI 업로드 매칭 → discharge_ptk/loading_ptk 기록 (덮어쓰기).
+2. 완료 버튼/자동삭제 → 같은 값 다시 기록(덮어쓰기) 후 카드 삭제. 삭제돼도 ships 통계 영구 보존.
+3. 대시보드 = ships/{id}/voyages 합산. 필드명 discharge_ptk/loading_ptk 전부 통일.
+4. 중복/누적 없음(덮어쓰기), 수정본은 가감, 양하·선적 따로.
+
+---
+
+## 17. V7.18 (2026-06-04) — 09 row 버그 (없는 row가 생기던 문제)
+
+### 증상
+양하 베이플랜엔 09 row 없는데 선적엔 09 있음. EDI에도 매트릭스에도 09 화물 없는데 화면에 09 생김.
+
+### 원인 2가지 (둘 다 베이매트릭스 무시)
+사용자 매트릭스 입력 기준: **cells = 00 포함 전체 칸 수** (데크00 체크 = 그 단에 00 있음 = cells 9 안에 08,06,04,02,00,01,03,05,07 포함).
+
+1. **cells +1 중복**: buildEmptyBayRenderData가 cells(00포함 9)에 또 +(hasZero?1:0) → 00 두 번 셈 → nDeckCols=10 → getRowPositions(10)에서 09 생성. (카고플랜 computeBayRenderData는 +1 안 했음 → 두 함수 불일치가 09 유무 차이로). → **+1 제거, cells 그대로. 카고플랜과 통일.** (line 681 nDeckCols, 701 ccEff, 687 nHoldCols, 729 hold ccEff)
+2. **EDI가 매트릭스 덮어씀**: deckHasZero를 `ediHasDeck ? EDI : 매트릭스`로 EDI 우선 → 선적분에 00 화물 없으면 deckHasZero=false → getRowPositions(...,false)가 빈 00자리를 09로 채움. 양하는 00화물 있어 true→09없음. 이게 양하/선적 차이. → **매트릭스 명시값(deck/holdHasZero) 우선, 미명시일 때만 EDI 폴백.** (BayPlan.jsx effEntry, cargoPlanCore.js line 454)
+
+### 핵심 원칙 (다음 클로드 — 반복 위반 주의)
+- **베이매트릭스가 기본(진실).** EDI/개수로 row를 추측·덮어쓰기 금지.
+- **cells = 00 포함 개수.** +1 하지 말 것 (00 두 번 셈 = 09 생성).
+- **row 번호를 개수로 생성하면 없는 번호(09 등)가 튀어나온다.** getRowPositions는 cells(00포함) 그대로 받음.
+- 데크00/홀드00 체크박스 = 매트릭스의 00 유무 진실. EDI에 00 화물 없어도 이 설정 우선.
+
+### 검증
+- BAY034(cells=9,데크00체크): 양하/선적/베이플랜/카고플랜 4경우 모두 08~07 9칸, 09 없음 ✅.
+- ATPR(데크00없음8칸/홀드00있음5칸): 회귀 없음 ✅.

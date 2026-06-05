@@ -1147,15 +1147,19 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       };
     }
 
-    // EDI 실데이터를 데크/홀드 00의 단일 진실로 삼음.
-    //   EDI에 그 구역(데크/홀드) 컨테이너가 있으면 → EDI의 00 유무가 정답 (사전값 무시).
-    //   EDI에 그 구역 컨테이너가 아예 없을 때만 사전값 사용 (폴백).
+    // 베이매트릭스가 기본(진실). 매트릭스에 deck/holdHasZero가 명시돼 있으면 그것을 우선.
+    //   사용자가 매트릭스에 데크00 체크 → 그 베이는 00 구조(09 안 생김). EDI에 00 화물이 없어도 매트릭스 따름.
+    //   (이전 버그: EDI has00으로 매트릭스를 덮어써서, 선적분에 00 화물 없으면 09가 생기던 문제.)
+    //   매트릭스에 값이 없을 때만 EDI 실데이터로 폴백 판정.
     const ediHasDeck = pageRange.deck.maxLeft > 0 || pageRange.deck.maxRight > 0 || pageRange.deck.has00;
     const ediHasHold = pageRange.hold.maxLeft > 0 || pageRange.hold.maxRight > 0 || pageRange.hold.has00;
+    const matrixDeckZero = (entry.deckHasZero != null) ? entry.deckHasZero : (entry.hasZero != null ? entry.hasZero : null);
+    const matrixHoldZero = (entry.holdHasZero != null) ? entry.holdHasZero : (entry.hasZero != null ? entry.hasZero : null);
     const effEntry = {
       ...entry,
-      deckHasZero: ediHasDeck ? pageRange.deck.has00 : (entry.deckHasZero != null ? entry.deckHasZero : entry.hasZero),
-      holdHasZero: ediHasHold ? pageRange.hold.has00 : (entry.holdHasZero != null ? entry.holdHasZero : entry.hasZero),
+      // 매트릭스 명시값 우선 → 없으면(null) EDI 판정 → 그것도 없으면 EDI 컨테이너 있을 때 has00
+      deckHasZero: matrixDeckZero != null ? matrixDeckZero : (ediHasDeck ? pageRange.deck.has00 : false),
+      holdHasZero: matrixHoldZero != null ? matrixHoldZero : (ediHasHold ? pageRange.hold.has00 : false),
     };
     try {
       return buildEmptyBayRenderData(effEntry, bayKey, isPair);
