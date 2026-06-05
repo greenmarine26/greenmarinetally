@@ -1413,17 +1413,27 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         const r = isAsc ? parseAscFile(text) : parseBAPLIE(text);
         const total = r.containers.length;
 
-        // 선박 정보 추출 (BAPLIE만, 첫 파일에서)
-        if (!isAsc && !shipInfo) {
-          shipInfo = extractShipInfo(text);
+        // 선박 정보 추출 (첫 파일에서). M7.20: ASC도 처리 — 기존엔 BAPLIE만 추출해
+        //   ASC로 올린 작업이 ships(선박 라이브러리/통계)에 누락되던 버그.
+        if (!shipInfo) {
+          if (isAsc) {
+            // ASC는 TDT 없음 → parseAscFile의 $604 헤더값(vsl/voy/serviceCode) 사용.
+            //   ASC엔 IMO 없으므로 식별키 = serviceCode > 선박명(공백제거). 콜사인 fallback과 동일 취지.
+            const ascId = (r.serviceCode || '').toUpperCase().trim()
+                       || (r.vsl ? r.vsl.toUpperCase().replace(/\s+/g, '') : '');
+            if (ascId) {
+              shipInfo = { imo: ascId, name: r.vsl || '', voyage: r.voy || '', callsign: (r.serviceCode || '').toUpperCase(), imoIsNumeric: false };
+            }
+          } else {
+            shipInfo = extractShipInfo(text);
+          }
           if (shipInfo) {
-            // 학습된 선박 구조 조회
             try {
               prevStruct = await fbGetShipStructure(shipInfo.imo);
               if (prevStruct?.structure) {
-                results.push(`📚 학습된 선박: ${shipInfo.name} (IMO ${shipInfo.imo}) — 이전 분석 ${prevStruct.voyages ? Object.keys(prevStruct.voyages).length : 0}개 항차`);
+                results.push(`📚 학습된 선박: ${shipInfo.name} (${shipInfo.imoIsNumeric ? 'IMO ' : ''}${shipInfo.imo}) — 이전 분석 ${prevStruct.voyages ? Object.keys(prevStruct.voyages).length : 0}개 항차`);
               } else {
-                results.push(`🆕 새 선박: ${shipInfo.name} (IMO ${shipInfo.imo})`);
+                results.push(`🆕 새 선박: ${shipInfo.name} (${shipInfo.imoIsNumeric ? 'IMO ' : ''}${shipInfo.imo})`);
               }
             } catch (e) {}
           }
