@@ -232,7 +232,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.27</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.28</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1389,8 +1389,8 @@ async function renderCargoView(){
   if(__cargoFlag==='l'&&!hasL) __cargoFlag='d';
   const flag=__cargoFlag;
 
-  // 판정 함수 (베이플랜과 동일)
-  const isPtk=(c,f)=>{ if(!c) return false; const p=String((f==='d'?c.pod:c.pol)||'').toUpperCase(); return /PTK|PYT|PYOTM/.test(p)||p===''; };
+  // 판정 함수 — 메인 isPtkPort()와 동일 기준 (PYO 포함, 끝 고정, 빈값 제외). V7.28 통일.
+  const isPtk=(c,f)=> !!c && isPtkPort(f==='d'?c.pod:c.pol);
   const frSym=(c)=> (c&&c.fr)?'FR':'';
   const cellCls=(c,f)=> isPtk(c,f) ? ('cvc '+(f==='d'?'cv-ptkd':'cv-ptkl')) : 'cvc cv-shade';
 
@@ -1695,12 +1695,8 @@ async function renderBayView(){
   const shipLabel=state.shipName||'선박';
   const today=new Date().toLocaleDateString('ko-KR');
 
-  // 평택분 판정 (양하=pod 평택, 선적=pol 평택)
-  const isPtk=(c,flag)=>{
-    if(!c) return false;
-    const p=String((flag==='d'?c.pod:c.pol)||'').toUpperCase();
-    return /PTK|PYT|PYOTM/.test(p) || p==='' ;
-  };
+  // 평택분 판정 (양하=pod 평택, 선적=pol 평택). 메인 isPtkPort()와 동일 기준. V7.28 통일.
+  const isPtk=(c,flag)=> !!c && isPtkPort(flag==='d'?c.pod:c.pol);
   // 특수타입 라벨/심볼
   const special=(c)=>{
     if(!c) return null;
