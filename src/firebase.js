@@ -8,6 +8,7 @@ import {
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
+import { isPyeongtaekPort } from './utils.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -693,8 +694,7 @@ export async function fbResetAllShipStats() {
 //   M7.18b: 평택 판정을 isPyeongtaekPort 기준으로 통일 — PTK/PYT/PYOTM/PYO 변종 포괄.
 //          (이전 endsWith('PTK')는 KRPYO/KRPYOTM 등을 누락시켜 통계 과소집계 위험)
 function _isPtk(code) {
-  if (!code) return false;
-  return /(PTK|PYT|PYOTM|PYO)$/.test(String(code).toUpperCase().trim());
+  return isPyeongtaekPort(code);
 }
 function _ptkCountOfSection(section) {
   if (!section || !section.ediContainers) return 0;

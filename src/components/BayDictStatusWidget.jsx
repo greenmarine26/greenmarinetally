@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Database, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { getShipBayDictData } from '../shipStructure.js';
+import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
 
 export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCount = 0 }) {
   const [expanded, setExpanded] = useState(false);
@@ -11,6 +12,28 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
     if (!shipImo && !shipName) return null;
     return getShipBayDictData(shipImo, shipName);
   }, [shipImo, shipName]);
+
+  // V7.27: 베이매트릭스 확정 여부 판정.
+  //   각 베이의 tier가 매트릭스(사용자 입력 또는 PDF override)로 확정됐는지 검사.
+  //   미확정 베이는 카고플랜에서 EDI 추정값으로 그려지므로 매트릭스 확정 권고.
+  const matrixStatus = useMemo(() => {
+    if (!dictData) return { allConfirmed: false, unconfirmed: [], total: 0 };
+    // 사용자가 직접 만든 사전(source='user')은 전체 확정으로 간주.
+    const isUserSource = dictData.source === 'user' || dictData.bayDef?._userOwned === true;
+    const summary = dictData.bayDef?.baysSummary || [];
+    if (summary.length === 0) return { allConfirmed: false, unconfirmed: [], total: 0 };
+    const code = dictData.code || '';
+    const unconfirmed = [];
+    for (const b of summary) {
+      const bayNum = b.bayNum;
+      const hasTier = (b.deckTiersLocal?.length > 0) || (b.holdTiersLocal?.length > 0)
+        || (b.deckTiers?.length > 0) || (b.holdTiers?.length > 0);
+      const hasOverride = !!getBayOverride(code, bayNum);
+      const confirmed = isUserSource ? hasTier : (hasTier || hasOverride);
+      if (!confirmed) unconfirmed.push(String(bayNum).padStart(2, '0'));
+    }
+    return { allConfirmed: unconfirmed.length === 0, unconfirmed, total: summary.length };
+  }, [dictData]);
 
   if (!dictData) {
     // 베이사전 미등록 — 명확한 진단 표시
@@ -77,6 +100,13 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
             ) : (
               <span className="bg-amber-700/60 text-amber-100 px-1.5 py-0.5 rounded text-[9px] font-black">미검증</span>
             )}
+            {matrixStatus.total > 0 && (
+              matrixStatus.allConfirmed ? (
+                <span className="bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded text-[9px] font-black">📐 매트릭스 확정</span>
+              ) : (
+                <span className="bg-red-700 text-red-100 px-1.5 py-0.5 rounded text-[9px] font-black animate-pulse">⚠️ 베이매트릭스 확정 필요</span>
+              )
+            )}
           </div>
           <div className="text-[10px] text-cyan-400/80 mt-0.5 truncate">
             {(dictData.name || '').substring(0, 30).trim()} · {bayCount}개 베이
@@ -89,6 +119,17 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
       </button>
       {expanded && (
         <div className="mt-2 pt-2 border-t border-cyan-700/40 text-[10px] text-cyan-300/80 space-y-1">
+          {matrixStatus.total > 0 && (
+            matrixStatus.allConfirmed ? (
+              <div className="text-emerald-300">📐 베이 {matrixStatus.total}개 모두 베이매트릭스로 확정됨.</div>
+            ) : (
+              <div className="bg-red-950/40 border border-red-700/50 rounded p-1.5 -mx-0.5">
+                <div className="text-red-300 font-black mb-0.5">⚠️ 베이매트릭스 확정이 필요합니다</div>
+                <div className="text-red-200/90">아래 베이는 현재 EDI 추정값으로 표시 중입니다. 매트릭스 빌더에서 확정하세요.</div>
+                <div className="text-red-100 font-bold mt-0.5">확정 필요: {matrixStatus.unconfirmed.join(', ')}</div>
+              </div>
+            )
+          )}
           <div className="flex items-center gap-2">
             <span className="text-cyan-500/70">매칭 방식:</span>
             <span className="font-bold text-cyan-100">{matchTier}</span>

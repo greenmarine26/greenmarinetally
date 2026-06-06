@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
 export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
@@ -767,9 +767,7 @@ function computeStats(section) {
   const ediValues = Object.values(ediContainers);
   const ptkCns = new Set();
   ediValues.forEach(c => {
-    const pol = (c.pol || '').toUpperCase();
-    const pod = (c.pod || '').toUpperCase();
-    if (pol.endsWith('PTK') || pod.endsWith('PTK')) ptkCns.add(c.cn);
+    if (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod)) ptkCns.add(c.cn);
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;

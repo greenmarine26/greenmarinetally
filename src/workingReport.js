@@ -7,7 +7,7 @@
 // ============ 매핑 테이블 ============
 // PORT 코드 매핑
 import { openPrintWindow } from './printHelper.js';
-import { formatBerth } from './utils.js';
+import { formatBerth, isPyeongtaekPort } from './utils.js';
 const PORT_MAP = {
   // 표준 5자
   'KRPUS': 'PUS', 'KRKAN': 'KAN', 'KRPTK': 'PTK', 'KRPYT': 'PTK', 'KRINC': 'INC',
@@ -208,9 +208,7 @@ function buildBuckets(voyage, mode = 'settlement') {
         if (targetCns.length === 0) {
           targetCns = Object.values(ediCs)
             .filter(c => {
-              const pol = String(c.pol || '').toUpperCase();
-              const pod = String(c.pod || '').toUpperCase();
-              return pol.endsWith('PTK') || pod.endsWith('PTK');
+              return isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod);
             })
             .map(c => c.cn);
         }

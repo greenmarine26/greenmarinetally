@@ -31,7 +31,7 @@ import BayDictStatusWidget from '../components/BayDictStatusWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber } from '../utils.js';
+import { getEquipNumber, isPyeongtaekPort } from '../utils.js';
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
@@ -160,13 +160,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // 평택 대상 (양하=POD, 선적=POL)
   const isPtk = (c) => {
     if (!c) return false;
-    if (mode === 'discharge') {
-      const pod = (c.pod || '').toUpperCase();
-      return pod === 'PTK' || pod === 'KRPTK' || pod.endsWith('PTK');
-    } else {
-      const pol = (c.pol || '').toUpperCase();
-      return pol === 'PTK' || pol === 'KRPTK' || pol.endsWith('PTK');
-    }
+    return mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
   };
 
   // M3.89: 베이플랜 전용 - 전체 EDI 컨테이너 (isPtk 필터 X)
@@ -446,11 +440,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     // 평택 화물만 필터된 ediMap 만들기
     const ediPtkObj = {};
     Object.values(ediMap || {}).forEach(c => {
-      const pol = (c.pol || '').toUpperCase();
-      const pod = (c.pod || '').toUpperCase();
-      if (mode === 'discharge' && (pod === 'KRPTK' || pod.endsWith('PTK'))) {
+      if (mode === 'discharge' && isPyeongtaekPort(c.pod)) {
         ediPtkObj[c.cn] = c;
-      } else if (mode === 'loading' && (pol === 'KRPTK' || pol.endsWith('PTK'))) {
+      } else if (mode === 'loading' && isPyeongtaekPort(c.pol)) {
         ediPtkObj[c.cn] = c;
       }
     });
@@ -1276,8 +1268,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         const isAsc = /\.asc$/i.test(f.name) || /^\$604/.test(f.text.slice(0, 10));
         const r = isAsc ? parseAscFile(f.text) : parseBAPLIE(f.text);
         r.containers.forEach(c => {
-          const podPtk = (c.pod || '').toUpperCase().endsWith('PTK');
-          const polPtk = (c.pol || '').toUpperCase().endsWith('PTK');
+          const podPtk = isPyeongtaekPort(c.pod);
+          const polPtk = isPyeongtaekPort(c.pol);
           let containerMode;
           if (mode === 'discharge') {
             containerMode = podPtk ? 'discharge' : 'transit';
@@ -1454,8 +1446,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         let podPtkTotal = 0;
         let polPtkTotal = 0;
         r.containers.forEach(c => {
-          if ((c.pod || '').toUpperCase().endsWith('PTK')) podPtkTotal++;
-          if ((c.pol || '').toUpperCase().endsWith('PTK')) polPtkTotal++;
+          if (isPyeongtaekPort(c.pod)) podPtkTotal++;
+          if (isPyeongtaekPort(c.pol)) polPtkTotal++;
         });
         const ediKind = podPtkTotal > polPtkTotal ? 'discharge'
                       : polPtkTotal > podPtkTotal ? 'loading'
@@ -1463,8 +1455,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
 
         let ptkCount = 0;
         r.containers.forEach(c => {
-          const podPtk = (c.pod || '').toUpperCase().endsWith('PTK');
-          const polPtk = (c.pol || '').toUpperCase().endsWith('PTK');
+          const podPtk = isPyeongtaekPort(c.pod);
+          const polPtk = isPyeongtaekPort(c.pol);
           let containerMode;
           if (ediKind === 'discharge') {
             if (podPtk) { containerMode = 'discharge'; ptkCount++; }

@@ -13,14 +13,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0f172a" />
     <title>Tallyman Master</title>
-    <link rel="manifest" href="./assets/manifest-CqEN1U-O.webmanifest" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Tallyman" />
-    <script type="module" crossorigin src="./assets/index-B0Ea4Nze.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CJaXnP6J.css">
   </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
