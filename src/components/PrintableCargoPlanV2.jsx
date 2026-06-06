@@ -578,10 +578,10 @@ export default function PrintableCargoPlanV2({
       addTo(carrierCounts, carrier, size);
       let cat = '일반';
       if (c.dg) cat = 'DG';
-      else if (c.iso && c.iso[2] === 'R') cat = 'Reefer';
-      else if (c.fr || (c.iso && c.iso[2] === 'P')) cat = 'FR';
-      else if (c.ot || c.oog || (c.iso && c.iso[2] === 'U')) cat = 'OT';
-      else if (c.tk || (c.iso && c.iso[2] === 'T')) cat = 'Tank';
+      else if (isReeferContainer(c)) cat = 'Reefer';
+      else if (c.fr) cat = 'FR';
+      else if (c.tk) cat = 'Tank';
+      else if (c.ot || c.oog) cat = 'OT';
       addTo(cargoCounts, cat, size);
       // M6.94.29: POD 키 직접 추출 (이미 matchPodC 통과 = 평택 확정).
       //   getContainerColorKey는 pol 재검증을 하는데, 엠티는 pol이 목적지로 오염될 수 있어

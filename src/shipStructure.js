@@ -500,11 +500,20 @@ export function getShipBayDictData(imo, code, opts) {
   return {
     source: result.source,
     matchedBy: result.matchedBy || result.source,
-    name: data.name,
-    callsign: data.callsign,
+    // V7.26: 계열 대체(series-substitute)면 베이 구조만 빌리고 신원(이름/콜사인)은 안 빌림.
+    //   (이전: DJCT가 베이사전 없어 'DJ' 계열의 XIN TAI PING 구조를 빌렸는데, 그 콜사인 BSDU까지
+    //    끌고 와 PORT-MIS 매칭에 써서 DJCT 항차에 XIN TAI PING이 표시되던 버그.
+    //    앞 2글자만 같으면 계열로 보는 느슨한 대체라, 무관한 선박의 신원이 섞이면 안 됨.)
+    name: _substituted ? '' : data.name,
+    callsign: _substituted ? '' : data.callsign,
     specs: data.specs || {},
     code: data.code,
-    bayDef: enrichedBayDef,
+    // V7.27: 계열 대체면 bayDef 내부 신원(콜사인/선박명)도 제거.
+    //   (최상위 callsign만 비우면 PORT-MIS가 dictData.bayDef.callsign으로 폴백해
+    //    빌려온 선박 콜사인(BSDU)을 집어와 DJCT에 XIN TAI PING이 뜨던 버그. V7.26 반쪽수정 보완.)
+    bayDef: _substituted
+      ? { ...enrichedBayDef, callsign: '', name: '', vesselName: '' }
+      : enrichedBayDef,
     verified: bayDef.verified || result.source === 'v2' || result.source === 'v2-fuzzy',
     // M6.40: STOWAGE PDF 메타 (Firebase 사전에서만 — v1/v2 임베드에는 없음)
     pdfUrl: data.pdfUrl || '',

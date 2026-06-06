@@ -1,7 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera, Search, Star, Calendar, UserCheck } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, fbResetAllShipStats, tallyVoyagesByShip } from '../firebase.js';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, fbResetAllShipStats, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
+import { isPyeongtaekPort } from '../utils.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import { isChief, getStaffRole } from '../staffList.js';
@@ -64,7 +65,7 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         const targets = [];
         Object.values(ediMap).forEach(c => {
           // 평택만 (mode에 맞춰)
-          const isPtk = mode === 'discharge' ? (c.pod || '').endsWith('PTK') : (c.pol || '').endsWith('PTK');
+          const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
           if (!isPtk) return;
           const sm = applyPolicyToContainer(policy, c);
           if (!sm) return;
@@ -230,8 +231,9 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
-      {/* 선박 라이브러리 (학습된 선박 구조) — M6.15: 강화 (정렬/검색/항차 상세/인원/베이사전 상태) */}
-      <ShipLibrarySection shipLib={shipLib} voyages={voyages} />
+      {/* M7.22: 라이브러리(진행 상황) + 선박별 자료 보관소(완료 기록) 분리 */}
+      <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} />
+      <ShipArchiveSection shipLib={shipLib} />
 
       {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
       {Object.keys(equipStats).length > 0 && (
@@ -558,7 +560,229 @@ function FeedbackRow({ feedback: f }) {
   );
 }
 
-// M6.15: 선박 라이브러리 섹션 — 검색/정렬 + 강화 표시
+// ─────────────────────────────────────────────────────────────
+// M7.22: 선박 라이브러리 (진행 상황) — 현재 살아있는 voyages 기준.
+//   수석검수사가 최종 확인 후 [완료 저장] → archive 백업 + 보관소 기록 + voyages 삭제.
+//   양하/선적 수는 평택분(tallyVoyagesByShip이 _ptkCountOfSection로 집계).
+// ─────────────────────────────────────────────────────────────
+function LiveProgressSection({ voyages, onOpenVoyage }) {
+  const [busyKey, setBusyKey] = useState(null);
+  const [confirmKey, setConfirmKey] = useState(null);
+
+  // 항차별 진행 행 (선박별 합계가 아니라 항차 단위 — 완료는 항차별로 누름)
+  const rows = useMemo(() => {
+    const out = [];
+    for (const [key, v] of Object.entries(voyages || {})) {
+      const info = v.info || {};
+      const vsl = info.vsl || key.split('_')[0] || '(선박명 미상)';
+      const dPtk = countPtkSection(v.discharge);
+      const lPtk = countPtkSection(v.loading);
+      out.push({
+        key, vsl,
+        voyD: info.voy_d || '', voyL: info.voy_l || '',
+        discharge: dPtk, loading: lPtk,
+        imo: info.imo || '',
+        createdAt: info.createdAt || 0,
+        inspectorDone: !!info.inspectorDone,
+        inspectorDoneAt: info.inspectorDoneAt || 0,
+      });
+    }
+    return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [voyages]);
+
+  const doComplete = async (row) => {
+    setBusyKey(row.key);
+    try {
+      const ok = await fbArchiveVoyageBeforeDelete(row.imo, row.key, voyages[row.key]);
+      if (!ok) {
+        alert('완료 저장 실패: 백업이 저장되지 않아 삭제하지 않았습니다. 네트워크 확인 후 다시 시도하세요.');
+        setBusyKey(null); setConfirmKey(null);
+        return;
+      }
+      await fbDeleteVoyage(row.key);
+    } catch (e) {
+      console.error('[수석 완료] 실패:', row.key, e);
+      alert('완료 저장 중 오류가 발생해 삭제하지 않았습니다.');
+    }
+    setBusyKey(null); setConfirmKey(null);
+  };
+
+  return (
+    <div className="bg-slate-900 border border-cyan-800/40 rounded-xl p-3 mt-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Ship className="w-4 h-4 text-cyan-400" />
+        <div className="text-sm font-bold text-slate-100 flex-1">
+          진행 상황 ({rows.length}척 작업 중)
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <div className="text-center text-slate-500 text-xs py-6">현재 작업 중인 항차가 없습니다.</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.key} className="bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onOpenVoyage && onOpenVoyage(r.key)}
+                  className="font-bold text-slate-100 text-sm flex-1 text-left hover:text-cyan-300 truncate"
+                  title="항차 열기"
+                >
+                  🚢 {r.vsl}
+                </button>
+                {confirmKey === r.key ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-amber-300 mr-1">최종 저장?</span>
+                    <button
+                      onClick={() => doComplete(r)}
+                      disabled={busyKey === r.key}
+                      className="text-[11px] px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
+                    >{busyKey === r.key ? '저장 중…' : '예'}</button>
+                    <button
+                      onClick={() => setConfirmKey(null)}
+                      className="text-[11px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200"
+                    >취소</button>
+                  </div>
+                ) : r.inspectorDone ? (
+                  <button
+                    onClick={() => setConfirmKey(r.key)}
+                    className="text-[11px] px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
+                    title="검수사 완료 확인됨 — 수석 최종 저장 (보관소로 이동)"
+                  >✓ 수석 완료 저장</button>
+                ) : (
+                  <span
+                    className="text-[10px] px-2 py-1 rounded bg-slate-700/40 text-slate-400 border border-slate-600/40"
+                    title="검수사가 항차 화면에서 '검수 완료'를 눌러야 수석이 최종 저장할 수 있습니다"
+                  >검수 진행 중</span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-xs">
+                <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b></span>
+                <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b></span>
+                {r.inspectorDone && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
+                )}
+                {(r.voyD || r.voyL) && (
+                  <span className="text-slate-500 text-[10px]">
+                    {r.voyD && `양하 ${r.voyD}`}{r.voyD && r.voyL && ' · '}{r.voyL && `선적 ${r.voyL}`}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-[10px] text-slate-500 mt-2">평택분 기준 · 수석검수사 최종 확인 후 완료 저장 → 자료 보관소로 이동</div>
+    </div>
+  );
+}
+
+// 한 섹션(discharge/loading)의 평택분 컨테이너 수 — UI용 (firebase _ptkCountOfSection과 동일 기준)
+function countPtkSection(section) {
+  if (!section || !section.ediContainers) return 0;
+  const isPtk = (c) => isPyeongtaekPort(c);
+  const set = new Set();
+  for (const c of Object.values(section.ediContainers)) {
+    if (isPtk(c.pol) || isPtk(c.pod)) set.add(c.cn || JSON.stringify(c));
+  }
+  return set.size;
+}
+
+// ─────────────────────────────────────────────────────────────
+// M7.22: 선박별 자료 보관소 (완료 기록) — ships 노드 기준, 최근 완료순.
+//   선박별 항차 줄(항차·양하·선적·일자) + 누적(항차 수·양하·선적).
+// ─────────────────────────────────────────────────────────────
+function ShipArchiveSection({ shipLib }) {
+  const [search, setSearch] = useState('');
+
+  const ships = useMemo(() => {
+    const out = [];
+    for (const [imo, s] of Object.entries(shipLib || {})) {
+      const voys = s?.voyages || {};
+      const voyRows = Object.entries(voys).map(([vk, v]) => ({
+        key: vk,
+        voy: v?.voy_d || v?.voy_l || v?.voy || vk.split('_').slice(1).join('_') || vk,
+        discharge: v?.discharge_ptk || 0,
+        loading: v?.loading_ptk || 0,
+        at: v?.completed_at || v?.analyzed_at || 0,
+        vsl: v?.vsl || '',
+        vslFull: v?.vslFull || '',
+      })).filter(r => r.discharge > 0 || r.loading > 0);
+      if (voyRows.length === 0) continue;   // 완료 항차 없는 배(구조만)는 보관소에 안 보임
+      voyRows.sort((a, b) => (b.at || 0) - (a.at || 0));
+      const totalD = voyRows.reduce((s, r) => s + r.discharge, 0);
+      const totalL = voyRows.reduce((s, r) => s + r.loading, 0);
+      const lastAt = voyRows[0]?.at || 0;
+      // 선박명 결정 (M7.24c): 사용자 입력 약자(vsl, 예 PCBJ/TNJP) 최우선 — 검수사가
+      //   약자만 봐도 선박을 식별함. 약자 없으면 ships.name → vslFull(풀네임) → 키 순.
+      const pick = (arr) => arr.find(v => v && String(v).trim()) || '';
+      let shipName = pick(voyRows.map(r => r.vsl));        // 약자 우선
+      if (!shipName) shipName = s?.name && !/^[0-9]{7}$/.test(s.name) ? s.name : '';
+      if (!shipName) shipName = pick(voyRows.map(r => r.vslFull));
+      if (!shipName) shipName = s?.name || imo;
+      out.push({ imo, name: shipName, voyRows, totalD, totalL, lastAt });
+    }
+    return out.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));   // 최근 완료순
+  }, [shipLib]);
+
+  const q = search.trim().toLowerCase();
+  const filtered = !q ? ships : ships.filter(s =>
+    String(s.name).toLowerCase().includes(q) || String(s.imo).toLowerCase().includes(q));
+
+  const fmtDate = (ts) => {
+    if (!ts) return '-';
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Library className="w-4 h-4 text-purple-400" />
+        <div className="text-sm font-bold text-slate-100 flex-1">
+          선박별 자료 보관소 ({ships.length}척)
+        </div>
+      </div>
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="선박명 / IMO 검색"
+        className="w-full mb-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-xs placeholder-slate-500"
+      />
+      {filtered.length === 0 ? (
+        <div className="text-center text-slate-500 text-xs py-6">완료 저장된 항차가 없습니다.</div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((s) => (
+            <div key={s.imo} className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-bold text-slate-100 text-sm flex-1 truncate">⚓ {s.name}</span>
+                <span className="text-[10px] text-slate-500">{/^[0-9]{7}$/.test(s.imo) ? `IMO ${s.imo}` : s.imo}</span>
+              </div>
+              <div className="space-y-0.5">
+                {s.voyRows.map((r) => (
+                  <div key={r.key} className="flex items-center gap-2 text-xs px-1 py-0.5 border-b border-slate-700/30 last:border-0">
+                    <span className="text-amber-300 font-bold w-16 truncate">{r.voy}</span>
+                    <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b></span>
+                    <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b></span>
+                    <span className="text-slate-500 text-[10px] ml-auto">{fmtDate(r.at)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 mt-1 pt-1 border-t border-slate-600/40 text-xs">
+                <span className="text-slate-400">누적 <b className="text-slate-200">{s.voyRows.length}</b>항차</span>
+                <span className="text-sky-400">양하 누적 <b className="text-sky-300">{s.totalD}</b></span>
+                <span className="text-emerald-400">선적 누적 <b className="text-emerald-300">{s.totalL}</b></span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-[10px] text-slate-500 mt-2">평택분 기준 · 최근 완료순 · 완료 저장 시 자동 기록</div>
+    </div>
+  );
+}
+
+// M6.15: (구) 선박 라이브러리 섹션 — M7.22에서 LiveProgress+ShipArchive로 분리됨. 미사용.
 function ShipLibrarySection({ shipLib, voyages }) {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('frequency'); // frequency | recent | name | discharge | loading
@@ -1164,9 +1388,7 @@ function computeStats(section) {
   const ediValues = Object.values(ediContainers);
   const ptkCns = new Set();
   ediValues.forEach(c => {
-    const pol = (c.pol || '').toUpperCase();
-    const pod = (c.pod || '').toUpperCase();
-    if (pol.endsWith('PTK') || pod.endsWith('PTK')) ptkCns.add(c.cn);
+    if (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod)) ptkCns.add(c.cn);
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;

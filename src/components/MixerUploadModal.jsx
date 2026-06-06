@@ -6,6 +6,7 @@
 //   3. 자동 분석 진행 표시
 //   4. 결과 요약 + 충돌/매칭 실패 확인
 import React, { useState, useRef, useEffect } from 'react';
+import { isPyeongtaekPort } from '../utils.js';
 import { X, Upload, Loader2, CheckCircle2, AlertTriangle, FileText, Image as ImageIcon, Trash2, Camera, Plus } from 'lucide-react';
 import { processSingleFile, mergeWithEdi, matchVoyage, preloadLibraries } from '../mixerUpload.js';
 import { fbCreateVoyage, fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList, fbUpdateVoyageInfo } from '../firebase.js';
@@ -276,8 +277,8 @@ async function processFiles({ files, mode, targetVoyage, voyages, inspector, set
     const data = r.data;
     if (!data?.containers) return;
     Object.values(data.containers).forEach(c => {
-      const isDischarge = (c.pod || '').endsWith('PTK') || (c.pod || '').endsWith('KRPTK');
-      const isLoading = (c.pol || '').endsWith('PTK') || (c.pol || '').endsWith('KRPTK');
+      const isDischarge = isPyeongtaekPort(c.pod);
+      const isLoading = isPyeongtaekPort(c.pol);
 
       // M3.91: 평택 필터 fix - transit 컨테이너(평택 무관)도 저장
       // 이전 버그: isDischarge도 isLoading도 아닌 컨이 양쪽에서 누락 → 베이 누락
