@@ -251,27 +251,26 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
   // 완료 버튼: 작업 끝난 항차 → 전체 작업량을 선박 누적에 100% 완료 기록 후 삭제.
   //   (삭제 버튼은 기록 없이 그냥 삭제 — 잘못 만든 항차 제거용)
-  // M7.23: 이중 확인 1단계 — 검수사가 항차에서 누르는 '완료'는 삭제가 아니라
-  //   '검수 완료(수석 확인 대기)' 표시만. 실제 archive 백업+보관소 기록+삭제는
-  //   수석이 대시보드 진행 상황에서 최종 '완료 저장'을 누를 때만 실행.
-  //   (2명이 나눠 작업 중 한 명이 자기 자리 완료를 전체 완료로 잘못 눌러 삭제되는 사고 방지)
   const [completeTarget, setCompleteTarget] = useState(null);
   const performComplete = async () => {
     if (!completeTarget) return;
     const { key } = completeTarget;
+    const v = voyages[key];
     try {
-      await fbUpdateVoyageInfo(key, { inspectorDone: true, inspectorDoneAt: Date.now() });
+      // 완료 = 항차 데이터 전체를 archive에 백업 → 백업 성공 확인 후에만 카드 삭제.
+      //   M7.18b: 백업 실패(false) 시 삭제하지 않음 — 데이터 유실 방지.
+      const ok = await fbArchiveVoyageBeforeDelete(v?.info?.imo, key, v);
+      if (!ok) {
+        alert('완료 처리 실패: 백업이 저장되지 않아 항차를 삭제하지 않았습니다. 네트워크 확인 후 다시 시도하세요.');
+        setCompleteTarget(null);
+        return;
+      }
+      await fbDeleteVoyage(key);
     } catch (e) {
-      console.error('[검수완료 표시] 실패:', key, e);
-      alert('검수 완료 표시 중 오류가 발생했습니다.');
+      console.error('[완료] 실패:', key, e);
+      alert('완료 처리 중 오류가 발생해 항차를 삭제하지 않았습니다.');
     }
     setCompleteTarget(null);
-  };
-  // 검수사가 누른 '검수 완료'를 수석 확인 전 되돌리기
-  const undoInspectorDone = async (key) => {
-    try {
-      await fbUpdateVoyageInfo(key, { inspectorDone: false, inspectorDoneAt: null });
-    } catch (e) { console.error('[검수완료 취소] 실패:', key, e); }
   };
 
   return (
@@ -448,8 +447,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 onOpen={() => onOpenVoyage(v.key)}
                 onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
                 onComplete={() => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy })}
-                inspectorDone={!!v.info?.inspectorDone}
-                onUndoComplete={() => undoInspectorDone(v.key)}
               />
             </React.Fragment>
           );
@@ -488,17 +485,17 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             <div className="bg-slate-900 border border-emerald-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle className="w-6 h-6 text-emerald-400"/>
-                <h3 className="text-lg font-bold text-slate-100">검수 완료</h3>
+                <h3 className="text-lg font-bold text-slate-100">작업 완료</h3>
               </div>
               <p className="text-sm text-slate-300 mb-1">{completeTarget.vsl} {completeTarget.voy}</p>
-              <p className="text-sm text-slate-400 mb-3">이 항차를 <b className="text-emerald-300">검수 완료</b>로 표시합니다. 자료는 삭제되지 않으며, 수석검수사가 대시보드에서 최종 확인(완료 저장)해야 보관소로 이동합니다.</p>
+              <p className="text-sm text-slate-400 mb-3">이 항차의 전체 작업량을 선박 기록에 저장하고 목록에서 제거합니다.</p>
               <div className="bg-slate-800/60 rounded-lg p-3 mb-4 text-sm">
                 <div className="flex justify-between"><span className="text-blue-300">양하</span><span className="font-bold text-slate-100">{dCnt}대</span></div>
                 <div className="flex justify-between mt-1"><span className="text-amber-300">선적</span><span className="font-bold text-slate-100">{lCnt}대</span></div>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setCompleteTarget(null)} className="flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-sm">취소</button>
-                <button onClick={performComplete} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">검수 완료 표시</button>
+                <button onClick={performComplete} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">완료 저장</button>
               </div>
             </div>
           </div>
@@ -604,7 +601,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, onUndoComplete }) {
+function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete }) {
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
@@ -688,28 +685,13 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           </div>
           <div className="flex items-center gap-1">
             {onComplete && (
-              inspectorDone ? (
-                <div className="flex items-center gap-1">
-                  <span className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/40 text-amber-300 text-[10px] font-bold border border-amber-700/40" title="검수 완료 — 수석검수사 최종 확인 대기 중">
-                    <CheckCircle className="w-3.5 h-3.5"/>검수 완료 · 수석 대기
-                  </span>
-                  {onUndoComplete && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onUndoComplete(); }}
-                      className="px-2 py-1 rounded bg-slate-700/50 hover:bg-slate-600 text-slate-300 text-[10px] font-bold border border-slate-600/40"
-                      title="검수 완료 취소 (수석 확인 전까지 가능)"
-                    >취소</button>
-                  )}
-                </div>
-              ) : (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onComplete(); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 hover:text-emerald-300 text-[10px] font-bold border border-emerald-800/40"
-                  title="검수 완료 표시 — 삭제 안 됨, 수석이 최종 저장"
-                >
-                  <CheckCircle className="w-3.5 h-3.5"/>완료
-                </button>
-              )
+              <button
+                onClick={(e) => { e.stopPropagation(); onComplete(); }}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 hover:text-emerald-300 text-[10px] font-bold border border-emerald-800/40"
+                title="작업 완료 — 작업량 저장 후 삭제"
+              >
+                <CheckCircle className="w-3.5 h-3.5"/>완료
+              </button>
             )}
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}

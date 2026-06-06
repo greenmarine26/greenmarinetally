@@ -772,7 +772,6 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
   if (shipId && (discharge > 0 || loading > 0)) {
     await fbAddShipVoyage(shipId, voyageKey, {
       vsl: info.vsl || '',
-      vslFull: info.vslFull || '',   // M7.24b: EDI 추출 풀네임 (보관소 선박명 표시용)
       callsign: info.callsign || '',
       imo: info.imo || '',
       voy_d: info.voy_d || '',
