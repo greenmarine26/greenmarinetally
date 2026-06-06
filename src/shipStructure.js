@@ -500,8 +500,12 @@ export function getShipBayDictData(imo, code, opts) {
   return {
     source: result.source,
     matchedBy: result.matchedBy || result.source,
-    name: data.name,
-    callsign: data.callsign,
+    // V7.26: 계열 대체(series-substitute)면 베이 구조만 빌리고 신원(이름/콜사인)은 안 빌림.
+    //   (이전: DJCT가 베이사전 없어 'DJ' 계열의 XIN TAI PING 구조를 빌렸는데, 그 콜사인 BSDU까지
+    //    끌고 와 PORT-MIS 매칭에 써서 DJCT 항차에 XIN TAI PING이 표시되던 버그.
+    //    앞 2글자만 같으면 계열로 보는 느슨한 대체라, 무관한 선박의 신원이 섞이면 안 됨.)
+    name: _substituted ? '' : data.name,
+    callsign: _substituted ? '' : data.callsign,
     specs: data.specs || {},
     code: data.code,
     bayDef: enrichedBayDef,
