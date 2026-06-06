@@ -592,7 +592,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
         // 1) 콜사인 정확 매칭
         let matchedKey = '';   // M5.83: 매칭된 Firebase 키 추적
-        if (dictCallsign && portMisData[dictCallsign]) {
+        // V7.30: 콜사인 매칭 신원 가드 — 콜사인이 맞아도 PORT-MIS 선박명이
+        //   우리 항차 선박명(EDI 풀네임)과 명백히 다르면 오염된 콜사인으로 보고 버림.
+        //   (사전에 잘못 저장된 콜사인(예: DJCT에 BSDU)이 PORT-MIS의 다른 배(XIN TAI PING)에
+        //    매칭되던 버그. EDI 풀네임이 있을 때만 검증 — 없으면 기존 동작 유지.)
+        const _nameMatchesPm = (pmRec) => {
+          const myName = String(vslFull || '').toUpperCase().replace(/[\s\-_.]/g, '');
+          const pmName = String(pmRec?.vesselName || '').toUpperCase().replace(/[\s\-_.]/g, '');
+          if (!myName || myName.length < 5 || !pmName || pmName.length < 5) return true; // 검증 불가 → 통과
+          return myName.includes(pmName.slice(0, 5)) || pmName.includes(myName.slice(0, 5));
+        };
+        if (dictCallsign && portMisData[dictCallsign] && _nameMatchesPm(portMisData[dictCallsign])) {
           pm = portMisData[dictCallsign];
           matchedBy = 'callsign';
           matchedKey = dictCallsign;
@@ -632,7 +642,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             // dictName 없으면 berth 있는 새 데이터 우선
             best = candidates.find(([k, p]) => p.berth) || candidates[0];
           }
-          if (best) { pm = best[1]; matchedBy = 'callsign-prefix'; matchedKey = best[0]; }
+          if (best && _nameMatchesPm(best[1])) { pm = best[1]; matchedBy = 'callsign-prefix'; matchedKey = best[0]; }
         }
         // 3) IMO 매칭 (PORT-MIS 데이터에 IMO 컬럼 없을 수도 있어 보조)
         if (!pm && dictImo && /^\d{7}$/.test(dictImo)) {
@@ -1501,7 +1511,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           //   - 베이사전에 해당 약자(code) 없거나 콜사인이 비어있으면 등록
           //   - def는 베이 구조 / EDI는 콜사인+풀네임 → 보완 관계
           //   - 모든 검수원과 즉시 공유 (Firebase)
-          if (r.callsign && (r.vsl || r.carrier)) {
+          // V7.30: 콜사인 없어도 선박명(r.vsl)이 있으면 사전 교정 (오염 콜사인 자동 정리).
+          //   정상 EDI는 TDT 호출부호 칸이 비어 callsign='' 인 경우가 많음 → 선박명으로 교정.
+          if ((r.callsign || r.vsl) && (r.vsl || r.carrier)) {
             try {
               const { fbSaveShipBayDict } = await import('../firebase.js');
               const code = (voyage.info.vsl || '').toUpperCase().replace(/\s+/g, '');
@@ -1509,11 +1521,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
                 await fbSaveShipBayDict(code, {
                   code,
                   name: r.vsl,
-                  callsign: r.callsign,
+                  callsign: r.callsign || '',
                   source: 'edi-auto',
                   _inspector: inspector || '',
                 });
-                results.push(`☁ ${file.name}: 베이사전 자동 등록 (${code} · ${r.callsign} · ${r.vsl})`);
+                results.push(`☁ ${file.name}: 베이사전 자동 등록 (${code} · ${r.callsign || '(콜사인없음)'} · ${r.vsl})`);
               }
             } catch (e) {
               console.warn('[M5.89] EDI 베이사전 자동 등록 실패:', e);
