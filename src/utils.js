@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V7.30';
+export const APP_VERSION = 'V7.26';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2036,23 +2036,6 @@ export const COLOR_PALETTE = [
 //   원인: 엠티 선적 리스트는 항구 컬럼이 목적지(CNDLC 등)라 pol이 비거나 오염됨.
 //   기존 getContainerColorKey는 pol.includes('PTK')만 봐서 엠티 285대에 색이 안 칠해져
 //   카고플랜 본체/별첨에서 통째로 누락됐다 (matchPodC만 _inList를 인정하던 비대칭 버그).
-// ─── V7.27: 선사 약자 정규화 (양하 카고플랜 컬러키 = 검수리스트/작업리포트와 동일 3자) ──
-//   inspectionList.normalizeCarrier / workingReport.normalizeOp와 동일한 변환표.
-//   op가 4·5자(EDI 원본 DJSC/SNKO 등)로 들어와도 3자 voucher 약자로 통일.
-//   ⚠️ 단순 slice(0,3) 금지: SNKO→SNK(X), 정답 SKR. 반드시 변환표 경유.
-const CARRIER_MAP_COLOR = {
-  'DJSC': 'DJS', 'NSSL': 'NSL', 'HASL': 'HAS', 'SNKO': 'SKR',
-  'HSLI': 'HSL', 'JEON': 'HSL',
-  'DWIC': 'DWS', 'EASK': 'EAS', 'TJMS': 'TJM', 'WDFC': 'WDF', 'SCLK': 'SIT',
-};
-export function normalizeCarrierCode(op) {
-  if (!op) return null;
-  const t = String(op).toUpperCase().trim();
-  if (!t) return null;
-  if (CARRIER_MAP_COLOR[t]) return CARRIER_MAP_COLOR[t];
-  return t.slice(0, 3);
-}
-
 export function getContainerColorKey(c, mode) {
   // 평택분 여부. M6.94.34: _inList(리스트=평택)는 선적 모드에서만 적용.
   //   양하 모드에서 _inList를 인정하면 타항 양하분(예: pod=PHDVO)이 평택으로 잘못 잡힘.
@@ -2062,8 +2045,8 @@ export function getContainerColorKey(c, mode) {
     : (c._inList || isPyeongtaekPort(c.pol));
   if (!isPtkC) return null;
   if (mode === 'discharge') {
-    // 양하: 선사코드로 컬러 (V7.27: 변환표 경유 3자 통일 — DJSC→DJS, SNKO→SKR)
-    return normalizeCarrierCode(c.op);
+    // 양하: 선사코드로 컬러
+    return c.op ? String(c.op).trim() : null;
   } else {
     // 선적: POD 3자로 컬러. 엠티는 pol이 목적지로 오염될 수 있으나
     //   여기선 이미 평택분 확정 → pod에서 직접 3자 추출 (별첨 로직과 동일).

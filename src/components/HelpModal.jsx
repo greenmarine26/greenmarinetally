@@ -461,18 +461,6 @@ const CONTENT = {
       ],
     },
     {
-      title: '🆕 V7.27 (2026-06-06) — 코드 정합성 점검 6건 일괄 수정',
-      examples: [
-        { q: '① 평택 판정 통일', a: '평택 표기(KRPTK/KRPYOTM/KRPYO/KRPYT 등 선사·선박별 변형)를 화면마다 다르게 판정하던 문제. 적재·집계·모드판정 단계가 endsWith(\'PTK\')나 부분 열거만 써서 KRPYOTM 등을 누락 → 카고플랜엔 보이는데 카운트엔 빠지는 불일치. VoyagePage·HomePage·ChiefDashboard·workingReport·mixerUpload·diagnostics·MixerUploadModal·firebase 8개 파일 14개 지점을 isPyeongtaekPort() 단일 함수로 통일. firebase 1182(한글 항구명 케이스)만 의도적 예외.' },
-        { q: '② 양하 선사 색 3자 통일', a: '양하 카고플랜 컬러키가 op를 trim만 해서 DJSC와 DJS가 다른 색으로 갈라짐. utils.normalizeCarrierCode 신설(변환표 경유): DJSC→DJS, SNKO→SKR 등. 단순 3자 절단 금지(SNKO→SNK는 틀림). 검수리스트·작업리포트와 동일 약자.' },
-        { q: '④ 베이매트릭스 확정 배지', a: '베이사전 검증 배지 옆에 매트릭스 확정 여부 표시. 모든 베이 tier가 매트릭스(사용자입력/PDF override)로 확정되면 \"📐 매트릭스 확정\", 미확정 베이가 있으면 \"⚠️ 베이매트릭스 확정 필요\"(EDI 추정 중). 위젯 펼치면 확정 필요 베이 번호 목록 표시.' },
-        { q: '⑥ V1 통과화물 X 제거', a: '구버전 카고플랜이 통과화물을 X로 표시해 짝수 shadow X와 구분 불가(지침 4.2 위반). V2와 동일하게 회색 배경으로 변경. X는 짝수 shadow 전용. V1은 V2 안전망이라 유지하되 약속 준수.' },
-        { q: '⑦ 리퍼·특수화물 판정 통일', a: 'V2 카고플랜에서 셀 마크는 isReeferContainer를 쓰는데 별첨 카운트는 iso[2]===R 약식 판정 → 그림과 카운트 불일치. 카운트도 셀 마크와 동일 기준(isReeferContainer + c.fr/tk/ot/oog 플래그)으로 통일.' },
-        { q: '⑧ PORT-MIS 오매칭 (DJCT에 XIN TAI PING) fix', a: '계열 대체 시 최상위 callsign만 비우고 bayDef 내부 callsign은 남겨, PORT-MIS가 dictData.bayDef.callsign으로 폴백해 빌려온 선박 콜사인(BSDU)을 집어오던 버그. V7.26 반쪽 수정 보완 — 계열 대체 시 bayDef의 callsign·name·vesselName도 제거.' },
-        { q: '⑤ 45R1 표시 (수정 안 함)', a: '45R1=40RF는 메인 분류 isoToLabel이 이미 정확히 처리. 45피트 리퍼는 없으므로(있으면 L5) 실무 영향 없어 보류.' },
-      ],
-    },
-    {
       title: '🆕 M6.94.36 (2026-05-31) — 매트릭스 빌더 지운 베이 부활 fix (중복 사전 제거)',
       examples: [
         { q: '🔥 증상', a: '베이를 삭제·확정·저장·동기화·배포했는데, 매트릭스 빌더를 다시 열면 지운 베이가 살아있음. 카고플랜(삭제 반영)과 매트릭스 빌더(삭제 안 됨)가 같은 베이를 다르게 그림. 둘 다 같은 사전을 봐야 하는데 다름.' },

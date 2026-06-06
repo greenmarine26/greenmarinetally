@@ -12,15 +12,17 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort } from './utils.js';
+import { isoToLabel, isUnknownIso, isReeferContainer } from './utils.js';
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 function filterPyeongtaek(containers, mode) {
   return Object.values(containers).filter(c => {
     if (mode === 'discharge') {
-      return isPyeongtaekPort(c.pod);
+      const pod = (c.pod || '').toUpperCase();
+      return pod === 'KRPTK' || pod === 'KRPYT' || pod.endsWith('PTK');
     } else if (mode === 'loading') {
-      return isPyeongtaekPort(c.pol);
+      const pol = (c.pol || '').toUpperCase();
+      return pol === 'KRPTK' || pol === 'KRPYT' || pol.endsWith('PTK');
     }
     return true;
   });

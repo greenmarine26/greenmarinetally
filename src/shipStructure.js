@@ -508,12 +508,7 @@ export function getShipBayDictData(imo, code, opts) {
     callsign: _substituted ? '' : data.callsign,
     specs: data.specs || {},
     code: data.code,
-    // V7.27: 계열 대체면 bayDef 내부 신원(콜사인/선박명)도 제거.
-    //   (최상위 callsign만 비우면 PORT-MIS가 dictData.bayDef.callsign으로 폴백해
-    //    빌려온 선박 콜사인(BSDU)을 집어와 DJCT에 XIN TAI PING이 뜨던 버그. V7.26 반쪽수정 보완.)
-    bayDef: _substituted
-      ? { ...enrichedBayDef, callsign: '', name: '', vesselName: '' }
-      : enrichedBayDef,
+    bayDef: enrichedBayDef,
     verified: bayDef.verified || result.source === 'v2' || result.source === 'v2-fuzzy',
     // M6.40: STOWAGE PDF 메타 (Firebase 사전에서만 — v1/v2 임베드에는 없음)
     pdfUrl: data.pdfUrl || '',

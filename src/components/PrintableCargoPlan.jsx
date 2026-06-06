@@ -142,7 +142,6 @@ function getMark(c, mode, xrayMap) {
   //   KR/CN/VN 같은 2자 국가 코드 제거 후 3자 표기
   let baseLetter;
   let pod3 = null;  // M6.70k: POD 3자 약자 (셀 색상용, 글자는 'L'/'E' 그대로)
-  let isThrough = false;  // V7.27: 통과화물 (회색 배경, X 금지)
   if (ptk) {
     if (mode === 'discharge') {
       baseLetter = 'o';
@@ -155,15 +154,13 @@ function getMark(c, mode, xrayMap) {
       }
     }
   } else {
-    // 통과 (평택 미관여) — V7.27: X 금지(짝수 shadow 전용). 회색 배경으로 표시.
-    isThrough = true;
+    // 통과 (평택 미관여)
     if (mode === 'loading' && c.pod) {
       const podUp = String(c.pod).toUpperCase();
-      const p3 = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : '');
-      baseLetter = p3 || '';
-      pod3 = p3 || null;
+      baseLetter = podUp.length >= 5 ? podUp.slice(2) : (podUp.length === 3 ? podUp : 'X');
+      pod3 = baseLetter !== 'X' ? baseLetter : null;
     } else {
-      baseLetter = '';
+      baseLetter = 'X';
     }
   }
 
@@ -196,7 +193,7 @@ function getMark(c, mode, xrayMap) {
   // X-RAY (평택 양하만)
   const isXray = mode === 'discharge' && ptk && xrayMap && xrayMap[c.cn];
 
-  return { letter, type, isXray, pod3, isThrough };
+  return { letter, type, isXray, pod3 };
 }
 
 function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, globalRowRange, globalTiers, dictShipMeta, dictBaysSummary = {}, podColorMap = {} }) {
@@ -470,7 +467,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? "mark-multi" : ""} ${m.type ? `type-${m.type}` : ""} ${m.isXray ? "xray" : ""} ${m.isThrough ? "cpv1-through" : ""}`;
+                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   const podColor = m.pod3 && podColorMap[m.pod3];
                   return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
                 })}
@@ -486,7 +483,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? "mark-multi" : ""} ${m.type ? `type-${m.type}` : ""} ${m.isXray ? "xray" : ""} ${m.isThrough ? "cpv1-through" : ""}`;
+                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   const podColor = m.pod3 && podColorMap[m.pod3];
                   return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
                 })}
@@ -502,7 +499,7 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
                   if (!c) return <span key={r} className="bay-cell mark-empty"></span>;
                   if (c._shadow40) return <span key={r} className="bay-cell mark-shadow">X</span>;
                   const m = getMark(c, mode, xrayMap);
-                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? "mark-multi" : ""} ${m.type ? `type-${m.type}` : ""} ${m.isXray ? "xray" : ""} ${m.isThrough ? "cpv1-through" : ""}`;
+                  const cls = `bay-cell mark-${m.letter} ${m.letter.length > 1 ? 'mark-multi' : ''} ${m.type ? `type-${m.type}` : ''} ${m.isXray ? 'xray' : ''}`;
                   const podColor = m.pod3 && podColorMap[m.pod3];
                   return <span key={r} className={cls} style={podColor ? {color: podColor, fontWeight: 700} : undefined}>{m.letter}</span>;
                 })}
@@ -1131,8 +1128,6 @@ export default function PrintableCargoPlan({
         /* M6.65: 3자 POD 약어 (DLC, LYG, PTK 등) 셀에 들어가도록 폰트 축소 */
         .bay-cell.mark-multi { font-size: 3.8pt; font-weight: 600; letter-spacing: -0.3px; }
         .mark-X { color: #000; }
-        /* V7.27: 통과화물 = 회색 배경 (V2와 동일, X 글자 금지) */
-        .cpv1-through { background: #d4d4d8 !important; color: #52525b !important; }
         /* M6.1: 짝수 베이 40피트의 짝꿍 자리 X (단독 박스에서, 다른 컨테이너 적재 불가) */
         .mark-shadow { color: #999; font-style: italic; background: #f0f0f0; }
         .mark-o { color: #d97706; font-weight: 500; }

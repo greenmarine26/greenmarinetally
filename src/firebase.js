@@ -8,7 +8,6 @@ import {
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort } from './utils.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -694,7 +693,8 @@ export async function fbResetAllShipStats() {
 //   M7.18b: 평택 판정을 isPyeongtaekPort 기준으로 통일 — PTK/PYT/PYOTM/PYO 변종 포괄.
 //          (이전 endsWith('PTK')는 KRPYO/KRPYOTM 등을 누락시켜 통계 과소집계 위험)
 function _isPtk(code) {
-  return isPyeongtaekPort(code);
+  if (!code) return false;
+  return /(PTK|PYT|PYOTM|PYO)$/.test(String(code).toUpperCase().trim());
 }
 function _ptkCountOfSection(section) {
   if (!section || !section.ediContainers) return 0;
@@ -1274,23 +1274,11 @@ export async function fbSaveShipBayDict(code, entry) {
     }
     // ──────────────────────────────────────────────────────────────────────
 
-    // V7.30: 선박명이 명백히 다르면 기존 콜사인은 다른 선박 것(오염) → 새 값으로 교체, 없으면 비움.
-    //   (예: 기존 name=XIN TAI PING/callsign=BSDU 인데 새 EDI name=DONGJIN CONTINENTAL →
-    //    BSDU는 DONGJIN 것이 아니므로 신뢰 불가. 정상 EDI는 콜사인이 비어 그냥 비워짐.)
-    //   user 사전은 위 existingIsUser 분기에서 이미 보호되므로 여기 도달하지 않음.
-    const _norm = s => String(s || '').toUpperCase().replace(/[\s\-_.]/g, '');
-    const exName = _norm(existing.name), enName = _norm(entry.name);
-    const nameConflict = exName.length >= 5 && enName.length >= 5
-      && !exName.includes(enName.slice(0, 5)) && !enName.includes(exName.slice(0, 5));
-    const mergedCallsign = nameConflict
-      ? (entry.callsign || '')                       // 선박명 충돌 → 기존 콜사인 버림
-      : (entry.callsign || existing.callsign || ''); // 같은 배 → 기존 보존
-
     const merged = {
       ...existing,
       ...entry,
-      // 콜사인: 선박명 충돌 시 기존(오염) 버림. 아니면 기존 보존.
-      callsign: mergedCallsign,
+      // 콜사인/IMO는 기존이 있고 새 값이 비어있으면 기존 보존
+      callsign: entry.callsign || existing.callsign || '',
       imo: entry.imo || existing.imo || '',
       name: entry.name || existing.name || '',
       // bayDef는 새 데이터가 있으면 갱신 (def 파일 재업로드 케이스)

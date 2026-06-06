@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera, Search, Star, Calendar, UserCheck } from 'lucide-react';
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, fbResetAllShipStats, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
-import { isPyeongtaekPort } from '../utils.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import { isChief, getStaffRole } from '../staffList.js';
@@ -65,7 +64,7 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         const targets = [];
         Object.values(ediMap).forEach(c => {
           // 평택만 (mode에 맞춰)
-          const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+          const isPtk = mode === 'discharge' ? (c.pod || '').endsWith('PTK') : (c.pol || '').endsWith('PTK');
           if (!isPtk) return;
           const sm = applyPolicyToContainer(policy, c);
           if (!sm) return;
@@ -679,7 +678,7 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
 // 한 섹션(discharge/loading)의 평택분 컨테이너 수 — UI용 (firebase _ptkCountOfSection과 동일 기준)
 function countPtkSection(section) {
   if (!section || !section.ediContainers) return 0;
-  const isPtk = (c) => isPyeongtaekPort(c);
+  const isPtk = (c) => c && /(PTK|PYT|PYOTM|PYO)$/.test(String(c).toUpperCase().trim());
   const set = new Set();
   for (const c of Object.values(section.ediContainers)) {
     if (isPtk(c.pol) || isPtk(c.pod)) set.add(c.cn || JSON.stringify(c));
@@ -1388,7 +1387,9 @@ function computeStats(section) {
   const ediValues = Object.values(ediContainers);
   const ptkCns = new Set();
   ediValues.forEach(c => {
-    if (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod)) ptkCns.add(c.cn);
+    const pol = (c.pol || '').toUpperCase();
+    const pod = (c.pod || '').toUpperCase();
+    if (pol.endsWith('PTK') || pod.endsWith('PTK')) ptkCns.add(c.cn);
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
