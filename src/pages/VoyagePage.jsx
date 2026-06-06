@@ -581,7 +581,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         const vsl = (voyage?.info?.vsl || '').toUpperCase();
         const vslFull = (voyage?.info?.vslFull || '').toUpperCase();  // M5.87: EDI에서 자동 추출된 풀네임
         const dictData = (() => {
-          try { return getShipBayDictData(voyage?.info?.imo, voyage?.info?.vsl); }
+          try { return getShipBayDictData(voyage?.info?.imo, voyage?.info?.vsl, { vslFull: voyage?.info?.vslFull || '' }); }
           catch { return null; }
         })();
         // M5.87: voyage.info.callsign 우선 (EDI 자동 추출), 없으면 베이사전

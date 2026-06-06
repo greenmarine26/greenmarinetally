@@ -413,6 +413,26 @@ function pickBestVariant(matchedData, imo, ediBayCount) {
 
 export function getShipBayDictData(imo, code, opts) {
   let result = fuzzyLookupAcrossDicts(imo, code);
+
+  // V7.31: 약자(code)로 조회 시 콜사인/IMO 경유로 엉뚱한 배가 매칭되는 오염 차단.
+  //   증상: DJCT 약자로 조회했는데 항차 콜사인이 BSDU로 오염 → callsign 매칭으로 XTPG가 잡힘.
+  //   (풀네임 조회는 정상 작동 = name 기준이 정확하다는 뜻. 약자 경로에만 선박명 검증 보강.)
+  //   matchedBy가 callsign/imo 계열이고, 매칭된 사전의 선박명이 항차 선박명(vslFull)과
+  //   명백히 다르면 그 매칭을 버림. (code 정확 매칭·user-dict·name 매칭은 신뢰 → 검증 생략.)
+  if (result && opts && opts.vslFull) {
+    const mb = String(result.matchedBy || '');
+    const viaCsOrImo = /callsign|imo/i.test(mb) && !/name|code/i.test(mb);
+    if (viaCsOrImo) {
+      const _norm = s => String(s || '').toUpperCase().replace(/[\s\-_.]/g, '');
+      const myName = _norm(opts.vslFull);
+      const hitName = _norm(result.data?.name || result.data?.bayDef?.name);
+      if (myName.length >= 5 && hitName.length >= 5
+          && !myName.includes(hitName.slice(0, 5)) && !hitName.includes(myName.slice(0, 5))) {
+        result = null; // 선박명 불일치 → 오염 매칭으로 보고 버림 (계열 대체로 진행)
+      }
+    }
+  }
+
   let _substituted = null;
   if (!result) {
     // V7.01: 정확 매칭 실패 → 같은 계열 선박으로 대체 시도.

@@ -19,10 +19,10 @@ import {
   fillEmptyBaysSequential,
 } from '../shipMatrixBuilder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
-import { addToUserBayDict, lookupUserBayDict, loadUserBayDict } from '../data/userBayDict.js';
+import { addToUserBayDict, lookupUserBayDict, loadUserBayDict, removeFromUserBayDict } from '../data/userBayDict.js';
 import {
   fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSaveShipBayDict,
-  fbBatchSaveShipBayDict,
+  fbBatchSaveShipBayDict, fbDeleteShipBayDict,
 } from '../firebase.js';
 import { _storage, SK } from '../utils.js';
 // M6.94.0: 빈 카고플랜 박스 시각 미리보기 (베이플랜)
@@ -320,6 +320,36 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     } else {
       alert('저장 실패 — localStorage 용량 확인 필요');
     }
+  };
+
+  // V7.31: 이 선박 사전 삭제 (localStorage + Firebase 양쪽). 잘못 등록된 사전을 지우고 다시 등록할 때 사용.
+  const handleDelete = async () => {
+    if (!canEdit) {
+      alert('삭제 권한이 없습니다. 권한자에게 문의하세요.');
+      return;
+    }
+    const code = shipMeta.code;
+    if (!code) {
+      alert('삭제할 선박 코드가 없습니다.');
+      return;
+    }
+    if (!confirm(`"${code}" (${shipMeta.name || '이름없음'}) 베이사전을 완전히 삭제할까요?\n\n이 기기와 Firebase(모든 기기)에서 지워집니다. 되돌릴 수 없습니다.`)) return;
+    // localStorage에서 이 선박의 모든 키 삭제 (code 일치 또는 키 자체가 code)
+    const dict = loadUserBayDict() || {};
+    const codeU = String(code).toUpperCase();
+    let localCount = 0;
+    for (const k of Object.keys(dict)) {
+      const e = dict[k];
+      const ec = String(e?.code || '').toUpperCase();
+      if (k.toUpperCase() === codeU || ec === codeU) {
+        if (removeFromUserBayDict(k)) localCount++;
+      }
+    }
+    let fbOk = false;
+    try { fbOk = await fbDeleteShipBayDict(code); } catch (e) { console.error(e); }
+    setSavingMsg(`🗑 ${code} 삭제 완료 — 이 기기 ${localCount}건${fbOk ? ' · ☁ Firebase에서도 삭제' : ' · ⚠ Firebase 삭제 실패'}. 새로 등록하려면 EDI/PDF를 다시 올리세요.`);
+    setDone(true);
+    if (onSaved) onSaved(null);
   };
 
   // M6.94.22: 일괄 동기화 — 이 기기 localStorage의 user 매트릭스 전부를 Firebase로 업로드.
@@ -924,6 +954,12 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
             {!done ? (
               <>
                 <button onClick={onClose} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">취소</button>
+                {canEdit && shipMeta.code && (
+                  <button onClick={handleDelete}
+                          className="px-4 py-2 bg-red-700 hover:bg-red-600 rounded text-sm font-bold">
+                    🗑 사전 삭제
+                  </button>
+                )}
                 {canEdit && (
                   <button onClick={handleSave} disabled={!shipMeta.code || bayList.length === 0}
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold disabled:opacity-50">
