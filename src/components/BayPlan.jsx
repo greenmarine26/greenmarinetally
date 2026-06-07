@@ -380,8 +380,13 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
   const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
 
-  // 셀 배경 hex 색 — POD/선사 색. xray/완료 제외. 쉬프팅도 POD색 유지 (마크로만 구분)
-  const getCellBg = (c) => {
+  // V7.32: 셀 배경색 폐지 — XRAY/선사 배경색이 보라 계열로 겹쳐 혼동(양하 중단 유발).
+  //   약속: 셀 배경색은 XRAY 전용. 선사는 글자색(opLabel 색)으로 구분. (cellColor/opColor로 이동)
+  //   카고플랜 V2(인쇄물)는 별도 색함수라 4.2 약속(선사 배경) 그대로 유지.
+  const getCellBg = () => null;
+
+  // V7.32: 선사 글자색 — 양하=선사(c.op)별, 선적=POD별 hex. 셀 배경 대신 opLabel에 적용.
+  const getOpColor = (c) => {
     if (!c?.cn) return null;
     if ((xrayMap && xrayMap[c.cn]) || (compMap && compMap[c.cn])) return null;
     const k = getContainerColorKey(c, mode);
@@ -389,6 +394,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   };
 
   // 셀 Tailwind 클래스
+  // V7.32: 선사 배경색 폐지 → 배경은 우리화물/통과만 구분. 선사는 글자색(getOpColor). XRAY만 배경 보라.
   const cellColor = (c) => {
     if (!c?.cn) return 'bg-slate-800 text-slate-400 border-slate-700';
     if (xrayMap && xrayMap[c.cn]) {
@@ -396,18 +402,14 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       return 'bg-purple-700 text-purple-50 border-purple-400 ring-1 ring-purple-300';
     }
     if (compMap && compMap[c.cn]) return 'bg-slate-300 text-slate-900 border-slate-500';
-    // 쉬프팅 주황: 양하 모드에서만. 선적 모드에서는 POD 색 유지
+    // 쉬프팅 주황: 양하 모드에서만. 선적 모드에서는 기본 배경 유지
     if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-600 text-orange-50 border-orange-400';
 
     const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
-    const hasBg = !!getContainerColorKey(c, mode);
-    if (hasBg) {
-      return isOurContainer
-        ? 'text-white border-amber-300 ring-2 ring-amber-400'
-        : 'text-white border-slate-500';
-    }
-    if (isOurContainer) return 'bg-amber-500 text-amber-950 border-amber-300 ring-1 ring-amber-400';
-    return 'bg-slate-700 text-slate-300 border-slate-600';
+    // 우리 화물(평택분) = 어두운 기본 배경 + amber 링/테두리 강조 (선사는 글자색으로 구분)
+    if (isOurContainer) return 'bg-slate-900 text-slate-100 border-amber-300 ring-2 ring-amber-400';
+    // 통과 화물 = 회색 배경, 글자 없는 느낌 (4.2: 통과 일반 = 회색)
+    return 'bg-slate-700 text-slate-400 border-slate-600';
   };
 
   // 셀 크기 (zoom 적용) - PDF 5줄 다 보이게
@@ -802,6 +804,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   isMobile={isMobile}
                   cellColor={cellColor}
                   getCellBg={getCellBg}
+                  getOpColor={getOpColor}
                   globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
@@ -842,6 +845,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             isMobile={isMobile}
             cellColor={cellColor}
             getCellBg={getCellBg}
+            getOpColor={getOpColor}
             globalRowRange={globalRowRange}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
@@ -939,7 +943,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getCellBg, globalRowRange, bayStructureMap, globalTiers = [], dictBaysSummary = {},
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getCellBg, getOpColor, globalRowRange, bayStructureMap, globalTiers = [], dictBaysSummary = {},
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1548,7 +1552,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
             ) : (c.cn || '')}
           </div>
           <div style={{ fontSize: fontSize - 1 }}>
-            {opLabel} {fe}{wt.padStart(4, ' ')} {typeLabel}
+            <span className="font-black" style={getOpColor && getOpColor(c) ? { color: getOpColor(c) } : undefined}>{opLabel}</span> {fe}{wt.padStart(4, ' ')} {typeLabel}
           </div>
           <div className={specialColor} style={{ fontSize: fontSize - 1, minHeight: fontSize }}>
             {specialLine || '\u00A0'}

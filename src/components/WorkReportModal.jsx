@@ -24,7 +24,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [activeWork, setActiveWork] = useState({});  // {1호기: {mode, started, paused, reason}, ...}
   // 시작 화면
   const [selectedEquip, setSelectedEquip] = useState(lastEquip || '1호기');
-  const [selectedMode, setSelectedMode] = useState('discharge');  // 'discharge' | 'load'
+  const [selectedMode, setSelectedMode] = useState('discharge');  // 'discharge' | 'loading'
   // 중단 사유
   const [pauseReason, setPauseReason] = useState('');
   const [externalReason, setExternalReason] = useState('');
@@ -68,7 +68,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     if (m === 'loading')   return voyage?.info?.voy_l || voyage?.info?.voy || '';
     return voyage?.info?.voy_d || voyage?.info?.voy_l || voyage?.info?.voy || '';
   };
-  const voy = getVoy();  // 기본 fallback (UI 표시용)
+  const voy = getVoy(selectedMode);  // 기본 fallback (UI 표시용) — 현재 선택 모드 항차
 
   // 활성 작업: [equipNo, mode, awData] 배열로 평탄화
   const activeWorkList = [];
@@ -404,8 +404,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                   className={`py-3 rounded-lg font-bold ${selectedMode === 'discharge' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
                   ⬇ 양하
                 </button>
-                <button onClick={() => setSelectedMode('load')}
-                  className={`py-3 rounded-lg font-bold ${selectedMode === 'load' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
+                <button onClick={() => setSelectedMode('loading')}
+                  className={`py-3 rounded-lg font-bold ${selectedMode === 'loading' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
                   ⬆ 선적
                 </button>
               </div>

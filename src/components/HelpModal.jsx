@@ -379,6 +379,19 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 V7.32 (2026-06-07) — 작업보고 항차/셀색/카메라 3건 수정',
+      examples: [
+        { q: '🔥 버그1 (작업보고 항차)', a: '선적 보고인데 양하 항차로 표시됨. 원인: 선적 시작 버튼이 비표준 mode값 "load"로 세팅 → 항차/라벨 선택이 양하로 폴백. 코드 전체 표준은 "loading".' },
+        { q: '✅ 수정1', a: 'WorkReportModal 선적 버튼 load→loading 통일 + UI 항차표시를 현재 선택 모드 기준으로. kakaoShare 라벨키 load_→loading_ 정합. 이제 양하=양하항차, 선적=선적항차 정확히 표시.' },
+        { q: '🔥 버그2 (XRAY·선사 셀색 혼동)', a: '양하 작업 화면에서 XRAY 보라 배경과 선사색(보라 #9333ea) 배경이 겹쳐 혼동 → 양하 중단 유발. 약속 위반(셀 배경색은 XRAY 전용).' },
+        { q: '✅ 수정2', a: 'BayPlan 셀 선사 배경색 폐지 → 선사는 글자색(opLabel)으로 구분. XRAY만 배경색(보라). 카고플랜 V2는 별도 함수라 4.2 약속(선사 배경) 그대로 유지.' },
+        { q: '🔥 버그3 (카메라 멈춤)', a: '실오류/데미지 사진 보고 화면에서 ReferenceError: photoBlob is not defined 발생 → 런타임 에러로 카메라 멈춤.' },
+        { q: '✅ 수정3', a: 'PhotoReportModal 검증 로직이 정의 안 된 photoBlob 참조 → 실제 변수 cnPhotoBlob/detailPhotoBlob로 분리(전송 검증 기준과 일치). 에러 제거.' },
+        { q: '⏸ 보류 (트윈)', a: '양하 트윈 짝 미출력은 현재 정상 작동·재현 데이터 부재로 확정 진단 불가하여 보류. 다음 발생 시 진단 예정.' },
+        { q: '🔧 변경 파일 + 버전', a: 'WorkReportModal.jsx, kakaoShare.js, BayPlan.jsx, PhotoReportModal.jsx. 버전 V7.32.' },
+      ],
+    },
+    {
       title: '🆕 V7.13 (2026-06-04) — 대시보드 선박별 항차/작업대수',
       examples: [
         { q: '📊 선박별 작업 이력', a: '수석 대시보드에서 선박(예: MCAT) 펼치면 항차별 양하/선적 대수 표 + 합계. 카드 요약: 입항 N회 / 양하 누계 / 선적 누계.' },

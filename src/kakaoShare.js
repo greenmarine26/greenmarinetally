@@ -158,9 +158,9 @@ export function buildWorkStatusMessage({ vsl, voy, action, time, reason, equip }
     discharge_start: '🟢 양하 시작',
     discharge_pause: '⏸ 양하 중단',
     discharge_done: '✅ 양하 완료',
-    load_start: '🟢 선적 시작',
-    load_pause: '⏸ 선적 중단',
-    load_done: '✅ 선적 완료',
+    loading_start: '🟢 선적 시작',
+    loading_pause: '⏸ 선적 중단',
+    loading_done: '✅ 선적 완료',
   };
   const lines = [];
   if (equip) lines.push(`🏗 ${equip}`);
