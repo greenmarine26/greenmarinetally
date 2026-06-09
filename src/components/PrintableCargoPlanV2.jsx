@@ -489,7 +489,19 @@ export default function PrintableCargoPlanV2({
   // M6.81 알고리즘 적용
   const { trios, singles } = useMemo(() => autoPairBays(matrixBays), [matrixBays]);
   const pdfBays = useMemo(() => generatePdfBays(matrixBays, trios, singles), [matrixBays, trios, singles]);
-  const layout = useMemo(() => autoPageLayout(trios, singles, 5), [trios, singles]);
+  // 지침서 4.5: deck-only(hold 없는) 단독 베이는 하단 배치 → autoPageLayout에 전달
+  const deckOnlyKeys = useMemo(() => {
+    const s = new Set();
+    for (const [key, pb] of Object.entries(pdfBays || {})) {
+      if (pb && (!pb.hold_t || pb.hold_t.length === 0)) {
+        const m = key.startsWith('(') ? key.replace('(', '').replace(')', '').slice(2) : key;
+        s.add(parseInt(m, 10));
+        s.add(key);
+      }
+    }
+    return s;
+  }, [pdfBays]);
+  const layout = useMemo(() => autoPageLayout(trios, singles, 5, deckOnlyKeys), [trios, singles, deckOnlyKeys]);
   const posMap = useMemo(() => buildPosMap(containers), [containers]);
 
   // 박스별 카운트 (M6.86.8.4: M6.81 정답 포맷)
