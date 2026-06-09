@@ -1604,10 +1604,10 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
                 const y = ti * rowH;
                 return (
                   <React.Fragment key={`d-${ti}`}>
-                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: cellH, textAlign: 'right', fontSize: 9, lineHeight: `${cellH}px` }} className="text-slate-500 mono font-bold">{tr.tier}</div>
-                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: cellH, fontSize: 9, lineHeight: `${cellH}px` }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
                     {tr.cells.filter(c => c.active && c.rowLbl != null).map((c) => (
-                      <div key={`dc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: cellH }}>
+                      <div key={`dc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
                         {renderCell(c.rowLbl, String(tr.tier).padStart(2, '0'))}
                       </div>
                     ))}
@@ -1625,10 +1625,10 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
                 const y = deckH + HATCH + ti * rowH;
                 return (
                   <React.Fragment key={`h-${ti}`}>
-                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: cellH, textAlign: 'right', fontSize: 9, lineHeight: `${cellH}px` }} className="text-slate-500 mono font-bold">{tr.tier}</div>
-                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: cellH, fontSize: 9, lineHeight: `${cellH}px` }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
                     {tr.cells.filter(c => c.active && c.rowLbl != null).map((c) => (
-                      <div key={`hc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: cellH }}>
+                      <div key={`hc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
                         {renderCell(c.rowLbl, String(tr.tier).padStart(2, '0'))}
                       </div>
                     ))}
