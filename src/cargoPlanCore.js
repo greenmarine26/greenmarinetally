@@ -160,9 +160,22 @@ export function autoPageLayout(trios, singles, colsPerRow = 5, deckOnlyKeys = nu
   let topBoxes = sortedAsc.slice(0, topCount);
   let bottomBoxes = sortedAsc.slice(topCount);
 
-  // (deckOnlyKeys 인자는 하위호환 위해 남기되 사용 안 함)
-  // ※ hold 유무로 자리를 바꾸지 않는다 — 베이 번호 순서가 절대 우선.
-  //   (지침서 4.5 정정: deck-only라고 하단으로 내리면 번호 순서가 깨진다. TMPZ BAY 01 사례.)
+  // 지침서 4.5: hold 없는 deck-only 단독 베이는 하단 행에 우선 배치.
+  //   (deck가 어디까지 높아질지 모르므로 위쪽 수직 공간 확보. 상단에 오면 deck 잘림.)
+  //   deckOnlyKeys: deck-only인 베이 키(odd 번호 또는 topKey) 집합. 없으면 기존 동작.
+  if (deckOnlyKeys && bottomBoxes.length > 0) {
+    const isDeckOnly = (box) =>
+      deckOnlyKeys.has(box.oddNum) || deckOnlyKeys.has(String(box.oddNum)) || deckOnlyKeys.has(box.topKey);
+    const topDeckOnly = topBoxes.filter(isDeckOnly);
+    const bottomHasHold = bottomBoxes.filter(b => !isDeckOnly(b));
+    // 상단에 deck-only가 있고 하단에 hold-있는 박스가 있으면 자리 교환
+    let swaps = Math.min(topDeckOnly.length, bottomHasHold.length);
+    for (let i = 0; i < swaps; i++) {
+      const t = topDeckOnly[i], b = bottomHasHold[i];
+      topBoxes = topBoxes.filter(x => x !== t).concat(b);
+      bottomBoxes = bottomBoxes.filter(x => x !== b).concat(t);
+    }
+  }
 
   // 각 행 내부: 큰 번호 좌측 (카스피 정답)
   topBoxes.sort((a, b) => b.oddNum - a.oddNum);

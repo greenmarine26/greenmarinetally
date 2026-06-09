@@ -1,6 +1,6 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'V7.34';
+const VERSION = 'V7.35';
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
@@ -26,10 +26,29 @@ self.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// fetch — network-first (캐시 사용 안 함, 새 버전 즉시 반영)
+// fetch — network-first 유지 (새 버전 즉시 반영) + 성공 응답을 캐시에 적재.
+// V7.35: 기존엔 cache.put이 없어 caches.match 폴백이 항상 실패(죽은 코드)
+//   → 오프라인이면 흰 화면. 같은 출처(same-origin) GET 성공분만 캐시에 넣어
+//   신호 끊긴 곳(홀드 안 등)에서 마지막 성공본으로 화면 유지.
+//   네트워크가 항상 우선이므로 업데이트 즉시 반영 동작은 그대로.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  let sameOrigin = false;
+  try { sameOrigin = new URL(e.request.url).origin === self.location.origin; } catch {}
+  if (!sameOrigin) return;  // Firebase 등 외부 요청은 관여하지 않음
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(e.request, copy)).catch(() => {});
+        }
+        return res;
+      })
+      .catch(() =>
+        caches.match(e.request).then((m) =>
+          m || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined)
+        )
+      )
   );
 });

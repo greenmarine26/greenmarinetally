@@ -60,6 +60,13 @@ export default class ErrorBoundary extends React.Component {
                 className="flex-1 py-2.5 bg-amber-700 hover:bg-amber-600 text-white font-bold rounded">
                 다시 시도
               </button>
+              {/* V7.35: 루트 크래시용 — 다시 시도로 안 풀리면 앱 전체 새로고침 */}
+              {this.props.reloadButton && (
+                <button onClick={() => window.location.reload()}
+                  className="flex-1 py-2.5 bg-blue-700 hover:bg-blue-600 text-white font-bold rounded">
+                  앱 새로고침
+                </button>
+              )}
             </div>
           </div>
         </div>

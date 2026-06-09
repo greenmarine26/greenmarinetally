@@ -12,4 +12,4 @@ npm run build    # 프로덕션 빌드 → dist/
 ## 배포
 빌드 후 `dist/` 폴더를 호스팅 (정적 사이트). PWA 지원 (sw.js).
 
-자세한 내용은 검수앱지침서.md 참조.
+자세한 내용은 [HANDOFF.md](./HANDOFF.md) 참조.
