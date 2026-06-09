@@ -531,17 +531,10 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
   const [autoTwin, setAutoTwin] = useState(true); // 자동 짝꿍 ON/OFF
+  const [twinBusy, setTwinBusy] = useState(false); // 통합 완료 처리 중
 
   // 이미 검수 완료된 컨번호 = 짝 후보에서 제외
   // 같은 트윈 작업으로 묶이지 않도록
-  const excludeCns = useMemo(() => {
-    const s = new Set();
-    allContainers.forEach(c => {
-      if (c._comp) s.add(c.cn);
-    });
-    return s;
-  }, [allContainers]);
-
   const r1 = useMemo(() => {
     if (!q1 || q1.length < 2) return [];
     const Q = q1.toUpperCase();
@@ -560,19 +553,46 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   useEffect(() => {
     if (r1.length === 1 && autoTwin) {
       const front = r1[0];
+      // 증상2 수정: 같은 앞 컨이 이미 선택돼 있으면(완료로 인한 재실행 등)
+      //   화면을 다시 계산해 갈아엎지 않고 현재 짝꿍을 유지한다.
+      if (c1 && c1.cn === front.cn) return;
       setC1(front);
-      const twin = findTwinCandidate(front, allContainers, excludeCns, shipImo, shipName);
+      // 짝꿍 탐색 시 완료된 컨도 후보에 포함(excludeCns 비움)해야
+      //   앞을 먼저 완료해도 뒤 컨이 계속 보인다.
+      const twin = findTwinCandidate(front, allContainers, new Set(), shipImo, shipName);
       setC2(twin);
     } else if (r1.length === 0 || r1.length > 1) {
       setC1(null);
       setC2(null);
     }
-  }, [r1, autoTwin, allContainers, excludeCns, shipImo, shipName]);
+  }, [r1, autoTwin, allContainers, shipImo, shipName, c1]);
 
-  // 두 컨 모두 완료되면 자동 비우기
+  // 증상3 수정: 옛 c1/c2 객체의 _comp는 갱신되지 않으므로,
+  //   최신 allContainers에서 두 컨의 완료 여부를 다시 조회해 판단한다.
   const handleAfterComplete = () => {
-    if (c1?._comp && c2?._comp) {
+    if (!c1) return;
+    const isComp = (cn) => {
+      const live = allContainers.find(x => x.cn === cn);
+      return !!(live && live._comp);
+    };
+    const c1Done = isComp(c1.cn);
+    const c2Done = c2 ? isComp(c2.cn) : true; // 짝꿍 없으면 앞 컨만으로 판단
+    if (c1Done && c2Done) {
       setQ1(''); setC1(null); setC2(null);
+    }
+  };
+
+  // 통합 완료: 앞+뒤를 한 번에 처리
+  const handleCompleteBoth = async () => {
+    if (!c1 || !c2 || twinBusy) return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    setTwinBusy(true);
+    try {
+      if (!c1._comp) await fbCompleteContainer(voyageKey, c1._mode, c1.cn, inspector);
+      if (!c2._comp) await fbCompleteContainer(voyageKey, c2._mode, c2.cn, inspector);
+      setTimeout(() => { setQ1(''); setC1(null); setC2(null); }, 500);
+    } finally {
+      setTwinBusy(false);
     }
   };
 
@@ -648,6 +668,14 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
 
       {c1 && !c2 && (
         <ManualTwinPicker allContainers={allContainers} c1={c1} onPick={setC2}/>
+      )}
+
+      {c1 && c2 && (
+        <button onClick={handleCompleteBoth} disabled={twinBusy}
+          className="w-full py-3 rounded-lg font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+          <Link2 className="w-5 h-5"/>
+          {twinBusy ? '처리 중…' : (c1._mode === 'discharge' ? '트윈 한 번에 양하확인' : '트윈 한 번에 선적확인')}
+        </button>
       )}
 
       {c1 && c2 && (
