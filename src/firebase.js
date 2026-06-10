@@ -696,11 +696,16 @@ export async function fbResetAllShipStats() {
 function _isPtk(code) {
   return isPyeongtaekPort(code);
 }
-function _ptkCountOfSection(section) {
+function _ptkCountOfSection(section, mode) {
+  // V7.40: 평택분 판정 모드별 정확화 (지침 7.1·8.3 — 양하=POD평택, 선적=POL평택).
+  //   이전: POL∨POD → 평택발 타항행/타항발 평택행이 양쪽에 이중 집계.
   if (!section || !section.ediContainers) return 0;
   const set = new Set();
   for (const c of Object.values(section.ediContainers)) {
-    if (_isPtk(c.pol) || _isPtk(c.pod)) set.add(c.cn || JSON.stringify(c));
+    const isPtk = mode === 'discharge' ? _isPtk(c.pod)
+      : mode === 'loading' ? _isPtk(c.pol)
+      : (_isPtk(c.pol) || _isPtk(c.pod));
+    if (isPtk) set.add(c.cn || JSON.stringify(c));
   }
   return set.size;
 }
@@ -713,8 +718,8 @@ export function tallyVoyagesByShip(voyages) {
     const info = v.info || {};
     const vsl = (info.vsl || key.split('_')[0] || '(선박명 미상)').toUpperCase();
     if (!byShip[vsl]) byShip[vsl] = { vsl, discharge: 0, loading: 0, voyageKeys: [] };
-    byShip[vsl].discharge += _ptkCountOfSection(v.discharge);
-    byShip[vsl].loading += _ptkCountOfSection(v.loading);
+    byShip[vsl].discharge += _ptkCountOfSection(v.discharge, 'discharge');
+    byShip[vsl].loading += _ptkCountOfSection(v.loading, 'loading');
     byShip[vsl].voyageKeys.push(key);
   }
   return Object.values(byShip).sort((a, b) => (b.discharge + b.loading) - (a.discharge + a.loading));

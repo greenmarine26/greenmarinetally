@@ -206,10 +206,9 @@ function buildBuckets(voyage, mode = 'settlement') {
         targetCns = Object.keys(recs);
         // records가 비어 있으면 ediContainers의 PTK 필터로 폴백
         if (targetCns.length === 0) {
+          // V7.40: 모드별 평택 판정 (지침 7.1 — 양하=POD평택, 선적=POL평택)
           targetCns = Object.values(ediCs)
-            .filter(c => {
-              return isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod);
-            })
+            .filter(c => dlMode === 'disch' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol))
             .map(c => c.cn);
         }
       }

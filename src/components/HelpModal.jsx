@@ -379,6 +379,16 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 V7.40 (2026-06-10) — 수석 대시보드 전폭 점검: 실시간 작업 보드',
+      examples: [
+        { q: '⚓ 실시간 작업 보드 (신설)', a: '동시 작업 선박을 카드로 한눈에 — 3척이면 3카드 나란히. 카드마다: 선박·항차·선사 / 양하·선적 진행바 / 지금 작업 중 검수원(90초 이내, 녹색 점) / 오늘 데미지·실오류 배지 / 최근 보고(장비·시간). 카드 클릭 → 항차 열기.' },
+        { q: '🔥 버그 (평택분 과대 집계)', a: '대시보드 진행률의 평택 판정이 모드 무관 POL∨POD — 양하 EDI의 평택발 타항행 컨까지 평택분·누락으로 잡힘 (지침 7.1 위반).' },
+        { q: '✅ 수정 (전수)', a: '모드 인자 추가 — 양하=POD평택, 선적=POL평택. 같은 패턴 5곳 일괄: ChiefDashboard computeStats·countPtkSection, firebase _ptkCountOfSection(라이브러리·보관소 기록), HomePage computeStats(항차 카드), workingReport 결제 폴백. 시뮬: 양하 평택발 타항행 30대 제외 확인.' },
+        { q: '🧹 정리', a: '중복이던 "항차별 진행" 섹션은 보드가 대체. 죽은 코드 ShipLibrarySection+Row(490여 줄)·빈 스텁 StatsPanel.jsx 제거. StatsTab은 점검 통과(상위 필터 구조라 정확).' },
+        { q: '🔧 변경 파일 + 버전', a: 'ChiefDashboard.jsx. puppeteer 실렌더 3척 시나리오 PASS. 버전 V7.40.' },
+      ],
+    },
+    {
       title: '🆕 V7.39 (2026-06-10) — tier 라벨 정렬 fix (고정 13px 재제거)',
       examples: [
         { q: '🔥 버그 (재발)', a: 'tier 라벨 높이가 셀 행과 어긋남. 6/9에 제거한 고정 height:13px이 이 작업 라인에 남아 flex 정렬을 덮어씀.' },

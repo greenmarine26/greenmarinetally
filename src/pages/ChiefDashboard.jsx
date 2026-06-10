@@ -1,12 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Users, Anchor, ChevronRight, ArrowDown, ArrowUp, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send, Camera, Search, Star, Calendar, UserCheck } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, fbResetAllShipStats, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
+import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
-import { isChief, getStaffRole } from '../staffList.js';
-import { isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 
 export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGoHome }) {
   const [shipLib, setShipLib] = useState({});
@@ -124,8 +122,8 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
     return Object.entries(voyages || {})
       .filter(([k, v]) => v && v.info)
       .map(([k, v]) => {
-        const dis = computeStats(v.discharge);
-        const loa = computeStats(v.loading);
+        const dis = computeStats(v.discharge, 'discharge');
+        const loa = computeStats(v.loading, 'loading');
         return {
           key: k,
           info: v.info,
@@ -172,6 +170,43 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
     return Object.values(stats).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
   }, [voyages, inspectors]);
 
+  // V7.40: 실시간 보드용 — 항차별 작업 중 검수원 (90초 이내 활동, HomePage activeInspectors와 동일 기준)
+  const activeByVoyage = useMemo(() => {
+    const out = {};
+    Object.values(inspectors || {}).forEach(i => {
+      if (!i?.name || !i.lastVoyage || !i.lastActive) return;
+      if (Date.now() - i.lastActive > 90000) return;
+      if (!out[i.lastVoyage]) out[i.lastVoyage] = [];
+      out[i.lastVoyage].push({ name: i.name, mode: i.lastMode });
+    });
+    return out;
+  }, [inspectors]);
+
+  // V7.40: 항차별 마지막 작업 보고 1건
+  const lastReportByVoyage = useMemo(() => {
+    const out = {};
+    (allReports || []).forEach(r => {
+      if (!r.voyageKey) return;
+      if (!out[r.voyageKey] || (r.ts || 0) > (out[r.voyageKey].ts || 0)) out[r.voyageKey] = r;
+    });
+    return out;
+  }, [allReports]);
+
+  // V7.40: 항차별 오늘 경고(데미지·실오류) 건수
+  const todayAlertsByVoyage = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const t0 = today.getTime();
+    const out = {};
+    (allReports || []).forEach(r => {
+      if (!r.voyageKey || !r.ts || r.ts < t0) return;
+      if (r.type !== 'damage' && r.type !== 'seal_error') return;
+      if (!out[r.voyageKey]) out[r.voyageKey] = { damage: 0, sealError: 0 };
+      if (r.type === 'damage') out[r.voyageKey].damage++;
+      else out[r.voyageKey].sealError++;
+    });
+    return out;
+  }, [allReports]);
+
   // 전체 합계
   const total = useMemo(() => {
     let done = 0, all = 0, ptkAll = 0, missing = 0;
@@ -214,18 +249,23 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
         )}
       </div>
 
-      {/* 항차별 진행률 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+      {/* V7.40: ⚓ 실시간 작업 보드 — 동시 작업 선박을 카드로 한눈에 (기존 "항차별 진행" 대체) */}
+      <div className="bg-slate-900 border border-blue-800/60 rounded-xl p-3">
         <div className="flex items-center gap-2 mb-3">
           <Anchor className="w-4 h-4 text-blue-400"/>
-          <div className="text-sm font-bold text-slate-100">항차별 진행 ({voyageStats.length}건)</div>
+          <div className="text-sm font-bold text-slate-100">실시간 작업 보드 ({voyageStats.length}척)</div>
+          <span className="text-[10px] text-slate-500">실시간</span>
         </div>
         {voyageStats.length === 0 ? (
           <div className="text-xs text-slate-500 text-center py-4">진행 중 항차 없음</div>
         ) : (
-          <div className="space-y-2">
+          <div className={`grid gap-2 grid-cols-1 ${voyageStats.length >= 2 ? 'sm:grid-cols-2' : ''} ${voyageStats.length >= 3 ? 'lg:grid-cols-3' : ''}`}>
             {voyageStats.map(v => (
-              <VoyageStatRow key={v.key} v={v} onOpen={() => onOpenVoyage(v.key)}/>
+              <LiveShipCard key={v.key} v={v}
+                workers={activeByVoyage[v.key] || []}
+                lastReport={lastReportByVoyage[v.key]}
+                alerts={todayAlertsByVoyage[v.key]}
+                onOpen={() => onOpenVoyage(v.key)}/>
             ))}
           </div>
         )}
@@ -575,8 +615,8 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
     for (const [key, v] of Object.entries(voyages || {})) {
       const info = v.info || {};
       const vsl = info.vsl || key.split('_')[0] || '(선박명 미상)';
-      const dPtk = countPtkSection(v.discharge);
-      const lPtk = countPtkSection(v.loading);
+      const dPtk = countPtkSection(v.discharge, 'discharge');
+      const lPtk = countPtkSection(v.loading, 'loading');
       out.push({
         key, vsl,
         voyD: info.voy_d || '', voyL: info.voy_l || '',
@@ -677,12 +717,15 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
 }
 
 // 한 섹션(discharge/loading)의 평택분 컨테이너 수 — UI용 (firebase _ptkCountOfSection과 동일 기준)
-function countPtkSection(section) {
+function countPtkSection(section, mode) {
+  // V7.40: 평택분 판정 모드별 정확화 (지침 7.1·8.3 — 양하=POD평택, 선적=POL평택).
   if (!section || !section.ediContainers) return 0;
-  const isPtk = (c) => isPyeongtaekPort(c);
   const set = new Set();
   for (const c of Object.values(section.ediContainers)) {
-    if (isPtk(c.pol) || isPtk(c.pod)) set.add(c.cn || JSON.stringify(c));
+    const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod)
+      : mode === 'loading' ? isPyeongtaekPort(c.pol)
+      : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
+    if (isPtk) set.add(c.cn || JSON.stringify(c));
   }
   return set.size;
 }
@@ -782,499 +825,6 @@ function ShipArchiveSection({ shipLib }) {
   );
 }
 
-// M6.15: (구) 선박 라이브러리 섹션 — M7.22에서 LiveProgress+ShipArchive로 분리됨. 미사용.
-function ShipLibrarySection({ shipLib, voyages }) {
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState('frequency'); // frequency | recent | name | discharge | loading
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetMsg, setResetMsg] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-  const previewRows = useMemo(() => showPreview ? tallyVoyagesByShip(voyages) : [], [showPreview, voyages]);
-
-  // M7.14: IMO 키 분열 병합 (표시 단계) — Firebase 데이터는 보존, 화면에서만 합침.
-  //   콜사인이 IMO 자리에 섞여 같은 배가 ships/{진짜IMO} + ships/{콜사인} 둘로 갈라진 과거 데이터 대응.
-  //   기준: 7자리 숫자 IMO가 있으면 그 IMO로, 없으면 정규화 선박명(공백/기호 제거 대문자)으로 그룹.
-  //   대표 키: 그룹 내 7자리 숫자 IMO 우선, 없으면 첫 키. voyages 합치고 stats 재합산.
-  const mergedLib = useMemo(() => {
-    const entries = Object.entries(shipLib || {});
-    const groups = {}; // groupKey → { repImo, names:Set, ships:[[imo,s]...] }
-    const normName = (n) => String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    entries.forEach(([imo, s]) => {
-      const isNumericImo = /^[0-9]{7}$/.test(imo);
-      const gk = isNumericImo ? `IMO:${imo}` : `NAME:${normName(s?.name)}` || `KEY:${imo}`;
-      if (!groups[gk]) groups[gk] = { repImo: imo, repIsNumeric: isNumericImo, ships: [], names: new Set() };
-      // 7자리 숫자 IMO를 대표 키로 승격
-      if (isNumericImo && !groups[gk].repIsNumeric) { groups[gk].repImo = imo; groups[gk].repIsNumeric = true; }
-      groups[gk].ships.push([imo, s]);
-      if (s?.name) groups[gk].names.add(s.name);
-    });
-
-    // 같은 정규화 이름이 서로 다른 그룹(IMO그룹 vs NAME그룹)으로 흩어진 경우 추가 병합
-    //   예: ships/{진짜IMO}는 IMO그룹, ships/{콜사인}은 NAME그룹 → 이름으로 다시 묶기
-    const byName = {}; // normName → groupKey (대표)
-    Object.entries(groups).forEach(([gk, g]) => {
-      g.names.forEach(nm => {
-        const nn = normName(nm);
-        if (!nn) return;
-        if (byName[nn] && byName[nn] !== gk) {
-          // 병합: 숫자 IMO 그룹을 살림
-          const target = groups[byName[nn]];
-          if (target && groups[gk]) {
-            target.ships.push(...groups[gk].ships);
-            groups[gk].names.forEach(x => target.names.add(x));
-            if (g.repIsNumeric && !target.repIsNumeric) { target.repImo = g.repImo; target.repIsNumeric = true; }
-            delete groups[gk];
-          }
-        } else if (!byName[nn]) {
-          byName[nn] = gk;
-        }
-      });
-    });
-
-    // 그룹 → 합산 선박 객체
-    return Object.values(groups).map(g => {
-      const mergedVoys = {};
-      let bestStruct = null, bestName = '', lastAt = 0;
-      const aliasImos = [];
-      g.ships.forEach(([imo, s]) => {
-        aliasImos.push(imo);
-        Object.entries(s?.voyages || {}).forEach(([vk, v]) => {
-          // 같은 voyageKey 충돌 시 더 최근(analyzed_at) 우선
-          if (!mergedVoys[vk] || (v?.analyzed_at || 0) > (mergedVoys[vk]?.analyzed_at || 0)) {
-            mergedVoys[vk] = v;
-          }
-        });
-        if (s?.structure && (!bestStruct || (s.structure.bay_count || 0) > (bestStruct.bay_count || 0))) {
-          bestStruct = s.structure;
-        }
-        if (s?.name && s.name.length > bestName.length) bestName = s.name;
-        if ((s?.stats?.last_voyage_at || 0) > lastAt) lastAt = s.stats.last_voyage_at;
-      });
-      // stats 재합산 — 항차별 평택 대수 우선, 없으면 기존 stats 비례 추정
-      let totalD = 0, totalL = 0;
-      Object.values(mergedVoys).forEach(v => {
-        totalD += v?.discharge_ptk || 0;
-        totalL += v?.loading_ptk || 0;
-      });
-      // 구버전 항차(discharge_ptk 없음) 보정: 그룹의 기존 stats 합을 fallback으로
-      if (totalD === 0 && totalL === 0) {
-        g.ships.forEach(([, s]) => {
-          totalD += s?.stats?.total_discharge || 0;
-          totalL += s?.stats?.total_loading || 0;
-        });
-      }
-      return [g.repImo, {
-        name: bestName || [...g.names][0] || '?',
-        structure: bestStruct || {},
-        voyages: mergedVoys,
-        stats: {
-          total_voyages: Object.keys(mergedVoys).length,
-          total_discharge: totalD,
-          total_loading: totalL,
-          last_voyage_at: lastAt,
-        },
-        _aliasImos: aliasImos,   // 병합된 원본 키들 (디버그/검색용)
-      }];
-    });
-  }, [shipLib]);
-
-  // 검색 + 정렬된 선박 목록
-  const sortedShips = useMemo(() => {
-    const list = mergedLib;
-    const q = search.trim().toLowerCase();
-    const filtered = !q ? list : list.filter(([imo, s]) => {
-      const name = String(s?.name || '').toLowerCase();
-      const aliases = (s?._aliasImos || []).join(' ').toLowerCase();
-      return name.includes(q) || imo.toLowerCase().includes(q) || aliases.includes(q);
-    });
-    const getMetric = (s) => {
-      const stats = s.stats || {};
-      const voys = s.voyages || {};
-      const voyKeys = Object.keys(voys);
-      switch (sortBy) {
-        case 'frequency':  return stats.total_voyages || voyKeys.length || 0;
-        case 'recent':     return stats.last_voyage_at || 0;
-        case 'discharge':  return stats.total_discharge || 0;
-        case 'loading':    return stats.total_loading || 0;
-        case 'name':       return String(s.name || '').toLowerCase();
-        default:           return 0;
-      }
-    };
-    return filtered.sort((a, b) => {
-      if (sortBy === 'name') {
-        return getMetric(a[1]).localeCompare(getMetric(b[1]));
-      }
-      return (getMetric(b[1]) || 0) - (getMetric(a[1]) || 0);
-    });
-  }, [mergedLib, search, sortBy]);
-
-  return (
-    <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
-      <div className="flex items-center gap-2 mb-2">
-        <Library className="w-4 h-4 text-purple-400"/>
-        <div className="text-sm font-bold text-slate-100 flex-1">
-          선박 라이브러리 ({mergedLib.length}척 · 표시 {sortedShips.length})
-        </div>
-        <button
-          onClick={() => setShowPreview(p => !p)}
-          className="text-[10px] px-2 py-1 rounded bg-cyan-900/30 hover:bg-cyan-800/50 text-cyan-300 border border-cyan-800/40 font-bold"
-          title="현재 항차들을 선박명별 양하/선적으로 미리보기"
-        >
-          📋 현재 항차 미리보기
-        </button>
-        <button
-          onClick={() => setShowResetConfirm(true)}
-          className="text-[10px] px-2 py-1 rounded bg-red-900/30 hover:bg-red-800/50 text-red-300 border border-red-800/40 font-bold"
-          title="모든 선박의 양하/선적 통계 초기화 (베이 구조는 보존)"
-        >
-          🗑️ 통계 초기화
-        </button>
-      </div>
-
-      {/* 현재 항차 선박명별 미리보기 표 */}
-      {showPreview && (
-        <div className="bg-slate-950/60 border border-cyan-800/30 rounded-lg p-2 mb-2">
-          <div className="text-[11px] text-cyan-300 font-bold mb-1">현재 항차 선박명별 집계 (평택분) — {previewRows.length}척</div>
-          <table className="w-full text-[11px] mono">
-            <thead className="text-slate-500 border-b border-slate-800">
-              <tr><th className="text-left px-1">선박명</th><th className="text-right px-1">양하</th><th className="text-right px-1">선적</th><th className="text-right px-1">항차수</th></tr>
-            </thead>
-            <tbody>
-              {previewRows.map((r, i) => (
-                <tr key={i} className="border-b border-slate-800/40">
-                  <td className="px-1 text-slate-200">{r.vsl}</td>
-                  <td className="px-1 text-right text-blue-300 font-bold">{r.discharge}</td>
-                  <td className="px-1 text-right text-amber-300 font-bold">{r.loading}</td>
-                  <td className="px-1 text-right text-slate-400">{r.voyageKeys.length}</td>
-                </tr>
-              ))}
-              {previewRows.length === 0 && (
-                <tr><td colSpan="4" className="text-center text-slate-500 px-1 py-2">현재 항차 없음</td></tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-slate-700 font-bold">
-                <td className="px-1 text-slate-200">합계</td>
-                <td className="px-1 text-right text-blue-300">{previewRows.reduce((s, r) => s + r.discharge, 0)}</td>
-                <td className="px-1 text-right text-amber-300">{previewRows.reduce((s, r) => s + r.loading, 0)}</td>
-                <td className="px-1 text-right text-slate-400">{previewRows.reduce((s, r) => s + r.voyageKeys.length, 0)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-      <div className="text-[10px] text-slate-500 mb-2">
-        EDI 분석된 선박 자동 누적 (항차 삭제와 무관). 입항 빈도순 정렬로 단골 식별 가능 (M6.15).
-      </div>
-
-      {/* 통계 초기화 확인 모달 */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowResetConfirm(false)}>
-          <div className="bg-slate-900 border border-red-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-red-300 mb-2">⚠️ 통계 초기화</h3>
-            <p className="text-sm text-slate-300 mb-2">모든 선박의 <b>양하/선적 작업 통계와 항차 기록</b>을 삭제합니다.</p>
-            <p className="text-xs text-slate-400 mb-1">• 베이 구조(베이사전)는 <b className="text-emerald-300">보존</b>됩니다.</p>
-            <p className="text-xs text-slate-400 mb-4">• 6월부터 새로 집계됩니다. 이 작업은 되돌릴 수 없습니다.</p>
-            {resetMsg ? (
-              <div className="text-sm text-emerald-300 mb-3">{resetMsg}</div>
-            ) : null}
-            <div className="flex gap-2">
-              <button onClick={() => { setShowResetConfirm(false); setResetMsg(''); }} className="flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-sm">취소</button>
-              <button
-                onClick={async () => {
-                  setResetMsg('초기화 중…');
-                  try {
-                    const n = await fbResetAllShipStats();
-                    setResetMsg(`✅ ${n}척 통계 초기화 완료. 6월부터 다시 집계됩니다.`);
-                    setTimeout(() => { setShowResetConfirm(false); setResetMsg(''); }, 2500);
-                  } catch (e) { setResetMsg('❌ 실패: ' + (e.message || e)); }
-                }}
-                className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm">초기화 실행</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 검색 + 정렬 */}
-      <div className="flex gap-2 mb-2">
-        <div className="flex-1 relative">
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2"/>
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="선박명 / IMO 검색"
-            className="w-full bg-slate-800 border border-slate-700 rounded pl-7 pr-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
-          />
-        </div>
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
-        >
-          <option value="frequency">📊 입항 빈도순</option>
-          <option value="recent">🕐 최근 작업순</option>
-          <option value="discharge">📥 양하 누적순</option>
-          <option value="loading">📤 선적 누적순</option>
-          <option value="name">🔤 이름순</option>
-        </select>
-      </div>
-
-      {sortedShips.length === 0 ? (
-        <div className="text-xs text-slate-500 text-center py-4">
-          {search ? '검색 결과 없음' : '아직 학습된 선박 없음 (EDI 업로드 시 자동 저장)'}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {sortedShips.map(([imo, ship], idx) => (
-            <ShipLibraryRow
-              key={imo}
-              imo={imo}
-              ship={ship}
-              rank={sortBy === 'frequency' ? idx + 1 : null}
-              activeVoyages={voyages}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ShipLibraryRow({ imo, ship, rank, activeVoyages }) {
-  const [expanded, setExpanded] = useState(false);
-  const struct = ship.structure || {};
-  const stats = ship.stats || {};
-  const voys = ship.voyages || {};
-  const voyageCount = Object.keys(voys).length;
-  const pairCount = struct.pairs ? Object.keys(struct.pairs).length / 2 : 0;
-
-  // M6.15: 베이사전 등록 상태 (정밀 등록 여부)
-  const bayDictInfo = useMemo(() => {
-    const code = (ship.name || '').toUpperCase().replace(/\s+/g, '').slice(0, 4);
-    const dict = getShipBayDictData(imo, code) || getShipBayDictData(imo, ship.name);
-    if (!dict) return { status: 'none', label: '미등록' };
-    if (dict.verified) return { status: 'verified', label: '정밀 등록', source: dict.source };
-    return { status: 'auto', label: '자동 추정', source: dict.source };
-  }, [imo, ship.name]);
-
-  // M6.15: 첫/최근 작업일 (voyages.analyzed_at 기준)
-  const { firstAt, recentAt, voyageList } = useMemo(() => {
-    const arr = Object.entries(voys).map(([key, v]) => ({
-      voyageKey: key,
-      voy: v.voy || '',
-      voy_d: v.voy_d || '',
-      voy_l: v.voy_l || '',
-      vsl: v.vsl || ship.name || '',
-      mode: v.mode || '',
-      container_count: v.container_count || 0,
-      ptk_count: v.ptk_count || 0,
-      discharge_count: v.discharge_ptk || v.discharge_count || 0,   // V7.14 저장 필드(discharge_ptk) 우선
-      loading_count: v.loading_ptk || v.loading_count || 0,
-      completed: v.completed || false,
-      completed_at: v.completed_at || 0,
-      analyzed_at: v.analyzed_at || v.completed_at || 0,
-      analyzed_by: v.analyzed_by || '',
-      inspectors: v.inspectors || {},  // M6.15: 항차별 검수원 카운트
-    })).sort((a, b) => b.analyzed_at - a.analyzed_at);
-    return {
-      firstAt: arr.length > 0 ? arr[arr.length - 1].analyzed_at : 0,
-      recentAt: arr.length > 0 ? arr[0].analyzed_at : (stats.last_voyage_at || 0),
-      voyageList: arr,
-    };
-  }, [voys, ship.name, stats.last_voyage_at]);
-
-  // M6.15: 전체 검수원 집계 (모든 항차 합산)
-  const allInspectors = useMemo(() => {
-    const acc = {}; // name → { count, chief, modes }
-    voyageList.forEach(v => {
-      // 영구 저장된 inspectors (Phase 2 누적용)
-      Object.values(v.inspectors || {}).forEach(ins => {
-        const n = ins.name;
-        if (!n) return;
-        if (!acc[n]) acc[n] = { name: n, count: 0, modes: {}, isChief: isChief(n) };
-        acc[n].count += ins.count || 0;
-        Object.entries(ins.modes || {}).forEach(([m, c]) => {
-          acc[n].modes[m] = (acc[n].modes[m] || 0) + c;
-        });
-      });
-      // 분석한 사람 (EDI 업로더)도 포함
-      if (v.analyzed_by) {
-        const n = v.analyzed_by;
-        if (!acc[n]) acc[n] = { name: n, count: 0, modes: {}, isChief: isChief(n), analyzed: 1 };
-        else acc[n].analyzed = (acc[n].analyzed || 0) + 1;
-      }
-    });
-    // M6.15: 활성 항차의 검수 완료(by 필드)에서 실시간 집계 — 영구 저장 아직 안 된 데이터 포함
-    if (activeVoyages) {
-      Object.entries(activeVoyages).forEach(([vKey, v]) => {
-        if (!v?.info || String(v.info.imo) !== String(imo)) return;
-        ['discharge', 'loading'].forEach(mode => {
-          const completed = v?.[mode]?.completed || {};
-          Object.values(completed).forEach(c => {
-            const n = c?.by;
-            if (!n) return;
-            if (!acc[n]) acc[n] = { name: n, count: 0, modes: {}, isChief: isChief(n) };
-            acc[n].count += 1;
-            acc[n].modes[mode] = (acc[n].modes[mode] || 0) + 1;
-          });
-        });
-      });
-    }
-    return Object.values(acc).sort((a, b) => b.count - a.count);
-  }, [voyageList, activeVoyages, imo]);
-
-  const chiefs = allInspectors.filter(i => i.isChief);
-  const members = allInspectors.filter(i => !i.isChief);
-
-  const fmtDate = (ts) => {
-    if (!ts) return '-';
-    const d = new Date(ts);
-    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-  const fmtDateFull = (ts) => {
-    if (!ts) return '-';
-    const d = new Date(ts);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  };
-
-  return (
-    <div className="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
-      {/* 헤더: 순위 + 이름 + IMO + 베이사전 배지 */}
-      <div className="flex items-center gap-2 mb-1 flex-wrap">
-        {rank && (
-          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-            rank <= 3 ? 'bg-amber-600 text-white' :
-            rank <= 10 ? 'bg-purple-700 text-purple-100' :
-            'bg-slate-700 text-slate-300'
-          }`}>
-            #{rank}
-          </span>
-        )}
-        <Ship className="w-3.5 h-3.5 text-purple-400 flex-shrink-0"/>
-        <span className="font-bold text-sm text-purple-200">{ship.name || '(이름 없음)'}</span>
-        <span className="text-[10px] text-slate-500 mono">IMO {imo}</span>
-        {/* 베이사전 상태 배지 */}
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-          bayDictInfo.status === 'verified' ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700/40' :
-          bayDictInfo.status === 'auto' ? 'bg-amber-900/40 text-amber-300 border border-amber-700/40' :
-          'bg-red-900/30 text-red-300 border border-red-700/30'
-        }`}>
-          📚 {bayDictInfo.label}
-        </span>
-      </div>
-
-      {/* 주요 통계 */}
-      <div className="grid grid-cols-3 gap-1 text-[10px] text-slate-400">
-        <div>입항 <span className="text-cyan-300 font-bold text-xs">{stats.total_voyages || voyageCount}</span>회</div>
-        <div>양하 <span className="text-blue-300 font-bold text-xs">{stats.total_discharge || 0}</span></div>
-        <div>선적 <span className="text-amber-300 font-bold text-xs">{stats.total_loading || 0}</span></div>
-        <div>베이 <span className="text-slate-200 font-bold">{struct.bay_count || 0}</span>개</div>
-        <div>짝꿍 <span className="text-emerald-300 font-bold">{pairCount}</span>쌍</div>
-        <div>단독 <span className="text-amber-300 font-bold">{struct.singles?.length || 0}</span>개</div>
-      </div>
-
-      {/* 작업 일자 */}
-      <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-500 mt-1 pt-1 border-t border-slate-800/60">
-        <div><Calendar className="w-3 h-3 inline mr-1"/>첫 작업 <span className="text-slate-300 mono">{fmtDate(firstAt)}</span></div>
-        <div><Clock className="w-3 h-3 inline mr-1"/>최근 작업 <span className="text-emerald-300 mono">{fmtDate(recentAt)}</span></div>
-      </div>
-
-      {/* 검수원 요약 (수석 + 검수원) */}
-      {(chiefs.length > 0 || members.length > 0) && (
-        <div className="mt-1 pt-1 border-t border-slate-800/60 text-[10px]">
-          <div className="flex items-start gap-1 flex-wrap">
-            <UserCheck className="w-3 h-3 text-cyan-400 flex-shrink-0 mt-0.5"/>
-            {chiefs.length > 0 && (
-              <span>
-                <span className="text-cyan-400 font-bold">수석:</span>{' '}
-                {chiefs.slice(0, 3).map(c => (
-                  <span key={c.name} className="text-cyan-200 font-bold mr-1.5">
-                    {c.name}({c.count || c.analyzed || 0})
-                  </span>
-                ))}
-              </span>
-            )}
-            {members.length > 0 && (
-              <span>
-                <span className="text-slate-400">검수원:</span>{' '}
-                {members.slice(0, 5).map(m => (
-                  <span key={m.name} className="text-slate-300 mr-1.5">
-                    {m.name}({m.count || 0})
-                  </span>
-                ))}
-                {members.length > 5 && <span className="text-slate-500">외 {members.length - 5}명</span>}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 펼침: 항차 상세 */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="mt-1.5 text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1"
-      >
-        {expanded ? '▼' : '▶'} 항차 상세 {voyageList.length}건 / 짝꿍 {pairCount}쌍
-      </button>
-
-      {expanded && (
-        <div className="mt-2 space-y-1">
-          {/* 짝꿍 상세 */}
-          {struct.pairs && Object.keys(struct.pairs).length > 0 && (
-            <div className="bg-slate-900/60 rounded p-1.5 text-[10px] text-slate-400 mono">
-              <div className="text-purple-400 font-bold mb-0.5">짝꿍 베이</div>
-              {[...new Set(Object.entries(struct.pairs).map(([a, b]) => [a, b].sort().join('↔')))].join(', ')}
-              {struct.singles?.length > 0 && (
-                <div className="text-amber-400 mt-0.5">단독: {struct.singles.join(', ')}</div>
-              )}
-            </div>
-          )}
-          {/* 항차 리스트 */}
-          {voyageList.length > 0 && (
-            <div className="bg-slate-900/60 rounded p-1.5">
-              <div className="text-[10px] text-purple-400 font-bold mb-1">항차별 작업 이력 (평택분)</div>
-              <table className="w-full text-[10px] mono">
-                <thead className="text-slate-500 border-b border-slate-800">
-                  <tr>
-                    <th className="text-left px-1">작업일</th>
-                    <th className="text-left px-1">항차</th>
-                    <th className="text-right px-1">양하</th>
-                    <th className="text-right px-1">선적</th>
-                    <th className="text-left px-1">분석자</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {voyageList.slice(0, 20).map((v, i) => (
-                    <tr key={i} className="border-b border-slate-800/40">
-                      <td className="px-1 text-slate-300">{fmtDateFull(v.completed_at || v.analyzed_at)}</td>
-                      <td className="px-1 text-purple-300">{v.voy_d || v.voy_l || v.voy || '-'}</td>
-                      <td className="px-1 text-right text-blue-300 font-bold">{v.discharge_count || 0}</td>
-                      <td className="px-1 text-right text-amber-300 font-bold">{v.loading_count || 0}</td>
-                      <td className="px-1 text-cyan-300">{v.analyzed_by || '-'}</td>
-                    </tr>
-                  ))}
-                  {voyageList.length > 20 && (
-                    <tr><td colSpan="5" className="text-center text-slate-500 px-1 pt-1">… 외 {voyageList.length - 20}건</td></tr>
-                  )}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-slate-700 font-bold">
-                    <td className="px-1 text-slate-200" colSpan="2">합계 {voyageList.length}항차</td>
-                    <td className="px-1 text-right text-blue-300">{voyageList.reduce((s, v) => s + (v.discharge_count || 0), 0)}</td>
-                    <td className="px-1 text-right text-amber-300">{voyageList.reduce((s, v) => s + (v.loading_count || 0), 0)}</td>
-                    <td className="px-1"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function BigStat({ label, value, sub, color }) {
   const map = {
     emerald: 'border-emerald-700/40 bg-emerald-950/30 text-emerald-300',
@@ -1321,34 +871,56 @@ function InspectorRow({ s }) {
   );
 }
 
-function VoyageStatRow({ v, onOpen }) {
+// V7.40: 실시간 작업 보드 카드 — 한 선박의 진행·작업자·최근 보고·경고를 한눈에
+function LiveShipCard({ v, workers, lastReport, alerts, onOpen }) {
   const pct = v.totalAll > 0 ? Math.round((v.totalDone / v.totalAll) * 100) : 0;
+  const repIcon = lastReport ? (
+    lastReport.type === 'work_status' ? '📤' : lastReport.type === 'hatch' ? '🔓' :
+    lastReport.type === 'conbox' ? '📦' : lastReport.type === 'damage' ? '⚠️' :
+    lastReport.type === 'seal_error' ? '🚨' : '📋') : null;
   return (
-    <button onClick={onOpen} className="w-full text-left bg-slate-800/40 border border-slate-700 rounded-lg p-2.5 hover:bg-slate-800/70">
-      <div className="flex items-center justify-between mb-1.5">
+    <button onClick={onOpen} className="w-full text-left bg-slate-800/40 border border-slate-700 rounded-lg p-2.5 hover:bg-slate-800/70 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="font-bold text-sm text-slate-200 truncate">{v.info.vsl}</div>
-          <div className="text-[10px] text-slate-500">
-            {/* M6.45: voy_d / voy_l 다르면 둘 다 */}
+          <div className="font-bold text-sm text-slate-200 truncate flex items-center gap-1.5">
+            {v.info.vsl}
+            {workers.length > 0 && <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>}
+          </div>
+          <div className="text-[10px] text-slate-500 truncate">
             {(() => {
               const d = v.info.voy_d, l = v.info.voy_l, vv = v.info.voy;
               if (d && l && d !== l) return `${d} / ${l}`;
               return d || l || vv || '';
             })()}
-            {' · '}{v.info.carrier || ''}
+            {v.info.carrier ? ` · ${v.info.carrier}` : ''}
           </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-slate-600"/>
+        <ChevronRight className="w-4 h-4 text-slate-600 shrink-0"/>
       </div>
       <div className="space-y-1.5 text-[10px] mono">
         {v.dis.total > 0 && <MiniBar label="양하" color="blue" stats={v.dis}/>}
         {v.loa.total > 0 && <MiniBar label="선적" color="amber" stats={v.loa}/>}
       </div>
-      <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-slate-700/50 text-[10px]">
-        <span className="text-slate-500">전체</span>
+      {/* 작업 중 검수원 */}
+      <div className="flex items-center gap-1 flex-wrap min-h-[18px]">
+        {workers.length > 0 ? workers.map(w => (
+          <span key={w.name} className="inline-flex items-center gap-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-200 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"/>
+            {w.name}{w.mode === 'discharge' ? ' (양하)' : w.mode === 'loading' ? ' (선적)' : ''}
+          </span>
+        )) : (
+          <span className="text-[10px] text-slate-600">작업 중 검수원 없음</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 pt-1.5 border-t border-slate-700/50 text-[10px] flex-wrap">
         <span className="text-emerald-300 font-black mono">{v.totalDone}</span>
-        <span className="text-slate-500">/{v.totalAll}</span>
-        <span className="text-slate-400">({pct}%)</span>
+        <span className="text-slate-500">/{v.totalAll} ({pct}%)</span>
+        <div className="flex-1"/>
+        {alerts?.damage > 0 && <span className="bg-amber-900/60 text-amber-200 px-1.5 rounded font-bold">⚠️ {alerts.damage}</span>}
+        {alerts?.sealError > 0 && <span className="bg-red-900/60 text-red-200 px-1.5 rounded font-bold">🚨 {alerts.sealError}</span>}
+        {lastReport && (
+          <span className="text-slate-500 mono">{repIcon} {lastReport.equip || ''} {timeAgo(lastReport.ts)}</span>
+        )}
       </div>
     </button>
   );
@@ -1380,7 +952,9 @@ function timeAgo(ts) {
   return `${Math.floor(sec/86400)}일 전`;
 }
 
-function computeStats(section) {
+function computeStats(section, mode) {
+  // V7.40: 평택분 판정을 모드별로 정확히 (지침 7.1 — 양하=POD평택, 선적=POL평택).
+  //   이전: POL∨POD 평택이면 카운트 → 양하 EDI에서 평택발 타항행 컨까지 평택분으로 잡혀 과대 집계.
   if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0 };
   const ediContainers = section.ediContainers || {};
   const records = section.records || {};
@@ -1388,7 +962,10 @@ function computeStats(section) {
   const ediValues = Object.values(ediContainers);
   const ptkCns = new Set();
   ediValues.forEach(c => {
-    if (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod)) ptkCns.add(c.cn);
+    const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod)
+      : mode === 'loading' ? isPyeongtaekPort(c.pol)
+      : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
+    if (isPtk) ptkCns.add(c.cn);
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;

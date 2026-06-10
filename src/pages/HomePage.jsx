@@ -481,8 +481,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {completeTarget && (() => {
         const v = voyages[completeTarget.key];
         // 항차 리스트와 동일 기준: 평택분(PTK)만 (타지역 제외)
-        const dCnt = computeStats(v?.discharge).ptk;
-        const lCnt = computeStats(v?.loading).ptk;
+        const dCnt = computeStats(v?.discharge, 'discharge').ptk;
+        const lCnt = computeStats(v?.loading, 'loading').ptk;
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCompleteTarget(null)}>
             <div className="bg-slate-900 border border-emerald-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
@@ -608,8 +608,8 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
-  const disStats = computeStats(dis);
-  const loaStats = computeStats(loa);
+  const disStats = computeStats(dis, 'discharge');
+  const loaStats = computeStats(loa, 'loading');
 
   // M5.82: 부두 정보 (voyage._pier가 HomePage에서 채워짐)
   const pier = voyage._pier || '';
@@ -757,17 +757,21 @@ function SectionBar({ label, color, stats, onClick }) {
   );
 }
 
-function computeStats(section) {
+function computeStats(section, mode) {
+  // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0 };
   const ediContainers = section.ediContainers || {};
   const records = section.records || {};
   const completed = section.completed || {};
 
-  // PTK 평택 대상
+  // PTK 평택 대상 (모드별)
   const ediValues = Object.values(ediContainers);
   const ptkCns = new Set();
   ediValues.forEach(c => {
-    if (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod)) ptkCns.add(c.cn);
+    const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod)
+      : mode === 'loading' ? isPyeongtaekPort(c.pol)
+      : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
+    if (isPtk) ptkCns.add(c.cn);
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
