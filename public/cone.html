@@ -87,7 +87,6 @@
   .bv-tl{color:var(--dim); font-size:10px; font-weight:600; min-width:16px;}
   .bv-slot{border:1px dashed #2c3a4d; background:transparent;}
   .bv-slot.off{border-color:#232f3e;}
-  .bv-empty{background:transparent;}
   /* 컨테이너 박스 셀 (크기는 .bv-tab.box td에서 통일) */
   .bvc{border-radius:3px; padding:2px 4px; border:1px solid rgba(255,255,255,.12);}
   .bvc-in{font-size:8.5px; line-height:1.2; font-family:Consolas,monospace; text-align:left;}
@@ -249,7 +248,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.49</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.50</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1380,13 +1379,16 @@ function bvBaySkeleton(bs){
   const holdTiers=Array.isArray(bs.holdTiers)&&bs.holdTiers.length?bs.holdTiers.map(Number):[];
   const deckCells=Array.isArray(bs.deckCells)?bs.deckCells.map(Number).filter(v=>v>0):[];
   const holdCells=Array.isArray(bs.holdCells)?bs.holdCells.map(Number).filter(v=>v>0):[];
-  const hasZero=!!bs.hasZero;
+  // V7.50: 데크/홀드 00 유무 분리 — 공통 hasZero를 양쪽에 쓰면 홀드에 없는 00이
+  //   강제 삽입됨(phantom 00, 6부 "축 통합 금지" 위반). 사전에 분리 필드 있으면 그것 우선.
+  const deckZ = bs.deckHasZero!=null ? !!bs.deckHasZero : !!bs.hasZero;
+  const holdZ = bs.holdHasZero!=null ? !!bs.holdHasZero : (bs.hz!=null ? !!bs.hz : !!bs.hasZero);
   const deckMax=deckCells.length?Math.max(...deckCells):(bs.rowCount||0);
   const holdMax=holdCells.length?Math.max(...holdCells):deckMax;
   return {
-    deckTiers, holdTiers, hasZero,
-    deckRowPos: deckTiers.length? bvRowPositions(deckMax, hasZero):[],
-    holdRowPos: holdTiers.length? bvRowPositions(holdMax, hasZero):[],
+    deckTiers, holdTiers,
+    deckRowPos: deckTiers.length? bvRowPositions(deckMax, deckZ):[],
+    holdRowPos: holdTiers.length? bvRowPositions(holdMax, holdZ):[],
   };
 }
 
@@ -1627,32 +1629,33 @@ async function renderBayView(){
       deckRowPos=sortRows(realDeckRows);
       holdRowPos=sortRows(realHoldRows);
     } else {
-      // 폴백: 컨테이너로 추정
-      const tiers=[...new Set(Object.values(cells).map(c=>parseInt(c.tier,10)))].sort((a,b)=>b-a);
-      const rowsSet=[...new Set(Object.values(cells).map(c=>c.row))];
-      const evens=rowsSet.filter(r=>parseInt(r,10)%2===0 && r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
-      const zero=rowsSet.filter(r=>r==='00');
-      const odds=rowsSet.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
-      const ro=[...evens,...zero,...odds];
-      deckTiers=tiers.filter(t=>t>=80); holdTiers=tiers.filter(t=>t<80);
-      deckRowPos=ro; holdRowPos=ro;
+      // 폴백: 컨테이너로 추정 — V7.50: 데크/홀드 row를 각자 수집 (합집합 공유 금지).
+      //   공유하면 데크에만 있는 00·바깥 row가 홀드에 phantom 슬롯으로 삽입됨.
+      const sortRows=set=>{
+        const arr=[...set];
+        const ev=arr.filter(r=>parseInt(r,10)%2===0&&r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
+        const ze=arr.filter(r=>r==='00');
+        const od=arr.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
+        return [...ev,...ze,...od];
+      };
+      const dT=new Set(), hT=new Set(), dR=new Set(), hR=new Set();
+      for(const c of Object.values(cells)){
+        const t=parseInt(c.tier,10);
+        if(t>=80){ dT.add(t); dR.add(c.row); }
+        else { hT.add(t); hR.add(c.row); }
+      }
+      deckTiers=[...dT].sort((a,b)=>b-a); holdTiers=[...hT].sort((a,b)=>b-a);
+      deckRowPos=sortRows(dR); holdRowPos=sortRows(hR);
     }
 
-    // 데크·홀드 중앙정렬 (검수앱 cargoPlanCore 방식):
-    //   row 라벨은 가운데(00 또는 02|01 경계) 기준 대칭. 데크·홀드 중 넓은 폭을 기준으로,
-    //   좁은 쪽은 가운데에 맞춰 양옆에 여백(빈 칸). 폭이 달라도 같은 열(row)이 세로로 정렬됨.
-    //   합집합이 아니라, 각 행을 '기준 폭'에 가운데 배치 → 데크 8 / 홀드 7 같은 경우도 정확.
-    const centerAlign=(rowPos, baseWidth)=>{
-      // rowPos를 baseWidth 폭의 가운데에 놓기. 좌우 여백은 null(빈 칸).
-      const pad=baseWidth-rowPos.length;
-      const left=Math.floor(pad/2);
-      const arr=new Array(baseWidth).fill(null);
-      for(let i=0;i<rowPos.length;i++) arr[left+i]=rowPos[i];
-      return arr;
-    };
+    // V7.50: 중앙정렬 = 카고플랜 V2 방식 — 데크/홀드는 각자 자기 row만 그리고(칸 삽입 금지),
+    //   좁은 쪽 테이블 전체를 margin으로 정중앙. 셀 피치 60px(58+spacing 2) 기준이라
+    //   홀수 칸 차이(0.5칸=30px)도 정확. phantom 빈 칸(null) 없음.
     const baseWidth=Math.max(deckRowPos.length, holdRowPos.length);
-    const deckCols=centerAlign(deckRowPos, baseWidth);   // 길이 baseWidth, 빈 칸은 null
-    const holdCols=centerAlign(holdRowPos, baseWidth);
+    const CELL_PITCH=60;
+    const centerMargin=(n)=> Math.round((baseWidth-n)*CELL_PITCH/2);
+    const deckCols=deckRowPos, holdCols=holdRowPos;
+    const deckMg=centerMargin(deckRowPos.length), holdMg=centerMargin(holdRowPos.length);
 
     const cnt={d:0,l:0};
     Object.values(cells).forEach(c=>{ if(c.d)cnt.d++; if(c.l)cnt.l++; });
@@ -1675,17 +1678,16 @@ async function renderBayView(){
         +`</div></td>`;
     };
 
-    const grid=(tierList, flag, cols)=>{
+    const grid=(tierList, flag, cols, mg)=>{
       if(!tierList.length || !cols.length) return '';
       let head='<tr><td class="bv-tl"></td>';
-      for(const r of cols) head+=`<td class="bv-rl">${r||''}</td>`;  // null=여백(라벨 없음)
+      for(const r of cols) head+=`<td class="bv-rl">${r}</td>`;
       head+='</tr>';
-      let g='<table class="bv-tab box"><tbody>'+head;
+      let g=`<table class="bv-tab box" style="margin-left:${mg||0}px"><tbody>`+head;
       for(const t of tierList){
         const tk=String(t).padStart(2,'0');
         g+=`<tr><td class="bv-tl">${tk}</td>`;
         for(const r of cols){
-          if(r===null){ g+='<td class="bv-empty"></td>'; continue; }  // 정렬용 여백 (점선 없음)
           const c=cells[r+'_'+tk];
           if(!c){ g+='<td class="bv-slot"></td>'; continue; }          // 골격엔 있으나 컨테이너 없음(점선)
           g+=boxCell(c,flag);
@@ -1708,13 +1710,13 @@ async function renderBayView(){
       if(deckTiers.length){
         const dT=tiersWith(deckTiers,flag);
         p += dT.length
-          ? `<div class="bv-sec">갑판</div>${grid(dT,flag,deckCols)}`
+          ? `<div class="bv-sec">갑판</div>${grid(dT,flag,deckCols,deckMg)}`
           : `<div class="bv-sec">갑판 · 화물 없음</div>`;
       }
       if(holdTiers.length){
         const hT=tiersWith(holdTiers,flag);
         p += hT.length
-          ? `<div class="bv-sec">선창</div>${grid(hT,flag,holdCols)}`
+          ? `<div class="bv-sec">선창</div>${grid(hT,flag,holdCols,holdMg)}`
           : `<div class="bv-sec">선창 · 화물 없음</div>`;
       }
       p+='</div>';
