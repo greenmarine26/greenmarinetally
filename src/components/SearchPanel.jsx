@@ -364,6 +364,19 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           </button>
         )}
 
+        {/* V7.54: 못 알아들었거나 일치 0인 질문 기록 — 나중에 지원 추가용 (사용자 요청) */}
+        {!isListening && query.length >= 4 && !aiLoading && !aiAnswer && chatMessages.length === 0 && !localAnswer
+          && (!hasAnyCondition(parsed) || results.length === 0)
+          && !/^\d+$/.test(query.trim()) && (
+          <button onClick={() => {
+              setWrongPayload({ query, answerType: 'unanswered', answerText: hasAnyCondition(parsed) ? '(일치 결과 없음)' : '(질문 인식 실패)', parsed });
+              setWrongOpen(true);
+            }}
+            className="mt-2 w-full py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-amber-700/50 text-amber-300 text-[11px] font-bold">
+            📌 이 질문을 기록 (나중에 답할 수 있게 개선)
+          </button>
+        )}
+
         <div className="text-[11px] text-center mt-2">
           {!isListening && query.length === 0 && <span className="text-slate-500">🎤 마이크 또는 키보드</span>}
           {!isListening && query.length >= 2 && results.length === 0 && hasAnyCondition(parsed) && <span className="text-red-400 font-bold">⚠ 일치 없음</span>}

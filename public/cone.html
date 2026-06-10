@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.53</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.55</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1868,6 +1868,127 @@ function computeRoutes(rows, kind, per){
   return { plan, totalSupply, usedFromSupply, totalBox, leftoverToBox, hasAny: plan.length>0 || totalSupply>0 };
 }
 
+// ===== V7.55 콘 질문기 — "5번 베이 콘?" 한 마디로 작업표 답변 (음성 입출력) =====
+//   범위: 베이별 콘 가감(데크/코끼리/홀드)·컨테이너 대수·모자란/남는 베이·전체 요약.
+//   콘 작업 중 일일이 눌러보지 않고 폰에 물어보는 용도 (사용자 확정).
+function coneSpeak(text){
+  try{
+    const u=new SpeechSynthesisUtterance(text.replace(/[+\-]/g, m=>m==='+'?' 플러스 ':' 마이너스 '));
+    u.lang='ko-KR'; u.rate=1.05;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+function coneQaConeLine(name, o, per){
+  // o={need, have, diff} (곳당), per=곳 수. 총개수와 행동(추가/반납/그대로)을 사람이 말하듯.
+  const totD=o.diff*per;
+  if(o.need===0&&o.have===0) return null;
+  if(o.diff>0) return name+' 곳당 '+o.have+'에서 '+o.need+'개로, 총 '+totD+'개 더 필요(추가)';
+  if(o.diff<0) return name+' 곳당 '+o.have+'에서 '+o.need+'개로, 총 '+(-totD)+'개 남음(반납)';
+  return name+' 곳당 '+o.need+'개 그대로';
+}
+function coneQaAnswer(qRaw){
+  const q=(qRaw||'').trim();
+  if(!q) return null;
+  const rows=(window.__coneQA&&window.__coneQA.rows)||[];
+  if(!rows.length) return '먼저 계산하기를 눌러 작업표를 만들어 주세요.';
+  const t=q.toLowerCase();
+  // 콘 종류 (선택)
+  const kind=/데크/.test(t)?'deck':(/코끼리/.test(t)?'ele':(/홀드/.test(t)?'hold':null));
+  const kindName={deck:'데크콘',ele:'코끼리콘',hold:'홀드콘'};
+  const perOf={deck:4,ele:2,hold:1};
+  // 베이 번호 → rows 라벨 매칭 ("06-07" 페어 라벨에 6도 7도 매칭)
+  const bayM=t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})|^(\d{1,3})$/);
+  const bayN=bayM?parseInt(bayM[1]||bayM[2]||bayM[3],10):null;
+  const findRow=(n)=>rows.find(r=>String(r.bay).split(/[,\-]/).some(p=>parseInt(p,10)===n));
+  // ① 베이 질문
+  if(bayN!=null){
+    const r=findRow(bayN);
+    if(!r) return bayN+'번 베이는 작업표에 없습니다. (콘 작업 없는 베이)';
+    // 컨테이너 대수 질문이면
+    if(/컨테이너|몇\s*대|대수/.test(t)){
+      const cnt=(rows0,b)=>rows0.filter(c=>String(r.bay).split(/[,\-]/).some(p=>parseInt(p,10)===parseInt(c.bay,10))).length;
+      const d=state.disch&&state.disch.ediRows?cnt(state.disch.ediRows):0;
+      const l=state.stow&&state.stow.ediRows?cnt(state.stow.ediRows):0;
+      return '베이 '+r.bay+'. 양하 '+d+'대, 선적 '+l+'대.';
+    }
+    const kinds=kind?[kind]:['deck','ele','hold'];
+    const lines=kinds.map(k=>coneQaConeLine(kindName[k], r[k], perOf[k])).filter(Boolean);
+    if(!lines.length) return '베이 '+r.bay+'. 콘 변동 없습니다.';
+    return '베이 '+r.bay+'. '+lines.join('. ')+'.';
+  }
+  // ② 모자란/남는 베이 목록
+  if(/모자|부족|추가|더\s*필요/.test(t) || /남(는|아)|반납|회수/.test(t)){
+    const wantAdd=/모자|부족|추가|더\s*필요/.test(t);
+    const ks=kind?[kind]:['deck','ele','hold'];
+    const out=[];
+    for(const r of rows){
+      const seg=ks.map(k=>{
+        const d=r[k].diff*perOf[k];
+        if(wantAdd&&d>0) return kindName[k]+' '+d+'개';
+        if(!wantAdd&&d<0) return kindName[k]+' '+(-d)+'개';
+        return null;
+      }).filter(Boolean);
+      if(seg.length) out.push('베이 '+r.bay+': '+seg.join(', '));
+    }
+    if(!out.length) return wantAdd?'더 필요한 콘이 있는 베이가 없습니다.':'반납할 콘이 있는 베이가 없습니다.';
+    return (wantAdd?'콘이 더 필요한 곳 — ':'콘이 남는 곳(반납) — ')+out.join(' / ');
+  }
+  // ③ 전체 요약
+  if(/전체|총|요약/.test(t)){
+    const ks=kind?[kind]:['deck','ele','hold'];
+    const seg=ks.map(k=>{
+      const tot=rows.reduce((a,r)=>a+r[k].diff*perOf[k],0);
+      return kindName[k]+' '+(tot>0?('+'+tot+'개 추가'):tot<0?((-tot)+'개 반납'):'변동 없음');
+    });
+    return '전체 가감. '+seg.join(', ')+'.';
+  }
+  // ④ 콘 종류만 ("데크콘") → 전체 그 종류 요약
+  if(kind){
+    const tot=rows.reduce((a,r)=>a+r[kind].diff*perOf[kind],0);
+    const list=rows.filter(r=>r[kind].diff!==0).map(r=>'베이 '+r.bay+' '+(r[kind].diff>0?'+':'')+(r[kind].diff*perOf[kind])+'개').join(', ');
+    return kindName[kind]+' 전체 '+(tot>0?('+'+tot+'개 추가'):tot<0?((-tot)+'개 반납'):'변동 없음')+(list?('. '+list):'')+'.';
+  }
+  return '이렇게 물어보세요. "5번 베이", "7번 베이 홀드콘", "모자란 데", "남는 데", "전체", "5번 베이 컨테이너 몇 대".';
+}
+function bindConeQa(){
+  const inp=document.getElementById('cqaInput'), btn=document.getElementById('cqaBtn'), mic=document.getElementById('cqaMic'), out=document.getElementById('cqaOut');
+  if(!inp||!btn) return;
+  const run=()=>{
+    const a=coneQaAnswer(inp.value);
+    if(!a) return;
+    out.style.display='block';
+    out.textContent=a;
+    coneSpeak(a);
+  };
+  btn.onclick=run;
+  inp.onkeydown=(e)=>{ if(e.key==='Enter') run(); };
+  if(mic){
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ mic.style.display='none'; }
+    else{
+      mic.onclick=()=>{
+        const r=new SR(); r.lang='ko-KR'; r.interimResults=false;
+        mic.textContent='🎙'; mic.classList.add('on');
+        r.onresult=(e)=>{ inp.value=e.results[0][0].transcript; run(); };
+        r.onend=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };
+        r.onerror=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };
+        try{ r.start(); }catch(_){}
+      };
+    }
+  }
+}
+function coneQaBarHtml(){
+  return `<div class="card cqa-card">
+    <div style="font-size:12px;color:var(--dim);margin-bottom:6px">💬 콘 질문 — "5번 베이" / "홀드콘" / "모자란 데" 라고 물어보세요</div>
+    <div class="row" style="gap:6px">
+      <input id="cqaInput" type="text" placeholder="예: 7번 베이 콘" style="flex:1;min-width:0">
+      <button id="cqaMic" class="bv-zb" style="width:44px">🎤</button>
+      <button id="cqaBtn" class="bv-zb" style="width:auto;padding:0 14px;background:var(--accent);color:#1a1206;font-weight:800">질문</button>
+    </div>
+    <div id="cqaOut" style="display:none;margin-top:8px;padding:10px;border-radius:8px;background:var(--panel2);font-size:15px;line-height:1.5;font-weight:600"></div>
+  </div>`;
+}
+
 function renderResults(groups){
   const ra=document.getElementById('resultArea');
   const keys=Object.keys(groups).map(Number).sort((a,b)=>a-b)
@@ -1886,11 +2007,15 @@ function renderResults(groups){
     };
   });
 
+  // V7.55: 콘 질문기용 데이터 보관 — 작업표 행을 그대로 답변 재료로
+  window.__coneQA = { rows };
+
   const shipLabel = state.shipName ? state.shipName : '선박 미입력';
   const today=new Date().toLocaleDateString('ko-KR');
 
   let html=resultTabsHtml('calc');
   if(window.__vesselWarn){ html+=`<div class="card" style="border-color:var(--rem)"><p style="color:var(--rem);margin:0;font-size:14px">${window.__vesselWarn}</p></div>`; }
+  html+=coneQaBarHtml();  // V7.55: 콘 질문바
   html+=`<div class="confirm-bar"><p><b>⚠ 인식 결과 확인</b> — 콘 작업 전 반드시 대조하세요.</p></div>`;
 
   html+=`<div class="card" id="shareCard">
@@ -1955,6 +2080,7 @@ function renderResults(groups){
   </div>`;
   ra.innerHTML=html;
   bindResultTabs();
+  bindConeQa();  // V7.55 콘 질문바
   enterResultMode('calc');
 
   document.getElementById('btnImg').onclick=()=>saveImage(rows,shipLabel,today);
