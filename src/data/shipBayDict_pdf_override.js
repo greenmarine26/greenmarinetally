@@ -8,6 +8,8 @@
 //   10 + false→ [10,08,06,04,02,01,03,05,07,09]
 //   11 + true → [10,08,06,04,02,00,01,03,05,07,09]
 
+import { getDefBayEntry } from './shipBayDict_def.js';
+
 export const PDF_BAY_OVERRIDE = {
   // DJCT (DONGJIN CONTINENTAL) — 0186W 기준
   DJCT: {
@@ -121,7 +123,9 @@ export const PDF_BAY_OVERRIDE = {
 
 export function getBayOverride(shipCode, bayNo) {
   const ship = PDF_BAY_OVERRIDE[String(shipCode || '').toUpperCase()];
-  if (!ship) return null;
   const padded = String(bayNo).padStart(2, '0');
-  return ship[padded] || null;
+  // V7.37: PDF override(사용자·PDF 검증) 우선, 없으면 .def 내장 사전(자동 디코드, 미검증) 폴백.
+  // 우선순위: 사용자 매트릭스(소비처에서 이미 우선) > PDF override > .def 사전 > v5/v2/EDI.
+  if (ship && ship[padded]) return ship[padded];
+  return getDefBayEntry(shipCode, bayNo);
 }

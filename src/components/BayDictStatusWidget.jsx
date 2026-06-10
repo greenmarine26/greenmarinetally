@@ -24,15 +24,23 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
     if (summary.length === 0) return { allConfirmed: false, unconfirmed: [], total: 0 };
     const code = dictData.code || '';
     const unconfirmed = [];
+    const defCovered = [];   // V7.37: .def 사전으로만 커버되는 베이
     for (const b of summary) {
       const bayNum = b.bayNum;
       const hasTier = (b.deckTiersLocal?.length > 0) || (b.holdTiersLocal?.length > 0)
         || (b.deckTiers?.length > 0) || (b.holdTiers?.length > 0);
-      const hasOverride = !!getBayOverride(code, bayNum);
+      const ov = getBayOverride(code, bayNum);
+      const hasOverride = !!ov && !ov.defSource;   // PDF override (사용자·PDF 검증)
+      const hasDef = !!ov && !!ov.defSource;        // V7.37: .def 내장 사전 (자동, 미검증)
       const confirmed = isUserSource ? hasTier : (hasTier || hasOverride);
-      if (!confirmed) unconfirmed.push(String(bayNum).padStart(2, '0'));
+      if (!confirmed) {
+        if (hasDef) defCovered.push(String(bayNum).padStart(2, '0'));
+        else unconfirmed.push(String(bayNum).padStart(2, '0'));
+      }
     }
-    return { allConfirmed: unconfirmed.length === 0, unconfirmed, total: summary.length };
+    return { allConfirmed: unconfirmed.length === 0 && defCovered.length === 0,
+             defAll: unconfirmed.length === 0 && defCovered.length > 0,
+             unconfirmed, defCovered, total: summary.length };
   }, [dictData]);
 
   if (!dictData) {
@@ -103,6 +111,8 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
             {matrixStatus.total > 0 && (
               matrixStatus.allConfirmed ? (
                 <span className="bg-emerald-700 text-emerald-100 px-1.5 py-0.5 rounded text-[9px] font-black">📐 매트릭스 확정</span>
+              ) : matrixStatus.defAll ? (
+                <span className="bg-sky-700 text-sky-100 px-1.5 py-0.5 rounded text-[9px] font-black">🚢 .def 사전 (검증 전)</span>
               ) : (
                 <span className="bg-red-700 text-red-100 px-1.5 py-0.5 rounded text-[9px] font-black animate-pulse">⚠️ 베이매트릭스 확정 필요</span>
               )
@@ -122,11 +132,20 @@ export default function BayDictStatusWidget({ shipImo, shipName, ediContainerCou
           {matrixStatus.total > 0 && (
             matrixStatus.allConfirmed ? (
               <div className="text-emerald-300">📐 베이 {matrixStatus.total}개 모두 베이매트릭스로 확정됨.</div>
+            ) : matrixStatus.defAll ? (
+              <div className="bg-sky-950/40 border border-sky-700/50 rounded p-1.5 -mx-0.5">
+                <div className="text-sky-300 font-black mb-0.5">🚢 .def 내장 사전 적용 중 (사용자 검증 전)</div>
+                <div className="text-sky-200/90">베이 구조는 .def 설계파일 자동 디코드 값입니다. 작업에 사용 가능하나, 매트릭스 빌더에서 확정하면 사용자 검증 데이터가 우선 적용됩니다.</div>
+                <div className="text-sky-100 font-bold mt-0.5">.def 적용: {matrixStatus.defCovered.join(', ')}</div>
+              </div>
             ) : (
               <div className="bg-red-950/40 border border-red-700/50 rounded p-1.5 -mx-0.5">
                 <div className="text-red-300 font-black mb-0.5">⚠️ 베이매트릭스 확정이 필요합니다</div>
                 <div className="text-red-200/90">아래 베이는 현재 EDI 추정값으로 표시 중입니다. 매트릭스 빌더에서 확정하세요.</div>
                 <div className="text-red-100 font-bold mt-0.5">확정 필요: {matrixStatus.unconfirmed.join(', ')}</div>
+                {matrixStatus.defCovered.length > 0 && (
+                  <div className="text-sky-200/90 mt-0.5">🚢 .def 사전 적용(검증 전): {matrixStatus.defCovered.join(', ')}</div>
+                )}
               </div>
             )
           )}
