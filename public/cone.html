@@ -208,6 +208,11 @@
   .legend{margin-top:10px; display:flex; gap:12px; flex-wrap:wrap; font-size:11px;}
   .rttab td{font-size:13px;}
   .rttab .rt-kind{font-weight:700; color:var(--dim); white-space:nowrap;}
+  /* V7.44: 동선표 콘 종류 배지 — 무슨 콘을 옮기는지 한눈에 (사용자 확정) */
+  .rt-badge{display:inline-block; padding:2px 8px; border-radius:8px; font-size:12px; font-weight:800; white-space:nowrap;}
+  .rt-badge.deck{background:#5b4a12; color:#ffd966; border:1px solid #8a6d1a;}
+  .rt-badge.ele{background:#143a52; color:#7cc4ff; border:1px solid #1f5a7e;}
+  .rt-badge.hold{background:#14402a; color:#7ce8a8; border:1px solid #1f6a44;}
   .rttab .rt-need{font-weight:700; color:var(--add); white-space:nowrap;}
   .rttab .rt-from{font-size:12px; color:var(--dim);}
   .rt-box{color:var(--accent); font-weight:700;}
@@ -251,7 +256,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.43</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.44</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -2084,7 +2089,7 @@ function computeRoutes(rows, kind, per){
   const totalBox = plan.reduce((a,p)=>a+p.box,0);
   const usedFromSupply = totalSupply - supply.reduce((a,s)=>a+(s.left>0?s.left:0),0);
   const leftoverToBox = supply.reduce((a,s)=>a+(s.left>0?s.left:0),0);
-  return { plan, usedFromSupply, totalBox, leftoverToBox, hasAny: plan.length>0 || totalSupply>0 };
+  return { plan, totalSupply, usedFromSupply, totalBox, leftoverToBox, hasAny: plan.length>0 || totalSupply>0 };
 }
 
 function renderResults(groups){
@@ -2134,17 +2139,18 @@ function renderResults(groups){
   const routeDeck = computeRoutes(rows, 'deck', 4);
   const routeEle  = computeRoutes(rows, 'ele', 2);
   const routeHold = computeRoutes(rows, 'hold', 1);
-  function routeRowsHtml(route, kindName){
+  function routeRowsHtml(route, kindName, kindCls){
     if(!route.plan.length) return '';
     let h='';
     for(const p of route.plan){
-      const parts=p.froms.map(f=>`${f.bay}→${f.qty}`);
-      if(p.box>0) parts.push(`<span class="rt-box">콘박스→${p.box}</span>`);
-      h+=`<tr><td class="rt-kind">${kindName}</td><td class="rt-need">${p.bay} (${p.need})</td><td class="rt-from">${parts.join(' · ')}</td></tr>`;
+      // V7.44: 받는 곳마다 콘 종류를 같이 표기 — "베이05→데크콘 4개"처럼 읽히게
+      const parts=p.froms.map(f=>`베이${f.bay}→${f.qty}개`);
+      if(p.box>0) parts.push(`<span class="rt-box">콘박스→${p.box}개</span>`);
+      h+=`<tr><td class="rt-kind"><span class="rt-badge ${kindCls}">${kindName}</span></td><td class="rt-need">${p.bay} (${p.need}개)</td><td class="rt-from">${parts.join(' · ')}</td></tr>`;
     }
     return h;
   }
-  const rd=routeRowsHtml(routeDeck,'데크'), re=routeRowsHtml(routeEle,'코끼리'), rh=routeRowsHtml(routeHold,'홀드');
+  const rd=routeRowsHtml(routeDeck,'데크콘','deck'), re=routeRowsHtml(routeEle,'코끼리콘','ele'), rh=routeRowsHtml(routeHold,'홀드콘','hold');
   if(!(rd||re||rh)){
     // V7.41: 이동이 없어도 동선표 자리를 비우지 않고 이유를 알려줌
     html+=`<div class="card">
