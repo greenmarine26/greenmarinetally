@@ -245,7 +245,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.46</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.47</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -598,8 +598,6 @@ async function fbFetchVoyages(){
   const all=await res.json();
   if(!all) return [];
   const out=[];
-  const THREE_DAYS = 3 * 86400000;
-  const now = Date.now();
   const has=(sec)=>{
     if(!sec) return false;
     if(sec.raw && sec.raw.edi && sec.raw.edi.text) return true;
@@ -611,10 +609,10 @@ async function fbFetchVoyages(){
     const info=v.info||{};
     const hasD=has(v.discharge);
     const hasL=has(v.loading);
-    if(!hasD&&!hasL) continue;
-    // 3일 필터: createdAt이 있으면 최근 3일 이내만. (없으면=0 → 옛 데이터로 보고 일단 포함)
-    const created = info.createdAt || 0;
-    if(created > 0 && (now - created) > THREE_DAYS) continue;
+    // V7.47: 검수앱 작업선박 목록과 1:1 — 살아있는 항차는 전부 보여준다.
+    //   (구) 3일 필터 제거: 검수앱은 7일 자동삭제로 관리하므로 콘앱이 따로 숨기면
+    //   "검수앱엔 있는데 콘앱엔 없다"는 불일치 발생. EDI 없는 항차도 회색으로
+    //   표시하고 이유를 알려줌(숨기면 사용자는 누락으로 인식).
     out.push({
       key,
       vsl: info.vsl||key.split('_')[0]||'(선박명 미상)',
@@ -622,6 +620,7 @@ async function fbFetchVoyages(){
       voy: info.voy_l||info.voy_d||info.voy||'',
       voy_d: info.voy_d||'', voy_l: info.voy_l||'',
       hasD, hasL,
+      noEdi: !hasD && !hasL,
       createdAt: info.createdAt||0,
     });
   }
@@ -730,6 +729,10 @@ async function loadVoyageList(){
 async function selectVoyage(voyageKey){
   const v=(state.voyages||[]).find(x=>x.key===voyageKey);
   if(!v) return;
+  if(v.noEdi){
+    alert(v.vsl+' 항차에는 아직 EDI가 없습니다.\n검수앱에서 EDI(BAPLIE)를 업로드하면 콘 계산이 가능합니다.');
+    return;
+  }
   state.voyageKey=voyageKey;
   state.stow=null; state.disch=null; state.shipType=null; state.shipName=''; state.detected=false;
   showLoading('검수앱에서 '+v.vsl+' 자료 불러오는 중...');
@@ -1154,9 +1157,10 @@ function render(){
       const tags=[];
       if(v.hasD) tags.push('<span class="vtag d">양하</span>');
       if(v.hasL) tags.push('<span class="vtag l">선적</span>');
-      listHtml+=`<button class="voy-item ${sel?'sel':''}" data-vk="${v.key}">
+      if(v.noEdi) tags.push('<span class="vtag" style="background:#3a3f47;color:#9aa0aa">EDI 없음</span>');
+      listHtml+=`<button class="voy-item ${sel?'sel':''}" data-vk="${v.key}" ${v.noEdi?'style="opacity:.55"':''}>
         <div class="vi-top"><b>${v.vsl}</b> ${tags.join('')}</div>
-        <div class="vi-sub">${v.voy?('항차 '+v.voy):''}</div>
+        <div class="vi-sub">${v.voy?('항차 '+v.voy):''}${v.noEdi?' · 검수앱에서 EDI 업로드 후 계산 가능':''}</div>
       </button>`;
     }
     listHtml+='</div>';
