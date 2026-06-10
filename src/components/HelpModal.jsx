@@ -379,6 +379,17 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 V7.38 (2026-06-10) — 카고플랜 V2 다듬기 (.def 정답 반영 + 베이 순서)',
+      examples: [
+        { q: '🔥 버그1 (.def 정답 무시)', a: '.def 사전 정답이 있는데 카고플랜이 v5/EDI 추정으로 그림 — 4행 베이가 8행 피라미드로, 홀드 없는 베이에 유령 홀드. 원인: 자동 사전값이 override보다 먼저 평가(지침 5.1 위반).' },
+        { q: '✅ 수정1', a: 'cargoPlanCore 우선순위 수술 — user 아닐 때 override(.def/PDF)가 tier·rowCount·cells·hasZero 모두 우선. 빈 holdTiers는 "홀드 없음"으로 존중. 사용자 매트릭스 최우선은 불변.' },
+        { q: '🔥 버그2 (BAY 01 하단 밀림 재발)', a: '6/9에 제거한 deck-only 하단배치 규칙이 이 작업 라인에 살아있어, .def로 bay01이 데크 전용으로 인식되자 재발.' },
+        { q: '✅ 수정2', a: 'deck-only 자리바꿈 제거 — hold 유무와 상관없이 베이 번호 순서 절대 우선. KSKM·TMPZ형·SWRG형 3케이스 시뮬 PASS.' },
+        { q: '✅ 수정3 (해치선)', a: '해치선 고정 180px → 그리드 실폭. 데크-홀드 사이 갭 추가로 tier 라벨(82/08) 겹침 해소.' },
+        { q: '🔧 변경 파일 + 버전', a: 'cargoPlanCore.js, PrintableCargoPlanV2.jsx(CSS). 검증: puppeteer 실렌더 KSKM+DJCT PASS. 버전 V7.38.' },
+      ],
+    },
+    {
       title: '🆕 V7.37 (2026-06-10) — .def 내장 사전 289척 (EDI만 올려도 자동 매칭)',
       examples: [
         { q: '🚢 .def 내장 사전', a: '평택항 .def 289척 디코드 결과를 앱에 내장. .def 업로드 없이 EDI만 올려도 선박 약자(vsl)로 자동 매칭되어 베이별 행·tier·홀드 구조가 적용됨.' },

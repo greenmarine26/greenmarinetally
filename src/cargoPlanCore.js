@@ -160,22 +160,11 @@ export function autoPageLayout(trios, singles, colsPerRow = 5, deckOnlyKeys = nu
   let topBoxes = sortedAsc.slice(0, topCount);
   let bottomBoxes = sortedAsc.slice(topCount);
 
-  // 지침서 4.5: hold 없는 deck-only 단독 베이는 하단 행에 우선 배치.
-  //   (deck가 어디까지 높아질지 모르므로 위쪽 수직 공간 확보. 상단에 오면 deck 잘림.)
-  //   deckOnlyKeys: deck-only인 베이 키(odd 번호 또는 topKey) 집합. 없으면 기존 동작.
-  if (deckOnlyKeys && bottomBoxes.length > 0) {
-    const isDeckOnly = (box) =>
-      deckOnlyKeys.has(box.oddNum) || deckOnlyKeys.has(String(box.oddNum)) || deckOnlyKeys.has(box.topKey);
-    const topDeckOnly = topBoxes.filter(isDeckOnly);
-    const bottomHasHold = bottomBoxes.filter(b => !isDeckOnly(b));
-    // 상단에 deck-only가 있고 하단에 hold-있는 박스가 있으면 자리 교환
-    let swaps = Math.min(topDeckOnly.length, bottomHasHold.length);
-    for (let i = 0; i < swaps; i++) {
-      const t = topDeckOnly[i], b = bottomHasHold[i];
-      topBoxes = topBoxes.filter(x => x !== t).concat(b);
-      bottomBoxes = bottomBoxes.filter(x => x !== b).concat(t);
-    }
-  }
+  // V7.38: deck-only 하단배치 자리바꿈 규칙 제거 (2026-06-09 확정 사항 재적용).
+  //   hold 유무와 상관없이 베이 번호 순서가 절대 우선 — deck-only라고 순서를 깨고 내리면
+  //   BAY 01이 하단으로 밀리는 버그(TMPZ 재현, .def 사전 적용 후 KSKM 등에서 재발).
+  //   SWRG의 33·35·38이 하단인 것은 번호가 커서이지 deck-only라서가 아님 (과잉 일반화였음).
+  //   deckOnlyKeys 인자는 호환을 위해 받기만 하고 무시.
 
   // 각 행 내부: 큰 번호 좌측 (카스피 정답)
   topBoxes.sort((a, b) => b.oddNum - a.oddNum);
@@ -434,11 +423,22 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   // 사용자 데이터 보호 (M6.94.9 강화): user dict면 inferredMax 차단.
   // 이전 isUserOwnedBay(=isUserSource && userBay)는 userBay 베이번호 매칭 실패 시 보호 풀림.
   // → isUserSource(dict 전체 user)로 넓혀 매칭 실패해도 절대 보호.
+  // V7.38: 지침 5.1 정합 — user 아닐 때 override(.def/PDF, 검증된 설계값)가
+  //   자동 사전(rowMax/inferred)보다 우선. (이전: 자동값이 override를 가려
+  //   .def 정답 4행 베이가 v5의 8행으로 그려지는 버그 — KSKM bay01)
+  const ovDeckRow = (!isUserSource && override && typeof override.rowCount === 'number' && override.rowCount > 0)
+    ? override.rowCount : null;
+  // .def는 홀드 폭을 holdCells로 따로 가짐 (데크보다 좁은 홀드 — NBTD bay01)
+  const ovHoldRow = (!isUserSource && override)
+    ? ((override.defSource && override.holdCells?.length > 0) ? override.holdCells[0] : ovDeckRow)
+    : null;
   const deckRowMax = userRowCount
+    || ovDeckRow
     || (rowMaxEven && rowMaxEven > 0 ? rowMaxEven : null)
     || (isUserSource ? null : inferredDeckMax)
     || (override ? override.rowCount : 10);
   const holdRowMax = userRowCount
+    || ovHoldRow
     || (rowMaxOdd && rowMaxOdd > 0 ? rowMaxOdd : null)
     || (isUserSource ? null : inferredHoldMax)
     || (override ? override.rowCount : 9);
@@ -464,9 +464,16 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   }
   hasZero = ediRows.has(0);
   // 사전값 폴백 (EDI에 해당 구역 컨테이너가 없을 때만)
-  const dictHasZero = (typeof userBay?.hasZero === 'boolean') ? userBay.hasZero : (override ? override.hasZero : false);
-  const dictDeckZero = (userBay?.deckHasZero != null) ? userBay.deckHasZero : ((override?.deckHasZero != null) ? override.deckHasZero : dictHasZero);
-  const dictHoldZero = (userBay?.holdHasZero != null) ? userBay.holdHasZero : ((override?.holdHasZero != null) ? override.holdHasZero : dictHasZero);
+  // V7.38: user 아닐 때 override hasZero가 자동 사전보다 우선 (지침 5.1)
+  const dictHasZero = (isUserSource && typeof userBay?.hasZero === 'boolean') ? userBay.hasZero
+    : (override && typeof override.hasZero === 'boolean') ? override.hasZero
+    : (typeof userBay?.hasZero === 'boolean') ? userBay.hasZero : false;
+  const dictDeckZero = (isUserSource && userBay?.deckHasZero != null) ? userBay.deckHasZero
+    : (override?.deckHasZero != null) ? override.deckHasZero
+    : (userBay?.deckHasZero != null) ? userBay.deckHasZero : dictHasZero;
+  const dictHoldZero = (isUserSource && userBay?.holdHasZero != null) ? userBay.holdHasZero
+    : (override?.holdHasZero != null) ? override.holdHasZero
+    : (userBay?.holdHasZero != null) ? userBay.holdHasZero : dictHasZero;
   // 베이매트릭스가 기본(진실): 매트릭스 명시값(null 아님) 우선 → 없을 때만 EDI 판정.
   //   사용자가 데크00 체크 → EDI에 00 화물 없어도(선적 등) 09 안 생김.
   deckHasZero = (dictDeckZero != null) ? dictDeckZero : (ediHasDeck ? ediDeckHas0 : false);
@@ -481,14 +488,17 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       : (userBay.deckTiersLocal?.length > 0) ? userBay.deckTiersLocal : [];
     holdTiers = (userBay.holdTiers?.length > 0) ? userBay.holdTiers
       : (userBay.holdTiersLocal?.length > 0) ? userBay.holdTiersLocal : [];
+  } else if (override) {
+    // V7.38: override(.def/PDF)가 있으면 자동 사전(baysSummary/v5)보다 우선 (지침 5.1).
+    //   빈 holdTiers=[]도 "홀드 없음"으로 그대로 존중 — 자동값이 유령 홀드를 채우던 버그 제거 (KSKM bay27).
+    deckTiers = override.deckTiers || [];
+    holdTiers = override.holdTiers || [];
   } else {
     deckTiers = (userBay?.deckTiers && userBay.deckTiers.length > 0 ? userBay.deckTiers : null)
       || (userBay?.deckTiersLocal && userBay.deckTiersLocal.length > 0 ? userBay.deckTiersLocal : null)
-      || override?.deckTiers
       || (bayData?.deckTiers && bayData.deckTiers.length > 0 ? bayData.deckTiers : pdf.deck_t);
     holdTiers = (userBay?.holdTiers && userBay.holdTiers.length > 0 ? userBay.holdTiers : null)
       || (userBay?.holdTiersLocal && userBay.holdTiersLocal.length > 0 ? userBay.holdTiersLocal : null)
-      || override?.holdTiers
       || (bayData?.holdTiers && bayData.holdTiers.length > 0 ? bayData.holdTiers : pdf.hold_t);
   }
 
@@ -527,10 +537,16 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
 
   // M6.93.12 fix #2: cells 우선순위 — userBay > override > v5 cells > v5 deckCells > fallback
   let deckCells, holdCells;
-  if (userBay?.deckCells && userBay.deckCells.length > 0) {
+  // V7.38: .def override(defSource)는 무추측 원칙 — 명시 cells 또는 영역 가득(rowMax).
+  //   v5 cells 추정이 .def 직사각을 피라미드로 왜곡하던 버그 제거 (KSKM bay01).
+  //   PDF override(수기, cells 없음)는 기존 폴백 유지 (DJCT/SWAT 회귀 방지).
+  const defStrict = !isUserSource && !!override?.defSource;
+  if (!defStrict && userBay?.deckCells && userBay.deckCells.length > 0) {
     deckCells = userBay.deckCells.slice(0, nDeck);
   } else if (override?.deckCells && override.deckCells.length > 0) {
     deckCells = override.deckCells;
+  } else if (defStrict) {
+    deckCells = new Array(nDeck).fill(deckRowMax);
   } else if (bayData?.cells && bayData.cells.length > 0) {
     deckCells = bayData.cells.slice(0, nDeck);
   } else if (bayData?.deckCells && bayData.deckCells.length > 0) {
@@ -538,10 +554,12 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   } else {
     deckCells = new Array(nDeck).fill(deckRowMax);
   }
-  if (userBay?.holdCells && userBay.holdCells.length > 0) {
+  if (!defStrict && userBay?.holdCells && userBay.holdCells.length > 0) {
     holdCells = userBay.holdCells.slice(0, nHold);
   } else if (override?.holdCells && override.holdCells.length > 0) {
     holdCells = override.holdCells;
+  } else if (defStrict) {
+    holdCells = new Array(nHold).fill(holdRowMax);
   } else if (bayData?.cells && bayData.cells.length > 0) {
     holdCells = bayData.cells.slice(nDeck, nDeck + nHold);
   } else if (bayData?.holdCells && bayData.holdCells.length > 0) {

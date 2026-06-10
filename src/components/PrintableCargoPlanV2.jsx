@@ -110,7 +110,7 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-mark-P { color: #6a1b9a; }
 .cpv2-cell.cpv2-mark-S { color: #2e7d32; }
 .cpv2-cell.cpv2-mark-M { color: #c62828; }
-.cpv2-hatch-break { display: flex; gap: 4px; width: 180px; height: 0; margin: 0; flex-shrink: 0; }
+.cpv2-hatch-break { display: flex; gap: 4px; width: calc(100% - 18px); height: 0; margin: 3px 0; flex-shrink: 0; box-sizing: border-box; }
 .cpv2-hatch-seg { flex: 1 1 0; border-top: 1.5px solid #000; height: 0; }
 .cpv2-tier-labels { display: flex; flex-direction: column; align-items: flex-start; font-size: 9px; color: #444; width: 16px; }
 .cpv2-tier-labels > span { flex: 1 1 0; display: flex; align-items: center; line-height: 1; }
