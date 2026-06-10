@@ -262,6 +262,26 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return m;
   }, [shipImo, shipName, containers]);
 
+  // V7.52: 전 베이 최대 그리드 폭 — 베이 간 세로 정렬 기준 (사용자 확정).
+  //   deck-only 베이(예: TMPZ BAY 01, 4칸)가 좌측 정렬돼 옆 베이(6칸)의 06 위치에
+  //   04가 오던 문제 — 모든 베이를 전체 최대 폭 기준 가운데(0.5칸 단위)에 배치.
+  //   폭 = 사전 베이들의 max(rowCount, deckCells, holdCells)와 EDI 전체 range 중 최대.
+  const globalGridCols = useMemo(() => {
+    let w = 1;
+    for (const k in dictBaysSummary) {
+      const e = dictBaysSummary[k];
+      if (!e) continue;
+      const dc = Array.isArray(e.deckCells) && e.deckCells.length ? Math.max(...e.deckCells.map(n => parseInt(n) || 0)) : 0;
+      const hc = Array.isArray(e.holdCells) && e.holdCells.length ? Math.max(...e.holdCells.map(n => parseInt(n) || 0)) : 0;
+      w = Math.max(w, parseInt(e.rowCount) || 0, dc, hc);
+    }
+    const r = globalRowRange;
+    const lenOf = (g) => (g ? Math.ceil((g.maxLeft || 0) / 2) + Math.ceil((g.maxRight || 0) / 2) + (g.has00 ? 1 : 0) : 0);
+    w = Math.max(w, lenOf(r?.deck), lenOf(r?.hold));
+    return w;
+  }, [dictBaysSummary, globalRowRange]);
+
+
   // 페이지 = 짝수/홀수 베이 한 쌍 (PDF 처럼)
   // M4.5: .def 베이사전 우선 사용. 사용자 원칙 #8 + 통로 구분 추가
   //   - .def에 있는 베이만 페이지로 (빈 베이도 포함)
@@ -806,6 +826,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
                   getCellBg={getCellBg}
                   getOpColor={getOpColor}
                   globalRowRange={globalRowRange}
+            globalGridCols={globalGridCols}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
                   bayStructureMap={bayStructureMap}
@@ -847,6 +868,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             getCellBg={getCellBg}
             getOpColor={getOpColor}
             globalRowRange={globalRowRange}
+            globalGridCols={globalGridCols}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
             bayStructureMap={bayStructureMap}
@@ -894,6 +916,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             shipName={shipName}
             xrayMap={xrayMap}
             globalRowRange={globalRowRange}
+            globalGridCols={globalGridCols}
             globalTiers={globalTiers}
             dictBaysSummary={dictBaysSummary}
             onClose={() => setPrintMode(null)}
@@ -923,6 +946,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             shipImo={shipImo}
             shipName={shipName}
             globalRowRange={globalRowRange}
+            globalGridCols={globalGridCols}
             globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
             onClose={() => setPrintMode(null)}
@@ -943,7 +967,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getCellBg, getOpColor, globalRowRange, bayStructureMap, globalTiers = [], dictBaysSummary = {},
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getCellBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {},
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1192,12 +1216,14 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const holdAxis = [...hEv, ...(holdSet.has('00') ? ['00'] : []), ...hOd];
     const deckRowX = {}; deckAxis.forEach((r, i) => { deckRowX[r] = i; });
     const holdRowX = {}; holdAxis.forEach((r, i) => { holdRowX[r] = i; });
-    // 중심선 정렬: 각 축의 중심(칸 수/2)을 맞춤. 더 넓은 축 기준 폭.
-    const nCols = Math.max(deckAxis.length, holdAxis.length);
+    // 중심선 정렬: 각 축의 중심(칸 수/2)을 맞춤.
+    // V7.52: 기준 폭 = 전 베이 최대(globalGridCols) — 베이 내부(데크↔홀드)와
+    //   베이 간(위아래 박스) 정렬을 같은 공식으로. 0.5칸 단위 보정 (지침 4.4 확장).
+    const nCols = Math.max(deckAxis.length, holdAxis.length, globalGridCols || 0);
     const deckOff = (nCols - deckAxis.length) / 2;     // 데크를 중앙에 (0.5칸 단위 가능)
     const holdOff = (nCols - holdAxis.length) / 2;
     return { deckRows, holdRows, deckAxis, holdAxis, deckRowX, holdRowX, deckOff, holdOff, nCols };
-  }, [pageMatrixRender]);
+  }, [pageMatrixRender, globalGridCols]);
 
   //   N=8 hasZero=false → [08,06,04,02,01,03,05,07]
   const buildGridRowsFromCells = (cells, hasZero) => {
