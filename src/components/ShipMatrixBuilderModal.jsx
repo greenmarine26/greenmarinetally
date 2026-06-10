@@ -17,8 +17,10 @@ import {
   createEmptyBayEntry,
   detectMissingBays,
   fillEmptyBaysSequential,
+  augmentMatrixFromDef,
 } from '../shipMatrixBuilder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
+import { parseDefSections } from '../defSectionParser.js';
 import { addToUserBayDict, lookupUserBayDict, loadUserBayDict, removeFromUserBayDict } from '../data/userBayDict.js';
 import {
   fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSaveShipBayDict,
@@ -36,6 +38,9 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const [shipMeta, setShipMeta] = useState(autoMeta);
   const [editMeta, setEditMeta] = useState(false);
   const [pdfStatus, setPdfStatus] = useState('idle');
+  const [defStatus, setDefStatus] = useState('idle');   // V7.36 .def 업로드
+  const [defError, setDefError] = useState('');
+  const defInputRef = useRef(null);
   const [pdfError, setPdfError] = useState('');
   const fileInputRef = useRef(null);
   const [savingMsg, setSavingMsg] = useState('');
@@ -200,6 +205,31 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       console.error('[ShipMatrixBuilder] PDF parse error:', err);
       setPdfError(err.message || 'PDF 파싱 실패');
       setPdfStatus('error');
+    }
+  };
+
+  // V7.36: .def(CASP) 업로드 → 단면 디코드 → 베이매트릭스 자동 생성
+  const handleDefUpload = async (file) => {
+    if (!file) return;
+    setDefStatus('parsing'); setDefError('');
+    try {
+      const buf = await file.arrayBuffer();
+      const result = parseDefSections(new Uint8Array(buf));
+      if (result.error) throw new Error(`${result.error} (포맷 ${result.format || '?'})`);
+      if (result.vesselName && !shipMeta.name) {
+        setShipMeta(m => ({ ...m, name: result.vesselName }));
+      }
+      if (result.callsign && !shipMeta.callsign) {
+        setShipMeta(m => ({ ...m, callsign: result.callsign }));
+      }
+      let merged = augmentMatrixFromDef({ ...matrix }, result);
+      merged = fillEmptyBaysSequential(merged);
+      setMatrix(merged);
+      setDefStatus('done');
+    } catch (err) {
+      console.error('[ShipMatrixBuilder] DEF parse error:', err);
+      setDefError(err.message || '.def 파싱 실패');
+      setDefStatus('error');
     }
   };
 
@@ -572,7 +602,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               </div>
             )}
             <div className="text-[11px] text-zinc-500 mt-2">
-              출처: EDI ({matrix._empty ? '없음' : '✓'}) · 베이사전 ({matrix.bayDictUsed ? '✓ 매칭' : '없음'}) · PDF ({matrix.pdfUsed ? '✓ 보강' : '미사용'})
+              출처: EDI ({matrix._empty ? '없음' : '✓'}) · 베이사전 ({matrix.bayDictUsed ? '✓ 매칭' : '없음'}) · .def ({matrix.defUsed ? '✓ 자동' : '미사용'}) · PDF ({matrix.pdfUsed ? '✓ 보강' : '미사용'})
               {matrix.bayDictMeta?.name && <span className="ml-2 text-cyan-400">(사전: {matrix.bayDictMeta.name})</span>}
             </div>
           </div>
@@ -590,7 +620,21 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 <span>모든 베이 분석 완료. 필요 시 PDF로 추가 보강 가능.</span>
               )}
             </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center flex-wrap">
+              <input ref={defInputRef} type="file" accept=".def,.DEF" hidden
+                     onChange={e => { handleDefUpload(e.target.files?.[0]); e.target.value = ''; }} />
+              <button onClick={() => defInputRef.current?.click()}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-sm">
+                🚢 .def 업로드 (자동 생성)
+              </button>
+              {defStatus === 'parsing' && <span className="text-xs text-zinc-400">.def 디코딩 중...</span>}
+              {defStatus === 'done' && matrix.defStats && (
+                <span className="text-xs text-emerald-400">
+                  ✓ .def {matrix.defStats.format} — 신규 {matrix.defStats.added} / 보강 {matrix.defStats.augmented}
+                  {matrix.defStats.unparsed > 0 && <span className="text-amber-400"> · 미확정 {matrix.defStats.unparsed}베이(검토 필요)</span>}
+                </span>
+              )}
+              {defStatus === 'error' && <span className="text-xs text-red-400">{defError}</span>}
               <input ref={fileInputRef} type="file" accept=".pdf" hidden
                      onChange={e => handlePdfUpload(e.target.files?.[0])} />
               <button onClick={() => fileInputRef.current?.click()}

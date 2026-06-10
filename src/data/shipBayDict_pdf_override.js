@@ -11,7 +11,7 @@
 export const PDF_BAY_OVERRIDE = {
   // DJCT (DONGJIN CONTINENTAL) — 0186W 기준
   DJCT: {
-    "01": { rowCount: 7,  hasZero: true,  deckTiers: [88,86,84],          holdTiers: [8,6,4] },
+    "01": { rowCount: 7,  hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4] },  // V7.36: .def+PDF 재확인 — 82단 누락 정정
     "03": { rowCount: 9,  hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },
     "05": { rowCount: 9,  hasZero: true,  deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },  // (04)05 페어
     "07": { rowCount: 10, hasZero: false, deckTiers: [88,86,84,82],       holdTiers: [8,6,4,2] },

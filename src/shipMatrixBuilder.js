@@ -430,6 +430,63 @@ export function augmentMatrixFromPdf(matrix, pdfResult) {
 }
 
 /**
+ * .def 단면 디코드 결과로 매트릭스 보강 — V7.36
+ * .def는 설계 원본(PDF 대조 검증 완료)이므로 EDI 추정값을 덮어쓴다.
+ * 단, 매트릭스 빌더 안에서의 보강이므로 사용자 확인·수정 후 저장된다 (userBayDict 절대 보호와 무관).
+ * @param {Object} matrix
+ * @param {Object} defResult - defSectionParser.parseDefSections 결과
+ * @returns {Object}
+ */
+export function augmentMatrixFromDef(matrix, defResult) {
+  if (!defResult || defResult.error || !defResult.bays) return matrix;
+  let added = 0, augmented = 0;
+  for (const bayNo of defResult.order || []) {
+    const e = defResult.bays[bayNo];
+    if (!e) continue;
+    const bay = pad3(bayNo);
+    if (!matrix.byBay[bay]) {
+      matrix.byBay[bay] = { bayNum: bay, source: 'def', sourceRows: [], sourceTiers: [], rowTierPairs: [] };
+      added++;
+    } else {
+      augmented++;
+    }
+    const m = matrix.byBay[bay];
+    // .def가 정답 — rowCount/hasZero/tier를 덮어씀
+    m.rowCount = e.rowCount;
+    m.hasZero = e.hasZero;
+    m.deckHasZero = e.hasZero;
+    m.holdHasZero = (e.holdRows || []).includes('00');
+    m.deckTiers = [...e.deckTiers];
+    m.deckCells = e.deckTiers.map(() => e.rowCount);
+    m.holdTiers = [...e.holdTiers];
+    // 홀드 폭은 .def의 홀드 행 수 (데크보다 좁은 베이 — 예: NBTD bay01 데크6/홀드4)
+    const holdW = (e.holdRows && e.holdRows.length) ? e.holdRows.length : e.rowCount;
+    m.holdCells = e.holdTiers.map(() => holdW);
+    m.sourceRows = [...e.deckRows];
+    m.sourceTiers = [...e.holdTiers, ...e.deckTiers].map(String);
+    m.source = m.source && m.source !== 'def' ? m.source + '+def' : 'def';
+  }
+  // 미확정 베이는 검토 필요 표시
+  for (const bayNo of defResult.unparsedBays || []) {
+    const bay = pad3(bayNo);
+    if (!matrix.byBay[bay]) {
+      matrix.byBay[bay] = { ...createEmptyBayEntry(bay), source: 'def-unparsed', isEstimated: true };
+      added++;
+    } else {
+      matrix.byBay[bay].isEstimated = true;
+    }
+  }
+  matrix.defUsed = true;
+  matrix.defStats = {
+    added, augmented,
+    format: defResult.format,
+    unparsed: (defResult.unparsedBays || []).length,
+    warnings: defResult.warnings || [],
+  };
+  return matrix;
+}
+
+/**
  * 매트릭스 → userBayDict entry 형식 변환
  * @param {Object} matrix
  * @param {string} code
