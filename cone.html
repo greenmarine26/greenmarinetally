@@ -119,34 +119,6 @@
   .cv-cell.cv-top{border-bottom:1px dashed var(--line); padding-bottom:2px;}
   .cv-empty-cell{min-height:14px;}
   .cv-bt{font-size:10px; font-weight:800; text-align:center; color:var(--ink); white-space:nowrap; margin-bottom:1px;}
-  .cvtab{border-collapse:collapse;}
-  /* V7.45: 본체 카고플랜급 정보 셀 (POL/POD·컨번호·규격·특수 4줄) — 13px 점 셀 폐지 */
-  .cvtab td{width:88px; height:56px; padding:0; font-size:8px; text-align:left; vertical-align:top; font-weight:600;}
-  .cvtab td.cvl{width:auto; min-width:16px; color:var(--dim); font-size:9px; font-weight:700; text-align:center; vertical-align:middle; height:auto;}
-  .cvtab td.cvrl{color:var(--dim); font-size:9px; font-weight:700; height:13px; line-height:13px; text-align:center;}
-  .cvtab td.cvsec{text-align:center; color:#cfd8e3; font-size:10px; font-weight:800; padding:3px 0; letter-spacing:2px; height:18px;}
-  .cvtab td.cvc{border:1px solid rgba(255,255,255,.14); position:relative; overflow:hidden;}
-  .cvtab td.cv-ptkd, .cvtab td.cv-ptkl{background:#0f1722; color:#e7eef7;
-    border:2px solid #f5b53f; box-shadow:inset 0 0 0 1px rgba(245,181,63,.35);}
-  .cvtab td.cv-shade{background:#33363c; color:#9aa0aa; border-color:rgba(255,255,255,.08);}
-  .cvtab td.cv-slot{background:transparent; border:1px dashed #2c3a4d;}
-  .cvtab td.cvc-gap{background:transparent; border:none;}
-  .cvc .cvc-in{padding:2px 3px 2px 4px; font-family:Consolas,'Courier New',monospace; line-height:1.25; white-space:nowrap;}
-  .cvc .cvc-pp{font-size:8px; color:#9fb4c9;}
-  .cvc .cvc-pp b{color:#e7eef7;}
-  .cvc .cvc-star{color:#ff6b6b; font-weight:900;}
-  .cvc .cvc-no{font-size:9px; font-weight:800;}
-  .cvc .cvc-no .t4{color:#ffd9a0; font-size:10px;}
-  .cvc .cvc-sz{font-size:8px; color:#9fb4c9;}
-  .cvc .cvc-sp{font-size:8px; font-weight:800; min-height:10px;}
-  .cvc .sp-rf{color:#7ce0f0;} .cvc .sp-dg{color:#ff8a8a;} .cvc .sp-fr{color:#cfa6ff;} .cvc .sp-ot{color:#f2a6e8;}
-  .cv-shade .cvc-no .t4{color:#b9bec7;} .cv-shade .cvc-pp b{color:#b9bec7;}
-  /* 특수화물 좌측 컬러 바 + 우상단 심볼 (본체 동일 감각) */
-  .cvc .cvc-bar{position:absolute; top:0; left:0; bottom:0; width:4px;}
-  .cvc .bar-rf{background:#22c5dd;} .cvc .bar-dg{background:#e23b3b;} .cvc .bar-fr{background:#8b5cf6;} .cvc .bar-ot{background:#d946ef;}
-  .cvc .cvc-sym{position:absolute; top:0; right:0; background:#fff; font-weight:900; font-size:11px; line-height:1; padding:1px 3px; border-bottom-left-radius:4px;}
-  .cvc .sym-rf{color:#0e7490; border:1px solid #22c5dd;} .cvc .sym-dg{color:#b91c1c; border:1px solid #e23b3b;}
-  .cvc .sym-fr{color:#6d28d9; border:1px solid #8b5cf6;} .cvc .sym-ot{color:#a21caf; border:1px solid #d946ef;}
   .bv-lg.rf{background:#0e4d52; color:#7fffe0;}
   .bv-lg.dg{background:#5a1717; color:#ffb3b3;}
   .bv-c{font-weight:700;}
@@ -273,7 +245,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.45</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.46</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1223,7 +1195,7 @@ function bindEvents(){
     btn.onclick=()=>selectVoyage(btn.getAttribute('data-vk'));
   });
   const cb=document.getElementById('calcBtn'); if(cb) cb.onclick=runCalc;
-  const cv=document.getElementById('cargoViewBtn'); if(cv) cv.onclick=renderCargoView;
+  const cv=document.getElementById('cargoViewBtn'); if(cv) cv.onclick=openCargoPlanV2Auto;  // V7.45: 본체 카고플랜 V2
   const bv=document.getElementById('bayViewBtn'); if(bv) bv.onclick=renderBayView;
 }
 
@@ -1310,7 +1282,7 @@ function bindResultTabs(){
     b.onclick=()=>{
       const id=b.getAttribute('data-rtab');
       if(id==='calc') runCalc();
-      else if(id==='cargo') renderCargoView();
+      else if(id==='cargo') openCargoPlanV2Auto();
       else if(id==='bay') renderBayView();
     };
   });
@@ -1393,56 +1365,6 @@ function bvRowPositions(cellCount, hasZero){
   }
 }
 
-// baysSummary의 한 베이 → {deckTiers, holdTiers, deckRowPos, holdRowPos, hasZero}
-// 검수앱 cargoPlanCore와 동일: 티어 cells 수만큼 가운데 active (단면), 나머지 invisible
-function cvActiveCols(cellCount, nTotal){
-  const active=new Set();
-  if(cellCount>=nTotal){ for(let i=0;i<nTotal;i++) active.add(i); return active; }
-  if(cellCount<=0) return active;
-  const center=Math.floor(nTotal/2);
-  if(nTotal%2===1){
-    if(cellCount%2===1){ const half=Math.floor((cellCount-1)/2); for(let i=center-half;i<=center+half;i++) active.add(i); }
-    else { const half=cellCount/2; for(let i=center-half+1;i<=center+half;i++) active.add(i); }
-  } else {
-    const half=Math.floor(cellCount/2);
-    for(let i=center-half;i<center;i++) active.add(i);
-    for(let i=center;i<center+half;i++) active.add(i);
-    if(cellCount%2===1){ const ex=center+half; if(ex<nTotal) active.add(ex); }
-  }
-  return active;
-}
-// 검수앱과 동일한 베이 단면 렌더 데이터 (티어별 cells, 데크/홀드 hasZero 분리)
-//   bs: baysSummary entry, ediDeckHas00/ediHoldHas00: EDI 실데이터 00 유무(단일 진실)
-function cvBayRender(bs, ediDeckHas00, ediHoldHas00){
-  if(!bs) return null;
-  const deckTiers=Array.isArray(bs.deckTiers)?bs.deckTiers.map(Number):[];
-  const holdTiers=Array.isArray(bs.holdTiers)?bs.holdTiers.map(Number):[];
-  const deckCells=Array.isArray(bs.deckCells)?bs.deckCells.map(Number):[];
-  const holdCells=Array.isArray(bs.holdCells)?bs.holdCells.map(Number):[];
-  // 데크/홀드 00: 사전값 > 통합 hasZero, 그리고 EDI에 00 있으면 무조건 true(단일 진실)
-  // EDI 실데이터 00 유무가 단일 진실. buildGrid에서 그 구역 EDI 유무 판단 후 최종값 전달.
-  const dHasZero = (ediDeckHas00!=null) ? !!ediDeckHas00 : (bs.deckHasZero!=null ? !!bs.deckHasZero : !!bs.hasZero);
-  const hHasZero = (ediHoldHas00!=null) ? !!ediHoldHas00 : (bs.holdHasZero!=null ? !!bs.holdHasZero : !!bs.hasZero);
-  const dMax=deckCells.filter(v=>v>0).length?Math.max(...deckCells.filter(v=>v>0)):0;
-  const nDeckCols=(dMax>0?dMax:(bs.rowCount||0))+(dHasZero?1:0);
-  const hMax=holdCells.filter(v=>v>0).length?Math.max(...holdCells.filter(v=>v>0)):0;
-  const nHoldCols=hMax>0?Math.min(hMax+(hHasZero?1:0),nDeckCols):nDeckCols;
-  const deckRowPos=bvRowPositions(nDeckCols,dHasZero);
-  const holdRowPos=bvRowPositions(nHoldCols,hHasZero);
-  const mkRows=(tiers,cells,nCols,hasZero,rowPos)=>tiers.map((t,i)=>{
-    const cc=i<cells.length?cells[i]:0;
-    const ccEff = hasZero ? (cc>0?cc+1:1) : cc;
-    const act=cvActiveCols(ccEff,nCols);
-    const arr=[];
-    for(let c=0;c<nCols;c++) arr.push(act.has(c)?rowPos[c]:null);
-    return {tier:t, rowLbls:arr};
-  });
-  return {
-    deckTiers, holdTiers, nDeckCols, nHoldCols, deckRowPos, holdRowPos,
-    deckRows: mkRows(deckTiers,deckCells,nDeckCols,dHasZero,deckRowPos),
-    holdRows: mkRows(holdTiers,holdCells,nHoldCols,hHasZero,holdRowPos),
-  };
-}
 
 function bvBaySkeleton(bs){
   if(!bs) return null;
@@ -1475,283 +1397,60 @@ function bvDictBays(entry){
 // 베이플랜의 각 베이 격자를 그대로 축소 배열. 박스=위(홀수단독)+아래(짝수페어).
 // 평택분만 강조, 통과분 음영, FR만 표시. 폰: 회전+핀치줌.
 let __cargoFlag='d';  // 'd'=양하, 'l'=선적
-async function renderCargoView(){
-  const ra=document.getElementById('resultArea');
-  ra.innerHTML='<div class="card"><div class="empty-note">카고플랜 불러오는 중...</div></div>';
+// V7.45: 본체 카고플랜 V2를 그대로 사용 — cone-cargoplan.js(React 번들) 동적 로드
+async function loadCargoPlanV2(){
+  if(window.ConeCargoPlan) return;
+  showLoading('카고플랜 모듈 불러오는 중...');
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='cone-cargoplan.js?v='+(window.__APPV||'');
+    s.onload=res; s.onerror=()=>rej(new Error('카고플랜 모듈 로드 실패'));
+    document.head.appendChild(s);
+  });
+  const ld=document.getElementById('loadingBox'); if(ld) ld.remove();
+}
+// parseEDI row → 본체 컨테이너 형식
+function rowsToContainers(rows){
+  return (rows||[]).map(r=>({
+    cn:r.cn, bay:String(r.bay), row:String(r.row), tier:String(r.tier).padStart(2,'0'),
+    iso:r.iso, fe:r.fe||'F', pol:r.pol||'', pod:r.pod||'',
+    dg:!!r.dg, fr:!!r.fr, ot:!!r.ot, tmp:r.temp!=null?String(r.temp):'',
+  }));
+}
+async function openCargoPlanV2(mode){
+  try{
+    await loadCargoPlanV2();
+    const sd = mode==='discharge' ? state.disch : state.stow;
+    const rows = sd && (sd.ediRowsAll && sd.ediRowsAll.length ? sd.ediRowsAll : sd.ediRows);
+    if(!rows || !rows.length){ alert(mode==='discharge'?'양하 자료가 없습니다.':'선적 자료가 없습니다.'); return; }
+    window.ConeCargoPlan.open({
+      containers: rowsToContainers(rows),
+      shipName: state.shipName || (sd.vessel||''),
+      mode,
+    });
+  }catch(err){
+    alert('카고플랜을 열지 못했습니다. 인터넷 연결 후 다시 시도해주세요. ('+err.message+')');
+  }
+}
+// 양하·선적 둘 다 있으면 선택, 한쪽만 있으면 바로
+function openCargoPlanV2Auto(){
   const hasD=!!(state.disch&&state.disch.ediRows&&state.disch.ediRows.length);
   const hasL=!!(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
-  if(!hasD&&!hasL){ ra.innerHTML='<div class="card"><div class="empty-note">표시할 컨테이너가 없습니다.</div></div>'; return; }
-  if(__cargoFlag==='d'&&!hasD) __cargoFlag='l';
-  if(__cargoFlag==='l'&&!hasL) __cargoFlag='d';
-  const flag=__cargoFlag;
-
-  // 판정 함수 — 메인 isPtkPort()와 동일 기준 (PYO 포함, 끝 고정, 빈값 제외). V7.28 통일.
-  const isPtk=(c,f)=> !!c && isPtkPort(f==='d'?c.pod:c.pol);
-  const frSym=(c)=> (c&&c.fr)?'FR':'';
-  const cellCls=(c,f)=> isPtk(c,f) ? ('cvc '+(f==='d'?'cv-ptkd':'cv-ptkl')) : 'cvc cv-shade';
-  // V7.45: 본체 카고플랜급 셀 — POL/POD·컨번호(끝4 강조)·규격 F/E·특수 4줄 + 좌측 바·우상단 심볼
-  const shortP=p=>{ p=String(p||'').toUpperCase(); return p? (p.replace(/^KR/,'').slice(0,3)||p.slice(0,3)) : '·'; };
-  const cvCellHtml=(c, f, r, tk)=>{
-    const ptk=isPtk(c,f);
-    const cn=String(c.cn||'');
-    const cnHtml=cn? `${cn.slice(0,-4)}<span class="t4">${cn.slice(-4)}</span>` : '—';
-    const fe=c.fe==='E'?'E':'F';
-    let sp='', spCls='', bar='', sym='';
-    if(c.dg){ sp='DG'; spCls='sp-dg'; bar='bar-dg'; sym='<div class="cvc-sym sym-dg">⚠</div>'; }
-    else if(c.reefer){ sp=c.temp!=null?`${c.temp}C`:'RF'; spCls='sp-rf'; bar='bar-rf'; sym='<div class="cvc-sym sym-rf">❄</div>'; }
-    else if(c.fr){ sp='FR'; spCls='sp-fr'; bar='bar-fr'; sym='<div class="cvc-sym sym-fr">⊞</div>'; }
-    else if(c.ot){ sp='OT'; spCls='sp-ot'; bar='bar-ot'; sym='<div class="cvc-sym sym-ot">△</div>'; }
-    return `<td class="${cellCls(c,f)}" title="${cn} ${c.pol||''}→${c.pod||''} r${r}t${tk}">`
-      +(bar?`<div class="cvc-bar ${bar}"></div>`:'')
-      +sym
-      +`<div class="cvc-in">`
-      +`<div class="cvc-pp">${shortP(c.pol)}/<b>${shortP(c.pod)}</b>${ptk?'<span class="cvc-star">★</span>':''}</div>`
-      +`<div class="cvc-no">${cnHtml}</div>`
-      +`<div class="cvc-sz">${c.size||''}ft ${fe}</div>`
-      +`<div class="cvc-sp ${spCls}">${sp||'&nbsp;'}</div>`
-      +`</div></td>`;
-  };
-
-  // 베이사전 골격 (existBays 짝꿍 판정에 사전 베이도 포함하기 위해 먼저 로드)
-  let dictBays=new Map();
-  try{
-    const fbDict=await fbFetchBayDict();
-    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
-    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
-    const entry=lookupBayDef(fbDict,imo,nm);
-    if(entry) dictBays=bvDictBays(entry);
-  }catch(e){}
-
-  // 선택 flag의 컨테이너만 수집 (베이플랜 그룹키와 동일)
-  // V7.45: 카고플랜은 전체 화물(타항 포함) — 본체와 동일. 평택만 강조, 타항 회색.
-  const sd=flag==='d'?state.disch:state.stow;
-  const planRows=(sd&&(sd.ediRowsAll&&sd.ediRowsAll.length?sd.ediRowsAll:sd.ediRows))||[];
-  // 짝꿍 판정 기준: 컨테이너 있는 베이 + 베이매트릭스(사전)에 있는 베이.
-  //   짝수 베이에 컨테이너가 없어도 사전에 있으면 짝꿍으로 인식 → 홀수가 단독으로 흩어지지 않음.
-  const existBays=new Set(planRows.map(r=>parseInt(r.bay,10)).filter(Number.isFinite));
-  for(const bn of dictBays.keys()) existBays.add(bn);
-  const groupKeyOf=(b)=> b%2===0 ? b : (existBays.has(b-1)?b-1:b);
-  const bays={}, groupBays={};
-  let cntPtk=0,cntOther=0,cntFr=0;
-  for(const r of planRows){
-    const b=parseInt(r.bay,10); if(!Number.isFinite(b)) continue;
-    const gk=groupKeyOf(b);
-    if(!bays[gk]) bays[gk]={};
-    if(!groupBays[gk]) groupBays[gk]=new Set();
-    groupBays[gk].add(b);
-    const key=r.row+'_'+String(r.tier).padStart(2,'0');
-    bays[gk][key]={row:r.row,tier:String(r.tier).padStart(2,'0'),c:r};
-    if(isPtk(r,flag)) cntPtk++; else cntOther++;
-    if(r.fr) cntFr++;
+  if(hasD&&hasL){
+    const ra=document.getElementById('resultArea');
+    ra.innerHTML=resultTabsHtml('cargo')+`<div class="card"><div class="share-head"><div class="sh-title">카고플랜 (검수앱과 동일)</div>
+      <div class="sh-sub">어느 작업의 카고플랜을 볼까요?</div></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn-share" id="cpD">📥 양하 카고플랜</button>
+        <button class="btn-share" id="cpL">📤 선적 카고플랜</button>
+      </div></div>`;
+    bindResultTabs();
+    document.getElementById('cpD').onclick=()=>openCargoPlanV2('discharge');
+    document.getElementById('cpL').onclick=()=>openCargoPlanV2('loading');
+    enterResultMode('cargo');
+  } else {
+    openCargoPlanV2(hasD?'discharge':'loading');
   }
-  const gks=Object.keys(bays).map(Number).sort((a,b)=>a-b);
-
-  // 전체 공통 tier (검수앱 STANDARD 방식): 모든 박스가 같은 데크/홀드 층 격자 사용 → 경계 일직선.
-  //   실제 쓰인 tier의 최대 범위로 공통 격자 구성. 없는 tier는 빈 행으로 자리 유지.
-  const allDeckT=new Set(), allHoldT=new Set();
-  for(const r of planRows){ const t=parseInt(r.tier,10); if(t>=80) allDeckT.add(t); else if(t>0) allHoldT.add(t); }
-  const commonDeck=[...allDeckT].sort((a,b)=>b-a);  // 위→아래 (큰 tier 위)
-  const commonHold=[...allHoldT].sort((a,b)=>b-a);
-
-  const shipLabel=state.shipName||'선박';
-  const today=new Date().toLocaleDateString('ko-KR');
-  const dd=n=>n>=100?String(n):String(n).padStart(2,'0');
-
-  // row 정렬 + 중앙정렬 (베이플랜과 동일)
-  const sortRows=set=>{
-    const arr=[...set];
-    const ev=arr.filter(r=>parseInt(r,10)%2===0&&r!=='00').sort((a,b)=>parseInt(b)-parseInt(a));
-    const ze=arr.filter(r=>r==='00');
-    const od=arr.filter(r=>parseInt(r,10)%2===1).sort((a,b)=>parseInt(a)-parseInt(b));
-    return [...ev,...ze,...od];
-  };
-  const centerAlign=(rowPos,baseWidth)=>{
-    const pad=baseWidth-rowPos.length, left=Math.floor(pad/2);
-    const arr=new Array(baseWidth).fill(null);
-    for(let i=0;i<rowPos.length;i++) arr[left+i]=rowPos[i];
-    return arr;
-  };
-
-  // 한 격자(gk) → {deckTiers,holdTiers,deckCols,holdCols,cells,title}
-  const buildGrid=(gk)=>{
-    const cells=bays[gk];
-    const memberBays=[...(groupBays[gk]||[gk])].sort((a,b)=>a-b);
-
-    // EDI 실데이터에서 데크/홀드 00 유무 + 구역 유무 (단일 진실)
-    let ediDeckHas00=false, ediHoldHas00=false, ediHasDeck=false, ediHasHold=false;
-    for(const v of Object.values(cells)){
-      const t=parseInt(v.tier,10), isDeck=t>=80;
-      if(isDeck) ediHasDeck=true; else ediHasHold=true;
-      if(parseInt(v.row,10)===0){ if(isDeck) ediDeckHas00=true; else ediHoldHas00=true; }
-    }
-    // EDI에 그 구역 컨테이너 있으면 EDI값(true/false), 없으면 null(사전 폴백)
-    const effDeck00 = ediHasDeck ? ediDeckHas00 : null;
-    const effHold00 = ediHasHold ? ediHoldHas00 : null;
-
-    // 대표 베이 사전 entry로 단면(cvBayRender). 페어면 짝수 우선, 멤버 중 cells 있는 것.
-    let render=null;
-    for(const mb of memberBays){
-      const bs=dictBays.get(mb);
-      if(bs && ((bs.deckCells&&bs.deckCells.length)||(bs.holdCells&&bs.holdCells.length))){
-        render=cvBayRender(bs, effDeck00, effHold00); break;
-      }
-    }
-    // 사전 없으면 EDI 컨테이너로 단면 골격 생성 (검수앱과 동일)
-    if(!render){
-      const dT=new Set(),hT=new Set(),dRows={},hRows={};
-      for(const v of Object.values(cells)){
-        const t=parseInt(v.tier,10), isDeck=t>=80;
-        if(isDeck){dT.add(t);(dRows[t]=dRows[t]||new Set()).add(v.row);}
-        else{hT.add(t);(hRows[t]=hRows[t]||new Set()).add(v.row);}
-      }
-      const deckTiers=[...dT].sort((a,b)=>b-a), holdTiers=[...hT].sort((a,b)=>b-a);
-      const deckCells=deckTiers.map(t=>[...(dRows[t]||[])].filter(r=>parseInt(r,10)!==0).length);
-      const holdCells=holdTiers.map(t=>[...(hRows[t]||[])].filter(r=>parseInt(r,10)!==0).length);
-      render=cvBayRender({deckTiers,holdTiers,deckCells,holdCells,deckHasZero:ediDeckHas00,holdHasZero:ediHoldHas00,hasZero:ediDeckHas00||ediHoldHas00}, effDeck00, effHold00);
-    }
-
-    const baseWidth=Math.max(render?render.nDeckCols:1, render?render.nHoldCols:1, 1);
-    const title = memberBays.length>=2 ? `(${dd(memberBays[0])})${dd(memberBays[memberBays.length-1])}` : `${dd(memberBays[0])}`;
-    // render: tier별 active rowLbl 단면. gridHtml이 active 칸에 컨테이너/빈슬롯, 비active는 invisible.
-    return { cells, render, baseWidth, title,
-      deckTiers:commonDeck, holdTiers:commonHold };
-  };
-
-  // 격자 → HTML (티어/로우 라벨 포함, 데크/홀드 상하)
-  const gridHtml=(g, sharedWidth)=>{
-    const R=g.render;
-    const cols=Math.max(g.baseWidth, sharedWidth||0);
-    if(!R){ return '<table class="cvtab"><tbody></tbody></table>'; }
-    const nD=R.nDeckCols, nH=R.nHoldCols;
-    // 박스 폭 통일(cols) 기준 데크/홀드 좌우 패딩 (가운데 정렬)
-    const dPadL=Math.floor((cols-nD)/2), dPadR=cols-nD-dPadL;
-    const hPadL=Math.floor((cols-nH)/2), hPadR=cols-nH-hPadL;
-    // tier별 active rowLbl 배열을 commonTier 순서로 매핑
-    const deckMap=new Map(R.deckRows.map(r=>[r.tier, r.rowLbls]));
-    const holdMap=new Map(R.holdRows.map(r=>[r.tier, r.rowLbls]));
-    const sectionRows=(tierList, rowMap, nCols, padL, padR)=>{
-      let s='';
-      for(const t of tierList){
-        const tk=String(t).padStart(2,'0');
-        const lbls=rowMap.get(t); // 이 박스에 그 tier가 있으면 rowLbls(null=비active), 없으면 undefined
-        s+=`<tr><td class="cvl">${tk}</td>`;
-        for(let i=0;i<padL;i++) s+='<td class="cvc-gap"></td>';
-        for(let c=0;c<nCols;c++){
-          const r = lbls ? lbls[c] : null;
-          if(r===null || r===undefined){ s+='<td class="cvc-gap"></td>'; continue; } // 비active=단면 바깥(빈 자리)
-          const v=g.cells[r+'_'+tk]; const cc=v&&v.c;
-          if(!cc){ s+='<td class="cvc cv-slot"></td>'; continue; } // active인데 컨테이너 없음=빈슬롯 음영
-          s+=cvCellHtml(cc, flag, r, tk);
-        }
-        for(let i=0;i<padR;i++) s+='<td class="cvc-gap"></td>';
-        s+='</tr>';
-      }
-      return s;
-    };
-    let h='<table class="cvtab"><tbody>';
-    // 데크 로우 라벨 헤더 (데크 폭 기준)
-    h+='<tr><td class="cvl"></td>';
-    for(let i=0;i<dPadL;i++) h+='<td class="cvrl"></td>';
-    for(const r of R.deckRowPos) h+=`<td class="cvrl">${r||''}</td>`;
-    for(let i=0;i<dPadR;i++) h+='<td class="cvrl"></td>';
-    h+='</tr>';
-    if(g.deckTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">갑판</td></tr>`; h+=sectionRows(g.deckTiers, deckMap, nD, dPadL, dPadR); }
-    if(g.holdTiers.length){ h+=`<tr><td class="cvsec" colspan="${cols+1}">선창</td></tr>`; h+=sectionRows(g.holdTiers, holdMap, nH, hPadL, hPadR); }
-    h+='</tbody></table>';
-    return h;
-  };
-
-  // 박스 짝짓기: 위=홀수단독, 아래=짝수페어 (사용자 규칙)
-  const used=new Set();
-  const boxes=[];
-  for(const gk of gks){
-    if(gk%2===0){ // 짝수페어 → 아래칸, 위칸은 (gk-1) 홀수단독
-      const topOdd = (gks.includes(gk-1)&&(gk-1)%2===1) ? gk-1 : null;
-      boxes.push({top:topOdd, bottom:gk});
-      if(topOdd!=null) used.add(topOdd);
-      used.add(gk);
-    }
-  }
-  for(const gk of gks){ if(gk%2===1&&!used.has(gk)){ boxes.push({top:gk, bottom:null}); used.add(gk); } }
-  // 정렬: 박스 대표번호(위 우선) 오름차순
-  boxes.sort((a,b)=>{ const ka=a.top!=null?a.top:a.bottom, kb=b.top!=null?b.top:b.bottom; return ka-kb; });
-
-  // 박스 HTML (위/아래 칸, 폭 통일)
-  // 전체 박스 폭 통일: 모든 격자의 최대 baseWidth → 박스끼리 row 세로 정렬
-  let globalWidth=1;
-  for(const gk of gks){ const g=buildGrid(gk); if(g.baseWidth>globalWidth) globalWidth=g.baseWidth; }
-
-  const boxHtml=(bx)=>{
-    const gTop = bx.top!=null ? buildGrid(bx.top) : null;
-    const gBot = bx.bottom!=null ? buildGrid(bx.bottom) : null;
-    const w=globalWidth;
-    const topTitle = gTop?gTop.title:'';
-    const botTitle = gBot?gBot.title:'';
-    let h='<div class="cv-box">';
-    h+=`<div class="cv-cell cv-top">${gTop?`<div class="cv-bt">BAY ${topTitle}</div>${gridHtml(gTop,w)}`:'<div class="cv-empty-cell"></div>'}</div>`;
-    h+=`<div class="cv-cell cv-bot">${gBot?`<div class="cv-bt">BAY ${botTitle}</div>${gridHtml(gBot,w)}`:'<div class="cv-empty-cell"></div>'}</div>`;
-    h+='</div>';
-    return h;
-  };
-
-  let html=resultTabsHtml('cargo')+`<div class="card">
-    <div class="share-head"><div class="sh-title">카고플랜 (전체 화물)</div><div class="sh-sub">${shipLabel} · ${today}</div></div>
-    <div class="cv-tabs">
-      ${hasD?`<button class="cv-tabbtn ${flag==='d'?'on':''}" data-cvf="d">양하</button>`:''}
-      ${hasL?`<button class="cv-tabbtn ${flag==='l'?'on':''}" data-cvf="l">선적</button>`:''}
-    </div>
-    <div class="bv-legend">
-      <span class="bv-lg ${flag==='d'?'ptkd':'ptkl'}">평택분 ${cntPtk}</span>
-      <span class="bv-lg" style="background:#2a2a30;color:#9aa">통과/타항 ${cntOther}</span>
-      ${cntFr?`<span class="bv-lg" style="background:#3a1f5a;color:#d9b3ff">FR ${cntFr}</span>`:''}
-    </div>
-    <div class="cv-zoom">
-      <button class="bv-zb" id="cvRotate" style="width:auto;padding:0 12px;white-space:nowrap;background:var(--panel2);">⟳ 가로모드</button>
-      <span>크기</span><button class="bv-zb" id="cvZoomOut">－</button>
-      <input type="range" id="cvZoomRange" min="10" max="100" value="100" step="5">
-      <button class="bv-zb" id="cvZoomIn">＋</button><span id="cvZoomPct">100%</span>
-    </div>`;
-
-  if(!gks.length){ html+=`<div class="empty-note">${flag==='d'?'양하':'선적'} 자료에 컨테이너가 없습니다.</div></div>`; ra.innerHTML=html; bindCargoTabs(); bindResultTabs(); enterResultMode('cargo'); return; }
-
-  html+=`<div class="cv-zoomwrap" id="cvZoomWrap"><div class="cv-zoomarea" id="cvZoomArea"><div class="cv-strip">`;
-  for(const bx of boxes) html+=boxHtml(bx);
-  html+=`</div></div></div></div>`;
-  ra.innerHTML=html;
-  bindCargoTabs();
-  bindResultTabs();
-  enterResultMode('cargo');
-
-  // 줌/회전/핀치 (베이플랜과 동일)
-  const zArea=document.getElementById('cvZoomArea'), zRange=document.getElementById('cvZoomRange'),
-        zPct=document.getElementById('cvZoomPct'), zRotate=document.getElementById('cvRotate'), zWrap=document.getElementById('cvZoomWrap');
-  let rotated=false;
-  const applyView=()=>{
-    let v=Math.max(10,Math.min(100,parseInt(zRange.value,10))); zRange.value=v; zPct.textContent=v+'%';
-    const s=v/100; zArea.style.transformOrigin='top left';
-    if(rotated){
-      zArea.style.transform='none'; zArea.style.width='max-content'; zArea.style.height='';
-      const cw=zArea.scrollWidth, ch=zArea.scrollHeight;
-      zArea.style.transform='translateX('+(ch*s)+'px) rotate(90deg) scale('+s+')';
-      zWrap.style.width='100%'; zWrap.style.height=(cw*s)+'px'; zWrap.scrollLeft=0; zWrap.scrollTop=0;
-    } else { zArea.style.transform='scale('+s+')'; zArea.style.width=(100/s)+'%'; zArea.style.height=''; zWrap.style.height=''; zWrap.style.width=''; }
-  };
-  const applyZoom=(v)=>{ zRange.value=Math.max(10,Math.min(100,v)); applyView(); };
-  if(zRange){
-    zRange.oninput=()=>applyView();
-    document.getElementById('cvZoomOut').onclick=()=>applyZoom(parseInt(zRange.value,10)-10);
-    document.getElementById('cvZoomIn').onclick=()=>applyZoom(parseInt(zRange.value,10)+10);
-    if(zRotate) zRotate.onclick=()=>{ rotated=!rotated; zRotate.textContent=rotated?'⟳ 세로모드':'⟳ 가로모드'; zRotate.style.background=rotated?'var(--accent,#d97706)':''; applyView(); };
-    let pd=0,pz=50; const pdist=(t)=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
-    zWrap.addEventListener('touchstart',(e)=>{ if(e.touches.length===2){ pd=pdist(e.touches); pz=parseInt(zRange.value,10); } },{passive:true});
-    zWrap.addEventListener('touchmove',(e)=>{ if(e.touches.length===2&&pd>0){ e.preventDefault(); applyZoom(Math.round(pz*pdist(e.touches)/pd)); } },{passive:false});
-    zWrap.addEventListener('touchend',(e)=>{ if(e.touches.length<2) pd=0; },{passive:true});
-    applyZoom(100);  // V7.45: 본체급 셀 — 기본 100%
-  }
-  ra.scrollIntoView({behavior:'smooth',block:'start'});
-}
-function bindCargoTabs(){
-  document.querySelectorAll('.cv-tabbtn').forEach(b=>{ b.onclick=()=>{ __cargoFlag=b.getAttribute('data-cvf'); renderCargoView(); }; });
 }
 
 async function renderBayView(){
