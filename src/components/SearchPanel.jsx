@@ -5,7 +5,7 @@
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
-import { parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
+import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer } from '../nlSearch.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
@@ -179,13 +179,17 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) { setVoiceSupported(false); return; }
     const r = new SR();
-    r.lang = 'ko-KR'; r.continuous = false; r.interimResults = true; r.maxAlternatives = 3;
+    r.lang = 'ko-KR'; r.continuous = false; r.interimResults = true; r.maxAlternatives = 5;
     r.onresult = (e) => {
       const last = e.results[e.results.length - 1];
       const text = last[0].transcript;
       setTranscript(text);
       if (last.isFinal) {
-        const t = text.trim();
+        // V7.56: 후보 전체에서 항만 용어가 든 것을 채택 + 오인식 교정(양아→양하 등).
+        //   "양하"를 6번 말해야 인식되던 문제 — STT가 일반어로 받아 적는 것을 사전으로 보정.
+        const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
+        const t = pickSpeechAlternative(alts).trim();
+        setTranscript(t);
         if (t.length >= 2) setQuery(t);
         else {
           const digits = parseSpokenDigits(text);

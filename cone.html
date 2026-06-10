@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.55</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.56</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1871,6 +1871,21 @@ function computeRoutes(rows, kind, per){
 // ===== V7.55 콘 질문기 — "5번 베이 콘?" 한 마디로 작업표 답변 (음성 입출력) =====
 //   범위: 베이별 콘 가감(데크/코끼리/홀드)·컨테이너 대수·모자란/남는 베이·전체 요약.
 //   콘 작업 중 일일이 눌러보지 않고 폰에 물어보는 용도 (사용자 확정).
+// V7.56: STT 항만 용어 교정 (검수앱 voice.js와 동일 — "양하"를 양아/양화로 받아 적는 것 보정)
+const CONE_FIX_MAP=[[/양\s*아|양화|향하|얀하/g,'양하'],[/성적/g,'선적'],[/(\d)\s*번\s*배(?![이가])/g,'$1번 베이'],[/배이|배\s*이|베\s*이|뱅이/g,'베이'],[/니퍼|리포(?!트)|리퍼드/g,'리퍼'],[/콘테이너|컨태이너|컨테이나/g,'컨테이너'],[/댁콘|대크콘|덱콘|데크\s+콘/g,'데크콘'],[/코끼리\s+콘/g,'코끼리콘'],[/홀드\s+콘|홀두콘|올드콘/g,'홀드콘'],[/홀두/g,'홀드'],[/갑반/g,'갑판']];
+const CONE_DOMAIN_WORDS=['양하','선적','베이','데크콘','코끼리콘','홀드콘','컨테이너','홀드','갑판','몇','남','모자','전체','반납','추가'];
+function coneFixSpeech(text){ let t=String(text||''); for(const [re,to] of CONE_FIX_MAP) t=t.replace(re,to); return t; }
+function conePickAlt(alts){
+  const list=(alts||[]).filter(Boolean);
+  if(!list.length) return '';
+  let best=coneFixSpeech(list[0]), bestScore=-1;
+  for(const a of list){
+    const f=coneFixSpeech(a);
+    let s=0; for(const w of CONE_DOMAIN_WORDS) if(f.includes(w)) s++;
+    if(s>bestScore){ bestScore=s; best=f; }
+  }
+  return best;
+}
 function coneSpeak(text){
   try{
     const u=new SpeechSynthesisUtterance(text.replace(/[+\-]/g, m=>m==='+'?' 플러스 ':' 마이너스 '));
@@ -1967,9 +1982,13 @@ function bindConeQa(){
     if(!SR){ mic.style.display='none'; }
     else{
       mic.onclick=()=>{
-        const r=new SR(); r.lang='ko-KR'; r.interimResults=false;
+        const r=new SR(); r.lang='ko-KR'; r.interimResults=false; r.maxAlternatives=5;
         mic.textContent='🎙'; mic.classList.add('on');
-        r.onresult=(e)=>{ inp.value=e.results[0][0].transcript; run(); };
+        r.onresult=(e)=>{
+          const res=e.results[0];
+          const alts=[]; for(let i=0;i<res.length;i++) alts.push(res[i].transcript);
+          inp.value=conePickAlt(alts); run();
+        };
         r.onend=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };
         r.onerror=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };
         try{ r.start(); }catch(_){}

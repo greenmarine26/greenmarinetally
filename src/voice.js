@@ -151,3 +151,40 @@ export function speakError(text) {
 export function stopSpeak() {
   try { window.speechSynthesis.cancel(); } catch {}
 }
+
+// 음성인식(STT) 항만 용어 교정 — 크롬 STT가 도메인 단어를 일반어로 오인식하는 것 보정 (V7.56)
+//   예: 양하→양아/양화/향하, 선적→성적, 베이→배이. 보수적 치환만 (일반 대화어 오염 금지).
+const SPEECH_FIX_MAP = [
+  [/양\s*아|양화|향하|얀하/g, '양하'],
+  [/성적/g, '선적'],
+  [/(\d)\s*번\s*배(?![이가])/g, '$1번 베이'],
+  [/배이|배\s*이|베\s*이|뱅이/g, '베이'],
+  [/니퍼|리포(?!트)|리퍼드/g, '리퍼'],
+  [/엑스래이|엑스 래이/g, '엑스레이'],
+  [/콘테이너|컨태이너|컨테이나/g, '컨테이너'],
+  [/댁콘|대크콘|덱콘|데크\s+콘/g, '데크콘'],
+  [/코끼리\s+콘/g, '코끼리콘'],
+  [/홀드\s+콘|홀두콘|올드콘/g, '홀드콘'],
+  [/홀두/g, '홀드'],
+  [/갑반/g, '갑판'],
+  [/앰티|엠\s+티/g, '엠티'],
+];
+const SPEECH_DOMAIN_WORDS = ['양하','선적','베이','리퍼','엑스레이','위험물','엠티','풀','컨테이너','갑판','홀드','데크콘','코끼리콘','홀드콘','피트','몇','위치','어디','남','모자','전체','완료'];
+export function fixSpeechDomain(text) {
+  let t = String(text || '');
+  for (const [re, to] of SPEECH_FIX_MAP) t = t.replace(re, to);
+  return t;
+}
+// STT 후보들 중 항만 용어가 가장 많이 든 후보 선택 (교정 후 반환)
+export function pickSpeechAlternative(alts) {
+  const list = (alts || []).filter(Boolean);
+  if (!list.length) return '';
+  let best = fixSpeechDomain(list[0]), bestScore = -1;
+  for (const a of list) {
+    const fixed = fixSpeechDomain(a);
+    let score = 0;
+    for (const w of SPEECH_DOMAIN_WORDS) if (fixed.includes(w)) score++;
+    if (score > bestScore) { bestScore = score; best = fixed; }
+  }
+  return best;
+}
