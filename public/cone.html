@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.58</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.59</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -459,8 +459,15 @@ function parsePositions(text){
 }
 
 // EDI rows → deck/hold tiers (콘엔진 입력). 베이그룹 합본은 결과 단계에서.
-function ediToBayGroups(rows, shipType, multiCount, ctx){
+function ediToBayGroups(rows, shipType, multiCount, ctx, allRowsOfPlan){
   const filledSelf=new Set(rows.map(r=>parseInt(r.bay,10)+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0')));
+  // V7.59: 받침 판정용 — 자기 plan의 전체 화물(통과화물 포함) + 사이즈 맵.
+  //   받침은 "우리 화물이든 잔류분이든" 성립 — 평택분만 보면 통과화물이 받친 컨의 콘이 빠짐.
+  const supportRows=(allRowsOfPlan&&allRowsOfPlan.length)?allRowsOfPlan:rows;
+  const sizeAt=new Map();
+  for(const r of supportRows){
+    sizeAt.set(parseInt(r.bay,10)+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0'), r.size);
+  }
   const existSelf=new Set(rows.map(r=>parseInt(r.bay)).filter(Number.isFinite));
   // ctx(양하+선적 합본)가 있으면 그룹핑·짝꿍 판정에 전역 베이/슬롯을 사용.
   //   이유: 40ft 양하는 짝수베이(예 004)에만, 20ft 선적은 홀수베이(005)에만 들어오는 경우가 있어
@@ -470,12 +477,15 @@ function ediToBayGroups(rows, shipType, multiCount, ctx){
   const filledAll = ctx&&ctx.slots ? ctx.slots : filledSelf; // 트윈 짝꿍은 전역(반대편 plan 포함)
   // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
   const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
-  // 각 베이의 홀드 유무 (전용 데크 판정용): 홀드(tier<80) 컨테이너가 있는 베이
+  // 각 베이의 홀드 유무 (전용 데크 판정용) — V7.59: 화물 유무가 아니라 구조 기준.
+  //   ctx.holdBays = 베이사전(실구조) ∪ 양·선 전체화물(통과 포함)의 홀드 베이.
+  //   (구) 자기 plan 평택분만 봐서 홀드 있는 베이를 전용 데크로 오판 → 20ft 데크콘 4.
   const bayHasHold={};
-  for(const r of rows){
+  for(const r of supportRows){
     const b=parseInt(r.bay,10), t=parseInt(r.tier,10);
     if(Number.isFinite(b)&&Number.isFinite(t)&&t<80) bayHasHold[b]=true;
   }
+  if(ctx&&ctx.holdBays) for(const b of ctx.holdBays) bayHasHold[b]=true;
   // 전용 데크(20ft, 데크콘 4) 판정:
   //   사용자 기준 — 전용 데크는 (1) 홀드가 없다, (2) 홀드가 있어도 후속 베이가 연속 안 됨.
   //   즉 홀드가 있으면 일반 베이(데크2+코끼리2). 홀드 없고 짝꿍(±1)도 없으면 전용 데크.
@@ -502,9 +512,13 @@ function ediToBayGroups(rows, shipType, multiCount, ctx){
     //   (예: 12-00-84 밑 확인 → 12-00-82 없으면 → 11-00-82, 13-00-82 확인)
     const belowTier=String(tierN-2).padStart(2,'0');
     const rowP=String(r.row).padStart(2,'0');
-    const hasBelow = filled.has(bay+'_'+rowP+'_'+belowTier)
-                  || filled.has((bay-1)+'_'+rowP+'_'+belowTier)
-                  || filled.has((bay+1)+'_'+rowP+'_'+belowTier);
+    // V7.59: 받침 정밀화 — 같은 베이 밑은 사이즈 무관 받침. 짝꿍 베이(±1) 밑은
+    //   그 컨이 40ft(두 베이에 걸쳐 실림)일 때만 받침. 옆 베이 20ft는 다른 슬롯이라
+    //   물리적으로 받칠 수 없는데 받침으로 오인 → 바닥 빈 컨에 콘 계산 (사용자 제보 버그).
+    const is40=(sz)=>sz==='40'||sz==='O40';
+    const hasBelow = sizeAt.has(bay+'_'+rowP+'_'+belowTier)
+                  || is40(sizeAt.get((bay-1)+'_'+rowP+'_'+belowTier))
+                  || is40(sizeAt.get((bay+1)+'_'+rowP+'_'+belowTier));
     if(!hasBelow) continue;
     const gk=groupKeyOf(bay);
     if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0,bays:new Set()};
@@ -1251,22 +1265,52 @@ function showLoading(msg){
 }
 
 // 양하+선적 합본 컨텍스트(그룹핑/짝꿍 판정용 전역 베이·슬롯)
-function buildConeCtx(){
-  const bays=new Set(), slots=new Set();
+// V7.59: 베이사전 entry 공용 로더 (베이뷰·콘 계산 공용, 선박당 1회 캐시)
+//   콘 계산의 베이 구조 판정(홀드 유무·베이 존재)은 화물 유무가 아니라 실제 구조가 기준.
+async function ensureConeBayDict(){
+  const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
+  const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
+  const ck=(imo||'')+'|'+nm;
+  if(state._bayDictKey===ck) return state._bayDictBays||new Map();
+  let dictBays=new Map();
+  try{
+    const fbDict=await fbFetchBayDict();
+    const entry=lookupBayDef(fbDict, imo, nm);
+    if(entry) dictBays=bvDictBays(entry);
+  }catch(e){ /* 사전 없으면 폴백 */ }
+  state._bayDictKey=ck; state._bayDictBays=dictBays;
+  return dictBays;
+}
+function buildConeCtx(dictBays){
+  // V7.59: 구조 판정은 전체 화물(rowsAll — 통과화물 포함) + 베이사전 기준.
+  //   (구) 평택분(ediRows)만 봐서, 이번 항차 평택분에 홀드 화물이 없으면
+  //   홀드 있는 베이를 "전용 데크"로 오판 → 20ft에 데크콘 4 (사용자 제보 버그).
+  const bays=new Set(), slots=new Set(), holdBays=new Set();
   const add=(plan)=>{
-    if(!plan||!plan.isEDI||!plan.ediRows) return;
-    for(const r of plan.ediRows){
-      const b=parseInt(r.bay,10);
-      if(Number.isFinite(b)) bays.add(b);
+    if(!plan||!plan.isEDI) return;
+    const rs=(plan.ediRowsAll&&plan.ediRowsAll.length)?plan.ediRowsAll:plan.ediRows;
+    if(!rs) return;
+    for(const r of rs){
+      const b=parseInt(r.bay,10), t=parseInt(r.tier,10);
+      if(!Number.isFinite(b)) continue;
+      bays.add(b);
+      if(Number.isFinite(t)&&t<80) holdBays.add(b);
       slots.add(b+'_'+String(r.row).padStart(2,'0')+'_'+String(r.tier).padStart(2,'0'));
     }
   };
   add(state.stow); add(state.disch);
-  return {bays, slots};
+  // 베이사전(실제 구조)이 있으면 베이 존재·홀드 유무를 구조로 보강
+  if(dictBays&&dictBays.size){
+    for(const [bn,bs] of dictBays){
+      bays.add(bn);
+      if(bs&&Array.isArray(bs.holdTiers)&&bs.holdTiers.length) holdBays.add(bn);
+    }
+  }
+  return {bays, slots, holdBays};
 }
 function planToGroups(plan, ctx){
   if(!plan) return {};
-  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType, state.multiCount, ctx);
+  if(plan.isEDI) return ediToBayGroups(plan.ediRows, state.shipType, state.multiCount, ctx, plan.ediRowsAll);
   if(!plan.bays || !plan.bays.length){
     // 사진이거나 베이 텍스트를 못읽음 → 빈 결과(사용자에게 안내됨)
     return {};
@@ -1317,15 +1361,17 @@ function enterResultMode(tab){
   }
   setTimeout(()=>{ const ra=document.getElementById('resultArea'); if(ra) ra.scrollIntoView({behavior:'smooth', block:'start'}); }, 120);
 }
-function runCalc(){
+async function runCalc(){
   showLoading('계산 중...');
+  // V7.59: 베이사전(실구조) 먼저 로드 — 전용 데크·연속 판정을 구조 기준으로 (오프라인이면 폴백)
+  const __dict = await ensureConeBayDict();
   setTimeout(()=>{
     try{
       // 양하/선적 선박명 다르면 경고(다른 항차 자료일 수 있음)
       const vs=state.stow&&state.stow.vessel, vd=state.disch&&state.disch.vessel;
       const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
       window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
-      const __ctx=buildConeCtx();
+      const __ctx=buildConeCtx(__dict);
       const sg=planToGroups(state.stow, __ctx);
       const dg=planToGroups(state.disch, __ctx);
       const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
@@ -1474,14 +1520,8 @@ async function renderBayView(){
   pushRows(state.disch&&state.disch.ediRows,'d');
   pushRows(state.stow&&state.stow.ediRows,'l');
   // 베이사전 골격 로드 (existBays 짝꿍 판정에 사전 베이도 포함 — 빈 짝수 베이로 홀수 흩어짐 방지)
-  let dictBays=new Map();
-  try{
-    const fbDict=await fbFetchBayDict();
-    const imo=state.imo||(state.disch&&state.disch.imo)||(state.stow&&state.stow.imo)||null;
-    const nm=state.shipName||(state.disch&&state.disch.vessel)||(state.stow&&state.stow.vessel)||'';
-    const entry=lookupBayDef(fbDict, imo, nm);
-    if(entry) dictBays=bvDictBays(entry);
-  }catch(e){ /* 베이사전 없으면 컨테이너로 추정(폴백) */ }
+  // V7.59: 공용 로더(ensureConeBayDict)로 — 콘 계산과 같은 사전, 선박당 1회 캐시.
+  const dictBays = await ensureConeBayDict();
 
   const existBays=new Set(allRows.map(x=>x.b));
   for(const bn of dictBays.keys()) existBays.add(bn);
@@ -1508,7 +1548,7 @@ async function renderBayView(){
   let coneByGroup={};
   let coneTotal={ disch:{deck:0,ele:0,hold:0}, stow:{deck:0,ele:0,hold:0} };  // 전체 총 콘 개수
   try{
-    const __ctx=buildConeCtx();
+    const __ctx=buildConeCtx(dictBays);
     const sg=planToGroups(state.stow, __ctx), dg=planToGroups(state.disch, __ctx);
     for(const k of new Set([...Object.keys(sg||{}),...Object.keys(dg||{})].map(Number))){
       const s=sg[k]||{deck:0,ele:0,hold:0}, d=dg[k]||{deck:0,ele:0,hold:0};
