@@ -176,7 +176,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -224,11 +224,15 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
         {count != null && <span className="cpv2-bay-count">{count}</span>}
       </div>
       <div className="cpv2-bay-content">
-        <div className="cpv2-deck-area" style={{ flex: `${Math.max(deckTiers.length, 1)} 1 0` }}>
+        <div className="cpv2-deck-area" style={{ flex: `${(nHold > 0 && globalHatch) ? globalHatch.maxDeck : Math.max(deckTiers.length, 1)} 1 0` }}>
+          {/* V7.58: 해치선 수평 — 데크는 아래(82)가 해치선에 붙음. 단수 부족분은 위 spacer */}
+          {nHold > 0 && globalHatch && globalHatch.maxDeck > deckTiers.length && (
+            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxDeck - deckTiers.length} 1 0` }}></div>
+          )}
           <div className="cpv2-row-labels" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
             {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
           </div>
-          <div className="cpv2-grid-row-wrap">
+          <div className="cpv2-grid-row-wrap" style={nHold > 0 && globalHatch ? { flex: `${Math.max(deckTiers.length, 1)} 1 0` } : undefined}>
             <div className="cpv2-grid" style={{ paddingLeft: deckPadStyle.paddingLeft, paddingRight: deckPadStyle.paddingRight }}>
               {deckRows.map((row, ri) => (
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
@@ -274,10 +278,10 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
             <div key={i} className="cpv2-hatch-seg"></div>
           ))}
         </div>
-        <div className="cpv2-hold-area" style={{ flex: `${Math.max(holdTiers.length, 1)} 1 0` }}>
+        <div className="cpv2-hold-area" style={{ flex: `${globalHatch ? globalHatch.maxHold : Math.max(holdTiers.length, 1)} 1 0` }}>
           <div
             className="cpv2-grid-row-wrap"
-            style={{ width: '100%' }}
+            style={{ width: '100%', flex: `${Math.max(holdTiers.length, 1)} 1 0` }}
           >
             <div className="cpv2-grid" style={{ paddingLeft: holdPadStyle.paddingLeft, paddingRight: holdPadStyle.paddingRight }}>
               {holdRows.map((row, ri) => (
@@ -325,9 +329,15 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
               {deckRowPos.map((rl, i) => <span key={i}>{rl}</span>)}
             </div>
           )}
+          {/* V7.58: 홀드는 위가 해치선에 붙음 — 단수 부족분은 아래 spacer */}
+          {globalHatch && globalHatch.maxHold > holdTiers.length && (
+            <div className="cpv2-tier-spacer" style={{ flex: `${globalHatch.maxHold - holdTiers.length} 1 0` }}></div>
+          )}
         </div>
         </>)}
         {(() => {
+          // V7.58: 홀드 있는 베이는 maxDeck/maxHold spacer가 높이를 이미 통일 — 말단 spacer 불필요
+          if (nHold > 0 && globalHatch) return null;
           const used = deckTiers.length + (nHold > 0 ? holdTiers.length : 0);
           const sp = Math.max(0, (globalMaxTier || used) - used);
           return sp > 0 ? <div className="cpv2-tier-spacer" style={{ flex: `${sp} 1 0` }}></div> : null;
@@ -648,6 +658,20 @@ export default function PrintableCargoPlanV2({
     return Math.max(m, 1);
   }, [renderDataMap]);
 
+  // V7.58: 해치커버 수평 정렬 기준 — 홀드가 있는 베이들의 최대 데크/홀드 단수 (사용자 확정).
+  //   모든 해치 보유 베이의 deck:hold 영역을 maxDeck:maxHold 동일 비율로 → 해치선이 같은 수평선.
+  //   데크는 아래(82)가 해치선에 붙으므로 부족분은 위 spacer, 홀드는 위가 붙으므로 아래 spacer.
+  const globalHatch = useMemo(() => {
+    let maxDeck = 0, maxHold = 0;
+    for (const d of Object.values(renderDataMap)) {
+      const nH = d?.holdTiers?.length || 0;
+      if (nH <= 0) continue;  // deck-only 베이는 해치선이 없어 기준에서 제외
+      maxDeck = Math.max(maxDeck, d?.deckTiers?.length || 0);
+      maxHold = Math.max(maxHold, nH);
+    }
+    return { maxDeck: Math.max(maxDeck, 1), maxHold: Math.max(maxHold, 1) };
+  }, [renderDataMap]);
+
   const closeBtn = onClose ? (
     <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
       <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
@@ -749,9 +773,9 @@ export default function PrintableCargoPlanV2({
                 const pairData = renderDataMap[box.pairKey];
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-trio-box">
-                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={false} globalMaxTier={globalMaxTier} />
+                    <BayBoxV2 data={topData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={false} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     <div className="cpv2-trio-divider"></div>
-                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={true} globalMaxTier={globalMaxTier} />
+                    <BayBoxV2 data={pairData} count={boxCounts[box.pairKey]} colorMap={colorMap} gridCols={globalMaxCols} applyHatch={true} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                   </div>
                 );
               } else {
@@ -759,7 +783,7 @@ export default function PrintableCargoPlanV2({
                 slots.push(
                   <div key={`box-${bi}`} className="cpv2-bay-box cpv2-single-box">
                     <div className="cpv2-single-half">
-                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} globalMaxTier={globalMaxTier} />
+                      <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     </div>
                     <div className="cpv2-empty-half"></div>
                   </div>
