@@ -120,16 +120,33 @@
   .cv-empty-cell{min-height:14px;}
   .cv-bt{font-size:10px; font-weight:800; text-align:center; color:var(--ink); white-space:nowrap; margin-bottom:1px;}
   .cvtab{border-collapse:collapse;}
-  .cvtab td{width:13px; height:13px; padding:0; font-size:6px; text-align:center; line-height:13px; font-weight:800;}
-  .cvtab td.cvl{width:auto; min-width:12px; color:var(--dim); font-size:6px; font-weight:600;}
-  .cvtab td.cvrl{color:var(--dim); font-size:6px; font-weight:600; height:9px; line-height:9px;}
-  .cvtab td.cvsec{text-align:center; color:var(--dim); font-size:6px; font-weight:700; padding:1px 0;}
-  .cvtab td.cvc{border:1px solid rgba(255,255,255,.12); border-radius:2px;}
-  .cvtab td.cv-ptkd{background:#1d4a66; color:#bfe3ff; border-color:#3a7ca5;}
-  .cvtab td.cv-ptkl{background:#1c4a32; color:#bff0d0; border-color:#3a9d63;}
-  .cvtab td.cv-shade{background:#2a2a2e; color:#666; border-color:rgba(255,255,255,.06);}
+  /* V7.45: 본체 카고플랜급 정보 셀 (POL/POD·컨번호·규격·특수 4줄) — 13px 점 셀 폐지 */
+  .cvtab td{width:88px; height:56px; padding:0; font-size:8px; text-align:left; vertical-align:top; font-weight:600;}
+  .cvtab td.cvl{width:auto; min-width:16px; color:var(--dim); font-size:9px; font-weight:700; text-align:center; vertical-align:middle; height:auto;}
+  .cvtab td.cvrl{color:var(--dim); font-size:9px; font-weight:700; height:13px; line-height:13px; text-align:center;}
+  .cvtab td.cvsec{text-align:center; color:#cfd8e3; font-size:10px; font-weight:800; padding:3px 0; letter-spacing:2px; height:18px;}
+  .cvtab td.cvc{border:1px solid rgba(255,255,255,.14); position:relative; overflow:hidden;}
+  .cvtab td.cv-ptkd, .cvtab td.cv-ptkl{background:#0f1722; color:#e7eef7;
+    border:2px solid #f5b53f; box-shadow:inset 0 0 0 1px rgba(245,181,63,.35);}
+  .cvtab td.cv-shade{background:#33363c; color:#9aa0aa; border-color:rgba(255,255,255,.08);}
   .cvtab td.cv-slot{background:transparent; border:1px dashed #2c3a4d;}
   .cvtab td.cvc-gap{background:transparent; border:none;}
+  .cvc .cvc-in{padding:2px 3px 2px 4px; font-family:Consolas,'Courier New',monospace; line-height:1.25; white-space:nowrap;}
+  .cvc .cvc-pp{font-size:8px; color:#9fb4c9;}
+  .cvc .cvc-pp b{color:#e7eef7;}
+  .cvc .cvc-star{color:#ff6b6b; font-weight:900;}
+  .cvc .cvc-no{font-size:9px; font-weight:800;}
+  .cvc .cvc-no .t4{color:#ffd9a0; font-size:10px;}
+  .cvc .cvc-sz{font-size:8px; color:#9fb4c9;}
+  .cvc .cvc-sp{font-size:8px; font-weight:800; min-height:10px;}
+  .cvc .sp-rf{color:#7ce0f0;} .cvc .sp-dg{color:#ff8a8a;} .cvc .sp-fr{color:#cfa6ff;} .cvc .sp-ot{color:#f2a6e8;}
+  .cv-shade .cvc-no .t4{color:#b9bec7;} .cv-shade .cvc-pp b{color:#b9bec7;}
+  /* 특수화물 좌측 컬러 바 + 우상단 심볼 (본체 동일 감각) */
+  .cvc .cvc-bar{position:absolute; top:0; left:0; bottom:0; width:4px;}
+  .cvc .bar-rf{background:#22c5dd;} .cvc .bar-dg{background:#e23b3b;} .cvc .bar-fr{background:#8b5cf6;} .cvc .bar-ot{background:#d946ef;}
+  .cvc .cvc-sym{position:absolute; top:0; right:0; background:#fff; font-weight:900; font-size:11px; line-height:1; padding:1px 3px; border-bottom-left-radius:4px;}
+  .cvc .sym-rf{color:#0e7490; border:1px solid #22c5dd;} .cvc .sym-dg{color:#b91c1c; border:1px solid #e23b3b;}
+  .cvc .sym-fr{color:#6d28d9; border:1px solid #8b5cf6;} .cvc .sym-ot{color:#a21caf; border:1px solid #d946ef;}
   .bv-lg.rf{background:#0e4d52; color:#7fffe0;}
   .bv-lg.dg{background:#5a1717; color:#ffb3b3;}
   .bv-c{font-weight:700;}
@@ -256,7 +273,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.44</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.45</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -387,6 +404,7 @@ function parseEDI(text){
   // 평택분만 계산. 폴백(rowsAll) 금지 — 평택분 0이면 0이 정답.
   if(up.includes('LOAD')||polPtk.length>podPtk.length){ kind='stow'; rows=polPtk; }
   else { kind='disch'; rows=podPtk; }
+  // V7.45: 전체 화물(타항 포함)도 보관 — 카고플랜 뷰는 본체처럼 전체를 그리고 평택만 강조
   let vessel='';
   const tdt=text.match(/TDT\+[\s\S]*?(?=['~\n\r]|$)/);
   if(tdt){
@@ -394,7 +412,7 @@ function parseEDI(text){
     const last=(parts[parts.length-1]||'').trim();
     if(/[A-Za-z]/.test(last) && last.length>=3) vessel=last;
   }
-  return {rows, kind, isEDI:true, vessel};
+  return {rows, rowsAll, kind, isEDI:true, vessel};
 }
 
 // ============ ASC 파서 (검수앱 parseAscFile 위치 추출분) ============
@@ -751,7 +769,7 @@ async function selectVoyage(voyageKey){
       else {  // 2순위: raw EDI/ASC 파싱 폴백
         const txt=await fbFetchRawEdi(voyageKey,'discharge');
         const d=txt&&parsePositions(txt);
-        if(d){ state.disch={ediRows:d.rows, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel}; applyVessel(d.vessel); }
+        if(d){ state.disch={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel}; applyVessel(d.vessel); }
       }
     }
     if(v.hasL){
@@ -760,7 +778,7 @@ async function selectVoyage(voyageKey){
       else {
         const txt=await fbFetchRawEdi(voyageKey,'loading');
         const d=txt&&parsePositions(txt);
-        if(d){ state.stow={ediRows:d.rows, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel}; applyVessel(d.vessel); }
+        if(d){ state.stow={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel}; applyVessel(d.vessel); }
       }
     }
     if(!state.shipName) state.shipName=v.vsl;
@@ -1234,7 +1252,7 @@ async function handleFile(file,slot){
     if(isEDI(text)){
       const d=parseEDI(text);
       if(d.kind && d.kind!==slot) slot=d.kind;
-      state[slot]={ediRows:d.rows, isEDI:true, fname:file.name, vessel:d.vessel};
+      state[slot]={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:file.name, vessel:d.vessel};
       applyVessel(d.vessel); render(); return;
     }
     // 텍스트인데 EDI 아님
@@ -1471,6 +1489,28 @@ async function renderCargoView(){
   const isPtk=(c,f)=> !!c && isPtkPort(f==='d'?c.pod:c.pol);
   const frSym=(c)=> (c&&c.fr)?'FR':'';
   const cellCls=(c,f)=> isPtk(c,f) ? ('cvc '+(f==='d'?'cv-ptkd':'cv-ptkl')) : 'cvc cv-shade';
+  // V7.45: 본체 카고플랜급 셀 — POL/POD·컨번호(끝4 강조)·규격 F/E·특수 4줄 + 좌측 바·우상단 심볼
+  const shortP=p=>{ p=String(p||'').toUpperCase(); return p? (p.replace(/^KR/,'').slice(0,3)||p.slice(0,3)) : '·'; };
+  const cvCellHtml=(c, f, r, tk)=>{
+    const ptk=isPtk(c,f);
+    const cn=String(c.cn||'');
+    const cnHtml=cn? `${cn.slice(0,-4)}<span class="t4">${cn.slice(-4)}</span>` : '—';
+    const fe=c.fe==='E'?'E':'F';
+    let sp='', spCls='', bar='', sym='';
+    if(c.dg){ sp='DG'; spCls='sp-dg'; bar='bar-dg'; sym='<div class="cvc-sym sym-dg">⚠</div>'; }
+    else if(c.reefer){ sp=c.temp!=null?`${c.temp}C`:'RF'; spCls='sp-rf'; bar='bar-rf'; sym='<div class="cvc-sym sym-rf">❄</div>'; }
+    else if(c.fr){ sp='FR'; spCls='sp-fr'; bar='bar-fr'; sym='<div class="cvc-sym sym-fr">⊞</div>'; }
+    else if(c.ot){ sp='OT'; spCls='sp-ot'; bar='bar-ot'; sym='<div class="cvc-sym sym-ot">△</div>'; }
+    return `<td class="${cellCls(c,f)}" title="${cn} ${c.pol||''}→${c.pod||''} r${r}t${tk}">`
+      +(bar?`<div class="cvc-bar ${bar}"></div>`:'')
+      +sym
+      +`<div class="cvc-in">`
+      +`<div class="cvc-pp">${shortP(c.pol)}/<b>${shortP(c.pod)}</b>${ptk?'<span class="cvc-star">★</span>':''}</div>`
+      +`<div class="cvc-no">${cnHtml}</div>`
+      +`<div class="cvc-sz">${c.size||''}ft ${fe}</div>`
+      +`<div class="cvc-sp ${spCls}">${sp||'&nbsp;'}</div>`
+      +`</div></td>`;
+  };
 
   // 베이사전 골격 (existBays 짝꿍 판정에 사전 베이도 포함하기 위해 먼저 로드)
   let dictBays=new Map();
@@ -1483,7 +1523,9 @@ async function renderCargoView(){
   }catch(e){}
 
   // 선택 flag의 컨테이너만 수집 (베이플랜 그룹키와 동일)
-  const planRows=(flag==='d'?(state.disch&&state.disch.ediRows):(state.stow&&state.stow.ediRows))||[];
+  // V7.45: 카고플랜은 전체 화물(타항 포함) — 본체와 동일. 평택만 강조, 타항 회색.
+  const sd=flag==='d'?state.disch:state.stow;
+  const planRows=(sd&&(sd.ediRowsAll&&sd.ediRowsAll.length?sd.ediRowsAll:sd.ediRows))||[];
   // 짝꿍 판정 기준: 컨테이너 있는 베이 + 베이매트릭스(사전)에 있는 베이.
   //   짝수 베이에 컨테이너가 없어도 사전에 있으면 짝꿍으로 인식 → 홀수가 단독으로 흩어지지 않음.
   const existBays=new Set(planRows.map(r=>parseInt(r.bay,10)).filter(Number.isFinite));
@@ -1599,7 +1641,7 @@ async function renderCargoView(){
           if(r===null || r===undefined){ s+='<td class="cvc-gap"></td>'; continue; } // 비active=단면 바깥(빈 자리)
           const v=g.cells[r+'_'+tk]; const cc=v&&v.c;
           if(!cc){ s+='<td class="cvc cv-slot"></td>'; continue; } // active인데 컨테이너 없음=빈슬롯 음영
-          s+=`<td class="${cellCls(cc,flag)}" title="${cc.cn||''} ${cc.pod||cc.pol||''} r${r}t${tk}">${frSym(cc)}</td>`;
+          s+=cvCellHtml(cc, flag, r, tk);
         }
         for(let i=0;i<padR;i++) s+='<td class="cvc-gap"></td>';
         s+='</tr>';
@@ -1666,8 +1708,8 @@ async function renderCargoView(){
     <div class="cv-zoom">
       <button class="bv-zb" id="cvRotate" style="width:auto;padding:0 12px;white-space:nowrap;background:var(--panel2);">⟳ 가로모드</button>
       <span>크기</span><button class="bv-zb" id="cvZoomOut">－</button>
-      <input type="range" id="cvZoomRange" min="10" max="100" value="50" step="5">
-      <button class="bv-zb" id="cvZoomIn">＋</button><span id="cvZoomPct">50%</span>
+      <input type="range" id="cvZoomRange" min="10" max="100" value="100" step="5">
+      <button class="bv-zb" id="cvZoomIn">＋</button><span id="cvZoomPct">100%</span>
     </div>`;
 
   if(!gks.length){ html+=`<div class="empty-note">${flag==='d'?'양하':'선적'} 자료에 컨테이너가 없습니다.</div></div>`; ra.innerHTML=html; bindCargoTabs(); bindResultTabs(); enterResultMode('cargo'); return; }
@@ -1704,7 +1746,7 @@ async function renderCargoView(){
     zWrap.addEventListener('touchstart',(e)=>{ if(e.touches.length===2){ pd=pdist(e.touches); pz=parseInt(zRange.value,10); } },{passive:true});
     zWrap.addEventListener('touchmove',(e)=>{ if(e.touches.length===2&&pd>0){ e.preventDefault(); applyZoom(Math.round(pz*pdist(e.touches)/pd)); } },{passive:false});
     zWrap.addEventListener('touchend',(e)=>{ if(e.touches.length<2) pd=0; },{passive:true});
-    applyZoom(50);
+    applyZoom(100);  // V7.45: 본체급 셀 — 기본 100%
   }
   ra.scrollIntoView({behavior:'smooth',block:'start'});
 }
