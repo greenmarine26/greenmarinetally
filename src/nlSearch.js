@@ -240,8 +240,10 @@ export function applyNLFilter(containers, parsed) {
     });
   }
   if (parsed.size === '20') r = r.filter(c => /^2[25]/.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('20'));
-  else if (parsed.size === '40') r = r.filter(c => /^4[245]/.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('40'));
-  else if (parsed.size === '45') r = r.filter(c => /^45/.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('45'));
+  else if (parsed.size === '40') r = r.filter(c => /^4/.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('40'));
+  // V7.53 fix: ISO '45xx'는 45피트가 아니라 40ft 하이큐브(첫자리 4=40ft, 둘째 5=9'6").
+  //   진짜 45피트는 L5xx (cargoPlanCore 주석: 45GP→40HC, L5G1→45HC). label 기준이 정답.
+  else if (parsed.size === '45') r = r.filter(c => /^L5/i.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('45'));
   if (parsed.fe) r = r.filter(c => c.fe === parsed.fe);
   if (parsed.type === 'rf') {
     r = r.filter(c => c.rf || (c.iso && c.iso[2] === 'R') || /RF$/.test(isoToLabel(c.iso) || '') || (c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0'));

@@ -115,7 +115,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>
         : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
     </div>
   );
@@ -130,7 +130,7 @@ function announceContainer(c) {
   speak(parts.join(', '));
 }
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenContainer }) {
+function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer }) {
   const [query, setQuery] = useState('');
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -152,8 +152,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, onOpenConta
   const results = useMemo(() => {
     if (!query || query.length < 2) return [];
     if (!hasAnyCondition(parsed)) return [];
-    return applyNLFilter(allContainers, parsed);
-  }, [allContainers, query, parsed]);
+    // V7.53: 전체 자료에서 검색하되 현재 작업 모드(미완료) 우선 정렬.
+    //   (구) 탭 필터 데이터만 검색 → 완료·반대 모드 컨테이너는 "없습니다" — 있는 자료를 못 알려주던 원인.
+    const r = applyNLFilter(allContainers, parsed);
+    const rank = (c) => (c._comp ? 2 : (c._mode === workFilter ? 0 : 1));
+    return [...r].sort((a, b) => rank(a) - rank(b));
+  }, [allContainers, query, parsed, workFilter]);
 
   // M3.2: 로컬 답변 (AI 의존 없이 즉답)
   // 베이/POL/POD/구역/무게합/위치 질문은 모두 여기서 처리
