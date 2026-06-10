@@ -77,8 +77,12 @@
   .bv-sec{font-size:11px; color:var(--dim); margin:6px 0 3px;}
   .bv-tab{border-collapse:separate; border-spacing:2px;}
   .bv-tab td{width:18px; height:18px; text-align:center; font-size:11px; border-radius:3px; line-height:18px;}
-  .bv-tab.box td{box-sizing:border-box; width:58px; min-width:58px; height:38px; vertical-align:top;}
-  .bv-tab.box td.bv-tl,.bv-tab.box td.bv-rl{width:auto; min-width:16px; height:auto;}
+  /* V7.48: table-layout:fixed + 라벨 열 폭 고정 — 데크/홀드가 별도 테이블이라
+     열폭이 내용 따라 달라지면 홀드 중앙정렬이 한쪽으로 쏠림 (row 라벨 행 width:auto가 원인) */
+  .bv-tab.box{table-layout:fixed; width:max-content;}
+  .bv-tab.box td{box-sizing:border-box; width:58px; min-width:58px; max-width:58px; height:38px; vertical-align:top; overflow:hidden;}
+  .bv-tab.box td.bv-tl{width:18px; min-width:18px; max-width:18px; height:auto;}
+  .bv-tab.box td.bv-rl{width:58px; min-width:58px; max-width:58px; height:auto;}
   .bv-rl{color:var(--dim); font-size:10px; font-weight:600;}
   .bv-tl{color:var(--dim); font-size:10px; font-weight:600; min-width:16px;}
   .bv-slot{border:1px dashed #2c3a4d; background:transparent;}
@@ -245,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.47</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.49</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1691,10 +1695,28 @@ async function renderBayView(){
       g+='</tbody></table>';
       return g;
     };
+    // V7.48~49: 이 작업(flag)의 컨테이너가 있는 단(tier)만 그린다.
+    //   반대 작업 전용 단은 bv-slot off(배경과 거의 같은 색)로 그려져
+    //   격자도 안 보이는 "빈 화면"이 영역만 차지하던 문제 — 행 자체를 생략.
+    //   구역 전체에 화물이 없으면 "갑판 · 화물 없음" 한 줄로 압축.
+    const tiersWith=(tierList,flag)=> tierList.filter(t=>{
+      const tk=String(t).padStart(2,'0');
+      return Object.values(cells).some(c=>c.tier===tk && c[flag]);
+    });
     const panel=(flag,label,count)=>{
       let p=`<div class="bv-col"><div class="bv-colhd ${flag}">${label} <span class="bv-cnt">${count}대</span></div>`;
-      if(deckTiers.length){ p+=`<div class="bv-sec">갑판</div>${grid(deckTiers,flag,deckCols)}`; }
-      if(holdTiers.length){ p+=`<div class="bv-sec">선창</div>${grid(holdTiers,flag,holdCols)}`; }
+      if(deckTiers.length){
+        const dT=tiersWith(deckTiers,flag);
+        p += dT.length
+          ? `<div class="bv-sec">갑판</div>${grid(dT,flag,deckCols)}`
+          : `<div class="bv-sec">갑판 · 화물 없음</div>`;
+      }
+      if(holdTiers.length){
+        const hT=tiersWith(holdTiers,flag);
+        p += hT.length
+          ? `<div class="bv-sec">선창</div>${grid(hT,flag,holdCols)}`
+          : `<div class="bv-sec">선창 · 화물 없음</div>`;
+      }
       p+='</div>';
       return p;
     };
