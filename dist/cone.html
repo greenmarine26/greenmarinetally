@@ -233,12 +233,25 @@
   .ask-type .seg button{padding:12px 8px; font-size:14px;}
   .ask-type .seg button small{font-size:10px; font-weight:500; opacity:.8;}
   @keyframes spin{to{transform:rotate(360deg);}}
+  /* V7.41 보강: 결과 모드 */
+  .btn-primary:disabled{opacity:.35; filter:grayscale(.4);}
+  .guide-toggle{display:flex; align-items:center; justify-content:center; gap:8px; padding:10px 14px;
+    background:var(--card,#16202e); border:1px dashed #3a4a5e; border-radius:12px; color:var(--dim,#8aa);
+    font-size:13px; cursor:pointer; margin-bottom:12px; width:100%;}
+  .result-tabs{position:sticky; top:58px; z-index:29; display:flex; gap:6px; padding:8px 0 10px;
+    background:var(--bg,#0f1419); margin:0 0 4px;}
+  .result-tabs button{flex:1; padding:10px 4px; border-radius:10px; border:1px solid #2c3a4c;
+    background:#16202e; color:#9fb4c9; font-size:13px; font-weight:700; cursor:pointer;}
+  .result-tabs button.on{background:#f5a623; border-color:#f5a623; color:#1a1206;}
+  .bvc-cn4{font-size:11px; color:#ffd9a0;}
+  .bvc-cnh{opacity:.75;}
+  .rt-empty{color:var(--dim,#8aa); font-size:13px; line-height:1.6; margin:6px 0 0;}
 </style>
 </head>
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.40</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.41</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -253,6 +266,13 @@ const ROWS=['10','08','06','04','02','01','03','05','07','09'];
 // 평택항 판정 — 메인 검수앱 isPyeongtaekPort()와 동일 기준.
 //   PTK/PYT/PYOTM/PYO 로 끝나면 평택 (KRPTK, KRPYO, KRPYOTM 등 변종 포괄).
 //   콘 계산은 평택분만 — 폴백으로 전체를 세지 않음.
+// 에러를 사람 말로 — 영어 원문(Failed to fetch 등) 노출 금지
+function friendlyErr(e, what){
+  const m=(e&&e.message)||'';
+  if(/failed to fetch|network|load failed/i.test(m))
+    return what+'. 인터넷 연결을 확인한 뒤 "다시 불러오기"를 눌러주세요. (배에서는 신호가 약할 수 있어요)';
+  return what+'. 잠시 후 다시 시도해주세요.'+(m?' ('+m+')':'');
+}
 function isPtkPort(code){
   if(!code) return false;
   const t=String(code).toUpperCase().trim();
@@ -567,7 +587,7 @@ function showIosInstallGuide(generic){
 }
 
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
-  voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'' };
+  voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
 // ============ 검수앱 Firebase 연동 (읽기 전용, REST) ============
 // 검수앱(Tallyman Master)이 voyages/{key}/{mode}/raw/edi 에 보관한 EDI 원문을 직접 읽어온다.
@@ -706,7 +726,7 @@ async function loadVoyageList(){
     state.voyages=await fbFetchVoyages();
     state.voyErr = state.voyages.length? '' : '검수앱에 EDI가 보관된 작업이 없습니다. 검수앱에서 EDI를 먼저 올려주세요.';
   }catch(e){
-    state.voyages=[]; state.voyErr='작업 목록을 불러오지 못했습니다: '+e.message+' (인터넷 연결 확인)';
+    state.voyages=[]; state.voyErr=friendlyErr(e, '작업 목록을 불러오지 못했습니다');
   }
   state.loadingVoyages=false; render();
 }
@@ -742,7 +762,7 @@ async function selectVoyage(voyageKey){
     applyVessel(state.shipName);
     render();
   }catch(e){
-    state.voyErr='자료를 불러오지 못했습니다: '+e.message; render();
+    state.voyErr=friendlyErr(e, '자료를 불러오지 못했습니다'); render();
   }
 }
 
@@ -972,9 +992,18 @@ function setShipType(t){
 function render(){
   app.innerHTML='';
 
+  // V7.41: 결과 모드 — 계산/뷰를 본 뒤에는 안내(인사·설치·사용순서)를 접고 작업 화면에 집중
+  if(state.resultMode){
+    const gt=document.createElement('button');
+    gt.className='guide-toggle';
+    gt.innerHTML='ℹ️ 사용 안내·설치 다시 보기';
+    gt.onclick=()=>{ state.resultMode=false; render(); };
+    app.appendChild(gt);
+  }
   // 인사말 (무료 배포의 뜻) + 컨테이너 항구 일러스트
   const intro=document.createElement('div');
   intro.className='card intro-card';
+  if(state.resultMode) intro.style.display='none';
   intro.innerHTML=`
     <div class="port-art">
       <svg viewBox="0 0 400 170" xmlns="http://www.w3.org/2000/svg" width="100%" preserveAspectRatio="xMidYMid meet">
@@ -1046,7 +1075,7 @@ function render(){
   app.appendChild(intro);
 
   // 설치 버튼 (이미 설치된 경우 숨김)
-  if(!isStandalone()){
+  if(!isStandalone() && !state.resultMode){
     const inst=document.createElement('div');
     inst.className='card';
     inst.style.cssText='text-align:center;padding:16px';
@@ -1064,6 +1093,7 @@ function render(){
   // 단계 안내
   const steps=document.createElement('div');
   steps.className='card';
+  if(state.resultMode) steps.style.display='none';
   const s1=state.disch?'done':'now';
   const s2=state.stow?'done':(state.disch?'now':'');
   // 양하+선적 둘 다 또는 한쪽만 있어도 콘 계산 가능 (선적만/양하만 케이스 지원).
@@ -1246,6 +1276,43 @@ function planToGroups(plan, ctx){
     groups[gk].deck+=c.deck; groups[gk].ele+=c.ele; groups[gk].hold+=c.hold;
   }
   return groups;
+}
+// V7.41: 결과 탭바 (작업표/카고플랜/베이플랜 전환) — 결과 화면 공통 상단
+function resultTabsHtml(active){
+  const t=(id,icon,label)=>`<button class="${active===id?'on':''}" data-rtab="${id}">${icon} ${label}</button>`;
+  return `<div class="result-tabs">${t('calc','📋','콘 작업표')}${t('cargo','📊','카고플랜')}${t('bay','🗺️','베이플랜')}</div>`;
+}
+function bindResultTabs(){
+  document.querySelectorAll('.result-tabs [data-rtab]').forEach(b=>{
+    b.onclick=()=>{
+      const id=b.getAttribute('data-rtab');
+      if(id==='calc') runCalc();
+      else if(id==='cargo') renderCargoView();
+      else if(id==='bay') renderBayView();
+    };
+  });
+}
+// 결과 모드 진입: 안내 접기 + 결과로 스크롤
+function enterResultMode(tab){
+  state.resultTab=tab;
+  if(!state.resultMode){
+    state.resultMode=true;
+    // render() 없이 기존 DOM만 접음 (resultArea 내용 보존)
+    document.querySelectorAll('.intro-card').forEach(el=>el.style.display='none');
+    document.querySelectorAll('.card h2').forEach(h=>{
+      if(h.textContent.startsWith('사용 순서')) h.parentElement.style.display='none';
+    });
+    const ib=document.getElementById('installBtn');
+    if(ib&&ib.closest('.card')) ib.closest('.card').style.display='none';
+    if(!document.querySelector('.guide-toggle')){
+      const gt=document.createElement('button');
+      gt.className='guide-toggle';
+      gt.innerHTML='ℹ️ 사용 안내·설치 다시 보기';
+      gt.onclick=()=>{ state.resultMode=false; render(); };
+      app.prepend(gt);
+    }
+  }
+  setTimeout(()=>{ const ra=document.getElementById('resultArea'); if(ra) ra.scrollIntoView({behavior:'smooth', block:'start'}); }, 120);
 }
 function runCalc(){
   showLoading('계산 중...');
@@ -1580,7 +1647,7 @@ async function renderCargoView(){
     return h;
   };
 
-  let html=`<div class="card">
+  let html=resultTabsHtml('cargo')+`<div class="card">
     <div class="share-head"><div class="sh-title">카고플랜 (전체 화물)</div><div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="cv-tabs">
       ${hasD?`<button class="cv-tabbtn ${flag==='d'?'on':''}" data-cvf="d">양하</button>`:''}
@@ -1598,13 +1665,15 @@ async function renderCargoView(){
       <button class="bv-zb" id="cvZoomIn">＋</button><span id="cvZoomPct">50%</span>
     </div>`;
 
-  if(!gks.length){ html+=`<div class="empty-note">${flag==='d'?'양하':'선적'} 자료에 컨테이너가 없습니다.</div></div>`; ra.innerHTML=html; bindCargoTabs(); return; }
+  if(!gks.length){ html+=`<div class="empty-note">${flag==='d'?'양하':'선적'} 자료에 컨테이너가 없습니다.</div></div>`; ra.innerHTML=html; bindCargoTabs(); bindResultTabs(); enterResultMode('cargo'); return; }
 
   html+=`<div class="cv-zoomwrap" id="cvZoomWrap"><div class="cv-zoomarea" id="cvZoomArea"><div class="cv-strip">`;
   for(const bx of boxes) html+=boxHtml(bx);
   html+=`</div></div></div></div>`;
   ra.innerHTML=html;
   bindCargoTabs();
+  bindResultTabs();
+  enterResultMode('cargo');
 
   // 줌/회전/핀치 (베이플랜과 동일)
   const zArea=document.getElementById('cvZoomArea'), zRange=document.getElementById('cvZoomRange'),
@@ -1723,7 +1792,7 @@ async function renderBayView(){
   // POL/POD 짧게 (뒤 3자)
   const short=p=>{ p=String(p||'').toUpperCase(); return p.length>=5?p.slice(2,5):p; };
 
-  let html=`<div class="card">
+  let html=resultTabsHtml('bay')+`<div class="card">
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-zoom">
@@ -1847,7 +1916,7 @@ async function renderBayView(){
       return `<td class="${cellCls(ct,flag)}" title="${ct.cn||''} row ${c.row} tier ${c.tier}">`
         +`<div class="bvc-in">`
         +`<div class="bvc-pp">${pol||'·'}/<b>${pod||'·'}</b>${ptk?'<span class="bvc-star">★</span>':''}</div>`
-        +`<div class="bvc-cn">${ct.cn||'—'}</div>`
+        +`<div class="bvc-cn">${ct.cn?`<span class="bvc-cnh">${ct.cn.slice(0,-4)}</span><b class="bvc-cn4">${ct.cn.slice(-4)}</b>`:'—'}</div>`
         +`<div class="bvc-l3">${sp?sp.sym+' ':''}${line3}</div>`
         +`</div></td>`;
     };
@@ -1920,6 +1989,8 @@ async function renderBayView(){
   html+=`</div></div>`;  // bv-zoomarea, bv-zoomwrap 닫기
   html+='</div>';
   ra.innerHTML=html;
+  bindResultTabs();
+  enterResultMode('bay');
 
   // 축소 슬라이더 + 가로모드 회전
   const zArea=document.getElementById('bvZoomArea');
@@ -2037,7 +2108,7 @@ function renderResults(groups){
   const shipLabel = state.shipName ? state.shipName : '선박 미입력';
   const today=new Date().toLocaleDateString('ko-KR');
 
-  let html='';
+  let html=resultTabsHtml('calc');
   if(window.__vesselWarn){ html+=`<div class="card" style="border-color:var(--rem)"><p style="color:var(--rem);margin:0;font-size:14px">${window.__vesselWarn}</p></div>`; }
   html+=`<div class="confirm-bar"><p><b>⚠ 인식 결과 확인</b> — 콘 작업 전 반드시 대조하세요.</p></div>`;
 
@@ -2056,7 +2127,7 @@ function renderResults(groups){
     </tr>`;
   }
   html+=`</tbody></table>
-    <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span> · <span style="color:#888">큰숫자=곳당, (괄호)=총개수</span></div>
+    <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span> · <span style="color:#888">큰숫자=곳당 가감 · 회수=양하에서 나옴 · 필요=선적에 듦</span></div>
   </div>`;
 
   // V7.29: 동선표 — 양하 회수분을 선적 베이로 보내고, 모자란 분만 콘박스에서.
@@ -2074,6 +2145,14 @@ function renderResults(groups){
     return h;
   }
   const rd=routeRowsHtml(routeDeck,'데크'), re=routeRowsHtml(routeEle,'코끼리'), rh=routeRowsHtml(routeHold,'홀드');
+  if(!(rd||re||rh)){
+    // V7.41: 이동이 없어도 동선표 자리를 비우지 않고 이유를 알려줌
+    html+=`<div class="card">
+      <div class="share-head"><div class="sh-title">동선표</div>
+        <div class="sh-sub">양하 회수분 → 선적 베이로. 모자란 분만 콘박스에서</div></div>
+      <p class="rt-empty">♻ 옮길 콘이 없습니다 — 베이마다 양하 회수분으로 선적 소요가 충당되거나, 추가 필요 베이가 없습니다.</p>
+    </div>`;
+  }
   if(rd||re||rh){
     html+=`<div class="card">
       <div class="share-head"><div class="sh-title">동선표</div>
@@ -2093,6 +2172,8 @@ function renderResults(groups){
     <button class="btn-share" id="btnTxt">📋 텍스트 복사</button>
   </div>`;
   ra.innerHTML=html;
+  bindResultTabs();
+  enterResultMode('calc');
 
   document.getElementById('btnImg').onclick=()=>saveImage(rows,shipLabel,today);
   document.getElementById('btnTxt').onclick=()=>copyText(rows,shipLabel,today);
@@ -2108,7 +2189,7 @@ function cell(c, perCount){
   // 총개수: 곳당 diff × 곳수 (추가/반납 총량)
   const totalDiff = c.diff * (perCount||1);
   const totalTxt = totalDiff>0?`총 +${totalDiff}개`:totalDiff<0?`총 −${-totalDiff}개`:'';
-  return `<td class="${cls}-c"><span class="big">${txt}</span>${totalTxt?`<span class="total">${totalTxt}</span>`:''}<span class="sub">${c.have}→${c.need}</span></td>`;
+  return `<td class="${cls}-c"><span class="big">${txt}</span>${totalTxt?`<span class="total">${totalTxt}</span>`:''}<span class="sub">회수${c.have}→필요${c.need}</span></td>`;
 }
 
 function copyText(rows,ship,today){
