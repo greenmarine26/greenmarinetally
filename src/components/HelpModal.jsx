@@ -408,6 +408,15 @@ const CONTENT = {
 
   tips: [
     {
+      title: '🆕 V7.57 (2026-06-10) — 카고플랜 해치커버 등분 복구 (V7.05 회귀)',
+      examples: [
+        { q: '🔥 보고', a: '베이매트릭스에 해치커버 수를 입력했는데 카고플랜 deck/hold 경계선이 등분되지 않음 (M6.94.13 기능).' },
+        { q: '🐛 원인', a: 'V7.05(6/3)에서 셀 1칸 늘어남 회귀를 고치며 computeBayRenderData를 V7.01 방식으로 원복할 때 return의 hatchCount 필드가 함께 누락됨. 카고플랜 BayBoxV2가 hatchCount=undefined를 받아 항상 1(통선)으로 폴백. 베이상세·베이플랜은 dictBaysSummary를 직접 읽어 영향 없음 — 카고플랜만 회귀.' },
+        { q: '✅ 수정', a: 'computeBayRenderData return에 hatchCount 복구. M6.94.15(페어는 짝수 베이 우선, 없으면 홀수)·M6.94.44(0 허용, 홀드 없으면 0, 미입력+홀드 있으면 1) 원칙 그대로. 시뮬 4케이스 ALL PASS: 페어(02)03→짝수2, 단독→2, 홀드없음→0, 미입력→1.' },
+        { q: '🔧 변경 + 버전', a: 'src/cargoPlanCore.js (computeBayRenderData return hatchCount 복구). 버전 V7.57.' },
+      ],
+    },
+    {
       title: '🆕 V7.56 (2026-06-10) — 음성인식 항만 용어 보정 (검수앱+콘앱)',
       examples: [
         { q: '🐛 사용자 증상', a: '"양하"를 6번 말해야 인식 — 크롬 음성인식이 일반 대화 모델이라 항만 용어를 양아/양화/향하 같은 일반어로 받아 적음.' },

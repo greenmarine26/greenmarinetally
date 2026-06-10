@@ -664,6 +664,24 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     holdAlign: userBay?.holdAlign || 'center',
     holdPadLeft: typeof userBay?.holdPadLeft === 'number' ? userBay.holdPadLeft : 0,
     holdPadRight: typeof userBay?.holdPadRight === 'number' ? userBay.holdPadRight : 0,
+    // V7.57: 해치커버 수 복구 — V7.05에서 computeBayRenderData를 V7.01 방식으로 원복할 때
+    //   M6.94.13의 hatchCount 반환이 함께 누락됨 (카고플랜만 해치 등분 안 됨 회귀).
+    //   M6.94.15: 페어는 짝수(even) 베이 우선, 없으면 홀수(odd). M6.94.44: 0 허용, 홀드 없으면 0.
+    hatchCount: (() => {
+      const findBay = (n) => {
+        if (n == null || Number.isNaN(n)) return null;
+        const k2 = String(n).padStart(2, '0');
+        const k3 = String(n).padStart(3, '0');
+        return shipBayDef?.baysSummary?.find(b => b.bayNo === k2 || b.bay === k3 || b.bay === k2) || null;
+      };
+      const evenNum = isPair ? parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10) : null;
+      let src = null;
+      for (const n of [evenNum, oddNum]) {
+        const e = findBay(n);
+        if (e && typeof e.hatchCount === 'number') { src = e; break; }
+      }
+      return Math.max(0, Math.min(3, (typeof src?.hatchCount === 'number') ? src.hatchCount : ((holdTiers && holdTiers.length > 0) ? 1 : 0)));
+    })(),
   };
 }
 
