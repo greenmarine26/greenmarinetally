@@ -7,7 +7,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer } from '../nlSearch.js';
+import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate } from '../twin.js';
@@ -16,7 +17,7 @@ import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null }) {
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {} }) {   // V7.92: portMisData 추가
   const [searchMode, setSearchMode] = useState('single');
   // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
   const [workFilter, setWorkFilter] = useState('discharge');  // 'discharge' | 'loading' | 'completed'
@@ -116,7 +117,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} />
         : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
     </div>
   );
@@ -131,8 +132,9 @@ function announceContainer(c) {
   speak(parts.join(', '));
 }
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer }) {
+function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {} }) {   // V7.92
   const [query, setQuery] = useState('');
+  const [weatherText, setWeatherText] = useState(null);   // V7.92: 날씨 질문 비동기 답변
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
   const fixTriedRef = useRef('');     // V7.80: AI 복원 1회 제한
   const [fixingVoice, setFixingVoice] = useState(false);
@@ -169,6 +171,27 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 단, 단순 컨번호 검색(digits만)이거나 결과가 단 1개면 BigResultCard 우선
   const localAnswer = useMemo(() => {
     if (!query || query.length < 2) return null;
+    // V7.92: 챗봇형 질문 — 자기소개·시간·입출항·날씨 (사용자 요청: "넌 뭐야"에 답하기)
+    if (parsed.introQuery) return generateIntroAnswer(voyage?.info?.vslFull || voyage?.info?.vsl || '');
+    // ⚠ 입출항을 시간보다 먼저 — "입항 시간 알려줘"는 timeQuery에도 걸리므로 순서가 답을 가른다.
+    if (parsed.schedQuery) {
+      const pm = matchPortMis(portMisData, voyage?.info || {});
+      const fmtDT = (x) => {
+        if (!x) return null;
+        const m = String(x).match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+        return m ? `${parseInt(m[2], 10)}월 ${parseInt(m[3], 10)}일 ${m[4]}:${m[5]}` : String(x);
+      };
+      if (!pm) return '입출항 정보가 아직 없습니다. PORT-MIS 데이터가 수집되면 자동으로 답합니다.';
+      const ship = voyage?.info?.vslFull || voyage?.info?.vsl || pm.vesselName || '이 선박';
+      const lines = [];
+      const eta = fmtDT(pm.eta), etd = fmtDT(pm.etd);
+      lines.push(`${ship} — ` + [eta ? `입항 ${eta}` : null, etd ? `출항 ${etd}` : null].filter(Boolean).join(', ') + '.');
+      if (pm.pier || pm.berth) lines.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
+      if (pm.port && pm.port !== '평택') lines.push(`⚠ ${pm.port} 항만 데이터입니다.`);
+      return lines.join('\n');
+    }
+    if (parsed.timeQuery) return generateTimeAnswer();
+    if (parsed.weatherQuery) return weatherText || '🌤 평택항 날씨 조회 중…';
     // V7.90-04: 브리핑 — 현재 작업(탭 모드) 기준 요약 (음성 "브리핑" 한 마디)
     if (parsed.briefingQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
@@ -179,7 +202,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const modeCs = allContainers.filter(c => c._mode === workFilter);
       return generateSealAuditAnswer(modeCs, workFilter === 'discharge' ? '양하' : '선적');
     }
-    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery && !parsed.sealAuditQuery) return null;
+    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery && !parsed.sealAuditQuery && !parsed.introQuery && !parsed.timeQuery && !parsed.weatherQuery && !parsed.schedQuery) return null;
     // 단순 컨번호만 입력한 경우는 BigResultCard 우선
     const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
                        !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
@@ -187,7 +210,27 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
     return generateLocalAnswer(parsed, results, allContainers);
-  }, [parsed, results, allContainers, query, workFilter]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage]);
+
+  // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.
+  useEffect(() => {
+    if (!parsed.weatherQuery) { setWeatherText(null); return; }
+    let alive = true;
+    const WMO = { 0: '맑음', 1: '대체로 맑음', 2: '구름 조금', 3: '흐림', 45: '안개', 48: '안개', 51: '이슬비', 53: '이슬비', 55: '이슬비', 61: '비', 63: '비', 65: '강한 비', 66: '진눈깨비', 67: '진눈깨비', 71: '눈', 73: '눈', 75: '강한 눈', 77: '눈날림', 80: '소나기', 81: '소나기', 82: '강한 소나기', 85: '소낙눈', 86: '소낙눈', 95: '뇌우', 96: '뇌우', 99: '뇌우' };
+    const dir16 = (d) => ['북', '북북동', '북동', '동북동', '동', '동남동', '남동', '남남동', '남', '남남서', '남서', '서남서', '서', '서북서', '북서', '북북서'][Math.round((((d % 360) + 360) % 360) / 22.5) % 16];
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=36.967&longitude=126.822&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1&timezone=Asia%2FSeoul&wind_speed_unit=ms')
+      .then(r => r.ok ? r.json() : null)
+      .then(j => {
+        if (!alive) return;
+        const c = j?.current, d = j?.daily;
+        if (!c) { setWeatherText('날씨 정보를 가져오지 못했습니다. 신호를 확인해 주세요.'); return; }
+        const lines = [`평택항 날씨 — ${WMO[c.weather_code] ?? ''} 기온 ${Math.round(c.temperature_2m)}도, 바람 ${dir16(c.wind_direction_10m)}풍 초속 ${Math.round(c.wind_speed_10m)}미터.`];
+        if (d) lines.push(`오늘 최저 ${Math.round(d.temperature_2m_min?.[0])}° / 최고 ${Math.round(d.temperature_2m_max?.[0])}° · 강수확률 ${d.precipitation_probability_max?.[0] ?? '-'}%`);
+        setWeatherText(lines.join('\n'));
+      })
+      .catch(() => { if (alive) setWeatherText('날씨 정보를 가져오지 못했습니다. 신호를 확인해 주세요.'); });
+    return () => { alive = false; };
+  }, [parsed.weatherQuery]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -228,7 +271,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (!q || q.length < 4) return;
     if (voiceQueryRef.current !== q) return;          // 음성으로 들어온 질문만
     if (/^[0-9\s]+$/.test(q)) return;                 // 숫자(끝4자리)는 제외
-    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
+    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|누구|소개|시야|시간|지금|오늘|날씨|기온|바람|입항|출항|입출항|접안|언제|며칠|요일|날짜|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
     const leftover = q.replace(/[0-9A-Za-z\s.,?!]/g, ' ').replace(KNOWN, ' ').trim()
       .split(/\s+/).filter(t => t.length >= 2);
     const understood = hasAnyCondition(parsed) || !!localAnswer;

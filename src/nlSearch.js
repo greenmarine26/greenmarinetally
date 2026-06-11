@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort } from './utils.js';
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION } from './utils.js';
 
 // ─── 항구 코드 매핑 ───
 const PORT_KR_TO_CODE = {
@@ -69,6 +69,7 @@ export function parseNaturalQuery(text) {
     bottomQuery: false, topQuery: false,
     vacantQuery: false,
     posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
+    introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
     isAll: false, isStat: false, mode: null,
   };
   if (!text) return result;
@@ -194,6 +195,11 @@ export function parseNaturalQuery(text) {
   // V7.90-02: 베이 분포 질문 — "리퍼가 몇 번 베이에 있어?" / "어디 어디에 있어?" (사용자 현장 제보)
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어떤\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;   // V7.91-02: 어떤 베이
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약/i.test(t)) result.briefingQuery = true;
+  // V7.92: 챗봇형 질문 — 자기소개·시간·날씨·입출항 (사용자 요청: "넌 뭐야"에 답하기)
+  if (/(?:^|\s)(?:넌|너는|네가|니가|너)\s*(?:뭐|누구)|누구세요|누구냐|누구니|누구야|자기\s*소개|소개\s*해/i.test(t)) result.introQuery = true;
+  if (/몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|오늘\s*며칠|며칠이야|무슨\s*요일|오늘\s*날짜|날짜\s*알려/i.test(t)) result.timeQuery = true;
+  if (/날씨|기온\s*어때|바람\s*어때|비\s*(와|오나|올까)|눈\s*(와|오나|올까)/i.test(t)) result.weatherQuery = true;
+  if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어오|언제\s*나가/i.test(t)) result.schedQuery = true;
   if (/(실번호|씰|실)\s*(점검|검사|오류|확인|체크)/i.test(t)) result.sealAuditQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   if (/리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등
@@ -1036,4 +1042,27 @@ function formatProgress(parsed, results, allContainers) {
     if (results.length > 10) lines.push(`  ... 외 ${results.length - 10}대`);
   }
   return lines.join('\n');
+}
+
+// ─── V7.92: 챗봇형 답변 (자기소개·시간) — 첫 줄은 음성으로 읽히므로 한 문장으로 ───
+export function generateIntroAnswer(shipName) {
+  const ship = shipName ? `지금은 ${shipName} 작업 자료로 답하고 있습니다.` : '작업 선박을 선택하면 그 자료로 답합니다.';
+  return [
+    `저는 탤리맨 마스터, 평택항 컨테이너 검수 도우미입니다.`,
+    `${ship} (${APP_VERSION})`,
+    '',
+    '이렇게 물어보세요.',
+    '  • "리퍼 몇 대" / "5번 베이" / "엑스레이 어디"',
+    '  • "브리핑" / "실번호 점검" / "남은 거 몇 대"',
+    '  • "입항 언제" / "지금 몇 시" / "날씨"',
+  ].join('\n');
+}
+
+export function generateTimeAnswer(now) {
+  const d = now instanceof Date ? now : new Date();
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  const h24 = d.getHours();
+  const ampm = h24 < 12 ? '오전' : '오후';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `지금은 ${d.getMonth() + 1}월 ${d.getDate()}일 ${days[d.getDay()]}요일, ${ampm} ${h12}시 ${d.getMinutes()}분입니다.`;
 }
