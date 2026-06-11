@@ -16,9 +16,12 @@ import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
+import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {} }) {   // V7.92: portMisData 추가
   const [searchMode, setSearchMode] = useState('single');
+  // V7.94: 자동 가이드 모드 — 앱이 크레인 순서대로 다음 컨을 예측 제시 (수동 = 기존 검색 방식)
+  const [guideMode, setGuideMode] = useState(false);
   // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
   const [workFilter, setWorkFilter] = useState('discharge');  // 'discharge' | 'loading' | 'completed'
 
@@ -103,6 +106,38 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           <span className="text-[10px] opacity-80">{completedCount}대</span>
         </button>
       </div>
+      {/* V7.94: 자동(가이드) / 수동 모드 전환 — 한눈에 구분되는 큰 토글 */}
+      {workFilter !== 'completed' && (
+        <div className={`rounded-lg p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
+          <button onClick={() => setGuideMode(true)}
+            className={`flex-1 py-2.5 rounded font-bold text-sm flex items-center justify-center gap-1.5 ${
+              guideMode ? 'bg-violet-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'
+            }`}>
+            🤖 자동 가이드
+          </button>
+          <button onClick={() => setGuideMode(false)}
+            className={`flex-1 py-2.5 rounded font-bold text-sm flex items-center justify-center gap-1.5 ${
+              !guideMode ? 'bg-amber-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'
+            }`}>
+            ✋ 수동
+          </button>
+        </div>
+      )}
+      {guideMode && workFilter !== 'completed' && (
+        <div className="text-center text-[11px] font-bold text-violet-300 -mt-1">
+          자동 가이드 모드 — 앱이 다음 컨테이너를 순서대로 제시합니다
+        </div>
+      )}
+
+      {guideMode && workFilter !== 'completed' ? (
+        <GuidedWorkPanel
+          voyage={voyage} voyageKey={voyageKey} inspector={inspector}
+          allContainers={allContainers} workFilter={workFilter}
+          onSwitchManual={() => setGuideMode(false)}
+          onOpenContainer={onOpenContainer}
+        />
+      ) : (
+      <>
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
         <button onClick={() => setSearchMode('single')}
           className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${
@@ -121,6 +156,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       {searchMode === 'single'
         ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} />
         : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
+      </>
+      )}
     </div>
   );
 }
