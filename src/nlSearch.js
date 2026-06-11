@@ -70,6 +70,7 @@ export function parseNaturalQuery(text) {
     vacantQuery: false,
     posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
+    twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
     isAll: false, isStat: false, mode: null,
   };
   if (!text) return result;
@@ -200,6 +201,8 @@ export function parseNaturalQuery(text) {
   if (/몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|오늘\s*며칠|며칠이야|무슨\s*요일|오늘\s*날짜|날짜\s*알려/i.test(t)) result.timeQuery = true;
   if (/날씨|기온\s*어때|바람\s*어때|비\s*(와|오나|올까)|눈\s*(와|오나|올까)/i.test(t)) result.weatherQuery = true;
   if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어오|언제\s*나가/i.test(t)) result.schedQuery = true;
+  // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
+  if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
   if (/(실번호|씰|실)\s*(점검|검사|오류|확인|체크)/i.test(t)) result.sealAuditQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   if (/리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등
@@ -588,7 +591,7 @@ export function auditSeals(containers) {
 
 // V7.90-04: 작업 브리핑 (사용자 요청) — 검수 시작·중간에 현재 작업 핵심을 한눈에.
 //   첫 줄은 음성으로 읽히는 한 문장 요약. 이후 화면용 상세.
-export function generateBriefing(containers, modeLabel, mode = 'discharge') {
+export function generateBriefing(containers, modeLabel, mode = 'discharge', pairsMap = null, pier = '') {   // V7.93: pairsMap·pier — 트윈 무게 예견
   // V7.90-07 재구성 (사용자 피드백): ① 평택분(작업 대상)만 집계 — 통과화물 포함 금지(7.1)
   //   ② 일반 통계 나열 대신 "검수원이 인지해야 할 특이사항" 중심, 행동 지향 문구.
   const all = containers || [];
@@ -645,6 +648,14 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge') {
   if (ot.length) warns.push({ k: `OT ${ot.length}`, line: `△ O/T ${ot.length}대 (${baysOf(ot)}) — 상부 확인` });
   if (tk.length) warns.push({ k: `탱크 ${tk.length}`, line: `🛢 탱크 ${tk.length}대 (${baysOf(tk)})` });
   if (oog.length) warns.push({ k: `OOG ${oog.length}`, line: `📐 OOG ${oog.length}대 (${baysOf(oog)}) — 규격 외 치수 확인` });
+  // V7.93: 트윈 무게 예견 — 합계 55톤 초과(불가)·무게 불균형(수평 주의). pairsMap 있을 때만.
+  if (pairsMap) {
+    const limit = twinDiffLimit(pier);
+    const tw = analyzeTwinPairs(buildTwinPairs(cs, pairsMap), limit);
+    const posOf = (arr) => arr.slice(0, 6).map(p => `${fmtPos(p.a)}↔${fmtPos(p.b)}`).join(', ') + (arr.length > 6 ? ' 외' : '');
+    if (tw.over.length) warns.push({ k: `트윈초과 ${tw.over.length}`, line: `🏗 트윈 무게 초과 ${tw.over.length}쌍 (합계 55톤↑): ${posOf(tw.over)} — 트윈 불가, 싱글 작업 검토` });
+    if (tw.diff.length) warns.push({ k: `트윈무게차 ${tw.diff.length}`, line: `⚖ 트윈 무게차 초과 ${tw.diff.length}쌍 (한계 ${(limit / 1000)}톤↑): ${posOf(tw.diff)} — 수평 불가, 싱글 작업 검토` });
+  }
   const audit = auditSeals(cs);
   if (audit.items.length) {
     const kinds = [...new Set(audit.items.map(it => it.reason.split(' — ')[0].replace(/^(풀씰|엠티실)\s*/, '')))].slice(0, 2).join(', ');
@@ -1065,4 +1076,97 @@ export function generateTimeAnswer(now) {
   const ampm = h24 < 12 ? '오전' : '오후';
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   return `지금은 ${d.getMonth() + 1}월 ${d.getDate()}일 ${days[d.getDay()]}요일, ${ampm} ${h12}시 ${d.getMinutes()}분입니다.`;
+}
+
+// ─── V7.93: 트윈 작업 무게 점검 (사용자 도메인: 합계 55톤 초과 = 트윈 불가) ───
+//   불균형 기준(TWIN_DIFF_WARN_KG)은 임시 10톤 — 크레인 실제 기준 확정 시 이 상수만 변경.
+//   짝 규칙은 twin.js getBayPairs(pairsMap)를 주입받음 — 트윈 작업 화면과 동일 규칙 보장.
+export const TWIN_MAX_TOTAL_KG = 55000;
+// V7.93-02: 무게차 한계는 부두별 (사용자 확정) — 동방아이포트(PNCT) 14톤, 평택컨테이너터미널(PCTC) 20톤.
+//   차이 초과 = 수평이 안 맞아 트윈 불가 (주의가 아니라 불가). 부두 미상이면 보수적으로 14톤.
+export const TWIN_DIFF_LIMITS = { PNCT: 14000, PCTC: 20000 };
+export function twinDiffLimit(pier) {
+  return TWIN_DIFF_LIMITS[String(pier || '').toUpperCase().trim()] || 14000;
+}
+
+function is20ft(c) {
+  return /^2/.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('20');
+}
+
+// 20ft 컨테이너들을 트윈 쌍으로 묶기 — 홀수 베이 + pairsMap 짝꿍 베이 + 같은 row/tier/모드
+export function buildTwinPairs(containers, pairsMap) {
+  const c20 = containers.filter(c => is20ft(c) && c.bay && c.row && c.tier);
+  const byPos = new Map();
+  c20.forEach(c => byPos.set(`${c._mode}|${parseInt(c.bay, 10)}|${c.row}|${c.tier}`, c));
+  const used = new Set();
+  const out = [];
+  c20.forEach(a => {
+    if (used.has(a.cn)) return;
+    const b1 = parseInt(a.bay, 10);
+    if (!Number.isFinite(b1) || b1 % 2 === 0) return;
+    const pb = pairsMap?.[String(b1)];
+    if (!pb) return;
+    const b = byPos.get(`${a._mode}|${parseInt(pb, 10)}|${a.row}|${a.tier}`);
+    if (!b || used.has(b.cn) || b.cn === a.cn) return;
+    used.add(a.cn); used.add(b.cn);
+    out.push([a, b]);
+  });
+  return out;
+}
+
+// 쌍 분석: ok / over(55톤 초과) / imbal(차이 큼) / noWt(무게 미상)
+export function analyzeTwinPairs(pairs, diffLimitKg = 14000) {
+  const r = { ok: [], over: [], diff: [], noWt: [] };
+  for (const [a, b] of pairs) {
+    const wa = parseInt(a.wt, 10) || 0, wb = parseInt(b.wt, 10) || 0;
+    if (!wa || !wb) { r.noWt.push({ a, b, wa, wb }); continue; }
+    const total = wa + wb, diff = Math.abs(wa - wb);
+    if (total > TWIN_MAX_TOTAL_KG) r.over.push({ a, b, wa, wb, total, diff });
+    else if (diff > diffLimitKg) r.diff.push({ a, b, wa, wb, total, diff });
+    else r.ok.push({ a, b, wa, wb, total, diff });
+  }
+  return r;
+}
+
+const t1 = (kg) => (kg / 1000).toFixed(1).replace(/\.0$/, '');
+const pairPos = (p) => `${fmtPos(p.a)} ↔ ${fmtPos(p.b)}`;
+const pairCn = (p) => `${p.a.cn?.slice(-4) || '?'}·${p.b.cn?.slice(-4) || '?'}`;
+
+export function generateTwinCheckAnswer(parsed, containers, pairsMap, pier = '') {
+  // 베이 지정: "20번 베이 트윈" — 짝수로 물어도 양옆 홀수 쌍 포함 (N-1·N·N+1)
+  let pool = containers;
+  let scope = '전체';
+  if (parsed.bay) {
+    const n = parseInt(parsed.bay, 10);
+    pool = containers.filter(c => Math.abs(parseInt(c.bay, 10) - n) <= 1);
+    scope = `${n}번 베이`;
+  }
+  const pairs = buildTwinPairs(pool, pairsMap);
+  if (!pairs.length) return `${scope} 트윈 쌍이 없습니다. (단독 베이이거나 같은 열·단의 20피트 짝이 없음)`;
+  const limit = twinDiffLimit(pier);
+  const pierLabel = TWIN_DIFF_LIMITS[String(pier || '').toUpperCase().trim()] ? String(pier).toUpperCase() : '부두 미상·보수 기준';
+  const r = analyzeTwinPairs(pairs, limit);
+  const bad = r.over.length + r.diff.length;
+  const lines = [];
+  // 첫 줄 = 음성용 한 문장
+  if (bad) lines.push(`${scope} 트윈 불가 ${bad}쌍 — ${[r.over.length ? '무게 초과' : null, r.diff.length ? '무게차 초과' : null].filter(Boolean).join('·')}. 위치 확인하세요.`);
+  else if (r.noWt.length && !r.ok.length) lines.push(`${scope} 트윈 ${pairs.length}쌍 — 무게 정보가 없어 판단 불가.`);
+  else lines.push(`${scope} 트윈 ${pairs.length}쌍 모두 가능합니다.`);
+  if (r.over.length) {
+    lines.push('', `🚫 무게 초과 (합계 55톤↑) — 트윈 불가, 싱글 작업:`);
+    r.over.forEach(p => lines.push(`  • ${pairPos(p)} — 합계 ${t1(p.total)}톤 (${t1(p.wa)}+${t1(p.wb)}) ${pairCn(p)}`));
+  }
+  if (r.diff.length) {
+    lines.push('', `🚫 무게차 초과 (${pierLabel} 한계 ${t1(limit)}톤↑) — 수평 불가, 싱글 작업:`);
+    r.diff.forEach(p => lines.push(`  • ${pairPos(p)} — 차이 ${t1(p.diff)}톤 (${t1(p.wa)}/${t1(p.wb)}) ${pairCn(p)}`));
+  }
+  if (r.noWt.length) {
+    lines.push('', `❓ 무게 미상 ${r.noWt.length}쌍 — EDI 무게 확인 필요:`);
+    r.noWt.slice(0, 6).forEach(p => lines.push(`  • ${pairPos(p)} ${pairCn(p)}`));
+  }
+  if (r.ok.length) {
+    const maxOk = Math.max(...r.ok.map(p => p.total));
+    lines.push('', `✅ 가능 ${r.ok.length}쌍 (최대 합계 ${t1(maxOk)}톤)`);
+  }
+  return lines.join('\n');
 }

@@ -4,7 +4,7 @@
 //   모두 0이면 큰 ✅ 화면 (마감 가능)
 import React, { useMemo } from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronRight, Snowflake, Camera, Shield, MoveRight, Hash } from 'lucide-react';
-import { isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
+import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort } from '../utils.js';
 
 export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJump }) {
   const items = useMemo(() => {
@@ -21,7 +21,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
       const e = ediMap[cn] || {};
       const r = recMap[cn] || {};
       return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn };
-    });
+    }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));   // V7.93-02: 평택분만 (7.1)
 
     const total = containers.length;
     const undone = containers.filter(c => !compMap[c.cn]);

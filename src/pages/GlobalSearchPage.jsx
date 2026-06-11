@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake } from 'lucide-react';
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos } from '../utils.js';
+import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';
 
 export default function GlobalSearchPage({ voyages, onOpenContainer }) {
@@ -54,6 +54,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
             voy: v.info.voy,
             mode,
             _mode: mode,
+            _ptk: mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol),   // V7.93-02: 평택분 (7.1)
             isXray: mode === 'discharge' && !!xrayMap[c.cn],
             _xray: mode === 'discharge' && !!xrayMap[c.cn],
             comp: compMap[c.cn] || null,
@@ -77,6 +78,8 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     const Q = debouncedQuery.toUpperCase();
     const isOnlyDigits = /^\d+$/.test(Q.replace(/\s/g, ''));
     let r = applyNLFilter(flat, parsed);
+    // V7.93-02: 조건·집계 검색은 평택분만 (7.1) — 컨번호(digits) 단건 조회는 전체 유지 (V7.92-02 동일 규칙)
+    if (!parsed.digits) r = r.filter(c => c._ptk);
     // 자연어 조건이 없는 알파벳 → 선박명 매칭도 시도
     if (!parsed.size && !parsed.fe && !parsed.type && !parsed.isAll && !isOnlyDigits) {
       const vslMatches = flat.filter(c => c.vsl?.toUpperCase().includes(Q));

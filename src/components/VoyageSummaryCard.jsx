@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, Camera, MoveRight } from 'lucide-react';
-import { isReeferContainer, isISO403, isISO403PhotoTaken } from '../utils.js';
+import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort } from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode }) {
   const summary = useMemo(() => {
@@ -16,11 +16,13 @@ export default function VoyageSummaryCard({ voyage, mode }) {
 
     // 머지 로직 (VoyagePage와 동일)
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+    // V7.93-02: 평택분만 (7.1 — 양하=POD평택, 선적=POL평택). 현황 요약이 EDI 전체(통과화물 포함)를
+    //   세어 목록(403)과 헤더(909)가 다르던 버그 (사용자 스크린샷 제보).
     const containers = [...allCnSet].map(cn => {
       const e = ediMap[cn] || {};
       const r = recMap[cn] || {};
       return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn };
-    });
+    }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));
 
     const total = containers.length;
     const done = Object.keys(compMap).length;

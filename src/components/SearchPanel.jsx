@@ -7,11 +7,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer } from '../nlSearch.js';
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
-import { findTwinCandidate } from '../twin.js';
+import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
@@ -198,17 +198,25 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     }
     if (parsed.timeQuery) return generateTimeAnswer();
     if (parsed.weatherQuery) return weatherText || '🌤 평택항 날씨 조회 중…';
+    // V7.93: 트윈 작업 무게 점검 — "20번 베이 트윈 가능해" (합계 55톤↑ 불가 + 불균형 수평 주의)
+    if (parsed.twinCheckQuery) {
+      const m = parsed.mode || workFilter;
+      const pool = allContainers.filter(c => c._ptk && c._mode === m && !c._comp);
+      const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');
+      return generateTwinCheckAnswer(parsed, pool, pairs, voyage?.info?.pier || '');   // V7.93-02: 부두별 무게차 한계
+    }
     // V7.90-04: 브리핑 — 현재 작업(탭 모드) 기준 요약 (음성 "브리핑" 한 마디)
     if (parsed.briefingQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
-      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter);
+      const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');   // V7.93: 트윈 무게 예견
+      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '');
     }
     // V7.90-05: 실번호 점검 (사용자 요청 — 씰 오류 사전 예측)
     if (parsed.sealAuditQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
       return generateSealAuditAnswer(modeCs, workFilter === 'discharge' ? '양하' : '선적');
     }
-    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery && !parsed.sealAuditQuery && !parsed.introQuery && !parsed.timeQuery && !parsed.weatherQuery && !parsed.schedQuery) return null;
+    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery && !parsed.sealAuditQuery && !parsed.introQuery && !parsed.timeQuery && !parsed.weatherQuery && !parsed.schedQuery && !parsed.twinCheckQuery) return null;
     // 단순 컨번호만 입력한 경우는 BigResultCard 우선
     const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
                        !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
@@ -277,7 +285,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (!q || q.length < 4) return;
     if (voiceQueryRef.current !== q) return;          // 음성으로 들어온 질문만
     if (/^[0-9\s]+$/.test(q)) return;                 // 숫자(끝4자리)는 제외
-    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|누구|소개|시야|시간|지금|오늘|날씨|기온|바람|입항|출항|입출항|접안|언제|며칠|요일|날짜|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
+    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|누구|소개|시야|시간|지금|오늘|날씨|기온|바람|입항|출항|입출항|접안|언제|며칠|요일|날짜|트윈|가능|불가|초과|불균형|수평|크레인|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
     const leftover = q.replace(/[0-9A-Za-z\s.,?!]/g, ' ').replace(KNOWN, ' ').trim()
       .split(/\s+/).filter(t => t.length >= 2);
     const understood = hasAnyCondition(parsed) || !!localAnswer;
