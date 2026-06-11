@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing } from '../nlSearch.js';
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate } from '../twin.js';
@@ -169,7 +169,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 단, 단순 컨번호 검색(digits만)이거나 결과가 단 1개면 BigResultCard 우선
   const localAnswer = useMemo(() => {
     if (!query || query.length < 2) return null;
-    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery) return null;
+    // V7.90-04: 브리핑 — 현재 작업(탭 모드) 기준 요약 (음성 "브리핑" 한 마디)
+    if (parsed.briefingQuery) {
+      const modeCs = allContainers.filter(c => c._mode === workFilter);
+      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적');
+    }
+    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery) return null;
     // 단순 컨번호만 입력한 경우는 BigResultCard 우선
     const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
                        !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
@@ -177,7 +182,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
     return generateLocalAnswer(parsed, results, allContainers);
-  }, [parsed, results, allContainers, query]);
+  }, [parsed, results, allContainers, query, workFilter]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt } from './utils.js';
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer } from './utils.js';
 
 // ─── 항구 코드 매핑 ───
 const PORT_KR_TO_CODE = {
@@ -68,7 +68,7 @@ export function parseNaturalQuery(text) {
     tierStackQuery: false,
     bottomQuery: false, topQuery: false,
     vacantQuery: false,
-    posQuery: false, listQuery: false, bayDistQuery: false,
+    posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false,
     isAll: false, isStat: false, mode: null,
   };
   if (!text) return result;
@@ -193,6 +193,7 @@ export function parseNaturalQuery(text) {
   // 위치/리스트 의도
   // V7.90-02: 베이 분포 질문 — "리퍼가 몇 번 베이에 있어?" / "어디 어디에 있어?" (사용자 현장 제보)
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;
+  if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약/i.test(t)) result.briefingQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   if (/리스트|목록|보여줘|보여줘봐|알려줘|list/i.test(t)) result.listQuery = true;
 
@@ -493,6 +494,71 @@ function formatBayStats(bay, results) {
 }
 
 // V7.90-02: 베이 분포 답변 — "리퍼가 몇 번 베이에 있어?" 첫 줄은 음성으로 읽히므로 베이 나열.
+// V7.90-04: 작업 브리핑 (사용자 요청) — 검수 시작·중간에 현재 작업 핵심을 한눈에.
+//   첫 줄은 음성으로 읽히는 한 문장 요약. 이후 화면용 상세.
+export function generateBriefing(containers, modeLabel) {
+  const cs = containers || [];
+  if (!cs.length) return `📋 ${modeLabel} 브리핑 — 컨테이너 자료가 없습니다`;
+  const szOf = (c) => {
+    const lbl = isoToLabel(c.iso) || '';
+    if (/^45/.test(lbl)) return '45'; if (/^40/.test(lbl)) return '40'; if (/^20/.test(lbl)) return '20';
+    const f = (c.iso || '')[0];
+    return f === '2' ? '20' : f === '4' ? '40' : (f === 'L' || f === '9') ? '45' : '?';
+  };
+  const total = cs.length;
+  const done = cs.filter(c => c._comp).length;
+  const sz = {}; let F = 0, E = 0;
+  const rf = [], dg = [], xr = [], fr = [], ot = [], tk = [], noTmp = [];
+  const bays = new Set(); let deck = 0, hold = 0;
+  for (const c of cs) {
+    const s = szOf(c); sz[s] = (sz[s] || 0) + 1;
+    if (c.fe === 'E') E++; else F++;
+    const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
+    const t = parseInt(c.tier, 10);
+    if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
+    const isRf = isReeferContainer(c);  // V7.27 ⑦ 원칙 — 리퍼 판정 단일 함수 (자체 정규식은 FR 오인)
+    if (isRf) { rf.push(c); if (c.fe !== 'E' && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }
+    if (c.dg) dg.push(c);
+    if (c._xray) xr.push(c);
+    if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);
+    if (c.ot || /OT$/.test(isoToLabel(c.iso) || '')) ot.push(c);
+    if (c.tk || /TK$/.test(isoToLabel(c.iso) || '')) tk.push(c);
+  }
+  const bayArr = [...bays].sort((a, b) => a - b);
+  const bayRange = bayArr.length ? `${bayArr[0]}~${bayArr[bayArr.length - 1]}번 (${bayArr.length}개 베이)` : '';
+  const szStr = ['20', '40', '45'].filter(s => sz[s]).map(s => `${s}ft ${sz[s]}`).join(', ');
+  const baysOf = (arr) => {
+    const bs = [...new Set(arr.map(c => parseInt(c.bay, 10)).filter(Number.isFinite))].sort((a, b) => a - b);
+    return bs.length ? ` (베이 ${bs.join(', ')})` : '';
+  };
+  // 음성용 첫 줄 — 한 문장
+  const voiceBits = [`${modeLabel} ${total}대`];
+  if (rf.length) voiceBits.push(`리퍼 ${rf.length}`);
+  if (dg.length) voiceBits.push(`위험물 ${dg.length}`);
+  if (xr.length) voiceBits.push(`엑스레이 ${xr.length}`);
+  if (done > 0) voiceBits.push(`잔여 ${total - done}`);
+  const lines = [`📋 ${voiceBits.join(', ')}`];
+  lines.push(`전체: ${total}대 (Full ${F} / Empty ${E}) · ${szStr}`);
+  if (bayRange) lines.push(`작업 범위: 베이 ${bayRange} · 갑판 ${deck} / 홀드 ${hold}`);
+  if (done > 0) lines.push(`진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
+  if (rf.length) {
+    const temps = {};
+    for (const c of rf) { const tp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim() : null; if (tp) temps[tp] = (temps[tp] || 0) + 1; }
+    const tStr = Object.keys(temps).sort().map(tp => `${tp}°C×${temps[tp]}`).join(' ');
+    lines.push(`❄ 리퍼 ${rf.length}대${baysOf(rf)}${tStr ? ' · ' + tStr : ''}${noTmp.length ? ` · ⚠ 온도미입력 ${noTmp.length}` : ''}`);
+  }
+  if (dg.length) {
+    const cls = {};
+    for (const c of dg) { const cl = c.dgc || '?'; cls[cl] = (cls[cl] || 0) + 1; }
+    lines.push(`⚠ 위험물 ${dg.length}대${baysOf(dg)} · ${Object.keys(cls).sort().map(cl => `cl.${cl}×${cls[cl]}`).join(' ')}`);
+  }
+  if (xr.length) lines.push(`🩻 X-RAY 대상 ${xr.length}대${baysOf(xr)} · ${xr.slice(0, 10).map(c => c.cn?.slice(-4)).join(', ')}`);
+  if (fr.length) lines.push(`⊞ FR ${fr.length}대${baysOf(fr)}`);
+  if (ot.length) lines.push(`△ O/T ${ot.length}대${baysOf(ot)}`);
+  if (tk.length) lines.push(`🛢 탱크 ${tk.length}대${baysOf(tk)}`);
+  return lines.join('\n');
+}
+
 // V7.90-03: 베이 분포 상세 확장 (사용자 요청 — 검수 실무 정보 전반)
 //   공통: 규격(20/40/45)·갑판/홀드. 리퍼: 온도 분포. XRAY: 컨번호 끝4. DG: 클래스.
 function formatBayDist(desc, results, parsed = {}) {
