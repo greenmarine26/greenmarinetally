@@ -30,9 +30,15 @@ export default function VoyageSummaryCard({ voyage, mode }) {
     const reeferTempMissing = reefers.filter(c =>
       (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
     );
-    const xrayCount = mode === 'discharge' ? Object.keys(xrayMap).length : 0;
+    // V7.94-03: X-RAY 카운트 기준 통일 (사용자 제보 — 상단 0/3 vs 리스트 2 불일치)
+    //   원인: 여기는 xrayList 원본 키 전부, 리스트(ListTab stats.xray)는 현재 컨테이너와 매칭분만.
+    //   매칭 안 되는 키(오타/다른 항차 잔존)는 숨기지 않고 ⚠미매칭으로 드러냄 — 검사 누락 방지.
+    const cnSet = new Set(containers.map(c => c.cn));
+    const xrayKeys = mode === 'discharge' ? Object.keys(xrayMap) : [];
+    const xrayCount = xrayKeys.filter(cn => cnSet.has(cn)).length;
+    const xrayUnmatched = xrayKeys.filter(cn => !cnSet.has(cn));
     const xraySealed = mode === 'discharge'
-      ? Object.entries(sec.xraySeals || {}).filter(([_, v]) => v?.seal).length
+      ? Object.entries(sec.xraySeals || {}).filter(([cn, v]) => v?.seal && cnSet.has(cn)).length
       : 0;
     const iso403Targets = containers.filter(isISO403);
     const iso403Pending = iso403Targets.filter(c => !isISO403PhotoTaken(c));
@@ -59,7 +65,7 @@ export default function VoyageSummaryCard({ voyage, mode }) {
       pct: total ? Math.round(done / total * 100) : 0,
       reeferTotal: reefers.length,
       reeferTempMissing: reeferTempMissing.length,
-      xrayCount, xraySealed,
+      xrayCount, xraySealed, xrayUnmatched,
       iso403Total: iso403Targets.length,
       iso403Pending: iso403Pending.length,
       displaced,
@@ -107,12 +113,12 @@ export default function VoyageSummaryCard({ voyage, mode }) {
             value={`${summary.reeferTotal}대${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
           />
         )}
-        {summary.xrayCount > 0 && (
+        {(summary.xrayCount > 0 || summary.xrayUnmatched?.length > 0) && (
           <Chip
             icon={Shield}
-            color="purple"
+            color={summary.xrayUnmatched?.length > 0 ? 'red' : 'purple'}
             label="X-RAY"
-            value={`${summary.xraySealed}/${summary.xrayCount}`}
+            value={`${summary.xraySealed}/${summary.xrayCount}${summary.xrayUnmatched?.length > 0 ? ` · ⚠${summary.xrayUnmatched.length} 미매칭` : ''}`}
           />
         )}
         {summary.iso403Total > 0 && (

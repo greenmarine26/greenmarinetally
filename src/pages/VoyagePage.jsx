@@ -2092,6 +2092,27 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-purple-700 file:text-purple-100 file:font-bold file:cursor-pointer"/>
           <div className="text-[10px] text-slate-500 mt-1">
             현재 X-RAY: {Object.keys(sec.xrayList || {}).length}대
+            {(() => {   // V7.94-03: EDI/리스트에 없는 X-RAY 컨번호 노출 + V7.94-04: 잔존 키 정리 버튼
+              //   업로드는 누적(merge) 방식 — 이전 업로드의 옛 키가 안 지워져 미매칭 잔존 발생 (사용자 제보)
+              const cnSet = new Set([...Object.keys(sec.ediContainers || {}), ...Object.keys(sec.records || {})]);
+              const um = Object.keys(sec.xrayList || {}).filter(cn => !cnSet.has(cn));
+              if (um.length === 0) return null;
+              const cleanUnmatched = async () => {
+                if (!window.confirm(`미매칭 X-RAY ${um.length}대를 리스트에서 삭제합니다.\n${um.join(', ')}\n\n(EDI/리스트에 없는 번호 — 이전 업로드 잔존/오타)\n진행할까요?`)) return;
+                const kept = {};
+                Object.entries(sec.xrayList || {}).forEach(([cn, v]) => { if (cnSet.has(cn)) kept[cn] = v; });
+                await fbSaveXrayList(voyageKey, kept);
+                setStatus(`🧹 미매칭 X-RAY ${um.length}대 삭제 — 남은 ${Object.keys(kept).length}대`);
+              };
+              return (
+                <span className="text-red-400 font-bold"> · ⚠미매칭 {um.length}대: {um.join(', ')} (EDI/리스트에 없는 번호)
+                  <button onClick={cleanUnmatched}
+                    className="ml-2 px-2 py-0.5 rounded bg-red-800 hover:bg-red-700 text-red-100 font-bold">
+                    🧹 미매칭 삭제
+                  </button>
+                </span>
+              );
+            })()}
             <br/>지원: .xls .xlsx
           </div>
         </div>

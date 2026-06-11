@@ -6,9 +6,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
-import { fbCompleteContainer, fbUpdateVoyageInfo } from '../firebase.js';
+import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber } from '../utils.js';
+import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
@@ -40,6 +40,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [consecFix, setConsecFix] = useState(0);
   const [busy, setBusy] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
+  // V7.94-05: 카드 내 실번호/XRAY 번호 인라인 입력 (검수사가 카드에서 바로 확인·입력)
+  const [editSealCn, setEditSealCn] = useState(null);
+  const [sealVal, setSealVal] = useState('');
+  const [editXCn, setEditXCn] = useState(null);
+  const [xVal, setXVal] = useState('');
+  const [xEVal, setXEVal] = useState('');
+
+  const saveSeal = async (c) => {
+    await fbUpdateRecordSeal(voyageKey, mode, c.cn, sealVal.trim(), inspector);
+    setEditSealCn(null); setSealVal('');
+  };
+  const saveXSeal = async (c) => {
+    await fbSetXraySeal(voyageKey, c.cn, xVal.trim(), xEVal.trim(), inspector);
+    setEditXCn(null); setXVal(''); setXEVal('');
+  };
 
   // 접안 방향 저장 — 오선택 방지: 확인 후 저장
   const pickBerth = (side) => {
@@ -256,7 +271,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     );
   }
 
-  // ── 4단계: 예측 카드 ──
+  // ── 4단계: 예측 카드 (V7.94-05: 기본 정보 전부 표시 — 실번호 확인·XRAY 번호 입력·규격 확인) ──
   const renderCon = (c, label, color) => (
     <div className={`rounded-lg border-2 p-3 ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
       <div className="flex items-center justify-between text-[10px] mb-1">
@@ -267,15 +282,66 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <span className="mono text-xl font-bold text-slate-100">{c.cn.slice(0, -4)}</span>
         <span className="mono text-3xl font-black text-emerald-300">{c.cn.slice(-4)}</span>
       </button>
+      {/* 기본 정보 줄: 규격·F/E·무게·선사·항로 */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 text-[11px] mono text-slate-300">
+        <span className="font-bold text-slate-100">{c.tp || c.iso}</span>
+        <span className={c.fe === 'E' ? 'text-slate-400 font-bold' : 'text-emerald-400 font-bold'}>{c.fe === 'E' ? 'EMPTY' : 'FULL'}</span>
+        {c.wt ? <span>{formatWt(c.wt)}</span> : null}
+        {c.op && <span className="px-1 rounded bg-slate-800 text-slate-300">{c.op}</span>}
+        <span className="text-slate-500">{c.pol} → {c.pod}</span>
+      </div>
       <div className="flex flex-wrap gap-1 mt-1">
         {c._xray && <span className="px-1.5 py-0.5 rounded bg-fuchsia-700 text-fuchsia-100 text-[10px] font-bold">★XRAY</span>}
         {c.rf && <span className="px-1.5 py-0.5 rounded bg-sky-700 text-sky-100 text-[10px] font-bold"><Snowflake className="w-3 h-3 inline"/>리퍼{c.tmp ? ` ${c.tmp}` : ''}</span>}
         {c.dg && <span className="px-1.5 py-0.5 rounded bg-red-700 text-red-100 text-[10px] font-bold">DG</span>}
         {c.fr && <span className="px-1.5 py-0.5 rounded bg-orange-700 text-orange-100 text-[10px] font-bold">FR</span>}
         {c.ot && <span className="px-1.5 py-0.5 rounded bg-yellow-700 text-yellow-100 text-[10px] font-bold">O/T</span>}
-        {c.fe === 'E' && <span className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-200 text-[10px] font-bold">EMPTY</span>}
-        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">{c.tp || c.iso}</span>
+        {c.oog && <span className="px-1.5 py-0.5 rounded bg-rose-700 text-rose-100 text-[10px] font-bold">OOG</span>}
       </div>
+      {/* 실번호 — 확인·수정 */}
+      <div className="mt-1.5 pt-1.5 border-t border-slate-700/60">
+        {editSealCn === c.cn ? (
+          <div className="flex gap-1.5">
+            <input autoFocus value={sealVal} onChange={e => setSealVal(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveSeal(c); }}
+              placeholder="실번호 입력" className="flex-1 min-w-0 bg-slate-800 border border-amber-600 rounded px-2 py-1 text-sm mono text-slate-100"/>
+            <button onClick={() => saveSeal(c)} className="px-2.5 rounded bg-emerald-700 text-white text-xs font-bold">저장</button>
+            <button onClick={() => { setEditSealCn(null); setSealVal(''); }} className="px-2 rounded bg-slate-800 text-slate-400 text-xs">취소</button>
+          </div>
+        ) : (
+          <button onClick={() => { setEditSealCn(c.cn); setSealVal(c.sl || ''); }} className="w-full flex items-center gap-1.5 text-left">
+            <span className="text-[11px] text-slate-500 flex-shrink-0">실:</span>
+            <span className={`mono text-sm font-bold ${c.sl ? 'text-cyan-300' : 'text-amber-400'}`}>{c.sl || '⚠ 미입력'}</span>
+            <Pencil className="w-3 h-3 text-slate-500"/>
+          </button>
+        )}
+      </div>
+      {/* XRAY 번호 — 대상만 표시·입력 */}
+      {c._xray && (
+        <div className="mt-1.5">
+          {editXCn === c.cn ? (
+            <div className="space-y-1">
+              <div className="flex gap-1.5">
+                <input autoFocus value={xVal} onChange={e => setXVal(e.target.value)}
+                  placeholder="XRAY 실번호" className="flex-1 min-w-0 bg-slate-800 border border-fuchsia-600 rounded px-2 py-1 text-sm mono text-slate-100"/>
+                <input value={xEVal} onChange={e => setXEVal(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveXSeal(c); }}
+                  placeholder="E-실(선택)" className="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm mono text-slate-100"/>
+              </div>
+              <div className="flex gap-1.5">
+                <button onClick={() => saveXSeal(c)} className="flex-1 py-1 rounded bg-fuchsia-700 text-white text-xs font-bold">XRAY 저장</button>
+                <button onClick={() => { setEditXCn(null); setXVal(''); setXEVal(''); }} className="px-2 rounded bg-slate-800 text-slate-400 text-xs">취소</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => { setEditXCn(c.cn); setXVal(c._xraySeal?.seal || ''); setXEVal(c._xraySeal?.eseal || ''); }} className="w-full flex items-center gap-1.5 text-left">
+              <span className="text-[11px] text-fuchsia-400 font-bold flex-shrink-0">XRAY:</span>
+              <span className={`mono text-sm font-bold ${c._xraySeal?.seal ? 'text-fuchsia-200' : 'text-amber-400'}`}>{c._xraySeal?.seal || '미입력'}{c._xraySeal?.eseal ? ` / E:${c._xraySeal.eseal}` : ''}</span>
+              <Pencil className="w-3 h-3 text-slate-500"/>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 
