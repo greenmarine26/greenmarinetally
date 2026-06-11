@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
-import { isoToLabel, fmtPos } from '../utils.js';
+import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer } from '../nlSearch.js';
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -53,6 +53,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         if (!c.cn) return;
         arr.push({
           ...c, _mode: m,
+          // V7.92-02: 평택분 여부 — 양하=POD평택, 선적=POL평택 (7.1). 집계는 평택분만.
+          _ptk: m === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol),
           _xray: m === 'discharge' && !!xrayMap[c.cn],
           _xraySeal: xraySeals[c.cn] || null,
           _comp: compMap[c.cn] || null,
@@ -71,8 +73,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   }, [allContainers, workFilter]);
 
   // 갯수 표시용
-  const dischCount = useMemo(() => allContainers.filter(c => c._mode === 'discharge' && !c._comp).length, [allContainers]);
-  const loadCount = useMemo(() => allContainers.filter(c => c._mode === 'loading' && !c._comp).length, [allContainers]);
+  const dischCount = useMemo(() => allContainers.filter(c => c._mode === 'discharge' && c._ptk && !c._comp).length, [allContainers]);   // V7.92-02: 평택분만
+  const loadCount = useMemo(() => allContainers.filter(c => c._mode === 'loading' && c._ptk && !c._comp).length, [allContainers]);   // V7.92-02: 평택분만
   const completedCount = useMemo(() => allContainers.filter(c => c._comp).length, [allContainers]);
 
   return (
@@ -161,7 +163,11 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (!hasAnyCondition(parsed)) return [];
     // V7.53: 전체 자료에서 검색하되 현재 작업 모드(미완료) 우선 정렬.
     //   (구) 탭 필터 데이터만 검색 → 완료·반대 모드 컨테이너는 "없습니다" — 있는 자료를 못 알려주던 원인.
-    const r = applyNLFilter(allContainers, parsed);
+    let r = applyNLFilter(allContainers, parsed);
+    // V7.92-02: 집계·조건 검색은 평택분만 (7.1) — 양하 탭 숫자와 챗봇 답이 달랐던 원인
+    //   (allContainers는 EDI 전체 = 통과화물 포함). 단, 컨번호(digits) 단건 조회는 전체 유지
+    //   — 통과화물을 스캔했을 때 "없습니다"가 아니라 찾아서 알려줘야 함 (V7.53 회귀 방지).
+    if (!parsed.digits) r = r.filter(c => c._ptk);
     const rank = (c) => (c._comp ? 2 : (c._mode === workFilter ? 0 : 1));
     return [...r].sort((a, b) => rank(a) - rank(b));
   }, [allContainers, query, parsed, workFilter]);
@@ -209,7 +215,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.size && !parsed.fe && !parsed.type && !parsed.weightSum &&
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
-    return generateLocalAnswer(parsed, results, allContainers);
+    return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk));   // V7.92-02: 집계는 평택분만
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage]);
 
   // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.
@@ -400,7 +406,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[10px] text-slate-500 font-bold">
-            🤖 검색/AI — 4자리 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 전체 {allContainers.length}대
+            🤖 검색/AI — 4자리 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
           </div>
           <button onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-[10px] font-bold border border-amber-700/40">
