@@ -136,6 +136,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
   const fixTriedRef = useRef('');     // V7.80: AI 복원 1회 제한
   const [fixingVoice, setFixingVoice] = useState(false);
+  const [showOthers, setShowOthers] = useState(false);  // V7.90: 반대 모드·완료분 접이식
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
@@ -556,17 +557,40 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         </div>
       )}
 
-      {/* 일반 결과 (로컬 답변/통계 카드 없을 때만 표시) */}
-      {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && results.length === 1 && (
-        <BigResultCard c={results[0]} allContainers={allContainers}
-          voyageKey={voyageKey} inspector={inspector}
-          onOpen={() => onOpenContainer?.(results[0])}
-          onAfterComplete={() => { setQuery(''); stopSpeak(); }}
-        />
-      )}
-      {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && results.length > 1 && results.slice(0, 30).map(c => (
-        <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
-      ))}
+      {/* 일반 결과 (로컬 답변/통계 카드 없을 때만 표시)
+          V7.90: 현재 작업(모드·미완료)만 기본 표시 — 반대 모드·완료분은 접이식.
+          선적 중 양하분이 조회에 나와 방해·중복되던 문제(사용자 제보) 해결.
+          접이식이라 "있는 자료를 못 찾는" V7.53 이전 문제로는 돌아가지 않음. */}
+      {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && (() => {
+        const main = results.filter(c => !c._comp && c._mode === workFilter);
+        const others = results.filter(c => c._comp || c._mode !== workFilter);
+        const othersLabel = (n) => `다른 작업·완료분에 ${n}건 — 보기`;
+        return (
+          <>
+            {main.length === 1 && (
+              <BigResultCard c={main[0]} allContainers={allContainers}
+                voyageKey={voyageKey} inspector={inspector}
+                onOpen={() => onOpenContainer?.(main[0])}
+                onAfterComplete={() => { setQuery(''); stopSpeak(); }}
+              />
+            )}
+            {main.length > 1 && main.slice(0, 30).map(c => (
+              <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
+            ))}
+            {others.length > 0 && results.length > 0 && (
+              <div className="mt-1">
+                <button onClick={() => setShowOthers(v => !v)}
+                  className="w-full py-1.5 rounded bg-slate-800/60 border border-slate-700/50 text-[11px] text-slate-400 font-bold">
+                  {showOthers ? '▲ 접기' : `▼ ${othersLabel(others.length)}`}
+                </button>
+                {showOthers && others.slice(0, 20).map(c => (
+                  <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
+                ))}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
       <WrongAnswerModal

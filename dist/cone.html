@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.80-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.90-02</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -648,6 +648,7 @@ async function fbFetchVoyages(){
       imo: info.imo||'',
       voy: info.voy_l||info.voy_d||info.voy||'',
       voy_d: info.voy_d||'', voy_l: info.voy_l||'',
+      dischargeDoneAt: info.dischargeDone ? (info.dischargeDoneAt||0) : (info.inspectorDone ? (info.inspectorDoneAt||0) : 0),  // V7.90: 양하 완료 기록 (분리작업 자동 판정)
       hasD, hasL,
       noEdi: !hasD && !hasL,
       createdAt: info.createdAt||0,
@@ -763,6 +764,7 @@ async function selectVoyage(voyageKey){
     return;
   }
   state.voyageKey=voyageKey;
+  state._dischDoneAt=v.dischargeDoneAt||0;  // V7.90: 검수앱 양하 완료 기록 — 분리작업 자동 판정 근거
   state.stow=null; state.disch=null; state.shipType=null; state.shipName=''; state.detected=false;
   showLoading('검수앱에서 '+v.vsl+' 자료 불러오는 중...');
   try{
@@ -1401,7 +1403,13 @@ async function runCalc(){
       state._sepInfo='';
       const dDate=state.disch&&state.disch.docDate, sDate=state.stow&&state.stow.docDate;
       const fmtD=(t)=>{ const x=new Date(t); return (x.getMonth()+1)+'/'+x.getDate(); };
-      if(dg&&Object.keys(dg).length && sg&&Object.keys(sg).length && dDate && sDate
+      const fmtDT=(t)=>{ const x=new Date(t); return (x.getMonth()+1)+'/'+x.getDate()+' '+String(x.getHours()).padStart(2,'0')+':'+String(x.getMinutes()).padStart(2,'0'); };
+      // V7.90: 검수앱 '양하 완료' 기록이 있으면 확인 없이 자동 분리 (사용자 확정 설계)
+      if(dg&&Object.keys(dg).length && sg&&Object.keys(sg).length && state._dischDoneAt){
+        dg={};
+        state._sepInfo='🔀 분리 작업 자동 적용 — 검수앱에 양하 완료 기록('+fmtDT(state._dischDoneAt)+')이 있어 콘은 전량 반납된 상태로 봅니다. 선적 콘은 <b>전량 콘박스에서</b> 가져옵니다.';
+      }
+      else if(dg&&Object.keys(dg).length && sg&&Object.keys(sg).length && dDate && sDate
          && (sDate-dDate)>=24*3600*1000){
         const sig=dDate+'|'+sDate;
         if(state._sepAnsKey!==sig){

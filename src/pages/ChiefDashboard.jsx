@@ -623,8 +623,13 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
         discharge: dPtk, loading: lPtk,
         imo: info.imo || '',
         createdAt: info.createdAt || 0,
-        inspectorDone: !!info.inspectorDone,
-        inspectorDoneAt: info.inspectorDoneAt || 0,
+        // V7.90: 완료 분리 — 보유 모드가 전부 완료되면 수석 최종 저장 가능 (구 inspectorDone 하위호환)
+        inspectorDone: !!info.inspectorDone
+          || ((dPtk === 0 && lPtk === 0) ? false
+              : (dPtk === 0 || !!info.dischargeDone) && (lPtk === 0 || !!info.loadingDone)),
+        inspectorDoneAt: info.inspectorDoneAt || Math.max(info.dischargeDoneAt || 0, info.loadingDoneAt || 0),
+        dDone: !!(info.inspectorDone || info.dischargeDone), dDoneAt: info.dischargeDoneAt || 0,
+        lDone: !!(info.inspectorDone || info.loadingDone), lDoneAt: info.loadingDoneAt || 0,
       });
     }
     return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -696,8 +701,8 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
                 )}
               </div>
               <div className="flex items-center gap-3 mt-1 text-xs">
-                <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b></span>
-                <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b></span>
+                <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
+                <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
                 {r.inspectorDone && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
                 )}

@@ -256,22 +256,38 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   //   수석이 대시보드 진행 상황에서 최종 '완료 저장'을 누를 때만 실행.
   //   (2명이 나눠 작업 중 한 명이 자기 자리 완료를 전체 완료로 잘못 눌러 삭제되는 사고 방지)
   const [completeTarget, setCompleteTarget] = useState(null);
+  // V7.90: 완료를 양하/선적으로 분리 — 작업시간 구분 + 콘앱 분리작업 자동 판정의 근거.
+  //   mode='discharge'|'loading'. 보유 모드가 전부 완료되면 기존 "수석 대기" 상태가 됨.
   const performComplete = async () => {
     if (!completeTarget) return;
-    const { key } = completeTarget;
+    const { key, mode } = completeTarget;
     try {
-      await fbUpdateVoyageInfo(key, { inspectorDone: true, inspectorDoneAt: Date.now() });
+      const f = mode === 'discharge'
+        ? { dischargeDone: true, dischargeDoneAt: Date.now() }
+        : { loadingDone: true, loadingDoneAt: Date.now() };
+      await fbUpdateVoyageInfo(key, f);
     } catch (e) {
       console.error('[검수완료 표시] 실패:', key, e);
       alert('검수 완료 표시 중 오류가 발생했습니다.');
     }
     setCompleteTarget(null);
   };
-  // 검수사가 누른 '검수 완료'를 수석 확인 전 되돌리기
-  const undoInspectorDone = async (key) => {
+  // 검수사가 누른 모드별 완료를 수석 확인 전 되돌리기
+  const undoInspectorDone = async (key, mode) => {
     try {
-      await fbUpdateVoyageInfo(key, { inspectorDone: false, inspectorDoneAt: null });
+      const f = mode === 'discharge'
+        ? { dischargeDone: false, dischargeDoneAt: null }
+        : { loadingDone: false, loadingDoneAt: null };
+      await fbUpdateVoyageInfo(key, f);
     } catch (e) { console.error('[검수완료 취소] 실패:', key, e); }
+  };
+  // 보유 모드 전부 완료 여부 (구 inspectorDone 데이터 하위호환)
+  const isAllDone = (v) => {
+    if (v?.info?.inspectorDone) return true;
+    const hasD = v?.discharge && Object.keys(v.discharge).length > 0;
+    const hasL = v?.loading && Object.keys(v.loading).length > 0;
+    if (!hasD && !hasL) return false;
+    return (!hasD || !!v?.info?.dischargeDone) && (!hasL || !!v?.info?.loadingDone);
   };
 
   return (
@@ -447,9 +463,15 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 activeInspectors={activeInspectors[v.key] || []}
                 onOpen={() => onOpenVoyage(v.key)}
                 onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
-                onComplete={() => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy })}
-                inspectorDone={!!v.info?.inspectorDone}
-                onUndoComplete={() => undoInspectorDone(v.key)}
+                onComplete={(mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
+                inspectorDone={isAllDone(v)}
+                modeDone={{
+                  d: v.info?.inspectorDone || !!v.info?.dischargeDone,
+                  l: v.info?.inspectorDone || !!v.info?.loadingDone,
+                  hasD: !!(v.discharge && Object.keys(v.discharge).length),
+                  hasL: !!(v.loading && Object.keys(v.loading).length),
+                }}
+                onUndoComplete={(mode) => undoInspectorDone(v.key, mode)}
               />
             </React.Fragment>
           );
@@ -488,17 +510,18 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             <div className="bg-slate-900 border border-emerald-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle className="w-6 h-6 text-emerald-400"/>
-                <h3 className="text-lg font-bold text-slate-100">검수 완료</h3>
+                <h3 className="text-lg font-bold text-slate-100">{completeTarget.mode === 'discharge' ? '⬇ 양하 완료' : '⬆ 선적 완료'}</h3>
               </div>
               <p className="text-sm text-slate-300 mb-1">{completeTarget.vsl} {completeTarget.voy}</p>
-              <p className="text-sm text-slate-400 mb-3">이 항차를 <b className="text-emerald-300">검수 완료</b>로 표시합니다. 자료는 삭제되지 않으며, 수석검수사가 대시보드에서 최종 확인(완료 저장)해야 보관소로 이동합니다.</p>
+              <p className="text-sm text-slate-400 mb-3">이 항차의 <b className="text-emerald-300">{completeTarget.mode === 'discharge' ? '양하 작업' : '선적 작업'}</b>을 완료로 표시합니다 (완료 시각 기록). 자료는 삭제되지 않으며, 모든 작업이 완료되면 수석검수사가 최종 확인합니다.</p>
               <div className="bg-slate-800/60 rounded-lg p-3 mb-4 text-sm">
-                <div className="flex justify-between"><span className="text-blue-300">양하</span><span className="font-bold text-slate-100">{dCnt}대</span></div>
-                <div className="flex justify-between mt-1"><span className="text-amber-300">선적</span><span className="font-bold text-slate-100">{lCnt}대</span></div>
+                {completeTarget.mode === 'discharge'
+                  ? <div className="flex justify-between"><span className="text-blue-300">양하</span><span className="font-bold text-slate-100">{dCnt}대</span></div>
+                  : <div className="flex justify-between"><span className="text-amber-300">선적</span><span className="font-bold text-slate-100">{lCnt}대</span></div>}
               </div>
               <div className="flex gap-2">
                 <button onClick={() => setCompleteTarget(null)} className="flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-sm">취소</button>
-                <button onClick={performComplete} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">검수 완료 표시</button>
+                <button onClick={performComplete} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">{completeTarget.mode === 'discharge' ? '양하 완료 표시' : '선적 완료 표시'}</button>
               </div>
             </div>
           </div>
@@ -604,7 +627,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, onUndoComplete }) {
+function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete }) {
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
@@ -687,27 +710,40 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             ) : <span className="text-slate-600">대기 중</span>}
           </div>
           <div className="flex items-center gap-1">
-            {onComplete && (
-              inspectorDone ? (
-                <div className="flex items-center gap-1">
-                  <span className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/40 text-amber-300 text-[10px] font-bold border border-amber-700/40" title="검수 완료 — 수석검수사 최종 확인 대기 중">
-                    <CheckCircle className="w-3.5 h-3.5"/>검수 완료 · 수석 대기
-                  </span>
-                  {onUndoComplete && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onUndoComplete(); }}
-                      className="px-2 py-1 rounded bg-slate-700/50 hover:bg-slate-600 text-slate-300 text-[10px] font-bold border border-slate-600/40"
-                      title="검수 완료 취소 (수석 확인 전까지 가능)"
-                    >취소</button>
-                  )}
-                </div>
+            {/* V7.90: 완료 분리 — 양하/선적 각각 완료 표시 (작업시간 구분 + 콘앱 분리작업 자동 판정 근거) */}
+            {onComplete && inspectorDone && (
+              <span className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/40 text-amber-300 text-[10px] font-bold border border-amber-700/40" title="모든 작업 완료 — 수석검수사 최종 확인 대기 중">
+                <CheckCircle className="w-3.5 h-3.5"/>검수 완료 · 수석 대기
+              </span>
+            )}
+            {onComplete && modeDone?.hasD && (
+              modeDone.d ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('discharge'); }}
+                  className="px-2 py-1 rounded bg-blue-900/40 text-blue-300 text-[10px] font-bold border border-blue-700/40"
+                  title="양하 완료됨 — 누르면 취소 (수석 확인 전까지)"
+                >⬇ 양하 ✓</button>
               ) : (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onComplete(); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-900/30 hover:bg-emerald-800/50 text-emerald-400 hover:text-emerald-300 text-[10px] font-bold border border-emerald-800/40"
-                  title="검수 완료 표시 — 삭제 안 됨, 수석이 최종 저장"
-                >
-                  <CheckCircle className="w-3.5 h-3.5"/>완료
+                  onClick={(e) => { e.stopPropagation(); onComplete('discharge'); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 text-[10px] font-bold border border-blue-800/40"
+                  title="양하 작업 완료 표시 — 삭제 안 됨"
+                >⬇ 양하 완료</button>
+              )
+            )}
+            {onComplete && modeDone?.hasL && (
+              modeDone.l ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('loading'); }}
+                  className="px-2 py-1 rounded bg-amber-900/40 text-amber-300 text-[10px] font-bold border border-amber-700/40"
+                  title="선적 완료됨 — 누르면 취소 (수석 확인 전까지)"
+                >⬆ 선적 ✓</button>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onComplete('loading'); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 text-[10px] font-bold border border-amber-800/40"
+                  title="선적 작업 완료 표시 — 삭제 안 됨"
+                >⬆ 선적 완료
                 </button>
               )
             )}
