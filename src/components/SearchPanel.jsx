@@ -582,9 +582,13 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       //   앞을 먼저 완료해도 뒤 컨이 계속 보인다.
       const twin = findTwinCandidate(front, allContainers, new Set(), shipImo, shipName);
       setC2(twin);
-    } else if (r1.length === 0 || r1.length > 1) {
+    } else if (r1.length === 0) {
       setC1(null);
       setC2(null);
+    } else if (r1.length > 1) {
+      // V7.60: 끝4자리 중복 — 사용자가 선택 버튼으로 고른 컨이 후보 안에 있으면 유지.
+      //   (구) 무조건 null → 버튼 클릭으로 선택해도 즉시 지워져 "선택이 안 됨" (메모 버그).
+      if (!c1 || !r1.some(c => c.cn === c1.cn)) { setC1(null); setC2(null); }
     }
   }, [r1, autoTwin, allContainers, shipImo, shipName, c1]);
 

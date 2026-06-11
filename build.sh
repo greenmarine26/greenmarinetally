@@ -60,7 +60,7 @@ cp dist/index.html ./
 # V7.46: 콘앱용 본체 카고플랜 V2 번들 — 같은 소스(PrintableCargoPlanV2+cargoPlanCore+사전)를 React째 번들
 echo "[+] 콘앱 카고플랜 V2 번들 생성 (cone-cargoplan.js)..."
 node_modules/.bin/esbuild src/coneCargoPlan.entry.jsx --bundle --outfile=public/cone-cargoplan.js \
-  --format=iife --loader:.js=jsx --jsx=automatic --define:process.env.NODE_ENV='"production"' --minify --log-level=error
+  --format=iife --loader:.js=jsx --jsx=automatic --define:process.env.NODE_ENV='"production"' --minify --target=es2017 --log-level=error
 cp public/cone-cargoplan.js dist/ 2>/dev/null || true
 cp public/cone-cargoplan.js ./
 echo "✓ cone-cargoplan.js 생성·복사 ($(du -h public/cone-cargoplan.js | cut -f1))" 

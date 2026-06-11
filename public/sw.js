@@ -1,9 +1,16 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'V7.59';
+const VERSION = 'V7.61';
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
+  // V7.60: 콘앱 카고플랜 번들(1.6MB)을 설치 때 미리 캐시 — 약신호(배 안)에서도 즉시 로드.
+  //   실패해도 설치를 막지 않음 (런타임 캐시가 보완).
+  e.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((c) => c.add('cone-cargoplan.js').catch(() => {}))
+      .catch(() => {})
+  );
   // 즉시 활성화 — 새 버전 빠르게 적용
   self.skipWaiting();
 });

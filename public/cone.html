@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.59</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.61</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1458,13 +1458,25 @@ let __cargoFlag='d';  // 'd'=양하, 'l'=선적
 async function loadCargoPlanV2(){
   if(window.ConeCargoPlan) return;
   showLoading('카고플랜 모듈 불러오는 중...');
-  await new Promise((res,rej)=>{
+  // V7.60: 약신호(배 안)에서 1.6MB 번들 로드가 실패하면 1회 자동 재시도.
+  //   onload 후에도 window.ConeCargoPlan이 없으면(파싱 실패 — 너무 오래된 브라우저) 구분 안내.
+  const tryLoad=()=>new Promise((res,rej)=>{
     const s=document.createElement('script');
-    s.src='cone-cargoplan.js?v='+(window.__APPV||'');
-    s.onload=res; s.onerror=()=>rej(new Error('카고플랜 모듈 로드 실패'));
+    s.src='cone-cargoplan.js?v='+(window.__APPV||'')+'&r='+Date.now();
+    s.onload=res; s.onerror=()=>{ s.remove(); rej(new Error('NETWORK')); };
     document.head.appendChild(s);
   });
-  const ld=document.getElementById('loadingBox'); if(ld) ld.remove();
+  try{
+    try{ await tryLoad(); }
+    catch(e){ await new Promise(r=>setTimeout(r,1200)); await tryLoad(); }
+  }catch(e){
+    throw new Error('모듈을 내려받지 못했습니다 — 인터넷 연결을 확인해 주세요 (배에서는 신호가 약할 수 있어요)');
+  }finally{
+    const ld=document.getElementById('loadingBox'); if(ld) ld.remove();
+  }
+  if(!window.ConeCargoPlan){
+    throw new Error('이 폰의 브라우저가 오래되어 카고플랜을 열 수 없습니다 — 크롬(Chrome) 최신 버전으로 열어 주세요');
+  }
 }
 // parseEDI row → 본체 컨테이너 형식
 function rowsToContainers(rows){
@@ -1486,7 +1498,7 @@ async function openCargoPlanV2(mode){
       mode,
     });
   }catch(err){
-    alert('카고플랜을 열지 못했습니다. 인터넷 연결 후 다시 시도해주세요. ('+err.message+')');
+    alert('카고플랜을 열지 못했습니다.\n'+err.message);
   }
 }
 // 양하·선적 둘 다 있으면 선택, 한쪽만 있으면 바로
@@ -2062,7 +2074,10 @@ function renderResults(groups){
       bay:(g.labels&&g.labels.length?g.labels.join(','):String(k)),
       deck:{need:sd.deckPer, have:dd.deckPer, diff:sd.deckPer-dd.deckPer},
       ele:{need:sd.elePer, have:dd.elePer, diff:sd.elePer-dd.elePer},
-      hold:{need:g.stow.hold*2, have:g.disch.hold*2, diff:g.stow.hold*2-g.disch.hold*2},
+      // V7.61: 홀드콘 ×2 제거 — ediToBayGroups가 이미 대당 1(받침 통과분)로 정확히 합산.
+      //   ×2는 "트윈 두 베이 합산" 규칙의 오역 — 자기 콘을 두 번 세어 ATPR 19번(콘 18)이
+      //   36으로 표기되던 버그 (메모: 19와 (20)21이 같이 계산됨).
+      hold:{need:g.stow.hold, have:g.disch.hold, diff:g.stow.hold-g.disch.hold},
     };
   });
 
