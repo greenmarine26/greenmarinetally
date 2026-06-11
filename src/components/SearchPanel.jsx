@@ -8,6 +8,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOct
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer } from '../nlSearch.js';
+import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate } from '../twin.js';
 import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
@@ -132,6 +133,9 @@ function announceContainer(c) {
 
 function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer }) {
   const [query, setQuery] = useState('');
+  const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
+  const fixTriedRef = useRef('');     // V7.80: AI 복원 1회 제한
+  const [fixingVoice, setFixingVoice] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
@@ -190,7 +194,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
         const t = pickSpeechAlternative(alts).trim();
         setTranscript(t);
-        if (t.length >= 2) setQuery(t);
+        if (t.length >= 2) { voiceQueryRef.current = t; setQuery(t); }
         else {
           const digits = parseSpokenDigits(text);
           if (digits && digits.length >= 2) setQuery(digits);
@@ -204,6 +208,35 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     return () => { try { r.abort(); } catch(_) {} };
   }, []);
 
+  // V7.80: 음성 질문 자동 복원 — 음성으로 들어온 문장에 못 알아들은 단어가 있으면
+  //   AI(질문 번역기)가 오인식을 교정한 문장으로 1회 재시도. AI는 답하지 않음(환각 차단).
+  //   ⚠ 완전 실패만 잡으면 안 됨: "20번 베이 잇퍼 몇대야"는 베이만 잡혀 전체 개수를
+  //   답해버림(사용자 증상) — 미해석 단어가 남아도 복원 대상.
+  useEffect(() => {
+    const q = query.trim();
+    if (!q || q.length < 4) return;
+    if (voiceQueryRef.current !== q) return;          // 음성으로 들어온 질문만
+    if (/^[0-9\s]+$/.test(q)) return;                 // 숫자(끝4자리)는 제외
+    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요/g;
+    const leftover = q.replace(/[0-9A-Za-z\s.,?!]/g, ' ').replace(KNOWN, ' ').trim()
+      .split(/\s+/).filter(t => t.length >= 2);
+    const understood = hasAnyCondition(parsed) || !!localAnswer;
+    if (understood && leftover.length === 0) return;   // 전부 알아들음 — 그대로
+    if (fixTriedRef.current === q) return;             // 같은 문장 1회만
+    fixTriedRef.current = q;
+    let alive = true;
+    setFixingVoice(true);
+    fixQuestionWithAI(q).then(fixed => {
+      if (!alive) return;
+      setFixingVoice(false);
+      if (fixed && fixed !== q) {
+        const p2 = parseNaturalQuery(fixed);
+        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setQuery(fixed); }
+      }
+    }).catch(() => { if (alive) setFixingVoice(false); });
+    return () => { alive = false; };
+  }, [query, parsed, localAnswer]);
+
   // 자동 음성 안내
   useEffect(() => {
     if (!autoSpeak) return;
@@ -214,20 +247,22 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
 
-    // M3.2: 로컬 답변이 있으면 첫 두 줄만 읽기 (좌표는 voice.js가 자동 한국어화)
+    // V7.80: 음성 답변 간결화 — 핵심 한 문장만 (상세는 화면). 0대면 "~없습니다" (사용자 확정 형식).
     if (localAnswer) {
-      const lines = localAnswer.split('\n').filter(l => l.trim());
-      const head = lines.slice(0, 2).join('. ').replace(/[📊📍📭⚖️•·]/g, '').trim();
-      if (head) speak(head);
+      const first = (localAnswer.split('\n').find(l => l.trim()) || '').replace(/[📊📍📭⚖️•·]/g, '').trim();
+      const zm = first.match(/^(.+?):\s*0대/);
+      if (zm) speak(`${zm[1].trim()} 없습니다`);
+      else if (first) speak(first.replace(/:\s*/, ' '));
       return;
     }
 
     if (parsed.isStat) {
-      speak(`${describeQuery(parsed)} ${results.length}대`);
+      const n = results.length;
+      speak(n === 0 ? `${describeQuery(parsed)} 없습니다` : `${describeQuery(parsed)} ${n}대`);
       return;
     }
     if (results.length === 0 && hasAnyCondition(parsed)) {
-      speak(`${describeQuery(parsed)} 없음`);
+      speak(`${describeQuery(parsed)} 없습니다`);
     } else if (results.length === 1) {
       announceContainer(results[0]);
     } else if (results.length <= 5) {
@@ -368,8 +403,11 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           </button>
         )}
 
+        {fixingVoice && (
+          <div className="mt-2 text-[11px] text-center text-sky-300 font-bold animate-pulse">🎙 문장 복원 중…</div>
+        )}
         {/* V7.54: 못 알아들었거나 일치 0인 질문 기록 — 나중에 지원 추가용 (사용자 요청) */}
-        {!isListening && query.length >= 4 && !aiLoading && !aiAnswer && chatMessages.length === 0 && !localAnswer
+        {!isListening && !fixingVoice && query.length >= 4 && !aiLoading && !aiAnswer && chatMessages.length === 0 && !localAnswer
           && (!hasAnyCondition(parsed) || results.length === 0)
           && !/^\d+$/.test(query.trim()) && (
           <button onClick={() => {

@@ -556,6 +556,32 @@ ${truncated ? `\n※ ${candidates.length}대 중 상위 ${MAX_CANDIDATES}대만 
 }
 
 // 질문이 자유 자연어인지 키워드 검색인지 판단
+// V7.80: 음성 오인식 질문 복원 — AI는 답하지 않고 "교정된 질문 한 문장"만 출력 (질문 번역기).
+//   복원된 문장은 로컬 파서(nlSearch)에 다시 넣어 데이터로 답함 — 환각 원천 차단.
+export async function fixQuestionWithAI(rawText, timeoutMs = 4000) {
+  const prompt = `다음은 항만 컨테이너 검수 현장에서 음성인식으로 받아 적은 질문이다. 음성 오인식을 교정해 의도된 질문을 한국어 한 문장으로만 출력하라. 설명·따옴표 금지.
+현장 용어: 양하, 선적, 베이, 리퍼, 엠티, 풀, 위험물, 엑스레이, 갑판, 홀드, 컨테이너, 20피트, 40피트, 45피트, 온도, 실번호, 위치, 몇대, 남은거, 완료.
+예시: "20번 베이 잇퍼 몇대야" → 20번 베이 리퍼 몇대야 / "양아 컨테이너 매수" → 양하 컨테이너 몇대 / "5번 배 갑반에 풀 며대" → 5번 베이 갑판에 풀 몇대
+
+받아 적은 질문: "${rawText}"`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(getActiveGeminiUrl(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 60 } }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const out = (j?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+      .replace(/^["'「]|["'」]$/g, '').split('\n')[0].trim();
+    return out && out.length >= 2 && out.length <= 60 ? out : null;
+  } catch (e) { return null; }
+  finally { clearTimeout(timer); }
+}
+
 export function isFreeFormQuestion(text) {
   if (!text) return false;
   const t = text.trim();
