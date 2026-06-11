@@ -68,7 +68,7 @@ export function parseNaturalQuery(text) {
     tierStackQuery: false,
     bottomQuery: false, topQuery: false,
     vacantQuery: false,
-    posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false,
+    posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
     isAll: false, isStat: false, mode: null,
   };
   if (!text) return result;
@@ -194,6 +194,7 @@ export function parseNaturalQuery(text) {
   // V7.90-02: 베이 분포 질문 — "리퍼가 몇 번 베이에 있어?" / "어디 어디에 있어?" (사용자 현장 제보)
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약/i.test(t)) result.briefingQuery = true;
+  if (/(실번호|씰|실)\s*(점검|검사|오류|확인|체크)/i.test(t)) result.sealAuditQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   if (/리스트|목록|보여줘|보여줘봐|알려줘|list/i.test(t)) result.listQuery = true;
 
@@ -494,6 +495,88 @@ function formatBayStats(bay, results) {
 }
 
 // V7.90-02: 베이 분포 답변 — "리퍼가 몇 번 베이에 있어?" 첫 줄은 음성으로 읽히므로 베이 나열.
+// V7.90-05: 실번호 점검 전용 답변 ("실번호 점검" 질문)
+export function generateSealAuditAnswer(containers, modeLabel) {
+  const audit = auditSeals(containers || []);
+  if (!audit.checked) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
+  if (!audit.items.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음`;
+  const lines = [`🔍 ${modeLabel} 실번호 주의 ${audit.items.length}건 (점검 ${audit.checked}건 중)`];
+  for (const it of audit.items) lines.push(`• ${it.cn} 「${it.seal}」 — ${it.reason}`);
+  return lines.join('\n');
+}
+
+// V7.90-05: 실번호(씰) 오류 사전 점검 (사용자 요청 — 리스트 단계에서 미리 잡기)
+//   ① 중복: 다른 컨테이너인데 같은 실번호  ② 혼입: 실번호 칸에 컨테이너 번호
+//   ③ 형식 특이: 특수문자·비정상 짧음  ④ 자리수 부족: 같은 접두 그룹의 다수 길이보다 짧음(엑셀 0 잘림 등)
+export function auditSeals(containers) {
+  const items = [];   // {cn, seal, field, reason}
+  const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-]/g, '');
+  const entries = [];
+  for (const c of containers || []) {
+    for (const [field, label] of [['sl', '풀씰'], ['eseal', '엠티실']]) {
+      const raw = c[field];
+      if (raw == null || String(raw).trim() === '') continue;
+      entries.push({ c, field: label, raw: String(raw).trim(), n: norm(raw) });
+    }
+  }
+  if (!entries.length) return { items, checked: 0 };
+  // ① 중복 (같은 정규화 씰, 서로 다른 컨)
+  const bySeal = {};
+  for (const e of entries) { (bySeal[e.n] = bySeal[e.n] || []).push(e); }
+  for (const k in bySeal) {
+    const g = bySeal[k];
+    const cns = [...new Set(g.map(e => e.c.cn))];
+    if (cns.length >= 2) {
+      items.push({ cn: cns.map(x => (x || '').slice(-4)).join('·'), seal: g[0].raw, reason: `같은 실번호가 ${cns.length}개 컨테이너에 — 서로 바뀌어 있을 가능성, 양쪽 모두 실물 확인` });
+    }
+  }
+  // ②③④ 개별 점검
+  const allCns = new Set((containers || []).map(c => norm(c.cn)).filter(Boolean));
+  // 접두 그룹별 숫자부 길이 최빈값 (④용)
+  const grpLens = {};
+  for (const e of entries) {
+    const m = e.n.match(/^([A-Z]*)(\d+)$/);
+    if (m) { const g = m[1] || '(숫자만)'; (grpLens[g] = grpLens[g] || []).push(m[2].length); }
+  }
+  const modeLen = {};
+  for (const g in grpLens) {
+    if (grpLens[g].length < 3) continue;  // 표본 적으면 판단 보류
+    const cnt = {};
+    for (const L of grpLens[g]) cnt[L] = (cnt[L] || 0) + 1;
+    const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
+    if (cnt[top] >= grpLens[g].length * 0.7) modeLen[g] = +top;  // 70% 이상이 같은 길이일 때만
+  }
+  const seen = new Set();
+  for (const e of entries) {
+    const key = (e.c.cn || '') + '|' + e.n;
+    if (seen.has(key)) continue; seen.add(key);
+    const last4 = (e.c.cn || '').slice(-4);
+    // ② 컨번호 혼입: ISO 컨번호 형식이거나, 이 항차의 어떤 컨번호를 포함
+    if (/^[A-Z]{4}\d{6,7}$/.test(e.n)) {
+      items.push({ cn: last4, seal: e.raw, reason: `${e.field}이 컨테이너 번호 형식` }); continue;
+    }
+    const cnDigits = norm(e.c.cn).slice(4);
+    if (cnDigits.length >= 6 && e.n.includes(cnDigits)) {
+      items.push({ cn: last4, seal: e.raw, reason: `${e.field}에 자기 컨번호 숫자 포함` }); continue;
+    }
+    let hit = null;
+    if (e.n.length >= 10) { for (const cn of allCns) { if (cn && e.n.includes(cn)) { hit = cn; break; } } }
+    if (hit) { items.push({ cn: last4, seal: e.raw, reason: `${e.field}에 컨테이너 번호(${hit.slice(-4)}) 포함` }); continue; }
+    // ③ 형식 특이
+    if (/[^A-Z0-9]/.test(e.n)) { items.push({ cn: last4, seal: e.raw, reason: `${e.field}에 특수문자` }); continue; }
+    if (e.n.length < 4) { items.push({ cn: last4, seal: e.raw, reason: `${e.field} 자리수 비정상(${e.n.length}자)` }); continue; }
+    // ④ 그룹 대비 자리수 부족
+    const m = e.n.match(/^([A-Z]*)(\d+)$/);
+    if (m) {
+      const g = m[1] || '(숫자만)';
+      if (modeLen[g] != null && m[2].length < modeLen[g]) {
+        items.push({ cn: last4, seal: e.raw, reason: `${e.field} 자리수 부족 — 같은 형식 대부분 ${modeLen[g]}자리, 이 건 ${m[2].length}자리 (앞자리 누락 의심)` });
+      }
+    }
+  }
+  return { items, checked: entries.length };
+}
+
 // V7.90-04: 작업 브리핑 (사용자 요청) — 검수 시작·중간에 현재 작업 핵심을 한눈에.
 //   첫 줄은 음성으로 읽히는 한 문장 요약. 이후 화면용 상세.
 export function generateBriefing(containers, modeLabel) {
@@ -556,6 +639,14 @@ export function generateBriefing(containers, modeLabel) {
   if (fr.length) lines.push(`⊞ FR ${fr.length}대${baysOf(fr)}`);
   if (ot.length) lines.push(`△ O/T ${ot.length}대${baysOf(ot)}`);
   if (tk.length) lines.push(`🛢 탱크 ${tk.length}대${baysOf(tk)}`);
+  // V7.90-05: 실번호 오류 사전 점검 — 주의할 점
+  const audit = auditSeals(cs);
+  if (audit.items.length) {
+    lines[0] += `, 실번호 주의 ${audit.items.length}건`;
+    lines.push(`🔍 주의할 점 — 실번호 ${audit.items.length}건 (점검 ${audit.checked}건 중)`);
+    for (const it of audit.items.slice(0, 12)) lines.push(`  • ${it.cn} 「${it.seal}」 — ${it.reason}`);
+    if (audit.items.length > 12) lines.push(`  (외 ${audit.items.length - 12}건 — "실번호 점검"으로 전체 확인)`);
+  }
   return lines.join('\n');
 }
 

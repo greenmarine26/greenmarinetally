@@ -131,7 +131,23 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     }
   };
 
+  // V7.90-06: 실번호 스왑(서로 바뀜) 감지 — 입력한 실번호가 다른 컨테이너의
+  //   리스트 실번호와 같으면 즉시 경고. 한쪽만 수정하면 중복이 되는 패턴 (사용자 요청).
+  //   저장 자체는 막지 않음(실물이 진실) — 상대 컨테이너 확인을 유도.
+  const checkSealSwap = (val) => {
+    const n = String(val || '').toUpperCase().replace(/[\s\-]/g, '');
+    if (!n) return true;
+    const owner = (allContainers || []).find(x => x.cn !== c.cn &&
+      [x.sl, x.eseal, x.reseal].some(s => s && String(s).toUpperCase().replace(/[\s\-]/g, '') === n));
+    if (!owner) return true;
+    return confirm(
+      `⚠ 이 실번호는 ${owner.cn?.slice(-4)} (${owner.cn})의 리스트 실번호와 같습니다.\n\n` +
+      `두 컨테이너의 실번호가 서로 바뀌어 있을 가능성이 큽니다 — ` +
+      `${owner.cn?.slice(-4)}번도 실물 실번호를 확인하세요.\n\n그대로 기록하시겠습니까?`);
+  };
+
   const handleSaveSeal = async () => {
+    if (!checkSealSwap(sealVal)) return;
     await fbUpdateRecordSeal(voyageKey, mode, c.cn, sealVal.trim(), inspector);
     setEditingSeal(false);
   };
@@ -189,6 +205,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const newVal = String(esealWrongVal || '').trim().toUpperCase();
     if (!newVal) { alert('실제 발견된 실번호를 입력하세요'); return; }
+    if (!checkSealSwap(newVal)) return;  // V7.90-06: 스왑 의심 경고
     await fbSetEmptySeal(voyageKey, mode, c.cn, {
       eseal: c.eseal || '',
       eseal_wrong: newVal,
@@ -204,6 +221,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const newVal = String(resealVal || '').trim().toUpperCase();
     if (!newVal) { alert('새로 부착한 실번호를 입력하세요'); return; }
+    if (!checkSealSwap(newVal)) return;  // V7.90-06: 다른 컨과 중복 경고
     await fbSetEmptySeal(voyageKey, mode, c.cn, {
       eseal: c.eseal || '',
       eseal_wrong: c.eseal_wrong || '',

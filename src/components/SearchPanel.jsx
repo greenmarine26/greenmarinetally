@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
 import { isoToLabel, fmtPos } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate } from '../twin.js';
@@ -174,7 +174,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const modeCs = allContainers.filter(c => c._mode === workFilter);
       return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적');
     }
-    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery) return null;
+    // V7.90-05: 실번호 점검 (사용자 요청 — 씰 오류 사전 예측)
+    if (parsed.sealAuditQuery) {
+      const modeCs = allContainers.filter(c => c._mode === workFilter);
+      return generateSealAuditAnswer(modeCs, workFilter === 'discharge' ? '양하' : '선적');
+    }
+    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery && !parsed.sealAuditQuery) return null;
     // 단순 컨번호만 입력한 경우는 BigResultCard 우선
     const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
                        !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
