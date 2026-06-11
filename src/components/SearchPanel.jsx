@@ -169,12 +169,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 단, 단순 컨번호 검색(digits만)이거나 결과가 단 1개면 BigResultCard 우선
   const localAnswer = useMemo(() => {
     if (!query || query.length < 2) return null;
-    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery) return null;
+    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery) return null;
     // 단순 컨번호만 입력한 경우는 BigResultCard 우선
     const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
                        !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
                        !parsed.size && !parsed.fe && !parsed.type && !parsed.weightSum &&
-                       !parsed.posQuery && !parsed.listQuery && !parsed.isStat;
+                       !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
     return generateLocalAnswer(parsed, results, allContainers);
   }, [parsed, results, allContainers, query]);

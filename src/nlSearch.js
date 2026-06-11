@@ -68,7 +68,7 @@ export function parseNaturalQuery(text) {
     tierStackQuery: false,
     bottomQuery: false, topQuery: false,
     vacantQuery: false,
-    posQuery: false, listQuery: false,
+    posQuery: false, listQuery: false, bayDistQuery: false,
     isAll: false, isStat: false, mode: null,
   };
   if (!text) return result;
@@ -191,6 +191,8 @@ export function parseNaturalQuery(text) {
   if (/무게\s*합|총중량|총\s*무게|중량\s*합/i.test(t)) result.weightSum = true;
 
   // 위치/리스트 의도
+  // V7.90-02: 베이 분포 질문 — "리퍼가 몇 번 베이에 있어?" / "어디 어디에 있어?" (사용자 현장 제보)
+  if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   if (/리스트|목록|보여줘|보여줘봐|알려줘|list/i.test(t)) result.listQuery = true;
 
@@ -378,7 +380,7 @@ export function hasAnyCondition(parsed) {
             parsed.capacityQuery || parsed.bayBreakdown ||
             parsed.progressQuery || parsed.tierStackQuery ||
             parsed.bottomQuery || parsed.topQuery || parsed.vacantQuery ||
-            parsed.weightSum || parsed.posQuery || parsed.listQuery);
+            parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery);
 }
 
 // ─── 베이별 슬롯 맵 (재사용) ───
@@ -420,6 +422,8 @@ export function generateLocalAnswer(parsed, results, allContainers) {
     return lines.join('\n');
   }
 
+  // V7.90-02: 베이 분포 — 명시 질문이거나, 위치 질문인데 결과가 많으면(개별 나열 무의미) 분포로
+  if (parsed.bayDistQuery || (parsed.posQuery && results.length > 5)) return formatBayDist(desc, results, parsed);
   if (parsed.posQuery || parsed.listQuery) return formatLocationList(desc, results);
   if (parsed.isStat) return formatStats(desc, results);
 
@@ -485,6 +489,59 @@ function formatBayStats(bay, results) {
     if (dgCount > 0) sp.push(`위험물 ${dgCount}`);
     lines.push(`특수: ${sp.join(' / ')}`);
   }
+  return lines.join('\n');
+}
+
+// V7.90-02: 베이 분포 답변 — "리퍼가 몇 번 베이에 있어?" 첫 줄은 음성으로 읽히므로 베이 나열.
+// V7.90-03: 베이 분포 상세 확장 (사용자 요청 — 검수 실무 정보 전반)
+//   공통: 규격(20/40/45)·갑판/홀드. 리퍼: 온도 분포. XRAY: 컨번호 끝4. DG: 클래스.
+function formatBayDist(desc, results, parsed = {}) {
+  if (results.length === 0) return `📭 ${desc} 없음`;
+  const byBay = {};
+  const sizeOf = (c) => {
+    const lbl = isoToLabel(c.iso) || '';
+    if (/^45/.test(lbl)) return '45';
+    if (/^40/.test(lbl)) return '40';
+    if (/^20/.test(lbl)) return '20';
+    const f = (c.iso || '')[0];
+    return f === '2' ? '20' : f === '4' ? '40' : (f === 'L' || f === '9') ? '45' : '?';
+  };
+  for (const c of results) {
+    const b = parseInt(c.bay, 10);
+    const k = Number.isFinite(b) ? b : '?';
+    const v = byBay[k] = byBay[k] || { n: 0, deck: 0, hold: 0, sz: {}, temps: {}, l4: [], dgc: {} };
+    v.n++;
+    const t = parseInt(c.tier, 10);
+    if (Number.isFinite(t)) { if (t >= 80) v.deck++; else v.hold++; }
+    const s = sizeOf(c); v.sz[s] = (v.sz[s] || 0) + 1;
+    if (c.rf || parsed.type === 'rf') {
+      const tp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim() : '미입력';
+      v.temps[tp] = (v.temps[tp] || 0) + 1;
+    }
+    if (parsed.type === 'xray' || parsed.type === 'dg' || parsed.type === 'fr' || parsed.type === 'ot' || parsed.type === 'tk') {
+      v.l4.push(c.cn ? c.cn.slice(-4) : '?');
+    }
+    if (c.dg) { const cl = c.dgc || '?'; v.dgc[cl] = (v.dgc[cl] || 0) + 1; }
+  }
+  const bays = Object.keys(byBay).filter(k => k !== '?').map(Number).sort((a, b) => a - b);
+  const head = bays.length <= 8
+    ? `📍 ${desc} ${results.length}대 — 베이 ${bays.join(', ')}`
+    : `📍 ${desc} ${results.length}대 — ${bays.length}개 베이`;
+  const lines = [head];
+  const fmtSz = (sz) => ['20', '40', '45'].filter(s => sz[s]).map(s => `${s}ft ${sz[s]}`).join('/');
+  for (const b of bays) {
+    const v = byBay[b];
+    const parts = [];
+    if (v.deck + v.hold > 0) parts.push(`갑판 ${v.deck}/홀드 ${v.hold}`);
+    const szs = fmtSz(v.sz); if (szs) parts.push(szs);
+    const tk = Object.keys(v.temps);
+    if (tk.length) parts.push(tk.sort().map(tp => `${tp === '미입력' ? '온도미입력' : tp + '°C'}×${v.temps[tp]}`).join(' '));
+    const dk = Object.keys(v.dgc);
+    if (dk.length) parts.push(dk.sort().map(cl => `cl.${cl}×${v.dgc[cl]}`).join(' '));
+    if (v.l4.length && v.l4.length <= 6) parts.push(v.l4.join(', '));
+    lines.push(`${String(b).padStart(2, '0')}번 베이 ${v.n}대${parts.length ? ' · ' + parts.join(' · ') : ''}`);
+  }
+  if (byBay['?']) lines.push(`위치미상 ${byBay['?'].n}대`);
   return lines.join('\n');
 }
 
