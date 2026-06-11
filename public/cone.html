@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.90-07-06-05-04-03-02-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.91</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -2068,31 +2068,78 @@ function coneQaAnswer(qRaw){
     const list=rows.filter(r=>r[kind].diff!==0).map(r=>'베이 '+r.bay+' '+(r[kind].diff>0?'+':'')+(r[kind].diff*perOf[kind])+'개').join(', ');
     return kindName[kind]+' 전체 '+(tot>0?('+'+tot+'개 추가'):tot<0?((-tot)+'개 반납'):'변동 없음')+(list?('. '+list):'')+'.';
   }
-  return '이렇게 물어보세요. "5번 베이", "7번 베이 홀드콘", "모자란 데", "남는 데", "전체", "5번 베이 컨테이너 몇 대".';
+  return CONE_QA_HELP;
+}
+// V7.91: 음성 질문 자동 복원 — 검수앱 V7.80과 동일 원칙 이식.
+//   AI는 답하지 않는다 — 음성 오인식 문장의 "질문 복원"만 시키고(temperature 0),
+//   답은 복원 문장을 coneQaAnswer(작업표 읽기)에 다시 넣어 데이터로 계산 — 환각 원천 차단.
+const CONE_QA_HELP='이렇게 물어보세요. "5번 베이", "7번 베이 홀드콘", "모자란 데", "남는 데", "전체", "5번 베이 컨테이너 몇 대".';
+const CONE_GEMINI_KEY='AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY';
+function coneGeminiUrl(){
+  // 검수앱과 같은 localStorage 키 — 같은 도메인이라 검수원이 본인 키를 넣었으면 콘앱도 그 키 사용.
+  let k=CONE_GEMINI_KEY; try{ k=localStorage.getItem('master_gemini_api_key_v1')||k; }catch(_){}
+  return 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='+k;
+}
+async function coneFixQuestionWithAI(rawText, timeoutMs){
+  const prompt='다음은 항만 컨테이너 고정장치(콘) 작업 현장에서 음성인식으로 받아 적은 질문이다. 음성 오인식을 교정해 의도된 질문을 한국어 한 문장으로만 출력하라. 설명·따옴표 금지.\n현장 용어: 베이, 데크콘, 코끼리콘, 홀드콘, 콘, 컨테이너, 갑판, 홀드, 모자란, 남는, 반납, 추가, 전체, 몇 대, 몇 개.\n예시: "5번 배 대코콘 며개" → 5번 베이 데크콘 몇 개 / "홀두콘 모지란데" → 홀드콘 모자란 데 / "코끼리꼰 남는대" → 코끼리콘 남는 데\n\n받아 적은 질문: "'+rawText+'"';
+  const ctrl=new AbortController(); const timer=setTimeout(()=>ctrl.abort(), timeoutMs||4000);
+  try{
+    const res=await fetch(coneGeminiUrl(),{method:'POST',headers:{'Content-Type':'application/json'},signal:ctrl.signal,
+      body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:60}})});
+    if(!res.ok) return null;
+    const j=await res.json();
+    const out=((((((j||{}).candidates||[])[0]||{}).content||{}).parts||[])[0]||{}).text;
+    const line=String(out||'').trim().replace(/^["'「]|["'」]$/g,'').split('\n')[0].trim();
+    return line&&line.length>=2&&line.length<=60?line:null;
+  }catch(e){ return null; }
+  finally{ clearTimeout(timer); }
+}
+// 콘 질문기가 아는 어휘 + 조사·의문어 — 이걸 지우고도 한글 2자+ 토큰이 남으면 "미해석 단어"로 복원 대상.
+//   (검수앱 교훈: 완전 실패만 잡으면 "5번 베이 잇퍼"가 베이만 잡혀 엉뚱한 답이 나감 — 부분 인식도 복원.)
+const CONE_QA_KNOWN=/데크콘|코끼리콘|홀드콘|컨테이너|베이|데크|코끼리|홀드|갑판|선창|양하|선적|모자|부족|추가|필요|남는|남았|남아|반납|회수|전체|대수|요약|콘|총|몇|대|개|번|은|는|이|가|을|를|에서|에|의|와|과|도|만|좀|요|줘|주세요|해|야|니|나요|입니까|있|없|어디|뭐|얼마/g;
+function coneQaLeftover(q){
+  return String(q||'').replace(/[0-9A-Za-z\s.,?!]/g,' ').replace(CONE_QA_KNOWN,' ').trim()
+    .split(/\s+/).filter(function(t){return t.length>=2;});
 }
 function bindConeQa(){
   const inp=document.getElementById('cqaInput'), btn=document.getElementById('cqaBtn'), mic=document.getElementById('cqaMic'), out=document.getElementById('cqaOut');
   if(!inp||!btn) return;
-  const run=()=>{
-    const a=coneQaAnswer(inp.value);
+  const show=(a)=>{
     if(!a) return;
     out.style.display='block';
     out.textContent=a;
     coneSpeak(a);
   };
+  const run=()=>show(coneQaAnswer(inp.value));
   btn.onclick=run;
   inp.onkeydown=(e)=>{ if(e.key==='Enter') run(); };
   if(mic){
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){ mic.style.display='none'; }
     else{
+      let fixTried='';   // V7.91: 같은 문장 1회만 복원
       mic.onclick=()=>{
         const r=new SR(); r.lang='ko-KR'; r.interimResults=false; r.maxAlternatives=5;
         mic.textContent='🎙'; mic.classList.add('on');
-        r.onresult=(e)=>{
+        r.onresult=async (e)=>{
           const res=e.results[0];
           const alts=[]; for(let i=0;i<res.length;i++) alts.push(res[i].transcript);
-          inp.value=conePickAlt(alts); run();
+          inp.value=conePickAlt(alts);
+          // V7.91: 음성 한정 자동 복원 — 못 알아들었거나(도움말) 미해석 단어가 남으면
+          //   AI로 질문 1회 복원 후 재시도. 실패·오프라인이면 조용히 원래 답.
+          const q=inp.value.trim();
+          const a=coneQaAnswer(q);
+          const canFix=q.length>=4&&!/^[0-9\s]+$/.test(q)&&fixTried!==q
+            &&(a===CONE_QA_HELP||coneQaLeftover(q).length>0);
+          if(!canFix){ show(a); return; }
+          fixTried=q;
+          out.style.display='block'; out.textContent='🎙 문장 복원 중…';
+          const fixed=await coneFixQuestionWithAI(q);
+          if(fixed&&fixed!==q){
+            const a2=coneQaAnswer(fixed);
+            if(a2&&a2!==CONE_QA_HELP){ inp.value=fixed; show(a2); return; }
+          }
+          show(a);
         };
         r.onend=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };
         r.onerror=()=>{ mic.textContent='🎤'; mic.classList.remove('on'); };
