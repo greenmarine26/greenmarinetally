@@ -1,15 +1,4 @@
-# MasterPlan
+# Tallyman Master — 평택항 검수앱
 
-베이사전 빌더 (Tallyman Master 검수앱과 분리).
-
-## 실행
-```bash
-npm install
-npm run dev      # 개발 서버
-npm run build    # 프로덕션 빌드 → dist/
-```
-
-## 배포
-빌드 후 `dist/` 폴더를 호스팅 (정적 사이트). PWA 지원 (sw.js).
-
-자세한 내용은 [검수앱지침서.md) 참조.
+실행: `npm install` 후 `bash build.sh` (npm run build 직접 실행 금지 — 지침서 2.3).
+모든 규칙·이력·운영 매뉴얼은 **검수앱지침서.md** 한 곳에 있습니다.

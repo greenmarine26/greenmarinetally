@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.61</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.70-02</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -331,6 +331,17 @@ function isEDI(text){
   return /UNB\+|LOC\+147\+/.test(text) && /EQD\+/.test(text);
 }
 
+// V7.7: EDI 문서 작성일 추출 — 양하/선적 분리 작업 자동 분별용 (DTM+137 우선, 폴백 UNB)
+function extractEdiDocDate(text){
+  let d=null;
+  const dm=text.match(/DTM\+137\+(\d{2})(\d{2})(\d{2})(\d{2})?(\d{2})?/);
+  if(dm){ d=new Date(2000+ +dm[1], +dm[2]-1, +dm[3], +(dm[4]||0), +(dm[5]||0)); }
+  else{
+    const um=text.match(/UNB\+[^+]+\+[^+]+\+[^+]+\+(\d{4})(\d{2})(\d{2}):(\d{2})(\d{2})/);
+    if(um){ d=new Date(+um[1], +um[2]-1, +um[3], +um[4], +um[5]); }
+  }
+  return d&&!isNaN(d)? d.getTime():null;
+}
 function parseEDI(text){
   // 평택 기준: 선적=POL KRPTK, 양하=POD KRPTK. 둘 다 시도해 더 많은 쪽 채택.
   const segs=text.split("LOC+147+");
@@ -388,7 +399,7 @@ function parseEDI(text){
     const last=(parts[parts.length-1]||'').trim();
     if(/[A-Za-z]/.test(last) && last.length>=3) vessel=last;
   }
-  return {rows, rowsAll, kind, isEDI:true, vessel};
+  return {rows, rowsAll, kind, isEDI:true, vessel, docDate: extractEdiDocDate(text)};
 }
 
 // ============ ASC 파서 (검수앱 parseAscFile 위치 추출분) ============
@@ -448,7 +459,7 @@ function parseASC(text){
   // 평택분만 계산. 폴백(rowsAll) 금지 — 평택분 0이면 0이 정답.
   if(polPtk.length>podPtk.length){ kind='stow'; rows=polPtk; }
   else { kind='disch'; rows=podPtk; }
-  return {rows, kind, isEDI:true, vessel};  // isEDI:true = 위치 rows 보유(다운스트림 동일 처리)
+  return {rows, rowsAll, kind, isEDI:true, vessel, docDate: extractEdiDocDate(text)};  // isEDI:true = 위치 rows 보유(다운스트림 동일 처리)
 }
 
 // EDI/ASC 자동 판별 통합 파서. raw 텍스트가 둘 중 무엇이든 위치 rows를 반환.
@@ -762,7 +773,11 @@ async function selectVoyage(voyageKey){
       else {  // 2순위: raw EDI/ASC 파싱 폴백
         const txt=await fbFetchRawEdi(voyageKey,'discharge');
         const d=txt&&parsePositions(txt);
-        if(d){ state.disch={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel}; applyVessel(d.vessel); }
+        if(d){ state.disch={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel, docDate:d.docDate}; applyVessel(d.vessel); }
+      }
+      // V7.7: 분리 작업 분별용 작업일 보충 — 파싱 경로엔 날짜가 없어 raw EDI에서 추출
+      if(state.disch && state.disch.docDate==null){
+        try{ const t=await fbFetchRawEdi(voyageKey,'discharge'); if(t) state.disch.docDate=extractEdiDocDate(t); }catch(_){}
       }
     }
     if(v.hasL){
@@ -771,7 +786,10 @@ async function selectVoyage(voyageKey){
       else {
         const txt=await fbFetchRawEdi(voyageKey,'loading');
         const d=txt&&parsePositions(txt);
-        if(d){ state.stow={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel}; applyVessel(d.vessel); }
+        if(d){ state.stow={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel, docDate:d.docDate}; applyVessel(d.vessel); }
+      }
+      if(state.stow && state.stow.docDate==null){
+        try{ const t=await fbFetchRawEdi(voyageKey,'loading'); if(t) state.stow.docDate=extractEdiDocDate(t); }catch(_){}
       }
     }
     if(!state.shipName) state.shipName=v.vsl;
@@ -1246,7 +1264,7 @@ async function handleFile(file,slot){
     if(isEDI(text)){
       const d=parseEDI(text);
       if(d.kind && d.kind!==slot) slot=d.kind;
-      state[slot]={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:file.name, vessel:d.vessel};
+      state[slot]={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:file.name, vessel:d.vessel, docDate:d.docDate};
       applyVessel(d.vessel); render(); return;
     }
     // 텍스트인데 EDI 아님
@@ -1373,7 +1391,34 @@ async function runCalc(){
       window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
       const __ctx=buildConeCtx(__dict);
       const sg=planToGroups(state.stow, __ctx);
-      const dg=planToGroups(state.disch, __ctx);
+      let dg=planToGroups(state.disch, __ctx);
+
+      // ===== V7.7: 양하/선적 분리 작업 자동 분별 (ATPR형 — 사용자 확정 설계) =====
+      //   양하·선적이 둘 다 있고 작업일(EDI 작성일)이 하루(24h) 이상 차이나면 분리 의심
+      //   → "양하가 완료되어 콘을 전부 반납했는지" 확인 멘트.
+      //   완료 확인 → 배에 회수분 0 → 선적 콘은 전량 콘박스에서 (상계 금지).
+      //   아니오/연속 → 현행 상계(회수분 재사용, 부분 추가).
+      state._sepInfo='';
+      const dDate=state.disch&&state.disch.docDate, sDate=state.stow&&state.stow.docDate;
+      const fmtD=(t)=>{ const x=new Date(t); return (x.getMonth()+1)+'/'+x.getDate(); };
+      if(dg&&Object.keys(dg).length && sg&&Object.keys(sg).length && dDate && sDate
+         && (sDate-dDate)>=24*3600*1000){
+        const sig=dDate+'|'+sDate;
+        if(state._sepAnsKey!==sig){
+          state._sepAns=confirm(
+            '양하('+fmtD(dDate)+')와 선적('+fmtD(sDate)+') 작업일이 하루 이상 차이납니다.\n\n'+
+            '양하가 이미 완료되어 콘을 전부 반납(회수)했습니까?\n\n'+
+            '확인 = 예, 분리 작업 (선적 콘은 전량 콘박스에서 가져옴)\n'+
+            '취소 = 아니오, 연속 작업 (양하 회수분을 선적에 재사용)');
+          state._sepAnsKey=sig;
+        }
+        if(state._sepAns){
+          dg={};  // 회수분 0 — 선적 전량 추가, 동선표(배 안 이동) 자연 소멸
+          state._sepInfo='🔀 분리 작업 — 양하('+fmtD(dDate)+')는 이미 완료·콘 전량 반납됨. 선적('+fmtD(sDate)+') 콘은 <b>전량 콘박스에서</b> 가져옵니다.';
+        } else {
+          state._sepInfo='↔ 연속 작업으로 계산 — 양하 회수분을 선적에 재사용 (작업일 차이 있음, 사용자 확인).';
+        }
+      }
       const allk=new Set([...Object.keys(sg),...Object.keys(dg)].map(Number));
       const groups={};
       for(const k of allk){
@@ -2089,6 +2134,7 @@ function renderResults(groups){
 
   let html=resultTabsHtml('calc');
   if(window.__vesselWarn){ html+=`<div class="card" style="border-color:var(--rem)"><p style="color:var(--rem);margin:0;font-size:14px">${window.__vesselWarn}</p></div>`; }
+  if(state._sepInfo){ html+=`<div class="card" style="border-color:var(--accent)"><p style="margin:0;font-size:13px;line-height:1.5">${state._sepInfo}</p></div>`; }
   html+=coneQaBarHtml();  // V7.55: 콘 질문바
   html+=`<div class="confirm-bar"><p><b>⚠ 인식 결과 확인</b> — 콘 작업 전 반드시 대조하세요.</p></div>`;
 
