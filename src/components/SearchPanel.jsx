@@ -172,7 +172,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     // V7.90-04: 브리핑 — 현재 작업(탭 모드) 기준 요약 (음성 "브리핑" 한 마디)
     if (parsed.briefingQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
-      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적');
+      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter);
     }
     // V7.90-05: 실번호 점검 (사용자 요청 — 씰 오류 사전 예측)
     if (parsed.sealAuditQuery) {

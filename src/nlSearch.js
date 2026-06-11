@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer } from './utils.js';
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort } from './utils.js';
 
 // ─── 항구 코드 매핑 ───
 const PORT_KR_TO_CODE = {
@@ -579,9 +579,14 @@ export function auditSeals(containers) {
 
 // V7.90-04: 작업 브리핑 (사용자 요청) — 검수 시작·중간에 현재 작업 핵심을 한눈에.
 //   첫 줄은 음성으로 읽히는 한 문장 요약. 이후 화면용 상세.
-export function generateBriefing(containers, modeLabel) {
-  const cs = containers || [];
-  if (!cs.length) return `📋 ${modeLabel} 브리핑 — 컨테이너 자료가 없습니다`;
+export function generateBriefing(containers, modeLabel, mode = 'discharge') {
+  // V7.90-07 재구성 (사용자 피드백): ① 평택분(작업 대상)만 집계 — 통과화물 포함 금지(7.1)
+  //   ② 일반 통계 나열 대신 "검수원이 인지해야 할 특이사항" 중심, 행동 지향 문구.
+  const all = containers || [];
+  const isPtk = (c) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+  const cs = all.filter(isPtk);
+  const transit = all.filter(c => !isPtk(c));
+  if (!cs.length) return `📋 ${modeLabel} 브리핑 — 평택분 컨테이너가 없습니다`;
   const szOf = (c) => {
     const lbl = isoToLabel(c.iso) || '';
     if (/^45/.test(lbl)) return '45'; if (/^40/.test(lbl)) return '40'; if (/^20/.test(lbl)) return '20';
@@ -590,62 +595,70 @@ export function generateBriefing(containers, modeLabel) {
   };
   const total = cs.length;
   const done = cs.filter(c => c._comp).length;
-  const sz = {}; let F = 0, E = 0;
-  const rf = [], dg = [], xr = [], fr = [], ot = [], tk = [], noTmp = [];
-  const bays = new Set(); let deck = 0, hold = 0;
+  const sz = {}; let F = 0, E = 0, deck = 0, hold = 0;
+  const rf = [], dg = [], xr = [], fr = [], ot = [], tk = [], oog = [], noTmp = [];
+  const bays = new Set();
   for (const c of cs) {
     const s = szOf(c); sz[s] = (sz[s] || 0) + 1;
     if (c.fe === 'E') E++; else F++;
     const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
     const t = parseInt(c.tier, 10);
     if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
-    const isRf = isReeferContainer(c);  // V7.27 ⑦ 원칙 — 리퍼 판정 단일 함수 (자체 정규식은 FR 오인)
-    if (isRf) { rf.push(c); if (c.fe !== 'E' && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }
+    if (isReeferContainer(c)) { rf.push(c); if (c.fe !== 'E' && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }
     if (c.dg) dg.push(c);
     if (c._xray) xr.push(c);
     if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);
     if (c.ot || /OT$/.test(isoToLabel(c.iso) || '')) ot.push(c);
     if (c.tk || /TK$/.test(isoToLabel(c.iso) || '')) tk.push(c);
+    if (c.oog) oog.push(c);
   }
   const bayArr = [...bays].sort((a, b) => a - b);
-  const bayRange = bayArr.length ? `${bayArr[0]}~${bayArr[bayArr.length - 1]}번 (${bayArr.length}개 베이)` : '';
-  const szStr = ['20', '40', '45'].filter(s => sz[s]).map(s => `${s}ft ${sz[s]}`).join(', ');
   const baysOf = (arr) => {
     const bs = [...new Set(arr.map(c => parseInt(c.bay, 10)).filter(Number.isFinite))].sort((a, b) => a - b);
-    return bs.length ? ` (베이 ${bs.join(', ')})` : '';
+    return bs.length ? `베이 ${bs.join(', ')}` : '';
   };
-  // 음성용 첫 줄 — 한 문장
-  const voiceBits = [`${modeLabel} ${total}대`];
-  if (rf.length) voiceBits.push(`리퍼 ${rf.length}`);
-  if (dg.length) voiceBits.push(`위험물 ${dg.length}`);
-  if (xr.length) voiceBits.push(`엑스레이 ${xr.length}`);
-  if (done > 0) voiceBits.push(`잔여 ${total - done}`);
-  const lines = [`📋 ${voiceBits.join(', ')}`];
-  lines.push(`전체: ${total}대 (Full ${F} / Empty ${E}) · ${szStr}`);
-  if (bayRange) lines.push(`작업 범위: 베이 ${bayRange} · 갑판 ${deck} / 홀드 ${hold}`);
-  if (done > 0) lines.push(`진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
+  // ── 주의사항 수집 (일반적이지 않은 것만)
+  const warns = [];
   if (rf.length) {
-    const temps = {};
-    for (const c of rf) { const tp = (c.tmp != null && String(c.tmp).trim() !== '') ? String(c.tmp).trim() : null; if (tp) temps[tp] = (temps[tp] || 0) + 1; }
-    const tStr = Object.keys(temps).sort().map(tp => `${tp}°C×${temps[tp]}`).join(' ');
-    lines.push(`❄ 리퍼 ${rf.length}대${baysOf(rf)}${tStr ? ' · ' + tStr : ''}${noTmp.length ? ` · ⚠ 온도미입력 ${noTmp.length}` : ''}`);
+    const tail = noTmp.length ? ` · ⚠ 온도 미입력 ${noTmp.length}대 — 조회 시 온도 입력` : ' — 조회 시 온도 확인';
+    warns.push({ k: `리퍼 ${rf.length}`, line: `❄ 리퍼 ${rf.length}대 (${baysOf(rf)})${tail}` });
   }
   if (dg.length) {
     const cls = {};
-    for (const c of dg) { const cl = c.dgc || '?'; cls[cl] = (cls[cl] || 0) + 1; }
-    lines.push(`⚠ 위험물 ${dg.length}대${baysOf(dg)} · ${Object.keys(cls).sort().map(cl => `cl.${cl}×${cls[cl]}`).join(' ')}`);
+    for (const c of dg) { const cl = c.dgc || '?'; (cls[cl] = cls[cl] || []).push(parseInt(c.bay, 10)); }
+    const detail = Object.keys(cls).sort().map(cl => `cl.${cl} 베이${[...new Set(cls[cl])].filter(Number.isFinite).sort((a,b)=>a-b).join('·')}`).join(' / ');
+    warns.push({ k: `위험물 ${dg.length}`, line: `☣ 위험물 ${dg.length}대 — ${detail} — 별도 취급` });
   }
-  if (xr.length) lines.push(`🩻 X-RAY 대상 ${xr.length}대${baysOf(xr)} · ${xr.slice(0, 10).map(c => c.cn?.slice(-4)).join(', ')}`);
-  if (fr.length) lines.push(`⊞ FR ${fr.length}대${baysOf(fr)}`);
-  if (ot.length) lines.push(`△ O/T ${ot.length}대${baysOf(ot)}`);
-  if (tk.length) lines.push(`🛢 탱크 ${tk.length}대${baysOf(tk)}`);
-  // V7.90-05: 실번호 오류 사전 점검 — 주의할 점
+  if (xr.length && mode === 'discharge') {
+    warns.push({ k: `엑스레이 ${xr.length}`, line: `🩻 X-RAY 대상 ${xr.length}대 (${baysOf(xr)}) — ${xr.slice(0, 8).map(c => c.cn?.slice(-4)).join(', ')} — 양하 후 별도 처리` });
+  }
+  if (fr.length) warns.push({ k: `FR ${fr.length}`, line: `⊞ FR ${fr.length}대 (${baysOf(fr)}) — 치수·고박 확인` });
+  if (ot.length) warns.push({ k: `OT ${ot.length}`, line: `△ O/T ${ot.length}대 (${baysOf(ot)}) — 상부 확인` });
+  if (tk.length) warns.push({ k: `탱크 ${tk.length}`, line: `🛢 탱크 ${tk.length}대 (${baysOf(tk)})` });
+  if (oog.length) warns.push({ k: `OOG ${oog.length}`, line: `📐 OOG ${oog.length}대 (${baysOf(oog)}) — 규격 외 치수 확인` });
   const audit = auditSeals(cs);
   if (audit.items.length) {
-    lines[0] += `, 실번호 주의 ${audit.items.length}건`;
-    lines.push(`🔍 주의할 점 — 실번호 ${audit.items.length}건 (점검 ${audit.checked}건 중)`);
-    for (const it of audit.items.slice(0, 12)) lines.push(`  • ${it.cn} 「${it.seal}」 — ${it.reason}`);
-    if (audit.items.length > 12) lines.push(`  (외 ${audit.items.length - 12}건 — "실번호 점검"으로 전체 확인)`);
+    const kinds = [...new Set(audit.items.map(it => it.reason.split(' — ')[0].replace(/^(풀씰|엠티실)\s*/, '')))].slice(0, 2).join(', ');
+    warns.push({ k: `실번호 ${audit.items.length}건`, line: `🔍 실번호 의심 ${audit.items.length}건 (${kinds}${audit.items.length > 2 ? ' 등' : ''}) — "실번호 점검"으로 상세 확인` });
+  }
+  if (transit.length) {
+    const tb = [...new Set(transit.map(c => parseInt(c.bay, 10)).filter(b => Number.isFinite(b) && bays.has(b)))].sort((a, b) => a - b);
+    if (tb.length) warns.push({ k: null, line: `🔁 통과화물이 작업 베이(${tb.join(', ')})에 혼재 — ${mode === 'discharge' ? '내리지 말 것' : '자리 주의'}` });
+  }
+  // ── 음성 첫 줄: 평택분 + 주의 핵심
+  const keyWarns = warns.filter(w => w.k).map(w => w.k).slice(0, 3);
+  const head = `📋 ${modeLabel} 평택 ${total}대` +
+    (warns.length ? ` — 주의 ${warns.length}건${keyWarns.length ? ' (' + keyWarns.join(', ') + ')' : ''}` : ' — 특이사항 없음') +
+    (done > 0 ? `, 잔여 ${total - done}` : '');
+  const szStr = ['20', '40', '45'].filter(s => sz[s]).map(s => `${s}ft ${sz[s]}`).join(', ');
+  const lines = [head];
+  lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
+  if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
+  if (warns.length) {
+    lines.push(`⚠ 주의사항`);
+    for (const w of warns) lines.push(`  ${w.line}`);
+  } else {
+    lines.push(`✅ 특이사항 없음 — 일반 화물만`);
   }
   return lines.join('\n');
 }
