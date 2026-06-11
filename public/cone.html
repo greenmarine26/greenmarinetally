@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.91</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V7.91-02</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -2025,7 +2025,7 @@ function coneQaAnswer(qRaw){
     const r=findRow(bayN);
     if(!r) return bayN+'번 베이는 작업표에 없습니다. (콘 작업 없는 베이)';
     // 컨테이너 대수 질문이면
-    if(/컨테이너|몇\s*대|대수/.test(t)){
+    if(/컨테이너|몇\s*대|대수/.test(t)){   // 콘은 '개', 컨테이너는 '대' — '몇 개'는 콘 질문이므로 여기 추가 금지(V7.91-02 검증에서 확인)
       const cnt=(rows0,b)=>rows0.filter(c=>String(r.bay).split(/[,\-]/).some(p=>parseInt(p,10)===parseInt(c.bay,10))).length;
       const d=state.disch&&state.disch.ediRows?cnt(state.disch.ediRows):0;
       const l=state.stow&&state.stow.ediRows?cnt(state.stow.ediRows):0;
@@ -2037,8 +2037,9 @@ function coneQaAnswer(qRaw){
     return '베이 '+r.bay+'. '+lines.join('. ')+'.';
   }
   // ② 모자란/남는 베이 목록
-  if(/모자|부족|추가|더\s*필요/.test(t) || /남(는|아)|반납|회수/.test(t)){
-    const wantAdd=/모자|부족|추가|더\s*필요/.test(t);
+  // V7.91-02: 일상 동의어 확장 — 모자란(필요·가져가야)·남는(남았·뺄·빼야·돌려줄)
+  if(/모자|부족|추가|필요|가져가야|가져갈/.test(t) || /남(는|아|았|을)|반납|회수|빼\s*야|뺄|돌려/.test(t)){
+    const wantAdd=/모자|부족|추가|필요|가져가야|가져갈/.test(t);
     const ks=kind?[kind]:['deck','ele','hold'];
     const out=[];
     for(const r of rows){
@@ -2054,7 +2055,7 @@ function coneQaAnswer(qRaw){
     return (wantAdd?'콘이 더 필요한 곳 — ':'콘이 남는 곳(반납) — ')+out.join(' / ');
   }
   // ③ 전체 요약
-  if(/전체|총|요약/.test(t)){
+  if(/전체|전부|모두|몽땅|싹\s*다|죄다|도합|통틀어|합쳐|합치|총|요약|다\s*해서|(?:^|\s)다(?=\s|$|[?.!,])/.test(t)){   // V7.91-02: 전부·모두·다 등
     const ks=kind?[kind]:['deck','ele','hold'];
     const seg=ks.map(k=>{
       const tot=rows.reduce((a,r)=>a+r[k].diff*perOf[k],0);
@@ -2096,7 +2097,7 @@ async function coneFixQuestionWithAI(rawText, timeoutMs){
 }
 // 콘 질문기가 아는 어휘 + 조사·의문어 — 이걸 지우고도 한글 2자+ 토큰이 남으면 "미해석 단어"로 복원 대상.
 //   (검수앱 교훈: 완전 실패만 잡으면 "5번 베이 잇퍼"가 베이만 잡혀 엉뚱한 답이 나감 — 부분 인식도 복원.)
-const CONE_QA_KNOWN=/데크콘|코끼리콘|홀드콘|컨테이너|베이|데크|코끼리|홀드|갑판|선창|양하|선적|모자|부족|추가|필요|남는|남았|남아|반납|회수|전체|대수|요약|콘|총|몇|대|개|번|은|는|이|가|을|를|에서|에|의|와|과|도|만|좀|요|줘|주세요|해|야|니|나요|입니까|있|없|어디|뭐|얼마/g;
+const CONE_QA_KNOWN=/데크콘|코끼리콘|홀드콘|컨테이너|베이|데크|코끼리|홀드|갑판|선창|양하|선적|모자|부족|추가|필요|가져|남는|남았|남아|남을|반납|회수|빼야|뺄|돌려|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|대수|개수|수량|요약|콘|총|몇|대|개|번|은|는|이|가|을|를|에서|에|의|와|과|도|만|좀|요|줘|주세요|해|야|니|나요|입니까|있|없|어디|뭐|얼마|다/g;
 function coneQaLeftover(q){
   return String(q||'').replace(/[0-9A-Za-z\s.,?!]/g,' ').replace(CONE_QA_KNOWN,' ').trim()
     .split(/\s+/).filter(function(t){return t.length>=2;});

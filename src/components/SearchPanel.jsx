@@ -228,7 +228,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (!q || q.length < 4) return;
     if (voiceQueryRef.current !== q) return;          // 음성으로 들어온 질문만
     if (/^[0-9\s]+$/.test(q)) return;                 // 숫자(끝4자리)는 제외
-    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요/g;
+    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
     const leftover = q.replace(/[0-9A-Za-z\s.,?!]/g, ' ').replace(KNOWN, ' ').trim()
       .split(/\s+/).filter(t => t.length >= 2);
     const understood = hasAnyCondition(parsed) || !!localAnswer;

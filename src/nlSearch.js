@@ -97,7 +97,7 @@ export function parseNaturalQuery(text) {
   // F/E
   if (/풀|적컨|적재|loaded/i.test(t)) result.fe = 'F';
   else if (/\bfull\b/i.test(t)) result.fe = 'F';
-  else if (/엠티|공컨/i.test(t)) result.fe = 'E';
+  else if (/엠티|공컨|빈\s*컨/i.test(t)) result.fe = 'E';   // V7.91-02: '빈 컨테이너' 추가
   else if (/\bempty\b|\bmt\b/i.test(t)) result.fe = 'E';
 
   // 특수 화물
@@ -133,7 +133,7 @@ export function parseNaturalQuery(text) {
   result.pol = polCode; result.pod = podCode; result.portAny = portCode;
 
   // 구역
-  if (/갑판|deck/i.test(t)) result.zone = 'deck';
+  if (/갑판|데크|deck/i.test(t)) result.zone = 'deck';   // V7.91-02: '데크' 한글 추가
   else if (/창내|선창|hold|홀드/i.test(t)) result.zone = 'hold';
 
   // DG 클래스 / UN
@@ -153,7 +153,7 @@ export function parseNaturalQuery(text) {
   if (isCapacityQ) result.capacityQuery = true;
 
   // M3.3: 진행 상황
-  if (/들어갔|들어간|들어가\s*있|실었|실은|올라\s*간|올라간|쌓은|쌓았|쌓았지|완료\s*된|완료된|완료\s*몇|완료\s*된\s*거|완료\s*컨|끝낸|끝난|마친|마쳤/i.test(t)) {
+  if (/들어갔|들어간|들어가\s*있|실었|실은|올라\s*간|올라간|쌓은|쌓았|쌓았지|완료\s*된|완료된|완료\s*몇|완료\s*된\s*거|완료\s*컨|끝낸|끝난|마친|마쳤|내렸|내린\s*거|다\s*했|다\s*됐|다\s*끝/i.test(t)) {   // V7.91-02: 내렸·다 했 추가
     result.progressQuery = 'done';
   } else if (/남았|남은|안\s*한|안한|더\s*해야|더\s*들어가|더\s*실어|더\s*해|얼마나\s*남|할\s*일|미완료|남아|남나/i.test(t)) {
     result.progressQuery = 'pending';
@@ -192,15 +192,18 @@ export function parseNaturalQuery(text) {
 
   // 위치/리스트 의도
   // V7.90-02: 베이 분포 질문 — "리퍼가 몇 번 베이에 있어?" / "어디 어디에 있어?" (사용자 현장 제보)
-  if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;
+  if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어떤\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;   // V7.91-02: 어떤 베이
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약/i.test(t)) result.briefingQuery = true;
   if (/(실번호|씰|실)\s*(점검|검사|오류|확인|체크)/i.test(t)) result.sealAuditQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
-  if (/리스트|목록|보여줘|보여줘봐|알려줘|list/i.test(t)) result.listQuery = true;
+  if (/리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등
 
   // 전체 / 통계
-  if (/컨테이너|container|전체|all|총\s*개수|총\s*대수|총\s*몇/i.test(t)) result.isAll = true;
-  if (/몇\s*(개|대|건)|얼마나|개수|대수|총\s*몇/i.test(t)) result.isStat = true;
+  // V7.91-02: 일상 동의어 확장 — "전체"만 되고 "전부/다/모두"는 안 되던 것 (사용자 요청).
+  //   단독 "다"는 토큰으로만 매칭(앞뒤 공백/문장 경계) — "남았다" 속 '다' 오인 방지.
+  const allWords = /전체|전부|모두|몽땅|싹\s*다|죄다|도합|통틀어|합쳐서|합치면|다\s*해서|다\s*합(?:쳐|치)|(?:^|\s)다(?=\s|$|[?.!,])/;
+  if (/컨테이너|container|all|총\s*개수|총\s*대수|총\s*몇/i.test(t) || allWords.test(t)) result.isAll = true;
+  if (/몇\s*(개|대|건)|얼마나|몇\s*이나|개수|대수|수량|총\s*몇/i.test(t)) result.isStat = true;
 
   // 온도
   if (hasTempCtx) {
