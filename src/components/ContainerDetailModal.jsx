@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState , useMemo} from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
 import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
@@ -7,6 +7,7 @@ import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
+import { findTwinCandidate, getBayPairs } from '../twin.js';
 import { formatDgLabel, lookupUN } from '../dgUnDict.js';
 
 // ISO 코드 옵션 — M5.79 확장
@@ -67,6 +68,18 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
+  // V7.94-09: 남은 자리 선택창용 — 트윈 짝꿍 후보·짝꿍 베이 매핑
+  const posEditTwinPartner = useMemo(() => {
+    if (!c || comp) return null;
+    const is20 = String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2';
+    if (!is20) return null;
+    try { return findTwinCandidate(c, allContainers.filter(x => (x._mode || mode) === (c._mode || mode) && !x._comp), new Set([c.cn])) || null; }
+    catch { return null; }
+  }, [c, comp, allContainers, mode]);
+  const posEditBayPairs = useMemo(() => {
+    try { return getBayPairs(allContainers.filter(x => (x._mode || mode) === (c?._mode || mode))); } catch { return null; }
+  }, [allContainers, c, mode]);
+
   // M3.87: 위치 수정 모달 (선적 모드 전용)
   const [showPosEdit, setShowPosEdit] = useState(false);
 
@@ -1046,7 +1059,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
       {/* M3.87: 위치 수정 모달 (선적 모드) */}
       <PositionEditModal
         open={showPosEdit}
-        container={{ ...c, _comp: comp }}
+        container={{ ...c, _comp: comp, _mode: c._mode || mode }}
         allContainers={allContainers}
         onClose={() => setShowPosEdit(false)}
         onSave={async (newBay, newRow, newTier) => {
@@ -1054,6 +1067,10 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector);
           return result;
         }}
+        twinPartner={posEditTwinPartner}
+        bayPairs={posEditBayPairs}
+        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector)}
+        onCompleteBoth={async (cns) => { for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector); }}
       />
     </div>
   );

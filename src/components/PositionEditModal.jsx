@@ -10,12 +10,20 @@ export default function PositionEditModal({
   allContainers = [],
   onClose,
   onSave,  // async (newBay, newRow, newTier) => { ok, displaced }
+  // V7.94-09: 남은 자리 선택창 + 트윈 짝꿍 자동 배치 + 배정 후 바로 선적확인 (사용자 요청)
+  twinPartner = null,        // 트윈 짝꿍 컨 (있으면 슬롯 선택 시 짝꿍 자리 자동 배치)
+  bayPairs = null,           // { '21': '23', ... } — 짝꿍 베이 매핑
+  onSavePartner = null,      // async (cn, bay, row, tier) => { ok }
+  onCompleteBoth = null,     // async (cns[]) => void — 배정 후 선적확인
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
   const [tier, setTier] = useState('');
   const [step, setStep] = useState('input');  // 'input' | 'confirm' | 'saving'
   const [errMsg, setErrMsg] = useState('');
+  const [manualOpen, setManualOpen] = useState(false);   // 직접 입력 접기 (기본: 슬롯 선택)
+  const [partnerPos, setPartnerPos] = useState(null);    // 슬롯 선택으로 정해진 짝꿍 위치
+  const [alsoComplete, setAlsoComplete] = useState(true);// 배정 후 바로 선적확인
 
   useEffect(() => {
     if (open && container) {
@@ -24,8 +32,45 @@ export default function PositionEditModal({
       setTier(container.tier || '');
       setStep('input');
       setErrMsg('');
+      setManualOpen(false);
+      setPartnerPos(null);
+      setAlsoComplete(true);
+      setPickedSlotCn(null);
     }
   }, [open, container]);
+
+  // 남은 자리 = 같은 모드·미완료·위치 보유·크기 일치 컨테이너들의 슬롯 (자기 자신/짝꿍 제외)
+  const is20 = (c) => String(c?.tp || '').startsWith('20') || String(c?.iso || '')[0] === '2';
+  const remainingSlots = useMemo(() => {
+    if (!open || !container) return [];
+    const targetIs20 = is20(container);
+    return allContainers
+      .filter(c => c && c._mode === container._mode && c._ptk !== false && !c._comp &&
+        c.bay && c.row && c.tier &&
+        c.cn !== container.cn && c.cn !== twinPartner?.cn &&
+        is20(c) === targetIs20)
+      .map(c => ({ bay: String(parseInt(c.bay, 10)), row: c.row, tier: c.tier, cn: c.cn }))
+      .sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
+        (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
+  }, [open, container, allContainers, twinPartner]);
+  const slotsByBay = useMemo(() => {
+    const m = {};
+    remainingSlots.forEach(s => { (m[s.bay] = m[s.bay] || []).push(s); });
+    return m;
+  }, [remainingSlots]);
+
+  // 슬롯 탭: 위치 세팅 + 트윈이면 짝꿍 자리 자동 계산 → 바로 확인 단계
+  const [pickedSlotCn, setPickedSlotCn] = useState(null);   // 선택 자리의 원래 계획 컨 (POD 구역 판정용)
+  const pickSlot = (s) => {
+    setBay(s.bay); setRow(s.row); setTier(s.tier);
+    setPickedSlotCn(s.cn || null);
+    if (twinPartner && bayPairs) {
+      const pBay = bayPairs[String(parseInt(s.bay, 10))];
+      setPartnerPos(pBay ? { bay: pBay, row: s.row, tier: s.tier } : null);
+    } else setPartnerPos(null);
+    setErrMsg('');
+    setStep('confirm');
+  };
 
   // 충돌 검사: 같은 자리에 있는 다른 컨
   const conflict = useMemo(() => {
@@ -39,6 +84,29 @@ export default function PositionEditModal({
       return cBay === bayInt && c.row === rowPad && c.tier === tierPad;
     }) || null;
   }, [bay, row, tier, allContainers, container]);
+
+  // V7.94-10: 경고 — ① 다른 베이에서 옮겨오는 컨 ② EDI 계획상 그 자리 목적지(POD) 구역 이탈
+  const findByCn = (cn) => cn ? allContainers.find(x => x?.cn === cn) : null;
+  const findAtPos = (b, r, t) => allContainers.find(x => x && x.cn !== container?.cn && x.bay &&
+    String(parseInt(x.bay, 10)) === String(parseInt(b, 10)) && x.row === String(r).padStart(2, '0') && x.tier === String(t).padStart(2, '0'));
+  const bayWarn = useMemo(() => {
+    if ((!bay && !row && !tier) || !container?.bay || !bay) return false;
+    return String(parseInt(container.bay, 10)) !== String(parseInt(bay, 10));
+  }, [container, bay, row, tier]);
+  const podWarn = useMemo(() => {
+    if ((!bay && !row && !tier) || !container?.pod) return null;
+    const slotCon = findByCn(pickedSlotCn) || (bay && row && tier ? findAtPos(bay, row, tier) : null) || conflict;
+    if (slotCon?.pod && slotCon.pod !== container.pod) return { zonePod: slotCon.pod, myPod: container.pod };
+    return null;
+  }, [pickedSlotCn, bay, row, tier, conflict, container, allContainers]);
+  const partnerPodWarn = useMemo(() => {
+    if (!partnerPos || !twinPartner?.pod) return null;
+    const slotCon = findAtPos(partnerPos.bay, partnerPos.row, partnerPos.tier);
+    if (slotCon && slotCon.cn !== twinPartner.cn && slotCon.pod && slotCon.pod !== twinPartner.pod)
+      return { zonePod: slotCon.pod, myPod: twinPartner.pod };
+    return null;
+  }, [partnerPos, twinPartner, allContainers]);
+
 
   if (!open || !container) return null;
 
@@ -68,8 +136,17 @@ export default function PositionEditModal({
       const r = row ? String(row).padStart(2, '0') : '';
       const t = tier ? String(tier).padStart(2, '0') : '';
       const result = await onSave(bay, r, t);
-      if (result?.ok) onClose();
-      else { setErrMsg('저장 실패'); setStep('input'); }
+      if (!result?.ok) { setErrMsg('저장 실패'); setStep('input'); return; }
+      // V7.94-09: 트윈 짝꿍 자동 배치 + 배정 후 바로 선적확인
+      if (partnerPos && twinPartner && onSavePartner) {
+        await onSavePartner(twinPartner.cn, partnerPos.bay, String(partnerPos.row).padStart(2, '0'), String(partnerPos.tier).padStart(2, '0'));
+      }
+      if (alsoComplete && !isUnassign && !isCompleted && onCompleteBoth) {
+        const cns = [container.cn];
+        if (partnerPos && twinPartner) cns.push(twinPartner.cn);
+        await onCompleteBoth(cns);
+      }
+      onClose();
     } catch (e) {
       setErrMsg(e?.message || String(e));
       setStep('input');
@@ -114,6 +191,34 @@ export default function PositionEditModal({
 
         {step === 'input' && (
           <div className="p-4 space-y-3">
+            {/* V7.94-09: 남은 자리 선택 (기본) — 탭 한 번으로 배정 */}
+            {remainingSlots.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-amber-300 font-bold">
+                  📍 남은 자리에서 선택 ({remainingSlots.length}곳{twinPartner ? ' · 트윈 — 짝꿍 자리 자동' : ''})
+                </div>
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {Object.keys(slotsByBay).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(b => (
+                    <div key={b}>
+                      <div className="text-[10px] font-bold text-slate-500 mb-1">BAY {b}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {slotsByBay[b].map(s => (
+                          <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
+                            className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-600 hover:border-amber-500 mono text-sm font-bold text-slate-100">
+                            {s.row}-{s.tier}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button onClick={() => setManualOpen(v => !v)}
+              className="w-full py-1.5 text-[11px] text-slate-400 hover:text-slate-200 border border-dashed border-slate-700 rounded">
+              {manualOpen ? '▲ 직접 입력 닫기' : '▼ 직접 입력 / 미배정 처리'}
+            </button>
+            {manualOpen && (<>
             <div className="text-xs text-slate-400">새 위치 (Bay-Row-Tier). 모두 비우면 미배정 처리(선적대상).</div>
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -138,7 +243,6 @@ export default function PositionEditModal({
                   className="w-full px-3 py-3 bg-slate-800 border border-slate-700 rounded text-2xl font-black mono text-amber-200 text-center"/>
               </div>
             </div>
-            {errMsg && <div className="text-red-400 text-sm font-bold">{errMsg}</div>}
             {conflict && (
               <div className="bg-orange-950/40 border-2 border-orange-700 rounded-lg p-3">
                 <div className="text-orange-300 font-black text-sm flex items-center gap-1.5">
@@ -162,6 +266,11 @@ export default function PositionEditModal({
                 다음 →
               </button>
             </div>
+            </>)}
+            {errMsg && <div className="text-red-400 text-sm font-bold">{errMsg}</div>}
+            {remainingSlots.length === 0 && !manualOpen && (
+              <div className="text-xs text-slate-500 text-center py-2">남은 자리가 없습니다 — 직접 입력을 사용하세요.</div>
+            )}
           </div>
         )}
 
@@ -186,6 +295,37 @@ export default function PositionEditModal({
               </div>
             )}
 
+            {bayWarn && (
+              <div className="bg-amber-950/60 border-2 border-amber-600 rounded-lg p-3">
+                <div className="text-amber-300 font-black text-sm flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4"/>다른 베이에서 오는 컨테이너
+                </div>
+                <div className="mt-1 text-xs text-amber-200">
+                  계획 베이 <span className="mono font-black">{String(parseInt(container.bay, 10))}</span> → 선적 베이 <span className="mono font-black">{String(parseInt(bay, 10))}</span> — 베이를 건너 이동합니다. 맞는지 확인하세요.
+                </div>
+              </div>
+            )}
+            {podWarn && (
+              <div className="bg-rose-950/70 border-2 border-rose-600 rounded-lg p-3 animate-pulse">
+                <div className="text-rose-300 font-black text-sm flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4"/>목적지 구역 이탈!
+                </div>
+                <div className="mt-1 text-xs text-rose-200">
+                  이 자리는 EDI 계획상 <span className="mono font-black">{podWarn.zonePod}</span> 구역인데,
+                  이 컨테이너의 목적지는 <span className="mono font-black">{podWarn.myPod}</span>입니다.
+                </div>
+              </div>
+            )}
+            {partnerPodWarn && (
+              <div className="bg-rose-950/70 border-2 border-rose-600 rounded-lg p-3">
+                <div className="text-rose-300 font-black text-sm flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4"/>트윈 짝꿍 — 목적지 구역 이탈
+                </div>
+                <div className="mt-1 text-xs text-rose-200">
+                  짝꿍 자리는 <span className="mono font-black">{partnerPodWarn.zonePod}</span> 구역, 짝꿍 컨 목적지는 <span className="mono font-black">{partnerPodWarn.myPod}</span>.
+                </div>
+              </div>
+            )}
             <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
               <div className="text-xs text-slate-400">변경 내용</div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -193,6 +333,21 @@ export default function PositionEditModal({
                 <span className="text-amber-400 text-xl">→</span>
                 <span className={`mono font-black text-lg ${isUnassign ? 'text-orange-300' : 'text-emerald-300'}`}>{newPosLabel}</span>
               </div>
+              {partnerPos && twinPartner && (
+                <div className="flex items-center gap-2 flex-wrap border-t border-slate-800 pt-2">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900 text-cyan-200 font-bold">트윈 짝꿍 자동</span>
+                  <span className="mono text-xs text-slate-300 font-bold">{twinPartner.cn}</span>
+                  <span className="text-amber-400">→</span>
+                  <span className="mono font-black text-cyan-300">{String(parseInt(partnerPos.bay, 10)).padStart(2, '0')}-{String(partnerPos.row).padStart(2,'0')}-{String(partnerPos.tier).padStart(2,'0')}</span>
+                </div>
+              )}
+              {!isUnassign && !isCompleted && onCompleteBoth && (
+                <button onClick={() => setAlsoComplete(v => !v)}
+                  className={`w-full flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-bold ${alsoComplete ? 'bg-emerald-950 border-emerald-700 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+                  <span className={`w-3.5 h-3.5 rounded ${alsoComplete ? 'bg-emerald-400' : 'bg-slate-600'}`}/>
+                  배정 후 바로 선적확인 {partnerPos && twinPartner ? '(트윈 둘 다)' : ''} — {alsoComplete ? '켬' : '끔'}
+                </button>
+              )}
               {conflict && (
                 <div className="text-[11px] text-orange-300 mt-2">
                   ⚠ {conflict.cn} → 미배정 (선적대상으로 분류)

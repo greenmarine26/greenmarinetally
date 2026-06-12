@@ -1,9 +1,10 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone } from '../voice.js';
+import { findTwinCandidate, getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
 
@@ -19,8 +20,31 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  const [posTarget, setPosTarget] = useState(null);   // V7.94-10: 위치 선택창 대상 컨 (c 또는 번호수정으로 고른 실제 컨)
+  // V7.94-09: 남은 자리 선택창용 — 트윈 짝꿍 후보·짝꿍 베이 매핑 (20ft 미완료 컨만)
+  const posEditTwinPartner = useMemo(() => {
+    const t = posTarget;
+    if (!t || t._comp) return null;
+    const is20 = String(t.tp || '').startsWith('20') || String(t.iso || '')[0] === '2';
+    if (!is20) return null;
+    try { return findTwinCandidate(t, allContainers.filter(x => x._mode === t._mode && !x._comp), new Set([t.cn])) || null; }
+    catch { return null; }
+  }, [posTarget, allContainers]);
+  const posEditBayPairs = useMemo(() => {
+    try { return getBayPairs(allContainers.filter(x => x._mode === c?._mode)); } catch { return null; }
+  }, [allContainers, c]);
+
   // M3.87: 위치 수정 모달 (선적 모드)
-  const [showPosEdit, setShowPosEdit] = useState(false);
+  // V7.94-10: 컨테이너 번호 수정 — 다른 컨이 왔을 때: 실제 컨 검색·선택 → [위치 선택] → 남은 자리 창
+  const [cnFixOpen, setCnFixOpen] = useState(false);
+  const [cnFixQuery, setCnFixQuery] = useState('');
+  const [cnFixPick, setCnFixPick] = useState(null);
+  const cnFixMatches = useMemo(() => {
+    const q = cnFixQuery.replace(/\s/g, '').toUpperCase();
+    if (q.length < 3) return [];
+    return allContainers.filter(x => x && x._mode === c._mode && !x._comp && x.cn !== c.cn &&
+      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q))).slice(0, 6);
+  }, [cnFixQuery, allContainers, c]);
   const isLoading = c._mode === 'loading';
 
   const labelMap = {
@@ -189,10 +213,58 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}
       {isLoading && (
-        <button onClick={() => setShowPosEdit(true)}
+        <button onClick={() => setPosTarget(c)}
           className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-amber-700 hover:bg-amber-600 text-amber-50 flex items-center justify-center gap-1.5">
-          <MapPin className="w-4 h-4"/>위치 수정 / 다른 자리에 배정
+          <MapPin className="w-4 h-4"/>위치 수정 (같은 컨, 자리만 변경)
         </button>
+      )}
+      {isLoading && !cnFixOpen && (
+        <button onClick={() => { setCnFixOpen(true); setCnFixQuery(''); setCnFixPick(null); }}
+          className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-slate-800 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 flex items-center justify-center gap-1.5">
+          <RotateCcw className="w-4 h-4"/>컨테이너 번호 수정 (다른 컨이 옴)
+        </button>
+      )}
+      {isLoading && cnFixOpen && (
+        <div className="mt-2 bg-slate-900 border border-cyan-800 rounded-lg p-2 space-y-2">
+          <div className="text-[11px] text-cyan-300 font-bold">실제 온 컨테이너 번호 (끝 4자리 이상)</div>
+          {cnFixPick ? (
+            <>
+              <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-700 rounded px-2 py-2">
+                <div>
+                  <div className="mono text-sm font-bold text-cyan-200">{cnFixPick.cn}</div>
+                  <div className="text-[10px] mono text-slate-400">
+                    계획 {cnFixPick.bay ? `${parseInt(cnFixPick.bay, 10)}-${cnFixPick.row}-${cnFixPick.tier}` : '미배정'} · {cnFixPick.pod || '-'}
+                    {cnFixPick.bay && c.bay && parseInt(cnFixPick.bay, 10) !== parseInt(c.bay, 10) &&
+                      <span className="ml-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
+                  </div>
+                </div>
+                <button onClick={() => setCnFixPick(null)} className="text-[11px] text-slate-400 px-1.5">✕</button>
+              </div>
+              <button onClick={() => { setPosTarget(cnFixPick); setCnFixOpen(false); }}
+                className="w-full py-2.5 rounded-lg font-black text-sm bg-cyan-700 hover:bg-cyan-600 text-white flex items-center justify-center gap-1.5">
+                <MapPin className="w-4 h-4"/>위치 선택 →
+              </button>
+            </>
+          ) : (
+            <>
+              <input autoFocus value={cnFixQuery} onChange={e => setCnFixQuery(e.target.value)}
+                placeholder="예: 1234 또는 SKLU1972626"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
+              {cnFixMatches.map(x => (
+                <button key={x.cn} onClick={() => setCnFixPick(x)}
+                  className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
+                  <span className="mono font-bold text-slate-100">{x.cn}</span>
+                  <span className="mono text-slate-400">
+                    {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}
+                  </span>
+                </button>
+              ))}
+              {cnFixQuery.length >= 3 && cnFixMatches.length === 0 &&
+                <div className="text-[11px] text-slate-500 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}
+            </>
+          )}
+          <button onClick={() => setCnFixOpen(false)} className="w-full text-[11px] text-slate-400 py-1">닫기</button>
+        </div>
       )}
 
       {/* M3.74: confirm() → ConfirmModal */}
@@ -200,15 +272,19 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* M3.87: 위치 수정 모달 */}
       <PositionEditModal
-        open={showPosEdit}
-        container={c}
+        open={!!posTarget}
+        container={posTarget || c}
         allContainers={allContainers}
-        onClose={() => setShowPosEdit(false)}
+        onClose={() => setPosTarget(null)}
         onSave={async (newBay, newRow, newTier) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
-          const result = await fbReassignContainerPosition(voyageKey, c._mode, c.cn, newBay, newRow, newTier, inspector);
+          const result = await fbReassignContainerPosition(voyageKey, c._mode, (posTarget || c).cn, newBay, newRow, newTier, inspector);
           return result;
         }}
+        twinPartner={posEditTwinPartner}
+        bayPairs={posEditBayPairs}
+        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector)}
+        onCompleteBoth={async (cns) => { for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector); }}
       />
     </div>
   );
