@@ -40,6 +40,25 @@ function normalizeShipKey(s) {
 //
 // M5.11: v2에 대해 lookupBayDictV2Enhanced 사용 — IMO/callsign/code/이름 4가지 매칭
 //   기존 fuzzy 매칭이 prefix 4글자 + garbage 콜사인 때문에 자주 실패하던 문제 해결
+// V7.94-07: Firebase 베이사전 접근 헬퍼 — window.__fbShipBayDict가 비어 있으면
+//   메인 앱이 미러해 둔 localStorage 캐시(gm_fb_baydict_cache)를 읽는다.
+//   목적: 콘앱(cone-cargoplan.js)처럼 Firebase를 로드하지 않는 같은-오리진 환경에서도
+//   Firebase 전용 선박(예: STMJ)의 카고플랜 조회가 가능하게.
+let _fbCacheParsed = null;
+function getFbBayDict() {
+  try {
+    if (typeof window !== 'undefined' && window.__fbShipBayDict && Object.keys(window.__fbShipBayDict).length > 0) {
+      return window.__fbShipBayDict;
+    }
+  } catch (e) { /* fallthrough */ }
+  try {
+    if (_fbCacheParsed) return _fbCacheParsed;
+    const raw = localStorage.getItem('gm_fb_baydict_cache');
+    if (raw) { _fbCacheParsed = JSON.parse(raw) || {}; return _fbCacheParsed; }
+  } catch (e) { /* skip */ }
+  return {};
+}
+
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
   // M6.93.12 fix #2 (검수앱지침서 §6.3): userBayDict가 최우선 (절대 보호).
   //   사용자가 매트릭스 빌더에서 직접 입력한 정답이 다른 어떤 사전보다 우선.
@@ -60,7 +79,7 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
     if (v2Enhanced && !v2Enhanced.matchedBy.startsWith('name-fuzzy')) {
       const def = v2Enhanced.entry?.bayDef;
       if (def?.verified === true && def?.parsedAt) {
-        const fbDict = window.__fbShipBayDict || {};
+        const fbDict = getFbBayDict();
         // 같은 선박 Firebase entry 찾기
         const fbEntry = Object.values(fbDict).find(e => 
           e && ((imo && e.imo === imo) || (v2Enhanced.entry.code && e.code === v2Enhanced.entry.code))
@@ -79,7 +98,7 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
 
   // M5.88: 0. Firebase 베이사전 (최우선 — 모든 검수원 공유)
   try {
-    const fbDict = window.__fbShipBayDict || {};
+    const fbDict = getFbBayDict();
     if (Object.keys(fbDict).length > 0) {
       const search = String(vesselNameOrCode || '').toUpperCase().replace(/\s+/g, '');
       // 1) code 정확 매칭
@@ -326,7 +345,7 @@ function findSeriesSubstitute(code, ediBayCount) {
   // 후보 수집: userBayDict + Firebase 사전
   const pools = [];
   try { pools.push(loadUserBayDict() || {}); } catch (e) { /* skip */ }
-  try { if (typeof window !== 'undefined' && window.__fbShipBayDict) pools.push(window.__fbShipBayDict); } catch (e) { /* skip */ }
+  try { const _fb = getFbBayDict(); if (Object.keys(_fb).length > 0) pools.push(_fb); } catch (e) { /* skip */ }
 
   const candidates = [];
   for (const pool of pools) {
@@ -384,7 +403,7 @@ function pickBestVariant(matchedData, imo, ediBayCount) {
   // 후보 수집: localStorage + Firebase
   const pools = [];
   try { pools.push(loadUserBayDict() || {}); } catch (e) { /* skip */ }
-  try { if (typeof window !== 'undefined' && window.__fbShipBayDict) pools.push(window.__fbShipBayDict); } catch (e) { /* skip */ }
+  try { const _fb = getFbBayDict(); if (Object.keys(_fb).length > 0) pools.push(_fb); } catch (e) { /* skip */ }
 
   const variants = [];
   for (const pool of pools) {

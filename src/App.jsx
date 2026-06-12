@@ -52,6 +52,9 @@ export default function App() {
     //   로컬에 이미 더 최신(updatedAt) user entry가 있으면 덮어쓰지 않는다.
     const u5 = fbSubscribeShipBayDict(data => {
       window.__fbShipBayDict = data || {};
+      // V7.94-07: 콘앱(Firebase 미로드, 같은 오리진)이 읽을 수 있게 localStorage에 미러.
+      //   용량 초과(QuotaExceeded) 시 조용히 생략 — 메인 앱 동작에는 영향 없음.
+      try { localStorage.setItem('gm_fb_baydict_cache', JSON.stringify(data || {})); } catch (e) { /* skip */ }
       try {
         const fb = data || {};
         const local = loadUserBayDict() || {};

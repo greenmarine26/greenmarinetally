@@ -6,7 +6,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
-import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
+import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
 import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
@@ -37,6 +37,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [selectedGroup, setSelectedGroup] = useState(null); // 그룹 center 베이 번호
   const [fixOpen, setFixOpen] = useState(false);
   const [fixQuery, setFixQuery] = useState('');
+  // V7.94-08: 트윈 수정 — 앞/뒤 두 컨 번호 동시 수정 (사용자 메모 ⑤)
+  const [fixQuery2, setFixQuery2] = useState('');
+  const [fixPickFront, setFixPickFront] = useState(null);
+  const [fixPickBack, setFixPickBack] = useState(null);
+  // V7.94-08: 홀드 선적 완료 → 다음 베이 선택 프롬프트 (사용자 메모 ②)
+  const [deckPromptDone, setDeckPromptDone] = useState(false);
   const [consecFix, setConsecFix] = useState(0);
   const [busy, setBusy] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -148,31 +154,74 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   // 수정: 실제 나온 컨을 입력 → 그 컨을 완료 처리, 예측 컨은 큐에 남음
-  const fixMatches = useMemo(() => {
-    const q = fixQuery.replace(/\s/g, '').toUpperCase();
+  const matchFor = (q0, excludeCn) => {
+    const q = q0.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
-    return remaining.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn &&
+    return remaining.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn && c.cn !== excludeCn &&
       (c.cn.includes(q) || (c.l4 || c.cn.slice(-4)).includes(q))).slice(0, 6);
-  }, [fixQuery, remaining, card]);
+  };
+  const fixMatches = useMemo(() => matchFor(fixQuery, fixPickBack?.cn), [fixQuery, remaining, card, fixPickBack]);
+  const fixMatches2 = useMemo(() => matchFor(fixQuery2, fixPickFront?.cn), [fixQuery2, remaining, card, fixPickFront]);
 
+  // V7.94-08: 미배정(위치 빠진) 컨 — 수정으로 밀려난 컨테이너 추적 표시 (사용자 메모 ④)
+  const unassigned = useMemo(
+    () => allContainers.filter(c => c._mode === mode && c._ptk && !c._comp && (!c.bay || !c.row || !c.tier)),
+    [allContainers, mode]
+  );
+  const [showUnassigned, setShowUnassigned] = useState(false);
+
+  // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
+  const holdDonePrompt = useMemo(() => {
+    if (mode !== 'loading' || deckPromptDone || selectedGroup == null) return false;
+    const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
+    if (groupRemain.length === 0) return false;
+    const holdRemain = groupRemain.filter(c => parseInt(c.tier, 10) < 80).length;
+    const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
+      groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
+    return holdRemain === 0 && deckDone === 0 && groupDone > 0;
+  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs]);
+
+  // 수정 1대 적용: 선적이면 실제 컨을 예측 슬롯 위치로 재배정(그 자리 예측 컨은 자동 미배정+완료취소 — 이중 수정 방지) 후 완료
+  const applyFixOne = async (actual, slot) => {
+    if (mode === 'loading') {
+      await fbReassignContainerPosition(voyageKey, mode, actual.cn, slot.bay, slot.row, slot.tier, inspector);
+    }
+    await fbCompleteContainer(voyageKey, mode, actual.cn, inspector);
+  };
+
+  const afterFix = () => {
+    const n = consecFix + 1;
+    setConsecFix(n);
+    setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null);
+    if (n >= AUTO_MANUAL_THRESHOLD) {
+      speak('수동 모드로 전환합니다');
+      alert(`수정이 ${AUTO_MANUAL_THRESHOLD}회 연속되었습니다.\n플랜대로 진행되지 않는 것으로 판단해 수동 모드로 전환합니다.`);
+      onSwitchManual?.();
+    }
+  };
+
+  // 단독 카드 수정: 실제 온 컨 1대
   const handleFixPick = async (c) => {
-    if (busy) return;
+    if (busy || !card) return;
     setBusy(true);
     try {
-      await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
-      const twin = findTwinCandidate(c, remaining, new Set([c.cn]), shipImo, shipName);
-      if (twin && window.confirm(`트윈 짝꿍 ${twin.cn}도 같이 ${mode === 'discharge' ? '양하' : '선적'}확인할까요?`)) {
-        await fbCompleteContainer(voyageKey, mode, twin.cn, inspector);
-      }
-      const n = consecFix + 1;
-      setConsecFix(n);
-      setFixOpen(false); setFixQuery('');
-      if (n >= AUTO_MANUAL_THRESHOLD) {
-        speak('수동 모드로 전환합니다');
-        alert(`수정이 ${AUTO_MANUAL_THRESHOLD}회 연속되었습니다.\n플랜대로 진행되지 않는 것으로 판단해 수동 모드로 전환합니다.`);
-        onSwitchManual?.();
-      }
+      await applyFixOne(c, card.main);
     } finally { setBusy(false); }
+    afterFix();
+  };
+
+  // 트윈 카드 수정: 앞/뒤 동시 — 바뀐 슬롯은 재배정+완료, 안 바뀐 슬롯은 예측 컨 그대로 완료
+  const handleTwinFixApply = async () => {
+    if (busy || !card || !card.twin) return;
+    if (!fixPickFront && !fixPickBack) { alert('수정할 컨테이너를 선택하세요. (한쪽만 바뀌었으면 그쪽만 선택)'); return; }
+    setBusy(true);
+    try {
+      if (fixPickFront) await applyFixOne(fixPickFront, card.main);
+      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
+      if (fixPickBack) await applyFixOne(fixPickBack, card.twin);
+      else await fbCompleteContainer(voyageKey, mode, card.twin.cn, inspector);
+    } finally { setBusy(false); }
+    afterFix();
   };
 
   if (mode !== 'discharge' && mode !== 'loading') return null;
@@ -259,7 +308,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {groups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
           <div className="grid grid-cols-3 gap-2">
             {groups.map(g => (
-              <button key={g.center} onClick={() => { setSelectedGroup(g.center); setConsecFix(0); }}
+              <button key={g.center} onClick={() => { setSelectedGroup(g.center); setConsecFix(0); setDeckPromptDone(false); setFixOpen(false); }}
                 className="py-3 rounded-lg bg-slate-800 hover:bg-violet-800 border border-slate-700 text-slate-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
                 <div className="text-[10px] text-slate-400">남은 {g.count}대</div>
@@ -361,7 +410,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
 
-      {!card ? (
+      {holdDonePrompt && card ? (
+        <div className="bg-sky-950/50 border-2 border-sky-600 rounded-lg p-4 text-center space-y-3">
+          <div className="font-bold text-sky-200">⚓ 이 베이 홀드 선적 완료!</div>
+          <div className="text-[11px] text-slate-400">바로 데크를 안 할 수도 있습니다. 다음 작업을 선택하세요.</div>
+          <div className="flex gap-2">
+            <button onClick={() => setDeckPromptDone(true)}
+              className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">이 베이 데크 계속 →</button>
+            <button onClick={() => { setSelectedGroup(null); setDeckPromptDone(false); }}
+              className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 베이 선택</button>
+          </div>
+        </div>
+      ) : !card ? (
         <div className="bg-emerald-950/40 border border-emerald-700 rounded-lg p-6 text-center">
           <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>
           <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
@@ -394,11 +454,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {!fixOpen ? (
             <button onClick={() => setFixOpen(true)}
               className="w-full py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-amber-800 text-amber-300 flex items-center justify-center gap-2">
-              <Pencil className="w-4 h-4"/>다른 컨테이너가 나옴 (수정)
+              <Pencil className="w-4 h-4"/>다른 컨테이너가 나옴 (수정{card.twin ? ' — 앞·뒤 동시' : ''})
             </button>
-          ) : (
+          ) : !card.twin ? (
             <div className="bg-slate-900 border border-amber-700 rounded-lg p-2 space-y-2">
-              <div className="text-[11px] text-amber-300 font-bold">실제 나온 컨테이너 번호 (끝 4자리 이상)</div>
+              <div className="text-[11px] text-amber-300 font-bold">실제 나온 컨테이너 번호 (끝 4자리 이상){mode === 'loading' && <span className="text-slate-500 font-normal"> · 이 자리({card.pos})로 배정되고 예측 컨은 미배정 처리</span>}</div>
               <input autoFocus value={fixQuery} onChange={e => setFixQuery(e.target.value)}
                 placeholder="예: 1234 또는 SKLU1972626"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
@@ -406,11 +466,48 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{c.cn}</span>
-                  <span className="mono text-slate-400">{parseInt(c.bay, 10)}-{c.row}-{c.tier}</span>
+                  <span className="mono text-slate-400">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
                 </button>
               ))}
               {fixQuery.length >= 3 && fixMatches.length === 0 && <div className="text-[11px] text-slate-500 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}
               <button onClick={() => { setFixOpen(false); setFixQuery(''); }} className="w-full text-[11px] text-slate-400 py-1">닫기</button>
+            </div>
+          ) : (
+            <div className="bg-slate-900 border border-amber-700 rounded-lg p-2 space-y-2">
+              <div className="text-[11px] text-amber-300 font-bold">트윈 수정 — 바뀐 쪽만 선택 (안 바뀐 쪽은 비워두면 예측대로 확인)</div>
+              {[
+                { label: `앞 (${card.pos})`, q: fixQuery, setQ: setFixQuery, pick: fixPickFront, setPick: setFixPickFront, matches: fixMatches },
+                { label: `뒤 (${parseInt(card.twin.bay, 10)}-${card.twin.row}-${card.twin.tier})`, q: fixQuery2, setQ: setFixQuery2, pick: fixPickBack, setPick: setFixPickBack, matches: fixMatches2 },
+              ].map((s) => (
+                <div key={s.label} className="border border-slate-700 rounded p-1.5 space-y-1">
+                  <div className="text-[10px] text-slate-400 font-bold">{s.label}</div>
+                  {s.pick ? (
+                    <div className="flex items-center justify-between bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5">
+                      <span className="mono text-sm font-bold text-amber-200">{s.pick.cn}</span>
+                      <button onClick={() => s.setPick(null)} className="text-[11px] text-slate-400 px-1.5">✕ 취소</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input value={s.q} onChange={e => s.setQ(e.target.value)}
+                        placeholder="실제 온 컨 끝 4자리 이상"
+                        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm mono text-slate-100"/>
+                      {s.matches.map(c => (
+                        <button key={c.cn} onClick={() => { s.setPick(c); s.setQ(''); }} disabled={busy}
+                          className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
+                          <span className="mono font-bold text-slate-100">{c.cn}</span>
+                          <span className="mono text-slate-400">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              ))}
+              <button onClick={handleTwinFixApply} disabled={busy || (!fixPickFront && !fixPickBack)}
+                className="w-full py-2.5 rounded-lg font-bold text-sm bg-amber-700 hover:bg-amber-600 disabled:opacity-40 text-white flex items-center justify-center gap-2">
+                {busy ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
+                선택한 수정 적용 (나머지는 예측대로 확인)
+              </button>
+              <button onClick={() => { setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null); }} className="w-full text-[11px] text-slate-400 py-1">닫기</button>
             </div>
           )}
 
@@ -436,6 +533,24 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </>
       )}
 
+      {unassigned.length > 0 && (
+        <div className="bg-amber-950/40 border border-amber-700 rounded-lg p-2">
+          <button onClick={() => setShowUnassigned(v => !v)} className="w-full flex items-center justify-center gap-1.5 text-[12px] font-bold text-amber-300">
+            <AlertTriangle className="w-3.5 h-3.5"/>위치 미배정 {unassigned.length}대 {showUnassigned ? '▲' : '▼'}
+          </button>
+          {showUnassigned && (
+            <div className="mt-1.5 space-y-1">
+              {unassigned.map(c => (
+                <button key={c.cn} onClick={() => onOpenContainer?.(c)}
+                  className="w-full flex justify-between items-center bg-slate-900 rounded px-2 py-1.5 text-xs">
+                  <span className="mono font-bold text-slate-100">{c.cn}</span>
+                  <span className="text-[10px] text-amber-400">재배정 필요 — 탭하여 위치 수정</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <button onClick={onSwitchManual}
         className="w-full py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center gap-2 border border-slate-700">
         <Hand className="w-4 h-4"/>수동 모드로 전환
