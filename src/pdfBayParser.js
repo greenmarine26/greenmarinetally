@@ -10,7 +10,9 @@
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 // worker는 빌드 시 vite로 처리 (필요시 별도 설정)
 pdfjsLib.GlobalWorkerOptions.workerSrc = 
-  new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+  // V7.94-13: Vite new URL 자산 처리가 해시를 중첩시켜 404 (pdf.worker.min-HASH-HASH.mjs)
+  //   → public 정적 파일로 고정 (빌드 시 dist 루트로 복사됨)
+  (import.meta.env?.BASE_URL || '/') + 'pdf.worker.min.mjs';
 
 const RE_BAY_TAIL = /^(?:\((\d+)\)\s+)?(\d+)\s+(.+)$/;
 

@@ -50,3 +50,6 @@
 
 ## V7.94-12 (MCSN 사전 오염 수정)
 - 진상: MCSN=SPIL NIKEN(.def 헤더 확정), V2 entry가 PDF box-region 오염(8척 동일). MCSN entry를 .def(M4.4, 34베이)로 교체 + 오염 패턴·정합성 게이트로 빌더 결합 거부 + bayNo 폴백. 시뮬 36 PASS. MCSN EDI 수령 시 99베이 출처 확인 필요.
+
+## V7.94-13 (MCSN 95베이 종결 + PDF 워커)
+- 원인: BAPLIE 위치 미정 코드(99-99-99) 1대가 1~max 채움을 95베이로 부풀림. 99 제외 + 사전 기반 채움 제한 + PDF 워커 public 정적화. MCSN 실EDI = 34베이/추정0 확정. 회귀 36 PASS.

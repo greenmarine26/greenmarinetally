@@ -92,8 +92,11 @@ export function fillEmptyBaysSequential(matrix) {
   for (const e of Object.values(matrix.byBay)) {
     if (e.pairEven) evenInPair.add(parseInt(e.pairEven));
   }
+  // V7.94-13: 사전이 적용됐으면 사전 베이 목록 밖 번호는 추정 채움 금지 (실선에 없는 베이)
+  const dictSet = Array.isArray(matrix.dictBaySet) && matrix.dictBaySet.length > 0 ? new Set(matrix.dictBaySet) : null;
   for (let n = 1; n <= max; n++) {
     if (n % 2 === 0 && evenInPair.has(n)) continue; // 페어 짝꿍은 skip
+    if (dictSet && !dictSet.has(n)) continue;       // 사전에 없는 베이는 채우지 않음
     const key = String(n).padStart(3, '0');
     if (!matrix.byBay[key]) {
       const e = createEmptyBayEntry(key, null);
@@ -210,6 +213,9 @@ export function buildMatrixFromEdi(containers) {
     // M6.94.36: 비숫자 bay 차단 — parseInt('NaN')/비숫자가 byBay['NaN'] 유령 베이를 만들던 버그.
     const bayN = parseInt(c.bay, 10);
     if (!Number.isFinite(bayN) || bayN <= 0) continue;
+    // V7.94-13: BAPLIE '위치 미정' 관례 코드(LOC+147+0999999 → 99-99-99) 제외
+    //   실사례: MCSN 622N — 미정 1대가 max를 99로 끌어올려 1~max 자동 채움이 95베이 쓰레기 생성.
+    if (bayN === 99 && parseInt(c.row, 10) === 99 && parseInt(c.tier, 10) === 99) continue;
     const b = pad3(c.bay);
     if (!byBay[b]) {
       byBay[b] = {
@@ -424,7 +430,9 @@ export function augmentMatrixFromBayDict(matrix, imo, code) {
     }
   }
 
-  return { ...matrix, bayDictUsed: true, bayDictMeta: { imo, code, name: dictData.name } };
+  // V7.94-13: 사전 베이 목록 기록 — 자동 채움이 사전에 없는 베이(4의 배수 등 실선 부재)를 만들지 않게
+  const dictBaySet = [...new Set(dictBays)];
+  return { ...matrix, bayDictUsed: true, bayDictMeta: { imo, code, name: dictData.name }, dictBaySet };
 }
 
 /**
