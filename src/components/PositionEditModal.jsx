@@ -36,28 +36,32 @@ export default function PositionEditModal({
       setPartnerPos(null);
       setAlsoComplete(true);
       setPickedSlotCn(null);
+      setPickBay(null);
     }
   }, [open, container]);
 
-  // 남은 자리 = 같은 모드·미완료·위치 보유·크기 일치 컨테이너들의 슬롯 (자기 자신/짝꿍 제외)
+  // V7.94-11: 베이 먼저 선택 → 그 베이 자리만 표시 (전체 노출은 오선적 유발 — 사용자 지적)
+  //   완료된 자리도 보여주되 선택 불가(비활성) — 베이 전체 그림 파악용
   const is20 = (c) => String(c?.tp || '').startsWith('20') || String(c?.iso || '')[0] === '2';
-  const remainingSlots = useMemo(() => {
+  const [pickBay, setPickBay] = useState(null);
+  const allSlots = useMemo(() => {
     if (!open || !container) return [];
     const targetIs20 = is20(container);
     return allContainers
-      .filter(c => c && c._mode === container._mode && c._ptk !== false && !c._comp &&
+      .filter(c => c && c._mode === container._mode && c._ptk !== false &&
         c.bay && c.row && c.tier &&
         c.cn !== container.cn && c.cn !== twinPartner?.cn &&
         is20(c) === targetIs20)
-      .map(c => ({ bay: String(parseInt(c.bay, 10)), row: c.row, tier: c.tier, cn: c.cn }))
+      .map(c => ({ bay: String(parseInt(c.bay, 10)), row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp }))
       .sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
         (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
   }, [open, container, allContainers, twinPartner]);
   const slotsByBay = useMemo(() => {
     const m = {};
-    remainingSlots.forEach(s => { (m[s.bay] = m[s.bay] || []).push(s); });
+    allSlots.forEach(s => { (m[s.bay] = m[s.bay] || []).push(s); });
     return m;
-  }, [remainingSlots]);
+  }, [allSlots]);
+  const remainingSlots = useMemo(() => allSlots.filter(s => !s.done), [allSlots]);
 
   // 슬롯 탭: 위치 세팅 + 트윈이면 짝꿍 자리 자동 계산 → 바로 확인 단계
   const [pickedSlotCn, setPickedSlotCn] = useState(null);   // 선택 자리의 원래 계획 컨 (POD 구역 판정용)
@@ -192,25 +196,45 @@ export default function PositionEditModal({
         {step === 'input' && (
           <div className="p-4 space-y-3">
             {/* V7.94-09: 남은 자리 선택 (기본) — 탭 한 번으로 배정 */}
-            {remainingSlots.length > 0 && (
+            {remainingSlots.length > 0 && !pickBay && (
               <div className="space-y-2">
                 <div className="text-xs text-amber-300 font-bold">
-                  📍 남은 자리에서 선택 ({remainingSlots.length}곳{twinPartner ? ' · 트윈 — 짝꿍 자리 자동' : ''})
+                  📍 선적할 베이를 먼저 선택하세요{twinPartner ? ' (트윈 — 짝꿍 자리 자동)' : ''}
                 </div>
-                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                  {Object.keys(slotsByBay).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(b => (
-                    <div key={b}>
-                      <div className="text-[10px] font-bold text-slate-500 mb-1">BAY {b}</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {slotsByBay[b].map(s => (
-                          <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
-                            className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-600 hover:border-amber-500 mono text-sm font-bold text-slate-100">
-                            {s.row}-{s.tier}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-3 gap-1.5">
+                  {Object.keys(slotsByBay).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(b => {
+                    const remain = slotsByBay[b].filter(s => !s.done).length;
+                    return (
+                      <button key={b} onClick={() => remain > 0 && setPickBay(b)} disabled={remain === 0}
+                        className={`py-2.5 rounded-lg border font-black ${remain > 0 ? 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                        <div className="mono text-base">B{b}</div>
+                        <div className="text-[10px] font-bold text-slate-400">남은 {remain}자리</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {pickBay && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 (✓회색=선적 완료, 선택 불가)</div>
+                  <button onClick={() => setPickBay(null)} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
+                </div>
+                <div className="max-h-56 overflow-y-auto pr-1">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(slotsByBay[pickBay] || []).map(s => s.done ? (
+                      <span key={`${s.bay}-${s.row}-${s.tier}`}
+                        className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">
+                        ✓{s.row}-{s.tier}
+                      </span>
+                    ) : (
+                      <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
+                        className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-600 hover:border-amber-500 mono text-sm font-bold text-slate-100">
+                        {s.row}-{s.tier}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

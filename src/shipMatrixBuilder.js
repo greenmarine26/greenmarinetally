@@ -334,8 +334,49 @@ export function augmentMatrixFromBayDict(matrix, imo, code) {
   }
 
   const baysSummary = dictData.bayDef?.baysSummary || [];
+
+  // V7.94-12: 정합성 게이트 — 약자 재사용(용선 교체) 충돌 방어 (실사례: MCSN가 과거 SPIL NIKEN 코드)
+  //   EDI에서 실측된 최대 베이가 사전의 최대 베이보다 크면 = 사전이 더 작은(다른) 배 → 사전 적용 거부.
+  //   원칙: EDI 실측이 진실, 사전은 보강일 뿐 — 사전이 실측을 못 덮으면 신뢰 불가.
+  const ediBays = Object.keys(matrix.byBay || {}).map(b => parseInt(b, 10)).filter(Number.isFinite);
+  const dictBays = baysSummary.map(bs => parseInt(bs.bayNo ?? bs.bay, 10)).filter(Number.isFinite);
+  if (ediBays.length > 0 && dictBays.length > 0) {
+    const ediMax = Math.max(...ediBays);
+    const dictMax = Math.max(...dictBays);
+    if (ediMax > dictMax) {
+      return {
+        ...matrix,
+        bayDictUsed: false,
+        bayDictRejected: {
+          name: dictData.name,
+          code: dictData.code || code,
+          reason: `EDI 실측 최대 베이 ${ediMax} > 사전 최대 베이 ${dictMax} — 다른 선박의 사전(약자 재사용 의심)`,
+        },
+      };
+    }
+  }
+  // V7.94-12: PDF box-region 오염 entry 거부 (실사례: MCSN 등 8척 — bayNo 00 + 트리오 3번째 베이 결손)
+  //   오염 entry로 보강하면 베이 구조 전체가 무너지므로 사전 미적용 (entry 데이터 자체는 보존).
+  if (dictBays.length > 0) {
+    const baySet = new Set(dictBays);
+    let miss3 = 0;
+    for (let g = 1; g <= 97; g += 4) {
+      if (baySet.has(g) && baySet.has(g + 1) && !baySet.has(g + 2)) miss3++;
+    }
+    if (baySet.has(0) && miss3 >= 2) {
+      return {
+        ...matrix,
+        bayDictUsed: false,
+        bayDictRejected: {
+          name: dictData.name,
+          code: dictData.code || code,
+          reason: `사전 베이 목록 오염 의심(00 베이 + 트리오 결손 ${miss3}건, PDF 자동 파싱 오류) — 미적용`,
+        },
+      };
+    }
+  }
   for (const bs of baysSummary) {
-    const bay = pad3(bs.bay);
+    const bay = pad3(bs.bay ?? bs.bayNo);   // V7.94-12: V2 사전은 bayNo 필드
     if (!matrix.byBay[bay]) {
       // EDI에 없는 베이도 사전에서 추가 (빈 베이)
       matrix.byBay[bay] = {

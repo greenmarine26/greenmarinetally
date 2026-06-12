@@ -604,6 +604,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
             <div className="text-[11px] text-zinc-500 mt-2">
               출처: EDI ({matrix._empty ? '없음' : '✓'}) · 베이사전 ({matrix.bayDictUsed ? '✓ 매칭' : '없음'}) · .def ({matrix.defUsed ? '✓ 자동' : '미사용'}) · PDF ({matrix.pdfUsed ? '✓ 보강' : '미사용'})
               {matrix.bayDictMeta?.name && <span className="ml-2 text-cyan-400">(사전: {matrix.bayDictMeta.name})</span>}
+              {matrix.bayDictRejected && (
+                <span className="ml-2 text-amber-400 font-bold">
+                  ⚠ 사전 미적용: {matrix.bayDictRejected.name?.split('\n').pop()} — {matrix.bayDictRejected.reason}
+                </span>
+              )}
             </div>
           </div>
 
