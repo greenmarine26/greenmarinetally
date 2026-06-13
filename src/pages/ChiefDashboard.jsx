@@ -3,10 +3,12 @@ import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, Check
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
+import { isChief } from '../staffList.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 
-export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGoHome }) {
+export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome }) {
+  const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const [shipLib, setShipLib] = useState({});
   const [feedback, setFeedback] = useState({});
   const [showResolved, setShowResolved] = useState(false);
@@ -272,7 +274,7 @@ export default function ChiefDashboard({ voyages, inspectors, onOpenVoyage, onGo
       </div>
 
       {/* M7.22: 라이브러리(진행 상황) + 선박별 자료 보관소(완료 기록) 분리 */}
-      <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} />
+      <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
       <ShipArchiveSection shipLib={shipLib} />
 
       {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
@@ -605,7 +607,7 @@ function FeedbackRow({ feedback: f }) {
 //   수석검수사가 최종 확인 후 [완료 저장] → archive 백업 + 보관소 기록 + voyages 삭제.
 //   양하/선적 수는 평택분(tallyVoyagesByShip이 _ptkCountOfSection로 집계).
 // ─────────────────────────────────────────────────────────────
-function LiveProgressSection({ voyages, onOpenVoyage }) {
+function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
   const [busyKey, setBusyKey] = useState(null);
   const [confirmKey, setConfirmKey] = useState(null);
 
@@ -636,6 +638,11 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
   }, [voyages]);
 
   const doComplete = async (row) => {
+    if (!chief) {   // V7.94-18: 수석검수/부수석만 완료 저장 가능
+      alert('⚠️ 완료 저장 권한이 없습니다.\n\n항차 완료 저장은 수석검수사만 할 수 있습니다.\n(현재 로그인: ' + (inspector || '미상') + ')\n\n수석검수사에게 완료 저장을 요청하세요.');
+      setConfirmKey(null);
+      return;
+    }
     setBusyKey(row.key);
     try {
       const ok = await fbArchiveVoyageBeforeDelete(row.imo, row.key, voyages[row.key]);
@@ -688,11 +695,19 @@ function LiveProgressSection({ voyages, onOpenVoyage }) {
                     >취소</button>
                   </div>
                 ) : r.inspectorDone ? (
-                  <button
-                    onClick={() => setConfirmKey(r.key)}
-                    className="text-[11px] px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
-                    title="검수사 완료 확인됨 — 수석 최종 저장 (보관소로 이동)"
-                  >✓ 수석 완료 저장</button>
+                  chief ? (
+                    <button
+                      onClick={() => setConfirmKey(r.key)}
+                      className="text-[11px] px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
+                      title="검수사 완료 확인됨 — 수석 최종 저장 (보관소로 이동)"
+                    >✓ 수석 완료 저장</button>
+                  ) : (
+                    <button
+                      onClick={() => alert('⚠️ 완료 저장 권한이 없습니다.\n\n항차 완료 저장은 수석검수사만 할 수 있습니다.\n(현재 로그인: ' + (inspector || '미상') + ')\n\n수석검수사에게 완료 저장을 요청하세요.')}
+                      className="text-[11px] px-2 py-1 rounded bg-slate-700/40 text-slate-400 border border-slate-600/40 font-bold"
+                      title="수석검수사만 완료 저장할 수 있습니다"
+                    >🔒 수석 전용</button>
+                  )
                 ) : (
                   <span
                     className="text-[10px] px-2 py-1 rounded bg-slate-700/40 text-slate-400 border border-slate-600/40"

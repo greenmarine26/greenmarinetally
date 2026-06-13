@@ -77,3 +77,9 @@
 
 ## 콘앱 C7.64 (설치 scope 충돌 수정)
 - 검수앱과 같은 scope라 "이미 설치됨"으로 배너 억제됨. id=/greenmarinetally/cone + scope=cone.html로 분리. puppeteer 6 PASS.
+
+## V7.94-18 (수석 완료 권한)
+- 비수석도 완료 저장 가능하던 버그 수정. isChief에 부수석 포함, ChiefDashboard에 inspector 전달, doComplete 권한 차단+경고, 버튼 [🔒 수석 전용] 분기. 권한자 7명. isChief 14+회귀 80 PASS.
+
+## V7.94-19 (페어 인라인 변경)
+- 베이매트릭스 짝수 지정을 베이 목록에서 바로 변경(삭제 불필요). updatePairEven(빈값=단독/홀수·범위 거부) + 인라인 입력. sim 9+회귀 89 PASS.

@@ -60,8 +60,8 @@ export function getStaffRole(name) {
   return STAFF_ROLES[norm] || '';
 }
 
-// 수석검수 여부 (작업 권한)
+// 수석검수 여부 (작업 권한) — 수석검수 또는 부수석 포함
 export function isChief(name) {
   const role = getStaffRole(name);
-  return /수석검수/.test(role);
+  return /수석검수|부수석/.test(role);
 }

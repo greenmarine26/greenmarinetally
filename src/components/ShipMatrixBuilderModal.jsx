@@ -241,6 +241,26 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     });
   };
 
+  // V7.94-19: 기존 베이 페어(짝수) 인라인 변경 — 베이 삭제 없이 지정/해제 가능.
+  //   빈값 = 단독, 짝수 = 페어 짝꿍. (홀수 베이 입력 → 짝수 짝꿍 지정이 일반 케이스)
+  const updatePairEven = (bay, raw) => {
+    const v = String(raw || '').trim();
+    if (v === '') {   // 페어 해제 → 단독
+      updateBay(bay, 'pairEven', null);
+      return;
+    }
+    const num = parseInt(v, 10);
+    if (!Number.isFinite(num) || num < 1 || num > 99) {
+      alert('페어 짝수는 1~99 사이여야 합니다 (비우면 단독)');
+      return;
+    }
+    if (num % 2 !== 0) {
+      alert('페어 짝꿍은 짝수여야 합니다 (예: 02, 04). 홀수 베이에 짝수 짝꿍을 지정하세요.');
+      return;
+    }
+    updateBay(bay, 'pairEven', String(num).padStart(2, '0'));
+  };
+
   const updateCells = (bay, kind, idx, value) => {
     setMatrix(m => {
       const cp = { ...m, byBay: { ...m.byBay } };
@@ -737,7 +757,13 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                         👁 BAY {bay}
                       </button>
                       {isSelected && <span className="text-[10px] px-1.5 py-0.5 bg-cyan-600 rounded font-bold">미리보기 →</span>}
-                      {e.pairEven && <span className="text-zinc-400">({e.pairEven}) 페어</span>}
+                      <label className="flex items-center gap-1 text-[11px] text-zinc-400" title="페어 짝수 짝꿍 (비우면 단독). 베이 삭제 없이 변경 가능.">
+                        페어:
+                        <input type="number" defaultValue={e.pairEven || ''} placeholder="단독"
+                          key={`pair-${bay}-${e.pairEven || ''}`}
+                          onBlur={ev => { if ((ev.target.value || '') !== (e.pairEven || '')) updatePairEven(bay, ev.target.value); }}
+                          className="w-16 px-2 py-0.5 bg-zinc-700 rounded text-center" min="0" max="99" step="2" />
+                      </label>
                       {isEst && <span className="text-[10px] px-2 py-0.5 bg-zinc-700 text-zinc-300 rounded">⚠ 추정 (EDI/PDF 없음)</span>}
                       {!isEst && <span className="text-[10px] px-2 py-0.5 bg-zinc-700 rounded">{e.source || '?'}</span>}
                       <label className="ml-auto flex items-center gap-1">

@@ -226,7 +226,7 @@ export default function App() {
         )}
         {route.name === 'chief' && (
           <ChiefDashboard
-            voyages={voyages} inspectors={inspectors}
+            voyages={voyages} inspectors={inspectors} inspector={inspector}
             onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
             onGoHome={() => navigate('home')}
           />
