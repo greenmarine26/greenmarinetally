@@ -68,3 +68,6 @@
 
 ## V7.94-16 (해치커버 프롬프트 통합)
 - 가이드: 양하 데크 완료→[오픈→홀드]/[다른 데크], 홀드 완료→[클로즈]/[다른 베이] (보고 자동 발송). WorkReportModal 항차 오표시(equipModeOf) 수정. 시뮬 12+회귀 54 PASS.
+
+## V7.94-17 (PWA 홈화면 404 + 항만 아이콘)
+- manifest start_url/scope=/greenmarinetally/ 절대경로, 항만 크레인 PNG 아이콘 3종, apple-touch-icon은 _index.entry.html에 (빌드 생존). puppeteer 7+회귀 66 PASS.
