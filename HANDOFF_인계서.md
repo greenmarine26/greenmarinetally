@@ -89,3 +89,12 @@
 
 ## V7.94-21 (컨번호 조회 숫자패드)
 - 끝4자리 조회칸 3곳 inputMode=numeric (SearchPanel 2 + GuidedWorkPanel 1). 자유질문칸은 text 유지. 미처리 메모: 로우목록 화면(확인 대기).
+
+## V7.94-22 (해치커버 장수 = hatchCount 합)
+- 보고가 베이 개수를 장수로 쓰던 버그(13,14,15→3장). buildHatchMessage panelCount + hatchPanelsOf(매트릭스 hatchCount 합). 사전 없으면 베이수 폴백. GuidedWorkPanel+WorkReportModal. sim 10+회귀 107 PASS.
+
+## V7.94-23 (베이 홀드/데크 구분 + 장비선택 1회 + 선적 POD묶기)
+- 베이카드 데크/홀드 잔여표시, equipStep=!getEquipNumber()(장비 1회), buildGuidedQueue 선적 같은베이 POD별 묶기. sim 10+회귀 117 PASS. 미착수: 수동 선적 베이→홀드/데크 게이트(문제2).
+
+## V7.94-24 (자리교환 swap + 위치수정창 작업단 필터)
+- fbReassignContainerPosition: displaced를 A원자리로 이동(swap, 미배정 폴백). PositionEditModal workTier=hold/deck 빈자리 필터. 조회 컨 tier로 단 자동판정. sim 10+회귀 127 PASS. 미처리: 연쇄 swap, 수동선적 게이트.

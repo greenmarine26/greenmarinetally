@@ -171,7 +171,7 @@ export function buildWorkStatusMessage({ vsl, voy, action, time, reason, equip }
   return lines.join('\n');
 }
 
-export function buildHatchMessage({ vsl, voy, bays, action, time, equip }) {
+export function buildHatchMessage({ vsl, voy, bays, action, time, equip, panelCount }) {
   const verb = action === 'open' ? '🔓 해치커버 OPEN' : '🔒 해치커버 CLOSE';
   const bayList = (bays || []).join(', ');
   const lines = [];
@@ -179,7 +179,9 @@ export function buildHatchMessage({ vsl, voy, bays, action, time, equip }) {
   lines.push(`📍 ${vsl || ''} ${voy || ''}`.trim());
   lines.push(verb);
   lines.push(`베이: ${bayList}`);
-  lines.push(`총 ${(bays || []).length}장`);
+  // V7.94-22: 해치커버 장수 = 매트릭스 hatchCount 합 (panelCount). 없으면 베이 개수 폴백(구 동작).
+  const panels = (typeof panelCount === 'number' && panelCount > 0) ? panelCount : (bays || []).length;
+  lines.push(`총 ${panels}장`);
   lines.push(`시각: ${formatTime(time)}`);
   return lines.join('\n');
 }

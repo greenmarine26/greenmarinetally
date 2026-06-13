@@ -378,6 +378,17 @@ export async function fbBatchClearActual(voyageKey, mode, cns) {
 //
 // 반환: { ok: true, displaced?: <빠진 컨번호> }
 export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by) {
+  // V7.94-24: 자리 교환(swap) — A를 B 자리로 옮기면, 자리를 뺏긴 B는 A의 원래 자리로 이동(거기서 선적 대기).
+  //   (구: B를 미배정 처리 → 떠돌이 발생). A의 현재 위치를 먼저 캡처.
+  let aOldBay = '', aOldRow = '', aOldTier = '';
+  {
+    const recSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
+    const ediSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`));
+    const recA = recSnapA.val() || {}; const ediA = ediSnapA.val() || {};
+    aOldBay = recA.bay !== undefined ? recA.bay : (ediA.bay || '');
+    aOldRow = recA.row !== undefined ? recA.row : (ediA.row || '');
+    aOldTier = recA.tier !== undefined ? recA.tier : (ediA.tier || '');
+  }
   // 1) 같은 자리에 있는 다른 컨 찾기 (충돌 검사)
   let displaced = null;
   if (newBay && newRow && newTier) {
@@ -405,16 +416,21 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     }
   }
 
-  // 2) 충돌 컨이 있으면 그 컨을 미배정 처리 + 완료 취소
+  // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
   if (displaced) {
-    await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+    if (aOldBay && aOldRow && aOldTier) {
+      await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
+    } else {
+      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+    }
+    // 자리를 옮긴 B는 아직 선적 안 됨 → 완료 취소 (A 원자리에서 대기)
     await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
   }
 
   // 3) target 컨 위치 변경
   await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
 
-  return { ok: true, displaced };
+  return { ok: true, displaced, swappedTo: displaced ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
 }
 
 // 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화

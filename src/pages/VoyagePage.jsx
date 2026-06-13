@@ -1069,6 +1069,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           <ContainerDetailModal
             c={detailC}
             workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}
+            workTier={(() => { const t = parseInt(detailC.tier || detailC.tier_planned || recMap[detailC.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
             comp={cSec.completed?.[detailC.cn]}
             isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
             xraySeal={cSec.xraySeals?.[detailC.cn] || null}

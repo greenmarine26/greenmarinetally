@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
+import { getShipBayDictData } from '../shipStructure.js';
 import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
@@ -21,7 +22,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // 장비(호기) — 헤더와 동일한 localStorage 공유 + equipChanged 이벤트 동기화
   const [equip, setEquip] = useState(getEquipNumber());
-  const [equipStep, setEquipStep] = useState(true);   // 가이드 진입 시 항상 장비부터 결정 (설정돼 있으면 탭 1회로 통과)
+  const [equipStep, setEquipStep] = useState(() => !getEquipNumber());   // V7.94-23: 장비 미선택 시에만 선택 화면. 이미 있으면 건너뜀(로그인·선박선택 직후 1회만, 교체는 헤더 🏗 탭)
   useEffect(() => {
     const h = (e) => setEquip(e.detail || getEquipNumber());
     window.addEventListener('equipChanged', h);
@@ -101,15 +102,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return b;
   };
 
-  // 그룹 목록 (남은 작업이 있는 그룹만)
+  // 그룹 목록 (남은 작업이 있는 그룹만) — V7.94-23: 홀드/데크 잔여 구분
   const groups = useMemo(() => {
     const map = {};
     for (const c of remaining) {
       const center = groupCenterOf(c.bay);
       if (center == null) continue;
-      const g = (map[center] ||= { center, bays: new Set(), count: 0 });
+      const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0 });
       g.bays.add(parseInt(c.bay, 10));
       g.count++;
+      if (parseInt(c.tier, 10) >= 80) g.deck++; else g.hold++;
     }
     return Object.values(map).sort((a, b) => a.center - b.center);
   }, [remaining, bayPairs]);
@@ -198,6 +200,23 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   // V7.94-16: 해치커버 보고 발송 (가이드 흐름 통합 — WorkReportModal 해치 보고와 동일 형식)
+  // V7.94-22: 그룹 베이들의 해치커버 장수 합 (매트릭스 hatchCount). 사전 없으면 0 → 메시지에서 베이 개수 폴백.
+  const hatchPanelsOf = (bays) => {
+    try {
+      const dict = getShipBayDictData(shipImo, shipName);
+      const summary = dict?.bayDef?.baysSummary;
+      if (!Array.isArray(summary) || !summary.length) return 0;
+      const byNo = {};
+      summary.forEach(bs => { const no = String(parseInt(bs.bayNo ?? bs.bay, 10)); if (Number.isFinite(parseInt(no,10))) byNo[no] = bs; });
+      let total = 0, found = false;
+      bays.forEach(b => {
+        const bs = byNo[String(parseInt(b, 10))];
+        if (bs && typeof bs.hatchCount === 'number') { total += bs.hatchCount; found = true; }
+      });
+      return found ? total : 0;
+    } catch (e) { return 0; }
+  };
+
   const sendHatchReport = async (action) => {
     if (hatchBusy) return;
     setHatchBusy(true);
@@ -206,8 +225,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       const voy = mode === 'discharge'
         ? (voyage?.info?.voy_d || voyage?.info?.voy || '')
         : (voyage?.info?.voy_l || voyage?.info?.voy || '');
-      const message = buildHatchMessage({ vsl: shipName, voy, bays, action, time: Date.now(), equip });
-      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, message }); } catch (e) {}
+      const panelCount = hatchPanelsOf(bays);
+      const message = buildHatchMessage({ vsl: shipName, voy, bays, action, time: Date.now(), equip, panelCount });
+      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, panelCount, message }); } catch (e) {}
       await shareText(message, '해치커버');
     } finally { setHatchBusy(false); }
   };
@@ -372,6 +392,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 className="py-3 rounded-lg bg-slate-800 hover:bg-violet-800 border border-slate-700 text-slate-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
                 <div className="text-[10px] text-slate-400">남은 {g.count}대</div>
+                <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[10px] font-bold">
+                  {g.deck > 0 && <span className="text-sky-300">데크 {g.deck}</span>}
+                  {g.deck > 0 && g.hold > 0 && <span className="text-slate-600">·</span>}
+                  {g.hold > 0 && <span className="text-amber-300">홀드 {g.hold}</span>}
+                </div>
               </button>
             ))}
           </div>

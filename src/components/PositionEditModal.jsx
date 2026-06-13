@@ -16,6 +16,7 @@ export default function PositionEditModal({
   onSavePartner = null,      // async (cn, bay, row, tier) => { ok }
   onCompleteBoth = null,     // async (cns[]) => void — 배정 후 선적확인
   workBay = null,            // V7.94-20: 현재 작업 중인 베이 — 미배정 컨 재배정 시 자동 선택 (전체 베이 재선택 불필요)
+  workTier = null,           // V7.94-24: 작업 중인 단 — 'hold' | 'deck'. 있으면 그 단의 빈자리만 표시 (홀드 작업 중엔 홀드 자리만)
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -50,15 +51,21 @@ export default function PositionEditModal({
   const allSlots = useMemo(() => {
     if (!open || !container) return [];
     const targetIs20 = is20(container);
+    // V7.94-24: 작업 단(workTier)이 지정되면 그 단(홀드 tier<80 / 데크 tier>=80)의 자리만 — 홀드 작업 중엔 홀드 빈자리만 보이게
+    const tierMatch = (t) => {
+      if (!workTier) return true;
+      const ti = parseInt(t, 10);
+      return workTier === 'hold' ? ti < 80 : ti >= 80;
+    };
     return allContainers
       .filter(c => c && c._mode === container._mode && c._ptk !== false &&
         c.bay && c.row && c.tier &&
         c.cn !== container.cn && c.cn !== twinPartner?.cn &&
-        is20(c) === targetIs20)
+        is20(c) === targetIs20 && tierMatch(c.tier))
       .map(c => ({ bay: String(parseInt(c.bay, 10)), row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp }))
       .sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
         (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
-  }, [open, container, allContainers, twinPartner]);
+  }, [open, container, allContainers, twinPartner, workTier]);
   const slotsByBay = useMemo(() => {
     const m = {};
     allSlots.forEach(s => { (m[s.bay] = m[s.bay] || []).push(s); });

@@ -34,9 +34,33 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   const landToSea = mode === 'discharge';
   const topFirst = mode === 'discharge';
 
+  // V7.94-23: 선적 시 같은 베이 안에서 POD(목적항)별로 묶어 제시 (현장: 포트별 선적).
+  //   베이 순서·물리 적재순서(데크/홀드·티어)는 유지하고, 같은 베이+같은 단 안에서 POD가 같은 것끼리 인접.
+  //   POD 우선순위 = 그 베이에서 먼저 등장하는 POD 순 (베이별 독립).
+  const podOrderByBay = {};
+  if (mode === 'loading') {
+    const seen = {};
+    for (const c of containers) {
+      const b = String(parseInt(c.bay, 10));
+      const pod = c.pod || '';
+      podOrderByBay[b] ||= {};
+      if (!(pod in podOrderByBay[b])) { seen[b] = (seen[b] || 0); podOrderByBay[b][pod] = seen[b]++; }
+    }
+  }
+  const podRank = (c) => {
+    if (mode !== 'loading') return 0;
+    const b = String(parseInt(c.bay, 10));
+    return podOrderByBay[b]?.[c.pod || ''] ?? 99;
+  };
+
   const cmp = (a, b) => {
     const aDeck = isDeckTier(a.tier), bDeck = isDeckTier(b.tier);
     if (aDeck !== bDeck) return (mode === 'discharge') === aDeck ? -1 : 1;
+    // 선적: 같은 단(데크/홀드) 안에서 같은 베이면 POD별로 묶기 (물리 적재순서보다 우선하지 않게 — 베이·단 동일 시에만)
+    if (mode === 'loading' && parseInt(a.bay, 10) === parseInt(b.bay, 10)) {
+      const ap = podRank(a), bp = podRank(b);
+      if (ap !== bp) return ap - bp;
+    }
     const at = parseInt(a.tier, 10), bt = parseInt(b.tier, 10);
     if (at !== bt) return topFirst ? bt - at : at - bt;
     const ar = rowRank(a.row, { evenRowsSeaSide, landToSea });

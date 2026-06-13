@@ -11,6 +11,7 @@ import {
   EQUIPMENT_NUMBERS,
 } from '../kakaoShare.js';
 import { fbAddWorkReport } from '../firebase.js';
+import { getShipBayDictData } from '../shipStructure.js';
 import { ref, set, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -60,6 +61,20 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   if (!open) return null;
 
   const vsl = voyage?.info?.vsl || '';
+  const shipImo = voyage?.info?.imo || '';
+  // V7.94-22: 해치커버 장수 = 매트릭스 hatchCount 합 (없으면 0 → 베이 개수 폴백)
+  const hatchPanelsOf = (bays) => {
+    try {
+      const dict = getShipBayDictData(shipImo, vsl);
+      const summary = dict?.bayDef?.baysSummary;
+      if (!Array.isArray(summary) || !summary.length) return 0;
+      const byNo = {};
+      summary.forEach(bs => { const no = String(parseInt(bs.bayNo ?? bs.bay, 10)); byNo[no] = bs; });
+      let total = 0, found = false;
+      bays.forEach(b => { const bs = byNo[String(parseInt(b, 10))]; if (bs && typeof bs.hatchCount === 'number') { total += bs.hatchCount; found = true; } });
+      return found ? total : 0;
+    } catch (e) { return 0; }
+  };
   // M6.37: mode 기반 voy 선택 — 양하 보고는 voy_d (양하 항차), 선적 보고는 voy_l (선적 항차)
   //   예: XTPG 양하 0523E, 선적 0523W → 양하 보고에 0523E, 선적 보고에 0523W
   //   각 핸들러 진입 시 자신의 mode로 voy를 shadowing해서 정확한 항차 전달
@@ -251,7 +266,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const voy = getVoy(equipModeOf(equip));
 
     const time = Date.now();
-    const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip });
+    const panelCount = hatchPanelsOf(bays);
+    const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip, panelCount });
 
     await fbAddWorkReport(voyageKey, {
       type: 'hatch',
