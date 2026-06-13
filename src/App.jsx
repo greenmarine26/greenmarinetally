@@ -4,7 +4,7 @@ import { APP_VERSION, _storage, SK } from './utils.js';
 import { loadUserBayDict } from './data/userBayDict.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
-  fbSubscribeConnection, fbSetInspectorActivity, fbSubscribePortMis,
+  fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict
 } from './firebase.js';
 import HomePage from './pages/HomePage.jsx';
@@ -163,6 +163,7 @@ export default function App() {
   // M3.6: 로그아웃 처리
   const handleLogout = useCallback(async () => {
     if (!inspector) return;
+    fbLogoutInspector(inspector).catch(() => {});   // V7.94-14: 서버에 로그아웃 즉시 마킹
     const loginTime = getLoginTime();
     const workDuration = loginTime ? (Date.now() - loginTime) : 0;
     // 최신 날씨 다시 조회

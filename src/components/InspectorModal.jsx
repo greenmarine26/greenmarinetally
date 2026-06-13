@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, UserPlus, User } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_NAMES } from '../staffList.js';
+import { inspectorStatus } from '../inspectorStatus.js';
 // fbDeleteInspector 등은 StaffManagerModal에서 사용
 
 // 삭제 권한자 (오직 한 사람)
@@ -52,9 +53,14 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
           <div>
             <div className="font-bold text-lg text-amber-200">검수원 선택</div>
             {(() => {
-              const active = list.filter(i => i.lastActive && (Date.now() - i.lastActive) < 60000);
-              return active.length > 0 ? (
-                <div className="text-[11px] text-emerald-300 mt-0.5">● 현재 {active.length}명 작업중: {active.map(a => a.name).join(', ')}</div>
+              const working = list.filter(i => inspectorStatus(i) === 'working');
+              const online = list.filter(i => inspectorStatus(i) === 'online');
+              return (working.length > 0 || online.length > 0) ? (
+                <div className="text-[11px] mt-0.5">
+                  {working.length > 0 && <span className="text-emerald-300">● {working.length}명 작업중: {working.map(a => a.name).join(', ')}</span>}
+                  {working.length > 0 && online.length > 0 && <span className="text-slate-500"> · </span>}
+                  {online.length > 0 && <span className="text-sky-300">○ {online.length}명 로그인: {online.map(a => a.name).join(', ')}</span>}
+                </div>
               ) : null;
             })()}
           </div>
@@ -86,8 +92,11 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
                     <div className="text-[10px] text-slate-400 truncate text-left">{getStaffRole(i.name)}</div>
                   )}
                 </div>
-                {i.lastActive && (Date.now() - i.lastActive) < 60000 && (
+                {inspectorStatus(i) === 'working' && (
                   <span className="bg-emerald-700/40 text-emerald-300 text-[10px] px-1.5 py-0.5 rounded font-bold">●작업중</span>
+                )}
+                {inspectorStatus(i) === 'online' && (
+                  <span className="bg-sky-900/50 text-sky-300 text-[10px] px-1.5 py-0.5 rounded font-bold">○로그인</span>
                 )}
               </button>
             ))}

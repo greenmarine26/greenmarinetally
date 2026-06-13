@@ -1,6 +1,7 @@
 // M5.73: 인원 관리 전용 모달 (김성일만 진입)
 //   InspectorModal과 분리 — 선택과 관리를 명확히 구분
 import React, { useState } from 'react';
+import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
 import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll } from '../firebase.js';
@@ -187,7 +188,9 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
         {/* 명단 리스트 */}
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {filtered.map(s => {
-            const isActive = inspectorMap[s.name] && (Date.now() - (inspectorMap[s.name].lastActive || 0)) < 60000;
+            const _st = inspectorStatus(inspectorMap[s.name]);   // V7.94-14: 공용 판정
+            const isActive = _st === 'working';
+            const isLoggedIn = _st === 'online';
             const isOnline = !!inspectorMap[s.name];
             const isDynamic = !STAFF_NAMES.includes(s.name);  // Firebase에 동적 추가된 직원
             return (
@@ -205,7 +208,8 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                   <div className="text-[10px] text-slate-400">{s.role}</div>
                 </div>
                 {isActive && <span className="text-[9px] bg-emerald-700/40 text-emerald-300 px-1.5 py-0.5 rounded font-bold">●작업중</span>}
-                {isOnline && !isActive && <span className="text-[9px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">접속이력</span>}
+                {isLoggedIn && <span className="text-[9px] bg-sky-900/50 text-sky-300 px-1.5 py-0.5 rounded font-bold">○로그인</span>}
+                {isOnline && !isActive && !isLoggedIn && <span className="text-[9px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">접속이력</span>}
                 {/* 액션 버튼 */}
                 {s.name !== ADMIN_NAME && (
                   <div className="flex gap-1">

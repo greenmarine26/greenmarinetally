@@ -203,6 +203,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     const out = {};
     Object.values(inspectors || {}).forEach(i => {
       if (!i || !i.lastVoyage || !i.lastActive) return;
+      if (i.loggedIn === false) return;              // V7.94-14: 로그아웃 마킹 제외
       if (Date.now() - i.lastActive > 90000) return; // 90초 이내만
       if (!out[i.lastVoyage]) out[i.lastVoyage] = [];
       out[i.lastVoyage].push({ name: i.name, mode: i.lastMode });

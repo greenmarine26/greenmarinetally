@@ -494,7 +494,17 @@ export async function fbSetInspector(name) {
   if (!name) return;
   await update(ref(db, `inspectors/${name}`), {
     name,
-    lastActive: Date.now()
+    lastActive: Date.now(),
+    loggedIn: true,                 // V7.94-14: 로그인 상태 마킹
+    loginAt: Date.now(),
+  });
+}
+// V7.94-14: 로그아웃 마킹 — 다른 기기 화면에서 즉시 '작업중' 배지 제거
+export async function fbLogoutInspector(name) {
+  if (!name) return;
+  await update(ref(db, `inspectors/${name}`), {
+    loggedIn: false,
+    loggedOutAt: Date.now(),
   });
 }
 export function fbSubscribeInspectors(callback) {

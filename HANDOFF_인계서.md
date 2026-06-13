@@ -53,3 +53,6 @@
 
 ## V7.94-13 (MCSN 95베이 종결 + PDF 워커)
 - 원인: BAPLIE 위치 미정 코드(99-99-99) 1대가 1~max 채움을 95베이로 부풀림. 99 제외 + 사전 기반 채움 제한 + PDF 워커 public 정적화. MCSN 실EDI = 34베이/추정0 확정. 회귀 36 PASS.
+
+## V7.94-14 (검수원 로그인/작업중 구분)
+- 로그아웃 시 fbLogoutInspector(loggedIn:false) 마킹 + inspectorStatus 공용 판정(working/online/null) + 3개 화면 배지(●작업중/○로그인). 시뮬 8 PASS.
