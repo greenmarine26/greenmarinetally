@@ -74,3 +74,6 @@
 
 ## 콘앱 C7.63 (PWA 설치)
 - manifest start_url=/greenmarinetally/cone.html 절대경로, 콘 PNG 아이콘 3종, cone-sw.js 신설+등록(안드로이드 설치 배너). 배포 시 cone-sw.js 동봉 필수. puppeteer 7 PASS.
+
+## 콘앱 C7.64 (설치 scope 충돌 수정)
+- 검수앱과 같은 scope라 "이미 설치됨"으로 배너 억제됨. id=/greenmarinetally/cone + scope=cone.html로 분리. puppeteer 6 PASS.
