@@ -15,6 +15,7 @@ export default function PositionEditModal({
   bayPairs = null,           // { '21': '23', ... } — 짝꿍 베이 매핑
   onSavePartner = null,      // async (cn, bay, row, tier) => { ok }
   onCompleteBoth = null,     // async (cns[]) => void — 배정 후 선적확인
+  workBay = null,            // V7.94-20: 현재 작업 중인 베이 — 미배정 컨 재배정 시 자동 선택 (전체 베이 재선택 불필요)
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -36,7 +37,9 @@ export default function PositionEditModal({
       setPartnerPos(null);
       setAlsoComplete(true);
       setPickedSlotCn(null);
-      setPickBay(null);
+      // V7.94-20: 미배정 컨(위치 없음)인데 현재 작업 베이가 있으면 그 베이 자동 선택 — 전체 베이 재선택 단계 생략
+      const wb = container.bay ? null : (workBay != null ? String(parseInt(workBay, 10)) : null);
+      setPickBay(wb);
     }
   }, [open, container]);
 

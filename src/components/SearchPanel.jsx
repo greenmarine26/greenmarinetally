@@ -808,7 +808,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           <input type="text" value={q1}
             onChange={e => setQ1(e.target.value.toUpperCase())}
             placeholder="끝 4자리 또는 컨번호"
-            inputMode="text" autoComplete="off"
+            inputMode="numeric" autoComplete="off"
             className="w-full pl-9 pr-10 py-3 bg-slate-800 border border-amber-700/40 rounded text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"/>
           {q1 && <button onClick={() => { setQ1(''); setC1(null); setC2(null); }} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-5 h-5 text-slate-500"/></button>}
         </div>
@@ -902,7 +902,7 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
         <input type="text" value={q}
           onChange={e => setQ(e.target.value.toUpperCase())}
           placeholder="끝 4자리"
-          inputMode="text" autoComplete="off"
+          inputMode="numeric" autoComplete="off"
           className="w-full pl-9 pr-3 py-3 bg-slate-800 border border-cyan-700/40 rounded text-2xl font-black mono text-cyan-200 text-center tracking-widest focus:outline-none focus:border-cyan-500"/>
       </div>
       {matches.length > 0 && (

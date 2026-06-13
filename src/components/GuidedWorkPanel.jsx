@@ -161,8 +161,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const matchFor = (q0, excludeCn) => {
     const q = q0.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
-    return remaining.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn && c.cn !== excludeCn &&
-      (c.cn.includes(q) || (c.l4 || c.cn.slice(-4)).includes(q))).slice(0, 6);
+    const hits = remaining.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn && c.cn !== excludeCn &&
+      (c.cn.includes(q) || (c.l4 || c.cn.slice(-4)).includes(q)));
+    // V7.94-20: 끝4자리 중복 오선택 방지 — 현재 카드 자리(card.pos)와 같은 위치 컨을 맨 위로.
+    //   (BAY38 3523처럼 같은 베이에 끝4자리 중복 시, 의도한 자리의 컨이 먼저 보이게)
+    const pos = card?.main?.pos || (card?.main ? `${card.main.bay}-${card.main.row}-${card.main.tier}` : '');
+    return hits.sort((a, b) => {
+      const ap = `${parseInt(a.bay,10)}-${a.row}-${a.tier}` === pos ? 0 : 1;
+      const bp = `${parseInt(b.bay,10)}-${b.row}-${b.tier}` === pos ? 0 : 1;
+      return ap - bp;
+    }).slice(0, 6);
   };
   const fixMatches = useMemo(() => matchFor(fixQuery, fixPickBack?.cn), [fixQuery, remaining, card, fixPickBack]);
   const fixMatches2 = useMemo(() => matchFor(fixQuery2, fixPickFront?.cn), [fixQuery2, remaining, card, fixPickFront]);
@@ -536,12 +544,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <div className="text-[11px] text-amber-300 font-bold">실제 나온 컨테이너 번호 (끝 4자리 이상){mode === 'loading' && <span className="text-slate-500 font-normal"> · 이 자리({card.pos})로 배정되고 예측 컨은 미배정 처리</span>}</div>
               <input autoFocus value={fixQuery} onChange={e => setFixQuery(e.target.value)}
                 placeholder="예: 1234 또는 SKLU1972626"
+                inputMode="numeric" autoComplete="off"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
+              {fixMatches.length > 1 && (
+                <div className="text-[11px] text-rose-300 font-bold bg-rose-950/40 border border-rose-800 rounded px-2 py-1 text-center">
+                  ⚠️ 끝자리 같은 컨 {fixMatches.length}대 — 위치(Bay-Row-Tier) 확인 후 선택
+                </div>
+              )}
               {fixMatches.map(c => (
                 <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{c.cn}</span>
-                  <span className="mono text-slate-400">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                  <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-slate-400'}`}>{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
                 </button>
               ))}
               {fixQuery.length >= 3 && fixMatches.length === 0 && <div className="text-[11px] text-slate-500 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}

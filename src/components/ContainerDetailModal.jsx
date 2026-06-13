@@ -48,7 +48,7 @@ const ISO_OPTIONS = [
   { iso: '42T1', label: '40TK (40피트 탱크)',         flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [] }) {
+export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
@@ -1071,6 +1071,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         bayPairs={posEditBayPairs}
         onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector)}
         onCompleteBoth={async (cns) => { for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector); }}
+        workBay={workBay}
       />
     </div>
   );

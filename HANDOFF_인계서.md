@@ -83,3 +83,9 @@
 
 ## V7.94-19 (페어 인라인 변경)
 - 베이매트릭스 짝수 지정을 베이 목록에서 바로 변경(삭제 불필요). updatePairEven(빈값=단독/홀수·범위 거부) + 인라인 입력. sim 9+회귀 89 PASS.
+
+## V7.94-20 (끝4자리 중복 + 위치창 베이 자동선택)
+- SWRG BAY38 3523 2대 발견. matchFor 카드위치 우선정렬+중복경고배지, PositionEditModal workBay 자동선택(미배정 컨 재배정 시 베이 재선택 생략). sim 8+회귀 97 PASS.
+
+## V7.94-21 (컨번호 조회 숫자패드)
+- 끝4자리 조회칸 3곳 inputMode=numeric (SearchPanel 2 + GuidedWorkPanel 1). 자유질문칸은 text 유지. 미처리 메모: 로우목록 화면(확인 대기).

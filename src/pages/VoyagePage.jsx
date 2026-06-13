@@ -1068,6 +1068,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return (
           <ContainerDetailModal
             c={detailC}
+            workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}
             comp={cSec.completed?.[detailC.cn]}
             isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
             xraySeal={cSec.xraySeals?.[detailC.cn] || null}
