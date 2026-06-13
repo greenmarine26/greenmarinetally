@@ -56,3 +56,9 @@
 
 ## V7.94-14 (검수원 로그인/작업중 구분)
 - 로그아웃 시 fbLogoutInspector(loggedIn:false) 마킹 + inspectorStatus 공용 판정(working/online/null) + 3개 화면 배지(●작업중/○로그인). 시뮬 8 PASS.
+
+## 콘앱 C7.61 (카고플랜 로드 실패 수정)
+- 1.6MB 모듈 캐시버스터 제거(?v=__APPV), 재시도 3차, 항차 목록 shallow 경량화. cone.html+public 동시. 모듈 갱신 시 __APPV 같이 올릴 것.
+
+## 콘앱 C7.62 (카고플랜 사전 주입)
+- 모듈은 window.__fbShipBayDict 1순위 — 콘앱이 미주입이라 새 기기 매칭 실패(YKTD). openCargoPlanV2에서 v3 주입. puppeteer 3 PASS.

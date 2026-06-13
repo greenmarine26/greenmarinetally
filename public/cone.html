@@ -610,6 +610,7 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
+window.__APPV='C7.62';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -622,22 +623,29 @@ const FB_BASE='https://greenmarinetally-default-rtdb.asia-southeast1.firebasedat
 async function fbFetchVoyages(){
   // 각 항차에 양하/선적 자료(raw EDI 또는 파싱된 ediContainers)가 있는지 판정.
   //   기존 항차는 raw가 없고 ediContainers만 있을 수 있음 → 둘 중 하나라도 있으면 포함(재업로드 불필요).
-  const res=await fetch(`${FB_BASE}/voyages.json?shallow=false`);
-  if(!res.ok) throw new Error('Firebase 응답 오류 ('+res.status+')');
-  const all=await res.json();
-  if(!all) return [];
+  // V7.61: (구) voyages.json?shallow=false 전체 다운로드 — 모든 항차의 EDI 원문·컨테이너까지
+  //   통째로 받아 수 MB~수십 MB. 폰 약신호에서 타임아웃 → 항차 목록·카고플랜 실패의 보조 원인.
+  //   → 키 목록(shallow)만 받고, 항차별 info + 모드 키 존재만 병렬 조회 (총 수십 KB).
+  const kres=await fetch(`${FB_BASE}/voyages.json?shallow=true`);
+  if(!kres.ok) throw new Error('Firebase 응답 오류 ('+kres.status+')');
+  const keys=Object.keys(await kres.json()||{});
+  if(!keys.length) return [];
+  const jget=async(p)=>{ try{ const r=await fetch(`${FB_BASE}/${p}`); return r.ok? await r.json() : null; }catch(e){ return null; } };
+  const metas=await Promise.all(keys.map(async(key)=>{
+    const [info, dKeys, lKeys] = await Promise.all([
+      jget(`voyages/${encodeURIComponent(key)}/info.json`),
+      jget(`voyages/${encodeURIComponent(key)}/discharge.json?shallow=true`),
+      jget(`voyages/${encodeURIComponent(key)}/loading.json?shallow=true`),
+    ]);
+    const has=(ks)=>!!(ks && (ks.raw || ks.ediContainers));
+    return { key, info: info||{}, hasD: has(dKeys), hasL: has(lKeys) };
+  }));
   const out=[];
-  const has=(sec)=>{
-    if(!sec) return false;
-    if(sec.raw && sec.raw.edi && sec.raw.edi.text) return true;
-    if(sec.ediContainers && Object.keys(sec.ediContainers).length>0) return true;
-    return false;
-  };
-  for(const key in all){
-    const v=all[key]||{};
-    const info=v.info||{};
-    const hasD=has(v.discharge);
-    const hasL=has(v.loading);
+  for(const m of metas){
+    const key=m.key;
+    const info=m.info;
+    const hasD=m.hasD;
+    const hasL=m.hasL;
     // V7.47: 검수앱 작업선박 목록과 1:1 — 살아있는 항차는 전부 보여준다.
     //   (구) 3일 필터 제거: 검수앱은 7일 자동삭제로 관리하므로 콘앱이 따로 숨기면
     //   "검수앱엔 있는데 콘앱엔 없다"는 불일치 발생. EDI 없는 항차도 회색으로
@@ -1515,13 +1523,17 @@ async function loadCargoPlanV2(){
   //   onload 후에도 window.ConeCargoPlan이 없으면(파싱 실패 — 너무 오래된 브라우저) 구분 안내.
   const tryLoad=()=>new Promise((res,rej)=>{
     const s=document.createElement('script');
-    s.src='cone-cargoplan.js?v='+(window.__APPV||'')+'&r='+Date.now();
+    s.src='cone-cargoplan.js?v='+(window.__APPV||'');  // V7.61: r=Date.now() 제거 — 매번 1.6MB 재다운로드가 약신호 카고플랜 실패 원인. 버전 바뀔 때만 갱신.
     s.onload=res; s.onerror=()=>{ s.remove(); rej(new Error('NETWORK')); };
     document.head.appendChild(s);
   });
   try{
     try{ await tryLoad(); }
-    catch(e){ await new Promise(r=>setTimeout(r,1200)); await tryLoad(); }
+    catch(e){
+      await new Promise(r=>setTimeout(r,1200));
+      try{ await tryLoad(); }
+      catch(e2){ await new Promise(r=>setTimeout(r,3000)); await tryLoad(); }  // V7.61: 약신호 3차 재시도
+    }
   }catch(e){
     throw new Error('모듈을 내려받지 못했습니다 — 인터넷 연결을 확인해 주세요 (배에서는 신호가 약할 수 있어요)');
   }finally{
@@ -1542,6 +1554,10 @@ function rowsToContainers(rows){
 async function openCargoPlanV2(mode){
   try{
     await loadCargoPlanV2();
+    // V7.62: 카고플랜 모듈은 검수앱 환경 전역 window.__fbShipBayDict를 1순위 사전으로 봄.
+    //   콘앱이 이를 채워주지 않아 — 로컬 사전 없는 새 기기에서 매칭 실패(shipImo=undefined, 골격 없음).
+    //   실사례: YKTD — 서버(v3)에는 있는데 새 폰 카고플랜만 실패. v3 사전을 주입해 검수앱과 동일 매칭.
+    try{ window.__fbShipBayDict = await fbFetchBayDict(); }catch(e){}
     const sd = mode==='discharge' ? state.disch : state.stow;
     const rows = sd && (sd.ediRowsAll && sd.ediRowsAll.length ? sd.ediRowsAll : sd.ediRows);
     if(!rows || !rows.length){ alert(mode==='discharge'?'양하 자료가 없습니다.':'선적 자료가 없습니다.'); return; }
