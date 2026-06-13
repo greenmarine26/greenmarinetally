@@ -60,7 +60,7 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     }
     const card = { kind: 'work', main: c, twin, pos: `${c.bay}-${c.row}-${c.tier}`, single: false, fr: false };
     const isSpecialLast = mode === 'loading'
-      ? (c.fr || c.ot || twin?.fr || twin?.ot)   // 선적: FR+OT 마지막
+      ? (c.fr || c.ot || c.oog || twin?.fr || twin?.ot || twin?.oog)   // 선적: FR+OT 마지막 (V7.94-15: oog 필드 누락 — SWRG 오픈탑 ISO 2261이 oog만 참)
       : (c.fr || twin?.fr);                       // 양하: FR만 우선
     if (isSpecialLast) { card.fr = true; frs.push(card); }
     else if (is20ft(c) && !twin && !isDeckTier(c.tier)) { card.single = true; singles.push(card); }

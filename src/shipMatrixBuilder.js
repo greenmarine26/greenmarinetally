@@ -94,9 +94,13 @@ export function fillEmptyBaysSequential(matrix) {
   }
   // V7.94-13: 사전이 적용됐으면 사전 베이 목록 밖 번호는 추정 채움 금지 (실선에 없는 베이)
   const dictSet = Array.isArray(matrix.dictBaySet) && matrix.dictBaySet.length > 0 ? new Set(matrix.dictBaySet) : null;
+  // V7.94-15: 사전 없는 신규 선박 — EDI 관측 베이에 4의 배수가 하나도 없으면(트리오 01,02,03 / 05,06,07 … 구조)
+  //   4의 배수는 실선에 없는 번호이므로 추정 채움 제외. 실사례: SWRG — 4,8,…,36 가짜 추정 9개 생성되던 문제.
+  const observed4k = Object.entries(matrix.byBay || {}).some(([k, e]) => !e?.isEstimated && parseInt(k, 10) % 4 === 0);
   for (let n = 1; n <= max; n++) {
     if (n % 2 === 0 && evenInPair.has(n)) continue; // 페어 짝꿍은 skip
     if (dictSet && !dictSet.has(n)) continue;       // 사전에 없는 베이는 채우지 않음
+    if (!dictSet && !observed4k && n % 4 === 0) continue; // 트리오 구조 선박의 4의 배수 채움 금지
     const key = String(n).padStart(3, '0');
     if (!matrix.byBay[key]) {
       const e = createEmptyBayEntry(key, null);

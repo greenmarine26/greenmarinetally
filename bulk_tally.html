@@ -1403,6 +1403,7 @@ function StartGate({ onClose }) {
     }
   }
   function enter() {
+    try { sessionStorage.setItem('bulk_entered_session', '1'); } catch (e) {}
     if (!canEnter) return;
     saveCheckerName(checker.trim());
     setActiveVoyKey(selKey);
@@ -1464,7 +1465,13 @@ function StartGate({ onClose }) {
 function App() {
   const [tab, setTab] = useState("scan");
   // 시작 화면: 항차 미선택 또는 검수자명 미입력 시 표시. 헤더 선박명 탭으로 언제든 재진입.
-  const [gateOpen, setGateOpen] = useState(() => !getActiveVoyKey() || !getCheckerName());
+  // 2026-06-13: 검수앱과 동일하게 — 접속 시 항상 시작 화면(검수자·항차 확인) 표시.
+  //   (구) 검수자·항차가 저장돼 있으면 게이트 없이 이전 작업 화면으로 직행 → "항상 로그인된 테스트 화면" 인상.
+  //   기존 선택값은 미리 채워져 있으므로 [시작하기] 한 번이면 입장.
+  const [gateOpen, setGateOpen] = useState(() => {
+    try { if (sessionStorage.getItem('bulk_entered_session') === '1') return !getActiveVoyKey() || !getCheckerName(); } catch (e) {}
+    return true;   // 새로 켠 세션 — 항상 시작 화면부터
+  });
   const gateMandatory = !getActiveVoyKey() || !getCheckerName();
   const [selectedCoil, setSelectedCoil] = useState(null);
   const [showDataManager, setShowDataManager] = useState(false);

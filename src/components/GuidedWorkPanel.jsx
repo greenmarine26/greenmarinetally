@@ -6,10 +6,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
-import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
-import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
+import { EQUIPMENT_NUMBERS, buildHatchMessage, shareText } from '../kakaoShare.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
 
@@ -43,6 +43,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [fixPickBack, setFixPickBack] = useState(null);
   // V7.94-08: 홀드 선적 완료 → 다음 베이 선택 프롬프트 (사용자 메모 ②)
   const [deckPromptDone, setDeckPromptDone] = useState(false);
+  // V7.94-16: 해치커버 프롬프트 (사용자 요구 — 베이 데크/홀드 완료 시 해치 액션 선택창)
+  const [hatchOpenDone, setHatchOpenDone] = useState(false);    // 양하: 데크 완료 → 오픈 프롬프트 처리됨
+  const [hatchCloseDone, setHatchCloseDone] = useState(false);  // 홀드 완료 → 클로즈 보고 발송됨
+  const [hatchBusy, setHatchBusy] = useState(false);
   const [consecFix, setConsecFix] = useState(0);
   const [busy, setBusy] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
@@ -169,6 +173,54 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     [allContainers, mode]
   );
   const [showUnassigned, setShowUnassigned] = useState(false);
+
+  // V7.94-16: 그룹(베이) 변경 시 프롬프트 플래그 리셋
+  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); }, [selectedGroup]);
+
+  // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
+  const groupBaysOf = (center) => {
+    const set = new Set();
+    allContainers.forEach(c => {
+      if (c._mode === mode && c._ptk && groupCenterOf(c.bay) === center) {
+        const b = parseInt(c.bay, 10);
+        if (Number.isFinite(b)) set.add(String(b).padStart(2, '0'));
+      }
+    });
+    return [...set].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  };
+
+  // V7.94-16: 해치커버 보고 발송 (가이드 흐름 통합 — WorkReportModal 해치 보고와 동일 형식)
+  const sendHatchReport = async (action) => {
+    if (hatchBusy) return;
+    setHatchBusy(true);
+    try {
+      const bays = groupBaysOf(selectedGroup);
+      const voy = mode === 'discharge'
+        ? (voyage?.info?.voy_d || voyage?.info?.voy || '')
+        : (voyage?.info?.voy_l || voyage?.info?.voy || '');
+      const message = buildHatchMessage({ vsl: shipName, voy, bays, action, time: Date.now(), equip });
+      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, message }); } catch (e) {}
+      await shareText(message, '해치커버');
+    } finally { setHatchBusy(false); }
+  };
+
+  // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
+  const deckDonePromptD = useMemo(() => {
+    if (mode !== 'discharge' || hatchOpenDone || selectedGroup == null) return false;
+    const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
+    const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
+    const holdRemain = groupRemain.filter(c => parseInt(c.tier, 10) < 80).length;
+    const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
+      groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
+    return deckRemain === 0 && holdRemain > 0 && deckDone > 0;
+  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs]);
+
+  // V7.94-16: 양하 — 그룹 홀드까지 완료 시 클로즈 제안 조건 (그룹 완료 화면에서 사용)
+  const holdWorkedD = useMemo(() => {
+    if (mode !== 'discharge' || selectedGroup == null) return false;
+    return allContainers.some(c => c._mode === mode && c._ptk && c._comp &&
+      groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) < 80);
+  }, [mode, selectedGroup, allContainers, bayPairs]);
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
   const holdDonePrompt = useMemo(() => {
@@ -410,22 +462,45 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
 
-      {holdDonePrompt && card ? (
+      {deckDonePromptD && card ? (
+        <div className="bg-amber-950/50 border-2 border-amber-600 rounded-lg p-4 text-center space-y-3">
+          <div className="font-bold text-amber-200">⚓ 이 베이 데크 양하 완료!</div>
+          <div className="text-[11px] text-slate-400">홀드를 하려면 해치커버를 열어야 합니다. 다음 작업을 선택하세요.</div>
+          <div className="flex gap-2">
+            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('open'); setHatchOpenDone(true); }}
+              className="flex-1 py-3 rounded-lg bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm">🔓 해치커버 오픈 → 홀드 진행</button>
+            <button onClick={() => setSelectedGroup(null)}
+              className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 데크로 이동</button>
+          </div>
+        </div>
+      ) : holdDonePrompt && card ? (
         <div className="bg-sky-950/50 border-2 border-sky-600 rounded-lg p-4 text-center space-y-3">
           <div className="font-bold text-sky-200">⚓ 이 베이 홀드 선적 완료!</div>
-          <div className="text-[11px] text-slate-400">바로 데크를 안 할 수도 있습니다. 다음 작업을 선택하세요.</div>
+          <div className="text-[11px] text-slate-400">데크를 하려면 해치커버를 닫아야 합니다. 다음 작업을 선택하세요.</div>
           <div className="flex gap-2">
-            <button onClick={() => setDeckPromptDone(true)}
-              className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">이 베이 데크 계속 →</button>
+            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setDeckPromptDone(true); }}
+              className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈 → 데크 계속</button>
             <button onClick={() => { setSelectedGroup(null); setDeckPromptDone(false); }}
-              className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 베이 선택</button>
+              className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 베이 홀드 이동</button>
           </div>
         </div>
       ) : !card ? (
         <div className="bg-emerald-950/40 border border-emerald-700 rounded-lg p-6 text-center">
           <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>
           <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
-          <button onClick={() => setSelectedGroup(null)} className="mt-3 px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-sm text-slate-200">다른 베이 선택</button>
+          {mode === 'discharge' && holdWorkedD && !hatchCloseDone ? (
+            <div className="mt-3 space-y-2">
+              <div className="text-[11px] text-slate-400">홀드 작업이 끝났습니다. 해치커버를 닫을까요?</div>
+              <div className="flex gap-2 justify-center">
+                <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setHatchCloseDone(true); }}
+                  className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈</button>
+                <button onClick={() => setSelectedGroup(null)}
+                  className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 베이 홀드 이동</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setSelectedGroup(null)} className="mt-3 px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-sm text-slate-200">다른 베이 선택</button>
+          )}
         </div>
       ) : (
         <>

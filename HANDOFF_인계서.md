@@ -62,3 +62,9 @@
 
 ## 콘앱 C7.62 (카고플랜 사전 주입)
 - 모듈은 window.__fbShipBayDict 1순위 — 콘앱이 미주입이라 새 기기 매칭 실패(YKTD). openCargoPlanV2에서 v3 주입. puppeteer 3 PASS.
+
+## V7.94-15 (SWRG 풀 테스트)
+- 실데이터 전수 교차(XRAY 10·선사 384 일치·LIST 광양 1건 혼입 발견). 수정: guidedQueue oog 인식 + 사전 없는 트리오 구조 선박 4의 배수 추정 금지. 시뮬 10+회귀 44 PASS.
+
+## V7.94-16 (해치커버 프롬프트 통합)
+- 가이드: 양하 데크 완료→[오픈→홀드]/[다른 데크], 홀드 완료→[클로즈]/[다른 베이] (보고 자동 발송). WorkReportModal 항차 오표시(equipModeOf) 수정. 시뮬 12+회귀 54 PASS.

@@ -234,13 +234,21 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     });
   };
 
+  // V7.94-16: 항차 오표시 수정 — (구) activeByEquip[equip][0].mode 고정: 활성 작업이 없거나
+  //   한 장비에 양하+선적 동시 활성이면 엉뚱한 항차(특히 voy_d 폴백 → 선적인데 양하 항차)로 발송.
+  //   (신) 장비의 활성 모드가 정확히 1개면 그것, 아니면 화면에서 선택된 모드(selectedMode)를 사용.
+  const equipModeOf = (eq) => {
+    const ms = activeByEquip[eq];
+    if (ms && ms.length === 1) return ms[0].mode;
+    return selectedMode;
+  };
+
   const handleHatch = async () => {
     const equip = hatchEquip || Object.keys(activeByEquip)[0] || '';
     if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
     const bays = bayInput.split(/[,\s]+/).filter(b => b.trim()).map(b => b.trim());
     if (bays.length === 0) { alert('베이 번호를 입력하세요'); return; }
-    // M6.37: equip의 첫 활성 작업 mode 기반 voy
-    const voy = getVoy(activeByEquip[equip]?.[0]?.mode);
+    const voy = getVoy(equipModeOf(equip));
 
     const time = Date.now();
     const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip });
@@ -262,7 +270,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const handleConBox = async () => {
     const equip = conBoxEquip || Object.keys(activeByEquip)[0] || '';
     if (!equip) { alert('장비를 선택하세요 (작업 중인 장비 없음)'); return; }
-    const voy = getVoy(activeByEquip[equip]?.[0]?.mode);  // M6.37
+    const voy = getVoy(equipModeOf(equip));  // V7.94-16: 항차 오표시 수정
     const time = Date.now();
     const message = buildConBoxMessage({ vsl, voy, type: conBoxType, count: conBoxCount, time, equip });
 
