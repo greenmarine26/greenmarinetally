@@ -71,3 +71,6 @@
 
 ## V7.94-17 (PWA 홈화면 404 + 항만 아이콘)
 - manifest start_url/scope=/greenmarinetally/ 절대경로, 항만 크레인 PNG 아이콘 3종, apple-touch-icon은 _index.entry.html에 (빌드 생존). puppeteer 7+회귀 66 PASS.
+
+## 콘앱 C7.63 (PWA 설치)
+- manifest start_url=/greenmarinetally/cone.html 절대경로, 콘 PNG 아이콘 3종, cone-sw.js 신설+등록(안드로이드 설치 배너). 배포 시 cone-sw.js 동봉 필수. puppeteer 7 PASS.
