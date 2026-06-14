@@ -210,9 +210,23 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
   };
 
   // 드래그
-  const cellDragStart = (e, cn) => { e.dataTransfer.setData('text/plain', cn); e.dataTransfer.effectAllowed = 'move'; };
+  const cellDragStart = (e, cn) => {
+    e.dataTransfer.setData('text/plain', cn);
+    e.dataTransfer.effectAllowed = 'move';
+    // V7.98-05: 선택에 없는 컨을 끌면 기존 선택 해제(그 1개만 대상). 선택 안의 컨이면 선택 유지(전체 이동).
+    if (!selected.has(cn)) setSelected(new Set());
+  };
   const onCellDrop = (e, row, tier) => { e.preventDefault(); const cn = e.dataTransfer.getData('text/plain'); if (cn) placeAtCell(cn, page?.odd ?? page?.even, row, tier); };
-  const onStoreDrop = (e) => { e.preventDefault(); setStoreOver(false); const cn = e.dataTransfer.getData('text/plain'); if (cn) moveToStorage([cn]); };
+  const onStoreDrop = (e) => {
+    e.preventDefault(); setStoreOver(false);
+    const cn = e.dataTransfer.getData('text/plain');
+    if (!cn) return;
+    // V7.98-05: rubber-band로 여러 개 선택 후 그 중 하나를 창고로 끌면 선택 전체 이동.
+    //   (드래그한 컨이 선택 밖이면 그것 하나만 — 직관적 동작 유지.)
+    const cns = selected.has(cn) ? [...selected] : [cn];
+    moveToStorage(cns);
+    setSelected(new Set());
+  };
 
   // rubber-band (빈 곳에서 시작)
   const onStageDown = (e) => { if (e.button !== 0) return; if (e.target.closest('[data-cn]')) return; const r = stageRef.current.getBoundingClientRect(); rubberStart.current = { x: e.clientX, y: e.clientY, rl: r.left, rt: r.top }; setRubber({ left: e.clientX - r.left, top: e.clientY - r.top, w: 0, h: 0 }); };
