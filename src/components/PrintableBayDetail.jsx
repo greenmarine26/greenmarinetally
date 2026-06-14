@@ -70,68 +70,47 @@ function splitForeAft(bayList) {
   };
 }
 
-// 베이상세 페이지 빌드 — 페어(홀-짝-홀 트리오)를 베이매트릭스 구조 기준으로 판정
+// 베이상세 페이지 빌드 — 페어(홀-짝-홀 트리오)
 //   요구사항: 7,8,9 베이 → "BAY 07 단독" + "BAY (08)09 짝꿍" = 2페이지
-//   페어 표기: (작은 짝수)(큰 홀수). 예 (02)03 (04)05 (08)09 (24)25
-//   V7.98-12: 페어 판정을 EDI 적재 여부(bays에 짝수 키 존재)에 의존하지 않는다.
-//     그 항차에 40ft가 안 실리면 짝수 베이가 EDI/bayMap에서 빠져, 사전엔 (04)05 페어인데도
-//     05가 단독 "BAY05"로 표기되던 버그(REF_베이페어링 §3 절대원칙2 위반)를 수정.
-//     summary(=dictBaysSummary, {bayNum:{section, pairEven?}})가 있으면 그 구조로 페어 복원.
-//     summary 없으면 기존 (n-1) 휴리스틱 그대로 폴백(사전 없는 선박 회귀 0).
+//   페어 표기 방향은 도메인 불변(REF §1·§3): 항상 (작은 짝수)(큰 홀수) = (짝)(짝+1).
+//     예 (02)03 (04)05 (08)09 (24)25. 짝수 ev의 짝꿍 홀수는 언제나 ev+1.
+//   V7.98-14: 방향을 데이터(section/pairEven 묶음)로 결정하던 V7.98-12 로직이
+//     (04)03·(08)07 처럼 뒤집히는 치명 버그를 유발 → 방향은 도메인 규칙으로 고정.
+//     summary는 "이 짝수가 페어 슬롯으로 존재하는가"의 힌트로만 쓴다(어느 홀수와 묶을지는 재계산 안 함).
+//   V7.98-12 의도(유지): EDI 적재 여부에 페어를 의존하지 않음 — 그 항차에 40ft가 안 실려
+//     짝수가 EDI/bayMap에서 빠져도, summary/매트릭스에 페어 짝수가 있으면 (04)05로 복원.
+//     summary 없으면 bays의 짝수만으로 기존과 동일 동작(회귀 0).
 export function buildBayPages(bays, summary) {
   summary = summary || {};
-  const hasSummary = Object.keys(summary).length > 0;
-  const baySet = new Set(bays);
 
-  // 구조상 짝수 → 묶일 홀수 맵 (EDI 적재 무관, 매트릭스/사전 기준)
-  const evenToOdd = new Map();
-  if (hasSummary) {
-    // (a) pairEven 흡수형: 홀수 entry가 pairEven=짝수를 보유
-    for (const [k, v] of Object.entries(summary)) {
-      const odd = parseInt(k, 10);
-      if (v && v.pairEven != null && odd % 2 === 1) {
-        const ev = parseInt(v.pairEven, 10);
-        if (Number.isFinite(ev)) evenToOdd.set(ev, odd);
-      }
-    }
-    // (b) section 묶음형: 같은 section의 짝수+홀수 → (짝)(짝+1) 우선, 없으면 (짝-1)(짝)
-    const bySec = {};
-    for (const [k, v] of Object.entries(summary)) {
-      if (!v || v.section == null) continue;
-      (bySec[v.section] = bySec[v.section] || []).push(parseInt(k, 10));
-    }
-    for (const sec of Object.values(bySec)) {
-      const odds = sec.filter(n => n % 2 === 1);
-      for (const ev of sec.filter(n => n % 2 === 0)) {
-        if (evenToOdd.has(ev)) continue;
-        if (odds.includes(ev + 1)) evenToOdd.set(ev, ev + 1);
-        else if (odds.includes(ev - 1)) evenToOdd.set(ev, ev - 1);
-      }
+  // "페어 짝수"로 인정되는 짝수 집합 (EDI에 안 실려도 페어 자리면 포함)
+  const pairEvens = new Set();
+  for (const n of bays) if (n % 2 === 0) pairEvens.add(n);          // (a) bays의 짝수
+  for (const [k, v] of Object.entries(summary)) {
+    const n = parseInt(k, 10);
+    if (n % 2 === 0) pairEvens.add(n);                              // (c) summary의 짝수 엔트리
+    if (v && v.pairEven != null) {                                 // (b) pairEven 값(방향 무시, 값만)
+      const ev = parseInt(v.pairEven, 10);
+      if (Number.isFinite(ev)) pairEvens.add(ev);
     }
   }
 
   const used = new Set();
   const pages = [];
-  // 1) 홀수 기준 페어링
+  // 홀수 기준: 홀수 odd의 짝꿍 짝수는 항상 odd-1 (도메인 고정). odd-1이 페어 짝수면 묶음.
   for (const odd of bays.filter(n => n % 2 === 1).sort((a, b) => a - b)) {
     if (used.has(odd)) continue;
-    let pairedEven = null;
-    for (const [ev, od] of evenToOdd) { if (od === odd) { pairedEven = ev; break; } }
-    // 구조 정보가 짝꿍을 못 주면 기존 (n-1) 휴리스틱으로 보조
-    if (pairedEven == null && baySet.has(odd - 1) && !used.has(odd - 1) && !evenToOdd.has(odd - 1)) {
-      pairedEven = odd - 1;
-    }
-    if (pairedEven != null) {
-      pages.push({ even: pairedEven, odd, key: `${pairedEven}-${odd}` });
-      used.add(odd); used.add(pairedEven);
+    const ev = odd - 1;
+    if (ev > 0 && pairEvens.has(ev) && !used.has(ev)) {
+      pages.push({ even: ev, odd, key: `${ev}-${odd}` });
+      used.add(odd); used.add(ev);
     } else {
       pages.push({ even: null, odd, key: `${odd}` });
       used.add(odd);
     }
   }
-  // 2) 페어 못 이룬 짝수 단독 (bays의 짝수 ∪ 구조상 짝수)
-  const evensAll = new Set([...bays.filter(n => n % 2 === 0), ...evenToOdd.keys()]);
-  for (const ev of [...evensAll].sort((a, b) => a - b)) {
+  // 짝꿍 홀수(ev+1)가 없어 페어 못 이룬 짝수 → 단독
+  for (const ev of [...pairEvens].sort((a, b) => a - b)) {
     if (used.has(ev)) continue;
     pages.push({ even: ev, odd: null, key: `${ev}` });
     used.add(ev);
@@ -581,11 +560,19 @@ export default function PrintableBayDetail({
   }), [dictData]);
 
   const bayList = useMemo(() => {
-    // V7.98-02: bay99/999 OOG placeholder 제외 (BayPlan3D와 동일 원칙 — row99 오염 방지)
-    const drop99 = (arr) => arr.filter(n => Number.isFinite(n) && n < 99);
-    if (dictBayList && dictBayList.length > 0) return drop99([...dictBayList]).sort((a, b) => a - b);
-    return drop99(Object.keys(bayMap).map(b => parseInt(b, 10))).sort((a, b) => a - b);
-  }, [dictBayList, bayMap]);
+    // V7.98-14: 베이매트릭스(사전)가 기본 진실 — 매트릭스에 있는 베이는 EDI 적재와 무관하게
+    //   전부 표시한다(6부 원칙). 사전(bayList·baysSummary) ∪ EDI(bayMap) 합집합으로 누락 방지.
+    //   bay99/999 OOG placeholder만 제외(BayPlan3D 동일).
+    const drop99 = (n) => Number.isFinite(n) && n < 99;
+    const set = new Set();
+    // 1) 사전 bayList 전체 (매트릭스 기본 진실)
+    if (dictBayList) dictBayList.forEach(n => { if (drop99(n)) set.add(n); });
+    // 2) baysSummary의 모든 bayNo (페어 짝수 등 매트릭스 구조 전체 — dictBayList가 비어도 확보)
+    Object.keys(dictBaysSummary).forEach(k => { const n = parseInt(k, 10); if (drop99(n)) set.add(n); });
+    // 3) EDI에만 있는 베이도 누락 방지 (사전에 없는 베이)
+    Object.keys(bayMap).forEach(k => { const n = parseInt(k, 10); if (drop99(n)) set.add(n); });
+    return [...set].sort((a, b) => a - b);
+  }, [dictBayList, dictBaysSummary, bayMap]);
 
   const allPages = useMemo(() => buildBayPages(bayList, dictBaysSummary), [bayList, dictBaysSummary]);
 
