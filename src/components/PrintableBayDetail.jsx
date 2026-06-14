@@ -18,7 +18,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
-import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
+import { buildBayGridForDetail } from '../cargoPlanCore.js';
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
@@ -166,7 +166,7 @@ export function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {} }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, shipBayDef, shipCode }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -221,34 +221,19 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     cellMap[`${t}-${r}`] = c;
   });
 
-  // V7.98-04: 인쇄 베이상세도 매트릭스 진실원(buildEmptyBayRenderData)으로 통일.
-  //   matrix_builder본은 rowMax 없이 deckCells/holdCells만 저장 → STD_ROWS(rowMax 기반)는 695베이/36% 미적용.
-  //   deckCells 유효하면 matrixRender(tier별 active cell·좁아짐·가운데 정렬, 3D·편집과 동일) 사용,
-  //   없으면(PDF 자동본) 기존 STD_ROWS 폴백 유지. 컨번호는 그대로(renderCell 재사용).
+  // V7.98-10: 인쇄 베이상세 격자를 카고플랜과 동일 함수(buildBayGridForDetail→computeBayRenderData)로.
+  //   cells 사전(MCSN)·rowMax 사전(ATRP) 모두 처리. rowMax도 없는 사전만 STD_ROWS 폴백.
   const matrixRender = useMemo(() => {
     const isPair = even != null && odd != null;
     const primaryBn = even != null ? even : odd;
     if (primaryBn == null) return null;
-    const e = dictBaysSummary[parseInt(primaryBn, 10)];
-    const hasCells = !!e && (
-      (Array.isArray(e.deckCells) && e.deckCells.length > 0) ||
-      (Array.isArray(e.holdCells) && e.holdCells.length > 0)
-    );
-    if (!hasCells) return null;
-    // EDI has00 반영 (매트릭스 명시값 우선) — BayPlan/ChiefBayEdit과 동일 패턴
-    let ediHas00 = false;
-    for (const c of allConts) { if (parseInt(c.row, 10) === 0) { ediHas00 = true; break; } }
-    const effEntry = {
-      ...e,
-      deckHasZero: e.deckHasZero != null ? e.deckHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
-      holdHasZero: e.holdHasZero != null ? e.holdHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
-    };
+    // V7.98-10: 카고플랜과 동일 함수로 격자 생성. cells 사전·rowMax 사전 모두 처리.
     const bayKey = isPair
       ? `(${String(even).padStart(2, '0')})${String(odd).padStart(2, '0')}`
       : String(primaryBn).padStart(2, '0');
-    try { return buildEmptyBayRenderData(effEntry, bayKey, isPair) || null; }
+    try { return buildBayGridForDetail(shipBayDef, shipCode, bayKey) || null; }
     catch (e2) { return null; }
-  }, [even, odd, dictBaysSummary, allConts]);
+  }, [even, odd, shipBayDef, shipCode]);
 
   // M6.26: 베이플랜 로직 그대로 이식 — 페이지 두 베이의 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   사용자 지시: "베이플랜에 다 맞춰주세요. 지금 베이플랜만 아주 정확합니다."
@@ -695,6 +680,7 @@ export default function PrintableBayDetail({
                 globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
                 colorMap={colorMap}
+                shipBayDef={dictData?.bayDef} shipCode={dictData?.code}
                 dictShipMeta={dictShipMeta} />
             );
           })

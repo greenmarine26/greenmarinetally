@@ -881,3 +881,34 @@ export function resolveBayEntry(bayList, bayNum) {
   for (const b of arr) if (b && b.pairEven && norm(b.pairEven) === bayNum) return b;
   return null;
 }
+
+// V7.98-10: 베이상세(편집·인쇄)용 빈 격자 생성 — 카고플랜과 동일 함수(computeBayRenderData) 사용.
+//   cells 사전(MCSN)·rowMax 사전(ATRP) 모두 정상 처리. 컨은 호출측이 cellMap으로 주입.
+//   shipBayDef: getShipBayDictData(...).bayDef. bayKey: '01' 또는 '(02)03'.
+export function buildBayGridForDetail(shipBayDef, shipCode, bayKey) {
+  if (!shipBayDef) return null;
+  const summaryArr = shipBayDef.baysSummary || [];
+  const matrixBays = summaryArr.map((s) => ({
+    bayNum: parseInt(s.bayNo, 10),
+    cells: Array.isArray(s.deckCells) || Array.isArray(s.holdCells)
+      ? [...(s.deckCells || []), ...(s.holdCells || [])] : [],
+    deckCells: Array.isArray(s.deckCells) ? s.deckCells : undefined,
+    holdCells: Array.isArray(s.holdCells) ? s.holdCells : undefined,
+    hasHold: !!s.hasHold,
+    hasDeck: s.hasDeck !== false,
+    deckTiers: s.deckTiers,
+    holdTiers: s.holdTiers,
+    isStandalone: !!s.isStandalone,
+  }));
+  const { trios, singles } = autoPairBays(matrixBays);
+  const pdfBays = generatePdfBays(matrixBays, trios, singles);
+  // 빈 posMap — 격자 구조(active)만 얻음. 컨/마크는 호출측에서 주입.
+  try {
+    return computeBayRenderData(
+      bayKey, pdfBays, matrixBays, new Map(), 'KRPTK',
+      () => '', {}, () => null, () => false, shipBayDef, shipCode
+    );
+  } catch (e) {
+    return null;
+  }
+}

@@ -1,37 +1,36 @@
-# Tallyman Master V7.98-09 인계서
+# Tallyman Master V7.98-10 인계서
 
-## 이번 변경 (V7.98-09) — 편집 베이상세 격자 찌부러짐 버그 수정
-**증상**: V7.98-07에서 ChiefBayEdit을 BayBoxV2로 바꾼 뒤, 편집화면 격자가 한 줄로 납작하게 눌림(셀 높이 0).
+## 이번 변경 (V7.98-10) — 베이상세 격자를 카고플랜과 완전 동일 함수로 (rowMax 사전 폴백 해결)
+**문제**: ATRP 등 rowMax 사전(deckCells/holdCells 없고 rowMaxEven/Odd만 있는 사전)이 베이상세 편집·인쇄에서 STD_ROWS 폴백으로 깨졌음. cells만 보는 buildEmptyBayRenderData를 써서 rowMax 사전을 못 그림.
 
-**원인 (데이터 확정)**: BayBoxV2의 모든 영역(deck-area/hold-area/tier-row/cell)이 `flex:1 1 0`로 높이를 부모에서 상속. 인쇄는 cpv2-page(height:195mm) 또는 bd-cargo-wrap(height:204mm)이 높이를 주지만, 편집 래퍼 cbe-cargo-wrap엔 height가 없어 전체가 0 높이로 collapse.
+**핵심 통찰 (사용자 지적)**: ATRP는 이미 "매트릭스 확정" 등록됨(source:user, verified). cells가 없어도 rowMaxEven=8/rowMaxOdd=7로 매트릭스가 지정돼 있고, 카고플랜이 쓰는 computeBayRenderData가 이미 그걸 읽음. 새로 만들 게 아니라 같은 함수를 쓰면 됨.
 
-**수정 (src/components/ChiefBayEdit.jsx CSS)**:
-- .cbe-cargo-wrap에 `height:72vh; display:flex; flex-direction:column` 부여.
-- .cbe-cargo-wrap .cpv2-bay-section{flex:1 1 0} 보강(높이 체인 연결).
-- 검증: cbe-cargo-wrap 높이 부여 후 데크 10칸/홀드 피라미드/0.5칸 정렬 정상 렌더(시각 PNG PASS).
+**수정**:
+- cargoPlanCore.js: `buildBayGridForDetail(shipBayDef, shipCode, bayKey)` 추가. dictData에서 matrixBays/pdfBays 구성 → computeBayRenderData 호출(빈 posMap, 컨은 호출측 cellMap 주입). cells 사전·rowMax 사전 모두 처리.
+- ChiefBayEdit.jsx: matrixRender를 buildBayGridForDetail로. hasCells 분기 제거(rowMax 사전도 그림).
+- PrintableBayDetail.jsx: matrixRender를 buildBayGridForDetail로. BayDetailPage에 shipBayDef/shipCode props 추가, 본체에서 dictData.bayDef/code 전달.
+- buildEmptyBayRenderData import 제거(orphan 정리).
 
-**인쇄(PrintableBayDetail)는 영향 없음**: bd-cargo-wrap에 height:204mm 명시 + CARGO_V2_CSS의 cpv2-bay-section{flex:1 1 0} 전역 → 높이 체인 정상.
+**결과**: 카고플랜·베이상세 편집·베이상세 인쇄가 모두 computeBayRenderData(via buildBayGridForDetail) 사용 → 그림 100% 일치. rowMax 사전(ATRP)·cells 사전(MCSN) 모두 정상.
 
-## 일원화 상태 (V7.98-07/08/09)
-카고플랜·베이상세 편집·베이상세 인쇄 모두 BayBoxV2 단일 컴포넌트 사용.
-- 그림(격자/정렬/0.5칸/해치)은 BayBoxV2. 셀 내용만 renderCellContent로 주입(카고플랜=마크, 편집=컨번호, 인쇄=5줄).
-- **중요**: BayBoxV2를 쓰는 래퍼는 반드시 명시적 height + flex column 필요(셀이 flex:1 1 0로 높이 상속). height 없으면 0높이 collapse.
+**검증 (시각 PNG PASS)**:
+- ATRP bay01/(02)03 (rowMax): deck 8칸/hold 7칸 전부 active — 카고플랜과 동일. (이전 폴백 깨짐 해결)
+- MCSN bay01/bay09 (cells): cells대로 피라미드.
+- 빈 active 칸도 선 유지("빈자리도 자리"). 0.5칸 정렬 % padding 자동.
 
-## 누적 이력 (V7.95~)
-- V7.98-08: 인쇄 베이상세 BayBoxV2 통일.
-- V7.98-07: 편집 베이상세 BayBoxV2 통일 + renderCellContent prop.
-- V7.98-05: 드래그-투-창고 다중 이동 수정.
-- V7.98-03/04: 베이상세 매트릭스 통일.
+## 일원화 완료 (V7.98-07~10)
+- 격자: BayBoxV2 단일 컴포넌트(카고플랜/편집/인쇄 공유). 셀 내용만 renderCellContent 주입.
+- 격자 데이터: buildBayGridForDetail→computeBayRenderData 단일 함수.
+- BayBoxV2 래퍼는 명시적 height+flex 필수(셀 flex:1 1 0 높이 상속). 편집=72vh, 인쇄=204mm.
 
 ## 핵심 원칙 (REF 승격 후보)
-- 베이 격자는 BayBoxV2 단일 컴포넌트. 셀 내용만 주입. 격자 재구현 금지.
-- **BayBoxV2 래퍼는 명시적 height + display:flex;flex-direction:column 필수** (셀 flex:1 1 0 높이 상속). 화면 모달은 vh, 인쇄는 mm.
-- BayBoxV2 정렬은 % padding → 0.5칸 자동.
-- "빈자리도 자리": active 빈 슬롯 선 유지, 비active만 cpv2-cell-empty(hidden).
+- 베이상세 격자는 카고플랜과 같은 함수(computeBayRenderData)로 그린다. cells 사전·rowMax 사전 모두 자동. cells만 보는 buildEmptyBayRenderData는 rowMax 사전을 폴백시키므로 베이상세에 쓰지 말 것.
+- ATRP류 PDF 자동본도 rowMaxEven/Odd로 매트릭스가 지정돼 있으면 정상 렌더됨. cells 유무로 판단 금지.
+- BayBoxV2 단일 컴포넌트 + 명시적 height 필수. "빈자리도 자리"(active 빈칸 선 유지).
 
 ## 다음 세션 (미해결)
 1. 끝자리 4자리 조회를 베이상세/3D 하이라이트.
-2. cells 없는 PDF 자동본(ATRP) 매트릭스 확보.
+2. rowMax도 cells도 없는 사전(있다면)만 STD_ROWS 폴백 — 해당 선박 확인되면 매트릭스 보강.
 
 ## 버전
-V7.98-09 (src/utils.js, sw.js, public/sw.js 동기화)
+V7.98-10 (src/utils.js, sw.js, public/sw.js 동기화)
