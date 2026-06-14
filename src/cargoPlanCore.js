@@ -809,3 +809,75 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     hatchCount: Math.max(0, Math.min(3, (typeof bayEntry?.hatchCount === 'number' ? bayEntry.hatchCount : ((holdTiers && holdTiers.length > 0) ? 1 : 0)))),  // M6.94.44: 0 허용. 홀드 없으면 0.
   };
 }
+
+// ============================================================
+// V7.95: 3D 좌표 매핑 (격자 = 진실, EDI 역산 금지)
+// ============================================================
+// MCSN 624S 실 EDI 810컨 검증: active 좌표 3710 = cells 합 3710 (100% PASS),
+//   EDI row ↔ 격자 rowPos 매칭 810/810 = 100% PASS, orphan 0.
+// 진실원: buildEmptyBayRenderData 하나. 카고플랜·베이플랜·미리보기·3D 전부 이 출력을 좌표로 씀.
+//   x = colIdx (center 정렬된 화면 컬럼), 라벨 rowLbl(=EDI row 2자리 padStart)
+//   y = tier, z = bay. EDI LOC+147에서 좌표 역산하지 말 것(발견②).
+
+// 빈 3D 격자 좌표 생성: 각 active cell = { bay, layer, tier, rowLbl, colIdx, cn? }
+export function buildBayGrid3D(bayEntry, bayKey, isPair = false) {
+  const rd = buildEmptyBayRenderData(bayEntry, bayKey, isPair);
+  if (!rd) return null;
+  const cells = [];
+  const collect = (rows, layer) => {
+    for (const r of rows) {
+      if (r.invisible) continue;
+      r.cells.forEach((c, colIdx) => {
+        if (!c.active) return;
+        cells.push({ bay: bayKey, layer, tier: r.tier, rowLbl: c.rowLbl, colIdx, cn: null });
+      });
+    }
+  };
+  collect(rd.deckRows, 'deck');
+  collect(rd.holdRows, 'hold');
+  return { rd, cells };
+}
+
+// EDI 컨테이너를 격자에 채움. 매칭 키 = `${tier}|${rowLbl}` (layer는 tier로 자동 판별).
+// containers: parseBAPLIE 결과 중 해당 bay 항목들. 반환: 채워진 grid + 미적재 빈칸 + orphan.
+export function fillBayGrid3D(bayEntry, bayKey, containers, isPair = false) {
+  const g = buildBayGrid3D(bayEntry, bayKey, isPair);
+  if (!g) return null;
+  const deckTiers = new Set(g.rd.deckTiers);
+  const holdTiers = new Set(g.rd.holdTiers);
+  // posMap: `${tier}|${row2}` → container
+  const posMap = new Map();
+  for (const c of containers) {
+    const tierN = parseInt(c.tier, 10);
+    if (!Number.isFinite(tierN)) continue;
+    const row2 = String(c.row).padStart(2, '0');
+    posMap.set(`${tierN}|${row2}`, c);
+  }
+  const placedKeys = new Set();
+  for (const cell of g.cells) {
+    const hit = posMap.get(`${cell.tier}|${cell.rowLbl}`);
+    if (hit) { cell.cn = hit.cn; cell.container = hit; placedKeys.add(`${cell.tier}|${cell.rowLbl}`); }
+  }
+  // orphan: 격자에 자리 없는 EDI 컨 (tier가 deck/hold 어디에도 없거나 row 라벨 불일치)
+  const orphans = [];
+  for (const c of containers) {
+    const tierN = parseInt(c.tier, 10);
+    const row2 = String(c.row).padStart(2, '0');
+    const inGrid = (deckTiers.has(tierN) || holdTiers.has(tierN));
+    if (!inGrid || !placedKeys.has(`${tierN}|${row2}`)) orphans.push(c);
+  }
+  const emptyActive = g.cells.filter(c => !c.cn).length;
+  return { rd: g.rd, cells: g.cells, placed: placedKeys.size, emptyActive, orphans };
+}
+
+// 짝수 bay를 pairEven으로 묶인 홀수 bay 엔트리로 해석 (범용 — 모든 선박).
+// baysSummary(list) 또는 bays(dict) 양쪽 지원. bayNum은 정규화된 문자열("1","17").
+export function resolveBayEntry(bayList, bayNum) {
+  const arr = Array.isArray(bayList) ? bayList
+    : (bayList && typeof bayList === 'object') ? Object.values(bayList) : [];
+  const norm = (v) => String(parseInt(v, 10));
+  for (const b of arr) if (b && norm(b.bayNo ?? b.bay) === bayNum) return b;
+  // 짝수 → pairEven 묶음 홀수 bay
+  for (const b of arr) if (b && b.pairEven && norm(b.pairEven) === bayNum) return b;
+  return null;
+}
