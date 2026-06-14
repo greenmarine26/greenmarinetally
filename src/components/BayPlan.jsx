@@ -18,6 +18,7 @@ import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReefer
 import { getShipBayDictData } from '../shipStructure.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
+import BayPlan3D from './BayPlan3D.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
@@ -34,6 +35,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
+  const [view3D, setView3D] = useState(false); // V7.97: 3D 입체 베이뷰 토글
   // M4.6: 인쇄 모달 상태
   const [printMode, setPrintMode] = useState(null);  // null | 'cargo' | 'detail'
   // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)
@@ -603,6 +605,15 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           {allBaysMode ? '✓ 전체' : '단일'}
         </button>
 
+        {/* V7.97: 3D 입체 베이뷰 토글 */}
+        <button onClick={() => setView3D(v => !v)}
+          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
+            view3D ? 'bg-cyan-600 text-cyan-50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          }`}
+          title="3D 입체 베이뷰">
+          {view3D ? '✓ 3D' : '3D'}
+        </button>
+
         {/* M5.0: 인쇄 드롭다운 — 2개 버튼 → 1개 메뉴 */}
         <div className="relative">
           <button onClick={() => setPrintMenuOpen(v => !v)}
@@ -790,7 +801,22 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       {/* 베이 그리드 본체 */}
       <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto"
            style={{ maxHeight: '78vh', scrollSnapType: 'y mandatory' }}>
-        {allBaysMode ? (
+        {view3D ? (
+          // V7.97: 3D 입체 베이뷰 (격자=진실, 색은 2D와 동일 규칙)
+          <BayPlan3D
+            containers={containers}
+            dictBaysSummary={dictBaysSummary}
+            mode={mode}
+            compMap={compMap}
+            xrayMap={xrayMap}
+            shiftingMap={shiftingMap}
+            cellColor={cellColor}
+            getOpColor={getOpColor}
+            onOpenContainer={onOpenContainer}
+            onCommitMove={onCommitMove}
+            pendingMove={pendingMove}
+          />
+        ) : allBaysMode ? (
           // 전체 베이 세로 스크롤 (V37 기본 모드)
           // M5.17: 한 베이 = 한 화면 (scroll-snap mandatory) — 베이 끼리 겹치지 않게 스냅
           <div className="space-y-6">
