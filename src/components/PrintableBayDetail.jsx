@@ -401,6 +401,10 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
             data={matrixRender}
             colorMap={colorMap}
             gridCols={Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0)}
+            globalHatch={{
+              maxDeck: Math.max((matrixRender.deckTiers || []).length, 1),
+              maxHold: Math.max((matrixRender.holdTiers || []).length, 1),
+            }}
             renderCellContent={mrRenderCellContent}
             cellExtra={mrCellExtra}
           />
