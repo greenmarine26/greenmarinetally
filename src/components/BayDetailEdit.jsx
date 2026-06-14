@@ -10,7 +10,7 @@ import { getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, isoToLa
 import { autoPairBays, generatePdfBays, buildPosMap, computeBayRenderData } from '../cargoPlanCore.js';
 import { BayBoxV2, getMarkV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 
-const BDE_CSS = `
+export const BDE_CSS = `
 .bde-overlay{position:fixed;inset:0;background:rgba(15,23,42,.78);z-index:9999;display:flex;flex-direction:column;}
 .bde-head{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0f172a;color:#e2e8f0;}
 .bde-baynav{display:flex;gap:4px;flex-wrap:wrap;padding:8px;background:#0b1220;max-height:84px;overflow:auto;}
@@ -20,7 +20,7 @@ const BDE_CSS = `
 .bde-tools button{padding:4px 10px;border-radius:5px;font-weight:700;border:none;cursor:pointer;color:#fff;}
 .bde-body{flex:1;display:flex;min-height:0;}
 .bde-stage{flex:1;overflow:auto;padding:16px;display:flex;align-items:center;justify-content:center;background:#1e293b;position:relative;}
-.bde-box{background:#fff;border-radius:6px;padding:12px;max-width:540px;width:100%;}
+.bde-box{background:#fff;border-radius:6px;padding:10px;max-width:560px;width:100%;height:min(72vh,620px);display:flex;flex-direction:column;}
 .bde-store{width:210px;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;border-left:1px solid #334155;}
 .bde-store-h{padding:8px 10px;font-weight:800;font-size:13px;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:center;}
 .bde-drop{margin:8px;border:2px dashed #38bdf8;border-radius:6px;padding:12px;text-align:center;font-size:12px;color:#7dd3fc;line-height:1.5;}
@@ -31,7 +31,24 @@ const BDE_CSS = `
 .bde-cell-sel{outline:2px solid #2563eb;outline-offset:-2px;}
 .bde-edit .cpv2-cell[draggable=true]{cursor:grab;}
 .bde-edit .cpv2-cell[draggable=true]:active{cursor:grabbing;}
+.bde-edit .cpv2-cell{font-size:clamp(11px,1.6vw,16px) !important;}
+.bde-edit .cpv2-row-labels{font-size:clamp(9px,1.3vw,13px) !important;}
+.bde-edit .cpv2-tier-labels{font-size:clamp(9px,1.3vw,13px) !important;}
 .bde-rubber{position:absolute;border:1.5px solid #2563eb;background:rgba(37,99,235,.15);pointer-events:none;z-index:5;}
+@media (max-width:680px){
+  .bde-body{flex-direction:column;}
+  .bde-stage{align-items:stretch;padding:8px;}
+  .bde-box{height:100%;max-width:none;}
+  .bde-store{width:100%;flex:0 0 auto;max-height:134px;border-left:none;border-top:1px solid #334155;}
+  .bde-store-h{padding:6px 10px;}
+  .bde-drop{margin:6px;padding:7px;line-height:1.3;}
+  .bde-store-list{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:6px;}
+  .bde-chip{margin-bottom:0;white-space:nowrap;}
+  .bde-edit .cpv2-cell{font-size:clamp(11px,3.2vw,16px) !important;}
+  .bde-edit .cpv2-row-labels{margin-right:4px !important;}
+  .bde-stage{overflow:auto;}
+  .bde-box{width:max-content;min-width:100%;}
+}
 `;
 
 function keyToNum(key) { const m = key.startsWith('(') ? key.replace(/[()]/g, '').slice(2) : key; return parseInt(m, 10) || 0; }
@@ -204,7 +221,7 @@ export default function BayDetailEdit({ onClose, containers = [], shipImo, shipN
           {box ? (
             <div className="bde-box">
               {box.kind === 'trio' ? (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, width: '100%' }}>
                   <BayBoxV2 data={topData} colorMap={colorMap} gridCols={gridCols} applyHatch={false} editable onCellDrop={handleCellDrop} selectedCns={selectedCns} />
                   <div className="cpv2-trio-divider"></div>
                   <BayBoxV2 data={pairData} colorMap={colorMap} gridCols={gridCols} applyHatch={true} editable onCellDrop={handleCellDrop} selectedCns={selectedCns} />
