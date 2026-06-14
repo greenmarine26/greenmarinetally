@@ -176,7 +176,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, renderCellContent, cellExtra, fixedCell }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, renderCellContent, cellExtra }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -218,8 +218,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
   const holdPadStyle = computePadding(holdAlign, holdPadLeft, holdPadRight, nHoldCols, gc);
 
   return (
-    <div className={`cpv2-bay-section${fixedCell ? ' cpv2-fixed-cell' : ''}`}
-      style={fixedCell ? { '--cell-w': `${fixedCell.w}mm`, '--cell-h': `${fixedCell.h}mm` } : undefined}>
+    <div className="cpv2-bay-section">
       <div className="cpv2-bay-title-row">
         <span className="cpv2-bay-title">BAY {bayKey}</span>
         {count != null && <span className="cpv2-bay-count">{count}</span>}

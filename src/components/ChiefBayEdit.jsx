@@ -8,7 +8,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { buildContainerColorMap, getContainerColorKey, isPyeongtaekPort, isoToLabel } from '../utils.js';
 import { formatCellLines, buildBayPages } from './PrintableBayDetail.jsx';
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
-import { buildEmptyBayRenderData, buildBayGridForDetail } from '../cargoPlanCore.js';
+import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import { fbSetActualPosition, fbBatchMoveToStorage } from '../firebase.js';
 
 const CBE_CSS = `
@@ -162,14 +162,35 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
     else if (page.even != null) title = `BAY ${dispBay(page.even)}`;
     else title = `BAY ${dispBay(page.odd)}`;
 
-    // V7.98-12: 베이상세 격자를 카고플랜과 동일 함수(buildBayGridForDetail→computeBayRenderData)로.
-    //   cells 사전(MCSN)·rowMax 사전(ATRP) 모두 정상. rowMax도 없는 사전만 폴백.
+    // V7.98-03: 베이상세를 매트릭스 진실원(buildEmptyBayRenderData)으로 통일.
+    //   rowMax 없이 deckCells/holdCells로 tier별 active cell·가운데 정렬·좁아짐을 정확히 그림(3D와 동일).
+    //   matrix_builder본은 rowMax가 없어 기존 uniform 경로에선 폴백됐음(695베이/36% 미적용 버그).
+    //   deckCells 유효하면 matrixRender 사용, 없으면(PDF 자동본 등) 기존 uniform 폴백 유지.
     const isPair = page.even != null && page.odd != null;
-    const bayKey = isPair ? `(${pad2(page.even)})${pad2(page.odd)}` : pad2(page.even != null ? page.even : page.odd);
+    const primaryBn = page.even != null ? page.even : page.odd;
+    const primaryEntry = dictBaysSummary[primaryBn] || null;
+    const hasCells = !!primaryEntry && (
+      (Array.isArray(primaryEntry.deckCells) && primaryEntry.deckCells.length > 0) ||
+      (Array.isArray(primaryEntry.holdCells) && primaryEntry.holdCells.length > 0)
+    );
     let matrixRender = null;
-    try {
-      matrixRender = buildBayGridForDetail(dictData?.bayDef, dictData?.code, bayKey) || null;
-    } catch (e) { matrixRender = null; }
+    if (hasCells) {
+      try {
+        const bayKey = isPair
+          ? `(${pad2(page.even)})${pad2(page.odd)}`
+          : pad2(primaryBn);
+        // EDI has00 반영(매트릭스 명시값 우선, 없으면 EDI 판정) — BayPlan과 동일 패턴
+        const effEntry = {
+          ...primaryEntry,
+          deckHasZero: primaryEntry.deckHasZero != null ? primaryEntry.deckHasZero
+            : (primaryEntry.hasZero != null ? primaryEntry.hasZero : has00),
+          holdHasZero: primaryEntry.holdHasZero != null ? primaryEntry.holdHasZero
+            : (primaryEntry.hasZero != null ? primaryEntry.hasZero : has00),
+        };
+        const rd = buildEmptyBayRenderData(effEntry, bayKey, isPair);
+        if (rd) matrixRender = rd;
+      } catch (e) { matrixRender = null; }
+    }
 
     return { rows, deckTiers, holdTiers, cellMap, title, matrixRender };
   }, [page, containers, eff, dictBaysSummary]);
