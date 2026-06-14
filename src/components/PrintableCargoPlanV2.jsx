@@ -492,6 +492,10 @@ export default function PrintableCargoPlanV2({
         holdCells,
         deckTiers,
         holdTiers,
+        // V7.98-11: pairEven 전파 — autoPairBays가 짝수 별도 엔트리 없이 페어 인식하도록.
+        //   baysSummary(matrixToBayDictEntry)엔 pairEven이 직렬화돼 있으나 여기서 누락돼,
+        //   매트릭스 빌더로 만든 페어가 "3 (4)5" 대신 "3 5"로 붕괴하던 버그.
+        pairEven: summary?.pairEven || b.pairEven || null,
         isStandalone: summary?.isStandalone || b.isStandalone || false,
       };
     });

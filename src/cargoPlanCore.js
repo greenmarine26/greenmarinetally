@@ -54,6 +54,25 @@ export function autoPairBays(matrixBays) {
     }
   }
 
+  // V7.98-11: pairEven 기반 페어 — 짝수 베이가 별도 엔트리로 없고 홀수 entry의 pairEven으로만
+  //   묶인 경우(매트릭스 빌더 저장 방식: (04)05를 홀수 05에 pairEven='04'로, 04 키 없음)도 트리오 형성.
+  //   detectMissingBays(M6.94.36)는 이미 같은 보정을 받았는데 여기만 빠져, 짝수가 matrixBays에
+  //   없으면 트리오가 붕괴해 홀수 둘이 단독으로 떨어지던 버그("3 (4)5" → "3 5", 같은 배에서 들쭉날쭉).
+  for (const o of odds) {
+    if (usedOdds.has(o)) continue;
+    const e = parseInt(byNum.get(o)?.pairEven, 10);
+    if (!Number.isFinite(e) || e <= 0 || usedEvens.has(e)) continue; // pairEven 없음/이미 별도 처리
+    const topOdd = e - 1; // (e)o 짝의 반대편 홀수 = 짝수-1 (예: (04)05 → top 03)
+    if (byNum.has(topOdd) && !usedOdds.has(topOdd)) {
+      const pairKey = `(${String(e).padStart(2, '0')})${String(o).padStart(2, '0')}`;
+      trios.push([String(topOdd).padStart(2, '0'), pairKey]);
+      usedOdds.add(topOdd);
+      usedOdds.add(o);
+      usedEvens.add(e);
+    }
+    // topOdd(반대편 홀수)가 없으면 기존 동작 보존 — o는 단독으로 남김(autoPageLayout 키 안전).
+  }
+
   // M6.94.8: orphanEvens(trio에 못 묶인 짝수 단독 베이)를 singles에 합침.
   // 이전: orphanEvens를 반환만 하고 호출처가 안 받아서 카고플랜에 통째로 누락
   //   (일부 베이/마지막 베이 안 나오던 버그 — 짝수 단독 베이가 있는 선박 다수).
