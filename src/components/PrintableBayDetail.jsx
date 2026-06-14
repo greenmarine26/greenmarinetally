@@ -29,7 +29,7 @@ const isPtk = (c, mode) => mode === 'discharge'
   ? isPyeongtaekPort(c.pod)
   : (c._inList || isPyeongtaekPort(c.pol));
 
-function groupByBay(containers) {
+export function groupByBay(containers) {
   const m = {};
   // M4.9: containers 검증 (배열 아니면 빈 객체 반환)
   if (!Array.isArray(containers)) return m;
@@ -76,7 +76,7 @@ function splitForeAft(bayList) {
 //     1) 홀수 n에 대해 (n-1)이 있으면 짝꿍 (n-1)n
 //     2) 홀수 n에 대해 (n-1)이 없으면 n 단독
 //     3) 짝수 중 양옆 홀수 모두 없는 것만 단독 처리 (예외 케이스)
-function buildBayPages(bays) {
+export function buildBayPages(bays) {
   const baySet = new Set(bays);
   const used = new Set();
   const pages = [];
@@ -108,7 +108,7 @@ function buildBayPages(bays) {
 
 // 컨테이너 4-5줄 텍스트 포맷
 // M4.9: 모든 입력 String 변환 + try-catch로 방어 (한 셀 에러가 전체 페이지 크래시 방지)
-function formatCellLines(c) {
+export function formatCellLines(c) {
   try {
     const pol = String(c.pol || '').replace(/^KR/, '').slice(0, 3) || '   ';
     const pod = String(c.pod || '').replace(/^KR/, '').slice(0, 3) || '   ';

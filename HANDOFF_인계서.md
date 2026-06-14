@@ -33,3 +33,21 @@ V7.95에서 검증·추가한 격자 함수(buildBayGrid3D/fillBayGrid3D)를 실
 
 ## 버전
 V7.97 (src/utils.js, sw.js, public/sw.js 동기화)
+
+---
+
+## V7.98 — 두 갈래 V7.97 통합 (3D 뷰 채택 + 수석 베이상세 편집 채택, 거부 모달 폐기)
+
+깃허브 origin/main(다른 세션 V7.97)과 본 세션 V7.97이 같은 버전번호로 갈라져, 취사선택 후 V7.98로 통합.
+
+**채택(origin/main에서 취함)**
+- BayPlan3D.jsx + BayPlan 3D 토글 — 베이 탭 `3D` 버튼(기본 OFF). 3D 입체 베이뷰(전체 카드/상세 격자). 색 규칙 2D 동일(XRAY 배경·선사 글자, V7.32). MCSN 624S 811컨 실EDI + PNG 검증됨. onCommitMove/pendingMove는 BayPlan 기존 props 재사용(새 편집 surface 아님).
+- BayDictVerifyWidget 수정(V7.96) — 통계 탭 "베이사전 미등록" 모순 버그 픽스.
+
+**채택(본 세션에서 유지)**
+- ChiefBayEdit.jsx + ChiefDashboard 통합 — 수석 대시보드의 컨번호 베이상세 편집(오선적 정정). 수석/관리자만, pending→[저장]시 fb 커밋→그때 검수사 반영. (사장님 확정 요구.)
+
+**폐기**
+- origin/main의 BayDetailEdit.jsx — "BayBoxV2 마크만 크게" 방식. 사장님이 거부한 접근 + 어느 페이지에도 미연결. 삭제.
+
+**정리**: 두 기능은 파일·위치가 달라 충돌 없음(3D=베이탭 뷰, 편집=수석 대시보드). 버전 V7.98(utils.js/sw.js/public/sw.js 동기화).

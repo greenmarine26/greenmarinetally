@@ -6,9 +6,11 @@ import { isPyeongtaekPort } from '../utils.js';
 import { isChief } from '../staffList.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
+import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
 
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
+  const [editKey, setEditKey] = useState(null); // V7.97: 베이상세 편집 대상 항차 (수석/관리자만)
   const [shipLib, setShipLib] = useState({});
   const [feedback, setFeedback] = useState({});
   const [showResolved, setShowResolved] = useState(false);
@@ -274,6 +276,22 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       </div>
 
       {/* M7.22: 라이브러리(진행 상황) + 선박별 자료 보관소(완료 기록) 분리 */}
+      {chief && voyageStats.length > 0 && (
+        <div className="bg-slate-900 border border-emerald-800/50 rounded-xl p-3">
+          <div className="text-sm font-bold text-emerald-200 mb-2">🖐 베이상세 편집 <span className="text-[11px] text-slate-400 font-normal">— 오선적 정정 (수석 전용 · [저장]해야 검수사 화면 반영)</span></div>
+          <div className="flex flex-wrap gap-2">
+            {voyageStats.map(v => (
+              <button key={v.key} onClick={() => setEditKey(v.key)}
+                className="px-3 py-1.5 rounded-lg text-sm font-bold bg-emerald-700 text-white hover:bg-emerald-600">
+                {v.info?.vsl || v.key}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {editKey && voyages[editKey] && (
+        <ChiefBayEdit voyage={voyages[editKey]} voyageKey={editKey} inspector={inspector} onClose={() => setEditKey(null)} />
+      )}
       <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
       <ShipArchiveSection shipLib={shipLib} />
 
