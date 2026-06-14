@@ -8,7 +8,8 @@
 //   - 베이 골격(가용 슬롯, 리퍼 위치 등) 보강
 //   - 컨테이너 데이터는 기존 EDI 흐름 유지 (변경 없음)
 
-import { lookupBayDict, getBayDictStats } from './data/shipBayDict.js';
+// V7.99: v1.1 사전(미검증 11척) 제거 — 11척 전부 v2(verified)에 존재 확인됨.
+//   18,903줄 정적 데이터가 앱 시작 시 통째로 로딩되던 것을 끊어 초기 로딩 가속.
 import { SHIP_BAY_DICT_V2, lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
 import { lookupUserBayDict, getUserBayDictStats, loadUserBayDict } from './data/userBayDict.js';
 // M6.55: v5 — .def 매트릭스 디코드 자동 추출
@@ -159,9 +160,7 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
     return { source: 'v5-supplement', data: v5Result.entry, matchedBy: v5Result.matchedBy };
   }
 
-  // 3. v1 사전 (legacy 폴백)
-  const v1Result = lookupBayDict(imo, vesselNameOrCode);
-  if (v1Result) return { source: 'v1', data: v1Result, matchedBy: 'v1-lookup' };
+  // 3. v1 사전 폴백 제거 (V7.99) — 11척 전부 v2 verified에 존재, 미검증 데이터 폴백 위험 제거.
 
   return null;
 }
@@ -689,16 +688,14 @@ export function isShipInBayDict(imo, code) {
 
 /**
  * 베이사전 통계 (디버그/진단용)
- * M4.5: 사용자 사전 + v2(109척) + v1(11척) 합산
+ * V7.99: v1 제거 — v2(verified) + 사용자 사전 합산
  */
 export function bayDictInfo() {
-  const v1 = getBayDictStats();
   const user = getUserBayDictStats();
   const v2Count = Object.keys(SHIP_BAY_DICT_V2).length;
   return {
-    v1: { totalShips: v1.totalShips, version: '1.1-draft', verified: false },
     v2: { totalShips: v2Count, version: '2.0', verified: true },
     user,
-    totalShips: v1.totalShips + v2Count + user.totalShips,
+    totalShips: v2Count + user.totalShips,
   };
 }
