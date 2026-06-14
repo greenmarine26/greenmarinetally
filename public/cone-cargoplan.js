@@ -101,7 +101,7 @@ XIN TAI PING`,bayDef:{sourceFile:"XTPG-stowage (M6.71 box-region)",parserVersion
      ref.html\uC740 page height 195mm \uACE0\uC815 (A4 landscape - margin 6mm \xD7 2). 
      V2\uB294 \uD654\uBA74\uC5D0\uC120 viewport \uBE44\uB840\uC9C0\uB9CC \uC778\uC1C4\uC5D0\uC120 195mm\uB85C \uAC15\uC81C. */
   html, body { background: white !important; background-color: white !important; margin: 0 !important; padding: 0 !important; }
-  body > *:not(.cpv2-overlay) { display: none !important; }
+  body > *:not(.cpv2-overlay):not(.bd-print-modal) { display: none !important; }
   .cpv2-overlay {
     position: static !important;
     inset: auto !important;

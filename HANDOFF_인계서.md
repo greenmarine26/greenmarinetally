@@ -1,36 +1,34 @@
 # Tallyman Master V7.98-10 인계서
 
-## 이번 변경 (V7.98-10) — 베이상세 격자를 카고플랜과 완전 동일 함수로 (rowMax 사전 폴백 해결)
-**문제**: ATRP 등 rowMax 사전(deckCells/holdCells 없고 rowMaxEven/Odd만 있는 사전)이 베이상세 편집·인쇄에서 STD_ROWS 폴백으로 깨졌음. cells만 보는 buildEmptyBayRenderData를 써서 rowMax 사전을 못 그림.
+## 이번 변경 (V7.98-10) — 인쇄 베이상세 백지/페이지 미분리 버그 수정 (M7.989 회귀)
+**증상**: 베이상세 인쇄 미리보기가 헛돌고(백지), 페이지 구분이 안 됨(여러 베이가 1페이지로 뭉개짐).
 
-**핵심 통찰 (사용자 지적)**: ATRP는 이미 "매트릭스 확정" 등록됨(source:user, verified). cells가 없어도 rowMaxEven=8/rowMaxOdd=7로 매트릭스가 지정돼 있고, 카고플랜이 쓰는 computeBayRenderData가 이미 그걸 읽음. 새로 만들 게 아니라 같은 함수를 쓰면 됨.
+**원인 (데이터 확정 — print-to-pdf A/B로 검증)**:
+1. **(주원인) CARGO_V2_CSS 인쇄 격리 누수.** M7.989가 PrintableBayDetail에 `import {BayBoxV2, CARGO_V2_CSS}` + `<style>{CARGO_V2_CSS}</style>`를 추가. CARGO_V2_CSS의 @media print에 `body > *:not(.cpv2-overlay){display:none}`(카고플랜 격리)가 있는데, 카고플랜 모달은 body로 portal돼 `.cpv2-overlay`가 body 직속이라 살아남지만, **PrintableBayDetail 모달(.bd-print-modal)은 portal 없이 #root 안에 렌더** → `body>*`=#root가 display:none → 베이상세 인쇄 통째 백지(1페이지). 화면엔 무영향(@media print만).
+2. **(부차) bd-cargo-wrap 이중 페이지.** bd-cargo-wrap이 `height:204mm; page-break-after:always`인 풀페이지 블록인데 `bd-page`(204mm+page-break) 안에 들어가 제목+헤더와 겹쳐 넘침 + 이중 페이지브레이크.
 
-**수정**:
-- cargoPlanCore.js: `buildBayGridForDetail(shipBayDef, shipCode, bayKey)` 추가. dictData에서 matrixBays/pdfBays 구성 → computeBayRenderData 호출(빈 posMap, 컨은 호출측 cellMap 주입). cells 사전·rowMax 사전 모두 처리.
-- ChiefBayEdit.jsx: matrixRender를 buildBayGridForDetail로. hasCells 분기 제거(rowMax 사전도 그림).
-- PrintableBayDetail.jsx: matrixRender를 buildBayGridForDetail로. BayDetailPage에 shipBayDef/shipCode props 추가, 본체에서 dictData.bayDef/code 전달.
-- buildEmptyBayRenderData import 제거(orphan 정리).
+**검증**: M7.989 직전 PrintableBayDetail은 print-to-pdf 5페이지 정상. M7.989는 1페이지 백지. 수정 후 다시 **5페이지·내용 가득·베이별 분리**(pdftoppm 이미지 PASS).
 
-**결과**: 카고플랜·베이상세 편집·베이상세 인쇄가 모두 computeBayRenderData(via buildBayGridForDetail) 사용 → 그림 100% 일치. rowMax 사전(ATRP)·cells 사전(MCSN) 모두 정상.
+**수정 (3곳, 최소 수술)**:
+- `src/components/PrintableCargoPlanV2.jsx`(135행): `body>*:not(.cpv2-overlay)` → `body>*:not(.cpv2-overlay):not(.bd-print-modal)`. 카고플랜 인쇄엔 무영향(인쇄 시 .bd-print-modal 부재).
+- `src/components/PrintableBayDetail.jsx`: 메인 모달을 **createPortal(…, document.body)**로 portal(카고플랜과 동일 패턴) → .bd-print-modal이 body 직속 → 격리 규칙 통과.
+- `src/components/PrintableBayDetail.jsx`(bd-cargo-wrap CSS): 고정 `width:291mm;height:204mm;page-break-after:always` 제거 → `width:100%; flex:1 1 0; min-height:0` (bd-page 안에서 채움). `.bd-cargo-wrap .cpv2-bay-section{flex:1 1 0;min-height:0}` 보강(높이 체인).
 
-**검증 (시각 PNG PASS)**:
-- ATRP bay01/(02)03 (rowMax): deck 8칸/hold 7칸 전부 active — 카고플랜과 동일. (이전 폴백 깨짐 해결)
-- MCSN bay01/bay09 (cells): cells대로 피라미드.
-- 빈 active 칸도 선 유지("빈자리도 자리"). 0.5칸 정렬 % padding 자동.
+## 일원화 상태 (V7.98-07/08/10)
+카고플랜·베이상세 편집·베이상세 인쇄 모두 BayBoxV2 단일 컴포넌트. 그림은 BayBoxV2, 셀 내용만 주입(카고=마크, 편집=컨번호, 인쇄=5줄).
+- **중요**: BayBoxV2 래퍼는 display:flex;flex-direction:column + 높이 확보 필요(셀이 flex:1 1 0 높이 상속). 화면 모달=vh, 인쇄=부모 bd-page(204mm) 안에서 flex:1로 채움(고정 height 금지 — 넘침 유발).
+- **중요**: 인쇄용 전체화면 모달은 body로 portal해야 CARGO_V2_CSS 인쇄 격리(body>* display:none)를 통과한다.
 
-## 일원화 완료 (V7.98-07~10)
-- 격자: BayBoxV2 단일 컴포넌트(카고플랜/편집/인쇄 공유). 셀 내용만 renderCellContent 주입.
-- 격자 데이터: buildBayGridForDetail→computeBayRenderData 단일 함수.
-- BayBoxV2 래퍼는 명시적 height+flex 필수(셀 flex:1 1 0 높이 상속). 편집=72vh, 인쇄=204mm.
-
-## 핵심 원칙 (REF 승격 후보)
-- 베이상세 격자는 카고플랜과 같은 함수(computeBayRenderData)로 그린다. cells 사전·rowMax 사전 모두 자동. cells만 보는 buildEmptyBayRenderData는 rowMax 사전을 폴백시키므로 베이상세에 쓰지 말 것.
-- ATRP류 PDF 자동본도 rowMaxEven/Odd로 매트릭스가 지정돼 있으면 정상 렌더됨. cells 유무로 판단 금지.
-- BayBoxV2 단일 컴포넌트 + 명시적 height 필수. "빈자리도 자리"(active 빈칸 선 유지).
+## 누적 이력 (V7.95~)
+- V7.98-10: 인쇄 베이상세 백지/페이지 미분리 수정(M7.989 회귀).
+- V7.98-09: 편집 베이상세 격자 찌부러짐 수정(cbe-cargo-wrap height:72vh).
+- V7.98-08: 인쇄 베이상세 BayBoxV2 통일.
+- V7.98-07: 편집 베이상세 BayBoxV2 통일 + renderCellContent prop.
 
 ## 다음 세션 (미해결)
 1. 끝자리 4자리 조회를 베이상세/3D 하이라이트.
-2. rowMax도 cells도 없는 사전(있다면)만 STD_ROWS 폴백 — 해당 선박 확인되면 매트릭스 보강.
+2. cells 없는 PDF 자동본(ATRP) 매트릭스 확보.
+3. 앱 내 신규 선박 입력 + PDF 자동 파싱.
 
 ## 버전
-V7.98-10 (src/utils.js, sw.js, public/sw.js 동기화)
+V7.98-10 (src/utils.js, sw.js, public/sw.js, public/cone.html 동기화 — build.sh 자동)

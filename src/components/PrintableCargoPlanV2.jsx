@@ -132,7 +132,7 @@ export const CARGO_V2_CSS = `
      ref.html은 page height 195mm 고정 (A4 landscape - margin 6mm × 2). 
      V2는 화면에선 viewport 비례지만 인쇄에선 195mm로 강제. */
   html, body { background: white !important; background-color: white !important; margin: 0 !important; padding: 0 !important; }
-  body > *:not(.cpv2-overlay) { display: none !important; }
+  body > *:not(.cpv2-overlay):not(.bd-print-modal) { display: none !important; }
   .cpv2-overlay {
     position: static !important;
     inset: auto !important;
