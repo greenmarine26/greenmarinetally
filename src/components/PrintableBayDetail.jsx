@@ -18,6 +18,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
+import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
 // M4.9e-fix: STD_DECK/STD_HOLD/STD_ROWS 모두 동적 (globalTiers + globalRowRange 기준)
@@ -219,6 +220,35 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     cellMap[`${t}-${r}`] = c;
   });
 
+  // V7.98-04: 인쇄 베이상세도 매트릭스 진실원(buildEmptyBayRenderData)으로 통일.
+  //   matrix_builder본은 rowMax 없이 deckCells/holdCells만 저장 → STD_ROWS(rowMax 기반)는 695베이/36% 미적용.
+  //   deckCells 유효하면 matrixRender(tier별 active cell·좁아짐·가운데 정렬, 3D·편집과 동일) 사용,
+  //   없으면(PDF 자동본) 기존 STD_ROWS 폴백 유지. 컨번호는 그대로(renderCell 재사용).
+  const matrixRender = useMemo(() => {
+    const isPair = even != null && odd != null;
+    const primaryBn = even != null ? even : odd;
+    if (primaryBn == null) return null;
+    const e = dictBaysSummary[parseInt(primaryBn, 10)];
+    const hasCells = !!e && (
+      (Array.isArray(e.deckCells) && e.deckCells.length > 0) ||
+      (Array.isArray(e.holdCells) && e.holdCells.length > 0)
+    );
+    if (!hasCells) return null;
+    // EDI has00 반영 (매트릭스 명시값 우선) — BayPlan/ChiefBayEdit과 동일 패턴
+    let ediHas00 = false;
+    for (const c of allConts) { if (parseInt(c.row, 10) === 0) { ediHas00 = true; break; } }
+    const effEntry = {
+      ...e,
+      deckHasZero: e.deckHasZero != null ? e.deckHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
+      holdHasZero: e.holdHasZero != null ? e.holdHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
+    };
+    const bayKey = isPair
+      ? `(${String(even).padStart(2, '0')})${String(odd).padStart(2, '0')}`
+      : String(primaryBn).padStart(2, '0');
+    try { return buildEmptyBayRenderData(effEntry, bayKey, isPair) || null; }
+    catch (e2) { return null; }
+  }, [even, odd, dictBaysSummary, allConts]);
+
   // M6.26: 베이플랜 로직 그대로 이식 — 페이지 두 베이의 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   사용자 지시: "베이플랜에 다 맞춰주세요. 지금 베이플랜만 아주 정확합니다."
   //   BayPlan.jsx:926-953의 로직 100% 동일
@@ -310,6 +340,32 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     );
   };
 
+  // V7.98-04: 매트릭스 격자 한 층 렌더 — 전체 폭(maxCols) 고정 grid에 active cell만 그 위치에(좁아짐=양끝 빈칸)
+  const mrMaxCols = matrixRender ? Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0) : 0;
+  const renderMatrixLayer = (mrRows, nCols) => mrRows
+    .filter(rr => !rr.invisible)
+    .map(rr => {
+      // 이 tier의 cells를 전체 폭(mrMaxCols) 가운데 정렬로 배치 (deck/hold 폭 다를 때 중심 맞춤)
+      const pad = Math.max(0, Math.floor((mrMaxCols - rr.cells.length) / 2));
+      return (
+        <div key={`mr-${rr.tier}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${mrMaxCols}, minmax(0, 1fr))` }}>
+          {Array.from({ length: pad }).map((_, i) => <div key={`lp-${i}`} className="bd-cell" style={{ border: 'none', background: 'transparent' }}></div>)}
+          {rr.cells.map((cell, ci) => cell.active
+            ? renderCell(String(rr.tier).padStart(2, '0'), cell.rowLbl)
+            : <div key={`x-${ci}`} className="bd-cell" style={{ border: 'none', background: 'transparent' }}></div>)}
+          {Array.from({ length: Math.max(0, mrMaxCols - pad - rr.cells.length) }).map((_, i) => <div key={`rp-${i}`} className="bd-cell" style={{ border: 'none', background: 'transparent' }}></div>)}
+        </div>
+      );
+    });
+  // 매트릭스 모드 row 라벨(상/하단): 전체 폭 중 deck 기준 라벨 (가장 넓은 층)
+  const mrRowLabels = matrixRender
+    ? (() => {
+        const widest = [...matrixRender.deckRows, ...matrixRender.holdRows].filter(r => !r.invisible)
+          .reduce((best, r) => (r.cells.length > (best?.cells.length || 0) ? r : best), null);
+        return widest ? widest.cells.map(c => c.active ? c.rowLbl : '').filter(Boolean) : [];
+      })()
+    : [];
+
   return (
     <div className="bd-page">
       <div className="bd-title">{title}</div>
@@ -320,32 +376,60 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       </div>
 
       <div className="bd-row-labels-top">
-        {STD_ROWS.map(r => <span key={r} className="bd-rl">{r}</span>)}
+        {(matrixRender ? mrRowLabels : STD_ROWS).map((r, i) => <span key={`${r}-${i}`} className="bd-rl">{r}</span>)}
       </div>
 
       <div className="bd-grid-wrap">
         <div className="bd-grid">
-          {hasDeck && deckTiers.map(t => (
-            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {STD_ROWS.map(r => renderCell(t, r))}
-            </div>
-          ))}
-          {hasDeck && hasHold && (
-            <div className="bd-hatch">
-              {Array.from({ length: hatchCount }).map((_, i) => <div key={i} className="bd-hatch-seg"></div>)}
-            </div>
+          {matrixRender ? (
+            <>
+              {matrixRender.deckRows.some(r => !r.invisible) && renderMatrixLayer(matrixRender.deckRows, mrMaxCols)}
+              {matrixRender.deckRows.some(r => !r.invisible) && matrixRender.holdRows.some(r => !r.invisible) && (
+                <div className="bd-hatch">
+                  {Array.from({ length: hatchCount }).map((_, i) => <div key={i} className="bd-hatch-seg"></div>)}
+                </div>
+              )}
+              {matrixRender.holdRows.some(r => !r.invisible) && renderMatrixLayer(matrixRender.holdRows, mrMaxCols)}
+            </>
+          ) : (
+            <>
+              {hasDeck && deckTiers.map(t => (
+                <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+                  {STD_ROWS.map(r => renderCell(t, r))}
+                </div>
+              ))}
+              {hasDeck && hasHold && (
+                <div className="bd-hatch">
+                  {Array.from({ length: hatchCount }).map((_, i) => <div key={i} className="bd-hatch-seg"></div>)}
+                </div>
+              )}
+              {hasHold && holdTiers.map(t => (
+                <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
+                  {STD_ROWS.map(r => renderCell(t, r))}
+                </div>
+              ))}
+            </>
           )}
-          {hasHold && holdTiers.map(t => (
-            <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
-              {STD_ROWS.map(r => renderCell(t, r))}
-            </div>
-          ))}
         </div>
         <div className="bd-tier-labels">
-          {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
-          {hasDeck && hasHold && <span className="bd-tier-gap"></span>}
-          {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+          {matrixRender ? (
+            <>
+              {matrixRender.deckRows.filter(r => !r.invisible).map(r => <span key={`dt-${r.tier}`}>{String(r.tier).padStart(2, '0')}</span>)}
+              {matrixRender.deckRows.some(r => !r.invisible) && matrixRender.holdRows.some(r => !r.invisible) && <span className="bd-tier-gap"></span>}
+              {matrixRender.holdRows.filter(r => !r.invisible).map(r => <span key={`ht-${r.tier}`}>{String(r.tier).padStart(2, '0')}</span>)}
+            </>
+          ) : (
+            <>
+              {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
+              {hasDeck && hasHold && <span className="bd-tier-gap"></span>}
+              {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
+            </>
+          )}
         </div>
+      </div>
+
+      <div className="bd-row-labels-bot">
+        {(matrixRender ? mrRowLabels : STD_ROWS).map((r, i) => <span key={`${r}-${i}`} className="bd-rl">{r}</span>)}
       </div>
 
       <div className="bd-row-labels-bot">
