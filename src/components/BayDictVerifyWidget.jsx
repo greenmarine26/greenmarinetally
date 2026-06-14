@@ -1,8 +1,8 @@
-// M4.1: 베이사전 검증 위젯 (V7.95-02: 데이터소스 통일)
-// EDI 컨테이너의 베이 번호와 베이사전(baysSummary)의 베이 번호 매칭률을 표시
-// 베이 탭(BayDictStatusWidget)과 동일하게 getShipBayDictData로 조회 — 통계/베이 탭 일치
-// 검수 시작 전 베이사전이 정확한지 빠르게 확인
-
+// 베이사전 검증 위젯 (통계 탭) — 베이 탭(BayDictStatusWidget)과 동일 사전 조회로 일치.
+// V7.96: lookupBayDict(정적 .def 사전만) → getShipBayDictData(Firebase/user/v2/v5)로 교체.
+//   증상: 같은 MCSN인데 베이 탭은 "매칭됨", 통계 탭은 "미등록"으로 모순.
+//   원인: 통계 탭만 옛 정적 사전(SHIP_BAY_DICT)을 봤고, 사용자 매트릭스(baysSummary)는 안 봄.
+//   추가로 matrixBuilder 구조는 bayDef.bays[].idx가 아니라 baysSummary[].bayNo에 데이터가 있음.
 import React, { useMemo } from 'react';
 import { getShipBayDictData } from '../shipStructure.js';
 import { Database, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
@@ -11,66 +11,67 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
   const result = useMemo(() => {
     if (!shipInfo) return { status: 'no-ship' };
 
-    // V7.95-02: 베이 탭(BayDictStatusWidget)과 동일 함수로 조회.
-    //   (옛 lookupBayDict는 정적 .def 내장 사전만 봐서 Firebase/매트릭스 빌더 등록분을
-    //    "미등록"으로 잘못 표시 — 베이 탭은 "매칭됨"인데 통계 탭만 어긋나던 버그.)
-    const dict = getShipBayDictData(shipInfo.imo, shipInfo.name);
-    if (!dict) {
-      return {
-        status: 'not-registered',
-        shipName: shipInfo.name,
-        imo: shipInfo.imo,
-      };
-    }
-
-    // 베이사전이 보유한 베이 번호 집합 (baysSummary 기준 — 매트릭스 빌더/Firebase 구조).
-    //   옛 코드는 bayDef.bays[].idx(.def 전용 필드)를 읽어 matrix_builder본에선 항상 비어 0%.
-    const summary = dict.bayDef?.baysSummary || [];
-    const knownBays = new Set();
-    summary.forEach(b => {
-      const n = parseInt(b.bayNum, 10);
-      if (!isNaN(n)) knownBays.add(n);
-    });
-
-    // EDI 컨테이너가 사용 중인 베이 번호 집합 (숫자로 변환).
+    // EDI 베이 번호 집합 (정규화: 앞 0 제거한 정수)
+    const containers = Array.isArray(ediContainers) ? ediContainers : Object.values(ediContainers || {});
     const ediBayNums = new Set();
-    const containers = Array.isArray(ediContainers)
-      ? ediContainers
-      : Object.values(ediContainers || {});
     containers.forEach(c => {
-      if (c.bay) {
+      if (c && c.bay != null && c.bay !== '') {
         const num = parseInt(c.bay, 10);
         if (!isNaN(num)) ediBayNums.add(num);
       }
     });
 
-    // 매칭: 직접 보유하면 매칭. 짝수(40ft 페어) 베이는 양옆 홀수(20ft)로 표현될 수 있으므로
-    //   직접 없을 때 n±1 보유로 인정 (앱 pairEven 모델: 짝수 e + 인접 홀수 페어).
-    let matched = 0;
-    ediBayNums.forEach(n => {
-      const hit = knownBays.has(n)
-        || (n % 2 === 0 && (knownBays.has(n - 1) || knownBays.has(n + 1)));
-      if (hit) matched++;
+    // 베이 탭과 동일 함수로 조회 (EDI 베이수 힌트 전달 → 같은 배 여러 벌 중 알맹이 선택)
+    const dict = getShipBayDictData(shipInfo.imo, shipInfo.name, {
+      vslFull: shipInfo.name,
+      ediBayCount: ediBayNums.size || undefined,
     });
+    if (!dict) {
+      return { status: 'not-registered', shipName: shipInfo.name, imo: shipInfo.imo };
+    }
 
+    // 사전이 아는 베이 번호 집합 (matrix_builder: baysSummary[].bayNo, 폴백: bayList)
+    const summary = dict.bayDef?.baysSummary || [];
+    const knownBayNums = new Set();
+    if (summary.length > 0) {
+      summary.forEach(b => {
+        const n = parseInt(b.bayNo ?? b.bayNum ?? b.bay, 10);
+        if (!isNaN(n)) knownBayNums.add(n);
+      });
+    } else {
+      (dict.bayDef?.bayList || []).forEach(v => {
+        const n = parseInt(v, 10);
+        if (!isNaN(n)) knownBayNums.add(n);
+      });
+    }
+
+    // 매칭률: EDI 베이가 사전 베이(또는 페어 묶인 짝수)에 들어가는 비율
+    let matched = 0;
+    ediBayNums.forEach(num => {
+      if (knownBayNums.has(num)) { matched++; return; }
+      // 짝수 bay는 pairEven으로 홀수 bay에 묶임 → 홀수 bay가 사전에 있으면 매칭
+      if (num % 2 === 0 && summary.some(b => parseInt(b.pairEven, 10) === num)) matched++;
+    });
     const total = ediBayNums.size;
-    const rate = total > 0 ? (matched / total) : 0;
+    const rate = total > 0 ? (matched / total) : 1;
 
     return {
       status: 'matched',
-      shipName: dict.name,
-      imo: shipInfo.imo,
-      dictBayCount: dict.bayDef?.recordCount || summary.length,
+      shipName: dict.name || shipInfo.name,
+      imo: dict.imo || shipInfo.imo,
+      matchedBy: dict.matchedBy || dict.source || '',
+      dictBayCount: knownBayNums.size,
       ediBayCount: total,
       matched,
       rate,
-      verified: dict.bayDef?.verified || dict.verified || false,
+      verified: dict.verified || dict.bayDef?.verified || false,
+      isUser: dict.source === 'user' || dict.bayDef?._userOwned === true,
     };
   }, [shipInfo, ediContainers]);
 
   if (result.status === 'no-ship') return null;
 
-  // 베이사전 미등록
+  // 베이사전 미등록 — 어떤 사전에도 없음
   if (result.status === 'not-registered') {
     return (
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
@@ -79,7 +80,7 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
           <div className="flex-1">
             <div className="text-xs font-bold text-slate-300">베이사전 미등록</div>
             <div className="text-[10px] text-slate-500 mt-0.5">
-              {result.shipName || result.imo || '이 선박'}은 베이사전이 등록되지 않았습니다.
+              {result.shipName || result.imo || '이 선박'}은 베이사전이 없습니다.
               EDI 좌표 기반으로 베이플랜 자동 형성됩니다.
             </div>
           </div>
@@ -109,24 +110,24 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-black bg-${color}-900/60 text-${color}-200`}>
               {ratePct}%
             </span>
-            {!result.verified && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-900/40 text-amber-300">
-                미검증 v1.1
-              </span>
+            {result.isUser ? (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-900/50 text-cyan-200">사용자 매트릭스</span>
+            ) : !result.verified && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-900/40 text-amber-300">미검증</span>
             )}
           </div>
           <div className="text-[10px] text-slate-400 mt-1">
             {result.shipName} (IMO: {result.imo || '-'})
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5 mono">
-            EDI 베이 {result.ediBayCount}개 중 {result.matched}개 베이사전 매칭
+            EDI 베이 {result.ediBayCount}개 중 {result.matched}개 매칭
             <span className="text-slate-600"> · 사전 {result.dictBayCount}개 보유</span>
           </div>
           {!isGood && (
             <div className={`text-[10px] text-${color}-300 mt-1`}>
               {result.rate < 0.7
-                ? '⚠️ 매칭률 낮음 — 베이매트릭스 베이 번호 ↔ EDI 베이 매핑 재검토 필요'
-                : '⚠️ 일부 베이 매칭 안 됨 — 매트릭스 빌더에서 베이 확정 권장'}
+                ? '⚠️ 매칭률 낮음 — 베이 번호 매핑 재검토 필요'
+                : '⚠️ 일부 베이 매칭 안 됨 — 페어/추가 베이 확인 권장'}
             </div>
           )}
         </div>
