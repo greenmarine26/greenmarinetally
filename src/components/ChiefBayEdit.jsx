@@ -7,6 +7,7 @@ import { X, Save, Undo2 } from 'lucide-react';
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildContainerColorMap, getContainerColorKey, isPyeongtaekPort, isoToLabel } from '../utils.js';
 import { formatCellLines, buildBayPages } from './PrintableBayDetail.jsx';
+import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import { fbSetActualPosition, fbBatchMoveToStorage } from '../firebase.js';
 
 const CBE_CSS = `
@@ -156,7 +157,38 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
     if (page.even != null && page.odd != null) title = `BAY (${dispBay(page.even)})${dispBay(page.odd)}`;
     else if (page.even != null) title = `BAY ${dispBay(page.even)}`;
     else title = `BAY ${dispBay(page.odd)}`;
-    return { rows, deckTiers, holdTiers, cellMap, title };
+
+    // V7.98-03: 베이상세를 매트릭스 진실원(buildEmptyBayRenderData)으로 통일.
+    //   rowMax 없이 deckCells/holdCells로 tier별 active cell·가운데 정렬·좁아짐을 정확히 그림(3D와 동일).
+    //   matrix_builder본은 rowMax가 없어 기존 uniform 경로에선 폴백됐음(695베이/36% 미적용 버그).
+    //   deckCells 유효하면 matrixRender 사용, 없으면(PDF 자동본 등) 기존 uniform 폴백 유지.
+    const isPair = page.even != null && page.odd != null;
+    const primaryBn = page.even != null ? page.even : page.odd;
+    const primaryEntry = dictBaysSummary[primaryBn] || null;
+    const hasCells = !!primaryEntry && (
+      (Array.isArray(primaryEntry.deckCells) && primaryEntry.deckCells.length > 0) ||
+      (Array.isArray(primaryEntry.holdCells) && primaryEntry.holdCells.length > 0)
+    );
+    let matrixRender = null;
+    if (hasCells) {
+      try {
+        const bayKey = isPair
+          ? `(${pad2(page.even)})${pad2(page.odd)}`
+          : pad2(primaryBn);
+        // EDI has00 반영(매트릭스 명시값 우선, 없으면 EDI 판정) — BayPlan과 동일 패턴
+        const effEntry = {
+          ...primaryEntry,
+          deckHasZero: primaryEntry.deckHasZero != null ? primaryEntry.deckHasZero
+            : (primaryEntry.hasZero != null ? primaryEntry.hasZero : has00),
+          holdHasZero: primaryEntry.holdHasZero != null ? primaryEntry.holdHasZero
+            : (primaryEntry.hasZero != null ? primaryEntry.hasZero : has00),
+        };
+        const rd = buildEmptyBayRenderData(effEntry, bayKey, isPair);
+        if (rd) matrixRender = rd;
+      } catch (e) { matrixRender = null; }
+    }
+
+    return { rows, deckTiers, holdTiers, cellMap, title, matrixRender };
   }, [page, containers, eff, dictBaysSummary]);
 
   // 임시창고 (effective storage)
@@ -205,8 +237,12 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
   };
   const tryClose = () => { if (pendCount && !confirm(`저장하지 않은 변경 ${pendCount}건이 있습니다. 닫으면 버려집니다. 닫을까요?`)) return; onClose(); };
 
-  const renderCell = (t, r) => {
+  const renderCell = (t, r, opts) => {
     const c = view.cellMap[`${t}-${r}`];
+    // V7.98-03: 매트릭스 모드에서 비활성(격자에 없는) 칸은 빈 공간으로 — 빈 슬롯(점선)과 구분
+    if (opts && opts.active === false) {
+      return <div key={`${t}-${r}`} className="cbe-cell" style={{ border: 'none', background: 'transparent' }}></div>;
+    }
     if (!c) return <div key={`${t}-${r}`} className="cbe-cell empty" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onCellDrop(e, r, t)}></div>;
     const lines = formatCellLines(c);
     const ptk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol));
@@ -225,6 +261,17 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
       </div>
     );
   };
+
+  // V7.98-03: 매트릭스 격자 한 층(deck/hold) 렌더 — tier별 active cell만(가운데 정렬·좁아짐 반영)
+  const renderMatrixLayer = (mrRows) => mrRows
+    .filter((rr) => !rr.invisible)
+    .map((rr) => (
+      <div key={`mr-${rr.tier}`} className="cbe-tier-row">
+        {rr.cells.map((cell, ci) => cell.active
+          ? renderCell(pad2(rr.tier), cell.rowLbl)
+          : renderCell(pad2(rr.tier), `__x${ci}`, { active: false }))}
+      </div>
+    ));
 
   return createPortal(
     <div className="cbe-overlay" onMouseUp={onStageUp} onMouseMove={onStageMove}>
@@ -256,11 +303,21 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
           {view ? (
             <div className="cbe-bd">
               <div className="cbe-bd-title">{view.title}</div>
-              <div className="cbe-rl">{view.rows.map((r) => <span key={r}>{r}</span>)}</div>
-              {view.deckTiers.map((t) => <div key={t} className="cbe-tier-row">{view.rows.map((r) => renderCell(t, r))}</div>)}
-              {view.deckTiers.length > 0 && view.holdTiers.length > 0 && <div className="cbe-hatch"></div>}
-              {view.holdTiers.map((t) => <div key={t} className="cbe-tier-row">{view.rows.map((r) => renderCell(t, r))}</div>)}
-              <div className="cbe-rl">{view.rows.map((r) => <span key={r}>{r}</span>)}</div>
+              {view.matrixRender ? (
+                <>
+                  {renderMatrixLayer(view.matrixRender.deckRows)}
+                  {view.matrixRender.deckRows.some((r) => !r.invisible) && view.matrixRender.holdRows.some((r) => !r.invisible) && <div className="cbe-hatch"></div>}
+                  {renderMatrixLayer(view.matrixRender.holdRows)}
+                </>
+              ) : (
+                <>
+                  <div className="cbe-rl">{view.rows.map((r) => <span key={r}>{r}</span>)}</div>
+                  {view.deckTiers.map((t) => <div key={t} className="cbe-tier-row">{view.rows.map((r) => renderCell(t, r))}</div>)}
+                  {view.deckTiers.length > 0 && view.holdTiers.length > 0 && <div className="cbe-hatch"></div>}
+                  {view.holdTiers.map((t) => <div key={t} className="cbe-tier-row">{view.rows.map((r) => renderCell(t, r))}</div>)}
+                  <div className="cbe-rl">{view.rows.map((r) => <span key={r}>{r}</span>)}</div>
+                </>
+              )}
             </div>
           ) : <span style={{ color: '#94a3b8' }}>베이를 선택하세요</span>}
         </div>
