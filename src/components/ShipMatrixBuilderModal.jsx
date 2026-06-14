@@ -312,6 +312,29 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     });
   };
 
+  // V7.94-25: 해치커버 수 일괄 적용 — 베이마다 select를 일일이 만지던 것을 한 번에.
+  //   mode 'auto'   → hatchCount 미명시(null). 저장 시 홀드 유무로 자동(홀드 1 / 데크 0). 해치 자동 선박용.
+  //   mode 'hold2'  → 홀드 있는 베이 = 2(기본값), 홀드 없는 데크전용 = 0. (일반 케이스: 1번 베이만 이후 예외 지정)
+  //   firstBay      → 가장 앞 베이만 그 값(2 또는 3)으로. 보통 1번 베이만 다름.
+  const hasHold = (en) => Array.isArray(en?.holdTiers) && en.holdTiers.length > 0;
+  const applyHatchBulk = (mode) => {
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      for (const bay of Object.keys(cp.byBay)) {
+        const entry = { ...cp.byBay[bay] };
+        if (mode === 'auto') entry.hatchCount = null;        // 자동(저장 시 홀드 유무로 결정)
+        else if (mode === 'hold2') entry.hatchCount = hasHold(entry) ? 2 : 0;
+        cp.byBay[bay] = entry;
+      }
+      return cp;
+    });
+  };
+  const applyHatchFirstBay = (value) => {
+    const first = Object.keys(matrix.byBay).sort()[0];
+    if (!first) return;
+    updateBay(first, 'hatchCount', value);
+  };
+
   // M6.94.0: 선택한 베이 (우측 시뮬에 표시)
   const [selectedBay, setSelectedBay] = useState(null);
   // M6.94.0: 베이 복사 모달 상태
@@ -736,6 +759,27 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 );
               })()}
 
+              {bayList.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-2 px-2 py-1.5 bg-zinc-900/60 border border-zinc-700 rounded text-xs">
+                  <span className="text-zinc-400">⚓ 해치 일괄:</span>
+                  <button onClick={() => applyHatchBulk('hold2')}
+                    className="px-2 py-0.5 bg-zinc-700 hover:bg-cyan-700 rounded"
+                    title="홀드 있는 베이 전부 해치 2, 홀드 없는 데크전용 베이 0. 가장 흔한 패턴.">
+                    홀드=2 · 데크=0
+                  </button>
+                  <button onClick={() => applyHatchBulk('auto')}
+                    className="px-2 py-0.5 bg-zinc-700 hover:bg-cyan-700 rounded"
+                    title="해치 수를 자동으로(미명시). 저장 시 홀드 있으면 1·없으면 0. 해치가 자동인 선박용.">
+                    전부 자동
+                  </button>
+                  <span className="text-zinc-500 ml-1">1번 베이만:</span>
+                  <button onClick={() => applyHatchFirstBay(2)}
+                    className="px-2 py-0.5 bg-zinc-700 hover:bg-amber-700 rounded" title="가장 앞 베이 해치 2">2</button>
+                  <button onClick={() => applyHatchFirstBay(3)}
+                    className="px-2 py-0.5 bg-zinc-700 hover:bg-amber-700 rounded" title="가장 앞 베이 해치 3">3</button>
+                  <span className="text-[10px] text-zinc-500">예외 베이는 아래 각 베이 ‘해치’에서 조정</span>
+                </div>
+              )}
               {bayList.length === 0 && (
                 <div className="text-center py-8 text-zinc-400">
                   EDI 데이터가 없습니다. 위에서 베이를 직접 추가하거나 PDF 업로드 후 진행하세요.
