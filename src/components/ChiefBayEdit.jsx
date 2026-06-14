@@ -7,6 +7,7 @@ import { X, Save, Undo2 } from 'lucide-react';
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildContainerColorMap, getContainerColorKey, isPyeongtaekPort, isoToLabel } from '../utils.js';
 import { formatCellLines, buildBayPages } from './PrintableBayDetail.jsx';
+import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import { fbSetActualPosition, fbBatchMoveToStorage } from '../firebase.js';
 
@@ -29,6 +30,9 @@ const CBE_CSS = `
 .cbe-rl{display:flex;gap:2px;margin:2px 0 2px 0;}
 .cbe-rl>span{flex:1;min-width:46px;text-align:center;font-size:11px;color:#555;}
 .cbe-tier-row{display:flex;gap:2px;margin-bottom:2px;}
+.cbe-tier-row-grid{display:grid;gap:2px;margin-bottom:2px;}
+.cbe-tier-row-grid>div{min-width:0;}
+.cbe-tier-row-grid .cbe-cell{flex:none;min-width:0;width:100%;}
 .cbe-cell{flex:1;min-width:46px;min-height:46px;border:1px solid #888;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;line-height:1.15;padding:2px;overflow:hidden;}
 .cbe-cell.empty{background:#f1f5f9;border-style:dashed;border-color:#cbd5e1;}
 .cbe-cell.filled{background:#fff;cursor:grab;}
@@ -277,19 +281,46 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
   };
 
   // V7.98-03: 매트릭스 격자 한 층(deck/hold) 렌더 — tier별 active cell만(가운데 정렬·좁아짐 반영)
-  const renderMatrixLayer = (mrRows) => mrRows
-    .filter((rr) => !rr.invisible)
-    .map((rr) => (
-      <div key={`mr-${rr.tier}`} className="cbe-tier-row">
-        {rr.cells.map((cell, ci) => cell.active
-          ? renderCell(pad2(rr.tier), cell.rowLbl)
-          : renderCell(pad2(rr.tier), `__x${ci}`, { active: false }))}
-      </div>
-    ));
+  // V7.98-07: 베이상세 격자는 BayBoxV2(카고플랜과 동일 그림)를 그대로 사용. 셀 내용만 컨번호로 주입.
+  //   cell.rowLbl + tier로 cellMap에서 컨을 찾아 표시. 드래그/선택/pending은 cellExtra로 span에 주입.
+  const renderCellContent = (cell, tier) => {
+    const c = view?.cellMap?.[`${pad2(tier)}-${cell.rowLbl}`];
+    if (!c) return null; // 빈 active 슬롯 — 그림(테두리)만, 내용 없음
+    const lines = formatCellLines(c);
+    return (<><span className="cbe-cn">{c.cn}</span><span className="cbe-sub">{lines.line1}</span></>);
+  };
+  const cellExtra = (cell, tier) => {
+    const c = view?.cellMap?.[`${pad2(tier)}-${cell.rowLbl}`];
+    if (!c) return {}; // 빈 슬롯: 드롭만 받음
+    const ptk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol));
+    const colorKey = ptk ? getContainerColorKey(c, mode) : null;
+    const col = colorKey ? colorMap[colorKey] : null;
+    const isSel = selected.has(c.cn), isPend = !!pending[c.cn];
+    return {
+      'data-cn': c.cn, draggable: true,
+      className: `cpv2-cell cbe-fill${ptk ? ' ptk' : ''}${isSel ? ' sel' : ''}${isPend ? ' pending' : ''}${cell.isXray ? ' cpv2-xray' : ''}`,
+      style: col ? { color: col } : undefined,
+      title: `${c.cn}  ${lines2(c)}`,
+      onDragStart: (e) => cellDragStart(e, c.cn),
+      onDragOver: (e) => e.preventDefault(),
+      onDrop: (e) => onCellDrop(e, cell.rowLbl, tier),
+    };
+  };
+  const lines2 = (c) => { const l = formatCellLines(c); return l.line3 || ''; };
 
   return createPortal(
     <div className="cbe-overlay" onMouseUp={onStageUp} onMouseMove={onStageMove}>
       <style>{CBE_CSS}</style>
+      <style>{CARGO_V2_CSS}</style>
+      <style>{`
+        .cbe-cargo-wrap{background:#fff;border-radius:6px;padding:10px;min-width:max-content;margin:0 auto;}
+        .cbe-cargo-wrap .cpv2-cell.cbe-fill{cursor:grab;font-weight:700;flex-direction:column;line-height:1.1;overflow:hidden;}
+        .cbe-cargo-wrap .cpv2-cell.cbe-fill:active{cursor:grabbing;}
+        .cbe-cargo-wrap .cpv2-cell.cbe-fill.sel{outline:3px solid #2563eb;outline-offset:-3px;}
+        .cbe-cargo-wrap .cpv2-cell.cbe-fill.pending{box-shadow:inset 0 0 0 2px #f59e0b;}
+        .cbe-cargo-wrap .cpv2-cell .cbe-cn{font-weight:800;font-size:10px;color:#111;letter-spacing:-.3px;}
+        .cbe-cargo-wrap .cpv2-cell .cbe-sub{font-size:8px;color:#64748b;}
+      `}</style>
       <div className="cbe-head">
         <strong style={{ fontSize: 15 }}>🖐 베이상세 편집 (수석)</strong>
         <div className="cbe-modes">
@@ -318,11 +349,15 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
             <div className="cbe-bd">
               <div className="cbe-bd-title">{view.title}</div>
               {view.matrixRender ? (
-                <>
-                  {renderMatrixLayer(view.matrixRender.deckRows)}
-                  {view.matrixRender.deckRows.some((r) => !r.invisible) && view.matrixRender.holdRows.some((r) => !r.invisible) && <div className="cbe-hatch"></div>}
-                  {renderMatrixLayer(view.matrixRender.holdRows)}
-                </>
+                <div className="cbe-cargo-wrap">
+                  <BayBoxV2
+                    data={view.matrixRender}
+                    colorMap={colorMap}
+                    gridCols={Math.max(view.matrixRender.nDeckCols || 0, view.matrixRender.nHoldCols || 0)}
+                    renderCellContent={renderCellContent}
+                    cellExtra={cellExtra}
+                  />
+                </div>
               ) : (
                 <>
                   <div className="cbe-rl">{view.rows.map((r) => <span key={r}>{r}</span>)}</div>

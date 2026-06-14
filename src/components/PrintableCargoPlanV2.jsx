@@ -176,7 +176,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, renderCellContent, cellExtra }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -238,6 +238,13 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
+                    if (renderCellContent) {
+                      return (
+                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                          {renderCellContent(cell, row.tier)}
+                        </span>
+                      );
+                    }
                     const bg = cell.colorKey && colorMap[cell.colorKey];
                     let style;
                     if (cell.isShadow20) {
@@ -288,6 +295,13 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                 <div key={ri} className={`cpv2-tier-row${row.invisible ? ' cpv2-invisible-row' : ''}`}>
                   {row.cells.map((cell, ci) => {
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
+                    if (renderCellContent) {
+                      return (
+                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                          {renderCellContent(cell, row.tier)}
+                        </span>
+                      );
+                    }
                     const bg = cell.colorKey && colorMap[cell.colorKey];
                     let style;
                     if (cell.isShadow20) {
