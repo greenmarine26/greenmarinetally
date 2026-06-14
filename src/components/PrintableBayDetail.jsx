@@ -19,6 +19,7 @@ import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
+import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
 // M4.9e-fix: STD_DECK/STD_HOLD/STD_ROWS 모두 동적 (globalTiers + globalRowRange 기준)
@@ -345,48 +346,30 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   //   데크 축(00 없음)·홀드 축(00 가운데)을 각자 만들고, (nCols-축길이)/2로 0.5칸 단위 offset.
   //   CSS grid를 half-column(2배)으로 깔아 0.5칸을 정수 half-column으로 표현. 각 셀은 2칸 span.
   //   데크 02|01 경계와 홀드 00이 같은 세로선에 옴.
-  const mrLayout = useMemo(() => {
-    if (!matrixRender) return null;
-    const deckRows = matrixRender.deckRows.filter(r => !r.invisible);
-    const holdRows = matrixRender.holdRows.filter(r => !r.invisible);
-    const deckSet = new Set();
-    deckRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) deckSet.add(c.rowLbl); }));
-    const dEv = [...deckSet].filter(r => parseInt(r, 10) % 2 === 0 && r !== '00').sort((a, b) => parseInt(b) - parseInt(a));
-    const dOd = [...deckSet].filter(r => parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
-    const deckAxis = [...dEv, ...(deckSet.has('00') ? ['00'] : []), ...dOd];
-    const holdSet = new Set();
-    holdRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) holdSet.add(c.rowLbl); }));
-    const hEv = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
-    const hOd = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
-    const holdAxis = [...hEv, ...(holdSet.has('00') ? ['00'] : []), ...hOd];
-    const nCols = Math.max(deckAxis.length, holdAxis.length);
-    const deckOff = (nCols - deckAxis.length) / 2;   // 0.5칸 단위 가능
-    const holdOff = (nCols - holdAxis.length) / 2;
-    return { deckRows, holdRows, deckAxis, holdAxis, nCols, deckOff, holdOff };
-  }, [matrixRender]);
-
-  // half-column grid 한 층 렌더: 축 순서대로 셀, 좌측에 offset*2 half-col 빈 칸. 각 셀 span 2.
-  const renderMatrixLayer = (rows, axis, off) => {
-    if (!mrLayout) return null;
-    const halfCols = mrLayout.nCols * 2;
-    const offHalf = Math.round(off * 2);  // 0.5칸 → 1 half-col
-    return rows.map(rr => {
-      // 이 tier의 active row→cell 맵 (rowLbl 기준)
-      const byRow = {};
-      rr.cells.forEach(c => { if (c.active && c.rowLbl) byRow[c.rowLbl] = true; });
-      return (
-        <div key={`mr-${rr.tier}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${halfCols}, minmax(0, 1fr))` }}>
-          {offHalf > 0 && <div style={{ gridColumn: `span ${offHalf}` }}></div>}
-          {axis.map((rowLbl, i) => byRow[rowLbl]
-            ? <div key={`c-${i}`} style={{ gridColumn: 'span 2' }}>{renderCell(String(rr.tier).padStart(2, '0'), rowLbl)}</div>
-            : <div key={`e-${i}`} style={{ gridColumn: 'span 2' }} className="bd-cell empty"></div>
-          )}
-        </div>
-      );
-    });
+  // V7.98-08: 인쇄 베이상세도 카고플랜 BayBoxV2 그대로 사용 — 편집화면과 동일 일원화.
+  //   셀 내용만 주입: 카고플랜=마크, 베이상세=5줄(POL/POD·컨번호·선사F/E무게타입·특수·위치).
+  const mrRenderCellContent = (cell, tier) => {
+    const c = cellMap[`${String(tier).padStart(2, '0')}-${cell.rowLbl}`];
+    if (!c) return null; // 빈 active 슬롯 — 테두리만, 내용 없음
+    const lines = formatCellLines(c);
+    return (
+      <div className="bd-cell-lines">
+        <div>{lines.line1}</div>
+        <div>{lines.line2}</div>
+        <div className="bd-line3">{lines.line3}</div>
+        {lines.line4 && <div>{lines.line4}</div>}
+        <div className="bd-pos">{lines.lineLast}</div>
+      </div>
+    );
   };
-  // 상/하단 row 라벨: deck 축 기준 (데크가 보통 더 넓음). half-col 정렬 맞춰 offset 반영.
-  const mrRowLabels = mrLayout ? mrLayout.deckAxis : [];
+  const mrCellExtra = (cell, tier) => {
+    const c = cellMap[`${String(tier).padStart(2, '0')}-${cell.rowLbl}`];
+    if (!c) return {};
+    const ptk = isPtk(c, mode);
+    const colorKey = ptk ? getContainerColorKey(c, mode) : null;
+    const bg = colorKey ? colorMap[colorKey] : null;
+    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}`, style: bg ? { color: bg } : undefined };
+  };
 
   return (
     <div className="bd-page">
@@ -397,24 +380,23 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
         <span>{portLabel}</span>
       </div>
 
-      <div className="bd-row-labels-top">
-        {(matrixRender ? mrRowLabels : STD_ROWS).map((r, i) => <span key={`${r}-${i}`} className="bd-rl">{r}</span>)}
-      </div>
-
-      <div className="bd-grid-wrap">
-        <div className="bd-grid">
-          {matrixRender ? (
-            <>
-              {mrLayout && mrLayout.deckRows.length > 0 && renderMatrixLayer(mrLayout.deckRows, mrLayout.deckAxis, mrLayout.deckOff)}
-              {mrLayout && mrLayout.deckRows.length > 0 && mrLayout.holdRows.length > 0 && (
-                <div className="bd-hatch">
-                  {Array.from({ length: hatchCount }).map((_, i) => <div key={i} className="bd-hatch-seg"></div>)}
-                </div>
-              )}
-              {mrLayout && mrLayout.holdRows.length > 0 && renderMatrixLayer(mrLayout.holdRows, mrLayout.holdAxis, mrLayout.holdOff)}
-            </>
-          ) : (
-            <>
+      {matrixRender ? (
+        <div className="bd-cargo-wrap">
+          <BayBoxV2
+            data={matrixRender}
+            colorMap={colorMap}
+            gridCols={Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0)}
+            renderCellContent={mrRenderCellContent}
+            cellExtra={mrCellExtra}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="bd-row-labels-top">
+            {STD_ROWS.map((r, i) => <span key={`${r}-${i}`} className="bd-rl">{r}</span>)}
+          </div>
+          <div className="bd-grid-wrap">
+            <div className="bd-grid">
               {hasDeck && deckTiers.map(t => (
                 <div key={t} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
                   {STD_ROWS.map(r => renderCell(t, r))}
@@ -430,33 +412,18 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
                   {STD_ROWS.map(r => renderCell(t, r))}
                 </div>
               ))}
-            </>
-          )}
-        </div>
-        <div className="bd-tier-labels">
-          {matrixRender ? (
-            <>
-              {matrixRender.deckRows.filter(r => !r.invisible).map(r => <span key={`dt-${r.tier}`}>{String(r.tier).padStart(2, '0')}</span>)}
-              {matrixRender.deckRows.some(r => !r.invisible) && matrixRender.holdRows.some(r => !r.invisible) && <span className="bd-tier-gap"></span>}
-              {matrixRender.holdRows.filter(r => !r.invisible).map(r => <span key={`ht-${r.tier}`}>{String(r.tier).padStart(2, '0')}</span>)}
-            </>
-          ) : (
-            <>
+            </div>
+            <div className="bd-tier-labels">
               {hasDeck && deckTiers.map(t => <span key={t}>{t}</span>)}
               {hasDeck && hasHold && <span className="bd-tier-gap"></span>}
               {hasHold && holdTiers.map(t => <span key={t}>{t}</span>)}
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="bd-row-labels-bot">
-        {(matrixRender ? mrRowLabels : STD_ROWS).map((r, i) => <span key={`${r}-${i}`} className="bd-rl">{r}</span>)}
-      </div>
-
-      <div className="bd-row-labels-bot">
-        {STD_ROWS.map(r => <span key={r} className="bd-rl">{r}</span>)}
-      </div>
+            </div>
+          </div>
+          <div className="bd-row-labels-bot">
+            {STD_ROWS.map(r => <span key={r} className="bd-rl">{r}</span>)}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -735,6 +702,18 @@ export default function PrintableBayDetail({
         </div>
       </div>
 
+      <style>{CARGO_V2_CSS}</style>
+      <style>{`
+        .bd-cargo-wrap { background: white; padding: 4px 8px; width: 291mm; min-height: 204mm; height: 204mm; box-sizing: border-box; display: flex; flex-direction: column; page-break-after: always; }
+        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; font-weight: normal; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; font-size: 7pt; font-family: 'Courier New', monospace; line-height: 1.1; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: left; padding: 0 2px; }
+        .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 6pt; letter-spacing: -0.2px; }
+        .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 6pt; color: #888; }
+        @media print {
+          .bd-cargo-wrap { box-shadow: none !important; margin: 0 !important; }
+        }
+      `}</style>
       <style>{`
         /* M4.9d-fix: 베이상세 인쇄 — 좌우 짤림 종합 픽스
            1. box-sizing: border-box 전역 적용 (padding/border가 width에 포함되어 폭 초과 방지)

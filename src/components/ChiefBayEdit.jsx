@@ -313,7 +313,9 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
       <style>{CBE_CSS}</style>
       <style>{CARGO_V2_CSS}</style>
       <style>{`
-        .cbe-cargo-wrap{background:#fff;border-radius:6px;padding:10px;min-width:max-content;margin:0 auto;}
+        .cbe-cargo-wrap{background:#fff;border-radius:6px;padding:10px 14px;margin:0 auto;width:96%;height:72vh;display:flex;flex-direction:column;box-sizing:border-box;}
+        .cbe-cargo-wrap .cpv2-bay-section{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}
+        .cbe-cargo-wrap .cpv2-bay-title{display:none;}
         .cbe-cargo-wrap .cpv2-cell.cbe-fill{cursor:grab;font-weight:700;flex-direction:column;line-height:1.1;overflow:hidden;}
         .cbe-cargo-wrap .cpv2-cell.cbe-fill:active{cursor:grabbing;}
         .cbe-cargo-wrap .cpv2-cell.cbe-fill.sel{outline:3px solid #2563eb;outline-offset:-3px;}
