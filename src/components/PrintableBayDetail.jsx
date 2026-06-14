@@ -341,30 +341,52 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   };
 
   // V7.98-04: 매트릭스 격자 한 층 렌더 — 전체 폭(maxCols) 고정 grid에 active cell만 그 위치에(좁아짐=양끝 빈칸)
-  const mrMaxCols = matrixRender ? Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0) : 0;
-  const renderMatrixLayer = (mrRows, nCols) => mrRows
-    .filter(rr => !rr.invisible)
-    .map(rr => {
-      // 이 tier의 cells를 전체 폭(mrMaxCols) 가운데 정렬로 배치 (deck/hold 폭 다를 때 중심 맞춤)
-      const pad = Math.max(0, Math.floor((mrMaxCols - rr.cells.length) / 2));
+  // V7.98-06: 베이플랜과 동일한 0.5칸 단위 중심정렬 (BayPlan pageCoordLayout 로직 이식).
+  //   데크 축(00 없음)·홀드 축(00 가운데)을 각자 만들고, (nCols-축길이)/2로 0.5칸 단위 offset.
+  //   CSS grid를 half-column(2배)으로 깔아 0.5칸을 정수 half-column으로 표현. 각 셀은 2칸 span.
+  //   데크 02|01 경계와 홀드 00이 같은 세로선에 옴.
+  const mrLayout = useMemo(() => {
+    if (!matrixRender) return null;
+    const deckRows = matrixRender.deckRows.filter(r => !r.invisible);
+    const holdRows = matrixRender.holdRows.filter(r => !r.invisible);
+    const deckSet = new Set();
+    deckRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) deckSet.add(c.rowLbl); }));
+    const dEv = [...deckSet].filter(r => parseInt(r, 10) % 2 === 0 && r !== '00').sort((a, b) => parseInt(b) - parseInt(a));
+    const dOd = [...deckSet].filter(r => parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
+    const deckAxis = [...dEv, ...(deckSet.has('00') ? ['00'] : []), ...dOd];
+    const holdSet = new Set();
+    holdRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) holdSet.add(c.rowLbl); }));
+    const hEv = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
+    const hOd = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
+    const holdAxis = [...hEv, ...(holdSet.has('00') ? ['00'] : []), ...hOd];
+    const nCols = Math.max(deckAxis.length, holdAxis.length);
+    const deckOff = (nCols - deckAxis.length) / 2;   // 0.5칸 단위 가능
+    const holdOff = (nCols - holdAxis.length) / 2;
+    return { deckRows, holdRows, deckAxis, holdAxis, nCols, deckOff, holdOff };
+  }, [matrixRender]);
+
+  // half-column grid 한 층 렌더: 축 순서대로 셀, 좌측에 offset*2 half-col 빈 칸. 각 셀 span 2.
+  const renderMatrixLayer = (rows, axis, off) => {
+    if (!mrLayout) return null;
+    const halfCols = mrLayout.nCols * 2;
+    const offHalf = Math.round(off * 2);  // 0.5칸 → 1 half-col
+    return rows.map(rr => {
+      // 이 tier의 active row→cell 맵 (rowLbl 기준)
+      const byRow = {};
+      rr.cells.forEach(c => { if (c.active && c.rowLbl) byRow[c.rowLbl] = true; });
       return (
-        <div key={`mr-${rr.tier}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${mrMaxCols}, minmax(0, 1fr))` }}>
-          {Array.from({ length: pad }).map((_, i) => <div key={`lp-${i}`} className="bd-cell" style={{ border: 'none', background: 'transparent' }}></div>)}
-          {rr.cells.map((cell, ci) => cell.active
-            ? renderCell(String(rr.tier).padStart(2, '0'), cell.rowLbl)
-            : <div key={`x-${ci}`} className="bd-cell" style={{ border: 'none', background: 'transparent' }}></div>)}
-          {Array.from({ length: Math.max(0, mrMaxCols - pad - rr.cells.length) }).map((_, i) => <div key={`rp-${i}`} className="bd-cell" style={{ border: 'none', background: 'transparent' }}></div>)}
+        <div key={`mr-${rr.tier}`} className="bd-tier-row" style={{ gridTemplateColumns: `repeat(${halfCols}, minmax(0, 1fr))` }}>
+          {offHalf > 0 && <div style={{ gridColumn: `span ${offHalf}` }}></div>}
+          {axis.map((rowLbl, i) => byRow[rowLbl]
+            ? <div key={`c-${i}`} style={{ gridColumn: 'span 2' }}>{renderCell(String(rr.tier).padStart(2, '0'), rowLbl)}</div>
+            : <div key={`e-${i}`} style={{ gridColumn: 'span 2' }} className="bd-cell empty"></div>
+          )}
         </div>
       );
     });
-  // 매트릭스 모드 row 라벨(상/하단): 전체 폭 중 deck 기준 라벨 (가장 넓은 층)
-  const mrRowLabels = matrixRender
-    ? (() => {
-        const widest = [...matrixRender.deckRows, ...matrixRender.holdRows].filter(r => !r.invisible)
-          .reduce((best, r) => (r.cells.length > (best?.cells.length || 0) ? r : best), null);
-        return widest ? widest.cells.map(c => c.active ? c.rowLbl : '').filter(Boolean) : [];
-      })()
-    : [];
+  };
+  // 상/하단 row 라벨: deck 축 기준 (데크가 보통 더 넓음). half-col 정렬 맞춰 offset 반영.
+  const mrRowLabels = mrLayout ? mrLayout.deckAxis : [];
 
   return (
     <div className="bd-page">
@@ -383,13 +405,13 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
         <div className="bd-grid">
           {matrixRender ? (
             <>
-              {matrixRender.deckRows.some(r => !r.invisible) && renderMatrixLayer(matrixRender.deckRows, mrMaxCols)}
-              {matrixRender.deckRows.some(r => !r.invisible) && matrixRender.holdRows.some(r => !r.invisible) && (
+              {mrLayout && mrLayout.deckRows.length > 0 && renderMatrixLayer(mrLayout.deckRows, mrLayout.deckAxis, mrLayout.deckOff)}
+              {mrLayout && mrLayout.deckRows.length > 0 && mrLayout.holdRows.length > 0 && (
                 <div className="bd-hatch">
                   {Array.from({ length: hatchCount }).map((_, i) => <div key={i} className="bd-hatch-seg"></div>)}
                 </div>
               )}
-              {matrixRender.holdRows.some(r => !r.invisible) && renderMatrixLayer(matrixRender.holdRows, mrMaxCols)}
+              {mrLayout && mrLayout.holdRows.length > 0 && renderMatrixLayer(mrLayout.holdRows, mrLayout.holdAxis, mrLayout.holdOff)}
             </>
           ) : (
             <>
