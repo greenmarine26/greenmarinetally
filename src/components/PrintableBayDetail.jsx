@@ -729,9 +729,12 @@ export default function PrintableBayDetail({
       <style>{`
         .bd-cargo-wrap { background: white; padding: 4px 8px; width: 100%; flex: 1 1 0; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; }
         .bd-cargo-wrap .cpv2-bay-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
-        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; font-weight: normal; }
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; font-size: 7pt; font-family: 'Courier New', monospace; line-height: 1.1; }
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: left; padding: 0 2px; }
+        /* V7.98-15: 베이번호 중복 제거 — bd-title(큰 제목)만 쓰고 BayBoxV2 자체 베이제목은 숨김 */
+        .bd-cargo-wrap .cpv2-bay-title-row { display: none !important; }
+        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; font-weight: normal; padding: 1px 0; }
+        /* V7.98-15: 셀 내용 중앙정렬 (CASPI 스타일) — 4줄을 가운데로 가지런히 */
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; font-size: 7pt; font-family: 'Courier New', monospace; line-height: 1.15; align-items: center; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: center; width: 100%; padding: 0; }
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 6pt; letter-spacing: -0.2px; }
         .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 6pt; color: #888; }
         @media print {
