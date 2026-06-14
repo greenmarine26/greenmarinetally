@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
-import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
+import { buildEmptyBayRenderData, buildBayGridForDetail } from '../cargoPlanCore.js';
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 
@@ -167,7 +167,7 @@ export function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {} }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, shipBayDef, shipCode }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -222,34 +222,18 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     cellMap[`${t}-${r}`] = c;
   });
 
-  // V7.98-04: 인쇄 베이상세도 매트릭스 진실원(buildEmptyBayRenderData)으로 통일.
-  //   matrix_builder본은 rowMax 없이 deckCells/holdCells만 저장 → STD_ROWS(rowMax 기반)는 695베이/36% 미적용.
-  //   deckCells 유효하면 matrixRender(tier별 active cell·좁아짐·가운데 정렬, 3D·편집과 동일) 사용,
-  //   없으면(PDF 자동본) 기존 STD_ROWS 폴백 유지. 컨번호는 그대로(renderCell 재사용).
+  // V7.98-12: 인쇄 베이상세 격자를 카고플랜과 동일 함수(buildBayGridForDetail→computeBayRenderData)로.
+  //   cells 사전(MCSN)·rowMax 사전(ATRP) 모두 정상. rowMax도 없는 사전만 STD_ROWS 폴백.
   const matrixRender = useMemo(() => {
     const isPair = even != null && odd != null;
     const primaryBn = even != null ? even : odd;
     if (primaryBn == null) return null;
-    const e = dictBaysSummary[parseInt(primaryBn, 10)];
-    const hasCells = !!e && (
-      (Array.isArray(e.deckCells) && e.deckCells.length > 0) ||
-      (Array.isArray(e.holdCells) && e.holdCells.length > 0)
-    );
-    if (!hasCells) return null;
-    // EDI has00 반영 (매트릭스 명시값 우선) — BayPlan/ChiefBayEdit과 동일 패턴
-    let ediHas00 = false;
-    for (const c of allConts) { if (parseInt(c.row, 10) === 0) { ediHas00 = true; break; } }
-    const effEntry = {
-      ...e,
-      deckHasZero: e.deckHasZero != null ? e.deckHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
-      holdHasZero: e.holdHasZero != null ? e.holdHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
-    };
     const bayKey = isPair
       ? `(${String(even).padStart(2, '0')})${String(odd).padStart(2, '0')}`
       : String(primaryBn).padStart(2, '0');
-    try { return buildEmptyBayRenderData(effEntry, bayKey, isPair) || null; }
+    try { return buildBayGridForDetail(shipBayDef, shipCode, bayKey) || null; }
     catch (e2) { return null; }
-  }, [even, odd, dictBaysSummary, allConts]);
+  }, [even, odd, shipBayDef, shipCode]);
 
   // M6.26: 베이플랜 로직 그대로 이식 — 페이지 두 베이의 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   사용자 지시: "베이플랜에 다 맞춰주세요. 지금 베이플랜만 아주 정확합니다."
@@ -383,13 +367,30 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 
       {matrixRender ? (
         <div className="bd-cargo-wrap">
-          <BayBoxV2
-            data={matrixRender}
-            colorMap={colorMap}
-            gridCols={Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0)}
-            renderCellContent={mrRenderCellContent}
-            cellExtra={mrCellExtra}
-          />
+          {(() => {
+            // V7.98-12: 모든 베이 셀 크기 동일(23x12mm 고정). bd-page(페이지)는 그대로, 셀만 고정.
+            //   tier 많아 페이지 넘칠 때만 그 페이지 scale 축소.
+            const CELL_W = 23, CELL_H = 12, HEADER_MM = 26, PAGE_H = 190, PAGE_W = 277;
+            const gc = Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0);
+            const dr = matrixRender.deckRows.filter(r => !r.invisible).length;
+            const hr = matrixRender.holdRows.filter(r => !r.invisible).length;
+            const gridH = (dr + hr) * CELL_H + (dr && hr ? 6 : 0);
+            const totalH = gridH + HEADER_MM;
+            const gridW = gc * CELL_W;
+            const scale = Math.min(totalH > PAGE_H ? PAGE_H / totalH : 1, gridW > PAGE_W ? PAGE_W / gridW : 1);
+            return (
+              <div className="bd-cargo-scaler" style={{ transform: `scale(${scale.toFixed(3)})`, transformOrigin: 'top center' }}>
+                <BayBoxV2
+                  data={matrixRender}
+                  colorMap={colorMap}
+                  gridCols={gc}
+                  renderCellContent={mrRenderCellContent}
+                  cellExtra={mrCellExtra}
+                  fixedCell={{ w: CELL_W, h: CELL_H }}
+                />
+              </div>
+            );
+          })()}
         </div>
       ) : (
         <>
@@ -696,6 +697,7 @@ export default function PrintableBayDetail({
                 globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
                 colorMap={colorMap}
+                shipBayDef={dictData?.bayDef} shipCode={dictData?.code}
                 dictShipMeta={dictShipMeta} />
             );
           })
@@ -705,11 +707,19 @@ export default function PrintableBayDetail({
 
       <style>{CARGO_V2_CSS}</style>
       <style>{`
-        .bd-cargo-wrap { background: white; padding: 4px 8px; width: 100%; flex: 1 1 0; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; }
-        .bd-cargo-wrap .cpv2-bay-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+        .bd-cargo-wrap { background: white; padding: 4px 8px; width: 100%; flex: 1 1 0; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; }
+        .bd-cargo-scaler { width: 100%; }
+        /* 고정 셀: deck/hold 영역 flex 무력화, 셀 고정 크기 */
+        .bd-cargo-wrap .cpv2-fixed-cell, .bd-cargo-wrap .cpv2-fixed-cell .cpv2-bay-content,
+        .bd-cargo-wrap .cpv2-fixed-cell .cpv2-deck-area, .bd-cargo-wrap .cpv2-fixed-cell .cpv2-hold-area,
+        .bd-cargo-wrap .cpv2-fixed-cell .cpv2-grid-row-wrap, .bd-cargo-wrap .cpv2-fixed-cell .cpv2-grid { flex: none !important; }
+        .bd-cargo-wrap .cpv2-fixed-cell .cpv2-tier-row { flex: none !important; height: var(--cell-h); }
+        .bd-cargo-wrap .cpv2-fixed-cell .cpv2-cell,
+        .bd-cargo-wrap .cpv2-fixed-cell .cpv2-cell-empty { flex: none !important; width: var(--cell-w); height: var(--cell-h); }
+        .bd-cargo-wrap .cpv2-fixed-cell .cpv2-row-labels > span { flex: none !important; width: var(--cell-w); }
         .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; font-weight: normal; }
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; font-size: 7pt; font-family: 'Courier New', monospace; line-height: 1.1; }
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: left; padding: 0 2px; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; height: 100%; justify-content: center; font-size: 7pt; font-family: 'Courier New', monospace; line-height: 1.15; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: center; padding: 0 1px; }
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 6pt; letter-spacing: -0.2px; }
         .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 6pt; color: #888; }
         @media print {
