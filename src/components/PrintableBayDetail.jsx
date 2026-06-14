@@ -199,7 +199,7 @@ export function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {} }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -405,7 +405,10 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   };
 
   return (
-    <div className="bd-page">
+    <div className={`bd-page${isPrintTarget ? '' : ' bd-noprint'}`}>
+      {!isPrintTarget && (
+        <div className="bd-noprint-badge no-print">인쇄 제외 (화면 표시용)</div>
+      )}
       <div className="bd-title">{title}</div>
       <div className="bd-header">
         <span>{voyageInfo?.vsl || shipName || ''}</span>
@@ -586,40 +589,39 @@ export default function PrintableBayDetail({
 
   const allPages = useMemo(() => buildBayPages(bayList, dictBaysSummary), [bayList, dictBaysSummary]);
 
-  const filteredPages = useMemo(() => {
-    if (printMode === 'all') {
-      return allPages.filter(p => {
-        const conts = [
-          ...(p.even != null && bayMap[String(p.even)] || []),
-          ...(p.odd != null && bayMap[String(p.odd)] || []),
-        ];
-        return conts.length > 0;
-      });
+  // V7.98-13: 화면은 항상 전체 베이를 빠짐없이 보여준다 (빈자리도 자리 — 양하/선적 대상이
+  //   아닌 베이도 표시). 인쇄 대상만 printMode로 선별한다.
+  //   화면용 = allPages 전부. 인쇄 제외 베이는 화면엔 보이되 @media print에서 숨김(아래 isPrintTarget).
+  const filteredPages = allPages;
+
+  // 각 페이지가 인쇄 대상인지 판정 (화면 표시와 무관 — 인쇄 시에만 적용)
+  const isPrintTarget = useMemo(() => {
+    const set = new Set();
+    for (const p of allPages) {
+      const conts = [
+        ...(p.even != null && bayMap[String(p.even)] || []),
+        ...(p.odd != null && bayMap[String(p.odd)] || []),
+      ];
+      let ok;
+      if (printMode === 'all') ok = conts.length > 0;
+      else if (printMode === 'ptk') ok = conts.some(c => isPtk(c, mode));
+      else if (printMode === 'single') ok = selectedKeys.includes(p.key);
+      else ok = false;
+      if (ok) set.add(p.key);
     }
-    if (printMode === 'ptk') {
-      return allPages.filter(p => {
-        const conts = [
-          ...(p.even != null && bayMap[String(p.even)] || []),
-          ...(p.odd != null && bayMap[String(p.odd)] || []),
-        ];
-        return conts.some(c => isPtk(c, mode));
-      });
-    }
-    if (printMode === 'single' && selectedKeys.length > 0) {
-      return allPages.filter(p => selectedKeys.includes(p.key));
-    }
-    return [];
+    return set;
   }, [allPages, bayMap, printMode, selectedKeys, mode]);
+  const printCount = isPrintTarget.size;
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black/90 flex flex-col bd-print-modal">
       <div className="no-print flex flex-col p-3 bg-slate-900 border-b border-slate-700 gap-2">
         <div className="flex items-center justify-between">
-          <div className="text-base font-bold text-slate-100">📋 베이 상세 인쇄 미리보기 ({filteredPages.length}페이지)</div>
+          <div className="text-base font-bold text-slate-100">📋 베이 상세 미리보기 (전체 {filteredPages.length}베이 · 인쇄 {printCount})</div>
           <div className="flex gap-2">
             <div className="flex gap-2 print:hidden">
-            <button onClick={() => window.print()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded">🖨 인쇄</button>
-            <button onClick={() => { alert('인쇄 창에서 "PDF로 저장" 선택하세요'); setTimeout(() => window.print(), 100); }} className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded">📄 PDF</button>
+            <button onClick={() => { if (printCount === 0) { alert('인쇄할 베이가 없습니다. 출력 모드(전체/평택분/베이 지정)를 확인하세요.'); return; } window.print(); }} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded">🖨 인쇄</button>
+            <button onClick={() => { if (printCount === 0) { alert('인쇄할 베이가 없습니다. 출력 모드를 확인하세요.'); return; } alert('인쇄 창에서 "PDF로 저장" 선택하세요'); setTimeout(() => window.print(), 100); }} className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded">📄 PDF</button>
             <button onClick={async () => {
               if (typeof window.XLSX === 'undefined') {
                 const s = document.createElement('script');
@@ -713,7 +715,7 @@ export default function PrintableBayDetail({
         <div className="bd-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: zoom !== 1 ? `${100 / zoom}%` : '100%' }}>
         {filteredPages.length === 0 ? (
           <div className="p-8 text-center text-slate-500">
-            출력할 페이지가 없습니다. 모드를 변경하거나 베이를 선택하세요.
+            표시할 베이가 없습니다. (EDI/베이사전에서 베이 정보를 찾지 못함)
           </div>
         ) : (
           filteredPages.map(p => {
@@ -728,6 +730,7 @@ export default function PrintableBayDetail({
                 globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
                 colorMap={colorMap}
+                isPrintTarget={isPrintTarget.has(p.key)}
                 dictShipMeta={dictShipMeta} />
             );
           })
@@ -817,6 +820,9 @@ export default function PrintableBayDetail({
             page-break-after: auto !important;
             break-after: auto !important;
           }
+          /* V7.98-13: 인쇄 제외 베이는 인쇄에서만 숨김 (화면엔 보임) */
+          .bd-page.bd-noprint { display: none !important; }
+          /* 페어 짝꿍으로 인쇄 대상이 마지막일 때 빈 페이지 방지 — noprint 다음의 마지막 출력 페이지 */
           /* 폰/프린터 minimum margin 대응 */
           @page { size: A4 landscape; margin: 0.3cm; }
         }
@@ -833,6 +839,14 @@ export default function PrintableBayDetail({
           flex-direction: column;
           box-sizing: border-box;
           page-break-after: always;
+          position: relative;
+        }
+        /* V7.98-13: 화면에서 인쇄 제외 베이는 살짝 흐리게 (보이되 구분). 인쇄엔 영향 없음 */
+        .bd-page.bd-noprint { opacity: 0.45; background: #fafafa; }
+        .bd-noprint-badge {
+          position: absolute; top: 6px; right: 8px; z-index: 2;
+          background: #64748b; color: #fff; font-size: 10pt; font-weight: 700;
+          padding: 2px 8px; border-radius: 4px;
         }
         .bd-title {
           text-align: center; font-size: 20pt; font-weight: 500;
