@@ -177,24 +177,31 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   // STD_ROWS: 베이플랜은 globalRowRange 사용 (전 베이 통일 폭) — 동일 적용
   // M6.77: has00 자동 감지 + tier 검증 + 컨 없는 박스 voyage 전체 fallback
   const STD_ROWS = useMemo(() => {
-    // 자체 계산 (globalRowRange props 없거나 빈일 때)
-    let maxLeft = globalRowRange?.maxLeft || 0;
-    let maxRight = globalRowRange?.maxRight || 0;
-    let has00 = globalRowRange?.has00 || false;
-    // 박스 자체 검사 (자체 fallback)
-    if (!maxLeft && !maxRight) {
-      for (const c of allConts) {
-        if (!c.row || !c.tier) continue;
-        const n = parseInt(c.row);
-        const tier = parseInt(c.tier);
-        if (!tier) continue;
-        if (n === 0) { has00 = true; continue; }
-        if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
-        else maxRight = Math.max(maxRight, n);
-      }
+    // V7.98-02: 베이별 매트릭스 row (전역 globalRowRange 미사용).
+    //   원인: row99 OOG가 전역 maxRight=99로 오염 → 전 베이 56칸 도배.
+    //   해결: 이 페이지 베이의 사전 rowMax(rowMaxEvenLocal/OddLocal → rowMaxEven/Odd) ∪ 이 베이 실제 컨(OOG row>=90 제외).
+    let maxLeft = 0, maxRight = 0, has00 = false;
+    // 1) 사전(매트릭스) 베이별 rowMax
+    for (const bn of [even, odd]) {
+      if (bn == null) continue;
+      const db = dictBaysSummary[parseInt(bn, 10)];
+      if (!db) continue;
+      const me = db.rowMaxEvenLocal ?? db.rowMaxEven;
+      const mo = db.rowMaxOddLocal ?? db.rowMaxOdd;
+      if (me) maxLeft = Math.max(maxLeft, me);
+      if (mo) maxRight = Math.max(maxRight, mo);
+    }
+    // 2) 이 베이 실제 컨과 union (데이터 손실 방지, OOG row>=90 제외)
+    for (const c of allConts) {
+      const n = parseInt(c.row);
+      const tier = parseInt(c.tier);
+      if (!Number.isFinite(n) || !tier || n >= 90) continue;
+      if (n === 0) { has00 = true; continue; }
+      if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
+      else maxRight = Math.max(maxRight, n);
     }
     if (!maxLeft && !maxRight) {
-      // 박스도 빈 — 기본 8 col 양식
+      // 데이터 없음 — 기본 8 col 양식
       return ['08', '06', '04', '02', '01', '03', '05', '07'];
     }
     const left = [];
@@ -202,7 +209,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const right = [];
     for (let n = 1; n <= maxRight; n += 2) right.push(String(n).padStart(2, '0'));
     return has00 ? [...left, '00', ...right] : [...left, ...right];
-  }, [globalRowRange, allConts]);
+  }, [even, odd, dictBaysSummary, allConts]);
   const colCount = STD_ROWS.length;
 
   const cellMap = {};
@@ -465,8 +472,10 @@ export default function PrintableBayDetail({
   }), [dictData]);
 
   const bayList = useMemo(() => {
-    if (dictBayList && dictBayList.length > 0) return [...dictBayList].sort((a, b) => a - b);
-    return Object.keys(bayMap).map(b => parseInt(b, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+    // V7.98-02: bay99/999 OOG placeholder 제외 (BayPlan3D와 동일 원칙 — row99 오염 방지)
+    const drop99 = (arr) => arr.filter(n => Number.isFinite(n) && n < 99);
+    if (dictBayList && dictBayList.length > 0) return drop99([...dictBayList]).sort((a, b) => a - b);
+    return drop99(Object.keys(bayMap).map(b => parseInt(b, 10))).sort((a, b) => a - b);
   }, [dictBayList, bayMap]);
 
   const allPages = useMemo(() => buildBayPages(bayList), [bayList]);

@@ -106,11 +106,11 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
     return { bay: c.baseBay, row: c.baseRow, tier: c.baseTier };
   }, [pending]);
 
-  // 베이 목록 → 페어 페이지
+  // 베이 목록 → 페어 페이지 (V7.98-02: bay>=99 OOG placeholder 제외)
   const bayPages = useMemo(() => {
     const set = new Set();
-    (dictData?.bayDef?.bayList || []).forEach((b) => { const n = parseInt(b, 10); if (Number.isFinite(n)) set.add(n); });
-    containers.forEach((c) => { const e = eff(c); if (!e.storage) { const n = parseInt(e.bay, 10); if (Number.isFinite(n)) set.add(n); } });
+    (dictData?.bayDef?.bayList || []).forEach((b) => { const n = parseInt(b, 10); if (Number.isFinite(n) && n < 99) set.add(n); });
+    containers.forEach((c) => { const e = eff(c); if (!e.storage) { const n = parseInt(e.bay, 10); if (Number.isFinite(n) && n < 99) set.add(n); } });
     return buildBayPages([...set].sort((a, b) => a - b));
   }, [dictData, containers, eff]);
 
@@ -127,21 +127,24 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
     const tierSet = new Set();
     here.forEach((c) => {
       const e = eff(c);
+      const rn = parseInt(e.row, 10);
+      if (Number.isFinite(rn) && rn >= 90) return; // V7.98-02: OOG placeholder(row99 등) 제외
       const t = pad2(e.tier), r = pad2(e.row);
       cellMap[`${t}-${r}`] = c;
       tierSet.add(parseInt(t, 10));
-      const rn = parseInt(r, 10);
       if (rn === 0) has00 = true; else if (rn % 2 === 0) maxLeft = Math.max(maxLeft, rn); else maxRight = Math.max(maxRight, rn);
     });
-    // 사전 tier/row 보강
+    // 사전 tier/row 보강 (rowMaxLocal 우선)
     [page.even, page.odd].forEach((bn) => {
       if (bn == null) return;
       const db = dictBaysSummary[bn];
       if (!db) return;
       (db.deckTiers || db.deckTiersLocal || []).forEach((t) => tierSet.add(parseInt(t, 10)));
       (db.holdTiers || db.holdTiersLocal || []).forEach((t) => tierSet.add(parseInt(t, 10)));
-      if (db.rowMaxEven) maxLeft = Math.max(maxLeft, db.rowMaxEven);
-      if (db.rowMaxOdd) maxRight = Math.max(maxRight, db.rowMaxOdd);
+      const me = db.rowMaxEvenLocal ?? db.rowMaxEven;
+      const mo = db.rowMaxOddLocal ?? db.rowMaxOdd;
+      if (me) maxLeft = Math.max(maxLeft, me);
+      if (mo) maxRight = Math.max(maxRight, mo);
     });
     if (!maxLeft && !maxRight) { maxLeft = 8; maxRight = 7; has00 = false; }
     const left = []; for (let n = maxLeft; n >= 2; n -= 2) left.push(pad2(n));
