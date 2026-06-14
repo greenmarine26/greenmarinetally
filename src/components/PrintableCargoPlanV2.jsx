@@ -40,7 +40,7 @@ function isSpecialMark(mark) {
          m.startsWith('R') || m === 'FR' || m === 'T' || m === 'A';
 }
 
-function getMarkV2(c, pod, mode) {
+export function getMarkV2(c, pod, mode) {
   // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
   //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 조회됨)
   const ptk = mode === 'discharge'
@@ -176,7 +176,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, editable = false, onCellDrop, onCellDragStart, selectedCns }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -217,6 +217,20 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
   const deckPadStyle = computePadding(deckAlign, deckPadLeft, deckPadRight, nDeckCols, gc);
   const holdPadStyle = computePadding(holdAlign, holdPadLeft, holdPadRight, nHoldCols, gc);
 
+  // V7.96: 베이상세 편집 — editable일 때만 셀에 드래그/드롭 부착 (기본 off → 카고플랜/매트릭스 동작 무변경)
+  const _editCell = (cell, tier) => {
+    if (!editable || !cell || !cell.active) return {};
+    return {
+      draggable: !!cell.cn && !cell.isShadow20 && !cell.isThrough,
+      onDragStart: cell.cn ? (e) => { e.dataTransfer.setData('text/plain', cell.cn); e.dataTransfer.effectAllowed = 'move'; onCellDragStart && onCellDragStart(cell.cn); } : undefined,
+      onDragOver: (e) => { e.preventDefault(); },
+      onDrop: (e) => { e.preventDefault(); const dragged = e.dataTransfer.getData('text/plain'); onCellDrop && onCellDrop(dragged, bayKey, cell, tier); },
+      'data-cn': cell.cn || undefined,
+      title: cell.cn || undefined,
+    };
+  };
+  const _selCls = (cell) => (editable && selectedCns && cell && cell.cn && selectedCns.has(cell.cn)) ? ' bde-cell-sel' : '';
+
   return (
     <div className="cpv2-bay-section">
       <div className="cpv2-bay-title-row">
@@ -252,8 +266,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${_selCls(cell)}`}
                         style={style}
+                        {..._editCell(cell, row.tier)}
                       >
                         {displayMark}
                       </span>
@@ -302,8 +317,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}${_selCls(cell)}`}
                         style={style}
+                        {..._editCell(cell, row.tier)}
                       >
                         {displayMark}
                       </span>

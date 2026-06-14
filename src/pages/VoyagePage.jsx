@@ -28,6 +28,7 @@ import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
 import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
 import BayDictStatusWidget from '../components/BayDictStatusWidget.jsx';
+import BayDetailEdit from '../components/BayDetailEdit.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import WorkReportModal from '../components/WorkReportModal.jsx';
@@ -80,6 +81,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   { cn, fromBay, fromRow, fromTier } 또는 null
   //   pendingMove 설정 시 → 베이그리드 빈 셀 클릭 → 그 자리로 fbSetActualPosition
   const [pendingMove, setPendingMove] = useState(null);
+  const [bayEditOpen, setBayEditOpen] = useState(false); // V7.96: 베이상세 드래그 편집 모달
   // M5.1 G: 작업 마감 체크리스트 모달
   const [closingOpen, setClosingOpen] = useState(false);
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
@@ -937,6 +939,33 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
         return (
           <div className="space-y-2">
+            <div className="flex justify-end">
+              <button
+                onClick={() => setBayEditOpen(true)}
+                className="px-3 py-1.5 rounded-lg text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-500"
+              >🖐 베이 편집 (드래그)</button>
+            </div>
+            {bayEditOpen && (
+              <BayDetailEdit
+                onClose={() => setBayEditOpen(false)}
+                containers={allEdiContainers}
+                shipImo={voyage?.info?.imo}
+                shipName={voyage?.info?.vsl}
+                mode={mode}
+                xrayMap={xrayMap}
+                storedContainers={storedContainers}
+                onMoveToStorage={async (cns) => {
+                  if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                  try { await fbBatchMoveToStorage(voyageKey, mode, cns, inspector); }
+                  catch (e) { console.error(e); alert('보관 실패: ' + (e?.message || e)); }
+                }}
+                onPlaceAtCell={async (cn, bay, row, tier) => {
+                  if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                  try { await fbSetActualPosition(voyageKey, mode, cn, bay, row, tier, inspector); }
+                  catch (e) { console.error(e); alert('배치 실패: ' + (e?.message || e)); }
+                }}
+              />
+            )}
             <BayDictStatusWidget
               shipImo={voyage?.info?.imo}
               shipName={voyage?.info?.vsl}
