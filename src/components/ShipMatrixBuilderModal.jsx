@@ -19,6 +19,7 @@ import {
   fillEmptyBaysSequential,
   augmentMatrixFromDef,
 } from '../shipMatrixBuilder.js';
+import { findSimilarShips, verifyMatrixFit } from '../shipMatchFinder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
 import { parseDefSections } from '../defSectionParser.js';
 import { addToUserBayDict, lookupUserBayDict, loadUserBayDict, removeFromUserBayDict } from '../data/userBayDict.js';
@@ -41,6 +42,10 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const [defStatus, setDefStatus] = useState('idle');   // V7.36 .def 업로드
   const [defError, setDefError] = useState('');
   const defInputRef = useRef(null);
+  // V7.99: 기존 선박 복제 — 등록된 베이사전에서 같은 구조 선박 골라 매트릭스 복제
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneList, setCloneList] = useState([]);   // [{code, name, callsign, bayCount}]
+  const [cloneFit, setCloneFit] = useState(null);   // V7.99-3: 복제본에 현재 EDI 얹은 수용률 검증
   const [pdfError, setPdfError] = useState('');
   const fileInputRef = useRef(null);
   const [savingMsg, setSavingMsg] = useState('');
@@ -231,6 +236,84 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       setDefError(err.message || '.def 파싱 실패');
       setDefStatus('error');
     }
+  };
+
+  // V7.99: 기존 선박 복제 패널 열기 — 등록된 베이사전 목록 로드
+  //   같은 베이 구조의 선박(예: 자매선)을 골라 매트릭스만 복제, 선박 메타는 현재 입력값 유지.
+  const openClone = () => {
+    const dict = loadUserBayDict();
+    // V7.99: 현재 매트릭스 구조와 가장 비슷한 선박 자동 추천 (점수 내림차순).
+    //   매트릭스가 있으면 findSimilarShips로 일치도 계산, 없으면 이름순 폴백.
+    let list;
+    const hasMatrix = matrix && matrix.byBay && Object.keys(matrix.byBay).length > 0;
+    if (hasMatrix) {
+      const ranked = findSimilarShips(matrix, dict, { minBays: 1 });
+      // V7.99-3: 각 후보에 현재 EDI를 얹은 실제 수용률도 미리 계산(있으면 정렬·표시에 활용).
+      const hasEdi = containers && containers.length > 0;
+      list = ranked.map(r => {
+        let fitPct = null;
+        if (hasEdi) {
+          try {
+            const fm = bayDictEntryToMatrix(dict[r.code]);
+            const v = verifyMatrixFit(fm, containers);
+            fitPct = v.total ? v.fit / v.total : null;
+          } catch { fitPct = null; }
+        }
+        return {
+          code: r.code, name: r.name, callsign: r.callsign,
+          bayCount: r.bayCount, score: r.score, fitPct,
+        };
+      });
+      // 정렬 원칙(중요): 수용률만으로 정렬 금지.
+      //   더 큰 배는 작은 배 컨테이너를 다 받아 수용률↑이지만 빈 베이가 많아 카고플랜이 어긋남.
+      //   "다 보임"은 필요조건일 뿐 — 구조(크기·프레임)가 맞는 후보 중에서 수용률 최고를 고름.
+      //   → 종합 키 = 구조점수와 수용률을 함께 본다(구조 0.55 + 수용률 0.45).
+      if (hasEdi) {
+        list.sort((a, b) => {
+          const ka = a.score * 0.55 + (a.fitPct ?? 0) * 0.45;
+          const kb = b.score * 0.55 + (b.fitPct ?? 0) * 0.45;
+          return kb - ka;
+        });
+      }
+    } else {
+      list = Object.entries(dict)
+        .map(([code, e]) => {
+          const bays = (e?.bayDef?.baysSummary || [])
+            .filter(b => { const n = parseInt(b?.bay, 10); return Number.isFinite(n) && n > 0; });
+          return { code, name: e?.name || '', callsign: e?.callsign || '', bayCount: bays.length, score: null };
+        })
+        .filter(x => x.bayCount > 0)
+        .sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code));
+    }
+    setCloneList(list);
+    setCloneOpen(true);
+  };
+
+  // V7.99: 선택한 선박의 베이 구조를 현재 매트릭스로 복제 (메타는 유지 → 신규 선박 정보 그대로).
+  const handleCloneFrom = (code) => {
+    if (!code) return;
+    const dict = loadUserBayDict();
+    const src = dict[code];
+    if (!src) { alert('선택한 선박을 찾을 수 없습니다.'); return; }
+    const restored = bayDictEntryToMatrix(src);
+    if (!restored?.byBay || Object.keys(restored.byBay).length === 0) {
+      alert('해당 선박에 복제할 베이 구조가 없습니다.');
+      return;
+    }
+    // 복제 출처 표시 + 저장된 매트릭스 복원 플래그 해제(신규 저장 흐름으로).
+    restored.fromSaved = false;
+    restored.savedAt = '';
+    restored.clonedFrom = src.name || src.callsign || code;
+    setMatrix(restored);
+    // V7.99-3: 복제 직후 현재 EDI 컨테이너를 얹어 수용률 검증.
+    //   "실린 컨테이너가 다 보이면 복제 성공" — 누락이 있으면 어느 베이·단 보정할지 표시.
+    if (containers && containers.length > 0) {
+      try { setCloneFit(verifyMatrixFit(restored, containers)); }
+      catch { setCloneFit(null); }
+    } else {
+      setCloneFit(null);
+    }
+    setCloneOpen(false);
   };
 
   const updateBay = (bay, field, value) => {
@@ -669,6 +752,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               )}
             </div>
             <div className="flex gap-2 items-center flex-wrap">
+              {/* V7.99: 기존 선박 복제 — 같은 베이 구조(자매선) 골라 매트릭스 복제 */}
+              <button onClick={openClone}
+                      className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 rounded text-sm">
+                🔁 기존 선박 복제
+              </button>
               <input ref={defInputRef} type="file" accept=".def,.DEF" hidden
                      onChange={e => { handleDefUpload(e.target.files?.[0]); e.target.value = ''; }} />
               <button onClick={() => defInputRef.current?.click()}
@@ -698,6 +786,86 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               {pdfStatus === 'error' && <span className="text-xs text-red-400">{pdfError}</span>}
             </div>
           </div>
+
+          {/* V7.99: 기존 선박 복제 선택 패널 (구조 자동 추천) */}
+          {cloneOpen && (
+            <div className="bg-zinc-800 p-3 rounded mb-4 border border-violet-500/40">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs text-violet-300 font-bold">🔁 복제할 선박 선택 — 현재 베이 구조와 가까운 순으로 추천</div>
+                <button onClick={() => setCloneOpen(false)} className="text-xs text-zinc-400 hover:text-zinc-200">닫기 ✕</button>
+              </div>
+              {cloneList.length === 0 ? (
+                <div className="text-xs text-zinc-500">등록된 베이사전 선박이 없습니다.</div>
+              ) : (
+                <>
+                  {/* 상위 추천 3척 — 수용률%(있으면) 우선, 없으면 구조 일치도% 버튼 */}
+                  {(cloneList[0]?.fitPct != null || cloneList[0]?.score != null) && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                      {cloneList.slice(0, 3).map((s, i) => {
+                        const hasFit = s.fitPct != null;
+                        const fitPct = hasFit ? Math.round(s.fitPct * 100) : null;
+                        const strPct = s.score != null ? Math.round(s.score * 100) : null;
+                        const mainPct = hasFit ? fitPct : strPct;
+                        const top = i === 0;
+                        return (
+                          <button key={s.code} onClick={() => handleCloneFrom(s.code)}
+                                  className={`text-left px-3 py-2 rounded border ${top ? 'bg-violet-700/40 border-violet-400' : 'bg-zinc-700/60 border-zinc-600 hover:border-violet-400'}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold">{top ? '⭐ ' : ''}{s.name || s.code}</span>
+                              <span className={`text-xs font-mono ${mainPct >= 95 ? 'text-emerald-400' : mainPct >= 80 ? 'text-yellow-400' : 'text-zinc-400'}`}>{mainPct}%</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 mt-0.5">
+                              {hasFit ? `EDI 수용 ${fitPct}% · 구조 ${strPct}%` : `구조 일치 ${strPct}%`} · {s.code} · {s.bayCount}베이
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-zinc-500 mb-1">전체 목록에서 선택{cloneList[0]?.fitPct != null ? ' (% = 이번 EDI 수용률)' : ''}:</div>
+                  <select defaultValue="" onChange={e => handleCloneFrom(e.target.value)}
+                          className="w-full px-2 py-1.5 bg-zinc-700 rounded text-sm font-mono">
+                    <option value="" disabled>— 선박 선택 ({cloneList.length}척) —</option>
+                    {cloneList.map(s => {
+                      const p = s.fitPct != null ? s.fitPct : s.score;
+                      return (
+                        <option key={s.code} value={s.code}>
+                          {p != null ? `[${Math.round(p * 100)}%] ` : ''}{(s.name || '(이름없음)')}{s.callsign ? ` · ${s.callsign}` : ''} · {s.code} · {s.bayCount}베이
+                        </option>
+                      );
+                    })}
+                  </select>
+                </>
+              )}
+            </div>
+          )}
+          {matrix.clonedFrom && (
+            <div className="bg-violet-900/30 border border-violet-500/30 px-3 py-2 rounded mb-4 text-xs text-violet-200">
+              🔁 <span className="font-bold">{matrix.clonedFrom}</span> 의 베이 구조를 복제했습니다. 위에서 선박 정보(선박명·콜사인·CASP 코드)를 신규 선박으로 입력 후 저장하세요.
+            </div>
+          )}
+          {/* V7.99-3: 복제본 적합성 검증 — 현재 EDI 컨테이너가 다 들어가는가 */}
+          {cloneFit && (
+            <div className={`px-3 py-2 rounded mb-4 text-xs border ${cloneFit.pass ? 'bg-emerald-900/30 border-emerald-500/40 text-emerald-200' : 'bg-amber-900/25 border-amber-500/40 text-amber-100'}`}>
+              {cloneFit.pass ? (
+                <span>✅ <span className="font-bold">완전 적합</span> — 이번 항차 컨테이너 {cloneFit.total}대가 모두 이 매트릭스에 들어갑니다. 복제 성공.</span>
+              ) : (
+                <>
+                  <div className="font-bold mb-1">
+                    ⚠ 수용 {cloneFit.fit}/{cloneFit.total}대 — {cloneFit.miss}대가 자리 없음(아래 베이의 단을 보정하세요)
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cloneFit.missByBay.map((m, i) => (
+                      <span key={i} className="px-1.5 py-0.5 bg-amber-800/40 rounded font-mono text-[11px]">
+                        B{m.bay} {m.tier}단({m.kind === 'deck' ? '데크' : '홀드'}) ×{m.count}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-amber-200/70 mt-1">해당 베이의 {`{데크/홀드}Tiers`}에 빠진 단을 추가하면 100% 수용됩니다. 진본 .def 구하기 전까지 이 방식으로 보정 반복.</div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* === 베이별 검증 폼 — 좌우 분할: 좌측 편집 + 우측 베이플랜 시뮬 === */}
           {/* M6.94.4: 모바일 반응형 — 좁은 폭(폰)에서는 세로 분할 (좌측 편집 위, 우측 시뮬 아래).
