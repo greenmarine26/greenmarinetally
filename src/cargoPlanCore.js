@@ -736,7 +736,12 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
     deckAlign = 'center', deckPadLeft = 0, deckPadRight = 0,
     holdAlign = 'center', holdPadLeft = 0, holdPadRight = 0,
     deckHasZero, holdHasZero,
+    blockedCells,   // V7.99-4: 중력 위반 자동 탐지 사용불가 셀 { deckBlocked:[{row,tier}], holdBlocked:[{row,tier}] }
   } = bayEntry;
+
+  // blockedCells를 빠른 조회용 Set으로. 키 "tier-rowLbl"(rowLbl은 2자리 문자열).
+  const _blkDeck = new Set((blockedCells?.deckBlocked || []).map(x => `${x.tier}-${String(x.row).padStart(2, '0')}`));
+  const _blkHold = new Set((blockedCells?.holdBlocked || []).map(x => `${x.tier}-${String(x.row).padStart(2, '0')}`));
 
   // V7.03: 데크/홀드 00(가운데 row) 유무를 따로 적용. 선박에 따라 데크는 00 없고 홀드만 00 있음
   //   (예: ATPR BAY1 데크 08~07 / 홀드 04,02,00,01,03). 분리값 없으면 기존 통합 hasZero로 폴백(회귀 없음).
@@ -777,7 +782,13 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
       const cells = [];
       for (let c = 0; c < nDeckCols; c++) {
         if (active.has(c)) {
-          cells.push({ active: true, rowLbl: deckRowPos[c], mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+          const rowLbl = deckRowPos[c];
+          // V7.99-4: 중력 위반 사용불가 셀이면 비활성(빈칸)으로.
+          if (_blkDeck.has(`${stdT}-${rowLbl}`)) {
+            cells.push({ active: false, blocked: true, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+          } else {
+            cells.push({ active: true, rowLbl, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+          }
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
@@ -804,7 +815,12 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
       for (let c = 0; c < nHoldCols; c++) {
         if (activeInHold.has(c)) {
           const rowLbl = (c >= 0 && c < nHoldCols) ? holdRowPos[c] : null;
-          cells.push({ active: true, rowLbl, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+          // V7.99-4: 중력 위반 사용불가 셀이면 비활성(빈칸)으로.
+          if (rowLbl != null && _blkHold.has(`${stdT}-${rowLbl}`)) {
+            cells.push({ active: false, blocked: true, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+          } else {
+            cells.push({ active: true, rowLbl, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+          }
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }

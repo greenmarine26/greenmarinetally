@@ -19,7 +19,7 @@ import {
   fillEmptyBaysSequential,
   augmentMatrixFromDef,
 } from '../shipMatrixBuilder.js';
-import { findSimilarShips, verifyMatrixFit } from '../shipMatchFinder.js';
+import { findSimilarShips, verifyMatrixFit, detectBlockedCells } from '../shipMatchFinder.js';
 import { parsePdfStowage } from '../pdfBayParser.js';
 import { parseDefSections } from '../defSectionParser.js';
 import { addToUserBayDict, lookupUserBayDict, loadUserBayDict, removeFromUserBayDict } from '../data/userBayDict.js';
@@ -304,12 +304,28 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     restored.fromSaved = false;
     restored.savedAt = '';
     restored.clonedFrom = src.name || src.callsign || code;
-    setMatrix(restored);
-    // V7.99-3: 복제 직후 현재 EDI 컨테이너를 얹어 수용률 검증.
-    //   "실린 컨테이너가 다 보이면 복제 성공" — 누락이 있으면 어느 베이·단 보정할지 표시.
+    // V7.99-4: 4단계 파이프라인 ③ 중력 위반 자동 보정.
+    //   현재 EDI를 얹어 "위는 찼는데 아래 빈" 사용불가 셀을 베이별로 탐지해 매트릭스에 주입.
+    //   확실한 것(중력 제약)만 처리 — 위가 비면 손대지 않음.
+    let blockedTotal = 0;
     if (containers && containers.length > 0) {
-      try { setCloneFit(verifyMatrixFit(restored, containers)); }
-      catch { setCloneFit(null); }
+      try {
+        const blk = detectBlockedCells(containers);
+        blockedTotal = blk.totalBlocked;
+        for (const [bayKey, b] of Object.entries(blk.byBay)) {
+          if (restored.byBay[bayKey]) {
+            restored.byBay[bayKey].blockedCells = b;
+          }
+        }
+      } catch { /* noop */ }
+    }
+    setMatrix(restored);
+    // ④ 100% 확인 — 보정 후 EDI 수용률 재검증, 사용자에게 제시(그대로/수정).
+    if (containers && containers.length > 0) {
+      try {
+        const fit = verifyMatrixFit(restored, containers);
+        setCloneFit({ ...fit, blockedTotal });
+      } catch { setCloneFit(null); }
     } else {
       setCloneFit(null);
     }
@@ -844,11 +860,16 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               🔁 <span className="font-bold">{matrix.clonedFrom}</span> 의 베이 구조를 복제했습니다. 위에서 선박 정보(선박명·콜사인·CASP 코드)를 신규 선박으로 입력 후 저장하세요.
             </div>
           )}
-          {/* V7.99-3: 복제본 적합성 검증 — 현재 EDI 컨테이너가 다 들어가는가 */}
+          {/* V7.99-3/4: 복제본 적합성 검증 — 4단계 결과 제시(수용률 + 중력 보정 + 적용/수정) */}
           {cloneFit && (
             <div className={`px-3 py-2 rounded mb-4 text-xs border ${cloneFit.pass ? 'bg-emerald-900/30 border-emerald-500/40 text-emerald-200' : 'bg-amber-900/25 border-amber-500/40 text-amber-100'}`}>
+              {cloneFit.blockedTotal > 0 && (
+                <div className="text-[11px] text-sky-300 mb-1">
+                  🛠 중력 보정: 사용불가 셀 {cloneFit.blockedTotal}곳을 비활성 처리했습니다(위는 찼는데 아래 빈 자리).
+                </div>
+              )}
               {cloneFit.pass ? (
-                <span>✅ <span className="font-bold">완전 적합</span> — 이번 항차 컨테이너 {cloneFit.total}대가 모두 이 매트릭스에 들어갑니다. 복제 성공.</span>
+                <span>✅ <span className="font-bold">완전 적합</span> — 이번 항차 컨테이너 {cloneFit.total}대가 모두 이 매트릭스에 들어갑니다. 이대로 저장하거나, 베이를 수정한 뒤 저장하세요.</span>
               ) : (
                 <>
                   <div className="font-bold mb-1">
@@ -861,7 +882,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                       </span>
                     ))}
                   </div>
-                  <div className="text-[10px] text-amber-200/70 mt-1">해당 베이의 {`{데크/홀드}Tiers`}에 빠진 단을 추가하면 100% 수용됩니다. 진본 .def 구하기 전까지 이 방식으로 보정 반복.</div>
+                  <div className="text-[10px] text-amber-200/70 mt-1">해당 베이의 데크/홀드 Tier에 빠진 단을 추가하면 100% 수용됩니다. 진본 .def 구하기 전까지 이 방식으로 보정 반복.</div>
                 </>
               )}
             </div>

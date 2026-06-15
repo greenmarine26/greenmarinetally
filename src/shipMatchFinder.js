@@ -190,3 +190,48 @@ export function verifyMatrixFit(matrix, containers) {
     pass: miss === 0,
   };
 }
+
+// 사용불가 셀 탐지 (기준 A — 중력 제약): 한 베이·한 row에서 컨테이너가 적재된 최저단보다
+//   아래에 있는 빈 단은 물리적으로 채울 수 없으므로 "셀 아님"(blocked).
+//   위(상단)에 컨테이너가 있는데 그 아래가 비면 = 그 자리는 구조상 없는 칸.
+//   단일 항차 EDI로도 100% 확실(중력). 위가 비어있으면 건드리지 않음(미적재일 뿐).
+//   tierStep: 단 간격(홀드·데크 모두 통상 2).
+//   returns: { byBay: { '003': { deckBlocked:[{row,tier}], holdBlocked:[{row,tier}] } }, totalBlocked }
+export function detectBlockedCells(containers, tierStep = 2) {
+  const _odd2 = n => (n % 2 === 0 ? n - 1 : n);
+  // 베이(정규화) → side → row → 적재 tier 집합
+  const acc = {};
+  for (const c of (containers || [])) {
+    const bay = _odd2(parseInt(c.bay, 10));
+    const row = parseInt(c.row, 10);
+    const tier = parseInt(c.tier, 10);
+    if (!Number.isFinite(bay) || !Number.isFinite(row) || !Number.isFinite(tier)) continue;
+    const side = tier >= 80 ? 'deck' : 'hold';
+    acc[bay] = acc[bay] || { deck: {}, hold: {} };
+    (acc[bay][side][row] = acc[bay][side][row] || new Set()).add(tier);
+  }
+  const byBay = {};
+  let totalBlocked = 0;
+  for (const [bayStr, sides] of Object.entries(acc)) {
+    const bayKey = String(parseInt(bayStr, 10)).padStart(3, '0');
+    const out = { deckBlocked: [], holdBlocked: [] };
+    for (const side of ['deck', 'hold']) {
+      const rowsObj = sides[side];
+      const rows = Object.keys(rowsObj).map(Number);
+      if (!rows.length) continue;
+      // 이 베이·side의 이론적 바닥 = 모든 row 통틀어 최저 적재단
+      const allTiers = [...new Set(rows.flatMap(r => [...rowsObj[r]]))];
+      const floor = Math.min(...allTiers);
+      for (const row of rows) {
+        const rmin = Math.min(...rowsObj[row]);   // 이 row에서 적재된 최저단
+        // floor ~ (rmin-step) 까지가 "위는 찼는데 아래 빈" 사용불가 셀
+        for (let t = floor; t < rmin; t += tierStep) {
+          out[side === 'deck' ? 'deckBlocked' : 'holdBlocked'].push({ row, tier: t });
+          totalBlocked++;
+        }
+      }
+    }
+    if (out.deckBlocked.length || out.holdBlocked.length) byBay[bayKey] = out;
+  }
+  return { byBay, totalBlocked };
+}

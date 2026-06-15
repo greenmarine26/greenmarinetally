@@ -577,6 +577,8 @@ export function matrixToBayDictEntry(matrix, code, name, imo, callsign) {
       holdAlign: e.holdAlign || 'center',
       holdPadLeft: typeof e.holdPadLeft === 'number' ? e.holdPadLeft : 0,
       holdPadRight: typeof e.holdPadRight === 'number' ? e.holdPadRight : 0,
+      // V7.99-4: 중력 위반 사용불가 셀(자동 탐지/수동 보정) 보존.
+      ...(e.blockedCells ? { blockedCells: e.blockedCells } : {}),
     };
   });
   return {
@@ -634,6 +636,7 @@ export function bayDictEntryToMatrix(entry) {
       holdAlign: bs.holdAlign || 'center',
       holdPadLeft: typeof bs.holdPadLeft === 'number' ? bs.holdPadLeft : 0,
       holdPadRight: typeof bs.holdPadRight === 'number' ? bs.holdPadRight : 0,
+      ...(bs.blockedCells ? { blockedCells: bs.blockedCells } : {}),   // V7.99-4: 사용불가 셀 복원
       sourceRows: [],
       sourceTiers: [],
       rowTierPairs: [],
