@@ -19,6 +19,7 @@
 
 const isDeckTier = (t) => parseInt(t, 10) >= 80;
 const is20ft = (c) => String(c.tp || '').startsWith("20") || String(c.iso || '')[0] === '2';
+const is40ft = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
 
 // 같은 티어 안 로우 정렬 순위 (작을수록 먼저)
 function rowRank(rowStr, { evenRowsSeaSide, landToSea }) {
@@ -63,6 +64,12 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     }
     const at = parseInt(a.tier, 10), bt = parseInt(b.tier, 10);
     if (at !== bt) return topFirst ? bt - at : at - bt;
+    // V7.99-6 (메모2): 양하 — 같은 티어에 40ft와 20ft가 공존하면(짝수 베이 40ft가 양옆 홀수 트윈 위에 걸침)
+    //   작업 방해가 없으므로 40ft를 먼저 내린다. 선적은 holdTwins 스택 로직이 따로 처리하므로 양하에만 적용.
+    if (mode === 'discharge') {
+      const a40 = is40ft(a), b40 = is40ft(b);
+      if (a40 !== b40) return a40 ? -1 : 1;
+    }
     const ar = rowRank(a.row, { evenRowsSeaSide, landToSea });
     const br = rowRank(b.row, { evenRowsSeaSide, landToSea });
     if (ar !== br) return ar - br;
@@ -139,8 +146,19 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   const deckFlow = flow.filter(card => isDeckTier(card.main.tier));
   const holdTwins = holdFlow.filter(card => card.twin);
   const holdRest = holdFlow.filter(card => !card.twin);
-  // 트윈: 로우(해상→육상) 우선, 같은 로우는 티어 오름차순 = 한 줄을 바닥부터 연속으로 쌓음
+  // 트윈: POD(포트) 우선 → 로우(해상→육상) → 티어 오름차순(바닥부터).
+  // V7.99-6 (메모9): 포트가 다르지 않으면(같은 POD) 한 로우를 바닥부터 끝까지 쌓고 다음 로우로.
+  //   POD가 섞이면 row 순서가 우선돼 포트가 교대로 나오던 문제 → POD를 1순위로.
+  //   POD 순위는 그룹 전체에서 먼저 등장하는 순(holdTwins 입력 순서 = flow의 cmp 정렬 결과).
+  const twinPodOrder = {};
+  let twinPodSeq = 0;
+  for (const c of holdTwins) {
+    const pod = c.main.pod || '';
+    if (!(pod in twinPodOrder)) twinPodOrder[pod] = twinPodSeq++;
+  }
   holdTwins.sort((a, b) => {
+    const ap = twinPodOrder[a.main.pod || ''] ?? 99, bp = twinPodOrder[b.main.pod || ''] ?? 99;
+    if (ap !== bp) return ap - bp;
     const ar = rowRank(a.main.row, { evenRowsSeaSide, landToSea: false });
     const br = rowRank(b.main.row, { evenRowsSeaSide, landToSea: false });
     if (ar !== br) return ar - br;

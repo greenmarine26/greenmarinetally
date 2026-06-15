@@ -11,6 +11,7 @@ import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXrayS
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
 import { EQUIPMENT_NUMBERS, buildHatchMessage, shareText } from '../kakaoShare.js';
+import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
 
@@ -128,6 +129,20 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   }, [remaining, selectedGroup, mode, berthSide, bayPairs, shipImo, shipName]);
 
   const card = queue[0] || null;
+
+  // V7.99-6 (메모3): 트윈 카드 무게 점검 — 합계 55톤 초과 = 트윈 불가, 무게차 부두한계 초과 = 수평 불가.
+  //   nlSearch의 검증된 상수 재사용. 부두는 voyage.info.pier(미상이면 보수적 14톤).
+  const twinWtWarn = useMemo(() => {
+    if (!card?.twin) return null;
+    const wa = parseInt(card.main.wt, 10) || 0, wb = parseInt(card.twin.wt, 10) || 0;
+    if (!wa || !wb) return { noWt: true };
+    const total = wa + wb, diff = Math.abs(wa - wb);
+    const limit = twinDiffLimit(voyage?.info?.pier);
+    if (total > TWIN_MAX_TOTAL_KG) return { over: true, total, diff };
+    if (diff > limit) return { imbal: true, total, diff, limit };
+    return null;
+  }, [card, voyage]);
+
   const groupDone = useMemo(() => {
     if (selectedGroup == null) return 0;
     return allContainers.filter(c => c._mode === mode && c._ptk && c._comp && groupCenterOf(c.bay) === selectedGroup).length;
@@ -188,10 +203,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); }, [selectedGroup]);
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
-  const groupBaysOf = (center) => {
+  // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
+  //   해치커버는 홀드 접근을 위한 물리 작업이므로, 데크만 평택분이고 홀드가 전부
+  //   통과화물인 베이는 평택에서 열지 않는다(포트 무시하고 전부 오픈하던 버그).
+  const groupBaysOf = (center, holdOnly = false) => {
     const set = new Set();
     allContainers.forEach(c => {
       if (c._mode === mode && c._ptk && groupCenterOf(c.bay) === center) {
+        if (holdOnly && parseInt(c.tier, 10) >= 80) return;  // 데크분 제외
         const b = parseInt(c.bay, 10);
         if (Number.isFinite(b)) set.add(String(b).padStart(2, '0'));
       }
@@ -200,7 +219,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   // V7.94-16: 해치커버 보고 발송 (가이드 흐름 통합 — WorkReportModal 해치 보고와 동일 형식)
-  // V7.94-22: 그룹 베이들의 해치커버 장수 합 (매트릭스 hatchCount). 사전 없으면 0 → 메시지에서 베이 개수 폴백.
+  // V7.94-22: 그룹 베이들의 해치커버 장수 (매트릭스 hatchCount). 사전 없으면 0 → 메시지에서 베이 개수 폴백.
+  // V7.99-6 (메모1): 같은 해치 묶음(트리오: 11·12·13 같은 페어 그룹)은 한 패널을 공유하므로
+  //   베이별 hatchCount를 단순 합산하면 중복(2+2+2=6)된다. 같은 groupCenter끼리는 대표값(최댓값)을,
+  //   서로 다른 그룹끼리만 합산한다.
   const hatchPanelsOf = (bays) => {
     try {
       const dict = getShipBayDictData(shipImo, shipName);
@@ -208,11 +230,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       if (!Array.isArray(summary) || !summary.length) return 0;
       const byNo = {};
       summary.forEach(bs => { const no = String(parseInt(bs.bayNo ?? bs.bay, 10)); if (Number.isFinite(parseInt(no,10))) byNo[no] = bs; });
-      let total = 0, found = false;
+      // groupCenter별로 hatchCount 최댓값을 모은 뒤, 그룹 간 합산
+      const byGroup = {};
+      let found = false;
       bays.forEach(b => {
         const bs = byNo[String(parseInt(b, 10))];
-        if (bs && typeof bs.hatchCount === 'number') { total += bs.hatchCount; found = true; }
+        if (bs && typeof bs.hatchCount === 'number') {
+          found = true;
+          const g = String(groupCenterOf(b));
+          byGroup[g] = Math.max(byGroup[g] || 0, bs.hatchCount);
+        }
       });
+      const total = Object.values(byGroup).reduce((s, v) => s + v, 0);
       return found ? total : 0;
     } catch (e) { return 0; }
   };
@@ -221,7 +250,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (hatchBusy) return;
     setHatchBusy(true);
     try {
-      const bays = groupBaysOf(selectedGroup);
+      const bays = groupBaysOf(selectedGroup, true);  // V7.99-6: 홀드 평택분 베이만 (메모5)
+      if (bays.length === 0) return;  // 열 홀드 없으면 보고 안 함 (finally에서 busy 해제)
       const voy = mode === 'discharge'
         ? (voyage?.info?.voy_d || voyage?.info?.voy || '')
         : (voyage?.info?.voy_l || voyage?.info?.voy || '');
@@ -553,6 +583,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </>
           )}
 
+          {twinWtWarn && (twinWtWarn.over || twinWtWarn.imbal) && (
+            <div className={`rounded-lg px-3 py-2 text-sm font-bold flex items-start gap-2 ${twinWtWarn.over ? 'bg-rose-950/60 border border-rose-700 text-rose-200' : 'bg-amber-950/60 border border-amber-700 text-amber-200'}`}>
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5"/>
+              {twinWtWarn.over ? (
+                <span>🚫 합계 {formatWt(twinWtWarn.total)} (55톤 초과) — 트윈 불가, 싱글 작업 검토</span>
+              ) : (
+                <span>⚠️ 무게차 {formatWt(twinWtWarn.diff)} (한계 {formatWt(twinWtWarn.limit)} 초과) — 수평 안 맞음, 트윈 주의</span>
+              )}
+            </div>
+          )}
+
           <button onClick={handleConfirm} disabled={busy}
             className="w-full py-4 rounded-lg font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
             {busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}
@@ -604,6 +645,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                     <>
                       <input value={s.q} onChange={e => s.setQ(e.target.value)}
                         placeholder="실제 온 컨 끝 4자리 이상"
+                        inputMode="numeric" autoComplete="off"
                         className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm mono text-slate-100"/>
                       {s.matches.map(c => (
                         <button key={c.cn} onClick={() => { s.setPick(c); s.setQ(''); }} disabled={busy}
