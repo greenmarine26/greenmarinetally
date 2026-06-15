@@ -64,7 +64,7 @@ const pad2 = (v) => String(v ?? '').padStart(2, '0');
 const dispBay = (n) => (n >= 100 ? String(n) : pad2(n));
 const sizeOf = (c) => { const l = isoToLabel(c.iso) || ''; if (l.startsWith('45')) return '45'; if (l.startsWith('40')) return '40'; return '20'; };
 
-export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) {
+export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorkers = [], onClose }) {
   const hasLoad = !!(voyage?.loading?.ediContainers && Object.keys(voyage.loading.ediContainers).length);
   const hasDis = !!(voyage?.discharge?.ediContainers && Object.keys(voyage.discharge.ediContainers).length);
   const [mode, setMode] = useState(hasLoad ? 'loading' : 'discharge');
@@ -72,21 +72,27 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
   const sec = voyage?.[mode] || {};
   const ediMap = sec.ediContainers || {};
   const recMap = sec.records || {};
+  const compMap = sec.completed || {};
 
   // 베이스 위치 = 실체위치(actual) 있으면 그것, 없으면 EDI
+  // V7.99-7 (메모7): 선적은 EDI가 계획(실체 아님) — 선적확인(actual 설정/완료)해야 실체.
+  //   _placed=false면 아직 안 실린 계획 칸 → 화면에서 흐리게/점선으로 구분(선적 여부 식별).
+  //   양하는 EDI가 실체라 항상 placed.
   const containers = useMemo(() => {
     return Object.values(ediMap).map((e) => {
       const rec = recMap[e.cn] || {};
       const hasA = rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null;
       const inStorage = rec.bay_actual === '__STG__';
+      const placed = mode === 'discharge' ? true : (hasA || !!compMap[e.cn]);
       return {
         ...e,
         baseBay: inStorage ? '__STG__' : pad2(hasA ? rec.bay_actual : e.bay),
         baseRow: pad2(hasA ? rec.row_actual : e.row),
         baseTier: pad2(hasA ? rec.tier_actual : e.tier),
+        _placed: placed,
       };
     });
-  }, [ediMap, recMap]);
+  }, [ediMap, recMap, compMap, mode]);
 
   const dictData = useMemo(() => {
     const imo = voyage?.info?.imo, vsl = voyage?.info?.vsl;
@@ -287,7 +293,8 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
     const c = view?.cellMap?.[`${pad2(tier)}-${cell.rowLbl}`];
     if (!c) return null; // 빈 active 슬롯 — 그림(테두리)만, 내용 없음
     const lines = formatCellLines(c);
-    return (<><span className="cbe-cn">{c.cn}</span><span className="cbe-sub">{lines.line1}</span></>);
+    const loaded = mode === 'loading' && c._placed;
+    return (<><span className="cbe-cn">{loaded ? '✓ ' : ''}{c.cn}</span><span className="cbe-sub">{lines.line1}</span></>);
   };
   const cellExtra = (cell, tier) => {
     const c = view?.cellMap?.[`${pad2(tier)}-${cell.rowLbl}`];
@@ -296,11 +303,12 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
     const colorKey = ptk ? getContainerColorKey(c, mode) : null;
     const col = colorKey ? colorMap[colorKey] : null;
     const isSel = selected.has(c.cn), isPend = !!pending[c.cn];
+    const unplaced = mode === 'loading' && !c._placed;
     return {
       'data-cn': c.cn, draggable: true,
-      className: `cpv2-cell cbe-fill${ptk ? ' ptk' : ''}${isSel ? ' sel' : ''}${isPend ? ' pending' : ''}${cell.isXray ? ' cpv2-xray' : ''}`,
+      className: `cpv2-cell cbe-fill${ptk ? ' ptk' : ''}${isSel ? ' sel' : ''}${isPend ? ' pending' : ''}${cell.isXray ? ' cpv2-xray' : ''}${unplaced ? ' cbe-unplaced' : ''}`,
       style: col ? { color: col } : undefined,
-      title: `${c.cn}  ${lines2(c)}`,
+      title: `${c.cn}  ${lines2(c)}${unplaced ? '  (선적 전 — 계획 위치)' : ''}`,
       onDragStart: (e) => cellDragStart(e, c.cn),
       onDragOver: (e) => e.preventDefault(),
       onDrop: (e) => onCellDrop(e, cell.rowLbl, tier),
@@ -322,6 +330,10 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
         .cbe-cargo-wrap .cpv2-cell.cbe-fill.pending{box-shadow:inset 0 0 0 2px #f59e0b;}
         .cbe-cargo-wrap .cpv2-cell .cbe-cn{font-weight:800;font-size:10px;color:#111;letter-spacing:-.3px;}
         .cbe-cargo-wrap .cpv2-cell .cbe-sub{font-size:8px;color:#64748b;}
+        /* V7.99-7 (메모7): 선적 전(계획) 칸 — 점선 테두리 + 흐린 글자로 "아직 안 실림" 표시. 배경색 미사용(Ⅱ-4.2). */
+        .cbe-cargo-wrap .cpv2-cell.cbe-fill.cbe-unplaced{border-style:dashed !important;border-color:#94a3b8 !important;}
+        .cbe-cargo-wrap .cpv2-cell.cbe-fill.cbe-unplaced .cbe-cn{color:#94a3b8;font-weight:600;}
+        .cbe-cargo-wrap .cpv2-cell.cbe-fill.cbe-unplaced .cbe-sub{color:#cbd5e1;}
       `}</style>
       <div className="cbe-head">
         <strong style={{ fontSize: 15 }}>🖐 베이상세 편집 (수석)</strong>
@@ -330,8 +342,35 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, onClose }) 
           {hasLoad && <button className={mode === 'loading' ? 'on' : ''} onClick={() => { setMode('loading'); setPageIdx(0); }}>선적</button>}
         </div>
         <span style={{ fontSize: 11, opacity: .65 }}>{voyage?.info?.vsl || ''} · 컨을 끌어 정정, 저장해야 검수사에 반영</span>
+        {mode === 'loading' && (() => {
+          const ptkCs = containers.filter(c => c._inList || isPyeongtaekPort(c.pol));
+          const done = ptkCs.filter(c => c._placed).length;
+          return (
+            <span style={{ fontSize: 11, marginLeft: 8, padding: '2px 8px', borderRadius: 6, background: '#1e293b', border: '1px solid #334155' }}>
+              <span style={{ color: '#34d399', fontWeight: 800 }}>선적 {done}</span>
+              <span style={{ color: '#94a3b8' }}> / {ptkCs.length}</span>
+              <span style={{ color: '#64748b', marginLeft: 6 }}>· 점선=선적 전(계획)</span>
+            </span>
+          );
+        })()}
         <button onClick={tryClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}><X size={20} /></button>
       </div>
+      {/* V7.99-8 (메모6): 지금 이 모드를 작업 중인 검수사 위치 — 수석이 "N호기·베이·홀드/데크·남은 N개"를 보고 화면 추적 */}
+      {(() => {
+        const here = (activeWorkers || []).filter(w => w.mode === mode && w.bay);
+        if (here.length === 0) return null;
+        return (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '6px 14px', background: '#0b1220', borderBottom: '1px solid #1e293b' }}>
+            {here.map(w => (
+              <span key={w.name} style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: w.tier === 'hold' ? '#7c2d12' : '#075985', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 7, height: 7, borderRadius: 999, background: '#34d399' }} />
+                {w.name}{w.equip ? ` · ${w.equip}` : ''} · {w.bay}번 {w.tier === 'hold' ? '홀드' : w.tier === 'deck' ? '데크' : ''}
+                {typeof w.remain === 'number' ? ` · 남은 ${w.remain}개` : ''}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
       <div className="cbe-baynav">
         {bayPages.map((p, i) => (<button key={p.key} className={i === pageIdx ? 'on' : ''} onClick={() => { setPageIdx(i); setSelected(new Set()); }}>{p.even != null && p.odd != null ? `${dispBay(p.even)}-${dispBay(p.odd)}` : dispBay(p.even ?? p.odd)}</button>))}
         {bayPages.length === 0 && <span style={{ color: '#94a3b8', fontSize: 12, padding: 4 }}>베이 없음 — 선택한 작업에 적재 데이터가 없습니다</span>}

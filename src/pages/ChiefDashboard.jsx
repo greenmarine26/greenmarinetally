@@ -175,13 +175,18 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   }, [voyages, inspectors]);
 
   // V7.40: 실시간 보드용 — 항차별 작업 중 검수원 (90초 이내 활동, HomePage activeInspectors와 동일 기준)
+  // V7.99-8 (메모6): 작업 위치(호기·베이·홀드/데크·잔여)도 포함 — 수석이 어디 작업 중인지 본다.
   const activeByVoyage = useMemo(() => {
     const out = {};
     Object.values(inspectors || {}).forEach(i => {
       if (!i?.name || !i.lastVoyage || !i.lastActive) return;
       if (Date.now() - i.lastActive > 90000) return;
       if (!out[i.lastVoyage]) out[i.lastVoyage] = [];
-      out[i.lastVoyage].push({ name: i.name, mode: i.lastMode });
+      out[i.lastVoyage].push({
+        name: i.name, mode: i.lastMode,
+        equip: i.workEquip || null, bay: i.workBay || null,
+        tier: i.workTier || null, remain: i.workRemain ?? null,
+      });
     });
     return out;
   }, [inspectors]);
@@ -290,7 +295,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         </div>
       )}
       {editKey && voyages[editKey] && (
-        <ChiefBayEdit voyage={voyages[editKey]} voyageKey={editKey} inspector={inspector} onClose={() => setEditKey(null)} />
+        <ChiefBayEdit voyage={voyages[editKey]} voyageKey={editKey} inspector={inspector} activeWorkers={activeByVoyage[editKey] || []} onClose={() => setEditKey(null)} />
       )}
       <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
       <ShipArchiveSection shipLib={shipLib} />

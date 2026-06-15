@@ -7,7 +7,7 @@ import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangl
 import { buildGuidedQueue } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { getShipBayDictData } from '../shipStructure.js';
-import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport } from '../firebase.js';
+import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
 import { EQUIPMENT_NUMBERS, buildHatchMessage, shareText } from '../kakaoShare.js';
@@ -37,6 +37,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   const [selectedGroup, setSelectedGroup] = useState(null); // 그룹 center 베이 번호
+  const [selectedTier, setSelectedTier] = useState(null);   // V7.99-8 (메모6): 'hold'|'deck' — 검수사가 누른 작업 단
   const [fixOpen, setFixOpen] = useState(false);
   const [fixQuery, setFixQuery] = useState('');
   // V7.94-08: 트윈 수정 — 앞/뒤 두 컨 번호 동시 수정 (사용자 메모 ⑤)
@@ -104,29 +105,35 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   // 그룹 목록 (남은 작업이 있는 그룹만) — V7.94-23: 홀드/데크 잔여 구분
+  // V7.99-8 (메모6): 단(홀드/데크) 선택 버튼에 규격별(20FT/40FT) 내역 표시용 집계 추가.
   const groups = useMemo(() => {
+    const is40 = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
     const map = {};
     for (const c of remaining) {
       const center = groupCenterOf(c.bay);
       if (center == null) continue;
-      const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0 });
+      const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
       g.bays.add(parseInt(c.bay, 10));
       g.count++;
-      if (parseInt(c.tier, 10) >= 80) g.deck++; else g.hold++;
+      const isDeck = parseInt(c.tier, 10) >= 80, big = is40(c);
+      if (isDeck) { g.deck++; if (big) g.deck40++; else g.deck20++; }
+      else { g.hold++; if (big) g.hold40++; else g.hold20++; }
     }
     return Object.values(map).sort((a, b) => a.center - b.center);
   }, [remaining, bayPairs]);
 
-  // 선택 그룹의 예측 큐
+  // 선택 그룹의 예측 큐 — V7.99-8 (메모6): 선택된 단(selectedTier)만 큐에 (홀드 작업=홀드만/데크 작업=데크만)
   const queue = useMemo(() => {
     if (selectedGroup == null) return [];
-    const targets = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
+    let targets = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
+    if (selectedTier === 'deck') targets = targets.filter(c => parseInt(c.tier, 10) >= 80);
+    else if (selectedTier === 'hold') targets = targets.filter(c => parseInt(c.tier, 10) < 80);
     return buildGuidedQueue({
       containers: targets, mode,
       evenRowsSeaSide: berthSide === 'starboard',           // 우현 접안 = 짝수 로우 해상쪽
       findTwin: (t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName),
     });
-  }, [remaining, selectedGroup, mode, berthSide, bayPairs, shipImo, shipName]);
+  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName]);
 
   const card = queue[0] || null;
 
@@ -148,6 +155,33 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return allContainers.filter(c => c._mode === mode && c._ptk && c._comp && groupCenterOf(c.bay) === selectedGroup).length;
   }, [allContainers, mode, selectedGroup, bayPairs]);
   const groupTotal = groupDone + (selectedGroup == null ? 0 : remaining.filter(c => groupCenterOf(c.bay) === selectedGroup).length);
+
+  // V7.99-8 (메모6): 현재 작업 위치(호기·베이·홀드/데크·잔여 컨번호 리스트)를 inspector 활동에 기록 →
+  //   수석이 베이상세에서 "N호기 · 20번 홀드 · 남은 N개"를 보고 그 화면을 연다.
+  //   작업 단 = 검수사가 명시적으로 누른 selectedTier(자동판단 아님 — 수석에게 의도를 전달하려면 검수사가 눌러야 함).
+  const tierRemainConts = useMemo(() => {
+    if (selectedGroup == null || !selectedTier) return [];
+    return remaining.filter(c => groupCenterOf(c.bay) === selectedGroup &&
+      (selectedTier === 'deck' ? parseInt(c.tier, 10) >= 80 : parseInt(c.tier, 10) < 80));
+  }, [remaining, selectedGroup, selectedTier, bayPairs]);
+  const tierRemainList = useMemo(() => tierRemainConts.map(c => c.cn), [tierRemainConts]);
+  const bayLabelOf = (center) => {
+    const bays = groupBaysOf(center);
+    if (bays.length === 0) return center != null ? String(center).padStart(2, '0') : '';
+    if (bays.length === 1) return bays[0];
+    return `${bays[0]}-${bays[bays.length - 1]}`;  // 예: 19-21
+  };
+  useEffect(() => {
+    if (!inspector) return;
+    if (selectedGroup == null || !selectedTier) {
+      // 베이/단 미선택 = 위치 정보 클리어(항차·모드는 유지)
+      fbSetInspectorActivity(inspector, voyageKey, mode).catch(() => {});
+      return;
+    }
+    fbSetInspectorActivity(inspector, voyageKey, mode, {
+      equip, bayLabel: bayLabelOf(selectedGroup), tier: selectedTier, remain: tierRemainList.length, auto: true,
+    }).catch(() => {});
+  }, [inspector, voyageKey, mode, equip, selectedGroup, selectedTier, tierRemainList.length]);
 
   // 카드 바뀌면 음성 안내
   const lastSpokenRef = useRef('');
@@ -178,7 +212,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const matchFor = (q0, excludeCn) => {
     const q = q0.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
+    // V7.99-8 (메모6): 후보를 현재 작업 베이의 선택된 단(홀드/데크)으로 좁힌다.
+    //   끝4자리 중복으로 선박 전체에서 엉뚱한 컨이 잡혀 오양하되는 것 방지.
+    //   홀드 작업이면 그 그룹 홀드 컨만, 데크 작업이면 데크 컨만.
+    const inWorkTier = (c) => {
+      if (selectedGroup != null && groupCenterOf(c.bay) !== selectedGroup) return false;
+      if (selectedTier === 'deck') return parseInt(c.tier, 10) >= 80;
+      if (selectedTier === 'hold') return parseInt(c.tier, 10) < 80;
+      return true;
+    };
     const hits = remaining.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn && c.cn !== excludeCn &&
+      inWorkTier(c) &&
       (c.cn.includes(q) || (c.l4 || c.cn.slice(-4)).includes(q)));
     // V7.94-20: 끝4자리 중복 오선택 방지 — 현재 카드 자리(card.pos)와 같은 위치 컨을 맨 위로.
     //   (BAY38 3523처럼 같은 베이에 끝4자리 중복 시, 의도한 자리의 컨이 먼저 보이게)
@@ -200,7 +244,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [showUnassigned, setShowUnassigned] = useState(false);
 
   // V7.94-16: 그룹(베이) 변경 시 프롬프트 플래그 리셋
-  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); }, [selectedGroup]);
+  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); }, [selectedGroup]);
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
@@ -435,6 +479,42 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     );
   }
 
+  // ── 3.5단계: 작업 단(홀드/데크) 선택 (V7.99-8 메모6) ──
+  //   검수사가 누른 단이 ① 수석에게 작업 위치 전달 ② 큐를 그 단만 표시 ③ 다른컨 수정 후보를 그 단으로 좁힘.
+  if (selectedTier == null) {
+    const g = groups.find(x => x.center === selectedGroup);
+    const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${selectedGroup}`;
+    return (
+      <div className="space-y-2">
+        <SettingsBar/>
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-300">
+              <ChevronLeft className="w-4 h-4"/>베이
+            </button>
+            <div className="text-sm font-bold text-violet-300">{bayLbl} — 작업할 단을 선택하세요</div>
+          </div>
+          <div className="grid grid-cols-1 gap-2">
+            <button disabled={!g || g.deck === 0} onClick={() => setSelectedTier('deck')}
+              className={`py-4 rounded-lg border text-left px-4 ${!g || g.deck === 0 ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-sky-950/40 border-sky-700 hover:bg-sky-900/50 text-sky-100'}`}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-base">🔵 데크 {g ? g.deck : 0}개</span>
+                <span className="text-xs mono text-sky-300">20FT:{g ? g.deck20 : 0} / 40FT:{g ? g.deck40 : 0}</span>
+              </div>
+            </button>
+            <button disabled={!g || g.hold === 0} onClick={() => setSelectedTier('hold')}
+              className={`py-4 rounded-lg border text-left px-4 ${!g || g.hold === 0 ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-base">🟠 홀드 {g ? g.hold : 0}개</span>
+                <span className="text-xs mono text-amber-300">20FT:{g ? g.hold20 : 0} / 40FT:{g ? g.hold40 : 0}</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── 4단계: 예측 카드 (V7.94-05: 기본 정보 전부 표시 — 실번호 확인·XRAY 번호 입력·규격 확인) ──
   const renderCon = (c, label, color) => (
     <div className={`rounded-lg border-2 p-3 ${color === 'amber' ? 'border-amber-600 bg-amber-950/30' : 'border-cyan-600 bg-cyan-950/30'}`}>
@@ -612,6 +692,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 placeholder="예: 1234 또는 SKLU1972626"
                 inputMode="numeric" autoComplete="off"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
+              {/* V7.99-8 (메모6): 4자리를 안 쳐도 이 단의 남은 리스트에서 바로 선택 — 끝4자리 오타 오양하 방지 */}
+              {fixQuery.length < 3 && tierRemainConts.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-[10px] text-slate-500">또는 이 {selectedTier === 'deck' ? '데크' : '홀드'} 남은 컨에서 선택 ({tierRemainConts.filter(c => c.cn !== card?.main?.cn).length}대)</div>
+                  <div className="max-h-44 overflow-y-auto space-y-1">
+                    {tierRemainConts.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn).map(c => (
+                      <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
+                        className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
+                        <span className="mono font-bold text-slate-100">{c.cn}</span>
+                        <span className="mono text-slate-400">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {fixMatches.length > 1 && (
                 <div className="text-[11px] text-rose-300 font-bold bg-rose-950/40 border border-rose-800 rounded px-2 py-1 text-center">
                   ⚠️ 끝자리 같은 컨 {fixMatches.length}대 — 위치(Bay-Row-Tier) 확인 후 선택

@@ -528,12 +528,27 @@ export function fbSubscribeInspectors(callback) {
   const unsub = onValue(r, (snap) => callback(snap.val() || {}));
   return unsub;
 }
-export async function fbSetInspectorActivity(name, voyageKey, mode) {
-  await update(ref(db, `inspectors/${name}`), {
+export async function fbSetInspectorActivity(name, voyageKey, mode, detail = null) {
+  // V7.99-8 (메모6): detail = { equip, bayLabel, tier('hold'|'deck'), remain, auto } —
+  //   수석이 "몇 호기가 어느 베이의 홀드/데크를 작업 중·몇 개 남음"을 실시간으로 보게 함.
+  const payload = {
     lastActive: Date.now(),
     lastVoyage: voyageKey || null,
     lastMode: mode || null,
-  });
+  };
+  if (detail && typeof detail === 'object') {
+    payload.workEquip = detail.equip || null;
+    payload.workBay = detail.bayLabel || null;
+    payload.workTier = detail.tier || null;        // 'hold' | 'deck' | null
+    payload.workRemain = (typeof detail.remain === 'number') ? detail.remain : null;
+    payload.workAuto = (typeof detail.auto === 'boolean') ? detail.auto : null;  // 자동/수동
+    payload.workAt = Date.now();
+  } else {
+    // detail 없으면 작업 위치 정보 클리어(베이 미선택 등)
+    payload.workEquip = null; payload.workBay = null; payload.workTier = null;
+    payload.workRemain = null; payload.workAuto = null;
+  }
+  await update(ref(db, `inspectors/${name}`), payload);
 }
 
 // M5.62: 검수원 삭제 (관리자만 — UI에서 김성일만 호출)
