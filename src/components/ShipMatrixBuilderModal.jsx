@@ -176,6 +176,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     if (saved?.bayDef?.baysSummary?.length > 0) {
       const restored = bayDictEntryToMatrix(saved);
       if (restored) {
+        if (saved.provisional || saved.bayDef?.provisional) restored.provisional = true;   // V7.99-5: 보정중 복원
         setMatrix(restored);
         initAnalyzedRef.current = true;
         return;
@@ -304,6 +305,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     restored.fromSaved = false;
     restored.savedAt = '';
     restored.clonedFrom = src.name || src.callsign || code;
+    restored.provisional = true;   // V7.99-5: 복제본은 "보정중" — 확정본과 구분 표시
     // V7.99-4: 4단계 파이프라인 ③ 중력 위반 자동 보정.
     //   현재 EDI를 얹어 "위는 찼는데 아래 빈" 사용불가 셀을 베이별로 탐지해 매트릭스에 주입.
     //   확실한 것(중력 제약)만 처리 — 위가 비면 손대지 않음.
@@ -462,13 +464,18 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     entry._userOwned = true;
     entry.editorName = currentInspector;
     entry.updatedAt = stamp;
+    // V7.99-5: 복제로 만든 보정중 선박이면 표시 보존 (확정본과 구분).
+    if (matrix.provisional) {
+      entry.provisional = true;
+      if (entry.bayDef) entry.bayDef.provisional = true;
+    }
     if (entry.bayDef) {
       entry.bayDef.source = 'user';
       entry.bayDef._userOwned = true;
     }
     const ok = addToUserBayDict(entry);
     if (ok) {
-      setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이`);
+      setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이${matrix.provisional ? ' · 🛠 보정중(복제 기반, 계속 수정 가능)' : ''}`);
       setDone(true);
       // M6.94.20: Firebase 업로드 (다른 기기 수신용) — fire-and-forget
       fbSaveShipBayDict(entry.code, {
@@ -478,6 +485,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         imo: entry.imo || '',
         source: 'user',
         _userOwned: true,
+        ...(matrix.provisional ? { provisional: true } : {}),
         bayDef: entry.bayDef,
         editorName: currentInspector,
         updatedAt: stamp,
@@ -637,7 +645,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         {/* 헤더 */}
         <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더</h2>
+            <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더{matrix?.provisional && <span className="ml-2 text-xs px-2 py-0.5 bg-sky-600 rounded align-middle">🛠 보정중</span>}</h2>
             <div className="text-xs text-zinc-400 mt-1">
               현재 항차의 EDI에서 선박 정보 자동 추출 + 베이 구조 분석
             </div>
