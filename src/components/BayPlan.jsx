@@ -41,9 +41,9 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(() => {
-    // V7.99-12: 기본 25% (30%는 큰 베이(데크 많음+홀드)가 한 화면에 안 들어와 홀드가 잘림 — 사용자 제보).
+    // V7.99-12: 기본 22% (30%는 큰 베이(데크 많음+홀드)가 한 화면에 안 들어와 홀드가 잘림 — 사용자 제보).
     //   하한 0.15·버튼 0.01단위로 낮춰 현장 미세 조정. +/− 버튼·핀치·휠로 확대 가능.
-    return 0.25;
+    return 0.22;
   });
   // M3.74: 다중 적재 슬롯 선택 모달
   const [slotPicker, setSlotPicker] = useState(null);  // { slot: {bay,row,tier}, containers: [...] }
@@ -583,7 +583,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           </button>
           <button onClick={() => {
             const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-            setZoom(isMobile ? 0.25 : 1.0);
+            setZoom(isMobile ? 0.22 : 1.0);
           }} className="text-xs mono text-slate-300 font-bold px-2 py-1.5 hover:bg-slate-700 border-x border-slate-700"
              title="기본 배율로 리셋">
             {Math.round(zoom * 100)}%
@@ -1455,6 +1455,11 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     }
 
     const needsShift = mode === 'discharge' ? shiftingMap.needsShift[c.cn] : null;
+    // V7.99-14: 셀이 좁아 전체 정보(5줄)가 안 들어가면 끝4자리 컴팩트 모드.
+    //   기준은 줌 값이 아니라 실제 셀 폭(cellW) — baseW와 무관하게 일관 동작.
+    //   monospace 4자(+여백) ≈ 폰트*2.6 이므로 폭에서 역산, 6~13px로 클램프.
+    const compactCell = cellW < 42;
+    const compactFont = compactCell ? Math.max(6, Math.min(13, Math.floor((cellW - 4) / 2.6))) : fontSize;
     const ptk = isPtk(c);
     const fe = c.fe || 'F';
     const wt = c.wt > 0 ? (c.wt / 1000).toFixed(1) : '0.0';
@@ -1558,15 +1563,15 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
           isSelected ? 'ring-4 ring-sky-400 ring-inset' : ''
         }`}
-        style={{ width: cellW, height: cellH, padding: '3px 4px', fontSize, backgroundColor: getCellBg(c) || undefined }}
+        style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize, backgroundColor: getCellBg(c) || undefined }}
       >
         {/* M3.78: 좌측 컬러 바 - 두껍고 흰색 테두리로 어떤 셀 색깔에도 잘 보임 */}
-        {typeBarBg && (
+        {typeBarBg && !compactCell && (
           <div className={`absolute top-0 left-0 bottom-0 ${typeBarBg} ${typeBarBorder} z-10`}
                style={{ width: Math.max(6, Math.round(cellW * 0.1)) }}/>
         )}
         {/* M3.78: 우상단 큰 심볼 - 흰색 배경 + 컬러 글씨 + 컬러 외곽선 (강한 대비) */}
-        {typeSymbol && (
+        {typeSymbol && !compactCell && (
           <div className={`absolute top-0 right-0 z-20 bg-white ${typeSymbolColor} font-black leading-none rounded-bl border-2 ${
             isReefer ? 'border-cyan-500' :
             c.dg ? 'border-red-600' :
@@ -1581,19 +1586,33 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
             )}
           </div>
         )}
-        {needsShift && (
+        {needsShift && !compactCell && (
           <div className="absolute top-0 left-0 bg-amber-400 text-slate-900 px-0.5 font-black leading-none rounded-br z-10"
             style={{ fontSize: fontSize - 1, marginLeft: typeBarBg ? Math.max(6, Math.round(cellW * 0.1)) + 2 : 0 }}>
             ⬆{needsShift}
           </div>
         )}
         {/* M3.74: 다중 적재 ⊕N 배지 (우상단, 심볼 옆) */}
-        {stackCount >= 2 && (
+        {stackCount >= 2 && !compactCell && (
           <div className="absolute top-0 right-0 z-30 bg-amber-500 text-slate-900 font-black leading-none rounded-bl px-0.5"
             style={{ fontSize: fontSize + 1, marginRight: typeSymbol ? Math.max(13, fontSize * 2) + 10 : 0 }}>
             ⊕{stackCount - 1}
           </div>
         )}
+        {compactCell ? (
+          // V7.99-14: 줌이 낮아 전체 정보가 안 보일 때 — 컨번호 끝 4자리만 셀에 꽉 차게.
+          //   현장에서 22% 같은 저배율로 베이 전체를 볼 때, 호출용 끝 4자리만이라도 읽히게 함.
+          //   POL/POD·선사·중량 등 나머지 줄은 생략(공간을 4자리에 몰아줌). XRAY/선사 구분은
+          //   여전히 셀 배경(XRAY)·글자색(getOpColor)으로 유지 — 배경색 규칙 위반 아님.
+          <div className="w-full h-full flex items-center justify-center mono font-black leading-none"
+               style={{
+                 fontFamily: 'Consolas, "Courier New", monospace',
+                 fontSize: compactFont,
+                 color: getOpColor && getOpColor(c) ? getOpColor(c) : undefined,
+               }}>
+            {isBookingSlot(c) ? '📝' : ((c.cn || '').slice(-4) || '')}
+          </div>
+        ) : (
         <div className="text-left mono leading-tight w-full" style={{
           whiteSpace: 'pre',
           fontFamily: 'Consolas, "Courier New", monospace',
@@ -1617,6 +1636,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
             {posStr}
           </div>
         </div>
+        )}
       </button>
     );
   };

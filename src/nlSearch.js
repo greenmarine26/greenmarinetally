@@ -80,7 +80,7 @@ export function parseNaturalQuery(text) {
 
   // 컨텍스트 우선 체크 (digits 추출 제외용)
   const hasTempCtx = /도\s|도$|°|온도|영하|영상|마이너스|temperature|reefer|리퍼|냉장|냉동/i.test(t);
-  const hasBayCtx = /베이|bay/i.test(t);
+  const hasBayCtx = /베이|bay/i.test(t) || /(?:^|\s)\d{1,2}\s*번(?![호])/.test(t);  // V7.99-13: "N번"도 베이 맥락
   const hasUnCtx = /\bun\s*\d|유엔\s*\d/i.test(t);
   const hasClassCtx = /클래스|class|급/i.test(t);
   const hasSizeCtx = /\d+\s*(피트|hc|ft)/i.test(t);
@@ -117,6 +117,10 @@ export function parseNaturalQuery(text) {
   let bayMatch = t.match(/(\d{1,3})\s*번?\s*베이/);
   if (!bayMatch) bayMatch = t.match(/베이\s*(\d{1,3})/);
   if (!bayMatch) bayMatch = t.match(/\bbay\s*(\d{1,3})/i);
+  // V7.99-13: "20번에 몇 개" — '베이' 단어가 없어도 "N번"(1~2자리 + '번')을 베이로 인식.
+  //   현장에서 "20번 데크" "18번에" 처럼 '번'만 붙여 묻는 경우가 많음. 3자리 이상은 컨번호 끝자리와
+  //   혼동 위험이 있어 2자리까지만(베이는 보통 1~99). 끝4자리 조회는 4자리라 구분됨.
+  if (!bayMatch) bayMatch = t.match(/(?:^|\s)(\d{1,2})\s*번(?![호])/);  // "2번" O, "2번호" X(호기)
   if (bayMatch) result.bay = normalizeBay(bayMatch[1]);
 
   // POL/POD

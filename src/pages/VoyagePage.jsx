@@ -671,13 +671,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (entry) { pm = entry[1]; matchedBy = 'name-norm'; matchedKey = entry[0]; }
         }
         // 6) M5.72 — 베이사전 풀네임 매칭 (앱: 약자 DJCF / PORT-MIS: 풀네임 DONGJIN CONFIDENT)
+        // V7.99-13 (버그수정): 기존 두 번째 조건 `pn.includes(dictNameNorm.slice(4, 4+8))`이
+        //   너무 느슨해 무관한 선박이 오매칭됨(DXQD에 "그린오션호" 매칭 → 삭제해도 또 다른 오매칭).
+        //   → 한쪽이 다른 쪽을 "통째로" 포함할 때만(진짜 약자↔풀네임 관계). 부분 슬라이스 매칭 제거.
+        //   추가 가드: 포함되는 쪽 문자열이 충분히 길어야(≥5) 우연한 짧은 겹침 차단.
         if (!pm && dictData?.name) {
           const dictNameNorm = String(dictData.name).toUpperCase().replace(/\s+/g, '');
           const entry = Object.entries(portMisData).find(([k, p]) => {
             const pn = (p.vesselName || '').toUpperCase().replace(/\s+/g, '');
-            if (!pn || pn.length < 5) return false;
-            // 베이사전 name 안에 PORT-MIS 풀네임 포함되는지
-            return dictNameNorm.includes(pn) || pn.includes(dictNameNorm.slice(4, 4 + Math.min(pn.length, 8)));
+            if (!pn || pn.length < 5 || dictNameNorm.length < 5) return false;
+            // 양방향 전체 포함만 인정 (긴 쪽이 짧은 쪽을 통째로 품을 때).
+            //   예: dict="DONGJINCONFIDENT" ⊇ pn="DONGJINCONFIDENT", 또는 약자↔풀네임 통짜 포함.
+            return dictNameNorm.includes(pn) || pn.includes(dictNameNorm);
           });
           if (entry) { pm = entry[1]; matchedBy = 'dict-fullname'; matchedKey = entry[0]; }
         }
@@ -841,7 +846,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               {!pm.berth && !fallbackInfo?.isFallback && (
                 <button
                   onClick={async () => {
-                    if (!confirm(`옛 데이터(키: ${matchedKey})를 Firebase에서 삭제하시겠습니까?\n\n새 PORT-MIS 엑셀로 다시 업로드 후 정상 매칭됩니다.`)) return;
+                    // V7.99-13: 삭제 확인에 선박명 명시. 오매칭(엉뚱한 배)이 잡혔을 때
+                    //   키 번호만 보면 무슨 배인지 모르고 멀쩡한 데이터를 지우는 사고가 남.
+                    if (!confirm(`PORT-MIS 데이터를 Firebase에서 삭제하시겠습니까?\n\n선박명: ${pm.vesselName || '?'}\n키: ${matchedKey}\n\n⚠ 이 선박명이 지금 작업 중인 배(${vsl})와 다르면, 잘못 매칭된 다른 배입니다. 그 경우 삭제하지 말고 새 PORT-MIS 엑셀을 업로드하세요.`)) return;
                     try {
                       const { ref, remove } = await import('firebase/database');
                       const { db } = await import('../firebase.js');
