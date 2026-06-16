@@ -4,6 +4,33 @@ import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSub
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
+// 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
+//   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
+//   HomePage(삭제 판정)와 VoyageCard("곧 자동삭제" 표시) 양쪽에서 동일 기준으로 쓴다.
+function lastWorkAt(v) {
+  let last = 0;
+  const scanAt = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    for (const rec of Object.values(obj)) {
+      const t = rec && typeof rec === 'object' ? rec.at : null;
+      if (typeof t === 'number' && t > last) last = t;
+    }
+  };
+  scanAt(v?.discharge?.completed);   // 양하 완료 기록 = 실제 검수 활동 증거
+  scanAt(v?.loading?.completed);     // 선적 완료 기록
+  const scanActual = (recs) => {     // 선적 실체 위치 입력도 활동으로 인정
+    if (!recs || typeof recs !== 'object') return;
+    for (const r of Object.values(recs)) {
+      const t = r && typeof r === 'object' ? r.actual_at : null;
+      if (typeof t === 'number' && t > last) last = t;
+    }
+  };
+  scanActual(v?.loading?.records);
+  const la = v?.info?.lastActive;    // 검수원 활동 핑
+  if (typeof la === 'number' && la > last) last = la;
+  return last;
+}
+
 export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
@@ -18,7 +45,11 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const [pierRegisterState, setPierRegisterState] = useState({ msg: '', error: false });
 
   // 1주일(7일) 이상 지난 항차 자동 삭제. voyages 로드 후 1회 실행.
-  //   createdAt 기준. 안전장치: createdAt 없는 항차는 건드리지 않음(옛 데이터 보호).
+  //   V8.01: 기준을 createdAt → "마지막 작업 활동" 시각으로 변경 (사용자 확정 2026-06-16).
+  //   배경: EDI를 작업 일주일 전에 미리 넣는 운영에서, createdAt 기준이면 작업 시작도 안 한
+  //         항차가 7일 경과로 사라진다. 자동삭제는 실제 작업이 있었던 항차에만 적용해야 한다.
+  //   안전장치 ①: 작업 활동(완료/실체위치 등)이 전혀 없는 항차는 절대 삭제하지 않음.
+  //   안전장치 ②: createdAt 없는 옛 항차는 건드리지 않음(기존 보호 유지).
   const [autoCleanDone, setAutoCleanDone] = useState(false);
   useEffect(() => {
     if (autoCleanDone) return;
@@ -28,7 +59,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     const now = Date.now();
     const expired = entries.filter(([k, v]) => {
       const created = v?.info?.createdAt;
-      return typeof created === 'number' && (now - created) > WEEK;
+      if (typeof created !== 'number') return false;   // 안전장치 ②: createdAt 없는 옛 항차 보호
+      const worked = lastWorkAt(v);
+      if (worked === 0) return false;                  // 안전장치 ①: 작업 미시작 항차 절대 보호
+      return (now - worked) > WEEK;                     // 마지막 작업 활동 기준 7일
     });
     setAutoCleanDone(true);                          // 1회만
     if (expired.length === 0) return;
@@ -683,9 +717,15 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             <div className="text-[10px] text-slate-600 mt-0.5">
               📅 {new Date(voyage.info.createdAt).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
               {(() => {
-                const days = Math.floor((Date.now() - voyage.info.createdAt) / 86400000);
-                if (days >= 7) return <span className="text-amber-500 ml-1">· {days}일 전 (곧 자동삭제)</span>;
-                if (days >= 1) return <span className="ml-1">· {days}일 전</span>;
+                // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다.
+                //   작업 활동이 없으면 자동삭제 대상이 아니므로 경고를 띄우지 않는다(불안 방지).
+                const worked = lastWorkAt(voyage);
+                const createdDays = Math.floor((Date.now() - voyage.info.createdAt) / 86400000);
+                if (worked > 0) {
+                  const workDays = Math.floor((Date.now() - worked) / 86400000);
+                  if (workDays >= 7) return <span className="text-amber-500 ml-1">· 작업 {workDays}일 전 (곧 자동삭제)</span>;
+                }
+                if (createdDays >= 1) return <span className="ml-1">· {createdDays}일 전</span>;
                 return <span className="ml-1">· 오늘</span>;
               })()}
             </div>

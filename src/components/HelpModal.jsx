@@ -1927,23 +1927,29 @@ export default function HelpModal({ open, onClose }) {
               </div>
             </div>
           ) : (
-            sections.map((sec, si) => (
-              <div key={si} className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
-                <div className="text-base font-black text-amber-200 mb-2">{sec.title}</div>
-                <div className="space-y-1.5">
-                  {sec.examples.map((ex, ei) => (
-                    <div key={ei} className="grid grid-cols-1 sm:grid-cols-5 gap-2 py-1.5 border-b border-slate-700/50 last:border-0">
-                      <code className="sm:col-span-2 text-xs sm:text-sm font-bold mono text-cyan-300 bg-slate-950/60 px-2 py-1 rounded break-all">
-                        {ex.q}
-                      </code>
-                      <div className="sm:col-span-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
-                        {ex.a}
+            sections.map((sec, si) => {
+              // V8.01 fix: 팁 탭 일부 블록은 examples 대신 items 키를 쓴다(M6.91~M6.93.0).
+              //   렌더가 sec.examples.map만 호출해 undefined.map 런타임 에러 → 화면 멈춤(재로딩 필요).
+              //   examples/items 둘 다 수용 + 없으면 빈 배열로 방어(향후 키 실수도 무해화).
+              const rows = sec.examples || sec.items || [];
+              return (
+                <div key={si} className="bg-slate-800/50 border border-slate-700 rounded-lg p-3">
+                  <div className="text-base font-black text-amber-200 mb-2">{sec.title}</div>
+                  <div className="space-y-1.5">
+                    {rows.map((ex, ei) => (
+                      <div key={ei} className="grid grid-cols-1 sm:grid-cols-5 gap-2 py-1.5 border-b border-slate-700/50 last:border-0">
+                        <code className="sm:col-span-2 text-xs sm:text-sm font-bold mono text-cyan-300 bg-slate-950/60 px-2 py-1 rounded break-all">
+                          {ex.q}
+                        </code>
+                        <div className="sm:col-span-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+                          {ex.a}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

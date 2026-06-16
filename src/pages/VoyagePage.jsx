@@ -625,6 +625,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             const pcs = (p.callsign || '').toUpperCase();
             return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
           });
+          // V8.01 (지침서 7.8): 같은 선박이 여러 항차로 존재할 때 stale(지난 항차) 날짜가
+          //   찍히는 것을 막기 위해 후보를 최신 updatedAt 우선으로 정렬. 이후 vesselName/berth
+          //   선택 로직이 같은 조건이면 항상 최신 데이터를 먼저 집는다.
+          candidates.sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0));
           // 베스트 후보 선택
           let best = null;
           if (candidates.length === 1) {
