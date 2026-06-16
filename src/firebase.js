@@ -310,12 +310,28 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
 }
-// V7.99-16: 초과 컨(신고 리스트에 없는데 내려진 것) 신설 기록.
+// V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
 //   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).
-export async function fbAddExtraContainer(voyageKey, mode, cn, by, note = '') {
+//   V8.04: 신고서 작성에 필요한 기본 정보(규격·F/E·타입·실번호·데미지 유무)를 함께 저장.
+export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}) {
   const at = Date.now();
-  await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), { by, at, flag: 'extra', note: note || '' });
-  await set(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`), { by, at, note: note || '' });
+  const rec = {
+    by, at, flag: 'extra',
+    size: info.size || '',      // '20' | '40ST' | '40HC' | '45'
+    fe: info.fe || '',          // 'F' | 'E'
+    ctype: info.ctype || '',    // '일반' | 'RF' | 'FR' | 'OT' | 'TK'
+    temp: info.temp || '',      // 리퍼 온도 (RF일 때)
+    seal: info.seal || '',      // 실번호
+    damage: info.damage || '',  // '없음' | '있음' | 데미지 내용
+    note: info.note || '',
+  };
+  await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
+  await set(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`), rec);
+}
+// V8.04: 잘못 기록한 초과 컨 취소(삭제) — completed·extras 양쪽에서 제거.
+export async function fbRemoveExtraContainer(voyageKey, mode, cn) {
+  await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
+  await remove(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`));
 }
 export async function fbCancelComplete(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));

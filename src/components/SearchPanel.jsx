@@ -12,9 +12,10 @@ import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
+import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
@@ -24,6 +25,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   const [guideMode, setGuideMode] = useState(false);
   // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
   const [workFilter, setWorkFilter] = useState('discharge');  // 'discharge' | 'loading' | 'completed'
+  const [extraModalOpen, setExtraModalOpen] = useState(false);   // V8.04: 초과 컨 입력 모달
 
   const allContainers = useMemo(() => {
     const arr = [];
@@ -63,6 +65,30 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           _comp: compMap[c.cn] || null,
         });
       });
+      // V8.04: 초과 컨(extras) — EDI/리스트에 없지만 실제 내려진 컨. 정식 목록에 포함하고
+      //   _extra 플래그로 색만 강조. 리스트·토탈·집계에 일반 컨처럼 들어간다(평택분 인정).
+      const extMap = sec.extras || {};
+      Object.entries(extMap).forEach(([cn, e]) => {
+        if (!cn || merged[cn]) return;   // 이미 목록에 있으면(EDI/리스트) 중복 추가 안 함
+        const label = e.size || '';
+        // 신고 기본정보 → 일반 컨 필드로 매핑 (집계·표시가 그대로 활용)
+        const iso = label === '20' ? '22G1' : label === '40HC' ? '45G1'
+          : label === '45' ? 'L5G1' : label === '40ST' ? '42G1' : '';
+        arr.push({
+          cn,
+          _mode: m, _extra: true,           // ← 색 강조용 플래그
+          _ptk: true,                        // 초과는 실제 내려진 평택분
+          _comp: { by: e.by, at: e.at, flag: 'extra' },
+          iso,
+          fe: e.fe || '',
+          rf: e.ctype === 'RF', fr: e.ctype === 'FR', ot: e.ctype === 'OT', tk: e.ctype === 'TK',
+          tmp: e.temp || '',
+          sl: e.seal || '',
+          _extraSize: e.size || '', _extraType: e.ctype || '', _extraDamage: e.damage || '',
+          note: e.note || '',
+          bay: '', row: '', tier: '',        // 위치 미지정(리스트에 없던 컨)
+        });
+      });
     });
     return arr;
   }, [voyage]);
@@ -79,6 +105,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   const dischCount = useMemo(() => allContainers.filter(c => c._mode === 'discharge' && c._ptk && !c._comp).length, [allContainers]);   // V7.92-02: 평택분만
   const loadCount = useMemo(() => allContainers.filter(c => c._mode === 'loading' && c._ptk && !c._comp).length, [allContainers]);   // V7.92-02: 평택분만
   const completedCount = useMemo(() => allContainers.filter(c => c._comp).length, [allContainers]);
+  // V8.04: 초과분만 따로 — 별도 집계·제출(검수리스트처럼) 및 색 강조용.
+  const extraList = useMemo(() => allContainers.filter(c => c._extra), [allContainers]);
 
   // V7.99-10 (메모6 수동): 수동 작업도 베이→홀드/데크 선택(A안). 가이드와 동일하게 수석에게 작업 위치 전달 + 조회를 그 단으로 좁힘.
   const [manualBay, setManualBay] = useState(null);    // 그룹 center
@@ -147,23 +175,55 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           <span className="text-[10px] opacity-80">{completedCount}대</span>
         </button>
       </div>
-      {/* V7.99-16: 양하 — 신고 리스트에 없는데 내려진 컨(초과) 신설 기록 */}
+      {/* V7.99-16 / V8.04: 양하 — 신고 리스트에 없는데 내려진 컨(초과) 기록 (모달) */}
       {workFilter === 'discharge' && (
         <button
-          onClick={async () => {
+          onClick={() => {
             if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-            const cn = (window.prompt('초과 컨테이너 번호 (신고 리스트에 없는데 내려진 컨)\n전체 번호를 입력하세요. 예: ABCD1234567') || '').trim().toUpperCase().replace(/\s/g, '');
-            if (!cn) return;
-            if (cn.length < 4) { alert('번호가 너무 짧습니다.'); return; }
-            const note = (window.prompt('메모 (선택 — 위치나 비고)') || '').trim();
-            try {
-              await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, note);
-              alert(`초과 기록 완료: ${cn}\n양하신고 점검에 '초과'로 잡힙니다.`);
-            } catch (e) { alert('기록 실패: 신호를 확인하세요.'); }
+            setExtraModalOpen(true);
           }}
           className="w-full mt-1.5 py-2 rounded-lg font-bold text-xs bg-slate-900 hover:bg-amber-900 text-amber-300 border border-amber-800 flex items-center justify-center gap-1.5">
           ➕ 초과 컨 추가 (리스트에 없는데 내려진 컨)
         </button>
+      )}
+      {/* V8.04: 초과분 별도 집계·제출 (검수리스트처럼) + 잘못 넣은 것 삭제 */}
+      {workFilter === 'discharge' && extraList.length > 0 && (
+        <div className="bg-amber-950/20 border border-amber-700/50 rounded-lg p-2.5 mt-1.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-black text-amber-300">초과분 {extraList.length}건 (신고 대상)</span>
+            <button onClick={() => {
+              const lines = ['번호,규격,적공,타입,온도,실번호,데미지,메모,기록자'];
+              extraList.forEach(c => {
+                lines.push([c.cn, c._extraSize || '', c.fe || '', c._extraType || '', c.tmp || '', c.sl || '', c._extraDamage || '', (c.note || '').replace(/,/g, ' '), c._comp?.by || ''].join(','));
+              });
+              const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `초과분리스트_${new Date().toISOString().slice(0, 10)}.csv`;
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            }}
+              className="text-[10px] px-2 py-0.5 rounded border border-amber-600 bg-amber-900/40 text-amber-200 hover:bg-amber-800/60 font-bold">
+              📥 초과분 내보내기 (CSV)
+            </button>
+          </div>
+          <div className="space-y-1">
+            {extraList.map(c => (
+              <div key={c.cn} className="flex items-center gap-2 text-[11px] bg-slate-900/60 rounded px-2 py-1">
+                <span className="mono font-bold text-amber-300 flex-1 truncate">{c.cn}</span>
+                <span className="text-slate-400">{c._extraSize} · {c.fe} · {c._extraType}</span>
+                {c.tmp && <span className="text-cyan-300">❄{c.tmp}°</span>}
+                {c._extraDamage && c._extraDamage !== '없음' && <span className="text-orange-400" title={c._extraDamage}>⚠</span>}
+                <button onClick={async () => {
+                  if (!window.confirm(`초과 기록 삭제: ${c.cn}\n잘못 기록한 경우만 삭제하세요.`)) return;
+                  try { await fbRemoveExtraContainer(voyageKey, 'discharge', c.cn); }
+                  catch (e) { alert('삭제 실패: 신호를 확인하세요.'); }
+                }}
+                  className="text-red-400 hover:text-red-200 px-1" title="삭제">✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
       {workFilter !== 'completed' && (
         <div className={`rounded-lg p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
@@ -869,6 +929,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       })()}
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
+      <ExtraContainerModal
+        open={extraModalOpen}
+        mode="discharge"
+        onClose={() => setExtraModalOpen(false)}
+        onSave={async ({ cn, info }) => {
+          await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info);
+        }}
+      />
       <WrongAnswerModal
         open={wrongOpen}
         onClose={() => setWrongOpen(false)}
@@ -1102,8 +1170,9 @@ function SmallResultCard({ c, onOpen }) {
   return (
     <button onClick={onOpen}
       className={`w-full text-left bg-slate-900 border rounded-lg p-2 flex items-center gap-2 ${
-        isDone ? 'border-emerald-700/30' : c._xray ? 'border-purple-700/30' : 'border-slate-700 hover:bg-slate-800/50'
+        c._extra ? 'border-amber-500/70 bg-amber-950/20' : isDone ? 'border-emerald-700/30' : c._xray ? 'border-purple-700/30' : 'border-slate-700 hover:bg-slate-800/50'
       }`}>
+      {c._extra && <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500 text-slate-950">초과</span>}
       <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
         c._mode === 'discharge' ? 'bg-blue-900 text-blue-200'
         : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
@@ -1111,7 +1180,7 @@ function SmallResultCard({ c, onOpen }) {
       }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
       <span className="text-[10px] text-slate-400 mono truncate flex-1">{c.cn}</span>
-      <span className="text-[9px] mono text-slate-400">{isoToLabel(c.iso) || c.tp || ''}</span>
+      <span className="text-[9px] mono text-slate-400">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>
       <span className={`text-[9px] mono px-1 rounded font-bold ${
         c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :
         c.fe === 'E' ? 'bg-slate-700 text-slate-300' :
@@ -1121,6 +1190,7 @@ function SmallResultCard({ c, onOpen }) {
       {!isReeferF && isReefer && <span className="text-cyan-400 text-xs">❄</span>}
       {c.dg && <span className="text-red-400 text-xs">🔥</span>}
       {c._xray && <span className="text-purple-400 text-xs">🔍</span>}
+      {c._extra && c._extraDamage && c._extraDamage !== '없음' && <span className="text-orange-400 text-xs" title="데미지">⚠</span>}
       {isDone && <span className="text-emerald-400 text-xs">✓</span>}
     </button>
   );
