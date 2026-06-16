@@ -41,9 +41,9 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(() => {
-    // M5.19: 모바일/PC 모두 기본 30% (사용자 요청 — 한 화면에 더 많은 베이 보이게)
-    //   필요 시 +/- 버튼 또는 핀치/휠로 확대 가능
-    return 0.3;
+    // V7.99-12: 기본 25% (30%는 큰 베이(데크 많음+홀드)가 한 화면에 안 들어와 홀드가 잘림 — 사용자 제보).
+    //   하한 0.15·버튼 0.01단위로 낮춰 현장 미세 조정. +/− 버튼·핀치·휠로 확대 가능.
+    return 0.25;
   });
   // M3.74: 다중 적재 슬롯 선택 모달
   const [slotPicker, setSlotPicker] = useState(null);  // { slot: {bay,row,tier}, containers: [...] }
@@ -467,7 +467,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     const onWheel = (e) => {
       if (e.ctrlKey) {
         e.preventDefault();
-        setZoom(z => Math.max(0.3, Math.min(3, z - e.deltaY * 0.001)));
+        setZoom(z => Math.max(0.15, Math.min(3, z - e.deltaY * 0.001)));
       } else if (e.shiftKey) {
         el.scrollLeft += e.deltaY;
         e.preventDefault();
@@ -485,7 +485,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
         e.preventDefault();
         const newDist = dist(e.touches);
         const ratio = newDist / pinchStartDist;
-        setZoom(Math.max(0.3, Math.min(3, pinchStartZoom * ratio)));
+        setZoom(Math.max(0.15, Math.min(3, pinchStartZoom * ratio)));
       }
     };
     el.style.cursor = 'grab';
@@ -577,18 +577,18 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-0 z-10">
         {/* 줌 그룹 (3버튼만 — 100% 표시는 가운데에) */}
         <div className="flex items-center bg-slate-800 rounded-lg overflow-hidden">
-          <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))}
+          <button onClick={() => setZoom(z => Math.max(0.15, Math.round((z - 0.01) * 100) / 100))}
             className="p-1.5 hover:bg-slate-700 text-slate-300" title="축소">
             <ZoomOut className="w-4 h-4"/>
           </button>
           <button onClick={() => {
             const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-            setZoom(isMobile ? 0.3 : 1.0);
+            setZoom(isMobile ? 0.25 : 1.0);
           }} className="text-xs mono text-slate-300 font-bold px-2 py-1.5 hover:bg-slate-700 border-x border-slate-700"
              title="기본 배율로 리셋">
             {Math.round(zoom * 100)}%
           </button>
-          <button onClick={() => setZoom(z => Math.min(3, z + 0.1))}
+          <button onClick={() => setZoom(z => Math.min(3, Math.round((z + 0.01) * 100) / 100))}
             className="p-1.5 hover:bg-slate-700 text-slate-300" title="확대">
             <ZoomIn className="w-4 h-4"/>
           </button>
@@ -1340,7 +1340,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         const aIsEven = an > 0 && an % 2 === 0;
         const bIsEven = bn > 0 && bn % 2 === 0;
         if (aIsEven && !bIsEven) return -1;
-        if (!aIsEven && bIsEven) return 1;
+        if (!aIsEven && bIsEven) return 0.18;
         if (aIsEven) return bn - an;
         return an - bn;
       })
