@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.04-03';
+export const APP_VERSION = 'V8.05';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -523,7 +523,84 @@ export const isoCategory = (iso) => {
 // M5.87: TDT 세그먼트에서 callsign(호출부호) 자동 추출
 //   예: TDT+20+2604N+++:172:20+++V7A576:103::SAWASDEE RIGEL
 //        → callsign='V7A576', vsl='SAWASDEE RIGEL'
+// CASP/CKL 계열 숫자코드 BAPLIE 파서 (V8.05).
+//   세그먼트: '00:BAPLIE:BAYPLAN:..., 10:콜사인:선박명:국가:항차:::ETD:ETA:POL...,
+//             50:컨번호:ISO:F/E:위치7자리(BBBRRTT):...:무게:..:선사:.., 52:POL::POD::FPOD:::
+//   표준 parseBAPLIE와 동일한 반환 구조({vsl,voy,pol,callsign,containers,errors})로 맞춤.
+export function parseNumericBAPLIE(ediText) {
+  const result = { vsl: '', voy: '', pol: '', etd: '', eta: '', carrier: '', callsign: '', containers: [], errors: [] };
+  const text = ediText.replace(/\r?\n/g, '');
+  const segs = text.split("'").map(s => s.trim()).filter(Boolean);
+  let cur = null;
+  for (const seg of segs) {
+    const p = seg.split(':');
+    const tag = p[0];
+    if (tag === '10') {
+      // 10:콜사인:선박명:국가:항차:::ETD:ETA:POL::...
+      result.callsign = (p[1] || '').trim().toUpperCase();
+      result.vsl = (p[2] || '').trim();
+      result.voy = (p[4] || '').trim();
+      result.etd = (p[7] || '').trim();
+      result.eta = (p[8] || '').trim();
+      result.pol = (p[9] || '').trim();
+    } else if (tag === '50') {
+      if (cur) result.containers.push(cur);
+      const cn = (p[1] || '').replace(/[\s\-]/g, '').toUpperCase();
+      const iso = (p[2] || '').toUpperCase();
+      const st = (p[3] || '').trim().toUpperCase();
+      const loc = (p[4] || '').trim();
+      const wt = parseInt(p[14] || '0', 10) || 0;
+      const op = (p[16] || '').trim();
+      cur = {
+        cn, l4: cn ? cn.slice(-4) : '', iso, tp: '',
+        fe: st === 'E' ? 'E' : 'F',
+        pol: '', pod: '', npod: '', tspot: '', fpod: '',
+        wt, wtt: wt ? 'WT' : '',
+        bay: '', row: '', tier: '',
+        op,
+        dg: false, dgc: '', un: '', pg: '',
+        rf: false, fr: false, tk: false, oog: false,
+        sl: '', sh: '', bl: '',
+        tmp: '', st,
+        isBooking: false, pendingCn: false,
+      };
+      // 위치 7자리 BBBRRTT
+      if (loc.length >= 7) {
+        cur.bay = normalizeBay(loc.substring(0, 3));
+        cur.row = loc.substring(3, 5);
+        cur.tier = loc.substring(5, 7);
+      } else if (loc.length === 6) {
+        cur.bay = normalizeBay(loc.substring(0, 2));
+        cur.row = loc.substring(2, 4);
+        cur.tier = loc.substring(4, 6);
+      }
+      // ISO 타입 → 특수 컨 플래그 (표준 파서와 동일 규칙)
+      if (iso.length >= 3) {
+        const t = iso[2];
+        if (t === 'R') cur.rf = true;
+        if (t === 'U' || t === 'O') cur.oog = true;
+        if (t === 'P' || t === 'F') { cur.fr = true; cur.oog = true; }
+      }
+      if (!cur.rf && isReeferIso(iso)) cur.rf = true;
+    } else if (tag === '52' && cur) {
+      // 52:POL::POD::FPOD:::  (예: CNSHA::KRPTK::KRPTK:::)
+      cur.pol = (p[1] || '').trim();
+      cur.pod = (p[3] || '').trim();
+      cur.fpod = (p[5] || '').trim();
+    }
+  }
+  if (cur) result.containers.push(cur);
+  if (result.containers.length === 0) result.errors.push('숫자코드 BAPLIE: 컨테이너(50 세그먼트)를 찾지 못했습니다.');
+  return result;
+}
+
 export function parseBAPLIE(ediText) {
+  // V8.05: CASP/CKL 계열 숫자코드 BAPLIE 지원 (표준 EDIFACT가 아닌 형식).
+  //   헤더가 "00:BAPLIE:BAYPLAN..."이고 세그먼트가 50:/52: 숫자코드면 전용 파서로.
+  //   기존엔 CASP→ASC 수동 변환 후 올려야 했던 것을 직접 읽게 함.
+  if (/^\s*00:BAPLIE/i.test(ediText) || /'50:[A-Z]{4}\d{6,7}:/.test(ediText)) {
+    return parseNumericBAPLIE(ediText);
+  }
   const result = {
     vsl: '', voy: '', pol: '', etd: '', eta: '',
     carrier: '',                       // V38 신규
@@ -1438,6 +1515,9 @@ export async function parseListExcel(arrayBuffer) {
         for (const off of [-1, 1, -2, 2]) {
           const c = cn_i + off;
           if (c < 0 || c >= row.length) continue;
+          // V8.04-04: 실번호 열은 컨번호 후보에서 제외. SITZ811084 같은 실번호가
+          //   4영문+6숫자 CN 패턴에 우연히 맞아 컨번호로 오인되던 버그(XRAY 미매칭 유발) 방지.
+          if (sl_i >= 0 && c === sl_i) continue;
           const tryCn = String(row[c] || '').replace(/[\s\-]/g, '').toUpperCase();
           if (/^[A-Z]{4}\d{6,7}$/.test(tryCn)) {
             cn = tryCn;
