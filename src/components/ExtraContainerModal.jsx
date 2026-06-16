@@ -1,5 +1,6 @@
 // 초과 컨테이너 입력 모달 — 신고 리스트에 없는데 내려진 컨을 신고용 기본정보와 함께 기록 (V8.04)
 //   규격·F/E·타입·실번호·데미지를 버튼 탭으로 받아 fbAddExtraContainer로 저장.
+//   V8.04-01: Chip/Field를 모듈 스코프로 분리 (컴포넌트 본문 내 정의가 React error #310 유발).
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 
@@ -7,6 +8,23 @@ const SIZES = ['20', '40ST', '40HC', '45'];
 const FES = [['F', '적 (Full)'], ['E', '공 (Empty)']];
 const TYPES = ['일반', 'RF', 'FR', 'OT', 'TK'];
 const DAMAGES = ['없음', '있음'];
+
+function Chip({ active, onClick, children }) {
+  return (
+    <button onClick={onClick}
+      className={`px-3 py-2 rounded-lg text-sm font-bold border-2 transition ${
+        active ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500'
+      }`}>{children}</button>
+  );
+}
+function Field({ label, color, children }) {
+  return (
+    <div className="mb-3">
+      <div className={`text-xs font-bold mb-1.5 ${color || 'text-amber-200'}`}>{label}</div>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
+    </div>
+  );
+}
 
 export default function ExtraContainerModal({ open, mode = 'discharge', onClose, onSave }) {
   const [cn, setCn] = useState('');
@@ -38,6 +56,7 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
           note: note.trim(),
         },
       });
+      setCn(''); setSize(''); setFe(''); setCtype(''); setTemp(''); setSeal(''); setDamage(''); setDamageNote(''); setNote('');
       onClose();
     } catch (e) {
       alert('기록 실패: 신호를 확인하세요.');
@@ -45,19 +64,6 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
       setSaving(false);
     }
   };
-
-  const Chip = ({ active, onClick, children }) => (
-    <button onClick={onClick}
-      className={`px-3 py-2 rounded-lg text-sm font-bold border-2 transition ${
-        active ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500'
-      }`}>{children}</button>
-  );
-  const Field = ({ label, children }) => (
-    <div className="mb-3">
-      <div className="text-xs font-bold text-amber-200 mb-1.5">{label}</div>
-      <div className="flex flex-wrap gap-1.5">{children}</div>
-    </div>
-  );
 
   return (
     <div className="fixed inset-0 z-[200] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>

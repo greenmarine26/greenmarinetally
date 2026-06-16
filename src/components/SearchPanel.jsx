@@ -332,6 +332,14 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       )}
       </>
       )}
+      <ExtraContainerModal
+        open={extraModalOpen}
+        mode="discharge"
+        onClose={() => setExtraModalOpen(false)}
+        onSave={async ({ cn, info }) => {
+          await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info);
+        }}
+      />
     </div>
   );
 }
@@ -929,14 +937,6 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       })()}
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
-      <ExtraContainerModal
-        open={extraModalOpen}
-        mode="discharge"
-        onClose={() => setExtraModalOpen(false)}
-        onSave={async ({ cn, info }) => {
-          await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info);
-        }}
-      />
       <WrongAnswerModal
         open={wrongOpen}
         onClose={() => setWrongOpen(false)}
