@@ -38,14 +38,17 @@ const ISO_OPTIONS = [
   // 플랫랙
   { iso: '22P1', label: '20FR (20피트 플랫랙)',       flags: { fr: true } },
   { iso: '42P1', label: '40FR (40피트 플랫랙)',       flags: { fr: true } },
+  { iso: '42P3', label: '40FR (40피트 플랫랙·고정식)', flags: { fr: true } },
   { iso: '45P1', label: '45FR (45피트 플랫랙)',       flags: { fr: true } },
   // 오픈탑
   { iso: '22U1', label: '20OT (20피트 오픈탑)',       flags: { ot: true } },
   { iso: '42U1', label: '40OT (40피트 오픈탑)',       flags: { ot: true } },
+  { iso: '45U1', label: '40HC 오픈탑',                flags: { ot: true } },
   // 탱크
   { iso: '22T1', label: '20TK (20피트 탱크)',         flags: { tk: true } },
   { iso: '22T6', label: '20TK 위험물 탱크',            flags: { tk: true } },
   { iso: '42T1', label: '40TK (40피트 탱크)',         flags: { tk: true } },
+  { iso: '45T1', label: '40HC 탱크',                  flags: { tk: true } },
 ];
 
 export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null }) {
