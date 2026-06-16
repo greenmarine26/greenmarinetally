@@ -109,7 +109,7 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
               className="w-full bg-slate-900 border-2 border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2 text-sm mono text-slate-100 outline-none" />
           </div>
 
-          <Field label="데미지 유무 * (책임소재)">
+          <Field label="데미지 유무 *">
             {DAMAGES.map(d => <Chip key={d} active={damage === d} onClick={() => setDamage(d)}>{d}</Chip>)}
           </Field>
 
