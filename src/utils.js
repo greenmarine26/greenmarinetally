@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.06-04';
+export const APP_VERSION = 'V8.06-05';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -419,8 +419,9 @@ export function isReeferIso(iso) {
   const upper = String(iso).toUpperCase().trim();
   // (1) "RF" 또는 "RE"로 시작 (RFHC, RFHQ, RF20, RE20 등 ASC tp 형식)
   if (/^R[FE]/.test(upper)) return true;
-  // (2) 4자리 숫자 코드 (4582~4585=40RF, 2282~2285=20RF) - ISO 표준 변형
-  if (/^[24]58[2-5]$/.test(upper)) return true;
+  // (2) 4자리 숫자 코드 (4582/4585=40RF, 2282/2285=20RF) - ISO 표준 변형
+  //     주의: 끝자리 2·5만 리퍼. 끝자리 3·4(4583/4584)는 FR(플랫랙)이므로 제외.
+  if (/^[24]58[25]$/.test(upper)) return true;
   // (3) "[2]가 R" 패턴: 4자리 ISO 표준 (45R0, 22R5, 40RF, 22RE 등)
   //     [0]은 길이코드(2/4), [1]은 높이코드, [2]='R', [3]=문자/숫자
   if (/^[24][024568L9]R[A-Z0-9]?$/.test(upper)) return true;
