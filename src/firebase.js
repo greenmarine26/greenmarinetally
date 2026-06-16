@@ -930,6 +930,20 @@ export async function fbDeleteFeedback(ts) {
   await set(r, null);
 }
 
+// V8.02-02: 오답 리포트 '저금통 비우기' — 내보낸 ts 목록만 삭제(안 본 것 보호).
+//   tsList 없으면 전체 비움. 내보내기 후 그 시점 목록만 넘겨 호출하는 것이 안전.
+export async function fbClearFeedback(tsList = null) {
+  if (Array.isArray(tsList)) {
+    await Promise.all(tsList.map((ts) => set(ref(db, `feedback/${ts}`), null)));
+    return tsList.length;
+  }
+  const snap = await get(ref(db, 'feedback'));
+  const all = snap.exists() ? snap.val() : {};
+  const keys = Object.keys(all);
+  await set(ref(db, 'feedback'), null);
+  return keys.length;
+}
+
 // M3.5.5: 엠티 실 부착/확인 (records의 eseal 관련 필드)
 //   - eseal: 기본 엠티실번호 (verify=원래 부착된 실, attach=새로 부착한 실)
 //   - eseal_wrong: 틀린 실 발견 시 그 번호 (verify 모드만)

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
 import { isChief } from '../staffList.js';
@@ -120,6 +120,48 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
   const unresolvedCount = useMemo(() =>
     Object.values(feedback || {}).filter(f => f && !f.resolved).length, [feedback]);
+
+  // V8.02-02: 오답 '저금통' 내보내기 — 전체를 텍스트 파일로 다운로드.
+  //   클로드(또는 개발자)에게 파일 하나로 전달하기 위함. 내보낸 시점의 ts 목록을 기억.
+  const [exportedTs, setExportedTs] = useState([]);
+  const exportFeedback = () => {
+    const all = Object.values(feedback || {}).filter(f => f && f.ts).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    if (all.length === 0) { alert('내보낼 오답 리포트가 없습니다.'); return; }
+    const lines = [];
+    lines.push('# Tallyman 음성/질문 오답 리포트');
+    lines.push(`# 내보낸 시각: ${new Date().toLocaleString('ko-KR')}`);
+    lines.push(`# 총 ${all.length}건 (미해결 ${all.filter(f => !f.resolved).length}건)`);
+    lines.push('');
+    all.forEach((f, i) => {
+      const d = new Date(f.ts);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      lines.push(`[${i + 1}] ${ds} · ${f.inspector || '익명'} · ${f.resolved ? '해결됨' : '미해결'} · v${f.appVersion || '?'}`);
+      lines.push(`  선박: ${f.voyageVsl || '-'}`);
+      lines.push(`  질문(Q): ${f.query || ''}`);
+      lines.push(`  답변종류: ${f.answerType || '?'}`);
+      if (f.answerText) lines.push(`  앱이 한 답: ${f.answerText}`);
+      if (f.userNote) lines.push(`  검수사 메모: ${f.userNote}`);
+      if (f.parsedSummary && Object.keys(f.parsedSummary).length) {
+        lines.push(`  파싱: ${JSON.stringify(f.parsedSummary)}`);
+      }
+      lines.push('');
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = `오답리포트_${stamp}.txt`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setExportedTs(all.map(f => f.ts));   // 비우기 대상 = 방금 내보낸 것
+  };
+  // 내보낸 것만 비우기(안 본 것 보호). 내보내기 후에만 활성.
+  const clearExported = async () => {
+    if (exportedTs.length === 0) { alert('먼저 내보내기를 하세요. 내보낸 건만 비웁니다.'); return; }
+    const n = await fbClearFeedback(exportedTs);
+    setExportedTs([]);
+    alert(`저금통 비움: ${n}건 삭제. 새 오답은 다시 쌓입니다.`);
+  };
 
   // 항차별 통계
   const voyageStats = useMemo(() => {
@@ -433,10 +475,25 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               </span>
             )}
           </div>
-          <button onClick={() => setShowResolved(v => !v)}
-            className="text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-slate-700">
-            {showResolved ? '미해결만' : '해결된 것도'}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button onClick={exportFeedback}
+              title="오답 전체를 텍스트 파일로 내려받기 (클로드에게 전달용)"
+              className="text-[10px] text-sky-300 hover:text-sky-100 px-2 py-0.5 rounded border border-sky-700/50 bg-sky-900/30">
+              📥 내보내기
+            </button>
+            <button onClick={clearExported}
+              title="방금 내보낸 오답만 비우기 (안 본 것은 보호)"
+              disabled={exportedTs.length === 0}
+              className={`text-[10px] px-2 py-0.5 rounded border ${exportedTs.length === 0
+                ? 'text-slate-600 border-slate-800 cursor-not-allowed'
+                : 'text-amber-300 hover:text-amber-100 border-amber-700/50 bg-amber-900/30'}`}>
+              🧹 비우기
+            </button>
+            <button onClick={() => setShowResolved(v => !v)}
+              className="text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-slate-700">
+              {showResolved ? '미해결만' : '해결된 것도'}
+            </button>
+          </div>
         </div>
         <div className="text-[10px] text-slate-500 mb-2">
           검수원이 잘못된 답변에 ❌ 오답 버튼 누르면 여기 모입니다 → 다음 버전에서 패턴 보강

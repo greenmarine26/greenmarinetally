@@ -4,20 +4,22 @@
 //   "한눈에 눈으로만 봐도" — 아이콘+색상 카드로 시각 구분.
 import React, { useState } from 'react';
 import { X, Search, Mic, MessageCircle, Anchor, Truck, AlertTriangle, Lightbulb,
-  BookOpen, Languages, ChevronRight, ChevronLeft } from 'lucide-react';
+  Camera, Ship, BookOpen, Languages, ChevronRight, ChevronLeft } from 'lucide-react';
 import ContainerPhrasebook from './ContainerPhrasebook.jsx';
 import { HELP_DATA } from '../data/helpData.js';
 
 // 사용설명 카테고리: id → {label, icon, accent(테일윈드 색), source}
 //   source: HELP_DATA.usage[key] 또는 HELP_DATA.tips(실용팁)
 const USAGE_CATS = [
-  { id: 'basic',   label: '기본 검색',   icon: Search,         accent: 'sky',     desc: '컨번호 끝 4자리로 찾기' },
-  { id: 'ai',      label: 'AI·질문',     icon: MessageCircle,  accent: 'violet',  desc: '개수·통계·자유 질문' },
-  { id: 'voice',   label: '음성',        icon: Mic,            accent: 'rose',    desc: '손 안 쓰고 검색·답변' },
-  { id: 'special', label: '특수화물',    icon: AlertTriangle,  accent: 'amber',   desc: '리퍼·위험물·X-RAY' },
+  { id: 'basic',   label: '기본 검색',   icon: Search,         accent: 'sky',     desc: '검색·브리핑·완료 처리' },
+  { id: 'ai',      label: 'AI·질문',     icon: MessageCircle,  accent: 'violet',  desc: '개수·통계·콘·자유 질문' },
+  { id: 'voice',   label: '음성',        icon: Mic,            accent: 'rose',    desc: '손 안 쓰고 검색·교정' },
+  { id: 'special', label: '특수화물',    icon: AlertTriangle,  accent: 'amber',   desc: '리퍼·위험물·X-RAY·위치' },
   { id: 'port',    label: '항구 검색',   icon: Anchor,         accent: 'emerald', desc: '한국어 항구명으로' },
   { id: 'twin',    label: '트윈',        icon: Truck,          accent: 'cyan',    desc: '20ft 두 개 한 번에' },
-  { id: 'tips',    label: '실전 팁',     icon: Lightbulb,      accent: 'yellow',  desc: '빠른 검수·문제 해결' },
+  { id: 'report',  label: '보고·출력',   icon: Camera,         accent: 'pink',    desc: '사진·인쇄·PDF·장비번호' },
+  { id: 'newship', label: '신규 선박',   icon: Ship,           accent: 'teal',    desc: '자동 등록·베이 그림' },
+  { id: 'tips',    label: '실전 팁',     icon: Lightbulb,      accent: 'yellow',  desc: '빠른 검수·막혔을 때' },
 ];
 
 // 테일윈드 정적 클래스 (동적 생성 금지 — 빌드 시 purge 회피)
@@ -28,6 +30,8 @@ const ACCENT = {
   amber:   { card: 'bg-amber-950/40 border-amber-700/50 hover:border-amber-500',    icon: 'text-amber-300',   title: 'text-amber-200' },
   emerald: { card: 'bg-emerald-950/40 border-emerald-700/50 hover:border-emerald-500', icon: 'text-emerald-300', title: 'text-emerald-200' },
   cyan:    { card: 'bg-cyan-950/40 border-cyan-700/50 hover:border-cyan-500',       icon: 'text-cyan-300',    title: 'text-cyan-200' },
+  pink:    { card: 'bg-pink-950/40 border-pink-700/50 hover:border-pink-500',       icon: 'text-pink-300',    title: 'text-pink-200' },
+  teal:    { card: 'bg-teal-950/40 border-teal-700/50 hover:border-teal-500',       icon: 'text-teal-300',    title: 'text-teal-200' },
   yellow:  { card: 'bg-yellow-950/40 border-yellow-700/50 hover:border-yellow-500', icon: 'text-yellow-300',  title: 'text-yellow-200' },
 };
 
