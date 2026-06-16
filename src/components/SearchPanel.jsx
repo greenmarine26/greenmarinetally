@@ -7,12 +7,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer, generateHandover } from '../nlSearch.js';
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
@@ -147,7 +147,24 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           <span className="text-[10px] opacity-80">{completedCount}대</span>
         </button>
       </div>
-      {/* V7.94: 자동(가이드) / 수동 모드 전환 — 한눈에 구분되는 큰 토글 */}
+      {/* V7.99-16: 양하 — 신고 리스트에 없는데 내려진 컨(초과) 신설 기록 */}
+      {workFilter === 'discharge' && (
+        <button
+          onClick={async () => {
+            if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+            const cn = (window.prompt('초과 컨테이너 번호 (신고 리스트에 없는데 내려진 컨)\n전체 번호를 입력하세요. 예: ABCD1234567') || '').trim().toUpperCase().replace(/\s/g, '');
+            if (!cn) return;
+            if (cn.length < 4) { alert('번호가 너무 짧습니다.'); return; }
+            const note = (window.prompt('메모 (선택 — 위치나 비고)') || '').trim();
+            try {
+              await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, note);
+              alert(`초과 기록 완료: ${cn}\n양하신고 점검에 '초과'로 잡힙니다.`);
+            } catch (e) { alert('기록 실패: 신호를 확인하세요.'); }
+          }}
+          className="w-full mt-1.5 py-2 rounded-lg font-bold text-xs bg-slate-900 hover:bg-amber-900 text-amber-300 border border-amber-800 flex items-center justify-center gap-1.5">
+          ➕ 초과 컨 추가 (리스트에 없는데 내려진 컨)
+        </button>
+      )}
       {workFilter !== 'completed' && (
         <div className={`rounded-lg p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
           <button onClick={() => setGuideMode(true)}
@@ -279,6 +296,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [autoSpeak, setAutoSpeak] = useState(true);
+  const [handoverNote, setHandoverNote] = useState('');     // V8.00: 인계 되묻기 — 검수사 직접 메모
+  const [handoverFinalized, setHandoverFinalized] = useState(false); // V8.00: 메모 반영 완료
   const [aiAnswer, setAiAnswer] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -292,6 +311,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const lastSpokenRef = useRef(null);
 
   const parsed = useMemo(() => parseNaturalQuery(query), [query]);
+  // V8.00: 인계 질문이 아니게 되면 메모 상태 리셋 (다른 질문으로 넘어갈 때)
+  useEffect(() => {
+    if (!parsed.handoverQuery) { setHandoverFinalized(false); }
+  }, [parsed.handoverQuery]);
   const results = useMemo(() => {
     if (!query || query.length < 2) return [];
     if (!hasAnyCondition(parsed)) return [];
@@ -323,6 +346,22 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 단, 단순 컨번호 검색(digits만)이거나 결과가 단 1개면 BigResultCard 우선
   const localAnswer = useMemo(() => {
     if (!query || query.length < 2) return null;
+    // V8.00: 인수인계 — 남은 작업+양하신고+특이사항 정리 + 되묻기. 최우선.
+    if (parsed.handoverQuery) {
+      const ptk = allContainers.filter(c => c._ptk);
+      const info = {
+        byInspector: inspector || '',
+        shipName: voyage?.info?.vslFull || voyage?.info?.vsl || '',
+        voyageLabel: voyage?.info?.voyNo || voyage?.info?.voy || '',
+        extraNote: handoverFinalized ? handoverNote : '',
+      };
+      const body = generateHandover(ptk, info);
+      if (handoverFinalized) {
+        return `인계서 정리했어요. 다음 검수사에게 이 내용 전달하세요.\n\n${body}`;
+      }
+      // 1단계: 초안 + 되묻기 (첫 줄은 음성으로 읽힘)
+      return `인계서 초안이에요. 특이사항이나 더 전달할 내용 있으면 아래에 적어 주세요. 없으면 그대로 두셔도 됩니다.\n\n${body}\n\n— 더 전달할 내용이 있으면 아래 칸에 적고 [인계 메모 추가]를 누르세요.`;
+    }
     // V7.92: 챗봇형 질문 — 자기소개·시간·입출항·날씨 (사용자 요청: "넌 뭐야"에 답하기)
     if (parsed.introQuery) return generateIntroAnswer(voyage?.info?.vslFull || voyage?.info?.vsl || '');
     // ⚠ 입출항을 시간보다 먼저 — "입항 시간 알려줘"는 timeQuery에도 걸리므로 순서가 답을 가른다.
@@ -370,7 +409,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
     return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk), manualCtx);   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector]);
 
   // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.
   useEffect(() => {
@@ -431,7 +470,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (!q || q.length < 4) return;
     if (voiceQueryRef.current !== q) return;          // 음성으로 들어온 질문만
     if (/^[0-9\s]+$/.test(q)) return;                 // 숫자(끝4자리)는 제외
-    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|누구|소개|시야|시간|지금|오늘|날씨|기온|바람|입항|출항|입출항|접안|언제|며칠|요일|날짜|트윈|가능|불가|초과|불균형|수평|크레인|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
+    const KNOWN = /베이|번|리퍼|냉동|엠티|풀|위험물|디지|엑스레이|갑판|데크|홀드|선창|컨테이너|피트|온도|영하|영상|실번호|씰|무게|톤|위치|어디|몇|대|개|남은|남았|완료|진행|전체|전부|모두|몽땅|싹|죄다|도합|통틀어|합쳐|합치|수량|불러|뽑아|달라|다오|내렸|내린|누구|소개|시야|시간|지금|오늘|날씨|기온|바람|입항|출항|입출항|접안|언제|며칠|요일|날짜|트윈|가능|불가|초과|불균형|수평|크레인|목록|리스트|양하|선적|쌓|단|빈자리|자리|평택|항|끝|끝나|페이스|속도|퇴근|점심|걸려|걸리|쯤|예상|마치|종료|신고|세관|누락|초과|바뀜|리씰|이상|건|인계|인수|교대|넘겨|특이사항|전달|에서|온|가는|있|없|찾|알려|보여|줘|주세요|해|야|니|나요|입니까|은|는|이|가|을|를|에|의|와|과|도|만|좀|요|다/g;
     const leftover = q.replace(/[0-9A-Za-z\s.,?!]/g, ' ').replace(KNOWN, ' ').trim()
       .split(/\s+/).filter(t => t.length >= 2);
     const understood = hasAnyCondition(parsed) || !!localAnswer;
@@ -463,10 +502,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 
     // V7.80: 음성 답변 간결화 — 핵심 한 문장만 (상세는 화면). 0대면 "~없습니다" (사용자 확정 형식).
     if (localAnswer) {
-      const first = (localAnswer.split('\n').find(l => l.trim()) || '').replace(/[📊📍📭⚖️•·]/g, '').trim();
+      const first = (localAnswer.split('\n').find(l => l.trim()) || '').replace(/[📊📍📭⚖️•·⏱🎉]/g, '').trim();
       const zm = first.match(/^(.+?):\s*0대/);
       if (zm) speak(`${zm[1].trim()} 없습니다`);
-      else if (first) speak(first.replace(/:\s*/, ' '));
+      else if (first) speak(first.replace(/:\s*/, ' '), (parsed.etaQuery || parsed.handoverQuery || parsed.customsReportQuery) ? { conversational: true } : {});  // V7.99-15/V8.00: 대화형 답변은 부드럽게
       return;
     }
 
@@ -754,6 +793,30 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             </button>
           </div>
           <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
+        </div>
+      )}
+
+      {/* V8.00: 인수인계 되묻기 — 검수사가 특이사항/전달사항 직접 입력 */}
+      {parsed.handoverQuery && localAnswer && !handoverFinalized && chatMessages.length === 0 && (
+        <div className="bg-slate-900 border border-amber-700 rounded-xl p-3 space-y-2">
+          <div className="text-[12px] text-amber-300 font-bold">📝 더 전달할 내용 (특이사항·다음 검수사 참고)</div>
+          <textarea
+            value={handoverNote}
+            onChange={(e) => setHandoverNote(e.target.value)}
+            placeholder="예: 12번 베이 리퍼 1대 온도 확인 필요. 3호기 크레인 점심 후 점검 예정. 없으면 비워두세요."
+            rows={3}
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-slate-100 resize-none"
+          />
+          <div className="flex gap-2">
+            <button onClick={() => setHandoverFinalized(true)}
+              className="flex-1 py-2.5 rounded-lg font-black text-sm bg-emerald-700 hover:bg-emerald-600 text-emerald-50">
+              ✓ 인계서 완성
+            </button>
+            <button onClick={() => { setHandoverNote(''); setHandoverFinalized(true); }}
+              className="px-4 py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600">
+              특이사항 없음
+            </button>
+          </div>
         </div>
       )}
 

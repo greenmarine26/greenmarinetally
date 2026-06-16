@@ -302,10 +302,20 @@ export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by) {
 }
 
 // 검수 완료 (양하/선적 공통)
-export async function fbCompleteContainer(voyageKey, mode, cn, by) {
-  await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), {
-    by, at: Date.now()
-  });
+// V7.99-16: 완료 시 이상 상태 기록(양하신고 점검용).
+//   flag: 'normal'(기본) | 'missing'(누락-선박에 없음) | 'extra'(초과-리스트에 없는데 내림) | 'swapped'(바뀜)
+//   note: 자유 메모(바뀜이면 원래 신고 번호 등). 기존 8개 호출부는 인자 안 줘서 normal — 회귀 없음.
+export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'normal', note = '') {
+  const rec = { by, at: Date.now() };
+  if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
+  await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
+}
+// V7.99-16: 초과 컨(신고 리스트에 없는데 내려진 것) 신설 기록.
+//   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).
+export async function fbAddExtraContainer(voyageKey, mode, cn, by, note = '') {
+  const at = Date.now();
+  await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), { by, at, flag: 'extra', note: note || '' });
+  await set(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`), { by, at, note: note || '' });
 }
 export async function fbCancelComplete(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));

@@ -5,6 +5,45 @@
 
 import { spellPosString } from './utils.js';
 
+// V7.99-15: 가장 자연스러운 한국어 TTS 목소리를 골라 캐시한다.
+//   기존엔 u.lang='ko-KR'만 줘서 브라우저가 멋대로 첫 번째(보통 가장 기계적인)
+//   목소리를 썼다 — 딱딱함의 주원인. getVoices()에서 향상된/네트워크 음성을 우선 선택.
+//   getVoices는 비동기 로드라 onvoiceschanged로 갱신(앱 시작 시 1회 준비).
+let _koVoice = null;        // 선택된 한국어 목소리 (없으면 null = 브라우저 기본)
+let _koVoiceReady = false;
+function pickKoreanVoice() {
+  try {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+    const all = window.speechSynthesis.getVoices() || [];
+    const ko = all.filter(v => v.lang && v.lang.toLowerCase().startsWith('ko'));
+    if (!ko.length) return null;
+    // 자연스러움 우선순위: 향상/네트워크 음성 → Google → 그 외 ko → 첫 번째
+    const score = (v) => {
+      const n = (v.name || '').toLowerCase();
+      let s = 0;
+      if (/enhanced|premium|natural|neural|wavenet|네트워크|향상/.test(n)) s += 4;
+      if (/google/.test(n)) s += 3;            // 안드로이드 Google 한국어가 대체로 부드러움
+      if (/yuna|nara|sora|시리|유나/.test(n)) s += 2; // iOS 한국어 음성명
+      if (v.localService === false) s += 1;    // 네트워크 음성(대개 더 자연스러움)
+      return s;
+    };
+    return ko.slice().sort((a, b) => score(b) - score(a))[0] || ko[0];
+  } catch { return null; }
+}
+function ensureKoVoice() {
+  if (_koVoiceReady) return _koVoice;
+  _koVoice = pickKoreanVoice();
+  if (_koVoice) _koVoiceReady = true;          // 잡히면 확정, 아니면 다음 호출에 재시도
+  return _koVoice;
+}
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  // 목소리 목록은 비동기로 채워짐 — 준비되면 한 번 더 선택
+  try {
+    window.speechSynthesis.onvoiceschanged = () => { _koVoiceReady = false; ensureKoVoice(); };
+    ensureKoVoice();
+  } catch {}
+}
+
 const NUM_KO = ['공', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'];
 const ALPHA_KO = {
   A: '에이', B: '비', C: '씨', D: '디', E: '이', F: '에프', G: '지',
@@ -70,8 +109,17 @@ export function speak(text, opts = {}) {
     const spoken = spellPosString(text);
     const u = new SpeechSynthesisUtterance(spoken);
     u.lang = 'ko-KR';
-    u.rate = opts.rate || 1.3;
-    u.pitch = opts.pitch || 1.0;
+    // V7.99-15: 골라둔 자연스러운 한국어 목소리 적용 (없으면 브라우저 기본 — 회귀 없음)
+    const kov = ensureKoVoice();
+    if (kov) u.voice = kov;
+    // V7.99-15: 대화 모드 — 검수 호출은 빠르게(기본 1.3), 말 거는 대화는 느긋·부드럽게.
+    if (opts.conversational) {
+      u.rate = opts.rate || 1.0;
+      u.pitch = opts.pitch || 1.08;   // 살짝 높여 덜 무뚝뚝하게
+    } else {
+      u.rate = opts.rate || 1.3;
+      u.pitch = opts.pitch || 1.0;
+    }
     u.volume = opts.volume || 1.0;
     u.onend = () => { currentSpeakPriority = null; };
     u.onerror = () => { currentSpeakPriority = null; };
@@ -129,6 +177,8 @@ export function speakContainer(c, opts = {}) {
     const text = parts.join(', ');
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'ko-KR';
+    const kov = ensureKoVoice();   // V7.99-15: 자연스러운 한국어 목소리 적용
+    if (kov) u.voice = kov;
     u.rate = opts.rate || 1.2;
     u.pitch = 1.0;
     window.speechSynthesis.speak(u);

@@ -329,6 +329,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
       merged[r.cn] = { ...(ediBase || {}), ...safeR, _src: ediBase ? 'both' : 'list' };
     });
+    // V7.99-16: 초과 컨(리스트·EDI에 없는데 내려진 것) 합치기 — 양하신고 점검이 보도록.
+    //   completed에도 flag:'extra'로 기록되지만, 컨 목록에 없으면 집계에서 빠지므로 여기서 추가.
+    const extrasMap = (mode === 'discharge' ? (sec.extras || {}) : {});
+    Object.keys(extrasMap).forEach(cn => {
+      if (!merged[cn]) merged[cn] = { cn, _src: 'extra', pod: 'KRPTK', _extraNote: extrasMap[cn]?.note || '' };
+    });
     const baseContainers = Object.values(merged).sort((a, b) => {
       const ka = `${a.bay || 'zz'}-${a.row || 'zz'}-${a.tier || 'zz'}`;
       const kb = `${b.bay || 'zz'}-${b.row || 'zz'}-${b.tier || 'zz'}`;
@@ -359,7 +365,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return baseContainers;
-  }, [ediMap, recMap, mode]);
+  }, [ediMap, recMap, mode, sec.extras]);
 
   // M3.5.5: 선박 정책 매칭 (DEFAULT + Firebase extra)
   const shipPolicy = useMemo(() => {

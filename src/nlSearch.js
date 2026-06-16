@@ -73,6 +73,9 @@ export function parseNaturalQuery(text) {
     twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
     tierPlaceCountQuery: null,   // V7.99-10: 'hold'|'deck' — "홀드 몇 개 남았어"(에 없음) = 작업 남은 단(곳) 개수+베이 나열
     tierInContextQuery: null,    // V7.99-10: 'hold'|'deck' — "홀드에 몇 개 남았어"(에 있음) = 현재 작업 중인 단 컨 수
+    etaQuery: false,             // V7.99-15: "몇 시에 끝나?" — 완료 페이스로 예상 완료 시각 계산(대화체)
+    customsReportQuery: false,   // V7.99-16: "양하신고할까?" — 그날 이상 건(누락/초과/바뀜/리씰/실오류) 정리
+    handoverQuery: false,        // V8.00: "인수인계" — 남은 작업+양하신고+특이사항 정리 (되묻기 2단계)
     isAll: false, isStat: false, mode: null,
   };
   if (!text) return result;
@@ -159,6 +162,25 @@ export function parseNaturalQuery(text) {
   // M3.3: 용량/수용 (mode 무시)
   const isCapacityQ = /실을\s*수\s*있|싣을\s*수|적재\s*가능|수용|용량|최대\s*적재|얼마나\s*실|몇\s*(개|대)\s*실/i.test(t);
   if (isCapacityQ) result.capacityQuery = true;
+
+  // V8.00: 인수인계 — "인수인계", "인계 자료", "다음 검수사에게 넘겨", "교대"
+  //   남은 작업 + (양하 남으면)신고할 것 + 특이사항을 한 화면에. customs보다 먼저.
+  if (/인수\s*인계|인계\s*(?:자료|서|할|해|준비|내용)|넘겨야|넘겨\s*줘|교대|다음\s*검수사|다음\s*사람|작업\s*마무리\s*못/i.test(t)) {
+    result.handoverQuery = true;
+  }
+
+  // V7.99-16: 양하신고 점검 — "양하신고할까?", "신고할까", "세관 신고", "이상 건"
+  //   그날 발생한 이상(누락/초과/바뀜/리씰/실오류)을 모아 신고서 작성용으로 정리.
+  if (/양하\s*신고|신고\s*(?:할|하|준비|점검|목록|항목)|세관\s*(?:신고|보고)|이상\s*(?:건|사항|있|발생)|신고\s*리스트|신고서/i.test(t)) {
+    result.customsReportQuery = true;
+  }
+
+  // V7.99-15: 완료 예정 시각 — "몇 시에 끝나?", "언제 끝나?", "이 속도면 얼마나?"
+  //   시간·완료시각 의도가 분명할 때만 (그냥 "몇 개 남았어"는 progress='pending'로 둠).
+  //   진행 페이스(완료 타임스탬프)로 남은 시간·완료 시각을 계산해 대화체로 답한다.
+  if (/몇\s*시(?:에|쯤|까지)?\s*(?:끝|완료|마|종료)|언제\s*(?:끝|완료|마치|다\s*돼|다\s*해)|끝나(?:는|나|려|)\s*(?:시간|시각|시|때)|완료\s*(?:예상|예정|시각|시간)|이\s*(?:속도|페이스)|얼마나\s*(?:걸|남았.*끝|더.*걸)|몇\s*시간\s*(?:남|걸|더)|예상\s*(?:완료|종료|시간)|퇴근|점심.*(?:전|까지).*(?:끝|돼)/i.test(t)) {
+    result.etaQuery = true;
+  }
 
   // M3.3: 진행 상황
   if (/들어갔|들어간|들어가\s*있|실었|실은|올라\s*간|올라간|쌓은|쌓았|쌓았지|완료\s*된|완료된|완료\s*몇|완료\s*된\s*거|완료\s*컨|끝낸|끝난|마친|마쳤|내렸|내린\s*거|다\s*했|다\s*됐|다\s*끝/i.test(t)) {   // V7.91-02: 내렸·다 했 추가
@@ -411,7 +433,7 @@ export function hasAnyCondition(parsed) {
             parsed.progressQuery || parsed.tierStackQuery ||
             parsed.bottomQuery || parsed.topQuery || parsed.vacantQuery ||
             parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery ||
-            parsed.tierPlaceCountQuery || parsed.tierInContextQuery);
+            parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery);
 }
 
 // ─── 베이별 슬롯 맵 (재사용) ───
@@ -431,6 +453,16 @@ function buildBaySlotMap(allContainers) {
 export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);
+
+  // V7.99-16: 양하신고 점검 — 그날 이상 건 정리. 최우선.
+  if (parsed.customsReportQuery) {
+    return formatCustomsReport(parsed, allContainers, ctx);
+  }
+
+  // V7.99-15: 완료 예정 시각 — 진행 페이스로 계산해 대화체로. progress보다 먼저.
+  if (parsed.etaQuery) {
+    return formatEta(parsed, allContainers, ctx);
+  }
 
   // V7.99-10 (메모6 수동): 홀드/데크 개수 질문 2종.
   //   tierPlaceCountQuery = "홀드 몇 개 남았어" → 작업 남은 단이 몇 곳인지 + 베이 번호 한 번에.
@@ -1142,7 +1174,266 @@ function formatProgress(parsed, results, allContainers) {
   return lines.join('\n');
 }
 
-// ─── V7.92: 챗봇형 답변 (자기소개·시간) — 첫 줄은 음성으로 읽히므로 한 문장으로 ───
+// ─── V7.99-15: 완료 예정 시각 (대화체) ───
+//   데이터에 이미 있는 완료 타임스탬프(c._comp.at)로 실제 작업 페이스를 직접 계산한다.
+//   사용자가 속도를 말해줄 필요 없음. AI도 필요 없음 — 순수 로컬 계산.
+//   검수사가 종일 단조로운 작업 중이라, 숫자만 던지지 않고 동료처럼 한마디 거든다.
+function formatEta(parsed, allContainers, ctx) {
+  // allContainers는 호출부에서 이미 평택분만 넘어옴(SearchPanel _ptk 필터).
+  //   반환은 다른 답변과 동일하게 '문자열' — 첫 줄이 음성으로 읽히므로 첫 줄에 대화체 한 문장.
+  const total = allContainers.length;
+  const doneAts = allContainers
+    .map(c => (c._comp && typeof c._comp === 'object' ? c._comp.at : null))
+    .filter(at => typeof at === 'number' && at > 0)
+    .sort((a, b) => a - b);
+  const doneCount = allContainers.filter(c => !!c._comp).length;
+  const remain = Math.max(0, total - doneCount);
+
+  if (total > 0 && remain === 0) {
+    return `작업 다 끝났어요. 수고 많으셨습니다.\n🎉 평택분 ${total}대 전부 완료했어요.`;
+  }
+  if (doneCount === 0) {
+    return `아직 시작 전이에요. 평택분 ${total}대 남았어요.\n몇 대 진행되면 페이스를 보고 완료 시각을 알려드릴게요.`;
+  }
+  if (doneAts.length < 2) {
+    return `${remain}대 남았어요. 조금 더 진행되면 끝날 시각을 알려드릴게요.\n완료 ${doneCount}대 · 남은 ${remain}대 — 아직 페이스를 잴 기록이 부족해요.`;
+  }
+
+  // 최근 페이스 우선 — 최근 20개(없으면 전체) 완료 간격으로 시간당 처리량.
+  const recent = doneAts.slice(-Math.min(20, doneAts.length));
+  const spanMs = recent[recent.length - 1] - recent[0];
+  const perHour = spanMs > 0 ? (recent.length - 1) / (spanMs / 3600000) : 0;
+  if (!(perHour > 0)) {
+    return `${remain}대 남았어요.\n완료 간격이 너무 짧아 페이스를 계산하기 어려워요. 조금 더 진행되면 다시 물어봐 주세요.`;
+  }
+
+  const remainMin = Math.round((remain / perHour) * 60);
+  const eta = new Date(Date.now() + remainMin * 60000);
+  const hh = eta.getHours(), mm = eta.getMinutes();
+  const ampm = hh < 12 ? '오전' : '오후';
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  const etaStr = `${ampm} ${h12}시 ${String(mm).padStart(2, '0')}분`;
+  const etaShort = mm === 0 ? `${h12}시` : `${h12}시 ${String(mm).padStart(2, '0')}분`;
+  const rate = Math.round(perHour);
+
+  const hPart = Math.floor(remainMin / 60), mPart = remainMin % 60;
+  let durKo = hPart > 0 && mPart > 0 ? `약 ${hPart}시간 ${mPart}분`
+            : hPart > 0 ? `약 ${hPart}시간` : `약 ${mPart}분`;
+
+  let cheer = '';
+  if (remain <= 10) cheer = ' 거의 다 왔어요.';
+  else if (remain <= total * 0.25) cheer = ' 막바지네요, 조금만 더.';
+  else if (remain >= total * 0.75) cheer = ' 차근차근 가요.';
+
+  // 첫 줄 = 음성용 대화 문장. 이후 = 화면 상세.
+  return (
+    `${remain}대 남았어요. 지금 페이스면 ${durKo}, ${etaShort}쯤 끝나겠네요.${cheer}\n` +
+    `⏱ 예상 완료: ${etaStr}쯤\n` +
+    `남은 작업: ${remain}대 (완료 ${doneCount} / 전체 ${total})\n` +
+    `현재 페이스: 시간당 약 ${rate}대 (최근 ${recent.length}대 기준)\n` +
+    `남은 시간: ${durKo}`
+  );
+}
+
+// ─── V7.99-16: 양하신고 점검 ───
+//   "양하신고할까?" → 그날 발생한 이상 건을 신고 리스트(세관 신고) 기준으로 정리.
+//   판별(데이터 기반, 추측 없음):
+//     누락 = flag 'missing'(선박에 없어 완료) + 보조: 리스트에 있으나 미완료(작업 종료 시 안 내려진 것)
+//     초과 = flag 'extra'(리스트에 없는데 내림) + 보조: _src==='edi'(리스트 밖)인데 완료된 것
+//     바뀜 = flag 'swapped'(다른 번호가 옴)
+//     리씰 = sl_orig ≠ 현재 sl (현장에서 실을 다시 단 것)
+//     실오류 = auditSeals (중복·혼입·자리수)
+//   allContainers는 평택분(SearchPanel _ptk 필터). 각 컨은 _comp(={at,flag,note}|null), _src, sl, sl_orig 보유.
+function formatCustomsReport(parsed, allContainers, ctx) {
+  const cs = allContainers || [];
+  const compInfo = (c) => (c._comp && typeof c._comp === 'object') ? c._comp : (c._comp ? {} : null);
+  const last4 = (c) => (c.cn || '').slice(-4) || '?';
+  const onList = (c) => c._src === 'list' || c._src === 'both';  // 신고 리스트에 있음
+
+  // 1) 누락 — 명시 flag + 보조(리스트에 있는데 미완료)
+  const missingFlagged = cs.filter(c => compInfo(c)?.flag === 'missing');
+  const pendingOnList = cs.filter(c => onList(c) && !c._comp);  // 작업 종료 전이면 정상, 종료 후면 누락 의심
+  // 2) 초과 — 명시 flag + 보조(리스트 밖인데 완료)
+  const extraFlagged = cs.filter(c => compInfo(c)?.flag === 'extra');
+  const extraImplied = cs.filter(c => c._src === 'edi' && c._comp && compInfo(c)?.flag !== 'extra');
+  // 3) 바뀜
+  const swapped = cs.filter(c => compInfo(c)?.flag === 'swapped');
+  // 4) 리씰 (원본 실번호와 현재가 다름)
+  const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-]/g, '');
+  const reseal = cs.filter(c => c.sl_orig && c.sl && norm(c.sl_orig) !== norm(c.sl));
+  // 5) 실오류
+  const audit = auditSeals(cs);
+  const sealErrs = audit.items || [];
+
+  // 중복 제거 헬퍼
+  const uniq = (arr) => { const seen = new Set(); return arr.filter(c => { if (seen.has(c.cn)) return false; seen.add(c.cn); return true; }); };
+  const missing = uniq(missingFlagged);
+  const extra = uniq([...extraFlagged, ...extraImplied]);
+
+  const totalIssues = missing.length + extra.length + swapped.length + reseal.length + sealErrs.length;
+
+  // 음성용 첫 줄 (요약 한 문장)
+  const sumParts = [];
+  if (missing.length) sumParts.push(`누락 ${missing.length}건`);
+  if (extra.length) sumParts.push(`초과 ${extra.length}건`);
+  if (swapped.length) sumParts.push(`바뀜 ${swapped.length}건`);
+  if (reseal.length) sumParts.push(`리씰 ${reseal.length}건`);
+  if (sealErrs.length) sumParts.push(`실오류 ${sealErrs.length}건`);
+
+  const lines = [];
+  if (totalIssues === 0) {
+    lines.push('이상 건 없습니다. 신고 리스트 그대로 신고하시면 돼요.');
+    lines.push('📋 양하신고 점검 — 이상 없음');
+    if (pendingOnList.length) {
+      lines.push('', `※ 아직 완료 안 된 컨 ${pendingOnList.length}대 있어요. 작업이 끝난 게 맞다면 누락일 수 있으니 확인하세요.`);
+    }
+    return lines.join('\n');
+  }
+
+  lines.push(`신고 전 확인하세요. 이상 ${totalIssues}건 — ${sumParts.join(', ')}.`);
+  lines.push('📋 양하신고 점검 결과');
+
+  if (missing.length) {
+    lines.push('', `🚫 누락 ${missing.length}건 (선박에 없음 / 신고 리스트에서 빼거나 사고 보고):`);
+    missing.slice(0, 20).forEach((c, i) => {
+      const n = compInfo(c)?.note;
+      lines.push(`  ${i + 1}. ${last4(c)}  ${c.cn || ''}${n ? ' — ' + n : ''}`);
+    });
+  }
+  if (extra.length) {
+    lines.push('', `➕ 초과 ${extra.length}건 (리스트에 없는데 내려짐 / 신고에 추가):`);
+    extra.slice(0, 20).forEach((c, i) => {
+      const n = compInfo(c)?.note;
+      lines.push(`  ${i + 1}. ${last4(c)}  ${c.cn || ''} @ ${fmtPos(c) || '위치미상'}${n ? ' — ' + n : ''}`);
+    });
+  }
+  if (swapped.length) {
+    lines.push('', `🔄 컨테이너 바뀜 ${swapped.length}건 (신고 번호와 다른 컨이 옴):`);
+    swapped.slice(0, 20).forEach((c, i) => {
+      const n = compInfo(c)?.note;
+      lines.push(`  ${i + 1}. 실제 ${last4(c)}  ${c.cn || ''}${n ? ' (신고: ' + n + ')' : ''}`);
+    });
+  }
+  if (reseal.length) {
+    lines.push('', `🔒 리씰 ${reseal.length}건 (현장에서 실번호 변경 — 신고서 실번호 반영):`);
+    reseal.slice(0, 20).forEach((c, i) => {
+      lines.push(`  ${i + 1}. ${last4(c)}  ${c.sl_orig} → ${c.sl}`);
+    });
+  }
+  if (sealErrs.length) {
+    lines.push('', `⚠ 실번호 오류 ${sealErrs.length}건 (점검 권장):`);
+    sealErrs.slice(0, 20).forEach((e, i) => {
+      lines.push(`  ${i + 1}. ${e.cn}  ${e.seal || ''} — ${e.reason}`);
+    });
+  }
+  if (pendingOnList.length) {
+    lines.push('', `※ 아직 완료 안 된 컨 ${pendingOnList.length}대. 작업이 끝났다면 누락 여부 확인하세요.`);
+  }
+  return lines.join('\n');
+}
+
+// ─── V8.00: 인수인계서 생성 ───
+//   "인수인계 자료 만들어줘" → 남은 작업 + (양하 남으면)양하신고할 것 + 특이사항을 한 화면에.
+//   2단계 대화: SearchPanel이 이 함수로 초안 생성 → 검수사에게 "특이사항/더 전달할 것" 되물음 →
+//   답을 extraNote로 받아 다시 호출하면 메모가 합쳐진 최종본.
+//   allContainers는 평택분(_ptk). 양하·선적 둘 다 _mode로 구분해 집계.
+//   handoverInfo: { byInspector, voyageLabel, shipName, extraNote } (선택)
+export function generateHandover(allContainers, handoverInfo = {}) {
+  const cs = allContainers || [];
+  const compInfo = (c) => (c._comp && typeof c._comp === 'object') ? c._comp : (c._comp ? {} : null);
+  const last4 = (c) => (c.cn || '').slice(-4) || '?';
+
+  const disch = cs.filter(c => c._mode === 'discharge');
+  const load = cs.filter(c => c._mode === 'loading');
+  const dischDone = disch.filter(c => c._comp).length;
+  const loadDone = load.filter(c => c._comp).length;
+  const dischPend = disch.length - dischDone;
+  const loadPend = load.length - loadDone;
+
+  const lines = [];
+  const now = new Date();
+  const hh = now.getHours(), mm = now.getMinutes();
+  const ts = `${now.getMonth() + 1}/${now.getDate()} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+
+  // 헤더
+  lines.push(`📋 인수인계서  (${ts} 작성${handoverInfo.byInspector ? ' · ' + handoverInfo.byInspector : ''})`);
+  if (handoverInfo.shipName || handoverInfo.voyageLabel) {
+    lines.push(`선박/항차: ${handoverInfo.shipName || ''} ${handoverInfo.voyageLabel || ''}`.trim());
+  }
+
+  // 1) 남은 작업
+  lines.push('', '━━ 남은 작업 ━━');
+  if (disch.length) {
+    lines.push(`⬇ 양하: 남은 ${dischPend}대 / 전체 ${disch.length}대 (완료 ${dischDone})`);
+  }
+  if (load.length) {
+    lines.push(`⬆ 선적: 남은 ${loadPend}대 / 전체 ${load.length}대 (완료 ${loadDone})`);
+  }
+  if (!disch.length && !load.length) lines.push('작업 데이터 없음.');
+
+  // 남은 작업 베이 분포 (어디가 남았는지 한눈에)
+  const pendBays = (arr) => {
+    const set = new Set();
+    arr.forEach(c => { if (!c._comp && c.bay != null) { const b = parseInt(normalizeBay(c.bay), 10); if (!isNaN(b)) set.add(b); } });
+    return [...set].sort((a, b) => a - b);
+  };
+  if (dischPend > 0) {
+    const bs = pendBays(disch);
+    if (bs.length) lines.push(`  · 양하 남은 베이: ${bs.join(', ')}`);
+  }
+  if (loadPend > 0) {
+    const bs = pendBays(load);
+    if (bs.length) lines.push(`  · 선적 남은 베이: ${bs.join(', ')}`);
+  }
+
+  // 2) 양하신고할 것 (양하분이 있으면) — formatCustomsReport와 같은 판별
+  if (disch.length) {
+    const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-]/g, '');
+    const onList = (c) => c._src === 'list' || c._src === 'both';
+    const missing = disch.filter(c => compInfo(c)?.flag === 'missing');
+    const extra = disch.filter(c => compInfo(c)?.flag === 'extra' || (c._src === 'edi' && c._comp));
+    const swapped = disch.filter(c => compInfo(c)?.flag === 'swapped');
+    const reseal = disch.filter(c => c.sl_orig && c.sl && norm(c.sl_orig) !== norm(c.sl));
+    const audit = auditSeals(disch);
+    const sealErrs = audit.items || [];
+    const uniq = (arr) => { const s = new Set(); return arr.filter(c => { if (s.has(c.cn)) return false; s.add(c.cn); return true; }); };
+    const mU = uniq(missing), eU = uniq(extra);
+    const totalIssues = mU.length + eU.length + swapped.length + reseal.length + sealErrs.length;
+
+    lines.push('', '━━ 양하신고 (인계 시 처리/공유) ━━');
+    if (totalIssues === 0) {
+      lines.push('이상 건 없음.');
+    } else {
+      if (mU.length) lines.push(`🚫 누락 ${mU.length}: ${mU.slice(0, 10).map(last4).join(', ')}`);
+      if (eU.length) lines.push(`➕ 초과 ${eU.length}: ${eU.slice(0, 10).map(last4).join(', ')}`);
+      if (swapped.length) lines.push(`🔄 바뀜 ${swapped.length}: ${swapped.slice(0, 10).map(last4).join(', ')}`);
+      if (reseal.length) lines.push(`🔒 리씰 ${reseal.length}: ${reseal.slice(0, 10).map(c => `${last4(c)}(${c.sl_orig}→${c.sl})`).join(', ')}`);
+      if (sealErrs.length) lines.push(`⚠ 실오류 ${sealErrs.length}: ${sealErrs.slice(0, 10).map(e => e.cn).join(', ')}`);
+    }
+  }
+
+  // 3) 특이사항 — 데이터로 잡히는 것 (리퍼 온도 미입력, 위험물, XRAY 미처리 등)
+  const special = [];
+  const reefers = cs.filter(c => isReeferContainer(c) && !c._comp);
+  const reeferNoTmp = reefers.filter(c => !c.tmp && c.fe !== 'E');
+  if (reeferNoTmp.length) special.push(`냉동 온도 미입력 ${reeferNoTmp.length}대 (조회 시 입력 필요)`);
+  const dg = cs.filter(c => c.dg && !c._comp);
+  if (dg.length) special.push(`위험물 ${dg.length}대 — 별도 취급`);
+  const fr = cs.filter(c => (c.fr || c.ot) && !c._comp);
+  if (fr.length) special.push(`FR/OT ${fr.length}대 — 적재 제약 주의`);
+  if (special.length) {
+    lines.push('', '━━ 특이사항 ━━');
+    special.forEach(s => lines.push(`· ${s}`));
+  }
+
+  // 4) 검수사 직접 메모 (되묻기로 받은 것)
+  if (handoverInfo.extraNote && handoverInfo.extraNote.trim()) {
+    lines.push('', '━━ 인계 메모 (검수사 직접 전달) ━━');
+    lines.push(handoverInfo.extraNote.trim());
+  }
+
+  return lines.join('\n');
+}
 export function generateIntroAnswer(shipName) {
   const ship = shipName ? `지금은 ${shipName} 작업 자료로 답하고 있습니다.` : '작업 선박을 선택하면 그 자료로 답합니다.';
   return [

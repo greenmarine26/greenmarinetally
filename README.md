@@ -1,4 +1,4 @@
-# Tallyman Master V7.99-14
+# Tallyman Master V8.00
 
 평택항 컨테이너선 양하·선적 검수앱 (React/Vite PWA + Firebase).
 

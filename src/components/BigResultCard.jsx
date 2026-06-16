@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
-import { speakDone } from '../voice.js';
+import { speakDone, speak } from '../voice.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
@@ -50,6 +50,23 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   const labelMap = {
     amber: 'bg-amber-700 text-amber-50',
     cyan: 'bg-cyan-700 text-cyan-50',
+  };
+
+  // V7.99-16: 누락 완료 — 신고 리스트엔 있으나 선박에 없는 컨. 'missing' flag로 완료 기록.
+  const handleMissing = async (e) => {
+    e.stopPropagation();
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    askConfirm({
+      title: '누락 처리',
+      message: `${c.cn}\n선박에 없는 컨테이너로 기록하고 완료합니다.\n(양하신고 점검에 '누락'으로 잡힙니다)`,
+      confirmLabel: '누락 완료',
+      cancelLabel: '취소',
+      onConfirm: async () => {
+        await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'missing', '선박에 없음');
+        speak(`${(c.cn || '').slice(-4)} 누락 처리`, { conversational: true });
+        if (onAfterComplete) setTimeout(() => onAfterComplete(c), 500);
+      },
+    });
   };
 
   const handleComplete = async (e) => {
@@ -210,6 +227,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           : <><Check className="w-5 h-5"/>{c._mode === 'discharge' ? '양하확인' : '선적확인'}</>
         }
       </button>
+
+      {/* V7.99-16: 양하 모드 — 선박에 없는 컨(누락) 처리 */}
+      {!isLoading && !isDone && (
+        <button onClick={handleMissing}
+          className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-slate-800 hover:bg-rose-900 text-rose-300 border border-rose-800 flex items-center justify-center gap-1.5">
+          🚫 선박에 없음 (누락 처리)
+        </button>
+      )}
 
       {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}
       {isLoading && (
