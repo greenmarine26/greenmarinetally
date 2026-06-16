@@ -69,6 +69,7 @@ export function parseNaturalQuery(text) {
     bottomQuery: false, topQuery: false,
     vacantQuery: false,
     posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
+    bayTrio: null,   // V8.03-01: 짝수 베이+구역 = 트리오(23·24·25) 전체
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
     twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
     tierPlaceCountQuery: null,   // V7.99-10: 'hold'|'deck' — "홀드 몇 개 남았어"(에 없음) = 작업 남은 단(곳) 개수+베이 나열
@@ -147,6 +148,16 @@ export function parseNaturalQuery(text) {
   if (/갑판|데크|deck/i.test(t)) result.zone = 'deck';   // V7.91-02: '데크' 한글 추가
   else if (/창내|선창|hold|홀드/i.test(t)) result.zone = 'hold';
 
+  // V8.03-01 (오답 [5]): "24번 홀드/데크"처럼 짝수 베이 + 구역을 함께 물으면
+  //   23·24·25 트리오 전체를 뜻한다(검수사 메모). 홀수(23·25)는 진짜 개별 홀드.
+  //   짝수 베이 + zone 명시일 때만 트리오로 확장. (단순 끝4자리 조회와 충돌 없음)
+  if (result.bay && result.zone) {
+    const b = parseInt(result.bay, 10);
+    if (Number.isFinite(b) && b % 2 === 0) {
+      result.bayTrio = [String(b - 1).padStart(2, '0'), result.bay, String(b + 1).padStart(2, '0')];
+    }
+  }
+
   // DG 클래스 / UN
   const clsMatch = t.match(/(?:클래스|class|급)\s*(\d(?:\.\d)?)/i);
   if (clsMatch) {
@@ -171,15 +182,16 @@ export function parseNaturalQuery(text) {
 
   // V7.99-16: 양하신고 점검 — "양하신고할까?", "신고할까", "세관 신고", "이상 건"
   //   그날 발생한 이상(누락/초과/바뀜/리씰/실오류)을 모아 신고서 작성용으로 정리.
-  if (/양하\s*신고|신고\s*(?:할|하|준비|점검|목록|항목)|세관\s*(?:신고|보고)|이상\s*(?:건|사항|있|발생)|신고\s*리스트|신고서/i.test(t)) {
+  if (/양하\s*신고|신고\s*(?:할|하|준비|점검|목록|항목)|세관\s*(?:신고|보고)|이상\s*(?:건|사항|있|발생)|특이\s*(?:사항|점|건)\s*(?:있|없|뭐|정리|알려)?|문제\s*(?:있|발생|생긴)|신고\s*리스트|신고서/i.test(t)) {
     result.customsReportQuery = true;
   }
 
   // V7.99-15: 완료 예정 시각 — "몇 시에 끝나?", "언제 끝나?", "이 속도면 얼마나?"
   //   시간·완료시각 의도가 분명할 때만 (그냥 "몇 개 남았어"는 progress='pending'로 둠).
   //   진행 페이스(완료 타임스탬프)로 남은 시간·완료 시각을 계산해 대화체로 답한다.
-  if (/몇\s*시(?:에|쯤|까지)?\s*(?:끝|완료|마|종료)|언제\s*(?:끝|완료|마치|다\s*돼|다\s*해)|끝나(?:는|나|려|)\s*(?:시간|시각|시|때)|완료\s*(?:예상|예정|시각|시간)|이\s*(?:속도|페이스)|얼마나\s*(?:걸|남았.*끝|더.*걸)|몇\s*시간\s*(?:남|걸|더)|예상\s*(?:완료|종료|시간)|퇴근|점심.*(?:전|까지).*(?:끝|돼)/i.test(t)) {
+  if (/몇\s*시(?:에|쯤|까지|쯤에|즈음)*\s*(?:끝|완료|마|종료)|언제\s*(?:끝|완료|마치|다\s*돼|다\s*해)|끝나(?:는|나|려|)\s*(?:시간|시각|시|때)?|완료\s*(?:예상|예정|시각|시간)|이\s*(?:속도|페이스)|얼마나\s*(?:걸|남았.*끝|더.*걸)|몇\s*시간\s*(?:남|걸|더)|예상\s*(?:완료|종료|시간)|퇴근|점심.*(?:전|까지).*(?:끝|돼)/i.test(t)) {
     result.etaQuery = true;
+    result.timeQuery = false;   // V8.03-01: "끝/완료" 의도면 현재 시각이 아니라 종료 추정으로 (오답 [4])
   }
 
   // M3.3: 진행 상황
@@ -235,13 +247,13 @@ export function parseNaturalQuery(text) {
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어떤\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;   // V7.91-02: 어떤 베이
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약/i.test(t)) result.briefingQuery = true;
   // V7.92: 챗봇형 질문 — 자기소개·시간·날씨·입출항 (사용자 요청: "넌 뭐야"에 답하기)
-  if (/(?:^|\s)(?:넌|너는|네가|니가|너)\s*(?:뭐|누구)|누구세요|누구냐|누구니|누구야|자기\s*소개|소개\s*해/i.test(t)) result.introQuery = true;
-  if (/몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|오늘\s*며칠|며칠이야|무슨\s*요일|오늘\s*날짜|날짜\s*알려/i.test(t)) result.timeQuery = true;
+  if (/(?:^|\s)(?:넌|너는|네가|니가|너|당신|당신이)\s*(?:뭐|누구|하는\s*일|할\s*수|어떤\s*일)|누구세요|누구냐|누구니|누구야|자기\s*소개|소개\s*해|무슨\s*(?:일|기능)|뭐\s*(?:하는|할\s*수)|어떤\s*(?:일|기능|걸\s*할)/i.test(t)) result.introQuery = true;
+  if (!result.etaQuery && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|오늘\s*며칠|며칠이야|무슨\s*요일|오늘\s*날짜|날짜\s*알려/i.test(t)) result.timeQuery = true;
   if (/날씨|기온\s*어때|바람\s*어때|비\s*(와|오나|올까)|눈\s*(와|오나|올까)/i.test(t)) result.weatherQuery = true;
   if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어오|언제\s*나가/i.test(t)) result.schedQuery = true;
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
-  if (/(실번호|씰|실)\s*(점검|검사|오류|확인|체크)/i.test(t)) result.sealAuditQuery = true;
+  if (/(실\s*번호|씰|실)\s*(점검|검사|오류|확인|체크)|리스트\s*(점검|검사|확인|체크)|점검\s*(?:해|좀|줘|할까)/i.test(t)) result.sealAuditQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   if (/리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등
 
@@ -308,7 +320,12 @@ export function applyNLFilter(containers, parsed) {
   else if (parsed.type === 'ot') r = r.filter(c => c.ot || /OT$/.test(isoToLabel(c.iso) || ''));
   else if (parsed.type === 'oog') r = r.filter(c => c.oog || c.fr || c.ot);
 
-  if (parsed.bay) r = r.filter(c => normalizeBay(c.bay) === parsed.bay);
+  if (parsed.bayTrio && parsed.bayTrio.length) {
+    const set = new Set(parsed.bayTrio.map(b => normalizeBay(b)));
+    r = r.filter(c => set.has(normalizeBay(c.bay)));   // V8.03-01: 짝수 홀드/데크 = 트리오 전체
+  } else if (parsed.bay) {
+    r = r.filter(c => normalizeBay(c.bay) === parsed.bay);
+  }
 
   const portMatch = (cVal, code) => {
     if (!cVal || !code) return false;
