@@ -367,6 +367,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return baseContainers;
   }, [ediMap, recMap, mode, sec.extras]);
 
+  // V8.06: LOLO/IFCSUM 선박 판정 — 컨테이너에 베이 위치가 하나도 없으면 LOLO 전용.
+  //   RIZHAO ORIENT 등 RORO/LOLO 혼용선은 IFCSUM(베이 없음)으로 명세만 제공된다.
+  //   베이 그림이 무의미하므로 리스트 기반 LOLO 탭을 노출한다(기존 베이 선박엔 영향 0).
+  const isLoloShip = useMemo(() => {
+    if (!containers.length) return false;
+    return containers.every(c => !c.bay && !c.row && !c.tier);
+  }, [containers]);
+
   // M3.5.5: 선박 정책 매칭 (DEFAULT + Firebase extra)
   const shipPolicy = useMemo(() => {
     const vsl = voyage?.info?.vsl || '';
@@ -518,7 +526,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', i: ListChecks },
           { k: 'search', t: '🎤 자연어', i: SearchIcon },
-          { k: 'bay', t: '베이', i: MapPin },
+          ...(isLoloShip
+            ? [{ k: 'lolo', t: 'LOLO', i: ListChecks }]
+            : [{ k: 'bay', t: '베이', i: MapPin }]),
           { k: 'stats', t: '통계', i: BarChart3 },
           { k: 'report', t: '결과', i: FileCheck },
           { k: 'data', t: '업로드', i: Upload },
@@ -915,6 +925,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           portMisData={portMisData}
         />
       )}
+      {tab === 'lolo' && (
+        <LoloTab
+          voyageKey={voyageKey} mode={mode}
+          containers={containers} compMap={compMap}
+          xrayMap={xrayMap} xraySeals={xraySeals}
+          inspector={inspector}
+          onOpenContainer={(c) => setDetailC(c)}
+        />
+      )}
       {tab === 'bay' && (() => {
         // M4.9e 3단계: 자리 뺏긴 컨테이너 검출 (사용자 요청)
         //   컨 X가 actual 위치(11/11/11)로 이동 → 거기 원래 계획된 컨 Y는 자리 뺏김
@@ -1227,6 +1246,93 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 }
 
 // 옛 BayTab 제거 (BayPlan 컴포넌트로 대체됨)
+
+// === LOLO 탭 (V8.06) ===
+// RIZHAO ORIENT 등 RORO/LOLO 혼용선 전용. 베이 그림 없이 리스트로 검수.
+//   기존 ContainerList·ContainerDetailModal·firebase 함수를 그대로 재사용.
+//   "조회·실체크한 것만 누적" — 검수사가 실제 처리(완료)한 컨만 누적분으로 모음.
+function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer }) {
+  const [filter, setFilter] = useState('all'); // all | done(누적) | undone
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    let arr = containers;
+    if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
+    else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
+    if (search) {
+      const q = search.toUpperCase();
+      arr = arr.filter(c => c.cn?.includes(q) || c.l4?.includes(q));
+    }
+    return arr;
+  }, [containers, filter, search, compMap]);
+
+  const stats = useMemo(() => ({
+    total: containers.length,
+    done: containers.filter(c => compMap[c.cn]).length,
+  }), [containers, compMap]);
+
+  // 규격별 누적 집계 (제출 양식 하단 합계와 동일 기준)
+  const sizeStats = useMemo(() => {
+    const acc = { '20': 0, '40': 0, '45': 0 };
+    containers.filter(c => compMap[c.cn]).forEach(c => {
+      const lbl = isoToLabel(c.iso) || '';
+      if (lbl.startsWith('20')) acc['20']++;
+      else if (lbl.startsWith('45')) acc['45']++;
+      else acc['40']++;
+    });
+    return acc;
+  }, [containers, compMap]);
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-cyan-950/40 border border-cyan-800/40 rounded-lg px-3 py-2 text-[12px] text-cyan-200">
+        <b>LOLO 검수</b> — 베이 없이 리스트로 작업합니다. 컨테이너를 조회해 실체크·데미지·확인하면 누적분에 모입니다.
+        <div className="mt-1 text-cyan-300/80">
+          누적 {stats.done} / 전체 {stats.total}
+          <span className="ml-2 text-cyan-400/70">(20′ {sizeStats['20']} · 40′ {sizeStats['40']} · 45′ {sizeStats['45']})</span>
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2">
+        <div className="relative flex-1">
+          <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"/>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value.toUpperCase())}
+            placeholder="끝4자리 / 컨번호"
+            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-1.5 text-sm mono focus:outline-none focus:border-cyan-500"
+          />
+          {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
+        </div>
+      </div>
+
+      <div className="flex gap-1 flex-wrap text-[11px]">
+        {[
+          { k: 'all', t: `전체 ${stats.total}` },
+          { k: 'undone', t: `미처리 ${stats.total - stats.done}` },
+          { k: 'done', t: `누적(처리) ${stats.done}` },
+        ].map(({ k, t }) => (
+          <button key={k} onClick={() => setFilter(k)}
+            className={`px-2.5 py-1 rounded font-bold ${
+              filter === k ? 'bg-cyan-700 text-cyan-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            }`}>{t}</button>
+        ))}
+      </div>
+
+      <ContainerList
+        list={filtered}
+        compMap={compMap}
+        xrayMap={xrayMap}
+        xraySeals={xraySeals}
+        mode={mode}
+        voyageKey={voyageKey}
+        inspector={inspector}
+        onOpenContainer={onOpenContainer}
+      />
+    </div>
+  );
+}
 
 // === 자료 탭 ===
 function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {

@@ -3,6 +3,7 @@ import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, Check
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
+import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import { isChief } from '../staffList.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
@@ -105,6 +106,51 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     });
     return list;
   }, [voyages, extraPolicies]);
+
+  // V8.06: LOLO 항차 감지 — 컨테이너에 베이 위치가 하나도 없으면 LOLO/IFCSUM 선박.
+  //   각 모드(양하/선적)별로 처리된(completed) 건이 있으면 제출 리스트 내보내기 대상.
+  const loloVoyages = useMemo(() => {
+    const list = [];
+    Object.entries(voyages || {}).forEach(([key, v]) => {
+      ['discharge', 'loading'].forEach(mode => {
+        const sec = v[mode];
+        if (!sec) return;
+        const ediMap = sec.ediContainers || {};
+        const ediArr = Object.values(ediMap);
+        if (ediArr.length === 0) return;
+        // 베이가 하나도 없으면 LOLO
+        const isLolo = ediArr.every(c => !c.bay && !c.row && !c.tier);
+        if (!isLolo) return;
+        const doneCount = Object.keys(sec.completed || {}).length;
+        list.push({
+          voyageKey: key,
+          voyage: v,
+          mode,
+          vsl: v?.info?.vsl || '',
+          voy: v?.info?.voy || v?.info?.voyage || '',
+          total: ediArr.length,
+          done: doneCount,
+          sec,
+        });
+      });
+    });
+    return list;
+  }, [voyages]);
+
+  // LOLO 제출 리스트 내보내기 (두 양식)
+  const exportLolo = (item, kind) => {
+    const rows = buildLoloRows(item.sec);
+    if (rows.length === 0) { alert('처리(완료)된 컨테이너가 없습니다. 검수사가 실체크·확인한 뒤 내보낼 수 있습니다.'); return; }
+    const today = new Date();
+    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const meta = { vsl: item.vsl, voy: item.voy, date: stamp, port: 'PYEONGTAEK, KOREA', mode: item.mode };
+    const modeKo = item.mode === 'discharge' ? '양하' : '선적';
+    if (kind === 'seal') {
+      downloadText(`LOLO_실번호리스트_${item.vsl}_${modeKo}_${stamp}.txt`, buildActualSealListText(meta, rows));
+    } else {
+      downloadText(`LOLO_검수리스트_${item.vsl}_${modeKo}_${stamp}.txt`, buildLoadingListText(meta, rows));
+    }
+  };
 
   // 오답 리포트 정렬 (최신순, 미해결 먼저)
   const feedbackList = useMemo(() => {
@@ -458,6 +504,44 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           <div className="space-y-3">
             {sealVoyages.map(sv => (
               <SealVoyageCard key={`${sv.voyageKey}-${sv.mode}`} sv={sv} onOpenVoyage={onOpenVoyage}/>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* V8.06: LOLO 검수 제출 리스트 (RIZHAO 등 RORO/LOLO 혼용선) */}
+      {loloVoyages.length > 0 && (
+        <div className="bg-slate-900 border border-cyan-800/40 rounded-xl p-3 mt-3">
+          <div className="flex items-center gap-2 mb-3">
+            <Truck className="w-4 h-4 text-cyan-400"/>
+            <div className="text-sm font-bold text-slate-100">LOLO 검수 제출 리스트</div>
+            <span className="text-[10px] text-cyan-300/70">베이 없는 LOLO 선박 · 처리분만 내보냄</span>
+          </div>
+          <div className="space-y-2">
+            {loloVoyages.map((item, idx) => (
+              <div key={`${item.voyageKey}-${item.mode}`}
+                className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-slate-100 truncate">
+                    {item.vsl || '(선박명 없음)'} <span className="text-cyan-300">{item.voy}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    {item.mode === 'discharge' ? '양하' : '선적'} · 처리 {item.done} / 전체 {item.total}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button onClick={() => exportLolo(item, 'seal')}
+                    title="실번호 변경·리씰·실오류 건만 (ACTUAL SEAL LIST 형식)"
+                    className="text-[10px] text-cyan-200 hover:text-white px-2 py-1 rounded border border-cyan-700/50 bg-cyan-900/30 flex items-center gap-1">
+                    <Send className="w-3 h-3"/>실번호
+                  </button>
+                  <button onClick={() => exportLolo(item, 'loading')}
+                    title="처리분 전체 (LOADING LIST 형식, V=실오류 ★=리씰)"
+                    className="text-[10px] text-cyan-200 hover:text-white px-2 py-1 rounded border border-cyan-700/50 bg-cyan-900/30 flex items-center gap-1">
+                    <FileSpreadsheet className="w-3 h-3"/>검수리스트
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>

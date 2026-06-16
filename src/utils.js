@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.05';
+export const APP_VERSION = 'V8.06';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -594,12 +594,94 @@ export function parseNumericBAPLIE(ediText) {
   return result;
 }
 
+// RIZHAO 계열 숫자코드 IFCSUM(매니페스트) 파서 (V8.06).
+//   RIZHAO ORIENT 등 RORO/LOLO 혼용선은 BAPLIE 대신 IFCSUM으로 컨테이너 명세만 제공한다.
+//   베이 위치가 없으므로(LOLO 작업은 베이 좌표 무의미) 컨테이너 목록만 읽어 리스트로 쓴다.
+//   세그먼트: 00:IFCSUM:MANIFEST..., 10:콜사인:선박명:국가:항차:::ETD:ETA::POL,
+//             12:B/L:::::POL국가:POL:..., 13:POD코드:POD명:..., 47:품명,
+//             51:순번:컨번호:실번호:ISO텍스트:F/E:개수:중량:::CBM
+//   같은 컨번호가 여러 51로 나오면(B/L split) 1대로 병합(중량 합산·품명 병기) — 검수는 물리 1대 기준.
+//   ISO는 '40HC'/'40RH'/'45HC'/'40FR'/'20GP'/'20RF' 텍스트라 표준 ISO로 정규화 후 기존 로직 재사용.
+//   (45HC=L5=진짜 45피트. 40RH=40피트 HC 리퍼=40RF. 40FR은 cat 기준으로 fr 판정, reefer 오탐 방지.)
+export function parseNumericIFCSUM(ediText) {
+  const ISO_MAP = { '40HC':'4500', '40RH':'45R1', '45HC':'L5G1', '40FR':'4583', '20GP':'2200', '20RF':'20RF' };
+  const result = { vsl:'', voy:'', pol:'', etd:'', eta:'', carrier:'', callsign:'', containers:[], errors:[] };
+  const text = ediText.replace(/\r?\n/g, '');
+  const segs = text.split("'").map(s => s.trim()).filter(Boolean);
+  let curBL = '', curPOL = '', curPOD = '', curDesc = '';
+  const byCn = new Map();
+  for (const seg of segs) {
+    const p = seg.split(':');
+    const tag = p[0];
+    if (tag === '10') {
+      result.callsign = (p[1] || '').trim().toUpperCase();
+      result.vsl = (p[2] || '').trim();
+      result.voy = (p[4] || '').trim();
+      result.etd = (p[7] || '').trim();
+      result.eta = (p[8] || '').trim();
+      result.pol = (p[10] || '').trim();
+    } else if (tag === '12') {
+      curBL = (p[1] || '').trim();
+      curPOL = (p[7] || '').trim();
+      curDesc = '';
+    } else if (tag === '13') {
+      curPOD = (p[1] || '').trim();
+    } else if (tag === '47') {
+      if (!curDesc) curDesc = (p[1] || '').trim();
+    } else if (tag === '51') {
+      const cn = (p[2] || '').replace(/[\s\-]/g, '').toUpperCase();
+      if (!cn) continue;
+      const sl = (p[3] || '').trim().toUpperCase();
+      const ediIso = (p[4] || '').trim().toUpperCase();
+      const std = ISO_MAP[ediIso] || ediIso;
+      const fe = (p[5] || '').trim().toUpperCase() === 'E' ? 'E' : 'F';
+      const wt = parseInt(p[7] || '0', 10) || 0;
+      if (byCn.has(cn)) {
+        // B/L split: 물리 1대 → 병합(중량 합산, 품명·B/L 병기)
+        const ex = byCn.get(cn);
+        ex.wt += wt;
+        if (curDesc && !ex.desc.includes(curDesc)) ex.desc += ' / ' + curDesc;
+        if (curBL && !ex.bl.includes(curBL)) ex.bl += ',' + curBL;
+        continue;
+      }
+      const cat = isoCategory(std);
+      const cur = {
+        cn, l4: cn.slice(-4), iso: std, ediIso, tp: '',
+        fe, pol: curPOL, pod: curPOD, npod: '', tspot: '', fpod: '',
+        wt, wtt: wt ? 'WT' : '',
+        bay: '', row: '', tier: '',
+        op: '',
+        dg: false, dgc: '', un: '', pg: '',
+        rf: false, fr: false, tk: false, oog: false,
+        sl: fe === 'F' ? sl : '', eseal: fe === 'E' ? sl : '', reseal: '',
+        bl: curBL, desc: curDesc,
+        tmp: '', st: fe,
+        isBooking: false, pendingCn: false,
+      };
+      // 특수 컨 판정은 cat 기준 (40FR이 표준코드 4583으로 매핑되며 isReeferIso 오탐하는 것 방지)
+      if (cat === 'RF') cur.rf = true;
+      else if (cat === 'FR') { cur.fr = true; cur.oog = true; }
+      else if (cat === 'OT') cur.oog = true;
+      else if (cat === 'TK') cur.tk = true;
+      byCn.set(cn, cur);
+    }
+  }
+  result.containers = [...byCn.values()];
+  if (result.containers.length === 0) result.errors.push('숫자코드 IFCSUM: 컨테이너(51 세그먼트)를 찾지 못했습니다.');
+  return result;
+}
+
 export function parseBAPLIE(ediText) {
   // V8.05: CASP/CKL 계열 숫자코드 BAPLIE 지원 (표준 EDIFACT가 아닌 형식).
   //   헤더가 "00:BAPLIE:BAYPLAN..."이고 세그먼트가 50:/52: 숫자코드면 전용 파서로.
   //   기존엔 CASP→ASC 수동 변환 후 올려야 했던 것을 직접 읽게 함.
   if (/^\s*00:BAPLIE/i.test(ediText) || /'50:[A-Z]{4}\d{6,7}:/.test(ediText)) {
     return parseNumericBAPLIE(ediText);
+  }
+  // V8.06: RIZHAO 계열 숫자코드 IFCSUM(매니페스트) 지원.
+  //   헤더가 "00:IFCSUM:MANIFEST..."이고 컨테이너가 51: 세그먼트면 전용 파서로.
+  if (/^\s*00:IFCSUM/i.test(ediText) || /'51:\d+:[A-Z]{4}\d{6,7}:/.test(ediText)) {
+    return parseNumericIFCSUM(ediText);
   }
   const result = {
     vsl: '', voy: '', pol: '', etd: '', eta: '',
