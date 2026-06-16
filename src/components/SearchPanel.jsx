@@ -12,7 +12,7 @@ import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
@@ -80,6 +80,47 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   const loadCount = useMemo(() => allContainers.filter(c => c._mode === 'loading' && c._ptk && !c._comp).length, [allContainers]);   // V7.92-02: 평택분만
   const completedCount = useMemo(() => allContainers.filter(c => c._comp).length, [allContainers]);
 
+  // V7.99-10 (메모6 수동): 수동 작업도 베이→홀드/데크 선택(A안). 가이드와 동일하게 수석에게 작업 위치 전달 + 조회를 그 단으로 좁힘.
+  const [manualBay, setManualBay] = useState(null);    // 그룹 center
+  const [manualTier, setManualTier] = useState(null);  // 'hold'|'deck'
+  const manualBayPairs = useMemo(() => getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''), [allContainers, voyage]);
+  const manualGroupCenterOf = (bayStr) => {
+    const b = parseInt(bayStr, 10);
+    if (!Number.isFinite(b)) return null;
+    if (b % 2 === 0) return b;
+    const p = manualBayPairs?.[String(b)];
+    if (p) return (b + parseInt(p, 10)) / 2;
+    return b;
+  };
+  const manualGroups = useMemo(() => {
+    if (workFilter === 'completed') return [];
+    const is40 = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
+    const map = {};
+    allContainers.forEach(c => {
+      if (c._mode !== workFilter || !c._ptk || c._comp || !c.bay) return;
+      const center = manualGroupCenterOf(c.bay);
+      if (center == null) return;
+      const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
+      g.bays.add(parseInt(c.bay, 10)); g.count++;
+      const isDeck = parseInt(c.tier, 10) >= 80, big = is40(c);
+      if (isDeck) { g.deck++; big ? g.deck40++ : g.deck20++; } else { g.hold++; big ? g.hold40++ : g.hold20++; }
+    });
+    return Object.values(map).sort((a, b) => a.center - b.center);
+  }, [allContainers, workFilter, manualBayPairs]);
+  // 작업 모드 바뀌면 선택 리셋
+  useEffect(() => { setManualBay(null); setManualTier(null); }, [workFilter]);
+  // 수동 작업 위치를 수석에게 전달 (가이드와 동일, auto=false). 베이/단 미선택이면 클리어.
+  useEffect(() => {
+    if (guideMode || !inspector) return;  // 가이드는 GuidedWorkPanel이 따로 기록
+    if (manualBay == null || !manualTier) { fbSetInspectorActivity(inspector, voyageKey, workFilter).catch(() => {}); return; }
+    const g = manualGroups.find(x => x.center === manualBay);
+    const bays = g ? [...g.bays].sort((a, b) => a - b) : [manualBay];
+    const bayLabel = bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0');
+    const remain = manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0);
+    fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
+  }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups]);
+  const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier };
+
   return (
     <div className="space-y-3">
       {/* M5.75: 작업 모드 탭 (양하/선적/완료) */}
@@ -138,6 +179,60 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         />
       ) : (
       <>
+      {/* V7.99-10 (메모6 수동): 베이→홀드/데크 선택 게이트 (A안). 완료 탭은 게이트 없이 자유 조회. */}
+      {workFilter !== 'completed' && manualBay == null ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
+          <div className="text-sm font-bold text-amber-300">작업할 베이를 선택하세요 <span className="text-[11px] text-slate-500 font-normal">(수동)</span></div>
+          {manualGroups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
+          <div className="grid grid-cols-3 gap-2">
+            {manualGroups.map(g => (
+              <button key={g.center} onClick={() => setManualBay(g.center)}
+                className="py-3 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-700 text-slate-100">
+                <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
+                <div className="text-[10px] text-slate-400">남은 {g.count}대</div>
+                <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[10px] font-bold">
+                  {g.deck > 0 && <span className="text-sky-300">데크 {g.deck}</span>}
+                  {g.deck > 0 && g.hold > 0 && <span className="text-slate-600">·</span>}
+                  {g.hold > 0 && <span className="text-amber-300">홀드 {g.hold}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : workFilter !== 'completed' && manualTier == null ? (
+        (() => {
+          const g = manualGroups.find(x => x.center === manualBay);
+          const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${manualBay}`;
+          return (
+            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setManualBay(null)} className="text-xs text-slate-400 hover:text-amber-300">‹ 베이</button>
+                <div className="text-sm font-bold text-amber-300">{bayLbl} — 작업할 단을 선택하세요</div>
+              </div>
+              <button disabled={!g || g.deck === 0} onClick={() => setManualTier('deck')}
+                className={`w-full py-4 rounded-lg border text-left px-4 ${!g || g.deck === 0 ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-sky-950/40 border-sky-700 hover:bg-sky-900/50 text-sky-100'}`}>
+                <div className="flex items-center justify-between"><span className="font-bold text-base">🔵 데크 {g ? g.deck : 0}개</span><span className="text-xs mono text-sky-300">20FT:{g ? g.deck20 : 0} / 40FT:{g ? g.deck40 : 0}</span></div>
+              </button>
+              <button disabled={!g || g.hold === 0} onClick={() => setManualTier('hold')}
+                className={`w-full py-4 rounded-lg border text-left px-4 ${!g || g.hold === 0 ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
+                <div className="flex items-center justify-between"><span className="font-bold text-base">🟠 홀드 {g ? g.hold : 0}개</span><span className="text-xs mono text-amber-300">20FT:{g ? g.hold20 : 0} / 40FT:{g ? g.hold40 : 0}</span></div>
+              </button>
+            </div>
+          );
+        })()
+      ) : (
+      <>
+      {workFilter !== 'completed' && manualBay != null && manualTier && (() => {
+        const g = manualGroups.find(x => x.center === manualBay);
+        const bayLbl = g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay);
+        return (
+          <div className="flex items-center gap-2 text-[11px] bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5">
+            <span className="font-bold text-amber-300">📍 {bayLbl}번 {manualTier === 'hold' ? '홀드' : '데크'} 작업 중</span>
+            <button onClick={() => { setManualTier(null); }} className="text-slate-400 hover:text-amber-300">단 변경</button>
+            <button onClick={() => { setManualBay(null); setManualTier(null); }} className="text-slate-400 hover:text-amber-300">베이 변경</button>
+          </div>
+        );
+      })()}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
         <button onClick={() => setSearchMode('single')}
           className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${
@@ -154,8 +249,10 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} />
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} manualCtx={manualCtx} />
         : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
+      </>
+      )}
       </>
       )}
     </div>
@@ -171,7 +268,7 @@ function announceContainer(c) {
   speak(parts.join(', '));
 }
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {} }) {   // V7.92
+function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, manualCtx = null }) {   // V7.92 / V7.99-10 manualCtx
   const [query, setQuery] = useState('');
   const [weatherText, setWeatherText] = useState(null);   // V7.92: 날씨 질문 비동기 답변
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
@@ -205,9 +302,21 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     //   (allContainers는 EDI 전체 = 통과화물 포함). 단, 컨번호(digits) 단건 조회는 전체 유지
     //   — 통과화물을 스캔했을 때 "없습니다"가 아니라 찾아서 알려줘야 함 (V7.53 회귀 방지).
     if (!parsed.digits) r = r.filter(c => c._ptk);
-    const rank = (c) => (c._comp ? 2 : (c._mode === workFilter ? 0 : 1));
+    // V7.99-10 (메모6 수동): 작업 단 선택 시, 끝4자리 조회 후보 중 현재 단(베이+홀드/데크) 컨을 최우선.
+    //   완전히 숨기지 않음(통과화물·단 밖도 찾아줘야 함 — V7.53 회귀 방지) — 우선 정렬로 오선택만 방지.
+    const inManualTier = (c) => {
+      if (!manualCtx || manualCtx.selectedGroup == null || !manualCtx.selectedTier) return false;
+      const bp = manualCtx.bayPairs || {};
+      const gc = (bs) => { const b = parseInt(bs, 10); if (!Number.isFinite(b)) return null; if (b % 2 === 0) return b; const p = bp[String(b)]; return p ? (b + parseInt(p, 10)) / 2 : b; };
+      if (gc(c.bay) !== manualCtx.selectedGroup) return false;
+      return manualCtx.selectedTier === 'deck' ? parseInt(c.tier, 10) >= 80 : parseInt(c.tier, 10) < 80;
+    };
+    const rank = (c) => {
+      if (parsed.digits && inManualTier(c)) return -1;  // 현재 단 최우선
+      return c._comp ? 2 : (c._mode === workFilter ? 0 : 1);
+    };
     return [...r].sort((a, b) => rank(a) - rank(b));
-  }, [allContainers, query, parsed, workFilter]);
+  }, [allContainers, query, parsed, workFilter, manualCtx]);
 
   // M3.2: 로컬 답변 (AI 의존 없이 즉답)
   // 베이/POL/POD/구역/무게합/위치 질문은 모두 여기서 처리
@@ -260,8 +369,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.size && !parsed.fe && !parsed.type && !parsed.weightSum &&
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
-    return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk));   // V7.92-02: 집계는 평택분만
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage]);
+    return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk), manualCtx);   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx]);
 
   // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.
   useEffect(() => {

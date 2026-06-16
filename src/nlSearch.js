@@ -71,6 +71,8 @@ export function parseNaturalQuery(text) {
     posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
     twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
+    tierPlaceCountQuery: null,   // V7.99-10: 'hold'|'deck' — "홀드 몇 개 남았어"(에 없음) = 작업 남은 단(곳) 개수+베이 나열
+    tierInContextQuery: null,    // V7.99-10: 'hold'|'deck' — "홀드에 몇 개 남았어"(에 있음) = 현재 작업 중인 단 컨 수
     isAll: false, isStat: false, mode: null,
   };
   if (!text) return result;
@@ -193,6 +195,16 @@ export function parseNaturalQuery(text) {
   if (/무게\s*합|총중량|총\s*무게|중량\s*합/i.test(t)) result.weightSum = true;
 
   // 위치/리스트 의도
+  // V7.99-10 (메모6 수동): "홀드/데크" 개수 질문 — "에" 유무로 의미가 갈림.
+  //   "홀드에 몇 개" = 현재 작업 중인 단의 컨 수 (tierInContextQuery, 맥락 의존)
+  //   "홀드 몇 개"   = 작업 남은 단이 몇 곳인지 + 베이 나열 (tierPlaceCountQuery)
+  //   먼저 평가해 bayDist/isStat 등 다른 의도보다 우선. 숫자 베이 명시("20번 홀드")는 제외(기존 처리).
+  if (!/\d+\s*번/.test(t) && /(개|군데|곳)/.test(t) && /(남았|남은|남아|남나)/.test(t)) {
+    if (/홀드에|홀드\s*에|선창에/.test(t)) result.tierInContextQuery = 'hold';
+    else if (/데크에|데크\s*에|갑판에/.test(t)) result.tierInContextQuery = 'deck';
+    else if (/홀드|선창/.test(t)) result.tierPlaceCountQuery = 'hold';
+    else if (/데크|갑판/.test(t)) result.tierPlaceCountQuery = 'deck';
+  }
   // V7.90-02: 베이 분포 질문 — "리퍼가 몇 번 베이에 있어?" / "어디 어디에 있어?" (사용자 현장 제보)
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어떤\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;   // V7.91-02: 어떤 베이
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약/i.test(t)) result.briefingQuery = true;
@@ -394,7 +406,8 @@ export function hasAnyCondition(parsed) {
             parsed.capacityQuery || parsed.bayBreakdown ||
             parsed.progressQuery || parsed.tierStackQuery ||
             parsed.bottomQuery || parsed.topQuery || parsed.vacantQuery ||
-            parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery);
+            parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery ||
+            parsed.tierPlaceCountQuery || parsed.tierInContextQuery);
 }
 
 // ─── 베이별 슬롯 맵 (재사용) ───
@@ -411,9 +424,19 @@ function buildBaySlotMap(allContainers) {
 }
 
 // ─── 답변 생성기 ───
-export function generateLocalAnswer(parsed, results, allContainers) {
+export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);
+
+  // V7.99-10 (메모6 수동): 홀드/데크 개수 질문 2종.
+  //   tierPlaceCountQuery = "홀드 몇 개 남았어" → 작업 남은 단이 몇 곳인지 + 베이 번호 한 번에.
+  //   tierInContextQuery  = "홀드에 몇 개 남았어" → 현재 작업 중인(선택한) 단의 컨 수.
+  if (parsed.tierPlaceCountQuery) {
+    return formatTierPlaceCount(parsed.tierPlaceCountQuery, allContainers, ctx);
+  }
+  if (parsed.tierInContextQuery) {
+    return formatTierInContext(parsed.tierInContextQuery, allContainers, ctx);
+  }
 
   // M3.3 우선순위
   if (parsed.capacityQuery)  return formatCapacity(parsed, allContainers);
@@ -459,6 +482,66 @@ export function generateLocalAnswer(parsed, results, allContainers) {
 }
 
 // ─── 헬퍼 함수들 ───
+
+// V7.99-10 (메모6 수동): "홀드 몇 개 남았어" — 작업 남은 단(홀드/데크)이 몇 곳인지 + 베이 번호 한 번에.
+//   되묻지 않게 곳수와 베이를 같이: "4, 12, 20 3곳입니다".
+function formatTierPlaceCount(tier, allContainers, ctx) {
+  const mode = ctx?.mode || 'discharge';
+  const bayPairs = ctx?.bayPairs || {};
+  const groupCenterOf = (bayStr) => {
+    const b = parseInt(bayStr, 10);
+    if (!Number.isFinite(b)) return null;
+    if (b % 2 === 0) return b;
+    const p = bayPairs?.[String(b)];
+    if (p) return (b + parseInt(p, 10)) / 2;
+    return b;
+  };
+  const isDeck = (c) => parseInt(c.tier, 10) >= 80;
+  const isPtk = (c) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+  // 작업 남은(미완료·평택분) 컨 중 해당 단에 있는 것 → 그룹(center)별로 모음
+  const centers = new Set();
+  allContainers.forEach(c => {
+    if (!isPtk(c) || c._comp) return;
+    if (tier === 'deck' ? !isDeck(c) : isDeck(c)) return;
+    const ctr = groupCenterOf(c.bay);
+    if (ctr != null) centers.add(ctr);
+  });
+  const label = tier === 'deck' ? '데크' : '홀드';
+  const sorted = [...centers].sort((a, b) => a - b);
+  if (sorted.length === 0) return `작업할 ${label}가 남지 않았습니다.`;
+  const bayList = sorted.map(c => String(c)).join(', ');
+  return `${bayList} ${sorted.length}곳입니다.`;
+}
+
+// V7.99-10 (메모6 수동): "홀드에 몇 개 남았어" — 현재 작업 중인(선택한) 단의 남은 컨 수.
+//   ctx.selectedGroup·selectedTier 없으면 어느 단인지 안내.
+function formatTierInContext(tier, allContainers, ctx) {
+  const label = tier === 'deck' ? '데크' : '홀드';
+  if (ctx?.selectedGroup == null) {
+    return `먼저 작업할 베이와 ${label}를 선택하세요. 그러면 그 ${label}에 남은 개수를 알려드립니다.`;
+  }
+  const mode = ctx?.mode || 'discharge';
+  const bayPairs = ctx?.bayPairs || {};
+  const selectedGroup = ctx.selectedGroup;
+  const groupCenterOf = (bayStr) => {
+    const b = parseInt(bayStr, 10);
+    if (!Number.isFinite(b)) return null;
+    if (b % 2 === 0) return b;
+    const p = bayPairs?.[String(b)];
+    if (p) return (b + parseInt(p, 10)) / 2;
+    return b;
+  };
+  const isDeck = (c) => parseInt(c.tier, 10) >= 80;
+  const isPtk = (c) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+  const remain = allContainers.filter(c =>
+    isPtk(c) && !c._comp && groupCenterOf(c.bay) === selectedGroup &&
+    (tier === 'deck' ? isDeck(c) : !isDeck(c))
+  );
+  // 베이 라벨
+  const bays = [...new Set(remain.map(c => parseInt(c.bay, 10)))].sort((a, b) => a - b);
+  const bayLbl = bays.length ? bays.join('·') + '번' : String(selectedGroup) + '번';
+  return `${bayLbl} ${label}에 ${remain.length}개 남았습니다.`;
+}
 
 function formatStats(desc, results) {
   if (results.length === 0) return `📊 ${desc}: 0대`;

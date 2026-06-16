@@ -47,8 +47,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V7.94-08: 홀드 선적 완료 → 다음 베이 선택 프롬프트 (사용자 메모 ②)
   const [deckPromptDone, setDeckPromptDone] = useState(false);
   // V7.94-16: 해치커버 프롬프트 (사용자 요구 — 베이 데크/홀드 완료 시 해치 액션 선택창)
-  const [hatchOpenDone, setHatchOpenDone] = useState(false);    // 양하: 데크 완료 → 오픈 프롬프트 처리됨
-  const [hatchCloseDone, setHatchCloseDone] = useState(false);  // 홀드 완료 → 클로즈 보고 발송됨
+  // V7.99-9 (메모10): 로컬 state만 쓰면 자동→수동→자동 전환 시 GuidedWorkPanel이 언마운트·재마운트되어
+  //   플래그가 false로 초기화 → 이미 처리한 해치 프롬프트가 또 떠 다시 눌러야 다음 진행됨.
+  //   해결: voyage.info.hatchDone({"discharge_12":"open"...})에 영속 기록하고, 로컬 OR 영속으로 판정.
+  const [hatchOpenDone, setHatchOpenDone] = useState(false);    // 양하: 데크 완료 → 오픈 프롬프트 처리됨(로컬 즉시반영)
+  const [hatchCloseDone, setHatchCloseDone] = useState(false);  // 홀드 완료 → 클로즈 보고 발송됨(로컬 즉시반영)
   const [hatchBusy, setHatchBusy] = useState(false);
   const [consecFix, setConsecFix] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -102,6 +105,19 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const pair = bayPairs?.[String(b)];
     if (pair) return (b + parseInt(pair, 10)) / 2;
     return b;
+  };
+
+  // V7.99-9 (메모10): 해치 처리 영속 상태 — voyage.info.hatchDone["{mode}_{center}"] = 'open'|'close'
+  //   모드 전환으로 재마운트돼도 voyage prop은 유지되므로 프롬프트가 다시 안 뜬다.
+  const hatchKeyOf = (center) => `${mode}_${center}`;
+  const isHatchDoneSaved = (center, action) => {
+    if (center == null) return false;
+    return voyage?.info?.hatchDone?.[hatchKeyOf(center)] === action;
+  };
+  const markHatchDone = async (center, action) => {
+    if (center == null) return;
+    const prev = voyage?.info?.hatchDone || {};
+    try { await fbUpdateVoyageInfo(voyageKey, { hatchDone: { ...prev, [hatchKeyOf(center)]: action } }); } catch (e) {}
   };
 
   // 그룹 목록 (남은 작업이 있는 그룹만) — V7.94-23: 홀드/데크 잔여 구분
@@ -308,14 +324,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
   const deckDonePromptD = useMemo(() => {
-    if (mode !== 'discharge' || hatchOpenDone || selectedGroup == null) return false;
+    if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
     const holdRemain = groupRemain.filter(c => parseInt(c.tier, 10) < 80).length;
     const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
     return deckRemain === 0 && holdRemain > 0 && deckDone > 0;
-  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs]);
+  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage]);
 
   // V7.94-16: 양하 — 그룹 홀드까지 완료 시 클로즈 제안 조건 (그룹 완료 화면에서 사용)
   const holdWorkedD = useMemo(() => {
@@ -610,7 +626,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           <div className="font-bold text-amber-200">⚓ 이 베이 데크 양하 완료!</div>
           <div className="text-[11px] text-slate-400">홀드를 하려면 해치커버를 열어야 합니다. 다음 작업을 선택하세요.</div>
           <div className="flex gap-2">
-            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('open'); setHatchOpenDone(true); }}
+            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('open'); setHatchOpenDone(true); markHatchDone(selectedGroup, 'open'); }}
               className="flex-1 py-3 rounded-lg bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm">🔓 해치커버 오픈 → 홀드 진행</button>
             <button onClick={() => setSelectedGroup(null)}
               className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 데크로 이동</button>
@@ -621,7 +637,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           <div className="font-bold text-sky-200">⚓ 이 베이 홀드 선적 완료!</div>
           <div className="text-[11px] text-slate-400">데크를 하려면 해치커버를 닫아야 합니다. 다음 작업을 선택하세요.</div>
           <div className="flex gap-2">
-            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setDeckPromptDone(true); }}
+            <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setDeckPromptDone(true); markHatchDone(selectedGroup, 'close'); }}
               className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈 → 데크 계속</button>
             <button onClick={() => { setSelectedGroup(null); setDeckPromptDone(false); }}
               className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 베이 홀드 이동</button>
@@ -631,11 +647,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <div className="bg-emerald-950/40 border border-emerald-700 rounded-lg p-6 text-center">
           <Check className="w-8 h-8 text-emerald-400 mx-auto mb-2"/>
           <div className="font-bold text-emerald-300">이 베이 그룹 {mode === 'discharge' ? '양하' : '선적'} 완료!</div>
-          {mode === 'discharge' && holdWorkedD && !hatchCloseDone ? (
+          {mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') ? (
             <div className="mt-3 space-y-2">
               <div className="text-[11px] text-slate-400">홀드 작업이 끝났습니다. 해치커버를 닫을까요?</div>
               <div className="flex gap-2 justify-center">
-                <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setHatchCloseDone(true); }}
+                <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('close'); setHatchCloseDone(true); markHatchDone(selectedGroup, 'close'); }}
                   className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-bold text-sm">🔒 해치커버 클로즈</button>
                 <button onClick={() => setSelectedGroup(null)}
                   className="flex-1 py-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-sm">다른 베이 홀드 이동</button>

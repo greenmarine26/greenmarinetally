@@ -711,7 +711,10 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
             const i = parseInt(e.target.value);
             setPageIdx(i);
             if (allBaysMode) {
-              const el = document.getElementById(`bay-page-${i}`);
+              // V7.99-11 (메모8): 선택 베이의 "한 페이지 앞"으로 스크롤 → 24 선택 시 23이 맨 위로 와서
+              //   23 · (24)25가 한 화면에 같이 보인다. 첫 페이지면 자기 자신.
+              const target = Math.max(0, i - 1);
+              const el = document.getElementById(`bay-page-${target}`);
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
           }}
@@ -800,7 +803,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
       {/* 베이 그리드 본체 */}
       <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto"
-           style={{ maxHeight: '78vh', scrollSnapType: 'y mandatory' }}>
+           style={{ maxHeight: '78vh' }}>
         {view3D ? (
           // V7.97: 3D 입체 베이뷰 (격자=진실, 색은 2D와 동일 규칙)
           <BayPlan3D
@@ -818,11 +821,12 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           />
         ) : allBaysMode ? (
           // 전체 베이 세로 스크롤 (V37 기본 모드)
-          // M5.17: 한 베이 = 한 화면 (scroll-snap mandatory) — 베이 끼리 겹치지 않게 스냅
-          <div className="space-y-6">
+          // V7.99-11 (메모8): scroll-snap 제거 — 베이를 한 화면에 한 개씩 스냅하던 것이
+          //   "23 (24)25를 같이 보고 싶다"를 막았다. 스냅 없이 이어 그리면 한 화면에 여러 베이가
+          //   들어오고, 베이 선택 시 scrollIntoView(block:'start')로 그 베이가 맨 위로 와 아래 베이도 보인다.
+          <div className="space-y-3">
             {pages.map((page, pIdx) => (
-              <div key={pIdx} id={`bay-page-${pIdx}`}
-                   style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}>
+              <div key={pIdx} id={`bay-page-${pIdx}`}>
                 <BayPage
                   page={page}
                   bayGroups={bayGroups}
