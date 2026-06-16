@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.06';
+export const APP_VERSION = 'V8.06-03';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -604,7 +604,7 @@ export function parseNumericBAPLIE(ediText) {
 //   ISO는 '40HC'/'40RH'/'45HC'/'40FR'/'20GP'/'20RF' 텍스트라 표준 ISO로 정규화 후 기존 로직 재사용.
 //   (45HC=L5=진짜 45피트. 40RH=40피트 HC 리퍼=40RF. 40FR은 cat 기준으로 fr 판정, reefer 오탐 방지.)
 export function parseNumericIFCSUM(ediText) {
-  const ISO_MAP = { '40HC':'4500', '40RH':'45R1', '45HC':'L5G1', '40FR':'4583', '20GP':'2200', '20RF':'20RF' };
+  const ISO_MAP = { '40HC':'4500', '40RH':'45R1', '45HC':'L5G1', '40FR':'42P3', '20GP':'2200', '20RF':'20RF' };
   const result = { vsl:'', voy:'', pol:'', etd:'', eta:'', carrier:'', callsign:'', containers:[], errors:[] };
   const text = ediText.replace(/\r?\n/g, '');
   const segs = text.split("'").map(s => s.trim()).filter(Boolean);

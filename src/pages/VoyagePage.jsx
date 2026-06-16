@@ -375,6 +375,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return containers.every(c => !c.bay && !c.row && !c.tier);
   }, [containers]);
 
+  // V8.06: LOLO 선박(베이 없는 IFCSUM)이면 최초 1회 자동으로 LOLO 탭으로 전환.
+  //   양하 탭의 EDI↔리스트 매칭 경고("리스트에 없음")는 이 선박엔 부적절(EDI가 곧 리스트)하므로
+  //   LOLO 탭을 기본으로 열어 검수사가 바로 작업하게 한다. 이후 사용자가 탭을 바꾸면 그 선택을 존중.
+  const loloAutoSwitched = useRef(false);
+  useEffect(() => {
+    if (isLoloShip && !loloAutoSwitched.current) {
+      loloAutoSwitched.current = true;
+      setTab('lolo');
+    }
+  }, [isLoloShip]);
+
   // M3.5.5: 선박 정책 매칭 (DEFAULT + Firebase extra)
   const shipPolicy = useMemo(() => {
     const vsl = voyage?.info?.vsl || '';

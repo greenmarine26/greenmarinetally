@@ -801,6 +801,28 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const tb = [...new Set(transit.map(c => parseInt(c.bay, 10)).filter(b => Number.isFinite(b) && bays.has(b)))].sort((a, b) => a - b);
     if (tb.length) warns.push({ k: null, line: `🔁 통과화물이 작업 베이(${tb.join(', ')})에 혼재 — ${mode === 'discharge' ? '내리지 말 것' : '자리 주의'}` });
   }
+  // V8.06-02: LOLO 선박(베이 없는 IFCSUM) 리스트 검증 — 작업 시작 전 확인 메시지.
+  //   추측·자동변환 대신 검수사가 현장에서 직접 확인하도록 브리핑에 띄운다(사용자 원칙: 데이터·사람이 확정).
+  const isLoloBrief = cs.length > 0 && cs.every(c => !c.bay && !c.row && !c.tier);
+  if (isLoloBrief) {
+    // ① 45HC 규격 확인 — 45HC는 진짜 45피트(L5)이나 표기/해석이 40HC로 흔들릴 수 있음.
+    const hc45 = cs.filter(c => {
+      const e = String(c.ediIso || '').toUpperCase();
+      const lbl = isoToLabel(c.iso) || '';
+      return e === '45HC' || /^45/.test(lbl);
+    });
+    if (hc45.length) {
+      // V8.07: 부드러운 음성 안내 — 컨번호 끝4자리를 한 글자씩(공백 구분) 읽도록.
+      const cnList = hc45.map(c => (c.cn || '').slice(-4).split('').join(' ')).join(', ');
+      warns.push({ k: `45피트 ${hc45.length}`, line: `📏 45피트가 ${hc45.length}대 실려 있습니다. 컨넘버 ${cnList} 규격을 확인해 주세요.` });
+    }
+    // ② 실번호 형식 비정상 — 여러 실번호 연결/과다 길이(컨테이너 화물 등). 매칭 시 주의.
+    const weirdSeal = cs.filter(c => c.fe !== 'E' && c.sl && c.sl.replace(/\s/g, '').length > 15);
+    if (weirdSeal.length) {
+      const cnList = weirdSeal.slice(0, 4).map(c => (c.cn || '').slice(-4).split('').join(' ')).join(', ');
+      warns.push({ k: `실번호확인 ${weirdSeal.length}`, line: `🔖 실번호가 특이한 컨테이너가 ${weirdSeal.length}대 있습니다. 컨넘버 ${cnList} 세관 리스트와 대조해 주세요.` });
+    }
+  }
   // ── 음성 첫 줄: 평택분 + 주의 핵심
   const keyWarns = warns.filter(w => w.k).map(w => w.k).slice(0, 3);
   const head = `📋 ${modeLabel} 평택 ${total}대` +
@@ -808,7 +830,12 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     (done > 0 ? `, 잔여 ${total - done}` : '');
   const szStr = ['20', '40', '45'].filter(s => sz[s]).map(s => `${s}ft ${sz[s]}`).join(', ');
   const lines = [head];
-  lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
+  // V8.06-02: LOLO 선박(베이 없음)은 베이/갑판/홀드 표기 생략 — undefined·0 표시 방지.
+  if (isLoloBrief) {
+    lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · LOLO(리스트 검수)`);
+  } else {
+    lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
+  }
   if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
   if (warns.length) {
     lines.push(`⚠ 주의사항`);
