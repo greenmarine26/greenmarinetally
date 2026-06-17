@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.08-06';
+export const APP_VERSION = 'V8.09-01';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1589,6 +1589,19 @@ export async function parseListExcel(arrayBuffer) {
     const clean = (v) => String(v || '').toUpperCase().replace(/[\s\-\/]/g, '').replace(/FT$/, '');
     const sz = clean(sizeRaw);
     const tp = clean(typeRaw);
+    // V8.09: RIZHAO ORIENT 선적 LOADING LIST 고유 표기 (20'D / 40'H / 40'R / 45'H / 20'L)
+    //   따옴표(')를 살린 길이+카테고리 1글자 표기. 작은따옴표 포함이라 타 선사 코드와 충돌 없음.
+    //   D=Dry, H=High Cube, R=Reefer, L=Luggage(수하물·20피트 일반 취급).
+    for (const v of [clean(typeRaw).replace(/'/g, "'"), String(sizeRaw || '').toUpperCase().trim(), String(typeRaw || '').toUpperCase().trim()]) {
+      const rz = v.replace(/\s/g, '');
+      if (rz === "20'D" || rz === "20'L") return '22G1';
+      if (rz === "20'R") return '22R1';
+      if (rz === "40'H") return '45G1';
+      if (rz === "40'R") return '45R1';
+      if (rz === "40'D") return '42G1';
+      if (rz === "45'H") return 'L5G1';
+      if (rz === "45'R") return 'L5R1';
+    }
     // 1) 입력 자체가 표준 ISO (42HQ, 22G1, L5G1 등)
     for (const v of [tp, sz]) {
       if (/^\d{2}[A-Z]\d$|^\d{2}[A-Z]{2}$|^L\d[A-Z]\d$/.test(v)) return v;
@@ -1647,6 +1660,10 @@ export async function parseListExcel(arrayBuffer) {
     return '';
   };
 
+  // V8.09: 정식 헤더(CONTAINER 등) 시트가 하나라도 파싱되면, 헤더 없는 fallback 셀스캔은 끈다.
+  //   RIZHAO 선적 엑셀처럼 메인 리스트 시트 + 작업자 메모/이전항차 잡시트가 섞인 경우,
+  //   잡시트의 흩어진 컨번호를 주워 과집계하던 문제 차단. (헤더 시트가 전무할 때만 fallback 유지.)
+  let formalSheetParsed = false;
   for (const sheetName of wb.SheetNames) {
     const ws = fixSheetRange(wb.Sheets[sheetName], XLSX);   // V38: !ref 보정
     const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
@@ -1687,7 +1704,9 @@ export async function parseListExcel(arrayBuffer) {
     }
 
     // 2단계: 헤더 못 찾으면 fallback (모든 셀에서 컨번호 패턴 스캔)
-    if (headerRow < 0) {
+    //   V8.09: 단, 앞선 시트에서 정식 헤더 리스트가 이미 파싱됐으면 이 fallback은 건너뛴다.
+    //   (작업자 메모·이전 항차 잡시트의 흩어진 컨번호 과집계 방지.)
+    if (headerRow < 0 && !formalSheetParsed) {
       for (const row of grid) {
         if (!row) continue;
         for (let ci = 0; ci < row.length; ci++) {
@@ -1741,6 +1760,8 @@ export async function parseListExcel(arrayBuffer) {
       }
       continue;
     }
+    // V8.09: 헤더를 못 찾았고(위 fallback도 건너뛴 경우) 정식 시트가 이미 있었으면 이 시트는 잡시트 → 스킵.
+    if (headerRow < 0) continue;
 
     // 헤더 키워드로 컬럼 인덱스 찾기 (M3.86: normHeader로 통일)
     const findCol = (patterns) => {
@@ -1767,7 +1788,7 @@ export async function parseListExcel(arrayBuffer) {
     // M3.86: L/S(Local/SOC) 컬럼 별도 추출 — SOC 식별용
     const ls_i = findCol([/^l\/?s$/]);
     // M3.86: type_i에 "Tp/Sz", "Tp.Sz", "Type/Size" 추가 (CDL 양식)
-    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^tp\/?sz$|^tp\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);
+    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^tp\/?sz$|^tp\s*sz$|^ty\/?sz$|^ty\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
     const op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
     // M5.55: voucher 보강 — TSPORT(환적), PRINTPOD(실제 양하 항구), CARGO TYPE(DJS 양식 F/P)
@@ -1775,6 +1796,8 @@ export async function parseListExcel(arrayBuffer) {
     const printpod_i = findCol([/^printpod$|^print.*pod$/, /^실제.*양하/]);
     const cargotype_i = findCol([/^cargo.*type$|^cargo\s*type$/, /화물구분/]);
     const dg_i = findCol([/^dg$|hazmat|imdg/, /위험물/]);
+    // V8.09: ITEM 컬럼 (RIZHAO 선적 LOADING LIST 공컨 표기). "공컨테이너"=Empty, 빈칸=Full.
+    const item_i = findCol([/^item$/, /^품목$/, /^공컨/]);
     // M3.85: SITC SENDAI 양식의 [40] "냉동" 컬럼이 실제 온도값(-18, -2.5 등)인데
     //   기존 /냉장/만 있어서 매칭 안 되어 26대 풀 리퍼 모두 미입력 처리되던 버그 수정.
     //   추가로 "set temp", "setpoint", "carry temp", "rf temp" 등 흔한 변형도 인식.
@@ -1784,6 +1807,9 @@ export async function parseListExcel(arrayBuffer) {
     ]);
 
     if (cn_i < 0) continue;
+    // V8.09: 여기 도달 = CONTAINER 헤더 + 컨번호 컬럼 확정된 정식 리스트 시트.
+    //   이후 시트의 헤더 없는 fallback 셀스캔을 끈다(잡시트 과집계 방지).
+    formalSheetParsed = true;
 
     // 데이터 행 처리 (헤더 다음부터, 빈 행 자동 건너뛰기)
     // V38: 병합셀로 컨번호 컬럼이 한 칸 어긋난 경우 ±2 컬럼까지 탐색
@@ -1847,6 +1873,14 @@ export async function parseListExcel(arrayBuffer) {
         const feRaw = String(row[fe_i] || '').trim().toUpperCase();
         if (feRaw === 'F' || feRaw === 'FULL' || feRaw === 'L' || feRaw === 'LOADED') fe = 'F';
         else if (feRaw === 'E' || feRaw === 'EMPTY' || feRaw === 'MT' || feRaw === 'M') fe = 'E';
+      }
+      // V8.09: ITEM 컬럼 "공컨테이너" 표기 (RIZHAO 선적 LOADING LIST).
+      //   엠티 컨에도 실(seal)이 붙는 선박이라 실 유무로 F/E 판정 불가 → ITEM 표기가 유일한 근거.
+      //   "공컨테이너"/"공컨"/"EMPTY"=Empty. 빈칸=Full. (R063W 검증: EMPTY 71건 = 작업자 요약 일치.)
+      if (!fe && item_i >= 0) {
+        const itemRaw = String(row[item_i] || '').trim();
+        if (/공\s*컨|empty|엠티|^MT$/i.test(itemRaw)) fe = 'E';
+        else if (itemRaw === '') fe = 'F';
       }
       // TYPE 끝 글자
       if (!fe && type_i >= 0) {

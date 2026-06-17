@@ -119,9 +119,15 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         const ediMap = sec.ediContainers || {};
         const recMap = sec.records || {};
         const ediArr = Object.values(ediMap);
-        if (ediArr.length === 0) return;
-        // 베이가 하나도 없으면 LOLO
-        const isLolo = ediArr.every(c => !c.bay && !c.row && !c.tier);
+        const recArr = Object.values(recMap);
+        // V8.09: EDI 없이 리스트(records)만 있어도 LOLO 카드 생성.
+        //   RIZHAO 선적분처럼 IFCSUM/BAPLIE 없이 LOADING LIST 엑셀만 들어오는 경우,
+        //   EDI 유무로만 판정하면 선적 카드가 안 떠 "선적이 어디 있나" 문제 발생.
+        //   기준: EDI∪리스트에 컨테이너가 있고, 위치좌표(bay/row/tier)가 하나도 없으면 LOLO.
+        //   일반 베이 선박은 EDI/리스트에 bay가 있어 isLolo=false → 영향 없음.
+        const allArr = [...ediArr, ...recArr];
+        if (allArr.length === 0) return;
+        const isLolo = allArr.every(c => !c.bay && !c.row && !c.tier);
         if (!isLolo) return;
         const compMap = sec.completed || {};
         const doneCount = Object.keys(compMap).length;
