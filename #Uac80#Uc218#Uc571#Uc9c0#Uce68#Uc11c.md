@@ -1238,3 +1238,27 @@ RIZHAO 실EDI(R063E_EDI.txt, IFCSUM 166대) + 실엑셀(R063E_预配.xlsx 166건
 **검증 환경**: /home/claude/sim/diag_run2.mjs (parseNumericIFCSUM + parseListExcel + runDiagnostics 실파일 결합).
 
 변경 없음(V8.07-02→03은 이전 세션 누적분). 빌드·ZIP 재발행.
+
+---
+
+## V8.08-01 — 세관리스트 전용 파서 + 작업순서 병합(EDI→선사→세관)
+
+**리스트 우선순위 확정(사용자)**: 세관리스트(적하목록)가 주 리스트. 선사리스트(RIZHAO 중국어)는 온도·완전실번호 보강용. 작업 순서: EDI → 선사리스트 → 세관리스트(마지막).
+
+**parseCustomsSheet 신규**: 세관 적하목록(.xls 영문 헤더) 전용 파서. 감지: 헤더에 '컨테이너번호'+'B/L TYPE'+'규격'. parseListExcel 진입부에서 세관→RIZHAO 순으로 감지(세관 우선).
+- F/E: B/L TYPE E=Empty, S/C=Full(사용자·데이터 확정). 169대 중 SPSU2019220만 엠티(20GP).
+- 규격 변환(선사리스트 교차검증): 22GP→22G1, 44GP→45G1(40HC, 40HA 포함), 45RE→45R1(40RF리퍼), 45HC→L5G1, 40FR→42P3, 20RF→22R1.
+- 비표준 컨번호(SAWTBP004 SOC) 포함 — 표준형 검증으로 누락되던 것 해소.
+- 실번호 Seal No 1~3 결합. _customs 표식으로 ISO 끝자리 동기화 제외.
+
+**스마트 병합(VoyagePage 1964)**: 작업 순서상 세관이 마지막이라 세관의 빈 온도가 선사 온도를 덮던 문제. → 새 값이 비어있으면 기존 보존, 온도는 선사값 우선, 실번호는 더 완전한(긴) 쪽 채택(세관 20자컷 vs 선사 완전값).
+
+**매칭 부족 경고 개선**: 어떤 컨번호가 부족한지 메시지·펼침에 표시(missing 목록). 기존엔 카운트만 — 검수사·디버깅 모두 못 찾던 문제. 화면에서 SPSU2019220 직접 확인됨.
+
+**실데이터 전수 검증(EDI+선사+세관 작업순서 재현)**:
+- 최종 167대(풀 166+엠티 1) ✅, F/E Full166/Empty1 ✅
+- 리퍼 24대 온도 전건 보존 ✅, SAWTBP004 실번호 완전(LF...102263LF102264) ✅
+- 진단: 온도 미입력 해결 ✅, 1개 부족 해결 ✅
+- 잔존(정상): SPSU2019220은 세관엔 있고 EDI엔 없는 엠티(매칭 안내), 실번호 불일치 1건.
+
+변경: src/utils.js(parseCustomsSheet+분기+동기화 제외), src/pages/VoyagePage.jsx(스마트 병합·실번호 보강), src/diagnostics.js(부족 컨번호 명시), src/components/DiagnosticsPanel.jsx(missing 표시).

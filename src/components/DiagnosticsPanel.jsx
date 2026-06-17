@@ -197,6 +197,15 @@ function AlertDetails({ alert, onOpenContainer }) {
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px]">
         EDI {d.ediCount || '?'}대 / 리스트 {d.listCount || '?'}대 (매칭 {d.matchedCount ?? '?'}대)
+        {d.missing && d.missing.length > 0 && (
+          <div className="mt-1">
+            <div className="text-amber-400 mb-0.5">리스트에 없는 컨번호 (부족):</div>
+            {d.missing.slice(0, 10).map((m, i) => (
+              <div key={i} className="mono">• {m.cn} {m.iso ? `(${m.iso})` : ''} {m.fe || ''}</div>
+            ))}
+            {d.missing.length > 10 && <div className="text-slate-500">... 외 {d.missing.length - 10}건</div>}
+          </div>
+        )}
         {d.extraCns && d.extraCns.length > 0 && (
           <div className="mt-1">
             <div className="text-slate-400 mb-0.5">EDI에 없는 컨번호:</div>

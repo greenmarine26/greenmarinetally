@@ -196,6 +196,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (r.pod && !merged[r.cn].pod) safeR.pod = r.pod;
         if (r.sl) safeR.sl = r.sl;
         if (r.sl_orig) safeR.sl_orig = r.sl_orig;
+        // M8.07: EDI 실번호가 잘린 경우(IFCSUM 20자 컷 등) records의 완전한 실번호 우선.
+        //   판정: EDI sl이 records sl의 앞부분이면서 더 짧으면 = 잘린 것.
+        //   예) EDI 'LF102261LF102262LF10' ⊂ records 'LF102261LF102262LF102263LF102264'.
+        {
+          const ediSl = String(merged[r.cn].sl || '').trim();
+          const recSl = String(r.sl || '').trim();
+          if (recSl && ediSl && recSl.length > ediSl.length && recSl.startsWith(ediSl)) {
+            safeR.sl = recSl;
+          }
+        }
         if (r.wt && !merged[r.cn].wt) safeR.wt = r.wt;
         // M8.07: 온도·품명·F/E·리퍼 보강.
         //   RIZHAO처럼 EDI에 온도/품명이 없는 양식에서 엑셀 리스트 값을 반영.
@@ -1951,7 +1961,28 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           if (!r.cn) continue;
           if (cnMap[r.cn]) {
             if (skipExisting) continue;  // 신규만 모드 → 기존 유지
-            cnMap[r.cn] = { ...cnMap[r.cn], ...r };
+            // M8.08: 스마트 병합 — 새 값(주로 세관리스트)이 비어있으면 기존 값(선사리스트) 보존.
+            //   작업 순서 EDI→선사→세관: 세관이 마지막이라 온도(빈값)가 선사 온도를 덮던 문제.
+            //   실번호는 더 완전한(긴) 쪽 유지 — 세관 20자 컷 vs 선사 완전값.
+            const prev = cnMap[r.cn];
+            const merged = { ...prev };
+            for (const [k, v] of Object.entries(r)) {
+              if (v === '' || v == null) continue;          // 빈 새 값은 기존 보존
+              if (k === 'tmp' && (v === '' || r.tmp_missing)) continue;  // 빈 온도 보존
+              merged[k] = v;
+            }
+            // 실번호: 한쪽이 다른 쪽의 앞부분이면서 더 길면 긴 쪽 채택(잘림 보정).
+            const a = String(prev.sl || '').trim(), b = String(r.sl || '').trim();
+            if (a && b) {
+              if (a.length > b.length && a.startsWith(b)) merged.sl = a;
+              else if (b.length > a.length && b.startsWith(a)) merged.sl = b;
+            } else {
+              merged.sl = a || b;
+            }
+            // 온도: 기존(선사)에 유효 온도 있으면 보존.
+            const prevTmp = String(prev.tmp || '').trim();
+            if (prevTmp && !prev.tmp_missing) { merged.tmp = prev.tmp; merged.tmp_missing = false; }
+            cnMap[r.cn] = merged;
           } else {
             added++;
             cnMap[r.cn] = r;

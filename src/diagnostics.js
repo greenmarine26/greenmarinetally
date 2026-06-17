@@ -202,13 +202,20 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       const diff = ediCount - matchedCount;
       const carrierStr = carrierLabel ? ` ${carrierLabel}` : '';
       if (diff > 0) {
+        // M8.07: 어떤 컨번호가 부족한지 명시 — EDI 평택엔 있는데 리스트에 없는 컨.
+        //   기존엔 카운트만 알려줘 검수사·디버깅 모두 어떤 컨인지 못 찾음.
+        const listCnSet = new Set(validListCns.map(cn => normCn(cn)));
+        const missingCns = ediPtk
+          .filter(c => !listCnSet.has(normCn(c.cn)))
+          .map(c => ({ cn: c.cn, iso: c.iso || '', fe: c.fe || '', sl: c.sl || '' }));
+        const missingPreview = missingCns.slice(0, 10).map(m => m.cn).join(', ');
         alerts.push({
           level: 'warning',
           code: 'list_short',
-          msg: `EDI ${ediCount}대 중 리스트 매칭 ${matchedCount}대 (${diff}개 부족)`,
+          msg: `EDI ${ediCount}대 중 리스트 매칭 ${matchedCount}대 (${diff}개 부족)${missingPreview ? ` — ${missingPreview}` : ''}`,
           voice: `${carrierStr ? carrierStr + ' ' : ''}EDI ${ediCount}개인데 리스트 매칭 ${matchedCount}개입니다. ${diff}개 부족합니다. 리스트 보완 필요`,
           count: diff,
-          details: { ediCount, listCount: realListCount, matchedCount, diff },
+          details: { ediCount, listCount: realListCount, matchedCount, diff, missing: missingCns },
         });
       }
       // 리스트에는 있는데 EDI 평택에 없는 컨 (통과화물이거나 다른 항차)

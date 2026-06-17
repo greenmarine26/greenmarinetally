@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.07-03';
+export const APP_VERSION = 'V8.08-01';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1337,6 +1337,86 @@ function fixSheetRange(ws, XLSX) {
 //   - CONTAINER No./SEAL No. (CLL)
 //   - CNTR NO./SEAL (SITC)
 //   - Container No. (병합셀 양식)
+// M8.08: 세관리스트(적하목록) 전용 파서. 검수의 주 리스트(우선).
+//   영문 헤더: B/L TYPE·화물구분·컨테이너번호·규격·Seal No 1~3·적재항·최종항.
+//   F/E: B/L TYPE E=Empty, S/C=Full(사용자·데이터 확정).
+//   규격: 세관 코드 → 검수앱 표준(선사리스트와 교차 검증).
+//   온도는 세관리스트에 없음 → 선사리스트(RIZHAO)에서 보강.
+function parseCustomsSheet(grid) {
+  if (!grid || grid.length < 2) return null;
+  let hdrRow = -1;
+  for (let i = 0; i < Math.min(5, grid.length); i++) {
+    const cells = (grid[i] || []).map(v => String(v || '').trim());
+    if (cells.includes('컨테이너번호') && cells.includes('B/L TYPE') && cells.includes('규격')) {
+      hdrRow = i; break;
+    }
+  }
+  if (hdrRow < 0) return null;
+
+  const H = (grid[hdrRow] || []).map(v => String(v || '').trim());
+  const col = (name) => H.indexOf(name);
+  const ci = {
+    cn: col('컨테이너번호'), iso: col('규격'), bl: col('B/L TYPE'),
+    s1: col('Seal No 1'), s2: col('Seal No 2'), s3: col('Seal No 3'),
+    pol: col('적재항'), pod: col('최종항'), bl_no: col('M-B/L'),
+  };
+  if (ci.cn < 0 || ci.iso < 0) return null;
+
+  // 세관 규격 → 검수앱 표준 ISO (선사리스트 교차 검증으로 확정).
+  const isoMap = {
+    '22GP': '22G1', '20GP': '22G1', '20DC': '22G1',
+    '20RF': '22R1',
+    '44GP': '45G1',                  // 40HC (세관은 40HC를 44GP로 표기, 40HA 포함)
+    '40GP': '42G1', '40DC': '42G1',
+    '45RE': '45R1', '45RH': '45R1',  // 40HC 리퍼 (온도 전건 확인)
+    '40RF': '42R1',
+    '40FR': '42P3',
+    '45HC': 'L5G1',                  // 진짜 45HC
+    '40OT': '45U1', '40TK': '45T1',
+  };
+  const toIso = (raw) => isoMap[String(raw || '').toUpperCase().trim()] || '';
+
+  const records = [];
+  for (let r = hdrRow + 1; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const cn = String(row[ci.cn] || '').trim().toUpperCase().replace(/\s/g, '');
+    if (!cn) continue;
+    if (/[\u4e00-\u9fff]/.test(cn)) continue;  // 합계/한자 행 스킵
+
+    const iso = toIso(row[ci.iso]);
+    // F/E: B/L TYPE E = Empty, 그 외(S/C) = Full.
+    const blType = String(row[ci.bl] || '').trim().toUpperCase();
+    const fe = blType === 'E' ? 'E' : 'F';
+    // 실번호: Seal No 1~3 결합(보통 1에만 들어옴).
+    const seal = [row[ci.s1], row[ci.s2], row[ci.s3]]
+      .map(s => String(s || '').trim()).filter(Boolean).join(' ');
+    const pod = ci.pod >= 0 ? String(row[ci.pod] || '').trim() : '';
+    const pol = ci.pol >= 0 ? String(row[ci.pol] || '').trim() : '';
+    const isoUp = iso.toUpperCase();
+    const isRf = isReeferIso(iso);
+    const isFr = /^[24][0245689]P/.test(isoUp) || /^45P/.test(isoUp) || /^L5P/.test(isoUp);
+    const isOt = /^[24][0245689]U/.test(isoUp) || /^45U/.test(isoUp) || /^L5U/.test(isoUp);
+    const isTk = /^[24][0245689]T/.test(isoUp) || /^L5T/.test(isoUp);
+
+    records.push({
+      cn, l4: cn.slice(-4),
+      sl: seal, sl_orig: seal, eseal: '', eseal_orig: '',
+      bl: ci.bl_no >= 0 ? String(row[ci.bl_no] || '').trim() : '',
+      sh: '', gi: '',
+      wt: 0,                            // 세관리스트엔 무게 없음(선사리스트에서 보강).
+      pol, pod,
+      fe,
+      iso,
+      op: '', tsport: '', printpod: '', cargoType: '',
+      dg: false,
+      rf: isRf, fr: isFr, ot: isOt, tk: isTk,
+      tmp: '', tmp_missing: isRf,        // 온도는 선사리스트에서 보강.
+      _customs: true,                   // 세관 출신 표식: ISO 끝자리 동기화 제외.
+    });
+  }
+  return records.length ? records : null;
+}
+
 // M8.07: RIZHAO ORIENT(日照海通) 예배清单 전용 파서.
 //   감지 실패 시 null 반환 → 호출부가 기존 로직으로 진행.
 //   양하분 전건 Full(엠티 없음). 품명은 desc에 저장(평소 미표시, 이상 보고 시 참조용).
@@ -1570,6 +1650,12 @@ export async function parseListExcel(arrayBuffer) {
   for (const sheetName of wb.SheetNames) {
     const ws = fixSheetRange(wb.Sheets[sheetName], XLSX);   // V38: !ref 보정
     const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+    // M8.08: 세관리스트(적하목록) 전용 파싱 — 검수 주 리스트.
+    {
+      const cuRecords = parseCustomsSheet(grid);
+      if (cuRecords) { records.push(...cuRecords); continue; }
+    }
 
     // M8.07: RIZHAO ORIENT(日照海通) 예배清单 전용 파싱.
     //   주3회 정기 입항선. 중국어 헤더(提单号/箱号/封号/箱量/重/温度/目的港) +
@@ -1897,7 +1983,7 @@ export async function parseListExcel(arrayBuffer) {
   // 원칙: 리스트의 F/E 명시값만 사용. 무게로 추정 X.
   // ISO 끝자리 동기화: F/E와 ISO 끝자리가 다르면 F/E 우선
   for (const r of records) {
-    if (r._rz) continue;  // M8.07: RIZHAO 레코드는 ISO가 이미 표준(L5G1 등) — 끝자리 변환 금지.
+    if (r._rz || r._customs) continue;  // M8.07/08: RIZHAO·세관 레코드는 ISO가 이미 표준 — 끝자리 변환 금지.
     if (!r.iso || r.iso.length < 4) continue;
     const last = r.iso[r.iso.length - 1];
     if (r.fe === 'E' && last !== 'E') {
