@@ -644,6 +644,7 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
               <th className="px-1.5 py-1 text-left">컨번호</th>
               <th className="px-1.5 py-1 text-left w-14">규격</th>
               <th className="px-1.5 py-1 text-left w-10">F/E</th>
+              <th className="px-1.5 py-1 text-left w-24">실번호</th>
               <th className="px-1.5 py-1 text-left w-14">검수자</th>
               <th className="px-1.5 py-1 text-left w-12">시각</th>
             </tr>
@@ -658,6 +659,9 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
                   {c.fe === 'E'
                     ? <span className="text-amber-300 font-bold">E</span>
                     : <span className="text-rose-300">F</span>}
+                </td>
+                <td className="px-1.5 py-1 mono text-slate-300 text-[10px] break-all">
+                  {c.sl || <span className="text-slate-600">-</span>}
                 </td>
                 <td className="px-1.5 py-1 text-slate-400 text-[10px]">
                   {c.done ? (c.by || '✓') : <span className="text-slate-600">⏳ 대기</span>}
@@ -740,6 +744,7 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
             <tr>
               <th className="px-1.5 py-1 text-left w-8">No</th>
               <th className="px-1.5 py-1 text-left">컨번호</th>
+              <th className="px-1.5 py-1 text-left w-14">규격</th>
               <th className="px-1.5 py-1 text-left w-20">엠티실</th>
               {sv.policy.mode === 'verify' && <th className="px-1.5 py-1 text-left w-20">리씰/틀린</th>}
               <th className="px-1.5 py-1 text-left w-14">검수자</th>
@@ -753,6 +758,7 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
                 <tr key={i} className={`border-t border-slate-800 ${filled ? '' : 'opacity-50'}`}>
                   <td className="px-1.5 py-1 text-slate-500 mono">{i + 1}</td>
                   <td className="px-1.5 py-1 mono text-slate-200">{c.cn || '(현장부여)'}</td>
+                  <td className="px-1.5 py-1 mono text-slate-400">{c.iso || '-'}</td>
                   <td className="px-1.5 py-1 mono">
                     {c.eseal ? <span className="text-emerald-300 font-bold">{c.eseal}</span> : <span className="text-slate-600">⏳ 대기</span>}
                   </td>
