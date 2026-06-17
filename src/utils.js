@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.09-01';
+export const APP_VERSION = 'V8.09-02';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1874,13 +1874,17 @@ export async function parseListExcel(arrayBuffer) {
         if (feRaw === 'F' || feRaw === 'FULL' || feRaw === 'L' || feRaw === 'LOADED') fe = 'F';
         else if (feRaw === 'E' || feRaw === 'EMPTY' || feRaw === 'MT' || feRaw === 'M') fe = 'E';
       }
-      // V8.09: ITEM 컬럼 "공컨테이너" 표기 (RIZHAO 선적 LOADING LIST).
+      // V8.09-02: ITEM 컬럼 "공컨테이너" 표기 (RIZHAO 선적 LOADING LIST).
       //   엠티 컨에도 실(seal)이 붙는 선박이라 실 유무로 F/E 판정 불가 → ITEM 표기가 유일한 근거.
-      //   "공컨테이너"/"공컨"/"EMPTY"=Empty. 빈칸=Full. (R063W 검증: EMPTY 71건 = 작업자 요약 일치.)
+      //   "공컨테이너"/"공컨"/"EMPTY"=Empty만 잡는다.
+      //   ★V8.09-01 버그 수정: "빈칸=Full 강제"를 제거. ITEM이 품목·순번 등 다른 용도인
+      //     일반 선박에서 ITEM 빈칸이 전 컨을 Full로 덮어써, TYPE/SIZE 끝글자·SOC seal로
+      //     판정될 엠티가 모두 Full로 오집계되던 문제(전 선박 공컨 집계 이상)를 차단.
+      //     빈칸은 아래 정상 경로(TYPE/SIZE/SOC)로 흘려보내고, RIZHAO 선적은 그 경로에서
+      //     끝글자가 없어 결국 기본 Full로 가므로 기존 동작과 동일.
       if (!fe && item_i >= 0) {
         const itemRaw = String(row[item_i] || '').trim();
         if (/공\s*컨|empty|엠티|^MT$/i.test(itemRaw)) fe = 'E';
-        else if (itemRaw === '') fe = 'F';
       }
       // TYPE 끝 글자
       if (!fe && type_i >= 0) {
