@@ -139,46 +139,92 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   //   선적 = 순수 싱글 → 트윈(같은 로우 스택 연속, 아래 깔린 40ft 종속 끌어오기) → 남은 40ft(층 순서) → FR·OT(마지막)
   const flow = [...normal, ...keepInFlow].sort((a, b) => cmp(a.main, b.main));
   if (mode === 'discharge') {
-    return [...pureFrs, ...flow, ...pureSingles];
+    // V8.09-03 (사용자 확정 2026-06-17): 양하는 "40ft 작업 전부 끝낸 뒤 20ft 작업".
+    //   이유: 같은 단에 40/20 혼재 시 층마다 40↔20 순서가 되면 스프레더를 40전용↔20트윈으로
+    //   반복 전환해 작업 시간이 지연됨. 40ft를 모아 먼저 다 내리고 20ft(트윈)를 나중에 모아 내린다.
+    //   ★단, 적재 종속 유지 — 어떤 40ft 카드 '위'(같은 단·같은 로우·더 높은 티어)에 아직 안 내린
+    //   20ft 작업분이 얹혀 있으면 그 40ft를 앞으로 끌어올 수 없다(20ft를 먼저 내려야 함). 이 경우
+    //   해당 40ft는 20ft와의 상대 순서를 기존 층 순서대로 둔다. (이 베이는 40ft가 20ft 위/독립이라
+    //   전부 앞으로 모임 — 검증 EDI STSE 2645E 24번 홀드로 PASS.)
+    const ordered40First = reorder40FirstForDischarge(flow);
+    return [...pureFrs, ...ordered40First, ...pureSingles];
   }
-  // ── 선적: 홀드는 트윈 스택 우선, 데크는 기존 층 순서 ──
-  const holdFlow = flow.filter(card => !isDeckTier(card.main.tier));
-  const deckFlow = flow.filter(card => isDeckTier(card.main.tier));
-  const holdTwins = holdFlow.filter(card => card.twin);
-  const holdRest = holdFlow.filter(card => !card.twin);
-  // 트윈: POD(포트) 우선 → 로우(해상→육상) → 티어 오름차순(바닥부터).
-  // V7.99-6 (메모9): 포트가 다르지 않으면(같은 POD) 한 로우를 바닥부터 끝까지 쌓고 다음 로우로.
-  //   POD가 섞이면 row 순서가 우선돼 포트가 교대로 나오던 문제 → POD를 1순위로.
-  //   POD 순위는 그룹 전체에서 먼저 등장하는 순(holdTwins 입력 순서 = flow의 cmp 정렬 결과).
-  const twinPodOrder = {};
-  let twinPodSeq = 0;
-  for (const c of holdTwins) {
-    const pod = c.main.pod || '';
-    if (!(pod in twinPodOrder)) twinPodOrder[pod] = twinPodSeq++;
-  }
-  holdTwins.sort((a, b) => {
-    const ap = twinPodOrder[a.main.pod || ''] ?? 99, bp = twinPodOrder[b.main.pod || ''] ?? 99;
-    if (ap !== bp) return ap - bp;
-    const ar = rowRank(a.main.row, { evenRowsSeaSide, landToSea: false });
-    const br = rowRank(b.main.row, { evenRowsSeaSide, landToSea: false });
-    if (ar !== br) return ar - br;
-    return parseInt(a.main.tier, 10) - parseInt(b.main.tier, 10);
-  });
-  const emitted = new Set();
-  const ordered = [];
-  const emit = (card) => { if (!emitted.has(card)) { emitted.add(card); ordered.push(card); } };
-  for (const tw of holdTwins) {
-    // 적재 종속: 이 트윈과 같은 로우에서 더 아래 티어에 있는 일반(40ft 등) 카드를 먼저 끌어옴
-    const tRow = tw.main.row, tTier = parseInt(tw.main.tier, 10);
-    holdRest
-      .filter(card => !emitted.has(card) && sameRow(card, tRow) && parseInt(card.main.tier, 10) < tTier)
-      .sort((a, b) => parseInt(a.main.tier, 10) - parseInt(b.main.tier, 10))
-      .forEach(emit);
-    emit(tw);
-  }
-  // 남은 홀드 일반분(40ft 등): 기존 층 순서
-  holdRest.filter(card => !emitted.has(card)).sort((a, b) => cmp(a.main, b.main)).forEach(emit);
-  return [...pureSingles, ...ordered, ...deckFlow, ...pureFrs];
+  // ── 선적: 홀드·데크 모두 "트윈 전부 → 40ft 전부" (각 단 내부). 단 사이는 홀드 먼저 → 데크. ──
+  //   V8.09-03 (사용자 확정 2026-06-17): 선적 순서는 20ft싱글 → 트윈 → 40ft, 순서 절대 우선.
+  //   도메인 사실(사용자 확정): 40ft 위에는 20ft가 절대 안 실린다(40ft 중간에 콘 구멍 없음).
+  //   따라서 "트윈을 먼저 다 싣고 40ft를 나중에" 실어도 적재 종속이 깨지지 않는다(40ft가 20ft 위/독립).
+  //   ★V7.99-6의 "트윈 아래 깔린 40ft 먼저 끌어오기"는 발동할 일이 없고, 발동 시 트윈↔40 순서를
+  //     깨므로 제거. 트윈끼리 스택 순서(POD→로우→바닥티어)만 유지하고, 40ft는 그 뒤에 층 순서로.
+  //   ★데크도 자동모드는 홀드와 동일 규칙으로 제시(사용자 확정 2026-06-17): 포트가 갈리거나 선적
+  //     난이도로 순서가 달라지는 경우는 검수사가 수동 작업으로 보정한다(자동은 기본 제시).
+  const buildStageOrder = (cards) => {
+    const twins = cards.filter(card => card.twin);
+    const single20 = cards.filter(card => !card.twin && !cardIs40(card));   // 짝 없는 20ft
+    const forties = cards.filter(card => !card.twin && cardIs40(card));     // 40ft
+    const podOrder = {}; let seq = 0;
+    for (const c of twins) { const p = c.main.pod || ''; if (!(p in podOrder)) podOrder[p] = seq++; }
+    twins.sort((a, b) => {
+      const ap = podOrder[a.main.pod || ''] ?? 99, bp = podOrder[b.main.pod || ''] ?? 99;
+      if (ap !== bp) return ap - bp;
+      const ar = rowRank(a.main.row, { evenRowsSeaSide, landToSea: false });
+      const br = rowRank(b.main.row, { evenRowsSeaSide, landToSea: false });
+      if (ar !== br) return ar - br;
+      return parseInt(a.main.tier, 10) - parseInt(b.main.tier, 10);
+    });
+    single20.sort((a, b) => cmp(a.main, b.main));
+    forties.sort((a, b) => cmp(a.main, b.main));
+    return [...single20, ...twins, ...forties];   // 단 내부: 20싱글 → 트윈 → 40ft
+  };
+  const holdOrdered = buildStageOrder(flow.filter(card => !isDeckTier(card.main.tier)));
+  const deckOrdered = buildStageOrder(flow.filter(card => isDeckTier(card.main.tier)));
+  // pureSingles(홀드 짝없는 20ft) → 홀드(싱글·트윈·40) → 데크(싱글·트윈·40) → FR(마지막)
+  return [...pureSingles, ...holdOrdered, ...deckOrdered, ...pureFrs];
+}
+
+// 카드의 대표 규격이 40ft인지 (트윈 카드는 20ft 짝이므로 20ft 취급)
+function cardIs40(card) {
+  if (card.twin) return false;            // 트윈 = 20ft 두 개
+  return is40ft(card.main);
+}
+
+// V8.09-03: 양하 — 같은 단(데크/홀드) 안에서 40ft 카드를 20ft 카드보다 앞으로 모은다.
+//   적재 종속 유지: 40ft '위'(같은 단·같은 로우·더 높은 티어)에 아직 안 내린 20ft 카드가 있으면
+//   그 40ft는 앞으로 끌어올 수 없다(그 20ft를 먼저 내려야 하므로) → 기존 상대 순서 유지.
+//   입력 flow는 이미 cmp(데크먼저 → 위층먼저 → 같은 티어 40먼저 → 로우)로 정렬돼 있다.
+//   여기서는 그 안에서 40ft를 안전하게 앞당기기만 한다(stable).
+function reorder40FirstForDischarge(flow) {
+  // 단(데크/홀드)별로 분리 — 단 사이 순서(데크 먼저)는 그대로 유지.
+  const deckCards = flow.filter(c => isDeckTier(c.main.tier));
+  const holdCards = flow.filter(c => !isDeckTier(c.main.tier));
+
+  const reorderWithinTier = (cards) => {
+    // 같은 단 안에서, 어떤 20ft 카드가 어떤 40ft '아래'에 깔려 있는지(=그 40ft를 먼저 내려야 함)
+    //   판정은 "같은 로우 + 더 높은 티어에 40ft가 있는 20ft"로 한다. 그런 20ft는 40ft보다 뒤여야 하므로
+    //   40ft 우선과 충돌하지 않는다(40ft가 어차피 앞). 반대로 40ft 위에 20ft가 얹힌 경우만 종속 위반이 되는데,
+    //   그 20ft는 해당 40ft보다 앞에 와야 한다.
+    const rowsBlock = new Set();   // 'row' 키: 이 로우엔 (40ft 위에 20ft가 얹힘) → 단순 40우선 금지
+    for (const card of cards) {
+      const isC40 = cardIs40(card);
+      const t = parseInt(card.main.tier, 10);
+      const row = card.main.row;
+      if (!isC40) {
+        // 이 20ft보다 '아래'(낮은 티어) 같은 로우에 40ft가 있으면 = 40ft 위에 20ft 얹힘 → 종속
+        const fortyBelow = cards.some(o => cardIs40(o) && o.main.row === row && parseInt(o.main.tier,10) < t);
+        if (fortyBelow) rowsBlock.add(row);
+      }
+    }
+    // 종속 없는 로우는 40ft를 앞으로, 20ft를 뒤로 (각 그룹 내부는 기존 cmp 순서 유지=stable).
+    // 종속 있는 로우(rowsBlock)는 기존 층 순서를 그대로 둔다.
+    const safe40 = [], safe20 = [], blocked = [];
+    for (const card of cards) {
+      if (rowsBlock.has(card.main.row)) blocked.push(card);
+      else if (cardIs40(card)) safe40.push(card);
+      else safe20.push(card);
+    }
+    return [...safe40, ...safe20, ...blocked];
+  };
+
+  return [...reorderWithinTier(deckCards), ...reorderWithinTier(holdCards)];
 }
 
 // 선택 베이 → 같은 슬롯 그룹 (예: 20 → [19,20,21])
