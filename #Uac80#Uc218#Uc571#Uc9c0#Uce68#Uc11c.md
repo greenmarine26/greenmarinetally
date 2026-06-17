@@ -1278,3 +1278,31 @@ RIZHAO 실EDI(R063E_EDI.txt, IFCSUM 166대) + 실엑셀(R063E_预配.xlsx 166건
 **미해결(데이터)**: 양하 카운트 168 vs 실제 167 — 파서·병합 시뮬레이션은 167(EDI166∪세관167). 168은 앱 저장 누적 데이터로 추정. 옛 데이터 삭제 후 EDI→선사→세관 재업로드로 정리 권장(코드 아닌 데이터 이슈).
 
 변경: src/pages/VoyagePage.jsx (엠티 블록·SealPolicyBanner·import 제거).
+
+---
+
+## V8.08-03 — 엠티 실 작업 선적 한정 + LOLO 검수 실시간 표
+
+**사용자 확정**: 엠티 실 작업(부착·확인)은 선적(loading) 때만. LOLO 검수 리스트는 양하·선적 모두, ATRP 엠티 실 현황처럼 실시간 표로 표시.
+
+**엠티 실 작업 선적 한정**(ChiefDashboard sealVoyages): `['discharge','loading']` → `['loading']`. 양하 EDI엔 엠티 실 부착/확인 개념 없음(선적 시 작업). RZOR 양하가 엠티 실 현황에 뜨던 것 제거. (앞서 시도한 'records 엠티 포함'은 방향 오류로 원복.)
+
+**LOLO 검수 실시간 표**(LoloVoyageCard 신규): 기존 한 줄 카드(카운트+버튼) → ATRP SealVoyageCard와 동일한 컨테이너별 표. 컬럼 컨번호·규격·F/E·검수자·시각. 처리(completed) 건 강조+최근순, 미처리 흐리게(opacity-50). 양하·선적 모두 적용. total은 세관리스트 기준(EDI∪records 합집합) — EDI만 세던 것 수정(엠티 1대 누락 방지). 내보내기(실번호·검수리스트) 버튼 유지.
+
+**원칙 재확인**: 리스트는 세관 기준. 갯수 안 맞으면 누락 신고로 처리(EDI 카운트로 판단 안 함).
+
+변경: src/pages/ChiefDashboard.jsx (sealVoyages loading 한정, loloVoyages rows 추가, LoloVoyageCard 신규).
+
+---
+
+## V8.08-03 — 엠티 실 작업 선적 한정 + LOLO 검수 리스트 실시간 표
+
+**엠티 실 작업(부착·확인)은 선적(loading)만**: ChiefDashboard 수집을 ['discharge','loading']→['loading']으로 한정. 양하엔 엠티 실 작업 개념 없음(선적 시 부착/확인). 양하 RZOR이 엠티 실 현황에 안 뜨는 게 정상.
+
+**LOLO 검수 리스트 실시간 표(ATRP 엠티 현황과 동일 형태)**: LoloVoyageCard가 rows를 컨번호·규격·F/E·검수자·시각 표로 그림. 처리분은 검수자·시각 실시간 표시, 미처리는 흐리게. total=EDI∪records(세관 기준 167대, 엠티 포함). 양하·선적 둘 다 적용.
+
+**RORO/LOLO 개념 정리(작업자 설명)**: LOLO=크레인 직접 양·적하, RORO=YT가 샤시째. 리스트는 167대 하나뿐이고 어느 게 LOLO인지 사전 구분 불가(현장에서 화물 보고 판단). 따라서 167대 전체 리스트 보유 → 검수사가 조회·처리한 것만 누적분에 모임(기존 구조가 맞음). "49대 이하 LOLO"는 결과적 수치이지 사전 필터 대상 아님 — 앱이 거르지 않음.
+
+검증: LOLO rows 167대(F166/E1, SPSU2019220 엠티 포함) 시뮬레이션 통과. 온도·매칭 진단 회귀 없음.
+
+변경: src/pages/ChiefDashboard.jsx (엠티 수집 loading 한정).

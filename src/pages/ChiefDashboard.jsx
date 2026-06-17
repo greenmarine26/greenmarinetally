@@ -59,8 +59,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     Object.entries(voyages || {}).forEach(([key, v]) => {
       const policy = matchShipPolicy(v?.info?.vsl || '', extraPolicies);
       if (!policy) return;
-      // 양하/선적 모두 검사
-      ['discharge', 'loading'].forEach(mode => {
+      // M8.08: 엠티 실 작업은 선적(loading) 때만 적용. 양하는 제외.
+      //   (양하 EDI엔 엠티 실 부착·확인 개념이 없음 — 선적 시 부착/확인하는 작업.)
+      ['loading'].forEach(mode => {
         const sec = v[mode];
         if (!sec) return;
         const ediMap = sec.ediContainers || {};
@@ -116,20 +117,45 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         const sec = v[mode];
         if (!sec) return;
         const ediMap = sec.ediContainers || {};
+        const recMap = sec.records || {};
         const ediArr = Object.values(ediMap);
         if (ediArr.length === 0) return;
         // 베이가 하나도 없으면 LOLO
         const isLolo = ediArr.every(c => !c.bay && !c.row && !c.tier);
         if (!isLolo) return;
-        const doneCount = Object.keys(sec.completed || {}).length;
+        const compMap = sec.completed || {};
+        const doneCount = Object.keys(compMap).length;
+        // M8.08: 컨테이너별 처리 상태 목록 — 실시간 표용. 리스트(세관) 기준 EDI∪records 합집합.
+        const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+        const rows = [...allCnSet].map(cn => {
+          const e = ediMap[cn] || {}, r = recMap[cn] || {};
+          const comp = compMap[cn] || null;
+          return {
+            cn,
+            iso: r.iso || e.iso || '',
+            fe: r.fe || e.fe || '',
+            sl: r.sl || e.sl || '',
+            done: !!comp,
+            by: comp?.by || comp?.inspector || '',
+            at: comp?.at || comp?.ts || 0,
+          };
+        });
+        // 처리된 것 먼저(최근순), 미처리는 컨번호순.
+        rows.sort((a, b) => {
+          if (a.done && b.done) return (b.at || 0) - (a.at || 0);
+          if (a.done) return -1;
+          if (b.done) return 1;
+          return a.cn.localeCompare(b.cn);
+        });
         list.push({
           voyageKey: key,
           voyage: v,
           mode,
           vsl: v?.info?.vsl || '',
           voy: v?.info?.voy || v?.info?.voyage || '',
-          total: ediArr.length,
+          total: allCnSet.size,        // 리스트(세관) 기준 전체.
           done: doneCount,
+          rows,
           sec,
         });
       });
@@ -519,29 +545,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           </div>
           <div className="space-y-2">
             {loloVoyages.map((item, idx) => (
-              <div key={`${item.voyageKey}-${item.mode}`}
-                className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2.5 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-slate-100 truncate">
-                    {item.vsl || '(선박명 없음)'} <span className="text-cyan-300">{item.voy}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-400">
-                    {item.mode === 'discharge' ? '양하' : '선적'} · 처리 {item.done} / 전체 {item.total}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button onClick={() => exportLolo(item, 'seal')}
-                    title="실번호 변경·리씰·실오류 건만 (ACTUAL SEAL LIST 형식)"
-                    className="text-[10px] text-cyan-200 hover:text-white px-2 py-1 rounded border border-cyan-700/50 bg-cyan-900/30 flex items-center gap-1">
-                    <Send className="w-3 h-3"/>실번호
-                  </button>
-                  <button onClick={() => exportLolo(item, 'loading')}
-                    title="처리분 전체 (LOADING LIST 형식, V=실오류 ★=리씰)"
-                    className="text-[10px] text-cyan-200 hover:text-white px-2 py-1 rounded border border-cyan-700/50 bg-cyan-900/30 flex items-center gap-1">
-                    <FileSpreadsheet className="w-3 h-3"/>검수리스트
-                  </button>
-                </div>
-              </div>
+              <LoloVoyageCard key={`${item.voyageKey}-${item.mode}`}
+                item={item}
+                onOpenVoyage={onOpenVoyage}
+                onExport={exportLolo}
+              />
             ))}
           </div>
         </div>
@@ -602,6 +610,88 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
+    </div>
+  );
+}
+
+// M8.08: LOLO 검수 항차 카드 (실시간 표). 양하/선적 모두, 처리 현황을 컨테이너별로 표시.
+//   ATRP 엠티 실 현황과 동일 형태 — 처리된 건 검수자·시각 표시, 미처리는 흐리게.
+function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
+  const modeKo = item.mode === 'discharge' ? '양하' : '선적';
+  return (
+    <div className="border-2 border-cyan-700/50 bg-cyan-950/15 rounded-lg p-2.5">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-slate-100">
+            🔍 {item.vsl || '(선박명 없음)'} <span className="text-slate-400">{item.voy}</span>
+          </div>
+          <div className="text-[10px] text-slate-500">{modeKo} 검수 · LOLO(베이 없음)</div>
+        </div>
+        <div className="text-right">
+          <div className={`text-lg font-black ${item.done === item.total ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {item.done} / {item.total}
+          </div>
+          <div className="text-[10px] text-slate-500">{item.total - item.done}대 남음</div>
+        </div>
+      </div>
+
+      {/* 실시간 표 (최대 50줄) */}
+      <div className="bg-slate-950 rounded border border-slate-700 overflow-hidden">
+        <table className="w-full text-[11px]">
+          <thead className="bg-slate-800 text-slate-400">
+            <tr>
+              <th className="px-1.5 py-1 text-left w-8">No</th>
+              <th className="px-1.5 py-1 text-left">컨번호</th>
+              <th className="px-1.5 py-1 text-left w-14">규격</th>
+              <th className="px-1.5 py-1 text-left w-10">F/E</th>
+              <th className="px-1.5 py-1 text-left w-14">검수자</th>
+              <th className="px-1.5 py-1 text-left w-12">시각</th>
+            </tr>
+          </thead>
+          <tbody>
+            {item.rows.slice(0, 50).map((c, i) => (
+              <tr key={i} className={`border-t border-slate-800 ${c.done ? '' : 'opacity-50'}`}>
+                <td className="px-1.5 py-1 text-slate-500 mono">{i + 1}</td>
+                <td className="px-1.5 py-1 mono text-slate-200">{c.cn}</td>
+                <td className="px-1.5 py-1 mono text-slate-400">{c.iso}</td>
+                <td className="px-1.5 py-1 mono">
+                  {c.fe === 'E'
+                    ? <span className="text-amber-300 font-bold">E</span>
+                    : <span className="text-rose-300">F</span>}
+                </td>
+                <td className="px-1.5 py-1 text-slate-400 text-[10px]">
+                  {c.done ? (c.by || '✓') : <span className="text-slate-600">⏳ 대기</span>}
+                </td>
+                <td className="px-1.5 py-1 text-slate-500 text-[10px] mono">
+                  {c.at ? new Date(c.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {item.rows.length > 50 && (
+          <div className="text-[10px] text-slate-500 text-center py-1 border-t border-slate-800">
+            ... 외 {item.rows.length - 50}대 (엑셀 다운로드로 전체 확인)
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <button onClick={() => onOpenVoyage?.(item.voyageKey)}
+          className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-bold">
+          항차 열기
+        </button>
+        <button onClick={() => onExport(item, 'seal')}
+          title="실번호 변경·리씰·실오류 건만 (ACTUAL SEAL LIST 형식)"
+          className="py-2 bg-cyan-900/40 hover:bg-cyan-800/50 text-cyan-200 rounded text-xs font-bold flex items-center justify-center gap-1">
+          <Send className="w-3 h-3"/>실번호
+        </button>
+        <button onClick={() => onExport(item, 'loading')}
+          title="처리분 전체 (LOADING LIST 형식)"
+          className="py-2 bg-cyan-900/40 hover:bg-cyan-800/50 text-cyan-200 rounded text-xs font-bold flex items-center justify-center gap-1">
+          <FileSpreadsheet className="w-3 h-3"/>검수리스트
+        </button>
+      </div>
     </div>
   );
 }
