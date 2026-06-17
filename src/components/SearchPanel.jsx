@@ -1017,6 +1017,13 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const handleCompleteBoth = async () => {
     if (!c1 || !c2 || twinBusy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
+    const xMiss = (c) => c._mode === 'discharge' && c._xray && !String(c._xraySeal?.seal || '').trim();
+    const miss = [c1, c2].filter(c => !c._comp && xMiss(c)).map(c => c.cn?.slice(-4));
+    if (miss.length) {
+      alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
+      return;
+    }
     setTwinBusy(true);
     try {
       if (!c1._comp) await fbCompleteContainer(voyageKey, c1._mode, c1.cn, inspector);

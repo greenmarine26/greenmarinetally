@@ -334,6 +334,11 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
         },
       });
     } else {
+      // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
+      if (mode === 'discharge' && isXray && !String(xraySeal?.seal || '').trim()) {
+        alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
+        return;
+      }
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
       speakDone(c);
     }

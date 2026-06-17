@@ -221,10 +221,63 @@ function reorder40FirstForDischarge(flow) {
       else if (cardIs40(card)) safe40.push(card);
       else safe20.push(card);
     }
-    return [...safe40, ...safe20, ...blocked];
+    return [...reorderFullReeferLast(safe40), ...safe20, ...blocked];
   };
 
   return [...reorderWithinTier(deckCards), ...reorderWithinTier(holdCards)];
+}
+
+// 리퍼 판정 (이 모듈 자체 완결성 위해 로컬 헬퍼 — ISO 3번째 글자 R 또는 변형코드)
+function cardIsReefer(c) {
+  if (!c) return false;
+  if (c.rf === true) return true;
+  const iso = String(c.iso || '').toUpperCase();
+  if (iso.length >= 3 && iso[2] === 'R') return true;
+  if (/^R[FE]/.test(iso)) return true;
+  if (/^[24]58[25]$/.test(iso)) return true;
+  return false;
+}
+
+// V8.09-04: 모아진 40ft 카드(safe40)를 베이 그룹 단위로 "풀일반 → 풀리퍼 → 엠티(층순서유지)" 정렬.
+//   ★물리종속 절대 우선: 같은 로우 스택 안에서는 티어 순서(위→아래)를 절대 깨지 않는다.
+//   재배치는 '로우(스택)의 맨 위 카드' 부류 기준으로만 한다. 스택 내부 순서는 입력 그대로 보존.
+//   엠티(공컨) 40ft는 일반/리퍼 순서 구분이 없으므로 풀 뒤에 두고 원래 순서 유지.
+function reorderFullReeferLast(cards) {
+  const grpKey = (card) => {
+    const b = parseInt(card.main.bay, 10);
+    if (!Number.isFinite(b)) return 'x';
+    return String(b % 2 === 0 ? b : (b + 1));
+  };
+  const order = [];
+  const groups = new Map();
+  for (const card of cards) {
+    const k = grpKey(card);
+    if (!groups.has(k)) { groups.set(k, []); order.push(k); }
+    groups.get(k).push(card);
+  }
+  const out = [];
+  for (const k of order) {
+    const arr = groups.get(k);
+    const stackOrder = [];
+    const stacks = new Map();
+    for (const card of arr) {
+      const row = card.main.row;
+      if (!stacks.has(row)) { stacks.set(row, []); stackOrder.push(row); }
+      stacks.get(row).push(card);
+    }
+    const genStacks = [], rfStacks = [], emptyStacks = [];
+    for (const row of stackOrder) {
+      const st = stacks.get(row);
+      let top = st[0];
+      for (const c of st) if (parseInt(c.main.tier, 10) > parseInt(top.main.tier, 10)) top = c;
+      const tc = top.main;
+      if (tc.fe === 'E') emptyStacks.push(st);
+      else if (cardIsReefer(tc)) rfStacks.push(st);
+      else genStacks.push(st);
+    }
+    for (const st of [...genStacks, ...rfStacks, ...emptyStacks]) out.push(...st);
+  }
+  return out;
 }
 
 // 선택 베이 → 같은 슬롯 그룹 (예: 20 → [19,20,21])

@@ -143,6 +143,11 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         },
       });
     } else {
+      // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
+      if (mode === 'discharge' && isXray && !String(xSeal || '').trim()) {
+        alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
+        return;
+      }
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
       speakDone(c);
     }
@@ -266,6 +271,22 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
       eseal_wrong: c.eseal_wrong || '',
       reseal: '',
     }, inspector, sealMode);
+  };
+
+  // V8.09-06 (사용자 보고 2026-06-18): 엠티실 테스트 입력 후 완전 삭제 경로.
+  //   기존엔 eseal에 삭제 버튼이 없고 저장 핸들러가 빈값을 막아(특히 attach/ATRP),
+  //   테스트로 1자라도 넣으면 지울 수 없었다. 빈값 저장을 허용해 기록을 완전히 비운다.
+  //   eseal_wrong/reseal은 보존(별도 삭제 버튼 사용). 이력(eseal_history)은 fbSetEmptySeal이 자동 누적.
+  const handleClearEseal = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!confirm('엠티 실번호 기록을 완전히 삭제하시겠습니까?\n(테스트 입력 등 잘못 기록한 경우)')) return;
+    await fbSetEmptySeal(voyageKey, mode, c.cn, {
+      eseal: '',
+      eseal_wrong: c.eseal_wrong || '',
+      reseal: c.reseal || '',
+    }, inspector, sealMode);
+    setEditingEseal(false);
+    setEsealVal('');
   };
 
   // M3.5.4-fix2: 규격(ISO) 수정 — rf/fr/ot/tk 플래그 자동 갱신
@@ -688,12 +709,20 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                   엠티 실 {sealMode === 'attach' ? '부착 (작업 필요)' : '표기'}
                 </span>
                 {!editingEseal && (
-                  <button onClick={() => { setEsealVal(c.eseal || ''); setEditingEseal(true); }}
-                    className={`hover:opacity-80 flex items-center gap-1 text-[10px] ${
-                      sealMode === 'attach' ? 'text-red-300' : 'text-cyan-400'
-                    }`}>
-                    <Edit3 className="w-3 h-3"/>{c.eseal ? '수정' : '실번호 입력'}
-                  </button>
+                  <span className="flex items-center gap-2">
+                    {c.eseal && (
+                      <button onClick={handleClearEseal}
+                        className="hover:opacity-80 text-[10px] text-rose-400 hover:text-rose-300">
+                        삭제
+                      </button>
+                    )}
+                    <button onClick={() => { setEsealVal(c.eseal || ''); setEditingEseal(true); }}
+                      className={`hover:opacity-80 flex items-center gap-1 text-[10px] ${
+                        sealMode === 'attach' ? 'text-red-300' : 'text-cyan-400'
+                      }`}>
+                      <Edit3 className="w-3 h-3"/>{c.eseal ? '수정' : '실번호 입력'}
+                    </button>
+                  </span>
                 )}
               </div>
               {!editingEseal ? (

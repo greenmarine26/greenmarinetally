@@ -212,9 +212,27 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     speak(parts.join(', '));
   }, [card, voiceOn]);
 
+  // V8.09-06 (사용자 보고 2026-06-18): XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
+  //   기존엔 검증 없이 바로 완료돼, 실 체결 후 실번호 미입력인데도 양하확인됨.
+  //   기준: 양하(discharge)에서 c._xray=true인데 c._xraySeal.seal이 비면 차단(공백도 미입력 취급).
+  //   미입력 카드를 alert로 알리고 완료 중단. (선적/비XRAY는 영향 없음.)
+  const xraySealMissing = (c) => mode === 'discharge' && c?._xray &&
+    !String(c?._xraySeal?.seal || '').trim();
+  const blockIfXrayMissing = () => {
+    const miss = [];
+    if (card?.main && xraySealMissing(card.main)) miss.push(card.main.l4 || card.main.cn?.slice(-4));
+    if (card?.twin && xraySealMissing(card.twin)) miss.push(card.twin.l4 || card.twin.cn?.slice(-4));
+    if (miss.length) {
+      alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
+      return true;
+    }
+    return false;
+  };
+
   // 확인 (트윈은 둘 다 한 번에)
   const handleConfirm = async () => {
     if (!card || busy) return;
+    if (blockIfXrayMissing()) return;   // V8.09-06: XRAY 실번호 미입력 차단
     setBusy(true);
     try {
       await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
@@ -334,10 +352,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage]);
 
   // V7.94-16: 양하 — 그룹 홀드까지 완료 시 클로즈 제안 조건 (그룹 완료 화면에서 사용)
+  // V8.09-05 (사용자 보고 2026-06-18): 같은 베이 그룹에 선적할 평택분이 남아 있으면 닫지 않는다.
+  //   현장 순서 = 양하 끝 → (그 홀드에 실을 게 있으면) 선적 먼저 → 선적까지 끝나야 해치 클로즈.
+  //   ★선적 EDI 미업로드면 loadRemain=0 → 기존대로 닫음(선적할 게 없으므로 안전).
   const holdWorkedD = useMemo(() => {
     if (mode !== 'discharge' || selectedGroup == null) return false;
-    return allContainers.some(c => c._mode === mode && c._ptk && c._comp &&
+    const holdDone = allContainers.some(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) < 80);
+    if (!holdDone) return false;
+    const loadRemain = allContainers.some(c => c._mode === 'loading' && c._ptk && !c._comp &&
+      groupCenterOf(c.bay) === selectedGroup);
+    if (loadRemain) return false;
+    return true;
   }, [mode, selectedGroup, allContainers, bayPairs]);
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
@@ -370,9 +396,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     }
   };
 
+  // V8.09-06: fix 경로용 — 실제 배정될 컨(actual)의 XRAY 실번호 검증.
+  //   actual은 검색결과 객체라 _xray/_xraySeal가 없을 수 있어 allContainers에서 원본을 찾아 확인.
+  const xrayMissingByCn = (cn) => {
+    if (mode !== 'discharge' || !cn) return false;
+    const src = allContainers.find(x => x.cn === cn && x._mode === mode) || {};
+    if (!src._xray) return false;
+    return !String(src._xraySeal?.seal || '').trim();
+  };
+
   // 단독 카드 수정: 실제 온 컨 1대
   const handleFixPick = async (c) => {
     if (busy || !card) return;
+    if (xrayMissingByCn(c.cn)) {   // V8.09-06: 실제 컨이 XRAY 대상인데 실번호 미입력이면 차단
+      alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
+      return;
+    }
     setBusy(true);
     try {
       await applyFixOne(c, card.main);
@@ -384,6 +423,16 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const handleTwinFixApply = async () => {
     if (busy || !card || !card.twin) return;
     if (!fixPickFront && !fixPickBack) { alert('수정할 컨테이너를 선택하세요. (한쪽만 바뀌었으면 그쪽만 선택)'); return; }
+    // V8.09-06: XRAY 실번호 검증 — 바뀐 쪽은 실제 컨, 안 바뀐 쪽은 예측 컨 기준.
+    const frontCn = fixPickFront ? fixPickFront.cn : card.main.cn;
+    const backCn = fixPickBack ? fixPickBack.cn : card.twin.cn;
+    const frontMiss = fixPickFront ? xrayMissingByCn(frontCn) : xraySealMissing(card.main);
+    const backMiss = fixPickBack ? xrayMissingByCn(backCn) : xraySealMissing(card.twin);
+    if (frontMiss || backMiss) {
+      const miss = [frontMiss && frontCn?.slice(-4), backMiss && backCn?.slice(-4)].filter(Boolean);
+      alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
+      return;
+    }
     setBusy(true);
     try {
       if (fixPickFront) await applyFixOne(fixPickFront, card.main);
