@@ -68,6 +68,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [photoMode, setPhotoMode] = useState(null);  // M3.5.6: 'seal_error' | 'damage'
   const [iso403PhotoOpen, setIso403PhotoOpen] = useState(false);  // M4.9: ISO403 사진 모달
   const [showHistory, setShowHistory] = useState(false);
+  const [showDesc, setShowDesc] = useState(false);  // M8.07: 품명(내용물) 펼침 — 평소 숨김, 이상 보고 시 참조
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
@@ -862,6 +863,23 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               <Field label="최종지(97)" value={c.fpod} mono highlight="purple"/>
             )}
           </div>
+          {/* M8.07: 품명(내용물) — 평소 숨김. 이상 발생 시 탭하여 확인. desc 있을 때만. */}
+          {c.desc && (
+            <div className="mt-2">
+              <button
+                onClick={() => setShowDesc(v => !v)}
+                className="w-full flex items-center justify-between px-2 py-1.5 bg-slate-800/40 border border-slate-700/50 rounded text-[11px] text-slate-400 font-bold"
+              >
+                <span>📦 내용물 {showDesc ? '숨기기' : '보기'}</span>
+                <span>{showDesc ? '▲' : '▼'}</span>
+              </button>
+              {showDesc && (
+                <div className="mt-1 px-2 py-2 bg-slate-900/60 border border-slate-700/40 rounded text-[12px] text-slate-200 break-words whitespace-pre-wrap">
+                  {c.desc}
+                </div>
+              )}
+            </div>
+          )}
           {/* M5.79: 2단 환적 경고 — POD를 거쳐 다시 환적되는 화물 */}
           {c.tspot && c.tspot !== c.pod && c.pod && (
             <div className="mt-2 px-2 py-1.5 bg-amber-950/40 border border-amber-700/40 rounded text-[11px] text-amber-200 font-bold">

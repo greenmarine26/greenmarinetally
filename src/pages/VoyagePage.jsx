@@ -197,6 +197,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (r.sl) safeR.sl = r.sl;
         if (r.sl_orig) safeR.sl_orig = r.sl_orig;
         if (r.wt && !merged[r.cn].wt) safeR.wt = r.wt;
+        // M8.07: 온도·품명·F/E·리퍼 보강.
+        //   RIZHAO처럼 EDI에 온도/품명이 없는 양식에서 엑셀 리스트 값을 반영.
+        //   EDI에 값이 있으면 보존(EDI 우선) — 다른 선박 영향 없음.
+        if (r.tmp !== undefined && r.tmp !== '' && (merged[r.cn].tmp === undefined || merged[r.cn].tmp === '')) {
+          safeR.tmp = r.tmp;
+          if (r.tmp_missing !== undefined) safeR.tmp_missing = r.tmp_missing;
+        }
+        if (r.desc && !merged[r.cn].desc) safeR.desc = r.desc;
+        if (r.fe && !merged[r.cn].fe) safeR.fe = r.fe;
+        if (r.rf === true && merged[r.cn].rf !== true) safeR.rf = true;
+        if (r.fr === true && merged[r.cn].fr !== true) safeR.fr = true;
         // 엠티실/리씰
         if (r.eseal) safeR.eseal = r.eseal;
         if (r.eseal_wrong) safeR.eseal_wrong = r.eseal_wrong;
@@ -283,6 +294,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       'sl', 'sl_orig', 'sl_history', 'wt',
       'bl', 'sh', 'gi', 'op',  // B/L, Shipper, Gross Index, Operator
       'tmp',  // 온도는 리스트가 보강 가능 (단, 비어있을 때만)
+      'desc',  // M8.07: 품명(내용물) — EDI에 없는 참조 정보, 카고플랜 그림에 영향 없음
       // M4.9b-fix: 엠티 실 — EDI에 봉인 정보 없는 게 일반적, records가 진실
       'eseal', 'eseal_orig', 'eseal_wrong', 'reseal',
       'eseal_at', 'eseal_by', 'eseal_mode', 'eseal_history',

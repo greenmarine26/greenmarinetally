@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.06-05';
+export const APP_VERSION = 'V8.07-02';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1337,6 +1337,109 @@ function fixSheetRange(ws, XLSX) {
 //   - CONTAINER No./SEAL No. (CLL)
 //   - CNTR NO./SEAL (SITC)
 //   - Container No. (병합셀 양식)
+// M8.07: RIZHAO ORIENT(日照海通) 예배清单 전용 파서.
+//   감지 실패 시 null 반환 → 호출부가 기존 로직으로 진행.
+//   양하분 전건 Full(엠티 없음). 품명은 desc에 저장(평소 미표시, 이상 보고 시 참조용).
+function parseRizhaoSheet(grid) {
+  if (!grid || grid.length < 6) return null;
+  // 감지: 상단 6행 안에 提单号 + 箱号 + 箱量 헤더가 모두 있어야 RIZHAO 양식.
+  let hdrRow = -1;
+  for (let i = 0; i < Math.min(6, grid.length); i++) {
+    const cells = (grid[i] || []).map(v => String(v || '').trim());
+    if (cells.includes('提单号') && cells.includes('箱号') && cells.includes('箱量')) {
+      hdrRow = i; break;
+    }
+  }
+  if (hdrRow < 0) return null;
+
+  const H = (grid[hdrRow] || []).map(v => String(v || '').trim());
+  const col = (name) => H.indexOf(name);
+  const ci = {
+    bl: col('提单号'), cn: col('箱号'), seal: col('封号'),
+    qty: col('箱量'), name: col('品名'), goods: col('货物描述'),
+    wt: col('重'), temp: col('温度'),
+  };
+  if (ci.cn < 0 || ci.qty < 0) return null;
+
+  // 目的港(POD): 상단 행에서 라벨 다음 셀 값을 찾음.
+  let pod = '';
+  for (let i = 0; i <= hdrRow; i++) {
+    const cells = (grid[i] || []).map(v => String(v || '').trim());
+    const k = cells.indexOf('目的港');
+    if (k >= 0 && cells[k + 1]) { pod = cells[k + 1]; break; }
+  }
+
+  // 箱量("40FR*1") → 검수앱 표준 ISO.
+  const qtyToIso = (raw) => {
+    const base = String(raw || '').split('*')[0].toUpperCase().trim();
+    const map = {
+      '20GP': '22G1', '20DC': '22G1',
+      '20RF': '22R1',
+      '40GP': '42G1', '40DC': '42G1',
+      '40HC': '45G1', '40HA': '45G1',  // HA=40HC(온도無 일반)
+      '40RH': '45R1',                  // 40HC 리퍼(온도 전건 확인)
+      '40FR': '42P3',
+      '40OT': '45U1', '40TK': '45T1',
+      '45HC': 'L5G1',                  // 진짜 45HC
+    };
+    return map[base] || '';
+  };
+  // 箱量 수량(*N): N==0 행은 빈 슬롯/중복 → 스킵.
+  const qtyNum = (raw) => {
+    const p = String(raw || '').split('*');
+    return p.length > 1 ? parseInt(p[1], 10) : 1;
+  };
+
+  const records = [];
+  for (let r = hdrRow + 1; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const cnRaw = String(row[ci.cn] || '').trim().toUpperCase().replace(/\s/g, '');
+    if (!cnRaw) continue;
+    // 합계행(重箱合计/整箱重合计 등) 스킵: 컨번호 자리에 한자가 오면 제외.
+    if (/[\u4e00-\u9fff]/.test(cnRaw)) continue;
+    if (qtyNum(row[ci.qty]) === 0) continue;  // *0 제외
+
+    const iso = qtyToIso(row[ci.qty]);
+    const seal = ci.seal >= 0 ? String(row[ci.seal] || '').trim() : '';
+    const wt = ci.wt >= 0 ? (Math.round(parseFloat(String(row[ci.wt] || '').replace(/[,\s]/g, '')) || 0)) : 0;
+    const tempRaw = ci.temp >= 0 ? String(row[ci.temp] || '').trim() : '';
+    const tmpMissing = tempRaw === '' || tempRaw === '-';
+    const isRf = (!tmpMissing) || isReeferIso(iso);
+    const isoUp = iso.toUpperCase();
+    const isFr = /^[24][0245689]P/.test(isoUp) || /^45P/.test(isoUp) || /^L5P/.test(isoUp);
+    const isOt = /^[24][0245689]U/.test(isoUp) || /^45U/.test(isoUp) || /^L5U/.test(isoUp);
+    const isTk = /^[24][0245689]T/.test(isoUp) || /^L5T/.test(isoUp);
+    // 품명: 品名 + 货物描述 결합(이상 보고 시 참조용).
+    const nm = ci.name >= 0 ? String(row[ci.name] || '').trim() : '';
+    const gd = ci.goods >= 0 ? String(row[ci.goods] || '').trim().replace(/\n/g, ' ') : '';
+    const desc = [nm, gd].filter(Boolean).join(' / ');
+    // F/E: 내용물(品名) 유무로 판정. 空箱/空/빈칸 = 내용물 없음 = Empty.
+    //   주의: 货物描述은 보지 않음(컨테이너 자체 표기 'CONTAINER' 등이 내용물 아님).
+    //   엠티 컨테이너 자체가 상품이어도 내용물 없으면 Empty — 검수 기록 정확성(오기재 책임 방지).
+    const isEmptyByName = (nm === '' || /^(空箱?|EMPTY|MT)$/i.test(nm));
+    const fe = isEmptyByName ? 'E' : 'F';
+
+    records.push({
+      cn: cnRaw, l4: cnRaw.slice(-4),
+      sl: seal, sl_orig: seal, eseal: '', eseal_orig: '',
+      bl: ci.bl >= 0 ? String(row[ci.bl] || '').trim() : '',
+      sh: '', gi: '',
+      wt,
+      pol: '', pod,
+      fe,                               // 품명(내용물) 기준: 空箱/빈칸=E, 품명 있음=F.
+      iso,
+      op: '', tsport: '', printpod: '', cargoType: '',
+      dg: false,
+      rf: isRf, fr: isFr, ot: isOt, tk: isTk,
+      tmp: tmpMissing ? '' : tempRaw,
+      tmp_missing: tmpMissing && isRf,
+      desc,                             // 품명/내용물(평소 미표시).
+      _rz: true,                        // RIZHAO 출신 표식: ISO 끝자리 동기화 제외(이미 정확).
+    });
+  }
+  return records.length ? records : null;
+}
+
 export async function parseListExcel(arrayBuffer) {
   const XLSX = await loadSheetJS();
   const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
@@ -1467,6 +1570,15 @@ export async function parseListExcel(arrayBuffer) {
   for (const sheetName of wb.SheetNames) {
     const ws = fixSheetRange(wb.Sheets[sheetName], XLSX);   // V38: !ref 보정
     const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+    // M8.07: RIZHAO ORIENT(日照海通) 예배清单 전용 파싱.
+    //   주3회 정기 입항선. 중국어 헤더(提单号/箱号/封号/箱量/重/温度/目的港) +
+    //   '箱量' 컬럼이 "40FR*1" 형식(규격*수량). 양하분은 전건 Full(엠티 없음).
+    //   기존 영문/한국어 양식 로직과 완전 분리: 감지되면 여기서 처리 후 다음 시트로.
+    {
+      const rzRecords = parseRizhaoSheet(grid);
+      if (rzRecords) { records.push(...rzRecords); continue; }
+    }
 
     // M3.86: SOC 양식 감지 (R0~R5 메타 행에 "SOC" 키워드 있으면 SOC 양식으로 판정)
     // SOC는 풀/엠티 모두 가능, F/E 미명시면 Seal 유무로 판정
@@ -1785,6 +1897,7 @@ export async function parseListExcel(arrayBuffer) {
   // 원칙: 리스트의 F/E 명시값만 사용. 무게로 추정 X.
   // ISO 끝자리 동기화: F/E와 ISO 끝자리가 다르면 F/E 우선
   for (const r of records) {
+    if (r._rz) continue;  // M8.07: RIZHAO 레코드는 ISO가 이미 표준(L5G1 등) — 끝자리 변환 금지.
     if (!r.iso || r.iso.length < 4) continue;
     const last = r.iso[r.iso.length - 1];
     if (r.fe === 'E' && last !== 'E') {
