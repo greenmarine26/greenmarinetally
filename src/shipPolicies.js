@@ -28,9 +28,10 @@ export const DEFAULT_SHIP_POLICIES = {
   'RIZHAO ORIENT': {
     name: 'RIZHAO ORIENT',
     code: 'RZOR',
-    aliases: ['RZOR'],
+    aliases: ['RZOR', 'R063'],   // R063 = RZOR 항차 prefix (R063W/R063E). 선박명 누락 리스트도 LOLO 인식.
     mode: 'verify',
     target: 'all_empty',
+    lolo: true,   // V8.09-07: LOLO 검수 대상 — IFCSUM(베이 없음) 명세 선박. RZOR만 LOLO 처리(사용자 확정 2026-06-18).
     label: '엠티 실 확인 (리씰 가능)',
     description: '엠티 컨테이너에 이미 실이 부착되어 있음. 확인 또는 리씰.',
   },
@@ -101,6 +102,15 @@ export function applyPolicyToContainer(policy, container) {
   }
 
   return null;
+}
+
+// V8.09-07: LOLO 검수 대상 선박인지 — 선박정책의 lolo 플래그로만 판정.
+//   기존엔 "모든 컨테이너에 bay/row/tier 없음"으로 판정했는데, 일반 베이 선박(TPMZ 등)이
+//   위치정보 없이 올라오면 LOLO로 오판돼 수석대시보드에 LOLO 리스트가 잘못 생성됐다.
+//   → LOLO는 RZOR(RIZHAO ORIENT)만(사용자 확정 2026-06-18). 선박명/코드로 정책 매칭 후 lolo===true만 LOLO.
+export function isLoloShipByPolicy(vsl, extraPolicies = {}, extraHints = []) {
+  const policy = matchShipPolicy(vsl, extraPolicies, extraHints);
+  return !!(policy && policy.lolo === true);
 }
 
 // Firebase에서 추가 정책 가져오기

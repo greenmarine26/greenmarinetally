@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
-import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
+import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import { isChief } from '../staffList.js';
@@ -127,7 +127,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         //   일반 베이 선박은 EDI/리스트에 bay가 있어 isLolo=false → 영향 없음.
         const allArr = [...ediArr, ...recArr];
         if (allArr.length === 0) return;
-        const isLolo = allArr.every(c => !c.bay && !c.row && !c.tier);
+        // V8.09-07: LOLO 판정을 선박정책(lolo 플래그) 기반으로 변경 (사용자 확정 2026-06-18).
+        //   기존 "모든 컨에 bay/row/tier 없음"은 일반 베이 선박(TPMZ 등)이 위치정보 없이
+        //   올라오면 LOLO로 오판 → 수석대시보드에 LOLO 리스트 잘못 생성. LOLO는 RZOR만.
+        //   선박명/항차코드(voy)로 정책 매칭 후 lolo===true인 선박만 LOLO 카드 생성.
+        const hints = [v?.info?.voy, v?.info?.voyage, v?.info?.callsign].filter(Boolean);
+        const isLolo = isLoloShipByPolicy(v?.info?.vsl || '', extraPolicies, hints);
         if (!isLolo) return;
         const compMap = sec.completed || {};
         const doneCount = Object.keys(compMap).length;
@@ -167,7 +172,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       });
     });
     return list;
-  }, [voyages]);
+  }, [voyages, extraPolicies]);
 
   // LOLO 제출 리스트 내보내기 (두 양식)
   const exportLolo = (item, kind) => {

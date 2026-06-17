@@ -21,6 +21,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
   const [target, setTarget] = useState('all_empty');  // 'all_empty' | 'empty_with_pod'
   const [selectedPods, setSelectedPods] = useState([]);
   const [customPod, setCustomPod] = useState('');
+  const [lolo, setLolo] = useState(false);   // V8.09-08: LOLO 선박(베이 없는 IFCSUM 명세선). 대체선 대응.
   const [saving, setSaving] = useState(false);
 
   if (!open) return null;
@@ -42,19 +43,26 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (mode === 'none') {
-        // 일반 정책: 별도 저장 안 함 (정책 없음)
+      // V8.09-08: LOLO만 켜고 엠티 정책은 none인 대체선도 저장해야 함.
+      //   mode가 none이고 lolo도 꺼져 있을 때만 "정책 없음".
+      if (mode === 'none' && !lolo) {
         if (onSaved) onSaved(null);
         onClose();
         return;
       }
 
-      const finalPods = target === 'empty_with_pod' ? selectedPods : [];
-      if (target === 'empty_with_pod' && finalPods.length === 0) {
+      const finalPods = (mode !== 'none' && target === 'empty_with_pod') ? selectedPods : [];
+      if (mode !== 'none' && target === 'empty_with_pod' && finalPods.length === 0) {
         alert('POD를 1개 이상 선택하거나 "모든 엠티" 옵션을 선택하세요');
         setSaving(false);
         return;
       }
+
+      const baseLabel = mode === 'none'
+        ? 'LOLO 검수 (베이 없는 명세선)'
+        : (mode === 'attach'
+            ? (target === 'empty_with_pod' ? `POD ${finalPods.join('/')}행 엠티 실 부착` : '모든 엠티 실 부착')
+            : (target === 'empty_with_pod' ? `POD ${finalPods.join('/')}행 엠티 실 확인` : '모든 엠티 실 확인'));
 
       const policy = {
         name: vsl,
@@ -62,9 +70,8 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
         mode,
         target,
         pod: finalPods,
-        label: mode === 'attach'
-          ? (target === 'empty_with_pod' ? `POD ${finalPods.join('/')}행 엠티 실 부착` : '모든 엠티 실 부착')
-          : (target === 'empty_with_pod' ? `POD ${finalPods.join('/')}행 엠티 실 확인` : '모든 엠티 실 확인'),
+        lolo: lolo === true,   // V8.09-08: LOLO 선박 플래그 (대체선 대응)
+        label: lolo ? `${baseLabel} · LOLO` : baseLabel,
         description: '',
       };
 
@@ -212,6 +219,28 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
               )}
             </>
           )}
+
+          {/* V8.09-08: LOLO 선박 토글 — 대체선 대응. 본선 수리·고장 시 대체선을 LOLO로 지정.
+              엠티 실 정책(위 mode)과 독립. LOLO만 켜고 mode=none도 가능. */}
+          <button
+            onClick={() => setLolo(v => !v)}
+            className={`w-full p-3 rounded-lg text-left border flex items-start gap-2 ${
+              lolo
+                ? 'bg-cyan-900/30 border-cyan-500 text-cyan-100'
+                : 'bg-slate-800 border-slate-700 text-slate-300'
+            }`}>
+            <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+              lolo ? 'bg-cyan-500 border-cyan-400' : 'border-slate-500'
+            }`}>
+              {lolo && <CheckCircle2 className="w-3.5 h-3.5 text-white"/>}
+            </div>
+            <div>
+              <div className="font-bold text-sm">LOLO 선박 (베이플랜 없음)</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                베이 그림 없이 리스트로만 검수하는 IFCSUM 명세선. 본선 수리·고장 시 대체선을 여기에 지정하면 LOLO 검수 리스트가 생성됩니다.
+              </div>
+            </div>
+          </button>
 
           <div className="bg-blue-950/30 border border-blue-700/40 rounded p-2 text-[10px] text-blue-200 flex items-start gap-1.5">
             <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5"/>

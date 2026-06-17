@@ -48,7 +48,7 @@ import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6
 import BayDictDiagnosticsWidget from '../components/BayDictDiagnosticsWidget.jsx'; // M6.50
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
-import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies } from '../shipPolicies.js';
+import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
@@ -392,9 +392,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   RIZHAO ORIENT 등 RORO/LOLO 혼용선은 IFCSUM(베이 없음)으로 명세만 제공된다.
   //   베이 그림이 무의미하므로 리스트 기반 LOLO 탭을 노출한다(기존 베이 선박엔 영향 0).
   const isLoloShip = useMemo(() => {
-    if (!containers.length) return false;
-    return containers.every(c => !c.bay && !c.row && !c.tier);
-  }, [containers]);
+    // V8.09-07: LOLO 판정을 선박정책(lolo 플래그)으로 변경 (사용자 확정 2026-06-18).
+    //   기존 "모든 컨에 bay/row/tier 없음"은 일반 베이 선박(TPMZ)이 위치정보 없이 올라오면
+    //   LOLO로 오판 → LOLO 탭 자동전환·수석 LOLO 리스트 오생성. LOLO는 RZOR만.
+    const vsl = voyage?.info?.vsl || '';
+    const hints = [voyage?.info?.voy, voyage?.info?.voyage, voyage?.info?.callsign].filter(Boolean);
+    return isLoloShipByPolicy(vsl, extraPolicies, hints);
+  }, [voyage, extraPolicies]);
 
   // V8.06: LOLO 선박(베이 없는 IFCSUM)이면 최초 1회 자동으로 LOLO 탭으로 전환.
   //   양하 탭의 EDI↔리스트 매칭 경고("리스트에 없음")는 이 선박엔 부적절(EDI가 곧 리스트)하므로
