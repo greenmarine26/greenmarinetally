@@ -477,11 +477,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     // 평택 화물만 필터된 ediMap 만들기
     const ediPtkObj = {};
     Object.values(ediMap || {}).forEach(c => {
-      if (mode === 'discharge' && isPyeongtaekPort(c.pod)) {
-        ediPtkObj[c.cn] = c;
-      } else if (mode === 'loading' && isPyeongtaekPort(c.pol)) {
-        ediPtkObj[c.cn] = c;
+      const isPtkC = mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+      if (!isPtkC) return;
+      // M8.07: 진단용 보강 — EDI에 온도/F/E가 없으면 검수 리스트(records) 값으로 채움.
+      //   RIZHAO 등 IFCSUM은 EDI에 온도 필드가 없고 검수 엑셀에만 있음.
+      //   EDI에 값이 있으면 보존(EDI 우선). 진단 입력만 보강, 원본 ediMap 불변.
+      const r = recMap[c.cn];
+      let merged = c;
+      if (r) {
+        const patch = {};
+        const ediTmp = String(c.tmp || '').trim();
+        const recTmp = String(r.tmp || '').trim();
+        if (!ediTmp && recTmp) { patch.tmp = r.tmp; patch.tmp_missing = false; }
+        if (!c.fe && r.fe) patch.fe = r.fe;
+        if (Object.keys(patch).length) merged = { ...c, ...patch };
       }
+      ediPtkObj[c.cn] = merged;
     });
     return runDiagnostics({
       ediContainers: ediPtkObj,

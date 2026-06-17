@@ -62,10 +62,16 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     const fullReefers = reefers.filter(c => c.fe === 'F');
     if (fullReefers.length > 0) {
       const missingTmp = fullReefers.filter(c => {
-        if (c.tmp_missing) return true;
-        const t = String(c.tmp || '').trim();
-        if (!t) return true;  // 빈 값만 미입력
-        return false;
+        // M8.07: EDI에 온도 없으면(IFCSUM 등) 리스트(records)의 온도를 참조.
+        //   RIZHAO처럼 온도가 검수용 엑셀에만 있는 선박 대응.
+        const lr = (listRecords || {})[c.cn] || (listRecords || {})[String(c.cn).toUpperCase()] || {};
+        const ediT = String(c.tmp || '').trim();
+        const listT = String(lr.tmp || '').trim();
+        const listMissing = lr.tmp_missing === true;
+        // EDI·리스트 어느 쪽이든 유효 온도가 있으면 입력된 것으로 인정.
+        if (ediT && !c.tmp_missing) return false;
+        if (listT && !listMissing) return false;
+        return true;  // 양쪽 다 없을 때만 미입력.
       });
       if (missingTmp.length > 0) {
         alerts.push({
@@ -180,11 +186,17 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   //   - listCount = 리스트 전체가 아니라, 진짜 컨번호만 카운트
   //   - 매칭된 컨테이너 (EDI 평택 ∩ 리스트) 기준
   if (ediCount > 0) {
-    // 진짜 컨번호만 (4자영문+7자숫자)
-    const validListCns = Object.keys(listRecords || {}).filter(cn => /^[A-Z]{4}\d{7}$/i.test(cn));
+    // 진짜 컨번호만 (4자영문+7자숫자) — 단, EDI에 실제 존재하는 컨번호는
+    // 비표준(SOC 자가번호 SAWTBP004 등)이어도 노이즈가 아닌 실 컨테이너이므로 포함.
+    // M8.07: EDI는 비표준 컨번호도 세는데(ediCount) 리스트만 표준형으로 거르면
+    //   같은 컨이 한쪽에만 잡혀 "1개 부족" 오탐 발생. EDI 매칭분은 형식 무관 인정.
+    // M8.07: 컨번호 정규화(공백제거·대문자)로 비교 — 미세 표기차로 인한 매칭 오탐 방지.
+    const normCn = (s) => String(s || '').replace(/[\s\-]/g, '').toUpperCase();
+    const ediPtkCnSet = new Set(ediPtk.map(c => normCn(c.cn)));
+    const validListCns = Object.keys(listRecords || {}).filter(cn =>
+      /^[A-Z]{4}\d{7}$/i.test(cn) || ediPtkCnSet.has(normCn(cn)));
     const realListCount = validListCns.length;
-    const ediPtkCnSet = new Set(ediPtk.map(c => c.cn));
-    const matchedCount = validListCns.filter(cn => ediPtkCnSet.has(cn.toUpperCase())).length;
+    const matchedCount = validListCns.filter(cn => ediPtkCnSet.has(normCn(cn))).length;
 
     if (realListCount > 0) {
       const diff = ediCount - matchedCount;

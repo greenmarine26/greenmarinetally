@@ -1205,3 +1205,36 @@ V7.49·V7.51 1차 연속 오답 — 사용자가 검수앱 화면(TMPZ) 비교�
 **미결**: 베이그리드(카고플랜) 그림에 RIZHAO 엑셀의 F/E·리퍼를 반영하려면 이 선박 EDI 실파일 필요. 상세화면은 이번 수정으로 반영됨.
 
 변경 파일: `src/utils.js`(F/E 판정·_rz 제외), `src/pages/VoyagePage.jsx`(병합 보강 2곳).
+
+---
+
+## V8.07-03 — RIZHAO 진단 오탐 수정 (리퍼 온도 미입력 + 1개 부족)
+
+실선박 RIZHAO ORIENT(R063E) 테스트에서 두 경고가 오탐으로 확인됨. EDI 먼저 저장 후 검수용 엑셀만 업로드한 상황. 실 EDI(R063E_EDI.txt, IFCSUM)+엑셀로 runDiagnostics 검증.
+
+**1) 리퍼 24대 온도 미입력 경고(오탐)**: IFCSUM EDI에는 온도 필드가 아예 없음(51 레코드에 온도 칸 없음). 온도는 검수용 엑셀 温度 컬럼에만 존재. diagnostics.js의 리퍼 온도 체크가 `extractReefers(ediPtk)` — EDI 컨테이너의 c.tmp만 보고 records의 온도를 안 봄 → 24대 전건 미입력 오탐. 수정: missingTmp 판정 시 EDI tmp 비면 listRecords[c.cn].tmp를 참조. 양쪽 다 없을 때만 미입력. 검증 후 경고 소멸 확인.
+
+**2) EDI 166대 중 매칭 165대(1개 부족) 경고(오탐)**: SAWTBP004(SOC 비표준 컨번호, EDI·엑셀 양쪽 존재)가 매칭 카운트에서 누락. 원인: 컨번호 비교가 대소문자/공백에 민감. 수정: normCn(공백제거·대문자)으로 ediPtkCnSet·validListCns·matchedCount 비교 정규화. 검증 후 경고 소멸. (SAWTBP004 자체는 화면 '모두' 필터에 정상 표시됨 — 데이터 누락 아니라 진단 카운트만 오탐이었음.)
+
+**잔존(정상)**: 무게 큰 차이 9건(EDI vs 엑셀 중량차 — 검수사 확인 항목), 실번호 불일치 1건. 오류 아닌 실제 차이 안내.
+
+**미해결 관찰**: SAWTBP004는 EDI상 F(IFCSUM 51 레코드 F:5번째 필드), 엑셀 파서는 品名 空箱이라 E로 만듦. EDI 우선 병합이라 화면엔 F로 표시. F/E 판정 원칙(품명 기준 E)과 EDI(F)가 충돌하나, EDI 단일 진실 원칙상 EDI F 우선이 맞음 — 추가 조치 보류, 현장 관찰.
+
+변경 파일: `src/diagnostics.js`(리퍼온도 listRecords 참조 + 매칭 정규화).
+
+---
+
+## V8.07-03 — 실데이터 진단 검증 완료 (온도·매칭 경고 해소 확인)
+
+RIZHAO 실EDI(R063E_EDI.txt, IFCSUM 166대) + 실엑셀(R063E_预配.xlsx 166건)로 runDiagnostics 시뮬레이션 검증.
+
+**결과**:
+- 리퍼 온도 미입력 경고: ✅ 해소(24대→0). EDI(IFCSUM)에 온도 필드 없음 → diagnostics가 listRecords(검수용 엑셀)의 tmp 참조하도록 처리됨(M8.07). 풀 리퍼 24대 온도 전건 인식.
+- EDI 매칭 부족 경고: ✅ 해소(1개 부족→없음). SAWTBP004(SOC 비표준 컨번호)가 표준형 검증(^[A-Z]{4}\d{7}$)에 걸려 매칭에서 빠지던 문제 → EDI에 실존하는 컨번호는 비표준이어도 매칭 인정 + 컨번호 정규화(공백제거·대문자) 비교로 해소.
+- 잔존(정상): 무게 차이 9건(5톤↑), 실번호 불일치 1건 — EDI vs 검수리스트 실차이를 알리는 정상 검수 경고.
+
+**SAWTBP004 목록 표시**: "모두" 필터에선 정상 표시됨(데이터 존재 확인). 직전 리퍼 등 필터 활성 상태라 안 보였던 것 — 버그 아님.
+
+**검증 환경**: /home/claude/sim/diag_run2.mjs (parseNumericIFCSUM + parseListExcel + runDiagnostics 실파일 결합).
+
+변경 없음(V8.07-02→03은 이전 세션 누적분). 빌드·ZIP 재발행.
