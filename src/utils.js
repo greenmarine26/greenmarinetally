@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.08-05';
+export const APP_VERSION = 'V8.08-06';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -1814,23 +1814,22 @@ export async function parseListExcel(arrayBuffer) {
       // 실번호: 헤더로 못 찾으면 같은 행에서 자동 탐색 (V38: 병합셀 대응)
       // M3.86: SOC fallback에 sl이 필요하므로 fe보다 먼저 추출
       let sl = '';
+      // M8.08: 규격(ISO) 형태 값은 실번호가 아님 — 자동 탐색에서 제외.
+      const looksLikeIso = (v) => {
+        const s = String(v || '').toUpperCase().replace(/[\s\-]/g, '');
+        return /^(20|22|25|28|40|42|45|48|L5|L2)[A-Z]{1,2}\d?$/.test(s)
+          || /^(20|40|45)(DC|GP|HC|RF|RH|FR|OT|TK|HQ|RE)?[FE]?$/.test(s)
+          || /^\d{2}[A-Z]{2}\d?$/.test(s);
+      };
       if (sl_i >= 0) {
+        // M8.08: SEAL 헤더가 명확히 있으면 그 칸 값만 사용. 비어있으면 실 없음(엠티 등) — 옆칸 탐색 금지.
+        //   (ATRP: SEAL 빈칸인데 옆 TYSZ/BLNO를 실번호로 오인하던 버그 방지.)
         sl = String(row[sl_i] || '').trim();
-        // 빈 값이면 ±2 컬럼도 시도
-        if (!sl) {
-          for (const off of [-1, 1, -2, 2]) {
-            const c = sl_i + off;
-            if (c < 0 || c >= row.length || c === cnColActual) continue;
-            const v = String(row[c] || '').trim();
-            if (v && v.toUpperCase() !== cn) { sl = v; break; }
-          }
-        }
-      }
-      if (!sl) {
-        // 컨번호 옆 5칸 탐색
+      } else {
+        // SEAL 헤더를 못 찾은 경우만 컨번호 옆 5칸 자동 탐색 (병합셀 등 대응, 규격 제외).
         for (let j = cnColActual + 1; j < Math.min(cnColActual + 6, row.length); j++) {
           const v = String(row[j] || '').replace(/[\s\-]/g, '');
-          if (/^[A-Z]{0,6}\d{4,}$/i.test(v) && v.length >= 5 && v.toUpperCase() !== cn) {
+          if (/^[A-Z]{0,6}\d{4,}$/i.test(v) && v.length >= 5 && v.toUpperCase() !== cn && !looksLikeIso(v)) {
             sl = v.toUpperCase();
             break;
           }
