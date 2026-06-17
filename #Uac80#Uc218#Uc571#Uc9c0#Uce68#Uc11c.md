@@ -1262,3 +1262,19 @@ RIZHAO 실EDI(R063E_EDI.txt, IFCSUM 166대) + 실엑셀(R063E_预配.xlsx 166건
 - 잔존(정상): SPSU2019220은 세관엔 있고 EDI엔 없는 엠티(매칭 안내), 실번호 불일치 1건.
 
 변경: src/utils.js(parseCustomsSheet+분기+동기화 제외), src/pages/VoyagePage.jsx(스마트 병합·실번호 보강), src/diagnostics.js(부족 컨번호 명시), src/components/DiagnosticsPanel.jsx(missing 표시).
+
+---
+
+## V8.08-02 — 양하/선적 화면 엠티 실 작업 블록 제거
+
+**사용자 요구**: 양하/선적 작업 화면엔 상단 요약(리퍼 N대 등)만. 엠티 실 정책 배너·작업 패널·보고서 버튼 불필요. 실번호 수정은 개별 컨테이너 카드에서, 엠티 실 보고서는 수석 대시보드에서(이미 구현됨).
+
+**제거**: VoyagePage에서 (1) 엠티 실 정책 배너+EmptySealReportButton 블록, (2) SealPolicyBanner 호출. 호출부 제거로 orphan된 SealPolicyBanner 정의·EmptySealReportButton import도 함께 정리(내 변경이 만든 orphan만).
+
+**유지 확인**: 수석 대시보드(ChiefDashboard)에 "엠티 실 작업 실시간 현황" + generateEmptySealReport 보고서가 이미 완비 — 번들 검증으로 살아있음 확인. 보고서 접근 경로 손실 없음.
+
+**비고**: 엠티 실 확인 작업이 이번에 화면에 처음 뜬 건 엠티 1대(SPSU2019220) 발생 때문(정상 동작이었음). 사용자 요구로 작업 화면에선 미표시 처리.
+
+**미해결(데이터)**: 양하 카운트 168 vs 실제 167 — 파서·병합 시뮬레이션은 167(EDI166∪세관167). 168은 앱 저장 누적 데이터로 추정. 옛 데이터 삭제 후 EDI→선사→세관 재업로드로 정리 권장(코드 아닌 데이터 이슈).
+
+변경: src/pages/VoyagePage.jsx (엠티 블록·SealPolicyBanner·import 제거).

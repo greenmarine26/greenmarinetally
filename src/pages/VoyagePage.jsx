@@ -36,7 +36,6 @@ import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
-import EmptySealReportButton from '../components/EmptySealReport.jsx';
 import DisplacedSidebar from '../components/DisplacedSidebar.jsx';
 import StorageBox from '../components/StorageBox.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
@@ -586,53 +585,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         ))}
       </nav>
 
-      {/* M3.5.5: 선박 엠티 실 정책 배너 + 보고서 */}
-      {shipPolicy && sealTargets.list.length > 0 && (
-        <div className="mb-3 space-y-2">
-          <div className={`rounded-lg p-3 border-2 flex items-center justify-between gap-2 ${
-            shipPolicy.mode === 'attach'
-              ? 'bg-red-950/30 border-red-700/50'
-              : 'bg-cyan-950/30 border-cyan-700/50'
-          }`}>
-            <div className="flex items-center gap-2 flex-1">
-              <span className={`text-xl ${shipPolicy.mode === 'attach' ? 'text-red-400' : 'text-cyan-400'}`}>🔧</span>
-              <div className="flex-1 min-w-0">
-                <div className={`text-sm font-black ${shipPolicy.mode === 'attach' ? 'text-red-200' : 'text-cyan-200'}`}>
-                  {shipPolicy.name || voyage?.info?.vsl} · {shipPolicy.label}
-                </div>
-                <div className="text-[10px] text-slate-400">
-                  대상 {sealTargets.list.length}대 · 완료 {sealTargets.list.filter(c => c.eseal).length}대 · 남음 {sealTargets.list.filter(c => !c.eseal).length}대
-                </div>
-              </div>
-            </div>
-            <button onClick={() => setShowPolicyModal(true)}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold text-slate-300">
-              정책 변경
-            </button>
-          </div>
-
-          {/* 엠티 실 보고서 */}
-          <EmptySealReportButton
-            vsl={voyage?.info?.vsl || ''}
-            voy={voyage?.info?.voy || voyage?.info?.voy_l || voyage?.info?.voy_d || ''}
-            loadDate={voyage?.info?.loadDate || ''}
-            containers={sealTargets.list}
-            mode={mode}
-            sealMode={shipPolicy.mode}
-          />
-        </div>
-      )}
-
-      {/* M3.5.5: 선박 정책 배너 (엠티 실 작업 모드일 때) */}
-      {shipPolicy && sealTargets.list.length > 0 && (
-        <div className="mb-3">
-          <SealPolicyBanner
-            policy={shipPolicy}
-            targets={sealTargets.list}
-            voyage={voyage}
-          />
-        </div>
-      )}
+      {/* M8.08: 양하/선적 작업 화면의 엠티 실 정책 배너·보고서 블록 제거.
+          사용자 요구: 작업 화면엔 상단 요약만, 실번호 수정은 개별 카드, 보고서는 수석 대시보드.
+          (EmptySealReportButton·SealPolicyBanner는 ChiefDashboard에 이미 구현됨.) */}
 
       {/* M5.21: PORT-MIS 입출항 정보 (Chrome 확장이 자동 수집한 데이터) */}
       {/* M5.23: 매칭 로직 강화 — 콜사인 prefix + IMO 매칭 fallback 추가 */}
@@ -2378,41 +2333,6 @@ function ModeSetup({ voyageKey }) {
   );
 }
 
-// M3.5.5: 엠티 실 작업 정책 배너
-function SealPolicyBanner({ policy, targets, voyage }) {
-  const total = targets.length;
-  const done = targets.filter(c => c.eseal).length;
-  const pending = total - done;
-  const isAttach = policy.mode === 'attach';
+// M8.08: SealPolicyBanner 제거 — 양하/선적 작업 화면에서 엠티 실 작업 패널 미표시.
+//   동일 기능은 수석 대시보드(ChiefDashboard)에 구현됨.
 
-  return (
-    <div className={`border-2 rounded-xl p-3 ${
-      isAttach
-        ? 'border-red-600 bg-red-950/30'
-        : 'border-cyan-600 bg-cyan-950/30'
-    }`}>
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">{isAttach ? '🔧' : '🔍'}</span>
-          <div>
-            <div className="font-black text-base">
-              {isAttach ? '엠티 실 부착 작업' : '엠티 실 확인 작업'}
-            </div>
-            <div className="text-[11px] text-slate-400">{policy.label}</div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className={`text-2xl font-black ${pending === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {done} / {total}
-          </div>
-          {pending > 0 && (
-            <div className="text-[10px] text-amber-300 font-bold animate-pulse">
-              {pending}대 남음
-            </div>
-          )}
-        </div>
-      </div>
-      <EmptySealReportButton voyage={voyage} sealTargets={targets} sealMode={policy.mode}/>
-    </div>
-  );
-}
