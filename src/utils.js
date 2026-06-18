@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.09-13';
+export const APP_VERSION = 'V8.09-14';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2259,15 +2259,22 @@ export function isPyeongtaekPortName(port) {
 }
 
 // V8.09-11: 선박 현재 상태 판정 (ETA/ETD vs 현재시각 + 입출 보조).
-//   phase: 'sailing'(현재<ETA) | 'berthed'(ETA≤현재<ETD) | 'departed'(현재≥ETD) | 'unknown'
-//   평택+정박중만 부두 배지(showBerth), 그 외는 상태 라벨.
-export function getShipStatus(pm, nowMs = Date.now()) {
+// V8.09-14 (사용자 보고 2026-06-18): ETD(출항예정)가 지났다고 무조건 '출항함'으로 보면 안 됨.
+//   입항 지연 등으로 예정 시각만 지나고 배는 안 온 경우가 있어서, ETD만으로 출항을 단정하면
+//   "작업 시작도 안 했는데 출항함"으로 오표시됨. → 출항함은 '작업이 실제로 끝났을 때'만.
+//   ETD 지났는데 작업 미완료 = '일정 미확정'(지연 가능성).
+//   work: { done, total } (현재 모드 기준 완료수/전체수). 없으면 작업 모름으로 간주.
+export function getShipStatus(pm, nowMs = Date.now(), work = null) {
   const port = String(pm?.port || '').trim();
   const isPt = isPyeongtaekPortName(port);
   const portName = isPt ? '평택' : (port || '타항만');
   const eta = parsePortMisDateTime(pm?.eta);
   const etd = parsePortMisDateTime(pm?.etd);
   const inout = String(pm?.ibobprtSe || pm?.voyageInOut || '').trim();
+  // 작업 완료 여부: total>0 이고 done>=total 이면 작업 끝남.
+  const total = work && Number.isFinite(work.total) ? work.total : 0;
+  const done = work && Number.isFinite(work.done) ? work.done : 0;
+  const workFinished = total > 0 && done >= total;
 
   let phase;
   if (eta == null && etd == null) {
@@ -2277,7 +2284,8 @@ export function getShipStatus(pm, nowMs = Date.now()) {
   } else if (eta != null && nowMs < eta) {
     phase = 'sailing';
   } else if (etd != null && nowMs >= etd) {
-    phase = 'departed';
+    // 출항예정 지남: 작업이 끝났으면 출항함, 아니면 일정 미확정(지연 등)
+    phase = workFinished ? 'departed' : 'unsure';
   } else {
     phase = 'berthed';
   }
@@ -2286,6 +2294,7 @@ export function getShipStatus(pm, nowMs = Date.now()) {
   if (phase === 'sailing') { label = `🚢 ${portName} 항해중 (입항예정)`; tone = 'sailing'; }
   else if (phase === 'berthed') { label = `⚓ ${portName} 정박중`; tone = 'berthed'; }
   else if (phase === 'departed') { label = `↗ ${portName} 출항함`; tone = 'departed'; }
+  else if (phase === 'unsure') { label = `❓ ${portName} 일정 미확정`; tone = 'unsure'; }
   else { label = `${portName}`; tone = 'unknown'; }
 
   const showBerth = isPt && phase === 'berthed';

@@ -833,12 +833,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             console.warn('[M6.13] voyage.info berth 자동 정리 실패:', e)
           );
         }
-        // V8.09-11: 선박 현재 상태 판정 (항해중/정박/출항). 평택 정박중만 부두 배지, 그 외 상태 라벨.
-        const shipSt = getShipStatus(pm);
+        // V8.09-11/14: 선박 현재 상태 판정. ETD 지나도 작업 미완료면 '일정 미확정'(입항지연 등).
+        //   작업 진행률(현재 모드 기준 완료/전체)을 함께 넘겨 '출항함'을 작업 완료 시에만 판정.
+        const _wkTotal = containers.length;
+        const _wkDone = containers.filter(c => compMap[c.cn]).length;
+        const shipSt = getShipStatus(pm, Date.now(), { done: _wkDone, total: _wkTotal });
         const toneClass = {
           sailing: 'bg-sky-900/50 border-sky-700/50 text-sky-200',
           berthed: 'bg-emerald-900/40 border-emerald-700/50 text-emerald-200',
           departed: 'bg-slate-700/60 border-slate-600/50 text-slate-300',
+          unsure: 'bg-amber-900/40 border-amber-600/50 text-amber-200',
           unknown: 'bg-slate-700 border-slate-600 text-slate-300',
         }[shipSt.tone] || 'bg-slate-700 text-slate-300';
         return (
