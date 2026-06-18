@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, _storage } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -638,10 +638,29 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             const pcs = (p.callsign || '').toUpperCase();
             return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
           });
-          // V8.01 (지침서 7.8): 같은 선박이 여러 항차로 존재할 때 stale(지난 항차) 날짜가
-          //   찍히는 것을 막기 위해 후보를 최신 updatedAt 우선으로 정렬. 이후 vesselName/berth
-          //   선택 로직이 같은 조건이면 항상 최신 데이터를 먼저 집는다.
-          candidates.sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0));
+          // V8.09-13 (사용자 보고 2026-06-18): 같은 선박이 여러 항차로 PORT-MIS에 있을 때
+          //   '저장 최신(updatedAt)'이 아니라 '다음 작업할 항차(가장 나중 일정)'를 골라야 한다.
+          //   증상: PACIFIC SHENZHEN이 6/19 입항 예정인데, 앱이 지난 6/17 항차를 집어
+          //     "정박중·부두표시"로 잘못 표시. 실제는 항해중(입항 전)이어야 함.
+          //   기준(현재시각 now 대비):
+          //     ① 아직 안 끝난 항차(ETD>=now) 우선 — 그중 ETA가 가장 늦은(가장 나중) 일정
+          //        (옛 항차가 출항 직전이라도, 미래 일정이 따로 있으면 그쪽이 다음 작업분)
+          //     ② 모두 끝났으면(ETD<now) 가장 최근 종료(ETD 최신)
+          //     ③ 시각 정보 없으면 updatedAt 최신
+          const _now = Date.now();
+          const _score = ([, p]) => {
+            const eta = parsePortMisDateTime(p?.eta);
+            const etd = parsePortMisDateTime(p?.etd);
+            if (eta == null && etd == null) return { tier: 2, key: p?.updatedAt || 0 };
+            const notEnded = (etd != null ? etd >= _now : (eta != null ? eta >= _now : false));
+            if (notEnded) return { tier: 0, key: (eta != null ? eta : etd) };  // 안 끝남: ETA 늦을수록 우선
+            return { tier: 1, key: (etd != null ? etd : eta) };                // 끝남: ETD 최신 우선
+          };
+          candidates.sort((a, b) => {
+            const sa = _score(a), sb = _score(b);
+            if (sa.tier !== sb.tier) return sa.tier - sb.tier;
+            return sb.key - sa.key;
+          });
           // 베스트 후보 선택
           let best = null;
           if (candidates.length === 1) {
