@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.09-08';
+export const APP_VERSION = 'V8.09-09';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2366,17 +2366,35 @@ export async function parsePortMisExcel(arrayBuffer) {
     //   17: 선석번호 ("07")
     //   18: 계선장소 명칭 ("동부두 7번선석") ← 진짜 원하는 컬럼
     //   첫 데이터 행에서 "동/서/남/북부두" 또는 "N번선석" 패턴 있는 컬럼을 찾아 colMap 보정
-    const firstDataRow = grid[headerRow + 1] || [];
-    let berthTextIdx = -1;
-    for (let j = 0; j < firstDataRow.length; j++) {
-      const v = String(firstDataRow[j] || '').trim();
-      if (/[동서남북]부두|N번선석|\d+번선석|항\s*[A-Z]?\d+컨테이너/.test(v)) {
-        berthTextIdx = j;
-        break;
+    // V8.09-09 (실데이터 download.xlsx 분석, 2026-06-18): 헤더의 "계선장소"가 3개 컬럼
+    //   (15=시설코드 MBM, 16=선석번호, 17=부두명)에 걸쳐 있고, 진짜 부두명은 17번이다.
+    //   기존엔 ① 첫 데이터 행 하나로만 컬럼을 찾고 ② 정규식이 "동/서/남/북부두"라
+    //   "남항 모래부두"·"신항 ...터미널"·"...돌핀" 같은 부두명을 놓쳤다. 첫 행이 "남항 모래부두"면
+    //   보정 실패 → berthRaw가 15(MBM)에 머물러 isValidBerth=false → 모든 선박 "부두 정보 없음".
+    //   → 부두명 패턴을 넓히고, 헤더 berthRaw~+4 컬럼을 여러 데이터 행(최대 40개) 스캔해
+    //     부두명이 가장 많이 나오는 컬럼을 다수결로 선택한다.
+    const BERTH_NAME_RE = /[가-힣]+부두|\d+\s*번?\s*선석|\d+\s*선석|[가-힣]+터미널|돌핀|컨테이너|[가-힣]+항\s/;
+    {
+      const scanRows = [];
+      for (let i = headerRow + 1; i < grid.length && scanRows.length < 40; i++) {
+        const r = grid[i];
+        if (!r) continue;
+        if (colMap.callsign >= 0 && !String(r[colMap.callsign] || '').trim()) continue;
+        scanRows.push(r);
       }
-    }
-    if (berthTextIdx >= 0) {
-      colMap.berthRaw = berthTextIdx;
+      const startCol = colMap.berthRaw >= 0 ? colMap.berthRaw : 0;
+      let bestCol = colMap.berthRaw, bestHit = -1;
+      for (let j = startCol; j <= startCol + 4; j++) {
+        let hit = 0;
+        for (const r of scanRows) {
+          if (BERTH_NAME_RE.test(String(r[j] || '').trim())) hit++;
+        }
+        if (hit > bestHit) { bestHit = hit; bestCol = j; }
+      }
+      // 부두명이 한 건이라도 잡히는 컬럼이 있으면 그쪽으로 보정 (없으면 헤더 위치 유지)
+      if (bestHit > 0 && bestCol >= 0) {
+        colMap.berthRaw = bestCol;
+      }
     }
 
     // 데이터 행
