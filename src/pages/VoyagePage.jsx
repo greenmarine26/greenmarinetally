@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, _storage } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, _storage } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -814,29 +814,44 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             console.warn('[M6.13] voyage.info berth 자동 정리 실패:', e)
           );
         }
+        // V8.09-11: 선박 현재 상태 판정 (항해중/정박/출항). 평택 정박중만 부두 배지, 그 외 상태 라벨.
+        const shipSt = getShipStatus(pm);
+        const toneClass = {
+          sailing: 'bg-sky-900/50 border-sky-700/50 text-sky-200',
+          berthed: 'bg-emerald-900/40 border-emerald-700/50 text-emerald-200',
+          departed: 'bg-slate-700/60 border-slate-600/50 text-slate-300',
+          unknown: 'bg-slate-700 border-slate-600 text-slate-300',
+        }[shipSt.tone] || 'bg-slate-700 text-slate-300';
         return (
           <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 text-sm">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-cyan-300 font-bold">⚓ PORT-MIS</span>
-              {/* M5.82: 부두 정보 강조 표시 (가장 왼쪽) */}
-              {pm.pier === 'PCTC' && (
+              {/* V8.09-11: 평택 정박중 + 부두 정보 있음 → 부두 배지 (PCTC/PNCT/일반) */}
+              {shipSt.showBerth && pm.pier === 'PCTC' && pm.berth && (
                 <span className="bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded font-bold text-xs">
                   📍 PCTC · {formatBerth(pm.berth)}
                 </span>
               )}
-              {pm.pier === 'PNCT' && (
+              {shipSt.showBerth && pm.pier === 'PNCT' && pm.berth && (
                 <span className="bg-purple-900/60 border border-purple-700/50 text-purple-200 px-2 py-0.5 rounded font-bold text-xs">
                   📍 PNCT · {formatBerth(pm.berth)}
                 </span>
               )}
-              {!pm.pier && pm.berth && (
+              {shipSt.showBerth && !pm.pier && pm.berth && (
                 <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs">
                   📍 {formatBerth(pm.berth)}
                 </span>
               )}
-              {!pm.berth && !fallbackInfo?.isFallback && (
+              {/* 평택 정박중인데 부두 정보가 없으면 옛 데이터 경고 (기존 동작 유지) */}
+              {shipSt.showBerth && !pm.berth && !fallbackInfo?.isFallback && (
                 <span className="bg-red-900/40 border border-red-700/40 text-red-300 px-2 py-0.5 rounded text-xs font-bold">
                   ⚠ 부두 정보 없음 (옛 데이터)
+                </span>
+              )}
+              {/* 평택 정박중이 아니면(항해중·출항·타항만) 상태 라벨 표시 */}
+              {!shipSt.showBerth && !fallbackInfo?.isFallback && (
+                <span className={`px-2 py-0.5 rounded text-xs font-bold border ${toneClass}`}>
+                  {shipSt.label}
                 </span>
               )}
               <span className="text-slate-200">
@@ -846,9 +861,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               <span className="text-slate-200">
                 출항 <span className="font-bold text-amber-300">{fmtDT(pm.etd)}</span>
               </span>
-              {pm.port && pm.port !== '평택' && !fallbackInfo?.isFallback && (
-                <span className="text-orange-400 text-xs ml-auto">⚠ {pm.port}</span>
-              )}
               {pm.voyageType && <span className="text-slate-400 text-xs">[{pm.voyageType}]</span>}
             </div>
             {/* M5.90: 평택 데이터 없음 — 인천/타항만 출항 정보 fallback */}
