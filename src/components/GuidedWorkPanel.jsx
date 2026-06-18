@@ -200,18 +200,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     }).catch(() => {});
   }, [inspector, voyageKey, mode, equip, selectedGroup, selectedTier, tierRemainList.length]);
 
-  // 카드 바뀌면 음성 안내
+  // 카드/선택지 음성 안내는 프롬프트 조건(deckDonePromptD 등) 정의 이후로 이동 — 아래 참조.
   const lastSpokenRef = useRef('');
-  useEffect(() => {
-    if (!card || !voiceOn) return;
-    const key = card.main.cn + (card.twin?.cn || '');
-    if (lastSpokenRef.current === key) return;
-    lastSpokenRef.current = key;
-    const parts = [`다음, ${spellKo(card.main.l4 || card.main.cn.slice(-4))}`];
-    if (card.twin) parts.push(`트윈 ${spellKo(card.twin.l4 || card.twin.cn.slice(-4))}`);
-    if (card.main._xray || card.twin?._xray) parts.push('엑스레이');
-    speak(parts.join(', '));
-  }, [card, voiceOn]);
 
   // V8.09-06 (사용자 보고 2026-06-18): XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
   //   기존엔 검증 없이 바로 완료돼, 실 체결 후 실번호 미입력인데도 양하확인됨.
@@ -377,6 +367,47 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
     return holdRemain === 0 && deckDone === 0 && groupDone > 0;
   }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs]);
+
+  // V8.09-15 (사용자 점검 2026-06-18): 해치커버/베이 선택 갈림길 음성 처리.
+  //   ① 선택 배너가 떠 있는 동안에는 "다음 컨테이너" 음성을 막는다(어디로 갈지 미정인데 앞서 말하던 버그).
+  //   ② 대신 선택지 자체를 음성으로 읽어준다(문구 1가). ③ 12초 무응답이면 1회 반복, 선택/배너 사라지면 즉시 멈춤.
+  //   prompt 종류: 'deckD'(양하 데크완료→홀드) / 'holdL'(선적 홀드완료→데크) / 'holdCloseD'(양하 홀드완료→닫기).
+  const choicePrompt = useMemo(() => {
+    if (deckDonePromptD && card) return 'deckD';
+    if (holdDonePrompt && card) return 'holdL';
+    if (mode === 'discharge' && holdWorkedD && !hatchCloseDone && !isHatchDoneSaved(selectedGroup, 'close') && !card) return 'holdCloseD';
+    return null;
+  }, [deckDonePromptD, holdDonePrompt, holdWorkedD, hatchCloseDone, selectedGroup, mode, card]);
+
+  const CHOICE_VOICE = {
+    deckD: '데크 양하 완료. 해치커버를 열까요, 다른 데크로 갈까요.',
+    holdL: '홀드 선적 완료. 해치커버를 닫을까요, 다른 베이 홀드로 갈까요.',
+    holdCloseD: '홀드 작업 끝. 해치커버를 닫을까요.',
+  };
+
+  // 선택지 음성 — 배너가 떠 있는 동안 읽고, 12초마다 1회 반복(무응답 대비). 선택/사라짐 시 정지.
+  const lastChoiceRef = useRef('');
+  useEffect(() => {
+    if (!choicePrompt || !voiceOn) { lastChoiceRef.current = ''; return; }
+    if (lastChoiceRef.current !== choicePrompt) {
+      lastChoiceRef.current = choicePrompt;
+      speak(CHOICE_VOICE[choicePrompt]);
+    }
+    const t = setInterval(() => { speak(CHOICE_VOICE[choicePrompt]); }, 12000);
+    return () => clearInterval(t);
+  }, [choicePrompt, voiceOn]);
+
+  // 다음 컨테이너 음성 — 단, 선택 배너가 떠 있으면 말하지 않는다(choicePrompt 가드).
+  useEffect(() => {
+    if (!card || !voiceOn || choicePrompt) return;
+    const key = card.main.cn + (card.twin?.cn || '');
+    if (lastSpokenRef.current === key) return;
+    lastSpokenRef.current = key;
+    const parts = [`다음, ${spellKo(card.main.l4 || card.main.cn.slice(-4))}`];
+    if (card.twin) parts.push(`트윈 ${spellKo(card.twin.l4 || card.twin.cn.slice(-4))}`);
+    if (card.main._xray || card.twin?._xray) parts.push('엑스레이');
+    speak(parts.join(', '));
+  }, [card, voiceOn, choicePrompt]);
 
   // 수정 1대 적용: 선적이면 실제 컨을 예측 슬롯 위치로 재배정(그 자리 예측 컨은 자동 미배정+완료취소 — 이중 수정 방지) 후 완료
   const applyFixOne = async (actual, slot) => {
