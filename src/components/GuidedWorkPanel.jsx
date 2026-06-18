@@ -64,11 +64,31 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [xVal, setXVal] = useState('');
   const [xEVal, setXEVal] = useState('');
 
+  // V8.09-16 (사용자 보고 2026-06-18): 실번호 중복 입력 차단. 같은 항차·같은 모드 안에서
+  //   같은 실번호를 서로 다른 컨에 입력하면 막는다. 예외: '0000'(실 부족 표기)은 중복 허용.
+  //   일반 실(c.sl)·XRAY 실(c._xraySeal.seal) 각각 자기 종류끼리만 비교한다.
+  const dupSealOwner = (val, selfCn, kind) => {
+    const v = String(val || '').trim();
+    if (!v || v === '0000') return null;   // 빈값·0000은 검사 제외
+    for (const o of allContainers) {
+      if (!o || o.cn === selfCn || o._mode !== mode) continue;
+      const ov = kind === 'xray'
+        ? String(o._xraySeal?.seal || '').trim()
+        : String(o.sl || '').trim();
+      if (ov && ov === v) return o.cn;
+    }
+    return null;
+  };
+
   const saveSeal = async (c) => {
+    const dup = dupSealOwner(sealVal, c.cn, 'normal');
+    if (dup) { alert(`실번호 중복입니다.\n${sealVal.trim()} 은(는) 이미 ${dup.slice(-4)} 컨에 입력돼 있습니다.\n(실 부족이면 0000으로 입력하세요.)`); return; }
     await fbUpdateRecordSeal(voyageKey, mode, c.cn, sealVal.trim(), inspector);
     setEditSealCn(null); setSealVal('');
   };
   const saveXSeal = async (c) => {
+    const dup = dupSealOwner(xVal, c.cn, 'xray');
+    if (dup) { alert(`XRAY 실번호 중복입니다.\n${xVal.trim()} 은(는) 이미 ${dup.slice(-4)} 컨에 입력돼 있습니다.\n(실 부족이면 0000으로 입력하세요.)`); return; }
     await fbSetXraySeal(voyageKey, c.cn, xVal.trim(), xEVal.trim(), inspector);
     setEditXCn(null); setXVal(''); setXEVal('');
   };
