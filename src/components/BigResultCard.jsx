@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
+import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';
@@ -277,7 +278,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
             </>
           ) : (
             <>
-              <input autoFocus value={cnFixQuery} onChange={e => setCnFixQuery(e.target.value)}
+              <input autoFocus value={cnFixQuery} onChange={e => setCnFixQuery(e.target.value)} {...NUM_INPUT_PROPS}
                 placeholder="예: 1234 또는 SKLU1972626"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
               {cnFixMatches.map(x => (

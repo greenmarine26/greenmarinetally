@@ -7,6 +7,7 @@ import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangl
 import { buildGuidedQueue } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { getShipBayDictData } from '../shipStructure.js';
+import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
@@ -611,7 +612,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       <div className="mt-1.5 pt-1.5 border-t border-slate-700/60">
         {editSealCn === c.cn ? (
           <div className="flex gap-1.5">
-            <input autoFocus value={sealVal} onChange={e => setSealVal(e.target.value)}
+            <input autoFocus value={sealVal} onChange={e => setSealVal(e.target.value)} {...NUM_INPUT_PROPS}
               onKeyDown={e => { if (e.key === 'Enter') saveSeal(c); }}
               placeholder="실번호 입력" className="flex-1 min-w-0 bg-slate-800 border border-amber-600 rounded px-2 py-1 text-sm mono text-slate-100"/>
             <button onClick={() => saveSeal(c)} className="px-2.5 rounded bg-emerald-700 text-white text-xs font-bold">저장</button>
@@ -631,9 +632,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {editXCn === c.cn ? (
             <div className="space-y-1">
               <div className="flex gap-1.5">
-                <input autoFocus value={xVal} onChange={e => setXVal(e.target.value)}
+                <input autoFocus value={xVal} onChange={e => setXVal(e.target.value)} {...NUM_INPUT_PROPS}
                   placeholder="XRAY 실번호" className="flex-1 min-w-0 bg-slate-800 border border-fuchsia-600 rounded px-2 py-1 text-sm mono text-slate-100"/>
-                <input value={xEVal} onChange={e => setXEVal(e.target.value)}
+                <input value={xEVal} onChange={e => setXEVal(e.target.value)} {...NUM_INPUT_PROPS}
                   onKeyDown={e => { if (e.key === 'Enter') saveXSeal(c); }}
                   placeholder="E-실(선택)" className="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm mono text-slate-100"/>
               </div>

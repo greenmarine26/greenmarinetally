@@ -6,6 +6,7 @@
 //   - 베이 복사 기능 (같은 사이즈 베이 일괄 적용)
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { engChange, toEnglishUpper as toEngU, ENG_INPUT_PROPS, NUM_INPUT_PROPS } from '../inputUtils.js';
 import {
   buildMatrixFromEdi,
   augmentMatrixFromBayDict,
@@ -693,22 +694,22 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <label>
                   <div className="text-[10px] text-blue-300/70">선박명</div>
-                  <input value={shipMeta.name || ''} onChange={e => setShipMeta(m => ({ ...m, name: e.target.value }))}
+                  <input value={shipMeta.name || ''} onChange={e => setShipMeta(m => ({ ...m, name: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded" />
                 </label>
                 <label>
                   <div className="text-[10px] text-blue-300/70">콜사인</div>
-                  <input value={shipMeta.callsign || ''} onChange={e => setShipMeta(m => ({ ...m, callsign: e.target.value.toUpperCase() }))}
+                  <input value={shipMeta.callsign || ''} onChange={e => setShipMeta(m => ({ ...m, callsign: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono" />
                 </label>
                 <label>
                   <div className="text-[10px] text-blue-300/70">IMO</div>
-                  <input value={shipMeta.imo || ''} onChange={e => setShipMeta(m => ({ ...m, imo: e.target.value }))}
+                  <input value={shipMeta.imo || ''} onChange={e => setShipMeta(m => ({ ...m, imo: e.target.value }))} {...NUM_INPUT_PROPS}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono" />
                 </label>
                 <label>
                   <div className="text-[10px] text-blue-300/70">CASP 코드 *</div>
-                  <input value={shipMeta.code || ''} onChange={e => setShipMeta(m => ({ ...m, code: e.target.value.toUpperCase() }))}
+                  <input value={shipMeta.code || ''} onChange={e => setShipMeta(m => ({ ...m, code: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
                          className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono font-bold" />
                 </label>
               </div>

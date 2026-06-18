@@ -3,6 +3,7 @@
 //   V8.04-01: Chip/Field를 모듈 스코프로 분리 (컴포넌트 본문 내 정의가 React error #310 유발).
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { engChange, ENG_INPUT_PROPS, NUM_INPUT_PROPS, DECIMAL_INPUT_PROPS } from '../inputUtils.js';
 
 const SIZES = ['20', '40ST', '40HC', '45'];
 const FES = [['F', '적 (Full)'], ['E', '공 (Empty)']];
@@ -79,7 +80,7 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
 
           <div className="mb-3">
             <div className="text-xs font-bold text-amber-200 mb-1.5">컨테이너 번호 *</div>
-            <input value={cn} onChange={(e) => setCn(e.target.value)} placeholder="예: ABCD1234567"
+            <input value={cn} onChange={engChange(setCn)} {...ENG_INPUT_PROPS} placeholder="예: ABCD1234567"
               className="w-full bg-slate-900 border-2 border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2 text-sm mono text-slate-100 outline-none" />
           </div>
 
@@ -98,14 +99,14 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
           {ctype === 'RF' && (
             <div className="mb-3">
               <div className="text-xs font-bold text-cyan-200 mb-1.5">리퍼 온도</div>
-              <input value={temp} onChange={(e) => setTemp(e.target.value)} placeholder="예: -18"
+              <input value={temp} onChange={(e) => setTemp(e.target.value)} {...DECIMAL_INPUT_PROPS} placeholder="예: -18"
                 className="w-full bg-slate-900 border-2 border-slate-700 focus:border-cyan-500 rounded-lg px-3 py-2 text-sm mono text-slate-100 outline-none" />
             </div>
           )}
 
           <div className="mb-3">
             <div className="text-xs font-bold text-amber-200 mb-1.5">실번호</div>
-            <input value={seal} onChange={(e) => setSeal(e.target.value)} placeholder="실 번호 (선택)"
+            <input value={seal} onChange={(e) => setSeal(e.target.value)} {...NUM_INPUT_PROPS} placeholder="실 번호 (선택)"
               className="w-full bg-slate-900 border-2 border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2 text-sm mono text-slate-100 outline-none" />
           </div>
 

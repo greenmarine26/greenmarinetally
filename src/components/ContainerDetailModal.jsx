@@ -8,6 +8,7 @@ import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
 import { findTwinCandidate, getBayPairs } from '../twin.js';
+import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { formatDgLabel, lookupUN } from '../dgUnDict.js';
 
 // ISO 코드 옵션 — M5.79 확장
@@ -521,7 +522,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                     <div>
                       <div className="text-[9px] text-slate-500 mb-0.5">베이</div>
                       <input type="text" value={actualBay}
-                        onChange={e => setActualBay(e.target.value.toUpperCase())}
+                        onChange={e => setActualBay(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="01"
                         className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"
                         autoFocus/>
@@ -529,14 +530,14 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                     <div>
                       <div className="text-[9px] text-slate-500 mb-0.5">열(row)</div>
                       <input type="text" value={actualRow}
-                        onChange={e => setActualRow(e.target.value.toUpperCase())}
+                        onChange={e => setActualRow(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="00"
                         className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
                     </div>
                     <div>
                       <div className="text-[9px] text-slate-500 mb-0.5">단(tier)</div>
                       <input type="text" value={actualTier}
-                        onChange={e => setActualTier(e.target.value.toUpperCase())}
+                        onChange={e => setActualTier(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="02"
                         className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
                     </div>
@@ -800,7 +801,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                       <input
                         type="text"
                         value={esealWrongVal}
-                        onChange={e => setEsealWrongVal(e.target.value.toUpperCase())}
+                        onChange={e => setEsealWrongVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="실제 발견 실번호"
                         className="w-full bg-slate-800 border-2 border-amber-700 rounded px-3 py-2 text-base font-bold mono text-amber-100 focus:outline-none focus:border-amber-400"
                         autoFocus
@@ -823,7 +824,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                       <input
                         type="text"
                         value={resealVal}
-                        onChange={e => setResealVal(e.target.value.toUpperCase())}
+                        onChange={e => setResealVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="새로 부착한 실번호"
                         className="w-full bg-slate-800 border-2 border-purple-700 rounded px-3 py-2 text-base font-bold mono text-purple-100 focus:outline-none focus:border-purple-400"
                         autoFocus
@@ -849,7 +850,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                   <input
                     type="text"
                     value={esealVal}
-                    onChange={e => setEsealVal(e.target.value.toUpperCase())}
+                    onChange={e => setEsealVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                     placeholder="실번호 (예: ABC1234)"
                     className={`w-full bg-slate-800 border-2 rounded px-3 py-2 text-base font-bold mono focus:outline-none ${
                       sealMode === 'attach'
@@ -933,7 +934,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           {editingSeal ? (
             <div className="flex gap-2">
               <input type="text" value={sealVal}
-                onChange={e => setSealVal(e.target.value.toUpperCase())}
+                onChange={e => setSealVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                 className="flex-1 bg-slate-800 border border-amber-500 rounded px-3 py-2 mono text-amber-200 focus:outline-none"
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleSaveSeal()}/>
