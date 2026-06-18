@@ -234,8 +234,8 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         }
       </button>
 
-      {/* V7.99-16: 양하 모드 — 선박에 없는 컨(누락) 처리 */}
-      {!isLoading && !isDone && (
+      {/* V7.99-16: 양하 모드 — 선박에 없는 컨(누락) 처리. V8.09-17: 양하 전용 — 선적엔 위치/번호수정이 따로 있어 누락 버튼이 뜨면 안 됨(메모1). */}
+      {!isLoading && !isDone && c._mode === 'discharge' && (
         <button onClick={handleMissing}
           className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-slate-800 hover:bg-rose-900 text-rose-300 border border-rose-800 flex items-center justify-center gap-1.5">
           🚫 선박에 없음 (누락 처리)

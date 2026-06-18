@@ -302,9 +302,12 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       {workFilter !== 'completed' && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
         const bayLbl = g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay);
+        // V8.09-17 (메모5): 수동도 자동 가이드처럼 진행상태(잔여 N대)를 보이게. 현재 단의 미완료 잔여.
+        const remain = g ? (manualTier === 'hold' ? g.hold : g.deck) : 0;
         return (
           <div className="flex items-center gap-2 text-[11px] bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5">
             <span className="font-bold text-amber-300">📍 {bayLbl}번 {manualTier === 'hold' ? '홀드' : '데크'} 작업 중</span>
+            <span className="font-black text-emerald-300 bg-emerald-950/50 border border-emerald-800 rounded px-1.5 py-0.5">잔여 {remain}대</span>
             <button onClick={() => { setManualTier(null); }} className="text-slate-400 hover:text-amber-300">단 변경</button>
             <button onClick={() => { setManualBay(null); setManualTier(null); }} className="text-slate-400 hover:text-amber-300">베이 변경</button>
           </div>
@@ -681,6 +684,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             onChange={e => { setQuery(e.target.value); }}
             placeholder="🎤 / 4777 / 40피트 4777 / 자유 질문"
             autoComplete="off"
+            inputMode={manualCtx && manualCtx.selectedGroup != null && manualCtx.selectedTier ? 'numeric' : 'text'}
             className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {voiceSupported && (

@@ -166,10 +166,14 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     twins.sort((a, b) => {
       const ap = podOrder[a.main.pod || ''] ?? 99, bp = podOrder[b.main.pod || ''] ?? 99;
       if (ap !== bp) return ap - bp;
+      // V8.09-18 (사용자 보고 2026-06-18): 트윈 선적은 한 티어의 전체 로우를 다 채운 뒤 위 티어로.
+      //   기존 로우→티어 순서는 한 로우의 02·04·06을 먼저 쌓아 올려 "02 전체 로우 미완"인 채 위로 감.
+      //   → 티어를 로우보다 먼저 비교(바닥 02부터). 같은 티어 안에서는 로우 해상→육상.
+      const at = parseInt(a.main.tier, 10), bt = parseInt(b.main.tier, 10);
+      if (at !== bt) return at - bt;
       const ar = rowRank(a.main.row, { evenRowsSeaSide, landToSea: false });
       const br = rowRank(b.main.row, { evenRowsSeaSide, landToSea: false });
-      if (ar !== br) return ar - br;
-      return parseInt(a.main.tier, 10) - parseInt(b.main.tier, 10);
+      return ar - br;
     });
     single20.sort((a, b) => cmp(a.main, b.main));
     forties.sort((a, b) => cmp(a.main, b.main));

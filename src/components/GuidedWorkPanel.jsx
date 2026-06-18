@@ -20,6 +20,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
+  // V8.09-17 (메모4): TMPZ는 해치커버가 자동(유압식)이라 검수사가 열고닫음을 보고하지 않는다.
+  //   vsl/vslFull 어디든 'TMPZ'가 들어가면 해치 프롬프트·클로즈 제안을 띄우지 않는다.
+  const isHatchAutoShip = /TMPZ/i.test(`${voyage?.info?.vsl || ''} ${voyage?.info?.vslFull || ''}`);
   const berthSide = voyage?.info?.berthSide || '';          // 'starboard'(우현) | 'port'(좌현)
 
   // 장비(호기) — 헤더와 동일한 localStorage 공유 + equipChanged 이벤트 동기화
@@ -353,6 +356,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
   const deckDonePromptD = useMemo(() => {
+    if (isHatchAutoShip) return false;  // V8.09-17(메모4): TMPZ 해치 자동 — 보고 안 함
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
@@ -367,6 +371,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   현장 순서 = 양하 끝 → (그 홀드에 실을 게 있으면) 선적 먼저 → 선적까지 끝나야 해치 클로즈.
   //   ★선적 EDI 미업로드면 loadRemain=0 → 기존대로 닫음(선적할 게 없으므로 안전).
   const holdWorkedD = useMemo(() => {
+    if (isHatchAutoShip) return false;  // V8.09-17(메모4): TMPZ 해치 자동 — 클로즈 제안 안 함
     if (mode !== 'discharge' || selectedGroup == null) return false;
     const holdDone = allContainers.some(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) < 80);
@@ -379,6 +384,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
   const holdDonePrompt = useMemo(() => {
+    if (isHatchAutoShip) return false;  // V8.09-17(메모4): TMPZ 해치 자동 — 닫기 제안 안 함
     if (mode !== 'loading' || deckPromptDone || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     if (groupRemain.length === 0) return false;
@@ -435,6 +441,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       await fbReassignContainerPosition(voyageKey, mode, actual.cn, slot.bay, slot.row, slot.tier, inspector);
     }
     await fbCompleteContainer(voyageKey, mode, actual.cn, inspector);
+  };
+
+  // V8.09-17 (메모6): 트윈 앞뒤 맞교환 — 선적 시 앞/뒤 위치가 바뀌어 들어가는 경우가 많아,
+  //   버튼 한 번으로 두 컨의 자리만 맞바꾼다. 완료 처리는 안 함(위치만 교환).
+  //   fbReassign이 swap을 지원: 앞 컨을 뒤 자리로 보내면 자리를 뺏긴 뒤 컨이 앞 자리로 자동 이동.
+  const swapTwinPos = async () => {
+    if (busy || !card?.main || !card?.twin || mode !== 'loading') return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const a = card.main, b = card.twin;
+    if (!confirm(`앞뒤 위치를 맞바꿉니다.\n앞 ${a.cn.slice(-4)} ↔ 뒤 ${b.cn.slice(-4)}\n(자리만 교환, 완료 처리는 안 됨)`)) return;
+    setBusy(true);
+    try {
+      // 앞 컨을 뒤 자리로 → swap 로직이 뒤 컨을 앞 자리로 이동시킴
+      await fbReassignContainerPosition(voyageKey, mode, a.cn, b.bay, b.row, b.tier, inspector);
+      speak('앞뒤 위치를 맞바꿨습니다');
+    } finally { setBusy(false); }
   };
 
   const afterFix = () => {
@@ -774,6 +796,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <div className="flex items-center gap-2 px-2">
                 <div className="flex-1 border-t border-slate-700"/>
                 <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1"><Link2 className="w-3 h-3"/>트윈 짝꿍</div>
+                {mode === 'loading' && (
+                  <button onClick={swapTwinPos} disabled={busy}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-800 hover:bg-indigo-700 text-indigo-100 disabled:opacity-50 flex items-center gap-1">
+                    ⇅ 앞뒤 맞교환
+                  </button>
+                )}
                 <div className="flex-1 border-t border-slate-700"/>
               </div>
               {renderCon(card.twin, '뒤', 'cyan')}
