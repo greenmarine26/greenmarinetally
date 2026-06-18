@@ -8,7 +8,7 @@ import {
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort } from './utils.js';
+import { isPyeongtaekPort, isPortCode } from './utils.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -784,6 +784,10 @@ export function tallyVoyagesByShip(voyages) {
   for (const [key, v] of Object.entries(voyages || {})) {
     const info = v.info || {};
     const vsl = (info.vsl || key.split('_')[0] || '(선박명 미상)').toUpperCase();
+    // V8.09-12: vsl 자리에 항만코드(CNYNT=옌타이 등)가 잘못 저장된 항차는 별도 선박으로
+    //   그룹핑하지 않는다. OBWH 항차의 목적항 코드가 vsl로 새어 수석대시보드에 OBWH와
+    //   중복 카드(CNYNT)가 생기던 문제. 항만코드 그룹은 표시에서 제외(데이터는 보존).
+    if (isPortCode(vsl)) continue;
     if (!byShip[vsl]) byShip[vsl] = { vsl, discharge: 0, loading: 0, voyageKeys: [] };
     byShip[vsl].discharge += _ptkCountOfSection(v.discharge, 'discharge');
     byShip[vsl].loading += _ptkCountOfSection(v.loading, 'loading');

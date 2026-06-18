@@ -6,7 +6,7 @@
 //   - 베이 복사 기능 (같은 사이즈 베이 일괄 적용)
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { toEnglishUpper as toEngU, ENG_INPUT_PROPS, NUM_INPUT_PROPS } from '../inputUtils.js';
+import { engChange, toEnglishUpper as toEngU, ENG_INPUT_PROPS, NUM_INPUT_PROPS } from '../inputUtils.js';
 import {
   buildMatrixFromEdi,
   augmentMatrixFromBayDict,

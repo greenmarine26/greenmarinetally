@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.09-11';
+export const APP_VERSION = 'V8.09-12';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2224,6 +2224,26 @@ export function formatBerth(berthRaw) {
   return s;  // 그 외는 원본 그대로 (BCT, "동부두7", "7선석" 등)
 }
 
+// V8.09-12: vsl(선박명) 자리에 UN/LOCODE 항만코드가 잘못 들어갔는지 판별.
+//   증상: OBWH 항차의 양하 데이터가 목적항 코드(CNYNT=옌타이)로 잘못 저장돼,
+//     수석대시보드가 "CNYNT"를 별도 선박으로 그룹핑 → OBWH와 중복 카드 생성.
+//   항만코드 = 공백 없는 5자 영문 + 국가 prefix(CN/KR/JP/TW/HK 등) 또는 알려진 항만 목록.
+//   선박명은 보통 공백 포함하거나 4자 이하 약자(OBWH/RZOR)라 오검출 없음.
+const _KNOWN_PORT_CODES = new Set([
+  'CNDLC','CNQDG','CNTAO','CNWEI','CNYAT','CNLYG','CNXMN','CNTSN','CNSHA','CNNGB',
+  'CNQZH','CNCAN','CNSZN','CNTAG','CNNTG','CNWEH','CNYNT','CNYTN',
+  'JPHKT','JPYOK','JPTYO','JPOSA','JPNGO','JPUKB',
+  'KRPUS','KRINC','KRPTK','TWKHH','TWTPE','HKHKG',
+]);
+const _LOCODE_COUNTRY = /^(CN|KR|JP|TW|HK|VN|TH|SG|MY|PH|ID|RU)/;
+export function isPortCode(vsl) {
+  const s = String(vsl || '').toUpperCase().trim();
+  if (!s || /\s/.test(s)) return false;
+  if (/^[A-Z]{5}$/.test(s) && _LOCODE_COUNTRY.test(s)) return true;
+  if (_KNOWN_PORT_CODES.has(s)) return true;
+  return false;
+}
+
 // V8.09-11: PORT-MIS 시각 문자열("2026-06-18 12:00") → epoch ms. 실패 시 null.
 export function parsePortMisDateTime(s) {
   if (!s) return null;
@@ -2238,31 +2258,28 @@ export function isPyeongtaekPortName(port) {
   return !s || /평택|PYEONGTAEK/i.test(s);
 }
 
-// V8.09-11: 선박 현재 상태 판정 (사용자 요청 2026-06-18).
-//   ETA/ETD와 현재 시각 비교 + 입출 필드 보조. 반환 { phase, isPyeongtaek, port, label, tone }.
-//   phase: 'sailing'(항해중·입항전) | 'berthed'(정박중) | 'departed'(출항함) | 'unknown'
-//   표시 규칙: 평택+정박중 → 부두 표시(호출부가 berth 배지 렌더). 그 외 → 상태 라벨.
+// V8.09-11: 선박 현재 상태 판정 (ETA/ETD vs 현재시각 + 입출 보조).
+//   phase: 'sailing'(현재<ETA) | 'berthed'(ETA≤현재<ETD) | 'departed'(현재≥ETD) | 'unknown'
+//   평택+정박중만 부두 배지(showBerth), 그 외는 상태 라벨.
 export function getShipStatus(pm, nowMs = Date.now()) {
   const port = String(pm?.port || '').trim();
   const isPt = isPyeongtaekPortName(port);
   const portName = isPt ? '평택' : (port || '타항만');
   const eta = parsePortMisDateTime(pm?.eta);
   const etd = parsePortMisDateTime(pm?.etd);
-  // 입출 필드(ibobprtSe): "입항"/"출항" — 시각이 없을 때 보조 신호
   const inout = String(pm?.ibobprtSe || pm?.voyageInOut || '').trim();
 
   let phase;
   if (eta == null && etd == null) {
-    // 시각 없음 → 입출 필드로 보조 추정
     if (/출항/.test(inout)) phase = 'departed';
     else if (/입항/.test(inout)) phase = 'berthed';
     else phase = 'unknown';
   } else if (eta != null && nowMs < eta) {
-    phase = 'sailing';                 // 입항 전 = 오는 중
+    phase = 'sailing';
   } else if (etd != null && nowMs >= etd) {
-    phase = 'departed';                // 출항 시각 지남
+    phase = 'departed';
   } else {
-    phase = 'berthed';                 // 입항 후, 출항 전
+    phase = 'berthed';
   }
 
   let label, tone;
@@ -2271,7 +2288,6 @@ export function getShipStatus(pm, nowMs = Date.now()) {
   else if (phase === 'departed') { label = `↗ ${portName} 출항함`; tone = 'departed'; }
   else { label = `${portName}`; tone = 'unknown'; }
 
-  // 평택 정박중일 때만 부두 배지를 띄운다(호출부에서 판단).
   const showBerth = isPt && phase === 'berthed';
   return { phase, isPyeongtaek: isPt, port: portName, label, tone, showBerth };
 }

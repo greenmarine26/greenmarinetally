@@ -826,7 +826,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 text-sm">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-cyan-300 font-bold">⚓ PORT-MIS</span>
-              {/* V8.09-11: 평택 정박중 + 부두 정보 있음 → 부두 배지 (PCTC/PNCT/일반) */}
+              {/* V8.09-11: 평택 정박중 + 부두 있음 → 부두 배지 */}
               {shipSt.showBerth && pm.pier === 'PCTC' && pm.berth && (
                 <span className="bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 py-0.5 rounded font-bold text-xs">
                   📍 PCTC · {formatBerth(pm.berth)}
@@ -842,13 +842,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                   📍 {formatBerth(pm.berth)}
                 </span>
               )}
-              {/* 평택 정박중인데 부두 정보가 없으면 옛 데이터 경고 (기존 동작 유지) */}
+              {/* 평택 정박중인데 부두 없음 → 옛 데이터 경고 */}
               {shipSt.showBerth && !pm.berth && !fallbackInfo?.isFallback && (
                 <span className="bg-red-900/40 border border-red-700/40 text-red-300 px-2 py-0.5 rounded text-xs font-bold">
                   ⚠ 부두 정보 없음 (옛 데이터)
                 </span>
               )}
-              {/* 평택 정박중이 아니면(항해중·출항·타항만) 상태 라벨 표시 */}
+              {/* 평택 정박중이 아니면 상태 라벨 (항해중·출항·타항만) */}
               {!shipSt.showBerth && !fallbackInfo?.isFallback && (
                 <span className={`px-2 py-0.5 rounded text-xs font-bold border ${toneClass}`}>
                   {shipSt.label}
