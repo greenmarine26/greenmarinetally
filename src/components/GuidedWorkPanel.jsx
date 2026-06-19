@@ -10,8 +10,8 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt } from '../utils.js';
-import { EQUIPMENT_NUMBERS, buildHatchMessage, shareText } from '../kakaoShare.js';
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, tallyDayNight } from '../utils.js';
+import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
@@ -20,10 +20,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
-  // V8.09-17 (메모4): TMPZ는 해치커버가 자동(유압식)이라 검수사가 열고닫음을 보고하지 않는다.
-  //   vsl/vslFull 어디든 'TMPZ'가 들어가면 해치 프롬프트·클로즈 제안을 띄우지 않는다.
-  const isHatchAutoShip = /TMPZ/i.test(`${voyage?.info?.vsl || ''} ${voyage?.info?.vslFull || ''}`);
+  // V8.09-17 (메모4)→V8.10: 해치커버 계산·보고를 하지 않는 선박들.
+  //   TMPZ는 해치가 자동(유압식)이고, TNJP·RZOR·OBWH도 해치커버 계산 대상이 아니다(사용자 확정 2026-06-19).
+  //   네 선박은 해치 대신 주야간 작업갯수를 기록한다(workShiftOf/tallyDayNight). vsl/vslFull 어디든 매칭되면 해치 프롬프트·계산·보고를 건너뛴다.
+  const isHatchSkipShip = /TMPZ|TNJP|RZOR|OBWH/i.test(`${voyage?.info?.vsl || ''} ${voyage?.info?.vslFull || ''}`);
   const berthSide = voyage?.info?.berthSide || '';          // 'starboard'(우현) | 'port'(좌현)
+  // V8.10: 부두별 장비 목록. PCTC 1~4호기, PNCT 1~5호기(여객석 RORO 1대 추가). 부두 미상이면 1~5 전체.
+  const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));
 
   // 장비(호기) — 헤더와 동일한 localStorage 공유 + equipChanged 이벤트 동기화
   const [equip, setEquip] = useState(getEquipNumber());
@@ -356,7 +359,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
   const deckDonePromptD = useMemo(() => {
-    if (isHatchAutoShip) return false;  // V8.09-17(메모4): TMPZ 해치 자동 — 보고 안 함
+    if (isHatchSkipShip) return false;  // V8.10: TMPZ·TNJP·RZOR·OBWH 해치 계산/보고 안 함
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
@@ -371,7 +374,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   현장 순서 = 양하 끝 → (그 홀드에 실을 게 있으면) 선적 먼저 → 선적까지 끝나야 해치 클로즈.
   //   ★선적 EDI 미업로드면 loadRemain=0 → 기존대로 닫음(선적할 게 없으므로 안전).
   const holdWorkedD = useMemo(() => {
-    if (isHatchAutoShip) return false;  // V8.09-17(메모4): TMPZ 해치 자동 — 클로즈 제안 안 함
+    if (isHatchSkipShip) return false;  // V8.10: 해치 클로즈 제안 안 함
     if (mode !== 'discharge' || selectedGroup == null) return false;
     const holdDone = allContainers.some(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) < 80);
@@ -384,7 +387,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
   const holdDonePrompt = useMemo(() => {
-    if (isHatchAutoShip) return false;  // V8.09-17(메모4): TMPZ 해치 자동 — 닫기 제안 안 함
+    if (isHatchSkipShip) return false;  // V8.10: 해치 닫기 제안 안 함
     if (mode !== 'loading' || deckPromptDone || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     if (groupRemain.length === 0) return false;
@@ -539,6 +542,31 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     </div>
   );
 
+  // V8.10: 해치 제외 4척(TMPZ·TNJP·RZOR·OBWH)은 해치커버 대신 주야간 작업갯수를 기록한다.
+  //   현재 모드 평택분 완료 컨을 주간(08~17)/야간(전일19~익05:30) × 규격(20/40/45) × F/E로 집계.
+  const DayNightBadge = () => {
+    if (!isHatchSkipShip) return null;
+    const t = tallyDayNight(allContainers.filter(c => c._mode === mode && c._ptk && c._comp));
+    const sz = (s) => `20ft ${s.s20.F}/${s.s20.E} · 40ft ${s.s40.F}/${s.s40.E} · 45ft ${s.s45.F}/${s.s45.E}`;
+    const row = (label, color, s) => (
+      <div className="px-2 py-1">
+        <div className="flex items-center justify-between">
+          <span className={`font-bold ${color}`}>{label}</span>
+          <span className="text-slate-300">계 <b>{s.total}</b></span>
+        </div>
+        <div className="text-slate-200 tabular-nums text-right">{sz(s)}</div>
+      </div>
+    );
+    return (
+      <div className="bg-slate-900 border border-teal-700 rounded-lg text-[11px] divide-y divide-slate-800">
+        <div className="px-2 py-1 text-teal-300 font-bold text-center">📋 주야간 작업갯수 ({mode === 'discharge' ? '양하' : '선적'}) · 규격 F/E</div>
+        {row('☀ 주간 08–17', 'text-amber-300', t.주간)}
+        {row('🌙 야간 19–05:30', 'text-sky-300', t.야간)}
+        {t.그외.total > 0 && row('· 그외', 'text-slate-400', t.그외)}
+      </div>
+    );
+  };
+
   // ── 1단계: 장비(호기) 결정 ──
   if (equipStep) {
     return (
@@ -548,7 +576,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
         <div className="text-[11px] text-slate-400 text-center">헤더의 🏗 장비 표시·작업 보고와 공유됩니다.</div>
         <div className="grid grid-cols-2 gap-2">
-          {EQUIPMENT_NUMBERS.map(num => (
+          {equipNumbers.map(num => (
             <button key={num} onClick={() => pickEquip(num)}
               className={`py-4 rounded-lg border font-bold text-base ${
                 equip === num ? 'bg-amber-700 border-amber-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-amber-900'
@@ -596,6 +624,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return (
       <div className="space-y-2">
         <SettingsBar/>
+        <DayNightBadge/>
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
           <div className="text-sm font-bold text-violet-300">작업할 베이를 선택하세요</div>
           {groups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
@@ -731,6 +760,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   return (
     <div className="space-y-2">
       <SettingsBar/>
+      <DayNightBadge/>
       <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5">
         <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-300">
           <ChevronLeft className="w-4 h-4"/>베이 선택

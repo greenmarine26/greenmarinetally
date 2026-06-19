@@ -4,12 +4,13 @@ import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
-import { getEquipNumber, setEquipNumber, _storage, SK } from '../utils.js';
-import { EQUIPMENT_NUMBERS } from '../kakaoShare.js';
+import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 
 export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager}) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
+  // V8.10: 현재 항차 부두 기준 장비 목록. 항차 없으면 1~5 전체.
+  const equipNumbers = equipNumbersForPier(getPierFromBerth(info?.berth || ''));
   const [helpOpen, setHelpOpen] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);   // M6.14d: Gemini 키 설정 모달
   // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
@@ -143,7 +144,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
             </div>
             <div className="text-[11px] text-slate-400 mb-3">현재 작업 중인 장비를 선택하세요. 작업 보고에 자동 포함됩니다.</div>
             <div className="grid grid-cols-2 gap-2">
-              {EQUIPMENT_NUMBERS.map(num => (
+              {equipNumbers.map(num => (
                 <button key={num} onClick={() => handleSelectEquip(num)}
                   className={`py-4 rounded-lg font-black text-lg ${
                     equipNo === num ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'

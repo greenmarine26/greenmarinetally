@@ -8,10 +8,10 @@ import {
   buildWorkStatusMessage,
   buildHatchMessage,
   buildConBoxMessage,
-  EQUIPMENT_NUMBERS,
 } from '../kakaoShare.js';
 import { fbAddWorkReport } from '../firebase.js';
 import { getShipBayDictData } from '../shipStructure.js';
+import { getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import { ref, set, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -22,6 +22,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   // M5.79: view에 'manual' 추가 — 시작 안 눌러도 중단/재개/완료 직접 보고
   //  사유: (1) 전 작업을 이어받을 때 (다른 검수원이 시작한 작업) (2) 한 갱 먼저 작업 완료
   const [view, setView] = useState('main');  // main | start | pause | hatch | conbox | external | manual
+  // V8.10: 현재 항차 부두 기준 장비 목록(PCTC 1~4 / PNCT 1~5). 항차 없으면 1~5 전체.
+  const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));
   const [activeWork, setActiveWork] = useState({});  // {1호기: {mode, started, paused, reason}, ...}
   // 시작 화면
   const [selectedEquip, setSelectedEquip] = useState(lastEquip || '1호기');
@@ -412,7 +414,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             <div>
               <div className="text-xs font-bold text-slate-300 mb-2">1) 장비 선택</div>
               <div className="grid grid-cols-2 gap-2">
-                {EQUIPMENT_NUMBERS.map(n => (
+                {equipNumbers.map(n => (
                   <button key={n} onClick={() => setSelectedEquip(n)}
                     className={`py-3 rounded-lg font-bold ${selectedEquip === n ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-slate-800 text-slate-300'}`}>
                     🏗 {n}
@@ -526,7 +528,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             <div>
               <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
               <div className="grid grid-cols-4 gap-1">
-                {EQUIPMENT_NUMBERS.map(n => (
+                {equipNumbers.map(n => (
                   <button key={n} onClick={() => setManualEquip(n)}
                     className={`py-2 rounded font-bold text-xs ${manualEquip === n ? 'bg-indigo-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
                     {n}
@@ -657,7 +659,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             <div>
               <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
               <div className="grid grid-cols-4 gap-1">
-                {EQUIPMENT_NUMBERS.map(n => (
+                {equipNumbers.map(n => (
                   <button key={n} onClick={() => setHatchEquip(n)}
                     className={`py-2 rounded text-xs font-bold ${(hatchEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
                     {n}
@@ -704,7 +706,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             <div>
               <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
               <div className="grid grid-cols-4 gap-1">
-                {EQUIPMENT_NUMBERS.map(n => (
+                {equipNumbers.map(n => (
                   <button key={n} onClick={() => setConBoxEquip(n)}
                     className={`py-2 rounded text-xs font-bold ${(conBoxEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
                     {n}

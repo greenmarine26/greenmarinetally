@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.09-18';
+export const APP_VERSION = 'V8.10';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2202,6 +2202,47 @@ export function getPierFromBerth(berthRaw) {
   if (n >= 6 && n <= 9) return 'PCTC';
   if (n >= 13 && n <= 16) return 'PNCT';
   return null;
+}
+
+// V8.10: 부두별 양적하 장비(호기) 목록.
+//   PCTC = 4대(1~4호기). PNCT = 5대(1~5호기, 여객석이 RORO 작업을 해 1대 더). 부두 미상이면 최대(1~5호기)로 안전하게.
+export function equipNumbersForPier(pier) {
+  if (pier === 'PCTC') return ['1호기', '2호기', '3호기', '4호기'];
+  if (pier === 'PNCT') return ['1호기', '2호기', '3호기', '4호기', '5호기'];
+  return ['1호기', '2호기', '3호기', '4호기', '5호기'];
+}
+
+// V8.10: 작업 시각 → 주야간 구분.
+//   주간 08:00~17:00. 야간 전일 19:00~명일 05:30. 그 사이(05:30~08:00, 17:00~19:00)는 '그외'.
+//   ts: ms epoch. 반환 '주간'|'야간'|'그외'.
+export function workShiftOf(ts) {
+  if (!ts) return '그외';
+  const d = new Date(ts);
+  const min = d.getHours() * 60 + d.getMinutes();
+  if (min >= 8 * 60 && min < 17 * 60) return '주간';        // 08:00~16:59
+  if (min >= 19 * 60 || min < 5 * 60 + 30) return '야간';    // 전일 19:00~익일 05:30
+  return '그외';
+}
+
+// V8.10: 해치 제외 4척 전용 — 완료 컨테이너를 주야간 × 규격(20/40/45) × F/E로 집계.
+//   완료 시각은 _comp.at(검수앱 completed 레코드) 우선. 규격은 isoToLabel prefix(20/40/45).
+//   F/E는 c.fe('E'면 Empty, 그 외 Full). 반환 { 주간:{...}, 야간:{...}, 그외:{...}, total }.
+//   각 shift = { s20:{F,E}, s40:{F,E}, s45:{F,E}, total }.
+export function tallyDayNight(containers) {
+  const blank = () => ({ s20: { F: 0, E: 0 }, s40: { F: 0, E: 0 }, s45: { F: 0, E: 0 }, total: 0 });
+  const out = { 주간: blank(), 야간: blank(), 그외: blank(), total: 0 };
+  for (const c of (containers || [])) {
+    const ts = (c._comp && c._comp.at) || c.completedAt || c._completedAt || c.actual_at || 0;
+    if (!ts) continue;                                   // 미완료는 집계 제외
+    const shift = workShiftOf(ts);
+    const lbl = isoToLabel(c.iso || c.type || '');
+    const sizeKey = /^45/.test(lbl) ? 's45' : /^40/.test(lbl) ? 's40' : 's20';  // 그 외(빈 라벨 등)는 20 칸
+    const fe = (c.fe === 'E') ? 'E' : 'F';               // 기본 Full
+    out[shift][sizeKey][fe] += 1;
+    out[shift].total += 1;
+    out.total += 1;
+  }
+  return out;
 }
 
 /**
