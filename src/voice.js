@@ -106,7 +106,11 @@ export function speak(text, opts = {}) {
     }
     currentSpeakPriority = isHigh ? 'high' : null;
     // M3.1: 좌표 자동 한국어화 (AI 답변 등 자유 텍스트에서 좌표를 자연스럽게 읽기)
-    const spoken = spellPosString(text);
+    let spoken = spellPosString(text);
+    // V8.13: 붙어 있는 4자리 이상 연속 숫자(컨번호 끝자리)는 한 자 한 자 또박또박 읽는다.
+    //   "1250"→"일 이 오 공". 수량(20대)·시각(17시)·온도(18도)·베이(38번)는 1~3자리라 보존.
+    //   좌표(spellPosString)가 먼저 처리된 뒤라 좌표 숫자와 충돌 없음.
+    spoken = spoken.replace(/\d{4,}/g, m => m.split('').map(d => NUM_KO[parseInt(d)]).join(' '));
     const u = new SpeechSynthesisUtterance(spoken);
     u.lang = 'ko-KR';
     // V7.99-15: 골라둔 자연스러운 한국어 목소리 적용 (없으면 브라우저 기본 — 회귀 없음)

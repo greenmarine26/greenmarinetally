@@ -435,7 +435,7 @@ export function describeQuery(parsed) {
     else if (parsed.temp > 0) desc.push(`영상 ${parsed.temp}도`);
     else desc.push('0도');
   }
-  if (parsed.digits) desc.push(`끝4자리 ${parsed.digits}`);
+  if (parsed.digits) desc.push(`끝네자리 ${parsed.digits}`);
   if (desc.length === 0 && parsed.isAll) return '전체';
   return desc.join(' ') || '전체';
 }
