@@ -1,7 +1,7 @@
 // 작업 보고 모달 (M3.5.6)
 // 흐름: 작업 시작 → 장비+작업종류 선택 → 카톡 발송
 //       이후 중단/완료/해치/콘박스는 활성 장비 자동 사용
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AlertTriangle, X, Play, Pause, CheckCircle2, Lock, Unlock, Box, Send, Truck, RefreshCw } from 'lucide-react';
 import {
   shareText,
@@ -11,7 +11,7 @@ import {
 } from '../kakaoShare.js';
 import { fbAddWorkReport } from '../firebase.js';
 import { getShipBayDictData } from '../shipStructure.js';
-import { getPierFromBerth, equipNumbersForPier } from '../utils.js';
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort } from '../utils.js';
 import { ref, set, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -21,9 +21,43 @@ import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 export default function WorkReportModal({ open, voyageKey, voyage, onClose, lastEquip }) {
   // M5.79: view에 'manual' 추가 — 시작 안 눌러도 중단/재개/완료 직접 보고
   //  사유: (1) 전 작업을 이어받을 때 (다른 검수원이 시작한 작업) (2) 한 갱 먼저 작업 완료
-  const [view, setView] = useState('main');  // main | start | pause | hatch | conbox | external | manual
+  const [view, setView] = useState('main');  // main | start | pause | hatch | conbox | external | manual | daynight
   // V8.10: 현재 항차 부두 기준 장비 목록(PCTC 1~4 / PNCT 1~5). 항차 없으면 1~5 전체.
   const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));
+  // V8.10: 해치 제외 4척(TMPZ·TNJP·RZOR·OBWH)은 해치커버 대신 주야간 작업갯수를 작업보고로 기록한다.
+  const isHatchSkipShip = /TMPZ|TNJP|RZOR|OBWH/i.test(`${voyage?.info?.vsl || ''} ${voyage?.info?.vslFull || ''}`);
+  // V8.10: 주야간 보고 — 진입 시 시각 자동 판정(reportShiftToShow), 토글로 수동 전환.
+  const [dnShift, setDnShift] = useState(null);   // null이면 자동, '주간'|'야간'이면 수동 고정
+
+  // V8.10: 해치 제외 4척 주야간 집계용 — 양하·선적 양쪽 평택분 컨을 모달 안에서 직접 조립.
+  //   집계는 작업 모드(가이드/수동)와 무관하게 Firebase 완료 레코드(completed/{cn}={by,at})가 근거.
+  //   호출부(VoyagePage)는 건드리지 않는다 — voyage prop만으로 조립(외과적 변경 유지).
+  const dnContainers = useMemo(() => {
+    if (!isHatchSkipShip) return { discharge: [], loading: [] };
+    const buildMode = (m) => {
+      const sec = voyage?.[m] || {};
+      const edi = sec.ediContainers || {};
+      const recs = sec.records || {};
+      const comp = sec.completed || {};
+      const cns = new Set([...Object.keys(edi), ...Object.keys(recs)]);
+      const out = [];
+      for (const cn of cns) {
+        const e = edi[cn] || {};
+        const r = recs[cn] || {};
+        const c = { ...e, ...r, cn, _comp: comp[cn] || null };
+        // 평택분만: 양하=POD 평택, 선적=POL 평택.
+        const ptk = m === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+        if (ptk) out.push(c);
+      }
+      return out;
+    };
+    return { discharge: buildMode('discharge'), loading: buildMode('loading') };
+  }, [voyage, isHatchSkipShip]);
+
+  // 현재 보여줄 시프트(자동 또는 수동 고정) + 양하/선적 보고서.
+  const dnActiveShift = dnShift || reportShiftToShow(Date.now());
+  const dnReportD = useMemo(() => buildShiftReport(dnContainers.discharge, dnActiveShift, Date.now()), [dnContainers, dnActiveShift]);
+  const dnReportL = useMemo(() => buildShiftReport(dnContainers.loading, dnActiveShift, Date.now()), [dnContainers, dnActiveShift]);
   const [activeWork, setActiveWork] = useState({});  // {1호기: {mode, started, paused, reason}, ...}
   // 시작 화면
   const [selectedEquip, setSelectedEquip] = useState(lastEquip || '1호기');
@@ -389,6 +423,13 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 <Box className="w-4 h-4"/> 콘박스
               </button>
             </div>
+            {/* V8.10: 해치 제외 4척(TMPZ·TNJP·RZOR·OBWH)은 해치커버 대신 주야간 작업보고를 쓴다. */}
+            {isHatchSkipShip && (
+              <button onClick={() => { setDnShift(null); setView('daynight'); }}
+                className="w-full py-3 bg-teal-700 hover:bg-teal-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-teal-500">
+                📋 주야간 작업보고
+              </button>
+            )}
             {/* M5.79: 수동 보고 (시작 안 누른 작업) — 이어받기 / 한 갱 먼저 완료 케이스 */}
             <button onClick={() => { setManualAction(''); setManualReason(''); setView('manual'); }}
               className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-indigo-500">
@@ -745,6 +786,72 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               className="w-full py-3 bg-purple-700 hover:bg-purple-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
               <Send className="w-4 h-4"/> 콘박스 보고
             </button>
+          </div>
+        )}
+
+        {/* V8.10: 주야간 작업보고 (해치 제외 4척 전용) */}
+        {view === 'daynight' && (
+          <div className="space-y-3">
+            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <div className="text-sm font-bold text-teal-300 text-center">📋 주야간 작업보고</div>
+            {/* 주/야 토글 (자동 선택이 기본, 수동 전환 가능) */}
+            <div className="grid grid-cols-2 gap-2">
+              {['주간', '야간'].map(s => (
+                <button key={s} onClick={() => setDnShift(s)}
+                  className={`py-2.5 rounded-lg font-bold text-sm border ${
+                    dnActiveShift === s
+                      ? (s === '주간' ? 'bg-amber-700 border-amber-400 text-white' : 'bg-sky-800 border-sky-400 text-white')
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                  }`}>
+                  {s === '주간' ? '☀ 주간보고 08–17' : '🌙 야간보고 19–05:30'}
+                </button>
+              ))}
+            </div>
+            <div className="text-[10px] text-slate-500 text-center">
+              {dnShift ? '수동 선택됨' : '현재 시각 기준 자동 선택'} · 보고 마감 +30분 여유
+            </div>
+            {/* 양하/선적 각 표 */}
+            {[['discharge', '양하', dnReportD], ['loading', '선적', dnReportL]].map(([m, label, rep]) => (
+              <div key={m} className="bg-slate-900 border border-slate-700 rounded-lg p-2">
+                <div className="text-xs font-bold text-slate-200 mb-1 flex items-center justify-between">
+                  <span>{label}</span>
+                  {!rep.excluded && (
+                    <span className="text-[10px] text-teal-300">
+                      {rep.basis} 기준 (완료 {rep.doneTotal} · 잔여 {rep.remainTotal})
+                    </span>
+                  )}
+                </div>
+                {rep.excluded ? (
+                  <div className="text-[11px] text-slate-500 text-center py-2">{rep.reason}</div>
+                ) : (
+                  <table className="w-full text-[11px] tabular-nums">
+                    <thead>
+                      <tr className="text-slate-400 border-b border-slate-700">
+                        <th className="text-left py-1">규격</th><th>F</th><th>E</th><th>TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-100">
+                      {[['20ft', rep.tbl.s20], ['40ft', rep.tbl.s40], ['45ft', rep.tbl.s45]].map(([nm, o]) => (
+                        <tr key={nm} className="border-b border-slate-800">
+                          <td className="text-left py-1 text-slate-300">{nm}</td>
+                          <td className="text-center">{o.F}</td><td className="text-center">{o.E}</td>
+                          <td className="text-center font-bold">{o.F + o.E}</td>
+                        </tr>
+                      ))}
+                      <tr className="text-teal-300 font-bold">
+                        <td className="text-left py-1">풀엠티토탈</td>
+                        <td className="text-center">{rep.total.F}</td>
+                        <td className="text-center">{rep.total.E}</td>
+                        <td className="text-center">{rep.total.total}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ))}
+            <div className="text-[10px] text-slate-500 text-center">
+              💡 적은 쪽(작업량/잔여)을 세는 게 빠릅니다. 어느 기준인지 표에 표기됩니다.
+            </div>
           </div>
         )}
       </div>

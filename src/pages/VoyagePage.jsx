@@ -961,6 +961,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
           shipLib={shipLib}
           portMisData={portMisData}
+          isLoloShip={isLoloShip}
         />
       )}
       {tab === 'lolo' && (

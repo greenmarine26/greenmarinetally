@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.10';
+export const APP_VERSION = 'V8.11';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2243,6 +2243,48 @@ export function tallyDayNight(containers) {
     out.total += 1;
   }
   return out;
+}
+
+// V8.10: 지금 시각에 어느 작업보고(주간/야간)를 자동으로 보여줄지 판정.
+//   집계 경계(주간 08~17·야간 전일19~05:30)와 별개로, 보고 마감에 +30분 여유를 준다.
+//   주간 표시창 08:00~17:30. 야간 표시창 17:30~익06:00. 06:00~08:00은 다음 주간 미리.
+//   반환 '주간'|'야간'. (사용자 확정 2026-06-19)
+export function reportShiftToShow(ts) {
+  const d = new Date(ts || Date.now());
+  const m = d.getHours() * 60 + d.getMinutes();
+  if (m >= 8 * 60 && m < 17 * 60 + 30) return '주간';   // 08:00~17:29
+  if (m >= 6 * 60 && m < 8 * 60) return '주간';          // 06:00~07:59 → 다음 주간 미리
+  return '야간';                                          // 17:30~익06:00
+}
+
+// V8.10: 해치 제외 4척 주야간 작업보고 표 빌드.
+//   shift='주간'이면 완료 컷 17:00:00, '야간'이면 05:30:00. 완료시각 ≤ 컷(정각 포함) = 완료, 그 1초 뒤부터 잔여.
+//   완료(작업량) vs 잔여 총합 중 적은 쪽을 보고 기준으로(세기 편의 — 적은 쪽 카운트가 빠름). 동수면 작업량(<=).
+//   잔여 0이면 보고 제외. 규격(20/40/45)×F/E 표 + 풀엠티 토탈.
+//   conts: 그 모드 평택분 컨(_comp.at 있으면 완료). 17:00 마감 전엔 현재까지 카운트가 그대로 반영된다.
+//   반환 {excluded, reason} 또는 {basis, tbl:{s20,s40,s45 각 {F,E}}, total:{F,E,total}, doneTotal, remainTotal}.
+export function buildShiftReport(conts, shift, now) {
+  const cutMin = shift === '야간' ? 5 * 60 + 30 : 17 * 60;   // 정각까지 완료 인정
+  const isDoneByCut = (ts) => {
+    const d = new Date(ts);
+    const sec = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+    return sec <= cutMin * 60;                                // 17:00:00 포함, 17:00:01 제외
+  };
+  const blank = () => ({ s20: { F: 0, E: 0 }, s40: { F: 0, E: 0 }, s45: { F: 0, E: 0 } });
+  const sizeKey = (c) => { const l = isoToLabel(c.iso || c.type || ''); return /^45/.test(l) ? 's45' : /^40/.test(l) ? 's40' : 's20'; };
+  const feKey = (c) => (c.fe === 'E' ? 'E' : 'F');
+  const tot = (t) => { const F = t.s20.F + t.s40.F + t.s45.F, E = t.s20.E + t.s40.E + t.s45.E; return { F, E, total: F + E }; };
+
+  const doneTbl = blank(), remainTbl = blank();
+  for (const c of (conts || [])) {
+    const done = c._comp && c._comp.at && isDoneByCut(c._comp.at);
+    (done ? doneTbl : remainTbl)[sizeKey(c)][feKey(c)] += 1;
+  }
+  const dT = tot(doneTbl), rT = tot(remainTbl);
+  if (rT.total === 0) return { excluded: true, reason: '작업 완료 — 보고 제외' };
+  const basis = dT.total <= rT.total ? '작업량' : '잔여';
+  const tbl = basis === '작업량' ? doneTbl : remainTbl;
+  return { excluded: false, basis, tbl, total: tot(tbl), doneTotal: dT.total, remainTotal: rT.total };
 }
 
 /**

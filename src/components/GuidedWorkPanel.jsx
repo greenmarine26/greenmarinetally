@@ -10,7 +10,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, tallyDayNight } from '../utils.js';
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -22,7 +22,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const shipName = voyage?.info?.vsl || '';
   // V8.09-17 (메모4)→V8.10: 해치커버 계산·보고를 하지 않는 선박들.
   //   TMPZ는 해치가 자동(유압식)이고, TNJP·RZOR·OBWH도 해치커버 계산 대상이 아니다(사용자 확정 2026-06-19).
-  //   네 선박은 해치 대신 주야간 작업갯수를 기록한다(workShiftOf/tallyDayNight). vsl/vslFull 어디든 매칭되면 해치 프롬프트·계산·보고를 건너뛴다.
+  //   네 선박은 해치 대신 주야간 작업갯수를 기록한다(작업보고 WorkReportModal의 주야간 보고). vsl/vslFull 어디든 매칭되면 해치 프롬프트·계산·보고를 건너뛴다.
   const isHatchSkipShip = /TMPZ|TNJP|RZOR|OBWH/i.test(`${voyage?.info?.vsl || ''} ${voyage?.info?.vslFull || ''}`);
   const berthSide = voyage?.info?.berthSide || '';          // 'starboard'(우현) | 'port'(좌현)
   // V8.10: 부두별 장비 목록. PCTC 1~4호기, PNCT 1~5호기(여객석 RORO 1대 추가). 부두 미상이면 1~5 전체.
@@ -542,30 +542,6 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     </div>
   );
 
-  // V8.10: 해치 제외 4척(TMPZ·TNJP·RZOR·OBWH)은 해치커버 대신 주야간 작업갯수를 기록한다.
-  //   현재 모드 평택분 완료 컨을 주간(08~17)/야간(전일19~익05:30) × 규격(20/40/45) × F/E로 집계.
-  const DayNightBadge = () => {
-    if (!isHatchSkipShip) return null;
-    const t = tallyDayNight(allContainers.filter(c => c._mode === mode && c._ptk && c._comp));
-    const sz = (s) => `20ft ${s.s20.F}/${s.s20.E} · 40ft ${s.s40.F}/${s.s40.E} · 45ft ${s.s45.F}/${s.s45.E}`;
-    const row = (label, color, s) => (
-      <div className="px-2 py-1">
-        <div className="flex items-center justify-between">
-          <span className={`font-bold ${color}`}>{label}</span>
-          <span className="text-slate-300">계 <b>{s.total}</b></span>
-        </div>
-        <div className="text-slate-200 tabular-nums text-right">{sz(s)}</div>
-      </div>
-    );
-    return (
-      <div className="bg-slate-900 border border-teal-700 rounded-lg text-[11px] divide-y divide-slate-800">
-        <div className="px-2 py-1 text-teal-300 font-bold text-center">📋 주야간 작업갯수 ({mode === 'discharge' ? '양하' : '선적'}) · 규격 F/E</div>
-        {row('☀ 주간 08–17', 'text-amber-300', t.주간)}
-        {row('🌙 야간 19–05:30', 'text-sky-300', t.야간)}
-        {t.그외.total > 0 && row('· 그외', 'text-slate-400', t.그외)}
-      </div>
-    );
-  };
 
   // ── 1단계: 장비(호기) 결정 ──
   if (equipStep) {
@@ -624,7 +600,6 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return (
       <div className="space-y-2">
         <SettingsBar/>
-        <DayNightBadge/>
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
           <div className="text-sm font-bold text-violet-300">작업할 베이를 선택하세요</div>
           {groups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
@@ -760,7 +735,6 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   return (
     <div className="space-y-2">
       <SettingsBar/>
-      <DayNightBadge/>
       <div className="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5">
         <button onClick={() => setSelectedGroup(null)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-violet-300">
           <ChevronLeft className="w-4 h-4"/>베이 선택

@@ -19,7 +19,7 @@ import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {} }) {   // V7.92: portMisData 추가
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false }) {   // V7.92: portMisData 추가 · V8.11: isLoloShip(LOLO선이면 베이 게이트 스킵)
   const [searchMode, setSearchMode] = useState('single');
   // V7.94: 자동 가이드 모드 — 앱이 크레인 순서대로 다음 컨을 예측 제시 (수동 = 기존 검색 방식)
   const [guideMode, setGuideMode] = useState(false);
@@ -225,7 +225,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           </div>
         </div>
       )}
-      {workFilter !== 'completed' && (
+      {workFilter !== 'completed' && !isLoloShip && (
         <div className={`rounded-lg p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
           <button onClick={() => setGuideMode(true)}
             className={`flex-1 py-2.5 rounded font-bold text-sm flex items-center justify-center gap-1.5 ${
@@ -247,7 +247,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         </div>
       )}
 
-      {guideMode && workFilter !== 'completed' ? (
+      {guideMode && workFilter !== 'completed' && !isLoloShip ? (
         <GuidedWorkPanel
           voyage={voyage} voyageKey={voyageKey} inspector={inspector}
           allContainers={allContainers} workFilter={workFilter}
@@ -257,7 +257,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       ) : (
       <>
       {/* V7.99-10 (메모6 수동): 베이→홀드/데크 선택 게이트 (A안). 완료 탭은 게이트 없이 자유 조회. */}
-      {workFilter !== 'completed' && manualBay == null ? (
+      {/* V8.11: LOLO선(RZOR 등)은 베이가 없으므로 게이트를 건너뛰고 바로 조회창으로. 베이만 못 알려줄 뿐 실번호·규격·F/E·온도·XRAY는 정상 조회. */}
+      {workFilter !== 'completed' && manualBay == null && !isLoloShip ? (
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
           <div className="text-sm font-bold text-amber-300">작업할 베이를 선택하세요 <span className="text-[11px] text-slate-500 font-normal">(수동)</span></div>
           {manualGroups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
@@ -276,7 +277,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
             ))}
           </div>
         </div>
-      ) : workFilter !== 'completed' && manualTier == null ? (
+      ) : workFilter !== 'completed' && manualTier == null && !isLoloShip ? (
         (() => {
           const g = manualGroups.find(x => x.center === manualBay);
           const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${manualBay}`;
@@ -299,6 +300,12 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         })()
       ) : (
       <>
+      {/* V8.11: LOLO선 안내 — 베이(위치)만 없고 나머지 정보는 정상 조회됨을 알림. */}
+      {isLoloShip && (
+        <div className="bg-teal-950/50 border border-teal-700 rounded-lg px-3 py-2 text-[11px] text-teal-200">
+          🚢 LOLO 선박 (베이플랜 없음) — 끝 4자리로 조회하세요. 선내 위치(베이)는 없지만 실번호·규격·적공·온도·X-RAY는 정상 조회됩니다.
+        </div>
+      )}
       {workFilter !== 'completed' && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
         const bayLbl = g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay);
