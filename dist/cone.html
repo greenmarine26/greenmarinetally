@@ -249,7 +249,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.20-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.23-02</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -527,9 +527,14 @@ function ediToBayGroups(rows, shipType, multiCount, ctx, allRowsOfPlan){
     //   그 컨이 40ft(두 베이에 걸쳐 실림)일 때만 받침. 옆 베이 20ft는 다른 슬롯이라
     //   물리적으로 받칠 수 없는데 받침으로 오인 → 바닥 빈 컨에 콘 계산 (사용자 제보 버그).
     const is40=(sz)=>sz==='40'||sz==='O40';
+    // V7.65: 20ft 트윈 받침 인정 — 40ft가 짝베이 양쪽(±1)의 20ft 트윈 위에 얹힌 경우.
+    //   양쪽 둘 다 컨이 있어야 트윈으로 인정(한쪽만이면 V7.59 오인방지 유지).
+    const twinBelow = sizeAt.has((bay-1)+'_'+rowP+'_'+belowTier)
+                   && sizeAt.has((bay+1)+'_'+rowP+'_'+belowTier);
     const hasBelow = sizeAt.has(bay+'_'+rowP+'_'+belowTier)
                   || is40(sizeAt.get((bay-1)+'_'+rowP+'_'+belowTier))
-                  || is40(sizeAt.get((bay+1)+'_'+rowP+'_'+belowTier));
+                  || is40(sizeAt.get((bay+1)+'_'+rowP+'_'+belowTier))
+                  || twinBelow;
     if(!hasBelow) continue;
     const gk=groupKeyOf(bay);
     if(!groups[gk]) groups[gk]={deck:0,ele:0,hold:0,bays:new Set()};
@@ -616,7 +621,7 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='C7.64';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__APPV='C7.65';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
