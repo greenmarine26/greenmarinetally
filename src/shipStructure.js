@@ -431,16 +431,18 @@ function pickBestVariant(matchedData, imo, ediBayCount) {
 }
 
 export function getShipBayDictData(imo, code, opts) {
-  let result = fuzzyLookupAcrossDicts(imo, code);
-
-  // V8.22: 빌더는 코드로 저장/조회, 화면은 선박명으로 조회 → code≠선박명인 배(예: DJCT)는
-  //   user 매트릭스를 못 찾고 계열 대체로 빠진다. 화면이 넘긴 코드(opts.vslCode)로 user 매트릭스를 먼저 구제.
-  if (opts && opts.vslCode && (!result || result.source !== 'user')) {
+  // V8.23: 빌더는 코드로 저장/조회하므로, 화면도 코드(opts.vslCode)로 user 매트릭스를 "최우선" 조회한다.
+  //   배경: 같은 배가 코드키(예: DJCT, name "DJCT")와 선박명키(예: DCON, name "DONGJIN CONTINENTAL")로
+  //   중복 저장돼 있을 때, 빌더는 코드로 DJCT를 편집하는데 화면은 선박명으로 DCON을 읽어 수정이 반영 안 됨.
+  //   → 코드 조회를 선박명 조회보다 우선해, 빌더가 편집하는 바로 그 엔트리를 화면도 읽게 통일.
+  let result = null;
+  if (opts && opts.vslCode) {
     try {
       const _byCode = lookupUserBayDict(imo, opts.vslCode);
       if (_byCode) result = { source: 'user', data: _byCode, matchedBy: 'user-dict-vslcode' };
     } catch (e) { /* fallthrough */ }
   }
+  if (!result) result = fuzzyLookupAcrossDicts(imo, code);
 
   // V7.31: 약자(code)로 조회 시 콜사인/IMO 경유로 엉뚱한 배가 매칭되는 오염 차단.
   //   증상: DJCT 약자로 조회했는데 항차 콜사인이 BSDU로 오염 → callsign 매칭으로 XTPG가 잡힘.

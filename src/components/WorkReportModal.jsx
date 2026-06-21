@@ -44,13 +44,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       for (const cn of cns) {
         const e = edi[cn] || {};
         const r = recs[cn] || {};
-        // V8.22-01 fix: POL/POD는 EDI가 단일 진실(7.1). 리스트 POL이 EDI 평택 POL을 덮어
-        //   isPyeongtaekPort 탈락 → 작업보고 카운트가 354 대신 265로 적게 나오던 버그
-        //   (현황요약·마감점검 V8.20-01과 동일 계열).
-        const { pol: _rpol, pod: _rpod, ...rEnrich } = r;
-        const c = { ...e, ...rEnrich, cn, _comp: comp[cn] || null };
-        if (!c.pol && _rpol) c.pol = _rpol;
-        if (!c.pod && _rpod) c.pod = _rpod;
+        const c = { ...e, ...r, cn, _comp: comp[cn] || null };
         // 평택분만: 양하=POD 평택, 선적=POL 평택.
         const ptk = m === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
         if (ptk) out.push(c);
