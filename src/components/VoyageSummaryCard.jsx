@@ -21,7 +21,15 @@ export default function VoyageSummaryCard({ voyage, mode }) {
     const containers = [...allCnSet].map(cn => {
       const e = ediMap[cn] || {};
       const r = recMap[cn] || {};
-      return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn };
+      // V8.20-01 fix: 리스트(records)는 실번호/무게 등 보강만. POL/POD(항구)는 EDI가 단일 진실(7.1).
+      //   리스트 POL이 EDI 평택 POL을 덮어 isPyeongtaekPort에서 탈락 → 현황요약 분모가 354 대신 265로 적게 나오던 버그.
+      const rEnrich = Object.fromEntries(
+        Object.entries(r).filter(([k, vv]) => vv !== '' && vv != null && k !== 'pol' && k !== 'pod')
+      );
+      const merged = { ...e, ...rEnrich, cn };
+      if (!merged.pol && r.pol) merged.pol = r.pol;   // EDI에 POL 없을 때만 리스트 보강
+      if (!merged.pod && r.pod) merged.pod = r.pod;
+      return merged;
     }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));
 
     const total = containers.length;

@@ -20,7 +20,15 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
     const containers = [...allCnSet].map(cn => {
       const e = ediMap[cn] || {};
       const r = recMap[cn] || {};
-      return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn };
+      // V8.20-01 fix: POL/POD는 EDI가 단일 진실(7.1). 리스트 POL이 EDI 평택 POL을 덮어
+      //   isPyeongtaekPort 탈락 → 마감점검 total이 354 대신 265로 적게 나오던 버그(현황요약과 동일).
+      const rEnrich = Object.fromEntries(
+        Object.entries(r).filter(([k, vv]) => vv !== '' && vv != null && k !== 'pol' && k !== 'pod')
+      );
+      const merged = { ...e, ...rEnrich, cn };
+      if (!merged.pol && r.pol) merged.pol = r.pol;
+      if (!merged.pod && r.pod) merged.pod = r.pod;
+      return merged;
     }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));   // V7.93-02: 평택분만 (7.1)
 
     const total = containers.length;
