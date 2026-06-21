@@ -482,7 +482,10 @@ export function getShipBayDictData(imo, code, opts) {
 
   // V7.01: 같은 배가 여러 벌(빈 깡통/구조 다른 중복)이면 EDI 베이수 가까운 알맹이 벌로 보정.
   //   계열 대체(_substituted)는 이미 베이수로 골랐으므로 제외.
-  if (!_substituted) {
+  // V8.23-01: vslCode(코드)로 찾은 user 매트릭스는 빌더가 편집하는 바로 그 엔트리이므로,
+  //   콜사인 공유(예: BSDU를 DJCT/XTPG가 공유)로 인한 pickBestVariant 바꿔치기를 막는다.
+  //   (양하/선적 베이수 차이로 양하만 엉뚱한 계열로 바뀌던 버그.)
+  if (!_substituted && result.matchedBy !== 'user-dict-vslcode') {
     const ediBayCount = opts && Number.isFinite(opts.ediBayCount) ? opts.ediBayCount : null;
     if (ediBayCount != null) {
       const better = pickBestVariant(data, imo, ediBayCount);
