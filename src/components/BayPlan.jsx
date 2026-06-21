@@ -16,6 +16,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
+import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import BayPlan3D from './BayPlan3D.jsx';
@@ -211,16 +212,21 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return s.size;
   }, [containers]);
 
+  // V8.20-02: 빌더와 동일 코드 신원 (code≠선박명 배의 user 매트릭스 조회용)
+  const _vslCode = useMemo(() => {
+    try { return extractShipMetaFromVoyage({ info: voyageInfo })?.code || ''; } catch { return ''; }
+  }, [voyageInfo]);
+
   // V7.01: 계열 대체 여부 (배너 표시용)
   const bayDictSubstituted = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount });
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
     return dict?._substituted || null;
-  }, [shipImo, shipName, ediBayCount]);
+  }, [shipImo, shipName, ediBayCount, _vslCode]);
 
   const dictBayList = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount });
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
     if (!dict?.bayDef) return null;
     // V7.01: 베이 목록은 baysSummary(카고플랜·빌더와 동일 소스)를 우선.
     //   원인: 일부 사전은 baysSummary가 비었는데 bayList에만 베이 번호가 남아있음(ATRP 등).
@@ -241,14 +247,14 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     const ints = list.map(b => parseInt(b, 10)).filter(n => Number.isFinite(n) && n > 0);
     if (ints.length < 2) return null;
     return [...new Set(ints)].sort((a, b) => a - b);
-  }, [shipImo, shipName, ediBayCount]);
+  }, [shipImo, shipName, ediBayCount, _vslCode]);
 
   // M6.19: 베이사전의 baysSummary를 베이번호 키로 맵핑 (BayPlan에서 베이별 tier 정밀 적용)
   //   v2(deckTiersLocal/holdTiersLocal) + STOWAGE PDF 등록(deckTiers/holdTiers) 양쪽 인식
   // M6.94.0: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
   const dictBaysSummary = useMemo(() => {
     if (!shipImo && !shipName) return {};
-    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount });
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
     if (!dict?.bayDef?.baysSummary) return {};
     // source='user'면 보강 차단, AI 임시는 L4 EDI 보정
     const enrichedEntry = enrichBayDef(
@@ -262,7 +268,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       m[parseInt(b.bayNo, 10)] = b;
     });
     return m;
-  }, [shipImo, shipName, containers]);
+  }, [shipImo, shipName, containers, _vslCode]);
 
   // V7.52: 전 베이 최대 그리드 폭 — 베이 간 세로 정렬 기준 (사용자 확정).
   //   deck-only 베이(예: TMPZ BAY 01, 4칸)가 좌측 정렬돼 옆 베이(6칸)의 06 위치에

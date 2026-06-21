@@ -44,13 +44,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       for (const cn of cns) {
         const e = edi[cn] || {};
         const r = recs[cn] || {};
-        // V8.20-01 fix: POL/POD(항구)는 EDI가 단일 진실(7.1). 리스트가 덮어 평택분이 누락되던 버그 통일.
-        const rEnrich = Object.fromEntries(
-          Object.entries(r).filter(([k, vv]) => vv !== '' && vv != null && k !== 'pol' && k !== 'pod')
-        );
-        const c = { ...e, ...rEnrich, cn, _comp: comp[cn] || null };
-        if (!c.pol && r.pol) c.pol = r.pol;
-        if (!c.pod && r.pod) c.pod = r.pod;
+        const c = { ...e, ...r, cn, _comp: comp[cn] || null };
         // 평택분만: 양하=POD 평택, 선적=POL 평택.
         const ptk = m === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
         if (ptk) out.push(c);

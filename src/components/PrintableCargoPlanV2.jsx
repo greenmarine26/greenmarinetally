@@ -10,6 +10,7 @@
 import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
+import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isReeferContainer, isoToLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
 import { getBayOverride } from '../data/shipBayDict_pdf_override.js';
@@ -399,7 +400,9 @@ export default function PrintableCargoPlanV2({
       }
       return s.size;
     })();
-    const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount });
+    // V8.20-02: 빌더와 동일한 코드 신원으로도 조회 → code≠선박명(DJCT 등) user 매트릭스 반영.
+    const _vslCode = extractShipMetaFromVoyage({ info: voyageInfo })?.code || '';
+    const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
     if (!baseDict) return null;
     // M6.94.0 사용자 원칙 1: source='user'면 enrichBayDef가 즉시 entry 반환 (어떤 보강도 안 함).
     //   AI 임시 베이사전 (v2/v5/firebase 등)일 때만 EDI 자동 채움 등 보강 동작.
@@ -407,7 +410,7 @@ export default function PrintableCargoPlanV2({
     // M6.94.0: cargoPlanCore가 user source 판단할 수 있게 bayDef에 source 정보 포함
     const bayDefWithSource = { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: baseDict.source === 'user' };
     return { ...baseDict, bayDef: bayDefWithSource };
-  }, [shipImo, shipName, containers]);
+  }, [shipImo, shipName, containers, voyageInfo]);
 
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
