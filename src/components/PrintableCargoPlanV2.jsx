@@ -400,7 +400,7 @@ export default function PrintableCargoPlanV2({
       }
       return s.size;
     })();
-    // V8.20-02: 빌더와 동일한 코드 신원으로도 조회 → code≠선박명(DJCT 등) user 매트릭스 반영.
+    // V8.22: 빌더와 동일한 코드 신원으로도 조회 → code≠선박명(DJCT 등) user 매트릭스 반영.
     const _vslCode = extractShipMetaFromVoyage({ info: voyageInfo })?.code || '';
     const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
     if (!baseDict) return null;

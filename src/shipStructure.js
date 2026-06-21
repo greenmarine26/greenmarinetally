@@ -433,7 +433,7 @@ function pickBestVariant(matchedData, imo, ediBayCount) {
 export function getShipBayDictData(imo, code, opts) {
   let result = fuzzyLookupAcrossDicts(imo, code);
 
-  // V8.20-02: 빌더는 코드로 저장/조회, 화면은 선박명으로 조회 → code≠선박명인 배(예: DJCT)는
+  // V8.22: 빌더는 코드로 저장/조회, 화면은 선박명으로 조회 → code≠선박명인 배(예: DJCT)는
   //   user 매트릭스를 못 찾고 계열 대체로 빠진다. 화면이 넘긴 코드(opts.vslCode)로 user 매트릭스를 먼저 구제.
   if (opts && opts.vslCode && (!result || result.source !== 'user')) {
     try {

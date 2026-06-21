@@ -212,7 +212,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     return s.size;
   }, [containers]);
 
-  // V8.20-02: 빌더와 동일 코드 신원 (code≠선박명 배의 user 매트릭스 조회용)
+  // V8.22: 빌더와 동일 코드 신원 (code≠선박명 배의 user 매트릭스 조회용)
   const _vslCode = useMemo(() => {
     try { return extractShipMetaFromVoyage({ info: voyageInfo })?.code || ''; } catch { return ''; }
   }, [voyageInfo]);
