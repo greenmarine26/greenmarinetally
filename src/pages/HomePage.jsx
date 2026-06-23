@@ -348,7 +348,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       const registered = existing.some((e) => e.vsl && e.vsl === sv && e.voys.some((vo) => svoys.includes(vo)));
       if (!registered) out.push({ ...s, _key: k });
     }
-    out.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+    out.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));   // 먼저 대기한 게 위로
     return out;
   }, [collectorSignals, voyages]);
 
