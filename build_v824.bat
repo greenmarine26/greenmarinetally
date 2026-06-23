@@ -1,27 +1,32 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-echo ============================================
-echo  Tallyman 검수앱 V8.24 빌드 (수집기 신호 카드)
-echo ============================================
-where bash >nul 2>nul
-if %errorlevel%==0 (
-  bash build.sh
-) else (
-  if exist "C:\Program Files\Git\bin\bash.exe" (
-    "C:\Program Files\Git\bin\bash.exe" build.sh
-  ) else (
-    if exist "C:\Program Files\Git\usr\bin\bash.exe" (
-      "C:\Program Files\Git\usr\bin\bash.exe" build.sh
-    ) else (
-      echo [오류] bash를 못 찾았습니다. git-bash 또는 WSL에서 "bash build.sh"를 직접 실행하세요.
-    )
-  )
-)
+(
+echo === Tallyman V8.24 build (cmd, no bash) ===
+echo --- node / npx 확인 ---
+where node
+where npx
+node -v
+echo --- [1] clean ---
+rmdir /s /q dist 2>nul
+rmdir /s /q assets 2>nul
+echo --- [2] entry swap (소스형 index.html) ---
+copy /y _index.entry.html index.html
+echo --- [3] vite build ---
+call npx --yes vite build
+echo --- [4] dist 를 root 로 복사 ---
+xcopy /e /i /y dist\assets assets
+copy /y dist\index.html index.html
+if exist dist\cone.html copy /y dist\cone.html cone.html
+if exist dist\sw.js copy /y dist\sw.js sw.js
+if exist dist\manifest.webmanifest copy /y dist\manifest.webmanifest manifest.webmanifest
+echo --- [5] 결과 확인 ---
+dir assets\index-*.js
+findstr /C:"assets/index-" index.html
+echo === DONE ===
+) > build_log.txt 2>&1
+echo 빌드 끝. build_log.txt 를 확인하세요.
+type build_log.txt
 echo.
-echo ============================================
-echo  빌드 종료. 위에 "APP_VERSION (V8.24) ... 박힘" 과
-echo  "ZIP 패키징 가능 상태" 가 보이면 성공입니다.
-echo  이후: git add -A  ^&^&  git commit -m "V8.24 수집기 신호 카드"  ^&^&  git push
-echo ============================================
+echo (이 창은 닫으셔도 됩니다)
 pause
