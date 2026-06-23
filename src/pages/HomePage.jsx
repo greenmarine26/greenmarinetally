@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, Inbox } from 'lucide-react';
+import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete, fbSubscribeCollectorSignal } from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
@@ -43,6 +43,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   // M6.17: 현재 GPS 좌표 (부두 좌표 등록용)
   const [currentCoord, setCurrentCoord] = useState(null);   // { lat, lng }
   const [pierRegisterState, setPierRegisterState] = useState({ msg: '', error: false });
+  const [collectorSignals, setCollectorSignals] = useState(null);   // 메일수집기 준비 신호
 
   // 1주일(7일) 이상 지난 항차 자동 삭제. voyages 로드 후 1회 실행.
   //   V8.01: 기준을 createdAt → "마지막 작업 활동" 시각으로 변경 (사용자 확정 2026-06-16).
@@ -93,6 +94,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         } catch {}
       }
     });
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
+
+  // 메일수집기 준비 신호 구독 — collector_signal/김성일 (양하·선적 준비된 배)
+  useEffect(() => {
+    const unsub = fbSubscribeCollectorSignal('김성일', (data) => setCollectorSignals(data || null));
     return () => { if (typeof unsub === 'function') unsub(); };
   }, []);
 
@@ -325,6 +332,26 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     return (!hasD || !!v?.info?.dischargeDone) && (!hasL || !!v?.info?.loadingDone);
   };
 
+  // 등록 대기 = 신호 중 아직 검수앱에 항차로 안 만들어진 것(선박명+항차 대조) → 등록되면 카드 사라짐
+  const pendingSignals = useMemo(() => {
+    if (!collectorSignals) return [];
+    const norm = (x) => (x || '').toString().trim().toUpperCase();
+    const existing = Object.values(voyages || {}).map((v) => ({
+      vsl: norm(v?.info?.vsl),
+      voys: [v?.info?.voy_d, v?.info?.voy_l, v?.info?.voy].map(norm).filter(Boolean),
+    }));
+    const out = [];
+    for (const [k, s] of Object.entries(collectorSignals)) {
+      if (!s || typeof s !== 'object' || k.startsWith('_')) continue;
+      const sv = norm(s.vessel);
+      const svoys = [s.dischargeVoy, s.loadVoy].map(norm).filter(Boolean);
+      const registered = existing.some((e) => e.vsl && e.vsl === sv && e.voys.some((vo) => svoys.includes(vo)));
+      if (!registered) out.push({ ...s, _key: k });
+    }
+    out.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+    return out;
+  }, [collectorSignals, voyages]);
+
   return (
     <div className="max-w-6xl mx-auto px-3 py-3">
       {/* 그린마린 검수팀 전용 배지 */}
@@ -355,12 +382,29 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         </button>
       </div>
 
-      <div className="flex items-center justify-between mb-3">
-        <div>
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <div className="shrink-0">
           <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
           <div className="text-lg font-bold text-slate-100">{list.length}건</div>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        {pendingSignals.length > 0 && (
+          <div className="flex-1 min-w-0 flex items-stretch gap-2 overflow-hidden">
+            {pendingSignals.slice(0, 3).map((s) => (
+              <div key={s._key} className="flex-1 min-w-0 bg-emerald-900/30 border border-emerald-700/40 rounded-lg px-2.5 py-1.5" title="수집기 준비됨 — 등록 대기">
+                <div className="flex items-center gap-1 text-emerald-200 text-xs font-bold truncate">
+                  <Inbox className="w-3 h-3 shrink-0"/>{s.vessel}
+                </div>
+                <div className="text-[10px] text-slate-300 truncate">
+                  {s.dischargeVoy ? `양하 ${s.dischargeVoy}` : ''}{s.dischargeVoy && s.loadVoy ? ' · ' : ''}{s.loadVoy ? `선적 ${s.loadVoy}` : ''}
+                </div>
+              </div>
+            ))}
+            {pendingSignals.length > 3 && (
+              <div className="shrink-0 self-center text-[10px] text-slate-500 font-bold">+{pendingSignals.length - 3}</div>
+            )}
+          </div>
+        )}
+        <div className="flex gap-2 flex-wrap shrink-0">
           <button
             onClick={() => setShowCreate('discharge')}
             className="bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
