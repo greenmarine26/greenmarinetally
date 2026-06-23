@@ -332,20 +332,21 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     return (!hasD || !!v?.info?.dischargeDone) && (!hasL || !!v?.info?.loadingDone);
   };
 
-  // 등록 대기 = 신호 중 아직 검수앱에 항차로 안 만들어진 것(선박명+항차 대조) → 등록되면 카드 사라짐
+  // 등록 대기 = 신호 중 아직 검수앱에 항차로 안 만들어진 것. **항차수로 대조**한다.
+  //   (검수앱 info.vsl은 코드 'ATRP', 수집기 신호 vessel은 풀네임 'ATLANTIC PIONEER'라 이름 비교는 불일치 → 항차수로.)
+  //   같은 항차수가 이미 등록돼 있으면 카드 숨김(사용자 확정 2026-06-23: "항차수가 같으면 안 보여야").
   const pendingSignals = useMemo(() => {
     if (!collectorSignals) return [];
     const norm = (x) => (x || '').toString().trim().toUpperCase();
-    const existing = Object.values(voyages || {}).map((v) => ({
-      vsl: norm(v?.info?.vsl),
-      voys: [v?.info?.voy_d, v?.info?.voy_l, v?.info?.voy].map(norm).filter(Boolean),
-    }));
+    const existingVoys = new Set();
+    Object.values(voyages || {}).forEach((v) => {
+      [v?.info?.voy_d, v?.info?.voy_l, v?.info?.voy].forEach((x) => { const n = norm(x); if (n) existingVoys.add(n); });
+    });
     const out = [];
     for (const [k, s] of Object.entries(collectorSignals)) {
       if (!s || typeof s !== 'object' || k.startsWith('_')) continue;
-      const sv = norm(s.vessel);
       const svoys = [s.dischargeVoy, s.loadVoy].map(norm).filter(Boolean);
-      const registered = existing.some((e) => e.vsl && e.vsl === sv && e.voys.some((vo) => svoys.includes(vo)));
+      const registered = svoys.some((vo) => existingVoys.has(vo));   // 항차수 일치 → 이미 등록 → 숨김
       if (!registered) out.push({ ...s, _key: k });
     }
     out.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));   // 먼저 대기한 게 위로
