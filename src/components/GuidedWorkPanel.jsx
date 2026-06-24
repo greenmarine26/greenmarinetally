@@ -450,7 +450,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   버튼 한 번으로 두 컨의 자리만 맞바꾼다. 완료 처리는 안 함(위치만 교환).
   //   fbReassign이 swap을 지원: 앞 컨을 뒤 자리로 보내면 자리를 뺏긴 뒤 컨이 앞 자리로 자동 이동.
   const swapTwinPos = async () => {
-    if (busy || !card?.main || !card?.twin || mode !== 'loading') return;
+    if (busy || !card?.main || !card?.twin) return;   // V8.25: 양하·선적 모두 허용
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const a = card.main, b = card.twin;
     if (!confirm(`앞뒤 위치를 맞바꿉니다.\n앞 ${a.cn.slice(-4)} ↔ 뒤 ${b.cn.slice(-4)}\n(자리만 교환, 완료 처리는 안 됨)`)) return;
@@ -800,12 +800,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <div className="flex items-center gap-2 px-2">
                 <div className="flex-1 border-t border-slate-700"/>
                 <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1"><Link2 className="w-3 h-3"/>트윈 짝꿍</div>
-                {mode === 'loading' && (
-                  <button onClick={swapTwinPos} disabled={busy}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-800 hover:bg-indigo-700 text-indigo-100 disabled:opacity-50 flex items-center gap-1">
-                    ⇅ 앞뒤 맞교환
-                  </button>
-                )}
+                <button onClick={swapTwinPos} disabled={busy}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-800 hover:bg-indigo-700 text-indigo-100 disabled:opacity-50 flex items-center gap-1">
+                  ⇅ 앞뒤 맞교환
+                </button>
                 <div className="flex-1 border-t border-slate-700"/>
               </div>
               {renderCon(card.twin, '뒤', 'cyan')}

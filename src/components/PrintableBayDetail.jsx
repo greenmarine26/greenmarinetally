@@ -380,7 +380,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const ptk = isPtk(c, mode);
     const colorKey = ptk ? getContainerColorKey(c, mode) : null;
     const bg = colorKey ? colorMap[colorKey] : null;
-    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}`, style: bg ? { color: bg } : undefined };
+    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}`, style: bg ? { background: bg, color: '#fff' } : undefined };
   };
 
   return (
@@ -454,7 +454,7 @@ export default function PrintableBayDetail({
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
 
   // V7.01: 폰 화면용 확대/축소 (핀치 + 버튼). 인쇄에는 영향 없음(@media print에서 무시).
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(0.22);  // V8.25: 22% 시작
   const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
   const onTouchStart = (e) => {
     if (e.touches && e.touches.length === 2) {
@@ -469,7 +469,7 @@ export default function PrintableBayDetail({
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.hypot(dx, dy);
       const ratio = dist / (pinchRef.current.startDist || 1);
-      const next = Math.min(3, Math.max(0.4, pinchRef.current.startZoom * ratio));
+      const next = Math.min(3, Math.max(0.15, pinchRef.current.startZoom * ratio));
       setZoom(next);
       e.preventDefault();
     }
@@ -652,15 +652,7 @@ export default function PrintableBayDetail({
             className={`px-3 py-1.5 rounded text-xs font-bold ${
               printMode === 'single' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'
             }`}>🎯 베이 지정</button>
-          {/* V7.01: 화면 확대/축소 (인쇄 무관) */}
-          <span className="ml-2 text-xs text-slate-400 font-bold">화면크기:</span>
-          <button onClick={() => setZoom(z => Math.max(0.4, +(z - 0.1).toFixed(2)))}
-            className="px-2 py-1.5 rounded text-xs font-bold bg-slate-700 text-white">➖</button>
-          <span className="text-xs text-slate-300 font-bold mono" style={{ minWidth: 38, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))}
-            className="px-2 py-1.5 rounded text-xs font-bold bg-slate-700 text-white">➕</button>
-          <button onClick={() => setZoom(1)}
-            className="px-2 py-1.5 rounded text-xs font-bold bg-slate-600 text-white">100%</button>
+          {/* V8.25: 줌 버튼 제거 — 핀치 전용 */}
           {printMode === 'single' && (
             <div className="flex flex-wrap gap-1 items-center">
               <span className="text-xs text-slate-400">선택({selectedKeys.length}):</span>
@@ -735,12 +727,12 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-bay-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
         /* V7.98-15: 베이번호 중복 제거 — bd-title(큰 제목)만 쓰고 BayBoxV2 자체 베이제목은 숨김 */
         .bd-cargo-wrap .cpv2-bay-title-row { display: none !important; }
-        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; font-weight: normal; padding: 1px 0; }
+        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; font-weight: bold; padding: 1px 0; }
         /* V7.98-15: 셀 내용 중앙정렬 (CASPI 스타일) — 4줄을 가운데로 가지런히 */
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; font-size: 7pt; font-family: 'Courier New', monospace; line-height: 1.15; align-items: center; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; font-size: 8.5pt; font-family: 'Courier New', monospace; line-height: 1.15; align-items: center; }
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: center; width: 100%; padding: 0; }
-        .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 6pt; letter-spacing: -0.2px; }
-        .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 6pt; color: #888; }
+        .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 7.5pt; letter-spacing: -0.2px; }
+        .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 7.5pt; color: inherit; }
         @media print {
           .bd-cargo-wrap { box-shadow: none !important; margin: 0 !important; }
         }

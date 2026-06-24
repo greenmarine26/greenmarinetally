@@ -532,6 +532,27 @@ export default function PrintableCargoPlan({
   // M6.72 → M6.73 → M6.74: deck/hold 별 row 범위 + tier 검증
   //   사용자: DXQD 카고플랜에 00 row 잘못 표시 → 컨테이너에 row=0 있지만 tier 없는 미배정 양식
   //   해결: row + tier 모두 있어야 진짜 좌표 (미배정 row=0 무시)
+  // V8.25: 화면 핀치 줌 (인쇄 무관) — 카고플랜(기존)에 두 손가락 확대/축소 추가
+  const [zoom, setZoom] = React.useState(0.22);
+  const pinchRef = React.useRef({ active: false, startDist: 0, startZoom: 1 });
+  const onTouchStart = (e) => {
+    if (e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchRef.current = { active: true, startDist: Math.hypot(dx, dy), startZoom: zoom };
+    }
+  };
+  const onTouchMove = (e) => {
+    if (pinchRef.current.active && e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const ratio = Math.hypot(dx, dy) / (pinchRef.current.startDist || 1);
+      setZoom(Math.min(3, Math.max(0.15, pinchRef.current.startZoom * ratio)));
+      e.preventDefault();
+    }
+  };
+  const onTouchEnd = (e) => { if (!e.touches || e.touches.length < 2) pinchRef.current.active = false; };
+
   const computedRowRange = useMemo(() => {
     let deckLeft = 0, deckRight = 0, deckHas00 = false;
     let holdLeft = 0, holdRight = 0, holdHas00 = false;
@@ -806,7 +827,8 @@ export default function PrintableCargoPlan({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white">
+      <div className="flex-1 overflow-auto bg-white" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        <div className="cargo-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}>
         <div className="cargo-plan-page">
           <div className="cargo-header">
             <span>{vsl}</span>
@@ -994,6 +1016,7 @@ export default function PrintableCargoPlan({
 
           {/* M5.32: cargo-footer 영역 제거 — 통계는 마지막 짝꿍 행 좌측에 인라인 / 범례 제거 */}
         </div>
+        </div>
       </div>
 
       <style>{`
@@ -1009,6 +1032,7 @@ export default function PrintableCargoPlan({
           .bd-print-modal * {
             visibility: visible !important;
           }
+          .cargo-zoom-wrap { transform: none !important; width: auto !important; }
           .bd-print-modal {
             position: absolute !important;
             left: 0 !important;

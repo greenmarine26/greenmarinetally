@@ -169,6 +169,7 @@ export const CARGO_V2_CSS = `
   }
   .cpv2-cell.cpv2-shadow20 { background: #e5e7eb !important; color: transparent !important; }
   .cpv2-cell.cpv2-through { background: #d4d4d8 !important; }
+  .cpv2-zoom-wrap { transform: none !important; width: auto !important; }
   @page { size: A4 landscape; margin: 6mm; }
 }
 `;
@@ -693,6 +694,27 @@ export default function PrintableCargoPlanV2({
     return { maxDeck: Math.max(maxDeck, 1), maxHold: Math.max(maxHold, 1) };
   }, [renderDataMap]);
 
+  // V8.25: 화면 핀치 줌 (인쇄 무관) — 카고플랜에 두 손가락 확대/축소 추가
+  const [zoom, setZoom] = useState(0.22);
+  const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
+  const onTouchStart = (e) => {
+    if (e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchRef.current = { active: true, startDist: Math.hypot(dx, dy), startZoom: zoom };
+    }
+  };
+  const onTouchMove = (e) => {
+    if (pinchRef.current.active && e.touches && e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const ratio = Math.hypot(dx, dy) / (pinchRef.current.startDist || 1);
+      setZoom(Math.min(3, Math.max(0.15, pinchRef.current.startZoom * ratio)));
+      e.preventDefault();
+    }
+  };
+  const onTouchEnd = (e) => { if (!e.touches || e.touches.length < 2) pinchRef.current.active = false; };
+
   const closeBtn = onClose ? (
     <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
       <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
@@ -722,9 +744,10 @@ export default function PrintableCargoPlanV2({
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
   return createPortal(
-    <div className="cpv2-overlay">
+    <div className="cpv2-overlay" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <style>{CARGO_V2_CSS}</style>
       {closeBtn}
+      <div className="cpv2-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}>
       <div className="cpv2-page">
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
@@ -816,6 +839,7 @@ export default function PrintableCargoPlanV2({
             );
           })}
         </div>
+      </div>
       </div>
     </div>,
     document.body

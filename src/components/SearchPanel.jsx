@@ -12,7 +12,7 @@ import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
 import ExtraContainerModal from './ExtraContainerModal.jsx';
@@ -1049,6 +1049,19 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     setC2(null);
   };
 
+  // V8.25: 트윈 앞뒤 위치 맞교환 — 다른 항에서 앞/뒤 자리를 바꿔 적재하고 미수정인 경우 한 번에 교정.
+  //   앞(c1)을 뒤(c2) 자리로 보내면 fbReassign swap이 c2를 c1 원자리로 자동 이동. 완료 처리는 안 함.
+  const handleSwapPos = async () => {
+    if (!c1 || !c2 || twinBusy) return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    if (!confirm(`앞뒤 위치를 맞바꿉니다.\n앞 ${c1.cn?.slice(-4)} ↔ 뒤 ${c2.cn?.slice(-4)}\n(자리만 교환, 완료 처리는 안 됨)`)) return;
+    setTwinBusy(true);
+    try {
+      await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, c2.bay, c2.row, c2.tier, inspector);
+      speak('앞뒤 위치를 맞바꿨습니다');
+    } finally { setTwinBusy(false); }
+  };
+
   return (
     <>
       <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
@@ -1130,6 +1143,13 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       {c1 && c2 && (
         <button onClick={handleSwapTwin} className="w-full text-xs text-slate-400 hover:text-amber-300 py-2 bg-slate-900 rounded">
           뒤 컨 짝꿍 변경 (수동 선택)
+        </button>
+      )}
+
+      {c1 && c2 && (
+        <button onClick={handleSwapPos} disabled={twinBusy}
+          className="w-full text-xs font-bold text-indigo-100 py-2 bg-indigo-800 hover:bg-indigo-700 disabled:opacity-50 rounded flex items-center justify-center gap-1">
+          ⇅ 앞뒤 맞교환
         </button>
       )}
     </>

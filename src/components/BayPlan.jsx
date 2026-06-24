@@ -13,7 +13,7 @@
 //  - 모바일/데스크톱 자동 셀 크기
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, Printer } from 'lucide-react';
+import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
 import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
@@ -581,24 +581,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
       {/* 컨트롤 바 — M5.0: 산뜻하게 정리 (줌 컴팩트 + 인쇄 드롭다운 + 시각적 분리) */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-0 z-10">
-        {/* 줌 그룹 (3버튼만 — 100% 표시는 가운데에) */}
-        <div className="flex items-center bg-slate-800 rounded-lg overflow-hidden">
-          <button onClick={() => setZoom(z => Math.max(0.15, Math.round((z - 0.01) * 100) / 100))}
-            className="p-1.5 hover:bg-slate-700 text-slate-300" title="축소">
-            <ZoomOut className="w-4 h-4"/>
-          </button>
-          <button onClick={() => {
-            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-            setZoom(isMobile ? 0.22 : 1.0);
-          }} className="text-xs mono text-slate-300 font-bold px-2 py-1.5 hover:bg-slate-700 border-x border-slate-700"
-             title="기본 배율로 리셋">
-            {Math.round(zoom * 100)}%
-          </button>
-          <button onClick={() => setZoom(z => Math.min(3, Math.round((z + 0.01) * 100) / 100))}
-            className="p-1.5 hover:bg-slate-700 text-slate-300" title="확대">
-            <ZoomIn className="w-4 h-4"/>
-          </button>
-        </div>
+        {/* V8.25: 줌 버튼 제거 — 핀치(두 손가락)/휠 전용 */}
 
         {/* 시각적 분리선 */}
         <div className="w-px h-6 bg-slate-700"/>
