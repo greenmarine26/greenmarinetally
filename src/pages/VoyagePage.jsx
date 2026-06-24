@@ -616,9 +616,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   (사전에 잘못 저장된 콜사인(예: DJCT에 BSDU)이 PORT-MIS의 다른 배(XIN TAI PING)에
         //    매칭되던 버그. EDI 풀네임이 있을 때만 검증 — 없으면 기존 동작 유지.)
         const _nameMatchesPm = (pmRec) => {
-          const myName = String(vslFull || '').toUpperCase().replace(/[\s\-_.]/g, '');
+          const raw = String(vslFull || '');
+          const myName = raw.toUpperCase().replace(/[\s\-_.]/g, '');
           const pmName = String(pmRec?.vesselName || '').toUpperCase().replace(/[\s\-_.]/g, '');
-          if (!myName || myName.length < 5 || !pmName || pmName.length < 5) return true; // 검증 불가 → 통과
+          // V8.24-02: vslFull이 신뢰할 만한 '선박명'이 아니면(빈값·짧음·공백없는 코드형) 검증 불가 → 통과.
+          //   EDI 자동추출이 항구코드(예: CNYNT=중국 옌타이)를 vslFull에 잘못 넣으면, 정확 콜사인 매칭(D5MO4)까지
+          //   이 가드에 막혀 미매칭이 났다. 진짜 풀네임은 보통 공백(다단어)이거나 7자 이상 → 그 경우만 가드 적용.
+          const looksLikeName = /\s/.test(raw.trim()) || myName.length >= 7;
+          if (!myName || !looksLikeName || !pmName || pmName.length < 5) return true; // 검증 불가 → 통과
           return myName.includes(pmName.slice(0, 5)) || pmName.includes(myName.slice(0, 5));
         };
         if (dictCallsign && portMisData[dictCallsign] && _nameMatchesPm(portMisData[dictCallsign])) {
