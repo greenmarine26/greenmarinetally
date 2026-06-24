@@ -1585,6 +1585,44 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         const r = isAsc ? parseAscFile(text) : parseBAPLIE(text);
         const total = r.containers.length;
 
+        // ===== V8.24-03: 다른 선박/항차 EDI 차단 (사용자 확정 2026-06-24) =====
+        //   다른 배 EDI나 항차 안 맞는 EDI를 넣어도 경고 없이 적용되던 위험 버그 차단.
+        //   선박: 콜사인(확실) 우선, 없으면 '진짜 선박명'끼리만 비교(코드형 쓰레기값 CNYNT 등은 비교 제외).
+        //   항차: 양하 EDI는 voy_d, 선적 EDI는 voy_l 과 대조(평택분 기준 ediKind 자동판정).
+        //         항차 안 맞으면 적용 안 함 — 평택분 있으면 "파일명 항차 고쳐 재등록" 유도, 없으면 다른 항차로 차단.
+        {
+          const _norm = (x) => String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
+          const _looksName = (x) => /\s/.test(String(x || '').trim()) || _norm(x).length >= 7;
+          const _voyCs = _norm(voyage.info.callsign), _ediCs = _norm(r.callsign);
+          const _voyNm = _norm(voyage.info.vslFull), _ediNm = _norm(r.vsl);
+          let _shipBad = '';
+          if (_voyCs && _ediCs && _voyCs !== _ediCs) {
+            _shipBad = `콜사인 ${voyage.info.callsign} ≠ EDI ${r.callsign}`;
+          } else if (_voyNm && _ediNm && _looksName(voyage.info.vslFull) && _looksName(r.vsl)
+                     && !(_voyNm.includes(_ediNm.slice(0, 5)) || _ediNm.includes(_voyNm.slice(0, 5)))) {
+            _shipBad = `선박명 ${voyage.info.vslFull} ≠ EDI ${r.vsl}`;
+          }
+          if (_shipBad) {
+            results.push(`⛔ ${file.name}: 다른 선박 EDI (${_shipBad}) — 적용 안 함. 이 항차(${voyage.info.vsl}) 자료가 맞는지 확인하세요.`);
+            continue;
+          }
+          let _podPtk = 0, _polPtk = 0;
+          r.containers.forEach((c) => { if (isPyeongtaekPort(c.pod)) _podPtk++; if (isPyeongtaekPort(c.pol)) _polPtk++; });
+          const _ediKind = _podPtk > _polPtk ? 'discharge' : _polPtk > _podPtk ? 'loading' : mode;
+          const _regVoy = _ediKind === 'discharge' ? voyage.info.voy_d : voyage.info.voy_l;
+          if (_regVoy && r.voy && _norm(r.voy) !== _norm(_regVoy)) {
+            const _leg = _ediKind === 'discharge' ? '양하' : '선적';
+            const _ptkLeg = _ediKind === 'discharge' ? _podPtk : _polPtk;
+            if (_ptkLeg > 0) {
+              results.push(`⛔ ${file.name}: 항차 불일치 — EDI 항차 ${r.voy} ≠ 등록 ${_leg} 항차 ${_regVoy}. 평택 ${_leg}분 ${_ptkLeg}대 있음 → 적용 안 함. 파일명 항차를 ${_regVoy} 로 고쳐 재등록하세요.`);
+            } else {
+              results.push(`⛔ ${file.name}: 다른 항차 자료 — EDI 항차 ${r.voy} ≠ 등록 ${_leg} 항차 ${_regVoy}, 평택 ${_leg}분 없음 → 적용 안 함.`);
+            }
+            continue;
+          }
+        }
+        // ===== 가드 끝 =====
+
         // 선박 정보 추출 (첫 파일에서). M7.20: ASC도 처리 — 기존엔 BAPLIE만 추출해
         //   ASC로 올린 작업이 ships(선박 라이브러리/통계)에 누락되던 버그.
         if (!shipInfo) {
