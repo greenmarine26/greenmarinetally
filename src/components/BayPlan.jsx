@@ -447,6 +447,10 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   const cellH = Math.round(baseH * zoom);
   const fontSize = Math.max(8, Math.round(10 * zoom));
 
+  // V8.25-01: 핀치 시작 시점의 줌을 읽기 위한 ref. (useEffect가 zoom마다 재실행되며
+  //   pinchStartDist를 0으로 리셋 → 두 번째 손가락 이동에서 ratio=Inf → 300% 고정되던 버그 수정)
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
   // 마우스/터치 드래그 + 휠 + 핀치 줌
   useEffect(() => {
     const el = scrollRef.current;
@@ -483,7 +487,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     const onTouchStart = (e) => {
       if (e.touches.length === 2) {
         pinchStartDist = dist(e.touches);
-        pinchStartZoom = zoom;
+        pinchStartZoom = zoomRef.current;
       }
     };
     const onTouchMove = (e) => {
@@ -510,7 +514,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
     };
-  }, [zoom]);
+  }, []);
 
   if (containers.length === 0) {
     return (
