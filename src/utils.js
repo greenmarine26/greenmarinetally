@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.25-04';
+export const APP_VERSION = 'V8.26';
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'
@@ -2657,8 +2657,15 @@ export function buildContainerColorMap(containers, mode) {
     if (k) keys.add(k);
   }
   const map = {};
+  // V8.25-06: 색 중복 금지 — 기존 12색은 그대로, 13번째부터는 안 겹치는 고유색을
+  //   황금각(137.5°) 균등 분포로 생성(흰 배경에서 읽히게 명도 낮춤). i%순환 제거.
   Array.from(keys).sort().forEach((k, i) => {
-    map[k] = COLOR_PALETTE[i % COLOR_PALETTE.length];
+    if (i < COLOR_PALETTE.length) {
+      map[k] = COLOR_PALETTE[i];
+    } else {
+      const hue = Math.round((i - COLOR_PALETTE.length) * 137.508) % 360;
+      map[k] = `hsl(${hue}, 72%, 34%)`;
+    }
   });
   return map;
 }

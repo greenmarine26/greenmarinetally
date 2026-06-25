@@ -96,7 +96,7 @@ export const CARGO_V2_CSS = `
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
 /* M6.94.19: XRAY는 ★ 별표만 표시, 배경은 선사 색 그대로 (연노랑 강제 제거) */
-.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(6px, 0.8vw, 10px); color: #000; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+.cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(7px, 1vw, 12px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; }
 .cpv2-cell.cpv2-mark-R { color: #006064; }
@@ -366,6 +366,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
 // ------------------------------------------------------------
 // 메인 컴포넌트
 // ------------------------------------------------------------
+const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
+
 export default function PrintableCargoPlanV2({
   containers = [],
   shipImo,
@@ -717,6 +719,11 @@ export default function PrintableCargoPlanV2({
 
   const closeBtn = onClose ? (
     <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
+      {!IS_TOUCH_DEVICE && (<>
+        <button onClick={() => setZoom(z => Math.max(0.15, +(z - 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>−</button>
+        <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>＋</button>
+        <button onClick={() => setZoom(0.22)} style={{ padding: '6px 10px', background: '#546e7a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>맞춤</button>
+      </>)}
       <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
       <button onClick={onClose} style={{ padding: '6px 10px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>✕ 닫기</button>
     </div>
@@ -744,7 +751,7 @@ export default function PrintableCargoPlanV2({
       : `${(effShipName || '').toUpperCase()} CARGO LOADING PLAN`;
 
   return createPortal(
-    <div className="cpv2-overlay" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+    <div className="cpv2-overlay" onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <style>{CARGO_V2_CSS}</style>
       {closeBtn}
       <div className="cpv2-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}>

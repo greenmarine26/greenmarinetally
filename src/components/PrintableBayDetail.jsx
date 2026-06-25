@@ -478,6 +478,8 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   );
 }
 
+const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
+
 export default function PrintableBayDetail({
   containers, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, globalTiers, onClose
 }) {
@@ -683,7 +685,14 @@ export default function PrintableBayDetail({
             className={`px-3 py-1.5 rounded text-xs font-bold ${
               printMode === 'single' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300'
             }`}>🎯 베이 지정</button>
-          {/* V8.25: 줌 버튼 제거 — 핀치 전용 */}
+          {/* V8.25-06: PC만 +/− 버튼. 폰은 핀치. */}
+          {!IS_TOUCH_DEVICE && (<>
+            <span className="ml-2 text-xs text-slate-400 font-bold">화면크기</span>
+            <button onClick={() => setZoom(z => Math.max(0.15, +(z - 0.1).toFixed(2)))} className="px-2 py-1.5 rounded text-sm font-black bg-slate-700 text-white">−</button>
+            <span className="text-xs text-slate-300 font-bold mono" style={{ minWidth: 38, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} className="px-2 py-1.5 rounded text-sm font-black bg-slate-700 text-white">＋</button>
+            <button onClick={() => setZoom(0.22)} className="px-2 py-1.5 rounded text-xs font-bold bg-slate-600 text-white">맞춤</button>
+          </>)}
           {printMode === 'single' && (
             <div className="flex flex-wrap gap-1 items-center">
               <span className="text-xs text-slate-400">선택({selectedKeys.length}):</span>
@@ -725,6 +734,7 @@ export default function PrintableBayDetail({
         </div>
       )}
       <div className="flex-1 overflow-auto bg-white bd-print-container"
+        onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }}
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
         <div className="bd-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: zoom !== 1 ? `${100 / zoom}%` : '100%' }}>
         {filteredPages.length === 0 ? (
@@ -761,7 +771,7 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: stretch; justify-content: space-evenly; line-height: 1.15; overflow: hidden; font-weight: bold; padding: 2px 4px; }
         /* V7.98-15: 셀 내용 중앙정렬 (CASPI 스타일) — 4줄을 가운데로 가지런히 */
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; height: 100%; font-size: 8.5pt; font-family: 'Courier New', monospace; line-height: 1.15; align-items: stretch; justify-content: space-evenly; }
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: left; width: 100%; padding: 0; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: 100%; padding: 0; }   /* V8.25-05: text-align 제거 — 줄별 정렬(bd-r2 좌/ bd-r4·r5 중앙)이 살도록 */
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 7.5pt; letter-spacing: -0.2px; }
         .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 7.5pt; color: inherit; }
         @media print {

@@ -525,6 +525,8 @@ function BayBox({ even, odd, containers, pairMap, mode, dictBay, xrayMap, global
   );
 }
 
+const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
+
 export default function PrintableCargoPlan({
   containers, mode, voyageInfo, shipImo, shipName, voyageKey, xrayMap = {}, 
   globalRowRange, globalTiers, onClose
@@ -799,6 +801,11 @@ export default function PrintableCargoPlan({
         <div className="text-base font-bold text-slate-100">📄 카고 플랜 인쇄 미리보기</div>
         <div className="flex gap-2">
           <div className="flex gap-2 print:hidden">
+            {!IS_TOUCH_DEVICE && (<>
+              <button onClick={() => setZoom(z => Math.max(0.15, +(z - 0.1).toFixed(2)))} className="bg-slate-700 hover:bg-slate-600 text-white font-black py-2 px-3 rounded">−</button>
+              <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} className="bg-slate-700 hover:bg-slate-600 text-white font-black py-2 px-3 rounded">＋</button>
+              <button onClick={() => setZoom(0.22)} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-3 rounded text-xs">맞춤</button>
+            </>)}
             <button onClick={() => window.print()} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded">🖨 인쇄</button>
             <button onClick={() => { alert('인쇄 창에서 "PDF로 저장" 선택하세요'); setTimeout(() => window.print(), 100); }} className="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded">📄 PDF</button>
             <button onClick={async () => {
@@ -827,7 +834,7 @@ export default function PrintableCargoPlan({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      <div className="flex-1 overflow-auto bg-white" onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
         <div className="cargo-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}>
         <div className="cargo-plan-page">
           <div className="cargo-header">

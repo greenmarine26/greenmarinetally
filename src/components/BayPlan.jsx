@@ -29,6 +29,8 @@ import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
 
+const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
+
 export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
@@ -424,20 +426,17 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
   // 셀 Tailwind 클래스
   // V7.32: 선사 배경색 폐지 → 배경은 우리화물/통과만 구분. 선사는 글자색(getOpColor). XRAY만 배경 보라.
   const cellColor = (c) => {
-    if (!c?.cn) return 'bg-slate-800 text-slate-400 border-slate-700';
+    // V8.25-06: 흰 배경 + 지정색 글자(B안). XRAY 보라 배경 제거(붉은 별로 대체).
+    if (!c?.cn) return 'bg-white text-slate-400 border-slate-300';
     if (xrayMap && xrayMap[c.cn]) {
-      if (compMap && compMap[c.cn]) return 'bg-purple-700 text-purple-50 border-purple-300 ring-2 ring-emerald-400';
-      return 'bg-purple-700 text-purple-50 border-purple-400 ring-1 ring-purple-300';
+      if (compMap && compMap[c.cn]) return 'bg-white text-slate-400 border-slate-400 ring-1 ring-emerald-400';
+      return 'bg-white text-slate-900 border-red-400';
     }
-    if (compMap && compMap[c.cn]) return 'bg-slate-300 text-slate-900 border-slate-500';
-    // 쉬프팅 주황: 양하 모드에서만. 선적 모드에서는 기본 배경 유지
-    if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-600 text-orange-50 border-orange-400';
-
+    if (compMap && compMap[c.cn]) return 'bg-slate-100 text-slate-400 border-slate-300';
+    if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-50 text-slate-900 border-orange-500 ring-1 ring-orange-400';
     const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
-    // 우리 화물(평택분) = 어두운 기본 배경 + amber 링/테두리 강조 (선사는 글자색으로 구분)
-    if (isOurContainer) return 'bg-slate-900 text-slate-100 border-amber-300 ring-2 ring-amber-400';
-    // 통과 화물 = 회색 배경, 글자 없는 느낌 (4.2: 통과 일반 = 회색)
-    return 'bg-slate-700 text-slate-400 border-slate-600';
+    if (isOurContainer) return 'bg-white text-slate-900 border-slate-400';
+    return 'bg-slate-50 text-slate-400 border-slate-200';
   };
 
   // 셀 크기 (zoom 적용) - PDF 5줄 다 보이게
@@ -585,7 +584,14 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
 
       {/* 컨트롤 바 — M5.0: 산뜻하게 정리 (줌 컴팩트 + 인쇄 드롭다운 + 시각적 분리) */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-0 z-10">
-        {/* V8.25: 줌 버튼 제거 — 핀치(두 손가락)/휠 전용 */}
+        {/* V8.25-06: PC(터치없음)만 +/− 버튼 표시. 폰은 핀치, PC는 버튼+Ctrl휠 */}
+        {!IS_TOUCH_DEVICE && (
+          <div className="flex items-center bg-slate-800 rounded-lg overflow-hidden">
+            <button onClick={() => setZoom(z => Math.max(0.15, Math.round((z - 0.05) * 100) / 100))} className="px-2 py-1.5 hover:bg-slate-700 text-slate-200 font-black" title="축소">−</button>
+            <button onClick={() => setZoom(isMobile ? 0.22 : 1.0)} className="text-xs mono text-slate-300 font-bold px-2 py-1.5 hover:bg-slate-700 border-x border-slate-700" title="기본 배율">{Math.round(zoom * 100)}%</button>
+            <button onClick={() => setZoom(z => Math.min(3, Math.round((z + 0.05) * 100) / 100))} className="px-2 py-1.5 hover:bg-slate-700 text-slate-200 font-black" title="확대">＋</button>
+          </div>
+        )}
 
         {/* 시각적 분리선 */}
         <div className="w-px h-6 bg-slate-700"/>
@@ -1592,44 +1598,49 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
             ⊕{stackCount - 1}
           </div>
         )}
+        {/* V8.25-06: XRAY = 붉은 별(한쪽 구석). 보라 배경 폐지 */}
+        {xrayMap && xrayMap[c.cn] && !compactCell && (
+          <div className="absolute z-40" style={{ top: 0, right: 1, color: '#dc2626', fontSize: Math.max(12, Math.round(fontSize * 1.7)), lineHeight: 1, fontWeight: 'bold', textShadow: '0 0 1px #fff,0 0 1px #fff' }}>★</div>
+        )}
         {compactCell ? (
-          // V7.99-14: 줌이 낮아 전체 정보가 안 보일 때 — 컨번호 끝 4자리만 셀에 꽉 차게.
-          //   현장에서 22% 같은 저배율로 베이 전체를 볼 때, 호출용 끝 4자리만이라도 읽히게 함.
-          //   POL/POD·선사·중량 등 나머지 줄은 생략(공간을 4자리에 몰아줌). XRAY/선사 구분은
-          //   여전히 셀 배경(XRAY)·글자색(getOpColor)으로 유지 — 배경색 규칙 위반 아님.
-          <div className="w-full h-full flex items-center justify-center mono font-black leading-none"
-               style={{
-                 fontFamily: 'Consolas, "Courier New", monospace',
-                 fontSize: compactFont,
-                 color: getOpColor && getOpColor(c) ? getOpColor(c) : undefined,
-               }}>
+          <div className="w-full h-full flex items-center justify-center mono font-black leading-none" style={{ position: 'relative', fontFamily: 'Consolas, "Courier New", monospace', fontSize: compactFont, color: getOpColor && getOpColor(c) ? getOpColor(c) : '#111' }}>
+            {xrayMap && xrayMap[c.cn] && <span style={{ position: 'absolute', top: 0, right: 1, color: '#dc2626', fontSize: Math.max(8, Math.round(compactFont * 0.95)), lineHeight: 1 }}>★</span>}
             {isBookingSlot(c) ? '📝' : ((c.cn || '').slice(-4) || '')}
           </div>
-        ) : (
-        <div className="text-left mono leading-tight w-full" style={{
-          whiteSpace: 'pre',
-          fontFamily: 'Consolas, "Courier New", monospace',
-          paddingLeft: typeBarBg ? Math.max(6, Math.round(cellW * 0.1)) + 2 : 0,
-        }}>
-          <div className="font-bold" style={{ fontSize: fontSize - 1 }}>
-            {polLabel}/{transit ? transit : '   '}<span className={ptk ? 'text-red-700 font-black' : ''}>*{podLabel}</span>
+        ) : (() => {
+          // V8.25-06: 새 분배 배치 + B안 색(선사=양하/POD=선적 + 특수만 지정색, 나머지 검정)
+          const cc = getOpColor && getOpColor(c);
+          const isLoad = mode === 'loading';
+          const podColor = isLoad ? cc : null;
+          const carrierColor = isLoad ? null : cc;
+          const specCol = (specialLine && specialLine.indexOf('⚠') >= 0) ? '#b91c1c' : (cc || null);
+          return (
+          <div className="mono leading-tight w-full" style={{
+            fontFamily: 'Consolas, "Courier New", monospace', fontWeight: 'bold', color: '#111',
+            paddingLeft: typeBarBg ? Math.max(6, Math.round(cellW * 0.1)) + 2 : 1, paddingRight: 1,
+            display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-evenly',
+          }}>
+            <div style={{ fontSize: fontSize - 1, display: 'flex', justifyContent: 'space-between' }}>
+              <span>{polLabel}/{transit ? transit : '   '}</span>
+              <span style={podColor ? { color: podColor } : undefined}>*{podLabel}</span>
+            </div>
+            <div style={{ fontSize, textAlign: 'left', letterSpacing: '0.3px' }}>
+              {isBookingSlot(c) ? <span style={{ color: '#b45309' }}>📝 대기</span> : (c.cn || '')}
+            </div>
+            <div style={{ fontSize: fontSize - 1, display: 'flex', justifyContent: 'space-between' }}>
+              <span style={carrierColor ? { color: carrierColor } : undefined}>{(opLabel || '').trim()}</span>
+              <span>{fe}{wt}</span>
+              <span>{typeLabel}</span>
+            </div>
+            <div style={{ fontSize: fontSize - 1, minHeight: fontSize, textAlign: 'center', color: specCol || undefined }}>
+              {specialLine || '\u00A0'}
+            </div>
+            <div style={{ fontSize: fontSize - 1, textAlign: 'center', color: '#666' }}>
+              {posStr}
+            </div>
           </div>
-          <div className="font-black" style={{ fontSize }}>
-            {isBookingSlot(c) ? (
-              <span className="text-amber-300">📝 대기</span>
-            ) : (c.cn || '')}
-          </div>
-          <div style={{ fontSize: fontSize - 1 }}>
-            <span className="font-black" style={getOpColor && getOpColor(c) ? { color: getOpColor(c) } : undefined}>{opLabel}</span> {fe}{wt.padStart(4, ' ')} {typeLabel}
-          </div>
-          <div className={specialColor} style={{ fontSize: fontSize - 1, minHeight: fontSize }}>
-            {specialLine || '\u00A0'}
-          </div>
-          <div className="text-slate-600" style={{ fontSize: fontSize - 1 }}>
-            {posStr}
-          </div>
-        </div>
-        )}
+          );
+        })()}
       </button>
     );
   };
