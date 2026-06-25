@@ -1599,12 +1599,12 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
           </div>
         )}
         {/* V8.25-06: XRAY = 붉은 별(한쪽 구석). 보라 배경 폐지 */}
-        {xrayMap && xrayMap[c.cn] && !compactCell && (
+        {xrayList && xrayList[c.cn] && !compactCell && (
           <div className="absolute z-40" style={{ top: 0, right: 1, color: '#dc2626', fontSize: Math.max(12, Math.round(fontSize * 1.7)), lineHeight: 1, fontWeight: 'bold', textShadow: '0 0 1px #fff,0 0 1px #fff' }}>★</div>
         )}
         {compactCell ? (
           <div className="w-full h-full flex items-center justify-center mono font-black leading-none" style={{ position: 'relative', fontFamily: 'Consolas, "Courier New", monospace', fontSize: compactFont, color: getOpColor && getOpColor(c) ? getOpColor(c) : '#111' }}>
-            {xrayMap && xrayMap[c.cn] && <span style={{ position: 'absolute', top: 0, right: 1, color: '#dc2626', fontSize: Math.max(8, Math.round(compactFont * 0.95)), lineHeight: 1 }}>★</span>}
+            {xrayList && xrayList[c.cn] && <span style={{ position: 'absolute', top: 0, right: 1, color: '#dc2626', fontSize: Math.max(8, Math.round(compactFont * 0.95)), lineHeight: 1 }}>★</span>}
             {isBookingSlot(c) ? '📝' : ((c.cn || '').slice(-4) || '')}
           </div>
         ) : (() => {
