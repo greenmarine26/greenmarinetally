@@ -122,6 +122,41 @@ export function buildBayPages(bays, summary) {
 
 // 컨테이너 4-5줄 텍스트 포맷
 // M4.9: 모든 입력 String 변환 + try-catch로 방어 (한 셀 에러가 전체 페이지 크래시 방지)
+export function formatCellParts(c) {
+  // V8.25-04: 셀 5줄 분배 렌더용 — 토큰 단위로 분리(줄1 양끝, 줄3 3등분).
+  try {
+    const pol = String(c.pol || '').replace(/^KR/, '').slice(0, 3) || '   ';
+    const pod = String(c.pod || '').replace(/^KR/, '').slice(0, 3) || '   ';
+    const via = String(c.via || '');
+    const same = pol === pod;
+    const left1 = same ? `${pol}/${pod}` : `${pol}/`;
+    const right1 = `*${same ? (via || ' ') : (via || pod)}`;
+    const cn = String(c.cn || '');
+    const carrierRaw = String(c.line || c.carrier || '').toUpperCase();
+    let carrier = 'C_K';
+    if (carrierRaw === 'CKL' || carrierRaw === 'CK') carrier = 'C_K';
+    else if (carrierRaw === 'SOC' || carrierRaw.includes('SOC')) carrier = 'SOC';
+    else if (carrierRaw) carrier = carrierRaw.slice(0, 3);
+    const fe = c.fe || (String(c.iso || '').endsWith('0') ? 'E' : 'F');
+    let wt = '0.0';
+    try { const n = parseFloat(c.wt); if (Number.isFinite(n)) wt = (n / 1000).toFixed(1); } catch (_) {}
+    const fewt = `${fe}${wt}`;
+    const type = String(isoToPdfLabel(c.iso) || '');
+    const _tmp = String(c.tmp ?? '').trim();
+    const mid = c.imdg ? `${String(c.imdg)}` : (_tmp ? `${_tmp}C` : '');
+    const bayInt = parseInt(c.bay, 10);
+    const bay = Number.isFinite(bayInt) && bayInt >= 100 ? String(bayInt)
+      : String(Number.isFinite(bayInt) ? bayInt : 0).padStart(2, '0');
+    const row = String(c.row ?? '00').padStart(2, '0');
+    const tier = String(c.tier ?? '00').padStart(2, '0');
+    const pos = `....${bay}${row}${tier}`;
+    return { left1, right1, cn, carrier, fewt, type, mid, pos };
+  } catch (e) {
+    console.error('[formatCellParts] error', e, c);
+    return { left1: '', right1: '', cn: String((c && c.cn) || ''), carrier: '', fewt: '', type: '', mid: '', pos: '' };
+  }
+}
+
 export function formatCellLines(c) {
   try {
     const pol = String(c.pol || '').replace(/^KR/, '').slice(0, 3) || '   ';
@@ -152,7 +187,9 @@ export function formatCellLines(c) {
     const isoLbl = String(isoToPdfLabel(c.iso) || '');
     const line3 = `${carrier} ${fe}${String(wt).padStart(5)} ${isoLbl}`;
     // IMDG/위험물
-    const line4 = c.imdg ? ` ${String(c.imdg)}` : '';
+    // V8.25-03: 줄4 고정 슬롯 — DG > 리퍼온도 > 빈 줄. 위치를 항상 줄5에 고정(카스피식).
+    const _tmp = String(c.tmp ?? '').trim();
+    const line4 = c.imdg ? ` ${String(c.imdg)}` : (_tmp ? `${_tmp}C` : '');
     // 위치
     // M6.35: BAY 2자리 정규화 (100+ 만 3자리 유지) — 7자리(0010002) → 6자리(010082)
     //   기존: padStart(3,'0') → "001" → ....0010002 7자리
@@ -335,20 +372,14 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   const renderCell = (t, r) => {
     const c = cellMap[`${t}-${r}`];
     if (!c) return <div key={`${t}-${r}`} className="bd-cell empty"></div>;
-    const lines = formatCellLines(c);
-    const ptk = isPtk(c, mode);
-    const colorKey = ptk ? getContainerColorKey(c, mode) : null;
-    const bgColor = colorKey ? colorMap[colorKey] : null;
+    const p = formatCellParts(c);
     return (
-      <div key={`${t}-${r}`}
-        className={`bd-cell filled ${ptk ? 'ptk' : ''}`}
-        style={bgColor ? { background: bgColor, color: '#fff' } : undefined}
-      >
-        <div>{lines.line1}</div>
-        <div>{lines.line2}</div>
-        <div className="bd-line3">{lines.line3}</div>
-        {lines.line4 && <div>{lines.line4}</div>}
-        <div className="bd-pos">{lines.lineLast}</div>
+      <div key={`${t}-${r}`} className="bd-cell filled">
+        <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
+        <div className="bd-r2">{p.cn}</div>
+        <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div>
+        <div className="bd-r4">{p.mid || '\u00A0'}</div>
+        <div className="bd-r5">{p.pos}</div>
       </div>
     );
   };
@@ -363,14 +394,14 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
   const mrRenderCellContent = (cell, tier) => {
     const c = cellMap[`${String(tier).padStart(2, '0')}-${cell.rowLbl}`];
     if (!c) return null; // 빈 active 슬롯 — 테두리만, 내용 없음
-    const lines = formatCellLines(c);
+    const p = formatCellParts(c);
     return (
       <div className="bd-cell-lines">
-        <div>{lines.line1}</div>
-        <div>{lines.line2}</div>
-        <div className="bd-line3">{lines.line3}</div>
-        {lines.line4 && <div>{lines.line4}</div>}
-        <div className="bd-pos">{lines.lineLast}</div>
+        <div className="bd-r1"><span>{p.left1}</span><span>{p.right1}</span></div>
+        <div className="bd-r2">{p.cn}</div>
+        <div className="bd-r3"><span>{p.carrier}</span><span>{p.fewt}</span><span>{p.type}</span></div>
+        <div className="bd-r4">{p.mid || '\u00A0'}</div>
+        <div className="bd-r5">{p.pos}</div>
       </div>
     );
   };
@@ -380,7 +411,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const ptk = isPtk(c, mode);
     const colorKey = ptk ? getContainerColorKey(c, mode) : null;
     const bg = colorKey ? colorMap[colorKey] : null;
-    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}`, style: bg ? { background: bg, color: '#fff' } : undefined };
+    return { className: `cpv2-cell bd-fill${ptk ? ' ptk' : ''}` };   // V8.25-03: 카스피식 흰 배경
   };
 
   return (
@@ -727,10 +758,10 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-bay-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
         /* V7.98-15: 베이번호 중복 제거 — bd-title(큰 제목)만 쓰고 BayBoxV2 자체 베이제목은 숨김 */
         .bd-cargo-wrap .cpv2-bay-title-row { display: none !important; }
-        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: center; justify-content: center; line-height: 1.05; overflow: hidden; font-weight: bold; padding: 1px 0; }
+        .bd-cargo-wrap .cpv2-cell.bd-fill { flex-direction: column; align-items: stretch; justify-content: space-evenly; line-height: 1.15; overflow: hidden; font-weight: bold; padding: 2px 4px; }
         /* V7.98-15: 셀 내용 중앙정렬 (CASPI 스타일) — 4줄을 가운데로 가지런히 */
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; font-size: 8.5pt; font-family: 'Courier New', monospace; line-height: 1.15; align-items: center; }
-        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: center; width: 100%; padding: 0; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines { display: flex; flex-direction: column; width: 100%; height: 100%; font-size: 8.5pt; font-family: 'Courier New', monospace; line-height: 1.15; align-items: stretch; justify-content: space-evenly; }
+        .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; text-align: left; width: 100%; padding: 0; }
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 7.5pt; letter-spacing: -0.2px; }
         .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 7.5pt; color: inherit; }
         @media print {
@@ -901,7 +932,9 @@ export default function PrintableBayDetail({
           box-sizing: border-box;
           display: flex;
           flex-direction: column;
-          justify-content: center;
+          justify-content: space-evenly;
+          align-items: stretch;
+          font-weight: bold;
         }
         /* M6.32: 셀 안 각 줄도 nowrap 보장 — 한 항목이 두 줄로 안 나뉨 */
         .bd-cell > div {
@@ -909,6 +942,12 @@ export default function PrintableBayDetail({
           overflow: hidden;
           text-overflow: clip;
         }
+        /* V8.25-04: 5줄 분배 — 줄1 양끝, 줄3 3등분, 컨번호 좌측, 온도·위치 중앙 */
+        .bd-cell .bd-r1, .bd-cell .bd-r3, .bd-cargo-wrap .cpv2-cell .bd-r1, .bd-cargo-wrap .cpv2-cell .bd-r3 { display: flex; flex-direction: row; justify-content: space-between; width: 100%; }
+        .bd-cell .bd-r2, .bd-cargo-wrap .cpv2-cell .bd-r2 { text-align: left; letter-spacing: 0.3px; }
+        .bd-cell .bd-r4, .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { text-align: center; }
+        .bd-cell .bd-r1, .bd-cell .bd-r3, .bd-cell .bd-r4, .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r1, .bd-cargo-wrap .cpv2-cell .bd-r3, .bd-cargo-wrap .cpv2-cell .bd-r4, .bd-cargo-wrap .cpv2-cell .bd-r5 { letter-spacing: 0.7px; }
+        .bd-cell .bd-r5, .bd-cargo-wrap .cpv2-cell .bd-r5 { color: #555; }
         /* M6.33: 3번째 줄(상태+무게+규격)만 폰트 축소 — 정보 밀도 높아 한 줄에 안 들어감
            예: "C_K E 2.2 DC20" → 14자 + 공백 → 6pt로 줄여서 한 줄 보장 */
         .bd-cell .bd-line3 {
