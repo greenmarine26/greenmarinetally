@@ -697,7 +697,7 @@ export default function PrintableCargoPlanV2({
   }, [renderDataMap]);
 
   // V8.25: 화면 핀치 줌 (인쇄 무관) — 카고플랜에 두 손가락 확대/축소 추가
-  const [zoom, setZoom] = useState(0.22);
+  const [zoom, setZoom] = useState(1);  // V8.26-02: 100% 시작
   const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
   const onTouchStart = (e) => {
     if (e.touches && e.touches.length === 2) {

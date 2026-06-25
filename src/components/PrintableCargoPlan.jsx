@@ -535,7 +535,7 @@ export default function PrintableCargoPlan({
   //   사용자: DXQD 카고플랜에 00 row 잘못 표시 → 컨테이너에 row=0 있지만 tier 없는 미배정 양식
   //   해결: row + tier 모두 있어야 진짜 좌표 (미배정 row=0 무시)
   // V8.25: 화면 핀치 줌 (인쇄 무관) — 카고플랜(기존)에 두 손가락 확대/축소 추가
-  const [zoom, setZoom] = React.useState(0.22);
+  const [zoom, setZoom] = React.useState(1);  // V8.26-02: 100% 시작
   const pinchRef = React.useRef({ active: false, startDist: 0, startZoom: 1 });
   const onTouchStart = (e) => {
     if (e.touches && e.touches.length === 2) {

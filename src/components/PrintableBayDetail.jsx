@@ -487,7 +487,7 @@ export default function PrintableBayDetail({
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
 
   // V7.01: 폰 화면용 확대/축소 (핀치 + 버튼). 인쇄에는 영향 없음(@media print에서 무시).
-  const [zoom, setZoom] = useState(0.22);  // V8.25: 22% 시작
+  const [zoom, setZoom] = useState(1);  // V8.26-02: 100% 시작
   const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
   const onTouchStart = (e) => {
     if (e.touches && e.touches.length === 2) {
