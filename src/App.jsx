@@ -12,6 +12,7 @@ import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import Header from './components/Header.jsx';
+import BroadcastMarquee from './components/BroadcastMarquee.jsx';
 import InspectorModal from './components/InspectorModal.jsx';
 import StaffManagerModal from './components/StaffManagerModal.jsx';
 import GreetingModal from './components/GreetingModal.jsx';
@@ -22,6 +23,7 @@ import UpdatePrompt from './components/UpdatePrompt.jsx';
 export default function App() {
   const [route, setRoute] = useState({ name: 'home' });
   const [voyages, setVoyages] = useState({});
+  const [voyagesLoaded, setVoyagesLoaded] = useState(false);  // V8.27: 딥링크 #310 방지 — 로드 전엔 VoyagePage 미마운트
   const [inspectors, setInspectors] = useState({});
   const [extraStaff, setExtraStaff] = useState({});
   const [deletedStaff, setDeletedStaff] = useState({});  // M5.74: 퇴사자 마커  // M5.62: 김성일이 추가한 동적 명단
@@ -38,7 +40,7 @@ export default function App() {
   const [weather, setWeather] = useState(null);
 
   useEffect(() => {
-    const u1 = fbSubscribeVoyages(setVoyages);
+    const u1 = fbSubscribeVoyages((v) => { setVoyages(v); setVoyagesLoaded(true); });
     const u2 = fbSubscribeInspectors(setInspectors);
     const unsub2 = fbSubscribeStaffList(setExtraStaff);
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
@@ -207,6 +209,8 @@ export default function App() {
         onLogout={handleLogout}
       />
 
+      <BroadcastMarquee inspector={inspector} />
+
       <main className="pb-20">
         {route.name === 'home' && (
           <HomePage
@@ -232,15 +236,24 @@ export default function App() {
           />
         )}
         {route.name === 'voyage' && (
+          voyages[route.voyageKey] ? (
           <VoyagePage
             voyageKey={route.voyageKey}
-            voyage={voyages[route.voyageKey] || null}
+            voyage={voyages[route.voyageKey]}
             inspector={inspector}
             inspectors={inspectors}
             portMisData={portMisData}
             onGoHome={() => navigate('home')}
             onModeChange={(mode) => setRoute(r => ({ ...r, mode }))}
           />
+          ) : voyagesLoaded ? (
+            <div className="max-w-3xl mx-auto px-3 py-16 text-center text-slate-400">
+              항차를 찾을 수 없습니다.
+              <div className="mt-3"><button onClick={() => navigate('home')} className="px-4 py-2 bg-slate-800 rounded text-slate-200">홈으로</button></div>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto px-3 py-16 text-center text-slate-400">항차 불러오는 중…</div>
+          )
         )}
       </main>
 

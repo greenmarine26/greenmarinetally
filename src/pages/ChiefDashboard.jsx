@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage } from '../firebase.js';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
@@ -365,6 +365,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <BigStat label="전체 확인" value={total.done.toLocaleString()} sub={`/ ${total.all.toLocaleString()}대`} color="emerald"/>
         <BigStat label="누락 (선사 추가 필요)" value={total.missing} sub={`평택 ${total.ptkAll}대 중`} color={total.missing > 0 ? "red" : "slate"}/>
       </div>
+
+      {/* V8.27: 검수원 공지 (흐르는 띠) */}
+      <BroadcastComposer inspector={inspector} />
 
       {/* 전체 검수원 진행률 (인원 무제한) */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
@@ -1214,6 +1217,52 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen }) {
         )}
       </div>
     </button>
+  );
+}
+
+function BroadcastComposer({ inspector }) {
+  const [text, setText] = useState('');
+  const [cur, setCur] = useState(null);
+  const [reads, setReads] = useState({});
+  useEffect(() => fbSubscribeBroadcast(setCur), []);
+  useEffect(() => {
+    if (!cur?.id) { setReads({}); return; }
+    return fbSubscribeBroadcastReads(cur.id, setReads);
+  }, [cur?.id]);
+  const send = async () => {
+    const t = text.trim();
+    if (!t) return;
+    await fbSetBroadcast(t, inspector || '수석');
+    setText('');
+  };
+  const clear = async () => { await fbClearBroadcast(); };
+  const readNames = Object.keys(reads || {});
+  return (
+    <div className="bg-slate-900 border border-amber-700/40 rounded-xl p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Send className="w-4 h-4 text-amber-400"/>
+        <div className="text-sm font-bold text-slate-100">검수원 공지 (흐르는 띠)</div>
+        <span className="text-[10px] text-slate-500">로그인된 검수원 모든 화면에 흘러감 · 확인 전까지</span>
+      </div>
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={2}
+        placeholder="예: 이번 선박 23번 베이에 중요한 FR 실림 — 사진 촬영 바랍니다"
+        className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-100 resize-none"/>
+      <div className="flex items-center gap-2 mt-2">
+        <button onClick={send} disabled={!text.trim()}
+          className="px-3 py-1.5 rounded text-sm font-bold bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white flex items-center gap-1">
+          <Send className="w-3.5 h-3.5"/> 보내기
+        </button>
+        {cur?.text && (
+          <button onClick={clear} className="px-3 py-1.5 rounded text-sm font-bold bg-slate-700 hover:bg-slate-600 text-slate-200">공지 내리기</button>
+        )}
+      </div>
+      {cur?.text && (
+        <div className="mt-2 bg-amber-950/40 border border-amber-800/40 rounded p-2 text-xs">
+          <div className="text-amber-200 font-bold">📢 현재 공지: {cur.text}</div>
+          <div className="text-slate-400 mt-1">읽음 {readNames.length}명{readNames.length > 0 ? ` · ${readNames.join(', ')}` : ''}</div>
+        </div>
+      )}
+    </div>
   );
 }
 

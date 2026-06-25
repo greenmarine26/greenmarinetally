@@ -781,14 +781,11 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
         <div className="flex items-center gap-2 flex-wrap text-[10px]">
           <span className="text-slate-500 font-bold uppercase w-12">셀색:</span>
-          <span className="text-cyan-300 font-bold">
-            {mode === 'discharge' ? 'POL(출발지)' : 'POD(목적지)'} 색깔
-          </span>
-          <span className="text-amber-300 font-bold">+ 노랑 ring = 평택</span>
-          <Legend color="bg-purple-700" label="X-RAY"/>
-          <Legend color="bg-orange-600" label="시프팅"/>
-          <Legend color="bg-slate-300" label="완료"/>
-          <Legend color="bg-slate-700" label="통과(색깔없음)"/>
+          <span className="text-cyan-300 font-bold">흰 배경 · 글자색 = {mode === 'discharge' ? '선사(양하)' : 'POD(선적)'} 지정색</span>
+          <span className="text-red-400 font-bold">★ 붉은별 = X-RAY</span>
+          <Legend color="bg-orange-400" label="시프팅"/>
+          <Legend color="bg-slate-200" label="완료"/>
+          <span className="text-slate-500 font-bold">검정 글자 = 비평택</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-[10px]">
           <span className="text-slate-500 font-bold uppercase w-12">종류:</span>

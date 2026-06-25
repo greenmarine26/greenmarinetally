@@ -564,6 +564,30 @@ export function fbSubscribeInspectors(callback) {
   const unsub = onValue(r, (snap) => callback(snap.val() || {}));
   return unsub;
 }
+
+// ===== 수석 공지(흐르는 띠) — V8.27 =====
+//   broadcast/current = { id, text, by, ts }  ·  broadcast/reads/{id}/{검수원} = ts
+export function fbSubscribeBroadcast(callback) {
+  const r = ref(db, 'broadcast/current');
+  return onValue(r, (snap) => callback(snap.val() || null));
+}
+export async function fbSetBroadcast(text, by) {
+  const id = String(Date.now());
+  await set(ref(db, 'broadcast/current'), { id, text: String(text || '').slice(0, 500), by: by || '', ts: Date.now() });
+  return id;
+}
+export async function fbClearBroadcast() {
+  await remove(ref(db, 'broadcast/current'));
+}
+export async function fbMarkBroadcastRead(id, inspector) {
+  if (!id || !inspector) return;
+  try { await set(ref(db, `broadcast/reads/${id}/${inspector}`), Date.now()); } catch (e) {}
+}
+export function fbSubscribeBroadcastReads(id, callback) {
+  if (!id) { callback({}); return () => {}; }
+  const r = ref(db, `broadcast/reads/${id}`);
+  return onValue(r, (snap) => callback(snap.val() || {}));
+}
 export async function fbSetInspectorActivity(name, voyageKey, mode, detail = null) {
   // V7.99-8 (메모6): detail = { equip, bayLabel, tier('hold'|'deck'), remain, auto } —
   //   수석이 "몇 호기가 어느 베이의 홀드/데크를 작업 중·몇 개 남음"을 실시간으로 보게 함.
