@@ -1058,6 +1058,12 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     setTwinBusy(true);
     try {
       await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, c2.bay, c2.row, c2.tier, inspector);
+      // V8.25-02: 화면 즉시 반영 — c1/c2는 로컬 state라 swap 후 갱신이 안 돼 위치가 그대로 보였음.
+      //   DB는 정상 교환되므로(시뮬 PASS) 표시도 앞↔뒤 위치를 맞바꿔 일치시킨다.
+      const _aPos = { bay: c1.bay, row: c1.row, tier: c1.tier };
+      const _bPos = { bay: c2.bay, row: c2.row, tier: c2.tier };
+      setC1({ ...c1, ..._bPos });
+      setC2({ ...c2, ..._aPos });
       speak('앞뒤 위치를 맞바꿨습니다');
     } finally { setTwinBusy(false); }
   };
