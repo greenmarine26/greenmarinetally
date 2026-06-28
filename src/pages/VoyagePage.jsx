@@ -1610,7 +1610,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           r.containers.forEach((c) => { if (isPyeongtaekPort(c.pod)) _podPtk++; if (isPyeongtaekPort(c.pol)) _polPtk++; });
           const _ediKind = _podPtk > _polPtk ? 'discharge' : _polPtk > _podPtk ? 'loading' : mode;
           const _regVoy = _ediKind === 'discharge' ? voyage.info.voy_d : voyage.info.voy_l;
-          if (_regVoy && r.voy && _norm(r.voy) !== _norm(_regVoy)) {
+          // V8.28: 항차 비교를 '번호 기준'으로 — E/W/N/S 방향·앞0 무시. 인천 출발 선박은 선사가 왕복을
+          //   한 항차(예 0529W)로 표기해 평택 양하분도 그 번호로 온다. leg는 위에서 내용(POD/POL)으로 이미
+          //   확정했으니 같은 번호면 통과(0529==0529), 번호가 다르면(0530 vs 0529) 그대로 차단.
+          const _voyCore = (x) => _norm(x).replace(/[EWNS]+$/, '').replace(/^0+/, '') || _norm(x);
+          if (_regVoy && r.voy && _voyCore(r.voy) !== _voyCore(_regVoy)) {
             const _leg = _ediKind === 'discharge' ? '양하' : '선적';
             const _ptkLeg = _ediKind === 'discharge' ? _podPtk : _polPtk;
             if (_ptkLeg > 0) {
