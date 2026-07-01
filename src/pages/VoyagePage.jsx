@@ -1617,12 +1617,37 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           if (_regVoy && r.voy && _voyCore(r.voy) !== _voyCore(_regVoy)) {
             const _leg = _ediKind === 'discharge' ? '양하' : '선적';
             const _ptkLeg = _ediKind === 'discharge' ? _podPtk : _polPtk;
-            if (_ptkLeg > 0) {
+            // V8.29: 인천발 선박은 평택 항차가 한 항차 낮게·방향이 바뀔 수 있다(사용자 확정).
+            //   콜사인이 같고 EDI에 평택분이 있으면 즉시 차단 대신 경고 모달로 사용자가
+            //   등록 항차 흡수 여부를 결정. 콜사인 비교 불가하거나 평택분 없으면 기존대로 차단.
+            const _csComparable = _voyCs && _ediCs;   // 1596행에서 계산됨
+            if (_ptkLeg > 0 && _csComparable) {
+              const _absorb = await askChoice({
+                title: '항차 번호가 다릅니다',
+                description:
+                  `인천발 선박은 평택 항차가 한 항차 낮게, 방향이 바뀔 수 있습니다.\n\n` +
+                  `EDI 항차 ${r.voy} ↔ 등록 ${_leg} 항차 ${_regVoy}\n` +
+                  `같은 배 (콜사인 ${voyage.info.callsign})\n` +
+                  `EDI에 평택 ${_leg}분 ${_ptkLeg}대 있음\n\n` +
+                  `등록 항차 ${_regVoy} 로 흡수할까요?`,
+                options: [
+                  { key: 'absorb', label: `✅ ${_regVoy} 로 흡수`, desc: '같은 입항으로 보고 이 항차에 적용', recommended: true },
+                  { key: 'skip', label: '⛔ 적용 안 함', desc: '다른 항차 자료 — 넣지 않음' },
+                ],
+              });
+              if (_absorb !== 'absorb') {
+                results.push(`⛔ ${file.name}: 항차 불일치 — EDI ${r.voy} ≠ 등록 ${_leg} ${_regVoy}, 사용자가 적용 안 함 선택.`);
+                continue;
+              }
+              results.push(`🔀 ${file.name}: 인천발 항차 오프셋 — EDI ${r.voy} 를 등록 ${_leg} 항차 ${_regVoy} 로 흡수 (콜사인 ${voyage.info.callsign} 일치, 평택 ${_ptkLeg}대).`);
+              // 흡수: 가드 통과 (아래 정상 병합 흐름 진입)
+            } else if (_ptkLeg > 0) {
               results.push(`⛔ ${file.name}: 항차 불일치 — EDI 항차 ${r.voy} ≠ 등록 ${_leg} 항차 ${_regVoy}. 평택 ${_leg}분 ${_ptkLeg}대 있음 → 적용 안 함. 파일명 항차를 ${_regVoy} 로 고쳐 재등록하세요.`);
+              continue;
             } else {
               results.push(`⛔ ${file.name}: 다른 항차 자료 — EDI 항차 ${r.voy} ≠ 등록 ${_leg} 항차 ${_regVoy}, 평택 ${_leg}분 없음 → 적용 안 함.`);
+              continue;
             }
-            continue;
           }
         }
         // ===== 가드 끝 =====
