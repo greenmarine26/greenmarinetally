@@ -770,6 +770,17 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 📍 {berth}
               </span>
             )}
+            {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정 */}
+            {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && (
+              <span className="text-[9px] bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
+                🤖 자동(수집중)
+              </span>
+            )}
+            {voyage.info?.autoRegistered && voyage.info?.autoStatus === 'confirmed' && (
+              <span className="text-[9px] bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold">
+                🤖 자동(확정)
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-slate-500 truncate">
             {/* M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W) */}
