@@ -307,25 +307,19 @@ function calcCones(deck, hold, shipType, multiCount){
 }
 
 // 베이 합본: 7-8-9 => key 8. label "BAY (08) 09" or "BAY 07"
-function bayGroupKey(label){
+function bayGroupKey(label, evensSet){
   const nums=(label.match(/\d+/g)||[]).map(Number);
   if(!nums.length) return label;
   // 짝수가 있으면 짝수, 없으면 홀수를 짝수로 내림(7->? ) : 7,8,9 묶음의 대표 = 가운데 짝수
   const even=nums.find(n=>n%2===0);
   if(even!==undefined) return even;
-  // 홀수만(예: BAY 07) => 짝꿍 짝수 = 홀수-1 or +1? 표기상 07은 (08)09와 한묶음 → 8
+  // C7.67: 홀수 단독 라벨은 실재하는 짝수 이웃(o-1 우선, 없으면 o+1)에 묶는다 — 트리오(e-1,e,e+1) 규칙.
   const odd=nums[0];
-  return odd+1; // 07->8, 23->24
+  if(evensSet&&evensSet.has(odd-1)) return odd-1;
+  if(evensSet&&evensSet.has(odd+1)) return odd+1;
+  return odd+1; // 정보 없으면 기존 동작 유지
 }
 
-// 배분: 데크콘÷4, 코끼리콘÷2, 홀드콘 트윈합본×2
-function distribute(cones){
-  return {
-    deckPer: Math.round(cones.deck/4),
-    elePer: Math.round(cones.ele/2),
-    holdTotal: cones.hold        // 이미 (콘대상 대수 × 곳당 개수)로 계산됨 — 추가 배수 없음
-  };
-}
 // ============ EDI(BAPLIE) 파서 — 앱 통합용 ============
 function isEDI(text){
   return /UNB\+|LOC\+147\+/.test(text) && /EQD\+/.test(text);
@@ -487,7 +481,7 @@ function ediToBayGroups(rows, shipType, multiCount, ctx, allRowsOfPlan){
   const filled    = filledSelf;                              // hasBelow는 자기 plan 기준(밑단 적재 여부)
   const filledAll = ctx&&ctx.slots ? ctx.slots : filledSelf; // 트윈 짝꿍은 전역(반대편 plan 포함)
   // 검수앱 트리오 규칙: 짝수 e는 다음 홀수(e+1)와 페어(그룹키 e). 홀수는 앞 짝수 있으면 그 페어, 없으면 단독.
-  const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:bay);
+  const groupKeyOf=(bay)=> bay%2===0 ? bay : (existBays.has(bay-1)?bay-1:(existBays.has(bay+1)?bay+1:bay));   // C7.67: 트리오(e-1,e,e+1) — 앞 홀수도 짝수에 묶음(검수앱 autoPairBays 일치)
   // 각 베이의 홀드 유무 (전용 데크 판정용) — V7.59: 화물 유무가 아니라 구조 기준.
   //   ctx.holdBays = 베이사전(실구조) ∪ 양·선 전체화물(통과 포함)의 홀드 베이.
   //   (구) 자기 plan 평택분만 봐서 홀드 있는 베이를 전용 데크로 오판 → 20ft 데크콘 4.
@@ -621,7 +615,7 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='C7.66';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__APPV='C7.67';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -797,8 +791,9 @@ async function selectVoyage(voyageKey){
         if(d){ state.disch={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(양하)', vessel:d.vessel, docDate:d.docDate}; applyVessel(d.vessel); }
       }
       // V7.7: 분리 작업 분별용 작업일 보충 — 파싱 경로엔 날짜가 없어 raw EDI에서 추출
-      if(state.disch && state.disch.docDate==null){
-        try{ const t=await fbFetchRawEdi(voyageKey,'discharge'); if(t) state.disch.docDate=extractEdiDocDate(t); }catch(_){}
+      if(state.disch && (state.disch.docDate==null || !(state.disch.ediRowsAll&&state.disch.ediRowsAll.length))){
+        // C7.67: 연동(1순위)에도 전체화물(rowsAll) 보충 — 받침·구조 판정이 평택분만 보면 통과화물 받침 콘 누락(V7.59 재발 수정).
+        try{ const t=await fbFetchRawEdi(voyageKey,'discharge'); if(t){ if(state.disch.docDate==null) state.disch.docDate=extractEdiDocDate(t); if(!(state.disch.ediRowsAll&&state.disch.ediRowsAll.length)){ const p=parsePositions(t); if(p&&p.rowsAll&&p.rowsAll.length) state.disch.ediRowsAll=p.rowsAll; } } }catch(_){}
       }
     }
     if(v.hasL){
@@ -809,8 +804,9 @@ async function selectVoyage(voyageKey){
         const d=txt&&parsePositions(txt);
         if(d){ state.stow={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:'검수앱(선적)', vessel:d.vessel, docDate:d.docDate}; applyVessel(d.vessel); }
       }
-      if(state.stow && state.stow.docDate==null){
-        try{ const t=await fbFetchRawEdi(voyageKey,'loading'); if(t) state.stow.docDate=extractEdiDocDate(t); }catch(_){}
+      if(state.stow && (state.stow.docDate==null || !(state.stow.ediRowsAll&&state.stow.ediRowsAll.length))){
+        // C7.67: 연동(1순위)에도 전체화물(rowsAll) 보충 — 위 양하와 동일.
+        try{ const t=await fbFetchRawEdi(voyageKey,'loading'); if(t){ if(state.stow.docDate==null) state.stow.docDate=extractEdiDocDate(t); if(!(state.stow.ediRowsAll&&state.stow.ediRowsAll.length)){ const p=parsePositions(t); if(p&&p.rowsAll&&p.rowsAll.length) state.stow.ediRowsAll=p.rowsAll; } } }catch(_){}
       }
     }
     if(!state.shipName) state.shipName=v.vsl;
@@ -998,12 +994,13 @@ function analyzePlan(plan,shipType,multiCount){
   if(!plan || !plan.bays.length) return {};
   const cells=findCells(plan.img);
   const res={};
+  const _evens=new Set(); for(const b of plan.bays){ for(const n of ((b.label||'').match(/\d+/g)||[]).map(Number)) if(n%2===0) _evens.add(n); }   // C7.67
   for(const bay of plan.bays){
     const bo=buildBay(plan.img,cells,bay);
     if(!bo) continue;
     const {deck,hold}=gridToTiers(bo);
     const cones=calcCones(deck,hold,shipType,multiCount);
-    res[bay.label]={cones, bayObj:bo, group:bayGroupKey(bay.label)};
+    res[bay.label]={cones, bayObj:bo, group:bayGroupKey(bay.label,_evens)};
   }
   return res;
 }
@@ -1618,7 +1615,7 @@ async function renderBayView(){
   const existBays=new Set(allRows.map(x=>x.b));
   for(const bn of dictBays.keys()) existBays.add(bn);
   // 그룹키: 짝수 e → e(페어 대표). 홀수 o → 앞 짝수(o-1) 있으면 o-1, 없으면 o(단독).
-  const groupKeyOf=(b)=> b%2===0 ? b : (existBays.has(b-1)?b-1:b);
+  const groupKeyOf=(b)=> b%2===0 ? b : (existBays.has(b-1)?b-1:(existBays.has(b+1)?b+1:b));   // C7.67: 트리오 일치
 
   const bays={};          // groupKey → 'row_tier' → {d,l,row,tier}
   const groupBays={};     // groupKey → Set(실제 베이번호) — 제목 표기용
@@ -2026,12 +2023,11 @@ function coneSpeak(text){
   }catch(e){}
 }
 function coneQaConeLine(name, o, per){
-  // o={need, have, diff} (곳당), per=곳 수. 총개수와 행동(추가/반납/그대로)을 사람이 말하듯.
-  const totD=o.diff*per;
+  // C7.67: o={need,have,diff}는 '참 총개수'. 행동(추가/반납/그대로)을 사람이 말하듯.
   if(o.need===0&&o.have===0) return null;
-  if(o.diff>0) return name+' 곳당 '+o.have+'에서 '+o.need+'개로, 총 '+totD+'개 더 필요(추가)';
-  if(o.diff<0) return name+' 곳당 '+o.have+'에서 '+o.need+'개로, 총 '+(-totD)+'개 남음(반납)';
-  return name+' 곳당 '+o.need+'개 그대로';
+  if(o.diff>0) return name+' 회수 '+o.have+'개, 필요 '+o.need+'개 — 총 '+o.diff+'개 더 필요(추가)';
+  if(o.diff<0) return name+' 회수 '+o.have+'개, 필요 '+o.need+'개 — 총 '+(-o.diff)+'개 남음(반납)';
+  return name+' 총 '+o.need+'개 그대로';
 }
 function coneQaAnswer(qRaw){
   const q=(qRaw||'').trim();
@@ -2046,14 +2042,16 @@ function coneQaAnswer(qRaw){
   // 베이 번호 → rows 라벨 매칭 ("06-07" 페어 라벨에 6도 7도 매칭)
   const bayM=t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})|^(\d{1,3})$/);
   const bayN=bayM?parseInt(bayM[1]||bayM[2]||bayM[3],10):null;
-  const findRow=(n)=>rows.find(r=>String(r.bay).split(/[,\-]/).some(p=>parseInt(p,10)===n));
+  // C7.67: "09-11" 병합 라벨은 범위 매칭 — 가운데 베이(10) 질문도 그 트리오 행으로.
+  const inLabel=(lbl,n)=>{ const s=String(lbl); const m=s.match(/^(\d+)\s*-\s*(\d+)$/); if(m) return n>=parseInt(m[1],10)&&n<=parseInt(m[2],10); return s.split(/[,\-]/).some(p=>parseInt(p,10)===n); };
+  const findRow=(n)=>rows.find(r=>inLabel(r.bay,n));
   // ① 베이 질문
   if(bayN!=null){
     const r=findRow(bayN);
     if(!r) return bayN+'번 베이는 작업표에 없습니다. (콘 작업 없는 베이)';
     // 컨테이너 대수 질문이면
     if(/컨테이너|몇\s*대|대수/.test(t)){   // 콘은 '개', 컨테이너는 '대' — '몇 개'는 콘 질문이므로 여기 추가 금지(V7.91-02 검증에서 확인)
-      const cnt=(rows0,b)=>rows0.filter(c=>String(r.bay).split(/[,\-]/).some(p=>parseInt(p,10)===parseInt(c.bay,10))).length;
+      const cnt=(rows0)=>rows0.filter(c=>inLabel(r.bay,parseInt(c.bay,10))).length;   // C7.67: 범위 매칭
       const d=state.disch&&state.disch.ediRows?cnt(state.disch.ediRows):0;
       const l=state.stow&&state.stow.ediRows?cnt(state.stow.ediRows):0;
       return '베이 '+r.bay+'. 양하 '+d+'대, 선적 '+l+'대.';
@@ -2071,7 +2069,7 @@ function coneQaAnswer(qRaw){
     const out=[];
     for(const r of rows){
       const seg=ks.map(k=>{
-        const d=r[k].diff*perOf[k];
+        const d=r[k].diff;   // C7.67: diff=총개수
         if(wantAdd&&d>0) return kindName[k]+' '+d+'개';
         if(!wantAdd&&d<0) return kindName[k]+' '+(-d)+'개';
         return null;
@@ -2085,15 +2083,15 @@ function coneQaAnswer(qRaw){
   if(/전체|전부|모두|몽땅|싹\s*다|죄다|도합|통틀어|합쳐|합치|총|요약|다\s*해서|(?:^|\s)다(?=\s|$|[?.!,])/.test(t)){   // V7.91-02: 전부·모두·다 등
     const ks=kind?[kind]:['deck','ele','hold'];
     const seg=ks.map(k=>{
-      const tot=rows.reduce((a,r)=>a+r[k].diff*perOf[k],0);
+      const tot=rows.reduce((a,r)=>a+r[k].diff,0);
       return kindName[k]+' '+(tot>0?('+'+tot+'개 추가'):tot<0?((-tot)+'개 반납'):'변동 없음');
     });
     return '전체 가감. '+seg.join(', ')+'.';
   }
   // ④ 콘 종류만 ("데크콘") → 전체 그 종류 요약
   if(kind){
-    const tot=rows.reduce((a,r)=>a+r[kind].diff*perOf[kind],0);
-    const list=rows.filter(r=>r[kind].diff!==0).map(r=>'베이 '+r.bay+' '+(r[kind].diff>0?'+':'')+(r[kind].diff*perOf[kind])+'개').join(', ');
+    const tot=rows.reduce((a,r)=>a+r[kind].diff,0);
+    const list=rows.filter(r=>r[kind].diff!==0).map(r=>'베이 '+r.bay+' '+(r[kind].diff>0?'+':'')+(r[kind].diff)+'개').join(', ');
     return kindName[kind]+' 전체 '+(tot>0?('+'+tot+'개 추가'):tot<0?((-tot)+'개 반납'):'변동 없음')+(list?('. '+list):'')+'.';
   }
   return CONE_QA_HELP;
@@ -2197,11 +2195,11 @@ function renderResults(groups){
   // 행 데이터 만들기
   const rows=keys.map(k=>{
     const g=groups[k];
-    const sd=distribute(g.stow), dd=distribute(g.disch);
+    // C7.67: 작업표는 '참 총개수' 기준 — 곳당 반올림(÷4 후 ×4) 왜곡 제거. 곳당은 표시에서 나눠 참고로.
     return {
       bay:(g.labels&&g.labels.length?g.labels.join(','):String(k)),
-      deck:{need:sd.deckPer, have:dd.deckPer, diff:sd.deckPer-dd.deckPer},
-      ele:{need:sd.elePer, have:dd.elePer, diff:sd.elePer-dd.elePer},
+      deck:{need:g.stow.deck, have:g.disch.deck, diff:g.stow.deck-g.disch.deck},
+      ele:{need:g.stow.ele, have:g.disch.ele, diff:g.stow.ele-g.disch.ele},
       // V7.61: 홀드콘 ×2 제거 — ediToBayGroups가 이미 대당 1(받침 통과분)로 정확히 합산.
       //   ×2는 "트윈 두 베이 합산" 규칙의 오역 — 자기 콘을 두 번 세어 ATPR 19번(콘 18)이
       //   36으로 표기되던 버그 (메모: 19와 (20)21이 같이 계산됨).
@@ -2227,7 +2225,7 @@ function renderResults(groups){
       <div class="sh-sub">${shipLabel} · ${today} · ${state.shipType==='container'?'컨테이너선':'일반/복합선'}</div>
     </div>
     <table class="ctab">
-      <thead><tr><th>베이</th><th>데크콘<br><small>4곳·곳당</small></th><th>코끼리콘<br><small>중간·곳당</small></th><th>홀드콘<br><small>중간</small></th></tr></thead>
+      <thead><tr><th>베이</th><th>데크콘<br><small>총개수·4곳</small></th><th>코끼리콘<br><small>총개수·중간</small></th><th>홀드콘<br><small>총개수</small></th></tr></thead>
       <tbody>`;
   for(const r of rows){
     html+=`<tr>
@@ -2236,12 +2234,13 @@ function renderResults(groups){
     </tr>`;
   }
   html+=`</tbody></table>
-    <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span> · <span style="color:#888">큰숫자=곳당 가감 · 회수=양하에서 나옴 · 필요=선적에 듦</span></div>
+    <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span> · <span style="color:#888">큰숫자=총 가감 · 작은글=곳당≈ · 회수=양하에서 나옴 · 필요=선적에 듦</span></div>
   </div>`;
 
   // V7.29: 동선표 — 양하 회수분을 선적 베이로 보내고, 모자란 분만 콘박스에서.
-  const routeDeck = computeRoutes(rows, 'deck', 4);
-  const routeEle  = computeRoutes(rows, 'ele', 2);
+  // C7.67: rows.diff가 이미 '참 총개수'라 per=1로 호출(×4/×2 이중 배수 제거).
+  const routeDeck = computeRoutes(rows, 'deck', 1);
+  const routeEle  = computeRoutes(rows, 'ele', 1);
   const routeHold = computeRoutes(rows, 'hold', 1);
   function routeRowsHtml(route, kindName, kindCls){
     if(!route.plan.length) return '';
@@ -2292,25 +2291,25 @@ function renderResults(groups){
 
 // perCount: 곳수 (데크콘 4곳, 코끼리콘 2곳, 홀드콘 1곳=중간). 총개수 = 곳당 × 곳수.
 function cell(c, perCount){
+  // C7.67: c는 '참 총개수' — 큰숫자=총 가감, 곳당은 나눠서 참고 표시(반올림 왜곡 제거).
   if(c.need===0&&c.have===0) return '<td class="keep-c">·</td>';
   let cls,txt;
   if(c.diff>0){cls='add';txt='+'+c.diff;}
   else if(c.diff<0){cls='rem';txt='−'+(-c.diff);}
   else {cls='keep';txt='0';}
-  // 총개수: 곳당 diff × 곳수 (추가/반납 총량)
-  const totalDiff = c.diff * (perCount||1);
-  const totalTxt = totalDiff>0?`총 +${totalDiff}개`:totalDiff<0?`총 −${-totalDiff}개`:'';
-  return `<td class="${cls}-c"><span class="big">${txt}</span>${totalTxt?`<span class="total">${totalTxt}</span>`:''}<span class="sub">회수${c.have}→필요${c.need}</span></td>`;
+  const per=perCount||1, perD=c.diff/per;
+  const perTxt=(per>1&&c.diff!==0)?`곳당 ${perD>0?'+':'−'}${Math.abs(Number.isInteger(perD)?perD:+perD.toFixed(1))}`:'';
+  return `<td class="${cls}-c"><span class="big">${txt}</span>${perTxt?`<span class="total">${perTxt}</span>`:''}<span class="sub">회수${c.have}→필요${c.need}</span></td>`;
 }
 
 function copyText(rows,ship,today){
   let t=`[콘 작업표] ${ship} ${today}\n`;
-  t+=`(콘: 데크/코끼리/홀드, +추가 −반납, 곳당 → 총개수)\n`;
+  t+=`(콘: 데크/코끼리/홀드, +추가 −반납, 총개수)\n`;
   for(const r of rows){
     const f=(c,per)=>{
       if(c.diff===0) return '0';
-      const sign=c.diff>0?'+':'−', v=Math.abs(c.diff), tot=v*per;
-      return `${sign}${v}(총${sign}${tot})`;
+      const sign=c.diff>0?'+':'−', v=Math.abs(c.diff);
+      return `${sign}${v}개`;   // C7.67: 참 총개수
     };
     t+=`${r.bay}번: 데크${f(r.deck,4)} 코끼리${f(r.ele,2)} 홀드${f(r.hold,1)}\n`;
   }
@@ -2348,7 +2347,7 @@ function saveImage(rows,ship,today){
     y+=rowH;
   });
   x.fillStyle='#888'; x.font='13px sans-serif';
-  x.fillText('+추가  −반납  ·그대로  (큰=곳당, 총=총개수)  |  콘 작업 전 반드시 확인', 24, y+26);
+  x.fillText('+추가  −반납  ·그대로  (큰숫자=총개수, 곳당=참고)  |  콘 작업 전 반드시 확인', 24, y+26);
   // 다운로드
   const url=cv.toDataURL('image/png');
   const a=document.createElement('a');
@@ -2362,9 +2361,9 @@ function drawCell(x,c,cx,y,rowH,perCount){
   else if(c.diff<0){col='#d83a3a'; txt='−'+(-c.diff);}
   else {col='#888'; txt='0';}
   x.fillStyle=col; x.font='bold 23px sans-serif'; x.fillText(txt, cx+8, y+26);
-  // 총개수 (곳당 × 곳수)
-  const per=perCount||1, tot=c.diff*per;
-  if(tot!==0){ x.fillStyle=col; x.font='bold 15px sans-serif'; x.fillText(`총 ${tot>0?'+':'−'}${Math.abs(tot)}개`, cx+8, y+44); }
+  // C7.67: c.diff = 참 총개수 — 곳당은 참고 표기
+  const per=perCount||1, perD=c.diff/per;
+  if(per>1&&c.diff!==0){ x.fillStyle=col; x.font='bold 15px sans-serif'; x.fillText(`곳당 ${perD>0?'+':'−'}${Math.abs(Number.isInteger(perD)?perD:+perD.toFixed(1))}`, cx+8, y+44); }
   x.fillStyle='#999'; x.font='12px sans-serif'; x.fillText(`${c.have}→${c.need}`, cx+8, y+58);
 }
 

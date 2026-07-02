@@ -10,7 +10,6 @@ import {
   buildConBoxMessage,
 } from '../kakaoShare.js';
 import { fbAddWorkReport } from '../firebase.js';
-import { getShipBayDictData } from '../shipStructure.js';
 import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort } from '../utils.js';
 import { ref, set, get, onValue, off } from 'firebase/database';
 import { db } from '../firebase.js';
@@ -76,6 +75,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   const [hatchAction, setHatchAction] = useState('open');
   const [bayInput, setBayInput] = useState('');
   const [hatchEquip, setHatchEquip] = useState('');
+  const [hatchPanels, setHatchPanels] = useState(1);  // V8.31: 해치커버 장수 수동 선택(1~3장) — 자동계산 제거
   // 콘박스
   const [conBoxType, setConBoxType] = useState('20');
   const [conBoxCount, setConBoxCount] = useState(1);
@@ -98,19 +98,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   const vsl = voyage?.info?.vsl || '';
   const shipImo = voyage?.info?.imo || '';
-  // V7.94-22: 해치커버 장수 = 매트릭스 hatchCount 합 (없으면 0 → 베이 개수 폴백)
-  const hatchPanelsOf = (bays) => {
-    try {
-      const dict = getShipBayDictData(shipImo, vsl);
-      const summary = dict?.bayDef?.baysSummary;
-      if (!Array.isArray(summary) || !summary.length) return 0;
-      const byNo = {};
-      summary.forEach(bs => { const no = String(parseInt(bs.bayNo ?? bs.bay, 10)); byNo[no] = bs; });
-      let total = 0, found = false;
-      bays.forEach(b => { const bs = byNo[String(parseInt(b, 10))]; if (bs && typeof bs.hatchCount === 'number') { total += bs.hatchCount; found = true; } });
-      return found ? total : 0;
-    } catch (e) { return 0; }
-  };
   // M6.37: mode 기반 voy 선택 — 양하 보고는 voy_d (양하 항차), 선적 보고는 voy_l (선적 항차)
   //   예: XTPG 양하 0523E, 선적 0523W → 양하 보고에 0523E, 선적 보고에 0523W
   //   각 핸들러 진입 시 자신의 mode로 voy를 shadowing해서 정확한 항차 전달
@@ -302,7 +289,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const voy = getVoy(equipModeOf(equip));
 
     const time = Date.now();
-    const panelCount = hatchPanelsOf(bays);
+    const panelCount = hatchPanels;  // V8.31: 자동계산 제거 — 검수사가 선택한 장수(1~3)
     const message = buildHatchMessage({ vsl, voy, bays, action: hatchAction, time, equip, panelCount });
 
     await fbAddWorkReport(voyageKey, {
@@ -310,6 +297,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       action: hatchAction,
       bays,
       equip,
+      panelCount,
       message,
     });
 
@@ -729,7 +717,19 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 placeholder="예: 1, 3, 5"
                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-3 text-base mono text-slate-100 focus:outline-none focus:border-cyan-500"
               />
-              <div className="text-[10px] text-slate-500 mt-1">총 {bayInput.split(/[,\s]+/).filter(b => b.trim()).length}장</div>
+            </div>
+
+            {/* V8.31: 해치커버 장수 수동 선택(1~3장) — 자동계산 제거 */}
+            <div>
+              <div className="text-xs font-bold text-slate-300 mb-1">장수 선택</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map(n => (
+                  <button key={n} onClick={() => setHatchPanels(n)}
+                    className={`py-3 rounded-lg font-bold ${hatchPanels === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    {n}장
+                  </button>
+                ))}
+              </div>
             </div>
 
             <button onClick={handleHatch}
