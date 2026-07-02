@@ -3,7 +3,7 @@
 //   - ediContainers 분류는 VoyagePage 재처리 로직과 동일(평택 POD/POL → discharge/loading, 그 외 transit).
 //   - records는 원시 파싱 결과만 반환(먼저 온 값 유지 + 빈칸 채움). 기존 records와의 병합·보존은 수집기 측 보수 머지 담당.
 //   - Firebase 쓰기는 여기서 하지 않는다 — 순수 함수라 시뮬·헬퍼 재사용이 쉽다.
-import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort } from './utils.js';
+import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, loadSheetJS } from './utils.js';
 import { APP_VERSION } from './utils.js';
 
 function _kind(name, head) {
@@ -19,7 +19,8 @@ function _kind(name, head) {
     return 'skip';
   }
   if (e === 'xls' || e === 'xlsx') {
-    if (/recap|cbf|cdl|memo|xray|x-ray|loadlist/.test(n)) return 'skip';
+    if (/loadlist\.xlsx$/.test(n)) return 'merged';   // V8.32-01: 수집기 합본(평택 기준 검증본) — 전용 매핑으로 읽음
+    if (/recap|cbf|cdl|memo|xray|x-ray/.test(n)) return 'skip';
     return 'list';
   }
   return 'skip';
@@ -50,7 +51,32 @@ export async function buildAutoPayload(files, opts) {
     const name = f.name || '';
     try {
       if (/\.(xls|xlsx)$/i.test(name)) {
-        if (_kind(name) !== 'list') { perFile.push({ name, kind: 'skip' }); continue; }
+        const xk = _kind(name);
+        if (xk === 'merged') {
+          // V8.32-01: 합본(MERGED 시트, 'Cntr No' 헤더) 전용 파싱 — parseListExcel은 이 형식을 못 읽음(0건).
+          const XLSX = await loadSheetJS();
+          const wb = XLSX.read(await _asU8(f), { type: 'array' });
+          const ws = wb.Sheets['MERGED'] || wb.Sheets[wb.SheetNames[0]];
+          let mc = 0;
+          (XLSX.utils.sheet_to_json(ws) || []).forEach(row => {
+            const cn = String(row['Cntr No'] || '').replace(/\s/g, '').toUpperCase();
+            if (!/^[A-Z]{4}\d{7}$/.test(cn)) return;
+            mc++;
+            const rec = { cn, _source: name };
+            if (row['Seal'] != null && row['Seal'] !== '') rec.sl = String(row['Seal']).trim();
+            if (row['EmptySeal'] != null && row['EmptySeal'] !== '') rec.eseal = String(row['EmptySeal']).trim();
+            const w = parseInt(row['Weight'], 10);
+            if (w > 0) rec.wt = w;
+            if (!records[cn]) { records[cn] = rec; return; }
+            const prev = records[cn];
+            for (const [k, v] of Object.entries(rec)) {
+              if (prev[k] === '' || prev[k] == null) prev[k] = v;
+            }
+          });
+          perFile.push({ name, kind: 'merged', count: mc });
+          continue;
+        }
+        if (xk !== 'list') { perFile.push({ name, kind: 'skip' }); continue; }
         const out = await parseListExcel(await _asU8(f));
         const recs = (out && out.records) || [];
         recs.forEach(r => {
