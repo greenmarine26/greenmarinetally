@@ -127,7 +127,7 @@ export async function buildAutoPayload(files, opts) {
         const cnCount = cs.filter(c => c.cn && c.cn.length === 11).length;
         perFile.push({ name, kind, count: cs.length, cnCount });
         if (!best || cnCount > best.cnCount || (cnCount === best.cnCount && cs.length > best.containers.length)) {
-          best = { name, text, containers: cs, cnCount };
+          best = { name, text, containers: cs, cnCount, virtual: !!(r && r._virtualEdi) };
         }
       }
     } catch (e) { perFile.push({ name, error: String(e && e.message || e) }); }
@@ -142,6 +142,23 @@ export async function buildAutoPayload(files, opts) {
       const containerMode = mode === 'discharge' ? (podPtk ? 'discharge' : 'transit') : (polPtk ? 'loading' : 'transit');
       const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
       ediContainers[key] = { ...c, _slotKey: key, _mode: containerMode };
+    });
+  }
+
+  // V8.33-01: 가상 EDI(IFCSUM)는 실번호·무게를 담고 있으므로 리스트(records)도 함께 생성 — 앱 매칭용.
+  //   (리스트가 없으면 매칭 0으로 보이는 문제, 사용자 지적 2026-07-03.)
+  if (best && best.virtual) {
+    best.containers.forEach(c => {
+      if (!c.cn || c.cn.length !== 11) return;
+      const cn = c.cn.toUpperCase();
+      const rec = { cn, _source: best.name };
+      if (c.sl) rec.sl = c.sl;
+      if (c.wt) rec.wt = c.wt;
+      if (!records[cn]) { records[cn] = rec; return; }
+      const prev = records[cn];
+      for (const [k, v] of Object.entries(rec)) {
+        if (prev[k] === '' || prev[k] == null) prev[k] = v;
+      }
     });
   }
 
