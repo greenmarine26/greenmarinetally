@@ -195,6 +195,8 @@
   .ctab .add-c .total{color:var(--add);}
   .ctab .rem-c .total{color:var(--rem);}
   .ctab .sub{display:block; font-size:10px; color:var(--dim);}
+  .ctab .sub2{font-size:9.5px; color:#8b93a7;}
+  .ctab .need-hl{color:var(--accent); font-weight:800;}
   .ctab .add-c .big{color:var(--add);}
   .ctab .rem-c .big{color:var(--rem);}
   .ctab .keep-c{color:var(--dim);} .ctab .keep-c .big{color:var(--dim);}
@@ -249,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.33-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.34</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -326,6 +328,37 @@ function distribute(cones){
     holdTotal: cones.hold        // 이미 (콘대상 대수 × 곳당 개수)로 계산됨 — 추가 배수 없음
   };
 }
+// V8.34: 작업표 '표시' 트리오 병합 — 선행 홀수 베이(예 33)가 별도 행이라 콘 작업자가
+//   짝수 행(34-35)만 보고 홀수 몫을 놓치던 문제(사용자 확정 2026-07-03).
+//   계산·그룹은 기존 그대로, 표시만 짝수 베이 트리오로 합산(소그룹 합 = 사용자 확정 28=2+26 방식)
+//   하고 소그룹 분해를 작은 글씨로 병기한다.
+function mergeTrioRows(baseRows, keys){
+  const keySet = new Set(keys);
+  const trioOf = k => k % 2 === 0 ? k : (keySet.has(k + 1) ? k + 1 : (keySet.has(k - 1) ? k - 1 : k));
+  const byTrio = new Map();
+  keys.forEach((k, i) => {
+    const t = trioOf(k);
+    if (!byTrio.has(t)) byTrio.set(t, []);
+    byTrio.get(t).push(baseRows[i]);
+  });
+  const out = [];
+  for (const t of Array.from(byTrio.keys()).sort((a, b) => a - b)) {
+    const subs = byTrio.get(t);
+    if (subs.length === 1) { out.push(Object.assign({ subs: [] }, subs[0])); continue; }
+    const nums = subs.flatMap(r => String(r.bay).split(/[-,]/).map(x => parseInt(x, 10)).filter(Number.isFinite));
+    const pad2 = n => String(n).padStart(2, '0');
+    const bay = pad2(Math.min.apply(null, nums)) + '-' + pad2(Math.max.apply(null, nums));
+    const m = kind => {
+      const need = subs.reduce((a, r) => a + r[kind].need, 0);
+      const have = subs.reduce((a, r) => a + r[kind].have, 0);
+      return { need, have, diff: need - have };
+    };
+    out.push({ bay, deck: m('deck'), ele: m('ele'), hold: m('hold'),
+               subs: subs.map(r => ({ label: String(r.bay), deck: r.deck, ele: r.ele, hold: r.hold })) });
+  }
+  return out;
+}
+
 // ============ EDI(BAPLIE) 파서 — 앱 통합용 ============
 function isEDI(text){
   return /UNB\+|LOC\+147\+/.test(text) && /EQD\+/.test(text);
@@ -2195,7 +2228,7 @@ function renderResults(groups){
   if(!keys.length){ ra.innerHTML='<div class="card"><div class="empty-note">인식된 베이가 없습니다. EDI를 쓰거나, 사진이면 더 또렷하게 찍어주세요.</div></div>'; return; }
 
   // 행 데이터 만들기
-  const rows=keys.map(k=>{
+  const baseRows=keys.map(k=>{
     const g=groups[k];
     const sd=distribute(g.stow), dd=distribute(g.disch);
     return {
@@ -2208,6 +2241,9 @@ function renderResults(groups){
       hold:{need:g.stow.hold, have:g.disch.hold, diff:g.stow.hold-g.disch.hold},
     };
   });
+
+  // V8.34: 표시·질문기·동선표 모두 트리오 병합 행 기준(작업자 단위).
+  const rows = mergeTrioRows(baseRows, keys);
 
   // V7.55: 콘 질문기용 데이터 보관 — 작업표 행을 그대로 답변 재료로
   window.__coneQA = { rows };
@@ -2230,9 +2266,12 @@ function renderResults(groups){
       <thead><tr><th>베이</th><th>데크콘<br><small>4곳·곳당</small></th><th>코끼리콘<br><small>중간·곳당</small></th><th>홀드콘<br><small>중간</small></th></tr></thead>
       <tbody>`;
   for(const r of rows){
+    const subTxt = kind => (r.subs && r.subs.length > 1)
+      ? r.subs.filter(s2 => s2[kind].need || s2[kind].have).map(s2 => `${s2.label}:${s2[kind].need}`).join(' · ')
+      : '';
     html+=`<tr>
       <td class="bay-c">${r.bay}</td>
-      ${cell(r.deck,4)}${cell(r.ele,2)}${cell(r.hold,1)}
+      ${cell(r.deck,4,subTxt('deck'))}${cell(r.ele,2,subTxt('ele'))}${cell(r.hold,1,subTxt('hold'))}
     </tr>`;
   }
   html+=`</tbody></table>
@@ -2291,7 +2330,7 @@ function renderResults(groups){
 }
 
 // perCount: 곳수 (데크콘 4곳, 코끼리콘 2곳, 홀드콘 1곳=중간). 총개수 = 곳당 × 곳수.
-function cell(c, perCount){
+function cell(c, perCount, subTxt){
   if(c.need===0&&c.have===0) return '<td class="keep-c">·</td>';
   let cls,txt;
   if(c.diff>0){cls='add';txt='+'+c.diff;}
@@ -2300,7 +2339,8 @@ function cell(c, perCount){
   // 총개수: 곳당 diff × 곳수 (추가/반납 총량)
   const totalDiff = c.diff * (perCount||1);
   const totalTxt = totalDiff>0?`총 +${totalDiff}개`:totalDiff<0?`총 −${-totalDiff}개`:'';
-  return `<td class="${cls}-c"><span class="big">${txt}</span>${totalTxt?`<span class="total">${totalTxt}</span>`:''}<span class="sub">회수${c.have}→필요${c.need}</span></td>`;
+  // V8.34: 필요 강조 + 소그룹(홀수·짝수) 분해를 작게 병기 — 예: 33:2 · 34-35:26
+  return `<td class="${cls}-c"><span class="big">${txt}</span>${totalTxt?`<span class="total">${totalTxt}</span>`:''}<span class="sub">회수${c.have}→<b class="need-hl">필요${c.need}</b></span>${subTxt?`<span class="sub sub2">${subTxt}</span>`:''}</td>`;
 }
 
 function copyText(rows,ship,today){
