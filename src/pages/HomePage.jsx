@@ -3,6 +3,7 @@ import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
+import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
 //   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
@@ -31,7 +32,7 @@ function lastWorkAt(v) {
   return last;
 }
 
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
@@ -175,6 +176,15 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   // M5.82: 항차마다 부두 정보 매칭
   //   M5.82 hotfix: PORT-MIS를 voyage.info보다 우선 (더 최신 데이터)
   //                 선박이 부두를 옮기면 PORT-MIS 갱신만으로 즉시 반영
+  // V8.40: 항차 건강 요약(이상 건수) + 수집기 하트비트 상태 — 30초마다 경과 재계산.
+  const [hbNow, setHbNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setHbNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const healthIssueCount = useMemo(() => healthSummary(voyages).issueCount, [voyages]);
+  const hbView = heartbeatState(heartbeat, hbNow);
+
   const voyagesWithPier = useMemo(() => {
     return Object.entries(voyages || {})
       .filter(([k, v]) => v && v.info)
@@ -356,6 +366,24 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           <div className="text-[10px] text-cyan-300/70">⚓ 입출항 자동 등록</div>
         </button>
       </div>
+
+      {/* V8.40: 수집기 상태 + 항차 이상 요약 → 건강 점검 페이지 */}
+      <button onClick={() => onOpenHealth && onOpenHealth()}
+        className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 mb-3 text-left transition-colors ${
+          hbView.state === 'down' || healthIssueCount
+            ? 'border-amber-700/60 bg-amber-950/30 hover:bg-amber-950/45'
+            : 'border-slate-700/40 bg-slate-900/50 hover:bg-slate-800/60'}`}>
+        <span className={`w-2 h-2 rounded-full shrink-0 ${
+          hbView.state === 'ok' ? 'bg-emerald-400 animate-pulse' : hbView.state === 'down' ? 'bg-red-500' : 'bg-slate-500'}`} />
+        <span className="text-xs font-bold text-slate-200">
+          {hbView.state === 'ok' ? `수집기 정상 · ${hbView.ageMin}분 전`
+            : hbView.state === 'down' ? `수집기 끊김 · ${hbView.ageMin}분 전` : '수집기 기록 없음'}
+        </span>
+        <span className={`text-xs font-bold ml-auto ${healthIssueCount ? 'text-amber-300' : 'text-emerald-300/80'}`}>
+          {healthIssueCount ? `⚠ 검증 필요 ${healthIssueCount}건` : '✓ 자료 정상'}
+        </span>
+        <ChevronRight size={14} className="text-slate-500 shrink-0" />
+      </button>
 
       <div className="flex items-center justify-between mb-3 gap-3">
         <div className="shrink-0">

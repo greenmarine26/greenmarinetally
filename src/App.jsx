@@ -5,12 +5,13 @@ import { loadUserBayDict } from './data/userBayDict.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis,
-  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict
+  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat
 } from './firebase.js';
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
+import HealthPage from './pages/HealthPage.jsx';  // V8.40: 항차 건강 점검
 import Header from './components/Header.jsx';
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
 import InspectorModal from './components/InspectorModal.jsx';
@@ -38,6 +39,7 @@ export default function App() {
   // M3.6: 인사 모달
   const [greeting, setGreeting] = useState(null);  // {type: 'login'|'logout', lines, voice, ...}
   const [weather, setWeather] = useState(null);
+  const [heartbeat, setHeartbeat] = useState(null);  // V8.40: 수집기 하트비트
 
   useEffect(() => {
     const u1 = fbSubscribeVoyages((v) => { setVoyages(v); setVoyagesLoaded(true); });
@@ -46,6 +48,7 @@ export default function App() {
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
+    const u6 = fbSubscribeHeartbeat(setHeartbeat);  // V8.40: 수집기 하트비트
     // M5.88: Firebase 베이사전 구독 — 전역 객체 window.__fbShipBayDict에 저장
     //   shipStructure.js가 이 데이터를 우선 조회 (베이사전 매칭 자동화)
     // M6.94.20: user 소스 매트릭스를 localStorage userBayDict에도 머지
@@ -87,7 +90,7 @@ export default function App() {
         console.error('[App] user 매트릭스 머지 실패', err);
       }
     });
-    return () => { u1(); u2(); u3(); u4(); u5(); unsub2(); unsub3(); };
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); unsub2(); unsub3(); };
   }, []);
 
   useEffect(() => {
@@ -97,6 +100,7 @@ export default function App() {
       if (v) setRoute({ name: 'voyage', voyageKey: decodeURIComponent(v[1]) });
       else if (h === '#/search') setRoute({ name: 'search' });
       else if (h === '#/chief') setRoute({ name: 'chief' });
+      else if (h === '#/health') setRoute({ name: 'health' });  // V8.40: 항차 건강 점검
       else setRoute({ name: 'home' });
     };
     sync();
@@ -191,6 +195,7 @@ export default function App() {
     if (target === 'home') window.location.hash = '';
     else if (target === 'search') window.location.hash = '#/search';
     else if (target === 'chief') window.location.hash = '#/chief';
+    else if (target === 'health') window.location.hash = '#/health';  // V8.40
     else if (target.voyageKey) window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}`;
   }, []);
 
@@ -219,6 +224,14 @@ export default function App() {
             onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
             onOpenGlobalSearch={() => navigate('search')}
             onOpenChiefDashboard={() => navigate('chief')}
+            heartbeat={heartbeat}
+            onOpenHealth={() => navigate('health')}
+          />
+        )}
+        {route.name === 'health' && (
+          <HealthPage
+            voyages={voyages} heartbeat={heartbeat}
+            onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
           />
         )}
         {route.name === 'search' && (

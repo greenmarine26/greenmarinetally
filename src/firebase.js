@@ -514,6 +514,13 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
 // (실번호 / X-RAY 봉인 수정 함수는 위에서 정의됨 — 이력 추적 포함)
 
 // === 항차 전체 구독 ===
+// V8.40: 수집기 하트비트 구독 — collector_heartbeat = { at, cycleMin, autoreg, version }
+export function fbSubscribeHeartbeat(callback) {
+  const r = ref(db, 'collector_heartbeat');
+  const unsub = onValue(r, (snap) => callback(snap.val() || null));
+  return unsub;
+}
+
 export function fbSubscribeVoyages(callback) {
   const r = ref(db, 'voyages');
   const unsub = onValue(r, (snap) => {
