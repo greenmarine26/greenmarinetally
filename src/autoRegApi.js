@@ -125,9 +125,14 @@ export async function buildAutoPayload(files, opts) {
         const r = kind === 'ifcsum' ? parseIfcsum(text) : (kind === 'asc' ? parseAscFile(text) : parseBAPLIE(text));
         const cs = (r && r.containers) || [];
         const cnCount = cs.filter(c => c.cn && c.cn.length === 11).length;
-        perFile.push({ name, kind, count: cs.length, cnCount });
-        if (!best || cnCount > best.cnCount || (cnCount === best.cnCount && cs.length > best.containers.length)) {
-          best = { name, text, containers: cs, cnCount, virtual: !!(r && r._virtualEdi) };
+        // V8.35-01: 동률이면 규격(iso) 보유 수가 많은 쪽 우선 — ASC(규격 일부 누락)가 알파벳순으로
+        //   BAPLIE를 밀어내 카고플랜 규격 180대 누락(PCSZ 2619E 사건, 사용자 발견 2026-07-03).
+        const isoCount = cs.filter(c => c.cn && c.iso).length;
+        perFile.push({ name, kind, count: cs.length, cnCount, isoCount });
+        if (!best || cnCount > best.cnCount
+            || (cnCount === best.cnCount && isoCount > (best.isoCount || 0))
+            || (cnCount === best.cnCount && isoCount === (best.isoCount || 0) && cs.length > best.containers.length)) {
+          best = { name, text, containers: cs, cnCount, isoCount, virtual: !!(r && r._virtualEdi) };
         }
       }
     } catch (e) { perFile.push({ name, error: String(e && e.message || e) }); }
