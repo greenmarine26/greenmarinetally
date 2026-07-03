@@ -523,15 +523,6 @@ export function fbSubscribeVoyages(callback) {
 }
 
 
-// 메일수집기 준비 신호 구독 — collector_signal/{이름}. 양하·선적 준비된 배 목록.
-export function fbSubscribeCollectorSignal(name, callback) {
-  const r = ref(db, 'collector_signal/' + name);
-  const unsub = onValue(r, (snap) => {
-    callback(snap.val() || null);
-  });
-  return unsub;
-}
-
 // 단일 항차 구독
 export function fbSubscribeVoyage(voyageKey, callback) {
   const r = voyageRef(voyageKey);

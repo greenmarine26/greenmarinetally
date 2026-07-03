@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, Inbox, X } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete, fbSubscribeCollectorSignal } from '../firebase.js';
+import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
+import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 
@@ -43,12 +43,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   // M6.17: 현재 GPS 좌표 (부두 좌표 등록용)
   const [currentCoord, setCurrentCoord] = useState(null);   // { lat, lng }
   const [pierRegisterState, setPierRegisterState] = useState({ msg: '', error: false });
-  const [collectorSignals, setCollectorSignals] = useState(null);   // 메일수집기 준비 신호
-  // V8.30: 사용자가 치운 수집기 대기 카드(항차번호 조합 sig 기준). 로컬 숨김 — 수집기 원본 불변.
-  const [dismissedSigs, setDismissedSigs] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('gm_dismissed_signals_v1') || '[]')); }
-    catch (e) { return new Set(); }
-  });
+  // V8.35: 수집기 통보(신호) 기능 제거 — 자동 항차 등록이 대체(사용자 확정 2026-07-03).
 
   // 1주일(7일) 이상 지난 항차 자동 삭제. voyages 로드 후 1회 실행.
   //   V8.01: 기준을 createdAt → "마지막 작업 활동" 시각으로 변경 (사용자 확정 2026-06-16).
@@ -102,11 +97,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     return () => { if (typeof unsub === 'function') unsub(); };
   }, []);
 
-  // 메일수집기 준비 신호 구독 — collector_signal/김성일 (양하·선적 준비된 배)
-  useEffect(() => {
-    const unsub = fbSubscribeCollectorSignal('김성일', (data) => setCollectorSignals(data || null));
-    return () => { if (typeof unsub === 'function') unsub(); };
-  }, []);
 
   // M6.17: GPS 측정 함수 분리 (재측정 가능)
   const measureGps = (force = false) => {
@@ -337,38 +327,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     return (!hasD || !!v?.info?.dischargeDone) && (!hasL || !!v?.info?.loadingDone);
   };
 
-  // 등록 대기 = 신호 중 아직 검수앱에 항차로 안 만들어진 것. **항차수로 대조**한다.
-  //   (검수앱 info.vsl은 코드 'ATRP', 수집기 신호 vessel은 풀네임 'ATLANTIC PIONEER'라 이름 비교는 불일치 → 항차수로.)
-  //   같은 항차수가 이미 등록돼 있으면 카드 숨김(사용자 확정 2026-06-23: "항차수가 같으면 안 보여야").
-  const pendingSignals = useMemo(() => {
-    if (!collectorSignals) return [];
-    const norm = (x) => (x || '').toString().trim().toUpperCase();
-    const existingVoys = new Set();
-    Object.values(voyages || {}).forEach((v) => {
-      [v?.info?.voy_d, v?.info?.voy_l, v?.info?.voy].forEach((x) => { const n = norm(x); if (n) existingVoys.add(n); });
-    });
-    const out = [];
-    for (const [k, s] of Object.entries(collectorSignals)) {
-      if (!s || typeof s !== 'object' || k.startsWith('_')) continue;
-      const svoys = [s.dischargeVoy, s.loadVoy].map(norm).filter(Boolean);
-      const registered = svoys.some((vo) => existingVoys.has(vo));   // 항차수 일치 → 이미 등록 → 숨김
-      // V8.30: 항차번호 조합 sig 기준 숨김. 같은 배라도 새 항차번호면 sig가 달라 다시 보임.
-      const sig = norm(s.dischargeVoy) + '|' + norm(s.loadVoy);
-      if (!registered && !dismissedSigs.has(sig)) out.push({ ...s, _key: k, _sig: sig });
-    }
-    out.sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));   // 먼저 대기한 게 위로
-    return out;
-  }, [collectorSignals, voyages, dismissedSigs]);
-
-  // V8.30: 대기 카드 치우기 — 그 항차번호 조합을 로컬 숨김 목록에 추가(수집기 원본 불변).
-  const dismissSignal = (sig) => {
-    setDismissedSigs((prev) => {
-      const next = new Set(prev); next.add(sig);
-      try { localStorage.setItem('gm_dismissed_signals_v1', JSON.stringify([...next])); } catch (e) {}
-      return next;
-    });
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-3 py-3">
       {/* 그린마린 검수팀 전용 배지 */}
@@ -404,30 +362,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
           <div className="text-lg font-bold text-slate-100">{list.length}건</div>
         </div>
-        {pendingSignals.length > 0 && (
-          <div className="flex-1 min-w-0 flex items-stretch gap-2 overflow-hidden">
-            {pendingSignals.slice(0, 3).map((s) => (
-              <div key={s._key} className="relative flex-1 min-w-0 bg-emerald-900/30 border border-emerald-700/40 rounded-lg px-2.5 py-1.5 pr-6" title="수집기 준비됨 — 등록 대기">
-                <button
-                  onClick={() => dismissSignal(s._sig)}
-                  className="absolute top-1 right-1 text-emerald-400/60 hover:text-red-300 p-0.5"
-                  title="이 대기 카드 치우기 (지난/등록된 항차)"
-                >
-                  <X className="w-3 h-3"/>
-                </button>
-                <div className="flex items-center gap-1 text-emerald-200 text-xs font-bold truncate">
-                  <Inbox className="w-3 h-3 shrink-0"/>{s.vessel}
-                </div>
-                <div className="text-[10px] text-slate-300 truncate">
-                  {s.dischargeVoy ? `양하 ${s.dischargeVoy}` : ''}{s.dischargeVoy && s.loadVoy ? ' · ' : ''}{s.loadVoy ? `선적 ${s.loadVoy}` : ''}
-                </div>
-              </div>
-            ))}
-            {pendingSignals.length > 3 && (
-              <div className="shrink-0 self-center text-[10px] text-slate-500 font-bold">+{pendingSignals.length - 3}</div>
-            )}
-          </div>
-        )}
         <div className="flex gap-2 flex-wrap shrink-0">
           <button
             onClick={() => setShowCreate('discharge')}
