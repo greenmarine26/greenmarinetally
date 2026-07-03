@@ -12,10 +12,11 @@ function _kind(name, head) {
   if (e === 'edi') return 'edi';
   if (e === 'asc') return 'asc';
   if (e === 'txt') {
-    // RZOR 등 EDI/ASC가 .txt로 오는 경우 — 내용 머리로 판정.
+    // RZOR 등 EDI/ASC/매니페스트가 .txt로 오는 경우 — 내용 머리로 판정.
     const h = (head || '').trimStart();
     if (h.startsWith('UNB') || h.startsWith('UNH')) return 'edi';
     if (h.startsWith('$60')) return 'asc';
+    if (h.startsWith('00:IFCSUM')) return 'ifcsum';   // V8.33: LOLO(RZOR) 매니페스트 — 가상 EDI 재료
     return 'skip';
   }
   if (e === 'xls' || e === 'xlsx') {
@@ -33,6 +34,33 @@ async function _asText(f) {
 async function _asU8(f) {
   const ab = f.arrayBuffer ? await f.arrayBuffer() : (f.buffer || f);
   return new Uint8Array(ab);
+}
+
+// V8.33: IFCSUM(콜론 구분 매니페스트, RZOR/LOLO) → 가상 EDI 컨테이너.
+//   구조(실파일 확인): 12:=B/L(파트7=POL), 13:=POD(파트1), 51:=컨테이너(파트2=컨번호, 3=실번호, 4=규격, 5=F/E, 7=무게).
+export function parseIfcsum(text) {
+  const containers = [];
+  let pol = '', pod = '';
+  for (const rawLine of String(text || '').split(/\r?\n/)) {
+    const line = rawLine.trim().replace(/'$/, '');
+    if (!line) continue;
+    const parts = line.split(':');
+    const seg = parts[0];
+    if (seg === '12') { pol = (parts[7] || '').trim().toUpperCase(); continue; }
+    if (seg === '13') { pod = (parts[1] || '').trim().toUpperCase(); continue; }
+    if (seg !== '51') continue;
+    const cn = (parts[2] || '').replace(/\s/g, '').toUpperCase();
+    if (!/^[A-Z]{4}\d{7}$/.test(cn)) continue;
+    const c = { cn, pol, pod, fe: (parts[5] || 'F').trim().toUpperCase() || 'F' };
+    const sl = (parts[3] || '').trim();
+    if (sl) c.sl = sl;
+    const iso = (parts[4] || '').trim().toUpperCase();
+    if (iso) c.iso = iso;
+    const wt = parseInt(parts[7], 10);
+    if (wt > 0) c.wt = wt;
+    containers.push(c);
+  }
+  return { containers, _virtualEdi: true };
 }
 
 export async function buildAutoPayload(files, opts) {
@@ -92,9 +120,9 @@ export async function buildAutoPayload(files, opts) {
         perFile.push({ name, kind: 'list', count: recs.length });
       } else {
         const text = await _asText(f);
-        const kind = _kind(name, text.slice(0, 8));
-        if (kind !== 'edi' && kind !== 'asc') { perFile.push({ name, kind: 'skip' }); continue; }
-        const r = kind === 'asc' ? parseAscFile(text) : parseBAPLIE(text);
+        const kind = _kind(name, text.slice(0, 12));
+        if (kind !== 'edi' && kind !== 'asc' && kind !== 'ifcsum') { perFile.push({ name, kind: 'skip' }); continue; }
+        const r = kind === 'ifcsum' ? parseIfcsum(text) : (kind === 'asc' ? parseAscFile(text) : parseBAPLIE(text));
         const cs = (r && r.containers) || [];
         const cnCount = cs.filter(c => c.cn && c.cn.length === 11).length;
         perFile.push({ name, kind, count: cs.length, cnCount });
