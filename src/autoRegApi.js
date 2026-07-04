@@ -63,6 +63,9 @@ export function parseIfcsum(text) {
   return { containers, _virtualEdi: true };
 }
 
+// 가상 선적 EDI 대상 — 선적 EDI가 늦거나(OBWH) 안 오는(RZOR) 선박. 리스트로 선적 카운트를 채운다(사용자 확정 2026-07-04).
+const VIRTUAL_LOAD_SHIPS = new Set(['RZOR', 'OBWH']);
+
 export async function buildAutoPayload(files, opts) {
   const vslCode = String(opts?.vslCode || '').trim().toUpperCase();
   const voy = String(opts?.voy || '').trim().toUpperCase();
@@ -165,6 +168,15 @@ export async function buildAutoPayload(files, opts) {
         if (prev[k] === '' || prev[k] == null) prev[k] = v;
       }
     });
+  }
+
+  // 가상 선적 EDI(RZOR·OBWH) — 선적인데 진짜 EDI가 없으면(best 없음) 리스트를 선적 ediContainers로 승격한다.
+  //   POL 평택으로 채워 대시보드 선적 카운트(_ptkCountOfSection·POL평택)에 잡히게. _virtualFromList로 '가상/리스트' 배지.
+  //   RZOR는 선적 EDI가 안 와 이 가상이 최종. OBWH는 나중에 실 EDI가 오면 best로 잡혀 ediContainers를 덮어씀(자동 마무리).
+  if (mode === 'loading' && !best && VIRTUAL_LOAD_SHIPS.has(vslCode) && Object.keys(records).length) {
+    for (const cn of Object.keys(records)) {
+      ediContainers[cn] = { ...records[cn], cn, pol: 'KRPTK', _slotKey: cn, _mode: 'loading', _virtualEdi: true, _virtualFromList: true };
+    }
   }
 
   // [3] 항차 info — HomePage 수동 생성(handleCreate)과 같은 스키마 + 자동 표시.

@@ -858,6 +858,9 @@ function SectionBar({ label, color, stats, onClick }) {
         <span className="text-slate-400">평택 <span className="text-amber-300 font-bold">{stats.ptk}</span></span>
         <span className="text-slate-600">·</span>
         <span className="text-slate-400">매칭 {stats.matched}</span>
+        {stats.virtual && (
+          <span className="ml-1 px-1 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/40 text-[10px] font-black" title="선적 EDI 미도착 — 선적 리스트로 채운 가상 카운트(베이 없음). 실 EDI 도착 시 자동 대체.">가상/리스트</span>
+        )}
         {stats.missing > 0 && (
           <>
             <span className="text-slate-600">·</span>
@@ -877,7 +880,7 @@ function SectionBar({ label, color, stats, onClick }) {
 
 function computeStats(section, mode) {
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
-  if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0 };
+  if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0, virtual: false };
   const ediContainers = section.ediContainers || {};
   const records = section.records || {};
   const completed = section.completed || {};
@@ -896,7 +899,7 @@ function computeStats(section, mode) {
   const missing = ptkCns.size - matched;
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
-  return { total, done, ptk: ptkCns.size, matched, missing };
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual: ediValues.some(c => c && c._virtualFromList) };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {
