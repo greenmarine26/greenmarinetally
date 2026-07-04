@@ -1,5 +1,28 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.41';
+export const APP_VERSION = 'V8.43';
+
+// V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
+//   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
+//   2026-07-04 Firebase ships 노드 정리(41→27키)와 세트. 백업: /ships_backup_20260704 + 로컬 JSON.
+export const SHIP_KEY_ALIAS = {
+  OBWH: 'D5MO4', CNYNT: 'D5MO4',        // 연태훼리 OBWH (CNYNT는 항구코드 오염 키)
+  RZOR: 'HOAG',                          // RIZHAO ORIENT
+  KKLC: 'D5MP9',                         // KMTC LAEM CHABANG
+  TNJP: '3E8470',                        // TEN JUPITER
+  PCSZ: '9V8012',                        // PACIFIC SHENZHEN
+  ATRP: '9388417', D5RR5: '9388417',     // ATLANTIC PIONEER (정식 IMO)
+  DONGJINCONTINENTAL: 'DJCT',            // DONGJIN CONTINENTAL (선박명 유령 키)
+  V2EE9: '9434450',                      // AS PIA (정식 IMO)
+  '9VMY6': '9435038',                    // SEASPAN CALICANTO (정식 IMO)
+  SWRG: '9943803', V7A576: '9943803',    // SAWASDEE RIGEL (정식 IMO)
+  V7A5451: 'V7A5151',                    // STARSHIP DRACO (콜사인 오타 키)
+};
+
+// ships/{키} 저장·조회용 정식 키 변환. 별칭이 아니면 그대로 돌려준다.
+export function resolveShipKey(id) {
+  const k = String(id || '').toUpperCase().trim();
+  return SHIP_KEY_ALIAS[k] || k;
+}
 // M5.81 변경점 (voucher 사이즈 분류 hotfix):
 //   ⚠ 발견: voucher가 LIST의 HC를 40 standard로 잘못 분류 (DPRT 2605N voucher 분석)
 //     - NSL "4HDC" → deriveIso 매칭 실패 → iso='' → cn 폴백으로 '40'

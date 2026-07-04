@@ -8,7 +8,7 @@ import {
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort, isPortCode } from './utils.js';
+import { isPyeongtaekPort, isPortCode, resolveShipKey } from './utils.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -848,7 +848,8 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
   const discharge = countSection(voyage.discharge);
   const loading = countSection(voyage.loading);
   const info = voyage.info || {};
-  const shipId = imo || info.imo || info.callsign || (info.vsl ? info.vsl.toUpperCase().replace(/\s+/g, '') : '');
+  // V8.43: vsl 폴백 등으로 같은 배가 다른 키에 갈라지지 않게 정식 키로 수렴.
+  const shipId = resolveShipKey(imo || info.imo || info.callsign || (info.vsl ? info.vsl.toUpperCase().replace(/\s+/g, '') : ''));
 
   // ── M7.18b 핵심: 삭제 전 실제 데이터 전체를 archive 노드에 통째 백업 ──
   //   기존엔 개수(통계)만 ships에 기록하고 실데이터는 그냥 삭제됨 → 복구 불가였음.
