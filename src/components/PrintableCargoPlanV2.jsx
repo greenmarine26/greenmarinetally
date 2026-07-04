@@ -798,12 +798,12 @@ export default function PrintableCargoPlanV2({
               );
               slots.push(
                 <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
-                  {/* V8.44: 별첨2 옆에 별첨3(규격별 F/E) 나란히 */}
-                  <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
-                    <div style={{ flex: 3, minWidth: 0 }}>
+                  {/* V8.44-01: 별첨3은 별첨2 아래 세로 배치 (옆 배치가 보기 안 좋음 — 사용자 피드백) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%' }}>
+                    <div style={{ flexShrink: 0 }}>
                       <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
                     </div>
-                    <div style={{ flex: 2, minWidth: 0 }}>
+                    <div style={{ flexShrink: 0 }}>
                       <FeLegend fe={legends.feCounts} />
                     </div>
                   </div>
@@ -813,14 +813,16 @@ export default function PrintableCargoPlanV2({
               slots.push(
                 <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box">
                   <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
-                    <div style={{ flex: 3, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
                     </div>
-                    <div style={{ flex: 3, minWidth: 0 }}>
-                      <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
-                    </div>
-                    <div style={{ flex: 2, minWidth: 0 }}>
-                      <FeLegend fe={legends.feCounts} />
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ flexShrink: 0 }}>
+                        <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        <FeLegend fe={legends.feCounts} />
+                      </div>
                     </div>
                   </div>
                 </div>
