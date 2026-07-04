@@ -610,6 +610,8 @@ export default function PrintableCargoPlanV2({
     const carrierCounts = new Map();
     const cargoCounts = new Map();
     const podCounts = new Map();
+    // V8.44: 별첨3 — 규격(20/40/45)별 Full/Empty 카운트 (평택분만, 기존 별첨 원칙 동일).
+    const feCounts = { '20': { F: 0, E: 0 }, '40': { F: 0, E: 0 }, '45': { F: 0, E: 0 } };
     const addTo = (map, key, size) => {
       if (!map.has(key)) map.set(key, { '20': 0, '40': 0, '45': 0, total: 0 });
       const e = map.get(key);
@@ -631,6 +633,7 @@ export default function PrintableCargoPlanV2({
       // M6.94.29: POD 키 직접 추출 (이미 matchPodC 통과 = 평택 확정).
       //   getContainerColorKey는 pol 재검증을 하는데, 엠티는 pol이 목적지로 오염될 수 있어
       //   여기서 null이 나면 POD 별첨에서 누락됨 → POD 3자만 직접 뽑는다.
+      feCounts[size][c.fe === 'E' ? 'E' : 'F']++;   // V8.44: 규격별 F/E
       const podRaw = String(c.pod || '').toUpperCase();
       const p3 = podRaw.length >= 5 ? podRaw.slice(2, 5) : podRaw.slice(0, 3);
       if (p3 && p3 !== 'PTK') addTo(podCounts, p3, size);
@@ -642,7 +645,7 @@ export default function PrintableCargoPlanV2({
       return b[1].total - a[1].total;
     });
     const pods = [...podCounts.entries()].sort((a, b) => b[1].total - a[1].total);
-    return { carriers, cargos, pods };
+    return { carriers, cargos, pods, feCounts };
   }, [containers, pod, mode]);
 
   // 모든 베이의 렌더 데이터 미리 계산
@@ -795,18 +798,29 @@ export default function PrintableCargoPlanV2({
               );
               slots.push(
                 <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
-                  <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
+                  {/* V8.44: 별첨2 옆에 별첨3(규격별 F/E) 나란히 */}
+                  <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
+                    <div style={{ flex: 3, minWidth: 0 }}>
+                      <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
+                    </div>
+                    <div style={{ flex: 2, minWidth: 0 }}>
+                      <FeLegend fe={legends.feCounts} />
+                    </div>
+                  </div>
                 </div>
               );
             } else if (emptySlots === 1) {
               slots.push(
                 <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box">
                   <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 3, minWidth: 0 }}>
                       <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 3, minWidth: 0 }}>
                       <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
+                    </div>
+                    <div style={{ flex: 2, minWidth: 0 }}>
+                      <FeLegend fe={legends.feCounts} />
                     </div>
                   </div>
                 </div>
@@ -850,6 +864,39 @@ export default function PrintableCargoPlanV2({
       </div>
     </div>,
     document.body
+  );
+}
+
+// V8.44: 별첨3 렌더링 — 규격(20/40/45)별 Full/Empty 표 (흑백, 평택분).
+function FeLegend({ fe }) {
+  const sizes = ['20', '40', '45'];
+  const totF = sizes.reduce((a, s) => a + fe[s].F, 0);
+  const totE = sizes.reduce((a, s) => a + fe[s].E, 0);
+  return (
+    <div className="cpv2-legend">
+      <div className="cpv2-legend-title">별첨3 · 규격별 F/E</div>
+      <table className="cpv2-legend-table">
+        <thead>
+          <tr><th>규격</th><th>Full</th><th>Empty</th><th>계</th></tr>
+        </thead>
+        <tbody>
+          {sizes.map((sz) => (
+            <tr key={sz}>
+              <td className="cpv2-legend-nm">{sz}'</td>
+              <td className="cpv2-legend-ct">{fe[sz].F}</td>
+              <td className="cpv2-legend-ct">{fe[sz].E}</td>
+              <td className="cpv2-legend-ct"><b>{fe[sz].F + fe[sz].E}</b></td>
+            </tr>
+          ))}
+          <tr className="cpv2-legend-total">
+            <td className="cpv2-legend-nm"><b>합계</b></td>
+            <td className="cpv2-legend-ct"><b>{totF}</b></td>
+            <td className="cpv2-legend-ct"><b>{totE}</b></td>
+            <td className="cpv2-legend-ct"><b>{totF + totE}</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }
 
