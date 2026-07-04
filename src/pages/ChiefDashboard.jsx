@@ -1037,7 +1037,9 @@ function ShipArchiveSection({ shipLib }) {
       const voys = s?.voyages || {};
       const voyRows = Object.entries(voys).map(([vk, v]) => ({
         key: vk,
-        voy: v?.voy_d || v?.voy_l || v?.voy || vk.split('_').slice(1).join('_') || vk,
+        // V8.43: 항차 표시는 항차 키(검수사가 만든 항차) 기준 — EDI 헤더의 전항차/오기
+        //   voy_d가 그대로 떠서 실제와 다른 번호가 보이던 버그(예: NSDC 2605N에 2611N 표시) 수정.
+        voy: vk.split('_').slice(1).join('_') || v?.voy_d || v?.voy_l || v?.voy || vk,
         discharge: v?.discharge_ptk || 0,
         loading: v?.loading_ptk || 0,
         at: v?.completed_at || v?.analyzed_at || 0,

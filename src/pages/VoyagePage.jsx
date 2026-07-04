@@ -31,7 +31,7 @@ import BayDictStatusWidget from '../components/BayDictStatusWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort } from '../utils.js';
+import { getEquipNumber, isPyeongtaekPort, resolveShipKey } from '../utils.js';
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
@@ -1668,7 +1668,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           }
           if (shipInfo) {
             try {
-              prevStruct = await fbGetShipStructure(shipInfo.imo);
+              prevStruct = await fbGetShipStructure(resolveShipKey(shipInfo.imo));   // V8.43: 별칭 → 정식 키
               if (prevStruct?.structure) {
                 results.push(`📚 학습된 선박: ${shipInfo.name} (${shipInfo.imoIsNumeric ? 'IMO ' : ''}${shipInfo.imo}) — 이전 분석 ${prevStruct.voyages ? Object.keys(prevStruct.voyages).length : 0}개 항차`);
               } else {
@@ -1874,12 +1874,15 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           results.push(`📊 선박 구조 일치 (이전 분석과 동일)`);
         }
         // 저장
-        await fbSaveShipStructure(shipInfo.imo, {
+        // V8.43: ships/{키} 저장은 정식 키로 통일 — BAPLIE/ASC 경로가 같은 배를
+        //   다른 키(콜사인 vs 약자/서비스코드)로 갈라 보관소에 중복 표시되던 버그 방지.
+        const shipStoreKey = resolveShipKey(shipInfo.imo);
+        await fbSaveShipStructure(shipStoreKey, {
           imo: shipInfo.imo,
           name: shipInfo.name,
           structure: newStruct,
         });
-        await fbAddShipVoyage(shipInfo.imo, voyageKey, {
+        await fbAddShipVoyage(shipStoreKey, voyageKey, {
           voy: shipInfo.voyage,
           vsl: shipInfo.name,
           mode,
@@ -1896,7 +1899,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           analyzed_by: inspector || '',   // M6.15: EDI 업로드한 검수원
         });
         // M7.15: stats는 voyages에서 합산만 (fbAddShipVoyage가 기록 전담)
-        await fbAddShipStats(shipInfo.imo, {}, voyageKey);
+        await fbAddShipStats(shipStoreKey, {}, voyageKey);
       } catch (e) {
         console.error('Ship structure save failed:', e);
       }
