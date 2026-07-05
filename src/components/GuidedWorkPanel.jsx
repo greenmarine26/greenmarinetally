@@ -627,6 +627,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   if (selectedTier == null) {
     const g = groups.find(x => x.center === selectedGroup);
     const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${selectedGroup}`;
+    // #5 (V8.45): 자동 양하는 정상 작업(데크→홀드) 전제. 그 베이 데크가 남았으면 홀드 비활성 —
+    //   커버 위 데크를 다 내려야 그 아래 홀드에 접근하기 때문. 커버 부분개방 등 예외 상황은 수동 몫(자동은 대처 못 함).
+    const deckFirstBlock = mode === 'discharge' && !!g && g.deck > 0;
     return (
       <div className="space-y-2">
         <SettingsBar/>
@@ -645,12 +648,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <span className="text-xs mono text-sky-300">20FT:{g ? g.deck20 : 0} / 40FT:{g ? g.deck40 : 0}</span>
               </div>
             </button>
-            <button disabled={!g || g.hold === 0} onClick={() => setSelectedTier('hold')}
-              className={`py-4 rounded-lg border text-left px-4 ${!g || g.hold === 0 ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
+            <button disabled={!g || g.hold === 0 || deckFirstBlock} onClick={() => setSelectedTier('hold')}
+              className={`py-4 rounded-lg border text-left px-4 ${!g || g.hold === 0 || deckFirstBlock ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
               <div className="flex items-center justify-between">
                 <span className="font-bold text-base">🟠 홀드 {g ? g.hold : 0}개</span>
                 <span className="text-xs mono text-amber-300">20FT:{g ? g.hold20 : 0} / 40FT:{g ? g.hold40 : 0}</span>
               </div>
+              {deckFirstBlock && g.hold > 0 && <div className="text-[10px] text-rose-300 font-bold mt-1">데크 {g.deck}개 먼저 양하 — 커버 아래 (자동)</div>}
             </button>
           </div>
         </div>

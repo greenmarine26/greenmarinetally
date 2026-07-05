@@ -43,7 +43,7 @@
   .btn-up{flex:1; min-width:140px; background:var(--panel2); color:var(--ink);
     border:1.5px dashed var(--line); padding:20px 12px; font-size:14px;}
   .btn-up.loaded{border-style:solid; border-color:var(--accent2); background:#16291f;}
-  .voy-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; max-height:60vh; overflow-y:auto; margin-bottom:4px;}
+  .voy-list{display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; margin-bottom:4px;}
   .voy-item{text-align:left; background:var(--panel2); border:1.5px solid var(--line); color:var(--ink); padding:12px 14px; width:100%;}
   .voy-item.sel{border-color:var(--accent); background:#2a2410;}
   .voy-item .vi-top{display:flex; align-items:center; gap:8px; font-size:15px;}
@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.42</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.45</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -654,7 +654,7 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='C7.67';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__APPV='C7.66';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -2413,53 +2413,6 @@ function drawCell(x,c,cx,y,rowH,perCount){
 try{ render(); loadVoyageList(); }catch(e){
   document.getElementById('app').innerHTML='<div class="card"><p style="color:var(--rem)">초기화 오류: '+e.message+'</p></div>';
 }
-
-// 콘앱 불편신고 — 신고를 Firebase feedback에 저장(약신호면 localStorage 큐 후 자동 재전송), 처리는 개발 세션의 Claude가 조회.
-(function(){
-  var FB='https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
-  var QK='gm_cone_feedback_queue';
-  function flush(){
-    var q; try{ q=JSON.parse(localStorage.getItem(QK)||'[]'); }catch(e){ q=[]; }
-    if(!q.length) return;
-    fetch(FB+'/feedback.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(q[0])})
-      .then(function(r){ if(r.ok){ q.shift(); localStorage.setItem(QK,JSON.stringify(q)); if(q.length) flush(); } })
-      .catch(function(){});
-  }
-  function submit(txt){
-    txt=(txt||'').trim(); if(!txt) return false;
-    var it={ text: txt.slice(0,2000), at: Date.now(),
-      atText: new Date().toLocaleString('ko-KR'),
-      app:'cone', ver:'V8.42 ('+(window.__APPV||'')+')',
-      ua: navigator.userAgent.slice(0,90), status:'new' };
-    var q; try{ q=JSON.parse(localStorage.getItem(QK)||'[]'); }catch(e){ q=[]; }
-    q.push(it); localStorage.setItem(QK,JSON.stringify(q)); flush();
-    return true;
-  }
-  var btn=document.createElement('button');
-  btn.textContent='🔧 불편신고';
-  btn.setAttribute('style','position:fixed;left:10px;bottom:10px;z-index:9999;background:#334155;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:6px 10px;font-size:12px;opacity:.85');
-  btn.onclick=function(){
-    var ov=document.createElement('div');
-    ov.setAttribute('style','position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px');
-    ov.innerHTML='<div style="background:#1e293b;border:1px solid #475569;border-radius:12px;padding:14px;width:100%;max-width:420px">'
-      +'<div style="color:#e2e8f0;font-weight:700;margin-bottom:8px">불편·오류 신고</div>'
-      +'<div style="color:#94a3b8;font-size:12px;margin-bottom:8px">틀린 계산, 불편한 점을 적어 주세요. 신호가 없어도 저장됐다가 자동 전송됩니다.</div>'
-      +'<textarea id="gmFbTxt" rows="5" style="width:100%;box-sizing:border-box;background:#0f172a;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:8px;font-size:14px"></textarea>'
-      +'<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">'
-      +'<button id="gmFbCancel" style="background:#334155;color:#cbd5e1;border:0;border-radius:8px;padding:8px 14px">닫기</button>'
-      +'<button id="gmFbSend" style="background:#2563eb;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700">보내기</button>'
-      +'</div></div>';
-    document.body.appendChild(ov);
-    ov.querySelector('#gmFbCancel').onclick=function(){ ov.remove(); };
-    ov.querySelector('#gmFbSend').onclick=function(){
-      if(submit(ov.querySelector('#gmFbTxt').value)){ ov.remove(); alert('접수됐습니다. 개발 점검 때 반영됩니다.'); }
-    };
-  };
-  document.body.appendChild(btn);
-  window.addEventListener('online',flush);
-  flush();
-})();
-
 </script>
 </body>
 </html>

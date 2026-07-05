@@ -125,7 +125,7 @@ export const CARGO_V2_CSS = `
 .cpv2-legend-table th, .cpv2-legend-table td { padding: 1px 3px; border: 0.3px solid #aaa; }
 .cpv2-legend-table th { background: #f5f5f5; font-size: 7px; font-weight: bold; }
 .cpv2-legend-mark { width: 14px; text-align: center; font-weight: bold; font-size: 8px; }
-.cpv2-legend-nm { font-size: 8px; font-weight: bold; }
+.cpv2-legend-nm { font-size: 8px; font-weight: bold; text-align: center; }
 .cpv2-legend-ct { font-size: 7.5px; text-align: center; }
 .cpv2-legend-total { background: #f0f0f0; }
 @media print {
