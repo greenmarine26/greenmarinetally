@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.45-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.46</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -655,6 +655,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='C7.67';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__CONEV='V8.46';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -2467,6 +2468,45 @@ try{ render(); loadVoyageList(); }catch(e){
   document.body.appendChild(btn);
   window.addEventListener('online',flush);
   flush();
+})();
+
+// 콘앱 자동 업데이트 감지 + 강제 새로고침 — 배포된 __CONEV와 비교해 새 버전이면 상단 배너. 배너/버튼 탭 시 서비스워커·캐시 비우고 최신본 재로드.
+(function(){
+  var RUN = window.__CONEV || '';
+  var _last = 0, _shown = false;
+  async function hardRefresh(){
+    try{ if(navigator.serviceWorker){ var rs=await navigator.serviceWorker.getRegistrations(); for(var i=0;i<rs.length;i++){ await rs[i].unregister(); } } }catch(e){}
+    try{ if(window.caches){ var ks=await caches.keys(); for(var j=0;j<ks.length;j++){ await caches.delete(ks[j]); } } }catch(e){}
+    location.replace(location.pathname + '?u=' + Date.now());
+  }
+  function showBanner(latest){
+    if(_shown) return; _shown = true;
+    var bar=document.createElement('div');
+    bar.setAttribute('style','position:fixed;left:0;right:0;top:0;z-index:10001;background:#2563eb;color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.3)');
+    var sp=document.createElement('span'); sp.textContent='새 버전('+latest+')이 있습니다.';
+    var b=document.createElement('button'); b.textContent='지금 업데이트';
+    b.setAttribute('style','background:#fff;color:#2563eb;border:0;border-radius:8px;padding:6px 14px;font-weight:700');
+    b.onclick=hardRefresh;
+    bar.appendChild(sp); bar.appendChild(b); document.body.appendChild(bar);
+  }
+  async function checkUpdate(){
+    var now=Date.now(); if(now-_last < 90000) return; _last=now;
+    try{
+      var res=await fetch(location.pathname + '?_ck=' + now, {cache:'no-store'});
+      if(!res.ok) return;
+      var txt=await res.text();
+      var m=txt.match(/__CONEV\s*=\s*'([^']+)'/);
+      var latest=m?m[1]:'';
+      if(latest && RUN && latest!==RUN) showBanner(latest);
+    }catch(e){}
+  }
+  var rb=document.createElement('button');
+  rb.textContent='🔄 새로고침';
+  rb.setAttribute('style','position:fixed;left:10px;bottom:46px;z-index:9999;background:#334155;color:#e2e8f0;border:1px solid #475569;border-radius:8px;padding:6px 10px;font-size:12px;opacity:.85');
+  rb.onclick=function(){ if(confirm('최신 버전으로 새로고침할까요? 보던 결과는 사라집니다.')) hardRefresh(); };
+  document.body.appendChild(rb);
+  setTimeout(checkUpdate, 1500);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) checkUpdate(); });
 })();
 </script>
 </body>
