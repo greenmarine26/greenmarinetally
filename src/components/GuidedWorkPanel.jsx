@@ -4,7 +4,7 @@
 // 수정 3연속 = 플랜대로 진행되지 않음 판단 → 자동으로 수동 모드 전환
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
-import { buildGuidedQueue } from '../guidedQueue.js';
+import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
@@ -15,6 +15,8 @@ import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
+// V8.50: 갈림 부류 라벨 (streamPref 키 → 표시·음성)
+const PREF_LABEL = { F: '풀', E: '엠티', RF: '리퍼', GEN: '일반', '40': '40피트', '20': '20피트' };
 
 export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer }) {
   const mode = workFilter;                                  // 'discharge' | 'loading'
@@ -45,6 +47,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   const [selectedGroup, setSelectedGroup] = useState(null); // 그룹 center 베이 번호
   const [selectedTier, setSelectedTier] = useState(null);   // V7.99-8 (메모6): 'hold'|'deck' — 검수사가 누른 작업 단
+  // V8.50: 갈림 선택 — 검수사(또는 무언 적응)가 고른 부류 스트림. null = 기본 층 순서.
+  const [streamPref, setStreamPref] = useState(null);
   const [fixOpen, setFixOpen] = useState(false);
   const [fixQuery, setFixQuery] = useState('');
   // V7.94-08: 트윈 수정 — 앞/뒤 두 컨 번호 동시 수정 (사용자 메모 ⑤)
@@ -175,10 +179,46 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       containers: targets, mode,
       evenRowsSeaSide: berthSide === 'starboard',           // 우현 접안 = 짝수 로우 해상쪽
       findTwin: (t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName),
+      streamPref,                                           // V8.50: 갈림 선택 부류
     });
-  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName]);
+  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref]);
 
   const card = queue[0] || null;
+
+  // V8.50: 갈림 감지 — 지금 바로 내릴 수 있는 카드들에 부류가 섞여 있으면 선택 버튼 제시 (양하만).
+  const availCards = useMemo(() => (mode === 'discharge' ? availableCardsOf(queue) : []), [queue, mode]);
+  const forkChips = useMemo(() => {
+    if (mode !== 'discharge' || availCards.length < 2) return null;
+    const cnt = { F: 0, E: 0, RF: 0, GEN: 0, '40': 0, '20': 0 };
+    for (const cd of availCards) {
+      const k = conClassOf(cd.main);
+      const size = cd.twin ? '20' : k.size;
+      cnt[k.fe]++; cnt[size]++;
+      if (k.fe === 'F') cnt[k.rf ? 'RF' : 'GEN']++;
+    }
+    const chips = [];
+    if (cnt.F && cnt.E) chips.push(['F', cnt.F], ['E', cnt.E]);
+    if (cnt.GEN && cnt.RF) chips.push(['GEN', cnt.GEN], ['RF', cnt.RF]);
+    if (cnt['40'] && cnt['20']) chips.push(['40', cnt['40']], ['20', cnt['20']]);
+    return chips.length ? chips : null;
+  }, [availCards, mode]);
+
+  // V8.50: 선택 부류가 소진되면 자동 해제 — 기본 층 순서로 복귀.
+  useEffect(() => {
+    if (!streamPref) return;
+    if (!queue.some(cd => cardMatchesPref(cd, streamPref))) setStreamPref(null);
+  }, [queue, streamPref]);
+
+  // V8.50: 무언 적응 — 예측과 다른 컨이 실제로 내려오면(수정 입력) 그 부류를 흐름으로 잡는다 (양하만).
+  const adaptStream = (actual) => {
+    if (mode !== 'discharge' || !card?.main || !actual) return;
+    const ac = conClassOf(actual), pc = conClassOf(card.main);
+    let next = null;
+    if (ac.fe !== pc.fe) next = ac.fe;
+    else if (ac.fe === 'F' && ac.rf !== pc.rf) next = ac.rf ? 'RF' : 'GEN';
+    else if (ac.size !== pc.size) next = ac.size;
+    if (next && next !== streamPref) { setStreamPref(next); speak(`${PREF_LABEL[next]} 흐름으로 바꿉니다`); }
+  };
 
   // V7.99-6 (메모3): 트윈 카드 무게 점검 — 합계 55톤 초과 = 트윈 불가, 무게차 부두한계 초과 = 수평 불가.
   //   nlSearch의 검증된 상수 재사용. 부두는 voyage.info.pier(미상이면 보수적 14톤).
@@ -295,7 +335,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [showUnassigned, setShowUnassigned] = useState(false);
 
   // V7.94-16: 그룹(베이) 변경 시 프롬프트 플래그 리셋
-  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); }, [selectedGroup]);
+  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); setStreamPref(null); }, [selectedGroup]);
+  useEffect(() => { setStreamPref(null); }, [selectedTier]);   // V8.50: 단 변경 시 스트림 리셋
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
@@ -493,6 +534,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     try {
       await applyFixOne(c, card.main);
     } finally { setBusy(false); }
+    adaptStream(c);   // V8.50: 실제 내려온 부류로 재앵커
     afterFix();
   };
 
@@ -517,6 +559,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       if (fixPickBack) await applyFixOne(fixPickBack, card.twin);
       else await fbCompleteContainer(voyageKey, mode, card.twin.cn, inspector);
     } finally { setBusy(false); }
+    adaptStream(fixPickFront || fixPickBack);   // V8.50: 실제 내려온 부류로 재앵커
     afterFix();
   };
 
@@ -751,6 +794,29 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       <div className="h-1.5 bg-slate-800 rounded overflow-hidden">
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
+
+      {/* V8.50: 갈림 — 지금 내릴 수 있는 컨에 부류 혼재 시 선택 버튼 (기사 흐름 따라가기) */}
+      {card && (forkChips || streamPref) && (
+        <div className="flex flex-wrap items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5">
+          <span className={`text-[10px] font-bold mr-0.5 ${streamPref ? 'text-violet-300' : 'text-slate-500'}`}>
+            {streamPref ? `${PREF_LABEL[streamPref]} 우선 중` : '갈림'}
+          </span>
+          {(forkChips || []).map(([k, n]) => (
+            <button key={k} onClick={() => setStreamPref(p => (p === k ? null : k))}
+              className={`px-2 py-1 rounded text-[11px] font-bold border ${streamPref === k
+                ? 'bg-violet-700 border-violet-500 text-white'
+                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+              {PREF_LABEL[k]}부터 {n}
+            </button>
+          ))}
+          {streamPref && (
+            <button onClick={() => setStreamPref(null)}
+              className="px-2 py-1 rounded text-[11px] font-bold border bg-slate-800 border-amber-700 text-amber-300 hover:bg-slate-700">
+              순서대로
+            </button>
+          )}
+        </div>
+      )}
 
       {deckDonePromptD && card ? (
         <div className="bg-amber-950/50 border-2 border-amber-600 rounded-lg p-4 text-center space-y-3">
