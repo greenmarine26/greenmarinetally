@@ -32,7 +32,7 @@ function lastWorkAt(v) {
   return last;
 }
 
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth, onOpenFood }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
@@ -366,6 +366,16 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           <div className="text-[10px] text-cyan-300/70">⚓ 입출항 자동 등록</div>
         </button>
       </div>
+
+      {/* V8.60: 맛집 수첩 — 주변 식당·돌림판 */}
+      <button onClick={() => onOpenFood && onOpenFood()}
+        className="w-full bg-gradient-to-r from-emerald-900/40 to-teal-950/40 border border-emerald-700/40 rounded-xl px-3 py-2.5 mb-3 text-left hover:from-emerald-900/60 active:scale-95 transition flex items-center gap-2">
+        <span className="text-xl">🍽</span>
+        <div>
+          <div className="font-bold text-sm text-emerald-100">평택항 맛집 수첩</div>
+          <div className="text-[10px] text-emerald-300/70">주변 식당 · 별점 · 🎰 뭐 먹지 돌림판 ("점심 뭐 먹을까?" 물어보세요)</div>
+        </div>
+      </button>
 
       {/* V8.40: 수집기 상태 + 항차 이상 요약 → 건강 점검 페이지 */}
       <button onClick={() => onOpenHealth && onOpenHealth()}
