@@ -443,20 +443,28 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   }
 
   // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
+  let displacedWasCompleted = false;
   if (displaced) {
     if (aOldBay && aOldRow && aOldTier) {
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
     } else {
       await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
     }
-    // 자리를 옮긴 B는 아직 선적 안 됨 → 완료 취소 (A 원자리에서 대기)
-    await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
+    // V8.70: 자리를 뺏긴 컨이 이미 검수완료된 컨이면 완료 기록을 지우지 않는다.
+    //   (구: 무조건 remove → 다른 자리에서 이미 선적확인한 기록이 조용히 사라짐 — 체인시프트 데이터 유실 원인.
+    //    오선적이었다면 검수사가 그 번호로 검색해 직접 취소·수정한다.)
+    const dispComp = await get(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
+    if (dispComp.exists()) {
+      displacedWasCompleted = true;
+    } else {
+      await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
+    }
   }
 
   // 3) target 컨 위치 변경
   await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
 
-  return { ok: true, displaced, swappedTo: displaced ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
+  return { ok: true, displaced, displacedWasCompleted, swappedTo: displaced ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
 }
 
 // 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화
