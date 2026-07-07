@@ -12,6 +12,7 @@ import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import HealthPage from './pages/HealthPage.jsx';  // V8.40: 항차 건강 점검
+import FoodPage from './pages/FoodPage.jsx';       // V8.60: 맛집 수첩+돌림판
 import Header from './components/Header.jsx';
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
 import InspectorModal from './components/InspectorModal.jsx';
@@ -101,6 +102,7 @@ export default function App() {
       else if (h === '#/search') setRoute({ name: 'search' });
       else if (h === '#/chief') setRoute({ name: 'chief' });
       else if (h === '#/health') setRoute({ name: 'health' });  // V8.40: 항차 건강 점검
+      else if (h.startsWith('#/food')) setRoute({ name: 'food' });  // V8.60: 맛집
       else setRoute({ name: 'home' });
     };
     sync();
@@ -196,6 +198,7 @@ export default function App() {
     else if (target === 'search') window.location.hash = '#/search';
     else if (target === 'chief') window.location.hash = '#/chief';
     else if (target === 'health') window.location.hash = '#/health';  // V8.40
+    else if (target === 'food') window.location.hash = '#/food';      // V8.60
     else if (target.voyageKey) window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}`;
   }, []);
 
@@ -226,7 +229,11 @@ export default function App() {
             onOpenChiefDashboard={() => navigate('chief')}
             heartbeat={heartbeat}
             onOpenHealth={() => navigate('health')}
+            onOpenFood={() => navigate('food')}
           />
+        )}
+        {route.name === 'food' && (
+          <FoodPage inspector={inspector} onGoHome={() => navigate('home')}/>
         )}
         {route.name === 'health' && (
           <HealthPage

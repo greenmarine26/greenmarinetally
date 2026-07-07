@@ -1588,3 +1588,49 @@ export async function fbGetPierCoords() {
   const snap = await get(r);
   return snap.val() || {};
 }
+
+
+// ── V8.60 맛집 수첩 — 평택항 주변 식당 공유(foodSpots/{id}) ──
+// 구조: {name, cat, tel, area, tags[], note, addedBy, ts, ratings:{검수사:1~5}, comments:{key:{by,text,ts}}}
+export function fbFoodListen(cb) {
+  const r = ref(db, 'foodSpots');
+  const h = onValue(r, (snap) => {
+    const v = snap.val() || {};
+    cb(Object.fromEntries(Object.entries(v).filter(([k]) => !k.startsWith('_'))));
+  }, () => cb({}));
+  return () => off(r, 'value', h);
+}
+
+export async function fbAddFoodSpot(spot, inspector) {
+  const r = push(ref(db, 'foodSpots'));
+  await set(r, { ...spot, addedBy: inspector || '', ts: Date.now() });
+  return r.key;
+}
+
+export async function fbDeleteFoodSpot(id) {
+  await remove(ref(db, `foodSpots/${id}`));
+}
+
+export async function fbRateFoodSpot(id, inspector, score) {
+  if (!inspector) return;
+  await set(ref(db, `foodSpots/${id}/ratings/${inspector}`), score);
+}
+
+export async function fbCommentFoodSpot(id, inspector, text) {
+  const r = push(ref(db, `foodSpots/${id}/comments`));
+  await set(r, { by: inspector || '', text: String(text || '').slice(0, 100), ts: Date.now() });
+}
+
+// 시드 1회 주입 — foodSpots/_seeded 플래그로 중복 방지(여러 폰 동시 접속 대비 최소 방어).
+export async function fbSeedFoodSpotsOnce(seeds) {
+  try {
+    const flag = await get(ref(db, 'foodSpots/_seeded'));
+    if (flag.exists()) return false;
+    await set(ref(db, 'foodSpots/_seeded'), Date.now());
+    for (const sd of (seeds || [])) {
+      const { id, ...rest } = sd;
+      await set(ref(db, `foodSpots/${id}`), { ...rest, addedBy: '시드', ts: Date.now() });
+    }
+    return true;
+  } catch (e) { return false; }
+}

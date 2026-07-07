@@ -249,6 +249,14 @@ export function parseNaturalQuery(text) {
   // V7.92: 챗봇형 질문 — 자기소개·시간·날씨·입출항 (사용자 요청: "넌 뭐야"에 답하기)
   if (/(?:^|\s)(?:넌|너는|네가|니가|너|당신|당신이)\s*(?:뭐|누구|하는\s*일|할\s*수|어떤\s*일)|누구세요|누구냐|누구니|누구야|자기\s*소개|소개\s*해|무슨\s*(?:일|기능)|뭐\s*(?:하는|할\s*수)|어떤\s*(?:일|기능|걸\s*할)/i.test(t)) result.introQuery = true;
   if (!result.etaQuery && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|오늘\s*며칠|며칠이야|무슨\s*요일|오늘\s*날짜|날짜\s*알려/i.test(t)) result.timeQuery = true;
+  // V8.60: 맛집/식사 추천 — "점심 뭐 먹을까"·"저녁 먹으러 어디 가지"·"야식 추천" → 돌림판.
+  //   ⚠ etaQuery("점심까지 끝나?")와 충돌 금지 — 끝/완료/까지 들어간 문장은 제외.
+  if (!result.etaQuery && /뭐\s*먹|먹을\s*까|먹으러|먹으면|맛집|식당\s*추천|배\s*고프|배고파|메뉴\s*추천|야식\s*추천|아침\s*추천|점심\s*추천|저녁\s*추천/i.test(t) && !/끝|완료|까지|남/.test(t)) {
+    result.foodQuery = /야식|밤참|심야/.test(t) ? 'night'
+      : /저녁|디너/.test(t) ? 'dinner'
+      : /아침|조식/.test(t) ? 'breakfast'
+      : /점심|런치/.test(t) ? 'lunch' : 'any';
+  }
   if (/날씨|기온\s*어때|바람\s*어때|비\s*(와|오나|올까)|눈\s*(와|오나|올까)/i.test(t)) result.weatherQuery = true;
   if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어오|언제\s*나가/i.test(t)) result.schedQuery = true;
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
@@ -1591,4 +1599,11 @@ export function generateTwinCheckAnswer(parsed, containers, pairsMap, pier = '')
     lines.push('', `✅ 가능 ${r.ok.length}쌍 (최대 합계 ${t1(maxOk)}톤)`);
   }
   return lines.join('\n');
+}
+
+
+// V8.60: 맛집 돌림판 안내 답변 — 첫 줄은 음성으로 읽힌다.
+export function generateFoodAnswer(slot) {
+  const label = { breakfast: '아침', lunch: '점심', dinner: '저녁', night: '야식', any: '식사' }[slot] || '식사';
+  return `🎰 ${label} 뭐 먹을지 돌림판으로 정해 드릴게요!\n\n음성이면 잠시 후 돌림판이 자동으로 열립니다. 아래 버튼으로 바로 돌릴 수도 있어요.\n(홈 화면 🍽 맛집 메뉴에서 식당 추가·별점도 가능합니다.)`;
 }
