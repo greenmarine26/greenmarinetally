@@ -300,32 +300,28 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   // 수정: 실제 나온 컨을 입력 → 그 컨을 완료 처리, 예측 컨은 큐에 남음
-  const matchFor = (q0, excludeCn) => {
+  // V8.70: 크로스베이 체인시프트 감안 — 그룹·단 제한을 "필터"에서 "정렬 우선순위"로 완화.
+  //   (구 V7.99-8: 현재 단으로만 좁힘 → 다른 베이 계획 컨이 실제로 오면 후보 0건, 현장 진행 불가.)
+  //   자기 카드의 반대편 컨도 후보 허용(앞뒤 얽힘: 뒤 예측 컨이 앞 자리에 오는 경우) — 그 칸 자신의 컨만 제외.
+  const inWorkTier = (c) => {
+    if (selectedGroup != null && groupCenterOf(c.bay) !== selectedGroup) return false;
+    if (selectedTier === 'deck') return parseInt(c.tier, 10) >= 80;
+    if (selectedTier === 'hold') return parseInt(c.tier, 10) < 80;
+    return true;
+  };
+  const matchFor = (q0, excludeCns) => {
     const q = q0.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
-    // V7.99-8 (메모6): 후보를 현재 작업 베이의 선택된 단(홀드/데크)으로 좁힌다.
-    //   끝4자리 중복으로 선박 전체에서 엉뚱한 컨이 잡혀 오양하되는 것 방지.
-    //   홀드 작업이면 그 그룹 홀드 컨만, 데크 작업이면 데크 컨만.
-    const inWorkTier = (c) => {
-      if (selectedGroup != null && groupCenterOf(c.bay) !== selectedGroup) return false;
-      if (selectedTier === 'deck') return parseInt(c.tier, 10) >= 80;
-      if (selectedTier === 'hold') return parseInt(c.tier, 10) < 80;
-      return true;
-    };
-    const hits = remaining.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn && c.cn !== excludeCn &&
-      inWorkTier(c) &&
+    const ex = new Set((Array.isArray(excludeCns) ? excludeCns : [excludeCns]).filter(Boolean));
+    const hits = remaining.filter(c => !ex.has(c.cn) &&
       (c.cn.includes(q) || (c.l4 || c.cn.slice(-4)).includes(q)));
-    // V7.94-20: 끝4자리 중복 오선택 방지 — 현재 카드 자리(card.pos)와 같은 위치 컨을 맨 위로.
-    //   (BAY38 3523처럼 같은 베이에 끝4자리 중복 시, 의도한 자리의 컨이 먼저 보이게)
+    // 정렬: 현재 카드 자리 > 현재 그룹·단 > 그 외(렌더에서 ⚠ 다른 베이 표시).
     const pos = card?.main?.pos || (card?.main ? `${card.main.bay}-${card.main.row}-${card.main.tier}` : '');
-    return hits.sort((a, b) => {
-      const ap = `${parseInt(a.bay,10)}-${a.row}-${a.tier}` === pos ? 0 : 1;
-      const bp = `${parseInt(b.bay,10)}-${b.row}-${b.tier}` === pos ? 0 : 1;
-      return ap - bp;
-    }).slice(0, 6);
+    const rankOf = (c) => `${parseInt(c.bay,10)}-${c.row}-${c.tier}` === pos ? 0 : (inWorkTier(c) ? 1 : 2);
+    return hits.sort((a, b) => rankOf(a) - rankOf(b)).slice(0, 6);
   };
-  const fixMatches = useMemo(() => matchFor(fixQuery, fixPickBack?.cn), [fixQuery, remaining, card, fixPickBack]);
-  const fixMatches2 = useMemo(() => matchFor(fixQuery2, fixPickFront?.cn), [fixQuery2, remaining, card, fixPickFront]);
+  const fixMatches = useMemo(() => matchFor(fixQuery, [fixPickBack?.cn, card?.main?.cn]), [fixQuery, remaining, card, fixPickBack]);
+  const fixMatches2 = useMemo(() => matchFor(fixQuery2, [fixPickFront?.cn, card?.twin?.cn]), [fixQuery2, remaining, card, fixPickFront]);
 
   // V7.94-08: 미배정(위치 빠진) 컨 — 수정으로 밀려난 컨테이너 추적 표시 (사용자 메모 ④)
   const unassigned = useMemo(
@@ -542,6 +538,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const handleTwinFixApply = async () => {
     if (busy || !card || !card.twin) return;
     if (!fixPickFront && !fixPickBack) { alert('수정할 컨테이너를 선택하세요. (한쪽만 바뀌었으면 그쪽만 선택)'); return; }
+    // V8.70: 한쪽만 선택하고 적용하면 나머지는 "예측대로" 완료된다 — 실물이 정말 예측 컨인지 확인.
+    //   (둘 다 틀렸는데 한쪽만 수정·적용 → 남은 쪽이 허위 완료되던 함정.)
+    if (!fixPickFront || !fixPickBack) {
+      const sideName = !fixPickFront ? '앞' : '뒤';
+      const sideCn = !fixPickFront ? card.main.cn : card.twin.cn;
+      if (!confirm(`${sideName} 자리는 예측 컨 ${(sideCn || '').slice(-4)} 그대로 맞습니까?\n[확인] → 예측대로 완료 처리\n둘 다 틀렸으면 [취소] 후 ${sideName}쪽도 수정하세요.`)) return;
+    }
     // V8.09-06: XRAY 실번호 검증 — 바뀐 쪽은 실제 컨, 안 바뀐 쪽은 예측 컨 기준.
     const frontCn = fixPickFront ? fixPickFront.cn : card.main.cn;
     const backCn = fixPickBack ? fixPickBack.cn : card.twin.cn;
@@ -933,7 +936,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{c.cn}</span>
-                  <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-slate-400'}`}>{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                  <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-slate-400'}`}>
+                    {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
+                    {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                  </span>
                 </button>
               ))}
               {fixQuery.length >= 3 && fixMatches.length === 0 && <div className="text-[11px] text-slate-500 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}
@@ -963,7 +969,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                         <button key={c.cn} onClick={() => { s.setPick(c); s.setQ(''); }} disabled={busy}
                           className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                           <span className="mono font-bold text-slate-100">{c.cn}</span>
-                          <span className="mono text-slate-400">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                          <span className="mono text-slate-400">
+                            {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
+                            {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                          </span>
                         </button>
                       ))}
                     </>

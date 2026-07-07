@@ -5,7 +5,7 @@ import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
-import { findTwinCandidate, getBayPairs } from '../twin.js';
+import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
 
@@ -22,15 +22,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
   const [posTarget, setPosTarget] = useState(null);   // V7.94-10: 위치 선택창 대상 컨 (c 또는 번호수정으로 고른 실제 컨)
-  // V7.94-09: 남은 자리 선택창용 — 트윈 짝꿍 후보·짝꿍 베이 매핑 (20ft 미완료 컨만)
-  const posEditTwinPartner = useMemo(() => {
-    const t = posTarget;
-    if (!t || t._comp) return null;
-    const is20 = String(t.tp || '').startsWith('20') || String(t.iso || '')[0] === '2';
-    if (!is20) return null;
-    try { return findTwinCandidate(t, allContainers.filter(x => x._mode === t._mode && !x._comp), new Set([t.cn])) || null; }
-    catch { return null; }
-  }, [posTarget, allContainers]);
+  // V8.70: 출발지(계획 위치) 기준 트윈 짝꿍 자동 계산 제거 — 싱글 자리 배정에 유령 짝꿍이 붙어
+  //   존재하지 않는 자리에 무단 배정·완료되던 원인. 트윈 배정은 PositionEditModal 안에서
+  //   도착지(배정 자리) 기준 + 검수사의 "트윈 지정"으로만 이뤄진다.
   const posEditBayPairs = useMemo(() => {
     try { return getBayPairs(allContainers.filter(x => x._mode === c?._mode)); } catch { return null; }
   }, [allContainers, c]);
@@ -312,10 +306,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           const result = await fbReassignContainerPosition(voyageKey, c._mode, (posTarget || c).cn, newBay, newRow, newTier, inspector);
           return result;
         }}
-        twinPartner={posEditTwinPartner}
         bayPairs={posEditBayPairs}
         onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector)}
-        onCompleteBoth={async (cns) => { for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector); }}
+        onCompleteBoth={async (cns) => {
+          for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector);
+          // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
+          cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
+          if (onAfterComplete) setTimeout(() => onAfterComplete(c), 600);
+        }}
       />
     </div>
   );

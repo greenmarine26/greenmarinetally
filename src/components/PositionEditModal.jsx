@@ -9,9 +9,9 @@ export default function PositionEditModal({
   container,
   allContainers = [],
   onClose,
-  onSave,  // async (newBay, newRow, newTier) => { ok, displaced }
-  // V7.94-09: 남은 자리 선택창 + 트윈 짝꿍 자동 배치 + 배정 후 바로 선적확인 (사용자 요청)
-  twinPartner = null,        // 트윈 짝꿍 컨 (있으면 슬롯 선택 시 짝꿍 자리 자동 배치)
+  onSave,  // async (newBay, newRow, newTier) => { ok, displaced, displacedWasCompleted }
+  // V8.70: 트윈은 도착지(배정 자리) 기준 — 짝꿍 베이에 같은 row·tier 자리가 플랜에 실재할 때만
+  //   "트윈 지정" 토글이 나타나고, 뒤 컨은 검수사가 직접 입력·선택한다 (출발지 기준 자동 추측 폐지).
   bayPairs = null,           // { '21': '23', ... } — 짝꿍 베이 매핑
   onSavePartner = null,      // async (cn, bay, row, tier) => { ok }
   onCompleteBoth = null,     // async (cns[]) => void — 배정 후 선적확인
@@ -24,7 +24,9 @@ export default function PositionEditModal({
   const [step, setStep] = useState('input');  // 'input' | 'confirm' | 'saving'
   const [errMsg, setErrMsg] = useState('');
   const [manualOpen, setManualOpen] = useState(false);   // 직접 입력 접기 (기본: 슬롯 선택)
-  const [partnerPos, setPartnerPos] = useState(null);    // 슬롯 선택으로 정해진 짝꿍 위치
+  const [twinOn, setTwinOn] = useState(false);           // V8.70: 검수사가 켜는 "트윈 지정"
+  const [partnerQuery, setPartnerQuery] = useState('');  // V8.70: 뒤(짝꿍) 컨 검색어
+  const [partnerPick, setPartnerPick] = useState(null);  // V8.70: 뒤(짝꿍) 컨 선택
   const [alsoComplete, setAlsoComplete] = useState(true);// 배정 후 바로 선적확인
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function PositionEditModal({
       setStep('input');
       setErrMsg('');
       setManualOpen(false);
-      setPartnerPos(null);
+      setTwinOn(false); setPartnerQuery(''); setPartnerPick(null);
       setAlsoComplete(true);
       setPickedSlotCn(null);
       // V7.94-20: 미배정 컨(위치 없음)인데 현재 작업 베이가 있으면 그 베이 자동 선택 — 전체 베이 재선택 단계 생략
@@ -60,12 +62,12 @@ export default function PositionEditModal({
     return allContainers
       .filter(c => c && c._mode === container._mode && c._ptk !== false &&
         c.bay && c.row && c.tier &&
-        c.cn !== container.cn && c.cn !== twinPartner?.cn &&
+        c.cn !== container.cn &&
         is20(c) === targetIs20 && tierMatch(c.tier))
       .map(c => ({ bay: String(parseInt(c.bay, 10)), row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp }))
       .sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
         (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
-  }, [open, container, allContainers, twinPartner, workTier]);
+  }, [open, container, allContainers, workTier]);
   const slotsByBay = useMemo(() => {
     const m = {};
     allSlots.forEach(s => { (m[s.bay] = m[s.bay] || []).push(s); });
@@ -78,13 +80,33 @@ export default function PositionEditModal({
   const pickSlot = (s) => {
     setBay(s.bay); setRow(s.row); setTier(s.tier);
     setPickedSlotCn(s.cn || null);
-    if (twinPartner && bayPairs) {
-      const pBay = bayPairs[String(parseInt(s.bay, 10))];
-      setPartnerPos(pBay ? { bay: pBay, row: s.row, tier: s.tier } : null);
-    } else setPartnerPos(null);
+    // V8.70: 짝꿍 자동 배치 제거 — 트윈은 확인 단계에서 검수사가 "트윈 지정"으로만 켠다.
+    setTwinOn(false); setPartnerQuery(''); setPartnerPick(null);
     setErrMsg('');
     setStep('confirm');
   };
+
+  // V8.70: 도착지 기준 짝꿍 자리 — 배정 자리의 짝꿍 베이에 같은 row·tier 자리가 플랜에 실재하는지.
+  //   실재하지 않으면(싱글 자리) 트윈 지정 자체가 불가 — 유령 자리 원천 차단.
+  const pairSlot = useMemo(() => {
+    if (!open || !container || !bay || !row || !tier || !bayPairs) return null;
+    const pBay = bayPairs[String(parseInt(bay, 10))];
+    if (!pBay) return null;
+    const rowPad = String(row).padStart(2, '0');
+    const tierPad = String(tier).padStart(2, '0');
+    const slotCon = allContainers.find(x => x && (x._mode === container._mode) && x.bay &&
+      String(parseInt(x.bay, 10)) === String(parseInt(pBay, 10)) && x.row === rowPad && x.tier === tierPad);
+    return slotCon ? { bay: String(parseInt(pBay, 10)), row: rowPad, tier: tierPad, slotCn: slotCon.cn, slotDone: !!slotCon._comp } : null;
+  }, [open, container, bay, row, tier, bayPairs, allContainers]);
+
+  // V8.70: 뒤(짝꿍) 컨 후보 — 선박 전체 미완료에서 검색, 다른 베이 계획분은 경고 배지.
+  const partnerMatches = useMemo(() => {
+    const q = partnerQuery.replace(/\s/g, '').toUpperCase();
+    if (q.length < 3 || !container) return [];
+    return allContainers.filter(x => x && x._mode === container._mode && !x._comp &&
+      x.cn !== container.cn &&
+      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q))).slice(0, 6);
+  }, [partnerQuery, allContainers, container]);
 
   // 충돌 검사: 같은 자리에 있는 다른 컨
   const conflict = useMemo(() => {
@@ -114,12 +136,12 @@ export default function PositionEditModal({
     return null;
   }, [pickedSlotCn, bay, row, tier, conflict, container, allContainers]);
   const partnerPodWarn = useMemo(() => {
-    if (!partnerPos || !twinPartner?.pod) return null;
-    const slotCon = findAtPos(partnerPos.bay, partnerPos.row, partnerPos.tier);
-    if (slotCon && slotCon.cn !== twinPartner.cn && slotCon.pod && slotCon.pod !== twinPartner.pod)
-      return { zonePod: slotCon.pod, myPod: twinPartner.pod };
+    if (!twinOn || !partnerPick?.pod || !pairSlot) return null;
+    const slotCon = findAtPos(pairSlot.bay, pairSlot.row, pairSlot.tier);
+    if (slotCon && slotCon.cn !== partnerPick.cn && slotCon.pod && slotCon.pod !== partnerPick.pod)
+      return { zonePod: slotCon.pod, myPod: partnerPick.pod };
     return null;
-  }, [partnerPos, twinPartner, allContainers]);
+  }, [twinOn, partnerPick, pairSlot, allContainers]);
 
 
   if (!open || !container) return null;
@@ -145,19 +167,28 @@ export default function PositionEditModal({
   };
 
   const handleConfirm = async () => {
+    // V8.70: 트윈 지정을 켰으면 뒤 컨을 고르기 전엔 확정 불가.
+    if (twinOn && !partnerPick) { setErrMsg('트윈 지정: 뒤(짝꿍) 컨테이너를 선택하세요'); return; }
     setStep('saving');
     try {
       const r = row ? String(row).padStart(2, '0') : '';
       const t = tier ? String(tier).padStart(2, '0') : '';
       const result = await onSave(bay, r, t);
       if (!result?.ok) { setErrMsg('저장 실패'); setStep('input'); return; }
-      // V7.94-09: 트윈 짝꿍 자동 배치 + 배정 후 바로 선적확인
-      if (partnerPos && twinPartner && onSavePartner) {
-        await onSavePartner(twinPartner.cn, partnerPos.bay, String(partnerPos.row).padStart(2, '0'), String(partnerPos.tier).padStart(2, '0'));
+      // V8.70: 밀려난 컨이 이미 선적확인된 컨이면 완료는 유지됨 — 검수사에게 알림만.
+      if (result.displacedWasCompleted) {
+        alert(`⚠ ${result.displaced}는 이미 선적확인된 컨입니다.\n완료는 유지한 채 자리만 ${result.swappedTo ? `${parseInt(result.swappedTo.bay, 10) || '-'}-${result.swappedTo.row}-${result.swappedTo.tier}` : '미배정'}(으)로 이동했습니다.\n오선적이었다면 그 번호로 검색해 취소·수정하세요.`);
+      }
+      // V8.70: 트윈 지정 — 검수사가 고른 뒤 컨을 짝꿍 자리(실재 검증됨)로 배정.
+      if (twinOn && partnerPick && pairSlot && onSavePartner) {
+        const r2 = await onSavePartner(partnerPick.cn, pairSlot.bay, pairSlot.row, pairSlot.tier);
+        if (r2?.displacedWasCompleted) {
+          alert(`⚠ ${r2.displaced}는 이미 선적확인된 컨입니다.\n완료는 유지한 채 자리만 이동했습니다. 오선적이었다면 검색해 취소·수정하세요.`);
+        }
       }
       if (alsoComplete && !isUnassign && !isCompleted && onCompleteBoth) {
         const cns = [container.cn];
-        if (partnerPos && twinPartner) cns.push(twinPartner.cn);
+        if (twinOn && partnerPick) cns.push(partnerPick.cn);
         await onCompleteBoth(cns);
       }
       onClose();
@@ -209,7 +240,7 @@ export default function PositionEditModal({
             {remainingSlots.length > 0 && !pickBay && (
               <div className="space-y-2">
                 <div className="text-xs text-amber-300 font-bold">
-                  📍 선적할 베이를 먼저 선택하세요{twinPartner ? ' (트윈 — 짝꿍 자리 자동)' : ''}
+                  📍 선적할 베이를 먼저 선택하세요
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
                   {Object.keys(slotsByBay).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(b => {
@@ -367,19 +398,52 @@ export default function PositionEditModal({
                 <span className="text-amber-400 text-xl">→</span>
                 <span className={`mono font-black text-lg ${isUnassign ? 'text-orange-300' : 'text-emerald-300'}`}>{newPosLabel}</span>
               </div>
-              {partnerPos && twinPartner && (
-                <div className="flex items-center gap-2 flex-wrap border-t border-slate-800 pt-2">
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900 text-cyan-200 font-bold">트윈 짝꿍 자동</span>
-                  <span className="mono text-xs text-slate-300 font-bold">{twinPartner.cn}</span>
-                  <span className="text-amber-400">→</span>
-                  <span className="mono font-black text-cyan-300">{String(parseInt(partnerPos.bay, 10)).padStart(2, '0')}-{String(partnerPos.row).padStart(2,'0')}-{String(partnerPos.tier).padStart(2,'0')}</span>
+              {/* V8.70: 트윈 지정 — 짝꿍 자리가 플랜에 실재할 때만 노출. 뒤 컨은 검수사가 직접 선택. */}
+              {!isUnassign && !isCompleted && pairSlot && onSavePartner && (
+                <div className="border-t border-slate-800 pt-2 space-y-1.5">
+                  <button onClick={() => { setTwinOn(v => !v); setPartnerQuery(''); setPartnerPick(null); setErrMsg(''); }}
+                    className={`w-full flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-bold ${twinOn ? 'bg-cyan-950 border-cyan-700 text-cyan-300' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+                    <span className={`w-3.5 h-3.5 rounded ${twinOn ? 'bg-cyan-400' : 'bg-slate-600'}`}/>
+                    트윈 지정 — 뒤 컨을 짝꿍 자리 {pairSlot.bay}-{pairSlot.row}-{pairSlot.tier}에 함께 배정 — {twinOn ? '켬' : '끔'}
+                  </button>
+                  {twinOn && pairSlot.slotDone && (
+                    <div className="text-[11px] text-orange-300">⚠ 짝꿍 자리는 이미 선적확인된 자리입니다. 확정 시 그 컨 처리를 확인하세요.</div>
+                  )}
+                  {twinOn && (partnerPick ? (
+                    <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-700 rounded px-2 py-2">
+                      <div>
+                        <div className="mono text-sm font-bold text-cyan-200">{partnerPick.cn}</div>
+                        <div className="text-[10px] mono text-slate-400">
+                          계획 {partnerPick.bay ? `${parseInt(partnerPick.bay, 10)}-${partnerPick.row}-${partnerPick.tier}` : '미배정'} · {partnerPick.pod || '-'}
+                          {partnerPick.bay && String(parseInt(partnerPick.bay, 10)) !== pairSlot.bay &&
+                            <span className="ml-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
+                        </div>
+                      </div>
+                      <button onClick={() => setPartnerPick(null)} className="text-[11px] text-slate-400 px-1.5">✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input autoFocus value={partnerQuery} onChange={e => setPartnerQuery(e.target.value)}
+                        placeholder="뒤(짝꿍) 컨 끝 4자리 이상" inputMode="numeric" autoComplete="off"
+                        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
+                      {partnerMatches.map(x => (
+                        <button key={x.cn} onClick={() => setPartnerPick(x)}
+                          className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
+                          <span className="mono font-bold text-slate-100">{x.cn}</span>
+                          <span className="mono text-slate-400">{x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}</span>
+                        </button>
+                      ))}
+                      {partnerQuery.length >= 3 && partnerMatches.length === 0 &&
+                        <div className="text-[11px] text-slate-500 text-center">일치하는 미완료 컨이 없습니다.</div>}
+                    </>
+                  ))}
                 </div>
               )}
               {!isUnassign && !isCompleted && onCompleteBoth && (
                 <button onClick={() => setAlsoComplete(v => !v)}
                   className={`w-full flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-bold ${alsoComplete ? 'bg-emerald-950 border-emerald-700 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
                   <span className={`w-3.5 h-3.5 rounded ${alsoComplete ? 'bg-emerald-400' : 'bg-slate-600'}`}/>
-                  배정 후 바로 선적확인 {partnerPos && twinPartner ? '(트윈 둘 다)' : ''} — {alsoComplete ? '켬' : '끔'}
+                  배정 후 바로 선적확인 {twinOn && partnerPick ? '(트윈 둘 다)' : ''} — {alsoComplete ? '켬' : '끔'}
                 </button>
               )}
               {conflict && (

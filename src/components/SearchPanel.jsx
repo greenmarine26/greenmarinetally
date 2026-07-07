@@ -934,6 +934,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && (() => {
         const main = results.filter(c => !c._comp && c._mode === workFilter);
         const others = results.filter(c => c._comp || c._mode !== workFilter);
+        // V8.70: 완료된 컨도 번호 단일 매칭이면 큰 카드로 — 취소·위치수정 접근(완료 후 재검색 시 막다른 골목 제거).
+        const doneSolo = (main.length === 0 && parsed.digits)
+          ? results.filter(c => c._comp && c._mode === workFilter) : [];
+        const othersRest = (doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others;
         const othersLabel = (n) => `다른 작업·완료분에 ${n}건 — 보기`;
         return (
           <>
@@ -944,16 +948,23 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                 onAfterComplete={() => { setQuery(''); stopSpeak(); }}
               />
             )}
+            {main.length === 0 && doneSolo.length === 1 && (
+              <BigResultCard c={doneSolo[0]} allContainers={allContainers}
+                voyageKey={voyageKey} inspector={inspector}
+                onOpen={() => onOpenContainer?.(doneSolo[0])}
+                onAfterComplete={() => { setQuery(''); stopSpeak(); }}
+              />
+            )}
             {main.length > 1 && main.slice(0, 30).map(c => (
               <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
             ))}
-            {others.length > 0 && results.length > 0 && (
+            {othersRest.length > 0 && results.length > 0 && (
               <div className="mt-1">
                 <button onClick={() => setShowOthers(v => !v)}
                   className="w-full py-1.5 rounded bg-slate-800/60 border border-slate-700/50 text-[11px] text-slate-400 font-bold">
-                  {showOthers ? '▲ 접기' : `▼ ${othersLabel(others.length)}`}
+                  {showOthers ? '▲ 접기' : `▼ ${othersLabel(othersRest.length)}`}
                 </button>
-                {showOthers && others.slice(0, 20).map(c => (
+                {showOthers && othersRest.slice(0, 20).map(c => (
                   <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
                 ))}
               </div>
