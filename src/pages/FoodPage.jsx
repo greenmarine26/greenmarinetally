@@ -60,12 +60,16 @@ function RouletteModal({ spots, slot, onClose }) {
             style={{ background: grad, transform: `rotate(${rot}deg)`, transition: 'transform 3.2s cubic-bezier(0.15, 0.9, 0.25, 1)' }}
             onTransitionEnd={onEnd}>
             {wheelList.map((s, i) => {
+              // V8.62-01: 라벨 중앙 정렬 — 회전 기준점이 휠 중심에서 45px 어긋나 조각 중심선 옆으로 쏠리던 버그.
+              //   조각 중앙선을 3시 방향으로 돌린 프레임에서, 중심→림 방향으로 텍스트를 눕혀 선 위에 정확히 얹는다.
               const a = i * seg + seg / 2;
               return (
-                <div key={s.name + i} className="absolute left-1/2 top-1/2 text-[10px] font-bold text-white"
-                  style={{ transform: `rotate(${a}deg) translateY(-104px) rotate(90deg)`, transformOrigin: '0 0', width: 90, marginLeft: -45, textAlign: 'center',
-                    textShadow: '0 1px 2px rgba(0,0,0,.8)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                  {s.name}
+                <div key={s.name + i} className="absolute inset-0" style={{ transform: `rotate(${a - 90}deg)` }}>
+                  <div className="absolute top-1/2 text-[10px] font-bold text-white"
+                    style={{ left: '50%', width: 128, paddingLeft: 34, transform: 'translateY(-50%)', textAlign: 'left',
+                      textShadow: '0 1px 2px rgba(0,0,0,.8)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                    {s.name}
+                  </div>
                 </div>
               );
             })}
