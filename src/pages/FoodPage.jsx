@@ -1,7 +1,7 @@
 // 맛집 수첩 + 돌림판 페이지 — 평택항(포승) 주변 식당 공유·별점·한줄평·랜덤 추천 (V8.60).
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, Phone, MapPin, Plus, Trash2, Star, Dices } from 'lucide-react';
-import { FOOD_SEEDS, FOOD_SEEDS_W2, mealSlotNow, SLOT_LABEL, filterBySlot, avgRating, spinPick, mapUrlOf } from '../foodSpots.js';
+import { FOOD_SEEDS, FOOD_SEEDS_W2, FOOD_SEEDS_W3, mealSlotNow, SLOT_LABEL, filterBySlot, avgRating, pickWheelList, wheelTargetOf, nextRotation, mapUrlOf } from '../foodSpots.js';
 import { fbFoodListen, fbAddFoodSpot, fbDeleteFoodSpot, fbRateFoodSpot, fbCommentFoodSpot, fbSeedFoodSpotsOnce } from '../firebase.js';
 import { isChief } from '../staffList.js';
 import { speak } from '../voice.js';
@@ -11,38 +11,43 @@ const WHEEL_COLORS = ['#7c3aed', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#8
 
 // 돌림판 모달 — 후보 조각 룰렛이 돌고 멈추면 음성으로 발표.
 function RouletteModal({ spots, slot, onClose }) {
-  const [spin, setSpin] = useState(null);     // spinPick 결과
+  // V8.62: 조각 배치는 후보가 준비된 순간 1회 고정 — 스핀마다 재셔플하면 바늘·당첨이 어긋난다.
+  const [wheelList, setWheelList] = useState([]);
+  const [winner, setWinner] = useState(null);
   const [rot, setRot] = useState(0);
   const [done, setDone] = useState(false);
   const label = SLOT_LABEL[slot] || '식사';
   const candidates = useMemo(() => filterBySlot(spots, slot), [spots, slot]);
 
-  const doSpin = () => {
-    const p = spinPick(candidates);
-    if (!p) return;
+  const doSpin = (list = wheelList) => {
+    if (!list.length) return;
+    const winIdx = Math.floor(Math.random() * list.length);
     setDone(false);
-    setSpin(p);
-    setRot(r => r + p.angle);   // 누적 회전 — 연속 돌리기에도 항상 앞으로 돈다
+    setWinner(list[winIdx]);
+    // 절대 방향각 — 몇 번을 다시 돌려도 당첨 조각 중앙이 정확히 바늘(12시)에 멈춘다.
+    setRot(r => nextRotation(r, wheelTargetOf(winIdx, list.length)));
   };
-  // 열리면 자동 스핀 — 단, 파이어베이스 로딩보다 먼저 열릴 수 있으므로 후보가 생긴 뒤 1회만.
+  // 열리면 자동 스핀 — 파이어베이스 로딩보다 먼저 열릴 수 있으므로 후보가 생긴 뒤 1회만.
   const spunRef = useRef(false);
   useEffect(() => {
     if (spunRef.current || !candidates.length) return;
     spunRef.current = true;
-    const t = setTimeout(doSpin, 400);
+    const list = pickWheelList(candidates);
+    setWheelList(list);
+    const t = setTimeout(() => doSpin(list), 400);
     return () => clearTimeout(t);
   }, [candidates.length]);
 
   const onEnd = () => {
-    if (!spin || done) return;
+    if (!winner || done) return;
     setDone(true);
-    const r = avgRating(spin.winner);
-    speak(`오늘 ${label}은 ${spin.winner.name}${r ? `, 별점 ${r}점` : ''}! 맛있게 드세요.`);
+    const r = avgRating(winner);
+    speak(`오늘 ${label}은 ${winner.name}${r ? `, 별점 ${r}점` : ''}! 맛있게 드세요.`);
   };
 
-  const n = spin?.list?.length || 0;
+  const n = wheelList.length;
   const seg = n ? 360 / n : 360;
-  const grad = n ? `conic-gradient(${spin.list.map((s, i) =>
+  const grad = n ? `conic-gradient(${wheelList.map((s, i) =>
     `${WHEEL_COLORS[i % WHEEL_COLORS.length]} ${i * seg}deg ${(i + 1) * seg}deg`).join(', ')})` : 'conic-gradient(#334155 0deg 360deg)';
 
   return (
@@ -54,7 +59,7 @@ function RouletteModal({ spots, slot, onClose }) {
           <div className="w-full h-full rounded-full border-4 border-slate-700 relative overflow-hidden"
             style={{ background: grad, transform: `rotate(${rot}deg)`, transition: 'transform 3.2s cubic-bezier(0.15, 0.9, 0.25, 1)' }}
             onTransitionEnd={onEnd}>
-            {spin?.list?.map((s, i) => {
+            {wheelList.map((s, i) => {
               const a = i * seg + seg / 2;
               return (
                 <div key={s.name + i} className="absolute left-1/2 top-1/2 text-[10px] font-bold text-white"
@@ -66,16 +71,16 @@ function RouletteModal({ spots, slot, onClose }) {
             })}
           </div>
         </div>
-        {done && spin && (
+        {done && winner && (
           <div className="text-center space-y-2">
-            <div className="text-lg font-black text-amber-300">🎉 {spin.winner.name}</div>
-            <div className="text-xs text-slate-400">{spin.winner.cat}{spin.winner.area ? ` · ${spin.winner.area}` : ''}{avgRating(spin.winner) ? ` · ★${avgRating(spin.winner)}` : ''}</div>
+            <div className="text-lg font-black text-amber-300">🎉 {winner.name}</div>
+            <div className="text-xs text-slate-400">{winner.cat}{winner.area ? ` · ${winner.area}` : ''}{avgRating(winner) ? ` · ★${avgRating(winner)}` : ''}</div>
             <div className="flex gap-2">
-              {spin.winner.tel && (
-                <a href={`tel:${spin.winner.tel}`} className="flex-1 py-2 rounded-lg bg-emerald-700 text-white text-sm font-bold text-center">📞 전화</a>
+              {winner.tel && (
+                <a href={`tel:${winner.tel}`} className="flex-1 py-2 rounded-lg bg-emerald-700 text-white text-sm font-bold text-center">📞 전화</a>
               )}
-              <a href={mapUrlOf(spin.winner)} target="_blank" rel="noreferrer" className="flex-1 py-2 rounded-lg bg-sky-700 text-white text-sm font-bold text-center">🗺 지도</a>
-              <button onClick={doSpin} className="flex-1 py-2 rounded-lg bg-violet-700 text-white text-sm font-bold">🎲 다시</button>
+              <a href={mapUrlOf(winner)} target="_blank" rel="noreferrer" className="flex-1 py-2 rounded-lg bg-sky-700 text-white text-sm font-bold text-center">🗺 지도</a>
+              <button onClick={() => doSpin()} className="flex-1 py-2 rounded-lg bg-violet-700 text-white text-sm font-bold">🎲 다시</button>
             </div>
           </div>
         )}
@@ -103,6 +108,7 @@ export default function FoodPage({ inspector, onGoHome }) {
     seededRef.current = true;
     if (Object.keys(spots).length === 0) fbSeedFoodSpotsOnce(FOOD_SEEDS);
     fbSeedFoodSpotsOnce(FOOD_SEEDS_W2, '_seeded_w2');
+    fbSeedFoodSpotsOnce(FOOD_SEEDS_W3, '_seeded_w3');   // V8.62: 편의점 전체
   }, [spots]);
   // URL ?spin=slot → 돌림판 자동 오픈 (음성 트리거)
   useEffect(() => {
