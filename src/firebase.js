@@ -1621,12 +1621,13 @@ export async function fbCommentFoodSpot(id, inspector, text) {
   await set(r, { by: inspector || '', text: String(text || '').slice(0, 100), ts: Date.now() });
 }
 
-// 시드 1회 주입 — foodSpots/_seeded 플래그로 중복 방지(여러 폰 동시 접속 대비 최소 방어).
-export async function fbSeedFoodSpotsOnce(seeds) {
+// 시드 1회 주입 — foodSpots/{flag} 플래그로 중복 방지(여러 폰 동시 접속 대비 최소 방어).
+// V8.61: flagKey 매개변수 — 시드 2차(_seeded_w2)도 같은 함수로 1회 주입.
+export async function fbSeedFoodSpotsOnce(seeds, flagKey = '_seeded') {
   try {
-    const flag = await get(ref(db, 'foodSpots/_seeded'));
+    const flag = await get(ref(db, `foodSpots/${flagKey}`));
     if (flag.exists()) return false;
-    await set(ref(db, 'foodSpots/_seeded'), Date.now());
+    await set(ref(db, `foodSpots/${flagKey}`), Date.now());
     for (const sd of (seeds || [])) {
       const { id, ...rest } = sd;
       await set(ref(db, `foodSpots/${id}`), { ...rest, addedBy: '시드', ts: Date.now() });
