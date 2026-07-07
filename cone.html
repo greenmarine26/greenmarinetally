@@ -43,7 +43,7 @@
   .btn-up{flex:1; min-width:140px; background:var(--panel2); color:var(--ink);
     border:1.5px dashed var(--line); padding:20px 12px; font-size:14px;}
   .btn-up.loaded{border-style:solid; border-color:var(--accent2); background:#16291f;}
-  .voy-list{display:flex; flex-direction:column; gap:8px; max-height:340px; overflow-y:auto; margin-bottom:4px;}
+  .voy-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px; max-height:60vh; overflow-y:auto; margin-bottom:4px;}
   .voy-item{text-align:left; background:var(--panel2); border:1.5px solid var(--line); color:var(--ink); padding:12px 14px; width:100%;}
   .voy-item.sel{border-color:var(--accent); background:#2a2410;}
   .voy-item .vi-top{display:flex; align-items:center; gap:8px; font-size:15px;}
@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.46</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.47</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -655,7 +655,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='C7.67';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
-window.__CONEV='V8.46';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='V8.47';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -2439,7 +2439,7 @@ try{ render(); loadVoyageList(); }catch(e){
     txt=(txt||'').trim(); if(!txt) return false;
     var it={ text: txt.slice(0,2000), at: Date.now(),
       atText: new Date().toLocaleString('ko-KR'),
-      app:'cone', ver:'V8.45-02 ('+(window.__APPV||'')+')',
+      app:'cone', ver:'V8.47 ('+(window.__APPV||'')+')',
       ua: navigator.userAgent.slice(0,90), status:'new' };
     var q; try{ q=JSON.parse(localStorage.getItem(QK)||'[]'); }catch(e){ q=[]; }
     q.push(it); localStorage.setItem(QK,JSON.stringify(q)); flush();
