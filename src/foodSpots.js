@@ -29,6 +29,17 @@ export const FOOD_SEEDS_W2 = [
   { id: 'seed21', name: '장모님', cat: '닭요리', tel: '031-681-4796', area: '만호리(서동대로 804)', tags: ['점심', '저녁'], note: '월~토 09~22시 · 카카오 ★4.8' },
 ];
 
+// 시드 3차(V8.62) — 부근 편의점 전체(사용자 요청 2026-07-07, 카카오맵 실측). 편의점은 야식·24시 전용 후보.
+export const FOOD_SEEDS_W3 = [
+  { id: 'seed22', name: 'GS25 포승친오애점', cat: '편의점', tel: '080-999-5425', area: '만호리(서동대로 782-9)', tags: ['야식', '24시'], note: '카카오 ★5.0' },
+  { id: 'seed23', name: 'GS25 평택라마다점', cat: '편의점', tel: '080-999-5425', area: '만호리(평택항로184번길 3-24)', tags: ['야식', '24시'], note: '00~24시' },
+  { id: 'seed24', name: 'GS25 뉴평택스마트점', cat: '편의점', tel: '', area: '만호리(평택항로184번길 7)', tags: ['야식', '24시'], note: '스마트뷰오1차상가' },
+  { id: 'seed25', name: 'GS25 한온시스템점', cat: '편의점', tel: '', area: '만호리(하만호길 32-1)', tags: ['야식', '24시'], note: '' },
+  { id: 'seed26', name: 'CU 평택포승만호점', cat: '편의점', tel: '031-681-2450', area: '만호리(평택항로 174)', tags: ['야식', '24시'], note: '' },
+  { id: 'seed27', name: 'CU 메트로하임점', cat: '편의점', tel: '', area: '만호리 668', tags: ['야식', '24시'], note: '' },
+  { id: 'seed28', name: 'CU 포승2공단점', cat: '편의점', tel: '', area: '만호리(포승산단로13번길 9)', tags: ['야식', '24시'], note: '' },
+];
+
 // 지금 시각의 식사 슬롯. 05~10:30 아침 / ~15시 점심 / ~20:30 저녁 / 그 외 야식.
 export function mealSlotNow(d = new Date()) {
   const m = d.getHours() * 60 + d.getMinutes();
@@ -58,17 +69,24 @@ export function avgRating(spot) {
   return Math.round((r.reduce((a, b) => a + b, 0) / r.length) * 10) / 10;
 }
 
-// 돌림판 추첨 — 후보(최대 10곳 무작위)와 당첨·바늘 각도를 정한다.
-export function spinPick(spots, rnd = Math.random) {
-  let list = (spots || []).slice();
+// V8.62: 돌림판 정합 수정 — 배치는 모달 열릴 때 1회 고정, 회전은 절대각도로.
+//   (기존 spinPick: 스핀마다 재셔플 + 회전각 누적 합산 → 두 번째 스핀부터 바늘·당첨 불일치. 사용자 보고 2026-07-07.)
+// 돌림판 후보 뽑기 — 무작위로 섞어 최대 10곳. 모달이 열릴 때 한 번만 호출해 배치를 고정한다.
+export function pickWheelList(spots, rnd = Math.random) {
+  const list = (spots || []).slice();
   for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
-  list = list.slice(0, 10);
-  if (!list.length) return null;
-  const winIdx = Math.floor(rnd() * list.length);
-  const seg = 360 / list.length;
-  // 바늘(12시 방향) 기준 — 당첨 조각의 중앙이 바늘에 오도록 회전각 계산 (+5바퀴 연출)
-  const target = 360 * 5 + (360 - (winIdx * seg + seg / 2));
-  return { list, winner: list[winIdx], winIdx, angle: target, seg };
+  return list.slice(0, 10);
+}
+
+// 당첨 조각(winIdx)의 중앙이 바늘(12시)에 오는 절대 방향각(0~360).
+export function wheelTargetOf(winIdx, n) {
+  const seg = 360 / n;
+  return (360 - (winIdx * seg + seg / 2)) % 360;
+}
+
+// 다음 회전각 — 현재 각도에서 최소 5바퀴 이상 앞으로 돌아 정확히 target 방향에 멈춘다.
+export function nextRotation(currentRot, target) {
+  return (Math.floor(currentRot / 360) + 5) * 360 + target;
 }
 
 // 카카오맵 검색 링크.
