@@ -1,7 +1,7 @@
 // 맛집 수첩 + 돌림판 페이지 — 평택항(포승) 주변 식당 공유·별점·한줄평·랜덤 추천 (V8.60).
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, Phone, MapPin, Plus, Trash2, Star, Dices } from 'lucide-react';
-import { FOOD_SEEDS, mealSlotNow, SLOT_LABEL, filterBySlot, avgRating, spinPick, mapUrlOf } from '../foodSpots.js';
+import { FOOD_SEEDS, FOOD_SEEDS_W2, mealSlotNow, SLOT_LABEL, filterBySlot, avgRating, spinPick, mapUrlOf } from '../foodSpots.js';
 import { fbFoodListen, fbAddFoodSpot, fbDeleteFoodSpot, fbRateFoodSpot, fbCommentFoodSpot, fbSeedFoodSpotsOnce } from '../firebase.js';
 import { isChief } from '../staffList.js';
 import { speak } from '../voice.js';
@@ -97,10 +97,12 @@ export default function FoodPage({ inspector, onGoHome }) {
   const seededRef = useRef(false);
 
   useEffect(() => fbFoodListen(setSpots), []);
-  // 첫 진입 시 비어 있으면 시드 1회 주입
+  // 첫 진입 시 비어 있으면 시드 1회 주입 + 2차 시드(V8.61: 노걸대~다온다 구간)는 기존 DB에도 1회 주입
   useEffect(() => {
     if (spots === null || seededRef.current) return;
-    if (Object.keys(spots).length === 0) { seededRef.current = true; fbSeedFoodSpotsOnce(FOOD_SEEDS); }
+    seededRef.current = true;
+    if (Object.keys(spots).length === 0) fbSeedFoodSpotsOnce(FOOD_SEEDS);
+    fbSeedFoodSpotsOnce(FOOD_SEEDS_W2, '_seeded_w2');
   }, [spots]);
   // URL ?spin=slot → 돌림판 자동 오픈 (음성 트리거)
   useEffect(() => {
