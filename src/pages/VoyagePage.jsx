@@ -58,7 +58,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const hasDis = !!voyage?.discharge;
   const hasLoa = !!voyage?.loading;
   // V8.81: 홈에서 양하/선적 막대로 연 경우 그 모드 우선 (route.mode 전달).
-  const initMode = initModeOverride || voyage?.info?.mode || (hasDis ? 'discharge' : 'loading');
+  // V8.82-01: 양하·선적이 둘 다 있으면 양하 우선 — 수집기가 선적 항차를 먼저 등록해 info.mode='loading'이
+  //   박혀 있어도, 작업 순서(양하→선적)대로 양하부터 연다. 양하가 완료 표시된 항차만 선적으로 바로.
+  const dischargeMarkedDone = !!(voyage?.info?.inspectorDone || voyage?.info?.dischargeDone);
+  const initMode = initModeOverride
+    || (hasDis && hasLoa
+      ? (dischargeMarkedDone ? 'loading' : 'discharge')
+      : (voyage?.info?.mode || (hasDis ? 'discharge' : 'loading')));
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
