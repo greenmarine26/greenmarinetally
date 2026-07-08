@@ -939,8 +939,9 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
       vslFull: info.vslFull || '',   // M7.24b: EDI 추출 풀네임 (보관소 선박명 표시용)
       callsign: info.callsign || '',
       imo: info.imo || '',
-      voy_d: info.voy_d || '',
-      voy_l: info.voy_l || '',
+      // V8.84: 빈값이면 키 자체를 안 보냄 — 이전 기록의 항차를 빈 문자열로 덮지 않게.
+      ...(info.voy_d ? { voy_d: info.voy_d } : {}),
+      ...(info.voy_l ? { voy_l: info.voy_l } : {}),
       carrier: info.carrier || '',
       discharge_ptk: discharge,
       loading_ptk: loading,
