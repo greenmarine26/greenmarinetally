@@ -62,7 +62,8 @@ export default function Header({ version, inspector, online, route, voyages, onC
               {info ? info.vsl : '평택항 검수'}
             </div>
             <div className="text-[10px] text-slate-500 truncate leading-tight">
-              {info ? `${info.voy_d || info.voy_l || info.voy || ''} · ${info.carrier || ''}` : '🌊 그린마린 검수팀 전용'}
+              {/* V8.82: 모드 따라 항차 표시 — 양하=voy_d, 선적=voy_l (구: 항상 voy_d 우선이라 선적 중에도 양하 항차가 보임) */}
+              {info ? `${(route?.mode === 'loading' ? (info.voy_l || info.voy_d) : (info.voy_d || info.voy_l)) || info.voy || ''} · ${info.carrier || ''}` : '🌊 그린마린 검수팀 전용'}
             </div>
           </div>
         </div>

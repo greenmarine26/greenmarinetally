@@ -19,12 +19,18 @@ import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false }) {   // V7.92: portMisData 추가 · V8.11: isLoloShip(LOLO선이면 베이 게이트 스킵)
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false, mode = null, onWorkFilterChange = null }) {   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V7.94: 자동 가이드 모드 — 앱이 크레인 순서대로 다음 컨을 예측 제시 (수동 = 기존 검색 방식)
   const [guideMode, setGuideMode] = useState(false);
   // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
-  const [workFilter, setWorkFilter] = useState('discharge');  // 'discharge' | 'loading' | 'completed'
+  const [workFilter, setWorkFilter] = useState(mode === 'loading' ? 'loading' : 'discharge');  // 'discharge' | 'loading' | 'completed'
+  // V8.82: 상단 양하/선적 탭(VoyagePage mode)이 바뀌면 작업 모드도 따라간다 — 위·아래가 반대로 엇갈리던 혼선 제거.
+  useEffect(() => {
+    if ((mode === 'discharge' || mode === 'loading') && workFilter !== mode) setWorkFilter(mode);
+  }, [mode]);
+  // V8.82: 아래 탭을 누르면 상단 모드도 따라가게 상위로 알림.
+  const pickWorkFilter = (m) => { setWorkFilter(m); if (m !== 'completed') onWorkFilterChange?.(m); };
   const [extraModalOpen, setExtraModalOpen] = useState(false);   // V8.04: 초과 컨 입력 모달
 
   const allContainers = useMemo(() => {
@@ -153,14 +159,14 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     <div className="space-y-3">
       {/* M5.75: 작업 모드 탭 (양하/선적/완료) */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
-        <button onClick={() => setWorkFilter('discharge')}
+        <button onClick={() => pickWorkFilter('discharge')}
           className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
             workFilter === 'discharge' ? 'bg-rose-700 text-rose-100' : 'text-slate-400 hover:bg-slate-800'
           }`}>
           <span>⬇ 양하 작업</span>
           <span className="text-[10px] opacity-80">대기 {dischCount}대</span>
         </button>
-        <button onClick={() => setWorkFilter('loading')}
+        <button onClick={() => pickWorkFilter('loading')}
           className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
             workFilter === 'loading' ? 'bg-sky-700 text-sky-100' : 'text-slate-400 hover:bg-slate-800'
           }`}>
