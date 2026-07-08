@@ -103,9 +103,11 @@ export default function PositionEditModal({
   const partnerMatches = useMemo(() => {
     const q = partnerQuery.replace(/\s/g, '').toUpperCase();
     if (q.length < 3 || !container) return [];
-    return allContainers.filter(x => x && x._mode === container._mode && !x._comp &&
+    // V8.71: 완료 기록 컨도 후보 포함(뒤 정렬 + ⚠배지) — 오선적 기록 교정 경로.
+    return allContainers.filter(x => x && x._mode === container._mode &&
       x.cn !== container.cn &&
-      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q))).slice(0, 6);
+      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q)))
+      .sort((a, b) => (!!a._comp) - (!!b._comp)).slice(0, 6);
   }, [partnerQuery, allContainers, container]);
 
   // 충돌 검사: 같은 자리에 있는 다른 컨
@@ -427,14 +429,20 @@ export default function PositionEditModal({
                         placeholder="뒤(짝꿍) 컨 끝 4자리 이상" inputMode="numeric" autoComplete="off"
                         className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
                       {partnerMatches.map(x => (
-                        <button key={x.cn} onClick={() => setPartnerPick(x)}
+                        <button key={x.cn} onClick={() => {
+                            if (x._comp && !confirm(`${x.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다. 계속할까요?`)) return;
+                            setPartnerPick(x);
+                          }}
                           className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
                           <span className="mono font-bold text-slate-100">{x.cn}</span>
-                          <span className="mono text-slate-400">{x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}</span>
+                          <span className="mono text-slate-400">
+                            {x._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
+                            {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}
+                          </span>
                         </button>
                       ))}
                       {partnerQuery.length >= 3 && partnerMatches.length === 0 &&
-                        <div className="text-[11px] text-slate-500 text-center">일치하는 미완료 컨이 없습니다.</div>}
+                        <div className="text-[11px] text-slate-500 text-center">일치하는 컨이 없습니다.</div>}
                     </>
                   ))}
                 </div>

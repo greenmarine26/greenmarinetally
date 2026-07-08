@@ -8,7 +8,7 @@ import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from 
 import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
-import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
+import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
@@ -292,8 +292,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (blockIfXrayMissing()) return;   // V8.09-06: XRAY 실번호 미입력 차단
     setBusy(true);
     try {
-      await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
-      if (card.twin) await fbCompleteContainer(voyageKey, mode, card.twin.cn, inspector);
+      // V8.71: 트윈 완료 2건을 멀티패스 한 번에 — 한 대만 먼저 선적되는 틈 제거.
+      if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector);
+      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
       setConsecFix(0);
       setFixOpen(false); setFixQuery('');
     } finally { setBusy(false); }
@@ -313,13 +314,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const q = q0.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
     const ex = new Set((Array.isArray(excludeCns) ? excludeCns : [excludeCns]).filter(Boolean));
-    const hits = remaining.filter(c => !ex.has(c.cn) &&
+    // V8.71: 완료로 기록된 컨도 후보에 포함 — 실물이 눈앞에 있으면 그 완료는 오선적 기록일 확률이 높다(사용자 확정).
+    //   렌더에서 ⚠완료 배지 + 선택 시 확인. 정렬은 미완료 우선.
+    const hits = modeAll.filter(c => !ex.has(c.cn) &&
       (c.cn.includes(q) || (c.l4 || c.cn.slice(-4)).includes(q)));
-    // 정렬: 현재 카드 자리 > 현재 그룹·단 > 그 외(렌더에서 ⚠ 다른 베이 표시).
+    // 정렬: 현재 카드 자리 > 현재 그룹·단 > 그 외(렌더에서 ⚠ 다른 베이 표시). 완료분은 항상 뒤.
     const pos = card?.main?.pos || (card?.main ? `${card.main.bay}-${card.main.row}-${card.main.tier}` : '');
-    const rankOf = (c) => `${parseInt(c.bay,10)}-${c.row}-${c.tier}` === pos ? 0 : (inWorkTier(c) ? 1 : 2);
+    const rankOf = (c) => (c._comp ? 10 : 0) + (`${parseInt(c.bay,10)}-${c.row}-${c.tier}` === pos ? 0 : (inWorkTier(c) ? 1 : 2));
     return hits.sort((a, b) => rankOf(a) - rankOf(b)).slice(0, 6);
   };
+  // V8.71: 완료 컨을 실제 온 컨으로 지정할 때 확인 — 오선적 기록 안내.
+  const confirmIfDone = (c) => !c?._comp ||
+    confirm(`${c.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 지금 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다.\n이 자리로 옮기고 진행할까요? (완료 기록은 유지)`);
   const fixMatches = useMemo(() => matchFor(fixQuery, [fixPickBack?.cn, card?.main?.cn]), [fixQuery, remaining, card, fixPickBack]);
   const fixMatches2 = useMemo(() => matchFor(fixQuery2, [fixPickFront?.cn, card?.twin?.cn]), [fixQuery2, remaining, card, fixPickFront]);
 
@@ -526,6 +532,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
     }
+    if (!confirmIfDone(c)) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행
     setBusy(true);
     try {
       await applyFixOne(c, card.main);
@@ -555,12 +562,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
     }
+    if ((fixPickFront && !confirmIfDone(fixPickFront)) || (fixPickBack && !confirmIfDone(fixPickBack))) return;   // V8.71
     setBusy(true);
+    // V8.71: 원자화 — 재배정(위치)을 앞·뒤 모두 끝낸 뒤에만 완료를 찍는다.
+    //   (구: 앞 재배정+완료 → 뒤 재배정+완료 순서라, 뒤가 중간에 실패하면 앞 한 대만 선적된 채 멈춤 — 현장 보고 2026-07-08.)
     try {
-      if (fixPickFront) await applyFixOne(fixPickFront, card.main);
-      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
-      if (fixPickBack) await applyFixOne(fixPickBack, card.twin);
-      else await fbCompleteContainer(voyageKey, mode, card.twin.cn, inspector);
+      if (mode === 'loading') {
+        if (fixPickFront) await fbReassignContainerPosition(voyageKey, mode, fixPickFront.cn, card.main.bay, card.main.row, card.main.tier, inspector);
+        if (fixPickBack) await fbReassignContainerPosition(voyageKey, mode, fixPickBack.cn, card.twin.bay, card.twin.row, card.twin.tier, inspector);
+      }
+      await fbCompleteContainersAtomic(voyageKey, mode,
+        [fixPickFront ? fixPickFront.cn : card.main.cn, fixPickBack ? fixPickBack.cn : card.twin.cn], inspector);
+    } catch (e) {
+      alert(`수정 적용 중 오류 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n(${e?.message || e})`);
+      setBusy(false);
+      return;
     } finally { setBusy(false); }
     adaptStream(fixPickFront || fixPickBack);   // V8.50: 실제 내려온 부류로 재앵커
     afterFix();
@@ -937,6 +953,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{c.cn}</span>
                   <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-slate-400'}`}>
+                    {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                     {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
                     {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
                   </span>
@@ -970,6 +987,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                           className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                           <span className="mono font-bold text-slate-100">{c.cn}</span>
                           <span className="mono text-slate-400">
+                            {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                             {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
                             {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
                           </span>

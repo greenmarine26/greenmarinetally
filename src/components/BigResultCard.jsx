@@ -37,8 +37,10 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   const cnFixMatches = useMemo(() => {
     const q = cnFixQuery.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
-    return allContainers.filter(x => x && x._mode === c._mode && !x._comp && x.cn !== c.cn &&
-      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q))).slice(0, 6);
+    // V8.71: 완료 기록된 컨도 후보 포함(뒤 정렬 + ⚠배지) — 실물이 눈앞이면 그 완료는 오선적 기록일 확률이 높다.
+    return allContainers.filter(x => x && x._mode === c._mode && x.cn !== c.cn &&
+      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q)))
+      .sort((a, b) => (!!a._comp) - (!!b._comp)).slice(0, 6);
   }, [cnFixQuery, allContainers, c]);
   const isLoading = c._mode === 'loading';
 
@@ -276,10 +278,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 placeholder="예: 1234 또는 SKLU1972626"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
               {cnFixMatches.map(x => (
-                <button key={x.cn} onClick={() => setCnFixPick(x)}
+                <button key={x.cn} onClick={() => {
+                    if (x._comp && !confirm(`${x.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다. 계속할까요?`)) return;
+                    setCnFixPick(x);
+                  }}
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{x.cn}</span>
                   <span className="mono text-slate-400">
+                    {x._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                     {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}
                   </span>
                 </button>
@@ -303,11 +309,12 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         onClose={() => setPosTarget(null)}
         onSave={async (newBay, newRow, newTier) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
-          const result = await fbReassignContainerPosition(voyageKey, c._mode, (posTarget || c).cn, newBay, newRow, newTier, inspector);
+          // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지, 사용자 확정)
+          const result = await fbReassignContainerPosition(voyageKey, c._mode, (posTarget || c).cn, newBay, newRow, newTier, inspector, { displacedMode: 'unassign' });
           return result;
         }}
         bayPairs={posEditBayPairs}
-        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector)}
+        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { displacedMode: 'unassign' })}
         onCompleteBoth={async (cns) => {
           for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector);
           // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
