@@ -1039,7 +1039,16 @@ function ShipArchiveSection({ shipLib }) {
         key: vk,
         // V8.43: 항차 표시는 항차 키(검수사가 만든 항차) 기준 — EDI 헤더의 전항차/오기
         //   voy_d가 그대로 떠서 실제와 다른 번호가 보이던 버그(예: NSDC 2605N에 2611N 표시) 수정.
-        voy: vk.split('_').slice(1).join('_') || v?.voy_d || v?.voy_l || v?.voy || vk,
+        // V8.84: 양하·선적 항차 둘 다 표시(사용자 요청 2026-07-08 '같이 마감했는데 항차가 둘다 기록 안 됨').
+        //   완료 저장이 기록한 info 기반 voy_d/voy_l(신뢰)이 둘 다 있으면 "양하/선적"으로,
+        //   아니면 기존대로 항차 키. EDI 헤더 voy 불신은 V8.43 그대로 유지.
+        voy: (() => {
+          const kv = vk.split('_').slice(1).join('_');
+          const vd = String(v?.voy_d || '').trim().toUpperCase();
+          const vl = String(v?.voy_l || '').trim().toUpperCase();
+          if (vd && vl && vd !== vl) return `${vd}/${vl}`;
+          return kv || vd || vl || v?.voy || vk;
+        })(),
         discharge: v?.discharge_ptk || 0,
         loading: v?.loading_ptk || 0,
         at: v?.completed_at || v?.analyzed_at || 0,

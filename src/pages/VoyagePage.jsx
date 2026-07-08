@@ -1893,6 +1893,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         });
         await fbAddShipVoyage(shipStoreKey, voyageKey, {
           voy: shipInfo.voyage,
+          // V8.84: 항차 등록 정보의 양하/선적 항차를 보관소 기록에도 — 빈값은 제외(기존 값 보존).
+          ...(voyage?.info?.voy_d ? { voy_d: voyage.info.voy_d } : {}),
+          ...(voyage?.info?.voy_l ? { voy_l: voyage.info.voy_l } : {}),
           vsl: shipInfo.name,
           mode,
           container_count: allEdiContainers.length,
