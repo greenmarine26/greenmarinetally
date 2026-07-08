@@ -343,6 +343,42 @@ export async function fbRemoveExtraContainer(voyageKey, mode, cn) {
 }
 export async function fbCancelComplete(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
+  // V8.80: 취소 = 위치도 원계획(bay_orig)으로 원복 (사용자 확정 2026-07-08 — 원복돼야 수정 여부를 알 수 있다).
+  //   원자리에 다른 컨이 있으면 미배정으로 두고 알림용 정보 반환.
+  try {
+    const recSnap = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
+    const rec = recSnap.val();
+    if (!rec || rec.bay_orig === undefined) return { ok: true };
+    const ob = rec.bay_orig || '', orow = rec.row_orig || '', ot = rec.tier_orig || '';
+    const changed = (rec.bay || '') !== ob || (rec.row || '') !== orow || (rec.tier || '') !== ot;
+    if (!changed) return { ok: true };
+    let occupant = null;
+    if (ob && orow && ot) {
+      const [ediSnap, recAllSnap] = await Promise.all([
+        get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers`)),
+        get(ref(db, `voyages/${voyageKey}/${mode}/records`)),
+      ]);
+      const ediMap = ediSnap.val() || {}, recMap = recAllSnap.val() || {};
+      const obInt = String(parseInt(ob, 10));
+      for (const otherCn of new Set([...Object.keys(ediMap), ...Object.keys(recMap)])) {
+        if (otherCn === cn) continue;
+        const e = ediMap[otherCn] || {}, r = recMap[otherCn] || {};
+        const xb = r.bay || e.bay || '';
+        if (xb && String(parseInt(xb, 10)) === obInt && (r.row || e.row) === orow && (r.tier || e.tier) === ot) { occupant = otherCn; break; }
+      }
+    }
+    if (occupant) {
+      await _updatePositionFields(voyageKey, mode, cn, '', '', '', '취소원복');
+      return { ok: true, restored: false, origOccupied: occupant };
+    }
+    await _updatePositionFields(voyageKey, mode, cn, ob, orow, ot, '취소원복');
+    return { ok: true, restored: true, orig: { bay: ob, row: orow, tier: ot } };
+  } catch { return { ok: true }; }
+}
+
+// V8.80: 수동 배정 확인 — 컨을 미배정으로 (수동 작업은 계획 위치에 묶이지 않는다. 사용자 확정 2026-07-08).
+export async function fbUnassignContainer(voyageKey, mode, cn, by) {
+  await _updatePositionFields(voyageKey, mode, cn, '', '', '', by);
 }
 
 // M4.9d-fix: 선적 실체 위치 저장 (사용자 도메인: 선적 EDI는 계획만, 선적확인 시 실체 발생)
