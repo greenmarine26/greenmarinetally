@@ -536,7 +536,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               <VoyageCard
                 voyage={v}
                 activeInspectors={activeInspectors[v.key] || []}
-                onOpen={() => onOpenVoyage(v.key)}
+                onOpen={(m) => onOpenVoyage(v.key, m)}
                 onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
                 onComplete={(mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
                 inspectorDone={isAllDone(v)}
@@ -720,7 +720,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       'border-slate-800'
     }`}>
       <button
-        onClick={onOpen}
+        onClick={() => onOpen()}
         className="w-full px-3 py-2.5 hover:bg-slate-800/50 flex items-center justify-between gap-2"
       >
         <div className="text-left min-w-0 flex-1">
@@ -786,8 +786,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       </button>
 
       <div className="px-3 pb-3 space-y-2">
-        {dis && <SectionBar label="양하" color="blue" stats={disStats} onClick={onOpen}/>}
-        {loa && <SectionBar label="선적" color="amber" stats={loaStats} onClick={onOpen}/>}
+        {/* V8.81: 양하/선적 막대를 누르면 그 모드로 항차를 연다 (구: 둘 다 기본 모드로 열려 "반응 없음"처럼 보임). */}
+        {dis && <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>}
+        {loa && <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>}
       </div>
 
       {(activeInspectors.length > 0 || onDelete) && (

@@ -53,11 +53,12 @@ import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange }) {
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange, initModeOverride = null }) {
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   const hasDis = !!voyage?.discharge;
   const hasLoa = !!voyage?.loading;
-  const initMode = voyage?.info?.mode || (hasDis ? 'discharge' : 'loading');
+  // V8.81: 홈에서 양하/선적 막대로 연 경우 그 모드 우선 (route.mode 전달).
+  const initMode = initModeOverride || voyage?.info?.mode || (hasDis ? 'discharge' : 'loading');
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
