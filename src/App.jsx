@@ -224,7 +224,7 @@ export default function App() {
           <HomePage
             voyages={voyages} inspectors={inspectors} inspector={inspector}
             portMisData={portMisData}
-            onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
+            onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
             onOpenGlobalSearch={() => navigate('search')}
             onOpenChiefDashboard={() => navigate('chief')}
             heartbeat={heartbeat}
@@ -238,7 +238,7 @@ export default function App() {
         {route.name === 'health' && (
           <HealthPage
             voyages={voyages} heartbeat={heartbeat}
-            onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
+            onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
           />
         )}
         {route.name === 'search' && (
@@ -251,13 +251,14 @@ export default function App() {
         {route.name === 'chief' && (
           <ChiefDashboard
             voyages={voyages} inspectors={inspectors} inspector={inspector}
-            onOpenVoyage={(voyageKey) => navigate({ voyageKey })}
+            onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
             onGoHome={() => navigate('home')}
           />
         )}
         {route.name === 'voyage' && (
           voyages[route.voyageKey] ? (
           <VoyagePage
+            initModeOverride={route.mode || null}
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}
             inspector={inspector}
