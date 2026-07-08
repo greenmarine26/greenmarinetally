@@ -310,6 +310,14 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
 }
+
+// V8.71: 여러 컨 완료를 한 번의 멀티패스 update로 — 트윈 수정에서 "한 대만 먼저 선적" 방지 (둘 다 되거나 둘 다 안 되거나).
+export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by) {
+  const patch = {};
+  const at = Date.now();
+  for (const cn of cns.filter(Boolean)) patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = { by, at };
+  await update(ref(db), patch);
+}
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
 //   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).
 //   V8.04: 신고서 작성에 필요한 기본 정보(규격·F/E·타입·실번호·데미지 유무)를 함께 저장.
@@ -403,7 +411,9 @@ export async function fbBatchClearActual(voyageKey, mode, cns) {
 //   - 빈 문자열로 새 위치를 주면 → 미배정으로 변경
 //
 // 반환: { ok: true, displaced?: <빠진 컨번호> }
-export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by) {
+// V8.71: opts.displacedMode — 'swap'(기본: 자동 가이드용, 밀려난 컨을 옮긴 컨의 옛 자리로)
+//   | 'unassign'(수동용: 밀려난 컨은 미배정 — 수동 작업에선 앱이 컨을 멋대로 재배정하지 않는다. 사용자 확정 2026-07-08).
+export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by, opts = {}) {
   // V7.94-24: 자리 교환(swap) — A를 B 자리로 옮기면, 자리를 뺏긴 B는 A의 원래 자리로 이동(거기서 선적 대기).
   //   (구: B를 미배정 처리 → 떠돌이 발생). A의 현재 위치를 먼저 캡처.
   let aOldBay = '', aOldRow = '', aOldTier = '';
@@ -445,9 +455,10 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
   let displacedWasCompleted = false;
   if (displaced) {
-    if (aOldBay && aOldRow && aOldTier) {
+    if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
     } else {
+      // 수동(unassign) 또는 옛 자리 없음 → 미배정 (미배정 목록에서 검수사가 직접 지정)
       await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
     }
     // V8.70: 자리를 뺏긴 컨이 이미 검수완료된 컨이면 완료 기록을 지우지 않는다.
@@ -464,7 +475,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // 3) target 컨 위치 변경
   await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
 
-  return { ok: true, displaced, displacedWasCompleted, swappedTo: displaced ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
+  return { ok: true, displaced, displacedWasCompleted, swappedTo: (displaced && opts.displacedMode !== 'unassign') ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
 }
 
 // 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화
