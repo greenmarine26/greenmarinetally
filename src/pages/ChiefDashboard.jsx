@@ -1109,7 +1109,12 @@ function ShipArchiveSection({ shipLib }) {
               <div className="space-y-0.5">
                 {s.voyRows.map((r) => (
                   <div key={r.key} className="flex items-center gap-2 text-xs px-1 py-0.5 border-b border-slate-700/30 last:border-0">
-                    <span className="text-amber-300 font-bold w-16 truncate">{r.voy}</span>
+                    {/* V8.84-01: 양하/선적 항차가 truncate로 잘려 선적이 안 보이던 문제 — 두 줄로 쌓아 표시 */}
+                    <span className="text-amber-300 font-bold w-16 shrink-0 leading-tight">
+                      {String(r.voy).includes('/')
+                        ? String(r.voy).split('/').map((p, i) => <span key={i} className="block">{p}</span>)
+                        : r.voy}
+                    </span>
                     <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b></span>
                     <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b></span>
                     <span className="text-slate-500 text-[10px] ml-auto">{fmtDate(r.at)}</span>
