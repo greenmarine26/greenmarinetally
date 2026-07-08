@@ -1006,7 +1006,20 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const [step, setStep] = useState('pick');   // 'pick' | 'pos'
   const [bay, setBay] = useState(''); const [row, setRow] = useState(''); const [tier, setTier] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pickBay, setPickBay] = useState(null);          // V8.83: 자리 선택 그리드 — 베이 먼저
+  const [manualOpen, setManualOpen] = useState(false);   // V8.83: 직접 입력 접이식
   const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading'), [allContainers]);
+  // V8.83: 자리 선택 그리드 — 20ft 계획 자리(완료=회색 선택불가). 위치수정 창과 같은 방식(사용자 확정).
+  const is20 = (c) => String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2';
+  const slotsByBay = useMemo(() => {
+    const m = {};
+    pool.filter(c => c.bay && c.row && c.tier && is20(c)).forEach(c => {
+      const b = String(parseInt(c.bay, 10));
+      (m[b] = m[b] || []).push({ bay: b, row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp });
+    });
+    Object.values(m).forEach(a => a.sort((x, y) => (parseInt(x.tier,10)-parseInt(y.tier,10)) || (parseInt(x.row,10)-parseInt(y.row,10))));
+    return m;
+  }, [pool]);
   const findMatches = (q, excludeCn) => {
     if (!q || q.length < 2) return [];
     const Q = q.toUpperCase();
@@ -1029,7 +1042,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const backPos = pairBay && rowP && tierP ? { bay: pairBay, row: rowP, tier: tierP } : null;
   const pairSlotPlanned = backPos ? pool.some(x => x.bay && String(parseInt(x.bay, 10)) === backPos.bay && x.row === backPos.row && x.tier === backPos.tier) : false;
 
-  const resetAll = () => { setQ1(''); setQ2(''); setC1(null); setC2(null); setStep('pick'); setBay(''); setRow(''); setTier(''); };
+  const resetAll = () => { setQ1(''); setQ2(''); setC1(null); setC2(null); setStep('pick'); setBay(''); setRow(''); setTier(''); setPickBay(null); setManualOpen(false); };
 
   // [수동 배정 확인] — 기존 위치를 보여준 상태에서 확인 = 두 컨 즉시 미배정 (사용자 확정)
   const confirmManual = async () => {
@@ -1118,7 +1131,44 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       )}
       {step === 'pos' && c1 && c2 && (
         <div className="bg-slate-900 border border-amber-700 rounded-lg p-3 space-y-3">
-          <div className="text-xs text-amber-300 font-bold">앞 {c1.cn?.slice(-4)} 위치 (Bay-Row-Tier)</div>
+          <div className="text-xs text-amber-300 font-bold">앞 {c1.cn?.slice(-4)} 위치 — 자리 선택 (✓회색=선적 완료, 선택 불가)</div>
+          {/* V8.83: 위치수정 창과 같은 자리 선택 그리드 — 직접 입력은 접이식으로 (사용자 확정) */}
+          {!pickBay ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {Object.keys(slotsByBay).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(b => {
+                const remain = slotsByBay[b].filter(s => !s.done).length;
+                return (
+                  <button key={b} onClick={() => remain > 0 && setPickBay(b)} disabled={remain === 0}
+                    className={`py-2.5 rounded-lg border font-black ${remain > 0 ? 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                    <div className="mono text-base">B{b}</div>
+                    <div className="text-[10px] font-bold text-slate-400">남은 {remain}자리</div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택</div>
+                <button onClick={() => { setPickBay(null); setBay(''); setRow(''); setTier(''); }} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(slotsByBay[pickBay] || []).map(s => s.done ? (
+                  <span key={`${s.row}-${s.tier}`} className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">✓{s.row}-{s.tier}</span>
+                ) : (
+                  <button key={`${s.row}-${s.tier}`} onClick={() => { setBay(s.bay); setRow(s.row); setTier(s.tier); }}
+                    className={`px-2.5 py-2 rounded-lg border mono text-sm font-bold ${row === s.row && tier === s.tier && bay === s.bay ? 'bg-amber-700 border-amber-400 text-amber-50' : 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100'}`}>
+                    {s.row}-{s.tier}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={() => setManualOpen(v => !v)}
+            className="w-full py-1.5 text-[11px] text-slate-400 hover:text-slate-200 border border-dashed border-slate-700 rounded">
+            {manualOpen ? '▲ 직접 입력 닫기' : '▼ 직접 입력 (플랜에 없는 자리)'}
+          </button>
+          {manualOpen && (
           <div className="grid grid-cols-3 gap-2">
             {[['BAY', bay, setBay, 3], ['ROW', row, setRow, 2], ['TIER', tier, setTier, 2]].map(([lb, v, setV, mx]) => (
               <div key={lb}>
@@ -1129,6 +1179,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
               </div>
             ))}
           </div>
+          )}
           {bay && rowP && tierP && (
             backPos ? (
               <div className="bg-cyan-950/40 border border-cyan-800 rounded p-2 text-xs text-cyan-200">
