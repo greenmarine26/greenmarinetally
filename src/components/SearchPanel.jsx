@@ -5,14 +5,14 @@
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
-import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
+import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer } from '../nlSearch.js';
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
 import ExtraContainerModal from './ExtraContainerModal.jsx';
@@ -337,7 +337,9 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
       {searchMode === 'single'
         ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} manualCtx={manualCtx} />
-        : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
+        : workFilter === 'loading'
+          ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}/>
+          : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
       </>
       )}
       </>
@@ -989,6 +991,161 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   );
 }
 
+// ─── V8.80: 수동 트윈 선적 — PCTC식 두 조회창 (사용자 확정 2026-07-08) ───
+//   원칙: 수동 작업은 계획 위치에 묶이지 않는다. 두 컨을 직접 입력해 짝꿍으로 묶고,
+//   [수동 배정 확인]으로 즉시 미배정 → 앞 위치를 정하면 뒤는 짝꿍 베이 자동 → 선적확인 한 번에 원자 완료.
+function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenContainer }) {
+  const [q1, setQ1] = useState(''); const [q2, setQ2] = useState('');
+  const [c1, setC1] = useState(null); const [c2, setC2] = useState(null);
+  const [step, setStep] = useState('pick');   // 'pick' | 'pos'
+  const [bay, setBay] = useState(''); const [row, setRow] = useState(''); const [tier, setTier] = useState('');
+  const [busy, setBusy] = useState(false);
+  const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading'), [allContainers]);
+  const findMatches = (q, excludeCn) => {
+    if (!q || q.length < 2) return [];
+    const Q = q.toUpperCase();
+    return pool.filter(c => c.cn !== excludeCn && (() => {
+      const l4 = c.l4 || c.cn?.slice(-4) || '';
+      return Q.length === 4 ? l4 === Q : (l4.endsWith(Q) || c.cn?.includes(Q));
+    })()).sort((a, b) => (!!a._comp) - (!!b._comp)).slice(0, 8);
+  };
+  const r1 = useMemo(() => findMatches(q1, c2?.cn), [q1, pool, c2]);
+  const r2 = useMemo(() => findMatches(q2, c1?.cn), [q2, pool, c1]);
+  useEffect(() => { if (r1.length === 1 && (!c1 || c1.cn !== r1[0].cn)) setC1(r1[0]); else if (r1.length === 0 && c1) setC1(null); }, [r1]);
+  useEffect(() => { if (r2.length === 1 && (!c2 || c2.cn !== r2[0].cn)) setC2(r2[0]); else if (r2.length === 0 && c2) setC2(null); }, [r2]);
+
+  const bayPairs = useMemo(() => {
+    try { return getBayPairs(pool, voyage?.info?.imo || '', voyage?.info?.vsl || '') || {}; } catch { return {}; }
+  }, [pool, voyage]);
+  const pairBay = bay ? (bayPairs[String(parseInt(bay, 10))] || null) : null;
+  const rowP = row ? String(row).padStart(2, '0') : '';
+  const tierP = tier ? String(tier).padStart(2, '0') : '';
+  const backPos = pairBay && rowP && tierP ? { bay: pairBay, row: rowP, tier: tierP } : null;
+  const pairSlotPlanned = backPos ? pool.some(x => x.bay && String(parseInt(x.bay, 10)) === backPos.bay && x.row === backPos.row && x.tier === backPos.tier) : false;
+
+  const resetAll = () => { setQ1(''); setQ2(''); setC1(null); setC2(null); setStep('pick'); setBay(''); setRow(''); setTier(''); };
+
+  // [수동 배정 확인] — 기존 위치를 보여준 상태에서 확인 = 두 컨 즉시 미배정 (사용자 확정)
+  const confirmManual = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const done = [c1, c2].filter(c => c._comp);
+    if (done.length && !confirm(`${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n오선적 기록일 수 있습니다. 계속할까요?`)) return;
+    setBusy(true);
+    try {
+      await fbUnassignContainer(voyageKey, 'loading', c1.cn, inspector);
+      await fbUnassignContainer(voyageKey, 'loading', c2.cn, inspector);
+      setStep('pos');
+    } catch (e) { alert(`미배정 처리 실패: ${e?.message || e}`); }
+    finally { setBusy(false); }
+  };
+
+  // [트윈 선적확인] — 앞 지정 위치 + 뒤 짝꿍 자동, 재배정 후 완료 2건 원자 처리
+  const completeBoth = async () => {
+    if (busy) return;
+    const bn = parseInt(bay, 10);
+    if (!Number.isFinite(bn) || !rowP || !tierP) { alert('앞 컨 위치(Bay/Row/Tier)를 입력하세요'); return; }
+    if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
+    setBusy(true);
+    try {
+      await fbReassignContainerPosition(voyageKey, 'loading', c1.cn, bay, rowP, tierP, inspector, { displacedMode: 'unassign' });
+      await fbReassignContainerPosition(voyageKey, 'loading', c2.cn, backPos.bay, backPos.row, backPos.tier, inspector, { displacedMode: 'unassign' });
+      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
+      speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
+      resetAll();
+    } catch (e) { alert(`처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n${e?.message || e}`); }
+    finally { setBusy(false); }
+  };
+
+  const pickBox = (label, color, q, setQ, cSel, setCSel, rr) => (
+    <div className={`bg-slate-900 border ${color === 'amber' ? 'border-amber-700/40' : 'border-cyan-700/40'} rounded-lg p-3`}>
+      <div className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>
+        <span className={`${color === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'} px-1.5 py-0.5 rounded text-[10px] font-black`}>{label}</span>
+        {label} 컨테이너 — 끝4자리
+      </div>
+      <input type="text" value={q} onChange={e => setQ(e.target.value.toUpperCase())}
+        placeholder="끝 4자리 또는 컨번호" inputMode="numeric" autoComplete="off"
+        className={`w-full px-3 py-3 bg-slate-800 border rounded text-2xl font-black mono text-center tracking-widest focus:outline-none ${color === 'amber' ? 'border-amber-700/40 text-amber-200 focus:border-amber-500' : 'border-cyan-700/40 text-cyan-200 focus:border-cyan-500'}`}/>
+      {cSel ? (
+        <div className="mt-2 flex items-center justify-between bg-slate-800 rounded px-2 py-1.5">
+          <div>
+            <span className="mono text-sm font-bold text-slate-100">{cSel.cn}</span>
+            <span className="ml-2 text-[10px] mono text-slate-400">기존 위치 {cSel.bay ? fmtPos(cSel) : '미배정'}</span>
+            {cSel._comp && <span className="ml-1 px-1 rounded bg-rose-800 text-rose-200 text-[10px] font-bold">⚠ 완료기록</span>}
+          </div>
+          <button onClick={() => { setCSel(null); setQ(''); }} className="text-[11px] text-slate-400 px-1.5">✕</button>
+        </div>
+      ) : (
+        <>
+          {q.length >= 2 && rr.length === 0 && <div className="mt-2 text-[11px] text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
+          {rr.length > 1 && (
+            <div className="flex flex-wrap gap-1 mt-2 justify-center">
+              {rr.map(c => (
+                <button key={c.cn} onClick={() => setCSel(c)}
+                  className="bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-[10px] mono text-slate-200">
+                  {c.cn}{c._comp ? ' ⚠완료' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
+        🚛 수동 트윈 선적 — 앞·뒤 두 컨을 직접 입력해 짝꿍으로 묶습니다
+        <div className="text-[10px] text-blue-400/70 mt-0.5">확인 즉시 미배정 → 앞 위치 지정 → 뒤는 짝꿍 베이 자동 → 선적확인 한 번에 완료</div>
+      </div>
+      {step === 'pick' && (
+        <>
+          {pickBox('앞', 'amber', q1, setQ1, c1, setC1, r1)}
+          {pickBox('뒤', 'cyan', q2, setQ2, c2, setC2, r2)}
+          {c1 && c2 && (
+            <button onClick={confirmManual} disabled={busy}
+              className="w-full py-3 rounded-lg font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+              <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 미배정 후 위치 지정'}
+            </button>
+          )}
+        </>
+      )}
+      {step === 'pos' && c1 && c2 && (
+        <div className="bg-slate-900 border border-amber-700 rounded-lg p-3 space-y-3">
+          <div className="text-xs text-amber-300 font-bold">앞 {c1.cn?.slice(-4)} 위치 (Bay-Row-Tier)</div>
+          <div className="grid grid-cols-3 gap-2">
+            {[['BAY', bay, setBay, 3], ['ROW', row, setRow, 2], ['TIER', tier, setTier, 2]].map(([lb, v, setV, mx]) => (
+              <div key={lb}>
+                <label className="text-[10px] text-slate-500 font-bold">{lb}</label>
+                <input type="text" inputMode="numeric" value={v}
+                  onChange={e => setV(e.target.value.replace(/[^\d]/g, '').slice(0, mx))}
+                  className="w-full px-3 py-3 bg-slate-800 border border-slate-700 rounded text-2xl font-black mono text-amber-200 text-center"/>
+              </div>
+            ))}
+          </div>
+          {bay && rowP && tierP && (
+            backPos ? (
+              <div className="bg-cyan-950/40 border border-cyan-800 rounded p-2 text-xs text-cyan-200">
+                뒤 <span className="mono font-bold">{c2.cn?.slice(-4)}</span> → 짝꿍 자리 <span className="mono font-black">{backPos.bay}-{backPos.row}-{backPos.tier}</span> 자동 배정
+                {!pairSlotPlanned && <div className="mt-1 text-amber-300 font-bold">⚠ 플랜에 없는 자리(싱글 자리)입니다 — 실물 기준으로 진행 가능</div>}
+              </div>
+            ) : (
+              <div className="bg-rose-950/40 border border-rose-800 rounded p-2 text-xs text-rose-300 font-bold">
+                ⚠ 베이 {parseInt(bay, 10)}는 짝꿍 베이가 없습니다 — 싱글 자리입니다. 싱글 모드로 처리하세요.
+              </div>
+            )
+          )}
+          <button onClick={completeBoth} disabled={busy || !backPos}
+            className="w-full py-3 rounded-lg font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white flex items-center justify-center gap-2">
+            <Check className="w-5 h-5"/>{busy ? '처리 중…' : '트윈 선적확인 (두 대 한 번에)'}
+          </button>
+          <button onClick={() => setStep('pick')} className="w-full text-[11px] text-slate-400 py-1">← 컨 선택으로</button>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── 트윈 모드 (자동 짝꿍) ───
 function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer }) {
   const [q1, setQ1] = useState('');
@@ -1249,6 +1406,8 @@ function SmallResultCard({ c, onOpen }) {
         : 'bg-gray-700 text-gray-300'
       }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
+      {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) &&
+        <span className="px-1 rounded text-[9px] font-black bg-indigo-900 text-indigo-200">수정</span>}
       <span className="text-[10px] text-slate-400 mono truncate flex-1">{c.cn}</span>
       <span className="text-[9px] mono text-slate-400">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>
       <span className={`text-[9px] mono px-1 rounded font-bold ${

@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
-import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition, fbUnassignContainer } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
 import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -78,7 +78,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         confirmLabel: '취소',
         cancelLabel: '닫기',
         onConfirm: async () => {
-          await fbCancelComplete(voyageKey, c._mode, c.cn);
+          const r = await fbCancelComplete(voyageKey, c._mode, c.cn);
+          // V8.80: 취소 = 위치 원복. 원자리가 점유돼 있으면 미배정으로 두고 알림.
+          if (r?.origOccupied) alert(`원래 자리에 ${r.origOccupied}가 있어 미배정으로 돌렸습니다.\n미배정 목록에서 자리를 지정하세요.`);
         },
       });
     } else {
@@ -209,6 +211,11 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         {/* 부가 정보 */}
         <div className="flex items-center gap-2 text-[11px] mono flex-wrap text-slate-400 pt-2 border-t border-slate-800">
           {c.bay && <span className="text-amber-300 font-bold">{fmtPos(c)}</span>}
+          {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
+            <span className="ml-1 px-1 rounded bg-indigo-900 text-indigo-200 text-[10px] font-bold">
+              📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '미배정'}
+            </span>
+          )}
           <span>{isoToLabel(c.iso) || c.tp || ''}</span>
           <span className={c.fe === 'F' ? 'text-rose-400' : ''}>{c.fe || '?'}</span>
           {c.op && <span className="bg-slate-800 px-1 py-0.5 rounded">{c.op}</span>}
@@ -240,9 +247,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}
       {isLoading && (
-        <button onClick={() => setPosTarget(c)}
+        <button onClick={async () => {
+            // V8.80: 수동 배정 — 카드의 기존 위치를 보고 이 버튼(=확인)을 누르면 즉시 미배정,
+            //   그 뒤 검수사가 자리를 지정한다 (수동 작업은 계획 위치에 묶이지 않는다. 사용자 확정).
+            if (!isDone && c.bay) { try { await fbUnassignContainer(voyageKey, c._mode, c.cn, inspector); } catch {} }
+            setPosTarget(c);
+          }}
           className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-amber-700 hover:bg-amber-600 text-amber-50 flex items-center justify-center gap-1.5">
-          <MapPin className="w-4 h-4"/>위치 수정 (같은 컨, 자리만 변경)
+          <MapPin className="w-4 h-4"/>{isDone ? '위치 수정 (같은 컨, 자리만 변경)' : `수동 배정 — 위치 지정${c.bay ? ` (계획 ${fmtPos(c)})` : ''}`}
         </button>
       )}
       {isLoading && !cnFixOpen && (

@@ -459,6 +459,11 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             {!c.bay && mode === 'loading' && (
               <span className="ml-2 bg-orange-700 text-orange-50 text-[10px] px-1.5 py-0.5 rounded font-black">선적대상</span>
             )}
+            {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
+              <span className="ml-2 bg-indigo-900 text-indigo-200 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '미배정'}
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">베이 / 열 / 단</div>
 
