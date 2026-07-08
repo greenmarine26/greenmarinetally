@@ -968,6 +968,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           shipLib={shipLib}
           portMisData={portMisData}
           isLoloShip={isLoloShip}
+          mode={mode}
+          onWorkFilterChange={(m) => setMode(m)}
         />
       )}
       {tab === 'lolo' && (
