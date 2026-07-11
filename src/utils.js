@@ -1,5 +1,9 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
+<<<<<<< HEAD
 export const APP_VERSION = 'V8.84-02';   // TMPZ 플랜 가상 EDI(격자 슬롯 등록)
+=======
+export const APP_VERSION = 'V8.84-01';
+>>>>>>> 84fec4ee2c71d3906498d78ae00ffd86b331214b
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
