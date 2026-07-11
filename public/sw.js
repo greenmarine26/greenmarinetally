@@ -1,10 +1,6 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-<<<<<<< HEAD
 const VERSION = 'V8.84-02';
-=======
-const VERSION = 'V8.84-01';
->>>>>>> 84fec4ee2c71d3906498d78ae00ffd86b331214b
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
