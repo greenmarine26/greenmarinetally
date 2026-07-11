@@ -66,6 +66,109 @@ export function parseIfcsum(text) {
 // 가상 선적 EDI 대상 — 선적 EDI가 늦거나(OBWH) 안 오는(RZOR) 선박. 리스트로 선적 카운트를 채운다(사용자 확정 2026-07-04).
 const VIRTUAL_LOAD_SHIPS = new Set(['RZOR', 'OBWH']);
 
+// V8.84-02: 플랜(프리스토우 격자 엑셀) 가상 선적 EDI 대상 — 선적 EDI가 안 오고 두우 표준 배치 플랜만 오는 선박.
+//   자리(베이/로우/단)만 계획 슬롯으로 등록하고 컨번호는 배정하지 않는다(사용자 확정 2026-07-11 — 임의 배정 금지).
+//   컨번호는 NOLIST 리스트(records)가 담당. 마커: e=20MT · E=40HQ MT · 2=20F · 4=40HQ F.
+const PLAN_VIRTUAL_SHIPS = new Set(['TMPZ']);
+// 플랜 시트명 → POD (평택 선적분 시트 = 목적항별, 사용자 확정 2026-07-11)
+const PLAN_POD_SHEETS = { SHANGHAI: 'CNSHA', SHA: 'CNSHA', BUSAN: 'KRPUS', PUSAN: 'KRPUS', NINGBO: 'CNNGB', NGB: 'CNNGB' };
+
+// V8.84-02: TMPZ 프리스토우 플랜 격자 파서 — 실파일(TIANHAI PINGZE.xls) SHANGHAI 시트 자체 집계표
+//   (20F 1 · 20E 99 · HQ F 7 · HQ E 52 · 218TEU)와 100% 일치 검증(2026-07-11).
+//   격자 구조: 밴드(가로 4블록)마다 [베이라벨 행] 위 + [로우라벨 행(08 06 04 02 01 03 05 07)] +
+//   블록 오른쪽 1~3칸에 단(tier) 라벨 열(92~82=데크, 08~02=홀드). 마커는 (단라벨 행 × 로우라벨 열) 교차 셀.
+export function parsePlanGrid(wb, XLSX) {
+  const ROWLBL = new Set(Array.from({ length: 11 }, (_, i) => String(i).padStart(2, '0')));
+  const TIER = /^(0[2468]|1[02468]|8[02468]|9[02468])$/;
+  const BAYRE = /^\((\d{1,2})\)(\d{1,2})$|^(\d{1,2})$/;
+  const slots = {};                              // (bay_row_tier) → slot (시트 간 겹침은 1회만 — 표준 패턴 중복 표기)
+  const bySheet = {};
+  for (const sn of wb.SheetNames) {
+    const pod = PLAN_POD_SHEETS[String(sn).trim().toUpperCase()];
+    if (!pod) continue;
+    const ws = wb.Sheets[sn];
+    if (!ws || !ws['!ref']) continue;
+    const rg = XLSX.utils.decode_range(ws['!ref']);
+    const nr = rg.e.r + 1, nc = rg.e.c + 1;
+    const val = (r, c) => {
+      if (r < 0 || c < 0 || r >= nr || c >= nc) return '';
+      const cell = ws[XLSX.utils.encode_cell({ r, c })];
+      if (!cell || cell.v == null) return '';
+      const v = cell.v;
+      if (typeof v === 'number' && v === Math.floor(v)) {
+        return (v >= 0 && v < 100) ? String(v).padStart(2, '0') : String(v);
+      }
+      return String(v).trim();
+    };
+    // 1) 로우라벨 런(블록 헤더) 수집
+    const hdr = {};                              // r → [ [cols...], ... ]
+    for (let r = 0; r < nr; r++) {
+      const cols = [];
+      for (let c = 0; c < nc; c++) if (ROWLBL.has(val(r, c))) cols.push(c);
+      if (cols.length < 4) continue;
+      const runs = []; let cur = [cols[0]];
+      for (const c of cols.slice(1)) {
+        if (c - cur[cur.length - 1] <= 2) cur.push(c); else { runs.push(cur); cur = [c]; }
+      }
+      runs.push(cur);
+      const keep = runs.filter(x => x.length >= 3);
+      if (keep.length) hdr[r] = keep;
+    }
+    const hrows = Object.keys(hdr).map(Number).sort((a, b) => a - b);
+    let cnt = 0;
+    for (let i = 0; i < hrows.length; i++) {
+      const r = hrows[i];
+      const rend = i + 1 < hrows.length ? hrows[i + 1] - 1 : Math.min(nr - 1, r + 13);
+      for (const cols of hdr[r]) {
+        // 2) 베이 라벨: 헤더 위 1~3행(다른 헤더행 만나면 중단) — '13' 또는 '(14)15'
+        let bayOdd = null, bayEven = null;
+        for (let rr = r - 1; rr >= Math.max(0, r - 3) && bayOdd == null; rr--) {
+          if (hdr[rr]) break;                    // 하단 미러 로우라벨 행은 베이라벨 아님
+          for (let c = Math.min(...cols) - 1; c <= Math.max(...cols) + 1; c++) {
+            const m = BAYRE.exec(val(rr, c));
+            if (m) {
+              if (m[3] != null) { bayOdd = parseInt(m[3], 10); bayEven = bayOdd - 1; }
+              else { bayEven = parseInt(m[1], 10); bayOdd = parseInt(m[2], 10); }
+              break;
+            }
+          }
+        }
+        if (bayOdd == null) continue;            // 베이라벨 없는 런(하단 미러) — 블록 아님
+        // 3) 단 라벨 열: 런 오른쪽 1~3칸 중 단 패턴이 2개 이상인 첫 열
+        let tcol = null;
+        for (let c = Math.max(...cols) + 1; c <= Math.min(nc - 1, Math.max(...cols) + 3); c++) {
+          let hits = 0;
+          for (let rr = r + 1; rr <= rend; rr++) if (TIER.test(val(rr, c))) hits++;
+          if (hits >= 2) { tcol = c; break; }
+        }
+        if (tcol == null) continue;
+        // 4) 마커 읽기
+        for (let rr = r + 1; rr <= rend; rr++) {
+          const t = val(rr, tcol);
+          if (!TIER.test(t)) continue;
+          for (const c of cols) {
+            const cell = ws[XLSX.utils.encode_cell({ r: rr, c })];
+            if (!cell || cell.v == null) continue;
+            let mk = typeof cell.v === 'number' && (cell.v === 2 || cell.v === 4) ? String(cell.v) : String(cell.v).trim();
+            let size = '', fe = '';
+            if (mk === 'e') { size = '20'; fe = 'E'; }
+            else if (mk === '2') { size = '20'; fe = 'F'; }
+            else if (mk === 'E') { size = '40'; fe = 'E'; }
+            else if (mk === '4') { size = '40'; fe = 'F'; }
+            else continue;
+            const bay = String(size === '20' ? bayOdd : bayEven);   // parseBAPLIE와 동일: 앞 0 없는 베이
+            const row = val(r, c), tier = t;
+            const k = `${bay}_${row}_${tier}`;
+            if (!slots[k]) { slots[k] = { bay, row, tier, size, fe, pod }; cnt++; }
+          }
+        }
+      }
+    }
+    bySheet[sn] = cnt;
+  }
+  return { slots: Object.values(slots), bySheet };
+}
+
 export async function buildAutoPayload(files, opts) {
   const vslCode = String(opts?.vslCode || '').trim().toUpperCase();
   const voy = String(opts?.voy || '').trim().toUpperCase();
@@ -76,6 +179,7 @@ export async function buildAutoPayload(files, opts) {
 
   // [1] 파일 분류·파싱 — EDI 후보 중 실번호 최다(동수면 총수 최다) 1개 채택(mergeApi와 같은 정신).
   let best = null;                 // { name, text, containers, cnCount }
+  let plan = null;                 // V8.84-02: 플랜 격자 파싱 결과 { name, slots } — 슬롯 최다 1개 채택
   const records = {};              // 리스트 원시 병합(먼저 온 값 유지 + 빈칸 채움)
   const perFile = [];
   for (const f of files || []) {
@@ -106,6 +210,22 @@ export async function buildAutoPayload(files, opts) {
           });
           perFile.push({ name, kind: 'merged', count: mc });
           continue;
+        }
+        // V8.84-02: 플랜 대상 선박(TMPZ)이면 격자 플랜 워크북인지 먼저 확인 — 시트명이 목적항(PLAN_POD_SHEETS)이고
+        //   격자 슬롯이 잡히면 플랜으로 처리(리스트 파싱 대상 아님). 아니면 기존 리스트 흐름으로.
+        if (PLAN_VIRTUAL_SHIPS.has(vslCode)) {
+          try {
+            const XLSX = await loadSheetJS();
+            const wb = XLSX.read(await _asU8(f), { type: 'array' });
+            if (wb.SheetNames.some(sn => PLAN_POD_SHEETS[String(sn).trim().toUpperCase()])) {
+              const pg = parsePlanGrid(wb, XLSX);
+              if (pg.slots.length) {
+                perFile.push({ name, kind: 'plan', count: pg.slots.length });
+                if (!plan || pg.slots.length > plan.slots.length) plan = { name, slots: pg.slots };
+                continue;
+              }
+            }
+          } catch (e) { /* 플랜 판별 실패 → 리스트 흐름으로 계속 */ }
         }
         if (xk !== 'list') { perFile.push({ name, kind: 'skip' }); continue; }
         const out = await parseListExcel(await _asU8(f));
@@ -179,6 +299,21 @@ export async function buildAutoPayload(files, opts) {
     }
   }
 
+  // V8.84-02: 플랜 가상 선적 EDI(TMPZ) — 선적인데 진짜 EDI가 없으면 플랜 격자 슬롯을 '자리만' 등록한다.
+  //   컨번호 미배정(__SLOT_ 키) — 임의 배정 금지(사용자 확정 2026-07-11). 컨번호는 NOLIST 리스트(records)가 담당.
+  //   나중에 실 EDI가 오면 best로 잡혀 이 블록은 건너뛰어 자동 대체된다.
+  if (mode === 'loading' && !best && plan && plan.slots.length) {
+    for (const s of plan.slots) {
+      const key = `__SLOT_${s.bay}_${s.row}_${s.tier}`;
+      ediContainers[key] = {
+        bay: s.bay, row: s.row, tier: s.tier,
+        iso: s.size === '20' ? '22G1' : '45G1', fe: s.fe,
+        pol: 'KRPTK', pod: s.pod,
+        _slotKey: key, _mode: 'loading', _virtualEdi: true, _virtualFromPlan: true, _source: plan.name,
+      };
+    }
+  }
+
   // [3] 항차 info — HomePage 수동 생성(handleCreate)과 같은 스키마 + 자동 표시.
   const info = {
     vsl: vslCode, voy, mode,
@@ -196,7 +331,7 @@ export async function buildAutoPayload(files, opts) {
     records: Object.keys(records).length,
   };
   return {
-    ok: !!best || counts.records > 0,
+    ok: !!best || counts.records > 0 || counts.edi > 0,   // V8.84-02: 플랜만 있어도(리스트 아직) 등록 성공
     key: `${vslCode}_${voy}`, mode, info, ediContainers, records, counts, perFile,
     ediRaw: best ? { text: best.text, fileName: best.name, parserVersion: APP_VERSION } : null,
   };

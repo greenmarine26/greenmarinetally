@@ -4,17 +4,19 @@
 // 수정 3연속 = 플랜대로 진행되지 않음 판단 → 자동으로 수동 모드 전환
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
-import { buildGuidedQueue } from '../guidedQueue.js';
+import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
-import { fbCompleteContainer, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
+import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
+// V8.50: 갈림 부류 라벨 (streamPref 키 → 표시·음성)
+const PREF_LABEL = { F: '풀', E: '엠티', RF: '리퍼', GEN: '일반', '40': '40피트', '20': '20피트' };
 
 export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer }) {
   const mode = workFilter;                                  // 'discharge' | 'loading'
@@ -45,6 +47,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   const [selectedGroup, setSelectedGroup] = useState(null); // 그룹 center 베이 번호
   const [selectedTier, setSelectedTier] = useState(null);   // V7.99-8 (메모6): 'hold'|'deck' — 검수사가 누른 작업 단
+  // V8.50: 갈림 선택 — 검수사(또는 무언 적응)가 고른 부류 스트림. null = 기본 층 순서.
+  const [streamPref, setStreamPref] = useState(null);
   const [fixOpen, setFixOpen] = useState(false);
   const [fixQuery, setFixQuery] = useState('');
   // V7.94-08: 트윈 수정 — 앞/뒤 두 컨 번호 동시 수정 (사용자 메모 ⑤)
@@ -175,10 +179,46 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       containers: targets, mode,
       evenRowsSeaSide: berthSide === 'starboard',           // 우현 접안 = 짝수 로우 해상쪽
       findTwin: (t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName),
+      streamPref,                                           // V8.50: 갈림 선택 부류
     });
-  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName]);
+  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref]);
 
   const card = queue[0] || null;
+
+  // V8.50: 갈림 감지 — 지금 바로 내릴 수 있는 카드들에 부류가 섞여 있으면 선택 버튼 제시 (양하만).
+  const availCards = useMemo(() => (mode === 'discharge' ? availableCardsOf(queue) : []), [queue, mode]);
+  const forkChips = useMemo(() => {
+    if (mode !== 'discharge' || availCards.length < 2) return null;
+    const cnt = { F: 0, E: 0, RF: 0, GEN: 0, '40': 0, '20': 0 };
+    for (const cd of availCards) {
+      const k = conClassOf(cd.main);
+      const size = cd.twin ? '20' : k.size;
+      cnt[k.fe]++; cnt[size]++;
+      if (k.fe === 'F') cnt[k.rf ? 'RF' : 'GEN']++;
+    }
+    const chips = [];
+    if (cnt.F && cnt.E) chips.push(['F', cnt.F], ['E', cnt.E]);
+    if (cnt.GEN && cnt.RF) chips.push(['GEN', cnt.GEN], ['RF', cnt.RF]);
+    if (cnt['40'] && cnt['20']) chips.push(['40', cnt['40']], ['20', cnt['20']]);
+    return chips.length ? chips : null;
+  }, [availCards, mode]);
+
+  // V8.50: 선택 부류가 소진되면 자동 해제 — 기본 층 순서로 복귀.
+  useEffect(() => {
+    if (!streamPref) return;
+    if (!queue.some(cd => cardMatchesPref(cd, streamPref))) setStreamPref(null);
+  }, [queue, streamPref]);
+
+  // V8.50: 무언 적응 — 예측과 다른 컨이 실제로 내려오면(수정 입력) 그 부류를 흐름으로 잡는다 (양하만).
+  const adaptStream = (actual) => {
+    if (mode !== 'discharge' || !card?.main || !actual) return;
+    const ac = conClassOf(actual), pc = conClassOf(card.main);
+    let next = null;
+    if (ac.fe !== pc.fe) next = ac.fe;
+    else if (ac.fe === 'F' && ac.rf !== pc.rf) next = ac.rf ? 'RF' : 'GEN';
+    else if (ac.size !== pc.size) next = ac.size;
+    if (next && next !== streamPref) { setStreamPref(next); speak(`${PREF_LABEL[next]} 흐름으로 바꿉니다`); }
+  };
 
   // V7.99-6 (메모3): 트윈 카드 무게 점검 — 합계 55톤 초과 = 트윈 불가, 무게차 부두한계 초과 = 수평 불가.
   //   nlSearch의 검증된 상수 재사용. 부두는 voyage.info.pier(미상이면 보수적 14톤).
@@ -252,40 +292,42 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (blockIfXrayMissing()) return;   // V8.09-06: XRAY 실번호 미입력 차단
     setBusy(true);
     try {
-      await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
-      if (card.twin) await fbCompleteContainer(voyageKey, mode, card.twin.cn, inspector);
+      // V8.71: 트윈 완료 2건을 멀티패스 한 번에 — 한 대만 먼저 선적되는 틈 제거.
+      if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector);
+      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
       setConsecFix(0);
       setFixOpen(false); setFixQuery('');
     } finally { setBusy(false); }
   };
 
   // 수정: 실제 나온 컨을 입력 → 그 컨을 완료 처리, 예측 컨은 큐에 남음
-  const matchFor = (q0, excludeCn) => {
+  // V8.70: 크로스베이 체인시프트 감안 — 그룹·단 제한을 "필터"에서 "정렬 우선순위"로 완화.
+  //   (구 V7.99-8: 현재 단으로만 좁힘 → 다른 베이 계획 컨이 실제로 오면 후보 0건, 현장 진행 불가.)
+  //   자기 카드의 반대편 컨도 후보 허용(앞뒤 얽힘: 뒤 예측 컨이 앞 자리에 오는 경우) — 그 칸 자신의 컨만 제외.
+  const inWorkTier = (c) => {
+    if (selectedGroup != null && groupCenterOf(c.bay) !== selectedGroup) return false;
+    if (selectedTier === 'deck') return parseInt(c.tier, 10) >= 80;
+    if (selectedTier === 'hold') return parseInt(c.tier, 10) < 80;
+    return true;
+  };
+  const matchFor = (q0, excludeCns) => {
     const q = q0.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
-    // V7.99-8 (메모6): 후보를 현재 작업 베이의 선택된 단(홀드/데크)으로 좁힌다.
-    //   끝4자리 중복으로 선박 전체에서 엉뚱한 컨이 잡혀 오양하되는 것 방지.
-    //   홀드 작업이면 그 그룹 홀드 컨만, 데크 작업이면 데크 컨만.
-    const inWorkTier = (c) => {
-      if (selectedGroup != null && groupCenterOf(c.bay) !== selectedGroup) return false;
-      if (selectedTier === 'deck') return parseInt(c.tier, 10) >= 80;
-      if (selectedTier === 'hold') return parseInt(c.tier, 10) < 80;
-      return true;
-    };
-    const hits = remaining.filter(c => c.cn !== card?.main?.cn && c.cn !== card?.twin?.cn && c.cn !== excludeCn &&
-      inWorkTier(c) &&
+    const ex = new Set((Array.isArray(excludeCns) ? excludeCns : [excludeCns]).filter(Boolean));
+    // V8.71: 완료로 기록된 컨도 후보에 포함 — 실물이 눈앞에 있으면 그 완료는 오선적 기록일 확률이 높다(사용자 확정).
+    //   렌더에서 ⚠완료 배지 + 선택 시 확인. 정렬은 미완료 우선.
+    const hits = modeAll.filter(c => !ex.has(c.cn) &&
       (c.cn.includes(q) || (c.l4 || c.cn.slice(-4)).includes(q)));
-    // V7.94-20: 끝4자리 중복 오선택 방지 — 현재 카드 자리(card.pos)와 같은 위치 컨을 맨 위로.
-    //   (BAY38 3523처럼 같은 베이에 끝4자리 중복 시, 의도한 자리의 컨이 먼저 보이게)
+    // 정렬: 현재 카드 자리 > 현재 그룹·단 > 그 외(렌더에서 ⚠ 다른 베이 표시). 완료분은 항상 뒤.
     const pos = card?.main?.pos || (card?.main ? `${card.main.bay}-${card.main.row}-${card.main.tier}` : '');
-    return hits.sort((a, b) => {
-      const ap = `${parseInt(a.bay,10)}-${a.row}-${a.tier}` === pos ? 0 : 1;
-      const bp = `${parseInt(b.bay,10)}-${b.row}-${b.tier}` === pos ? 0 : 1;
-      return ap - bp;
-    }).slice(0, 6);
+    const rankOf = (c) => (c._comp ? 10 : 0) + (`${parseInt(c.bay,10)}-${c.row}-${c.tier}` === pos ? 0 : (inWorkTier(c) ? 1 : 2));
+    return hits.sort((a, b) => rankOf(a) - rankOf(b)).slice(0, 6);
   };
-  const fixMatches = useMemo(() => matchFor(fixQuery, fixPickBack?.cn), [fixQuery, remaining, card, fixPickBack]);
-  const fixMatches2 = useMemo(() => matchFor(fixQuery2, fixPickFront?.cn), [fixQuery2, remaining, card, fixPickFront]);
+  // V8.71: 완료 컨을 실제 온 컨으로 지정할 때 확인 — 오선적 기록 안내.
+  const confirmIfDone = (c) => !c?._comp ||
+    confirm(`${c.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 지금 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다.\n이 자리로 옮기고 진행할까요? (완료 기록은 유지)`);
+  const fixMatches = useMemo(() => matchFor(fixQuery, [fixPickBack?.cn, card?.main?.cn]), [fixQuery, remaining, card, fixPickBack]);
+  const fixMatches2 = useMemo(() => matchFor(fixQuery2, [fixPickFront?.cn, card?.twin?.cn]), [fixQuery2, remaining, card, fixPickFront]);
 
   // V7.94-08: 미배정(위치 빠진) 컨 — 수정으로 밀려난 컨테이너 추적 표시 (사용자 메모 ④)
   const unassigned = useMemo(
@@ -295,7 +337,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [showUnassigned, setShowUnassigned] = useState(false);
 
   // V7.94-16: 그룹(베이) 변경 시 프롬프트 플래그 리셋
-  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); }, [selectedGroup]);
+  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); setStreamPref(null); }, [selectedGroup]);
+  useEffect(() => { setStreamPref(null); }, [selectedTier]);   // V8.50: 단 변경 시 스트림 리셋
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
@@ -489,10 +532,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
     }
+    if (!confirmIfDone(c)) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행
     setBusy(true);
     try {
       await applyFixOne(c, card.main);
     } finally { setBusy(false); }
+    adaptStream(c);   // V8.50: 실제 내려온 부류로 재앵커
     afterFix();
   };
 
@@ -500,6 +545,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const handleTwinFixApply = async () => {
     if (busy || !card || !card.twin) return;
     if (!fixPickFront && !fixPickBack) { alert('수정할 컨테이너를 선택하세요. (한쪽만 바뀌었으면 그쪽만 선택)'); return; }
+    // V8.70: 한쪽만 선택하고 적용하면 나머지는 "예측대로" 완료된다 — 실물이 정말 예측 컨인지 확인.
+    //   (둘 다 틀렸는데 한쪽만 수정·적용 → 남은 쪽이 허위 완료되던 함정.)
+    if (!fixPickFront || !fixPickBack) {
+      const sideName = !fixPickFront ? '앞' : '뒤';
+      const sideCn = !fixPickFront ? card.main.cn : card.twin.cn;
+      if (!confirm(`${sideName} 자리는 예측 컨 ${(sideCn || '').slice(-4)} 그대로 맞습니까?\n[확인] → 예측대로 완료 처리\n둘 다 틀렸으면 [취소] 후 ${sideName}쪽도 수정하세요.`)) return;
+    }
     // V8.09-06: XRAY 실번호 검증 — 바뀐 쪽은 실제 컨, 안 바뀐 쪽은 예측 컨 기준.
     const frontCn = fixPickFront ? fixPickFront.cn : card.main.cn;
     const backCn = fixPickBack ? fixPickBack.cn : card.twin.cn;
@@ -510,13 +562,23 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
     }
+    if ((fixPickFront && !confirmIfDone(fixPickFront)) || (fixPickBack && !confirmIfDone(fixPickBack))) return;   // V8.71
     setBusy(true);
+    // V8.71: 원자화 — 재배정(위치)을 앞·뒤 모두 끝낸 뒤에만 완료를 찍는다.
+    //   (구: 앞 재배정+완료 → 뒤 재배정+완료 순서라, 뒤가 중간에 실패하면 앞 한 대만 선적된 채 멈춤 — 현장 보고 2026-07-08.)
     try {
-      if (fixPickFront) await applyFixOne(fixPickFront, card.main);
-      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
-      if (fixPickBack) await applyFixOne(fixPickBack, card.twin);
-      else await fbCompleteContainer(voyageKey, mode, card.twin.cn, inspector);
+      if (mode === 'loading') {
+        if (fixPickFront) await fbReassignContainerPosition(voyageKey, mode, fixPickFront.cn, card.main.bay, card.main.row, card.main.tier, inspector);
+        if (fixPickBack) await fbReassignContainerPosition(voyageKey, mode, fixPickBack.cn, card.twin.bay, card.twin.row, card.twin.tier, inspector);
+      }
+      await fbCompleteContainersAtomic(voyageKey, mode,
+        [fixPickFront ? fixPickFront.cn : card.main.cn, fixPickBack ? fixPickBack.cn : card.twin.cn], inspector);
+    } catch (e) {
+      alert(`수정 적용 중 오류 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n(${e?.message || e})`);
+      setBusy(false);
+      return;
     } finally { setBusy(false); }
+    adaptStream(fixPickFront || fixPickBack);   // V8.50: 실제 내려온 부류로 재앵커
     afterFix();
   };
 
@@ -752,6 +814,29 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
 
+      {/* V8.50: 갈림 — 지금 내릴 수 있는 컨에 부류 혼재 시 선택 버튼 (기사 흐름 따라가기) */}
+      {card && (forkChips || streamPref) && (
+        <div className="flex flex-wrap items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5">
+          <span className={`text-[10px] font-bold mr-0.5 ${streamPref ? 'text-violet-300' : 'text-slate-500'}`}>
+            {streamPref ? `${PREF_LABEL[streamPref]} 우선 중` : '갈림'}
+          </span>
+          {(forkChips || []).map(([k, n]) => (
+            <button key={k} onClick={() => setStreamPref(p => (p === k ? null : k))}
+              className={`px-2 py-1 rounded text-[11px] font-bold border ${streamPref === k
+                ? 'bg-violet-700 border-violet-500 text-white'
+                : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}>
+              {PREF_LABEL[k]}부터 {n}
+            </button>
+          ))}
+          {streamPref && (
+            <button onClick={() => setStreamPref(null)}
+              className="px-2 py-1 rounded text-[11px] font-bold border bg-slate-800 border-amber-700 text-amber-300 hover:bg-slate-700">
+              순서대로
+            </button>
+          )}
+        </div>
+      )}
+
       {deckDonePromptD && card ? (
         <div className="bg-amber-950/50 border-2 border-amber-600 rounded-lg p-4 text-center space-y-3">
           <div className="font-bold text-amber-200">⚓ 이 베이 데크 양하 완료!</div>
@@ -867,7 +952,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                 <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{c.cn}</span>
-                  <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-slate-400'}`}>{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                  <span className={`mono font-bold ${fixMatches.length > 1 ? 'text-rose-300' : 'text-slate-400'}`}>
+                    {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
+                    {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
+                    {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                  </span>
                 </button>
               ))}
               {fixQuery.length >= 3 && fixMatches.length === 0 && <div className="text-[11px] text-slate-500 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}
@@ -897,7 +986,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
                         <button key={c.cn} onClick={() => { s.setPick(c); s.setQ(''); }} disabled={busy}
                           className="w-full flex justify-between items-center bg-slate-800 hover:bg-amber-900 rounded px-2 py-1.5 text-xs">
                           <span className="mono font-bold text-slate-100">{c.cn}</span>
-                          <span className="mono text-slate-400">{c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}</span>
+                          <span className="mono text-slate-400">
+                            {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
+                            {!inWorkTier(c) && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
+                            {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                          </span>
                         </button>
                       ))}
                     </>

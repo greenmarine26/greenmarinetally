@@ -16,6 +16,13 @@
 //   40ft/20ft 혼재 시 40ft 먼저: 별도 규칙이 아니라 층 단위 정렬에서 자연 충족
 //     (양하: 트윈 위 40ft가 위층 차례에 먼저 / 선적: 바닥 40ft가 아래층 차례에 먼저).
 //   쉬프팅: 가이드 모드에서 감지하지 않음 — 발생 시 수동 모드 사용 (사용자 결정).
+//   V8.50 (사용자 확정 2026-07-06 — 양하 우선순위 협의):
+//     ① 기본 순서는 층(티어) 단위 절대 유지 — V8.09-04의 스택 통째 배치(로우 단위 붕괴) 폐기.
+//        (실증: 625N bay26 위엠티/풀리퍼/바닥엠티 홀드에서 로우 단위로 파고들던 문제.)
+//     ② 같은 층 안 부류 기본 순서 = 풀일반 → 풀리퍼 → 엠티 (같은 층 로우끼리는 물리 종속 없음).
+//     ③ 갈림(지금 내릴 수 있는 카드에 부류 혼재) 시 검수사 선택 = streamPref('F'|'E'|'RF'|'GEN'|'40'|'20').
+//        선택 부류를 물리 종속을 지키며 앞당겨 연속 제시(내리던 흐름 계속), 막히면 기본 순서 잔류.
+//     ④ 예측과 다른 컨이 내려오면 그 부류로 자동 재앵커(무언 적응 — GuidedWorkPanel에서 처리).
 
 const isDeckTier = (t) => parseInt(t, 10) >= 80;
 const is20ft = (c) => String(c.tp || '').startsWith("20") || String(c.iso || '')[0] === '2';
@@ -31,7 +38,7 @@ function rowRank(rowStr, { evenRowsSeaSide, landToSea }) {
   return landToSea ? -seaToLand : seaToLand;
 }
 
-export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null }) {
+export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null }) {
   const landToSea = mode === 'discharge';
   const topFirst = mode === 'discharge';
 
@@ -69,6 +76,9 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     if (mode === 'discharge') {
       const a40 = is40ft(a), b40 = is40ft(b);
       if (a40 !== b40) return a40 ? -1 : 1;
+      // V8.50 ②: 같은 층 안에서 풀일반 → 풀리퍼 → 엠티 (V8.09-04 대체 — 층 순서는 안 깨짐)
+      const ar2 = conClassRank(a), br2 = conClassRank(b);
+      if (ar2 !== br2) return ar2 - br2;
     }
     const ar = rowRank(a.row, { evenRowsSeaSide, landToSea });
     const br = rowRank(b.row, { evenRowsSeaSide, landToSea });
@@ -147,7 +157,10 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     //   해당 40ft는 20ft와의 상대 순서를 기존 층 순서대로 둔다. (이 베이는 40ft가 20ft 위/독립이라
     //   전부 앞으로 모임 — 검증 EDI STSE 2645E 24번 홀드로 PASS.)
     const ordered40First = reorder40FirstForDischarge(flow);
-    return [...pureFrs, ...ordered40First, ...pureSingles];
+    const base = [...pureFrs, ...ordered40First, ...pureSingles];
+    // V8.50 ③: 검수사가 고른 부류를 물리 종속 지키며 앞당김. FR 우선 양하는 그대로 고정.
+    if (streamPref) return [...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)];
+    return base;
   }
   // ── 선적: 홀드·데크 모두 "트윈 전부 → 40ft 전부" (각 단 내부). 단 사이는 홀드 먼저 → 데크. ──
   //   V8.09-03 (사용자 확정 2026-06-17): 선적 순서는 20ft싱글 → 트윈 → 40ft, 순서 절대 우선.
@@ -225,7 +238,8 @@ function reorder40FirstForDischarge(flow) {
       else if (cardIs40(card)) safe40.push(card);
       else safe20.push(card);
     }
-    return [...reorderFullReeferLast(safe40), ...safe20, ...blocked];
+    // V8.50 ①: reorderFullReeferLast(스택 통째 배치) 폐기 — safe40은 cmp 층 순서 그대로 둔다.
+    return [...safe40, ...safe20, ...blocked];
   };
 
   return [...reorderWithinTier(deckCards), ...reorderWithinTier(holdCards)];
@@ -242,46 +256,57 @@ function cardIsReefer(c) {
   return false;
 }
 
-// V8.09-04: 모아진 40ft 카드(safe40)를 베이 그룹 단위로 "풀일반 → 풀리퍼 → 엠티(층순서유지)" 정렬.
-//   ★물리종속 절대 우선: 같은 로우 스택 안에서는 티어 순서(위→아래)를 절대 깨지 않는다.
-//   재배치는 '로우(스택)의 맨 위 카드' 부류 기준으로만 한다. 스택 내부 순서는 입력 그대로 보존.
-//   엠티(공컨) 40ft는 일반/리퍼 순서 구분이 없으므로 풀 뒤에 두고 원래 순서 유지.
-function reorderFullReeferLast(cards) {
-  const grpKey = (card) => {
-    const b = parseInt(card.main.bay, 10);
-    if (!Number.isFinite(b)) return 'x';
-    return String(b % 2 === 0 ? b : (b + 1));
-  };
-  const order = [];
-  const groups = new Map();
-  for (const card of cards) {
-    const k = grpKey(card);
-    if (!groups.has(k)) { groups.set(k, []); order.push(k); }
-    groups.get(k).push(card);
-  }
+// ── V8.50: 부류·물리 종속 헬퍼 (V8.09-04 reorderFullReeferLast 대체) ──
+// 컨테이너 부류 — 패널의 갈림 감지·무언 적응과 공용.
+export function conClassOf(c) {
+  return { size: is40ft(c) ? '40' : '20', fe: c.fe === 'E' ? 'E' : 'F', rf: cardIsReefer(c) };
+}
+// 같은 층 안 부류 기본 순서: 풀일반 0 → 풀리퍼 1 → 엠티 2.
+function conClassRank(c) {
+  if (c.fe === 'E') return 2;
+  return cardIsReefer(c) ? 1 : 0;
+}
+// 카드가 선호 부류에 맞는지.
+export function cardMatchesPref(card, pref) {
+  const c = card.main;
+  if (pref === 'F') return c.fe !== 'E';
+  if (pref === 'E') return c.fe === 'E';
+  if (pref === 'RF') return cardIsReefer(c);
+  if (pref === 'GEN') return !cardIsReefer(c) && c.fe !== 'E';
+  if (pref === '40') return cardIs40(card);
+  if (pref === '20') return !cardIs40(card);
+  return true;
+}
+// 같은 수직 스택 판정 — 같은 로우 + (같은 베이거나 한쪽이 짝수베이 40(양쪽 20슬롯에 걸침)).
+function sameStackPos(a, b) {
+  if (a.row !== b.row) return false;
+  const ab = parseInt(a.bay, 10), bb = parseInt(b.bay, 10);
+  if (ab === bb) return true;
+  return ab % 2 === 0 || bb % 2 === 0;
+}
+function cardPositions(card) { return card.twin ? [card.main, card.twin] : [card.main]; }
+// 남은 카드들 중 이 카드 '위'(같은 스택·더 높은 티어)에 안 내린 게 있는지. 단(데크/홀드)이 다르면 비교 안 함.
+function blockedByAbove(card, cards) {
+  const poss = cardPositions(card);
+  return cards.some(o => {
+    if (o === card) return false;
+    if (isDeckTier(o.main.tier) !== isDeckTier(card.main.tier)) return false;
+    return cardPositions(o).some(op => poss.some(p =>
+      sameStackPos(op, p) && parseInt(op.tier, 10) > parseInt(p.tier, 10)));
+  });
+}
+// 지금 바로 내릴 수 있는 카드들 — 패널의 갈림 감지용.
+export function availableCardsOf(queue) { return queue.filter(card => !blockedByAbove(card, queue)); }
+// 선호 부류를 물리 종속 지키며 앞으로 — 위가 막힌 카드는 못 당기고, 못 당긴 것은 기본 순서에 남는다.
+function pullStreamForward(cards, pref) {
+  const rest = [...cards];
   const out = [];
-  for (const k of order) {
-    const arr = groups.get(k);
-    const stackOrder = [];
-    const stacks = new Map();
-    for (const card of arr) {
-      const row = card.main.row;
-      if (!stacks.has(row)) { stacks.set(row, []); stackOrder.push(row); }
-      stacks.get(row).push(card);
-    }
-    const genStacks = [], rfStacks = [], emptyStacks = [];
-    for (const row of stackOrder) {
-      const st = stacks.get(row);
-      let top = st[0];
-      for (const c of st) if (parseInt(c.main.tier, 10) > parseInt(top.main.tier, 10)) top = c;
-      const tc = top.main;
-      if (tc.fe === 'E') emptyStacks.push(st);
-      else if (cardIsReefer(tc)) rfStacks.push(st);
-      else genStacks.push(st);
-    }
-    for (const st of [...genStacks, ...rfStacks, ...emptyStacks]) out.push(...st);
+  for (;;) {
+    const idx = rest.findIndex(card => cardMatchesPref(card, pref) && !blockedByAbove(card, rest));
+    if (idx === -1) break;
+    out.push(...rest.splice(idx, 1));
   }
-  return out;
+  return [...out, ...rest];
 }
 
 // 선택 베이 → 같은 슬롯 그룹 (예: 20 → [19,20,21])

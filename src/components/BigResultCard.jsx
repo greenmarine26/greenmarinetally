@@ -3,9 +3,9 @@ import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
-import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition, fbUnassignContainer } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
-import { findTwinCandidate, getBayPairs } from '../twin.js';
+import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
 
@@ -22,15 +22,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
   const [posTarget, setPosTarget] = useState(null);   // V7.94-10: 위치 선택창 대상 컨 (c 또는 번호수정으로 고른 실제 컨)
-  // V7.94-09: 남은 자리 선택창용 — 트윈 짝꿍 후보·짝꿍 베이 매핑 (20ft 미완료 컨만)
-  const posEditTwinPartner = useMemo(() => {
-    const t = posTarget;
-    if (!t || t._comp) return null;
-    const is20 = String(t.tp || '').startsWith('20') || String(t.iso || '')[0] === '2';
-    if (!is20) return null;
-    try { return findTwinCandidate(t, allContainers.filter(x => x._mode === t._mode && !x._comp), new Set([t.cn])) || null; }
-    catch { return null; }
-  }, [posTarget, allContainers]);
+  // V8.70: 출발지(계획 위치) 기준 트윈 짝꿍 자동 계산 제거 — 싱글 자리 배정에 유령 짝꿍이 붙어
+  //   존재하지 않는 자리에 무단 배정·완료되던 원인. 트윈 배정은 PositionEditModal 안에서
+  //   도착지(배정 자리) 기준 + 검수사의 "트윈 지정"으로만 이뤄진다.
   const posEditBayPairs = useMemo(() => {
     try { return getBayPairs(allContainers.filter(x => x._mode === c?._mode)); } catch { return null; }
   }, [allContainers, c]);
@@ -43,8 +37,10 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   const cnFixMatches = useMemo(() => {
     const q = cnFixQuery.replace(/\s/g, '').toUpperCase();
     if (q.length < 3) return [];
-    return allContainers.filter(x => x && x._mode === c._mode && !x._comp && x.cn !== c.cn &&
-      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q))).slice(0, 6);
+    // V8.71: 완료 기록된 컨도 후보 포함(뒤 정렬 + ⚠배지) — 실물이 눈앞이면 그 완료는 오선적 기록일 확률이 높다.
+    return allContainers.filter(x => x && x._mode === c._mode && x.cn !== c.cn &&
+      (x.cn.includes(q) || (x.l4 || x.cn.slice(-4)).includes(q)))
+      .sort((a, b) => (!!a._comp) - (!!b._comp)).slice(0, 6);
   }, [cnFixQuery, allContainers, c]);
   const isLoading = c._mode === 'loading';
 
@@ -82,7 +78,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         confirmLabel: '취소',
         cancelLabel: '닫기',
         onConfirm: async () => {
-          await fbCancelComplete(voyageKey, c._mode, c.cn);
+          const r = await fbCancelComplete(voyageKey, c._mode, c.cn);
+          // V8.80: 취소 = 위치 원복. 원자리가 점유돼 있으면 미배정으로 두고 알림.
+          if (r?.origOccupied) alert(`원래 자리에 ${r.origOccupied}가 있어 미배정으로 돌렸습니다.\n미배정 목록에서 자리를 지정하세요.`);
         },
       });
     } else {
@@ -213,6 +211,11 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         {/* 부가 정보 */}
         <div className="flex items-center gap-2 text-[11px] mono flex-wrap text-slate-400 pt-2 border-t border-slate-800">
           {c.bay && <span className="text-amber-300 font-bold">{fmtPos(c)}</span>}
+          {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
+            <span className="ml-1 px-1 rounded bg-indigo-900 text-indigo-200 text-[10px] font-bold">
+              📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '미배정'}
+            </span>
+          )}
           <span>{isoToLabel(c.iso) || c.tp || ''}</span>
           <span className={c.fe === 'F' ? 'text-rose-400' : ''}>{c.fe || '?'}</span>
           {c.op && <span className="bg-slate-800 px-1 py-0.5 rounded">{c.op}</span>}
@@ -244,9 +247,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}
       {isLoading && (
-        <button onClick={() => setPosTarget(c)}
+        <button onClick={async () => {
+            // V8.80: 수동 배정 — 카드의 기존 위치를 보고 이 버튼(=확인)을 누르면 즉시 미배정,
+            //   그 뒤 검수사가 자리를 지정한다 (수동 작업은 계획 위치에 묶이지 않는다. 사용자 확정).
+            if (!isDone && c.bay) { try { await fbUnassignContainer(voyageKey, c._mode, c.cn, inspector); } catch {} }
+            setPosTarget(c);
+          }}
           className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-amber-700 hover:bg-amber-600 text-amber-50 flex items-center justify-center gap-1.5">
-          <MapPin className="w-4 h-4"/>위치 수정 (같은 컨, 자리만 변경)
+          <MapPin className="w-4 h-4"/>{isDone ? '위치 수정 (같은 컨, 자리만 변경)' : `수동 배정 — 위치 지정${c.bay ? ` (계획 ${fmtPos(c)})` : ''}`}
         </button>
       )}
       {isLoading && !cnFixOpen && (
@@ -282,10 +290,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 placeholder="예: 1234 또는 SKLU1972626"
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
               {cnFixMatches.map(x => (
-                <button key={x.cn} onClick={() => setCnFixPick(x)}
+                <button key={x.cn} onClick={() => {
+                    if (x._comp && !confirm(`${x.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다. 계속할까요?`)) return;
+                    setCnFixPick(x);
+                  }}
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{x.cn}</span>
                   <span className="mono text-slate-400">
+                    {x._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                     {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}
                   </span>
                 </button>
@@ -309,13 +321,18 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         onClose={() => setPosTarget(null)}
         onSave={async (newBay, newRow, newTier) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
-          const result = await fbReassignContainerPosition(voyageKey, c._mode, (posTarget || c).cn, newBay, newRow, newTier, inspector);
+          // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지, 사용자 확정)
+          const result = await fbReassignContainerPosition(voyageKey, c._mode, (posTarget || c).cn, newBay, newRow, newTier, inspector, { displacedMode: 'unassign' });
           return result;
         }}
-        twinPartner={posEditTwinPartner}
         bayPairs={posEditBayPairs}
-        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector)}
-        onCompleteBoth={async (cns) => { for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector); }}
+        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { displacedMode: 'unassign' })}
+        onCompleteBoth={async (cns) => {
+          for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector);
+          // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
+          cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
+          if (onAfterComplete) setTimeout(() => onAfterComplete(c), 600);
+        }}
       />
     </div>
   );

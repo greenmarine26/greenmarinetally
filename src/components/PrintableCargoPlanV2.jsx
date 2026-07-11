@@ -370,6 +370,7 @@ const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in win
 
 export default function PrintableCargoPlanV2({
   containers = [],
+  structureContainers = null,
   shipImo,
   shipName,
   voyNo,
@@ -391,13 +392,15 @@ export default function PrintableCargoPlanV2({
   else _voyByMode = (_voyD && _voyL && _voyD !== _voyL) ? `양하 ${_voyD} / 선적 ${_voyL}` : (_voyD || _voyL || _voyGeneric);
   const effVoyNo = voyNo || _voyByMode || '-';
   const effShipName = shipName || voyageInfo?.shipName || '';
+  // V8.45-02: 골격(구조) 판정 전용 컨 — 양하+선적 합본. 없으면 containers 폴백(하위호환).
+  const structCont = (structureContainers && structureContainers.length) ? structureContainers : containers;
   // 베이사전 + v5 매트릭스 로딩
   const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
     // V7.01: 계열 대체 시 베이 수 비교용으로 현재 EDI의 실제 베이 수를 넘김
     const ediBayCount = (() => {
       const s = new Set();
-      for (const c of (containers || [])) {
+      for (const c of (structCont || [])) {
         const n = parseInt(c.bay, 10);
         if (Number.isFinite(n) && n > 0) s.add(n);
       }
@@ -409,11 +412,11 @@ export default function PrintableCargoPlanV2({
     if (!baseDict) return null;
     // M6.94.0 사용자 원칙 1: source='user'면 enrichBayDef가 즉시 entry 반환 (어떤 보강도 안 함).
     //   AI 임시 베이사전 (v2/v5/firebase 등)일 때만 EDI 자동 채움 등 보강 동작.
-    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, containers, baseDict.source);
+    const enrichedEntry = enrichBayDef({ bayDef: baseDict.bayDef }, baseDict._v5Matrix, structCont, baseDict.source);
     // M6.94.0: cargoPlanCore가 user source 판단할 수 있게 bayDef에 source 정보 포함
     const bayDefWithSource = { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: baseDict.source === 'user' };
     return { ...baseDict, bayDef: bayDefWithSource };
-  }, [shipImo, shipName, containers, voyageInfo]);
+  }, [shipImo, shipName, structCont, voyageInfo]);
 
   const matrixBays = useMemo(() => {
     const raw = dictData?._v5Matrix?.matrixBays || [];
@@ -428,7 +431,7 @@ export default function PrintableCargoPlanV2({
     }
     // EDI tier 검증
     const ediTiersByBay = new Map();
-    for (const c of containers) {
+    for (const c of structCont) {
       const b = Number(c.bay);
       const t = Number(c.tier);
       if (!Number.isFinite(b) || !Number.isFinite(t)) continue;

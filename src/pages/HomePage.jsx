@@ -32,7 +32,7 @@ function lastWorkAt(v) {
   return last;
 }
 
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth, onOpenFood }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
@@ -367,6 +367,16 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         </button>
       </div>
 
+      {/* V8.60: 맛집 수첩 — 주변 식당·돌림판 */}
+      <button onClick={() => onOpenFood && onOpenFood()}
+        className="w-full bg-gradient-to-r from-emerald-900/40 to-teal-950/40 border border-emerald-700/40 rounded-xl px-3 py-2.5 mb-3 text-left hover:from-emerald-900/60 active:scale-95 transition flex items-center gap-2">
+        <span className="text-xl">🍽</span>
+        <div>
+          <div className="font-bold text-sm text-emerald-100">평택항 맛집 수첩</div>
+          <div className="text-[10px] text-emerald-300/70">주변 식당 · 별점 · 🎰 뭐 먹지 돌림판 ("점심 뭐 먹을까?" 물어보세요)</div>
+        </div>
+      </button>
+
       {/* V8.40: 수집기 상태 + 항차 이상 요약 → 건강 점검 페이지 */}
       <button onClick={() => onOpenHealth && onOpenHealth()}
         className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 mb-3 text-left transition-colors ${
@@ -526,7 +536,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               <VoyageCard
                 voyage={v}
                 activeInspectors={activeInspectors[v.key] || []}
-                onOpen={() => onOpenVoyage(v.key)}
+                onOpen={(m) => onOpenVoyage(v.key, m)}
                 onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
                 onComplete={(mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
                 inspectorDone={isAllDone(v)}
@@ -710,7 +720,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       'border-slate-800'
     }`}>
       <button
-        onClick={onOpen}
+        onClick={() => onOpen()}
         className="w-full px-3 py-2.5 hover:bg-slate-800/50 flex items-center justify-between gap-2"
       >
         <div className="text-left min-w-0 flex-1">
@@ -776,8 +786,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       </button>
 
       <div className="px-3 pb-3 space-y-2">
-        {dis && <SectionBar label="양하" color="blue" stats={disStats} onClick={onOpen}/>}
-        {loa && <SectionBar label="선적" color="amber" stats={loaStats} onClick={onOpen}/>}
+        {/* V8.81: 양하/선적 막대를 누르면 그 모드로 항차를 연다 (구: 둘 다 기본 모드로 열려 "반응 없음"처럼 보임). */}
+        {dis && <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>}
+        {loa && <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>}
       </div>
 
       {(activeInspectors.length > 0 || onDelete) && (
@@ -899,7 +910,7 @@ function computeStats(section, mode) {
   const missing = ptkCns.size - matched;
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual: ediValues.some(c => c && c._virtualFromList) };
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual: ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan)) };   // V8.84-02: 플랜 가상도 배지
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {

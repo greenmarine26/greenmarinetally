@@ -5,26 +5,32 @@
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
-import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative } from '../voice.js';
+import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer, generateHandover } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer } from '../nlSearch.js';
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
 import HelpModal from './HelpModal.jsx';
 import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false }) {   // V7.92: portMisData 추가 · V8.11: isLoloShip(LOLO선이면 베이 게이트 스킵)
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false, mode = null, onWorkFilterChange = null }) {   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V7.94: 자동 가이드 모드 — 앱이 크레인 순서대로 다음 컨을 예측 제시 (수동 = 기존 검색 방식)
   const [guideMode, setGuideMode] = useState(false);
   // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
-  const [workFilter, setWorkFilter] = useState('discharge');  // 'discharge' | 'loading' | 'completed'
+  const [workFilter, setWorkFilter] = useState(mode === 'loading' ? 'loading' : 'discharge');  // 'discharge' | 'loading' | 'completed'
+  // V8.82: 상단 양하/선적 탭(VoyagePage mode)이 바뀌면 작업 모드도 따라간다 — 위·아래가 반대로 엇갈리던 혼선 제거.
+  useEffect(() => {
+    if ((mode === 'discharge' || mode === 'loading') && workFilter !== mode) setWorkFilter(mode);
+  }, [mode]);
+  // V8.82: 아래 탭을 누르면 상단 모드도 따라가게 상위로 알림.
+  const pickWorkFilter = (m) => { setWorkFilter(m); if (m !== 'completed') onWorkFilterChange?.(m); };
   const [extraModalOpen, setExtraModalOpen] = useState(false);   // V8.04: 초과 컨 입력 모달
 
   const allContainers = useMemo(() => {
@@ -153,14 +159,14 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     <div className="space-y-3">
       {/* M5.75: 작업 모드 탭 (양하/선적/완료) */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
-        <button onClick={() => setWorkFilter('discharge')}
+        <button onClick={() => pickWorkFilter('discharge')}
           className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
             workFilter === 'discharge' ? 'bg-rose-700 text-rose-100' : 'text-slate-400 hover:bg-slate-800'
           }`}>
           <span>⬇ 양하 작업</span>
           <span className="text-[10px] opacity-80">대기 {dischCount}대</span>
         </button>
-        <button onClick={() => setWorkFilter('loading')}
+        <button onClick={() => pickWorkFilter('loading')}
           className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
             workFilter === 'loading' ? 'bg-sky-700 text-sky-100' : 'text-slate-400 hover:bg-slate-800'
           }`}>
@@ -337,7 +343,9 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
       {searchMode === 'single'
         ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} manualCtx={manualCtx} />
-        : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
+        : workFilter === 'loading'
+          ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}/>
+          : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
       </>
       )}
       </>
@@ -441,6 +449,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       return `인계서 초안이에요. 특이사항이나 더 전달할 내용 있으면 아래에 적어 주세요. 없으면 그대로 두셔도 됩니다.\n\n${body}\n\n— 더 전달할 내용이 있으면 아래 칸에 적고 [인계 메모 추가]를 누르세요.`;
     }
     // V7.92: 챗봇형 질문 — 자기소개·시간·입출항·날씨 (사용자 요청: "넌 뭐야"에 답하기)
+    if (parsed.foodQuery) return generateFoodAnswer(parsed.foodQuery);   // V8.60: 맛집 돌림판
     if (parsed.introQuery) return generateIntroAnswer(voyage?.info?.vslFull || voyage?.info?.vsl || '');
     // ⚠ 입출항을 시간보다 먼저 — "입항 시간 알려줘"는 timeQuery에도 걸리므로 순서가 답을 가른다.
     if (parsed.schedQuery) {
@@ -567,6 +576,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     }).catch(() => { if (alive) setFixingVoice(false); });
     return () => { alive = false; };
   }, [query, parsed, localAnswer]);
+
+  // V8.60: 음성으로 식사 질문("점심 뭐 먹을까") → 맛집 돌림판 자동 오픈. 타이핑은 답변 카드의 버튼으로.
+  useEffect(() => {
+    if (!parsed.foodQuery) return;
+    if (voiceQueryRef.current !== query.trim()) return;   // 음성으로 들어온 질문만 자동 이동
+    const t = setTimeout(() => { window.location.hash = `#/food?spin=${parsed.foodQuery}`; }, 1500);
+    return () => clearTimeout(t);
+  }, [parsed.foodQuery, query]);
 
   // 자동 음성 안내
   useEffect(() => {
@@ -872,6 +889,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             </button>
           </div>
           <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
+          {parsed.foodQuery && (
+            <button onClick={() => { window.location.hash = `#/food?spin=${parsed.foodQuery}`; }}
+              className="mt-2 w-full py-2.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white font-bold text-sm">
+              🎰 돌림판 돌리기
+            </button>
+          )}
         </div>
       )}
 
@@ -919,6 +942,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && (() => {
         const main = results.filter(c => !c._comp && c._mode === workFilter);
         const others = results.filter(c => c._comp || c._mode !== workFilter);
+        // V8.70: 완료된 컨도 번호 단일 매칭이면 큰 카드로 — 취소·위치수정 접근(완료 후 재검색 시 막다른 골목 제거).
+        const doneSolo = (main.length === 0 && parsed.digits)
+          ? results.filter(c => c._comp && c._mode === workFilter) : [];
+        const othersRest = (doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others;
         const othersLabel = (n) => `다른 작업·완료분에 ${n}건 — 보기`;
         return (
           <>
@@ -929,16 +956,23 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                 onAfterComplete={() => { setQuery(''); stopSpeak(); }}
               />
             )}
+            {main.length === 0 && doneSolo.length === 1 && (
+              <BigResultCard c={doneSolo[0]} allContainers={allContainers}
+                voyageKey={voyageKey} inspector={inspector}
+                onOpen={() => onOpenContainer?.(doneSolo[0])}
+                onAfterComplete={() => { setQuery(''); stopSpeak(); }}
+              />
+            )}
             {main.length > 1 && main.slice(0, 30).map(c => (
               <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
             ))}
-            {others.length > 0 && results.length > 0 && (
+            {othersRest.length > 0 && results.length > 0 && (
               <div className="mt-1">
                 <button onClick={() => setShowOthers(v => !v)}
                   className="w-full py-1.5 rounded bg-slate-800/60 border border-slate-700/50 text-[11px] text-slate-400 font-bold">
-                  {showOthers ? '▲ 접기' : `▼ ${othersLabel(others.length)}`}
+                  {showOthers ? '▲ 접기' : `▼ ${othersLabel(othersRest.length)}`}
                 </button>
-                {showOthers && others.slice(0, 20).map(c => (
+                {showOthers && othersRest.slice(0, 20).map(c => (
                   <SmallResultCard key={`${c._mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer?.(c)} />
                 ))}
               </div>
@@ -959,6 +993,212 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         voyageVsl={voyage?.info?.vsl || ''}
         inspector={inspector}
       />
+    </>
+  );
+}
+
+// ─── V8.80: 수동 트윈 선적 — PCTC식 두 조회창 (사용자 확정 2026-07-08) ───
+//   원칙: 수동 작업은 계획 위치에 묶이지 않는다. 두 컨을 직접 입력해 짝꿍으로 묶고,
+//   [수동 배정 확인]으로 즉시 미배정 → 앞 위치를 정하면 뒤는 짝꿍 베이 자동 → 선적확인 한 번에 원자 완료.
+function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenContainer }) {
+  const [q1, setQ1] = useState(''); const [q2, setQ2] = useState('');
+  const [c1, setC1] = useState(null); const [c2, setC2] = useState(null);
+  const [step, setStep] = useState('pick');   // 'pick' | 'pos'
+  const [bay, setBay] = useState(''); const [row, setRow] = useState(''); const [tier, setTier] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [pickBay, setPickBay] = useState(null);          // V8.83: 자리 선택 그리드 — 베이 먼저
+  const [manualOpen, setManualOpen] = useState(false);   // V8.83: 직접 입력 접이식
+  const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading'), [allContainers]);
+  // V8.83: 자리 선택 그리드 — 20ft 계획 자리(완료=회색 선택불가). 위치수정 창과 같은 방식(사용자 확정).
+  const is20 = (c) => String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2';
+  const slotsByBay = useMemo(() => {
+    const m = {};
+    pool.filter(c => c.bay && c.row && c.tier && is20(c)).forEach(c => {
+      const b = String(parseInt(c.bay, 10));
+      (m[b] = m[b] || []).push({ bay: b, row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp });
+    });
+    Object.values(m).forEach(a => a.sort((x, y) => (parseInt(x.tier,10)-parseInt(y.tier,10)) || (parseInt(x.row,10)-parseInt(y.row,10))));
+    return m;
+  }, [pool]);
+  const findMatches = (q, excludeCn) => {
+    if (!q || q.length < 2) return [];
+    const Q = q.toUpperCase();
+    return pool.filter(c => c.cn !== excludeCn && (() => {
+      const l4 = c.l4 || c.cn?.slice(-4) || '';
+      return Q.length === 4 ? l4 === Q : (l4.endsWith(Q) || c.cn?.includes(Q));
+    })()).sort((a, b) => (!!a._comp) - (!!b._comp)).slice(0, 8);
+  };
+  const r1 = useMemo(() => findMatches(q1, c2?.cn), [q1, pool, c2]);
+  const r2 = useMemo(() => findMatches(q2, c1?.cn), [q2, pool, c1]);
+  useEffect(() => { if (r1.length === 1 && (!c1 || c1.cn !== r1[0].cn)) setC1(r1[0]); else if (r1.length === 0 && c1) setC1(null); }, [r1]);
+  useEffect(() => { if (r2.length === 1 && (!c2 || c2.cn !== r2[0].cn)) setC2(r2[0]); else if (r2.length === 0 && c2) setC2(null); }, [r2]);
+
+  const bayPairs = useMemo(() => {
+    try { return getBayPairs(pool, voyage?.info?.imo || '', voyage?.info?.vsl || '') || {}; } catch { return {}; }
+  }, [pool, voyage]);
+  const pairBay = bay ? (bayPairs[String(parseInt(bay, 10))] || null) : null;
+  const rowP = row ? String(row).padStart(2, '0') : '';
+  const tierP = tier ? String(tier).padStart(2, '0') : '';
+  const backPos = pairBay && rowP && tierP ? { bay: pairBay, row: rowP, tier: tierP } : null;
+  const pairSlotPlanned = backPos ? pool.some(x => x.bay && String(parseInt(x.bay, 10)) === backPos.bay && x.row === backPos.row && x.tier === backPos.tier) : false;
+
+  const resetAll = () => { setQ1(''); setQ2(''); setC1(null); setC2(null); setStep('pick'); setBay(''); setRow(''); setTier(''); setPickBay(null); setManualOpen(false); };
+
+  // [수동 배정 확인] — 기존 위치를 보여준 상태에서 확인 = 두 컨 즉시 미배정 (사용자 확정)
+  const confirmManual = async () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const done = [c1, c2].filter(c => c._comp);
+    if (done.length && !confirm(`${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n오선적 기록일 수 있습니다. 계속할까요?`)) return;
+    setBusy(true);
+    try {
+      await fbUnassignContainer(voyageKey, 'loading', c1.cn, inspector);
+      await fbUnassignContainer(voyageKey, 'loading', c2.cn, inspector);
+      setStep('pos');
+    } catch (e) { alert(`미배정 처리 실패: ${e?.message || e}`); }
+    finally { setBusy(false); }
+  };
+
+  // [트윈 선적확인] — 앞 지정 위치 + 뒤 짝꿍 자동, 재배정 후 완료 2건 원자 처리
+  const completeBoth = async () => {
+    if (busy) return;
+    const bn = parseInt(bay, 10);
+    if (!Number.isFinite(bn) || !rowP || !tierP) { alert('앞 컨 위치(Bay/Row/Tier)를 입력하세요'); return; }
+    if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
+    setBusy(true);
+    try {
+      await fbReassignContainerPosition(voyageKey, 'loading', c1.cn, bay, rowP, tierP, inspector, { displacedMode: 'unassign' });
+      await fbReassignContainerPosition(voyageKey, 'loading', c2.cn, backPos.bay, backPos.row, backPos.tier, inspector, { displacedMode: 'unassign' });
+      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
+      speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
+      resetAll();
+    } catch (e) { alert(`처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n${e?.message || e}`); }
+    finally { setBusy(false); }
+  };
+
+  const pickBox = (label, color, q, setQ, cSel, setCSel, rr) => (
+    <div className={`bg-slate-900 border ${color === 'amber' ? 'border-amber-700/40' : 'border-cyan-700/40'} rounded-lg p-3`}>
+      <div className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>
+        <span className={`${color === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'} px-1.5 py-0.5 rounded text-[10px] font-black`}>{label}</span>
+        {label} 컨테이너 — 끝4자리
+      </div>
+      <input type="text" value={q} onChange={e => setQ(e.target.value.toUpperCase())}
+        placeholder="끝 4자리 또는 컨번호" inputMode="numeric" autoComplete="off"
+        className={`w-full px-3 py-3 bg-slate-800 border rounded text-2xl font-black mono text-center tracking-widest focus:outline-none ${color === 'amber' ? 'border-amber-700/40 text-amber-200 focus:border-amber-500' : 'border-cyan-700/40 text-cyan-200 focus:border-cyan-500'}`}/>
+      {cSel ? (
+        <div className="mt-2 flex items-center justify-between bg-slate-800 rounded px-2 py-1.5">
+          <div>
+            <span className="mono text-sm font-bold text-slate-100">{cSel.cn}</span>
+            <span className="ml-2 text-[10px] mono text-slate-400">기존 위치 {cSel.bay ? fmtPos(cSel) : '미배정'}</span>
+            {cSel._comp && <span className="ml-1 px-1 rounded bg-rose-800 text-rose-200 text-[10px] font-bold">⚠ 완료기록</span>}
+          </div>
+          <button onClick={() => { setCSel(null); setQ(''); }} className="text-[11px] text-slate-400 px-1.5">✕</button>
+        </div>
+      ) : (
+        <>
+          {q.length >= 2 && rr.length === 0 && <div className="mt-2 text-[11px] text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
+          {rr.length > 1 && (
+            <div className="flex flex-wrap gap-1 mt-2 justify-center">
+              {rr.map(c => (
+                <button key={c.cn} onClick={() => setCSel(c)}
+                  className="bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-[10px] mono text-slate-200">
+                  {c.cn}{c._comp ? ' ⚠완료' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
+        🚛 수동 트윈 선적 — 앞·뒤 두 컨을 직접 입력해 짝꿍으로 묶습니다
+        <div className="text-[10px] text-blue-400/70 mt-0.5">확인 즉시 미배정 → 앞 위치 지정 → 뒤는 짝꿍 베이 자동 → 선적확인 한 번에 완료</div>
+      </div>
+      {step === 'pick' && (
+        <>
+          {pickBox('앞', 'amber', q1, setQ1, c1, setC1, r1)}
+          {pickBox('뒤', 'cyan', q2, setQ2, c2, setC2, r2)}
+          {c1 && c2 && (
+            <button onClick={confirmManual} disabled={busy}
+              className="w-full py-3 rounded-lg font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+              <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 미배정 후 위치 지정'}
+            </button>
+          )}
+        </>
+      )}
+      {step === 'pos' && c1 && c2 && (
+        <div className="bg-slate-900 border border-amber-700 rounded-lg p-3 space-y-3">
+          <div className="text-xs text-amber-300 font-bold">앞 {c1.cn?.slice(-4)} 위치 — 자리 선택 (✓회색=선적 완료, 선택 불가)</div>
+          {/* V8.83: 위치수정 창과 같은 자리 선택 그리드 — 직접 입력은 접이식으로 (사용자 확정) */}
+          {!pickBay ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {Object.keys(slotsByBay).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(b => {
+                const remain = slotsByBay[b].filter(s => !s.done).length;
+                return (
+                  <button key={b} onClick={() => remain > 0 && setPickBay(b)} disabled={remain === 0}
+                    className={`py-2.5 rounded-lg border font-black ${remain > 0 ? 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                    <div className="mono text-base">B{b}</div>
+                    <div className="text-[10px] font-bold text-slate-400">남은 {remain}자리</div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택</div>
+                <button onClick={() => { setPickBay(null); setBay(''); setRow(''); setTier(''); }} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {(slotsByBay[pickBay] || []).map(s => s.done ? (
+                  <span key={`${s.row}-${s.tier}`} className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">✓{s.row}-{s.tier}</span>
+                ) : (
+                  <button key={`${s.row}-${s.tier}`} onClick={() => { setBay(s.bay); setRow(s.row); setTier(s.tier); }}
+                    className={`px-2.5 py-2 rounded-lg border mono text-sm font-bold ${row === s.row && tier === s.tier && bay === s.bay ? 'bg-amber-700 border-amber-400 text-amber-50' : 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100'}`}>
+                    {s.row}-{s.tier}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={() => setManualOpen(v => !v)}
+            className="w-full py-1.5 text-[11px] text-slate-400 hover:text-slate-200 border border-dashed border-slate-700 rounded">
+            {manualOpen ? '▲ 직접 입력 닫기' : '▼ 직접 입력 (플랜에 없는 자리)'}
+          </button>
+          {manualOpen && (
+          <div className="grid grid-cols-3 gap-2">
+            {[['BAY', bay, setBay, 3], ['ROW', row, setRow, 2], ['TIER', tier, setTier, 2]].map(([lb, v, setV, mx]) => (
+              <div key={lb}>
+                <label className="text-[10px] text-slate-500 font-bold">{lb}</label>
+                <input type="text" inputMode="numeric" value={v}
+                  onChange={e => setV(e.target.value.replace(/[^\d]/g, '').slice(0, mx))}
+                  className="w-full px-3 py-3 bg-slate-800 border border-slate-700 rounded text-2xl font-black mono text-amber-200 text-center"/>
+              </div>
+            ))}
+          </div>
+          )}
+          {bay && rowP && tierP && (
+            backPos ? (
+              <div className="bg-cyan-950/40 border border-cyan-800 rounded p-2 text-xs text-cyan-200">
+                뒤 <span className="mono font-bold">{c2.cn?.slice(-4)}</span> → 짝꿍 자리 <span className="mono font-black">{backPos.bay}-{backPos.row}-{backPos.tier}</span> 자동 배정
+                {!pairSlotPlanned && <div className="mt-1 text-amber-300 font-bold">⚠ 플랜에 없는 자리(싱글 자리)입니다 — 실물 기준으로 진행 가능</div>}
+              </div>
+            ) : (
+              <div className="bg-rose-950/40 border border-rose-800 rounded p-2 text-xs text-rose-300 font-bold">
+                ⚠ 베이 {parseInt(bay, 10)}는 짝꿍 베이가 없습니다 — 싱글 자리입니다. 싱글 모드로 처리하세요.
+              </div>
+            )
+          )}
+          <button onClick={completeBoth} disabled={busy || !backPos}
+            className="w-full py-3 rounded-lg font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white flex items-center justify-center gap-2">
+            <Check className="w-5 h-5"/>{busy ? '처리 중…' : '트윈 선적확인 (두 대 한 번에)'}
+          </button>
+          <button onClick={() => setStep('pick')} className="w-full text-[11px] text-slate-400 py-1">← 컨 선택으로</button>
+        </div>
+      )}
     </>
   );
 }
@@ -1223,6 +1463,8 @@ function SmallResultCard({ c, onOpen }) {
         : 'bg-gray-700 text-gray-300'
       }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
+      {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) &&
+        <span className="px-1 rounded text-[9px] font-black bg-indigo-900 text-indigo-200">수정</span>}
       <span className="text-[10px] text-slate-400 mono truncate flex-1">{c.cn}</span>
       <span className="text-[9px] mono text-slate-400">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>
       <span className={`text-[9px] mono px-1 rounded font-bold ${

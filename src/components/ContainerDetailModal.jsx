@@ -7,7 +7,7 @@ import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
-import { findTwinCandidate, getBayPairs } from '../twin.js';
+import { getBayPairs } from '../twin.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { formatDgLabel, lookupUN } from '../dgUnDict.js';
 
@@ -74,13 +74,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
   // V7.94-09: 남은 자리 선택창용 — 트윈 짝꿍 후보·짝꿍 베이 매핑
-  const posEditTwinPartner = useMemo(() => {
-    if (!c || comp) return null;
-    const is20 = String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2';
-    if (!is20) return null;
-    try { return findTwinCandidate(c, allContainers.filter(x => (x._mode || mode) === (c._mode || mode) && !x._comp), new Set([c.cn])) || null; }
-    catch { return null; }
-  }, [c, comp, allContainers, mode]);
+  // V8.70: 출발지 기준 트윈 짝꿍 자동 계산 제거 — PositionEditModal이 도착지 기준 "트윈 지정"으로 처리.
   const posEditBayPairs = useMemo(() => {
     try { return getBayPairs(allContainers.filter(x => (x._mode || mode) === (c?._mode || mode))); } catch { return null; }
   }, [allContainers, c, mode]);
@@ -464,6 +458,11 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             <span className="text-xl font-bold mono text-slate-300">{c._tier_planned || c.tier || '--'}</span>
             {!c.bay && mode === 'loading' && (
               <span className="ml-2 bg-orange-700 text-orange-50 text-[10px] px-1.5 py-0.5 rounded font-black">선적대상</span>
+            )}
+            {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
+              <span className="ml-2 bg-indigo-900 text-indigo-200 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '미배정'}
+              </span>
             )}
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5">베이 / 열 / 단</div>
@@ -1115,13 +1114,17 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         onClose={() => setShowPosEdit(false)}
         onSave={async (newBay, newRow, newTier) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
-          const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector);
+          // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지)
+          const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector, { displacedMode: 'unassign' });
           return result;
         }}
-        twinPartner={posEditTwinPartner}
         bayPairs={posEditBayPairs}
-        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector)}
-        onCompleteBoth={async (cns) => { for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector); }}
+        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { displacedMode: 'unassign' })}
+        onCompleteBoth={async (cns) => {
+          for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector);
+          // V8.70: 자동 선적확인 완료 음성 — 무음 오해 방지.
+          cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
+        }}
         workBay={workBay}
         workTier={workTier}
       />

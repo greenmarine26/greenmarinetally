@@ -121,9 +121,13 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
   const bayPages = useMemo(() => {
     const set = new Set();
     (dictData?.bayDef?.bayList || []).forEach((b) => { const n = parseInt(b, 10); if (Number.isFinite(n) && n < 99) set.add(n); });
-    containers.forEach((c) => { const e = eff(c); if (!e.storage) { const n = parseInt(e.bay, 10); if (Number.isFinite(n) && n < 99) set.add(n); } });
+    // V8.81: 베이사전 요약(baysSummary)도 포함 — 매트릭스 선박은 bayList가 비어 있을 수 있음.
+    (dictData?.bayDef?.baysSummary || []).forEach((s) => { const n = parseInt(s.bayNo ?? s.bay ?? s.idx, 10); if (Number.isFinite(n) && n < 99) set.add(n); });
+    // V8.81: 컨의 원본 EDI 베이를 들어냄(임시창고) 여부와 무관하게 포함 — 컨을 다 들어내도 베이가 사라지지 않게.
+    //   (구: 현재(effective) 위치만 반영 → 전부 들어내면 베이 근거 0 → 화면에서 베이 소실. 데이터는 살아 있었음.)
+    containers.forEach((c) => { const n = parseInt(c.bay, 10); if (Number.isFinite(n) && n < 99) set.add(n); });
     return buildBayPages([...set].sort((a, b) => a - b));
-  }, [dictData, containers, eff]);
+  }, [dictData, containers]);
 
   const [pageIdx, setPageIdx] = useState(0);
   const page = bayPages[Math.min(pageIdx, Math.max(0, bayPages.length - 1))] || null;

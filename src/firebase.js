@@ -310,6 +310,14 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
 }
+
+// V8.71: 여러 컨 완료를 한 번의 멀티패스 update로 — 트윈 수정에서 "한 대만 먼저 선적" 방지 (둘 다 되거나 둘 다 안 되거나).
+export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by) {
+  const patch = {};
+  const at = Date.now();
+  for (const cn of cns.filter(Boolean)) patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = { by, at };
+  await update(ref(db), patch);
+}
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
 //   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).
 //   V8.04: 신고서 작성에 필요한 기본 정보(규격·F/E·타입·실번호·데미지 유무)를 함께 저장.
@@ -335,6 +343,42 @@ export async function fbRemoveExtraContainer(voyageKey, mode, cn) {
 }
 export async function fbCancelComplete(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
+  // V8.80: 취소 = 위치도 원계획(bay_orig)으로 원복 (사용자 확정 2026-07-08 — 원복돼야 수정 여부를 알 수 있다).
+  //   원자리에 다른 컨이 있으면 미배정으로 두고 알림용 정보 반환.
+  try {
+    const recSnap = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
+    const rec = recSnap.val();
+    if (!rec || rec.bay_orig === undefined) return { ok: true };
+    const ob = rec.bay_orig || '', orow = rec.row_orig || '', ot = rec.tier_orig || '';
+    const changed = (rec.bay || '') !== ob || (rec.row || '') !== orow || (rec.tier || '') !== ot;
+    if (!changed) return { ok: true };
+    let occupant = null;
+    if (ob && orow && ot) {
+      const [ediSnap, recAllSnap] = await Promise.all([
+        get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers`)),
+        get(ref(db, `voyages/${voyageKey}/${mode}/records`)),
+      ]);
+      const ediMap = ediSnap.val() || {}, recMap = recAllSnap.val() || {};
+      const obInt = String(parseInt(ob, 10));
+      for (const otherCn of new Set([...Object.keys(ediMap), ...Object.keys(recMap)])) {
+        if (otherCn === cn) continue;
+        const e = ediMap[otherCn] || {}, r = recMap[otherCn] || {};
+        const xb = r.bay || e.bay || '';
+        if (xb && String(parseInt(xb, 10)) === obInt && (r.row || e.row) === orow && (r.tier || e.tier) === ot) { occupant = otherCn; break; }
+      }
+    }
+    if (occupant) {
+      await _updatePositionFields(voyageKey, mode, cn, '', '', '', '취소원복');
+      return { ok: true, restored: false, origOccupied: occupant };
+    }
+    await _updatePositionFields(voyageKey, mode, cn, ob, orow, ot, '취소원복');
+    return { ok: true, restored: true, orig: { bay: ob, row: orow, tier: ot } };
+  } catch { return { ok: true }; }
+}
+
+// V8.80: 수동 배정 확인 — 컨을 미배정으로 (수동 작업은 계획 위치에 묶이지 않는다. 사용자 확정 2026-07-08).
+export async function fbUnassignContainer(voyageKey, mode, cn, by) {
+  await _updatePositionFields(voyageKey, mode, cn, '', '', '', by);
 }
 
 // M4.9d-fix: 선적 실체 위치 저장 (사용자 도메인: 선적 EDI는 계획만, 선적확인 시 실체 발생)
@@ -403,7 +447,9 @@ export async function fbBatchClearActual(voyageKey, mode, cns) {
 //   - 빈 문자열로 새 위치를 주면 → 미배정으로 변경
 //
 // 반환: { ok: true, displaced?: <빠진 컨번호> }
-export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by) {
+// V8.71: opts.displacedMode — 'swap'(기본: 자동 가이드용, 밀려난 컨을 옮긴 컨의 옛 자리로)
+//   | 'unassign'(수동용: 밀려난 컨은 미배정 — 수동 작업에선 앱이 컨을 멋대로 재배정하지 않는다. 사용자 확정 2026-07-08).
+export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by, opts = {}) {
   // V7.94-24: 자리 교환(swap) — A를 B 자리로 옮기면, 자리를 뺏긴 B는 A의 원래 자리로 이동(거기서 선적 대기).
   //   (구: B를 미배정 처리 → 떠돌이 발생). A의 현재 위치를 먼저 캡처.
   let aOldBay = '', aOldRow = '', aOldTier = '';
@@ -443,20 +489,29 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   }
 
   // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
+  let displacedWasCompleted = false;
   if (displaced) {
-    if (aOldBay && aOldRow && aOldTier) {
+    if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
     } else {
+      // 수동(unassign) 또는 옛 자리 없음 → 미배정 (미배정 목록에서 검수사가 직접 지정)
       await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
     }
-    // 자리를 옮긴 B는 아직 선적 안 됨 → 완료 취소 (A 원자리에서 대기)
-    await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
+    // V8.70: 자리를 뺏긴 컨이 이미 검수완료된 컨이면 완료 기록을 지우지 않는다.
+    //   (구: 무조건 remove → 다른 자리에서 이미 선적확인한 기록이 조용히 사라짐 — 체인시프트 데이터 유실 원인.
+    //    오선적이었다면 검수사가 그 번호로 검색해 직접 취소·수정한다.)
+    const dispComp = await get(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
+    if (dispComp.exists()) {
+      displacedWasCompleted = true;
+    } else {
+      await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
+    }
   }
 
   // 3) target 컨 위치 변경
   await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
 
-  return { ok: true, displaced, swappedTo: displaced ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
+  return { ok: true, displaced, displacedWasCompleted, swappedTo: (displaced && opts.displacedMode !== 'unassign') ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
 }
 
 // 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화
@@ -884,8 +939,9 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
       vslFull: info.vslFull || '',   // M7.24b: EDI 추출 풀네임 (보관소 선박명 표시용)
       callsign: info.callsign || '',
       imo: info.imo || '',
-      voy_d: info.voy_d || '',
-      voy_l: info.voy_l || '',
+      // V8.84: 빈값이면 키 자체를 안 보냄 — 이전 기록의 항차를 빈 문자열로 덮지 않게.
+      ...(info.voy_d ? { voy_d: info.voy_d } : {}),
+      ...(info.voy_l ? { voy_l: info.voy_l } : {}),
       carrier: info.carrier || '',
       discharge_ptk: discharge,
       loading_ptk: loading,
@@ -1587,4 +1643,51 @@ export async function fbGetPierCoords() {
   const r = ref(db, 'pier_coords');
   const snap = await get(r);
   return snap.val() || {};
+}
+
+
+// ── V8.60 맛집 수첩 — 평택항 주변 식당 공유(foodSpots/{id}) ──
+// 구조: {name, cat, tel, area, tags[], note, addedBy, ts, ratings:{검수사:1~5}, comments:{key:{by,text,ts}}}
+export function fbFoodListen(cb) {
+  const r = ref(db, 'foodSpots');
+  const h = onValue(r, (snap) => {
+    const v = snap.val() || {};
+    cb(Object.fromEntries(Object.entries(v).filter(([k]) => !k.startsWith('_'))));
+  }, () => cb({}));
+  return () => off(r, 'value', h);
+}
+
+export async function fbAddFoodSpot(spot, inspector) {
+  const r = push(ref(db, 'foodSpots'));
+  await set(r, { ...spot, addedBy: inspector || '', ts: Date.now() });
+  return r.key;
+}
+
+export async function fbDeleteFoodSpot(id) {
+  await remove(ref(db, `foodSpots/${id}`));
+}
+
+export async function fbRateFoodSpot(id, inspector, score) {
+  if (!inspector) return;
+  await set(ref(db, `foodSpots/${id}/ratings/${inspector}`), score);
+}
+
+export async function fbCommentFoodSpot(id, inspector, text) {
+  const r = push(ref(db, `foodSpots/${id}/comments`));
+  await set(r, { by: inspector || '', text: String(text || '').slice(0, 100), ts: Date.now() });
+}
+
+// 시드 1회 주입 — foodSpots/{flag} 플래그로 중복 방지(여러 폰 동시 접속 대비 최소 방어).
+// V8.61: flagKey 매개변수 — 시드 2차(_seeded_w2)도 같은 함수로 1회 주입.
+export async function fbSeedFoodSpotsOnce(seeds, flagKey = '_seeded') {
+  try {
+    const flag = await get(ref(db, `foodSpots/${flagKey}`));
+    if (flag.exists()) return false;
+    await set(ref(db, `foodSpots/${flagKey}`), Date.now());
+    for (const sd of (seeds || [])) {
+      const { id, ...rest } = sd;
+      await set(ref(db, `foodSpots/${id}`), { ...rest, addedBy: '시드', ts: Date.now() });
+    }
+    return true;
+  } catch (e) { return false; }
 }

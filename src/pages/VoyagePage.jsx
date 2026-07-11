@@ -53,11 +53,18 @@ import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange }) {
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange, initModeOverride = null }) {
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   const hasDis = !!voyage?.discharge;
   const hasLoa = !!voyage?.loading;
-  const initMode = voyage?.info?.mode || (hasDis ? 'discharge' : 'loading');
+  // V8.81: 홈에서 양하/선적 막대로 연 경우 그 모드 우선 (route.mode 전달).
+  // V8.82-01: 양하·선적이 둘 다 있으면 양하 우선 — 수집기가 선적 항차를 먼저 등록해 info.mode='loading'이
+  //   박혀 있어도, 작업 순서(양하→선적)대로 양하부터 연다. 양하가 완료 표시된 항차만 선적으로 바로.
+  const dischargeMarkedDone = !!(voyage?.info?.inspectorDone || voyage?.info?.dischargeDone);
+  const initMode = initModeOverride
+    || (hasDis && hasLoa
+      ? (dischargeMarkedDone ? 'loading' : 'discharge')
+      : (voyage?.info?.mode || (hasDis ? 'discharge' : 'loading')));
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
@@ -967,6 +974,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           shipLib={shipLib}
           portMisData={portMisData}
           isLoloShip={isLoloShip}
+          mode={mode}
+          onWorkFilterChange={(m) => setMode(m)}
         />
       )}
       {tab === 'lolo' && (
@@ -1884,6 +1893,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         });
         await fbAddShipVoyage(shipStoreKey, voyageKey, {
           voy: shipInfo.voyage,
+          // V8.84: 항차 등록 정보의 양하/선적 항차를 보관소 기록에도 — 빈값은 제외(기존 값 보존).
+          ...(voyage?.info?.voy_d ? { voy_d: voyage.info.voy_d } : {}),
+          ...(voyage?.info?.voy_l ? { voy_l: voyage.info.voy_l } : {}),
           vsl: shipInfo.name,
           mode,
           container_count: allEdiContainers.length,
