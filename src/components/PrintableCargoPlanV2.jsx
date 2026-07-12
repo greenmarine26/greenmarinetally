@@ -623,6 +623,7 @@ export default function PrintableCargoPlanV2({
     };
     for (const c of containers) {
       if (!matchPodC(c)) continue;
+      if (c._slot || (typeof c.cn === 'string' && c.cn.startsWith('__SLOT_'))) continue;   // V8.86: 컨번호 미지정 자리는 별첨에서 제외 — 별첨은 리스트(실컨) 기준
       const size = sizeOfC(c);
       const carrier = (c.op && String(c.op).trim()) || 'UNK';
       addTo(carrierCounts, carrier, size);

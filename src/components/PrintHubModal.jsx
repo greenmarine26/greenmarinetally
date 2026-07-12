@@ -66,7 +66,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       if (hasEdi && PROTECTED_EDI_FIELDS.has(k)) return;
       merged[k] = v;
     });
-    merged.cn = cn;
+    // V8.86: 컨번호 없는 EDI 자리(배열 인덱스 키) → 배열 인덱스가 컨번호로 둔갑하지 않게 __SLOT_ 키 부여
+    merged.cn = (hasEdi && !e.cn && !recMap[cn]) ? `__SLOT_${e.bay || ''}_${e.row || ''}_${e.tier || ''}_${cn}` : cn;
+    if (hasEdi && !e.cn && !recMap[cn]) { merged.pendingCn = true; merged._slot = true; }
     merged._comp = compMap[cn] || null;
     // M6.94.29: 리스트(records) 등록 표식 — 카고플랜 별첨이 평택 판정에 사용.
     //   검수리스트와 동일 원칙: 리스트에 등록되면 무조건 평택분.
