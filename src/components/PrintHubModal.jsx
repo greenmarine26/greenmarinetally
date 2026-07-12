@@ -170,6 +170,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintSub(null)}>
         <PrintableCargoPlanV2
           containers={printContainers}
+          legendContainers={ptkContainers}
           mode={mode}
           voyageInfo={voyageInfo}
           shipImo={shipImo}

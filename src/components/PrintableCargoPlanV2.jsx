@@ -371,6 +371,7 @@ const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in win
 export default function PrintableCargoPlanV2({
   containers = [],
   structureContainers = null,
+  legendContainers = null,   // V8.87: 별첨 전용 목록(리스트=검수 대상 기준). 없으면 containers 폴백(하위호환).
   shipImo,
   shipName,
   voyNo,
@@ -621,7 +622,11 @@ export default function PrintableCargoPlanV2({
       e[size]++;
       e.total++;
     };
-    for (const c of containers) {
+    // V8.87: 별첨은 리스트(검수 대상) 기준 — 카고플랜 그림(containers)은 베이 있는 컨만이라
+    //   베이 미배정 리스트 컨(터미널 PRE 등)이 별첨에서 통째로 빠지던 문제 해결.
+    //   legendContainers(검수앱 ptkContainers / 콘앱 records 합본)가 오면 그걸로 집계.
+    const legendSrc = (legendContainers && legendContainers.length) ? legendContainers : containers;
+    for (const c of legendSrc) {
       if (!matchPodC(c)) continue;
       if (c._slot || (typeof c.cn === 'string' && c.cn.startsWith('__SLOT_'))) continue;   // V8.86: 컨번호 미지정 자리는 별첨에서 제외 — 별첨은 리스트(실컨) 기준
       const size = sizeOfC(c);
@@ -650,7 +655,7 @@ export default function PrintableCargoPlanV2({
     });
     const pods = [...podCounts.entries()].sort((a, b) => b[1].total - a[1].total);
     return { carriers, cargos, pods, feCounts };
-  }, [containers, pod, mode]);
+  }, [containers, legendContainers, pod, mode]);
 
   // 모든 베이의 렌더 데이터 미리 계산
   const renderDataMap = useMemo(() => {
