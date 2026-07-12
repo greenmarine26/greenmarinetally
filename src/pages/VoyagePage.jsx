@@ -175,11 +175,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   베이플랜에만 이 allEdiContainers 전달 → 어떤 EDI 와도 베이 누락 X
   const allEdiContainers = useMemo(() => {
     const merged = {};
-    Object.values(ediMap).forEach(c => { merged[c.cn] = { ...c, _src: 'edi' }; });
+    // V8.87-01: 컨번호 없는 실자리(터미널 PRE 등)가 merged['']로 1개로 붕괴하던 버그 수정.
+    //   베이플랜 화면 인쇄(카고플랜 V2)가 이 목록을 쓰는데, 붕괴+_inList 누락으로 별첨이 35(pol 있는 34+팬텀 1)로 잘못 집계됐다.
+    //   메인 병합(containers)과 동일하게 __SLOT_ 키로 개별 유지 + 대기 표식.
+    let _slotSeq2 = 0;
+    Object.values(ediMap).forEach(c => {
+      if (c.cn) { merged[c.cn] = { ...c, _src: 'edi' }; return; }
+      let k = `__SLOT_${c.bay || ''}_${c.row || ''}_${c.tier || ''}`;
+      if (merged[k]) k = `${k}_${_slotSeq2++}`;
+      merged[k] = { ...c, cn: k, pendingCn: true, _slot: true, _src: 'edi' };
+    });
     // recMap에서 EDI에 없는 컨도 포함 (참고용) + EDI 매칭된 컨에는 records 전체 필드 보강
     Object.values(recMap).forEach(r => {
       if (!merged[r.cn]) {
-        merged[r.cn] = { ...r, _src: 'list' };
+        merged[r.cn] = { ...r, _src: 'list', _inList: true };   // V8.87-01: 별첨 평택 판정용(리스트=검수 대상)
       } else {
         // M4.9e-fix: 베이그리드용 컨테이너에도 records 핵심 필드 전부 보강
         //   사용자 신고: "검색은 수정 반영되는다 베이는 안 됨"
@@ -252,7 +261,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (r.row !== undefined) safeR.row = r.row;
           if (r.tier !== undefined) safeR.tier = r.tier;
         }
-        merged[r.cn] = { ...merged[r.cn], ...safeR };
+        merged[r.cn] = { ...merged[r.cn], ...safeR, _inList: true };   // V8.87-01: 리스트 등록 표식(별첨 평택 판정)
       }
     });
     const list = Object.values(merged);
