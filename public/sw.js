@@ -34,7 +34,7 @@ self.addEventListener('message', (e) => {
 });
 
 // fetch — network-first 유지 (새 버전 즉시 반영) + 성공 응답을 캐시에 적재.
-// V7.35: 기존엔 cache.put이 없어 caches.match 폴백이 항상 실패(주은 코드)
+// V7.35: 기존엔 cache.put이 없어 caches.match 폴백이 항상 실패(죽은 코드)
 //   → 오프라인이면 흰 화면. 같은 출처(same-origin) GET 성공분만 캐시에 넣어
 //   신호 끊긴 곳(홀드 안 등)에서 마지막 성공본으로 화면 유지.
 //   네트워크가 항상 우선이므로 업데이트 즉시 반영 동작은 그대로.
