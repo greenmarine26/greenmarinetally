@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.85';   // 베이플랜 완료 셀 초록+✔ 구분(사용자 확답 2026-07-12)
+export const APP_VERSION = 'V8.86';   // 컨번호 없는 실자리: 그림 O(대기표시)·별첨 제외·분모=자리수(사용자 확답 2026-07-12)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -471,6 +471,7 @@ export function isBookingSlot(c) {
   if (c.isBooking === true) return true;
   if (c.pendingCn === true) return true;
   if (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_')) return true;
+  if (typeof c.cn === 'string' && c.cn.startsWith('__SLOT_')) return true;   // V8.86: 컨번호 미지정 실자리(터미널 PRE)도 대기 슬롯 표시
   return false;
 }
 
