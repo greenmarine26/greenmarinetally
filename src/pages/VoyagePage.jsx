@@ -299,7 +299,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   - 리스트가 EDI 리퍼를 일반 컨으로 덮어쓰는 사고 방지
   const containers = useMemo(() => {
     const merged = {};
-    Object.values(ediMap).forEach(c => { if (isPtk(c)) merged[c.cn] = { ...c, _src: 'edi' }; });
+    // V8.86: 컨번호 없는 EDI = '실제 자리'(규격·자리 확정, 컨번호 미지정 — 예: 터미널 PRE) →
+    //   컨번호 키로 뭉개지 말고 자리별 __SLOT_ 키로 각각 유지(그림에 그려지고, 별첨·검수집계에선 제외).
+    let _slotSeq = 0;
+    Object.values(ediMap).forEach(c => {
+      if (!isPtk(c)) return;
+      if (c.cn) { merged[c.cn] = { ...c, _src: 'edi' }; return; }
+      let k = `__SLOT_${c.bay || ''}_${c.row || ''}_${c.tier || ''}`;
+      if (merged[k]) k = `${k}_${_slotSeq++}`;
+      merged[k] = { ...c, cn: k, pendingCn: true, _slot: true, _src: 'edi' };
+    });
 
     // 리스트가 채울 수 있는 필드 (보강 정보만)
     // EDI 핵심 필드(iso, rf, fr, ot, tk, dg, fe, bay, row, tier, pol, pod 등)는 제외
@@ -355,7 +364,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (v !== 0) safeR[k] = v;
         }
       });
-      merged[r.cn] = { ...(ediBase || {}), ...safeR, _src: ediBase ? 'both' : 'list' };
+      merged[r.cn] = { ...(ediBase || {}), ...safeR, _inList: true, _src: ediBase ? 'both' : 'list' };   // V8.86: 리스트 등록 표식(선적 평택 판정 — 별첨·베이와 동일 원칙)
     });
     // V7.99-16: 초과 컨(리스트·EDI에 없는데 내려진 것) 합치기 — 양하신고 점검이 보도록.
     //   completed에도 flag:'extra'로 기록되지만, 컨 목록에 없으면 집계에서 빠지므로 여기서 추가.
