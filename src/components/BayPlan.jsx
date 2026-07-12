@@ -429,10 +429,10 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
     // V8.25-06: 흰 배경 + 지정색 글자(B안). XRAY 보라 배경 제거(붉은 별로 대체).
     if (!c?.cn) return 'bg-white text-slate-400 border-slate-300';
     if (xrayMap && xrayMap[c.cn]) {
-      if (compMap && compMap[c.cn]) return 'bg-white text-slate-400 border-slate-400 ring-1 ring-emerald-400';
+      if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-slate-500 border-emerald-500 ring-1 ring-emerald-400';   // V8.85: XRAY 완료도 초록 배경
       return 'bg-white text-slate-900 border-red-400';
     }
-    if (compMap && compMap[c.cn]) return 'bg-slate-100 text-slate-400 border-slate-300';
+    if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-slate-500 border-emerald-400';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
     if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-50 text-slate-900 border-orange-500 ring-1 ring-orange-400';
     const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
     if (isOurContainer) return 'bg-white text-slate-900 border-slate-400';
@@ -784,7 +784,7 @@ export default function BayPlan({ containers, compMap, xrayMap, mode, onOpenCont
           <span className="text-cyan-300 font-bold">흰 배경 · 글자색 = {mode === 'discharge' ? '선사(양하)' : 'POD(선적)'} 지정색</span>
           <span className="text-red-400 font-bold">★ 붉은별 = X-RAY</span>
           <Legend color="bg-orange-400" label="시프팅"/>
-          <Legend color="bg-slate-200" label="완료"/>
+          <Legend color="bg-emerald-200" label="✔ 완료"/>
           <span className="text-slate-500 font-bold">검정 글자 = 비평택</span>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-[10px]">
@@ -1598,6 +1598,11 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         {/* V8.25-06: XRAY = 붉은 별(한쪽 구석). 보라 배경 폐지 */}
         {xrayList && xrayList[c.cn] && !compactCell && (
           <div className="absolute z-40" style={{ top: 0, right: 1, color: '#dc2626', fontSize: Math.max(12, Math.round(fontSize * 1.7)), lineHeight: 1, fontWeight: 'bold', textShadow: '0 0 1px #fff,0 0 1px #fff' }}>★</div>
+        )}
+        {/* V8.85: 완료 = 중앙 ✔ 워터마크 — 야외에서 완료/미완료 한눈 구분(초록 배경과 세트, 사용자 확답 2026-07-12) */}
+        {completedMap && completedMap[c.cn] && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
+               style={{ color: '#059669', opacity: 0.32, fontWeight: 900, fontSize: Math.max(12, Math.round(cellH * 0.6)), lineHeight: 1 }}>✔</div>
         )}
         {compactCell ? (
           <div className="w-full h-full flex items-center justify-center mono font-black leading-none" style={{ position: 'relative', fontFamily: 'Consolas, "Courier New", monospace', fontSize: compactFont, color: getOpColor && getOpColor(c) ? getOpColor(c) : '#111' }}>
