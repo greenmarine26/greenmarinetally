@@ -97,58 +97,83 @@ export function numericIso(iso) {
   return '2200';
 }
 
-// ── 실선적 BAPLIE 생성 — 카스피계 수신 EDI(SMDG20 방언, 2603S 실측)와 동일 문법 (V8.95 전면 교체) ──
-//   실측 규칙: UNB 날짜 8자리·수신자 CASP·참조 0 / DTM137은 세기 포함:203, DTM178은 10자리:203 /
-//   TDT는 호출부호:103::선명 / 컨 블록 = LOC147→MEA(필수, 5자리 0채움)→TMP(소수1자리)→LOC9→LOC11→
-//   RFF+BM→EQD(숫자 ISO 4자리)→NAD(필수)→DGS / LOC9·11에 :139:6 없음 / CRLF.
+// EDI(EQD)용 ISO — 이미 ISO꼴(4자리 숫자·문자)은 그대로, 문자 라벨('20DC'/'40HC'…)과 빈 값만
+//   수신 선적 EDI(LOAD FILE) 실측 문자쌍(22GP/45GP/45RE/22RE)으로 변환. 엠티 정규화('450E')는 복원.
+export function ediIso(iso) {
+  const s = String(iso || '').toUpperCase().trim();
+  if (!s) return '22GP';                                             // 타입 미상 기본값(20DC 상당, 2026-07-13 결정)
+  if (/^\d{3}E$/.test(s)) return s.slice(0, 3) + '0';                // '450E' → '4500'
+  const label = s.match(/^(20|40)['\s]?(DC|GP|HC|HQ|RF|RH|OT|OP|FR|FL|TK|BK)$/) || s.match(/^(45)['\s]?(DC|HC)$/);
+  if (!label) return s;                                              // '45G1'·'22GP'·'4530' 등 ISO꼴은 그대로 (카스피 판독 실증)
+  const t = normalizeCntrType(s);
+  const len = t.len === '20' ? '22' : t.len === '45' ? 'L5' : (t.high ? '45' : '42');
+  const kind = t.kind === 'RF' ? 'RE' : t.kind === 'OT' ? 'UT' : t.kind === 'FR' ? 'PL'
+    : t.kind === 'TK' ? 'TK' : t.kind === 'BK' ? 'BU' : 'GP';
+  return len + kind;
+}
+
+// ── 실선적 BAPLIE 생성 — 수신 "선적 EDI(LOAD EDI FILE)" 실측 문법 (V8.96 전면 교체) ──
+//   근거: KSKM-2610S·XTPG-0522W LOAD EDI FILE (PCTC 발신, 카스피가 선적분으로 판독하는 실파일).
+//   머리 = DTM+137(작성):201 → LOC+5+KRPTK → DTM+132(입항)·DTM+133(출항) → RFF+VON.
+//   컨 블록 = LOC147 → MEA(평택 만재분은 VGM, 그 외 WT) → TMP(정수 3자리) → LOC9/11/83(:139:6)
+//   → RFF+BM → EQD(컨번호 4+7 사이 공백, ISO꼴 유지) → NAD → DGS. CRLF.
 export function buildActualBaplie(rows, meta = {}) {
   const now = new Date();
   const p = (n, w) => String(n).padStart(w, '0');
-  const yyyy = String(now.getFullYear());
-  const mm = p(now.getMonth() + 1, 2), dd = p(now.getDate(), 2);
-  const hh = p(now.getHours(), 2), mi = p(now.getMinutes(), 2);
-  const ref = String(meta.ref != null ? meta.ref : 0);
+  const yymmddhhmm = p(now.getFullYear() % 100, 2) + p(now.getMonth() + 1, 2) + p(now.getDate(), 2)
+    + p(now.getHours(), 2) + p(now.getMinutes(), 2);
+  const ref = String(meta.ref != null ? meta.ref : Date.now());
+  const bgmRef = String(meta.bgmRef != null ? meta.bgmRef : ref);
   const sender = (meta.sender || 'GMT').toUpperCase();
+  const rcpt = (meta.rcpt || 'CASP').toUpperCase();
   const voy = (meta.voy || '').toUpperCase();
   const vslName = (meta.vslFull || meta.vsl || '').toUpperCase();
   const callsign = (meta.callsign || meta.imo || meta.vsl || 'UNKNOWN').toUpperCase();
+  const carrier = (meta.carrier || (rows[0] && rows[0].op) || 'XXX').toUpperCase();
   const pol = (meta.pol || 'KRPTK').toUpperCase();
+  const dtm137 = meta.dtm137 || yymmddhhmm;
+  const eta = meta.eta || yymmddhhmm;
+  const etd = meta.etd || yymmddhhmm;
 
   const segs = [];
-  segs.push(`UNB+UNOA:2+${sender}+CASP+${yyyy}${mm}${dd}:${hh}${mi}+${ref}`);
-  segs.push('UNH+1+BAPLIE:D:95B:UN:SMDG20');
-  segs.push(`BGM++${ref}+9`);
-  segs.push(`DTM+137:${yyyy}${mm}${dd}${hh}${mi}:203`);
-  segs.push(`TDT+20+${voy}+++:172:20+++${callsign}:103::${vslName}`);
+  segs.push(`UNB+UNOA:2+${sender}+${rcpt}+${dtm137.slice(0, 6)}:${dtm137.slice(6)}+${ref}+++++`);
+  segs.push('UNH+1+BAPLIE:D:95B:UN:SMDG22');
+  segs.push(`BGM++${bgmRef}+9`);
+  segs.push(`DTM+137:${dtm137}:201`);
+  segs.push(`TDT+20+${voy}+++${carrier}:172:20+++${callsign}:103:11:${vslName}`);
   segs.push(`LOC+5+${pol}:139:6`);
-  segs.push(`DTM+178:${yyyy.slice(2)}${mm}${dd}${hh}${mi}:203`);
+  segs.push(`DTM+132:${eta}:201`);
+  segs.push(`DTM+133:${etd}:201`);
+  segs.push(`RFF+VON:${voy}`);
   for (const r of rows) {
     const bay3 = p(String(parseInt(r.bay, 10) || 0), 3);
     const row2 = p(String(parseInt(r.row, 10) || 0), 2);
     const tier2 = p(String(parseInt(r.tier, 10) || 0), 2);
     segs.push(`LOC+147+${bay3}${row2}${tier2}::5`);
-    segs.push(`MEA+WT++KGM:${p(Math.max(0, Math.round(Number(r.wt) || 0)), 5)}`);
+    const rpol = (r.pol || pol).toUpperCase();
+    const wtKg = Math.max(0, Math.round(Number(r.wt) || 0));
+    const vgm = r.meaVgm !== undefined ? !!r.meaVgm : (rpol === pol && r.fe !== 'E' && wtKg > 0);
+    segs.push(`MEA+${vgm ? 'VGM' : 'WT'}++KGM:${wtKg}`);
     if (r.tmp !== '' && r.tmp != null && String(r.tmp).trim() !== '') {
-      const tv = parseFloat(r.tmp) || 0;
-      const ip = Math.floor(Math.abs(tv));
-      const dp = Math.round((Math.abs(tv) - ip) * 10) % 10;
-      segs.push(`TMP+2+${tv < 0 ? '-' : ''}${p(ip, 2)}.${dp}:CEL`);
+      const tv = Math.round(parseFloat(r.tmp) || 0);
+      segs.push(`TMP+2+${tv < 0 ? '-' : ''}${p(Math.abs(tv), 3)}:CEL`);   // 실측: 025 / -018
     }
-    if (Array.isArray(r.dims)) for (const d of r.dims) segs.push(d);   // OOG 치수 (실측: DIM+9+CMT:::184 등, 원문 그대로)
-    segs.push(`LOC+9+${(r.pol || pol).toUpperCase()}`);
-    if (r.pod) segs.push(`LOC+11+${r.pod}`);
-    if (r.npod) segs.push(`LOC+76+${r.npod}`);   // 환적/경유항 (실측: LOC+76+THBKK)
-    if (r.fpod) segs.push(`LOC+83+${r.fpod}`);   // 최종 목적지 (실측: LOC+83+VNTCH)
-    segs.push(r.rff || 'RFF+BM:1');              // 참조 (일부 컨은 RFF+ET:… 원문 유지)
-    segs.push(`EQD+CN+${r.cn}+${numericIso(r.iso)}+++${r.fe === 'E' ? '4' : '5'}`);
-    segs.push(`NAD+CA+${(r.op || meta.carrier || 'XXX').toUpperCase()}:172:20`);
+    if (Array.isArray(r.dims)) for (const d of r.dims) segs.push(d);
+    segs.push(`LOC+9+${rpol}:139:6`);
+    if (r.pod) segs.push(`LOC+11+${r.pod}:139:6`);
+    if (r.npod) segs.push(`LOC+76+${r.npod}:139:6`);
+    if (r.fpod) segs.push(`LOC+83+${r.fpod}:139:6`);
+    segs.push(r.rff || 'RFF+BM:1');
+    const cnTxt = /^[A-Z]{4}\d{7}$/.test(r.cn) ? r.cn.slice(0, 4) + ' ' + r.cn.slice(4) : r.cn;   // 실측: 'KMTU 9321484'
+    segs.push(`EQD+CN+${cnTxt}+${ediIso(r.iso)}+++${r.fe === 'E' ? '4' : '5'}`);
+    segs.push(`NAD+CA+${(r.op || carrier).toUpperCase()}:172:20`);
     const dgs = Array.isArray(r.dgs) && r.dgs.length ? r.dgs : (r.dgc || r.un ? [{ dgc: r.dgc, un: r.un }] : []);
     for (const d of dgs) segs.push(`DGS+IMD+${d.dgc || ''}+${d.un || ''}`);
   }
   const untCount = segs.length - 1 + 1;              // UNH부터 UNT 자신까지 (UNB 제외)
   segs.push(`UNT+${untCount}+1`);
   segs.push(`UNZ+1+${ref}`);
-  return segs.join("'\r\n") + "'\r\n";
+  return segs.join("'") + "'";                       // 실측 LOAD EDI FILE: 줄바꿈 없이 아포스트로피 연속, 끝 개행 없음
 }
 
 // ── 카스피 ASC($604) 타입코드 — normalizeCntrType 기반 (선적 ASC는 길이-종류 순: 40HC/20DC/40RH/20RF/45DC/20BK…) ──
