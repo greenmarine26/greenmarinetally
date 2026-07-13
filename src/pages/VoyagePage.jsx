@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMap } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingFromVoyage } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -162,10 +162,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const xrayMap = sec.xrayList || {};
   const xraySeals = sec.xraySeals || {};
   const compMap = sec.completed || {};
-  // V8.98: 쉬프팅(재적부) — 양하/선적 BAPLIE 위치 대조 (통과화물만, utils.computeShiftingMap)
+  // V8.98-01: 쉬프팅(재적부) — raw EDI 원문 기반 대조 (ediContainers엔 통과화물 없음, MAMP 실측).
   const shiftingMap = useMemo(
-    () => computeShiftingMap(voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers),
-    [voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers]
+    () => computeShiftingFromVoyage(voyage),
+    [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]
   );
 
   // 평택 대상 (양하=POD, 선적=POL)

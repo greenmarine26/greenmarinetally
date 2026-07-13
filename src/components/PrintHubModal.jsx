@@ -2,7 +2,7 @@
 // 양하/선적 탭 × 항목별 (검수 리스트 / 카고플랜 / 베이 상세) 출력
 //   - 평택분만 (양하 mode = 평택 양하 대상, 선적 mode = 평택 선적 대상)
 //   - 컨테이너는 이미 mode별로 분리되어 voyage.discharge / voyage.loading에 있음
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, FileText, Grid3x3, Ship, ArrowDown, ArrowUp, Printer } from 'lucide-react';
 import { openInspectionListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
@@ -10,7 +10,7 @@ import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMap } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingFromVoyage } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -29,8 +29,13 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const recMap = sec.records || {};
   const compMap = sec.completed || {};
   const xrayMap = sec.xrayList || {};
-  // V8.98: 쉬프팅(재적부) — 양하/선적 BAPLIE 위치 대조 (모드 무관, 항차 전체 기준)
-  const shiftingMap = computeShiftingMap(voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers);
+  // V8.98-01: 쉬프팅(재적부) — raw EDI 원문 기반 대조 (ediContainers엔 통과화물 없음).
+  //   uploadedAt 기준 메모 — 스냅샷마다 300KB 재파싱 방지.
+  const shiftingMap = useMemo(
+    () => computeShiftingFromVoyage(voyage),
+    [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]
+  );
 
   const isPtk = (c) => {
     if (!c) return false;
