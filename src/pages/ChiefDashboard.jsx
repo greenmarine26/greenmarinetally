@@ -918,6 +918,20 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
       setConfirmKey(null);
       return;
     }
+    // V8.92: 선적 미완 가드(RZOR R074E 사건 2026-07-13) — 선적 항차(voy_l)가 배정돼 있는데
+    //   선적 완료 표시가 없으면(자료가 아직 안 와 lPtk=0이라 버튼이 열린 경우) 통삭제 전에
+    //   명시적 확인을 받는다. 완료 저장은 항차 전체(양하+선적)를 보관소로 옮기고 화면에서 지운다.
+    //   (실사고: RZOR 양하 완료 → 수석 완료 저장 → 선적 R074W 진행 예정인데 항차 전체 소실.)
+    {
+      const _info = (voyages[row.key] || {}).info || {};
+      if (_info.voy_l && !_info.loadingDone && !_info.inspectorDone) {
+        const go = window.confirm(
+          `⚠ 이 항차에는 선적(${_info.voy_l})이 배정되어 있는데 선적 완료 표시가 없습니다.\n\n` +
+          `완료 저장은 항차 전체(양하·선적)를 보관소로 옮기고 화면에서 지웁니다.\n` +
+          `선적 작업이 남아 있으면 [취소]를 누르세요.\n\n정말 완료 저장할까요?`);
+        if (!go) { setConfirmKey(null); return; }
+      }
+    }
     setBusyKey(row.key);
     try {
       const ok = await fbArchiveVoyageBeforeDelete(row.imo, row.key, voyages[row.key]);
