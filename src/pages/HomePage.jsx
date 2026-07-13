@@ -866,13 +866,42 @@ function SectionBar({ label, color, stats, onClick }) {
     <div onClick={onClick} className="cursor-pointer">
       <div className="flex items-center gap-2 mb-1.5 text-[11px]">
         <span className={`${colorClasses.label} border px-1.5 py-0.5 rounded font-black`}>{label}</span>
-        <span className="text-slate-400">평택 <span className="text-amber-300 font-bold">{stats.ptk}</span></span>
-        <span className="text-slate-600">·</span>
-        <span className="text-slate-400">매칭 {stats.matched}</span>
+        {/* V8.90: 예상 EDI 구분(사용자 확정 2026-07-13, SWDN 2608S 사건) —
+            리스트(실데이터)가 있는데 EDI 평택분과 매칭 0이면 그 EDI는 확정본이 아니라 예상(프리스토우)본.
+            '누락 293' 같은 허수 대신 리스트 개수를 녹색(기준 수치)으로 + '예상 EDI · 확정 대기' 배지.
+            매칭>0(확정 EDI)이면 EDI·매칭 녹색, 누락만 적색. */}
+        {stats.forecastEdi ? (
+          <>
+            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-500">예상EDI {stats.ptk}</span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-[10px] font-black" title="EDI 컨번호가 리스트(실데이터)와 하나도 일치하지 않음 — 예상(프리스토우) EDI로 판단. 평택 개수는 리스트 기준. 확정 EDI가 오면 자동으로 매칭·누락 표기로 전환됩니다.">예상 EDI · 확정 대기</span>
+          </>
+        ) : stats.listOnly ? (
+          /* V8.91: 리스트만(EDI 없음) — 평택 = 리스트 개수(실데이터 기준), MAMP 628S 사건 */
+          <>
+            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-700/40 text-[10px] font-black" title="EDI가 아직 없음 — 수집된 리스트(실데이터) 기준 개수. EDI가 오면 매칭·누락 표기로 전환됩니다.">리스트만 · EDI 대기</span>
+          </>
+        ) : stats.partialEdi ? (
+          /* V8.91: 부분 EDI(리스트 > EDI) — 평택 = 리스트 개수, EDI·매칭은 참고, TNJP 26349W 사건 */
+          <>
+            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-500">매칭 {stats.matched}</span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-[10px] font-black" title="EDI가 리스트 일부(한 선사분 등)만 담은 부분본 — 평택 개수는 리스트(실데이터) 기준. 전체 EDI가 오면 매칭·누락 표기로 전환됩니다.">부분 EDI {stats.ptk}</span>
+          </>
+        ) : (
+          <>
+            <span className="text-slate-400">평택 <span className={`${stats.matched > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.ptk}</span></span>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-400">매칭 {stats.matched > 0 ? <span className="text-emerald-300 font-bold">{stats.matched}</span> : stats.matched}</span>
+          </>
+        )}
         {stats.virtual && (
           <span className="ml-1 px-1 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/40 text-[10px] font-black" title="선적 EDI 미도착 — 선적 리스트로 채운 가상 카운트(베이 없음). 실 EDI 도착 시 자동 대체.">가상/리스트</span>
         )}
-        {stats.missing > 0 && (
+        {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && (
           <>
             <span className="text-slate-600">·</span>
             <span className="text-red-300">누락 {stats.missing}</span>
@@ -910,7 +939,18 @@ function computeStats(section, mode) {
   const missing = ptkCns.size - matched;
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual: ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan)) };   // V8.84-02: 플랜 가상도 배지
+  const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));   // V8.84-02: 플랜 가상도 배지
+  // V8.90: 예상 EDI 판정 — 리스트(실데이터)가 있는데 EDI 평택분과 컨번호가 하나도 안 겹치면
+  //   그 EDI는 확정본이 아니라 예상(프리스토우)본(SWDN 2608S: EDI 293 vs 리스트 284, 매칭 0).
+  //   가상 EDI(리스트 승격)는 리스트에서 만든 것이라 제외.
+  const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;
+  // V8.91: 리스트만(EDI 0) — MAMP 628S 사건: 리스트 324가 올라와 있는데 카드가 '평택 0'으로 보임.
+  //   리스트가 실데이터이므로 평택 자리에 리스트 개수를 보여준다(EDI 대기 배지).
+  const listOnly = !virtual && ptkCns.size === 0 && recordCns.size > 0;
+  // V8.91: 부분 EDI — TNJP 26349W 사건: EDI가 리스트 일부(한 선사분 46/313)만 커버.
+  //   리스트가 기준 수치(녹색), EDI·매칭은 참고로 표기. 누락 표기는 무의미하므로 숨김.
+  const partialEdi = !virtual && matched > 0 && recordCns.size > ptkCns.size;
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {

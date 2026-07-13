@@ -281,9 +281,10 @@ export function buildPosMap(containers) {
 // xrayMap: { cn: true } 형태. 해당 컨테이너 위치에 xray 플래그 표시.
 // getColorKeyFn(c): 컨테이너의 컬러 매핑 key 반환 (양하: 선사코드, 선적: POD 3자). 평택분 외엔 null.
 // isThroughFn(c): 통과화물 판정. 회색 셀 처리용.
-export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn) {
+export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, coveredBays) {
   const marks = new Map();
   const xrays = new Map();
+  const shifts = new Map();  // V8.98: 쉬프팅(재적부) 컨테이너 위치 플래그
   const colors = new Map();
   const throughs = new Map();
   const shadow20s = new Map(); // M6.86.8.19: 양옆 짝수 20ft 자리 = 회색 표시
@@ -294,6 +295,10 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   const ensureXrayTier = (tier) => {
     if (!xrays.has(tier)) xrays.set(tier, new Map());
     return xrays.get(tier);
+  };
+  const ensureShiftTier = (tier) => {
+    if (!shifts.has(tier)) shifts.set(tier, new Map());
+    return shifts.get(tier);
   };
   const ensureColorTier = (tier) => {
     if (!colors.has(tier)) colors.set(tier, new Map());
@@ -310,6 +315,11 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   const tagXray = (c, tier, rowLbl) => {
     if (xrayMap && c.cn && xrayMap[c.cn]) {
       ensureXrayTier(tier).set(rowLbl, true);
+    }
+  };
+  const tagShift = (c, tier, rowLbl) => {
+    if (shiftMap && c.cn && shiftMap[c.cn]) {
+      ensureShiftTier(tier).set(rowLbl, true);
     }
   };
   const tagColor = (c, tier, rowLbl) => {
@@ -336,6 +346,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           for (const [rowLbl, c] of rowMap.entries()) {
             tierMap.set(rowLbl, getSelfMarkFn(c, pod));
             tagXray(c, tier, rowLbl);
+            tagShift(c, tier, rowLbl);
             tagColor(c, tier, rowLbl);
             tagThrough(c, tier, rowLbl);
           }
@@ -351,6 +362,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
         for (const [rowLbl, c] of rowMap.entries()) {
           tierMap.set(rowLbl, getSelfMarkFn(c, pod));
           tagXray(c, tier, rowLbl);
+          tagShift(c, tier, rowLbl);
           tagColor(c, tier, rowLbl);
           tagThrough(c, tier, rowLbl);
         }
@@ -371,9 +383,18 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
               if (tierMap.has(rowLbl)) continue;
               if (is40OrMore) {
                 tierMap.set(rowLbl, 'X');
+                // V8.89: 인접 40ft 점유 표시(X) 셀에도 색·통과 태그 상속 — 같은 통과 컨이
+                //   쌍 박스에선 회색인데 단독 박스에선 흰 배경 검정 X로 갈라지던 비일관(사용자 보고 2026-07-13).
+                //   평택분 X는 선사/포트 색 글자, 통과분 X는 회색 배경(쌍 박스와 동일 규칙).
+                tagColor(c, tier, rowLbl);
+                tagThrough(c, tier, rowLbl);
+                // V8.98: 자기 박스가 없는 베이(골격 밖, 예: MAMP 27번)의 쉬프팅 컨은
+                //   이 인접 점유 셀이 유일한 표시 자리 — 여기에만 ◆ (자기 박스 있으면 중복 방지 위해 생략)
+                if (coveredBays && !coveredBays.has(bb)) tagShift(c, tier, rowLbl);
               } else {
                 // 20ft 짝수: 셀 자리 차지 + 회색 (마크 없음)
                 ensureShadow20Tier(tier).set(rowLbl, true);
+                if (coveredBays && !coveredBays.has(bb)) tagShift(c, tier, rowLbl);   // V8.98: 위와 동일 원칙
               }
             }
           }
@@ -381,7 +402,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
       }
     }
   }
-  return { marks, xrays, colors, throughs, shadow20s };
+  return { marks, xrays, shifts, colors, throughs, shadow20s };
 }
 
 // ------------------------------------------------------------
@@ -394,7 +415,14 @@ import { isoToLabel } from './utils.js';
 // M6.91.0: PDF STOWAGE INSTRUCTION에서 추출한 베이별 정답 데이터 사용 (DJCT/SWAT 우선).
 //   override가 있으면 추측 안 함. 없으면 베이사전 기본 fallback.
 
-export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shipBayDef, shipCode) {
+export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shipBayDef, shipCode, shiftMap) {
+  // V8.98: 레이아웃이 자기 박스로 커버하는 베이 번호 집합 — "(EE)OO"는 EE·OO 둘 다, "NN"은 NN.
+  const coveredBays = new Set();
+  for (const k of Object.keys(pdfBays || {})) {
+    const mm = String(k).match(/^\((\d+)\)(\d+)$/);
+    if (mm) { coveredBays.add(parseInt(mm[1], 10)); coveredBays.add(parseInt(mm[2], 10)); }
+    else { const n = parseInt(k, 10); if (Number.isFinite(n)) coveredBays.add(n); }
+  }
   const pdf = pdfBays[bayKey];
   if (!pdf) return null;
 
@@ -606,7 +634,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nDeckCols = deckRowPos.length;
   const nHoldCols = Math.min(holdRowPos.length, nDeckCols);
 
-  const { marks: bayMarks, xrays: bayXrays, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn);
+  const { marks: bayMarks, xrays: bayXrays, shifts: bayShifts, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, coveredBays);
 
   // deck tier별 셀 배열 (자리 통일: STANDARD_DECK 6 tier 모두 렌더)
   const deckRows = STANDARD_DECK.map((stdT) => {
@@ -616,6 +644,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const activeSet = getActiveColsSymmetric(cc, nDeckCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
+      const rowShifts = bayShifts.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
@@ -627,7 +656,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
         const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
         if (inActive) {
           // M6.90.3: hull 단면 안쪽만 active. 바깥은 cell-empty (visibility:hidden) — 사용 못하는 셀 안 보임.
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
@@ -648,6 +677,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const activeInHold = getActiveColsSymmetric(cc, nHoldCols);
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
+      const rowShifts = bayShifts.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
@@ -658,7 +688,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
           const rowLbl = (c >= 0 && c < nHoldCols) ? holdRowPos[c] : null;
           const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
           const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }

@@ -4,6 +4,7 @@ import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDelet
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
+import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
 import { isChief } from '../staffList.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
@@ -348,7 +349,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       done += v.totalDone;
       all += v.totalAll;
       ptkAll += v.dis.ptk + v.loa.ptk;
-      missing += v.dis.missing + v.loa.missing;
+      // V8.90: 예상 EDI(리스트와 매칭 0) 항차의 '누락'은 허수 — 합계에서 제외(SWDN 2608S 사건)
+      missing += (v.dis.forecastEdi ? 0 : v.dis.missing) + (v.loa.forecastEdi ? 0 : v.loa.missing);
     });
     return { done, all, ptkAll, missing };
   }, [voyageStats]);
@@ -917,6 +919,20 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
       setConfirmKey(null);
       return;
     }
+    // V8.92: 선적 미완 가드(RZOR R074E 사건 2026-07-13) — 선적 항차(voy_l)가 배정돼 있는데
+    //   선적 완료 표시가 없으면(자료가 아직 안 와 lPtk=0이라 버튼이 열린 경우) 통삭제 전에
+    //   명시적 확인을 받는다. 완료 저장은 항차 전체(양하+선적)를 보관소로 옮기고 화면에서 지운다.
+    //   (실사고: RZOR 양하 완료 → 수석 완료 저장 → 선적 R074W 진행 예정인데 항차 전체 소실.)
+    {
+      const _info = (voyages[row.key] || {}).info || {};
+      if (_info.voy_l && !_info.loadingDone && !_info.inspectorDone) {
+        const go = window.confirm(
+          `⚠ 이 항차에는 선적(${_info.voy_l})이 배정되어 있는데 선적 완료 표시가 없습니다.\n\n` +
+          `완료 저장은 항차 전체(양하·선적)를 보관소로 옮기고 화면에서 지웁니다.\n` +
+          `선적 작업이 남아 있으면 [취소]를 누르세요.\n\n정말 완료 저장할까요?`);
+        if (!go) { setConfirmKey(null); return; }
+      }
+    }
     setBusyKey(row.key);
     try {
       const ok = await fbArchiveVoyageBeforeDelete(row.imo, row.key, voyages[row.key]);
@@ -933,6 +949,79 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
     setBusyKey(null); setConfirmKey(null);
   };
 
+  // ── V8.93: 실선적 EDI(표준 BAPLIE) + 수정용 엑셀 왕복 (사용자 확정 2026-07-13) ──
+  //   범위 = 평택 선적분(실체 위치 우선). 선적확인된 컨 우선 — 완료 0이면 전체(확인창).
+  const ediFileRef = React.useRef(null);
+  const [ediUpKey, setEdiUpKey] = useState(null);
+  const _ediMeta = (key, v) => {
+    const info = (v && v.info) || {};
+    return { vsl: info.vsl || key.split('_')[0] || 'VSL', vslFull: info.vslFull || '',
+             voy: info.voy_l || info.voy || '', callsign: info.callsign || '', imo: info.imo || '',
+             carrier: info.carrier || '' };
+  };
+  const _collectOrWarn = (row) => {
+    const v = voyages[row.key];
+    if (!v) return null;
+    const got = collectActualLoading(v);
+    if (!got.rows.length) { alert('평택 선적분 자료가 없습니다.'); return null; }
+    if (!got.useDoneOnly && !window.confirm(
+      `선적확인(완료)된 컨이 아직 없습니다.\n전체 평택 선적분 ${got.totalPtk}대 기준으로 만들까요?`)) return null;
+    return { ...got, meta: _ediMeta(row.key, v) };
+  };
+  const exportActualEdi = (row) => {
+    const got = _collectOrWarn(row);
+    if (!got) return;
+    downloadText(`${got.meta.vsl}_${got.meta.voy}_ACTUAL_BAPLIE.edi`, buildActualBaplie(got.rows, got.meta));
+  };
+  // V8.94: 실선적 ASC(카스피 $604) — 선박코드는 기본 검수앱 코드, 저장 전 입력창에서 수정 가능(선박별 기억).
+  const exportActualAsc = (row) => {
+    const got = _collectOrWarn(row);
+    if (!got) return;
+    const lsKey = 'ascShipCode_' + got.meta.vsl;
+    let saved = '';
+    try { saved = localStorage.getItem(lsKey) || ''; } catch { /* 무시 */ }
+    const input = window.prompt('ASC 선박코드(4자)\n기본은 검수앱 코드입니다. 카스피 코드가 따로 있으면 고쳐 주세요.', saved || got.meta.vsl);
+    if (input == null) return;
+    const shipCode = (input.trim().toUpperCase() || got.meta.vsl).slice(0, 4);
+    try { localStorage.setItem(lsKey, shipCode); } catch { /* 무시 */ }
+    downloadText(`${got.meta.vsl}${got.meta.voy}.ASC`, buildActualAsc(got.rows, { ...got.meta, shipCode }));
+  };
+  const exportEditExcel = async (row) => {
+    const got = _collectOrWarn(row);
+    if (!got) return;
+    try {
+      const buf = await buildEditExcel(got.rows, got.meta);
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${got.meta.vsl}_${got.meta.voy}_EDIT.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      alert('엑셀 생성 실패: ' + (e && e.message || e));
+    }
+  };
+  const startExcelToEdi = (row) => {
+    setEdiUpKey(row.key);
+    if (ediFileRef.current) { ediFileRef.current.value = ''; ediFileRef.current.click(); }
+  };
+  const onExcelpicked = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    const key = ediUpKey;
+    setEdiUpKey(null);
+    if (!file || !key) return;
+    try {
+      const { rows, errors } = await parseEditExcel(await file.arrayBuffer());
+      if (!rows.length) { alert('엑셀에서 컨테이너를 읽지 못했습니다.\n' + errors.join('\n')); return; }
+      if (errors.length && !window.confirm(`형식 경고 ${errors.length}건:\n` + errors.slice(0, 8).join('\n') + '\n\n그래도 EDI를 만들까요?')) return;
+      const meta = _ediMeta(key, voyages[key] || {});
+      downloadText(`${meta.vsl}_${meta.voy}_ACTUAL_BAPLIE_수정본.edi`, buildActualBaplie(rows, meta));
+      alert(`수정본 EDI 생성 완료 — ${rows.length}대 (엑셀 기준)`);
+    } catch (err) {
+      alert('엑셀 읽기 실패: ' + (err && err.message || err));
+    }
+  };
+
   return (
     <div className="bg-slate-900 border border-cyan-800/40 rounded-xl p-3 mt-3">
       <div className="flex items-center gap-2 mb-2">
@@ -941,6 +1030,8 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
           진행 상황 ({rows.length}척 작업 중)
         </div>
       </div>
+      {/* V8.93: 엑셀→EDI 업로드용 숨은 파일 선택 */}
+      <input ref={ediFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onExcelpicked} />
       {rows.length === 0 ? (
         <div className="text-center text-slate-500 text-xs py-6">현재 작업 중인 항차가 없습니다.</div>
       ) : (
@@ -992,6 +1083,23 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
               <div className="flex items-center gap-3 mt-1 text-xs">
                 <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
                 <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
+                {/* V8.93: 실선적 EDI(표준 BAPLIE)·수정용 엑셀·엑셀→EDI 재생성 — 선적분 있을 때만 */}
+                {r.loading > 0 && (
+                  <span className="flex items-center gap-1 ml-auto">
+                    <button onClick={(e) => { e.stopPropagation(); exportActualEdi(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
+                      title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 카스피에서 읽을 수 있습니다.">실선적 EDI</button>
+                    <button onClick={(e) => { e.stopPropagation(); exportActualAsc(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
+                      title="실선적 ASC 내려받기 — 카스피와 같은 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
+                    <button onClick={(e) => { e.stopPropagation(); exportEditExcel(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
+                      title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
+                    <button onClick={(e) => { e.stopPropagation(); startExcelToEdi(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 font-bold"
+                      title="수정한 엑셀을 선택하면 수정본 EDI 파일을 만들어 내려줍니다.">엑셀→EDI</button>
+                  </span>
+                )}
                 {r.inspectorDone && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
                 )}
@@ -1295,7 +1403,9 @@ function MiniBar({ label, color, stats }) {
         <div className={`${map[color].bar} h-full`} style={{ width: `${pct}%` }}/>
       </div>
       <span className="text-slate-400 w-16 text-right">{stats.done}/{stats.total}</span>
-      {stats.missing > 0 && <span className="text-red-400 w-12 text-right">누락 {stats.missing}</span>}
+      {stats.forecastEdi
+        ? <span className="text-orange-300 text-right" title="EDI 컨번호가 리스트와 하나도 일치하지 않음 — 예상(프리스토우) EDI. 확정 EDI 대기.">예상EDI</span>
+        : stats.missing > 0 && <span className="text-red-400 w-12 text-right">누락 {stats.missing}</span>}
     </div>
   );
 }
@@ -1328,5 +1438,8 @@ function computeStats(section, mode) {
   const missing = ptkCns.size - matched;
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
-  return { total, done, ptk: ptkCns.size, matched, missing };
+  // V8.90: 예상 EDI 판정(홈 카드와 동일 규칙) — 리스트가 있는데 매칭 0이면 예상(프리스토우) EDI.
+  const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));
+  const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;
+  return { total, done, ptk: ptkCns.size, matched, missing, forecastEdi };
 }

@@ -21,7 +21,9 @@ function _kind(name, head) {
   }
   if (e === 'xls' || e === 'xlsx') {
     if (/loadlist\.xlsx$/.test(n)) return 'merged';   // V8.32-01: 수집기 합본(평택 기준 검증본) — 전용 매핑으로 읽음
-    if (/recap|cbf|cdl|memo|xray|x-ray/.test(n)) return 'skip';
+    // V8.89: cdl 제외 해제 — CDL(양하 리스트)만 먼저 온 항차가 "인식된 자료 없음"으로 등록조차 안 되던
+    //   문제(STSE 2653E 사건 2026-07-13). CDL은 양하 검수 리스트이므로 records로 등록한다.
+    if (/recap|cbf|memo|xray|x-ray/.test(n)) return 'skip';
     return 'list';
   }
   return 'skip';

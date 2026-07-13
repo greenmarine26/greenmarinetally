@@ -30,9 +30,19 @@ export default function VoyageSummaryCard({ voyage, mode }) {
       if (!merged.pol && r.pol) merged.pol = r.pol;   // EDI에 POL 없을 때만 리스트 보강
       if (!merged.pod && r.pod) merged.pod = r.pod;
       return merged;
-    }).filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));
+    }).filter(c => {
+      if (mode === 'discharge') return isPyeongtaekPort(c.pod);
+      // V8.86: 선적 — 리스트 등록 = 평택(별첨·베이와 동일 원칙, M6.94.34). NOLIST류 pol 공란 누락 방지.
+      if (recMap[c.cn]) return true;
+      return isPyeongtaekPort(c.pol);
+    });
 
-    const total = containers.length;
+    // V8.86: 컨번호 없는 EDI '실제 자리'(터미널 PRE)는 항차수(분모)의 기준 — 자리수와 실컨수 중 큰 쪽.
+    //   (자리는 배열 인덱스 키라 위 컨번호 병합에서 각각 세어지지만, 실컨과 이중계산되지 않게 분모를 재정의)
+    const _slotN = Object.values(ediMap).filter(c => c && !c.cn &&
+      (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol))).length;
+    const _realN = Math.max(containers.length - _slotN, 0);   // 자리 제외한 실컨(리스트) 수
+    const total = _slotN > 0 ? Math.max(_slotN, _realN) : containers.length;
     const done = Object.keys(compMap).length;
     const reefers = containers.filter(isReeferContainer);
     const reeferTempMissing = reefers.filter(c =>

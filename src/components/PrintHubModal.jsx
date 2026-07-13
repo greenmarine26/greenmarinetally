@@ -10,7 +10,7 @@ import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMap } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -29,6 +29,8 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const recMap = sec.records || {};
   const compMap = sec.completed || {};
   const xrayMap = sec.xrayList || {};
+  // V8.98: 쉬프팅(재적부) — 양하/선적 BAPLIE 위치 대조 (모드 무관, 항차 전체 기준)
+  const shiftingMap = computeShiftingMap(voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers);
 
   const isPtk = (c) => {
     if (!c) return false;
@@ -66,7 +68,9 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       if (hasEdi && PROTECTED_EDI_FIELDS.has(k)) return;
       merged[k] = v;
     });
-    merged.cn = cn;
+    // V8.86: 컨번호 없는 EDI 자리(배열 인덱스 키) → 배열 인덱스가 컨번호로 둔갑하지 않게 __SLOT_ 키 부여
+    merged.cn = (hasEdi && !e.cn && !recMap[cn]) ? `__SLOT_${e.bay || ''}_${e.row || ''}_${e.tier || ''}_${cn}` : cn;
+    if (hasEdi && !e.cn && !recMap[cn]) { merged.pendingCn = true; merged._slot = true; }
     merged._comp = compMap[cn] || null;
     // M6.94.29: 리스트(records) 등록 표식 — 카고플랜 별첨이 평택 판정에 사용.
     //   검수리스트와 동일 원칙: 리스트에 등록되면 무조건 평택분.
@@ -168,11 +172,13 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintSub(null)}>
         <PrintableCargoPlanV2
           containers={printContainers}
+          legendContainers={ptkContainers}
           mode={mode}
           voyageInfo={voyageInfo}
           shipImo={shipImo}
           shipName={shipName}
           xrayMap={xrayMap}
+          shiftingMap={shiftingMap}
           onClose={() => setPrintSub(null)}
         />
       </ErrorBoundary>

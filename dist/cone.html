@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.84-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.98</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1613,9 +1613,56 @@ async function openCargoPlanV2(mode){
     const _v=(state.voyages||[]).find(x=>x.key===state.voyageKey)||{};
     const voyageInfo={ voy_d:_v.voy_d||'', voy_l:_v.voy_l||'', voy:_v.voy||'',
       code:(state.voyageKey||'').split('_')[0]||'', vsl:state.shipName||_v.vsl||'', imo:_v.imo||'' };
+    // V8.87: 별첨은 리스트(검수 대상) 기준 — 검수앱과 동일. records를 가져와 별첨 전용 목록으로 전달.
+    //   (기존: EDI만 넘겨 컨번호 없는 자리 항차(TMPZ류)에서 별첨이 0 또는 자리 수로 잘못 집계)
+    //   records가 없으면(옛 항차) 안 넘김 → 기존 동작(containers 집계) 유지.
+    let legendContainers = null;
+    try{
+      const _res = await fetch(`${FB_BASE}/voyages/${encodeURIComponent(state.voyageKey)}/${mode}/records.json`);
+      const _recs = _res.ok ? (await _res.json()) : null;
+      if(_recs && typeof _recs === 'object' && Object.keys(_recs).length){
+        // 검수앱 PrintHubModal과 동일 원칙: EDI(컨번호 있는 것)에 리스트를 병합하되 핵심 필드는 EDI 진실.
+        const _PROT = new Set(['pol','pod','npod','fpod','bay','row','tier','pos','iso','fe','rf','fr','ot','tk','dg','oog','voy','vsl']);
+        const _byCn = {};
+        for(const c of rowsToContainers(rows)){ if(c.cn && c.cn.length === 11) _byCn[c.cn] = c; }
+        for(const [cn, r] of Object.entries(_recs)){
+          const base = _byCn[cn];
+          if(base){
+            const add = {};
+            for(const [k, v] of Object.entries(r)){ if(v === '' || v == null) continue; if(_PROT.has(k)) continue; add[k] = v; }
+            _byCn[cn] = Object.assign({}, base, add, { _inList: true });
+          } else {
+            _byCn[cn] = Object.assign({}, r, { cn, _inList: true });
+          }
+        }
+        const _list = Object.values(_byCn);
+        if(_list.length) legendContainers = _list;
+      }
+    }catch(e){ /* 리스트 못 가져오면 기존 동작 */ }
+    // V8.98: 쉬프팅(재적부) — 양하/선적 BAPLIE 위치 대조 (검수앱 computeShiftingMap과 동일 규칙)
+    let shiftingMap = {};
+    try{
+      const _isPtkCode = (v)=>/(PTK|PYT|PYOTM|PYO)$/.test(String(v||'').toUpperCase().trim());
+      const _posOf = (r)=>{ if(!r||!r.bay||!r.row||!r.tier) return '';
+        const b=String(parseInt(r.bay,10)); if(!b||b==='NaN') return '';
+        return b.padStart(3,'0')+String(r.row).padStart(2,'0')+String(r.tier).padStart(2,'0'); };
+      const _dRows = _pick(state.disch), _lRows = _pick(state.stow);
+      const _lBy = {};
+      for(const r of _lRows){ if(r.cn && String(r.cn).length===11) _lBy[r.cn]=r; }
+      for(const d of _dRows){
+        const cn = d.cn; if(!cn || String(cn).length!==11 || String(cn).startsWith('__')) continue;
+        const l = _lBy[cn]; if(!l) continue;
+        if(!d.pod || _isPtkCode(d.pod)) continue;   // 통과화물만 (양하측 POD 평택 아님)
+        if(!l.pol || _isPtkCode(l.pol)) continue;   // 선적측 POL 평택 아님
+        const from=_posOf(d), to=_posOf(l);
+        if(from && to && from!==to) shiftingMap[cn]={from,to};
+      }
+    }catch(e){ shiftingMap = {}; }
     window.ConeCargoPlan.open({
       containers: rowsToContainers(rows),
       structureContainers: rowsToContainers(structureRows),
+      legendContainers,
+      shiftingMap,
       shipName: state.shipName || (sd.vessel||''),
       shipImo: _v.imo||'',
       voyageInfo,

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.84-02';   // TMPZ 플랜 가상 EDI(격자 슬롯 등록)
+export const APP_VERSION = 'V8.98';   // 쉬프팅(재적부) 자동 검출·카고플랜 표기 — 양하/선적 BAPLIE 위치 대조 (2026-07-14)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -471,6 +471,7 @@ export function isBookingSlot(c) {
   if (c.isBooking === true) return true;
   if (c.pendingCn === true) return true;
   if (typeof c.cn === 'string' && c.cn.startsWith('__BOOK_')) return true;
+  if (typeof c.cn === 'string' && c.cn.startsWith('__SLOT_')) return true;   // V8.86: 컨번호 미지정 실자리(터미널 PRE)도 대기 슬롯 표시
   return false;
 }
 
@@ -2706,4 +2707,42 @@ export function isPyeongtaekPort(code) {
   if (PYEONGTAEK_CODES.includes(t)) return true;
   // 접미 매칭: ...PTK, ...PYT, ...PYOTM, ...PYO 로 끝나면 평택
   return /(PTK|PYT|PYOTM|PYO)$/.test(t);
+}
+
+// ------------------------------------------------------------
+// V8.98: 쉬프팅(재적부, restow) 자동 검출
+//   양하 EDI(도착 BAPLIE)와 선적 EDI(최종 BAPLIE)에 모두 실려 있는 "통과화물"의
+//   선내 위치(bay/row/tier)가 달라졌으면 쉬프팅으로 판정한다.
+//   근거 실측(MAMP 628S, 2026-07-14): MOVINS HAN+RES 13개 == 두 BAPLIE 위치 비교 13개 (100% 일치).
+//   MOVINS가 안 오는 선박도 커버되도록 위치 비교 방식을 채택 (MOVINS 파싱은 추후 보강 후보).
+//   보수 규칙(오검출 방지):
+//     - 컨번호 11자(실번호)만. __SLOT_/__BOOK_ 등 임시 키 제외.
+//     - 양쪽 모두 bay/row/tier가 온전한 것만.
+//     - 통과화물만: 양하측 POD가 평택이 아니고, 선적측 POL도 평택이 아닌 것.
+//       (평택 양하분·선적분은 위치가 달라도 쉬프팅이 아님 — 야드 경유 재선적 등)
+// ------------------------------------------------------------
+export function computeShiftingMap(dischEdiMap, loadEdiMap) {
+  const out = {};
+  if (!dischEdiMap || !loadEdiMap) return out;
+  const posOf = (c) => {
+    if (!c) return '';
+    const b = normalizeBay(c.bay || '');
+    const r = String(c.row || '').padStart(2, '0');
+    const t = String(c.tier || '').padStart(2, '0');
+    if (!b || !c.row || !c.tier) return '';
+    return `${String(b).padStart(3, '0')}${r}${t}`;
+  };
+  for (const [cn, d] of Object.entries(dischEdiMap)) {
+    if (!cn || cn.length !== 11 || cn.startsWith('__')) continue;
+    const l = loadEdiMap[cn];
+    if (!l) continue;
+    // 통과화물 판정: 양하측 POD·선적측 POL 둘 다 평택이 아님이 명시된 경우만
+    if (!d.pod || isPyeongtaekPort(d.pod)) continue;
+    if (!l.pol || isPyeongtaekPort(l.pol)) continue;
+    const from = posOf(d);
+    const to = posOf(l);
+    if (!from || !to) continue;
+    if (from !== to) out[cn] = { from, to };
+  }
+  return out;
 }
