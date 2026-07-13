@@ -1,6 +1,6 @@
-// 실선적 EDI 내보내기 — 작업 완료 후 평택 선적분(실체 위치)을 표준 BAPLIE(D.95B/SMDG22)와
-// 수정용 엑셀로 생성하고, 수정 엑셀을 다시 읽어 EDI를 재생성하는 왕복 모듈 (V8.93, 사용자 확정 2026-07-13).
-//   - EDI 형식: 수신 BAPLIE(BAPLIE_SMDG22_*)와 동일 골격 — 카스피(CASP)가 읽는 표준 EDIFACT.
+// 실선적 EDI·ASC 내보내기 — 작업 완료 후 평택 선적분(실체 위치)을 카스피계 BAPLIE(D.95B/SMDG20 방언)와
+// $604 ASC, 수정용 엑셀로 생성하고, 수정 엑셀을 다시 읽어 EDI를 재생성하는 왕복 모듈 (V8.93~95).
+//   - EDI 형식: 실수신 EDI(SWDN 2603S) 실측 문법과 바이트 단위 일치 검증(sim_v895) — 카스피(CASP) 호환.
 //   - 범위: 평택 선적분만(사용자 확정). 위치는 실체(bay_actual) 우선, 없으면 계획.
 //   - 대상: 선적확인(completed)된 컨 우선 — 완료가 하나도 없으면 전체 평택 선적분(경고 표시).
 import { isPyeongtaekPort, loadSheetJS } from './utils.js';
@@ -37,6 +37,7 @@ export function collectActualLoading(voyage) {
     return {
       cn: c.cn, iso: (c.iso || '').toUpperCase(), fe: c.fe === 'E' ? 'E' : 'F',
       op: (c.op || '').toUpperCase(), pol: 'KRPTK', pod: (c.pod || '').toUpperCase(),
+      npod: (c.npod || '').toUpperCase(), fpod: (c.fpod || '').toUpperCase(),
       bay, row, tier,
       wt: Number(c.wt) || 0, sl: c.sl || '', tmp: c.rf || c.tmp ? String(c.tmp ?? '') : '',
       dgc: c.dgc || '', un: c.un || '',
@@ -45,73 +46,123 @@ export function collectActualLoading(voyage) {
   return { rows, useDoneOnly, totalPtk: all.length, doneCount: done.length };
 }
 
-// ── 표준 BAPLIE(D.95B/SMDG22) 생성 — 수신 샘플(BAPLIE_SMDG22_2607N_VNSGN_SWDN.edi) 골격 준수 ──
+// ── 컨테이너 타입 정규화 — 구형 숫자 ISO('2200'/'4530'/'9500'/'450E')·신형 ISO('45G1'/'22R1')·
+//    문자형 타입 문자열('20DC'/'40HC'/'40RH'/'20BK'…) 모두 {len, kind, high}로 통일 (V8.95).
+export function normalizeCntrType(iso) {
+  const s = String(iso || '').toUpperCase().trim();
+  // 문자형 타입 라벨 (리스트 유래): 20DC/40HC/40RH/20BK… — 앞 두 자리가 피트 길이.
+  //   단 '45GP'·'45RE'·'45RF'는 라벨이 아니라 ISO식(4=40피트·5=9'6) — 이 앱 관례상 진짜 45피트 라벨은 45HC/45DC뿐.
+  const m = s.match(/^(20|40)['\s]?(DC|GP|HC|HQ|RF|RH|OT|OP|FR|FL|TK|BK)$/) || s.match(/^(45)['\s]?(DC|HC)$/);
+  if (m) {
+    const len = m[1];
+    const k = m[2];
+    const kind = (k === 'RF' || k === 'RH') ? 'RF'
+      : (k === 'OT' || k === 'OP') ? 'OT' : (k === 'FR' || k === 'FL') ? 'FR'
+      : k === 'TK' ? 'TK' : k === 'BK' ? 'BK' : 'GP';
+    const high = k === 'HC' || k === 'HQ' || k === 'RH' || len === '45';
+    return { len, kind, high };
+  }
+  const c1 = s[0] || '', c2 = s[1] || '', c3 = s[2] || '';
+  const len = c1 === '2' ? '20' : c1 === '4' ? '40' : (c1 === '9' || c1 === 'L' || c1 === 'M') ? '45' : '20';
+  const high = c2 === '4' || c2 === '5' || c2 === '6' || c2 === 'E' || c2 === 'F';
+  if (/^\d/.test(c3) || c3 === '') {
+    // 구형 숫자 ISO: 3번째 숫자 = 종류 (0·1=GP, 2=벌크, 3·4=리퍼, 5=오픈탑, 6=플랫, 7=탱크)
+    const kind = (c3 === '3' || c3 === '4') ? 'RF' : c3 === '2' ? 'BK'
+      : c3 === '5' ? 'OT' : c3 === '6' ? 'FR' : c3 === '7' ? 'TK' : 'GP';
+    return { len, kind, high };
+  }
+  // 신형 ISO: 3번째 문자 (G=GP, R·H=리퍼, U=오픈탑, P=플랫, T=탱크, B=벌크)
+  const kind = (c3 === 'R' || c3 === 'H') ? 'RF' : c3 === 'U' ? 'OT'
+    : c3 === 'P' ? 'FR' : c3 === 'T' ? 'TK' : c3 === 'B' ? 'BK' : 'GP';
+  return { len, kind, high };
+}
+
+// EDI(EQD)용 구형 숫자 ISO 4자리 — 카스피계 수신 EDI 실측값(2200/2230/2270/4300/4500/4530/9500)에 맞춤.
+//   타입을 알 수 없으면 2200(20DC) 기본값 (2026-07-13 결정).
+export function numericIso(iso) {
+  const s = String(iso || '').toUpperCase().trim();
+  if (/^\d{4}$/.test(s)) return s;                                   // 이미 구형 숫자
+  if (/^\d{3}E$/.test(s)) return s.slice(0, 3) + '0';                // 엠티 정규화('450E') 복원
+  if (!s) return '2200';
+  const t = normalizeCntrType(s);
+  if (t.len === '45') return t.kind === 'RF' ? '9530' : '9500';
+  if (t.len === '40') {
+    if (t.kind === 'RF') return '4530';
+    if (t.kind === 'TK') return '4370';
+    return t.high ? '4500' : '4300';
+  }
+  if (t.kind === 'RF') return '2230';
+  if (t.kind === 'TK') return '2270';
+  if (t.kind === 'BK') return '2220';
+  return '2200';
+}
+
+// ── 실선적 BAPLIE 생성 — 카스피계 수신 EDI(SMDG20 방언, 2603S 실측)와 동일 문법 (V8.95 전면 교체) ──
+//   실측 규칙: UNB 날짜 8자리·수신자 CASP·참조 0 / DTM137은 세기 포함:203, DTM178은 10자리:203 /
+//   TDT는 호출부호:103::선명 / 컨 블록 = LOC147→MEA(필수, 5자리 0채움)→TMP(소수1자리)→LOC9→LOC11→
+//   RFF+BM→EQD(숫자 ISO 4자리)→NAD(필수)→DGS / LOC9·11에 :139:6 없음 / CRLF.
 export function buildActualBaplie(rows, meta = {}) {
   const now = new Date();
   const p = (n, w) => String(n).padStart(w, '0');
-  const yymmdd = p(now.getFullYear() % 100, 2) + p(now.getMonth() + 1, 2) + p(now.getDate(), 2);
-  const hhmm = p(now.getHours(), 2) + p(now.getMinutes(), 2);
-  const dtm201 = yymmdd + hhmm;                      // DTM 201 = YYMMDDHHMM
-  const ref = String(meta.ref || Date.now());
+  const yyyy = String(now.getFullYear());
+  const mm = p(now.getMonth() + 1, 2), dd = p(now.getDate(), 2);
+  const hh = p(now.getHours(), 2), mi = p(now.getMinutes(), 2);
+  const ref = String(meta.ref != null ? meta.ref : 0);
+  const sender = (meta.sender || 'GMT').toUpperCase();
   const voy = (meta.voy || '').toUpperCase();
   const vslName = (meta.vslFull || meta.vsl || '').toUpperCase();
   const callsign = (meta.callsign || meta.imo || meta.vsl || 'UNKNOWN').toUpperCase();
-  const carrier = (meta.carrier || (rows[0] && rows[0].op) || 'XXX').toUpperCase();
-  // 다음 항구 = 선적분 최다 POD (표기용 LOC+61)
-  const podCount = {};
-  rows.forEach(r => { if (r.pod) podCount[r.pod] = (podCount[r.pod] || 0) + 1; });
-  const nextPort = Object.keys(podCount).sort((a, b) => podCount[b] - podCount[a])[0] || '';
+  const pol = (meta.pol || 'KRPTK').toUpperCase();
 
   const segs = [];
-  segs.push(`UNB+UNOA:2+GMT+CCASP+${yymmdd}:${hhmm}+${ref}+++++`);
-  segs.push('UNH+1+BAPLIE:D:95B:UN:SMDG22');
+  segs.push(`UNB+UNOA:2+${sender}+CASP+${yyyy}${mm}${dd}:${hh}${mi}+${ref}`);
+  segs.push('UNH+1+BAPLIE:D:95B:UN:SMDG20');
   segs.push(`BGM++${ref}+9`);
-  segs.push(`DTM+137:${dtm201}:201`);
-  segs.push(`TDT+20+${voy}+++${carrier}:172:20+++${callsign}:146:11:${vslName}`);
-  segs.push('LOC+5+KRPTK:139:6');
-  if (nextPort) segs.push(`LOC+61+${nextPort}:139:6`);
-  segs.push(`DTM+136:${dtm201}:201`);
-  segs.push(`RFF+VON:${voy}`);
+  segs.push(`DTM+137:${yyyy}${mm}${dd}${hh}${mi}:203`);
+  segs.push(`TDT+20+${voy}+++:172:20+++${callsign}:103::${vslName}`);
+  segs.push(`LOC+5+${pol}:139:6`);
+  segs.push(`DTM+178:${yyyy.slice(2)}${mm}${dd}${hh}${mi}:203`);
   for (const r of rows) {
     const bay3 = p(String(parseInt(r.bay, 10) || 0), 3);
     const row2 = p(String(parseInt(r.row, 10) || 0), 2);
     const tier2 = p(String(parseInt(r.tier, 10) || 0), 2);
     segs.push(`LOC+147+${bay3}${row2}${tier2}::5`);
-    if (r.wt > 0) segs.push(`MEA+WT++KGM:${Math.round(r.wt)}`);
-    segs.push('LOC+9+KRPTK:139:6');
-    if (r.pod) segs.push(`LOC+11+${r.pod}:139:6`);
-    segs.push('RFF+BM:1');
-    segs.push(`EQD+CN+${r.cn}+${r.iso}+++${r.fe === 'E' ? '4' : '5'}`);
-    if (r.tmp !== '' && r.tmp != null && String(r.tmp).trim() !== '') segs.push(`TMP+2+${String(r.tmp).trim()}:CEL`);
-    if (r.dgc || r.un) segs.push(`DGS+IMD+${r.dgc || ''}+${r.un || ''}`);
-    if (r.op) segs.push(`NAD+CA+${r.op}:172:20`);
+    segs.push(`MEA+WT++KGM:${p(Math.max(0, Math.round(Number(r.wt) || 0)), 5)}`);
+    if (r.tmp !== '' && r.tmp != null && String(r.tmp).trim() !== '') {
+      const tv = parseFloat(r.tmp) || 0;
+      const ip = Math.floor(Math.abs(tv));
+      const dp = Math.round((Math.abs(tv) - ip) * 10) % 10;
+      segs.push(`TMP+2+${tv < 0 ? '-' : ''}${p(ip, 2)}.${dp}:CEL`);
+    }
+    if (Array.isArray(r.dims)) for (const d of r.dims) segs.push(d);   // OOG 치수 (실측: DIM+9+CMT:::184 등, 원문 그대로)
+    segs.push(`LOC+9+${(r.pol || pol).toUpperCase()}`);
+    if (r.pod) segs.push(`LOC+11+${r.pod}`);
+    if (r.npod) segs.push(`LOC+76+${r.npod}`);   // 환적/경유항 (실측: LOC+76+THBKK)
+    if (r.fpod) segs.push(`LOC+83+${r.fpod}`);   // 최종 목적지 (실측: LOC+83+VNTCH)
+    segs.push(r.rff || 'RFF+BM:1');              // 참조 (일부 컨은 RFF+ET:… 원문 유지)
+    segs.push(`EQD+CN+${r.cn}+${numericIso(r.iso)}+++${r.fe === 'E' ? '4' : '5'}`);
+    segs.push(`NAD+CA+${(r.op || meta.carrier || 'XXX').toUpperCase()}:172:20`);
+    const dgs = Array.isArray(r.dgs) && r.dgs.length ? r.dgs : (r.dgc || r.un ? [{ dgc: r.dgc, un: r.un }] : []);
+    for (const d of dgs) segs.push(`DGS+IMD+${d.dgc || ''}+${d.un || ''}`);
   }
-  // UNT 카운트 = UNH부터 UNT까지 세그먼트 수 (UNH 포함, UNB/UNZ 제외)
-  const untCount = segs.length - 1 + 1;              // segs에서 UNB 제외 + UNT 자신
+  const untCount = segs.length - 1 + 1;              // UNH부터 UNT 자신까지 (UNB 제외)
   segs.push(`UNT+${untCount}+1`);
   segs.push(`UNZ+1+${ref}`);
-  return segs.join("'\n") + "'";
+  return segs.join("'\r\n") + "'\r\n";
 }
 
-// ── 카스피 ASC($604) 타입코드 — ISO(구형 숫자 '2200'/'4530'/'9500'·신형 '45G1'·엠티 정규화 '450E') → 40HC/20DC/40RH/20RF/45DC/OT/FR/TK ──
+// ── 카스피 ASC($604) 타입코드 — normalizeCntrType 기반 (선적 ASC는 길이-종류 순: 40HC/20DC/40RH/20RF/45DC/20BK…) ──
 export function ascTypeCode(iso) {
-  const s = String(iso || '').toUpperCase();
-  const c1 = s[0] || '', c2 = s[1] || '', c3 = s[2] || '';
-  const len = c1 === '2' ? '20' : c1 === '4' ? '40' : (c1 === '9' || c1 === 'L' || c1 === 'M') ? '45' : '20';
-  // 종류: 구형 3번째 숫자(3·4=리퍼, 5=오픈탑, 6=플랫, 7=탱크) / 신형 3번째 문자(R·H=리퍼, U=오픈탑, P=플랫, T=탱크)
-  const kind = (c3 === '3' || c3 === '4' || c3 === 'R' || c3 === 'H') ? 'RF'
-    : (c3 === '5' || c3 === 'U') ? 'OT'
-    : (c3 === '6' || c3 === 'P') ? 'FR'
-    : (c3 === '7' || c3 === 'T') ? 'TK' : 'GP';
-  const high = c2 === '4' || c2 === '5' || c2 === '6';   // 9'0/9'6 이상
-  if (kind === 'GP') return len + (len === '45' ? 'DC' : (high ? 'HC' : 'DC'));   // 45피트는 카스피 표기상 45DC
-  if (kind === 'RF') return len + (high ? 'RH' : 'RF');
-  return len + kind;
+  const t = normalizeCntrType(iso);
+  if (t.kind === 'GP') return t.len + (t.len === '45' ? 'DC' : (t.high ? 'HC' : 'DC'));   // 45피트는 카스피 표기상 45DC
+  if (t.kind === 'RF') return t.len + (t.high ? 'RH' : 'RF');
+  return t.len + t.kind;
 }
 
 // ── 카스피 ASC($604) 생성 — 업로드 샘플 TNJP26349W.ASC(카스피 산출물)와 바이트 단위 동일 형식 ──
-//   고정폭 198자 + CRLF. 컬럼: 위치6 / 컨번호11(7) / POD3(19) / POL3+POD3(27) / 타입4+중량백kg3+FE(44)
+//   고정폭 198자 + CRLF. 컬럼: 위치6 / 컨번호11(7) / 선사LINE3(19) / POL3+POD3(27) / 타입4+중량백kg3+FE(44)
 //   / 온도(56, 값×10+'C') / 위험물참조4(60) / 중량kg5(87) / POL5+POD5(188). 하단 IMDG 목록.
+//   V8.95: 19열은 POD가 아니라 선사 코드(실측 SWDN2603S: HSL·NSL — TNJP는 선사 LYG=POD LYG 우연 일치였음).
 export function buildActualAsc(rows, meta = {}) {
   const W = 198;
   const num = (v, n) => String(Math.max(0, Math.round(Number(v) || 0))).padStart(n, '0');
@@ -147,18 +198,24 @@ export function buildActualAsc(rows, meta = {}) {
     const w100 = num(Math.floor(wtKg / 100) + (rem > 50 || (rem === 50 && Math.floor(wtKg / 100) % 2 === 1) ? 1 : 0), 3);
     const fe = r.fe === 'E' ? 'E' : 'F';
     let dgRef = '';
-    if (r.dgc || r.un) { dgList.push(r); dgRef = num(dgList.length, 4); }
+    const dgs = Array.isArray(r.dgs) && r.dgs.length ? r.dgs : (r.dgc || r.un ? [{ dgc: r.dgc, un: r.un }] : []);
+    if (dgs.length) { dgList.push(dgs); dgRef = num(dgList.length, 4); }
     const hasTmp = r.tmp !== '' && r.tmp != null && String(r.tmp).trim() !== '';
     const tmpTxt = hasTmp ? String(Math.round(parseFloat(r.tmp) * 10)) + 'C' : '';
-    out.push(line([[0, pos], [7, r.cn], [19, pod3], [27, pol3 + pod3], [44, ascTypeCode(r.iso) + w100 + fe],
+    const op3 = String(r.op || '').toUpperCase().slice(0, 3);
+    out.push(line([[0, pos], [7, r.cn], [19, op3], [27, pol3 + pod3], [44, ascTypeCode(r.iso) + w100 + fe],
                    [56, tmpTxt], [60, dgRef], [87, num(r.wt, 5)], [188, pol5 + pod5]]));
   }
   out.push(line([[0, '***Refer to the following remark.']]));
   out.push(line([[0, '***Refer to the following IMDG.']]));
-  dgList.forEach((r, i) => {
-    const cls = String(r.dgc || '').replace('.', '').padStart(3, '0');
-    const un = String(r.un || '').padStart(4, '0');
-    out.push(line([[0, num(i + 1, 4) + cls + ' ' + un + '00000']]));
+  dgList.forEach((dgs, i) => {
+    // 실측(SWDN2603S): 참조4 + 순번2 + 주클래스1 + 보조숫자1(없으면 공백) + UN4 + '00000'
+    //   예: 3→'003 3272', 6.1→'00612810', 4.1→'00411325' — 한 컨에 여러 위험물이면 순번 00,01,02…
+    dgs.forEach((d, j) => {
+      const [major, sub] = String(d.dgc || '0').split('.');
+      const un = String(d.un || '').padStart(4, '0');
+      out.push(line([[0, num(i + 1, 4) + num(j, 2) + (major || '0').slice(-1) + (sub ? sub[0] : ' ') + un + '00000']]));
+    });
   });
   out.push(line([[0, '***Refer to the following VGM remark.']]));
   return out.join('\r\n') + '\r\n';
