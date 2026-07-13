@@ -93,6 +93,77 @@ export function buildActualBaplie(rows, meta = {}) {
   return segs.join("'\n") + "'";
 }
 
+// ── 카스피 ASC($604) 타입코드 — ISO(구형 숫자 '2200'/'4530'/'9500'·신형 '45G1'·엠티 정규화 '450E') → 40HC/20DC/40RH/20RF/45DC/OT/FR/TK ──
+export function ascTypeCode(iso) {
+  const s = String(iso || '').toUpperCase();
+  const c1 = s[0] || '', c2 = s[1] || '', c3 = s[2] || '';
+  const len = c1 === '2' ? '20' : c1 === '4' ? '40' : (c1 === '9' || c1 === 'L' || c1 === 'M') ? '45' : '20';
+  // 종류: 구형 3번째 숫자(3·4=리퍼, 5=오픈탑, 6=플랫, 7=탱크) / 신형 3번째 문자(R·H=리퍼, U=오픈탑, P=플랫, T=탱크)
+  const kind = (c3 === '3' || c3 === '4' || c3 === 'R' || c3 === 'H') ? 'RF'
+    : (c3 === '5' || c3 === 'U') ? 'OT'
+    : (c3 === '6' || c3 === 'P') ? 'FR'
+    : (c3 === '7' || c3 === 'T') ? 'TK' : 'GP';
+  const high = c2 === '4' || c2 === '5' || c2 === '6';   // 9'0/9'6 이상
+  if (kind === 'GP') return len + (len === '45' ? 'DC' : (high ? 'HC' : 'DC'));   // 45피트는 카스피 표기상 45DC
+  if (kind === 'RF') return len + (high ? 'RH' : 'RF');
+  return len + kind;
+}
+
+// ── 카스피 ASC($604) 생성 — 업로드 샘플 TNJP26349W.ASC(카스피 산출물)와 바이트 단위 동일 형식 ──
+//   고정폭 198자 + CRLF. 컬럼: 위치6 / 컨번호11(7) / POD3(19) / POL3+POD3(27) / 타입4+중량백kg3+FE(44)
+//   / 온도(56, 값×10+'C') / 위험물참조4(60) / 중량kg5(87) / POL5+POD5(188). 하단 IMDG 목록.
+export function buildActualAsc(rows, meta = {}) {
+  const W = 198;
+  const num = (v, n) => String(Math.max(0, Math.round(Number(v) || 0))).padStart(n, '0');
+  const line = (fields) => {
+    const buf = new Array(W).fill(' ');
+    for (const [at, text] of fields) {
+      const t = String(text ?? '');
+      for (let i = 0; i < t.length && at + i < W; i++) buf[at + i] = t[i];
+    }
+    return buf.join('');
+  };
+  const now = new Date();
+  const p2 = (n) => String(n).padStart(2, '0');
+  const yymmdd = p2(now.getFullYear() % 100) + p2(now.getMonth() + 1) + p2(now.getDate());
+  const shipCode = String(meta.shipCode || meta.vsl || 'XXXX').toUpperCase().slice(0, 4).padEnd(4, ' ');
+  const vslName = String(meta.vslFull || meta.vsl || '').toUpperCase().slice(0, 20);
+  const voy = String(meta.voy || '').toUpperCase().slice(0, 12);
+  const pol5 = 'KRPTK', pol3 = 'PTK';
+
+  const out = [];
+  out.push(line([[0, '$604' + shipCode], [8, '/'], [9, vslName], [29, '/'], [30, voy], [42, '/'],
+                 [55, '/POL:' + pol3], [63, '/'], [64, yymmdd], [72, '/RECORD=' + num(rows.length, 4)], [84, '/']]));
+  out.push(line([[0, '$609PORT ROTATION/']]));
+
+  const dgList = [];
+  for (const r of rows) {
+    const pos = num(r.bay, 2) + num(r.row, 2) + num(r.tier, 2);
+    const pod5 = String(r.pod || '').toUpperCase();
+    const pod3 = pod5.slice(-3);
+    // 백kg 자리: 카스피 실측(샘플 대조)은 .5에서 짝수 쪽 반올림(banker's) — 5650→056, 12450→124, 4155→042
+    const wtKg = Math.max(0, Math.round(Number(r.wt) || 0));
+    const rem = wtKg % 100;
+    const w100 = num(Math.floor(wtKg / 100) + (rem > 50 || (rem === 50 && Math.floor(wtKg / 100) % 2 === 1) ? 1 : 0), 3);
+    const fe = r.fe === 'E' ? 'E' : 'F';
+    let dgRef = '';
+    if (r.dgc || r.un) { dgList.push(r); dgRef = num(dgList.length, 4); }
+    const hasTmp = r.tmp !== '' && r.tmp != null && String(r.tmp).trim() !== '';
+    const tmpTxt = hasTmp ? String(Math.round(parseFloat(r.tmp) * 10)) + 'C' : '';
+    out.push(line([[0, pos], [7, r.cn], [19, pod3], [27, pol3 + pod3], [44, ascTypeCode(r.iso) + w100 + fe],
+                   [56, tmpTxt], [60, dgRef], [87, num(r.wt, 5)], [188, pol5 + pod5]]));
+  }
+  out.push(line([[0, '***Refer to the following remark.']]));
+  out.push(line([[0, '***Refer to the following IMDG.']]));
+  dgList.forEach((r, i) => {
+    const cls = String(r.dgc || '').replace('.', '').padStart(3, '0');
+    const un = String(r.un || '').padStart(4, '0');
+    out.push(line([[0, num(i + 1, 4) + cls + ' ' + un + '00000']]));
+  });
+  out.push(line([[0, '***Refer to the following VGM remark.']]));
+  return out.join('\r\n') + '\r\n';
+}
+
 // ── 수정용 엑셀 (왕복 규격 — 헤더 고정) ──
 const EXCEL_HEADERS = ['NO', 'CNTR NO', 'ISO', 'F/E', 'LINE', 'POL', 'POD', 'BAY', 'ROW', 'TIER', 'WEIGHT(KG)', 'SEAL', 'TEMP', 'DG CLASS', 'UN NO'];
 

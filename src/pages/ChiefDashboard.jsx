@@ -4,7 +4,7 @@ import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDelet
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
-import { collectActualLoading, buildActualBaplie, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
+import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
 import { isChief } from '../staffList.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
@@ -973,6 +973,19 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
     if (!got) return;
     downloadText(`${got.meta.vsl}_${got.meta.voy}_ACTUAL_BAPLIE.edi`, buildActualBaplie(got.rows, got.meta));
   };
+  // V8.94: 실선적 ASC(카스피 $604) — 선박코드는 기본 검수앱 코드, 저장 전 입력창에서 수정 가능(선박별 기억).
+  const exportActualAsc = (row) => {
+    const got = _collectOrWarn(row);
+    if (!got) return;
+    const lsKey = 'ascShipCode_' + got.meta.vsl;
+    let saved = '';
+    try { saved = localStorage.getItem(lsKey) || ''; } catch { /* 무시 */ }
+    const input = window.prompt('ASC 선박코드(4자)\n기본은 검수앱 코드입니다. 카스피 코드가 따로 있으면 고쳐 주세요.', saved || got.meta.vsl);
+    if (input == null) return;
+    const shipCode = (input.trim().toUpperCase() || got.meta.vsl).slice(0, 4);
+    try { localStorage.setItem(lsKey, shipCode); } catch { /* 무시 */ }
+    downloadText(`${got.meta.vsl}${got.meta.voy}.ASC`, buildActualAsc(got.rows, { ...got.meta, shipCode }));
+  };
   const exportEditExcel = async (row) => {
     const got = _collectOrWarn(row);
     if (!got) return;
@@ -1076,6 +1089,9 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
                     <button onClick={(e) => { e.stopPropagation(); exportActualEdi(r); }}
                       className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
                       title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 카스피에서 읽을 수 있습니다.">실선적 EDI</button>
+                    <button onClick={(e) => { e.stopPropagation(); exportActualAsc(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
+                      title="실선적 ASC 내려받기 — 카스피와 같은 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
                     <button onClick={(e) => { e.stopPropagation(); exportEditExcel(r); }}
                       className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
                       title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
