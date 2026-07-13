@@ -41,6 +41,33 @@ function isSpecialMark(mark) {
          m.startsWith('R') || m === 'FR' || m === 'T' || m === 'A';
 }
 
+// V8.88: 20피트 판정 — iso 앞자리(2x=20ft), 없으면 베이 홀수 폴백. 엠티 마커 ⓔ/Ⓔ 분기용.
+function _is20ft(c) {
+  const iso = String(c.iso || '').trim();
+  if (iso) return /^2/.test(iso);
+  const b = parseInt(c.bay, 10);
+  return Number.isFinite(b) ? (b % 2 === 1) : false;
+}
+
+// V8.88: 엠티 마커 여부(일반 엠티 e/E — 리퍼 R/E는 기존 표기 유지, 사용자 확정 2026-07-13).
+function isMtMark(m) {
+  return m === 'e' || m === 'E' || m === 'R/E';
+}
+
+// V8.88: 엠티 셀 배경 = 그 컨의 포트(선적)/선사(양하) 색을 연하게(파스텔) — 풀/엠티 구역이 면으로 구분.
+//   hex(#rrggbb)는 투명도, hsl(자동 생성색)은 명도 상향. 인쇄는 print-color-adjust:exact로 유지.
+function pastelOf(col) {
+  const s = String(col || '').trim();
+  const m = /^#([0-9a-f]{6})$/i.exec(s);
+  if (m) {
+    const n = parseInt(m[1], 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.18)`;
+  }
+  const h = /^hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)$/i.exec(s);
+  if (h) return `hsl(${h[1]}, ${h[2]}%, 88%)`;
+  return '#eef2f7';
+}
+
 function getMarkV2(c, pod, mode) {
   // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
   //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 조회됨)
@@ -60,8 +87,8 @@ function getMarkV2(c, pod, mode) {
 
   // 통과화물: 특수면 글자만 (회색 배경은 cell render), 일반은 빈
   if (!ptk) return specialLetter || '';
-  // PTK: 특수면 특수글자, 일반이면 F/E
-  return specialLetter || (isEmpty ? 'E' : 'F');
+  // PTK: 특수면 특수글자, 일반이면 F / 엠티는 ⓔ(20ft)·Ⓔ(40/45ft) — E·F 오독 방지(V8.88, 사용자 요청 2026-07-13)
+  return specialLetter || (isEmpty ? (_is20ft(c) ? 'e' : 'E') : 'F');
 }
 
 // ------------------------------------------------------------
@@ -106,6 +133,9 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-mark-A { color: #4a148c; }
 .cpv2-cell.cpv2-mark-T { color: #e65100; }
 .cpv2-cell.cpv2-mark-E { color: #555; }
+.cpv2-cell.cpv2-mark-e { color: #555; }
+/* V8.88: 엠티 마커 동그라미 — ⓔ(20ft)·Ⓔ(40/45ft). E·F 오독 방지(사용자 요청 2026-07-13) */
+.cpv2-mtc { display: inline-flex; align-items: center; justify-content: center; font-size: 0.7em; width: 1.43em; height: 1.43em; padding-bottom: 0.08em; border: 1px solid currentColor; border-radius: 50%; line-height: 1; box-sizing: border-box; }  /* padding-bottom = 글자 정중앙 보정(-0.04em 상향, 사용자 확정) */  /* 동그라미 외경 ≈ 풀(F) 폰트 크기, 글자는 그 안에(사용자 확정) */
 .cpv2-cell.cpv2-mark-L { color: #1565c0; }
 .cpv2-cell.cpv2-mark-K { color: #0d47a1; }
 .cpv2-cell.cpv2-mark-P { color: #6a1b9a; }
@@ -256,6 +286,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
                       style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
+                      if (isMtMark(cell.mark)) style.background = pastelOf(bg);   // V8.88: 엠티 = 연한 파스텔 배경(풀/엠티 구역 구분)
+                    } else if (isMtMark(cell.mark)) {
+                      style = { background: '#eef2f7' };                          // V8.88: 색 없는 엠티도 옅은 음영
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -264,7 +297,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
-                        {displayMark}
+                        {(displayMark === 'e' || displayMark === 'E')
+                          ? <span className="cpv2-mtc">{displayMark}</span>   /* V8.88: 엠티 동그라미 ⓔ/Ⓔ */
+                          : displayMark}
                       </span>
                     );
                   })}
@@ -313,6 +348,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
                       style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
+                      if (isMtMark(cell.mark)) style.background = pastelOf(bg);   // V8.88: 엠티 = 연한 파스텔 배경(풀/엠티 구역 구분)
+                    } else if (isMtMark(cell.mark)) {
+                      style = { background: '#eef2f7' };                          // V8.88: 색 없는 엠티도 옅은 음영
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -321,7 +359,9 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
-                        {displayMark}
+                        {(displayMark === 'e' || displayMark === 'E')
+                          ? <span className="cpv2-mtc">{displayMark}</span>   /* V8.88: 엠티 동그라미 ⓔ/Ⓔ */
+                          : displayMark}
                       </span>
                     );
                   })}
@@ -771,6 +811,7 @@ export default function PrintableCargoPlanV2({
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
+          <div className="col" style={{ fontSize: 8, color: '#555' }}>Ⓔ=엠티(소문자 e=20ft) · 연한배경=엠티 구역</div>
           <div className="col">DATE : {today}</div>
         </div>
         {dictData && dictData._substituted && (
