@@ -4,6 +4,7 @@ import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDelet
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
+import { collectActualLoading, buildActualBaplie, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
 import { isChief } from '../staffList.js';
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
@@ -948,6 +949,66 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
     setBusyKey(null); setConfirmKey(null);
   };
 
+  // ── V8.93: 실선적 EDI(표준 BAPLIE) + 수정용 엑셀 왕복 (사용자 확정 2026-07-13) ──
+  //   범위 = 평택 선적분(실체 위치 우선). 선적확인된 컨 우선 — 완료 0이면 전체(확인창).
+  const ediFileRef = React.useRef(null);
+  const [ediUpKey, setEdiUpKey] = useState(null);
+  const _ediMeta = (key, v) => {
+    const info = (v && v.info) || {};
+    return { vsl: info.vsl || key.split('_')[0] || 'VSL', vslFull: info.vslFull || '',
+             voy: info.voy_l || info.voy || '', callsign: info.callsign || '', imo: info.imo || '',
+             carrier: info.carrier || '' };
+  };
+  const _collectOrWarn = (row) => {
+    const v = voyages[row.key];
+    if (!v) return null;
+    const got = collectActualLoading(v);
+    if (!got.rows.length) { alert('평택 선적분 자료가 없습니다.'); return null; }
+    if (!got.useDoneOnly && !window.confirm(
+      `선적확인(완료)된 컨이 아직 없습니다.\n전체 평택 선적분 ${got.totalPtk}대 기준으로 만들까요?`)) return null;
+    return { ...got, meta: _ediMeta(row.key, v) };
+  };
+  const exportActualEdi = (row) => {
+    const got = _collectOrWarn(row);
+    if (!got) return;
+    downloadText(`${got.meta.vsl}_${got.meta.voy}_ACTUAL_BAPLIE.edi`, buildActualBaplie(got.rows, got.meta));
+  };
+  const exportEditExcel = async (row) => {
+    const got = _collectOrWarn(row);
+    if (!got) return;
+    try {
+      const buf = await buildEditExcel(got.rows, got.meta);
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${got.meta.vsl}_${got.meta.voy}_EDIT.xlsx`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      alert('엑셀 생성 실패: ' + (e && e.message || e));
+    }
+  };
+  const startExcelToEdi = (row) => {
+    setEdiUpKey(row.key);
+    if (ediFileRef.current) { ediFileRef.current.value = ''; ediFileRef.current.click(); }
+  };
+  const onExcelpicked = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    const key = ediUpKey;
+    setEdiUpKey(null);
+    if (!file || !key) return;
+    try {
+      const { rows, errors } = await parseEditExcel(await file.arrayBuffer());
+      if (!rows.length) { alert('엑셀에서 컨테이너를 읽지 못했습니다.\n' + errors.join('\n')); return; }
+      if (errors.length && !window.confirm(`형식 경고 ${errors.length}건:\n` + errors.slice(0, 8).join('\n') + '\n\n그래도 EDI를 만들까요?')) return;
+      const meta = _ediMeta(key, voyages[key] || {});
+      downloadText(`${meta.vsl}_${meta.voy}_ACTUAL_BAPLIE_수정본.edi`, buildActualBaplie(rows, meta));
+      alert(`수정본 EDI 생성 완료 — ${rows.length}대 (엑셀 기준)`);
+    } catch (err) {
+      alert('엑셀 읽기 실패: ' + (err && err.message || err));
+    }
+  };
+
   return (
     <div className="bg-slate-900 border border-cyan-800/40 rounded-xl p-3 mt-3">
       <div className="flex items-center gap-2 mb-2">
@@ -956,6 +1017,8 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
           진행 상황 ({rows.length}척 작업 중)
         </div>
       </div>
+      {/* V8.93: 엑셀→EDI 업로드용 숨은 파일 선택 */}
+      <input ref={ediFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onExcelpicked} />
       {rows.length === 0 ? (
         <div className="text-center text-slate-500 text-xs py-6">현재 작업 중인 항차가 없습니다.</div>
       ) : (
@@ -1007,6 +1070,20 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
               <div className="flex items-center gap-3 mt-1 text-xs">
                 <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
                 <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
+                {/* V8.93: 실선적 EDI(표준 BAPLIE)·수정용 엑셀·엑셀→EDI 재생성 — 선적분 있을 때만 */}
+                {r.loading > 0 && (
+                  <span className="flex items-center gap-1 ml-auto">
+                    <button onClick={(e) => { e.stopPropagation(); exportActualEdi(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
+                      title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 카스피에서 읽을 수 있습니다.">실선적 EDI</button>
+                    <button onClick={(e) => { e.stopPropagation(); exportEditExcel(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
+                      title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
+                    <button onClick={(e) => { e.stopPropagation(); startExcelToEdi(r); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 font-bold"
+                      title="수정한 엑셀을 선택하면 수정본 EDI 파일을 만들어 내려줍니다.">엑셀→EDI</button>
+                  </span>
+                )}
                 {r.inspectorDone && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
                 )}
