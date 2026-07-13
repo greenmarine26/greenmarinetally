@@ -371,6 +371,11 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
               if (tierMap.has(rowLbl)) continue;
               if (is40OrMore) {
                 tierMap.set(rowLbl, 'X');
+                // V8.89: 인접 40ft 점유 표시(X) 셀에도 색·통과 태그 상속 — 같은 통과 컨이
+                //   쌍 박스에선 회색인데 단독 박스에선 흰 배경 검정 X로 갈라지던 비일관(사용자 보고 2026-07-13).
+                //   평택분 X는 선사/포트 색 글자, 통과분 X는 회색 배경(쌍 박스와 동일 규칙).
+                tagColor(c, tier, rowLbl);
+                tagThrough(c, tier, rowLbl);
               } else {
                 // 20ft 짝수: 셀 자리 차지 + 회색 (마크 없음)
                 ensureShadow20Tier(tier).set(rowLbl, true);
