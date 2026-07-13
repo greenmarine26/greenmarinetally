@@ -348,7 +348,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       done += v.totalDone;
       all += v.totalAll;
       ptkAll += v.dis.ptk + v.loa.ptk;
-      missing += v.dis.missing + v.loa.missing;
+      // V8.90: 예상 EDI(리스트와 매칭 0) 항차의 '누락'은 허수 — 합계에서 제외(SWDN 2608S 사건)
+      missing += (v.dis.forecastEdi ? 0 : v.dis.missing) + (v.loa.forecastEdi ? 0 : v.loa.missing);
     });
     return { done, all, ptkAll, missing };
   }, [voyageStats]);
@@ -1295,7 +1296,9 @@ function MiniBar({ label, color, stats }) {
         <div className={`${map[color].bar} h-full`} style={{ width: `${pct}%` }}/>
       </div>
       <span className="text-slate-400 w-16 text-right">{stats.done}/{stats.total}</span>
-      {stats.missing > 0 && <span className="text-red-400 w-12 text-right">누락 {stats.missing}</span>}
+      {stats.forecastEdi
+        ? <span className="text-orange-300 text-right" title="EDI 컨번호가 리스트와 하나도 일치하지 않음 — 예상(프리스토우) EDI. 확정 EDI 대기.">예상EDI</span>
+        : stats.missing > 0 && <span className="text-red-400 w-12 text-right">누락 {stats.missing}</span>}
     </div>
   );
 }
@@ -1328,5 +1331,8 @@ function computeStats(section, mode) {
   const missing = ptkCns.size - matched;
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
-  return { total, done, ptk: ptkCns.size, matched, missing };
+  // V8.90: 예상 EDI 판정(홈 카드와 동일 규칙) — 리스트가 있는데 매칭 0이면 예상(프리스토우) EDI.
+  const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));
+  const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;
+  return { total, done, ptk: ptkCns.size, matched, missing, forecastEdi };
 }
