@@ -35,9 +35,13 @@ export function collectActualLoading(voyage) {
     const row = String(c.bay_actual && c.bay_actual !== '__STG__' ? (c.row_actual || '') : (c.row || '')).trim();
     const tier = String(c.bay_actual && c.bay_actual !== '__STG__' ? (c.tier_actual || '') : (c.tier || '')).trim();
     return {
-      cn: c.cn, iso: (c.iso || '').toUpperCase(), fe: c.fe === 'E' ? 'E' : 'F',
+      cn: c.cn,
+      iso: (c.iso_orig_parsed || c.iso || '').toUpperCase(),   // 파서가 엠티 정규화한 경우 원본 ISO 우선 (왕복 보존)
+      fe: c.fe === 'E' ? 'E' : 'F',
       op: (c.op || '').toUpperCase(), pol: 'KRPTK', pod: (c.pod || '').toUpperCase(),
       npod: (c.npod || '').toUpperCase(), fpod: (c.fpod || '').toUpperCase(),
+      tspot: (c.tspot || '').toUpperCase(),                    // 환적항 (수신 EDI의 LOC+83 — 파서 보존값)
+      meaVgm: c.wtt ? c.wtt === 'VGM' : undefined,             // 수신 EDI의 MEA 종류 보존 (없으면 규칙으로 판정)
       bay, row, tier,
       wt: Number(c.wt) || 0, sl: c.sl || '', tmp: c.rf || c.tmp ? String(c.tmp ?? '') : '',
       dgc: c.dgc || '', un: c.un || '',
@@ -162,7 +166,8 @@ export function buildActualBaplie(rows, meta = {}) {
     segs.push(`LOC+9+${rpol}:139:6`);
     if (r.pod) segs.push(`LOC+11+${r.pod}:139:6`);
     if (r.npod) segs.push(`LOC+76+${r.npod}:139:6`);
-    if (r.fpod) segs.push(`LOC+83+${r.fpod}:139:6`);
+    const l83 = r.tspot || r.fpod;                             // 앱 파서는 LOC+83을 tspot(환적항)에 저장
+    if (l83) segs.push(`LOC+83+${l83}:139:6`);
     segs.push(r.rff || 'RFF+BM:1');
     const cnTxt = /^[A-Z]{4}\d{7}$/.test(r.cn) ? r.cn.slice(0, 4) + ' ' + r.cn.slice(4) : r.cn;   // 실측: 'KMTU 9321484'
     segs.push(`EQD+CN+${cnTxt}+${ediIso(r.iso)}+++${r.fe === 'E' ? '4' : '5'}`);
