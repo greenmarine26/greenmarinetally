@@ -1298,6 +1298,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         ediContainers={Object.values(ediMap)}
         records={Object.values(recMap)}
         mode={mode}
+        shiftCount={shiftingList.length}
       />
 
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2">

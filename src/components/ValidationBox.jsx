@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import { fmtPos, isPyeongtaekPort } from '../utils.js';
 
-export default function ValidationBox({ ediContainers, records, mode }) {
+export default function ValidationBox({ ediContainers, records, mode, shiftCount = 0 }) {
   const v = useMemo(() => {
     if (!ediContainers || ediContainers.length === 0) return null;
     const isPtk = (c) => {
@@ -61,7 +61,7 @@ export default function ValidationBox({ ediContainers, records, mode }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-center text-[11px] mb-2">
+      <div className={`grid ${shiftCount > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-center text-[11px] mb-2`}>
         <div className="bg-slate-800/60 rounded p-1.5">
           <div className="text-slate-500 text-[10px]">EDI 평택</div>
           <div className="text-amber-300 font-black mono">{v.ptkTotal}</div>
@@ -74,7 +74,21 @@ export default function ValidationBox({ ediContainers, records, mode }) {
           <div className="text-slate-500 text-[10px]">매칭</div>
           <div className="text-emerald-400 font-black mono">{v.matched}</div>
         </div>
+        {shiftCount > 0 && (
+          <div className="bg-blue-950/50 rounded p-1.5 border border-blue-800/40">
+            <div className="text-blue-300/80 text-[10px]">◆ 쉬프팅</div>
+            <div className="text-blue-300 font-black mono">{shiftCount}</div>
+          </div>
+        )}
       </div>
+      {/* V8.98-07: 총 작업 합계 — 쉬프팅(재적부)은 양하+재선적 실작업이라 청구 근거에 포함(사용자 확정 2026-07-14).
+          상세 목록은 리스트 하단 ◆ 박스 + 인쇄 검수리스트 [별첨2]. */}
+      {shiftCount > 0 && (
+        <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-[11px] text-blue-200 font-bold">
+          총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}
+          <span className="ml-1 font-normal text-blue-300/70">(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])</span>
+        </div>
+      )}
 
       {v.missingCount > 0 && (
         <div className="bg-red-950/40 border border-red-800/50 rounded p-2 mb-2">
