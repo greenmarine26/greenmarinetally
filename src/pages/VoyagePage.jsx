@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingFromVoyage } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingFromVoyage, ediMapFromRaw } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -179,13 +179,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   원칙: 베이플랜은 선박 적부도 = 모든 화물 표시. 평택 화물 0대 베이도 누락 X
   //   기존 containers는 평택만 (검색/통계/검수용)
   //   베이플랜에만 이 allEdiContainers 전달 → 어떤 EDI 와도 베이 누락 X
+  // V8.98-02: 베이플랜/카고플랜 소스 = raw EDI 전문(통과화물 포함). 저장본 키는 저장본 우선. raw 없으면 기존 ediMap.
+  const fullEdiMap = useMemo(() => {
+    const rawMap = ediMapFromRaw(sec);
+    return rawMap ? { ...rawMap, ...ediMap } : ediMap;
+  }, [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap]);
+
   const allEdiContainers = useMemo(() => {
     const merged = {};
     // V8.87-01: 컨번호 없는 실자리(터미널 PRE 등)가 merged['']로 1개로 붕괴하던 버그 수정.
     //   베이플랜 화면 인쇄(카고플랜 V2)가 이 목록을 쓰는데, 붕괴+_inList 누락으로 별첨이 35(pol 있는 34+팬텀 1)로 잘못 집계됐다.
     //   메인 병합(containers)과 동일하게 __SLOT_ 키로 개별 유지 + 대기 표식.
     let _slotSeq2 = 0;
-    Object.values(ediMap).forEach(c => {
+    Object.values(fullEdiMap).forEach(c => {
       if (c.cn) { merged[c.cn] = { ...c, _src: 'edi' }; return; }
       let k = `__SLOT_${c.bay || ''}_${c.row || ''}_${c.tier || ''}`;
       if (merged[k]) k = `${k}_${_slotSeq2++}`;
@@ -305,7 +311,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return list;
-  }, [ediMap, recMap, mode]);
+  }, [fullEdiMap, recMap, mode]);
 
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
   // M3.5.4-fix2: EDI = 단일 진실 원칙 강화

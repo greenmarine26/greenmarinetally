@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.98-01';   // 쉬프팅 검출을 raw EDI 원문 기반으로 — ediContainers엔 통과화물이 없음(수집기 등록 항차 실측) (2026-07-14)
+export const APP_VERSION = 'V8.98-02';   // 카고플랜/베이플랜 통과화물 표시 — 컨테이너 소스를 raw EDI 전문으로(수집기 등록 항차의 ediContainers엔 통과분 없음) (2026-07-14)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -2751,26 +2751,27 @@ export function computeShiftingMap(dischEdiMap, loadEdiMap) {
 //   실측(MAMP_626N, 2026-07-14): 수집기 등록 항차의 ediContainers에는 통과화물이 없어
 //   ediContainers끼리 대조하면 빈손. raw/edi.text(전체 BAPLIE)를 파싱해 대조한다.
 //   raw가 없거나 파싱 실패면 ediContainers로 폴백(하위호환 — 인앱 업로드 항차는 통과분 포함).
-export function computeShiftingFromVoyage(voyage) {
-  const mapOf = (sec) => {
-    const t = sec?.raw?.edi?.text;
-    if (t && typeof t === 'string' && t.length > 50) {
-      // 인앱 업로드는 여러 파일을 "----- FILE: 이름 -----" 구분자로 합쳐 저장 — 나눠 파싱, 컨 수 최다 파일 채택
-      const parts = t.includes('----- FILE: ') ? t.split(/^----- FILE: .*$/m).filter(x => x && x.trim()) : [t];
-      let best = null;
-      for (const part of parts) {
-        let conts = [];
-        try { conts = (parseBAPLIE(part) || {}).containers || []; } catch (e) { conts = []; }
-        if (!conts.length) {
-          try { conts = (parseAscFile(part) || {}).containers || []; } catch (e) { conts = []; }
-        }
-        const m = {};
-        for (const c of conts) if (c.cn && c.cn.length === 11) m[c.cn] = c;
-        if (!best || Object.keys(m).length > Object.keys(best).length) best = m;
-      }
-      if (best && Object.keys(best).length) return best;
+// V8.98-02: {mode} 섹션의 raw EDI 원문을 파싱해 전체 컨테이너 맵(cn→컨)을 만든다.
+//   raw 없거나 파싱 실패면 null. 인앱 합본 저장("----- FILE: x -----" 구분자)은 나눠 파싱해 컨 수 최다 파일 채택.
+export function ediMapFromRaw(sec) {
+  const t = sec?.raw?.edi?.text;
+  if (!t || typeof t !== 'string' || t.length <= 50) return null;
+  const parts = t.includes('----- FILE: ') ? t.split(/^----- FILE: .*$/m).filter(x => x && x.trim()) : [t];
+  let best = null;
+  for (const part of parts) {
+    let conts = [];
+    try { conts = (parseBAPLIE(part) || {}).containers || []; } catch (e) { conts = []; }
+    if (!conts.length) {
+      try { conts = (parseAscFile(part) || {}).containers || []; } catch (e) { conts = []; }
     }
-    return sec?.ediContainers || null;
-  };
+    const m = {};
+    for (const c of conts) if (c.cn && c.cn.length === 11) m[c.cn] = c;
+    if (!best || Object.keys(m).length > Object.keys(best).length) best = m;
+  }
+  return (best && Object.keys(best).length) ? best : null;
+}
+
+export function computeShiftingFromVoyage(voyage) {
+  const mapOf = (sec) => ediMapFromRaw(sec) || sec?.ediContainers || null;
   return computeShiftingMap(mapOf(voyage?.discharge), mapOf(voyage?.loading));
 }

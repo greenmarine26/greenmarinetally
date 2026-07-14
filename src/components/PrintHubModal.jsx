@@ -10,7 +10,7 @@ import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingFromVoyage } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingFromVoyage, ediMapFromRaw } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -29,6 +29,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   const recMap = sec.records || {};
   const compMap = sec.completed || {};
   const xrayMap = sec.xrayList || {};
+  // V8.98-02: 카고플랜/베이상세는 선박 전체 적부도 — 수집기 등록 항차의 ediContainers엔 통과화물이 없어
+  //   raw EDI 전문을 파싱해 전체 컨을 쓴다(저장본이 있는 키는 저장본 우선 — _slotKey 등 보존). raw 없으면 기존 그대로.
+  const fullEdiMap = useMemo(() => {
+    const rawMap = ediMapFromRaw(sec);
+    return rawMap ? { ...rawMap, ...ediMap } : ediMap;
+  }, [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap]);
   // V8.98-01: 쉬프팅(재적부) — raw EDI 원문 기반 대조 (ediContainers엔 통과화물 없음).
   //   uploadedAt 기준 메모 — 스냅샷마다 300KB 재파싱 방지.
   const shiftingMap = useMemo(
@@ -61,11 +67,11 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     'pol', 'pod', 'npod', 'fpod', 'bay', 'row', 'tier', 'pos',
     'iso', 'fe', 'rf', 'fr', 'ot', 'tk', 'dg', 'oog', 'voy', 'vsl',
   ]);
-  const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+  const allCnSet = new Set([...Object.keys(fullEdiMap), ...Object.keys(recMap)]);
   const allContainers = [...allCnSet].map(cn => {
-    const e = ediMap[cn] || {};
+    const e = fullEdiMap[cn] || {};
     const r = recMap[cn] || {};
-    const hasEdi = !!ediMap[cn];
+    const hasEdi = !!fullEdiMap[cn];
     const merged = { ...e };
     Object.entries(r).forEach(([k, v]) => {
       if (v === '' || v == null) return;
