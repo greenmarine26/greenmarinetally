@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.98-02';   // 카고플랜/베이플랜 통과화물 표시 — 컨테이너 소스를 raw EDI 전문으로(수집기 등록 항차의 ediContainers엔 통과분 없음) (2026-07-14)
+export const APP_VERSION = 'V8.98-04';   // 홈 카드 쉬프팅 N + 별첨 가상컨(DUME) 잔재 제외 + 콘앱 쉬프팅 컨번호 공백 수정 (2026-07-14)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -2774,4 +2774,25 @@ export function ediMapFromRaw(sec) {
 export function computeShiftingFromVoyage(voyage) {
   const mapOf = (sec) => ediMapFromRaw(sec) || sec?.ediContainers || null;
   return computeShiftingMap(mapOf(voyage?.discharge), mapOf(voyage?.loading));
+}
+
+// V8.98-03: 쉬프팅 계산 모듈 캐시 — 홈 카드(항차 여러 장)·항차 화면·출력허브가 공유.
+//   raw EDI(양하 150KB+선적 150KB) 파싱은 무겁고, Firebase 스냅샷은 records 틱마다 갱신되므로
+//   raw 업로드 시각·크기(+ediContainers 개수 폴백)로 서명해 변화 없으면 재파싱하지 않는다.
+const _shiftMapCache = new Map();   // voyageKey → { sig, map }
+export function computeShiftingMapCached(voyageKey, voyage) {
+  if (!voyage) return {};
+  const d = voyage?.discharge, l = voyage?.loading;
+  const sig = [
+    d?.raw?.edi?.uploadedAt || 0, d?.raw?.edi?.sizeBytes || 0,
+    l?.raw?.edi?.uploadedAt || 0, l?.raw?.edi?.sizeBytes || 0,
+    Object.keys(d?.ediContainers || {}).length, Object.keys(l?.ediContainers || {}).length,
+  ].join('|');
+  const key = voyageKey || 'unknown';
+  const hit = _shiftMapCache.get(key);
+  if (hit && hit.sig === sig) return hit.map;
+  const map = computeShiftingFromVoyage(voyage);
+  if (_shiftMapCache.size > 60) _shiftMapCache.clear();   // 폭주 방지(항차 수보다 넉넉)
+  _shiftMapCache.set(key, { sig, map });
+  return map;
 }

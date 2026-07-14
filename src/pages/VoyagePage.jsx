@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingFromVoyage, ediMapFromRaw } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -164,7 +164,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const compMap = sec.completed || {};
   // V8.98-01: 쉬프팅(재적부) — raw EDI 원문 기반 대조 (ediContainers엔 통과화물 없음, MAMP 실측).
   const shiftingMap = useMemo(
-    () => computeShiftingFromVoyage(voyage),
+    () => computeShiftingMapCached(voyageKey, voyage),
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]
   );
@@ -182,7 +182,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // V8.98-02: 베이플랜/카고플랜 소스 = raw EDI 전문(통과화물 포함). 저장본 키는 저장본 우선. raw 없으면 기존 ediMap.
   const fullEdiMap = useMemo(() => {
     const rawMap = ediMapFromRaw(sec);
-    return rawMap ? { ...rawMap, ...ediMap } : ediMap;
+    if (!rawMap) return ediMap;
+    // V8.98-04: raw(확정 EDI 전문)가 있으면 그것이 단일 진실.
+    //   raw에 있는 키 = 저장본 필드 우선 병합(기존 동작). raw에 없는 저장본 키는
+    //   실번호 형식(4영문+7숫자)이면 구판/가상(예: MAMP DUME 더미, pol=PTK) 잔재로 보고 표시에서 제외 —
+    //   별첨·카고플랜이 평택 선적분으로 잘못 집계하던 원인. 컨번호 없는 자리(__SLOT_ 부킹 등)는 보존.
+    const m = { ...rawMap };
+    for (const [k, v] of Object.entries(ediMap)) {
+      if (rawMap[k]) { m[k] = { ...rawMap[k], ...v }; continue; }
+      if (!/^[A-Z]{4}\d{7}$/.test(String(k))) m[k] = v;
+    }
+    return m;
   }, [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap]);
 
   const allEdiContainers = useMemo(() => {

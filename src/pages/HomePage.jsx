@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 
@@ -708,6 +708,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
 
   const disStats = computeStats(dis, 'discharge');
   const loaStats = computeStats(loa, 'loading');
+  // V8.98-03: 쉬프팅(재적부) 개수 — 양하·선적 공통(같은 기항의 재적부 컨). 캐시라 스냅샷 틱에도 가벼움.
+  const shiftCount = Object.keys(computeShiftingMapCached(voyage.key, voyage) || {}).length;
+  if (shiftCount > 0) { disStats.shiftCount = shiftCount; loaStats.shiftCount = shiftCount; }
 
   // M5.82: 부두 정보 (voyage._pier가 HomePage에서 채워짐)
   const pier = voyage._pier || '';
@@ -896,6 +899,12 @@ function SectionBar({ label, color, stats, onClick }) {
             <span className="text-slate-400">평택 <span className={`${stats.matched > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.ptk}</span></span>
             <span className="text-slate-600">·</span>
             <span className="text-slate-400">매칭 {stats.matched > 0 ? <span className="text-emerald-300 font-bold">{stats.matched}</span> : stats.matched}</span>
+          </>
+        )}
+        {stats.shiftCount > 0 && (
+          <>
+            <span className="text-slate-600">·</span>
+            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 플랜상 선내 위치가 바뀐 통과화물. 양하·선적 공통 개수, 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount}</span>
           </>
         )}
         {stats.virtual && (

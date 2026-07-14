@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.98-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V8.98-04</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -1590,8 +1590,9 @@ async function loadCargoPlanV2(){
 }
 // parseEDI row → 본체 컨테이너 형식
 function rowsToContainers(rows){
+  // V8.98-04: 컨번호 내부 공백 제거("MSKU 9788795" → "MSKU9788795") — 쉬프팅 ◆ 매칭·리스트 병합용.
   return (rows||[]).map(r=>({
-    cn:r.cn, bay:String(r.bay), row:String(r.row), tier:String(r.tier).padStart(2,'0'),
+    cn:String(r.cn||'').replace(/[\s-]/g,'').toUpperCase(), bay:String(r.bay), row:String(r.row), tier:String(r.tier).padStart(2,'0'),
     iso:r.iso, fe:r.fe||'F', pol:r.pol||'', pod:r.pod||'',
     dg:!!r.dg, fr:!!r.fr, ot:!!r.ot, tmp:r.temp!=null?String(r.temp):'',
   }));
@@ -1647,15 +1648,17 @@ async function openCargoPlanV2(mode){
         const b=String(parseInt(r.bay,10)); if(!b||b==='NaN') return '';
         return b.padStart(3,'0')+String(r.row).padStart(2,'0')+String(r.tier).padStart(2,'0'); };
       const _dRows = _pick(state.disch), _lRows = _pick(state.stow);
+      // V8.98-04: 콘앱 파서는 EQD 컨번호의 내부 공백("MSKU 9788795")을 제거하지 않음 — 정규화 후 대조.
+      const _cnOf = (r)=>String(r&&r.cn||'').replace(/[\s-]/g,'').toUpperCase();
       const _lBy = {};
-      for(const r of _lRows){ if(r.cn && String(r.cn).length===11) _lBy[r.cn]=r; }
+      for(const r of _lRows){ const k=_cnOf(r); if(k.length===11) _lBy[k]=r; }
       for(const d of _dRows){
-        const cn = d.cn; if(!cn || String(cn).length!==11 || String(cn).startsWith('__')) continue;
+        const cn = _cnOf(d); if(cn.length!==11 || cn.startsWith('__')) continue;
         const l = _lBy[cn]; if(!l) continue;
         if(!d.pod || _isPtkCode(d.pod)) continue;   // 통과화물만 (양하측 POD 평택 아님)
         if(!l.pol || _isPtkCode(l.pol)) continue;   // 선적측 POL 평택 아님
         const from=_posOf(d), to=_posOf(l);
-        if(from && to && from!==to) shiftingMap[cn]={from,to};
+        if(from && to && from!==to) shiftingMap[cn]={from,to};   // 키=정규화 컨번호(공백 제거)
       }
     }catch(e){ shiftingMap = {}; }
     window.ConeCargoPlan.open({
