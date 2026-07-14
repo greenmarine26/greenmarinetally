@@ -1345,6 +1345,26 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         inspector={inspector}
         onOpenContainer={onOpenContainer}
       />
+
+      {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
+      {shiftingList.length > 0 && (
+        <div className="mt-3 bg-slate-900 border border-blue-800/50 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5">
+            <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
+          </div>
+          <div className="divide-y divide-slate-800">
+            {shiftingList.map(sc => (
+              <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-[12px]">
+                <span className="mono font-bold text-slate-200">{sc.cn}</span>
+                <span className="text-slate-500">{sc.iso}</span>
+                {sc.pod && <span className="text-slate-500">{sc.pod}</span>}
+                <span className="ml-auto mono text-blue-300">{sc.from} → {sc.to}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1434,26 +1454,6 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         inspector={inspector}
         onOpenContainer={onOpenContainer}
       />
-
-      {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
-      {shiftingList.length > 0 && (
-        <div className="mt-3 bg-slate-900 border border-blue-800/50 rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5">
-            <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
-            <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
-          </div>
-          <div className="divide-y divide-slate-800">
-            {shiftingList.map(sc => (
-              <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-[12px]">
-                <span className="mono font-bold text-slate-200">{sc.cn}</span>
-                <span className="text-slate-500">{sc.iso}</span>
-                {sc.pod && <span className="text-slate-500">{sc.pod}</span>}
-                <span className="ml-auto mono text-blue-300">{sc.from} → {sc.to}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
