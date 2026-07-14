@@ -195,6 +195,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return m;
   }, [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap]);
 
+  // V8.98-05: 검수 리스트용 쉬프팅 목록 — shiftingMap + 컨 정보(규격/POD) 보강
+  const shiftingList = useMemo(() => {
+    const keys = Object.keys(shiftingMap || {});
+    if (!keys.length) return [];
+    return keys.map(cn => {
+      const c = fullEdiMap[cn] || {};
+      return { cn, from: shiftingMap[cn].from, to: shiftingMap[cn].to, iso: c.iso || '', pod: c.pod || '', fe: c.fe || '' };
+    }).sort((a, b) => a.from.localeCompare(b.from));
+  }, [shiftingMap, fullEdiMap]);
+
   const allEdiContainers = useMemo(() => {
     const merged = {};
     // V8.87-01: 컨번호 없는 실자리(터미널 PRE 등)가 merged['']로 1개로 붕괴하던 버그 수정.
@@ -1003,6 +1013,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
+          shiftingList={shiftingList}
         />
       )}
       {tab === 'search' && (
@@ -1250,7 +1261,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [] }) {
   const [filter, setFilter] = useState('all'); // all | done | undone | xray
   const [search, setSearch] = useState('');
 
@@ -1423,6 +1434,26 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         inspector={inspector}
         onOpenContainer={onOpenContainer}
       />
+
+      {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
+      {shiftingList.length > 0 && (
+        <div className="mt-3 bg-slate-900 border border-blue-800/50 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5">
+            <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
+          </div>
+          <div className="divide-y divide-slate-800">
+            {shiftingList.map(sc => (
+              <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-[12px]">
+                <span className="mono font-bold text-slate-200">{sc.cn}</span>
+                <span className="text-slate-500">{sc.iso}</span>
+                {sc.pod && <span className="text-slate-500">{sc.pod}</span>}
+                <span className="ml-auto mono text-blue-300">{sc.from} → {sc.to}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

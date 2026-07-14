@@ -178,7 +178,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       alert(`${modeKo} 컨테이너가 없습니다`);
       return;
     }
-    openInspectionListPrint(ptkContainers, mode, voyageInfo);
+    // V8.98-05: 쉬프팅 별첨 — 컨 정보 보강해 전달
+    const _shiftList = Object.keys(shiftingMap || {}).map(cn => {
+      const c = fullEdiMap[cn] || {};
+      return { cn, from: shiftingMap[cn].from, to: shiftingMap[cn].to, iso: c.iso || '', pod: c.pod || '' };
+    }).sort((a, b) => a.from.localeCompare(b.from));
+    openInspectionListPrint(ptkContainers, mode, voyageInfo, _shiftList);
   };
 
   // 서브 모달 (카고플랜 V2/베이 상세) 표시 중이면 그것만

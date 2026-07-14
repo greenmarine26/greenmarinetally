@@ -27,6 +27,13 @@ if [ -n "$APPVER" ]; then
   # V7.91: V[0-9.]* → V[0-9.-]* — 빌드번호 하이픈을 패턴이 못 잡아 라벨이 누적 오염되던 버그 수정.
   sed -i "s/(주)그린마린 · V[0-9.-]*/(주)그린마린 · $APPVER/" public/cone.html
   echo "✓ cone.html 화면 버전 → $APPVER 동기화"
+  # V8.98-05: 콘앱 카고플랜 모듈 캐시키(__APPV)도 버전과 동기화 — 고정값(C7.67)이라
+  #   cone-cargoplan.js를 새로 배포해도 폰이 옛 번들을 캐시로 계속 쓰던 사고 방지.
+  sed -i "s/window.__APPV='[^']*'/window.__APPV='$APPVER'/" public/cone.html
+  echo "✓ cone.html 모듈 캐시키(__APPV) → $APPVER 동기화"
+  # __CONEV(콘앱 화면 자동갱신 감지 키)도 동기화 — V8.46에 멈춰 폰이 새 cone.html을 감지 못 하던 문제.
+  sed -i "s/window.__CONEV='[^']*'/window.__CONEV='$APPVER'/" public/cone.html
+  echo "✓ cone.html 화면 갱신키(__CONEV) → $APPVER 동기화"
 else
   echo "⚠ APP_VERSION 추출 실패 — sw.js 수동 확인 필요"
 fi

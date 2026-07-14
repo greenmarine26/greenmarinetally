@@ -170,7 +170,7 @@ function renderPage(rows, pageNum, totalPages) {
 }
 
 // 메인: 검수 리스트 HTML 생성
-export function generateInspectionListHTML(containers, mode, voyageInfo) {
+export function generateInspectionListHTML(containers, mode, voyageInfo, shiftingList = []) {
   const list = Array.isArray(containers) ? [...containers] : Object.values(containers || {});
   if (list.length === 0) return '<p>컨테이너 없음</p>';
 
@@ -250,6 +250,18 @@ export function generateInspectionListHTML(containers, mode, voyageInfo) {
       sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length)).join('');
   }
 
+  // V8.98-05: [별첨2] 쉬프팅(재적부) — 통과화물 위치 이동, 양하·선적 공통. 크레인 작업 확인용.
+  let shiftHtml = '';
+  if (Array.isArray(shiftingList) && shiftingList.length > 0) {
+    const rows = shiftingList.map((c, i) => `<tr>
+      <td>${i + 1}</td><td class="cn">${c.cn || ''}</td><td>${c.iso || ''}</td><td>${c.pod || ''}</td>
+      <td class="cn">${c.from || ''}</td><td class="cn">${c.to || ''}</td><td></td></tr>`).join('');
+    shiftHtml = `<div class="ititle">[별첨2] ◆ 쉬프팅(재적부) ${shiftingList.length}대 — 통과화물 위치 이동 (양하·선적 공통)</div>
+      <div class="ipage"><table class="ilist" style="max-width:120mm;margin:0 auto;">
+      <tr><th>No</th><th>컨테이너</th><th>규격</th><th>POD</th><th>전 위치</th><th>후 위치</th><th>확인</th></tr>
+      ${rows}</table></div>`;
+  }
+
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>검수 리스트 ${modeKo} - ${vsl} ${voy}</title>
 <style>
@@ -295,13 +307,14 @@ table.ilist td.cn { font-family: monospace; font-size: 6.5pt; letter-spacing: -0
 <div class="content">
 ${sheet1Pages}
 ${sheet2Html}
+${shiftHtml}
 </div>
 </body></html>`;
 }
 
 // 새 창에서 인쇄 가능한 HTML 열기
-export function openInspectionListPrint(containers, mode, voyageInfo) {
-  const html = generateInspectionListHTML(containers, mode, voyageInfo);
+export function openInspectionListPrint(containers, mode, voyageInfo, shiftingList = []) {
+  const html = generateInspectionListHTML(containers, mode, voyageInfo, shiftingList);
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) {
     alert('팝업 차단을 해제해주세요');
