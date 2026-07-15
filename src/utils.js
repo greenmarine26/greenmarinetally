@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.98-09';   // 검수 리스트(화면·인쇄) 쉬프팅 섹션 + 콘앱 카고플랜 모듈 캐시키 배포마다 자동 갱신 (2026-07-14)
+export const APP_VERSION = 'V8.98-10';   // isoToLabel 공컨마커(453E/450E/950E) 복원 → '알 수 없는 규격 403' 오탐 수정 (2026-07-15)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -290,7 +290,12 @@ export const formatWt = (wt) => {
 
 export const isoToLabel = (iso) => {
   if (!iso) return '';
-  const p = String(iso).toUpperCase().trim().replace(/\s+/g, '');
+  let p = String(iso).toUpperCase().trim().replace(/\s+/g, '');
+  // V8.98-10: 엠티/풀 마커 복원 — 공컨정규화(utils 993/1131/2051)로 끝자리가 E/F가 된
+  //   숫자 ISO를 원 숫자로 되돌려 규격판정. 450E→4500, 453E→4530, 950E→9500.
+  //   (loadingEdiExport numericIso/ediIso의 /^\d{3}E$/ 복원과 동일 소스. 없으면 453E→'403' 오탐)
+  if (/^\d{3}[EF]$/.test(p)) p = p.slice(0, 3) + '0';
+  if (/^95\d\d$/.test(p)) return '45HC';   // V8.98-10: 9500/9530 = 45피트 숫자표기(numericIso 대응) → 45HC (복원된 950E 포함)
 
   // M3.6: ISO 6346 정확 해석
   // 첫 자리: 길이 (2=20ft, 4=40ft, L=45ft)
