@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
-import { isPyeongtaekPort } from '../utils.js';
+import { isPyeongtaekPort, isBookingSlot, emptySealSpec } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
 import { isChief } from '../staffList.js';
@@ -69,6 +69,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         const recMap = sec.records || {};
         const targets = [];
         Object.values(ediMap).forEach(c => {
+          // V8.98-11: 부킹슬롯(__BOOK_ 예상자리, 실번호 없음) 제외 — 가상 엠티리스트 방지
+          if (isBookingSlot(c)) return;
           // 평택만 (mode에 맞춰)
           const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
           if (!isPtk) return;
@@ -774,7 +776,7 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
                 <tr key={i} className={`border-t border-slate-800 ${filled ? '' : 'opacity-50'}`}>
                   <td className="px-1.5 py-1 text-slate-500 mono">{i + 1}</td>
                   <td className="px-1.5 py-1 mono text-slate-200">{c.cn || '(현장부여)'}</td>
-                  <td className="px-1.5 py-1 mono text-slate-400">{c.iso || '-'}</td>
+                  <td className="px-1.5 py-1 mono text-slate-400">{emptySealSpec(c)}</td>
                   <td className="px-1.5 py-1 mono">
                     {c.eseal ? <span className="text-emerald-300 font-bold">{c.eseal}</span> : <span className="text-slate-600">⏳ 대기</span>}
                   </td>

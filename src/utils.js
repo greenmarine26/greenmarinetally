@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.98-10';   // isoToLabel 공컨마커(453E/450E/950E) 복원 → '알 수 없는 규격 403' 오탐 수정 (2026-07-15)
+export const APP_VERSION = 'V8.98-11';   // 엠티 실 리스트: 부킹슬롯(__BOOK_) 제외 + 규격 20E/45GE/45RE 표기 (2026-07-15)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -466,6 +466,20 @@ export function isReeferContainer(c) {
   if (!c) return false;
   if (c.rf) return true;
   return isReeferIso(c.iso);
+}
+
+// V8.98-11: 엠티 실 리스트 전용 규격 표기 — 20E / 45GE / 45RE (사용자 확정 형식)
+//   메인플랜 TpSz 대응: DC20→20E, DCHC→45GE(40HC 드라이), RFHC→45RE(40HC 리퍼).
+//   리퍼 판별은 숫자 ISO 냉동코드(3번째 자리='3', 예 4530) 기준 — 이 리스트 표기 안에서만(전역 isoToLabel 미변경).
+export function emptySealSpec(c) {
+  if (!c) return '-';
+  const raw = String(c.iso || '').toUpperCase().trim().replace(/\s+/g, '');
+  if (!raw) return '-';
+  const num = /^\d{3}[EF]$/.test(raw) ? raw.slice(0, 3) + '0' : raw;   // 엠티마커 복원(453E→4530)
+  const reefer = isReeferContainer(c) || isReeferIso(num) || /^\d\d3\d$/.test(num);
+  const twenty = /^2/.test(num) || (isoToLabel(num) || '').startsWith('20');
+  if (twenty) return reefer ? '20RE' : '20E';
+  return reefer ? '45RE' : '45GE';   // 40ft/40HC → 45xE
 }
 
 // M5.79: 부킹 슬롯(컨번호 미입력) 판정
