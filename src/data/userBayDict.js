@@ -231,6 +231,28 @@ export function listUserBayDict() {
 }
 
 /**
+ * V8.98-15: 공유(파이어베이스) 사전 → 이 기기 로컬 사본 동기화 (명시적 가져오기)
+ *   배경: 조회는 로컬 사본이 절대 우선(§6.3)이고 FB→로컬 자동 병합이 없어,
+ *   기기/브라우저마다 사본이 어긋남(크롬≠엣지 사고). 이 함수는 사용자가
+ *   라이브러리 위젯의 '공유 사전 가져오기' 버튼을 누를 때만 실행된다.
+ *   병합 규칙: 같은 키는 공유본으로 덮어쓰기, 이 기기에만 있는 선박은 유지.
+ */
+export function mergeUserBayDictFrom(sharedDict) {
+  if (!sharedDict || typeof sharedDict !== 'object') return { ok: false, updated: 0, added: 0, kept: 0, total: 0 };
+  const dict = loadUserBayDict() || {};
+  let updated = 0, added = 0;
+  for (const [k, v] of Object.entries(sharedDict)) {
+    if (!v || typeof v !== 'object') continue;
+    if (dict[k]) updated++; else added++;
+    dict[k] = v;
+  }
+  const total = Object.keys(dict).length;
+  const kept = total - updated - added;
+  const ok = _ls.set(STORAGE_KEY, JSON.stringify(dict));
+  return { ok, updated, added, kept, total };
+}
+
+/**
  * 통계 (디버그/대시보드용)
  */
 export function getUserBayDictStats() {

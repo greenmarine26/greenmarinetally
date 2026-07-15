@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Database, ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, Upload, FolderOpen } from 'lucide-react';
 import { fbSubscribeShipBayDict, fbSubscribeShipLibrary } from '../firebase.js';
+import { mergeUserBayDictFrom } from '../data/userBayDict.js';
 
 export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload, onAscUpload }) {
   const [bayDict, setBayDict] = useState({});
@@ -87,6 +88,16 @@ export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload, onA
     e.target.value = '';
   };
 
+  // V8.98-15: 공유 사전 → 이 기기 로컬 사본 동기화 (크롬≠엣지 어긋남 해소)
+  const handlePullShared = () => {
+    const n = Object.keys(bayDict || {}).length;
+    if (n === 0) { alert('공유 사전이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.'); return; }
+    if (!confirm(`공유 저장소의 베이사전 ${n}척을 이 기기(브라우저) 로컬 사본으로 가져옵니다.\n같은 선박은 공유본으로 덮어쓰고, 이 기기에만 있는 선박은 유지됩니다.\n진행할까요?`)) return;
+    const r = mergeUserBayDictFrom(bayDict);
+    if (r.ok) alert(`✅ 공유 사전 동기화 완료\n덮어씀 ${r.updated}척 · 새로 추가 ${r.added}척 · 이 기기 전용 유지 ${r.kept}척`);
+    else alert('저장 실패 — 브라우저 저장공간을 확인하세요.');
+  };
+
   return (
     <div className="bg-cyan-950/30 border border-cyan-700/50 rounded-lg overflow-hidden">
       {/* 헤더 — 전체 탭으로 펼침 */}
@@ -125,6 +136,13 @@ export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload, onA
         <div className="border-t border-cyan-700/40 p-2.5 space-y-2">
           {/* PDF/ASC 등록 버튼 — 위젯 안에서 직접 */}
           <div className="space-y-1.5">
+            {/* V8.98-15: 공유 사전 → 이 기기 동기화 */}
+            <button
+              onClick={handlePullShared}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold"
+            >
+              📥 공유 사전 가져오기 (이 기기 동기화)
+            </button>
             {/* M6.47: ASC 일괄 — Gemini 0, 즉시 */}
             <button
               onClick={() => onAscUpload && onAscUpload()}
