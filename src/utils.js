@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.98-12';   // 카고플랜 공컨 리퍼 R/E 복구 — isReeferIso 숫자 냉동코드(4530류) 인식 (2026-07-15)
+export const APP_VERSION = 'V8.98-13';   // 규격 라벨 리퍼 통일 — isoToLabel 4530→40RF·2230→20RF (RFHC 일치) (2026-07-15)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -320,8 +320,9 @@ export const isoToLabel = (iso) => {
   if (/^45[0-9][0-9]$/.test(p)) {
     if (/^458[3-4]$/.test(p)) return '40FR';   // 4583/4584 = FR (먼저 좁은 범위)
     if (/^458[25]$/.test(p)) return '40RF';    // 4582/4585 = RF
+    if (/^453/.test(p)) return '40RF';         // V8.98-13: 4530류 = 40ft 리퍼(ISO6346 냉동군, 메인플랜 RFHC). isReeferIso와 규격 일치
     if (/^459/.test(p)) return '40OT';
-    return '40HC';   // 4500, 4510, 4530 등
+    return '40HC';   // 4500, 4510 등
   }
   // === 46XX (4로 시작 = 40피트, 잘못된 표기) ===
   // M3.6: ISO 6346 표준상 4XXX는 무조건 40피트. 45피트는 L 시작이어야 함.
@@ -351,6 +352,7 @@ export const isoToLabel = (iso) => {
   if (/^22[0-9][0-9]$/.test(p)) {
     if (/^228[3-4]$/.test(p)) return '20FR';   // 2283/2284 = FR (먼저 좁은 범위)
     if (/^228[25]$/.test(p)) return '20RF';    // 2282/2285 = RF
+    if (/^223/.test(p)) return '20RF';         // V8.98-13: 2230류 = 20ft 리퍼(ISO6346 냉동군)
     return '20DC';
   }
 
