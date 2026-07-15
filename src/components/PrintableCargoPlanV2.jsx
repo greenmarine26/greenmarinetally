@@ -210,7 +210,7 @@ export const CARGO_V2_CSS = `
 // BayBox 단일 베이 렌더
 // M6.94.0: export하여 매트릭스 빌더에서도 재사용 (1개 베이 시각 미리보기)
 // ------------------------------------------------------------
-export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, renderCellContent, cellExtra }) {
+export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = true, globalMaxTier, globalHatch, renderCellContent, cellExtra, fixedCellVar = null }) {
   if (!data) return null;
   const {
     bayKey, deckTiers, holdTiers, nHold, nDeckCols, nHoldCols,
@@ -248,8 +248,27 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
   }
 
   // deck/hold 둘 다 gridCols(gc) 기준 → 셀 폭 통일 + 중앙선 일치
-  const deckPadStyle = computePadding(deckAlign, deckPadLeft, deckPadRight, nDeckCols, gc);
-  const holdPadStyle = computePadding(holdAlign, holdPadLeft, holdPadRight, nHoldCols, gc);
+  // V8.98-14: fixedCellVar(옵트인, 베이상세 인쇄) — 셀 폭이 CSS 변수 고정일 때 패딩도
+  //   %(부모폭 기준, 라벨 16px 몫만큼 오차) 대신 '셀 폭 × 칸수' calc로 정확히.
+  //   미전달(카고플랜 본체) 시 기존 % 패딩 그대로 (회귀 0).
+  const _padCols = (align, padL, padR, smallerN) => {
+    if (padL > 0 || padR > 0) return { l: padL, r: padR };
+    const diff = gc - smallerN;
+    if (diff <= 0) return { l: 0, r: 0 };
+    if (align === 'left') return { l: 0, r: diff };
+    if (align === 'right') return { l: diff, r: 0 };
+    return { l: diff / 2, r: diff / 2 };
+  };
+  const _mkPad = (align, padL, padR, n) => {
+    if (!fixedCellVar) return computePadding(align, padL, padR, n, gc);
+    const pc = _padCols(align, padL, padR, n);
+    return {
+      paddingLeft: `calc(var(${fixedCellVar}) * ${pc.l})`,
+      paddingRight: `calc(var(${fixedCellVar}) * ${pc.r})`,
+    };
+  };
+  const deckPadStyle = _mkPad(deckAlign, deckPadLeft, deckPadRight, nDeckCols);
+  const holdPadStyle = _mkPad(holdAlign, holdPadLeft, holdPadRight, nHoldCols);
 
   return (
     <div className="cpv2-bay-section">

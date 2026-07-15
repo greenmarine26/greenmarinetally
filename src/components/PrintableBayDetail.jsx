@@ -215,7 +215,7 @@ export function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true, uniformCell = null }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -427,7 +427,16 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
       </div>
 
       {matrixRender ? (
-        <div className="bd-cargo-wrap">
+        /* V8.98-14: 카스피식 고정격자 — 항차 공통 셀크기(--bdc-w/h)로 전 셀 균일.
+           uniformCell 없으면(계산 불가) 기존 flex 채움 방식 그대로 (회귀 0). */
+        <div
+          className={`bd-cargo-wrap${uniformCell ? ' bd-uniform' : ''}`}
+          style={uniformCell ? {
+            '--bdc-w': `${uniformCell.w}px`,
+            '--bdc-h': `${uniformCell.h}px`,
+            '--bdc-gc': String(Math.max(matrixRender.nDeckCols || 0, matrixRender.nHoldCols || 0, 1)),
+          } : undefined}
+        >
           <BayBoxV2
             data={matrixRender}
             colorMap={colorMap}
@@ -438,6 +447,7 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
             }}
             renderCellContent={mrRenderCellContent}
             cellExtra={mrCellExtra}
+            fixedCellVar={uniformCell ? '--bdc-w' : null}
           />
         </div>
       ) : (
@@ -613,6 +623,38 @@ export default function PrintableBayDetail({
 
   const allPages = useMemo(() => buildBayPages(bayList, dictBaysSummary), [bayList, dictBaysSummary]);
 
+  // V8.98-14: 카스피식 균일 셀 — 항차 전체(모든 인쇄 페이지)에 단일 셀 폭·행 높이.
+  //   기존: 격자가 페이지를 flex로 채워 베이마다/행마다 셀 크기가 제각각 (+ 점유 셀 padding·border가
+  //   flex 분배에 가산돼 빈 셀과 폭이 어긋남) → 인쇄물 격자 뒤틀림.
+  //   계산: 전 페이지 최대 칸수(gcMax)·최대 행수(rowsMax)로 폭·높이 상한을 잡아 전 페이지 공통 고정.
+  //   matrixRender(사전 deckCells) 페이지에만 적용 — 폴백(STD_ROWS) 페이지는 기존 그대로.
+  const uniformCell = useMemo(() => {
+    let gcMax = 0, rowsMax = 0;
+    for (const p of allPages) {
+      const bn = p.even != null ? p.even : p.odd;
+      const e = dictBaysSummary[parseInt(bn, 10)];
+      if (!e) continue;
+      const hasCells = (Array.isArray(e.deckCells) && e.deckCells.length > 0)
+        || (Array.isArray(e.holdCells) && e.holdCells.length > 0);
+      if (!hasCells) continue;
+      const dNums = (e.deckCells || []).map(Number).filter(v => Number.isFinite(v) && v > 0);
+      const dMax = dNums.length > 0 ? Math.max(...dNums) : 0;
+      const effDeck = dMax > 0 ? dMax : (Number(e.rowCount) || 9);
+      const hNums = (e.holdCells || []).map(Number).filter(v => Number.isFinite(v) && v > 0);
+      const hMax = hNums.length > 0 ? Math.min(Math.max(...hNums), effDeck) : 0;
+      gcMax = Math.max(gcMax, effDeck, hMax, 1);
+      const dT = (e.deckTiersLocal || e.deckTiers || []).length;
+      const hT = (e.holdTiersLocal || e.holdTiers || []).length;
+      rowsMax = Math.max(rowsMax, dT + hT);
+    }
+    if (!gcMax) return null;   // 매트릭스 페이지 없음 → 폴백 경로만 (기존 동작)
+    // bd-page 291mm(≈1100px) − 페이지·랩 패딩·tier라벨(16px)·여유 ≈ 1046px 가용.
+    const w = Math.max(78, Math.min(118, Math.floor(1046 / gcMax)));
+    // bd-page 204mm(≈771px) − 제목·헤더·row라벨 2줄·해치·패딩 ≈ 655px 가용. 셀 5줄 최소 46px.
+    const h = Math.max(46, Math.min(84, Math.floor(655 / Math.max(rowsMax, 1))));
+    return { w, h };
+  }, [allPages, dictBaysSummary]);
+
   // V7.98-13: 화면은 항상 전체 베이를 빠짐없이 보여준다 (빈자리도 자리 — 양하/선적 대상이
   //   아닌 베이도 표시). 인쇄 대상만 printMode로 선별한다.
   //   화면용 = allPages 전부. 인쇄 제외 베이는 화면엔 보이되 @media print에서 숨김(아래 isPrintTarget).
@@ -755,6 +797,7 @@ export default function PrintableBayDetail({
                 globalTiers={globalTiers}
                 colorMap={colorMap}
                 isPrintTarget={isPrintTarget.has(p.key)}
+                uniformCell={uniformCell}
                 dictShipMeta={dictShipMeta} />
             );
           })
@@ -774,6 +817,40 @@ export default function PrintableBayDetail({
         .bd-cargo-wrap .cpv2-cell .bd-cell-lines > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: 100%; padding: 0; }   /* V8.25-05: text-align 제거 — 줄별 정렬(bd-r2 좌/ bd-r4·r5 중앙)이 살도록 */
         .bd-cargo-wrap .cpv2-cell .bd-line3 { font-size: 7.5pt; letter-spacing: -0.2px; }
         .bd-cargo-wrap .cpv2-cell .bd-pos { font-size: 7.5pt; color: inherit; }
+        /* ── V8.98-14: 카스피식 고정격자 (bd-uniform) ─────────────────────────
+           원리: 셀 폭·행 높이를 항차 공통 CSS 변수(--bdc-w/--bdc-h)로 완전 고정.
+           · flex 채움 폐기(행/영역 flex: none) → 페이지·행·베이 간 크기 동일
+           · 모든 칸(점유/빈/비활성) 동일 고정폭 → padding·border 가산 불균일 소멸
+           · 격자·라벨·해치는 가운데 정렬, 남는 공간은 여백 (카스피 양식) */
+        /* 세로 중앙: auto 마진 (공간 부족 시 0으로 접혀 위 잘림 없음 — safe center) */
+        .bd-cargo-wrap.bd-uniform .cpv2-bay-section { flex: 0 0 auto; margin-top: auto; margin-bottom: auto; }
+        .bd-cargo-wrap.bd-uniform .cpv2-bay-content { flex: 0 0 auto; }
+        .bd-cargo-wrap.bd-uniform .cpv2-deck-area,
+        .bd-cargo-wrap.bd-uniform .cpv2-hold-area,
+        .bd-cargo-wrap.bd-uniform .cpv2-grid-row-wrap { flex: 0 0 auto !important; }
+        .bd-cargo-wrap.bd-uniform .cpv2-grid-row-wrap { justify-content: center; }
+        .bd-cargo-wrap.bd-uniform .cpv2-grid { flex: 0 0 auto; min-width: 0; }
+        .bd-cargo-wrap.bd-uniform .cpv2-tier-row {
+          flex: 0 0 var(--bdc-h);
+          min-height: var(--bdc-h); max-height: var(--bdc-h);
+        }
+        .bd-cargo-wrap.bd-uniform .cpv2-tier-row > * {
+          flex: 0 0 var(--bdc-w) !important;
+          width: var(--bdc-w); min-width: var(--bdc-w); max-width: var(--bdc-w);
+          box-sizing: border-box;
+        }
+        .bd-cargo-wrap.bd-uniform .cpv2-tier-row .cpv2-cell-empty { border: 0.5px solid transparent; }
+        .bd-cargo-wrap.bd-uniform .cpv2-cell.bd-fill { padding: 0; }
+        .bd-cargo-wrap.bd-uniform .cpv2-cell .bd-cell-lines { padding: 1px 3px; box-sizing: border-box; }
+        .bd-cargo-wrap.bd-uniform .cpv2-row-labels { justify-content: center; margin-right: 16px; }
+        .bd-cargo-wrap.bd-uniform .cpv2-row-labels > span {
+          flex: 0 0 var(--bdc-w); min-width: var(--bdc-w); max-width: var(--bdc-w);
+        }
+        .bd-cargo-wrap.bd-uniform .cpv2-tier-labels > span { flex: 0 0 var(--bdc-h); }
+        .bd-cargo-wrap.bd-uniform .cpv2-hatch-break {
+          width: calc(var(--bdc-w) * var(--bdc-gc) + 16px);
+          margin: 3px auto;
+        }
         @media print {
           .bd-cargo-wrap { box-shadow: none !important; margin: 0 !important; }
         }
