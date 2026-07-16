@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V8.98-15';   // 베이사전 '공유 사전 가져오기' 동기화 버튼 — 기기별 로컬 사본 어긋남 해소 (2026-07-15)
+export const APP_VERSION = 'V8.99';   // 선석배정 예정일시 표기 — 수집기 v2.17.11-14 berth_schedule 레코드 출처 구분 (2026-07-16)
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.
@@ -2421,9 +2421,12 @@ export function getShipStatus(pm, nowMs = Date.now(), work = null) {
     phase = 'berthed';
   }
 
+  // V8.99: 수집기 v2.17.11-14가 기록한 선석배정 예정 레코드(source='berth_schedule')는 출처를 표기해
+  //   PORT-MIS 신고(확정)와 구분한다 — 신고가 올라오면 수집기가 신고 우선으로 자동 대체.
+  const fromBerthSched = String(pm?.source || '') === 'berth_schedule';
   let label, tone;
-  if (phase === 'sailing') { label = `🚢 ${portName} 항해중 (입항예정)`; tone = 'sailing'; }
-  else if (phase === 'berthed') { label = `⚓ ${portName} 정박중`; tone = 'berthed'; }
+  if (phase === 'sailing') { label = `🚢 ${portName} 항해중 (입항예정${fromBerthSched ? '·선석배정' : ''})`; tone = 'sailing'; }
+  else if (phase === 'berthed') { label = `⚓ ${portName} 정박중${fromBerthSched ? ' (선석배정 기준)' : ''}`; tone = 'berthed'; }
   else if (phase === 'departed') { label = `↗ ${portName} 출항함`; tone = 'departed'; }
   else if (phase === 'unsure') { label = `❓ ${portName} 일정 미확정`; tone = 'unsure'; }
   else { label = `${portName}`; tone = 'unknown'; }
