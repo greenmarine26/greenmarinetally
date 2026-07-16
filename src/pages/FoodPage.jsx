@@ -17,7 +17,8 @@ function RouletteModal({ spots, slot, onClose }) {
   const [rot, setRot] = useState(0);
   const [done, setDone] = useState(false);
   const label = SLOT_LABEL[slot] || '식사';
-  const candidates = useMemo(() => filterBySlot(spots, slot), [spots, slot]);
+  // V9.00: 폐업 추정(status=closed) 식당은 돌림판 후보에서 제외
+  const candidates = useMemo(() => filterBySlot(spots, slot).filter(s => s.status !== 'closed'), [spots, slot]);
 
   const doSpin = (list = wheelList) => {
     if (!list.length) return;
@@ -103,6 +104,7 @@ export default function FoodPage({ inspector, onGoHome }) {
   const [form, setForm] = useState({ name: '', cat: '', tel: '', area: '', note: '', tags: [] });
   const [commentFor, setCommentFor] = useState(null);
   const [commentText, setCommentText] = useState('');
+  const [menuFor, setMenuFor] = useState(null);        // V9.00: 메뉴판 펼친 식당 id
   const seededRef = useRef(false);
 
   useEffect(() => fbFoodListen(setSpots), []);
@@ -175,12 +177,15 @@ export default function FoodPage({ inspector, onGoHome }) {
         {list.map(s => {
           const r = avgRating(s);
           const comments = Object.values(s.comments || {}).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+          const isClosed = s.status === 'closed';   // V9.00: 일일 점검이 폐업 추정으로 표시한 곳
           return (
-            <div key={s.id} className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-1.5">
+            <div key={s.id} className={`bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-1.5 ${isClosed ? 'opacity-55' : ''}`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-bold text-slate-100">{s.name} <span className="text-[11px] font-normal text-slate-400">{s.cat}</span></div>
-                  <div className="text-[11px] text-slate-500">{[s.area, s.note].filter(Boolean).join(' · ')}</div>
+                  <div className="font-bold text-slate-100">{s.name} <span className="text-[11px] font-normal text-slate-400">{s.cat}</span>
+                    {isClosed && <span className="ml-1 px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 text-[10px] font-bold align-middle">⚠ 폐업 추정</span>}
+                  </div>
+                  <div className="text-[11px] text-slate-500">{[s.area, s.hours, s.note].filter(Boolean).join(' · ')}</div>
                 </div>
                 {canDelete(s) && (
                   <button onClick={() => { if (confirm(`${s.name} 삭제할까요?`)) fbDeleteFoodSpot(s.id); }}
@@ -201,10 +206,27 @@ export default function FoodPage({ inspector, onGoHome }) {
                 </div>
                 <span className="text-xs font-bold text-amber-300">{r ? `★${r} (${Object.keys(s.ratings || {}).length}명)` : '첫 별점을!'}</span>
                 <div className="ml-auto flex gap-1.5">
+                  {Array.isArray(s.menu) && s.menu.length > 0 && (
+                    <button onClick={() => setMenuFor(menuFor === s.id ? null : s.id)}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-bold ${menuFor === s.id ? 'bg-amber-700 text-white' : 'bg-amber-900/60 text-amber-300'}`}>
+                      🍜 메뉴 {s.menu.length}
+                    </button>
+                  )}
                   {s.tel && <a href={`tel:${s.tel}`} className="p-1.5 rounded-lg bg-emerald-900/60 text-emerald-300"><Phone className="w-4 h-4"/></a>}
                   <a href={mapUrlOf(s)} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg bg-sky-900/60 text-sky-300"><MapPin className="w-4 h-4"/></a>
                 </div>
               </div>
+              {menuFor === s.id && Array.isArray(s.menu) && (
+                <div className="border-t border-slate-800 pt-1.5 space-y-0.5">
+                  {s.menu.map((m, i) => (
+                    <div key={i} className="flex justify-between text-[12px]">
+                      <span className="text-slate-200">{m.n}</span>
+                      <span className="text-amber-300 font-bold">{typeof m.p === 'number' ? m.p.toLocaleString() + '원' : (m.p || '')}</span>
+                    </div>
+                  ))}
+                  {s.checkedAt && <div className="text-[10px] text-slate-600 text-right">웹 확인 {new Date(s.checkedAt).toLocaleDateString('ko-KR')} — 가격은 변동될 수 있음</div>}
+                </div>
+              )}
               {comments.length > 0 && (
                 <div className="text-[11px] text-slate-400 space-y-0.5 border-t border-slate-800 pt-1.5">
                   {comments.slice(0, 3).map((c, i) => <div key={i}>💬 {c.text} <span className="text-slate-600">— {c.by}</span></div>)}
