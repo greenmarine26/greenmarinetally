@@ -1,5 +1,62 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.01';   // 홈 선박 정렬: 작업시간 근접순 + GPS 현 부두 우선 유지 (2026-07-17)
+export const APP_VERSION = 'V9.02';   // 카톡 물량 예보 붙여넣기 — EDI 도착 전 규격별 예상 개수 표시 (2026-07-17)
+
+// ── V9.02: 카톡 물량 예보 파서 (RZOR·OBWH 형식 — 사용자 확정 2026-07-17) ─────────
+//   예: "R075W / *FULL / 20D X 9 (S X 9) / 40H X 73 ... / FULL-161TEU EMPTY-238TEU LUG-1TEU 400TEU"
+//   규칙: *FULL/*EMPTY/*LUGGAGE 섹션 안의 "규격 X 수량"만 집계. '-'로 시작하는 줄(위치·화주 상세,
+//   예: -LO LO, -CORNNING, -TRAIN)은 같은 컨을 다시 세는 내역이므로 섹션을 닫고 건너뛴다.
+//   첫 요약 줄(S-32 C-110 ... TEU)은 해석하지 않고 원문 그대로 보존(표시용).
+//   검산: 20피트=1TEU, 40/45피트=2TEU로 계산한 값과 말미 합계(FULL-…TEU …)가 일치해야 teuOk.
+export function parseCargoForecast(text) {
+  const out = { vsl: '', voy: '', mode: '', full: {}, empty: {}, luggage: {}, teu: null, summary: '',
+    vans: { full: 0, empty: 0, luggage: 0 }, calc: { full: 0, empty: 0, luggage: 0 }, teuOk: true };
+  const add = (sec, size20, sizeSfx, n) => {
+    const size = size20 + sizeSfx;
+    out[sec][size] = (out[sec][size] || 0) + n;
+    out.vans[sec] += n;
+    out.calc[sec] += (size20 === '20' ? 1 : 2) * n;
+  };
+  const SIZE_G = /(\d{2})\s*([A-Z]{1,2})\s*[Xx×]\s*(\d+)/g;
+  let sec = null;
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    // 선박+항차 (OBWH형: "OBWH 2690W"가 줄 어디든) / 항차 단독 줄 (RZOR형: "R075W")
+    const sv = line.match(/\b([A-Z]{4})\s+([A-Z]?\d{2,5}[EWNS])\b/);
+    if (sv && !out.voy) { out.vsl = sv[1]; out.voy = sv[2].toUpperCase(); }
+    const vm = line.match(/^([A-Z]?\d{2,5}[EWNS])$/);
+    if (vm && !out.voy) { out.voy = vm[1].toUpperCase(); continue; }
+    // TEU 합계 줄 (RZOR형 말미)
+    const tm = line.match(/FULL\s*-\s*(\d+)\s*TEU\s+EMPTY\s*-\s*(\d+)\s*TEU(?:\s+LUG\w*\s*-\s*(\d+)\s*TEU)?\s+(\d+)\s*TEU/i);
+    if (tm) { out.teu = { full: +tm[1], empty: +tm[2], luggage: +(tm[3] || 0), total: +tm[4] }; continue; }
+    // 요약 줄 (RZOR형 첫 줄 "S-32 C-110 G-7 266TEU") — 해석 없이 원문 보존
+    if (/^[A-Z]{1,2}-\d+/.test(line) && /TEU/i.test(line)) { out.summary = line; continue; }
+    // OBWH형 인라인: "FULL 20GPX19 + 40HQX33 + ..." — 단 한글 포함 줄은 주석(수화물·긴급분 안내)이라 집계 제외
+    const inline = line.match(/^\*?\s*(FULL|EMPTY|LUG\w*)\b/i);
+    if (inline && !/[가-힣]/.test(line) && SIZE_G.test(line)) {
+      SIZE_G.lastIndex = 0;
+      const bucket = /LUG/i.test(inline[1]) ? 'luggage' : inline[1].toLowerCase();
+      for (const m of line.matchAll(SIZE_G)) add(bucket, m[1], m[2], +m[3]);
+      sec = null;
+      continue;
+    }
+    // RZOR형 섹션 헤더
+    if (/^\*\s*FULL\s*$/i.test(line)) { sec = 'full'; continue; }
+    if (/^\*\s*EMPTY\s*$/i.test(line)) { sec = 'empty'; continue; }
+    if (/^\*\s*LUG/i.test(line)) { sec = 'luggage'; continue; }
+    // 위치·화주 상세('-LO LO', '-CORNNING'…)나 온도 상세("40RHX7 (-18'C)") 등은 이중 집계 방지 위해 제외
+    if (/^[-=]/.test(line)) { sec = null; continue; }
+    if (!sec) continue;
+    const m = line.match(/^(\d{2})\s*([A-Z]{1,2})\s*[Xx×]\s*(\d+)/);
+    if (m) add(sec, m[1], m[2], +m[3]);
+  }
+  out.mode = /[WS]$/.test(out.voy) ? 'loading' : (/[EN]$/.test(out.voy) ? 'discharge' : '');
+  if (out.teu) {
+    out.teuOk = out.calc.full === out.teu.full && out.calc.empty === out.teu.empty
+      && out.calc.luggage === out.teu.luggage;
+  }
+  return out;
+}
 
 // V8.43: 선박 키 별칭 — 같은 배가 BAPLIE(콜사인/IMO)·ASC(약자/서비스코드)·완료저장(vsl 폴백)
 //   경로마다 다른 ships/{키}로 갈라지던 것을 정식 키 하나로 수렴시킨다.

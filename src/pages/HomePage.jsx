@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 
@@ -37,6 +37,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
   const [showPortMisCapture, setShowPortMisCapture] = useState(false);  // M5.25
+  // V9.02: 카톡 물량 예보 붙여넣기
+  const [showForecast, setShowForecast] = useState(false);
+  const [fcText, setFcText] = useState('');
   // M5.82: GPS 기반 현 부두 자동 판별
   const [currentPier, setCurrentPier] = useState(null);    // { code, distance, name }
   const [gpsState, setGpsState] = useState('idle');         // 'idle' | 'loading' | 'denied' | 'ok' | 'far'
@@ -429,6 +432,13 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           >
             <Plus className="w-3.5 h-3.5"/><ArrowUp className="w-3.5 h-3.5"/>선적
           </button>
+          <button
+            onClick={() => { setShowForecast(true); setFcText(''); }}
+            className="bg-orange-900/50 hover:bg-orange-800 border border-orange-700/50 text-orange-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
+            title="카톡으로 받은 물량 예보 붙여넣기 — EDI 도착 전 개수 먼저 등록"
+          >
+            📋 예보
+          </button>
         </div>
       </div>
 
@@ -580,6 +590,64 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           onCreate={handleCreate}
         />
       )}
+
+      {/* V9.02: 카톡 물량 예보 붙여넣기 모달 — EDI 도착 전 규격별 개수 선등록 (사용자 확정 2026-07-17) */}
+      {showForecast && (() => {
+        const fc = fcText.trim() ? parseCargoForecast(fcText) : null;
+        const vv = fc && fc.voy ? fc.voy.toUpperCase() : '';
+        const match = fc ? (voyagesWithPier.find(v =>
+          vv && [v.info.voy, v.info.voy_d, v.info.voy_l].some(x => (x || '').toUpperCase() === vv))
+          || (fc.vsl ? voyagesWithPier.find(v => (v.info.vsl || '').toUpperCase().replace(/\s+/g, '').startsWith(fc.vsl)) : null)) : null;
+        const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join('  ');
+        const totalTeu = fc ? (fc.teu ? fc.teu.total : fc.calc.full + fc.calc.empty + fc.calc.luggage) : 0;
+        const save = async () => {
+          if (!fc || !match) return;
+          await fbUpdateVoyageInfo(match.key, { forecast: {
+            voy: fc.voy, mode: fc.mode || 'loading', full: fc.full, empty: fc.empty, luggage: fc.luggage,
+            teu: fc.teu || null, calc: fc.calc, vans: fc.vans, summary: fc.summary || '',
+            raw: fcText, at: Date.now(), by: inspector || '',
+          } });
+          setShowForecast(false); setFcText('');
+        };
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowForecast(false)}>
+            <div className="bg-slate-900 border-2 border-orange-700 rounded-xl p-4 w-full max-w-lg space-y-2.5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="font-bold text-orange-300">📋 물량 예보 붙여넣기 <span className="text-[11px] font-normal text-slate-500">카톡 원문 그대로 — EDI 오면 자동 대체</span></div>
+              <textarea autoFocus value={fcText} onChange={e => setFcText(e.target.value)} rows={8}
+                placeholder={'카톡 물량 예보를 그대로 붙여넣으세요\n(RZOR: *FULL / 20D X 9 …  ·  OBWH: FULL 20GPX19 + 40HQX33 …)'}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-[12px] text-slate-100 font-mono"/>
+              {fc && (
+                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-2.5 space-y-1 text-[12px]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-100">{fc.vsl || (match ? match.info.vsl : '')} {fc.voy || '항차 미인식'}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${fc.mode === 'loading' ? 'bg-amber-900/70 text-amber-200' : fc.mode === 'discharge' ? 'bg-blue-900/70 text-blue-200' : 'bg-slate-700 text-slate-300'}`}>
+                      {fc.mode === 'loading' ? '선적' : fc.mode === 'discharge' ? '양하' : '모드 미상'}
+                    </span>
+                    <span className="font-bold text-orange-300">{totalTeu}TEU</span>
+                    {fc.teu && (fc.teuOk
+                      ? <span className="text-emerald-400 text-[10px] font-bold">✓ TEU 검산 일치</span>
+                      : <span className="text-rose-400 text-[10px] font-bold">⚠ TEU 검산 불일치 (원문 확인)</span>)}
+                  </div>
+                  {Object.keys(fc.full).length > 0 && <div><span className="text-emerald-300 font-bold">FULL</span> <span className="text-slate-200">{fmt(fc.full)}</span> <span className="text-slate-500">({fc.vans.full}대 {fc.calc.full}TEU)</span></div>}
+                  {Object.keys(fc.empty).length > 0 && <div><span className="text-sky-300 font-bold">EMPTY</span> <span className="text-slate-300">{fmt(fc.empty)}</span> <span className="text-slate-500">({fc.vans.empty}대 {fc.calc.empty}TEU)</span></div>}
+                  {Object.keys(fc.luggage).length > 0 && <div><span className="text-violet-300 font-bold">수화물</span> <span className="text-slate-300">{fmt(fc.luggage)}</span></div>}
+                  {fc.summary && <div className="text-[10px] text-slate-500">요약 원문: {fc.summary}</div>}
+                  <div className={`text-[11px] font-bold ${match ? 'text-emerald-300' : 'text-rose-300'}`}>
+                    {match ? `→ ${match.info.vsl} ${match.info.voy_d || match.info.voy || ''}${match.info.voy_l ? '/' + match.info.voy_l : ''} 항차에 저장` : '연결할 항차를 못 찾음 — 수집기 등록 후 다시 시도하거나 항차를 먼저 만드세요'}
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={save} disabled={!fc || !match}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold ${fc && match ? 'bg-orange-600 hover:bg-orange-500 text-white' : 'bg-slate-800 text-slate-600'}`}>
+                  예보 저장
+                </button>
+                <button onClick={() => setShowForecast(false)} className="px-4 rounded-lg bg-slate-800 text-slate-400 text-sm">취소</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 항차 삭제 모달 (폰 친화) */}
       {deleteTarget && (
@@ -808,6 +876,27 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
         {/* V8.81: 양하/선적 막대를 누르면 그 모드로 항차를 연다 (구: 둘 다 기본 모드로 열려 "반응 없음"처럼 보임). */}
         {dis && <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>}
         {loa && <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>}
+        {(() => {
+          // V9.02: 카톡 물량 예보 — 해당 모드의 EDI(컨 리스트)가 아직 없을 때만 표시, 생기면 자동 대체(숨김)
+          const f = voyage.info?.forecast;
+          if (!f) return null;
+          const isL = (f.mode || 'loading') === 'loading';
+          const hasReal = isL ? !!(loa && Object.keys(loa).length) : !!(dis && Object.keys(dis).length);
+          if (hasReal) return null;
+          const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join(' ');
+          const tot = (f.teu && f.teu.total) || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));
+          return (
+            <div className="rounded-lg border border-dashed border-orange-600/50 bg-orange-950/30 px-2.5 py-1.5">
+              <div className="text-[11px] font-bold text-orange-300">
+                📋 {isL ? '선적' : '양하'} 예보 {f.voy || ''} · {tot}TEU
+                <span className="font-normal text-orange-400/60 ml-1">(EDI 도착 시 자동 대체)</span>
+              </div>
+              {f.full && Object.keys(f.full).length > 0 && <div className="text-[10px] text-slate-300">FULL {fmt(f.full)}</div>}
+              {f.empty && Object.keys(f.empty).length > 0 && <div className="text-[10px] text-slate-400">EMPTY {fmt(f.empty)}</div>}
+              {f.luggage && Object.keys(f.luggage).length > 0 && <div className="text-[10px] text-slate-500">수화물 {fmt(f.luggage)}</div>}
+            </div>
+          );
+        })()}
       </div>
 
       {(activeInspectors.length > 0 || onDelete) && (
