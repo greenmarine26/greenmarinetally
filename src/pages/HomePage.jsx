@@ -881,7 +881,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           const f = voyage.info?.forecast;
           if (!f) return null;
           const isL = (f.mode || 'loading') === 'loading';
-          const hasReal = isL ? !!(loa && Object.keys(loa).length) : !!(dis && Object.keys(dis).length);
+          // V9.02-01: 'EDI 도착' 판정은 실제 EDI 컨테이너(ediContainers)로만 — 수집기 가등록 섹션의
+          //   _created 같은 메타 키를 도착으로 오인해 예보가 숨던 버그 수정 (RZOR_R075E 사례).
+          const hasReal = isL ? !!(loa && Object.keys(loa.ediContainers || {}).length)
+            : !!(dis && Object.keys(dis.ediContainers || {}).length);
           if (hasReal) return null;
           const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join(' ');
           const tot = (f.teu && f.teu.total) || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));

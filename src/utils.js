@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.02';   // 카톡 물량 예보 붙여넣기 — EDI 도착 전 규격별 예상 개수 표시 (2026-07-17)
+export const APP_VERSION = 'V9.02-01';   // 예보 숨김 판정을 ediContainers 기준으로 수정 — _created 메타 오인 버그 (2026-07-17)
 
 // ── V9.02: 카톡 물량 예보 파서 (RZOR·OBWH 형식 — 사용자 확정 2026-07-17) ─────────
 //   예: "R075W / *FULL / 20D X 9 (S X 9) / 40H X 73 ... / FULL-161TEU EMPTY-238TEU LUG-1TEU 400TEU"
