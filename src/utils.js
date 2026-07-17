@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.03';   // 긴급리스트·수화물 컨번호 파싱+리스트·카고플랜 표시, 선적 가상엠티(DUME) 분리 표기 (2026-07-17)
+export const APP_VERSION = 'V9.03-01';   // isISO403 45ft 드라이(L5G1·9500) 촬영 오탐 제외 — OBWH 2689E 사용자 검증 (2026-07-17)
 
 // ── V9.02: 카톡 물량 예보 파서 (RZOR·OBWH 형식 — 사용자 확정 2026-07-17) ─────────
 //   예: "R075W / *FULL / 20D X 9 (S X 9) / 40H X 73 ... / FULL-161TEU EMPTY-238TEU LUG-1TEU 400TEU"
@@ -611,10 +611,10 @@ export function isISO403(c) {
   if (!code) return false;
   // 4530 류: 40ft 리퍼 HC (4530, 4531~4539 모두 포함)
   if (/^45[3]\d$/.test(code)) return true;
-  // 9500 류: 45ft HC 4자리 숫자 표기
-  if (/^950\d$/.test(code)) return true;
-  // L5 시작: 45ft 표기 (L5G0, L5G1, L5HC 등)
-  if (/^L5/.test(code)) return true;
+  // V9.03-01: 45ft 드라이는 촬영 대상 아님 (사용자 검증 2026-07-17 — OBWH 2689E L5G1 10대 오탐).
+  //   L5G1·L5G0·9500류는 표준 45ft HC 표기라 실물 확인 불필요. 45ft도 리퍼 표기만 대상 유지.
+  if (/^953\d$/.test(code)) return true;   // 45ft 리퍼 숫자표기 (9530류)
+  if (/^L5R/.test(code)) return true;      // 45ft 리퍼 알파표기 (L5R1 등)
   return false;
 }
 
