@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 
@@ -216,9 +216,25 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const rawBerth = (pm && pm.berth) || info.berth || '';
         const berth = isValidBerth(rawBerth) ? rawBerth : '';
         const pier = (pm && pm.pier) || info.pier || getPierFromBerth(berth) || '';
-        return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth };
+        return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
+                 _etaMs: pm ? parsePortMisDateTime(pm.eta) : null,     // V9.01: 작업시간 근접 정렬용
+                 _etdMs: pm ? parsePortMisDateTime(pm.etd) : null };
       })
-      .sort((a, b) => (b.info.createdAt || 0) - (a.info.createdAt || 0));
+      .sort((a, b) => {
+        // V9.01: 작업시간 근접순 (사용자 확정 2026-07-17)
+        //   ①정박·작업중(출항 임박한 순) ②입항 예정(접안 가까운 순) ③출항·지남(최근 순) ④일정 미상(등록 최신순)
+        //   PORT-MIS 신고 + 수집기 선석배정(berth_schedule) 레코드의 eta/etd 기준. 부두 그룹(현 위치 우선)은 이 정렬 위에 얹힘.
+        const now = Date.now();
+        const rank = (v) => {
+          const eta = v._etaMs, etd = v._etdMs;
+          if (eta != null && eta <= now && (etd == null || now <= etd)) return [0, etd != null ? etd - now : 86400000];
+          if (eta != null && eta > now) return [1, eta - now];
+          if (etd != null && etd < now) return [2, now - etd];
+          return [3, -(v.info.createdAt || 0)];
+        };
+        const ra = rank(a), rb = rank(b);
+        return ra[0] - rb[0] || ra[1] - rb[1];
+      });
   }, [voyages, portMisData]);
 
   // M6.18: 잘못된 berth가 voyage.info에 저장되어 있으면 백그라운드 자동 정리
