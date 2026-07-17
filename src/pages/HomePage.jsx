@@ -605,6 +605,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           await fbUpdateVoyageInfo(match.key, { forecast: {
             voy: fc.voy, mode: fc.mode || 'loading', full: fc.full, empty: fc.empty, luggage: fc.luggage,
             teu: fc.teu || null, calc: fc.calc, vans: fc.vans, summary: fc.summary || '',
+            // V9.03: 긴급/수화물 컨번호 — 리스트·카고플랜 마커는 렌더 시점에 이 목록으로 주입
+            //   (EDI가 예보보다 늦게 와도, EDI가 갱신돼도 마커 유지 — 연태훼리 CLL 메일)
+            urgentCns: fc.urgentCns || [], luggageCns: fc.luggageCns || [], luggageSeals: fc.luggageSeals || {},
             raw: fcText, at: Date.now(), by: inspector || '',
           } });
           setShowForecast(false); setFcText('');
@@ -631,6 +634,17 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                   {Object.keys(fc.full).length > 0 && <div><span className="text-emerald-300 font-bold">FULL</span> <span className="text-slate-200">{fmt(fc.full)}</span> <span className="text-slate-500">({fc.vans.full}대 {fc.calc.full}TEU)</span></div>}
                   {Object.keys(fc.empty).length > 0 && <div><span className="text-sky-300 font-bold">EMPTY</span> <span className="text-slate-300">{fmt(fc.empty)}</span> <span className="text-slate-500">({fc.vans.empty}대 {fc.calc.empty}TEU)</span></div>}
                   {Object.keys(fc.luggage).length > 0 && <div><span className="text-violet-300 font-bold">수화물</span> <span className="text-slate-300">{fmt(fc.luggage)}</span></div>}
+                  {/* V9.03: 긴급/수화물 컨번호 미리보기 — 저장 시 리스트·카고플랜에 마커로 표시 */}
+                  {fc.urgentCns && fc.urgentCns.length > 0 && (
+                    <div><span className="text-rose-300 font-bold">▲ 긴급 {fc.urgentCns.length}대</span>{' '}
+                      <span className="text-slate-400 mono text-[10px] break-all">{fc.urgentCns.join(' ')}</span></div>
+                  )}
+                  {fc.luggageCns && fc.luggageCns.length > 0 && (
+                    <div><span className="text-violet-300 font-bold">🧳 수화물 컨 {fc.luggageCns.length}대</span>{' '}
+                      <span className="text-slate-400 mono text-[10px] break-all">
+                        {fc.luggageCns.map(cn => fc.luggageSeals && fc.luggageSeals[cn] ? `${cn}(실 ${fc.luggageSeals[cn]})` : cn).join(' ')}
+                      </span></div>
+                  )}
                   {fc.summary && <div className="text-[10px] text-slate-500">요약 원문: {fc.summary}</div>}
                   <div className={`text-[11px] font-bold ${match ? 'text-emerald-300' : 'text-rose-300'}`}>
                     {match ? `→ ${match.info.vsl} ${match.info.voy_d || match.info.voy || ''}${match.info.voy_l ? '/' + match.info.voy_l : ''} 항차에 저장` : '연결할 항차를 못 찾음 — 수집기 등록 후 다시 시도하거나 항차를 먼저 만드세요'}
@@ -790,8 +804,8 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
-  const disStats = computeStats(dis, 'discharge');
-  const loaStats = computeStats(loa, 'loading');
+  const disStats = computeStats(dis, 'discharge', voyage.info);
+  const loaStats = computeStats(loa, 'loading', voyage.info);   // V9.03: info.emptyConfirmed(엠티 확정) 표시용
   // V8.98-03: 쉬프팅(재적부) 개수 — 양하·선적 공통(같은 기항의 재적부 컨). 캐시라 스냅샷 틱에도 가벼움.
   const shiftCount = Object.keys(computeShiftingMapCached(voyage.key, voyage) || {}).length;
   if (shiftCount > 0) { disStats.shiftCount = shiftCount; loaStats.shiftCount = shiftCount; }
@@ -897,6 +911,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               {f.full && Object.keys(f.full).length > 0 && <div className="text-[10px] text-slate-300">FULL {fmt(f.full)}</div>}
               {f.empty && Object.keys(f.empty).length > 0 && <div className="text-[10px] text-slate-400">EMPTY {fmt(f.empty)}</div>}
               {f.luggage && Object.keys(f.luggage).length > 0 && <div className="text-[10px] text-slate-500">수화물 {fmt(f.luggage)}</div>}
+              {/* V9.03: 긴급/수화물 컨번호 — EDI 도착 후엔 리스트·카고플랜에 ▲·보라 마커로 표시됨 */}
+              {f.urgentCns && f.urgentCns.length > 0 && <div className="text-[10px] text-rose-300 font-bold">▲ 긴급 {f.urgentCns.length}대</div>}
+              {f.luggageCns && f.luggageCns.length > 0 && <div className="text-[10px] text-violet-300 font-bold">🧳 수화물 컨 {f.luggageCns.length}대</div>}
             </div>
           );
         })()}
@@ -1009,6 +1026,19 @@ function SectionBar({ label, color, stats, onClick }) {
             <span className="text-slate-400">매칭 {stats.matched > 0 ? <span className="text-emerald-300 font-bold">{stats.matched}</span> : stats.matched}</span>
           </>
         )}
+        {/* V9.03: 선적 가상엠티(DUME)·엠티확정 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
+            실번호와 가상엠티를 나눠 보여주고, 수집기가 기록한 엠티 확정(엑셀 실번호) 개수가 있으면
+            "실+E확정=총"으로 터미널 집계와 바로 대조되게 한다. */}
+        {(stats.dummyE > 0 || stats.emptyConfirmed > 0) && (
+          <>
+            <span className="text-slate-600">·</span>
+            <span className="text-purple-300" title="가상E = EDI의 엠티 예약자리(실번호 미배정, DUME 더미). E확정 = 선사가 엑셀로 준 최종 엠티 실번호 개수(수집기 기록). 총 = 실번호 + E확정 — 터미널 선적 집계와 대조용.">
+              실 {stats.ptk - stats.dummyE}
+              {stats.dummyE > 0 ? `+가상E${stats.dummyE}` : ''}
+              {stats.emptyConfirmed > 0 ? ` · E확정 ${stats.emptyConfirmed} → 총 ${stats.ptk - stats.dummyE + stats.emptyConfirmed}` : ''}
+            </span>
+          </>
+        )}
         {stats.shiftCount > 0 && (
           <>
             <span className="text-slate-600">·</span>
@@ -1035,7 +1065,7 @@ function SectionBar({ label, color, stats, onClick }) {
   );
 }
 
-function computeStats(section, mode) {
+function computeStats(section, mode, info) {
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0, virtual: false };
   const ediContainers = section.ediContainers || {};
@@ -1067,7 +1097,14 @@ function computeStats(section, mode) {
   // V8.91: 부분 EDI — TNJP 26349W 사건: EDI가 리스트 일부(한 선사분 46/313)만 커버.
   //   리스트가 기준 수치(녹색), EDI·매칭은 참고로 표기. 누락 표기는 무의미하므로 숨김.
   const partialEdi = !virtual && matched > 0 && recordCns.size > ptkCns.size;
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size };
+  // V9.03: 선적 가상엠티(DUME) 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
+  //   BAPLIE의 엠티 예약자리는 실번호가 없어 수집기가 DUME 더미번호로 채운다.
+  //   실번호 개수와 섞이면 터미널 집계와 대조가 안 되므로 분리해 보여준다.
+  const dummyE = mode === 'loading' ? [...ptkCns].filter(cn => /^DUME/.test(String(cn))).length : 0;
+  // V9.03: 엠티 확정 개수 — 선사가 EDI 대신 엑셀(MAE EMPTY LOAD LIST 등)로만 주는 최종 엠티 실번호 개수.
+  //   수집기가 voyages/{key}/info.emptyConfirmed로 기록하면 "실번호+E확정" 총계로 터미널과 맞춰볼 수 있다.
+  const emptyConfirmed = mode === 'loading' ? (parseInt(info?.emptyConfirmed, 10) || 0) : 0;
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {

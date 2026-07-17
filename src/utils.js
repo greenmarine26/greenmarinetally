@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.02-01';   // 예보 숨김 판정을 ediContainers 기준으로 수정 — _created 메타 오인 버그 (2026-07-17)
+export const APP_VERSION = 'V9.03';   // 긴급리스트·수화물 컨번호 파싱+리스트·카고플랜 표시, 선적 가상엠티(DUME) 분리 표기 (2026-07-17)
 
 // ── V9.02: 카톡 물량 예보 파서 (RZOR·OBWH 형식 — 사용자 확정 2026-07-17) ─────────
 //   예: "R075W / *FULL / 20D X 9 (S X 9) / 40H X 73 ... / FULL-161TEU EMPTY-238TEU LUG-1TEU 400TEU"
@@ -9,7 +9,8 @@ export const APP_VERSION = 'V9.02-01';   // 예보 숨김 판정을 ediContainer
 //   검산: 20피트=1TEU, 40/45피트=2TEU로 계산한 값과 말미 합계(FULL-…TEU …)가 일치해야 teuOk.
 export function parseCargoForecast(text) {
   const out = { vsl: '', voy: '', mode: '', full: {}, empty: {}, luggage: {}, teu: null, summary: '',
-    vans: { full: 0, empty: 0, luggage: 0 }, calc: { full: 0, empty: 0, luggage: 0 }, teuOk: true };
+    vans: { full: 0, empty: 0, luggage: 0 }, calc: { full: 0, empty: 0, luggage: 0 }, teuOk: true,
+    urgentCns: [], luggageCns: [], luggageSeals: {} };   // V9.03: 긴급/수화물 컨번호 (연태훼리 CLL 메일)
   const add = (sec, size20, sizeSfx, n) => {
     const size = size20 + sizeSfx;
     out[sec][size] = (out[sec][size] || 0) + n;
@@ -18,14 +19,47 @@ export function parseCargoForecast(text) {
   };
   const SIZE_G = /(\d{2})\s*([A-Z]{1,2})\s*[Xx×]\s*(\d+)/g;
   let sec = null;
+  let cnSec = null;      // V9.03: 'urgent' | 'lugg' — "*** 긴급리스트 ***" / "*** 수화물 컨테이너 ***" 아래 컨번호 나열 구간
+  let lastLuggCn = '';   // V9.03: "SEAL NO. : X" 줄을 직전 CNTR와 짝짓기
   for (const raw of String(text || '').split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
+    // V9.03: 별 2개 이상 헤더 — "*** 긴급리스트 ***", "*** 수화물 컨테이너 ***", "**변경사항**".
+    //   RZOR 섹션 헤더(*FULL, 별 1개)와 충돌하지 않음. 모르는 ** 헤더는 구간만 닫는다.
+    if (/^\*{2,}/.test(line)) {
+      sec = null;
+      if (/긴급/.test(line)) { cnSec = 'urgent'; }
+      else if (/수화물/.test(line)) { cnSec = 'lugg'; lastLuggCn = ''; }
+      else cnSec = null;
+      continue;
+    }
     // 선박+항차 (OBWH형: "OBWH 2690W"가 줄 어디든) / 항차 단독 줄 (RZOR형: "R075W")
     const sv = line.match(/\b([A-Z]{4})\s+([A-Z]?\d{2,5}[EWNS])\b/);
     if (sv && !out.voy) { out.vsl = sv[1]; out.voy = sv[2].toUpperCase(); }
     const vm = line.match(/^([A-Z]?\d{2,5}[EWNS])$/);
     if (vm && !out.voy) { out.voy = vm[1].toUpperCase(); continue; }
+    // V9.03: 항차 폴백 — 한글 제목줄("연태훼리 2690W CLL 2차 …")처럼 선박코드 없이 항차만 있는 경우.
+    //   숫자 3~5자리+방향(EWNS)이 단어 경계로 홀로 선 첫 토큰. 컨번호(영문4+숫자7)는 형태가 달라 안 걸림.
+    if (!out.voy) {
+      const va = line.match(/(?:^|[^A-Z0-9])(\d{3,5}[EWNS])(?![A-Z0-9])/);
+      if (va) out.voy = va[1].toUpperCase();
+    }
+    // V9.03: 컨번호 나열 구간 수집 — 그룹 표기 "(20X3)"/"(40X12)"는 규격 안내일 뿐이라 무시.
+    if (cnSec) {
+      if (/^[([]/.test(line)) continue;
+      const cm = line.match(/CNTR[^:：]*[:：]\s*([A-Z]{4})\s?(\d{7})/i);          // "CNTR NO. : SPSU2042317"
+      const sl = line.match(/SEAL[^:：]*[:：]\s*([A-Z0-9-]{4,})/i);              // "SEAL NO. : BHGJ048274"
+      const bare = line.match(/^([A-Z]{4})\s?(\d{7})\b/);                        // 줄 자체가 컨번호
+      const cn = cm ? (cm[1] + cm[2]).toUpperCase() : (bare ? (bare[1] + bare[2]).toUpperCase() : '');
+      if (cn) {
+        const bucket = cnSec === 'urgent' ? out.urgentCns : out.luggageCns;
+        if (!bucket.includes(cn)) bucket.push(cn);
+        if (cnSec === 'lugg') lastLuggCn = cn;
+        continue;
+      }
+      if (sl && cnSec === 'lugg' && lastLuggCn) { out.luggageSeals[lastLuggCn] = sl[1].toUpperCase(); continue; }
+      continue;   // 구간 내 기타 줄(안내문 등)은 집계에 흘리지 않는다
+    }
     // TEU 합계 줄 (RZOR형 말미)
     const tm = line.match(/FULL\s*-\s*(\d+)\s*TEU\s+EMPTY\s*-\s*(\d+)\s*TEU(?:\s+LUG\w*\s*-\s*(\d+)\s*TEU)?\s+(\d+)\s*TEU/i);
     if (tm) { out.teu = { full: +tm[1], empty: +tm[2], luggage: +(tm[3] || 0), total: +tm[4] }; continue; }

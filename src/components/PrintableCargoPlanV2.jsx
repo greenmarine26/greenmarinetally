@@ -126,6 +126,9 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(7px, 1vw, 12px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V8.98: 쉬프팅(재적부) = 좌상단 파란 ◆ (XRAY ★는 우상단 — 동시 표기 가능) */
 .cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: -1px; left: 0px; font-size: clamp(7px, 0.9vw, 11px); color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+/* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능) */
+.cpv2-cell.cpv2-urgent::after { content: '▲'; position: absolute; bottom: -1px; left: 0px; font-size: clamp(7px, 0.9vw, 11px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+.cpv2-cell.cpv2-lugg { box-shadow: inset 0 0 0 2px #7c3aed; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; }
 .cpv2-cell.cpv2-mark-R { color: #006064; }
@@ -293,7 +296,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     if (renderCellContent) {
                       return (
-                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
                           {renderCellContent(cell, row.tier)}
                         </span>
                       );
@@ -315,7 +318,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
                         {(displayMark === 'e' || displayMark === 'E')
@@ -355,7 +358,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     if (!cell.active) return <span key={ci} className="cpv2-cell-empty"></span>;
                     if (renderCellContent) {
                       return (
-                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
+                        <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
                           {renderCellContent(cell, row.tier)}
                         </span>
                       );
@@ -377,7 +380,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     return (
                       <span
                         key={ci}
-                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
+                        className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
                         {(displayMark === 'e' || displayMark === 'E')
@@ -456,6 +459,9 @@ export default function PrintableCargoPlanV2({
   const effVoyNo = voyNo || _voyByMode || '-';
   const effShipName = shipName || voyageInfo?.shipName || '';
   const shiftCount = Object.keys(shiftingMap || {}).length;   // V8.98
+  // V9.03: 긴급/수화물 카운트 — 컨테이너 플래그(c.urgent/c.lugg) 기반 (예보 저장 시 태깅됨)
+  const urgentCount = (containers || []).filter(c => c && c.urgent).length;
+  const luggCount = (containers || []).filter(c => c && c.lugg).length;
   // V8.45-02: 골격(구조) 판정 전용 컨 — 양하+선적 합본. 없으면 containers 폴백(하위호환).
   const structCont = (structureContainers && structureContainers.length) ? structureContainers : containers;
   // 베이사전 + v5 매트릭스 로딩
@@ -834,8 +840,10 @@ export default function PrintableCargoPlanV2({
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
-          <div className="col" style={{ fontSize: 8, color: '#555' }}>Ⓔ=엠티(소문자 e=20ft) · 연한배경=엠티 구역{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}</div>
+          <div className="col" style={{ fontSize: 8, color: '#555' }}>Ⓔ=엠티(소문자 e=20ft) · 연한배경=엠티 구역{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
           {shiftCount > 0 && <div className="col" style={{ fontSize: 9, color: '#1d4ed8', fontWeight: 'bold' }}>쉬프팅 {shiftCount}</div>}
+          {urgentCount > 0 && <div className="col" style={{ fontSize: 9, color: '#dc2626', fontWeight: 'bold' }}>긴급 {urgentCount}</div>}
+          {luggCount > 0 && <div className="col" style={{ fontSize: 9, color: '#7c3aed', fontWeight: 'bold' }}>수화물 {luggCount}</div>}
           <div className="col">DATE : {today}</div>
         </div>
         {dictData && dictData._substituted && (

@@ -53,6 +53,26 @@ import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 
+// V9.03: 긴급/수화물 마커 주입 — 예보(카톡·연태훼리 CLL 메일)에 담긴 컨번호를 렌더 시점에
+//   c.urgent/c.lugg 플래그로 붙인다. 데이터(ediContainers)에 쓰지 않으므로 EDI가 예보보다
+//   늦게 오거나(일반 흐름) 갱신·재등록돼도 마커가 유지된다.
+function tagForecastMarks(list, urgentSet, luggSet, luggSeals) {
+  if ((!urgentSet || !urgentSet.size) && (!luggSet || !luggSet.size)) return list;
+  return list.map(c => {
+    if (!c || !c.cn) return c;
+    const u = urgentSet.has(c.cn);
+    const l = luggSet.has(c.cn);
+    if (!u && !l) return c;
+    const t = { ...c };
+    if (u) t.urgent = true;
+    if (l) {
+      t.lugg = true;
+      if (luggSeals && luggSeals[c.cn]) t.luggSeal = luggSeals[c.cn];
+    }
+    return t;
+  });
+}
+
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange, initModeOverride = null }) {
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   const hasDis = !!voyage?.discharge;
@@ -205,7 +225,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     }).sort((a, b) => a.from.localeCompare(b.from));
   }, [shiftingMap, fullEdiMap]);
 
-  const allEdiContainers = useMemo(() => {
+  // V9.03: 긴급/수화물 컨번호 세트 — forecast.mode가 현재 모드와 일치할 때만 적용
+  //   (선적 예보 마커가 양하 리스트에 새지 않게). 상세는 tagForecastMarks 주석.
+  const _fc = voyage?.info?.forecast;
+  const _fcApply = _fc && (_fc.mode || 'loading') === mode;
+  const urgentSet = useMemo(
+    () => new Set((_fcApply && Array.isArray(_fc.urgentCns)) ? _fc.urgentCns : []), [_fc, _fcApply]);
+  const luggSet = useMemo(
+    () => new Set((_fcApply && Array.isArray(_fc.luggageCns)) ? _fc.luggageCns : []), [_fc, _fcApply]);
+
+  const allEdiContainersBase = useMemo(() => {
     const merged = {};
     // V8.87-01: 컨번호 없는 실자리(터미널 PRE 등)가 merged['']로 1개로 붕괴하던 버그 수정.
     //   베이플랜 화면 인쇄(카고플랜 V2)가 이 목록을 쓰는데, 붕괴+_inList 누락으로 별첨이 35(pol 있는 34+팬텀 1)로 잘못 집계됐다.
@@ -333,12 +362,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return list;
   }, [fullEdiMap, recMap, mode]);
 
+  // V9.03: 베이플랜/카고플랜용 목록에 긴급/수화물 마커 주입
+  const allEdiContainers = useMemo(
+    () => tagForecastMarks(allEdiContainersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null),
+    [allEdiContainersBase, urgentSet, luggSet, _fc, _fcApply]);
+
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
   // M3.5.4-fix2: EDI = 단일 진실 원칙 강화
   //   - 리스트는 sl/wt 같은 보강 필드만 채울 수 있음
   //   - ISO, rf, fe, dg, bay/row/tier 등 핵심 필드는 EDI 절대 우선
   //   - 리스트가 EDI 리퍼를 일반 컨으로 덮어쓰는 사고 방지
-  const containers = useMemo(() => {
+  const containersBase = useMemo(() => {
     const merged = {};
     // V8.86: 컨번호 없는 EDI = '실제 자리'(규격·자리 확정, 컨번호 미지정 — 예: 터미널 PRE) →
     //   컨번호 키로 뭉개지 말고 자리별 __SLOT_ 키로 각각 유지(그림에 그려지고, 별첨·검수집계에선 제외).
@@ -444,6 +478,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     }
     return baseContainers;
   }, [ediMap, recMap, mode, sec.extras]);
+
+  // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
+  const containers = useMemo(
+    () => tagForecastMarks(containersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null),
+    [containersBase, urgentSet, luggSet, _fc, _fcApply]);
 
   // V8.06: LOLO/IFCSUM 선박 판정 — 컨테이너에 베이 위치가 하나도 없으면 LOLO 전용.
   //   RIZHAO ORIENT 등 RORO/LOLO 혼용선은 IFCSUM(베이 없음)으로 명세만 제공된다.

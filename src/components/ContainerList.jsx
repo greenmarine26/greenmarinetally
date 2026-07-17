@@ -413,6 +413,9 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               }`}>{c.fe || '⚠?'}</span>
               <span className="text-[9px] mono px-1 py-0.5 rounded font-bold bg-blue-900 text-blue-300">{isoToLabel(c.iso) || c.tp || ''}</span>
               {isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1.5 py-0.5 rounded font-black">🔍 XRAY</span>}
+              {/* V9.03: 긴급/수화물 — 예보(CLL 메일) 컨번호 마커. 카고플랜의 ▲·보라테두리와 짝. */}
+              {c.urgent && <span className="bg-rose-600 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black">▲ 긴급</span>}
+              {c.lugg && <span className="bg-violet-700/70 text-violet-100 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-400/60">🧳 수화물{c.luggSeal ? ` 실 ${c.luggSeal}` : ''}</span>}
               {isDG && <span className="bg-red-700/60 text-red-100 text-[9px] px-1.5 py-0.5 rounded font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
               {/* 리퍼 - 온도 있으면 항상 큰 뱃지 (F/E 무관) */}
               {isReefer && hasTmp

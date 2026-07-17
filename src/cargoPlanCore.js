@@ -285,6 +285,8 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
   const marks = new Map();
   const xrays = new Map();
   const shifts = new Map();  // V8.98: 쉬프팅(재적부) 컨테이너 위치 플래그
+  const urgents = new Map(); // V9.03: 긴급 화물 (예보의 긴급리스트 — c.urgent 플래그)
+  const luggs = new Map();   // V9.03: 수화물 컨테이너 (c.lugg 플래그)
   const colors = new Map();
   const throughs = new Map();
   const shadow20s = new Map(); // M6.86.8.19: 양옆 짝수 20ft 자리 = 회색 표시
@@ -322,6 +324,12 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
       ensureShiftTier(tier).set(rowLbl, true);
     }
   };
+  const ensureUrgentTier = (tier) => { if (!urgents.has(tier)) urgents.set(tier, new Map()); return urgents.get(tier); };
+  const ensureLuggTier = (tier) => { if (!luggs.has(tier)) luggs.set(tier, new Map()); return luggs.get(tier); };
+  const tagUrgentLugg = (c, tier, rowLbl) => {   // V9.03: 컨테이너 플래그 기반 (예보 저장 시 태깅)
+    if (c && c.urgent) ensureUrgentTier(tier).set(rowLbl, true);
+    if (c && c.lugg) ensureLuggTier(tier).set(rowLbl, true);
+  };
   const tagColor = (c, tier, rowLbl) => {
     if (getColorKeyFn) {
       const k = getColorKeyFn(c);
@@ -347,6 +355,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
             tierMap.set(rowLbl, getSelfMarkFn(c, pod));
             tagXray(c, tier, rowLbl);
             tagShift(c, tier, rowLbl);
+            tagUrgentLugg(c, tier, rowLbl);
             tagColor(c, tier, rowLbl);
             tagThrough(c, tier, rowLbl);
           }
@@ -363,6 +372,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           tierMap.set(rowLbl, getSelfMarkFn(c, pod));
           tagXray(c, tier, rowLbl);
           tagShift(c, tier, rowLbl);
+          tagUrgentLugg(c, tier, rowLbl);
           tagColor(c, tier, rowLbl);
           tagThrough(c, tier, rowLbl);
         }
@@ -402,7 +412,7 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
       }
     }
   }
-  return { marks, xrays, shifts, colors, throughs, shadow20s };
+  return { marks, xrays, shifts, urgents, luggs, colors, throughs, shadow20s };
 }
 
 // ------------------------------------------------------------
@@ -634,7 +644,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nDeckCols = deckRowPos.length;
   const nHoldCols = Math.min(holdRowPos.length, nDeckCols);
 
-  const { marks: bayMarks, xrays: bayXrays, shifts: bayShifts, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, coveredBays);
+  const { marks: bayMarks, xrays: bayXrays, shifts: bayShifts, urgents: bayUrgents, luggs: bayLuggs, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, coveredBays);
 
   // deck tier별 셀 배열 (자리 통일: STANDARD_DECK 6 tier 모두 렌더)
   const deckRows = STANDARD_DECK.map((stdT) => {
@@ -645,6 +655,8 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowShifts = bayShifts.get(stdT) || new Map();
+      const rowUrgents = bayUrgents.get(stdT) || new Map();
+      const rowLuggs = bayLuggs.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
@@ -656,7 +668,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
         const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
         if (inActive) {
           // M6.90.3: hull 단면 안쪽만 active. 바깥은 cell-empty (visibility:hidden) — 사용 못하는 셀 안 보임.
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
@@ -678,6 +690,8 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
       const rowMarks = bayMarks.get(stdT) || new Map();
       const rowXrays = bayXrays.get(stdT) || new Map();
       const rowShifts = bayShifts.get(stdT) || new Map();
+      const rowUrgents = bayUrgents.get(stdT) || new Map();
+      const rowLuggs = bayLuggs.get(stdT) || new Map();
       const rowColors = bayColors.get(stdT) || new Map();
       const rowThroughs = bayThroughs.get(stdT) || new Map();
       const rowShadow20 = bayShadow20s.get(stdT) || new Map();
@@ -688,7 +702,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
           const rowLbl = (c >= 0 && c < nHoldCols) ? holdRowPos[c] : null;
           const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
           const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
-          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
+          cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
         }
