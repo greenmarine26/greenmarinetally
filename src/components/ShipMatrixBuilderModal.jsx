@@ -110,6 +110,29 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     });
   };
 
+  // V9.04: 사용불가 셀(선박 구조상 없는 자리) 토글 — XTPG BAY25 80티어처럼 한 티어에
+  //   로우가 부분 부분만 있는 구조를 표현. 저장은 기존 blockedCells 필드(V7.99-4) 재사용이라
+  //   베이플랜·카고플랜·3D가 같은 데이터를 읽는다.
+  const toggleBlockedCell = (bay, kind, tier, row) => {
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      const entry = { ...cp.byBay[bay] };
+      const key = kind === 'deck' ? 'deckBlocked' : 'holdBlocked';
+      const bc = {
+        deckBlocked: [...(entry.blockedCells?.deckBlocked || [])],
+        holdBlocked: [...(entry.blockedCells?.holdBlocked || [])],
+      };
+      const rowP = String(row).padStart(2, '0');
+      const idx = bc[key].findIndex(x => Number(x.tier) === Number(tier) && String(x.row).padStart(2, '0') === rowP);
+      if (idx >= 0) bc[key].splice(idx, 1);
+      else bc[key].push({ tier: Number(tier), row: rowP });
+      if (!bc.deckBlocked.length && !bc.holdBlocked.length) delete entry.blockedCells;
+      else entry.blockedCells = bc;
+      cp.byBay[bay] = entry;
+      return cp;
+    });
+  };
+
   const addTier = (bay, kind, tierValueRaw) => {
     const v = parseInt(tierValueRaw);
     if (!Number.isFinite(v) || v < 1 || v > 99) {
@@ -1132,6 +1155,58 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                             <BayBoxV2 data={data} count={null} colorMap={{}} />
                           </div>
                         </div>
+
+                        {/* === V9.04: 사용불가 셀(구조상 없는 자리) 편집 — XTPG BAY25 80티어 부분 로우 === */}
+                        {(() => {
+                          const eNoBlk = { ...e };
+                          delete eNoBlk.blockedCells;
+                          const grid = buildEmptyBayRenderData(eNoBlk, 'blk', false);
+                          if (!grid) return null;
+                          const blkArr = (kind) => kind === 'deck' ? (e.blockedCells?.deckBlocked || []) : (e.blockedCells?.holdBlocked || []);
+                          const isBlk = (kind, tier, rowLbl) =>
+                            blkArr(kind).some(x => Number(x.tier) === tier && String(x.row).padStart(2, '0') === rowLbl);
+                          const nBlk = blkArr('deck').length + blkArr('hold').length;
+                          const renderRows = (rows, kind) => rows.filter(r => !r.invisible).map(r => (
+                            <div key={`${kind}-${r.tier}`} className="flex items-center gap-0.5 mb-0.5">
+                              <span className="w-6 text-[9px] text-zinc-500 text-right mr-1 font-mono">{String(r.tier).padStart(2, '0')}</span>
+                              {r.cells.map((cell, i) => cell.rowLbl != null && (cell.active || cell.blocked) ? (
+                                <button key={i}
+                                  onClick={() => toggleBlockedCell(selectedBay, kind, r.tier, cell.rowLbl)}
+                                  title={isBlk(kind, r.tier, cell.rowLbl) ? '사용불가 해제' : '이 자리를 사용불가(구조상 없음)로'}
+                                  className={`w-7 h-6 rounded text-[9px] font-mono font-bold ${
+                                    isBlk(kind, r.tier, cell.rowLbl)
+                                      ? 'bg-red-900/70 text-red-300 border border-red-600'
+                                      : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300'
+                                  }`}>
+                                  {isBlk(kind, r.tier, cell.rowLbl) ? '✕' : cell.rowLbl}
+                                </button>
+                              ) : <span key={i} className="w-7 h-6" />)}
+                            </div>
+                          ));
+                          return (
+                            <div className="bg-zinc-900/50 rounded p-2 mb-2">
+                              <div className="text-xs text-zinc-300 font-bold mb-1">
+                                🧱 사용불가 셀 <span className="font-normal text-zinc-500">(선박 구조상 없는 자리 — 셀을 눌러 ✕ 지정)</span>
+                                {nBlk > 0 && <span className="ml-2 px-1.5 py-0.5 bg-red-900/60 text-red-300 rounded text-[10px]">{nBlk}곳</span>}
+                              </div>
+                              <div className="text-[10px] text-zinc-500 mb-2">
+                                예: 80티어에 로우가 부분만 있는 베이 — 없는 자리를 ✕ 지정하면 베이플랜·카고플랜·콘앱 그림에서 빈 자리로 빠집니다.
+                              </div>
+                              {grid.deckRows.some(r => !r.invisible) && (
+                                <div className="mb-1">
+                                  <div className="text-[10px] text-blue-400 font-bold mb-0.5">Deck</div>
+                                  {renderRows(grid.deckRows, 'deck')}
+                                </div>
+                              )}
+                              {grid.holdRows.some(r => !r.invisible) && (
+                                <div>
+                                  <div className="text-[10px] text-green-400 font-bold mb-0.5">Hold</div>
+                                  {renderRows(grid.holdRows, 'hold')}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* === Padding/Alignment 컨트롤 === */}
                         <div className="bg-zinc-900/50 rounded p-2 mb-2">

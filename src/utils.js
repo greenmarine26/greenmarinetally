@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.03-01';   // isISO403 45ft 드라이(L5G1·9500) 촬영 오탐 제외 — OBWH 2689E 사용자 검증 (2026-07-17)
+export const APP_VERSION = 'V9.04';   // 매트릭스 사용불가 셀(부분 로우) — 빌더 토글 UI + 카고플랜 반영 (XTPG BAY25, 2026-07-17)
 
 // ── V9.02: 카톡 물량 예보 파서 (RZOR·OBWH 형식 — 사용자 확정 2026-07-17) ─────────
 //   예: "R075W / *FULL / 20D X 9 (S X 9) / 40H X 73 ... / FULL-161TEU EMPTY-238TEU LUG-1TEU 400TEU"

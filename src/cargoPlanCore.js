@@ -457,6 +457,21 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const userBay = shipBayDef?.baysSummary?.find(b =>
     b.bayNo === oddKey2 || b.bay === oddKey3 || b.bay === oddKey2
   );
+  // V9.04: 사용불가 셀(blockedCells — 선박 구조상 없는 자리) 조회 세트.
+  //   XTPG BAY25 80티어처럼 한 티어에 로우가 부분 부분만 있는 구조를 카고플랜에도 반영
+  //   (기존엔 buildEmptyBayRenderData(베이플랜·미리보기)만 지원 → 82티어가 허공에 뜬 그림).
+  //   페어 박스면 짝수 베이 entry의 blockedCells도 합친다.
+  const _evenNumForBlk = isPair ? parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10) : null;
+  const _evenBayForBlk = (_evenNumForBlk != null) ? shipBayDef?.baysSummary?.find(b =>
+    b.bayNo === String(_evenNumForBlk).padStart(2, '0') || b.bay === String(_evenNumForBlk).padStart(3, '0') || b.bay === String(_evenNumForBlk).padStart(2, '0')
+  ) : null;
+  const _blkDeckC = new Set();
+  const _blkHoldC = new Set();
+  for (const _bsrc of [userBay, _evenBayForBlk]) {
+    if (!_bsrc || !_bsrc.blockedCells) continue;
+    (_bsrc.blockedCells.deckBlocked || []).forEach(x => _blkDeckC.add(`${Number(x.tier)}-${String(x.row).padStart(2, '0')}`));
+    (_bsrc.blockedCells.holdBlocked || []).forEach(x => _blkHoldC.add(`${Number(x.tier)}-${String(x.row).padStart(2, '0')}`));
+  }
 
   // M6.91.0: PDF override가 있으면 그대로 사용 (베이마다 다른 row 구조 정확히)
   // M6.93.12 fix #2 (지침서 §6.2): userBay > override 우선순위 역전.
@@ -666,6 +681,11 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
         const inActive = activeSet.has(c);
         const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
         const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
+        // V9.04: 사용불가 셀(구조상 없는 자리)은 빈칸으로 — 단 실데이터(mark)가 있으면 데이터 우선(사전 오설정 안전장치).
+        if (inActive && !mark && rowLbl && _blkDeckC.has(`${stdT}-${rowLbl}`)) {
+          cells.push({ active: false, blocked: true, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+          continue;
+        }
         if (inActive) {
           // M6.90.3: hull 단면 안쪽만 active. 바깥은 cell-empty (visibility:hidden) — 사용 못하는 셀 안 보임.
           cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
@@ -702,6 +722,11 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
           const rowLbl = (c >= 0 && c < nHoldCols) ? holdRowPos[c] : null;
           const mark = rowLbl ? (rowMarks.get(rowLbl) || null) : null;
           const isShadow20 = rowLbl ? !!rowShadow20.get(rowLbl) : false;
+          // V9.04: 사용불가 셀 — 실데이터(mark) 없을 때만 빈칸 처리(데이터 우선 안전장치).
+          if (!mark && rowLbl && _blkHoldC.has(`${stdT}-${rowLbl}`)) {
+            cells.push({ active: false, blocked: true, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
+            continue;
+          }
           cells.push({ active: true, rowLbl, mark, isXray: rowLbl ? !!rowXrays.get(rowLbl) : false, isShift: rowLbl ? !!rowShifts.get(rowLbl) : false, isUrgent: rowLbl ? !!rowUrgents.get(rowLbl) : false, isLugg: rowLbl ? !!rowLuggs.get(rowLbl) : false, colorKey: rowLbl ? (rowColors.get(rowLbl) || null) : null, isThrough: rowLbl ? !!rowThroughs.get(rowLbl) : false, isShadow20 });
         } else {
           cells.push({ active: false, rowLbl: null, mark: null, isXray: false, colorKey: null, isThrough: false, isShadow20: false });
