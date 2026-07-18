@@ -1035,7 +1035,10 @@ function SectionBar({ label, color, stats, onClick }) {
             <span className="text-purple-300" title="가상E = EDI의 엠티 예약자리(실번호 미배정 — DUME·CASP 등 더미번호). E확정 = 선사가 엑셀로 준 최종 엠티 실번호 개수(수집기 기록). 총 = 실번호 + E확정 — 터미널 선적 집계와 대조용.">
               실 {stats.ptk - stats.dummyE}
               {stats.dummyE > 0 ? `+가상E${stats.dummyE}` : ''}
-              {stats.emptyConfirmed > 0 ? ` · E확정 ${stats.emptyConfirmed} → 총 ${stats.ptk - stats.dummyE + stats.emptyConfirmed}` : ''}
+              {/* V9.04-03: E확정은 EDI에 없는 엠티 실번호만 총계에 가산(emptyConfirmedAdd) — 실번호 EDI면 '반영됨' 표기 */}
+              {stats.emptyConfirmed > 0 ? (stats.emptyConfirmedAdd > 0
+                ? ` · E확정 ${stats.emptyConfirmed} → 총 ${stats.ptk - stats.dummyE + stats.emptyConfirmedAdd}`
+                : ` · E확정 ${stats.emptyConfirmed} ✓EDI반영`) : ''}
             </span>
           </>
         )}
@@ -1108,7 +1111,14 @@ function computeStats(section, mode, info) {
   // V9.03: 엠티 확정 개수 — 선사가 EDI 대신 엑셀(MAE EMPTY LOAD LIST 등)로만 주는 최종 엠티 실번호 개수.
   //   수집기가 voyages/{key}/info.emptyConfirmed로 기록하면 "실번호+E확정" 총계로 터미널과 맞춰볼 수 있다.
   const emptyConfirmed = mode === 'loading' ? (parseInt(info?.emptyConfirmed, 10) || 0) : 0;
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed };
+  // V9.04-03: E확정 중복가산 방지 — EDI에 엠티 '실번호'가 이미 있으면(카스피 LOAD EDI 등)
+  //   그 엠티는 실 카운트에 포함돼 있으므로 E확정을 총계에 다시 더하지 않는다.
+  //   (629S: 실번호 EDI 등록 시 실 287 + E확정 187 = 총 474 허수 방지. BAPLIE(가상만)면 realE=0 → 기존 총계 유지.)
+  const realEPtk = mode === 'loading'
+    ? ediValues.filter(c => isPyeongtaekPort(c.pol) && String(c.fe || '').toUpperCase() === 'E' && !isVirtualCn(c.cn)).length
+    : 0;
+  const emptyConfirmedAdd = Math.max(0, emptyConfirmed - realEPtk);
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {
