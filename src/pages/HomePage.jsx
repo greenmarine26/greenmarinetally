@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 
@@ -1032,7 +1032,7 @@ function SectionBar({ label, color, stats, onClick }) {
         {(stats.dummyE > 0 || stats.emptyConfirmed > 0) && (
           <>
             <span className="text-slate-600">·</span>
-            <span className="text-purple-300" title="가상E = EDI의 엠티 예약자리(실번호 미배정, DUME 더미). E확정 = 선사가 엑셀로 준 최종 엠티 실번호 개수(수집기 기록). 총 = 실번호 + E확정 — 터미널 선적 집계와 대조용.">
+            <span className="text-purple-300" title="가상E = EDI의 엠티 예약자리(실번호 미배정 — DUME·CASP 등 더미번호). E확정 = 선사가 엑셀로 준 최종 엠티 실번호 개수(수집기 기록). 총 = 실번호 + E확정 — 터미널 선적 집계와 대조용.">
               실 {stats.ptk - stats.dummyE}
               {stats.dummyE > 0 ? `+가상E${stats.dummyE}` : ''}
               {stats.emptyConfirmed > 0 ? ` · E확정 ${stats.emptyConfirmed} → 총 ${stats.ptk - stats.dummyE + stats.emptyConfirmed}` : ''}
@@ -1083,7 +1083,10 @@ function computeStats(section, mode, info) {
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
-  const missing = ptkCns.size - matched;
+  // V9.04-01: 가상(더미) 자리는 '누락' 대상이 아님 — 실번호 미배정 엠티 자리(가상E)로 별도 표기.
+  //   (MCSN 629S: 가상 187이 전부 누락으로 잡혀 '누락 187' 허수. dummyE는 아래에서 계산 — 선적만.)
+  const dummyECount = mode === 'loading' ? [...ptkCns].filter(cn => isVirtualCn(cn)).length : 0;
+  const missing = Math.max(0, ptkCns.size - matched - dummyECount);
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));   // V8.84-02: 플랜 가상도 배지
@@ -1097,10 +1100,11 @@ function computeStats(section, mode, info) {
   // V8.91: 부분 EDI — TNJP 26349W 사건: EDI가 리스트 일부(한 선사분 46/313)만 커버.
   //   리스트가 기준 수치(녹색), EDI·매칭은 참고로 표기. 누락 표기는 무의미하므로 숨김.
   const partialEdi = !virtual && matched > 0 && recordCns.size > ptkCns.size;
-  // V9.03: 선적 가상엠티(DUME) 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
-  //   BAPLIE의 엠티 예약자리는 실번호가 없어 수집기가 DUME 더미번호로 채운다.
+  // V9.03: 선적 가상엠티 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
+  //   BAPLIE의 엠티 예약자리는 실번호가 없어 수집기(DUME…)나 선사 플래너(CASP69: CASP0000001…)가 더미번호로 채운다.
   //   실번호 개수와 섞이면 터미널 집계와 대조가 안 되므로 분리해 보여준다.
-  const dummyE = mode === 'loading' ? [...ptkCns].filter(cn => /^DUME/.test(String(cn))).length : 0;
+  //   V9.04-01: /^DUME/ 프리픽스 → isVirtualCn(ISO 6346 규칙) — CASP 77대 오집계(실 177·총 364) 수정.
+  const dummyE = dummyECount;
   // V9.03: 엠티 확정 개수 — 선사가 EDI 대신 엑셀(MAE EMPTY LOAD LIST 등)로만 주는 최종 엠티 실번호 개수.
   //   수집기가 voyages/{key}/info.emptyConfirmed로 기록하면 "실번호+E확정" 총계로 터미널과 맞춰볼 수 있다.
   const emptyConfirmed = mode === 'loading' ? (parseInt(info?.emptyConfirmed, 10) || 0) : 0;

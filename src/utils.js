@@ -1,5 +1,15 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.04';   // 매트릭스 사용불가 셀(부분 로우) — 빌더 토글 UI + 카고플랜 반영 (XTPG BAY25, 2026-07-17)
+export const APP_VERSION = 'V9.04-01';   // 가상엠티 프리픽스 확장(DUME→ISO 규칙: CASP 등) — 선적 집계 총364·누락187 허수 수정 (MCSN 629S, 2026-07-18)
+
+// ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
+//   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
+//   엠티 예약자리에 만드는 가상번호는 이 규칙을 안 따른다 (수집기 DUME9400016…, CASP69 플래너 CASP0000001…).
+//   V9.03의 /^DUME/ 프리픽스 판정이 CASP 77대를 실번호로 오집계 → "실 177·총 364·누락 187" 허수.
+//   검증(2026-07-18): 4개 선사 EDI 3,728컨 + 리스트 실번호 974컨에서 가상 판정 = DUME 110·CASP 77뿐, 오탐 0.
+export function isVirtualCn(cn) {
+  const s = String(cn || '').toUpperCase().replace(/\s+/g, '');
+  return /^[A-Z]{4}\d{7}$/.test(s) && !/^[A-Z]{3}[UJZ]/.test(s);
+}
 
 // ── V9.02: 카톡 물량 예보 파서 (RZOR·OBWH 형식 — 사용자 확정 2026-07-17) ─────────
 //   예: "R075W / *FULL / 20D X 9 (S X 9) / 40H X 73 ... / FULL-161TEU EMPTY-238TEU LUG-1TEU 400TEU"

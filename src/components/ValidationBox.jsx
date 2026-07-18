@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ShieldCheck, AlertTriangle, Printer, FileDown, X } from 'lucide-react';
-import { fmtPos, isPyeongtaekPort, loadSheetJS } from '../utils.js';
+import { fmtPos, isPyeongtaekPort, loadSheetJS, isVirtualCn } from '../utils.js';
 
 // V8.98-08: 쉬프팅(재적부) 목록 모달 — 검증 카드의 ◆ 칸 클릭 시. 인쇄/PDF/엑셀 저장(청구 근거용).
 const _sp = (p) => `${String(p).slice(0, 3)}-${String(p).slice(3, 5)}-${String(p).slice(5, 7)}`;
@@ -90,8 +90,20 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
     const ptkInEdi = ediContainers.filter(isPtk);
     const recCns = new Set((records || []).map(r => r.cn));
     const ediCns = new Set(ediContainers.map(c => c.cn));
-    const missingInList = ptkInEdi.filter(c => !recCns.has(c.cn));
-    const extraInList = (records || []).filter(r => !ediCns.has(r.cn));
+    // V9.04-01: 가상(더미) 컨번호 분리 — MCSN 629S 사건 2026-07-18.
+    //   EDI의 엠티 예약자리(DUME·CASP 더미)는 '리스트에 없음(누락)' 대상이 아니고,
+    //   리스트의 엠티 실번호(E확정)가 그 자리를 채우는 짝이므로 '추가(EDI밖)' 경고에서도 뺀다.
+    const virtualInEdi = ptkInEdi.filter(c => isVirtualCn(c.cn));
+    const missingInList = ptkInEdi.filter(c => !isVirtualCn(c.cn) && !recCns.has(c.cn));
+    let extraInList = (records || []).filter(r => !ediCns.has(r.cn));
+    let emptyConfirmed = 0;
+    if (virtualInEdi.length > 0) {
+      // fe='E' 또는 공란(합본 F/E 공란 287행 실측 — 수집기 v2.17.11-17부터 엠티 출처는 E로 채움)을
+      //   엠티 확정분으로 본다. 명시적 'F'(풀인데 EDI에 없음)만 진짜 '추가' 경고로 남긴다.
+      const isE = (r) => String(r.fe || '').toUpperCase() !== 'F';
+      emptyConfirmed = extraInList.filter(isE).length;
+      extraInList = extraInList.filter(r => !isE(r));
+    }
 
     // 선사별 누락
     const missingByOp = {};
@@ -118,6 +130,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
       extraCount: extraInList.length,
       extraByOp,
       extraDetails: extraInList.slice(0, 5),
+      virtualCount: virtualInEdi.length,   // V9.04-01: 가상E(실번호 미배정 자리)
+      emptyConfirmed,                      // V9.04-01: 리스트 엠티 실번호(가상 자리 확정분)
     };
   }, [ediContainers, records, mode]);
 
@@ -167,6 +181,16 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
         <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-[11px] text-blue-200 font-bold">
           총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}
           <span className="ml-1 font-normal text-blue-300/70">(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])</span>
+        </div>
+      )}
+
+      {/* V9.04-01: 가상E·E확정 안내 — EDI 엠티 예약자리(더미번호)와 리스트 엠티 실번호의 짝.
+          MCSN 629S: 가상 187이 '누락 187 + 추가 187' 이중 경고로 떠서 허수였음 — 정보 줄로 대체. */}
+      {v.virtualCount > 0 && (
+        <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-[11px] text-purple-200 font-bold">
+          실 {v.ptkTotal - v.virtualCount} + 가상E {v.virtualCount}
+          {v.emptyConfirmed > 0 && <> · E확정(리스트 엠티) {v.emptyConfirmed} → 총 {v.ptkTotal - v.virtualCount + v.emptyConfirmed}</>}
+          <span className="ml-1 font-normal text-purple-300/70">(가상E = 실번호 미배정 엠티 자리 — 누락 아님)</span>
         </div>
       )}
 
