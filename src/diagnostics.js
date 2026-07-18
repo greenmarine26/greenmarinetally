@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort } from './utils.js';
+import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort, isVirtualCn } from './utils.js';
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 function filterPyeongtaek(containers, mode) {
@@ -197,29 +197,51 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       /^[A-Z]{4}\d{7}$/i.test(cn) || ediPtkCnSet.has(normCn(cn)));
     const realListCount = validListCns.length;
     const matchedCount = validListCns.filter(cn => ediPtkCnSet.has(normCn(cn))).length;
+    // V9.04-02: 가상(더미) 컨번호 분리 — MCSN 629S 사건 2026-07-18 (isVirtualCn = ISO 6346 규칙).
+    //   EDI의 엠티 예약자리(DUME·CASP 더미)는 '리스트 부족' 대상이 아니고,
+    //   리스트의 엠티 실번호(E확정)가 그 자리를 채우는 짝 — 부족·불일치 경고에서 제외.
+    const virtualEdiCount = ediPtk.filter(c => isVirtualCn(c.cn)).length;
+    const realEdiCount = ediCount - virtualEdiCount;
 
     if (realListCount > 0) {
-      const diff = ediCount - matchedCount;
+      const diff = realEdiCount - matchedCount;
       const carrierStr = carrierLabel ? ` ${carrierLabel}` : '';
       if (diff > 0) {
         // M8.07: 어떤 컨번호가 부족한지 명시 — EDI 평택엔 있는데 리스트에 없는 컨.
         //   기존엔 카운트만 알려줘 검수사·디버깅 모두 어떤 컨인지 못 찾음.
         const listCnSet = new Set(validListCns.map(cn => normCn(cn)));
+        // V9.04-02: 가상 자리는 부족 목록에서 제외 (CASP0000001… 77대가 '부족'으로 뜨던 오탐)
         const missingCns = ediPtk
-          .filter(c => !listCnSet.has(normCn(c.cn)))
+          .filter(c => !isVirtualCn(c.cn) && !listCnSet.has(normCn(c.cn)))
           .map(c => ({ cn: c.cn, iso: c.iso || '', fe: c.fe || '', sl: c.sl || '' }));
         const missingPreview = missingCns.slice(0, 10).map(m => m.cn).join(', ');
         alerts.push({
           level: 'warning',
           code: 'list_short',
-          msg: `EDI ${ediCount}대 중 리스트 매칭 ${matchedCount}대 (${diff}개 부족)${missingPreview ? ` — ${missingPreview}` : ''}`,
-          voice: `${carrierStr ? carrierStr + ' ' : ''}EDI ${ediCount}개인데 리스트 매칭 ${matchedCount}개입니다. ${diff}개 부족합니다. 리스트 보완 필요`,
+          msg: `EDI 실번호 ${realEdiCount}대 중 리스트 매칭 ${matchedCount}대 (${diff}개 부족)${missingPreview ? ` — ${missingPreview}` : ''}`,
+          voice: `${carrierStr ? carrierStr + ' ' : ''}EDI 실번호 ${realEdiCount}개인데 리스트 매칭 ${matchedCount}개입니다. ${diff}개 부족합니다. 리스트 보완 필요`,
           count: diff,
-          details: { ediCount, listCount: realListCount, matchedCount, diff, missing: missingCns },
+          details: { ediCount, realEdiCount, virtualEdiCount, listCount: realListCount, matchedCount, diff, missing: missingCns },
         });
       }
       // 리스트에는 있는데 EDI 평택에 없는 컨 (통과화물이거나 다른 항차)
-      const extraCns = validListCns.filter(cn => !ediPtkCnSet.has(cn.toUpperCase()));
+      let extraCns = validListCns.filter(cn => !ediPtkCnSet.has(cn.toUpperCase()));
+      // V9.04-02: 가상 자리(virtualEdiCount>0)가 있으면, EDI밖 리스트분 중 fe≠'F'는
+      //   그 자리를 채우는 엠티 확정분(E확정) — 경고가 아니라 info로 분리 (629S: 187개 이중 경고 소멸).
+      let emptyConfirmedCount = 0;
+      if (virtualEdiCount > 0) {
+        const isE = (cn) => String(listRecords?.[cn]?.fe || '').toUpperCase() !== 'F';
+        emptyConfirmedCount = extraCns.filter(isE).length;
+        extraCns = extraCns.filter(cn => !isE(cn));
+        alerts.push({
+          level: 'info',
+          code: 'empty_confirmed',
+          msg: `가상E ${virtualEdiCount}자리 · E확정(리스트 엠티) ${emptyConfirmedCount} — 실 ${realEdiCount} + E확정 = 총 ${realEdiCount + emptyConfirmedCount}`,
+          voice: '',
+          count: emptyConfirmedCount,
+          details: { virtualEdiCount, emptyConfirmedCount, realEdiCount },
+        });
+      }
       if (extraCns.length > 0) {
         alerts.push({
           level: 'warning',
