@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.04-05';   // 가상엠티 ISO 규칙 3경로 + E확정 중복가산 방지(실번호 EDI 등록 시 총474 방지) (MCSN 629S, 2026-07-19)
+export const APP_VERSION = 'V9.04-06';   // 가상엠티 ISO 규칙 3경로 + E확정 중복가산 방지(실번호 EDI 등록 시 총474 방지) (MCSN 629S, 2026-07-19)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -1947,7 +1947,13 @@ export async function parseListExcel(arrayBuffer) {
     // M3.86: type_i에 "Tp/Sz", "Tp.Sz", "Type/Size" 추가 (CDL 양식)
     const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^tp\/?sz$|^tp\s*sz$|^ty\/?sz$|^ty\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
-    const op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
+    let op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
+    // V9.04-06: 선사·씰 겸용 헤더 가드 (STMJ 2639E 사건 2026-07-20) — 세관 X-RAY 조회 파일
+    //   '검수업체컨테이너목록조회'의 B열 헤더가 "선사SEAL NO"라 op(/^선사/)와 sl(SEAL NO)이
+    //   같은 열에 매칭 → 실번호 17개가 선사로 들어가 카고플랜 별첨1(선사별)에 1대씩 등재됐다.
+    //   op 후보가 씰 컬럼과 같은 열이면 선사 컬럼이 아닌 것 — op 매핑을 포기한다(cargoType X-RAY 등
+    //   나머지 컬럼은 그대로 살아 X-RAY 마킹 유지).
+    if (op_i >= 0 && op_i === sl_i) op_i = -1;
     // M5.55: voucher 보강 — TSPORT(환적), PRINTPOD(실제 양하 항구), CARGO TYPE(DJS 양식 F/P)
     const tsport_i = findCol([/^tsport$|^ts.*port$|^transhipment.*port$/, /환적/]);
     const printpod_i = findCol([/^printpod$|^print.*pod$/, /^실제.*양하/]);
