@@ -143,7 +143,7 @@ export default function VoyageSummaryCard({ voyage, mode }) {
           <Chip
             icon={Camera}
             color={summary.iso403Pending > 0 ? 'blue' : 'emerald'}
-            label="ISO403 사진"
+            label="풀 리퍼 사진"
             value={`${summary.iso403Total - summary.iso403Pending}/${summary.iso403Total}${summary.iso403Pending > 0 ? ` · ⚠${summary.iso403Pending}` : ''}`}
           />
         )}

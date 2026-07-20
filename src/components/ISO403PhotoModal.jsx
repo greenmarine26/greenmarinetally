@@ -131,7 +131,7 @@ export default function ISO403PhotoModal({ open, c, voyageKey, mode, inspector, 
         <div className="sticky top-0 bg-blue-950 border-b border-blue-800 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Camera className="w-5 h-5 text-blue-300"/>
-            <span className="font-black text-blue-100">📷 ISO403 사진 촬영</span>
+            <span className="font-black text-blue-100">📷 풀 리퍼 사진 촬영</span>
           </div>
           <button onClick={onClose} className="p-1 hover:bg-blue-900 rounded">
             <X className="w-5 h-5 text-blue-200"/>
@@ -207,7 +207,7 @@ export default function ISO403PhotoModal({ open, c, voyageKey, mode, inspector, 
 
           {/* 안내 */}
           <div className="text-[11px] text-slate-400 leading-relaxed">
-            ISO403 대상 컨테이너는 사진 1장이 필수입니다. 촬영 후 저장 버튼을 누르면 항차에 기록됩니다.
+            풀 리퍼는 온도 확인 사진 1장이 필수입니다. 촬영 후 저장 버튼을 누르면 항차에 기록됩니다.
             {!inspector && <span className="block text-amber-400 mt-1">⚠️ 검수원을 먼저 선택하세요.</span>}
           </div>
         </div>

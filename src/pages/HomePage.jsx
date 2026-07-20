@@ -1045,7 +1045,7 @@ function SectionBar({ label, color, stats, onClick }) {
         {stats.shiftCount > 0 && (
           <>
             <span className="text-slate-600">·</span>
-            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 플랜상 선내 위치가 바뀐 통과화물. 양하·선적 공통 개수, 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount}</span>
+            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 터미널 배정표는 모브 수(1대=양하+재선적 2모브). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({stats.shiftCount * 2}모브)</span>
           </>
         )}
         {stats.virtual && (

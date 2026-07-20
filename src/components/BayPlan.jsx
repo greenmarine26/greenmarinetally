@@ -678,7 +678,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                 ? 'bg-blue-700 hover:bg-blue-600 text-blue-50 animate-pulse'
                 : 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100'
             }`}
-            title="ISO403 사진 촬영 의무 대상">
+            title="풀 리퍼 사진 촬영 대상">
             📷 {iso403Stats.taken}/{iso403Stats.total}
             {iso403Stats.pending > 0 && <span className="bg-blue-900/60 px-1 rounded text-[10px]">⚠{iso403Stats.pending}</span>}
           </button>
@@ -735,7 +735,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             <div className="text-sm font-black flex items-center gap-2">
               <span className="text-lg">📷</span>
               <span className={iso403Stats.pending > 0 ? 'text-blue-200' : 'text-emerald-200'}>
-                ISO403 사진 촬영
+                풀 리퍼 사진 촬영
               </span>
               <span className="text-xs font-bold text-slate-400 mono">
                 {iso403Stats.taken}/{iso403Stats.total} 완료
@@ -751,7 +751,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           </div>
           {iso403Stats.pending === 0 ? (
             <div className="text-xs text-emerald-300 font-bold flex items-center gap-1">
-              ✅ ISO403 대상 컨테이너 모두 사진 촬영 완료
+              ✅ 풀 리퍼 모두 사진 촬영 완료
             </div>
           ) : (
             <>

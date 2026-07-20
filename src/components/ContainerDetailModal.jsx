@@ -371,8 +371,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             {/* M4.9: ISO403 배지 */}
             {needsISO403Photo && (
               iso403PhotoTaken
-                ? <Badge color="emerald"><Camera className="w-3 h-3"/>ISO403 ✓</Badge>
-                : <Badge color="blue"><Camera className="w-3 h-3"/>ISO403 사진 필요</Badge>
+                ? <Badge color="emerald"><Camera className="w-3 h-3"/>풀 리퍼 ✓</Badge>
+                : <Badge color="blue"><Camera className="w-3 h-3"/>풀 리퍼 사진 필요</Badge>
             )}
           </div>
 
@@ -397,13 +397,13 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               <div className="flex items-start gap-2">
                 <span className="text-xl">📷</span>
                 <div className="flex-1">
-                  <div className="text-xs font-black text-blue-200">ISO403 사진 촬영 필요</div>
+                  <div className="text-xs font-black text-blue-200">풀 리퍼 사진 촬영 필요</div>
                   <div className="text-[11px] text-blue-300 mt-0.5">
-                    이 컨테이너는 ISO403 대상입니다 (코드 {c.iso}). 사진 1장 촬영이 필요합니다.
+                    이 컨테이너는 풀 리퍼입니다 (코드 {c.iso}). 온도 확인 사진 1장 촬영이 필요합니다.
                   </div>
                   <button onClick={() => setIso403PhotoOpen(true)}
                     className="mt-2 w-full py-2.5 bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white rounded font-bold text-sm flex items-center justify-center gap-1.5">
-                    <Camera className="w-4 h-4"/>📷 ISO403 사진 촬영
+                    <Camera className="w-4 h-4"/>📷 풀 리퍼 사진 촬영
                   </button>
                 </div>
               </div>
@@ -414,7 +414,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             <div className="mt-2 px-3 py-2 bg-emerald-950/30 border border-emerald-700/50 rounded-lg flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400"/>
-                <span className="text-xs font-bold text-emerald-200">ISO403 사진 촬영 완료</span>
+                <span className="text-xs font-bold text-emerald-200">풀 리퍼 사진 촬영 완료</span>
                 {c.iso403_photo_by && (
                   <span className="text-[10px] text-emerald-400/80">({c.iso403_photo_by})</span>
                 )}

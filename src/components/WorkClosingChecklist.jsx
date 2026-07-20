@@ -94,7 +94,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
       {
         id: 'iso403',
         icon: Camera,
-        label: 'ISO403 사진 미촬영',
+        label: '풀 리퍼 사진 미촬영',
         count: iso403Pending.length,
         desc: iso403Pending.length > 0
           ? `의무 대상 중 ${iso403Pending.length}대 사진 X`

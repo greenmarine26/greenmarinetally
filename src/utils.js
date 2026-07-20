@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.04-03';   // 가상엠티 ISO 규칙 3경로 + E확정 중복가산 방지(실번호 EDI 등록 시 총474 방지) (MCSN 629S, 2026-07-19)
+export const APP_VERSION = 'V9.04-05';   // 가상엠티 ISO 규칙 3경로 + E확정 중복가산 방지(실번호 EDI 등록 시 총474 방지) (MCSN 629S, 2026-07-19)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -607,7 +607,7 @@ export function bookingLabel(c, short = false) {
   return short ? '📝 대기' : '📝 컨번호 입력대기';
 }
 
-// M4.9: ISO403 사진 촬영 의무 대상 검출
+// M4.9 → V9.04-04: 풀 리퍼 사진 촬영 대상 검출 (구 ISO403 — 식별자·저장키는 호환 위해 유지)
 //   사용자 정의: "리퍼 L5 포함" + "26대" (TNJP 26334W 기준)
 //   EDI 분석 결과 패턴:
 //     - 4530 류 (4530~4539): 40ft 리퍼 HC (일부 선사가 표준 외 코드로 사용)
@@ -617,15 +617,23 @@ export function bookingLabel(c, short = false) {
 //         검수원이 1차 확인 후 사진 촬영하도록 함.
 export function isISO403(c) {
   if (!c) return false;
+  // V9.04-04: 목적 정정 — '규격 확인'이 아니라 '풀 리퍼 온도 확인 사진'(사용자 확정 2026-07-19).
+  //   기존 규칙은 4530·9530·L5R 코드만 봐서 두 가지가 어긋나 있었다.
+  //   ① 20ft 리퍼(2230류)를 통째로 빠뜨림 — 온도 확인이 목적이면 당연히 대상이어야 한다.
+  //   ② 4530처럼 규격이 확정되는 코드에도 'ISO403(규격) 확인' 알림을 보내, 리퍼·풀인 걸
+  //      이미 아는 검수원이 왜 찍으라는지 알 수 없었다(DJCF 0148N 화면 25대 전부 4530).
+  //   유래: M4.9 주석의 "사용자 정의 '리퍼 L5 포함' + '26대'(TNJP 26334W 기준)" — 의도가 아니라
+  //   한 항차 숫자에 맞춘 규칙이었다. 규격 표기 대조는 별건(EDI↔리스트 규격 비교, 미구현).
+  //   실측 근거(DJCF 0148N · DJCF0149SINC.EDI 689대): 4530 46대 + 2230 7대 = 냉동군 53대, Empty 0건.
+  //   대상 = 리퍼 && 풀. 엠티는 화물이 없어 온도 확인이 불필요하므로 제외(사용자 확정 2026-07-19).
   const code = String(c.iso || '').toUpperCase().trim().replace(/\s+/g, '');
-  if (!code) return false;
-  // 4530 류: 40ft 리퍼 HC (4530, 4531~4539 모두 포함)
-  if (/^45[3]\d$/.test(code)) return true;
-  // V9.03-01: 45ft 드라이는 촬영 대상 아님 (사용자 검증 2026-07-17 — OBWH 2689E L5G1 10대 오탐).
-  //   L5G1·L5G0·9500류는 표준 45ft HC 표기라 실물 확인 불필요. 45ft도 리퍼 표기만 대상 유지.
-  if (/^953\d$/.test(code)) return true;   // 45ft 리퍼 숫자표기 (9530류)
-  if (/^L5R/.test(code)) return true;      // 45ft 리퍼 알파표기 (L5R1 등)
-  return false;
+  //   ※ isReeferIso는 L5R 계열(45ft 리퍼 알파표기)을 인식하지 못한다 — 기존 ISO403 규칙에만 있던
+  //     조건이라 그대로 보존한다(시뮬에서 L5R1 회귀로 검출). isReeferIso 자체 확장은 전역 리퍼 판정
+  //     (온도 미입력 체크·카고플랜 R 표기)에 영향이 있어 별건으로 둔다.
+  if (!isReeferContainer(c) && !/^L5R/.test(code)) return false;
+  if (c.fe === 'E') return false;   // 앱 표준 F/E 판정('E'만 엠티, 그 외 풀 — utils 2389·2424 동일)
+  if (/^\d{3}E$/.test(code)) return false;   // 공컨 정규화 마커(453E·223E·953E) — fe 누락분 보강
+  return true;
 }
 
 // M4.9: 컨테이너 사진 촬영 완료 여부 판정
@@ -2870,8 +2878,31 @@ export function computeShiftingMap(dischEdiMap, loadEdiMap) {
     const from = posOf(d);
     const to = posOf(l);
     if (!from || !to) continue;
-    if (from !== to) out[cn] = { from, to };
+    if (from !== to) out[cn] = { from, to, _iso: d.iso || l.iso || '', _fe: (d.fe === 'E' && l.fe === 'E') ? 'E' : 'F' };
   }
+  // V9.04-05: 서류상 자리바꿈(동형 공컨 순열) 제외 — XTPG 532 사건(사용자 확정 2026-07-20).
+  //   실측: 쉬프팅 26 중 20이 같은 규격 공컨끼리 자리만 맞바꾼 것(맞교환 7쌍 14 + 3자 순환 2조 6).
+  //   플래너가 서류에서 공컨 번호를 재배정한 것뿐, 동일 규격 빈 컨이라 크레인이 옮길 이유가 없고
+  //   EDI에 이동 마커도 전무. 터미널 배정표 12 = 실이적 6대 × 2모브(양하+재선적)와 일치.
+  //   규칙: 공컨(양쪽 모두 E)을 (ISO) 그룹으로 묶어, from이 그룹의 to 집합에 있고 to가 그룹의
+  //   from 집합에 있는 컨(=순열 구성원)만 제외. 새 슬롯으로 간 공컨(진짜 이적)은 유지.
+  //   풀 컨은 건드리지 않는다(실이적 6대 전부 풀 — 이 필터의 영향 없음).
+  const groups = {};
+  for (const [cn, v] of Object.entries(out)) {
+    if (v._fe !== 'E') continue;
+    const k = String(v._iso || '?').toUpperCase();
+    (groups[k] = groups[k] || []).push(cn);
+  }
+  for (const k in groups) {
+    const cns = groups[k];
+    if (cns.length < 2) continue;
+    const froms = new Set(cns.map((c) => out[c].from));
+    const tos = new Set(cns.map((c) => out[c].to));
+    for (const cn of cns) {
+      if (tos.has(out[cn].from) && froms.has(out[cn].to)) delete out[cn];   // 순열 구성원 — 서류상 교환
+    }
+  }
+  for (const v of Object.values(out)) { delete v._iso; delete v._fe; }   // 내부 필드 정리(호환 형태 유지)
   return out;
 }
 
