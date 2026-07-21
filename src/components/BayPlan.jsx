@@ -55,8 +55,14 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   const unassignedCount = useMemo(() =>
     containers.filter(c => !c.bay).length, [containers]);
   // M4.9: ISO403 사진 촬영 통계
+  // V9.05-01: 평택분 필터 추가 — 통과화물 리퍼(타항행)까지 사진 대상으로 세던 버그
+  //   (SWAT 2607S: 평택 선적 리퍼 0인데 통과 리퍼 16대가 알람 ⚠16으로 표시, 9.2-② 패턴 재발).
+  //   판정은 아래 isPtk와 동일 규칙(선적=_inList||POL평택, 양하=POD평택) — TDZ 때문에 지역 정의.
   const iso403Stats = useMemo(() => {
-    const targets = containers.filter(c => isISO403(c));
+    const ptk = (c) => mode === 'discharge'
+      ? isPyeongtaekPort(c.pod)
+      : (c._inList || isPyeongtaekPort(c.pol));
+    const targets = containers.filter(c => ptk(c) && isISO403(c));
     const taken = targets.filter(c => isISO403PhotoTaken(c));
     return {
       total: targets.length,
@@ -64,7 +70,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       pending: targets.length - taken.length,
       pendingList: targets.filter(c => !isISO403PhotoTaken(c)),
     };
-  }, [containers]);
+  }, [containers, mode]);
   // M4.9: ISO403 미촬영 목록 펼치기
   const [showISO403List, setShowISO403List] = useState(false);
   const scrollRef = useRef(null);
