@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, UserPlus, User } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_NAMES } from '../staffList.js';
 import { inspectorStatus } from '../inspectorStatus.js';
+// V9.05: 관리자 이름 보호 — 신뢰 기기 3대만 무비번, 그 외 기기는 비밀번호
+import {
+  MAX_TRUSTED_DEVICES,
+  getAdminDeviceId, hashPassword, makeSalt, isTrustedDevice,
+  hasSessionPass, setSessionPass, verifyPassword, deviceLabel,
+} from '../adminGuard.js';
+import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 // fbDeleteInspector 등은 StaffManagerModal에서 사용
 
 // 삭제 권한자 (오직 한 사람)
@@ -9,6 +16,74 @@ const ADMIN_NAME = '김성일';
 
 export default function InspectorModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onSelect, onClose }) {
   const [newName, setNewName] = useState('');
+  // ── V9.05: 관리자 이름 가드 상태 ──────────────────────────────────────
+  const [guard, setGuard] = useState(null);          // admin_guard 노드 (null = 미설정/로딩전)
+  const [guardLoaded, setGuardLoaded] = useState(false);
+  const [gateMode, setGateMode] = useState(null);    // null | 'verify' | 'setup'
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [regDevice, setRegDevice] = useState(false);
+  const [gateBusy, setGateBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fbGetAdminGuard().then(g => { if (alive) { setGuard(g); setGuardLoaded(true); } });
+    return () => { alive = false; };
+  }, []);
+
+  // V9.05: 이름 선택 진입점 — 관리자 이름만 가드, 나머지는 기존 그대로
+  const handlePick = (name) => {
+    if (name !== ADMIN_NAME) { onSelect(name); return; }
+    if (hasSessionPass()) { onSelect(name); return; }          // 이 탭에서 이미 비번 통과
+    if (!guardLoaded) { alert('관리자 보호 정보 로딩 중 — 잠시 후 다시 시도하세요.'); return; }
+    if (!guard || !guard.pwHash) { setGateMode('setup'); return; }   // 최초 설정 (이 기기가 신뢰 기기 1호)
+    if (isTrustedDevice(guard)) { onSelect(name); return; }          // 신뢰 기기 (PC·폰2)
+    setGateMode('verify');                                            // 그 외 기기 → 비밀번호
+  };
+
+  // 최초 설정: 비밀번호 등록 + 이 기기를 신뢰 기기 1호로
+  const handleSetup = async () => {
+    if (gateBusy) return;
+    if (!pw1 || pw1.length < 4) { alert('비밀번호는 4자 이상으로 하세요.'); return; }
+    if (pw1 !== pw2) { alert('비밀번호가 서로 다릅니다.'); return; }
+    setGateBusy(true);
+    try {
+      const salt = makeSalt();
+      const pwHash = await hashPassword(pw1, salt);
+      const devId = getAdminDeviceId();
+      const ok = await fbUpdateAdminGuard({
+        pwHash, salt,
+        [`devices/${devId}`]: { label: `${deviceLabel()} (1호)`, addedAt: Date.now() },
+      });
+      if (!ok) { alert('저장 실패 — 네트워크를 확인하세요.'); return; }
+      setSessionPass();
+      setGateMode(null); setPw1(''); setPw2('');
+      alert(`✅ 관리자 비밀번호 설정 완료 — 이 기기가 신뢰 기기 1호로 등록됐습니다.\n폰에서도 ${ADMIN_NAME} 선택 시 비밀번호를 넣고 "기기 등록"을 체크하면 신뢰 기기(최대 ${MAX_TRUSTED_DEVICES}대)가 됩니다.`);
+      onSelect(ADMIN_NAME);
+    } finally {
+      setGateBusy(false);
+    }
+  };
+
+  // 비신뢰 기기: 비밀번호 검증 (+선택 시 신뢰 기기 등록)
+  const handleVerify = async () => {
+    if (gateBusy) return;
+    setGateBusy(true);
+    try {
+      const pass = await verifyPassword(guard, pw1);
+      if (!pass) { alert('비밀번호가 틀립니다.'); setPw1(''); return; }
+      setSessionPass();
+      const devCount = Object.keys(guard?.devices || {}).length;
+      if (regDevice && devCount < MAX_TRUSTED_DEVICES) {
+        const devId = getAdminDeviceId();
+        await fbUpdateAdminGuard({ [`devices/${devId}`]: { label: `${deviceLabel()} (${devCount + 1}호)`, addedAt: Date.now() } });
+      }
+      setGateMode(null); setPw1('');
+      onSelect(ADMIN_NAME);
+    } finally {
+      setGateBusy(false);
+    }
+  };
   const list = Object.values(inspectors || {})
     .filter(i => i && i.name)
     .sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
@@ -40,7 +115,7 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
     }
     const norm = normalizeName(raw);
     const exactName = allWhitelist.find(n => normalizeName(n) === norm);
-    onSelect(exactName);
+    handlePick(exactName);   // V9.05: 직접 입력도 관리자 가드 경유
     setNewName('');
   };
 
@@ -48,7 +123,7 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 w-full max-w-sm">
+      <div className="relative bg-slate-900 border border-slate-700 rounded-xl p-4 w-full max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="font-bold text-lg text-amber-200">검수원 선택</div>
@@ -76,7 +151,7 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
             {list.map(i => (
               <button
                 key={i.name}
-                onClick={() => onSelect(i.name)}
+                onClick={() => handlePick(i.name)}
                 className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border transition ${
                   i.name === current
                     ? 'bg-amber-900/40 border-amber-600/60 text-amber-100'
@@ -124,6 +199,63 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
             </button>
           </div>
         </div>
+
+        {/* V9.05: 관리자 이름 보호 — 비밀번호 게이트 */}
+        {gateMode && (
+          <div className="absolute inset-0 z-10 bg-slate-950/90 rounded-xl flex items-center justify-center p-4">
+            <div className="w-full max-w-xs bg-slate-900 border border-amber-600/60 rounded-lg p-4">
+              <div className="font-bold text-amber-200 text-sm mb-2">
+                {gateMode === 'setup' ? `🔐 ${ADMIN_NAME} 보호 최초 설정` : `🔐 ${ADMIN_NAME} 선택 — 비밀번호`}
+              </div>
+              {gateMode === 'setup' && (
+                <div className="text-[11px] text-slate-400 mb-2">
+                  비밀번호를 설정하면 이 기기가 신뢰 기기 1호가 됩니다. 신뢰 기기(최대 {MAX_TRUSTED_DEVICES}대)에서는 비밀번호 없이 선택됩니다.
+                </div>
+              )}
+              {gateMode === 'verify' && (
+                <div className="text-[11px] text-slate-400 mb-2">
+                  이 기기는 신뢰 기기가 아닙니다. 관리자 비밀번호를 입력하세요.
+                </div>
+              )}
+              <input
+                type="password" value={pw1} onChange={e => setPw1(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (gateMode === 'setup' ? handleSetup() : handleVerify())}
+                placeholder="비밀번호"
+                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 mb-2 focus:outline-none focus:border-amber-500"
+                autoFocus
+              />
+              {gateMode === 'setup' && (
+                <input
+                  type="password" value={pw2} onChange={e => setPw2(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSetup()}
+                  placeholder="비밀번호 확인"
+                  className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 mb-2 focus:outline-none focus:border-amber-500"
+                />
+              )}
+              {gateMode === 'verify' && Object.keys(guard?.devices || {}).length < MAX_TRUSTED_DEVICES && (
+                <label className="flex items-center gap-2 text-[11px] text-slate-300 mb-2 select-none">
+                  <input type="checkbox" checked={regDevice} onChange={e => setRegDevice(e.target.checked)}/>
+                  이 기기를 신뢰 기기로 등록 ({Object.keys(guard?.devices || {}).length}/{MAX_TRUSTED_DEVICES})
+                </label>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={gateMode === 'setup' ? handleSetup : handleVerify}
+                  disabled={gateBusy || !pw1}
+                  className="flex-1 bg-amber-700 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500 px-3 py-2 rounded text-sm font-bold text-amber-100"
+                >
+                  {gateBusy ? '확인 중…' : '확인'}
+                </button>
+                <button
+                  onClick={() => { setGateMode(null); setPw1(''); setPw2(''); }}
+                  className="px-3 py-2 rounded text-sm bg-slate-800 border border-slate-700 text-slate-300"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -844,6 +844,12 @@ export default function PrintableCargoPlanV2({
           {shiftCount > 0 && <div className="col" style={{ fontSize: 9, color: '#1d4ed8', fontWeight: 'bold' }}>쉬프팅 {shiftCount}</div>}
           {urgentCount > 0 && <div className="col" style={{ fontSize: 9, color: '#dc2626', fontWeight: 'bold' }}>긴급 {urgentCount}</div>}
           {luggCount > 0 && <div className="col" style={{ fontSize: 9, color: '#7c3aed', fontWeight: 'bold' }}>수화물 {luggCount}</div>}
+          {/* V9.05: 어느 베이사전으로 그렸는지 표기 — 오매칭 즉시 식별 (2026-07-21 SWAT 사건 후속) */}
+          <div className="col" style={{ fontSize: 8, color: (dictData && dictData.source === 'user') ? '#555' : '#dc2626', fontWeight: (dictData && dictData.source === 'user') ? 'normal' : 'bold' }}>
+            {dictData
+              ? `사전:${dictData.code || '?'}·${dictData.source || '?'}${dictData.bayDef?.parsedAt ? '·' + String(dictData.bayDef.parsedAt).slice(0, 10) : ''}${dictData.source !== 'user' ? ' ⚠비정본' : ''}`
+              : '사전:⚠미매칭(폴백 구조)'}
+          </div>
           <div className="col">DATE : {today}</div>
         </div>
         {dictData && dictData._substituted && (

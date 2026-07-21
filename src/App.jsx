@@ -1,11 +1,12 @@
 // 그린마린 평택항 검수 — Master V1.1
 import React, { useState, useEffect, useCallback } from 'react';
 import { APP_VERSION, _storage, SK } from './utils.js';
-import { loadUserBayDict } from './data/userBayDict.js';
+import { loadUserBayDict, entryTimestamp, applyApprovedSync } from './data/userBayDict.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis,
-  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat
+  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
+  fbSubscribeMatrixEditors
 } from './firebase.js';
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
@@ -41,6 +42,8 @@ export default function App() {
   const [greeting, setGreeting] = useState(null);  // {type: 'login'|'logout', lines, voice, ...}
   const [weather, setWeather] = useState(null);
   const [heartbeat, setHeartbeat] = useState(null);  // V8.40: 수집기 하트비트
+  // V9.05: 공유 정본보다 오래된 로컬 베이사전 사본 목록 (관리자 승인 후 갱신)
+  const [bayDictSyncPending, setBayDictSyncPending] = useState([]);
 
   useEffect(() => {
     const u1 = fbSubscribeVoyages((v) => { setVoyages(v); setVoyagesLoaded(true); });
@@ -56,15 +59,23 @@ export default function App() {
     //   → PC에서 만든 user 매트릭스를 폰에서도 받아서 카고플랜 룩업 가능 (읽기 전용 수신).
     //   원칙 ① 보호: source==='user'(또는 _userOwned) entry만 머지하고,
     //   로컬에 이미 더 최신(updatedAt) user entry가 있으면 덮어쓰지 않는다.
+    // V9.05: 베이사전 쓰기 게이트용 권한자 명단 캐시 (bayDictGuard.js가 참조)
+    const u7 = fbSubscribeMatrixEditors(list => { window.__gmMatrixEditors = Array.isArray(list) ? list : []; });
     const u5 = fbSubscribeShipBayDict(data => {
       window.__fbShipBayDict = data || {};
       // V7.94-07: 콘앱(Firebase 미로드, 같은 오리진)이 읽을 수 있게 localStorage에 미러.
       //   용량 초과(QuotaExceeded) 시 조용히 생략 — 메인 앱 동작에는 영향 없음.
       try { localStorage.setItem('gm_fb_baydict_cache', JSON.stringify(data || {})); } catch (e) { /* skip */ }
+      // ── V9.05: 조용한 자동 덮어쓰기 제거 (관리자 원칙: 매트릭스는 앱이 스스로 수정 금지) ──
+      //   기존 M6.94.20 자동 머지는 ①타임스탬프 비교가 NaN(ISO 문자열)으로 깨져 있었고
+      //   ②알림·이력 없이 로컬 user 사전을 덮어썼다 (2026-07-21 SWAT 사건 계기 재설계).
+      //   이제는 "공유 정본이 로컬 사본보다 최신"인 항목을 탐지만 하고,
+      //   관리자가 배너에서 승인해야 applyApprovedSync로 반영한다.
+      //   (오프라인 조회는 gm_fb_baydict_cache 폴백이 있어 자동 머지 없이도 동작.)
       try {
         const fb = data || {};
         const local = loadUserBayDict() || {};
-        let changed = false;
+        const pending = [];
         for (const code of Object.keys(fb)) {
           const e = fb[code];
           const isUser =
@@ -72,27 +83,31 @@ export default function App() {
             e?._userOwned === true || e?.bayDef?._userOwned === true;
           if (!isUser || !e?.bayDef) continue;
           const cur = local[code];
-          const curIsUser =
-            cur?.source === 'user' || cur?.bayDef?.source === 'user' ||
-            cur?._userOwned === true || cur?.bayDef?._userOwned === true;
-          if (curIsUser) {
-            // 로컬 user entry가 더 최신이면 보존 (다기기 충돌)
-            const curTs = Number(cur.updatedAt || cur.bayDef?.parsedAt || 0);
-            const fbTs = Number(e.updatedAt || e.bayDef?.parsedAt || 0);
-            if (curTs >= fbTs) continue;
-          }
-          local[code] = e;
-          changed = true;
+          if (!cur) continue;   // 로컬에 사본이 없으면 FB 폴백 조회 — 문제 없음
+          if (entryTimestamp(e) > entryTimestamp(cur)) pending.push(code);
         }
-        if (changed) {
-          _storage.set('master_user_bay_dict_v1', JSON.stringify(local));
-        }
+        setBayDictSyncPending(pending);
       } catch (err) {
-        console.error('[App] user 매트릭스 머지 실패', err);
+        console.error('[App] 베이사전 정본 대조 실패', err);
       }
     });
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); unsub2(); unsub3(); };
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); unsub2(); unsub3(); };
   }, []);
+
+  // V9.05: 관리자 승인 시 공유 정본을 로컬 사본에 반영
+  const handleApproveBayDictSync = useCallback(() => {
+    const codes = bayDictSyncPending;
+    if (!codes || codes.length === 0) return;
+    const okGo = window.confirm(`베이사전 로컬 사본 ${codes.length}건(${codes.join(', ')})을 공유 정본으로 갱신할까요?`);
+    if (!okGo) return;
+    const res = applyApprovedSync(window.__fbShipBayDict || {}, codes);
+    if (res.ok && res.applied > 0) {
+      setBayDictSyncPending([]);
+      alert(`✅ ${res.applied}건 갱신 완료`);
+    } else if (!res.ok) {
+      alert('갱신 실패 — 권한 또는 저장 오류. 콘솔을 확인하세요.');
+    }
+  }, [bayDictSyncPending]);
 
   useEffect(() => {
     const sync = () => {
@@ -219,6 +234,13 @@ export default function App() {
 
       <BroadcastMarquee inspector={inspector} />
 
+      {/* V9.05: 베이사전 정본 갱신 대기 배너 — 관리자에게만, 승인해야 반영 */}
+      {inspector === '김성일' && bayDictSyncPending.length > 0 && (
+        <div className="bg-amber-900/60 border-b border-amber-600/50 text-amber-100 text-xs px-3 py-2 flex items-center justify-between gap-2">
+          <span>📚 베이사전 로컬 사본 {bayDictSyncPending.length}건이 공유 정본보다 오래됨: {bayDictSyncPending.slice(0, 6).join(', ')}{bayDictSyncPending.length > 6 ? ' 외' : ''}</span>
+          <button onClick={handleApproveBayDictSync} className="bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold px-3 py-1 rounded flex-shrink-0">정본으로 갱신</button>
+        </div>
+      )}
       <main className="pb-20">
         {route.name === 'home' && (
           <HomePage

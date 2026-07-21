@@ -4,6 +4,7 @@ import { initializeApp } from 'firebase/app';
 import {
   getDatabase, ref, onValue, push, set, update, remove, get, child, off
 } from 'firebase/database';
+import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
 // M6.40: STOWAGE PDF 보관 — Firebase Storage
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
@@ -1408,6 +1409,8 @@ export { db };
  */
 export async function fbSaveShipBayDict(code, entry) {
   if (!code || !entry) return false;
+  // V9.05: 베이사전 쓰기 중앙 게이트 — 권한자(matrix_editors)만 저장 가능 (관리자 원칙)
+  if (!gateBayDictWrite('Firebase 저장')) return false;
   const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
   if (!cleanCode) return false;
   try {
@@ -1500,6 +1503,8 @@ export function fbSubscribeShipBayDict(callback) {
  * 베이사전 단일 항목 삭제
  */
 export async function fbDeleteShipBayDict(code) {
+  // V9.05: 삭제도 수정 — 권한자만
+  if (!gateBayDictWrite('Firebase 삭제')) return false;
   const cleanCode = String(code).replace(/[.#$/[\]\s'"]/g, '_').trim();
   if (!cleanCode) return false;
   try {
@@ -1605,6 +1610,42 @@ export async function fbSetMatrixEditors(actor, nextEditors) {
   } catch (e) {
     console.error('[fbSetMatrixEditors] 저장 실패', e);
     return { ok: false, reason: 'fb_error' };
+  }
+}
+
+// ─── V9.05: 관리자 이름 보호 (admin_guard) ────────────────────────────────
+//   노드: admin_guard = { pwHash, salt, devices: { [devId]: { label, addedAt } } }
+//   김성일 선택: 신뢰 기기(최대 3대)는 무비번, 그 외 기기는 비밀번호 검증.
+export async function fbGetAdminGuard() {
+  try {
+    const snap = await get(ref(db, 'admin_guard'));
+    return snap.exists() ? snap.val() : null;
+  } catch (e) {
+    console.error('[fbGetAdminGuard] 조회 실패', e);
+    return null;
+  }
+}
+
+/** 부분 갱신 (pwHash/salt 설정, devices/{id} 추가 등) */
+export async function fbUpdateAdminGuard(patch) {
+  try {
+    await update(ref(db, 'admin_guard'), patch || {});
+    return true;
+  } catch (e) {
+    console.error('[fbUpdateAdminGuard] 저장 실패', e);
+    return false;
+  }
+}
+
+/** 신뢰 기기 해제 */
+export async function fbRemoveAdminDevice(devId) {
+  if (!devId) return false;
+  try {
+    await remove(ref(db, `admin_guard/devices/${devId}`));
+    return true;
+  } catch (e) {
+    console.error('[fbRemoveAdminDevice] 삭제 실패', e);
+    return false;
   }
 }
 

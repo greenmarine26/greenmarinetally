@@ -4,11 +4,40 @@ import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll } from '../firebase.js';
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice } from '../firebase.js';
+import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES } from '../adminGuard.js';   // V9.05
 
 const ADMIN_NAME = '김성일';
 
 export default function StaffManagerModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onClose }) {
+  // ── V9.05: 관리자 이름 보호 — 신뢰 기기 관리 ────────────────────────────
+  const [guardInfo, setGuardInfo] = useState(null);
+  React.useEffect(() => {
+    let alive = true;
+    fbGetAdminGuard().then(g => { if (alive) setGuardInfo(g); });
+    return () => { alive = false; };
+  }, []);
+  const handleRemoveDevice = async (devId, label) => {
+    if (!window.confirm(`신뢰 기기 해제: ${label || devId}\n이 기기에서는 앞으로 ${ADMIN_NAME} 선택 시 비밀번호가 필요합니다.`)) return;
+    const ok = await fbRemoveAdminDevice(devId);
+    if (ok) setGuardInfo(g => {
+      const next = { ...(g || {}) };
+      next.devices = { ...(next.devices || {}) };
+      delete next.devices[devId];
+      return next;
+    });
+    else alert('해제 실패 — 네트워크를 확인하세요.');
+  };
+  const handleChangePw = async () => {
+    const pw = window.prompt('새 관리자 비밀번호 (4자 이상):');
+    if (!pw) return;
+    if (pw.length < 4) { alert('4자 이상으로 하세요.'); return; }
+    const salt = makeSalt();
+    const pwHash = await hashPassword(pw, salt);
+    const ok = await fbUpdateAdminGuard({ pwHash, salt });
+    if (ok) { alert('✅ 비밀번호 변경 완료'); setGuardInfo(g => ({ ...(g || {}), pwHash, salt })); }
+    else alert('변경 실패 — 네트워크를 확인하세요.');
+  };
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('검수');
   const [filter, setFilter] = useState('all'); // all | inspectors | staff
@@ -148,6 +177,28 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
               <X className="w-5 h-5 text-slate-400" />
             </button>
           </div>
+        </div>
+
+        {/* V9.05: 관리자 이름 보호 — 신뢰 기기 관리 */}
+        <div className="px-4 py-2 border-b border-slate-700 bg-slate-800/40">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-bold text-amber-300">🔐 {ADMIN_NAME} 이름 보호 — 신뢰 기기 {Object.keys(guardInfo?.devices || {}).length}/{MAX_TRUSTED_DEVICES}</div>
+            <button onClick={handleChangePw} className="text-[10px] px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200">
+              {guardInfo?.pwHash ? '비밀번호 변경' : '비밀번호 미설정'}
+            </button>
+          </div>
+          {Object.entries(guardInfo?.devices || {}).map(([devId, d]) => (
+            <div key={devId} className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
+              <span>
+                {d?.label || devId}{devId === getAdminDeviceId() && <span className="text-emerald-400"> (현재 기기)</span>}
+                {d?.addedAt ? <span className="text-slate-500"> · {new Date(d.addedAt).toISOString().slice(0, 10)}</span> : null}
+              </span>
+              <button onClick={() => handleRemoveDevice(devId, d?.label)} className="text-red-400 hover:text-red-300 px-1.5">해제</button>
+            </div>
+          ))}
+          {Object.keys(guardInfo?.devices || {}).length === 0 && (
+            <div className="text-[10px] text-slate-500 mt-1">등록된 신뢰 기기 없음 — 검수원 선택에서 {ADMIN_NAME} 클릭 시 설정됩니다.</div>
+          )}
         </div>
 
         {/* 필터 탭 */}

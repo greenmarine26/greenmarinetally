@@ -8,7 +8,21 @@
 //   1. userBayDict (이 모듈) — 사용자 업로드, 검증된 M4.4 메서드
 //   2. SHIP_BAY_DICT (shipBayDict.js) — 임베드된 v1.1, 미검증
 
+import { gateBayDictWrite } from '../bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
+
 const STORAGE_KEY = 'master_user_bay_dict_v1';
+
+/**
+ * V9.05: entry 최신 시각 판정 — updatedAt(숫자) 우선, 없으면 parsedAt(ISO 문자열)을 Date.parse.
+ *   기존 결함: Number(parsedAt)이 ISO 문자열에서 NaN → "로컬이 최신이면 보존" 가드가 무작위 동작.
+ */
+export function entryTimestamp(e) {
+  if (!e) return 0;
+  const u = Number(e.updatedAt);
+  if (Number.isFinite(u) && u > 0) return u;
+  const p = Date.parse(e.bayDef?.parsedAt || e.parsedAt || '');
+  return Number.isFinite(p) ? p : 0;
+}
 
 // localStorage 안전 접근 (사파리 시크릿 모드 등 fail-safe)
 const _ls = {
@@ -153,6 +167,8 @@ export function lookupUserBayDict(imo, codeOrName) {
  */
 export function addToUserBayDict(entry) {
   if (!entry || !entry.code) return false;
+  // V9.05: 로컬 사전 쓰기도 중앙 게이트 통과 필수 (관리자 원칙)
+  if (!gateBayDictWrite('로컬 사전 저장')) return false;
   const dict = loadUserBayDict();
 
   // M6.94.5: 같은 배 다른 키 entry 탐색 (imo/callsign/name 매칭)
@@ -205,6 +221,8 @@ export function addToUserBayDict(entry) {
  * @returns {boolean}
  */
 export function removeFromUserBayDict(key) {
+  // V9.05: 삭제도 수정 — 게이트 통과 필수
+  if (!gateBayDictWrite('로컬 사전 삭제')) return false;
   const dict = loadUserBayDict();
   if (!(key in dict)) return false;
   delete dict[key];
@@ -239,6 +257,8 @@ export function listUserBayDict() {
  */
 export function mergeUserBayDictFrom(sharedDict) {
   if (!sharedDict || typeof sharedDict !== 'object') return { ok: false, updated: 0, added: 0, kept: 0, total: 0 };
+  // V9.05: 병합도 로컬 사전 쓰기 — 게이트 통과 필수
+  if (!gateBayDictWrite('공유 사전 가져오기')) return { ok: false, updated: 0, added: 0, kept: 0, total: 0 };
   const dict = loadUserBayDict() || {};
   let updated = 0, added = 0;
   for (const [k, v] of Object.entries(sharedDict)) {
@@ -250,6 +270,27 @@ export function mergeUserBayDictFrom(sharedDict) {
   const kept = total - updated - added;
   const ok = _ls.set(STORAGE_KEY, JSON.stringify(dict));
   return { ok, updated, added, kept, total };
+}
+
+/**
+ * V9.05: 공유 정본 승인 반영 — App.jsx 배너에서 관리자가 승인했을 때만 실행.
+ *   기존 자동 머지(조용한 덮어쓰기)를 대체. 지정된 코드만 FB 정본으로 교체.
+ * @param {object} fbDict  window.__fbShipBayDict
+ * @param {string[]} codes 교체할 키 목록
+ */
+export function applyApprovedSync(fbDict, codes) {
+  if (!fbDict || !Array.isArray(codes) || codes.length === 0) return { ok: false, applied: 0 };
+  if (!gateBayDictWrite('정본 승인 반영')) return { ok: false, applied: 0 };
+  const dict = loadUserBayDict() || {};
+  let applied = 0;
+  for (const code of codes) {
+    const e = fbDict[code];
+    if (!e || typeof e !== 'object') continue;
+    dict[code] = e;
+    applied++;
+  }
+  const ok = applied > 0 ? _ls.set(STORAGE_KEY, JSON.stringify(dict)) : true;
+  return { ok, applied };
 }
 
 /**
