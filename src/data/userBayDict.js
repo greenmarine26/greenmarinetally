@@ -257,8 +257,9 @@ export function listUserBayDict() {
  */
 export function mergeUserBayDictFrom(sharedDict) {
   if (!sharedDict || typeof sharedDict !== 'object') return { ok: false, updated: 0, added: 0, kept: 0, total: 0 };
-  // V9.05: 병합도 로컬 사전 쓰기 — 게이트 통과 필수
-  if (!gateBayDictWrite('공유 사전 가져오기')) return { ok: false, updated: 0, added: 0, kept: 0, total: 0 };
+  // V9.05-02: 게이트 해제 — FB 정본→로컬 복사는 원본을 건드리지 않으므로 모든 검수원 허용.
+  //   (V9.05에서 과잉 차단되어 권한자 미선택 폰에서 카고플랜이 틀리게 보이던 문제 수정.
+  //    원본(FB) 쓰기와 로컬 직접 수정 게이트는 그대로 유지.)
   const dict = loadUserBayDict() || {};
   let updated = 0, added = 0;
   for (const [k, v] of Object.entries(sharedDict)) {
@@ -280,7 +281,7 @@ export function mergeUserBayDictFrom(sharedDict) {
  */
 export function applyApprovedSync(fbDict, codes) {
   if (!fbDict || !Array.isArray(codes) || codes.length === 0) return { ok: false, applied: 0 };
-  if (!gateBayDictWrite('정본 승인 반영')) return { ok: false, applied: 0 };
+  // V9.05-02: 게이트 해제 — FB 정본→로컬 반영도 원본 훼손 불가, 모든 검수원 허용.
   const dict = loadUserBayDict() || {};
   let applied = 0;
   for (const code of codes) {

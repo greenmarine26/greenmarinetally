@@ -94,8 +94,12 @@ export default function BayDictLibraryWidget({ onSingleUpload, onBulkUpload, onA
     if (n === 0) { alert('공유 사전이 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.'); return; }
     if (!confirm(`공유 저장소의 베이사전 ${n}척을 이 기기(브라우저) 로컬 사본으로 가져옵니다.\n같은 선박은 공유본으로 덮어쓰고, 이 기기에만 있는 선박은 유지됩니다.\n진행할까요?`)) return;
     const r = mergeUserBayDictFrom(bayDict);
-    if (r.ok) alert(`✅ 공유 사전 동기화 완료\n덮어씀 ${r.updated}척 · 새로 추가 ${r.added}척 · 이 기기 전용 유지 ${r.kept}척`);
-    else alert('저장 실패 — 브라우저 저장공간을 확인하세요.');
+    if (r.ok) {
+      // V9.05-02: 카고플랜은 로컬 사본을 우선 읽으므로 새로고침해야 반영됨 — 안내 + 즉시 새로고침 제안
+      if (confirm(`✅ 공유 사전 동기화 완료\n덮어씀 ${r.updated}척 · 새로 추가 ${r.added}척 · 이 기기 전용 유지 ${r.kept}척\n\n카고플랜에 반영하려면 새로고침이 필요합니다. 지금 새로고침할까요?`)) {
+        window.location.reload();
+      }
+    } else alert('저장 실패 — 브라우저 저장공간을 확인하세요.');
   };
 
   return (
