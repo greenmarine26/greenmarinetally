@@ -1,4 +1,6 @@
-# Tallyman Master V8.09-03
+# Tallyman Master V9.05-03
+
+(버전 라벨은 build.sh가 src/utils.js APP_VERSION 기준으로 자동 동기화)
 
 평택항 컨테이너선 양하·선적 검수앱 (React/Vite PWA + Firebase).
 콘앱(cone.html)·벌크탤리와 함께 단일 통합지침서로 관리됩니다.

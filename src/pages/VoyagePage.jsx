@@ -1741,14 +1741,22 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             // V8.29: 인천발 선박은 평택 항차가 한 항차 낮게·방향이 바뀔 수 있다(사용자 확정).
             //   콜사인이 같고 EDI에 평택분이 있으면 즉시 차단 대신 경고 모달로 사용자가
             //   등록 항차 흡수 여부를 결정. 콜사인 비교 불가하거나 평택분 없으면 기존대로 차단.
+            // V9.05-03: 흡수 모달 트리거 확대 — 콜사인 비교 불가 시 모달 없이 즉시 차단되던 버그.
+            //   실측 두 갈래: (a) DJCT 계열 EDI는 TDT 식별자가 '9891' 같은 숫자 코드라 콜사인 자체가 없음.
+            //   (b) 자동등록(수집기) 항차 info에는 callsign이 아예 저장되지 않아 등록 측이 항상 공란.
+            //   여기 도달 = 상단 선박 가드 통과(콜사인·선박명이 '비교 가능한데 다른' EDI는 이미 차단됨)
+            //   → 불일치 증거 없음. 평택분이 있으면 식별 근거를 문구로 보여주고 사용자가 결정한다.
             const _csComparable = _voyCs && _ediCs;   // 1596행에서 계산됨
-            if (_ptkLeg > 0 && _csComparable) {
+            const _idBasis = _csComparable ? `같은 배 (콜사인 ${voyage.info.callsign})`
+              : (_voyNm && _ediNm) ? `선박명 대조 통과 (${r.vsl})`
+              : `⚠ 선박 식별자 비교 불가 — EDI 선박 '${r.vsl || '미상'}'이 이 배가 맞는지 직접 확인하세요`;
+            if (_ptkLeg > 0) {
               const _absorb = await askChoice({
                 title: '항차 번호가 다릅니다',
                 description:
                   `인천발 선박은 평택 항차가 한 항차 낮게, 방향이 바뀔 수 있습니다.\n\n` +
                   `EDI 항차 ${r.voy} ↔ 등록 ${_leg} 항차 ${_regVoy}\n` +
-                  `같은 배 (콜사인 ${voyage.info.callsign})\n` +
+                  `${_idBasis}\n` +
                   `EDI에 평택 ${_leg}분 ${_ptkLeg}대 있음\n\n` +
                   `등록 항차 ${_regVoy} 로 흡수할까요?`,
                 options: [
@@ -1760,11 +1768,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
                 results.push(`⛔ ${file.name}: 항차 불일치 — EDI ${r.voy} ≠ 등록 ${_leg} ${_regVoy}, 사용자가 적용 안 함 선택.`);
                 continue;
               }
-              results.push(`🔀 ${file.name}: 인천발 항차 오프셋 — EDI ${r.voy} 를 등록 ${_leg} 항차 ${_regVoy} 로 흡수 (콜사인 ${voyage.info.callsign} 일치, 평택 ${_ptkLeg}대).`);
+              results.push(`🔀 ${file.name}: 인천발 항차 오프셋 — EDI ${r.voy} 를 등록 ${_leg} 항차 ${_regVoy} 로 흡수 (${_csComparable ? `콜사인 ${voyage.info.callsign} 일치` : '사용자 확인'}, 평택 ${_ptkLeg}대).`);
               // 흡수: 가드 통과 (아래 정상 병합 흐름 진입)
-            } else if (_ptkLeg > 0) {
-              results.push(`⛔ ${file.name}: 항차 불일치 — EDI 항차 ${r.voy} ≠ 등록 ${_leg} 항차 ${_regVoy}. 평택 ${_leg}분 ${_ptkLeg}대 있음 → 적용 안 함. 파일명 항차를 ${_regVoy} 로 고쳐 재등록하세요.`);
-              continue;
+              // V9.05-03: 콜사인 비교 불가+평택분 있음의 옛 즉시 차단 분기는 모달로 대체(위).
             } else {
               results.push(`⛔ ${file.name}: 다른 항차 자료 — EDI 항차 ${r.voy} ≠ 등록 ${_leg} 항차 ${_regVoy}, 평택 ${_leg}분 없음 → 적용 안 함.`);
               continue;

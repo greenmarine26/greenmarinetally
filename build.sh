@@ -34,6 +34,9 @@ if [ -n "$APPVER" ]; then
   # __CONEV(콘앱 화면 자동갱신 감지 키)도 동기화 — V8.46에 멈춰 폰이 새 cone.html을 감지 못 하던 문제.
   sed -i "s/window.__CONEV='[^']*'/window.__CONEV='$APPVER'/" public/cone.html
   echo "✓ cone.html 화면 갱신키(__CONEV) → $APPVER 동기화"
+  # V9.05-03: README 제목 버전도 동기화 — V8.09-03에 멈춰 있던 불일치 재발 방지.
+  sed -i "s/^# Tallyman Master V[0-9.-]*/# Tallyman Master $APPVER/" README.md
+  echo "✓ README.md 제목 버전 → $APPVER 동기화"
 else
   echo "⚠ APP_VERSION 추출 실패 — sw.js 수동 확인 필요"
 fi

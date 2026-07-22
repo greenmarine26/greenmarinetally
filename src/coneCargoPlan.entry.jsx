@@ -4,6 +4,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
+import { parseBAPLIE, parseAscFile } from './utils.js';   // V9.05-03: 콘앱 파서 통합용
 
 let _root = null;
 let _host = null;
@@ -25,3 +26,8 @@ function open(props) {
 }
 
 window.ConeCargoPlan = { open, close };
+
+// V9.05-03: 파서 단일 소스 통합 — 콘앱(cone.html)이 본체 parseBAPLIE/parseAscFile을 그대로 쓰도록 노출.
+//   콘앱 내부 약식 파서의 Full/Empty 미인식(실측: EQD 상태 +5/+4 안 읽음)·ISO 불일치 해소.
+//   숫자코드 BAPLIE(CASP)·IFCSUM(RIZHAO)도 parseBAPLIE가 내부 라우팅하므로 콘앱에서 그대로 처리됨.
+window.ConeParse = { parseBAPLIE, parseAscFile };

@@ -309,8 +309,11 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const performDelete = async (action) => {
     if (!deleteTarget) return;
     const { key } = deleteTarget;
-    if (action === 'discharge') await fbDeleteSection(key, 'discharge');
-    else if (action === 'loading') await fbDeleteSection(key, 'loading');
+    // V9.05-03: 섹션 삭제 시 해당 voy 필드도 함께 제거 — 한쪽만 지웠는데 info.voy_d/voy_l이
+    //   남아 목록·검색(599행 some)·수집기 재등록 판정이 유령 항차를 계속 보던 버그.
+    //   RTDB update에 null을 주면 그 키가 삭제된다.
+    if (action === 'discharge') { await fbDeleteSection(key, 'discharge'); await fbUpdateVoyageInfo(key, { voy_d: null }); }
+    else if (action === 'loading') { await fbDeleteSection(key, 'loading'); await fbUpdateVoyageInfo(key, { voy_l: null }); }
     else if (action === 'all') await fbDeleteVoyage(key);
     setDeleteTarget(null);
   };

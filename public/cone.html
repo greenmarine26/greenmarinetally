@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.05-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.05-03</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -496,7 +496,40 @@ function parseASC(text){
 }
 
 // EDI/ASC 자동 판별 통합 파서. raw 텍스트가 둘 중 무엇이든 위치 rows를 반환.
+// V9.05-03: 본체 파서 단일 소스 통합 — 번들(cone-cargoplan.js)이 로드돼 있으면 본체
+//   parseBAPLIE/parseAscFile을 사용(Full/Empty·ISO 정확 + 숫자코드 BAPLIE/IFCSUM까지 처리).
+//   로드 전/실패(약신호)면 기존 내부 약식 파서 폴백 — 지금 동작 그대로 유지(회귀 없음).
+//   배경(실측): 콘앱 parseEDI는 EQD 상태(+5=Full/+4=Empty)를 읽지 않아 fe가 항상 공란이었다.
+function masterRowsAdapter(res, text){
+  const asc=isASC(text);
+  const rowsAll=(res.containers||[]).map(c=>{
+    const iso=String(c.iso||'').toUpperCase();
+    const size=(String(c.tp||'').startsWith('20')||iso[0]==='2')?'20':'40';
+    const t3=iso.slice(2);
+    const temp=(c.tmp==null||c.tmp==='')?null:c.tmp;
+    const isReefer=!!c.rf||/^R[FE]/.test(iso)||/^[24]58[2-5]$/.test(iso)||temp!=null;
+    const fr=!!c.fr||/^4[0-9]?P/.test(iso)||/PF|PL|PC/.test(t3)||/^[24][0-9]P/.test(iso);
+    const ot=!!c.oog||/^[24][0-9]U/.test(iso);
+    return {bay:String(c.bay||''),row:String(c.row||''),tier:parseInt(c.tier,10)||0,size,
+      cn:String(c.cn||'').replace(/[\s\-]/g,''),iso,fe:c.fe||'',temp,
+      reefer:isReefer,dg:!!c.dg,fr,ot,pol:c.pol||null,pod:c.pod||null};
+  });
+  const polPtk=rowsAll.filter(r=>isPtkPort(r.pol));
+  const podPtk=rowsAll.filter(r=>isPtkPort(r.pod));
+  // 평택분만 계산. 폴백(rowsAll) 금지 — 평택분 0이면 0이 정답. (kind 규칙은 내부 파서와 동일)
+  const useLoad=!asc && (text||'').toUpperCase().includes('LOAD');
+  let kind, rows;
+  if(useLoad||polPtk.length>podPtk.length){ kind='stow'; rows=polPtk; }
+  else { kind='disch'; rows=podPtk; }
+  return {rows, rowsAll, kind, isEDI:true, vessel:res.vsl||'', docDate:extractEdiDocDate(text)};
+}
 function parsePositions(text){
+  if(window.ConeParse && text){
+    try{
+      const res=isASC(text)?window.ConeParse.parseAscFile(text):window.ConeParse.parseBAPLIE(text);
+      if(res&&Array.isArray(res.containers)&&res.containers.length) return masterRowsAdapter(res,text);
+    }catch(e){ /* 본체 파서 예외 → 아래 내부 파서 폴백 */ }
+  }
   if(isASC(text)) return parseASC(text);
   if(isEDI(text)) return parseEDI(text);
   return null;
@@ -654,8 +687,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='V9.05-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
-window.__CONEV='V9.05-02';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='V9.05-03';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__CONEV='V9.05-03';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1339,8 +1372,9 @@ async function handleFile(file,slot){
     }
     // 그 외 전부 텍스트로 읽어 EDI인지 내용으로 판별 (확장자 무관)
     const text=await file.text();
-    if(isEDI(text)){
-      const d=parseEDI(text);
+    // V9.05-03: parsePositions로 통일 — 본체 파서 우선(로드 시) + ASC/숫자코드 형식도 이 경로에서 처리.
+    const d=parsePositions(text);
+    if(d){
       if(d.kind && d.kind!==slot) slot=d.kind;
       state[slot]={ediRows:d.rows, ediRowsAll:d.rowsAll, isEDI:true, fname:file.name, vessel:d.vessel, docDate:d.docDate};
       applyVessel(d.vessel); render(); return;
@@ -1583,6 +1617,18 @@ function bvDictBays(entry){
 // 베이플랜의 각 베이 격자를 그대로 축소 배열. 박스=위(홀수단독)+아래(짝수페어).
 // 평택분만 강조, 통과분 음영, FR만 표시. 폰: 회전+핀치줌.
 let __cargoFlag='d';  // 'd'=양하, 'l'=선적
+// V9.05-03: 본체 파서 선로드 — 시작 2.5초 후 조용히 번들 로드(버전 캐시 재사용, 실패해도 무해:
+//   parsePositions가 내부 파서로 폴백). 로드되면 window.ConeParse로 본체 파서 사용 가능.
+setTimeout(function preloadMasterParser(){
+  if(window.ConeParse||window.ConeCargoPlan) return;
+  try{
+    const s=document.createElement('script');
+    s.src='cone-cargoplan.js?v='+(window.__APPV||'');
+    s.onerror=function(){ s.remove(); };
+    document.head.appendChild(s);
+  }catch(e){}
+}, 2500);
+
 // V7.45: 본체 카고플랜 V2를 그대로 사용 — cone-cargoplan.js(React 번들) 동적 로드
 async function loadCargoPlanV2(){
   if(window.ConeCargoPlan) return;
