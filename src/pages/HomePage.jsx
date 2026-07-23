@@ -219,9 +219,15 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const rawBerth = (pm && pm.berth) || info.berth || '';
         const berth = isValidBerth(rawBerth) ? rawBerth : '';
         const pier = (pm && pm.pier) || info.pier || getPierFromBerth(berth) || '';
+        // V9.06-01: 예정작업일자(planDate — 수집기 예정 등록 "ETA ~ ETD") 폴백 (사용자 요청 2026-07-23)
+        //   PORT-MIS 레코드가 없는 예정 항차가 '일정 미상'(④)으로 밀리던 것을 작업(예정)일자 순 정렬에 태움.
+        //   PORT-MIS(신고·선석배정 기록)가 있으면 그대로 우선 — planDate는 없을 때만.
+        const _pd = String(info.planDate || '');
+        const _pdEta = _pd ? parsePortMisDateTime(_pd.split('~')[0].trim()) : null;
+        const _pdEtd = _pd.includes('~') ? parsePortMisDateTime(_pd.split('~')[1].trim()) : null;
         return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
-                 _etaMs: pm ? parsePortMisDateTime(pm.eta) : null,     // V9.01: 작업시간 근접 정렬용
-                 _etdMs: pm ? parsePortMisDateTime(pm.etd) : null };
+                 _etaMs: (pm ? parsePortMisDateTime(pm.eta) : null) ?? _pdEta,     // V9.01: 작업시간 근접 정렬용
+                 _etdMs: (pm ? parsePortMisDateTime(pm.etd) : null) ?? _pdEtd };
       })
       .sort((a, b) => {
         // V9.01: 작업시간 근접순 (사용자 확정 2026-07-17)
