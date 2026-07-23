@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.06-01';   // 홈 정렬: 예정작업일자(planDate) 폴백 — 작업(예정)일자 순 (2026-07-23)
+export const APP_VERSION = 'V9.06-02';   // 리퍼 리스트 온도 열 'Degre(e)'·'-18C' 인식(冷箱清单) — 리스트 파서 보강 (2026-07-23)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -1965,8 +1965,9 @@ export async function parseListExcel(arrayBuffer) {
     //   기존 /냉장/만 있어서 매칭 안 되어 26대 풀 리퍼 모두 미입력 처리되던 버그 수정.
     //   추가로 "set temp", "setpoint", "carry temp", "rf temp" 등 흔한 변형도 인식.
     const tmp_i = findCol([
-      /^temp|^temperature|^reefer/, /set\s*temp/, /set\s*point/, /carry\s*temp/, /rf\s*temp/,
-      /온도/, /냉장/, /냉동/, /^냉동온도/, /^냉장온도/,
+      // V9.06-02: 중국 선사 리퍼 리스트(冷箱清单 — TMPZ 2022E 실측) 'Degre(e)' 열 + ℃ 표기 인식.
+      /^temp|^temperature|^reefer/, /^degre/, /set\s*temp/, /set\s*point/, /carry\s*temp/, /rf\s*temp/,
+      /온도/, /냉장/, /냉동/, /^냉동온도/, /^냉장온도/, /℃|°c/,
     ]);
 
     if (cn_i < 0) continue;
@@ -2106,7 +2107,8 @@ export async function parseListExcel(arrayBuffer) {
         tmpMissing = true;
       } else {
         // "0", "0.0", "+0", "-0", "000" 모두 정규화 → 그대로 0°C
-        const m = tmpValRaw.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
+        // V9.06-02: '-18C'/'−18℃' 같은 단위 접미 허용(冷箱清单 실측) — 숫자만 남긴다.
+        const m = tmpValRaw.match(/^([+-]?)0*(\d+(?:\.\d+)?)\s*(?:[cC]|℃|°C)?$/);
         if (m) tmpVal = (m[1] || '') + m[2];
       }
       const isoUpper = (iso || '').toUpperCase();
