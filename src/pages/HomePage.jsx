@@ -846,8 +846,14 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 📍 {berth}
               </span>
             )}
-            {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정 */}
-            {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && (
+            {/* V9.06: 예정 항차(수집기 선등록) — 선석배정 기반, 예정작업일자 표시 (사용자 요청 2026-07-23) */}
+            {voyage.info?.autoStatus === 'expected' && (
+              <span className="text-[9px] bg-sky-900/60 border border-sky-700/50 text-sky-200 px-1.5 py-0.5 rounded font-bold">
+                📅 예정{voyage.info?.planDate ? ` · ${String(voyage.info.planDate).slice(5, 16)}` : ''}
+              </span>
+            )}
+            {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정. V9.06: expected는 위 예정 배지가 대신. */}
+            {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && voyage.info?.autoStatus !== 'expected' && (
               <span className="text-[9px] bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
                 🤖 자동(수집중)
               </span>
