@@ -126,8 +126,10 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-xray::after { content: '★'; position: absolute; top: -1px; right: 0px; font-size: clamp(7px, 1vw, 12px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
 /* V8.98: 쉬프팅(재적부) = 좌상단 파란 ◆ (XRAY ★는 우상단 — 동시 표기 가능) */
 .cpv2-cell.cpv2-shift::before { content: '◆'; position: absolute; top: -1px; left: 0px; font-size: clamp(7px, 0.9vw, 11px); color: #1d4ed8; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
-/* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능) */
-.cpv2-cell.cpv2-urgent::after { content: '▲'; position: absolute; bottom: -1px; left: 0px; font-size: clamp(7px, 0.9vw, 11px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; }
+/* V9.03: 긴급 화물 = 좌하단 빨간 ▲ · 수화물 = 우하단 보라 ■ (쉬프팅◆·XRAY★와 동시 표기 가능)
+   V9.06-03: ▲를 ::after → 실요소(.cpv2-um)로 — XRAY ★와 같은 ::after 채널이라 긴급∩XRAY 셀에서
+   ★가 지워지던 충돌(사용자 지적 2026-07-23). 이제 ◆(before)·★(after)·▲(요소)·보라테두리 4종 완전 공존. */
+.cpv2-cell .cpv2-um { position: absolute; bottom: -1px; left: 0px; font-size: clamp(7px, 0.9vw, 11px); color: #dc2626; font-weight: bold; pointer-events: none; text-shadow: 0 0 1px #fff, 0 0 1px #fff, 0 0 1px #fff; font-style: normal; line-height: 1; }
 .cpv2-cell.cpv2-lugg { box-shadow: inset 0 0 0 2px #7c3aed; }
 .cpv2-cell.cpv2-mark-o { color: #000; }
 .cpv2-cell.cpv2-mark-X { color: #000; }
@@ -298,6 +300,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       return (
                         <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
                           {renderCellContent(cell, row.tier)}
+                          {cell.isUrgent && <i className="cpv2-um">▲</i>}
                         </span>
                       );
                     }
@@ -324,6 +327,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         {(displayMark === 'e' || displayMark === 'E')
                           ? <span className="cpv2-mtc">{displayMark}</span>   /* V8.88: 엠티 동그라미 ⓔ/Ⓔ */
                           : displayMark}
+                        {cell.isUrgent && <i className="cpv2-um">▲</i>}
                       </span>
                     );
                   })}
@@ -360,6 +364,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                       return (
                         <span key={ci} className={`cpv2-cell${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}`} {...(cellExtra ? cellExtra(cell, row.tier) : {})}>
                           {renderCellContent(cell, row.tier)}
+                          {cell.isUrgent && <i className="cpv2-um">▲</i>}
                         </span>
                       );
                     }
@@ -386,6 +391,7 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         {(displayMark === 'e' || displayMark === 'E')
                           ? <span className="cpv2-mtc">{displayMark}</span>   /* V8.88: 엠티 동그라미 ⓔ/Ⓔ */
                           : displayMark}
+                        {cell.isUrgent && <i className="cpv2-um">▲</i>}
                       </span>
                     );
                   })}
