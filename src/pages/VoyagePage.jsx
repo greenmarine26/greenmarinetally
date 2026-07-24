@@ -1584,6 +1584,13 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       }
 
       // ediContainers 덮어쓰기 (records 등은 그대로)
+      // V9.06-05: 0대 가드 — 빈 파싱 결과로 기존 노드를 지우지 않는다 (TNJP 26352E 리퍼 사건 2026-07-24).
+      //   보관 raw가 손상·타형식(ASC 인코딩 깨짐 등)이면 파싱이 0대가 되는데, 그대로 저장하면
+      //   chunkedReplace가 노드를 삭제해 살아있던 EDI 158대가 증발했다. 0대면 저장 없이 중단.
+      if (Object.keys(allCns).length === 0) {
+        setStatus(`❌ 재처리 중단 — 파싱 결과 0대 (${messages.join(', ')}). 기존 EDI 데이터는 보존했습니다.\nEDI 파일을 다시 업로드해 주세요.`);
+        return;
+      }
       await fbSaveEdiContainers(voyageKey, mode, allCns);
       setStatus(`✅ 재처리 완료 — ${messages.join(', ')}\n검수 입력 데이터(실번호 등)는 보존됨`);
     } catch (e) {
