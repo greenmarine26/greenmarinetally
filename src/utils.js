@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.06-03';   // 카고플랜 긴급▲·XRAY★ 동시 표기(::after 충돌 제거 — 긴급을 실요소로) (2026-07-23)
+export const APP_VERSION = 'V9.06-04';   // 카고플랜 긴급▲·XRAY★ 동시 표기(::after 충돌 제거 — 긴급을 실요소로) (2026-07-23)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -740,6 +740,15 @@ export function parseNumericBAPLIE(ediText) {
         if (t === 'P' || t === 'F') { cur.fr = true; cur.oog = true; }
       }
       if (!cur.rf && isReeferIso(iso)) cur.rf = true;
+      // V9.06-04: 숫자코드 50 세그먼트 온도 필드(:C:온도:) 추출 — TNJP 26352E 실측
+      //   (리퍼 37대 전건 온도X 오경보). 표준 파서 TMP+2와 동일 정규화("-018"→"-18", 0°C는 실온도).
+      if ((p[5] || '').trim().toUpperCase() === 'C' && (p[6] || '').trim() !== '') {
+        let norm = (p[6] || '').trim();
+        const m = norm.match(/^([+-]?)0*(\d+(?:\.\d+)?)$/);
+        if (m) norm = (m[1] || '') + (m[2] === '' ? '0' : m[2]);
+        cur.rf = true;
+        cur.tmp = norm;
+      }
     } else if (tag === '52' && cur) {
       // 52:POL::POD::FPOD:::  (예: CNSHA::KRPTK::KRPTK:::)
       cur.pol = (p[1] || '').trim();
