@@ -441,6 +441,94 @@ export async function fbBatchClearActual(voyageKey, mode, cns) {
   await update(ref(db), updates);
 }
 
+// ============================================================
+// V9.07: 선적 확정 플랜 (일항사 협의용) — 3단 계층
+//   planDraft   : 초안. 검수사 화면·실선적에 영향 없음.
+//   ediContainers bay/row/tier : [확정] 시에만 갱신 = 검수앱 선적 플랜
+//   records.bay_actual         : 실체 위치 — 이 API가 절대 건드리지 않는다
+// ============================================================
+const PLAN_MODE = 'loading';   // 확정 플랜은 선적 전용 (사용자 확정 2026-07-25)
+
+export async function fbSavePlanDraft(voyageKey, draft, by) {
+  const path = `voyages/${voyageKey}/${PLAN_MODE}/planDraft`;
+  await set(ref(db, path), { ...draft, _at: Date.now(), _by: by || '' });
+}
+
+export async function fbClearPlanDraft(voyageKey) {
+  await remove(ref(db, `voyages/${voyageKey}/${PLAN_MODE}/planDraft`));
+}
+
+// 확정 — planDraft(또는 넘겨받은 positions)를 ediContainers 계획 위치로 커밋.
+//   최초 1회만 EDI 원본을 bay_edi0/row_edi0/tier_edi0에 백업한다(복원용).
+//   positions: { cn: {bay,row,tier} | {storage:true} }
+export async function fbCommitPlan(voyageKey, positions, by) {
+  const base = `voyages/${voyageKey}/${PLAN_MODE}`;
+  const snap = await get(ref(db, `${base}/ediContainers`));
+  const edi = snap.val() || {};
+  const updates = {};
+  const now = Date.now();
+  const hist = [];
+  let stored = 0;
+
+  for (const [cn, p] of Object.entries(positions || {})) {
+    const cur = edi[cn];
+    if (!cur) continue;
+    // 원본 백업은 최초 1회만 (이미 있으면 덮지 않는다)
+    if (cur.bay_edi0 === undefined || cur.bay_edi0 === null) {
+      updates[`${base}/ediContainers/${cn}/bay_edi0`] = cur.bay ?? '';
+      updates[`${base}/ediContainers/${cn}/row_edi0`] = cur.row ?? '';
+      updates[`${base}/ediContainers/${cn}/tier_edi0`] = cur.tier ?? '';
+    }
+    const from = `${cur.bay ?? ''}/${cur.row ?? ''}/${cur.tier ?? ''}`;
+    if (p && p.storage) {
+      // 확정 플랜에서 뺀 컨 — 계획 위치를 비운다 (미배정)
+      updates[`${base}/ediContainers/${cn}/bay`] = '';
+      updates[`${base}/ediContainers/${cn}/row`] = '';
+      updates[`${base}/ediContainers/${cn}/tier`] = '';
+      updates[`${base}/ediContainers/${cn}/plan_unassigned`] = true;
+      stored++;
+      hist.push({ cn, from, to: '__STG__' });
+    } else if (p && p.bay) {
+      updates[`${base}/ediContainers/${cn}/bay`] = p.bay;
+      updates[`${base}/ediContainers/${cn}/row`] = p.row;
+      updates[`${base}/ediContainers/${cn}/tier`] = p.tier;
+      updates[`${base}/ediContainers/${cn}/plan_unassigned`] = null;
+      hist.push({ cn, from, to: `${p.bay}/${p.row}/${p.tier}` });
+    }
+    updates[`${base}/ediContainers/${cn}/plan_at`] = now;
+    updates[`${base}/ediContainers/${cn}/plan_by`] = by || '';
+  }
+
+  if (hist.length) {
+    updates[`${base}/planHistory/${now}`] = { at: now, by: by || '', count: hist.length, storage: stored, changes: hist.slice(0, 400) };
+  }
+  updates[`${base}/planDraft`] = null;   // 확정 후 초안 비움
+  await update(ref(db), updates);
+  return { committed: hist.length, storage: stored };
+}
+
+// EDI 원본 복원 — bay_edi0가 있는 컨을 원 좌표로 되돌리고 백업 필드를 정리한다.
+export async function fbRestorePlanFromEdi(voyageKey) {
+  const base = `voyages/${voyageKey}/${PLAN_MODE}`;
+  const snap = await get(ref(db, `${base}/ediContainers`));
+  const edi = snap.val() || {};
+  const updates = {};
+  let n = 0;
+  for (const [cn, c] of Object.entries(edi)) {
+    if (c?.bay_edi0 === undefined || c?.bay_edi0 === null) continue;
+    updates[`${base}/ediContainers/${cn}/bay`] = c.bay_edi0;
+    updates[`${base}/ediContainers/${cn}/row`] = c.row_edi0 ?? '';
+    updates[`${base}/ediContainers/${cn}/tier`] = c.tier_edi0 ?? '';
+    updates[`${base}/ediContainers/${cn}/bay_edi0`] = null;
+    updates[`${base}/ediContainers/${cn}/row_edi0`] = null;
+    updates[`${base}/ediContainers/${cn}/tier_edi0`] = null;
+    updates[`${base}/ediContainers/${cn}/plan_unassigned`] = null;
+    n++;
+  }
+  if (n) await update(ref(db), updates);
+  return n;
+}
+
 // M3.87: 컨테이너 위치 재배정 (선적 모드용)
 //   - 새 위치(bay/row/tier)로 이동
 //   - 새 위치에 다른 컨이 있으면 그 컨은 미배정 처리(bay 빈 값) + 완료 취소

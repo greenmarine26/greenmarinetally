@@ -531,9 +531,26 @@ export default function PrintableCargoPlanV2({
     //   v5 raw에는 사용자가 베이사전에서 뺀 베이가 남아있을 수 있어(유령 베이),
     //   baysSummary에 없는 bayNum은 제외한다. (예: 4번 빼서 (4)5로 잘못 페어링되던 문제)
     //   userBayDict 보호 원칙: 사용자 정의 > v5 자동 추출.
+    // V9.12: 이 보호는 '사용자가 직접 고친 사전'에만 적용한다.
+    //   자동추출 사전(v2/v5/fuzzy)에서 v2.baysSummary가 v5보다 불완전한 경우가 있고
+    //   (TEN JUPITER/LYTJ: v2 18베이·페어 0 vs v5 25베이·페어 8), 그때 v2로 거르면
+    //   홀수 베이 3·7·11·15…가 전부 날아가 카고플랜 페어가 통째로 붕괴한다.
+    //   → user 사전이면 종전대로 v2가 정답, 자동 사전이면 v5에만 있는 베이도 살린다.
     if (raw.length > 0 && baysSummary.length > 0) {
-      const allowed = new Set(baysSummary.map((s) => Number(s.bayNo)).filter(Number.isFinite));
-      bays = raw.filter((b) => allowed.has(Number(b.bayNum)));
+      if (dictData?.source === 'user') {
+        const allowed = new Set(baysSummary.map((s) => Number(s.bayNo)).filter(Number.isFinite));
+        bays = raw.filter((b) => allowed.has(Number(b.bayNum)));
+      } else {
+        const have = new Set(raw.map((b) => Number(b.bayNum)));
+        const extra = baysSummary
+          .map((s) => Number(s.bayNo))
+          .filter((n) => Number.isFinite(n) && n > 0 && !have.has(n))
+          .map((n) => {
+            const sm = summaryByBay.get(n);
+            return { bayNum: n, cells: [], hasHold: !!sm?.hasHold, hasDeck: sm?.hasDeck !== false, isStandalone: !!sm?.isStandalone };
+          });
+        bays = [...raw, ...extra].sort((a, b) => Number(a.bayNum) - Number(b.bayNum));
+      }
     }
 
     return bays.map((b) => {

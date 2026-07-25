@@ -1,436 +1,118 @@
-// 수석 베이상세 편집 — 컨번호 격자에서 오선적을 드래그로 정정 (V7.97)
-//   수석/관리자만. 드래그는 임시(pending)로 모았다가 [저장] 시 fb 커밋 → 그때 검수사 화면 반영.
-//   백엔드 신규 없음: 실체위치(fbSetActualPosition)·임시창고(fbBatchMoveToStorage) 재사용.
-import React, { useMemo, useState, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Save, Undo2 } from 'lucide-react';
-import { getShipBayDictData } from '../shipStructure.js';
-import { buildContainerColorMap, getContainerColorKey, isPyeongtaekPort, isoToLabel } from '../utils.js';
-import { formatCellLines, buildBayPages } from './PrintableBayDetail.jsx';
-import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
-import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
-import { fbSetActualPosition, fbBatchMoveToStorage } from '../firebase.js';
-
-const CBE_CSS = `
-.cbe-overlay{position:fixed;inset:0;background:rgba(15,23,42,.8);z-index:10000;display:flex;flex-direction:column;}
-.cbe-head{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0f172a;color:#e2e8f0;}
-.cbe-modes{display:flex;gap:4px;}
-.cbe-modes button{padding:3px 10px;border-radius:5px;font-size:12px;font-weight:700;border:1px solid #334155;background:#1e293b;color:#cbd5e1;cursor:pointer;}
-.cbe-modes button.on{background:#2563eb;color:#fff;border-color:#2563eb;}
-.cbe-baynav{display:flex;gap:4px;flex-wrap:wrap;padding:8px;background:#0b1220;max-height:84px;overflow:auto;}
-.cbe-baynav button{padding:4px 9px;border-radius:5px;font-size:12px;font-weight:700;border:1px solid #334155;background:#1e293b;color:#cbd5e1;cursor:pointer;}
-.cbe-baynav button.on{background:#2563eb;color:#fff;border-color:#2563eb;}
-.cbe-tools{display:flex;gap:6px;align-items:center;padding:6px 12px;background:#0f172a;color:#cbd5e1;font-size:12px;border-top:1px solid #1e293b;flex-wrap:wrap;}
-.cbe-tools button{padding:5px 11px;border-radius:5px;font-weight:700;border:none;cursor:pointer;color:#fff;display:inline-flex;align-items:center;gap:4px;}
-.cbe-tools button:disabled{opacity:.45;cursor:default;}
-.cbe-body{flex:1;display:flex;min-height:0;}
-.cbe-stage{flex:1;overflow:auto;padding:14px;background:#1e293b;position:relative;}
-.cbe-bd{background:#fff;border-radius:6px;padding:10px;min-width:max-content;margin:0 auto;}
-.cbe-bd-title{text-align:center;font-weight:800;font-size:14px;color:#111;margin-bottom:6px;}
-.cbe-rl{display:flex;gap:2px;margin:2px 0 2px 0;}
-.cbe-rl>span{flex:1;min-width:46px;text-align:center;font-size:11px;color:#555;}
-.cbe-tier-row{display:flex;gap:2px;margin-bottom:2px;}
-.cbe-tier-row-grid{display:grid;gap:2px;margin-bottom:2px;}
-.cbe-tier-row-grid>div{min-width:0;}
-.cbe-tier-row-grid .cbe-cell{flex:none;min-width:0;width:100%;}
-.cbe-cell{flex:1;min-width:46px;min-height:46px;border:1px solid #888;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;line-height:1.15;padding:2px;overflow:hidden;}
-.cbe-cell.empty{background:#f1f5f9;border-style:dashed;border-color:#cbd5e1;}
-.cbe-cell.filled{background:#fff;cursor:grab;}
-.cbe-cell.filled:active{cursor:grabbing;}
-.cbe-cell.filled.ptk{font-weight:700;}
-.cbe-cell .cbe-cn{font-weight:800;font-size:11px;color:#111;letter-spacing:-.2px;}
-.cbe-cell .cbe-sub{font-size:9px;color:#64748b;}
-.cbe-cell.sel{outline:3px solid #2563eb;outline-offset:-3px;}
-.cbe-cell.pending{box-shadow:inset 0 0 0 2px #f59e0b;}
-.cbe-hatch{height:0;border-top:2px solid #111;margin:5px 0;}
-.cbe-store{width:230px;background:#0f172a;color:#e2e8f0;display:flex;flex-direction:column;border-left:1px solid #334155;}
-.cbe-store-h{padding:8px 10px;font-weight:800;font-size:13px;border-bottom:1px solid #334155;display:flex;justify-content:space-between;}
-.cbe-drop{margin:8px;border:2px dashed #38bdf8;border-radius:6px;padding:12px;text-align:center;font-size:12px;color:#7dd3fc;line-height:1.4;}
-.cbe-drop.over{background:#0c4a6e;color:#e0f2fe;}
-.cbe-store-list{flex:1;overflow:auto;padding:8px;}
-.cbe-chip{background:#1e293b;border:1px solid #475569;border-radius:5px;padding:7px 8px;margin-bottom:5px;font-size:12px;cursor:grab;color:#e2e8f0;}
-.cbe-chip .cbe-chip-cn{font-weight:800;font-family:monospace;}
-.cbe-rubber{position:absolute;border:1.5px solid #2563eb;background:rgba(37,99,235,.15);pointer-events:none;z-index:5;}
-@media (max-width:680px){
-  .cbe-body{flex-direction:column;}
-  .cbe-store{width:100%;flex:0 0 auto;max-height:140px;border-left:none;border-top:1px solid #334155;}
-  .cbe-store-list{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:6px;}
-  .cbe-chip{margin-bottom:0;white-space:nowrap;}
-  .cbe-drop{margin:6px;padding:7px;}
-}
-`;
+// 수석 베이상세 편집 — V9.07 전면 개편
+//   V7.97~V9.06: 자체 격자(cbe-cell) + 부분 BayBoxV2 혼용. 빈 슬롯에 드롭 핸들러가 없어
+//     빈 자리로 이동이 불가능했고(cellExtra의 `if(!c) return {}`), 찬 칸 드롭은 점유 검사가 없어
+//     같은 bay/row/tier에 컨이 중복 배치됐다(placeAtCell). 사용자 신고 2026-07-25.
+//   V9.07: 단독 선적플랜 편집기에서 검증된 BayGridEditor로 교체.
+//     빈 슬롯 표시·이동, 자리 맞교환, 여러 대 동시 이동, 클릭 토글 선택, 격자 기하 고정.
+//   저장 경로는 종전 그대로: 실체위치 fbSetActualPosition / 임시창고 fbBatchMoveToStorage.
+//   → 검수사 화면·실선적 EDI 근거(records.bay_actual)의 의미는 바뀌지 않는다.
+import React, { useMemo, useState, useCallback } from 'react';
+import { isoToLabel, isPyeongtaekPort } from '../utils.js';
+import { fbSetActualPosition, fbBatchMoveToStorage, STORAGE_BAY } from '../firebase.js';
+import BayGridEditor from './BayGridEditor.jsx';
+import * as P from '../planEditCore.js';
 
 const pad2 = (v) => String(v ?? '').padStart(2, '0');
-const dispBay = (n) => (n >= 100 ? String(n) : pad2(n));
-const sizeOf = (c) => { const l = isoToLabel(c.iso) || ''; if (l.startsWith('45')) return '45'; if (l.startsWith('40')) return '40'; return '20'; };
 
 export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorkers = [], onClose }) {
   const hasLoad = !!(voyage?.loading?.ediContainers && Object.keys(voyage.loading.ediContainers).length);
   const hasDis = !!(voyage?.discharge?.ediContainers && Object.keys(voyage.discharge.ediContainers).length);
   const [mode, setMode] = useState(hasLoad ? 'loading' : 'discharge');
+  const [saving, setSaving] = useState(false);
+  const [seq, setSeq] = useState(0);              // 저장 후 편집기 재생성용
 
   const sec = voyage?.[mode] || {};
   const ediMap = sec.ediContainers || {};
   const recMap = sec.records || {};
   const compMap = sec.completed || {};
 
-  // 베이스 위치 = 실체위치(actual) 있으면 그것, 없으면 EDI
-  // V7.99-7 (메모7): 선적은 EDI가 계획(실체 아님) — 선적확인(actual 설정/완료)해야 실체.
-  //   _placed=false면 아직 안 실린 계획 칸 → 화면에서 흐리게/점선으로 구분(선적 여부 식별).
-  //   양하는 EDI가 실체라 항상 placed.
-  const containers = useMemo(() => {
-    return Object.values(ediMap).map((e) => {
+  // 기준 위치 = 실체위치(actual) 있으면 그것, 없으면 EDI 계획
+  const { containers, storageCns } = useMemo(() => {
+    const list = [];
+    const stg = [];
+    for (const e of Object.values(ediMap)) {
       const rec = recMap[e.cn] || {};
       const hasA = rec.bay_actual !== undefined && rec.bay_actual !== '' && rec.bay_actual !== null;
-      const inStorage = rec.bay_actual === '__STG__';
-      const placed = mode === 'discharge' ? true : (hasA || !!compMap[e.cn]);
-      return {
+      const inStorage = rec.bay_actual === STORAGE_BAY;
+      if (inStorage) stg.push(e.cn);
+      list.push({
         ...e,
-        baseBay: inStorage ? '__STG__' : pad2(hasA ? rec.bay_actual : e.bay),
-        baseRow: pad2(hasA ? rec.row_actual : e.row),
-        baseTier: pad2(hasA ? rec.tier_actual : e.tier),
-        _placed: placed,
-      };
-    });
+        bay: inStorage ? pad2(e.bay) : pad2(hasA ? rec.bay_actual : e.bay),
+        row: inStorage ? pad2(e.row) : pad2(hasA ? rec.row_actual : e.row),
+        tier: inStorage ? pad2(e.tier) : pad2(hasA ? rec.tier_actual : e.tier),
+        // 선적은 EDI가 계획 — 선적확인(actual/완료)돼야 실체 (V7.99-7 사용자 확정)
+        _placed: mode === 'discharge' ? true : (hasA || !!compMap[e.cn]),
+      });
+    }
+    return { containers: list, storageCns: stg };
   }, [ediMap, recMap, compMap, mode]);
 
-  const dictData = useMemo(() => {
-    const imo = voyage?.info?.imo, vsl = voyage?.info?.vsl;
-    if (!imo && !vsl) return null;
-    const ediBayCount = new Set(containers.map((c) => parseInt(c.bay, 10)).filter((n) => Number.isFinite(n) && n > 0)).size;
-    return getShipBayDictData(imo, vsl, { ediBayCount });
-  }, [voyage, containers]);
-
-  const colorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
-  const dictBaysSummary = useMemo(() => {
-    const m = {};
-    (dictData?.bayDef?.baysSummary || []).forEach((b) => { m[parseInt(b.bayNo, 10)] = b; });
-    return m;
-  }, [dictData]);
-
-  // pending(로컬): cn -> {bay,row,tier} | {storage:true}
-  const [pending, setPending] = useState({});
-  const eff = useCallback((c) => {
-    const p = pending[c.cn];
-    if (p) return p.storage ? { storage: true } : { bay: p.bay, row: p.row, tier: p.tier };
-    if (c.baseBay === '__STG__') return { storage: true };
-    return { bay: c.baseBay, row: c.baseRow, tier: c.baseTier };
-  }, [pending]);
-
-  // 베이 목록 → 페어 페이지 (V7.98-02: bay>=99 OOG placeholder 제외)
-  const bayPages = useMemo(() => {
-    const set = new Set();
-    (dictData?.bayDef?.bayList || []).forEach((b) => { const n = parseInt(b, 10); if (Number.isFinite(n) && n < 99) set.add(n); });
-    // V8.81: 베이사전 요약(baysSummary)도 포함 — 매트릭스 선박은 bayList가 비어 있을 수 있음.
-    (dictData?.bayDef?.baysSummary || []).forEach((s) => { const n = parseInt(s.bayNo ?? s.bay ?? s.idx, 10); if (Number.isFinite(n) && n < 99) set.add(n); });
-    // V8.81: 컨의 원본 EDI 베이를 들어냄(임시창고) 여부와 무관하게 포함 — 컨을 다 들어내도 베이가 사라지지 않게.
-    //   (구: 현재(effective) 위치만 반영 → 전부 들어내면 베이 근거 0 → 화면에서 베이 소실. 데이터는 살아 있었음.)
-    containers.forEach((c) => { const n = parseInt(c.bay, 10); if (Number.isFinite(n) && n < 99) set.add(n); });
-    return buildBayPages([...set].sort((a, b) => a - b));
-  }, [dictData, containers]);
-
-  const [pageIdx, setPageIdx] = useState(0);
-  const page = bayPages[Math.min(pageIdx, Math.max(0, bayPages.length - 1))] || null;
-
-  // 이 페이지(even/odd)의 셀맵 + 행/단
-  const view = useMemo(() => {
-    if (!page) return null;
-    const baySet = new Set([page.even, page.odd].filter((x) => x != null).map(String));
-    const here = containers.filter((c) => { const e = eff(c); return !e.storage && baySet.has(String(parseInt(e.bay, 10))); });
-    const cellMap = {};
-    let maxLeft = 0, maxRight = 0, has00 = false;
-    const tierSet = new Set();
-    here.forEach((c) => {
-      const e = eff(c);
-      const rn = parseInt(e.row, 10);
-      if (Number.isFinite(rn) && rn >= 90) return; // V7.98-02: OOG placeholder(row99 등) 제외
-      const t = pad2(e.tier), r = pad2(e.row);
-      cellMap[`${t}-${r}`] = c;
-      tierSet.add(parseInt(t, 10));
-      if (rn === 0) has00 = true; else if (rn % 2 === 0) maxLeft = Math.max(maxLeft, rn); else maxRight = Math.max(maxRight, rn);
-    });
-    // 사전 tier/row 보강 (rowMaxLocal 우선)
-    [page.even, page.odd].forEach((bn) => {
-      if (bn == null) return;
-      const db = dictBaysSummary[bn];
-      if (!db) return;
-      (db.deckTiers || db.deckTiersLocal || []).forEach((t) => tierSet.add(parseInt(t, 10)));
-      (db.holdTiers || db.holdTiersLocal || []).forEach((t) => tierSet.add(parseInt(t, 10)));
-      const me = db.rowMaxEvenLocal ?? db.rowMaxEven;
-      const mo = db.rowMaxOddLocal ?? db.rowMaxOdd;
-      if (me) maxLeft = Math.max(maxLeft, me);
-      if (mo) maxRight = Math.max(maxRight, mo);
-    });
-    if (!maxLeft && !maxRight) { maxLeft = 8; maxRight = 7; has00 = false; }
-    const left = []; for (let n = maxLeft; n >= 2; n -= 2) left.push(pad2(n));
-    const right = []; for (let n = 1; n <= maxRight; n += 2) right.push(pad2(n));
-    const rows = has00 ? [...left, '00', ...right] : [...left, ...right];
-    const deckTiers = [...tierSet].filter((t) => t >= 80).sort((a, b) => b - a).map(pad2);
-    const holdTiers = [...tierSet].filter((t) => t < 80).sort((a, b) => b - a).map(pad2);
-    let title;
-    if (page.even != null && page.odd != null) title = `BAY (${dispBay(page.even)})${dispBay(page.odd)}`;
-    else if (page.even != null) title = `BAY ${dispBay(page.even)}`;
-    else title = `BAY ${dispBay(page.odd)}`;
-
-    // V7.98-03: 베이상세를 매트릭스 진실원(buildEmptyBayRenderData)으로 통일.
-    //   rowMax 없이 deckCells/holdCells로 tier별 active cell·가운데 정렬·좁아짐을 정확히 그림(3D와 동일).
-    //   matrix_builder본은 rowMax가 없어 기존 uniform 경로에선 폴백됐음(695베이/36% 미적용 버그).
-    //   deckCells 유효하면 matrixRender 사용, 없으면(PDF 자동본 등) 기존 uniform 폴백 유지.
-    const isPair = page.even != null && page.odd != null;
-    const primaryBn = page.even != null ? page.even : page.odd;
-    const primaryEntry = dictBaysSummary[primaryBn] || null;
-    const hasCells = !!primaryEntry && (
-      (Array.isArray(primaryEntry.deckCells) && primaryEntry.deckCells.length > 0) ||
-      (Array.isArray(primaryEntry.holdCells) && primaryEntry.holdCells.length > 0)
-    );
-    let matrixRender = null;
-    if (hasCells) {
-      try {
-        const bayKey = isPair
-          ? `(${pad2(page.even)})${pad2(page.odd)}`
-          : pad2(primaryBn);
-        // EDI has00 반영(매트릭스 명시값 우선, 없으면 EDI 판정) — BayPlan과 동일 패턴
-        const effEntry = {
-          ...primaryEntry,
-          deckHasZero: primaryEntry.deckHasZero != null ? primaryEntry.deckHasZero
-            : (primaryEntry.hasZero != null ? primaryEntry.hasZero : has00),
-          holdHasZero: primaryEntry.holdHasZero != null ? primaryEntry.holdHasZero
-            : (primaryEntry.hasZero != null ? primaryEntry.hasZero : has00),
-        };
-        const rd = buildEmptyBayRenderData(effEntry, bayKey, isPair);
-        if (rd) matrixRender = rd;
-      } catch (e) { matrixRender = null; }
+  // 오선적 정정 화면이므로 이동 대상은 평택 검수분.
+  //   양하=POD 평택 · 선적=리스트 등록 또는 POL 평택 (앱 전역 isPtk 규칙과 동일)
+  const lockedCns = useMemo(() => {
+    const s = new Set();
+    for (const c of containers) {
+      const ptk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : (!!recMap[c.cn] || isPyeongtaekPort(c.pol));
+      if (!ptk) s.add(String(c.cn).replace(/\s/g, '').toUpperCase());
     }
+    return s;
+  }, [containers, recMap, mode]);
 
-    return { rows, deckTiers, holdTiers, cellMap, title, matrixRender };
-  }, [page, containers, eff, dictBaysSummary]);
-
-  // 임시창고 (effective storage)
-  const storeList = useMemo(() => containers.filter((c) => eff(c).storage), [containers, eff]);
-
-  // 선택(rubber-band)
-  const [selected, setSelected] = useState(new Set());
-  const stageRef = useRef(null);
-  const [rubber, setRubber] = useState(null);
-  const rubberStart = useRef(null);
-  const [storeOver, setStoreOver] = useState(false);
-
-  const moveToStorage = (cns) => { if (!cns.length) return; setPending((p) => { const n = { ...p }; cns.forEach((cn) => { n[cn] = { storage: true }; }); return n; }); };
-  const placeAtCell = (cn, bayKey, row, tier) => {
-    const c = containers.find((x) => x.cn === cn); const sz = c ? sizeOf(c) : '20';
-    let bay = bayKey;
-    if (page && page.even != null && page.odd != null) bay = (sz === '40' || sz === '45') ? page.even : page.odd;
-    setPending((p) => ({ ...p, [cn]: { bay: pad2(bay), row: pad2(row), tier: pad2(tier) } }));
-  };
-
-  // 드래그
-  const cellDragStart = (e, cn) => {
-    e.dataTransfer.setData('text/plain', cn);
-    e.dataTransfer.effectAllowed = 'move';
-    // V7.98-05: 선택에 없는 컨을 끌면 기존 선택 해제(그 1개만 대상). 선택 안의 컨이면 선택 유지(전체 이동).
-    if (!selected.has(cn)) setSelected(new Set());
-  };
-  const onCellDrop = (e, row, tier) => { e.preventDefault(); const cn = e.dataTransfer.getData('text/plain'); if (cn) placeAtCell(cn, page?.odd ?? page?.even, row, tier); };
-  const onStoreDrop = (e) => {
-    e.preventDefault(); setStoreOver(false);
-    const cn = e.dataTransfer.getData('text/plain');
-    if (!cn) return;
-    // V7.98-05: rubber-band로 여러 개 선택 후 그 중 하나를 창고로 끌면 선택 전체 이동.
-    //   (드래그한 컨이 선택 밖이면 그것 하나만 — 직관적 동작 유지.)
-    const cns = selected.has(cn) ? [...selected] : [cn];
-    moveToStorage(cns);
-    setSelected(new Set());
-  };
-
-  // rubber-band (빈 곳에서 시작)
-  const onStageDown = (e) => { if (e.button !== 0) return; if (e.target.closest('[data-cn]')) return; const r = stageRef.current.getBoundingClientRect(); rubberStart.current = { x: e.clientX, y: e.clientY, rl: r.left, rt: r.top }; setRubber({ left: e.clientX - r.left, top: e.clientY - r.top, w: 0, h: 0 }); };
-  const onStageMove = (e) => { if (!rubberStart.current) return; const s = rubberStart.current; const x1 = Math.min(s.x, e.clientX), y1 = Math.min(s.y, e.clientY), x2 = Math.max(s.x, e.clientX), y2 = Math.max(s.y, e.clientY); setRubber({ left: x1 - s.rl, top: y1 - s.rt, w: x2 - x1, h: y2 - y1 }); };
-  const onStageUp = (e) => { if (!rubberStart.current) return; const s = rubberStart.current; rubberStart.current = null; const x1 = Math.min(s.x, e.clientX), y1 = Math.min(s.y, e.clientY), x2 = Math.max(s.x, e.clientX), y2 = Math.max(s.y, e.clientY); setRubber(null); if (Math.abs(x2 - x1) < 5 && Math.abs(y2 - y1) < 5) return; const found = new Set(); stageRef.current?.querySelectorAll('[data-cn]').forEach((el) => { const cn = el.getAttribute('data-cn'); if (!cn) return; const b = el.getBoundingClientRect(); const cx = b.left + b.width / 2, cy = b.top + b.height / 2; if (cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2) found.add(cn); }); if (found.size) setSelected(found); };
-
-  const pendCount = Object.keys(pending).length;
-  const [saving, setSaving] = useState(false);
-  const save = async () => {
-    if (!pendCount || saving) return;
+  const save = useCallback(async (state) => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const changes = P.diffChanges(state);
+    if (!changes.length) return;
     setSaving(true);
     try {
       const stg = [], cells = [];
-      Object.entries(pending).forEach(([cn, p]) => { if (p.storage) stg.push(cn); else cells.push([cn, p]); });
+      for (const c of changes) {
+        if (c.to === P.STG) stg.push(c.cn);
+        else cells.push([c.cn, { bay: c.to.slice(0, 2), row: c.to.slice(2, 4), tier: c.to.slice(4, 6) }]);
+      }
       if (stg.length) await fbBatchMoveToStorage(voyageKey, mode, stg, inspector);
       for (const [cn, p] of cells) await fbSetActualPosition(voyageKey, mode, cn, p.bay, p.row, p.tier, inspector);
-      setPending({}); setSelected(new Set());
-      alert(`저장 완료 — ${stg.length + cells.length}건 반영. 검수사 화면에 표시됩니다.`);
-    } catch (e) { console.error(e); alert('저장 실패: ' + (e?.message || e)); }
-    finally { setSaving(false); }
-  };
-  const tryClose = () => { if (pendCount && !confirm(`저장하지 않은 변경 ${pendCount}건이 있습니다. 닫으면 버려집니다. 닫을까요?`)) return; onClose(); };
+      alert(`저장 완료 — ${changes.length}건 반영. 검수사 화면에 표시됩니다.`);
+      setSeq((n) => n + 1);   // 새 기준으로 편집기 재시작
+    } catch (e) {
+      console.error(e);
+      alert('저장 실패: ' + (e?.message || e));
+    } finally { setSaving(false); }
+  }, [inspector, voyageKey, mode]);
 
-  const renderCell = (t, r, opts) => {
-    const c = view.cellMap[`${t}-${r}`];
-    // V7.98-03: 매트릭스 모드에서 비활성(격자에 없는) 칸은 빈 공간으로 — 빈 슬롯(점선)과 구분
-    if (opts && opts.active === false) {
-      return <div key={`${t}-${r}`} className="cbe-cell" style={{ border: 'none', background: 'transparent' }}></div>;
-    }
-    if (!c) return <div key={`${t}-${r}`} className="cbe-cell empty" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onCellDrop(e, r, t)}></div>;
-    const lines = formatCellLines(c);
-    const ptk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol));
-    const colorKey = ptk ? getContainerColorKey(c, mode) : null;
-    const col = colorKey ? colorMap[colorKey] : null;
-    const isSel = selected.has(c.cn), isPend = !!pending[c.cn];
-    return (
-      <div key={`${t}-${r}`} data-cn={c.cn} draggable
-        className={`cbe-cell filled ${ptk ? 'ptk' : ''} ${isSel ? 'sel' : ''} ${isPend ? 'pending' : ''}`}
-        style={col ? { color: col } : undefined}
-        title={`${c.cn}  ${lines.line3 || ''}`}
-        onDragStart={(e) => cellDragStart(e, c.cn)}
-        onDragOver={(e) => e.preventDefault()} onDrop={(e) => onCellDrop(e, r, t)}>
-        <span className="cbe-cn">{c.cn}</span>
-        <span className="cbe-sub">{lines.line1}</span>
-      </div>
-    );
-  };
+  const modeTabs = (
+    <>
+      {hasDis && (
+        <button className={`bge-btn${mode === 'discharge' ? ' p' : ''}`}
+          onClick={() => { setMode('discharge'); setSeq((n) => n + 1); }}>양하</button>
+      )}
+      {hasLoad && (
+        <button className={`bge-btn${mode === 'loading' ? ' p' : ''}`}
+          onClick={() => { setMode('loading'); setSeq((n) => n + 1); }}>선적</button>
+      )}
+      {activeWorkers.length > 0 && (
+        <span className="bge-badge" title={activeWorkers.join(', ')}>작업중 {activeWorkers.length}명</span>
+      )}
+    </>
+  );
 
-  // V7.98-03: 매트릭스 격자 한 층(deck/hold) 렌더 — tier별 active cell만(가운데 정렬·좁아짐 반영)
-  // V7.98-07: 베이상세 격자는 BayBoxV2(카고플랜과 동일 그림)를 그대로 사용. 셀 내용만 컨번호로 주입.
-  //   cell.rowLbl + tier로 cellMap에서 컨을 찾아 표시. 드래그/선택/pending은 cellExtra로 span에 주입.
-  const renderCellContent = (cell, tier) => {
-    const c = view?.cellMap?.[`${pad2(tier)}-${cell.rowLbl}`];
-    if (!c) return null; // 빈 active 슬롯 — 그림(테두리)만, 내용 없음
-    const lines = formatCellLines(c);
-    const loaded = mode === 'loading' && c._placed;
-    return (<><span className="cbe-cn">{loaded ? '✓ ' : ''}{c.cn}</span><span className="cbe-sub">{lines.line1}</span></>);
-  };
-  const cellExtra = (cell, tier) => {
-    const c = view?.cellMap?.[`${pad2(tier)}-${cell.rowLbl}`];
-    if (!c) return {}; // 빈 슬롯: 드롭만 받음
-    const ptk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol));
-    const colorKey = ptk ? getContainerColorKey(c, mode) : null;
-    const col = colorKey ? colorMap[colorKey] : null;
-    const isSel = selected.has(c.cn), isPend = !!pending[c.cn];
-    const unplaced = mode === 'loading' && !c._placed;
-    return {
-      'data-cn': c.cn, draggable: true,
-      className: `cpv2-cell cbe-fill${ptk ? ' ptk' : ''}${isSel ? ' sel' : ''}${isPend ? ' pending' : ''}${cell.isXray ? ' cpv2-xray' : ''}${unplaced ? ' cbe-unplaced' : ''}`,
-      style: col ? { color: col } : undefined,
-      title: `${c.cn}  ${lines2(c)}${unplaced ? '  (선적 전 — 계획 위치)' : ''}`,
-      onDragStart: (e) => cellDragStart(e, c.cn),
-      onDragOver: (e) => e.preventDefault(),
-      onDrop: (e) => onCellDrop(e, cell.rowLbl, tier),
-    };
-  };
-  const lines2 = (c) => { const l = formatCellLines(c); return l.line3 || ''; };
-
-  return createPortal(
-    <div className="cbe-overlay" onMouseUp={onStageUp} onMouseMove={onStageMove}>
-      <style>{CBE_CSS}</style>
-      <style>{CARGO_V2_CSS}</style>
-      <style>{`
-        .cbe-cargo-wrap{background:#fff;border-radius:6px;padding:10px 14px;margin:0 auto;width:96%;height:72vh;display:flex;flex-direction:column;box-sizing:border-box;}
-        .cbe-cargo-wrap .cpv2-bay-section{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}
-        .cbe-cargo-wrap .cpv2-bay-title{display:none;}
-        .cbe-cargo-wrap .cpv2-cell.cbe-fill{cursor:grab;font-weight:700;flex-direction:column;line-height:1.1;overflow:hidden;}
-        .cbe-cargo-wrap .cpv2-cell.cbe-fill:active{cursor:grabbing;}
-        .cbe-cargo-wrap .cpv2-cell.cbe-fill.sel{outline:3px solid #2563eb;outline-offset:-3px;}
-        .cbe-cargo-wrap .cpv2-cell.cbe-fill.pending{box-shadow:inset 0 0 0 2px #f59e0b;}
-        .cbe-cargo-wrap .cpv2-cell .cbe-cn{font-weight:800;font-size:10px;color:#111;letter-spacing:-.3px;}
-        .cbe-cargo-wrap .cpv2-cell .cbe-sub{font-size:8px;color:#64748b;}
-        /* V7.99-7 (메모7): 선적 전(계획) 칸 — 점선 테두리 + 흐린 글자로 "아직 안 실림" 표시. 배경색 미사용(Ⅱ-4.2). */
-        .cbe-cargo-wrap .cpv2-cell.cbe-fill.cbe-unplaced{border-style:dashed !important;border-color:#94a3b8 !important;}
-        .cbe-cargo-wrap .cpv2-cell.cbe-fill.cbe-unplaced .cbe-cn{color:#94a3b8;font-weight:600;}
-        .cbe-cargo-wrap .cpv2-cell.cbe-fill.cbe-unplaced .cbe-sub{color:#cbd5e1;}
-      `}</style>
-      <div className="cbe-head">
-        <strong style={{ fontSize: 15 }}>🖐 베이상세 편집 (수석)</strong>
-        <div className="cbe-modes">
-          {hasDis && <button className={mode === 'discharge' ? 'on' : ''} onClick={() => { setMode('discharge'); setPageIdx(0); }}>양하</button>}
-          {hasLoad && <button className={mode === 'loading' ? 'on' : ''} onClick={() => { setMode('loading'); setPageIdx(0); }}>선적</button>}
-        </div>
-        <span style={{ fontSize: 11, opacity: .65 }}>{voyage?.info?.vsl || ''} · 컨을 끌어 정정, 저장해야 검수사에 반영</span>
-        {mode === 'loading' && (() => {
-          const ptkCs = containers.filter(c => c._inList || isPyeongtaekPort(c.pol));
-          const done = ptkCs.filter(c => c._placed).length;
-          return (
-            <span style={{ fontSize: 11, marginLeft: 8, padding: '2px 8px', borderRadius: 6, background: '#1e293b', border: '1px solid #334155' }}>
-              <span style={{ color: '#34d399', fontWeight: 800 }}>선적 {done}</span>
-              <span style={{ color: '#94a3b8' }}> / {ptkCs.length}</span>
-              <span style={{ color: '#64748b', marginLeft: 6 }}>· 점선=선적 전(계획)</span>
-            </span>
-          );
-        })()}
-        <button onClick={tryClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#e2e8f0', cursor: 'pointer' }}><X size={20} /></button>
-      </div>
-      {/* V7.99-8 (메모6): 지금 이 모드를 작업 중인 검수사 위치 — 수석이 "N호기·베이·홀드/데크·남은 N개"를 보고 화면 추적 */}
-      {(() => {
-        const here = (activeWorkers || []).filter(w => w.mode === mode && w.bay);
-        if (here.length === 0) return null;
-        return (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '6px 14px', background: '#0b1220', borderBottom: '1px solid #1e293b' }}>
-            {here.map(w => (
-              <span key={w.name} style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: w.tier === 'hold' ? '#7c2d12' : '#075985', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 7, height: 7, borderRadius: 999, background: '#34d399' }} />
-                {w.name}{w.equip ? ` · ${w.equip}` : ''} · {w.bay}번 {w.tier === 'hold' ? '홀드' : w.tier === 'deck' ? '데크' : ''}
-                {typeof w.remain === 'number' ? ` · 남은 ${w.remain}개` : ''}
-              </span>
-            ))}
-          </div>
-        );
-      })()}
-      <div className="cbe-baynav">
-        {bayPages.map((p, i) => (<button key={p.key} className={i === pageIdx ? 'on' : ''} onClick={() => { setPageIdx(i); setSelected(new Set()); }}>{p.even != null && p.odd != null ? `${dispBay(p.even)}-${dispBay(p.odd)}` : dispBay(p.even ?? p.odd)}</button>))}
-        {bayPages.length === 0 && <span style={{ color: '#94a3b8', fontSize: 12, padding: 4 }}>베이 없음 — 선택한 작업에 적재 데이터가 없습니다</span>}
-      </div>
-      <div className="cbe-tools">
-        <span>선택 <strong>{selected.size}</strong></span>
-        <button onClick={() => { moveToStorage([...selected]); setSelected(new Set()); }} disabled={!selected.size} style={{ background: selected.size ? '#2563eb' : '#334155' }}>선택분 → 임시창고</button>
-        <button onClick={() => setSelected(new Set())} disabled={!selected.size} style={{ background: '#475569' }}>선택해제</button>
-        <span style={{ marginLeft: 'auto', color: pendCount ? '#fbbf24' : '#64748b' }}>미저장 {pendCount}건</span>
-        <button onClick={() => { setPending({}); setSelected(new Set()); }} disabled={!pendCount} style={{ background: '#7c2d12' }}><Undo2 size={14} />되돌리기</button>
-        <button onClick={save} disabled={!pendCount || saving} style={{ background: pendCount ? '#16a34a' : '#334155' }}><Save size={14} />{saving ? '저장 중…' : '저장'}</button>
-      </div>
-      <div className="cbe-body">
-        <div className="cbe-stage" ref={stageRef} onMouseDown={onStageDown}>
-          {rubber && <div className="cbe-rubber" style={{ left: rubber.left, top: rubber.top, width: rubber.w, height: rubber.h }} />}
-          {view ? (
-            <div className="cbe-bd">
-              <div className="cbe-bd-title">{view.title}</div>
-              {view.matrixRender ? (
-                <div className="cbe-cargo-wrap">
-                  <BayBoxV2
-                    data={view.matrixRender}
-                    colorMap={colorMap}
-                    gridCols={Math.max(view.matrixRender.nDeckCols || 0, view.matrixRender.nHoldCols || 0)}
-                    renderCellContent={renderCellContent}
-                    cellExtra={cellExtra}
-                  />
-                </div>
-              ) : (
-                <>
-                  <div className="cbe-rl">{view.rows.map((r) => <span key={r}>{r}</span>)}</div>
-                  {view.deckTiers.map((t) => <div key={t} className="cbe-tier-row">{view.rows.map((r) => renderCell(t, r))}</div>)}
-                  {view.deckTiers.length > 0 && view.holdTiers.length > 0 && <div className="cbe-hatch"></div>}
-                  {view.holdTiers.map((t) => <div key={t} className="cbe-tier-row">{view.rows.map((r) => renderCell(t, r))}</div>)}
-                  <div className="cbe-rl">{view.rows.map((r) => <span key={r}>{r}</span>)}</div>
-                </>
-              )}
-            </div>
-          ) : <span style={{ color: '#94a3b8' }}>베이를 선택하세요</span>}
-        </div>
-        <div className="cbe-store">
-          <div className="cbe-store-h"><span>📦 임시창고</span><span>{storeList.length}대</span></div>
-          <div className={`cbe-drop${storeOver ? ' over' : ''}`} onDragOver={(e) => { e.preventDefault(); setStoreOver(true); }} onDragLeave={() => setStoreOver(false)} onDrop={onStoreDrop}>
-            여기로 컨을 끌어다 놓기<br />= 임시창고 보관
-          </div>
-          <div className="cbe-store-list">
-            {storeList.length === 0 && <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', marginTop: 16 }}>비어 있음</div>}
-            {storeList.map((c) => (
-              <div key={c.cn} className="cbe-chip" draggable onDragStart={(e) => cellDragStart(e, c.cn)} title="베이 칸으로 끌어 배치">
-                <span className="cbe-chip-cn">{c.cn}</span> <span style={{ opacity: .55 }}>{isoToLabel(c.iso)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
+  return (
+    <BayGridEditor
+      key={`${mode}-${seq}`}
+      title="🖐 베이상세 편집"
+      subtitle={`${voyage?.info?.vsl || voyageKey} · ${mode === 'discharge' ? '양하' : '선적'}`}
+      voyageInfo={mode === 'discharge' ? (voyage?.info?.voy_d || voyage?.info?.voy || '') : (voyage?.info?.voy_l || voyage?.info?.voy || '')}
+      containers={containers}
+      storageCns={storageCns}
+      lockedCns={lockedCns}
+      shipImo={voyage?.info?.imo}
+      shipName={voyage?.info?.vsl}
+      mode={mode}
+      lockHint="통과화물"
+      saving={saving}
+      saveLabel="저장"
+      onSave={save}
+      onClose={onClose}
+      headerExtra={modeTabs}
+    />
   );
 }
