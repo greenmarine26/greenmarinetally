@@ -79,6 +79,12 @@ export const BGE_CSS = `
 .bge-edit .cpv2-cell.bge-over{background:#fde68a !important;border-color:#d97706 !important}
 .bge-edit .cpv2-cell.bge-empty{cursor:copy;background:#fefefe;border-style:dashed !important;border-color:#cbd5e1 !important}
 .bge-edit .cpv2-cell.bge-empty:hover{background:#e0f2fe}
+/* 옆 짝수 베이가 차지한 자리 — 단독 홀수 박스에서만 생긴다.
+     bge-x      : 인접 40ft/45ft (cargoPlanCore가 mark 'X'를 준다) → 회색 + ✕
+     bge-shadow : 인접 20ft (isShadow20) → 카고플랜과 같은 회색 빈 칸
+   둘 다 배치 불가. 크기에 영향 주는 속성은 쓰지 않는다(::after 절대배치) — 격자 기하 고정 규칙. */
+.bge-edit .cpv2-cell.bge-x,.bge-edit .cpv2-cell.bge-shadow{background:#e5e7eb !important;border-style:solid !important;border-color:#9ca3af !important;cursor:not-allowed;color:transparent}
+.bge-edit .cpv2-cell.bge-x::after{content:'✕';position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#4b5563;font-weight:800;font-size:12px;pointer-events:none}
 .bge-cn{font-weight:800;font-size:9.5px;letter-spacing:-.3px;font-family:ui-monospace,monospace;display:block}
 .bge-sub{font-size:8px;color:#64748b;display:block}
 @media print{
@@ -445,7 +451,19 @@ export default function BayGridEditor({
   };
   const makeExtra = (box) => (cell, tier) => {
     const cn = cell.rowLbl ? box.cellMap[`${P.pad2(tier)}-${cell.rowLbl}`] : null;
-    const dropProps = cell.active && cell.rowLbl ? {
+    // V9.07-04: 단독 홀수 박스에서 옆 짝수 베이가 차지한 자리.
+    //   cargoPlanCore가 40ft/45ft엔 mark 'X'를, 20ft엔 isShadow20을 준다.
+    //   편집기는 cell.mark를 안 쓰고(renderCellContent) className도 cellExtra가 덮어써서
+    //   둘 다 빈 칸으로 보였다 → 이동 가부 분간 불가. 표시하고 드롭도 막는다.
+    const blockedBy40 = !cn && cell.mark === 'X';
+    const blockedBy20 = !cn && !!cell.isShadow20;
+    if (blockedBy40 || blockedBy20) {
+      return {
+        className: `cpv2-cell ${blockedBy40 ? 'bge-x' : 'bge-shadow'}`,
+        title: blockedBy40 ? '옆 베이 40ft가 차지한 자리 — 배치 불가' : '옆 베이 20ft가 차지한 자리 — 배치 불가',
+      };
+    }
+    const dropProps = cell.active && cell.rowLbl && !cell.isShadow20 && cell.mark !== 'X' ? {
       onDragOver: (e) => {
         e.preventDefault();
         if (e.currentTarget.classList.contains('bge-over')) return;
