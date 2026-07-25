@@ -1,4 +1,4 @@
-// 선적 확정 플랜 편집 — V9.07 신규
+// 컨펌용 플랜편집 — V9.07 신규 (V9.07-01에서 '선적 확정 플랜'에서 개칭)
 //   일항사와 협의해 확정 플랜을 만드는 전용 화면. 선적(loading) 전용.
 //
 // 저장 계층 (3단 — 실선적 불가침):
@@ -172,7 +172,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
 
   const sideExtra = (
     <div style={{ padding: '8px 10px', borderTop: '1px solid #334155', fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
-      <b style={{ color: '#c4b5fd' }}>확정 플랜 작업</b><br />
+      <b style={{ color: '#c4b5fd' }}>컨펌용 플랜편집</b><br />
       <b style={{ color: '#e2e8f0' }}>[초안 저장]</b>은 보관만 합니다.<br />
       <b style={{ color: '#e2e8f0' }}>[확정]</b>을 눌러야 검수앱 선적 플랜이 됩니다.<br />
       실선적 기록은 바뀌지 않습니다.
@@ -188,7 +188,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
     <>
       <BayGridEditor
         key={`plan-${seq}`}
-        title="📐 선적 확정 플랜"
+        title="📐 컨펌용 플랜편집"
         subtitle={`${voyage?.info?.vsl || voyageKey} · 일항사 협의용`}
         voyageInfo={voyage?.info?.voy_l || voyage?.info?.voy || ''}
         containers={containers}

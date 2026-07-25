@@ -24,6 +24,9 @@ import * as P from '../planEditCore.js';
 
 export const BGE_CSS = `
 .bge-overlay{position:fixed;inset:0;background:#0f172a;z-index:10000;display:flex;flex-direction:column;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','맑은 고딕',sans-serif}
+/* 카고플랜은 편집기 위로 — .cpv2-overlay 기본 z-index 50은 .bge-overlay 10000에 묻힌다.
+   이 규칙은 편집기가 떠 있는 동안에만 주입되므로 다른 화면의 쌓임 순서에 영향 없음 */
+.cpv2-overlay{z-index:10050 !important}
 .bge-head{display:flex;align-items:center;gap:8px;padding:0 12px;height:44px;flex:0 0 44px;background:#0b1220;border-bottom:1px solid #1e293b;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;white-space:nowrap}
 .bge-head h1{font-size:14px;margin:0;font-weight:800}
 .bge-head>*{flex:0 0 auto}
@@ -78,8 +81,15 @@ export const BGE_CSS = `
 .bge-cn{font-weight:800;font-size:9.5px;letter-spacing:-.3px;font-family:ui-monospace,monospace;display:block}
 .bge-sub{font-size:8px;color:#64748b;display:block}
 @media print{
-  body > #root{display:block !important}
-  body.bge-planopen > #root{display:none !important}
+  /* 인쇄 대상 확정 — CARGO_V2_CSS가 함께 주입되면서 그 안의
+       body > *:not(.cpv2-overlay):not(.bd-print-modal){display:none}   (0,2,1)
+     규칙이 편집기 오버레이까지 지운다. 종전 대응(body > #root{display:block})은
+     우선순위 (1,0,1)로 이겨서 '본화면만' 남기는 바람에 뒤 화면이 인쇄됐다.
+     클래스를 겹쳐 (0,3,1)~(0,4,1)을 확보해 결정적으로 이긴다. 소스 순서에 기대지 않는다. */
+  body.bge-open.bge-open > *:not(.bge-overlay):not(.cpv2-overlay){display:none !important}
+  body.bge-open.bge-open > .bge-overlay{display:flex !important}
+  /* 카고플랜이 열려 있으면 인쇄 대상은 카고플랜 (cpv2 자체 인쇄 규칙이 처리) */
+  body.bge-planopen.bge-planopen > .bge-overlay{display:none !important}
   .bge-head,.bge-stats,.bge-nav,.bge-side,.bge-noprint{display:none !important}
   .bge-overlay{position:static !important;background:#fff !important}
   .bge-stage{overflow:visible;padding:0;background:#fff}
@@ -132,6 +142,12 @@ export default function BayGridEditor({
   }, [containers, state, storageCns, lockedCns, shiftCns]);
 
   useEffect(() => { if (state && onStateChange) onStateChange(state, tick); }, [state, tick, onStateChange]);
+
+  // 인쇄 대상 판별용 표식 — 편집기가 떠 있는 동안에만 body에 붙는다
+  useEffect(() => {
+    document.body.classList.add('bge-open');
+    return () => document.body.classList.remove('bge-open');
+  }, []);
 
   const ediBayNums = useMemo(() => {
     const s = new Set();

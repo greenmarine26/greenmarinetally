@@ -800,7 +800,7 @@ function App() {
           {rubber && <div className="pe-rubber" style={{ left: rubber.left, top: rubber.top, width: rubber.w, height: rubber.h }} />}
           <div className="pe-sheet pe-edit">
             <div style={{ textAlign: 'center', fontWeight: 800, fontSize: 14, marginBottom: 6, flexShrink: 0 }}>
-              {ship?.name} {ship?.voyage} — 선적 확정 플랜 (BAY {page?.label})
+              {ship?.name} {ship?.voyage} — 컨펌용 플랜편집 (BAY {page?.label})
             </div>
             <div className="pe-sheet-body">
               {boxes.map((b) => (

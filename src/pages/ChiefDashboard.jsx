@@ -14,7 +14,7 @@ import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const [editKey, setEditKey] = useState(null); // V7.97: 베이상세 편집 대상 항차 (수석/관리자만)
-  const [planKey, setPlanKey] = useState(null); // V9.07: 선적 확정 플랜 편집 대상 항차
+  const [planKey, setPlanKey] = useState(null); // V9.07: 컨펌용 플랜편집 대상 항차
   const [shipLib, setShipLib] = useState({});
   const [feedback, setFeedback] = useState({});
   const [showResolved, setShowResolved] = useState(false);
@@ -429,7 +429,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
           {/* V9.07: 선적 확정 플랜 편집 — 일항사 협의용. 초안(planDraft) → [확정] 시 검수앱 선적 플랜이 된다.
               실선적 기록(records.bay_actual)은 건드리지 않는다. */}
-          <div className="text-sm font-bold text-violet-200 mt-3 mb-2">📐 선적 확정 플랜 <span className="text-[11px] text-slate-400 font-normal">— 일항사 협의용 ([확정] 눌러야 선적 플랜 반영 · 실선적 무관)</span></div>
+          <div className="text-sm font-bold text-violet-200 mt-3 mb-2">📐 컨펌용 플랜편집 <span className="text-[11px] text-slate-400 font-normal">— 일항사 협의용 ([확정] 눌러야 선적 플랜 반영 · 실선적 무관)</span></div>
           <div className="flex flex-wrap gap-2">
             {voyageStats.filter(v => voyages[v.key]?.loading?.ediContainers).map(v => (
               <button key={'p' + v.key} onClick={() => setPlanKey(v.key)}
