@@ -47,7 +47,8 @@ export const BGE_CSS = `
 .bge-nav button.chg{border-color:#f59e0b;border-width:2px}
 .bge-body{flex:1;display:flex;min-height:0}
 .bge-stage{flex:1;overflow:auto;padding:10px;background:#1e293b;position:relative}
-.bge-sheet{background:#fff;border-radius:6px;padding:10px;color:#111;max-width:1180px;min-width:900px;margin:0 auto;display:flex;flex-direction:column;height:calc(100vh - 138px);min-height:480px}
+.bge-sheet{background:#fff;border-radius:6px;padding:10px;color:#111;max-width:1180px;min-width:900px;margin:0 auto 12px;display:flex;flex-direction:column;height:calc(100vh - 138px);min-height:480px}
+.bge-sheet:last-child{margin-bottom:0}
 .bge-sheet-body{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
 .bge-boxwrap{flex:1 1 0;min-height:0;display:flex;flex-direction:column;border:1px solid #111;border-radius:3px;overflow:hidden}
 .bge-boxh{font-size:12px;font-weight:800;color:#334155;background:#f1f5f9;padding:2px 0;text-align:center;flex-shrink:0;border-bottom:1px solid #cbd5e1}
@@ -93,7 +94,9 @@ export const BGE_CSS = `
   .bge-head,.bge-stats,.bge-nav,.bge-side,.bge-noprint{display:none !important}
   .bge-overlay{position:static !important;background:#fff !important}
   .bge-stage{overflow:visible;padding:0;background:#fff}
-  .bge-sheet{box-shadow:none;max-width:none;min-width:0;height:auto}
+  /* 베이 한 장씩 따로 인쇄 — 1과 (02)03을 각각 뽑을 수 있어야 한다 (사용자 확정 2026-07-26) */
+  .bge-sheet{box-shadow:none;max-width:none;min-width:0;height:auto;margin:0;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always}
+  .bge-sheet:last-child{break-after:auto;page-break-after:auto}
   /* 브라우저 '배경 그래픽' 기본값이 꺼져 있으면 통과 고정분 회색이 날아간다 — 강제 출력 */
   .bge-sheet, .bge-sheet *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
 }
@@ -380,8 +383,10 @@ export default function BayGridEditor({
     if (e.button !== 0 || !stageRef.current) return;
     if (e.target.closest('[data-cn]')) return;
     const r = stageRef.current.getBoundingClientRect();
-    rubberStart.current = { x: e.clientX, y: e.clientY, rl: r.left, rt: r.top, add: e.shiftKey, sub: e.ctrlKey || e.metaKey };
-    setRubber({ left: e.clientX - r.left, top: e.clientY - r.top, w: 0, h: 0 });
+    // 시트가 세로로 쌓이면서 스테이지가 스크롤된다 — 절대배치 러버밴드는 스크롤량을 더해야 제자리에 그려진다
+    const sl = stageRef.current.scrollLeft, st = stageRef.current.scrollTop;
+    rubberStart.current = { x: e.clientX, y: e.clientY, rl: r.left - sl, rt: r.top - st, add: e.shiftKey, sub: e.ctrlKey || e.metaKey };
+    setRubber({ left: e.clientX - r.left + sl, top: e.clientY - r.top + st, w: 0, h: 0 });
   };
   const stageMove = (e) => {
     if (!rubberStart.current) return;
@@ -509,13 +514,13 @@ export default function BayGridEditor({
         <div className="bge-stage" ref={stageRef} onMouseDown={stageDown} onMouseMove={stageMove} onMouseUp={stageUp}
           onDragLeave={(e) => { if (!stageRef.current?.contains(e.relatedTarget)) clearOver(); }} onDrop={clearOver} onDragEnd={clearOver}>
           {rubber && <div className="bge-rubber" style={{ left: rubber.left, top: rubber.top, width: rubber.w, height: rubber.h }} />}
-          <div className="bge-sheet bge-edit">
-            <div style={{ textAlign: 'center', fontWeight: 800, fontSize: 14, marginBottom: 6, flexShrink: 0 }}>
-              {shipName} {voyageInfo || ''} — {mode === 'loading' ? '선적' : '양하'} (BAY {page?.label || '-'})
-            </div>
-            <div className="bge-sheet-body">
-              {boxes.map((b) => (
-                <div key={b.key} className="bge-boxwrap">
+          {boxes.map((b) => (
+            <div key={b.key} className="bge-sheet bge-edit">
+              <div style={{ textAlign: 'center', fontWeight: 800, fontSize: 14, marginBottom: 6, flexShrink: 0 }}>
+                {shipName} {voyageInfo || ''} — {mode === 'loading' ? '선적' : '양하'} (BAY {b.label})
+              </div>
+              <div className="bge-sheet-body">
+                <div className="bge-boxwrap">
                   <div className="bge-boxh">BAY {b.label}{b.even ? ` — 40ft ${b.even} / 20ft ${b.odd}` : ' — 20ft 단독'}</div>
                   <div className="bge-boxbody">
                     {b.data
@@ -524,9 +529,9 @@ export default function BayGridEditor({
                       : <div style={{ padding: 14, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>매트릭스 없음</div>}
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
+          ))}
         </div>
 
         <div className="bge-side bge-noprint">
