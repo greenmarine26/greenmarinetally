@@ -8,7 +8,7 @@
 //
 // 이동 가능 = 작업대상(평택 선적화물 + 쉬프팅). 통과 고정분은 잠금. (사용자 확정 2026-07-25)
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { isPyeongtaekPort, isoToLabel, loadSheetJS } from '../utils.js';
+import { isPyeongtaekPort, isoToLabel, loadSheetJS, fullEdiMapOf } from '../utils.js';
 import { fbSavePlanDraft, fbCommitPlan, fbRestorePlanFromEdi } from '../firebase.js';
 import { computeShiftingMapCached } from '../utils.js';
 import BayGridEditor from './BayGridEditor.jsx';
@@ -34,7 +34,10 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
   const [live, setLive] = useState(null);          // 편집기 현재 state (내보내기·카고플랜용)
 
   const sec = voyage?.loading || {};
-  const ediMap = sec.ediContainers || {};
+  // V9.07-03: 통과화물 포함 — 다른 항에서 실린 화물이 안 보이면 이동 가능한 자리인지 분간이 안 된다.
+  //   통과화물은 lockedCns 판정으로 회색 잠금이 되어 표시만 되고 움직이지 않는다.
+  const ediMap = useMemo(() => fullEdiMapOf(sec),
+    [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, sec?.ediContainers]);
   const recMap = sec.records || {};
   const draft = sec.planDraft || null;
 

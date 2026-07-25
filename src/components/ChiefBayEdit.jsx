@@ -7,7 +7,7 @@
 //   저장 경로는 종전 그대로: 실체위치 fbSetActualPosition / 임시창고 fbBatchMoveToStorage.
 //   → 검수사 화면·실선적 EDI 근거(records.bay_actual)의 의미는 바뀌지 않는다.
 import React, { useMemo, useState, useCallback } from 'react';
-import { isoToLabel, isPyeongtaekPort } from '../utils.js';
+import { isoToLabel, isPyeongtaekPort, fullEdiMapOf } from '../utils.js';
 import { fbSetActualPosition, fbBatchMoveToStorage, STORAGE_BAY } from '../firebase.js';
 import BayGridEditor from './BayGridEditor.jsx';
 import * as P from '../planEditCore.js';
@@ -22,7 +22,10 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
   const [seq, setSeq] = useState(0);              // 저장 후 편집기 재생성용
 
   const sec = voyage?.[mode] || {};
-  const ediMap = sec.ediContainers || {};
+  // V9.07-03: 통과화물 포함 — ediContainers엔 다른 항에서 실린 화물이 없어
+  //   빈 칸처럼 보이던 자리가 실은 차 있었다(이동 가부 판단 불가). raw EDI 전문이 단일 진실.
+  const ediMap = useMemo(() => fullEdiMapOf(sec),
+    [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, sec?.ediContainers]);
   const recMap = sec.records || {};
   const compMap = sec.completed || {};
 
@@ -41,7 +44,9 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
         row: inStorage ? pad2(e.row) : pad2(hasA ? rec.row_actual : e.row),
         tier: inStorage ? pad2(e.tier) : pad2(hasA ? rec.tier_actual : e.tier),
         // 선적은 EDI가 계획 — 선적확인(actual/완료)돼야 실체 (V7.99-7 사용자 확정)
-        _placed: mode === 'discharge' ? true : (hasA || !!compMap[e.cn]),
+        //   단 통과화물은 이미 실려 있는 것이므로 미배치(·) 표식을 달지 않는다 (V9.07-03)
+        _placed: mode === 'discharge' ? true
+          : ((!!recMap[e.cn] || isPyeongtaekPort(e.pol)) ? (hasA || !!compMap[e.cn]) : true),
       });
     }
     return { containers: list, storageCns: stg };

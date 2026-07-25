@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.07-02';   // 베이 편집 시트 분리 — 페어 베이를 한 장씩(01 / (02)03) 따로 표시·인쇄 (2026-07-26)
+export const APP_VERSION = 'V9.07-03';   // 편집기에 통과화물 표시 — raw EDI 기준 전체 적부도 (2026-07-26)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -2945,6 +2945,22 @@ export function ediMapFromRaw(sec) {
     if (!best || Object.keys(m).length > Object.keys(best).length) best = m;
   }
   return (best && Object.keys(best).length) ? best : null;
+}
+
+// V9.07-03: 선박 전체 적부도용 컨 맵 — ediContainers엔 통과화물이 없다(수집기 등록 항차).
+//   raw EDI 전문이 있으면 그것이 단일 진실. 저장본 필드(_slotKey 등)는 병합해 보존하고,
+//   raw에 없는 실번호 형식 저장본 키는 구판/가상 잔재로 보고 제외한다(V8.98-04 판정 그대로).
+//   PrintHubModal에 있던 로직을 승격 — 인쇄와 편집기가 같은 소스를 쓰게 한다.
+export function fullEdiMapOf(sec) {
+  const ediMap = sec?.ediContainers || {};
+  const rawMap = ediMapFromRaw(sec);
+  if (!rawMap) return ediMap;
+  const m = { ...rawMap };
+  for (const [k, v] of Object.entries(ediMap)) {
+    if (rawMap[k]) { m[k] = { ...rawMap[k], ...v }; continue; }
+    if (!/^[A-Z]{4}\d{7}$/.test(String(k))) m[k] = v;
+  }
+  return m;
 }
 
 export function computeShiftingFromVoyage(voyage) {
