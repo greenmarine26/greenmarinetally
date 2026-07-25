@@ -79,12 +79,13 @@ export const BGE_CSS = `
 .bge-edit .cpv2-cell.bge-over{background:#fde68a !important;border-color:#d97706 !important}
 .bge-edit .cpv2-cell.bge-empty{cursor:copy;background:#fefefe;border-style:dashed !important;border-color:#cbd5e1 !important}
 .bge-edit .cpv2-cell.bge-empty:hover{background:#e0f2fe}
-/* 옆 짝수 베이가 차지한 자리 — 단독 홀수 박스에서만 생긴다.
-     bge-x      : 인접 40ft/45ft (cargoPlanCore가 mark 'X'를 준다) → 회색 + ✕
-     bge-shadow : 인접 20ft (isShadow20) → 카고플랜과 같은 회색 빈 칸
-   둘 다 배치 불가. 크기에 영향 주는 속성은 쓰지 않는다(::after 절대배치) — 격자 기하 고정 규칙. */
-.bge-edit .cpv2-cell.bge-x,.bge-edit .cpv2-cell.bge-shadow{background:#e5e7eb !important;border-style:solid !important;border-color:#9ca3af !important;cursor:not-allowed;color:transparent}
-.bge-edit .cpv2-cell.bge-x::after{content:'✕';position:absolute;left:0;top:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:#4b5563;font-weight:800;font-size:12px;pointer-events:none}
+/* 옆 짝수 베이가 차지한 자리 — 단독 홀수 박스에서만 생긴다. 표기는 카고플랜과 동일.
+     bge-x      : 인접 40ft/45ft → 흰 배경에 X 글자 (카고플랜 각 베이와 같은 모양)
+     bge-shadow : 인접 20ft      → 회색 빈 칸 (카고플랜과 같음)
+   둘 다 배치 불가(드롭 차단). 크기에 영향 주는 속성은 쓰지 않는다 — 격자 기하 고정 규칙. */
+.bge-edit .cpv2-cell.bge-x{background:#fff;border-color:#111 !important;cursor:not-allowed}
+.bge-edit .cpv2-cell.bge-shadow{background:#e5e7eb !important;border-color:#9ca3af !important;cursor:not-allowed;color:transparent}
+.bge-x-mark{font-weight:800;font-size:11px;color:#111;line-height:1}
 .bge-cn{font-weight:800;font-size:9.5px;letter-spacing:-.3px;font-family:ui-monospace,monospace;display:block}
 .bge-sub{font-size:8px;color:#64748b;display:block}
 @media print{
@@ -256,10 +257,18 @@ export default function BayGridEditor({
       const odd = isPair ? m.slice(2) : String(k);
       const bays = isPair ? [num(even), num(odd)] : [num(k)];
       const cellMap = {};
+      // V9.07-05: 옆 짝수 베이 점유 맵. mark 'X'로 판정하면 안 된다 —
+      //   'X'는 defaultGetSelfMark가 자기 컨의 POD 불일치에도 주는 값이라,
+      //   컨을 옮기면 비운 자리가 잘못 막힌다. 현재 위치(state.pos)로 직접 계산한다.
+      const adjMap = {};
+      const oddNum = isPair ? null : num(k);
       for (const [cn, p] of Object.entries(state.pos)) {
         if (p.storage) continue;
-        if (!bays.includes(num(p.bay))) continue;
-        cellMap[`${p.tier}-${p.row}`] = cn;
+        const b = num(p.bay);
+        if (bays.includes(b)) { cellMap[`${p.tier}-${p.row}`] = cn; continue; }
+        if (oddNum != null && (b === oddNum - 1 || b === oddNum + 1)) {
+          adjMap[`${p.tier}-${p.row}`] = P.sizeOf(state.byCn.get(cn) || {}) === '20' ? '20' : '40';
+        }
       }
       const data = mk(k);
       const mkSec = (rows) => {
@@ -269,7 +278,7 @@ export default function BayGridEditor({
         for (const r of rows) (r.cells || []).forEach((c, i) => { if (cols[i] == null && c.rowLbl) cols[i] = c.rowLbl; });
         return { tiers: rows.map((r) => P.pad2(r.tier)), cols, active: rows.map((r) => (r.cells || []).map((c) => !!c.active)) };
       };
-      return { key: k, label: keyLabel(k), even, odd, bays, cellMap, data, sections: { deck: mkSec(data?.deckRows), hold: mkSec(data?.holdRows) } };
+      return { key: k, label: keyLabel(k), even, odd, bays, cellMap, adjMap, data, sections: { deck: mkSec(data?.deckRows), hold: mkSec(data?.holdRows) } };
     });
   }, [page, state, mk, tick]);
 
@@ -443,7 +452,13 @@ export default function BayGridEditor({
 
   const makeContent = (box) => (cell, tier) => {
     const cn = box.cellMap[`${P.pad2(tier)}-${cell.rowLbl}`];
-    if (!cn) return null;
+    if (!cn) {
+      // 옆 짝수 베이 40ft가 차지한 자리 — 카고플랜 각 베이와 같은 X 글자
+      if (cell.rowLbl && box.adjMap[`${P.pad2(tier)}-${cell.rowLbl}`] === '40') {
+        return <span className="bge-x-mark">X</span>;
+      }
+      return null;
+    }
     const c = state.byCn.get(cn) || {};
     const unplaced = mode === 'loading' && c._placed === false;
     return (<><span className="bge-cn">{state.shiftSet.has(cn) ? '◆' : ''}{unplaced ? '·' : ''}{cn.slice(4)}</span>
@@ -451,19 +466,16 @@ export default function BayGridEditor({
   };
   const makeExtra = (box) => (cell, tier) => {
     const cn = cell.rowLbl ? box.cellMap[`${P.pad2(tier)}-${cell.rowLbl}`] : null;
-    // V9.07-04: 단독 홀수 박스에서 옆 짝수 베이가 차지한 자리.
-    //   cargoPlanCore가 40ft/45ft엔 mark 'X'를, 20ft엔 isShadow20을 준다.
-    //   편집기는 cell.mark를 안 쓰고(renderCellContent) className도 cellExtra가 덮어써서
-    //   둘 다 빈 칸으로 보였다 → 이동 가부 분간 불가. 표시하고 드롭도 막는다.
-    const blockedBy40 = !cn && cell.mark === 'X';
-    const blockedBy20 = !cn && !!cell.isShadow20;
-    if (blockedBy40 || blockedBy20) {
+    // V9.07-05: 옆 짝수 베이가 차지한 자리 — 표기는 카고플랜과 동일, 드롭은 차단.
+    //   판정은 adjMap(현재 위치 기준). cell.mark는 자기 컨 마크와 섞이므로 쓰지 않는다.
+    const adj = !cn && cell.rowLbl ? box.adjMap[`${P.pad2(tier)}-${cell.rowLbl}`] : null;
+    if (adj) {
       return {
-        className: `cpv2-cell ${blockedBy40 ? 'bge-x' : 'bge-shadow'}`,
-        title: blockedBy40 ? '옆 베이 40ft가 차지한 자리 — 배치 불가' : '옆 베이 20ft가 차지한 자리 — 배치 불가',
+        className: `cpv2-cell ${adj === '40' ? 'bge-x' : 'bge-shadow'}`,
+        title: `옆 베이 ${adj}ft가 차지한 자리 — 배치 불가`,
       };
     }
-    const dropProps = cell.active && cell.rowLbl && !cell.isShadow20 && cell.mark !== 'X' ? {
+    const dropProps = cell.active && cell.rowLbl ? {
       onDragOver: (e) => {
         e.preventDefault();
         if (e.currentTarget.classList.contains('bge-over')) return;
