@@ -37,6 +37,20 @@ if [ -n "$APPVER" ]; then
   # V9.05-03: README 제목 버전도 동기화 — V8.09-03에 멈춰 있던 불일치 재발 방지.
   sed -i "s/^# Tallyman Master V[0-9.-]*/# Tallyman Master $APPVER/" README.md
   echo "✓ README.md 제목 버전 → $APPVER 동기화"
+  # V9.07-05 정리: 벌크탤리 버전 라벨도 동기화 — 이전엔 버전 문자열 자체가 없어
+  #   벌크탤리만 "언제 판인지" 알 수 없었다(지침서에 '2026-06-12판'으로 방치).
+  sed -i "s/<meta name=\"app-version\" content=\"(주)그린마린 · V[0-9.-]*\">/<meta name=\"app-version\" content=\"(주)그린마린 · $APPVER\">/" bulk_tally.html
+  echo "✓ bulk_tally.html 버전 라벨 → $APPVER 동기화"
+  # V9.07-05 정리: 통합지침서는 최신 1개만 남긴다 — 누적 재발(저장소 48개·드라이브 28개) 원천 차단.
+  KEEPGUIDE="평택항_검수_통합지침서_3앱통합본_$APPVER.md"
+  if [ -f "$KEEPGUIDE" ]; then
+    find . -maxdepth 1 -name '평택항_검수_통합지침서_3앱통합본_V*.md' ! -name "$KEEPGUIDE" -delete
+    echo "✓ 구버전 통합지침서 정리 — $KEEPGUIDE 만 유지"
+  else
+    echo "⚠ $KEEPGUIDE 없음 — 지침서 파일명 버전을 APP_VERSION에 맞춰 갱신할 것"
+  fi
+  # V9.07-05 정리: 한글 파일명이 '#Uxxxx'로 깨진 채 커밋된 사본 제거(정상 파일과 중복된 낡은 사본).
+  find . -maxdepth 2 -name '*#U*' -not -path './.git/*' -delete 2>/dev/null && echo "✓ 깨진 파일명(#Uxxxx) 정리"
 else
   echo "⚠ APP_VERSION 추출 실패 — sw.js 수동 확인 필요"
 fi
