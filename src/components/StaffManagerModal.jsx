@@ -5,9 +5,8 @@ import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
 import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice } from '../firebase.js';
-import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES } from '../adminGuard.js';   // V9.05
-
-const ADMIN_NAME = '김성일';
+import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
+         getAdminNames, isAdminName, adminEntry, ADMIN_NAME } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자
 
 export default function StaffManagerModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onClose }) {
   // ── V9.05: 관리자 이름 보호 — 신뢰 기기 관리 ────────────────────────────
@@ -18,24 +17,23 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     return () => { alive = false; };
   }, []);
   const handleRemoveDevice = async (devId, label) => {
-    if (!window.confirm(`신뢰 기기 해제: ${label || devId}\n이 기기에서는 앞으로 ${ADMIN_NAME} 선택 시 비밀번호가 필요합니다.`)) return;
-    const ok = await fbRemoveAdminDevice(devId);
-    if (ok) setGuardInfo(g => {
-      const next = { ...(g || {}) };
-      next.devices = { ...(next.devices || {}) };
-      delete next.devices[devId];
-      return next;
-    });
+    if (!window.confirm(`신뢰 기기 해제: ${label || devId}\n이 기기에서는 앞으로 관리자 선택 시 비밀번호가 필요합니다.`)) return;
+    const ok = await fbUpdateAdminGuard({ [`admins/${current}/devices/${devId}`]: null });
+    if (ok) { const g = await fbGetAdminGuard(); setGuardInfo(g); }
     else alert('해제 실패 — 네트워크를 확인하세요.');
   };
+  // V9.09: 내 비밀번호만 바꾼다(admins/{나}). 다른 관리자 비밀번호는 건드리지 않는다.
   const handleChangePw = async () => {
-    const pw = window.prompt('새 관리자 비밀번호 (4자 이상):');
+    const pw = window.prompt(`${current} 새 비밀번호 (4자 이상):`);
     if (!pw) return;
     if (pw.length < 4) { alert('4자 이상으로 하세요.'); return; }
     const salt = makeSalt();
     const pwHash = await hashPassword(pw, salt);
-    const ok = await fbUpdateAdminGuard({ pwHash, salt });
-    if (ok) { alert('✅ 비밀번호 변경 완료'); setGuardInfo(g => ({ ...(g || {}), pwHash, salt })); }
+    const ok = await fbUpdateAdminGuard({
+      [`admins/${current}/pwHash`]: pwHash,
+      [`admins/${current}/salt`]: salt,
+    });
+    if (ok) { alert('✅ 비밀번호 변경 완료'); const g = await fbGetAdminGuard(); setGuardInfo(g); }
     else alert('변경 실패 — 네트워크를 확인하세요.');
   };
   const [newName, setNewName] = useState('');
@@ -67,13 +65,54 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     }
   };
 
+  // ── V9.09(2026-07-26): 관리자 권한 부여·회수 — 인수인계용 ─────────────────
+  //   왜: 관리자 이름이 소스에 박혀 있어 담당자가 바뀌면 재배포해야만 넘길 수 있었다.
+  //   원칙 — 비밀번호는 관리자마다 따로. 권한을 줘도 내 비밀번호를 알려줄 필요가 없고,
+  //   받은 사람이 첫 선택 때 자기 것을 정한다. 마지막 1명은 회수 불가(잠김 방지).
+  const adminNames = getAdminNames(guardInfo);
+  const handleGrantAdmin = async (name) => {
+    if (isAdminName(guardInfo, name)) return;
+    if (!window.confirm(
+      `"${name}" 님에게 관리자 권한을 주시겠습니까?\n\n` +
+      `· 인원 관리 · 항차 삭제 · 기기 관리를 할 수 있게 됩니다.\n` +
+      `· 비밀번호는 본인이 첫 선택 때 직접 정합니다(내 비밀번호는 알려주지 않아도 됩니다).\n` +
+      `· 언제든 회수할 수 있습니다.`)) return;
+    const ok = await fbUpdateAdminGuard({
+      [`admins/${name}/grantedBy`]: current,
+      [`admins/${name}/grantedAt`]: Date.now(),
+      [`admins/${name}/revoked`]: null,
+    });
+    if (!ok) { alert('저장 실패 — 네트워크를 확인하세요.'); return; }
+    // 구버전(단일 관리자) 상태였다면 현재 관리자도 admins 목록으로 옮겨 적는다(마이그레이션)
+    if (!guardInfo?.admins && guardInfo?.pwHash) {
+      await fbUpdateAdminGuard({
+        [`admins/${ADMIN_NAME}/pwHash`]: guardInfo.pwHash,
+        [`admins/${ADMIN_NAME}/salt`]: guardInfo.salt,
+        [`admins/${ADMIN_NAME}/devices`]: guardInfo.devices || {},
+        [`admins/${ADMIN_NAME}/grantedBy`]: '(초기)',
+      });
+    }
+    const g = await fbGetAdminGuard(); setGuardInfo(g);
+    alert(`✅ "${name}" 관리자 권한 부여 완료.\n그 분이 검수원 선택에서 자기 이름을 고르면 비밀번호를 정하게 됩니다.`);
+  };
+  const handleRevokeAdmin = async (name) => {
+    if (adminNames.length <= 1) { alert('마지막 관리자는 회수할 수 없습니다.\n먼저 다른 사람에게 권한을 준 뒤 회수하세요.'); return; }
+    if (name === current && !window.confirm(
+      `본인 권한을 내려놓습니다.\n이후 관리 기능을 쓸 수 없게 됩니다. 계속할까요?`)) return;
+    if (name !== current && !window.confirm(`"${name}" 님의 관리자 권한을 회수하시겠습니까?`)) return;
+    const ok = await fbUpdateAdminGuard({ [`admins/${name}`]: null });
+    if (!ok) { alert('저장 실패 — 네트워크를 확인하세요.'); return; }
+    const g = await fbGetAdminGuard(); setGuardInfo(g);
+    alert(`"${name}" 관리자 권한을 회수했습니다.`);
+  };
+
   // 관리자 아니면 차단
-  if (current !== ADMIN_NAME) {
+  if (!isAdminName(guardInfo, current)) {
     return (
       <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3">
         <div className="bg-slate-900 border border-red-700 rounded-xl p-6 max-w-sm text-center">
           <div className="text-red-300 font-bold mb-2">⛔ 권한 없음</div>
-          <div className="text-slate-300 text-sm mb-4">인원 관리는 관리자(<b>{ADMIN_NAME}</b>)만 가능합니다.</div>
+          <div className="text-slate-300 text-sm mb-4">인원 관리는 관리자(<b>{getAdminNames(guardInfo).join(', ')}</b>)만 가능합니다.</div>
           <button onClick={onClose} className="bg-slate-700 px-4 py-2 rounded text-white">확인</button>
         </div>
       </div>
@@ -120,7 +159,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   };
 
   const handleDeleteStaff = async (name) => {
-    if (name === ADMIN_NAME) { alert('관리자 본인은 삭제할 수 없습니다.'); return; }
+    if (isAdminName(guardInfo, name)) { alert('관리자는 삭제할 수 없습니다.\n먼저 관리자 권한을 회수하세요.'); return; }
     if (!confirm(`"${name}" — 퇴사 처리하시겠습니까?\n(접속 차단 + 명단 숨김. 복구 가능)`)) return;
     try {
       // Firebase 동적 명단에 있으면 삭제
@@ -145,7 +184,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   };
 
   const handleKickInspector = async (name) => {
-    if (name === ADMIN_NAME) return;
+    if (isAdminName(guardInfo, name)) return;
     if (!confirm(`"${name}" 접속 기록을 제거하시겠습니까?\n(명단에는 남음, 다시 접속 가능)`)) return;
     try {
       await fbDeleteInspector(name);
@@ -163,7 +202,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
             <Shield className="w-5 h-5 text-amber-400" />
             <div>
               <div className="font-bold text-amber-200">인원 관리</div>
-              <div className="text-[10px] text-slate-400">관리자: {ADMIN_NAME}</div>
+              <div className="text-[10px] text-slate-400">관리자: {adminNames.join(', ')}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -182,12 +221,12 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
         {/* V9.05: 관리자 이름 보호 — 신뢰 기기 관리 */}
         <div className="px-4 py-2 border-b border-slate-700 bg-slate-800/40">
           <div className="flex items-center justify-between">
-            <div className="text-[11px] font-bold text-amber-300">🔐 {ADMIN_NAME} 이름 보호 — 신뢰 기기 {Object.keys(guardInfo?.devices || {}).length}/{MAX_TRUSTED_DEVICES}</div>
+            <div className="text-[11px] font-bold text-amber-300">🔐 {current} 보호 — 신뢰 기기 {Object.keys(adminEntry(guardInfo, current)?.devices || {}).length}/{MAX_TRUSTED_DEVICES}</div>
             <button onClick={handleChangePw} className="text-[10px] px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200">
-              {guardInfo?.pwHash ? '비밀번호 변경' : '비밀번호 미설정'}
+              {adminEntry(guardInfo, current)?.pwHash ? '비밀번호 변경' : '비밀번호 미설정'}
             </button>
           </div>
-          {Object.entries(guardInfo?.devices || {}).map(([devId, d]) => (
+          {Object.entries(adminEntry(guardInfo, current)?.devices || {}).map(([devId, d]) => (
             <div key={devId} className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
               <span>
                 {d?.label || devId}{devId === getAdminDeviceId() && <span className="text-emerald-400"> (현재 기기)</span>}
@@ -196,8 +235,8 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
               <button onClick={() => handleRemoveDevice(devId, d?.label)} className="text-red-400 hover:text-red-300 px-1.5">해제</button>
             </div>
           ))}
-          {Object.keys(guardInfo?.devices || {}).length === 0 && (
-            <div className="text-[10px] text-slate-500 mt-1">등록된 신뢰 기기 없음 — 검수원 선택에서 {ADMIN_NAME} 클릭 시 설정됩니다.</div>
+          {Object.keys(adminEntry(guardInfo, current)?.devices || {}).length === 0 && (
+            <div className="text-[10px] text-slate-500 mt-1">등록된 신뢰 기기 없음 — 검수원 선택에서 {current} 클릭 시 설정됩니다.</div>
           )}
         </div>
 
@@ -247,12 +286,12 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
             return (
               <div key={s.name} className="flex items-center gap-2 px-2 py-1.5 bg-slate-800/50 border border-slate-700 rounded">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  s.name === ADMIN_NAME ? 'bg-amber-500 text-slate-900' : 'bg-slate-600 text-slate-200'
+                  isAdminName(guardInfo, s.name) ? 'bg-amber-500 text-slate-900' : 'bg-slate-600 text-slate-200'
                 }`}>{s.name[0]}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1 text-sm font-bold text-slate-100">
                     {s.name}
-                    {s.name === ADMIN_NAME && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
+                    {isAdminName(guardInfo, s.name) && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
                     {isDynamic && <span className="text-[9px] bg-purple-900 text-purple-300 px-1 rounded">추가됨</span>}
                     {isDeleted(s.name) && <span className="text-[9px] bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
                   </div>
@@ -262,7 +301,23 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                 {isLoggedIn && <span className="text-[9px] bg-sky-900/50 text-sky-300 px-1.5 py-0.5 rounded font-bold">○로그인</span>}
                 {isOnline && !isActive && !isLoggedIn && <span className="text-[9px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">접속이력</span>}
                 {/* 액션 버튼 */}
-                {s.name !== ADMIN_NAME && (
+                {/* V9.09: 관리자 권한 부여·회수 — 인수인계 */}
+                {!isDeleted(s.name) && (
+                  isAdminName(guardInfo, s.name) ? (
+                    <button onClick={() => handleRevokeAdmin(s.name)}
+                      className="px-2 py-1 bg-amber-800 hover:bg-amber-700 rounded text-amber-100 text-xs font-bold"
+                      title={s.name === current ? '내 관리자 권한 내려놓기' : '관리자 권한 회수'}>
+                      권한회수
+                    </button>
+                  ) : (
+                    <button onClick={() => handleGrantAdmin(s.name)}
+                      className="px-2 py-1 bg-slate-700 hover:bg-amber-800 rounded text-slate-200 hover:text-amber-100 text-xs font-bold"
+                      title="관리자 권한 부여 — 비밀번호는 본인이 정합니다">
+                      권한부여
+                    </button>
+                  )
+                )}
+                {!isAdminName(guardInfo, s.name) && (
                   <div className="flex gap-1">
                     {isDeleted(s.name) ? (
                       <button onClick={() => handleRestore(s.name)}

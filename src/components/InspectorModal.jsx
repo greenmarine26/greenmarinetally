@@ -5,14 +5,17 @@ import { inspectorStatus } from '../inspectorStatus.js';
 // V9.05: 관리자 이름 보호 — 신뢰 기기 3대만 무비번, 그 외 기기는 비밀번호
 import {
   MAX_TRUSTED_DEVICES,
-  getAdminDeviceId, hashPassword, makeSalt, isTrustedDevice,
-  hasSessionPass, setSessionPass, verifyPassword, deviceLabel,
+  getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
+  // V9.09: 다중 관리자 — 이름 하드코딩 제거, 관리자별 개별 비밀번호
+  getAdminNames, isAdminName, adminEntry, isTrustedDeviceFor,
+  verifyPasswordFor, needsPasswordSetup, hasSessionPassFor, setSessionPassFor,
 } from '../adminGuard.js';
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 // fbDeleteInspector 등은 StaffManagerModal에서 사용
 
-// 삭제 권한자 (오직 한 사람)
-const ADMIN_NAME = '김성일';
+// V9.09(2026-07-26): 관리자는 이제 Firebase admin_guard/admins 목록이 정한다.
+//   종전에는 여기에 이름이 박혀 있어(const ADMIN_NAME = '김성일') 담당자가 바뀌면
+//   소스를 고쳐 재배포해야만 인수인계가 됐다. 앱 안에서 넘길 수 있게 바꾼다.
 
 export default function InspectorModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onSelect, onClose }) {
   const [newName, setNewName] = useState('');
@@ -20,6 +23,7 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
   const [guard, setGuard] = useState(null);          // admin_guard 노드 (null = 미설정/로딩전)
   const [guardLoaded, setGuardLoaded] = useState(false);
   const [gateMode, setGateMode] = useState(null);    // null | 'verify' | 'setup'
+  const [gateName, setGateName] = useState('');      // V9.09: 지금 인증 중인 관리자 이름
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
   const [regDevice, setRegDevice] = useState(false);
@@ -33,12 +37,14 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
 
   // V9.05: 이름 선택 진입점 — 관리자 이름만 가드, 나머지는 기존 그대로
   const handlePick = (name) => {
-    if (name !== ADMIN_NAME) { onSelect(name); return; }
-    if (hasSessionPass()) { onSelect(name); return; }          // 이 탭에서 이미 비번 통과
+    if (!isAdminName(guard, name)) { onSelect(name); return; }   // 일반 검수원은 그대로
+    if (hasSessionPassFor(name)) { onSelect(name); return; }     // 이 탭에서 이미 비번 통과
     if (!guardLoaded) { alert('관리자 보호 정보 로딩 중 — 잠시 후 다시 시도하세요.'); return; }
-    if (!guard || !guard.pwHash) { setGateMode('setup'); return; }   // 최초 설정 (이 기기가 신뢰 기기 1호)
-    if (isTrustedDevice(guard)) { onSelect(name); return; }          // 신뢰 기기 (PC·폰2)
-    setGateMode('verify');                                            // 그 외 기기 → 비밀번호
+    setGateName(name);
+    // 비번 미설정 = 권한만 받은 신규 관리자 → 본인이 직접 정한다(기존 비번을 알려줄 필요 없음)
+    if (needsPasswordSetup(guard, name)) { setGateMode('setup'); return; }
+    if (isTrustedDeviceFor(guard, name)) { onSelect(name); return; }   // 신뢰 기기
+    setGateMode('verify');                                             // 그 외 기기 → 비밀번호
   };
 
   // 최초 설정: 비밀번호 등록 + 이 기기를 신뢰 기기 1호로
@@ -51,15 +57,17 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
       const salt = makeSalt();
       const pwHash = await hashPassword(pw1, salt);
       const devId = getAdminDeviceId();
+      // V9.09: 관리자별 개별 저장 — admins/{이름} 아래. 구버전 최상위 필드는 건드리지 않는다.
       const ok = await fbUpdateAdminGuard({
-        pwHash, salt,
-        [`devices/${devId}`]: { label: `${deviceLabel()} (1호)`, addedAt: Date.now() },
+        [`admins/${gateName}/pwHash`]: pwHash,
+        [`admins/${gateName}/salt`]: salt,
+        [`admins/${gateName}/devices/${devId}`]: { label: `${deviceLabel()} (1호)`, addedAt: Date.now() },
       });
       if (!ok) { alert('저장 실패 — 네트워크를 확인하세요.'); return; }
-      setSessionPass();
+      setSessionPassFor(gateName);
       setGateMode(null); setPw1(''); setPw2('');
-      alert(`✅ 관리자 비밀번호 설정 완료 — 이 기기가 신뢰 기기 1호로 등록됐습니다.\n폰에서도 ${ADMIN_NAME} 선택 시 비밀번호를 넣고 "기기 등록"을 체크하면 신뢰 기기(최대 ${MAX_TRUSTED_DEVICES}대)가 됩니다.`);
-      onSelect(ADMIN_NAME);
+      alert(`✅ ${gateName} 관리자 비밀번호 설정 완료 — 이 기기가 신뢰 기기 1호로 등록됐습니다.\n다른 기기에서는 비밀번호를 넣고 "기기 등록"을 체크하면 신뢰 기기(최대 ${MAX_TRUSTED_DEVICES}대)가 됩니다.`);
+      onSelect(gateName);
     } finally {
       setGateBusy(false);
     }
@@ -70,16 +78,16 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
     if (gateBusy) return;
     setGateBusy(true);
     try {
-      const pass = await verifyPassword(guard, pw1);
+      const pass = await verifyPasswordFor(guard, gateName, pw1);
       if (!pass) { alert('비밀번호가 틀립니다.'); setPw1(''); return; }
-      setSessionPass();
-      const devCount = Object.keys(guard?.devices || {}).length;
+      setSessionPassFor(gateName);
+      const devCount = Object.keys(adminEntry(guard, gateName)?.devices || {}).length;
       if (regDevice && devCount < MAX_TRUSTED_DEVICES) {
         const devId = getAdminDeviceId();
-        await fbUpdateAdminGuard({ [`devices/${devId}`]: { label: `${deviceLabel()} (${devCount + 1}호)`, addedAt: Date.now() } });
+        await fbUpdateAdminGuard({ [`admins/${gateName}/devices/${devId}`]: { label: `${deviceLabel()} (${devCount + 1}호)`, addedAt: Date.now() } });
       }
       setGateMode(null); setPw1('');
-      onSelect(ADMIN_NAME);
+      onSelect(gateName);
     } finally {
       setGateBusy(false);
     }
@@ -110,7 +118,7 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
     if (!isAllowed(raw)) {
       const hint = allWhitelist.filter(n => n.includes(raw.slice(0,2)) || raw.includes(n.slice(0,2)));
       const hintTxt = hint.length > 0 ? `\n\n비슷한 이름: ${hint.slice(0,5).join(', ')}` : '';
-      alert(`"${raw}" — 그린마린 직원 명단에 없습니다.\n정확한 이름으로 입력하세요.${hintTxt}\n\n새 직원 등록은 관리자(${ADMIN_NAME})에게 요청하세요.`);
+      alert(`"${raw}" — 그린마린 직원 명단에 없습니다.\n정확한 이름으로 입력하세요.${hintTxt}\n\n새 직원 등록은 관리자(${getAdminNames(guard).join(', ')})에게 요청하세요.`);
       return;
     }
     const norm = normalizeName(raw);
@@ -119,7 +127,7 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
     setNewName('');
   };
 
-  const isAdmin = current === ADMIN_NAME;
+  const isAdmin = isAdminName(guard, current);   // V9.09: 목록 기준
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -205,7 +213,7 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
           <div className="absolute inset-0 z-10 bg-slate-950/90 rounded-xl flex items-center justify-center p-4">
             <div className="w-full max-w-xs bg-slate-900 border border-amber-600/60 rounded-lg p-4">
               <div className="font-bold text-amber-200 text-sm mb-2">
-                {gateMode === 'setup' ? `🔐 ${ADMIN_NAME} 보호 최초 설정` : `🔐 ${ADMIN_NAME} 선택 — 비밀번호`}
+                {gateMode === 'setup' ? `🔐 ${gateName} 비밀번호 설정` : `🔐 ${gateName} 선택 — 비밀번호`}
               </div>
               {gateMode === 'setup' && (
                 <div className="text-[11px] text-slate-400 mb-2">
