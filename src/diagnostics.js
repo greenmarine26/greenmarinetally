@@ -236,7 +236,7 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
         alerts.push({
           level: 'info',
           code: 'empty_confirmed',
-          msg: `가상E ${virtualEdiCount}자리 · E확정(리스트 엠티) ${emptyConfirmedCount} — 실 ${realEdiCount} + E확정 = 총 ${realEdiCount + emptyConfirmedCount}`,
+          msg: `실 ${realEdiCount} + E확정 ${emptyConfirmedCount} = 총 ${realEdiCount + emptyConfirmedCount}` + (emptyConfirmedCount ? '' : ` (가상E 예약 ${virtualEdiCount}자리 — 확정 대기)`),
           voice: '',
           count: emptyConfirmedCount,
           details: { virtualEdiCount, emptyConfirmedCount, realEdiCount },

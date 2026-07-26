@@ -186,11 +186,19 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
 
       {/* V9.04-01: 가상E·E확정 안내 — EDI 엠티 예약자리(더미번호)와 리스트 엠티 실번호의 짝.
           MCSN 629S: 가상 187이 '누락 187 + 추가 187' 이중 경고로 떠서 허수였음 — 정보 줄로 대체. */}
+      {/* V9.08(2026-07-26, 사용자 확정): 가상E는 '예상치'다. 확정이 들어오면 그것이 진실이고
+          예상 수와 달라도 부족이 아니다(예상 202·확정 201이어도 정상, 확정 2면 2가 맞다).
+          확정이 있으면 예상 자리수는 표시하지 않는다 — 남아 있으면 미확정으로 오해된다. */}
       {v.virtualCount > 0 && (
         <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-[11px] text-purple-200 font-bold">
-          실 {v.ptkTotal - v.virtualCount} + 가상E {v.virtualCount}
-          {v.emptyConfirmed > 0 && <> · E확정(리스트 엠티) {v.emptyConfirmed} → 총 {v.ptkTotal - v.virtualCount + v.emptyConfirmed}</>}
-          <span className="ml-1 font-normal text-purple-300/70">(가상E = 실번호 미배정 엠티 자리 — 누락 아님)</span>
+          {v.emptyConfirmed > 0 ? (
+            <>실 {v.ptkTotal - v.virtualCount} + E확정 {v.emptyConfirmed} = 총 {v.ptkTotal - v.virtualCount + v.emptyConfirmed}</>
+          ) : (
+            <>
+              실 {v.ptkTotal - v.virtualCount} + 가상E {v.virtualCount}
+              <span className="ml-1 font-normal text-purple-300/70">(가상E = 실번호 미배정 엠티 자리 — 누락 아님)</span>
+            </>
+          )}
         </div>
       )}
 

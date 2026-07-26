@@ -1047,13 +1047,16 @@ function SectionBar({ label, color, stats, onClick }) {
         {(stats.dummyE > 0 || stats.emptyConfirmed > 0) && (
           <>
             <span className="text-slate-600">·</span>
-            <span className="text-purple-300" title="가상E = EDI의 엠티 예약자리(실번호 미배정 — DUME·CASP 등 더미번호). E확정 = 선사가 엑셀로 준 최종 엠티 실번호 개수(수집기 기록). 총 = 실번호 + E확정 — 터미널 선적 집계와 대조용.">
+            <span className="text-purple-300" title="실 = EDI 실번호. E확정 = 선사가 엑셀로 준 엠티 실번호(수집기 기록). 총 = 실 + E확정 — 터미널 선적 집계와 대조용. 가상E는 EDI의 엠티 예약자리(예상치)라 확정이 오면 표시하지 않는다 — 예상과 확정 수가 달라도 부족이 아니다.">
               실 {stats.ptk - stats.dummyE}
-              {stats.dummyE > 0 ? `+가상E${stats.dummyE}` : ''}
+              {/* V9.08(2026-07-26, 사용자 확정): 가상E는 '예상치'다. 확정이 들어오면 그것이 진실이고
+                  예상 수와 달라도 부족이 아니다(예상 202·확정 201이어도 정상). 확정이 있으면
+                  예상 자리수는 표시하지 않는다 — 남아 있으면 미확정으로 오해된다. */}
+              {stats.dummyE > 0 && !(stats.emptyConfirmed > 0) ? `+가상E${stats.dummyE}` : ''}
               {/* V9.04-03: E확정은 EDI에 없는 엠티 실번호만 총계에 가산(emptyConfirmedAdd) — 실번호 EDI면 '반영됨' 표기 */}
               {stats.emptyConfirmed > 0 ? (stats.emptyConfirmedAdd > 0
-                ? ` · E확정 ${stats.emptyConfirmed} → 총 ${stats.ptk - stats.dummyE + stats.emptyConfirmedAdd}`
-                : ` · E확정 ${stats.emptyConfirmed} ✓EDI반영`) : ''}
+                ? ` + E확정 ${stats.emptyConfirmed} = 총 ${stats.ptk - stats.dummyE + stats.emptyConfirmedAdd}`
+                : ` + E확정 ${stats.emptyConfirmed} ✓EDI반영`) : ''}
             </span>
           </>
         )}
