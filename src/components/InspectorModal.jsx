@@ -7,7 +7,7 @@ import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
   // V9.09: 다중 관리자 — 이름 하드코딩 제거, 관리자별 개별 비밀번호
-  getAdminNames, isAdminName, adminEntry, isTrustedDeviceFor,
+  getAdminNames, isAdminName, adminEntry, isTrustedDeviceFor, isOwnerName, OWNER_NAME,
   verifyPasswordFor, needsPasswordSetup, hasSessionPassFor, setSessionPassFor,
 } from '../adminGuard.js';
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
@@ -104,7 +104,8 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
 
   // 화이트리스트 (코드 명단 + Firebase 동적 명단 - 퇴사자 제외)
   const extraNames = Object.values(extraStaff || {}).map(s => s.name).filter(Boolean);
-  const allWhitelist = [...STAFF_NAMES, ...extraNames].filter(n => !deletedStaff[n]);
+  // V9.10: 소유자는 퇴사 처리돼 있어도 항상 선택 가능 — 앱이 쓰이는 한 접속이 유지돼야 한다.
+  const allWhitelist = [...new Set([...STAFF_NAMES, ...extraNames].filter(n => !deletedStaff[n] || isOwnerName(n)).concat(OWNER_NAME))];
   const isAllowed = (name) => allWhitelist.some(n => normalizeName(n) === normalizeName(name));
 
   // M5.73: 선택만 처리 (관리는 별도 StaffManagerModal)

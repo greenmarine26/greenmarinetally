@@ -6,7 +6,8 @@ import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
 import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice } from '../firebase.js';
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
-         getAdminNames, isAdminName, adminEntry, ADMIN_NAME } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자
+         getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
+         OWNER_NAME, isOwnerName, canRevokeAdmin } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자 · V9.10 소유자 고정
 
 export default function StaffManagerModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onClose }) {
   // ── V9.05: 관리자 이름 보호 — 신뢰 기기 관리 ────────────────────────────
@@ -76,7 +77,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
       `"${name}" 님에게 관리자 권한을 주시겠습니까?\n\n` +
       `· 인원 관리 · 항차 삭제 · 기기 관리를 할 수 있게 됩니다.\n` +
       `· 비밀번호는 본인이 첫 선택 때 직접 정합니다(내 비밀번호는 알려주지 않아도 됩니다).\n` +
-      `· 언제든 회수할 수 있습니다.`)) return;
+      `· 언제든 회수할 수 있고, 퇴사 처리하면 권한도 함께 사라집니다.`)) return;
     const ok = await fbUpdateAdminGuard({
       [`admins/${name}/grantedBy`]: current,
       [`admins/${name}/grantedAt`]: Date.now(),
@@ -96,7 +97,9 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     alert(`✅ "${name}" 관리자 권한 부여 완료.\n그 분이 검수원 선택에서 자기 이름을 고르면 비밀번호를 정하게 됩니다.`);
   };
   const handleRevokeAdmin = async (name) => {
-    if (adminNames.length <= 1) { alert('마지막 관리자는 회수할 수 없습니다.\n먼저 다른 사람에게 권한을 준 뒤 회수하세요.'); return; }
+    // V9.10: 소유자(개발·운영자) 권한은 회수 불가 — 앱이 쓰이는 한 유지돼야 버그를 고칠 수 있다.
+    if (isOwnerName(name)) { alert(`${OWNER_NAME} 님은 앱 소유자입니다.\n관리자 권한을 회수할 수 없습니다.`); return; }
+    if (!canRevokeAdmin(guardInfo, name)) { alert('마지막 관리자는 회수할 수 없습니다.\n먼저 다른 사람에게 권한을 준 뒤 회수하세요.'); return; }
     if (name === current && !window.confirm(
       `본인 권한을 내려놓습니다.\n이후 관리 기능을 쓸 수 없게 됩니다. 계속할까요?`)) return;
     if (name !== current && !window.confirm(`"${name}" 님의 관리자 권한을 회수하시겠습니까?`)) return;
@@ -158,16 +161,31 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     }
   };
 
+  // V9.10(2026-07-26): 퇴사 처리 규칙 정리
+  //   · 소유자 — 퇴사 처리해도 관리자 권한·접속은 그대로. 앱이 쓰이는 한 유지돼야 한다.
+  //   · 그 외 관리자 — 퇴사 처리하면 관리자 권한이 함께 삭제된다(먼저 회수할 필요 없음).
   const handleDeleteStaff = async (name) => {
-    if (isAdminName(guardInfo, name)) { alert('관리자는 삭제할 수 없습니다.\n먼저 관리자 권한을 회수하세요.'); return; }
-    if (!confirm(`"${name}" — 퇴사 처리하시겠습니까?\n(접속 차단 + 명단 숨김. 복구 가능)`)) return;
+    const owner = isOwnerName(name);
+    const wasAdmin = !owner && isAdminName(guardInfo, name);
+    const msg = owner
+      ? `"${name}" — 퇴사 처리하시겠습니까?\n\n소유자이므로 관리자 권한과 앱 접속은 그대로 유지됩니다.\n(명단에만 퇴사로 표시)`
+      : wasAdmin
+        ? `"${name}" — 퇴사 처리하시겠습니까?\n\n⚠ 관리자 권한도 함께 삭제됩니다.\n(접속 차단 + 명단 숨김. 복구해도 권한은 다시 부여해야 합니다)`
+        : `"${name}" — 퇴사 처리하시겠습니까?\n(접속 차단 + 명단 숨김. 복구 가능)`;
+    if (!confirm(msg)) return;
     try {
+      // 관리자였다면 권한 먼저 삭제 (소유자는 제외)
+      if (wasAdmin) {
+        const ok = await fbUpdateAdminGuard({ [`admins/${name}`]: null });
+        if (!ok) { alert('관리자 권한 삭제 실패 — 네트워크를 확인하세요. 퇴사 처리를 중단합니다.'); return; }
+      }
       // Firebase 동적 명단에 있으면 삭제
       if (extraStaff[name]) await fbDeleteStaff(name);
       // 검수원 활동 기록 삭제
       if (inspectorMap[name]) await fbDeleteInspector(name);
       // M5.74: 코드 명단도 deletedStaff 마커로 제외 (퇴사자 처리)
       await fbMarkDeletedStaff(name);
+      if (wasAdmin) { const g = await fbGetAdminGuard(); setGuardInfo(g); }
     } catch (e) {
       alert('삭제 실패: ' + e.message);
     }
@@ -184,7 +202,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   };
 
   const handleKickInspector = async (name) => {
-    if (isAdminName(guardInfo, name)) return;
+    if (isOwnerName(name)) { alert(`${OWNER_NAME} 님은 앱 소유자입니다.\n접속 기록을 제거할 수 없습니다.`); return; }
     if (!confirm(`"${name}" 접속 기록을 제거하시겠습니까?\n(명단에는 남음, 다시 접속 가능)`)) return;
     try {
       await fbDeleteInspector(name);
@@ -291,7 +309,9 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1 text-sm font-bold text-slate-100">
                     {s.name}
-                    {isAdminName(guardInfo, s.name) && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
+                    {isOwnerName(s.name)
+                      ? <span className="text-[9px] bg-amber-600 text-slate-900 px-1 rounded font-black">소유자</span>
+                      : isAdminName(guardInfo, s.name) && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
                     {isDynamic && <span className="text-[9px] bg-purple-900 text-purple-300 px-1 rounded">추가됨</span>}
                     {isDeleted(s.name) && <span className="text-[9px] bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
                   </div>
@@ -303,7 +323,11 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                 {/* 액션 버튼 */}
                 {/* V9.09: 관리자 권한 부여·회수 — 인수인계 */}
                 {!isDeleted(s.name) && (
-                  isAdminName(guardInfo, s.name) ? (
+                  isOwnerName(s.name) ? (
+                    <span className="px-2 py-1 bg-slate-800 rounded text-amber-400/70 text-[10px] font-bold" title="소유자 권한은 회수할 수 없습니다">
+                      권한고정
+                    </span>
+                  ) : isAdminName(guardInfo, s.name) ? (
                     <button onClick={() => handleRevokeAdmin(s.name)}
                       className="px-2 py-1 bg-amber-800 hover:bg-amber-700 rounded text-amber-100 text-xs font-bold"
                       title={s.name === current ? '내 관리자 권한 내려놓기' : '관리자 권한 회수'}>
@@ -317,7 +341,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     </button>
                   )
                 )}
-                {!isAdminName(guardInfo, s.name) && (
+                {(
                   <div className="flex gap-1">
                     {isDeleted(s.name) ? (
                       <button onClick={() => handleRestore(s.name)}
@@ -326,7 +350,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                       </button>
                     ) : (
                       <>
-                        {isOnline && (
+                        {isOnline && !isOwnerName(s.name) && (
                           <button onClick={() => handleKickInspector(s.name)}
                             className="p-1.5 hover:bg-orange-900/40 rounded text-orange-400" title="접속 기록 제거">
                             <RefreshCw className="w-3.5 h-3.5"/>
@@ -346,7 +370,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
         </div>
 
         <div className="p-3 border-t border-slate-700 text-[10px] text-slate-500">
-          🗑 퇴사 처리 (접속 차단, 복구 가능) · 🔄 접속 기록만 제거
+          🗑 퇴사 처리 (접속 차단, 복구 가능 · 관리자면 권한도 함께 삭제) · 🔄 접속 기록만 제거 · 소유자({OWNER_NAME}) 권한은 고정
         </div>
       </div>
     </div>

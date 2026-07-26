@@ -5,7 +5,8 @@
 // 기기 식별: localStorage 'gm_admin_device_id_v1' (기기·브라우저별 1회 생성 UUID)
 // 세션 허용: 비신뢰 기기에서 비밀번호 통과 시 sessionStorage 'gm_admin_session_ok' (탭 닫으면 소멸)
 
-export const ADMIN_NAME = '김성일';          // 초기 관리자(하위호환 기본값) — 인수인계 후에도 목록의 한 명일 뿐
+export const OWNER_NAME = '김성일';          // V9.10: 소유자(개발·운영자) — 권한 회수 불가, 퇴사해도 유지
+export const ADMIN_NAME = OWNER_NAME;        // 하위호환 별칭 (기존 호출부 유지)
 export const MAX_TRUSTED_DEVICES = 3;
 const DEVICE_KEY = 'gm_admin_device_id_v1';
 const SESSION_KEY = 'gm_admin_session_ok';
@@ -89,11 +90,23 @@ export function deviceLabel() {
 /** 관리자 이름 목록. admins 노드가 없으면 구버전으로 보고 [ADMIN_NAME] 반환(하위호환). */
 export function getAdminNames(guard) {
   const m = guard && guard.admins;
+  let names = [];
   if (m && typeof m === 'object') {
-    const names = Object.keys(m).filter(n => m[n] && m[n].revoked !== true);
-    if (names.length) return names;
+    names = Object.keys(m).filter(n => m[n] && m[n].revoked !== true);
   }
-  return [ADMIN_NAME];
+  // V9.10: 소유자는 DB 상태와 무관하게 항상 관리자 — 목록에서 빠져 있어도 되살린다.
+  return [OWNER_NAME, ...names.filter(n => n !== OWNER_NAME)];
+}
+
+/** V9.10: 소유자(개발·운영자) 여부 — 이름 고정. 회수·차단 불가 판정의 단일 기준. */
+export function isOwnerName(name) {
+  return String(name || '').trim() === OWNER_NAME;
+}
+
+/** V9.10: 그 관리자의 권한을 회수할 수 있는가 (소유자 불가 · 마지막 1명 불가) */
+export function canRevokeAdmin(guard, name) {
+  if (isOwnerName(name)) return false;
+  return getAdminNames(guard).length > 1;
 }
 
 /** 그 이름이 관리자인가 */
@@ -105,7 +118,7 @@ export function isAdminName(guard, name) {
 export function adminEntry(guard, name) {
   const m = guard && guard.admins;
   if (m && m[name]) return m[name];
-  if (name === ADMIN_NAME && guard && guard.pwHash) {
+  if (isOwnerName(name) && guard && guard.pwHash) {
     return { pwHash: guard.pwHash, salt: guard.salt, devices: guard.devices || {} };
   }
   return null;
