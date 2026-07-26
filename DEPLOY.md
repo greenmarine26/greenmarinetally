@@ -29,6 +29,8 @@ A는 사용자 PC의 GitHub Desktop git을 배치파일로 돌리는 방식이�
 
 1. 실데이터 시뮬 PASS (추론 금지)  2. `bash build.sh` 성공  3. 번들 grep으로 새 문자열·APP_VERSION 확인
 4. push 로그에 `xxxxxxx..yyyyyyy  main -> main`  5. 라이브 `sw.js?v=캐시버스터`의 VERSION 확인
+   ⚠ **라이브 번들 해시는 저장소와 다르다** — Pages는 Actions(`.github/workflows/deploy.yml`)가 `npm run build`한 `./dist`를 배포한다.
+   라이브 검증은 해시 대조가 아니라 **sw.js VERSION · 캐시명(`tallyman-Vx.xx`) · 번들 내 새 문자열**로 한다 (V9.10 실측: 저장소 `CJrBNLX3` ≠ 라이브 `Bm2YSPZD`).
 + blob 해시 전수 대조 권장 (`git rev-parse origin/main:<파일>` vs `git hash-object <검증본>`)
 
 ## 3. 방법 A 절차
