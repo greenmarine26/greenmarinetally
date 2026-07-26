@@ -6,8 +6,9 @@ import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
-  fbSubscribeMatrixEditors
+  fbSubscribeMatrixEditors, fbGetAdminGuard
 } from './firebase.js';
+import { isAdminName } from './adminGuard.js';   // V9.11: 관리자 판정은 Firebase 목록 기준(하드코딩 제거)
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
@@ -30,6 +31,9 @@ export default function App() {
   const [inspectors, setInspectors] = useState({});
   const [extraStaff, setExtraStaff] = useState({});
   const [deletedStaff, setDeletedStaff] = useState({});  // M5.74: 퇴사자 마커  // M5.62: 김성일이 추가한 동적 명단
+  // V9.11: 관리자 가드 — 종전에는 `inspector === '김성일'` 하드코딩이라 V9.09에서 권한을 넘겨받은
+  //   관리자에게 헤더 ⚙(인원 관리) 버튼이 아예 안 보였다(인수인계가 실질적으로 반쪽).
+  const [adminGuard, setAdminGuard] = useState(null);
   // M5.21: PORT-MIS 입출항 데이터 (Chrome 확장이 저장 — 호출부호로 매칭)
   const [portMisData, setPortMisData] = useState({});
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력
@@ -93,6 +97,13 @@ export default function App() {
     });
     return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); unsub2(); unsub3(); };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fbGetAdminGuard().then(g => { if (alive) setAdminGuard(g); }).catch(() => {});
+    return () => { alive = false; };
+  }, [inspector]);
+  const isAdmin = isAdminName(adminGuard, inspector);
 
   // V9.05: 관리자 승인 시 공유 정본을 로컬 사본에 반영
   const handleApproveBayDictSync = useCallback(() => {
@@ -227,7 +238,7 @@ export default function App() {
         route={route}
         voyages={voyages}
         onChangeInspector={() => setShowInspectorModal(true)}
-        onOpenStaffManager={inspector === '김성일' ? () => setShowStaffManager(true) : null}
+        onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}
         onGoHome={() => navigate('home')}
         onLogout={handleLogout}
       />
@@ -235,7 +246,7 @@ export default function App() {
       <BroadcastMarquee inspector={inspector} />
 
       {/* V9.05: 베이사전 정본 갱신 대기 배너 — 관리자에게만, 승인해야 반영 */}
-      {inspector === '김성일' && bayDictSyncPending.length > 0 && (
+      {isAdmin && bayDictSyncPending.length > 0 && (
         <div className="bg-amber-900/60 border-b border-amber-600/50 text-amber-100 text-xs px-3 py-2 flex items-center justify-between gap-2">
           <span>📚 베이사전 로컬 사본 {bayDictSyncPending.length}건이 공유 정본보다 오래됨: {bayDictSyncPending.slice(0, 6).join(', ')}{bayDictSyncPending.length > 6 ? ' 외' : ''}</span>
           <button onClick={handleApproveBayDictSync} className="bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold px-3 py-1 rounded flex-shrink-0">정본으로 갱신</button>
