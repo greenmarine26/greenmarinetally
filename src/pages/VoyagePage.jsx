@@ -650,6 +650,42 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         </div>
       )}
 
+      {/* V9.17: 출항 임박 마감 경고 — ETD 2시간 전인데 미완·X-RAY·리퍼 온도가 남아 있으면 붉은 배너.
+          데이터(ETD·미완 판정)는 전부 있었는데 능동 경고가 0이었다(전면 점검 §6). */}
+      {(() => {
+        try {
+          const info = voyage?.info || {};
+          let pm = null;
+          const cs = String(info.callsign || '').toUpperCase();
+          if (cs && portMisData[cs]) pm = portMisData[cs];
+          if (!pm && info.imo) pm = Object.values(portMisData).find(x => x && String(x.imo || '') === String(info.imo));
+          if (!pm) return null;
+          const etd = parsePortMisDateTime(pm.etd);
+          if (!etd) return null;
+          const left = etd - Date.now();
+          if (left <= 0 || left > 2 * 3600000) return null;
+          const undone = containers.filter(c => !compMap[c.cn]).length;
+          const xrayPend = mode === 'discharge' ? Object.keys(xrayMap || {}).filter(cn => !(xraySeals || {})[cn]?.seal).length : 0;
+          const rfMiss = containers.filter(c => (c.rf || (c.iso && c.iso[2] === 'R')) &&
+            (c.fe === 'F' || !c.fe) && (!c.tmp || String(c.tmp).trim() === '')).length;
+          if (!undone && !xrayPend && !rfMiss) return null;
+          const mins = Math.round(left / 60000);
+          const parts = [];
+          if (undone) parts.push(`미완 ${undone}대`);
+          if (xrayPend) parts.push(`X-RAY 미처리 ${xrayPend}대`);
+          if (rfMiss) parts.push(`리퍼 온도 미입력 ${rfMiss}대`);
+          return (
+            <button onClick={() => setClosingOpen(true)}
+              className="w-full mb-3 bg-red-950/70 border-2 border-red-600 rounded-lg px-3 py-2.5 text-left active:scale-[0.99]">
+              <div className="text-[13px] font-black text-red-200">
+                🚨 출항 {mins >= 60 ? `${Math.floor(mins / 60)}시간 ${mins % 60}분` : `${mins}분`} 전 — {parts.join(' · ')}
+              </div>
+              <div className="text-[11px] text-red-300/80 mt-0.5">탭하면 마감 점검이 열립니다</div>
+            </button>
+          );
+        } catch { return null; }
+      })()}
+
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
       <VoyageSummaryCard voyage={voyage} mode={mode} />
 

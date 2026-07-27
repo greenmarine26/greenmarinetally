@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads } from '../firebase.js';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbRestoreVoyageFromArchive, fbCleanupArchive } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort, isBookingSlot, emptySealSpec } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
@@ -451,6 +451,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       )}
       <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
       <ShipArchiveSection shipLib={shipLib} />
+
+      {/* V9.17: 완료 보관소 열람·복원 — 백엔드(archive/{key} + 복원·정리 함수)는 M7.18b에 완성돼
+          있었는데 UI가 0이었다(전면 점검 §1-5). RZOR 통삭제 사건 같은 실수의 되돌리기가 이것. */}
+      <ArchiveRestoreSection chief={chief} onRestored={() => {}} />
 
       {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
       {Object.keys(equipStats).length > 0 && (
@@ -1464,4 +1468,80 @@ function computeStats(section, mode) {
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));
   const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;
   return { total, done, ptk: ptkCns.size, matched, missing, forecastEdi };
+}
+
+// ── V9.17: 완료 보관소 (archive 노드) — 열람·복원·1년 정리. 수석 전용 조작. ──
+function ArchiveRestoreSection({ chief }) {
+  const [items, setItems] = useState(null);   // null=아직 안 불러옴
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    setBusy(true);
+    try { setItems(await fbListArchive()); }
+    catch (e) { alert('보관소 조회 실패: ' + (e?.message || e)); }
+    finally { setBusy(false); }
+  };
+  const restore = async (key) => {
+    if (!chief) { alert('🔒 복원은 수석검수사만 가능합니다.'); return; }
+    if (!window.confirm(`"${key}" 항차를 보관소에서 복원합니다.\n홈 목록에 다시 나타나고, 수집기도 다시 자료를 받기 시작합니다. 계속할까요?`)) return;
+    setBusy(true);
+    try {
+      const ok = await fbRestoreVoyageFromArchive(key);
+      alert(ok ? `✅ ${key} 복원 완료 — 홈에서 확인하세요.` : '복원 실패 — 보관 기록이 없습니다.');
+      await load();
+    } catch (e) { alert('복원 실패: ' + (e?.message || e)); }
+    finally { setBusy(false); }
+  };
+  const cleanup = async () => {
+    if (!chief) { alert('🔒 정리는 수석검수사만 가능합니다.'); return; }
+    if (!window.confirm('1년(365일) 지난 보관 항차를 영구 삭제합니다.\n복구할 수 없습니다. 계속할까요?')) return;
+    setBusy(true);
+    try { const n = await fbCleanupArchive(365); alert(`🧹 ${n}건 정리 완료`); await load(); }
+    catch (e) { alert('정리 실패: ' + (e?.message || e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-bold text-slate-200 text-sm">🗄 완료 보관소 (복원)</h2>
+        <div className="flex gap-2">
+          {items && items.length > 0 && (
+            <button onClick={cleanup} disabled={busy}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-bold border border-slate-700">
+              🧹 1년 지난 것 정리
+            </button>
+          )}
+          <button onClick={load} disabled={busy}
+            className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[12px] font-bold" style={{ minHeight: 36 }}>
+            {busy ? '불러오는 중…' : items ? '새로고침' : '목록 불러오기'}
+          </button>
+        </div>
+      </div>
+      <div className="text-[11px] text-slate-500 mb-2">
+        수석 [완료 저장]으로 화면에서 내려간 항차의 원본. 실수로 지웠거나 재작업이 잡히면 여기서 [복원].
+      </div>
+      {items === null ? (
+        <div className="text-[12px] text-slate-600">버튼을 눌러 목록을 확인하세요 (필요할 때만 읽음).</div>
+      ) : items.length === 0 ? (
+        <div className="text-[12px] text-slate-600">보관된 항차가 없습니다.</div>
+      ) : (
+        <div className="space-y-1 max-h-72 overflow-y-auto">
+          {items.map(it => (
+            <div key={it.voyageKey} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold text-slate-200 mono truncate">{it.voyageKey}</div>
+                <div className="text-[11px] text-slate-500">
+                  {it.archivedAt ? new Date(it.archivedAt).toLocaleDateString('ko-KR') : '?'} 저장
+                  {it.discharge_ptk ? ` · 양하 ${it.discharge_ptk}` : ''}{it.loading_ptk ? ` · 선적 ${it.loading_ptk}` : ''}
+                </div>
+              </div>
+              <button onClick={() => restore(it.voyageKey)} disabled={busy}
+                className="px-3 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-[12px] font-bold shrink-0" style={{ minHeight: 40 }}>
+                복원
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
