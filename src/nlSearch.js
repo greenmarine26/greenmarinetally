@@ -458,7 +458,10 @@ export function hasAnyCondition(parsed) {
             parsed.progressQuery || parsed.tierStackQuery ||
             parsed.bottomQuery || parsed.topQuery || parsed.vacantQuery ||
             parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery ||
-            parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery);
+            parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
+            // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
+            parsed.briefingQuery || parsed.sealAuditQuery || parsed.introQuery || parsed.timeQuery ||
+            parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery);
 }
 
 // ─── 베이별 슬롯 맵 (재사용) ───

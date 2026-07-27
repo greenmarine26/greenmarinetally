@@ -488,7 +488,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const modeCs = allContainers.filter(c => c._mode === workFilter);
       return generateSealAuditAnswer(modeCs, workFilter === 'discharge' ? '양하' : '선적');
     }
-    if (!hasAnyCondition(parsed) && !parsed.weightSum && !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.briefingQuery && !parsed.sealAuditQuery && !parsed.introQuery && !parsed.timeQuery && !parsed.weatherQuery && !parsed.schedQuery && !parsed.twinCheckQuery) return null;
+    if (!hasAnyCondition(parsed)) return null;   // V9.14: 챗봇 8종이 hasAnyCondition에 흡수됨 — 수동 나열(구조적 부채) 제거
     // 단순 컨번호만 입력한 경우는 BigResultCard 우선
     const onlyDigits = parsed.digits && !parsed.bay && !parsed.pol && !parsed.pod &&
                        !parsed.portAny && !parsed.zone && !parsed.dgClass && !parsed.un &&
@@ -661,10 +661,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         ]);
         if (autoSpeak) speak(res.answer);
       } else {
-        setAiAnswer(`오류: ${res.error}`);
+        // V9.14: 실패 시 aiAnswer를 세우지 않는다 — aiAnswer는 렌더되지 않는 게이트 변수라
+        //   '오류:' 문자열을 넣으면 오류도 안 보이고 기존 검색 결과까지 사라졌다(지침서 V9.11 기록).
+        alert(`AI 호출 실패: ${res.error}\n검색 결과는 그대로 유지됩니다.`);
       }
     } catch (e) {
-      setAiAnswer(`오류: ${e.message}`);
+      alert(`AI 호출 실패: ${e.message}\n검색 결과는 그대로 유지됩니다.`);
     } finally {
       setAiLoading(false);
       setFollowupQuery('');

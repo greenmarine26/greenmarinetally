@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake } from 'lucide-react';
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateIntroAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결
 
 export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   const [query, setQuery] = useState('');
@@ -70,6 +70,21 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   // 자연어 파싱 (M6.10: debouncedQuery 사용)
   const parsed = useMemo(() => parseNaturalQuery(debouncedQuery), [debouncedQuery]);
 
+  // ── V9.14: 통합검색 즉답 — 종전에는 "브리핑·몇 시야·날씨" 등이 여기서 전부 무응답이었다.
+  //   시간·자기소개처럼 항차와 무관한 질문은 바로 답하고,
+  //   항차 맥락이 필요한 질문(브리핑·점검·인계·ETA·날씨 등)은 어디서 물어야 하는지 안내한다.
+  const localAnswer = useMemo(() => {
+    if (!debouncedQuery || debouncedQuery.length < 2) return null;
+    const p = parsed;
+    if (p.briefingQuery || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
+        p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.schedQuery || p.foodQuery) {
+      return '이 질문은 항차 화면에서 답합니다.\n홈에서 그 배의 [양하]/[선적] 막대를 누른 뒤 🎤 자연어 탭에서 물어보세요.';
+    }
+    if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
+    if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
+    return null;
+  }, [parsed, debouncedQuery]);
+
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
     if (!debouncedQuery || debouncedQuery.length < 2) return [];
@@ -130,6 +145,11 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
 
+    if (localAnswer) {
+      const first = localAnswer.split('\n').find(l => l.trim());
+      if (first) speak(first);
+      return;
+    }
     if (parsed.isStat) {
       speak(`${describeQuery(parsed)} ${matches.length}대`);
       return;
@@ -150,7 +170,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     } else {
       speak(`${matches.length}개 일치. 더 자세히`);
     }
-  }, [matches, debouncedQuery, parsed, autoSpeak]);
+  }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer]);
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -220,8 +240,16 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
         </div>
       </div>
 
+      {/* V9.14: 즉답/안내 카드 */}
+      {localAnswer && (
+        <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-xl p-4 mb-3">
+          <div className="text-[11px] text-emerald-400 font-bold uppercase mb-1">🤖 즉답</div>
+          <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
+        </div>
+      )}
+
       {/* 통계 답변 카드 */}
-      {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && (
+      {!localAnswer && parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && (
         <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-xl p-4 text-center mb-3">
           <div className="text-[11px] text-cyan-400 font-bold uppercase mb-1">🤖 AI 답변</div>
           <div className="text-base text-slate-300 mb-2">{describeQuery(parsed)}</div>
@@ -234,7 +262,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
       )}
 
       {/* 일반 결과 */}
-      {!parsed.isStat && (
+      {!localAnswer && !parsed.isStat && (
         <div className="space-y-1.5">
           {matches.map(c => (
             <GlobalResultCard key={`${c.voyageKey}/${c.mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer(c)} />

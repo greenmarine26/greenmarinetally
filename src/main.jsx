@@ -6,6 +6,11 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import './index.css';
 import './mergeApi.js'; // V8.20: 수집기 연동 입구 — window.GMmerge(files) 전역 등록
 import './autoRegApi.js'; // V8.32: 수집기 자동 항차 등록 입구 — window.GMautoPayload 전역 등록
+import { installToastAlert } from './toast.js';
+
+// V9.14: alert() 254곳 → 논블로킹 토스트로 일괄 전환 (toast.js는 M-대 완성돼 있었으나 연결 0회였다).
+//   confirm/prompt는 그대로 — 사용자의 결정이 필요한 창은 막지 않는다.
+installToastAlert();
 
 // V7.35: 루트 ErrorBoundary — 어디서든 런타임 에러 1건으로 React 트리 전체가
 //   언마운트되어 흰 화면 + 카메라 멈춤이 되던 문제 방지. 인쇄 모달에만 있던

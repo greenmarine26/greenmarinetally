@@ -23,7 +23,12 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
                       'dgClass','un','mode','weightMin','weightMax','weightSum',
                       'capacityQuery','bayBreakdown','progressQuery','tierStackQuery',
                       'bottomQuery','topQuery','vacantQuery','posQuery','listQuery',
-                      'isAll','isStat'];
+                      'isAll','isStat',
+                      // V9.14: V7.9x 이후 추가된 의도 15종 — 빠져 있어 이 계열 오답은 파싱 정보 없이 접수됐다
+                      'bayDistQuery','briefingQuery','sealAuditQuery','twinCheckQuery',
+                      'tierPlaceCountQuery','tierInContextQuery','etaQuery','customsReportQuery',
+                      'handoverQuery','foodQuery','schedQuery','weatherQuery','timeQuery',
+                      'introQuery','bayTrio'];
         keys.forEach(k => {
           if (parsed[k] !== null && parsed[k] !== false && parsed[k] !== '' && parsed[k] !== undefined) {
             parsedSummary[k] = parsed[k];

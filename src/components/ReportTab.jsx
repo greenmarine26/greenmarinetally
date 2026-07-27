@@ -182,6 +182,7 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
         <SealErrorReport
           errors={sealErrors}
           voyageInfo={voyageInfo}
+          voy={voy}
           mode={mode}
           onExport={handleExportErrors}
           onCopy={handleCopyErrorReport}
@@ -191,7 +192,7 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
   );
 }
 
-function SealErrorReport({ errors, voyageInfo, mode, onExport, onCopy }) {
+function SealErrorReport({ errors, voyageInfo, voy, mode, onExport, onCopy }) {   // V9.14: voy 스코프 버그 수리 — 실오류 1건 이상이면 ReferenceError로 앱 전체 크래시였다
   if (errors.length === 0) {
     return (
       <div className="bg-emerald-950/30 border border-emerald-800 rounded-lg p-8 text-center">

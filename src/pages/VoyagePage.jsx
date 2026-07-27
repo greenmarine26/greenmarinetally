@@ -1291,8 +1291,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         onJump={(target) => {
           // target: { tab, filter?, search? }
           if (target.tab) setTab(target.tab);
-          if (target.filter) setListFilter(target.filter);
-          // search는 일단 미지원 (리퍼는 list 안에서 자체 검색하면 됨)
+          if (target.filter) setListFilter(target.filter);   // V9.14: reeferTemp 필터 추가 — 리퍼 온도 미입력만
         }}
       />
     </div>
@@ -1314,6 +1313,10 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
+    // V9.14: 마감 점검 「리퍼 온도 미입력」 점프용 — Full 리퍼인데 온도 빈 것만 (판정은 체크리스트와 동일)
+    else if (filter === 'reeferTemp') arr = arr.filter(c =>
+      (c.rf || /^..R/.test(c.iso || '')) &&
+      (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
     if (search) {
       const q = search.toUpperCase();
       arr = arr.filter(c => c.cn?.includes(q) || c.l4?.includes(q) || c.bay?.includes(q));

@@ -25,7 +25,7 @@ export default function BroadcastMarquee({ inspector }) {
   const dur = Math.max(10, Math.min(40, Math.round(String(msg.text).length * 0.45)));
 
   return (
-    <div className="sticky top-0 z-50 flex items-center gap-2 bg-amber-500 text-slate-900 px-2 py-1 shadow-md border-b-2 border-amber-300">
+    <div className="sticky top-[52px] z-30 flex items-center gap-2 bg-amber-500 text-slate-900 px-2 py-1 shadow-md border-b-2 border-amber-300">
       <span className="font-black text-sm shrink-0">📢 수석</span>
       <div className="flex-1 overflow-hidden">
         <div className="gm-marq inline-block whitespace-nowrap font-bold text-sm" style={{ animationDuration: `${dur}s` }}>

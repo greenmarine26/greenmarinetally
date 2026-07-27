@@ -89,7 +89,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
           ? `리퍼 ${reefers.length}대 중 ${reeferTempMissing.length}대 온도 X`
           : '리퍼 없음',
         color: reeferTempMissing.length > 0 ? 'red' : 'emerald',
-        jumpTo: { tab: 'list', filter: 'all', search: '리퍼' },
+        jumpTo: { tab: 'list', filter: 'reeferTemp' },   // V9.14: search는 컨번호 검색이라 '리퍼'가 안 걸렸다 — 전용 필터로
       },
       {
         id: 'iso403',
