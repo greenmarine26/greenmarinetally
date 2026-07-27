@@ -664,8 +664,26 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         </button>
       </div>
 
+      {/* V9.15: 진단 경고는 탭 바 위(눈에 띄어야 하는 경고) — PORT-MIS 카드는 탭 본문 아래로 내림(전면 점검 2-1) */}
+      {/* M3.5.4: 자동 진단 경고 패널 */}
+      {diagAlerts.length > 0 && (
+        <div className="mb-3">
+          <DiagnosticsPanel
+            alerts={diagAlerts}
+            autoSpeak={diagAutoSpeak}
+            onToggleSpeak={() => setDiagAutoSpeak(v => !v)}
+            onDismiss={() => setDiagDismissed(true)}
+            onOpenContainer={(cn) => {
+              const c = (containers || []).find(x => x.cn === cn);
+              if (c) setDetailC(c);
+            }}
+          />
+        </div>
+      )}
+
+
       {/* 탭 네비게이션 — M5.0: 명칭 산뜻하게 정리 */}
-      <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto">
+      <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto sticky top-[52px] z-20 shadow-lg shadow-slate-950/60">
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', i: ListChecks },
           { k: 'search', t: '🎤 자연어', i: SearchIcon },
@@ -689,6 +707,250 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           사용자 요구: 작업 화면엔 상단 요약만, 실번호 수정은 개별 카드, 보고서는 수석 대시보드.
           (EmptySealReportButton·SealPolicyBanner는 ChiefDashboard에 이미 구현됨.) */}
 
+      {/* 탭 본문 */}
+      {tab === 'list' && (
+        <ListTab
+          voyageKey={voyageKey} mode={mode}
+          containers={containers} ediMap={ediMap} recMap={recMap}
+          xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
+          inspector={inspector}
+          onOpenContainer={(c) => setDetailC(c)}
+          externalFilter={listFilter}
+          shiftingList={shiftingList}
+        />
+      )}
+      {tab === 'search' && (
+        <SearchPanel
+          voyage={voyage}
+          voyageKey={voyageKey}
+          inspector={inspector}
+          onOpenContainer={(c) => setDetailC(c)}
+          shipLib={shipLib}
+          portMisData={portMisData}
+          isLoloShip={isLoloShip}
+          mode={mode}
+          onWorkFilterChange={(m) => setMode(m)}
+        />
+      )}
+      {tab === 'lolo' && (
+        <LoloTab
+          voyageKey={voyageKey} mode={mode}
+          containers={containers} compMap={compMap}
+          xrayMap={xrayMap} xraySeals={xraySeals}
+          inspector={inspector}
+          onOpenContainer={(c) => setDetailC(c)}
+        />
+      )}
+      {tab === 'bay' && (() => {
+        // M4.9e 3단계: 자리 뺏긴 컨테이너 검출 (사용자 요청)
+        //   컨 X가 actual 위치(11/11/11)로 이동 → 거기 원래 계획된 컨 Y는 자리 뺏김
+        //   Y는 actual 없고, Y의 계획 위치를 다른 컨이 actual로 점유
+        const displaced = (() => {
+          if (mode !== 'loading') return [];
+          // 1) actual 위치 → 점유한 컨번호 맵
+          const occupiedBy = new Map();
+          allEdiContainers.forEach(c => {
+            if (c._position_moved && c.bay_actual) {
+              const key = `${c.bay_actual}-${c.row_actual}-${c.tier_actual}`;
+              occupiedBy.set(key, c.cn);
+            }
+          });
+          // 2) 자기 계획 위치를 다른 컨이 점유했는데 자기는 actual 없음
+          return allEdiContainers.filter(c => {
+            if (c._position_moved) return false;  // 이미 옮긴 컨 제외
+            // _bay_planned가 있으면 그것이 진짜 계획 (effective 변환된 경우)
+            // 없으면 c.bay (원본 그대로)
+            const planBay = c._bay_planned || c.bay;
+            const planRow = c._row_planned || c.row;
+            const planTier = c._tier_planned || c.tier;
+            if (!planBay || !planRow || !planTier) return false;
+            const key = `${planBay}-${planRow}-${planTier}`;
+            const occupier = occupiedBy.get(key);
+            if (!occupier || occupier === c.cn) return false;
+            // 점유자 컨번호 부착 (UI 표시용)
+            c._displacedBy = occupier;
+            return true;
+          });
+        })();
+
+        // M5.1 I: STG 보관 컨 검출 (선적 전용)
+        const storedContainers = mode === 'loading'
+          ? allEdiContainers.filter(c => c._in_storage)
+          : [];
+
+        return (
+          <div className="space-y-2">
+            <BayDictStatusWidget
+              shipImo={voyage?.info?.imo}
+              shipName={voyage?.info?.vsl}
+              ediContainerCount={allEdiContainers.length}
+            />
+            {/* 선적 모드 + 자리 뺏긴 컨 있을 때만 표시 */}
+            {mode === 'loading' && displaced.length > 0 && (
+              <DisplacedSidebar
+                displaced={displaced}
+                onOpenContainer={(c) => setDetailC(c)}
+                onStartMove={(c) => {
+                  // M4.9f 5단계: 이동 모드 진입 (토글)
+                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
+                  setPendingMove({
+                    cn: c.cn,
+                    fromBay: c._bay_planned || c.bay || '',
+                    fromRow: c._row_planned || c.row || '',
+                    fromTier: c._tier_planned || c.tier || '',
+                    fe: c.fe || '',
+                  });
+                }}
+                pendingMoveCn={pendingMove?.cn}
+              />
+            )}
+            {/* M5.1 I: 보관함 박스 (선적 전용) */}
+            {mode === 'loading' && storedContainers.length > 0 && (
+              <StorageBox
+                stored={storedContainers}
+                onOpenContainer={(c) => setDetailC(c)}
+                onStartMove={(c) => {
+                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
+                  // 보관함에서 이동: 본위치는 계획 위치 사용 (짝/홀 매칭용)
+                  setPendingMove({
+                    cn: c.cn,
+                    fromBay: c._bay_planned || '',
+                    fromRow: c._row_planned || '',
+                    fromTier: c._tier_planned || '',
+                    fe: c.fe || '',
+                  });
+                }}
+                pendingMoveCn={pendingMove?.cn}
+                onBatchRestore={async () => {
+                  if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                  if (!confirm(`보관함의 ${storedContainers.length}대를 모두 계획 위치로 복원하시겠습니까?`)) return;
+                  try {
+                    await fbBatchClearActual(voyageKey, mode, storedContainers.map(c => c.cn));
+                  } catch (e) {
+                    alert('복원 실패: ' + (e?.message || e));
+                  }
+                }}
+              />
+            )}
+            <BayPlan
+              containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
+              onOpenContainer={(c) => setDetailC(c)}
+              shipImo={voyage?.info?.imo}
+              shipName={voyage?.info?.vsl}
+              voyageInfo={voyage?.info}
+              voyageKey={voyageKey}
+              pendingMove={pendingMove}
+              onCancelMove={() => setPendingMove(null)}
+              onCommitMove={async (bay, row, tier) => {
+                // M4.9f 5단계: 빈 셀 클릭 시 그 자리로 이동
+                if (!pendingMove) return;
+                if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                try {
+                  await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
+                    String(bay).padStart(2,'0'),
+                    String(row).padStart(2,'0'),
+                    String(tier).padStart(2,'0'),
+                    inspector);
+                  setPendingMove(null);
+                } catch (e) {
+                  console.error(e);
+                  alert('이동 저장 실패: ' + (e?.message || e));
+                }
+              }}
+              // M5.1 I: 영역 선택 → 일괄 보관 (선적 전용)
+              enableSelection={mode === 'loading'}
+              onBatchToStorage={async (cns) => {
+                if (!cns || cns.length === 0) return;
+                if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                if (!confirm(`선택된 ${cns.length}대를 보관함으로 보내시겠습니까?\n(언제든 보관함에서 [이동] 버튼으로 다시 배치 가능)`)) return;
+                try {
+                  await fbBatchMoveToStorage(voyageKey, mode, cns, inspector);
+                } catch (e) {
+                  console.error(e);
+                  alert('보관 실패: ' + (e?.message || e));
+                }
+              }}
+            />
+          </div>
+        );
+      })()}
+      {tab === 'stats' && (
+        <div className="space-y-3">
+          {/* V9.15: BayDictVerifyWidget(자료 진단)은 업로드 탭으로 — 통계 탭 첫 화면은 통계여야 한다(전면 점검 2-5) */}
+          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
+        </div>
+      )}
+      {tab === 'report' && (
+        <ReportTab
+          voyageKey={voyageKey} mode={mode} voyageInfo={voyage.info}
+          containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
+        />
+      )}
+      {tab === 'data' && (
+        <div className="space-y-3">
+          {/* V9.15: 자료 진단은 자료 화면에 — 통계 탭에서 이사 */}
+          <BayDictVerifyWidget
+            shipInfo={voyage?.info ? { imo: voyage.info.imo, name: voyage.info.vsl } : null}
+            ediContainers={Object.values(ediMap)}
+          />
+          <DataTab voyageKey={voyageKey} mode={mode} voyage={voyage} setMode={setMode} inspector={inspector} />
+        </div>
+      )}
+
+      {/* 컨테이너 상세 모달 */}
+      {detailC && (() => {
+        // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
+        const cMode = detailC._mode || mode;
+        const cSec = voyage[cMode] || {};
+        // M3.87: 위치 수정 충돌 검사용 - 같은 모드 전체 컨테이너 머지
+        const ediMap = cSec.ediContainers || {};
+        const recMap = cSec.records || {};
+        const compMap = cSec.completed || {};
+        const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+        const allContainersForMode = [...allCnSet].map(cn => {
+          const e = ediMap[cn] || {};
+          const r = recMap[cn] || {};
+          return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
+        });
+        return (
+          <ContainerDetailModal
+            c={detailC}
+            workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}
+            workTier={(() => { const t = parseInt(detailC.tier || detailC.tier_planned || recMap[detailC.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
+            comp={cSec.completed?.[detailC.cn]}
+            isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
+            xraySeal={cSec.xraySeals?.[detailC.cn] || null}
+            mode={cMode}
+            voyageKey={voyageKey}
+            voyageInfo={voyage.info}
+            inspector={inspector}
+            sealMode={sealTargets.byCn[detailC.cn] || null}
+            onClose={() => setDetailC(null)}
+            allContainers={allContainersForMode}
+          />
+        );
+      })()}
+
+      {/* M3.5.5: 새 선박 정책 등록 모달 */}
+      <ShipPolicyModal
+        open={showPolicyModal}
+        vsl={voyage?.info?.vsl || ''}
+        code={voyage?.info?.imo || ''}
+        inspector={inspector}
+        onSaved={() => { /* Firebase 구독으로 자동 반영 */ }}
+        onClose={() => setShowPolicyModal(false)}
+      />
+
+      {/* M3.5.6: 작업 보고 모달 (양하/선적/해치/콘박스 + 카톡 공유) */}
+      <WorkReportModal
+        open={showWorkReport}
+        voyageKey={voyageKey}
+        voyage={voyage}
+        lastEquip={getEquipNumber()}
+        onClose={() => setShowWorkReport(false)}
+      />
+
+      {/* V9.15: PORT-MIS 카드 — 탭을 눌러도 이 카드 때문에 내용이 안 보이던 문제로 본문 아래 이동 */}
       {/* M5.21: PORT-MIS 입출항 정보 (Chrome 확장이 자동 수집한 데이터) */}
       {/* M5.23: 매칭 로직 강화 — 콜사인 prefix + IMO 매칭 fallback 추가 */}
       {/* M5.87: voyage.info의 callsign + vslFull 우선 사용 (베이사전 의존도 제거, EDI 자동 추출) */}
@@ -1027,260 +1289,6 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         );
       })()}
 
-      {/* M3.5.4: 자동 진단 경고 패널 */}
-      {diagAlerts.length > 0 && (
-        <div className="mb-3">
-          <DiagnosticsPanel
-            alerts={diagAlerts}
-            autoSpeak={diagAutoSpeak}
-            onToggleSpeak={() => setDiagAutoSpeak(v => !v)}
-            onDismiss={() => setDiagDismissed(true)}
-            onOpenContainer={(cn) => {
-              const c = (containers || []).find(x => x.cn === cn);
-              if (c) setDetailC(c);
-            }}
-          />
-        </div>
-      )}
-
-      {/* 탭 본문 */}
-      {tab === 'list' && (
-        <ListTab
-          voyageKey={voyageKey} mode={mode}
-          containers={containers} ediMap={ediMap} recMap={recMap}
-          xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
-          inspector={inspector}
-          onOpenContainer={(c) => setDetailC(c)}
-          externalFilter={listFilter}
-          shiftingList={shiftingList}
-        />
-      )}
-      {tab === 'search' && (
-        <SearchPanel
-          voyage={voyage}
-          voyageKey={voyageKey}
-          inspector={inspector}
-          onOpenContainer={(c) => setDetailC(c)}
-          shipLib={shipLib}
-          portMisData={portMisData}
-          isLoloShip={isLoloShip}
-          mode={mode}
-          onWorkFilterChange={(m) => setMode(m)}
-        />
-      )}
-      {tab === 'lolo' && (
-        <LoloTab
-          voyageKey={voyageKey} mode={mode}
-          containers={containers} compMap={compMap}
-          xrayMap={xrayMap} xraySeals={xraySeals}
-          inspector={inspector}
-          onOpenContainer={(c) => setDetailC(c)}
-        />
-      )}
-      {tab === 'bay' && (() => {
-        // M4.9e 3단계: 자리 뺏긴 컨테이너 검출 (사용자 요청)
-        //   컨 X가 actual 위치(11/11/11)로 이동 → 거기 원래 계획된 컨 Y는 자리 뺏김
-        //   Y는 actual 없고, Y의 계획 위치를 다른 컨이 actual로 점유
-        const displaced = (() => {
-          if (mode !== 'loading') return [];
-          // 1) actual 위치 → 점유한 컨번호 맵
-          const occupiedBy = new Map();
-          allEdiContainers.forEach(c => {
-            if (c._position_moved && c.bay_actual) {
-              const key = `${c.bay_actual}-${c.row_actual}-${c.tier_actual}`;
-              occupiedBy.set(key, c.cn);
-            }
-          });
-          // 2) 자기 계획 위치를 다른 컨이 점유했는데 자기는 actual 없음
-          return allEdiContainers.filter(c => {
-            if (c._position_moved) return false;  // 이미 옮긴 컨 제외
-            // _bay_planned가 있으면 그것이 진짜 계획 (effective 변환된 경우)
-            // 없으면 c.bay (원본 그대로)
-            const planBay = c._bay_planned || c.bay;
-            const planRow = c._row_planned || c.row;
-            const planTier = c._tier_planned || c.tier;
-            if (!planBay || !planRow || !planTier) return false;
-            const key = `${planBay}-${planRow}-${planTier}`;
-            const occupier = occupiedBy.get(key);
-            if (!occupier || occupier === c.cn) return false;
-            // 점유자 컨번호 부착 (UI 표시용)
-            c._displacedBy = occupier;
-            return true;
-          });
-        })();
-
-        // M5.1 I: STG 보관 컨 검출 (선적 전용)
-        const storedContainers = mode === 'loading'
-          ? allEdiContainers.filter(c => c._in_storage)
-          : [];
-
-        return (
-          <div className="space-y-2">
-            <BayDictStatusWidget
-              shipImo={voyage?.info?.imo}
-              shipName={voyage?.info?.vsl}
-              ediContainerCount={allEdiContainers.length}
-            />
-            {/* 선적 모드 + 자리 뺏긴 컨 있을 때만 표시 */}
-            {mode === 'loading' && displaced.length > 0 && (
-              <DisplacedSidebar
-                displaced={displaced}
-                onOpenContainer={(c) => setDetailC(c)}
-                onStartMove={(c) => {
-                  // M4.9f 5단계: 이동 모드 진입 (토글)
-                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
-                  setPendingMove({
-                    cn: c.cn,
-                    fromBay: c._bay_planned || c.bay || '',
-                    fromRow: c._row_planned || c.row || '',
-                    fromTier: c._tier_planned || c.tier || '',
-                    fe: c.fe || '',
-                  });
-                }}
-                pendingMoveCn={pendingMove?.cn}
-              />
-            )}
-            {/* M5.1 I: 보관함 박스 (선적 전용) */}
-            {mode === 'loading' && storedContainers.length > 0 && (
-              <StorageBox
-                stored={storedContainers}
-                onOpenContainer={(c) => setDetailC(c)}
-                onStartMove={(c) => {
-                  if (pendingMove?.cn === c.cn) { setPendingMove(null); return; }
-                  // 보관함에서 이동: 본위치는 계획 위치 사용 (짝/홀 매칭용)
-                  setPendingMove({
-                    cn: c.cn,
-                    fromBay: c._bay_planned || '',
-                    fromRow: c._row_planned || '',
-                    fromTier: c._tier_planned || '',
-                    fe: c.fe || '',
-                  });
-                }}
-                pendingMoveCn={pendingMove?.cn}
-                onBatchRestore={async () => {
-                  if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-                  if (!confirm(`보관함의 ${storedContainers.length}대를 모두 계획 위치로 복원하시겠습니까?`)) return;
-                  try {
-                    await fbBatchClearActual(voyageKey, mode, storedContainers.map(c => c.cn));
-                  } catch (e) {
-                    alert('복원 실패: ' + (e?.message || e));
-                  }
-                }}
-              />
-            )}
-            <BayPlan
-              containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
-              onOpenContainer={(c) => setDetailC(c)}
-              shipImo={voyage?.info?.imo}
-              shipName={voyage?.info?.vsl}
-              voyageInfo={voyage?.info}
-              voyageKey={voyageKey}
-              pendingMove={pendingMove}
-              onCancelMove={() => setPendingMove(null)}
-              onCommitMove={async (bay, row, tier) => {
-                // M4.9f 5단계: 빈 셀 클릭 시 그 자리로 이동
-                if (!pendingMove) return;
-                if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-                try {
-                  await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
-                    String(bay).padStart(2,'0'),
-                    String(row).padStart(2,'0'),
-                    String(tier).padStart(2,'0'),
-                    inspector);
-                  setPendingMove(null);
-                } catch (e) {
-                  console.error(e);
-                  alert('이동 저장 실패: ' + (e?.message || e));
-                }
-              }}
-              // M5.1 I: 영역 선택 → 일괄 보관 (선적 전용)
-              enableSelection={mode === 'loading'}
-              onBatchToStorage={async (cns) => {
-                if (!cns || cns.length === 0) return;
-                if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-                if (!confirm(`선택된 ${cns.length}대를 보관함으로 보내시겠습니까?\n(언제든 보관함에서 [이동] 버튼으로 다시 배치 가능)`)) return;
-                try {
-                  await fbBatchMoveToStorage(voyageKey, mode, cns, inspector);
-                } catch (e) {
-                  console.error(e);
-                  alert('보관 실패: ' + (e?.message || e));
-                }
-              }}
-            />
-          </div>
-        );
-      })()}
-      {tab === 'stats' && (
-        <div className="space-y-3">
-          <BayDictVerifyWidget
-            shipInfo={voyage?.info ? { imo: voyage.info.imo, name: voyage.info.vsl } : null}
-            ediContainers={Object.values(ediMap)}
-          />
-          <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
-        </div>
-      )}
-      {tab === 'report' && (
-        <ReportTab
-          voyageKey={voyageKey} mode={mode} voyageInfo={voyage.info}
-          containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
-        />
-      )}
-      {tab === 'data' && (
-        <DataTab voyageKey={voyageKey} mode={mode} voyage={voyage} setMode={setMode} inspector={inspector} />
-      )}
-
-      {/* 컨테이너 상세 모달 */}
-      {detailC && (() => {
-        // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
-        const cMode = detailC._mode || mode;
-        const cSec = voyage[cMode] || {};
-        // M3.87: 위치 수정 충돌 검사용 - 같은 모드 전체 컨테이너 머지
-        const ediMap = cSec.ediContainers || {};
-        const recMap = cSec.records || {};
-        const compMap = cSec.completed || {};
-        const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
-        const allContainersForMode = [...allCnSet].map(cn => {
-          const e = ediMap[cn] || {};
-          const r = recMap[cn] || {};
-          return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
-        });
-        return (
-          <ContainerDetailModal
-            c={detailC}
-            workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}
-            workTier={(() => { const t = parseInt(detailC.tier || detailC.tier_planned || recMap[detailC.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
-            comp={cSec.completed?.[detailC.cn]}
-            isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
-            xraySeal={cSec.xraySeals?.[detailC.cn] || null}
-            mode={cMode}
-            voyageKey={voyageKey}
-            voyageInfo={voyage.info}
-            inspector={inspector}
-            sealMode={sealTargets.byCn[detailC.cn] || null}
-            onClose={() => setDetailC(null)}
-            allContainers={allContainersForMode}
-          />
-        );
-      })()}
-
-      {/* M3.5.5: 새 선박 정책 등록 모달 */}
-      <ShipPolicyModal
-        open={showPolicyModal}
-        vsl={voyage?.info?.vsl || ''}
-        code={voyage?.info?.imo || ''}
-        inspector={inspector}
-        onSaved={() => { /* Firebase 구독으로 자동 반영 */ }}
-        onClose={() => setShowPolicyModal(false)}
-      />
-
-      {/* M3.5.6: 작업 보고 모달 (양하/선적/해치/콘박스 + 카톡 공유) */}
-      <WorkReportModal
-        open={showWorkReport}
-        voyageKey={voyageKey}
-        voyage={voyage}
-        lastEquip={getEquipNumber()}
-        onClose={() => setShowWorkReport(false)}
-      />
 
       {/* M5.1 G: 작업 마감 체크리스트 */}
       <WorkClosingChecklist

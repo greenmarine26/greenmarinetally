@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, LogOut, Key } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, LogOut, Key, MoreVertical, Users } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import HelpModal from './HelpModal.jsx';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
@@ -15,6 +15,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const [keyOpen, setKeyOpen] = useState(false);   // M6.14d: Gemini 키 설정 모달
   // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
   const [equipOpen, setEquipOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);   // V9.15: 부가 버튼 4개(도움말·키·인원·종료)를 ⋯ 메뉴로 — 선박명 자리 확보
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
@@ -68,68 +69,82 @@ export default function Header({ version, inspector, online, route, voyages, onC
           </div>
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {online
-            ? <Cloud className="w-3.5 h-3.5 text-emerald-400" title={`실시간 연결됨 · ${version}`}/>
-            : <CloudOff className="w-3.5 h-3.5 text-red-400" title={`오프라인 · ${version}`}/>}
-          {/* M5.82: 버전 표시 헤더에서 제거 (홈 버튼 가림 해결). 도움말 안에서 확인 가능 */}
-          <button
-            onClick={() => setHelpOpen(true)}
-            title={`사용 매뉴얼 · ${version}`}
-            className="p-1.5 rounded bg-amber-900/30 hover:bg-amber-900/60 active:bg-amber-900/80 border border-amber-700/40"
-          >
-            <HelpCircle className="w-4 h-4 text-amber-300"/>
-          </button>
-          {/* M6.14d: Gemini API 키 설정 — 사용자 키 미설정 시 빨간 점멸 */}
-          <button
-            onClick={() => setKeyOpen(true)}
-            title={hasUserKey ? 'Gemini API 키 (본인 키 설정됨)' : 'Gemini API 키 설정 필요 (현재 차단된 내장 키 사용)'}
-            className={`p-1.5 rounded border ${
-              hasUserKey
-                ? 'bg-emerald-900/30 hover:bg-emerald-900/60 border-emerald-700/40'
-                : 'bg-red-900/40 hover:bg-red-900/70 border-red-600/60 animate-pulse'
-            }`}
-          >
-            <Key className={`w-4 h-4 ${hasUserKey ? 'text-emerald-300' : 'text-red-300'}`}/>
-          </button>
+        {/* V9.15: 헤더 정리 — 종전 우측 6버튼(262px)이 선박명을 42px까지 밀어냈다(전면 점검 3-1).
+            상시 노출은 장비·검수원 2개만, 도움말·Gemini 키·인원 관리·로그아웃은 ⋯ 메뉴로.
+            버튼도 40px대로 키움(터치 타깃). 오프라인은 아이콘 대신 헤더 아래 빨간 띠(하단 렌더). */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {/* M3.5.6: 장비 번호 빠른 변경 */}
           <button
             onClick={() => setEquipOpen(true)}
             title="장비 번호 변경"
-            className={`px-1.5 py-1 rounded text-xs font-bold flex items-center gap-0.5 ${
+            className={`px-2 py-2 rounded-lg text-sm font-bold flex items-center gap-1 ${
               equipNo
                 ? 'bg-orange-700 text-white border border-orange-500'
                 : 'bg-slate-800 text-slate-400 border border-slate-600 animate-pulse'
             }`}
           >
-            <Truck className="w-3 h-3"/>
+            <Truck className="w-4 h-4"/>
             {equipNo || '장비?'}
           </button>
           <button
             onClick={onChangeInspector}
-            className="bg-amber-900/40 border border-amber-700/40 px-1.5 py-1 rounded text-xs flex items-center gap-1 active:bg-amber-900/60"
+            className="bg-amber-900/40 border border-amber-700/40 px-2 py-1.5 rounded-lg text-xs flex items-center gap-1.5 active:bg-amber-900/60"
           >
-            <span className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center text-slate-900 text-[10px] font-black">
+            <span className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-slate-900 text-[11px] font-black">
               {(inspector && inspector[0]) || '?'}
             </span>
-            <span className="font-bold text-amber-200 max-w-[48px] truncate">{inspector || '검수원'}</span>
+            <span className="font-bold text-amber-200 max-w-[56px] truncate">{inspector || '검수원'}</span>
           </button>
-          {onOpenStaffManager && (
+          <div className="relative">
             <button
-              onClick={onOpenStaffManager}
-              className="p-1.5 bg-amber-900/40 hover:bg-amber-800/60 border border-amber-700 rounded text-amber-300 text-xs font-bold"
-              title="인원 관리"
-            >⚙</button>
-          )}
-          <button
-            onClick={handleLogoutOrExit}
-            title={onLogout ? '로그아웃 (인사 후 종료)' : '앱 종료'}
-            className="p-1.5 rounded bg-purple-900/40 hover:bg-purple-900/70 active:bg-purple-900/90 border border-purple-600/50"
-          >
-            <LogOut className="w-4 h-4 text-purple-200"/>
-          </button>
+              onClick={() => setMenuOpen(v => !v)}
+              title="메뉴 (도움말·설정)"
+              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-600 relative"
+            >
+              <MoreVertical className="w-5 h-5 text-slate-300"/>
+              {!hasUserKey && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"/>}
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)}/>
+                <div className="absolute right-0 top-full mt-1 z-50 w-52 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl overflow-hidden">
+                  <button onClick={() => { setMenuOpen(false); setHelpOpen(true); }}
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                    <HelpCircle className="w-5 h-5 text-amber-300 shrink-0"/>
+                    <span className="text-sm text-slate-200 font-bold">사용 매뉴얼</span>
+                    <span className="ml-auto text-[10px] text-slate-500">{version}</span>
+                  </button>
+                  <button onClick={() => { setMenuOpen(false); setKeyOpen(true); }}
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                    <Key className={`w-5 h-5 shrink-0 ${hasUserKey ? 'text-emerald-300' : 'text-red-300'}`}/>
+                    <span className="text-sm text-slate-200 font-bold">AI 검색 키</span>
+                    {!hasUserKey && <span className="ml-auto text-[10px] text-red-300 font-bold">설정 필요</span>}
+                  </button>
+                  {onOpenStaffManager && (
+                    <button onClick={() => { setMenuOpen(false); onOpenStaffManager(); }}
+                      className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                      <Users className="w-5 h-5 text-amber-300 shrink-0"/>
+                      <span className="text-sm text-slate-200 font-bold">인원 관리</span>
+                    </button>
+                  )}
+                  <div className="border-t border-slate-700"/>
+                  <button onClick={() => { setMenuOpen(false); handleLogoutOrExit(); }}
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-red-950/40 active:bg-red-950/60" style={{ minHeight: 48 }}>
+                    <LogOut className="w-5 h-5 text-red-300 shrink-0"/>
+                    <span className="text-sm text-red-200 font-bold">{onLogout ? '로그아웃' : '앱 종료'}</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
+      {/* V9.15: 오프라인은 14px 아이콘 대신 놓칠 수 없는 띠로 */}
+      {!online && (
+        <div className="bg-red-900/80 text-red-100 text-[12px] font-bold text-center py-1">
+          <CloudOff className="w-3.5 h-3.5 inline mr-1 -mt-0.5"/>오프라인 — 저장은 연결 복구 후 서버에 반영됩니다
+        </div>
+      )}
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
       {/* M6.14d: Gemini API 키 설정 모달 */}
       {keyOpen && <GeminiKeyModal onClose={() => setKeyOpen(false)} />}

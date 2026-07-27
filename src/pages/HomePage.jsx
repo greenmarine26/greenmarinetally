@@ -367,12 +367,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
   return (
     <div className="max-w-6xl mx-auto px-3 py-3">
-      {/* 그린마린 검수팀 전용 배지 */}
-      <div className="bg-gradient-to-r from-emerald-900/30 via-teal-900/30 to-cyan-900/30 border border-emerald-700/40 rounded-lg px-3 py-2 mb-3 text-center">
-        <div className="text-[10px] text-emerald-400 font-bold tracking-wider">🌊 GREEN MARINE TALLY 🌊 <span className="text-amber-300 ml-1">{APP_VERSION}</span></div>
-        <div className="text-xs text-emerald-200 font-bold">그린마린 검수팀 전용 · 평택항</div>
-      </div>
-
+      {/* V9.15: 브랜드 배지 삭제 — 헤더(🌊 그린마린 검수팀 전용)와 완전 중복, 첫 화면 44px 회수.
+          버전은 헤더 ⋯ 메뉴와 도움말에서 확인. */}
       {/* 빠른 진입 - 통합검색 + 수석대시보드 + PORT-MIS 캡처 (M5.25) */}
       <div className="grid grid-cols-3 gap-2 mb-3">
         <button onClick={onOpenGlobalSearch}
@@ -394,16 +390,6 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           <div className="text-[10px] text-cyan-300/70">⚓ 입출항 자동 등록</div>
         </button>
       </div>
-
-      {/* V8.60: 맛집 수첩 — 주변 식당·돌림판 */}
-      <button onClick={() => onOpenFood && onOpenFood()}
-        className="w-full bg-gradient-to-r from-emerald-900/40 to-teal-950/40 border border-emerald-700/40 rounded-xl px-3 py-2.5 mb-3 text-left hover:from-emerald-900/60 active:scale-95 transition flex items-center gap-2">
-        <span className="text-xl">🍽</span>
-        <div>
-          <div className="font-bold text-sm text-emerald-100">평택항 맛집 수첩</div>
-          <div className="text-[10px] text-emerald-300/70">주변 식당 · 별점 · 🎰 뭐 먹지 돌림판 ("점심 뭐 먹을까?" 물어보세요)</div>
-        </div>
-      </button>
 
       {/* V8.40: 수집기 상태 + 항차 이상 요약 → 건강 점검 페이지 */}
       <button onClick={() => onOpenHealth && onOpenHealth()}
@@ -486,7 +472,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               { id: 'all', label: '전체' },
             ].map(b => (
               <button key={b.id} onClick={() => setPierFilter(b.id)}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-bold ${
                   pierFilter === b.id
                     ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
                        b.id === 'PNCT' ? 'bg-purple-700 text-white' :
@@ -508,14 +494,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               </span>
               <button
                 onClick={() => measureGps(true)}
-                className="text-[10px] px-2 py-0.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300"
+                className="text-[11px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300"
               >
                 🔄 다시 측정
               </button>
               <div className="flex gap-1 ml-auto">
                 <button
                   onClick={() => handleRegisterPier('PCTC')}
-                  className="text-[10px] px-2 py-1 bg-blue-900/60 hover:bg-blue-800/80 rounded text-blue-200 font-bold border border-blue-700/40"
+                  className="text-[11px] px-3 py-1.5 bg-blue-900/60 hover:bg-blue-800/80 rounded-lg text-blue-200 font-bold border border-blue-700/40"
                   title="현재 GPS 위치를 PCTC 부두 좌표로 등록"
                 >
                   <Anchor className="w-3 h-3 inline mr-1"/>
@@ -523,7 +509,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 </button>
                 <button
                   onClick={() => handleRegisterPier('PNCT')}
-                  className="text-[10px] px-2 py-1 bg-purple-900/60 hover:bg-purple-800/80 rounded text-purple-200 font-bold border border-purple-700/40"
+                  className="text-[11px] px-3 py-1.5 bg-purple-900/60 hover:bg-purple-800/80 rounded-lg text-purple-200 font-bold border border-purple-700/40"
                 >
                   <Anchor className="w-3 h-3 inline mr-1"/>
                   여기를 PNCT로 등록
@@ -587,6 +573,16 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           );
         })}
       </div>
+
+      {/* V9.15: 맛집 수첩 — 하루 한 번 쓰는 기능이라 항차 목록 아래로 (전면 점검 1-1) */}
+      <button onClick={() => onOpenFood && onOpenFood()}
+        className="w-full bg-gradient-to-r from-emerald-900/40 to-teal-950/40 border border-emerald-700/40 rounded-xl px-3 py-3 mt-3 text-left hover:from-emerald-900/60 active:scale-95 transition flex items-center gap-2">
+        <span className="text-xl">🍽</span>
+        <div>
+          <div className="font-bold text-sm text-emerald-100">평택항 맛집 수첩</div>
+          <div className="text-[11px] text-emerald-300/70">주변 식당 · 별점 · 🎰 뭐 먹지 돌림판</div>
+        </div>
+      </button>
 
       {showCreate && (
         <CreateVoyageModal
@@ -660,12 +656,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                   </div>
                 </div>
               )}
+              {/* V9.15: 버튼 순서 통일 — 이 모달만 [저장][취소] 역순이라 근육기억 오작동(전면 점검 1-6) */}
               <div className="flex gap-2">
+                <button onClick={() => setShowForecast(false)} className="px-4 rounded-lg bg-slate-800 text-slate-400 text-sm" style={{ minHeight: 44 }}>취소</button>
                 <button onClick={save} disabled={!fc || !match}
+                  style={{ minHeight: 44 }}
                   className={`flex-1 py-2.5 rounded-lg text-sm font-bold ${fc && match ? 'bg-orange-600 hover:bg-orange-500 text-white' : 'bg-slate-800 text-slate-600'}`}>
                   예보 저장
                 </button>
-                <button onClick={() => setShowForecast(false)} className="px-4 rounded-lg bg-slate-800 text-slate-400 text-sm">취소</button>
               </div>
             </div>
           </div>
@@ -823,12 +821,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const pier = voyage._pier || '';
   const berth = voyage._berth || '';
 
+  // V9.15: 카드 테두리 부두색 제거 — 파랑=양하/호박=선적 전용으로 잠금(전면 점검 1-4). 부두는 📍배지가 말한다.
   return (
-    <div className={`bg-slate-900 border rounded-xl overflow-hidden ${
-      pier === 'PCTC' ? 'border-blue-700/40' :
-      pier === 'PNCT' ? 'border-purple-700/40' :
-      'border-slate-800'
-    }`}>
+    <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
       <button
         onClick={() => onOpen()}
         className="w-full px-3 py-2.5 hover:bg-slate-800/50 flex items-center justify-between gap-2"
@@ -838,34 +833,34 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             <span className="font-bold text-sm text-slate-100 truncate">{voyage.info.vsl}</span>
             {/* M5.82: 부두 배지 */}
             {pier === 'PCTC' && (
-              <span className="text-[9px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-[11px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
                 📍 PCTC {berth ? `· ${formatBerth(berth)}` : ''}
               </span>
             )}
             {pier === 'PNCT' && (
-              <span className="text-[9px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-[11px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
                 📍 PNCT {berth ? `· ${formatBerth(berth)}` : ''}
               </span>
             )}
             {!pier && berth && (
-              <span className="text-[9px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">
+              <span className="text-[11px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">
                 📍 {berth}
               </span>
             )}
             {/* V9.06: 예정 항차(수집기 선등록) — 선석배정 기반, 예정작업일자 표시 (사용자 요청 2026-07-23) */}
             {voyage.info?.autoStatus === 'expected' && (
-              <span className="text-[9px] bg-sky-900/60 border border-sky-700/50 text-sky-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-[11px] bg-sky-900/60 border border-sky-700/50 text-sky-200 px-1.5 py-0.5 rounded font-bold">
                 📅 예정{voyage.info?.planDate ? ` · ${String(voyage.info.planDate).slice(5, 16)}` : ''}
               </span>
             )}
             {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정. V9.06: expected는 위 예정 배지가 대신. */}
             {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && voyage.info?.autoStatus !== 'expected' && (
-              <span className="text-[9px] bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-[11px] bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
                 🤖 자동(수집중)
               </span>
             )}
             {voyage.info?.autoRegistered && voyage.info?.autoStatus === 'confirmed' && (
-              <span className="text-[9px] bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-[11px] bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold">
                 🤖 자동(확정)
               </span>
             )}
@@ -881,7 +876,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           </div>
           {/* 작업일 표시 (수동/자동 삭제 구분용) */}
           {voyage.info.createdAt && (
-            <div className="text-[10px] text-slate-600 mt-0.5">
+            <div className="text-[11px] text-slate-500 mt-0.5">
               📅 {new Date(voyage.info.createdAt).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
               {(() => {
                 // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다.
@@ -956,13 +951,15 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               modeDone.d ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('discharge'); }}
-                  className="px-2 py-1 rounded bg-blue-900/40 text-blue-300 text-[10px] font-bold border border-blue-700/40"
+                  className="px-3 py-2 rounded-lg bg-blue-900/40 text-blue-300 text-[12px] font-bold border border-blue-700/40"
+                  style={{ minHeight: 40 }}
                   title="양하 완료됨 — 누르면 취소 (수석 확인 전까지)"
                 >⬇ 양하 ✓</button>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); onComplete('discharge'); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 text-[10px] font-bold border border-blue-800/40"
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 text-[12px] font-bold border border-blue-800/40"
+                  style={{ minHeight: 40 }}
                   title="양하 작업 완료 표시 — 삭제 안 됨"
                 >⬇ 양하 완료</button>
               )
@@ -971,24 +968,28 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               modeDone.l ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('loading'); }}
-                  className="px-2 py-1 rounded bg-amber-900/40 text-amber-300 text-[10px] font-bold border border-amber-700/40"
+                  className="px-3 py-2 rounded-lg bg-amber-900/40 text-amber-300 text-[12px] font-bold border border-amber-700/40"
+                  style={{ minHeight: 40 }}
                   title="선적 완료됨 — 누르면 취소 (수석 확인 전까지)"
                 >⬆ 선적 ✓</button>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); onComplete('loading'); }}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 text-[10px] font-bold border border-amber-800/40"
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 text-[12px] font-bold border border-amber-800/40"
+                  style={{ minHeight: 40 }}
                   title="선적 작업 완료 표시 — 삭제 안 됨"
                 >⬆ 선적 완료
                 </button>
               )
             )}
+            {/* V9.15: 삭제는 완료 버튼과 오터치되지 않게 간격 + 40px 타깃 */}
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-1 rounded hover:bg-red-900/30 text-slate-600 hover:text-red-400"
+              className="p-2 ml-2 rounded-lg hover:bg-red-900/30 text-slate-600 hover:text-red-400 border border-transparent hover:border-red-800/40"
+              style={{ minWidth: 40, minHeight: 40 }}
               title="항차 삭제 (기록 없이 제거)"
             >
-              <Trash2 className="w-3.5 h-3.5"/>
+              <Trash2 className="w-4 h-4 mx-auto"/>
             </button>
           </div>
         </div>
