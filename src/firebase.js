@@ -310,14 +310,40 @@ export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'norma
   const rec = { by, at: Date.now() };
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
+  _tallyInspector(voyageKey, mode, by);   // V9.16: 개인 누적 실적 (비차단 — 실패해도 완료 처리는 무관)
+}
+
+// ── V9.16(2026-07-27): 검수원 개인 누적 실적 — fbAddShipVoyageInspector가 완성된 채
+//   호출 0회로 방치돼, 수석이 완료 저장하면 그 항차 실적이 화면에서 증발했다(전면 점검 §1-1).
+//   완료 1건마다 ships/{shipId}/voyages/{key}/inspectors/{이름}에 누적한다.
+//   비차단·실패 무시 — 검수 완료 흐름을 절대 막지 않는다. info는 항차별 1회만 읽고 캐시.
+const _tallyInfoCache = {};
+function _tallyInspector(voyageKey, mode, by) {
+  if (!voyageKey || !by) return;
+  (async () => {
+    try {
+      let info = _tallyInfoCache[voyageKey];
+      if (info === undefined) {
+        const snap = await get(ref(db, `voyages/${voyageKey}/info`));
+        info = snap.exists() ? snap.val() : null;
+        _tallyInfoCache[voyageKey] = info;
+      }
+      if (!info) return;
+      const shipId = resolveShipKey(info.imo || info.callsign || String(info.vsl || '').toUpperCase().replace(/\s+/g, ''));
+      if (!shipId) return;
+      await fbAddShipVoyageInspector(shipId, voyageKey, by, mode);
+    } catch { /* 통계는 놓쳐도 검수는 계속 */ }
+  })();
 }
 
 // V8.71: 여러 컨 완료를 한 번의 멀티패스 update로 — 트윈 수정에서 "한 대만 먼저 선적" 방지 (둘 다 되거나 둘 다 안 되거나).
 export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by) {
   const patch = {};
   const at = Date.now();
-  for (const cn of cns.filter(Boolean)) patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = { by, at };
+  const list = cns.filter(Boolean);
+  for (const cn of list) patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = { by, at };
   await update(ref(db), patch);
+  for (const _ of list) _tallyInspector(voyageKey, mode, by);   // V9.16: 트윈도 대수만큼 누적
 }
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
 //   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).

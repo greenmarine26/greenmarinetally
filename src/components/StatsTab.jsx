@@ -22,6 +22,61 @@ export default function StatsTab({ containers, compMap, xrayMap, mode }) {
         <SmallStat label="미완" value={stats.total - stats.done} mono="text-amber-300"/>
       </div>
 
+      {/* V9.16: 이상 3종 + 리퍼 온도 — 신고·마감에 직결되는 숫자를 통계 맨 위에 */}
+      {(stats.anomaly.missing + stats.anomaly.extra + stats.anomaly.swapped + stats.reeferTempMissing.length) > 0 && (
+        <div className="grid grid-cols-4 gap-2">
+          <SmallStat label="누락" value={stats.anomaly.missing} mono={stats.anomaly.missing ? 'text-red-300' : 'text-slate-500'}/>
+          <SmallStat label="초과" value={stats.anomaly.extra} mono={stats.anomaly.extra ? 'text-orange-300' : 'text-slate-500'}/>
+          <SmallStat label="바뀜" value={stats.anomaly.swapped} mono={stats.anomaly.swapped ? 'text-rose-300' : 'text-slate-500'}/>
+          <SmallStat label="온도 미입력" value={stats.reeferTempMissing.length} mono={stats.reeferTempMissing.length ? 'text-cyan-300' : 'text-slate-500'}/>
+        </div>
+      )}
+
+      {/* V9.16: 시간대별 처리량 + 페이스 */}
+      {Object.keys(stats.byHour).length > 0 && (
+        <Section title={`시간대별 처리량${stats.paceHour != null ? ` — 지금 페이스 시간당 ${stats.paceHour}대` : ''}`}>
+          <div className="space-y-1">
+            {Object.entries(stats.byHour).slice(-12).map(([h, n]) => {
+              const max = Math.max(...Object.values(stats.byHour));
+              return (
+                <div key={h} className="flex items-center gap-2 text-[12px]">
+                  <span className="w-20 shrink-0 text-slate-400 mono">{h}</span>
+                  <div className="flex-1 bg-slate-800 rounded h-4 overflow-hidden">
+                    <div className="h-full bg-emerald-600/70 rounded" style={{ width: `${Math.max(4, Math.round(n / max * 100))}%` }}/>
+                  </div>
+                  <span className="w-9 text-right mono text-emerald-300 font-bold">{n}</span>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
+      {/* V9.16: 검수원별 완료 */}
+      {Object.keys(stats.byInspector).length > 0 && (
+        <Section title="검수원별 완료">
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(stats.byInspector).sort((a, b) => b[1] - a[1]).map(([name, n]) => (
+              <div key={name} className="flex items-center justify-between bg-slate-800/60 rounded px-2.5 py-1.5 text-[12px]">
+                <span className="text-slate-300 font-bold truncate">{name}</span>
+                <span className="mono text-emerald-300 font-bold">{n}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* V9.16: 항구별 (양하=선적항 POL / 선적=목적항 POD) */}
+      {Object.keys(stats.byPort).length > 1 && (
+        <Section title={mode === 'loading' ? '목적항(POD)별' : '선적항(POL)별'}>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(stats.byPort).sort((a, b) => b[1].total - a[1].total).map(([port, st]) => (
+              <StatRow key={port} label={port} stats={st}/>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {/* 규격별 */}
       <Section title="규격별" icon={Box}>
         <div className="grid grid-cols-2 gap-2">
@@ -222,5 +277,48 @@ function computeAllStats(containers, compMap, xrayMap, mode) {
   const xrayTotal = xrayList.length;
   const xrayDone = xrayList.filter(c => compMap[c.cn]).length;
 
-  return { total, done, bySize, byFE, bySpecial, byOp, xrayTotal, xrayDone, xrayList };
+  // ── V9.16: 시간·사람·항구·이상 축 (전면 점검 §6-1 — 데이터는 있는데 통계에 없던 것들) ──
+  // 시간대별 처리량 (완료 시각 1시간 버킷) + 시간당 페이스(최근 20건)
+  const byHour = {};
+  const doneAts = [];
+  const byInspector = {};
+  const anomaly = { missing: 0, extra: 0, swapped: 0 };
+  containers.forEach(c => {
+    const r = compMap[c.cn];
+    if (!r) return;
+    if (r.at) {
+      doneAts.push(r.at);
+      const d = new Date(r.at);
+      const k = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}시`;
+      byHour[k] = (byHour[k] || 0) + 1;
+    }
+    if (r.by) byInspector[r.by] = (byInspector[r.by] || 0) + 1;
+    if (r.flag === 'missing') anomaly.missing++;
+    else if (r.flag === 'extra') anomaly.extra++;
+    else if (r.flag === 'swapped') anomaly.swapped++;
+  });
+  doneAts.sort((a, b) => a - b);
+  let paceHour = null;
+  if (doneAts.length >= 3) {
+    const recent = doneAts.slice(-20);
+    const span = recent[recent.length - 1] - recent[0];
+    if (span > 0) paceHour = Math.round((recent.length - 1) / (span / 3600000));
+  }
+
+  // POD/POL별 (양하=POD, 선적=POD(목적항)) — 양하 순서·목적항 협의용
+  const byPort = {};
+  containers.forEach(c => {
+    const port = (mode === 'loading' ? (c.pod || '') : (c.pol || '')) || '미상';
+    if (!byPort[port]) byPort[port] = { total: 0, done: 0 };
+    byPort[port].total++;
+    if (compMap[c.cn]) byPort[port].done++;
+  });
+
+  // 리퍼 온도 미입력 (Full만 — 마감 체크리스트와 동일 판정)
+  const reeferTempMissing = containers.filter(c =>
+    (c.rf || (c.iso && c.iso[2] === 'R')) &&
+    (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
+
+  return { total, done, bySize, byFE, bySpecial, byOp, xrayTotal, xrayDone, xrayList,
+           byHour, byInspector, anomaly, paceHour, byPort, reeferTempMissing };
 }

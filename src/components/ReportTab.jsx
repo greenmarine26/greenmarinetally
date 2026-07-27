@@ -163,6 +163,9 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
             </button>
           </div>
 
+          {/* V9.16: 미완 목록 — "결과" 탭에 정작 '아직 안 한 것'이 없었다(전면 점검 §6-2) */}
+          <UndoneSection containers={containers} compMap={compMap}/>
+
           {records.length === 0 ? (
             <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
               아직 완료된 검수 없음
@@ -291,6 +294,36 @@ function ReportGroup({ title, items, groupBy }) {
               {r.completedAt && (
                 <span className="text-[10px] text-slate-500 mono">{new Date(r.completedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
               )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── V9.16: 미완 목록 (접이식, 위치와 함께) ─────────────────────────────
+function UndoneSection({ containers, compMap }) {
+  const [open, setOpen] = React.useState(false);
+  const undone = containers.filter(c => !compMap[c.cn]);
+  if (undone.length === 0) return (
+    <div className="bg-emerald-950/30 border border-emerald-800 rounded-lg px-3 py-2 text-[12px] text-emerald-300 font-bold">
+      ✅ 미완 0건 — 전량 완료
+    </div>
+  );
+  return (
+    <div className="bg-amber-950/30 border border-amber-800/60 rounded-lg overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left" style={{ minHeight: 44 }}>
+        <span className="text-[13px] font-bold text-amber-200">⏳ 미완 {undone.length}건 {open ? '접기' : '보기'}</span>
+        <span className="text-amber-400 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 max-h-72 overflow-y-auto space-y-1">
+          {undone.map(c => (
+            <div key={c.cn} className="flex items-center justify-between text-[12px] bg-slate-900/70 rounded px-2 py-1.5">
+              <span className="mono text-slate-200 font-bold">{c.cn}</span>
+              <span className="mono text-slate-400">{[c.bay, c.row, c.tier].filter(Boolean).join('-') || '-'}</span>
             </div>
           ))}
         </div>

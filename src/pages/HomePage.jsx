@@ -391,6 +391,23 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         </button>
       </div>
 
+      {/* V9.16: 오늘의 나 — 내 처리량·페이스 (완료 기록이 있을 때만) */}
+      {(() => {
+        const me = computeMyToday(voyages, inspector);
+        if (!me || me.count === 0) return null;
+        const ago = me.lastAt ? Math.round((Date.now() - me.lastAt) / 60000) : null;
+        return (
+          <div className="flex items-center gap-3 bg-slate-900 border border-emerald-800/50 rounded-lg px-3 py-2 mb-3">
+            <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-slate-950 text-[12px] font-black shrink-0">{inspector[0]}</span>
+            <div className="flex items-baseline gap-3 flex-wrap text-[12px]">
+              <span className="text-slate-300">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
+              {me.perHour != null && <span className="text-slate-400">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대</span>}
+              {ago != null && <span className="text-slate-500">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* V8.40: 수집기 상태 + 항차 이상 요약 → 건강 점검 페이지 */}
       <button onClick={() => onOpenHealth && onOpenHealth()}
         className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 mb-3 text-left transition-colors ${
@@ -1204,4 +1221,31 @@ function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }
       </div>
     </div>
   );
+}
+
+// ── V9.16(2026-07-27): "오늘의 나" — 검수원 개인 지표 (전면 점검 §3: 개인 화면 0이었다) ──
+//   모든 항차의 completed에서 by=나·오늘 것만 센다. 페이스 = 최근 20건 완료 간격 기반(대/시간).
+export function computeMyToday(voyages, inspector, now = Date.now()) {
+  if (!inspector) return null;
+  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+  const t0 = dayStart.getTime();
+  const mine = [];
+  Object.values(voyages || {}).forEach(v => {
+    ['discharge', 'loading'].forEach(m => {
+      const comp = v?.[m]?.completed || {};
+      Object.values(comp).forEach(r => {
+        if (r && r.by === inspector && r.at >= t0 && r.at <= now) mine.push(r.at);
+      });
+    });
+  });
+  mine.sort((a, b) => a - b);
+  const count = mine.length;
+  let perHour = null;
+  if (count >= 3) {
+    const recent = mine.slice(-20);
+    const spanMs = recent[recent.length - 1] - recent[0];
+    if (spanMs > 0) perHour = Math.round((recent.length - 1) / (spanMs / 3600000));
+  }
+  const lastAt = count ? mine[mine.length - 1] : null;
+  return { count, perHour, lastAt };
 }

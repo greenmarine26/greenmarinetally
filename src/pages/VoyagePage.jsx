@@ -16,6 +16,7 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
+  , fbSubscribeWorkReports
 } from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
@@ -881,10 +882,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         </div>
       )}
       {tab === 'report' && (
-        <ReportTab
-          voyageKey={voyageKey} mode={mode} voyageInfo={voyage.info}
-          containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
-        />
+        <div className="space-y-3">
+          <ReportTab
+            voyageKey={voyageKey} mode={mode} voyageInfo={voyage.info}
+            containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
+          />
+          {/* V9.16: 이 항차 작업 보고 이력 — 구독 함수는 있었는데 호출 0회였다(전면 점검 §1-7).
+              검수원이 자기가 보낸 시작·중단·해치·콘박스 보고를 여기서 확인한다. */}
+          <WorkReportHistory voyageKey={voyageKey}/>
+        </div>
       )}
       {tab === 'data' && (
         <div className="space-y-3">
@@ -2599,3 +2605,41 @@ function ModeSetup({ voyageKey }) {
 // M8.08: SealPolicyBanner 제거 — 양하/선적 작업 화면에서 엠티 실 작업 패널 미표시.
 //   동일 기능은 수석 대시보드(ChiefDashboard)에 구현됨.
 
+// ── V9.16: 이 항차 작업 보고 이력 (읽기 전용) ─────────────────────────
+function WorkReportHistory({ voyageKey }) {
+  const [reports, setReports] = useState({});
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const unsub = fbSubscribeWorkReports(voyageKey, setReports);
+    return () => { try { unsub(); } catch { /* skip */ } };
+  }, [voyageKey]);
+  const list = Object.entries(reports || {})
+    .map(([k, r]) => ({ k, ...(r || {}) }))
+    .sort((a, b) => (b.ts || b.at || 0) - (a.ts || a.at || 0));
+  if (list.length === 0) return null;
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left" style={{ minHeight: 44 }}>
+        <span className="text-[13px] font-bold text-slate-200">📤 이 항차 작업 보고 {list.length}건 {open ? '접기' : '보기'}</span>
+        <span className="text-slate-500 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 max-h-80 overflow-y-auto space-y-1">
+          {list.slice(0, 50).map(r => (
+            <div key={r.k} className="text-[12px] bg-slate-800/60 rounded px-2.5 py-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-200">{({work_status:'작업',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${r.equip}호기` : ''}</span>
+                <span className="text-slate-500 mono">{(r.ts || r.at) ? new Date(r.ts || r.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+              </div>
+              {(r.text || r.message || r.summary) && (
+                <div className="text-slate-400 whitespace-pre-wrap mt-0.5 leading-snug">{String(r.text || r.message || r.summary).slice(0, 200)}</div>
+              )}
+              {r.by && <div className="text-slate-600 text-[11px] mt-0.5">{r.by}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
