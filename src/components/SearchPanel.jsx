@@ -459,7 +459,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       } catch { return ''; } })();
       const cached = _sid && window.__shipIntroCache && window.__shipIntroCache[_sid];
       if (cached) return `🚢 ${voyage?.info?.vslFull || voyage?.info?.vsl || ''}\n${cached}`;
-      return '이 배의 소개가 아직 없습니다.\n화면 아래 「🚢 이 배는?」 카드에서 [AI로 소개 만들기]를 누르면 이름 뜻·유래를 만들어 드립니다.';
+      return '이 배의 정보가 아직 없습니다.\n화면 아래 「🚢 이 배는?」 카드에서 [AI로 선박 정보 찾기]를 누르면 제원·선사·항로와 이름 유래를 정리해 드립니다.';
     }
     // ⚠ 입출항을 시간보다 먼저 — "입항 시간 알려줘"는 timeQuery에도 걸리므로 순서가 답을 가른다.
     if (parsed.schedQuery) {

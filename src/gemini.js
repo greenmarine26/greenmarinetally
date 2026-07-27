@@ -886,37 +886,73 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
   };
 }
 
-// ── V9.18(2026-07-27): 선박 소개·이름 유래 생성 (사용자 요청) ──────────────
-//   원칙 — 환각 최소화: 확실치 않은 사실은 만들지 말라고 지시하고, 이름의 뜻(언어·단어 풀이)
-//   중심으로 답하게 한다. 결과는 Firebase ship_intros/{shipId}에 캐시돼 전 검수원이 공유.
+// ── V9.18-01(2026-07-27): 선박 정보 조회 — Google 검색 그라운딩으로 실제 제원을 가져온다.
+//   V9.18 초판은 이름 풀이만 했는데 사용자 확정: "선종·IMO·국적·길이·너비·건조년도·선사·항로 같은
+//   실제 정보를 출처와 함께" (KMTC OSAKA 예시 제시). Gemini google_search 도구로 웹을 찾아 답하고,
+//   groundingMetadata의 출처 링크를 함께 저장한다. 그라운딩 미지원 키면 검색 없이 생성(정확도 주의 표기).
 export async function askShipIntro({ name = '', callsign = '', imo = '', carrier = '' }) {
   const shipName = String(name || '').trim();
   if (!shipName) return { ok: false, error: '선박명이 없습니다' };
   const prompt =
-    `선박 정보: 이름 "${shipName}"` +
-    (callsign ? ` · 콜사인 ${callsign}` : '') +
-    (imo ? ` · IMO ${imo}` : '') +
-    (carrier ? ` · 선사 ${carrier}` : '');
-  try {
+    `다음 선박의 실제 정보를 웹에서 찾아 정리하라: 선박명 "${shipName}"` +
+    (imo ? `, IMO ${imo}` : '') + (callsign ? `, 콜사인 ${callsign}` : '') +
+    (carrier ? `, 선사 코드 ${carrier}` : '') + `.
+
+한국어로 아래 형식으로 답하라 (마크다운 굵게 금지, 각 줄은 "· 항목: 값"):
+첫 줄: 한 문장 소개 (예: "KMTC OSAKA는 고려해운 소속의 파나마 국적 컨테이너선입니다.")
+
+[선박 제원]
+· 선박 종류: …
+· IMO 번호: …
+· 국적(선적국): …
+· 길이 × 너비: …
+· 건조년도: …
+· 총톤수(GT) 또는 TEU: …
+
+[운항 정보]
+· 운항 선사: …
+· 주요 항로/기항지: …
+
+[이름 이야기]
+· 선박명의 뜻·유래를 1~3문장으로. 어느 언어의 무슨 뜻인지(한자 이름이면 한자 풀이), 사람 이름·동물 이름·지명이면 그 배경, 선사의 명명 규칙(같은 계열 자매선 이름 패턴)이 있으면 그것도. 확인되는 재미있는 일화가 있으면 덧붙인다.
+
+규칙: 제원·운항 정보는 검색으로 확인된 값만 적고, 확인 안 되는 항목은 "확인 안 됨"이라고 쓴다. 숫자를 추측하지 마라. 이름 이야기의 언어적 풀이는 지어내지 말고 사전적 사실만.`;
+
+  const call = async (useSearch) => {
+    const body = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 1100 },
+    };
+    if (useSearch) body.tools = [{ google_search: {} }];
     const res = await fetch(getActiveGeminiUrl(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text:
-          '당신은 한국 평택항 컨테이너 검수원에게 배를 소개하는 도우미다. 다음 형식으로 한국어로 답하라.\n' +
-          '1) 이름의 뜻: 선박명을 언어학적으로 풀이(어느 언어, 무슨 뜻, 한자 이름이면 한자와 뜻). 이것이 핵심.\n' +
-          '2) 짧은 소개: 선명·선사에서 확실히 추론 가능한 것만 1~2문장.\n' +
-          '규칙: 전체 4문장 이내. 건조연도·크기·사고이력 등 확인 불가한 사실은 절대 지어내지 말 것. ' +
-          '모르면 "이름 풀이 외의 상세 정보는 확인되지 않습니다"라고 쓸 것. 마크다운·목록 기호 없이 문장으로.' }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 400 },
-      }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
+    return res;
+  };
+
+  try {
+    let res = await call(true);
+    let grounded = true;
+    if (!res.ok && (res.status === 400 || res.status === 403)) {
+      // 키/모델이 검색 도구를 지원하지 않는 경우 — 검색 없이 폴백
+      res = await call(false);
+      grounded = false;
+    }
     if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
     const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
+    const cand = data?.candidates?.[0];
+    let text = cand?.content?.parts?.map(p => p.text).filter(Boolean).join('').trim();
     if (!text) return { ok: false, error: '빈 응답' };
-    return { ok: true, text };
+    if (!grounded) text += '\n\n⚠ 웹 검색 없이 생성됨 — 수치는 부정확할 수 있습니다.';
+    // 출처 링크 (grounding)
+    const sources = [];
+    const chunks = cand?.groundingMetadata?.groundingChunks || [];
+    for (const ch of chunks) {
+      const uri = ch?.web?.uri; const title = ch?.web?.title || '';
+      if (uri && !sources.some(x => x.uri === uri)) sources.push({ uri, title: String(title).slice(0, 60) });
+      if (sources.length >= 5) break;
+    }
+    return { ok: true, text, sources, grounded };
   } catch (e) {
     return { ok: false, error: e.message || String(e) };
   }

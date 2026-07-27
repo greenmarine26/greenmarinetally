@@ -1,8 +1,7 @@
-// V9.18(2026-07-27): 선박 소개 · 이름 유래 카드 (사용자 요청)
-//   "선박에 대한 간단한 소개 또는 선박명의 유래" — 항차 화면 하단 정보 구역에 접이식 카드.
-//   동작: ship_intros/{shipId} 캐시가 있으면 그대로 표시(전 검수원 공유),
-//        없으면 [AI로 소개 만들기] — Gemini가 이름 풀이 중심으로 4문장 이내 생성 후 저장.
-//   환각 방지: 프롬프트가 "확인 불가한 사실 금지"를 강제, 카드에 "AI 생성 · 참고용" 상시 표기.
+// V9.18-01(2026-07-27): 선박 정보 카드 — 실제 제원(선종·IMO·국적·크기·건조년도·선사·항로)을
+//   Google 검색 그라운딩으로 조회 + [이름 이야기](여자 이름·동물 이름 등 유래·명명 규칙) + 출처 링크.
+//   사용자 확정: KMTC OSAKA 예시 형식 + "이름 풀이도 재미있어서 같이".
+//   ship_intros/{shipId} 캐시 = 전 검수원 공유, 배마다 1회 생성이면 충분.
 //   테스트 주입: loader/generator/saver를 prop으로 덮을 수 있다(기본 = firebase/gemini 실물).
 import React, { useState, useEffect } from 'react';
 import { Ship, Sparkles, RefreshCw } from 'lucide-react';
@@ -35,10 +34,10 @@ export default function ShipIntroCard({ info, inspector,
     try {
       const res = await generator({ name: shipName, callsign: info?.callsign || '', imo: info?.imo || '', carrier: info?.carrier || '' });
       if (!res.ok) { setErr(`생성 실패: ${res.error} — 헤더 ⋯ 메뉴에서 AI 검색 키를 확인하세요.`); return; }
-      const rec = { text: res.text, by: inspector || '', at: Date.now() };
+      const rec = { text: res.text, sources: res.sources || [], by: inspector || '', at: Date.now() };
       setIntro(rec);
       window.__shipIntroCache = { ...(window.__shipIntroCache || {}), [shipId]: res.text };
-      await saver(shipId, res.text, inspector || '');
+      await saver(shipId, res.text, inspector || '', res.sources || []);
     } catch (e) {
       setErr(`생성 실패: ${e.message || e}`);
     } finally {
@@ -63,9 +62,19 @@ export default function ShipIntroCard({ info, inspector,
           {intro ? (
             <>
               <div className="text-[13px] text-slate-300 leading-relaxed whitespace-pre-wrap">{intro.text}</div>
+              {Array.isArray(intro.sources) && intro.sources.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {intro.sources.map((sc, i) => (
+                    <a key={i} href={sc.uri} target="_blank" rel="noreferrer"
+                      className="text-[10px] px-2 py-1 rounded bg-slate-800 border border-slate-700 text-sky-300 truncate max-w-[160px]">
+                      🔗 {sc.title || `출처 ${i + 1}`}
+                    </a>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center justify-between mt-2">
                 <div className="text-[10px] text-slate-600">
-                  ✨ AI 생성 · 참고용{intro.by ? ` · ${intro.by}` : ''}{intro.at ? ` · ${new Date(intro.at).toLocaleDateString('ko-KR')}` : ''}
+                  ✨ AI 웹 검색 · 참고용{intro.by ? ` · ${intro.by}` : ''}{intro.at ? ` · ${new Date(intro.at).toLocaleDateString('ko-KR')}` : ''}
                 </div>
                 <button onClick={generate} disabled={busy}
                   className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700">
@@ -76,12 +85,12 @@ export default function ShipIntroCard({ info, inspector,
           ) : intro === null ? (
             <>
               <div className="text-[12px] text-slate-500 mb-2 leading-relaxed">
-                아직 이 배의 소개가 없습니다. AI가 선박명의 뜻·유래를 풀이해 줍니다 (한 번 만들면 모든 검수원이 같이 봅니다).
+                아직 이 배의 정보가 없습니다. AI가 웹을 검색해 제원(선종·IMO·국적·크기·건조년도)·선사·항로와 이름의 유래까지 정리합니다 (한 번 만들면 모든 검수원이 같이 봅니다).
               </div>
               <button onClick={generate} disabled={busy}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-sky-800 hover:bg-sky-700 text-sky-100 text-[13px] font-bold"
                 style={{ minHeight: 44 }}>
-                <Sparkles className="w-4 h-4"/>{busy ? '생성 중…' : 'AI로 소개 만들기'}
+                <Sparkles className="w-4 h-4"/>{busy ? '웹 검색 중…' : 'AI로 선박 정보 찾기'}
               </button>
             </>
           ) : (

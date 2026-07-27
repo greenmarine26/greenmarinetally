@@ -1853,8 +1853,10 @@ export async function fbGetShipIntro(shipId) {
   const snap = await get(ref(db, `ship_intros/${shipId}`));
   return snap.exists() ? snap.val() : null;
 }
-export async function fbSaveShipIntro(shipId, text, by) {
+export async function fbSaveShipIntro(shipId, text, by, sources = []) {
   if (!shipId || !text) return false;
-  await set(ref(db, `ship_intros/${shipId}`), { text: String(text).slice(0, 2000), by: by || '', at: Date.now() });
+  const rec = { text: String(text).slice(0, 3000), by: by || '', at: Date.now() };
+  if (Array.isArray(sources) && sources.length) rec.sources = sources.slice(0, 5);
+  await set(ref(db, `ship_intros/${shipId}`), rec);   // V9.18-01: 출처 링크 동봉
   return true;
 }
