@@ -994,7 +994,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       />
 
       {/* V9.18: 선박 소개 · 이름 유래 — 하단 정보 구역 */}
-      <ShipIntroCard info={voyage?.info} inspector={inspector}/>
+      <ShipIntroCard info={voyage?.info} inspector={inspector} portMisData={portMisData}/>
 
       {/* V9.15: PORT-MIS 카드 — 탭을 눌러도 이 카드 때문에 내용이 안 보이던 문제로 본문 아래 이동 */}
       {/* M5.21: PORT-MIS 입출항 정보 (Chrome 확장이 자동 수집한 데이터) */}

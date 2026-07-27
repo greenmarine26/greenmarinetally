@@ -893,10 +893,14 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
 export async function askShipIntro({ name = '', callsign = '', imo = '', carrier = '' }) {
   const shipName = String(name || '').trim();
   if (!shipName) return { ok: false, error: '선박명이 없습니다' };
+  // V9.18-02: 앱 내부 약자(DXQD 등)로 검색하면 "확인되지 않았습니다"가 나온다(사용자 보고).
+  //   IMO·콜사인이 있으면 그것을 우선 검색 키로 쓰고, 이름이 약자일 수 있음을 명시한다.
+  const looksCode = /^[A-Z0-9]{2,5}$/.test(shipName);
   const prompt =
     `다음 선박의 실제 정보를 웹에서 찾아 정리하라: 선박명 "${shipName}"` +
     (imo ? `, IMO ${imo}` : '') + (callsign ? `, 콜사인 ${callsign}` : '') +
-    (carrier ? `, 선사 코드 ${carrier}` : '') + `.
+    (carrier ? `, 선사 코드 ${carrier}` : '') +
+    (looksCode ? `.\n주의: "${shipName}"은 사내 약자일 수 있다. ${imo ? `IMO ${imo}` : ''}${imo && callsign ? '와 ' : ''}${callsign ? `콜사인 ${callsign}` : ''}${(imo || callsign) ? '으로 먼저 실제 선박명을 확정한 뒤 정리하라.' : '실제 선박명을 찾지 못하면 첫 줄에 "선박 풀네임이 필요합니다"라고 써라.'}` : '') + `.
 
 한국어로 아래 형식으로 답하라 (마크다운 굵게 금지, 각 줄은 "· 항목: 값"):
 첫 줄: 한 문장 소개 (예: "KMTC OSAKA는 고려해운 소속의 파나마 국적 컨테이너선입니다.")

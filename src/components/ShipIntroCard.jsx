@@ -9,15 +9,33 @@ import { fbGetShipIntro, fbSaveShipIntro } from '../firebase.js';
 import { askShipIntro } from '../gemini.js';
 import { resolveShipKey } from '../utils.js';
 
-export default function ShipIntroCard({ info, inspector,
+// V9.18-02: 표시/검색용 선박명 해석 — vslFull → PORT-MIS 선박명(콜사인 매칭) → 약자.
+//   약자(2~5자 코드, 예: DXQD)만 남으면 needsName=true — 검색이 "확인되지 않았습니다"로 끝나기 때문
+//   (사용자 보고). 이때 카드가 풀네임 입력칸을 연다. (순수 함수 — 시뮬 대상)
+export function resolveShipDisplayName(info, portMisData = {}) {
+  const vslFull = String(info?.vslFull || '').trim();
+  if (vslFull && !/^[A-Z0-9]{2,5}$/.test(vslFull)) return { name: vslFull, needsName: false, from: 'edi' };
+  const cs = String(info?.callsign || '').toUpperCase();
+  const pm = cs && portMisData[cs];
+  const pmName = String(pm?.vesselName || '').trim();
+  if (pmName && pmName.length >= 6) return { name: pmName, needsName: false, from: 'portmis' };
+  const code = String(info?.vsl || '').trim();
+  // 약자만 있음 — IMO가 있으면 그걸로 검색은 가능하지만, 이름 입력을 권한다
+  return { name: code, needsName: true, from: 'code' };
+}
+
+export default function ShipIntroCard({ info, inspector, portMisData = {},
   loader = fbGetShipIntro, generator = askShipIntro, saver = fbSaveShipIntro }) {
   const [open, setOpen] = useState(false);
   const [intro, setIntro] = useState(undefined);   // undefined=로딩전, null=없음
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [manualName, setManualName] = useState('');   // V9.18-02: 약자뿐일 때 풀네임 직접 입력
 
   const shipId = resolveShipKey(info?.imo || info?.callsign || String(info?.vsl || '').toUpperCase().replace(/\s+/g, ''));
-  const shipName = info?.vslFull || info?.vsl || '';
+  const resolved = resolveShipDisplayName(info, portMisData);
+  const shipName = (manualName.trim() || resolved.name || '').toUpperCase();
+  const needsName = resolved.needsName && !manualName.trim();
 
   useEffect(() => {
     if (!shipId) { setIntro(null); return; }
@@ -33,6 +51,7 @@ export default function ShipIntroCard({ info, inspector,
     setBusy(true); setErr('');
     try {
       const res = await generator({ name: shipName, callsign: info?.callsign || '', imo: info?.imo || '', carrier: info?.carrier || '' });
+      // eslint-disable-next-line no-unused-expressions
       if (!res.ok) { setErr(`생성 실패: ${res.error} — 헤더 ⋯ 메뉴에서 AI 검색 키를 확인하세요.`); return; }
       const rec = { text: res.text, sources: res.sources || [], by: inspector || '', at: Date.now() };
       setIntro(rec);
@@ -87,10 +106,21 @@ export default function ShipIntroCard({ info, inspector,
               <div className="text-[12px] text-slate-500 mb-2 leading-relaxed">
                 아직 이 배의 정보가 없습니다. AI가 웹을 검색해 제원(선종·IMO·국적·크기·건조년도)·선사·항로와 이름의 유래까지 정리합니다 (한 번 만들면 모든 검수원이 같이 봅니다).
               </div>
-              <button onClick={generate} disabled={busy}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-sky-800 hover:bg-sky-700 text-sky-100 text-[13px] font-bold"
+              {resolved.needsName && (
+                <div className="mb-2">
+                  <div className="text-[11px] text-amber-300/90 mb-1 leading-relaxed">
+                    ⚠ 지금은 약자({resolved.name})뿐이라 검색이 안 될 수 있습니다{info?.imo ? ' (IMO로 시도는 가능)' : ''}. 선박 영문 풀네임을 알면 넣어 주세요.
+                  </div>
+                  <input type="text" value={manualName} onChange={e => setManualName(e.target.value)}
+                    placeholder="예: XIN QUN DAO"
+                    className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-[13px] text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                    style={{ minHeight: 40 }}/>
+                </div>
+              )}
+              <button onClick={generate} disabled={busy || (needsName && !info?.imo)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-sky-800 hover:bg-sky-700 disabled:bg-slate-800 disabled:text-slate-600 text-sky-100 text-[13px] font-bold"
                 style={{ minHeight: 44 }}>
-                <Sparkles className="w-4 h-4"/>{busy ? '웹 검색 중…' : 'AI로 선박 정보 찾기'}
+                <Sparkles className="w-4 h-4"/>{busy ? '웹 검색 중…' : needsName && !info?.imo ? '풀네임 입력 후 검색 가능' : 'AI로 선박 정보 찾기'}
               </button>
             </>
           ) : (
