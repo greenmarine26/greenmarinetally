@@ -14,6 +14,14 @@ import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
+  // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
+  //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
+  const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
+  const toggleSec = (id) => setOpenSecs(o => ({ ...o, [id]: !o[id] }));
+  const jumpSec = (id) => {
+    setOpenSecs(o => ({ ...o, [id]: true }));
+    setTimeout(() => { try { document.getElementById('sec-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* skip */ } }, 60);
+  };
   const [editKey, setEditKey] = useState(null); // V7.97: 베이상세 편집 대상 항차 (수석/관리자만)
   const [planKey, setPlanKey] = useState(null); // V9.07: 컨펌용 플랜편집 대상 항차
   const [shipLib, setShipLib] = useState({});
@@ -373,10 +381,32 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <BigStat label="누락 (선사 추가 필요)" value={total.missing} sub={`평택 ${total.ptkAll}대 중`} color={total.missing > 0 ? "red" : "slate"}/>
       </div>
 
+      {/* V9.19-02: 바로가기 — 누르면 그 항목이 펼쳐지며 이동 */}
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+          {[
+            ['board', '⚓ 작업 보드'], ['progress', '📋 진행 상황'], ['tally', '📑 마감 텔리'],
+            ['inspectors', '👷 검수원'], ['reports', '📤 작업 보고'], ['equip', '🏗 장비 보고'],
+            ['edit', '🖐 편집'], ['archive', '📚 자료 보관소'], ['restore', '🗄 완료 보관소'],
+            ['seal', '🔒 엠티 실'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
+            ['notice', '📢 공지'],
+          ].map(([id, label]) => (
+            <button key={id} onClick={() => jumpSec(id)}
+              className="px-2 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-[12px] font-bold text-slate-200 text-left truncate"
+              style={{ minHeight: 40 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* V8.27: 검수원 공지 (흐르는 띠) */}
-      <BroadcastComposer inspector={inspector} />
+      <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>
+        <BroadcastComposer inspector={inspector} />
+      </Fold>
 
       {/* 전체 검수원 진행률 (인원 무제한) */}
+      <Fold id="inspectors" title={`👷 검수원 활동 (${inspectorStats.length}명)`} open={!!openSecs.inspectors} onToggle={() => toggleSec('inspectors')}>
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
         <div className="flex items-center gap-2 mb-3">
           <Users className="w-4 h-4 text-amber-400"/>
@@ -392,8 +422,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           </div>
         )}
       </div>
+      </Fold>
 
       {/* V7.40: ⚓ 실시간 작업 보드 — 동시 작업 선박을 카드로 한눈에 (기존 "항차별 진행" 대체) */}
+      <Fold id="board" title={`⚓ 실시간 작업 보드 (${voyageStats.length}척)`} open={!!openSecs.board} onToggle={() => toggleSec('board')}>
       <div className="bg-slate-900 border border-blue-800/60 rounded-xl p-3">
         <div className="flex items-center gap-2 mb-3">
           <Anchor className="w-4 h-4 text-blue-400"/>
@@ -414,9 +446,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           </div>
         )}
       </div>
+      </Fold>
 
       {/* M7.22: 라이브러리(진행 상황) + 선박별 자료 보관소(완료 기록) 분리 */}
       {chief && voyageStats.length > 0 && (
+        <Fold id="edit" title="🖐 베이상세 편집 · 📐 컨펌용 플랜편집" open={!!openSecs.edit} onToggle={() => toggleSec('edit')}>
         <div className="bg-slate-900 border border-emerald-800/50 rounded-xl p-3">
           <div className="text-sm font-bold text-emerald-200 mb-2">🖐 베이상세 편집 <span className="text-[11px] text-slate-400 font-normal">— 오선적 정정 (수석 전용 · [저장]해야 검수사 화면 반영)</span></div>
           <div className="flex flex-wrap gap-2">
@@ -443,6 +477,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             )}
           </div>
         </div>
+        </Fold>
       )}
       {editKey && voyages[editKey] && (
         <ChiefBayEdit voyage={voyages[editKey]} voyageKey={editKey} inspector={inspector} activeWorkers={activeByVoyage[editKey] || []} onClose={() => setEditKey(null)} />
@@ -450,18 +485,27 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {planKey && voyages[planKey] && (
         <LoadingPlanEdit voyage={voyages[planKey]} voyageKey={planKey} inspector={inspector} onClose={() => setPlanKey(null)} />
       )}
-      <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
-      <ShipArchiveSection shipLib={shipLib} />
+      <Fold id="progress" title="📋 진행 상황 · 완료 저장" open={!!openSecs.progress} onToggle={() => toggleSec('progress')}>
+        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
+      </Fold>
+      <Fold id="archive" title="📚 선박별 자료 보관소" open={!!openSecs.archive} onToggle={() => toggleSec('archive')}>
+        <ShipArchiveSection shipLib={shipLib} />
+      </Fold>
 
       {/* V9.19-01: 마감 텔리 — 검수원이 보면 안 되는 서류라 수석 대시보드로 이동(사용자 확정) */}
-      <TallyExportSection voyages={voyages} chief={chief}/>
+      <Fold id="tally" title="📑 마감 텔리 (DEP.TALLY)" open={!!openSecs.tally} onToggle={() => toggleSec('tally')}>
+        <TallyExportSection voyages={voyages} chief={chief}/>
+      </Fold>
 
       {/* V9.17: 완료 보관소 열람·복원 — 백엔드(archive/{key} + 복원·정리 함수)는 M7.18b에 완성돼
           있었는데 UI가 0이었다(전면 점검 §1-5). RZOR 통삭제 사건 같은 실수의 되돌리기가 이것. */}
-      <ArchiveRestoreSection chief={chief} onRestored={() => {}} />
+      <Fold id="restore" title="🗄 완료 보관소 (복원)" open={!!openSecs.restore} onToggle={() => toggleSec('restore')}>
+        <ArchiveRestoreSection chief={chief} onRestored={() => {}} />
+      </Fold>
 
       {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
       {Object.keys(equipStats).length > 0 && (
+        <Fold id="equip" title="🏗 오늘 장비별 작업 보고" open={!!openSecs.equip} onToggle={() => toggleSec('equip')}>
         <div className="bg-slate-900 border border-orange-700/40 rounded-xl p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="w-4 h-4 text-orange-400"/>
@@ -493,10 +537,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             })}
           </div>
         </div>
+        </Fold>
       )}
 
       {/* M3.5.6: 최근 작업 보고 (시간순) */}
       {recentReports.length > 0 && (
+        <Fold id="reports" title="📤 최근 작업 보고 (30건)" open={!!openSecs.reports} onToggle={() => toggleSec('reports')}>
         <div className="bg-slate-900 border border-emerald-700/40 rounded-xl p-3 mt-3">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Send className="w-4 h-4 text-emerald-400"/>
@@ -563,10 +609,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             })}
           </div>
         </div>
+        </Fold>
       )}
 
       {/* M3.5.5: 엠티 실 작업 실시간 현황 */}
       {sealVoyages.length > 0 && (
+        <Fold id="seal" title={`🔒 엠티 실 작업 현황 (${sealVoyages.length})`} open={!!openSecs.seal} onToggle={() => toggleSec('seal')}>
         <div className="bg-slate-900 border border-amber-700/40 rounded-xl p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Lock className="w-4 h-4 text-amber-400"/>
@@ -579,10 +627,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ))}
           </div>
         </div>
+        </Fold>
       )}
 
       {/* V8.06: LOLO 검수 제출 리스트 (RIZHAO 등 RORO/LOLO 혼용선) */}
       {loloVoyages.length > 0 && (
+        <Fold id="lolo" title={`🚛 LOLO 검수 제출 리스트 (${loloVoyages.length})`} open={!!openSecs.lolo} onToggle={() => toggleSec('lolo')}>
         <div className="bg-slate-900 border border-cyan-800/40 rounded-xl p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="w-4 h-4 text-cyan-400"/>
@@ -599,9 +649,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ))}
           </div>
         </div>
+        </Fold>
       )}
 
       {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) */}
+      <Fold id="feedback" title={`❌ 오답 리포트${unresolvedCount > 0 ? ` (미해결 ${unresolvedCount})` : ''}`} open={!!openSecs.feedback} onToggle={() => toggleSec('feedback')}>
       <div className="bg-slate-900 border border-red-800/40 rounded-xl p-3 mt-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -653,6 +705,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           </div>
         )}
       </div>
+      </Fold>
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
@@ -1594,5 +1647,22 @@ function TallyExportSection({ voyages, chief }) {
       </div>
       {msg && <div className="mt-2 text-[11px] text-slate-300 whitespace-pre-wrap">{msg}</div>}
     </section>
+  );
+}
+
+// ── V9.19-02: 접이식 항목 래퍼 — 대시보드 항목을 버튼으로 열고 닫는다 ─────────
+//   상단 바로가기(jumpSec)가 열림 상태를 켜고 스크롤한다. 헤더 44px 터치 타깃.
+function Fold({ id, title, open, onToggle, children }) {
+  return (
+    <div id={'sec-' + id} className="scroll-mt-16">
+      <button onClick={onToggle}
+        className={`w-full flex items-center justify-between px-3 rounded-xl border text-left ${
+          open ? 'bg-slate-800/80 border-slate-600' : 'bg-slate-900 border-slate-800 hover:border-slate-600'}`}
+        style={{ minHeight: 44 }}>
+        <span className="text-[13px] font-bold text-slate-200 truncate">{title}</span>
+        <span className="text-slate-500 text-xs shrink-0 ml-2">{open ? '▲ 접기' : '▼ 열기'}</span>
+      </button>
+      {open && <div className="mt-2">{children}</div>}
+    </div>
   );
 }
