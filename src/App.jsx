@@ -9,6 +9,7 @@ import {
   fbSubscribeMatrixEditors, fbGetAdminGuard
 } from './firebase.js';
 import { isAdminName } from './adminGuard.js';   // V9.11: 관리자 판정은 Firebase 목록 기준(하드코딩 제거)
+import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
@@ -34,6 +35,9 @@ export default function App() {
   // V9.11: 관리자 가드 — 종전에는 `inspector === '김성일'` 하드코딩이라 V9.09에서 권한을 넘겨받은
   //   관리자에게 헤더 ⚙(인원 관리) 버튼이 아예 안 보였다(인수인계가 실질적으로 반쪽).
   const [adminGuard, setAdminGuard] = useState(null);
+  // V9.13: 무조작 자동 로그아웃 — 마지막 화면 조작 시각(ref: 리렌더 없이 갱신) + 안내 문구
+  const lastInputRef = React.useRef(Date.now());
+  const [autoLogoutNotice, setAutoLogoutNotice] = useState('');
   // M5.21: PORT-MIS 입출항 데이터 (Chrome 확장이 저장 — 호출부호로 매칭)
   const [portMisData, setPortMisData] = useState({});
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력
@@ -167,6 +171,36 @@ export default function App() {
     return () => clearInterval(id);
   }, [inspector, route]);
 
+  // ── V9.13(2026-07-27): 30분 무조작 자동 로그아웃 (사용자 요청) ───────────────
+  //   왜: 로그인해 두고 앱을 만지지 않아도 30초 하트비트 때문에 계속 '로그인/작업중'으로 남았다.
+  //   기준은 화면 조작(터치·클릭·키·스크롤). 조작이 30분 없으면 그 기기에서 스스로 로그아웃하고
+  //   검수원 선택창을 띄운다. 작업 기록은 그대로 남는다(로그아웃 마킹만).
+  useEffect(() => {
+    if (!inspector) return;
+    lastInputRef.current = Date.now();
+    const mark = () => { lastInputRef.current = Date.now(); };
+    const evs = ['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'];
+    evs.forEach(e => window.addEventListener(e, mark, { passive: true, capture: true }));
+    const check = () => {
+      if (!isIdleLogout(lastInputRef.current)) return;
+      fbLogoutInspector(inspector).catch(() => {});
+      clearLoginTime();
+      _storage.set(SK.activeInspector, '');
+      setInspector('');
+      setAutoLogoutNotice(`${Math.round(IDLE_LOGOUT_MS / 60000)}분 동안 사용이 없어 자동 로그아웃됐습니다. 이름을 다시 선택하세요.`);
+      setShowInspectorModal(true);
+    };
+    const id = setInterval(check, 30000);
+    // 폰이 잠겨 타이머가 멈췄다 돌아오는 경우 — 화면 복귀 즉시 한 번 더 검사
+    const onVis = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      evs.forEach(e => window.removeEventListener(e, mark, { capture: true }));
+      document.removeEventListener('visibilitychange', onVis);
+      clearInterval(id);
+    };
+  }, [inspector]);
+
   // M6.42: STOWAGE PDF는 영구 보관 — 시간 기반 자동 폐기 제거
   //   비용 분석: 300척 × 3MB = 900MB → 월 ₩25 (매우 적음)
   //   사용자 결정: 자동 폐기보다 라이브러리로 영구 보관이 더 가치 있음
@@ -174,6 +208,8 @@ export default function App() {
 
   const handleSelectInspector = useCallback(async (name) => {
     setInspector(name);
+    lastInputRef.current = Date.now();     // V9.13: 로그인 순간부터 무조작 시간 다시 셈
+    setAutoLogoutNotice('');
     _storage.set(SK.activeInspector, name);
     await fbSetInspector(name);
     setShowInspectorModal(false);
@@ -237,7 +273,7 @@ export default function App() {
         online={online}
         route={route}
         voyages={voyages}
-        onChangeInspector={() => setShowInspectorModal(true)}
+        onChangeInspector={() => { setAutoLogoutNotice(''); setShowInspectorModal(true); }}
         onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}
         onGoHome={() => navigate('home')}
         onLogout={handleLogout}
@@ -322,8 +358,9 @@ export default function App() {
           inspectors={inspectors}
           extraStaff={extraStaff}
           deletedStaff={deletedStaff}
+          notice={autoLogoutNotice}
           onSelect={handleSelectInspector}
-          onClose={() => inspector && setShowInspectorModal(false)}
+          onClose={() => { setAutoLogoutNotice(''); if (inspector) setShowInspectorModal(false); }}
         />
       )}
 

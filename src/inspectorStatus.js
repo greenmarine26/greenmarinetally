@@ -12,3 +12,15 @@ export function inspectorStatus(i, now = Date.now()) {
   if (i.loggedIn === true) return 'online';                    // 로그인 상태지만 활동 끊김
   return null;                                                 // 과거 데이터(필드 없음) + 활동 오래됨
 }
+
+// ── V9.13(2026-07-27): 무조작 자동 로그아웃 ──────────────────────────────
+//   사용자 확정 — "30분 이상 로그인 후 신호 없으면 강제 로그아웃", 기준은 **화면 조작**.
+//   앱을 켜 둔 채 30분 동안 터치·클릭·키·스크롤이 없으면 그 기기에서 스스로 로그아웃한다.
+//   (앱을 그냥 닫은 경우는 대상 아님 — 사용자 선택. 30초 하트비트는 조작 신호가 아니다.)
+export const IDLE_LOGOUT_MS = 30 * 60 * 1000;   // 30분
+
+/** 마지막 조작 시각 기준으로 자동 로그아웃할 때가 됐는가 */
+export function isIdleLogout(lastInputAt, now = Date.now()) {
+  if (!lastInputAt) return false;               // 기준 시각이 없으면 판정 안 함(로그아웃 안 시킴)
+  return (now - lastInputAt) >= IDLE_LOGOUT_MS;
+}

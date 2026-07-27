@@ -17,7 +17,7 @@ import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 //   종전에는 여기에 이름이 박혀 있어(const ADMIN_NAME = '김성일') 담당자가 바뀌면
 //   소스를 고쳐 재배포해야만 인수인계가 됐다. 앱 안에서 넘길 수 있게 바꾼다.
 
-export default function InspectorModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onSelect, onClose }) {
+export default function InspectorModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onClose }) {
   const [newName, setNewName] = useState('');
   // ── V9.05: 관리자 이름 가드 상태 ──────────────────────────────────────
   const [guard, setGuard] = useState(null);          // admin_guard 노드 (null = 미설정/로딩전)
@@ -154,6 +154,13 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
             </button>
           )}
         </div>
+
+        {/* V9.13: 자동 로그아웃 안내 한 줄 (무조작 30분) */}
+        {notice && (
+          <div className="mb-3 text-[12px] text-amber-100 bg-amber-900/40 border border-amber-700/60 rounded-lg px-3 py-2 leading-relaxed">
+            ⏱ {notice}
+          </div>
+        )}
 
         {list.length > 0 && (
           <div className="space-y-1.5 mb-4 max-h-72 overflow-y-auto">
