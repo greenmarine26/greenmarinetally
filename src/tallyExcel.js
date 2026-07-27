@@ -321,9 +321,244 @@ function sheetShifting(wb, D) {
   return ws;
 }
 
+// ═══ V9.19-01: 실물 템플릿 필 모드 ══════════════════════════════════════
+//   사용자 피드백: "셀 크기·간격·글씨 크기가 실물과 다르고 짤린다. 중앙정렬 원함."
+//   → 실물 마감 텔리 파일을 그대로 서식 틀로 쓰고(public/tally_templates/{code}.xlsx,
+//     빌더가 가변 값만 비움) 숫자만 채운다. 서식·정렬·열너비·글꼴 = 실물 100%.
+//   합계·헤더(DISCH (n))는 원본이 수식이지만, 모바일 뷰어가 재계산을 안 하는 경우를
+//   위해 검증된 계산값으로 덮어쓴다. 템플릿 없는 배(TMPZ·DXQD·OBWH 등)는 드로잉 폴백.
+import TEMPLATE_MAP from './data/tallyTemplateMap.js';
+
+const zv = (v) => (v ? v : null);   // 실물 규칙: 빈 값은 공란
+
+async function fillTemplate(D, ExcelJS) {
+  const M = TEMPLATE_MAP[D.code];
+  if (!M || !M.sheets || !M.sheets.finalWork) return null;
+  const base = (typeof document !== 'undefined' ? './' : 'public/');
+  let ab;
+  if (typeof document !== 'undefined') {
+    const res = await fetch(`${base}tally_templates/${D.code}.xlsx`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    ab = await res.arrayBuffer();
+  } else {
+    const fs = await import('fs');
+    ab = fs.readFileSync(`public/tally_templates/${D.code}.xlsx`);
+  }
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(ab);
+  // exceljs 라운드트립 버그 방어 — 원본의 정의명(인쇄영역 등)이 깨진 채 남으면
+  //   재저장본을 일부 뷰어가 못 연다. 정의명은 서식이 아니므로 비운다.
+  try { wb.definedNames.model = []; } catch { /* skip */ }
+  for (const ws0 of wb.worksheets) { try { if (ws0.pageSetup) delete ws0.pageSetup.printArea; } catch { /* skip */ } }
+  const get = (key) => M.sheets[key] ? wb.getWorksheet(M.sheets[key].name) : null;
+  const voy = [D.voyD, D.voyL].filter(Boolean).join(' & ');
+  const dstr = d10(D.date);
+
+  // ── Final Work ──
+  {
+    const cfg = M.sheets.finalWork;
+    const ws = get('finalWork');
+    ws.getCell('B4').value = ` ${D.vslFull}`;
+    ws.getCell('G4').value = voy;
+    ws.getCell('L4').value = dstr;
+    ws.getCell('B6').value = ` ${D.pier}`;
+    ws.getCell('G6').value = D.berth;
+    const cap = cfg.totalRow - cfg.dataStart;
+    if (D.rows.length > cap) ws.duplicateRow(cfg.totalRow - 1, D.rows.length - cap, true);
+    const totalRow = cfg.totalRow + Math.max(0, D.rows.length - cap);
+    // 라벨 쓰기 + 블록 추적 (템플릿은 A/B 병합을 풀어둔 상태 — 실제 블록 크기로 재병합해 실물 모양 재현)
+    const opBlocks = [];   // {op, r1, r2}
+    const portBlocks = [];
+    for (let i = 0; i < Math.max(D.rows.length, cap); i++) {
+      const r = cfg.dataStart + i;
+      const row = D.rows[i];
+      const cells = ws.getRow(r);
+      if (row) {
+        if (!opBlocks.length || opBlocks[opBlocks.length - 1].op !== row.op) {
+          cells.getCell(1).value = row.op;
+          opBlocks.push({ op: row.op, r1: r, r2: r });
+        } else opBlocks[opBlocks.length - 1].r2 = r;
+        const pb = portBlocks[portBlocks.length - 1];
+        if (!pb || pb.op !== row.op || pb.port !== row.port) {
+          cells.getCell(2).value = row.port;
+          portBlocks.push({ op: row.op, port: row.port, r1: r, r2: r });
+        } else portBlocks[portBlocks.length - 1].r2 = r;
+        cells.getCell(3).value = row.fe;
+        ['20','40','HC','45'].forEach((sz, k) => {
+          cells.getCell(4 + k).value = zv(row.dis[sz]);
+          cells.getCell(8 + k).value = zv(row.load[sz]);
+          cells.getCell(12 + k).value = zv(row.shift[sz]);
+        });
+      } else {
+        for (const c of [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) cells.getCell(c).value = null;
+      }
+    }
+    for (const b of opBlocks) if (b.r2 > b.r1) { try { ws.mergeCells(b.r1, 1, b.r2, 1); } catch { /* skip */ } }
+    for (const b of portBlocks) if (b.r2 > b.r1) { try { ws.mergeCells(b.r1, 2, b.r2, 2); } catch { /* skip */ } }
+    // 합계·헤더 — 검증된 계산값으로 (수식 덮어씀: 모바일 뷰어 재계산 문제 방지)
+    for (const [off, fe] of [[0,'F'],[1,'E']]) {
+      const cells = ws.getRow(totalRow + off);
+      ['20','40','HC','45'].forEach((sz, k) => {
+        cells.getCell(4 + k).value = D.totals.dis[fe][sz] || 0;
+        cells.getCell(8 + k).value = D.totals.load[fe][sz] || 0;
+        cells.getCell(12 + k).value = D.totals.shift[fe][sz] || 0;
+      });
+    }
+    ws.getCell(`D8`).value = `DISCH (${D.totals.dis.n})`;
+    ws.getCell(`H8`).value = `LOAD (${D.totals.load.n})`;
+    ws.getCell(`L8`).value = `SHIFT (${D.totals.shift.n})`;
+  }
+  // ── Time Sheet ──
+  if (get('timeSheet')) {
+    const cfg = M.sheets.timeSheet;
+    const ws = get('timeSheet');
+    for (let r = cfg.dataStart, i = 0; r <= cfg.dataEnd; r++, i++) {
+      const row = D.timeSheet[i];
+      ws.getRow(r).getCell(2).value = row ? row.time : null;
+      ws.getRow(r).getCell(3).value = row ? row.remark : null;
+    }
+  }
+  // ── OS-IN / OS-OUT ──
+  for (const key of ['osIn', 'osOut']) {
+    const cfg = M.sheets[key];
+    if (!cfg) continue;
+    const ws = get(key);
+    const os = key === 'osIn' ? D.osIn : D.osOut;
+    ws.getCell('H6').value = key === 'osIn' ? D.voyD : D.voyL;
+    ws.getCell('L6').value = dstr;
+    ws.getCell('H8').value = D.pier;
+    ws.getCell('L8').value = D.berth;
+    const cap = cfg.totalRow - cfg.dataStart;
+    if (os.rows.length > cap) ws.duplicateRow(cfg.totalRow - 1, os.rows.length - cap, true);
+    const totalRow = cfg.totalRow + Math.max(0, os.rows.length - cap);
+    let last = ''; let man = 0, wk = 0;
+    for (let i = 0; i < Math.max(os.rows.length, cap); i++) {
+      const r = ws.getRow(cfg.dataStart + i);
+      const o = os.rows[i];
+      if (o) {
+        r.getCell(2).value = o.port === last ? '-ditto-' : o.port.split('').join(' ');
+        r.getCell(4).value = o.size; r.getCell(5).value = o.fe;
+        r.getCell(6).value = "CONT'R"; r.getCell(7).value = 'VAN';
+        r.getCell(8).value = o.manifested; r.getCell(10).value = o.manifested - o.short;
+        r.getCell(11).value = 'NIL'; r.getCell(12).value = o.short ? o.short : 'NIL';
+        const tags = [];
+        if (o.rf) tags.push(`RF x ${o.rf}`);
+        if (o.rh) tags.push(`RH x ${o.rh}`);
+        if (o.dg) tags.push(`DG x ${o.dg}`);
+        r.getCell(13).value = tags.join(' , ') || null;
+        man += o.manifested; wk += o.manifested - o.short;
+        last = o.port;
+      } else {
+        for (const c of [1,2,3,4,5,6,7,8,9,10,11,12,13]) r.getCell(c).value = null;
+      }
+    }
+    const tr = ws.getRow(totalRow);
+    tr.getCell(8).value = man; tr.getCell(10).value = wk;
+    tr.getCell(11).value = 'NIL'; tr.getCell(12).value = (man - wk) ? (man - wk) : 'NIL';
+    if (cfg.remarksRow > 0) {
+      for (let r = cfg.remarksRow + 1, i = 0; r <= cfg.remarksEnd; r++, i++) {
+        const line = os.remarks[i] || '';
+        const m = line.indexOf(':');
+        ws.getRow(r).getCell(1).value = line ? line.slice(0, m + 1) : null;
+        ws.getRow(r).getCell(2).value = line ? line.slice(m + 1).trim() : null;
+      }
+    }
+  }
+  // ── Act Seal ──
+  if (M.sheets.seal) {
+    const cfg = M.sheets.seal;
+    const ws = get('seal');
+    ws.getCell('G4').value = dstr;
+    const all = [...D.sealIn.map(x => ({ ...x, leg: "DISCH'" })), ...D.sealOut.map(x => ({ ...x, leg: 'LOAD' }))];
+    const cap = cfg.dataEnd - cfg.dataStart + 1;
+    if (all.length > cap) ws.duplicateRow(cfg.dataEnd, all.length - cap, true);
+    for (let i = 0; i < Math.max(all.length, cap); i++) {
+      const r = ws.getRow(cfg.dataStart + i);
+      const o = all[i];
+      r.getCell(1).value = o ? o.cn : null;
+      r.getCell(3).value = o ? o.manifestSeal : null;
+      r.getCell(4).value = o ? o.size : null;
+      r.getCell(6).value = o ? o.actualSeal : null;
+      r.getCell(7).value = o ? o.reseal : null;
+      r.getCell(8).value = o ? `${o.remarks} ${o.leg}`.trim() : null;
+    }
+  }
+  // ── RF ──
+  if (M.sheets.rf) {
+    const cfg = M.sheets.rf;
+    const ws = get('rf');
+    const all = [...D.rfIn, ...D.rfOut];
+    const cap = cfg.dataEnd - cfg.dataStart + 1;
+    if (all.length > cap) ws.duplicateRow(cfg.dataEnd, all.length - cap, true);
+    for (let i = 0; i < Math.max(all.length, cap); i++) {
+      const r = ws.getRow(cfg.dataStart + i);
+      const o = all[i];
+      r.getCell(1).value = o ? o.cn : null;
+      r.getCell(2).value = o ? (o.seal || null) : null;
+      r.getCell(3).value = o ? o.size : null;
+      r.getCell(4).value = o ? (o.loc || null) : null;
+      r.getCell(6).value = o ? (o.setting || null) : null;
+      r.getCell(9).value = o ? o.op : null;
+    }
+  }
+  // ── Performance (표준 열: op=D(4), FULL 20/40/HC/45 = H/J/L/N(8,10,12,14), EMPTY = P/R/T/V(16,18,20,22)) ──
+  if (M.sheets.perf) {
+    const cfg = M.sheets.perf;
+    const ws = get('perf');
+    const S = { 20: 0, 40: 1, HC: 2, 45: 3 };
+    const fill = (agg, r0, r1, stRow) => {
+      const st = { F: {20:0,40:0,HC:0,45:0}, E: {20:0,40:0,HC:0,45:0} };
+      let i = 0;
+      for (const op of D.perf.ops) {
+        const o = agg[op]; if (!o) continue;
+        const r = ws.getRow(r0 + i);
+        if (r0 + i < r1) {
+          r.getCell(4).value = op;
+          for (const fe of ['F','E']) for (const [sz, k] of Object.entries(S)) {
+            const v = (o[fe] || {})[sz] || 0;
+            r.getCell((fe === 'F' ? 8 : 16) + k * 2).value = v || null;
+          }
+        }
+        for (const fe of ['F','E']) for (const sz of ['20','40','HC','45']) st[fe][sz] += (o[fe]||{})[sz] || 0;
+        i++;
+      }
+      for (; r0 + i < r1; i++) { const r = ws.getRow(r0 + i); r.getCell(4).value = null; for (let c = 8; c <= 22; c++) r.getCell(c).value = null; }
+      const tr = ws.getRow(stRow);
+      for (const fe of ['F','E']) for (const [sz, k] of Object.entries(S))
+        tr.getCell((fe === 'F' ? 8 : 16) + k * 2).value = st[fe][sz];
+    };
+    fill(D.perf.inbound, cfg.inRow, cfg.st1, cfg.st1);
+    fill(D.perf.outbound, cfg.outRow, cfg.st2, cfg.st2);
+  }
+  // ── SHIFTING ──
+  if (M.sheets.shifting) {
+    const cfg = M.sheets.shifting;
+    const ws = get('shifting');
+    for (let i = 0; i < Math.max(D.shifting.length, cfg.dataEnd - cfg.dataStart + 1); i++) {
+      const r = ws.getRow(cfg.dataStart + i);
+      const s2 = D.shifting[i];
+      [s2?.no, s2?.cn, s2?.type, s2?.fe, s2?.wt, s2?.op, s2?.oldPos, s2?.newPos, s2?.pod, s2?.pol, s2?.op]
+        .forEach((v, k) => { r.getCell(k + 1).value = v ?? null; });
+    }
+  }
+  return wb;
+}
+
 /** 워크북 생성 → Blob 다운로드. 반환: 파일명 */
 export async function generateTallyExcel(D) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+  // V9.19-01: 실물 템플릿 우선 — 실패 시 드로잉 폴백
+  let note = '';
+  let tplWb = null;
+  try { tplWb = await fillTemplate(D, ExcelJS); } catch (e) { note = `템플릿 실패(${e?.message || e}) — 표준 서식으로 생성`; }
+  if (tplWb) {
+    const voy0 = [D.voyD, D.voyL].filter(Boolean).join('&');
+    const fname0 = `${D.code} ${voy0} PTK TALLY REPORT.xlsx`;
+    const buf0 = await tplWb.xlsx.writeBuffer();
+    _download(buf0, fname0);
+    return { fname: fname0, buf: buf0, note: note || '실물 서식(템플릿) 기반' };
+  }
+  if (!note) note = '이 배는 템플릿 미보유 — 표준 서식으로 생성(배치가 실물과 다를 수 있음)';
   const wb = new ExcelJS.Workbook();
   wb.creator = 'GREEN MARINE Tallyman Master';
   sheetFinalWork(wb, D);
@@ -339,12 +574,15 @@ export async function generateTallyExcel(D) {
   const voy = [D.voyD, D.voyL].filter(Boolean).join('&');
   const fname = `${D.code} ${voy} PTK TALLY REPORT.xlsx`;
   const buf = await wb.xlsx.writeBuffer();
-  if (typeof document !== 'undefined') {
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = fname; a.click();
-    URL.revokeObjectURL(url);
-  }
-  return { fname, buf };
+  _download(buf, fname);
+  return { fname, buf, note };
+}
+
+function _download(buf, fname) {
+  if (typeof document === 'undefined') return;
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  URL.revokeObjectURL(url);
 }

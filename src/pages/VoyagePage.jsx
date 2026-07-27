@@ -35,7 +35,6 @@ import WorkReportModal from '../components/WorkReportModal.jsx';
 import { getEquipNumber, isPyeongtaekPort, resolveShipKey } from '../utils.js';
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
-import { computeTallyData } from '../tallyReport.js';   // V9.19: 마감 텔리
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
 import ChoiceModal, { useChoice } from '../components/ChoiceModal.jsx';
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';
@@ -921,8 +920,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {tab === 'report' && (
         <div className="space-y-3">
-          {/* V9.19: 선박별 마감 텔리 엑셀 — 실물 DEP.TALLY 양식(양식 사전 = tallyFormats.js) */}
-          <TallyExportCard voyage={voyage}/>
+          {/* V9.19-01: 마감 텔리 카드는 수석 대시보드로 이동 — 검수원이 보면 안 되는 서류(사용자 확정 2026-07-28) */}
           <ReportTab
             voyageKey={voyageKey} mode={mode} voyageInfo={voyage.info}
             containers={containers} compMap={compMap} xrayMap={xrayMap} xraySeals={xraySeals}
@@ -2687,42 +2685,3 @@ function WorkReportHistory({ voyageKey }) {
   );
 }
 
-// ── V9.19(2026-07-28): 마감 텔리 엑셀 생성 카드 ─────────────────────────
-//   실물 DEP.TALLY REPORT 워크북(Final Work·Time Sheet·OS·DM·Seal·RF·Performance·SHIFTING)을
-//   그 배의 선사·포트 순서(양식 사전)대로 생성. 검증: DJCT 216대·ATPR 251대 실물 텔리와 완전 일치.
-function TallyExportCard({ voyage }) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const code = String(voyage?.info?.vsl || '').toUpperCase();
-  const gen = async () => {
-    if (busy) return;
-    setBusy(true); setMsg('');
-    try {
-      const D = computeTallyData(voyage);
-      if (D.fmt._unknown) setMsg(`⚠ ${code}는 양식 사전에 없는 선박 — 선사·포트가 자료 등장 순서로 나갑니다. 순서 확인 후 사용하세요.`);
-      const { generateTallyExcel } = await import('../tallyExcel.js');
-      const { fname } = await generateTallyExcel(D);
-      setMsg(m => (m ? m + '\n' : '') + `✅ ${fname} 다운로드 완료 — 메일 첨부 전 숫자를 한 번 확인하세요.`);
-    } catch (e) {
-      setMsg(`생성 실패: ${e?.message || e}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="bg-slate-900 border border-emerald-800/60 rounded-lg p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-[13px] font-bold text-emerald-200">📑 마감 텔리 (DEP.TALLY REPORT)</div>
-          <div className="text-[11px] text-slate-500 mt-0.5">이 배 양식 그대로 엑셀 생성 — Final Work·Time Sheet·O/S·실번호·리퍼·Performance</div>
-        </div>
-        <button onClick={gen} disabled={busy}
-          className="shrink-0 px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-[13px] font-bold"
-          style={{ minHeight: 44 }}>
-          {busy ? '생성 중…' : '엑셀 생성'}
-        </button>
-      </div>
-      {msg && <div className="mt-2 text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed">{msg}</div>}
-    </div>
-  );
-}

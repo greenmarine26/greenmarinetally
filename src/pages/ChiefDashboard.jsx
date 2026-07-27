@@ -6,6 +6,7 @@ import { isPyeongtaekPort, isBookingSlot, emptySealSpec } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
 import { isChief } from '../staffList.js';
+import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
@@ -451,6 +452,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       )}
       <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
       <ShipArchiveSection shipLib={shipLib} />
+
+      {/* V9.19-01: 마감 텔리 — 검수원이 보면 안 되는 서류라 수석 대시보드로 이동(사용자 확정) */}
+      <TallyExportSection voyages={voyages} chief={chief}/>
 
       {/* V9.17: 완료 보관소 열람·복원 — 백엔드(archive/{key} + 복원·정리 함수)는 M7.18b에 완성돼
           있었는데 UI가 0이었다(전면 점검 §1-5). RZOR 통삭제 사건 같은 실수의 되돌리기가 이것. */}
@@ -1542,6 +1546,53 @@ function ArchiveRestoreSection({ chief }) {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+// ── V9.19-01: 마감 텔리 엑셀 생성 (수석 전용) ─────────────────────────
+//   실물 DEP.TALLY 워크북을 배별 템플릿(실물 파일 서식 그대로)에 숫자만 채워 생성.
+function TallyExportSection({ voyages, chief }) {
+  const [busyKey, setBusyKey] = useState('');
+  const [msg, setMsg] = useState('');
+  const list = Object.entries(voyages || {})
+    .filter(([, v]) => v && v.info)
+    .sort((a, b) => (b[1].info.createdAt || 0) - (a[1].info.createdAt || 0));
+  const gen = async (key, v) => {
+    if (!chief) { alert('🔒 마감 텔리는 수석검수사만 생성할 수 있습니다.'); return; }
+    setBusyKey(key); setMsg('');
+    try {
+      const D = computeTallyData(v);
+      const { generateTallyExcel } = await import('../tallyExcel.js');
+      const r = await generateTallyExcel(D);
+      setMsg(`✅ ${r.fname} 다운로드${r.note ? ` · ${r.note}` : ''} — 발송 전 Final Work 총계 확인.`);
+    } catch (e) {
+      setMsg(`생성 실패(${key}): ${e?.message || e}`);
+    } finally {
+      setBusyKey('');
+    }
+  };
+  return (
+    <section className="bg-slate-900 border border-emerald-800/60 rounded-xl p-4">
+      <h2 className="font-bold text-emerald-200 text-sm mb-1">📑 마감 텔리 (DEP.TALLY REPORT) {!chief && <span className="text-[10px] text-slate-500">— 🔒 수석 전용</span>}</h2>
+      <div className="text-[11px] text-slate-500 mb-2">실물 양식 그대로 엑셀 생성 · 선사/포트 순서 선박별 고정 · 발송 전 숫자 확인 필수</div>
+      <div className="space-y-1">
+        {list.map(([key, v]) => (
+          <div key={key} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
+            <div className="flex-1 min-w-0">
+              <span className="text-[13px] font-bold text-slate-200">{v.info.vsl}</span>
+              <span className="text-[11px] text-slate-500 ml-2">{[v.info.voy_d, v.info.voy_l].filter(Boolean).join(' & ')}</span>
+            </div>
+            <button onClick={() => gen(key, v)} disabled={busyKey === key}
+              className={`shrink-0 px-3 py-2 rounded-lg text-[12px] font-bold ${chief ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100' : 'bg-slate-800 text-slate-600'}`}
+              style={{ minHeight: 40 }}>
+              {busyKey === key ? '생성 중…' : '엑셀 생성'}
+            </button>
+          </div>
+        ))}
+        {list.length === 0 && <div className="text-[12px] text-slate-600">진행 중인 항차가 없습니다.</div>}
+      </div>
+      {msg && <div className="mt-2 text-[11px] text-slate-300 whitespace-pre-wrap">{msg}</div>}
     </section>
   );
 }
