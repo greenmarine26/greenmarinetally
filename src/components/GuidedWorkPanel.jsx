@@ -18,6 +18,24 @@ const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
 // V8.50: 갈림 부류 라벨 (streamPref 키 → 표시·음성)
 const PREF_LABEL = { F: '풀', E: '엠티', RF: '리퍼', GEN: '일반', '40': '40피트', '20': '20피트' };
 
+// V9.12(2026-07-27): 양하 홀드까지 끝났을 때 "해치커버 닫을까요?"를 물을지 판정.
+//   사용자 확정 — 선적 여부를 확인해서 **선적이 없을 때만** 묻는다.
+//     · 그 베이 그룹에 평택 선적분이 있으면(완료·미완료 무관) 묻지 않는다 → 닫는 건 선적 흐름이 맡는다.
+//     · 선적 자료(위치 있는 선적 컨)가 아예 없으면 = 모름 → 묻지 않는다.
+//       (종전에는 '선적 EDI 미도착'이 '선적 없음'으로 읽혀 닫자고 물었다 — 그 구멍을 막는다.)
+//   holdDone = 그 그룹 홀드에서 평택 양하분을 실제로 한 대라도 쳤는가(작업한 그룹만 대상).
+export function shouldAskHatchClose(allContainers, group, centerOf) {
+  const list = Array.isArray(allContainers) ? allContainers : [];
+  const holdDone = list.some(c => c._mode === 'discharge' && c._ptk && c._comp &&
+    centerOf(c.bay) === group && parseInt(c.tier, 10) < 80);
+  if (!holdDone) return false;
+  const loadingKnown = list.some(c => c._mode === 'loading' && centerOf(c.bay) != null);
+  if (!loadingKnown) return false;                 // 선적을 모름 → 묻지 않음
+  const loadingHere = list.some(c => c._mode === 'loading' && c._ptk && centerOf(c.bay) === group);
+  if (loadingHere) return false;                   // 이 그룹에 선적 있음 → 묻지 않음
+  return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
+}
+
 export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer }) {
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
@@ -415,17 +433,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V7.94-16: 양하 — 그룹 홀드까지 완료 시 클로즈 제안 조건 (그룹 완료 화면에서 사용)
   // V8.09-05 (사용자 보고 2026-06-18): 같은 베이 그룹에 선적할 평택분이 남아 있으면 닫지 않는다.
   //   현장 순서 = 양하 끝 → (그 홀드에 실을 게 있으면) 선적 먼저 → 선적까지 끝나야 해치 클로즈.
-  //   ★선적 EDI 미업로드면 loadRemain=0 → 기존대로 닫음(선적할 게 없으므로 안전).
+  // V9.12 (사용자 확정 2026-07-27): "선적 여부 확인 후 선적이 없을 때만 질문. 모를 때·있을 때는 묻지 않는다."
+  //   종전 구멍 — 선적 EDI가 아직 안 온 상태(=모름)가 loadRemain=0으로 읽혀 닫자고 물었다.
+  //   판정은 shouldAskHatchClose()에 모아 두었다(순수 함수 — 시뮬 검증용).
   const holdWorkedD = useMemo(() => {
     if (isHatchSkipShip) return false;  // V8.10: 해치 클로즈 제안 안 함
     if (mode !== 'discharge' || selectedGroup == null) return false;
-    const holdDone = allContainers.some(c => c._mode === mode && c._ptk && c._comp &&
-      groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) < 80);
-    if (!holdDone) return false;
-    const loadRemain = allContainers.some(c => c._mode === 'loading' && c._ptk && !c._comp &&
-      groupCenterOf(c.bay) === selectedGroup);
-    if (loadRemain) return false;
-    return true;
+    return shouldAskHatchClose(allContainers, selectedGroup, groupCenterOf);
   }, [mode, selectedGroup, allContainers, bayPairs]);
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
