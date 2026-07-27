@@ -1846,3 +1846,15 @@ export async function fbSeedFoodSpotsOnce(seeds, flagKey = '_seeded') {
     return true;
   } catch (e) { return false; }
 }
+
+// ── V9.18: 선박 소개 캐시 — AI로 1회 생성해 전 검수원 공유. ship_intros/{shipId} ──
+export async function fbGetShipIntro(shipId) {
+  if (!shipId) return null;
+  const snap = await get(ref(db, `ship_intros/${shipId}`));
+  return snap.exists() ? snap.val() : null;
+}
+export async function fbSaveShipIntro(shipId, text, by) {
+  if (!shipId || !text) return false;
+  await set(ref(db, `ship_intros/${shipId}`), { text: String(text).slice(0, 2000), by: by || '', at: Date.now() });
+  return true;
+}

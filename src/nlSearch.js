@@ -71,6 +71,7 @@ export function parseNaturalQuery(text) {
     posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
     bayTrio: null,   // V8.03-01: 짝수 베이+구역 = 트리오(23·24·25) 전체
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
+    shipIntroQuery: false,   // V9.18: 선박 소개·이름 유래
     twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
     tierPlaceCountQuery: null,   // V7.99-10: 'hold'|'deck' — "홀드 몇 개 남았어"(에 없음) = 작업 남은 단(곳) 개수+베이 나열
     tierInContextQuery: null,    // V7.99-10: 'hold'|'deck' — "홀드에 몇 개 남았어"(에 있음) = 현재 작업 중인 단 컨 수
@@ -258,6 +259,8 @@ export function parseNaturalQuery(text) {
       : /점심|런치/.test(t) ? 'lunch' : 'any';
   }
   if (/날씨|기온\s*어때|바람\s*어때|비\s*(와|오나|올까)|눈\s*(와|오나|올까)/i.test(t)) result.weatherQuery = true;
+  // V9.18: 선박 소개·이름 유래 — "이 배 뭐야", "선박 소개", "배 이름 뜻/유래", "무슨 배야"
+  if (/이\s*배\s*(뭐|무슨|어떤|소개)|선박\s*소개|배\s*소개|(?:배|선박)\s*이름\s*(?:뜻|유래|의미)|무슨\s*배|어떤\s*배(?:야|에요|예요|인가)/i.test(t)) result.shipIntroQuery = true;
   if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어오|언제\s*나가/i.test(t)) result.schedQuery = true;
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
@@ -461,7 +464,7 @@ export function hasAnyCondition(parsed) {
             parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
             // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
             parsed.briefingQuery || parsed.sealAuditQuery || parsed.introQuery || parsed.timeQuery ||
-            parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery);
+            parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery);
 }
 
 // ─── 베이별 슬롯 맵 (재사용) ───

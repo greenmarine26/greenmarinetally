@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer } from '../nlSearch.js';
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -451,6 +451,16 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     // V7.92: 챗봇형 질문 — 자기소개·시간·입출항·날씨 (사용자 요청: "넌 뭐야"에 답하기)
     if (parsed.foodQuery) return generateFoodAnswer(parsed.foodQuery);   // V8.60: 맛집 돌림판
     if (parsed.introQuery) return generateIntroAnswer(voyage?.info?.vslFull || voyage?.info?.vsl || '');
+    // V9.18: 선박 소개·이름 유래 — ShipIntroCard가 캐시해 둔 소개가 있으면 바로 읽어준다.
+    if (parsed.shipIntroQuery) {
+      const _sid = (() => { try {
+        const inf = voyage?.info || {};
+        return resolveShipKey(inf.imo || inf.callsign || String(inf.vsl || '').toUpperCase().replace(/\s+/g, ''));
+      } catch { return ''; } })();
+      const cached = _sid && window.__shipIntroCache && window.__shipIntroCache[_sid];
+      if (cached) return `🚢 ${voyage?.info?.vslFull || voyage?.info?.vsl || ''}\n${cached}`;
+      return '이 배의 소개가 아직 없습니다.\n화면 아래 「🚢 이 배는?」 카드에서 [AI로 소개 만들기]를 누르면 이름 뜻·유래를 만들어 드립니다.';
+    }
     // ⚠ 입출항을 시간보다 먼저 — "입항 시간 알려줘"는 timeQuery에도 걸리므로 순서가 답을 가른다.
     if (parsed.schedQuery) {
       const pm = matchPortMis(portMisData, voyage?.info || {});

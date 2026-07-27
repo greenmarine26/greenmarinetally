@@ -885,3 +885,39 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
     },
   };
 }
+
+// ── V9.18(2026-07-27): 선박 소개·이름 유래 생성 (사용자 요청) ──────────────
+//   원칙 — 환각 최소화: 확실치 않은 사실은 만들지 말라고 지시하고, 이름의 뜻(언어·단어 풀이)
+//   중심으로 답하게 한다. 결과는 Firebase ship_intros/{shipId}에 캐시돼 전 검수원이 공유.
+export async function askShipIntro({ name = '', callsign = '', imo = '', carrier = '' }) {
+  const shipName = String(name || '').trim();
+  if (!shipName) return { ok: false, error: '선박명이 없습니다' };
+  const prompt =
+    `선박 정보: 이름 "${shipName}"` +
+    (callsign ? ` · 콜사인 ${callsign}` : '') +
+    (imo ? ` · IMO ${imo}` : '') +
+    (carrier ? ` · 선사 ${carrier}` : '');
+  try {
+    const res = await fetch(getActiveGeminiUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text:
+          '당신은 한국 평택항 컨테이너 검수원에게 배를 소개하는 도우미다. 다음 형식으로 한국어로 답하라.\n' +
+          '1) 이름의 뜻: 선박명을 언어학적으로 풀이(어느 언어, 무슨 뜻, 한자 이름이면 한자와 뜻). 이것이 핵심.\n' +
+          '2) 짧은 소개: 선명·선사에서 확실히 추론 가능한 것만 1~2문장.\n' +
+          '규칙: 전체 4문장 이내. 건조연도·크기·사고이력 등 확인 불가한 사실은 절대 지어내지 말 것. ' +
+          '모르면 "이름 풀이 외의 상세 정보는 확인되지 않습니다"라고 쓸 것. 마크다운·목록 기호 없이 문장으로.' }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 400 },
+      }),
+    });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
+    if (!text) return { ok: false, error: '빈 응답' };
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+}
