@@ -80,6 +80,9 @@ npx vite build
 echo "[5/6] dist → root 복사 (assets + index.html 모두)..."
 cp -r dist/assets ./
 cp dist/index.html ./
+# V9.19-02: 마감 텔리 템플릿도 루트로 — Pages는 두 워크플로(Actions dist / 브랜치 루트)가
+#   경합해 마지막에 끝난 쪽이 서빙된다(2026-07-28 실측). 루트·dist 양쪽 다 완전해야 한다.
+[ -d dist/tally_templates ] && rm -rf ./tally_templates && cp -r dist/tally_templates ./
 # 콘앱(독립 파일): dist의 cone.html을 루트로 복사 (Pages가 루트 서빙). 검수앱과 무관.
 [ -f dist/cone.html ] && cp dist/cone.html ./
 # V7.46: 콘앱용 본체 카고플랜 V2 번들 — 같은 소스(PrintableCargoPlanV2+cargoPlanCore+사전)를 React째 번들
