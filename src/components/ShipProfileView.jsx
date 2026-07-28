@@ -1,15 +1,15 @@
 // V9.20: 배 옆모습(종단면) 프로파일 뷰 — 3D 카드뷰 대체 (사용자 선택: 프로파일 방향)
-//   x축 = 베이(선수 오른쪽), y축 = 티어(데크 위 / 홀드 아래, 해치라인 분리).
-//   셀 = (베이,티어) 집계: 숫자=컨 수, 초록=완료, 모드색=미완료, 회색=통과(비평택), ⚡=XRAY 포함.
-//   베이 클릭 → 2D 해당 베이로 이동(onPickBay). 진실원: 사전 tiers, 없으면 tier>=60 데크 폴백.
+//   V9.20-01: 40/20 구분 — x축을 20ft 슬롯(홀수 베이)으로 깔고, 짝수 베이(40ft)는 두 슬롯을
+//   차지하는 넓은 칸으로 그림(물리 그대로). 상단 여백 = 베이별 특수화물 아이콘(❄RF ⚠DG ⊞FR △OT ▣TK).
+//   셀 = (베이,티어) 집계: 숫자=컨 수, 초록=완료, 모드색=미완료, 회색=통과. 베이 클릭 → 2D 이동.
+//   진실원: 사전 tiers, 없으면 tier>=60 데크 폴백. 베이 홀짝 = 20/40 (베이매트릭스가 진실).
 import React, { useMemo } from 'react';
-import { isPyeongtaekPort } from '../utils.js';
+import { isPyeongtaekPort, isReeferContainer } from '../utils.js';
 
 export default function ShipProfileView({
   containers = [], dictBaysSummary = {}, mode = 'discharge',
   compMap = {}, xrayMap = {}, onPickBay,
 }) {
-  // 사전 → 베이별 deck/hold tier 집합 (페어 표기 흡수: primary 짝수+뒤홀수)
   const dict = useMemo(() => {
     const m = {};
     const arr = Array.isArray(dictBaysSummary) ? dictBaysSummary : Object.values(dictBaysSummary || {});
@@ -25,9 +25,9 @@ export default function ShipProfileView({
     return m;
   }, [dictBaysSummary]);
 
-  // (bay,tier) 집계 — bay99/999 OOG 제외(BayPlan3D와 동일 규칙)
   const model = useMemo(() => {
-    const cell = {};           // `${bay}|${tier}` → {n, done, ptk, xray}
+    const cell = {};              // `${bay}|${tier}` → {n, done, ptk, xray}
+    const spec = {};              // bay → {rf, dg, fr, ot, tk}
     const bays = new Set();
     const deckT = new Set(), holdT = new Set();
     for (const c of containers) {
@@ -37,7 +37,7 @@ export default function ShipProfileView({
       if (!Number.isFinite(bn) || bn >= 99 || !Number.isFinite(tn)) continue;
       bays.add(bn);
       const d = dict[bn];
-      const isDeck = d ? d.deck.has(tn) : tn >= 60;   // 사전이 진실, 없으면 60 폴백
+      const isDeck = d ? d.deck.has(tn) : tn >= 60;
       (isDeck ? deckT : holdT).add(tn);
       const k = `${bn}|${tn}`;
       const e = (cell[k] ||= { n: 0, done: 0, ptk: 0, xray: 0 });
@@ -46,64 +46,99 @@ export default function ShipProfileView({
       if (xrayMap[c.cn]) e.xray += 1;
       const port = mode === 'discharge' ? c.pod : c.pol;
       if (isPyeongtaekPort(port)) e.ptk += 1;
+      // 특수화물 (상단 아이콘) — 리퍼/DG/FR/OT/TK
+      const sp = (spec[bn] ||= { rf: 0, dg: 0, fr: 0, ot: 0, tk: 0 });
+      if (isReeferContainer(c)) sp.rf += 1;
+      if (c.dg) sp.dg += 1;
+      if (c.fr) sp.fr += 1;
+      if (c.ot) sp.ot += 1;
+      if (c.tk) sp.tk += 1;
     }
-    // 사전에만 있는 베이(빈 베이)도 축에 표시 — 배 형태 유지
     for (const bn of Object.keys(dict)) bays.add(parseInt(bn, 10));
+    // 20ft 슬롯 축(홀수 베이): 짝수 베이 bn은 bn-1·bn+1 두 슬롯을 차지
+    const slotSet = new Set();
+    for (const bn of bays) {
+      if (bn % 2 === 1) slotSet.add(bn);
+      else { slotSet.add(bn - 1); slotSet.add(bn + 1); }
+    }
+    const slots = [...slotSet].sort((a, b) => a - b);
     const bayList = [...bays].sort((a, b) => a - b);
-    const deckTiers = [...deckT].sort((a, b) => b - a);   // 위→아래 (큰 티어 위)
+    const deckTiers = [...deckT].sort((a, b) => b - a);
     const holdTiers = [...holdT].sort((a, b) => b - a);
-    return { cell, bayList, deckTiers, holdTiers };
+    return { cell, spec, bayList, slots, deckTiers, holdTiers };
   }, [containers, dict, mode, compMap, xrayMap]);
 
-  const { cell, bayList, deckTiers, holdTiers } = model;
+  const { cell, spec, bayList, slots, deckTiers, holdTiers } = model;
   if (!bayList.length) {
     return <div className="text-slate-400 text-sm p-6 text-center">표시할 베이가 없습니다 (EDI/사전 확인)</div>;
   }
 
-  // ── SVG 좌표계: 선수(bow)를 오른쪽에 — 베이 번호는 선수가 작다 → 역순 배치
-  const CW = 34, CH = 16, GAP = 3;                     // 셀 폭/높이/베이 간격
-  const bx = (i) => 60 + (bayList.length - 1 - i) * (CW + GAP);
-  const deckH = deckTiers.length * CH;
-  const holdH = holdTiers.length * CH;
-  const yDeckTop = 46;
-  const yHatch = yDeckTop + deckH + 4;                 // 해치커버 라인
-  const yHoldTop = yHatch + 8;
-  const H = yHoldTop + holdH + 46;
-  const W = 60 + bayList.length * (CW + GAP) + 90;     // 우측 선수 여백
+  // ── 좌표계: 선수(bow) 오른쪽 — 슬롯 번호가 작을수록 오른쪽
+  const CW = 30, CH = 16, GAP = 3;
+  const slotIdx = new Map(slots.map((s, i) => [s, i]));
+  const sxOf = (slot) => 60 + (slots.length - 1 - slotIdx.get(slot)) * (CW + GAP);
+  // 베이 → x·폭 (짝수=두 슬롯 스팬: 화면상 왼쪽 슬롯은 큰 번호 bn+1)
+  const geo = (bn) => (bn % 2 === 1)
+    ? { x: sxOf(bn), w: CW }
+    : { x: sxOf(bn + 1), w: CW * 2 + GAP };
 
-  const modeFill = mode === 'discharge' ? '#0284c7' : '#d97706';   // 미완료: 양하 파랑 / 선적 주황
+  const specH = 34;                                    // 상단 특수화물 아이콘 밴드
+  const yDeckTop = 24 + specH;
+  const deckH = deckTiers.length * CH;
+  const yHatch = yDeckTop + deckH + 4;
+  const yHoldTop = yHatch + 8;
+  const holdH = holdTiers.length * CH;
+  const H = yHoldTop + holdH + 46;
+  const W = 60 + slots.length * (CW + GAP) + 90;
+
+  const modeFill = mode === 'discharge' ? '#0284c7' : '#d97706';
   const cellRect = (bn, tn, y) => {
     const e = cell[`${bn}|${tn}`];
-    const i = bayList.indexOf(bn);
-    const x = bx(i);
-    if (!e) return <rect key={`${bn}|${tn}`} x={x} y={y} width={CW} height={CH} fill="#0f172a" stroke="#1e293b" strokeWidth="0.5" />;
+    const { x, w } = geo(bn);
+    if (!e) return null;                               // 빈 (베이,티어)는 안 그림 — 40/20 겹침 방지
     const allDone = e.done >= e.n && e.n > 0;
     const fill = e.ptk === 0 ? '#475569' : allDone ? '#059669' : modeFill;
     return (
       <g key={`${bn}|${tn}`}>
-        <rect x={x} y={y} width={CW} height={CH} fill={fill} stroke={e.xray ? '#facc15' : '#0f172a'} strokeWidth={e.xray ? 1.5 : 0.5} rx="1.5" />
-        <text x={x + CW / 2} y={y + CH / 2 + 3.5} textAnchor="middle" fontSize="9" fontWeight="700"
+        <rect x={x} y={y} width={w} height={CH} fill={fill} stroke={e.xray ? '#facc15' : '#0f172a'} strokeWidth={e.xray ? 1.5 : 0.5} rx="1.5" />
+        <text x={x + w / 2} y={y + CH / 2 + 3.5} textAnchor="middle" fontSize="9" fontWeight="700"
               fill={allDone ? '#d1fae5' : '#f8fafc'}>{allDone ? `✓${e.n}` : e.n}</text>
       </g>
     );
   };
+  // 빈 격자 배경 (슬롯 축 기준 — 구조감)
+  const bgRect = (slot, y) => (
+    <rect key={`bg${slot}|${y}`} x={sxOf(slot)} y={y} width={CW} height={CH} fill="#0f172a" stroke="#1e293b" strokeWidth="0.5" />
+  );
 
-  // 선체 실루엣 path (단순 곡선: 선미 수직 → 바닥 → 선수 곡선 상승)
-  const xL = 46, xR = 60 + bayList.length * (CW + GAP) + 14;
+  // 특수화물 아이콘 (베이 상단) — 있는 것만 위로 쌓음
+  const SPEC = [
+    ['rf', '❄', '#22d3ee'], ['dg', '⚠', '#f87171'], ['fr', '⊞', '#c084fc'],
+    ['ot', '△', '#e879f9'], ['tk', '▣', '#fb923c'],
+  ];
+  const specIcons = (bn) => {
+    const sp = spec[bn];
+    if (!sp) return null;
+    const items = SPEC.filter(([k]) => sp[k] > 0);
+    if (!items.length) return null;
+    const { x, w } = geo(bn);
+    return items.slice(0, 3).map(([k, glyph, color], i) => (
+      <text key={`${bn}${k}`} x={x + w / 2} y={yDeckTop - 8 - i * 11} textAnchor="middle"
+            fontSize="9" fontWeight="800" fill={color}>{glyph}{sp[k]}</text>
+    ));
+  };
+
+  const xL = 46, xR = 60 + slots.length * (CW + GAP) + 14;
   const yBot = yHoldTop + holdH + 14;
   const hull = `M ${xL} ${yHatch - 2} L ${xL} ${yBot - 8} Q ${xL} ${yBot} ${xL + 16} ${yBot} L ${xR - 34} ${yBot} Q ${xR + 24} ${yBot - 6} ${xR + 30} ${yHatch - 2}`;
 
   return (
     <div className="overflow-auto">
-      <svg viewBox={`0 0 ${W + 40} ${H}`} className="w-full min-w-[720px]" style={{ maxHeight: '74vh' }}>
-        {/* 선체 실루엣 + 브리지(선미측) */}
+      <svg viewBox={`0 0 ${W + 40} ${H}`} className="w-full min-w-[760px]" style={{ maxHeight: '74vh' }}>
         <path d={hull} fill="none" stroke="#334155" strokeWidth="2.5" />
-        <rect x={xL - 26} y={yDeckTop - 18} width="22" height={yHatch - yDeckTop + 14} fill="none" stroke="#334155" strokeWidth="2" rx="2" />
         <line x1={xL - 30} y1={yHatch - 2} x2={xR + 32} y2={yHatch - 2} stroke="#64748b" strokeWidth="2" strokeDasharray="6 3" />
-        <text x={xL - 15} y={yDeckTop - 24} textAnchor="middle" fontSize="9" fill="#64748b">브리지</text>
         <text x={xR + 26} y={yBot + 12} textAnchor="end" fontSize="9" fill="#64748b">▶ 선수</text>
 
-        {/* 티어 라벨 */}
         {deckTiers.map((t, r) => (
           <text key={`dt${t}`} x={40} y={yDeckTop + r * CH + CH / 2 + 3} textAnchor="end" fontSize="8.5" fill="#7dd3fc">{String(t).padStart(2, '0')}</text>
         ))}
@@ -111,24 +146,44 @@ export default function ShipProfileView({
           <text key={`ht${t}`} x={40} y={yHoldTop + r * CH + CH / 2 + 3} textAnchor="end" fontSize="8.5" fill="#a5b4fc">{String(t).padStart(2, '0')}</text>
         ))}
 
-        {/* 셀 + 베이 라벨/클릭 */}
-        {bayList.map((bn, i) => (
+        {/* 빈 격자(슬롯) → 40ft(넓은 칸) → 20ft 순서로 겹침 */}
+        {slots.map((s) => deckTiers.map((t, r) => bgRect(s, yDeckTop + r * CH)))}
+        {slots.map((s) => holdTiers.map((t, r) => bgRect(s, yHoldTop + r * CH)))}
+        {bayList.filter((b) => b % 2 === 0).map((bn) => (
           <g key={bn} className="cursor-pointer" onClick={() => onPickBay?.(bn)}>
             {deckTiers.map((t, r) => cellRect(bn, t, yDeckTop + r * CH))}
             {holdTiers.map((t, r) => cellRect(bn, t, yHoldTop + r * CH))}
-            <text x={bx(i) + CW / 2} y={H - 22} textAnchor="middle" fontSize="9.5" fontWeight="800"
-                  fill="#e2e8f0">{String(bn).padStart(2, '0')}</text>
-            {/* 클릭 히트 영역 */}
-            <rect x={bx(i)} y={yDeckTop - 4} width={CW} height={H - yDeckTop - 22} fill="transparent" />
+            {specIcons(bn)}
+          </g>
+        ))}
+        {bayList.filter((b) => b % 2 === 1).map((bn) => (
+          <g key={bn} className="cursor-pointer" onClick={() => onPickBay?.(bn)}>
+            {deckTiers.map((t, r) => cellRect(bn, t, yDeckTop + r * CH))}
+            {holdTiers.map((t, r) => cellRect(bn, t, yHoldTop + r * CH))}
+            {specIcons(bn)}
           </g>
         ))}
 
-        {/* 범례 */}
+        {/* 슬롯(홀수 베이) 라벨 + 클릭 */}
+        {slots.map((s) => (
+          <g key={`lb${s}`} className="cursor-pointer" onClick={() => onPickBay?.(s)}>
+            <text x={sxOf(s) + CW / 2} y={H - 22} textAnchor="middle" fontSize="9" fontWeight="800"
+                  fill="#e2e8f0">{String(s).padStart(2, '0')}</text>
+            <rect x={sxOf(s)} y={yDeckTop - specH} width={CW} height={H - yDeckTop + specH - 22} fill="transparent" />
+          </g>
+        ))}
+
         <g fontSize="8.5" fill="#94a3b8">
           <rect x={60} y={H - 12} width="10" height="8" fill={modeFill} rx="1.5" /><text x={74} y={H - 5}>미완료</text>
           <rect x={112} y={H - 12} width="10" height="8" fill="#059669" rx="1.5" /><text x={126} y={H - 5}>완료</text>
           <rect x={158} y={H - 12} width="10" height="8" fill="#475569" rx="1.5" /><text x={172} y={H - 5}>통과</text>
           <rect x={204} y={H - 12} width="10" height="8" fill="#0f172a" stroke="#facc15" strokeWidth="1.5" rx="1.5" /><text x={218} y={H - 5}>XRAY</text>
+          <rect x={252} y={H - 12} width="20" height="8" fill="#0f172a" stroke="#64748b" strokeWidth="1" rx="1.5" /><text x={276} y={H - 5}>넓은 칸=40ft</text>
+          <text x={344} y={H - 5} fill="#22d3ee">❄RF</text>
+          <text x={372} y={H - 5} fill="#f87171">⚠DG</text>
+          <text x={402} y={H - 5} fill="#c084fc">⊞FR</text>
+          <text x={430} y={H - 5} fill="#e879f9">△OT</text>
+          <text x={458} y={H - 5} fill="#fb923c">▣TK</text>
         </g>
       </svg>
     </div>
