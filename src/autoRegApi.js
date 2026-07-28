@@ -204,6 +204,17 @@ export async function buildAutoPayload(files, opts) {
             if (row['EmptySeal'] != null && row['EmptySeal'] !== '') rec.eseal = String(row['EmptySeal']).trim();
             const w = parseInt(row['Weight'], 10);
             if (w > 0) rec.wt = w;
+            // V9.20-02: 합본에 있는 ISO/F/E/Line/POL/POD도 옮긴다 — 안 옮겨서 26353W 256대가
+            //   전부 'F/E 미정 + 기타 ISO'로 등록되던 사건(2026-07-28 실측). 합본이 유일 리스트인 항차 보호.
+            const feRaw = String(row['F/E'] || '').trim().toUpperCase();
+            if (feRaw === 'F' || feRaw === 'E') rec.fe = feRaw;
+            const isoRaw = String(row['ISO'] || '').trim().toUpperCase();
+            if (isoRaw) rec.iso = isoRaw;
+            if (row['Line'] != null && row['Line'] !== '') rec.op = String(row['Line']).trim().toUpperCase();
+            if (row['POL'] != null && row['POL'] !== '') rec.pol = String(row['POL']).trim().toUpperCase();
+            if (row['POD'] != null && row['POD'] !== '') rec.pod = String(row['POD']).trim().toUpperCase();
+            // 엠티인데 Seal만 있는 합본(엠티실을 Seal 열에 실는 수집기 포맷) → eseal로도 복사
+            if (rec.fe === 'E' && rec.sl && !rec.eseal) rec.eseal = rec.sl;
             if (!records[cn]) { records[cn] = rec; return; }
             const prev = records[cn];
             for (const [k, v] of Object.entries(rec)) {

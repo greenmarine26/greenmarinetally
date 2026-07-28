@@ -165,6 +165,9 @@ export function speakContainer(c, opts = {}) {
     // 실번호 (있으면)
     if (c.sl && c.sl.trim()) {
       parts.push(`실번호 ${spellKo(c.sl.trim())}`);
+    } else if (c.eseal && String(c.eseal).trim().length >= 4) {
+      // V9.20-02: 엠티실도 읽어준다 (엠티에 실 붙는 선박 — 사용자 요청)
+      parts.push(`엠티실 ${spellKo(String(c.eseal).trim())}`);
     }
 
     // 특수 화물

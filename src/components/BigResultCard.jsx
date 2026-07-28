@@ -150,6 +150,15 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
               style={{ textShadow: '0 0 20px rgba(251, 191, 36, 0.6)' }}>
               {c.sl}
             </div>
+          ) : (c.fe === 'E' && c.eseal && String(c.eseal).trim().length >= 4) ? (
+            // V9.20-02: 엠티실 — 엠티에도 실이 붙는 선박(26353W LYG 실측). eseal을 크게, 청록으로 구분.
+            <div>
+              <div className="text-[10px] text-cyan-500 font-bold text-center">📦 엠티실 (Empty Seal)</div>
+              <div className="text-4xl sm:text-5xl font-black mono text-cyan-300 tracking-wider text-center py-1 animate-pulse"
+                style={{ textShadow: '0 0 20px rgba(34, 211, 238, 0.6)' }}>
+                {String(c.eseal).trim()}
+              </div>
+            </div>
           ) : c.fe === 'E' ? (
             // M3.88: 엠티 컨테이너는 실번호 없는 게 정상 → 엠티 표시
             // M3.88.1: 엠티에 짧은/이상 sl이 들어있어도 무시 ("1", "TJM" 같은 잘못된 데이터)
