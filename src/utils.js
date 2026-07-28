@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.21-02';   // 페리 OS-IN/OUT — 20/40/45 고정행·HC/RH 분해·DG 괄호 (2026-07-29)
+export const APP_VERSION = 'V9.21-03';   // 리스트 REMARK 자유텍스트 DG(IMDG/UN)·리퍼온도 감지 (2026-07-29)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -1973,6 +1973,9 @@ export async function parseListExcel(arrayBuffer) {
     const printpod_i = findCol([/^printpod$|^print.*pod$/, /^실제.*양하/]);
     const cargotype_i = findCol([/^cargo.*type$|^cargo\s*type$/, /화물구분/]);
     const dg_i = findCol([/^dg$|hazmat|imdg/, /위험물/]);
+    // V9.21-03: REMARK 자유 텍스트 열 — 연운항(TNJP) 리스트는 DG·온도를 REMARK에 실는다
+    //   (실측 26353E: "RF +23  IMDG 9 UN_CD 3480" × 33 — 수석 ( DG x 33 )의 출처).
+    const rmk_i = findCol([/^remarks?$/, /^비고$/]);
     // V8.09: ITEM 컬럼 (RIZHAO 선적 LOADING LIST 공컨 표기). "공컨테이너"=Empty, 빈칸=Full.
     const item_i = findCol([/^item$/, /^품목$/, /^공컨/]);
     // M3.85: SITC SENDAI 양식의 [40] "냉동" 컬럼이 실제 온도값(-18, -2.5 등)인데
@@ -2103,7 +2106,17 @@ export async function parseListExcel(arrayBuffer) {
       }
 
       const dgVal = dg_i >= 0 ? String(row[dg_i] || '').trim() : '';
-      const isDg = dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal);
+      let isDg = !!(dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal));
+      // V9.21-03: REMARK 자유 텍스트에서 DG(IMDG 클래스·UN번호)·리퍼 온도 감지
+      const rmkVal = rmk_i >= 0 ? String(row[rmk_i] || '').trim().toUpperCase() : '';
+      let rmkDgc = '', rmkUn = '', rmkTmp = null;
+      if (rmkVal) {
+        const mCls = rmkVal.match(/(?:IMDG|CLASS)[\s.:]*([0-9](?:\.[0-9])?)/);
+        const mUn = rmkVal.match(/UN[_\s]*(?:CD|NO)?[_\s.:]*([0-9]{4})/);
+        if (mCls || mUn) { isDg = true; rmkDgc = mCls ? mCls[1] : ''; rmkUn = mUn ? mUn[1] : ''; }
+        const mT = rmkVal.match(/RF\s*([+-]?\d+(?:\.\d+)?)/);
+        if (mT) rmkTmp = mT[1].replace(/^\+/, '');
+      }
 
       // M3.85 fix: row[tmp_i]가 숫자 0이면 `0 || ''` = '' 로 사라지던 버그
       // JavaScript falsy 함정 (0, '', null, undefined 모두 falsy)
@@ -2186,12 +2199,14 @@ export async function parseListExcel(arrayBuffer) {
         printpod: printpod_i >= 0 ? String(row[printpod_i] || '').trim() : '',
         cargoType: cargotype_i >= 0 ? String(row[cargotype_i] || '').trim() : '',
         dg: isDg,
+        dgc: rmkDgc || undefined,          // V9.21-03: REMARK에서 뽑은 IMDG 클래스/UN번호
+        un: rmkUn || undefined,
         rf: isRf,
         fr: isFr,
         ot: isOt,
         tk: isTk,
-        tmp: tmpVal,
-        tmp_missing: tmpMissing && isRf,  // 리퍼인데 온도 미입력
+        tmp: (tmpVal === '' && rmkTmp != null) ? rmkTmp : tmpVal,   // V9.21-03: REMARK 온도 보강(빈 경우만)
+        tmp_missing: tmpMissing && rmkTmp == null && isRf,
       });
     }
   }
