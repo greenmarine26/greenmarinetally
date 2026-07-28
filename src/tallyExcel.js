@@ -487,6 +487,15 @@ async function fillTemplate(D, ExcelJS) {
     const cap = cfg.totalRow - cfg.dataStart;
     if (os.rows.length > cap) ws.duplicateRow(cfg.totalRow - 1, os.rows.length - cap, true);
     const totalRow = cfg.totalRow + Math.max(0, os.rows.length - cap);
+    // V9.19-08: 실물은 데이터 행마다 B:C(MARKS/PORT)·H:I(MANIFESTED) 병합 — 템플릿 생성 때 풀림(사용자 실측)
+    for (let r = cfg.dataStart; r < totalRow; r++) {
+      for (const [c1, c2] of [[2, 3], [8, 9]]) {
+        const saved = [];
+        for (let c = c1; c <= c2; c++) saved.push(JSON.parse(JSON.stringify(ws.getRow(r).getCell(c).style || {})));
+        try { ws.mergeCells(r, c1, r, c2); } catch { /* 이미 병합 */ }
+        for (let c = c1; c <= c2; c++) ws.getRow(r).getCell(c).style = saved[c - c1];
+      }
+    }
     let last = ''; let man = 0, wk = 0;
     for (let i = 0; i < Math.max(os.rows.length, cap); i++) {
       const r = ws.getRow(cfg.dataStart + i);
@@ -547,7 +556,8 @@ async function fillTemplate(D, ExcelJS) {
     const cap = cfg.dataEnd - cfg.dataStart + 1;
     if (all.length > cap) ws.duplicateRow(cfg.dataEnd, all.length - cap, true);
     for (let i = 0; i < Math.max(all.length, cap); i++) {
-      const r = ws.getRow(cfg.dataStart + i);
+      const rn = cfg.dataStart + i;
+      const r = ws.getRow(rn);
       const o = all[i];
       r.getCell(1).value = o ? o.cn : null;
       r.getCell(2).value = o ? (o.seal || null) : null;
@@ -555,6 +565,13 @@ async function fillTemplate(D, ExcelJS) {
       r.getCell(4).value = o ? (o.loc || null) : null;
       r.getCell(6).value = o ? (o.setting || null) : null;
       r.getCell(9).value = o ? o.op : null;
+      // V9.19-08: LOCATION(D:E)은 병합 — 사용자 확정(실물 2·3페이지와 동일). 스타일 보존 병합.
+      const saved = [JSON.parse(JSON.stringify(r.getCell(4).style || {})), JSON.parse(JSON.stringify(r.getCell(5).style || {}))];
+      try { ws.mergeCells(rn, 4, rn, 5); } catch { /* 이미 병합 */ }
+      r.getCell(4).style = saved[0]; r.getCell(5).style = saved[1];
+      const st4 = JSON.parse(JSON.stringify(r.getCell(4).style || {}));
+      st4.alignment = { ...(st4.alignment || {}), horizontal: 'center', vertical: 'middle' };
+      r.getCell(4).style = st4;
     }
   }
   // ── Performance (표준 열: op=D(4), FULL 20/40/HC/45 = H/J/L/N(8,10,12,14), EMPTY = P/R/T/V(16,18,20,22)) ──
@@ -585,6 +602,19 @@ async function fillTemplate(D, ExcelJS) {
     };
     fill(D.perf.inbound, cfg.inRow, cfg.st1, cfg.st1);
     fill(D.perf.outbound, cfg.outRow, cfg.st2, cfg.st2);
+    // ── V9.19-08: 데이터 행 병합 복원 — 실물은 매 행 D:G(선사)+짝(H:I…V:W) 병합인데 템플릿 생성 때 풀림.
+    //   (사용자 실측: 선사명 칸 분리·H열 숫자 ####·격자선이 실물과 다름)
+    const mergeRow = (rn) => {
+      const pairs = [[4,7],[8,9],[10,11],[12,13],[14,15],[16,17],[18,19],[20,21],[22,23]];
+      for (const [c1,c2] of pairs) {
+        const saved = [];
+        for (let c=c1;c<=c2;c++) saved.push(JSON.parse(JSON.stringify(ws.getRow(rn).getCell(c).style || {})));
+        try { ws.mergeCells(rn, c1, rn, c2); } catch { /* 이미 병합 */ }
+        for (let c=c1;c<=c2;c++) ws.getRow(rn).getCell(c).style = saved[c-c1];
+      }
+    };
+    for (let r = cfg.inRow; r <= cfg.st1 - 1; r++) mergeRow(r);
+    for (let r = cfg.outRow; r <= cfg.st2 - 1; r++) mergeRow(r);
     // ── V9.19-06: 원본 배 잔재 청소 + 합계 갱신 (사용자 실측: X열 TOTAL·REMARKS·SHIFT·워킹피리어드 잔재) ──
     const rowSum = (r) => { let t2 = 0; for (let c = 8; c <= 23; c++) {
       const cell2 = ws.getRow(r).getCell(c);
@@ -795,7 +825,9 @@ function fillAllHeaders(wb, D, dstr) {
       const cn = (c) => c.split('').reduce((a2, ch) => a2 * 26 + ch.charCodeAt(0) - 64, 0);
       return { c1: cn(mm[1]), r1: +mm[2], c2: cn(mm[3]), r2: +mm[4] };
     }).filter(Boolean);
-    for (let r = 1; r <= 9; r++) {
+    // 2·3페이지 사본 헤더(예: Seal 41행, RF 50·93행)도 잔재가 남으므로 전 행 스캔.
+    //   오인 방지 장치: 콜론 필수 + kindOf 라벨 패턴 + 길이 제한(라벨은 짧다).
+    for (let r = 1; r <= Math.min(ws.rowCount, 200); r++) {
       const row = ws.getRow(r);
       for (let c = 1; c <= 30; c++) {
         const cell = row.getCell(c);
@@ -803,7 +835,7 @@ function fillAllHeaders(wb, D, dstr) {
         const v = cell.value;
         const txt = (typeof v === 'string') ? v : (v && typeof v === 'object' && typeof v.richText !== 'undefined') ? v.richText.map(t2 => t2.text).join('') : null;
         if (!txt || !txt.trim()) continue;
-        if (!txt.includes(':')) continue;   // 라벨은 반드시 콜론 포함 — 열머리(PORT 등) 오인 방지
+        if (!txt.includes(':') || txt.length > 60) continue;   // 라벨은 콜론 포함·짧음 — 열머리/데이터 오인 방지
         const kind = kindOf(txt);
         if (!kind) continue;
         const nv = valFor(kind, ws.name);
@@ -820,9 +852,12 @@ function fillAllHeaders(wb, D, dstr) {
           const mg = merges.find((m2) => m2.r1 <= r && r <= m2.r2 && m2.c1 <= c && c <= m2.c2);
           const start = (mg ? mg.c2 : c) + 1;
           let vc = start;
+          const cellText = (cv) => (typeof cv === 'string') ? cv
+            : (cv && typeof cv === 'object' && cv.richText) ? cv.richText.map(t3 => t3.text).join('')
+            : '';   // richText 라벨(BERTH 등)도 문자열로 — V9.19-07 실측 사고
           for (let k2 = start; k2 <= start + 7; k2++) {
             const cand = ws.getRow(r).getCell(k2);
-            const ctxt = (typeof cand.value === 'string') ? cand.value : '';
+            const ctxt = cellText(cand.value);
             if (ctxt.includes(':') || kindOf(ctxt || '')) { vc = start; break; }   // 다음 라벨 도달 → 기본 칸
             const isMaster = merges.some((m2) => m2.r1 === r && m2.c1 === k2);
             const hasVal = cand.value !== null && cand.value !== undefined && cand.value !== '';
