@@ -677,6 +677,13 @@ export async function generateTallyExcel(D) {
   let tplWb = null;
   try { tplWb = await fillTemplate(D, ExcelJS); } catch (e) { note = `템플릿 실패(${e?.message || e}) — 표준 서식으로 생성`; }
   if (tplWb) {
+    // V9.19-05: NaN/Infinity 캐시 결과 스크럽 — 엑셀이 <v>NaN</v>을 거부해 '복구' 경고를 띄우고
+    //   복구 과정에서 서식이 깎인다 (KKAK/MCAP 실측, RF 시트 H98=H55 수식 캐시가 NaN).
+    tplWb.worksheets.forEach((ws0) => ws0.eachRow({ includeEmpty: true }, (row0) => row0.eachCell({ includeEmpty: true }, (c0) => {
+      const v0 = c0.value;
+      if (typeof v0 === 'number' && !isFinite(v0)) c0.value = null;
+      else if (v0 && typeof v0 === 'object' && typeof v0.result === 'number' && !isFinite(v0.result)) c0.value = { formula: v0.formula, sharedFormula: v0.sharedFormula };
+    })));
     const voy0 = [D.voyD, D.voyL].filter(Boolean).join('&');
     const fname0 = `${D.code} ${voy0} PTK TALLY REPORT.xlsx`;
     const buf0 = await tplWb.xlsx.writeBuffer();
