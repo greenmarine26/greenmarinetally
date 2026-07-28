@@ -665,7 +665,7 @@ async function fillTemplate(D, ExcelJS) {
           if (cell.master && cell.master.address !== cell.address) continue;
           if (cell.formula) { cell.value = { formula: cell.formula }; continue; }   // 캐시 비움
           const v2 = cell.value;
-          if (typeof v2 === 'number') cell.value = null;
+          if (typeof v2 === 'number' || v2 instanceof Date) cell.value = null;   // 시각은 Date로 읽힘(실측)
           else if (typeof v2 === 'string' && v2.trim() && !/FROM|^TO$|HOURS|REMARKS|TOTAL|CRANE/i.test(v2.trim())) cell.value = null;
         }
       }
