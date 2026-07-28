@@ -37,7 +37,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
     // 리퍼 온도 미입력 (Full만 — 엠티는 정상 가능)
     const reefers = containers.filter(isReeferContainer);
     const reeferTempMissing = reefers.filter(c =>
-      (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
+      !c.rfdry && (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
     );
 
     // ISO403 사진 미촬영

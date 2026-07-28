@@ -667,7 +667,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (left <= 0 || left > 2 * 3600000) return null;
           const undone = containers.filter(c => !compMap[c.cn]).length;
           const xrayPend = mode === 'discharge' ? Object.keys(xrayMap || {}).filter(cn => !(xraySeals || {})[cn]?.seal).length : 0;
-          const rfMiss = containers.filter(c => (c.rf || (c.iso && c.iso[2] === 'R')) &&
+          const rfMiss = containers.filter(c => (c.rf || (c.iso && c.iso[2] === 'R')) && !c.rfdry &&
             (c.fe === 'F' || !c.fe) && (!c.tmp || String(c.tmp).trim() === '')).length;
           if (!undone && !xrayPend && !rfMiss) return null;
           const mins = Math.round(left / 60000);
@@ -1370,7 +1370,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
     // V9.14: 마감 점검 「리퍼 온도 미입력」 점프용 — Full 리퍼인데 온도 빈 것만 (판정은 체크리스트와 동일)
     else if (filter === 'reeferTemp') arr = arr.filter(c =>
-      (c.rf || /^..R/.test(c.iso || '')) &&
+      (c.rf || /^..R/.test(c.iso || '')) && !c.rfdry &&
       (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
     if (search) {
       const q = search.toUpperCase();

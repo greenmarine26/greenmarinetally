@@ -203,7 +203,13 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 리퍼 엠티
               </span>
             )}
-            {!showTmp && isReefer && c.fe !== 'E' && (
+            {!showTmp && isReefer && c.fe !== 'E' && c.rfdry && (
+              /* V9.20-03: 리퍼드라이(넌플러그) — 온도 없음이 정상 */
+              <span className="bg-teal-800 text-teal-100 px-2 py-1 rounded font-black text-sm flex items-center gap-1 border-2 border-teal-500">
+                <Snowflake className="w-3.5 h-3.5"/>🔌 리퍼드라이 (넌플러그)
+              </span>
+            )}
+            {!showTmp && isReefer && c.fe !== 'E' && !c.rfdry && (
               <span className="bg-red-700 text-white px-2 py-1 rounded font-black text-sm flex items-center gap-1 animate-pulse border-2 border-red-400">
                 <Snowflake className="w-3.5 h-3.5"/>
                 <AlertTriangle className="w-3 h-3"/>

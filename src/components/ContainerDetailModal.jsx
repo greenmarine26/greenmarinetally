@@ -639,7 +639,10 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               </div>
               {!editingTmp ? (
                 <div className="flex items-center gap-2">
-                  {c.tmp && !c.tmp_missing ? (
+                  {c.rfdry ? (
+                    /* V9.20-03: 리퍼드라이(넌플러그) — 선사 요청으로 전원 안 꽂는 리퍼. 온도 없음 정상 */
+                    <span className="text-sm font-bold text-teal-300">🔌 리퍼드라이 (넌플러그 — 온도 없음 정상)</span>
+                  ) : c.tmp && !c.tmp_missing ? (
                     <span className="text-base font-bold mono text-cyan-200">{c.tmp}°C</span>
                   ) : c.fe === 'E' ? (
                     /* M3.75: 엠티 리퍼는 온도 없는 게 정상 */
@@ -650,6 +653,18 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                   {c.tmp_orig !== undefined && c.tmp_orig !== c.tmp && (
                     <span className="text-[10px] text-amber-400 mono">원본: {c.tmp_orig || '(없음)'} → 수정됨</span>
                   )}
+                  {/* V9.20-03: 리퍼드라이 토글 — 선사 요청(넌플러그) 반영. 경고·사진 대상에서 빠진다 */}
+                  <button
+                    onClick={async () => {
+                      if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                      const nv = !c.rfdry;
+                      if (!window.confirm(nv ? '이 리퍼를 리퍼드라이(넌플러그)로 지정할까요?\n온도 경고·풀리퍼 사진 대상에서 제외됩니다.' : '리퍼드라이 지정을 해제할까요?')) return;
+                      await fbUpdateRecordField(voyageKey, mode, c.cn, 'rfdry', nv, inspector);
+                      c.rfdry = nv;   // 즉시 반영 (RTDB 구독이 곧 덮어씀)
+                    }}
+                    className={`ml-auto text-[10px] px-2 py-1 rounded font-bold border ${c.rfdry ? 'bg-teal-900 border-teal-500 text-teal-200' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>
+                    {c.rfdry ? '드라이 해제' : '리퍼드라이 지정'}
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
