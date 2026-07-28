@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.21';   // TNJP 여객선(카페리) 마감텔리 — 페리 바우처 변형 신설 (2026-07-28)
+export const APP_VERSION = 'V9.21-01';   // 통풍컨(V) 규격 인식 + 미지 규격 터미널 조회 버튼 (2026-07-28)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -494,6 +494,7 @@ export const isoToLabel = (iso) => {
     if (t === 'P' || t === 'F') return '40FR';
     if (t === 'O' || t === 'U') return '40OT';
     if (t === 'T') return '40TK';
+    if (t === 'V') return '40VH';   // V9.21-01: 통풍컨(Ventilated) — 터미널은 DC 취급 (OBWH 2699E 22V7 실측)
     if (t === 'H') return '40HC';
     if (t === 'G' || t === 'D') return '40DC';
     if (t === '0') return '40HC';   // V38: 4500 → 40HC fallback
@@ -505,6 +506,7 @@ export const isoToLabel = (iso) => {
     if (t === 'P' || t === 'F') return '20FR';
     if (t === 'O' || t === 'U') return '20OT';
     if (t === 'T') return '20TK';
+    if (t === 'V') return '20VH';   // V9.21-01: 통풍컨 — PNCT 조회 시 20/DC(2210)로 표기
     if (t === 'H') return '20HC';
     if (t === 'G' || t === 'D') return '20DC';
     if (t === '0') return '20DC';
@@ -524,7 +526,9 @@ export const isUnknownIso = (iso) => {
   const known = new Set([
     '20DC', '20HC', '20RF', '20FR', '20OT', '20TK',
     '40DC', '40HC', '40RF', '40FR', '40OT', '40TK',
-    '45HC', '45GP'
+    '45HC', '45GP',
+    '20VH', '40VH',   // V9.21-01: 통풍컨(Ventilated) — 알려진 규격
+
   ]);
   if (known.has(label)) return false;
   // ?가 포함되거나 알 수 없는 길이/타입

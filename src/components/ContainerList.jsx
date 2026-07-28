@@ -76,8 +76,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       const lbl = isoToLabel(c.iso);
       let knownLbl = false;
       if (lbl === '40HC') { k.hc++; knownLbl = true; }
-      else if (lbl === '20DC' || lbl === '20GP') { k.dc20++; knownLbl = true; }
-      else if (lbl === '40DC' || lbl === '40GP') { k.dc40++; knownLbl = true; }
+      else if (lbl === '20DC' || lbl === '20GP' || lbl === '20VH') { k.dc20++; knownLbl = true; }
+      else if (lbl === '40DC' || lbl === '40GP' || lbl === '40VH') { k.dc40++; knownLbl = true; }
       if (lbl === '20RF') { k.rf20++; knownLbl = true; }
       else if (lbl === '40RF') { k.rf40++; knownLbl = true; }
       if (lbl === '20FR') { k.fr20++; knownLbl = true; }

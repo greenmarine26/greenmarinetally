@@ -589,6 +589,15 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                           className="mt-2 w-full py-2 bg-red-700 hover:bg-red-600 text-white rounded text-xs font-bold flex items-center justify-center gap-1">
                           📷 사진 촬영하기
                         </button>
+                        {/* V9.21-01: 터미널 정보서비스 교차 확인 — 컨번호 자동 복사 후 조회창 (사용자 워크플로 실측) */}
+                        <button onClick={async () => {
+                          try { await navigator.clipboard.writeText(c.cn); } catch { /* 클립보드 실패 무해 */ }
+                          window.open('https://pnct.co.kr/infoservice/index.html', '_blank');
+                          alert(`컨번호 ${c.cn} 복사됨 — 터미널 조회창의 Container No에 붙여넣으세요`);
+                        }}
+                          className="mt-1.5 w-full py-2 bg-sky-800 hover:bg-sky-700 text-sky-50 rounded text-xs font-bold flex items-center justify-center gap-1">
+                          🔎 터미널 조회 (컨번호 복사됨)
+                        </button>
                       </div>
                     </div>
                   </div>
