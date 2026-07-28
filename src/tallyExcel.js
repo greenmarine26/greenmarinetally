@@ -369,7 +369,9 @@ async function fillTemplate(D, ExcelJS) {
   fillAllHeaders(wb, D, dstr);
 
   // ── Final Work (변형 cn: 선사 반복·하위선사 괄호·소계/총계 수식) ──
-  if (M.variant === 'cn') {
+  if (M.variant === 'ferry') {
+    fillFerrySheets(wb, M, D, dstr);
+  } else if (M.variant === 'cn') {
     fillVariantFinalWork(wb, M, D, dstr);
   } else {
   // ── Final Work (표준) ──
@@ -697,6 +699,71 @@ async function fillTemplate(D, ExcelJS) {
     }
   }
   return wb;
+}
+
+// ── V9.21: 여객선(페리) 바우처 채우기 — TNJP 실물 26353E&W 기준 ─────────────
+function fillFerrySheets(wb, M, D, dstr) {
+  const F = D.ferry || { inb: null, outb: null };
+  const zv2 = (n) => (n ? n : null);   // 0은 빈칸 (실물 관례)
+  // ── Final work rpt-voucher
+  {
+    const cfg = M.sheets.finalWork;
+    const ws = wb.getWorksheet(cfg.name);
+    if (cfg.voyCells) { ws.getCell(cfg.voyCells[0]).value = ` ${D.voyD}`; ws.getCell(cfg.voyCells[1]).value = D.voyL; }
+    const put = (rows, z) => {
+      if (!z) return;
+      for (const k of ['f20', 'e20', 'f20lug', 'e20lug', 'f40', 'e40', 'f40lug', 'e40lug']) {
+        const r = rows[k]; const e = z[k];
+        ws.getRow(r).getCell(cfg.cols.total).value = zv2(e.total);
+        ws.getRow(r).getCell(cfg.cols.day).value = zv2(e.day);
+        ws.getRow(r).getCell(cfg.cols.night).value = zv2(e.night);
+      }
+      ws.getRow(rows.total).getCell(cfg.cols.total).value = z.total.total;
+      ws.getRow(rows.total).getCell(cfg.cols.day).value = zv2(z.total.day);
+      ws.getRow(rows.total).getCell(cfg.cols.night).value = zv2(z.total.night);
+    };
+    put(cfg.inRows, F.inb);
+    put(cfg.outRows, F.outb);
+  }
+  // ── RF condition report (3페이지, 오버플로는 다음 페이지로 — 페이지 초과분은 노트)
+  if (M.sheets.rfFerry) {
+    const cfg = M.sheets.rfFerry;
+    const ws = wb.getWorksheet(cfg.name);
+    for (const vc of cfg.voyCells || []) { try { ws.getCell(vc).value = D.voyD || D.voyL; } catch { /* skip */ } }
+    // 실물 관례(26353 실측): 양하 F 리퍼만 기재 — 공리퍼·선적 리퍼는 미기재 (실물 40대와 일치)
+    const all = D.rfIn.filter((x) => x.fe !== 'E');
+    let i = 0;
+    for (const [r1, r2] of cfg.pages) {
+      for (let r = r1; r <= r2 && i < all.length; r++, i++) {
+        const o = all[i]; const row = ws.getRow(r);
+        row.getCell(1).value = o.cn;
+        row.getCell(2).value = o.seal || null;
+        row.getCell(3).value = o.size;
+        row.getCell(4).value = o.loc || null;
+        row.getCell(6).value = o.setting || null;
+        row.getCell(9).value = o.dg ? 'DG' : null;
+      }
+    }
+    if (i < all.length) D._overflow = (D._overflow || 0) + (all.length - i);
+  }
+  // ── PORTPERFORMANCE
+  if (M.sheets.ppFerry) {
+    const cfg = M.sheets.ppFerry;
+    const ws = wb.getWorksheet(cfg.name);
+    ws.getCell(cfg.vslCell).value = D.vslFull;
+    ws.getCell(cfg.voyCell).value = D.voyL ? `${D.voyD}/${D.voyL.slice(-1)}` : D.voyD;
+    const put = (rn, pp) => {
+      if (!pp) return;
+      let ttl = 0;
+      for (const k of ['f20', 'f40', 'fhc', 'flug', 'e20', 'e40', 'ehc', 'elug']) {
+        ws.getRow(rn).getCell(cfg.cols[k]).value = zv2(pp[k]); ttl += pp[k];
+      }
+      ws.getRow(rn).getCell(cfg.cols.ttl).value = ttl;
+    };
+    put(cfg.rows.inCk, F.inb && F.inb.pp); put(cfg.rows.inTtl, F.inb && F.inb.pp);
+    put(cfg.rows.outCk, F.outb && F.outb.pp); put(cfg.rows.outTtl, F.outb && F.outb.pp);
+    if (D.shifting.length) ws.getRow(cfg.rows.shift).getCell(2).value = `${D.shifting.length} TIME`;
+  }
 }
 
 // ── V9.19-03: 변형(cn) Final Work 채우기 ─────────────────────────────────

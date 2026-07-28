@@ -1,5 +1,25 @@
 // 마감 텔리 템플릿 좌표 매니페스트 — 빌더가 실물 파일에서 추출 (V9.19-03: 변형 DXQD·TMPZ 추가)
 export default {
+  // V9.21: TNJP(TEN JUPITER) — 여객선(카페리) 바우처 양식. 실물 26353E&W에서 생성 (2026-07-28).
+  //   FW=규격별 집계+주간/야간, RF 3페이지, PORTPERFORMANCE 매트릭스. OS/Seal은 표준 로직 재사용.
+  TNJP: {
+    variant: 'ferry',
+    sheets: {
+      finalWork: { name: 'Final work rpt-voucher',
+        voyCells: ['C6', 'E6'],
+        inRows: { f20: 17, e20: 18, f20lug: 19, e20lug: 20, f40: 21, e40: 22, f40lug: 23, e40lug: 24, total: 27 },
+        outRows: { f20: 30, e20: 31, f20lug: 32, e20lug: 33, f40: 34, e40: 35, f40lug: 36, e40lug: 37, total: 40 },
+        cols: { total: 5, day: 6, night: 7 } },
+      osIn:  { name: 'OS-IN',  dataStart: 12, totalRow: 15, remarksRow: 0, remarksEnd: 0 },
+      osOut: { name: 'OS-OUT', dataStart: 12, totalRow: 18, remarksRow: 0, remarksEnd: 0 },
+      seal:  { name: 'Act. Cntr-Seal No List', dataStart: 12, dataEnd: 32 },
+      rfFerry: { name: 'RF condition report', pages: [[11, 30], [56, 75], [101, 120]], voyCells: ['E6', 'E51', 'E96'] },
+      ppFerry: { name: 'PORTPERFORMANCE',
+        vslCell: 'C4', voyCell: 'H4',
+        rows: { inCk: 10, inTtl: 14, outCk: 15, outTtl: 19, shift: 20 },
+        cols: { f20: 3, f40: 4, fhc: 5, flug: 6, e20: 7, e40: 8, ehc: 9, elug: 10, ttl: 11 } },
+    },
+  },
  "ATPR": {
   "sheets": {
    "finalWork": {

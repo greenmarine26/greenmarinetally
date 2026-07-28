@@ -158,7 +158,48 @@ export function buildRF(containers) {
       setting: c.tmp != null && String(c.tmp).trim() !== '' ? String(c.tmp) : '',
       op: String(c.op || '').toUpperCase(),
       fe: c.fe === 'E' ? 'E' : 'F',
+      dg: !!c.dg,   // V9.21: 페리 RF REMARKS(DG) 표기용
     }));
+}
+
+/** V9.21: 페리(여객선) 집계 — 규격군(20 vs 40/HC/45) × F/E × 수화물(Lug) × 주간/야간.
+ *  주야 분해: 완료 시각(completed[cn].at) 기준 07~17시=주간, 그 외=야간. 미완료는 총계에만.
+ *  Lug: voyage.info.forecast(수화물 예보, V9.03)의 lugg 목록 — 모드 일치 시에만. */
+export function buildFerry(voyage, disCs, loadCs) {
+  const fc = voyage?.info?.forecast || null;
+  const luggSet = new Set();
+  if (fc && Array.isArray(fc.lugg)) for (const cn of fc.lugg) luggSet.add(String(cn).toUpperCase());
+  const zone = (voyage, mode, cs) => {
+    const comp = sect(voyage, mode).completed || {};
+    const recs = sect(voyage, mode).records || {};
+    const mk = () => ({ total: 0, day: 0, night: 0 });
+    const z = { f20: mk(), e20: mk(), f20lug: mk(), e20lug: mk(), f40: mk(), e40: mk(), f40lug: mk(), e40lug: mk(),
+                pp: { f20: 0, f40: 0, fhc: 0, flug: 0, e20: 0, e40: 0, ehc: 0, elug: 0 }, total: mk() };
+    const fcOk = fc && fc.mode === mode;
+    for (const c of cs) {
+      const sz = tallySizeCol(c);
+      const g20 = sz === '20';
+      const fe = c.fe === 'E' ? 'e' : 'f';
+      const lug = fcOk && luggSet.has(String(c.cn).toUpperCase());
+      const key = `${fe}${g20 ? '20' : '40'}${lug ? 'lug' : ''}`;
+      const e = z[key]; e.total += 1; z.total.total += 1;
+      const at = comp[c.cn]?.at || comp[String(c.cn).toUpperCase()]?.at;
+      if (at) {
+        const h = new Date(at).getHours();
+        const day = h >= 7 && h < 17;
+        e[day ? 'day' : 'night'] += 1; z.total[day ? 'day' : 'night'] += 1;
+      }
+      // PORTPERFORMANCE: 20/40/40HC 분리 (45·HC → 40HC), Lug는 별도 열.
+      //   LYG EDI는 40군을 43xx로 통칭 — 40일반/HC 구분은 선사 리스트 ISO가 진실(26353W 실측: 42GE 20대).
+      //   43=HC는 연운항 관례일 뿐 전역 아님(DXQD 실물은 4300을 40'로 집계 — V9.21 실측 충돌) → 페리 전용 분류.
+      const isoEff = String((recs[c.cn] || recs[String(c.cn).toUpperCase()] || {}).iso || c.iso || '').toUpperCase();
+      const pcls = /^2/.test(isoEff) ? '20' : (/^4[3-9]|^L|^9[05]/.test(isoEff) ? 'hc' : '40');
+      const pk = lug ? `${fe}lug` : (pcls === '20' ? `${fe}20` : (pcls === '40' ? `${fe}40` : `${fe}hc`));
+      z.pp[pk] += 1;
+    }
+    return z;
+  };
+  return { inb: zone(voyage, 'discharge', disCs), outb: zone(voyage, 'loading', loadCs) };
 }
 
 /** Performance — 선사별 IN/OUT × F/E × 규격 */
@@ -230,6 +271,7 @@ export function computeTallyData(voyage) {
   }
   return {
     fmt, code,
+    ferry: buildFerry(voyage, disCs, loadCs),   // V9.21: 여객선(TNJP) 바우처용 — 타선박도 무해(집계만)
     vslFull: info.vslFull || info.vsl || '',
     voyD: info.voy_d || '', voyL: info.voy_l || '',
     pier: info.pier || '', berth: info.berth || '',
