@@ -179,6 +179,14 @@ export function buildFerry(voyage, disCs, loadCs) {
                       '40F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '40E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' },
                       '45F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '45E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' } } };
     const fcOk = fc && fc.mode === mode;
+    // V9.21-04: 일괄 마감 감지 — 완료 시각이 좁은 구간에 뭉치면(30분 내 20대+) 실제 작업시각이 아니다
+    //   (26353 실측: 마감 일괄처리로 256대 전부 새벽 01시 → 주0/야256 오분해). 이때 주/야는 수기(빈칸).
+    const ats = cs.map((c) => comp[c.cn]?.at || comp[String(c.cn).toUpperCase()]?.at).filter(Boolean);
+    let bulkClose = false;
+    if (ats.length >= 20) {
+      const mn = Math.min(...ats), mx = Math.max(...ats);
+      bulkClose = (mx - mn) < 30 * 60 * 1000;
+    }
     for (const c of cs) {
       const sz = tallySizeCol(c);
       const g20 = sz === '20';
@@ -187,7 +195,7 @@ export function buildFerry(voyage, disCs, loadCs) {
       const key = `${fe}${g20 ? '20' : '40'}${lug ? 'lug' : ''}`;
       const e = z[key]; e.total += 1; z.total.total += 1;
       const at = comp[c.cn]?.at || comp[String(c.cn).toUpperCase()]?.at;
-      if (at) {
+      if (at && !bulkClose) {
         const h = new Date(at).getHours();
         const day = h >= 7 && h < 17;
         e[day ? 'day' : 'night'] += 1; z.total[day ? 'day' : 'night'] += 1;
