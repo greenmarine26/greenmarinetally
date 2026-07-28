@@ -405,8 +405,16 @@ async function fillTemplate(D, ExcelJS) {
         for (const c of [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]) cells.getCell(c).value = null;
       }
     }
-    for (const b of opBlocks) if (b.r2 > b.r1) { try { ws.mergeCells(b.r1, 1, b.r2, 1); } catch { /* skip */ } }
-    for (const b of portBlocks) if (b.r2 > b.r1) { try { ws.mergeCells(b.r1, 2, b.r2, 2); } catch { /* skip */ } }
+    // V9.19-04: exceljs mergeCells는 범위 전체에 마스터 스타일을 덮어써 실물과 선이 달라진다
+    //   (실측: 아래칸 top 선이 생기고 bottom 선이 사라짐). 병합 전 스타일 보존 → 병합 → 복원.
+    const mergeKeepStyle = (r1, c, r2) => {
+      const saved = [];
+      for (let r = r1; r <= r2; r++) saved.push(JSON.parse(JSON.stringify(ws.getRow(r).getCell(c).style || {})));
+      try { ws.mergeCells(r1, c, r2, c); } catch { return; }
+      for (let r = r1; r <= r2; r++) ws.getRow(r).getCell(c).style = saved[r - r1];
+    };
+    for (const b of opBlocks) if (b.r2 > b.r1) mergeKeepStyle(b.r1, 1, b.r2);
+    for (const b of portBlocks) if (b.r2 > b.r1) mergeKeepStyle(b.r1, 2, b.r2);
     // 합계·헤더 — 검증된 계산값으로 (수식 덮어씀: 모바일 뷰어 재계산 문제 방지)
     for (const [off, fe] of [[0,'F'],[1,'E']]) {
       const cells = ws.getRow(totalRow + off);
