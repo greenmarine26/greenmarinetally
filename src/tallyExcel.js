@@ -485,14 +485,22 @@ async function fillTemplate(D, ExcelJS) {
     ws.getCell('H8').value = D.pier;
     ws.getCell('L8').value = D.berth;
     const cap = cfg.totalRow - cfg.dataStart;
-    if (os.rows.length > cap) ws.duplicateRow(cfg.totalRow - 1, os.rows.length - cap, true);
-    const totalRow = cfg.totalRow + Math.max(0, os.rows.length - cap);
+    const ins = Math.max(0, os.rows.length - cap);
+    // V9.19-11: duplicateRow는 아래쪽 REMARKS 병합 행을 파괴(실측) — insertRows(스타일 위 행 상속)로 교체
+    if (ins) ws.insertRows(cfg.totalRow, Array.from({ length: ins }, () => []), 'i');
+    const totalRow = cfg.totalRow + ins;
+    // V9.19-11: 원본 배가 숨겨둔 데이터 행(예: DJCT OS-OUT 12행)에 쓰면 안 보인다 — 쓰는 구간은 숨김 해제
+    for (let r = cfg.dataStart; r <= totalRow; r++) ws.getRow(r).hidden = false;
     // V9.19-08: 실물은 데이터 행마다 B:C(MARKS/PORT)·H:I(MANIFESTED) 병합 — 템플릿 생성 때 풀림(사용자 실측)
     for (let r = cfg.dataStart; r < totalRow; r++) {
       for (const [c1, c2] of [[2, 3], [8, 9]]) {
         const saved = [];
         for (let c = c1; c <= c2; c++) saved.push(JSON.parse(JSON.stringify(ws.getRow(r).getCell(c).style || {})));
-        try { ws.mergeCells(r, c1, r, c2); } catch { /* 이미 병합 */ }
+        try { ws.mergeCells(r, c1, r, c2); }
+        catch {
+          // insertRows 후 유령 병합 레지스트리로 실패(실측) — 풀고 재병합
+          try { ws.unMergeCells(r, c1, r, c2); ws.mergeCells(r, c1, r, c2); } catch { /* 포기 */ }
+        }
         for (let c = c1; c <= c2; c++) ws.getRow(r).getCell(c).style = saved[c - c1];
       }
     }
@@ -521,7 +529,7 @@ async function fillTemplate(D, ExcelJS) {
     tr.getCell(8).value = man; tr.getCell(10).value = wk;
     tr.getCell(11).value = 'NIL'; tr.getCell(12).value = (man - wk) ? (man - wk) : 'NIL';
     if (cfg.remarksRow > 0) {
-      for (let r = cfg.remarksRow + 1, i = 0; r <= cfg.remarksEnd; r++, i++) {
+      for (let r = cfg.remarksRow + ins + 1, i = 0; r <= cfg.remarksEnd + ins; r++, i++) {
         const line = os.remarks[i] || '';
         const m = line.indexOf(':');
         ws.getRow(r).getCell(1).value = line ? line.slice(0, m + 1) : null;
