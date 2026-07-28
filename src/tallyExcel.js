@@ -764,6 +764,35 @@ function fillFerrySheets(wb, M, D, dstr) {
     put(cfg.rows.outCk, F.outb && F.outb.pp); put(cfg.rows.outTtl, F.outb && F.outb.pp);
     if (D.shifting.length) ws.getRow(cfg.rows.shift).getCell(2).value = `${D.shifting.length} TIME`;
   }
+  // ── OS-IN/OUT (페리 고정행: 20'/40'/45' × F/E, 40HC는 40'에 합산·REMARKS로 HC/RH(+DG) 분해 — 수석 실물 규칙)
+  for (const [key, zk] of [['osFerryIn', 'inb'], ['osFerryOut', 'outb']]) {
+    const cfg = M.sheets[key];
+    if (!cfg) continue;
+    const ws = wb.getWorksheet(cfg.name);
+    const z = F[zk];
+    if (!ws || !z) continue;
+    let man = 0; let portDone = false;
+    for (const rr of cfg.rows) {
+      const o = z.os[`${rr.sz}${rr.fe}`] || { n: 0, hc: 0, rh: 0, dg: 0, port: '' };
+      const row = ws.getRow(rr.r);
+      if (!portDone && o.n && o.port) { row.getCell(2).value = o.port.split('').join(' '); portDone = true; }
+      row.getCell(8).value = o.n ? o.n : null;
+      row.getCell(10).value = o.n ? o.n : null;
+      row.getCell(11).value = 'NIL';
+      row.getCell(12).value = 'NIL';
+      const parts = [];
+      if (o.hc) parts.push(`HC x ${o.hc}`);
+      if (o.rh) parts.push(`RH x ${o.rh}`);
+      let rm = parts.join(' , ');
+      if (o.dg) rm += `${rm ? ' ' : ''}( DG x ${o.dg} )`;
+      row.getCell(13).value = rm || null;
+      man += o.n;
+    }
+    const tr = ws.getRow(cfg.totalRow);
+    // ⚠ H:I 병합 — 슬레이브(9)에 쓰면 마스터가 지워진다(실측). 마스터(8)만 쓴다. 잔재는 템플릿 빌드에서 이미 청소.
+    tr.getCell(8).value = man; tr.getCell(10).value = man;
+    tr.getCell(11).value = 'NIL'; tr.getCell(12).value = 'NIL';
+  }
 }
 
 // ── V9.19-03: 변형(cn) Final Work 채우기 ─────────────────────────────────

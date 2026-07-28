@@ -10,8 +10,9 @@ export default {
         inRows: { f20: 17, e20: 18, f20lug: 19, e20lug: 20, f40: 21, e40: 22, f40lug: 23, e40lug: 24, total: 27 },
         outRows: { f20: 30, e20: 31, f20lug: 32, e20lug: 33, f40: 34, e40: 35, f40lug: 36, e40lug: 37, total: 40 },
         cols: { total: 5, day: 6, night: 7 } },
-      osIn:  { name: 'OS-IN',  dataStart: 12, totalRow: 15, remarksRow: 0, remarksEnd: 0 },
-      osOut: { name: 'OS-OUT', dataStart: 12, totalRow: 18, remarksRow: 0, remarksEnd: 0 },
+      // V9.21-02: 페리 OS는 행 고정(20'/40'/45', 40HC는 40'에 합산·REMARKS로 분해) — 수석 실물 대조
+      osFerryIn:  { name: 'OS-IN',  rows: [{ r: 12, sz: '20', fe: 'F' }, { r: 13, sz: '40', fe: 'F' }, { r: 14, sz: '45', fe: 'F' }], totalRow: 15 },
+      osFerryOut: { name: 'OS-OUT', rows: [{ r: 12, sz: '20', fe: 'F' }, { r: 13, sz: '20', fe: 'E' }, { r: 14, sz: '40', fe: 'F' }, { r: 15, sz: '40', fe: 'E' }, { r: 16, sz: '45', fe: 'F' }, { r: 17, sz: '45', fe: 'E' }], totalRow: 18 },
       seal:  { name: 'Act. Cntr-Seal No List', dataStart: 12, dataEnd: 32 },
       rfFerry: { name: 'RF condition report', pages: [[11, 30], [56, 75], [101, 120]], voyCells: ['E6', 'E51', 'E96'] },
       ppFerry: { name: 'PORTPERFORMANCE',

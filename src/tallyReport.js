@@ -174,7 +174,10 @@ export function buildFerry(voyage, disCs, loadCs) {
     const recs = sect(voyage, mode).records || {};
     const mk = () => ({ total: 0, day: 0, night: 0 });
     const z = { f20: mk(), e20: mk(), f20lug: mk(), e20lug: mk(), f40: mk(), e40: mk(), f40lug: mk(), e40lug: mk(),
-                pp: { f20: 0, f40: 0, fhc: 0, flug: 0, e20: 0, e40: 0, ehc: 0, elug: 0 }, total: mk() };
+                pp: { f20: 0, f40: 0, fhc: 0, flug: 0, e20: 0, e40: 0, ehc: 0, elug: 0 }, total: mk(),
+                os: { '20F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '20E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' },
+                      '40F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '40E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' },
+                      '45F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '45E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' } } };
     const fcOk = fc && fc.mode === mode;
     for (const c of cs) {
       const sz = tallySizeCol(c);
@@ -196,6 +199,15 @@ export function buildFerry(voyage, disCs, loadCs) {
       const pcls = /^2/.test(isoEff) ? '20' : (/^4[3-9]|^L|^9[05]/.test(isoEff) ? 'hc' : '40');
       const pk = lug ? `${fe}lug` : (pcls === '20' ? `${fe}20` : (pcls === '40' ? `${fe}40` : `${fe}hc`));
       z.pp[pk] += 1;
+      // OS(페리): 길이 3단(20/40/45 — 4x는 43·45Gx 포함 전부 40', L5/9x만 45') + HC/RH/DG 분해 (수석 실물 규칙)
+      const oLen = /^2/.test(isoEff) ? '20' : (/^L|^9[05]/.test(isoEff) ? '45' : '40');
+      const oe = z.os[`${oLen}${fe.toUpperCase()}`];
+      oe.n += 1;
+      const isRf = !!(c.rf || String(isoEff)[2] === 'R');
+      if (isRf) oe.rh += 1;
+      else if (/^4[3-9]|^L|^9[05]/.test(isoEff)) oe.hc += 1;   // 하이큐브 드라이
+      if (c.dg) oe.dg += 1;
+      if (!oe.port) oe.port = port3(mode === 'discharge' ? c.pol : c.pod) || '';
     }
     return z;
   };
