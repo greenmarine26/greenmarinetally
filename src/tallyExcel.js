@@ -663,7 +663,13 @@ async function fillTemplate(D, ExcelJS) {
         for (let c = 1; c <= 36; c++) {
           const cell = ws.getRow(r).getCell(c);
           if (cell.master && cell.master.address !== cell.address) continue;
-          if (cell.formula) { cell.value = { formula: cell.formula }; continue; }   // 캐시 비움
+          if (cell.formula) {
+            // 빈 입력에도 0을 그리는 수식(=E35 체인·SUM)은 제거 — '00:00 HRS' 유령 표시 방지.
+            //   IF(ISBLANK...) 계열은 빈칸에서 공백이므로 남김(수석 수기 입력 시 자동계산 편의 유지).
+            const f2 = String(cell.formula);
+            cell.value = /^IF\s*\(/i.test(f2) ? { formula: cell.formula } : null;
+            continue;
+          }
           const v2 = cell.value;
           if (typeof v2 === 'number' || v2 instanceof Date) cell.value = null;   // 시각은 Date로 읽힘(실측)
           else if (typeof v2 === 'string' && v2.trim() && !/FROM|^TO$|HOURS|REMARKS|TOTAL|CRANE/i.test(v2.trim())) cell.value = null;
