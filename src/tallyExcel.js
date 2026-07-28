@@ -362,6 +362,12 @@ async function fillTemplate(D, ExcelJS) {
   const voy = [D.voyD, D.voyL].filter(Boolean).join(' & ');
   const dstr = d10(D.date);
 
+  // ── V9.19-06: 전 시트 헤더 자동 기입 ─────────────────────────────────────
+  //   템플릿에 남은 원본 배 잔재(선명·항차·날짜 캐시)가 그대로 노출되던 문제(SHIFTING에서 실측).
+  //   1~9행에서 라벨(M/V·VOY·DATE·PIER·BERTH·PORT)을 찾아 값 셀에 이번 항차 값을 쓴다.
+  //   합성 라벨("M / V : 배이름")은 콜론 뒤만 교체. 값 셀 위치는 라벨 병합 범위 오른쪽 칸.
+  fillAllHeaders(wb, D, dstr);
+
   // ── Final Work (변형 cn: 선사 반복·하위선사 괄호·소계/총계 수식) ──
   if (M.variant === 'cn') {
     fillVariantFinalWork(wb, M, D, dstr);
@@ -415,6 +421,35 @@ async function fillTemplate(D, ExcelJS) {
     };
     for (const b of opBlocks) if (b.r2 > b.r1) mergeKeepStyle(b.r1, 1, b.r2);
     for (const b of portBlocks) if (b.r2 > b.r1) mergeKeepStyle(b.r1, 2, b.r2);
+    // V9.19-06: 선사간 구분선 — 템플릿의 선 패턴은 원본 배의 블록 크기(예: DJCT 6행) 기준이라
+    //   이 배의 실제 블록과 어긋난다(사용자 실측: "선사간 구분선이 없다").
+    //   실물 규칙(DJCT 실측): F행 아래=hair, 짝(F/E) 끝=thin, 선사 블록 끝=medium.
+    {
+      const blockEnd = new Set(opBlocks.map((b2) => b2.r2));
+      const pairEnd = new Set(portBlocks.map((b2) => b2.r2));
+      const lastUsed = opBlocks.length ? opBlocks[opBlocks.length - 1].r2 : cfg.dataStart - 1;
+      for (let r = cfg.dataStart; r < totalRow; r++) {
+        let st;
+        if (blockEnd.has(r)) st = 'medium';
+        else if (pairEnd.has(r)) st = 'thin';
+        else if (r <= lastUsed) st = 'hair';
+        else st = ((r - lastUsed) % 2 === 1) ? "hair" : "thin";
+        for (let c = 1; c <= 15; c++) {
+          // exceljs는 파싱 시 같은 서식 셀끼리 style 객체를 공유한다 — 그대로 대입하면
+          //   뒤 행의 지정이 앞 행까지 덮는다(실측: r21 thin이 r11 medium을 지움). 셀별 딥클론.
+          const cell = ws.getRow(r).getCell(c);
+          const st0 = JSON.parse(JSON.stringify(cell.style || {}));
+          st0.border = { ...(st0.border || {}), bottom: { style: st } };
+          cell.style = st0;
+          if (r + 1 < totalRow) {
+            const below = ws.getRow(r + 1).getCell(c);
+            const st1 = JSON.parse(JSON.stringify(below.style || {}));
+            if (st1.border) delete st1.border.top;   // 옛 패턴의 top 선 겹침 방지
+            below.style = st1;
+          }
+        }
+      }
+    }
     // 합계·헤더 — 검증된 계산값으로 (수식 덮어씀: 모바일 뷰어 재계산 문제 방지)
     for (const [off, fe] of [[0,'F'],[1,'E']]) {
       const cells = ws.getRow(totalRow + off);
@@ -550,6 +585,61 @@ async function fillTemplate(D, ExcelJS) {
     };
     fill(D.perf.inbound, cfg.inRow, cfg.st1, cfg.st1);
     fill(D.perf.outbound, cfg.outRow, cfg.st2, cfg.st2);
+    // ── V9.19-06: 원본 배 잔재 청소 + 합계 갱신 (사용자 실측: X열 TOTAL·REMARKS·SHIFT·워킹피리어드 잔재) ──
+    const rowSum = (r) => { let t2 = 0; for (let c = 8; c <= 23; c++) {
+      const cell2 = ws.getRow(r).getCell(c);
+      if (cell2.master && cell2.master.address !== cell2.address) continue;   // 병합 슬레이브 중복 방지
+      const v2 = cell2.value;
+      if (typeof v2 === 'number') t2 += v2;
+      else if (v2 && typeof v2 === 'object' && typeof v2.result === 'number') t2 += v2.result;
+    } return t2; };
+    const setX = (r, v2) => { const c2 = ws.getRow(r).getCell(24); c2.value = (v2 === 0 && !ws.getRow(r).getCell(4).value) ? null : v2; };
+    for (const [r0, r1] of [[cfg.inRow, cfg.st1 - 1], [cfg.outRow, cfg.st2 - 1]]) {
+      for (let r = r0; r <= r1; r++) {
+        setX(r, rowSum(r));                       // X(TOTAL) — 잔재 숫자/수식 캐시 → 우리 값
+        ws.getRow(r).getCell(27).value = null;    // AA(REMARKS) 잔재 제거
+      }
+    }
+    setX(cfg.st1, rowSum(cfg.st1)); setX(cfg.st2, rowSum(cfg.st2));
+    ws.getRow(cfg.st1).getCell(27).value = null; ws.getRow(cfg.st2).getCell(27).value = null;
+    // GRAND TOTAL·SHIFT·WORKING PERIOD 구역 — 라벨 탐지
+    let grandRow = 0, wpRow = 0;
+    for (let r = cfg.st2 + 1; r <= Math.min(ws.rowCount, cfg.st2 + 40); r++) {
+      const a2 = String(ws.getRow(r).getCell(1).value || '');
+      if (!grandRow && /GRAND/i.test(a2)) grandRow = r;
+      if (!wpRow && /WORKING\s*PERIOD/i.test(a2)) { wpRow = r; break; }
+    }
+    if (grandRow) {
+      for (let r = cfg.st2 + 1; r < grandRow; r++) {   // SHIFT 행 — 잔재 제거 후 우리 값
+        const rw = ws.getRow(r);
+        const isFirst = r === cfg.st2 + 1;
+        rw.getCell(4).value = (isFirst && D.shifting.length) ? `${D.shifting.length} TIME` : null;
+        for (let c = 8; c <= 27; c++) rw.getCell(c).value = null;
+      }
+      const gr = ws.getRow(grandRow);
+      for (let c = 8; c <= 22; c += 2) {
+        const t2 = (Number(ws.getRow(cfg.st1).getCell(c).value) || 0) + (Number(ws.getRow(cfg.st2).getCell(c).value) || 0);
+        const cell = gr.getCell(c);
+        // exceljs가 result:0을 직렬화에서 떨어뜨림(실측) — 0은 리터럴로 쓴다
+        cell.value = (cell.formula && t2) ? { formula: cell.formula, result: t2 } : t2;
+      }
+      const gx = gr.getCell(24);
+      const gt = rowSum(grandRow);
+      gx.value = (gx.formula && gt) ? { formula: gx.formula, result: gt } : gt;
+    }
+    if (wpRow) {
+      // 워킹피리어드: 틀은 유지(공간 확보), 내용(크레인·시각·비고 잔재)만 비움 — 수기 기입용
+      for (let r = wpRow + 1; r <= Math.min(ws.rowCount, wpRow + 45); r++) {
+        for (let c = 1; c <= 36; c++) {
+          const cell = ws.getRow(r).getCell(c);
+          if (cell.master && cell.master.address !== cell.address) continue;
+          if (cell.formula) { cell.value = { formula: cell.formula }; continue; }   // 캐시 비움
+          const v2 = cell.value;
+          if (typeof v2 === 'number') cell.value = null;
+          else if (typeof v2 === 'string' && v2.trim() && !/FROM|^TO$|HOURS|REMARKS|TOTAL|CRANE/i.test(v2.trim())) cell.value = null;
+        }
+      }
+    }
   }
   // ── SHIFTING ──
   if (M.sheets.shifting) {
@@ -664,6 +754,80 @@ function refreshFormulaResults(ws, r1, r2, D) {
         }
         const rres = evalF(f);
         if (rres !== null) cell.value = { formula: f, result: rres };
+      }
+    }
+  }
+}
+
+// ── V9.19-06: 라벨 스캔 헤더 기입 ──────────────────────────────────────────
+function fillAllHeaders(wb, D, dstr) {
+  const voyAll = [D.voyD, D.voyL].filter(Boolean).join(' & ');
+  const valFor = (kind, sheetName) => {
+    const sn = sheetName.toUpperCase();
+    if (kind === 'MV') return D.vslFull;
+    if (kind === 'VOY') {
+      if (/-IN\b|DISCH/.test(sn)) return D.voyD || D.voyL;
+      if (/-OUT\b|LOAD/.test(sn)) return D.voyL || D.voyD;
+      if (/SEAL/.test(sn) || /^RF|REEFER/.test(sn)) return D.voyD || D.voyL;
+      return voyAll;
+    }
+    if (kind === 'DATE') return dstr;
+    if (kind === 'PIER') return D.pier;
+    if (kind === 'BERTH') return D.berth;
+    if (kind === 'PORT') return 'PYEONGTAEK, KOREA';
+    return null;
+  };
+  const kindOf = (t) => {
+    const u = t.toUpperCase();
+    if (/^M\s*\.?\s*\/?\s*V\s*\.?\s*:?/.test(u.replace(/\s+/g, ' ').trim()) && /M\s*\.?\s*[\/.]\s*V/.test(u)) return 'MV';
+    if (/^VOY/.test(u.trim())) return 'VOY';
+    if (/^DATE/.test(u.trim())) return 'DATE';
+    if (/^PIER/.test(u.trim())) return 'PIER';
+    if (/^BERTH/.test(u.trim())) return 'BERTH';
+    if (/^\s*PORT/.test(u)) return 'PORT';
+    return null;
+  };
+  for (const ws of wb.worksheets) {
+    // 병합 범위 목록 (라벨 병합의 오른쪽 끝 찾기용)
+    const merges = (ws.model.merges || []).map((m0) => {
+      const mm = String(m0).match(/([A-Z]+)(\d+):([A-Z]+)(\d+)/);
+      if (!mm) return null;
+      const cn = (c) => c.split('').reduce((a2, ch) => a2 * 26 + ch.charCodeAt(0) - 64, 0);
+      return { c1: cn(mm[1]), r1: +mm[2], c2: cn(mm[3]), r2: +mm[4] };
+    }).filter(Boolean);
+    for (let r = 1; r <= 9; r++) {
+      const row = ws.getRow(r);
+      for (let c = 1; c <= 30; c++) {
+        const cell = row.getCell(c);
+        if (cell.master && cell.master.address !== cell.address) continue;   // 병합 슬레이브 skip
+        const v = cell.value;
+        const txt = (typeof v === 'string') ? v : (v && typeof v === 'object' && typeof v.richText !== 'undefined') ? v.richText.map(t2 => t2.text).join('') : null;
+        if (!txt || !txt.trim()) continue;
+        const kind = kindOf(txt);
+        if (!kind) continue;
+        const nv = valFor(kind, ws.name);
+        if (nv == null) continue;
+        const ci = txt.indexOf(':');
+        const tail = ci >= 0 ? txt.slice(ci + 1).trim() : '';
+        if (ci >= 0 && tail) {
+          // 합성 라벨 — 콜론 뒤만 교체 (앞 공백 형식 유지)
+          const pad = txt.slice(ci + 1).match(/^\s*/)[0] || ' ';
+          cell.value = txt.slice(0, ci + 1) + (pad.length ? pad : ' ') + nv;
+        } else {
+          // 값 셀 = 라벨(병합 포함) 오른쪽에서 첫 병합 마스터 또는 기존 값(수식 캐시 잔재) 셀.
+          //   (Performance: O6 라벨 ↔ R6 값처럼 사이가 떠 있는 레이아웃 대응)
+          const mg = merges.find((m2) => m2.r1 <= r && r <= m2.r2 && m2.c1 <= c && c <= m2.c2);
+          const start = (mg ? mg.c2 : c) + 1;
+          let vc = start;
+          for (let k2 = start; k2 <= start + 7; k2++) {
+            const cand = ws.getRow(r).getCell(k2);
+            const isMaster = merges.some((m2) => m2.r1 === r && m2.c1 === k2);
+            const hasVal = cand.value !== null && cand.value !== undefined && cand.value !== '';
+            if (isMaster || hasVal) { vc = k2; break; }
+          }
+          ws.getRow(r).getCell(vc).value = nv;   // 수식 캐시(잔재)도 리터럴로 덮음
+          c = vc;   // 값 셀 다음부터 계속 (라벨 재감지 방지)
+        }
       }
     }
   }
