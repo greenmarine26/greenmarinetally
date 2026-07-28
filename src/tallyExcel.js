@@ -803,6 +803,7 @@ function fillAllHeaders(wb, D, dstr) {
         const v = cell.value;
         const txt = (typeof v === 'string') ? v : (v && typeof v === 'object' && typeof v.richText !== 'undefined') ? v.richText.map(t2 => t2.text).join('') : null;
         if (!txt || !txt.trim()) continue;
+        if (!txt.includes(':')) continue;   // 라벨은 반드시 콜론 포함 — 열머리(PORT 등) 오인 방지
         const kind = kindOf(txt);
         if (!kind) continue;
         const nv = valFor(kind, ws.name);
@@ -821,6 +822,8 @@ function fillAllHeaders(wb, D, dstr) {
           let vc = start;
           for (let k2 = start; k2 <= start + 7; k2++) {
             const cand = ws.getRow(r).getCell(k2);
+            const ctxt = (typeof cand.value === 'string') ? cand.value : '';
+            if (ctxt.includes(':') || kindOf(ctxt || '')) { vc = start; break; }   // 다음 라벨 도달 → 기본 칸
             const isMaster = merges.some((m2) => m2.r1 === r && m2.c1 === k2);
             const hasVal = cand.value !== null && cand.value !== undefined && cand.value !== '';
             if (isMaster || hasVal) { vc = k2; break; }
