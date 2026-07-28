@@ -19,12 +19,11 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
-import BayPlan3D from './BayPlan3D.jsx';
+import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
 import { formatDgShort } from '../dgUnDict.js';
 // M4.6: 인쇄 컴포넌트
-import PrintableCargoPlan from './PrintableCargoPlan.jsx';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
@@ -616,7 +615,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             view3D ? 'bg-cyan-600 text-cyan-50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
           title="3D 입체 베이뷰">
-          {view3D ? '✓ 3D' : '3D'}
+          {view3D ? '✓ ⛴ 측면' : '⛴ 측면'}
         </button>
 
         {/* M5.0: 인쇄 드롭다운 — 2개 버튼 → 1개 메뉴 */}
@@ -631,14 +630,6 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
               {/* 백드롭 — 바깥 클릭으로 닫기 */}
               <div className="fixed inset-0 z-20" onClick={() => setPrintMenuOpen(false)}/>
               <div className="absolute top-full left-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-30 min-w-[180px] overflow-hidden">
-                <button onClick={() => { setPrintMode('cargo'); setPrintMenuOpen(false); }}
-                  className="w-full px-3 py-2 text-left hover:bg-cyan-900 text-xs text-cyan-100 border-b border-slate-700 flex items-center gap-2">
-                  <span className="text-base">📄</span>
-                  <div>
-                    <div className="font-black">카고 플랜 (기존)</div>
-                    <div className="text-[10px] text-slate-400">요약 1페이지</div>
-                  </div>
-                </button>
                 <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
                   className="w-full px-3 py-2 text-left hover:bg-emerald-900 text-xs text-emerald-100 border-b border-slate-700 flex items-center gap-2 bg-emerald-950">
                   <span className="text-base">🆕</span>
@@ -807,19 +798,27 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto"
            style={{ maxHeight: '78vh' }}>
         {view3D ? (
-          // V7.97: 3D 입체 베이뷰 (격자=진실, 색은 2D와 동일 규칙)
-          <BayPlan3D
+          // V9.20: 배 옆모습 프로파일 뷰 — 3D 카드뷰 대체 (사용자 선택). 베이 클릭 → 2D 해당 베이로.
+          <ShipProfileView
             containers={containers}
             dictBaysSummary={dictBaysSummary}
             mode={mode}
             compMap={compMap}
             xrayMap={xrayMap}
-            shiftingMap={shiftingMap}
-            cellColor={cellColor}
-            getOpColor={getOpColor}
-            onOpenContainer={onOpenContainer}
-            onCommitMove={onCommitMove}
-            pendingMove={pendingMove}
+            onPickBay={(bn) => {
+              const i = pages.findIndex((pg) => {
+                const e = parseInt(pg.evenBay, 10), o = parseInt(pg.oddBay, 10);   // keyBay는 문자열
+                return e === bn || o === bn || e === bn - 1 || o === bn + 1;
+              });
+              if (i >= 0) {
+                setView3D(false);
+                setPageIdx(i);
+                setTimeout(() => {
+                  const el = document.getElementById(`bay-page-${Math.max(0, i - 1)}`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 60);
+              }
+            }}
           />
         ) : allBaysMode ? (
           // 전체 베이 세로 스크롤 (V37 기본 모드)
@@ -937,25 +936,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       />
 
       {/* M4.6: 인쇄 모달 — M4.9: ErrorBoundary로 격리 */}
-      {printMode === 'cargo' && (
-        <ErrorBoundary name="카고 플랜 인쇄" onClose={() => setPrintMode(null)}>
-          <PrintableCargoPlan
-            containers={containers}
-            mode={mode}
-            voyageInfo={voyageInfo}
-            voyageKey={voyageKey}
-            shipImo={shipImo}
-            shipName={shipName}
-            xrayMap={xrayMap}
-            globalRowRange={globalRowRange}
-            globalGridCols={globalGridCols}
-            globalTiers={globalTiers}
-            dictBaysSummary={dictBaysSummary}
-            onClose={() => setPrintMode(null)}
-          />
-        </ErrorBoundary>
-      )}
-      {printMode === 'cargo-v2' && (
+            {printMode === 'cargo-v2' && (
         <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintMode(null)}>
           <PrintableCargoPlanV2
             containers={containers}
