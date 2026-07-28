@@ -396,6 +396,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       'sl', 'sl_orig', 'sl_history', 'wt',
       'bl', 'sh', 'gi', 'op',  // B/L, Shipper, Gross Index, Operator
       'tmp',  // 온도는 리스트가 보강 가능 (단, 비어있을 때만)
+      'rfdry',  // V9.20-04: 리퍼드라이(넌플러그) — records/수집기 패치가 화면까지 오도록
       'desc',  // M8.07: 품명(내용물) — EDI에 없는 참조 정보, 카고플랜 그림에 영향 없음
       // M4.9b-fix: 엠티 실 — EDI에 봉인 정보 없는 게 일반적, records가 진실
       'eseal', 'eseal_orig', 'eseal_wrong', 'reseal',
