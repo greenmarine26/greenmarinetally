@@ -5,6 +5,7 @@
 //   Final Work → Time Sheet → OS-IN → DM-IN → OS-OUT → DM-OUT → Act. Cntr-Seal → RF → Performance → SHIFTING
 
 const THIN = { style: 'thin' };
+const CTR = { horizontal: 'center', vertical: 'middle' };   // V9.19-03: 드로잉 폴백도 전부 중앙정렬(사용자 확정)
 const BOX = { top: THIN, left: THIN, bottom: THIN, right: THIN };
 const TITLE_FONT = { name: 'Arial', size: 14, bold: true };
 const HEAD_FONT = { name: 'Arial', size: 10, bold: true };
@@ -123,7 +124,7 @@ function sheetTimeSheet(wb, D) {
     ws.getCell(`B${r}`).font = BODY_FONT; ws.getCell(`C${r}`).font = BODY_FONT;
     r++;
   }
-  if (D.timeSheet.length === 0) { ws.getCell('B13').value = '(작업 보고 기록 없음 — 수기 기입)'; ws.getCell('B13').font = BODY_FONT; }
+  // V9.19-03: 자료 없어도 틀 유지 — 빈 칸으로 (수기 기입 공간)
   sig(ws, Math.max(r + 4, 44), 'CHIEF CHECKER', 'CHIEF OFFICER', 'H');
   return ws;
 }
@@ -163,13 +164,13 @@ function sheetOS(wb, D, mode) {
     if (row.rh) tags.push(`RH x ${row.rh}`);
     if (row.dg) tags.push(`DG x ${row.dg}`);
     ws.getCell(`M${r}`).value = tags.join(' , ');
-    for (let c = 1; c <= 13; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; }
+    for (let c = 1; c <= 13; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
     lastPort = row.port; r++;
   }
   ws.getCell(`D${r}`).value = 'T O T A L'; ws.getCell(`G${r}`).value = 'VAN';
   ws.getCell(`H${r}`).value = manTotal; ws.getCell(`J${r}`).value = workTotal;
   ws.getCell(`K${r}`).value = 'NIL'; ws.getCell(`L${r}`).value = manTotal - workTotal ? manTotal - workTotal : 'NIL';
-  for (let c = 1; c <= 13; c++) { const cell = ws.getRow(r).getCell(c); cell.font = HEAD_FONT; cell.border = BOX; }
+  for (let c = 1; c <= 13; c++) { const cell = ws.getRow(r).getCell(c); cell.font = HEAD_FONT; cell.border = BOX; cell.alignment = CTR; }
   if (os.extra) { r += 1; ws.getCell(`B${r}`).value = `OVERLANDED (초과) x ${os.extra} — 별도 신고`; ws.getCell(`B${r}`).font = HEAD_FONT; }
   r += 3;
   ws.getCell(`A${r}`).value = 'REMARKS'; ws.getCell(`A${r}`).font = HEAD_FONT;
@@ -182,7 +183,9 @@ function sheetOS(wb, D, mode) {
 function sheetDM(wb, D, mode) {
   const isIn = mode === 'in';
   const ws = wb.addWorksheet(isIn ? 'DM-IN' : 'DM-OUT');
-  ws.columns = Array(12).fill({ width: 10 });
+  // V9.19-03: 셀 짤림 보정 — 마지막 열(EXCEPTION) 넓게, 헤더 병합
+  ws.columns = [{ width: 8 }, { width: 12 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 },
+    { width: 8 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 9 }, { width: 26 }];
   head(ws);
   ws.mergeCells('A4:L4'); ws.getCell('A4').value = 'CARGO  DAMAGE  REPORT';
   ws.getCell('A4').font = TITLE_FONT; ws.getCell('A4').alignment = { horizontal: 'center' };
@@ -194,8 +197,9 @@ function sheetDM(wb, D, mode) {
   ws.getCell('K8').value = 'BERTH :'; ws.getCell('L8').value = D.berth;
   for (const a of ['A6','G6','K6','A8','G8','K8']) ws.getCell(a).font = HEAD_FONT;
   const hd = ['PORT', 'B/L NO.', 'MARKS', '', '', 'CONTENTS', '', '', '', 'NO. OF PKGS', 'TYPE', 'EXCEPTION ( Found In Stow )'];
-  hd.forEach((v, i) => { const c = ws.getRow(10).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = { horizontal: 'center' }; });
-  for (let r = 11; r <= 28; r++) for (let c = 1; c <= 12; c++) ws.getRow(r).getCell(c).border = BOX;
+  hd.forEach((v, i) => { const c = ws.getRow(10).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = CTR; });
+  ws.mergeCells('C10:E10'); ws.mergeCells('F10:I10');   // MARKS·CONTENTS 병합 — 실물처럼
+  for (let r = 11; r <= 28; r++) for (let c = 1; c <= 12; c++) { const cell = ws.getRow(r).getCell(c); cell.border = BOX; cell.alignment = CTR; }
   sig(ws, 32, 'CHIEF CHECKER', 'CHIEF OFFICER', 'K', `STEVEDORE  ${D.pier || ''}`, 'F');
   return ws;
 }
@@ -219,10 +223,10 @@ function sheetSeal(wb, D) {
     ws.getCell(`A${r}`).value = row.cn; ws.getCell(`C${r}`).value = row.manifestSeal;
     ws.getCell(`D${r}`).value = row.size; ws.getCell(`F${r}`).value = row.actualSeal;
     ws.getCell(`G${r}`).value = row.reseal; ws.getCell(`H${r}`).value = `${row.remarks} ${row.leg}`.trim();
-    for (let c = 1; c <= 8; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; }
+    for (let c = 1; c <= 8; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
     r++;
   }
-  if (!all.length) { ws.getCell(`A${r}`).value = 'NIL'; ws.getCell(`A${r}`).font = BODY_FONT; r++; }
+  if (!all.length) { r += 6; }   // V9.19-03: 빈 틀 유지(공간 확보)
   ws.getCell(`A${r + 2}`).value = `TOTAL : ${all.length}`; ws.getCell(`A${r + 2}`).font = HEAD_FONT;
   sig(ws, r + 4, 'CHIEF CHECKER', 'CHIEF OFFICER', 'G');
   return ws;
@@ -247,10 +251,10 @@ function sheetRF(wb, D) {
     ws.getCell(`A${r}`).value = row.cn; ws.getCell(`B${r}`).value = row.seal;
     ws.getCell(`C${r}`).value = row.size; ws.getCell(`D${r}`).value = row.loc;
     ws.getCell(`E${r}`).value = row.setting; ws.getCell(`H${r}`).value = row.op;
-    for (let c = 1; c <= 8; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; }
+    for (let c = 1; c <= 8; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
     r++;
   }
-  if (r === 12) { ws.getCell('A12').value = 'NIL'; ws.getCell('A12').font = BODY_FONT; r++; }
+  if (r === 12) { r += 6; }   // V9.19-03: 빈 틀 유지
   sig(ws, r + 4, 'CHIEF CHECKER', 'CHIEF OFFICER', 'G');
   return ws;
 }
@@ -314,7 +318,7 @@ function sheetShifting(wb, D) {
   for (const s of D.shifting) {
     [s.no, s.cn, s.type, s.fe, s.wt, s.op, s.oldPos, s.newPos, s.pod, s.pol, s.op].forEach((v, i) =>
       ws.getRow(r).getCell(i + 1).value = v);
-    for (let c = 1; c <= 11; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; }
+    for (let c = 1; c <= 11; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
     r++;
   }
   if (!D.shifting.length) { ws.getCell('A10').value = 'NIL'; ws.getCell('A10').font = BODY_FONT; }
@@ -332,17 +336,21 @@ import TEMPLATE_MAP from './data/tallyTemplateMap.js';
 const zv = (v) => (v ? v : null);   // 실물 규칙: 빈 값은 공란
 
 async function fillTemplate(D, ExcelJS) {
-  const M = TEMPLATE_MAP[D.code];
+  // V9.19-03: 미보유 선박은 STANDARD(표준 GM 서식) 템플릿으로 — 드로잉 폴백은 최후 수단.
+  //   OBWH(바우처형)만 예외 — 표준 서식이 오히려 틀리므로 드로잉 유지.
+  let tplCode = D.code;
+  let M = TEMPLATE_MAP[D.code];
+  if (!M && D.code !== 'OBWH') { M = TEMPLATE_MAP.STANDARD; tplCode = 'STANDARD'; D._stdNote = '이 배 전용 템플릿 없음 — 표준 GM 서식으로 생성'; }
   if (!M || !M.sheets || !M.sheets.finalWork) return null;
   const base = (typeof document !== 'undefined' ? './' : 'public/');
   let ab;
   if (typeof document !== 'undefined') {
-    const res = await fetch(`${base}tally_templates/${D.code}.xlsx`, { cache: 'no-store' });
+    const res = await fetch(`${base}tally_templates/${tplCode}.xlsx`, { cache: 'no-store' });
     if (!res.ok) return null;
     ab = await res.arrayBuffer();
   } else {
     const fs = await import('fs');
-    ab = fs.readFileSync(`public/tally_templates/${D.code}.xlsx`);
+    ab = fs.readFileSync(`public/tally_templates/${tplCode}.xlsx`);
   }
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(ab);
@@ -354,7 +362,11 @@ async function fillTemplate(D, ExcelJS) {
   const voy = [D.voyD, D.voyL].filter(Boolean).join(' & ');
   const dstr = d10(D.date);
 
-  // ── Final Work ──
+  // ── Final Work (변형 cn: 선사 반복·하위선사 괄호·소계/총계 수식) ──
+  if (M.variant === 'cn') {
+    fillVariantFinalWork(wb, M, D, dstr);
+  } else {
+  // ── Final Work (표준) ──
   {
     const cfg = M.sheets.finalWork;
     const ws = get('finalWork');
@@ -407,6 +419,7 @@ async function fillTemplate(D, ExcelJS) {
     ws.getCell(`D8`).value = `DISCH (${D.totals.dis.n})`;
     ws.getCell(`H8`).value = `LOAD (${D.totals.load.n})`;
     ws.getCell(`L8`).value = `SHIFT (${D.totals.shift.n})`;
+  }
   }
   // ── Time Sheet ──
   if (get('timeSheet')) {
@@ -544,6 +557,110 @@ async function fillTemplate(D, ExcelJS) {
   return wb;
 }
 
+// ── V9.19-03: 변형(cn) Final Work 채우기 ─────────────────────────────────
+//   구조(실측 DXQD·TMPZ): 선사 블록마다 [포트쌍 F/E … + Total F/E(수식)] · 마지막 G.Total(수식) ·
+//   헤더 DISCH( n )도 수식. → 쌍 행 값만 쓰고, 수식 셀은 계산 결과를 캐시에 넣는다
+//   (모바일 뷰어는 재계산을 안 하므로 {formula, result}로 저장).
+function fillVariantFinalWork(wb, M, D, dstr) {
+  const cfg = M.sheets.finalWork;
+  const ws = wb.getWorksheet(cfg.name);
+  const h = cfg.hdr || {};
+  if (h.voy) ws.getCell(h.voy).value = `VOY # : ${[D.voyD, D.voyL].filter(Boolean).join(' / ')}`;
+  if (h.date) ws.getCell(h.date).value = dstr;
+  if (h.pier) ws.getCell(h.pier).value = D.pier;
+  if (h.berth) ws.getCell(h.berth).value = D.berth;
+  ws.getCell('B4').value = D.vslFull;
+
+  // 매트릭스 → 행 매칭: 행 키 = (sub || 블록op, port). 우리 rows는 op·port·fe 순.
+  const want = {};   // `${op}|${port}|${fe}` → sizes
+  for (const row of D.rows) {
+    want[`${row.op}|${row.port}|${row.fe}`] = { dis: row.dis, load: row.load, shift: row.shift };
+  }
+  const used = new Set();
+  const writeRow = (r, v) => {
+    ['20','40','HC','45'].forEach((sz, k) => {
+      ws.getRow(r).getCell(4 + k).value = zv(v.dis[sz]);
+      ws.getRow(r).getCell(8 + k).value = zv(v.load[sz]);
+      ws.getRow(r).getCell(12 + k).value = zv(v.shift[sz]);
+    });
+  };
+  const empt = { dis: {}, load: {}, shift: {} };
+  const freeRows = [];
+  for (const pr of cfg.pairRows) {
+    const key = (fe) => `${pr.sub || pr.op}|${pr.port}|${fe}`;
+    if (!pr.op && !pr.port) { freeRows.push(pr.r); continue; }
+    const vF = want[key('F')]; const vE = want[key('E')];
+    writeRow(pr.r, vF || empt);
+    writeRow(pr.r + 1, vE || empt);
+    if (vF) used.add(key('F'));
+    if (vE) used.add(key('E'));
+  }
+  // 템플릿에 없는 (선사,포트) — 빈 쌍 행에 라벨 써서 배치
+  const leftovers = Object.keys(want).filter(k => !used.has(k) && k.endsWith('|F'));
+  let li = 0;
+  for (const k of leftovers) {
+    if (li >= freeRows.length) { D._overflow = (D._overflow || 0) + 1; continue; }
+    const [op, port] = k.split('|');
+    const r = freeRows[li++];
+    try { ws.getCell(`A${r}`).value = op; } catch { /* skip */ }
+    try { ws.getCell(`B${r}`).value = port; } catch { /* skip */ }
+    writeRow(r, want[k] || empt);
+    writeRow(r + 1, want[`${op}|${port}|E`] || empt);
+  }
+  refreshFormulaResults(ws, 8, (cfg.grandRow || 40) + 1, D);
+}
+
+/** 시트 구역의 수식 셀 결과 캐시 갱신 — SUM(...)·+A+B 체인·헤더 문자열 수식 지원 */
+function refreshFormulaResults(ws, r1, r2, D) {
+  const val = (addr) => {
+    const c = ws.getCell(addr);
+    if (c.formula) return evalF(c.formula);
+    const v = c.value;
+    return (typeof v === 'number') ? v : 0;
+  };
+  const evalF = (f) => {
+    const s2 = String(f);
+    const sum = s2.match(/^SUM\(([^)]+)\)$/i);
+    let refs = null;
+    if (sum) refs = sum[1].split(/[,;:]/);
+    else if (/^\+?[A-Z]+\d+([+][A-Z]+\d+)*$/.test(s2.replace(/^\+/, '').replace(/\s/g, ''))) refs = s2.replace(/\s/g, '').replace(/^\+/, '').split('+');
+    if (!refs) return null;
+    let t = 0;
+    for (const ref of refs) {
+      const rr = ref.trim();
+      if (/^[A-Z]+\d+$/.test(rr)) t += val(rr);
+      else if (/^[A-Z]+\d+:[A-Z]+\d+$/.test(rr)) {
+        const [a, b] = rr.split(':');
+        const c1 = a.match(/[A-Z]+/)[0], n1 = +a.match(/\d+/)[0], c2b = b.match(/[A-Z]+/)[0], n2 = +b.match(/\d+/)[0];
+        const ci = (x) => x.split('').reduce((acc, ch) => acc * 26 + ch.charCodeAt(0) - 64, 0);
+        for (let rr2 = n1; rr2 <= n2; rr2++) for (let cc = ci(c1); cc <= ci(c2b); cc++) {
+          const v2 = ws.getRow(rr2).getCell(cc).value;
+          t += (typeof v2 === 'number') ? v2 : (v2 && typeof v2 === 'object' && typeof v2.result === 'number' ? v2.result : 0);
+        }
+      }
+    }
+    return t;
+  };
+  // 2패스 — 소계 먼저, 총계(소계 참조)는 소계 결과 반영 후
+  for (let pass = 0; pass < 2; pass++) {
+    for (let r = r1; r <= r2; r++) {
+      for (let c = 1; c <= 16; c++) {
+        const cell = ws.getRow(r).getCell(c);
+        if (!cell.formula) continue;
+        const f = String(cell.formula);
+        if (/DISCH|LOAD|SHIFT/i.test(f) || /&/.test(f)) {
+          // 헤더 문자열 수식 — 총계로 문자열 구성
+          const label = /DISCH/i.test(f) ? `DISCH ( ${D.totals.dis.n} )` : /LOAD/i.test(f) ? `LOAD ( ${D.totals.load.n} )` : `SHIFT ( ${D.totals.shift.n} )`;
+          cell.value = label;   // 문자열 수식은 값으로 대체(뷰어 호환)
+          continue;
+        }
+        const rres = evalF(f);
+        if (rres !== null) cell.value = { formula: f, result: rres };
+      }
+    }
+  }
+}
+
 /** 워크북 생성 → Blob 다운로드. 반환: 파일명 */
 export async function generateTallyExcel(D) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
@@ -556,7 +673,8 @@ export async function generateTallyExcel(D) {
     const fname0 = `${D.code} ${voy0} PTK TALLY REPORT.xlsx`;
     const buf0 = await tplWb.xlsx.writeBuffer();
     _download(buf0, fname0);
-    return { fname: fname0, buf: buf0, note: note || '실물 서식(템플릿) 기반' };
+    const notes = [note, D._stdNote, D._overflow ? `⚠ 자리 부족으로 못 실은 선사·포트 ${D._overflow}건 — 확인 필요` : ''].filter(Boolean);
+    return { fname: fname0, buf: buf0, note: notes.join(' · ') || '실물 서식(템플릿) 기반' };
   }
   if (!note) note = '이 배는 템플릿 미보유 — 표준 서식으로 생성(배치가 실물과 다를 수 있음)';
   const wb = new ExcelJS.Workbook();
