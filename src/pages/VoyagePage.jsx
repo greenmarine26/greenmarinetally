@@ -398,6 +398,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       'bl', 'sh', 'gi', 'op',  // B/L, Shipper, Gross Index, Operator
       'tmp',  // 온도는 리스트가 보강 가능 (단, 비어있을 때만)
       'rfdry',  // V9.20-04: 리퍼드라이(넌플러그) — records/수집기 패치가 화면까지 오도록
+      'mkcon',  // V9.23: 제작컨테이너 — 리스트 REMARK '특수컨' 자동 인식분이 화면까지 오도록
       'desc',  // M8.07: 품명(내용물) — EDI에 없는 참조 정보, 카고플랜 그림에 영향 없음
       // M4.9b-fix: 엠티 실 — EDI에 봉인 정보 없는 게 일반적, records가 진실
       'eseal', 'eseal_orig', 'eseal_wrong', 'reseal',
@@ -427,6 +428,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (Array.isArray(v) && v.length === 0) return;
 
         if (ediBase) {
+          // V9.23: 가상 EDI(실 EDI 없이 리스트로 만든 스텁 — cn/pol/wt뿐)는 규격·F/E의 진실이 아니다.
+          //   스텁이거나 EDI 값이 비어 있으면 리스트가 핵심 필드를 채운다 (OBWH 2699E 실측:
+          //   records엔 fe/iso 전수 있는데 화면은 미정·기타 — 사용자 신고 "풀엠티·규격 다 있는데 적용 안 됨").
+          //   실 EDI에 값이 있으면 기존 원칙 그대로 EDI가 진실.
+          const CORE_FILL = k === 'fe' || k === 'iso' || k === 'tp' || k === 'rf' || k === 'fr' ||
+            k === 'ot' || k === 'tk' || k === 'dg' || k === 'dgc' || k === 'un' || k === 'pod' || k === 'tmp_missing';
+          if (CORE_FILL && (ediBase._virtualEdi || ediBase[k] === undefined || ediBase[k] === '')) {
+            safeR[k] = v; return;
+          }
           // EDI 매칭됨 → 핵심 필드는 보호, 보강 필드만 허용
           if (!ALLOWED_LIST_FIELDS.has(k)) return;  // 핵심 필드 무시
           // M6.94.32: EDI에 위치(bay)가 있으면 리스트 bay/row/tier가 덮지 못함.
@@ -669,7 +679,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (left <= 0 || left > 2 * 3600000) return null;
           const undone = containers.filter(c => !compMap[c.cn]).length;
           const xrayPend = mode === 'discharge' ? Object.keys(xrayMap || {}).filter(cn => !(xraySeals || {})[cn]?.seal).length : 0;
-          const rfMiss = containers.filter(c => (c.rf || (c.iso && c.iso[2] === 'R')) && !c.rfdry &&
+          const rfMiss = containers.filter(c => (c.rf || (c.iso && c.iso[2] === 'R')) && !c.rfdry && !c.mkcon &&
             (c.fe === 'F' || !c.fe) && (!c.tmp || String(c.tmp).trim() === '')).length;
           if (!undone && !xrayPend && !rfMiss) return null;
           const mins = Math.round(left / 60000);
@@ -1380,7 +1390,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
     // V9.14: 마감 점검 「리퍼 온도 미입력」 점프용 — Full 리퍼인데 온도 빈 것만 (판정은 체크리스트와 동일)
     else if (filter === 'reeferTemp') arr = arr.filter(c =>
-      (c.rf || /^..R/.test(c.iso || '')) && !c.rfdry &&
+      (c.rf || /^..R/.test(c.iso || '')) && !c.rfdry && !c.mkcon &&
       (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
     if (search) {
       const q = search.toUpperCase();

@@ -648,7 +648,10 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               </div>
               {!editingTmp ? (
                 <div className="flex items-center gap-2">
-                  {c.rfdry ? (
+                  {c.mkcon ? (
+                    /* V9.23: 제작컨테이너 — 컨 자체가 상품(빈 컨). 온도 없음 정상 */
+                    <span className="text-sm font-bold text-purple-300">🏭 제작컨테이너 (컨 자체가 상품 — 온도 없음 정상)</span>
+                  ) : c.rfdry ? (
                     /* V9.20-03: 리퍼드라이(넌플러그) — 선사 요청으로 전원 안 꽂는 리퍼. 온도 없음 정상 */
                     <span className="text-sm font-bold text-teal-300">🔌 리퍼드라이 (넌플러그 — 온도 없음 정상)</span>
                   ) : c.tmp && !c.tmp_missing ? (
@@ -673,6 +676,18 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                     }}
                     className={`ml-auto text-[10px] px-2 py-1 rounded font-bold border ${c.rfdry ? 'bg-teal-900 border-teal-500 text-teal-200' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>
                     {c.rfdry ? '드라이 해제' : '리퍼드라이 지정'}
+                  </button>
+                  {/* V9.23: 제작컨테이너 토글 — 컨 자체가 상품(빈 컨). 리퍼드라이와 별도 분류 (사용자 확정 2026-07-29) */}
+                  <button
+                    onClick={async () => {
+                      if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                      const nv = !c.mkcon;
+                      if (!window.confirm(nv ? '이 컨테이너를 제작컨테이너(컨 자체가 상품·빈 컨)로 지정할까요?\n온도 경고·풀리퍼 사진 대상에서 제외됩니다.' : '제작컨테이너 지정을 해제할까요?')) return;
+                      await fbUpdateRecordField(voyageKey, mode, c.cn, 'mkcon', nv, inspector);
+                      c.mkcon = nv;   // 즉시 반영 (RTDB 구독이 곧 덮어씀)
+                    }}
+                    className={`text-[10px] px-2 py-1 rounded font-bold border ${c.mkcon ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>
+                    {c.mkcon ? '제작컨 해제' : '제작컨 지정'}
                   </button>
                 </div>
               ) : (

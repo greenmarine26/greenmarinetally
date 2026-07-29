@@ -29,7 +29,7 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
     const isReefer = isReeferContainer(c);
     const tmpStr = String(c.tmp || '').trim();
     const isFullReefer = isReefer && (c.fe === 'F' || c.fe === '' || c.fe == null);
-    const tmpMissing = isFullReefer && !c.rfdry && (c.tmp_missing || tmpStr === '');
+    const tmpMissing = isFullReefer && !c.rfdry && !c.mkcon && (c.tmp_missing || tmpStr === '');
 
     rows.push([
       i + 1,

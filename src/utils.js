@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.22-02';   // 덱 플랜 빈자리 표시 + 탭 지정(선적 배치) (2026-07-29)
+export const APP_VERSION = 'V9.23';   // 제작컨테이너 분류 신설 — 리퍼드라이와 별도 (2026-07-29)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -622,6 +622,7 @@ export function bookingLabel(c, short = false) {
 export function isISO403(c) {
   if (!c) return false;
   if (c.rfdry) return false;   // V9.20-03: 리퍼드라이(넌플러그) — 온도 확인 불필요, 사진 대상 아님
+  if (c.mkcon) return false;   // V9.23: 제작컨테이너 — 컨 자체가 상품(내용물 없음), 온도·사진 대상 아님
   // V9.04-04: 목적 정정 — '규격 확인'이 아니라 '풀 리퍼 온도 확인 사진'(사용자 확정 2026-07-19).
   //   기존 규칙은 4530·9530·L5R 코드만 봐서 두 가지가 어긋나 있었다.
   //   ① 20ft 리퍼(2230류)를 통째로 빠뜨림 — 온도 확인이 목적이면 당연히 대상이어야 한다.
@@ -2109,13 +2110,15 @@ export async function parseListExcel(arrayBuffer) {
       let isDg = !!(dgVal && /^(Y|YES|TRUE|1|DG|HAZ)/i.test(dgVal));
       // V9.21-03: REMARK 자유 텍스트에서 DG(IMDG 클래스·UN번호)·리퍼 온도 감지
       const rmkVal = rmk_i >= 0 ? String(row[rmk_i] || '').trim().toUpperCase() : '';
-      let rmkDgc = '', rmkUn = '', rmkTmp = null;
+      let rmkDgc = '', rmkUn = '', rmkTmp = null, rmkMkc = false;
       if (rmkVal) {
         const mCls = rmkVal.match(/(?:IMDG|CLASS)[\s.:]*([0-9](?:\.[0-9])?)/);
         const mUn = rmkVal.match(/UN[_\s]*(?:CD|NO)?[_\s.:]*([0-9]{4})/);
         if (mCls || mUn) { isDg = true; rmkDgc = mCls ? mCls[1] : ''; rmkUn = mUn ? mUn[1] : ''; }
         const mT = rmkVal.match(/RF\s*([+-]?\d+(?:\.\d+)?)/);
         if (mT) rmkTmp = mT[1].replace(/^\+/, '');
+        // V9.23: 제작컨테이너 — 컨 자체가 상품(빈 컨). RZOR R080E HSAP 10대 'CY/CY 특수컨' 실측
+        if (/특수\s*제작|특수\s*컨|제작\s*컨/.test(rmkVal)) rmkMkc = true;
       }
 
       // M3.85 fix: row[tmp_i]가 숫자 0이면 `0 || ''` = '' 로 사라지던 버그
@@ -2206,7 +2209,8 @@ export async function parseListExcel(arrayBuffer) {
         ot: isOt,
         tk: isTk,
         tmp: (tmpVal === '' && rmkTmp != null) ? rmkTmp : tmpVal,   // V9.21-03: REMARK 온도 보강(빈 경우만)
-        tmp_missing: tmpMissing && rmkTmp == null && isRf,
+        tmp_missing: tmpMissing && rmkTmp == null && isRf && !rmkMkc,
+        mkcon: rmkMkc || undefined,        // V9.23: 제작컨테이너 (리퍼드라이와 별도 분류 — 사용자 확정 2026-07-29)
       });
     }
   }

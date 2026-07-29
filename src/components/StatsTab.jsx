@@ -316,7 +316,7 @@ function computeAllStats(containers, compMap, xrayMap, mode) {
 
   // 리퍼 온도 미입력 (Full만 — 마감 체크리스트와 동일 판정)
   const reeferTempMissing = containers.filter(c =>
-    (c.rf || (c.iso && c.iso[2] === 'R')) && !c.rfdry &&
+    (c.rf || (c.iso && c.iso[2] === 'R')) && !c.rfdry && !c.mkcon &&
     (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
 
   return { total, done, bySize, byFE, bySpecial, byOp, xrayTotal, xrayDone, xrayList,

@@ -172,9 +172,10 @@ export function speakContainer(c, opts = {}) {
 
     // 특수 화물
     if (c.dg) parts.push(`디지`);
+    if (c.mkcon) parts.push('제작 컨테이너');   // V9.23: 컨 자체가 상품(빈 컨)
     if (c.rf && c.rfdry) parts.push('리퍼드라이 넌플러그');   // V9.20-03
     else if (c.rf && c.tmp) parts.push(`리퍼 ${c.tmp}도`);
-    else if (c.rf) parts.push('리퍼');
+    else if (c.rf && !c.mkcon) parts.push('리퍼');
     if (c.fr) parts.push('에프알');
     if (c.ot) parts.push('오티');
     if (c.tk) parts.push('탱크');

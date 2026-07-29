@@ -70,6 +70,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
         const listMissing = lr.tmp_missing === true;
         // V9.20-04: 리퍼드라이(넌플러그) — 전원 안 꽂는 리퍼는 온도 자체가 없다 (PCSZ 2622E 실측)
         if (c.rfdry || lr.rfdry) return false;
+        // V9.23: 제작컨테이너 — 컨 자체가 상품(빈 컨), 온도 없음이 정상 (RZOR R080E HSAP 실측)
+        if (c.mkcon || lr.mkcon) return false;
         // EDI·리스트 어느 쪽이든 유효 온도가 있으면 입력된 것으로 인정.
         if (ediT && !c.tmp_missing) return false;
         if (listT && !listMissing) return false;

@@ -46,7 +46,7 @@ export default function VoyageSummaryCard({ voyage, mode }) {
     const done = Object.keys(compMap).length;
     const reefers = containers.filter(isReeferContainer);
     const reeferTempMissing = reefers.filter(c =>
-      !c.rfdry && (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
+      !c.rfdry && !c.mkcon && (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
     );
     // V7.94-03: X-RAY 카운트 기준 통일 (사용자 제보 — 상단 0/3 vs 리스트 2 불일치)
     //   원인: 여기는 xrayList 원본 키 전부, 리스트(ListTab stats.xray)는 현재 컨테이너와 매칭분만.
@@ -84,6 +84,7 @@ export default function VoyageSummaryCard({ voyage, mode }) {
       reeferTotal: reefers.length,
       reeferTempMissing: reeferTempMissing.length,
       reeferDry: reefers.filter(c => c.rfdry).length,   // V9.20-03: 리퍼드라이(넌플러그)
+      madeCon: containers.filter(c => c.mkcon).length,  // V9.23: 제작컨테이너(컨 자체가 상품)
       xrayCount, xraySealed, xrayUnmatched,
       iso403Total: iso403Targets.length,
       iso403Pending: iso403Pending.length,
@@ -129,7 +130,7 @@ export default function VoyageSummaryCard({ voyage, mode }) {
             icon={Snowflake}
             color={summary.reeferTempMissing > 0 ? 'red' : 'cyan'}
             label="리퍼"
-            value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
+            value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.madeCon > 0 ? ` · 🏭제작컨${summary.madeCon}` : ''}${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
           />
         )}
         {(summary.xrayCount > 0 || summary.xrayUnmatched?.length > 0) && (

@@ -203,13 +203,19 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 리퍼 엠티
               </span>
             )}
+            {c.mkcon && (
+              /* V9.23: 제작컨테이너 — 컨 자체가 상품(빈 컨). 리퍼드라이와 별도 분류 */
+              <span className="bg-purple-800 text-purple-100 px-2 py-1 rounded font-black text-sm flex items-center gap-1 border-2 border-purple-400">
+                🏭 제작컨 (컨 자체가 상품)
+              </span>
+            )}
             {!showTmp && isReefer && c.fe !== 'E' && c.rfdry && (
               /* V9.20-03: 리퍼드라이(넌플러그) — 온도 없음이 정상 */
               <span className="bg-teal-800 text-teal-100 px-2 py-1 rounded font-black text-sm flex items-center gap-1 border-2 border-teal-500">
                 <Snowflake className="w-3.5 h-3.5"/>🔌 리퍼드라이 (넌플러그)
               </span>
             )}
-            {!showTmp && isReefer && c.fe !== 'E' && !c.rfdry && (
+            {!showTmp && isReefer && c.fe !== 'E' && !c.rfdry && !c.mkcon && (
               <span className="bg-red-700 text-white px-2 py-1 rounded font-black text-sm flex items-center gap-1 animate-pulse border-2 border-red-400">
                 <Snowflake className="w-3.5 h-3.5"/>
                 <AlertTriangle className="w-3 h-3"/>

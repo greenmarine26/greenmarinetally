@@ -766,7 +766,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
     const t = parseInt(c.tier, 10);
     if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
-    if (isReeferContainer(c)) { rf.push(c); if (c.fe !== 'E' && !c.rfdry && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }
+    if (isReeferContainer(c)) { rf.push(c); if (c.fe !== 'E' && !c.rfdry && !c.mkcon && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }
     if (c.dg) dg.push(c);
     if (c._xray) xr.push(c);
     if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);
@@ -1473,12 +1473,14 @@ export function generateHandover(allContainers, handoverInfo = {}) {
   // 3) 특이사항 — 데이터로 잡히는 것 (리퍼 온도 미입력, 위험물, XRAY 미처리 등)
   const special = [];
   const reefers = cs.filter(c => isReeferContainer(c) && !c._comp);
-  const reeferNoTmp = reefers.filter(c => !c.tmp && c.fe !== 'E' && !c.rfdry);
+  const reeferNoTmp = reefers.filter(c => !c.tmp && c.fe !== 'E' && !c.rfdry && !c.mkcon);
   if (reeferNoTmp.length) special.push(`냉동 온도 미입력 ${reeferNoTmp.length}대 (조회 시 입력 필요)`);
   const dg = cs.filter(c => c.dg && !c._comp);
   if (dg.length) special.push(`위험물 ${dg.length}대 — 별도 취급`);
   const fr = cs.filter(c => (c.fr || c.ot) && !c._comp);
   if (fr.length) special.push(`FR/OT ${fr.length}대 — 적재 제약 주의`);
+  const mk = cs.filter(c => c.mkcon && !c._comp);
+  if (mk.length) special.push(`제작컨테이너 ${mk.length}대 — 컨 자체가 상품(빈 컨), 온도 없음 정상`);
   if (special.length) {
     lines.push('', '━━ 특이사항 ━━');
     special.forEach(s => lines.push(`· ${s}`));
