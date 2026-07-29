@@ -777,6 +777,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         <DeckPlanView
           plan={voyage?.[mode]?.stowagePlan}
           containers={containers} compMap={compMap} xrayMap={xrayMap}
+          voyageKey={voyageKey} mode={mode} inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
         />
         <LoloTab
@@ -2221,7 +2222,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           // V9.22: RZOR 덱 스토우지 플랜(rzdf_ship_*.xls, 시트 A~E-DECK) 감지 → 플랜으로 저장(리스트 아님)
           try {
             const XLSX0 = await loadSheetJS();
-            const wb0 = XLSX0.read(new Uint8Array(buf.slice(0)), { type: 'array' });
+            const wb0 = XLSX0.read(new Uint8Array(buf.slice(0)), { type: 'array', cellStyles: true });   // V9.22-02: 회색(불가) 구역 구분
             if (isDeckPlanWorkbook(wb0)) {
               const plan0 = parseDeckPlanWorkbook(wb0, XLSX0);
               if (plan0.total > 0) {

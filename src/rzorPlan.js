@@ -60,6 +60,20 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
       });
     }
     if (!rawSlots.length) continue;
+    // V9.22-02: 빈자리(선적 지정용) — 데이터 구역 내 글자 없는 병합. 회색 solid 채움은 적재불가 구역으로 제외.
+    //   실측(R080E D덱): 빈 101(none/흰색) + 회색 1(불가). 스타일 정보 없으면 빈자리로 간주(안전측).
+    const rMin = Math.min(...rawSlots.map((s) => s.r1));
+    const rMax = Math.max(...rawSlots.map((s) => s.r1)) + 6;
+    for (const m of ws['!merges']) {
+      const raw = cellText(m.s.r, m.s.c).trim();
+      if (raw) continue;
+      if (m.s.r < rMin || m.s.r > rMax) continue;
+      if ((m.e.r - m.s.r) < 3) continue;
+      const cell = ws[XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c })];
+      const rgb = cell && cell.s && cell.s.fgColor && (cell.s.fgColor.rgb || '');
+      if (rgb && !/^F{2}?FFFFFF$/i.test(String(rgb)) && String(rgb).toUpperCase() !== 'FFFFFF') continue;   // 회색 등 = 불가
+      rawSlots.push({ cn: '', wt: null, iso: '', fe: '', r1: m.s.r, c1: m.s.c, c2: m.e.c, flags: [], empty: true });
+    }
     // 좌표 정규화: colStops = 모든 블록 경계, rowBands = 블록 시작행들
     const stopSet = new Set();
     rawSlots.forEach((s) => { stopSet.add(s.c1); stopSet.add(s.c2 + 1); });
@@ -69,11 +83,15 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
     const slots = rawSlots.map((s) => {
       const ci = colStops.indexOf(s.c1);
       const span = Math.max(1, colStops.indexOf(s.c2 + 1) - ci);
-      return { cn: s.cn, wt: s.wt, iso: s.iso, fe: s.fe, ri: rowBands.indexOf(s.r1), ci, span, flags: s.flags };
-    });
+      // 빈자리는 colStops에 정확한 경계가 없을 수 있음 — 가장 가까운 스톱으로
+      const ci2 = ci >= 0 ? ci : Math.max(0, colStops.findIndex((x) => x > s.c1) - 1);
+      const end = colStops.indexOf(s.c2 + 1);
+      const span2 = end >= 0 ? Math.max(1, end - ci2) : Math.max(1, span);
+      return { cn: s.cn, wt: s.wt, iso: s.iso, fe: s.fe, ri: rowBands.indexOf(s.r1), ci: ci2, span: span2, flags: s.flags, empty: !!s.empty };
+    }).filter((s) => s.ri >= 0 && s.ci >= 0);
     decks.push({ deck: deckLetter, name, cols: colStops.length - 1, rows: rowBands.length, slots });
   }
   // 덱 순서: 위(D)→아래(B) 실물 페이지 순 아님 — 알파벳 역순(D,C,B,A)로 위 데크 먼저
   decks.sort((a, b) => (b.deck < a.deck ? -1 : b.deck > a.deck ? 1 : 0));
-  return { voy, decks, total: decks.reduce((a, d) => a + d.slots.length, 0) };
+  return { voy, decks, total: decks.reduce((a, d) => a + d.slots.filter((s) => !s.empty).length, 0) };
 }

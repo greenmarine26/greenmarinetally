@@ -3,8 +3,9 @@
 //   셀 클릭 → 컨 상세(기존 모달).
 import React, { useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
+import { fbAssignDeckSlot } from '../firebase.js';
 
-export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer }) {
+export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector }) {
   const decks = plan?.decks || [];
   const [sel, setSel] = useState(0);
   const byCn = useMemo(() => {
@@ -14,7 +15,8 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
   }, [containers]);
   if (!decks.length) return null;
   const d = decks[Math.min(sel, decks.length - 1)];
-  const done = d.slots.filter((s) => compMap[s.cn]).length;
+  const conts = d.slots.filter((s) => !s.empty);
+  const done = conts.filter((s) => compMap[s.cn]).length;
 
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 mb-3">
@@ -25,15 +27,47 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         {decks.map((dk, i) => (
           <button key={dk.deck} onClick={() => setSel(i)}
             className={`px-2.5 py-1 rounded text-xs font-black ${i === sel ? 'bg-cyan-600 text-cyan-50' : 'bg-slate-800 text-slate-300'}`}>
-            {dk.deck}덱 {dk.slots.filter((s) => compMap[s.cn]).length}/{dk.slots.length}
+            {dk.deck}덱 {dk.slots.filter((s) => !s.empty && compMap[s.cn]).length}/{dk.slots.filter((s) => !s.empty).length}
           </button>
         ))}
-        <span className="ml-auto text-[11px] text-slate-400">이 덱 {done}/{d.slots.length} 완료</span>
+        <span className="ml-auto text-[11px] text-slate-400">이 덱 {done}/{conts.length} 완료 · 빈자리 {d.slots.length - conts.length}</span>
       </div>
       <div className="overflow-auto">
         <div className="grid gap-0.5 min-w-[720px]"
              style={{ gridTemplateColumns: `repeat(${d.cols}, minmax(30px, 1fr))`, gridTemplateRows: `repeat(${d.rows}, 58px)` }}>
-          {d.slots.map((s) => {
+          {d.slots.map((s, si) => {
+            // V9.22-02: 빈자리 — 선적 시 탭해서 컨 지정 (assign 맵), 재탭 해제
+            if (s.empty) {
+              const slotKey = `${d.deck}-${s.ri}-${s.ci}`;
+              const asg = plan.assign && plan.assign[slotKey];
+              return (
+                <button key={`e${si}`}
+                  onClick={async () => {
+                    if (!voyageKey) return;
+                    if (asg) {
+                      if (window.confirm(`${asg.cn} 지정을 해제할까요?`)) await fbAssignDeckSlot(voyageKey, mode, slotKey, null);
+                      return;
+                    }
+                    const q = window.prompt('이 자리에 실을 컨번호(전체 또는 끝 4자리):');
+                    if (!q) return;
+                    const qq = q.trim().toUpperCase();
+                    let cn = qq;
+                    if (!/^[A-Z]{4}\d{7}$/.test(qq)) {
+                      const hits = containers.filter((c) => c.cn && c.cn.endsWith(qq));
+                      if (hits.length === 1) cn = hits[0].cn;
+                      else { alert(hits.length ? `끝자리 일치 ${hits.length}건 — 전체 번호로 입력하세요` : '일치하는 컨 없음'); return; }
+                    }
+                    await fbAssignDeckSlot(voyageKey, mode, slotKey, { cn, by: inspector || '', at: Date.now() });
+                  }}
+                  className={`rounded-sm border border-dashed text-center overflow-hidden leading-tight
+                    ${asg ? 'bg-amber-900/70 border-amber-400' : 'bg-slate-800/40 border-slate-600'}`}
+                  style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
+                  {asg
+                    ? <div className="text-[10px] font-black mono text-amber-200 truncate">📌{asg.cn.slice(-4)}<div className="text-[8px] text-amber-300/80">{asg.cn.slice(0,4)}</div></div>
+                    : <div className="text-[9px] text-slate-500">빈자리</div>}
+                </button>
+              );
+            }
             const isDone = !!compMap[s.cn];
             const c = byCn[s.cn];   // V9.22-01: 리스트(records) 정보 합류 — 실번호·온도·DG·POD (사용자 요청)
             const fe = (c && (c.fe === 'F' || c.fe === 'E')) ? c.fe : s.fe;
@@ -67,6 +101,8 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         <span><span className="inline-block w-2.5 h-2.5 bg-emerald-800 border border-emerald-500 rounded-sm mr-1" />완료</span>
         <span><span className="inline-block w-2.5 h-2.5 border border-cyan-400 rounded-sm mr-1" />리퍼</span>
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-yellow-400 rounded-sm mr-1" />X-RAY</span>
+        <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-slate-500 rounded-sm mr-1" />빈자리(탭=지정)</span>
+        <span><span className="inline-block w-2.5 h-2.5 bg-amber-900 border border-amber-400 rounded-sm mr-1" />📌지정됨</span>
       </div>
     </div>
   );
