@@ -32,23 +32,30 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
       </div>
       <div className="overflow-auto">
         <div className="grid gap-0.5 min-w-[720px]"
-             style={{ gridTemplateColumns: `repeat(${d.cols}, minmax(30px, 1fr))`, gridTemplateRows: `repeat(${d.rows}, 44px)` }}>
+             style={{ gridTemplateColumns: `repeat(${d.cols}, minmax(30px, 1fr))`, gridTemplateRows: `repeat(${d.rows}, 58px)` }}>
           {d.slots.map((s) => {
             const isDone = !!compMap[s.cn];
-            const c = byCn[s.cn];
+            const c = byCn[s.cn];   // V9.22-01: 리스트(records) 정보 합류 — 실번호·온도·DG·POD (사용자 요청)
+            const fe = (c && (c.fe === 'F' || c.fe === 'E')) ? c.fe : s.fe;
             const isRf = /RH|RF/.test(s.iso) || (c && c.rf);
+            const isDg = !!(c && c.dg);
             const isXray = !!xrayMap[s.cn];
+            const tmp = c && c.tmp != null && String(c.tmp).trim() !== '' ? String(c.tmp) : '';
+            const sl = c && c.sl ? String(c.sl) : (c && c.eseal ? String(c.eseal) : '');
+            const marks = [isRf ? (tmp ? `❄${tmp}` : '❄') : '', isDg ? '⚠DG' : '',
+                           s.flags && s.flags.length ? s.flags.join('·') : ''].filter(Boolean).join(' ');
             return (
               <button key={`${s.cn}${s.ri}${s.ci}`}
-                onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: s.iso.replace(/\s/g, ''), fe: s.fe })}
+                onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: s.iso.replace(/\s/g, ''), fe })}
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
-                  ${isDone ? 'bg-emerald-800/90 border-emerald-500' : s.fe === 'E' ? 'bg-slate-700/80 border-slate-500' : 'bg-sky-900/80 border-sky-600'}
+                  ${isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-slate-700/80 border-slate-500' : 'bg-sky-900/80 border-sky-600'}
                   ${isRf ? 'ring-1 ring-cyan-400' : ''} ${isXray ? 'ring-2 ring-yellow-400' : ''}`}
                 style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
-                <div className="text-[10px] font-black mono text-slate-100 truncate">{s.cn.slice(-4)}</div>
-                <div className="text-[8.5px] text-slate-300 truncate">
-                  {s.iso}{isDone ? ' ✓' : ''}{s.flags && s.flags.length ? ` ${s.flags.join('·')}` : ''}
+                <div className="text-[10px] font-black mono text-slate-100 truncate">
+                  {s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
                 </div>
+                <div className="text-[8.5px] text-slate-300 truncate">{s.iso} {fe}</div>
+                {sl ? <div className="text-[8.5px] mono text-amber-200/90 truncate">🔒{sl}</div> : null}
               </button>
             );
           })}
