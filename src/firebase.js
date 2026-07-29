@@ -1173,6 +1173,11 @@ export async function fbClearFeedback(tsList = null) {
 //   - eseal_wrong: 틀린 실 발견 시 그 번호 (verify 모드만)
 //   - reseal: 리씰한 새 실번호 (verify 모드만, 다시 부착한 경우)
 //   - eseal_at, eseal_by, eseal_mode
+// V9.22: RZOR 덱 스토우지 플랜 저장 (선사 rzdf 플랜 파싱분)
+export async function fbSetStowagePlan(voyageKey, mode, plan) {
+  await set(ref(db, `voyages/${voyageKey}/${mode}/stowagePlan`), { ...plan, _at: Date.now() });
+}
+
 export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) {
   // fields: { eseal, eseal_wrong, reseal }
   const eseal = String(fields.eseal || '').trim();

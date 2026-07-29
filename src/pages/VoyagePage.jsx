@@ -5,7 +5,7 @@ import {
   BarChart3, FileCheck
 } from 'lucide-react';
 import {
-  parseBAPLIE, parseAscFile, parseListExcel, parseXrayList,
+  parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos
 , formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw } from '../utils.js';
 import {
@@ -16,8 +16,7 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
-  , fbSubscribeWorkReports
-} from '../firebase.js';
+  , fbSubscribeWorkReports, fbSetStowagePlan } from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -51,6 +50,8 @@ import BayDictDiagnosticsWidget from '../components/BayDictDiagnosticsWidget.jsx
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
+import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
+import DeckPlanView from '../components/DeckPlanView.jsx';
 import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
@@ -772,6 +773,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
       )}
       {tab === 'lolo' && (
+        <>
+        <DeckPlanView
+          plan={voyage?.[mode]?.stowagePlan}
+          containers={containers} compMap={compMap} xrayMap={xrayMap}
+          onOpenContainer={(c) => setDetailC(c)}
+        />
         <LoloTab
           voyageKey={voyageKey} mode={mode}
           containers={containers} compMap={compMap}
@@ -779,6 +786,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
         />
+        </>
       )}
       {tab === 'bay' && (() => {
         // M4.9e 3단계: 자리 뺏긴 컨테이너 검출 (사용자 요청)
@@ -2210,6 +2218,19 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         } else {
           // 엑셀/CSV (기존 로직)
           const buf = await file.arrayBuffer();
+          // V9.22: RZOR 덱 스토우지 플랜(rzdf_ship_*.xls, 시트 A~E-DECK) 감지 → 플랜으로 저장(리스트 아님)
+          try {
+            const XLSX0 = await loadSheetJS();
+            const wb0 = XLSX0.read(new Uint8Array(buf.slice(0)), { type: 'array' });
+            if (isDeckPlanWorkbook(wb0)) {
+              const plan0 = parseDeckPlanWorkbook(wb0, XLSX0);
+              if (plan0.total > 0) {
+                await fbSetStowagePlan(voyageKey, mode, plan0);
+                results.push(`✅ 🗺 ${file.name}: 덱 플랜 ${plan0.decks.map(d => `${d.deck}${d.slots.length}`).join('/')} = ${plan0.total}대`);
+                continue;
+              }
+            }
+          } catch (e0) { /* 덱 플랜 아님 → 리스트 흐름 계속 */ }
           const parseResult = await parseListExcel(buf);
           records = parseResult.records || [];
           if (records.length === 0) {
