@@ -79,6 +79,17 @@ export const BGE_CSS = `
 .bge-edit .cpv2-cell.bge-over{background:#fde68a !important;border-color:#d97706 !important}
 .bge-edit .cpv2-cell.bge-empty{cursor:copy;background:#fefefe;border-style:dashed !important;border-color:#cbd5e1 !important}
 .bge-edit .cpv2-cell.bge-empty:hover{background:#e0f2fe}
+.bge-edit .cpv2-cell.bge-open{background:#ecfccb;border-color:#84cc16 !important}
+.bge-edit .cpv2-cell.bge-open:hover{background:#d9f99d}
+.bge-pick-back{position:fixed;inset:0;background:rgba(2,6,23,.72);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}
+.bge-pick{background:#0b1220;border:1px solid #334155;border-radius:8px;width:min(420px,96vw);max-height:82vh;display:flex;flex-direction:column}
+.bge-pick-h{padding:10px 12px;border-bottom:1px solid #334155;color:#e2e8f0;font-weight:800;font-size:14px;display:flex;flex-direction:column;gap:3px}
+.bge-pick-h span{color:#a3e635;font-weight:600;font-size:11.5px}
+.bge-pick-list{overflow:auto;padding:6px;display:flex;flex-direction:column;gap:5px}
+.bge-pick-item{text-align:left;background:#1e293b;border:1px solid #334155;border-radius:6px;padding:9px 10px;color:#e2e8f0;font-size:13px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.bge-pick-item:hover{background:#334155}
+.bge-pick-item span{color:#94a3b8;font-size:11px}
+.bge-pick-item em{color:#fbbf24;font-style:normal}
 /* 옆 짝수 베이가 차지한 자리 — 단독 홀수 박스에서만 생긴다. 표기는 카고플랜과 동일.
      bge-x      : 인접 40ft/45ft → 흰 배경에 X 글자 (카고플랜 각 베이와 같은 모양)
      bge-shadow : 인접 20ft      → 회색 빈 칸 (카고플랜과 같음)
@@ -150,6 +161,7 @@ export default function BayGridEditor({
   const [msg, setMsg] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [stgOver, setStgOver] = useState(false);
+  const [picker, setPicker] = useState(null);   // V9.23-07: 빈 자리 → 놓을 컨 고르기
   const stageRef = useRef(null);
   const rubberStart = useRef(null);
   const [rubber, setRubber] = useState(null);
@@ -342,6 +354,56 @@ export default function BayGridEditor({
     }
     return out.sort((a, b) => (a.bay + a.row + a.tier).localeCompare(b.bay + b.row + b.tier));
   }, [state, drawable, issues, matrixBays, tick]);
+
+  // V9.23-07: 선적 안 된 자리를 먼저 보여 준다 (사용자 요구 2026-07-30).
+  //   종전 흐름은 "임시창고 컨을 집어 좌표에 끌어다 놓기"라 폰에서 쓰기 어려웠다.
+  //   뒤집는다 — 빈 자리를 목록으로 내고, 그 자리를 누르면 놓을 컨을 골라 준다.
+  const openSlots = useMemo(() => {
+    const out = [];
+    if (!state || !matrixBays.length) return out;
+    pages.forEach((pg, pi) => {
+      for (const k of pg.boxKeys) {
+        const isPair = String(k).startsWith('(');
+        const m = String(k).replace(/[()]/g, '');
+        const even = isPair ? m.slice(0, 2) : null;
+        const odd = isPair ? m.slice(2) : String(k);
+        const bays = isPair ? [num(even), num(odd)] : [num(k)];
+        const oddNum = isPair ? null : num(k);
+        const d = mk(k);
+        if (!d) continue;
+        const occ = new Set(), blocked = new Set();
+        for (const [, pos2] of Object.entries(state.pos)) {
+          if (pos2.storage) continue;
+          const b = num(pos2.bay);
+          const key = `${pos2.tier}-${pos2.row}`;
+          if (bays.includes(b)) occ.add(key);
+          else if (oddNum != null && (b === oddNum - 1 || b === oddNum + 1)) blocked.add(key);
+        }
+        for (const [secName, rows] of [['데크', d.deckRows], ['홀드', d.holdRows]]) {
+          for (const r of (rows || [])) {
+            for (const c of (r.cells || [])) {
+              if (!c.active || !c.rowLbl) continue;
+              const key = `${P.pad2(r.tier)}-${c.rowLbl}`;
+              if (occ.has(key) || blocked.has(key)) continue;
+              out.push({ page: pi, boxKey: k, label: keyLabel(k), even, odd,
+                         sec: secName, row: c.rowLbl, tier: P.pad2(r.tier) });
+            }
+          }
+        }
+      }
+    });
+    return out;
+  }, [state, pages, mk, matrixBays, tick]);
+
+  // 베이별로 묶어 목록에 낸다 — 자리 하나하나보다 "어느 베이에 몇 자리"가 먼저 보여야 한다
+  const openByBox = useMemo(() => {
+    const m = new Map();
+    for (const e of openSlots) {
+      if (!m.has(e.boxKey)) m.set(e.boxKey, { label: e.label, page: e.page, slots: [] });
+      m.get(e.boxKey).slots.push(e);
+    }
+    return [...m.entries()].map(([k, v]) => ({ boxKey: k, ...v }));
+  }, [openSlots]);
 
   const stats = useMemo(() => (state ? P.summarize(state) : null), [state, tick]);
   const changes = useMemo(() => (state ? P.diffChanges(state) : []), [state, tick]);
@@ -585,11 +647,13 @@ export default function BayGridEditor({
       },
       onDrop: (e) => dropCell(e, box, cell.rowLbl, tier),
     } : {};
-    if (!cn) return { ...dropProps, className: `cpv2-cell${cell.active ? ' bge-empty' : ''}`,
+    if (!cn) return { ...dropProps, className: `cpv2-cell${cell.active ? ' bge-empty' : ''}${cell.active && stgList.length ? ' bge-open' : ''}`,
       onClick: cell.active ? (e) => { e.stopPropagation();
+        // V9.23-07: 좌표를 외워 끌어 놓게 하지 않는다 — 자리를 누르면 놓을 컨을 골라 준다.
+        if (stgList.length) { setPicker({ even: box.even, odd: box.odd, row: cell.rowLbl, tier: P.pad2(tier), label: box.label }); return; }
         setMsg(selected.size
           ? `빈 자리 ${P.pad2(cell.rowLbl)}열 ${P.pad2(tier)}단 — 선택한 ${selected.size}대를 여기로 끌어 놓으십시오`
-          : `빈 자리 ${P.pad2(cell.rowLbl)}열 ${P.pad2(tier)}단 — 임시창고나 다른 칸에서 컨을 끌어 놓으십시오`);
+          : `빈 자리 ${P.pad2(cell.rowLbl)}열 ${P.pad2(tier)}단 — 놓을 컨이 임시창고에 없습니다`);
       } : undefined };
     const c = state.byCn.get(cn) || {};
     const locked = state.locked.has(cn);
@@ -682,6 +746,8 @@ export default function BayGridEditor({
             <button className={tab === 'sel' ? 'on' : ''} onClick={() => setTab('sel')}>✓ 선택 {selected.size}</button>
             <button className={tab === 'stg' ? 'on' : ''} onClick={() => setTab('stg')}>📦 창고 {stgList.length}</button>
             <button className={tab === 'chg' ? 'on' : ''} onClick={() => setTab('chg')}>변경 {changes.length}</button>
+            <button className={tab === 'opn' ? 'on' : ''} style={stgList.length ? { color: '#a3e635' } : undefined}
+              onClick={() => setTab('opn')}>🅿 빈자리 {openSlots.length}</button>
             <button className={tab === 'hid' ? 'on' : ''} style={hidden.length ? { color: '#fca5a5' } : undefined}
               onClick={() => setTab('hid')}>⚠ 안 보임 {hidden.length}</button>
           </div>
@@ -723,6 +789,27 @@ export default function BayGridEditor({
                   <div key={cn} className="bge-chip" draggable onDragStart={(e) => dragStart(e, cn)} onDragEnd={clearOver} title="베이 칸으로 끌어 배치">
                     {cn} <span style={{ opacity: .55 }}>{isoToLabel(state.byCn.get(cn)?.iso) || ''}</span>
                     {state.unplaced?.has(cn) && <span style={{ color: '#fbbf24', marginLeft: 4 }}>미배정</span>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {tab === 'opn' && (
+            <>
+              <div className="bge-drop" style={{ borderColor: '#65a30d', color: '#a3e635' }}>
+                선적 안 된 자리 <b>{openSlots.length}</b>곳
+                <br />{stgList.length
+                  ? <>임시창고에 <b>{stgList.length}대</b> 대기 중 — 자리를 누르면 놓을 컨을 골라 줍니다</>
+                  : '놓을 컨이 임시창고에 없습니다'}
+              </div>
+              <div className="bge-list">
+                {openByBox.length === 0 && <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', marginTop: 16 }}>빈 자리 없음</div>}
+                {openByBox.map((g) => (
+                  <div key={g.boxKey} className="bge-chg" style={{ cursor: 'pointer' }}
+                    onClick={() => { setSelIdx(g.page); setMsg(`BAY ${g.label} — 빈 자리 ${g.slots.length}곳. 자리를 누르면 놓을 컨을 고릅니다`); }}>
+                    <b>BAY {g.label}</b> — 빈 자리 {g.slots.length}곳<br />
+                    <i>{g.slots.slice(0, 8).map((e) => `${e.sec} ${e.row}열 ${e.tier}단`).join(' · ')}{g.slots.length > 8 ? ` 외 ${g.slots.length - 8}곳` : ''}</i>
                   </div>
                 ))}
               </div>
@@ -772,6 +859,40 @@ export default function BayGridEditor({
           {sideExtra}
         </div>
       </div>
+
+      {/* V9.23-07: 빈 자리를 누르면 뜨는 '놓을 컨 고르기'. 좌표를 외워 끌 필요가 없다. */}
+      {picker && (
+        <div className="bge-pick-back" onClick={() => setPicker(null)}>
+          <div className="bge-pick" onClick={(e) => e.stopPropagation()}>
+            <div className="bge-pick-h">
+              BAY {picker.label} · {P.pad2(picker.row)}열 {picker.tier}단
+              <span>여기에 놓을 컨을 고르십시오</span>
+            </div>
+            <div className="bge-pick-list">
+              {stgList.length === 0 && <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', padding: 20 }}>임시창고가 비어 있습니다</div>}
+              {stgList.map((cn) => {
+                const c = state.byCn.get(cn) || {};
+                return (
+                  <button key={cn} className="bge-pick-item" onClick={() => {
+                    const opts = picker.even ? { pairEven: picker.even, pairOdd: picker.odd } : {};
+                    const r = P.placeAt(state, cn, picker.even || picker.odd, picker.row, picker.tier, opts);
+                    setMsg(r.ok
+                      ? `${cn} → BAY ${picker.label} ${P.pad2(picker.row)}열 ${picker.tier}단 선적`
+                      : `놓을 수 없습니다: ${r.reason}`);
+                    if (r.ok) setPicker(null);
+                    bump();
+                  }}>
+                    <b>{cn}</b>
+                    <span>{isoToLabel(c.iso) || c.iso || ''} {c.pol || ''}→{c.pod || ''}
+                      {state.unplaced?.has(cn) && <em> · 미배정</em>}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button className="bge-btn r" style={{ margin: 8 }} onClick={() => setPicker(null)}>닫기</button>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );
