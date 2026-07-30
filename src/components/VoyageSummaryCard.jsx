@@ -61,6 +61,21 @@ export default function VoyageSummaryCard({ voyage, mode }) {
     const iso403Targets = containers.filter(isISO403);
     const iso403Pending = iso403Targets.filter(c => !isISO403PhotoTaken(c));
 
+    // V9.24: 자리 중복 검출 (STSE 2658W 사고 — 두 컨이 같은 자리) — 실체 우선 유효 위치 기준
+    const _p2d = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
+    const _posCnt = new Map();
+    containers.forEach(c => {
+      if (String(c.bay_actual || '').startsWith('__')) return;   // 임시창고 제외
+      const hasA = c.bay_actual !== undefined && c.bay_actual !== '' && c.bay_actual !== null;
+      const b = hasA ? c.bay_actual : c.bay, r = hasA ? c.row_actual : c.row, t = hasA ? c.tier_actual : c.tier;
+      if (!b || !t) return;
+      const k = `${_p2d(b)}-${_p2d(r)}-${_p2d(t)}`;
+      if (k.startsWith('00-')) return;
+      if (!_posCnt.has(k)) _posCnt.set(k, []);
+      _posCnt.get(k).push(c.cn);
+    });
+    const dupPos = [..._posCnt.entries()].filter(([, v]) => v.length > 1);
+
     // M4.9e: 자리 뺏긴 검출 (선적 모드만, VoyagePage와 동일 로직)
     let displaced = 0;
     if (mode === 'loading') {
@@ -89,6 +104,7 @@ export default function VoyageSummaryCard({ voyage, mode }) {
       iso403Total: iso403Targets.length,
       iso403Pending: iso403Pending.length,
       displaced,
+      dupPos,   // V9.24: [[자리키, [cn,...]], ...]
     };
   }, [voyage, mode]);
 
@@ -147,6 +163,14 @@ export default function VoyageSummaryCard({ voyage, mode }) {
             color={summary.iso403Pending > 0 ? 'blue' : 'emerald'}
             label="풀 리퍼 사진"
             value={`${summary.iso403Total - summary.iso403Pending}/${summary.iso403Total}${summary.iso403Pending > 0 ? ` · ⚠${summary.iso403Pending}` : ''}`}
+          />
+        )}
+        {summary.dupPos?.length > 0 && (
+          <Chip
+            icon={AlertTriangle}
+            color="red"
+            label="🔴 자리 중복"
+            value={`${summary.dupPos.length}곳 — ${summary.dupPos.slice(0, 2).map(([k, v]) => `${k.replace(/-/g, '/')} ${v.join('·')}`).join(', ')}${summary.dupPos.length > 2 ? ' 외' : ''}`}
           />
         )}
         {mode === 'loading' && summary.displaced > 0 && (

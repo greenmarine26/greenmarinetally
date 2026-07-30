@@ -95,9 +95,34 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     const r = String(actualRow || '').trim().toUpperCase();
     const t = String(actualTier || '').trim().toUpperCase();
     if (!b || !r || !t) { alert('베이/열/단 모두 입력하세요'); return; }
-    await fbSetActualPosition(voyageKey, mode, c.cn, b, r, t, inspector);
-    setEditingActualPos(false);
-    setActualBay(''); setActualRow(''); setActualTier('');
+    // V9.24: 점유 확인 — 두 컨이 같은 자리가 되는 걸 저장 전에 알린다 (STSE 2658W 중복 사고).
+    //   차단하지 않는다(사용자 원칙: 블럭하면 수정 자체가 안 된다) — 경고 후 확인되면 저장.
+    const _p2 = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
+    const _tk = `${_p2(b)}-${_p2(r)}-${_p2(t)}`;
+    const _occ = (allContainers || []).find((o) => {
+      if (!o || !o.cn || o.cn === c.cn) return false;
+      if (String(o.bay_actual || '').startsWith('__')) return false;   // 임시창고 제외
+      const hasA = o.bay_actual !== undefined && o.bay_actual !== '' && o.bay_actual !== null;
+      const ob = hasA ? o.bay_actual : o.bay, orr = hasA ? o.row_actual : o.row, ot = hasA ? o.tier_actual : o.tier;
+      if (!ob || !ot) return false;
+      return `${_p2(ob)}-${_p2(orr)}-${_p2(ot)}` === _tk;
+    });
+    const _doSave = async () => {
+      await fbSetActualPosition(voyageKey, mode, c.cn, b, r, t, inspector);
+      setEditingActualPos(false);
+      setActualBay(''); setActualRow(''); setActualTier('');
+    };
+    if (_occ) {
+      const kind = (_occ.bay_actual !== undefined && _occ.bay_actual !== '' && _occ.bay_actual !== null) ? '수정 위치' : '계획 위치';
+      askConfirm({
+        title: '⚠ 자리 중복',
+        message: `그 자리(BAY ${_p2(b)} / ${_p2(r)}열 / ${_p2(t)}단)에는 이미 ${_occ.cn}이(가) 있습니다 (${kind}).\n두 컨테이너가 같은 자리에 있을 수는 없습니다.\n상대 컨을 먼저 옮겼다면 계속 저장하세요.`,
+        confirmLabel: '그래도 저장', danger: true,
+        onConfirm: _doSave,
+      });
+      return;
+    }
+    await _doSave();
   };
 
   // M4.9d-fix: 실체 위치 삭제 (수정 취소 - 계획대로 돌아감)

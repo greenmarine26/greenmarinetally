@@ -48,6 +48,21 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
       ? Object.keys(xrayMap).filter(cn => !xraySeals[cn]?.seal)
       : [];
 
+    // V9.24: 자리 중복 (STSE 2658W 사고 — 두 컨이 같은 자리, 절대 있어선 안 됨)
+    const _p2d = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
+    const _posCnt = new Map();
+    containers.forEach(c => {
+      if (String(c.bay_actual || '').startsWith('__')) return;
+      const hasA = c.bay_actual !== undefined && c.bay_actual !== '' && c.bay_actual !== null;
+      const b = hasA ? c.bay_actual : c.bay, r = hasA ? c.row_actual : c.row, t = hasA ? c.tier_actual : c.tier;
+      if (!b || !t) return;
+      const k = `${_p2d(b)}-${_p2d(r)}-${_p2d(t)}`;
+      if (k.startsWith('00-')) return;
+      if (!_posCnt.has(k)) _posCnt.set(k, []);
+      _posCnt.get(k).push(c.cn);
+    });
+    const dupPos = [..._posCnt.entries()].filter(([, v]) => v.length > 1);
+
     // 자리 뺏긴 컨 (선적 모드만)
     let displaced = [];
     if (mode === 'loading') {
@@ -112,6 +127,15 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
           : 'X-RAY 없음',
         color: xrayPending.length > 0 ? 'purple' : 'emerald',
         jumpTo: { tab: 'list', filter: 'xray' },
+      }] : []),
+      ...(dupPos.length > 0 ? [{
+        id: 'dupPos',
+        icon: AlertTriangle,
+        label: '🔴 자리 중복 — 즉시 정리',
+        count: dupPos.length,
+        desc: dupPos.slice(0, 3).map(([k, v]) => `${k.replace(/-/g, '/')}: ${v.join(' · ')}`).join('  |  ') + (dupPos.length > 3 ? ` 외 ${dupPos.length - 3}곳` : ''),
+        color: 'red',
+        jumpTo: { tab: 'bay' },
       }] : []),
       ...(mode === 'loading' ? [
         {

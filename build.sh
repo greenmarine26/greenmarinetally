@@ -133,9 +133,10 @@ echo "✓ 루트 참조 파일 존재 확인: $REFJS, $REFCSS"
 # V9.23-06: 렌더 연막검사 — 실제로 한 번 그려 본다.
 #   빌드 성공·번들 grep 통과에도 앱이 죽은 사고(hidden→issues TDZ)를 겪었다.
 echo "[+] 렌더 연막검사 (BayGridEditor)..."
+SMOKE_OUT=$(mktemp /tmp/_smoke_XXXXXX.js)   # V9.24: 고정 경로가 타 세션 잔재(권한 다른 uid)와 충돌해 검사가 통째로 건너뛰어졌다
 if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
-     --outfile=/tmp/_smoke.js --define:process.env.NODE_ENV='"development"' --log-level=error; then
-  node tools/smoke_render.cjs /tmp/_smoke.js || { echo "✗ 렌더 연막검사 실패 — 배포 금지"; exit 1; }
+     --outfile="$SMOKE_OUT" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+  node tools/smoke_render.cjs "$SMOKE_OUT" || { echo "✗ 렌더 연막검사 실패 — 배포 금지"; exit 1; }
 else
   echo "⚠ 연막검사 번들 실패 — 건너뜀"
 fi
