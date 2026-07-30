@@ -15,8 +15,15 @@ import * as P from '../planEditCore.js';
 const pad2 = (v) => String(v ?? '').padStart(2, '0');
 
 export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorkers = [], onClose }) {
-  const hasLoad = !!(voyage?.loading?.ediContainers && Object.keys(voyage.loading.ediContainers).length);
-  const hasDis = !!(voyage?.discharge?.ediContainers && Object.keys(voyage.discharge.ediContainers).length);
+  // V9.23-02: 탭 표시 기준을 편집 데이터 출처와 일치시킨다 (사용자 신고 STSE2658W — 선적 탭이 안 보임).
+  //   V9.07-03에서 컨 목록을 fullEdiMapOf(raw EDI 우선)로 바꿨는데 탭 조건만 ediContainers로 남아,
+  //   raw EDI만 있고 ediContainers가 빈 섹션은 자료가 있는데도 탭이 통째로 사라졌다.
+  //   raw 파싱은 무거우므로 존재 여부만 싸게 본다(fullEdiMapOf가 raw를 쓰는 조건과 동일: 길이>50).
+  const secHasEdi = (m) =>
+    (typeof m?.raw?.edi?.text === 'string' && m.raw.edi.text.length > 50) ||
+    Object.keys(m?.ediContainers || {}).length > 0;
+  const hasLoad = secHasEdi(voyage?.loading);
+  const hasDis = secHasEdi(voyage?.discharge);
   const [mode, setMode] = useState(hasLoad ? 'loading' : 'discharge');
   const [saving, setSaving] = useState(false);
   const [seq, setSeq] = useState(0);              // 저장 후 편집기 재생성용
@@ -86,14 +93,14 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
 
   const modeTabs = (
     <>
-      {hasDis && (
-        <button className={`bge-btn${mode === 'discharge' ? ' p' : ''}`}
-          onClick={() => { setMode('discharge'); setSeq((n) => n + 1); }}>양하</button>
-      )}
-      {hasLoad && (
-        <button className={`bge-btn${mode === 'loading' ? ' p' : ''}`}
-          onClick={() => { setMode('loading'); setSeq((n) => n + 1); }}>선적</button>
-      )}
+      <button className={`bge-btn${mode === 'discharge' ? ' p' : ''}`} disabled={!hasDis}
+        title={hasDis ? '' : '양하 EDI 자료 없음'}
+        onClick={() => { if (!hasDis) return; setMode('discharge'); setSeq((n) => n + 1); }}>
+        양하{hasDis ? '' : ' (자료 없음)'}</button>
+      <button className={`bge-btn${mode === 'loading' ? ' p' : ''}`} disabled={!hasLoad}
+        title={hasLoad ? '' : '선적 EDI 자료 없음'}
+        onClick={() => { if (!hasLoad) return; setMode('loading'); setSeq((n) => n + 1); }}>
+        선적{hasLoad ? '' : ' (자료 없음)'}</button>
       {activeWorkers.length > 0 && (
         <span className="bge-badge" title={activeWorkers.join(', ')}>작업중 {activeWorkers.length}명</span>
       )}
