@@ -1870,3 +1870,40 @@ export async function fbSaveShipIntro(shipId, text, by, sources = []) {
   await set(ref(db, `ship_intros/${shipId}`), rec);   // V9.18-01: 출처 링크 동봉
   return true;
 }
+
+// ── V9.25: 검증 모드(테스트 랩) — 검수확인 전체 취소 (성일님 전용 재검수 도구) ──
+//   패치 빌더는 순수 함수로 분리해 실데이터 시뮬로 검증한다.
+export function buildBulkCancelPatch(records) {
+  const patch = {};
+  let actualCnt = 0;
+  for (const [cn, r] of Object.entries(records || {})) {
+    if (!r || typeof r !== 'object') continue;
+    if (r.bay_actual !== undefined && r.bay_actual !== null && r.bay_actual !== '') {
+      for (const f of ['bay_actual', 'row_actual', 'tier_actual', 'actual_at', 'actual_by']) {
+        patch[`records/${cn}/${f}`] = null;
+      }
+      actualCnt++;
+    }
+  }
+  return { patch, actualCnt };
+}
+
+export async function fbBulkCancelComplete(voyageKey, mode, { resetActuals = false } = {}) {
+  const base = `voyages/${voyageKey}/${mode}`;
+  const compSnap = await get(ref(db, `${base}/completed`));
+  const comp = compSnap.val() || {};
+  const canceled = Object.keys(comp).length;
+  const updates = { [`${base}/completed`]: null };
+  let actualsReset = 0;
+  if (resetActuals) {
+    const recSnap = await get(ref(db, `${base}/records`));
+    const { patch, actualCnt } = buildBulkCancelPatch(recSnap.val() || {});
+    actualsReset = actualCnt;
+    for (const [k, v] of Object.entries(patch)) updates[`${base}/${k}`] = v;
+  }
+  // 마감 플래그 해제 — 재검수 시 화면이 '마감됨'으로 남지 않도록
+  updates[`voyages/${voyageKey}/info/${mode === 'loading' ? 'loadingDone' : 'dischargeDone'}`] = null;
+  updates[`voyages/${voyageKey}/info/${mode === 'loading' ? 'loadingDoneAt' : 'dischargeDoneAt'}`] = null;
+  await update(ref(db), updates);
+  return { canceled, actualsReset };
+}

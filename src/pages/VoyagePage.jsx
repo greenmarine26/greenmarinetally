@@ -55,6 +55,7 @@ import DeckPlanView from '../components/DeckPlanView.jsx';
 import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
+import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 
 // V9.03: 긴급/수화물 마커 주입 — 예보(카톡·연태훼리 CLL 메일)에 담긴 컨번호를 렌더 시점에
 //   c.urgent/c.lugg 플래그로 붙인다. 데이터(ediContainers)에 쓰지 않으므로 EDI가 예보보다
@@ -2413,6 +2414,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
 
   // M5.26: 통합 출력 허브 모달
   const [showPrintHub, setShowPrintHub] = useState(false);
+  const [showTestLab, setShowTestLab] = useState(false);   // V9.25: 검증 모드 (검수원 '김성일'만 노출)
 
   return (
     <div className="space-y-3">
@@ -2457,6 +2459,21 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           voyageKey={voyageKey}
           onClose={() => setShowPrintHub(false)}
         />
+      )}
+      {/* V9.25: 🧪 검증 모드 — 검수원 '김성일' 선택 시에만 노출 (사용자 요청: "저만 보이게") */}
+      {inspector === '김성일' && (
+        <button onClick={() => setShowTestLab(true)}
+          className="w-full bg-fuchsia-950/40 hover:bg-fuchsia-900/50 border border-fuchsia-700/50 rounded-lg p-3 flex items-center gap-3 active:scale-[0.98] transition">
+          <span className="text-2xl">🧪</span>
+          <div className="flex-1 text-left">
+            <div className="font-bold text-fuchsia-200">검증 모드 (테스트 랩)</div>
+            <div className="text-[10px] text-fuchsia-300/70">검수확인 전체 취소 등 재검수 도구 — 성일님 전용</div>
+          </div>
+          <span className="text-fuchsia-300">›</span>
+        </button>
+      )}
+      {showTestLab && inspector === '김성일' && (
+        <TestLabModal voyage={voyage} voyageKey={voyageKey} onClose={() => setShowTestLab(false)}/>
       )}
       {/* M6.14: STOWAGE PDF 자동 분석 검토 모달 */}
       {stowagePdfFile && (
