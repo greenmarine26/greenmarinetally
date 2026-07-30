@@ -130,16 +130,24 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     if (workFilter === 'completed') return [];
     const is40 = (c) => { const f = String(c.iso || '')[0]; return f === '4' || f === 'L' || f === '9' || String(c.tp || '').includes('40'); };
     const map = {};
+    // V9.23-08: 좌표 없는 컨을 버리지 않는다 — 버리면 "대기 N대"인데 고를 베이가 없어진다.
+    //   (2658W 실측: 남은 14대가 전부 좌표 없는 엠티라 화면이 "남은 작업 없음"으로 보였다)
+    const NOBAY = -1;
     allContainers.forEach(c => {
-      if (c._mode !== workFilter || !c._ptk || c._comp || !c.bay) return;
-      const center = manualGroupCenterOf(c.bay);
+      if (c._mode !== workFilter || !c._ptk || c._comp) return;
+      const center = c.bay ? manualGroupCenterOf(c.bay) : NOBAY;
       if (center == null) return;
+      if (center === NOBAY) {
+        const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
+        g0.count++;
+        return;
+      }
       const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
       g.bays.add(parseInt(c.bay, 10)); g.count++;
       const isDeck = parseInt(c.tier, 10) >= 80, big = is40(c);
       if (isDeck) { g.deck++; big ? g.deck40++ : g.deck20++; } else { g.hold++; big ? g.hold40++ : g.hold20++; }
     });
-    return Object.values(map).sort((a, b) => a.center - b.center);
+    return Object.values(map).sort((a, b) => a.center - b.center);   // 자리 미지정(-1)이 맨 앞
   }, [allContainers, workFilter, manualBayPairs]);
   // 작업 모드 바뀌면 선택 리셋
   useEffect(() => { setManualBay(null); setManualTier(null); }, [workFilter]);
@@ -149,8 +157,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     if (manualBay == null || !manualTier) { fbSetInspectorActivity(inspector, voyageKey, workFilter).catch(() => {}); return; }
     const g = manualGroups.find(x => x.center === manualBay);
     const bays = g ? [...g.bays].sort((a, b) => a - b) : [manualBay];
-    const bayLabel = bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0');
-    const remain = manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0);
+    const bayLabel = g?.noBay ? '미지정' : (bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0'));
+    const remain = g?.noBay ? (g.count || 0) : (manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0));
     fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
   }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups]);
   const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier };
@@ -269,7 +277,14 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           <div className="text-sm font-bold text-amber-300">작업할 베이를 선택하세요 <span className="text-[11px] text-slate-500 font-normal">(수동)</span></div>
           {manualGroups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
           <div className="grid grid-cols-3 gap-2">
-            {manualGroups.map(g => (
+            {manualGroups.map(g => g.noBay ? (
+              <button key="nobay" onClick={() => { setManualBay(g.center); setManualTier('none'); }}
+                className="py-3 rounded-lg bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
+                <div className="font-bold text-base">⚠ 자리 미지정</div>
+                <div className="text-[10px] text-amber-300">남은 {g.count}대 — 리스트엔 있는데 적부 좌표가 없습니다</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">눌러서 조회·작업 · 위치는 베이상세편집에서 지정</div>
+              </button>
+            ) : (
               <button key={g.center} onClick={() => setManualBay(g.center)}
                 className="py-3 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-700 text-slate-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
@@ -314,12 +329,13 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       )}
       {workFilter !== 'completed' && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
-        const bayLbl = g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay);
+        const noBay = !!g?.noBay;
+        const bayLbl = noBay ? '자리 미지정' : (g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay));
         // V8.09-17 (메모5): 수동도 자동 가이드처럼 진행상태(잔여 N대)를 보이게. 현재 단의 미완료 잔여.
-        const remain = g ? (manualTier === 'hold' ? g.hold : g.deck) : 0;
+        const remain = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? g.hold : g.deck) : 0);
         return (
           <div className="flex items-center gap-2 text-[11px] bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5">
-            <span className="font-bold text-amber-300">📍 {bayLbl}번 {manualTier === 'hold' ? '홀드' : '데크'} 작업 중</span>
+            <span className="font-bold text-amber-300">📍 {noBay ? '⚠ 자리 미지정 작업 중' : `${bayLbl}번 ${manualTier === 'hold' ? '홀드' : '데크'} 작업 중`}</span>
             <span className="font-black text-emerald-300 bg-emerald-950/50 border border-emerald-800 rounded px-1.5 py-0.5">잔여 {remain}대</span>
             <button onClick={() => { setManualTier(null); }} className="text-slate-400 hover:text-amber-300">단 변경</button>
             <button onClick={() => { setManualBay(null); setManualTier(null); }} className="text-slate-400 hover:text-amber-300">베이 변경</button>
@@ -415,6 +431,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     //   완전히 숨기지 않음(통과화물·단 밖도 찾아줘야 함 — V7.53 회귀 방지) — 우선 정렬로 오선택만 방지.
     const inManualTier = (c) => {
       if (!manualCtx || manualCtx.selectedGroup == null || !manualCtx.selectedTier) return false;
+      if (manualCtx.selectedGroup === -1) return !c.bay;   // V9.23-08: 자리 미지정 묶음
       const bp = manualCtx.bayPairs || {};
       const gc = (bs) => { const b = parseInt(bs, 10); if (!Number.isFinite(b)) return null; if (b % 2 === 0) return b; const p = bp[String(b)]; return p ? (b + parseInt(p, 10)) / 2 : b; };
       if (gc(c.bay) !== manualCtx.selectedGroup) return false;

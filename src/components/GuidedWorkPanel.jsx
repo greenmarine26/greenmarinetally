@@ -678,7 +678,27 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <SettingsBar/>
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
           <div className="text-sm font-bold text-violet-300">작업할 베이를 선택하세요</div>
-          {groups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
+          {groups.length === 0 && unassigned.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {mode === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
+          {/* V9.23-08: 좌표 없는 컨은 어느 베이 묶음에도 안 들어간다. 여기서 안 보여 주면
+              "대기 N대"인데 고를 베이가 없어 작업이 막힌다(2658W 신고). */}
+          {unassigned.length > 0 && (
+            <button onClick={() => setShowUnassigned(v => !v)}
+              className="w-full py-3 rounded-lg bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100">
+              <div className="font-bold text-base">⚠ 자리 미지정 {unassigned.length}대</div>
+              <div className="text-[10px] text-amber-300">리스트엔 있는데 적부 좌표가 없습니다 — 눌러서 목록 보기</div>
+            </button>
+          )}
+          {unassigned.length > 0 && showUnassigned && (
+            <div className="space-y-1">
+              {unassigned.map(c => (
+                <button key={c.cn} onClick={() => onOpenContainer?.(c)}
+                  className="w-full flex justify-between items-center bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs">
+                  <span className="mono font-bold text-slate-100">{c.cn}</span>
+                  <span className="text-[10px] text-amber-400">탭하여 작업 · 위치는 베이상세편집에서 지정</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-2">
             {groups.map(g => (
               <button key={g.center} onClick={() => { setSelectedGroup(g.center); setConsecFix(0); setDeckPromptDone(false); setFixOpen(false); }}
