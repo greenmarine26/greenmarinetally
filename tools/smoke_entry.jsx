@@ -26,7 +26,8 @@ for (const bay of ['01', '03', '04', '05']) {
   }
 }
 // 좌표 없는 컨(미배정) — 임시창고로 가야 한다
-for (let k = 0; k < 3; k++) containers.push({ cn: mkCn(i++), bay: '', row: '', tier: '', iso: '22GP', pol: 'KRPTK', pod: 'CNTAO', fe: 'E' });
+//   ChiefBayEdit 는 pad2()로 넘기므로 빈 좌표가 '00'이 되어 온다 — 그 경로까지 검사한다(V9.23-08 사고).
+for (let k = 0; k < 3; k++) containers.push({ cn: mkCn(i++), bay: k === 0 ? '' : '00', row: '00', tier: '00', iso: '22GP', pol: 'KRPTK', pod: 'CNTAO', fe: 'E' });
 
 createRoot(document.getElementById('root')).render(
   React.createElement(BayGridEditor, {
