@@ -295,6 +295,50 @@ export default function BayGridEditor({
     });
   }, [page, state, mk, tick]);
 
+  // V9.23-04: 격자에 안 나타나는 컨 찾기 (사용자 신고 — 놓였는데 보이지도 고치지도 못함)
+  //   ① 좌표중복: 같은 bay/row/tier에 둘 이상 → cellMap이 덮어써 하나만 그려진다
+  //   ② 격자 밖: 베이사전에 없는 베이·비활성 칸 → 어느 페이지에도 안 그려진다
+  //   둘 다 편집기에서 손댈 방법이 없었다. 목록으로 꺼내 선택·보관할 수 있게 한다.
+  const drawable = useMemo(() => {
+    const ok = new Set();
+    if (!state || !matrixBays.length) return ok;
+    for (const pg of pages) {
+      for (const k of pg.boxKeys) {
+        const isPair = String(k).startsWith('(');
+        const m = String(k).replace(/[()]/g, '');
+        const bs = isPair ? [num(m.slice(0, 2)), num(m.slice(2))] : [num(k)];
+        const d = mk(k);
+        if (!d) continue;
+        const active = new Set();
+        for (const r of [...(d.deckRows || []), ...(d.holdRows || [])]) {
+          for (const c of (r.cells || [])) if (c.active && c.rowLbl) active.add(`${P.pad2(r.tier)}-${c.rowLbl}`);
+        }
+        for (const [cn, pos2] of Object.entries(state.pos)) {
+          if (pos2.storage || ok.has(cn)) continue;
+          if (!bs.includes(num(pos2.bay))) continue;
+          if (active.has(`${pos2.tier}-${pos2.row}`)) ok.add(cn);
+        }
+      }
+    }
+    return ok;
+  }, [state, pages, mk, matrixBays, tick]);
+
+  const hidden = useMemo(() => {
+    if (!state) return [];
+    const dupCns = new Set();
+    for (const d of (issues?.dup || [])) for (const cn of d.cns.slice(1)) dupCns.add(cn);
+    const out = [];
+    for (const [cn, pos2] of Object.entries(state.pos)) {
+      if (pos2.storage) continue;
+      const isDup = dupCns.has(cn);
+      const offGrid = !drawable.has(cn);
+      if (!isDup && !offGrid) continue;
+      out.push({ cn, bay: pos2.bay, row: pos2.row, tier: pos2.tier,
+                 why: isDup ? '좌표중복' : '격자 밖' });
+    }
+    return out.sort((a, b) => (a.bay + a.row + a.tier).localeCompare(b.bay + b.row + b.tier));
+  }, [state, drawable, issues, tick]);
+
   const stats = useMemo(() => (state ? P.summarize(state) : null), [state, tick]);
   const changes = useMemo(() => (state ? P.diffChanges(state) : []), [state, tick]);
   const changedSet = useMemo(() => new Set(changes.map((c) => c.cn)), [changes]);
@@ -401,6 +445,13 @@ export default function BayGridEditor({
     setMsg(`임시창고 보관 ${r.done.length}대${r.skipped.length ? ` (거부 ${r.skipped.length})` : ''}`);
     setSelected(new Set()); bump();
   };
+  // V9.23-04: 목록에서 직접 보관 (안 보임 패널용)
+  const sendCns = (cns) => {
+    if (!state || !cns.length) return;
+    const r = P.moveToStorage(state, cns);
+    setMsg(`임시창고 보관 ${r.done.length}대${r.skipped.length ? ` (${lockHint} ${r.skipped.length} 제외)` : ''}`);
+    setSelected(new Set()); bump();
+  };
   const sendSelected = () => {
     const r = P.moveToStorage(state, [...selected]);
     setMsg(`임시창고 보관 ${r.done.length}대${r.skipped.length ? ` (${lockHint} ${r.skipped.length} 제외)` : ''}`);
@@ -495,9 +546,18 @@ export default function BayGridEditor({
       //   차지하고 있는 컨 자체는 끌어 옮기거나 눌러 선택할 수 있어야 한다.
       const aCn = box.adjCnMap[akey];
       const aLock = aCn ? state.locked.has(aCn) : true;
+      // V9.23-04: 폰에는 풍선말이 안 뜬다 — 눌렀을 때·떨어뜨렸을 때 상태줄로 이유를 말한다.
+      const why = aCn
+        ? `이 자리는 ${box.adjBayMap[akey]}베이 ${aCn}(${adj}ft)이 차지하고 있습니다`
+        : `이 자리는 옆 베이 ${adj}ft가 차지하고 있습니다`;
+      const tell = () => setMsg(aLock
+        ? `${why} — ${lockHint}이라 옮길 수 없습니다`
+        : `${why} — 그 컨을 먼저 옮기면 이 자리가 납니다 (선택됨)`);
       return {
         'data-cn': aCn || undefined,
         draggable: !!aCn && !aLock,
+        onDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; },
+        onDrop: (e) => { e.preventDefault(); clearOver(); tell(); },
         className: `cpv2-cell ${adj === '40' ? 'bge-x' : 'bge-shadow'}`
           + (aCn && selected.has(aCn) ? ' bge-picked' : '')
           + (aCn && changedSet.has(aCn) ? ' bge-chgd' : ''),
@@ -506,8 +566,13 @@ export default function BayGridEditor({
           : `옆 베이 ${adj}ft가 차지한 자리 — 배치 불가`,
         onDragStart: aCn && !aLock ? (e) => dragStart(e, aCn) : undefined,
         onDragEnd: aCn && !aLock ? () => clearOver() : undefined,
-        onClick: aCn && !aLock ? (e) => { e.stopPropagation(); toggleSel(aCn); } : undefined,
+        onClick: (e) => { e.stopPropagation(); if (aCn && !aLock) toggleSel(aCn); tell(); },
       };
+    }
+    // 슬롯이 없는 칸도 조용히 넘기지 않는다
+    if (!cell.active && akey) {
+      return { className: 'cpv2-cell',
+        onClick: (e) => { e.stopPropagation(); setMsg('이 자리는 이 배에 슬롯이 없습니다 (베이사전 기준)'); } };
     }
     const dropProps = cell.active && cell.rowLbl ? {
       onDragOver: (e) => {
@@ -517,7 +582,12 @@ export default function BayGridEditor({
       },
       onDrop: (e) => dropCell(e, box, cell.rowLbl, tier),
     } : {};
-    if (!cn) return { ...dropProps, className: `cpv2-cell${cell.active ? ' bge-empty' : ''}` };
+    if (!cn) return { ...dropProps, className: `cpv2-cell${cell.active ? ' bge-empty' : ''}`,
+      onClick: cell.active ? (e) => { e.stopPropagation();
+        setMsg(selected.size
+          ? `빈 자리 ${P.pad2(cell.rowLbl)}열 ${P.pad2(tier)}단 — 선택한 ${selected.size}대를 여기로 끌어 놓으십시오`
+          : `빈 자리 ${P.pad2(cell.rowLbl)}열 ${P.pad2(tier)}단 — 임시창고나 다른 칸에서 컨을 끌어 놓으십시오`);
+      } : undefined };
     const c = state.byCn.get(cn) || {};
     const locked = state.locked.has(cn);
     return {
@@ -527,7 +597,13 @@ export default function BayGridEditor({
       title: `${cn}\n${isoToLabel(c.iso) || c.iso} · ${c.pol || ''}→${c.pod || ''}${locked ? `\n${lockHint} — 이동 불가` : ''}${state.shiftSet.has(cn) ? '\n◆ 쉬프팅(재적부)' : ''}`,
       onDragStart: (e) => dragStart(e, cn),
       onDragEnd: () => clearOver(),
-      onClick: (e) => { e.stopPropagation(); toggleSel(cn); },
+      onClick: (e) => {
+        e.stopPropagation(); toggleSel(cn);
+        const p2 = state.pos[cn] || {};
+        setMsg(locked
+          ? `${cn} · ${p2.bay}베이 ${p2.row}열 ${p2.tier}단 — ${lockHint}이라 이동 불가`
+          : `${cn} · ${p2.bay}베이 ${p2.row}열 ${p2.tier}단 (${isoToLabel(c.iso) || c.iso || ''}) — 끌어서 옮기거나 보관하십시오`);
+      },
     };
   };
 
@@ -603,6 +679,8 @@ export default function BayGridEditor({
             <button className={tab === 'sel' ? 'on' : ''} onClick={() => setTab('sel')}>✓ 선택 {selected.size}</button>
             <button className={tab === 'stg' ? 'on' : ''} onClick={() => setTab('stg')}>📦 창고 {stgList.length}</button>
             <button className={tab === 'chg' ? 'on' : ''} onClick={() => setTab('chg')}>변경 {changes.length}</button>
+            <button className={tab === 'hid' ? 'on' : ''} style={hidden.length ? { color: '#fca5a5' } : undefined}
+              onClick={() => setTab('hid')}>⚠ 안 보임 {hidden.length}</button>
           </div>
 
           {tab === 'sel' && (
@@ -634,12 +712,14 @@ export default function BayGridEditor({
                 onDragOver={(e) => { e.preventDefault(); setStgOver(true); }}
                 onDragLeave={() => setStgOver(false)} onDrop={dropStorage}>
                 여기로 컨을 끌어다 놓기<br />= 임시창고 보관
+                <br /><span style={{ color: '#fbbf24' }}>미배정</span> = EDI에 자리 없는 컨 (호출해서 베이에 놓으십시오)
               </div>
               <div className="bge-list">
                 {stgList.length === 0 && <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', marginTop: 16 }}>비어 있음</div>}
                 {stgList.map((cn) => (
                   <div key={cn} className="bge-chip" draggable onDragStart={(e) => dragStart(e, cn)} onDragEnd={clearOver} title="베이 칸으로 끌어 배치">
                     {cn} <span style={{ opacity: .55 }}>{isoToLabel(state.byCn.get(cn)?.iso) || ''}</span>
+                    {state.unplaced?.has(cn) && <span style={{ color: '#fbbf24', marginLeft: 4 }}>미배정</span>}
                   </div>
                 ))}
               </div>
@@ -653,6 +733,37 @@ export default function BayGridEditor({
                 <div key={c.cn} className="bge-chg"><b>{c.shifting ? '◆ ' : ''}{c.cn}</b><br /><i>{c.fromLabel} → {c.toLabel}</i></div>
               ))}
             </div>
+          )}
+
+          {tab === 'hid' && (
+            <>
+              <div style={{ padding: '8px 8px 4px', fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
+                격자에 그려지지 않아 손댈 수 없던 컨입니다.<br />
+                <b style={{ color: '#e2e8f0' }}>좌표중복</b> = 같은 칸에 둘 이상 ·
+                <b style={{ color: '#e2e8f0' }}> 격자 밖</b> = 베이사전에 없는 자리<br />
+                보관으로 빼낸 뒤 원하는 칸에 다시 놓으십시오.
+              </div>
+              <div style={{ padding: '0 8px 6px' }}>
+                <button className="bge-btn p" style={{ width: '100%' }} disabled={!hidden.length}
+                  onClick={() => { const cns = hidden.map((h) => h.cn); setSelected(new Set(cns)); sendCns(cns); }}>
+                  {hidden.length}대 전부 임시창고로
+                </button>
+              </div>
+              <div className="bge-list">
+                {hidden.length === 0 && <div style={{ color: '#64748b', fontSize: 12, textAlign: 'center', marginTop: 16 }}>없음 — 모두 격자에 보입니다</div>}
+                {hidden.map((h) => (
+                  <div key={h.cn} className="bge-chip" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ flex: 1 }}>{h.cn}
+                      <span style={{ opacity: .6 }}> {isoToLabel(state.byCn.get(h.cn)?.iso) || ''}</span><br />
+                      <span style={{ fontSize: 11, color: h.why === '좌표중복' ? '#fca5a5' : '#fcd34d' }}>
+                        {h.why} · {h.bay}베이 {h.row}행 {h.tier}단</span>
+                    </span>
+                    <button className="bge-btn p" style={{ padding: '2px 7px', fontSize: 11 }}
+                      title="임시창고로 보내기" onClick={() => sendCns([h.cn])}>보관</button>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
 
           {sideExtra}
