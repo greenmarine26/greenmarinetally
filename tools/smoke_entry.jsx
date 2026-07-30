@@ -6,11 +6,19 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import BayGridEditor from '../src/components/BayGridEditor.jsx';
 
+// 합성 베이사전 — 사전이 없으면 격자가 아예 안 그려져 검사가 무의미해진다(V9.23-07 실측).
+const mkBay = (bayNo) => ({ bay: '0' + bayNo, bayNo, deckAlign: 'center', deckCells: [6, 6, 6],
+  deckHasZero: false, deckTiers: [86, 84, 82], hasDeck: true, hasHold: false, hasZero: false,
+  hatchCount: 1, holdAlign: 'center', holdCells: [], holdTiers: [], rowCount: 6, source: 'edi' });
+window.__fbShipBayDict = { SMOKE: { name: 'SMOKE', code: 'SMOKE', callsign: 'SMOKE1', imo: '',
+  bayDef: { baysSummary: ['01', '03', '04', '05'].map(mkBay), recordCount: 4, verified: true,
+            deckTiers: [86, 84, 82], holdTiers: [] } } };
+
 const mkCn = (i) => `TEST${String(1000000 + i).padStart(7, '0')}`;
 const containers = [];
 let i = 0;
 for (const bay of ['01', '03', '04', '05']) {
-  for (const row of ['01', '02', '03', '04']) {
+  for (const row of ['01', '02', '03', '04']) {   // 05·06열은 비워 둔다 = 검사할 빈 자리
     for (const tier of ['82', '84', '86']) {
       containers.push({ cn: mkCn(i++), bay, row, tier, iso: bay === '04' ? '42GP' : '22GP',
         pol: 'KRPTK', pod: 'CNTAO', fe: 'F', _mode: 'loading' });
