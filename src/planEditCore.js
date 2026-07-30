@@ -55,7 +55,10 @@ export function buildState(containers, listCns = [], shiftCns = [], opts = {}) {
     // V9.23-05: EDI에 적부 좌표가 없는 컨(미배정)은 가짜 좌표 00-00-00로 뭉쳐
     //   '좌표중복'으로 잡히고 격자 어디에도 안 그려져 손댈 수 없었다.
     //   실제 업무 흐름대로 임시창고에 넣어 두고, 호출하면 해당 베이에 선적한다.
-    const noSlot = !String(c.bay ?? '').trim() || !String(c.tier ?? '').trim();
+    // V9.23-08: 호출부가 pad2()로 넘기면 빈 값이 '00'이 된다(ChiefBayEdit 실측).
+    //   01단부터 시작하므로 베이·단의 '0'·'00'은 자리 없음과 같다.
+    const _noSlot = (v) => { const t = String(v ?? '').trim(); return !t || /^0+$/.test(t); };
+    const noSlot = _noSlot(c.bay) || _noSlot(c.tier);
     if (noSlot) unplaced.add(cn);
     const p = (stgSet.has(cn) || noSlot) ? { storage: true } : { bay: pad2(c.bay), row: pad2(c.row), tier: pad2(c.tier) };
     base[cn] = { ...p };

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.23-07';   // 빈 자리를 먼저 보여주고 눌러서 놓을 컨을 고르는 흐름 (좌표 입력 → 자리 선택으로 뒤집음)
+export const APP_VERSION = 'V9.23-08';   // 리스트에만 있는 컨(raw EDI 없음)을 살려 베이상세편집·작업패널에 노출 + 자리 미지정 묶음
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -2980,9 +2980,15 @@ export function fullEdiMapOf(sec) {
   const rawMap = ediMapFromRaw(sec);
   if (!rawMap) return ediMap;
   const m = { ...rawMap };
+  // V9.23-08: raw(BAPLIE)에 없는 실번호라도 리스트(records)나 완료(completed)에 있으면 실재하는 화물이다.
+  //   2658W 실측 — 선사가 엑셀 로드리스트로만 준 엠티 14대가 여기서 통째로 버려져
+  //   베이상세편집에도 작업패널에도 안 나왔다("대기 14대"인데 "남은 작업 없음").
+  //   구판·가상 잔재를 거르려던 조건이 진짜 화물까지 지우고 있었다.
+  const onList = sec?.records || {};
+  const done = sec?.completed || {};
   for (const [k, v] of Object.entries(ediMap)) {
     if (rawMap[k]) { m[k] = { ...rawMap[k], ...v }; continue; }
-    if (!/^[A-Z]{4}\d{7}$/.test(String(k))) m[k] = v;
+    if (!/^[A-Z]{4}\d{7}$/.test(String(k)) || onList[k] || done[k]) m[k] = v;
   }
   return m;
 }
