@@ -299,6 +299,8 @@ export default function BayGridEditor({
   //   ① 좌표중복: 같은 bay/row/tier에 둘 이상 → cellMap이 덮어써 하나만 그려진다
   //   ② 격자 밖: 베이사전에 없는 베이·비활성 칸 → 어느 페이지에도 안 그려진다
   //   둘 다 편집기에서 손댈 방법이 없었다. 목록으로 꺼내 선택·보관할 수 있게 한다.
+  const issues = useMemo(() => (state ? P.validate(state) : null), [state, tick]);
+
   const drawable = useMemo(() => {
     const ok = new Set();
     if (!state || !matrixBays.length) return ok;
@@ -324,7 +326,9 @@ export default function BayGridEditor({
   }, [state, pages, mk, matrixBays, tick]);
 
   const hidden = useMemo(() => {
-    if (!state) return [];
+    // V9.23-06: 베이사전이 아직 없으면 '격자 밖' 판정 자체가 불가능하다.
+    //   막으로 두면 사전 로딩 전에 전 컨이 '안 보임'으로 잡혀 겁을 준다(실측 390/405).
+    if (!state || !matrixBays.length) return [];
     const dupCns = new Set();
     for (const d of (issues?.dup || [])) for (const cn of d.cns.slice(1)) dupCns.add(cn);
     const out = [];
@@ -337,13 +341,12 @@ export default function BayGridEditor({
                  why: isDup ? '좌표중복' : '격자 밖' });
     }
     return out.sort((a, b) => (a.bay + a.row + a.tier).localeCompare(b.bay + b.row + b.tier));
-  }, [state, drawable, issues, tick]);
+  }, [state, drawable, issues, matrixBays, tick]);
 
   const stats = useMemo(() => (state ? P.summarize(state) : null), [state, tick]);
   const changes = useMemo(() => (state ? P.diffChanges(state) : []), [state, tick]);
   const changedSet = useMemo(() => new Set(changes.map((c) => c.cn)), [changes]);
   const stgList = useMemo(() => (state ? P.storageList(state) : []), [state, tick]);
-  const issues = useMemo(() => (state ? P.validate(state) : null), [state, tick]);
   const changedBays = useMemo(() => {
     const s = new Set();
     if (state) for (const c of changes) { const p = state.pos[c.cn]; if (!p?.storage) s.add(num(p.bay)); }
