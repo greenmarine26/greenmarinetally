@@ -999,6 +999,13 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   //   복원: 20ft가 명확한 경우만 제외. 짝수 row에 적재된 컨테이너는 40/45ft로 추정 (실무 일관성)
   const xMarks = useMemo(() => {
     const marks = new Set();
+    // V9.24-01: 도메인 규칙으로 교체 (TNJP 26354E 사용자 신고 — 22베이 82단 01/03/05열 가짜 X).
+    //   종전 M6.2~M6.7 규칙은 "짝수 열(row)의 40ft가 옆 홀수 열을 차지"라는 추정이었는데,
+    //   열은 배 폭 방향이라 물리적으로 잠식이 없다. 40ft 잠식은 베이(앞뒤) 방향뿐이다.
+    //   카고플랜(cargoPlanCore 단독 홀수 박스)·베이상세편집(adjMap)과 동일 규칙로 통일:
+    //   단독 홀수 베이 페이지에서 인접 짝수 베이(±1)의 40/45ft가 같은 단·열을 차지하면 X.
+    //   페어 페이지는 40ft가 병합 박스에 이미 그려지므로 X 없음 (카고플랜·편집기와 동일).
+    if (!page.oddBay || page.evenBay) return marks;
     const occupied = new Set();
     for (const c of allContainers) {
       if (c.row && c.tier) occupied.add(`${c.row}-${c.tier}`);
@@ -1006,26 +1013,23 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const isLongContainer = (c) => {
       const iso = c.iso || '';
       const lbl = (isoToLabel ? isoToLabel(iso) : '') || '';
-      // 20ft 명시 → 제외
       if (lbl.startsWith('20')) return false;
       if (/^2/.test(iso)) return false;
-      // 그 외 → 40/45ft로 추정 (짝수 row 컨테이너는 거의 40/45)
       return true;
     };
-    for (const c of evenContainers) {
-      if (!c.row || !c.tier) continue;
-      if (!isLongContainer(c)) continue;
-      const evenN = parseInt(c.row);
-      if (evenN === 0 || evenN % 2 !== 0) continue;
-      const oddN = evenN - 1;
-      if (oddN < 0) continue;
-      const oddRow = String(oddN).padStart(2, '0');
-      const xKey = `${oddRow}-${c.tier}`;
-      if (occupied.has(xKey)) continue;
-      marks.add(xKey);
+    const oddN = parseInt(page.oddBay, 10);
+    for (const adjEven of [oddN - 1, oddN + 1]) {
+      if (adjEven <= 0) continue;
+      for (const c of (bayGroups[String(adjEven)] || [])) {
+        if (!c.row || !c.tier) continue;
+        if (!isLongContainer(c)) continue;
+        const xKey = `${c.row}-${c.tier}`;
+        if (occupied.has(xKey)) continue;
+        marks.add(xKey);
+      }
     }
     return marks;
-  }, [evenContainers, allContainers]);
+  }, [page.oddBay, page.evenBay, allContainers, bayGroups]);
 
   // M6.75: deck/hold 별 row 양식 — 베이별 다름
   //   페이지 단위 — page.evenBay + page.oddBay 컨테이너 검사
