@@ -47,17 +47,23 @@ export function buildState(containers, listCns = [], shiftCns = [], opts = {}) {
   const base = {};
   const pos = {};
   const locked = new Set();
+  const unplaced = new Set();
   for (const c of containers) {
     const cn = norm(c.cn || '');
     if (!cn) continue;
     byCn.set(cn, c);
-    const p = stgSet.has(cn) ? { storage: true } : { bay: pad2(c.bay), row: pad2(c.row), tier: pad2(c.tier) };
+    // V9.23-05: EDI에 적부 좌표가 없는 컨(미배정)은 가짜 좌표 00-00-00로 뭉쳐
+    //   '좌표중복'으로 잡히고 격자 어디에도 안 그려져 손댈 수 없었다.
+    //   실제 업무 흐름대로 임시창고에 넣어 두고, 호출하면 해당 베이에 선적한다.
+    const noSlot = !String(c.bay ?? '').trim() || !String(c.tier ?? '').trim();
+    if (noSlot) unplaced.add(cn);
+    const p = (stgSet.has(cn) || noSlot) ? { storage: true } : { bay: pad2(c.bay), row: pad2(c.row), tier: pad2(c.tier) };
     base[cn] = { ...p };
     pos[cn] = { ...p };
     const lock = lockSet ? lockSet.has(cn) : !isMoveable(c, listSet, shiftSet);
     if (lock) locked.add(cn);
   }
-  return { byCn, base, pos, locked, listSet, shiftSet };
+  return { byCn, base, pos, locked, listSet, shiftSet, unplaced };
 }
 
 const keyOf = (p) => (p && !p.storage ? `${p.bay}-${p.row}-${p.tier}` : null);
