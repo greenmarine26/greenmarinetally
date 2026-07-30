@@ -41,7 +41,7 @@ export const BGE_CSS = `
 .bge-stats{display:flex;gap:12px;padding:0 12px;height:30px;flex:0 0 30px;background:#0f172a;border-bottom:1px solid #1e293b;font-size:12px;flex-wrap:nowrap;align-items:center;overflow:hidden;white-space:nowrap}
 .bge-stats b{color:#f8fafc;font-size:13px}
 .bge-msg{margin-left:auto;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;max-width:44%;flex-shrink:1}
-.bge-nav{display:flex;gap:4px;flex-wrap:wrap;padding:5px 10px;height:44px;flex:0 0 44px;background:#0b1220;overflow:auto;border-bottom:1px solid #1e293b;align-content:flex-start}
+.bge-nav{display:flex;gap:4px;flex-wrap:wrap;padding:5px 10px;min-height:34px;max-height:78px;flex:0 0 auto;background:#0b1220;overflow-y:auto;overflow-x:hidden;border-bottom:1px solid #1e293b;align-content:flex-start}
 .bge-nav button{padding:4px 9px;border-radius:5px;font-size:12px;font-weight:700;border:1px solid #334155;background:#1e293b;color:#cbd5e1;cursor:pointer}
 .bge-nav button.on{background:#2563eb;color:#fff;border-color:#2563eb}
 .bge-nav button.chg{border-color:#f59e0b;border-width:2px}
@@ -86,6 +86,8 @@ export const BGE_CSS = `
 .bge-edit .cpv2-cell.bge-x{background:#fff;border-color:#111 !important;cursor:not-allowed}
 .bge-edit .cpv2-cell.bge-shadow{background:#e5e7eb !important;border-color:#9ca3af !important;cursor:not-allowed;color:transparent}
 .bge-x-mark{font-weight:800;font-size:11px;color:#111;line-height:1}
+.bge-edit .cpv2-cell.bge-x .bge-adjcn,.bge-edit .cpv2-cell.bge-shadow .bge-adjcn{color:#334155 !important;opacity:.85}
+.bge-edit .cpv2-cell.bge-shadow{color:inherit !important}
 .bge-cn{font-weight:800;font-size:9.5px;letter-spacing:-.3px;font-family:ui-monospace,monospace;display:block}
 .bge-sub{font-size:8px;color:#64748b;display:block}
 @media print{
@@ -110,7 +112,15 @@ export const BGE_CSS = `
 @media (max-width:820px){
   .bge-body{flex-direction:column}
   .bge-side{width:100%;flex:0 0 auto;max-height:150px;border-left:none;border-top:1px solid #334155}
-  .bge-sheet{min-width:0;height:auto;min-height:420px}
+  .bge-sheet{min-width:0;height:auto;min-height:420px;padding:6px}
+  /* V9.23-03: 폰에서 시트 머리글이 두세 줄로 늘어 베이탭을 밀어내던 것 — 한 줄로 줄인다 */
+  .bge-sheet-title{font-size:11.5px !important;margin-bottom:3px !important;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .bge-boxh{font-size:11px;padding:1px 0}
+  .bge-nav{max-height:64px;padding:4px 8px;gap:3px}
+  .bge-nav button{padding:3px 7px;font-size:11.5px}
+  .bge-stats{gap:8px;font-size:11px;overflow-x:auto}
+  .bge-stage{padding:6px}
 }
 `;
 
@@ -260,14 +270,17 @@ export default function BayGridEditor({
       // V9.07-05: 옆 짝수 베이 점유 맵. mark 'X'로 판정하면 안 된다 —
       //   'X'는 defaultGetSelfMark가 자기 컨의 POD 불일치에도 주는 값이라,
       //   컨을 옮기면 비운 자리가 잘못 막힌다. 현재 위치(state.pos)로 직접 계산한다.
-      const adjMap = {};
+      const adjMap = {}, adjCnMap = {}, adjBayMap = {};
       const oddNum = isPair ? null : num(k);
       for (const [cn, p] of Object.entries(state.pos)) {
         if (p.storage) continue;
         const b = num(p.bay);
         if (bays.includes(b)) { cellMap[`${p.tier}-${p.row}`] = cn; continue; }
         if (oddNum != null && (b === oddNum - 1 || b === oddNum + 1)) {
-          adjMap[`${p.tier}-${p.row}`] = P.sizeOf(state.byCn.get(cn) || {}) === '20' ? '20' : '40';
+          const k2 = `${p.tier}-${p.row}`;
+          adjMap[k2] = P.sizeOf(state.byCn.get(cn) || {}) === '20' ? '20' : '40';
+          adjCnMap[k2] = cn;                       // V9.23-03: 누가 차지했는지 기억
+          adjBayMap[k2] = p.bay;
         }
       }
       const data = mk(k);
@@ -278,7 +291,7 @@ export default function BayGridEditor({
         for (const r of rows) (r.cells || []).forEach((c, i) => { if (cols[i] == null && c.rowLbl) cols[i] = c.rowLbl; });
         return { tiers: rows.map((r) => P.pad2(r.tier)), cols, active: rows.map((r) => (r.cells || []).map((c) => !!c.active)) };
       };
-      return { key: k, label: keyLabel(k), even, odd, bays, cellMap, adjMap, data, sections: { deck: mkSec(data?.deckRows), hold: mkSec(data?.holdRows) } };
+      return { key: k, label: keyLabel(k), even, odd, bays, cellMap, adjMap, adjCnMap, adjBayMap, data, sections: { deck: mkSec(data?.deckRows), hold: mkSec(data?.holdRows) } };
     });
   }, [page, state, mk, tick]);
 
@@ -454,8 +467,15 @@ export default function BayGridEditor({
     const cn = box.cellMap[`${P.pad2(tier)}-${cell.rowLbl}`];
     if (!cn) {
       // 옆 짝수 베이 40ft가 차지한 자리 — 카고플랜 각 베이와 같은 X 글자
-      if (cell.rowLbl && box.adjMap[`${P.pad2(tier)}-${cell.rowLbl}`] === '40') {
-        return <span className="bge-x-mark">X</span>;
+      if (cell.rowLbl) {
+        const k2 = `${P.pad2(tier)}-${cell.rowLbl}`;
+        const aCn = box.adjCnMap[k2];
+        if (aCn) {
+          // V9.23-03: 옆 베이 컨이 차지한 자리 — 번호를 보여 잡을 수 있게 한다.
+          //   종전엔 'X'만 찍혀 그 컨을 편집기에서 건드릴 방법이 없었다(사용자 신고: 28데크 X 3개).
+          return (<><span className="bge-cn bge-adjcn">{aCn.slice(4)}</span>
+            <span className="bge-sub">{box.adjBayMap[k2]}베이 {box.adjMap[k2]}ft</span></>);
+        }
       }
       return null;
     }
@@ -468,11 +488,25 @@ export default function BayGridEditor({
     const cn = cell.rowLbl ? box.cellMap[`${P.pad2(tier)}-${cell.rowLbl}`] : null;
     // V9.07-05: 옆 짝수 베이가 차지한 자리 — 표기는 카고플랜과 동일, 드롭은 차단.
     //   판정은 adjMap(현재 위치 기준). cell.mark는 자기 컨 마크와 섞이므로 쓰지 않는다.
-    const adj = !cn && cell.rowLbl ? box.adjMap[`${P.pad2(tier)}-${cell.rowLbl}`] : null;
+    const akey = cell.rowLbl ? `${P.pad2(tier)}-${cell.rowLbl}` : null;
+    const adj = !cn && akey ? box.adjMap[akey] : null;
     if (adj) {
+      // V9.23-03: 이 자리에 새로 놓는 건 여전히 막지만(드롭 없음),
+      //   차지하고 있는 컨 자체는 끌어 옮기거나 눌러 선택할 수 있어야 한다.
+      const aCn = box.adjCnMap[akey];
+      const aLock = aCn ? state.locked.has(aCn) : true;
       return {
-        className: `cpv2-cell ${adj === '40' ? 'bge-x' : 'bge-shadow'}`,
-        title: `옆 베이 ${adj}ft가 차지한 자리 — 배치 불가`,
+        'data-cn': aCn || undefined,
+        draggable: !!aCn && !aLock,
+        className: `cpv2-cell ${adj === '40' ? 'bge-x' : 'bge-shadow'}`
+          + (aCn && selected.has(aCn) ? ' bge-picked' : '')
+          + (aCn && changedSet.has(aCn) ? ' bge-chgd' : ''),
+        title: aCn
+          ? `${aCn}\n옆 ${box.adjBayMap[akey]}베이 ${adj}ft가 이 자리를 차지\n${aLock ? `${lockHint} — 이동 불가` : '끌어서 옮기거나 눌러 선택'}`
+          : `옆 베이 ${adj}ft가 차지한 자리 — 배치 불가`,
+        onDragStart: aCn && !aLock ? (e) => dragStart(e, aCn) : undefined,
+        onDragEnd: aCn && !aLock ? () => clearOver() : undefined,
+        onClick: aCn && !aLock ? (e) => { e.stopPropagation(); toggleSel(aCn); } : undefined,
       };
     }
     const dropProps = cell.active && cell.rowLbl ? {
@@ -546,7 +580,7 @@ export default function BayGridEditor({
           {rubber && <div className="bge-rubber" style={{ left: rubber.left, top: rubber.top, width: rubber.w, height: rubber.h }} />}
           {boxes.map((b) => (
             <div key={b.key} className="bge-sheet bge-edit">
-              <div style={{ textAlign: 'center', fontWeight: 800, fontSize: 14, marginBottom: 6, flexShrink: 0 }}>
+              <div className="bge-sheet-title" style={{ textAlign: 'center', fontWeight: 800, fontSize: 14, marginBottom: 6, flexShrink: 0 }}>
                 {shipName} {voyageInfo || ''} — {mode === 'loading' ? '선적' : '양하'} (BAY {b.label})
               </div>
               <div className="bge-sheet-body">
