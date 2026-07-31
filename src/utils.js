@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.29';   // 양하 평택분에 TS(환적) 화물 포함 — 리스트 등재분 인정 (MCAP 629N, 2026-07-31)
+export const APP_VERSION = 'V9.30';   // 리스트 규격 헤더 SzTp 인식 + 메일박스 전수 점검 교정 (2026-07-31)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -1971,7 +1971,7 @@ export async function parseListExcel(arrayBuffer) {
     // M3.86: L/S(Local/SOC) 컬럼 별도 추출 — SOC 식별용
     const ls_i = findCol([/^l\/?s$/]);
     // M3.86: type_i에 "Tp/Sz", "Tp.Sz", "Type/Size" 추가 (CDL 양식)
-    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^tp\/?sz$|^tp\s*sz$|^ty\/?sz$|^ty\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);
+    const type_i = findCol([/^type$|^cntr.*type|^iso|^tysz$|^szty$|^sztp$|^tpsz$|^sz\/?tp$|^sz\s*tp$|^tp\/?sz$|^tp\s*sz$|^ty\/?sz$|^ty\s*sz$|^type\/?size$|^type\s*size$/, /^타입$/, /^컨.*규격/, /^kind$/]);   // V9.30: SzTp(천경 CDL) 추가 — 35대가 규격미상으로 등록되던 결함
     const size_i = findCol([/^size$|^sz$|^len$|^length$/, /^사이즈$/, /^규격$/]);
     let op_i = findCol([/^op$|^operator|^carrier|^line|^oper$|^soc.*line/, /^선사/, /선사부호/]);
     // V9.04-06: 선사·씰 겸용 헤더 가드 (STMJ 2639E 사건 2026-07-20) — 세관 X-RAY 조회 파일
