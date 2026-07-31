@@ -19,7 +19,7 @@ import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false, mode = null, onWorkFilterChange = null }) {   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false, mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V7.94: 자동 가이드 모드 — 앱이 크레인 순서대로 다음 컨을 예측 제시 (수동 = 기존 검색 방식)
   const [guideMode, setGuideMode] = useState(false);
@@ -263,6 +263,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
       {guideMode && workFilter !== 'completed' && !isLoloShip ? (
         <GuidedWorkPanel
+          onPlaceUnassigned={onPlaceUnassigned}
           voyage={voyage} voyageKey={voyageKey} inspector={inspector}
           allContainers={allContainers} workFilter={workFilter}
           onSwitchManual={() => setGuideMode(false)}
@@ -282,7 +283,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
                 className="py-3 rounded-lg bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
                 <div className="font-bold text-base">⚠ 자리 미지정</div>
                 <div className="text-[10px] text-amber-300">남은 {g.count}대 — 리스트엔 있는데 적부 좌표가 없습니다</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">눌러서 조회·작업 · 위치는 베이상세편집에서 지정</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
               </button>
             ) : (
               <button key={g.center} onClick={() => setManualBay(g.center)}
@@ -342,6 +343,21 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           </div>
         );
       })()}
+      {/* V9.28: 미배정 = 빈자리가 있다는 뜻 — 검수원이 베이 탭 빈 칸을 골라 직접 배치한다 (사용자 확정) */}
+      {workFilter !== 'completed' && manualBay != null && manualGroups.find(x => x.center === manualBay)?.noBay && onPlaceUnassigned && (
+        <div className="bg-slate-900 border border-amber-800/60 rounded-lg p-2 space-y-1">
+          <div className="text-[11px] text-amber-300 font-bold">🅿 배치 — 누르면 베이 화면으로 가서 빈 칸(📦+)을 고릅니다</div>
+          {allContainers.filter(c => c._mode === workFilter && !c.bay && !c._comp).map(c => (
+            <div key={c.cn} className="flex items-center gap-1.5">
+              <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-slate-800 rounded px-2 py-1.5 text-xs mono font-bold text-slate-100">
+                {c.cn} <span className="text-[10px] text-slate-400 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
+              </button>
+              <button onClick={() => onPlaceUnassigned(c)}
+                className="px-3 py-1.5 rounded bg-lime-800 hover:bg-lime-700 border border-lime-600 text-lime-100 text-xs font-black">🅿 배치</button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
         <button onClick={() => setSearchMode('single')}
           className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${

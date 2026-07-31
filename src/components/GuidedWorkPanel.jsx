@@ -36,7 +36,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
   return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
 }
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer }) {
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null }) {   // V9.28
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -691,11 +691,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {unassigned.length > 0 && showUnassigned && (
             <div className="space-y-1">
               {unassigned.map(c => (
-                <button key={c.cn} onClick={() => onOpenContainer?.(c)}
-                  className="w-full flex justify-between items-center bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs">
-                  <span className="mono font-bold text-slate-100">{c.cn}</span>
-                  <span className="text-[10px] text-amber-400">탭하여 작업 · 위치는 베이상세편집에서 지정</span>
-                </button>
+                <div key={c.cn} className="flex items-center gap-1.5">
+                  <button onClick={() => onOpenContainer?.(c)}
+                    className="flex-1 flex justify-between items-center bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-xs">
+                    <span className="mono font-bold text-slate-100">{c.cn}</span>
+                    <span className="text-[10px] text-amber-400">조회</span>
+                  </button>
+                  {onPlaceUnassigned && (
+                    <button onClick={() => onPlaceUnassigned(c)}
+                      className="px-3 py-1.5 rounded bg-lime-800 hover:bg-lime-700 border border-lime-600 text-lime-100 text-xs font-black">🅿 배치</button>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -1070,11 +1076,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           {showUnassigned && (
             <div className="mt-1.5 space-y-1">
               {unassigned.map(c => (
-                <button key={c.cn} onClick={() => onOpenContainer?.(c)}
-                  className="w-full flex justify-between items-center bg-slate-900 rounded px-2 py-1.5 text-xs">
-                  <span className="mono font-bold text-slate-100">{c.cn}</span>
-                  <span className="text-[10px] text-amber-400">재배정 필요 — 탭하여 위치 수정</span>
-                </button>
+                <div key={c.cn} className="flex items-center gap-1.5">
+                  <button onClick={() => onOpenContainer?.(c)}
+                    className="flex-1 flex justify-between items-center bg-slate-900 rounded px-2 py-1.5 text-xs">
+                    <span className="mono font-bold text-slate-100">{c.cn}</span>
+                    <span className="text-[10px] text-amber-400">조회</span>
+                  </button>
+                  {onPlaceUnassigned && (
+                    <button onClick={() => onPlaceUnassigned(c)}
+                      className="px-3 py-1.5 rounded bg-lime-800 hover:bg-lime-700 border border-lime-600 text-lime-100 text-xs font-black">🅿 배치</button>
+                  )}
+                </div>
               ))}
             </div>
           )}

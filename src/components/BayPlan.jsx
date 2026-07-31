@@ -1375,7 +1375,14 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   //   원본 베이가 짝수면 페이지의 evenBay로, 홀수면 oddBay로 (같은 종류 슬롯 보장)
   //   매칭 안 되면 이 페이지에서는 클릭 못 함 (다른 페이지로 스크롤해서 옮기기)
   const moveTargetBay = (() => {
-    if (!pendingMove?.fromBay) return null;
+    if (!pendingMove) return null;
+    if (!pendingMove.fromBay) {
+      // V9.28: 미배정 컨(본위치 없음) — 규격으로 짝/홀 판정 (40/45=짝수 베이, 20=홀수 베이)
+      const lbl = (isoToLabel ? isoToLabel(pendingMove.iso || '') : '') || '';
+      if (lbl.startsWith('40') || lbl.startsWith('45')) return page.evenBay || null;
+      if (lbl.startsWith('20')) return page.oddBay || (page.isStandalone ? page.evenBay : null);
+      return null;   // 규격 미상 — 안전측 (배치 불가)
+    }
     const fromN = parseInt(pendingMove.fromBay);
     if (!fromN) return null;
     if (fromN % 2 === 0) return page.evenBay || null;

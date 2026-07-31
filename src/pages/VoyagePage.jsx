@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , bayParityError } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -781,6 +781,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           isLoloShip={isLoloShip}
           mode={mode}
           onWorkFilterChange={(m) => setMode(m)}
+          onPlaceUnassigned={(c) => {
+            // V9.28: 미배정 = 빈자리가 있다는 뜻 — 검수원이 베이 탭 빈 칸에 직접 배치 (사용자 확정:
+            //   "앱이 빈자리를 보여주고 거기에 맞는 컨을 넣어야 한다. 수석 편집은 오입력 교정용")
+            setPendingMove({ cn: c.cn, fromBay: '', fromRow: '', fromTier: '', fe: c.fe || '', iso: c.iso || c.tp || '' });
+            setTab('bay');
+          }}
         />
       )}
       {tab === 'lolo' && (
@@ -857,7 +863,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                     fromBay: c._bay_planned || c.bay || '',
                     fromRow: c._row_planned || c.row || '',
                     fromTier: c._tier_planned || c.tier || '',
-                    fe: c.fe || '',
+                    fe: c.fe || '', iso: c.iso || c.tp || '',
                   });
                 }}
                 pendingMoveCn={pendingMove?.cn}
@@ -876,7 +882,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                     fromBay: c._bay_planned || '',
                     fromRow: c._row_planned || '',
                     fromTier: c._tier_planned || '',
-                    fe: c.fe || '',
+                    fe: c.fe || '', iso: c.iso || c.tp || '',
                   });
                 }}
                 pendingMoveCn={pendingMove?.cn}
@@ -904,6 +910,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 // M4.9f 5단계: 빈 셀 클릭 시 그 자리로 이동
                 if (!pendingMove) return;
                 if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                // V9.28: 물리 불가 가드 — 이 경로도 좌표 기록처다 (V9.27와 동일 원칙)
+                const _pe = bayParityError({ iso: pendingMove.iso }, bay);
+                if (_pe) { alert('⛔ ' + _pe); return; }
                 try {
                   await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
                     String(bay).padStart(2,'0'),
