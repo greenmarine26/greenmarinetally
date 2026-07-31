@@ -194,9 +194,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   );
 
   // 평택 대상 (양하=POD, 선적=POL)
+  //   V9.29: 양하도 '리스트(records)에 있으면 평택분' — 선적에 이미 있던 원칙을 맞춘다.
+  //   근거(MCAP 629N 실측 2026-07-31): 선사 양하리스트·터미널 화면 278대인데 앱은 216대만 셌다.
+  //   차이 62대는 POD가 CNTXG인 엠티 — 평택에서 내렸다가 다시 싣는 **환적(TS)** 화물이다
+  //   (선사 메일 "please declare 62 x 40'HDRY empty ex L77-629N as TS ... create load plan in KRPYOTM").
+  //   POD만 보면 이 62대가 통째로 빠진다. 선사가 양하리스트에 올린 컨은 평택에서 내리는 것이 진실.
   const isPtk = (c) => {
     if (!c) return false;
-    return mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+    if (mode === 'discharge') {
+      if (isPyeongtaekPort(c.pod)) return true;
+      return !!(c.cn && recMap && recMap[c.cn]);   // 양하리스트 등재분(TS 포함)
+    }
+    return (!!(c.cn && recMap && recMap[c.cn])) || isPyeongtaekPort(c.pol);
   };
 
   // M3.89: 베이플랜 전용 - 전체 EDI 컨테이너 (isPtk 필터 X)
@@ -601,7 +610,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     // 평택 화물만 필터된 ediMap 만들기
     const ediPtkObj = {};
     Object.values(ediMap || {}).forEach(c => {
-      const isPtkC = mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+      const isPtkC = isPtk(c);   // V9.29: TS 화물 포함 — 판정 단일 소스
       if (!isPtkC) return;
       // M8.07: 진단용 보강 — EDI에 온도/F/E가 없으면 검수 리스트(records) 값으로 채움.
       //   RIZHAO 등 IFCSUM은 EDI에 온도 필드가 없고 검수 엑셀에만 있음.
