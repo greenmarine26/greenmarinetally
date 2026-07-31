@@ -99,6 +99,9 @@ export default function VoyageSummaryCard({ voyage, mode }) {
       reeferTotal: reefers.length,
       reeferTempMissing: reeferTempMissing.length,
       reeferDry: reefers.filter(c => c.rfdry).length,   // V9.20-03: 리퍼드라이(넌플러그)
+      // V9.28-08: EDI에 위치가 없는 리퍼 (TMPZ 2023E 실측 — 선사 EDI가 리퍼 6대 누락, 냉동리스트에만 존재.
+      //   카고플랜에 못 그리는 건 어쩔 수 없지만 숨기면 안 된다 — 검수원이 위치 미상임을 알아야 현장에서 찾는다)
+      reeferNoPos: reefers.filter(c => !c.bay && !c.bay_actual).length,
       madeCon: containers.filter(c => c.mkcon).length,  // V9.23: 제작컨테이너(컨 자체가 상품)
       xrayCount, xraySealed, xrayUnmatched,
       iso403Total: iso403Targets.length,
@@ -144,9 +147,9 @@ export default function VoyageSummaryCard({ voyage, mode }) {
         {summary.reeferTotal > 0 && (
           <Chip
             icon={Snowflake}
-            color={summary.reeferTempMissing > 0 ? 'red' : 'cyan'}
+            color={summary.reeferTempMissing > 0 || summary.reeferNoPos > 0 ? 'red' : 'cyan'}
             label="리퍼"
-            value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.madeCon > 0 ? ` · 🏭제작컨${summary.madeCon}` : ''}${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
+            value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.madeCon > 0 ? ` · 🏭제작컨${summary.madeCon}` : ''}${summary.reeferNoPos > 0 ? ` · 📍위치미상${summary.reeferNoPos}` : ''}${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
           />
         )}
         {(summary.xrayCount > 0 || summary.xrayUnmatched?.length > 0) && (
