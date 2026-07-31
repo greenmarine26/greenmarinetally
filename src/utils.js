@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.28-04';   // 인접 슬롯·40위20 물리 검사 — 표시·저장 단일 소스 (2026-07-31)
+export const APP_VERSION = 'V9.28-05';   // POD 구역 경고 — 오선적 맞바꿈 세 번째 그물 (2026-07-31)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3081,4 +3081,32 @@ export function slotAdjacencyError(c, bay, row, tier, others) {
     }
   }
   return null;
+}
+
+
+// ── V9.28-05: POD 구역 검사 — 오선적 맞바꿈의 세 번째 그물 (STSE 실측: FBIU CNTAO가
+//   CNSHD 구역(20베이)에, SEGU CNSHD가 CNTAO 구역(24)에 — 규격 2번+포트 2번 기회를 전부 놓쳤던 사고) ──
+//   같은 베이·같은 구역(데크/홀드)의 다수 POD와 다르면 경고 재료 반환. 차단 아님 — 확인 후 허용.
+export function podZoneMismatch(c, bay, tier, others) {
+  const pod = String((c && c.pod) || '').trim();
+  if (!pod) return null;
+  const bn = parseInt(bay, 10), tn = parseInt(tier, 10);
+  if (!Number.isFinite(bn) || !Number.isFinite(tn)) return null;
+  const deck = tn >= 80;
+  const cnt = {};
+  for (const o of (others || [])) {
+    if (!o || o.cn === c.cn || !o.bay || !o.tier || !o.pod) continue;
+    const ob = parseInt(o.bay, 10), ot = parseInt(o.tier, 10);
+    if (!Number.isFinite(ob) || !Number.isFinite(ot)) continue;
+    // 페어(양옆 홀수 포함)까지 같은 구역으로 본다 — 40ft 구역은 짝수 베이에 걸쳐 있다
+    if (Math.abs(ob - bn) > 1) continue;
+    if ((ot >= 80) !== deck) continue;
+    const p = String(o.pod).trim();
+    if (p) cnt[p] = (cnt[p] || 0) + 1;
+  }
+  let zone = '', max = 0, total = 0;
+  for (const [p, n] of Object.entries(cnt)) { total += n; if (n > max) { max = n; zone = p; } }
+  if (!zone || total < 3) return null;   // 구역 판단 근거 부족하면 침묵
+  if (zone === pod) return null;
+  return { zone, pod, count: max };
 }

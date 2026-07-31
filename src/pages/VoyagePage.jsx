@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , bayParityError, slotAdjacencyError } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -916,6 +916,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 // V9.28-04: 인접 슬롯 검사 — 40ft는 양옆 홀수 슬롯이 비어야 한다
                 const _ae = slotAdjacencyError({ cn: pendingMove.cn, iso: pendingMove.iso }, bay, row, tier, allEdiContainers);
                 if (_ae) { alert('⛔ ' + _ae); return; }
+                // V9.28-05: POD 구역 경고 — 오선적 맞바꿈의 세 번째 그물 (경고 후 허용)
+                const _pm = allEdiContainers.find(x => x.cn === pendingMove.cn);
+                const _pz = podZoneMismatch({ cn: pendingMove.cn, pod: _pm?.pod }, bay, tier, allEdiContainers);
+                if (_pz && !window.confirm(`⚠ 이 구역은 ${_pz.zone} 화물 자리입니다 (주변 ${_pz.count}대).\n${pendingMove.cn}의 포트는 ${_pz.pod}입니다 — 오선적이 아닌지 확인하세요.\n그래도 이 자리에 놓을까요?`)) return;
                 try {
                   await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
                     String(bay).padStart(2,'0'),
