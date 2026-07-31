@@ -3,6 +3,7 @@
 //   - 빈 입력 = 미배정 (선적대상으로 분류)
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
+import { bayParityError } from '../utils.js';   // V9.27: 물리 불가 좌표 차단
 
 export default function PositionEditModal({
   open,
@@ -171,6 +172,9 @@ export default function PositionEditModal({
   const handleConfirm = async () => {
     // V8.70: 트윈 지정을 켰으면 뒤 컨을 고르기 전엔 확정 불가.
     if (twinOn && !partnerPick) { setErrMsg('트윈 지정: 뒤(짝꿍) 컨테이너를 선택하세요'); return; }
+    // V9.27: 물리 불가 좌표 원천 차단 — 40/45ft를 홀수 베이에 (경고 아닌 차단)
+    const _pe = bayParityError(container, bay);
+    if (_pe) { setErrMsg('⛔ ' + _pe.replace(/\n/g, ' ')); setStep('input'); return; }
     setStep('saving');
     try {
       const r = row ? String(row).padStart(2, '0') : '';

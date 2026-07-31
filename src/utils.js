@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.26';   // 검증 모드 부분 취소 — 격자 드래그/탭 선택 (2026-07-31)
+export const APP_VERSION = 'V9.27';   // 40/45ft 홀수 베이 기록 원천 차단 (물리 불가 좌표 — STSE 사고 근원, 2026-07-31)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3017,4 +3017,19 @@ export function computeShiftingMapCached(voyageKey, voyage) {
   if (_shiftMapCache.size > 60) _shiftMapCache.clear();   // 폭주 방지(항차 수보다 넉넉)
   _shiftMapCache.set(key, { sig, map });
   return map;
+}
+
+
+// ── V9.27: 물리 불가 좌표 차단 — 40/45피트는 짝수 베이에만 (STSE 2658W 사고 근원) ──
+//   홀수 베이 단독 슬롯은 20피트 자리다. 40/45ft를 홀수 베이에 기록하는 건 "코끼리를
+//   냉장고에 넣는" 일 — 경고가 아니라 차단한다 (사용자 확정 2026-07-31).
+//   어제 강제 입력 11대 전수가 이 위반이었고, 전 항차 감사에서 그 외 위반 0건.
+export function bayParityError(c, bay) {
+  const bn = parseInt(bay, 10);
+  if (!Number.isFinite(bn) || bn % 2 === 0) return null;
+  const lbl = isoToLabel((c && (c.iso || c.tp)) || '') || '';
+  if (lbl.startsWith('40') || lbl.startsWith('45')) {
+    return `${lbl} 컨테이너는 홀수 베이 ${bn}에 놓을 수 없습니다.\n40/45피트는 짝수 베이에 놓여 앞뒤 홀수 자리를 차지합니다 — 물리적으로 불가능한 자리입니다.`;
+  }
+  return null;
 }

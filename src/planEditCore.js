@@ -96,6 +96,13 @@ export function placeAt(state, cn, bay, row, tier, opts = {}) {
     const sz = sizeOf(state.byCn.get(key));
     tgtBay = pad2(sz === '40' || sz === '45' ? opts.pairEven : opts.pairOdd);
   }
+  // V9.27: 물리 불가 — 40/45ft를 홀수 베이 단독 슬롯에 (pair 경로는 사이즈로 짝수 강제라 안전)
+  if (opts.pairEven == null) {
+    const _sz = sizeOf(state.byCn.get(key) || {});
+    if ((_sz === '40' || _sz === '45') && parseInt(tgtBay, 10) % 2 === 1) {
+      return { ok: false, reason: `40/45피트는 홀수 베이 ${parseInt(tgtBay, 10)}에 못 놓습니다 — 짝수 베이 자리로 놓으세요` };
+    }
+  }
   const target = { bay: tgtBay, row: pad2(row), tier: pad2(tier) };
   const tk = keyOf(target);
 
@@ -131,6 +138,11 @@ export function placeMany(state, moves) {
     if (!state.pos[cn]) return { ok: false, reason: `${cn} 없는 컨테이너`, moved: 0 };
     if (state.locked.has(cn)) return { ok: false, reason: `${cn} 통과 고정분 — 이동 불가`, moved: 0 };
     const t = { bay: pad2(m.bay), row: pad2(m.row), tier: pad2(m.tier) };
+    // V9.27: 물리 불가 — 40/45ft 홀수 베이
+    const _sz = sizeOf(state.byCn.get(cn) || {});
+    if ((_sz === '40' || _sz === '45') && parseInt(t.bay, 10) % 2 === 1) {
+      return { ok: false, reason: `${cn} — 40/45피트는 홀수 베이 ${parseInt(t.bay, 10)}에 못 놓습니다`, moved: 0 };
+    }
     const k = `${t.bay}-${t.row}-${t.tier}`;
     if (targets.has(k)) return { ok: false, reason: '선택분끼리 같은 칸으로 겹칩니다', moved: 0 };
     targets.set(k, cn);
