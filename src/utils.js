@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.32';   // 업로드 정지 수리 — 동적 import 실패를 화면에 알림(캐시 청크 불일치) (2026-07-31)
+export const APP_VERSION = 'V9.32-01';   // 엑셀 라이브러리 번들 우선 로드 + CDN 10초 타임아웃 폴백 — CDN 무응답 시 업로드 정지 수리 (2026-07-31)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -1461,14 +1461,35 @@ export function ascToBayDictEntry(ascResult, fileName, extra = {}) {
 }
 export async function loadSheetJS() {
   if (window.XLSX) return window.XLSX;
-  await new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-  return window.XLSX;
+  // V9.32-01: 종전엔 CDN 한 곳을 타임아웃 없이 기다려 — CDN 무응답이면 업로드가
+  //   "처리 중"에서 영영 멈췄다(사용자 신고 2026-07-31, OBWH 2702W).
+  //   1차: 번들 xlsx를 동적 import (의존성에 이미 있음, planedit.entry와 동일 경로 — 네트워크 불필요)
+  //   2차: 번들 실패(옛 캐시가 사라진 청크 참조 등) 시 CDN 2곳을 10초 타임아웃으로 순차 시도
+  //   전부 실패 시 조용히 멈추지 않고 이유를 던진다 → 호출부가 화면에 표시.
+  try {
+    const mod = await import('xlsx');
+    const X = (mod && typeof mod.read === 'function') ? mod
+      : (mod && mod.default && typeof mod.default.read === 'function') ? mod.default : null;
+    if (X) { window.XLSX = X; return X; }
+  } catch (e) { /* 번들 청크 실패 → CDN 폴백 */ }
+  const _urls = [
+    'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  ];
+  for (const src of _urls) {
+    try {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        const timer = setTimeout(() => { script.remove(); reject(new Error('timeout')); }, 10000);
+        script.src = src;
+        script.onload = () => { clearTimeout(timer); resolve(); };
+        script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error('script error')); };
+        document.head.appendChild(script);
+      });
+      if (window.XLSX) return window.XLSX;
+    } catch (e) { /* 다음 CDN */ }
+  }
+  throw new Error('엑셀 라이브러리를 불러오지 못했습니다 — 네트워크 확인 후 화면을 새로고침해 주세요.');
 }
 
 // === V38 신규: 시트 범위(!ref) 보정 ===

@@ -80,10 +80,14 @@ let _pdfjsPromise = null;
 async function loadPdfJs() {
   if (window.pdfjsLib) return window.pdfjsLib;
   if (_pdfjsPromise) return _pdfjsPromise;
+  // V9.32-01: 타임아웃 추가 + 실패한 프라미스는 캐시에서 비운다(종전엔 한 번 실패하면 재시도 불가,
+  //   CDN 무응답이면 PDF 업로드도 "처리 중"에서 영영 멈췄다 — 엑셀 건과 동일 계열).
   _pdfjsPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
+    const timer = setTimeout(() => { script.remove(); reject(new Error('PDF.js 로드 시간 초과 — 네트워크 확인 후 새로고침해 주세요.')); }, 15000);
     script.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
     script.onload = () => {
+      clearTimeout(timer);
       if (window.pdfjsLib) {
         window.pdfjsLib.GlobalWorkerOptions.workerSrc =
           'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
@@ -92,9 +96,10 @@ async function loadPdfJs() {
         reject(new Error('pdfjsLib not found'));
       }
     };
-    script.onerror = () => reject(new Error('PDF.js 로드 실패'));
+    script.onerror = () => { clearTimeout(timer); reject(new Error('PDF.js 로드 실패 — 네트워크 확인 후 새로고침해 주세요.')); };
     document.head.appendChild(script);
   });
+  _pdfjsPromise = _pdfjsPromise.catch(e => { _pdfjsPromise = null; throw e; });
   return _pdfjsPromise;
 }
 
