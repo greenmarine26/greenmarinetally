@@ -1380,6 +1380,15 @@ export function fbSubscribePortMis(callback) {
   return unsub;
 }
 
+// V9.33: 평택도선사회 도선 예보 구독 (수집기 pilot.py가 기록)
+//   경로: pilot_forecast/{선박코드} = { code, vessel, callsign, rows[], nextDep, nextArr, updatedAt }
+//   PORT-MIS(신고=예보 성격)와 별도 노드 — 도선 예보는 확정에 가까우므로 카드에 함께 표시한다.
+export function fbSubscribePilotForecast(callback) {
+  const r = ref(db, 'pilot_forecast');
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
+}
+
 // M5.25: PORT-MIS 캡처 OCR 결과 일괄 저장 (Chrome 확장과 동일 구조)
 //   폰에서 캡처 → OCR → 추출된 ships 배열을 Firebase port_mis_data에 PUT
 //   key는 sanitized callsign. callsign 없으면 vesselName 사용 (안전망)

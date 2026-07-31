@@ -4,7 +4,7 @@ import { APP_VERSION, _storage, SK } from './utils.js';
 import { loadUserBayDict, entryTimestamp, applyApprovedSync } from './data/userBayDict.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
-  fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis,
+  fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard
 } from './firebase.js';
@@ -40,6 +40,8 @@ export default function App() {
   const [autoLogoutNotice, setAutoLogoutNotice] = useState('');
   // M5.21: PORT-MIS 입출항 데이터 (Chrome 확장이 저장 — 호출부호로 매칭)
   const [portMisData, setPortMisData] = useState({});
+  // V9.33: 평택도선사회 도선 예보(수집기 기록) — 선박코드 키
+  const [pilotForecast, setPilotForecast] = useState({});
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력
   const [inspector, setInspector] = useState('');
   const [showInspectorModal, setShowInspectorModal] = useState(true);
@@ -60,6 +62,7 @@ export default function App() {
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
+    const u4b = fbSubscribePilotForecast(setPilotForecast);  // V9.33: 도선 예보
     const u6 = fbSubscribeHeartbeat(setHeartbeat);  // V8.40: 수집기 하트비트
     // M5.88: Firebase 베이사전 구독 — 전역 객체 window.__fbShipBayDict에 저장
     //   shipStructure.js가 이 데이터를 우선 조회 (베이사전 매칭 자동화)
@@ -99,7 +102,7 @@ export default function App() {
         console.error('[App] 베이사전 정본 대조 실패', err);
       }
     });
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); unsub2(); unsub3(); };
+    return () => { u1(); u2(); u3(); u4(); u4b(); u5(); u6(); u7(); unsub2(); unsub3(); };
   }, []);
 
   useEffect(() => {
@@ -333,6 +336,7 @@ export default function App() {
             inspector={inspector}
             inspectors={inspectors}
             portMisData={portMisData}
+            pilotForecast={pilotForecast}
             onGoHome={() => navigate('home')}
             onModeChange={(mode) => setRoute(r => ({ ...r, mode }))}
           />

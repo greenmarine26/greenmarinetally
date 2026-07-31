@@ -77,7 +77,7 @@ function tagForecastMarks(list, urgentSet, luggSet, luggSeals) {
   });
 }
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, onGoHome, onModeChange, initModeOverride = null }) {
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, onGoHome, onModeChange, initModeOverride = null }) {
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   const hasDis = !!voyage?.discharge;
   const hasLoa = !!voyage?.loading;
@@ -1342,6 +1342,36 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               </span>
               {pm.voyageType && <span className="text-slate-400 text-xs">[{pm.voyageType}]</span>}
             </div>
+            {/* V9.33: 평택도선사회 도선 예보 (사용자 확정 2026-08-01 — "포트미스는 예보 성격,
+                도선사협회는 확정과 비슷"). PORT-MIS 값을 덮지 않고 아래 줄에 확정시각으로 함께 표시. */}
+            {(() => {
+              const pf = pilotForecast[(voyage?.info?.vsl || '').toUpperCase()];
+              if (!pf || (!pf.nextDep && !pf.nextArr)) return null;
+              const fmtPf = (v) => {
+                if (!v) return '';
+                const [d, t] = String(v).split(' ');
+                return `${(d || '').slice(5)} ${t || ''}`.trim();
+              };
+              return (
+                <div className="mt-1 flex items-center gap-2 flex-wrap text-sm bg-sky-950/50 border border-sky-800/50 rounded px-2 py-1">
+                  <span className="text-sky-300 font-bold text-xs">⚓ 도선 예보</span>
+                  {pf.nextArr && (
+                    <span className="text-slate-200">
+                      입항 <span className="font-bold text-emerald-300">{fmtPf(pf.nextArr)}</span>
+                      {pf.nextArrBerth && <span className="text-slate-400 text-xs ml-1">({pf.nextArrBerth})</span>}
+                    </span>
+                  )}
+                  {pf.nextArr && pf.nextDep && <span className="text-slate-500">·</span>}
+                  {pf.nextDep && (
+                    <span className="text-slate-200">
+                      출항 <span className="font-bold text-amber-300">{fmtPf(pf.nextDep)}</span>
+                      {pf.nextDepBerth && <span className="text-slate-400 text-xs ml-1">({pf.nextDepBerth})</span>}
+                    </span>
+                  )}
+                  <span className="text-sky-400/70 text-[10px]">평택도선사회 · 확정에 가까움</span>
+                </div>
+              );
+            })()}
             {/* M5.90: 평택 데이터 없음 — 인천/타항만 출항 정보 fallback */}
             {fallbackInfo?.isFallback && (
               <div className="mt-1 bg-amber-950/50 border border-amber-700/50 rounded px-2 py-1 text-xs">
