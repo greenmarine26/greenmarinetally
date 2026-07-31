@@ -2256,7 +2256,13 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           // 엑셀/CSV (기존 로직)
           const buf = await file.arrayBuffer();
           // V9.22: RZOR 덱 스토우지 플랜(rzdf_ship_*.xls, 시트 A~E-DECK) 감지 → 플랜으로 저장(리스트 아님)
+          //   V9.31: 파일명이 rzdf_ 이거나 RZOR 선박일 때만 검사한다. 종전엔 모든 리스트 파일을
+          //   cellStyles:true(스타일 전체 파싱)로 통째 읽어 — 큰 CLL(OBWH 2702W 등)에서 업로드가
+          //   "처리 중"에서 수 분간 멈춘 것처럼 보였다(사용자 신고 2026-07-31). 무관한 파일엔 건너뛴다.
+          const _mayBeDeckPlan = /rzdf|deck/i.test(file.name) ||
+            String(voyage?.info?.vsl || voyageKey || '').toUpperCase().includes('RZOR');
           try {
+            if (!_mayBeDeckPlan) throw new Error('skip-deckplan');
             const XLSX0 = await loadSheetJS();
             const wb0 = XLSX0.read(new Uint8Array(buf.slice(0)), { type: 'array', cellStyles: true });   // V9.22-02: 회색(불가) 구역 구분
             if (isDeckPlanWorkbook(wb0)) {
