@@ -1394,16 +1394,17 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   //   빈 자리를 찾아야 하는 것").  좌표 하나하나가 계획에 있어야 하는 게 아니라(그러면 1곳뿐),
   //   계획이 화물을 올리는 단(예: 88단 만적인데 비어 있는 86단 칸들)의 빈 칸이 곧 빈 자리다.
   //   같은 베이·같은 단에 화물(계획·실체)이 하나라도 있으면 그 단의 빈 칸을 📦+ 후보로 켠다.
+  //   V9.28-03: 이 지점은 페이지 하위 스코프 — containers가 없어 'containers is not defined' 크래시.
+  //   같은 스코프의 bayGroups(전 베이 컨 묶음)로 계산한다.
   const occupiedTierSet = useMemo(() => {
     const set = new Set();
-    for (const c of containers) {
-      if (!c.bay || !c.tier) continue;
-      const bn = parseInt(c.bay, 10);
+    for (const [bk, list] of Object.entries(bayGroups)) {
+      const bn = parseInt(bk, 10);
       if (!Number.isFinite(bn)) continue;
-      set.add(`${bn}-${c.tier}`);
+      for (const c of list) if (c.tier) set.add(`${bn}-${c.tier}`);
     }
     return set;
-  }, [containers]);
+  }, [bayGroups]);
 
   // M3.74: 다중 적재 지원 - 같은 슬롯 컨테이너 모두 반환
   // 우선순위: 평택 화물 > 다른 화물 (평택이 첫 번째로 표시)

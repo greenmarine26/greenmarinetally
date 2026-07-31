@@ -137,6 +137,13 @@ SMOKE_OUT=$(mktemp /tmp/_smoke_XXXXXX.js)   # V9.24: 고정 경로가 타 세션
 if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
      --outfile="$SMOKE_OUT" --define:process.env.NODE_ENV='"development"' --log-level=error; then
   node tools/smoke_render.cjs "$SMOKE_OUT" || { echo "✗ 렌더 연막검사 실패 — 배포 금지"; exit 1; }
+  SMOKE_BP=$(mktemp /tmp/_smokebp_XXXXXX.js)
+  if npx esbuild tools/smoke_bayplan.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
+       --outfile="$SMOKE_BP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_bayplan.cjs "$SMOKE_BP" || { echo "✗ BayPlan 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "⚠ BayPlan 연막 번들 실패 — 건너뜀"
+  fi
 else
   echo "⚠ 연막검사 번들 실패 — 건너뜀"
 fi
