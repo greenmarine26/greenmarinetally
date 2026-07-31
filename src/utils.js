@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.28-08';   // 리퍼 위치미상 표시 — EDI 누락 리퍼를 숨기지 않는다 (TMPZ 실측, 2026-07-31)
+export const APP_VERSION = 'V9.28-10';   // 연운항 SZ 코드(5R/4J/2D/4D/2T) 매핑 — TNJP 리스트 리퍼 복원 (2026-07-31)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -470,6 +470,7 @@ export const isoToLabel = (iso) => {
   if (/^4[24]T/.test(p)) return '40TK';
   if (/^40HC/.test(p)) return '40HC';
   if (/^4[24]H/.test(p)) return '40HC';
+  if (/^43R/.test(p)) return '40RF';   // V9.28-09: 연운항 43류 리퍼 (TNJP 43RF 24대가 40HC로 뭉개지던 버그)
   if (/^43/.test(p)) return '40HC';
   if (/^40[DG]/.test(p)) return '40DC';
   if (/^4[24][G][P0-9]/.test(p)) return '40DC';
@@ -562,7 +563,7 @@ export function isReeferIso(iso) {
   if (/^(22|45|95)3[0-9EF]$/.test(upper)) return true;
   // (3) "[2]가 R" 패턴: 4자리 ISO 표준 (45R0, 22R5, 40RF, 22RE 등)
   //     [0]은 길이코드(2/4), [1]은 높이코드, [2]='R', [3]=문자/숫자
-  if (/^[24][024568L9]R[A-Z0-9]?$/.test(upper)) return true;
+  if (/^[24][0234568L9]R[A-Z0-9]?$/.test(upper)) return true;   // V9.28-09: 높이코드 '3' 포함 (43RF — FR 충돌 없음: 4583/4584는 [2]='8')
   // (4) "40HR", "20HR" (ASC m2 변형: H+R 패턴) - 4글자만 인정
   if (/^[24]0HR$/.test(upper)) return true;
   // 정밀: isoToLabel 결과로 판단 (위 패턴이 못 잡은 변형도 정규화로 잡음)
@@ -1811,6 +1812,16 @@ export async function parseListExcel(arrayBuffer) {
       if (/^(40TK|42TN|42T6)$/.test(v)) return '42T1';
       // 진짜 45피트
       if (/^(L5GP|L5DC|45L|L45|45FT)$/.test(v)) return 'L5G1';
+      // V9.28-10: 연운항(TNJP) CNTR LIST 축약 SZ 코드 — 26354E 실측: 리스트 118대 전부 iso 미인식.
+      //   5R(40리퍼HC=EDI 43RF 24대와 1:1)·4J(40HC=43DC)·2D(20DC)·4D(40DC 표준높이)·2T(20탱크).
+      //   REMARK의 RF온도·UN·IMDG는 이미 뽑고 있었는데 SZ를 몰라 rf=false — "리퍼 실종"의 마지막 조각.
+      if (/^5R$/.test(v)) return '45R1';
+      if (/^4R$/.test(v)) return '45R1';
+      if (/^2R$/.test(v)) return '22R1';
+      if (/^4J$/.test(v)) return '45G1';
+      if (/^2D$/.test(v)) return '22G1';
+      if (/^4D$/.test(v)) return '42G1';
+      if (/^2T$/.test(v)) return '22T1';
     }
     // 2) "DC43", "RF40" 같은 합쳐진 표기 (CDL Tp/Sz 양식)
     for (const v of [tp, sz]) {
