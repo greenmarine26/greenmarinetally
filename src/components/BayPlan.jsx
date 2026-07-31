@@ -1390,6 +1390,21 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   })();
   const isMoveActiveHere = !!pendingMove && !!moveTargetBay;
 
+  // V9.28-02: 배치 후보 = "화물이 실리는 단의 빈 칸" (사용자 정정 2차 — "미배정이 14대면 빈 곳도 14곳,
+  //   빈 자리를 찾아야 하는 것").  좌표 하나하나가 계획에 있어야 하는 게 아니라(그러면 1곳뿐),
+  //   계획이 화물을 올리는 단(예: 88단 만적인데 비어 있는 86단 칸들)의 빈 칸이 곧 빈 자리다.
+  //   같은 베이·같은 단에 화물(계획·실체)이 하나라도 있으면 그 단의 빈 칸을 📦+ 후보로 켠다.
+  const occupiedTierSet = useMemo(() => {
+    const set = new Set();
+    for (const c of containers) {
+      if (!c.bay || !c.tier) continue;
+      const bn = parseInt(c.bay, 10);
+      if (!Number.isFinite(bn)) continue;
+      set.add(`${bn}-${c.tier}`);
+    }
+    return set;
+  }, [containers]);
+
   // M3.74: 다중 적재 지원 - 같은 슬롯 컨테이너 모두 반환
   // 우선순위: 평택 화물 > 다른 화물 (평택이 첫 번째로 표시)
   const getCellAll = (row, tier) => {
@@ -1434,7 +1449,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     }
     if (!c) {
       // M4.9f 5단계: 이동 모드 + 같은 종류(짝/홀) 베이 페이지에서만 빈 셀 클릭 가능
-      if (isMoveActiveHere) {
+      // V9.28-02: + 화물이 실리는 단의 빈 칸만 (완전히 빈 단·계획 밖 공간은 후보 아님)
+      if (isMoveActiveHere && occupiedTierSet.has(`${parseInt(moveTargetBay, 10)}-${tier}`)) {
         return (
           <button key={key}
             onClick={() => onEmptyCellClick?.(moveTargetBay, row, tier)}
