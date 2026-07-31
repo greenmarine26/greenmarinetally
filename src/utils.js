@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.32-01';   // 엑셀 라이브러리 번들 우선 로드 + CDN 10초 타임아웃 폴백 — CDN 무응답 시 업로드 정지 수리 (2026-07-31)
+export const APP_VERSION = 'V9.32-02';   // 리스트 저장 undefined 거부 수리(dgc/un/mkcon) + 저장 실패를 화면에 표시 (2026-07-31)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -2234,15 +2234,19 @@ export async function parseListExcel(arrayBuffer) {
         printpod: printpod_i >= 0 ? String(row[printpod_i] || '').trim() : '',
         cargoType: cargotype_i >= 0 ? String(row[cargotype_i] || '').trim() : '',
         dg: isDg,
-        dgc: rmkDgc || undefined,          // V9.21-03: REMARK에서 뽑은 IMDG 클래스/UN번호
-        un: rmkUn || undefined,
+        dgc: rmkDgc || '',                 // V9.21-03: REMARK에서 뽑은 IMDG 클래스/UN번호
+        //   V9.32-02: || undefined → || '' — undefined가 든 레코드는 Firebase set()이 통째로 거부
+        //   ("value argument contains undefined"). 평소엔 기존 리스트와의 병합이 undefined를 걸러
+        //   숨어 있다가, 빈 리스트에 전신규+충돌 0건(EDI 전건 일치)인 OBWH 2702W에서 직행 저장으로
+        //   터졌다 — 업로드가 "처리 중"에서 조용히 멈춘 진짜 원인(사용자 신고 2026-07-31, 재현 확정).
+        un: rmkUn || '',
         rf: isRf,
         fr: isFr,
         ot: isOt,
         tk: isTk,
         tmp: (tmpVal === '' && rmkTmp != null) ? rmkTmp : tmpVal,   // V9.21-03: REMARK 온도 보강(빈 경우만)
         tmp_missing: tmpMissing && rmkTmp == null && isRf && !rmkMkc,
-        mkcon: rmkMkc || undefined,        // V9.23: 제작컨테이너 (리퍼드라이와 별도 분류 — 사용자 확정 2026-07-29)
+        mkcon: rmkMkc || false,            // V9.23: 제작컨테이너 (V9.32-02: undefined→false, Firebase 거부 방지)
       });
     }
   }

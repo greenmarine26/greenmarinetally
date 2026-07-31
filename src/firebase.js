@@ -192,6 +192,9 @@ export async function fbSaveXrayList(voyageKey, xrayObj) {
 //   M4.2 fix: 청크 분할(50대씩 set+병렬 update) → race condition으로 데이터 손실 의심
 //             단일 set으로 변경 (Firebase 16MB 제한 내, 904대 ≈ 1MB라 안전)
 async function chunkedReplace(path, obj) {
+  // V9.32-02: undefined 값이 하나라도 있으면 RTDB set()이 통째로 거부 → 업로드가 조용히 멈춤.
+  //   JSON 왕복으로 undefined 필드를 제거(REST 경로의 JSON.stringify와 동일 의미론).
+  try { obj = JSON.parse(JSON.stringify(obj)); } catch (e) { /* 순환 등 — 원본 유지 */ }
   const keys = Object.keys(obj || {});
   if (keys.length === 0) {
     await set(ref(db, path), null);

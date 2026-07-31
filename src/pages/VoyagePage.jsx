@@ -2386,8 +2386,14 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     }
 
     // 충돌 없음 → 그대로 저장
-    await fbSaveListRecords(voyageKey, mode, cnMap);
-    setStatus(results.join('\n') + `\n\n전체 ${Object.keys(cnMap).length}대 (신규 ${added})`);
+    // V9.32-02: 저장 실패(undefined 거부 등)를 삼키지 않는다 — 종전엔 여기서 예외가 나면
+    //   함수가 조용히 죽어 "처리 중"이 영영 남았다(OBWH 2702W 재현 확정).
+    try {
+      await fbSaveListRecords(voyageKey, mode, cnMap);
+      setStatus(results.join('\n') + `\n\n전체 ${Object.keys(cnMap).length}대 (신규 ${added})`);
+    } catch (e) {
+      setStatus(`❌ 리스트 저장 실패 — ${e?.message || e}\n다시 시도하거나 이 메시지를 개발자에게 알려 주세요.`);
+    }
     if (listRef.current) listRef.current.value = '';
   };
 
