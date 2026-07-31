@@ -782,7 +782,10 @@ export function defaultGetSelfMark(c, pod) {
   if (c.dg) return 'D';
   const iso = c.iso || '';
   const typeChar = iso.length >= 3 ? iso[2] : 'G';
-  if (typeChar === 'R') return 'R';
+  // V9.28-07: 비표준 리퍼 코드 보강 — YKTD 2612E 실측: EDI가 4530(40ft 리퍼 HC, 온도 동봉)으로
+  //   보낸 12대가 iso[2]='3'이라 R마크를 못 받아 "인식은 되는데 카고플랜엔 안 보이는" 상태였다.
+  //   rf 플래그·isoToLabel(4530→40RF)을 함께 본다 — 카운트·리스트·카고플랜 판정 통일.
+  if (typeChar === 'R' || c.rf || (isoToLabel(iso) || '').endsWith('RF')) return 'R';
   if (typeChar === 'P') return 'P';
   if (typeChar === 'U') return 'U';
   if (typeChar === 'T') return 'T';
