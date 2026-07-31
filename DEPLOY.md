@@ -79,7 +79,11 @@ echo DONE %DATE% %TIME% >> %LOG%
 5. **큰 base64를 클로드가 직접 옮기지 말 것** — V8.85에서 두 번 다 글자 유실로 훼손됐다.
    4.2MB ZIP은 base64로 약 139만 토큰이라 애초에 컨텍스트를 통과할 수 없다.
 6. `.gitignore`가 없으면 `add -A`가 node_modules 19,027개를 쓸어담는다 (V9.07에서 신설).
-7. 컨테이너에서 github.io로 curl 불가(HTTP 000). 라이브 확인은 Chrome MCP `javascript_tool` + fetch.
+7. 컨테이너에서 github.io로 curl 불가(HTTP 000). **⚠ Chrome MCP로 라이브 확인 금지 (2026-07-31 사용자 지시)** —
+   수집기가 CDP(9222)로 전용 크롬(tallyman-chrome 프로필)을 조종하는데, 클로드의 크롬 탭 조작이 수집기를
+   멈추게 한다(사용자 실측). 크롬 없는 검증 체계: ① blob 전수 대조(저장소 진실) ② `web_fetch`로
+   `raw.githubusercontent.com/.../main/sw.js?v=캐시버스터` VERSION 확인(text/plain이라 읽힘 — github.io는 [binary]로 안 읽힘)
+   ③ 최종 라이브는 사용자 폰 버전 라벨. 크롬이 꼭 필요한 검증은 사용자 승인 후 최소한으로.
 8. 샌드박스에 Chromium 설치 불가(dl.google.com 차단). CSS·렌더 검증은 사용자 Chrome에서 `getComputedStyle`.
 9. `raw.githubusercontent`는 CDN이 낡다 — **커밋 목록이 진실**. raw 검증 시 `?v=` 필수.
 10. `Edit` 도구는 대형 파일을 조용히 자를 수 있다 — 대형 jsx는 python 치환 + 치환 횟수 assert.
