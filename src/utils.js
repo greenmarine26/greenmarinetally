@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.28-03';   // 베이 탭 크래시 수정 — occupiedTierSet 스코프 (2026-07-31)
+export const APP_VERSION = 'V9.28-04';   // 인접 슬롯·40위20 물리 검사 — 표시·저장 단일 소스 (2026-07-31)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3030,6 +3030,55 @@ export function bayParityError(c, bay) {
   const lbl = isoToLabel((c && (c.iso || c.tp)) || '') || '';
   if (lbl.startsWith('40') || lbl.startsWith('45')) {
     return `${lbl} 컨테이너는 홀수 베이 ${bn}에 놓을 수 없습니다.\n40/45피트는 짝수 베이에 놓여 앞뒤 홀수 자리를 차지합니다 — 물리적으로 불가능한 자리입니다.`;
+  }
+  return null;
+}
+
+
+// ── V9.28-04: 인접 슬롯 물리 검사 — 40ft는 앞뒤 홀수 슬롯 두 개를 차지한다 (STSE 실측:
+//   FBIU5086535를 20-03-82에 받아줬는데 19-03-82엔 이미 20ft가 실려 있었다 — 물리 충돌) ──
+//   others: 유효 좌표(bay/row/tier)가 실린 컨 배열 (자기 자신 제외하고 호출)
+export function slotAdjacencyError(c, bay, row, tier, others) {
+  const bn = parseInt(bay, 10);
+  if (!Number.isFinite(bn)) return null;
+  const p2 = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
+  const R = p2(row), T = p2(tier);
+  const lbl = isoToLabel((c && (c.iso || c.tp)) || '') || '';
+  const at = (b2) => (others || []).find((o) => {
+    if (!o || o.cn === c.cn || !o.bay || !o.tier) return false;
+    return parseInt(o.bay, 10) === b2 && p2(o.row) === R && p2(o.tier) === T;
+  });
+  if ((lbl.startsWith('40') || lbl.startsWith('45')) && bn % 2 === 0) {
+    for (const b2 of [bn - 1, bn + 1]) {
+      const occ = b2 > 0 ? at(b2) : null;
+      if (occ) return `40/45피트는 ${bn}베이에 놓이면 앞뒤 ${bn - 1}·${bn + 1}베이 자리까지 차지합니다.\n그런데 ${b2}-${R}-${T}에 이미 ${occ.cn}이(가) 있습니다 — 물리적으로 불가능합니다.`;
+    }
+  }
+  if (lbl.startsWith('20') && bn % 2 === 1) {
+    for (const b2 of [bn - 1, bn + 1]) {
+      const occ = b2 > 0 ? at(b2) : null;
+      if (occ) {
+        const ol = isoToLabel(occ.iso || occ.tp || '') || '';
+        if (ol.startsWith('40') || ol.startsWith('45')) return `${bn}-${R}-${T} 자리는 옆 ${b2}베이의 ${occ.cn}(${ol})이(가) 차지하고 있습니다 — 놓을 수 없습니다.`;
+      }
+    }
+    // V9.28-04: 40ft 위 20ft 불가 (콘 홀 없음 — 확립 원칙). 아래 단 받침이 옆 짝수 베이 40ft 지붕이면 차단.
+    //   STSE 실측: SEGU3445581(20ft)이 25-06-90 — 아래 24-88-06이 40ft.
+    const tN = parseInt(T, 10);
+    if (Number.isFinite(tN) && tN - 2 > 0) {
+      const TB = String(tN - 2).padStart(2, '0');
+      const below = (others || []).find((o) => o && o.cn !== c.cn && o.bay && parseInt(o.bay, 10) === bn && p2(o.row) === R && p2(o.tier) === TB);
+      if (!below) {
+        for (const b2 of [bn - 1, bn + 1]) {
+          if (b2 <= 0) continue;
+          const u = (others || []).find((o) => o && o.cn !== c.cn && o.bay && parseInt(o.bay, 10) === b2 && p2(o.row) === R && p2(o.tier) === TB);
+          if (u) {
+            const ul = isoToLabel(u.iso || u.tp || '') || '';
+            if (ul.startsWith('40') || ul.startsWith('45')) return `아래 단(${b2}-${R}-${TB})이 40/45피트 ${u.cn}입니다 — 40피트 위에는 20피트를 올릴 수 없습니다 (콘 홀 없음).`;
+          }
+        }
+      }
+    }
   }
   return null;
 }

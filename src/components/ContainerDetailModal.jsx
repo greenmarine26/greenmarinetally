@@ -1,6 +1,6 @@
 import React, { useState , useMemo} from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError } from '../utils.js';
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError } from '../utils.js';
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
@@ -98,6 +98,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     // V9.27: 물리 불가 좌표 원천 차단 — 40/45ft를 홀수 베이에 (어제 강제 입력 사고의 근원, 경고 아닌 차단)
     const _pe = bayParityError(c, b);
     if (_pe) { alert('⛔ ' + _pe); return; }
+    // V9.28-04: 인접 슬롯 검사 (40ft ↔ 양옆 홀수 슬롯)
+    const _ae = slotAdjacencyError(c, b, r, t, allContainers);
+    if (_ae) { alert('⛔ ' + _ae); return; }
     // V9.24: 점유 확인 — 두 컨이 같은 자리가 되는 걸 저장 전에 알린다 (STSE 2658W 중복 사고).
     //   차단하지 않는다(사용자 원칙: 블럭하면 수정 자체가 안 된다) — 경고 후 확인되면 저장.
     const _p2 = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);

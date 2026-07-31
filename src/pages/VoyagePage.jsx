@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , bayParityError } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , bayParityError, slotAdjacencyError } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -913,6 +913,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 // V9.28: 물리 불가 가드 — 이 경로도 좌표 기록처다 (V9.27와 동일 원칙)
                 const _pe = bayParityError({ iso: pendingMove.iso }, bay);
                 if (_pe) { alert('⛔ ' + _pe); return; }
+                // V9.28-04: 인접 슬롯 검사 — 40ft는 양옆 홀수 슬롯이 비어야 한다
+                const _ae = slotAdjacencyError({ cn: pendingMove.cn, iso: pendingMove.iso }, bay, row, tier, allEdiContainers);
+                if (_ae) { alert('⛔ ' + _ae); return; }
                 try {
                   await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
                     String(bay).padStart(2,'0'),

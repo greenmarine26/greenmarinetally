@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Maximize2, Printer } from 'lucide-react';   // V8.25: ZoomIn/ZoomOut 제거(핀치 전용)
-import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort } from '../utils.js';
+import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, getContainerColorKey, buildContainerColorMap, COLOR_PALETTE, isPyeongtaekPort , slotAdjacencyError } from '../utils.js';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
@@ -1396,6 +1396,14 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   //   같은 베이·같은 단에 화물(계획·실체)이 하나라도 있으면 그 단의 빈 칸을 📦+ 후보로 켠다.
   //   V9.28-03: 이 지점은 페이지 하위 스코프 — containers가 없어 'containers is not defined' 크래시.
   //   같은 스코프의 bayGroups(전 베이 컨 묶음)로 계산한다.
+  // V9.28-04: 물리 검사용 전 컨 유효 좌표 평탄 목록 (인접 40ft·40위20 규칙 — utils.slotAdjacencyError 단일 소스)
+  const effAll = useMemo(() => {
+    const out = [];
+    for (const [bk, list] of Object.entries(bayGroups)) {
+      for (const c of list) if (c.row && c.tier) out.push({ cn: c.cn, bay: bk, row: c.row, tier: c.tier, iso: c.iso || c.tp || '' });
+    }
+    return out;
+  }, [bayGroups]);
   const occupiedTierSet = useMemo(() => {
     const set = new Set();
     for (const [bk, list] of Object.entries(bayGroups)) {
@@ -1451,7 +1459,13 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     if (!c) {
       // M4.9f 5단계: 이동 모드 + 같은 종류(짝/홀) 베이 페이지에서만 빈 셀 클릭 가능
       // V9.28-02: + 화물이 실리는 단의 빈 칸만 (완전히 빈 단·계획 밖 공간은 후보 아님)
-      if (isMoveActiveHere && occupiedTierSet.has(`${parseInt(moveTargetBay, 10)}-${tier}`)) {
+      // V9.28-04: 물리 검사 통과 칸만 후보 — 40ft 양옆 홀수 점유(FBIU 20-03-82)·40ft 위 20ft(SEGU 25-06-90) 차단.
+      //   저장 가드(slotAdjacencyError)와 같은 함수를 써서 표시와 저장이 절대 어긋나지 않게 한다.
+      const _tbN = parseInt(moveTargetBay, 10);
+      const _phyErr = isMoveActiveHere
+        ? slotAdjacencyError({ cn: pendingMove.cn, iso: pendingMove.iso }, _tbN, row, tier, effAll)
+        : 'off';
+      if (isMoveActiveHere && !_phyErr && occupiedTierSet.has(`${_tbN}-${tier}`)) {
         return (
           <button key={key}
             onClick={() => onEmptyCellClick?.(moveTargetBay, row, tier)}
