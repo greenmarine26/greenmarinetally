@@ -296,6 +296,7 @@ export default function App() {
           <HomePage
             voyages={voyages} inspectors={inspectors} inspector={inspector}
             portMisData={portMisData}
+            pilotForecast={pilotForecast}
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
             onOpenGlobalSearch={() => navigate('search')}
             onOpenChiefDashboard={() => navigate('chief')}

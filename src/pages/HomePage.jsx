@@ -32,7 +32,7 @@ function lastWorkAt(v) {
   return last;
 }
 
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth, onOpenFood }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth, onOpenFood }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
@@ -225,9 +225,30 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const _pd = String(info.planDate || '');
         const _pdEta = _pd ? parsePortMisDateTime(_pd.split('~')[0].trim()) : null;
         const _pdEtd = _pd.includes('~') ? parsePortMisDateTime(_pd.split('~')[1].trim()) : null;
+        // V9.34: 정렬 시각 선택 — '지나지 않은 일정'을 우선한다 (사용자 신고 2026-08-01, MCAP 629N).
+        //   종전: PORT-MIS가 있으면 무조건 그것만 봤다(`pm ? pm.eta : null ?? planDate`).
+        //   그래서 같은 콜사인의 '지난 기항' 레코드(MCAP V2EE9 = 6/28~6/29)가 남아 있으면,
+        //   선석배정 planDate(08-02)와 도선 예보(08-02 04:30)가 미래를 가리켜도 '출항 지남'으로
+        //   판정돼 홈 맨 아래로 밀렸다. 새 키(OBWH 2703E 등)는 PORT-MIS 매칭이 없어 정상이었고
+        //   MCAP만 틀렸던 이유가 이것이다.
+        //   규칙: 후보(도선예보 > 선석배정 > PORT-MIS) 중 ① 아직 안 끝난 것(etd 없음 또는 미래)을
+        //   우선순위 높은 순으로 채택 ② 전부 지났으면 가장 최근 것. 세 출처가 다 없으면 종전대로 null.
+        const _pfRec = pilotForecast[(info.vsl || '').toUpperCase()];
+        const _cands = [
+          { p: 3, eta: _pfRec ? parsePortMisDateTime(_pfRec.nextArr) : null,
+                  etd: _pfRec ? parsePortMisDateTime(_pfRec.nextDep) : null },   // 도선 예보(확정에 가까움)
+          { p: 2, eta: _pdEta, etd: _pdEtd },                                     // 선석배정(수집기 예정)
+          { p: 1, eta: pm ? parsePortMisDateTime(pm.eta) : null,
+                  etd: pm ? parsePortMisDateTime(pm.etd) : null },                // PORT-MIS 신고
+        ].filter(c => c.eta != null || c.etd != null);
+        const _now = Date.now();
+        const _live = _cands.filter(c => (c.etd == null ? (c.eta == null || c.eta >= _now) : c.etd >= _now));
+        const _pick = _live.length
+          ? _live.sort((a, b) => b.p - a.p || (a.eta ?? a.etd) - (b.eta ?? b.etd))[0]
+          : (_cands.sort((a, b) => (b.etd ?? b.eta ?? 0) - (a.etd ?? a.eta ?? 0))[0] || null);
         return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
-                 _etaMs: (pm ? parsePortMisDateTime(pm.eta) : null) ?? _pdEta,     // V9.01: 작업시간 근접 정렬용
-                 _etdMs: (pm ? parsePortMisDateTime(pm.etd) : null) ?? _pdEtd };
+                 _etaMs: _pick ? _pick.eta : null,     // V9.01: 작업시간 근접 정렬용
+                 _etdMs: _pick ? _pick.etd : null };
       })
       .sort((a, b) => {
         // V9.01: 작업시간 근접순 (사용자 확정 2026-07-17)
@@ -244,7 +265,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const ra = rank(a), rb = rank(b);
         return ra[0] - rb[0] || ra[1] - rb[1];
       });
-  }, [voyages, portMisData]);
+  }, [voyages, portMisData, pilotForecast]);
 
   // M6.18: 잘못된 berth가 voyage.info에 저장되어 있으면 백그라운드 자동 정리
   //   M6.13 자동 정리는 VoyagePage 진입 시에만 동작 — HomePage에서도 처리
