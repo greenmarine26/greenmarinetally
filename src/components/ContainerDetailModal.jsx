@@ -103,7 +103,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     if (_ae) { alert('⛔ ' + _ae); return; }
     // V9.28-05: POD 구역 경고 (경고 후 허용)
     const _pz = podZoneMismatch(c, b, t, allContainers);
-    if (_pz && !window.confirm(`⚠ 이 구역은 ${_pz.zone} 화물 자리입니다 (주변 ${_pz.count}대).\n${c.cn}의 포트는 ${_pz.pod}입니다 — 오선적이 아닌지 확인하세요.\n그래도 저장할까요?`)) return;
+    if (_pz) { alert(`⛔ 이 구역은 ${_pz.zone} 화물 자리입니다 (주변 ${_pz.count}대). ${c.cn}의 포트는 ${_pz.pod}.\n계획에 없는 포트 섞임은 실을 수 없습니다 — 현장에서 막고 제 구역 빈자리로 보내세요.\n불가피한 변경은 수석검수사가 베이상세편집 또는 EDI 수정으로 처리합니다.`); return; }
     // V9.24: 점유 확인 — 두 컨이 같은 자리가 되는 걸 저장 전에 알린다 (STSE 2658W 중복 사고).
     //   차단하지 않는다(사용자 원칙: 블럭하면 수정 자체가 안 된다) — 경고 후 확인되면 저장.
     const _p2 = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);

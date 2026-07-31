@@ -919,7 +919,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 // V9.28-05: POD 구역 경고 — 오선적 맞바꿈의 세 번째 그물 (경고 후 허용)
                 const _pm = allEdiContainers.find(x => x.cn === pendingMove.cn);
                 const _pz = podZoneMismatch({ cn: pendingMove.cn, pod: _pm?.pod }, bay, tier, allEdiContainers);
-                if (_pz && !window.confirm(`⚠ 이 구역은 ${_pz.zone} 화물 자리입니다 (주변 ${_pz.count}대).\n${pendingMove.cn}의 포트는 ${_pz.pod}입니다 — 오선적이 아닌지 확인하세요.\n그래도 이 자리에 놓을까요?`)) return;
+                if (_pz) { alert(`⛔ 이 구역은 ${_pz.zone} 화물 자리입니다 (주변 ${_pz.count}대). ${pendingMove.cn}의 포트는 ${_pz.pod}.\n계획에 없는 포트 섞임은 실을 수 없습니다 — 현장에서 막고 제 구역 빈자리로 보내세요.\n불가피한 변경은 수석검수사가 베이상세편집 또는 EDI 수정으로 처리합니다.`); return; }
                 try {
                   await fbSetActualPosition(voyageKey, mode, pendingMove.cn,
                     String(bay).padStart(2,'0'),
