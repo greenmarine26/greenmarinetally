@@ -233,13 +233,17 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         //   MCAP만 틀렸던 이유가 이것이다.
         //   규칙: 후보(도선예보 > 선석배정 > PORT-MIS) 중 ① 아직 안 끝난 것(etd 없음 또는 미래)을
         //   우선순위 높은 순으로 채택 ② 전부 지났으면 가장 최근 것. 세 출처가 다 없으면 종전대로 null.
+        // V9.35: 작업일시의 진실은 **선석배정**이다 (사용자 확정 2026-08-01).
+        //   "작업일시는 선석배정목록이 먼저 입니다. 도선만 해놓고 대기 하는 경우도 있으니까요."
+        //   → 도선 예보는 도선사 배정일 뿐 작업 시작이 아니다. V9.34에서 도선을 1순위로 둔 것을 교정한다.
+        //   출항 시각 표시(항차 상세의 ⚓ 도선 예보 줄)는 그대로 — 거기선 도선이 확정에 가깝다.
         const _pfRec = pilotForecast[(info.vsl || '').toUpperCase()];
         const _cands = [
-          { p: 3, eta: _pfRec ? parsePortMisDateTime(_pfRec.nextArr) : null,
-                  etd: _pfRec ? parsePortMisDateTime(_pfRec.nextDep) : null },   // 도선 예보(확정에 가까움)
-          { p: 2, eta: _pdEta, etd: _pdEtd },                                     // 선석배정(수집기 예정)
-          { p: 1, eta: pm ? parsePortMisDateTime(pm.eta) : null,
-                  etd: pm ? parsePortMisDateTime(pm.etd) : null },                // PORT-MIS 신고
+          { p: 3, src: 'plan', eta: _pdEta, etd: _pdEtd },                        // ① 선석배정(작업일시의 기준)
+          { p: 2, src: 'pilot', eta: _pfRec ? parsePortMisDateTime(_pfRec.nextArr) : null,
+                  etd: _pfRec ? parsePortMisDateTime(_pfRec.nextDep) : null },     // ② 도선 예보
+          { p: 1, src: 'portmis', eta: pm ? parsePortMisDateTime(pm.eta) : null,
+                  etd: pm ? parsePortMisDateTime(pm.etd) : null },                 // ③ PORT-MIS 신고
         ].filter(c => c.eta != null || c.etd != null);
         const _now = Date.now();
         const _live = _cands.filter(c => (c.etd == null ? (c.eta == null || c.eta >= _now) : c.etd >= _now));
@@ -248,7 +252,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           : (_cands.sort((a, b) => (b.etd ?? b.eta ?? 0) - (a.etd ?? a.eta ?? 0))[0] || null);
         return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
                  _etaMs: _pick ? _pick.eta : null,     // V9.01: 작업시간 근접 정렬용
-                 _etdMs: _pick ? _pick.etd : null };
+                 _etdMs: _pick ? _pick.etd : null,
+                 _etaSrc: _pick ? _pick.src : '' };    // V9.35: 작업일시 배지 출처 표기용
       })
       .sort((a, b) => {
         // V9.01: 작업시간 근접순 (사용자 확정 2026-07-17)
@@ -885,12 +890,38 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 📍 {berth}
               </span>
             )}
-            {/* V9.06: 예정 항차(수집기 선등록) — 선석배정 기반, 예정작업일자 표시 (사용자 요청 2026-07-23) */}
-            {voyage.info?.autoStatus === 'expected' && (
-              <span className="text-[11px] bg-sky-900/60 border border-sky-700/50 text-sky-200 px-1.5 py-0.5 rounded font-bold">
-                📅 예정{voyage.info?.planDate ? ` · ${String(voyage.info.planDate).slice(5, 16)}` : ''}
-              </span>
-            )}
+            {/* V9.35: 작업일시 배지 — 항상 표시 (사용자 요청 2026-08-01).
+                종전엔 autoStatus === 'expected'일 때만 떠서, PORT-MIS·자료가 들어와 '수집중/확정'으로
+                승격되는 순간 사라졌다. 그래서 금일 작업인지 명일 작업인지 배정목록을 따로 찾아봐야 했다.
+                출처는 항상 표기 — 📋 선석배정 · ⚓ 도선 예보 · 🚢 PORT-MIS 신고. */}
+            {(() => {
+              const eta = voyage._etaMs, etd = voyage._etdMs;
+              if (!eta && !etd) return null;
+              const two = (n) => String(n).padStart(2, '0');
+              const hm = (ms) => { const d = new Date(ms); return `${two(d.getHours())}:${two(d.getMinutes())}`; };
+              const dayLabel = (ms) => {
+                const d = new Date(ms), t = new Date();
+                const base = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+                const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - base) / 86400000);
+                if (diff === 0) return '오늘';
+                if (diff === 1) return '내일';
+                if (diff === -1) return '어제';
+                const w = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+                return `${two(d.getMonth() + 1)}-${two(d.getDate())}(${w})`;
+              };
+              const srcMark = { plan: '📋배정', pilot: '⚓도선', portmis: '🚢신고' }[voyage._etaSrc] || '';
+              const head = eta ? `${dayLabel(eta)} ${hm(eta)}` : '';
+              const tail = etd ? (eta && dayLabel(etd) !== dayLabel(eta) ? `${dayLabel(etd)} ${hm(etd)}` : hm(etd)) : '';
+              const body = head && tail ? `${head} ~ ${tail}` : (head || `~ ${tail}`);
+              const past = etd && etd < Date.now();
+              return (
+                <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${past
+                  ? 'bg-slate-800 border-slate-600 text-slate-400'
+                  : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
+                  📅 {body}{srcMark ? ` ${srcMark}` : ''}
+                </span>
+              );
+            })()}
             {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정. V9.06: expected는 위 예정 배지가 대신. */}
             {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && voyage.info?.autoStatus !== 'expected' && (
               <span className="text-[11px] bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
@@ -915,7 +946,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           {/* 작업일 표시 (수동/자동 삭제 구분용) */}
           {voyage.info.createdAt && (
             <div className="text-[11px] text-slate-500 mt-0.5">
-              📅 {new Date(voyage.info.createdAt).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              🗂 등록 {new Date(voyage.info.createdAt).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
               {(() => {
                 // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다.
                 //   작업 활동이 없으면 자동삭제 대상이 아니므로 경고를 띄우지 않는다(불안 방지).
