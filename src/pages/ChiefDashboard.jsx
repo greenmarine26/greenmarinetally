@@ -205,7 +205,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
   // 오답 리포트 정렬 (최신순, 미해결 먼저)
   const feedbackList = useMemo(() => {
-    return Object.values(feedback || {})
+    // V9.36-02: 콘앱 신고는 POST(푸시키)라 ts 필드가 없다 — 배지엔 세어지고 목록엔 안 보이는
+    //   유령 레코드가 됐다(미해결 1 · "미해결 오답 없음" 모순, 실DB 2026-07-04 1건으로 확인).
+    //   DB 키를 _key로 붙이고 ts는 ts→at 폴백. 카운트·목록·해결처리 모두 같은 레코드를 본다.
+    return Object.entries(feedback || {})
+      .map(([k, f]) => (f ? { ...f, _key: k, ts: f.ts || f.at || 0 } : null))
       .filter(f => f && f.ts)
       .filter(f => showResolved || !f.resolved)
       .sort((a, b) => {
@@ -216,7 +220,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   }, [feedback, showResolved]);
 
   const unresolvedCount = useMemo(() =>
-    Object.values(feedback || {}).filter(f => f && !f.resolved).length, [feedback]);
+    Object.values(feedback || {}).filter(f => f && !f.resolved).length, [feedback]);   // 목록과 동일 모수(위와 같은 원본)
 
   // V8.02-02: 오답 '저금통' 내보내기 — 전체를 텍스트 파일로 다운로드.
   //   클로드(또는 개발자)에게 파일 하나로 전달하기 위함. 내보낸 시점의 ts 목록을 기억.
@@ -695,7 +699,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         ) : (
           <div className="space-y-2">
             {feedbackList.slice(0, 50).map(f => (
-              <FeedbackRow key={f.ts} feedback={f}/>
+              <FeedbackRow key={f._key || f.ts} feedback={f}/>
             ))}
             {feedbackList.length > 50 && (
               <div className="text-[10px] text-slate-500 text-center pt-1">
@@ -922,7 +926,7 @@ function FeedbackRow({ feedback: f }) {
           <span className="text-[9px] text-slate-600 mono">v{f.appVersion}</span>
         </div>
         <div className="flex gap-1 flex-shrink-0">
-          <button onClick={() => fbResolveFeedback(f.ts, !f.resolved)}
+          <button onClick={() => fbResolveFeedback(f._key || f.ts, !f.resolved)}
             title={f.resolved ? '미해결로 되돌리기' : '해결됨 표시'}
             className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-700/40">
             {f.resolved ? '↩' : '✓'}
@@ -933,7 +937,7 @@ function FeedbackRow({ feedback: f }) {
             confirmLabel: '삭제',
             cancelLabel: '취소',
             danger: true,
-            onConfirm: async () => { await fbDeleteFeedback(f.ts); },
+            onConfirm: async () => { await fbDeleteFeedback(f._key || f.ts); },
           })}
             title="삭제"
             className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-700/40">
