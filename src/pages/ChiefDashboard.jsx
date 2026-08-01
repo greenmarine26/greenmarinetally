@@ -1514,21 +1514,26 @@ function computeStats(section, mode) {
   const completed = section.completed || {};
   const ediValues = Object.values(ediContainers);
   const ptkCns = new Set();
-  ediValues.forEach(c => {
+  // V9.37-02: 홈 카드(HomePage.computeStats)와 **같은 규칙**. 플랜 가상 EDI는 cn 이 없어(확답 ④)
+  //   c.cn 으로 넣으면 undefined 가 Set에서 1개로 합쳐진다(TMPZ 370 → 1). 키를 폴백 식별자로.
+  Object.entries(ediContainers).forEach(([key, c]) => {
+    if (!c) return;
     const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod)
       : mode === 'loading' ? isPyeongtaekPort(c.pol)
       : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
-    if (isPtk) ptkCns.add(c.cn);
+    if (isPtk) ptkCns.add(c.cn || key);
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
-  const missing = ptkCns.size - matched;
+  // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당.
+  const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
+  const missing = Math.max(0, ptkCns.size - matched - planSlots);
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
   // V8.90: 예상 EDI 판정(홈 카드와 동일 규칙) — 리스트가 있는데 매칭 0이면 예상(프리스토우) EDI.
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));
   const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;
-  return { total, done, ptk: ptkCns.size, matched, missing, forecastEdi };
+  return { total, done, ptk: ptkCns.size, matched, missing, forecastEdi, planSlots };
 }
 
 // ── V9.17: 완료 보관소 (archive 노드) — 열람·복원·1년 정리. 수석 전용 조작. ──

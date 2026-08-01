@@ -1184,7 +1184,16 @@ function SectionBar({ label, color, stats, onClick }) {
             리스트(실데이터)가 있는데 EDI 평택분과 매칭 0이면 그 EDI는 확정본이 아니라 예상(프리스토우)본.
             '누락 293' 같은 허수 대신 리스트 개수를 녹색(기준 수치)으로 + '예상 EDI · 확정 대기' 배지.
             매칭>0(확정 EDI)이면 EDI·매칭 녹색, 누락만 적색. */}
-        {stats.forecastEdi ? (
+        {stats.planOnly ? (
+          /* V9.37-02: 프리스토우 플랜 자리(TMPZ) — 컨번호 없는 __SLOT_ 이라 매칭·누락이 성립하지 않는다.
+             자리 수(플랜)와 리스트 수(NOLIST 등)를 나란히. 사용자 확답 2026-07-11 ④. */
+          <>
+            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.planSlots}</span><span className="text-slate-500">자리</span></span>
+            <span className="text-slate-600">·</span>
+            <span className="text-slate-400">리스트 <span className={`${stats.recCount > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.recCount}</span></span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/40 text-[10px] font-black" title="선사가 선적 EDI 대신 프리스토우 플랜(격자)만 보내는 선박 — 플랜은 '자리'만 담고 컨번호는 NOLIST 리스트가 담당합니다(사용자 확정 2026-07-11). 자리와 리스트는 서로 다른 것을 세므로 매칭·누락을 표시하지 않습니다.">플랜 자리</span>
+          </>
+        ) : stats.forecastEdi ? (
           <>
             <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
             <span className="text-slate-600">·</span>
@@ -1267,18 +1276,25 @@ function computeStats(section, mode, info) {
   // PTK 평택 대상 (모드별)
   const ediValues = Object.values(ediContainers);
   const ptkCns = new Set();
-  ediValues.forEach(c => {
+  // V9.37-02: 식별자는 `cn || 키`. 플랜 가상 EDI(TMPZ 프리스토우)는 **cn 필드가 없다** —
+  //   사용자 확답 2026-07-11 ④ "자리만 등록(__SLOT_ 키), 컨번호 임의 배정 금지".
+  //   종전엔 c.cn(undefined) 370개가 Set에서 1개로 합쳐져 카드가 '선적 평택 1 · 매칭 0 · 누락 1'
+  //   이었다(TMPZ 2023E 실측 2026-08-02, 슬롯 370 전부 pol=KRPTK).
+  Object.entries(ediContainers).forEach(([key, c]) => {
+    if (!c) return;
     const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod)
       : mode === 'loading' ? isPyeongtaekPort(c.pol)
       : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
-    if (isPtk) ptkCns.add(c.cn);
+    if (isPtk) ptkCns.add(c.cn || key);
   });
   const recordCns = new Set(Object.keys(records));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.04-01: 가상(더미) 자리는 '누락' 대상이 아님 — 실번호 미배정 엠티 자리(가상E)로 별도 표기.
   //   (MCSN 629S: 가상 187이 전부 누락으로 잡혀 '누락 187' 허수. dummyE는 아래에서 계산 — 선적만.)
   const dummyECount = mode === 'loading' ? [...ptkCns].filter(cn => isVirtualCn(cn)).length : 0;
-  const missing = Math.max(0, ptkCns.size - matched - dummyECount);
+  // V9.37-02: 플랜 슬롯(자리)은 컨번호가 배정될 대상이지 '누락'이 아니다. 컨번호는 NOLIST 담당.
+  const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
+  const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots);
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));   // V8.84-02: 플랜 가상도 배지
@@ -1307,7 +1323,10 @@ function computeStats(section, mode, info) {
     ? ediValues.filter(c => isPyeongtaekPort(c.pol) && String(c.fe || '').toUpperCase() === 'E' && !isVirtualCn(c.cn)).length
     : 0;
   const emptyConfirmedAdd = Math.max(0, emptyConfirmed - realEPtk);
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd };
+  // V9.37-02: 플랜 자리만 있는 상태(TMPZ) — 슬롯엔 컨번호가 없어 '매칭'이 성립하지 않는다.
+  //   자리 수와 리스트 수를 나란히 보여주고 매칭·누락 표기는 숨긴다.
+  const planOnly = planSlots > 0 && matched === 0;
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {
