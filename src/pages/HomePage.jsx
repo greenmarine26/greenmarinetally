@@ -268,6 +268,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           const eta = v._etaMs, etd = v._etdMs;
           if (eta != null && eta <= now && (etd == null || now <= etd)) return [0, etd != null ? etd - now : 86400000];
           if (eta != null && eta > now) return [1, eta - now];
+          // V9.36-01: 도선만 있는 항차(nextArr 없이 nextDep만 — "도선만 잡고 대기")가 ④미상으로
+          //   떨어지던 결함. etd만 미래면 입항 예정과 같은 급으로 정렬한다.
+          if (eta == null && etd != null && etd >= now) return [1, etd - now];
           if (etd != null && etd < now) return [2, now - etd];
           return [3, -(v.info.createdAt || 0)];
         };
@@ -918,8 +921,15 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 return (st >= lo && st <= hi) ? _tw0 : null;
               })();
               const pfDep = (() => {
+                // V9.36-01: 도선 nextDep에도 tw와 같은 작업창(±12h) 가드 — 도선 예보는 '다음 출항'으로
+                //   계속 갱신되므로, 이 항차 출항이 예보에서 빠지면 다음 기항 출항이 이번 카드에 붙는다.
                 const r = pilotForecast[(voyage.info?.vsl || '').toUpperCase()];
-                return r ? parsePortMisDateTime(r.nextDep) : null;
+                const t = r ? parsePortMisDateTime(r.nextDep) : null;
+                if (!t) return null;
+                const a = voyage._etaMs, b = voyage._etdMs;
+                if (!a && !b) return null;
+                const lo = (a ?? b) - 12 * 3600000, hi = (b ?? a) + 12 * 3600000;
+                return (t >= lo && t <= hi) ? t : null;
               })();
               const twDep = tw ? parsePortMisDateTime(tw.depEtd) : null;
               const nearDone = tw && typeof tw.pct === 'number' && tw.pct >= WORK_DONE_PCT;

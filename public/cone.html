@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.36</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.36-01</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -687,8 +687,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='V9.36';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
-window.__CONEV='V9.36';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='V9.36-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__CONEV='V9.36-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1344,9 +1344,16 @@ function render(){
             if(!st||(!a&&!b)) return false;
             return st>=((a||b)-12*3600000) && st<=((b||a)+12*3600000); })();
           if(_win && tw && typeof tw.pct==='number' && tw.pct>=WORK_DONE_PCT){
-            const dep=(pf&&pf.nextDep)||tw.depEtd||'';
+            // V9.36-01: 도선 nextDep도 작업창(±12h) 안일 때만 — 다음 기항 출항이 붙는 것 방지(검수앱과 동일 가드).
+            const _pfOk=(()=>{ if(!pf||!pf.nextDep) return false;
+              const P=x=>{ const m=String(x).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime():null; };
+              const pd=String(v.planDate||''), a=pd?P(pd.split('~')[0].trim()):null,
+                    b=pd.includes('~')?P(pd.split('~')[1].trim()):null, t=P(pf.nextDep);
+              if(!t||(!a&&!b)) return false;
+              return t>=((a||b)-12*3600000) && t<=((b||a)+12*3600000); })();
+            const dep=(_pfOk&&pf.nextDep)||tw.depEtd||'';
             if(dep){
-              const src=(pf&&pf.nextDep)?'⚓도선':'🏭터미널';
+              const src=(_pfOk&&pf.nextDep)?'⚓도선':'🏭터미널';
               const late=(tw.delayed&&tw.pct<100)?' <span style="color:#fca5a5">· 지연</span>':'';
               return `<div class="vi-sub" style="color:#fbbf24">🚢 출항 <b>${_pfShort(dep)}</b> <span style="color:#94a3b8">${src}</span>${late}</div>`;
             }
