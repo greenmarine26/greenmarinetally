@@ -8,6 +8,10 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
 //   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
 //   HomePage(삭제 판정)와 VoyageCard("곧 자동삭제" 표시) 양쪽에서 동일 기준으로 쓴다.
+
+// V9.36: 작업 마무리 판정 기준(터미널 합계 진행률 %). 이 값 이상이면 카드가 '출항시간'으로 바뀐다.
+//   기준을 바꿔야 하면 이 한 줄만 고친다 (사용자 확정 2026-08-01: 터미널 진행률 기준).
+const WORK_DONE_PCT = 90;
 function lastWorkAt(v) {
   let last = 0;
   const scanAt = (obj) => {
@@ -32,7 +36,7 @@ function lastWorkAt(v) {
   return last;
 }
 
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth, onOpenFood }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth, onOpenFood }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
@@ -599,6 +603,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               )}
               <VoyageCard
                 voyage={v}
+                pilotForecast={pilotForecast}
+                terminalWork={terminalWork}
                 activeInspectors={activeInspectors[v.key] || []}
                 onOpen={(m) => onOpenVoyage(v.key, m)}
                 onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
@@ -850,7 +856,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete }) {
+function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {} }) {
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
@@ -895,6 +901,48 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 승격되는 순간 사라졌다. 그래서 금일 작업인지 명일 작업인지 배정목록을 따로 찾아봐야 했다.
                 출처는 항상 표기 — 📋 선석배정 · ⚓ 도선 예보 · 🚢 PORT-MIS 신고. */}
             {(() => {
+              // V9.36: 작업이 마무리될 무렵이면 '작업일시' 대신 '출항시간'을 보여준다 (사용자 요청 2026-08-01).
+              //   전환 기준 = 터미널(트레드링스) 합계 진행률 ≥ WORK_DONE_PCT. 대상은 항차 목록에 있는 선박만.
+              //   출항시각은 도선 예보 우선(사용자 확정) → 없으면 터미널 출항 ETD.
+              //   진행률·ETD가 5분마다 갱신되므로 작업이 늦어지거나 출항이 바뀌면 그대로 따라간다.
+              const _tw0 = terminalWork[(voyage.info?.vsl || '').toUpperCase()];
+              // V9.36 가드: 터미널 자료는 **선박코드**로만 오므로 그대로 쓰면 '직전 항차'의 작업/출항이
+              //   다음 기항 카드(예 OBWH 2703E)에 붙는다(시뮬에서 "출항 어제 19:00"으로 잡힘).
+              //   이 항차의 작업창(_etaMs~_etdMs) 앞뒤 12시간 안에서 시작한 작업만 이 항차의 것으로 본다.
+              const tw = (() => {
+                if (!_tw0) return null;
+                const st = parsePortMisDateTime(_tw0.startAt);
+                const a = voyage._etaMs, b = voyage._etdMs;
+                if (!st || (!a && !b)) return null;
+                const lo = (a ?? b) - 12 * 3600000, hi = (b ?? a) + 12 * 3600000;
+                return (st >= lo && st <= hi) ? _tw0 : null;
+              })();
+              const pfDep = (() => {
+                const r = pilotForecast[(voyage.info?.vsl || '').toUpperCase()];
+                return r ? parsePortMisDateTime(r.nextDep) : null;
+              })();
+              const twDep = tw ? parsePortMisDateTime(tw.depEtd) : null;
+              const nearDone = tw && typeof tw.pct === 'number' && tw.pct >= WORK_DONE_PCT;
+              if (nearDone && (pfDep || twDep)) {
+                const dep = pfDep || twDep;
+                const two2 = (n) => String(n).padStart(2, '0');
+                const d = new Date(dep), t = new Date();
+                const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
+                  - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
+                const w = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+                const day = diff === 0 ? '오늘' : diff === 1 ? '내일' : diff === -1 ? '어제'
+                  : `${two2(d.getMonth() + 1)}-${two2(d.getDate())}(${w})`;
+                const src = pfDep ? '⚓도선' : '🏭터미널';
+                const late = tw.delayed && tw.pct < 100;
+                return (
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${dep < Date.now()
+                    ? 'bg-slate-800 border-slate-600 text-slate-400'
+                    : 'bg-amber-900/60 border-amber-700/50 text-amber-200'}`}>
+                    🚢 출항 {day} {two2(d.getHours())}:{two2(d.getMinutes())} {src}
+                    {late ? <span className="text-red-300 ml-1">· 지연</span> : ''}
+                  </span>
+                );
+              }
               const eta = voyage._etaMs, etd = voyage._etdMs;
               if (!eta && !etd) return null;
               const two = (n) => String(n).padStart(2, '0');

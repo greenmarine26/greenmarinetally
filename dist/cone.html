@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.35</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.36</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -687,8 +687,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='V9.35';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
-window.__CONEV='V9.35';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='V9.36';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__CONEV='V9.36';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -733,6 +733,7 @@ async function fbFetchVoyages(){
       vsl: info.vsl||key.split('_')[0]||'(선박명 미상)',
       imo: info.imo||'',
       voy: info.voy_l||info.voy_d||info.voy||'',
+      planDate: info.planDate||'',            // C7.69: 터미널 작업현황 항차 매칭용(작업창)
       voy_d: info.voy_d||'', voy_l: info.voy_l||'',
       dischargeDoneAt: info.dischargeDone ? (info.dischargeDoneAt||0) : (info.inspectorDone ? (info.inspectorDoneAt||0) : 0),  // V7.90: 양하 완료 기록 (분리작업 자동 판정)
       hasD, hasL,
@@ -755,6 +756,17 @@ async function fbFetchPilotForecast(){
 }
 // '2026-08-01 20:00' → '08-01 20:00'
 function _pfShort(v){ if(!v) return ''; const p=String(v).split(' '); return ((p[0]||'').slice(5)+' '+(p[1]||'')).trim(); }
+
+// C7.69 (2026-08-01, 사용자 요청): 터미널 작업 현황 — 작업이 마무리될 무렵 '출항시간'으로 바꿔 표기.
+//   전환 기준 = 터미널 합계 진행률 ≥ WORK_DONE_PCT (검수앱 HomePage와 같은 값).
+const WORK_DONE_PCT = 90;
+async function fbFetchTerminalWork(){
+  try{
+    const res=await fetch(`${FB_BASE}/terminal_work.json`);
+    if(!res.ok) return {};
+    return (await res.json())||{};
+  }catch(e){ return {}; }
+}
 
 // 항차 mode의 ediContainers(이미 파싱된 좌표)를 콘앱 rows 형식으로 가져오기.
 //   검수앱이 저장한 그대로 → 재업로드 불필요, 검수앱과 동일 데이터. 없으면 null(→raw 폴백).
@@ -845,8 +857,8 @@ function lookupBayDef(fbDict, imo, nameOrCode){
 async function loadVoyageList(){
   state.loadingVoyages=true; state.voyErr=''; render();
   try{
-    const [_vs, _pf] = await Promise.all([fbFetchVoyages(), fbFetchPilotForecast()]);   // C7.68: 도선 예보 동시 로드
-    state.voyages=_vs; state.pilotForecast=_pf;
+    const [_vs, _pf, _tw] = await Promise.all([fbFetchVoyages(), fbFetchPilotForecast(), fbFetchTerminalWork()]);   // C7.68/69
+    state.voyages=_vs; state.pilotForecast=_pf; state.terminalWork=_tw;
     state.voyErr = state.voyages.length? '' : '검수앱에 EDI가 보관된 작업이 없습니다. 검수앱에서 EDI를 먼저 올려주세요.';
   }catch(e){
     state.voyages=[]; state.voyErr=friendlyErr(e, '작업 목록을 불러오지 못했습니다');
@@ -1321,7 +1333,24 @@ function render(){
       listHtml+=`<button class="voy-item ${sel?'sel':''}" data-vk="${v.key}" ${v.noEdi?'style="opacity:.55"':''}>
         <div class="vi-top"><b>${v.vsl}</b> ${tags.join('')}</div>
         <div class="vi-sub">${v.voy?('항차 '+v.voy):''}${v.noEdi?' · 검수앱에서 EDI 업로드 후 계산 가능':''}</div>
-        ${(()=>{ const pf=(state.pilotForecast||{})[(v.vsl||'').toUpperCase()];
+        ${(()=>{ const code=(v.vsl||'').toUpperCase();
+          const pf=(state.pilotForecast||{})[code], tw=(state.terminalWork||{})[code];
+          // C7.69: 작업 마무리(진행률 ≥ 90%)면 출항시간만 — 도선 예보 우선, 없으면 터미널 ETD.
+          // C7.69 가드: 터미널 자료는 선박코드로만 와서 '직전 항차' 것이 다음 기항 카드에 붙는다.
+          //   이 항차 작업창(planDate) 앞뒤 12시간 안에서 시작한 작업만 인정한다.
+          const _win=(()=>{ const pd=String(v.planDate||''); if(!pd||!tw||!tw.startAt) return false;
+            const P=x=>{ const m=String(x).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime():null; };
+            const a=P(pd.split('~')[0].trim()), b=pd.includes('~')?P(pd.split('~')[1].trim()):null, st=P(tw.startAt);
+            if(!st||(!a&&!b)) return false;
+            return st>=((a||b)-12*3600000) && st<=((b||a)+12*3600000); })();
+          if(_win && tw && typeof tw.pct==='number' && tw.pct>=WORK_DONE_PCT){
+            const dep=(pf&&pf.nextDep)||tw.depEtd||'';
+            if(dep){
+              const src=(pf&&pf.nextDep)?'⚓도선':'🏭터미널';
+              const late=(tw.delayed&&tw.pct<100)?' <span style="color:#fca5a5">· 지연</span>':'';
+              return `<div class="vi-sub" style="color:#fbbf24">🚢 출항 <b>${_pfShort(dep)}</b> <span style="color:#94a3b8">${src}</span>${late}</div>`;
+            }
+          }
           if(!pf||(!pf.nextDep&&!pf.nextArr)) return '';
           const a=pf.nextArr?`입항 <b style="color:#34d399">${_pfShort(pf.nextArr)}</b>`:'';
           const d=pf.nextDep?`출항 <b style="color:#fbbf24">${_pfShort(pf.nextDep)}</b>`:'';
