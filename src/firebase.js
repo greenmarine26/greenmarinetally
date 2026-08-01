@@ -1928,3 +1928,20 @@ export async function fbBulkCancelComplete(voyageKey, mode, { resetActuals = fal
   await update(ref(db), updates);
   return { canceled, actualsReset };
 }
+
+// V9.37(판6): 수집기 즉시 처리 명령 — 5분 사이클을 기다리지 않고 그 항차만 지금 처리시킨다.
+//   사용자가 받은 자료를 폴더에 넣은 직후 반영이 필요할 때(2026-08-01 XTPG 534W 손보완 사례).
+//   수집기는 대기 중 30초마다 collector_commands 를 보고, 끝나면 collector_commands_done 에 결과를 남긴다.
+export async function fbRequestProcessNow(vessel, voy, by = '') {
+  const key = `${(vessel || '').toUpperCase()}_${(voy || '').toUpperCase()}_${Date.now()}`;
+  await set(ref(db, `collector_commands/${key}`), {
+    action: 'process_now', vessel: (vessel || '').toUpperCase(),
+    voy: (voy || '').toUpperCase(), at: Date.now(), by: by || '',
+  });
+  return key;
+}
+
+export function fbSubscribeProcessDone(key, callback) {
+  const r = ref(db, `collector_commands_done/${key}`);
+  return onValue(r, (snap) => callback(snap.val() || null));
+}

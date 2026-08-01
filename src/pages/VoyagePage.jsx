@@ -16,7 +16,7 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
-  , fbSubscribeWorkReports, fbSetStowagePlan } from '../firebase.js';
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -92,6 +92,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
+  const [procState, setProcState] = useState('');  // V9.37(판6): ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
+  const [procMsg, setProcMsg] = useState('');
   const [showWorkReport, setShowWorkReport] = useState(false);  // M3.5.6: 작업 보고 모달
   const [shipLib, setShipLib] = useState(null); // M3.0: 선박 라이브러리 (AI 컨텍스트용)
   // M3.5.4: 자동 진단 state (메인 컴포넌트에 두어야 useMemo에서 접근 가능)
@@ -1042,6 +1044,47 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
       {/* V9.18: 선박 소개 · 이름 유래 — 하단 정보 구역 */}
       <ShipIntroCard info={voyage?.info} inspector={inspector} portMisData={portMisData}/>
+
+      {/* V9.37(판6): ⚡ 지금 처리 — 수집기 5분 사이클을 기다리지 않고 이 항차만 즉시 합본·등록.
+          현장에서 받은 자료를 메일박스 폴더에 넣은 직후 반영할 때 쓴다(개발자용 화면 도구). */}
+      {(() => {
+        const vsl = voyage?.info?.vsl || '';
+        const voyNo = voyage?.info?.voy_l || voyage?.info?.voy || voyage?.info?.voy_d || '';
+        if (!vsl || !voyNo) return null;
+        return (
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              onClick={async () => {
+                if (procState === 'run') return;
+                setProcState('run'); setProcMsg('수집기에 요청 보냄 — 최대 30초 내 시작');
+                try {
+                  const key = await fbRequestProcessNow(vsl, voyNo, inspector || '');
+                  const off = fbSubscribeProcessDone(key, (r) => {
+                    if (!r) return;
+                    setProcState(r.ok ? 'ok' : 'fail');
+                    setProcMsg(`${r.ok ? '✅' : '❌'} ${r.msg || ''} (${r.took ?? '-'}초)`);
+                    try { off && off(); } catch {}
+                  });
+                  setTimeout(() => setProcState((s) => (s === 'run' ? 'timeout' : s)), 180000);
+                } catch (e) {
+                  setProcState('fail'); setProcMsg('❌ 요청 실패 — ' + (e?.message || e));
+                }
+              }}
+              disabled={procState === 'run'}
+              className={`text-[11px] px-2 py-1 rounded border font-bold ${procState === 'run'
+                ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-wait'
+                : 'bg-amber-900/50 border-amber-700/60 text-amber-200 hover:bg-amber-800/60'}`}>
+              ⚡ 지금 처리 (수집기)
+            </button>
+            {procMsg && (
+              <span className={`text-[11px] ${procState === 'fail' ? 'text-red-300'
+                : procState === 'ok' ? 'text-emerald-300' : 'text-slate-400'}`}>
+                {procState === 'timeout' ? '⏱ 3분 내 응답 없음 — 수집기가 꺼져 있는지 확인' : procMsg}
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* V9.15: PORT-MIS 카드 — 탭을 눌러도 이 카드 때문에 내용이 안 보이던 문제로 본문 아래 이동 */}
       {/* M5.21: PORT-MIS 입출항 정보 (Chrome 확장이 자동 수집한 데이터) */}
