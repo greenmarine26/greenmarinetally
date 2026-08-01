@@ -1246,7 +1246,7 @@ function SectionBar({ label, color, stats, onClick }) {
             <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 터미널 배정표는 모브 수(1대=양하+재선적 2모브). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({stats.shiftCount * 2}모브)</span>
           </>
         )}
-        {stats.virtual && (
+        {stats.virtualFromList && (
           <span className="ml-1 px-1 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/40 text-[10px] font-black" title="선적 EDI 미도착 — 선적 리스트로 채운 가상 카운트(베이 없음). 실 EDI 도착 시 자동 대체.">가상/리스트</span>
         )}
         {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && (
@@ -1298,6 +1298,11 @@ function computeStats(section, mode, info) {
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
   const done = Object.keys(completed).length;
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));   // V8.84-02: 플랜 가상도 배지
+  // V9.37-03: 배지는 **출처별로** 나눈다(사용자 지적 2026-08-02 "가상/리스트?").
+  //   '가상/리스트'는 리스트로 채운 가상(베이 없음)을 뜻하는데, 플랜 슬롯은 리스트가 아니라
+  //   플랜에서 왔고 bay/row/tier 도 있다 — 문구와 툴팁이 둘 다 사실과 달랐다.
+  //   플랜 가상은 '플랜 자리' 배지가 이미 정확히 설명하므로 여기서는 리스트 가상만 남긴다.
+  const virtualFromList = ediValues.some(c => c && c._virtualFromList);
   // V8.90: 예상 EDI 판정 — 리스트(실데이터)가 있는데 EDI 평택분과 컨번호가 하나도 안 겹치면
   //   그 EDI는 확정본이 아니라 예상(프리스토우)본(SWDN 2608S: EDI 293 vs 리스트 284, 매칭 0).
   //   가상 EDI(리스트 승격)는 리스트에서 만든 것이라 제외.
@@ -1326,7 +1331,7 @@ function computeStats(section, mode, info) {
   // V9.37-02: 플랜 자리만 있는 상태(TMPZ) — 슬롯엔 컨번호가 없어 '매칭'이 성립하지 않는다.
   //   자리 수와 리스트 수를 나란히 보여주고 매칭·누락 표기는 숨긴다.
   const planOnly = planSlots > 0 && matched === 0;
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual, virtualFromList, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {
