@@ -1191,7 +1191,7 @@ function SectionBar({ label, color, stats, onClick }) {
             <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.planSlots}</span><span className="text-slate-500">자리</span></span>
             <span className="text-slate-600">·</span>
             <span className="text-slate-400">리스트 <span className={`${stats.recCount > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.recCount}</span></span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/40 text-[10px] font-black" title="선사가 선적 EDI 대신 프리스토우 플랜(격자)만 보내는 선박 — 플랜은 '자리'만 담고 컨번호는 NOLIST 리스트가 담당합니다(사용자 확정 2026-07-11). 자리와 리스트는 서로 다른 것을 세므로 매칭·누락을 표시하지 않습니다.">플랜 자리</span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/40 text-[10px] font-black" title="컨펌전 플랜 — 선사가 선적 EDI 대신 프리스토우 플랜(격자)만 보내는 선박. 자리마다 규격은 정해져 있고 컨번호만 배정하면 되는 상태입니다(컨번호는 NOLIST 담당). 일항사가 컨펌하면 규격 자리는 그대로지만 개별 컨의 위치는 바뀔 수 있습니다 — 확정 위치가 아닙니다. 자리와 리스트는 서로 다른 것을 세므로 매칭·누락을 표시하지 않습니다.">컨펌전</span>
           </>
         ) : stats.forecastEdi ? (
           <>
@@ -1301,7 +1301,7 @@ function computeStats(section, mode, info) {
   // V9.37-03: 배지는 **출처별로** 나눈다(사용자 지적 2026-08-02 "가상/리스트?").
   //   '가상/리스트'는 리스트로 채운 가상(베이 없음)을 뜻하는데, 플랜 슬롯은 리스트가 아니라
   //   플랜에서 왔고 bay/row/tier 도 있다 — 문구와 툴팁이 둘 다 사실과 달랐다.
-  //   플랜 가상은 '플랜 자리' 배지가 이미 정확히 설명하므로 여기서는 리스트 가상만 남긴다.
+  //   플랜 가상은 '컨펌전' 배지가 이미 정확히 설명하므로 여기서는 리스트 가상만 남긴다.
   const virtualFromList = ediValues.some(c => c && c._virtualFromList);
   // V8.90: 예상 EDI 판정 — 리스트(실데이터)가 있는데 EDI 평택분과 컨번호가 하나도 안 겹치면
   //   그 EDI는 확정본이 아니라 예상(프리스토우)본(SWDN 2608S: EDI 293 vs 리스트 284, 매칭 0).
@@ -1330,6 +1330,11 @@ function computeStats(section, mode, info) {
   const emptyConfirmedAdd = Math.max(0, emptyConfirmed - realEPtk);
   // V9.37-02: 플랜 자리만 있는 상태(TMPZ) — 슬롯엔 컨번호가 없어 '매칭'이 성립하지 않는다.
   //   자리 수와 리스트 수를 나란히 보여주고 매칭·누락 표기는 숨긴다.
+  // ★ V9.37-04 도메인(사용자 확답 2026-08-02): 이 플랜은 **컨펌전 플랜**이다.
+  //   "그 자리에 컨번호만 배정하면 되는 자리. 일항사의 의지대로 컨펌하면 (규격)자리는 맞는데
+  //    컨 위치만 바뀌는 거지요."
+  //   → 자리의 **규격·개수는 신뢰**하되 **개별 컨의 위치는 확정이 아니다.**
+  //     이 자료로 만든 위치를 확정처럼 다루면 안 된다(카고플랜·베이플랜 표기 시 주의).
   const planOnly = planSlots > 0 && matched === 0;
   return { total, done, ptk: ptkCns.size, matched, missing, virtual, virtualFromList, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
 }
