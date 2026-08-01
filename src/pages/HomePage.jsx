@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete } from '../firebase.js';
+import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
@@ -606,6 +606,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               )}
               <VoyageCard
                 voyage={v}
+                inspector={inspector}
                 pilotForecast={pilotForecast}
                 terminalWork={terminalWork}
                 activeInspectors={activeInspectors[v.key] || []}
@@ -859,7 +860,10 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {} }) {
+function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {}, inspector = '' }) {
+  // V9.37-01: ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
+  const [zap, setZap] = useState('');
+  const [zapMsg, setZapMsg] = useState('');
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
@@ -1068,6 +1072,45 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             ) : <span className="text-slate-600">대기 중</span>}
           </div>
           <div className="flex items-center gap-1">
+            {/* V9.37-01(사용자 지시 2026-08-01): ⚡ 지금 처리 — **홈 카드에** 둔다.
+                "홈화면에 있어야 하죠 거기에 정보가 거의 있는데" — 자료를 폴더에 넣은 직후
+                수집기 5분 사이클을 기다리지 않고 이 항차만 즉시 합본·등록시킨다.
+                항차 상세 안쪽에 두면 급할 때 못 쓴다(V9.37의 위치 오류를 교정). */}
+            {(() => {
+              const _vsl = voyage?.info?.vsl || '';
+              const _voy = voyage?.info?.voy_l || voyage?.info?.voy || voyage?.info?.voy_d || '';
+              if (!_vsl || !_voy) return null;
+              const busy = zap === 'run';
+              return (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (busy) return;
+                    setZap('run'); setZapMsg('요청 보냄');
+                    try {
+                      const k = await fbRequestProcessNow(_vsl, _voy, inspector || '');
+                      const off = fbSubscribeProcessDone(k, (r) => {
+                        if (!r) return;
+                        setZap(r.ok ? 'ok' : 'fail');
+                        setZapMsg(r.ok ? `✅ ${r.msg || ''}` : `❌ ${r.msg || ''}`);
+                        try { off && off(); } catch { /* skip */ }
+                        setTimeout(() => { setZap(''); setZapMsg(''); }, 20000);
+                      });
+                      setTimeout(() => setZap((s) => (s === 'run' ? 'timeout' : s)), 180000);
+                    } catch (err) {
+                      setZap('fail'); setZapMsg('❌ 요청 실패');
+                    }
+                  }}
+                  className={`px-2.5 py-2 rounded-lg text-[12px] font-bold border ${busy
+                    ? 'bg-slate-800 border-slate-700 text-slate-500'
+                    : zap === 'ok' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
+                    : zap === 'fail' || zap === 'timeout' ? 'bg-red-900/40 border-red-700/50 text-red-300'
+                    : 'bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 border-amber-800/40'}`}
+                  style={{ minHeight: 40 }}
+                  title={zapMsg || '수집기에 이 항차를 지금 처리하라고 요청 (메일박스 폴더에 자료를 넣은 직후 사용)'}
+                >{busy ? '⚡ 처리 중…' : zap === 'timeout' ? '⚡ 응답 없음' : zapMsg ? `⚡ ${zapMsg.slice(0, 18)}` : '⚡ 지금 처리'}</button>
+              );
+            })()}
             {/* V7.90: 완료 분리 — 양하/선적 각각 완료 표시 (작업시간 구분 + 콘앱 분리작업 자동 판정 근거) */}
             {onComplete && inspectorDone && (
               <span className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/40 text-amber-300 text-[10px] font-bold border border-amber-700/40" title="모든 작업 완료 — 수석검수사 최종 확인 대기 중">
