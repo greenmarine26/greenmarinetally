@@ -9,6 +9,7 @@ import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51: 원래 자리로 되돌리기
+import { gradeSwap, confirmTextOf, GRADE_STYLE } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급
 
 export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [], onReplace = null }) {
   // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
@@ -47,6 +48,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       .sort((a, b) => (!!a._comp) - (!!b._comp)).slice(0, 6);
   }, [cnFixQuery, allContainers, c]);
   const isLoading = c._mode === 'loading';
+  // V9.53: 실제 온 컨을 이 자리에 넣을 때 — 얼마나 세게 물어볼지. 판정은 swapGrade.js 한 벌.
+  const swapG = useMemo(() => (cnFixPick ? gradeSwap(cnFixPick, c, posEditBayPairs || {}) : null),
+                        [cnFixPick, c, posEditBayPairs]);
 
   const labelMap = {
     amber: 'bg-amber-700 text-amber-50',
@@ -297,15 +301,25 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 <div>
                   <div className="mono text-sm font-bold text-cyan-200">{cnFixPick.cn}</div>
                   <div className="text-[10px] mono text-slate-400">
-                    계획 {cnFixPick.bay ? `${parseInt(cnFixPick.bay, 10)}-${cnFixPick.row}-${cnFixPick.tier}` : '미배정'} · {cnFixPick.pod || '-'}
-                    {cnFixPick.bay && c.bay && parseInt(cnFixPick.bay, 10) !== parseInt(c.bay, 10) &&
-                      <span className="ml-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">⚠ 다른 베이</span>}
+                    계획 {cnFixPick.bay ? `${parseInt(cnFixPick.bay, 10)}-${cnFixPick.row}-${cnFixPick.tier}` : '미배정'} · {cnFixPick.pod || '-'} · {cnFixPick.fe === 'E' ? '엠티' : '풀'}
                   </div>
                 </div>
                 <button onClick={() => setCnFixPick(null)} className="text-[11px] text-slate-400 px-1.5">✕</button>
               </div>
-              <button onClick={() => { setPosTarget(cnFixPick); setCnFixOpen(false); }}
-                className="w-full py-2.5 rounded-lg font-black text-sm bg-cyan-700 hover:bg-cyan-600 text-white flex items-center justify-center gap-1.5">
+              {/* V9.53: 등급별 안내 — 엠티·같은포트는 그냥 진행, 다른 베이/다른 포트는 강하게 확인 */}
+              {swapG && (
+                <div className={`rounded-lg border px-2.5 py-2 text-[11px] font-bold leading-snug ${GRADE_STYLE[swapG.level].box} ${GRADE_STYLE[swapG.level].text}`}>
+                  {GRADE_STYLE[swapG.level].icon} {swapG.reason}
+                  {swapG.level === 'strong' && <div className="mt-0.5 font-normal opacity-90">누르면 한 번 더 확인합니다.</div>}
+                </div>
+              )}
+              <button onClick={() => {
+                  const t = confirmTextOf(swapG, cnFixPick, c);
+                  if (t && !confirm(t)) return;
+                  setPosTarget(cnFixPick); setCnFixOpen(false);
+                }}
+                className={`w-full py-2.5 rounded-lg font-black text-sm text-white flex items-center justify-center gap-1.5 ${
+                  swapG?.level === 'strong' ? 'bg-rose-700 hover:bg-rose-600' : 'bg-cyan-700 hover:bg-cyan-600'}`}>
                 <MapPin className="w-4 h-4"/>위치 선택 →
               </button>
             </>

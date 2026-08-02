@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
 import { bayParityError } from '../utils.js';   // V9.27: 물리 불가 좌표 차단
+import { gradeSwap, confirmTextOf, GRADE_STYLE } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급(판정 한 벌)
 
 export default function PositionEditModal({
   open,
@@ -147,6 +148,15 @@ export default function PositionEditModal({
   }, [twinOn, partnerPick, pairSlot, allContainers]);
 
 
+  // V9.53: 이 자리에 있던 컨과 비교해 **얼마나 세게 물어볼지**. 판정은 swapGrade.js 한 벌.
+  //   엠티+같은포트=통과 · 풀+같은베이=간단 · 다른베이/다른포트/특수컨=강한 확인.
+  const swapG = useMemo(() => {
+    if (!container || !bay || !row || !tier) return null;
+    const slotCon = findByCn(pickedSlotCn) || findAtPos(bay, row, tier) || conflict;
+    if (!slotCon || slotCon.cn === container.cn) return null;
+    return gradeSwap(container, slotCon, bayPairs || {});
+  }, [container, bay, row, tier, pickedSlotCn, conflict, allContainers, bayPairs]);
+
   if (!open || !container) return null;
 
   const isFull = container.fe === 'F';
@@ -175,6 +185,12 @@ export default function PositionEditModal({
     // V9.27: 물리 불가 좌표 원천 차단 — 40/45ft를 홀수 베이에 (경고 아닌 차단)
     const _pe = bayParityError(container, bay);
     if (_pe) { setErrMsg('⛔ ' + _pe.replace(/\n/g, ' ')); setStep('input'); return; }
+    // V9.53: 강한 등급(다른 베이 풀 · 다른 포트 · 특수컨)이면 한 번 더 묻는다.
+    {
+      const slotCon = findByCn(pickedSlotCn) || findAtPos(bay, row, tier) || conflict;
+      const t0 = confirmTextOf(swapG, container, slotCon);
+      if (t0 && !confirm(t0)) { setStep('input'); return; }
+    }
     setStep('saving');
     try {
       const r = row ? String(row).padStart(2, '0') : '';
@@ -366,7 +382,18 @@ export default function PositionEditModal({
               </div>
             )}
 
-            {bayWarn && (
+            {/* V9.53: 등급 안내 — 엠티·같은포트는 초록(그냥 진행), 특수컨·다른베이는 빨강 */}
+            {swapG && (
+              <div className={`rounded-lg border-2 p-3 ${GRADE_STYLE[swapG.level].box}`}>
+                <div className={`font-black text-sm ${GRADE_STYLE[swapG.level].text}`}>
+                  {GRADE_STYLE[swapG.level].icon} {swapG.reason}
+                </div>
+                {swapG.level === 'strong' && (
+                  <div className="mt-1 text-[11px] text-rose-200/90">확정 전에 한 번 더 확인합니다.</div>
+                )}
+              </div>
+            )}
+            {bayWarn && swapG?.level !== 'ok' && (
               <div className="bg-amber-950/60 border-2 border-amber-600 rounded-lg p-3">
                 <div className="text-amber-300 font-black text-sm flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4"/>다른 베이에서 오는 컨테이너
