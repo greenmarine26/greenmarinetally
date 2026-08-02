@@ -4,7 +4,8 @@ import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSub
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
-import { decideBadge, DEPART_REMAIN_MAX } from '../badgeRule.js';  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
+import { decideBadge, DEPART_REMAIN_MAX } from '../badgeRule.js';
+import { isChief } from '../staffList.js';   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
 //   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
@@ -449,15 +450,17 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
           <div className="text-lg font-bold text-slate-100">{list.length}건</div>
         </div>
-        {/* V9.42: 수석 대시보드 — 종전 상단 3카드에서 이 줄 가운데 빈 공간으로 옮김 */}
-        <button onClick={onOpenChiefDashboard}
+        {/* V9.42: 수석 대시보드 — 종전 상단 3카드에서 이 줄 가운데 빈 공간으로 옮김
+            V9.44: **수석 검수원에게만 보인다.** 눌러서 막히는 것보다 아예 안 보이는 편이 낫다
+            (진입 차단은 ChiefDashboard 안에도 있다 — 주소로 직접 들어오는 경우 대비). */}
+        {isChief(inspector) && <button onClick={onOpenChiefDashboard}
           className="flex-1 min-w-0 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
           <div className="flex items-center gap-1.5">
             <BarChart3 className="w-4 h-4 text-purple-300 shrink-0"/>
             <span className="font-bold text-xs text-purple-100 truncate">수석 대시보드</span>
           </div>
           <div className="text-[10px] text-purple-300/70 truncate">전체 검수원 진행률·통계</div>
-        </button>
+        </button>}
         <div className="flex gap-2 flex-wrap shrink-0">
           <button
             onClick={() => setShowCreate('discharge')}

@@ -374,6 +374,34 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     return { done, all, ptkAll, missing };
   }, [voyageStats]);
 
+  // ★ V9.44(사용자 확정 2026-08-02): **수석검수사만 진입한다.**
+  //   종전엔 isChief 가 '완료 저장' 버튼에만 걸려 있어(V7.94-18) 일반 검수원도 화면에 들어와
+  //   전체 통계·자료보관소·완료보관소·오답·공지작성·편집·항차삭제를 다 볼 수 있었다.
+  //   사용자: "이제야 알았네요 일반 검수원이 수석대쉬보드 진입이 가능 하다는걸. 진입을 막아 주세요.
+  //           물론 수석검수사만 출입이 가능하다는 문구와 함께."
+  //   ⚠ 화면 가드일 뿐 데이터 차단이 아니다 — 진짜 권한 분리는 Firebase 규칙에서 해야 한다(다음 판).
+  if (!chief) {
+    return (
+      <div className="max-w-3xl mx-auto px-3 py-10">
+        <div className="bg-slate-900 border border-purple-800/50 rounded-2xl p-6 text-center">
+          <div className="text-4xl mb-3">🔒</div>
+          <div className="text-lg font-bold text-purple-200 mb-2">수석 검수원 전용 화면입니다</div>
+          <div className="text-sm text-slate-400 leading-relaxed">
+            수석 검수원만 출입이 가능합니다.<br/>
+            전체 진행률·보관소·편집 기능은 수석 검수원에게 요청해 주세요.
+          </div>
+          <div className="text-[11px] text-slate-500 mt-3">
+            현재 로그인: <b className="text-slate-300">{inspector || '미상'}</b>
+          </div>
+          <button onClick={onGoHome}
+            className="mt-5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-bold text-slate-200">
+            ← 홈으로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-3 py-3 space-y-3">
       <div>
