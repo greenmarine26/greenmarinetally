@@ -8,6 +8,7 @@ import { speakDone, speak } from '../voice.js';
 import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
+import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51: 원래 자리로 되돌리기
 
 export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [], onReplace = null }) {
   // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
@@ -336,6 +337,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
+
+      {/* V9.51: 미배정된 컨을 계획 자리로 되돌린다 — 밀려난 컨의 유일한 출구였다 */}
+      {!isDone && (
+        <div className="mt-2">
+          <RestoreOrigButton c={c} allContainers={allContainers} voyageKey={voyageKey}
+            inspector={inspector} mode={c._mode} onDone={() => { if (onAfterComplete) setTimeout(() => onAfterComplete(c), 400); }} />
+        </div>
+      )}
 
       {/* M3.87: 위치 수정 모달 */}
       <PositionEditModal

@@ -14,6 +14,7 @@ import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
 import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer } from '../firebase.js';
 import BigResultCard from './BigResultCard.jsx';
+import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
 import HelpModal from './HelpModal.jsx';
 import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
@@ -354,6 +355,9 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
               <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-slate-800 rounded px-2 py-1.5 text-xs mono font-bold text-slate-100">
                 {c.cn} <span className="text-[10px] text-slate-400 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
               </button>
+              {/* V9.51: 원래 계획 자리가 남아 있으면 한 번에 되돌린다 (빈 칸을 다시 찾을 필요 없음) */}
+              <RestoreOrigButton c={c} allContainers={allContainers} voyageKey={voyageKey}
+                inspector={inspector} mode={workFilter} compact />
               <button onClick={() => onPlaceUnassigned(c)}
                 className="px-3 py-1.5 rounded bg-lime-800 hover:bg-lime-700 border border-lime-600 text-lime-100 text-xs font-black">🅿 배치</button>
             </div>
