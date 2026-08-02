@@ -140,14 +140,32 @@ export function isNoise(name) {
  */
 export async function listVoyageFiles(root, vessel, voy) {
   if (!root) return { ok: false, reason: 'no-root', files: [], dirs: [] };
+
+  // V9.47: **어느 층을 연결했든** 찾아간다. 검수사가 MAILBOX를 고를 수도, 선박 폴더를 고를 수도,
+  //   그 항차 폴더를 바로 고를 수도 있다. 한 가지만 맞다고 우기면 "안 되네" 로 끝난다.
+  //     ① root/{선박}/{항차}   ← MAILBOX 를 연결한 경우 (권장 — 한 번으로 전 선박이 풀린다)
+  //     ② root/{항차}          ← 선박 폴더를 연결한 경우
+  //     ③ root 자체가 그 항차   ← 항차 폴더를 연결한 경우
+  let yDir = null, base = '';
   const vDir = await findDir(root, vessel);
-  if (!vDir) {
-    return { ok: false, reason: 'no-vessel', files: [], dirs: await listDirs(root) };
+  if (vDir) {
+    const y = await findDir(vDir.handle, voy);
+    if (y) { yDir = y; base = `${vDir.name}/${y.name}`; }
   }
-  const yDir = await findDir(vDir.handle, voy);
   if (!yDir) {
-    return { ok: false, reason: 'no-voy', files: [],
-             dirs: await listDirs(vDir.handle), vesselDir: vDir.name };
+    const y2 = await findDir(root, voy);                       // ② 선박 폴더를 연결했다
+    if (y2) { yDir = y2; base = `${root.name || ''}/${y2.name}`; }
+  }
+  if (!yDir && norm(root.name) === norm(voy)) {                // ③ 항차 폴더를 연결했다
+    yDir = { name: root.name, handle: root };
+    base = root.name;
+  }
+  if (!yDir) {
+    // 못 찾았을 때는 추측하지 않고, 지금 연결된 폴더에 무엇이 있는지 그대로 보여준다.
+    return { ok: false, reason: vDir ? 'no-voy' : 'no-vessel', files: [],
+             dirs: await listDirs(vDir ? vDir.handle : root),
+             vesselDir: vDir ? vDir.name : (root.name || ''),
+             rootName: root.name || '' };
   }
   const files = [];
   for await (const [name, h] of yDir.handle.entries()) {
@@ -160,7 +178,7 @@ export async function listVoyageFiles(root, vessel, voy) {
     files.push({ name, size, at, target: suggestTarget(name), handle: h });
   }
   files.sort((a, b) => (b.at || 0) - (a.at || 0));
-  return { ok: true, dirPath: `${vDir.name}/${yDir.name}`, files, dirs: [] };
+  return { ok: true, dirPath: base, files, dirs: [], rootName: root.name || '' };
 }
 
 /** 목록의 항목 → File 객체 */

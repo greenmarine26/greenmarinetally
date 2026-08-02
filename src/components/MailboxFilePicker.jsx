@@ -113,7 +113,9 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
         </div>
         <div className="text-[11px] text-slate-400 mb-2 leading-relaxed">
           한 번만 연결해 두면, 이 항차의 자료가 아래에 바로 뜹니다 — 파일 창에서 찾아 들어갈 필요가 없습니다.
-          <br />연결할 폴더: <b className="text-slate-200">MAILBOX</b> (선박 폴더들이 들어 있는 그 폴더)
+          <br />권장: <b className="text-slate-200">MAILBOX</b> 폴더 (선박 폴더들이 들어 있는 그 폴더) —
+          <b className="text-amber-300"> 한 번만 연결하면 모든 선박·항차가 자동으로 풀립니다.</b>
+          <br />선박 폴더({vessel})나 항차 폴더({voy})를 골라도 동작하지만, 그러면 그 폴더 안에서만 찾습니다.
         </div>
         <button onClick={connect}
           className="bg-amber-700 hover:bg-amber-600 text-amber-50 px-3 py-2 rounded text-xs font-bold flex items-center gap-1.5">
@@ -156,6 +158,7 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
           <FolderOpen className="w-4 h-4" />
           메일함 자료
           {res && res.ok && <span className="text-[11px] text-slate-400 font-normal mono">{res.dirPath} · {files.length}개</span>}
+          {res && res.ok && res.rootName && <span className="text-[10px] text-slate-600 font-normal">📁{res.rootName}</span>}
         </button>
         <div className="flex-1" />
         <button onClick={() => load()} title="다시 읽기"
@@ -171,12 +174,15 @@ export default function MailboxFilePicker({ vessel, voy, voyageKey, mode, onEdi,
 
       {open && res && !res.ok && (
         <div className="text-[11px] text-slate-400 leading-relaxed">
-          {res.reason === 'no-vessel' && <>메일함에 <b className="text-amber-300">{vessel}</b> 폴더가 없습니다.</>}
+          <div>연결된 폴더: <b className="text-slate-200">{res.rootName || '?'}</b></div>
+          {res.reason === 'no-vessel' && <>그 안에 <b className="text-amber-300">{vessel}</b> 선박 폴더도, <b className="text-amber-300">{voy}</b> 항차 폴더도 없습니다.</>}
           {res.reason === 'no-voy' && <>{res.vesselDir} 폴더에 <b className="text-amber-300">{voy}</b> 항차가 없습니다.</>}
           {res.dirs && res.dirs.length > 0 && (
             <div className="mt-1 text-slate-500">있는 폴더: {res.dirs.slice(0, 24).join(' · ')}{res.dirs.length > 24 ? ' …' : ''}</div>
           )}
-          <div className="mt-1 text-slate-500">연결한 폴더가 MAILBOX가 맞는지 확인하세요 — 아니면 [폴더 바꾸기].</div>
+          <div className="mt-1 text-slate-500">
+            [폴더 바꾸기]로 <b className="text-slate-300">MAILBOX</b>를 고르면 선박·항차를 알아서 찾아갑니다.
+          </div>
         </div>
       )}
 
