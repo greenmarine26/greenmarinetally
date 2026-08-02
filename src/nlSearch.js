@@ -117,6 +117,10 @@ export function parseNaturalQuery(text) {
   else if (/플랫\s*랙|flat\s*rack/i.test(t) || /\bfr\b/i.test(t)) result.type = 'fr';
   else if (/오픈\s*탑|open\s*top/i.test(t) || /\bot\b/i.test(t)) result.type = 'ot';
   else if (/\boog\b|아웃\s*오브\s*게이지/i.test(t)) result.type = 'oog';
+  // V9.56: RO/RO 겸용선(RZOR) — 크레인으로 검수하는 건 갠트리(落地) 분뿐이다.
+  //   선사 표현 그대로 "갠트리 40van" 이라 부른다. 섀시분은 램프로 굴려 나가 검수 대상이 아니다.
+  else if (/갠트리|gantry|락지|落地|크레인\s*작업|로로\s*제외/i.test(t)) result.type = 'lolo';
+  else if (/双背|쌍배|2단\s*적재|이단\s*적재/i.test(t)) result.type = 'dbl';
 
   // 베이 번호
   let bayMatch = t.match(/(\d{1,3})\s*번?\s*베이/);
@@ -326,6 +330,8 @@ export function applyNLFilter(containers, parsed) {
     r = r.filter(c => c.rf || (c.iso && c.iso[2] === 'R') || /RF$/.test(isoToLabel(c.iso) || '') || (c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0'));
   } else if (parsed.type === 'dg') r = r.filter(c => c.dg);
   else if (parsed.type === 'xray') r = r.filter(c => c._xray);
+  else if (parsed.type === 'lolo') r = r.filter(c => c.lolo);       // V9.56: 갠트리(落地) 분
+  else if (parsed.type === 'dbl') r = r.filter(c => c.dbl);         // V9.56: 双背(2단)
   else if (parsed.type === 'tk') r = r.filter(c => c.tk || /TK$/.test(isoToLabel(c.iso) || ''));
   else if (parsed.type === 'fr') r = r.filter(c => c.fr || /FR$/.test(isoToLabel(c.iso) || ''));
   else if (parsed.type === 'ot') r = r.filter(c => c.ot || /OT$/.test(isoToLabel(c.iso) || ''));
@@ -431,6 +437,8 @@ export function describeQuery(parsed) {
   if (parsed.dgClass) desc.push(`클래스 ${parsed.dgClass}`);
   if (parsed.un) desc.push(`UN${parsed.un}`);
   if (parsed.type === 'xray') desc.push('X-RAY');
+  if (parsed.type === 'lolo') desc.push('갠트리(落地)');
+  if (parsed.type === 'dbl') desc.push('双背 2단');
   if (parsed.type === 'tk') desc.push('탱크');
   if (parsed.type === 'fr') desc.push('FR');
   if (parsed.type === 'ot') desc.push('OT');
@@ -933,6 +941,8 @@ function formatLocationList(desc, results) {
     if (c.rf && c.tmp) tag.push(`${c.tmp}°C`);
     if (c.dg) tag.push(`DG${c.dgc || ''}${c.un ? ' UN' + c.un : ''}`);
     if (c._xray) tag.push('X-RAY');
+    if (c.lolo) tag.push('🏗갠트리');
+    if (c.dbl) tag.push('⇅2단');
     if (c._comp) tag.push('✅');
     const tagStr = tag.length ? ` [${tag.join(' ')}]` : '';
     lines.push(`${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${fmtPos(c) || '위치미상'}${tagStr}`);

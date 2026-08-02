@@ -328,7 +328,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       {/* V8.11: LOLO선 안내 — 베이(위치)만 없고 나머지 정보는 정상 조회됨을 알림. */}
       {isLoloShip && (
         <div className="bg-teal-950/50 border border-teal-700 rounded-lg px-3 py-2 text-[11px] text-teal-200">
-          🚢 LOLO 선박 (베이플랜 없음) — 끝 4자리로 조회하세요. 선내 위치(베이)는 없지만 실번호·규격·적공·온도·X-RAY는 정상 조회됩니다.
+          🚢 LOLO 선박 — 끝 4자리로 조회하세요. 덱플랜이 올라오면 <b className="text-lime-300">자리(D덱 3줄 5칸)</b>와 <b className="text-lime-300">🏗갠트리 대상</b>까지 함께 나옵니다.
         </div>
       )}
       {workFilter !== 'completed' && manualBay != null && manualTier && (() => {

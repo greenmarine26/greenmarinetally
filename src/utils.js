@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.55';   // RZOR 갠트리(LO/LO) 분 구분 — 초록=落地
+export const APP_VERSION = 'V9.56';   // RZOR 좌표를 컨테이너에 — 조회·리스트에 자리와 갠트리 표시
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -332,7 +332,13 @@ export const normalizeBay = (b) => {
 // M3.85: 베이 단위 자리수 보장 — bay=1 → "01", bay=16 → "16", bay=100 → "100"
 //   row/tier는 EDI에서 이미 2자리 substring으로 저장 ("00", "04", "82" 등 텍스트)
 export const fmtPos = (c) => {
-  if (!c || !c.bay) return '';
+  if (!c) return '';
+  // V9.56: 배가 자기 표기법을 가지고 있으면 그걸 쓴다.
+  //   RZOR 같은 RO/RO 겸용선은 베이 번호가 없고 도면이 "D덱 3줄 5칸"으로 되어 있다.
+  //   내부 좌표(bay/row/tier)는 검색·정렬용으로 그대로 두되, **사람에게 보일 때는 도면 말**로.
+  //   (덱플랜 파서가 pos 를 넣어 준다 — collector/deckplan.py · src/rzorPlan.js)
+  if (c.pos) return String(c.pos);
+  if (!c.bay) return '';
   const b = normalizeBay(c.bay);  // "1", "16", "100"
   const bayPad = b.length === 1 ? '0' + b : b;  // 2자리 강제
   return `${bayPad}-${c.row || '00'}-${c.tier || '00'}`;

@@ -240,6 +240,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         {/* 부가 정보 */}
         <div className="flex items-center gap-2 text-[11px] mono flex-wrap text-slate-400 pt-2 border-t border-slate-800">
           {c.bay && <span className="text-amber-300 font-bold">{fmtPos(c)}</span>}
+          {/* V9.56: RO/RO 겸용선(RZOR) — 갠트리(落地) 작업분인지 한눈에. 크레인 검수 대상이 이것뿐이다. */}
+          {c.lolo && <span className="px-1.5 py-0.5 rounded bg-lime-700 text-lime-50 text-[10px] font-black">🏗갠트리</span>}
+          {c.dbl && <span className="px-1.5 py-0.5 rounded bg-amber-700 text-amber-50 text-[10px] font-black">⇅2단</span>}
           {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
             <span className="ml-1 px-1 rounded bg-indigo-900 text-indigo-200 text-[10px] font-bold">
               📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '미배정'}
