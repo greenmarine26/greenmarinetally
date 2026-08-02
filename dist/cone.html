@@ -251,7 +251,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.37-04</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · V9.38</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -687,8 +687,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='V9.37-04';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
-window.__CONEV='V9.37-04';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='V9.38';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
+window.__CONEV='V9.38';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -734,6 +734,8 @@ async function fbFetchVoyages(){
       imo: info.imo||'',
       voy: info.voy_l||info.voy_d||info.voy||'',
       planDate: info.planDate||'',            // C7.69: 터미널 작업현황 항차 매칭용(작업창)
+      departBadgeAt: info.departBadgeAt||0,   // V9.38: 출항 전환은 **검수앱이 판정**한 결과를 그대로 쓴다
+      terminalStatus: info.terminalStatus||'',// V9.38: 터미널 상태(판B 수집기가 채움)
       voy_d: info.voy_d||'', voy_l: info.voy_l||'',
       dischargeDoneAt: info.dischargeDone ? (info.dischargeDoneAt||0) : (info.inspectorDone ? (info.inspectorDoneAt||0) : 0),  // V7.90: 양하 완료 기록 (분리작업 자동 판정)
       hasD, hasL,
@@ -758,8 +760,8 @@ async function fbFetchPilotForecast(){
 function _pfShort(v){ if(!v) return ''; const p=String(v).split(' '); return ((p[0]||'').slice(5)+' '+(p[1]||'')).trim(); }
 
 // C7.69 (2026-08-01, 사용자 요청): 터미널 작업 현황 — 작업이 마무리될 무렵 '출항시간'으로 바꿔 표기.
-//   전환 기준 = 터미널 합계 진행률 ≥ WORK_DONE_PCT (검수앱 HomePage와 같은 값).
-const WORK_DONE_PCT = 90;
+//   V9.38: 전환 판정은 검수앱이 한다(선적 잔여 ≤ 20개). 콘앱은 info.departBadgeAt 결과만 읽는다.
+// V9.38: WORK_DONE_PCT 폐지 — 전환 판정은 검수앱(badgeRule.js)이 하고 콘앱은 결과만 읽는다.
 async function fbFetchTerminalWork(){
   try{
     const res=await fetch(`${FB_BASE}/terminal_work.json`);
@@ -1343,8 +1345,12 @@ function render(){
             const a=P(pd.split('~')[0].trim()), b=pd.includes('~')?P(pd.split('~')[1].trim()):null, st=P(tw.startAt);
             if(!st||(!a&&!b)) return false;
             return st>=((a||b)-12*3600000) && st<=((b||a)+12*3600000); })();
-          if(_win && tw && typeof tw.pct==='number' && tw.pct>=WORK_DONE_PCT){
-            // V9.36-01: 도선 nextDep도 작업창(±12h) 안일 때만 — 다음 기항 출항이 붙는 것 방지(검수앱과 동일 가드).
+          // V9.38: **콘앱은 판정하지 않는다.** 출항 전환 규칙은 검수앱 src/badgeRule.js 한 곳에 있고,
+          //   검수앱이 전환하는 순간 info.departBadgeAt 을 기록하므로 여기서는 그 결과만 읽는다.
+          //   (종전엔 같은 판정이 여기에도 복사돼 있었고 가드 구현이 검수앱과 달라 어긋날 여지가 있었다.)
+          //   기준은 퍼센트가 아니라 **선적 잔여 ≤ 20개** — 콘앱은 잔여를 모르므로 판정 자체가 불가능하다.
+          const _departed = !!v.departBadgeAt || String(v.terminalStatus||'').toLowerCase()==='departed';
+          if(_departed && _win && tw){
             const _pfOk=(()=>{ if(!pf||!pf.nextDep) return false;
               const P=x=>{ const m=String(x).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime():null; };
               const pd=String(v.planDate||''), a=pd?P(pd.split('~')[0].trim()):null,
@@ -1354,7 +1360,7 @@ function render(){
             const dep=(_pfOk&&pf.nextDep)||tw.depEtd||'';
             if(dep){
               const src=(_pfOk&&pf.nextDep)?'⚓도선':'🏭터미널';
-              const late=(tw.delayed&&tw.pct<100)?' <span style="color:#fca5a5">· 지연</span>':'';
+              const late=(tw.delayed&&typeof tw.pct==='number'&&tw.pct<100)?' <span style="color:#fca5a5">· 지연</span>':'';
               return `<div class="vi-sub" style="color:#fbbf24">🚢 출항 <b>${_pfShort(dep)}</b> <span style="color:#94a3b8">${src}</span>${late}</div>`;
             }
           }

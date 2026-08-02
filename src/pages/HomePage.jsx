@@ -4,6 +4,7 @@ import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSub
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
+import { decideBadge, DEPART_REMAIN_MAX } from '../badgeRule.js';  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
 //   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
@@ -11,7 +12,9 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 
 // V9.36: 작업 마무리 판정 기준(터미널 합계 진행률 %). 이 값 이상이면 카드가 '출항시간'으로 바뀐다.
 //   기준을 바꿔야 하면 이 한 줄만 고친다 (사용자 확정 2026-08-01: 터미널 진행률 기준).
-const WORK_DONE_PCT = 90;
+// V9.38: 출항 전환 기준은 badgeRule.js 로 이관 — 퍼센트가 아니라 **남은 개수**(사용자 확답 2026-08-02).
+//   "600개의 10%는 60개, 2갱이면 한 시간 이상 / 100개의 10%면 10개, 2갱이면 5분이면 끝남."
+//   같은 10%가 한 시간도 5분도 되므로 준비 시간 확보에 쓸 수 없다. → DEPART_REMAIN_MAX(=20)
 function lastWorkAt(v) {
   let last = 0;
   const scanAt = (obj) => {
@@ -909,7 +912,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 출처는 항상 표기 — 📋 선석배정 · ⚓ 도선 예보 · 🚢 PORT-MIS 신고. */}
             {(() => {
               // V9.36: 작업이 마무리될 무렵이면 '작업일시' 대신 '출항시간'을 보여준다 (사용자 요청 2026-08-01).
-              //   전환 기준 = 터미널(트레드링스) 합계 진행률 ≥ WORK_DONE_PCT. 대상은 항차 목록에 있는 선박만.
+              //   V9.38: 전환 기준은 **선적 잔여 ≤ DEPART_REMAIN_MAX(20)** — 규칙은 badgeRule.js 한 곳.
               //   출항시각은 도선 예보 우선(사용자 확정) → 없으면 터미널 출항 ETD.
               //   진행률·ETD가 5분마다 갱신되므로 작업이 늦어지거나 출항이 바뀌면 그대로 따라간다.
               const _tw0 = terminalWork[(voyage.info?.vsl || '').toUpperCase()];
@@ -936,9 +939,20 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 return (t >= lo && t <= hi) ? t : null;
               })();
               const twDep = tw ? parsePortMisDateTime(tw.depEtd) : null;
-              const nearDone = tw && typeof tw.pct === 'number' && tw.pct >= WORK_DONE_PCT;
-              if (nearDone && (pfDep || twDep)) {
-                const dep = pfDep || twDep;
+              // V9.38: 판정은 badgeRule.decideBadge 한 곳에서. 잔여의 출처는 **검수앱 자신**(총−완료) —
+              //   검수 중이면 이게 실시간이고 가장 정확하다. 터미널은 참조이자 폴백이지 기준이 아니다.
+              const _lst = computeStats(voyage.loading, 'loading', voyage.info);
+              const _dis = computeStats(voyage.discharge, 'discharge', voyage.info);
+              const _hasLoad = !!(voyage.loading && (_lst.total > 0 || _lst.ptk > 0));
+              const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
+              const _b = decideBadge({
+                remainLoad: _rem(_lst), remainDis: _rem(_dis), hasLoad: _hasLoad,
+                terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
+                tw, pfDep, twDep, stickyAt: voyage.info?.departBadgeAt || null,
+                eta: voyage._etaMs, etd: voyage._etdMs, src: voyage._etaSrc,
+              });
+              if (_b && _b.kind === 'depart') {
+                const dep = _b.at;
                 const two2 = (n) => String(n).padStart(2, '0');
                 const d = new Date(dep), t = new Date();
                 const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -946,10 +960,20 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 const w = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
                 const day = diff === 0 ? '오늘' : diff === 1 ? '내일' : diff === -1 ? '어제'
                   : `${two2(d.getMonth() + 1)}-${two2(d.getDate())}(${w})`;
-                const src = pfDep ? '⚓도선' : '🏭터미널';
-                const late = tw.delayed && tw.pct < 100;
+                const src = _b.src === 'pilot' ? '⚓도선' : '🏭터미널';
+                const late = _b.delayed;
+                // V9.38: 한 번 뜨면 유지(사용자 확답) — 자료가 늦게 와 잔여가 늘어도 안 돌아간다.
+                //   기억은 Firebase에 한 번만 쓴다(새로고침해도 유지). 실패해도 표시는 그대로.
+                if (!voyage.info?.departBadgeAt) {
+                  try { fbUpdateVoyageInfo(voyage.key, { departBadgeAt: Date.now() }); }
+                  catch (e) { console.warn('[배지] sticky 저장 실패', voyage.key, e); }
+                }
+                const _why = { departed: '터미널 출항 처리됨', sticky: '이미 출항 표시로 전환됨',
+                  pct: '터미널 진행률 기준(잔여 미상)' }[_b.reason]
+                  || `선적 잔여 ${String(_b.reason).replace('remain', '')}개 이하 (기준 ${DEPART_REMAIN_MAX}개 · 갱당 시간당 20개 ≈ 1시간분)`;
                 return (
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${dep < Date.now()
+                  <span title={`출항 표시 이유: ${_why}`}
+                    className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${dep < Date.now()
                     ? 'bg-slate-800 border-slate-600 text-slate-400'
                     : 'bg-amber-900/60 border-amber-700/50 text-amber-200'}`}>
                     🚢 출항 {day} {two2(d.getHours())}:{two2(d.getMinutes())} {src}
