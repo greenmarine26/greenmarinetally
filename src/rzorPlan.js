@@ -8,6 +8,14 @@ export function isDeckPlanWorkbook(wb) {
   return (wb?.SheetNames || []).some((n) => /-?DECK/i.test(String(n)));
 }
 
+// V9.54(2026-08-03): 덱플랜을 **좌표로** 읽는다 — 도면 실측(R082E 2甲/3甲/4甲.PDF)으로 축 확정.
+//   · 도면 오른쪽 = 선수(양 모서리 사선) · 왼쪽 = 선미(B덱 도면에 RAMP)
+//   · D덱 도면 오른쪽에 줄 번호 1~8 이 인쇄돼 있다(위=1, 아래=8)
+//   · 선수가 오른쪽 → 위쪽이 좌현. 이 배는 항상 좌현 접안이라 **줄 1이 부두 쪽**.
+//   → line = 좌현1→우현N · col = 선미1→선수N · 덱 = 티어. 표기는 "D덱 3줄 5칸".
+//   수집기 collector/deckplan.py 와 **같은 규칙**이어야 한다(두 벌이 어긋나면 화면과 DB가 갈린다).
+const DECK_TIER = { A: '82', B: '84', C: '86', D: '88', E: '90' };
+
 const CN_RE = /([A-Z]{4})\s*(\d{7})/;
 const ISO_RE = /(20|40|45)\s*(GP|HC|RH|RF|HA|OT|FR|TK|DC)\s*([FE])?/;
 
@@ -80,6 +88,11 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
     const colStops = [...stopSet].sort((a, b) => a - b);
     const bandSet = new Set(rawSlots.map((s) => s.r1));
     const rowBands = [...bandSet].sort((a, b) => a - b);
+    // V9.54: 줄·칸 번호 — 블록 시작 좌표 순번(폭은 덱마다 달라 쓸 수 없다)
+    const colStarts = [...new Set(rawSlots.map((s) => s.c1))].sort((a, b) => a - b);
+    const lineOf = (r1) => rowBands.indexOf(r1) + 1;
+    const colOf = (c1) => colStarts.indexOf(c1) + 1;
+    const tier = DECK_TIER[String(deckLetter).toUpperCase()] || '';
     const slots = rawSlots.map((s) => {
       const ci = colStops.indexOf(s.c1);
       const span = Math.max(1, colStops.indexOf(s.c2 + 1) - ci);
@@ -87,9 +100,16 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
       const ci2 = ci >= 0 ? ci : Math.max(0, colStops.findIndex((x) => x > s.c1) - 1);
       const end = colStops.indexOf(s.c2 + 1);
       const span2 = end >= 0 ? Math.max(1, end - ci2) : Math.max(1, span);
-      return { cn: s.cn, wt: s.wt, iso: s.iso, fe: s.fe, ri: rowBands.indexOf(s.r1), ci: ci2, span: span2, flags: s.flags, empty: !!s.empty };
+      const ln = lineOf(s.r1), cl = colOf(s.c1);
+      return { cn: s.cn, wt: s.wt, iso: s.iso, fe: s.fe, ri: rowBands.indexOf(s.r1), ci: ci2, span: span2, flags: s.flags, empty: !!s.empty,
+               // V9.54: 자리 좌표 — 화면 표기는 "D덱 3줄 5칸"
+               line: ln, col: cl, tier,
+               row: ln ? String(ln).padStart(2, '0') : '',
+               bay: cl ? String(cl).padStart(2, '0') : '',
+               pos: (ln && cl) ? `${deckLetter}덱 ${ln}줄 ${cl}칸` : '' };
     }).filter((s) => s.ri >= 0 && s.ci >= 0);
-    decks.push({ deck: deckLetter, name, cols: colStops.length - 1, rows: rowBands.length, slots });
+    decks.push({ deck: deckLetter, name, cols: colStops.length - 1, rows: rowBands.length, slots,
+                 tier, lines: rowBands.length, colsN: colStarts.length });
   }
   // 덱 순서: 위(D)→아래(B) 실물 페이지 순 아님 — 알파벳 역순(D,C,B,A)로 위 데크 먼저
   decks.sort((a, b) => (b.deck < a.deck ? -1 : b.deck > a.deck ? 1 : 0));

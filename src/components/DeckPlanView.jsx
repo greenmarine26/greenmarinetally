@@ -32,6 +32,12 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         ))}
         <span className="ml-auto text-[11px] text-slate-400">이 덱 {done}/{conts.length} 완료 · 빈자리 {d.slots.length - conts.length}</span>
       </div>
+      {/* V9.54: 도면과 같은 방향으로 읽는다 — 줄은 좌현(부두)→우현, 칸은 선미(램프)→선수 */}
+      <div className="text-[10px] text-slate-500 mb-1">
+        ↕ 줄 1~{d.lines || d.rows} <span className="text-slate-600">(1=좌현·부두쪽)</span>
+        <span className="mx-2 text-slate-700">|</span>
+        ↔ 칸 1~{d.colsN || d.cols} <span className="text-slate-600">(1=선미·램프쪽 → 선수)</span>
+      </div>
       <div className="overflow-auto">
         <div className="grid gap-0.5 min-w-[720px]"
              style={{ gridTemplateColumns: `repeat(${d.cols}, minmax(30px, 1fr))`, gridTemplateRows: `repeat(${d.rows}, 58px)` }}>
@@ -42,6 +48,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
               const asg = plan.assign && plan.assign[slotKey];
               return (
                 <button key={`e${si}`}
+                  title={s.pos || ''}
                   onClick={async () => {
                     if (!voyageKey) return;
                     if (asg) {
@@ -64,7 +71,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                   style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
                   {asg
                     ? <div className="text-[10px] font-black mono text-amber-200 truncate">📌{asg.cn.slice(-4)}<div className="text-[8px] text-amber-300/80">{asg.cn.slice(0,4)}</div></div>
-                    : <div className="text-[9px] text-slate-500">빈자리</div>}
+                    : <div className="text-[9px] text-slate-500">빈자리{s.line ? <div className="text-[8px] mono text-slate-600">{s.line}-{s.col}</div> : null}</div>}
                 </button>
               );
             }
@@ -80,7 +87,8 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                            s.flags && s.flags.length ? s.flags.join('·') : ''].filter(Boolean).join(' ');
             return (
               <button key={`${s.cn}${s.ri}${s.ci}`}
-                onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: s.iso.replace(/\s/g, ''), fe })}
+                title={s.pos || ''}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" */
+                onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: s.iso.replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay })}
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
                   ${isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-slate-700/80 border-slate-500' : 'bg-sky-900/80 border-sky-600'}
                   ${isRf ? 'ring-1 ring-cyan-400' : ''} ${isXray ? 'ring-2 ring-yellow-400' : ''}`}
@@ -89,6 +97,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                   {s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
                 </div>
                 <div className="text-[8.5px] text-slate-300 truncate">{s.iso} {fe}</div>
+                {s.line ? <div className="text-[8px] mono text-slate-400/90 truncate">{s.line}줄 {s.col}칸</div> : null}
                 {sl ? <div className="text-[8.5px] mono text-amber-200/90 truncate">🔒{sl}</div> : null}
               </button>
             );
