@@ -998,8 +998,12 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               // V9.40: 선사 일정 메일(VESSEL MOVEMENT)에서 온 일정은 📧메일 로 구분한다.
               //   수집기가 planDate 를 메일 값으로 교체하면 info.planSrc='mail' 을 함께 남긴다
               //   (사용자 지시 2026-08-02: 같으면 패스, 틀리면 메일 정보로 교체).
-              const srcMark = (voyage._etaSrc === 'plan' && voyage.info?.planSrc === 'mail')
-                ? '📧메일'
+              // V9.41: planDate 는 수집기가 **판단해서** 넣는다(사용자 규칙 2026-08-02) —
+              //   메일 있으면 메일 확정 / PCTC는 배정 신뢰 / PNCT는 도선 출항이 배정과 크게 벌어지면 도선.
+              //   그 판단 결과가 info.planSrc 다. 표시는 그 출처를 그대로 보여준다.
+              const _pSrc = voyage.info?.planSrc || '';
+              const srcMark = (voyage._etaSrc === 'plan' && _pSrc)
+                ? ({ mail: '📧메일', pilot: '⚓도선', plan: '📋배정' }[_pSrc] || '📋배정')
                 : ({ plan: '📋배정', pilot: '⚓도선', portmis: '🚢신고' }[voyage._etaSrc] || '');
               const head = eta ? `${dayLabel(eta)} ${hm(eta)}` : '';
               const tail = etd ? (eta && dayLabel(etd) !== dayLabel(eta) ? `${dayLabel(etd)} ${hm(etd)}` : hm(etd)) : '';
