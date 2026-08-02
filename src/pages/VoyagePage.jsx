@@ -1891,7 +1891,14 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             //   여기 도달 = 상단 선박 가드 통과(콜사인·선박명이 '비교 가능한데 다른' EDI는 이미 차단됨)
             //   → 불일치 증거 없음. 평택분이 있으면 식별 근거를 문구로 보여주고 사용자가 결정한다.
             const _csComparable = _voyCs && _ediCs;   // 1596행에서 계산됨
+            // V9.39: **IMO도 식별 근거로 쓴다.** SKR·동진 계열 EDI는 콜사인이 없고 IMO만 있어
+            //   종전엔 근거가 '비교 불가'로 떨어져, 실제로는 같은 배라는 증거가 있는데도
+            //   검수사가 맨눈으로 확인해야 했다. 차단 로직은 건드리지 않는다 — 문구(근거)만 정확해진다.
+            const _voyImo = String(voyage.info.imo || '').replace(/\D/g, '');
+            const _ediImo = String(r.imo || '').replace(/\D/g, '');
+            const _imoSame = !!(_voyImo && _ediImo && _voyImo === _ediImo);
             const _idBasis = _csComparable ? `같은 배 (콜사인 ${voyage.info.callsign})`
+              : _imoSame ? `같은 배 (IMO ${_ediImo})`
               : (_voyNm && _ediNm) ? `선박명 대조 통과 (${r.vsl})`
               : `⚠ 선박 식별자 비교 불가 — EDI 선박 '${r.vsl || '미상'}'이 이 배가 맞는지 직접 확인하세요`;
             if (_ptkLeg > 0) {

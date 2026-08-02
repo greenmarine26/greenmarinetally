@@ -102,9 +102,13 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     : (c._inList || isPyeongtaekPort(c.pol));
 
   // 평택 컨번호 set
+  // V9.39: **컨번호가 있는 것만** 넣는다. 컨펌전 플랜 슬롯(__SLOT_)은 컨번호가 없어서(확답 ④)
+  //   종전엔 `s.add(undefined)`가 되고, 그러면 `has(undefined)`가 true라 **cn 없는 셀이 전부
+  //   '우리 화물'로 통과**했다(442행 isOurContainer). 홈 카드에서 370이 1로 뭉개진 것과 같은 원인,
+  //   증상만 다르다(개수가 아니라 그림 판정이 뒤집힘). TMPZ처럼 플랜만 오는 배에서 나타난다.
   const dischargeCns = useMemo(() => {
     const s = new Set();
-    containers.forEach(c => { if (isPtk(c)) s.add(c.cn); });
+    containers.forEach(c => { if (c.cn && isPtk(c)) s.add(c.cn); });
     return s;
   }, [containers, mode]);
 
@@ -144,12 +148,13 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     if (!dischargeCns || dischargeCns.size === 0) return result;
     const tierZone = (t) => parseInt(t) >= 80 ? 'deck' : 'hold';
     for (const c of containers) {
-      if (!dischargeCns.has(c.cn)) continue;
+      if (!c.cn || !dischargeCns.has(c.cn)) continue;   // V9.39: 컨번호 미배정 자리는 쉬프팅 대상이 아니다
       if (!c.bay || !c.tier) continue;
       const zone = tierZone(c.tier);
       const tier = parseInt(c.tier);
       const above = containers.filter(o =>
-        o.cn !== c.cn && !dischargeCns.has(o.cn) &&
+        // V9.39: 아직 컨번호가 배정되지 않은 자리(플랜 슬롯)는 '위에 얹힌 화물'로 세지 않는다
+        o.cn && o.cn !== c.cn && !dischargeCns.has(o.cn) &&
         !(compMap && compMap[o.cn]) &&
         o.bay === c.bay && o.row === c.row && tierZone(o.tier) === zone &&
         parseInt(o.tier) > tier
@@ -439,7 +444,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     }
     if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-slate-500 border-emerald-400';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
     if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-50 text-slate-900 border-orange-500 ring-1 ring-orange-400';
-    const isOurContainer = isPtk(c) || dischargeCns.has(c.cn);
+    const isOurContainer = isPtk(c) || (!!c.cn && dischargeCns.has(c.cn));   // V9.39: undefined 오염 차단
     if (isOurContainer) return 'bg-white text-slate-900 border-slate-400';
     return 'bg-slate-50 text-slate-400 border-slate-200';
   };
