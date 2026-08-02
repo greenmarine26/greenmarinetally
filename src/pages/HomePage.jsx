@@ -995,7 +995,12 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 const w = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
                 return `${two(d.getMonth() + 1)}-${two(d.getDate())}(${w})`;
               };
-              const srcMark = { plan: '📋배정', pilot: '⚓도선', portmis: '🚢신고' }[voyage._etaSrc] || '';
+              // V9.40: 선사 일정 메일(VESSEL MOVEMENT)에서 온 일정은 📧메일 로 구분한다.
+              //   수집기가 planDate 를 메일 값으로 교체하면 info.planSrc='mail' 을 함께 남긴다
+              //   (사용자 지시 2026-08-02: 같으면 패스, 틀리면 메일 정보로 교체).
+              const srcMark = (voyage._etaSrc === 'plan' && voyage.info?.planSrc === 'mail')
+                ? '📧메일'
+                : ({ plan: '📋배정', pilot: '⚓도선', portmis: '🚢신고' }[voyage._etaSrc] || '');
               const head = eta ? `${dayLabel(eta)} ${hm(eta)}` : '';
               const tail = etd ? (eta && dayLabel(etd) !== dayLabel(eta) ? `${dayLabel(etd)} ${hm(etd)}` : hm(etd)) : '';
               const body = head && tail ? `${head} ~ ${tail}` : (head || `~ ${tail}`);
