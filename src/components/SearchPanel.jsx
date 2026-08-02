@@ -1078,6 +1078,18 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   useEffect(() => { if (r1.length === 1 && (!c1 || c1.cn !== r1[0].cn)) setC1(r1[0]); else if (r1.length === 0 && c1) setC1(null); }, [r1]);
   useEffect(() => { if (r2.length === 1 && (!c2 || c2.cn !== r2[0].cn)) setC2(r2[0]); else if (r2.length === 0 && c2) setC2(null); }, [r2]);
 
+  // V9.48: 앞을 넣으면 **뒤(짝꿍)를 양하처럼 자동으로 불러온다**(사용자 요청 2026-08-03).
+  //   근거: 선적이 자동화되면서 플랜 짝 자리 그대로 맞춰 오는 경우가 크게 늘었다.
+  //   양하 트윈(TwinSearch)이 쓰는 findTwinCandidate 를 그대로 쓴다 — 판정을 두 벌로 만들지 않는다.
+  //   ⚠ 뒤 칸을 검수사가 이미 채웠으면 건드리지 않는다(사람 입력이 우선).
+  const shipImo = voyage?.info?.imo || '';
+  const shipName = voyage?.info?.vsl || '';
+  useEffect(() => {
+    if (!c1 || c2 || q2) return;
+    const t = findTwinCandidate(c1, pool, new Set(), shipImo, shipName);
+    if (t) setC2(t);
+  }, [c1, c2, q2, pool, shipImo, shipName]);
+
   const bayPairs = useMemo(() => {
     try { return getBayPairs(pool, voyage?.info?.imo || '', voyage?.info?.vsl || '') || {}; } catch { return {}; }
   }, [pool, voyage]);
@@ -1088,6 +1100,44 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const pairSlotPlanned = backPos ? pool.some(x => x.bay && String(parseInt(x.bay, 10)) === backPos.bay && x.row === backPos.row && x.tier === backPos.tier) : false;
 
   const resetAll = () => { setQ1(''); setQ2(''); setC1(null); setC2(null); setStep('pick'); setBay(''); setRow(''); setTier(''); setPickBay(null); setManualOpen(false); };
+
+  // V9.48: **지정 자리가 우선이다**(사용자 확정 2026-08-03).
+  //   종전엔 [수동 배정 확인]이 두 컨을 무조건 미배정시키고 자리를 다시 고르게 했다.
+  //   플랜 짝 자리 그대로 실려 오는 경우가 늘었는데, 맞는 자리를 지우고 다시 찍는 건 헛일이고
+  //   손으로 다시 고르다 틀릴 여지만 만든다. → 자리가 맞으면 **그대로 선적확인**,
+  //   실제가 다를 때만 [위치 지정]으로 간다.
+  const _bn = (v) => (v ? String(parseInt(v, 10)) : '');
+  const planPair = useMemo(() => {
+    if (!c1 || !c2) return null;
+    const b1 = _bn(c1.bay), b2 = _bn(c2.bay);
+    if (!b1 || !b2 || !c1.row || !c1.tier || !c2.row || !c2.tier) return null;
+    if (c1.row !== c2.row || c1.tier !== c2.tier) return null;   // 같은 row·tier 여야 한 슬롯
+    if (bayPairs[b1] !== b2 && bayPairs[b2] !== b1) return null;
+    // 앞뒤: **작은 베이가 앞**(지침 — 방향은 규칙으로 고정, 데이터로 추론하지 않는다).
+    //   실선박의 짝 맵은 양방향이라(19↔21) 맵만으로는 앞뒤를 가릴 수 없다 — 번호로 가른다.
+    return { ok: true, swapped: parseInt(b1, 10) > parseInt(b2, 10) };
+  }, [c1, c2, bayPairs]);
+
+  const swapFrontBack = () => {
+    const a = c1, b = c2, qa = q1, qb = q2;
+    setC1(b); setC2(a); setQ1(qb); setQ2(qa);
+  };
+
+  // [지정 자리 그대로 트윈 선적확인] — 재배정 없이 확인만. 위치는 이미 플랜대로다.
+  const completeAtPlan = async () => {
+    if (busy) return;
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const done = [c1, c2].filter(c => c._comp);
+    if (done.length && !confirm(`${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n계속할까요?`)) return;
+    setBusy(true);
+    try {
+      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
+      speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
+      resetAll();
+    } catch (e) {
+      alert(`처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n${e?.message || e}`);
+    } finally { setBusy(false); }
+  };
 
   // [수동 배정 확인] — 기존 위치를 보여준 상태에서 확인 = 두 컨 즉시 미배정 (사용자 확정)
   const confirmManual = async () => {
@@ -1159,18 +1209,64 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   return (
     <>
       <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
-        🚛 수동 트윈 선적 — 앞·뒤 두 컨을 직접 입력해 짝꿍으로 묶습니다
-        <div className="text-[10px] text-blue-400/70 mt-0.5">확인 즉시 미배정 → 앞 위치 지정 → 뒤는 짝꿍 베이 자동 → 선적확인 한 번에 완료</div>
+        🚛 수동 트윈 선적 — 앞 컨을 넣으면 뒤(짝꿍)는 자동으로 따라옵니다
+        <div className="text-[10px] text-blue-400/70 mt-0.5">지정 자리대로면 그대로 확인 · 실제가 다를 때만 위치를 고칩니다</div>
       </div>
       {step === 'pick' && (
         <>
           {pickBox('앞', 'amber', q1, setQ1, c1, setC1, r1)}
           {pickBox('뒤', 'cyan', q2, setQ2, c2, setC2, r2)}
-          {c1 && c2 && (
-            <button onClick={confirmManual} disabled={busy}
-              className="w-full py-3 rounded-lg font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
-              <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 미배정 후 위치 지정'}
-            </button>
+
+          {/* V9.48: 앞뒤가 바뀌어 들어온 경우 — 지우고 다시 치게 하지 않고 바꿔 준다 */}
+          {planPair && planPair.swapped && (
+            <div className="bg-indigo-950/50 border border-indigo-700 rounded-lg p-3 flex items-center justify-between gap-2">
+              <div className="text-[12px] text-indigo-200 leading-snug">
+                앞뒤가 바뀐 것 같습니다 — 플랜상 앞은 <b className="mono">{c2.cn?.slice(-4)}</b>(B{_bn(c2.bay)}) 입니다.
+              </div>
+              <button onClick={swapFrontBack}
+                className="flex-shrink-0 px-3 py-2 rounded bg-indigo-700 hover:bg-indigo-600 text-indigo-50 text-xs font-bold">
+                ⇅ 앞뒤 바꾸기
+              </button>
+            </div>
+          )}
+
+          {/* V9.48: 지정 자리가 우선 — 플랜 짝 자리 그대로면 미배정 없이 바로 확인 */}
+          {c1 && c2 && planPair && !planPair.swapped && (
+            <>
+              <div className="bg-emerald-950/40 border border-emerald-700/60 rounded-lg p-3">
+                <div className="text-[11px] font-bold text-emerald-300 mb-1.5 flex items-center gap-1">
+                  <Link2 className="w-3.5 h-3.5"/>지정 자리 — 플랜 그대로 (짝 확인됨)
+                </div>
+                <div className="flex items-center justify-center gap-3 text-sm mono">
+                  <span className="text-amber-200 font-black">{c1.cn?.slice(-4)} <span className="text-slate-400 font-normal">{fmtPos(c1)}</span></span>
+                  <span className="text-slate-600">+</span>
+                  <span className="text-cyan-200 font-black">{c2.cn?.slice(-4)} <span className="text-slate-400 font-normal">{fmtPos(c2)}</span></span>
+                </div>
+              </div>
+              <button onClick={completeAtPlan} disabled={busy}
+                className="w-full py-4 rounded-lg font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+                {busy ? '처리 중…' : '✅ 지정 자리 그대로 트윈 선적확인'}
+              </button>
+              <button onClick={confirmManual} disabled={busy}
+                className="w-full py-2 rounded-lg text-[12px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-50">
+                실제 자리가 다릅니다 — 위치 지정하기
+              </button>
+            </>
+          )}
+
+          {/* 짝 자리가 아니거나 미배정 — 종전대로 자리를 지정한다 */}
+          {c1 && c2 && !planPair && (
+            <>
+              <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg p-2 text-[11px] text-amber-200 text-center leading-snug">
+                {(!c1.bay || !c2.bay)
+                  ? '두 컨 중 지정 자리가 없는 쪽이 있습니다 — 위치를 지정하세요.'
+                  : '플랜상 짝 자리가 아닙니다 — 위치를 지정하세요.'}
+              </div>
+              <button onClick={confirmManual} disabled={busy}
+                className="w-full py-3 rounded-lg font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+                <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 미배정 후 위치 지정'}
+              </button>
+            </>
           )}
         </>
       )}
