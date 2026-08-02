@@ -1364,6 +1364,8 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
   const [autoTwin, setAutoTwin] = useState(true); // 자동 짝꿍 ON/OFF
+  // V9.50: 검수사가 '실제 온 컨'으로 갈아 끼웠으면 자동 계산이 그걸 덮어쓰면 안 된다.
+  const [replaced, setReplaced] = useState(false);
   const [twinBusy, setTwinBusy] = useState(false); // 통합 완료 처리 중
 
   // 이미 검수 완료된 컨번호 = 짝 후보에서 제외
@@ -1384,6 +1386,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
   useEffect(() => {
+    if (replaced) return;   // V9.50: 손으로 바꿔 놓은 카드를 자동 짝꿍이 되돌리지 않는다
     if (r1.length === 1 && autoTwin) {
       const front = r1[0];
       // 증상2 수정: 같은 앞 컨이 이미 선택돼 있으면(완료로 인한 재실행 등)
@@ -1402,7 +1405,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       //   (구) 무조건 null → 버튼 클릭으로 선택해도 즉시 지워져 "선택이 안 됨" (메모 버그).
       if (!c1 || !r1.some(c => c.cn === c1.cn)) { setC1(null); setC2(null); }
     }
-  }, [r1, autoTwin, allContainers, shipImo, shipName, c1]);
+  }, [r1, autoTwin, allContainers, shipImo, shipName, c1, replaced]);
 
   // 증상3 수정: 옛 c1/c2 객체의 _comp는 갱신되지 않으므로,
   //   최신 allContainers에서 두 컨의 완료 여부를 다시 조회해 판단한다.
@@ -1415,7 +1418,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     const c1Done = isComp(c1.cn);
     const c2Done = c2 ? isComp(c2.cn) : true; // 짝꿍 없으면 앞 컨만으로 판단
     if (c1Done && c2Done) {
-      setQ1(''); setC1(null); setC2(null);
+      setReplaced(false); setQ1(''); setC1(null); setC2(null);
     }
   };
 
@@ -1434,13 +1437,24 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     try {
       if (!c1._comp) await fbCompleteContainer(voyageKey, c1._mode, c1.cn, inspector);
       if (!c2._comp) await fbCompleteContainer(voyageKey, c2._mode, c2.cn, inspector);
-      setTimeout(() => { setQ1(''); setC1(null); setC2(null); }, 500);
+      setTimeout(() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }, 500);
     } finally {
       setTwinBusy(false);
     }
   };
 
+  // V9.50: 번호 수정으로 '실제 온 컨'이 확정되면 그 카드를 갈아 끼운다.
+  //   계획 컨은 그 자리에서 밀려나 미배정이 된다(fbReassign displacedMode:'unassign') — 화면도 그걸 따라간다.
+  //   최신 상태(allContainers)가 이미 왔으면 그 값을 쓰고, 아직이면 방금 지정한 자리를 얹는다.
+  const _freshen = (nc) => {
+    const live = allContainers.find(x => x.cn === nc.cn);
+    return { ...(live || {}), ...nc, _replaced: true };
+  };
+  const replaceFront = (nc) => { setReplaced(true); setC1(_freshen(nc)); };
+  const replaceBack = (nc) => { setReplaced(true); setC2(_freshen(nc)); };
+
   const handleSwapTwin = () => {
+    setReplaced(false);
     setC2(null);
   };
 
@@ -1478,11 +1492,11 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
           <input type="text" value={q1}
-            onChange={e => setQ1(e.target.value.toUpperCase())}
+            onChange={e => { setReplaced(false); setQ1(e.target.value.toUpperCase()); }}
             placeholder="끝 4자리 또는 컨번호"
             inputMode="numeric" autoComplete="off"
             className="w-full pl-9 pr-10 py-3 bg-slate-800 border border-amber-700/40 rounded text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"/>
-          {q1 && <button onClick={() => { setQ1(''); setC1(null); setC2(null); }} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-5 h-5 text-slate-500"/></button>}
+          {q1 && <button onClick={() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-5 h-5 text-slate-500"/></button>}
         </div>
         {q1.length >= 2 && r1.length === 0 && <div className="mt-2 text-[11px] text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
         {r1.length > 1 && (
@@ -1505,6 +1519,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(c1)}
           onAfterComplete={handleAfterComplete}
+          onReplace={replaceFront}
           label="앞" labelColor="amber"
         />
       )}
@@ -1525,7 +1540,8 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(c2)}
           onAfterComplete={handleAfterComplete}
-          label="뒤 (자동)" labelColor="cyan"
+          onReplace={replaceBack}
+          label={c2._replaced ? '뒤 (실제 온 컨)' : '뒤 (자동)'} labelColor="cyan"
         />
       )}
 

@@ -9,7 +9,10 @@ import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import PositionEditModal from './PositionEditModal.jsx';
 
-export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [] }) {
+export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [], onReplace = null }) {
+  // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
+  //   이 카드가 그 컨으로 바뀌어야 한다. 종전엔 배정만 되고 카드는 계획 컨 그대로여서
+  //   화면상 아무 일도 안 일어난 것처럼 보였다(사용자 지적 2026-08-03: 트윈 뒤 카드가 안 바뀜).
   const isDone = !!c._comp;
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
   const sealError = c.sl && slOrig && c.sl !== slOrig;
@@ -343,7 +346,13 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         onSave={async (newBay, newRow, newTier) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
           // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지, 사용자 확정)
-          const result = await fbReassignContainerPosition(voyageKey, c._mode, (posTarget || c).cn, newBay, newRow, newTier, inspector, { displacedMode: 'unassign' });
+          const _t = posTarget || c;
+          const result = await fbReassignContainerPosition(voyageKey, c._mode, _t.cn, newBay, newRow, newTier, inspector, { displacedMode: 'unassign' });
+          // V9.50: 다른 컨이 와서 그 자리에 배정했다면 카드를 그 컨으로 갈아 끼운다.
+          //   (같은 컨의 단순 위치 이동이면 갈아 끼울 것이 없다)
+          if (result && result.ok !== false && _t.cn !== c.cn && onReplace) {
+            onReplace({ ..._t, bay: String(parseInt(newBay, 10)), row: newRow, tier: newTier });
+          }
           return result;
         }}
         bayPairs={posEditBayPairs}
