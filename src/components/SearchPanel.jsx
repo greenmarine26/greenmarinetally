@@ -21,6 +21,8 @@ import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이�
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false, mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
+  // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
+  const [loadTwinMode, setLoadTwinMode] = useState('auto');
   // V7.94: 자동 가이드 모드 — 앱이 크레인 순서대로 다음 컨을 예측 제시 (수동 = 기존 검색 방식)
   const [guideMode, setGuideMode] = useState(false);
   // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
@@ -375,9 +377,15 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
       {searchMode === 'single'
         ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} manualCtx={manualCtx} />
-        : workFilter === 'loading'
-          ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}/>
-          : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}/>}
+        : (workFilter === 'loading' && loadTwinMode === 'manual')
+          /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
+          ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
+              onBackToAuto={() => setLoadTwinMode('auto')}/>
+          /* V9.49: 선적 트윈도 **양하와 같은 화면**으로. 실번호(SEAL NO)를 보고 확인해야 하는데
+             종전 선적 화면은 끝4자리 두 칸뿐이라 실번호를 볼 수가 없었다(사용자 지적 2026-08-03).
+             BigResultCard 는 이미 선적을 완전히 지원한다 — 화면을 새로 만들 필요가 없었다. */
+          : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}
+              onManualMode={workFilter === 'loading' ? () => setLoadTwinMode('manual') : null}/>}
       </>
       )}
       </>
@@ -1045,7 +1053,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 // ─── V8.80: 수동 트윈 선적 — PCTC식 두 조회창 (사용자 확정 2026-07-08) ───
 //   원칙: 수동 작업은 계획 위치에 묶이지 않는다. 두 컨을 직접 입력해 짝꿍으로 묶고,
 //   [수동 배정 확인]으로 즉시 미배정 → 앞 위치를 정하면 뒤는 짝꿍 베이 자동 → 선적확인 한 번에 원자 완료.
-function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenContainer }) {
+function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenContainer, onBackToAuto = null }) {
   const [q1, setQ1] = useState(''); const [q2, setQ2] = useState('');
   const [c1, setC1] = useState(null); const [c2, setC2] = useState(null);
   const [step, setStep] = useState('pick');   // 'pick' | 'pos'
@@ -1208,8 +1216,14 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
 
   return (
     <>
+      {onBackToAuto && (
+        <button onClick={onBackToAuto}
+          className="w-full text-[11px] text-slate-300 py-2 bg-slate-800 border border-slate-700 rounded hover:bg-slate-700">
+          ← 조회 방식으로 돌아가기 (실번호 확인 화면)
+        </button>
+      )}
       <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
-        🚛 수동 트윈 선적 — 앞 컨을 넣으면 뒤(짝꿍)는 자동으로 따라옵니다
+        📍 위치 지정 방식 — 두 컨을 직접 묶고 자리를 새로 정합니다
         <div className="text-[10px] text-blue-400/70 mt-0.5">지정 자리대로면 그대로 확인 · 실제가 다를 때만 위치를 고칩니다</div>
       </div>
       {step === 'pick' && (
@@ -1345,7 +1359,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
 }
 
 // ─── 트윈 모드 (자동 짝꿍) ───
-function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer }) {
+function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null }) {
   const [q1, setQ1] = useState('');
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
@@ -1537,6 +1551,14 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
         <button onClick={handleSwapPos} disabled={twinBusy}
           className="w-full text-xs font-bold text-indigo-100 py-2 bg-indigo-800 hover:bg-indigo-700 disabled:opacity-50 rounded flex items-center justify-center gap-1">
           ⇅ 앞뒤 맞교환
+        </button>
+      )}
+
+      {/* V9.49: 선적에서 실제 자리가 플랜과 다를 때 — 두 컨을 직접 묶어 자리를 새로 정하는 방식 */}
+      {onManualMode && (
+        <button onClick={onManualMode}
+          className="w-full text-[11px] text-slate-400 hover:text-amber-300 py-2 bg-slate-900 border border-slate-800 rounded">
+          실제 자리가 플랜과 다릅니다 — 위치 지정 방식으로
         </button>
       )}
     </>
