@@ -1173,8 +1173,9 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
     setBusy(true);
     try {
-      await fbReassignContainerPosition(voyageKey, 'loading', c1.cn, bay, rowP, tierP, inspector, { displacedMode: 'unassign' });
-      await fbReassignContainerPosition(voyageKey, 'loading', c2.cn, backPos.bay, backPos.row, backPos.tier, inspector, { displacedMode: 'unassign' });
+      // V9.52: 자리 교환 — 밀려난 계획 컨은 이 컨의 옛 자리로 옮겨 대기(미배정 떠돌이 방지)
+      await fbReassignContainerPosition(voyageKey, 'loading', c1.cn, bay, rowP, tierP, inspector);
+      await fbReassignContainerPosition(voyageKey, 'loading', c2.cn, backPos.bay, backPos.row, backPos.tier, inspector);
       await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
       speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
       resetAll();
@@ -1448,7 +1449,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   };
 
   // V9.50: 번호 수정으로 '실제 온 컨'이 확정되면 그 카드를 갈아 끼운다.
-  //   계획 컨은 그 자리에서 밀려나 미배정이 된다(fbReassign displacedMode:'unassign') — 화면도 그걸 따라간다.
+  //   계획 컨은 그 자리에서 밀려나 **이 컨의 옛 계획 자리로** 옮겨진다(V9.52 자리 교환) — 화면도 그걸 따라간다.
   //   최신 상태(allContainers)가 이미 왔으면 그 값을 쓰고, 아직이면 방금 지정한 자리를 얹는다.
   const _freshen = (nc) => {
     const live = allContainers.find(x => x.cn === nc.cn);
