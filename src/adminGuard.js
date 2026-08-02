@@ -5,6 +5,8 @@
 // 기기 식별: localStorage 'gm_admin_device_id_v1' (기기·브라우저별 1회 생성 UUID)
 // 세션 허용: 비신뢰 기기에서 비밀번호 통과 시 sessionStorage 'gm_admin_session_ok' (탭 닫으면 소멸)
 
+import { isChief } from './staffList.js';
+
 export const OWNER_NAME = '김성일';          // V9.10: 소유자(개발·운영자) — 권한 회수 불가, 퇴사해도 유지
 export const ADMIN_NAME = OWNER_NAME;        // 하위호환 별칭 (기존 호출부 유지)
 export const MAX_TRUSTED_DEVICES = 3;
@@ -124,25 +126,63 @@ export function adminEntry(guard, name) {
   return null;
 }
 
-/** 그 관리자 기준으로 이 기기가 신뢰 기기인가 */
+// ── V9.45(2026-08-02): 이름 잠금을 수석검수·부수석까지 확대 ──────────────────
+//   왜: 지금까지 비밀번호를 요구한 건 관리자 이름뿐이라, 수석검수사 이름은 누구나
+//   골라 로그인할 수 있었다. 수석 대시보드를 막아도(V9.44) 수석 이름으로 들어오면
+//   그대로 열린다 — 문 옆에 창문이 열려 있는 꼴이었다(사용자 지적 2026-08-02).
+//
+// 저장 위치가 갈리는 이유(중요):
+//   admins/{이름}  = 관리자.  이 노드에 키가 생기면 getAdminNames가 관리자로 읽는다.
+//   locks/{이름}   = 관리자가 아닌 잠금 대상(수석검수·부수석).
+//   → 수석 비번을 admins에 저장하면 관리자 권한이 딸려 붙는다. 그래서 노드를 나눈다.
+
+/** V9.45: 이 이름이 잠금 대상인가 (관리자 + 수석검수·부수석) */
+export function isLockedName(guard, name) {
+  const n = String(name || '').trim();
+  return isAdminName(guard, n) || isChief(n);
+}
+
+/** V9.45: 잠금 대상 1명의 인증 정보 (관리자는 admins, 그 외는 locks) */
+export function lockEntry(guard, name) {
+  const a = adminEntry(guard, name);
+  if (a) return a;
+  const n = String(name || '').trim();
+  const l = guard && guard.locks;
+  return (l && l[n]) || null;
+}
+
+/** V9.45: 저장 경로 — 관리자면 admins/{이름}, 아니면 locks/{이름} */
+export function lockPath(guard, name) {
+  const n = String(name || '').trim();
+  return isAdminName(guard, n) ? `admins/${n}` : `locks/${n}`;
+}
+
+/** 그 사람 기준으로 이 기기가 신뢰 기기인가 (V9.45: 관리자 → 잠금 대상 전체로 확대) */
 export function isTrustedDeviceFor(guard, name) {
-  const e = adminEntry(guard, name);
+  const e = lockEntry(guard, name);
   return !!(e && e.devices && e.devices[getAdminDeviceId()]);
 }
 
-/** 그 관리자 비밀번호 검증 */
+/** 그 사람 비밀번호 검증 (V9.45: 잠금 대상 전체) */
 export async function verifyPasswordFor(guard, name, pw) {
-  const e = adminEntry(guard, name);
+  const e = lockEntry(guard, name);
   if (!e || !e.pwHash || !e.salt) return false;
   const h = await hashPassword(pw, e.salt);
   return h === e.pwHash;
 }
 
-/** 그 관리자가 비밀번호를 아직 안 정했는가 (권한만 부여된 상태) */
+/** 그 사람이 비밀번호를 아직 안 정했는가 (V9.45: 잠금 대상 전체) */
 export function needsPasswordSetup(guard, name) {
-  if (!isAdminName(guard, name)) return false;
-  const e = adminEntry(guard, name);
+  if (!isLockedName(guard, name)) return false;
+  const e = lockEntry(guard, name);
   return !e || !e.pwHash;
+}
+
+/** V9.45: 소유자가 대신 열 수 있는가 — 소유자 비번이 실제로 설정돼 있을 때만 */
+export function ownerCanUnlock(guard, name) {
+  if (isOwnerName(name)) return false;
+  const e = adminEntry(guard, OWNER_NAME);
+  return !!(e && e.pwHash && e.salt);
 }
 
 /** 세션 통과 키를 관리자별로 — 다른 관리자 세션이 서로 열어주지 않게 */

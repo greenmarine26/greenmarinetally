@@ -9,6 +9,8 @@ import {
   // V9.09: 다중 관리자 — 이름 하드코딩 제거, 관리자별 개별 비밀번호
   getAdminNames, isAdminName, adminEntry, isTrustedDeviceFor, isOwnerName, OWNER_NAME,
   verifyPasswordFor, needsPasswordSetup, hasSessionPassFor, setSessionPassFor,
+  // V9.45: 잠금 대상을 수석검수·부수석까지 확대 + 소유자 마스터 해제
+  isLockedName, lockEntry, lockPath, ownerCanUnlock,
 } from '../adminGuard.js';
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 // fbDeleteInspector 등은 StaffManagerModal에서 사용
@@ -31,17 +33,31 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
 
   useEffect(() => {
     let alive = true;
-    fbGetAdminGuard().then(g => { if (alive) { setGuard(g); setGuardLoaded(true); } });
+    // V9.45: 조회가 어떤 이유로 실패해도 guardLoaded는 반드시 세운다.
+    //   안 세우면 로딩 검사(handlePick 첫 줄)에 걸려 아무도 로그인하지 못한다.
+    fbGetAdminGuard()
+      .then(g => { if (alive) setGuard(g); })
+      .catch(e => { console.error('[guard] 조회 실패', e); })
+      .finally(() => { if (alive) setGuardLoaded(true); });
     return () => { alive = false; };
   }, []);
 
-  // V9.05: 이름 선택 진입점 — 관리자 이름만 가드, 나머지는 기존 그대로
+  // V9.45: 저장 직후 guard를 다시 읽는다. 안 읽으면 같은 화면에서 옛 값으로 판정한다
+  //   (비번을 막 정했는데 "미설정"으로 보이는 식).
+  const refreshGuard = async () => {
+    try { const g = await fbGetAdminGuard(); setGuard(g); } catch (e) { console.error('[guard] 재조회 실패', e); }
+  };
+
+  // V9.05 → V9.45: 이름 선택 진입점. 잠금 대상(관리자 + 수석검수·부수석)만 가드.
   const handlePick = (name) => {
-    if (!isAdminName(guard, name)) { onSelect(name); return; }   // 일반 검수원은 그대로
+    // V9.45: 로딩 검사를 맨 앞으로. 종전에는 guard가 아직 null인 사이에 잠금 대상을
+    //   선택하면 needsPasswordSetup이 "미설정"으로 읽혀 남의 비밀번호 설정 화면이
+    //   떴다(설정된 비번을 덮어쓸 수 있는 경로). 로딩 전에는 무조건 멈춘다.
+    if (!guardLoaded) { alert('이름 보호 정보를 불러오는 중 — 잠시 후 다시 시도하세요.'); return; }
+    if (!isLockedName(guard, name)) { onSelect(name); return; }  // 일반 검수원은 그대로
     if (hasSessionPassFor(name)) { onSelect(name); return; }     // 이 탭에서 이미 비번 통과
-    if (!guardLoaded) { alert('관리자 보호 정보 로딩 중 — 잠시 후 다시 시도하세요.'); return; }
     setGateName(name);
-    // 비번 미설정 = 권한만 받은 신규 관리자 → 본인이 직접 정한다(기존 비번을 알려줄 필요 없음)
+    // 비번 미설정 = 아직 한 번도 안 정한 사람 → 본인이 직접 정한다(남이 알려줄 필요 없음)
     if (needsPasswordSetup(guard, name)) { setGateMode('setup'); return; }
     if (isTrustedDeviceFor(guard, name)) { onSelect(name); return; }   // 신뢰 기기
     setGateMode('verify');                                             // 그 외 기기 → 비밀번호
@@ -58,15 +74,19 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
       const pwHash = await hashPassword(pw1, salt);
       const devId = getAdminDeviceId();
       // V9.09: 관리자별 개별 저장 — admins/{이름} 아래. 구버전 최상위 필드는 건드리지 않는다.
+      // V9.45: 관리자는 admins/, 수석검수·부수석은 locks/ 아래. 노드를 나누지 않으면
+      //   수석 비번을 저장하는 순간 admins에 키가 생겨 관리자 권한이 딸려 붙는다.
+      const base = lockPath(guard, gateName);
       const ok = await fbUpdateAdminGuard({
-        [`admins/${gateName}/pwHash`]: pwHash,
-        [`admins/${gateName}/salt`]: salt,
-        [`admins/${gateName}/devices/${devId}`]: { label: `${deviceLabel()} (1호)`, addedAt: Date.now() },
+        [`${base}/pwHash`]: pwHash,
+        [`${base}/salt`]: salt,
+        [`${base}/devices/${devId}`]: { label: `${deviceLabel()} (1호)`, addedAt: Date.now() },
       });
       if (!ok) { alert('저장 실패 — 네트워크를 확인하세요.'); return; }
       setSessionPassFor(gateName);
       setGateMode(null); setPw1(''); setPw2('');
-      alert(`✅ ${gateName} 관리자 비밀번호 설정 완료 — 이 기기가 신뢰 기기 1호로 등록됐습니다.\n다른 기기에서는 비밀번호를 넣고 "기기 등록"을 체크하면 신뢰 기기(최대 ${MAX_TRUSTED_DEVICES}대)가 됩니다.`);
+      alert(`✅ ${gateName} 비밀번호 설정 완료 — 이 기기가 신뢰 기기 1호로 등록됐습니다.\n다른 기기에서는 비밀번호를 넣고 "기기 등록"을 체크하면 신뢰 기기(최대 ${MAX_TRUSTED_DEVICES}대)가 됩니다.\n\n잊었을 때는 ${OWNER_NAME}에게 초기화를 요청하세요.`);
+      await refreshGuard();
       onSelect(gateName);
     } finally {
       setGateBusy(false);
@@ -81,12 +101,38 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
       const pass = await verifyPasswordFor(guard, gateName, pw1);
       if (!pass) { alert('비밀번호가 틀립니다.'); setPw1(''); return; }
       setSessionPassFor(gateName);
-      const devCount = Object.keys(adminEntry(guard, gateName)?.devices || {}).length;
+      const devCount = Object.keys(lockEntry(guard, gateName)?.devices || {}).length;
       if (regDevice && devCount < MAX_TRUSTED_DEVICES) {
         const devId = getAdminDeviceId();
-        await fbUpdateAdminGuard({ [`admins/${gateName}/devices/${devId}`]: { label: `${deviceLabel()} (${devCount + 1}호)`, addedAt: Date.now() } });
+        await fbUpdateAdminGuard({ [`${lockPath(guard, gateName)}/devices/${devId}`]: { label: `${deviceLabel()} (${devCount + 1}호)`, addedAt: Date.now() } });
+        await refreshGuard();
       }
-      setGateMode(null); setPw1('');
+      setGateMode(null); setPw1(''); setRegDevice(false);
+      onSelect(gateName);
+    } finally {
+      setGateBusy(false);
+    }
+  };
+
+  // V9.45: 소유자 마스터 해제 — 본인이 비번을 잊었을 때 소유자가 열어준다.
+  //   · 소유자 비번이 실제로 설정돼 있을 때만 노출(ownerCanUnlock)
+  //   · 남의 기기를 소유자 신뢰 기기로 등록하지 않는다 — 이 세션만 열어준다
+  //   · 원하면 그 자리에서 그 사람 비번을 초기화(다음 선택 때 본인이 새로 정함)
+  const handleOwnerUnlock = async () => {
+    if (gateBusy) return;
+    setGateBusy(true);
+    try {
+      const pass = await verifyPasswordFor(guard, OWNER_NAME, pw1);
+      if (!pass) { alert(`${OWNER_NAME} 비밀번호가 틀립니다.`); setPw1(''); return; }
+      const hadPw = !!lockEntry(guard, gateName)?.pwHash;
+      if (hadPw && confirm(`${gateName} 의 비밀번호와 신뢰 기기를 초기화할까요?\n\n초기화하면 다음에 ${gateName} 님이 이름을 고를 때 본인이 새 비밀번호를 정합니다.\n[취소] 를 누르면 이번만 열고 기존 비밀번호는 그대로 둡니다.`)) {
+        const base = lockPath(guard, gateName);
+        const ok = await fbUpdateAdminGuard({ [`${base}/pwHash`]: null, [`${base}/salt`]: null, [`${base}/devices`]: null });
+        if (!ok) { alert('초기화 저장 실패 — 네트워크를 확인하세요. 이번 접속만 열립니다.'); }
+        else { await refreshGuard(); alert(`✅ ${gateName} 비밀번호 초기화 완료`); }
+      }
+      setSessionPassFor(gateName);
+      setGateMode(null); setPw1(''); setPw2('');
       onSelect(gateName);
     } finally {
       setGateBusy(false);
@@ -221,22 +267,31 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
           <div className="absolute inset-0 z-10 bg-slate-950/90 rounded-xl flex items-center justify-center p-4">
             <div className="w-full max-w-xs bg-slate-900 border border-amber-600/60 rounded-lg p-4">
               <div className="font-bold text-amber-200 text-sm mb-2">
-                {gateMode === 'setup' ? `🔐 ${gateName} 비밀번호 설정` : `🔐 ${gateName} 선택 — 비밀번호`}
+                {gateMode === 'setup' ? `🔐 ${gateName} 비밀번호 설정`
+                  : gateMode === 'owner' ? `🔑 ${OWNER_NAME} 비밀번호로 ${gateName} 열기`
+                  : `🔐 ${gateName} 선택 — 비밀번호`}
               </div>
               {gateMode === 'setup' && (
                 <div className="text-[11px] text-slate-400 mb-2">
-                  비밀번호를 설정하면 이 기기가 신뢰 기기 1호가 됩니다. 신뢰 기기(최대 {MAX_TRUSTED_DEVICES}대)에서는 비밀번호 없이 선택됩니다.
+                  <b className="text-amber-300">{getStaffRole(gateName) || '보호 대상'}</b> 이름은 본인만 쓸 수 있습니다. 처음 한 번 비밀번호를 정하세요.
+                  이 기기가 신뢰 기기 1호가 되고, 신뢰 기기(최대 {MAX_TRUSTED_DEVICES}대)에서는 다음부터 비밀번호 없이 선택됩니다.
                 </div>
               )}
               {gateMode === 'verify' && (
                 <div className="text-[11px] text-slate-400 mb-2">
-                  이 기기는 신뢰 기기가 아닙니다. 관리자 비밀번호를 입력하세요.
+                  이 기기는 <b className="text-amber-300">{gateName}</b> 님의 신뢰 기기가 아닙니다. 본인 비밀번호를 입력하세요.
+                </div>
+              )}
+              {gateMode === 'owner' && (
+                <div className="text-[11px] text-slate-400 mb-2">
+                  {gateName} 님이 비밀번호를 잊었을 때 씁니다. {OWNER_NAME} 비밀번호를 입력하면 이번 접속만 열립니다
+                  (이 기기는 신뢰 기기로 등록되지 않습니다).
                 </div>
               )}
               <input
                 type="password" value={pw1} onChange={e => setPw1(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && (gateMode === 'setup' ? handleSetup() : handleVerify())}
-                placeholder="비밀번호"
+                onKeyDown={e => e.key === 'Enter' && (gateMode === 'setup' ? handleSetup() : gateMode === 'owner' ? handleOwnerUnlock() : handleVerify())}
+                placeholder={gateMode === 'owner' ? `${OWNER_NAME} 비밀번호` : '비밀번호'}
                 className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 mb-2 focus:outline-none focus:border-amber-500"
                 autoFocus
               />
@@ -248,27 +303,38 @@ export default function InspectorModal({ current, inspectors, extraStaff = {}, d
                   className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 mb-2 focus:outline-none focus:border-amber-500"
                 />
               )}
-              {gateMode === 'verify' && Object.keys(guard?.devices || {}).length < MAX_TRUSTED_DEVICES && (
+              {/* V9.45: 종전에는 최상위 guard.devices(구버전 단일 관리자 필드)를 세어
+                  사람이 바뀌어도 같은 숫자가 나왔다. 그 사람 기기 수로 고친다. */}
+              {gateMode === 'verify' && Object.keys(lockEntry(guard, gateName)?.devices || {}).length < MAX_TRUSTED_DEVICES && (
                 <label className="flex items-center gap-2 text-[11px] text-slate-300 mb-2 select-none">
                   <input type="checkbox" checked={regDevice} onChange={e => setRegDevice(e.target.checked)}/>
-                  이 기기를 신뢰 기기로 등록 ({Object.keys(guard?.devices || {}).length}/{MAX_TRUSTED_DEVICES})
+                  이 기기를 신뢰 기기로 등록 ({Object.keys(lockEntry(guard, gateName)?.devices || {}).length}/{MAX_TRUSTED_DEVICES})
                 </label>
               )}
               <div className="flex gap-2">
                 <button
-                  onClick={gateMode === 'setup' ? handleSetup : handleVerify}
+                  onClick={gateMode === 'setup' ? handleSetup : gateMode === 'owner' ? handleOwnerUnlock : handleVerify}
                   disabled={gateBusy || !pw1}
                   className="flex-1 bg-amber-700 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500 px-3 py-2 rounded text-sm font-bold text-amber-100"
                 >
                   {gateBusy ? '확인 중…' : '확인'}
                 </button>
                 <button
-                  onClick={() => { setGateMode(null); setPw1(''); setPw2(''); }}
+                  onClick={() => { setGateMode(null); setPw1(''); setPw2(''); setRegDevice(false); }}
                   className="px-3 py-2 rounded text-sm bg-slate-800 border border-slate-700 text-slate-300"
                 >
                   취소
                 </button>
               </div>
+              {/* V9.45: 비밀번호를 잊었을 때의 유일한 출구 — 소유자가 열어준다 */}
+              {gateMode !== 'owner' && ownerCanUnlock(guard, gateName) && (
+                <button
+                  onClick={() => { setGateMode('owner'); setPw1(''); setPw2(''); }}
+                  className="mt-2 w-full text-[11px] text-slate-400 hover:text-amber-300 underline underline-offset-2"
+                >
+                  비밀번호를 잊으셨나요? — {OWNER_NAME} 비밀번호로 열기
+                </button>
+              )}
             </div>
           </div>
         )}
