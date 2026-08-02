@@ -52,6 +52,7 @@ import { runDiagnostics } from '../diagnostics.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
 import DeckPlanView from '../components/DeckPlanView.jsx';
+import MailboxFilePicker from '../components/MailboxFilePicker.jsx';   // V9.46: 메일함 폴더 직결
 import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
@@ -2607,6 +2608,19 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           }}
         />
       )}
+      {/* V9.46: 이 항차의 메일함 폴더를 바로 펼친다 — 파일 창에서 찾아 들어갈 필요가 없다.
+          지원 안 되는 브라우저(폰 등)에서는 아무것도 안 그리고 아래 파일 입력이 그대로 쓰인다. */}
+      <MailboxFilePicker
+        vessel={(voyage?.info?.vsl || String(voyageKey || '').split('_')[0] || '').trim()}
+        voy={(mode === 'discharge' ? voyage?.info?.voy_d : voyage?.info?.voy_l)
+             || voyage?.info?.voy
+             || String(voyageKey || '').split('_').slice(1).join('_')}
+        voyageKey={voyageKey}
+        mode={mode}
+        onEdi={handleEdiUpload}
+        onList={handleListUpload}
+        onXray={handleXrayUpload}
+      />
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400"/>
