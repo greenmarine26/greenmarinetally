@@ -16,6 +16,27 @@ export function isDeckPlanWorkbook(wb) {
 //   수집기 collector/deckplan.py 와 **같은 규칙**이어야 한다(두 벌이 어긋나면 화면과 DB가 갈린다).
 const DECK_TIER = { A: '82', B: '84', C: '86', D: '88', E: '90' };
 
+// V9.55(2026-08-03): 셀 색이 **작업 방식**을 말한다 — 선사 메일 제목이 범례다.
+//   "黄色为双背（2），绿色为落地（40）" = 노랑 双背(2단 적재) · 초록 落地(갑판 직접 적재).
+//   落地 = 섀시에서 내려 갑판에 얹는 것 = **갠트리(LO/LO) 작업분**.
+//   실측(R082E D덱): 초록 40 = 도면 "( + 40 )" = 선사 연락 "인바운드 갠트리 40van",
+//   나머지 62 = 도면 CAPACITY 62(섀시·RO/RO). 40+62 = CONT 102 ✔
+//   검수사가 크레인으로 검수하는 건 초록 분이다 — 색을 버리면 그걸 못 가린다.
+const FILL_LOLO = 'FF92D050';   // 초록 — 落地 = 갠트리
+const FILL_DBL = 'FFFFFF00';    // 노랑 — 双背 = 2단
+
+function fillKind(ws, XLSX, r, c) {
+  try {
+    const cell = ws[XLSX.utils.encode_cell({ r, c })];
+    const rgb = cell && cell.s && cell.s.fgColor && cell.s.fgColor.rgb;
+    if (!rgb) return '';
+    const up = String(rgb).toUpperCase();
+    if (up === FILL_LOLO || up === FILL_LOLO.slice(2)) return 'lolo';
+    if (up === FILL_DBL || up === FILL_DBL.slice(2)) return 'dbl';
+  } catch { /* 색을 못 읽으면 표시 없음으로 */ }
+  return '';
+}
+
 const CN_RE = /([A-Z]{4})\s*(\d{7})/;
 const ISO_RE = /(20|40|45)\s*(GP|HC|RH|RF|HA|OT|FR|TK|DC)\s*([FE])?/;
 
@@ -60,6 +81,7 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
       if (/LUG/i.test(joined)) flags.push('LUG');
       rawSlots.push({
         cn,
+        kind: fillKind(ws, XLSX, m.s.r, m.s.c),   // V9.55: lolo(갠트리) / dbl(2단)
         wt: wtM ? parseInt(wtM[1], 10) : null,
         iso: isoM ? `${isoM[1]} ${isoM[2]}` : '',
         fe: isoM && isoM[3] ? isoM[3] : 'F',
@@ -80,7 +102,7 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
       const cell = ws[XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c })];
       const rgb = cell && cell.s && cell.s.fgColor && (cell.s.fgColor.rgb || '');
       if (rgb && !/^F{2}?FFFFFF$/i.test(String(rgb)) && String(rgb).toUpperCase() !== 'FFFFFF') continue;   // 회색 등 = 불가
-      rawSlots.push({ cn: '', wt: null, iso: '', fe: '', r1: m.s.r, c1: m.s.c, c2: m.e.c, flags: [], empty: true });
+      rawSlots.push({ cn: '', kind: '', wt: null, iso: '', fe: '', r1: m.s.r, c1: m.s.c, c2: m.e.c, flags: [], empty: true });
     }
     // 좌표 정규화: colStops = 모든 블록 경계, rowBands = 블록 시작행들
     const stopSet = new Set();
@@ -102,6 +124,7 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
       const span2 = end >= 0 ? Math.max(1, end - ci2) : Math.max(1, span);
       const ln = lineOf(s.r1), cl = colOf(s.c1);
       return { cn: s.cn, wt: s.wt, iso: s.iso, fe: s.fe, ri: rowBands.indexOf(s.r1), ci: ci2, span: span2, flags: s.flags, empty: !!s.empty,
+               lolo: s.kind === 'lolo', dbl: s.kind === 'dbl',   // V9.55
                // V9.54: 자리 좌표 — 화면 표기는 "D덱 3줄 5칸"
                line: ln, col: cl, tier,
                row: ln ? String(ln).padStart(2, '0') : '',
@@ -109,9 +132,13 @@ export function parseDeckPlanWorkbook(wb, XLSX) {
                pos: (ln && cl) ? `${deckLetter}덱 ${ln}줄 ${cl}칸` : '' };
     }).filter((s) => s.ri >= 0 && s.ci >= 0);
     decks.push({ deck: deckLetter, name, cols: colStops.length - 1, rows: rowBands.length, slots,
-                 tier, lines: rowBands.length, colsN: colStarts.length });
+                 tier, lines: rowBands.length, colsN: colStarts.length,
+                 lolo: slots.filter((x) => x.lolo).length, dbl: slots.filter((x) => x.dbl).length });
   }
   // 덱 순서: 위(D)→아래(B) 실물 페이지 순 아님 — 알파벳 역순(D,C,B,A)로 위 데크 먼저
   decks.sort((a, b) => (b.deck < a.deck ? -1 : b.deck > a.deck ? 1 : 0));
-  return { voy, decks, total: decks.reduce((a, d) => a + d.slots.filter((s) => !s.empty).length, 0) };
+  return { voy, decks,
+           total: decks.reduce((a, d) => a + d.slots.filter((s) => !s.empty).length, 0),
+           lolo: decks.reduce((a, d) => a + (d.lolo || 0), 0),
+           dbl: decks.reduce((a, d) => a + (d.dbl || 0), 0) };
 }

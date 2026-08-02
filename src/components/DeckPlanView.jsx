@@ -8,6 +8,7 @@ import { fbAssignDeckSlot } from '../firebase.js';
 export default function DeckPlanView({ plan, containers = [], compMap = {}, xrayMap = {}, onOpenContainer, voyageKey, mode, inspector }) {
   const decks = plan?.decks || [];
   const [sel, setSel] = useState(0);
+  const [loloOnly, setLoloOnly] = useState(false);   // V9.55: 갠트리(LO/LO) 분만 보기
   const byCn = useMemo(() => {
     const m = {};
     for (const c of containers) if (c && c.cn) m[c.cn] = c;
@@ -31,6 +32,15 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
           </button>
         ))}
         <span className="ml-auto text-[11px] text-slate-400">이 덱 {done}/{conts.length} 완료 · 빈자리 {d.slots.length - conts.length}</span>
+        {/* V9.55: 갠트리(LO/LO) 분만 보기 — 크레인으로 검수하는 건 이것뿐이다 */}
+        {(d.lolo > 0) && (
+          <button onClick={() => setLoloOnly(!loloOnly)}
+            className={`px-2 py-1 rounded text-[11px] font-black border ${loloOnly
+              ? 'bg-lime-600 border-lime-400 text-lime-50'
+              : 'bg-slate-800 border-lime-700/60 text-lime-300'}`}>
+            🏗 갠트리 {d.lolo}van{loloOnly ? ' 만 보는 중' : ''}
+          </button>
+        )}
       </div>
       {/* V9.54: 도면과 같은 방향으로 읽는다 — 줄은 좌현(부두)→우현, 칸은 선미(램프)→선수 */}
       <div className="text-[10px] text-slate-500 mb-1">
@@ -44,6 +54,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
           {d.slots.map((s, si) => {
             // V9.22-02: 빈자리 — 선적 시 탭해서 컨 지정 (assign 맵), 재탭 해제
             if (s.empty) {
+              if (loloOnly) return null;   // V9.55
               const slotKey = `${d.deck}-${s.ri}-${s.ci}`;
               const asg = plan.assign && plan.assign[slotKey];
               return (
@@ -75,6 +86,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                 </button>
               );
             }
+            if (loloOnly && !s.lolo) return null;   // V9.55: 갠트리 분만 보기
             const isDone = !!compMap[s.cn];
             const c = byCn[s.cn];   // V9.22-01: 리스트(records) 정보 합류 — 실번호·온도·DG·POD (사용자 요청)
             const fe = (c && (c.fe === 'F' || c.fe === 'E')) ? c.fe : s.fe;
@@ -91,10 +103,11 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                 onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: s.iso.replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay })}
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
                   ${isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-slate-700/80 border-slate-500' : 'bg-sky-900/80 border-sky-600'}
-                  ${isRf ? 'ring-1 ring-cyan-400' : ''} ${isXray ? 'ring-2 ring-yellow-400' : ''}`}
+                  ${isRf ? 'ring-1 ring-cyan-400' : ''} ${isXray ? 'ring-2 ring-yellow-400' : ''}
+                  ${s.lolo ? 'ring-2 ring-lime-400' : ''} ${s.dbl ? 'ring-2 ring-amber-300' : ''}`}
                 style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
                 <div className="text-[10px] font-black mono text-slate-100 truncate">
-                  {s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
+                  {s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
                 </div>
                 <div className="text-[8.5px] text-slate-300 truncate">{s.iso} {fe}</div>
                 {s.line ? <div className="text-[8px] mono text-slate-400/90 truncate">{s.line}줄 {s.col}칸</div> : null}
@@ -112,6 +125,8 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-yellow-400 rounded-sm mr-1" />X-RAY</span>
         <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-slate-500 rounded-sm mr-1" />빈자리(탭=지정)</span>
         <span><span className="inline-block w-2.5 h-2.5 bg-amber-900 border border-amber-400 rounded-sm mr-1" />📌지정됨</span>
+        <span><span className="inline-block w-2.5 h-2.5 border-2 border-lime-400 rounded-sm mr-1" />🏗갠트리(落地·LO/LO)</span>
+        <span><span className="inline-block w-2.5 h-2.5 border-2 border-amber-300 rounded-sm mr-1" />⇅双背(2단)</span>
       </div>
     </div>
   );

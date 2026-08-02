@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.54';   // RZOR 덱플랜 좌표화 — 덱/줄/칸 (도면 실측 기준)
+export const APP_VERSION = 'V9.55';   // RZOR 갠트리(LO/LO) 분 구분 — 초록=落地
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
