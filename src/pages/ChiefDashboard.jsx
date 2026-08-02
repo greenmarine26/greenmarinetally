@@ -4,6 +4,7 @@ import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDelet
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort, isBookingSlot, emptySealSpec } from '../utils.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
+import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
 import { isChief } from '../staffList.js';
 import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
@@ -12,11 +13,12 @@ import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 
-export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome }) {
+export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
   const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
+  const [showPortMis, setShowPortMis] = useState(false);   // V9.42: 홈 상단에서 옮겨온 PORT-MIS 캡처
   const toggleSec = (id) => setOpenSecs(o => ({ ...o, [id]: !o[id] }));
   const jumpSec = (id) => {
     setOpenSecs(o => ({ ...o, [id]: true }));
@@ -394,8 +396,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ['edit', '🖐 편집'], ['archive', '📚 자료 보관소'], ['restore', '🗄 완료 보관소'],
             ['seal', '🔒 엠티 실'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
             ['notice', '📢 공지'],
+            // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
+            //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
+            ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
           ].map(([id, label]) => (
-            <button key={id} onClick={() => jumpSec(id)}
+            <button key={id} onClick={() => (id === '__search' ? (onOpenGlobalSearch && onOpenGlobalSearch())
+                                            : id === '__portmis' ? setShowPortMis(true)
+                                            : jumpSec(id))}
               className="px-2 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-[12px] font-bold text-slate-200 text-left truncate"
               style={{ minHeight: 40 }}>
               {label}
@@ -403,6 +410,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           ))}
         </div>
       </div>
+
+      {/* V9.42: PORT-MIS 캡처 모달 — 홈 상단 3카드 정리로 이리로 옮겨왔다 */}
+      {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
 
       {/* V8.27: 검수원 공지 (흐르는 띠) */}
       <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>

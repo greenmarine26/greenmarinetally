@@ -405,28 +405,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     <div className="max-w-6xl mx-auto px-3 py-3">
       {/* V9.15: 브랜드 배지 삭제 — 헤더(🌊 그린마린 검수팀 전용)와 완전 중복, 첫 화면 44px 회수.
           버전은 헤더 ⋯ 메뉴와 도움말에서 확인. */}
-      {/* 빠른 진입 - 통합검색 + 수석대시보드 + PORT-MIS 캡처 (M5.25) */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <button onClick={onOpenGlobalSearch}
-          className="bg-gradient-to-br from-amber-900/40 to-amber-950/40 border border-amber-700/40 rounded-xl p-3 text-left hover:from-amber-900/60 active:scale-95 transition">
-          <Search className="w-5 h-5 text-amber-300 mb-1"/>
-          <div className="font-bold text-sm text-amber-100">통합 검색</div>
-          <div className="text-[10px] text-amber-300/70">모든 항차·양/선적</div>
-        </button>
-        <button onClick={onOpenChiefDashboard}
-          className="bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-xl p-3 text-left hover:from-purple-900/60 active:scale-95 transition">
-          <BarChart3 className="w-5 h-5 text-purple-300 mb-1"/>
-          <div className="font-bold text-sm text-purple-100">수석 대시보드</div>
-          <div className="text-[10px] text-purple-300/70">전체 검수원 진행률·통계</div>
-        </button>
-        <button onClick={() => setShowPortMisCapture(true)}
-          className="bg-gradient-to-br from-cyan-900/40 to-cyan-950/40 border border-cyan-700/40 rounded-xl p-3 text-left hover:from-cyan-900/60 active:scale-95 transition">
-          <span className="text-xl mb-1 block">📸</span>
-          <div className="font-bold text-sm text-cyan-100">PORT-MIS 캡처</div>
-          <div className="text-[10px] text-cyan-300/70">⚓ 입출항 자동 등록</div>
-        </button>
-      </div>
-
+      {/* V9.42(사용자 지시 2026-08-02): 상단 3카드(통합검색·수석대시보드·PORT-MIS 캡처) 블록 삭제.
+          첫 화면에서 가장 큰 자리를 차지했는데 매일 쓰는 것은 아래 항차 목록이다.
+          · 수석 대시보드 → '진행 중인 항차' 줄 가운데(빈 공간)로
+          · 통합 검색·PORT-MIS 캡처 → 수석 대시보드 바로가기 그리드의 빈칸으로 */}
       {/* V9.16: 오늘의 나 — 내 처리량·페이스 (완료 기록이 있을 때만) */}
       {(() => {
         const me = computeMyToday(voyages, inspector);
@@ -467,6 +449,15 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
           <div className="text-lg font-bold text-slate-100">{list.length}건</div>
         </div>
+        {/* V9.42: 수석 대시보드 — 종전 상단 3카드에서 이 줄 가운데 빈 공간으로 옮김 */}
+        <button onClick={onOpenChiefDashboard}
+          className="flex-1 min-w-0 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
+          <div className="flex items-center gap-1.5">
+            <BarChart3 className="w-4 h-4 text-purple-300 shrink-0"/>
+            <span className="font-bold text-xs text-purple-100 truncate">수석 대시보드</span>
+          </div>
+          <div className="text-[10px] text-purple-300/70 truncate">전체 검수원 진행률·통계</div>
+        </button>
         <div className="flex gap-2 flex-wrap shrink-0">
           <button
             onClick={() => setShowCreate('discharge')}

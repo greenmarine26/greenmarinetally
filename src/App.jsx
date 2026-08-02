@@ -330,6 +330,7 @@ export default function App() {
             voyages={voyages} inspectors={inspectors} inspector={inspector}
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
             onGoHome={() => navigate('home')}
+            onOpenGlobalSearch={() => navigate('search')}
           />
         )}
         {route.name === 'voyage' && (
