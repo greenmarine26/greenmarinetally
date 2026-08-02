@@ -992,16 +992,35 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               // V9.41: planDate 는 수집기가 **판단해서** 넣는다(사용자 규칙 2026-08-02) —
               //   메일 있으면 메일 확정 / PCTC는 배정 신뢰 / PNCT는 도선 출항이 배정과 크게 벌어지면 도선.
               //   그 판단 결과가 info.planSrc 다. 표시는 그 출처를 그대로 보여준다.
+              // V9.43: 출처를 **자리별로** 보여준다 (사용자 지시 2026-08-02:
+              //   "출처 두 군데면 다 보여주면 됩니다. 입항에 도선 출항에 포트미스").
+              //   수집기 planSrc 는 한 출처면 'pilot', 자리별로 다르면 '입항출처|출항출처'.
+              //   도선 예보에 한쪽만 올라온 배는 나머지를 PORT-MIS·배정 **예정값**으로 채우고
+              //   도선이 확정되면 자동으로 갈아끼운다 — 그 사실이 화면에 그대로 보여야 한다.
+              const _MK = { mail: '📧메일', pilot: '⚓도선', portmis: '🚢신고', plan: '📋배정' };
               const _pSrc = voyage.info?.planSrc || '';
-              const srcMark = (voyage._etaSrc === 'plan' && _pSrc)
-                ? ({ mail: '📧메일', pilot: '⚓도선', plan: '📋배정' }[_pSrc] || '📋배정')
+              const _pp = _pSrc.split('|');
+              const _srcIn = _MK[_pp[0]] || '';
+              const _srcOut = _MK[_pp[1] || _pp[0]] || '';
+              // ★ 사용자 확정(2026-08-02): **표시 자체가 확정/예정을 말한다.**
+              //   "도선 2개가 붙으면 확정으로 알면 되고 신고가 붙으면 예정으로 알면 되니까요."
+              //   → 별도 기호(*)나 배지 없이 **항상 자리별로** 출처를 붙인다. 둘 다 ⚓도선이면 확정.
+              const _perSlot = !!(voyage._etaSrc === 'plan' && _pSrc);
+              const srcMark = _perSlot ? ''
                 : ({ plan: '📋배정', pilot: '⚓도선', portmis: '🚢신고' }[voyage._etaSrc] || '');
+              const srcTip = _perSlot
+                ? '⚓도선이 양쪽에 붙으면 확정입니다. 🚢신고·📋배정이 붙은 쪽은 예정값이며, 도선 예보가 올라오면 자동으로 바뀝니다.'
+                : '';
               const head = eta ? `${dayLabel(eta)} ${hm(eta)}` : '';
               const tail = etd ? (eta && dayLabel(etd) !== dayLabel(eta) ? `${dayLabel(etd)} ${hm(etd)}` : hm(etd)) : '';
-              const body = head && tail ? `${head} ~ ${tail}` : (head || `~ ${tail}`);
+              // V9.43: 자리별 출처가 다르면 각 시각 뒤에 붙여 보여준다.
+              const _h = head && _perSlot && _srcIn ? `${head} ${_srcIn}` : head;
+              const _t = tail && _perSlot && _srcOut ? `${tail} ${_srcOut}` : tail;
+              const body = _h && _t ? `${_h} ~ ${_t}` : (_h || `~ ${_t}`);
               const past = etd && etd < Date.now();
               return (
-                <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${past
+                <span title={srcTip || undefined}
+                  className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${past
                   ? 'bg-slate-800 border-slate-600 text-slate-400'
                   : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
                   📅 {body}{srcMark ? ` ${srcMark}` : ''}

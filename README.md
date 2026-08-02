@@ -1,4 +1,4 @@
-# Tallyman Master V9.42
+# Tallyman Master V9.43
 
 (버전 라벨은 build.sh가 src/utils.js APP_VERSION 기준으로 자동 동기화)
 
