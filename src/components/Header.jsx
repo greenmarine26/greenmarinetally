@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 // TallyOne 1.0 (K4): 미사용 아이콘 임포트 제거(Cloud·RefreshCw·Power) + 보조기능 아이콘 추가
-import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen } from 'lucide-react';
+// TallyOne 1.1: 클로드에게 메모 아이콘(NotebookPen) 추가
+import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import { isChief } from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
 import { isOwnerName } from '../adminGuard.js';
 import HelpModal from './HelpModal.jsx';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
+import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 
@@ -16,6 +18,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const equipNumbers = equipNumbersForPier(getPierFromBerth(info?.berth || ''));
   const [helpOpen, setHelpOpen] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);   // M6.14d: Gemini 키 설정 모달
+  const [memoOpen, setMemoOpen] = useState(false); // TallyOne 1.1: 클로드에게 메모 모달 (HelpModal과 같은 Header 내부 state 패턴)
   // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
   const [equipOpen, setEquipOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);   // V9.15: 부가 버튼 4개(도움말·키·인원·종료)를 ⋯ 메뉴로 — 선박명 자리 확보
@@ -137,6 +140,12 @@ export default function Header({ version, inspector, online, route, voyages, onC
                     <span className="text-sm text-slate-200 font-bold">AI 검색 키</span>
                     {!hasUserKey && <span className="ml-auto text-[10px] text-red-300 font-bold">설정 필요</span>}
                   </button>
+                  {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청을 claude_inbox로 보낸다 (전 화면 접근) */}
+                  <button onClick={() => { setMenuOpen(false); setMemoOpen(true); }}
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                    <NotebookPen className="w-5 h-5 text-violet-300 shrink-0"/>
+                    <span className="text-sm text-slate-200 font-bold">📝 클로드에게 메모</span>
+                  </button>
                   {/* TallyOne 1.0 (K4): 보조기능(#/aux) 진입 — 건강 점검·맛집 수첩 등 */}
                   {onOpenAux && (
                     <button onClick={() => { setMenuOpen(false); onOpenAux(); }}
@@ -181,6 +190,15 @@ export default function Header({ version, inspector, online, route, voyages, onC
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
       {/* M6.14d: Gemini API 키 설정 모달 */}
       {keyOpen && <GeminiKeyModal onClose={() => setKeyOpen(false)} />}
+      {/* TallyOne 1.1: 클로드에게 메모 — Header가 이미 받는 props로 자동 첨부 정보 구성 (route 없으면 모달이 해시 파싱 폴백) */}
+      {memoOpen && (
+        <ClaudeMemoModal
+          inspector={inspector}
+          route={route}
+          appVersion={version}
+          onClose={() => setMemoOpen(false)}
+        />
+      )}
       {/* M5.0: ContainerPhrasebook은 HelpModal 안에서 호출됨 */}
 
       {/* M3.5.6: 장비 번호 선택 모달 */}

@@ -4,10 +4,11 @@
 //   화면 이동은 window.location.hash 직접 변경(#/food, #/health, #/). 라우트 등록(#/aux)은 팀K 소관.
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, BookOpen, Languages, MessageCircle, Dices, Activity,
-  Key, Sun, Wrench, Search, X, RefreshCw } from 'lucide-react';
+  Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가
 import HelpModal from '../components/HelpModal.jsx';
 import ContainerPhrasebook from '../components/ContainerPhrasebook.jsx';
 import GeminiKeyModal from '../components/GeminiKeyModal.jsx';
+import ClaudeMemoModal from '../components/ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
 import { HELP_DATA, HELP_COURSE } from '../data/helpData.js';
 import { buildGreetingMessage, fetchPyeongtaekWeather } from '../greeting.js';
 import { heartbeatState, healthSummary } from '../health.js';
@@ -23,6 +24,8 @@ const ACCENT = {
   rose:    { card: 'bg-gradient-to-br from-rose-900/40 to-slate-900 border-rose-700/40 hover:border-rose-500',         icon: 'text-rose-300',    title: 'text-rose-100' },
   cyan:    { card: 'bg-gradient-to-br from-cyan-900/40 to-slate-900 border-cyan-700/40 hover:border-cyan-500',         icon: 'text-cyan-300',    title: 'text-cyan-100' },
   orange:  { card: 'bg-gradient-to-br from-orange-900/40 to-slate-900 border-orange-700/40 hover:border-orange-500',   icon: 'text-orange-300',  title: 'text-orange-100' },
+  // TallyOne 1.1: 클로드에게 메모 카드용 (정적 문자열 유지 — purge 회피 규칙 동일)
+  violetDeep: { card: 'bg-gradient-to-br from-violet-950/60 to-slate-900 border-violet-700/40 hover:border-violet-500', icon: 'text-violet-300', title: 'text-violet-100' },
 };
 
 // 시간대별 인사 한 줄 — 상단을 따뜻하게 (greeting.js의 시간대 구분과 같은 기준)
@@ -206,6 +209,7 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
   const [phraseOpen, setPhraseOpen] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
+  const [memoOpen, setMemoOpen] = useState(false);   // TallyOne 1.1: 클로드에게 메모 모달
 
   // 수집기 하트비트 상태 — 30초마다 경과 재계산 (HomePage와 같은 주기)
   const [now, setNow] = useState(Date.now());
@@ -275,6 +279,10 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
           <AuxCard icon={Wrench} accent="orange" title="장비 번호 안내"
             sub="부두별 갠트리 호기 참고표"
             onClick={() => setView('equip')} />
+          {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청 기록, 클로드 세션이 나중에 처리 */}
+          <AuxCard icon={NotebookPen} accent="violetDeep" title="클로드에게 메모"
+            sub="발견한 문제·요청 기록 → 클로드가 처리"
+            onClick={() => setMemoOpen(true)} />
         </div>
       )}
 
@@ -289,6 +297,8 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
       <ContainerPhrasebook open={phraseOpen} onClose={() => setPhraseOpen(false)} />
       {keyOpen && <GeminiKeyModal onClose={() => setKeyOpen(false)} />}
       {briefOpen && <BriefingModal inspector={inspector} onClose={() => setBriefOpen(false)} />}
+      {/* TallyOne 1.1: 클로드에게 메모 — AuxPage는 route·version prop이 없어 모달 내부 해시 파싱·APP_VERSION 폴백으로 동작 */}
+      {memoOpen && <ClaudeMemoModal inspector={inspector} onClose={() => setMemoOpen(false)} />}
     </div>
   );
 }

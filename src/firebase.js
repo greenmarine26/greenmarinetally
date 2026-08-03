@@ -1914,3 +1914,31 @@ export function fbSubscribeProcessDone(key, callback) {
   const r = ref(db, `collector_commands_done/${key}`);
   return onValue(r, (snap) => callback(snap.val() || null));
 }
+
+// ─── TallyOne 1.1: 클로드에게 메모 — /claude_inbox/{pushKey} 노드 ───
+//   검수사가 작업 중 발견한 문제·요청을 앱에서 기록하면 클로드 세션이 나중에 읽어 처리한다.
+//   콘앱 불편신고(feedback 노드)와 같은 계열이며 비용은 0원.
+//   memo = { text, inspector, route, voyageKey, mode, appVersion, at, status:'new' }
+
+// 메모 1건 저장 — 실패는 상위로 던진다. 호출부(ClaudeMemoModal)가 오프라인 큐로 보관한다.
+export async function fbAddClaudeMemo(memo) {
+  const r = push(ref(db, 'claude_inbox'));
+  await set(r, { status: 'new', at: Date.now(), ...memo });
+  return r.key;
+}
+
+// 최근 메모 목록 1회 조회(get) — at 역순(최신 먼저), 기본 30건
+export async function fbGetClaudeMemos(limit = 30) {
+  const snap = await get(ref(db, 'claude_inbox'));
+  const all = snap.exists() ? snap.val() : {};
+  return Object.entries(all || {})
+    .map(([key, v]) => ({ key, ...(v || {}) }))
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
+    .slice(0, limit);
+}
+
+// 메모 삭제 — 클로드가 처리 완료한 뒤 정리하거나, 검수사가 잘못 보낸 메모를 지울 때
+export async function fbDeleteClaudeMemo(key) {
+  if (!key) return;
+  await remove(ref(db, `claude_inbox/${key}`));
+}
