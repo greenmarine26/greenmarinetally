@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.2-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.3</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -664,7 +664,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 1.1-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.2-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 1.3';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -768,6 +768,7 @@ async function fbFetchEdiContainers(voyageKey, mode){
       temp:(c.temp!=null?c.temp:(c.setpoint!=null?c.setpoint:null)),
       reefer:isReefer, dg:!!c.dg, fr:!!c.fr, tk:!!c.tk, ot:!!(c.ot||c.oog), oog:!!c.oog,
       pol:c.pol||null, pod:c.pod||null,
+      lolo:!!c.lolo, dbl:!!c.dbl, deck:c.deck||'', pos:c.pos||'',   // ConeOne 1.3: RZOR 덱플랜 표시(갠트리/2단/자리) 운반
     });
   }
   // 평택분만 — 검수앱 ediContainers는 전체(타지역 포함)라 여기서 걸러야 함.
@@ -923,6 +924,18 @@ async function selectVoyage(voyageKey){
       }
     }
     if(!state.shipName) state.shipName=v.vsl;
+    // ConeOne 1.3(사용자 확정 2026-08-03): RZOR(LOLO)은 **갠트리(lolo)·2단(dbl) 적재분만** 콘 대상.
+    //   섀시(RORO)분·표시 없는 컨은 제외하고, 남은 것은 일반 데크 규칙 그대로 계산한다.
+    if(isLoloShip()){
+      state._loloFilter={};
+      for(const mk of ['disch','stow']){
+        const sd=state[mk]; if(!sd||!sd.ediRows) continue;
+        const total=sd.ediRows.length;
+        sd.ediRows=sd.ediRows.filter(r=>r.lolo||r.dbl);
+        sd.ediRowsAll=undefined;   // 전체화물 표시는 덱플랜에 무의미 — 갠트리분만 본다
+        state._loloFilter[mk]={total, kept:sd.ediRows.length};
+      }
+    }
     applyVessel(state.shipName);
     render();
   }catch(e){
@@ -1307,14 +1320,21 @@ function isLoloShip(){
 function renderLoloNotice(){
   return '<div class="card"><div style="padding:14px 12px;line-height:1.7">'
     +'<b style="font-size:15px">⚓ LOLO 선박 (RIZHAO ORIENT)</b><br>'
-    +'이 배는 베이 구조가 없는 LOLO 검수 선박입니다 — <b>콘(고정장치) 작업 대상이 아닙니다.</b><br>'
-    +'베이플랜·콘 작업표 대신 <b>검수앱의 LOLO 탭(덱플랜)</b>으로 검수합니다.'
+    +'덱플랜의 <b>갠트리(초록)·2단 적재 표시가 있는 컨테이너가 아직 없습니다.</b><br>'
+    +'수집기가 선사 덱플랜을 받으면 자동으로 갠트리 적재분이 표시되고, 그 부분만 일반 데크 규칙으로 콘을 계산합니다.'
     +'</div></div>';
 }
 async function runCalc(){
   showLoading('계산 중...');
-  // ConeOne 1.2-01: LOLO 선박은 콘 계산 없음 — 합성 덱플랜 좌표 오계산 방지.
-  if(isLoloShip()){ const ra=document.getElementById('resultArea'); if(ra) ra.innerHTML=renderLoloNotice(); return; }
+  // ConeOne 1.3: LOLO(RZOR)는 갠트리·2단 적재분만 일반 데크 규칙으로 계산(로드 시 필터 완료).
+  //   대상이 0대면(덱플랜 미수신·표시 없음) 오계산 대신 안내.
+  if(isLoloShip()){
+    const _has=(state.disch&&state.disch.ediRows&&state.disch.ediRows.length)||(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
+    if(!_has){ const ra=document.getElementById('resultArea'); if(ra) ra.innerHTML=renderLoloNotice(); return; }
+    const f=state._loloFilter||{}; const kept=(f.disch?f.disch.kept:0)+(f.stow?f.stow.kept:0);
+    const excl=(f.disch?f.disch.total-f.disch.kept:0)+(f.stow?f.stow.total-f.stow.kept:0);
+    window.__loloNote='⚓ LOLO(RIZHAO ORIENT) — 갠트리·2단 적재분 '+kept+'대만 콘 계산(섀시/RORO분 '+excl+'대 제외), 일반 데크 규칙 적용.';
+  } else { window.__loloNote=''; }
   // V7.59: 베이사전(실구조) 먼저 로드 — 전용 데크·연속 판정을 구조 기준으로 (오프라인이면 폴백)
   const __dict = await ensureConeBayDict();
   setTimeout(()=>{
@@ -1323,6 +1343,7 @@ async function runCalc(){
       const vs=state.stow&&state.stow.vessel, vd=state.disch&&state.disch.vessel;
       const norm=s=>(s||'').toUpperCase().replace(/\s+/g,'');
       window.__vesselWarn = (vs&&vd&&norm(vs)!==norm(vd)) ? ('⚠ 양하('+vd+')와 선적('+vs+') 선박명이 다릅니다. 같은 항차 자료인지 확인하세요.') : '';
+      if(window.__loloNote) window.__vesselWarn = (window.__loloNote+(window.__vesselWarn?'<br>'+window.__vesselWarn:''));   // ConeOne 1.3: LOLO 대상 요약 병기
       const __ctx=buildConeCtx(__dict);
       const sg=planToGroups(state.stow, __ctx);
       let dg=planToGroups(state.disch, __ctx);
@@ -1603,8 +1624,11 @@ function openCargoPlanV2Auto(){
 
 async function renderBayView(){
   const ra=document.getElementById('resultArea');
-  // ConeOne 1.2-01: LOLO 선박은 베이뷰 없음(검수앱과 동일 — LOLO 탭 안내).
-  if(isLoloShip()){ ra.innerHTML=renderLoloNotice(); return; }
+  // ConeOne 1.3: LOLO는 갠트리·2단 적재분만(로드 시 필터) 덱 격자로 표시. 대상 0이면 안내.
+  if(isLoloShip()){
+    const _has=(state.disch&&state.disch.ediRows&&state.disch.ediRows.length)||(state.stow&&state.stow.ediRows&&state.stow.ediRows.length);
+    if(!_has){ ra.innerHTML=renderLoloNotice(); return; }
+  }
   ra.innerHTML='<div class="card"><div class="empty-note">베이플랜 불러오는 중...</div></div>';
   // 컨테이너 수집: 먼저 존재 베이 파악 → 그룹키(짝수=페어 대표, 단독 홀수)로 묶음.
   //   40ft는 짝수+홀수 두 베이를 한 자리로 차지 → 한 격자에 그려야 7번이 따로 떠보이지 않음.
