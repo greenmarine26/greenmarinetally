@@ -175,6 +175,11 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
               <input type="file" accept="image/*" capture="environment" onChange={handleCnPhoto} className="hidden"/>
               <Camera className="w-5 h-5"/> {cnPhotoUrl ? '📷 다시 촬영' : '컨테이너 번호 촬영'}
             </label>
+            {/* TallyOne 1.2: 찍어둔 사진 등록 — capture 강제로 앨범 선택이 막혀 있던 문제(2026-08-02 파손 보고 실패) */}
+            <label className="w-full block cursor-pointer rounded-lg font-bold text-center py-2 mt-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200">
+              <input type="file" accept="image/*" onChange={handleCnPhoto} className="hidden"/>
+              🖼 앨범에서 선택 (찍어둔 사진)
+            </label>
           </div>
 
           {/* 사진 2: 상세 */}
@@ -191,6 +196,10 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
             }`}>
               <input type="file" accept="image/*" capture="environment" onChange={handleDetailPhoto} className="hidden"/>
               <Camera className="w-5 h-5"/> {detailPhotoUrl ? '📷 다시 촬영' : (isError ? '액츄얼 실 촬영' : '데미지 부분 촬영')}
+            </label>
+            <label className="w-full block cursor-pointer rounded-lg font-bold text-center py-2 mt-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200">
+              <input type="file" accept="image/*" onChange={handleDetailPhoto} className="hidden"/>
+              🖼 앨범에서 선택 (찍어둔 사진)
             </label>
           </div>
 

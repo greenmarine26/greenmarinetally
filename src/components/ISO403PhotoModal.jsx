@@ -44,6 +44,7 @@ export default function ISO403PhotoModal({ open, c, voyageKey, mode, inspector, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const fileRef = useRef(null);
+  const albumRef = useRef(null);   // TallyOne 1.2: 앨범 선택
 
   // 기존 사진 불러오기
   useEffect(() => {
@@ -192,10 +193,16 @@ export default function ISO403PhotoModal({ open, c, voyageKey, mode, inspector, 
           {/* 사진 촬영 input */}
           <input ref={fileRef} type="file" accept="image/*" capture="environment"
             onChange={handlePick} className="hidden"/>
+          {/* TallyOne 1.2: 앨범 선택용(capture 없음) — 찍어둔 사진 등록 지원 */}
+          <input ref={albumRef} type="file" accept="image/*" onChange={handlePick} className="hidden"/>
           <button onClick={() => fileRef.current?.click()} disabled={saving}
             className="w-full py-4 bg-blue-700 hover:bg-blue-600 active:bg-blue-800 text-white rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50">
             <Camera className="w-5 h-5"/>
             {photoPreview ? '📷 다시 촬영' : (hasExisting ? '📷 새로 촬영' : '📷 사진 촬영')}
+          </button>
+          <button onClick={() => albumRef.current?.click()} disabled={saving}
+            className="w-full py-2 mt-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-bold text-xs">
+            🖼 앨범에서 선택 (찍어둔 사진)
           </button>
 
           {/* 에러 */}

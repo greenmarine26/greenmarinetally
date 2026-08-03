@@ -167,7 +167,7 @@ export default function PortMisCaptureModal({ onClose }) {
               <label className="block bg-cyan-600 hover:bg-cyan-700 text-white text-center font-bold py-4 rounded-lg cursor-pointer flex items-center justify-center gap-2">
                 <Camera className="w-5 h-5" />
                 📷 화면 캡처 (AI OCR)
-                <input type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+                <input type="file" accept="image/*" onChange={handleFile} className="hidden" />{/* TallyOne 1.2: capture 제거 — 갤러리의 캡처 이미지 선택 가능 */}
               </label>
               <p className="text-xs text-slate-500 mt-3 leading-relaxed">
                 💡 팁: 평택항 + 입출항 기간으로 검색 후 <b>엑셀 다운로드</b>가 가장 정확합니다.
