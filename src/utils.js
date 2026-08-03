@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.1';   // 클로드 메모함(claude_inbox) — 앱 안에서 문제·요청 기록, 클로드 세션이 수거 처리
+export const APP_VERSION = 'TallyOne 1.1-01';   // 콘앱 베이뷰 격자 단일화(ConeOne 1.2) 동반 — 번들 캐시키 갱신용 빌드번호
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

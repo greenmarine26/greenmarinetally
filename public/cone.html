@@ -87,6 +87,10 @@
   .bv-slot{border:1px dashed #3d4f66; background:transparent;}
   /* V7.51: off도 보이게 — 반대 작업 슬롯이라도 자리는 항상 표시 (안 보이는 #232f3e 폐지) */
   .bv-slot.off{border-color:#33415466; border-color:rgba(73,93,120,.55);}
+  /* ConeOne 1.2: 검수앱 베이플랜과 같은 모양 — 존재하지 않는 칸은 아예 안 그림(투명 자리만 차지) */
+  .bv-slot.none{border:none; background:transparent;}
+  /* ConeOne 1.2: 40ft 그림자 칸 — 검수앱 X표와 동일 의미(인접 짝수 베이 40ft가 점유한 자리) */
+  .bv-x{border:1px solid #475569; background:#334155; color:#94a3b8; font-weight:900; font-size:18px; text-align:center; vertical-align:middle; border-radius:3px; line-height:36px;}
   /* 컨테이너 박스 셀 (크기는 .bv-tab.box td에서 통일) */
   .bvc{border-radius:3px; padding:2px 4px; border:1px solid rgba(255,255,255,.12);}
   .bvc-in{font-size:8.5px; line-height:1.2; font-family:Consolas,monospace; text-align:left;}
@@ -250,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.1</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.2</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -659,8 +663,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 1.1';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것)
-window.__CONEV='ConeOne 1.1';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 1.1-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 1.2';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -780,6 +784,21 @@ async function fbFetchRawEdi(voyageKey, mode){
   if(!res.ok) return null;
   const d=await res.json();
   return d&&d.text? d.text : null;
+}
+
+// ConeOne 1.2: 항차 info — 검수앱 BayPlan이 받는 voyage.info(vsl·imo·callsign)와 같은 인자를
+//   격자 모듈(ConeBayGrid)에 넘기기 위해 조회(항차당 1회 캐시). 실패해도 격자는 선박명 폴백으로 동작.
+async function fbFetchVoyageInfo(){
+  if(!state.voyageKey) return {};
+  if(state._voyInfo && state._voyInfoKey===state.voyageKey) return state._voyInfo;
+  try{
+    const res=await fetch(`${FB_BASE}/voyages/${encodeURIComponent(state.voyageKey)}/info.json`);
+    if(res.ok){
+      const d=await res.json();
+      if(d && typeof d==='object'){ state._voyInfo=d; state._voyInfoKey=state.voyageKey; return d; }
+    }
+  }catch(e){ console.warn('[ConeOne 1.2] 항차 info 조회 실패 — 선박명 폴백', e); }
+  return {};
 }
 
 // 검수앱 베이사전(ship_bay_dict_v3) 캐시 — 검수앱이 매트릭스 빌더로 등록·동기화한 골격.
@@ -1574,6 +1593,39 @@ async function renderBayView(){
   // V7.59: 공용 로더(ensureConeBayDict)로 — 콘 계산과 같은 사전, 선박당 1회 캐시.
   const dictBays = await ensureConeBayDict();
 
+  // ═══ ConeOne 1.2: 검수앱 격자 모듈(ConeBayGrid)로 베이별 격자 파생 ═══
+  //   원인: 종전 콘앱은 관측된 row×tier 직사각형에 점선 빈칸을 깔아, 검수앱 베이플랜에 없는
+  //   유령 칸이 보였다(OBWH 2703E 신고). 이제 격자는 검수앱 BayPlan 규칙(번들 모듈)이 단일 소스.
+  //   번들 로드 실패 시 기존 방식 폴백 + "간이 격자 모드" 경고(조용한 격하 금지).
+  let gridD=null, gridL=null;
+  try{ await ensureMasterParser(8000); }catch(e){ /* 아래 masterGrid=false로 경고 표시 */ }
+  if(window.ConeBayGrid){
+    try{
+      // 검수앱과 같은 사전을 모듈이 보도록 — shipStructure.getFbBayDict()가 이 전역을 읽는다
+      window.__fbShipBayDict = await fbFetchBayDict();
+      const vinfo = await fbFetchVoyageInfo();
+      const shipInfo = {
+        imo: vinfo.imo || state.imo || '',
+        name: vinfo.vsl || (state.voyageKey||'').split('_')[0] || state.shipName || '',
+        voyageInfo: vinfo,
+      };
+      // 검수앱 BayPlan 입력과 동일: 전체 화물(ediRowsAll, 통과 포함) 우선 — 격자 구조용
+      const toMaster=(plan)=>{
+        const rs=(plan.ediRowsAll&&plan.ediRowsAll.length)?plan.ediRowsAll:plan.ediRows;
+        return (rs||[]).map(r=>({
+          bay:String(r.bay||''), row:String(r.row||'').padStart(2,'0'),
+          tier:String(r.tier||'').padStart(2,'0'), iso:String(r.iso||''), cn:String(r.cn||''),
+        }));
+      };
+      if(state.disch&&state.disch.ediRows&&state.disch.ediRows.length) gridD=window.ConeBayGrid.buildGrid(toMaster(state.disch), shipInfo);
+      if(state.stow&&state.stow.ediRows&&state.stow.ediRows.length) gridL=window.ConeBayGrid.buildGrid(toMaster(state.stow), shipInfo);
+    }catch(err){
+      console.warn('[ConeOne 1.2] 격자 모듈 실패 — 간이 격자 폴백', err);
+      gridD=null; gridL=null;
+    }
+  }
+  const masterGrid = !!(gridD||gridL);
+
   const existBays=new Set(allRows.map(x=>x.b));
   for(const bn of dictBays.keys()) existBays.add(bn);
   // 그룹키: 짝수 e → e(페어 대표). 홀수 o → 앞 짝수(o-1) 있으면 o-1, 없으면 o(단독).
@@ -1640,7 +1692,10 @@ async function renderBayView(){
   // POL/POD 짧게 (뒤 3자)
   const short=p=>{ p=String(p||'').toUpperCase(); return p.length>=5?p.slice(2,5):p; };
 
-  let html=resultTabsHtml('bay')+parserWarnHtml()+`<div class="card">
+  // ConeOne 1.2: 격자 모듈 실패 시 명시 경고 — 간이 해석 모드 경고 카드와 같은 패턴(조용한 격하 금지)
+  const gridWarnHtml = masterGrid ? '' :
+    '<div class="card" style="border-color:var(--accent)"><p style="margin:0;font-size:13px;line-height:1.6;color:var(--accent)">⚠ 간이 격자 모드 — 신호가 약해 본체 격자 모듈을 내려받지 못했습니다. 실제 선박에 없는 빈 칸(점선)이 보일 수 있습니다. 신호가 잡히면 작업을 다시 선택해 주세요.</p></div>';
+  let html=resultTabsHtml('bay')+parserWarnHtml()+gridWarnHtml+`<div class="card">
     <div class="share-head"><div class="sh-title">베이플랜 (양하·선적 비교)</div>
       <div class="sh-sub">${shipLabel} · ${today}</div></div>
     <div class="bv-zoom">
@@ -1681,6 +1736,156 @@ async function renderBayView(){
   if(totalBox) html+=`<div class="bv-totals">${totalBox}</div>`;
 
   html+=`<div class="bv-zoomwrap" id="bvZoomWrap"><div class="bv-zoomarea" id="bvZoomArea">`;
+
+  // ═══ ConeOne 1.2: 검수앱 격자(ConeBayGrid) 기반 렌더 — 격자 모듈이 있을 때의 기본 경로 ═══
+  //   격자의 칸만 그린다. 존재하지 않는 칸은 .bv-slot.none(안 그림), 40ft 그림자는 .bv-x(×).
+  if(masterGrid){
+    // 컨테이너 셀 — 기존 boxCell과 동일 모양 (폴백 경로와 독립 유지를 위해 복제)
+    const boxCellM=(c,flag)=>{
+      const ct=c[flag];
+      if(!ct) return '<td class="bv-slot off"></td>';
+      const sp=special(ct);
+      const ptk=isPtk(ct,flag);
+      const fe=ct.fe==='E'?'E':(ct.fe==='F'?'F':'');
+      const pol=short(ct.pol), pod=short(ct.pod);
+      const line3 = sp ? sp.label : (ct.size+'ft '+fe);
+      return `<td class="${cellCls(ct,flag)}" title="${ct.cn||''} row ${c.row} tier ${c.tier}">`
+        +`<div class="bvc-in">`
+        +`<div class="bvc-pp">${pol||'·'}/<b>${pod||'·'}</b>${ptk?'<span class="bvc-star">★</span>':''}</div>`
+        +`<div class="bvc-cn">${ct.cn?`<span class="bvc-cnh">${ct.cn.slice(0,-4)}</span><b class="bvc-cn4">${ct.cn.slice(-4)}</b>`:'—'}</div>`
+        +`<div class="bvc-l3">${sp?sp.sym+' ':''}${line3}</div>`
+        +`</div></td>`;
+    };
+    // 베이별 컨테이너 맵 (표시 대상은 기존과 동일 — ediRows)
+    const bayCont={};
+    for(const {r,flag,b} of allRows){
+      const m=(bayCont[b]=bayCont[b]||{});
+      const rw=String(r.row||'').padStart(2,'0'), tr=String(r.tier||'').padStart(2,'0');
+      const key=rw+'_'+tr;
+      if(!m[key]) m[key]={row:rw,tier:tr};
+      m[key][flag]=r;
+    }
+    // 페이지 합본 — 양하/선적 각자의 격자 (검수앱 모드별 베이플랜과 동일). 키 = 짝수 대표/단독 홀수.
+    const pmap=new Map();
+    const addAll=(g,flag)=>{ if(!g||!g.pages) return; for(const p of g.pages){
+      const gk=parseInt(p.evenBay!=null?p.evenBay:p.oddBay,10);
+      const e=pmap.get(gk)||{gk}; e[flag]=p; pmap.set(gk,e);
+    }};
+    addAll(gridD,'d'); addAll(gridL,'l');
+    const plist=[...pmap.values()].sort((a,b)=>a.gk-b.gk);
+    const CELL_PITCH=60;   // .bv-tab.box td 58px + border-spacing 2px
+    for(const pe of plist){
+      const ref=pe.d||pe.l;
+      const members=new Set();
+      [pe.d,pe.l].forEach(p=>{ if(!p) return; if(p.evenBay!=null) members.add(parseInt(p.evenBay,10)); if(p.oddBay!=null) members.add(parseInt(p.oddBay,10)); });
+      const cells={};
+      for(const mb of members){
+        const m=bayCont[mb]; if(!m) continue;
+        for(const k in m){
+          if(!cells[k]) cells[k]={row:m[k].row,tier:m[k].tier};
+          if(m[k].d) cells[k].d=m[k].d;
+          if(m[k].l) cells[k].l=m[k].l;
+        }
+      }
+      const cnt={d:0,l:0};
+      Object.values(cells).forEach(c=>{ if(c.d)cnt.d++; if(c.l)cnt.l++; });
+      // 섹션 그리드 — coord(칸 단위)·flex(직사각 골격, 검수앱 폴백과 동일)
+      const secGrid=(pg,sec,flag)=>{
+        const xset=new Set(pg.xMarks||[]);
+        const cellTd=(row,tier2)=>{
+          const c=cells[row+'_'+tier2];
+          if(c&&c[flag]) return boxCellM(c,flag);
+          if(c&&(c.d||c.l)) return '<td class="bv-slot off"></td>';
+          if(xset.has(row+'-'+tier2)) return '<td class="bv-x" title="인접 40ft 점유(그림자)">×</td>';
+          return '<td class="bv-slot"></td>';
+        };
+        if(pg.mode==='coord'){
+          const axis=sec==='deck'?pg.deckAxis:pg.holdAxis;
+          const rows=sec==='deck'?pg.deckRows:pg.holdRows;
+          if(!(axis&&axis.length)||!(rows&&rows.length)) return '';
+          const off=sec==='deck'?pg.deckOff:pg.holdOff;
+          const mg=Math.round((off||0)*CELL_PITCH);
+          let head='<tr><td class="bv-tl"></td>';
+          for(const r of axis) head+=`<td class="bv-rl">${r}</td>`;
+          head+='</tr>';
+          let g=`<table class="bv-tab box" style="margin-left:${mg}px"><tbody>`+head;
+          for(const tr of rows){
+            const has=new Set(tr.rows);
+            g+=`<tr><td class="bv-tl">${tr.tier}</td>`;
+            for(const r of axis){
+              if(!has.has(r)){ g+='<td class="bv-slot none"></td>'; continue; }   // 검수앱에 없는 칸 — 안 그림
+              g+=cellTd(r,tr.tier);
+            }
+            g+='</tr>';
+          }
+          g+='</tbody></table>';
+          return g;
+        }
+        const tiers=sec==='deck'?pg.deckTiersPadded:pg.holdTiersPadded;
+        const rowsArr=sec==='deck'?pg.deckRowsArr:pg.holdRowsArr;
+        const realTiers=(tiers||[]).filter(Boolean);
+        if(!realTiers.length||!(rowsArr&&rowsArr.length)) return '';
+        let head='<tr><td class="bv-tl"></td>';
+        for(const r of rowsArr) head+=`<td class="bv-rl">${r||''}</td>`;
+        head+='</tr>';
+        let g='<table class="bv-tab box"><tbody>'+head;
+        for(const t of realTiers){
+          const t2=String(t).padStart(2,'0');
+          g+=`<tr><td class="bv-tl">${t2}</td>`;
+          for(const r of rowsArr){
+            if(!r){ g+='<td class="bv-slot none"></td>'; continue; }
+            g+=cellTd(r,t2);
+          }
+          g+='</tr>';
+        }
+        g+='</tbody></table>';
+        return g;
+      };
+      const panelM=(flag,label,count)=>{
+        const pg=flag==='d'?pe.d:pe.l;
+        let p=`<div class="bv-col"><div class="bv-colhd ${flag}">${label} <span class="bv-cnt">${count}대</span></div>`;
+        if(!pg){ p+='<div class="empty-note" style="padding:8px 4px">이 작업에는 해당 베이가 없습니다</div></div>'; return p; }
+        const dHtml=secGrid(pg,'deck',flag), hHtml=secGrid(pg,'hold',flag);
+        if(dHtml) p+=`<div class="bv-sec">갑판</div>${dHtml}`;
+        if(hHtml) p+=`<div class="bv-sec">선창</div>${hHtml}`;
+        p+='</div>';
+        return p;
+      };
+      // 콘 개수 배지 — 콘 계산 그룹키(짝수 대표/단독 홀수)와 대응. 단독 홀수는 앞 짝수 키도 시도.
+      const cone=coneByGroup[pe.gk]!==undefined ? coneByGroup[pe.gk]
+        : ((pe.gk%2===1 && coneByGroup[pe.gk-1]!==undefined) ? coneByGroup[pe.gk-1] : undefined);
+      let coneBadge='';
+      if(cone){
+        const spots=(o)=>({ deck:Math.round(o.deck/4), ele:Math.round(o.ele/2), hold:o.hold });
+        const part=(o,lbl,cls)=>{
+          const sp=spots(o);
+          const segs=[];
+          if(o.deck) segs.push('데크콘 '+o.deck+'개('+sp.deck+'곳)');
+          if(o.ele)  segs.push('코끼리콘 '+o.ele+'개('+sp.ele+'곳)');
+          if(o.hold) segs.push('홀드콘 '+o.hold+'개');
+          return segs.length? `<span class="bv-cone ${cls}">${lbl} ${segs.join(' · ')}</span>` : '';
+        };
+        const d=part(cone.disch,'양하콘','cone-d'), s=part(cone.stow,'선적콘','cone-l');
+        let diffStr='';
+        if(hasD&&hasL){
+          const diff=(k)=>cone.stow[k]-cone.disch[k];
+          const dd=diff('deck'), de=diff('ele'), dh=diff('hold');
+          const seg=[];
+          const fmt=(v,lbl)=> v===0?'':(lbl+' '+(v>0?'+'+v:v));
+          [fmt(dd,'데크콘'),fmt(de,'코끼리콘'),fmt(dh,'홀드콘')].forEach(x=>{ if(x) seg.push(x); });
+          if(seg.length) diffStr=`<span class="bv-cone cone-diff">가감 ${seg.join(' · ')}</span>`;
+        }
+        if(d||s||diffStr) coneBadge=`<div class="bv-cones">${d}${s}${diffStr}</div>`;
+      }
+      html+=`<div class="bv-bay"><div class="bv-bayhd">${ref.title}</div>
+        ${coneBadge}
+        <div class="bv-split">`;
+      if(hasD) html+=panelM('d','양하',cnt.d);
+      if(hasL) html+=panelM('l','선적',cnt.l);
+      html+='</div></div>';
+    }
+  } else {
+  // ═══ 폴백(간이 격자 모드): 기존 콘앱 방식 — 격자 모듈을 못 받았을 때만 ═══
   // V7.52: 베이 골격 계산 함수 (사전 → 실데이터 합집합 → EDI 폴백 연속 보간)
   const computeSkel=(cells, memberBays)=>{
     let sk=null;
@@ -1858,6 +2063,7 @@ async function renderBayView(){
     if(hasL) html+=panel('l','선적',cnt.l);
     html+='</div></div>';
   }
+  }  // ConeOne 1.2: 폴백(간이 격자 모드) 분기 닫기
   html+=`</div></div>`;  // bv-zoomarea, bv-zoomwrap 닫기
   html+='</div>';
   ra.innerHTML=html;
