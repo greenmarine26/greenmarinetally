@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.3-01';   // 유령 로그인 배지 수리 — 앱 닫고 간 검수원(활동 30분 초과)은 로그아웃 취급
+export const APP_VERSION = 'TallyOne 1.3-02';   // 마감텔리 수화물(Lug) 키 교정 — forecast.lugg(유령키) -> luggageCns
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

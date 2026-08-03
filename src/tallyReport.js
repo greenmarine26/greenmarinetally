@@ -167,11 +167,17 @@ export function buildRF(containers) {
 
 /** V9.21: 페리(여객선) 집계 — 규격군(20 vs 40/HC/45) × F/E × 수화물(Lug) × 주간/야간.
  *  주야 분해: 완료 시각(completed[cn].at) 기준 07~17시=주간, 그 외=야간. 미완료는 총계에만.
- *  Lug: voyage.info.forecast(수화물 예보, V9.03)의 lugg 목록 — 모드 일치 시에만. */
+ *  Lug: voyage.info.forecast(수화물 예보, V9.03)의 luggageCns 목록 — 모드 일치 시에만.
+ *  TallyOne 1.4: 읽는 키를 fc.lugg -> fc.luggageCns 로 교정. 저장 경로(HomePage.jsx fbUpdateVoyageInfo)는
+ *    처음부터 luggageCns 로 저장했고, lugg 를 저장하는 코드는 저장소 어디에도 없었다. 그래서 Lug 4행 x IN/OUT
+ *    8칸과 PORTPERFORMANCE flug/elug 열이 상시 공란이었다. 구 데이터 호환을 위해 lugg 도 폴백으로 읽는다.
+ *    (실물 대조: OBWH 2692W 20ft Empty 41->40, 20ft Empty(Lug) 0->1) */
 export function buildFerry(voyage, disCs, loadCs) {
   const fc = voyage?.info?.forecast || null;
   const luggSet = new Set();
-  if (fc && Array.isArray(fc.lugg)) for (const cn of fc.lugg) luggSet.add(String(cn).toUpperCase());
+  const luggList = fc && (Array.isArray(fc.luggageCns) ? fc.luggageCns
+    : (Array.isArray(fc.lugg) ? fc.lugg : null));
+  if (luggList) for (const cn of luggList) luggSet.add(String(cn).toUpperCase());
   const zone = (voyage, mode, cs) => {
     const comp = sect(voyage, mode).completed || {};
     const recs = sect(voyage, mode).records || {};
