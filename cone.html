@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.4</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.5</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -664,7 +664,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 1.1-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.4';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 1.5';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1378,15 +1378,35 @@ async function renderLoloDeckPlan(){
   if(spd) h+=renderDeckPlanHtml(spd,'양하');
   if(spl) h+=renderDeckPlanHtml(spl,'선적');
   if(!h){ ra.innerHTML=renderLoloNotice(); return; }
-  // ConeOne 1.4: LOLO 콘 수량 — 일반 데크 규칙 그대로(사용자 확정): 40ft=데크콘 4/대, 20ft 단독=데크2+코끼리2.
-  //   규칙이 컨당 계산이라 단수 배치(7·6·6 등)와 무관하게 수량 동일.
-  const coneSum=(sp)=>{
-    if(!sp||!sp.decks) return null;
+  // ConeOne 1.5(사용자 확정 2026-08-03): LOLO 콘 규칙 — **1단(바닥)은 콘 없음**, 2단·3단 올릴 때만 대당 4개.
+  //   작업 순서: 열마다 1단 콘없이 → 2단 콘작업 → 3단 콘작업. 최대 8열 3단.
+  //   콘 = (전체 반수 − 1단 바닥 수) × 4. 바닥 수는 현장 쌓기에 따라 달라 입력식(기본값 = 3단 만적 가정 ⌈N/3⌉).
+  const loloCnt=(sp)=>{
+    if(!sp||!sp.decks) return 0;
     const decks=Array.isArray(sp.decks)?sp.decks:Object.values(sp.decks);
-    let n40=0,n20=0;
-    for(const dk of decks){ const sl=Array.isArray(dk.slots)?dk.slots:Object.values(dk.slots||{});
-      for(const x of sl){ if(x.empty||!x.cn) continue; if(String(x.iso||'').match(/^\s*2|^20/)) n20++; else n40++; } }
-    return {n40,n20,deck:n40*4+n20*2,ele:n20*2};
+    let n=0; for(const dk of decks){ const sl=Array.isArray(dk.slots)?dk.slots:Object.values(dk.slots||{});
+      for(const x of sl){ if(!x.empty&&x.cn) n++; } }
+    return n;
+  };
+  const calcRows=[];
+  for(const [sp,lb,mk] of [[spd,'양하','d'],[spl,'선적','l']]){
+    const n=loloCnt(sp); if(!n) continue;
+    const skey='lolo_floor_'+state.voyageKey+'_'+mk;
+    const def=Math.ceil(n/3);
+    let saved=parseInt(localStorage.getItem(skey),10); if(!Number.isFinite(saved)||saved<def||saved>n) saved=def;
+    calcRows.push({lb,mk,n,skey,floor:saved});
+  }
+  if(calcRows.length){
+    h+='<div class="card"><div style="padding:10px 12px;line-height:1.9;font-size:13px">'
+      +'🔩 <b>LOLO 콘 계산 — 1단 바닥은 콘 없음, 2·3단만 대당 4개</b> (사용자 확정 규칙)<br>';
+    for(const r of calcRows){
+      const cones=(r.n-r.floor)*4;
+      h+='<b>'+r.lb+'</b> '+r.n+'반 · 1단(바닥) <input type="number" id="loloFloor_'+r.mk+'" value="'+r.floor+'" min="'+Math.ceil(r.n/3)+'" max="'+r.n+'" '
+        +'style="width:58px;background:#16202e;color:#e8eef7;border:1px solid #3a4a5f;border-radius:5px;padding:3px 6px;font-size:13px" data-skey="'+r.skey+'" data-n="'+r.n+'" data-mk="'+r.mk+'">개 '
+        +'→ 2·3단 <b id="loloUp_'+r.mk+'">'+(r.n-r.floor)+'</b>반 = <b style="font-size:15px" id="loloCone_'+r.mk+'">콘 '+cones+'개</b><br>';
+    }
+    h+='<span style="opacity:.7;font-size:11px">기본값은 3단 만적 가정(⌈반수÷3⌉). 실제 1단에 놓인 개수로 고치면 즉시 재계산·저장됩니다. 예 7·6·6 → 바닥 7 → 콘 48개.</span>'
+      +'</div></div>';
   };
   const parts=[];
   for(const [sp,lb] of [[spd,'양하'],[spl,'선적']]){
@@ -1399,7 +1419,19 @@ async function renderLoloDeckPlan(){
       +'🔩 <b>콘 수량 (일반 데크 규칙 — 컨당 계산, 단수 배치 무관)</b><br>'+parts.join('<br>')
       +'</div></div>';
   }
-  ra.innerHTML=h;
+  ra.innerHTML=h;  ra.innerHTML=h;
+  // ConeOne 1.5: 바닥 수 입력 → 즉시 재계산 + 저장
+  for(const inp of ra.querySelectorAll('input[id^=loloFloor_]')){
+    inp.oninput=()=>{
+      const n=parseInt(inp.dataset.n,10); let v=parseInt(inp.value,10);
+      if(!Number.isFinite(v)) return;
+      if(v<0) v=0; if(v>n) v=n;
+      const up=n-v, mk=inp.dataset.mk;
+      const eu=document.getElementById('loloUp_'+mk), ec=document.getElementById('loloCone_'+mk);
+      if(eu) eu.textContent=up; if(ec) ec.textContent='콘 '+(up*4)+'개';
+      try{ localStorage.setItem(inp.dataset.skey, String(v)); }catch(e){}
+    };
+  }
 }
 async function runCalc(){
   showLoading('계산 중...');
