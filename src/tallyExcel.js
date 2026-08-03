@@ -338,6 +338,7 @@ const zv = (v) => (v ? v : null);   // 실물 규칙: 빈 값은 공란
 async function fillTemplate(D, ExcelJS) {
   // V9.19-03: 미보유 선박은 STANDARD(표준 GM 서식) 템플릿으로 — 드로잉 폴백은 최후 수단.
   //   OBWH(바우처형)만 예외 — 표준 서식이 오히려 틀리므로 드로잉 유지.
+  //   TallyOne 1.4: OBWH 전용 템플릿·좌표를 넣었으므로 이 예외는 이제 타지 않는다(안전망으로 유지).
   let tplCode = D.code;
   let M = TEMPLATE_MAP[D.code];
   if (!M && D.code !== 'OBWH') { M = TEMPLATE_MAP.STANDARD; tplCode = 'STANDARD'; D._stdNote = '이 배 전용 템플릿 없음 — 표준 GM 서식으로 생성'; }
@@ -782,11 +783,20 @@ function fillFerrySheets(wb, M, D, dstr) {
       row.getCell(12).value = 'NIL';
       const parts = [];
       if (o.hc) parts.push(`HC x ${o.hc}`);
-      if (o.rh) parts.push(`RH x ${o.rh}`);
+      // TallyOne 1.4: 리퍼 라벨은 규격별로 다르다 — 20'는 RF, 40'/45'는 RH (실물 관례·buildRF와 동일).
+      if (o.rh) parts.push(`${String(rr.sz).startsWith('20') ? 'RF' : 'RH'} x ${o.rh}`);
       let rm = parts.join(' , ');
       if (o.dg) rm += `${rm ? ' ' : ''}( DG x ${o.dg} )`;
       row.getCell(13).value = rm || null;
       man += o.n;
+    }
+    // TallyOne 1.4: 템플릿 행에 없는 분류에 값이 있으면 조용히 사라진다 — 반드시 드러낸다(3금지 3번).
+    {
+      const covered = new Set(cfg.rows.map((rr) => `${rr.sz}${rr.fe}`));
+      const missed = Object.entries(z.os).filter(([k, v]) => v && v.n > 0 && !covered.has(k));
+      if (missed.length) {
+        D._osMissed = (D._osMissed || []).concat(missed.map(([k, v]) => `${cfg.name} ${k}=${v.n}`));
+      }
     }
     const tr = ws.getRow(cfg.totalRow);
     // ⚠ H:I 병합 — 슬레이브(9)에 쓰면 마스터가 지워진다(실측). 마스터(8)만 쓴다. 잔재는 템플릿 빌드에서 이미 청소.

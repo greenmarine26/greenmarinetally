@@ -21,6 +21,26 @@ export default {
         cols: { f20: 3, f40: 4, fhc: 5, flug: 6, e20: 7, e40: 8, ehc: 9, elug: 10, ttl: 11 } },
     },
   },
+  // TallyOne 1.4: OBWH(OCEAN BLUE WHALE) — 연태훼리 카페리. TNJP와 같은 시간대축 바우처 계보.
+  //   실물 2691E&2692W에서 좌표 실측(9회차 대조로 행 고정 확인). PORTPERFORMANCE 시트는 없다.
+  //   RF는 1페이지(11~30) — 실물 I4가 '1/1'~'1/2'로 가변이라 초과분은 _overflow로 보고한다.
+  //   OS는 LUG 행이 따로 있다(TNJP엔 없음) — sz:'20LUG'.
+  OBWH: {
+    variant: 'ferry',
+    sheets: {
+      finalWork: { name: 'Final work rpt-voucher',
+        voyCells: ['C6', 'E6'],
+        inRows: { f20: 17, e20: 18, f20lug: 19, e20lug: 20, f40: 21, e40: 22, f40lug: 23, e40lug: 24, total: 27 },
+        outRows: { f20: 30, e20: 31, f20lug: 32, e20lug: 33, f40: 34, e40: 35, f40lug: 36, e40lug: 37, total: 40 },
+        cols: { total: 5, day: 6, night: 7 } },
+      // 실측 8/9회차: 양하는 전량 FULL(40E·45E 미발생). 미커버 분류가 생기면 _overflow로 드러난다.
+      osFerryIn:  { name: 'OS-IN',  rows: [{ r: 12, sz: '20', fe: 'F' }, { r: 13, sz: '20LUG', fe: 'F' }, { r: 14, sz: '40', fe: 'F' }, { r: 15, sz: '45', fe: 'F' }], totalRow: 16 },
+      osFerryOut: { name: 'OS-OUT', rows: [{ r: 12, sz: '20', fe: 'F' }, { r: 13, sz: '20', fe: 'E' }, { r: 14, sz: '20LUG', fe: 'E' }, { r: 15, sz: '40', fe: 'F' }, { r: 16, sz: '40', fe: 'E' }, { r: 17, sz: '45', fe: 'F' }, { r: 18, sz: '45', fe: 'E' }], totalRow: 19 },
+      seal:  { name: 'Act. Cntr-Seal No List', dataStart: 12, dataEnd: 32 },
+      // TallyOne 1.4: RF 2페이지(각 20행 = 40대). 2697E 실측 37대 — 1페이지만 두면 17대가 누락된다.
+      rfFerry: { name: 'RF condition report', pages: [[11, 30], [58, 77]], voyCells: ['E6', 'E53'] },
+    },
+  },
  "ATPR": {
   "sheets": {
    "finalWork": {

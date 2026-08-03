@@ -184,9 +184,12 @@ export function buildFerry(voyage, disCs, loadCs) {
     const mk = () => ({ total: 0, day: 0, night: 0 });
     const z = { f20: mk(), e20: mk(), f20lug: mk(), e20lug: mk(), f40: mk(), e40: mk(), f40lug: mk(), e40lug: mk(),
                 pp: { f20: 0, f40: 0, fhc: 0, flug: 0, e20: 0, e40: 0, ehc: 0, elug: 0 }, total: mk(),
+                // TallyOne 1.4: OBWH OS 시트는 20'(LUG) 행이 따로 있다(TNJP엔 없음) — LUG 버킷 신설.
                 os: { '20F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '20E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' },
                       '40F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '40E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' },
-                      '45F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '45E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' } } };
+                      '45F': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '45E': { n: 0, hc: 0, rh: 0, dg: 0, port: '' },
+                      '20LUGF': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '20LUGE': { n: 0, hc: 0, rh: 0, dg: 0, port: '' },
+                      '40LUGF': { n: 0, hc: 0, rh: 0, dg: 0, port: '' }, '40LUGE': { n: 0, hc: 0, rh: 0, dg: 0, port: '' } } };
     const fcOk = fc && fc.mode === mode;
     // V9.21-04: 일괄 마감 감지 — 완료 시각이 좁은 구간에 뭉치면(30분 내 20대+) 실제 작업시각이 아니다
     //   (26353 실측: 마감 일괄처리로 256대 전부 새벽 01시 → 주0/야256 오분해). 이때 주/야는 수기(빈칸).
@@ -200,7 +203,9 @@ export function buildFerry(voyage, disCs, loadCs) {
       const sz = tallySizeCol(c);
       const g20 = sz === '20';
       const fe = c.fe === 'E' ? 'e' : 'f';
-      const lug = fcOk && luggSet.has(String(c.cn).toUpperCase());
+      // TallyOne 1.4: 두 소스 병합 — ① 리스트(CLL) 자동 판별로 컨에 직접 선 플래그 ② 카톡 예보 luggageCns.
+      //   리스트가 진실에 가깝지만(선사 원본), 리스트가 없는 항차도 있으므로 OR로 둔다.
+      const lug = c.lugg === true || (fcOk && luggSet.has(String(c.cn).toUpperCase()));
       const key = `${fe}${g20 ? '20' : '40'}${lug ? 'lug' : ''}`;
       const e = z[key]; e.total += 1; z.total.total += 1;
       const at = comp[c.cn]?.at || comp[String(c.cn).toUpperCase()]?.at;
@@ -218,11 +223,18 @@ export function buildFerry(voyage, disCs, loadCs) {
       z.pp[pk] += 1;
       // OS(페리): 길이 3단(20/40/45 — 4x는 43·45Gx 포함 전부 40', L5/9x만 45') + HC/RH/DG 분해 (수석 실물 규칙)
       const oLen = /^2/.test(isoEff) ? '20' : (/^L|^9[05]/.test(isoEff) ? '45' : '40');
-      const oe = z.os[`${oLen}${fe.toUpperCase()}`];
+      // TallyOne 1.4: 수화물(Lug)은 전용 행으로 뺀다. LUG 버킷이 없는 규격(45')은 일반 행으로 폴백.
+      const oKey = (lug && z.os[`${oLen}LUG${fe.toUpperCase()}`]) ? `${oLen}LUG${fe.toUpperCase()}` : `${oLen}${fe.toUpperCase()}`;
+      const oe = z.os[oKey];
       oe.n += 1;
       const isRf = !!(c.rf || String(isoEff)[2] === 'R');
       if (isRf) oe.rh += 1;
-      else if (/^4[3-9]|^L|^9[05]/.test(isoEff)) oe.hc += 1;   // 하이큐브 드라이
+      // TallyOne 1.4: 20' 하이큐브(26xx 등 높이코드 5~9)가 어느 분기에도 안 걸려 hc 미집계였다
+      //   (2697E 실측: ZXJU0130463 ISO 2600 → 실물 REMARKS ' HC x 1' 인데 재현은 공란).
+      //   ^228 = 연태훼리 자사 벌크컨(CLL Tp/Sz=BC20). 같은 박스가 항차에 따라 2600/2280으로 코딩되는데
+      //     실물 텔리는 둘 다 HC로 계상한다(ZXJU0130463: 2697E=2600, 2692W=2280 — 실측).
+      //   ^2[5-9]가 아니라 ^2[56]으로 좁힌다 — ISO 6346 2번째 자리 8=4'3", 9=<4'는 반높이라 HC가 아니다.
+      else if (/^4[3-9]|^L|^9[05]|^2[56]|^228/.test(isoEff)) oe.hc += 1;   // 하이큐브 드라이
       if (c.dg) oe.dg += 1;
       if (!oe.port) oe.port = port3(mode === 'discharge' ? c.pol : c.pod) || '';
     }

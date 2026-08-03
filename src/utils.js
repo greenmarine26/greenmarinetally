@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.3-02';   // 마감텔리 수화물(Lug) 키 교정 — forecast.lugg(유령키) -> luggageCns
+export const APP_VERSION = 'TallyOne 1.4';   // OBWH 마감텔리 전용 서식 + CLL 수화물 자동판별 + RF 2페이지
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -2300,7 +2300,56 @@ export async function parseListExcel(arrayBuffer) {
       r.iso = r.iso.slice(0, -1) + 'F';
     }
   }
+  // ── TallyOne 1.4: 수화물(Lug) 자동 판별 — OBWH CLL 전용 게이트 ──────────────
+  //   근거: OBWH CLL 4회차 11리비전 전수 검증(2698W·2700W·2702W·2704W) 11/11 적중·반증 0.
+  //   판별식은 아래 순서로 첫 적중만 채택한다. 게이트를 먼저 걸어 다른 선박 리스트는 아예 타지 않는다.
+  //     1순위  맨 끝 화주 열이 공란인 행           (단독 11/11 — 가장 견고)
+  //     2순위  Weight공란 ∧ VGM공란 ∧ F/E=E ∧ 20ft (화주 열이 없는 시트1만 올 때)
+  //   ⚠ 중량 공란 단독은 쓰지 않는다 — 리비전 초기에 최대 37건이라 노이즈다(실측).
+  //   ⚠ BC20(2200kg·화주=연태훼리·Seal='W')은 수화물이 아니다 — 자사 엠티.
+  try {
+    const lugg = detectLuggageFromCLL(wb, XLSX);
+    if (lugg.length) {
+      const set = new Set(lugg);
+      for (const r of records) if (set.has(r.cn)) r.lugg = true;
+      return { records, luggCns: lugg };
+    }
+  } catch { /* 판별 실패는 리스트 파싱 전체를 막지 않는다 — 값이 없으면 기존대로 forecast 경로 사용 */ }
   return { records };
+}
+
+// TallyOne 1.4: OBWH CLL에서 수화물 컨번호를 뽑는다. CLL 서명이 안 맞으면 빈 배열(게이트).
+//   CLL 서명 = 헤더에 'Cntr. No' + 'Seal No.' + 'Tp/Sz' + 'VGM weight' 가 모두 있는 시트.
+export function detectLuggageFromCLL(wb, XLSX) {
+  const out = [];
+  for (const sn of wb.SheetNames) {
+    const grid = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '', raw: false });
+    if (!grid || grid.length < 3) continue;
+    const hdr = (grid[0] || []).map((h) => String(h || '').trim().toLowerCase().replace(/[.\s]/g, ''));
+    const idx = (name) => hdr.indexOf(name);
+    const iCn = idx('cntrno'); const iSeal = idx('sealno'); const iTp = idx('tp/sz');
+    const iWt = idx('weight'); const iFe = idx('f/e'); const iVgm = idx('vgmweight');
+    if (iCn < 0 || iSeal < 0 || iTp < 0 || iVgm < 0) continue;   // ← 게이트: CLL이 아니면 통과
+    // 화주 열 = VGM 뒤쪽의 이름 없는 마지막 열. 있으면 1순위, 없으면 2순위로 간다.
+    let iShip = -1;
+    for (let c = iVgm + 1; c < (grid[0] || []).length; c++) if (!hdr[c]) iShip = c;
+    const rows = grid.slice(1).filter((r) => String(r[iCn] || '').trim());
+    if (!rows.length) continue;
+    const cnOf = (r) => String(r[iCn] || '').trim().toUpperCase().replace(/\s/g, '');
+    let hit = [];
+    if (iShip >= 0) {
+      hit = rows.filter((r) => !String(r[iShip] || '').trim());          // 1순위
+    }
+    if (!hit.length) {
+      hit = rows.filter((r) => !String(r[iWt] || '').trim()               // 2순위
+        && !String(r[iVgm] || '').trim()
+        && String(r[iFe] || '').trim().toUpperCase() === 'E'
+        && /^(DC|GP)?20/i.test(String(r[iTp] || '').trim()));
+    }
+    // 실물 관례상 항차당 1대다. 2대 이상 잡히면 판별이 흐려진 것이므로 채택하지 않는다(조용한 오염 방지).
+    if (hit.length === 1) { const cn = cnOf(hit[0]); if (cn && !out.includes(cn)) out.push(cn); }
+  }
+  return out;
 }
 
 // === X-RAY Parser ===
