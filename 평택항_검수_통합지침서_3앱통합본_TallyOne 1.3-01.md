@@ -1,4 +1,4 @@
-﻿> (저장소 사본) 정본은 G:\내 드라이브\CLAUDE_SHARED\★앱_통합지침서.md — 두 권 체계(작업표준+앱지침서)는 CLAUDE_SHARED 참조.
+﻿> (저장소 사본) 정본은 G:\내 드라이브\CLAUDE_SHARED\★앱_통합지침서.md
 
 # ?????듯빀吏移⑥꽌 ??TallyOne 쨌 MailPilot 쨌 ConeOne (?ы깂??1.0 ?몃?)
 
