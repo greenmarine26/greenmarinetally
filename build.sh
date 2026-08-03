@@ -27,7 +27,7 @@ if [ -n "$APPVER" ]; then
   # V7.91: V[0-9.]* → V[0-9.-]* — 빌드번호 하이픈을 패턴이 못 잡아 라벨이 누적 오염되던 버그 수정.
   # ConeOne 1.0: 콘앱 라벨은 검수앱 버전이 아니라 콘앱 자체 버전(__CONEV, cone.html 단일 소스)에서 동기화.
   CONEVER=$(grep -oE "window.__CONEV='[^']*'" public/cone.html | head -1 | sed -E "s/.*'([^']*)'.*/\\1/")
-  sed -i "s/(주)그린마린 · \(V[0-9.-]*\|ConeOne [0-9.]*\)/(주)그린마린 · $CONEVER/" public/cone.html
+  sed -i "s/(주)그린마린 · \(V[0-9.-]*\|ConeOne [0-9.-]*\)/(주)그린마린 · $CONEVER/" public/cone.html
   echo "✓ cone.html 화면 버전 → $CONEVER 동기화(콘앱 자체 버전)"
   # V8.98-05: 콘앱 카고플랜 모듈 캐시키(__APPV)도 버전과 동기화 — 고정값(C7.67)이라
   #   cone-cargoplan.js를 새로 배포해도 폰이 옛 번들을 캐시로 계속 쓰던 사고 방지.

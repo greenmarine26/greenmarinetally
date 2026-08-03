@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.2</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.2-01</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -663,8 +663,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 1.1-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.2';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 1.1-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 1.2-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1292,8 +1292,29 @@ function enterResultMode(tab){
   }
   setTimeout(()=>{ const ra=document.getElementById('resultArea'); if(ra) ra.scrollIntoView({behavior:'smooth', block:'start'}); }, 120);
 }
+// ConeOne 1.2-01: LOLO 선박 판정 — 검수앱 선박정책(번들 ConeShipPolicy)이 단일 소스.
+//   배경: 수집기가 RZOR 덱플랜 좌표(합성 bay/tier)를 컨에 넣기 시작하면서 베이뷰·콘 계산이
+//   이를 진짜 베이로 오인해 이상 격자·무의미한 콘 수량이 보였다(사용자 신고 2026-08-03).
+function isLoloShip(){
+  const vsl = state.shipName || (state.disch&&state.disch.vessel) || (state.stow&&state.stow.vessel) || '';
+  const hints = [state.voyageKey||''];
+  try{
+    if(window.ConeShipPolicy && window.ConeShipPolicy.isLolo) return !!window.ConeShipPolicy.isLolo(vsl, {}, hints);
+  }catch(e){}
+  const u=(vsl+' '+hints.join(' ')).toUpperCase();
+  return /RZOR|RIZHAO\s*ORIENT/.test(u) || /(^|_)R0\d{2,3}[EW]/.test((state.voyageKey||'').toUpperCase());
+}
+function renderLoloNotice(){
+  return '<div class="card"><div style="padding:14px 12px;line-height:1.7">'
+    +'<b style="font-size:15px">⚓ LOLO 선박 (RIZHAO ORIENT)</b><br>'
+    +'이 배는 베이 구조가 없는 LOLO 검수 선박입니다 — <b>콘(고정장치) 작업 대상이 아닙니다.</b><br>'
+    +'베이플랜·콘 작업표 대신 <b>검수앱의 LOLO 탭(덱플랜)</b>으로 검수합니다.'
+    +'</div></div>';
+}
 async function runCalc(){
   showLoading('계산 중...');
+  // ConeOne 1.2-01: LOLO 선박은 콘 계산 없음 — 합성 덱플랜 좌표 오계산 방지.
+  if(isLoloShip()){ const ra=document.getElementById('resultArea'); if(ra) ra.innerHTML=renderLoloNotice(); return; }
   // V7.59: 베이사전(실구조) 먼저 로드 — 전용 데크·연속 판정을 구조 기준으로 (오프라인이면 폴백)
   const __dict = await ensureConeBayDict();
   setTimeout(()=>{
@@ -1582,6 +1603,8 @@ function openCargoPlanV2Auto(){
 
 async function renderBayView(){
   const ra=document.getElementById('resultArea');
+  // ConeOne 1.2-01: LOLO 선박은 베이뷰 없음(검수앱과 동일 — LOLO 탭 안내).
+  if(isLoloShip()){ ra.innerHTML=renderLoloNotice(); return; }
   ra.innerHTML='<div class="card"><div class="empty-note">베이플랜 불러오는 중...</div></div>';
   // 컨테이너 수집: 먼저 존재 베이 파악 → 그룹키(짝수=페어 대표, 단독 홀수)로 묶음.
   //   40ft는 짝수+홀수 두 베이를 한 자리로 차지 → 한 격자에 그려야 7번이 따로 떠보이지 않음.

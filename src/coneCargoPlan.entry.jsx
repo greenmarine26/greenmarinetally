@@ -7,6 +7,7 @@ import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
 import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel } from './utils.js';   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용
 // ConeOne 1.2: 베이뷰 격자 단일 소스 — 검수앱 BayPlan이 쓰는 바로 그 모듈들을 임포트해 재사용
 import { getShipBayDictData } from './shipStructure.js';
+import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
 import { enrichBayDef } from './bayDictAutoEnrich.js';
 import { buildEmptyBayRenderData } from './cargoPlanCore.js';
 import { extractShipMetaFromVoyage } from './shipMatrixBuilder.js';
@@ -36,6 +37,9 @@ window.ConeCargoPlan = { open, close };
 //   콘앱 내부 약식 파서의 Full/Empty 미인식(실측: EQD 상태 +5/+4 안 읽음)·ISO 불일치 해소.
 //   숫자코드 BAPLIE(CASP)·IFCSUM(RIZHAO)도 parseBAPLIE가 내부 라우팅하므로 콘앱에서 그대로 처리됨.
 window.ConeParse = { parseBAPLIE, parseAscFile };
+
+// ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.
+window.ConeShipPolicy = { isLolo: isLoloShipByPolicy };
 
 // ═══════════════════════════════════════════════════════════════════
 // ConeOne 1.2: 콘앱 베이뷰 격자 파생 — 검수앱 BayPlan.jsx 규칙 그대로 (단일 소스)
