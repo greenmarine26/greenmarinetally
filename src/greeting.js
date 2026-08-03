@@ -153,53 +153,6 @@ function buildWorkHoursForecast(hourly) {
   return lines;
 }
 
-// M3.68: 근무 시간대 음성 요약 (자연스러운 한 문장)
-function buildWorkForecastVoice(hourly) {
-  if (!hourly || hourly.length < 4) return '';
-
-  // 3시간, 6시간, 9시간 후의 의미있는 변화 찾기
-  const slots = [
-    { i: 3, label: '3시간 후' },
-    { i: 6, label: '6시간 후' },
-    { i: 9, label: '9시간 후' },
-  ].filter(s => s.i < hourly.length);
-
-  const temps = slots.map(s => hourly[s.i].temp);
-  const tempMin = Math.min(...temps);
-  const tempMax = Math.max(...temps);
-
-  // 1) 큰 기온 변화
-  if (tempMax - tempMin >= 8) {
-    return `근무 중 기온은 ${Math.round(tempMin)}도에서 ${Math.round(tempMax)}도까지 변할 예정입니다`;
-  }
-
-  // 2) 평균 기온 안내
-  const avgTemp = Math.round((temps.reduce((a, b) => a + b, 0)) / temps.length);
-
-  // 3) 비/눈 발생 시각 찾기
-  for (const s of slots) {
-    const h = hourly[s.i];
-    const w = describeWeather(h.weatherCode);
-    const hour = new Date(h.time).getHours();
-
-    if (w.kind === 'thunder') {
-      return `${hour}시쯤 천둥번개 예보, 안전 주의하세요`;
-    }
-    if (w.kind === 'snow') {
-      return `${hour}시쯤 눈 예보, 미끄럼 주의하세요`;
-    }
-    if (h.precipitation >= 5) {
-      return `${hour}시쯤 비가 강해질 예정입니다`;
-    }
-    if (h.windSpeed >= 12) {
-      return `${hour}시쯤 강풍 ${Math.round(h.windSpeed)}미터 예보입니다`;
-    }
-  }
-
-  // 4) 평온
-  return `근무 시간 동안 ${avgTemp}도 안팎으로 평온합니다. 좋은 하루 되세요`;
-}
-
 // 로그인 인사 메시지 생성
 export function buildGreetingMessage(name, weather) {
   const now = new Date();
@@ -219,7 +172,6 @@ export function buildGreetingMessage(name, weather) {
   const greeting = tg[Math.floor(Math.random() * tg.length)];
 
   let weatherLine = '';
-  let voiceWeather = '';
 
   if (weather) {
     const w = describeWeather(weather.weatherCode);
@@ -230,34 +182,25 @@ export function buildGreetingMessage(name, weather) {
     // 위험 기상 우선
     if (w.kind === 'thunder') {
       weatherLine = '⛈ 천둥번개! 위험 기상 - 작업 중단 검토 필요';
-      voiceWeather = '천둥번개입니다. 위험 기상이니 작업 중단을 검토하세요';
     } else if (wind >= 12) {
       weatherLine = `💨 강풍 ${wind.toFixed(0)}m/s - 안전 주의!`;
-      voiceWeather = `강풍 경보. 풍속 ${wind.toFixed(0)}미터입니다. 안전 주의 부탁드립니다`;
     } else if (rain >= 5) {
       weatherLine = `🌧 비 ${rain.toFixed(0)}mm/h - 미끄럼 주의`;
-      voiceWeather = `비가 많이 옵니다. 미끄럼 주의하세요`;
     } else if (w.kind === 'snow') {
       weatherLine = `❄️ 눈 - 미끄럼 매우 주의`;
-      voiceWeather = `눈이 옵니다. 미끄럼 매우 주의하세요`;
     } else if (w.kind === 'rain' || w.kind === 'drizzle') {
       weatherLine = `${w.emoji} ${w.label} - 우비 챙기세요`;
-      voiceWeather = `오늘 ${w.label}이 와요. 우비 챙기세요`;
     } else if (w.kind === 'fog') {
       weatherLine = `🌫 안개 - 시야 확보 주의`;
-      voiceWeather = `안개입니다. 시야 확보 주의하세요`;
     } else if (t >= 30) {
       const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
       weatherLine = `🥵 ${t.toFixed(0)}°C 더위${windInfo} - 수분 보충 잊지 마세요`;
-      voiceWeather = `오늘 ${t.toFixed(0)}도. 더우니 수분 보충 잊지 마세요`;
     } else if (t <= 0) {
       const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
       weatherLine = `🥶 ${t.toFixed(0)}°C 추위${windInfo} - 따뜻하게 입으세요`;
-      voiceWeather = `오늘 영하 ${Math.abs(t).toFixed(0)}도. 추우니 따뜻하게 입으세요`;
     } else if (t <= 5) {
       const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
       weatherLine = `❄️ ${t.toFixed(0)}°C 쌀쌀${windInfo} - 따뜻하게`;
-      voiceWeather = `오늘 ${t.toFixed(0)}도. 쌀쌀하니 따뜻하게 입으세요`;
     } else {
       // M3.88: 평온한 날씨에도 풍속 정보 표시 (작업 도움)
       const windInfo = wind >= 5 ? ` · 바람 ${wind.toFixed(0)}m/s` : '';
@@ -273,13 +216,10 @@ export function buildGreetingMessage(name, weather) {
 
   // M3.68: 예보 변화 멘트 (듣기 좋게)
   let forecastLine = '';
-  let voiceForecast = '';
   if (weather && weather.hourly && weather.hourly.length > 0) {
     const w = describeWeather(weather.weatherCode);
     forecastLine = buildForecastNarration(weather.hourly, w.kind);
     if (forecastLine) {
-      // 음성용 (이모지 제거)
-      voiceForecast = forecastLine.replace(/[⚠️⛈❄️💨🌧☔🌤🌡✨⭐]/g, '').trim();
       lines.push(forecastLine);
     }
   }
@@ -287,24 +227,9 @@ export function buildGreetingMessage(name, weather) {
   // M3.68: 근무 시간대 예보 라인 (8~9시간)
   const workForecast = weather ? buildWorkHoursForecast(weather.hourly) : [];
 
-  // 음성용 (이모지/기호 제거)
-  const voiceLines = [
-    `안녕하세요`,
-    greeting.replace(/[☀️🌅🌞💪🍱🥤🌤☕🌆🌙⭐]/g, '').trim(),
-  ];
-  if (voiceWeather) voiceLines.push(voiceWeather);
-  if (voiceForecast) voiceLines.push(voiceForecast);
-
-  // M3.68: 근무 시간대 음성 - 의미있는 변화만 짧게
-  if (workForecast && workForecast.length >= 2) {
-    const summary = buildWorkForecastVoice(weather.hourly);
-    if (summary) voiceLines.push(summary);
-  }
-
   return {
     lines,                          // 화면 표시용
     workForecast,                   // M3.68: 근무 시간대 예보 라인 배열
-    voice: voiceLines.join('. '),   // 음성용
     timeOfDay: tod,
     weather,
   };
@@ -317,33 +242,26 @@ export function buildFarewellMessage(name, weather, workDurationMs) {
   const tod = getTimeOfDay(hour);
 
   const lines = [`수고하셨어요!`];
-  const voiceLines = [`수고하셨어요`];
 
   // 작업 시간이 길었으면 강조
   if (workDurationMs && workDurationMs > 0) {
     const hours = workDurationMs / (1000 * 60 * 60);
     if (hours >= 8) {
       lines.push(`⏰ 오늘 ${hours.toFixed(1)}시간 작업하셨습니다`);
-      voiceLines.push(`오늘 ${hours.toFixed(0)}시간 작업하셨습니다`);
     } else if (hours >= 6) {
       lines.push(`⏰ 오늘 ${hours.toFixed(1)}시간 정말 수고하셨어요`);
-      voiceLines.push(`오늘 ${hours.toFixed(0)}시간 정말 수고하셨어요`);
     }
   }
 
   // 시간대별 마무리
   if (tod === 'night') {
     lines.push('🌙 안전 귀가하세요');
-    voiceLines.push('안전 귀가하세요. 푹 쉬세요');
   } else if (tod === 'evening') {
     lines.push('🌆 푹 쉬세요');
-    voiceLines.push('푹 쉬세요');
   } else if (tod === 'dawn' || tod === 'morning') {
     lines.push('🌟 일찍 끝나셨네요! 좋은 하루 되세요');
-    voiceLines.push('좋은 하루 보내세요');
   } else {
     lines.push('☕ 잠시 쉬세요');
-    voiceLines.push('잠시 쉬세요');
   }
 
   // 날씨 기반 마무리
@@ -353,25 +271,19 @@ export function buildFarewellMessage(name, weather, workDurationMs) {
 
     if (w.kind === 'thunder') {
       lines.push('⛈ 위험 기상에 정말 고생 많으셨어요');
-      voiceLines.push('위험 기상에 정말 고생 많으셨어요');
     } else if (w.kind === 'rain' || w.kind === 'drizzle') {
       lines.push('☔ 비 조심해서 귀가하세요');
-      voiceLines.push('비 조심해서 귀가하세요');
     } else if (w.kind === 'snow') {
       lines.push('❄️ 눈길 미끄럼 주의 귀가하세요');
-      voiceLines.push('눈길 미끄럼 주의해서 귀가하세요');
     } else if (t >= 30) {
       lines.push('🥵 더위에 정말 고생 많으셨어요. 시원한 물 한 잔!');
-      voiceLines.push('더위에 정말 고생 많으셨어요');
     } else if (t <= 0) {
       lines.push('🥶 추위에 수고 많으셨어요. 따뜻한 곳에서 쉬세요');
-      voiceLines.push('추위에 수고 많으셨어요');
     }
   }
 
   return {
     lines,
-    voice: voiceLines.join('. '),
     workHours: workDurationMs ? (workDurationMs / 1000 / 60 / 60) : 0,
   };
 }

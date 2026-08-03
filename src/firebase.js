@@ -25,8 +25,9 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const storage = getStorage(app);  // M6.40
 
-// === M6.40: STOWAGE PDF 보관 (30일 자동 폐기) ===
-const STOWAGE_PDF_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;  // 30일
+// === M6.40: STOWAGE PDF 보관 ===
+// V9.57(G14): 참조 0인 죽은 export 삭제 — fbCleanupExpiredStowagePdfs·fbDeleteStowagePdf
+//   (저장소 전체 grep으로 호출부 없음 확인, 2026-08-03).
 
 // 선박 코드별 PDF 업로드 — 같은 선박 새 PDF 등록 시 이전 자동 삭제
 export async function fbUploadStowagePdf(shipCode, file) {
@@ -54,47 +55,6 @@ export async function fbUploadStowagePdf(shipCode, file) {
   return { url, path, name: file.name, uploadedAt: ts };
 }
 
-// 만료된 PDF 자동 폐기 (30일 초과)
-// 클라이언트 측 정리 — Spark 플랜에 Cloud Function 없음
-//   앱 진입 시 백그라운드로 호출, 사용자 액션 0
-export async function fbCleanupExpiredStowagePdfs() {
-  try {
-    const folderRef = storageRef(storage, 'stowage-pdf');
-    const list = await listAll(folderRef);
-    const now = Date.now();
-    let removed = 0;
-    for (const item of list.items) {
-      // 파일명에서 timestamp 추출: {shipCode}_{ts}_{originalName}
-      const m = item.name.match(/^[^_]+_(\d+)_/);
-      if (!m) continue;
-      const ts = parseInt(m[1], 10);
-      if (!Number.isFinite(ts)) continue;
-      if (now - ts > STOWAGE_PDF_RETENTION_MS) {
-        try {
-          await deleteObject(item);
-          removed++;
-        } catch (_) {}
-      }
-    }
-    return removed;
-  } catch (e) {
-    console.warn('[M6.40] PDF 자동 정리 실패:', e);
-    return 0;
-  }
-}
-
-// PDF 삭제 (개별)
-export async function fbDeleteStowagePdf(path) {
-  try {
-    const r = storageRef(storage, path);
-    await deleteObject(r);
-    return true;
-  } catch (e) {
-    console.warn('[M6.40] PDF 삭제 실패:', e);
-    return false;
-  }
-}
-
 // M6.45: 단순 get/set (정책 1일 1회 등 단순 키-값 저장용)
 export async function fbGetSimple(path) {
   try {
@@ -120,8 +80,18 @@ const voyageRef = (key) => ref(db, `voyages/${key}`);
 const sectionRef = (key, mode) => ref(db, `voyages/${key}/${mode}`);
 
 // === 항차 (양하/선적 통합) ===
+// V9.57(G1): update(voyageRef, { info })는 info 자식 전체를 통째로 교체해, 수집기가 먼저 채운
+//   terminalStatus·planDate·planSrc·forecast·departBadgeAt·autoRegistered 등이 증발했다.
+//   이미 있는 항차면 info 하위 경로에 부분 병합(update)으로 전환 — 기존 필드 보존.
+//   신규 항차면 현행대로 통째 생성. 호출부(HomePage 338, MixerUploadModal 430) 시그니처 불변.
 export async function fbCreateVoyage(voyageKey, info) {
-  await update(voyageRef(voyageKey), { info });
+  const infoRef = ref(db, `voyages/${voyageKey}/info`);
+  const snap = await get(infoRef);
+  if (snap.exists()) {
+    await update(infoRef, info);          // 부분 병합 — 수집기 필드 보존
+  } else {
+    await update(voyageRef(voyageKey), { info });   // 신규 생성 — 기존 동작
+  }
 }
 
 export async function fbDeleteVoyage(voyageKey) {
@@ -483,9 +453,7 @@ export async function fbSavePlanDraft(voyageKey, draft, by) {
   await set(ref(db, path), { ...draft, _at: Date.now(), _by: by || '' });
 }
 
-export async function fbClearPlanDraft(voyageKey) {
-  await remove(ref(db, `voyages/${voyageKey}/${PLAN_MODE}/planDraft`));
-}
+// V9.57(G14): fbClearPlanDraft 삭제 — 저장소 전체 grep 참조 0 확인.
 
 // 확정 — planDraft(또는 넘겨받은 positions)를 ediContainers 계획 위치로 커밋.
 //   최초 1회만 EDI 원본을 bay_edi0/row_edi0/tier_edi0에 백업한다(복원용).
@@ -703,14 +671,8 @@ export function fbSubscribeVoyages(callback) {
 }
 
 
-// 단일 항차 구독
-export function fbSubscribeVoyage(voyageKey, callback) {
-  const r = voyageRef(voyageKey);
-  const unsub = onValue(r, (snap) => {
-    callback(snap.val() || null);
-  });
-  return unsub;
-}
+// V9.57(G14): fbSubscribeVoyage(단일 항차 구독) 삭제 — 저장소 전체 grep 참조 0 확인
+//   (App.jsx는 복수형 fbSubscribeVoyages만 사용).
 
 // === 검수원 ===
 export async function fbSetInspector(name) {
@@ -902,7 +864,8 @@ export async function fbAddShipVoyage(imo, voyageKey, voyageMeta) {
 // M6.15: 컨테이너 검수 완료 시 ships 노드에 inspector 카운트 추가
 //   동일 inspector 여러 컨 처리 시 카운트 증가
 //   항차 삭제되어도 ships에 누적 보존됨
-export async function fbAddShipVoyageInspector(imo, voyageKey, inspectorName, mode) {
+// V9.57(G14): 외부 참조 0 (내부 _tallyInspector에서만 호출) — export 제거, 내부 함수로 전환.
+async function fbAddShipVoyageInspector(imo, voyageKey, inspectorName, mode) {
   if (!imo || !voyageKey || !inspectorName) return;
   const r = ref(db, `ships/${imo}/voyages/${voyageKey}/inspectors/${inspectorName}`);
   const snap = await get(r);
@@ -946,20 +909,7 @@ export async function fbAddShipStats(imo, stats, voyageKey) {
   });
 }
 
-// M7.15: 모든 선박의 작업 통계(stats + voyages 집계)만 초기화. 베이 구조(structure)는 보존.
-//   기존 잘못 쌓인 양하/선적 대수를 깨끗이 지우고 6월부터 다시 집계하기 위함.
-//   ships/{imo}/structure, name, imo 등은 그대로 두고 stats/voyages만 제거.
-export async function fbResetAllShipStats() {
-  const snap = await get(ref(db, 'ships'));
-  const all = snap.val() || {};
-  let cleared = 0;
-  for (const imo of Object.keys(all)) {
-    await set(ref(db, `ships/${imo}/stats`), null);     // 누적 통계 제거
-    await set(ref(db, `ships/${imo}/voyages`), null);   // 항차별 집계 제거
-    cleared++;
-  }
-  return cleared;  // 초기화된 선박 수
-}
+// V9.57(G14): fbResetAllShipStats(M7.15 일회성 초기화 도구) 삭제 — 저장소 전체 grep 참조 0 확인.
 
 // M7.15: 한 섹션(discharge 또는 loading)의 평택분 컨테이너 수.
 //   discharge 섹션 = 양하 평택분, loading 섹션 = 선적 평택분. (pol 또는 pod가 평택)
@@ -1007,19 +957,11 @@ export function tallyVoyagesByShip(voyages) {
 //   삭제돼도 ships/{imo}/stats에 총 양하/선적 대수 영구 보존.
 export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
   if (!voyage) return false;
-  // 양하/선적 평택분 컨테이너 수 집계 (변종 포함 기준)
-  const countSection = (sec) => {
-    if (!sec) return 0;
-    const edi = sec.ediContainers;
-    if (!edi || typeof edi !== 'object') return 0;
-    let n = 0;
-    for (const c of Object.values(edi)) {
-      if (_isPtk(c.pol) || _isPtk(c.pod)) n++;
-    }
-    return n;
-  };
-  const discharge = countSection(voyage.discharge);
-  const loading = countSection(voyage.loading);
+  // V9.57(G2): 보관소 평택분 집계를 화면 규칙과 통일 — 모드별(양하=POD평택, 선적=POL평택) + Set 중복 제거.
+  //   종전 POL∨POD 판정은 평택발 타항행/타항발 평택행이 양쪽에 이중 집계됐다(옛 규칙 잔존).
+  //   _ptkCountOfSection(수석대시보드 집계와 동일 함수) 재사용으로 단일 소스화.
+  const discharge = _ptkCountOfSection(voyage.discharge, 'discharge');
+  const loading = _ptkCountOfSection(voyage.loading, 'loading');
   const info = voyage.info || {};
   // V8.43: vsl 폴백 등으로 같은 배가 다른 키에 갈라지지 않게 정식 키로 수렴.
   const shipId = resolveShipKey(imo || info.imo || info.callsign || (info.vsl ? info.vsl.toUpperCase().replace(/\s+/g, '') : ''));
@@ -1091,7 +1033,34 @@ export async function fbRestoreVoyageFromArchive(voyageKey) {
 }
 
 // ── M7.18b: archive 목록 조회 (복원 UI용) ──
+// V9.57(G3): archive 전체 읽기(항차당 수 MB 데이터를 목록 때문에 통째로 다운로드) 제거.
+//   REST shallow=true로 키만 받고, 항차별 메타 필드(_archivedAt·_discharge_ptk·_loading_ptk·info/vsl —
+//   실제 저장 구조가 archive/{key} 최상위 평면이라 meta 노드가 따로 없음)만 개별 get.
+//   REST 실패 시 기존 전체 읽기로 폴백 + console.warn.
 export async function fbListArchive() {
+  try {
+    const res = await fetch(`${firebaseConfig.databaseURL}/archive.json?shallow=true`);
+    if (!res.ok) throw new Error(`shallow HTTP ${res.status}`);
+    const keys = Object.keys((await res.json()) || {});
+    const out = await Promise.all(keys.map(async (key) => {
+      const [at, dp, lp, vsl] = await Promise.all([
+        get(ref(db, `archive/${key}/_archivedAt`)),
+        get(ref(db, `archive/${key}/_discharge_ptk`)),
+        get(ref(db, `archive/${key}/_loading_ptk`)),
+        get(ref(db, `archive/${key}/info/vsl`)),
+      ]);
+      return {
+        voyageKey: key,
+        vsl: (vsl.exists() && vsl.val()) || key.split('_')[0] || '',
+        archivedAt: (at.exists() && at.val()) || 0,
+        discharge_ptk: (dp.exists() && dp.val()) || 0,
+        loading_ptk: (lp.exists() && lp.val()) || 0,
+      };
+    }));
+    return out.sort((a, b) => b.archivedAt - a.archivedAt);
+  } catch (e) {
+    console.warn('[fbListArchive] shallow 목록 실패 — 전체 읽기로 폴백:', e);
+  }
   const snap = await get(ref(db, 'archive'));
   if (!snap.exists()) return [];
   const out = [];
@@ -1343,10 +1312,7 @@ export async function fbDeleteWorkReport(voyageKey, ts) {
   await set(ref(db, `voyages/${voyageKey}/reports/${ts}`), null);
 }
 
-// 단일 사진 삭제
-export async function fbDeletePhotoReport(voyageKey, ts) {
-  await set(ref(db, `voyages/${voyageKey}/photos/${ts}`), null);
-}
+// V9.57(G14): fbDeletePhotoReport(단일 사진 삭제) 삭제 — 저장소 전체 grep 참조 0 확인.
 
 // 한 항차의 모든 작업 보고 삭제
 export async function fbClearAllReports(voyageKey) {
@@ -1510,7 +1476,9 @@ export async function fbReplacePortMisBatch(ships, opts = {}) {
           p === 'BUSAN' || p === 'INCHEON' || p === 'MASAN' || p === 'ULSAN' || p === 'GWANGYANG') {
         return false;
       }
-      return true;  // 알 수 없는 값도 평택 (안전 디폴트)
+      // V9.57(G7-①): 미상 항만은 삭제하지 않는다 — 종전 '알 수 없는 값도 평택 간주 삭제'는
+      //   다른 항만 데이터를 평택 엑셀 업로드 한 번에 지울 수 있는 위험 경로였다.
+      return false;
     }
     // 인천/부산 등 타겟: 정확히 매칭만
     if (t === '인천' || t === 'INCHEON') return p === '인천' || p === 'INCHEON' || p === 'KRINC';
@@ -1519,22 +1487,25 @@ export async function fbReplacePortMisBatch(ships, opts = {}) {
   };
   try {
     // 1) 기존 데이터에서 타겟 항만 삭제
+    // V9.57(G7-②): read→개별 remove 다발 대신, 스냅샷 시점의 키로 한정한 멀티패스 update 1회로
+    //   원자 삭제 — 삭제 도중 새로 들어온 키를 건드리지 않고, 부분 실패(반쯤 지워짐)도 없앤다.
+    //   삭제 대상 키를 로그로 남겨 사후 추적 가능하게.
     const snap = await get(ref(db, 'port_mis_data'));
     if (snap.exists()) {
       const all = snap.val() || {};
-      await Promise.all(Object.entries(all).map(async ([k, v]) => {
-        if (v && matchTarget(v.port)) {
-          try {
-            await remove(ref(db, `port_mis_data/${k}`));
-            deleted++;
-          } catch (e) {
-            console.warn('[fbReplacePortMisBatch] 삭제 실패', k, e);
-          }
-        }
-      }));
+      const delKeys = Object.entries(all)
+        .filter(([, v]) => v && matchTarget(v.port))
+        .map(([k]) => k);
+      if (delKeys.length) {
+        console.log(`[fbReplacePortMisBatch] ${targetPort} 교체 — 스냅샷 기준 삭제 ${delKeys.length}건:`, delKeys);
+        const patch = {};
+        for (const k of delKeys) patch[`port_mis_data/${k}`] = null;
+        await update(ref(db), patch);
+        deleted = delKeys.length;
+      }
     }
   } catch (e) {
-    console.error('[fbReplacePortMisBatch] 옛 데이터 조회 실패', e);
+    console.error('[fbReplacePortMisBatch] 옛 데이터 조회/삭제 실패', e);
   }
   // 2) 새 데이터 저장 (prefix 충돌 정리는 fbSavePortMisBatch가 추가 처리)
   const result = await fbSavePortMisBatch(ships);
@@ -1685,7 +1656,8 @@ const MATRIX_EDITORS_SEED = ['김성일'];
  * 권한자 명단 조회 (1회성). 명단이 없으면 김성일로 시딩 후 반환.
  * @returns {Promise<string[]>}
  */
-export async function fbGetMatrixEditors() {
+// V9.57(G14): 외부 참조 0 (내부 fbSetMatrixEditors에서만 호출) — export 제거, 내부 함수로 전환.
+async function fbGetMatrixEditors() {
   try {
     const r = ref(db, MATRIX_EDITORS_NODE);
     const snap = await get(r);
@@ -1825,11 +1797,7 @@ export function fbSubscribePierCoords(callback) {
   });
 }
 
-export async function fbGetPierCoords() {
-  const r = ref(db, 'pier_coords');
-  const snap = await get(r);
-  return snap.val() || {};
-}
+// V9.57(G14): fbGetPierCoords 삭제 — 저장소 전체 grep 참조 0 확인(구독형 fbSubscribePierCoords만 사용).
 
 
 // ── V8.60 맛집 수첩 — 평택항 주변 식당 공유(foodSpots/{id}) ──
@@ -1894,7 +1862,8 @@ export async function fbSaveShipIntro(shipId, text, by, sources = []) {
 
 // ── V9.25: 검증 모드(테스트 랩) — 검수확인 전체 취소 (성일님 전용 재검수 도구) ──
 //   패치 빌더는 순수 함수로 분리해 실데이터 시뮬로 검증한다.
-export function buildBulkCancelPatch(records) {
+// V9.57(G14): 외부 참조 0 (내부 fbBulkCancelComplete에서만 호출) — export 제거, 내부 함수로 전환.
+function buildBulkCancelPatch(records) {
   const patch = {};
   let actualCnt = 0;
   for (const [cn, r] of Object.entries(records || {})) {

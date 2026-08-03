@@ -423,7 +423,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   // V7.32: 셀 배경색 폐지 — XRAY/선사 배경색이 보라 계열로 겹쳐 혼동(양하 중단 유발).
   //   약속: 셀 배경색은 XRAY 전용. 선사는 글자색(opLabel 색)으로 구분. (cellColor/opColor로 이동)
   //   카고플랜 V2(인쇄물)는 별도 색함수라 4.2 약속(선사 배경) 그대로 유지.
-  const getCellBg = () => null;
+  // V9.57(I12): 항상 null만 돌려주던 getCellBg 죽은 체인(정의→prop→backgroundColor) 제거.
 
   // V7.32: 선사 글자색 — 양하=선사(c.op)별, 선적=POD별 hex. 셀 배경 대신 opLabel에 적용.
   const getOpColor = (c) => {
@@ -859,7 +859,6 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                   fontSize={fontSize}
                   isMobile={isMobile}
                   cellColor={cellColor}
-                  getCellBg={getCellBg}
                   getOpColor={getOpColor}
                   globalRowRange={globalRowRange}
             globalGridCols={globalGridCols}
@@ -901,7 +900,6 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             fontSize={fontSize}
             isMobile={isMobile}
             cellColor={cellColor}
-            getCellBg={getCellBg}
             getOpColor={getOpColor}
             globalRowRange={globalRowRange}
             globalGridCols={globalGridCols}
@@ -986,7 +984,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getCellBg, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {},
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {},  // V9.57(I12): getCellBg 죽은 체인 제거
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1215,6 +1213,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     try {
       return buildEmptyBayRenderData(effEntry, bayKey, isPair);
     } catch (e) {
+      // V9.57(I12): 빈 catch — 매트릭스 렌더 실패가 조용히 빈 베이로 보이던 것. 로그 남김.
+      console.warn('[V9.57] 베이 매트릭스 렌더 실패', bayKey, e);
       return null;
     }
   }, [page.evenBay, page.oddBay, dictBaysSummary, pageRange, allContainers]);
@@ -1432,10 +1432,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       return aPtk - bPtk;
     });
   };
-  const getCell = (row, tier) => {
-    const all = getCellAll(row, tier);
-    return all.length > 0 ? all[0] : null;
-  };
+  // V9.57(I12): 미호출 getCell 제거 — 실제 사용은 getCellAll(다중 적재)뿐
   const isXmark = (row, tier) => {
     if (!row || !tier) return false;
     return xMarks.has(`${row}-${tier}`);
@@ -1594,7 +1591,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         className={`relative border ${cellColor(c)} hover:brightness-125 active:scale-95 transition flex-shrink-0 overflow-hidden ${
           isSelected ? 'ring-4 ring-sky-400 ring-inset' : ''
         }`}
-        style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize, backgroundColor: getCellBg(c) || undefined }}
+        style={{ width: cellW, height: cellH, padding: compactCell ? '1px' : '3px 4px', fontSize }}
       >
         {/* M3.78: 좌측 컬러 바 - 두껍고 흰색 테두리로 어떤 셀 색깔에도 잘 보임 */}
         {typeBarBg && !compactCell && (

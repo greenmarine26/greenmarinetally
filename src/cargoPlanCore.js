@@ -126,7 +126,10 @@ export function generatePdfBays(matrixBays, trios, singles) {
     const hasHold = bay.hasHold !== undefined ? bay.hasHold : true;
     let nHold, nDeck;
     if (hasHold) {
-      nHold = Math.min(4, Math.max(0, nTotal - 4));
+      // V9.57: 홀드 상한 4 고정 → STANDARD_HOLD 길이(7)까지 허용 — 큰 배(5~7단 홀드)에서
+      //   홀드 단이 4로 잘려 데크로 밀리던 결함 교정. nTotal ≤ 8인 배(홀드 4단 이하)는
+      //   nTotal-4 ≤ 4라 기존 출력 불변(시뮬 확인). nTotal 기반 추정 로직 자체는 유지.
+      nHold = Math.min(STANDARD_HOLD.length, Math.max(0, nTotal - 4));
       nDeck = nTotal - nHold;
     } else {
       nHold = 0;
@@ -352,6 +355,13 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
         if (bb === b) {
           const tierMap = ensureTier(tier);
           for (const [rowLbl, c] of rowMap.entries()) {
+            // V9.57: 짝수·홀수 베이가 같은 tier·row를 주장하면 조용히 덮어쓰지 않는다 —
+            //   단독 분기(아래 tierMap.has 가드)와 동일하게 먼저 그린 셀 유지 + 충돌을 경고로 드러냄
+            //   (물리적으로 같은 슬롯에 2대 = 데이터 이상. 무음 덮어쓰기는 표에서 1대를 증발시킨다).
+            if (tierMap.has(rowLbl)) {
+              console.warn(`[cargoPlanCore] 페어 ${bayKey} 좌표 충돌: bay ${b} tier ${tier} row ${rowLbl} — ${(c && c.cn) || '?'} 표시 생략(먼저 그린 셀 유지)`);
+              continue;
+            }
             tierMap.set(rowLbl, getSelfMarkFn(c, pod));
             tagXray(c, tier, rowLbl);
             tagShift(c, tier, rowLbl);
@@ -917,74 +927,5 @@ export function buildEmptyBayRenderData(bayEntry, bayKey, isPair = false) {
   };
 }
 
-// ============================================================
-// V7.95: 3D 좌표 매핑 (격자 = 진실, EDI 역산 금지)
-// ============================================================
-// MCSN 624S 실 EDI 810컨 검증: active 좌표 3710 = cells 합 3710 (100% PASS),
-//   EDI row ↔ 격자 rowPos 매칭 810/810 = 100% PASS, orphan 0.
-// 진실원: buildEmptyBayRenderData 하나. 카고플랜·베이플랜·미리보기·3D 전부 이 출력을 좌표로 씀.
-//   x = colIdx (center 정렬된 화면 컬럼), 라벨 rowLbl(=EDI row 2자리 padStart)
-//   y = tier, z = bay. EDI LOC+147에서 좌표 역산하지 말 것(발견②).
-
-// 빈 3D 격자 좌표 생성: 각 active cell = { bay, layer, tier, rowLbl, colIdx, cn? }
-export function buildBayGrid3D(bayEntry, bayKey, isPair = false) {
-  const rd = buildEmptyBayRenderData(bayEntry, bayKey, isPair);
-  if (!rd) return null;
-  const cells = [];
-  const collect = (rows, layer) => {
-    for (const r of rows) {
-      if (r.invisible) continue;
-      r.cells.forEach((c, colIdx) => {
-        if (!c.active) return;
-        cells.push({ bay: bayKey, layer, tier: r.tier, rowLbl: c.rowLbl, colIdx, cn: null });
-      });
-    }
-  };
-  collect(rd.deckRows, 'deck');
-  collect(rd.holdRows, 'hold');
-  return { rd, cells };
-}
-
-// EDI 컨테이너를 격자에 채움. 매칭 키 = `${tier}|${rowLbl}` (layer는 tier로 자동 판별).
-// containers: parseBAPLIE 결과 중 해당 bay 항목들. 반환: 채워진 grid + 미적재 빈칸 + orphan.
-export function fillBayGrid3D(bayEntry, bayKey, containers, isPair = false) {
-  const g = buildBayGrid3D(bayEntry, bayKey, isPair);
-  if (!g) return null;
-  const deckTiers = new Set(g.rd.deckTiers);
-  const holdTiers = new Set(g.rd.holdTiers);
-  // posMap: `${tier}|${row2}` → container
-  const posMap = new Map();
-  for (const c of containers) {
-    const tierN = parseInt(c.tier, 10);
-    if (!Number.isFinite(tierN)) continue;
-    const row2 = String(c.row).padStart(2, '0');
-    posMap.set(`${tierN}|${row2}`, c);
-  }
-  const placedKeys = new Set();
-  for (const cell of g.cells) {
-    const hit = posMap.get(`${cell.tier}|${cell.rowLbl}`);
-    if (hit) { cell.cn = hit.cn; cell.container = hit; placedKeys.add(`${cell.tier}|${cell.rowLbl}`); }
-  }
-  // orphan: 격자에 자리 없는 EDI 컨 (tier가 deck/hold 어디에도 없거나 row 라벨 불일치)
-  const orphans = [];
-  for (const c of containers) {
-    const tierN = parseInt(c.tier, 10);
-    const row2 = String(c.row).padStart(2, '0');
-    const inGrid = (deckTiers.has(tierN) || holdTiers.has(tierN));
-    if (!inGrid || !placedKeys.has(`${tierN}|${row2}`)) orphans.push(c);
-  }
-  const emptyActive = g.cells.filter(c => !c.cn).length;
-  return { rd: g.rd, cells: g.cells, placed: placedKeys.size, emptyActive, orphans };
-}
-
-// 짝수 bay를 pairEven으로 묶인 홀수 bay 엔트리로 해석 (범용 — 모든 선박).
-// baysSummary(list) 또는 bays(dict) 양쪽 지원. bayNum은 정규화된 문자열("1","17").
-export function resolveBayEntry(bayList, bayNum) {
-  const arr = Array.isArray(bayList) ? bayList
-    : (bayList && typeof bayList === 'object') ? Object.values(bayList) : [];
-  const norm = (v) => String(parseInt(v, 10));
-  for (const b of arr) if (b && norm(b.bayNo ?? b.bay) === bayNum) return b;
-  // 짝수 → pairEven 묶음 홀수 bay
-  for (const b of arr) if (b && b.pairEven && norm(b.pairEven) === bayNum) return b;
-  return null;
-}
+// V9.57: buildBayGrid3D·fillBayGrid3D·resolveBayEntry 체인 삭제 — 저장소 전체 grep 참조 0
+//   (V7.95 3D 좌표 매핑 시도 잔재. 진실원 buildEmptyBayRenderData는 그대로 살아 있음).

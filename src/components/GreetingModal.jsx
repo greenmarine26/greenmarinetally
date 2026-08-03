@@ -1,10 +1,14 @@
 // 로그인/로그아웃 인사 모달 (M3.6)
 import React, { useEffect, useState } from 'react';
+import { useBackHandler } from '../backHandler.js';   // TallyOne 1.0 (K3): 안드로이드 뒤로가기 = 닫기
 
 export default function GreetingModal({ type, lines, workForecast, onClose }) {
   // 자동 닫힘 카운트다운 (로그인 시 12초, 로그아웃 시 5초 - 예보 보는 시간)
   const totalSec = type === 'login' ? 12 : 5;
   const [remaining, setRemaining] = useState(totalSec);
+
+  // TallyOne 1.0 (K3): 폰 뒤로가기로도 인사 모달을 닫는다 (앱 이탈 방지)
+  useBackHandler(onClose, true);
 
   useEffect(() => {
     if (remaining <= 0) {

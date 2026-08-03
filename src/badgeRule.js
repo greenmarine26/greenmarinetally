@@ -29,6 +29,9 @@ export function inWindow(t, eta, etd) {
   return t >= lo && t <= hi;
 }
 
+// V9.57: 미인식 terminalStatus 경고 1회 기록용 (decideBadge는 카드마다 렌더마다 불린다)
+const _warnedStatus = new Set();
+
 /**
  * @param {object}  a
  * @param {number?} a.remainLoad  선적 잔여(총−완료). 모르면 null
@@ -56,8 +59,16 @@ export function decideBadge(a) {
   }
 
   // ① 터미널이 끝났다고 하면 무조건 — 완료 버튼 미입력 보완
-  if (String(terminalStatus || '').toLowerCase() === 'departed' && dep != null) {
-    return { kind: 'depart', at: dep, src: depSrc, delayed: false, reason: 'departed' };
+  // V9.57: 수집기·터미널 값에 공백/대소문자가 섞여 와도 인식(.trim 추가), 'done' 별칭 허용.
+  //   dep이 없어도 명세("터미널이 DEPARTED면 무조건")대로 etd, 그것도 없으면 지금 시각으로 전환.
+  const _ts = String(terminalStatus || '').trim().toLowerCase();
+  if (_ts === 'departed' || _ts === 'done') {
+    return { kind: 'depart', at: dep ?? etd ?? Date.now(), src: depSrc, delayed: false, reason: 'departed' };
+  }
+  // V9.57: 인식 못한 비어있지 않은 상태값은 조용히 무시하지 않고 경고(값당 1회 — 렌더 스팸 방지)
+  if (_ts && _ts !== 'working' && _ts !== 'planned' && !_warnedStatus.has(_ts)) {
+    _warnedStatus.add(_ts);
+    console.warn(`[badgeRule] 인식 못한 terminalStatus 값: "${terminalStatus}" — departed/done/working/planned 외 값은 출항 판정에 쓰이지 않습니다`);
   }
 
   // ② 남은 개수 — 선적 우선, 선적 없는 항차는 양하

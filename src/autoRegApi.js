@@ -6,7 +6,11 @@
 import { parseBAPLIE, parseAscFile, parseListExcel, isPyeongtaekPort, loadSheetJS } from './utils.js';
 import { APP_VERSION } from './utils.js';
 
-function _kind(name, head) {
+// V9.57(G5): 파일 분류기 단일화 — mergeApi.classify와 이 _kind가 서로 달라(cdl 허용·.txt 지원·
+//   merged 지원) 같은 파일이 경로마다 다르게 처리됐다. 이제 이 함수 하나를 양쪽
+//   (buildAutoPayload·mergeApi.mergeFolder)이 임포트한다. 확장자가 아니라 내용(head) 기준 판정 유지.
+//   반환: 'edi' | 'asc' | 'ifcsum' | 'merged' | 'xray' | 'list' | 'skip'
+export function classifyTallyFile(name, head) {
   const n = (name || '').toLowerCase();
   const e = n.split('.').pop();
   if (e === 'edi') return 'edi';
@@ -17,53 +21,38 @@ function _kind(name, head) {
     if (h.startsWith('UNB') || h.startsWith('UNH')) return 'edi';
     if (h.startsWith('$60')) return 'asc';
     if (h.startsWith('00:IFCSUM')) return 'ifcsum';   // V8.33: LOLO(RZOR) 매니페스트 — 가상 EDI 재료
+    // V9.57(G4): .txt + 00:BAPLIE(숫자코드)도 EDI로 — parseBAPLIE가 숫자형 라우팅을 내장하므로
+    //   종전처럼 skip으로 버리지 않는다.
+    if (h.startsWith('00:')) return 'edi';
     return 'skip';
   }
   if (e === 'xls' || e === 'xlsx') {
     if (/loadlist\.xlsx$/.test(n)) return 'merged';   // V8.32-01: 수집기 합본(평택 기준 검증본) — 전용 매핑으로 읽음
+    if (/xray|x-ray/.test(n)) return 'xray';          // V9.57(G5): mergeApi가 쓰는 xray 분류 편입
     // V8.89: cdl 제외 해제 — CDL(양하 리스트)만 먼저 온 항차가 "인식된 자료 없음"으로 등록조차 안 되던
     //   문제(STSE 2653E 사건 2026-07-13). CDL은 양하 검수 리스트이므로 records로 등록한다.
-    if (/recap|cbf|memo|xray|x-ray/.test(n)) return 'skip';
+    if (/recap|cbf|memo/.test(n)) return 'skip';
     return 'list';
   }
   return 'skip';
 }
+const _kind = classifyTallyFile;   // 파일 내 기존 호출부 호환 별칭
 
 async function _asText(f) {
   const ab = f.arrayBuffer ? await f.arrayBuffer() : (f.buffer || f);
-  try { return new TextDecoder('latin1').decode(new Uint8Array(ab)); } catch (e) { return ''; }
+  // V9.57(G9): 디코드 실패를 조용히 삼키지 않는다 — ''를 돌려주면 그 파일이 skip으로 사라져
+  //   원인이 증상에서 멀어진다. 경고 로그를 남기고 호출부 perFile에 0건으로 드러나게 한다.
+  try { return new TextDecoder('latin1').decode(new Uint8Array(ab)); }
+  catch (e) { console.warn('[autoRegApi] 파일 텍스트 디코드 실패:', f && f.name, e); return ''; }
 }
 async function _asU8(f) {
   const ab = f.arrayBuffer ? await f.arrayBuffer() : (f.buffer || f);
   return new Uint8Array(ab);
 }
 
-// V8.33: IFCSUM(콜론 구분 매니페스트, RZOR/LOLO) → 가상 EDI 컨테이너.
-//   구조(실파일 확인): 12:=B/L(파트7=POL), 13:=POD(파트1), 51:=컨테이너(파트2=컨번호, 3=실번호, 4=규격, 5=F/E, 7=무게).
-export function parseIfcsum(text) {
-  const containers = [];
-  let pol = '', pod = '';
-  for (const rawLine of String(text || '').split(/\r?\n/)) {
-    const line = rawLine.trim().replace(/'$/, '');
-    if (!line) continue;
-    const parts = line.split(':');
-    const seg = parts[0];
-    if (seg === '12') { pol = (parts[7] || '').trim().toUpperCase(); continue; }
-    if (seg === '13') { pod = (parts[1] || '').trim().toUpperCase(); continue; }
-    if (seg !== '51') continue;
-    const cn = (parts[2] || '').replace(/\s/g, '').toUpperCase();
-    if (!/^[A-Z]{4}\d{7}$/.test(cn)) continue;
-    const c = { cn, pol, pod, fe: (parts[5] || 'F').trim().toUpperCase() || 'F' };
-    const sl = (parts[3] || '').trim();
-    if (sl) c.sl = sl;
-    const iso = (parts[4] || '').trim().toUpperCase();
-    if (iso) c.iso = iso;
-    const wt = parseInt(parts[7], 10);
-    if (wt > 0) c.wt = wt;
-    containers.push(c);
-  }
-  return { containers, _virtualEdi: true };
-}
+// V9.57(G4): 약식 parseIfcsum 제거 — utils.parseNumericIFCSUM(parseBAPLIE 라우팅 경유)으로 통합.
+//   약식 파서는 ISO 텍스트('40HC' 등)를 정규화하지 않고 B/L split(같은 컨 여러 51 세그먼트)을
+//   병합하지 않아 중복·규격 불일치를 만들었다. 정식 파서가 둘 다 처리한다.
 
 // 가상 선적 EDI 대상 — 선적 EDI가 늦거나(OBWH) 안 오는(RZOR) 선박. 리스트로 선적 카운트를 채운다(사용자 확정 2026-07-04).
 const VIRTUAL_LOAD_SHIPS = new Set(['RZOR', 'OBWH']);
@@ -238,7 +227,10 @@ export async function buildAutoPayload(files, opts) {
                 continue;
               }
             }
-          } catch (e) { /* 플랜 판별 실패 → 리스트 흐름으로 계속 */ }
+          } catch (e) {
+            // V9.57(G9): 플랜 판별 실패는 리스트 흐름으로 계속하되 로그는 남긴다 — 조용한 실패 금지.
+            console.warn('[autoRegApi] 플랜 격자 판별 실패 — 리스트로 처리:', name, e);
+          }
         }
         if (xk !== 'list') { perFile.push({ name, kind: 'skip' }); continue; }
         const out = await parseListExcel(await _asU8(f));
@@ -258,7 +250,10 @@ export async function buildAutoPayload(files, opts) {
         const text = await _asText(f);
         const kind = _kind(name, text.slice(0, 12));
         if (kind !== 'edi' && kind !== 'asc' && kind !== 'ifcsum') { perFile.push({ name, kind: 'skip' }); continue; }
-        const r = kind === 'ifcsum' ? parseIfcsum(text) : (kind === 'asc' ? parseAscFile(text) : parseBAPLIE(text));
+        // V9.57(G4): IFCSUM도 parseBAPLIE로 — 숫자형 라우팅 내장(00:IFCSUM→parseNumericIFCSUM,
+        //   00:BAPLIE→parseNumericBAPLIE). ISO_MAP 정규화·B/L split 병합이 정식 파서에서 처리된다.
+        const r = kind === 'asc' ? parseAscFile(text) : parseBAPLIE(text);
+        const isVirtual = kind === 'ifcsum' || !!(r && r._virtualEdi);   // 가상 EDI(리스트 겸용) 표식 유지
         const cs = (r && r.containers) || [];
         const cnCount = cs.filter(c => c.cn && c.cn.length === 11).length;
         // V8.35-01: 동률이면 규격(iso) 보유 수가 많은 쪽 우선 — ASC(규격 일부 누락)가 알파벳순으로
@@ -268,7 +263,7 @@ export async function buildAutoPayload(files, opts) {
         if (!best || cnCount > best.cnCount
             || (cnCount === best.cnCount && isoCount > (best.isoCount || 0))
             || (cnCount === best.cnCount && isoCount === (best.isoCount || 0) && cs.length > best.containers.length)) {
-          best = { name, text, containers: cs, cnCount, isoCount, virtual: !!(r && r._virtualEdi) };
+          best = { name, text, containers: cs, cnCount, isoCount, virtual: isVirtual };
         }
       }
     } catch (e) { perFile.push({ name, error: String(e && e.message || e) }); }
@@ -278,8 +273,10 @@ export async function buildAutoPayload(files, opts) {
   const ediContainers = {};
   if (best) {
     best.containers.forEach(c => {
+      // V9.57(G6): 선적 평택 판정에 _inList(리스트 등록=평택) 반영 — 화면(BayPlan·카고플랜) 규칙과 통일.
+      //   TODO: utils.isPtk(c, mode)가 export되면(팀F 추가 중) 이 인라인을 임포트로 교체.
       const podPtk = isPyeongtaekPort(c.pod);
-      const polPtk = isPyeongtaekPort(c.pol);
+      const polPtk = c._inList || isPyeongtaekPort(c.pol);
       const containerMode = mode === 'discharge' ? (podPtk ? 'discharge' : 'transit') : (polPtk ? 'loading' : 'transit');
       const key = c.cn && c.cn.length === 11 ? c.cn : `__SLOT_${c.bay}_${c.row}_${c.tier}`;
       ediContainers[key] = { ...c, _slotKey: key, _mode: containerMode };
@@ -294,6 +291,7 @@ export async function buildAutoPayload(files, opts) {
       const cn = c.cn.toUpperCase();
       const rec = { cn, _source: best.name };
       if (c.sl) rec.sl = c.sl;
+      if (c.eseal) rec.eseal = c.eseal;   // V9.57(G4): 정식 IFCSUM 파서는 엠티실을 eseal로 분리해 담는다
       if (c.wt) rec.wt = c.wt;
       if (!records[cn]) { records[cn] = rec; return; }
       const prev = records[cn];

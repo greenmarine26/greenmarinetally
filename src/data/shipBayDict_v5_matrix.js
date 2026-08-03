@@ -20,37 +20,3 @@ export function getMatrixV5(code) {
   return SHIP_MATRIX_V5[key] || null;
 }
 
-/** v2 entry에 v5 매트릭스 정보 attach (overwrite 없이 보조 필드로) */
-export function attachMatrixToEntry(entry, code) {
-  if (!entry || !code) return entry;
-  const m = getMatrixV5(code);
-  if (!m) return entry;
-  // v2 데이터는 그대로 유지, 매트릭스만 _v5Matrix 보조 필드로 첨부
-  return { ...entry, _v5Matrix: m };
-}
-
-/** 베이 번호로 해당 베이의 매트릭스 정보 (rows, cells, maxRow) */
-export function getBayMatrix(code, bayNum) {
-  const m = getMatrixV5(code);
-  if (!m || !m.matrixBays) return null;
-  const target = parseInt(bayNum, 10);
-  return m.matrixBays.find(b => b.bayNum === target) || null;
-}
-
-/** 자동 추출된 row 폭 (default 8/7 대체용) */
-export function getRowMaxFromMatrix(code, bayNum) {
-  const b = getBayMatrix(code, bayNum);
-  if (!b || !b.maxRow) return null;
-  // maxRow가 짝수면 짝수 베이 기준, 홀수 기준은 maxRow-1
-  const isEvenBay = parseInt(bayNum, 10) % 2 === 0;
-  if (isEvenBay) return { rowMaxEven: b.maxRow, rowMaxOdd: Math.max(b.maxRow - 1, 1) };
-  return { rowMaxOdd: b.maxRow, rowMaxEven: b.maxRow + 1 };
-}
-
-export function getMatrixV5Stats() {
-  return {
-    version: '5.0-matrix',
-    totalShips: Object.keys(SHIP_MATRIX_V5).length,
-    methodology: 'M6.55 .def matrix uint16 LE decode',
-  };
-}

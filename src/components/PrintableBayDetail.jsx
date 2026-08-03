@@ -132,7 +132,9 @@ export function formatCellParts(c) {
     const left1 = same ? `${pol}/${pod}` : `${pol}/`;
     const right1 = `*${same ? (via || ' ') : (via || pod)}`;
     const cn = String(c.cn || '');
-    const carrierRaw = String(c.line || c.carrier || '').toUpperCase();
+    // V9.57(I16): c.line 충돌 — 수집기/덱플랜은 line에 덱 줄번호(정수)를 쓴다.
+    //   숫자를 선사로 해석하면 "3" 같은 값이 선사 칸에 찍힌다. 영문자가 있는 문자열만 선사로 인정.
+    const carrierRaw = ((typeof c.line === 'string' && /[A-Z]/i.test(c.line)) ? c.line : String(c.carrier || '')).toUpperCase();
     let carrier = 'C_K';
     if (carrierRaw === 'CKL' || carrierRaw === 'CK') carrier = 'C_K';
     else if (carrierRaw === 'SOC' || carrierRaw.includes('SOC')) carrier = 'SOC';
@@ -171,7 +173,8 @@ export function formatCellLines(c) {
     }
     const line2 = String(c.cn || '');
     // 선사 약어
-    const carrierRaw = String(c.line || c.carrier || '').toUpperCase();
+    // V9.57(I16): c.line 충돌 — 덱 줄번호(정수) 오염 차단 (formatCellParts와 동일 규칙)
+    const carrierRaw = ((typeof c.line === 'string' && /[A-Z]/i.test(c.line)) ? c.line : String(c.carrier || '')).toUpperCase();
     let carrier = 'C_K';
     if (carrierRaw === 'CKL' || carrierRaw === 'CK') carrier = 'C_K';
     else if (carrierRaw === 'SOC' || carrierRaw.includes('SOC')) carrier = 'SOC';

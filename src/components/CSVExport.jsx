@@ -60,7 +60,11 @@ export function exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap
 }
 
 // 세관 신고용 — 실오류 컨테이너만 추출
-export function exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, xraySeals) {
+export function exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, xraySeals, voyArg = '') {
+  // V9.57(I7): 종전엔 legacy info.voy 고정이라 양하/선적 항차가 구분되지 않았다.
+  //   호출부(ReportTab)가 mode별로 계산한 voy(voy_d/voy_l)를 끝 인자로 넘겨받아 사용.
+  //   미전달 시 기존 폴백(info.voy) 유지 — 이 함수 호출부는 ReportTab 하나뿐(전수 grep 확인).
+  const voy = voyArg || voyageInfo?.voy || '';
   const headers = [
     '항차', '선박', '항해번호', '모드',
     '순번', '위치', '컨번호',
@@ -76,7 +80,7 @@ export function exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, x
     if (c.sl && slOrig && c.sl !== slOrig) {
       const last = (c.sl_history || []).slice(-1)[0];
       rows.push([
-        voyageKey, voyageInfo?.vsl || '', voyageInfo?.voy || '', mode === 'discharge' ? '양하' : '선적',
+        voyageKey, voyageInfo?.vsl || '', voy, mode === 'discharge' ? '양하' : '선적',
         no++, fmtPos(c),
         c.cn,
         '실번호',
@@ -92,7 +96,7 @@ export function exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, x
       if (xs.seal && xSealOrig && xs.seal !== xSealOrig) {
         const last = (xs.history || []).slice(-1)[0];
         rows.push([
-          voyageKey, voyageInfo?.vsl || '', voyageInfo?.voy || '', '양하',
+          voyageKey, voyageInfo?.vsl || '', voy, '양하',
           no++, fmtPos(c),
           c.cn,
           'X-RAY 세관봉인',

@@ -54,10 +54,25 @@ export function isStaff(name) {
   return STAFF_NAMES.some(n => n === norm || n.replace(/\s/g, '') === norm);
 }
 
+// V9.57(B-4 선행): 서버 staffList 직책 캐시 — Firebase 구독(fbSubscribeStaffList) 데이터를
+//   구독부(App 등, 연결은 판2)가 setServerRoles로 밀어 넣는다. 모듈 캐시 방식이라 React 의존이 없고
+//   getStaffRole/isChief는 순수 함수 형태를 유지한다. 서버 값 우선, 코드 STAFF_ROLES는 폴백.
+let SERVER_ROLES = {};
+export function setServerRoles(map) {
+  const out = {};
+  for (const [k, v] of Object.entries(map || {})) {
+    const name = String((v && typeof v === 'object' && v.name) || k).trim();
+    const role = typeof v === 'string' ? v.trim() : String((v && v.role) || '').trim();
+    if (name && role) out[name] = role;
+  }
+  SERVER_ROLES = out;
+}
+
 export function getStaffRole(name) {
   if (!name) return '';
   const norm = String(name).trim();
-  return STAFF_ROLES[norm] || '';
+  // V9.57: 서버 명단(관리자가 앱에서 추가/변경한 직책) 우선 — 코드 명단은 폴백
+  return SERVER_ROLES[norm] || STAFF_ROLES[norm] || '';
 }
 
 // 수석검수 여부 (작업 권한) — 수석검수 또는 부수석 포함

@@ -5,14 +5,15 @@
 //
 // M4.9b: "엠티 수정 리포트" 별도 추가 - 수정 이력(eseal_history)이 있는 컨테이너만 출력
 //        TNJP 같은 verify 선박에서 입력은 단순화하고, 수정 발생 시 별도 보고서로 추적
-import React from 'react';
-import { Download, FileSpreadsheet, History } from 'lucide-react';
-import { loadSheetJS, isoToLabel } from '../utils.js';
+// V9.57(I14): 죽은 export 정리 — 외부 참조는 generateEmptySealReport 하나뿐(전수 grep 확인).
+//   loadSheetJSStyled·buildSealReportSheet는 내부 사용만 남기고 export 제거,
+//   generateEmptySealEditReport·EmptySealReportButton(참조 0)은 삭제. React/lucide/loadSheetJS 임포트도 함께 정리.
+import { isoToLabel } from '../utils.js';
 
 // V7.42: 셀 스타일(음영·테두리·볼드)을 지원하는 SheetJS 호환 라이브러리 로더.
 //   기존 loadSheetJS(xlsx@0.18.5)는 스타일 미지원 → 보고서 출력 전용으로 xlsx-js-style 사용.
 //   파서 등 다른 코드는 기존 로더 그대로 (영향 없음).
-export async function loadSheetJSStyled() {
+async function loadSheetJSStyled() {
   if (window.XLSXS) return window.XLSXS;
   await new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -87,8 +88,7 @@ const STY = {
 };
 
 // 표 한 장을 스타일 입혀 시트로 — 규격 바뀔 때 소계 행, 마지막 합계 행, 줄무늬(밴딩)
-//   exported for 검증: node에서 같은 로직으로 생성 가능 (XLSX 인자 주입)
-export function buildSealReportSheet(XLSX, { title, meta, cols, rows, leftCols = [1] }) {
+function buildSealReportSheet(XLSX, { title, meta, cols, rows, leftCols = [1] }) {
   const aoa = [];
   aoa.push([title]);
   aoa.push([]);
@@ -217,161 +217,5 @@ export async function generateEmptySealReport({ voyage, sealTargets, sealMode })
   XLSX.writeFile(wb, filename);
   return { filename, rowCount: targets.length };
 }
-
-// M4.9b: 엠티 수정 리포트 — eseal_history가 있는 컨테이너만 출력
-//   각 수정 건마다 한 행: from(이전 번호) → to(새 번호) + 검수자 + 시각
-export async function generateEmptySealEditReport({ voyage, sealTargets }) {
-  const XLSX = await loadSheetJS();
-
-  const vsl = voyage?.info?.vsl || '-';
-  const voy = voyage?.info?.voy_l || voyage?.info?.voy || '-';
-  const etd = fmtDateSafe(voyage?.info?.etd);  // V7.42: Invalid Date 방어
-
-  const targets = sealTargets || [];
-  // 수정 이력이 있는 것만 필터링 (단, 처음 입력은 from='', to='실번호'이므로 from이 비어있지 않은 것만 = 진짜 수정)
-  // 또는 history 길이가 1 이상이고, 그 중 진짜 변경이 있는 것
-  const editsRows = [];
-  let seq = 1;
-  for (const c of targets) {
-    const history = Array.isArray(c.eseal_history) ? c.eseal_history : [];
-    for (const h of history) {
-      const fromEseal = String(h.from?.eseal || '').trim();
-      const toEseal = String(h.to?.eseal || '').trim();
-      // 처음 입력(from=''→to=값)은 수정이 아님 — 제외
-      if (!fromEseal) continue;
-      // 같은 값이면 변화 없음 — 제외
-      if (fromEseal === toEseal) continue;
-      editsRows.push([
-        seq++,
-        c.cn || '',
-        isoToLabel(c.iso) || c.iso || '-',
-        fromEseal,
-        toEseal || '(삭제)',
-        h.by || '',
-        h.at ? new Date(h.at).toLocaleString('ko-KR') : '',
-      ]);
-    }
-  }
-
-  const cols = ['순번', '컨번호', '규격', '이전 번호', '새 번호', '수정자', '수정 시각'];
-  const headerInfo = [
-    [`엠티 실 수정 리포트`],
-    [],
-    ['선박', vsl],
-    ['항차', voy],
-    ['선적일자', etd],
-    ['수정 건수', `${editsRows.length}건`],
-    [],
-  ];
-
-  const aoa = [...headerInfo, cols, ...editsRows];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [
-    { wch: 5 }, { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 14 },
-    { wch: 10 }, { wch: 18 },
-  ];
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: cols.length - 1 } }];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '엠티실 수정 리포트');
-
-  const filename = `엠티실수정_${vsl.replace(/\s+/g, '')}_${voy}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-  XLSX.writeFile(wb, filename);
-  return { filename, rowCount: editsRows.length };
-}
-
-// 다운로드 버튼 컴포넌트
-export default function EmptySealReportButton({ voyage, sealTargets, sealMode }) {
-  const [downloading, setDownloading] = React.useState(false);
-  const [downloadingEdits, setDownloadingEdits] = React.useState(false);
-
-  if (!sealMode || !sealTargets || sealTargets.length === 0) return null;
-
-  const total = sealTargets.length;
-  const done = sealTargets.filter(c => c.eseal).length;
-  const pending = total - done;
-
-  // M4.9b: 수정 발생 건수 카운트 (eseal_history에서 from!='' 인 항목)
-  const editsCount = sealTargets.reduce((sum, c) => {
-    const h = Array.isArray(c.eseal_history) ? c.eseal_history : [];
-    return sum + h.filter(x => {
-      const fromE = String(x.from?.eseal || '').trim();
-      const toE = String(x.to?.eseal || '').trim();
-      return fromE && fromE !== toE;
-    }).length;
-  }, 0);
-
-  const handleDownload = async () => {
-    setDownloading(true);
-    try {
-      const result = await generateEmptySealReport({ voyage, sealTargets, sealMode });
-      alert(`✅ 다운로드 완료: ${result.filename}\n${result.rowCount}대`);
-    } catch (e) {
-      alert('다운로드 실패: ' + e.message);
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  // M4.9b: 수정 리포트 별도 다운로드
-  const handleDownloadEdits = async () => {
-    setDownloadingEdits(true);
-    try {
-      const result = await generateEmptySealEditReport({ voyage, sealTargets });
-      if (result.rowCount === 0) {
-        alert('수정된 엠티 실이 없습니다.');
-      } else {
-        alert(`✅ 수정 리포트 다운로드 완료: ${result.filename}\n수정 ${result.rowCount}건`);
-      }
-    } catch (e) {
-      alert('다운로드 실패: ' + e.message);
-    } finally {
-      setDownloadingEdits(false);
-    }
-  };
-
-  return (
-    <div className={`border-2 rounded-lg p-3 ${sealMode === 'attach' ? 'border-red-700/50 bg-red-950/20' : 'border-cyan-700/50 bg-cyan-950/20'}`}>
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
-          <FileSpreadsheet className={`w-4 h-4 ${sealMode === 'attach' ? 'text-red-400' : 'text-cyan-400'}`}/>
-          <span className="font-bold text-sm">
-            엠티 실 {sealMode === 'attach' ? '부착' : '표기'} 보고서
-          </span>
-        </div>
-        <span className={`text-xs font-bold ${pending > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-          {done} / {total} {pending > 0 && `(${pending}대 남음)`}
-        </span>
-      </div>
-      <button
-        onClick={handleDownload}
-        disabled={downloading}
-        className={`w-full py-2 rounded text-sm font-bold text-white flex items-center justify-center gap-2 ${
-          sealMode === 'attach' ? 'bg-red-700 hover:bg-red-600' : 'bg-cyan-700 hover:bg-cyan-600'
-        } disabled:opacity-50`}
-      >
-        <Download className="w-4 h-4"/>
-        {downloading ? '생성 중...' : '엑셀 다운로드'}
-      </button>
-      {/* M4.9b: 수정 리포트 별도 버튼 — 수정 이력 있을 때만 활성 */}
-      {sealMode === 'verify' && (
-        <button
-          onClick={handleDownloadEdits}
-          disabled={downloadingEdits || editsCount === 0}
-          className={`w-full mt-2 py-2 rounded text-xs font-bold flex items-center justify-center gap-2 ${
-            editsCount > 0
-              ? 'bg-amber-700 hover:bg-amber-600 text-white'
-              : 'bg-slate-800 text-slate-500'
-          } disabled:opacity-50`}
-        >
-          <History className="w-4 h-4"/>
-          {downloadingEdits
-            ? '생성 중...'
-            : editsCount > 0
-              ? `엠티 수정 리포트 (${editsCount}건)`
-              : '엠티 수정 리포트 (수정 없음)'}
-        </button>
-      )}
-    </div>
-  );
-}
+/* V9.57(I14): 이하 generateEmptySealEditReport·EmptySealReportButton 삭제 — 참조 0 (전수 grep 확인).
+   수정 리포트 기능이 다시 필요하면 git 이력(V9.56 이전)에서 복원. */

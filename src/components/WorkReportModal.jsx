@@ -11,7 +11,7 @@ import {
 } from '../kakaoShare.js';
 import { fbAddWorkReport } from '../firebase.js';
 import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort } from '../utils.js';
-import { ref, set, get, onValue, off } from 'firebase/database';
+import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 
@@ -91,13 +91,14 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     const unsub = onValue(r, (snap) => {
       setActiveWork(snap.val() || {});
     });
-    return () => off(r);
+    // V9.57(I9): off(r)는 해당 ref의 리스너를 전부 떼어내 다른 구독자까지 끊는다 — 반환된 unsub만 해제
+    return () => unsub();
   }, [voyageKey]);
 
   if (!open) return null;
 
   const vsl = voyage?.info?.vsl || '';
-  const shipImo = voyage?.info?.imo || '';
+  // V9.57(I9): 미사용 shipImo 제거
   // M6.37: mode 기반 voy 선택 — 양하 보고는 voy_d (양하 항차), 선적 보고는 voy_l (선적 항차)
   //   예: XTPG 양하 0523E, 선적 0523W → 양하 보고에 0523E, 선적 보고에 0523W
   //   각 핸들러 진입 시 자신의 mode로 voy를 shadowing해서 정확한 항차 전달

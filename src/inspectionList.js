@@ -209,7 +209,12 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
 
   const modeKo = mode === 'discharge' ? '양하' : '선적';
   const vsl = voyageInfo?.vsl || '';
-  const voy = voyageInfo?.voy || voyageInfo?.voy_l || voyageInfo?.voy_d || '';
+  // V9.57: 항차 표기를 모드별 필드 우선으로 — 양하 인쇄는 voy_d, 선적 인쇄는 voy_l.
+  //   한쪽 섹션 삭제 시 info.voy가 남은 쪽으로 재기입되는 수정(HomePage performDelete)과 정합.
+  //   종전엔 info.voy(생성 당시 모드의 항차)가 먼저라 양하/선적 항차가 다른 배에서 반대쪽 번호가 찍혔다.
+  const voy = (mode === 'discharge'
+    ? (voyageInfo?.voy_d || voyageInfo?.voy || voyageInfo?.voy_l)
+    : (voyageInfo?.voy_l || voyageInfo?.voy || voyageInfo?.voy_d)) || '';
   // 날짜: 2026.05.11 형식
   const d = new Date();
   const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
@@ -329,7 +334,10 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
     return (a.cn || '').localeCompare(b.cn || '');
   });
   const vsl = voyageInfo?.vsl || voyageInfo?.vslFull || 'VESSEL';
-  const voy = voyageInfo?.voy || '';
+  // V9.57: CSV 파일명 항차도 모드별 필드 우선(위 generateInspectionListHTML과 동일 기준)
+  const voy = (mode === 'discharge'
+    ? (voyageInfo?.voy_d || voyageInfo?.voy || voyageInfo?.voy_l)
+    : (voyageInfo?.voy_l || voyageInfo?.voy || voyageInfo?.voy_d)) || '';
   const modeKo = mode === 'discharge' ? '양하' : '선적';
   const dateStr = new Date().toISOString().slice(0, 10);
   w.__inspectionData = { containers: sortedConts, vsl, voy, modeKo, dateStr };

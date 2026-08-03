@@ -27,9 +27,12 @@ const sect = (v, m) => (v && v[m]) || {};
 const vals = (o) => Object.values(o || {});
 
 /** 모드별 평택분 컨 목록 (EDI 기준 + 리스트 병합은 호출부 책임 아님 — EDI가 집계의 진실) */
+// V9.57(G6): 선적 평택 판정에 _inList(리스트 등록=평택) 반영 — 화면(BayPlan·카고플랜·별첨)과 동일 규칙.
+//   엠티 선적 리스트는 pol이 비거나 목적지로 오염되는데, 종전엔 그 컨들이 마감 텔리에서 통째로 빠졌다.
+//   TODO: utils.isPtk(c, mode)가 export되면(팀F 추가 중) 이 인라인을 임포트로 교체.
 export function ptkContainers(voyage, mode) {
   const edi = vals(sect(voyage, mode).ediContainers);
-  return edi.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol));
+  return edi.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)));
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */

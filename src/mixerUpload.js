@@ -70,7 +70,10 @@ export async function detectFileType(file) {
     if (/IFCSUM/i.test(text)) return 'edi-ifcsum';
     if (/^[A-Z]{4}\d{7}\s/m.test(text)) return 'asc';
     if (text.includes(',') && /^[A-Z]{4}\d{7}/m.test(text)) return 'csv';
-  } catch (e) {}
+  } catch (e) {
+    // V9.57(G9): 텍스트 판별 실패를 조용히 삼키지 않는다 — unknown 처리 이유를 로그로 남긴다.
+    console.warn('[mixerUpload] 파일 형식 텍스트 판별 실패:', file && file.name, e);
+  }
 
   return 'unknown';
 }
@@ -290,7 +293,8 @@ async function blobToBase64(blob) {
 }
 
 export async function ocrImageContainers(file, geminiApiKey) {
-  if (!geminiApiKey) throw new Error('Gemini API 키 없음');
+  // V9.57(G11): 내장 폴백 키 삭제로 키 부재가 정상 상태가 됨 — 설정 경로를 정확히 안내.
+  if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
 
   // 자동 축소 (4032×3024 → 1600×1200 정도, OCR 정확도 유지)
   let imageBlob;
@@ -506,7 +510,8 @@ export async function processSingleFile(file, options = {}) {
       }
       case 'image': {
         if (!geminiApiKey) {
-          out.error = '이미지 분석을 위해 Gemini API 키가 필요합니다';
+          // V9.57(G11): 키 부재 안내를 설정 경로까지 — 내장 폴백 키 삭제로 이 분기가 실제로 밟힌다.
+          out.error = '이미지 분석을 위해 Gemini API 키가 필요합니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.';
           break;
         }
         const parsed = await ocrImageContainers(file, geminiApiKey);
@@ -563,6 +568,8 @@ function parseCsvList(text) {
 //   conflicts: [{ cn, field, ediVal, otherVal, source }] - 검수원 확인용
 //   unmatched: { cn → {info} } - 리스트엔 있는데 EDI에 없는 것
 export function mergeWithEdi(ediContainers, listResults, xrayResults, ocrResults) {
+  // V9.57(G8): 얕은 복사 후 내부 객체 직접 수정 금지 — 보강 대상 컨만 { ...원본 } 새 객체로 교체.
+  //   종전엔 merged[cn]과 ediContainers[cn]이 같은 참조라, 호출부가 넘긴 원본 EDI 상태가 몰래 오염됐다.
   const merged = { ...ediContainers };
   const conflicts = [];
   const unmatched = {};
@@ -572,8 +579,8 @@ export function mergeWithEdi(ediContainers, listResults, xrayResults, ocrResults
     if (!c.cn) return;
     const cn = c.cn.toUpperCase();
     if (merged[cn]) {
-      // EDI에 있음 → 보강
-      const ediC = merged[cn];
+      // EDI에 있음 → 보강 (컨 단위 새 객체)
+      const ediC = merged[cn] = { ...merged[cn] };
       // 풀씰(sl): EDI에 없으면 추가 (이미 있으면 충돌 검사)
       if (c.sl) {
         if (!ediC.sl) ediC.sl = c.sl;
@@ -605,7 +612,7 @@ export function mergeWithEdi(ediContainers, listResults, xrayResults, ocrResults
   // 2. X-RAY 플래그 추가
   Object.keys(xrayResults || {}).forEach(cn => {
     const cnU = cn.toUpperCase();
-    if (merged[cnU]) merged[cnU]._xray = true;
+    if (merged[cnU]) merged[cnU] = { ...merged[cnU], _xray: true };   // V9.57(G8): 새 객체로
     else {
       // EDI에 없는 X-RAY 컨 — 일단 unmatched에 표시
       unmatched[cnU] = { ...(unmatched[cnU] || {}), cn: cnU, _xray: true };
@@ -617,7 +624,8 @@ export function mergeWithEdi(ediContainers, listResults, xrayResults, ocrResults
     if (!c.cn) return;
     const cn = c.cn.toUpperCase();
     if (merged[cn]) {
-      const ediC = merged[cn];
+      const ediC = merged[cn] = { ...merged[cn] };   // V9.57(G8): 새 객체로
+
       if (c.sl && c.sl !== ediC.sl) {
         if (!ediC.sl) ediC.sl = c.sl;
         else conflicts.push({ cn, field: 'sl', ediVal: ediC.sl, otherVal: c.sl, source: 'ocr' });
@@ -690,7 +698,8 @@ export function matchVoyage(ediVsl, ediVoy, existingVoyages) {
 // 검수원이 폰 Chrome으로 PORT-MIS 입출항현황 캡처 → Gemini Vision으로 데이터 추출
 // 결과를 Firebase port_mis_data에 저장 → Chrome 확장 없이도 ⚓ 카드 표시
 export async function ocrPortMisCapture(file, geminiApiKey) {
-  if (!geminiApiKey) throw new Error('Gemini API 키 없음');
+  // V9.57(G11): 키 부재 안내를 설정 경로까지.
+  if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
 
   let imageBlob;
   try { imageBlob = await compressImage(file, 1600); }

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Home, Anchor, Power, HelpCircle, Truck, LogOut, Key, MoreVertical, Users } from 'lucide-react';
+// TallyOne 1.0 (K4): 미사용 아이콘 임포트 제거(Cloud·RefreshCw·Power) + 보조기능 아이콘 추가
+import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
+import { isChief } from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
+import { isOwnerName } from '../adminGuard.js';
 import HelpModal from './HelpModal.jsx';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 
-export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager}) {
+export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux }) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
   const info = cur?.info;
   // V8.10: 현재 항차 부두 기준 장비 목록. 항차 없으면 1~5 전체.
@@ -22,19 +25,28 @@ export default function Header({ version, inspector, online, route, voyages, onC
   // M6.14d: 사용자 키 미설정 시 경고 (헤더 키 버튼 점멸)
   const hasUserKey = !!_storage.get(SK.geminiKey);
 
-  const handleLogoutOrExit = () => {
-    if (onLogout) {
-      onLogout();
-    } else {
-      askConfirm({
-        title: '검수앱 종료',
-        message: '검수앱을 종료하시겠습니까?\n\n(완전 종료는 폰 홈 버튼이나 앱 스위처에서 닫아주세요)',
-        confirmLabel: '종료',
-        cancelLabel: '취소',
-        onConfirm: () => exitApp(),
-      });
-    }
+  // TallyOne 1.0 (K3·B-7): 로그아웃/앱 종료 2메뉴 분리 — 둘 다 확인 단계를 먼저 밟는다.
+  //   종전에는 onLogout이 확인 없이 곧장 서버에 로그아웃을 마킹했다(B-7).
+  const handleLogoutClick = () => {
+    askConfirm({
+      title: '로그아웃',
+      message: `${inspector || '검수원'} 님, 로그아웃할까요?\n\n작업 기록은 그대로 남습니다.`,
+      confirmLabel: '로그아웃',
+      cancelLabel: '취소',
+      onConfirm: () => onLogout && onLogout(),
+    });
   };
+  const handleExitClick = () => {
+    askConfirm({
+      title: '앱 종료',
+      message: 'TallyOne 검수앱을 종료하시겠습니까?\n\n(완전 종료는 폰 홈 버튼이나 앱 스위처에서 닫아주세요)',
+      confirmLabel: '종료',
+      cancelLabel: '취소',
+      onConfirm: () => exitApp(),
+    });
+  };
+  // TallyOne 1.0 (K4): 현재 역할 표시 — 소유자 > 수석 > 검수사
+  const roleLabel = !inspector ? '' : isOwnerName(inspector) ? '소유자' : isChief(inspector) ? '수석' : '검수사';
 
   const handleSelectEquip = (num) => {
     setEquipNumber(num);
@@ -60,7 +72,8 @@ export default function Header({ version, inspector, online, route, voyages, onC
           )}
           <div className="min-w-0">
             <div className="font-bold text-sm text-blue-100 truncate leading-tight">
-              {info ? info.vsl : '평택항 검수'}
+              {/* TallyOne 1.0 (K4): 앱 이름 리브랜딩 — 버전 문자열은 건드리지 않음(통합 시 처리) */}
+              {info ? info.vsl : 'TallyOne'}
             </div>
             <div className="text-[10px] text-slate-500 truncate leading-tight">
               {/* V8.82: 모드 따라 항차 표시 — 양하=voy_d, 선적=voy_l (구: 항상 voy_d 우선이라 선적 중에도 양하 항차가 보임) */}
@@ -93,7 +106,11 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <span className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-slate-900 text-[11px] font-black">
               {(inspector && inspector[0]) || '?'}
             </span>
-            <span className="font-bold text-amber-200 max-w-[56px] truncate">{inspector || '검수원'}</span>
+            {/* TallyOne 1.0 (K4): 이름 아래 현재 역할 표시 */}
+            <span className="flex flex-col items-start leading-tight min-w-0">
+              <span className="font-bold text-amber-200 max-w-[56px] truncate">{inspector || '검수원'}</span>
+              {roleLabel && <span className="text-[9px] text-amber-400/90">{roleLabel}</span>}
+            </span>
           </button>
           <div className="relative">
             <button
@@ -120,6 +137,14 @@ export default function Header({ version, inspector, online, route, voyages, onC
                     <span className="text-sm text-slate-200 font-bold">AI 검색 키</span>
                     {!hasUserKey && <span className="ml-auto text-[10px] text-red-300 font-bold">설정 필요</span>}
                   </button>
+                  {/* TallyOne 1.0 (K4): 보조기능(#/aux) 진입 — 건강 점검·맛집 수첩 등 */}
+                  {onOpenAux && (
+                    <button onClick={() => { setMenuOpen(false); onOpenAux(); }}
+                      className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                      <Wrench className="w-5 h-5 text-sky-300 shrink-0"/>
+                      <span className="text-sm text-slate-200 font-bold">보조기능</span>
+                    </button>
+                  )}
                   {onOpenStaffManager && (
                     <button onClick={() => { setMenuOpen(false); onOpenStaffManager(); }}
                       className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
@@ -128,10 +153,18 @@ export default function Header({ version, inspector, online, route, voyages, onC
                     </button>
                   )}
                   <div className="border-t border-slate-700"/>
-                  <button onClick={() => { setMenuOpen(false); handleLogoutOrExit(); }}
+                  {/* TallyOne 1.0 (K3): 로그아웃/앱 종료 2메뉴 분리 — 각각 확인 후 실행 */}
+                  {onLogout && (
+                    <button onClick={() => { setMenuOpen(false); handleLogoutClick(); }}
+                      className="w-full flex items-center gap-3 px-4 text-left hover:bg-red-950/40 active:bg-red-950/60" style={{ minHeight: 48 }}>
+                      <LogOut className="w-5 h-5 text-red-300 shrink-0"/>
+                      <span className="text-sm text-red-200 font-bold">로그아웃</span>
+                    </button>
+                  )}
+                  <button onClick={() => { setMenuOpen(false); handleExitClick(); }}
                     className="w-full flex items-center gap-3 px-4 text-left hover:bg-red-950/40 active:bg-red-950/60" style={{ minHeight: 48 }}>
-                    <LogOut className="w-5 h-5 text-red-300 shrink-0"/>
-                    <span className="text-sm text-red-200 font-bold">{onLogout ? '로그아웃' : '앱 종료'}</span>
+                    <DoorOpen className="w-5 h-5 text-red-300 shrink-0"/>
+                    <span className="text-sm text-red-200 font-bold">앱 종료</span>
                   </button>
                 </div>
               </>

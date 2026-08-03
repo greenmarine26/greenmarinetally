@@ -309,14 +309,4 @@ function pullStreamForward(cards, pref) {
   return [...out, ...rest];
 }
 
-// 선택 베이 → 같은 슬롯 그룹 (예: 20 → [19,20,21])
-export function resolveBayGroup(bayNo, bayPairs) {
-  const n = parseInt(bayNo, 10);
-  const group = new Set([n]);
-  if (n % 2 === 0) { group.add(n - 1); group.add(n + 1); }
-  else {
-    const pair = bayPairs?.[String(n)];
-    if (pair) { group.add(parseInt(pair, 10)); group.add((n + parseInt(pair, 10)) / 2); }
-  }
-  return group;
-}
+// V9.57: resolveBayGroup 삭제 — 저장소 전체 grep 참조 0 (베이 그룹 선택 UI가 쓰지 않는 잔재).

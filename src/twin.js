@@ -113,17 +113,4 @@ export function getBayPairs(allContainers, shipImo = '', shipName = '') {
   return buildBayPairs(allContainers, shipImo, shipName);
 }
 
-// 같은 슬롯에 적재된 다른 컨 찾기 (FR 4개 한 자리 등)
-// M3.86 fix2: c.bay normalize
-export function findStackMates(target, allContainers) {
-  if (!target?.bay || !target?.row || !target?.tier) return [];
-  const tBayNorm = String(parseInt(target.bay, 10));
-  return allContainers.filter(c => {
-    if (c.cn === target.cn) return false;
-    const cBayNorm = c.bay ? String(parseInt(c.bay, 10)) : '';
-    return cBayNorm === tBayNorm &&
-      c.row === target.row &&
-      c.tier === target.tier &&
-      c._mode === target._mode;
-  });
-}
+// V9.57: findStackMates 삭제 — 저장소 전체 grep 참조 0 (같은 슬롯 다중 적재 조회는 미사용 잔재).

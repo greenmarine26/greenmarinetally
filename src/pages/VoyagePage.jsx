@@ -27,7 +27,6 @@ import SearchPanel from '../components/SearchPanel.jsx';
 import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
 import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
-import BayDictStatusWidget from '../components/BayDictStatusWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import WorkReportModal from '../components/WorkReportModal.jsx';
@@ -121,7 +120,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // 선박 정책 Firebase 구독
   useEffect(() => {
     const unsub = fbSubscribeShipPolicies(db, (data) => setExtraPolicies(data || {}));
-    return () => { try { unsub && unsub(); } catch (e) {} };
+    return () => { try { unsub && unsub(); } catch (e) { console.warn('[선박정책] 구독 해제 실패', e); } };  // V9.57: 조용한 실패 금지
   }, []);
 
   useEffect(() => { onModeChange?.(mode); }, [mode]);
@@ -602,7 +601,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (fb.fbSetSimple) {
           await fb.fbSetSimple(`policyAsked/${inspector || 'anon'}/${policyAskKey}`, todayStr);
         }
-      } catch (_) {}
+      } catch (e) { console.warn('[정책질문 기록] Firebase 백업 저장 실패(로컬 기록은 유지)', e); }  // V9.57: 조용한 실패 금지
     })();
   }, [voyage, shipPolicy, policyAsked, containers, voyageKey, inspector]);
 
@@ -857,11 +856,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
         return (
           <div className="space-y-2">
-            <BayDictStatusWidget
-              shipImo={voyage?.info?.imo}
-              shipName={voyage?.info?.vsl}
-              ediContainerCount={allEdiContainers.length}
-            />
+            {/* V9.57: BayDictStatusWidget 제거 — bayNum 결함으로 오표시, 기능은 자료 탭 BayDictVerifyWidget으로 이관(팀I) */}
             {/* 선적 모드 + 자리 뺏긴 컨 있을 때만 표시 */}
             {mode === 'loading' && displaced.length > 0 && (
               <DisplacedSidebar
@@ -1764,7 +1759,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           defFiles.push(file);
           continue;
         }
-      } catch (e) {}
+      } catch (e) { console.warn('[파일판별] .def 매직바이트 검사 실패 — 일반 파일로 계속 진행:', file.name, e); }  // V9.57: 조용한 실패 금지
 
       // M6.14a (핫픽스): 파일명 키워드만으로 즉시 판별 — PDF.js 텍스트 추출 안 함
       //   이유: 양하 리스트 PDF(50+페이지)에서 extractPdfText가 수십 초 블로킹 → 먹통 현상
@@ -1875,7 +1870,15 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           let _podPtk = 0, _polPtk = 0;
           r.containers.forEach((c) => { if (isPyeongtaekPort(c.pod)) _podPtk++; if (isPyeongtaekPort(c.pol)) _polPtk++; });
           const _ediKind = _podPtk > _polPtk ? 'discharge' : _polPtk > _podPtk ? 'loading' : mode;
-          const _regVoy = _ediKind === 'discharge' ? voyage.info.voy_d : voyage.info.voy_l;
+          let _regVoy = _ediKind === 'discharge' ? voyage.info.voy_d : voyage.info.voy_l;
+          // V9.57: 수집기 자동등록 항차는 voy_d/voy_l이 비어 있어 항차 대조를 통째로 건너뛰고
+          //   무검증 통과하던 구멍. 등록값이 없으면 Firebase 키({VSL}_{VOY} — HomePage handleCreate와
+          //   수집기가 같은 구조)의 마지막 '_' 뒤 항차를 추출해 그것과 대조한다.
+          let _regVoyFromKey = false;
+          if (!_regVoy && typeof voyageKey === 'string' && voyageKey.includes('_')) {
+            const _kv = voyageKey.slice(voyageKey.lastIndexOf('_') + 1).trim();
+            if (_kv) { _regVoy = _kv; _regVoyFromKey = true; }
+          }
           // V8.28: 항차 비교를 '번호 기준'으로 — E/W/N/S 방향·앞0 무시. 인천 출발 선박은 선사가 왕복을
           //   한 항차(예 0529W)로 표기해 평택 양하분도 그 번호로 온다. leg는 위에서 내용(POD/POL)으로 이미
           //   확정했으니 같은 번호면 통과(0529==0529), 번호가 다르면(0530 vs 0529) 그대로 차단.
@@ -1891,7 +1894,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             //   (b) 자동등록(수집기) 항차 info에는 callsign이 아예 저장되지 않아 등록 측이 항상 공란.
             //   여기 도달 = 상단 선박 가드 통과(콜사인·선박명이 '비교 가능한데 다른' EDI는 이미 차단됨)
             //   → 불일치 증거 없음. 평택분이 있으면 식별 근거를 문구로 보여주고 사용자가 결정한다.
-            const _csComparable = _voyCs && _ediCs;   // 1596행에서 계산됨
+            const _csComparable = _voyCs && _ediCs;   // V9.57: 행번호 정정 — 위 선박 가드(_voyCs·_ediCs 계산부, 종전 '1596행' 주석은 옛 위치)
             // V9.39: **IMO도 식별 근거로 쓴다.** SKR·동진 계열 EDI는 콜사인이 없고 IMO만 있어
             //   종전엔 근거가 '비교 불가'로 떨어져, 실제로는 같은 배라는 증거가 있는데도
             //   검수사가 맨눈으로 확인해야 했다. 차단 로직은 건드리지 않는다 — 문구(근거)만 정확해진다.
@@ -1907,7 +1910,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
                 title: '항차 번호가 다릅니다',
                 description:
                   `인천발 선박은 평택 항차가 한 항차 낮게, 방향이 바뀔 수 있습니다.\n\n` +
-                  `EDI 항차 ${r.voy} ↔ 등록 ${_leg} 항차 ${_regVoy}\n` +
+                  `EDI 항차 ${r.voy} ↔ 등록 ${_leg} 항차 ${_regVoy}${_regVoyFromKey ? ' (항차 키에서 추출)' : ''}\n` +
                   `${_idBasis}\n` +
                   `EDI에 평택 ${_leg}분 ${_ptkLeg}대 있음\n\n` +
                   `등록 항차 ${_regVoy} 로 흡수할까요?`,
@@ -1923,6 +1926,27 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               results.push(`🔀 ${file.name}: 인천발 항차 오프셋 — EDI ${r.voy} 를 등록 ${_leg} 항차 ${_regVoy} 로 흡수 (${_csComparable ? `콜사인 ${voyage.info.callsign} 일치` : '사용자 확인'}, 평택 ${_ptkLeg}대).`);
               // 흡수: 가드 통과 (아래 정상 병합 흐름 진입)
               // V9.05-03: 콜사인 비교 불가+평택분 있음의 옛 즉시 차단 분기는 모달로 대체(위).
+            } else if (_csComparable || _imoSame) {
+              // V9.57: 평택분 0이어도 콜사인·IMO가 같은 배면 즉시 차단하지 않고 사용자 판단(흡수 모달).
+              //   여기 도달 = 상단 선박 가드 통과 → 콜사인이 둘 다 있으면 이미 일치한 것.
+              //   통과 화물뿐인 EDI일 수 있으므로 기본 권장은 '적용 안 함'.
+              const _absorb0 = await askChoice({
+                title: '항차 번호가 다릅니다',
+                description:
+                  `EDI 항차 ${r.voy} ↔ 등록 ${_leg} 항차 ${_regVoy}${_regVoyFromKey ? ' (항차 키에서 추출)' : ''}\n` +
+                  `${_idBasis}\n` +
+                  `⚠ EDI에 평택 ${_leg}분 없음 — 다른 항차(통과 화물) 자료일 수 있습니다\n\n` +
+                  `그래도 등록 항차 ${_regVoy} 로 흡수할까요?`,
+                options: [
+                  { key: 'absorb', label: `✅ ${_regVoy} 로 흡수`, desc: '같은 입항으로 보고 이 항차에 적용' },
+                  { key: 'skip', label: '⛔ 적용 안 함', desc: '다른 항차 자료 — 넣지 않음', recommended: true },
+                ],
+              });
+              if (_absorb0 !== 'absorb') {
+                results.push(`⛔ ${file.name}: 항차 불일치 — EDI ${r.voy} ≠ 등록 ${_leg} ${_regVoy}, 평택 ${_leg}분 없음, 사용자가 적용 안 함 선택.`);
+                continue;
+              }
+              results.push(`🔀 ${file.name}: EDI ${r.voy} 를 등록 ${_leg} 항차 ${_regVoy} 로 흡수 (평택 ${_leg}분 없음, 같은 배 확인 후 사용자 결정).`);
             } else {
               results.push(`⛔ ${file.name}: 다른 항차 자료 — EDI 항차 ${r.voy} ≠ 등록 ${_leg} 항차 ${_regVoy}, 평택 ${_leg}분 없음 → 적용 안 함.`);
               continue;
@@ -1953,7 +1977,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
               } else {
                 results.push(`🆕 새 선박: ${shipInfo.name} (${shipInfo.imoIsNumeric ? 'IMO ' : ''}${shipInfo.imo})`);
               }
-            } catch (e) {}
+            } catch (e) { console.warn('[선박 라이브러리] 이전 구조 조회 실패(학습 없이 계속 진행)', e); }  // V9.57: 조용한 실패 금지
           }
         }
 
@@ -2008,10 +2032,15 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             etd: r.etd || voyage.info.etd || '',
             carrier: r.carrier || voyage.info.carrier || '',
           };
+          // V9.57: 등록 항차 표기를 EDI 표기로 덮어쓰지 않는다 — 위 대조 가드에서 voyCore 동일
+          //   (0패딩·방향 차이, 예 0529W vs 529W)로 통과했거나 사용자가 흡수한 EDI가 여기서
+          //   voy_d/voy_l을 갈아치우면 Firebase 키({VSL}_{VOY})·목록 표기와 어긋난다.
+          //   등록값이 비어 있을 때만 자동 보완한다. (utils voyCore/voyEq 승격은 팀F 진행 중 —
+          //   가드가 핵심번호 불일치를 이미 차단/흡수 처리하므로 여기선 '빈 값만 채움'으로 충분)
           if (ediKind === 'discharge') {
-            if (r.voy !== voyage.info.voy_d) infoPatch.voy_d = r.voy;
+            if (!voyage.info.voy_d) infoPatch.voy_d = r.voy;
           } else if (ediKind === 'loading') {
-            if (r.voy !== voyage.info.voy_l) infoPatch.voy_l = r.voy;
+            if (!voyage.info.voy_l) infoPatch.voy_l = r.voy;
           }
           // M5.87: callsign 자동 저장 (EDI에서 새로 추출됐고 voyage.info에 없거나 다르면)
           if (r.callsign && r.callsign !== voyage.info.callsign) {
@@ -2486,7 +2515,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         containers.forEach(cn => {
           if (!cnObj[cn]) { cnObj[cn] = { at: Date.now() }; added++; }
         });
-      } catch (e) {}
+      } catch (e) { console.warn('[X-RAY] 파일 파싱 실패 — 이 파일은 건너뜀:', file.name, e); }  // V9.57: 조용한 실패 금지
     }
     await fbSaveXrayList(voyageKey, cnObj);
     setStatus(`✅ X-RAY: +${added}대 (전체 ${Object.keys(cnObj).length}대)`);

@@ -3,7 +3,7 @@
 //   - EDI 형식: 실수신 EDI(SWDN 2603S) 실측 문법과 바이트 단위 일치 검증(sim_v895) — 카스피(CASP) 호환.
 //   - 범위: 평택 선적분만(사용자 확정). 위치는 실체(bay_actual) 우선, 없으면 계획.
 //   - 대상: 선적확인(completed)된 컨 우선 — 완료가 하나도 없으면 전체 평택 선적분(경고 표시).
-import { isPyeongtaekPort, loadSheetJS } from './utils.js';
+import { isPyeongtaekPort, loadSheetJS, isoToLabel, isPtk, isValidCn } from './utils.js';   // V9.57: 규격·평택분·컨번호 판정 단일 소스
 
 // ── 평택 선적분 컨테이너 조립 (ediContainers + records 병합, 실체 위치 우선) ──
 export function collectActualLoading(voyage) {
@@ -26,7 +26,7 @@ export function collectActualLoading(voyage) {
   for (const [cn, c] of Object.entries(edi)) put(cn, c, false);
   for (const [cn, r] of Object.entries(recs)) put(cn, r, true);
 
-  const all = Object.values(byCn).filter(c => c._inList || isPyeongtaekPort(c.pol));   // 평택 선적분(리스트=평택 원칙)
+  const all = Object.values(byCn).filter(c => isPtk(c, 'loading'));   // 평택 선적분(리스트=평택 원칙) — V9.57: isPtk 단일 소스
   const doneKeys = new Set(Object.keys(completed).map(k => String(k).replace(/\s/g, '').toUpperCase()));
   const done = all.filter(c => doneKeys.has(c.cn));
   const useDoneOnly = done.length > 0;
@@ -71,8 +71,15 @@ export function normalizeCntrType(iso) {
   const high = c2 === '4' || c2 === '5' || c2 === '6' || c2 === 'E' || c2 === 'F';
   if (/^\d/.test(c3) || c3 === '') {
     // 구형 숫자 ISO: 3번째 숫자 = 종류 (0·1=GP, 2=벌크, 3·4=리퍼, 5=오픈탑, 6=플랫, 7=탱크)
-    const kind = (c3 === '3' || c3 === '4') ? 'RF' : c3 === '2' ? 'BK'
-      : c3 === '5' ? 'OT' : c3 === '6' ? 'FR' : c3 === '7' ? 'TK' : 'GP';
+    // V9.57: 8·9를 GP로 처리해 4582(40RF)→GP, 4583(FR)→GP, 4590(OT)→GP가 되던 결함 —
+    //   규격 라벨 단일 소스 isoToLabel이 특수 종류를 확정하면 그것을 따르고(4582→40RF·4583→40FR·
+    //   4590→40OT·9530→라벨은 45HC지만 숫자 규칙 '3'=RF로 왕복 보존), 라벨이 일반(DC/HC)인 코드만
+    //   구형 숫자 규칙으로 판정한다 (라벨이 모르는 2270=탱크 등은 숫자 규칙이 살린다 — numericIso 왕복 유지).
+    const lbl = String(isoToLabel(s) || '');
+    const lk = lbl.endsWith('RF') ? 'RF' : lbl.endsWith('FR') ? 'FR'
+      : lbl.endsWith('OT') ? 'OT' : lbl.endsWith('TK') ? 'TK' : '';
+    const kind = lk || ((c3 === '3' || c3 === '4') ? 'RF' : c3 === '2' ? 'BK'
+      : c3 === '5' ? 'OT' : c3 === '6' ? 'FR' : c3 === '7' ? 'TK' : 'GP');
     return { len, kind, high };
   }
   // 신형 ISO: 3번째 문자 (G=GP, R·H=리퍼, U=오픈탑, P=플랫, T=탱크, B=벌크)
@@ -169,7 +176,7 @@ export function buildActualBaplie(rows, meta = {}) {
     const l83 = r.tspot || r.fpod;                             // 앱 파서는 LOC+83을 tspot(환적항)에 저장
     if (l83) segs.push(`LOC+83+${l83}:139:6`);
     segs.push(r.rff || 'RFF+BM:1');
-    const cnTxt = /^[A-Z]{4}\d{7}$/.test(r.cn) ? r.cn.slice(0, 4) + ' ' + r.cn.slice(4) : r.cn;   // 실측: 'KMTU 9321484'
+    const cnTxt = isValidCn(r.cn) ? r.cn.slice(0, 4) + ' ' + r.cn.slice(4) : r.cn;   // 실측: 'KMTU 9321484' — V9.57: 단일 소스
     segs.push(`EQD+CN+${cnTxt}+${ediIso(r.iso)}+++${r.fe === 'E' ? '4' : '5'}`);
     segs.push(`NAD+CA+${(r.op || carrier).toUpperCase()}:172:20`);
     const dgs = Array.isArray(r.dgs) && r.dgs.length ? r.dgs : (r.dgc || r.un ? [{ dgc: r.dgc, un: r.un }] : []);
@@ -286,7 +293,7 @@ export async function parseEditExcel(arrayBuffer) {
       const line = aoa[r] || [];
       const cn = String(line[iCn] || '').replace(/\s/g, '').toUpperCase();
       if (!cn) continue;
-      if (!/^[A-Z]{4}\d{7}$/.test(cn)) errors.push(`${r + 1}행 컨번호 형식 이상: ${cn}`);
+      if (!isValidCn(cn)) errors.push(`${r + 1}행 컨번호 형식 이상: ${cn}`);   // V9.57: 단일 소스
       rows.push({
         cn, iso: String(line[iIso] || '').toUpperCase(),
         fe: String(line[iFe] || 'F').toUpperCase() === 'E' ? 'E' : 'F',

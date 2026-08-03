@@ -151,10 +151,11 @@ export default function FoodPage({ inspector, onGoHome }) {
   return (
     <div className="max-w-3xl mx-auto px-3 py-3 space-y-3">
       <div className="flex items-center justify-between">
-        <button onClick={onGoHome} className="flex items-center gap-1 text-sm text-slate-400 hover:text-violet-300">
+        {/* TallyOne 1.0(판2 팀M): 헤더 톤을 보조기능 허브(AuxPage)·건강 점검과 통일 — 스타일만, 동작 불변 */}
+        <button onClick={onGoHome} className="flex items-center gap-1 py-2.5 pr-3 text-sm text-slate-400 hover:text-sky-300">
           <ChevronLeft className="w-4 h-4"/>홈
         </button>
-        <div className="font-bold text-emerald-300">🍽 평택항 맛집 수첩</div>
+        <div className="font-black text-slate-100">🍽 평택항 맛집 수첩</div>
         <button onClick={() => setRoulette(slot)}
           className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white text-sm font-bold">
           <Dices className="w-4 h-4"/>돌림판

@@ -25,21 +25,23 @@ if [ -n "$APPVER" ]; then
   # 콘앱 화면 버전 라벨도 동기화 — 라벨로 신/구버전 구분 가능하게.
   #   (이전: 코드는 고쳐도 라벨이 V7.01로 박혀 업데이트 여부를 화면에서 알 수 없었음)
   # V7.91: V[0-9.]* → V[0-9.-]* — 빌드번호 하이픈을 패턴이 못 잡아 라벨이 누적 오염되던 버그 수정.
-  sed -i "s/(주)그린마린 · V[0-9.-]*/(주)그린마린 · $APPVER/" public/cone.html
-  echo "✓ cone.html 화면 버전 → $APPVER 동기화"
+  # ConeOne 1.0: 콘앱 라벨은 검수앱 버전이 아니라 콘앱 자체 버전(__CONEV, cone.html 단일 소스)에서 동기화.
+  CONEVER=$(grep -oE "window.__CONEV='[^']*'" public/cone.html | head -1 | sed -E "s/.*'([^']*)'.*/\\1/")
+  sed -i "s/(주)그린마린 · \(V[0-9.-]*\|ConeOne [0-9.]*\)/(주)그린마린 · $CONEVER/" public/cone.html
+  echo "✓ cone.html 화면 버전 → $CONEVER 동기화(콘앱 자체 버전)"
   # V8.98-05: 콘앱 카고플랜 모듈 캐시키(__APPV)도 버전과 동기화 — 고정값(C7.67)이라
   #   cone-cargoplan.js를 새로 배포해도 폰이 옛 번들을 캐시로 계속 쓰던 사고 방지.
   sed -i "s/window.__APPV='[^']*'/window.__APPV='$APPVER'/" public/cone.html
   echo "✓ cone.html 모듈 캐시키(__APPV) → $APPVER 동기화"
   # __CONEV(콘앱 화면 자동갱신 감지 키)도 동기화 — V8.46에 멈춰 폰이 새 cone.html을 감지 못 하던 문제.
-  sed -i "s/window.__CONEV='[^']*'/window.__CONEV='$APPVER'/" public/cone.html
-  echo "✓ cone.html 화면 갱신키(__CONEV) → $APPVER 동기화"
+  # ConeOne 1.0: __CONEV는 콘앱 자체 버전 단일 소스 — 검수앱 버전으로 덮지 않는다(콘앱 수정 시 수동으로 올림).
+  echo "✓ cone.html 화면 갱신키(__CONEV) = $CONEVER (콘앱 단일 소스, 동기화 안 함)"
   # V9.05-03: README 제목 버전도 동기화 — V8.09-03에 멈춰 있던 불일치 재발 방지.
-  sed -i "s/^# Tallyman Master V[0-9.-]*/# Tallyman Master $APPVER/" README.md
+  sed -i "s/^# \(Tallyman Master\|TallyOne\).*/# $APPVER (구 Tallyman Master)/" README.md
   echo "✓ README.md 제목 버전 → $APPVER 동기화"
   # V9.07-05 정리: 벌크탤리 버전 라벨도 동기화 — 이전엔 버전 문자열 자체가 없어
   #   벌크탤리만 "언제 판인지" 알 수 없었다(지침서에 '2026-06-12판'으로 방치).
-  sed -i "s/<meta name=\"app-version\" content=\"(주)그린마린 · V[0-9.-]*\">/<meta name=\"app-version\" content=\"(주)그린마린 · $APPVER\">/" bulk_tally.html
+  sed -i "s/<meta name=\"app-version\" content=\"(주)그린마린 · [^\"]*\">/<meta name=\"app-version\" content=\"(주)그린마린 · $APPVER\">/" bulk_tally.html
   echo "✓ bulk_tally.html 버전 라벨 → $APPVER 동기화"
   # V9.07-05 정리: 통합지침서는 최신 1개만 남긴다 — 누적 재발(저장소 48개·드라이브 28개) 원천 차단.
   KEEPGUIDE="평택항_검수_통합지침서_3앱통합본_$APPVER.md"

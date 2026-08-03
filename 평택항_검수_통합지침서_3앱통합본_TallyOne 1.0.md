@@ -4306,3 +4306,26 @@ V9.23-06의 연막검사는 껍데기만 그리고 있었다(실측: `.cpv2-cell
 픽스처의 미배정 컨을 **`bay:'00', tier:'00'`(pad2 통과 형태)**으로 바꿨다. 이번 사고의 급소가 바로 그 경로였는데 종전 픽스처는 `''`만 써서 못 잡았다.
 
 > **교훈.** 컴포넌트 하나만 데이터로 태워 보고 "검증 완료"라 하면 안 된다. V9.23-05에서 `BayGridEditor`에 **원본 EDI 값을 직접** 넣어 "임시창고 15대"를 확인했지만, 실제 앱은 `ChiefBayEdit`가 `fullEdiMapOf`로 거르고 `pad2`로 가공해 넘긴다. **호출부까지 포함한 실제 경로로 태워야 검증이다.**
+
+---
+
+# [TallyOne 1.0 — 2026-08-03 재탄생판] 전수조사 수리 + 3화면 개편 + 리브랜딩
+
+## 이름 변경 (사용자 확정 2026-08-03)
+- 검수앱 Tallyman Master → **TallyOne 1.0** / 메일수집기 → **MailPilot 1.0** / 콘앱 → **ConeOne 1.0**
+- 콘앱 버전은 cone.html의 window.__CONEV가 단일 소스(검수앱 버전과 분리, build.sh가 라벨만 동기화).
+
+## 판1 (V9.57 커밋): 전수조사 수리·삭제
+- 결함 52건 수정: 숫자 ISO 특수컨 오태깅(4582 계열 tk 오판), normalizeCntrType 충돌(실선적 EDI 리퍼→드라이), 플랜편집 베이 100번대 절단, fbCreateVoyage가 수집기 info 덮어쓰기, 보관소 평택분 옛 규칙(POL∨POD), 약식 IFCSUM 파서 제거(parseNumericIFCSUM 단일화), badgeRule departed 무조건 전환, 흡수 가드 구멍(자동등록 항차 무검증 통과), gemini API 키 하드코딩 제거(⚠ AI 기능은 설정에서 키 등록 필요), 수석 장비표 5호기 누락·external_pause 미표시 등.
+- 삭제 약 2,100줄: 고아 서브시스템(ShipList/BayBuilder/CargoPlanView/BayBox/lib), MixerUploadModal 껍데기, BayDictStatusWidget(기능은 VerifyWidget 이관), emptyPlanVerify, 죽은 export 다수.
+
+## 판2 (TallyOne 1.0): 3화면 개편
+- 시작은 항상 **로그인 화면**(#/login). 로그인 후 역할별 진입 — 검수사→홈(#/), 수석·소유자→수석 대시보드(#/chief).
+- 권한: #/chief·#/search는 수석·소유자 전용. **소유자(김성일)만 전 화면 열람**.
+- 보조기능 화면 #/aux 신설: 사용 매뉴얼·검수 용어집·영어 회화집(1급 승격)·맛집·건강점검·AI 키·오늘의 브리핑·장비번호.
+- 수석 대시보드 보강: 수집기 하트비트 배너·healthSummary, 터미널 실적 대조(disDone/disPlan 등)·출항 표시, planDate/planSrc·도선 예보, 10px 버튼 44px화, alert 21곳 인라인 통지화.
+- 라우팅 수리: 양하/선적 mode 해시 유실(B-1), 뒤로가기 정리, 해시 파서 단일화(backHandler.parseHash).
+
+## MailPilot 1.0 (수집기, 같은 날)
+- v2.17.47 전수조사 수리판(치명 6·높음 19·중간 20·낮음 11 수정, 미사용 790줄 삭제) 위에 이름 변경.
+- 상세: C:\TALLYTEST\메일수집기_전수조사_보고서_v2.17.46_2026-08-03.md

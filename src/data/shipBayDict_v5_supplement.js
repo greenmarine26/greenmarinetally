@@ -4836,13 +4836,6 @@ export const SHIP_BAY_DICT_V5_SUPPLEMENT = {
   }
 };
 
-/** v5 supplement에서 code로 직접 lookup */
-export function lookupBayDictV5Supplement(code) {
-  if (!code) return null;
-  const key = String(code).toUpperCase().replace(/\s+/g, '');
-  return SHIP_BAY_DICT_V5_SUPPLEMENT[key] || null;
-}
-
 /** v5 supplement IMO/code/name 매칭 (v2 호환 단순 fuzzy) */
 export function lookupBayDictV5SupplementEnhanced(imo, vesselNameOrCode) {
   if (!vesselNameOrCode && !imo) return null;

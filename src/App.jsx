@@ -1,4 +1,5 @@
 // 그린마린 평택항 검수 — Master V1.1
+// TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
 import React, { useState, useEffect, useCallback } from 'react';
 import { APP_VERSION, _storage, SK } from './utils.js';
 import { loadUserBayDict, entryTimestamp, applyApprovedSync } from './data/userBayDict.js';
@@ -8,25 +9,43 @@ import {
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard
 } from './firebase.js';
-import { isAdminName } from './adminGuard.js';   // V9.11: 관리자 판정은 Firebase 목록 기준(하드코딩 제거)
+import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
+import { isChief, setServerRoles } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결)
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
+import { parseHash, exitApp } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6)
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
 import ChiefDashboard from './pages/ChiefDashboard.jsx';
 import HealthPage from './pages/HealthPage.jsx';  // V8.40: 항차 건강 점검
 import FoodPage from './pages/FoodPage.jsx';       // V8.60: 맛집 수첩+돌림판
+import AuxPage from './pages/AuxPage.jsx';         // TallyOne 1.0: 보조기능 화면(#/aux — 팀M 구현)
+import LoginPage from './pages/LoginPage.jsx';     // TallyOne 1.0: 로그인 전용 화면 (구 InspectorModal 승격)
 import Header from './components/Header.jsx';
 import BroadcastMarquee from './components/BroadcastMarquee.jsx';
-import InspectorModal from './components/InspectorModal.jsx';
 import StaffManagerModal from './components/StaffManagerModal.jsx';
 import GreetingModal from './components/GreetingModal.jsx';
-import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, speakGreeting, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
+import { fetchPyeongtaekWeather, buildGreetingMessage, buildFarewellMessage, saveLoginTime, getLoginTime, clearLoginTime } from './greeting.js';
 import ContainerDetailModal from './components/ContainerDetailModal.jsx';
 import UpdatePrompt from './components/UpdatePrompt.jsx';
 
+// TallyOne 1.0 (K2): 수석 전용 라우트(#/chief·#/search) 접근 차단 안내 화면
+function DeniedChiefOnly({ onGoHome }) {
+  return (
+    <div className="max-w-3xl mx-auto px-3 py-16 text-center text-slate-400">
+      <div className="text-5xl mb-4">🔒</div>
+      <div className="text-lg font-bold text-slate-200 mb-1">수석 검수사 전용</div>
+      <div className="text-sm mb-5">이 화면은 수석·부수석 검수사와 소유자만 열 수 있습니다.</div>
+      <button onClick={onGoHome} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold">홈으로</button>
+    </div>
+  );
+}
+
 export default function App() {
-  const [route, setRoute] = useState({ name: 'home' });
+  // TallyOne 1.0 (B-8): 초기 라우트도 해시 파싱으로 — 홈 깜빡임 제거 (단 아래 로그인 강제가 우선)
+  const [route, setRoute] = useState(() => parseHash(window.location.hash));
+  // TallyOne 1.0: 로그인 전에 열려던 딥링크(#/voyage/... 등) — 로그인 후 그 화면으로 보낸다
+  const pendingHashRef = React.useRef('');
   const [voyages, setVoyages] = useState({});
   const [voyagesLoaded, setVoyagesLoaded] = useState(false);  // V8.27: 딥링크 #310 방지 — 로드 전엔 VoyagePage 미마운트
   const [inspectors, setInspectors] = useState({});
@@ -44,9 +63,8 @@ export default function App() {
   const [pilotForecast, setPilotForecast] = useState({});
   // V9.36: 터미널 작업 현황(진행률·출항 ETD) — 작업 마무리 시 출항시간 표기용
   const [terminalWork, setTerminalWork] = useState({});
-  // M3.6: 자동 로그인 제거 - 매번 검수원 입력
+  // M3.6: 자동 로그인 제거 - 매번 검수원 입력 (TallyOne 1.0: 모달 → 로그인 화면으로 승격)
   const [inspector, setInspector] = useState('');
-  const [showInspectorModal, setShowInspectorModal] = useState(true);
   const [showStaffManager, setShowStaffManager] = useState(false);  // M5.73
   const [online, setOnline] = useState(true);
   const [globalDetail, setGlobalDetail] = useState(null);
@@ -57,10 +75,22 @@ export default function App() {
   // V9.05: 공유 정본보다 오래된 로컬 베이사전 사본 목록 (관리자 승인 후 갱신)
   const [bayDictSyncPending, setBayDictSyncPending] = useState([]);
 
+  // TallyOne 1.0: 앱 시작은 항상 로그인 화면(자동 로그인 없음 — 사용자 확정 사양).
+  //   원래 열려던 해시는 pendingHashRef에 보관 → 로그인 성공 시 권한 검사 후 그 해시로 진입.
+  //   replaceState라 히스토리에 로그인 이전 엔트리가 쌓이지 않는다.
+  useEffect(() => {
+    const h = window.location.hash;
+    if (h && h !== '#' && h !== '#/' && !h.startsWith('#/login')) pendingHashRef.current = h;
+    window.history.replaceState(null, '', '#/login');
+    setRoute({ name: 'login' });
+  }, []);
+
   useEffect(() => {
     const u1 = fbSubscribeVoyages((v) => { setVoyages(v); setVoyagesLoaded(true); });
     const u2 = fbSubscribeInspectors(setInspectors);
-    const unsub2 = fbSubscribeStaffList(setExtraStaff);
+    // TallyOne 1.0 (K5): 서버 직책을 staffList 모듈 캐시에 먼저 밀어 넣고(setServerRoles),
+    //   그 다음 state 반영(setExtraStaff) — 순서가 바뀌면 첫 렌더가 옛 직책으로 판정한다.
+    const unsub2 = fbSubscribeStaffList((m) => { setServerRoles(m); setExtraStaff(m); });
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
@@ -114,6 +144,8 @@ export default function App() {
     return () => { alive = false; };
   }, [inspector]);
   const isAdmin = isAdminName(adminGuard, inspector);
+  // TallyOne 1.0 (K2): 라우트 게이트 — 수석(부수석 포함) 또는 소유자만 #/chief·#/search
+  const chiefOrOwner = isChief(inspector) || isOwnerName(inspector);
 
   // V9.05: 관리자 승인 시 공유 정본을 로컬 사본에 반영
   const handleApproveBayDictSync = useCallback(() => {
@@ -130,40 +162,31 @@ export default function App() {
     }
   }, [bayDictSyncPending]);
 
+  // TallyOne 1.0 (B-12): 해시 → 라우트 동기화는 parseHash 단일 파서만 쓴다
   useEffect(() => {
-    const sync = () => {
-      const h = window.location.hash;
-      const v = h.match(/^#\/voyage\/([^/]+)/);
-      if (v) setRoute({ name: 'voyage', voyageKey: decodeURIComponent(v[1]) });
-      else if (h === '#/search') setRoute({ name: 'search' });
-      else if (h === '#/chief') setRoute({ name: 'chief' });
-      else if (h === '#/health') setRoute({ name: 'health' });  // V8.40: 항차 건강 점검
-      else if (h.startsWith('#/food')) setRoute({ name: 'food' });  // V8.60: 맛집
-      else setRoute({ name: 'home' });
-    };
-    sync();
+    const sync = () => setRoute(parseHash(window.location.hash));
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
   }, []);
 
-  // 뒤로가기 가로채기 - 홈에서 뒤로가기 누르면 앱 종료 막기
+  // TallyOne 1.0 (B-6): 홈 뒤로가기 — 종전에는 홈 진입마다 pushState를 무조건 반복해
+  //   가짜 엔트리가 무한 누적됐다. 이제 가드 엔트리(gmHomeGuard)를 1개만 유지하고,
+  //   홈에서 뒤로가면 종료 확인 → 확인 시 exitApp, 취소 시 가드 재장전.
   useEffect(() => {
-    if (route.name !== 'home') return;
-    // 홈일 때만 가짜 history 추가 → 뒤로가기 시 그냥 홈에 머무름
+    if (route.name !== 'home' || !inspector) return;
+    if (!(window.history.state && window.history.state.gmHomeGuard)) {
+      window.history.pushState({ gmHomeGuard: true }, '', '#/');
+    }
     const handler = () => {
-      // 홈에서 뒤로가기 누름 → 다시 홈으로 강제
-      if (window.location.hash !== '' && window.location.hash !== '#/') {
-        // 다른 페이지로 이동된 경우는 무시 (정상 라우팅)
-        return;
-      }
-      // 가짜 항목 다시 추가
-      window.history.pushState({ home: true }, '', '#/');
+      const h = window.location.hash;
+      if (h && h !== '#' && h !== '#/') return;   // 다른 라우트로의 정상 이동은 통과
+      const okExit = window.confirm('TallyOne 검수앱을 종료할까요?');
+      if (okExit) exitApp();
+      else window.history.pushState({ gmHomeGuard: true }, '', '#/');
     };
-    // 진입 시 1번 가짜 항목 추가
-    window.history.pushState({ home: true }, '', '#/');
     window.addEventListener('popstate', handler);
     return () => window.removeEventListener('popstate', handler);
-  }, [route.name]);
+  }, [route.name, inspector]);
 
   useEffect(() => {
     if (!inspector) return;
@@ -177,10 +200,16 @@ export default function App() {
     return () => clearInterval(id);
   }, [inspector, route]);
 
+  // TallyOne 1.0: 로그인 화면 강제(자동 로그아웃·로그아웃 완료 시) — replaceState라 스택에 안 쌓임
+  const forceLoginScreen = useCallback(() => {
+    window.history.replaceState(null, '', '#/login');
+    setRoute({ name: 'login' });
+  }, []);
+
   // ── V9.13(2026-07-27): 30분 무조작 자동 로그아웃 (사용자 요청) ───────────────
   //   왜: 로그인해 두고 앱을 만지지 않아도 30초 하트비트 때문에 계속 '로그인/작업중'으로 남았다.
   //   기준은 화면 조작(터치·클릭·키·스크롤). 조작이 30분 없으면 그 기기에서 스스로 로그아웃하고
-  //   검수원 선택창을 띄운다. 작업 기록은 그대로 남는다(로그아웃 마킹만).
+  //   로그인 화면을 띄운다. 작업 기록은 그대로 남는다(로그아웃 마킹만).
   useEffect(() => {
     if (!inspector) return;
     lastInputRef.current = Date.now();
@@ -194,7 +223,7 @@ export default function App() {
       _storage.set(SK.activeInspector, '');
       setInspector('');
       setAutoLogoutNotice(`${Math.round(IDLE_LOGOUT_MS / 60000)}분 동안 사용이 없어 자동 로그아웃됐습니다. 이름을 다시 선택하세요.`);
-      setShowInspectorModal(true);
+      forceLoginScreen();   // TallyOne 1.0: 모달 대신 로그인 화면으로
     };
     const id = setInterval(check, 30000);
     // 폰이 잠겨 타이머가 멈췄다 돌아오는 경우 — 화면 복귀 즉시 한 번 더 검사
@@ -205,7 +234,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVis);
       clearInterval(id);
     };
-  }, [inspector]);
+  }, [inspector, forceLoginScreen]);
 
   // M6.42: STOWAGE PDF는 영구 보관 — 시간 기반 자동 폐기 제거
   //   비용 분석: 300척 × 3MB = 900MB → 월 ₩25 (매우 적음)
@@ -218,9 +247,23 @@ export default function App() {
     setAutoLogoutNotice('');
     _storage.set(SK.activeInspector, name);
     await fbSetInspector(name);
-    setShowInspectorModal(false);
-    // M3.6: 로그인 시각 저장 + 날씨 + 인사
+    // M3.6: 로그인 시각 저장
     saveLoginTime(name);
+    // TallyOne 1.0: 역할별 진입 — 수석·소유자는 #/chief, 그 외 #/.
+    //   로그인 전 딥링크(pendingHash)가 있으면 거기로(수석 전용 화면은 권한 통과 시에만).
+    //   replaceState로 로그인 엔트리를 대체 — 뒤로가기 스택에 로그인 화면이 남지 않는다.
+    const roleGate = isChief(name) || isOwnerName(name);
+    let target = pendingHashRef.current || '';
+    pendingHashRef.current = '';
+    if (target) {
+      const r = parseHash(target);
+      if (r.name === 'login') target = '';
+      else if ((r.name === 'chief' || r.name === 'search') && !roleGate) target = '';
+    }
+    if (!target) target = roleGate ? '#/chief' : '#/';
+    window.history.replaceState(null, '', target);
+    setRoute(parseHash(target));
+    // M3.6: 날씨 + 인사 (화면 전환 뒤에 조회 — 날씨 응답을 기다리며 로그인이 멈추지 않게)
     const w = await fetchPyeongtaekWeather();
     setWeather(w);
     // M4.2: 인사말 하루 1회 — 같은 날(YYYY-MM-DD) 재로그인 시 인사말 스킵
@@ -236,7 +279,8 @@ export default function App() {
     // M3.88: 로그인 인사 음성 제거 (호불호 많음 - 사용자 요청)
   }, []);
 
-  // M3.6: 로그아웃 처리
+  // M3.6: 로그아웃 처리 — TallyOne 1.0 (B-7): 확인 단계는 Header(ConfirmModal)가 먼저 밟는다.
+  //   여기 도달했다는 것은 사용자가 이미 [로그아웃]을 확인했다는 뜻 — 그때만 서버에 마킹한다.
   const handleLogout = useCallback(async () => {
     if (!inspector) return;
     fbLogoutInspector(inspector).catch(() => {});   // V7.94-14: 서버에 로그아웃 즉시 마킹
@@ -252,23 +296,58 @@ export default function App() {
   // 인사 모달 닫기 + 로그아웃 시 실제 로그아웃 진행
   const handleCloseGreeting = useCallback(() => {
     if (greeting?.type === 'logout') {
-      // 실제 로그아웃 진행
+      // 실제 로그아웃 진행 → TallyOne 1.0: #/login으로
       clearLoginTime();
       _storage.set(SK.activeInspector, '');
       setInspector('');
-      setShowInspectorModal(true);
+      forceLoginScreen();
     }
     setGreeting(null);
-  }, [greeting]);
+  }, [greeting, forceLoginScreen]);
 
   const navigate = useCallback((target) => {
-    if (target === 'home') window.location.hash = '';
+    if (target === 'home') window.location.hash = '#/';
     else if (target === 'search') window.location.hash = '#/search';
     else if (target === 'chief') window.location.hash = '#/chief';
     else if (target === 'health') window.location.hash = '#/health';  // V8.40
     else if (target === 'food') window.location.hash = '#/food';      // V8.60
-    else if (target.voyageKey) window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}`;
+    else if (target === 'aux') window.location.hash = '#/aux';        // TallyOne 1.0: 보조기능
+    else if (target === 'login') window.location.hash = '#/login';    // TallyOne 1.0: 검수원 변경
+    // TallyOne 1.0 (B-1): 양하/선적 모드까지 해시에 인코딩 — #/voyage/KEY/discharge|loading
+    else if (target.voyageKey) window.location.hash = `#/voyage/${encodeURIComponent(target.voyageKey)}${target.mode ? `/${target.mode}` : ''}`;
   }, []);
+
+  // ── TallyOne 1.0: 로그인 게이트 — 로그인 전에는 어떤 라우트도 렌더하지 않는다. ──
+  //   로그인 상태에서 #/login에 오면 검수원 변경 화면(돌아가기 버튼 제공).
+  if (!inspector || route.name === 'login') {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100">
+        <UpdatePrompt/>
+        <LoginPage
+          current={inspector}
+          inspectors={inspectors}
+          extraStaff={extraStaff}
+          deletedStaff={deletedStaff}
+          notice={autoLogoutNotice}
+          onSelect={handleSelectInspector}
+          onCancel={inspector ? () => window.history.back() : null}
+        />
+        {/* 로그아웃 작별 인사 모달 — 닫으면 로그인 화면 유지 */}
+        {greeting && (
+          <GreetingModal
+            type={greeting.type}
+            lines={greeting.lines}
+            workForecast={greeting.workForecast}
+            onClose={handleCloseGreeting}
+          />
+        )}
+        <footer className="text-center text-[11px] text-slate-600 pb-8 pt-2 leading-relaxed">
+          © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
+          <span className="opacity-70">{APP_VERSION}</span>
+        </footer>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -279,9 +358,10 @@ export default function App() {
         online={online}
         route={route}
         voyages={voyages}
-        onChangeInspector={() => { setAutoLogoutNotice(''); setShowInspectorModal(true); }}
+        onChangeInspector={() => { setAutoLogoutNotice(''); navigate('login'); }}
         onOpenStaffManager={isAdmin ? () => setShowStaffManager(true) : null}
         onGoHome={() => navigate('home')}
+        onOpenAux={() => navigate('aux')}
         onLogout={handleLogout}
       />
 
@@ -302,11 +382,9 @@ export default function App() {
             pilotForecast={pilotForecast}
             terminalWork={terminalWork}
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
-            onOpenGlobalSearch={() => navigate('search')}
             onOpenChiefDashboard={() => navigate('chief')}
             heartbeat={heartbeat}
-            onOpenHealth={() => navigate('health')}
-            onOpenFood={() => navigate('food')}
+            onOpenAux={() => navigate('aux')}
           />
         )}
         {route.name === 'food' && (
@@ -318,19 +396,41 @@ export default function App() {
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
           />
         )}
+        {/* TallyOne 1.0 (K2): 통합검색은 수석·소유자 전용 */}
         {route.name === 'search' && (
-          <GlobalSearchPage
-            voyages={voyages}
-            onOpenContainer={(c) => setGlobalDetail(c)}
-            onGoHome={() => navigate('home')}
-          />
+          chiefOrOwner ? (
+            <GlobalSearchPage
+              voyages={voyages}
+              onOpenContainer={(c) => setGlobalDetail(c)}
+            />
+          ) : (
+            <DeniedChiefOnly onGoHome={() => navigate('home')}/>
+          )
         )}
+        {/* TallyOne 1.0 (K2): 수석 대시보드 게이트 (ChiefDashboard 내부 가드와 이중 방어) */}
         {route.name === 'chief' && (
-          <ChiefDashboard
-            voyages={voyages} inspectors={inspectors} inspector={inspector}
-            onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
-            onGoHome={() => navigate('home')}
-            onOpenGlobalSearch={() => navigate('search')}
+          chiefOrOwner ? (
+            <ChiefDashboard
+              voyages={voyages} inspectors={inspectors} inspector={inspector}
+              collectorHb={heartbeat}
+              pilotForecast={pilotForecast}
+              terminalWork={terminalWork}
+              onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
+              onGoHome={() => navigate('home')}
+              onOpenGlobalSearch={() => navigate('search')}
+            />
+          ) : (
+            <DeniedChiefOnly onGoHome={() => navigate('home')}/>
+          )
+        )}
+        {/* TallyOne 1.0: 보조기능 화면 (#/aux — 구현은 팀M AuxPage) */}
+        {route.name === 'aux' && (
+          <AuxPage
+            inspector={inspector}
+            isChief={isChief(inspector)}
+            isOwner={isOwnerName(inspector)}
+            voyages={voyages}
+            collectorHb={heartbeat}
           />
         )}
         {route.name === 'voyage' && (
@@ -344,7 +444,13 @@ export default function App() {
             portMisData={portMisData}
             pilotForecast={pilotForecast}
             onGoHome={() => navigate('home')}
-            onModeChange={(mode) => setRoute(r => ({ ...r, mode }))}
+            onModeChange={(mode) => {
+              // TallyOne 1.0 (B-1/B-2): 모드를 해시에도 기록 — 새로고침·공유 시 모드 유지.
+              //   replaceState라 모드 전환이 뒤로가기 스택에 쌓이지 않는다(hashchange 미발화 → setRoute 직접).
+              const h = `#/voyage/${encodeURIComponent(route.voyageKey)}${mode ? `/${mode}` : ''}`;
+              window.history.replaceState(window.history.state, '', h);
+              setRoute(r => ({ ...r, mode }));
+            }}
           />
           ) : voyagesLoaded ? (
             <div className="max-w-3xl mx-auto px-3 py-16 text-center text-slate-400">
@@ -361,18 +467,6 @@ export default function App() {
         © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
         <span className="opacity-70">{APP_VERSION}</span>
       </footer>
-
-      {showInspectorModal && (
-        <InspectorModal
-          current={inspector}
-          inspectors={inspectors}
-          extraStaff={extraStaff}
-          deletedStaff={deletedStaff}
-          notice={autoLogoutNotice}
-          onSelect={handleSelectInspector}
-          onClose={() => { setAutoLogoutNotice(''); if (inspector) setShowInspectorModal(false); }}
-        />
-      )}
 
       {showStaffManager && (
         <StaffManagerModal

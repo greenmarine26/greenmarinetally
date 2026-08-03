@@ -18877,27 +18877,3 @@ export function lookupBayDict(imo, code) {
   return null;
 }
 
-/**
- * 등록된 모든 선박 목록
- */
-export function listAllShips() {
-  return Object.values(SHIP_BAY_DICT).map(s => ({
-    imo: s.imo,
-    code: s.code,
-    name: s.name,
-    bayCount: s.bayDef.recordCount
-  }));
-}
-
-/**
- * 베이사전 통계
- */
-export function getBayDictStats() {
-  const ships = Object.values(SHIP_BAY_DICT);
-  return {
-    totalShips: ships.length,
-    withImo: ships.filter(s => s.imo).length,
-    totalBays: ships.reduce((sum, s) => sum + s.bayDef.recordCount, 0),
-    version: '1.1-draft'
-  };
-}

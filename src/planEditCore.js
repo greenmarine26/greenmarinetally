@@ -6,12 +6,23 @@
 //   - 초벌 EDI = 위치의 출발점, 선적 리스트 = 평택분 판정(단일 진실은 parseBAPLIE)
 //   - 이동 가능 = 평택 선적분 + 쉬프팅(재적부). 통과 고정분은 잠금.
 //   - 실선적 데이터(records/bay_actual)는 이 모듈이 절대 만지지 않는다.
-import { isPyeongtaekPort, isoToLabel } from './utils.js';
+import { isPyeongtaekPort, isoToLabel, under40Support } from './utils.js';
 
 export const STG = '__STG__';
 
 export const pad2 = (v) => String(v ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
 export const pad3 = (v) => String(v ?? '').replace(/\D/g, '').padStart(3, '0').slice(-3);
+// V9.57: 베이 전용 패딩 — pad2가 100번대 베이를 절단('100'→'00', 좌표 충돌·소실)하던 결함 교정.
+//   최소 2자리(기존 표기 유지) + 절단 없음(100번대는 3자리 그대로). row/tier는 pad2 유지.
+//   ※ 항상 3자리(pad3)로 저장하지 않는 이유: diffChanges의 to 문자열을 ChiefBayEdit(82행)가
+//     slice(0,2)/(2,4)/(4,6)로 위치 파싱한다 — 100 미만 베이는 기존 6자리 형식을 보존해야 한다.
+//     rewriteBaplie의 LOC+147은 pad3로 명시 변환하므로 정합(264행).
+export const padBay = (v) => {
+  const d = String(v ?? '').replace(/\D/g, '');
+  const n = parseInt(d, 10);
+  if (!Number.isFinite(n)) return '00';
+  return String(n).padStart(2, '0');   // padStart는 절단하지 않음 — 100은 '100' 그대로
+};
 
 // 컨 사이즈 라벨 → '20' | '40' | '45'
 export function sizeOf(c) {
@@ -60,7 +71,7 @@ export function buildState(containers, listCns = [], shiftCns = [], opts = {}) {
     const _noSlot = (v) => { const t = String(v ?? '').trim(); return !t || /^0+$/.test(t); };
     const noSlot = _noSlot(c.bay) || _noSlot(c.tier);
     if (noSlot) unplaced.add(cn);
-    const p = (stgSet.has(cn) || noSlot) ? { storage: true } : { bay: pad2(c.bay), row: pad2(c.row), tier: pad2(c.tier) };
+    const p = (stgSet.has(cn) || noSlot) ? { storage: true } : { bay: padBay(c.bay), row: pad2(c.row), tier: pad2(c.tier) };   // V9.57: 베이 100번대 절단 방지
     base[cn] = { ...p };
     pos[cn] = { ...p };
     const lock = lockSet ? lockSet.has(cn) : !isMoveable(c, listSet, shiftSet);
@@ -91,10 +102,10 @@ export function placeAt(state, cn, bay, row, tier, opts = {}) {
   if (state.locked.has(key)) return { ok: false, reason: '통과 고정분 — 이동 불가' };
 
   // 페어 베이(짝/홀)에서 목적 베이는 컨 사이즈로 결정 — 도메인 고정 규칙
-  let tgtBay = pad2(bay);
+  let tgtBay = padBay(bay);   // V9.57: 베이 100번대 절단 방지
   if (opts.pairEven != null && opts.pairOdd != null) {
     const sz = sizeOf(state.byCn.get(key));
-    tgtBay = pad2(sz === '40' || sz === '45' ? opts.pairEven : opts.pairOdd);
+    tgtBay = padBay(sz === '40' || sz === '45' ? opts.pairEven : opts.pairOdd);
   }
   // V9.27: 물리 불가 — 40/45ft를 홀수 베이 단독 슬롯에 (pair 경로는 사이즈로 짝수 강제라 안전)
   if (opts.pairEven == null) {
@@ -137,7 +148,7 @@ export function placeMany(state, moves) {
     const cn = String(m.cn).replace(/\s/g, '').toUpperCase();
     if (!state.pos[cn]) return { ok: false, reason: `${cn} 없는 컨테이너`, moved: 0 };
     if (state.locked.has(cn)) return { ok: false, reason: `${cn} 통과 고정분 — 이동 불가`, moved: 0 };
-    const t = { bay: pad2(m.bay), row: pad2(m.row), tier: pad2(m.tier) };
+    const t = { bay: padBay(m.bay), row: pad2(m.row), tier: pad2(m.tier) };   // V9.57: 베이 100번대 절단 방지
     // V9.27: 물리 불가 — 40/45ft 홀수 베이
     const _sz = sizeOf(state.byCn.get(cn) || {});
     if ((_sz === '40' || _sz === '45') && parseInt(t.bay, 10) % 2 === 1) {
@@ -188,17 +199,21 @@ export function validate(state) {
 
   const warnings = [];
   // 40ft 위 20ft 적재 불가 (콘 홀 없음)
-  const byCell = new Map();
-  for (const [cn, p] of Object.entries(state.pos)) {
-    if (p.storage) continue;
-    byCell.set(`${p.bay}-${p.row}-${p.tier}`, cn);
+  // V9.57: 약식 판정(같은 베이 하단만) → utils.under40Support(강한 판정 — 옆 짝수 베이 하단의
+  //   40/45까지 확인)로 교체. slotAdjacencyError와 단일 소스 (중복 제거, 감사 F8).
+  const others = [];
+  for (const [ocn, op] of Object.entries(state.pos)) {
+    if (op.storage) continue;
+    const oc = state.byCn.get(ocn) || {};
+    others.push({ cn: ocn, bay: op.bay, row: op.row, tier: op.tier, iso: oc.iso, tp: oc.tp });
   }
   for (const [cn, p] of Object.entries(state.pos)) {
     if (p.storage) continue;
-    if (sizeOf(state.byCn.get(cn)) !== '20') continue;
-    const below = byCell.get(`${p.bay}-${p.row}-${pad2(Number(p.tier) - 2)}`);
-    if (below && sizeOf(state.byCn.get(below)) !== '20') {
-      warnings.push({ cn, type: '40ft위20ft', msg: `${cn}(20ft)이 ${below}(${sizeOf(state.byCn.get(below))}ft) 위 — 콘 홀 없음` });
+    const c = state.byCn.get(cn) || {};
+    if (sizeOf(c) !== '20') continue;
+    const u40 = under40Support({ cn, iso: c.iso, tp: c.tp }, p.bay, p.row, p.tier, others);
+    if (u40) {
+      warnings.push({ cn, type: '40ft위20ft', msg: `${cn}(20ft)이 ${u40.below.cn}(${u40.label}) 위 — 콘 홀 없음` });
     }
   }
   return { dup, warnings, ok: dup.length === 0 };

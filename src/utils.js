@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'V9.56';   // RZOR 좌표를 컨테이너에 — 조회·리스트에 자리와 갠트리 표시
+export const APP_VERSION = 'TallyOne 1.0';   // 새 이름으로 재탄생(사용자 확정 2026-08-03) — V9.57 수리판 + 3화면 개편 포함
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -8,7 +8,7 @@ export const APP_VERSION = 'V9.56';   // RZOR 좌표를 컨테이너에 — 조�
 //   검증(2026-07-18): 4개 선사 EDI 3,728컨 + 리스트 실번호 974컨에서 가상 판정 = DUME 110·CASP 77뿐, 오탐 0.
 export function isVirtualCn(cn) {
   const s = String(cn || '').toUpperCase().replace(/\s+/g, '');
-  return /^[A-Z]{4}\d{7}$/.test(s) && !/^[A-Z]{3}[UJZ]/.test(s);
+  return isValidCn(s) && !/^[A-Z]{3}[UJZ]/.test(s);   // V9.57: 컨번호 형식 검사를 isValidCn 단일 소스로
 }
 
 // ── V9.02: 카톡 물량 예보 파서 (RZOR·OBWH 형식 — 사용자 확정 2026-07-17) ─────────
@@ -371,13 +371,7 @@ const spellDigits = (s) => {
     return isNaN(n) ? d : KR_DIGIT[n];
   }).join('');
 };
-// 위치를 한국어 음성으로 ("십육번 베이 공일에 팔육")
-export const spellPos = (c) => {
-  if (!c || !c.bay) return '';
-  const bayN = parseInt(normalizeBay(c.bay), 10);
-  if (isNaN(bayN)) return '';
-  return `${sinoKorean(bayN)}번 베이 ${spellDigits(c.row)}에 ${spellDigits(c.tier)}`;
-};
+// V9.57: spellPos(개별 컨 → 음성) 삭제 — 저장소 전체 grep 참조 0 (voice.js는 spellPosString만 사용).
 // 좌표 문자열("16-01-86")을 음성용으로 변환 (AI 답변 후처리에 사용)
 export const spellPosString = (str) => {
   if (!str) return '';
@@ -611,12 +605,7 @@ export function isBookingSlot(c) {
   return false;
 }
 
-// M5.79: 부킹 슬롯 화면 표시용 라벨
-//   "(컨번호 입력대기)" 또는 짧게 "📝 대기"
-export function bookingLabel(c, short = false) {
-  if (!isBookingSlot(c)) return '';
-  return short ? '📝 대기' : '📝 컨번호 입력대기';
-}
+// V9.57: bookingLabel 삭제 — 저장소 전체 grep 참조 0 (화면은 isBookingSlot 판정 후 문구를 직접 렌더).
 
 // M4.9 → V9.04-04: 풀 리퍼 사진 촬영 대상 검출 (구 ISO403 — 식별자·저장키는 호환 위해 유지)
 //   사용자 정의: "리퍼 L5 포함" + "26대" (TNJP 26334W 기준)
@@ -746,12 +735,25 @@ export function parseNumericBAPLIE(ediText) {
         cur.tier = loc.substring(4, 6);
       }
       // ISO 타입 → 특수 컨 플래그 (표준 파서와 동일 규칙)
+      // V9.57: 표준 파서(F1)와 동일하게 숫자/알파벳 분기 — 숫자코드 EDI(CASP 2270 탱크·4583 FR 등)는
+      //   기존에 rf 외 특수 태깅이 통째로 빠져 있었다(복제 블록 누락 교정, 3금지①).
       if (iso.length >= 3) {
         const t = iso[2];
-        if (t === 'R') cur.rf = true;
-        if (t === 'U' || t === 'O') cur.oog = true;
-        if (t === 'P' || t === 'F') { cur.fr = true; cur.oog = true; }
+        if (t >= '0' && t <= '9') {
+          if (t === '3' || t === '4') cur.rf = true;
+          else if (t === '5') cur.oog = true;
+          else if (t === '6') { cur.fr = true; cur.oog = true; }
+          else if (t === '7') cur.tk = true;
+        } else {
+          if (t === 'R') cur.rf = true;
+          if (t === 'U' || t === 'O') cur.oog = true;
+          if (t === 'T') cur.tk = true;
+          if (t === 'P' || t === 'F') { cur.fr = true; cur.oog = true; }
+        }
       }
+      if (/^[24]58[25]$/.test(iso)) cur.rf = true;
+      if (/^[24]59/.test(iso)) cur.oog = true;
+      if (/^[24]58[34]$/.test(iso)) { cur.fr = true; cur.oog = true; }
       if (!cur.rf && isReeferIso(iso)) cur.rf = true;
       // V9.06-04: 숫자코드 50 세그먼트 온도 필드(:C:온도:) 추출 — TNJP 26352E 실측
       //   (리퍼 37대 전건 온도X 오경보). 표준 파서 TMP+2와 동일 정규화("-018"→"-18", 0°C는 실온도).
@@ -993,18 +995,31 @@ export function parseBAPLIE(ediText) {
       const isoField = parts[3] || '';
       cur.iso = (isoField.split(':')[0] || '').toUpperCase();
 
-      // 특수화물 자동 감지 (ISO 3번째/4번째 글자)
+      // 특수화물 자동 감지 (ISO 3번째 글자)
+      // V9.57: 숫자/알파벳 분기 — 기존 `t>='7'&&t<='9'` 탱크 판정이 4582(40RF)·4583/4584(FR)·
+      //   4590(OT)·2282(20RF)까지 전부 tk=true로 중복 태깅하던 결함 교정.
+      //   숫자면 구형 숫자 규칙(0·1=GP, 2=벌크, 3·4=리퍼, 5=오픈탑, 6=플랫, 7=탱크)으로만 판정하고
+      //   (8·9는 아래 458x/459x 정규식이 판정), 알파벳일 때만 현행 문자 규칙을 쓴다.
       if (cur.iso.length >= 3) {
         const t = cur.iso[2];
-        if (t === 'R') cur.rf = true;
-        if (t === 'U' || t === 'O') cur.oog = true;
-        if (t === 'T' || (t >= '7' && t <= '9')) cur.tk = true;
-        // M3.74 fix: FR(P=Platform/F=Flatrack)은 fr 명시 + oog는 호환성 유지
-        // 기존: oog만 true → 베이플랜에 'OOG'로 표시 + 상세모달/카드에 FR 배지 안 뜸
-        if (t === 'P' || t === 'F') { cur.fr = true; cur.oog = true; }
+        if (t >= '0' && t <= '9') {
+          if (t === '3' || t === '4') cur.rf = true;
+          else if (t === '5') cur.oog = true;
+          else if (t === '6') { cur.fr = true; cur.oog = true; }
+          else if (t === '7') cur.tk = true;
+          // 2(벌크)는 대응 필드 없음 — 태깅 생략(기존 동작 유지)
+        } else {
+          if (t === 'R') cur.rf = true;
+          if (t === 'U' || t === 'O') cur.oog = true;
+          if (t === 'T') cur.tk = true;
+          // M3.74 fix: FR(P=Platform/F=Flatrack)은 fr 명시 + oog는 호환성 유지
+          // 기존: oog만 true → 베이플랜에 'OOG'로 표시 + 상세모달/카드에 FR 배지 안 뜸
+          if (t === 'P' || t === 'F') { cur.fr = true; cur.oog = true; }
+        }
       }
-      // 4자리 숫자 코드 (4582 등) reefer
-      if (/^[24]58[2-5]$/.test(cur.iso)) cur.rf = true;
+      // 4자리 숫자 코드 reefer — V9.57: 끝자리 2·5만 리퍼(4582/4585). 3·4는 FR이므로 rf에서 제외
+      //   (isReeferIso·guidedQueue cardIsReefer의 /^[24]58[25]$/와 일치 — rf/fr 모순 태깅 제거)
+      if (/^[24]58[25]$/.test(cur.iso)) cur.rf = true;
       if (/^[24]59/.test(cur.iso)) cur.oog = true;
       // M3.74 fix: 4자리 숫자 FR 코드 (4583/4584/2283/2284) = FR
       if (/^[24]58[34]$/.test(cur.iso)) { cur.fr = true; cur.oog = true; }
@@ -1041,12 +1056,14 @@ export function parseBAPLIE(ediText) {
       // M3.67: 기본값 '' (미정) - 무게로 추정 또는 검수원 확인
 
       // 화면 표시용 tp
-      if (cur.iso.startsWith('22')) cur.tp = "20'GP";
+      // V9.57: 좁은 패턴(458x=40'RF·228x=20'RF)을 startsWith('45'/'22')보다 앞으로 —
+      //   기존엔 넓은 패턴이 선점해 두 분기가 도달 불가(4582가 40'HC, 2282가 20'GP로 표기)였다.
+      if (/^458[2-5]$/.test(cur.iso)) cur.tp = "40'RF";
+      else if (/^228[2-5]$/.test(cur.iso)) cur.tp = "20'RF";
+      else if (cur.iso.startsWith('22')) cur.tp = "20'GP";
       else if (cur.iso.startsWith('25')) cur.tp = "20'HC";
       else if (cur.iso.startsWith('42') || cur.iso.startsWith('44')) cur.tp = "40'GP";
       else if (cur.iso.startsWith('45')) cur.tp = "40'HC";
-      else if (/^458[2-5]$/.test(cur.iso)) cur.tp = "40'RF";
-      else if (/^228[2-5]$/.test(cur.iso)) cur.tp = "20'RF";
     } else if (cur && (seg.startsWith('LOC+9+') || seg.startsWith('LOC+6+'))) {
       // M3.85: SITC SENDAI 양식은 LOC+6을 POL로 사용 (표준은 LOC+9)
       cur.pol = seg.substring(seg.indexOf('+', 4) + 1).split(':')[0];
@@ -1187,7 +1204,7 @@ export function parseAscFile(text) {
     const cn = line.substring(7, 18).replace(/[\s\-]/g, '').toUpperCase();
     // M3.5.5: 컨번호 빈 라인(선적 엠티)도 허용 — F/E와 POL/POD 정보는 유효
     //   엠티 실 부착 작업에서는 컨번호 없는 엠티 슬롯도 표시 대상
-    const hasCn = /^[A-Z]{4}\d{7}$/.test(cn);
+    const hasCn = isValidCn(cn);   // V9.57: 컨번호 형식 검사 단일 소스
     if (cn && !hasCn) continue;  // 컨번호가 있는데 형식 이상이면 스킵
 
     const bay = normalizeBay(slot.substring(0, 2));
@@ -1228,12 +1245,25 @@ export function parseAscFile(text) {
       const wtMatch = line.substring(54, 100).match(/(\d{5})/);
       if (wtMatch) wt = parseInt(wtMatch[1]);
     } else if (m1) {
-      tp = m1[1]; iso = m1[2] + 'GP'; fe = m1[3];
-      if (tp.startsWith('TK')) iso = '22T6';
-      if (tp.startsWith('RF')) iso = tp.endsWith('20') ? '22R5' : '45R1';
-      if (tp.startsWith('DC') && tp.endsWith('20')) iso = '22GP';
-      if (tp.startsWith('DC') && tp.endsWith('40')) iso = '42GP';
-      if (tp === 'HC40') iso = '45GP';
+      tp = m1[1]; fe = m1[3];
+      // V9.57: ① TK도 크기 토큰 반영 — TK40이 22T6(20피트 탱크)으로 박히던 결함 교정.
+      //   ② 기존 기본값 iso = m1[2]+'GP'는 m1[2]가 '무게 3자리'라 '057GP' 같은 쓰레기 ISO를
+      //   만들던 결함 — 매칭 안 되는 tp는 종류+크기 최소 매핑으로 유추한다.
+      if (tp.startsWith('TK')) iso = tp.endsWith('40') ? '42T6' : '22T6';
+      else if (tp.startsWith('RF')) iso = tp.endsWith('20') ? '22R5' : '45R1';
+      else if (tp.startsWith('DC') && tp.endsWith('20')) iso = '22GP';
+      else if (tp.startsWith('DC') && tp.endsWith('40')) iso = '42GP';
+      else if (tp === 'HC40') iso = '45GP';
+      else {
+        const _sz40 = tp.endsWith('40');
+        const _kd = tp.slice(0, 2);
+        const _map = {
+          GP: _sz40 ? '42GP' : '22GP', HC: _sz40 ? '45GP' : '25GP', HQ: _sz40 ? '45GP' : '25GP',
+          RH: _sz40 ? '45R1' : '25R1', OT: _sz40 ? '42U1' : '22U1', OP: _sz40 ? '42U1' : '22U1',
+          BK: _sz40 ? '42B0' : '22B0',
+        };
+        iso = _map[_kd] || (_sz40 ? '42GP' : '22GP');
+      }
       const wtMatch = line.substring(54, 100).match(/(\d{5})/);
       wt = wtMatch ? parseInt(wtMatch[1]) : 0;
     } else if (m4) {
@@ -1359,7 +1389,7 @@ export function parseAscFile(text) {
 export function ascToBayDictEntry(ascResult, fileName, extra = {}) {
   // M6.47: 컨번호 있는 실제 컨테이너만 사용 (정렬용 빈 슬롯 라인 무시)
   //   ASC에 종종 "000010", "000020" 같은 빈 슬롯 라인 있음 — BAY 00 오인 원인
-  const containers = (ascResult?.containers || []).filter(c => c.cn && /^[A-Z]{4}\d{7}$/.test(c.cn));
+  const containers = (ascResult?.containers || []).filter(c => c.cn && isValidCn(c.cn));   // V9.57: 단일 소스
   if (containers.length === 0) {
     return null;
   }
@@ -2141,7 +2171,8 @@ export async function parseListExcel(arrayBuffer) {
         else if (/20.*DC|20.*GP|^D2$/.test(isoRaw)) iso = '22G1';
         else if (/40.*DC|40.*GP|^D4$/.test(isoRaw)) iso = '42G1';
         else if (/RF|REEFER|^R[25]$/.test(isoRaw)) iso = isoRaw.includes('20') || isoRaw.includes('22') ? '22R1' : '45R1';
-        else if (/TK|TANK/.test(isoRaw)) iso = '22T6';
+        // V9.57: TK도 크기 토큰 반영 — 40/45 탱크가 전부 22T6(20피트)으로 박히던 결함 교정
+        else if (/TK|TANK/.test(isoRaw)) iso = (isoRaw.includes('40') || isoRaw.includes('42') || isoRaw.includes('45')) ? '42T6' : '22T6';
       }
 
       const dgVal = dg_i >= 0 ? String(row[dg_i] || '').trim() : '';
@@ -2464,26 +2495,9 @@ export function workShiftOf(ts) {
   return '그외';
 }
 
-// V8.10: 해치 제외 4척 전용 — 완료 컨테이너를 주야간 × 규격(20/40/45) × F/E로 집계.
-//   완료 시각은 _comp.at(검수앱 completed 레코드) 우선. 규격은 isoToLabel prefix(20/40/45).
-//   F/E는 c.fe('E'면 Empty, 그 외 Full). 반환 { 주간:{...}, 야간:{...}, 그외:{...}, total }.
-//   각 shift = { s20:{F,E}, s40:{F,E}, s45:{F,E}, total }.
-export function tallyDayNight(containers) {
-  const blank = () => ({ s20: { F: 0, E: 0 }, s40: { F: 0, E: 0 }, s45: { F: 0, E: 0 }, total: 0 });
-  const out = { 주간: blank(), 야간: blank(), 그외: blank(), total: 0 };
-  for (const c of (containers || [])) {
-    const ts = (c._comp && c._comp.at) || c.completedAt || c._completedAt || c.actual_at || 0;
-    if (!ts) continue;                                   // 미완료는 집계 제외
-    const shift = workShiftOf(ts);
-    const lbl = isoToLabel(c.iso || c.type || '');
-    const sizeKey = /^45/.test(lbl) ? 's45' : /^40/.test(lbl) ? 's40' : 's20';  // 그 외(빈 라벨 등)는 20 칸
-    const fe = (c.fe === 'E') ? 'E' : 'F';               // 기본 Full
-    out[shift][sizeKey][fe] += 1;
-    out[shift].total += 1;
-    out.total += 1;
-  }
-  return out;
-}
+// V9.57: tallyDayNight 삭제 — V8.10-2에서 화면 사용처(DayNightBadge)가 제거된 뒤 참조 0 확정
+//   (지침서 V8.10 항목 "utils에 남아있으나 미사용 — 다음에 정리 가능" 이행). 주야간 보고는
+//   reportShiftToShow/buildShiftReport가 담당. workShiftOf는 보존(경계 규칙 문서 역할).
 
 // V8.10: 지금 시각에 어느 작업보고(주간/야간)를 자동으로 보여줄지 판정.
 //   집계 경계(주간 08~17·야간 전일19~05:30)와 별개로, 보고 마감에 +30분 여유를 준다.
@@ -2928,6 +2942,44 @@ export function isPyeongtaekPort(code) {
   return /(PTK|PYT|PYOTM|PYO)$/.test(t);
 }
 
+// ─── V9.57: 공용 헬퍼 신설 (감사 F6) — 흩어진 지역 규칙의 단일 소스 ──────────
+//   호출부 교체는 각 파일 담당 팀이 진행 — 여기서는 export 준비 + utils/팀F 파일 내부 교체만.
+
+// 항차 핵심 번호 — VoyagePage 지역 클로저(_voyCore, 1882행)와 동일 규칙:
+//   공백·구분자 제거 → 접미 방향(E/W/N/S) 제거 → 선행 0 제거. 전부 지워지면 정규화 원문 유지.
+export function voyCore(x) {
+  const n = String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
+  return n.replace(/[EWNS]+$/, '').replace(/^0+/, '') || n;
+}
+
+// 항차 동일성 비교 (번호 기준 — 0529W == 529E)
+export function voyEq(a, b) {
+  return voyCore(a) === voyCore(b);
+}
+
+// 평택분 판정 단일 소스 — 양하=POD 평택, 선적=리스트 등록(_inList) 또는 POL 평택.
+export function isPtk(c, mode) {
+  if (!c) return false;
+  return mode === 'discharge' ? isPyeongtaekPort(c.pod) : !!(c._inList || isPyeongtaekPort(c.pol));
+}
+
+// 컨번호 형식 검사 단일 소스 (ISO 6346: 알파벳 4 + 숫자 7)
+export function isValidCn(cn) {
+  return /^[A-Z]{4}\d{7}$/i.test(String(cn || '').trim());
+}
+
+// 오픈탑/OOG 통합 판정 — 필드 유래가 갈린다: 리스트 파서는 ot, EDI 파서는 oog(459 계열·U/O 타입).
+//   oog는 오픈탑 외 순수 OOG(규격초과)도 포함하므로 이름을 isOogOrOt로 명확히 한다
+//   (기존 소비처 20곳의 의미가 전부 '오픈탑/OOG 표시'라 통합 판정과 일치 — 감사 F6 확인).
+//   필드가 없어도 ISO(459x·..U/..O → 라벨 OT)로 보강 판정.
+export function isOogOrOt(c) {
+  if (!c) return false;
+  if (c.ot || c.oog) return true;
+  const iso = String(c.iso || '').toUpperCase();
+  if (/^[24]59/.test(iso)) return true;
+  return (isoToLabel(iso) || '').endsWith('OT');
+}
+
 // ------------------------------------------------------------
 // V8.98: 쉬프팅(재적부, restow) 자동 검출
 //   양하 EDI(도착 BAPLIE)와 선적 EDI(최종 BAPLIE)에 모두 실려 있는 "통과화물"의
@@ -3030,7 +3082,7 @@ export function fullEdiMapOf(sec) {
   const done = sec?.completed || {};
   for (const [k, v] of Object.entries(ediMap)) {
     if (rawMap[k]) { m[k] = { ...rawMap[k], ...v }; continue; }
-    if (!/^[A-Z]{4}\d{7}$/.test(String(k)) || onList[k] || done[k]) m[k] = v;
+    if (!isValidCn(String(k)) || onList[k] || done[k]) m[k] = v;   // V9.57: 단일 소스
   }
   return m;
 }
@@ -3077,6 +3129,39 @@ export function bayParityError(c, bay) {
 }
 
 
+// ── V9.57: 40/45피트 위 20피트 판정 단일 소스 (감사 F8) ──
+//   slotAdjacencyError 내부에 있던 강한 판정(자기 베이 하단 받침 확인 → 없으면 옆 짝수 베이
+//   하단의 40/45 확인)을 분리 export — planEditCore.validate의 약식(같은 베이만) 판정을 대체해
+//   중복 제거. 반환: 위반이면 { below(받침 컨), bay, tier, label }, 아니면 null.
+export function under40Support(c, bay, row, tier, others) {
+  const bn = parseInt(bay, 10);
+  const p2 = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
+  const tN = parseInt(p2(tier), 10);
+  if (!Number.isFinite(bn) || !Number.isFinite(tN) || tN - 2 <= 0) return null;
+  const lbl = isoToLabel((c && (c.iso || c.tp)) || '') || '';
+  if (!lbl.startsWith('20')) return null;
+  const R = p2(row), TB = String(tN - 2).padStart(2, '0');
+  const at = (b2) => (others || []).find((o) =>
+    o && o.cn !== (c && c.cn) && o.bay != null && o.bay !== '' &&
+    parseInt(o.bay, 10) === b2 && p2(o.row) === R && p2(o.tier) === TB);
+  const same = at(bn);
+  if (same) {
+    // 자기 베이에 받침이 있으면 그 받침만 본다 (40/45면 위반, 20이면 정상 적재)
+    const sl = isoToLabel(same.iso || same.tp || '') || '';
+    return (sl.startsWith('40') || sl.startsWith('45')) ? { below: same, bay: bn, tier: TB, label: sl } : null;
+  }
+  for (const b2 of [bn - 1, bn + 1]) {
+    if (b2 <= 0) continue;
+    const u = at(b2);
+    if (u) {
+      const ul = isoToLabel(u.iso || u.tp || '') || '';
+      if (ul.startsWith('40') || ul.startsWith('45')) return { below: u, bay: b2, tier: TB, label: ul };
+    }
+  }
+  return null;
+}
+
+
 // ── V9.28-04: 인접 슬롯 물리 검사 — 40ft는 앞뒤 홀수 슬롯 두 개를 차지한다 (STSE 실측:
 //   FBIU5086535를 20-03-82에 받아줬는데 19-03-82엔 이미 20ft가 실려 있었다 — 물리 충돌) ──
 //   others: 유효 좌표(bay/row/tier)가 실린 컨 배열 (자기 자신 제외하고 호출)
@@ -3104,24 +3189,12 @@ export function slotAdjacencyError(c, bay, row, tier, others) {
         if (ol.startsWith('40') || ol.startsWith('45')) return `${bn}-${R}-${T} 자리는 옆 ${b2}베이의 ${occ.cn}(${ol})이(가) 차지하고 있습니다 — 놓을 수 없습니다.`;
       }
     }
-    // V9.28-04: 40ft 위 20ft 불가 (콘 홀 없음 — 확립 원칙). 아래 단 받침이 옆 짝수 베이 40ft 지붕이면 차단.
-    //   STSE 실측: SEGU3445581(20ft)이 25-06-90 — 아래 24-88-06이 40ft.
-    const tN = parseInt(T, 10);
-    if (Number.isFinite(tN) && tN - 2 > 0) {
-      const TB = String(tN - 2).padStart(2, '0');
-      const below = (others || []).find((o) => o && o.cn !== c.cn && o.bay && parseInt(o.bay, 10) === bn && p2(o.row) === R && p2(o.tier) === TB);
-      if (!below) {
-        for (const b2 of [bn - 1, bn + 1]) {
-          if (b2 <= 0) continue;
-          const u = (others || []).find((o) => o && o.cn !== c.cn && o.bay && parseInt(o.bay, 10) === b2 && p2(o.row) === R && p2(o.tier) === TB);
-          if (u) {
-            const ul = isoToLabel(u.iso || u.tp || '') || '';
-            if (ul.startsWith('40') || ul.startsWith('45')) return `아래 단(${b2}-${R}-${TB})이 40/45피트 ${u.cn}입니다 — 40피트 위에는 20피트를 올릴 수 없습니다 (콘 홀 없음).`;
-          }
-        }
-      }
-    }
   }
+  // V9.28-04 → V9.57: 40ft 위 20ft 불가(콘 홀 없음)는 공용 판정 under40Support로 일원화
+  //   (planEditCore.validate와 단일 소스). 홀수 베이 제한을 풀어 자기 베이 하단이 40/45인
+  //   비정상 상태도 잡는다 — 기존보다 정확해지는 방향만.
+  const u40 = under40Support(c, bay, row, tier, others);
+  if (u40) return `아래 단(${u40.bay}-${R}-${u40.tier})이 40/45피트 ${u40.below.cn}입니다 — 40피트 위에는 20피트를 올릴 수 없습니다 (콘 홀 없음).`;
   return null;
 }
 

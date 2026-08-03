@@ -2,9 +2,10 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
-import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
-import { decideBadge, DEPART_REMAIN_MAX } from '../badgeRule.js';
+// V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
+//   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
+import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import { isChief } from '../staffList.js';   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
@@ -40,11 +41,19 @@ function lastWorkAt(v) {
   return last;
 }
 
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenGlobalSearch, onOpenChiefDashboard, heartbeat = null, onOpenHealth, onOpenFood }) {
+// V9.57: 항차 핵심번호 비교 — 방향 접미사(E/W/N/S)·앞0·구분자 무시. utils voyCore 승격(팀F) 전까지 지역 헬퍼.
+const _voyCore = (x) => {
+  const n = String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
+  return n.replace(/[EWNS]+$/, '').replace(/^0+/, '') || n;
+};
+
+// V9.57: 죽은 prop onOpenGlobalSearch 제거 — 이 컴포넌트 안에서 쓰는 곳이 없었다(App쪽 전달부 정리는 판2).
+// TallyOne 1.0 (K5): 맛집(onOpenFood)·건강점검(onOpenHealth) 개별 진입 → 보조기능(onOpenAux, #/aux) 하나로 교체
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
-  const [showPortMisCapture, setShowPortMisCapture] = useState(false);  // M5.25
+  // V9.57: showPortMisCapture 상태 제거 — 켜는 버튼이 V9.42에 삭제돼 항상 false였던 고아 상태
   // V9.02: 카톡 물량 예보 붙여넣기
   const [showForecast, setShowForecast] = useState(false);
   const [fcText, setFcText] = useState('');
@@ -355,8 +364,27 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     // V9.05-03: 섹션 삭제 시 해당 voy 필드도 함께 제거 — 한쪽만 지웠는데 info.voy_d/voy_l이
     //   남아 목록·검색(599행 some)·수집기 재등록 판정이 유령 항차를 계속 보던 버그.
     //   RTDB update에 null을 주면 그 키가 삭제된다.
-    if (action === 'discharge') { await fbDeleteSection(key, 'discharge'); await fbUpdateVoyageInfo(key, { voy_d: null }); }
-    else if (action === 'loading') { await fbDeleteSection(key, 'loading'); await fbUpdateVoyageInfo(key, { voy_l: null }); }
+    // V9.57: 잔재 정리 확대 — 해당 모드의 완료 표시({mode}Done/{mode}DoneAt)도 지우고,
+    //   info.voy는 남은 쪽 항차(voy_l 또는 voy_d, 둘 다 없으면 null)로, info.mode도 남은 쪽으로 재기입.
+    //   종전엔 삭제된 쪽의 voy·mode·완료 기록이 남아 목록 표기·검수완료 판정·재등록이 어긋났다.
+    const v = voyages[key];
+    if (action === 'discharge') {
+      await fbDeleteSection(key, 'discharge');
+      const hasL = !!(v?.loading && Object.keys(v.loading).length > 0);
+      await fbUpdateVoyageInfo(key, {
+        voy_d: null, dischargeDone: null, dischargeDoneAt: null,
+        voy: v?.info?.voy_l || null,
+        mode: hasL ? 'loading' : null,
+      });
+    } else if (action === 'loading') {
+      await fbDeleteSection(key, 'loading');
+      const hasD = !!(v?.discharge && Object.keys(v.discharge).length > 0);
+      await fbUpdateVoyageInfo(key, {
+        voy_l: null, loadingDone: null, loadingDoneAt: null,
+        voy: v?.info?.voy_d || null,
+        mode: hasD ? 'discharge' : null,
+      });
+    }
     else if (action === 'all') await fbDeleteVoyage(key);
     setDeleteTarget(null);
   };
@@ -427,8 +455,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         );
       })()}
 
-      {/* V8.40: 수집기 상태 + 항차 이상 요약 → 건강 점검 페이지 */}
-      <button onClick={() => onOpenHealth && onOpenHealth()}
+      {/* TallyOne 1.0 (K5): 수집기 상태 요약은 유지하되 진입은 보조기능(#/aux)으로 —
+          건강 점검·맛집 수첩 등 개별 버튼은 AuxPage 안으로 통합됐다 */}
+      <button onClick={() => onOpenAux && onOpenAux()}
         className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 mb-3 text-left transition-colors ${
           hbView.state === 'down' || healthIssueCount
             ? 'border-amber-700/60 bg-amber-950/30 hover:bg-amber-950/45'
@@ -442,6 +471,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         <span className={`text-xs font-bold ml-auto ${healthIssueCount ? 'text-amber-300' : 'text-emerald-300/80'}`}>
           {healthIssueCount ? `⚠ 검증 필요 ${healthIssueCount}건` : '✓ 자료 정상'}
         </span>
+        {/* TallyOne 1.0: 보조기능 진입 표시 (건강 점검 · 맛집 수첩 등) */}
+        <span className="text-[10px] font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-1.5 py-0.5 shrink-0">보조기능</span>
         <ChevronRight size={14} className="text-slate-500 shrink-0" />
       </button>
 
@@ -624,15 +655,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         })}
       </div>
 
-      {/* V9.15: 맛집 수첩 — 하루 한 번 쓰는 기능이라 항차 목록 아래로 (전면 점검 1-1) */}
-      <button onClick={() => onOpenFood && onOpenFood()}
-        className="w-full bg-gradient-to-r from-emerald-900/40 to-teal-950/40 border border-emerald-700/40 rounded-xl px-3 py-3 mt-3 text-left hover:from-emerald-900/60 active:scale-95 transition flex items-center gap-2">
-        <span className="text-xl">🍽</span>
-        <div>
-          <div className="font-bold text-sm text-emerald-100">평택항 맛집 수첩</div>
-          <div className="text-[11px] text-emerald-300/70">주변 식당 · 별점 · 🎰 뭐 먹지 돌림판</div>
-        </div>
-      </button>
+      {/* TallyOne 1.0 (K5): 맛집 수첩 개별 버튼 제거 — 보조기능(#/aux) 안으로 통합 */}
 
       {showCreate && (
         <CreateVoyageModal
@@ -650,8 +673,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {showForecast && (() => {
         const fc = fcText.trim() ? parseCargoForecast(fcText) : null;
         const vv = fc && fc.voy ? fc.voy.toUpperCase() : '';
+        // V9.57: 항차 매칭에 voyCore 비교 적용 — 0패딩·방향 표기 차이(0529W vs 529W)로 예보가
+        //   등록 항차를 못 찾던 문제. 정확 일치 → 핵심번호 일치 순으로 본다.
         const match = fc ? (voyagesWithPier.find(v =>
-          vv && [v.info.voy, v.info.voy_d, v.info.voy_l].some(x => (x || '').toUpperCase() === vv))
+          vv && [v.info.voy, v.info.voy_d, v.info.voy_l].some(x => x && _voyCore(x) === _voyCore(vv)))
           || (fc.vsl ? voyagesWithPier.find(v => (v.info.vsl || '').toUpperCase().replace(/\s+/g, '').startsWith(fc.vsl)) : null)) : null;
         const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join('  ');
         const totalTeu = fc ? (fc.teu ? fc.teu.total : fc.calc.full + fc.calc.empty + fc.calc.luggage) : 0;
@@ -758,10 +783,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         );
       })()}
 
-      {/* M5.25: PORT-MIS 캡처 업로드 모달 */}
-      {showPortMisCapture && (
-        <PortMisCaptureModal onClose={() => setShowPortMisCapture(false)} />
-      )}
+      {/* V9.57: PORT-MIS 캡처 모달 마운트 제거 — 여는 경로가 없는 고아 코드(ChiefDashboard에 이관됨) */}
     </div>
   );
 }
@@ -874,6 +896,42 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const pier = voyage._pier || '';
   const berth = voyage._berth || '';
 
+  // V9.57: 출항 배지 판정을 렌더 JSX 밖으로 끌어올림 — sticky 기록(Firebase 쓰기)을
+  //   렌더 중 부수효과가 아니라 useEffect에서 하기 위함. 판정 자체는 badgeRule.decideBadge 그대로.
+  // V9.36 가드: 터미널 자료는 **선박코드**로만 오므로 그대로 쓰면 '직전 항차'의 작업/출항이
+  //   다음 기항 카드에 붙는다. 이 항차의 작업창(_etaMs~_etdMs) ±12h 안의 자료만 이 항차 것으로 본다.
+  // V9.57: ±12h 창 검사 인라인 2벌 → badgeRule.inWindow(WINDOW_H) 한 곳으로 단일화.
+  const _tw0 = terminalWork[(voyage.info?.vsl || '').toUpperCase()];
+  const tw = (_tw0 && inWindow(parsePortMisDateTime(_tw0.startAt), voyage._etaMs, voyage._etdMs)) ? _tw0 : null;
+  const pfDep = (() => {
+    // V9.36-01: 도선 nextDep에도 같은 작업창 가드 — 도선 예보는 '다음 출항'으로 계속 갱신되므로
+    //   이 항차 출항이 예보에서 빠지면 다음 기항 출항이 이번 카드에 붙는다.
+    const r = pilotForecast[(voyage.info?.vsl || '').toUpperCase()];
+    const t = r ? parsePortMisDateTime(r.nextDep) : null;
+    return (t != null && inWindow(t, voyage._etaMs, voyage._etdMs)) ? t : null;
+  })();
+  const twDep = tw ? parsePortMisDateTime(tw.depEtd) : null;
+  // V9.38: 판정은 badgeRule.decideBadge 한 곳에서. 잔여의 출처는 **검수앱 자신**(총−완료).
+  //   V9.57: disStats/loaStats(위에서 같은 인자로 계산)를 재사용 — IIFE 안 중복 computeStats 제거.
+  const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0));
+  const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
+  const departBadge = decideBadge({
+    remainLoad: _rem(loaStats), remainDis: _rem(disStats), hasLoad: _hasLoad,
+    terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
+    tw, pfDep, twDep, stickyAt: voyage.info?.departBadgeAt || null,
+    eta: voyage._etaMs, etd: voyage._etdMs, src: voyage._etaSrc,
+  });
+  // V9.57(H6): 한 번 뜨면 유지(sticky) 기록 — 렌더 IIFE 안 fire-and-forget에서 useEffect로 이동.
+  //   departBadgeAt이 이미 있으면 발화하지 않고, 실패는 console.warn으로 드러낸다.
+  const _isDepart = !!(departBadge && departBadge.kind === 'depart');
+  useEffect(() => {
+    if (!_isDepart || voyage.info?.departBadgeAt) return;
+    try {
+      fbUpdateVoyageInfo(voyage.key, { departBadgeAt: Date.now() })
+        .catch(e => console.warn('[배지] sticky 저장 실패', voyage.key, e));
+    } catch (e) { console.warn('[배지] sticky 저장 실패', voyage.key, e); }
+  }, [_isDepart, voyage.key, voyage.info?.departBadgeAt]);
+
   // V9.15: 카드 테두리 부두색 제거 — 파랑=양하/호박=선적 전용으로 잠금(전면 점검 1-4). 부두는 📍배지가 말한다.
   return (
     <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
@@ -908,43 +966,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               // V9.36: 작업이 마무리될 무렵이면 '작업일시' 대신 '출항시간'을 보여준다 (사용자 요청 2026-08-01).
               //   V9.38: 전환 기준은 **선적 잔여 ≤ DEPART_REMAIN_MAX(20)** — 규칙은 badgeRule.js 한 곳.
               //   출항시각은 도선 예보 우선(사용자 확정) → 없으면 터미널 출항 ETD.
-              //   진행률·ETD가 5분마다 갱신되므로 작업이 늦어지거나 출항이 바뀌면 그대로 따라간다.
-              const _tw0 = terminalWork[(voyage.info?.vsl || '').toUpperCase()];
-              // V9.36 가드: 터미널 자료는 **선박코드**로만 오므로 그대로 쓰면 '직전 항차'의 작업/출항이
-              //   다음 기항 카드(예 OBWH 2703E)에 붙는다(시뮬에서 "출항 어제 19:00"으로 잡힘).
-              //   이 항차의 작업창(_etaMs~_etdMs) 앞뒤 12시간 안에서 시작한 작업만 이 항차의 것으로 본다.
-              const tw = (() => {
-                if (!_tw0) return null;
-                const st = parsePortMisDateTime(_tw0.startAt);
-                const a = voyage._etaMs, b = voyage._etdMs;
-                if (!st || (!a && !b)) return null;
-                const lo = (a ?? b) - 12 * 3600000, hi = (b ?? a) + 12 * 3600000;
-                return (st >= lo && st <= hi) ? _tw0 : null;
-              })();
-              const pfDep = (() => {
-                // V9.36-01: 도선 nextDep에도 tw와 같은 작업창(±12h) 가드 — 도선 예보는 '다음 출항'으로
-                //   계속 갱신되므로, 이 항차 출항이 예보에서 빠지면 다음 기항 출항이 이번 카드에 붙는다.
-                const r = pilotForecast[(voyage.info?.vsl || '').toUpperCase()];
-                const t = r ? parsePortMisDateTime(r.nextDep) : null;
-                if (!t) return null;
-                const a = voyage._etaMs, b = voyage._etdMs;
-                if (!a && !b) return null;
-                const lo = (a ?? b) - 12 * 3600000, hi = (b ?? a) + 12 * 3600000;
-                return (t >= lo && t <= hi) ? t : null;
-              })();
-              const twDep = tw ? parsePortMisDateTime(tw.depEtd) : null;
-              // V9.38: 판정은 badgeRule.decideBadge 한 곳에서. 잔여의 출처는 **검수앱 자신**(총−완료) —
-              //   검수 중이면 이게 실시간이고 가장 정확하다. 터미널은 참조이자 폴백이지 기준이 아니다.
-              const _lst = computeStats(voyage.loading, 'loading', voyage.info);
-              const _dis = computeStats(voyage.discharge, 'discharge', voyage.info);
-              const _hasLoad = !!(voyage.loading && (_lst.total > 0 || _lst.ptk > 0));
-              const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
-              const _b = decideBadge({
-                remainLoad: _rem(_lst), remainDis: _rem(_dis), hasLoad: _hasLoad,
-                terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
-                tw, pfDep, twDep, stickyAt: voyage.info?.departBadgeAt || null,
-                eta: voyage._etaMs, etd: voyage._etdMs, src: voyage._etaSrc,
-              });
+              // V9.57: 판정(departBadge)·창 가드·sticky 기록은 컴포넌트 본문 상단으로 이동 —
+              //   렌더 IIFE는 표시만 담당한다.
+              const _b = departBadge;
               if (_b && _b.kind === 'depart') {
                 const dep = _b.at;
                 const two2 = (n) => String(n).padStart(2, '0');
@@ -956,12 +980,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                   : `${two2(d.getMonth() + 1)}-${two2(d.getDate())}(${w})`;
                 const src = _b.src === 'pilot' ? '⚓도선' : '🏭터미널';
                 const late = _b.delayed;
-                // V9.38: 한 번 뜨면 유지(사용자 확답) — 자료가 늦게 와 잔여가 늘어도 안 돌아간다.
-                //   기억은 Firebase에 한 번만 쓴다(새로고침해도 유지). 실패해도 표시는 그대로.
-                if (!voyage.info?.departBadgeAt) {
-                  try { fbUpdateVoyageInfo(voyage.key, { departBadgeAt: Date.now() }); }
-                  catch (e) { console.warn('[배지] sticky 저장 실패', voyage.key, e); }
-                }
+                // V9.38: 한 번 뜨면 유지(사용자 확답) — sticky 기록은 V9.57에서 useEffect로 이동(위).
                 const _why = { departed: '터미널 출항 처리됨', sticky: '이미 출항 표시로 전환됨',
                   pct: '터미널 진행률 기준(잔여 미상)' }[_b.reason]
                   || `선적 잔여 ${String(_b.reason).replace('remain', '')}개 이하 (기준 ${DEPART_REMAIN_MAX}개 · 갱당 시간당 20개 ≈ 1시간분)`;

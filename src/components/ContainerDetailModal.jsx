@@ -65,7 +65,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const [esealWrongVal, setEsealWrongVal] = useState('');
   const [esealVal, setEsealVal] = useState(c.eseal || '');
   const [resealVal, setResealVal] = useState(c.reseal || '');
-  const [esealType, setEsealType] = useState('reseal');
+  // V9.57(I10): 미사용 esealType state 제거 (참조 0, 전수 grep 확인)
   const [photoMode, setPhotoMode] = useState(null);  // M3.5.6: 'seal_error' | 'damage'
   const [iso403PhotoOpen, setIso403PhotoOpen] = useState(false);  // M4.9: ISO403 사진 모달
   const [showHistory, setShowHistory] = useState(false);
@@ -78,6 +78,14 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const posEditBayPairs = useMemo(() => {
     try { return getBayPairs(allContainers.filter(x => (x._mode || mode) === (c?._mode || mode))); } catch { return null; }
   }, [allContainers, c, mode]);
+
+  // V9.57(I10): 클릭 경로에 따라 병합 컨(c)에 iso_orig·tmp_orig가 안 붙어 "원본→수정됨" 표기가
+  //   영구 거짓 분기였다. 호출부(VoyagePage/App)가 records 전체 병합으로 만든 allContainers에서
+  //   같은 컨을 찾아 _orig를 폴백 조회해 표시를 복원한다. (records에 ''로 저장된 _orig는
+  //   호출부 병합 필터가 빈 값을 걸러 못 받는다 — 그 경우만 미표시, 무해)
+  const recOrig = useMemo(() => (allContainers || []).find(x => x && x.cn === c.cn) || {}, [allContainers, c.cn]);
+  const isoOrigShow = c.iso_orig !== undefined ? c.iso_orig : recOrig.iso_orig;
+  const tmpOrigShow = c.tmp_orig !== undefined ? c.tmp_orig : recOrig.tmp_orig;
 
   // M3.87: 위치 수정 모달 (선적 모드 전용)
   const [showPosEdit, setShowPosEdit] = useState(false);
@@ -605,8 +613,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                 <div className="flex items-center gap-2">
                   <span className="text-base font-bold mono text-slate-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
                   <span className="text-xs text-slate-500 mono">({c.iso || '-'})</span>
-                  {c.iso_orig && c.iso_orig !== c.iso && (
-                    <span className="text-[10px] text-amber-400 mono">원본: {c.iso_orig} → 수정됨</span>
+                  {/* V9.57(I10): c.iso_orig → 폴백 조회값(isoOrigShow) — 병합 누락으로 안 뜨던 표기 복원 */}
+                  {isoOrigShow && isoOrigShow !== c.iso && (
+                    <span className="text-[10px] text-amber-400 mono">원본: {isoOrigShow} → 수정됨</span>
                   )}
                 </div>
                 {/* M3.6: 알 수 없는 ISO 표기 → 사진 보고 강력 유도 */}
@@ -696,8 +705,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                   ) : (
                     <span className="text-sm font-bold text-red-300 animate-pulse">⚠️ 온도 미입력 (현장 확인 필요)</span>
                   )}
-                  {c.tmp_orig !== undefined && c.tmp_orig !== c.tmp && (
-                    <span className="text-[10px] text-amber-400 mono">원본: {c.tmp_orig || '(없음)'} → 수정됨</span>
+                  {/* V9.57(I10): c.tmp_orig → 폴백 조회값(tmpOrigShow) — 병합 누락으로 안 뜨던 표기 복원 */}
+                  {tmpOrigShow !== undefined && tmpOrigShow !== c.tmp && (
+                    <span className="text-[10px] text-amber-400 mono">원본: {tmpOrigShow || '(없음)'} → 수정됨</span>
                   )}
                   {/* V9.20-03: 리퍼드라이 토글 — 선사 요청(넌플러그) 반영. 경고·사진 대상에서 빠진다 */}
                   <button

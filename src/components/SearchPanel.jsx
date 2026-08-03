@@ -682,7 +682,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     try { recognitionRef.current.start(); } catch (e) { setIsListening(false); }
   };
   const stopListening = () => {
-    try { recognitionRef.current?.stop(); } catch (e) {}
+    try { recognitionRef.current?.stop(); } catch (e) { console.warn('[V9.57] 음성인식 stop 실패(무해)', e); }  // V9.57(I15): 빈 catch 로그
     setIsListening(false);
   };
 
@@ -1368,7 +1368,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const [q1, setQ1] = useState('');
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
-  const [autoTwin, setAutoTwin] = useState(true); // 자동 짝꿍 ON/OFF
+  const autoTwin = true; // V9.57(I15): 죽은 토글 정리 — setAutoTwin 참조 0(전수 grep)·UI 토글 없음 → 상수화
   // V9.50: 검수사가 '실제 온 컨'으로 갈아 끼웠으면 자동 계산이 그걸 덮어쓰면 안 된다.
   const [replaced, setReplaced] = useState(false);
   const [twinBusy, setTwinBusy] = useState(false); // 통합 완료 처리 중

@@ -40,28 +40,6 @@ export function makeSalt() {
   return [...a].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** 이 기기가 신뢰 기기인가 */
-export function isTrustedDevice(guard) {
-  if (!guard || !guard.devices) return false;
-  return !!guard.devices[getAdminDeviceId()];
-}
-
-/** 이 세션(탭)에서 이미 비밀번호를 통과했는가 */
-export function hasSessionPass() {
-  try { return sessionStorage.getItem(SESSION_KEY) === '1'; } catch { return false; }
-}
-
-export function setSessionPass() {
-  try { sessionStorage.setItem(SESSION_KEY, '1'); } catch { /* skip */ }
-}
-
-/** 비밀번호 검증 */
-export async function verifyPassword(guard, pw) {
-  if (!guard || !guard.pwHash || !guard.salt) return false;
-  const h = await hashPassword(pw, guard.salt);
-  return h === guard.pwHash;
-}
-
 /** 기기 라벨 자동 생성 (예: "Windows·Chrome", "Android·모바일") */
 export function deviceLabel() {
   try {

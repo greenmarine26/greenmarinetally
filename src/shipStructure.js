@@ -8,9 +8,9 @@
 //   - 베이 골격(가용 슬롯, 리퍼 위치 등) 보강
 //   - 컨테이너 데이터는 기존 EDI 흐름 유지 (변경 없음)
 
-import { lookupBayDict, getBayDictStats } from './data/shipBayDict.js';
-import { SHIP_BAY_DICT_V2, lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
-import { lookupUserBayDict, getUserBayDictStats, loadUserBayDict } from './data/userBayDict.js';
+import { lookupBayDict } from './data/shipBayDict.js';
+import { lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
+import { lookupUserBayDict, loadUserBayDict } from './data/userBayDict.js';
 // M6.55: v5 — .def 매트릭스 디코드 자동 추출
 //   - supplement: v2에 없는 13척 (DAP, DBM, DHA, ESTM, FN7, FSR, HAHM, HECN, MDB, MEB, ORT, PCBS, WBC)
 //   - matrix: 311척의 row 폭/cells_per_row 정보 (v2 verified 데이터에 보조 첨부)
@@ -701,18 +701,3 @@ export function isShipInBayDict(imo, code) {
   return getShipBayDictData(imo, code) !== null;
 }
 
-/**
- * 베이사전 통계 (디버그/진단용)
- * M4.5: 사용자 사전 + v2(109척) + v1(11척) 합산
- */
-export function bayDictInfo() {
-  const v1 = getBayDictStats();
-  const user = getUserBayDictStats();
-  const v2Count = Object.keys(SHIP_BAY_DICT_V2).length;
-  return {
-    v1: { totalShips: v1.totalShips, version: '1.1-draft', verified: false },
-    v2: { totalShips: v2Count, version: '2.0', verified: true },
-    user,
-    totalShips: v1.totalShips + v2Count + user.totalShips,
-  };
-}

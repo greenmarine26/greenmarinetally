@@ -2,7 +2,9 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbRestoreVoyageFromArchive, fbCleanupArchive } from '../firebase.js';
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
-import { isPyeongtaekPort, isBookingSlot, emptySealSpec } from '../utils.js';
+import { isPyeongtaekPort, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
+import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
+import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
@@ -13,8 +15,36 @@ import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 
-export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch }) {
+// TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
+const _EMPTY_OBJ = {};
+
+// TallyOne 1.0(L2/L3): 항차 일정 합성 — 우선순위는 HomePage 258행과 동일(선석배정 > 도선 예보).
+//   PORT-MIS 자료는 이 화면에 없으므로 후보에서 제외. 전부 없으면 null(화면에 '자료 없음' 명시).
+function scheduleOf(info, pfMap) {
+  const pf = (pfMap || {})[(info?.vsl || '').toUpperCase()] || null;
+  const pd = String(info?.planDate || '');
+  const pdEta = pd ? parsePortMisDateTime(pd.split('~')[0].trim()) : null;
+  const pdEtd = pd.includes('~') ? parsePortMisDateTime(pd.split('~')[1].trim()) : null;
+  const pfArr = pf ? parsePortMisDateTime(pf.nextArr) : null;
+  const pfDep = pf ? parsePortMisDateTime(pf.nextDep) : null;
+  return { pf, planDate: pd, planSrc: String(info?.planSrc || ''),
+           etaMs: pdEta ?? pfArr, etdMs: pdEtd ?? pfDep };
+}
+
+// TallyOne 1.0(L2): 터미널 실적 레코드 선택 — 자료가 **선박코드로만** 오므로 직전/다음 기항 자료가
+//   붙는 것을 작업창(±12h, badgeRule.inWindow) 가드로 막는다(HomePage 908~909행과 같은 방식).
+function twOf(info, twMap, sched) {
+  const rec = (twMap || {})[(info?.vsl || '').toUpperCase()] || null;
+  if (!rec) return null;
+  return inWindow(parsePortMisDateTime(rec.startAt), sched.etaMs, sched.etdMs) ? rec : null;
+}
+
+export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch,
+  // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
+  collectorHb = null, pilotForecast = null, terminalWork = null }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
+  const pfMap = pilotForecast || _EMPTY_OBJ;   // TallyOne 1.0: null 방어
+  const twMap = terminalWork || _EMPTY_OBJ;    // TallyOne 1.0: null 방어
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
   const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
@@ -33,13 +63,30 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const [allReports, setAllReports] = useState([]);  // M3.5.6: 작업 보고 이력
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  // TallyOne 1.0(L5): 결과 통지 alert() → 섹션 안 인라인 알림 — 확인창(confirm) 성격은 유지
+  const [fbNotice, setFbNotice] = useState(null);     // 오답 저금통(내보내기·비우기)
+  const [repNotice, setRepNotice] = useState(null);   // 작업 보고(전체 삭제·개별 삭제)
+  const [loloNotice, setLoloNotice] = useState(null); // LOLO 내보내기
   useEffect(() => {
     const u1 = fbSubscribeShipLibrary(setShipLib);
     const u2 = fbSubscribeFeedback(setFeedback);
     const u3 = fbSubscribeShipPolicies(db, setExtraPolicies);
-    const u4 = fbSubscribeAllReports(setAllReports, 100);
+    // V9.57(I3): 100건 절단으로 다항차·다보고 날에 "오늘 통계"가 조용히 모자랐다 — 300건으로 상향.
+    //   그래도 넘치면 장비 표 헤더에 "최근 300건 기준" 캡션으로 절단 사실을 밝힌다(아래 렌더부).
+    const u4 = fbSubscribeAllReports(setAllReports, 300);
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
+
+  // TallyOne 1.0(L1): 수집기 생존 판정용 시계 — HomePage 199~203행과 같은 30초 틱.
+  //   끊김 기준은 heartbeatState(사이클 주기×2분, 사용자 확정 2026-07-03) 그대로 쓴다.
+  const [hbNow, setHbNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setHbNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const hbView = heartbeatState(collectorHb, hbNow);
+  // TallyOne 1.0(L1): 항차 건강 요약 — 홈 배지와 같은 healthSummary, 클릭 시 #/health 이동
+  const healthIssueCount = useMemo(() => healthSummary(voyages).issueCount, [voyages]);
 
   // M3.5.6: 오늘 장비별 작업 보고 통계
   const equipStats = useMemo(() => {
@@ -50,13 +97,14 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     (allReports || []).forEach(r => {
       if (!r.ts || r.ts < todayMs) return;
       const equip = r.equip || '미지정';
-      if (!stats[equip]) stats[equip] = { total: 0, status: 0, hatch: 0, conbox: 0, damage: 0, sealError: 0, latest: 0 };
+      if (!stats[equip]) stats[equip] = { total: 0, status: 0, hatch: 0, conbox: 0, damage: 0, sealError: 0, externalPause: 0, latest: 0 };
       stats[equip].total++;
       if (r.type === 'work_status') stats[equip].status++;
       else if (r.type === 'hatch') stats[equip].hatch++;
       else if (r.type === 'conbox') stats[equip].conbox++;
       else if (r.type === 'damage') stats[equip].damage++;
       else if (r.type === 'seal_error') stats[equip].sealError++;
+      else if (r.type === 'external_pause') stats[equip].externalPause++;  // V9.57(I2): 작업중단(사고성) 분기 누락 — 표에 안 잡히던 것
       if (r.ts > stats[equip].latest) stats[equip].latest = r.ts;
     });
     return stats;
@@ -75,22 +123,29 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       if (!policy) return;
       // M8.08: 엠티 실 작업은 선적(loading) 때만 적용. 양하는 제외.
       //   (양하 EDI엔 엠티 실 부착·확인 개념이 없음 — 선적 시 부착/확인하는 작업.)
-      ['loading'].forEach(mode => {
+      // V9.57(I5): 죽은 분기 정리 — ['loading'] 순회 안에서 discharge 비교하던 삼항 제거, mode 상수화.
+      {
+        const mode = 'loading';
         const sec = v[mode];
         if (!sec) return;
         const ediMap = sec.ediContainers || {};
         const recMap = sec.records || {};
         const targets = [];
-        Object.values(ediMap).forEach(c => {
+        // V9.57(I5): 모수를 EDI만 → EDI∪리스트(records) 합집합으로 (LOLO 카드 156행과 동일 규칙).
+        //   EDI 없이 리스트만 올라온 선적분(엠티 실 대상)이 현황에서 통째로 빠지던 것.
+        const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+        allCnSet.forEach(cn => {
+          const e = ediMap[cn];
+          const r = recMap[cn] || {};
+          const c = e ? { ...e } : { ...r, cn };
           // V8.98-11: 부킹슬롯(__BOOK_ 예상자리, 실번호 없음) 제외 — 가상 엠티리스트 방지
           if (isBookingSlot(c)) return;
-          // 평택만 (mode에 맞춰)
-          const isPtk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
-          if (!isPtk) return;
+          // 평택만 — EDI가 있으면 POL로 판정. 리스트만 있으면 평택 선적 리스트(세관) 자체가
+          // 평택분이므로 통과 (리스트 레코드엔 pol이 없어 판정 불가).
+          if (e && !isPyeongtaekPort(c.pol)) return;
           const sm = applyPolicyToContainer(policy, c);
           if (!sm) return;
           // record로 보강 (eseal 등)
-          const r = recMap[c.cn] || {};
           targets.push({
             ...c,
             eseal: r.eseal || c.eseal || '',
@@ -119,7 +174,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             total: targets.length,
           });
         }
-      });
+      }
     });
     return list;
   }, [voyages, extraPolicies]);
@@ -193,7 +248,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // LOLO 제출 리스트 내보내기 (두 양식)
   const exportLolo = (item, kind) => {
     const rows = buildLoloRows(item.sec);
-    if (rows.length === 0) { alert('처리(완료)된 컨테이너가 없습니다. 검수사가 실체크·확인한 뒤 내보낼 수 있습니다.'); return; }
+    if (rows.length === 0) { setLoloNotice({ kind: 'err', text: '처리(완료)된 컨테이너가 없습니다. 검수사가 실체크·확인한 뒤 내보낼 수 있습니다.' }); return; }  // TallyOne 1.0(L5)
     const today = new Date();
     const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const meta = { vsl: item.vsl, voy: item.voy, date: stamp, port: 'PYEONGTAEK, KOREA', mode: item.mode };
@@ -221,15 +276,25 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       });
   }, [feedback, showResolved]);
 
+  // V9.57(I6): 배지도 목록(feedbackList)과 같은 모수 — ts→at 폴백 후 ts 없는 유령 레코드 제외.
+  //   종전엔 ts 필터 없이 세어 배지 숫자와 목록 건수가 어긋날 수 있었다(V9.36-02 유령 레코드 패턴).
   const unresolvedCount = useMemo(() =>
-    Object.values(feedback || {}).filter(f => f && !f.resolved).length, [feedback]);   // 목록과 동일 모수(위와 같은 원본)
+    Object.values(feedback || {})
+      .map(f => (f ? { ...f, ts: f.ts || f.at || 0 } : null))
+      .filter(f => f && f.ts && !f.resolved).length, [feedback]);
 
   // V8.02-02: 오답 '저금통' 내보내기 — 전체를 텍스트 파일로 다운로드.
   //   클로드(또는 개발자)에게 파일 하나로 전달하기 위함. 내보낸 시점의 ts 목록을 기억.
-  const [exportedTs, setExportedTs] = useState([]);
+  // V9.57(I6): 내보내기·비우기도 목록(213행대)과 동일하게 _key·at 폴백 적용.
+  //   종전엔 Object.values + f.ts 필터라 콘앱 신고(푸시키, ts 없음)가 내보내기에서 빠지고,
+  //   비우기도 ts를 키로 삼아 푸시키 레코드를 못 지웠다. 이제 실제 DB 키(_key)로 삭제한다.
+  const [exportedTs, setExportedTs] = useState([]);   // 내용물은 feedback DB 키(_key) 목록
   const exportFeedback = () => {
-    const all = Object.values(feedback || {}).filter(f => f && f.ts).sort((a, b) => (a.ts || 0) - (b.ts || 0));
-    if (all.length === 0) { alert('내보낼 오답 리포트가 없습니다.'); return; }
+    const all = Object.entries(feedback || {})
+      .map(([k, f]) => (f ? { ...f, _key: k, ts: f.ts || f.at || 0 } : null))
+      .filter(f => f && f.ts)
+      .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    if (all.length === 0) { setFbNotice({ kind: 'err', text: '내보낼 오답 리포트가 없습니다.' }); return; }  // TallyOne 1.0(L5)
     const lines = [];
     lines.push('# Tallyman 음성/질문 오답 리포트');
     lines.push(`# 내보낸 시각: ${new Date().toLocaleString('ko-KR')}`);
@@ -256,14 +321,19 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     a.href = url; a.download = `오답리포트_${stamp}.txt`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setExportedTs(all.map(f => f.ts));   // 비우기 대상 = 방금 내보낸 것
+    setExportedTs(all.map(f => f._key));   // V9.57(I6): 비우기 대상 = 방금 내보낸 것의 실제 DB 키
+    setFbNotice({ kind: 'ok', text: `✅ 오답 ${all.length}건 내보냄 — 파일 다운로드 확인 후 [비우기]를 누르세요.` });  // TallyOne 1.0(L5)
   };
   // 내보낸 것만 비우기(안 본 것 보호). 내보내기 후에만 활성.
   const clearExported = async () => {
-    if (exportedTs.length === 0) { alert('먼저 내보내기를 하세요. 내보낸 건만 비웁니다.'); return; }
-    const n = await fbClearFeedback(exportedTs);
-    setExportedTs([]);
-    alert(`저금통 비움: ${n}건 삭제. 새 오답은 다시 쌓입니다.`);
+    if (exportedTs.length === 0) { setFbNotice({ kind: 'err', text: '먼저 내보내기를 하세요. 내보낸 건만 비웁니다.' }); return; }  // TallyOne 1.0(L5)
+    try {
+      const n = await fbClearFeedback(exportedTs);
+      setExportedTs([]);
+      setFbNotice({ kind: 'ok', text: `🧹 저금통 비움: ${n}건 삭제. 새 오답은 다시 쌓입니다.` });  // TallyOne 1.0(L5)
+    } catch (e) {
+      setFbNotice({ kind: 'err', text: '비우기 실패: ' + (e?.message || e) });  // TallyOne 1.0(L5): 조용한 실패 금지
+    }
   };
 
   // 항차별 통계
@@ -374,6 +444,20 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     return { done, all, ptkAll, missing };
   }, [voyageStats]);
 
+  // TallyOne 1.0(L2): 작업 보드 행에 터미널 실적·출항 상태 합성.
+  //   선박코드 매칭 = info.vsl 대문자(HomePage 908·913행과 동일), ±12h 작업창 가드(twOf).
+  //   terminalStatus의 출항 별칭('departed'/'done')은 badgeRule 65행과 같은 판정.
+  //   출항 항차는 보드 하단으로 내리고 카드를 흐리게 — 기존 최신순은 그룹 안에서 유지.
+  const boardRows = useMemo(() => {
+    const rows = voyageStats.map(v => {
+      const sched = scheduleOf(v.info, pfMap);
+      const tw = twOf(v.info, twMap, sched);
+      const ts = String(v.info?.terminalStatus || '').trim().toLowerCase();
+      return { ...v, _tw: tw, _departed: ts === 'departed' || ts === 'done' };
+    });
+    return [...rows.filter(r => !r._departed), ...rows.filter(r => r._departed)];
+  }, [voyageStats, pfMap, twMap]);
+
   // ★ V9.44(사용자 확정 2026-08-02): **수석검수사만 진입한다.**
   //   종전엔 isChief 가 '완료 저장' 버튼에만 걸려 있어(V7.94-18) 일반 검수원도 화면에 들어와
   //   전체 통계·자료보관소·완료보관소·오답·공지작성·편집·항차삭제를 다 볼 수 있었다.
@@ -409,6 +493,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <div className="text-lg font-bold text-slate-100">전체 현황</div>
       </div>
 
+      {/* TallyOne 1.0(L1): 수집기 상태 배너 — 끊기면 아래 모든 숫자가 갱신 정지임을 맨 위에서 알린다.
+          하트비트 미수신(prop 미전달 포함)도 조용히 넘기지 않고 '자료 없음'으로 명시. */}
+      <CollectorStatusBanner hbView={hbView} hb={collectorHb} issueCount={healthIssueCount} />
+
       {/* 전체 카운터 */}
       <div className="grid grid-cols-2 gap-2">
         <BigStat label="전체 확인" value={total.done.toLocaleString()} sub={`/ ${total.all.toLocaleString()}대`} color="emerald"/>
@@ -427,9 +515,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
             //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
             ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
+            // TallyOne 1.0(L4): 보조기능 바로가기 — 판2 신설 #/aux 라우트(팀K)로 이동
+            ['__aux', '🧰 보조기능'],
           ].map(([id, label]) => (
             <button key={id} onClick={() => (id === '__search' ? (onOpenGlobalSearch && onOpenGlobalSearch())
                                             : id === '__portmis' ? setShowPortMis(true)
+                                            : id === '__aux' ? (window.location.hash = '#/aux')
                                             : jumpSec(id))}
               className="px-2 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-[12px] font-bold text-slate-200 text-left truncate"
               style={{ minHeight: 40 }}>
@@ -478,11 +569,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           <div className="text-xs text-slate-500 text-center py-4">진행 중 항차 없음</div>
         ) : (
           <div className={`grid gap-2 grid-cols-1 ${voyageStats.length >= 2 ? 'sm:grid-cols-2' : ''} ${voyageStats.length >= 3 ? 'lg:grid-cols-3' : ''}`}>
-            {voyageStats.map(v => (
+            {/* TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
+            {boardRows.map(v => (
               <LiveShipCard key={v.key} v={v}
                 workers={activeByVoyage[v.key] || []}
                 lastReport={lastReportByVoyage[v.key]}
                 alerts={todayAlertsByVoyage[v.key]}
+                tw={v._tw} departed={v._departed}
                 onOpen={() => onOpenVoyage(v.key)}/>
             ))}
           </div>
@@ -528,7 +621,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <LoadingPlanEdit voyage={voyages[planKey]} voyageKey={planKey} inspector={inspector} onClose={() => setPlanKey(null)} />
       )}
       <Fold id="progress" title="📋 진행 상황 · 완료 저장" open={!!openSecs.progress} onToggle={() => toggleSec('progress')}>
-        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} />
+        {/* TallyOne 1.0(L3): 도선 예보 전달 — 진행 상황 줄에 일정 정보(완료 저장 타이밍 판단 근거) */}
+        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} pilotForecast={pfMap} />
       </Fold>
       <Fold id="archive" title="📚 선박별 자료 보관소" open={!!openSecs.archive} onToggle={() => toggleSec('archive')}>
         <ShipArchiveSection shipLib={shipLib} />
@@ -553,9 +647,21 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             <Truck className="w-4 h-4 text-orange-400"/>
             <div className="text-sm font-bold text-orange-100">오늘 장비별 작업 보고</div>
             <span className="text-[10px] text-slate-500">실시간</span>
+            {/* V9.57(I3): 구독 한도(300건)에 걸리면 오늘 통계가 잘렸을 수 있음을 명시 */}
+            {(allReports || []).length >= 300 && (
+              <span className="text-[10px] text-amber-400 font-bold">최근 300건 기준 (더 오래된 보고는 미집계)</span>
+            )}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {['1호기', '2호기', '3호기', '4호기'].map(eq => {
+            {/* V9.57(I1): 하드코딩 1~4호기 → 부두 최대 목록(1~5호기) ∪ 실제 보고에 등장한 장비.
+                PNCT는 5호기가 있어 5호기 보고가 표에서 통째로 빠졌었다. '미지정'(장비 없는 보고,
+                작업중단 등)은 맨 뒤 버킷으로 표시(I2). */}
+            {(() => {
+              const eqList = [...equipNumbersForPier(null)];
+              Object.keys(equipStats).forEach(k => { if (k !== '미지정' && !eqList.includes(k)) eqList.push(k); });
+              if (equipStats['미지정']) eqList.push('미지정');
+              return eqList;
+            })().map(eq => {
               const s = equipStats[eq];
               if (!s) return (
                 <div key={eq} className="bg-slate-800/40 border border-slate-700/40 rounded p-2 opacity-50">
@@ -573,6 +679,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                     {s.conbox > 0 && <div>📦 콘박스 {s.conbox}</div>}
                     {s.damage > 0 && <div className="text-amber-300">⚠️ 데미지 {s.damage}</div>}
                     {s.sealError > 0 && <div className="text-red-300">🚨 실오류 {s.sealError}</div>}
+                    {/* V9.57(I2): 작업중단(외부요인) — 사고성 보고라 가장 눈에 띄게 */}
+                    {s.externalPause > 0 && <div className="text-red-300 font-black">⛔ 작업중단 {s.externalPause}</div>}
                   </div>
                 </div>
               );
@@ -602,8 +710,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                   try {
                     await fbClearAllReportsAllVoyages();
                     await fbClearAllActiveWork();
-                    alert('✅ 모든 작업 보고가 삭제되었습니다');
-                  } catch (e) { alert('삭제 실패: ' + e.message); }
+                    setRepNotice({ kind: 'ok', text: '✅ 모든 작업 보고가 삭제되었습니다' });  // TallyOne 1.0(L5)
+                  } catch (e) { setRepNotice({ kind: 'err', text: '삭제 실패: ' + e.message }); }  // TallyOne 1.0(L5)
                 },
               });
             }}
@@ -611,16 +719,24 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               <Trash2 className="w-3 h-3"/> 전체 삭제 (테스트용)
             </button>
           </div>
+          {/* TallyOne 1.0(L5): 삭제 결과 인라인 통지 */}
+          <InlineNotice notice={repNotice} onClose={() => setRepNotice(null)} />
           <div className="space-y-1 max-h-96 overflow-y-auto">
             {recentReports.map((r, i) => {
               const time = r.ts ? new Date(r.ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-              const icon = r.type === 'work_status' ? '📤' : r.type === 'hatch' ? '🔓' : r.type === 'conbox' ? '📦' : r.type === 'damage' ? '⚠️' : r.type === 'seal_error' ? '🚨' : '📋';
+              // V9.57(I2): external_pause(작업중단) 아이콘 누락 → 기본 '📋'로 묻히던 것. 사고성이라 ⛔ + 붉은 테두리.
+              const icon = r.type === 'work_status' ? '📤' : r.type === 'hatch' ? '🔓' : r.type === 'conbox' ? '📦' : r.type === 'damage' ? '⚠️' : r.type === 'seal_error' ? '🚨' : r.type === 'external_pause' ? '⛔' : '📋';
+              // V9.57(I7): 피드 voy는 firebase 구독이 voy_l 고정으로 붙인다 — 보고의 mode를 보고 voy_d/voy_l 선택.
+              const rInfo = voyages?.[r.voyageKey]?.info;
+              const rVoy = r.mode === 'discharge' ? (rInfo?.voy_d || rInfo?.voy || r.voy)
+                : r.mode === 'loading' ? (rInfo?.voy_l || rInfo?.voy || r.voy)
+                : r.voy;
               return (
-                <div key={i} className="bg-slate-950 border border-slate-800 rounded p-2 text-xs group">
+                <div key={i} className={`bg-slate-950 border rounded p-2 text-xs group ${r.type === 'external_pause' ? 'border-red-700/70' : 'border-slate-800'}`}>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-1">
                       <span>{icon}</span>
-                      <span className="font-bold text-slate-200">{r.vsl} {r.voy}</span>
+                      <span className="font-bold text-slate-200">{r.vsl} {rVoy}</span>
                       {r.equip && <span className="text-[10px] bg-orange-700 text-white px-1 py-0.5 rounded font-bold">{r.equip}</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -635,7 +751,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                           onConfirm: async () => {
                             try {
                               await fbDeleteWorkReport(r.voyageKey, r.ts);
-                            } catch (e) { alert('삭제 실패: ' + e.message); }
+                            } catch (e) { setRepNotice({ kind: 'err', text: '삭제 실패: ' + e.message }); }  // TallyOne 1.0(L5)
                           },
                         });
                       }}
@@ -681,6 +797,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             <div className="text-sm font-bold text-slate-100">LOLO 검수 제출 리스트</div>
             <span className="text-[10px] text-cyan-300/70">베이 없는 LOLO 선박 · 처리분만 내보냄</span>
           </div>
+          {/* TallyOne 1.0(L5): 내보내기 결과 인라인 통지 */}
+          <InlineNotice notice={loloNotice} onClose={() => setLoloNotice(null)} />
           <div className="space-y-2">
             {loloVoyages.map((item, idx) => (
               <LoloVoyageCard key={`${item.voyageKey}-${item.mode}`}
@@ -727,6 +845,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             </button>
           </div>
         </div>
+        {/* TallyOne 1.0(L5): 내보내기·비우기 결과 인라인 통지 */}
+        <InlineNotice notice={fbNotice} onClose={() => setFbNotice(null)} />
         <div className="text-[10px] text-slate-500 mb-2">
           검수원이 잘못된 답변에 ❌ 오답 버튼 누르면 여기 모입니다 → 다음 버전에서 패턴 보강
         </div>
@@ -844,6 +964,8 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
 // M3.5.5: 엠티 실 작업 항차 카드 (실시간 표)
 function SealVoyageCard({ sv, onOpenVoyage }) {
   const [downloading, setDownloading] = useState(false);
+  // TallyOne 1.0(L5): 다운로드 결과 alert → 카드 안 인라인 통지
+  const [notice, setNotice] = useState(null);
   const isAttach = sv.policy.mode === 'attach';
   const handleDownload = async () => {
     setDownloading(true);
@@ -853,9 +975,9 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
         sealTargets: sv.targets,
         sealMode: sv.policy.mode,
       });
-      alert(`✅ 다운로드: ${result.filename}\n${result.rowCount}대`);
+      setNotice({ kind: 'ok', text: `✅ 다운로드: ${result.filename}\n${result.rowCount}대` });
     } catch (e) {
-      alert('실패: ' + e.message);
+      setNotice({ kind: 'err', text: '실패: ' + e.message });
     } finally {
       setDownloading(false);
     }
@@ -877,6 +999,9 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
           <div className="text-[10px] text-slate-500">{sv.total - sv.done}대 남음</div>
         </div>
       </div>
+
+      {/* TallyOne 1.0(L5): 다운로드 결과 인라인 통지 */}
+      <InlineNotice notice={notice} onClose={() => setNotice(null)} />
 
       {/* 실시간 표 (최대 50줄) */}
       <div className="bg-slate-950 rounded border border-slate-700 overflow-hidden">
@@ -1008,9 +1133,11 @@ function FeedbackRow({ feedback: f }) {
 //   수석검수사가 최종 확인 후 [완료 저장] → archive 백업 + 보관소 기록 + voyages 삭제.
 //   양하/선적 수는 평택분(tallyVoyagesByShip이 _ptkCountOfSection로 집계).
 // ─────────────────────────────────────────────────────────────
-function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
+function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotForecast = {} }) {
   const [busyKey, setBusyKey] = useState(null);
   const [confirmKey, setConfirmKey] = useState(null);
+  // TallyOne 1.0(L5): 결과 통지 alert() → 섹션 안 인라인 알림(확인창 성격 window.confirm은 유지)
+  const [notice, setNotice] = useState(null);
 
   // 항차별 진행 행 (선박별 합계가 아니라 항차 단위 — 완료는 항차별로 누름)
   const rows = useMemo(() => {
@@ -1024,6 +1151,8 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
         key, vsl,
         voyD: info.voy_d || '', voyL: info.voy_l || '',
         discharge: dPtk, loading: lPtk,
+        // TallyOne 1.0(L3): 일정 정보 — 수집기가 채우는 planDate("ETA ~ ETD")·planSrc(출처 판단 결과)
+        planDate: info.planDate || '', planSrc: info.planSrc || '',
         imo: info.imo || '',
         createdAt: info.createdAt || 0,
         // V7.90: 완료 분리 — 보유 모드가 전부 완료되면 수석 최종 저장 가능 (구 inspectorDone 하위호환)
@@ -1062,14 +1191,16 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
     try {
       const ok = await fbArchiveVoyageBeforeDelete(row.imo, row.key, voyages[row.key]);
       if (!ok) {
-        alert('완료 저장 실패: 백업이 저장되지 않아 삭제하지 않았습니다. 네트워크 확인 후 다시 시도하세요.');
+        // TallyOne 1.0(L5): alert → 인라인 알림
+        setNotice({ kind: 'err', text: `완료 저장 실패(${row.vsl}) — 백업이 저장되지 않아 삭제하지 않았습니다. 네트워크 확인 후 다시 시도하세요.` });
         setBusyKey(null); setConfirmKey(null);
         return;
       }
       await fbDeleteVoyage(row.key);
+      setNotice({ kind: 'ok', text: `✅ ${row.vsl} 완료 저장 — 보관소로 이동했습니다.` });  // TallyOne 1.0(L5): 성공도 화면에 명시
     } catch (e) {
       console.error('[수석 완료] 실패:', row.key, e);
-      alert('완료 저장 중 오류가 발생해 삭제하지 않았습니다.');
+      setNotice({ kind: 'err', text: `완료 저장 중 오류가 발생해 삭제하지 않았습니다(${row.vsl}). ${e?.message || e}` });  // TallyOne 1.0(L5)
     }
     setBusyKey(null); setConfirmKey(null);
   };
@@ -1088,7 +1219,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
     const v = voyages[row.key];
     if (!v) return null;
     const got = collectActualLoading(v);
-    if (!got.rows.length) { alert('평택 선적분 자료가 없습니다.'); return null; }
+    if (!got.rows.length) { setNotice({ kind: 'err', text: '평택 선적분 자료가 없습니다.' }); return null; }  // TallyOne 1.0(L5)
     if (!got.useDoneOnly && !window.confirm(
       `선적확인(완료)된 컨이 아직 없습니다.\n전체 평택 선적분 ${got.totalPtk}대 기준으로 만들까요?`)) return null;
     return { ...got, meta: _ediMeta(row.key, v) };
@@ -1123,7 +1254,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) {
-      alert('엑셀 생성 실패: ' + (e && e.message || e));
+      setNotice({ kind: 'err', text: '엑셀 생성 실패: ' + (e && e.message || e) });  // TallyOne 1.0(L5)
     }
   };
   const startExcelToEdi = (row) => {
@@ -1137,13 +1268,13 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
     if (!file || !key) return;
     try {
       const { rows, errors } = await parseEditExcel(await file.arrayBuffer());
-      if (!rows.length) { alert('엑셀에서 컨테이너를 읽지 못했습니다.\n' + errors.join('\n')); return; }
+      if (!rows.length) { setNotice({ kind: 'err', text: '엑셀에서 컨테이너를 읽지 못했습니다.\n' + errors.join('\n') }); return; }  // TallyOne 1.0(L5)
       if (errors.length && !window.confirm(`형식 경고 ${errors.length}건:\n` + errors.slice(0, 8).join('\n') + '\n\n그래도 EDI를 만들까요?')) return;
       const meta = _ediMeta(key, voyages[key] || {});
       downloadText(`${meta.vsl}_${meta.voy}_ACTUAL_BAPLIE_수정본.edi`, buildActualBaplie(rows, meta));
-      alert(`수정본 EDI 생성 완료 — ${rows.length}대 (엑셀 기준)`);
+      setNotice({ kind: 'ok', text: `✅ 수정본 EDI 생성 완료 — ${rows.length}대 (엑셀 기준)` });  // TallyOne 1.0(L5)
     } catch (err) {
-      alert('엑셀 읽기 실패: ' + (err && err.message || err));
+      setNotice({ kind: 'err', text: '엑셀 읽기 실패: ' + (err && err.message || err) });  // TallyOne 1.0(L5)
     }
   };
 
@@ -1155,6 +1286,8 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
           진행 상황 ({rows.length}척 작업 중)
         </div>
       </div>
+      {/* TallyOne 1.0(L5): 이 섹션의 결과 통지(완료 저장·EDI/엑셀 생성) 인라인 표시 */}
+      <InlineNotice notice={notice} onClose={() => setNotice(null)} />
       {/* V8.93: 엑셀→EDI 업로드용 숨은 파일 선택 */}
       <input ref={ediFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onExcelpicked} />
       {rows.length === 0 ? (
@@ -1208,32 +1341,35 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector }) {
               <div className="flex items-center gap-3 mt-1 text-xs">
                 <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
                 <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
-                {/* V8.93: 실선적 EDI(표준 BAPLIE)·수정용 엑셀·엑셀→EDI 재생성 — 선적분 있을 때만 */}
-                {r.loading > 0 && (
-                  <span className="flex items-center gap-1 ml-auto">
-                    <button onClick={(e) => { e.stopPropagation(); exportActualEdi(r); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
-                      title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 카스피에서 읽을 수 있습니다.">실선적 EDI</button>
-                    <button onClick={(e) => { e.stopPropagation(); exportActualAsc(r); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
-                      title="실선적 ASC 내려받기 — 카스피와 같은 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
-                    <button onClick={(e) => { e.stopPropagation(); exportEditExcel(r); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 font-bold"
-                      title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
-                    <button onClick={(e) => { e.stopPropagation(); startExcelToEdi(r); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 font-bold"
-                      title="수정한 엑셀을 선택하면 수정본 EDI 파일을 만들어 내려줍니다.">엑셀→EDI</button>
-                  </span>
-                )}
                 {r.inspectorDone && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
                 )}
                 {(r.voyD || r.voyL) && (
-                  <span className="text-slate-500 text-[10px]">
+                  <span className="text-slate-500 text-[10px] ml-auto">
                     {r.voyD && `양하 ${r.voyD}`}{r.voyD && r.voyL && ' · '}{r.voyL && `선적 ${r.voyL}`}
                   </span>
                 )}
               </div>
+              {/* TallyOne 1.0(L3): 일정 정보 — 작업일자(출처 뱃지)·도선 입출항. 완료 저장 타이밍 판단 근거 */}
+              <ScheduleLine planDate={r.planDate} planSrc={r.planSrc}
+                pf={(pilotForecast || {})[(r.vsl || '').toUpperCase()]} />
+              {/* TallyOne 1.0(L4): V8.93 도구 4종 — 10px 초소형 버튼을 줄 아래 40px 터치 타깃 행으로 재배치(기능 불변) */}
+              {r.loading > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5">
+                  <button onClick={() => exportActualEdi(r)} style={{ minHeight: 40 }}
+                    className="px-2 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-[11px] font-bold"
+                    title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 카스피에서 읽을 수 있습니다.">실선적 EDI</button>
+                  <button onClick={() => exportActualAsc(r)} style={{ minHeight: 40 }}
+                    className="px-2 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-[11px] font-bold"
+                    title="실선적 ASC 내려받기 — 카스피와 같은 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
+                  <button onClick={() => exportEditExcel(r)} style={{ minHeight: 40 }}
+                    className="px-2 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-[11px] font-bold"
+                    title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
+                  <button onClick={() => startExcelToEdi(r)} style={{ minHeight: 40 }}
+                    className="px-2 rounded-lg bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 text-[11px] font-bold"
+                    title="수정한 엑셀을 선택하면 수정본 EDI 파일을 만들어 내려줍니다.">엑셀→EDI</button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1368,6 +1504,85 @@ function ShipArchiveSection({ shipLib }) {
   );
 }
 
+// TallyOne 1.0(L1): 수집기 상태 배너 — 끊김(주기×2분 초과)이면 붉은 경고, 살아있으면 컴팩트 한 줄,
+//   하트비트 자체가 없으면(prop 미전달·수집기 미가동) '자료 없음'을 명시(조용한 실패 금지).
+//   '검증 필요 N항차'는 health.js healthSummary 기준 — 누르면 #/health(항차 건강 점검)로 이동.
+function CollectorStatusBanner({ hbView, hb, issueCount }) {
+  const healthBtn = (
+    <button onClick={() => { window.location.hash = '#/health'; }}
+      title="항차 건강 점검(#/health)으로 이동"
+      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border shrink-0 ${issueCount > 0
+        ? 'bg-amber-900/40 border-amber-700/50 text-amber-300 hover:bg-amber-800/50'
+        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+      style={{ minHeight: 36 }}>
+      {issueCount > 0 ? `⚠ 검증 필요 ${issueCount}항차` : '✓ 항차 검증 이상 없음'}
+    </button>
+  );
+  if (hbView.state === 'down') {
+    return (
+      <div className="bg-red-950/60 border-2 border-red-600/70 rounded-xl px-3 py-2 flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-red-200">🔴 수집기 끊김 — 아래 숫자는 갱신 정지 상태</div>
+          <div className="text-[11px] text-red-300/80 mt-0.5">
+            마지막 갱신 {hbView.ageMin}분 전{hb?.version ? ` · 수집기 v${hb.version}` : ''} · 끊김 기준 주기 {hbView.cycleMin}분×2
+          </div>
+        </div>
+        {healthBtn}
+      </div>
+    );
+  }
+  return (
+    <div className={`flex items-center gap-2 flex-wrap rounded-xl border px-3 py-1.5 text-[11px] ${hbView.state === 'ok'
+      ? 'bg-slate-900 border-emerald-800/40 text-slate-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+      {hbView.state === 'ok'
+        ? <span>🟢 수집기 v{hb?.version || '?'} · {hbView.ageMin}분 전 갱신 (주기 {hbView.cycleMin}분)</span>
+        : <span>⚪ 수집기 상태 자료 없음 — 하트비트 미수신</span>}
+      <span className="flex-1"/>
+      {healthBtn}
+    </div>
+  );
+}
+
+// TallyOne 1.0(L3): 진행 상황 줄 일정 표시 — planSrc 출처 뱃지는 HomePage 1026행 _MK와 같은 표기.
+//   자리별 출처('입항출처|출항출처')도 같은 규칙으로 풀며, 일정이 전혀 없으면 '자료 없음'을 명시.
+function ScheduleLine({ planDate, planSrc, pf }) {
+  const MK = { mail: '📧메일', pilot: '⚓도선', portmis: '🚢신고', plan: '📋배정' };
+  const pp = String(planSrc || '').split('|');
+  const srcIn = MK[pp[0]] || '';
+  const srcOut = MK[pp[1] || pp[0]] || '';
+  const srcLabel = srcIn && srcOut && srcIn !== srcOut ? `${srcIn}/${srcOut}` : (srcIn || srcOut);
+  const fmt = (s) => {
+    const ms = parsePortMisDateTime(s);
+    if (ms == null) return String(s || '');
+    const d = new Date(ms);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+  const hasAny = planDate || (pf && (pf.nextArr || pf.nextDep));
+  if (!hasAny) return <div className="text-[10px] text-slate-600 mt-0.5">📅 일정 자료 없음 (수집기 미수신)</div>;
+  return (
+    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+      {planDate && <span>📅 {planDate}{srcLabel ? ` (${srcLabel})` : ''}</span>}
+      {pf?.nextArr && <span className="text-sky-300">⚓ 입항 {fmt(pf.nextArr)}</span>}
+      {pf?.nextDep && <span className="text-amber-300">⚓ 출항 {fmt(pf.nextDep)}</span>}
+    </div>
+  );
+}
+
+// TallyOne 1.0(L5): 결과 통지 인라인 알림 — alert() 대신 해당 섹션 안에서 보여준다. ✕로 닫음.
+function InlineNotice({ notice, onClose }) {
+  if (!notice) return null;
+  const ok = notice.kind !== 'err';
+  return (
+    <div className={`flex items-start gap-2 text-[11px] rounded-lg border px-2.5 py-1.5 mb-2 ${ok
+      ? 'bg-emerald-950/40 border-emerald-700/50 text-emerald-200'
+      : 'bg-red-950/40 border-red-700/50 text-red-200'}`}>
+      <span className="flex-1 whitespace-pre-line break-all">{notice.text}</span>
+      <button onClick={onClose} title="알림 닫기"
+        className="shrink-0 px-1.5 font-bold text-slate-400 hover:text-slate-200" style={{ minWidth: 28, minHeight: 24 }}>✕</button>
+    </div>
+  );
+}
+
 function BigStat({ label, value, sub, color }) {
   const map = {
     emerald: 'border-emerald-700/40 bg-emerald-950/30 text-emerald-300',
@@ -1415,18 +1630,23 @@ function InspectorRow({ s }) {
 }
 
 // V7.40: 실시간 작업 보드 카드 — 한 선박의 진행·작업자·최근 보고·경고를 한눈에
-function LiveShipCard({ v, workers, lastReport, alerts, onOpen }) {
-  const pct = v.totalAll > 0 ? Math.round((v.totalDone / v.totalAll) * 100) : 0;
+// TallyOne 1.0(L2): tw(터미널 실적, ±12h 창 가드 통과분)·departed(터미널 출항 상태) 추가 — 옵셔널
+function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, departed = false }) {
+  // V9.57(I4): 100% 클램프
+  const pct = v.totalAll > 0 ? Math.min(100, Math.round((v.totalDone / v.totalAll) * 100)) : 0;
   const repIcon = lastReport ? (
     lastReport.type === 'work_status' ? '📤' : lastReport.type === 'hatch' ? '🔓' :
     lastReport.type === 'conbox' ? '📦' : lastReport.type === 'damage' ? '⚠️' :
-    lastReport.type === 'seal_error' ? '🚨' : '📋') : null;
+    lastReport.type === 'seal_error' ? '🚨' :
+    lastReport.type === 'external_pause' ? '⛔' : '📋') : null;  // V9.57(I2): 작업중단 아이콘 추가
   return (
-    <button onClick={onOpen} className="w-full text-left bg-slate-800/40 border border-slate-700 rounded-lg p-2.5 hover:bg-slate-800/70 flex flex-col gap-1.5">
+    <button onClick={onOpen} className={`w-full text-left bg-slate-800/40 border border-slate-700 rounded-lg p-2.5 hover:bg-slate-800/70 flex flex-col gap-1.5 ${departed ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
           <div className="font-bold text-sm text-slate-200 truncate flex items-center gap-1.5">
             {v.info.vsl}
+            {/* TallyOne 1.0(L2): 터미널이 출항 처리한 항차 — 흐린 카드 + 출항 뱃지 */}
+            {departed && <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-bold shrink-0">⚓ 출항</span>}
             {workers.length > 0 && <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>}
           </div>
           <div className="text-[10px] text-slate-500 truncate">
@@ -1444,6 +1664,23 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen }) {
         {v.dis.total > 0 && <MiniBar label="양하" color="blue" stats={v.dis}/>}
         {v.loa.total > 0 && <MiniBar label="선적" color="amber" stats={v.loa}/>}
       </div>
+      {/* TallyOne 1.0(L2): 터미널 실적 대조 — 앱 내부 완료수 vs 트레드링스 실적(disDone/disPlan·lodDone/lodPlan).
+          미수신도 조용히 비우지 않고 명시(±12h 창 밖 자료는 이 항차 것이 아니라 버려진 상태 포함). */}
+      {tw ? (
+        <div className="text-[10px] mono text-slate-400 flex items-center gap-1.5 flex-wrap">
+          <span className="text-cyan-300 font-bold">🏗 터미널</span>
+          {(tw.disPlan > 0 || tw.disDone > 0) && (
+            <span>양하 {tw.disDone}/{tw.disPlan} <span className="text-slate-600">(앱 {v.dis.done})</span></span>
+          )}
+          {(tw.lodPlan > 0 || tw.lodDone > 0) && (
+            <span>선적 {tw.lodDone}/{tw.lodPlan} <span className="text-slate-600">(앱 {v.loa.done})</span></span>
+          )}
+          {typeof tw.pct === 'number' && tw.pct >= 0 && <span className="text-slate-500">{tw.pct}%</span>}
+          {tw.delayed && <span className="bg-red-900/60 text-red-200 px-1.5 rounded font-bold">지연</span>}
+        </div>
+      ) : (
+        <div className="text-[10px] text-slate-600">터미널 실적 미수신</div>
+      )}
       {/* 작업 중 검수원 */}
       <div className="flex items-center gap-1 flex-wrap min-h-[18px]">
         {workers.length > 0 ? workers.map(w => (
@@ -1516,7 +1753,8 @@ function BroadcastComposer({ inspector }) {
 }
 
 function MiniBar({ label, color, stats }) {
-  const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+  // V9.57(I4): 진행률 100% 클램프 — done이 모수 교집합으로 제한됐어도 표시 안전망 유지
+  const pct = stats.total > 0 ? Math.min(100, Math.round((stats.done / stats.total) * 100)) : 0;
   const map = {
     blue: { tag: 'bg-blue-900/60 text-blue-200', bar: 'bg-blue-500' },
     amber: { tag: 'bg-amber-900/60 text-amber-200', bar: 'bg-amber-500' },
@@ -1528,6 +1766,8 @@ function MiniBar({ label, color, stats }) {
         <div className={`${map[color].bar} h-full`} style={{ width: `${pct}%` }}/>
       </div>
       <span className="text-slate-400 w-16 text-right">{stats.done}/{stats.total}</span>
+      {/* V9.57(I4): 모수 밖 완료(추가컨 등)는 진행률에 안 섞고 따로 알린다 */}
+      {stats.extra > 0 && <span className="text-violet-300 text-right" title="리스트(모수) 밖에서 완료 처리된 컨테이너 — 추가컨·리스트 교체 잔재 등">+{stats.extra} 초과</span>}
       {stats.forecastEdi
         ? <span className="text-orange-300 text-right" title="EDI 컨번호가 리스트와 하나도 일치하지 않음 — 예상(프리스토우) EDI. 확정 EDI 대기.">예상EDI</span>
         : stats.missing > 0 && <span className="text-red-400 w-12 text-right">누락 {stats.missing}</span>}
@@ -1567,21 +1807,29 @@ function computeStats(section, mode) {
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
   const missing = Math.max(0, ptkCns.size - matched - planSlots);
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
-  const done = Object.keys(completed).length;
+  // V9.57(I4): done을 completed 전체 개수로 세면 모수(리스트) 밖 완료(추가컨·리스트 교체 잔재)까지
+  //   더해져 진행률이 100%를 넘었다. done은 모수(리스트 있으면 recordCns, 없으면 ptkCns)와의
+  //   교집합으로 제한하고, 모수 밖 완료는 extra로 따로 센다(MiniBar "+N 초과" 표기).
+  const compKeys = Object.keys(completed);
+  const baseSet = recordCns.size > 0 ? recordCns : ptkCns;
+  const done = compKeys.filter(cn => baseSet.has(cn)).length;
+  const extra = compKeys.length - done;
   // V8.90: 예상 EDI 판정(홈 카드와 동일 규칙) — 리스트가 있는데 매칭 0이면 예상(프리스토우) EDI.
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));
   const forecastEdi = !virtual && ptkCns.size > 0 && recordCns.size > 0 && matched === 0;
-  return { total, done, ptk: ptkCns.size, matched, missing, forecastEdi, planSlots };
+  return { total, done, extra, ptk: ptkCns.size, matched, missing, forecastEdi, planSlots };  // V9.57(I4): extra 추가
 }
 
 // ── V9.17: 완료 보관소 (archive 노드) — 열람·복원·1년 정리. 수석 전용 조작. ──
 function ArchiveRestoreSection({ chief }) {
   const [items, setItems] = useState(null);   // null=아직 안 불러옴
   const [busy, setBusy] = useState(false);
+  // TallyOne 1.0(L5): 결과 통지 alert → 섹션 안 인라인 알림(권한·확인창은 유지)
+  const [notice, setNotice] = useState(null);
   const load = async () => {
     setBusy(true);
     try { setItems(await fbListArchive()); }
-    catch (e) { alert('보관소 조회 실패: ' + (e?.message || e)); }
+    catch (e) { setNotice({ kind: 'err', text: '보관소 조회 실패: ' + (e?.message || e) }); }
     finally { setBusy(false); }
   };
   const restore = async (key) => {
@@ -1590,17 +1838,18 @@ function ArchiveRestoreSection({ chief }) {
     setBusy(true);
     try {
       const ok = await fbRestoreVoyageFromArchive(key);
-      alert(ok ? `✅ ${key} 복원 완료 — 홈에서 확인하세요.` : '복원 실패 — 보관 기록이 없습니다.');
+      setNotice(ok ? { kind: 'ok', text: `✅ ${key} 복원 완료 — 홈에서 확인하세요.` }
+                   : { kind: 'err', text: '복원 실패 — 보관 기록이 없습니다.' });
       await load();
-    } catch (e) { alert('복원 실패: ' + (e?.message || e)); }
+    } catch (e) { setNotice({ kind: 'err', text: '복원 실패: ' + (e?.message || e) }); }
     finally { setBusy(false); }
   };
   const cleanup = async () => {
     if (!chief) { alert('🔒 정리는 수석검수사만 가능합니다.'); return; }
     if (!window.confirm('1년(365일) 지난 보관 항차를 영구 삭제합니다.\n복구할 수 없습니다. 계속할까요?')) return;
     setBusy(true);
-    try { const n = await fbCleanupArchive(365); alert(`🧹 ${n}건 정리 완료`); await load(); }
-    catch (e) { alert('정리 실패: ' + (e?.message || e)); }
+    try { const n = await fbCleanupArchive(365); setNotice({ kind: 'ok', text: `🧹 ${n}건 정리 완료` }); await load(); }
+    catch (e) { setNotice({ kind: 'err', text: '정리 실패: ' + (e?.message || e) }); }
     finally { setBusy(false); }
   };
   return (
@@ -1623,6 +1872,8 @@ function ArchiveRestoreSection({ chief }) {
       <div className="text-[11px] text-slate-500 mb-2">
         수석 [완료 저장]으로 화면에서 내려간 항차의 원본. 실수로 지웠거나 재작업이 잡히면 여기서 [복원].
       </div>
+      {/* TallyOne 1.0(L5): 조회·복원·정리 결과 인라인 통지 */}
+      <InlineNotice notice={notice} onClose={() => setNotice(null)} />
       {items === null ? (
         <div className="text-[12px] text-slate-600">버튼을 눌러 목록을 확인하세요 (필요할 때만 읽음).</div>
       ) : items.length === 0 ? (

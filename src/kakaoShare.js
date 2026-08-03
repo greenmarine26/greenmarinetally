@@ -265,5 +265,3 @@ export const DAMAGE_PARTS = [
   { code: 'LOCK ROD', label: 'LOCK ROD (잠금봉)' },
   { code: 'SEAL', label: 'SEAL (봉인)' },
 ];
-
-export const EQUIPMENT_NUMBERS = ['1호기', '2호기', '3호기', '4호기'];

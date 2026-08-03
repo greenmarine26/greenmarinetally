@@ -44,11 +44,3 @@ export function getDefBayEntry(shipCode, bayNo) {
   if (e.hz != null) out.holdHasZero = !!e.hz;
   return out;
 }
-
-export function hasDefShip(shipCode) {
-  return !!DEF_DICT[String(shipCode || '').trim().toUpperCase()];
-}
-
-export function defDictStats() {
-  return { ships: Object.keys(DEF_DICT).length };
-}

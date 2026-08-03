@@ -24,19 +24,23 @@
 import { fmtPos, normalizeBay } from './utils.js';
 import { lookupUN } from './dgUnDict.js';
 
-export const GEMINI_API_KEY = 'AIzaSyDPRM3bRGusAwhyhjGGka2K1m2r6c5gJKY';
+// V9.57(G11): 하드코딩 폴백 키 삭제 — GitHub public repo 노출로 이미 차단된 키였고,
+//   소스에 실키를 두는 것 자체가 보안 위반. export 이름은 소비처 6곳(GeminiKeyModal·VoyagePage·
+//   MixerUploadModal·PortMisCaptureModal·StowageReviewModal·BulkStowageModal)이 임포트하므로
+//   유지하되 빈 문자열 — `_storage.get(SK.geminiKey) || GEMINI_API_KEY` 패턴이 자연히
+//   "본인 키 없으면 키 없음" 분기로 흐른다(각 소비처는 키 부재 안내를 이미 갖춤).
+export const GEMINI_API_KEY = '';
 const GEMINI_MODEL = 'gemini-2.5-flash';   // M5.80: Pro → Flash
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+// V9.57(G11): 키 부재 공통 안내 문구 — 조용한 실패 금지.
+const NO_KEY_MSG = 'Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.';
 
 // M6.14d: 매 호출 시 localStorage에서 검수원 본인 키 우선 사용
 //   M5.70에 패턴만 있고 SK 정의/UI 누락되어 실제로는 작동 안 했던 버그 완전 수정.
-//   GEMINI_URL 상수는 폴백용으로 남기되, 활성 호출은 항상 getActiveGeminiUrl() 사용.
 function getActiveGeminiKey() {
   try {
-    const userKey = localStorage.getItem('master_gemini_api_key_v1');
-    return userKey || GEMINI_API_KEY;
+    return localStorage.getItem('master_gemini_api_key_v1') || '';
   } catch {
-    return GEMINI_API_KEY;
+    return '';
   }
 }
 function getActiveGeminiUrl() {
@@ -427,6 +431,8 @@ function compressHistory(history) {
 //
 // 반환: { ok, answer, error, ragInfo }
 export async function askGemini(question, voyage, allContainers, opts = {}) {
+  // V9.57(G11): 키 없으면 명확한 안내로 즉시 반환 — 빈 키로 fetch해 400을 받는 조용한 실패 방지.
+  if (!getActiveGeminiKey()) return { ok: false, error: NO_KEY_MSG };
   const { history = [], shipLib = null, parsedQuery = {} } = opts;
 
   // === RAG: 질문 키워드로 후보 좁히기 ===
@@ -564,6 +570,8 @@ export async function fixQuestionWithAI(rawText, timeoutMs = 4000) {
 예시: "20번 베이 잇퍼 몇대야" → 20번 베이 리퍼 몇대야 / "양아 컨테이너 매수" → 양하 컨테이너 몇대 / "5번 배 갑반에 풀 며대" → 5번 베이 갑판에 풀 몇대
 
 받아 적은 질문: "${rawText}"`;
+  // V9.57(G11): 키 없으면 시도하지 않음 — 호출부는 null이면 로컬 파서로 폴백(기존 계약 유지).
+  if (!getActiveGeminiKey()) { console.warn('[gemini] ' + NO_KEY_MSG + ' (음성 교정 생략)'); return null; }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -662,7 +670,7 @@ const STOWAGE_PROMPT = `이 PDF는 컨테이너 선박의 STOWAGE INSTRUCTION (�
 - 데크와 hold 구분: tier >= 80 이면 deck, < 80 이면 hold`;
 
 export async function ocrStowagePdf(file, geminiApiKey) {
-  if (!geminiApiKey) throw new Error('Gemini API 키 없음');
+  if (!geminiApiKey) throw new Error(NO_KEY_MSG);   // V9.57(G11): 설정 경로까지 안내
   if (!file) throw new Error('PDF 파일 없음');
 
   // PDF 파일을 base64로 변환 (사진 변환 없음 — 그대로 전송)
@@ -893,6 +901,7 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
 export async function askShipIntro({ name = '', callsign = '', imo = '', carrier = '' }) {
   const shipName = String(name || '').trim();
   if (!shipName) return { ok: false, error: '선박명이 없습니다' };
+  if (!getActiveGeminiKey()) return { ok: false, error: NO_KEY_MSG };   // V9.57(G11)
   // V9.18-02: 앱 내부 약자(DXQD 등)로 검색하면 "확인되지 않았습니다"가 나온다(사용자 보고).
   //   IMO·콜사인이 있으면 그것을 우선 검색 키로 쓰고, 이름이 약자일 수 있음을 명시한다.
   const looksCode = /^[A-Z0-9]{2,5}$/.test(shipName);

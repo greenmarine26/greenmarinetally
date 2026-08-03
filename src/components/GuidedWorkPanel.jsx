@@ -126,11 +126,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const label = side === 'starboard' ? '우현' : '좌현';
     const seaRows = side === 'starboard' ? '짝수' : '홀수';
     if (!window.confirm(`접안 방향을 [${label} 접안]으로 저장합니다.\n(${seaRows} 로우가 해상쪽)\n\n양하/선적 순서가 모두 이 기준으로 계산됩니다. 맞습니까?`)) return;
-    fbUpdateVoyageInfo(voyageKey, { berthSide: side });
+    // V9.57(I8): fire-and-forget 저장 실패가 조용히 사라지던 것 — 실패를 알린다
+    fbUpdateVoyageInfo(voyageKey, { berthSide: side })
+      .catch(e => { console.warn('[V9.57] 접안 방향 저장 실패', e); alert('접안 방향 저장에 실패했습니다. 네트워크 확인 후 다시 선택해 주세요.'); });
   };
   const changeBerth = () => {
     if (!window.confirm('접안 방향을 변경하면 작업 순서(육상↔해상)가 뒤집힙니다.\n변경 화면으로 이동할까요?')) return;
-    fbUpdateVoyageInfo(voyageKey, { berthSide: '' });
+    fbUpdateVoyageInfo(voyageKey, { berthSide: '' })
+      .catch(e => { console.warn('[V9.57] 접안 방향 초기화 실패', e); alert('접안 방향 초기화에 실패했습니다. 네트워크 확인 후 다시 시도해 주세요.'); });  // V9.57(I8)
     setSelectedGroup(null);
   };
 
@@ -166,7 +169,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const markHatchDone = async (center, action) => {
     if (center == null) return;
     const prev = voyage?.info?.hatchDone || {};
-    try { await fbUpdateVoyageInfo(voyageKey, { hatchDone: { ...prev, [hatchKeyOf(center)]: action } }); } catch (e) {}
+    // V9.57(I8): 빈 catch로 조용히 실패하던 것 — 저장 안 되면 모드 전환 때 프롬프트가 또 뜬다. 알린다.
+    try { await fbUpdateVoyageInfo(voyageKey, { hatchDone: { ...prev, [hatchKeyOf(center)]: action } }); }
+    catch (e) {
+      console.warn('[V9.57] 해치 처리 상태 저장 실패', e);
+      alert('해치 처리 상태 저장에 실패했습니다.\n(저장 안 되면 모드 전환 시 해치 안내가 다시 뜰 수 있습니다.)');
+    }
   };
 
   // 그룹 목록 (남은 작업이 있는 그룹만) — V7.94-23: 홀드/데크 잔여 구분
@@ -276,12 +284,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (!inspector) return;
     if (selectedGroup == null || !selectedTier) {
       // 베이/단 미선택 = 위치 정보 클리어(항차·모드는 유지)
-      fbSetInspectorActivity(inspector, voyageKey, mode).catch(() => {});
+      fbSetInspectorActivity(inspector, voyageKey, mode).catch(e => console.warn('[V9.57] 활동 위치 클리어 실패', e));  // V9.57(I8): 무음 catch → 로그
       return;
     }
     fbSetInspectorActivity(inspector, voyageKey, mode, {
       equip, bayLabel: bayLabelOf(selectedGroup), tier: selectedTier, remain: tierRemainList.length, auto: true,
-    }).catch(() => {});
+    }).catch(e => console.warn('[V9.57] 활동 위치 보고 실패', e));  // V9.57(I8): 무음 catch → 로그
   }, [inspector, voyageKey, mode, equip, selectedGroup, selectedTier, tierRemainList.length]);
 
   // 카드/선택지 음성 안내는 프롬프트 조건(deckDonePromptD 등) 정의 이후로 이동 — 아래 참조.
@@ -413,7 +421,19 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         : (voyage?.info?.voy_l || voyage?.info?.voy || '');
       const panelCount = hatchPanelsOf(bays);
       const message = buildHatchMessage({ vsl: shipName, voy, bays, action, time: Date.now(), equip, panelCount });
-      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, panelCount, message }); } catch (e) {}
+      // V9.57(I8): DB 기록 실패를 삼키고 카톡만 나가던 것 — 수석 대시보드엔 보고가 없는데
+      //   카톡엔 있는 불일치가 생겼다. 재시도 1회 후에도 실패면 공유 진행 여부를 묻는다.
+      let dbOk = false;
+      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, panelCount, message }); dbOk = true; }
+      catch (e1) {
+        console.warn('[V9.57] 해치 보고 DB 기록 실패 — 1회 재시도', e1);
+        try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, panelCount, message }); dbOk = true; }
+        catch (e2) { console.warn('[V9.57] 해치 보고 DB 기록 재시도 실패', e2); }
+      }
+      if (!dbOk) {
+        const goOn = window.confirm('해치 보고 DB 기록에 실패했습니다 (재시도 포함).\n수석 대시보드에는 이 보고가 남지 않습니다.\n\n카톡 공유만 진행할까요?');
+        if (!goOn) return;  // finally에서 busy 해제
+      }
       await shareText(message, '해치커버');
     } finally { setHatchBusy(false); }
   };

@@ -10,7 +10,10 @@ import { openPrintWindow } from './printHelper.js';
 import { formatBerth, isPyeongtaekPort } from './utils.js';
 const PORT_MAP = {
   // 표준 5자
+  // V9.57(G13): 평택 표기 7종(utils.isPyeongtaekPort의 PYEONGTAEK_CODES)과 정합 —
+  //   KRPYOTM/PYOTM/KRPYO/PYT 누락 시 normalizePort 폴백(뒤 3자)이 'OTM'/'PYO' 같은 유령 항구를 만들었다.
   'KRPUS': 'PUS', 'KRKAN': 'KAN', 'KRPTK': 'PTK', 'KRPYT': 'PTK', 'KRINC': 'INC',
+  'PYT': 'PTK', 'KRPYOTM': 'PTK', 'PYOTM': 'PTK', 'KRPYO': 'PTK',
   'VNSGN': 'SGN', 'VNHPP': 'HPP',
   'THLCH': 'LCH', 'THBKK': 'BKK',
   'JPTYO': 'TYO', 'JPYOK': 'YOK',

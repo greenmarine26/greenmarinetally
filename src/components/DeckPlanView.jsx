@@ -100,7 +100,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             return (
               <button key={`${s.cn}${s.ri}${s.ci}`}
                 title={s.pos || ''}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" */
-                onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: s.iso.replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay })}
+                onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay })}  /* V9.57(I11): s.iso null 가드 — 플랜에 iso 없는 슬롯 클릭 시 크래시 방지 */
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
                   ${isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-slate-700/80 border-slate-500' : 'bg-sky-900/80 border-sky-600'}
                   ${isRf ? 'ring-1 ring-cyan-400' : ''} ${isXray ? 'ring-2 ring-yellow-400' : ''}

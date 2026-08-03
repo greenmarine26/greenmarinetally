@@ -81,7 +81,8 @@ export default function ReportTab({ voyageKey, mode, voyageInfo, containers, com
   };
 
   const handleExportErrors = () => {
-    exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, xraySeals);
+    // V9.57(I7): mode별 항차(voy_d/voy_l)를 CSV에 넘긴다 — legacy info.voy 고정 해소
+    exportSealErrorsToCSV(voyageKey, mode, voyageInfo, containers, xraySeals, voy);
   };
 
   const handleCopyErrorReport = () => {

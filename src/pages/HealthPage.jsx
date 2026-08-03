@@ -54,7 +54,14 @@ export default function HealthPage({ voyages, heartbeat, onOpenVoyage }) {
               ? 'border-amber-700/60 bg-amber-950/25 hover:bg-amber-950/40'
               : 'border-slate-700/40 bg-slate-900/50 hover:bg-slate-800/60'}`}>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-sm text-slate-100">{h.vsl} {h.voy}</span>
+              {/* V9.57(I17): health.js(h.voy)는 legacy info.voy 단일 — 양하/선적 항차 분리 미지원.
+                  화면에서 voyages prop으로 voy_d/voy_l을 직접 조회해 병기한다 (health.js는 팀G 소관, 미수정). */}
+              <span className="font-bold text-sm text-slate-100">{h.vsl} {(() => {
+                const info = voyages?.[h.key]?.info || {};
+                const d = info.voy_d, l = info.voy_l;
+                if (d && l && d !== l) return `${d} / ${l}`;
+                return d || l || h.voy;
+              })()}</span>
               <span className="text-[10px] text-slate-500">{h.key}</span>
               {h.auto && (
                 <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-300 border border-sky-700/40">

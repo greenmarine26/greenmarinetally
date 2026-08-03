@@ -8,6 +8,8 @@
 //
 // 판정은 이 파일 한 벌만 쓴다 — 카드와 위치수정 창이 서로 다른 잣대를 대면 검수사가 헷갈린다.
 
+import { isReeferIso } from './utils.js';   // V9.57: 리퍼 판정 단일 소스 (ISO 가드 정비에 사용)
+
 const bn = (v) => (v !== undefined && v !== null && v !== '' ? String(parseInt(v, 10)) : '');
 
 /** 두 베이가 같은 슬롯(트리오)인가 — 같은 번호 · 짝꿍 · 사이 짝수 */
@@ -17,7 +19,8 @@ export function sameBayGroup(bayA, bayB, bayPairs = {}) {
   if (A === B) return true;
   if (bayPairs[A] === B || bayPairs[B] === A) return true;
   const a = parseInt(A, 10), b = parseInt(B, 10);
-  if (Math.abs(a - b) === 1 && (a % 2 === 0 || b % 2 === 0)) return true;   // 19-20, 20-21
+  // V9.57: 죽은 가드 정리 — 인접 정수는 항상 한쪽이 짝수라 `(a%2===0||b%2===0)`은 상시 참이었다.
+  if (Math.abs(a - b) === 1) return true;   // 19-20, 20-21
   return false;
 }
 
@@ -33,8 +36,12 @@ export function isSpecialCon(c) {
   if (String(c.dgc || '').trim() || String(c.un || '').trim()) return true;
   if (c.tmp !== undefined && c.tmp !== null && String(c.tmp).trim() !== '') return true;   // 온도가 있으면 리퍼
   const iso = String(c.iso || c.ediIso || '').toUpperCase();
-  // ISO 3~4번째 = 형식. R/H(리퍼) P(플랫) U(오픈탑) T(탱크) S(네임드) B(벌크)
-  if (/^..[RHPUTSB]/.test(iso)) return true;
+  // ISO 3번째 = 형식. R/H(리퍼) P(플랫) U(오픈탑) T(탱크) S(네임드) B(벌크)
+  // V9.57: ISO꼴(첫 자리가 길이코드 2/4/9/L/M)일 때만 적용 — 'GPHC'·'DCHC' 같은 라벨/변형
+  //   문자열의 3번째 글자('H')에 과잉 발동해 일반 드라이가 특수컨으로 묶이던 결함 교정.
+  //   (표기 변형 리퍼 'RFHC' 등은 isReeferIso가 계속 잡는다 — 판정 누락 없음.)
+  if (/^[249LM][0-9A-Z][RHPUTSB]/.test(iso)) return true;
+  if (isReeferIso(iso)) return true;
   const tp = String(c.tp || '').toUpperCase();
   if (/RF|RH|OT|FR|TK|OOG|PL/.test(tp)) return true;
   return false;
