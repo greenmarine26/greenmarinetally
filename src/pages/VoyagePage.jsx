@@ -48,6 +48,7 @@ import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6
 import BayDictDiagnosticsWidget from '../components/BayDictDiagnosticsWidget.jsx'; // M6.50
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
+import { logView, logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 활동 로그(열람·조회 기록)
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
 import DeckPlanView from '../components/DeckPlanView.jsx';
@@ -124,6 +125,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, []);
 
   useEffect(() => { onModeChange?.(mode); }, [mode]);
+
+  // TallyOne 1.3: 열람 기록 — 항차 진입·탭 전환·모드 전환마다 1건.
+  //   같은 대상(voyageKey+mode+tab) 30초 안 중복은 activityLog가 생략한다.
+  useEffect(() => {
+    logView({ route: 'voyage', voyageKey, mode, tab });
+  }, [voyageKey, mode, tab]);
 
   // M3.0: 항차 IMO로 선박 라이브러리 로드 (AI에게 이전 항차 패턴 컨텍스트 제공)
   useEffect(() => {
@@ -782,6 +789,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
       )}
       {tab === 'search' && (
+        // TallyOne 1.3: 조회(lookup)·자연어(nls) 기록 — 검색 실행부는 별도 파일
+        //   (components/SearchPanel.jsx)이라 이번 판 수정 범위 밖. prop 계약을 건드리지 않고
+        //   input 이벤트를 캡처해 질의를 기록한다. 숫자만이면 끝4 조회, 그 외는 자연어.
+        //   textarea(인계 메모)는 제외. 확정 판정(타이핑 멈춤 1.2초)·중복 생략은 activityLog 담당.
+        //   한계 — 음성 입력은 state로 직접 들어와 input 이벤트가 없어 기록되지 않는다
+        //   (SearchPanel의 setQuery 지점에 1줄 보강 필요 — 다음 판).
+        <div onInputCapture={(e) => {
+          const t = e.target;
+          if (!t || t.tagName !== 'INPUT') return;
+          const v = String(t.value || '').trim();
+          if (/^[0-9\s]+$/.test(v)) logQuerySettled('lookup', v, { voyageKey, mode });
+          else logQuerySettled('nls', v, { voyageKey });
+        }}>
         <SearchPanel
           voyage={voyage}
           voyageKey={voyageKey}
@@ -799,6 +819,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             setTab('bay');
           }}
         />
+        </div>
       )}
       {tab === 'lolo' && (
         <>
@@ -1438,6 +1459,10 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     if (externalFilter && externalFilter !== filter) setFilter(externalFilter);
   }, [externalFilter]);
 
+  // TallyOne 1.3: 조회 기록 — 이 검색창은 라이브 필터라 확정 버튼이 없다.
+  //   타이핑 멈춤을 확정으로 본다(판정·중복 생략은 activityLog가 담당, 타이핑마다 기록 아님).
+  useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
+
   const filtered = useMemo(() => {
     let arr = containers;
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
@@ -1552,6 +1577,9 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer }) {
   const [filter, setFilter] = useState('all'); // all | done(누적) | undone
   const [search, setSearch] = useState('');
+
+  // TallyOne 1.3: 조회 기록 — ListTab과 같은 기준(타이핑 멈춤 = 조회 확정 1회)
+  useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
 
   const filtered = useMemo(() => {
     let arr = containers;

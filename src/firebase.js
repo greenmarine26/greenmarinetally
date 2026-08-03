@@ -10,6 +10,7 @@ import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
 import { isPyeongtaekPort, isPortCode, resolveShipKey } from './utils.js';
+import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -1941,4 +1942,47 @@ export async function fbGetClaudeMemos(limit = 30) {
 export async function fbDeleteClaudeMemo(key) {
   if (!key) return;
   await remove(ref(db, `claude_inbox/${key}`));
+}
+
+// ─── TallyOne 1.3: 활동 로그 — activity_log/{YYMMDD}/{pushKey} ───
+//   "검수원이 뭘 보려고 들어왔는지"를 남긴다(열람 자체가 데이터 — 사용자 확정 2026-08-03).
+//   일 단위 버킷이라 30일 정리를 버킷 통삭제로 싸게 한다. 버킷 키·정리 판정은
+//   activityLog.js(activityDayKey·pickExpiredActivityBuckets)가 단일 소스.
+
+// 활동 1건 기록 — 호출부(activityLog.js logActivity)가 fire-and-forget으로 부른다.
+export async function fbPushActivity(dayKey, payload) {
+  const r = push(ref(db, `activity_log/${dayKey}`));
+  await set(r, payload);
+  return r.key;
+}
+
+// 최근 N일 버킷 병합 조회 — at 역순(최신 먼저). 소유자 뷰어(ChiefDashboard 활동 로그)용.
+export async function fbGetActivityDays(days = 7) {
+  const now = Date.now();
+  const dayKeys = [];
+  for (let i = 0; i < days; i++) dayKeys.push(activityDayKey(now - i * 86400000));
+  const snaps = await Promise.all(dayKeys.map(k => get(ref(db, `activity_log/${k}`))));
+  const out = [];
+  snaps.forEach((snap, i) => {
+    if (!snap.exists()) return;
+    for (const [id, v] of Object.entries(snap.val() || {})) out.push({ id, day: dayKeys[i], ...(v || {}) });
+  });
+  return out.sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+
+// 30일 지난 버킷 정리 — shallow로 키만 나열(fbListArchive와 같은 방식) 후 버킷째 remove.
+//   소유자 화면(활동 로그 섹션) 진입 시 1회 호출. 실패 무해 — console.warn 1줄만 남긴다.
+export async function fbCleanupActivityLog(keepDays = 30) {
+  try {
+    const res = await fetch(`${firebaseConfig.databaseURL}/activity_log.json?shallow=true`);
+    if (!res.ok) throw new Error(`shallow HTTP ${res.status}`);
+    const keys = Object.keys((await res.json()) || {});
+    const expired = pickExpiredActivityBuckets(keys, keepDays, Date.now());
+    for (const k of expired) await remove(ref(db, `activity_log/${k}`));
+    if (expired.length > 0) console.log(`[활동로그] ${keepDays}일 지난 버킷 ${expired.length}개 정리 완료`);
+    return expired.length;
+  } catch (e) {
+    console.warn('[fbCleanupActivityLog] 정리 실패(무해)', e);
+    return 0;
+  }
 }

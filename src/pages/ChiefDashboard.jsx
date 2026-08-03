@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbRestoreVoyageFromArchive, fbCleanupArchive } from '../firebase.js';
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbRestoreVoyageFromArchive, fbCleanupArchive, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
+import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
@@ -43,6 +44,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
   collectorHb = null, pilotForecast = null, terminalWork = null }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
+  const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   const pfMap = pilotForecast || _EMPTY_OBJ;   // TallyOne 1.0: null 방어
   const twMap = terminalWork || _EMPTY_OBJ;    // TallyOne 1.0: null 방어
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
@@ -512,6 +514,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             ['edit', '🖐 편집'], ['archive', '📚 자료 보관소'], ['restore', '🗄 완료 보관소'],
             ['seal', '🔒 엠티 실'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
             ['notice', '📢 공지'],
+            // TallyOne 1.3: 활동 로그 바로가기 — 소유자에게만 노출
+            ...(owner ? [['actlog', '🕵️ 활동 로그']] : []),
             // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
             //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
             ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
@@ -868,6 +872,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         )}
       </div>
       </Fold>
+
+      {/* TallyOne 1.3: 활동 로그 — 소유자 전용. 기본 접힘, 펼칠 때 조회+30일 정리 1회. */}
+      {owner && (
+        <Fold id="actlog" title="🕵️ 활동 로그" open={!!openSecs.actlog} onToggle={() => toggleSec('actlog')}>
+          <ActivityLogSection voyages={voyages} />
+        </Fold>
+      )}
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
@@ -1961,6 +1972,187 @@ function Fold({ id, title, open, onToggle, children }) {
         <span className="text-slate-500 text-xs shrink-0 ml-2">{open ? '▲ 접기' : '▼ 열기'}</span>
       </button>
       {open && <div className="mt-2">{children}</div>}
+    </div>
+  );
+}
+
+// ── TallyOne 1.3: 활동 로그 뷰어 — 소유자 전용 ─────────────────────────────
+//   "검수원들이 로그인만 하고 뭘 보는지"를 시간순으로 보여준다(사용자 확정 2026-08-03).
+//   완료 건수는 archive까지 합산하면 무거워 현재 voyages의 completed만 센다(캡션에 명시).
+
+// 타임라인 한 줄 문구 — 순수 함수(노드 시뮬 검증 겸 단일 소스)
+const _ACT_ROUTE_KO = { home: '홈', chief: '수석 대시보드', search: '통합 검색', health: '항차 건강', food: '맛집', aux: '보조기능' };
+const _ACT_TAB_KO = { list: '검수', search: '자연어', bay: '베이', lolo: 'LOLO', stats: '통계', report: '결과', data: '자료' };
+export function formatActivityLine(r, voyages) {
+  if (!r) return '?';
+  if (r.type === 'login') return '로그인';
+  if (r.type === 'logout') return r.via === 'idle' ? '자동 로그아웃' : '로그아웃';
+  if (r.type === 'view') {
+    if (r.route === 'voyage') {
+      const info = voyages?.[r.voyageKey]?.info;
+      const vsl = info?.vsl || String(r.voyageKey || '').split('_')[0] || '';
+      const voy = (r.mode === 'loading' ? info?.voy_l : info?.voy_d) || info?.voy || '';
+      const modeKo = r.mode === 'loading' ? '선적' : r.mode === 'discharge' ? '양하' : '';
+      const head = [vsl, voy, modeKo].filter(Boolean).join(' ');
+      const tabKo = _ACT_TAB_KO[r.tab] ? `${_ACT_TAB_KO[r.tab]}탭 ` : '';
+      return `${head || '항차'} · ${tabKo}열람`;
+    }
+    return `${_ACT_ROUTE_KO[r.route] || r.route || '?'} 열람`;
+  }
+  if (r.type === 'lookup') return `조회 '${r.q || ''}'`;
+  if (r.type === 'nls') return `질문 '${r.q || ''}'`;
+  return r.type || '?';
+}
+
+const _actHHMM = (at) => {
+  const d = new Date(at || 0);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+const _actMD = (at) => {
+  const d = new Date(at || 0);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+};
+// 타입별 색 — 열람은 무채색, 조회·질문은 눈에 띄게(뭘 찾으러 왔는지가 핵심 데이터)
+const _ACT_COLOR = { login: 'text-emerald-300', logout: 'text-amber-300/80', view: 'text-slate-300', lookup: 'text-cyan-300', nls: 'text-purple-300' };
+
+function ActivityLogSection({ voyages }) {
+  const [period, setPeriod] = useState('today');   // today | yesterday | 7d
+  const [who, setWho] = useState('');              // '' = 전체
+  const [rows, setRows] = useState(null);          // null = 로딩 전·중
+  const [error, setError] = useState('');
+  const [limit, setLimit] = useState(300);
+
+  // 섹션을 펼칠 때(마운트) 1회 — 30일 지난 버킷 정리. 실패 무해(fb 함수가 warn 1줄).
+  useEffect(() => { fbCleanupActivityLog(30); }, []);
+
+  // 기간 변경 시 조회 — 오늘 1일 / 어제 2일 / 7일 버킷 병합
+  useEffect(() => {
+    let alive = true;
+    setRows(null); setError(''); setLimit(300);
+    const days = period === 'today' ? 1 : period === 'yesterday' ? 2 : 7;
+    fbGetActivityDays(days)
+      .then(list => { if (alive) setRows(list); })
+      .catch(e => { if (alive) { setRows([]); setError(String((e && e.message) || e)); } });
+    return () => { alive = false; };
+  }, [period]);
+
+  // 기간 경계(로컬 자정 기준) — 버킷은 일 단위지만 '어제'는 어제 하루만 잘라 보여준다
+  const range = useMemo(() => {
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const t0 = d0.getTime();
+    if (period === 'today') return { from: t0, to: Infinity };
+    if (period === 'yesterday') return { from: t0 - 86400000, to: t0 };
+    return { from: t0 - 6 * 86400000, to: Infinity };
+  }, [period]);
+
+  const periodRows = useMemo(
+    () => (rows || []).filter(r => (r.at || 0) >= range.from && (r.at || 0) < range.to),
+    [rows, range]);
+  const names = useMemo(() => [...new Set(periodRows.map(r => r.who).filter(Boolean))], [periodRows]);
+  const view = useMemo(() => (who ? periodRows.filter(r => r.who === who) : periodRows), [periodRows, who]);
+
+  // 검수원별 요약 — 로그인·열람·조회(lookup+nls)·완료(현재 voyages의 completed by 합산)
+  const summary = useMemo(() => {
+    const m = {};
+    const ensure = (n) => (m[n] = m[n] || { login: 0, view: 0, lookup: 0, done: 0 });
+    periodRows.forEach(r => {
+      const s = ensure(r.who || '?');
+      if (r.type === 'login') s.login++;
+      else if (r.type === 'view') s.view++;
+      else if (r.type === 'lookup' || r.type === 'nls') s.lookup++;
+    });
+    Object.values(voyages || {}).forEach(v => {
+      ['discharge', 'loading'].forEach(md => {
+        Object.values((v && v[md] && v[md].completed) || {}).forEach(c => {
+          if (c && c.by && (c.at || 0) >= range.from && (c.at || 0) < range.to) ensure(c.by).done++;
+        });
+      });
+    });
+    return Object.entries(m).sort((a, b) => (b[1].view + b[1].lookup) - (a[1].view + a[1].lookup));
+  }, [periodRows, voyages, range]);
+
+  const shown = view.slice(0, limit);
+  return (
+    <div className="bg-slate-900 border border-fuchsia-800/40 rounded-xl p-3">
+      <div className="flex items-center gap-2 mb-1">
+        <div className="text-sm font-bold text-slate-100">🕵️ 활동 로그</div>
+        <span className="text-[10px] text-fuchsia-300/70">소유자 전용 — 열람 자체를 기록</span>
+      </div>
+      <div className="text-[10px] text-slate-500 mb-2">
+        완료 건수는 현재 항차 기준(voyages의 completed만 합산 — 보관소로 넘어간 실적 제외)
+      </div>
+
+      {/* 기간 선택 + 검수원 필터 칩 */}
+      <div className="flex gap-1 mb-2">
+        {[['today', '오늘'], ['yesterday', '어제'], ['7d', '7일']].map(([k, t]) => (
+          <button key={k} onClick={() => setPeriod(k)}
+            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
+              period === k ? 'bg-fuchsia-700 text-fuchsia-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1 flex-wrap mb-2">
+        <button onClick={() => setWho('')}
+          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+            who === '' ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+          전체
+        </button>
+        {names.map(n => (
+          <button key={n} onClick={() => setWho(n)}
+            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+              who === n ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+            {n}
+          </button>
+        ))}
+      </div>
+
+      {/* 검수원별 요약 줄 */}
+      {summary.length > 0 && (
+        <div className="space-y-1 mb-2">
+          {summary.map(([n, s]) => (
+            <div key={n} className="text-[11px] text-slate-300 bg-slate-950/60 border border-slate-800 rounded px-2 py-1">
+              <b className="text-slate-100">{n}</b>
+              <span className="text-slate-500"> — </span>
+              로그인 {s.login}회 · 열람 {s.view}건 · 조회 {s.lookup}건 · <span className={s.done > 0 ? 'text-emerald-300' : 'text-slate-500'}>완료 {s.done}건</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 타임라인 — 최신순, 300건 + 더보기 */}
+      {rows === null ? (
+        <div className="text-xs text-slate-500 text-center py-4">불러오는 중…</div>
+      ) : error ? (
+        <div className="text-xs text-red-300 text-center py-3">활동 로그 조회 실패 — {error}</div>
+      ) : shown.length === 0 ? (
+        <div className="text-xs text-slate-500 text-center py-4">이 기간의 활동 기록이 없습니다</div>
+      ) : (
+        <div className="bg-slate-950 rounded border border-slate-800 divide-y divide-slate-800/60 max-h-[50vh] overflow-y-auto">
+          {shown.map((r, i) => {
+            const prev = shown[i - 1];
+            const dayBreak = !prev || _actMD(prev.at) !== _actMD(r.at);
+            return (
+              <React.Fragment key={r.day + '_' + r.id}>
+                {dayBreak && period !== 'today' && (
+                  <div className="px-2 py-0.5 text-[10px] font-bold text-slate-500 bg-slate-900/80">{_actMD(r.at)}</div>
+                )}
+                <div className="px-2 py-1 flex items-baseline gap-2 text-[11px]">
+                  <span className="mono text-slate-500 shrink-0">{_actHHMM(r.at)}</span>
+                  <span className="font-bold text-slate-200 shrink-0">{r.who}</span>
+                  <span className={`min-w-0 break-all ${_ACT_COLOR[r.type] || 'text-slate-300'}`}>{formatActivityLine(r, voyages)}</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      )}
+      {view.length > limit && (
+        <button onClick={() => setLimit(l => l + 300)}
+          className="mt-2 w-full py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300">
+          더보기 ({view.length - limit}건 남음)
+        </button>
+      )}
     </div>
   );
 }

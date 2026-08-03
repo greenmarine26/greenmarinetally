@@ -18,6 +18,7 @@ import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
 import HelpModal from './HelpModal.jsx';
 import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
+import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false, mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
@@ -589,10 +590,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
         const t = pickSpeechAlternative(alts).trim();
         setTranscript(t);
-        if (t.length >= 2) { voiceQueryRef.current = t; setQuery(t); }
+        if (t.length >= 2) { voiceQueryRef.current = t; setQuery(t); logQuerySettled(t); }   // TallyOne 1.3: 음성 조회 기록
         else {
           const digits = parseSpokenDigits(text);
-          if (digits && digits.length >= 2) setQuery(digits);
+          if (digits && digits.length >= 2) { setQuery(digits); logQuerySettled(digits); }
           else speak('인식 실패');
         }
       }
@@ -626,7 +627,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       setFixingVoice(false);
       if (fixed && fixed !== q) {
         const p2 = parseNaturalQuery(fixed);
-        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setQuery(fixed); }
+        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setQuery(fixed); logQuerySettled(fixed); }
       }
     }).catch(() => { if (alive) setFixingVoice(false); });
     return () => { alive = false; };
@@ -762,7 +763,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
           <input type="text" value={query}
-            onChange={e => { setQuery(e.target.value); }}
+            onChange={e => { setQuery(e.target.value); logQuerySettled(e.target.value); }}   // TallyOne 1.3: 조회 기록
             placeholder="🎤 / 4777 / 40피트 4777 / 자유 질문"
             autoComplete="off"
             inputMode={manualCtx && manualCtx.selectedGroup != null && manualCtx.selectedTier ? 'numeric' : 'text'}

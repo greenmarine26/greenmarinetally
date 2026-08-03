@@ -13,6 +13,7 @@ import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리�
 import { isChief, setServerRoles } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결)
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
 import { parseHash, exitApp } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6)
+import { setActivityUser, logActivity, logView } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
 import HomePage from './pages/HomePage.jsx';
 import VoyagePage from './pages/VoyagePage.jsx';
 import GlobalSearchPage from './pages/GlobalSearchPage.jsx';
@@ -200,6 +201,14 @@ export default function App() {
     return () => clearInterval(id);
   }, [inspector, route]);
 
+  // TallyOne 1.3: 화면 열람 기록 — 라우트 변경마다 1건(30초 중복 생략은 activityLog가 처리).
+  //   voyage는 VoyagePage가 탭·모드까지 붙여 기록하므로 여기서 빼고(이중 기록 방지), login도 제외.
+  useEffect(() => {
+    if (!inspector) return;
+    if (route.name === 'login' || route.name === 'voyage') return;
+    logView({ route: route.name });
+  }, [inspector, route.name]);
+
   // TallyOne 1.0: 로그인 화면 강제(자동 로그아웃·로그아웃 완료 시) — replaceState라 스택에 안 쌓임
   const forceLoginScreen = useCallback(() => {
     window.history.replaceState(null, '', '#/login');
@@ -218,6 +227,9 @@ export default function App() {
     evs.forEach(e => window.addEventListener(e, mark, { passive: true, capture: true }));
     const check = () => {
       if (!isIdleLogout(lastInputRef.current)) return;
+      // TallyOne 1.3: 자동 로그아웃 기록 — 사용자 이름이 지워지기 전에 남긴다(fire-and-forget)
+      logActivity('logout', { via: 'idle' });
+      setActivityUser('');
       fbLogoutInspector(inspector).catch(() => {});
       clearLoginTime();
       _storage.set(SK.activeInspector, '');
@@ -246,6 +258,9 @@ export default function App() {
     lastInputRef.current = Date.now();     // V9.13: 로그인 순간부터 무조작 시간 다시 셈
     setAutoLogoutNotice('');
     _storage.set(SK.activeInspector, name);
+    // TallyOne 1.3: 로그인 기록 — 검수원 선택 성공이 유일한 로그인 경로(자동 로그인 없음)
+    setActivityUser(name);
+    logActivity('login', { via: 'select' });
     await fbSetInspector(name);
     // M3.6: 로그인 시각 저장
     saveLoginTime(name);
@@ -283,6 +298,8 @@ export default function App() {
   //   여기 도달했다는 것은 사용자가 이미 [로그아웃]을 확인했다는 뜻 — 그때만 서버에 마킹한다.
   const handleLogout = useCallback(async () => {
     if (!inspector) return;
+    // TallyOne 1.3: 수동 로그아웃 기록 — Header ConfirmModal 확인을 거쳐 여기 도달한 시점이 확정
+    logActivity('logout', { via: 'manual' });
     fbLogoutInspector(inspector).catch(() => {});   // V7.94-14: 서버에 로그아웃 즉시 마킹
     const loginTime = getLoginTime();
     const workDuration = loginTime ? (Date.now() - loginTime) : 0;
@@ -300,6 +317,7 @@ export default function App() {
       clearLoginTime();
       _storage.set(SK.activeInspector, '');
       setInspector('');
+      setActivityUser('');   // TallyOne 1.3: 로그아웃 완료 — 이후 열람은 기록하지 않는다
       forceLoginScreen();
     }
     setGreeting(null);
