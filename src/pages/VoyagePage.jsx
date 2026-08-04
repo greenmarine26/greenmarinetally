@@ -522,8 +522,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   "작업전 먼저 선박을 선택합니다. 그러면 앱은 리퍼 유무를 판단하고 있으면 리퍼메모 화면을
   //    띄워 줍니다"(검수사 확정 2026-08-04). 아직 확인 안 한 리퍼가 남아 있을 때만 자동으로 뜬다.
   //   확인을 마치면 다시 안 뜨고, 상단 「❄ 리퍼 N」 버튼으로 언제든 다시 연다.
+  //   대상 = **풀 리퍼만**(검수사 확정 2026-08-04). 공 리퍼는 전원을 안 꽂아 잴 것이 없다.
+  //   ReeferMemoModal.isReefer 와 **같은 식**이어야 한다 — 버튼 숫자와 모달 줄 수가 어긋나면 안 된다.
   const reefers = useMemo(
-    () => (containers || []).filter(c => c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || ''))),
+    () => (containers || []).filter((c) => {
+      const rf = !!c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || ''));
+      if (!rf || c.rfdry || c.mkcon) return false;
+      return c.fe === 'F' || !c.fe;
+    }),
     [containers]);
   const rfUnchecked = useMemo(() => reefers.filter(c => !c.rfCheckedAt).length, [reefers]);
   const [showReefer, setShowReefer] = useState(false);

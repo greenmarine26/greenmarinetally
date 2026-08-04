@@ -52,6 +52,10 @@ export function ptkContainers(voyage, mode) {
     // TallyOne 1.8: 리퍼 메모에서 검수원이 확인·수정한 값 — 있으면 그대로 들고 간다.
     if (r.rfSet != null && String(r.rfSet).trim() !== '') out.rfSet = r.rfSet;
     if (r.rfAct != null && String(r.rfAct).trim() !== '') out.rfAct = r.rfAct;
+    // 1.8-04: 리퍼드라이·제작컨 표시는 records 에만 있다(수집기 패치·검수원 입력). 텔리가
+    //   RF 목록에서 이 둘을 빼려면 여기서 들고 가야 한다 — 안 그러면 EDI에 없어 항상 false 다.
+    if (r.rfdry === true) out.rfdry = true;
+    if (r.mkcon === true) out.mkcon = true;
     return out;
   });
   return merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)));
@@ -182,6 +186,11 @@ export function buildSealList(voyage, mode) {
 export function buildRF(containers) {
   const t = (v) => (v != null && String(v).trim() !== '' ? String(v).trim() : '');
   return containers
+    // TallyOne 1.8-04: 리퍼드라이(넌플러그)·제작컨은 **온도를 잴 수 없다**. 종전엔 이 둘이 그대로
+    //   RF condition report 에 실려 Setting·Actual 이 영영 빈칸으로 남았다(서류 오류).
+    //   지침서 5-5 "리퍼드라이=넌플러그, 제작컨=컨 자체가 상품 — 온도 경고 제외"와 같은 기준으로 맞춘다.
+    //   리퍼 메모 화면·상단 버튼·출항 임박 경고도 전부 이 식이다(네 곳 일치, 시뮬 검증).
+    .filter(c => !c.rfdry && !c.mkcon)
     .filter(c => c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || '')))
     .map(c => ({
       cn: c.cn, seal: c.sl || '', size: tallySizeCol(c) === '20' ? "20'RF" : "40'RH",

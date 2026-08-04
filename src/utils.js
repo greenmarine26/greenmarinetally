@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.8-03';   // 실오류(실물 확인)와 자료 불일치(리스트끼리 다름) 분리
+export const APP_VERSION = 'TallyOne 1.8-04';   // 리퍼 점검 대상을 풀 리퍼만으로 — 텔리 RF·출항 경고와 기준 통일
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -17,6 +17,25 @@ export function isVirtualCn(cn) {
 //   예: -LO LO, -CORNNING, -TRAIN)은 같은 컨을 다시 세는 내역이므로 섹션을 닫고 건너뛴다.
 //   첫 요약 줄(S-32 C-110 ... TEU)은 해석하지 않고 원문 그대로 보존(표시용).
 //   검산: 20피트=1TEU, 40/45피트=2TEU로 계산한 값과 말미 합계(FULL-…TEU …)가 일치해야 teuOk.
+/** TallyOne 1.8-04: 리퍼 풀/공/드라이 표기에서 뒤 글자를 뽑는다 (검수사 확정 2026-08-04).
+ *
+ *    `RF` `RE` `RD`        붙여쓰기 — 검수사가 정한 표기
+ *    `R/F` `R-E` `R / D`   슬래시·하이픈, 공백 있어도 됨
+ *    `D/F` `D/E`           앞 글자가 R이 아니어도 슬래시형이면 뒤 글자를 쓴다
+ *
+ *  반환 'F'(풀) | 'E'(공) | 'D'(리퍼드라이 — 넌플러그, 온도 무관) | ''
+ *
+ *  ⚠ 붙여쓰기는 **정확히 두 글자 R+X 일 때만** 인정한다. ISO 코드에 RF 가 흔히 들어가기
+ *    때문이다(`43RF` `45R1` `22R1`). 네 글자짜리 ISO 는 여기 안 걸린다.
+ */
+export function _feFromSlash(raw) {
+  const s = String(raw || '').trim().toUpperCase();
+  const m = s.match(/^([A-Z]{1,2})\s*[/\-]\s*([FED])$/);
+  if (m) return m[2];
+  const m2 = s.match(/^R\s*([FED])$/);      // RF · RE · RD (두 글자 고정)
+  return m2 ? m2[1] : '';
+}
+
 export function parseCargoForecast(text) {
   const out = { vsl: '', voy: '', mode: '', full: {}, empty: {}, luggage: {}, teu: null, summary: '',
     vans: { full: 0, empty: 0, luggage: 0 }, calc: { full: 0, empty: 0, luggage: 0 }, teuOk: true,
@@ -2047,6 +2066,12 @@ export async function parseListExcel(arrayBuffer) {
     const rmk_i = findCol([/^remarks?$/, /^비고$/]);
     // V8.09: ITEM 컬럼 (RIZHAO 선적 LOADING LIST 공컨 표기). "공컨테이너"=Empty, 빈칸=Full.
     const item_i = findCol([/^item$/, /^품목$/, /^공컨/]);
+    // TallyOne 1.8-04: `R/F`·`R/E`·`R/D` 표기 (검수사 확정 2026-08-04).
+    //   "각종 리스트 플랜에 R/E R/F 표기만 정확하면 됩니다" · "리퍼 드라이는 R/D로 표기 온도와 무관합니다"
+    //   앞 글자는 종류(R=리퍼, D=드라이 등), 뒤 글자가 풀/공/드라이다. 슬래시·하이픈 둘 다 쓰인다.
+    //   ⚠ 종전엔 이 형태가 F/E·TYPE·SIZE 어느 경로에서도 안 잡혀 **미판정 → 기본 Full** 로 흘렀다.
+    //     그래서 공 리퍼(R/E)가 풀로 집계되고, 리퍼드라이(R/D)는 온도 못 재는데 온도 경고에 잡혔다.
+    //   반환: 'F' | 'E' | 'D'(리퍼드라이 — 호출부가 rfdry 로 세운다) | ''
     // M3.85: SITC SENDAI 양식의 [40] "냉동" 컬럼이 실제 온도값(-18, -2.5 등)인데
     //   기존 /냉장/만 있어서 매칭 안 되어 26대 풀 리퍼 모두 미입력 처리되던 버그 수정.
     //   추가로 "set temp", "setpoint", "carry temp", "rf temp" 등 흔한 변형도 인식.
@@ -2119,10 +2144,16 @@ export async function parseListExcel(arrayBuffer) {
       // M3.74: 무게 기반 추정 완전 제거 (M3.73 정책과 일치)
       // M3.86: SOC fallback 추가 (F/E 미명시 + SOC면 Seal 유무로 판정)
       let fe = '';
+      let rfdryFlag = false;      // 1.8-04: `R/D` 표기를 만나면 세운다 (온도 확인 대상에서 뺀다)
       if (fe_i >= 0) {
         const feRaw = String(row[fe_i] || '').trim().toUpperCase();
         if (feRaw === 'F' || feRaw === 'FULL' || feRaw === 'L' || feRaw === 'LOADED') fe = 'F';
         else if (feRaw === 'E' || feRaw === 'EMPTY' || feRaw === 'MT' || feRaw === 'M') fe = 'E';
+        else {
+          const s = _feFromSlash(feRaw);
+          if (s === 'D') rfdryFlag = true;     // R/D = 리퍼드라이(넌플러그) — 온도와 무관
+          else if (s) fe = s;
+        }
       }
       // V8.09-02: ITEM 컬럼 "공컨테이너" 표기 (RIZHAO 선적 LOADING LIST).
       //   엠티 컨에도 실(seal)이 붙는 선박이라 실 유무로 F/E 판정 불가 → ITEM 표기가 유일한 근거.
@@ -2138,8 +2169,12 @@ export async function parseListExcel(arrayBuffer) {
       }
       // TYPE 끝 글자
       if (!fe && type_i >= 0) {
-        const tRaw = String(row[type_i] || '').trim().toUpperCase().replace(/[\s\-]/g, '');
-        if (/^([A-Z]{2}\d{2}|[A-Z]{2,4}|\d{2}[A-Z]{2,3}|\d{4})\d{0,3}([FE])$/.test(tRaw)) {
+        const tRaw0 = String(row[type_i] || '').trim().toUpperCase();
+        const s0 = _feFromSlash(tRaw0);         // `R/F`·`R/E`·`R/D` 형태 먼저
+        if (s0 === 'D') rfdryFlag = true;
+        else if (s0) fe = s0;
+        const tRaw = tRaw0.replace(/[\s\-]/g, '');
+        if (!fe && /^([A-Z]{2}\d{2}|[A-Z]{2,4}|\d{2}[A-Z]{2,3}|\d{4})\d{0,3}([FE])$/.test(tRaw)) {
           fe = tRaw.slice(-1);
         }
       }
@@ -2254,6 +2289,9 @@ export async function parseListExcel(arrayBuffer) {
 
       records.push({
         cn, l4: cn.slice(-4),
+        // 1.8-04: `R/D`(리퍼드라이 — 넌플러그, 온도 무관)를 리스트에서 읽었으면 표시를 세운다.
+        //   false 는 굳이 쓰지 않는다 — 기존 값(수집기 패치·검수원 입력)을 덮지 않기 위함.
+        ...(rfdryFlag ? { rfdry: true } : {}),
         sl: finalSl,
         sl_orig: finalSl,
         eseal: finalEseal,

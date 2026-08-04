@@ -18,7 +18,18 @@ import { X, Camera, Check, Snowflake, Loader2 } from 'lucide-react';
 import { fbSetReeferTempBulk } from '../firebase.js';
 import { _storage, SK } from '../utils.js';
 
-const isReefer = (c) => !!c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || ''));
+// 점검 대상 = **풀 리퍼만** (검수사 확정 2026-08-04).
+//   공 리퍼는 전원을 안 꽂아 잴 것이 없다. 텔리 RF 시트(`fe !== 'E'` — 실물 관례 "양하 F 리퍼만
+//   기재")와 출항 임박 경고(`fe === 'F'`)가 이미 이 기준이라, 여기까지 맞춰 세 곳을 일치시킨다.
+//   ⚠ 1.8 첫 판은 F/E 를 안 갈라 공 리퍼까지 점검 목록에 올렸다 — 메모엔 뜨는데 텔리엔 안 실리는
+//     컨이 생긴다(STMJ 2643E 는 24대가 전부 풀이라 드러나지 않았다).
+//   리퍼드라이(rfdry, 넌플러그)·제작컨(mkcon)도 제외 — 지침서 5-5 "온도 경고 제외" 규칙과 같다.
+const isReefer = (c) => {
+  const rf = !!c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || ''));
+  if (!rf) return false;
+  if (c.rfdry || c.mkcon) return false;
+  return c.fe === 'F' || !c.fe;     // fe 미상은 남긴다 — 조용히 빠뜨리지 않는다
+};
 
 /** 화면에 보일 온도 문자열 — 값이 없으면 빈 문자열(0으로 착각하게 두지 않는다) */
 const tempStr = (v) => (v == null || String(v).trim() === '' ? '' : String(v).trim());
