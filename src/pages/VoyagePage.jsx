@@ -419,6 +419,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       'tmp',  // 온도는 리스트가 보강 가능 (단, 비어있을 때만)
       'rfdry',  // V9.20-04: 리퍼드라이(넌플러그) — records/수집기 패치가 화면까지 오도록
       'mkcon',  // V9.23: 제작컨테이너 — 리스트 REMARK '특수컨' 자동 인식분이 화면까지 오도록
+      // TallyOne 1.8-07: 리퍼 온도 확인값 — **여기 없으면 저장돼도 화면이 못 읽는다.**
+      //   1.8 에서 이 다섯을 빠뜨려, 사진 판독·확인 완료까지 해도 재로그인하면 '미확인'으로
+      //   되돌아가고 온도가 EDI 값으로 초기화됐다(검수사 신고 2026-08-04).
+      //   ⚠ 바로 위 M4.9b-fix 주석의 엠티실 사고와 **같은 실수를 반복한 것**이다.
+      //     records 에 새 필드를 만들면 이 목록에 넣었는지 반드시 확인할 것.
+      'rfSet', 'rfAct', 'rfSrc', 'rfCheckedAt', 'rfCheckedBy',
+      'sl_conflict',   // 1.8-03: 리스트끼리 실번호가 다를 때 두 값 모두 — 배지가 이걸 읽는다
       'desc',  // M8.07: 품명(내용물) — EDI에 없는 참조 정보, 카고플랜 그림에 영향 없음
       // M4.9b-fix: 엠티 실 — EDI에 봉인 정보 없는 게 일반적, records가 진실
       'eseal', 'eseal_orig', 'eseal_wrong', 'reseal',
