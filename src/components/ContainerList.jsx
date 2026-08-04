@@ -305,7 +305,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const isBooking = isBookingSlot(c);
 
   const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
-  const sealError = c.sl && slOrig && c.sl !== slOrig;
+  // TallyOne 1.8-03: '실오류'와 '자료 불일치'를 가른다.
+  //   실오류 = 검수원이 **실물 봉인을 보고** 다르다고 판정한 것. 세관 신고 대상이라 붉은색.
+  //     판정 근거는 sl_history(수정 이력)다. 종전엔 `sl !== sl_orig` 만 봐서, 리스트끼리
+  //     달라도 실오류로 떴다(2026-08-04 STMJ 2643E SKHU8912132 실측).
+  //   자료 불일치 = 리스트끼리 안 맞음. **아무도 실물을 안 봤다.** 검수 전에 확인할 신호.
+  const sealEdited = Array.isArray(c.sl_history) && c.sl_history.length > 0;
+  const sealError = sealEdited && c.sl && slOrig && c.sl !== slOrig;
+  const sealConflict = !sealError && Array.isArray(c.sl_conflict) && c.sl_conflict.length > 1;
   const xSealOrig = xraySeal?.seal_orig != null ? xraySeal.seal_orig : xraySeal?.seal || '';
   const xSeal = xraySeal?.seal || '';
   const xSealError = xSeal && xSealOrig && xSeal !== xSealOrig;
@@ -404,6 +411,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {(sealError || xSealError) && (
                 <span className="bg-red-700/80 text-red-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
                   <AlertOctagon className="w-2.5 h-2.5"/>실오류
+                </span>
+              )}
+              {sealConflict && (
+                <span className="bg-amber-700/80 text-amber-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
+                  title={`리스트마다 실번호가 다릅니다 — ${c.sl_conflict.map(h => h.sl + (h.src ? ` (${h.src})` : '')).join(' / ')}`}>
+                  ⚠ 자료 불일치
                 </span>
               )}
               <span className={`text-[9px] mono px-1 py-0.5 rounded font-bold ${

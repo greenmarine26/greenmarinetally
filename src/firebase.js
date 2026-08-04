@@ -208,10 +208,24 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     const ov = cur[cn];
     if (!ov) { out[cn] = nv; continue; }
     const m = { ...ov };
+    // TallyOne 1.8-03: 리스트끼리 **실번호가 다르면 조용히 덮지 않고 기록**한다.
+    //   실증 2026-08-04 STMJ 2643E `SKHU8912132` — 같은 BL(SNKO024260703119) 같은 컨인데
+    //     선사 리스트 `482869` / 세관 CDL `549844`. **자료가 실제로 어긋나 있었다.**
+    //   1.8-02 로 실오류 오탐은 막았지만 그 바람에 이 어긋남까지 조용해졌다. 그건 더 나쁘다.
+    //   ⚠ 이것은 '실오류'가 아니다 — 실물 봉인을 본 사람이 없다. 검수 전에 확인할 신호다.
+    if (nv && nv.sl && ov.sl && String(nv.sl).trim() !== String(ov.sl).trim()) {
+      const hist = Array.isArray(ov.sl_conflict) ? [...ov.sl_conflict] : [];
+      const prevSrc = ov._source || '';
+      const nextSrc = nv._source || '';
+      if (!hist.length) hist.push({ sl: String(ov.sl), src: prevSrc });
+      if (!hist.some((h) => h.sl === String(nv.sl))) hist.push({ sl: String(nv.sl), src: nextSrc });
+      m.sl_conflict = hist;
+    }
     for (const [k, v] of Object.entries(nv || {})) {
       if (_emptyFor(k, v)) continue;           // ① 빈 값(무게 0 포함)은 기존을 덮지 않는다
       m[k] = v;
     }
+    if (m.sl_conflict === undefined && ov.sl_conflict !== undefined) m.sl_conflict = ov.sl_conflict;
     for (const k of _FIELD_WORK_KEYS) {        // ② 현장 입력은 리스트가 못 덮는다
       if (ov[k] !== undefined) m[k] = ov[k];
     }
