@@ -22,17 +22,40 @@ export async function shareText(message, title = '검수 보고') {
 }
 
 // M3.5.6-fix: 사진 위에 정보 자막 합성 후 공유
-export async function shareWithPhoto(message, photoBlob, title = '검수 보고') {
-  console.log('[shareWithPhoto] 시작', { title, photoSize: photoBlob?.size });
+//
+// TallyOne 1.8-08 — **카톡에서 사진이 깨지던 원인** (검수사 신고 2026-08-04, 갤럭시)
+//   M5.77 에서 호출부(PhotoReportModal)가 사진 2장을 **배열**로 넘기게 바뀌었는데
+//   이 함수는 blob 하나만 받도록 그대로였다. 그래서:
+//     URL.createObjectURL([blob, blob])  → TypeError → catch → composedBlob = 배열
+//     new File([[blob, blob]], 'report.jpg', {type:'image/jpeg'})
+//   File 생성자는 내부 배열을 BlobPart 로 못 보고 **문자열로 변환**한다.
+//   결과: 카톡에 간 것은 `"[object Blob],[object Blob]"` 40바이트 텍스트를 담은 report.jpg.
+//   당연히 이미지로 안 열려 깨진 아이콘만 보였다.
+//   → 배열·단일 둘 다 받고, **장마다 따로 합성해 files 에 나란히 담는다.**
+//
+// ⚠ 합성 실패 시 원본을 `image/jpeg` 로 **타입 위조하지 않는다**(3금지 3번 — 조용히 실패 금지).
+//   원본 타입 그대로 보내고 무엇이 실패했는지 로그에 남긴다.
+export async function shareWithPhoto(message, photos, title = '검수 보고') {
+  const list = (Array.isArray(photos) ? photos : [photos]).filter(Boolean);
+  console.log('[shareWithPhoto] 시작', { title, count: list.length, sizes: list.map(b => b?.size) });
 
-  let composedBlob = photoBlob;
-  try {
-    composedBlob = await composePhotoWithCaption(photoBlob, message);
-    console.log('[shareWithPhoto] 합성 성공');
-  } catch (e) {
-    console.error('[shareWithPhoto] 합성 실패, 원본 사용:', e);
-    composedBlob = photoBlob;
+  const files = [];
+  let composeFail = 0;
+  for (let i = 0; i < list.length; i++) {
+    let b = list[i];
+    try {
+      b = await composePhotoWithCaption(list[i], message);
+    } catch (e) {
+      composeFail += 1;
+      console.error(`[shareWithPhoto] ${i + 1}번째 사진 합성 실패 — 원본 사용:`, e);
+      b = list[i];
+    }
+    const ext = (b?.type === 'image/png') ? 'png' : 'jpg';
+    files.push(new File([b], `report${list.length > 1 ? i + 1 : ''}.${ext}`,
+      { type: b?.type || 'image/jpeg' }));
   }
+  console.log('[shareWithPhoto] 파일 준비:', files.map(f => `${f.name} ${f.size}B ${f.type}`),
+    composeFail ? `(합성 실패 ${composeFail}장)` : '');
 
   // navigator.share 미지원 (PC 등)
   if (!navigator.share) {
@@ -40,22 +63,22 @@ export async function shareWithPhoto(message, photoBlob, title = '검수 보고'
     return shareText(message, title);
   }
 
-  // 파일 공유 시도
   try {
-    if (composedBlob && navigator.canShare) {
-      const file = new File([composedBlob], 'report.jpg', { type: 'image/jpeg' });
-      const shareData = { title, text: message, files: [file] };
+    if (files.length && navigator.canShare) {
+      // 자막을 사진에 이미 넣었으므로 text 는 넣지 않는다 — 카톡이 텍스트를 우선 처리하면
+      //   사진이 첨부로 안 붙는다(검수사 실측: 글자는 안 가고 이미지만 갔다).
+      const shareData = { title, files };
       const canShareFile = navigator.canShare(shareData);
       console.log('[shareWithPhoto] canShare(파일):', canShareFile);
       if (canShareFile) {
         await navigator.share(shareData);
         console.log('[shareWithPhoto] 파일 공유 성공');
-        return { method: 'share-with-file', success: true };
+        return { method: 'share-with-file', success: true, files: files.length };
       }
     }
     // 파일 공유 안 되면 텍스트만이라도
     console.log('[shareWithPhoto] 파일 공유 불가 - 텍스트만 공유');
-    try { await navigator.clipboard.writeText(message); } catch(_) {}
+    try { await navigator.clipboard.writeText(message); } catch { /* 무시 */ }
     await navigator.share({ title, text: message });
     return { method: 'share-text-only', success: true };
   } catch (e) {
