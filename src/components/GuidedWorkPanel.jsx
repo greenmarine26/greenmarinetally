@@ -161,7 +161,25 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const hatchKeyOf = (center) => `${mode}_${center}`;
   const isHatchDoneSaved = (center, action) => {
     if (center == null) return false;
-    return voyage?.info?.hatchDone?.[hatchKeyOf(center)] === action;
+    if (voyage?.info?.hatchDone?.[hatchKeyOf(center)] === action) return true;
+    // TallyOne 1.8-10: **보고 기록으로 소급 인식**한다.
+    //   검수사 지적 2026-08-05 — "닫았는데 또 닫았다는 이야기인데 맞질 않습니다."
+    //   1.8-09 는 앞으로의 수동 보고만 hatchDone 에 찍는다. 그러면 이미 보낸 옛 보고
+    //   (04:15·04:58 베이 18 CLOSE 등)는 여전히 되묻고, 거기서 누르면 **카톡이 또 나가**
+    //   이미 닫은 커버를 또 닫았다고 보고하게 된다. 이중 보고가 되물음보다 나쁘다.
+    //   → hatchDone 은 빠른 표시일 뿐이고 **reports 가 진실**이다. 둘 다 본다.
+    //   ⚠ 옛 기록엔 mode 가 없다. 있으면 대조하고, 없으면 action+그룹만 맞으면 인정한다 —
+    //     잘못 인정해도 결과는 '안 물어봄'이고 필요하면 수동 보고로 언제든 보낼 수 있다.
+    const reps = voyage?.reports;
+    if (reps) {
+      for (const r of Object.values(reps)) {
+        if (!r || r.type !== 'hatch' || r.action !== action) continue;
+        if (r.mode && r.mode !== mode) continue;
+        const bs = Array.isArray(r.bays) ? r.bays : [];
+        if (bs.some(b => groupCenterOf(b) === center)) return true;
+      }
+    }
+    return false;
   };
   const markHatchDone = async (center, action) => {
     if (center == null) return;
@@ -421,10 +439,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       // V9.57(I8): DB 기록 실패를 삼키고 카톡만 나가던 것 — 수석 대시보드엔 보고가 없는데
       //   카톡엔 있는 불일치가 생겼다. 재시도 1회 후에도 실패면 공유 진행 여부를 묻는다.
       let dbOk = false;
-      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, panelCount, message }); dbOk = true; }
+      try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
       catch (e1) {
         console.warn('[V9.57] 해치 보고 DB 기록 실패 — 1회 재시도', e1);
-        try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, bays, equip, panelCount, message }); dbOk = true; }
+        try { await fbAddWorkReport(voyageKey, { type: 'hatch', action, mode, bays, equip, panelCount, message }); dbOk = true; }
         catch (e2) { console.warn('[V9.57] 해치 보고 DB 기록 재시도 실패', e2); }
       }
       if (!dbOk) {

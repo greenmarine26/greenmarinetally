@@ -310,6 +310,9 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     await fbAddWorkReport(voyageKey, {
       type: 'hatch',
       action: hatchAction,
+      // TallyOne 1.8-10: mode 를 함께 남긴다 — 자동 유도가 reports 로 소급 인식할 때
+      //   양하 close 와 선적 close 를 구분하려면 이 값이 있어야 한다(옛 기록엔 없다).
+      mode: equipModeOf(equip) === 'loading' ? 'loading' : 'discharge',
       bays,
       equip,
       panelCount,
