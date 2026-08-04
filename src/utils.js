@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.8-08';   // 카톡 사진 보고가 27바이트 문자열로 가던 것 수정(2장 전송 미대응)
+export const APP_VERSION = 'TallyOne 1.8-09';   // 수동 해치 보고를 자동 유도가 인식 못 하던 것 수정(hatchDone 미기록)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

@@ -13,6 +13,25 @@ import { isReeferIso } from './utils.js';   // V9.57: 리퍼 판정 단일 소�
 const bn = (v) => (v !== undefined && v !== null && v !== '' ? String(parseInt(v, 10)) : '');
 
 /** 두 베이가 같은 슬롯(트리오)인가 — 같은 번호 · 짝꿍 · 사이 짝수 */
+/** TallyOne 1.8-09: 베이 → 그룹 대표값(center). 해치커버 상태 키에 쓴다.
+ *
+ *  왜 공용으로 빼나 — 종전엔 `GuidedWorkPanel` 안에만 있었다. 그래서 **수동 해치 보고**
+ *  (WorkReportModal)는 같은 계산을 못 해 `info.hatchDone` 표시를 못 남겼고,
+ *  검수사가 수동으로 커버를 닫아도 자동 유도가 그걸 모른 채 "닫을까요?"를 되물었다
+ *  (검수사 신고 2026-08-05, STMJ 2644W 베이 18).
+ *
+ *  규칙(지침서 확정): 짝수 베이가 곧 그룹 대표. 홀수는 짝꿍 짝수와의 중앙값.
+ *    짝꿍을 모르면 자기 자신 — 조용히 다른 그룹으로 섞이지 않게 한다.
+ */
+export function bayGroupCenter(bayStr, bayPairs = {}) {
+  const b = parseInt(bayStr, 10);
+  if (!Number.isFinite(b)) return null;
+  if (b % 2 === 0) return b;
+  const pair = bayPairs?.[String(b)];
+  if (pair) return (b + parseInt(pair, 10)) / 2;
+  return b;
+}
+
 export function sameBayGroup(bayA, bayB, bayPairs = {}) {
   const A = bn(bayA), B = bn(bayB);
   if (!A || !B) return false;

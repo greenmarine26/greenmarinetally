@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Check, Pencil, Hand, Link2, ChevronLeft, Volume2, VolumeX, AlertTriangle, Snowflake, Loader2, Anchor, Construction } from 'lucide-react';
 import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from '../guidedQueue.js';
 import { getBayPairs, findTwinCandidate } from '../twin.js';
+import { bayGroupCenter } from '../swapGrade.js';   // TallyOne 1.8-09: 해치 그룹 계산 단일 소스
 import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
@@ -150,14 +151,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const bayPairs = useMemo(() => getBayPairs(modeAll, shipImo, shipName), [modeAll, shipImo, shipName]);
 
   // 베이 → 그룹 center (홀수+짝꿍은 사이 짝수가 center, 단독 홀수는 자기 자신)
-  const groupCenterOf = (bayStr) => {
-    const b = parseInt(bayStr, 10);
-    if (!Number.isFinite(b)) return null;
-    if (b % 2 === 0) return b;
-    const pair = bayPairs?.[String(b)];
-    if (pair) return (b + parseInt(pair, 10)) / 2;
-    return b;
-  };
+  // TallyOne 1.8-09: 계산을 swapGrade.bayGroupCenter 로 단일화.
+  //   수동 해치 보고(WorkReportModal)가 같은 그룹 키를 찍어야 자동 유도가 그걸 알아본다.
+  //   두 곳이 각자 계산하면 반드시 갈라진다.
+  const groupCenterOf = (bayStr) => bayGroupCenter(bayStr, bayPairs);
 
   // V7.99-9 (메모10): 해치 처리 영속 상태 — voyage.info.hatchDone["{mode}_{center}"] = 'open'|'close'
   //   모드 전환으로 재마운트돼도 voyage prop은 유지되므로 프롬프트가 다시 안 뜬다.

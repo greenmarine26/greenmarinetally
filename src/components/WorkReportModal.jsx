@@ -9,7 +9,10 @@ import {
   buildHatchMessage,
   buildConBoxMessage,
 } from '../kakaoShare.js';
-import { fbAddWorkReport } from '../firebase.js';
+import { fbAddWorkReport, fbUpdateVoyageInfo } from '../firebase.js';
+// TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
+import { bayGroupCenter } from '../swapGrade.js';
+import { getBayPairs } from '../twin.js';
 import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort } from '../utils.js';
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
@@ -96,6 +99,17 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   }, [voyageKey]);
 
   if (!open) return null;
+
+  // TallyOne 1.8-09: 해치 그룹 계산용 베이 짝 사전 — GuidedWorkPanel(150행)과 같은 소스.
+  //   양하·선적 컨을 모두 넣어야 짝이 온전하다(한쪽만 보면 홀수 베이 짝을 못 찾는다).
+  const bayPairsForHatch = useMemo(() => {
+    const all = [];
+    for (const m of ['discharge', 'loading']) {
+      const sec = voyage?.[m] || {};
+      for (const c of Object.values(sec.ediContainers || {})) if (c) all.push(c);
+    }
+    return getBayPairs(all, voyage?.info?.imo || '', voyage?.info?.vsl || '');
+  }, [voyage]);
 
   const vsl = voyage?.info?.vsl || '';
   // V9.57(I9): 미사용 shipImo 제거
@@ -301,6 +315,28 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
       panelCount,
       message,
     });
+
+    // TallyOne 1.8-09: **수동으로 닫은 것을 자동 유도가 알게 한다.**
+    //   자동 유도(GuidedWorkPanel)가 "해치커버 닫을까요?"를 묻지 않는 근거는 오직
+    //   `info.hatchDone["{mode}_{center}"]` 하나다. 종전엔 수동 보고가 카톡과 reports 에만
+    //   남기고 이 표시를 안 찍어, 수동으로 닫아도 자동모드가 되물었다
+    //   (검수사 신고 2026-08-05 — STMJ 2644W 베이 18을 수동으로 CLOSE 했는데 또 물음).
+    //   ⚠ 실패해도 보고 자체는 이미 나갔으므로 막지 않는다. 다만 조용히 넘기지는 않는다.
+    try {
+      const mode = equipModeOf(equip) === 'loading' ? 'loading' : 'discharge';
+      const prev = voyage?.info?.hatchDone || {};
+      const next = { ...prev };
+      for (const b of bays) {
+        const center = bayGroupCenter(b, bayPairsForHatch);
+        if (center != null) next[`${mode}_${center}`] = hatchAction;
+      }
+      if (Object.keys(next).length !== Object.keys(prev).length ||
+          JSON.stringify(next) !== JSON.stringify(prev)) {
+        await fbUpdateVoyageInfo(voyageKey, { hatchDone: next });
+      }
+    } catch (e) {
+      console.warn('[해치 수동보고] hatchDone 표시 저장 실패 — 자동 유도가 다시 물을 수 있습니다', e);
+    }
 
     await shareText(message, '해치커버');
     setBayInput('');
