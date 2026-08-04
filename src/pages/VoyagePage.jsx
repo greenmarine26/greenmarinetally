@@ -794,6 +794,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
       {/* TallyOne 1.8: 리퍼가 있으면 언제든 온도 확인 화면을 다시 연다.
           미확인이 남아 있으면 숫자를 붉게 띄워 '아직 안 봤다'를 숨기지 않는다. */}
+      {/* ⚠ 모달은 이 버튼 바로 옆(VoyagePage 트리 안)에 둔다. 1.8 첫 배포에서 파일 아래쪽
+          DataTab(업로드 탭) 안에 넣는 바람에 상태는 켜지는데 그릴 곳이 없어 아무 일도 안 났다. */}
+      {showReefer && (
+        <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector}
+          onClose={() => setShowReefer(false)}/>
+      )}
       {reefers.length > 0 && (
         <button onClick={() => setShowReefer(true)}
           className={`w-full mb-3 px-3 py-2 rounded-lg border flex items-center justify-between ${
@@ -2652,11 +2658,6 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       )}
       {showTestLab && inspector === '김성일' && (
         <TestLabModal voyage={voyage} voyageKey={voyageKey} onClose={() => setShowTestLab(false)}/>
-      )}
-      {/* TallyOne 1.8: 리퍼 온도 확인 — 텔리 RF condition report 의 Setting/Actual 이 여기서 나온다 */}
-      {showReefer && (
-        <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector}
-          onClose={() => setShowReefer(false)}/>
       )}
       {/* M6.14: STOWAGE PDF 자동 분석 검토 모달 */}
       {stowagePdfFile && (

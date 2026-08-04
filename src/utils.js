@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.8';   // 리퍼 온도 확인(사진 판독) + 텔리 RF 실번호·셋팅·실제온도 + 리스트 재업로드 병합
+export const APP_VERSION = 'TallyOne 1.8-01';   // 리퍼 메모 모달이 DataTab 안에 있어 안 뜨던 것 수정
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
