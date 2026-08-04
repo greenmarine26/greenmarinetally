@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.4';   // OBWH 마감텔리 전용 서식 + CLL 수화물 자동판별 + RF 2페이지
+export const APP_VERSION = 'TallyOne 1.5';   // 화면 데이터만 새로고침(로그인 유지) + 터미널 자료 신선도 표시
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

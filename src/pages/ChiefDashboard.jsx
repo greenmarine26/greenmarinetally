@@ -8,6 +8,7 @@ import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
+import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
 import { isChief } from '../staffList.js';
 import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
@@ -42,7 +43,9 @@ function twOf(info, twMap, sched) {
 
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch,
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
-  collectorHb = null, pilotForecast = null, terminalWork = null }) {
+  collectorHb = null, pilotForecast = null, terminalWork = null,
+  onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
+}) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   const pfMap = pilotForecast || _EMPTY_OBJ;   // TallyOne 1.0: null 방어
@@ -503,6 +506,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       <div className="grid grid-cols-2 gap-2">
         <BigStat label="전체 확인" value={total.done.toLocaleString()} sub={`/ ${total.all.toLocaleString()}대`} color="emerald"/>
         <BigStat label="누락 (선사 추가 필요)" value={total.missing} sub={`평택 ${total.ptkAll}대 중`} color={total.missing > 0 ? "red" : "slate"}/>
+      </div>
+
+      {/* TallyOne 1.5: 화면 데이터만 새로고침 — 페이지 리로드 없이 구독 재연결(로그인 유지) */}
+      <div className="flex justify-end">
+        <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
       </div>
 
       {/* V9.19-02: 바로가기 — 누르면 그 항목이 펼쳐지며 이동 */}
@@ -1688,6 +1696,17 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
           )}
           {typeof tw.pct === 'number' && tw.pct >= 0 && <span className="text-slate-500">{tw.pct}%</span>}
           {tw.delayed && <span className="bg-red-900/60 text-red-200 px-1.5 rounded font-bold">지연</span>}
+          {/* TallyOne 1.5: 신선도 — 이 값이 언제 것인지 화면이 말해주지 않아 새로고침하게 되던 문제.
+              수집기 사이클이 5분이므로 10분 넘으면 이상 신호. 실측(2026-08-04): 같은 화면에
+              9분 전(TNJP·DXQD)과 2일 전(XTPG)이 구분 없이 섞여 있었다. */}
+          {(() => {
+            const t = Number(tw.updatedAt) || 0;
+            if (!t) return <span className="text-slate-600" title="갱신 시각 정보 없음">시각 미상</span>;
+            const m = Math.floor((Date.now() - t) / 60000);
+            const txt = m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`;
+            const cls = m <= 10 ? 'text-emerald-300' : m <= 60 ? 'text-amber-300' : 'text-rose-300 font-bold';
+            return <span className={cls} title={`터미널 자료 갱신 ${new Date(t).toLocaleString('ko-KR')}`}>← {txt}</span>;
+          })()}
         </div>
       ) : (
         <div className="text-[10px] text-slate-600">터미널 실적 미수신</div>

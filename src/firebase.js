@@ -2,7 +2,7 @@
 // 프로젝트: greenmarinetally (asia-southeast1)
 import { initializeApp } from 'firebase/app';
 import {
-  getDatabase, ref, onValue, push, set, update, remove, get, child, off
+  getDatabase, ref, onValue, push, set, update, remove, get, child, off, goOffline, goOnline
 } from 'firebase/database';
 import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 쓰기 중앙 게이트
 // M6.40: STOWAGE PDF 보관 — Firebase Storage
@@ -1359,6 +1359,19 @@ export function fbSubscribePilotForecast(callback) {
 // V9.36: 터미널 작업 현황 구독 (수집기 terminal_work.py가 기록 — 트레드링스 공개 API)
 //   경로: terminal_work/{선박코드} = { pct, endAt, expectEnd, depEtd, delayed, disDone/disPlan, lodDone/lodPlan, ... }
 //   용도: 작업이 마무리될 무렵(기본 90% 이상) 카드의 '작업일시'를 '출항시간'으로 바꾼다.
+// TallyOne 1.5: 화면 데이터만 새로고침 — 페이지를 다시 불러오지 않고 실시간 구독만 재연결한다.
+//   사유(사용자 확정 2026-08-04): 터미널 실시간 자료를 보려고 브라우저 새로고침을 하면
+//   로그인(App.jsx의 inspector 메모리 상태)이 풀려 로그인 화면으로 돌아간다.
+//   goOffline→goOnline은 열려 있는 onValue 구독을 전부 끊었다 다시 붙이므로 최신값이 즉시 재수신된다.
+//   ⚠ 30분 무조작 자동 로그아웃(V9.13)은 건드리지 않는다 — 활동 로그의 검수원 신뢰도가 걸려 있다.
+export async function fbReconnect() {
+  goOffline(db);
+  await new Promise((r) => setTimeout(r, 300));
+  goOnline(db);
+  return Date.now();
+}
+
+
 export function fbSubscribeTerminalWork(callback) {
   const r = ref(db, 'terminal_work');
   const unsub = onValue(r, (snap) => callback(snap.val() || {}));

@@ -7,7 +7,7 @@ import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
-  fbSubscribeMatrixEditors, fbGetAdminGuard
+  fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
 } from './firebase.js';
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결)
@@ -68,6 +68,22 @@ export default function App() {
   const [inspector, setInspector] = useState('');
   const [showStaffManager, setShowStaffManager] = useState(false);  // M5.73
   const [online, setOnline] = useState(true);
+  // TallyOne 1.5: 화면 데이터만 새로고침 — 페이지 리로드 없이 실시간 구독 재연결(로그인 유지).
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshedAt, setRefreshedAt] = useState(0);
+  const handleRefreshData = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await fbReconnect();
+      setRefreshedAt(Date.now());
+    } catch (e) {
+      console.warn('[새로고침] 재연결 실패', e);   // 조용히 실패하지 않는다(3금지 3번)
+      alert('데이터 새로고침 실패 — 네트워크를 확인해 주세요.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const [globalDetail, setGlobalDetail] = useState(null);
   // M3.6: 인사 모달
   const [greeting, setGreeting] = useState(null);  // {type: 'login'|'logout', lines, voice, ...}
@@ -399,6 +415,7 @@ export default function App() {
             portMisData={portMisData}
             pilotForecast={pilotForecast}
             terminalWork={terminalWork}
+            onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
             onOpenChiefDashboard={() => navigate('chief')}
             heartbeat={heartbeat}
@@ -433,6 +450,7 @@ export default function App() {
               collectorHb={heartbeat}
               pilotForecast={pilotForecast}
               terminalWork={terminalWork}
+              onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
               onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
               onGoHome={() => navigate('home')}
               onOpenGlobalSearch={() => navigate('search')}

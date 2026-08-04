@@ -6,6 +6,7 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
 import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
+import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
 import { isChief } from '../staffList.js';   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
@@ -49,7 +50,7 @@ const _voyCore = (x) => {
 
 // V9.57: 죽은 prop onOpenGlobalSearch 제거 — 이 컴포넌트 안에서 쓰는 곳이 없었다(App쪽 전달부 정리는 판2).
 // TallyOne 1.0 (K5): 맛집(onOpenFood)·건강점검(onOpenHealth) 개별 진입 → 보조기능(onOpenAux, #/aux) 하나로 교체
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux, onRefreshData, refreshing = false, refreshedAt = 0 }) {
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
@@ -512,6 +513,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           >
             📋 예보
           </button>
+          {/* TallyOne 1.5: 화면 데이터만 새로고침 — 입출항 자료가 수시로 바뀌는데(사용자 확정 2026-08-04)
+              브라우저 새로고침을 하면 로그인이 풀린다. 이 버튼은 로그인을 유지한 채 구독만 재연결한다. */}
+          <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
         </div>
       </div>
 
