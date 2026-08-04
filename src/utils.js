@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.6-01';   // 1.6 긴급 — 마감텔리 목록이 보관소 전체를 훑어 대시보드가 멈추던 것 수정
+export const APP_VERSION = 'TallyOne 1.7';   // 마감 서류를 TALLYBOX에 직접 저장 — 다운로드·저장창을 거치지 않음
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

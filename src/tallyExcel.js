@@ -992,7 +992,10 @@ function fillAllHeaders(wb, D, dstr) {
 }
 
 /** 워크북 생성 → Blob 다운로드. 반환: 파일명 */
-export async function generateTallyExcel(D) {
+// TallyOne 1.7: opts.download === false 면 파일을 내려받지 않고 buf 만 돌려준다.
+//   호출부가 TALLYBOX에 직접 쓰는 경로(tallyboxFs)를 쓸 때를 위한 것. 기본값은 종전대로 다운로드.
+export async function generateTallyExcel(D, opts = {}) {
+  const _wantDownload = opts.download !== false;
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   // V9.19-01: 실물 템플릿 우선 — 실패 시 드로잉 폴백
   let note = '';
@@ -1009,7 +1012,7 @@ export async function generateTallyExcel(D) {
     const voy0 = [D.voyD, D.voyL].filter(Boolean).join('&');
     const fname0 = `${D.code} ${voy0} PTK TALLY REPORT.xlsx`;
     const buf0 = await tplWb.xlsx.writeBuffer();
-    _download(buf0, fname0);
+    if (_wantDownload) _download(buf0, fname0);
     const notes = [note, D._stdNote, D._overflow ? `⚠ 자리 부족으로 못 실은 선사·포트 ${D._overflow}건 — 확인 필요` : ''].filter(Boolean);
     return { fname: fname0, buf: buf0, note: notes.join(' · ') || '실물 서식(템플릿) 기반' };
   }
@@ -1029,7 +1032,7 @@ export async function generateTallyExcel(D) {
   const voy = [D.voyD, D.voyL].filter(Boolean).join('&');
   const fname = `${D.code} ${voy} PTK TALLY REPORT.xlsx`;
   const buf = await wb.xlsx.writeBuffer();
-  _download(buf, fname);
+  if (_wantDownload) _download(buf, fname);
   return { fname, buf, note };
 }
 

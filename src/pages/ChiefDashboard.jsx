@@ -1,11 +1,14 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbRestoreVoyageFromArchive, fbCleanupArchive, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
+// TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
+import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
+import { folderName, fileNameFor } from '../data/tallyBoxRules.js';
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
@@ -89,6 +92,26 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // TallyOne 1.6-01: 마감 텔리 대기 목록 — **작은 색인 노드 하나만** 읽는다.
   //   1.6에서 fbListArchive()(키 1건당 get 7회 × 보관소 160건 = 1,120요청)를 대시보드 열 때마다
   //   돌려 화면이 멈췄다. 목록 때문에 보관소를 훑지 않는다.
+  // TallyOne 1.7: TALLYBOX 폴더 직결 — "크롬은 폴더를 지정해야 하고 엣지는 다운로드로 가고
+  //   일관성이 없음"(검수사 2026-08-04). 루트를 **한 번만** 지정받아 IndexedDB에 두면
+  //   그 뒤로는 안 묻는다. 마감 텔리·실선적 EDI·ASC 가 모두 이 핸들을 쓴다.
+  const [boxRoot, setBoxRoot] = useState(null);
+  React.useEffect(() => { readyRoot().then(setBoxRoot).catch(() => {}); }, []);
+  const onPickBox = React.useCallback(async () => {
+    const h = await pickTallyboxRoot();            // 사용자 클릭 안에서만 열린다
+    setBoxRoot(h);
+    return h;
+  }, []);
+  // 저장은 돼 있는데 권한이 'prompt' 로 식은 경우가 있다 — 버튼 클릭 안에서 조용히 되살린다.
+  const resolveBox = React.useCallback(async () => {
+    if (boxRoot) return boxRoot;
+    try {
+      const saved = await getSavedTallybox();
+      if (saved && (await requestWritePermission(saved)) === 'granted') { setBoxRoot(saved); return saved; }
+    } catch { /* 폴백: 다운로드 */ }
+    return null;
+  }, [boxRoot]);
+
   const [arcList, setArcList] = useState(null);
   const reloadArchive = React.useCallback(() => {
     if (!isChief(inspector)) return;
@@ -688,7 +711,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* V9.19-01: 마감 텔리 — 검수원이 보면 안 되는 서류라 수석 대시보드로 이동(사용자 확정) */}
       <Fold id="tally" title="📑 마감 텔리 (DEP.TALLY)" open={!!openSecs.tally} onToggle={() => toggleSec('tally')}>
         <TallyExportSection voyages={voyages} chief={chief} pfMap={pfMap} twMap={twMap}
-          archiveList={arcList} onArchiveChanged={reloadArchive}/>
+          archiveList={arcList} onArchiveChanged={reloadArchive}
+          boxRoot={boxRoot} onPickBox={onPickBox} resolveBox={resolveBox}/>
       </Fold>
 
       {/* V9.17: 완료 보관소 열람·복원 — 백엔드(archive/{key} + 복원·정리 함수)는 M7.18b에 완성돼
@@ -1289,10 +1313,30 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
       `선적확인(완료)된 컨이 아직 없습니다.\n전체 평택 선적분 ${got.totalPtk}대 기준으로 만들까요?`)) return null;
     return { ...got, meta: _ediMeta(row.key, v) };
   };
+  // TallyOne 1.7: TALLYBOX가 연결돼 있으면 다운로드 대신 `{선박}\{항차}\` 에 바로 쓴다.
+  //   연결 안 됐거나 미지원 브라우저면 종전대로 다운로드(폴백). 실패해도 다운로드로 떨어진다.
+  const _saveOrDownload = async (row, kind, filename, text) => {
+    const v = voyages[row.key];
+    const info = (v && v.info) || {};
+    try {
+      const root = await resolveBox();
+      if (root) {
+        const ext = filename.slice(filename.lastIndexOf('.'));
+        const name = fileNameFor(kind, info.vsl || row.vsl, info.voy_d, info.voy_l, ext);
+        const p = await writeTallyboxFile(root, info.vsl || row.vsl, folderName(info.voy_d, info.voy_l), name,
+          new Blob([text], { type: 'text/plain' }));
+        setNotice({ kind: 'ok', text: `✅ TALLYBOX\\${p} 저장 — 다운로드 폴더를 거치지 않았습니다.` });
+        return;
+      }
+    } catch (e) {
+      setNotice({ kind: 'err', text: `TALLYBOX 저장 실패 — 다운로드로 내려받습니다. (${e?.message || e})` });
+    }
+    downloadText(filename, text);
+  };
   const exportActualEdi = (row) => {
     const got = _collectOrWarn(row);
     if (!got) return;
-    downloadText(`${got.meta.vsl}_${got.meta.voy}_ACTUAL_BAPLIE.edi`, buildActualBaplie(got.rows, got.meta));
+    _saveOrDownload(row, 'edi', `${got.meta.vsl}_${got.meta.voy}_ACTUAL_BAPLIE.edi`, buildActualBaplie(got.rows, got.meta));
   };
   // V8.94: 실선적 ASC(카스피 $604) — 선박코드는 기본 검수앱 코드, 저장 전 입력창에서 수정 가능(선박별 기억).
   const exportActualAsc = (row) => {
@@ -1305,7 +1349,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
     if (input == null) return;
     const shipCode = (input.trim().toUpperCase() || got.meta.vsl).slice(0, 4);
     try { localStorage.setItem(lsKey, shipCode); } catch { /* 무시 */ }
-    downloadText(`${got.meta.vsl}${got.meta.voy}.ASC`, buildActualAsc(got.rows, { ...got.meta, shipCode }));
+    _saveOrDownload(row, 'asc', `${got.meta.vsl}${got.meta.voy}.ASC`, buildActualAsc(got.rows, { ...got.meta, shipCode }));
   };
   const exportEditExcel = async (row) => {
     const got = _collectOrWarn(row);
@@ -1979,7 +2023,7 @@ function ArchiveRestoreSection({ chief }) {
 
 // ── V9.19-01: 마감 텔리 엑셀 생성 (수석 전용) ─────────────────────────
 //   실물 DEP.TALLY 워크북을 배별 템플릿(실물 파일 서식 그대로)에 숫자만 채워 생성.
-function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchiveChanged }) {
+function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchiveChanged, boxRoot, onPickBox, resolveBox }) {
   const [busyKey, setBusyKey] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -2008,6 +2052,11 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
     return out.sort((a, b) => (rank[a.state] - rank[b.state]) || (b.at - a.at));
   }, [voyages, pfMap, twMap, archiveList]);
 
+  const pickBox = async () => {
+    try { await onPickBox(); setMsg('📁 TALLYBOX 폴더 연결됨 — 이제 만든 서류가 바로 그 안에 저장됩니다.'); }
+    catch (e) { if (e?.name !== 'AbortError') setMsg(`폴더 지정 실패: ${e?.message || e}`); }
+  };
+
   const gen = async (row) => {
     if (!chief) { alert('🔒 마감 텔리는 수석검수사만 생성할 수 있습니다.'); return; }
     if (row.state !== 'ready') return;            // 잠김 — 완료 저장 전에는 만들지 않는다
@@ -2018,10 +2067,20 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
       if (!v) throw new Error('보관소에서 항차를 찾지 못했습니다');
       const D = computeTallyData(v);
       const { generateTallyExcel } = await import('../tallyExcel.js');
-      const r = await generateTallyExcel(D);
+      const root = await resolveBox();   // 권한이 식어 있으면 이 클릭 안에서 조용히 되살린다
+      const r = await generateTallyExcel(D, { download: !root });
+      let where = `${r.fname} 다운로드`;
+      if (root) {
+        const info = v.info || {};
+        const folder = folderName(info.voy_d, info.voy_l);
+        const name = fileNameFor('tally', info.vsl || row.vsl, info.voy_d, info.voy_l, '.xlsx');
+        const p = await writeTallyboxFile(root, info.vsl || row.vsl, folder, name,
+          new Blob([r.buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        where = `TALLYBOX\\${p}`;
+      }
       await fbMarkTallyMade(row.key);
       if (onArchiveChanged) onArchiveChanged();
-      setMsg(`✅ ${r.fname} 다운로드${r.note ? ` · ${r.note}` : ''} — 발송 전 Final Work 총계 확인.`);
+      setMsg(`✅ ${where}${r.note ? ` · ${r.note}` : ''} — 발송 전 Final Work 총계 확인.`);
     } catch (e) {
       setMsg(`생성 실패(${row.vsl} ${row.voy}): ${e?.message || e}`);
     } finally {
@@ -2033,6 +2092,21 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
       <h2 className="font-bold text-emerald-200 text-sm mb-1">📑 마감 텔리 (DEP.TALLY REPORT) {!chief && <span className="text-[10px] text-slate-500">— 🔒 수석 전용</span>}</h2>
       <div className="text-[11px] text-slate-500 mb-2">실물 양식 그대로 엑셀 생성 · 선사/포트 순서 선박별 고정 · 발송 전 숫자 확인 필수</div>
       <div className="text-[11px] text-amber-300/80 mb-2">🔒 「✓ 수석 완료 저장」을 누른 항차만 생성할 수 있습니다 — 작업 중인 항차는 잠겨 있습니다.</div>
+      {/* TallyOne 1.7: 폴더 직결 — 처음 한 번만 고르면 그 뒤로는 안 묻는다(IndexedDB 보관) */}
+      <div className="mb-2 flex items-center gap-2 flex-wrap">
+        {boxRoot ? (
+          <span className="text-[11px] text-emerald-300">📁 TALLYBOX 연결됨 — 만든 서류가 <b>{'{선박}\\{항차}'}</b> 폴더에 바로 저장됩니다 (다운로드 거치지 않음)</span>
+        ) : isTallyboxSupported() ? (
+          <>
+            <button onClick={pickBox} className="px-3 py-2 rounded-lg text-[12px] font-bold bg-sky-800 hover:bg-sky-700 text-sky-100" style={{ minHeight: 40 }}>
+              📁 TALLYBOX 폴더 지정 (처음 한 번만)
+            </button>
+            <span className="text-[11px] text-slate-500">지정하면 저장창 없이 바로 들어갑니다. 안 하면 종전대로 다운로드됩니다.</span>
+          </>
+        ) : (
+          <span className="text-[11px] text-slate-500">이 브라우저는 폴더 직결을 지원하지 않아 다운로드로 저장됩니다 (크롬·엣지 데스크톱에서 지원).</span>
+        )}
+      </div>
       <div className="space-y-1">
         {rows.map((r) => {
           const ready = r.state === 'ready';
