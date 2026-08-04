@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbRestoreVoyageFromArchive, fbCleanupArchive, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbRestoreVoyageFromArchive, fbCleanupArchive, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
@@ -86,12 +86,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   const pfMap = pilotForecast || _EMPTY_OBJ;   // TallyOne 1.0: null 방어
   const twMap = terminalWork || _EMPTY_OBJ;    // TallyOne 1.0: null 방어
-  // TallyOne 1.6: 마감 텔리 목록이 보관소를 봐야 한다 —「수석 완료 저장」된 항차가 대상이기 때문.
-  //   메타만 읽는 fbListArchive 라 가볍다. 수석일 때만, 그리고 새로고침(refreshedAt) 때 다시 읽는다.
+  // TallyOne 1.6-01: 마감 텔리 대기 목록 — **작은 색인 노드 하나만** 읽는다.
+  //   1.6에서 fbListArchive()(키 1건당 get 7회 × 보관소 160건 = 1,120요청)를 대시보드 열 때마다
+  //   돌려 화면이 멈췄다. 목록 때문에 보관소를 훑지 않는다.
   const [arcList, setArcList] = useState(null);
   const reloadArchive = React.useCallback(() => {
     if (!isChief(inspector)) return;
-    fbListArchive().then(setArcList).catch(e => console.warn('[마감텔리] 보관소 조회 실패:', e));
+    fbListTallyPending().then(setArcList).catch(e => console.warn('[마감텔리] 대기 목록 조회 실패:', e));
   }, [inspector]);
   React.useEffect(() => { reloadArchive(); }, [reloadArchive, refreshedAt]);
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).

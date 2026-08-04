@@ -988,6 +988,15 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
       console.error('[archive] 백업 검증 실패 — 삭제 중단:', voyageKey);
       return false;
     }
+    // TallyOne 1.6-01: 마감 텔리 대기 색인 — 「수석 완료 저장」이 마감의 방아쇠다.
+    //   대시보드가 보관소 160건을 훑지 않고 이 작은 노드 하나만 읽게 하려는 것.
+    //   실패해도 백업·삭제는 그대로 진행한다(목록 편의 기능이 본 작업을 막지 않는다).
+    try {
+      await set(ref(db, `tally_pending/${voyageKey}`), {
+        vsl: info.vsl || '', voy_d: info.voy_d || '', voy_l: info.voy_l || '',
+        archivedAt: Date.now(), tallyMadeAt: 0,
+      });
+    } catch (e) { console.warn('[마감텔리] 대기 색인 기록 실패(계속):', voyageKey, e); }
   } catch (e) {
     console.error('[archive] 백업 실패 — 삭제 중단:', voyageKey, e);
     return false;            // 백업 실패 시 false → 호출부가 삭제 안 함
@@ -1044,24 +1053,19 @@ export async function fbListArchive() {
     if (!res.ok) throw new Error(`shallow HTTP ${res.status}`);
     const keys = Object.keys((await res.json()) || {});
     const out = await Promise.all(keys.map(async (key) => {
-      // TallyOne 1.6: voy_d·voy_l·_tallyMadeAt 추가 — 마감 텔리 목록이 항차와 생성 여부를 보여준다.
-      //   (메타만 개별 get 하는 G3 규칙 유지 — 항차 본문은 생성할 때 fbGetArchiveVoyage 로 한 건만 읽는다)
-      const [at, dp, lp, vsl, vd, vl, tm] = await Promise.all([
+      // ⚠ 여기에 필드를 늘리지 마라. 키 1건당 get 이 그만큼 늘어난다(보관소 160건 × N).
+      //   1.6에서 3개를 더 붙이고 대시보드에서 자동 호출했다가 요청 1,120건으로 화면이 멈췄다.
+      //   마감 텔리 목록은 tally_pending 노드 하나만 읽는다(fbListTallyPending).
+      const [at, dp, lp, vsl] = await Promise.all([
         get(ref(db, `archive/${key}/_archivedAt`)),
         get(ref(db, `archive/${key}/_discharge_ptk`)),
         get(ref(db, `archive/${key}/_loading_ptk`)),
         get(ref(db, `archive/${key}/info/vsl`)),
-        get(ref(db, `archive/${key}/info/voy_d`)),
-        get(ref(db, `archive/${key}/info/voy_l`)),
-        get(ref(db, `archive/${key}/_tallyMadeAt`)),
       ]);
       return {
         voyageKey: key,
         vsl: (vsl.exists() && vsl.val()) || key.split('_')[0] || '',
-        voy_d: (vd.exists() && vd.val()) || '',
-        voy_l: (vl.exists() && vl.val()) || '',
         archivedAt: (at.exists() && at.val()) || 0,
-        tallyMadeAt: (tm.exists() && tm.val()) || 0,
         discharge_ptk: (dp.exists() && dp.val()) || 0,
         loading_ptk: (lp.exists() && lp.val()) || 0,
       };
@@ -1078,10 +1082,7 @@ export async function fbListArchive() {
     out.push({
       voyageKey: key,
       vsl: info.vsl || key.split('_')[0] || '',
-      voy_d: info.voy_d || '',
-      voy_l: info.voy_l || '',
       archivedAt: v._archivedAt || 0,
-      tallyMadeAt: v._tallyMadeAt || 0,
       discharge_ptk: v._discharge_ptk || 0,
       loading_ptk: v._loading_ptk || 0,
     });
@@ -1110,7 +1111,27 @@ export async function fbGetArchiveVoyage(voyageKey) {
 //     항차 데이터가 아니라 '이 항차 서류를 뽑았다'는 작업 흔적이라 여기 둔다.
 export async function fbMarkTallyMade(voyageKey, at = Date.now()) {
   await set(ref(db, `archive/${voyageKey}/_tallyMadeAt`), at);
+  await update(ref(db, `tally_pending/${voyageKey}`), { tallyMadeAt: at });
   return at;
+}
+
+// ── TallyOne 1.6-01: 마감 텔리 대기 목록 (가벼운 색인) ──
+//   ⚠ 1.6 사고 — 대시보드가 열릴 때마다 fbListArchive() 를 돌렸다. 그 함수는 보관소 키
+//     1건당 get 을 7번 한다. 보관소 160건 = 요청 1,120건이 한 번에 나가 화면이 멈췄다.
+//     목록 때문에 보관소 전체를 훑으면 안 된다(G3 규칙의 재발).
+//   → 「수석 완료 저장」 때 이 작은 노드에 한 줄 남기고, 대시보드는 **이 노드 하나만** 읽는다.
+//     항차 본문은 실제로 엑셀을 만들 때 fbGetArchiveVoyage 로 그 한 건만 읽는다.
+export async function fbListTallyPending() {
+  const snap = await get(ref(db, 'tally_pending'));
+  if (!snap.exists()) return [];
+  const out = [];
+  for (const [key, v] of Object.entries(snap.val() || {})) {
+    if (!v) continue;
+    out.push({ voyageKey: key, vsl: v.vsl || key.split('_')[0] || '',
+               voy_d: v.voy_d || '', voy_l: v.voy_l || '',
+               archivedAt: v.archivedAt || 0, tallyMadeAt: v.tallyMadeAt || 0 });
+  }
+  return out.sort((a, b) => b.archivedAt - a.archivedAt);
 }
 
 // ── M7.18b: 1년 경과 archive 자동 정리 ──
