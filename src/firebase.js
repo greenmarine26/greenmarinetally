@@ -164,8 +164,15 @@ export async function fbGetEdiRaw(voyageKey, mode) {
 //     ① 새 값이 비어 있으면 기존 값을 유지한다 (빈칸으로 덮지 않는다).
 //     ② 현장 입력 전용 필드는 리스트가 아예 못 덮는다 (KEEP).
 //     ③ 새 리스트에 없는데 검수 흔적이 있는 컨은 지우지 않는다 — 조용히 사라지면 안 된다.
+// ⚠ `sl_orig` 는 여기 넣으면 안 된다 (1.8-02에서 제거).
+//   파서는 sl 과 sl_orig 를 **같은 값**으로 넣는다(utils.js:2258). 그래서 sl_orig 를 보존하고
+//   sl 만 새 리스트로 갱신하면, 검수원이 고친 적도 없는데 `sl ≠ sl_orig` 가 되어
+//   화면이 **실오류(세관 신고 대상)** 로 띄운다.
+//   실측 사고 2026-08-04 — STMJ 2643E `SKHU8912132`: 선사 리스트 뒤에 세관 CDL이 올라오자
+//   `sl:482869 / sl_orig:549844 / sl_history 없음`. EDI 에는 실번호가 아예 없어 EDI 탓도 아니다.
+//   → sl·sl_orig 는 **검수원이 실제로 고친 흔적(sl_history)이 있을 때만** 통째로 지킨다.
 const _FIELD_WORK_KEYS = [
-  'sl_orig', 'sl_history',          // 실번호 원본·수정 이력
+  'sl_history',                     // 실번호 수정 이력 (sl·sl_orig 는 아래에서 조건부로 지킨다)
   'eseal', 'eseal_orig',            // 엠티 실
   'rfSet', 'rfAct', 'rfSrc', 'rfCheckedAt', 'rfCheckedBy',   // 리퍼 온도 확인(1.8)
   'iso403', 'photo', 'photos', 'mkcon', 'memo',
@@ -208,8 +215,12 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     for (const k of _FIELD_WORK_KEYS) {        // ② 현장 입력은 리스트가 못 덮는다
       if (ov[k] !== undefined) m[k] = ov[k];
     }
-    // 실번호를 검수원이 고친 적이 있으면 리스트 값으로 되돌리지 않는다.
-    if (Array.isArray(ov.sl_history) && ov.sl_history.length && ov.sl) m.sl = ov.sl;
+    // 실번호는 **검수원이 고친 적이 있을 때만** 리스트가 못 덮는다. 그때는 sl·sl_orig 를 짝으로 지킨다
+    //   (한쪽만 지키면 `sl ≠ sl_orig` 가 되어 실오류로 오인된다 — 1.8-02 사고).
+    if (Array.isArray(ov.sl_history) && ov.sl_history.length) {
+      if (ov.sl) m.sl = ov.sl;
+      if (ov.sl_orig !== undefined) m.sl_orig = ov.sl_orig;
+    }
     out[cn] = m;
   }
   let kept = 0;

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.8-01';   // 리퍼 메모 모달이 DataTab 안에 있어 안 뜨던 것 수정
+export const APP_VERSION = 'TallyOne 1.8-02';   // 1.8 병합이 sl_orig를 굳혀 실오류 오탐을 내던 것 수정
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
