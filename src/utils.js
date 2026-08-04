@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.8-04';   // 리퍼 점검 대상을 풀 리퍼만으로 — 텔리 RF·출항 경고와 기준 통일
+export const APP_VERSION = 'TallyOne 1.8-05';   // 45RE·43RF 규격형 리퍼 표기 인식 — 공 리퍼가 풀로 집계되던 것 교정
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -19,20 +19,25 @@ export function isVirtualCn(cn) {
 //   검산: 20피트=1TEU, 40/45피트=2TEU로 계산한 값과 말미 합계(FULL-…TEU …)가 일치해야 teuOk.
 /** TallyOne 1.8-04: 리퍼 풀/공/드라이 표기에서 뒤 글자를 뽑는다 (검수사 확정 2026-08-04).
  *
- *    `RF` `RE` `RD`        붙여쓰기 — 검수사가 정한 표기
+ *    `45RE` `43RF` `20RD`  **규격 + R + 풀/공/드라이** — 실물 리스트가 이 형태다
+ *    `RF` `RE` `RD`        규격 없이 쓰기도 한다
  *    `R/F` `R-E` `R / D`   슬래시·하이픈, 공백 있어도 됨
  *    `D/F` `D/E`           앞 글자가 R이 아니어도 슬래시형이면 뒤 글자를 쓴다
  *
  *  반환 'F'(풀) | 'E'(공) | 'D'(리퍼드라이 — 넌플러그, 온도 무관) | ''
  *
- *  ⚠ 붙여쓰기는 **정확히 두 글자 R+X 일 때만** 인정한다. ISO 코드에 RF 가 흔히 들어가기
- *    때문이다(`43RF` `45R1` `22R1`). 네 글자짜리 ISO 는 여기 안 걸린다.
+ *  실증(2026-08-04)
+ *    STMJ 리스트 `45RE` + F/E열 `E` + 실번호 공란  → E = 엠티
+ *    TNJP EDI     `43RF` + records `fe:"F"`        → F = 풀
+ *  ⚠ 진짜 ISO 코드(`45R1` `22R1` `45G1`)는 끝이 숫자라 여기 안 걸린다. 그게 구분선이다.
+ *  ⚠ 기존 TYPE 끝글자 정규식은 `45RE` 에서 E 를 못 뽑는다(그룹이 `45`+`RE` 를 다 먹어
+ *    뒤에 남는 글자가 없다). 그래서 이 함수가 따로 필요하다.
  */
 export function _feFromSlash(raw) {
   const s = String(raw || '').trim().toUpperCase();
   const m = s.match(/^([A-Z]{1,2})\s*[/\-]\s*([FED])$/);
   if (m) return m[2];
-  const m2 = s.match(/^R\s*([FED])$/);      // RF · RE · RD (두 글자 고정)
+  const m2 = s.match(/^(?:\d{2})?R\s*([FED])$/);   // 45RE · 43RF · 20RD · RF · RE · RD
   return m2 ? m2[1] : '';
 }
 
