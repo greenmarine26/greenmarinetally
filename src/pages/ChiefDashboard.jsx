@@ -41,6 +41,42 @@ function twOf(info, twMap, sched) {
   return inWindow(parsePortMisDateTime(rec.startAt), sched.etaMs, sched.etdMs) ? rec : null;
 }
 
+// ── TallyOne 1.6: 마감 텔리 대상 판정 ─────────────────────────────────────────
+//   사고 (2026-08-04) — 수석이 마감 텔리 「엑셀 생성」을 눌렀는데 **엉뚱한 항차**가 나왔다.
+//     목록이 `info`만 있으면 전부 넣고 `createdAt` 내림차순으로 세웠다. 그래서
+//       TNJP 26356E & 26356W ← 맨 위 (오늘 12:22 예정 등록, 입항 8/6, 작업한 적 없음)
+//       TNJP 26355E & 26355W ← 13번째 (7/30 등록, 오늘 실제 작업·완료)
+//     같은 TNJP 두 줄 중 위엣것이 아직 배도 안 온 항차였다. 등록 시각 정렬이 원인.
+//
+//   검수사 확정 흐름 — 「수석 완료 저장」이 마감의 방아쇠다.
+//     작업중/검수 완료 → (잠김)  ─ 수석 완료 저장 ─→  보관소 이동 → 마감 텔리 활성
+//     "완료 처리가 안되면 눌리면 안됩니다. 수석이 완료로 저장하면 마감텔리에 불이 들어 오게"
+//     최종형은 완료 저장 즉시 텔리·마감자료가 TALLYBOX로 자동 생성. 지금은 시험 중이라
+//     조각을 떼어 둔 상태이므로 **순서만 강제**한다(자동 생성은 당기지 않는다).
+//
+//   ⚠ 완료 **기록**(discharge/loading.completed)을 신호로 쓰면 안 된다.
+//     TNJP 26355E 실측: dischargeDone·loadingDone 둘 다 true(12:34)인데 completed 는 null.
+//     지금은 시험 운용이라 컨을 하나씩 확인하지 않고 완료만 누른다(검수사 확인 2026-08-04).
+//     앱이 완성되면 한 대라도 남을 때 완료 버튼이 잠기므로 done 플래그가 곧 전량 확인을 뜻한다.
+//     즉 completed 는 지금은 항상 0이고 나중엔 중복이라 쓸 이유가 없다.
+//
+//   반환: null(입항 전 — 목록에 없음) | 'working'(작업중) | 'done'(검수 완료·수석 대기)
+export function tallyTargetState(v, pfMap, twMap, now = Date.now()) {
+  const info = v?.info;
+  if (!info) return null;
+  if (info.dischargeDone || info.loadingDone || info.inspectorDone) return 'done';
+  const sched = scheduleOf(info, pfMap);
+  if (twOf(info, twMap, sched)) return 'working';          // 터미널이 실제 작업을 잡고 있다
+  if (sched.etaMs != null && sched.etaMs <= now) return 'working';  // 작업 시작 시각이 지났다
+  return null;                                             // 아직 배가 없다
+}
+
+// TallyOne 1.6: 마감 텔리 목록에 올릴 보관소 하한.
+//   보관소에는 1년치(fbCleanupArchive 365일)가 쌓여 있고 그 대부분은 이 기능이 생기기 전에
+//   사람이 수기로 만들어 보낸 것들이다. 전부 '미작성'으로 띄우면 목록이 거짓말을 한다.
+//   → 이 기능 도입일 이후 완료 저장된 것만 올린다. 그 이전 것은 [완료 보관소] 메뉴에서 본다.
+export const TALLY_LIST_SINCE = new Date('2026-08-04T00:00:00+09:00').getTime();
+
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch,
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
   collectorHb = null, pilotForecast = null, terminalWork = null,
@@ -50,6 +86,14 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   const pfMap = pilotForecast || _EMPTY_OBJ;   // TallyOne 1.0: null 방어
   const twMap = terminalWork || _EMPTY_OBJ;    // TallyOne 1.0: null 방어
+  // TallyOne 1.6: 마감 텔리 목록이 보관소를 봐야 한다 —「수석 완료 저장」된 항차가 대상이기 때문.
+  //   메타만 읽는 fbListArchive 라 가볍다. 수석일 때만, 그리고 새로고침(refreshedAt) 때 다시 읽는다.
+  const [arcList, setArcList] = useState(null);
+  const reloadArchive = React.useCallback(() => {
+    if (!isChief(inspector)) return;
+    fbListArchive().then(setArcList).catch(e => console.warn('[마감텔리] 보관소 조회 실패:', e));
+  }, [inspector]);
+  React.useEffect(() => { reloadArchive(); }, [reloadArchive, refreshedAt]);
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
   const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
@@ -642,7 +686,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* V9.19-01: 마감 텔리 — 검수원이 보면 안 되는 서류라 수석 대시보드로 이동(사용자 확정) */}
       <Fold id="tally" title="📑 마감 텔리 (DEP.TALLY)" open={!!openSecs.tally} onToggle={() => toggleSec('tally')}>
-        <TallyExportSection voyages={voyages} chief={chief}/>
+        <TallyExportSection voyages={voyages} chief={chief} pfMap={pfMap} twMap={twMap}
+          archiveList={arcList} onArchiveChanged={reloadArchive}/>
       </Fold>
 
       {/* V9.17: 완료 보관소 열람·복원 — 백엔드(archive/{key} + 복원·정리 함수)는 M7.18b에 완성돼
@@ -1933,22 +1978,51 @@ function ArchiveRestoreSection({ chief }) {
 
 // ── V9.19-01: 마감 텔리 엑셀 생성 (수석 전용) ─────────────────────────
 //   실물 DEP.TALLY 워크북을 배별 템플릿(실물 파일 서식 그대로)에 숫자만 채워 생성.
-function TallyExportSection({ voyages, chief }) {
+function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchiveChanged }) {
   const [busyKey, setBusyKey] = useState('');
   const [msg, setMsg] = useState('');
-  const list = Object.entries(voyages || {})
-    .filter(([, v]) => v && v.info)
-    .sort((a, b) => (b[1].info.createdAt || 0) - (a[1].info.createdAt || 0));
-  const gen = async (key, v) => {
+
+  // 목록 = ① 보관소(수석 완료 저장됨) — 생성 가능  + ② 진행 중인 항차 — 잠김
+  //   정렬 기준은 **작업 시각**이다. 등록 시각(createdAt)으로 세우면 오늘 막 예정 등록된
+  //   미래 항차가 실제 작업한 항차보다 위로 올라온다(2026-08-04 TNJP 26356/26355 사고).
+  const rows = React.useMemo(() => {
+    const now = Date.now();
+    const out = [];
+    const archKeys = new Set();
+    for (const a of (archiveList || [])) {
+      if (!a || (a.archivedAt || 0) < TALLY_LIST_SINCE) continue;
+      archKeys.add(a.voyageKey);
+      out.push({ key: a.voyageKey, vsl: a.vsl, voy: [a.voy_d, a.voy_l].filter(Boolean).join(' & '),
+                 state: 'ready', at: a.archivedAt || 0, madeAt: a.tallyMadeAt || 0 });
+    }
+    for (const [key, v] of Object.entries(voyages || {})) {
+      if (archKeys.has(key)) continue;           // 복원된 항차가 양쪽에 있으면 보관소 쪽을 쓴다
+      const st = tallyTargetState(v, pfMap, twMap, now);
+      if (!st) continue;                          // 입항 전 — 목록에 올리지 않는다
+      const i = v.info || {};
+      out.push({ key, vsl: i.vsl || key.split('_')[0] || '', voy: [i.voy_d, i.voy_l].filter(Boolean).join(' & '),
+                 state: st, at: scheduleOf(i, pfMap).etaMs || 0, madeAt: 0 });
+    }
+    const rank = { ready: 0, done: 1, working: 2 };
+    return out.sort((a, b) => (rank[a.state] - rank[b.state]) || (b.at - a.at));
+  }, [voyages, pfMap, twMap, archiveList]);
+
+  const gen = async (row) => {
     if (!chief) { alert('🔒 마감 텔리는 수석검수사만 생성할 수 있습니다.'); return; }
-    setBusyKey(key); setMsg('');
+    if (row.state !== 'ready') return;            // 잠김 — 완료 저장 전에는 만들지 않는다
+    setBusyKey(row.key); setMsg('');
     try {
+      const { fbGetArchiveVoyage, fbMarkTallyMade } = await import('../firebase.js');
+      const v = await fbGetArchiveVoyage(row.key);
+      if (!v) throw new Error('보관소에서 항차를 찾지 못했습니다');
       const D = computeTallyData(v);
       const { generateTallyExcel } = await import('../tallyExcel.js');
       const r = await generateTallyExcel(D);
+      await fbMarkTallyMade(row.key);
+      if (onArchiveChanged) onArchiveChanged();
       setMsg(`✅ ${r.fname} 다운로드${r.note ? ` · ${r.note}` : ''} — 발송 전 Final Work 총계 확인.`);
     } catch (e) {
-      setMsg(`생성 실패(${key}): ${e?.message || e}`);
+      setMsg(`생성 실패(${row.vsl} ${row.voy}): ${e?.message || e}`);
     } finally {
       setBusyKey('');
     }
@@ -1957,21 +2031,37 @@ function TallyExportSection({ voyages, chief }) {
     <section className="bg-slate-900 border border-emerald-800/60 rounded-xl p-4">
       <h2 className="font-bold text-emerald-200 text-sm mb-1">📑 마감 텔리 (DEP.TALLY REPORT) {!chief && <span className="text-[10px] text-slate-500">— 🔒 수석 전용</span>}</h2>
       <div className="text-[11px] text-slate-500 mb-2">실물 양식 그대로 엑셀 생성 · 선사/포트 순서 선박별 고정 · 발송 전 숫자 확인 필수</div>
+      <div className="text-[11px] text-amber-300/80 mb-2">🔒 「✓ 수석 완료 저장」을 누른 항차만 생성할 수 있습니다 — 작업 중인 항차는 잠겨 있습니다.</div>
       <div className="space-y-1">
-        {list.map(([key, v]) => (
-          <div key={key} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
-            <div className="flex-1 min-w-0">
-              <span className="text-[13px] font-bold text-slate-200">{v.info.vsl}</span>
-              <span className="text-[11px] text-slate-500 ml-2">{[v.info.voy_d, v.info.voy_l].filter(Boolean).join(' & ')}</span>
+        {rows.map((r) => {
+          const ready = r.state === 'ready';
+          return (
+            <div key={r.key} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${
+              ready ? 'bg-emerald-900/20 border-emerald-800/50' : 'bg-slate-800/40 border-slate-800'}`}>
+              <div className="flex-1 min-w-0">
+                <span className={`text-[13px] font-bold ${ready ? 'text-emerald-100' : 'text-slate-500'}`}>{r.vsl}</span>
+                <span className={`text-[11px] ml-2 ${ready ? 'text-emerald-300/70' : 'text-slate-600'}`}>{r.voy}</span>
+                <div className="text-[10px] mt-0.5">
+                  {ready
+                    ? (r.madeAt
+                        ? <span className="text-emerald-400">✓ 생성함 · {new Date(r.madeAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} — 다시 뽑을 수 있습니다</span>
+                        : <span className="text-emerald-300 font-bold">● 완료 저장됨 — 지금 만드세요</span>)
+                    : r.state === 'done'
+                      ? <span className="text-amber-400/80">검수 완료 · 수석 완료 저장을 누르면 열립니다</span>
+                      : <span className="text-slate-600">작업 중</span>}
+                </div>
+              </div>
+              <button onClick={() => gen(r)} disabled={!ready || busyKey === r.key}
+                title={ready ? '마감 텔리 엑셀 생성' : '수석 완료 저장 전에는 생성할 수 없습니다'}
+                className={`shrink-0 px-3 py-2 rounded-lg text-[12px] font-bold ${
+                  ready && chief ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}
+                style={{ minHeight: 40 }}>
+                {busyKey === r.key ? '생성 중…' : ready ? '엑셀 생성' : '🔒 잠김'}
+              </button>
             </div>
-            <button onClick={() => gen(key, v)} disabled={busyKey === key}
-              className={`shrink-0 px-3 py-2 rounded-lg text-[12px] font-bold ${chief ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100' : 'bg-slate-800 text-slate-600'}`}
-              style={{ minHeight: 40 }}>
-              {busyKey === key ? '생성 중…' : '엑셀 생성'}
-            </button>
-          </div>
-        ))}
-        {list.length === 0 && <div className="text-[12px] text-slate-600">진행 중인 항차가 없습니다.</div>}
+          );
+        })}
+        {rows.length === 0 && <div className="text-[12px] text-slate-600">작업 중이거나 완료 저장된 항차가 없습니다. (입항 전 항차는 표시하지 않습니다)</div>}
       </div>
       {msg && <div className="mt-2 text-[11px] text-slate-300 whitespace-pre-wrap">{msg}</div>}
     </section>

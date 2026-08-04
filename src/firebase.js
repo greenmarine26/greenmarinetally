@@ -1044,16 +1044,24 @@ export async function fbListArchive() {
     if (!res.ok) throw new Error(`shallow HTTP ${res.status}`);
     const keys = Object.keys((await res.json()) || {});
     const out = await Promise.all(keys.map(async (key) => {
-      const [at, dp, lp, vsl] = await Promise.all([
+      // TallyOne 1.6: voy_d·voy_l·_tallyMadeAt 추가 — 마감 텔리 목록이 항차와 생성 여부를 보여준다.
+      //   (메타만 개별 get 하는 G3 규칙 유지 — 항차 본문은 생성할 때 fbGetArchiveVoyage 로 한 건만 읽는다)
+      const [at, dp, lp, vsl, vd, vl, tm] = await Promise.all([
         get(ref(db, `archive/${key}/_archivedAt`)),
         get(ref(db, `archive/${key}/_discharge_ptk`)),
         get(ref(db, `archive/${key}/_loading_ptk`)),
         get(ref(db, `archive/${key}/info/vsl`)),
+        get(ref(db, `archive/${key}/info/voy_d`)),
+        get(ref(db, `archive/${key}/info/voy_l`)),
+        get(ref(db, `archive/${key}/_tallyMadeAt`)),
       ]);
       return {
         voyageKey: key,
         vsl: (vsl.exists() && vsl.val()) || key.split('_')[0] || '',
+        voy_d: (vd.exists() && vd.val()) || '',
+        voy_l: (vl.exists() && vl.val()) || '',
         archivedAt: (at.exists() && at.val()) || 0,
+        tallyMadeAt: (tm.exists() && tm.val()) || 0,
         discharge_ptk: (dp.exists() && dp.val()) || 0,
         loading_ptk: (lp.exists() && lp.val()) || 0,
       };
@@ -1070,12 +1078,39 @@ export async function fbListArchive() {
     out.push({
       voyageKey: key,
       vsl: info.vsl || key.split('_')[0] || '',
+      voy_d: info.voy_d || '',
+      voy_l: info.voy_l || '',
       archivedAt: v._archivedAt || 0,
+      tallyMadeAt: v._tallyMadeAt || 0,
       discharge_ptk: v._discharge_ptk || 0,
       loading_ptk: v._loading_ptk || 0,
     });
   }
   return out.sort((a, b) => b.archivedAt - a.archivedAt);
+}
+
+// ── TallyOne 1.6: 보관소 항차 한 건 통째 읽기 (마감 텔리 생성용) ──
+//   fbArchiveVoyageBeforeDelete 가 `{...voyage}` 로 통째 복사하므로 구조는 voyages/{key} 와 같다.
+//   메타(_로 시작)만 걷어내면 computeTallyData 가 그대로 먹는다.
+export async function fbGetArchiveVoyage(voyageKey) {
+  const snap = await get(ref(db, `archive/${voyageKey}`));
+  if (!snap.exists()) return null;
+  const data = snap.val() || {};
+  const out = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (k.startsWith('_')) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+// ── TallyOne 1.6: 마감 텔리 생성 시각 기록 ──
+//   목록에서 "이미 만든 건"을 구분하기 위한 표시. archive 본문은 건드리지 않고 메타 한 칸만 쓴다.
+//   ⚠ archive 는 읽기/복원 전용 보관소라는 원칙(firebase.js 973행)의 유일한 예외 —
+//     항차 데이터가 아니라 '이 항차 서류를 뽑았다'는 작업 흔적이라 여기 둔다.
+export async function fbMarkTallyMade(voyageKey, at = Date.now()) {
+  await set(ref(db, `archive/${voyageKey}/_tallyMadeAt`), at);
+  return at;
 }
 
 // ── M7.18b: 1년 경과 archive 자동 정리 ──
