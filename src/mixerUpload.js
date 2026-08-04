@@ -292,6 +292,82 @@ async function blobToBase64(blob) {
   });
 }
 
+/**
+ * TallyOne 1.8: 선원이 체크한 리퍼 온도 리스트 사진 → 컨번호별 온도 판독.
+ *
+ * 왜 (검수사 확정 2026-08-04)
+ *   "리퍼가 많으면 일일이 확인 불가함 · 선원이 체크한 리스트를 받아서 읽게함"
+ *   본선에서 온도를 적어 준 종이 리스트를 폰으로 찍으면, 앱이 읽어 리퍼 메모에 채운다.
+ *   검수원은 **틀린 것만** 고친다. 손으로 12~40줄을 치게 두지 않는다.
+ *
+ * 판독은 초안이다 — 반드시 사람이 보고 확정한다(메모 화면에서 수정 가능).
+ * @returns {Promise<{items: Array<{cn, set, act}>, note: string}>}
+ */
+export async function ocrReeferTemps(file, geminiApiKey) {
+  if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
+  let imageBlob;
+  try { imageBlob = await compressImage(file, 1600); } catch { imageBlob = file; }
+  const base64 = await blobToBase64(imageBlob);
+
+  const prompt = `이 이미지는 선박 리퍼(냉동/냉장) 컨테이너 온도 점검 리스트입니다.
+본선 선원이 손으로 체크하거나 적어 넣은 값이 있을 수 있습니다.
+
+다음 JSON 형식으로만 응답하세요. 다른 설명 없이 JSON만:
+{"items":[{"cn":"컨테이너번호","set":"설정온도","act":"실제온도"}]}
+
+규칙:
+- cn 은 정확히 영문 4자 + 숫자 7자 (예: SEKU9206423). 형식이 아니면 그 행은 버린다.
+- set = SETTING / SET TEMP / 설정 온도 열의 값
+- act = ACTUAL / SUPPLY / RETURN / 실제 온도 열의 값
+- 온도는 숫자만 남긴다. 영하는 반드시 음수로 (-18, -18.0, -0.5).
+  "18-" "18 MINUS" "△18" 처럼 적혀 있어도 -18 로 읽는다.
+  ℃ · C · 도 같은 단위 글자는 뺀다.
+- 설정 온도 열만 있고 실제 온도 열이 없으면 act 는 빈 문자열로 둔다. **추측해서 채우지 않는다.**
+- 값이 안 보이거나 흐리면 빈 문자열. 지어내지 않는다.
+- 손글씨가 인쇄값 위에 덧쓰여 있으면 **손글씨를 우선**한다(선원이 고친 값이다).`;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: base64 } }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+      }),
+    }
+  );
+  if (!response.ok) {
+    const t = await response.text();
+    throw new Error(`Gemini API 오류 ${response.status}: ${t.slice(0, 200)}`);
+  }
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let json;
+  try {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('JSON 못 찾음');
+    json = JSON.parse(m[0]);
+  } catch (e) {
+    throw new Error(`판독 결과 파싱 실패: ${e.message}`);
+  }
+  // 온도 정규화 — 숫자로 읽히는 것만 남긴다(조용히 이상값을 통과시키지 않는다).
+  const num = (v) => {
+    if (v == null) return '';
+    const s = String(v).replace(/[℃°CcＣ도\s]/g, '').replace(/[−–—]/g, '-').trim();
+    if (!s) return '';
+    const m = s.match(/^-?\d+(?:\.\d+)?$/);
+    return m ? m[0] : '';
+  };
+  const items = [];
+  for (const it of (json.items || [])) {
+    const cn = String(it?.cn || '').toUpperCase().replace(/\s/g, '');
+    if (!/^[A-Z]{4}\d{7}$/.test(cn)) continue;
+    items.push({ cn, set: num(it.set), act: num(it.act) });
+  }
+  return { items, note: `사진에서 ${items.length}대 읽음` };
+}
+
 export async function ocrImageContainers(file, geminiApiKey) {
   // V9.57(G11): 내장 폴백 키 삭제로 키 부재가 정상 상태가 됨 — 설정 경로를 정확히 안내.
   if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');

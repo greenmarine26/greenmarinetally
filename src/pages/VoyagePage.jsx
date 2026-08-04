@@ -57,6 +57,7 @@ import { db } from '../firebase.js';
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
+import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1.8: 리퍼 온도 확인
 
 // V9.03: 긴급/수화물 마커 주입 — 예보(카톡·연태훼리 CLL 메일)에 담긴 컨번호를 렌더 시점에
 //   c.urgent/c.lugg 플래그로 붙인다. 데이터(ediContainers)에 쓰지 않으므로 EDI가 예보보다
@@ -517,6 +518,25 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     () => tagForecastMarks(containersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null),
     [containersBase, urgentSet, luggSet, _fc, _fcApply]);
 
+  // ── TallyOne 1.8: 리퍼 온도 확인 ─────────────────────────────────────────
+  //   "작업전 먼저 선박을 선택합니다. 그러면 앱은 리퍼 유무를 판단하고 있으면 리퍼메모 화면을
+  //    띄워 줍니다"(검수사 확정 2026-08-04). 아직 확인 안 한 리퍼가 남아 있을 때만 자동으로 뜬다.
+  //   확인을 마치면 다시 안 뜨고, 상단 「❄ 리퍼 N」 버튼으로 언제든 다시 연다.
+  const reefers = useMemo(
+    () => (containers || []).filter(c => c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || ''))),
+    [containers]);
+  const rfUnchecked = useMemo(() => reefers.filter(c => !c.rfCheckedAt).length, [reefers]);
+  const [showReefer, setShowReefer] = useState(false);
+  const rfAutoRef = React.useRef('');
+  React.useEffect(() => {
+    // 항차·모드가 바뀔 때 한 번만 판단한다(자료가 늦게 도착해 재렌더돼도 다시 띄우지 않는다).
+    const key = `${voyageKey}|${mode}`;
+    if (rfAutoRef.current === key) return;
+    if (!reefers.length) return;          // 리퍼 자체가 없으면 아무 일 없다
+    rfAutoRef.current = key;
+    if (rfUnchecked > 0) setShowReefer(true);
+  }, [voyageKey, mode, reefers.length, rfUnchecked]);
+
   // V8.06: LOLO/IFCSUM 선박 판정 — 컨테이너에 베이 위치가 하나도 없으면 LOLO 전용.
   //   RIZHAO ORIENT 등 RORO/LOLO 혼용선은 IFCSUM(베이 없음)으로 명세만 제공된다.
   //   베이 그림이 무의미하므로 리스트 기반 LOLO 탭을 노출한다(기존 베이 선박엔 영향 0).
@@ -771,6 +791,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           </button>
         ))}
       </nav>
+
+      {/* TallyOne 1.8: 리퍼가 있으면 언제든 온도 확인 화면을 다시 연다.
+          미확인이 남아 있으면 숫자를 붉게 띄워 '아직 안 봤다'를 숨기지 않는다. */}
+      {reefers.length > 0 && (
+        <button onClick={() => setShowReefer(true)}
+          className={`w-full mb-3 px-3 py-2 rounded-lg border flex items-center justify-between ${
+            rfUnchecked > 0 ? 'bg-cyan-900/30 border-cyan-700/60' : 'bg-slate-900 border-slate-800'}`}
+          style={{ minHeight: 44 }}>
+          <span className="text-[12px] font-bold text-cyan-200">❄ 리퍼 온도 확인 · {reefers.length}대</span>
+          <span className={`text-[11px] font-bold ${rfUnchecked > 0 ? 'text-rose-300' : 'text-emerald-400'}`}>
+            {rfUnchecked > 0 ? `미확인 ${rfUnchecked}대` : '확인 완료 ✓'}
+          </span>
+        </button>
+      )}
 
       {/* M8.08: 양하/선적 작업 화면의 엠티 실 정책 배너·보고서 블록 제거.
           사용자 요구: 작업 화면엔 상단 요약만, 실번호 수정은 개별 카드, 보고서는 수석 대시보드.
@@ -2618,6 +2652,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       )}
       {showTestLab && inspector === '김성일' && (
         <TestLabModal voyage={voyage} voyageKey={voyageKey} onClose={() => setShowTestLab(false)}/>
+      )}
+      {/* TallyOne 1.8: 리퍼 온도 확인 — 텔리 RF condition report 의 Setting/Actual 이 여기서 나온다 */}
+      {showReefer && (
+        <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector}
+          onClose={() => setShowReefer(false)}/>
       )}
       {/* M6.14: STOWAGE PDF 자동 분석 검토 모달 */}
       {stowagePdfFile && (

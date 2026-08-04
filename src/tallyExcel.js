@@ -250,7 +250,9 @@ function sheetRF(wb, D) {
   for (const row of [...D.rfIn, ...D.rfOut]) {
     ws.getCell(`A${r}`).value = row.cn; ws.getCell(`B${r}`).value = row.seal;
     ws.getCell(`C${r}`).value = row.size; ws.getCell(`D${r}`).value = row.loc;
-    ws.getCell(`E${r}`).value = row.setting; ws.getCell(`H${r}`).value = row.op;
+    // TallyOne 1.8: F열(Actual)이 헤더에만 있고 값이 안 들어가고 있었다 — 리퍼 메모 확인값을 채운다.
+    ws.getCell(`E${r}`).value = row.setting; ws.getCell(`F${r}`).value = row.actual || '';
+    ws.getCell(`H${r}`).value = row.op;
     for (let c = 1; c <= 8; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
     r++;
   }
@@ -741,7 +743,10 @@ function fillFerrySheets(wb, M, D, dstr) {
         row.getCell(2).value = o.seal || null;
         row.getCell(3).value = o.size;
         row.getCell(4).value = o.loc || null;
+        // TallyOne 1.8: 실물 템플릿 병합 실측 — D:E=LOCATION, F:G=TEMPERATURE(F=Setting, G=Atual),
+        //   H=TIME(Plug In/Out), I=REMARKS. Actual 은 검수원이 확인한 값이 있을 때만 찍는다.
         row.getCell(6).value = o.setting || null;
+        row.getCell(7).value = o.actual || null;
         row.getCell(9).value = o.dg ? 'DG' : null;
       }
     }

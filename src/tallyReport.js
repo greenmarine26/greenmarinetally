@@ -32,7 +32,29 @@ const vals = (o) => Object.values(o || {});
 //   TODO: utils.isPtk(c, mode)가 export되면(팀F 추가 중) 이 인라인을 임포트로 교체.
 export function ptkContainers(voyage, mode) {
   const edi = vals(sect(voyage, mode).ediContainers);
-  return edi.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)));
+  const recs = sect(voyage, mode).records || {};
+  // TallyOne 1.8: **필드 보강** — records(양하/선적 리스트 + 검수원 입력)의 값을 EDI 컨에 덮는다.
+  //   왜: BAPLIE에는 실번호도 리퍼 온도도 없다. 그 둘은 리스트에서 오고 records 에 있다.
+  //   화면(VoyagePage 271~/624행)은 진작부터 병합해서 보여 주는데 텔리만 ediContainers 만 읽어서,
+  //   RF condition report 의 SEAL NO·Setting 이 **상시 공란**이었다(TNJP 26355E 실측 2026-08-04).
+  //   Lug 키 사고(1.3-02)와 같은 계열 — 화면과 텔리가 서로 다른 소스를 보던 문제다.
+  //   ⚠ 컨을 **추가하지 않는다**. 필드만 채운다 — 추가하면 Final Work·OS·PORTPERFORMANCE
+  //     집계가 통째로 흔들린다. 여기 목적은 빈칸 채우기지 대수 변경이 아니다.
+  const merged = edi.map((c) => {
+    const r = recs[c.cn];
+    if (!r) return c;
+    const out = { ...c };
+    // 실번호: EDI가 비었거나, EDI 값이 records 값의 앞부분인 잘린 값이면 records 우선(M8.07과 같은 규칙).
+    const es = String(c.sl || ''); const rs = String(r.sl || '');
+    if (rs && (!es || (rs.length > es.length && rs.startsWith(es)))) out.sl = rs;
+    // 리퍼 온도: EDI에 없으면 리스트 값으로.
+    if ((c.tmp == null || String(c.tmp).trim() === '') && r.tmp != null && String(r.tmp).trim() !== '') out.tmp = r.tmp;
+    // TallyOne 1.8: 리퍼 메모에서 검수원이 확인·수정한 값 — 있으면 그대로 들고 간다.
+    if (r.rfSet != null && String(r.rfSet).trim() !== '') out.rfSet = r.rfSet;
+    if (r.rfAct != null && String(r.rfAct).trim() !== '') out.rfAct = r.rfAct;
+    return out;
+  });
+  return merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)));
 }
 
 /** Final Work 매트릭스: {op: {port: {F|E: {20,40,HC,45}}}} — 양하=POL별, 선적=POD별 */
@@ -151,14 +173,21 @@ export function buildSealList(voyage, mode) {
   return out;
 }
 
-/** RF condition — 리퍼 목록 (설정온도 = tmp, 실측은 검수 입력이 덮은 tmp와 동일 소스라 setting에만) */
+/** RF condition — 리퍼 목록.
+ *  TallyOne 1.8: Setting/Actual 을 나눈다.
+ *    setting = 검수원이 리퍼 메모에서 확인한 실제 셋팅온도(rfSet). 없으면 EDI·리스트 온도(tmp).
+ *    actual  = 실제 측정 온도(rfAct). 확인 전에는 **빈칸으로 둔다** — tmp로 채우면
+ *              재보지도 않은 값이 '실측'으로 서류에 박힌다.
+ */
 export function buildRF(containers) {
+  const t = (v) => (v != null && String(v).trim() !== '' ? String(v).trim() : '');
   return containers
     .filter(c => c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || '')))
     .map(c => ({
       cn: c.cn, seal: c.sl || '', size: tallySizeCol(c) === '20' ? "20'RF" : "40'RH",
       loc: [c.bay, c.row, c.tier].filter(Boolean).join('/'),
-      setting: c.tmp != null && String(c.tmp).trim() !== '' ? String(c.tmp) : '',
+      setting: t(c.rfSet) || t(c.tmp),
+      actual: t(c.rfAct),
       op: String(c.op || '').toUpperCase(),
       fe: c.fe === 'E' ? 'E' : 'F',
       dg: !!c.dg,   // V9.21: 페리 RF REMARKS(DG) 표기용

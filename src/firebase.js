@@ -150,8 +150,76 @@ export async function fbGetEdiRaw(voyageKey, mode) {
 }
 
 // 양하/선적 리스트 저장 (실번호 등)
+// TallyOne 1.8: 리스트 재업로드가 **현장 입력을 지우지 못하게** 병합해서 저장한다.
+//
+//   사고 (검수사 발견 2026-08-04) — "앱이 저장을 할때 병합 저장하면 틀린것만 남을텐데
+//   완전 교체 하는것 같습니다. 그래서 제가 다시 저장함"
+//   종전엔 chunkedReplace(=set) 로 records 노드를 통째 갈아엎었다. 그래서 온도 열이 없는
+//   리스트를 한 번 올리면 있던 리퍼 온도가 ""로 덮여 사라졌다.
+//   실증: TNJP 26355E SEKU9206423 — archive 13:09 스냅샷 tmp:"" tmp_missing:true wt:0,
+//         검수사가 리스트를 다시 올린 뒤 tmp:"-18" wt:14937. 반대 방향으로도 똑같이 날아간다.
+//   같은 방식으로 실번호 수정 이력·엠티실·리퍼 확인값(rfSet/rfAct)도 전부 소실된다.
+//
+//   규칙 셋:
+//     ① 새 값이 비어 있으면 기존 값을 유지한다 (빈칸으로 덮지 않는다).
+//     ② 현장 입력 전용 필드는 리스트가 아예 못 덮는다 (KEEP).
+//     ③ 새 리스트에 없는데 검수 흔적이 있는 컨은 지우지 않는다 — 조용히 사라지면 안 된다.
+const _FIELD_WORK_KEYS = [
+  'sl_orig', 'sl_history',          // 실번호 원본·수정 이력
+  'eseal', 'eseal_orig',            // 엠티 실
+  'rfSet', 'rfAct', 'rfSrc', 'rfCheckedAt', 'rfCheckedBy',   // 리퍼 온도 확인(1.8)
+  'iso403', 'photo', 'photos', 'mkcon', 'memo',
+];
+const _isEmptyVal = (v) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+// 값이 0이면 '없음'인 필드. 컨 무게 0은 실제 무게가 아니라 리스트에 그 열이 없었다는 뜻이다.
+//   (실측: TNJP 26355E SEKU9206423 이 wt:0 으로 저장돼 있었고 재업로드 후 14937 이 됐다)
+const _ZERO_IS_EMPTY = new Set(['wt']);
+const _emptyFor = (k, v) => _isEmptyVal(v) || (_ZERO_IS_EMPTY.has(k) && Number(v) === 0);
+
+// ⚠ '검수 흔적' 판정은 KEEP 목록과 다르다.
+//   sl_orig·mkcon 은 리스트 업로드가 자동으로 붙이는 값이라 흔적이 아니다. 그걸 흔적으로 세면
+//   리스트에서 빠진 컨이 영영 안 지워지고 재업로드마다 죽은 컨이 쌓인다(시뮬 2026-08-04에서 잡음).
+const _FIELD_WORK_SIGNS = ['sl_history', 'eseal', 'rfCheckedAt', 'rfSet', 'rfAct', 'iso403', 'photo', 'photos', 'memo'];
+function _hasFieldWork(o) {
+  if (!o) return false;
+  if (Array.isArray(o.sl_history) && o.sl_history.length) return true;
+  for (const k of _FIELD_WORK_SIGNS) {
+    if (k === 'sl_history') continue;
+    if (!_isEmptyVal(o[k])) return true;
+  }
+  return false;
+}
+
 export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
-  await chunkedReplace(`voyages/${voyageKey}/${mode}/records`, recordsObj);
+  const path = `voyages/${voyageKey}/${mode}/records`;
+  let cur = {};
+  try { cur = (await get(ref(db, path))).val() || {}; }
+  catch (e) { console.warn('[리스트 저장] 기존 records 읽기 실패 — 병합 없이 저장합니다:', e); }
+
+  const out = {};
+  for (const [cn, nv] of Object.entries(recordsObj || {})) {
+    const ov = cur[cn];
+    if (!ov) { out[cn] = nv; continue; }
+    const m = { ...ov };
+    for (const [k, v] of Object.entries(nv || {})) {
+      if (_emptyFor(k, v)) continue;           // ① 빈 값(무게 0 포함)은 기존을 덮지 않는다
+      m[k] = v;
+    }
+    for (const k of _FIELD_WORK_KEYS) {        // ② 현장 입력은 리스트가 못 덮는다
+      if (ov[k] !== undefined) m[k] = ov[k];
+    }
+    // 실번호를 검수원이 고친 적이 있으면 리스트 값으로 되돌리지 않는다.
+    if (Array.isArray(ov.sl_history) && ov.sl_history.length && ov.sl) m.sl = ov.sl;
+    out[cn] = m;
+  }
+  let kept = 0;
+  for (const [cn, ov] of Object.entries(cur)) {   // ③ 리스트에서 빠졌어도 검수 흔적이 있으면 남긴다
+    if (out[cn]) continue;
+    if (_hasFieldWork(ov)) { out[cn] = { ...ov, _keptNotInList: true }; kept += 1; }
+  }
+  if (kept) console.warn(`[리스트 저장] 새 리스트에 없지만 검수 흔적이 있어 남긴 컨 ${kept}대`);
+  await chunkedReplace(path, out);
+  return { total: Object.keys(out).length, kept };
 }
 
 // X-RAY (양하만)
@@ -180,6 +248,37 @@ export async function fbToggleXray(voyageKey, cn) {
   else await set(r, { at: Date.now() });
 }
 // 실번호 현장 수정 — 원본(sl_orig)은 절대 변경 X, 이력 누적
+// ── TallyOne 1.8: 리퍼 온도 확인 (리퍼 메모 화면) ──────────────────────────
+//   rfSet = 실제 셋팅온도 · rfAct = 실제온도 · rfSrc = 'photo'(선원 리스트 판독) | 'manual'
+//   records 가 단일 진실 원천이라는 기존 원칙 그대로 여기에 적는다(ediContainers 는 EDI 원본이므로 안 건드린다).
+//   텔리 RF condition report 의 Setting/Actual 칸이 이 값을 읽는다.
+export async function fbSetReeferTemp(voyageKey, mode, cn, patch, by) {
+  const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const f = { rfCheckedAt: Date.now(), rfCheckedBy: by || '' };
+  if (patch.set !== undefined) f.rfSet = String(patch.set ?? '');
+  if (patch.act !== undefined) f.rfAct = String(patch.act ?? '');
+  if (patch.src) f.rfSrc = patch.src;
+  await update(r, f);
+}
+
+/** 여러 대를 한 번에 (사진 판독 결과 반영 · '전부 리스트대로' 일괄 적용) */
+export async function fbSetReeferTempBulk(voyageKey, mode, rows, by) {
+  const now = Date.now();
+  const patch = {};
+  for (const it of rows || []) {
+    if (!it || !it.cn) continue;
+    const base = `voyages/${voyageKey}/${mode}/records/${it.cn}`;
+    if (it.set !== undefined) patch[`${base}/rfSet`] = String(it.set ?? '');
+    if (it.act !== undefined) patch[`${base}/rfAct`] = String(it.act ?? '');
+    patch[`${base}/rfSrc`] = it.src || 'manual';
+    patch[`${base}/rfCheckedAt`] = now;
+    patch[`${base}/rfCheckedBy`] = by || '';
+  }
+  if (!Object.keys(patch).length) return 0;
+  await update(ref(db), patch);
+  return rows.length;
+}
+
 export async function fbUpdateRecordSeal(voyageKey, mode, cn, newSl, by) {
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const snap = await get(r);
