@@ -1444,6 +1444,36 @@ export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) 
 }
 
 // M3.5.6: 작업 보고 저장 (양하/선적/해치/콘박스/실오류/데미지)
+/** TallyOne 1.8-15: **시각을 지정해서** 작업 기록을 넣는다 (카톡방 기록 보강용).
+ *
+ *  fbAddWorkReport 는 ts 를 '지금'으로 덮는다. 카톡에서 읽어 온 것은 **과거 시각**이라
+ *  그걸 쓰면 타임시트 순서가 무너진다(실측: 22:47 해치 오픈이 12:30 으로 박힘).
+ *
+ *  @param base 'voyages/{key}' 또는 'archive/{key}' — 완료 저장된 항차는 보관소에 넣어야
+ *              마감 텔리가 다시 만들 때 반영된다.
+ *  @param items [{ts, ...report}]
+ *  @returns {Promise<{added:number, skipped:number}>} 같은 ts 가 이미 있으면 건너뛴다(중복 방지)
+ */
+export async function fbAddReportsAt(base, items) {
+  let added = 0, skipped = 0;
+  for (const it of items || []) {
+    const ts = Number(it?.ts);
+    if (!Number.isFinite(ts) || ts <= 0) { skipped += 1; continue; }
+    const path = `${base}/reports/${ts}`;
+    try {
+      const cur = await get(ref(db, path));
+      if (cur.exists()) { skipped += 1; continue; }
+      const { ts: _t, ...rest } = it;
+      await set(ref(db, path), { ...rest, ts, created_at: new Date(ts).toISOString(), _src: 'kakao' });
+      added += 1;
+    } catch (e) {
+      console.error('[카톡 보강] 기록 추가 실패:', path, e);   // 조용히 삼키지 않는다
+      skipped += 1;
+    }
+  }
+  return { added, skipped };
+}
+
 export async function fbAddWorkReport(voyageKey, report) {
   const ts = Date.now();
   const r = ref(db, `voyages/${voyageKey}/reports/${ts}`);

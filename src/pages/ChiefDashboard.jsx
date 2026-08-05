@@ -9,6 +9,7 @@ import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자�
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
 import { folderName, fileNameFor } from '../data/tallyBoxRules.js';
+import KakaoLogImportModal from '../components/KakaoLogImportModal.jsx';   // TallyOne 1.8-15
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
@@ -2079,6 +2080,19 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
     catch (e) { if (e?.name !== 'AbortError') setMsg(`폴더 지정 실패: ${e?.message || e}`); }
   };
 
+  // TallyOne 1.8-15: 카톡 기록 보강 대상 항차. 완료 저장된 항차라 **보관소**에 넣어야
+  //   마감 텔리를 다시 만들 때 반영된다.
+  const [kakaoKey, setKakaoKey] = useState(null);
+  const [kakaoVoyage, setKakaoVoyage] = useState(null);
+  React.useEffect(() => {
+    if (!kakaoKey) { setKakaoVoyage(null); return; }
+    let alive = true;
+    import('../firebase.js').then(({ fbGetArchiveVoyage }) => fbGetArchiveVoyage(kakaoKey))
+      .then((v) => { if (alive) setKakaoVoyage(v || {}); })
+      .catch((e) => { console.warn('[카톡 보강] 항차 조회 실패', e); if (alive) setKakaoVoyage({}); });
+    return () => { alive = false; };
+  }, [kakaoKey]);
+
   const gen = async (row) => {
     if (!chief) { alert('🔒 마감 텔리는 수석검수사만 생성할 수 있습니다.'); return; }
     if (row.state !== 'ready') return;            // 잠김 — 완료 저장 전에는 만들지 않는다
@@ -2114,6 +2128,12 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
       <h2 className="font-bold text-emerald-200 text-sm mb-1">📑 마감 텔리 (DEP.TALLY REPORT) {!chief && <span className="text-[10px] text-slate-500">— 🔒 수석 전용</span>}</h2>
       <div className="text-[11px] text-slate-500 mb-2">실물 양식 그대로 엑셀 생성 · 선사/포트 순서 선박별 고정 · 발송 전 숫자 확인 필수</div>
       <div className="text-[11px] text-amber-300/80 mb-2">🔒 「✓ 수석 완료 저장」을 누른 항차만 생성할 수 있습니다 — 작업 중인 항차는 잠겨 있습니다.</div>
+      {/* ⚠ 모달은 이 섹션 트리 안에 둔다 — 1.8 에서 DataTab 안에 넣어 상태만 켜지고 안 뜬 적이 있다. */}
+      {kakaoKey && kakaoVoyage && (
+        <KakaoLogImportModal voyage={kakaoVoyage} voyageKey={kakaoKey} base={`archive/${kakaoKey}`}
+          onClose={() => setKakaoKey(null)}
+          onDone={() => { if (onArchiveChanged) onArchiveChanged(); }}/>
+      )}
       {/* TallyOne 1.7: 폴더 직결 — 처음 한 번만 고르면 그 뒤로는 안 묻는다(IndexedDB 보관) */}
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         {boxRoot ? (
@@ -2148,6 +2168,13 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
                       : <span className="text-slate-600">작업 중</span>}
                 </div>
               </div>
+              {/* TallyOne 1.8-15: 카톡방 기록으로 타임시트를 메운다 — 손으로 친 해치 보고가 앱에 없을 때 */}
+              {ready && (
+                <button onClick={() => setKakaoKey(r.key)}
+                  title="카톡 작업방 기록을 붙여넣어 빠진 해치·작업 기록을 채웁니다"
+                  className="shrink-0 px-2.5 py-2 rounded-lg text-[12px] font-bold bg-amber-800/70 hover:bg-amber-700 text-amber-100"
+                  style={{ minHeight: 40 }}>📋 카톡</button>
+              )}
               <button onClick={() => gen(r)} disabled={!ready || busyKey === r.key}
                 title={ready ? '마감 텔리 엑셀 생성' : '수석 완료 저장 전에는 생성할 수 없습니다'}
                 className={`shrink-0 px-3 py-2 rounded-lg text-[12px] font-bold ${
