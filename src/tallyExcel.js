@@ -578,6 +578,16 @@ async function fillTemplate(D, ExcelJS) {
       r.getCell(6).value = o ? o.actualSeal : null;
       r.getCell(7).value = o ? o.reseal : null;
       r.getCell(8).value = o ? `${o.remarks} ${o.leg}`.trim() : null;
+      // TallyOne 1.9: 컨번호 칸 A:B 병합 — 머리글 A11:B11 은 병합인데 데이터 행은 아니어서
+      //   컨번호가 좁은 A열에 갇혀 잘려 보였다(검수사 지적 2026-08-05, STMJ 2643E 실번호 시트).
+      //   RF 시트 D:E 와 같은 방식 — 스타일 보존 병합.
+      const rn = cfg.dataStart + i;
+      const sv = [JSON.parse(JSON.stringify(r.getCell(1).style || {})), JSON.parse(JSON.stringify(r.getCell(2).style || {}))];
+      try { ws.mergeCells(rn, 1, rn, 2); } catch { /* 이미 병합 */ }
+      r.getCell(1).style = sv[0]; r.getCell(2).style = sv[1];
+      const s1 = JSON.parse(JSON.stringify(r.getCell(1).style || {}));
+      s1.alignment = { ...(s1.alignment || {}), horizontal: 'center', vertical: 'middle' };
+      r.getCell(1).style = s1;
     }
   }
   // ── RF ──
