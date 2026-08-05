@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
+import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { isPyeongtaekPort, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
@@ -1276,9 +1276,30 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         if (!go) { setConfirmKey(null); return; }
       }
     }
+    // TallyOne 1.8-11: **오프라인이면 아예 시작하지 않는다.**
+    //   실측 2026-08-05 STMJ 2643E — 오프라인에서 누르니 버튼이 "저장 중…"에 갇혔다.
+    //   Firebase 는 신호가 없으면 쓰기 Promise 를 연결 복구 전까지 resolve 하지 않는다.
+    //   그대로 두면 나중에 연결이 살아났을 때 **사용자가 화면을 떠난 뒤 항차 삭제까지** 진행된다.
+    //   완료 저장은 되돌릴 수 없는 작업이라 신호가 확실할 때만 연다.
+    if (!(await fbIsOnline())) {
+      setNotice({ kind: 'err', text: '📵 오프라인입니다 — 완료 저장은 신호가 잡힐 때만 할 수 있습니다.\n검수 완료 표시는 이미 서버에 있으니 잃는 것은 없습니다. 신호 잡히는 곳에서 다시 눌러 주세요.' });
+      setConfirmKey(null);
+      return;
+    }
     setBusyKey(row.key);
     try {
-      const ok = await fbArchiveVoyageBeforeDelete(row.imo, row.key, voyages[row.key]);
+      // TallyOne 1.8-11: 시작한 뒤 신호가 끊겨도 **갇히지 않게** 시간 제한을 둔다.
+      //   백업이 끝났는지 모르는 채로 삭제하는 일은 없어야 하므로, 시간이 넘으면 삭제하지 않고
+      //   실패로 처리한다. 큐에 남은 쓰기는 연결이 살아나면 archive 에 들어가지만, **삭제는 안 한다.**
+      const ok = await Promise.race([
+        fbArchiveVoyageBeforeDelete(row.imo, row.key, voyages[row.key]),
+        new Promise((res) => setTimeout(() => res('timeout'), 60000)),
+      ]);
+      if (ok === 'timeout') {
+        setNotice({ kind: 'err', text: `완료 저장이 끝나지 않았습니다(${row.vsl}) — 신호가 끊긴 것으로 보입니다.\n항차는 그대로 두었습니다. 신호 잡히는 곳에서 다시 눌러 주세요.` });
+        setBusyKey(null); setConfirmKey(null);
+        return;
+      }
       if (!ok) {
         // TallyOne 1.0(L5): alert → 인라인 알림
         setNotice({ kind: 'err', text: `완료 저장 실패(${row.vsl}) — 백업이 저장되지 않아 삭제하지 않았습니다. 네트워크 확인 후 다시 시도하세요.` });

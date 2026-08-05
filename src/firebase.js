@@ -919,6 +919,42 @@ export function fbSubscribeConnection(callback) {
   return unsub;
 }
 
+/** TallyOne 1.8-11: 지금 서버에 붙어 있는가 (한 번만 확인).
+ *
+ *  왜 필요한가 (검수사 실측 2026-08-05, STMJ 2643E)
+ *    오프라인에서 「수석 완료 저장」을 누르니 버튼이 **"저장 중…"에 갇혔다.**
+ *    Firebase 는 신호가 없으면 쓰기를 로컬 큐에 담고 Promise 를 **연결이 살아날 때까지
+ *    resolve 하지 않는다.** 그래서 `await set(...)` 에서 멈춘다.
+ *    더 위험한 건, 나중에 연결이 살아나면 사용자가 화면을 떠난 뒤에 archive 쓰기 →
+ *    검증 통과 → **fbDeleteVoyage(항차 삭제)** 까지 진행될 수 있다는 것이다.
+ *    되돌릴 수 없는 작업을 신호 없는 상태에서 시작하게 두면 안 된다.
+ *
+ *  @returns {Promise<boolean>} 3초 안에 연결 확인이 안 되면 false(= 끊긴 것으로 본다)
+ */
+export function fbIsOnline(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    let done = false;
+    // ⚠ `.info/connected` 는 캐시된 값이 있으면 콜백이 **즉시** 돈다. 그때 off 는 아직 할당 전이라
+    //   그 자리에서 off() 를 부르면 구독이 안 끊긴다. 해제를 다음 틱으로 미뤄 순서를 보장한다.
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      setTimeout(() => { try { off(); } catch { /* 무시 */ } }, 0);
+      resolve(v);
+    };
+    const t = setTimeout(() => finish(false), timeoutMs);
+    let off = () => {};
+    try {
+      off = onValue(ref(db, '.info/connected'), (snap) => {
+        clearTimeout(t);
+        finish(!!snap.val());
+      }, () => { clearTimeout(t); finish(false); });
+    } catch {
+      clearTimeout(t); finish(false);
+    }
+  });
+}
+
 // ─── 선박 라이브러리 (수석 검수 통계 자료) ───
 // IMO 번호로 선박 식별 (절대 안 변함, 전 세계 유일)
 // 한 번 분석된 선박 구조는 다음 항차에서 즉시 활용
