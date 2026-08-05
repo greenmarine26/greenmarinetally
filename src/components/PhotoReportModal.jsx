@@ -94,8 +94,23 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           r.onerror = () => rej(new Error('파일 읽기 실패'));
           r.readAsDataURL(blob);
         });
-        const cnB64 = await toBase64(cnPhotoBlob);
-        const detailB64 = await toBase64(detailPhotoBlob);
+        // TallyOne 1.8-13: **저장용은 축소한다.** 카메라 원본(1~2.8MB)을 base64 로 그대로 넣으면
+        //   한 건이 수 MB 가 되고, 나중에 「수석 완료 저장」이 항차를 통째로 보관소에 복사할 때
+        //   10~20MB 짜리 쓰기가 되어 연결이 끊긴다(2026-08-05 STMJ 2643E 실측 — 집 PC 유선인데
+        //   "오프라인" 배너가 뜨고 완료 저장이 멈췄다).
+        //   ⚠ 카톡으로 나가는 사진은 건드리지 않는다 — 위에서 이미 원본으로 공유했다.
+        //     여기서 줄이는 건 **보관용**이고, 컨번호·손상은 1600px 로도 충분히 읽힌다.
+        const shrink = async (blob) => {
+          try {
+            const { compressForReport } = await import('../mixerUpload.js');
+            return await compressForReport(blob, 1600);
+          } catch (e) {
+            console.warn('[PhotoReport] 보관용 축소 실패 — 원본으로 저장합니다:', e);
+            return blob;
+          }
+        };
+        const cnB64 = await toBase64(await shrink(cnPhotoBlob));
+        const detailB64 = await toBase64(await shrink(detailPhotoBlob));
         await fbAddPhotoReport(voyageKey, cnB64, {
           photoKind: 'cn',
           detailPhoto: detailB64,

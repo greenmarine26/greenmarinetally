@@ -303,6 +303,15 @@ async function blobToBase64(blob) {
  * 판독은 초안이다 — 반드시 사람이 보고 확정한다(메모 화면에서 수정 가능).
  * @returns {Promise<{items: Array<{cn, set, act}>, note: string}>}
  */
+/** TallyOne 1.8-13: 보관용 사진 축소. 이미 있던 compressImage 를 밖에서 쓸 수 있게 감싼다.
+ *  카메라 원본을 그대로 base64 로 DB에 넣으면 한 건이 수 MB 가 되고, 완료 저장 때
+ *  항차를 통째로 복사하면서 연결이 끊긴다(2026-08-05 STMJ 실측). 1600px 이면 컨번호·손상이
+ *  충분히 읽히고 크기는 1/10 이하가 된다. 실패하면 호출부가 원본을 쓴다(조용히 죽지 않는다). */
+export async function compressForReport(blob, maxDim = 1600) {
+  const out = await compressImage(blob, maxDim);   // 내부 고정 JPEG 0.9
+  return out || blob;
+}
+
 export async function ocrReeferTemps(file, geminiApiKey) {
   if (!geminiApiKey) throw new Error('Gemini API 키가 없습니다. 헤더 🔑 버튼(설정)에서 AI 키를 등록하세요.');
   let imageBlob;

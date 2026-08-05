@@ -1133,10 +1133,24 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
   //   archive는 어떤 일반 쓰기 경로도 건드리지 않음(읽기/복원 전용 보관소).
   //   반환값: 백업 성공 true / 실패 false → 호출부(HomePage)는 true일 때만 삭제 진행.
   try {
+    // TallyOne 1.8-13: **사진은 통째 페이로드에서 빼고 한 건씩 따로 옮긴다.**
+    //
+    //   사고(검수사 신고 2026-08-05, STMJ 2643E — 집 PC 유선인데도 "오프라인" 배너)
+    //     `{...voyage}` 에는 `photos` 가 들어 있고, 사진 한 건마다 컨번호·상세 **원본 두 장**이
+    //     base64 로 담긴다(원본 1~2.8MB → base64 는 그 1.4배). 5건이면 10~20MB.
+    //     그걸 set() 한 번에 밀어 넣으니 Firebase 가 못 받고 연결이 끊긴다. 재연결하면 큐에
+    //     남은 같은 쓰기를 또 시도하다 또 끊긴다 — **앱이 스스로 연결을 무너뜨리는 고리**다.
+    //     그래서 완료 저장이 "저장 중…"에서 멈추고 오프라인 배너까지 떴다.
+    //   대조 실측: 성공한 TNJP_26355E 보관본에는 photos 가 없다(discharge·loading·info 뿐).
+    //             실패한 STMJ_2643E 에는 photos 5건이 있었다.
+    //
+    //   ⚠ 사진을 버리지 않는다. 본문 백업이 끝난 뒤 **한 건씩** 옮긴다. 한 건이 실패해도
+    //     나머지와 본문은 남는다(조용히 삼키지 않고 로그를 남긴다).
+    const { photos: _photos, ...voyageNoPhotos } = voyage || {};
     const archivePayload = {
-      ...voyage,                       // 항차 데이터 전체(discharge/loading/info/records 등)
+      ...voyageNoPhotos,               // 항차 데이터(discharge/loading/info/records 등) — 사진 제외
       _archivedAt: Date.now(),
-      _archiveVersion: 1,
+      _archiveVersion: 2,              // 2 = 사진을 따로 옮기는 구조
       _discharge_ptk: discharge,
       _loading_ptk: loading,
       _shipId: shipId || '',
@@ -1147,6 +1161,23 @@ export async function fbArchiveVoyageBeforeDelete(imo, voyageKey, voyage) {
     if (!verify.exists()) {
       console.error('[archive] 백업 검증 실패 — 삭제 중단:', voyageKey);
       return false;
+    }
+    // 1.8-13: 사진을 **한 건씩** 옮긴다. 큰 건 하나가 실패해도 본문·나머지 사진은 남는다.
+    //   한 건도 수 MB 라 통째로 묶으면 위와 같은 사고가 난다.
+    if (_photos && typeof _photos === 'object') {
+      const keys = Object.keys(_photos);
+      let okN = 0;
+      for (const k of keys) {
+        try {
+          await set(ref(db, `archive/${voyageKey}/photos/${k}`), _photos[k]);
+          okN += 1;
+        } catch (pe) {
+          console.error(`[archive] 사진 이동 실패 (${voyageKey}/${k}) — 본문은 저장됨:`, pe);
+        }
+      }
+      if (okN < keys.length) {
+        console.warn(`[archive] 사진 ${keys.length}건 중 ${okN}건만 옮겨짐 — ${voyageKey}`);
+      }
     }
     // TallyOne 1.6-01: 마감 텔리 대기 색인 — 「수석 완료 저장」이 마감의 방아쇠다.
     //   대시보드가 보관소 160건을 훑지 않고 이 작은 노드 하나만 읽게 하려는 것.
