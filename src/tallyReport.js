@@ -4,6 +4,8 @@
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
 import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached } from './utils.js';
 import { getTallyFormat, orderIndex } from './data/tallyFormats.js';
+import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
+import { getBayPairs } from './twin.js';
 
 export const SIZE_COLS = ['20', '40', 'HC', '45'];
 
@@ -311,10 +313,30 @@ export function buildShifting(voyage) {
 }
 
 /** Time Sheet — 작업 보고 이력에서 시각록 구성 */
-export function buildTimeSheet(reports) {
+/**
+ * TallyOne 1.8-16: **닫았는데 보고가 없는 커버를 추론해 넣는다.**
+ *
+ *  검수사 확정 2026-08-05
+ *    "기본 선적은 홀드 다 채우고 데크를 채웁니다. 6번 해치를 닫고 14번도 닫았으면
+ *     10번은 닫았다는 보고가 없습니다. 그런데 앱상에서 10번 데크 컨테이너가 실렸습니다.
+ *     이럴땐 아 10번이 닫혔구나. 그런데 앱은 시간을 모릅니다. 단 6번과 14번 사이라는 것은
+ *     예상할 수 있습니다. 그럼 보고서엔 **시간만 빼고 기록**합니다. 수기로 나중에 시간 기록을
+ *     할 수 있게" · "그건 찾을 필요가 없습니다. **완료처리 했다는게 중요** 합니다."
+ *
+ *  즉 데크 적재를 일일이 뒤질 필요가 없다. **그 모드가 완료 처리됐다는 것 자체가 근거다** —
+ *  커버를 안 닫으면 데크에 못 싣고, 못 실으면 완료가 안 된다.
+ *
+ *  ⚠ 시각은 **지어내지 않는다.** 앞뒤 클로즈 사이에 놓아 순서만 맞추고 시각 칸은 비운다.
+ *    수석이 나중에 수기로 채운다. `inferred:true` 로 표시해 호출부가 구분할 수 있게 한다.
+ *  실증(STMJ 2643E): 오픈된 슬롯 2·6·10·14·18·26 중 클로즈 보고가 없는 것은 10(09&11) 하나.
+ *    검수사 확인 — "최검수사의 실수로 서류 정리 때도 보고 누락 이야기가 나왔다".
+ */
+export function buildTimeSheet(reports, opts = {}) {
   const rows = [];
   const list = vals(reports || {}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
   const t = (ms) => new Date(ms).toTimeString().slice(0, 5);
+  const groupOf = typeof opts.groupOf === 'function' ? opts.groupOf : null;
+  const doneModes = new Set(opts.doneModes || []);   // 'discharge' | 'loading'
   for (const r of list) {
     if (!r || !r.ts) continue;
     if (r.type === 'work_status') {
@@ -335,9 +357,36 @@ export function buildTimeSheet(reports) {
       else if (/_resume$|^resume$/.test(act)) put('RESUMED');
       else if (/_done$|^complete$/.test(act)) put('COMPLETED');
     } else if (r.type === 'hatch') {
-      rows.push({ time: `${t(r.ts)}    HRS`, remark: `HATCH COVER ${String(r.action || '').toUpperCase()}${r.bays ? ` (BAY ${r.bays})` : ''}` });
+      rows.push({ ts: r.ts, time: `${t(r.ts)}    HRS`, remark: `HATCH COVER ${String(r.action || '').toUpperCase()}${r.bays ? ` (BAY ${r.bays})` : ''}` });
     }
   }
+
+  // ── 닫았는데 보고가 없는 커버 (완료 처리된 모드만)
+  if (groupOf && doneModes.size) {
+    const opened = new Map();     // group → {ts, bays}
+    const closed = new Set();
+    const closeTs = [];
+    for (const r of list) {
+      if (!r || r.type !== 'hatch') continue;
+      const md = r.mode || '';
+      if (md && !doneModes.has(md)) continue;      // 아직 안 끝난 모드는 건드리지 않는다
+      const gs = (r.bays || []).map(groupOf).filter((g) => g != null);
+      if (r.action === 'close') { for (const g of gs) closed.add(g); if (gs.length) closeTs.push(r.ts); }
+      else if (r.action === 'open') { for (const g of gs) if (!opened.has(g)) opened.set(g, { ts: r.ts, bays: r.bays || [] }); }
+    }
+    for (const [g, o] of opened) {
+      if (closed.has(g)) continue;
+      // 순서만 맞춘다 — 마지막 클로즈 근처에 놓고 **시각은 비운다**.
+      const near = closeTs.length ? closeTs[closeTs.length - 1] : o.ts;
+      rows.push({
+        ts: near + 1, inferred: true,
+        time: '        HRS',
+        remark: `HATCH COVER CLOSE (BAY ${o.bays.join(',')})   ※ 시각 미기록`,
+      });
+    }
+  }
+
+  rows.sort((a, b) => (a.ts || 0) - (b.ts || 0));
   return rows;
 }
 
@@ -379,6 +428,14 @@ export function computeTallyData(voyage) {
     rfIn: buildRF(disCs), rfOut: buildRF(loadCs),
     perf: buildPerformance(disCs, loadCs, fmt),
     shifting: shiftRows,
-    timeSheet: buildTimeSheet(voyage?.reports),
+    // 1.8-16: 완료 처리된 모드에서 **닫았는데 보고가 없는 커버**를 시각 없이 채운다.
+    //   베이 짝 사전은 양하·선적 컨을 다 넣어야 온전하다(한쪽만 보면 홀수 짝을 못 찾는다).
+    timeSheet: buildTimeSheet(voyage?.reports, {
+      groupOf: (b) => bayGroupCenter(b, getBayPairs([...disCs, ...loadCs], info.imo || '', info.vsl || '')),
+      doneModes: [
+        ...(info.dischargeDone || info.inspectorDone ? ['discharge'] : []),
+        ...(info.loadingDone || info.inspectorDone ? ['loading'] : []),
+      ],
+    }),
   };
 }
