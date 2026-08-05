@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.9';   // 텔리 템플릿 남의 항차 잔재 제거 + 실번호 A:B 병합 + 머리글/행높이 정리
+export const APP_VERSION = 'TallyOne 1.10';   // 손상 기록(photos) → CARGO DAMAGE REPORT·개별 손상보고서 연결 + 촬영 화면 POINT·치수 입력
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

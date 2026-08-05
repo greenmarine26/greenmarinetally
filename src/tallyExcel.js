@@ -624,6 +624,120 @@ async function fillTemplate(D, ExcelJS) {
       r.getCell(4).style = st4;
     }
   }
+  // ── CARGO DAMAGE REPORT (DM-IN / DM-OUT) + 개별 손상보고서 ──────────────
+  //   TallyOne 1.10: 템플릿맵에 DM·DAMAGE 키가 없어 **본문을 아무도 안 쓰고 있었다**.
+  //     머리글만 V9.19-06 라벨 스캔이 갱신해서, 이전 항차 손상이 이번 항차 서류로 둔갑했다.
+  //     좌표는 선박별로 넣지 않는다 — 19개 템플릿 DM 시트가 전부 같은 구조(머리글 10행,
+  //     A PORT · B B/L NO. · C:E MARKS · F:I CONTENTS · J NO.OF PKGS · K TYPE · L EXCEPTION)임을
+  //     전수 확인했다. 머리글을 찾아 쓰므로 양식이 바뀌어도 좌표를 고칠 일이 없다.
+  {
+    const D2 = D.damage || { dmIn: [], dmOut: [] };
+    const norm = (x) => String(x || '').trim().toUpperCase();
+    const findWs = (want) => wb.worksheets.find((w) => norm(w.name) === want);
+    const txt = (v) => (typeof v === 'string') ? v
+      : (v && typeof v === 'object' && v.richText) ? v.richText.map((t) => t.text).join('')
+      : (v == null ? '' : String(v));
+
+    for (const [name, rows] of [['DM-IN', D2.dmIn], ['DM-OUT', D2.dmOut]]) {
+      const ws = findWs(name);
+      if (!ws) continue;
+      // 머리글 행 찾기 — PORT + MARKS 가 같은 행에 있는 곳
+      let hr = 0;
+      for (let r = 6; r <= 16 && !hr; r++) {
+        let hasPort = false, hasMarks = false;
+        for (let c = 1; c <= 20; c++) {
+          const t = norm(txt(ws.getRow(r).getCell(c).value));
+          if (t === 'PORT') hasPort = true;
+          if (t.includes('MARKS')) hasMarks = true;
+        }
+        if (hasPort && hasMarks) hr = r;
+      }
+      if (!hr) continue;
+      // 표 마지막 행 = 머리글 아래로 테두리가 이어지는 마지막 행
+      let last = hr + 1;
+      for (let r = hr + 2; r <= hr + 40; r++) {
+        const b = ws.getRow(r).getCell(1).border || {};
+        if (b.left || b.right || b.top || b.bottom) last = r; else break;
+      }
+      const start = hr + 2;                      // 머리글이 2행 병합(10:11)이라 +2
+      for (let i = 0; start + i <= last; i++) {
+        const r = ws.getRow(start + i), o = rows[i];
+        r.getCell(1).value = o ? o.port : null;
+        r.getCell(2).value = o ? o.op : null;
+        r.getCell(3).value = o ? o.cn : null;
+        r.getCell(6).value = o ? o.contents : null;
+        r.getCell(10).value = o ? o.pkgs : null;
+        r.getCell(11).value = o ? o.kind : null;
+        r.getCell(12).value = o ? o.exception : null;
+      }
+      if (rows.length > last - start + 1) D._overflow = (D._overflow || 0) + (rows.length - (last - start + 1));
+    }
+
+    // 개별 손상보고서 — 'CONTAINER NO' 라벨이 있는 행이 블록 시작. 컨 1대 = 블록 1장.
+    //   값 칸은 좌표를 박지 않는다. 8개 템플릿(STMJ·STSE·DJCF·YKTD·DXQD·TMPZ·OBWH·TNJP)의
+    //   실제 배치를 전수 확인한 결과 아래 두 규칙으로 전부 맞는다.
+    //     ① 값 칸 = 라벨 병합이 끝난 다음부터 오른쪽으로 훑어 **첫 병합 마스터**. 없으면 바로 다음 칸.
+    //        (A8:B8 라벨→C8 · A8 라벨+C8:E8 병합→C8 · A8 라벨+병합없음→B8 — 셋 다 실물과 일치)
+    //     ② FULL/EMPTY 칸 = 'SEAL NO' 라벨 병합이 끝난 바로 다음 칸.
+    //   ⚠ 씰번호는 **쓰지 않는다.** 실물(2639E)에서 SEAL NO. 뒤는 곧바로 FULL/EMPTY 칸이고
+    //     씰 값 칸 자체가 없다. 여기 쓰면 FULL/EMPTY 를 덮는다.
+    const dmgWs = wb.worksheets.find((w) => norm(w.name).includes('DAMAGE-EACH') || norm(w.name).includes('DAMAGE REPORT'));
+    if (dmgWs) {
+      const all = [...D2.dmIn, ...D2.dmOut];
+      const isMaster = (cell) => cell.isMerged && cell.master && cell.master.address === cell.address;
+      const mergedEnd = (r, c) => {
+        const base = dmgWs.getRow(r).getCell(c);
+        let e = c;
+        while (e < 30) {
+          const nx = dmgWs.getRow(r).getCell(e + 1);
+          if (nx.isMerged && nx.master && base.master && nx.master.address === base.master.address) e++; else break;
+        }
+        return e;
+      };
+      const valueCol = (r, labelCol) => {
+        const st = mergedEnd(r, labelCol) + 1;
+        for (let c = st; c <= st + 6; c++) {
+          const cell = dmgWs.getRow(r).getCell(c);
+          if (txt(cell.value).includes(':')) break;        // 다음 라벨에 닿음
+          if (isMaster(cell)) return c;
+        }
+        return st;
+      };
+      const labelCol = (r, want) => {
+        for (let c = 1; c <= 12; c++) {
+          if (norm(txt(dmgWs.getRow(r).getCell(c).value)).replace(/\s/g, '').startsWith(want)) return c;
+        }
+        return 0;
+      };
+      const heads = [];
+      for (let r = 1; r <= dmgWs.rowCount; r++) {
+        if (labelCol(r, 'CONTAINERNO')) heads.push(r);
+      }
+      heads.forEach((h, i) => {
+        const o = all[i];
+        const lc = labelCol(h, 'CONTAINERNO');
+        dmgWs.getRow(h).getCell(valueCol(h, lc)).value = o ? o.cn : null;
+        // FULL / EMPTY
+        const sc = labelCol(h, 'SEALNO');
+        if (sc) dmgWs.getRow(h).getCell(mergedEnd(h, sc) + 1).value = o ? o.fe : null;
+        // OPERATOR (바로 아랫줄에 있는 템플릿이 대부분)
+        for (let r2 = h + 1; r2 <= h + 2; r2++) {
+          const oc = labelCol(r2, 'OPERATOR');
+          if (oc) { dmgWs.getRow(r2).getCell(valueCol(r2, oc)).value = o ? (o.op || null) : null; break; }
+        }
+        // Description of Damage — 라벨 다음 줄은 '( Found In Stow )' 안내라 +2
+        for (let r2 = h; r2 < h + 55; r2++) {
+          let hit = 0;
+          for (let c = 1; c <= 3; c++) {
+            if (norm(txt(dmgWs.getRow(r2).getCell(c).value)).startsWith('DESCRIPTION OF DAMAGE')) { hit = 1; break; }
+          }
+          if (hit) { dmgWs.getRow(r2 + 2).getCell(2).value = o ? o.exception : null; break; }
+        }
+      });
+      if (all.length > heads.length) D._overflow = (D._overflow || 0) + (all.length - heads.length);
+    }
+  }
+
   // ── Performance (표준 열: op=D(4), FULL 20/40/HC/45 = H/J/L/N(8,10,12,14), EMPTY = P/R/T/V(16,18,20,22)) ──
   if (M.sheets.perf) {
     const cfg = M.sheets.perf;

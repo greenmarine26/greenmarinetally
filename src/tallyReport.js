@@ -456,6 +456,68 @@ export function buildTimeSheet(reports, opts = {}) {
   return rows;
 }
 
+/** 부위 표기 — 실물 서류 관례. 오라클은 2639E 실물 문구
+ *  (`R/SIDE TOP RAIL 1 POINT PUSHED IN ( 60 x 30 x 10 )` · `L/SIDE PANEL 1 POINT DENTED ( 80 x 120 x 20 )`).
+ *  앱 코드값(DAMAGE_PARTS)은 화면용이라 서류 표기와 다르다 — 여기서만 바꾼다. */
+const DMG_PART_LABEL = {
+  'ROOF': 'TOP PANEL', 'FLOOR': 'FLOOR',
+  'LEFT SIDE': 'L/SIDE PANEL', 'RIGHT SIDE': 'R/SIDE PANEL',
+  'FRONT END': 'FRONT PANEL', 'BACK END/DOOR': 'REAR DOOR',
+  'DOOR HANDLE': 'DOOR HANDLE', 'DOOR LATCH': 'DOOR LATCH', 'DOOR HINGE': 'DOOR HINGE',
+  'DOOR GASKET': 'DOOR GASKET', 'CORNER POST': 'CORNER POST', 'LOCK ROD': 'LOCK ROD', 'SEAL': 'SEAL',
+};
+
+/** CARGO DAMAGE REPORT (DM-IN·DM-OUT) + 개별 손상보고서(DAMAGE-EACH·DAMAGE REPORT).
+ *  TallyOne 1.10: 손상은 예전부터 `voyages/{key}/photos` 에 정상 기록되고 있었는데
+ *    텔리가 그 노드를 한 번도 읽지 않아 서류가 늘 비어 있었다(검수사 신고 2026-08-05, STMJ 2643E).
+ *    `reports` 는 타임시트용이고 손상은 `photos` 에 있다 — 소스가 다르다.
+ *  같은 컨의 같은 자리·같은 종류는 **사진만 여러 장**이므로 한 건으로 묶는다
+ *    (실측: SKHU6312247 이 07:21·07:22·07:29 세 장, 전부 LEFT SIDE DENTED).
+ */
+export function buildDamage(voyage, disCs, loadCs) {
+  const norm = (x) => String(x || '').toUpperCase().replace(/\s/g, '');
+  const byCn = new Map();
+  for (const c of [...disCs, ...loadCs]) if (c?.cn) byCn.set(norm(c.cn), c);
+  const disSet = new Set(disCs.map((c) => norm(c.cn)));
+  const loadSet = new Set(loadCs.map((c) => norm(c.cn)));
+  const seen = new Set();
+  const out = { dmIn: [], dmOut: [] };
+  const list = vals(voyage?.photos || {})
+    .filter((p) => p && p.type === 'damage' && p.cn)
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  for (const p of list) {
+    const cn = norm(p.cn);
+    const types = (Array.isArray(p.damageTypes) ? p.damageTypes : []).filter(Boolean);
+    const parts = (Array.isArray(p.damageParts) ? p.damageParts : []).filter(Boolean);
+    const key = `${cn}|${parts.join(',')}|${types.join(',')}`;
+    if (seen.has(key)) continue;                 // 같은 자리·같은 종류 = 사진만 여러 장
+    seen.add(key);
+    // 방향: 컨이 어느 쪽에 있는지가 먼저. photos.mode 는 'unknown' 으로 오는 경우가 많다(실측).
+    const isLoad = loadSet.has(cn) ? true : disSet.has(cn) ? false : (p.mode === 'loading');
+    const c = byCn.get(cn) || {};
+    const sz = tallySizeCol(c);
+    const szLbl = sz === '20' ? "20'" : sz === '45' ? "45'" : sz === '40' ? "40'" : "40'";
+    const fe = c.fe === 'E' ? 'EMPTY' : 'FULL';
+    const partTxt = parts.map((x) => DMG_PART_LABEL[x] || x).join(' & ');
+    const ptTxt = p.points ? `${p.points} POINT` : '';
+    const dimTxt = String(p.dims || '').trim() ? `( ${String(p.dims).trim()} )` : '';
+    const exception = [partTxt, ptTxt, types.join(' & '), dimTxt, String(p.note || '').trim()]
+      .filter(Boolean).join(' ');
+    const row = {
+      cn: c.cn || p.cn,
+      port: port3(isLoad ? c.pod : c.pol) || '???',
+      op: String(c.op || '').toUpperCase(),
+      contents: `${szLbl} ${fe} CONT'R`,
+      pkgs: 1, kind: 'VAN',
+      exception,
+      seal: String(c.sl || c.sl_orig || '').trim(),
+      fe, size: szLbl, ts: p.ts || 0,
+    };
+    (isLoad ? out.dmOut : out.dmIn).push(row);
+  }
+  return out;
+}
+
 /** 전체 집계 — voyage 하나로 모든 시트 데이터 생성 */
 export function computeTallyData(voyage) {
   const info = voyage?.info || {};
@@ -492,6 +554,7 @@ export function computeTallyData(voyage) {
     sealIn: buildSealList(voyage, 'discharge'),
     sealOut: buildSealList(voyage, 'loading'),
     rfIn: buildRF(disCs), rfOut: buildRF(loadCs),
+    damage: buildDamage(voyage, disCs, loadCs),   // TallyOne 1.10: photos → DM-IN/DM-OUT·DAMAGE 시트
     perf: buildPerformance(disCs, loadCs, fmt),
     shifting: shiftRows,
     // 1.8-16: 완료 처리된 모드에서 **닫았는데 보고가 없는 커버**를 시각 없이 채운다.

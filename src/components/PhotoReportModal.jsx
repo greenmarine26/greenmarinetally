@@ -10,6 +10,14 @@ import {
 } from '../kakaoShare.js';
 import { fbAddWorkReport, fbAddPhotoReport } from '../firebase.js';
 
+// 서류 표기 — tallyReport.js 의 DMG_PART_LABEL 과 같은 값(미리보기용 사본)
+const PART_DOC = {
+  'ROOF': 'TOP PANEL', 'FLOOR': 'FLOOR', 'LEFT SIDE': 'L/SIDE PANEL', 'RIGHT SIDE': 'R/SIDE PANEL',
+  'FRONT END': 'FRONT PANEL', 'BACK END/DOOR': 'REAR DOOR', 'DOOR HANDLE': 'DOOR HANDLE',
+  'DOOR LATCH': 'DOOR LATCH', 'DOOR HINGE': 'DOOR HINGE', 'DOOR GASKET': 'DOOR GASKET',
+  'CORNER POST': 'CORNER POST', 'LOCK ROD': 'LOCK ROD', 'SEAL': 'SEAL',
+};
+
 export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equipNo, onClose }) {
   // type: 'seal_error' | 'damage'
   // M5.77: 사진 2장 (컨번호 사진 + 상세 사진 — 데미지부분 or 액츄얼실)
@@ -20,6 +28,10 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
   const [damageTypes, setDamageTypes] = useState([]);
   const [damageParts, setDamageParts] = useState([]);
   const [note, setNote] = useState('');
+  // TallyOne 1.10: 서류(CARGO DAMAGE REPORT)는 `L/SIDE PANEL 1 POINT DENTED ( 80 x 120 x 20 )` 형식이라
+  //   POINT 수와 치수가 필요한데 앱이 안 받고 있었다. 둘 다 선택 입력 — 비우면 그 부분만 빠진다.
+  const [points, setPoints] = useState('1');
+  const [dimW, setDimW] = useState(''); const [dimH, setDimH] = useState(''); const [dimD, setDimD] = useState('');
   const [sealOrig, setSealOrig] = useState(c?.sl_orig || c?.sl || '');
   const [sealNew, setSealNew] = useState('');
   const [sending, setSending] = useState(false);
@@ -28,6 +40,7 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
   if (!open) return null;
 
   const vsl = voyage?.info?.vsl || '';
+  const dims = [dimW, dimH, dimD].map(x => String(x).trim()).filter(Boolean).join(' x ');
   const voy = voyage?.info?.voy_l || voyage?.info?.voy || '';
   const cn = c?.cn || '';
 
@@ -118,6 +131,8 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           equip: equipNo,
           damageTypes: type === 'damage' ? damageTypes : null,
           damageParts: type === 'damage' ? damageParts : null,
+          points: type === 'damage' ? (String(points).trim() || null) : null,
+          dims: type === 'damage' ? (dims || null) : null,
           sealOrig: type === 'seal_error' ? sealOrig : null,
           sealNew: type === 'seal_error' ? sealNew : null,
           note, message,
@@ -273,6 +288,37 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
                     </label>
                   ))}
                 </div>
+              </div>
+
+              {/* TallyOne 1.10: 서류용 POINT·치수 — 비워도 된다(그 부분만 문구에서 빠진다) */}
+              <div>
+                <div className="text-xs font-bold text-amber-300 mb-2">
+                  손상 개소 · 크기 <span className="font-normal text-slate-400">(선택 — 적으면 서류에 그대로 들어갑니다)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input type="number" min="1" inputMode="numeric" value={points} onChange={e => setPoints(e.target.value)}
+                    className="w-14 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
+                  <span className="text-[11px] text-slate-400 font-bold">POINT</span>
+                  <span className="text-slate-600 mx-1">·</span>
+                  <input type="number" inputMode="numeric" placeholder="가로" value={dimW} onChange={e => setDimW(e.target.value)}
+                    className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
+                  <span className="text-slate-500">x</span>
+                  <input type="number" inputMode="numeric" placeholder="세로" value={dimH} onChange={e => setDimH(e.target.value)}
+                    className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
+                  <span className="text-slate-500">x</span>
+                  <input type="number" inputMode="numeric" placeholder="깊이" value={dimD} onChange={e => setDimD(e.target.value)}
+                    className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
+                </div>
+                {(damageParts.length > 0 || damageTypes.length > 0) && (
+                  <div className="mt-2 text-[11px] text-slate-300 bg-slate-800/70 border border-slate-700 rounded px-2 py-1.5">
+                    서류 문구 <span className="text-amber-200 font-bold">
+                      {[damageParts.map(x => PART_DOC[x] || x).join(' & '),
+                        String(points).trim() ? `${String(points).trim()} POINT` : '',
+                        damageTypes.join(' & '),
+                        dims ? `( ${dims} )` : ''].filter(Boolean).join(' ')}
+                    </span>
+                  </div>
+                )}
               </div>
             </>
           )}
