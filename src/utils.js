@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.10';   // 손상 기록(photos) → CARGO DAMAGE REPORT·개별 손상보고서 연결 + 촬영 화면 POINT·치수 입력
+export const APP_VERSION = 'TallyOne 1.10-01';   // 인쇄 허브(카고플랜·검수 리스트) ▲긴급·🧳수화물 마커 유실 수리 — tagForecastMarks 공용 승격
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3325,4 +3325,25 @@ export function podZoneMismatch(c, bay, tier, others) {
   if (!zone || total < 3) return null;   // 구역 판단 근거 부족하면 침묵
   if (zone === pod) return null;
   return { zone, pod, count: max };
+}
+
+// TallyOne 1.10-01: VoyagePage에서 승격 — PrintHubModal과 공용 (인쇄 허브 마커 유실 수리)
+// V9.03: 긴급/수화물 마커 주입 — 예보(카톡·연태훼리 CLL 메일)에 담긴 컨번호를 렌더 시점에
+//   c.urgent/c.lugg 플래그로 붙인다. 데이터(ediContainers)에 쓰지 않으므로 EDI가 예보보다
+//   늦게 오거나(일반 흐름) 갱신·재등록돼도 마커가 유지된다.
+export function tagForecastMarks(list, urgentSet, luggSet, luggSeals) {
+  if ((!urgentSet || !urgentSet.size) && (!luggSet || !luggSet.size)) return list;
+  return list.map(c => {
+    if (!c || !c.cn) return c;
+    const u = urgentSet.has(c.cn);
+    const l = luggSet.has(c.cn);
+    if (!u && !l) return c;
+    const t = { ...c };
+    if (u) t.urgent = true;
+    if (l) {
+      t.lugg = true;
+      if (luggSeals && luggSeals[c.cn]) t.luggSeal = luggSeals[c.cn];
+    }
+    return t;
+  });
 }

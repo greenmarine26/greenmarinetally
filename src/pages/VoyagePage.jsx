@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -58,26 +58,6 @@ import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1.8: 리퍼 온도 확인
-
-// V9.03: 긴급/수화물 마커 주입 — 예보(카톡·연태훼리 CLL 메일)에 담긴 컨번호를 렌더 시점에
-//   c.urgent/c.lugg 플래그로 붙인다. 데이터(ediContainers)에 쓰지 않으므로 EDI가 예보보다
-//   늦게 오거나(일반 흐름) 갱신·재등록돼도 마커가 유지된다.
-function tagForecastMarks(list, urgentSet, luggSet, luggSeals) {
-  if ((!urgentSet || !urgentSet.size) && (!luggSet || !luggSet.size)) return list;
-  return list.map(c => {
-    if (!c || !c.cn) return c;
-    const u = urgentSet.has(c.cn);
-    const l = luggSet.has(c.cn);
-    if (!u && !l) return c;
-    const t = { ...c };
-    if (u) t.urgent = true;
-    if (l) {
-      t.lugg = true;
-      if (luggSeals && luggSeals[c.cn]) t.luggSeal = luggSeals[c.cn];
-    }
-    return t;
-  });
-}
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, onGoHome, onModeChange, initModeOverride = null }) {
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동

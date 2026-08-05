@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -66,7 +66,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     'iso', 'fe', 'rf', 'fr', 'ot', 'tk', 'dg', 'oog', 'voy', 'vsl',
   ]);
   const allCnSet = new Set([...Object.keys(fullEdiMap), ...Object.keys(recMap)]);
-  const allContainers = [...allCnSet].map(cn => {
+  const allContainersBase = [...allCnSet].map(cn => {
     const e = fullEdiMap[cn] || {};
     const r = recMap[cn] || {};
     const hasEdi = !!fullEdiMap[cn];
@@ -88,6 +88,15 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     if (xrayMap[cn]) merged._xray = true;
     return merged;
   });
+
+  // TallyOne 1.10-01: 긴급/수화물 예보 마커 주입 — VoyagePage와 같은 게이트 규칙.
+  //   forecast.mode가 현재 모드와 일치할 때만 적용(선적 예보 마커가 양하 인쇄물에 새지 않게).
+  const _fc = voyage?.info?.forecast;
+  const _fcApply = _fc && (_fc.mode || 'loading') === mode;
+  const urgentSet = new Set((_fcApply && Array.isArray(_fc.urgentCns)) ? _fc.urgentCns : []);
+  const luggSet = new Set((_fcApply && Array.isArray(_fc.luggageCns)) ? _fc.luggageCns : []);
+  const allContainers = tagForecastMarks(
+    allContainersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null);
 
   // M5.30-fix: 베이 단위 필터
   //   평택 화물이 1개라도 있는 베이의 전체 슬롯 표시 (그 베이의 통과 화물 + 빈 슬롯 포함)
