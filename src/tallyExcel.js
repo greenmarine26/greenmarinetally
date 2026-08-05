@@ -565,7 +565,13 @@ async function fillTemplate(D, ExcelJS) {
   if (M.sheets.rf) {
     const cfg = M.sheets.rf;
     const ws = get('rf');
-    const all = [...D.rfIn, ...D.rfOut];
+    // TallyOne 1.8-14: 리퍼 시트가 어수선하던 이유 셋 (검수사 지적 2026-08-05, STMJ 2643E)
+    //   ① **양하·선적 리퍼를 구분 없이 한 표에 섞었다** — 실물 관례는 양하 F 리퍼 기재다
+    //      (페리 경로 rfFerry 는 이미 `fe !== 'E'` 로 거르는데 여기만 안 걸렀다).
+    //   ② **공 리퍼가 섞였다** — 전원을 안 꽂아 온도가 없으니 빈 줄만 늘어난다.
+    //   ③ **Actual(7열)이 비어 있고, 9열에 선사코드(op)를 넣고 있었다** — 그 자리는 REMARKS 다.
+    //   양하 F 리퍼만, 확인한 실제온도까지 채운다. 선적 리퍼는 실물에 안 싣는다.
+    const all = D.rfIn.filter((x) => x.fe !== 'E');
     const cap = cfg.dataEnd - cfg.dataStart + 1;
     if (all.length > cap) ws.duplicateRow(cfg.dataEnd, all.length - cap, true);
     for (let i = 0; i < Math.max(all.length, cap); i++) {
@@ -576,8 +582,10 @@ async function fillTemplate(D, ExcelJS) {
       r.getCell(2).value = o ? (o.seal || null) : null;
       r.getCell(3).value = o ? o.size : null;
       r.getCell(4).value = o ? (o.loc || null) : null;
+      // 실물 열 구성(TNJP 템플릿 실측과 동일): D:E LOCATION · F Setting · G Actual · H TIME · I REMARKS
       r.getCell(6).value = o ? (o.setting || null) : null;
-      r.getCell(9).value = o ? o.op : null;
+      r.getCell(7).value = o ? (o.actual || null) : null;   // 1.8-14: 실제온도 — 확인한 것만
+      r.getCell(9).value = o && o.dg ? 'DG' : null;         // 1.8-14: REMARKS 자리에 선사코드를 넣던 것 교정
       // V9.19-08: LOCATION(D:E)은 병합 — 사용자 확정(실물 2·3페이지와 동일). 스타일 보존 병합.
       const saved = [JSON.parse(JSON.stringify(r.getCell(4).style || {})), JSON.parse(JSON.stringify(r.getCell(5).style || {}))];
       try { ws.mergeCells(rn, 4, rn, 5); } catch { /* 이미 병합 */ }

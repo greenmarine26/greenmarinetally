@@ -318,11 +318,22 @@ export function buildTimeSheet(reports) {
   for (const r of list) {
     if (!r || !r.ts) continue;
     if (r.type === 'work_status') {
-      const modeLbl = r.mode === 'discharge' ? "DISCH'G" : 'LOADING';
-      if (r.action === 'start') rows.push({ time: `${t(r.ts)}    HRS`, remark: `COMMENCED ${modeLbl}` });
-      else if (r.action === 'stop') rows.push({ time: `${t(r.ts)}    HRS`, remark: `SUSPENDED ${modeLbl}${r.reason ? ` (${r.reason})` : ''}` });
-      else if (r.action === 'resume') rows.push({ time: `${t(r.ts)}    HRS`, remark: `RESUMED ${modeLbl}` });
-      else if (r.action === 'complete') rows.push({ time: `${t(r.ts)}    HRS`, remark: `COMPLETED ${modeLbl}` });
+      // TallyOne 1.8-14: **저장되는 action 이름과 맞춘다.**
+      //   종전엔 'start'·'stop'·'resume'·'complete' 를 찾았는데, 실제로 저장되는 값은
+      //   `discharge_start`·`discharge_pause`·`discharge_done`·`loading_*` 여섯 가지다
+      //   (kakaoShare.buildWorkStatusMessage 의 labels 가 단일 소스).
+      //   그래서 **타임시트에 하역 시작·완료가 한 줄도 안 나왔다** — STMJ 2643E 실측:
+      //   해치 10줄만 있고 COMMENCED/COMPLETED 가 통째로 빠졌다.
+      //   ⚠ mode 는 옛 기록에 없을 수 있다. action 접두어에서 뽑는 것을 우선한다.
+      const act = String(r.action || '');
+      const md = act.startsWith('discharge') ? 'discharge'
+        : act.startsWith('loading') ? 'loading' : (r.mode || '');
+      const modeLbl = md === 'discharge' ? "DISCH'G" : 'LOADING';
+      const put = (word, extra = '') => rows.push({ time: `${t(r.ts)}    HRS`, remark: `${word} ${modeLbl}${extra}` });
+      if (/_start$|^start$/.test(act)) put('COMMENCED');
+      else if (/_pause$|^stop$/.test(act)) put('SUSPENDED', r.reason ? ` (${r.reason})` : '');
+      else if (/_resume$|^resume$/.test(act)) put('RESUMED');
+      else if (/_done$|^complete$/.test(act)) put('COMPLETED');
     } else if (r.type === 'hatch') {
       rows.push({ time: `${t(r.ts)}    HRS`, remark: `HATCH COVER ${String(r.action || '').toUpperCase()}${r.bays ? ` (BAY ${r.bays})` : ''}` });
     }
