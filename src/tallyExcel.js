@@ -247,15 +247,34 @@ function sheetRF(wb, D) {
   const hd = ['CONTAINER NO.', 'SEAL NO.', 'SIZE', 'LOCATION (Bay/Row/Tier)', 'Setting', 'Actual', 'TIME (Plug In/Out)', 'REMARKS'];
   hd.forEach((v, i) => { const c = ws.getRow(10).getCell(i + 1); c.value = v; c.font = HEAD_FONT; c.border = BOX; c.alignment = { horizontal: 'center' }; });
   let r = 12;
-  for (const row of [...D.rfIn, ...D.rfOut]) {
-    ws.getCell(`A${r}`).value = row.cn; ws.getCell(`B${r}`).value = row.seal;
-    ws.getCell(`C${r}`).value = row.size; ws.getCell(`D${r}`).value = row.loc;
-    // TallyOne 1.8: F열(Actual)이 헤더에만 있고 값이 안 들어가고 있었다 — 리퍼 메모 확인값을 채운다.
-    ws.getCell(`E${r}`).value = row.setting; ws.getCell(`F${r}`).value = row.actual || '';
-    ws.getCell(`H${r}`).value = row.op;
-    for (let c = 1; c <= 8; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
+  // TallyOne 1.8-17: 종전엔 `[...D.rfIn, ...D.rfOut]` 을 한 덩어리로 쏟아부어
+  //   **양하 공리퍼와 선적 리퍼까지 섞여** 나왔다. 검수사 지적 2026-08-05:
+  //   "양하 리퍼 점검 대상은 24대인데 다른건 어디서 온것인가요?"
+  //   점검 대상은 **양하 풀 리퍼**다(공리퍼는 전원을 안 꽂아 잴 것이 없다).
+  //   선사 양식 경로(`D.rfIn.filter(x => x.fe !== 'E')`)·리퍼 메모 화면·출항 임박 경고와 같은 기준 —
+  //   네 곳을 일치시킨다(지침서 5-5).
+  //   선적 리퍼는 버리지 않고 **구분줄을 넣어 따로** 싣는다(시트 제목이 Discharging / Loading 이다).
+  const block = (rowsIn) => {
+    for (const row of rowsIn) {
+      ws.getCell(`A${r}`).value = row.cn; ws.getCell(`B${r}`).value = row.seal;
+      ws.getCell(`C${r}`).value = row.size; ws.getCell(`D${r}`).value = row.loc;
+      // TallyOne 1.8: F열(Actual)이 헤더에만 있고 값이 안 들어가고 있었다 — 리퍼 메모 확인값을 채운다.
+      ws.getCell(`E${r}`).value = row.setting; ws.getCell(`F${r}`).value = row.actual || '';
+      ws.getCell(`H${r}`).value = row.op;
+      for (let c = 1; c <= 8; c++) { const cell = ws.getRow(r).getCell(c); cell.font = BODY_FONT; cell.border = BOX; cell.alignment = CTR; }
+      r++;
+    }
+  };
+  const label = (txt) => {
+    ws.mergeCells(`A${r}:H${r}`);
+    const c = ws.getCell(`A${r}`); c.value = txt; c.font = HEAD_FONT; c.border = BOX;
+    c.alignment = { horizontal: 'left' };
     r++;
-  }
+  };
+  const dis = D.rfIn.filter((x) => x.fe !== 'E');
+  const load = D.rfOut.filter((x) => x.fe !== 'E');
+  if (dis.length) { label(`DISCHARGING  (${dis.length})`); block(dis); }
+  if (load.length) { if (dis.length) r++; label(`LOADING  (${load.length})`); block(load); }
   if (r === 12) { r += 6; }   // V9.19-03: 빈 틀 유지
   sig(ws, r + 4, 'CHIEF CHECKER', 'CHIEF OFFICER', 'G');
   return ws;

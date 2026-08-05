@@ -333,60 +333,93 @@ export function buildShifting(voyage) {
  */
 export function buildTimeSheet(reports, opts = {}) {
   const rows = [];
-  const list = vals(reports || {}).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const list = vals(reports || {}).filter((r) => r && r.ts).sort((a, b) => a.ts - b.ts);
   const t = (ms) => new Date(ms).toTimeString().slice(0, 5);
   const groupOf = typeof opts.groupOf === 'function' ? opts.groupOf : null;
   const doneModes = new Set(opts.doneModes || []);   // 'discharge' | 'loading'
+
+  // 베이는 두 자리로 맞춘다 — 앱은 `9,11`, 손으로 친 카톡은 `09,10,11` 로 와서
+  // 같은 커버가 서로 다르게 찍혔다(검수사 지적 2026-08-05).
+  const bayStr = (b) => (Array.isArray(b) ? b : [b]).filter(Boolean)
+    .map((x) => String(x).trim().padStart(2, '0')).join(',');
+  const modeOf = (r) => {
+    const act = String(r.action || '');
+    return act.startsWith('discharge') ? 'discharge'
+      : act.startsWith('loading') ? 'loading' : (r.mode || '');
+  };
+  const BLANK = '        HRS';                       // 시각 미상 — 수기로 채운다
+
+  // ── 1) 중복 접기 ───────────────────────────────────────────────
+  // 같은 보고가 앱에서 한 번, 손으로 친 카톡에서 또 한 번 들어온다(검수사 확정: "앱이 보낸것과
+  // 수동으로 보낸것과 섞여 있어 그렇습니다"). **지우는 게 아니라 접는다** — 판단 기준은 상태다.
+  //   해치: 사이에 반대 동작 없이 같은 그룹이 또 열리면(또는 또 닫히면) 같은 사건이다.
+  //   상태: 사이에 다른 상태 없이 COMMENCED 가 또 오면 같은 사건이다. 먼저 온 것을 남긴다.
+  const hatchState = new Map();     // 그룹 → 'open' | 'close'
+  const stLast = new Map();         // 모드 → 마지막 상태 낱말
+  let lastTs = 0;
+  let dupHatch = 0, dupSt = 0;
+
   for (const r of list) {
-    if (!r || !r.ts) continue;
+    lastTs = r.ts;
     if (r.type === 'work_status') {
-      // TallyOne 1.8-14: **저장되는 action 이름과 맞춘다.**
-      //   종전엔 'start'·'stop'·'resume'·'complete' 를 찾았는데, 실제로 저장되는 값은
-      //   `discharge_start`·`discharge_pause`·`discharge_done`·`loading_*` 여섯 가지다
-      //   (kakaoShare.buildWorkStatusMessage 의 labels 가 단일 소스).
-      //   그래서 **타임시트에 하역 시작·완료가 한 줄도 안 나왔다** — STMJ 2643E 실측:
-      //   해치 10줄만 있고 COMMENCED/COMPLETED 가 통째로 빠졌다.
-      //   ⚠ mode 는 옛 기록에 없을 수 있다. action 접두어에서 뽑는 것을 우선한다.
-      const act = String(r.action || '');
-      const md = act.startsWith('discharge') ? 'discharge'
-        : act.startsWith('loading') ? 'loading' : (r.mode || '');
+      const md = modeOf(r);
       const modeLbl = md === 'discharge' ? "DISCH'G" : 'LOADING';
-      const put = (word, extra = '') => rows.push({ time: `${t(r.ts)}    HRS`, remark: `${word} ${modeLbl}${extra}` });
-      if (/_start$|^start$/.test(act)) put('COMMENCED');
-      else if (/_pause$|^stop$/.test(act)) put('SUSPENDED', r.reason ? ` (${r.reason})` : '');
-      else if (/_resume$|^resume$/.test(act)) put('RESUMED');
-      else if (/_done$|^complete$/.test(act)) put('COMPLETED');
+      const act = String(r.action || '');
+      const word = /_start$|^start$/.test(act) ? 'COMMENCED'
+        : /_pause$|^stop$/.test(act) ? 'SUSPENDED'
+        : /_resume$|^resume$/.test(act) ? 'RESUMED'
+        : /_done$|^complete$/.test(act) ? 'COMPLETED' : '';
+      if (!word) continue;
+      if (stLast.get(md) === word) { dupSt += 1; continue; }
+      stLast.set(md, word);
+      const extra = (word === 'SUSPENDED' && r.reason) ? ` (${r.reason})` : '';
+      rows.push({ ts: r.ts, time: `${t(r.ts)}    HRS`, remark: `${word} ${modeLbl}${extra}` });
     } else if (r.type === 'hatch') {
-      rows.push({ ts: r.ts, time: `${t(r.ts)}    HRS`, remark: `HATCH COVER ${String(r.action || '').toUpperCase()}${r.bays ? ` (BAY ${r.bays})` : ''}` });
+      const act = String(r.action || '').toLowerCase();
+      const gs = groupOf ? [...new Set((r.bays || []).map(groupOf).filter((g) => g != null))] : [];
+      if (gs.length && gs.every((g) => hatchState.get(g) === act)) { dupHatch += 1; continue; }
+      for (const g of gs) hatchState.set(g, act);
+      rows.push({ ts: r.ts, time: `${t(r.ts)}    HRS`,
+        remark: `HATCH COVER ${act.toUpperCase()}${r.bays ? ` (BAY ${bayStr(r.bays)})` : ''}` });
     }
   }
 
-  // ── 닫았는데 보고가 없는 커버 (완료 처리된 모드만)
+  // ── 2) 완료 처리 = 커버는 닫혔다 ───────────────────────────────
+  // 검수사 확정 2026-08-05: "완료처리 했다는게 중요 합니다."
+  //   커버를 안 닫으면 데크에 못 싣고, 못 실으면 완료가 안 된다.
+  //   ⚠ **마지막 상태**로 판단한다 — 닫았다가 아침에 다시 연 커버가 있다(STMJ 03:05 BAY 14,
+  //     08:19 BAY 05,06,07, 08:20 BAY 01,03). 종전엔 '한 번이라도 닫혔으면 끝'으로 봐서
+  //     이 셋을 통째로 놓쳤다.
+  //   시각은 지어내지 않는다 — 순서만 맞추고 칸은 비운다.
   if (groupOf && doneModes.size) {
-    const opened = new Map();     // group → {ts, bays}
-    const closed = new Set();
-    const closeTs = [];
+    const openG = new Map();                 // 그룹 → 마지막 오픈 보고
     for (const r of list) {
       if (!r || r.type !== 'hatch') continue;
-      const md = r.mode || '';
-      if (md && !doneModes.has(md)) continue;      // 아직 안 끝난 모드는 건드리지 않는다
-      const gs = (r.bays || []).map(groupOf).filter((g) => g != null);
-      if (r.action === 'close') { for (const g of gs) closed.add(g); if (gs.length) closeTs.push(r.ts); }
-      else if (r.action === 'open') { for (const g of gs) if (!opened.has(g)) opened.set(g, { ts: r.ts, bays: r.bays || [] }); }
+      if (r.mode && !doneModes.has(r.mode)) continue;
+      const act = String(r.action || '').toLowerCase();
+      for (const g of (r.bays || []).map(groupOf).filter((x) => x != null)) {
+        // 닫힌 뒤 **처음** 열린 보고를 잡는다 — 접힌 중복이 아니라 실제로 시트에 찍힌 줄과
+        // 같은 베이 표기를 쓰기 위해서다(BAY 09,11 로 열었는데 닫힘만 09,10,11 로 나오면 안 된다).
+        if (act === 'open') { if (!openG.has(g)) openG.set(g, r); }
+        else if (act === 'close') openG.delete(g);
+      }
     }
-    for (const [g, o] of opened) {
-      if (closed.has(g)) continue;
-      // 순서만 맞춘다 — 마지막 클로즈 근처에 놓고 **시각은 비운다**.
-      const near = closeTs.length ? closeTs[closeTs.length - 1] : o.ts;
-      rows.push({
-        ts: near + 1, inferred: true,
-        time: '        HRS',
-        remark: `HATCH COVER CLOSE (BAY ${o.bays.join(',')})   ※ 시각 미기록`,
-      });
+    let n = 0;
+    for (const r of openG.values()) {
+      rows.push({ ts: lastTs + (++n), inferred: true, time: BLANK,
+        remark: `HATCH COVER CLOSE (BAY ${bayStr(r.bays)})   ※ 시각 미기록` });
+    }
+    // 완료 처리됐는데 COMPLETED 줄이 없는 모드도 같은 이치다 — 시각만 비운다.
+    for (const md of doneModes) {
+      if (stLast.get(md) === 'COMPLETED') continue;
+      if (!stLast.has(md)) continue;         // 아예 시작 기록도 없으면 손대지 않는다
+      rows.push({ ts: lastTs + 100, inferred: true, time: BLANK,
+        remark: `COMPLETED ${md === 'discharge' ? "DISCH'G" : 'LOADING'}   ※ 시각 미기록` });
     }
   }
 
   rows.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  if (dupHatch || dupSt) rows._folded = dupHatch + dupSt;   // 화면에 몇 줄 접었는지 알린다
   return rows;
 }
 
