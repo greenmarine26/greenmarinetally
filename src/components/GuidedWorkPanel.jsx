@@ -448,12 +448,52 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return false;
   }, [voyage, mode]);
 
+  // TallyOne 1.8-19: **데크에 화물이 얹혀 있으면 그 커버는 열리지 않는다.**
+  //
+  // 검수사 2026-08-05: "화물이 있는 상태에서 커버를 연다고 열리면 안되니까요"
+  //   물리 사실이다. 커버 위에 컨테이너가 한 대라도 있으면 크레인이 패널을 못 든다.
+  //
+  // ⚠ 종전엔 `deckRemain` 을 **평택분(_ptk)만** 셌다. 그래서 **통과화물**이 데크에 얹혀 있으면
+  //   실제로는 못 여는데 앱은 "데크 비었다"고 보고 오픈을 권했다. 통과화물은 평택에서 손대지
+  //   않으니 영영 안 빠진다 — 그 커버는 이 항차 내내 못 연다.
+  //   (평택분 필터를 안 걸어 오집계하던 9.2-② 패턴의 **거울상**이다. 카운트엔 평택분만,
+  //    물리 판단엔 배에 실제로 있는 것 전부.)
+  //
+  // 지금 데크에 있는 것 —
+  //   양하: 아직 안 내린 것(평택분 미완료) + 통과화물 전부
+  //   선적: 이미 실은 것(평택분 완료)     + 통과화물 전부
+  const deckBlockers = (center) => {
+    if (center == null) return [];
+    return allContainers.filter((c) => {
+      if (groupCenterOf(c.bay) !== center) return false;
+      if (parseInt(c.tier, 10) < 80) return false;          // 홀드는 커버 아래다
+      if (!c._ptk) return true;                             // 통과화물 — 늘 배 위에 있다
+      if (c._mode !== mode) return false;
+      return mode === 'discharge' ? !c._comp : !!c._comp;
+    });
+  };
+
   const sendHatchReport = async (action) => {
     if (hatchBusy) return;
     setHatchBusy(true);
     try {
       const bays = groupBaysOf(selectedGroup, true);  // V7.99-6: 홀드 평택분 베이만 (메모5)
       if (bays.length === 0) return;  // 열 홀드 없으면 보고 안 함 (finally에서 busy 해제)
+      // 1.8-19: 데크에 화물이 얹혀 있으면 오픈은 물리적으로 불가능하다.
+      //   자료가 틀렸을 수도 있으니 조용히 막지 않고, 무엇이 막고 있는지 보여 주고 묻는다.
+      if (action === 'open') {
+        const blk = deckBlockers(selectedGroup);
+        if (blk.length) {
+          const where = [...new Set(blk.map((c) => `${c.bay}/${c.row}/${c.tier}`))].slice(0, 6).join('  ');
+          const thru = blk.filter((c) => !c._ptk).length;
+          const ok = window.confirm(
+            `이 커버 위 데크에 컨테이너 ${blk.length}대가 있습니다`
+            + (thru ? ` (통과화물 ${thru}대 포함)` : '') + '.\n'
+            + '화물이 얹힌 커버는 열 수 없습니다.\n\n' + where + '\n\n'
+            + '자료가 틀렸다면 그래도 보고할 수 있습니다. 보고할까요?');
+          if (!ok) return;
+        }
+      }
       // 1.8-18: 끝난 모드면 조용히 막지 않고 **사람에게 묻는다** — 진짜 뒤늦은 보고일 수도 있다.
       if (modeFinished) {
         const ok = window.confirm(
@@ -491,6 +531,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
+    if (deckBlockers(selectedGroup).length) return false;   // 1.8-19: 화물이 얹힌 커버는 권하지 않는다
     const holdRemain = groupRemain.filter(c => parseInt(c.tier, 10) < 80).length;
     const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;

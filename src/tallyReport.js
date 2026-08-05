@@ -349,6 +349,37 @@ export function buildTimeSheet(reports, opts = {}) {
   };
   const BLANK = '        HRS';                       // 시각 미상 — 수기로 채운다
 
+  // ── 0) 카톡이 정본 ─────────────────────────────────────────────
+  // 검수사 확정 2026-08-05.
+  //   해치커버는 카톡 작업방에 손으로 보고한 것이 실제다. 앱은 그걸 **모르는 상태**로
+  //   "이 커버를 여세요" 라고 단정했고, 사람은 앱이 시키는 대로 눌렀다. STMJ 2643E 실측 —
+  //   자동 모드가 낸 해치 보고 네 건이 전부 오보다.
+  //     00:51 `13,14,15` · 00:52 `09,10,11`  이미 22:47·23:15 에 카톡으로 열린 커버
+  //     03:05 `14`                            03:01 에 카톡으로 닫은 커버
+  //     08:19 `05,06,07` · 08:20 `01,03`      03:17·02:28 에 카톡으로 닫은 커버
+  //   검수사: "실제 연시간은 22:47 입니다. 00:51 은 텔리 테스트 하기위해 제가 앱기록을 한것입니다.
+  //           그런데 자동으로 테스트를 할려고 하니 14번커버를 안열었다고 열어야 한다는것입니다."
+  //
+  // 그래서 **카톡 기록이 있는 그룹은 카톡만으로 상태를 정한다.** 그 그룹의 앱 보고는 메아리다.
+  //   ⚠ 카톡 기록이 **없는** 그룹은 손대지 않는다 — 앱 보고가 유일한 진실이다(BAY 26·18).
+  //   ⚠ 조용히 버리지 않는다 — 몇 줄 뺐는지 `_echo` 로 돌려준다.
+  let echoDropped = 0;
+  const keep = new Set(list);
+  if (groupOf) {
+    const kakaoGroups = new Set();
+    for (const r of list) {
+      if (r.type !== 'hatch' || r._src !== 'kakao') continue;
+      for (const g of (r.bays || []).map(groupOf)) if (g != null) kakaoGroups.add(g);
+    }
+    if (kakaoGroups.size) {
+      for (const r of list) {
+        if (r.type !== 'hatch' || r._src === 'kakao') continue;
+        const gs = (r.bays || []).map(groupOf).filter((g) => g != null);
+        if (gs.length && gs.every((g) => kakaoGroups.has(g))) { keep.delete(r); echoDropped += 1; }
+      }
+    }
+  }
+
   // ── 1) 중복 접기 ───────────────────────────────────────────────
   // 같은 보고가 앱에서 한 번, 손으로 친 카톡에서 또 한 번 들어온다(검수사 확정: "앱이 보낸것과
   // 수동으로 보낸것과 섞여 있어 그렇습니다"). **지우는 게 아니라 접는다** — 판단 기준은 상태다.
@@ -360,6 +391,7 @@ export function buildTimeSheet(reports, opts = {}) {
   let dupHatch = 0, dupSt = 0;
 
   for (const r of list) {
+    if (!keep.has(r)) continue;
     lastTs = r.ts;
     if (r.type === 'work_status') {
       const md = modeOf(r);
@@ -394,7 +426,7 @@ export function buildTimeSheet(reports, opts = {}) {
   if (groupOf && doneModes.size) {
     const openG = new Map();                 // 그룹 → 마지막 오픈 보고
     for (const r of list) {
-      if (!r || r.type !== 'hatch') continue;
+      if (!r || r.type !== 'hatch' || !keep.has(r)) continue;
       if (r.mode && !doneModes.has(r.mode)) continue;
       const act = String(r.action || '').toLowerCase();
       for (const g of (r.bays || []).map(groupOf).filter((x) => x != null)) {
@@ -420,6 +452,7 @@ export function buildTimeSheet(reports, opts = {}) {
 
   rows.sort((a, b) => (a.ts || 0) - (b.ts || 0));
   if (dupHatch || dupSt) rows._folded = dupHatch + dupSt;   // 화면에 몇 줄 접었는지 알린다
+  if (echoDropped) rows._echo = echoDropped;               // 카톡과 어긋나 뺀 앱 보고 수
   return rows;
 }
 
