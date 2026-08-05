@@ -1276,15 +1276,16 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         if (!go) { setConfirmKey(null); return; }
       }
     }
-    // TallyOne 1.8-11: **오프라인이면 아예 시작하지 않는다.**
-    //   실측 2026-08-05 STMJ 2643E — 오프라인에서 누르니 버튼이 "저장 중…"에 갇혔다.
-    //   Firebase 는 신호가 없으면 쓰기 Promise 를 연결 복구 전까지 resolve 하지 않는다.
-    //   그대로 두면 나중에 연결이 살아났을 때 **사용자가 화면을 떠난 뒤 항차 삭제까지** 진행된다.
-    //   완료 저장은 되돌릴 수 없는 작업이라 신호가 확실할 때만 연다.
+    // TallyOne 1.8-12: **오프라인 배너를 믿고 막지 않는다.**
+    //   1.8-11 은 `.info/connected` 가 false 면 완료 저장을 차단했다. 그런데 그 값이 **거짓으로
+    //   false 에 멈춰 있는 경우**가 실측됐다(2026-08-05, 집 PC·유선). 배너가 떠 있는 상태에서
+    //   누른 검수 완료가 서버에 정상 기록됐다(dischargeDoneAt·loadingDoneAt 11:39).
+    //   `fbReconnect()` 의 goOffline→goOnline 이 `.info/connected` 구독을 끊고 복구를 못 한 탓으로
+    //   보인다. 그 거짓 신호로 막으면 **완료 저장을 영영 못 하게 된다** — 원래 문제보다 나쁘다.
+    //   → 막지 않는다. 아래 시간 제한이 '갇힘'을 막고, 시간이 넘으면 삭제하지 않는다.
+    //     연결이 의심스러우면 알리기만 한다.
     if (!(await fbIsOnline())) {
-      setNotice({ kind: 'err', text: '📵 오프라인입니다 — 완료 저장은 신호가 잡힐 때만 할 수 있습니다.\n검수 완료 표시는 이미 서버에 있으니 잃는 것은 없습니다. 신호 잡히는 곳에서 다시 눌러 주세요.' });
-      setConfirmKey(null);
-      return;
+      setNotice({ kind: 'warn', text: '⚠ 연결이 끊긴 것으로 보입니다 — 그래도 저장을 시도합니다.\n1분 안에 끝나지 않으면 중단하고 항차는 그대로 둡니다. (화면 새로고침으로 연결이 되살아나기도 합니다)' });
     }
     setBusyKey(row.key);
     try {

@@ -75,8 +75,13 @@ export default function App() {
     if (refreshing) return;
     setRefreshing(true);
     try {
-      await fbReconnect();
+      // TallyOne 1.8-12: 재연결 결과를 확인한다. 끊고 다시 붙이는 동작이라, 못 붙으면
+      //   상단 배너가 '오프라인'에 멈춘 채 남는다(2026-08-05 실측). 그걸 조용히 넘기지 않는다.
+      const r = await fbReconnect();
       setRefreshedAt(Date.now());
+      if (r && r.online === false) {
+        alert('데이터 새로고침 — 서버 재연결을 확인하지 못했습니다.\n\n상단에 오프라인 표시가 남아 있으면 화면을 새로고침(F5) 해 주세요.\n저장한 내용은 사라지지 않습니다.');
+      }
     } catch (e) {
       console.warn('[새로고침] 재연결 실패', e);   // 조용히 실패하지 않는다(3금지 3번)
       alert('데이터 새로고침 실패 — 네트워크를 확인해 주세요.');

@@ -1584,7 +1584,19 @@ export async function fbReconnect() {
   goOffline(db);
   await new Promise((r) => setTimeout(r, 300));
   goOnline(db);
-  return Date.now();
+  // TallyOne 1.8-12: **끊고 다시 붙였으면 붙었는지 확인한다.**
+  //   실측 2026-08-05 — 새로고침 버튼을 쓴 뒤 상단 오프라인 배너가 그대로 남았다.
+  //   그런데 그 상태에서 누른 검수 완료는 서버에 정상 기록됐다. 즉 **실제로는 연결돼 있는데
+  //   `.info/connected` 구독만 goOffline 때 끊긴 채 복구가 안 된 것**이다.
+  //   거짓 배너는 그 자체로도 나쁘지만, 그걸 근거로 기능을 막으면(1.8-11) 훨씬 나쁘다.
+  //   → 최대 5초까지 재연결을 지켜보고, 안 붙으면 한 번 더 goOnline 을 시도한다.
+  //     그래도 안 되면 호출부가 알 수 있게 online:false 로 돌려준다(조용히 넘기지 않는다).
+  let online = await fbIsOnline(5000);
+  if (!online) {
+    try { goOnline(db); } catch { /* 무시 */ }
+    online = await fbIsOnline(5000);
+  }
+  return { at: Date.now(), online };
 }
 
 
