@@ -1454,6 +1454,24 @@ export async function fbSetEmptySeal(voyageKey, mode, cn, fields, by, sealMode) 
  *  @param items [{ts, ...report}]
  *  @returns {Promise<{added:number, skipped:number}>} 같은 ts 가 이미 있으면 건너뛴다(중복 방지)
  */
+/**
+ * TallyOne 1.8-18: 잘못 들어온 작업 보고를 지운다.
+ *
+ * 왜 (검수사 2026-08-05)
+ *   "08시건은 오염 자료 입니다. 처음 텔리 자료를 만들때 묻어온 자료 입니다."
+ *   STMJ 2643E 08:19·08:20 의 커버 오픈 보고는 **앱이 진짜로 쓴 기록**(`_src` 없음)이라
+ *   출처로도 시각으로도 가려낼 수 없다 — 그때 실제 선적이 진행 중이었다(완료는 11:39).
+ *   즉 기계가 판별할 방법이 없다. **사람이 지우는 수밖에 없는데 지울 수단이 앱에 없었다.**
+ *   그래서 지우개를 만든다. 판단은 수석이 하고, 앱은 무엇이 지워지는지 보여 준다.
+ *
+ * ⚠ 되돌릴 수 없다. 호출부는 반드시 확인을 한 번 받는다.
+ */
+export async function fbDeleteReport(base, key) {
+  if (!base || key == null || key === '') throw new Error('삭제 대상이 없습니다');
+  await remove(ref(db, `${base}/reports/${key}`));
+  return true;
+}
+
 export async function fbAddReportsAt(base, items) {
   let added = 0, skipped = 0;
   for (const it of items || []) {

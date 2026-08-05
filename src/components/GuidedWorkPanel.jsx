@@ -425,12 +425,43 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     } catch (e) { return 0; }
   };
 
+  // TallyOne 1.8-18: **끝난 모드에서는 유도 해치 보고를 걸지 않는다.**
+  //
+  // 왜 (STMJ 2643E 2026-08-05 실사건)
+  //   양하는 02:16 에 끝났는데, 08:19:08~08:21:07 사이 다른 검수사가 로그인한 2분 동안
+  //   08:19:54 `open 05,06,07` · 08:20:25 `open 01,03` 두 건이 찍혔다. 그 커버들은 이미
+  //   02:28·03:17 에 닫힌 것이라 타임시트가 "닫고 다시 연 채로 출항"으로 나왔다 — 불가능한 서류다.
+  //
+  // 왜 걸렸나 — 프롬프트가 **남은 컨테이너 수**만 본다. 그런데 검수원이 앱으로 일일이 체크하지 않아
+  //   `remaining` 이 늘 남아 있다(검수사 확정: "검수원이 이 앱을 사용 안 한다는 이야기입니다").
+  //   그래서 작업이 끝난 뒤에 들어와도 앱은 "아직 홀드가 남았다"고 믿고 오픈을 권했다.
+  //
+  // 그래서 판단 근거를 하나 더 둔다 — **완료 보고**. 이건 사람이 명시적으로 누른 것이라 믿을 수 있다.
+  const modeFinished = useMemo(() => {
+    const inf = voyage?.info || {};
+    if (inf.inspectorDone) return true;
+    if (mode === 'discharge' && inf.dischargeDone) return true;
+    if (mode === 'loading' && inf.loadingDone) return true;
+    for (const r of Object.values(voyage?.reports || {})) {
+      if (r && r.type === 'work_status' && String(r.action) === `${mode}_done`) return true;
+    }
+    return false;
+  }, [voyage, mode]);
+
   const sendHatchReport = async (action) => {
     if (hatchBusy) return;
     setHatchBusy(true);
     try {
       const bays = groupBaysOf(selectedGroup, true);  // V7.99-6: 홀드 평택분 베이만 (메모5)
       if (bays.length === 0) return;  // 열 홀드 없으면 보고 안 함 (finally에서 busy 해제)
+      // 1.8-18: 끝난 모드면 조용히 막지 않고 **사람에게 묻는다** — 진짜 뒤늦은 보고일 수도 있다.
+      if (modeFinished) {
+        const ok = window.confirm(
+          `${mode === 'discharge' ? '양하' : '선적'}는 이미 완료 처리되었습니다.\n`
+          + `그래도 해치커버 ${action === 'open' ? '오픈' : '클로즈'} 보고를 남길까요?\n\n`
+          + '(실수로 눌렀다면 「취소」 — 마감 서류 타임시트에 그대로 실립니다)');
+        if (!ok) return;
+      }
       const voy = mode === 'discharge'
         ? (voyage?.info?.voy_d || voyage?.info?.voy || '')
         : (voyage?.info?.voy_l || voyage?.info?.voy || '');
@@ -456,6 +487,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V7.94-16: 양하 — 베이 데크 완료 → [해치커버 오픈 → 홀드 진행] / [다른 데크 이동] (사용자 요구)
   const deckDonePromptD = useMemo(() => {
     if (isHatchSkipShip) return false;  // V8.10: TMPZ·TNJP·RZOR·OBWH 해치 계산/보고 안 함
+    if (modeFinished) return false;   // 1.8-18: 끝난 모드엔 권하지 않는다
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
@@ -463,7 +495,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
     return deckRemain === 0 && holdRemain > 0 && deckDone > 0;
-  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage]);
+  }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished]);
 
   // V7.94-16: 양하 — 그룹 홀드까지 완료 시 클로즈 제안 조건 (그룹 완료 화면에서 사용)
   // V8.09-05 (사용자 보고 2026-06-18): 같은 베이 그룹에 선적할 평택분이 남아 있으면 닫지 않는다.
@@ -473,13 +505,15 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   판정은 shouldAskHatchClose()에 모아 두었다(순수 함수 — 시뮬 검증용).
   const holdWorkedD = useMemo(() => {
     if (isHatchSkipShip) return false;  // V8.10: 해치 클로즈 제안 안 함
+    if (modeFinished) return false;   // 1.8-18
     if (mode !== 'discharge' || selectedGroup == null) return false;
     return shouldAskHatchClose(allContainers, selectedGroup, groupCenterOf);
-  }, [mode, selectedGroup, allContainers, bayPairs]);
+  }, [mode, selectedGroup, allContainers, bayPairs, modeFinished]);
 
   // V7.94-08: 홀드 선적 완료 → 데크 진입 전 베이 선택 프롬프트 조건 (사용자 메모 ②)
   const holdDonePrompt = useMemo(() => {
     if (isHatchSkipShip) return false;  // V8.10: 해치 닫기 제안 안 함
+    if (modeFinished) return false;   // 1.8-18
     if (mode !== 'loading' || deckPromptDone || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     if (groupRemain.length === 0) return false;
@@ -487,7 +521,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
     return holdRemain === 0 && deckDone === 0 && groupDone > 0;
-  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs]);
+  }, [mode, deckPromptDone, selectedGroup, remaining, allContainers, groupDone, bayPairs, modeFinished]);
 
   // V8.09-15 (사용자 점검 2026-06-18): 해치커버/베이 선택 갈림길 음성 처리.
   //   ① 선택 배너가 떠 있는 동안에는 "다음 컨테이너" 음성을 막는다(어디로 갈지 미정인데 앞서 말하던 버그).
