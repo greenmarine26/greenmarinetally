@@ -596,7 +596,10 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       )}
 
       {/* 컨트롤 바 — M5.0: 산뜻하게 정리 (줌 컴팩트 + 인쇄 드롭다운 + 시각적 분리) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-0 z-10">
+      {/* TallyOne 1.15: **고정 위치 교정** (검수사 신고 2026-08-06 — "스크롤 대상이 아니다. 베이만 스크롤되고
+          이 부분은 고정되어야 한다"). sticky 는 걸려 있었지만 `top-0` 이라 앱 헤더(52px)와
+          항차 탭 네비(`sticky top-[52px]`, 높이 ≈38px) 뒤로 숨어 안 보였다. 그 아래로 내린다. */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-[92px] z-10 shadow-lg shadow-slate-950/60">
         {/* V8.25-06: PC(터치없음)만 +/− 버튼 표시. 폰은 핀치, PC는 버튼+Ctrl휠 */}
         {!IS_TOUCH_DEVICE && (
           <div className="flex items-center bg-slate-800 rounded-lg overflow-hidden">

@@ -744,7 +744,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       })()}
 
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
-      <VoyageSummaryCard voyage={voyage} mode={mode} />
+      <VoyageSummaryCard voyage={voyage} mode={mode}
+        reeferCheck={reefers.length > 0
+          ? { total: reefers.length, unchecked: rfUnchecked, onOpen: () => setShowReefer(true) }
+          : null} />
 
       {/* M5.1 G: 작업 보고 + 마감 점검 두 큰 버튼 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
@@ -805,17 +808,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector}
           onClose={() => setShowReefer(false)}/>
       )}
-      {reefers.length > 0 && (
-        <button onClick={() => setShowReefer(true)}
-          className={`w-full mb-3 px-3 py-2 rounded-lg border flex items-center justify-between ${
-            rfUnchecked > 0 ? 'bg-cyan-900/30 border-cyan-700/60' : 'bg-slate-900 border-slate-800'}`}
-          style={{ minHeight: 44 }}>
-          <span className="text-[12px] font-bold text-cyan-200">❄ 리퍼 온도 확인 · {reefers.length}대</span>
-          <span className={`text-[11px] font-bold ${rfUnchecked > 0 ? 'text-rose-300' : 'text-emerald-400'}`}>
-            {rfUnchecked > 0 ? `미확인 ${rfUnchecked}대` : '확인 완료 ✓'}
-          </span>
-        </button>
-      )}
+      {/* TallyOne 1.15: **리퍼 온도 확인 배너 삭제** (검수사 신고 2026-08-06 — "중복 건입니다").
+          바로 아래 현황 요약 줄에 이미 「리퍼 N대」 칩이 있고, 확인 유무까지 거기로 합쳤다.
+          다시 열기는 요약 줄의 「리퍼 확인」 칩을 누르면 된다 — 진입점은 유지된다.
+          자동으로 뜨는 동작(선박 선택 시 미확인이 있으면 모달)은 그대로다. */}
 
       {/* M8.08: 양하/선적 작업 화면의 엠티 실 정책 배너·보고서 블록 제거.
           사용자 요구: 작업 화면엔 상단 요약만, 실번호 수정은 개별 카드, 보고서는 수석 대시보드.

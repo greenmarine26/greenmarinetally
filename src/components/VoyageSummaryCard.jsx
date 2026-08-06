@@ -6,7 +6,7 @@ import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, Camera, MoveRight } from 'lucide-react';
 import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort } from '../utils.js';
 
-export default function VoyageSummaryCard({ voyage, mode }) {
+export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) {
   const summary = useMemo(() => {
     const sec = voyage?.[mode] || {};
     const ediMap = sec.ediContainers || {};
@@ -152,20 +152,24 @@ export default function VoyageSummaryCard({ voyage, mode }) {
             value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.madeCon > 0 ? ` · 🏭제작컨${summary.madeCon}` : ''}${summary.reeferNoPos > 0 ? ` · 📍위치미상${summary.reeferNoPos}` : ''}${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
           />
         )}
-        {(summary.xrayCount > 0 || summary.xrayUnmatched?.length > 0) && (
-          <Chip
-            icon={Shield}
-            color={summary.xrayUnmatched?.length > 0 ? 'red' : 'purple'}
-            label="X-RAY"
-            value={`${summary.xraySealed}/${summary.xrayCount}${summary.xrayUnmatched?.length > 0 ? ` · ⚠${summary.xrayUnmatched.length} 미매칭` : ''}`}
-          />
-        )}
         {summary.iso403Total > 0 && (
           <Chip
             icon={Camera}
             color={summary.iso403Pending > 0 ? 'blue' : 'emerald'}
             label="풀 리퍼 사진"
             value={`${summary.iso403Total - summary.iso403Pending}/${summary.iso403Total}${summary.iso403Pending > 0 ? ` · ⚠${summary.iso403Pending}` : ''}`}
+          />
+        )}
+        {/* TallyOne 1.15: **리퍼 온도 확인 유무** — 검수사 지시 2026-08-06 "풀리퍼 옆에 표기".
+            리퍼는 선박을 고르면 앱이 확인 모달을 띄운다. 그때 확인을 했는지 여기서 바로 보이게 한다.
+            누르면 다시 열린다 — 위에 있던 중복 배너를 지운 대신 이 칩이 진입점이다. */}
+        {reeferCheck && (
+          <Chip
+            icon={Snowflake}
+            color={reeferCheck.unchecked > 0 ? 'red' : 'emerald'}
+            label="리퍼 확인"
+            value={reeferCheck.unchecked > 0 ? `미확인 ${reeferCheck.unchecked}/${reeferCheck.total}` : `완료 ${reeferCheck.total}대 ✓`}
+            onClick={reeferCheck.onOpen}
           />
         )}
         {summary.dupPos?.length > 0 && (
@@ -184,6 +188,15 @@ export default function VoyageSummaryCard({ voyage, mode }) {
             value={`${summary.displaced}대`}
           />
         )}
+        {/* TallyOne 1.15: **X-RAY 는 맨 뒤로** (검수사 지시 2026-08-06). 리퍼·사진이 앞, X-RAY 는 마지막. */}
+        {(summary.xrayCount > 0 || summary.xrayUnmatched?.length > 0) && (
+          <Chip
+            icon={Shield}
+            color={summary.xrayUnmatched?.length > 0 ? 'red' : 'purple'}
+            label="X-RAY"
+            value={`${summary.xraySealed}/${summary.xrayCount}${summary.xrayUnmatched?.length > 0 ? ` · ⚠${summary.xrayUnmatched.length} 미매칭` : ''}`}
+          />
+        )}
         {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.iso403Total === 0 && summary.displaced === 0 && (
           <span className="text-[11px] text-slate-500 px-2 py-1">특이 항목 없음</span>
         )}
@@ -192,7 +205,7 @@ export default function VoyageSummaryCard({ voyage, mode }) {
   );
 }
 
-function Chip({ icon: Icon, color, label, value }) {
+function Chip({ icon: Icon, color, label, value, onClick = null }) {
   const colorMap = {
     cyan:    'bg-cyan-900/40 border-cyan-700/40 text-cyan-200',
     red:     'bg-red-900/40 border-red-700/50 text-red-200 animate-pulse',
@@ -201,11 +214,20 @@ function Chip({ icon: Icon, color, label, value }) {
     emerald: 'bg-emerald-900/40 border-emerald-700/40 text-emerald-200',
     orange:  'bg-orange-900/40 border-orange-700/50 text-orange-200',
   };
+  const cls = `inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-bold ${colorMap[color] || colorMap.cyan}`;
+  const body = (<>
+    <Icon className="w-3 h-3"/>
+    <span className="text-slate-300/80">{label}</span>
+    <span className="mono">{value}</span>
+  </>);
+  // TallyOne 1.15: 누를 수 있는 칩 지원 — 리퍼 확인 칩이 온도 확인 화면을 다시 연다.
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`${cls} hover:brightness-125 active:scale-95 transition`}
+        style={{ minHeight: 28 }}>{body}</button>
+    );
+  }
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-bold ${colorMap[color] || colorMap.cyan}`}>
-      <Icon className="w-3 h-3"/>
-      <span className="text-slate-300/80">{label}</span>
-      <span className="mono">{value}</span>
-    </span>
+    <span className={cls}>{body}</span>
   );
 }
