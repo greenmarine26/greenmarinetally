@@ -11,6 +11,7 @@
 import { lookupBayDict } from './data/shipBayDict.js';
 import { lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
 import { lookupUserBayDict, loadUserBayDict } from './data/userBayDict.js';
+import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 // M6.55: v5 — .def 매트릭스 디코드 자동 추출
 //   - supplement: v2에 없는 13척 (DAP, DBM, DHA, ESTM, FN7, FSR, HAHM, HECN, MDB, MEB, ORT, PCBS, WBC)
 //   - matrix: 311척의 row 폭/cells_per_row 정보 (v2 verified 데이터에 보조 첨부)
@@ -526,7 +527,14 @@ export function getShipBayDictData(imo, code, opts) {
   //         사용자가 매트릭스 빌더에서 직접 입력한 정답을 v2 사전이 덮어쓰는 것 방지.
   //         사용자가 명시적으로 제거한 tier도 v2 union으로 복원되는 사고 차단.
   let finalBayDef = { ...bayDef, bayList: bayList || [] };
-  if (result.source === 'firebase') {
+  // TallyOne 1.11-01: **정본 판정을 조회 경로가 아니라 항목 안쪽으로.**
+  //   종전 `result.source === 'firebase'` 는 *어디서 찾았나*만 봤다. 그래서 검수사가 만든 정본이
+  //   Firebase 경유로 잡히면(= 그 브라우저 localStorage에 사본이 없으면) 아래 v2 union 보호를
+  //   못 받아, v2 자동본(STOWAGE PDF 파싱)이 정본 위에 섞였다.
+  //   실측(NSFR 2026-08-06): 엣지는 정본 22베이 그대로, 크롬은 v2 17베이본이 union 되어
+  //   홀드 모양이 통째로 달랐다. 같은 배 같은 매트릭스인데 브라우저마다 그림이 갈렸다.
+  const _isUserOwned = isUserOwnedBayDict({ source: result.source, bayDef });
+  if (result.source === 'firebase' && !_isUserOwned) {
     try {
       const v2Backup = lookupBayDictV2Enhanced(imo, code);
       const v2HasData = v2Backup?.entry?.bayDef?.baysSummary && v2Backup.entry.bayDef.baysSummary.length > 0;
@@ -547,11 +555,14 @@ export function getShipBayDictData(imo, code, opts) {
   //   원본 entry 미수정 (deep clone 후 보강).
   //   M6.93.12 fix #4: source='user'일 때 enrichBayDef가 EDI 자동 채움 차단.
   const matrixV5 = getMatrixV5(data.code);
-  const wrappedEntry = enrichBayDef({ bayDef: finalBayDef }, matrixV5, null, result.source);
+  // TallyOne 1.11-01: 정본이면 'user'로 넘겨 자동 보강을 확실히 차단한다(위와 같은 이유).
+  const wrappedEntry = enrichBayDef({ bayDef: finalBayDef }, matrixV5, null, _isUserOwned ? 'user' : result.source);
   const enrichedBayDef = wrappedEntry.bayDef;
 
   return {
     source: result.source,
+    // TallyOne 1.11-01: 조회 경로와 무관한 **정본 여부**. 화면·카고플랜은 source가 아니라 이걸 본다.
+    _userOwned: _isUserOwned,
     matchedBy: result.matchedBy || result.source,
     // V7.26: 계열 대체(series-substitute)면 베이 구조만 빌리고 신원(이름/콜사인)은 안 빌림.
     //   (이전: DJCT가 베이사전 없어 'DJ' 계열의 XIN TAI PING 구조를 빌렸는데, 그 콜사인 BSDU까지

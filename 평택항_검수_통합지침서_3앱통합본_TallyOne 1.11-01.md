@@ -14,7 +14,7 @@
 
 | 앱 | 정체 | 현재 버전 | 버전 소스 (여기를 읽는다) |
 |---|---|---|---|
-| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.11** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
+| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.11-01** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
 | **MailPilot** (구 수집기) | PC 로컬 Python (`C:\TALLYTEST\TallymanMailCollector_v2.17.15\` — 폴더명은 버전 아님) | **MailPilot 1.0** | `app_gui.py` → `VERSION` |
 | **ConeOne** (구 콘앱) | `public/cone.html` 독립 HTML | **ConeOne 1.5-01** | `cone.html` → `window.__CONEV` — 콘앱 단일 소스(검수앱 버전과 분리) |
 | 벌크탤리 | `bulk_tally.html` 독립 HTML | TallyOne 버전 동기 | 라벨은 build.sh가 APP_VERSION에서 동기화 |
@@ -136,7 +136,30 @@
 
 > 범용화 프로젝트(TallyUni·MailPilot Uni, 저장소 tallyone-universal)의 작업 기록은 여기가 아니라 `★범용화_프로젝트_별도관리.md` §8에 적는다 — 검수사 지시 "따로 관리"(2026-08-05). 이 기록부는 현장 3앱(TallyOne·MailPilot·ConeOne) 전용이다.
 
-### 2026-08-06 — TallyOne 1.11: **리스트 합산 오류** — 양하·선적 리스트가 한쪽으로 합산됐다 (커밋 `__HASH__`)
+### 2026-08-06 — TallyOne 1.11-01: 매트릭스 정본을 **조회 경로로 판정**하던 결함 (커밋 `__HASH2__`)
+
+**신고.** NSFR이 오랜만에 들어왔다. 검수사가 엣지에서 베이매트릭스를 CASP 플랜과 대조해 다시 맞추고 저장했는데, 크롬에서 열면 옛 그림 그대로였다. "다 맞춰논 매트릭스인데 틀어져 있다."
+
+**서버는 멀쩡했다.** `ship_bay_dict_v3/NSFR` 실측 — `source:'user'`·`_userOwned:true`·22베이, `BAY01 holdCells[3,1,1]`·`holdTiers[8,6,4]`까지 온전. 엣지 화면과 같다.
+
+**찾은 결함 — 겉껍데기로 정본을 판정한다.** 조회 결과의 `source`는 *어느 경로로 찾았나*(`user`=로컬 localStorage / `firebase` / `v2`)이지 *누가 만들었나*가 아니다. 그런데 아홉 곳이 `source === 'user'` 로 "정본인가"를 물었다. 로컬 사본이 없는 브라우저는 같은 매트릭스를 Firebase로 받으면서 **자동 사전 취급**을 당한다.
+
+- `shipStructure.js:537` — `result.source === 'firebase'` 면 v2 자동본과 union. **정본이 v2 STOWAGE PDF 파싱본과 섞였다.** (NSFR 실측: BAY 27·28 에 검수사가 없앤 홀드가 `holdTiers[8,6,4]`·`[8,6]` 로 되살아남)
+- `shipStructure.js:559` · 각 화면의 `enrichBayDef(..., source)` — 정본이면 보강 금지인데 Firebase 경유면 EDI 자동 보강이 걸린다
+- `PrintableCargoPlanV2.jsx:493` — `_userOwned: baseDict.source === 'user'` 로 **항목의 정본 표식을 조회 경로로 덮어썼다.** 이 한 줄이 하류의 `cargoPlanCore.isUserSource` 까지 false로 만든다
+- 같은 판정이 `PrintableCargoPlanV2:540·871·873`, `PrintableBayDetail:587`, `BayGridEditor:194·218·685`, `planedit.entry:136·288·330·698·758`, `BayPlan:272`, `coneCargoPlan.entry:149` 에 복제돼 있었다
+
+**수리.** `utils.isUserOwnedBayDict(d)` 단일 소스 신설 — **항목 안쪽**(`_userOwned` / `bayDef.source`)만 본다. 위 열두 지점을 이 함수로 교체. `source` 는 표시용(조회 경로)으로 그대로 두고, 조회 결과에 `_userOwned` 정규화 플래그를 실어 보낸다.
+
+**함께 고친 조용한 실패 (3금지 ③ 위반).** `fbSaveShipBayDict` 다기기 충돌 가드가 서버 항목이 더 최신이면 저장을 건너뛰면서 **`true`(성공)를 돌려줬다.** 빌더 화면엔 "☁ 동기화됨 (다른 기기에서도 보임)"이 떴는데 서버엔 안 올라갔다. → `false` 반환 + 콘솔 경고(서버/이번 저장 시각 함께)로 바꿔 "⚠ 동기화 실패"가 뜨게 했다. 기기 시계 차이를 의심할 근거를 남긴다.
+
+**검증 (정직하게).**
+- 실 Firebase NSFR 로 크롬 경로 시뮬 15항목 PASS — 수리 전엔 BAY 27·28 에 v2 홀드 2건이 주입됐고, 수리 후 22베이 전 필드 무손실.
+- **그러나 이 2건은 `hasHold:false` 라 화면에 안 나타난다.** 즉 고친 것은 진짜 결함이지만 **이번 화면 증상 전체를 설명하지는 못한다.** NSFR은 우연히 v5 번들 베이목록이 검수사 목록과 같아(둘 다 22베이) 목록 오염이 없었다. v5 목록이 다르거나 v2에 `parsedAt`이 있는 배였다면 그림이 통째로 갈렸을 것이다.
+- 남은 유력 후보는 **저장이 서버에 안 올라갔던 것**(위 조용한 실패). 검수사가 크롬에서 저장하자 바로 맞게 나온 것과 맞물린다. 재현 자료가 없어 확정 못 했다 — 다음에 같은 일이 나면 콘솔 경고가 증거를 남긴다.
+- `bash build.sh` 성공 · 연막검사 통과 · 번들 grep `TallyOne 1.11-01`·`isUserOwnedBayDict`·"동기화 실패" 확인.
+
+### 2026-08-06 — TallyOne 1.11: **리스트 합산 오류** — 양하·선적 리스트가 한쪽으로 합산됐다 (커밋 `6b34f9d`)
 
 **신고.** 검수사가 홈 카드 두 장을 나란히 보였다 — 같은 배 SWSP 2606N인데 한 장은 `양하 평택 778 · 매칭 371 · 부분 EDI 371`, 다른 한 장은 `양하 평택 371 · 매칭 371`. "내용을 안 보고 양하와 선적 리스트를 같이 양하 리스트로 합산하는 오류입니다."
 

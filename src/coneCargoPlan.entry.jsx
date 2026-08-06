@@ -9,6 +9,7 @@ import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel } from './utils.js'
 import { getShipBayDictData } from './shipStructure.js';
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
 import { enrichBayDef } from './bayDictAutoEnrich.js';
+import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { buildEmptyBayRenderData } from './cargoPlanCore.js';
 import { extractShipMetaFromVoyage } from './shipMatrixBuilder.js';
 
@@ -146,7 +147,8 @@ export function buildConeBayGrid(containers, shipInfo) {
     if (!dict || !dict.bayDef || !dict.bayDef.baysSummary) return {};
     const m = {};
     try {
-      const enrichedEntry = enrichBayDef({ bayDef: dict.bayDef }, dict._v5Matrix, containers, dict.source);
+      // TallyOne 1.11-01: 정본 판정은 조회 경로(source)가 아니라 항목 안쪽(isUserOwnedBayDict). Firebase 경유 정본이 자동 사전 취급되던 결함.
+      const enrichedEntry = enrichBayDef({ bayDef: dict.bayDef }, dict._v5Matrix, containers, isUserOwnedBayDict(dict) ? 'user' : dict.source);
       enrichedEntry.bayDef.baysSummary.forEach(b => { m[parseInt(b.bayNo, 10)] = b; });
     } catch (e) { console.warn('[ConeOne 1.2] 베이사전 보강 실패', e); return {}; }
     return m;

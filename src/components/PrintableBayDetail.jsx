@@ -22,6 +22,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
+import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 
 // M4.9e-fix: STD_DECK/STD_HOLD/STD_ROWS 모두 동적 (globalTiers + globalRowRange 기준)
 //   사용자 지적: "베이마다 / 선박마다 row/tier 다름, 일괄 X, 화면과 같게"
@@ -576,15 +577,18 @@ export default function PrintableBayDetail({
     const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount });
     if (!baseDict) return null;
     // M6.94.0 사용자 원칙: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
+    // TallyOne 1.11-01: 정본 판정은 조회 경로(source)가 아니라 항목 안쪽(isUserOwnedBayDict). Firebase 경유 정본이 자동 사전 취급되던 결함.
+    const _isUser = isUserOwnedBayDict(baseDict);
     const enrichedEntry = enrichBayDef(
       { bayDef: baseDict.bayDef },
       baseDict._v5Matrix,
       containers,
-      baseDict.source
+      _isUser ? 'user' : baseDict.source
     );
     return {
       ...baseDict,
-      bayDef: { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: baseDict.source === 'user' },
+      _userOwned: _isUser,
+      bayDef: { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: _isUser },
       _enrichMeta: enrichedEntry._enrichMeta || baseDict._enrichMeta,
     };
   }, [shipImo, shipName, containers]);

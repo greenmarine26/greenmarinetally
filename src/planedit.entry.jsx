@@ -23,6 +23,7 @@ import * as XLSX from 'xlsx';
 import { parseBAPLIE, parseListExcel, isoToLabel, isPyeongtaekPort, getContainerColorKey, buildContainerColorMap } from './utils.js';
 import { extractShipInfo, getShipBayDictData } from './shipStructure.js';
 import { enrichBayDef } from './bayDictAutoEnrich.js';
+import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { autoPairBays, generatePdfBays, buildPosMap, computeBayRenderData, defaultGetSelfMark } from './cargoPlanCore.js';
 import { BayBoxV2, CARGO_V2_CSS } from './components/PrintableCargoPlanV2.jsx';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
@@ -133,7 +134,7 @@ const effBaysOf = (code) => {
     if (!d) return [];
     const v5 = (d._v5Matrix?.matrixBays || []).map((b) => Number(b.bayNum));
     const sm = (d.bayDef?.baysSummary || []).map((x) => Number(x.bayNo));
-    const set = (d.source === 'user' && v5.length && sm.length)
+    const set = (isUserOwnedBayDict(d) && v5.length && sm.length)
       ? new Set(v5.filter((n) => sm.includes(n)))
       : new Set([...v5, ...sm]);
     return [...set].filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
@@ -285,7 +286,9 @@ function App() {
       base = getShipBayDictData(imo, ship.name || '', { ...opts, vslFull: ship.name || '' });
     }
     if (!base) return null;
-    const en = enrichBayDef({ bayDef: base.bayDef }, base._v5Matrix, containers, base.source);
+    // TallyOne 1.11-01: 정본 판정은 조회 경로(source)가 아니라 항목 안쪽(isUserOwnedBayDict). Firebase 경유 정본이 자동 사전 취급되던 결함.
+    const _isUser = isUserOwnedBayDict(base);
+    const en = enrichBayDef({ bayDef: base.bayDef }, base._v5Matrix, containers, _isUser ? 'user' : base.source);
     return { ...base, bayDef: { ...en.bayDef, source: base.source } };
   }, [containers, ship, shipCode, ediBayNums]);
 
@@ -327,7 +330,7 @@ function App() {
       bays = summary.map((s) => ({ bayNum: Number(s.bayNo), cells: [], hasHold: !!s.hasHold, hasDeck: s.hasDeck !== false, isStandalone: !!s.isStandalone }));
     }
     if (rawM.length > 0 && summary.length > 0) {
-      if (dictData.source === 'user') {
+      if (isUserOwnedBayDict(dictData)) {
         // 사용자가 직접 고친 사전이 정답 — v5의 유령 베이를 걷어낸다
         const allow = new Set(summary.map((s) => Number(s.bayNo)).filter(Number.isFinite));
         bays = rawM.filter((b) => allow.has(Number(b.bayNum)));
@@ -695,7 +698,7 @@ function App() {
                   베이매트릭스 선박: {shipPicker}
                   <div style={{ marginTop: 6, color: dictData ? '#86efac' : '#fca5a5' }}>
                     {dictData
-                      ? `${dictData.source === 'user' ? '★ 정본' : '✓ 번들'} 매트릭스 ${dictData.code || ''} — ${(dictData.bayDef?.baysSummary || []).length}베이 적용 (EDI 베이 ${ediBayNums.length}개)`
+                      ? `${isUserOwnedBayDict(dictData) ? '★ 정본' : '✓ 번들'} 매트릭스 ${dictData.code || ''} — ${(dictData.bayDef?.baysSummary || []).length}베이 적용 (EDI 베이 ${ediBayNums.length}개)`
                       : '✗ 베이사전 미매칭 — 목록에서 배를 직접 고르세요 (매트릭스 없이는 빈 슬롯을 그릴 수 없습니다)'}
                   </div>
                 </div>
@@ -755,8 +758,8 @@ function App() {
         <h1>📐 선적 플랜 편집기</h1>
         <span className="pe-badge">{VERSION}</span>
         <span className="pe-badge">{ship?.name} · {ship?.voyage}</span>
-        <span className={`pe-badge${dictData?.source === 'user' ? '' : ' warn'}`}>
-          {dictData?.source === 'user' ? '★정본' : '⚠비정본'} {dictData?.code || '?'} · {(dictData?.bayDef?.baysSummary || []).length}베이
+        <span className={`pe-badge${isUserOwnedBayDict(dictData) ? '' : ' warn'}`}>
+          {isUserOwnedBayDict(dictData) ? '★정본' : '⚠비정본'} {dictData?.code || '?'} · {(dictData?.bayDef?.baysSummary || []).length}베이
         </span>
         <label className="pe-btn" style={{ cursor: 'pointer' }} title="검수앱 [선박목록]에서 내보낸 베이사전 JSON">📖 사전
           <input type="file" accept=".json" style={{ display: 'none' }} onChange={(e) => e.target.files[0] && loadDict(e.target.files[0])} />

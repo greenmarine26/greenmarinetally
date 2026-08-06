@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.11';   // 리스트 합산 오류 수리 — 한 폴더에 섞여 온 양하·선적 리스트 분리(N_N 타입) + 평택 코드 변형(PTK02·PYONGTAEK) 인식
+export const APP_VERSION = 'TallyOne 1.11-01';   // 매트릭스 정본 판정을 조회 경로(source) 대신 항목 안쪽(_userOwned)으로 — 브라우저마다 카고플랜이 갈리던 결함
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3101,6 +3101,27 @@ export function isOppositeDirRecord(r, mode) {
 /** 반대 방향 레코드를 걸러낸 컨번호 목록 — 카운트 모수·컨테이너 병합이 함께 쓴다. */
 export function ownDirCns(records, mode) {
   return Object.keys(records || {}).filter(cn => !isOppositeDirRecord(records[cn], mode));
+}
+
+/**
+ * TallyOne 1.11-01: 이 베이사전이 **검수사가 직접 만든 정본인가** — 단일 소스.
+ *
+ * 왜 필요한가 — 조회 결과의 `source`는 *어느 경로로 찾았나*(user=로컬 / firebase / v2 …)이지
+ *   *누가 만들었나*가 아니다. 그런데 여러 곳이 `source === 'user'` 로 "정본인가"를 판정했다.
+ *   그래서 **같은 매트릭스인데 브라우저마다 다른 그림**이 나왔다(NSFR 2026-08-06 실측):
+ *     엣지 — localStorage 사본 있음 → source='user' → 정본 대접 → 검수사 매트릭스 그대로
+ *     크롬 — 사본 없어 Firebase 경유 → source='firebase' → **자동 사전 취급** →
+ *            v2(STOWAGE PDF 자동본 17베이) union + v5 유령 베이 혼입 + EDI 자동 보강
+ *   Firebase 항목 자체는 `source:'user'`·`_userOwned:true` 정본인데도 그랬다.
+ *   판정은 항상 **항목 안쪽**을 봐야 한다. 겉껍데기(조회 경로)를 보면 안 된다.
+ *
+ * @param d 조회 결과(dictData) 또는 entry 또는 bayDef — 어느 것을 줘도 된다.
+ */
+export function isUserOwnedBayDict(d) {
+  if (!d) return false;
+  const bd = d.bayDef || d;
+  return d.source === 'user' || d._userOwned === true ||
+         bd?.source === 'user' || bd?._userOwned === true;
 }
 
 // 컨번호 형식 검사 단일 소스 (ISO 6346: 알파벳 4 + 숫자 7)

@@ -1888,7 +1888,15 @@ export async function fbSaveShipBayDict(code, entry) {
       const exTs = Number(existing.updatedAt || existing.bayDef?.parsedAt || 0);
       const enTs = Number(entry.updatedAt || entry.bayDef?.parsedAt || Date.now());
       if (exTs > enTs) {
-        return true; // 기존이 더 최신 → 보존
+        // TallyOne 1.11-01: **조용히 실패하지 않는다.** 종전엔 저장을 건너뛰고 `true`(성공)를 돌려줘,
+        //   빌더 화면에 "☁ 동기화됨 (다른 기기에서도 보임)"이 떴다. 실제로는 서버에 안 올라가
+        //   다른 브라우저·기기는 계속 옛 매트릭스를 봤다 — "저장했는데 적용이 안 된다"의 정체.
+        //   (기기 시계가 앞선 기기에서 먼저 저장된 적이 있으면 그 시각을 넘어설 때까지 계속 스킵된다.)
+        //   이제 false를 돌려 화면이 "⚠ 동기화 실패 (이 기기에는 저장됨)"을 띄우게 한다.
+        console.warn('[fbSaveShipBayDict] 서버 항목이 더 최신이라 저장을 건너뜀 —', cleanCode,
+          '서버', new Date(exTs).toISOString(), '> 이번 저장', new Date(enTs).toISOString(),
+          '· 기기 시계 차이를 의심할 것');
+        return false;
       }
     }
     // ──────────────────────────────────────────────────────────────────────

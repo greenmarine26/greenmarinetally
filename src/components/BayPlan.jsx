@@ -18,6 +18,7 @@ import { isoToLabel, isoToPdfLabel, fmtPos, normalizeBay, getPortColor, isReefer
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
+import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
@@ -269,11 +270,12 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
     if (!dict?.bayDef?.baysSummary) return {};
     // source='user'면 보강 차단, AI 임시는 L4 EDI 보정
+    // TallyOne 1.11-01: 정본 판정은 조회 경로(source)가 아니라 항목 안쪽(isUserOwnedBayDict). Firebase 경유 정본이 자동 사전 취급되던 결함.
     const enrichedEntry = enrichBayDef(
       { bayDef: dict.bayDef },
       dict._v5Matrix,
       containers,
-      dict.source
+      isUserOwnedBayDict(dict) ? 'user' : dict.source
     );
     const m = {};
     enrichedEntry.bayDef.baysSummary.forEach(b => {
