@@ -14,7 +14,7 @@
 
 | 앱 | 정체 | 현재 버전 | 버전 소스 (여기를 읽는다) |
 |---|---|---|---|
-| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.19** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
+| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.20** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
 | **MailPilot** (구 수집기) | PC 로컬 Python (`C:\TALLYTEST\TallymanMailCollector_v2.17.15\` — 폴더명은 버전 아님) | **MailPilot 1.0-09** | `app_gui.py` → `VERSION` |
 | **ConeOne** (구 콘앱) | `public/cone.html` 독립 HTML | **ConeOne 1.5-01** | `cone.html` → `window.__CONEV` — 콘앱 단일 소스(검수앱 버전과 분리) |
 | 벌크탤리 | `bulk_tally.html` 독립 HTML | TallyOne 버전 동기 | 라벨은 build.sh가 APP_VERSION에서 동기화 |
@@ -136,7 +136,37 @@
 
 > 범용화 프로젝트(TallyUni·MailPilot Uni, 저장소 tallyone-universal)의 작업 기록은 여기가 아니라 `★범용화_프로젝트_별도관리.md` §8에 적는다 — 검수사 지시 "따로 관리"(2026-08-05). 이 기록부는 현장 3앱(TallyOne·MailPilot·ConeOne) 전용이다.
 
-### 2026-08-06 — TallyOne 1.19: 미회신 오답을 **소유자 눈에** (커밋 `__HC__`)
+### 2026-08-06 — TallyOne 1.20: **폰 푸시 알림 (FCM)** — 앱 쪽 (커밋 `__HD__`)
+
+화면을 안 열어도 폰이 울리게 한다. 1.19 는 "열면 보인다" 였고 이건 "안 열어도 온다" 다.
+
+**왜 FCM 인가 — 새로 늘어나는 것이 없다.** 회사 정책상 외부 API 를 못 쓴다는 조건과 충돌하지 않는다.
+이미 쓰는 Firebase 프로젝트 안이고(`messagingSenderId 981192728666`), 컨테이너 자료를 이미 그 Firebase 에 올리고 있으므로 **새 반출처가 아니다.** 나가는 것은 알림 문구뿐이다. 배포처가 늘어도 조건이 안 늘어난다(범용화).
+
+**검수사 환경 확인** — 갤럭시 울트라 · **PWA 설치 완료**. iOS 제약 없음, 백그라운드 수신 확실.
+
+**넣은 것**
+
+| 파일 | 내용 |
+|---|---|
+| `src/push.js` (신설) | 지원 여부·권한·토큰 발급/폐기. VAPID 공개 키 상수 |
+| `src/firebase.js` | `app` export(messaging 초기화용) · `fbSavePushToken`/`fbDeletePushToken` |
+| `public/sw.js` | `push` · `notificationclick` 핸들러 |
+| `src/pages/AuxPage.jsx` | 보조기능에 「폰 알림 켜기」 카드 — 상태·오류를 문구로 그대로 표시 |
+
+**노드** — `push_tokens/{사람}/{토큰끝24자}` = `{ token, at, ua }`.
+⚠ **키에 토큰 원문을 쓰면 안 된다** — `.#$/[]` 가 들어 있어 RTDB 경로가 깨진다. 끝 24자를 치환해 쓴다.
+기기마다 토큰이 다르므로 사람 밑에 여러 개가 붙는다(폰·태블릿·PC).
+
+**⚠ 서비스워커를 하나로 유지했다.** `firebase-messaging-sw.js` 를 따로 두지 않고 기존 `sw.js` 에 핸들러를 붙이고 `getToken({ serviceWorkerRegistration })` 로 넘긴다. 파일이 둘이면 캐시 전략이 갈리고 배포 때 하나를 빠뜨린다.
+
+**⚠ 발송은 반드시 data-only.** `notification` 블록을 넣으면 브라우저가 자동으로도 띄워 **알림이 두 번 뜬다**(자동 1 + 우리 push 핸들러 1). 그래서 우리가 직접 그린다.
+
+**아직 안 된 것 — 발송(수집기).** FCM HTTP v1 발송에는 **서비스 계정 JSON** 이 필요하다.
+⛔ 그 파일은 **비밀 키다. 채팅·메일·카톡 어디에도 붙이지 않는다.** `C:\TALLYTEST\` 에 파일로 두고 경로만 코드가 읽는다.
+그전까지는 앱에서 알림을 켜 토큰만 등록된다 — 울리지는 않는다.
+
+### 2026-08-06 — TallyOne 1.19: 미회신 오답을 **소유자 눈에** (커밋 `4da92c3`)
 
 **문제.** 오답 리포트는 `#/chief` 안에 있고 접힌 섹션이다. **그 화면을 열어야만 보인다.**
 오늘 오답 두 건 다 클로드가 **우연히** 발견했다(다른 걸 조회하다가). 그 우연을 없애는 것이 목적이다.

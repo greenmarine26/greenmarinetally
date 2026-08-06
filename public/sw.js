@@ -1,6 +1,6 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 1.19';
+const VERSION = 'TallyOne 1.20';
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
@@ -58,4 +58,40 @@ self.addEventListener('fetch', (e) => {
         )
       )
   );
+});
+
+// ─── TallyOne 1.20: 푸시 알림 ────────────────────────────────────────────────────────
+//   수집기가 미회신 오답을 보내면 여기서 받아 알림을 그린다.
+//   ⚠ 발신 쪽은 **data-only** 로 보낼 것 — `notification` 블록을 넣으면 브라우저가 자동으로도 띄워
+//     알림이 두 번 뜬다. 그래서 여기서 직접 그린다.
+//   ⚠ 조용히 실패하지 않는다 — 페이로드를 못 읽어도 기본 문구로라도 띄운다.
+//     안 띄우면 "왜 안 오지"가 되고, 원인을 못 찾는다.
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? (e.data.json().data || e.data.json() || {}) : {}; }
+  catch (err) { try { d = { body: e.data ? e.data.text() : '' }; } catch (e2) { d = {}; } }
+  const title = d.title || '평택항 검수';
+  const body = d.body || '새 알림이 있습니다.';
+  e.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: d.tag || 'tallyone',        // 같은 tag 는 덮어쓴다 — 같은 알림이 쌓이지 않게
+    renotify: true,
+    data: { url: d.url || './#/chief' },
+    requireInteraction: d.sticky === '1',
+  }));
+});
+
+// 알림을 누르면 그 화면으로. 이미 열린 탭이 있으면 그 탭을 쓴다(탭이 늘어나지 않게).
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || './#/chief';
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      if ('focus' in c) { try { await c.navigate(new URL(url, self.location.href).href); } catch (err) {} return c.focus(); }
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(url);
+  })());
 });

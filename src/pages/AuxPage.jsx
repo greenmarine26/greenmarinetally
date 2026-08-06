@@ -4,12 +4,13 @@
 //   화면 이동은 window.location.hash 직접 변경(#/food, #/health, #/). 라우트 등록(#/aux)은 팀K 소관.
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, BookOpen, Languages, MessageCircle, Dices, Activity,
-  Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가
+  Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen, Bell, BellOff } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가
 import HelpModal from '../components/HelpModal.jsx';
 import ContainerPhrasebook from '../components/ContainerPhrasebook.jsx';
 import GeminiKeyModal from '../components/GeminiKeyModal.jsx';
 import ClaudeMemoModal from '../components/ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
 import { HELP_DATA, HELP_COURSE } from '../data/helpData.js';
+import { pushState, enablePush, disablePush } from '../push.js';   // TallyOne 1.20: 폰 알림
 import { buildGreetingMessage, fetchPyeongtaekWeather } from '../greeting.js';
 import { heartbeatState, healthSummary } from '../health.js';
 import { equipNumbersForPier, getEquipNumber } from '../utils.js';
@@ -211,6 +212,26 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
   const [briefOpen, setBriefOpen] = useState(false);
   const [memoOpen, setMemoOpen] = useState(false);   // TallyOne 1.1: 클로드에게 메모 모달
 
+  // TallyOne 1.20: 폰 알림(FCM) — 화면을 안 열어도 미회신 오답을 폰이 알려 준다.
+  //   'on' | 'off' | 'denied' | 'unsupported'. 결과는 문구로 그대로 보여준다(조용한 실패 금지).
+  const [pushSt, setPushSt] = useState('off');
+  const [pushMsg, setPushMsg] = useState('');
+  const [pushBusy, setPushBusy] = useState(false);
+  useEffect(() => { pushState().then(setPushSt); }, []);
+  const togglePush = async () => {
+    setPushBusy(true); setPushMsg('');
+    try {
+      if (pushSt === 'on') {
+        await disablePush(inspector);
+        setPushSt('off'); setPushMsg('폰 알림을 껐습니다.');
+      } else {
+        const r = await enablePush(inspector);
+        if (r.ok) { setPushSt('on'); setPushMsg('✅ 켜졌습니다. 이 기기로 알림이 옵니다.'); }
+        else setPushMsg('⚠ ' + r.reason);
+      }
+    } finally { setPushBusy(false); }
+  };
+
   // 수집기 하트비트 상태 — 30초마다 경과 재계산 (HomePage와 같은 주기)
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -279,6 +300,14 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
           <AuxCard icon={Wrench} accent="orange" title="장비 번호 안내"
             sub="부두별 갠트리 호기 참고표"
             onClick={() => setView('equip')} />
+          {/* TallyOne 1.20: 폰 알림 — 미회신 오답이 생기면 폰이 울린다. 화면을 열어 볼 필요가 없다. */}
+          <AuxCard icon={pushSt === 'on' ? Bell : BellOff}
+            accent={pushSt === 'on' ? 'teal' : 'orange'}
+            title={pushBusy ? '처리 중…' : (pushSt === 'on' ? '폰 알림 켜짐' : '폰 알림 켜기')}
+            sub={pushSt === 'unsupported' ? '이 브라우저는 지원 안 함'
+              : pushSt === 'denied' ? '차단됨 — 사이트 설정에서 허용'
+              : (pushMsg || (pushSt === 'on' ? '누르면 끕니다' : '오답·긴급 알림을 폰으로'))}
+            onClick={pushBusy || pushSt === 'unsupported' ? undefined : togglePush} />
           {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청 기록, 클로드 세션이 나중에 처리 */}
           <AuxCard icon={NotebookPen} accent="violetDeep" title="클로드에게 메모"
             sub="발견한 문제·요청 기록 → 클로드가 처리"

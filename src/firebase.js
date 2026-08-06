@@ -22,7 +22,7 @@ const firebaseConfig = {
   appId: "1:981192728666:web:c74f0e1a26c1f91039b863"
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);   // TallyOne 1.20: push.js 가 messaging 초기화에 쓴다
 const db = getDatabase(app);
 const storage = getStorage(app);  // M6.40
 
@@ -1369,6 +1369,27 @@ export async function fbReportWrongAnswer(data) {
     ...data,
   });
   return ts;
+}
+
+/**
+ * TallyOne 1.20: 푸시 토큰 등록 — `push_tokens/{사람}/{토큰끝24자}` = { token, at, ua }
+ *   기기마다 토큰이 다르므로 사람 밑에 여러 개가 붙는다(폰·태블릿·PC).
+ *   키에 토큰 원문을 쓰면 안 된다 — `.#$/[]` 가 들어 있어 RTDB 경로가 깨진다.
+ */
+const _safeKey = (x) => String(x || '').replace(/[.#$/[\]\s]/g, '_');
+export async function fbSavePushToken(name, token) {
+  if (!token) return false;
+  const k = _safeKey(String(token).slice(-24));
+  await set(ref(db, `push_tokens/${_safeKey(name) || '익명'}/${k}`), {
+    token, at: Date.now(),
+    ua: (typeof navigator !== 'undefined' ? String(navigator.userAgent || '').slice(0, 120) : ''),
+  });
+  return true;
+}
+export async function fbDeletePushToken(name, token) {
+  if (!token) return false;
+  await remove(ref(db, `push_tokens/${_safeKey(name) || '익명'}/${_safeKey(String(token).slice(-24))}`));
+  return true;
 }
 
 export function fbSubscribeFeedback(callback) {
