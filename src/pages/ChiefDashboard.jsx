@@ -357,6 +357,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       .map(f => (f ? { ...f, ts: f.ts || f.at || 0 } : null))
       .filter(f => f && f.ts && !f.resolved).length, [feedback]);
 
+  // TallyOne 1.19: **미회신**(클로드가 아직 답을 안 단 것) — '미해결'(사람이 ✓ 를 안 누른 것)과 다르다.
+  //   배너는 미회신을 센다. 답이 붙었으면 검수사가 볼 것이 있는 상태라 급하지 않다.
+  const unansweredCount = useMemo(() =>
+    Object.values(feedback || {})
+      .filter(f => f && (f.query || '').trim() && !f.claudeStatus && !f.resolved).length, [feedback]);
+
   // V8.02-02: 오답 '저금통' 내보내기 — 전체를 텍스트 파일로 다운로드.
   //   클로드(또는 개발자)에게 파일 하나로 전달하기 위함. 내보낸 시점의 ts 목록을 기억.
   // V9.57(I6): 내보내기·비우기도 목록(213행대)과 동일하게 _key·at 폴백 적용.
@@ -895,6 +901,19 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         </Fold>
       )}
 
+      {/* TallyOne 1.19: 미회신이 있으면 **섹션 위에** 눈에 띄게. 접힌 섹션 안에 있으면 못 본다. */}
+      {unansweredCount > 0 && (
+        <button onClick={() => { if (!openSecs.feedback) toggleSec('feedback'); }}
+          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-xl px-3 py-2.5 mt-3 hover:bg-red-900/40 transition"
+          style={{ minHeight: 44 }}>
+          <span className="flex items-center gap-2 text-[13px] font-bold text-red-200">
+            ❌ 오답 <b className="text-lg mono">{unansweredCount}</b>건 — 아직 회신 안 함
+          </span>
+          <span className="text-[11px] text-red-300/80">
+            {openSecs.feedback ? '아래에 있습니다' : '눌러서 펼치기 →'}
+          </span>
+        </button>
+      )}
       {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) */}
       <Fold id="feedback" title={`❌ 오답 리포트${unresolvedCount > 0 ? ` (미해결 ${unresolvedCount})` : ''}`} open={!!openSecs.feedback} onToggle={() => toggleSec('feedback')}>
       <div className="bg-slate-900 border border-red-800/40 rounded-xl p-3 mt-3">

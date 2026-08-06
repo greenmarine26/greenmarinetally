@@ -14,7 +14,7 @@
 
 | 앱 | 정체 | 현재 버전 | 버전 소스 (여기를 읽는다) |
 |---|---|---|---|
-| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.18** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
+| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.19** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
 | **MailPilot** (구 수집기) | PC 로컬 Python (`C:\TALLYTEST\TallymanMailCollector_v2.17.15\` — 폴더명은 버전 아님) | **MailPilot 1.0-09** | `app_gui.py` → `VERSION` |
 | **ConeOne** (구 콘앱) | `public/cone.html` 독립 HTML | **ConeOne 1.5-01** | `cone.html` → `window.__CONEV` — 콘앱 단일 소스(검수앱 버전과 분리) |
 | 벌크탤리 | `bulk_tally.html` 독립 HTML | TallyOne 버전 동기 | 라벨은 build.sh가 APP_VERSION에서 동기화 |
@@ -136,7 +136,31 @@
 
 > 범용화 프로젝트(TallyUni·MailPilot Uni, 저장소 tallyone-universal)의 작업 기록은 여기가 아니라 `★범용화_프로젝트_별도관리.md` §8에 적는다 — 검수사 지시 "따로 관리"(2026-08-05). 이 기록부는 현장 3앱(TallyOne·MailPilot·ConeOne) 전용이다.
 
-### 2026-08-06 — TallyOne 1.18: **말길 넓히기** — 앱이 할 수 있는 것에 닿게 (커밋 `__HB__`)
+### 2026-08-06 — TallyOne 1.19: 미회신 오답을 **소유자 눈에** (커밋 `__HC__`)
+
+**문제.** 오답 리포트는 `#/chief` 안에 있고 접힌 섹션이다. **그 화면을 열어야만 보인다.**
+오늘 오답 두 건 다 클로드가 **우연히** 발견했다(다른 걸 조회하다가). 그 우연을 없애는 것이 목적이다.
+
+**전 검수원 방송(`fbSetBroadcast`)은 쓰지 않았다.** 검수사 지적 —
+> "저만이 볼 수 있는 게 있습니다, 다른 사람은 못 보고 그쵸?"
+
+맞다. 오답 미회신은 현장 검수원이 할 수 있는 일이 아니다. 방송하면 화면만 시끄러워진다.
+권한 판정은 **이미 있는 `adminGuard.isOwnerName`** 을 그대로 쓴다 — 새 개념을 만들지 않는다.
+
+**넣은 것 둘.**
+1. **검수 홈** — 소유자에게만 「❌ 오답 N건 — 아직 회신 안 함」 한 줄. 누르면 수석 대시보드로.
+   소유자가 아니면 **구독 자체를 안 건다**(`if (!isOwnerName(inspector)) return;`).
+2. **수석 대시보드** — 오답 섹션 **위에** 같은 배너. 접혀 있어도 보이고, 누르면 펼쳐진다.
+
+**⚠ '미회신'과 '미해결'은 다르다.** 종전 `unresolvedCount` 는 *사람이 ✓ 를 안 누른 것*이고,
+배너가 세는 `unansweredCount` 는 *클로드가 아직 답을 안 단 것*이다. 답이 붙었으면 검수사가 볼 것이 있는 상태라 급하지 않다. **따로 센다.**
+
+**다음 단계 — FCM 푸시.** 검수사 폰이 **갤럭시 울트라 + 앱(PWA) 설치 완료** 확인. iOS 제약이 없고 설치까지 돼 있어 백그라운드 수신이 확실하다.
+재료도 다 있다 — `firebase 11.x`(messaging 포함) · `messagingSenderId 981192728666` · `manifest(standalone)` · `sw.js`.
+**새 업체·새 키·새 비용이 없다** — 컨테이너 데이터를 이미 그 Firebase 에 올리고 있으므로 FCM 은 새 반출처가 아니고, 나가는 것은 알림 문구뿐이다. 회사 정책상 외부 API 를 못 쓰는 조건과 충돌하지 않는다.
+남은 것: VAPID 키 생성(5분) · 앱 messaging 초기화+토큰 저장(1~2h) · `sw.js` push 핸들러(30분) · 수집기 발송(1h).
+
+### 2026-08-06 — TallyOne 1.18: **말길 넓히기** — 앱이 할 수 있는 것에 닿게 (커밋 `7981ebb`)
 
 **계기.** 검수사가 「출출한데 뭘 먹을까?」 를 물었더니 맛집 돌림판이 떴다 — 그걸 보고 하신 말씀:
 

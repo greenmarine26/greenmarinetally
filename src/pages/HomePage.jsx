@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
-import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
+import { fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
 import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
-import { isChief } from '../staffList.js';   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
+import { isChief } from '../staffList.js';
+import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
 //   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
@@ -359,6 +360,20 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       });
   }, [voyages, portMisData, pilotForecast]);
 
+  // TallyOne 1.19: 미회신 오답 감시 — **소유자에게만.**
+  //   검수사 지시 2026-08-06: 오답 리포트는 #/chief 안에 있어서 그 화면을 열어야만 보인다.
+  //   전 검수원 방송(fbSetBroadcast)은 쓰지 않는다 — 현장 검수원이 할 수 있는 일이 아니라
+  //   화면만 시끄러워진다. 권한 판정은 이미 있는 isOwnerName 을 그대로 쓴다.
+  const [fbUnanswered, setFbUnanswered] = useState(0);
+  useEffect(() => {
+    if (!isOwnerName(inspector)) return;            // 소유자가 아니면 구독 자체를 안 건다
+    return fbSubscribeFeedback((fb) => {
+      const n = Object.values(fb || {}).filter(f =>
+        f && (f.query || '').trim() && !f.claudeStatus && !f.resolved).length;
+      setFbUnanswered(n);
+    });
+  }, [inspector]);
+
   // TallyOne 1.13: **자료 확정 시각 자동 기록** (검수사 확정 2026-08-06 — "앱이 자동으로").
   //   완성율(EDI·리스트 100% 매칭)이 처음 1.0 이 된 순간 `info.dataFixedAt` 을 남긴다.
   //   이 시각이 있어야 그 뒤 자료가 또 들어왔을 때 "수정본"으로 구분할 수 있다.
@@ -540,6 +555,18 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           첫 화면에서 가장 큰 자리를 차지했는데 매일 쓰는 것은 아래 항차 목록이다.
           · 수석 대시보드 → '진행 중인 항차' 줄 가운데(빈 공간)로
           · 통합 검색·PORT-MIS 캡처 → 수석 대시보드 바로가기 그리드의 빈칸으로 */}
+      {/* TallyOne 1.19: 미회신 오답 — 소유자만 본다. 누르면 수석 대시보드(오답 리포트)로. */}
+      {fbUnanswered > 0 && isOwnerName(inspector) && (
+        <button onClick={onOpenChiefDashboard}
+          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-lg px-3 py-2 mb-3 hover:bg-red-900/40 transition"
+          style={{ minHeight: 44 }}>
+          <span className="flex items-center gap-2 text-[12px] font-bold text-red-200">
+            ❌ 오답 <b className="text-base mono">{fbUnanswered}</b>건 — 아직 회신 안 함
+          </span>
+          <span className="text-[11px] text-red-300/80">눌러서 보기 →</span>
+        </button>
+      )}
+
       {/* V9.16: 오늘의 나 — 내 처리량·페이스 (완료 기록이 있을 때만) */}
       {(() => {
         const me = computeMyToday(voyages, inspector);
