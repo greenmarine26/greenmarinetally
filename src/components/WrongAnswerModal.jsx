@@ -95,7 +95,9 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
                 <b className="text-sky-300"> 클로드 회신</b>이 붙습니다 —
                 <b className="text-slate-200"> 무엇을 고칠지</b>와 <b className="text-slate-200">언제 되는지</b>.
                 <div className="text-[11px] text-slate-500 mt-1.5">
-                  간단한 건 10분 안, 손이 많이 가는 건 예상 시점을 적어 둡니다. 기다리지 마시고 일 보십시오.
+                  {/* TallyOne 1.17: 검수사 지시 — "실제 얼마의 시간이 걸리는지. 그래야 앱을 신용하고 더 쓰고 싶어진다." */}
+                  <b className="text-slate-300">답이 먼저 옵니다</b> — 앱이 못 낸 답을 클로드가 직접 적어 둡니다.
+                  그 다음 <b className="text-slate-300">앱이 언제부터 스스로 답하는지</b>를 분 단위로 적습니다.
                 </div>
               </div>
             </div>

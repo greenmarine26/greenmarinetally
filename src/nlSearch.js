@@ -69,6 +69,7 @@ export function parseNaturalQuery(text) {
     bottomQuery: false, topQuery: false,
     vacantQuery: false,
     posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
+    dupL4Query: false,   // TallyOne 1.17: 끝 4자리 중복 조회
     bayTrio: null,   // V8.03-01: 짝수 베이+구역 = 트리오(23·24·25) 전체
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
     shipIntroQuery: false,   // V9.18: 선박 소개·이름 유래
@@ -270,6 +271,11 @@ export function parseNaturalQuery(text) {
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
   if (/(실\s*번호|씰|실)\s*(점검|검사|오류|확인|체크)|리스트\s*(점검|검사|확인|체크)|점검\s*(?:해|좀|줘|할까)/i.test(t)) result.sealAuditQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
+  // TallyOne 1.17: **끝 4자리 중복 조회** (검수사 오답 신고 2026-08-06 — "끝자리 4자리 중복인거 알려줘").
+  //   종전엔 listQuery 하나로만 잡혀 '중복'을 못 읽고 전체를 나열했다.
+  //   끝 4자리는 컨번호 조회의 기준이라, 겹치는 것이 있으면 반드시 짚어야 조회를 믿을 수 있다.
+  //   listQuery 판정보다 **먼저** 본다 — "중복인 거 알려줘"의 '알려줘'가 목록 질문으로 먹히기 때문.
+  if (/중복|겹치|겹쳐|같은\s*(?:번호|끝자리|끝\s*자리)|duplicate|dup\b/i.test(t)) result.dupL4Query = true;
   if (/리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등
 
   // 전체 / 통계
@@ -536,6 +542,7 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
 
   // V7.90-02: 베이 분포 — 명시 질문이거나, 위치 질문인데 결과가 많으면(개별 나열 무의미) 분포로
   if (parsed.bayDistQuery || (parsed.posQuery && results.length > 5)) return formatBayDist(desc, results, parsed);
+  if (parsed.dupL4Query) return formatDupL4(desc, results);   // TallyOne 1.17: 중복 질문은 목록보다 먼저
   if (parsed.posQuery || parsed.listQuery) return formatLocationList(desc, results);
   if (parsed.isStat) return formatStats(desc, results);
 
@@ -917,6 +924,55 @@ function formatBayDist(desc, results, parsed = {}) {
     lines.push(`${String(b).padStart(2, '0')}번 베이 ${v.n}대${parts.length ? ' · ' + parts.join(' · ') : ''}`);
   }
   if (byBay['?']) lines.push(`위치미상 ${byBay['?'].n}대`);
+  return lines.join('\n');
+}
+
+/**
+ * TallyOne 1.17: 끝 4자리가 겹치는 컨을 짝지어 답한다.
+ *   왜 — 검수사는 컨을 끝 4자리로 부른다. 겹치는 것이 있으면 그 번호로는 특정이 안 된다.
+ *   **같은 방향(양하끼리/선적끼리) 겹친 것을 위로** 올린다 — 그게 실제로 헷갈리는 것이다.
+ *   양하-선적으로 갈린 것은 작업 자체가 달라 혼동이 적으므로 아래에 요약만 둔다.
+ */
+function formatDupL4(desc, results) {
+  const groups = new Map();
+  for (const c of results) {
+    const cn = String(c.cn || '').toUpperCase();
+    if (cn.length !== 11) continue;             // 실번호 없는 자리(__SLOT_ 등) 제외
+    const k = c.l4 || cn.slice(-4);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(c);
+  }
+  const dups = [...groups.entries()].filter(([, v]) => v.length > 1).sort((a, b) => a[0].localeCompare(b[0]));
+  if (dups.length === 0) return `✅ ${desc} — 끝 4자리 중복 없음 (${results.length}대 확인)`;
+
+  const sameDir = dups.filter(([, v]) => new Set(v.map(c => c._mode)).size === 1);
+  const crossDir = dups.filter(([, v]) => new Set(v.map(c => c._mode)).size > 1);
+  const total = dups.reduce((t, [, v]) => t + v.length, 0);
+  const lines = [`⚠️ ${desc} — 끝 4자리 겹침 ${dups.length}쌍 (${total}대)`];
+  const dirLabel = (m) => (m === 'discharge' ? '양하' : m === 'loading' ? '선적' : '');
+
+  const put = (list, head) => {
+    if (!list.length) return;
+    lines.push('', head);
+    for (const [k, v] of list) {
+      const one = v.map(c => `${c.cn} ${fmtPos(c)}`).join(' │ ');
+      const dirs = [...new Set(v.map(c => dirLabel(c._mode)).filter(Boolean))];
+      lines.push(`  ${k}  ${one}${dirs.length === 1 && dirs[0] ? `  (둘 다 ${dirs[0]})` : ''}`);
+    }
+  };
+  put(sameDir, `같은 방향끼리 겹침 — 조회가 실제로 갈립니다 (${sameDir.length}쌍)`);
+  if (crossDir.length) {
+    lines.push('', `양하·선적으로 갈림 — 혼동은 적음 (${crossDir.length}쌍)`);
+    lines.push(`  ${crossDir.map(([k]) => k).join(' · ')}`);
+  }
+  // 같은 베이 안에서 겹친 것은 따로 짚는다 — 현장에서 가장 위험하다.
+  const sameBay = dups.filter(([, v]) => {
+    const bays = new Set(v.map(c => String(parseInt(c.bay, 10))));
+    return bays.size === 1 && !bays.has('NaN');
+  });
+  if (sameBay.length) {
+    lines.push('', `🔴 같은 베이 안에서 겹침 — ${sameBay.map(([k, v]) => `${k}(${parseInt(v[0].bay, 10)}번 베이)`).join(' · ')}`);
+  }
   return lines.join('\n');
 }
 

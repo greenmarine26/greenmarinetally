@@ -1217,6 +1217,10 @@ function FeedbackRow({ feedback: f }) {
             </div>
           );
         }
+        // TallyOne 1.17: **답이 먼저다** (검수사 지시 2026-08-06 —
+        //   "질문에 대한 답을 먼저. 4개가 있습니다, 컨번호 알려주고, 대략 30분 후부터는 앱이 자동으로
+        //    알려줄 거라는 것입니다"). 검수사는 지금 답이 필요하다. 앱 수정 일정은 그 다음이다.
+        const remainMin = f.claudeEtaAt ? Math.round((f.claudeEtaAt - Date.now()) / 60000) : null;
         const tone = st === 'fixed'
           ? { box: 'border-emerald-700/50 bg-emerald-950/30', head: 'text-emerald-300', icon: '✅', label: '반영 완료' }
           : st === 'wontfix'
@@ -1224,10 +1228,27 @@ function FeedbackRow({ feedback: f }) {
             : { box: 'border-sky-700/50 bg-sky-950/25', head: 'text-sky-300', icon: '🔧', label: '처리 예정' };
         return (
           <div className={`text-[11px] rounded px-2 py-1.5 mb-1 border leading-relaxed ${tone.box}`}>
+            {/* 질문에 대한 답 — 앱이 못 낸 답을 클로드가 직접 낸 것. 가장 위에 크게. */}
+            {f.claudeAnswer && (
+              <div className="mb-1.5 pb-1.5 border-b border-slate-700/50">
+                <div className="text-[10px] font-bold text-amber-300 mb-0.5">💬 답</div>
+                <div className="text-[11px] text-slate-100 whitespace-pre-wrap mono leading-snug">{f.claudeAnswer}</div>
+              </div>
+            )}
             <div className={`font-bold ${tone.head}`}>
               {tone.icon} 클로드 — {tone.label}
               {f.claudeEta && st !== 'fixed' && <span className="ml-1 text-slate-300">· {f.claudeEta}</span>}
+              {/* 남은 시간 — 막연한 '곧'이 아니라 숫자로. 지나면 그것도 그대로 적는다. */}
+              {remainMin != null && st !== 'fixed' && (
+                <span className={`ml-1 ${remainMin >= 0 ? 'text-slate-400' : 'text-amber-400'}`}>
+                  {remainMin >= 0 ? `(약 ${remainMin}분 남음)` : `(예정 ${-remainMin}분 지남 — 확인 중)`}
+                </span>
+              )}
               {f.fixedVersion && st === 'fixed' && <span className="ml-1 text-slate-300 mono">· {f.fixedVersion}</span>}
+              {/* 반영된 것은 신고 후 몇 분 만이었는지 남긴다 — 다음에 얼마나 기다리면 되는지의 근거. */}
+              {st === 'fixed' && f.claudeAt && f.ts && (
+                <span className="ml-1 text-emerald-400/80">· 신고 후 {Math.max(1, Math.round((f.claudeAt - f.ts) / 60000))}분</span>
+              )}
             </div>
             {f.claudePlan && <div className="text-slate-300 mt-0.5 whitespace-pre-wrap">{f.claudePlan}</div>}
             {f.claudeAt && (
