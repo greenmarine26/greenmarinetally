@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.11-01';   // 매트릭스 정본 판정을 조회 경로(source) 대신 항목 안쪽(_userOwned)으로 — 브라우저마다 카고플랜이 갈리던 결함
+export const APP_VERSION = 'TallyOne 1.12';   // 홈 항차 목록을 자료 완성율(EDI·리스트 매칭율) 내림차순으로 — 자료 갖춘 배가 위로
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
