@@ -3,7 +3,7 @@ import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, Check
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, planWorkStart } from '../utils.js';   // TallyOne 1.22: 도선→작업개시  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -1772,6 +1772,13 @@ function ScheduleLine({ planDate, planSrc, pf }) {
   return (
     <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
       {planDate && <span>📅 {planDate}{srcLabel ? ` (${srcLabel})` : ''}</span>}
+      {/* TallyOne 1.22: 도선 일정은 **입항 시각**이다 — 작업개시는 부두별 소요를 더해 따로 보여준다
+          (검수사 확정 2026-08-07: PCTC 1시간 30분 · PNCT 2시간). 오답 1786057401908. */}
+      {(() => {
+        const w = planWorkStart({ planDate, planSrc, berth: pf?.nextArrBerth || '' });
+        if (w.basis !== 'pilot' || !w.start) return null;
+        return <span className="text-emerald-300">🛠 작업예정 {fmt(`${w.start.getFullYear()}-${String(w.start.getMonth() + 1).padStart(2, '0')}-${String(w.start.getDate()).padStart(2, '0')} ${String(w.start.getHours()).padStart(2, '0')}:${String(w.start.getMinutes()).padStart(2, '0')}`)}</span>;
+      })()}
       {pf?.nextArr && <span className="text-sky-300">⚓ 입항 {fmt(pf.nextArr)}</span>}
       {pf?.nextDep && <span className="text-amber-300">⚓ 출항 {fmt(pf.nextDep)}</span>}
     </div>

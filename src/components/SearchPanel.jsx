@@ -4,10 +4,10 @@
 // - 결과 카드: 실번호 거대 + 완료 버튼
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle } from 'lucide-react';
+import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer } from '../nlSearch.js';
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
@@ -21,7 +21,7 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, isLoloShip = false, mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, pilotForecast = {}, isLoloShip = false, mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -381,7 +381,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} manualCtx={manualCtx} />
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} manualCtx={manualCtx} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
@@ -416,8 +416,15 @@ function announceContainer(c) {
   speak(parts.join(', '));
 }
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, manualCtx = null }) {   // V7.92 / V7.99-10 manualCtx
+function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, manualCtx = null }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast
   const [query, setQuery] = useState('');
+  // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
+  //   "숫자가 아닌 텍스트가 입력이 될때는 대기 하고 전송키로 전송을 누르면 질문에 답을 해주게").
+  //   종전엔 글자마다 즉답을 만들어 "…컨테이너가 없습니다"가 타이핑 중에 튀어나왔다.
+  //   ⚠ 숫자(끝 4자리)와 음성은 종전대로 즉답 — 현장 조회 속도를 늦추지 않는다.
+  const [draft, setDraft] = useState('');
+  const isSentence = (v) => /[가-힣A-Za-z]/.test(String(v || '')) && !/^[\d\s-]+$/.test(String(v || ''));
+  const submitDraft = () => { const v = draft.trim(); if (!v) return; setQuery(v); logQuerySettled(v); };
   const [weatherText, setWeatherText] = useState(null);   // V7.92: 날씨 질문 비동기 답변
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
   const fixTriedRef = useRef('');     // V7.80: AI 복원 1회 제한
@@ -524,6 +531,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       if (pm.port && pm.port !== '평택') lines.push(`⚠ ${pm.port} 항만 데이터입니다.`);
       return lines.join('\n');
     }
+    // TallyOne 1.22: 도선·작업개시 — 도선 시각은 입항 시각이라 부두별 소요(PCTC 90분·PNCT 120분)를 더해 답한다.
+    if (parsed.pilotQuery) return generatePilotAnswer(voyage?.info || {}, pilotForecast[String(voyage?.info?.vsl || '').toUpperCase()] || null);
+    // TallyOne 1.21: 기상 시각 — timeQuery보다 먼저. 그 선박 일정(planDate)으로 작업시작을 잡는다.
+    if (parsed.wakeQuery) return generateWakeAnswer(voyage?.info || {});
     if (parsed.timeQuery) return generateTimeAnswer();
     if (parsed.weatherQuery) return weatherText || '🌤 평택항 날씨 조회 중…';
     // V7.93: 트윈 작업 무게 점검 — "20번 베이 트윈 가능해" (합계 55톤↑ 불가 + 불균형 수평 주의)
@@ -590,10 +601,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
         const t = pickSpeechAlternative(alts).trim();
         setTranscript(t);
-        if (t.length >= 2) { voiceQueryRef.current = t; setQuery(t); logQuerySettled(t); }   // TallyOne 1.3: 음성 조회 기록
+        if (t.length >= 2) { voiceQueryRef.current = t; setDraft(t); setQuery(t); logQuerySettled(t); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록
         else {
           const digits = parseSpokenDigits(text);
-          if (digits && digits.length >= 2) { setQuery(digits); logQuerySettled(digits); }
+          if (digits && digits.length >= 2) { setDraft(digits); setQuery(digits); logQuerySettled(digits); }
           else speak('인식 실패');
         }
       }
@@ -627,7 +638,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       setFixingVoice(false);
       if (fixed && fixed !== q) {
         const p2 = parseNaturalQuery(fixed);
-        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setQuery(fixed); logQuerySettled(fixed); }
+        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setDraft(fixed); setQuery(fixed); logQuerySettled(fixed); }
       }
     }).catch(() => { if (alive) setFixingVoice(false); });
     return () => { alive = false; };
@@ -762,8 +773,15 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         </div>
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
-          <input type="text" value={query}
-            onChange={e => { setQuery(e.target.value); logQuerySettled(e.target.value); }}   // TallyOne 1.3: 조회 기록
+          <input type="text" value={draft}
+            onChange={e => {
+              const v = e.target.value;
+              setDraft(v);
+              // 숫자·빈 입력은 즉답(종전 동작). 문장은 전송키를 누를 때까지 답하지 않는다.
+              if (!isSentence(v)) { setQuery(v); logQuerySettled(v); }
+              else if (query) setQuery('');
+            }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitDraft(); } }}
             placeholder="🎤 / 4777 / 40피트 4777 / 자유 질문"
             autoComplete="off"
             inputMode={manualCtx && manualCtx.selectedGroup != null && manualCtx.selectedTier ? 'numeric' : 'text'}
@@ -781,8 +799,15 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-slate-500'}`}>
               {autoSpeak ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
             </button>
-            {(query || chatMessages.length > 0) && (
-              <button onClick={() => { setQuery(''); handleNewChat(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
+            {/* TallyOne 1.22: 전송키 — 문장을 다 쓰고 누르면 그때 답한다. */}
+            {isSentence(draft) && draft.trim() !== query && (
+              <button onClick={submitDraft} title="질문 전송"
+                className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-slate-900">
+                <SendHorizontal className="w-5 h-5"/>
+              </button>
+            )}
+            {(draft || query || chatMessages.length > 0) && (
+              <button onClick={() => { setDraft(''); setQuery(''); handleNewChat(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
                 <X className="w-4 h-4 text-slate-500"/>
               </button>
             )}
@@ -1011,14 +1036,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               <BigResultCard c={main[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(main[0])}
-                onAfterComplete={() => { setQuery(''); stopSpeak(); }}
+                onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
               />
             )}
             {main.length === 0 && doneSolo.length === 1 && (
               <BigResultCard c={doneSolo[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(doneSolo[0])}
-                onAfterComplete={() => { setQuery(''); stopSpeak(); }}
+                onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
               />
             )}
             {main.length > 1 && main.slice(0, 30).map(c => (

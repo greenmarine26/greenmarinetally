@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake } from 'lucide-react';
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateIntroAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결
 
 export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   const [query, setQuery] = useState('');
@@ -80,6 +80,8 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
         p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.schedQuery || p.foodQuery) {
       return '이 질문은 항차 화면에서 답합니다.\n홈에서 그 배의 [양하]/[선적] 막대를 누른 뒤 🎤 자연어 탭에서 물어보세요.';
     }
+    // TallyOne 1.21: 기상 시각 — 통합검색엔 항차 맥락이 없어 근무조(주간 08시·야간 19시) 기준으로 답한다.
+    if (p.wakeQuery) { try { return generateWakeAnswer({}); } catch { return null; } }
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.20';   // 폰 푸시 알림(FCM) — 화면 안 열어도 미회신 오답을 폰이 알려준다
+export const APP_VERSION = 'TallyOne 1.22';   // 폰 푸시 알림(FCM) — 화면 안 열어도 미회신 오답을 폰이 알려준다
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3406,4 +3406,33 @@ export function tagForecastMarks(list, urgentSet, luggSet, luggSeals) {
     }
     return t;
   });
+}
+
+// ─── TallyOne 1.22: 도선(입항) → 작업개시 소요 (검수사 확정 2026-08-07) ───
+//   "PCTC는 1시간 30분, PNCT는 2시간 정도 걸립니다. 그걸 계산해서 작업예정시간을 표기하시면 됩니다."
+//   ⚠ 도선 시각은 **입항 시각**이지 작업시간이 아니다. planSrc='pilot' 인 planDate 를
+//     작업시간처럼 보여준 것이 오답 1786057401908("도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?")의 뿌리.
+export const PILOT_TO_WORK_MIN = { PCTC: 90, PNCT: 120 };
+export function pilotToWorkMin(pier) {
+  return PILOT_TO_WORK_MIN[String(pier || '').toUpperCase().trim()] ?? 120;   // 부두 미상이면 보수적으로 2시간
+}
+/** "2026-08-08 08:30 ~ 2026-08-08 21:00" → Date(입항) */
+export function parsePlanStart(planDate) {
+  const m = String(planDate || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0, 0) : null;
+}
+/**
+ * 작업개시 예정시각. 일정 출처가 도선이면 입항 + 부두별 소요를 더한다.
+ * @returns {{start: Date|null, basis: 'pilot'|'plan'|null, arr: Date|null, leadMin: number}}
+ */
+export function planWorkStart(info = {}, pierOverride = null) {
+  const arr = parsePlanStart(info.planDate);
+  const pier = pierOverride || info.pier || getPierFromBerth(info.berth) || '';
+  const src = String(info.planSrc || '').split('|')[0];
+  if (!arr) return { start: null, basis: null, arr: null, leadMin: 0 };
+  if (src === 'pilot') {
+    const lead = pilotToWorkMin(pier);
+    return { start: new Date(arr.getTime() + lead * 60000), basis: 'pilot', arr, leadMin: lead };
+  }
+  return { start: arr, basis: 'plan', arr, leadMin: 0 };
 }

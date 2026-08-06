@@ -4,7 +4,7 @@
 //   화면 이동은 window.location.hash 직접 변경(#/food, #/health, #/). 라우트 등록(#/aux)은 팀K 소관.
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, BookOpen, Languages, MessageCircle, Dices, Activity,
-  Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen, Bell, BellOff } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가
+  Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen, Bell, BellOff, MessageSquareReply } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가 / 1.22: 오답노트
 import HelpModal from '../components/HelpModal.jsx';
 import ContainerPhrasebook from '../components/ContainerPhrasebook.jsx';
 import GeminiKeyModal from '../components/GeminiKeyModal.jsx';
@@ -14,6 +14,7 @@ import { pushState, enablePush, disablePush } from '../push.js';   // TallyOne 1
 import { buildGreetingMessage, fetchPyeongtaekWeather } from '../greeting.js';
 import { heartbeatState, healthSummary } from '../health.js';
 import { equipNumbersForPier, getEquipNumber } from '../utils.js';
+import { fbSubscribeFeedback } from '../firebase.js';   // TallyOne 1.22: 오답노트 — 내가 신고한 오답과 클로드 회신
 
 // 테일윈드 정적 클래스 (동적 생성 금지 — purge 회피, HelpModal ACCENT 패턴과 동일)
 const ACCENT = {
@@ -144,6 +145,87 @@ function EquipView({ onBack }) {
 }
 
 // ── 오늘의 인사·날씨 브리핑 모달 — greeting.js 재사용, 하루 1회 자동 인사와 무관하게 수동 재열람 ──
+// ─── TallyOne 1.22: 오답노트 — 검수사가 신고한 오답과 **클로드 회신을 검수사 화면에서** 본다 ───
+//   종전에는 회신이 수석 대시보드에만 있었다. 검수사는 답이 왔는지조차 알 수 없었다
+//   (검수사 지적 2026-08-07: "클로드님이 답장을 보낸걸 사용자가 볼수 없습니다").
+function ClaudeReplyView({ inspector, isOwner = false, onBack }) {
+  const [fb, setFb] = useState({});
+  const [openKey, setOpenKey] = useState(null);
+  useEffect(() => {
+    let unsub = null;
+    try { unsub = fbSubscribeFeedback(setFb); } catch (_) { /* 오프라인이면 빈 목록 */ }
+    return () => { try { unsub && unsub(); } catch (_) {} };
+  }, []);
+  const rows = useMemo(() => {
+    const arr = Object.entries(fb || {}).map(([k, v]) => ({ ...(v || {}), _key: k }));
+    const mine = arr.filter(f => isOwner || !inspector || f.inspector === inspector);
+    return mine.sort((a, b) => (b.ts || b.at || 0) - (a.ts || a.at || 0));
+  }, [fb, inspector, isOwner]);
+  const waiting = rows.filter(f => !f.claudeStatus && !f.resolved).length;
+
+  const stTone = (st) => st === 'fixed'
+    ? { box: 'border-emerald-700/50 bg-emerald-950/30', head: 'text-emerald-300', icon: '✅', label: '반영 완료' }
+    : st === 'built' ? { box: 'border-sky-700/50 bg-sky-950/25', head: 'text-sky-300', icon: '📦', label: '수정 완료 · 배포 대기' }
+    : st === 'wontfix' ? { box: 'border-slate-700 bg-slate-900/60', head: 'text-slate-300', icon: '↩', label: '수정 안 함' }
+    : { box: 'border-sky-700/50 bg-sky-950/25', head: 'text-sky-300', icon: '🔧', label: '처리 예정' };
+
+  return (
+    <div className="space-y-2">
+      <SubHeader title="오답노트 — 클로드 회신" onBack={onBack} />
+      <div className="text-[11px] text-slate-400 px-1">
+        신고 {rows.length}건 · 회신 대기 {waiting}건 {isOwner ? '· (전체 검수사)' : '· (내 신고분)'}
+      </div>
+      {rows.length === 0 && (
+        <div className="text-xs text-slate-500 text-center py-6">신고한 오답이 없습니다.</div>
+      )}
+      {rows.map(f => {
+        const t = stTone(f.claudeStatus || '');
+        const when = new Date(f.ts || f.at || 0).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        return (
+          <div key={f._key} className={`bg-slate-950 border rounded-lg p-2.5 ${f.resolved ? 'border-slate-800 opacity-70' : 'border-red-900/40'}`}>
+            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+              <span className="text-[10px] text-slate-500">{when}</span>
+              {f.voyageVsl && <span className="text-[10px] text-slate-500">{f.voyageVsl}</span>}
+              <span className="text-[9px] text-slate-600 mono">v{f.appVersion || '-'}</span>
+            </div>
+            <div className="text-xs text-amber-200 mono break-all mb-1">Q: {f.query}</div>
+            {!f.claudeStatus && !f.claudeAnswer && (
+              <div className="text-[11px] text-slate-500 bg-slate-900/60 border border-slate-800 rounded px-2 py-1">
+                🕐 클로드 확인 대기 — 아직 회신이 없습니다
+              </div>
+            )}
+            {(f.claudeAnswer || f.claudeStatus) && (
+              <div className={`text-[11px] rounded px-2 py-1.5 border leading-relaxed ${t.box}`}>
+                {f.claudeAnswer && (
+                  <div className="mb-1.5 pb-1.5 border-b border-slate-700/50">
+                    <div className="text-[10px] font-bold text-amber-300 mb-0.5">💬 답</div>
+                    <div className="text-[11px] text-slate-100 whitespace-pre-wrap leading-snug">{f.claudeAnswer}</div>
+                  </div>
+                )}
+                <div className={`font-bold ${t.head}`}>
+                  {t.icon} 클로드 — {t.label}
+                  {f.claudeEta && f.claudeStatus !== 'fixed' && <span className="ml-1 text-slate-300">· {f.claudeEta}분 예정</span>}
+                  {f.fixedVersion && f.claudeStatus === 'fixed' && <span className="ml-1 text-slate-300 mono">· {f.fixedVersion}</span>}
+                </div>
+                {f.claudePlan && <div className="text-slate-300 mt-0.5 whitespace-pre-wrap">{f.claudePlan}</div>}
+              </div>
+            )}
+            <button onClick={() => setOpenKey(openKey === f._key ? null : f._key)}
+              className="mt-1 text-[10px] text-slate-500 hover:text-slate-300">
+              {openKey === f._key ? '▼ 앱 답변 숨기기' : '▶ 그때 앱이 한 답 보기'}
+            </button>
+            {openKey === f._key && (
+              <div className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap leading-relaxed bg-slate-900/40 rounded p-2 max-h-40 overflow-y-auto">
+                {f.answerText || '(없음)'}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function BriefingModal({ inspector, onClose }) {
   const [state, setState] = useState({ loading: true, msg: null, weatherOk: false });
   const load = async () => {
@@ -234,6 +316,20 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
 
   // 수집기 하트비트 상태 — 30초마다 경과 재계산 (HomePage와 같은 주기)
   const [now, setNow] = useState(Date.now());
+  // TallyOne 1.22: 오답노트 배지 — 회신이 온 건수 / 아직 회신 없는 건수를 카드에 그대로 보여준다.
+  const [fbAll, setFbAll] = useState({});
+  useEffect(() => {
+    let unsub = null;
+    try { unsub = fbSubscribeFeedback(setFbAll); } catch (_) {}
+    return () => { try { unsub && unsub(); } catch (_) {} };
+  }, []);
+  const { replyBadge, waitingBadge } = useMemo(() => {
+    const arr = Object.values(fbAll || {}).filter(v => v && (isOwner || !inspector || v.inspector === inspector));
+    return {
+      replyBadge: arr.filter(v => v.claudeAnswer).length,
+      waitingBadge: arr.filter(v => !v.claudeStatus && !v.resolved).length,
+    };
+  }, [fbAll, inspector, isOwner]);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
@@ -273,6 +369,8 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
         <TermsView onBack={() => setView('grid')} />
       ) : view === 'equip' ? (
         <EquipView onBack={() => setView('grid')} />
+      ) : view === 'reply' ? (
+        <ClaudeReplyView inspector={inspector} isOwner={isOwner} onBack={() => setView('grid')} />
       ) : (
         <div className="grid grid-cols-2 gap-2.5">
           <AuxCard icon={BookOpen} accent="amber" title="사용 매뉴얼"
@@ -308,6 +406,12 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
               : pushSt === 'denied' ? '차단됨 — 사이트 설정에서 허용'
               : (pushMsg || (pushSt === 'on' ? '누르면 끕니다' : '오답·긴급 알림을 폰으로'))}
             onClick={pushBusy || pushSt === 'unsupported' ? undefined : togglePush} />
+          {/* TallyOne 1.22: 오답노트 — 내가 신고한 오답에 클로드가 뭐라고 답했는지 여기서 본다.
+              종전엔 수석 대시보드에만 있어 검수사가 회신을 볼 수 없었다(검수사 지적 2026-08-07). */}
+          <AuxCard icon={MessageSquareReply} accent="rose" title="오답노트"
+            sub={replyBadge ? `클로드 회신 ${replyBadge}건 · 눌러서 보기` : '내가 신고한 오답 · 클로드 답'}
+            badge={waitingBadge ? `대기 ${waitingBadge}` : null}
+            onClick={() => setView('reply')} />
           {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청 기록, 클로드 세션이 나중에 처리 */}
           <AuxCard icon={NotebookPen} accent="violetDeep" title="클로드에게 메모"
             sub="발견한 문제·요청 기록 → 클로드가 처리"

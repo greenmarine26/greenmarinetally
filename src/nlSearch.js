@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION } from './utils.js';
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth } from './utils.js';   // TallyOne 1.22: 도선→작업개시
 
 // ─── 항구 코드 매핑 ───
 const PORT_KR_TO_CODE = {
@@ -72,6 +72,8 @@ export function parseNaturalQuery(text) {
     dupL4Query: false,   // TallyOne 1.17: 끝 4자리 중복 조회
     bayTrio: null,   // V8.03-01: 짝수 베이+구역 = 트리오(23·24·25) 전체
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
+    pilotQuery: false,  // TallyOne 1.22: 도선·접안·작업개시 시각 (오답 1786057401908)
+    wakeQuery: false,   // TallyOne 1.21: "몇 시에 일어나야 하지" — 현재 시각이 아니라 기상 시각 (오답 1786028593439)
     shipIntroQuery: false,   // V9.18: 선박 소개·이름 유래
     twinCheckQuery: false,   // V7.93: 트윈 작업 가능 여부 (무게)
     tierPlaceCountQuery: null,   // V7.99-10: 'hold'|'deck' — "홀드 몇 개 남았어"(에 없음) = 작업 남은 단(곳) 개수+베이 나열
@@ -92,8 +94,11 @@ export function parseNaturalQuery(text) {
   const hasSizeCtx = /\d+\s*(피트|hc|ft)/i.test(t);
   const hasWeightCtx = /\d+\s*(톤|t|ton)\s*(?:이상|이하|넘는|미만|초과)/i.test(t);
   const hasStackCtx = /\d+\s*(단|층)/i.test(t);
+  // TallyOne 1.22: **시각 표현을 컨번호로 읽지 않는다.** (오답 1786057401908 직접 원인 —
+  //   "도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?" 의 0830 을 끝 4자리로 잡아 "(일치 결과 없음)")
+  const hasTimeCtx = /\d{1,2}\s*시\s*\d{1,2}\s*분|\d{1,2}\s*:\s*\d{2}|도선|파일럿|접안|입항|출항|작업\s*(?:시간|시각|시작|개시|예정)/i.test(t);
   const skipDigits = hasTempCtx || hasBayCtx || hasUnCtx || hasClassCtx ||
-                     hasSizeCtx || hasWeightCtx || hasStackCtx;
+                     hasSizeCtx || hasWeightCtx || hasStackCtx || hasTimeCtx;
   if (!skipDigits) {
     const digits = String(text).replace(/\D/g, '');
     if (digits.length >= 2) result.digits = digits.slice(-4);
@@ -255,7 +260,18 @@ export function parseNaturalQuery(text) {
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약|상황\s*(?:어때|어떻|알려|보고)|어떻게\s*(?:돼|되)\s*가|진행\s*(?:상황|어디|어때|얼마)|어디까지\s*(?:했|왔|됐)/i.test(t)) result.briefingQuery = true;
   // V7.92: 챗봇형 질문 — 자기소개·시간·날씨·입출항 (사용자 요청: "넌 뭐야"에 답하기)
   if (/(?:^|\s)(?:넌|너는|네가|니가|너|당신|당신이)\s*(?:뭐|누구|하는\s*일|할\s*수|어떤\s*일)|누구세요|누구냐|누구니|누구야|자기\s*소개|소개\s*해|무슨\s*(?:일|기능)|뭐\s*(?:하는|할\s*수)|어떤\s*(?:일|기능|걸\s*할)/i.test(t)) result.introQuery = true;
-  if (!result.etaQuery && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|시간\s*좀|오늘\s*며칠|며칠이야|며칠인가|무슨\s*요일|오늘\s*날짜|날짜\s*알려|오늘\s*무슨\s*날/i.test(t)) result.timeQuery = true;   // TallyOne 1.18: 며칠인가·시간 좀 추가
+  // TallyOne 1.22: 도선·접안·작업개시 — "도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?"
+  //   도선 시각은 **입항 시각**이라 그 시각에 작업을 시작할 수 없다. 부두별 소요를 더해 작업개시를 답한다.
+  if (/도선|파일럿|접안|작업\s*(?:시작|개시|예정)|몇\s*시(?:부터|에)?\s*작업|작업\s*(?:시간|시각)\s*(?:이|은|는)?\s*(?:몇|언제|가능)|언제\s*작업/i.test(t)) {
+    result.pilotQuery = true;
+  }
+  // TallyOne 1.21: 기상·출근 시각 — "몇 시에 일어나야 하지"는 **현재 시각 질문이 아니다**(오답 1786028593439).
+  //   검수사 규칙: 출근 = 작업시작 40분 전, 준비+운전 1시간 → 기상 = 작업시작 2시간 전.
+  //   ⚠ timeQuery보다 먼저 판정하고 timeQuery를 끈다 — "몇 시에"가 둘 다에 걸린다.
+  if (/일어\s*나|일어날|일어남|깨워|깨우|기상\s*(?:시간|시각|몇|해야|하나)|몇\s*시\s*(?:에\s*)?(?:일어|기상)|알람|출근\s*(?:몇|시간|언제|해야)|몇\s*시(?:에|까지)?\s*출근|몇\s*시에\s*나가/i.test(t)) {
+    result.wakeQuery = true;
+  }
+  if (!result.etaQuery && !result.wakeQuery && !result.pilotQuery && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|시간\s*좀|오늘\s*며칠|며칠이야|며칠인가|무슨\s*요일|오늘\s*날짜|날짜\s*알려|오늘\s*무슨\s*날/i.test(t)) result.timeQuery = true;   // TallyOne 1.18: 며칠인가·시간 좀 추가
   // V8.60: 맛집/식사 추천 — "점심 뭐 먹을까"·"저녁 먹으러 어디 가지"·"야식 추천" → 돌림판.
   //   ⚠ etaQuery("점심까지 끝나?")와 충돌 금지 — 끝/완료/까지 들어간 문장은 제외.
   // TallyOne 1.18: 출출·허기·요기·시켜먹 등 실제로 쓰는 말 추가 (검수사: 「출출한데 뭘 먹을까」 는 이미 됐다)
@@ -494,7 +510,7 @@ export function hasAnyCondition(parsed) {
             parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery ||
             parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
             // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
-            parsed.briefingQuery || parsed.sealAuditQuery || parsed.introQuery || parsed.timeQuery ||
+            parsed.briefingQuery || parsed.sealAuditQuery || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
             parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery);
 }
 
@@ -1597,6 +1613,88 @@ export function generateTimeAnswer(now) {
   const ampm = h24 < 12 ? '오전' : '오후';
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   return `지금은 ${d.getMonth() + 1}월 ${d.getDate()}일 ${days[d.getDay()]}요일, ${ampm} ${h12}시 ${d.getMinutes()}분입니다.`;
+}
+
+// ─── TallyOne 1.21: 기상 시각 (검수사 규칙 2026-08-07, 오답 1786028593439) ───
+//   출근 = 작업시작 40분 전, 준비+운전 1시간 → **기상 = 작업시작 2시간 전**(정시 내림).
+//   기준 작업시작은 ① 그 선박 일정(planDate 시작)이 아직 미래면 그것,
+//   ② 이미 지났거나 없으면 다음 근무조 시작(주간 08시 / 야간 19시).
+//   ⚠ 새벽엔 주간·야간을 앱이 알 수 없다 → 주간 기준으로 답하고 야간 기준을 한 줄 덧붙인다.
+export const WAKE_LEAD_H = 2;          // 작업시작 − 2시간 = 기상
+export const SHIFT_DAY_H = 8;          // 주간 근무 시작
+export const SHIFT_NIGHT_H = 19;       // 야간 교대 시작
+
+function _planStartDate(planDate) {
+  const m = String(planDate || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0, 0);
+}
+function _wakeFrom(start) {
+  const w = new Date(start.getTime() - WAKE_LEAD_H * 3600 * 1000);
+  w.setMinutes(0, 0, 0);   // 정시 내림 — "06시에 일어나셔야 합니다"
+  return w;
+}
+const _hLabel = (d) => `${String(d.getHours()).padStart(2, '0')}시`;   // 검수사 표기: 08시·06시
+
+export function generateWakeAnswer(info = {}, now) {
+  const d = now instanceof Date ? now : new Date();
+  const ship = info.vslFull || info.vsl || '';
+  const shipLabel = ship ? `${ship}는` : '이 배는';
+
+  // ① 선박 일정이 미래면 그 시각이 기준 (예: 13시 시작 → 11시 기상 / 21시 시작 → 19시 기상)
+  //   TallyOne 1.22: 도선 일정(planSrc='pilot')이면 입항 시각이 아니라 **작업개시**(입항+부두별 소요)를 쓴다.
+  const planStart = planWorkStart(info).start || _planStartDate(info.planDate);
+  if (planStart && planStart.getTime() - d.getTime() > WAKE_LEAD_H * 3600 * 1000) {
+    const w = _wakeFrom(planStart);
+    return `${shipLabel} ${_hLabel(planStart)} 작업시작이니 ${_hLabel(w)}에 일어나셔야 합니다. 알람을 켜드릴까요?`;
+  }
+
+  // ② 일정이 지났거나 없으면 다음 근무조 기준
+  const dayStart = new Date(d); dayStart.setHours(SHIFT_DAY_H, 0, 0, 0);
+  if (dayStart.getTime() - d.getTime() <= WAKE_LEAD_H * 3600 * 1000) dayStart.setDate(dayStart.getDate() + 1);
+  const nightStart = new Date(d); nightStart.setHours(SHIFT_NIGHT_H, 0, 0, 0);
+  if (nightStart.getTime() - d.getTime() <= WAKE_LEAD_H * 3600 * 1000) nightStart.setDate(nightStart.getDate() + 1);
+
+  const dayWake = _wakeFrom(dayStart), nightWake = _wakeFrom(nightStart);
+  const H = d.getHours();
+  // 주간이 먼저 오면 주간을 본문으로 — 21시 이후·새벽 질문이 여기 해당(다음은 아침 8시).
+  const dayFirst = dayStart.getTime() <= nightStart.getTime();
+  const main = dayFirst
+    ? `${shipLabel} ${_hLabel(dayStart)} 작업시작이니 ${_hLabel(dayWake)}에 일어나셔야 합니다. 알람을 켜드릴까요?`
+    : `${shipLabel} ${_hLabel(nightStart)} 작업시작이니 ${_hLabel(nightWake)}에 일어나셔야 합니다. 알람을 켜드릴까요?`;
+  // 새벽·심야엔 주간/야간을 앱이 가릴 수 없다 → 반대 조도 한 줄로.
+  const ambiguous = (H >= 21 || H < 6);
+  if (!ambiguous) return main;
+  return dayFirst
+    ? `${main}\n야간 근무시면 ${_hLabel(nightStart)} 교대라 ${_hLabel(nightWake)} 기상입니다.`
+    : `${main}\n주간 근무시면 ${_hLabel(dayStart)} 작업시작이라 ${_hLabel(dayWake)} 기상입니다.`;
+}
+
+// ─── TallyOne 1.22: 도선 → 작업개시 (검수사 확정 2026-08-07: PCTC 90분 · PNCT 120분) ───
+//   ⚠ 도선 시각은 입항 시각이다. 그 시각에 작업을 시작할 수 없다 — 접안·갱웨이·크레인 세팅이 남는다.
+export function generatePilotAnswer(info = {}, pf = null) {
+  const ship = info.vslFull || info.vsl || '이 배';
+  const pier = info.pier || getPierFromBerth(info.berth) || '';
+  const w = planWorkStart(info, pier);
+  const fmt = (d) => d ? `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+  const hm = (d) => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+  const row = (pf?.rows || []).find(r => r.dir === '입항');
+  const lines = [];
+
+  if (!w.arr) {
+    return `${ship} — 도선 예보가 아직 없습니다.\n도선사협회 예보가 올라오면 입항 시각에 부두별 소요(PCTC 1시간 30분 · PNCT 2시간)를 더해 작업개시 예정을 알려 드립니다.`;
+  }
+  const lead = w.leadMin, leadTxt = lead % 60 === 0 ? `${lead / 60}시간` : `${Math.floor(lead / 60)}시간 ${lead % 60}분`;
+  if (w.basis === 'pilot') {
+    lines.push(`⚓ ${ship} — 도선 입항 ${fmt(w.arr)}${row?.side ? ` · ${row.side}` : ''}${row?.berth || info.berth ? ` · ${row?.berth || info.berth}` : ''}`);
+    lines.push(`🛠 작업개시 예정 ${hm(w.start)} — ${pier || '부두 미상'}은 접안 후 ${leadTxt} 걸립니다.`);
+    lines.push(`⚠ ${hm(w.arr)}은 도선(입항) 시각입니다. 그 시각에 작업을 시작할 수는 없습니다.`);
+  } else {
+    lines.push(`🛠 ${ship} — 작업 예정 ${fmt(w.start)}${info.berth ? ` · ${info.berth}` : ''}`);
+    lines.push('(도선 예보가 아니라 신고·배정 일정 기준입니다.)');
+  }
+  if (pf?.nextDep) lines.push(`⚓ 출항 예정 ${String(pf.nextDep).slice(5)}`);
+  return lines.join('\n');
 }
 
 // ─── V7.93: 트윈 작업 무게 점검 (사용자 도메인: 합계 55톤 초과 = 트윈 불가) ───

@@ -850,6 +850,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
           shipLib={shipLib}
           portMisData={portMisData}
+          pilotForecast={pilotForecast}
           isLoloShip={isLoloShip}
           mode={mode}
           onWorkFilterChange={(m) => setMode(m)}
