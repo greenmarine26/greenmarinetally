@@ -1,0 +1,43 @@
+# Restored 2026-08-06 after the 1 GB incident.
+# Why: with source="Deploy from a branch", GitHub's built-in workflow has a
+# FIXED 10-minute deploy timeout. After the oversized-site throttle, Pages
+# backend processing exceeds 10 min, so branch-mode deploys die with
+# "Timeout reached, aborting!". This workflow deploys the same repo root
+# but with a 30-minute timeout. Pages source = "GitHub Actions" (set 2026-08-06).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact (repo root, same as branch mode)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - name: Deploy to GitHub Pages (30 min timeout)
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 1800000
+          error_count: 30
