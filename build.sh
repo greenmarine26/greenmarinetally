@@ -15,6 +15,53 @@
 set -e
 cd "$(dirname "$0")"
 
+# ─── 2026-08-06: 판 쪼개기 게이트 (GitHub Pages 배포 거부 사고 재발 방지) ───
+#   사고: 1.11~1.20 을 하루 15판으로 나눠 올렸다. 각 판은 작았고 검증도 했지만
+#         묶었어야 할 것들이었다(화면 수정 셋=1.15, 표기 둘=1.19·1.20).
+#         푸시마다 워크플로 2개가 돌아 하루 ~30 배포가 걸렸고, 13번째 판(1.20)부터
+#         Pages 의 deploy 단계가 죽기 시작했다. build 는 22초에 통과하고 아티팩트도
+#         9.4MB 로 정상인데 **배포 호출만** 거부됐다:
+#             #1022  "Timeout reached, aborting!"
+#             #1023  "Deployment failed, try again later."   ← GitHub 이 직접 나중에 하라고 한다
+#         커밋·푸시가 전부 정상이라 원인이 안 보였고, 라이브는 1.19 에 멈춰 있었다.
+#   교훈: 판을 나누는 비용은 내 시간이 아니라 **배포 파이프라인 예산**이다.
+#         작게 나눈 판은 하나하나는 안전해 보인다. 예산을 다 쓰면 라이브가 통째로 멈춘다.
+#
+#   임계치는 오늘 실데이터로 잡았다(추정 금지 — 처음 쓴 '시간당 4판'은 오늘 한 번도
+#   안 걸리는 장식이었다. 오늘 시간당 최대는 3판이었다):
+#       시간당  최대 3판  → 시간당으로는 못 잡는다. 경고만.
+#       24시간  15판      → 여기서 터졌다. 8판에서 끊으면 오늘 9번째 판에서 멈췄다.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then
+    git fetch --deepen=40 --quiet 2>/dev/null || true
+  fi
+  N1H=$(git log --since="1 hour ago"   --pretty=%H 2>/dev/null | wc -l | tr -d ' ')
+  N24=$(git log --since="24 hours ago" --pretty=%H 2>/dev/null | wc -l | tr -d ' ')
+  if [ "${N24:-0}" -ge 8 ]; then
+    if [ "${TALLY_BATCH_OK:-}" = "1" ]; then
+      echo "⚠ 판 쪼개기 게이트 — 최근 24시간 ${N24}판. TALLY_BATCH_OK=1 로 넘어감(이 줄이 기록이다)."
+    else
+      echo ""
+      echo "⛔ 판 쪼개기 게이트 — 최근 24시간 커밋 ${N24}판 (최근 1시간 ${N1H}판)."
+      echo "   GitHub Pages 는 여기서부터 배포를 거부한다. build 는 통과하고 deploy 만"
+      echo "   'Deployment failed, try again later.' 로 죽는다 — 커밋·푸시가 정상이라"
+      echo "   원인이 안 보이고, 라이브는 옛 판에 멈춘다 (2026-08-06 실측)."
+      echo ""
+      echo "   지금 할 것 — 대기 중인 수정을 전부 모아 **한 판으로 묶어라.**"
+      echo "     · ★인계함_밀린작업.md 에 지금 같이 갈 항목이 있나?"
+      echo "     · 이번 세션에서 '나중에' 로 미룬 화면 수정·표기 수정이 있나?"
+      echo "     · 셋을 한 판으로 묶으면 배포 예산 1/3 만 쓴다."
+      echo ""
+      echo "   정말 지금 따로 올려야 하면:  TALLY_BATCH_OK=1 bash build.sh"
+      echo ""
+      exit 1
+    fi
+  elif [ "${N24:-0}" -ge 6 ] || [ "${N1H:-0}" -ge 3 ]; then
+    echo "⚠ 판 쪼개기 주의 — 최근 1시간 ${N1H}판 · 24시간 ${N24}판. 다음 판부터는 묶어라(24시간 8판에서 차단)."
+  fi
+fi
+
+
 # 캐시 자동 무효화: sw.js의 VERSION을 utils.js의 APP_VERSION과 동기화.
 # sw.js VERSION이 바뀌면 서비스워커가 새 버전으로 인식 → 옛 캐시 삭제 + 자동 새로고침.
 # (이전: sw.js가 V7.13에 멈춰 새 배포해도 캐시 안 비워지던 문제 해결)
