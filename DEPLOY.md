@@ -65,7 +65,14 @@ A는 사용자 PC의 GitHub Desktop git을 배치파일로 돌리는 방식이�
 1. **VM 내부**(`/tmp/repo`)에 클론해 수정·빌드한다. ⚠ 마운트 폴더에서 git 실행 금지 (4장 1번).
 2. `src/utils.js`의 `APP_VERSION`을 올린다 (단일 소스). 기능=마이너 두 자리 / 픽스=빌드번호. 언더스코어 금지.
 3. `bash build.sh` (npm run build 직접 호출 금지).
-4. 변경 목록에서 **삭제분(`^ D`)은 제외**한다 — 옛 해시 assets는 지우지 않는다(누적 무해).
+4. 변경 목록에서 **삭제분(`^ D`)은 제외**한다.
+   ⛔ **단 "옛 해시 assets는 누적 무해"는 틀렸다 — 2026-08-06 사고.** 빌드 2,103회분이 쌓여
+   저장소가 **1,337MB**(assets 671MB + dist 649MB)가 됐고 **GitHub Pages 사이트 한도 1GB를 넘겨
+   배포가 통째로 실패**했다(1.20). `Deploy to GitHub Pages`·`pages build and deployment` 두 워크플로가
+   다 빨간 X 였고, 라이브는 옛 버전(1.19)에 멈춰 있었다. 커밋·푸시는 정상이라 원인이 안 보였다.
+   → `build.sh` 가 매 빌드마다 **미참조 루트 자산을 자동 삭제**한다(정리 후 1,337MB → 28MB).
+   → `dist/` 는 `.gitignore` — **루트 서빙이라 사이트에 안 쓰인다.** 649MB 를 그냥 먹고 있었다.
+   → 배포 전 `du -sh assets` 를 한 번 보라. **수십 MB를 넘으면 뭔가 잘못된 것이다.**
 5. payload tgz는 `./` 접두사·디렉터리 엔트리 없이 파일만 (`tar -czf out.tgz --no-recursion -T list`).
 6. **한글 파일명은 tar에 안 태운다.** 워킹카피에 직접 복사 → `reset --hard`가 안 지우므로 `add -A`가 잡는다.
 7. bat 작성 후 **CRLF 변환 필수** (`sed -i 's/$/\r/'`). 커밋 메시지는 영문 (코드페이지).

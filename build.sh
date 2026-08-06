@@ -163,5 +163,36 @@ if [ -n "$VERSION" ]; then
   echo "✓ 빌드된 JS에 APP_VERSION ($VERSION) $VCOUNT건 박힘"
 fi
 
+# ─── 2026-08-06: 옛 해시 자산 정리 (GitHub Pages 1GB 한도 사고 재발 방지) ───
+#   사고: 빌드 2,103회분 해시 자산이 루트 assets/ 에 누적돼 저장소가 1,337MB 가 됐고
+#         Pages 사이트 크기 한도(1GB)를 넘겨 **배포가 통째로 실패**했다(1.20, 2026-08-06).
+#         옛 DEPLOY.md 는 "옛 해시 assets 는 지우지 않는다(누적 무해)" 였다 — 무해하지 않았다.
+#   규칙: 지금 사이트가 실제로 참조하는 것만 남긴다. 참조는 **파일명 문자열**로 추적한다
+#         (Vite 동적 import 는 `./exceljs.min-XXXX.js` 처럼 assets/ 접두어 없이 나온다 —
+#          경로로 찾으면 청크를 통째로 놓친다. 한 번 헛짚었다.)
+echo "[+] 옛 해시 자산 정리..."
+python3 - <<'PRUNE'
+import os
+seeds=[f for f in ['index.html','cone.html','bulk_tally.html','sw.js','cone-sw.js',
+                   'manifest.webmanifest','cone-cargoplan.js'] if os.path.exists(f)]
+if os.path.isdir('assets'):
+    assets=os.listdir('assets')
+    def text(p):
+        try: return open(p,'rb').read().decode('utf-8','ignore')
+        except Exception: return ''
+    keep=set(); frontier=list(seeds); seen=set()
+    while frontier:
+        p=frontier.pop()
+        if p in seen: continue
+        seen.add(p); t=text(p)
+        for a in assets:
+            if a not in keep and a in t:
+                keep.add(a); frontier.append(os.path.join('assets',a))
+    drop=[a for a in assets if a not in keep]; sz=0
+    for a in drop:
+        fp=os.path.join('assets',a); sz+=os.path.getsize(fp); os.remove(fp)
+    print(f"  \u2713 \ucc38\uc870 {len(keep)}\uac1c \uc720\uc9c0 \u00b7 \ubbf8\ucc38\uc870 {len(drop)}\uac1c \uc0ad\uc81c ({sz/1048576:.0f} MB)")
+PRUNE
+
 echo ""
 echo "ZIP 패키징 가능 상태 (옛 M6.71 흐름과 동일 구조)."
