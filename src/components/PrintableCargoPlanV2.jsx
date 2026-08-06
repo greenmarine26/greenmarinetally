@@ -842,9 +842,25 @@ export default function PrintableCargoPlanV2({
   ) : null;
 
   if (!dictData) {
+    // TallyOne 1.14: 사전이 없으면 **없다고 말한다.** 계열 대체(남의 배 골격 빌려 그리기)를 폐지했으므로
+    //   여기 도달하는 항차가 늘어난다 — 개발자용 문구 대신 무엇을 해야 하는지 적는다.
+    const _c = (() => { try { return extractShipMetaFromVoyage({ info: voyageInfo })?.code || ''; } catch { return ''; } })();
     return (
       <div className="cpv2-overlay-fallback" style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0f172a', color: '#fff', padding: 20 }}>
-        {closeBtn}<div style={{ marginTop: 60 }}>선박 정보를 찾을 수 없습니다. (shipImo={String(shipImo)}, shipName={String(shipName)})</div>
+        {closeBtn}
+        <div style={{ marginTop: 60, maxWidth: 560, lineHeight: 1.7 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>베이 매트릭스가 없습니다</div>
+          <div style={{ color: '#cbd5e1' }}>
+            이 배(<b style={{ color: '#fff' }}>{_c || shipName || '선박코드 미상'}</b>)의 베이 구조가 사전에 등록돼 있지 않습니다.
+          </div>
+          <div style={{ color: '#94a3b8', marginTop: 12, fontSize: 13 }}>
+            비슷한 배의 구조를 빌려 그리지 않습니다 — 틀린 그림은 검수를 그르칩니다.
+            <br />매트릭스 빌더에서 이 배를 등록한 뒤 다시 열어 주세요.
+          </div>
+          <div style={{ color: '#64748b', marginTop: 12, fontSize: 11 }}>
+            조회 키 — 코드 {_c || '(없음)'} · 선박명 {String(shipName || '(없음)')} · IMO {String(shipImo || '(없음)')}
+          </div>
+        </div>
       </div>
     );
   }

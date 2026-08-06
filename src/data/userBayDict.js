@@ -107,14 +107,15 @@ function _matchInDict(subDictRaw, imo, codeOrName) {
       if (cs && cs === argU) return subDict[k];
     }
   }
-  // 6) entry.name fuzzy (공백 무시, prefix 양방향, 5글자+ overlap)
+  // 6) entry.name — **완전 일치만.**
+  //   TallyOne 1.14: 검수사 확정 2026-08-06 — "베이 매트릭스는 검수의 근본 중 하나다.
+  //   **100% 딱 맞지 않으면 불러올 수가 없어야 한다.** 앞 4자리 코드로 읽어 들인다는 자체가 오류다."
+  //   종전엔 prefix 양방향·5글자 겹침으로 잡아서, 이름이 비슷한 다른 배가 그대로 걸렸다.
+  //   못 찾으면 null 을 돌려주는 것이 맞다 — 틀린 그림보다 '사전 없음'이 낫다.
   if (argClean && argClean.length >= 4) {
     for (const k of Object.keys(subDict)) {
       const n = String(subDict[k]?.name || '').toUpperCase().replace(/\s+/g, '');
-      if (!n) continue;
-      if (n === argClean) return subDict[k];
-      if (n.startsWith(argClean) || argClean.startsWith(n)) return subDict[k];
-      if (n.length >= 5 && argClean.length >= 5 && n.slice(0, 5) === argClean.slice(0, 5)) return subDict[k];
+      if (n && n === argClean) return subDict[k];
     }
   }
   return null;

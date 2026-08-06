@@ -14,7 +14,7 @@
 
 | 앱 | 정체 | 현재 버전 | 버전 소스 (여기를 읽는다) |
 |---|---|---|---|
-| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.13-02** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
+| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.14** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
 | **MailPilot** (구 수집기) | PC 로컬 Python (`C:\TALLYTEST\TallymanMailCollector_v2.17.15\` — 폴더명은 버전 아님) | **MailPilot 1.0-09** | `app_gui.py` → `VERSION` |
 | **ConeOne** (구 콘앱) | `public/cone.html` 독립 HTML | **ConeOne 1.5-01** | `cone.html` → `window.__CONEV` — 콘앱 단일 소스(검수앱 버전과 분리) |
 | 벌크탤리 | `bulk_tally.html` 독립 HTML | TallyOne 버전 동기 | 라벨은 build.sh가 APP_VERSION에서 동기화 |
@@ -136,7 +136,50 @@
 
 > 범용화 프로젝트(TallyUni·MailPilot Uni, 저장소 tallyone-universal)의 작업 기록은 여기가 아니라 `★범용화_프로젝트_별도관리.md` §8에 적는다 — 검수사 지시 "따로 관리"(2026-08-05). 이 기록부는 현장 3앱(TallyOne·MailPilot·ConeOne) 전용이다.
 
-### 2026-08-06 — TallyOne 1.13-02: **콜사인 앞 4자로 코드를 짐작해 남의 배 매트릭스를 그렸다** (커밋 `__H6__`)
+### 2026-08-06 — TallyOne 1.14: 베이사전 **엄격 매칭** — 100% 안 맞으면 안 불러온다 (커밋 `__H7__`)
+
+**검수사 확정 (원칙).**
+
+> "베이 매트릭스는 **검수의 근본 중 하나**입니다. **100% 딱 맞지 않으면 불러올 수가 없어야 합니다.**
+>  앞 4자리 코드로 읽어 들인다는 자체가 오류입니다. **다 맞아야 합니다.**"
+> "**4자리로 불러오는 것은 조회할 때만입니다.**" (= 컨번호 끝 4자리 검색에만 허용)
+
+1.13-02 는 증상 하나(콜사인 앞4자)를 막았을 뿐이고, **부분 매칭 경로가 여섯 군데 더 있었다.** 전부 폐지했다.
+
+**폐지한 것 (전수).**
+
+| # | 위치 | 종전 |
+|---|---|---|
+| ① | `userBayDict._matchInDict` 6단계 | 이름 prefix 양방향 · 앞 5글자 겹침 → **완전 일치만** |
+| ② | `shipStructure` Firebase 3)·4) | 이름 5글자 겹침 · **콜사인 접두**(NSFR↔SWAT 사고) → **완전 일치만**(`fb-exact`) |
+| ③ | `findSeriesSubstitute` | **앞 2글자가 같으면 남의 배 골격을 빌려 그림** → **폐지**(항상 null) |
+| ④ | `pickBestVariant.sameShip` | 이름 prefix → **완전 일치만** |
+| ⑤ | `fuzzyLookupAcrossDicts` 2c | v2 name-fuzzy → **폐지** |
+| ⑥ | 같은 함수 2d | v5 supplement fuzzy → **폐지**(정확 코드 매칭 2b만) |
+| ⑦ | `_dictIdentityConflict` | 근거 인정도 부분 일치 허용 → **완전 일치만** |
+
+**③ 계열 대체가 특히 위험했다.** 사전이 없는 배에 **앞 2글자가 같은 다른 배의 베이 구조를 그려 줬다.** 실측 — SWBT 2614S 가 `SWAL`(다른 배) 28베이를 빌려 그리고 있었다. 검수사는 그걸 이 배의 구조로 믿는다.
+
+**⛔ 컨번호 끝 4자리 조회는 건드리지 않았다.** 그건 검색 기능이고 검수사가 명시적으로 예외로 뒀다. 이번 판 diff 에 `l4`·`slice(-4)` 추가분이 **0건**임을 확인했다.
+
+**검증 (사전 106 · 항차 17, 실제 조회 함수 + localStorage 채움).**
+
+```
+13항차 정상 — 전부 완전 일치(user-dict-vslcode · fb-code)
+  OBWH→D5MO/OBWH 15베이 · NSDC→V7A5/NSDC 28베이 · SWSP→V7A6/SWSP 28베이
+  DJCF→D7XF/DJCF 28베이 · MCAT→5LRE/MCAT 34베이   ← 유령 키에 든 매트릭스도 이름 완전일치로 정상 회수
+  NSFR→NSFR/NSFR 22베이 (1.13-02 로 이미 교정된 것 유지)
+계열 대체 0개 (종전 SWBT→SWAL 28베이 빌려 쓰던 것 차단)
+사전 없는 항차 4개 — HAYN 9001E · SWBT 2614S · KBTR 2605W · RZOR R084E(빈 깡통 0베이)
+```
+
+**⚠ 이 4척은 매트릭스를 새로 등록해야 한다.** 종전엔 남의 배 구조로 그려져 "있는 것처럼" 보였을 뿐이다. → 인계함.
+
+**화면 안내도 바꿨다.** 종전 `선박 정보를 찾을 수 없습니다. (shipImo=…, shipName=…)` 는 개발자용이었다. 이제 무엇을 해야 하는지 적는다 — "비슷한 배의 구조를 빌려 그리지 않습니다 — 틀린 그림은 검수를 그르칩니다. 매트릭스 빌더에서 이 배를 등록한 뒤 다시 열어 주세요." + 조회 키(코드·선박명·IMO) 표시.
+
+**교훈.** 오늘 ①·④·⑤에서 "짐작하지 말고 저장된 것을 읽어라"를 배웠는데, 이번 것은 그 위층이다 — **찾지 못했을 때 비슷한 것으로 때우지 마라.** 없으면 없다고 해야 사람이 조치한다. 빌려 그린 그림은 사람이 조치할 기회를 빼앗는다.
+
+### 2026-08-06 — TallyOne 1.13-02: **콜사인 앞 4자로 코드를 짐작해 남의 배 매트릭스를 그렸다** (커밋 `88d5359`)
 
 **신고.** "메트릭스가 왜 또 원위치 되었는지?" — 인쇄된 NSFR 카고플랜을 첨부.
 

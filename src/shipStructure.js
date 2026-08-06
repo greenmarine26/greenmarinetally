@@ -111,21 +111,19 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
         const entry = Object.values(fbDict).find(e => e && e.imo === imo);
         if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-imo' };
       }
-      // 3) name fuzzy 매칭 (4글자 이상 prefix)
+      // 3) name·callsign — **완전 일치만.**
+      //   TallyOne 1.14: 검수사 확정 2026-08-06 — "베이 매트릭스는 검수의 근본 중 하나다.
+      //   100% 딱 맞지 않으면 불러올 수가 없어야 한다. 앞 4자리 코드로 읽어 들인다는 자체가 오류다."
+      //   구 3)은 이름 5글자 겹침, 구 4)는 콜사인 접두 매칭이었다.
+      //   구 4) 때문에 NSFR(V7A2845)이 SWAT(V7A281)을 물어왔다.
       if (search && search.length >= 4) {
         const entry = Object.values(fbDict).find(e => {
-          const en = String(e?.name || '').toUpperCase().replace(/\s+/g, '');
-          return en && (en.includes(search.slice(0, 5)) || search.includes(en.slice(0, 5)));
+          if (!e) return false;
+          const en = String(e.name || '').toUpperCase().replace(/\s+/g, '');
+          const ec = String(e.callsign || '').toUpperCase().replace(/\s+/g, '');
+          return (en && en === search) || (ec && ec === search);
         });
-        if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-name-fuzzy' };
-      }
-      // 4) callsign 매칭 (fbDict의 callsign이 search prefix 또는 vice versa)
-      if (search && search.length >= 4) {
-        const entry = Object.values(fbDict).find(e => {
-          const ec = String(e?.callsign || '').toUpperCase();
-          return ec && ec.length >= 4 && (ec.startsWith(search) || search.startsWith(ec));
-        });
-        if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-callsign' };
+        if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-exact' };
       }
     }
   } catch (e) { /* fallthrough */ }
@@ -150,15 +148,9 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
     return { source: 'v5-supplement', data: v5Result.entry, matchedBy: v5Result.matchedBy };
   }
 
-  // 2c. v2 fuzzy 매칭 (name-fuzzy) — 정확 매칭 모두 실패 후
-  if (v2Enhanced) {
-    return { source: 'v2-fuzzy', data: v2Enhanced.entry, matchedBy: v2Enhanced.matchedBy };
-  }
+  // 2c. TallyOne 1.14: **v2 fuzzy(name-fuzzy) 폐지** — 정확 매칭이 아니면 쓰지 않는다.
 
-  // 2d. M6.55: v5 supplement fuzzy 매칭
-  if (v5Result) {
-    return { source: 'v5-supplement', data: v5Result.entry, matchedBy: v5Result.matchedBy };
-  }
+  // 2d. TallyOne 1.14: **v5 supplement fuzzy 폐지** — 정확 코드 매칭(2b)만 남긴다.
 
   // 3. v1 사전 (legacy 폴백)
   const v1Result = lookupBayDict(imo, vesselNameOrCode);
@@ -339,6 +331,13 @@ function _realBayCount(entry) {
 }
 
 function findSeriesSubstitute(code, ediBayCount) {
+  // TallyOne 1.14: **계열 대체 폐지** (검수사 확정 2026-08-06).
+  //   앞 2글자가 같다는 이유로 **다른 배의 베이 구조를 빌려 그리던** 기능이다.
+  //   "베이 매트릭스는 검수의 근본 중 하나다. 100% 딱 맞지 않으면 불러올 수가 없어야 한다."
+  //   → 사전이 없으면 없다고 해야 한다. 남의 배 골격을 그려 주면 검수사가 그걸 믿는다.
+  //   (함수는 남겨 둔다 — 호출부·배너 문구가 _substituted 를 참조하므로 형태만 유지하고 항상 null.)
+  return null;
+  /* eslint-disable no-unreachable */
   const codeU = String(code || '').trim().toUpperCase();
   if (codeU.length < 2) return null;
   const prefix2 = codeU.slice(0, 2);
@@ -396,7 +395,7 @@ function pickBestVariant(matchedData, imo, ediBayCount) {
     if (codeU && _normShip(e.code) === codeU) return true;
     if (nameU && nameU.length >= 4) {
       const en = _normShip(e.name);
-      if (en && (en === nameU || en.startsWith(nameU) || nameU.startsWith(en))) return true;
+      if (en && en === nameU) return true;   // TallyOne 1.14: 완전 일치만 (prefix 매칭 폐지)
     }
     return false;
   };
@@ -440,13 +439,13 @@ function _dictIdentityConflict(entry, opts) {
   const _n = x => String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
   const my = _n(opts?.vslCode);
   if (!my || !entry) return false;                       // 근거 없음 → 통과
+  // TallyOne 1.14: 근거도 **완전 일치**만 인정한다 (부분 일치 폐지 — 검수사 확정 2026-08-06).
   const ec = _n(entry.code), en = _n(entry.name);
-  if (ec === my || en === my) return false;              // 코드/이름이 항차 선박코드와 같다 → 같은 배
-  const full = _n(opts?.vslFull);                        // 풀네임끼리 (STAR FRONTIER ↔ …)
-  if (full.length >= 5 && en.length >= 5
-      && (full.includes(en.slice(0, 5)) || en.includes(full.slice(0, 5)))) return false;
-  const a = _n(entry.callsign), b = _n(opts?.callsign);  // 콜사인 접두 일치
-  if (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a))) return false;
+  if (ec === my || en === my) return false;              // 코드/이름이 항차 선박코드와 같다
+  const full = _n(opts?.vslFull);
+  if (full && en && full === en) return false;           // 풀네임 완전 일치
+  const a = _n(entry.callsign), b = _n(opts?.callsign);
+  if (a && b && a === b) return false;                   // 콜사인 완전 일치
   const ei = String(entry.imo || '').trim(), oi = String(opts?.imo || '').trim();
   if (ei && oi && ei === oi) return false;               // IMO 일치
   return true;                                           // 아무 근거도 못 찾음 → 다른 배
