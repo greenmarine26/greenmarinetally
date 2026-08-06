@@ -4,17 +4,20 @@
 > 이 파일은 저장소만 보고 있는 클로드를 위한 **자립 요약**이다. 절차·판단은 이것만으로 충분하다.
 > 개정 2026-07-26 (V9.07-01 배포 실측 반영)
 
-## 0-D. 배포 경로 변경 (2026-08-06 확정) — Pages 소스는 GitHub Actions다
+## 0-D. 배포 경로 (2026-08-07 실측 정정) — Pages 소스는 GitHub Actions다
 
-- **현재 배포 경로**: push → `.github/workflows/deploy.yml` ("Deploy to GitHub Pages") → actions/deploy-pages, **타임아웃 30분**.
-- Settings→Pages Source는 **GitHub Actions**다. **"Deploy from a branch"로 되돌리지 마라.**
-  내장 pages-build-deployment는 deploy 타임아웃이 **10분 고정**이라 손댈 수 없다. 1GB 사고 이후
-  Pages 백엔드 처리가 10분을 넘겨, branch 모드 배포가 전부 "Timeout reached, aborting!"으로
-  죽었다(#1021~#1024). 자체 워크플로만 타임아웃을 늘릴 수 있어 이 경로로 옮겼고,
-  **1.20이 이 경로 전환 직후 라이브에 갔다** (2026-08-06 23:45 KST 실측).
-- 과거 deploy.yml은 branch 모드와 중복 배포기라 b155110에서 지웠었다.
-  지금 deploy.yml은 중복이 아니라 **유일한 배포기**다. 지우면 배포가 아예 안 된다.
-- 배포 검증은 기존과 동일: 라이브 `sw.js` 버전 문자열 + 메인 번들 200 확인. 캐시 우회(`?cb=`) 필수.
+- **현재 배포 경로**: push → `.github/workflows/deploy.yml` ("Deploy to GitHub Pages") → actions/deploy-pages.
+  Settings→Pages Source는 **GitHub Actions**다. branch 모드로 되돌리지 마라(내장 워크플로는 Jekyll
+  빌드가 끼고, 과거처럼 배포기 2개가 동시에 도는 구조로 돌아간다).
+- **타임아웃의 진실 (#1085 로그 실측)**: actions/deploy-pages는 타임아웃 **상한 10분(600000ms) 캡**.
+  더 크게 설정하면 "timeout set to the maximum of 600000" 경고와 함께 10분으로 잘린다.
+  **어느 경로든 10분이 한계다.** 1GB 사고 직후처럼 백엔드 처리가 10분을 넘는 동안은 어떤 설정으로도
+  못 뚫는다 — 냉각을 기다리는 것이 유일한 해법이다(실측: 사고 당일 백엔드 65분 걸려 #1024 성공).
+  deploy.yml의 "30 min timeout" 표기는 이 캡 때문에 실제 10분이다. 다음 코드 판에 표기 정정할 것.
+- ⛔ **이 워크플로는 Re-run 금지.** deploy 잡을 재실행하면 같은 런에 github-pages 아티팩트가 2개가 되어
+  "Multiple artifacts named \"github-pages\"" 로 즉사한다(#1085 attempt2 실측). 다시 돌리려면
+  **새 커밋** 또는 Actions 탭 → Deploy to GitHub Pages → **Run workflow**(workflow_dispatch)로 새 런을 만든다.
+- 배포 검증은 기존과 동일: 라이브 `sw.js` 버전 문자열 + 메인 번들 200. 캐시 우회(`?cb=`) 필수.
 
 ## 0. 절대 원칙
 
