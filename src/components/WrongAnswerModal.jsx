@@ -79,10 +79,25 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
         {/* 본문 */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {done ? (
-            <div className="text-center py-8">
+            <div className="text-center py-8 px-2">
               <div className="text-5xl mb-2">✅</div>
-              <div className="text-emerald-300 font-bold text-lg">접수 완료</div>
-              <div className="text-slate-400 text-sm mt-1">감사합니다. 다음 버전에서 개선됩니다.</div>
+              <div className="text-emerald-300 font-bold text-lg">접수됐습니다</div>
+              {/* TallyOne 1.16: 검수사 지시 2026-08-06 — "접수 확인 문구와 처리 계획을 알려 줘야 함.
+                  쉬운 거면 10분 이내, 복잡하면 클로드의 처리 속도에 맞춰 알려줘야 사용자가 기다리지 않습니다."
+                  파일로 내려받을 필요가 없다 — 클로드가 서버(feedback 노드)를 직접 읽는다. */}
+              <div className="text-slate-300 text-sm mt-2 leading-relaxed">
+                클로드가 <b className="text-slate-100">서버에서 바로 읽습니다.</b><br/>
+                파일로 내려받지 않으셔도 됩니다.
+              </div>
+              <div className="text-[12px] text-slate-400 mt-3 bg-slate-800/60 border border-slate-700/60 rounded-lg p-2.5 leading-relaxed text-left">
+                <div className="text-slate-300 font-bold mb-1">처리 계획은 이 신고에 적힙니다</div>
+                수석 대시보드 「오답 리포트」에서 이 건을 보시면
+                <b className="text-sky-300"> 클로드 회신</b>이 붙습니다 —
+                <b className="text-slate-200"> 무엇을 고칠지</b>와 <b className="text-slate-200">언제 되는지</b>.
+                <div className="text-[11px] text-slate-500 mt-1.5">
+                  간단한 건 10분 안, 손이 많이 가는 건 예상 시점을 적어 둡니다. 기다리지 마시고 일 보십시오.
+                </div>
+              </div>
             </div>
           ) : (
             <>
@@ -119,7 +134,8 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
 
               <div className="text-[11px] text-slate-500 leading-relaxed bg-slate-800/50 rounded p-2 border border-slate-700/50">
                 💡 검수자({inspector || '익명'}) · 항차({voyageVsl || '-'}) · 앱 v{APP_VERSION} 자동 기록됩니다.
-                <br/>수석 대시보드 "오답 리포트" 섹션에서 확인 가능합니다.
+                <br/>클로드가 서버에서 바로 읽습니다 — 파일로 내려받지 않아도 됩니다.
+                <br/>처리 계획은 수석 대시보드 "오답 리포트"의 이 건에 붙습니다.
               </div>
             </>
           )}
