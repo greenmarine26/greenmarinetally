@@ -291,12 +291,34 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           const den = Math.max(_ptk.size - slots, _rec.size);
           return den > 0 ? { matched, den } : null;    // 자료가 아예 없는 섹션
         };
-        const _rs = [_readyOf(v.discharge, 'discharge'), _readyOf(v.loading, 'loading')].filter(Boolean);
-        const _rNum = _rs.reduce((t, x) => t + x.matched, 0);
-        const _rDen = _rs.reduce((t, x) => t + x.den, 0);
+        // TallyOne 1.13-01: **예정 섹션은 voy_d / voy_l 이 진실이다.** 섹션 노드 유무로 보면 안 된다.
+        //   사건(검수사 신고 2026-08-06): 양하만 들어온 배가 `✅ 자료 확정`으로 떴다. 양하·선적을
+        //   둘 다 하는 배인데도. 원인 — 선적 섹션 노드가 아직 없으니 계산에서 통째로 빠져
+        //   "양하 하나만 100%" = 전체 100% 가 됐다.
+        //   실측: TNJP 26356E(voy_d 26356E · voy_l 26356W) — discharge 만 존재. SWDN 2608N 도 같다.
+        //   ATPR 2636E 처럼 voy_d 만 있는 배는 양하만으로 확정이 맞다(검수사: "ATPR은 양하만 선적만이 있으니").
+        const _info = v.info || {};
+        const _expect = [];
+        if (_info.voy_d) _expect.push('discharge');
+        if (_info.voy_l) _expect.push('loading');
+        if (!_expect.length) _expect.push(_info.mode === 'loading' ? 'loading' : 'discharge');   // 옛 항차 폴백
+        // 섹션마다 완성율을 따로 낸다. 자료가 아직 없는 예정 섹션은 0 — 몇 대일지 모르므로 가중치는 균등하다.
+        const _sr = _expect.map(m => {
+          const r = _readyOf(m === 'discharge' ? v.discharge : v.loading, m);
+          return { mode: m, ratio: r ? r.matched / r.den : 0, has: !!r };
+        });
+        const _rDen = _sr.filter(x => x.has).length;   // 자료가 들어온 예정 섹션 수
+        const _done = _sr.filter(x => x.ratio >= 0.9999);
+        const _wait = _sr.filter(x => x.ratio < 0.9999);
         return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
-                 _ready: _rDen > 0 ? _rNum / _rDen : 0,   // TallyOne 1.12: 자료 완성율 (0 = 매칭 0)
+                 // TallyOne 1.13-01: 예정 섹션들의 완성율 평균. 둘 다 해야 하는 배는 둘 다 채워야 1.0 이 된다.
+                 _ready: _sr.length ? _sr.reduce((t, x) => t + x.ratio, 0) / _sr.length : 0,
                  _hasData: _rDen > 0,                     // TallyOne 1.12: 자료가 하나라도 있는가(EDI든 리스트든)
+                 // 일부만 끝났으면 무엇을 기다리는지 카드에 적는다 — '선적자료 대기중'(검수사 요청 2026-08-06).
+                 _waitFor: (_done.length > 0 && _wait.length > 0)
+                   ? _wait.map(x => (x.mode === 'discharge' ? '양하' : '선적')).join('·') : '',
+                 // 예정 섹션 중 **자료가 한 번도 안 들어온** 것이 있는가 — 확정 자격 판정에 쓴다.
+                 _missingSection: _sr.some(x => !x.has),
                  // TallyOne 1.13: 자료가 마지막으로 들어온 시각. EDI·리스트만 본다(X-RAY 제외 — 확정 뒤 붙는 자료).
                  //   `{mode}/dataAt` 이 1.13 부터 기록된다. 그 전에 등록된 항차는 EDI 업로드 시각으로 폴백한다.
                  _dataAt: Math.max(
@@ -350,6 +372,25 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       _fixedWrote.current.add(v.key);
       fbUpdateVoyageInfo(v.key, { dataFixedAt: Date.now() })
         .catch(e => console.warn('[dataFixedAt] 자료 확정 시각 기록 실패 —', v.key, e));
+    }
+  }, [voyagesWithPier]);
+
+  // TallyOne 1.13-01: **잘못 찍힌 확정 기록 자동 정리.**
+  //   1.13 이 예정 섹션을 섹션 노드 유무로 봐서, 양하만 들어온 배(선적 예정)를 확정으로 기록해 버렸다
+  //   (실측 2026-08-06 17:14 — TNJP 26356E · SWDN 2608N). 코드만 고치면 그 기록이 남아 계속 '확정'으로 뜬다.
+  //   지우는 조건을 **좁게** 잡는다: 예정 섹션 중 **자료가 한 번도 안 들어온** 것이 있을 때만.
+  //   정상적인 '수정본'(모든 섹션에 자료가 있는데 매칭이 잠깐 어긋난 상태)은 건드리지 않는다 —
+  //   거기서 확정 기록을 지우면 수정본 표기가 사라진다.
+  const _fixedCleared = useRef(new Set());
+  useEffect(() => {
+    for (const v of voyagesWithPier) {
+      if (!v?.key || !v.info?.dataFixedAt) continue;
+      if (!v._missingSection) continue;
+      if (_fixedCleared.current.has(v.key)) continue;
+      _fixedCleared.current.add(v.key);
+      console.warn('[dataFixedAt] 자료 없는 예정 섹션이 있어 확정 기록을 지웁니다 —', v.key);
+      fbUpdateVoyageInfo(v.key, { dataFixedAt: null })
+        .catch(e => console.warn('[dataFixedAt] 확정 기록 정리 실패 —', v.key, e));
     }
   }, [voyagesWithPier]);
 
@@ -1165,6 +1206,11 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                   return <span className="ml-1 text-amber-300">· ✏ 수정본 {fmt2(at)}</span>;
                 }
                 return <span className="ml-1 text-emerald-300">· ✅ 자료 확정</span>;
+              }
+              // TallyOne 1.13-01: 한쪽만 끝난 배 — 무엇을 기다리는지 적는다(검수사 요청).
+              //   종전엔 선적 섹션이 아직 없다는 이유로 계산에서 빠져 '자료 확정'으로 떴다.
+              if (voyage._waitFor) {
+                return <span className="ml-1 text-sky-300">· ⏳ {voyage._waitFor}자료 대기중{at ? ` · 갱신 ${fmt2(at)}` : ''}</span>;
               }
               if (at) return <span className="ml-1">· 갱신 {fmt2(at)}</span>;
               if (voyage._hasData) return <span className="ml-1 text-slate-600">· 갱신 —</span>;
