@@ -4,6 +4,18 @@
 > 이 파일은 저장소만 보고 있는 클로드를 위한 **자립 요약**이다. 절차·판단은 이것만으로 충분하다.
 > 개정 2026-07-26 (V9.07-01 배포 실측 반영)
 
+## 0-D. 배포 경로 변경 (2026-08-06 확정) — Pages 소스는 GitHub Actions다
+
+- **현재 배포 경로**: push → `.github/workflows/deploy.yml` ("Deploy to GitHub Pages") → actions/deploy-pages, **타임아웃 30분**.
+- Settings→Pages Source는 **GitHub Actions**다. **"Deploy from a branch"로 되돌리지 마라.**
+  내장 pages-build-deployment는 deploy 타임아웃이 **10분 고정**이라 손댈 수 없다. 1GB 사고 이후
+  Pages 백엔드 처리가 10분을 넘겨, branch 모드 배포가 전부 "Timeout reached, aborting!"으로
+  죽었다(#1021~#1024). 자체 워크플로만 타임아웃을 늘릴 수 있어 이 경로로 옮겼고,
+  **1.20이 이 경로 전환 직후 라이브에 갔다** (2026-08-06 23:45 KST 실측).
+- 과거 deploy.yml은 branch 모드와 중복 배포기라 b155110에서 지웠었다.
+  지금 deploy.yml은 중복이 아니라 **유일한 배포기**다. 지우면 배포가 아예 안 된다.
+- 배포 검증은 기존과 동일: 라이브 `sw.js` 버전 문자열 + 메인 번들 200 확인. 캐시 우회(`?cb=`) 필수.
+
 ## 0. 절대 원칙
 
 - **배포는 클로드가 끝까지 직접 한다.** 아래 문장은 전부 금지다.
