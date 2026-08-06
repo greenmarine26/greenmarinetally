@@ -485,7 +485,11 @@ export default function PrintableCargoPlanV2({
     })();
     // V8.22: 빌더와 동일한 코드 신원으로도 조회 → code≠선박명(DJCT 등) user 매트릭스 반영.
     const _vslCode = extractShipMetaFromVoyage({ info: voyageInfo })?.code || '';
-    const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
+    // TallyOne 1.13-02: 신원 검증용 — 코드가 콜사인 앞4자로 추론될 수 있어 사전 항목이 남의 배일 수 있다.
+    const baseDict = getShipBayDictData(shipImo, shipName, {
+      ediBayCount, vslCode: _vslCode,
+      callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '',
+    });
     if (!baseDict) return null;
     // M6.94.0 사용자 원칙 1: source='user'면 enrichBayDef가 즉시 entry 반환 (어떤 보강도 안 함).
     //   AI 임시 베이사전 (v2/v5/firebase 등)일 때만 EDI 자동 채움 등 보강 동작.

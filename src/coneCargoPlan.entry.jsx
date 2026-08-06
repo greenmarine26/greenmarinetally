@@ -120,7 +120,7 @@ export function buildConeBayGrid(containers, shipInfo) {
   // BayPlan.jsx 244·269: 사전 조회 — getShipBayDictData (검수앱과 동일 인자)
   let dict = null;
   if (shipImo || shipName) {
-    try { dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode }); }
+    try { dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: (shipInfo.voyageInfo && shipInfo.voyageInfo.callsign) || '', vslFull: shipName || '' }); }
     catch (e) { console.warn('[ConeOne 1.2] 베이사전 조회 실패 — EDI 폴백', e); dict = null; }
   }
 

@@ -14,7 +14,7 @@
 
 | 앱 | 정체 | 현재 버전 | 버전 소스 (여기를 읽는다) |
 |---|---|---|---|
-| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.13-01** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
+| **TallyOne** (구 Tallyman Master, 검수앱) | React/Vite PWA + Firebase RTDB | **TallyOne 1.13-02** | `src/utils.js` → `APP_VERSION` — 단일 진실원 |
 | **MailPilot** (구 수집기) | PC 로컬 Python (`C:\TALLYTEST\TallymanMailCollector_v2.17.15\` — 폴더명은 버전 아님) | **MailPilot 1.0-09** | `app_gui.py` → `VERSION` |
 | **ConeOne** (구 콘앱) | `public/cone.html` 독립 HTML | **ConeOne 1.5-01** | `cone.html` → `window.__CONEV` — 콘앱 단일 소스(검수앱 버전과 분리) |
 | 벌크탤리 | `bulk_tally.html` 독립 HTML | TallyOne 버전 동기 | 라벨은 build.sh가 APP_VERSION에서 동기화 |
@@ -136,7 +136,62 @@
 
 > 범용화 프로젝트(TallyUni·MailPilot Uni, 저장소 tallyone-universal)의 작업 기록은 여기가 아니라 `★범용화_프로젝트_별도관리.md` §8에 적는다 — 검수사 지시 "따로 관리"(2026-08-05). 이 기록부는 현장 3앱(TallyOne·MailPilot·ConeOne) 전용이다.
 
-### 2026-08-06 — TallyOne 1.13-01 + MailPilot 1.0-09: 양하만 왔는데 '자료 확정' (커밋 `__H5__`)
+### 2026-08-06 — TallyOne 1.13-02: **콜사인 앞 4자로 코드를 짐작해 남의 배 매트릭스를 그렸다** (커밋 `__H6__`)
+
+**신고.** "메트릭스가 왜 또 원위치 되었는지?" — 인쇄된 NSFR 카고플랜을 첨부.
+
+**인쇄물 머리글이 답이었다.**
+
+```
+사전:V7A2·user·2026-07-21
+```
+
+NSFR 사전이 아니다. 코드가 `V7A2` 이고 날짜도 오늘이 아니라 7월 21일. 베이도 28개(01,02,03,05,06,…,38)로 NSFR(22베이)과 전혀 달랐다.
+
+**`V7A2` 의 정체 — 다른 배다.**
+
+```
+V7A2 : name='SWAT'  callsign='V7A281'  28베이  2026-07-21
+NSFR : name='NSFR'  callsign='V7A284988'  22베이  (검수사가 14:27 에 저장)
+NSFR_2615N 항차 : vsl='NSFR'  callsign='V7A2845'
+```
+
+**콜사인 앞 4자가 둘 다 `V7A2`.**
+
+**원인.** `shipMatrixBuilder.extractShipMetaFromVoyage` 의 코드 추론 우선순위 —
+
+```js
+let code = info.code || '';
+if (!code && callsign.length >= 4) code = callsign.substring(0, 4);   // ← 여기
+if (!code && vsl) { … }                                               // vsl 은 그 다음
+```
+
+**항차의 선박 코드(`info.vsl` = 'NSFR')를 놔두고 콜사인 앞 4자를 먼저 썼다.** 그 코드가 `getShipBayDictData(…, {vslCode})` 의 **최우선** 조회 키라, `V7A2`(SWAT) 매트릭스가 그대로 잡혔다. 검수사가 NSFR 매트릭스를 몇 번을 고쳐 저장해도 화면은 계속 SWAT 을 그렸다 — "또 원위치"의 정체다.
+
+**기존 오염 방어가 이 경로만 비켜갔다.** V7.31 가드는 `matchedBy` 가 callsign/imo 계열일 때만 선박명을 검증하는데, 조건이 `!/name|code/i.test(mb)` 라 `user-dict-vslcode` 는 'code' 를 포함해 **검증 없이 통과**했다. 코드로 잡았으니 믿는다는 전제였는데, **그 코드 자체가 콜사인에서 나온 것**이었다.
+
+**범위 — 사전 전체에 22건.** 콜사인 앞 4자가 코드로 굳은 유령 항목이 106개 중 22개다.
+`V7A5`(NSDC·DPRT 두 배가 후보) · `BSDU`(XTPG·DJCT) · `D5QW`(PCBJ·PCSZ) · `V7A6`(SWSP) · `9HA3`/`5LRE`(MCAT) …
+**지우지 않았다** — 그중 상당수는 그 키로만 저장된 진짜 매트릭스다(SWSP 는 `V7A6` 에 28베이가 들어 있다). 지우면 멀쩡한 배가 사전을 잃는다.
+
+**수리 (두 겹).**
+
+1. `extractShipMetaFromVoyage` — `info.vsl` 을 콜사인 앞 4자보다 **앞**에 둔다. 공백 없는 3~8자 영숫자일 때만 코드로 인정(풀네임 항차 방어).
+2. `getShipBayDictData` — vslCode 경로에도 **신원 검증**(`_dictIdentityConflict`). 항목의 code·name 이 항차 선박코드와 같거나, 풀네임이 겹치거나, 콜사인이 접두 일치하거나, IMO 가 같으면 **같은 배**. 아무 근거도 못 찾으면 버리고 콘솔에 남긴다. 호출부(카고플랜·베이플랜·콘앱)가 `callsign`·`vslFull`·`imo` 를 함께 넘기도록 배선했다.
+
+**검증 (RTDB 사전 106개 · 항차 17개, 실제 조회 함수로).**
+
+```
+NSFR_2615N   수리전 V7A2/SWAT 28베이   →  수리후 NSFR/NSFR 22베이   ← 유일하게 바뀐 항차
+SWSP_2606N   V7A6/SWSP 28베이         →  V7A6/SWSP 28베이  (같은 배 — 그대로)
+NSDC_2607N   V7A5/NSDC 28베이         →  V7A5/NSDC 28베이  (같은 배 — 그대로)
+… 나머지 14항차 전부 동일
+베이를 잃은 항차 0개
+```
+
+**교훈.** ①·④에 이어 **세 번째로 같은 실수**다 — *조회 경로로 정본을 판정*(①), *구조로 예정 섹션을 추론*(④), 그리고 이번엔 *콜사인으로 선박 코드를 추론*. 셋 다 **명시된 데이터가 옆에 있는데 짐작으로 대신한 것**이다. `info.vsl`·`voy_d`/`voy_l`·`_userOwned` — 전부 이미 저장돼 있었다.
+
+### 2026-08-06 — TallyOne 1.13-01 + MailPilot 1.0-09: 양하만 왔는데 '자료 확정' (커밋 `e7fd5eb`)
 
 **신고 (검수사, 1.13 배포 직후).** "확정된 선박 중 **양하만 확정인데 자료 확정으로 되어 있습니다. 양하 선적이 이루어지는 선박인데도.** 그럴 경우 별도 표기가 있어야 할 것입니다. **선적자료 대기중** 같은 표기."
 그리고 — "**그것까지 처리하셨어야 했습니다. 그래야 수정이 된 거죠**"(수집기 dataAt 미대응 건).

@@ -431,6 +431,27 @@ function pickBestVariant(matchedData, imo, ediBayCount) {
   return variants[0].entry;
 }
 
+/**
+ * TallyOne 1.13-02: 코드로 잡은 사전 항목이 **다른 배 것인가**.
+ *   콜사인이 양쪽 다 있고 서로 접두 관계도 아니면 다른 배로 본다.
+ *   (콜사인이 한쪽이라도 없으면 판단 근거가 없으므로 통과시킨다 — 근거 없이 버리면 사전이 통째로 안 잡힌다.)
+ */
+function _dictIdentityConflict(entry, opts) {
+  const _n = x => String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
+  const my = _n(opts?.vslCode);
+  if (!my || !entry) return false;                       // 근거 없음 → 통과
+  const ec = _n(entry.code), en = _n(entry.name);
+  if (ec === my || en === my) return false;              // 코드/이름이 항차 선박코드와 같다 → 같은 배
+  const full = _n(opts?.vslFull);                        // 풀네임끼리 (STAR FRONTIER ↔ …)
+  if (full.length >= 5 && en.length >= 5
+      && (full.includes(en.slice(0, 5)) || en.includes(full.slice(0, 5)))) return false;
+  const a = _n(entry.callsign), b = _n(opts?.callsign);  // 콜사인 접두 일치
+  if (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a))) return false;
+  const ei = String(entry.imo || '').trim(), oi = String(opts?.imo || '').trim();
+  if (ei && oi && ei === oi) return false;               // IMO 일치
+  return true;                                           // 아무 근거도 못 찾음 → 다른 배
+}
+
 export function getShipBayDictData(imo, code, opts) {
   // V8.23: 빌더는 코드로 저장/조회하므로, 화면도 코드(opts.vslCode)로 user 매트릭스를 "최우선" 조회한다.
   //   배경: 같은 배가 코드키(예: DJCT, name "DJCT")와 선박명키(예: DCON, name "DONGJIN CONTINENTAL")로
@@ -440,7 +461,19 @@ export function getShipBayDictData(imo, code, opts) {
   if (opts && opts.vslCode) {
     try {
       const _byCode = lookupUserBayDict(imo, opts.vslCode);
-      if (_byCode) result = { source: 'user', data: _byCode, matchedBy: 'user-dict-vslcode' };
+      // TallyOne 1.13-02: **코드로 잡았어도 신원을 확인한다.**
+      //   vslCode 는 콜사인 앞4자로 추론되기도 해서, 앞4자가 겹치는 다른 배의 매트릭스를 그대로 물어왔다
+      //   (실측: NSFR 콜사인 V7A2845 → 코드 V7A2 → 사전 V7A2 = SWAT(V7A281) 매트릭스).
+      //   기존 V7.31 오염 방어는 `matchedBy` 에 'code' 가 들어가면 통과시켜 이 경로를 못 걸렀다.
+      //   규칙: 양쪽 콜사인이 다 있는데 **서로 접두 관계도 아니면 다른 배**다.
+      //     V7A281 vs V7A2845 → 다른 배(버림) · V7A623 vs V7A623 → 같은 배(채택)
+      if (_byCode && !_dictIdentityConflict(_byCode, opts)) {
+        result = { source: 'user', data: _byCode, matchedBy: 'user-dict-vslcode' };
+      } else if (_byCode) {
+        console.warn('[베이사전] 코드는 맞지만 신원이 다른 항목을 버립니다 —',
+          `조회코드 ${opts.vslCode}`, `사전 ${_byCode.code}/${_byCode.name}/${_byCode.callsign}`,
+          `항차 ${opts.vslFull || ''}/${opts.callsign || ''}`);
+      }
     } catch (e) { /* fallthrough */ }
   }
   if (!result) result = fuzzyLookupAcrossDicts(imo, code);

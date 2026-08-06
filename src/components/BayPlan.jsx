@@ -226,6 +226,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   }, [containers]);
 
   // V8.22: 빌더와 동일 코드 신원 (code≠선박명 배의 user 매트릭스 조회용)
+  // TallyOne 1.13-02: 신원 검증용 — 코드가 콜사인 앞4자로 추론될 수 있어 사전 항목이 남의 배일 수 있다.
   const _vslCode = useMemo(() => {
     try { return extractShipMetaFromVoyage({ info: voyageInfo })?.code || ''; } catch { return ''; }
   }, [voyageInfo]);
@@ -233,13 +234,13 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   // V7.01: 계열 대체 여부 (배너 표시용)
   const bayDictSubstituted = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '' });
     return dict?._substituted || null;
   }, [shipImo, shipName, ediBayCount, _vslCode]);
 
   const dictBayList = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '' });
     if (!dict?.bayDef) return null;
     // V7.01: 베이 목록은 baysSummary(카고플랜·빌더와 동일 소스)를 우선.
     //   원인: 일부 사전은 baysSummary가 비었는데 bayList에만 베이 번호가 남아있음(ATRP 등).
@@ -267,7 +268,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   // M6.94.0: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
   const dictBaysSummary = useMemo(() => {
     if (!shipImo && !shipName) return {};
-    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode });
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '' });
     if (!dict?.bayDef?.baysSummary) return {};
     // source='user'면 보강 차단, AI 임시는 L4 EDI 보정
     // TallyOne 1.11-01: 정본 판정은 조회 경로(source)가 아니라 항목 안쪽(isUserOwnedBayDict). Firebase 경유 정본이 자동 사전 취급되던 결함.

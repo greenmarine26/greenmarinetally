@@ -29,6 +29,17 @@ export function extractShipMetaFromVoyage(voyage) {
   //   3) vsl 단어들 첫 글자 (예: SAWASDEE ATLANTIC → SAAT)
   //   4) vsl 처음 4자
   let code = info.code || '';
+  // TallyOne 1.13-02: **항차의 선박 코드(info.vsl)가 콜사인 앞4자보다 먼저다.**
+  //   info.vsl 은 항차 키(`NSFR_2615N`)의 앞부분 — 검수사가 항차를 만들 때 넣은 진짜 코드다.
+  //   종전엔 콜사인 앞4자를 먼저 써서 **남의 배 매트릭스를 잡았다**(2026-08-06 실측):
+  //     NSFR 콜사인 `V7A2845` → 코드 `V7A2` → 사전의 `V7A2`(= SWAT, 콜사인 V7A281) 히트.
+  //     검수사가 NSFR 매트릭스를 몇 번을 고쳐도 화면은 계속 SWAT 28베이를 그렸다.
+  //   같은 충돌이 사전 전체에 22건 있었다 — V7A5(NSDC·DPRT), BSDU(XTPG·DJCT), D5QW(PCBJ·PCSZ) 등.
+  //   공백 없는 3~8자 영숫자일 때만 코드로 인정한다(풀네임이 들어온 항차 방어).
+  if (!code && vsl) {
+    const _v = String(vsl).toUpperCase().trim();
+    if (/^[A-Z0-9]{3,8}$/.test(_v)) code = _v;
+  }
   if (!code && callsign && callsign.length >= 4) {
     code = callsign.substring(0, 4);
   }
