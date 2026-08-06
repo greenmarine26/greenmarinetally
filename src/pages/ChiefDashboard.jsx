@@ -3,7 +3,7 @@ import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, Check
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
-import { isPyeongtaekPort, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -1944,7 +1944,11 @@ function computeStats(section, mode) {
       : (isPyeongtaekPort(c.pol) || isPyeongtaekPort(c.pod));
     if (isPtk) ptkCns.add(c.cn || key);
   });
-  const recordCns = new Set(Object.keys(records));
+  // TallyOne 1.11: 모수에서 **반대 방향 리스트**를 뺀다. 항차번호가 방향까지 같은 배(N_N 타입)는
+  //   메일함 폴더가 하나라 양하·선적 리스트가 섞여 들어와, 양하 카드가 두 리스트를 합산해
+  //   `평택 778`(= 양하 371 + 선적 407) 로 나왔다(SWSP 2606N, 2026-08-06 실측).
+  //   POL/POD 로 확정된 것만 뺀다 — 근거 없는 레코드는 그대로 센다.
+  const recordCns = new Set(ownDirCns(records, mode));
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당.
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;

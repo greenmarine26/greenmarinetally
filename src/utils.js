@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.10-01';   // 인쇄 허브(카고플랜·검수 리스트) ▲긴급·🧳수화물 마커 유실 수리 — tagForecastMarks 공용 승격
+export const APP_VERSION = 'TallyOne 1.11';   // 리스트 합산 오류 수리 — 한 폴더에 섞여 온 양하·선적 리스트 분리(N_N 타입) + 평택 코드 변형(PTK02·PYONGTAEK) 인식
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3034,13 +3034,24 @@ export function buildContainerColorMap(containers, mode) {
 //   (선적 리스트가 KRPYOTM 표기 → 평택분이 표시 안 되던 버그).
 //   새 평택 코드가 나오면 이 배열에만 추가하면 전 화면 일괄 반영.
 const PYEONGTAEK_CODES = ['PTK', 'KRPTK', 'KRPYT', 'PYT', 'KRPYOTM', 'PYOTM', 'KRPYO'];
+// TallyOne 1.11: 실 리스트에 들어 있는 평택 표기 전수 조사(2026-08-06, RTDB voyages 17항차 records).
+//   실측 변형과 종전 판정 결과:
+//     KRPTK 1401건 ✓ / PTK 61건 ✓ / PTK02 407건 ✗ / PYEONGTAEK 71건 ✗ /
+//     PYONGTAEK 25건 ✗ / PYEONGTAEK,KOREA 5건 ✗ / PYONGTAEK,KOREA 3건 ✗
+//   → 511건이 평택인데 평택이 아닌 것으로 판정되고 있었다. 부두번호 접미(PTK02 = 평택 2부두)와
+//   철자 그대로 쓰는 리스트(PYONGTAEK/PYEONGTAEK, 뒤에 국가명이 붙기도 한다)를 흡수한다.
+const RE_PTK_SPELL = /^(KR)?P(Y|YE)ONGTAEK$/;              // PYONGTAEK · PYEONGTAEK · KRPYEONGTAEK
 export function isPyeongtaekPort(code) {
   if (!code) return false;
-  const t = String(code).toUpperCase().trim();
+  let t = String(code).toUpperCase().trim();
+  if (!t) return false;
+  // 'PYONGTAEK,KOREA' · 'PYEONGTAEK(KR)' 처럼 뒤에 국가·부연이 붙어 오는 리스트가 있다 — 앞토막만 본다.
+  t = t.split(/[,/(]/)[0].replace(/[\s.]/g, '').trim();
   if (!t) return false;
   if (PYEONGTAEK_CODES.includes(t)) return true;
-  // 접미 매칭: ...PTK, ...PYT, ...PYOTM, ...PYO 로 끝나면 평택
-  return /(PTK|PYT|PYOTM|PYO)$/.test(t);
+  if (RE_PTK_SPELL.test(t)) return true;
+  // 접미 매칭: ...PTK, ...PYT, ...PYOTM, ...PYO. 뒤에 부두번호 두 자리까지 허용(PTK02·KRPTK1).
+  return /(PTK|PYT|PYOTM|PYO)\d{0,2}$/.test(t);
 }
 
 // ─── V9.57: 공용 헬퍼 신설 (감사 F6) — 흩어진 지역 규칙의 단일 소스 ──────────
@@ -3062,6 +3073,34 @@ export function voyEq(a, b) {
 export function isPtk(c, mode) {
   if (!c) return false;
   return mode === 'discharge' ? isPyeongtaekPort(c.pod) : !!(c._inList || isPyeongtaekPort(c.pol));
+}
+
+/**
+ * TallyOne 1.11: 리스트 레코드가 **반대 방향**으로 확정되는가 (합산 오류 차단 단일 소스).
+ *
+ * 왜 필요한가 — 항차번호가 방향까지 같은 배(N_N 타입: 양하 2606N · 선적 2606N)는 수집기가
+ *   메일함 폴더를 하나로 만들어서 양하 리스트와 선적 리스트가 한 폴더에 섞인다. 그 폴더를
+ *   통째로 등록하면 두 리스트가 한 mode 로 합산됐다.
+ *   실측(SWSP 2606N, 2026-08-06): 양하 카드가 `평택 778` — 양하 371 + 선적 407 이었다.
+ *
+ * 판정 근거는 레코드 자신의 POL/POD 다. 실데이터에서 두 리스트는 깨끗이 갈린다:
+ *   양하 371건 → pod=KRPTK, pol=VNSGN/THBKK/THLCH
+ *   선적 407건 → pol=PTK02, pod=KRKAN/CNNKG/…
+ *
+ * **확정된 것만 뺀다.** POL/POD 가 없거나(구형 리스트) 둘 다 평택이면(환적) 근거가 없으므로
+ *   유지한다 — 근거 없이 버리면 리스트가 통째로 사라진다(정보 손실 금지).
+ */
+export function isOppositeDirRecord(r, mode) {
+  if (!r || (mode !== 'discharge' && mode !== 'loading')) return false;
+  const podPtk = isPyeongtaekPort(r.pod);
+  const polPtk = isPyeongtaekPort(r.pol);
+  if (podPtk === polPtk) return false;            // 근거 없음(둘 다 아님 / 둘 다 평택) → 유지
+  return mode === 'discharge' ? polPtk : podPtk;  // 양하인데 POL만 평택 = 선적분, 반대도 같다
+}
+
+/** 반대 방향 레코드를 걸러낸 컨번호 목록 — 카운트 모수·컨테이너 병합이 함께 쓴다. */
+export function ownDirCns(records, mode) {
+  return Object.keys(records || {}).filter(cn => !isOppositeDirRecord(records[cn], mode));
 }
 
 // 컨번호 형식 검사 단일 소스 (ISO 6346: 알파벳 4 + 숫자 7)
