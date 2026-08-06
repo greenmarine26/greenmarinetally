@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
@@ -297,6 +297,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
                  _ready: _rDen > 0 ? _rNum / _rDen : 0,   // TallyOne 1.12: 자료 완성율 (0 = 매칭 0)
                  _hasData: _rDen > 0,                     // TallyOne 1.12: 자료가 하나라도 있는가(EDI든 리스트든)
+                 // TallyOne 1.13: 자료가 마지막으로 들어온 시각. EDI·리스트만 본다(X-RAY 제외 — 확정 뒤 붙는 자료).
+                 //   `{mode}/dataAt` 이 1.13 부터 기록된다. 그 전에 등록된 항차는 EDI 업로드 시각으로 폴백한다.
+                 _dataAt: Math.max(
+                   Number(v.discharge?.dataAt) || 0, Number(v.loading?.dataAt) || 0,
+                   Number(v.discharge?.raw?.edi?.uploadedAt) || 0, Number(v.loading?.raw?.edi?.uploadedAt) || 0,
+                 ),
                  _etaMs: _pick ? _pick.eta : null,     // V9.01: 작업시간 근접 정렬용
                  _etdMs: _pick ? _pick.etd : null,
                  _etaSrc: _pick ? _pick.src : '' };    // V9.35: 작업일시 배지 출처 표기용
@@ -330,6 +336,22 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         return ra[0] - rb[0] || ra[1] - rb[1];
       });
   }, [voyages, portMisData, pilotForecast]);
+
+  // TallyOne 1.13: **자료 확정 시각 자동 기록** (검수사 확정 2026-08-06 — "앱이 자동으로").
+  //   완성율(EDI·리스트 100% 매칭)이 처음 1.0 이 된 순간 `info.dataFixedAt` 을 남긴다.
+  //   이 시각이 있어야 그 뒤 자료가 또 들어왔을 때 "수정본"으로 구분할 수 있다.
+  //   이미 있으면 절대 덮지 않는다 — 확정은 한 번뿐이고, 덮으면 수정본 판정이 영영 안 뜬다.
+  const _fixedWrote = useRef(new Set());
+  useEffect(() => {
+    for (const v of voyagesWithPier) {
+      if (!v?.key || v._ready < 0.9999) continue;
+      if (v.info?.dataFixedAt) continue;
+      if (_fixedWrote.current.has(v.key)) continue;   // 같은 화면에서 중복 쓰기 방지
+      _fixedWrote.current.add(v.key);
+      fbUpdateVoyageInfo(v.key, { dataFixedAt: Date.now() })
+        .catch(e => console.warn('[dataFixedAt] 자료 확정 시각 기록 실패 —', v.key, e));
+    }
+  }, [voyagesWithPier]);
 
   // M6.18: 잘못된 berth가 voyage.info에 저장되어 있으면 백그라운드 자동 정리
   //   M6.13 자동 정리는 VoyagePage 진입 시에만 동작 — HomePage에서도 처리
@@ -1112,24 +1134,52 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             })()}
             {' · '}{voyage.info.carrier || ''}
           </div>
-          {/* 작업일 표시 (수동/자동 삭제 구분용) */}
-          {voyage.info.createdAt && (
-            <div className="text-[11px] text-slate-500 mt-0.5">
-              🗂 등록 {new Date(voyage.info.createdAt).toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-              {(() => {
-                // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다.
-                //   작업 활동이 없으면 자동삭제 대상이 아니므로 경고를 띄우지 않는다(불안 방지).
-                const worked = lastWorkAt(voyage);
-                const createdDays = Math.floor((Date.now() - voyage.info.createdAt) / 86400000);
-                if (worked > 0) {
-                  const workDays = Math.floor((Date.now() - worked) / 86400000);
-                  if (workDays >= 7) return <span className="text-amber-500 ml-1">· 작업 {workDays}일 전 (곧 자동삭제)</span>;
+          {/* TallyOne 1.13: 등록일자 → **작업일시 + 자료 상태**.
+                검수사 확정 2026-08-06 — "등록일자는 사실상 무의미하다. 작업일자를 표기하고 자료 갱신일시를 그 옆에.
+                자료가 완성되면 갱신일시를 없애고 '자료 확정', 확정 후 수정 자료가 있으면 '수정본'.
+                작업일시도 변경될 수 있으니 변경 시점으로 표기."
+                작업일시(_etaMs/_etdMs)는 선석배정 > 도선 > PORT-MIS 순으로 **매 렌더 다시 고르므로**
+                일정이 바뀌면 저절로 바뀐 값이 나온다(V9.35). 별도 보관이 필요 없다. */}
+          <div className="text-[11px] text-slate-500 mt-0.5">
+            {(() => {
+              const fmt = (ms, withDate = true) => {
+                if (!ms) return '';
+                const d = new Date(ms);
+                const p = (n) => String(n).padStart(2, '0');
+                return `${withDate ? `${p(d.getMonth() + 1)}-${p(d.getDate())} ` : ''}${p(d.getHours())}:${p(d.getMinutes())}`;
+              };
+              const eta = voyage._etaMs, etd = voyage._etdMs;
+              const sameDay = eta && etd && new Date(eta).toDateString() === new Date(etd).toDateString();
+              const work = eta && etd ? `${fmt(eta)} ~ ${fmt(etd, !sameDay)}` : (eta ? fmt(eta) : (etd ? `~ ${fmt(etd)}` : ''));
+              return <>🗓 작업 {work || <span className="text-slate-600">일정 미상</span>}</>;
+            })()}
+            {(() => {
+              // 자료 상태 — 확정 > 수정본 > 갱신일시 > 자료 없음.
+              const fixed = Number(voyage.info?.dataFixedAt) || 0;
+              const at = Number(voyage._dataAt) || 0;
+              const fmt2 = (ms) => { const d = new Date(ms); const p = (n) => String(n).padStart(2, '0');
+                return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+              if (fixed) {
+                // 확정 뒤에 자료가 또 들어왔으면 수정본. 1분 여유 — 확정 기록과 저장이 거의 동시일 수 있다.
+                if (at > fixed + 60000) {
+                  return <span className="ml-1 text-amber-300">· ✏ 수정본 {fmt2(at)}</span>;
                 }
-                if (createdDays >= 1) return <span className="ml-1">· {createdDays}일 전</span>;
-                return <span className="ml-1">· 오늘</span>;
-              })()}
-            </div>
-          )}
+                return <span className="ml-1 text-emerald-300">· ✅ 자료 확정</span>;
+              }
+              if (at) return <span className="ml-1">· 갱신 {fmt2(at)}</span>;
+              if (voyage._hasData) return <span className="ml-1 text-slate-600">· 갱신 —</span>;
+              return <span className="ml-1 text-slate-600">· 자료 없음</span>;
+            })()}
+            {(() => {
+              // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다. 이 경고만 남긴다.
+              const worked = lastWorkAt(voyage);
+              if (worked > 0) {
+                const workDays = Math.floor((Date.now() - worked) / 86400000);
+                if (workDays >= 7) return <span className="text-amber-500 ml-1">· 작업 {workDays}일 전 (곧 자동삭제)</span>;
+              }
+              return null;
+            })()}
+          </div>
         </div>
         <ChevronRight className="w-5 h-5 text-slate-600 flex-shrink-0"/>
       </button>

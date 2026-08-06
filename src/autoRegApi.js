@@ -358,6 +358,10 @@ export async function buildAutoPayload(files, opts) {
   };
   return {
     ok: !!best || counts.records > 0 || counts.edi > 0,   // V8.84-02: 플랜만 있어도(리스트 아직) 등록 성공
+    // TallyOne 1.13: 자료 갱신 시각 — 수집기가 이 payload를 그대로 쓰므로 자동등록분도 시각이 남는다.
+    //   (앱 업로드 경로는 firebase.js `_touchDataAt` 이 담당. 수집기가 이 필드를 안 쓰면
+    //    홈 카드는 raw/edi.uploadedAt 으로 폴백하므로 최소한 EDI 시각은 보인다.)
+    dataAt: Date.now(),
     key: `${vslCode}_${voy}`, mode, info, ediContainers, records, counts, perFile,
     ediRaw: best ? { text: best.text, fileName: best.name, parserVersion: APP_VERSION } : null,
   };
