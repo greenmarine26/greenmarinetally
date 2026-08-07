@@ -30,7 +30,7 @@ import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey } from '../utils.js';
+import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg } from '../utils.js';   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -300,7 +300,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         // 1.23: 무게는 리스트 기준. 단 B/L 총중량 복사분은 컨별 실중량이 아니라 EDI 를 유지.
         //   ⚠ 이미 저장된 톤 값(1.22 이전 파서가 `12.4`→`12` 로 남긴 것)이 EDI 를 덮지 않도록
         //   같은 보정을 여기서도 건다. 재업로드 없이도 옛 자료가 스스로 낫는다.
-        if (r.wt) safeR.wt = normListWt(r.wt);
+        if (r.wt) safeR.wt = parseListWeightKg(r.wt);
         // M8.07: 온도·품명·F/E·리퍼 보강.
         //   RIZHAO처럼 EDI에 온도/품명이 없는 양식에서 엑셀 리스트 값을 반영.
         //   EDI에 값이 있으면 보존(EDI 우선) — 다른 선박 영향 없음.
@@ -476,7 +476,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //   ⛔ 예외를 만들지 마라 — "같은 B/L 에서 20ft·40ft 무게가 같으면 총중량 복사" 라는
           //   예외를 넣었다가 교정받았다(2026-08-07). **20ft 도 30톤까지 싣고, 20ft 가 40ft 보다
           //   무거울 수도 있다**(40ft 에 부피만 큰 가벼운 화물을 넣기도 한다).
-          if (k === 'wt') { safeR.wt = normListWt(v); return; }   // 톤 보정 후 리스트 값 채택
+          if (k === 'wt') { safeR.wt = parseListWeightKg(v); return; }   // 톤 보정 후 리스트 값 채택
           safeR[k] = v;
         } else {
           // EDI에 없는 컨번호 → 리스트만 있는 항목 (참고용으로 허용)
