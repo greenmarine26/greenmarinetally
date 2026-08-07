@@ -182,8 +182,17 @@ export function parseNaturalQuery(text) {
   }
 
   // M3.3: 용량/수용 (mode 무시)
-  const isCapacityQ = /실을\s*수\s*있|싣을\s*수|적재\s*가능|수용|용량|최대\s*적재|얼마나\s*실|몇\s*(개|대)\s*실/i.test(t);
-  if (isCapacityQ) result.capacityQuery = true;
+  // 1.26: **"몇 대까지 선적이 가능한가요?" 가 안 걸렸다.** 종전 패턴은 '적재 가능' 처럼
+  //   낱말이 붙어 있어야 했고, 검수사 문장은 '선적이 ... 가능한' 이라 사이가 벌어져 있었다.
+  //   그래서 465 가 컨번호 끝자리로 잡혀 "선적 끝네자리 465: 0대" 가 나갔다(오답 리포트 2026-08-07).
+  const isCapacityQ = /실을\s*수\s*있|싣을\s*수|적재\s*가능|수용|용량|최대\s*적재|얼마나\s*실|몇\s*(개|대)\s*실/i.test(t)
+    || /몇\s*(대|개)\s*까지/.test(t)
+    || /(선적|적재|양하)[가-힣\s]{0,6}(가능|할\s*수|될\s*수)/.test(t)
+    || /선복|적재\s*능력|최대\s*몇/.test(t);
+  if (isCapacityQ) {
+    result.capacityQuery = true;
+    result.digits = null;   // 1.26: '465대' 의 465 가 컨번호 끝자리로 잡히던 것 차단
+  }
 
   // V8.00: 인수인계 — "인수인계", "인계 자료", "다음 검수사에게 넘겨", "교대"
   //   남은 작업 + (양하 남으면)신고할 것 + 특이사항을 한 화면에. customs보다 먼저.
@@ -655,7 +664,7 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   }
 
   // M3.3 우선순위
-  if (parsed.capacityQuery)  return formatCapacity(parsed, allContainers);
+  if (parsed.capacityQuery)  return formatCapacity(parsed, allContainers, ctx);
   if (parsed.vacantQuery)    return formatVacant(parsed, allContainers);
   if (parsed.bayBreakdown)   return formatBayBreakdown(parsed, allContainers);
   if (parsed.tierStackQuery) return formatStack(parsed, allContainers);
@@ -1143,7 +1152,7 @@ function formatLocationList(desc, results) {
 }
 
 // M3.3: 베이 용량/짝꿍 분석
-function formatCapacity(parsed, allContainers) {
+function formatCapacity(parsed, allContainers, ctx = null) {
   const baySlot = buildBaySlotMap(allContainers);
   if (parsed.bay) {
     const bayN = parseInt(parsed.bay, 10);
@@ -1189,7 +1198,37 @@ function formatCapacity(parsed, allContainers) {
     return lines.join('\n');
   }
 
-  // 전체 빈 슬롯 분포
+  // 1.26: **베이를 안 짚었으면 배 전체를 묻는 것이다** — 본선 구조와 실적으로 답한다.
+  //   종전엔 이번 항차에 컨이 놓인 자리(관측 슬롯)만 셌다. 그건 "지금 몇 자리 찼나" 이지
+  //   "이 배에 몇 대까지 싣나" 가 아니다. 검수사 질문은 후자였다(오답 리포트 2026-08-07).
+  //   근거: ships/{키}/structure (베이·페어·슬롯) + stats (항차수·양하/선적 누계).
+  //   ⚠ 여기서 낸 수는 **관측치**다. 도면상 선복이 아니다 — 그 사실을 문장으로 밝힌다.
+  const st = ctx?.shipLib?.structure, sx = ctx?.shipLib?.stats;
+  if (st || sx) {
+    const lines = ['📊 이 배에 몇 대까지 싣나'];
+    if (st) {
+      const bc = st.bay_count ?? (st.bays?.length || 0);
+      const pr = st.pairs ? Object.keys(st.pairs).length / 2 : 0;
+      lines.push(`🚢 본선 구조: ${bc}베이${pr ? ` · 페어 ${pr}쌍` : ''}` +
+                 `${st.has_deck ? ' · 덱' : ''}${st.has_hold ? '/홀드' : ''}`);
+      if (st.total_slots) lines.push(`   관측 슬롯 ${st.total_slots.toLocaleString()}개`);
+    }
+    if (sx?.total_voyages > 0) {
+      const avgL = Math.round((sx.total_loading || 0) / sx.total_voyages);
+      const avgD = Math.round((sx.total_discharge || 0) / sx.total_voyages);
+      lines.push(`📈 실적 ${sx.total_voyages}항차 — 선적 평균 ${avgL}대 · 양하 평균 ${avgD}대`);
+      lines.push(`   누계 선적 ${(sx.total_loading || 0).toLocaleString()} · 양하 ${(sx.total_discharge || 0).toLocaleString()}`);
+    }
+    // 이번 항차 현재
+    const nowL = allContainers.filter(c => c._mode === 'loading').length;
+    const nowD = allContainers.filter(c => c._mode === 'discharge').length;
+    if (nowL || nowD) lines.push(`📦 이번 항차 현재: 선적 ${nowL}대 · 양하 ${nowD}대`);
+    lines.push('', '※ 위 수는 지난 항차에서 실제로 관측된 값입니다.',
+                   '   도면상 최대 선복이 아니며, 확정 수량은 선적 기준 EDI 가 와야 정해집니다.');
+    return lines.join('\n');
+  }
+
+  // 전체 빈 슬롯 분포 (본선 구조가 없을 때)
   let totalCons = 0, totalSlots = 0;
   const free = [];
   Object.entries(baySlot).forEach(([bn, v]) => {

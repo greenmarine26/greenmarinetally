@@ -165,7 +165,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     const remain = g?.noBay ? (g.count || 0) : (manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0));
     fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
   }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups]);
-  const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier };
+  // 1.26: shipLib(본선 구조·실적)을 ctx 로 내려보낸다 — "몇 대까지 싣나" 답변 근거.
+  const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib };
 
   return (
     <div className="space-y-3">

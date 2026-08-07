@@ -114,15 +114,37 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, [voyageKey, mode, tab]);
 
   // M3.0: 항차 IMO로 선박 라이브러리 로드 (AI에게 이전 항차 패턴 컨텍스트 제공)
+  // 1.26: **IMO 가 없으면 콜사인으로 찾는다.** 항차 info 에 imo·callsign 이 아예 없는 배가 있다
+  //   (OBWH 2707E 실측 — info 에 vsl 뿐). 그러면 shipLib 이 늘 null 이라 본선 구조(베이·슬롯)와
+  //   실적(항차수·선적 누계)을 **앱이 들고도 못 썼다.** ships 노드 키는 콜사인인 경우가 많고
+  //   (ships/D5MO4 = OBWH), 그 콜사인은 베이사전에 있다.
+  //   검수사 질문 "몇 대까지 선적이 가능한가요?" 에 답하려면 이 연결이 있어야 한다.
   useEffect(() => {
-    const imo = voyage?.info?.imo;
-    if (!imo) { setShipLib(null); return; }
+    const info = voyage?.info || {};
     let cancelled = false;
-    fbGetShipStructure(imo).then(data => {
-      if (!cancelled) setShipLib(data);
-    }).catch(() => { if (!cancelled) setShipLib(null); });
+    const tryKeys = [];
+    if (info.imo) tryKeys.push(info.imo);
+    if (info.callsign) tryKeys.push(info.callsign);
+    // 베이사전에서 콜사인 보강 — 선박코드(vsl)로 찾는다.
+    const code = String(info.vsl || '').toUpperCase().trim();
+    if (code) {
+      const d = getShipBayDictData(info.imo, info.vslFull || code, { vslFull: info.vslFull });
+      if (d?.callsign) tryKeys.push(d.callsign);
+      tryKeys.push(code);
+    }
+    if (!tryKeys.length) { setShipLib(null); return; }
+    (async () => {
+      for (const k of tryKeys) {
+        try {
+          const data = await fbGetShipStructure(k);
+          // structure 가 실제로 있는 것만 채택 — 빈 껍데기는 넘긴다.
+          if (data && (data.structure || data.stats)) { if (!cancelled) setShipLib(data); return; }
+        } catch { /* 다음 키로 */ }
+      }
+      if (!cancelled) setShipLib(null);
+    })();
     return () => { cancelled = true; };
-  }, [voyage?.info?.imo]);
+  }, [voyage?.info?.imo, voyage?.info?.callsign, voyage?.info?.vsl]);
 
   // M6.39: 항차 진입 시 voy_d/voy_l 자동 복구 — 사용자 액션 0
   //   ediContainers의 첫 컨테이너에서 c.voy 추출 → voy_d/voy_l 자동 백필
