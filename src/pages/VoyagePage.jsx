@@ -297,7 +297,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             safeR.sl = recSl;
           }
         }
-        if (r.wt && !merged[r.cn].wt) safeR.wt = r.wt;
+        // 1.23: 무게는 리스트 기준. 단 B/L 총중량 복사분은 컨별 실중량이 아니라 EDI 를 유지.
+        //   ⚠ 이미 저장된 톤 값(1.22 이전 파서가 `12.4`→`12` 로 남긴 것)이 EDI 를 덮지 않도록
+        //   같은 보정을 여기서도 건다. 재업로드 없이도 옛 자료가 스스로 낫는다.
+        if (r.wt) safeR.wt = normListWt(r.wt);
         // M8.07: 온도·품명·F/E·리퍼 보강.
         //   RIZHAO처럼 EDI에 온도/품명이 없는 양식에서 엑셀 리스트 값을 반영.
         //   EDI에 값이 있으면 보존(EDI 우선) — 다른 선박 영향 없음.
@@ -464,8 +467,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (isPositionField && ediBase.bay !== undefined && ediBase.bay !== '') return;
           // tmp는 EDI에 이미 있으면 덮어쓰지 않음 (EDI가 진실)
           if (k === 'tmp' && ediBase.tmp && !ediBase.tmp_missing) return;
-          // wt는 EDI 값이 0일 때만 채움
-          if (k === 'wt' && parseInt(ediBase.wt, 10) > 0) return;
+          // 무게는 **리스트가 기준**이다 — TallyOne 1.23 (검수사 확정 2026-08-07).
+          //   왜 뒤집었나 — 종전엔 EDI 값이 있으면 리스트를 무시했다. 그런데
+          //   "검수의 기본은 리스트입니다. EDI 는 처음에 컨번호 없이 자리만 지정하는 경우가 많고
+          //    그때 오기입이 들어갈 수 있습니다."
+          //   실측 근거 — TNJP 26356E CKFU9806127: EDI 4,000kg(43DC 타레 3,900) 인데
+          //   리스트는 20,385kg 에 실번호 LYG465484 까지 있다. EDI 쪽이 틀렸다.
+          //   ⛔ 예외를 만들지 마라 — "같은 B/L 에서 20ft·40ft 무게가 같으면 총중량 복사" 라는
+          //   예외를 넣었다가 교정받았다(2026-08-07). **20ft 도 30톤까지 싣고, 20ft 가 40ft 보다
+          //   무거울 수도 있다**(40ft 에 부피만 큰 가벼운 화물을 넣기도 한다).
+          if (k === 'wt') { safeR.wt = normListWt(v); return; }   // 톤 보정 후 리스트 값 채택
           safeR[k] = v;
         } else {
           // EDI에 없는 컨번호 → 리스트만 있는 항목 (참고용으로 허용)
@@ -852,6 +863,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           portMisData={portMisData}
           pilotForecast={pilotForecast}
           isLoloShip={isLoloShip}
+          diagAlerts={diagAlerts}
           mode={mode}
           onWorkFilterChange={(m) => setMode(m)}
           onPlaceUnassigned={(c) => {

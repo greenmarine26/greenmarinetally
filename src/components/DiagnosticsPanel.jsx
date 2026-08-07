@@ -217,16 +217,30 @@ function AlertDetails({ alert, onOpenContainer }) {
     );
   }
 
-  if (alert.code === 'weight_diff') {
+  // TallyOne 1.23: 무게 대조 경고(weight_diff)는 없앴다 — 무게가 벌어지는 이유가 여럿이라
+  //   원인을 가릴 수 없고, 실 자료 17항차에서 한 번도 맞은 적이 없었다(검수사 확정 2026-08-07).
+  //   대신 **풀/엠티**와 **규격**만 대조한다. `weight_diff` 분기는 옛 자료 호환으로 남긴다.
+  if (alert.code === 'fe_conflict' || alert.code === 'iso_conflict' || alert.code === 'weight_diff') {
+    const why = alert.code === 'fe_conflict'
+      ? 'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.'
+      : alert.code === 'iso_conflict'
+        ? 'EDI 와 리스트의 규격이 서로 다릅니다. 실물을 확인하세요.'
+        : '';
     return (
       <div className="mt-2 pt-2 border-t border-slate-700/50 text-[10px] space-y-0.5">
+        {why && <div className="px-1.5 pb-1.5 text-[10px] leading-relaxed text-slate-300/90">{why}</div>}
         {d.slice(0, 20).map((w, i) => (
           <button key={i}
             onClick={(e) => { e.stopPropagation(); onOpenContainer?.(w.cn); }}
             className="mono w-full text-left px-1.5 py-1 rounded hover:bg-slate-700/50 active:bg-slate-700 flex items-center justify-between gap-2"
           >
             <span className="font-bold">{w.cn}</span>
-            <span className="text-slate-400">EDI {(w.ediW/1000).toFixed(1)}t / 리스트 {(w.lrW/1000).toFixed(1)}t</span>
+            <span className="text-slate-400">
+              {w.ediFe && w.lrFe ? `EDI ${w.ediFe} / 리스트 ${w.lrFe}` : ''}
+              {w.ediIso && w.lrIso ? `EDI ${w.ediIso} / 리스트 ${w.lrIso}` : ''}
+              {w.ediW != null && w.lrW != null ? `EDI ${(w.ediW/1000).toFixed(1)}t / 리스트 ${(w.lrW/1000).toFixed(1)}t` : ''}
+              {w.bay ? ` · ${w.bay}-${w.row}-${w.tier}` : ''}
+            </span>
             <span className="text-amber-400 text-[9px]">✏️</span>
           </button>
         ))}

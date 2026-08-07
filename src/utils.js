@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.22';   // 폰 푸시 알림(FCM) — 화면 안 열어도 미회신 오답을 폰이 알려준다
+export const APP_VERSION = 'TallyOne 1.23';   // 진단 경고를 풀/엠티·규격으로 단순화 · 경고 문장 질의 응답 · 리스트 무게 톤 절사 수리 · 업데이트 배너 수리
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -1735,7 +1735,8 @@ function parseRizhaoSheet(grid) {
 
     const iso = qtyToIso(row[ci.qty]);
     const seal = ci.seal >= 0 ? String(row[ci.seal] || '').trim() : '';
-    const wt = ci.wt >= 0 ? (Math.round(parseFloat(String(row[ci.wt] || '').replace(/[,\s]/g, '')) || 0)) : 0;
+    // 1.23: 톤 표기 리스트 대비 — kg 값(200 초과)은 그대로 지나간다(RZOR 실측 7,200·5,364 = kg).
+    const wt = ci.wt >= 0 ? parseListWeightKg(row[ci.wt]) : 0;
     const tempRaw = ci.temp >= 0 ? String(row[ci.temp] || '').trim() : '';
     const tmpMissing = tempRaw === '' || tempRaw === '-';
     const isRf = (!tmpMissing) || isReeferIso(iso);
@@ -1772,6 +1773,30 @@ function parseRizhaoSheet(grid) {
     });
   }
   return records.length ? records : null;
+}
+
+/**
+ * 리스트 엑셀의 무게 칸을 **kg 정수**로 읽는다. — TallyOne 1.23
+ *
+ * 왜 — 종전엔 `parseInt('12.4')` 라 **소수점이 잘렸다.**
+ *   선사에 따라 무게 칸을 **톤 소수 한 자리**로 적는다(실측: `PTK CDL OF XTPG 535E.xlsx`
+ *   → `DYLU5118230 | 45G0 | 12.4 | F`). 그 12.4 가 `12` 로 저장돼 **12,400kg 이 12kg** 이 됐다.
+ *   XTPG 535E 실데이터 61건이 그 상태였고, EDI 와 대조하면 60건 전부
+ *   `리스트값 == floor(EDI/1000)` 로 정확히 맞았다(2026-08-07 실측, 불일치 0).
+ *
+ *   더 위험한 것은 F/E 다 — `mixerUpload` 는 무게 5,000 미만이면 엠티로 추정한다.
+ *   12kg 이면 **풀 컨이 통째로 엠티로 들어간다.** XTPG 는 리스트에 F 표기가 따로 있어 살았다.
+ *
+ * 단위 판정 — 값이 0 초과 200 미만이면 톤으로 본다.
+ *   20ft 빈 컨의 타레만 해도 2,200kg 이라 **kg 값이 200 미만일 수 없다.** 톤이면 45t 언저리가 최대다.
+ *   즉 두 범위는 겹치지 않는다. 겹치지 않으므로 추측이 아니다.
+ */
+export function parseListWeightKg(raw) {
+  const s = String(raw ?? '').replace(/[,\s]/g, '');
+  if (!s) return 0;
+  const n = parseFloat(s);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n < 200 ? Math.round(n * 1000) : Math.round(n);
 }
 
 export async function parseListExcel(arrayBuffer) {
@@ -2313,7 +2338,8 @@ export async function parseListExcel(arrayBuffer) {
         bl: bl_i >= 0 ? String(row[bl_i] || '').trim() : '',
         sh: sh_i >= 0 ? String(row[sh_i] || '').trim() : '',
         gi: gi_i >= 0 ? String(row[gi_i] || '').trim() : '',
-        wt: wt_i >= 0 ? (parseInt(String(row[wt_i] || '').replace(/[,\s]/g, '')) || 0) : 0,
+        // 1.23: parseInt → parseListWeightKg (톤 소수 표기 절사 사고 — 위 함수 주석 참조)
+        wt: wt_i >= 0 ? parseListWeightKg(row[wt_i]) : 0,
         pol: pol_i >= 0 ? String(row[pol_i] || '').trim() : '',
         pod: pod_i >= 0 ? String(row[pod_i] || '').trim() : '',
         fe,

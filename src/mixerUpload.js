@@ -9,7 +9,7 @@
 // 결과: { ediResults, listResults, xrayResults, ocrResults, summary, warnings }
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
-  isoToLabel, normalizeBay, isPyeongtaekPort,
+  isoToLabel, normalizeBay, isPyeongtaekPort, parseListWeightKg,
 } from './utils.js';
 import { extractShipInfo } from './shipStructure.js';
 // M4.4: CASP .def 파서
@@ -478,12 +478,18 @@ export async function ocrImageContainers(file, geminiApiKey) {
   (json.containers || []).forEach(c => {
     if (!c.cn || !/^[A-Z]{4}\d{7}$/i.test(c.cn)) return;
     const cn = c.cn.toUpperCase();
+    // 1.23: 톤 표기 보정을 **F/E 추정보다 먼저** 태운다.
+    //   종전엔 `parseInt('12.4')=12` → 5,000 미만 → **풀 컨이 엠티로** 들어갔다.
+    //   ⚠ 무게가 아예 없을 때의 기존 동작(→'F')은 그대로 둔다. 바뀌는 것은 톤 표기뿐이다.
+    const _wtRaw = String(c.wt ?? '').replace(/[,\s]/g, '');
+    const _wtKnown = _wtRaw !== '' && Number.isFinite(parseFloat(_wtRaw));
+    const wtKg = parseListWeightKg(c.wt);
     result.containers[cn] = {
       cn,
       sl: c.sl || '',
-      wt: parseInt(c.wt, 10) || 0,
+      wt: wtKg,
       iso: c.iso || '',
-      fe: c.fe || (parseInt(c.wt, 10) < 5000 ? 'E' : 'F'),
+      fe: c.fe || (_wtKnown && wtKg < 5000 ? 'E' : 'F'),
       pol: result.pol,
       pod: result.pod,
       _source: 'ocr',
@@ -648,7 +654,8 @@ function parseCsvList(text) {
     result.containers[cn] = {
       cn,
       sl: slIdx >= 0 ? (cells[slIdx] || '') : '',
-      wt: wtIdx >= 0 ? parseInt((cells[wtIdx] || '').replace(/[^\d]/g, ''), 10) || 0 : 0,
+      // 1.23: `[^\d]` 제거는 소수점까지 지워 `12.4` 를 `124` 로 만들었다(톤 표기 리스트에서 치명).
+      wt: wtIdx >= 0 ? parseListWeightKg(cells[wtIdx]) : 0,
       iso: '', fe: '', pol: '', pod: '',
       _source: 'csv',
     };

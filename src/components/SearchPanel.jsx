@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer } from '../nlSearch.js';
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert } from '../nlSearch.js';   // 1.23: answerAboutAlert
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
@@ -21,7 +21,7 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, pilotForecast = {}, isLoloShip = false, mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -381,7 +381,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} manualCtx={manualCtx} />
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
@@ -416,7 +416,7 @@ function announceContainer(c) {
   speak(parts.join(', '));
 }
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, manualCtx = null }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast
+function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
   const [query, setQuery] = useState('');
   // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
   //   "숫자가 아닌 텍스트가 입력이 될때는 대기 하고 전송키로 전송을 누르면 질문에 답을 해주게").
@@ -485,6 +485,13 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 단, 단순 컨번호 검색(digits만)이거나 결과가 단 1개면 BigResultCard 우선
   const localAnswer = useMemo(() => {
     if (!query || query.length < 2) return null;
+    // 1.23: **경고 문장을 그대로 물은 것인가**를 가장 먼저 본다.
+    //   검색 파서보다 앞에 둬야 한다 — 뒤에 두면 `풀` 한 글자와 `5톤 이상` 이 먼저 잡혀
+    //   "풀 5톤 이상 98대" 같은 엉뚱한 답이 나간다(오답 리포트 2건, 2026-08-07).
+    {
+      const a = answerAboutAlert(query, diagAlerts);
+      if (a) return a;
+    }
     // V8.00: 인수인계 — 남은 작업+양하신고+특이사항 정리 + 되묻기. 최우선.
     if (parsed.handoverQuery) {
       const ptk = allContainers.filter(c => c._ptk);
@@ -563,7 +570,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
     return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk), manualCtx);   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts]);
 
   // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.
   useEffect(() => {

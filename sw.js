@@ -1,6 +1,6 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 1.22';
+const VERSION = 'TallyOne 1.23';
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
@@ -29,8 +29,20 @@ self.addEventListener('activate', (e) => {
 });
 
 // SKIP_WAITING 메시지 받으면 즉시 활성화 (UpdatePrompt 버튼)
+// TallyOne 1.22-01: GET_VERSION 추가 — UpdatePrompt 가 "정말 새 버전인가"를 버전으로 판정한다.
+//   종전엔 워커가 installed 상태를 스쳐 지나가는 것만 보고 배너를 띄웠다. 그 워커가 곧바로
+//   activated 로 넘어가도 배너는 그대로 남았고, 폰(설치된 PWA)은 controllerchange 가 안 와
+//   새로고침으로 지워지지도 않아 **1.22 를 돌리면서 "새 버전 출시" 가 영구히 붙어 있었다**
+//   (검수사 신고 2026-08-07). 이제 버전이 같으면 배너를 아예 안 띄운다.
 self.addEventListener('message', (e) => {
-  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if (!e.data) return;
+  if (e.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if (e.data.type === 'GET_VERSION') {
+    // 조용히 실패하지 않는다 — 포트가 없으면 전체 클라이언트로라도 알린다.
+    const payload = { type: 'VERSION', version: VERSION };
+    if (e.ports && e.ports[0]) { try { e.ports[0].postMessage(payload); return; } catch (err) { /* 아래로 */ } }
+    self.clients.matchAll().then((cs) => cs.forEach((c) => { try { c.postMessage(payload); } catch (err) {} }));
+  }
 });
 
 // fetch — network-first 유지 (새 버전 즉시 반영) + 성공 응답을 캐시에 적재.

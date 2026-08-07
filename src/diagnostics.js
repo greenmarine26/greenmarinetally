@@ -3,7 +3,7 @@
 //
 // 경고 종류:
 //   🔴 critical: 리퍼 온도 미입력, 위험물 정보 누락, IMDG 격리 위반
-//   🟡 warning:  카운트 차이, 무게 큰 차이
+//   🟡 warning:  카운트 차이, 풀/엠티 불일치, 규격 불일치
 //   🔵 info:     실번호 불일치, X-RAY 매칭 안됨
 //
 // 결과 형식:
@@ -259,30 +259,61 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     }
   }
 
-  // ─── 🟡 5. 무게 큰 차이 (5톤 이상 - 풀/엠티 구분 의심 수준) ───
-  // M3.67: 1톤 차이는 정상 범위 (서류 vs 실측). 풀/엠티 구분에 영향 줄 정도(5톤+)만 경고
-  const wtDiffs = [];
+  // ─── 🟡 5. EDI ↔ 리스트 대조 — TallyOne 1.23: **풀/엠티와 규격만 본다** ───
+  //
+  // 무게 대조는 없앴다(검수사 확정 2026-08-07 — "그냥 쉽게 가죠. EDI와 리스트 무게 비교를
+  //   하지 마세요. 그냥 풀 엠티만 비교해주세요"). 종전 `무게 큰 차이 N건 (5톤 이상 -
+  //   풀/엠티 구분 확인 필요)` 은 실 자료 17항차에서 **한 번도 맞은 적이 없었다** — 72건 전부
+  //   양쪽 다 F 였다. 무게가 벌어지는 이유는 여럿이고(선사 서류 방식·신고중량·톤 표기) 그 중
+  //   무엇인지 자료만으로는 못 가린다. 원인을 지어내면 검수사가 매번 되물어야 한다(오답 2건).
+  //
+  // ⛔ 되살리지 마라 — 무게 차이 자체는 이상이 아니다.
+  //   **20ft 도 30톤까지 싣고, 20ft 가 40ft 보다 무거울 수도 있다**(40ft 에 부피만 큰 가벼운
+  //   화물을 넣기도 한다). 같은 B/L 에서 규격이 섞였는데 무게가 같은 것도 정상이다.
+  //
+  // ⚠ 무게 비교가 살아 있는 곳은 따로 있다 — **트윈 작업 가능 여부**(nlSearch.js
+  //   `TWIN_MAX_TOTAL_KG` 합 55톤 · `TWIN_DIFF_LIMITS` 차이 PNCT 14톤/PCTC 20톤).
+  //   그건 두 컨테이너끼리 비교하는 것이라 성격이 다르다. 건드리지 마라.
+  const feOf = (x) => {
+    const v = String(x?.fe ?? x?.st ?? '').trim().toUpperCase().slice(0, 1);
+    return (v === 'F' || v === 'E') ? v : '';
+  };
+  // 규격은 사람이 읽는 라벨로 맞춰 본다 — `43DC`·`45GP`·`40HC` 처럼 표기가 제각각이라
+  //   원문 문자열끼리 비교하면 멀쩡한 것도 다르다고 나온다.
+  const isoKey = (x) => {
+    if (!x || isUnknownIso(x)) return '';
+    return String(isoToLabel(x) || '').replace(/\s/g, '').toUpperCase();
+  };
+  const feConf = [], isoConf = [];
   ediPtk.forEach(c => {
     const lr = listRecords?.[c.cn];
     if (!lr) return;
-    const ediW = parseInt(c.wt, 10) || 0;
-    const lrW = parseInt(lr.wt, 10) || 0;
-    if (ediW > 0 && lrW > 0 && Math.abs(ediW - lrW) >= 5000) {
-      wtDiffs.push({
-        cn: c.cn,
-        ediW, lrW,
-        diff: lrW - ediW,
-      });
+    const base = { cn: c.cn, bay: c.bay, row: c.row, tier: c.tier };
+    const fe1 = feOf(c), fe2 = feOf(lr);
+    if (fe1 && fe2 && fe1 !== fe2) feConf.push({ ...base, ediFe: fe1, lrFe: fe2 });
+    const i1 = isoKey(c.iso || c.tp), i2 = isoKey(lr.iso || lr.tp);
+    if (i1 && i2 && i1 !== i2) {
+      isoConf.push({ ...base, ediIso: c.iso || c.tp, lrIso: lr.iso || lr.tp, ediLabel: i1, lrLabel: i2 });
     }
   });
-  if (wtDiffs.length > 0) {
+  if (feConf.length > 0) {
     alerts.push({
       level: 'warning',
-      code: 'weight_diff',
-      msg: `무게 큰 차이 ${wtDiffs.length}건 (5톤 이상 - 풀/엠티 구분 확인 필요)`,
-      voice: `무게 큰 차이 ${wtDiffs.length}건 발생. 풀 엠티 구분 확인 필요`,
-      count: wtDiffs.length,
-      details: wtDiffs.slice(0, 20),
+      code: 'fe_conflict',
+      msg: `풀/엠티가 EDI 와 리스트에서 다름 ${feConf.length}건`,
+      voice: `풀 엠티 불일치 ${feConf.length}건. 실물 확인 필요`,
+      count: feConf.length,
+      details: feConf.slice(0, 20),
+    });
+  }
+  if (isoConf.length > 0) {
+    alerts.push({
+      level: 'warning',
+      code: 'iso_conflict',
+      msg: `규격이 EDI 와 리스트에서 다름 ${isoConf.length}건`,
+      voice: `규격 불일치 ${isoConf.length}건. 실물 확인 필요`,
+      count: isoConf.length,
+      details: isoConf.slice(0, 20),
     });
   }
 

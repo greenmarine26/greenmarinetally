@@ -528,6 +528,108 @@ function buildBaySlotMap(allContainers) {
 }
 
 // ─── 답변 생성기 ───
+/**
+ * 경고 문장을 그대로 물었을 때 그 경고를 설명한다. — TallyOne 1.23
+ *
+ * 왜 — 검수사가 화면의 경고 문구를 복사해 물었더니 **검색어로 처리돼 엉뚱한 답**이 나왔다.
+ *   `무게 큰 차이 12건 (5톤 이상 - 풀/엠티 구분 확인 필요)` 에서
+ *   `풀` 한 글자가 `fe='F'` 로, `5톤 이상` 이 `weightMin=5000` 으로 잡혀
+ *   **"풀 5톤 이상 98대"** 를 답했다(오답 리포트 2건, 2026-08-07).
+ *   `경고`·`진단` 이라는 낱말은 nlSearch 어디에도 없었다 — 의도 자체가 비어 있었다.
+ *
+ * 어떻게 — 숫자·괄호·기호를 걷어낸 뒤 **지금 이 항차에 실제로 떠 있는 경고**의 문구와 맞춰 본다.
+ *   경고 목록(diagAlerts)을 그대로 쓰므로 문구가 바뀌어도 따로 손볼 데가 없다.
+ *   맞으면 그 경고의 상세(details)까지 붙여 답한다. 못 맞추면 null 을 돌려 기존 경로로 넘긴다.
+ */
+const _WHY_BY_CODE = {
+  fe_conflict:   'EDI 와 리스트의 풀/엠티 표기가 서로 다릅니다. 실물을 확인하세요.',
+  iso_conflict:  'EDI 와 리스트의 규격이 서로 다릅니다. 실물을 확인하세요.',
+  reefer_no_temp:'풀 리퍼인데 온도가 없습니다. 현장에서 온도를 확인해 입력하세요.',
+  unknown_iso:   '규격 표기를 앱이 해석하지 못했습니다. 사진을 찍고 1항사에게 확인하세요.',
+  dg_no_class:   '위험물인데 클래스 정보가 없습니다.',
+  dg_no_un:      '위험물인데 UN 번호가 없습니다.',
+  imdg_violation:'같은 자리에 격리해야 할 위험물 클래스가 함께 있습니다. 즉시 확인하세요.',
+  list_short:    'EDI 실번호보다 리스트가 모자랍니다. 리스트가 덜 왔거나 컨번호가 어긋난 것입니다.',
+  list_extra:    '리스트에는 있는데 EDI 평택분에 없는 컨입니다. 통과화물이거나 타선박 자료일 수 있습니다.',
+  empty_confirmed:'실 컨과 엠티 확정분을 더한 수입니다. 이상이 아니라 집계입니다.',
+  seal_diff:     'EDI 와 리스트의 실번호가 다릅니다.',
+  xray_no_location:'X-RAY 대상인데 EDI 에서 위치를 못 찾았습니다.',
+  empty_seal_pending:'엠티 실 부착·확인이 남았습니다.',
+  weight_diff:   '무게 대조 경고는 1.23 에서 없앴습니다. 무게가 벌어지는 이유가 여럿이라 원인을 가릴 수 없습니다.',
+};
+// 경고별 핵심 낱말 — **묶음마다 하나씩** 질문에 들어 있어야 그 경고로 본다(AND of ORs).
+//   경고를 새로 만들면 여기에 한 줄 추가한다. 없으면 문구 그대로 물었을 때만 잡힌다.
+const _ALERT_TERMS = {
+  fe_conflict:       [['풀', 'F/E', 'FE'], ['엠티', '공컨', '빈컨'], ['다름', '다르', '불일치', '차이', '충돌']],
+  iso_conflict:      [['규격', '사이즈', '타입'], ['다름', '다르', '불일치', '차이', '충돌']],
+  reefer_no_temp:    [['리퍼', '냉동'], ['온도'], ['미입력', '없', '누락', '안']],
+  unknown_iso:       [['규격', '표기'], ['알수없', '알 수 없', '모르', '미상', '이상']],
+  dg_no_class:       [['위험물', 'DG'], ['클래스', '급']],
+  dg_no_un:          [['위험물', 'DG'], ['UN', '유엔']],
+  imdg_violation:    [['IMDG', '격리']],
+  list_short:        [['리스트'], ['부족', '모자', '매칭', '안맞', '적']],
+  list_extra:        [['리스트'], ['매칭', '없', '남', '더']],
+  seal_diff:         [['실번호', '씰', '실'], ['다름', '다르', '불일치', '차이']],
+  xray_no_location:  [['XRAY', 'X-RAY', '엑스레이'], ['매칭', '위치', '없']],
+  empty_seal_pending:[['엠티', '공컨'], ['실', '씰'], ['부착', '확인', '미']],
+  empty_confirmed:   [['확정'], ['엠티', '실']],
+  weight_diff:       [['무게', '중량'], ['차이', '다름', '다르']],
+};
+const _alertNorm = (s) => String(s || '')
+  .replace(/[0-9]+/g, ' ')
+  .replace(/[()[\]{}·:,.\-—~!?"'`/+]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+export function answerAboutAlert(query, alerts) {
+  if (!query || !Array.isArray(alerts) || !alerts.length) return null;
+  const q = _alertNorm(query);
+  if (q.length < 4) return null;
+  let hit = null;
+  for (const a of alerts) {
+    const m = _alertNorm(a?.msg);
+    if (!m) continue;
+    // 문구를 통째로 붙여 넣었거나(포함), 앞부분만 옮겨 적었어도(역포함) 잡는다.
+    if (q === m || q.includes(m) || (m.includes(q) && q.length >= Math.min(10, m.length * 0.5))) { hit = a; break; }
+  }
+  // 핵심 낱말표 — 현장에서는 문구를 그대로 옮기지 않는다.
+  //   "풀엠티 다름 이거 뭐죠" · "규격이 다르다는게 무슨 말이야" 처럼 붙여 쓰고 말꼬리를 바꾼다.
+  //   ⚠ 문장 유사도로 재려다 실패했다(2026-08-07) — 한국어 어미 변화 때문에 임계값을 아무리 만져도
+  //   "리퍼 온도 알려줘"(평범한 조회)까지 삼키거나 진짜 질문을 놓쳤다. **표가 예측 가능하다.**
+  //   규칙: 묶음마다 하나씩은 들어 있어야 그 경고로 본다(AND of ORs).
+  //   그래서 "리퍼 온도 알려줘" 는 '미입력' 묶음이 비어 안 걸리고, "리퍼 온도 미입력" 은 걸린다.
+  if (!hit) {
+    const qFlat = q.replace(/\s/g, '');
+    const has = (arr) => arr.some(w => qFlat.includes(w));
+    for (const a of alerts) {
+      const groups = _ALERT_TERMS[a?.code];
+      if (!groups || !groups.length) continue;
+      if (groups.every(has)) { hit = a; break; }
+    }
+  }
+  if (!hit) return null;
+  const icon = hit.level === 'critical' ? '🔴' : hit.level === 'warning' ? '🟡' : '🔵';
+  const lines = [`${icon} ${hit.msg}`];
+  const why = _WHY_BY_CODE[hit.code];
+  if (why) lines.push('', why);
+  const d = hit.details;
+  if (Array.isArray(d) && d.length) {
+    lines.push('', `해당 ${hit.count ?? d.length}건`);
+    d.slice(0, 12).forEach((x, i) => {
+      if (typeof x === 'string') { lines.push(`${i + 1}. ${x}`); return; }
+      const pos = x.bay ? ` @ ${x.bay}-${x.row}-${x.tier}` : '';
+      const extra =
+        (x.ediFe && x.lrFe) ? ` · EDI ${x.ediFe} / 리스트 ${x.lrFe}` :
+        (x.ediIso && x.lrIso) ? ` · EDI ${x.ediIso} / 리스트 ${x.lrIso}` :
+        (x.ediSl && x.lrSl) ? ` · EDI ${x.ediSl} / 리스트 ${x.lrSl}` :
+        (x.iso ? ` · ${x.iso}` : '');
+      lines.push(`${i + 1}. ${x.cn || x.location || ''}${pos}${extra}`);
+    });
+    if (d.length > 12) lines.push(`… 외 ${d.length - 12}건`);
+  }
+  return lines.join('\n');
+}
+
 export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);
