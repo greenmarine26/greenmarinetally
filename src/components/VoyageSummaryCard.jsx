@@ -3,13 +3,18 @@
 //   표시: 모드별 진행률 / 리퍼·X-RAY·ISO403·자리뺏긴 등 주의 항목
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
-import { CheckCircle2, AlertTriangle, Snowflake, Shield, Camera, MoveRight } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
 import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort } from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) {
   const summary = useMemo(() => {
     const sec = voyage?.[mode] || {};
     const ediMap = sec.ediContainers || {};
+    // 1.24: 이 항차의 덱플랜(비셀형 선박)에 실제 자리가 잡힌 컨 — 위치 판정에 쓴다.
+    const deckPosCns = new Set();
+    for (const d of (sec.stowagePlan?.decks || [])) {
+      for (const sl of (d?.slots || [])) if (sl?.cn) deckPosCns.add(sl.cn);
+    }
     const recMap = sec.records || {};
     const compMap = sec.completed || {};
     const xrayMap = sec.xrayList || {};
@@ -101,7 +106,11 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
       reeferDry: reefers.filter(c => c.rfdry).length,   // V9.20-03: 리퍼드라이(넌플러그)
       // V9.28-08: EDI에 위치가 없는 리퍼 (TMPZ 2023E 실측 — 선사 EDI가 리퍼 6대 누락, 냉동리스트에만 존재.
       //   카고플랜에 못 그리는 건 어쩔 수 없지만 숨기면 안 된다 — 검수원이 위치 미상임을 알아야 현장에서 찾는다)
-      reeferNoPos: reefers.filter(c => !c.bay && !c.bay_actual).length,
+      // 1.24: **덱플랜 위치도 위치다.** 비셀형(RZOR 등)은 bay/row/tier 를 안 쓰고
+      //   `{mode}/stowagePlan` 의 덱 좌표(`D덱 2줄 20칸`)를 쓴다. 그걸 안 보고 `!c.bay` 로만 재서
+      //   **덱에 다 있는 리퍼를 통째로 "위치미상" 으로 표시**했다(RZOR R084E 실측 16/16).
+      //   검수사 지적 2026-08-07 — "위치도 덱 위치도 보면 알고 있습니다."
+      reeferNoPos: reefers.filter(c => !c.bay && !c.bay_actual && !deckPosCns.has(c.cn)).length,
       madeCon: containers.filter(c => c.mkcon).length,  // V9.23: 제작컨테이너(컨 자체가 상품)
       xrayCount, xraySealed, xrayUnmatched,
       iso403Total: iso403Targets.length,
@@ -152,14 +161,10 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
             value={`${summary.reeferTotal}대${summary.reeferDry > 0 ? ` · 🔌드라이${summary.reeferDry}` : ''}${summary.madeCon > 0 ? ` · 🏭제작컨${summary.madeCon}` : ''}${summary.reeferNoPos > 0 ? ` · 📍위치미상${summary.reeferNoPos}` : ''}${summary.reeferTempMissing > 0 ? ` · ⚠${summary.reeferTempMissing} 온도X` : ''}`}
           />
         )}
-        {summary.iso403Total > 0 && (
-          <Chip
-            icon={Camera}
-            color={summary.iso403Pending > 0 ? 'blue' : 'emerald'}
-            label="풀 리퍼 사진"
-            value={`${summary.iso403Total - summary.iso403Pending}/${summary.iso403Total}${summary.iso403Pending > 0 ? ` · ⚠${summary.iso403Pending}` : ''}`}
-          />
-        )}
+        {/* 1.24: **풀 리퍼 사진 칩 삭제** — 바로 옆 「리퍼 확인」 칩과 같은 것을 두 번 말한다.
+            검수사 지시 2026-08-07 — "사진찍는 문제는 옆에 확인 알림과 중복입니다. 사진 알림을 삭제 바랍니다."
+            ⚠ 기능은 그대로다 — 촬영은 컨 상세의 [📷 풀 리퍼 사진 촬영] 에서 하고,
+            빠뜨린 건 마감 점검(WorkClosingChecklist '풀 리퍼 사진 미촬영')이 잡는다. 요약줄에서만 뺀다. */}
         {/* TallyOne 1.15: **리퍼 온도 확인 유무** — 검수사 지시 2026-08-06 "풀리퍼 옆에 표기".
             리퍼는 선박을 고르면 앱이 확인 모달을 띄운다. 그때 확인을 했는지 여기서 바로 보이게 한다.
             누르면 다시 열린다 — 위에 있던 중복 배너를 지운 대신 이 칩이 진입점이다. */}
@@ -197,7 +202,7 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
             value={`${summary.xraySealed}/${summary.xrayCount}${summary.xrayUnmatched?.length > 0 ? ` · ⚠${summary.xrayUnmatched.length} 미매칭` : ''}`}
           />
         )}
-        {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.iso403Total === 0 && summary.displaced === 0 && (
+        {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.displaced === 0 && (   /* 1.24: iso403 칩 삭제분 제외 */
           <span className="text-[11px] text-slate-500 px-2 py-1">특이 항목 없음</span>
         )}
       </div>
