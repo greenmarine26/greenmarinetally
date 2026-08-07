@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.26';   // "몇 대까지 선적 가능한가" 질문 인식 + 본선 구조·실적으로 답변 · IMO 없는 배는 콜사인으로 선박 라이브러리 연결
+export const APP_VERSION = 'TallyOne 1.26-01';   // 타항(인천 등) 부두명이 항차 카드에 표기되던 결함 수리 — 부두 검증 2벌 동시 반영
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -2579,10 +2579,25 @@ export function extractBerthNo(berthRaw) {
  *     - 빈 값 / 공백만
  *   그 외 한글/숫자 포함 값은 모두 정상으로 통과 — 정상 부두명 보존
  */
+// TallyOne 1.26-01: **타항 부두 차단** — 작업항(평택)이 아닌 부두명은 부두로 인정하지 않는다.
+//   사고(2026-08-07 검수사 신고): NSFR 2615N 카드에 「신항 한진인천컨테이너터미널 3선석」이 떴다.
+//   경로 — 같은 콜사인의 **인천 기항 PORT-MIS 신고**가 매칭돼 VoyagePage 가 voyage.info.berth 에 저장.
+//   항구 필터가 못 잡은 이유: PORT-MIS 엑셀에 '항명' 칸이 없으면 parsePortMisExcel 이 port 를
+//   **무조건 '평택'으로 기본 주입**한다(아래 2958행) — 그래서 port 로는 인천을 가려낼 수 없다.
+//   → 부두명 자체에 타항 지명이 있으면 거른다. 평택 부두명(동부두·고대부두·서부두·내항 N번선석)에는
+//     타 지명이 들어가지 않으므로 정상값을 자르지 않는다.
+//   ※ 범용화 시 이 목록은 테넌트 프로필의 homePort 기준으로 바꾼다(작업표준 §범용화).
+const _FOREIGN_PORT_RE = /인천|부산|광양|울산|마산|군산|목포|포항|동해|대산|여수|삼천포|INCHEON|BUSAN|PUSAN|GWANGYANG|ULSAN|MASAN/i;
+export function isForeignPortBerth(b) {
+  return !!b && _FOREIGN_PORT_RE.test(String(b));
+}
+
 export function isValidBerth(b) {
   if (!b) return false;
   const s = String(b).trim();
   if (!s) return false;
+  // TallyOne 1.26-01: 타항 부두는 형식이 멀쩡해도 이 앱의 부두가 아니다 — 표시·저장 양쪽에서 차단.
+  if (_FOREIGN_PORT_RE.test(s)) return false;
   // M6.18c: E7/W6 단축형 우선 통과 (2자라도 정상)
   if (/^[ewEW]\d+$/.test(s)) return true;
   // 영문 대문자 3-5자만 (시설 약어 코드: MBM, BCT, MIPO 등) → 차단

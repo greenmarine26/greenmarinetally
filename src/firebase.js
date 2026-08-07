@@ -1724,10 +1724,14 @@ export function fbSubscribeTerminalWork(callback) {
 //   key는 sanitized callsign. callsign 없으면 vesselName 사용 (안전망)
 // M6.18: berth 검증 — utils.js의 isValidBerth와 동일 패턴
 // M6.18c: 블랙리스트 방식 — 명백한 시설 코드(영문 대문자 3-5자)만 차단
+// TallyOne 1.26-01: utils.isValidBerth 와 **같은 규칙**을 유지한다(복제본 — 고칠 때 둘 다 고친다).
+//   타항(인천 등) 부두명 차단 추가. 근거·경위는 utils.js isValidBerth 주석 참조.
+const _FOREIGN_PORT_RE_FB = /인천|부산|광양|울산|마산|군산|목포|포항|동해|대산|여수|삼천포|INCHEON|BUSAN|PUSAN|GWANGYANG|ULSAN|MASAN/i;
 function isValidBerthFb(b) {
   if (!b) return false;
   const s = String(b).trim();
   if (!s) return false;
+  if (_FOREIGN_PORT_RE_FB.test(s)) return false; // 타항 부두 — 이 앱의 부두가 아니다
   if (/^[ewEW]\d+$/.test(s)) return true;       // E7/W6 단축형 예외
   if (/^[A-Z]{3,5}$/.test(s)) return false;     // MBM/BCT 등 시설 코드
   if (s.length <= 2) return false;
@@ -1751,8 +1755,9 @@ export async function fbSavePortMisBatch(ships) {
       //   확장 v1.0.0 / 옛 OCR / 옛 엑셀 파서 무관하게 저장 시점 차단
       const shipClean = { ...s };
       if (shipClean.berth && !isValidBerthFb(shipClean.berth)) {
-        console.warn('[M6.18 berth] 잘못된 형식 제거:', shipClean.berth, '(key:', key, ')');
+        console.warn('[M6.18 berth] 부두 부적합 제거:', shipClean.berth, '(key:', key, ')');
         shipClean.berth = '';
+        shipClean.pier = '';   // TallyOne 1.26-01: berth 를 버렸으면 그것으로 만든 pier 도 함께 버린다
         shipClean.pier = '';   // pier도 무효화
       }
       await set(ref(db, `port_mis_data/${key}`), { ...shipClean, updatedAt: now });
