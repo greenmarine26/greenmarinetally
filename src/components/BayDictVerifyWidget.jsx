@@ -54,7 +54,12 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
       if (num % 2 === 0 && summary.some(b => parseInt(b.pairEven, 10) === num)) matched++;
     });
     const total = ediBayNums.size;
-    const rate = total > 0 ? (matched / total) : 1;
+    // 1.25: **대조할 것이 없으면 비율을 만들지 않는다.**
+    //   종전엔 `total > 0 ? matched/total : 1` 이라 EDI 에 베이 좌표가 하나도 없으면 **무조건 1(=100%)**
+    //   이었다. 비셀형(OBWH·RZOR 등)은 EDI 에 베이가 아예 없어 **영원히 초록 100%** 로 떴다
+    //   — 아무것도 못 맞췄는데 "확정" 이라 말한 것이다(검수사 신고 2026-08-07, OBWH 0개 중 0개 100%).
+    //   0/0 은 100% 가 아니라 **판정 불가**다. rate 를 null 로 두고 화면이 따로 말하게 한다.
+    const rate = total > 0 ? (matched / total) : null;
 
     // V9.57(I13): 베이매트릭스 확정 여부 판정 — BayDictStatusWidget(폐기 예정) 고유 기능 이관.
     //   원본(StatusWidget)은 b.bayNum을 읽었는데 matrixBuilder 요약은 bayNo에 값이 있어(감사 #1)
@@ -123,15 +128,20 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
   }
 
   // 매칭됨
-  const ratePct = (result.rate * 100).toFixed(0);
-  const isGood = result.rate >= 0.95;
-  const isOK = result.rate >= 0.7;
-  const color = isGood ? 'emerald' : isOK ? 'amber' : 'red';
+  // 1.25: rate === null 이면 EDI 에 베이 좌표가 없어 **대조 자체가 불가**하다.
+  //   초록도 빨강도 아니다 — 사전은 있으니 경고할 일이 아니고, 맞췄다고 할 근거도 없다.
+  const noBasis = result.rate == null;
+  const ratePct = noBasis ? null : (result.rate * 100).toFixed(0);
+  const isGood = !noBasis && result.rate >= 0.95;
+  const isOK = !noBasis && result.rate >= 0.7;
+  const color = noBasis ? 'slate' : isGood ? 'emerald' : isOK ? 'amber' : 'red';
 
   return (
     <div className={`bg-slate-900 border border-${color}-700/40 rounded-lg p-3`}>
       <div className="flex items-start gap-2">
-        {isGood ? (
+        {noBasis ? (
+          <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5"/>
+        ) : isGood ? (
           <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"/>
         ) : (
           <AlertTriangle className={`w-4 h-4 text-${color}-400 flex-shrink-0 mt-0.5`}/>
@@ -141,7 +151,7 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
             <Database className="w-3 h-3 text-slate-400"/>
             <span className="text-xs font-bold text-slate-200">베이사전 매칭</span>
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-black bg-${color}-900/60 text-${color}-200`}>
-              {ratePct}%
+              {noBasis ? '대조 불가' : `${ratePct}%`}
             </span>
             {result.isUser ? (
               <span className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-900/50 text-cyan-200">사용자 매트릭스</span>
@@ -163,10 +173,18 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
             {result.shipName} (IMO: {result.imo || '-'})
           </div>
           <div className="text-[10px] text-slate-500 mt-0.5 mono">
-            EDI 베이 {result.ediBayCount}개 중 {result.matched}개 매칭
+            {noBasis
+              ? 'EDI 에 베이 좌표가 없어 대조할 수 없습니다'
+              : `EDI 베이 ${result.ediBayCount}개 중 ${result.matched}개 매칭`}
             <span className="text-slate-600"> · 사전 {result.dictBayCount}개 보유</span>
           </div>
-          {!isGood && (
+          {noBasis && (
+            <div className="text-[10px] text-slate-400 mt-1">
+              비셀형(덱 적부) 선박이거나 EDI 가 위치 없는 포맷(IFCSUM 등)입니다.
+              사전이 맞는지 틀린지는 이 자료로 판정할 수 없습니다.
+            </div>
+          )}
+          {!noBasis && !isGood && (
             <div className={`text-[10px] text-${color}-300 mt-1`}>
               {result.rate < 0.7
                 ? '⚠️ 매칭률 낮음 — 베이 번호 매핑 재검토 필요'
