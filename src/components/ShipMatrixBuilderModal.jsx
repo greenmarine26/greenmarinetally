@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { engChange, toEnglishUpper as toEngU, ENG_INPUT_PROPS, NUM_INPUT_PROPS } from '../inputUtils.js';
+import { hasHatchCovers, lookupHatchCovers } from '../data/hatchCovers.js';
 import {
   buildMatrixFromEdi,
   augmentMatrixFromBayDict,
@@ -459,6 +460,62 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     if (!first) return;
     updateBay(first, 'hatchCount', value);
   };
+
+  // TallyOne 1.28: 해치커버는 **해치(3베이 묶음)에 1벌**이다 — 베이마다 묻지 않는다.
+  //   검수사 지적: "17 18 19면 어디에 입력을 해야 하나요?" → 답은 '해치 줄에 한 번'.
+  //   묶음 규칙: 40ft(짝수) 베이 e 에 대해 [e-1, e, e+1] 이 한 해치. 짝 없는 홀수 베이는 단독 해치.
+  //   (KBTR·MCSN .def 의 해치번호와 전 베이 일치 확인 2026-08-08)
+  const hatchGroups = useMemo(() => {
+    const keyOf = {};
+    for (const k of Object.keys(matrix?.byBay || {})) {
+      const n = parseInt(k, 10);
+      if (Number.isFinite(n)) keyOf[n] = k;
+    }
+    const nums = Object.keys(keyOf).map(Number).sort((a, b) => a - b);
+    const used = new Set(); const out = [];
+    for (const n of nums) {
+      if (n % 2 !== 0 || used.has(n)) continue;
+      const g = [n - 1, n, n + 1].filter(v => keyOf[v] != null && !used.has(v));
+      g.forEach(v => used.add(v));
+      if (g.length) out.push(g);
+    }
+    for (const n of nums) if (!used.has(n)) { used.add(n); out.push([n]); }
+    out.sort((a, b) => a[0] - b[0]);
+    return out.map((g, i) => ({ no: i + 1, nums: g, keys: g.map(v => keyOf[v]),
+                                label: g.map(v => String(v).padStart(2, '0')).join('·') }));
+  }, [matrix]);
+
+  const groupCovers = (g) => {
+    for (const k of g.keys) { const e = matrix?.byBay?.[k]; if (typeof e?.hatchCount === 'number') return e.hatchCount; }
+    return null;
+  };
+  const setGroupCovers = (g, v) => {
+    setMatrix(m => {
+      const cp = { ...m, byBay: { ...m.byBay } };
+      g.keys.forEach(k => { if (cp.byBay[k]) cp.byBay[k] = { ...cp.byBay[k], hatchCount: v }; });
+      return cp;
+    });
+  };
+  const coversDictKnown = hasHatchCovers(shipMeta?.code);
+
+  // 사전에 있는 선박이면 통과 — 자동으로 채운다. 없으면 비워 두고 아래에서 입력받는다.
+  //   이미 값이 있는 베이는 건드리지 않는다(검수사가 손으로 고친 값 보호).
+  useEffect(() => {
+    if (!shipMeta?.code || !hatchGroups.length) return;
+    setMatrix(m => {
+      if (!m?.byBay) return m;
+      const cp = { ...m, byBay: { ...m.byBay } }; let hit = false;
+      hatchGroups.forEach(g => {
+        const v = lookupHatchCovers(shipMeta.code, g.no, g.nums.map(n => String(n).padStart(2, '0')));
+        if (v == null) return;
+        g.keys.forEach(k => {
+          const e = cp.byBay[k];
+          if (e && typeof e.hatchCount !== 'number') { cp.byBay[k] = { ...e, hatchCount: v }; hit = true; }
+        });
+      });
+      return hit ? cp : m;
+    });
+  }, [shipMeta?.code, hatchGroups.length]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // M6.94.0: 선택한 베이 (우측 시뮬에 표시)
   const [selectedBay, setSelectedBay] = useState(null);
@@ -999,6 +1056,44 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                   <button onClick={() => applyHatchFirstBay(3)}
                     className="px-2 py-0.5 bg-zinc-700 hover:bg-amber-700 rounded" title="가장 앞 베이 해치 3">3</button>
                   <span className="text-[10px] text-zinc-500">예외 베이는 아래 각 베이 ‘해치’에서 조정</span>
+                </div>
+              )}
+
+              {/* TallyOne 1.28: 해치 줄 — 해치마다 한 번만 입력한다 */}
+              {hatchGroups.length > 0 && (
+                <div className="mb-2 px-2 py-2 bg-zinc-900/60 border border-zinc-700 rounded text-xs">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="text-zinc-200">⚓ 해치커버 — 해치마다 한 번만 넣습니다</span>
+                    {coversDictKnown
+                      ? <span className="px-1.5 py-0.5 bg-emerald-900/50 text-emerald-300 rounded">사전에 있는 선박 · 자동으로 채웠습니다</span>
+                      : <span className="px-1.5 py-0.5 bg-amber-900/50 text-amber-300 rounded">사전에 없는 선박입니다 — 카고플랜의 해치선 조각 수를 넣어 주세요</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {hatchGroups.map(g => {
+                      const v = groupCovers(g);
+                      const miss = v == null;
+                      return (
+                        <label key={g.no}
+                          className={`flex items-center gap-1 px-2 py-1 rounded border ${miss ? 'border-amber-500 bg-amber-950/30' : 'border-zinc-700 bg-zinc-800'}`}
+                          title={`해치 ${g.no} · 베이 ${g.label}`}>
+                          <span className="text-zinc-400">해치 {g.no}</span>
+                          <span className="text-zinc-300 mono">{g.label}</span>
+                          <select value={miss ? '' : v}
+                            onChange={ev => setGroupCovers(g, parseInt(ev.target.value, 10))}
+                            className={`px-1 py-0.5 rounded text-center ${miss ? 'bg-amber-800 text-amber-100' : 'bg-zinc-700'}`}>
+                            {miss && <option value="">입력</option>}
+                            <option value={0}>0</option>
+                            <option value={1}>1</option>
+                            <option value={2}>2</option>
+                            <option value={3}>3</option>
+                          </select>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 mt-1">
+                    0 = 홀드 없음(상시 개방). 커버는 현측마다 열리므로 보통 2장, 좁은 해치는 1장입니다.
+                  </div>
                 </div>
               )}
               {bayList.length === 0 && (
