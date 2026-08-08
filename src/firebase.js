@@ -677,7 +677,6 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // V7.94-24: 자리 교환(swap) — A를 B 자리로 옮기면, 자리를 뺏긴 B는 A의 원래 자리로 이동(거기서 선적 대기).
   //   (구: B를 미배정 처리 → 떠돌이 발생). A의 현재 위치를 먼저 캡처.
   let aOldBay = '', aOldRow = '', aOldTier = '';
-  let aOldFromPlan = false;   // 1.28-02: 계획 자리에서 끌어온 값인가 (그러면 비었는지 확인하고 쓴다)
   {
     const recSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
     const ediSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`));
@@ -685,21 +684,6 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     aOldBay = recA.bay !== undefined ? recA.bay : (ediA.bay || '');
     aOldRow = recA.row !== undefined ? recA.row : (ediA.row || '');
     aOldTier = recA.tier !== undefined ? recA.tier : (ediA.tier || '');
-    // TallyOne 1.28-02: A가 **이미 미배정(떠돌이)** 이면 A의 계획 자리를 옛 자리로 본다.
-    //   종전엔 aOld 가 비어 무조건 else 로 빠져 자리를 뺏긴 컨이 새 떠돌이가 됐다.
-    //   → 떠돌이를 자리에 넣을 때마다 다른 컨이 떠돌이가 되는 **무한 연쇄**(검수사 신고 2026-08-08).
-    //   계획 자리는 records._orig(최초 EDI 위치) → ediContainers 순으로 본다.
-    //   ⚠ 그 계획 자리를 지금 다른 컨이 쓰고 있으면 보내지 않는다(중복 자리 방지) — 아래 2)에서 검사.
-    if (!(aOldBay && aOldRow && aOldTier)) {
-      const pb = recA.bay_orig !== undefined ? recA.bay_orig : (ediA.bay || '');
-      const pr = recA.row_orig !== undefined ? recA.row_orig : (ediA.row || '');
-      const pt = recA.tier_orig !== undefined ? recA.tier_orig : (ediA.tier || '');
-      //   ⚠ 그 계획 자리가 **지금 옮겨 가려는 자리와 같으면 쓰지 않는다** — 뺏긴 컨을 같은 칸으로 도로 보내
-      //     한 자리에 두 대가 된다(시뮬에서 중복 5곳 검출, 배포 전 차단 2026-08-08).
-      const sameAsTarget = pb && newBay
-        && String(parseInt(pb, 10)) === String(parseInt(newBay, 10)) && pr === newRow && pt === newTier;
-      if (pb && pr && pt && !sameAsTarget) { aOldBay = pb; aOldRow = pr; aOldTier = pt; aOldFromPlan = true; }
-    }
   }
   // 1) 같은 자리에 있는 다른 컨 찾기 (충돌 검사)
   let displaced = null;
@@ -716,13 +700,9 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       if (otherCn === cn) continue;
       const ediC = ediMap[otherCn] || {};
       const recC = recMap[otherCn] || {};
-      // TallyOne 1.28-01: records 의 명시적 ''(미배정)를 **존중한다**.
-      //   종전 `recC.bay || ediC.bay` 는 ''를 falsy 로 흘려보내, 이미 미배정된 컨을
-      //   **옛 자리에 그대로 있는 것으로** 봤다 → 한 자리를 두 대가 차지(NSDC_2607N BAY22 03-86 실측).
-      //   같은 함수 위쪽 A 캡처는 이미 `!== undefined` 기준이다 — 판정을 그쪽에 맞춘다.
-      const oBay = recC.bay !== undefined ? recC.bay : (ediC.bay || '');
-      const oRow = recC.row !== undefined ? recC.row : (ediC.row || '');
-      const oTier = recC.tier !== undefined ? recC.tier : (ediC.tier || '');
+      const oBay = recC.bay || ediC.bay || '';
+      const oRow = recC.row || ediC.row || '';
+      const oTier = recC.tier || ediC.tier || '';
       if (!oBay) continue;
       const oBayInt = String(parseInt(oBay, 10));
       if (oBayInt === newBayInt && oRow === newRow && oTier === newTier) {
@@ -735,26 +715,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
   let displacedWasCompleted = false;
   if (displaced) {
-    // 1.28-02: 계획 자리로 보내는 경우엔 그 자리가 **비어 있을 때만** 보낸다.
-    //   (A의 계획 자리를 이미 다른 컨이 쓰고 있는데 보내면 한 자리에 두 대가 된다.)
-    let planSlotFree = true;
-    if (aOldFromPlan && aOldBay && aOldRow && aOldTier) {
-      const aOldBayInt = String(parseInt(aOldBay, 10));
-      const ediMapRef2 = ref(db, `voyages/${voyageKey}/${mode}/ediContainers`);
-      const recMapRef2 = ref(db, `voyages/${voyageKey}/${mode}/records`);
-      const [es2, rs2] = await Promise.all([get(ediMapRef2), get(recMapRef2)]);
-      const em2 = es2.val() || {}, rm2 = rs2.val() || {};
-      for (const oc of new Set([...Object.keys(em2), ...Object.keys(rm2)])) {
-        if (oc === cn || oc === displaced) continue;
-        const rc = rm2[oc] || {}, ec = em2[oc] || {};
-        const ob = rc.bay !== undefined ? rc.bay : (ec.bay || '');
-        const orw = rc.row !== undefined ? rc.row : (ec.row || '');
-        const ot = rc.tier !== undefined ? rc.tier : (ec.tier || '');
-        if (!ob) continue;
-        if (String(parseInt(ob, 10)) === aOldBayInt && orw === aOldRow && ot === aOldTier) { planSlotFree = false; break; }
-      }
-    }
-    if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier && planSlotFree) {
+    if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
     } else {
       // 수동(unassign) 또는 옛 자리 없음 → 미배정 (미배정 목록에서 검수사가 직접 지정)
@@ -774,7 +735,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // 3) target 컨 위치 변경
   await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
 
-  return { ok: true, displaced, displacedWasCompleted, swappedTo: (displaced && opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
+  return { ok: true, displaced, displacedWasCompleted, swappedTo: (displaced && opts.displacedMode !== 'unassign') ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
 }
 
 // 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화

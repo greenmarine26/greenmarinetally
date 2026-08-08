@@ -794,6 +794,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           <Legend color="bg-orange-400" label="시프팅"/>
           <Legend color="bg-emerald-200" label="✔ 완료"/>
           <span className="text-slate-500 font-bold">검정 글자 = 비평택</span>
+          {/* TallyOne 1.29: 빈 자리와 '배에 칸이 없는 곳'을 눈으로 가른다 */}
+          <Legend color="bg-slate-100" label="빈 자리 (아직 안 실림)"/>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-[10px]">
           <span className="text-slate-500 font-bold uppercase w-12">종류:</span>
@@ -1483,6 +1485,16 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
             <span className="text-amber-200 font-black" style={{ fontSize: Math.max(10, fontSize) }}>📦+</span>
           </button>
         );
+      }
+      // TallyOne 1.29: **컨이 떠난 자리를 '배에 없는 칸'처럼 어둡게 남기지 않는다.**
+      //   검수사 지적 2026-08-08: *"비어 있다면 빈자리가 표시되어야 합니다. 그런데 검은색입니다.
+      //   뭔가 있는거죠 고스트"* — 컨을 88단에서 84단으로 옮기면 88단이 어둡게 남아, 배에 칸이
+      //   아예 없는 90단(`bg-slate-950`)과 눈으로 구분이 안 됐다. 실제로는 **그냥 빈 자리**다.
+      //   → 화물이 실리는 단이면 흰 빈 칸으로 그린다. 화물이 안 실리는 단·구조 밖은 종전대로 어둡게.
+      const tierHasCargo = allContainers.some(x => x.tier === tier);
+      if (tierHasCargo) {
+        return <div key={key} className="border border-slate-400 flex-shrink-0 bg-slate-100"
+          style={{ width: cellW, height: cellH }}/>;
       }
       return <div key={key} className="border border-dashed border-slate-800 flex-shrink-0 bg-slate-950/40"
         style={{ width: cellW, height: cellH }}/>;
