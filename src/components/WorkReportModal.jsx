@@ -98,8 +98,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     return () => unsub();
   }, [voyageKey]);
 
-  if (!open) return null;
-
+  // TallyOne 1.26-02: 이 useMemo 는 원래 `if (!open) return null;` **뒤**에 있었다.
+  //   닫힌 상태(open=false)에선 실행되지 않고 열리는 순간 훅이 하나 늘어 렌더마다 훅 개수가 달라졌다
+  //   → React error #310 "Rendered more hooks than during the previous render" = 앱 전체 크래시.
+  //   작업 보고 카드를 누르면 무조건 터졌다(검수사 신고 2026-08-08 09:47).
+  //   지침 Ⅱ-6 원칙 그대로 — **모든 Hook 은 최상단, 조기 반환은 훅 선언 이후.**
   // TallyOne 1.8-09: 해치 그룹 계산용 베이 짝 사전 — GuidedWorkPanel(150행)과 같은 소스.
   //   양하·선적 컨을 모두 넣어야 짝이 온전하다(한쪽만 보면 홀수 베이 짝을 못 찾는다).
   const bayPairsForHatch = useMemo(() => {
@@ -110,6 +113,8 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     }
     return getBayPairs(all, voyage?.info?.imo || '', voyage?.info?.vsl || '');
   }, [voyage]);
+
+  if (!open) return null;
 
   const vsl = voyage?.info?.vsl || '';
   // V9.57(I9): 미사용 shipImo 제거
