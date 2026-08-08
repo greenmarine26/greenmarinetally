@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey } from '../utils.js';
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage} from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert } from '../nlSearch.js';   // 1.23: answerAboutAlert
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -570,7 +570,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.size && !parsed.fe && !parsed.type && !parsed.weightSum &&
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
-    return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk), manualCtx);   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
+    // TallyOne 1.27: 시프팅은 **평택분 필터 전** 원본 voyage 로 계산해 넘긴다(통과화물이 대상이라서).
+    return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk),
+      { ...manualCtx, shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
+          return (c && Object.keys(c).length) ? c : predictShiftingFromVoyage(voyage); })() });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts]);
 
   // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.

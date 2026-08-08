@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -211,8 +211,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const xraySeals = sec.xraySeals || {};
   const compMap = sec.completed || {};
   // V8.98-01: 쉬프팅(재적부) — raw EDI 원문 기반 대조 (ediContainers엔 통과화물 없음, MAMP 실측).
+  // TallyOne 1.27(검수사 확정 2026-08-08): 선적 EDI 는 **작업 결과물**이라 그걸 기다리면 늦다.
+  //   *"홀드 양하를 하려면 커버를 열어야 하는데, 그 컨테이너들을 치워야만 알 수 있습니다."*
+  //   → 두 EDI 대조가 비면 **양하 EDI 하나로 예측**한다(utils.predictShifting · 현측 커버 규칙).
+  //     선적 EDI 가 오면 대조값이 채워지고 그쪽이 자동으로 우선한다 — 예측은 그때까지의 다리다.
   const shiftingMap = useMemo(
-    () => computeShiftingMapCached(voyageKey, voyage),
+    () => {
+      const cmp = computeShiftingMapCached(voyageKey, voyage);
+      if (cmp && Object.keys(cmp).length) return cmp;      // 선적 EDI 있음 = 확정값
+      return predictShiftingFromVoyage(voyage);            // 없으면 예측(양하 EDI만)
+    },
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]
   );

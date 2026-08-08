@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.26-02';   // 작업 보고 카드 크래시(React #310) 수리 — 조기 반환 뒤에 있던 훅을 최상단으로
+export const APP_VERSION = 'TallyOne 1.27';   // 시프팅 예측 — 양하 EDI 하나로 작업 전에(커버 여는 현측 기준). SWDN 2608N 실측 5/5 일치
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3241,6 +3241,86 @@ export function computeShiftingMap(dischEdiMap, loadEdiMap) {
   }
   for (const v of Object.values(out)) { delete v._iso; delete v._fe; }   // 내부 필드 정리(호환 형태 유지)
   return out;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TallyOne 1.27(검수사 확정 2026-08-08): **시프팅 예측 — 양하 EDI 하나로, 작업 시작 전에.**
+//
+//   ⛔ 종전 computeShiftingMap 은 양하·선적 **두 EDI 의 위치 차이**로 셌다. 그건 작업이 끝나고
+//     선적 EDI 가 와야 알 수 있는 **사후 확인**이다. 검수사 지적 그대로 —
+//     *"홀드 양하를 하려면 커버를 열어야 하는데, 그 컨테이너들을 치워야만 알 수 있습니다."*
+//     시프팅은 **커버를 열기 전에** 알아야 하는 값이다.
+//
+//   ★ 규칙 (SWDN 2608N 실측으로 확정 · 과검출 0 · 놓침 0)
+//     ① 베이별로 **홀드에 평택 양하분이 있는 현측**을 찾는다 — 짝수 row 쪽 / 홀수 row 쪽.
+//        row 00 은 중앙이라 양쪽 커버에 걸친다 → 양측 모두 열어야 하는 것으로 본다.
+//     ② 그 **열어야 할 현측의 데크**에 얹힌 **통과화물**이 곧 치워야 할 컨 = 시프팅.
+//
+//   왜 현측으로 가르나 — 해치커버가 현측별로 나뉘기 때문이다. 검수사 확답:
+//     *"26번 베이는 커버 1장 오픈입니다. 걸리는 것이 없습니다."*
+//     실제로 26번은 홀드 양하가 짝수 row(02·04·06·08)뿐이라 짝수쪽만 열면 되고,
+//     데크 통과화물은 홀수 row(05·07·09)에 있어 안 걸렸다. 반대로 3번은 홀드 양하에 짝수(00·02)가
+//     있어 짝수쪽을 열어야 했고 그 위 row 08 컨이 걸렸다. 베이 전체로 보면 26번 9대가 과검출된다.
+//
+//   실측 대조(SWDN 2608N · 양하 EDI 564대): 예측 5대 = 실제 시프팅 5대(선적 EDI 대조값)와 완전 일치.
+//     HALU2535445 3-08-82 · SEGU9587990 10-00-82 · OTPU6566655 10-00-84
+//     HLHU8345089 10-00-86 · TCKU7839055 10-02-84  (전부 VNSGN→KRPUS 통과화물)
+//   배정목록 '시프팅 10' 과도 맞는다 — 그 10 은 무브 수(양하 1 + 재선적 1)라 컨 5대다.
+// ══════════════════════════════════════════════════════════════════════
+const _sideOf = (row) => {
+  const r = parseInt(row, 10);
+  if (!Number.isFinite(r)) return null;
+  if (r === 0) return 'C';          // 중앙 — 양쪽 커버에 걸친다
+  return (r % 2 === 0) ? 'E' : 'O'; // 짝수 현측 / 홀수 현측
+};
+const _isDeckTier = (tier) => {
+  const t = parseInt(tier, 10);
+  return Number.isFinite(t) && t >= 80;   // 80번대 이상 = 데크(지침 Ⅱ 데크/홀드 분리)
+};
+
+/** 양하 EDI 맵 하나로 시프팅(치워야 할 통과화물)을 예측한다.
+ *  dischEdiMap: {cn: 컨} — **평택분만 거른 것이 아니라 전체**여야 한다(통과화물이 대상이므로).
+ *  반환 {cn: {bay,row,tier,pos,iso,pod,_why}} */
+export function predictShifting(dischEdiMap) {
+  const out = {};
+  if (!dischEdiMap) return out;
+  const rows = Object.entries(dischEdiMap).filter(([cn, c]) => cn && cn.length === 11 && !cn.startsWith('__') && c);
+  // ① 홀드에 평택 양하분이 있는 베이 → 열어야 할 현측
+  const openSides = {};
+  for (const [, c] of rows) {
+    if (_isDeckTier(c.tier)) continue;
+    if (!isPyeongtaekPort(c.pod)) continue;
+    const b = normalizeBay(c.bay || '');
+    const sd = _sideOf(c.row);
+    if (!b || !sd) continue;
+    (openSides[b] = openSides[b] || new Set()).add(sd);
+  }
+  for (const b in openSides) {
+    if (openSides[b].has('C')) { openSides[b].add('E'); openSides[b].add('O'); }   // 중앙이면 양쪽
+  }
+  // ② 그 현측의 데크에 얹힌 통과화물
+  for (const [cn, c] of rows) {
+    if (!_isDeckTier(c.tier)) continue;
+    if (isPyeongtaekPort(c.pod)) continue;            // 평택 양하분은 어차피 내리므로 시프팅 아님
+    const b = normalizeBay(c.bay || '');
+    const sd = _sideOf(c.row);
+    const need = openSides[b];
+    if (!b || !sd || !need) continue;
+    if (sd === 'C' || need.has(sd)) {
+      out[cn] = { bay: b, row: String(c.row || ''), tier: String(c.tier || ''),
+                  pos: `${b}-${String(c.row || '').padStart(2, '0')}-${String(c.tier || '').padStart(2, '0')}`,
+                  iso: c.iso || '', pod: c.pod || '',
+                  _why: `${b}베이 홀드 양하분 위 — 커버 열려면 이동` };
+    }
+  }
+  return out;
+}
+
+/** 항차 객체에서 시프팅 예측. raw EDI(전체 화물) 우선 — ediContainers 는 평택분만일 수 있다. */
+export function predictShiftingFromVoyage(voyage) {
+  const sec = voyage?.discharge;
+  const map = ediMapFromRaw(sec) || sec?.ediContainers || null;
+  return predictShifting(map);
 }
 
 // V8.98-01: 항차 객체에서 쉬프팅 계산 — raw EDI 원문 우선.

@@ -82,6 +82,7 @@ export function parseNaturalQuery(text) {
     customsReportQuery: false,   // V7.99-16: "양하신고할까?" — 그날 이상 건(누락/초과/바뀜/리씰/실오류) 정리
     handoverQuery: false,        // V8.00: "인수인계" — 남은 작업+양하신고+특이사항 정리 (되묻기 2단계)
     isAll: false, isStat: false, mode: null,
+    shiftingQuery: false,   // TallyOne 1.27: 시프팅(치워야 할 통과화물)
   };
   if (!text) return result;
   const t = String(text).toLowerCase();
@@ -326,6 +327,8 @@ export function parseNaturalQuery(text) {
   const allWords = /전체|전부|모두|몽땅|싹\s*다|죄다|도합|통틀어|합쳐서|합치면|다\s*해서|다\s*합(?:쳐|치)|(?:^|\s)다(?=\s|$|[?.!,])/;
   if (/컨테이너|container|all|총\s*개수|총\s*대수|총\s*몇/i.test(t) || allWords.test(t)) result.isAll = true;
   if (/몇\s*(개|대|건)|얼마나|몇\s*이나|개수|대수|수량|총\s*몇/i.test(t)) result.isStat = true;
+  // TallyOne 1.27(검수사 신고 2026-08-08): 「시프팅이 몇 개야」가 인식조차 안 됐다.
+  if (/시프팅|쉬프팅|시프트|쉬프트|재적|restow|shifting/i.test(t)) result.shiftingQuery = true;
 
   // 온도
   if (hasTempCtx) {
@@ -508,7 +511,8 @@ export function describeQuery(parsed) {
 }
 
 export function hasAnyCondition(parsed) {
-  return !!(parsed.digits || parsed.size || parsed.fe || parsed.type ||
+  return !!(parsed.shiftingQuery ||   // TallyOne 1.27
+            parsed.digits || parsed.size || parsed.fe || parsed.type ||
             parsed.bay || parsed.pol || parsed.pod || parsed.portAny ||
             parsed.zone || parsed.dgClass || parsed.un || parsed.mode ||
             parsed.weightMin !== null || parsed.weightMax !== null ||
@@ -639,9 +643,36 @@ export function answerAboutAlert(query, alerts) {
   return lines.join('\n');
 }
 
+// TallyOne 1.27: 시프팅 답변. ctx.shiftMap 은 VoyagePage 와 같은 값(확정 대조 우선, 없으면 예측).
+function formatShifting(ctx) {
+  const map = (ctx && ctx.shiftMap) || null;
+  const cns = map ? Object.keys(map) : [];
+  if (!cns.length) {
+    return '🔄 시프팅 0대\n홀드 양하분 위(커버 여는 현측)에 얹힌 통과화물이 없습니다.';
+  }
+  const posOf = (v) => {
+    if (v && v.pos) return v.pos;                       // 예측값
+    const p = String((v && v.from) || '');               // 확정 대조값
+    return p.length >= 7 ? `${Number(p.slice(0, 3))}-${p.slice(3, 5)}-${p.slice(5, 7)}` : p;
+  };
+  const lines = [`🔄 시프팅 ${cns.length}대 (배정목록 표기로는 ${cns.length * 2} — 양하 1 + 재선적 1)`];
+  const sorted = cns.slice().sort((a, b) => String(posOf(map[a])).localeCompare(String(posOf(map[b]))));
+  for (const cn of sorted) {
+    const v = map[cn] || {};
+    const to = v.to ? ` → ${String(v.to).length >= 7 ? `${Number(String(v.to).slice(0, 3))}-${String(v.to).slice(3, 5)}-${String(v.to).slice(5, 7)}` : v.to}` : '';
+    lines.push(`${cn.slice(-4)}  ${posOf(v)}${to}  ${v.iso || ''} ${v.pod ? 'POD ' + v.pod : ''}`.trimEnd());
+  }
+  lines.push('', '커버를 열려면 치워야 하는 통과화물입니다 — 평택 양하분은 세지 않습니다.');
+  return lines.join('\n');
+}
+
 export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);
+
+  // TallyOne 1.27: 시프팅 — 배정목록의 'N' 은 무브 수(양하 1 + 재선적 1)라 컨 대수의 2배다.
+  if (parsed.shiftingQuery) return formatShifting(ctx);
+
 
   // V7.99-16: 양하신고 점검 — 그날 이상 건 정리. 최우선.
   if (parsed.customsReportQuery) {
