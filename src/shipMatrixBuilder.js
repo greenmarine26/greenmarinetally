@@ -622,9 +622,15 @@ export function bayDictEntryToMatrix(entry) {
   if (!entry?.bayDef?.baysSummary?.length) return null;
   const byBay = {};
   for (const bs of entry.bayDef.baysSummary) {
-    if (!bs.bay) continue;
+    // TallyOne 1.28-03: 베이 번호는 `bay`(3자리) **또는 `bayNo`(2자리)** 어느 쪽이든 받는다.
+    //   매트릭스 빌더가 저장한 항목은 둘 다 갖지만, **STOWAGE PDF 자동 파서가 만든 항목은 `bayNo` 만** 갖는다.
+    //   종전 `if (!bs.bay) continue` 는 그걸 전부 버려 **복원 결과가 베이 0개**가 됐다.
+    //   사전이 28베이를 갖고 있는데 매트릭스 빌더 화면은 텅 빈 채로 뜬다 — 조용한 실패였다.
+    //   실측 2026-08-08: 사전 107척 중 **50척**이 이 게이트에 걸려 0개로 복원됐다.
+    const _bayRaw = (bs.bay != null && bs.bay !== '') ? bs.bay : bs.bayNo;
+    if (_bayRaw == null || _bayRaw === '') continue;
     // M6.94.36: 깨진 베이 번호(NaN/0/비숫자) 차단 — "BAY NaN" 유령 entry 방지.
-    const bayN = parseInt(bs.bay, 10);
+    const bayN = parseInt(_bayRaw, 10);
     if (!Number.isFinite(bayN) || bayN <= 0) continue;
     const bayKey = String(bayN).padStart(3, '0');
     byBay[bayKey] = {

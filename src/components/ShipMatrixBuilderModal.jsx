@@ -496,7 +496,12 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       return cp;
     });
   };
-  const coversDictKnown = hasHatchCovers(shipMeta?.code);
+  // TallyOne 1.28-03: 배지 판정은 **하드코딩 사전만** 보면 안 된다.
+  //   종전 `hasHatchCovers(code)` 는 src/data/hatchCovers.js(.def 105척)만 뒤졌다. 그래서 검수사가
+  //   매트릭스 빌더로 **직접 저장해 둔 해치커버**가 화면에 그대로 떠 있는데도 "사전에 없는 선박입니다"
+  //   주황 배지가 붙었다 — "저장했는데 없다고 한다"(검수사 신고 2026-08-08).
+  //   값이 실제로 채워져 있으면 그것이 곧 "사전에 있다"이다.
+  const coversDictKnown = hasHatchCovers(shipMeta?.code) || hatchGroups.some(g => groupCovers(g) != null);
 
   // 사전에 있는 선박이면 통과 — 자동으로 채운다. 없으면 비워 두고 아래에서 입력받는다.
   //   이미 값이 있는 베이는 건드리지 않는다(검수사가 손으로 고친 값 보호).
