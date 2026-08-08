@@ -5,6 +5,7 @@ import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, U
 import { exitApp } from '../backHandler.js';
 import { isChief } from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
 import { isOwnerName } from '../adminGuard.js';
+import { APP_VERSION } from '../utils.js';   // 1.29-01: 헤더에 판 번호 상시 표시
 import HelpModal from './HelpModal.jsx';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
 import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
@@ -81,6 +82,13 @@ export default function Header({ version, inspector, online, route, voyages, onC
             <div className="text-[10px] text-slate-500 truncate leading-tight">
               {/* V8.82: 모드 따라 항차 표시 — 양하=voy_d, 선적=voy_l (구: 항상 voy_d 우선이라 선적 중에도 양하 항차가 보임) */}
               {info ? `${(route?.mode === 'loading' ? (info.voy_l || info.voy_d) : (info.voy_d || info.voy_l)) || info.voy || ''} · ${info.carrier || ''}` : '🌊 그린마린 검수팀 전용'}
+            </div>
+            {/* TallyOne 1.29-01: **판 번호를 늘 보이게 한다.**
+                검수사 지적 2026-08-08: *"버전 확인을 하려도 버튼을 누르는건 불편합니다."*
+                업데이트 배너가 안 뜨는 건(인계함 별건) 아직 못 고쳤으니, 그 사이 검수사가
+                **아무것도 안 눌러도** 지금 판을 알 수 있어야 한다. 푸터까지 내려갈 필요 없다. */}
+            <div className="text-[9px] text-slate-600 truncate leading-tight mono">
+              {APP_VERSION}
             </div>
           </div>
         </div>
