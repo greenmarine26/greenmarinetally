@@ -700,9 +700,13 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       if (otherCn === cn) continue;
       const ediC = ediMap[otherCn] || {};
       const recC = recMap[otherCn] || {};
-      const oBay = recC.bay || ediC.bay || '';
-      const oRow = recC.row || ediC.row || '';
-      const oTier = recC.tier || ediC.tier || '';
+      // TallyOne 1.28-01: records 의 명시적 ''(미배정)를 **존중한다**.
+      //   종전 `recC.bay || ediC.bay` 는 ''를 falsy 로 흘려보내, 이미 미배정된 컨을
+      //   **옛 자리에 그대로 있는 것으로** 봤다 → 한 자리를 두 대가 차지(NSDC_2607N BAY22 03-86 실측).
+      //   같은 함수 위쪽 A 캡처는 이미 `!== undefined` 기준이다 — 판정을 그쪽에 맞춘다.
+      const oBay = recC.bay !== undefined ? recC.bay : (ediC.bay || '');
+      const oRow = recC.row !== undefined ? recC.row : (ediC.row || '');
+      const oTier = recC.tier !== undefined ? recC.tier : (ediC.tier || '');
       if (!oBay) continue;
       const oBayInt = String(parseInt(oBay, 10));
       if (oBayInt === newBayInt && oRow === newRow && oTier === newTier) {

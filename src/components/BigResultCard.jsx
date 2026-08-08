@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
 import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
-import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition, fbUnassignContainer } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
 import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -279,10 +279,16 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}
       {isLoading && (
-        <button onClick={async () => {
-            // V8.80: 수동 배정 — 카드의 기존 위치를 보고 이 버튼(=확인)을 누르면 즉시 미배정,
-            //   그 뒤 검수사가 자리를 지정한다 (수동 작업은 계획 위치에 묶이지 않는다. 사용자 확정).
-            if (!isDone && c.bay) { try { await fbUnassignContainer(voyageKey, c._mode, c.cn, inspector); } catch {} }
+        <button onClick={() => {
+            // TallyOne 1.28-01: **여기서 미리 미배정하지 않는다.**
+            //   V8.80 은 자리 지정 전에 fbUnassignContainer 로 위치를 비웠다. 그러면 바로 뒤 onSave 가 부르는
+            //   fbReassignContainerPosition 이 이 컨의 **옛 자리를 못 읽는다**(이미 ''). 그 함수의 자리 교환 분기
+            //   `aOldBay && aOldRow && aOldTier` 가 절대 참이 될 수 없어, 자리를 뺏긴 컨이 매번 미배정 떠돌이가 됐다.
+            //   → V9.52 가 되살린 자리 교환이 **이 경로에서만 100% 무력화**돼 있었다.
+            //   실측(NSDC_2607N 선적 188대): 떠돌이 9대, 그중 7대가 이미 선적완료를 찍은 컨.
+            //   이력도 그대로다 — `TGBU6406311 22/05/86 → //` 다음 `KMTU9448587 22/03/86 → //`.
+            //   자리를 비우는 일은 fbReassignContainerPosition 이 한다(뺏긴 컨은 이 컨의 옛 자리로 간다).
+            //   ※ V8.80 의 취지("계획 위치에 묶이지 않는다")는 자리 선택 UI 기본값 문제이지 DB를 비울 이유가 아니다.
             setPosTarget(c);
           }}
           className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-amber-700 hover:bg-amber-600 text-amber-50 flex items-center justify-center gap-1.5">
