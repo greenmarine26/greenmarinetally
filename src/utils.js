@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.40-01';   // 도선 오프셋 이중 적용 수리(작업시작 2시간 초과)
+export const APP_VERSION = 'TallyOne 1.40-02';   // 1.40-01 크래시 수리 — LiveProgressSection portMisData 미전달
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

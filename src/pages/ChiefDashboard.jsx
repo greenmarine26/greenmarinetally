@@ -709,7 +709,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       )}
       <Fold id="progress" title="📋 진행 상황 · 완료 저장" open={!!openSecs.progress} onToggle={() => toggleSec('progress')}>
         {/* TallyOne 1.0(L3): 도선 예보 전달 — 진행 상황 줄에 일정 정보(완료 저장 타이밍 판단 근거) */}
-        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} pilotForecast={pfMap} />
+        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} pilotForecast={pfMap} portMisData={portMisData} />
       </Fold>
       <Fold id="archive" title="📚 선박별 자료 보관소" open={!!openSecs.archive} onToggle={() => toggleSec('archive')}>
         <ShipArchiveSection shipLib={shipLib} />
@@ -1301,7 +1301,7 @@ function FeedbackRow({ feedback: f }) {
 //   수석검수사가 최종 확인 후 [완료 저장] → archive 백업 + 보관소 기록 + voyages 삭제.
 //   양하/선적 수는 평택분(tallyVoyagesByShip이 _ptkCountOfSection로 집계).
 // ─────────────────────────────────────────────────────────────
-function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotForecast = {} }) {
+function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotForecast = {}, portMisData = null }) {   // 1.40-01: 🚢신고도착
   const [busyKey, setBusyKey] = useState(null);
   const [confirmKey, setConfirmKey] = useState(null);
   // TallyOne 1.0(L5): 결과 통지 alert() → 섹션 안 인라인 알림(확인창 성격 window.confirm은 유지)
@@ -1344,7 +1344,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
       });
     }
     return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  }, [voyages]);
+  }, [voyages, portMisData]);   // 1.40-01: 신고도착이 늦게 도착해도 다시 계산
 
   const doComplete = async (row) => {
     if (!chief) {   // V7.94-18: 수석검수/부수석만 완료 저장 가능
