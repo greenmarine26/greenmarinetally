@@ -690,9 +690,11 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   if (newBay && newRow && newTier) {
     const ediMapRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers`);
     const recMapRef = ref(db, `voyages/${voyageKey}/${mode}/records`);
-    const [ediSnap, recSnap] = await Promise.all([get(ediMapRef), get(recMapRef)]);
+    const compMapRef = ref(db, `voyages/${voyageKey}/${mode}/completed`);
+    const [ediSnap, recSnap, compSnap] = await Promise.all([get(ediMapRef), get(recMapRef), get(compMapRef)]);
     const ediMap = ediSnap.val() || {};
     const recMap = recSnap.val() || {};
+    const compMap = compSnap.val() || {};
     // ediContainers + records 양쪽 봐서 같은 위치 컨 검색
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
     const newBayInt = String(parseInt(newBay, 10));  // normalize
@@ -706,6 +708,15 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       if (!oBay) continue;
       const oBayInt = String(parseInt(oBay, 10));
       if (oBayInt === newBayInt && oRow === newRow && oTier === newTier) {
+        // TallyOne 1.31: **계획은 예약이지 입실이 아니다.** (검수사 확정 2026-08-08)
+        //   원문 — *"호텔을 예약하고는 있지만 실제 입실은 안 한 상태로 보면 됩니다. 모든 자리가."*
+        //   종전에는 그 자리에 **계획(EDI)만 있어도** 충돌로 보고 그 컨을 밀어냈다. 아무도 입실 안 한 방을
+        //   두고 "사람이 있으니 옮겨야 한다"고 판단한 것이고, 밀려난 컨은 갈 곳을 잃어 떠돌이가 됐다.
+        //   실측(NSDC_2607N 선적): 계획 188칸 중 **입실(선적완료)은 91칸뿐.** 충돌로 잡히던 185칸이
+        //   89칸으로 준다 — **헛충돌 96칸(52%)이 사라진다.**
+        //   → 이제 **이미 선적완료된 컨이 그 자리에 있을 때만** 충돌로 본다.
+        //     예약만 한 컨은 계획 자리를 그대로 지키고, 안 실리면 작업 끝에 '미선적'으로 잡힌다.
+        if (!compMap[otherCn]) continue;
         displaced = otherCn;
         break;
       }
