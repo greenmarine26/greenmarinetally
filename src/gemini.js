@@ -934,13 +934,9 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
 · 주요 항로/기항지: …
 
 [이름 이야기]
-· 선박명의 뜻·유래를 3~5문장으로. 한자 이름이면 **한자 표기와 글자별 뜻**을 먼저 밝힌다(예: XIN QUN DAO = 新群岛 '새로운 섬들의 무리').
-· 선사의 명명 규칙(같은 계열 자매선의 이름 패턴, 접두어·돌림자)을 설명한다.
-· 사람 이름·지명·동물 이름이면 그 배경을, 지명이면 실제 어느 곳인지 한 줄 덧붙인다.
-· 얽힌 설화·전설·유래담이 있으면 짧게 소개한다. 개명 이력(구명)이 있으면 함께.
+· 선박명의 뜻·유래를 3~5문장으로. 한자 이름이면 한자 표기와 글자별 뜻을 먼저 밝힌다(예: XIN QUN DAO = 新群岛, '새로운 섬들의 무리'). 선사의 명명 규칙(자매선 이름 패턴·접두어)과, 사람 이름·지명이면 그 배경을 덧붙인다. 얽힌 설화나 개명 이력이 확인되면 짧게.
 
-규칙: 제원·선사·운항 정보는 검색으로 확인된 값만 적고, 확인 안 되는 항목은 "확인 안 됨"이라고 쓴다. 숫자를 추측하지 마라.
-이름 이야기의 언어적 풀이는 사전적 사실에 근거해 쓰고, 설화·유래담은 **확인된 것만** 쓴다. 지어내지 마라 — 모르면 명명 규칙만 적는다.`;
+규칙: 검색으로 확인된 값만 적고, 확인 안 되는 항목은 "확인 안 됨"이라고 쓴다. 숫자를 추측하지 마라. 이름 풀이도 지어내지 말고 확인된 것만 쓴다.`;
 
   const call = async (useSearch) => {
     const body = {
@@ -966,7 +962,20 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
     const data = await res.json();
     const cand = data?.candidates?.[0];
     let text = cand?.content?.parts?.map(p => p.text).filter(Boolean).join('').trim();
-    if (!text) return { ok: false, error: '빈 응답' };
+    // TallyOne 1.39-01: **왜 짧게 끊겼는지 남긴다.** 검수사 신고 2026-08-09 —
+    //   *"충실했던 내용들이 다 잘려 나갔습니다. 내용도 20% 수준으로 줄었습니다."*
+    //   실측: 07-27 생성분은 391~398자인데 08-08 이후 50~163자로 줄었고 문장 중간에서 끊겼다.
+    //   그런데 **원인을 알 수가 없었다** — finishReason 을 한 번도 안 봤기 때문이다.
+    //   MAX_TOKENS(상한 소진) / SAFETY(차단) / RECITATION(인용 차단) 중 무엇인지 로그로 확인한다.
+    //   조용히 실패하지 않는다 — 짧게 끊긴 응답은 화면에도 사유를 붙여 보낸다.
+    const fr = cand?.finishReason || '';
+    if (fr && fr !== 'STOP') {
+      console.warn('[shipIntro] 응답이 정상 종료가 아니다 — finishReason:', fr,
+        '· 길이:', (text || '').length, '· usage:', JSON.stringify(data?.usageMetadata || {}));
+    }
+    if (!text) return { ok: false, error: `빈 응답 (finishReason: ${fr || '없음'})` };
+    if (fr === 'MAX_TOKENS') text += '\n\n⚠ 분량 한도로 뒷부분이 잘렸습니다. 다시 생성하면 더 나올 수 있습니다.';
+    else if (fr && fr !== 'STOP') text += `\n\n⚠ 생성이 중단됐습니다 (${fr}).`;
     if (!grounded) text += '\n\n⚠ 웹 검색 없이 생성됨 — 수치는 부정확할 수 있습니다.';
     // 출처 링크 (grounding)
     const sources = [];
