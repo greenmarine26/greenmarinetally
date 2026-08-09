@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -104,7 +104,13 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   //   베이 번호 추출: bay_actual (검수원 수정) 우선, 없으면 pos[0:3]
   const getBay = (c) => {
     if (!c) return '';
-    const b = c.bay_actual || c.bay || (c.pos ? String(c.pos).slice(0, 3) : '');
+    // TallyOne 1.38-01: 위치 판정은 effectivePos() 로 통일.
+    //   종전 `c.bay_actual || c.bay` 는 **임시창고(`__STG__`)를 그대로 베이로 썼다** —
+    //   보관함에 넣은 컨이 `__S` 라는 베이에 있는 것처럼 인쇄물에 실린다.
+    //   effectivePos 는 `__` 로 시작하면 자리 없음으로 돌려준다.
+    const p = effectivePos(c);
+    const b = p.bay || (c.pos ? String(c.pos).slice(0, 3) : '');
+    if (!b) return '';
     return String(b).padStart(3, '0').slice(0, 3);
   };
 

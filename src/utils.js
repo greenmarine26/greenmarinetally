@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.38';   // 위치 판정을 effectivePos() 하나로 — 화면마다 다르던 것 통합
+export const APP_VERSION = 'TallyOne 1.38-01';   // 인쇄 허브도 effectivePos() — 임시창고가 베이로 찍히던 것 수리
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
