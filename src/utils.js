@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.37';   // 배포할 때마다 업데이트 배너가 뜨게 — 3분 확인 + 낡은 대기 워커 교체
+export const APP_VERSION = 'TallyOne 1.38';   // 위치 판정을 effectivePos() 하나로 — 화면마다 다르던 것 통합
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3556,4 +3556,39 @@ export function planWorkStart(info = {}, pierOverride = null) {
     return { start: new Date(arr.getTime() + lead * 60000), basis: 'pilot', arr, leadMin: lead };
   }
   return { start: arr, basis: 'plan', arr, leadMin: 0 };
+}
+
+// ── TallyOne 1.38: 컨 위치 판정 단일 진입점 ──────────────────────────────────
+//   왜 만들었나 — 같은 판단을 **여덟 곳이 각자** 되풀이하고 있었고 조건이 조금씩 달랐다.
+//   (VoyagePage / SearchPanel / VoyageSummaryCard / WorkClosingChecklist /
+//    PrintHubModal / ChiefBayEdit / TestLabModal / BayPlan)
+//   어긋난 실제 사고:
+//     · 1.35 — SearchPanel 만 승격을 안 해 같은 컨이 한 화면에선 배정, 다른 화면에선 미배정이었다.
+//     · 2026-08-09 마감 점검 — 클로드가 records 우선으로 읽어 멀쩡한 자료를 세 번 사고로 오판했다.
+//   ⚠ 순서를 바꾸지 마라. 이것이 화면이 그리는 순서다.
+//     ① records.bay_actual  실체 위치(선적확인 때 생김). '__' 로 시작하면 임시창고 — 자리 없음.
+//     ② ediContainers.bay   EDI 가 진실 (M6.94.32). 값이 '' 가 아니면 이것을 쓴다.
+//     ③ records.bay         위 둘이 없을 때만.
+/** @returns {{bay:string,row:string,tier:string,src:'actual'|'edi'|'rec'|'none',inStorage:boolean}} */
+export function effectivePos(c) {
+  if (!c) return { bay: '', row: '', tier: '', src: 'none', inStorage: false };
+  const s = (v) => (v === undefined || v === null ? '' : String(v));
+  const ba = s(c.bay_actual);
+  if (ba.startsWith('__')) return { bay: '', row: '', tier: '', src: 'none', inStorage: true };
+  if (ba && s(c.row_actual) && s(c.tier_actual)) {
+    return { bay: ba, row: s(c.row_actual), tier: s(c.tier_actual), src: 'actual', inStorage: false };
+  }
+  //   _bay_planned 가 있으면 이미 상위에서 승격된 객체다 — 그 값(c.bay)이 곧 EDI 자리다.
+  const eb = s(c._edi_bay !== undefined ? c._edi_bay : c.bay);
+  if (eb) return { bay: eb, row: s(c._edi_row !== undefined ? c._edi_row : c.row),
+                   tier: s(c._edi_tier !== undefined ? c._edi_tier : c.tier), src: 'edi', inStorage: false };
+  return { bay: s(c.bay), row: s(c.row), tier: s(c.tier), src: s(c.bay) ? 'rec' : 'none', inStorage: false };
+}
+
+/** 위치 키 — 베이는 정수 정규화("038"→"38"). 자리가 없으면 '' */
+export function posKey(c) {
+  const p = effectivePos(c);
+  if (!p.bay || !p.row || !p.tier) return '';
+  const n = parseInt(p.bay, 10);
+  return `${Number.isFinite(n) ? n : p.bay}/${p.row}/${p.tier}`;
 }

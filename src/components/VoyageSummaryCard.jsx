@@ -4,7 +4,7 @@
 //   각 항목은 클릭 시 해당 탭/필터로 점프 (옵션 — 일단 V1은 표시만)
 import React, { useMemo } from 'react';
 import { CheckCircle2, AlertTriangle, Snowflake, Shield, MoveRight } from 'lucide-react';   // 1.24: Camera 제거 — 풀 리퍼 사진 칩 삭제로 미사용
-import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort } from '../utils.js';
+import { isReeferContainer, isISO403, isISO403PhotoTaken, isPyeongtaekPort, effectivePos } from '../utils.js';
 
 export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) {
   const summary = useMemo(() => {
@@ -70,9 +70,10 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
     const _p2d = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
     const _posCnt = new Map();
     containers.forEach(c => {
-      if (String(c.bay_actual || '').startsWith('__')) return;   // 임시창고 제외
-      const hasA = c.bay_actual !== undefined && c.bay_actual !== '' && c.bay_actual !== null;
-      const b = hasA ? c.bay_actual : c.bay, r = hasA ? c.row_actual : c.row, t = hasA ? c.tier_actual : c.tier;
+      // TallyOne 1.38: 위치 판정은 effectivePos() 하나로 — 여덟 곳이 각자 하던 것을 모았다.
+      const _p = effectivePos(c);
+      if (_p.inStorage) return;                       // 임시창고 = 자리 없음
+      const b = _p.bay, r = _p.row, t = _p.tier;
       if (!b || !t) return;
       const k = `${_p2d(b)}-${_p2d(r)}-${_p2d(t)}`;
       if (k.startsWith('00-')) return;
