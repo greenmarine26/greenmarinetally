@@ -677,16 +677,19 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // V7.94-24: 자리 교환(swap) — A를 B 자리로 옮기면, 자리를 뺏긴 B는 A의 원래 자리로 이동(거기서 선적 대기).
   //   (구: B를 미배정 처리 → 떠돌이 발생). A의 현재 위치를 먼저 캡처.
   let aOldBay = '', aOldRow = '', aOldTier = '';
+  let recA0 = {}, ediA0 = {};          // 1.36: 아래 2)에서 A의 계획 자리를 다시 쓴다
   {
     const recSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
     const ediSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`));
     const recA = recSnapA.val() || {}; const ediA = ediSnapA.val() || {};
+    recA0 = recA; ediA0 = ediA;
     aOldBay = recA.bay !== undefined ? recA.bay : (ediA.bay || '');
     aOldRow = recA.row !== undefined ? recA.row : (ediA.row || '');
     aOldTier = recA.tier !== undefined ? recA.tier : (ediA.tier || '');
   }
   // 1) 같은 자리에 있는 다른 컨 찾기 (충돌 검사)
   let displaced = null;
+  let ediMap0 = {}, recMap0 = {};
   if (newBay && newRow && newTier) {
     const ediMapRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers`);
     const recMapRef = ref(db, `voyages/${voyageKey}/${mode}/records`);
@@ -695,6 +698,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     const ediMap = ediSnap.val() || {};
     const recMap = recSnap.val() || {};
     const compMap = compSnap.val() || {};
+    ediMap0 = ediMap; recMap0 = recMap;   // 1.36: 아래 2)에서 계획 자리 점유 검사에 쓴다
     // ediContainers + records 양쪽 봐서 같은 위치 컨 검색
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
     const newBayInt = String(parseInt(newBay, 10));  // normalize
@@ -728,9 +732,39 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   if (displaced) {
     if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
-    } else {
-      // 수동(unassign) 또는 옛 자리 없음 → 미배정 (미배정 목록에서 검수사가 직접 지정)
+    } else if (opts.displacedMode === 'unassign') {
+      // 검수사가 명시적으로 미배정을 고른 경우만 비운다.
       await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+    } else {
+      // TallyOne 1.36: **뺏긴 컨을 미배정으로 만들지 않는다.** 검수사 확정 2026-08-09 —
+      //   *"빼앗긴 컨테이너는 빼앗은 컨테이너 자리로 가 있는 것, 그것만 확실하다면 미배정은 없습니다."*
+      //   여기까지 오는 것은 **뺏은 컨(A) 자신이 자리가 없던 경우**뿐이다(1.31 이후로 예약 자리는 아예
+      //   안 뺏으므로, 뺏겼다는 건 상대가 이미 선적완료됐다는 뜻이다).
+      //   그때 뺏긴 컨을 미배정으로 만들면 **실물은 배에 있는데 앱에서만 사라진다** — 그게 떠돌이의 정체였다.
+      //   → A의 계획 자리(_orig/EDI)가 비어 있으면 거기로 보낸다. 그것도 없으면 **자리를 그대로 둔다.**
+      //     한 칸에 두 대로 보이는 편이, 조용히 사라져 영영 못 찾는 것보다 낫다(화면에 ⊕N 로 뜬다).
+      const pb = recA0.bay_orig !== undefined ? recA0.bay_orig : (ediA0.bay || '');
+      const pr = recA0.row_orig !== undefined ? recA0.row_orig : (ediA0.row || '');
+      const pt = recA0.tier_orig !== undefined ? recA0.tier_orig : (ediA0.tier || '');
+      const sameAsTarget = pb && String(parseInt(pb, 10)) === String(parseInt(newBay, 10)) && pr === newRow && pt === newTier;
+      let planFree = false;
+      if (pb && pr && pt && !sameAsTarget) {
+        const pbI = String(parseInt(pb, 10));
+        planFree = true;
+        for (const oc of new Set([...Object.keys(ediMap0), ...Object.keys(recMap0)])) {
+          if (oc === cn || oc === displaced) continue;
+          const rc = recMap0[oc] || {}, ec = ediMap0[oc] || {};
+          const ob = rc.bay !== undefined ? rc.bay : (ec.bay || '');
+          const orw = rc.row !== undefined ? rc.row : (ec.row || '');
+          const ot2 = rc.tier !== undefined ? rc.tier : (ec.tier || '');
+          if (!ob) continue;
+          if (String(parseInt(ob, 10)) === pbI && orw === pr && ot2 === pt) { planFree = false; break; }
+        }
+      }
+      if (planFree) {
+        await _updatePositionFields(voyageKey, mode, displaced, pb, pr, pt, by);
+      }
+      // planFree 가 아니면 아무것도 하지 않는다 — 뺏긴 컨은 그 자리에 남는다.
     }
     // V8.70: 자리를 뺏긴 컨이 이미 검수완료된 컨이면 완료 기록을 지우지 않는다.
     //   (구: 무조건 remove → 다른 자리에서 이미 선적확인한 기록이 조용히 사라짐 — 체인시프트 데이터 유실 원인.
