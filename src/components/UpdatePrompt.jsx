@@ -73,8 +73,40 @@ export default function UpdatePrompt() {
         });
       });
 
-      // 1시간마다 새 버전 확인
-      setInterval(() => reg.update(), 60 * 60 * 1000);
+      // TallyOne 1.37: **배포할 때마다 보여야 한다.** 검수사 지적 2026-08-09 —
+      //   *"업데이트 화면이 또 사라졌습니다. 오늘 딱 한번 봤습니다."* / *"클로드님이 배포할 때마다 보여야 하는데."*
+      //   원인 둘.
+      //   ① 확인 주기가 1시간이었다. 오늘처럼 한 시간에 아홉 판을 올리면 대부분을 놓친다.
+      //   ② **`waiting` 이 한 번 차면 브라우저가 새 워커를 더 안 가져온다.** 실측: active 1.30 / waiting 1.32
+      //      인 채로 서버가 1.36 이 되어도 대기열이 1.32 에 멈춰 있었다. 배너를 한 번 본 뒤로 영영 안 뜬 이유다.
+      //   → 주기를 3분으로 줄이고, **대기 중인 워커가 서버 판보다 낡았으면 그 자리에서 갈아 끼운다.**
+      const CHECK_MS = 3 * 60 * 1000;
+      const serverVersion = async () => {
+        try {
+          const t = await fetch(swUrl + '?v=' + Date.now(), { cache: 'no-store' }).then(r => r.text());
+          return (t.match(/VERSION\s*=\s*'([^']+)'/) || [])[1] || '';
+        } catch (e) { console.warn('[sw] 서버 판 확인 실패', e); return ''; }
+      };
+      const poll = async () => {
+        try {
+          const sv = await serverVersion();
+          // 대기 중인 워커가 서버보다 낡았으면 밀어낸다 — 안 그러면 새 워커를 아예 못 받는다.
+          if (sv && reg.waiting) {
+            const wv = await askVersion(reg.waiting);
+            if (wv && wv !== sv) {
+              console.log('[sw] 대기 워커가 낡음', wv, '→ 서버', sv, '— 갈아 끼운다');
+              try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) { /* 아래 update 로 재시도 */ }
+              setWaiting(null);
+            }
+          }
+          await reg.update();
+          if (reg.waiting) consider(reg.waiting);
+        } catch (e) { console.warn('[sw] 갱신 확인 실패', e); }
+      };
+      setInterval(poll, CHECK_MS);
+      // 탭으로 돌아왔을 때도 한 번 — 폰에서 앱을 다시 열었을 때 바로 알게 된다.
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+      poll();
     }).catch(e => console.log('SW 등록 실패:', e));
 
     // 컨트롤러 변경 (새 SW 활성화) → 새로고침
