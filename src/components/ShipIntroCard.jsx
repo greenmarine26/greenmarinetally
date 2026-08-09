@@ -3,7 +3,7 @@
 //   사용자 확정: KMTC OSAKA 예시 형식 + "이름 풀이도 재미있어서 같이".
 //   ship_intros/{shipId} 캐시 = 전 검수원 공유, 배마다 1회 생성이면 충분.
 //   테스트 주입: loader/generator/saver를 prop으로 덮을 수 있다(기본 = firebase/gemini 실물).
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Ship, Sparkles, RefreshCw } from 'lucide-react';
 import { fbGetShipIntro, fbSaveShipIntro } from '../firebase.js';
 import { askShipIntro } from '../gemini.js';
@@ -37,14 +37,38 @@ export default function ShipIntroCard({ info, inspector, portMisData = {},
   const shipName = (manualName.trim() || resolved.name || '').toUpperCase();
   const needsName = resolved.needsName && !manualName.trim();
 
+  // TallyOne 1.39: **같은 배가 여러 키로 저장돼 있어 조회 키에 따라 있다/없다가 갈렸다.**
+  //   shipId 는 `imo || callsign || 선박명` 순으로 정해지는데, 항차마다 채워진 필드가 달라
+  //   한 배가 IMO·콜사인·코드 세 키로 흩어졌다(실측: XIN QUN DAO 가 `9361067`·`DXQD`·`H3OI` 로 3중 저장,
+  //   ship_intros 100건 중 실제 배는 약 35척). 검수사 신고: *"맞는 게 있고 빈 자료만 있는 게 있다."*
+  //   → **읽을 때 후보 키를 순서대로 다 찾아본다.** 하나라도 있으면 그것을 쓴다.
+  //   쓸 때는 종전대로 대표 키(shipId) 하나에만 저장한다 — 중복을 더 늘리지 않는다.
+  const altKeys = useMemo(() => {
+    const raw = [info?.imo, info?.callsign, String(info?.vsl || '').toUpperCase().replace(/\s+/g, '')];
+    const seen = new Set(); const out = [];
+    raw.forEach(v => { const k = resolveShipKey(v); if (k && !seen.has(k)) { seen.add(k); out.push(k); } });
+    return out;
+  }, [info?.imo, info?.callsign, info?.vsl]);
+
   useEffect(() => {
-    if (!shipId) { setIntro(null); return; }
+    if (!altKeys.length) { setIntro(null); return; }
     let alive = true;
-    loader(shipId)
-      .then(v => { if (alive) { setIntro(v || null); if (v) window.__shipIntroCache = { ...(window.__shipIntroCache || {}), [shipId]: v.text }; } })
-      .catch(() => { if (alive) setIntro(null); });
+    (async () => {
+      for (const k of altKeys) {
+        try {
+          const v = await loader(k);
+          if (!alive) return;
+          if (v && v.text) {
+            setIntro(v);
+            window.__shipIntroCache = { ...(window.__shipIntroCache || {}), [shipId]: v.text, [k]: v.text };
+            return;
+          }
+        } catch (e) { /* 다음 키로 */ }
+      }
+      if (alive) setIntro(null);
+    })();
     return () => { alive = false; };
-  }, [shipId]);
+  }, [altKeys.join('|')]);
 
   const generate = async () => {
     if (busy || !shipName) return;
