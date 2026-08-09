@@ -898,7 +898,7 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
 //   V9.18 초판은 이름 풀이만 했는데 사용자 확정: "선종·IMO·국적·길이·너비·건조년도·선사·항로 같은
 //   실제 정보를 출처와 함께" (KMTC OSAKA 예시 제시). Gemini google_search 도구로 웹을 찾아 답하고,
 //   groundingMetadata의 출처 링크를 함께 저장한다. 그라운딩 미지원 키면 검색 없이 생성(정확도 주의 표기).
-export async function askShipIntro({ name = '', callsign = '', imo = '', carrier = '' }) {
+export async function askShipIntro({ name = '', callsign = '', imo = '', carrier = '', code = '' }) {
   const shipName = String(name || '').trim();
   if (!shipName) return { ok: false, error: '선박명이 없습니다' };
   if (!getActiveGeminiKey()) return { ok: false, error: NO_KEY_MSG };   // V9.57(G11)
@@ -909,6 +909,9 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
     `다음 선박의 실제 정보를 웹에서 찾아 정리하라: 선박명 "${shipName}"` +
     (imo ? `, IMO ${imo}` : '') + (callsign ? `, 콜사인 ${callsign}` : '') +
     (carrier ? `, 선사 코드 ${carrier}` : '') +
+    // TallyOne 1.39-02: 사내 약자(code)도 같이 넘긴다 — 검수사 지적 *"기본 검색에도 추가해야 합니다."*
+    //   이름만으로 못 찾을 때 IMO·콜사인·약자가 같이 있으면 검색이 붙는다.
+    (code && code !== shipName ? `, 사내 약자 ${code}` : '') +
     (looksCode ? `.\n주의: "${shipName}"은 사내 약자일 수 있다. ${imo ? `IMO ${imo}` : ''}${imo && callsign ? '와 ' : ''}${callsign ? `콜사인 ${callsign}` : ''}${(imo || callsign) ? '으로 먼저 실제 선박명을 확정한 뒤 정리하라.' : '실제 선박명을 찾지 못하면 첫 줄에 "선박 풀네임이 필요합니다"라고 써라.'}` : '') + `.
 
 한국어로 아래 형식으로 답하라 (마크다운 굵게 금지, 각 줄은 "· 항목: 값"):

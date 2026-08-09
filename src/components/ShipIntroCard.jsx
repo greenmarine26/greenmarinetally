@@ -5,27 +5,50 @@
 //   테스트 주입: loader/generator/saver를 prop으로 덮을 수 있다(기본 = firebase/gemini 실물).
 import React, { useState, useEffect, useMemo } from 'react';
 import { Ship, Sparkles, RefreshCw } from 'lucide-react';
-import { fbGetShipIntro, fbSaveShipIntro } from '../firebase.js';
+import { fbGetShipIntro, fbSaveShipIntro, fbSubscribeShipBayDict } from '../firebase.js';
 import { askShipIntro } from '../gemini.js';
 import { resolveShipKey } from '../utils.js';
 
 // V9.18-02: 표시/검색용 선박명 해석 — vslFull → PORT-MIS 선박명(콜사인 매칭) → 약자.
 //   약자(2~5자 코드, 예: DXQD)만 남으면 needsName=true — 검색이 "확인되지 않았습니다"로 끝나기 때문
 //   (사용자 보고). 이때 카드가 풀네임 입력칸을 연다. (순수 함수 — 시뮬 대상)
-export function resolveShipDisplayName(info, portMisData = {}) {
+export function resolveShipDisplayName(info, portMisData = {}, bayDict = null) {
   const vslFull = String(info?.vslFull || '').trim();
   if (vslFull && !/^[A-Z0-9]{2,5}$/.test(vslFull)) return { name: vslFull, needsName: false, from: 'edi' };
   const cs = String(info?.callsign || '').toUpperCase();
   const pm = cs && portMisData[cs];
   const pmName = String(pm?.vesselName || '').trim();
   if (pmName && pmName.length >= 6) return { name: pmName, needsName: false, from: 'portmis' };
+  // TallyOne 1.39-02: **베이사전에도 풀네임이 있다.** 검수사 지적 2026-08-09 —
+  //   *"선박 풀네임은 다 있습니다."* 그런데 이 함수는 EDI(vslFull)와 PORT-MIS 두 곳만 봤다.
+  //   실측: `ship_bay_dict_v3/RZOR` 에 `name:"RIZHAO ORIENT"`, `callsign:"HOAG"` 가 멀쩡히 있는데
+  //   앱은 그것을 두고 약자 `RZOR` 로 검색해 *"RZOR 이라는 선박을 찾을 수 없다"* 를 소개로 저장했다.
+  //   → 코드·콜사인 어느 쪽으로든 사전을 뒤져 풀네임을 찾는다.
   const code = String(info?.vsl || '').trim();
+  if (bayDict) {
+    const cand = [code.toUpperCase(), cs].filter(Boolean);
+    for (const k of cand) {
+      const e = bayDict[k];
+      const nm = String(e?.name || '').trim();
+      if (nm && nm.length >= 6 && !/^[A-Z0-9]{2,5}$/.test(nm)) return { name: nm, needsName: false, from: 'baydict' };
+    }
+    // 키가 안 맞으면 값에서 code/callsign 이 일치하는 항목을 찾는다
+    for (const e of Object.values(bayDict)) {
+      if (!e) continue;
+      const hit = (code && String(e.code || '').toUpperCase() === code.toUpperCase())
+               || (cs && String(e.callsign || '').toUpperCase() === cs);
+      const nm = String(e.name || '').trim();
+      if (hit && nm && nm.length >= 6 && !/^[A-Z0-9]{2,5}$/.test(nm)) return { name: nm, needsName: false, from: 'baydict' };
+    }
+  }
   // 약자만 있음 — IMO가 있으면 그걸로 검색은 가능하지만, 이름 입력을 권한다
   return { name: code, needsName: true, from: 'code' };
 }
 
 export default function ShipIntroCard({ info, inspector, portMisData = {},
   loader = fbGetShipIntro, generator = askShipIntro, saver = fbSaveShipIntro }) {
+  const [bayDict, setBayDict] = useState(null);
+  useEffect(() => fbSubscribeShipBayDict(setBayDict), []);
   const [open, setOpen] = useState(false);
   const [intro, setIntro] = useState(undefined);   // undefined=로딩전, null=없음
   const [busy, setBusy] = useState(false);
@@ -33,7 +56,7 @@ export default function ShipIntroCard({ info, inspector, portMisData = {},
   const [manualName, setManualName] = useState('');   // V9.18-02: 약자뿐일 때 풀네임 직접 입력
 
   const shipId = resolveShipKey(info?.imo || info?.callsign || String(info?.vsl || '').toUpperCase().replace(/\s+/g, ''));
-  const resolved = resolveShipDisplayName(info, portMisData);
+  const resolved = resolveShipDisplayName(info, portMisData, bayDict);
   const shipName = (manualName.trim() || resolved.name || '').toUpperCase();
   const needsName = resolved.needsName && !manualName.trim();
 
@@ -72,9 +95,20 @@ export default function ShipIntroCard({ info, inspector, portMisData = {},
 
   const generate = async () => {
     if (busy || !shipName) return;
+    // TallyOne 1.39-02: **약자(4자 코드)만 있으면 검색하지 않는다.** 검수사 신고 2026-08-09 —
+    //   *"지금 선박 풀네임으로 검색을 하고 있어야 하는데 약자 4자로 검색을 하는 듯합니다."*
+    //   실측: `RZOR_R085E` 는 수집기 예정등록만 된 상태라 `vslFull`·`callsign` 이 둘 다 비어 있고
+    //   `vsl:"RZOR"` 뿐이다. 그대로 검색하면 *"RZOR 이라는 이름의 실제 상업용 선박을 찾을 수 없다"* 가
+    //   그럴듯한 소개인 양 저장돼, 나중에 진짜 자료가 와도 캐시가 남아 계속 그것만 보인다.
+    //   → IMO 도 없으면 아예 부르지 않고 이름을 받는다. 쓰레기를 저장하는 것보다 낫다.
+    if (needsName && !String(info?.imo || '').trim()) {
+      setErr('선박 풀네임이 필요합니다. 아래 칸에 전체 이름을 넣어 주세요 (자료가 들어오면 자동으로 채워집니다).');
+      return;
+    }
     setBusy(true); setErr('');
     try {
-      const res = await generator({ name: shipName, callsign: info?.callsign || '', imo: info?.imo || '', carrier: info?.carrier || '' });
+      const res = await generator({ name: shipName, callsign: info?.callsign || '', imo: info?.imo || '',
+        carrier: info?.carrier || '', code: String(info?.vsl || '').trim() });
       // eslint-disable-next-line no-unused-expressions
       if (!res.ok) { setErr(`생성 실패: ${res.error} — 헤더 ⋯ 메뉴에서 AI 검색 키를 확인하세요.`); return; }
       const rec = { text: res.text, sources: res.sources || [], by: inspector || '', at: Date.now() };
