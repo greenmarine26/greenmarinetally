@@ -786,6 +786,22 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     edits,
   };
 
+  // TallyOne 1.34: **미배정으로 만들 때는 실체 위치도 같이 지운다.**
+  //   검수사 신고 2026-08-09: *"38번 베이에 선적이 안 된 곳은 23곳인데 앱은 21개로 표시하고
+  //   컨테이너 2개가 미배정으로 되어 있다. 실제 선적할 자리에는 미배정이라 되어 있는
+  //   컨테이너 넘버들이 그 자리를 차지하고 있다."*
+  //   원인 — 이 함수는 `bay/row/tier` 만 비우고 `bay_actual` 은 손대지 않았다. 그래서
+  //   `KMTU9448587` 이 `bay:""` (미배정)인데 `bay_actual:"38/09/88"` 로 남아,
+  //   **목록에서는 미배정으로 세면서 그림에서는 자리를 차지**했다. 그 자리는 영영 못 쓴다.
+  //   ⚠ 임시창고(`__STG__`)는 건드리지 않는다 — 그것도 '자리 없음'을 뜻하는 정상 상태다.
+  if (!nb && !nr && !nt) {
+    const curActual = cur.bay_actual;
+    if (curActual !== undefined && curActual !== null && curActual !== '' && curActual !== STORAGE_BAY) {
+      patch.bay_actual = null; patch.row_actual = null; patch.tier_actual = null;
+      patch.actual_at = null; patch.actual_by = null;
+    }
+  }
+
   // records가 없으면 새로 만듦 (cn은 키이지만 안전하게)
   if (!recSnap.exists()) {
     patch.cn = cn;
