@@ -1491,8 +1491,18 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       //   뭔가 있는거죠 고스트"* — 컨을 88단에서 84단으로 옮기면 88단이 어둡게 남아, 배에 칸이
       //   아예 없는 90단(`bg-slate-950`)과 눈으로 구분이 안 됐다. 실제로는 **그냥 빈 자리**다.
       //   → 화물이 실리는 단이면 흰 빈 칸으로 그린다. 화물이 안 실리는 단·구조 밖은 종전대로 어둡게.
-      const tierHasCargo = allContainers.some(x => x.tier === tier);
-      if (tierHasCargo) {
+      //   TallyOne 1.32 정정: **단이 아니라 자리(열+단) 기준으로 본다.**
+      //     1.29는 `some(x => x.tier === tier)` 로 단만 보고 그 단의 **전 열**을 빈 자리로 그렸다.
+      //     그래서 배에 아예 없는 칸까지 흰 자리가 됐다 — 검수사 지적 2026-08-09:
+      //     *"앞베이는 선적할 자리는 다 채웠는데 임의로 빈곳을 만들어 놨습니다."*
+      //     실측: BAY(34)35 82단은 계획에 3~6자리뿐인데 11자리가 그려졌다. 없는 자리에 컨을 배정할 수 있게 된다.
+      //   → 계획(`_row_planned`)이든 현재 위치든 **그 자리를 쓰는 컨이 하나라도 있었으면** 자리가 있는 것이다.
+      //     8587이 떠난 BAY38 09-88 은 계획에 있으므로 빈 자리로 남고, BAY34 82단 10·09 는 어둡게 남는다.
+      const slotExists = allContainers.some(x =>
+        (x.row === row && x.tier === tier) ||
+        (x._row_planned === row && x._tier_planned === tier)
+      );
+      if (slotExists) {
         return <div key={key} className="border border-slate-400 flex-shrink-0 bg-slate-100"
           style={{ width: cellW, height: cellH }}/>;
       }
