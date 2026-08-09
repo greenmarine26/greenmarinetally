@@ -3,7 +3,7 @@ import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, Check
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, planWorkStart } from '../utils.js';   // TallyOne 1.22: 도선→작업개시  // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -83,7 +83,7 @@ export const TALLY_LIST_SINCE = new Date('2026-08-04T00:00:00+09:00').getTime();
 
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch,
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
-  collectorHb = null, pilotForecast = null, terminalWork = null,
+  collectorHb = null, pilotForecast = null, terminalWork = null, portMisData = null,   // 1.40-01: 🚢신고도착
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
 }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
@@ -1321,6 +1321,17 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         discharge: dPtk, loading: lPtk,
         // TallyOne 1.0(L3): 일정 정보 — 수집기가 채우는 planDate("ETA ~ ETD")·planSrc(출처 판단 결과)
         planDate: info.planDate || '', planSrc: info.planSrc || '',
+        // 1.40-01: PORT-MIS 항 도착(세관 신고) 원본 — 콜사인 매칭. 도선과 다른 사건이라 따로 표기한다.
+        pmEta: (() => {
+          const cs = String(info.callsign || '').toUpperCase();
+          if (!cs || !portMisData) return '';
+          const rec = portMisData[cs]
+            || Object.values(portMisData).find(x => {
+                 const p = String(x?.callsign || '').toUpperCase();
+                 return p && p.length >= 4 && (p.startsWith(cs) || cs.startsWith(p));
+               });
+          return (rec && rec.eta) || '';
+        })(),
         imo: info.imo || '',
         createdAt: info.createdAt || 0,
         // V7.90: 완료 분리 — 보유 모드가 전부 완료되면 수석 최종 저장 가능 (구 inspectorDone 하위호환)
@@ -1561,7 +1572,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
                 )}
               </div>
               {/* TallyOne 1.0(L3): 일정 정보 — 작업일자(출처 뱃지)·도선 입출항. 완료 저장 타이밍 판단 근거 */}
-              <ScheduleLine planDate={r.planDate} planSrc={r.planSrc}
+              <ScheduleLine planDate={r.planDate} planSrc={r.planSrc} pmEta={r.pmEta}
                 pf={(pilotForecast || {})[(r.vsl || '').toUpperCase()]} />
               {/* TallyOne 1.0(L4): V8.93 도구 4종 — 10px 초소형 버튼을 줄 아래 40px 터치 타깃 행으로 재배치(기능 불변) */}
               {r.loading > 0 && (
@@ -1755,7 +1766,7 @@ function CollectorStatusBanner({ hbView, hb, issueCount }) {
 
 // TallyOne 1.0(L3): 진행 상황 줄 일정 표시 — planSrc 출처 뱃지는 HomePage 1026행 _MK와 같은 표기.
 //   자리별 출처('입항출처|출항출처')도 같은 규칙으로 풀며, 일정이 전혀 없으면 '자료 없음'을 명시.
-function ScheduleLine({ planDate, planSrc, pf }) {
+function ScheduleLine({ planDate, planSrc, pf, pmEta = '' }) {
   const MK = { mail: '📧메일', pilot: '⚓도선', portmis: '🚢신고', plan: '📋배정' };
   const pp = String(planSrc || '').split('|');
   const srcIn = MK[pp[0]] || '';
@@ -1772,14 +1783,13 @@ function ScheduleLine({ planDate, planSrc, pf }) {
   return (
     <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
       {planDate && <span>📅 {planDate}{srcLabel ? ` (${srcLabel})` : ''}</span>}
-      {/* TallyOne 1.22: 도선 일정은 **입항 시각**이다 — 작업개시는 부두별 소요를 더해 따로 보여준다
-          (검수사 확정 2026-08-07: PCTC 1시간 30분 · PNCT 2시간). 오답 1786057401908. */}
-      {(() => {
-        const w = planWorkStart({ planDate, planSrc, berth: pf?.nextArrBerth || '' });
-        if (w.basis !== 'pilot' || !w.start) return null;
-        return <span className="text-emerald-300">🛠 작업예정 {fmt(`${w.start.getFullYear()}-${String(w.start.getMonth() + 1).padStart(2, '0')}-${String(w.start.getDate()).padStart(2, '0')} ${String(w.start.getHours()).padStart(2, '0')}:${String(w.start.getMinutes()).padStart(2, '0')}`)}</span>;
-      })()}
+      {/* TallyOne 1.40-01: 🛠 작업예정 줄 삭제. planDate 앞자리가 **이미 작업시작**이라(수집기가 환산해
+          넣는다) 여기서 부두 소요를 또 더해 2시간 초과 표시가 났다 — 위 📅 줄과 같은 값이므로 중복이기도 했다.
+          도선 **입항 원본**은 아래 ⚓ 입항 줄이 그대로 보여준다. 1.22 주석의 오답 1786057401908은
+          수집기 v1.0-16 환산이 들어오기 전 이야기다. */}
       {pf?.nextArr && <span className="text-sky-300">⚓ 입항 {fmt(pf.nextArr)}</span>}
+      {/* 1.40-01: 🚢 신고도착 — PORT-MIS 세관 신고 항 도착시각(원본). 도선 시작과 다른 사건이다. */}
+      {pmEta && <span className="text-slate-400" title="PORT-MIS 세관 신고 기준 항 도착시각">🚢 신고도착 {fmt(pmEta)}</span>}
       {pf?.nextDep && <span className="text-amber-300">⚓ 출항 {fmt(pf.nextDep)}</span>}
     </div>
   );

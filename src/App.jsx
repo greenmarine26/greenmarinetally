@@ -454,6 +454,7 @@ export default function App() {
               voyages={voyages} inspectors={inspectors} inspector={inspector}
               collectorHb={heartbeat}
               pilotForecast={pilotForecast}
+              portMisData={portMisData}
               terminalWork={terminalWork}
               onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
               onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.40';   // 선박 소개에 조선소·개명 이력 추가
+export const APP_VERSION = 'TallyOne 1.40-01';   // 도선 오프셋 이중 적용 수리(작업시작 2시간 초과)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3543,19 +3543,30 @@ export function parsePlanStart(planDate) {
   return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0, 0) : null;
 }
 /**
- * 작업개시 예정시각. 일정 출처가 도선이면 입항 + 부두별 소요를 더한다.
+ * 작업개시 예정시각.
+ *
+ * ── TallyOne 1.40-01: **오프셋은 수집기가 이미 더했다 — 앱은 다시 더하지 않는다.** ──
+ *   2026-08-07 같은 날 같은 지시("PCTC 1시간 30분 · PNCT 2시간")를 수집기(_to_work_start)와
+ *   앱(이 함수) **양쪽에 각각** 넣었다. 그래서 도선 항차는 오프셋이 두 번 붙었다.
+ *   실측 2026-08-10 — RZOR: 도선 07:30 → 수집기 planDate 09:30(정답) → 앱 표시 11:30(2시간 초과).
+ *   그날 작업 4척(ATPR·DXQD·OBWH·RZOR)이 전부 같은 증상이었다.
+ *   검수사 지적: "작업시작만 2:00과 30 더하는것만 틀립니다."
+ *   ⚠ planDate 앞자리는 **어떤 출처든 이미 작업시작**이다 — 수집기 decide_plan 의 모든 반환 경로가
+ *     환산해서 넣는다(도선 +90/+120 · PORT-MIS +30 · 메일 +0 · 배정 +0). 여기서 또 더하면 무조건 틀린다.
+ *   도선 **입항 원본** 시각이 필요하면 pilot_forecast.nextArr 를 세 번째 인자로 넘긴다(표시용).
  * @returns {{start: Date|null, basis: 'pilot'|'plan'|null, arr: Date|null, leadMin: number}}
  */
-export function planWorkStart(info = {}, pierOverride = null) {
-  const arr = parsePlanStart(info.planDate);
+export function planWorkStart(info = {}, pierOverride = null, pilotArr = null) {
+  const start = parsePlanStart(info.planDate);
   const pier = pierOverride || info.pier || getPierFromBerth(info.berth) || '';
   const src = String(info.planSrc || '').split('|')[0];
-  if (!arr) return { start: null, basis: null, arr: null, leadMin: 0 };
-  if (src === 'pilot') {
-    const lead = pilotToWorkMin(pier);
-    return { start: new Date(arr.getTime() + lead * 60000), basis: 'pilot', arr, leadMin: lead };
-  }
-  return { start: arr, basis: 'plan', arr, leadMin: 0 };
+  if (!start) return { start: null, basis: null, arr: null, leadMin: 0 };
+  const arrMs = pilotArr ? parsePortMisDateTime(pilotArr) : null;
+  const arr = arrMs != null ? new Date(arrMs) : null;
+  const leadMin = arr
+    ? Math.round((start.getTime() - arr.getTime()) / 60000)   // 실제 차이(추정 상수가 아니라 데이터)
+    : (src === 'pilot' ? pilotToWorkMin(pier) : 0);
+  return { start, basis: src === 'pilot' ? 'pilot' : 'plan', arr, leadMin };
 }
 
 // ── TallyOne 1.38: 컨 위치 판정 단일 진입점 ──────────────────────────────────

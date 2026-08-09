@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort, isPortCode, resolveShipKey } from './utils.js';
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName } from './utils.js';   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 
 const firebaseConfig = {
@@ -1810,6 +1810,16 @@ export async function fbSavePortMisBatch(ships) {
     if (!rawKey) { failed++; return; }
     const key = String(rawKey).replace(/[.#$/[\]\s'"]/g, '_').trim();
     if (!key) { failed++; return; }
+    // ── TallyOne 1.40-01: **타항 레코드는 저장하지 않는다.** (인계함 [다음 판에 함께]) ──
+    //   port_mis_data 는 **콜사인당 1레코드**다. NSFR(V7A2845)에 다음 기항(인천 08-08 13:00) 신고가
+    //   들어와 **평택 기록을 통째로 덮었다.** 1.26-01 은 화면 표시만 막아 저장은 그대로였고,
+    //   그래서 다른 배에서 재발할 수 있었다. 실측 2026-08-10: 262건 중 **146건이 평택이 아니다.**
+    //   ⚠ 항명이 **빈 값이면 평택으로 본다**(isPyeongtaekPortName) — 항명 칸 없는 엑셀 폴백을
+    //     깨지 않기 위해서다. 명시적으로 '인천'·'부산' 등이 적힌 것만 막는다(회귀 0).
+    if (!isPyeongtaekPortName(s.port)) {
+      console.warn('[1.40-01] 타항 레코드 저장 안 함:', key, s.vesselName || '', s.port);
+      return;   // failed 로 세지 않는다 — 실패가 아니라 대상 아님이다
+    }
     newKeys.add(key);
     try {
       // M6.18: 잘못된 berth 자동 제거 (MBM 등 시설 코드)

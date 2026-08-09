@@ -1847,7 +1847,9 @@ export function generateWakeAnswer(info = {}, now) {
 export function generatePilotAnswer(info = {}, pf = null) {
   const ship = info.vslFull || info.vsl || '이 배';
   const pier = info.pier || getPierFromBerth(info.berth) || '';
-  const w = planWorkStart(info, pier);
+  // 1.40-01: 도선 **입항 원본** 시각은 예보에서 가져온다(planDate 앞자리는 이미 작업시작이라
+  //   거기서 역산하면 안 된다). pf 가 없으면 arr 도 없고, 아래에서 '예보 없음'으로 답한다.
+  const w = planWorkStart(info, pier, pf?.nextArr);
   const fmt = (d) => d ? `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
   const hm = (d) => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
   const row = (pf?.rows || []).find(r => r.dir === '입항');
@@ -1859,7 +1861,10 @@ export function generatePilotAnswer(info = {}, pf = null) {
   const lead = w.leadMin, leadTxt = lead % 60 === 0 ? `${lead / 60}시간` : `${Math.floor(lead / 60)}시간 ${lead % 60}분`;
   if (w.basis === 'pilot') {
     lines.push(`⚓ ${ship} — 도선 입항 ${fmt(w.arr)}${row?.side ? ` · ${row.side}` : ''}${row?.berth || info.berth ? ` · ${row?.berth || info.berth}` : ''}`);
-    lines.push(`🛠 작업개시 예정 ${hm(w.start)} — ${pier || '부두 미상'}은 접안 후 ${leadTxt} 걸립니다.`);
+    // 1.40-01: 소요는 실제 차이(작업시작 − 도선입항)다. 0 이하면 문구를 만들지 않는다.
+    lines.push(lead > 0
+      ? `🛠 작업개시 예정 ${hm(w.start)} — ${pier || '부두 미상'}은 접안 후 ${leadTxt} 걸립니다.`
+      : `🛠 작업개시 예정 ${hm(w.start)}`);
     lines.push(`⚠ ${hm(w.arr)}은 도선(입항) 시각입니다. 그 시각에 작업을 시작할 수는 없습니다.`);
   } else {
     lines.push(`🛠 ${ship} — 작업 예정 ${fmt(w.start)}${info.berth ? ` · ${info.berth}` : ''}`);

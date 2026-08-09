@@ -312,6 +312,11 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const _done = _sr.filter(x => x.ratio >= 0.9999);
         const _wait = _sr.filter(x => x.ratio < 0.9999);
         return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
+                 // 1.40-01: PORT-MIS **항 도착** 시각 원본 (검수사 확정 2026-08-10).
+                 //   "포트미스는 항 도착시간이고 도선은 도선 시작입니다. 그리고 포트미스는 세관에 신고된
+                 //    시간이기 때문에 따로 표기 해야 합니다."
+                 //   → 작업시작으로 환산하지 않는다(+30분은 수집기가 planDate 에만 적용). 여기는 신고 원본.
+                 _pmEta: (pm && pm.eta) || '',
                  // TallyOne 1.13-01: 예정 섹션들의 완성율 평균. 둘 다 해야 하는 배는 둘 다 채워야 1.0 이 된다.
                  _ready: _sr.length ? _sr.reduce((t, x) => t + x.ratio, 0) / _sr.length : 0,
                  _hasData: _rDen > 0,                     // TallyOne 1.12: 자료가 하나라도 있는가(EDI든 리스트든)
@@ -1178,6 +1183,19 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                   ? 'bg-slate-800 border-slate-600 text-slate-400'
                   : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
                   📅 {body}{srcMark ? ` ${srcMark}` : ''}
+                </span>
+              );
+            })()}
+            {/* 1.40-01: 🚢 신고도착 — PORT-MIS 세관 신고 항 도착시각. 도선(도선 시작)과 다른 사건이라
+                따로 세운다. 값은 신고 원본 그대로 — 작업시작 환산(+30분)을 여기 적용하면 안 된다. */}
+            {(() => {
+              const ms = voyage._pmEta ? parsePortMisDateTime(voyage._pmEta) : null;
+              if (ms == null) return null;
+              const d = new Date(ms), p2 = (n) => String(n).padStart(2, '0');
+              return (
+                <span title="PORT-MIS 세관 신고 기준 항 도착시각입니다. 도선 시작·작업시작과는 다릅니다."
+                  className="text-[11px] px-1.5 py-0.5 rounded font-bold border bg-slate-800/70 border-slate-600 text-slate-300">
+                  🚢신고도착 {p2(d.getHours())}:{p2(d.getMinutes())}
                 </span>
               );
             })()}
