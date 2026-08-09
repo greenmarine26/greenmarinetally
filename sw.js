@@ -1,6 +1,6 @@
 // Tallyman Master Service Worker
 // 매 빌드마다 VERSION 변경 → 새 버전 감지 → UpdatePrompt 알림 + 자동 새로고침
-const VERSION = 'TallyOne 1.29-01';
+const VERSION = 'TallyOne 1.30';
 const CACHE_NAME = `tallyman-${VERSION}`;
 
 self.addEventListener('install', (e) => {
@@ -11,8 +11,17 @@ self.addEventListener('install', (e) => {
       .then((c) => c.add('cone-cargoplan.js').catch(() => {}))
       .catch(() => {})
   );
-  // 즉시 활성화 — 새 버전 빠르게 적용
-  self.skipWaiting();
+  // TallyOne 1.30: **여기서 즉시 활성화하지 않는다.** 검수사 확정 2026-08-09 —
+  //   *"알림을 주고 사용자가 필요할 때 새로 고침 하게 하는 게 좋을듯 합니다."*
+  //   현장 작업 중에 앱이 제멋대로 새 판으로 바뀌면 안 된다. 갱신 시점은 검수사가 정한다.
+  //
+  //   종전 `skipWaiting()` 은 새 워커를 설치 즉시 활성화시켜 **`installed` 상태를 스쳐 지나가게** 했다.
+  //   그러면 `reg.waiting` 에도 안 잡히고 `statechange` 의 `installed && controller` 조건도 못 잡아,
+  //   UpdatePrompt 가 배너를 띄울 틈이 없다. 곧바로 `activated` 로 가서 1.23이 넣은 정리 코드가 배너를 걷는다.
+  //   → **거짓 배너를 없애려던 1.22-01/1.23 수정이 이 줄과 만나 배너를 아예 못 뜨게 만들었다**
+  //     (검수사 신고: "어느순간 업데이트 알림 화면이 사라졌습니다").
+  //
+  //   이제 새 워커는 **waiting 으로 대기**하고, 배너의 [지금 적용] 이 아래 SKIP_WAITING 메시지를 보낸다.
 });
 
 self.addEventListener('activate', (e) => {
