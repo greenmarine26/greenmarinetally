@@ -100,7 +100,20 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         });
       });
     });
-    return arr;
+    // TallyOne 1.35: **실체 위치를 계획 자리로 승격한다.**
+    //   검수사 신고 2026-08-09: *"한 곳에서 자리를 배정했는데 다른 한 곳은 아직도 미배정으로 뜹니다."*
+    //   원인 — 이 패널은 voyage 를 받아 **자체적으로 다시 병합**해서, VoyagePage 가 하는
+    //   `bay_actual → bay` 승격(`VoyagePage.jsx:395`)을 전혀 거치지 않았다.
+    //   그래서 베이 화면에서 배정해 `bay_actual` 이 채워져도, 이 패널의 "자리 미지정"
+    //   판정(`!c.bay || !c.row || !c.tier`)에는 그대로 걸려 **같은 컨이 두 화면에서 다르게 세어졌다.**
+    //   임시창고(`__STG__`)는 승격하지 않는다 — 그것은 '자리 없음'을 뜻하는 정상 상태다.
+    return arr.map(c => {
+      if (c.bay_actual && c.bay_actual !== '__STG__' && c.row_actual && c.tier_actual) {
+        return { ...c, bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual,
+                 _bay_planned: c.bay, _row_planned: c.row, _tier_planned: c.tier, _position_moved: true };
+      }
+      return c;
+    });
   }, [voyage]);
 
   // M5.75: 작업 모드 필터 적용 — 양하 작업 중엔 양하만, 선적엔 선적만, 완료는 별도
