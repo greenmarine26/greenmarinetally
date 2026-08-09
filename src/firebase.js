@@ -2283,7 +2283,8 @@ export async function fbGetShipIntro(shipId) {
 }
 export async function fbSaveShipIntro(shipId, text, by, sources = []) {
   if (!shipId || !text) return false;
-  const rec = { text: String(text).slice(0, 3000), by: by || '', at: Date.now() };
+  // 1.39-03: 저장 상한도 함께 올린다 — 본문이 길어졌는데 3000자에서 다시 자르면 같은 일이 반복된다.
+  const rec = { text: String(text).slice(0, 8000), by: by || '', at: Date.now() };
   if (Array.isArray(sources) && sources.length) rec.sources = sources.slice(0, 5);
   await set(ref(db, `ship_intros/${shipId}`), rec);   // V9.18-01: 출처 링크 동봉
   return true;

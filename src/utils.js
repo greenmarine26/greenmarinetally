@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.39-02';   // 약자만 있는 배는 소개를 만들지 않는다 + finishReason 로그
+export const APP_VERSION = 'TallyOne 1.39-03';   // 선박 소개 분량 한도 확대 — 잘리던 것 수리
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

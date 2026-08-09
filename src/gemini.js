@@ -944,7 +944,13 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
   const call = async (useSearch) => {
     const body = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 2000 },   // 1.39: 선사·관리·이름 이야기가 늘어 상한 확대(1100이면 뒤가 잘렸다)
+      // TallyOne 1.39-03: 상한을 실제 분량에 맞춘다.
+      //   1.39 에서 요구 항목(적재능력·선주·관리선사·국내대리점·이름 유래 3~5문장)을 늘려 놓고
+      //   그릇은 2000 토큰 그대로 뒀다 → `finishReason: MAX_TOKENS` 로 문장 중간에서 잘렸다
+      //   (검수사 신고: *"충실했던 내용이 다 잘려 나갔다. 20% 수준으로 줄었다"*).
+      //   한글은 토큰당 글자수가 영어보다 적다 — 2000 토큰이면 1,300자 남짓뿐이고,
+      //   검수사가 받은 참고 답변은 한 주제만으로도 1,800자였다. 여유 있게 잡는다.
+      generationConfig: { temperature: 0.1, maxOutputTokens: 6000 },
     };
     if (useSearch) body.tools = [{ google_search: {} }];
     const res = await fetch(getActiveGeminiUrl(), {
