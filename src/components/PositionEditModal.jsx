@@ -281,19 +281,34 @@ export default function PositionEditModal({
             {pickBay && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 (✓회색=선적 완료, 선택 불가)</div>
+                  <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 (✓회색=선적 완료 · 흐림=다른 컨 예약 · 밝은 칸=빈 자리)</div>
                   <button onClick={() => setPickBay(null)} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
                 </div>
                 <div className="max-h-56 overflow-y-auto pr-1">
                   <div className="flex flex-wrap gap-1.5">
+                    {/* TallyOne 1.33: **세 갈래로 가른다.** 검수사 지적 2026-08-09 —
+                        BAY38에서 22자리가 다 열려 보이는데 실제로 맞는 건 1자리뿐이었다.
+                        나머지 21자리는 **다른 컨이 예약한 자리**라, 누르면 남의 자리를 뺏는 셈이 된다.
+                        어제 확정한 "계획은 예약이지 입실이 아니다"를 화면에 그대로 옮긴다.
+                          ✓회색 = 선적 완료 (입실) — 선택 불가
+                          흐림  = 다른 컨이 예약 — 누를 수는 있되 그 컨 끝4자리를 보여준다
+                          밝음  = 진짜 빈 자리 — 여기를 고르면 된다
+                        ※ 예약 자리를 막지는 않는다. 실제로 그 자리에 실렸으면 기록할 수 있어야 한다. */}
                     {(slotsByBay[pickBay] || []).map(s => s.done ? (
                       <span key={`${s.bay}-${s.row}-${s.tier}`}
                         className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">
                         ✓{s.row}-{s.tier}
                       </span>
+                    ) : s.cn ? (
+                      <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
+                        title={`${s.cn} 이 예약한 자리입니다`}
+                        className="px-2.5 py-2 rounded-lg bg-slate-900/70 hover:bg-amber-900 border border-slate-700 border-dashed hover:border-amber-500 mono text-[13px] font-bold text-slate-400 flex flex-col items-center leading-tight">
+                        <span>{s.row}-{s.tier}</span>
+                        <span className="text-[9px] text-slate-500">{String(s.cn).slice(-4)}</span>
+                      </button>
                     ) : (
                       <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
-                        className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-600 hover:border-amber-500 mono text-sm font-bold text-slate-100">
+                        className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-amber-800 border-2 border-amber-600 hover:border-amber-400 mono text-sm font-bold text-amber-100">
                         {s.row}-{s.tier}
                       </button>
                     ))}
