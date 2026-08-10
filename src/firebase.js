@@ -1781,6 +1781,13 @@ export function fbSubscribeTerminalWork(callback) {
   return unsub;
 }
 
+// 1.45: 항로 로테이션 사전(lane_routes) — utils.LANE_ROUTES 내장 시드를 덮어쓴다.
+export function fbSubscribeLaneRoutes(callback) {
+  const r = ref(db, 'lane_routes');
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
+}
+
 // M5.25: PORT-MIS 캡처 OCR 결과 일괄 저장 (Chrome 확장과 동일 구조)
 //   폰에서 캡처 → OCR → 추출된 ships 배열을 Firebase port_mis_data에 PUT
 //   key는 sanitized callsign. callsign 없으면 vesselName 사용 (안전망)

@@ -1,14 +1,14 @@
 // 그린마린 평택항 검수 — Master V1.1
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
 import React, { useState, useEffect, useCallback, useMemo } from 'react';   // 1.41: useMemo — 접근 판정
-import { APP_VERSION, _storage, SK } from './utils.js';
+import { APP_VERSION, _storage, SK , setLaneRoutes } from './utils.js';
 import { loadUserBayDict, entryTimestamp, applyApprovedSync } from './data/userBayDict.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
-} from './firebase.js';
+, fbSubscribeLaneRoutes } from './firebase.js';
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
@@ -122,6 +122,7 @@ export default function App() {
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
     const u4b = fbSubscribePilotForecast(setPilotForecast);  // V9.33: 도선 예보
     const u4c = fbSubscribeTerminalWork(setTerminalWork);   // V9.36: 터미널 작업 현황
+    const u4d = fbSubscribeLaneRoutes(setLaneRoutes);       // 1.45: 항로 사전(utils 모듈 캐시)
     const u6 = fbSubscribeHeartbeat(setHeartbeat);  // V8.40: 수집기 하트비트
     // M5.88: Firebase 베이사전 구독 — 전역 객체 window.__fbShipBayDict에 저장
     //   shipStructure.js가 이 데이터를 우선 조회 (베이사전 매칭 자동화)

@@ -222,7 +222,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       return predictShiftingFromVoyage(voyage);            // 없으면 예측(양하 EDI만)
     },
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
-     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
+     voyage?.info?.lane]   // 1.45: 항로가 나중에 등록돼도 예측을 다시 계산
   );
 
   // 평택 대상 (양하=POD, 선적=POL)
@@ -270,6 +271,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       return { cn, from: s.from || s.pos || '', to: s.to || '', iso: c.iso || '', pod: c.pod || '', fe: c.fe || '' };
     }).sort((a, b) => String(a.from || '').localeCompare(String(b.from || '')));
   }, [shiftingMap, fullEdiMap]);
+
+  // 1.45: 시프팅 근거 — 예측이면 출항본·제외 기항, 배정표 이적(수집기 berthShift)이 있으면 그것이 정본
+  const shiftInfo = {
+    meta: (shiftingMap && shiftingMap._meta) || null,
+    berthShift: (voyage?.info?.berthShift ?? null),
+    lane: voyage?.info?.lane || '',
+  };
 
   // V9.03: 긴급/수화물 컨번호 세트 — forecast.mode가 현재 모드와 일치할 때만 적용
   //   (선적 예보 마커가 양하 리스트에 새지 않게). 상세는 tagForecastMarks 주석.
@@ -873,7 +881,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
-          shiftingList={shiftingList}
+          shiftingList={shiftingList} shiftInfo={shiftInfo}
         />
       )}
       {tab === 'search' && (
@@ -1540,7 +1548,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [] }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null }) {
   const [filter, setFilter] = useState('all'); // all | done | undone | xray
   const [search, setSearch] = useState('');
 
@@ -1636,12 +1644,21 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
       />
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
-      {shiftingList.length > 0 && (
+      {(shiftingList.length > 0 || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && shiftInfo.meta.excludedCnt > 0)))) && (
         <div className="mt-3 bg-slate-900 border border-blue-800/50 rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5">
+          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
+            {shiftInfo?.berthShift != null && (
+              <span className="text-amber-300">· 배정표 이적 {shiftInfo.berthShift}모브(정본)</span>
+            )}
             <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
           </div>
+          {shiftInfo?.meta?.origin && (
+            <div className="px-3 py-1 text-[10px] text-slate-400 bg-slate-950/60 border-b border-slate-800">
+              {shiftInfo.lane ? `항로 ${shiftInfo.lane} · ` : ''}{shiftInfo.meta.origin} 출항본 기준
+              {shiftInfo.meta.excluded ? ` — 평택 전 기항(${shiftInfo.meta.excluded.join('·')}) 양하 ${shiftInfo.meta.excludedCnt}대 제외` : ' — 항로 미등록: 평택 전 기항 양하분이 섞여 있을 수 있음'}
+            </div>
+          )}
           <div className="divide-y divide-slate-800">
             {shiftingList.map(sc => (
               <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-[12px]">

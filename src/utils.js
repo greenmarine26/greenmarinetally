@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.44';   // 예측 시프팅에 스택 규칙 추가 — 양하분 위 통과화물 합산
+export const APP_VERSION = 'TallyOne 1.45';   // 항로 사전 — 평택 전 기항 양하분 제외·이적 정본 표시
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3404,11 +3404,78 @@ export function predictShifting(dischEdiMap) {
   return out;
 }
 
-/** 항차 객체에서 시프팅 예측. raw EDI(전체 화물) 우선 — ediContainers 는 평택분만일 수 있다. */
+// ── 1.45: 항로(Port Rotation) 사전 — 키는 배정목록의 항로 코드 (검수사 확정 2026-08-10) ──
+//   "배정목록엔 각 항로가 있고 각 항로가 구글검색에서 자세히 나오고 있습니다."
+//   로테이션은 평택(KRPTK)에서 시작하는 한 바퀴. 예측 시프팅이 EDI 출항지(LOC+5)와 이 표로
+//   **평택 도착 전에 내리는 항의 POD를 제외**한다 — MCAT 630N 실증: 다바오 출항본에
+//   신강 양하 445대가 실려 있어 시프팅 104로 오판(실제 배정표 이적 0). 제외 후 0 일치.
+// 1.45: RTDB `lane_routes/{항로}` 가 오면 내장 시드를 덮어쓴다 — 항로는 바뀐다.
+//   검수사 확정: *"공개자료도 검색을 최신으로 해야 정확한게 나옵니다."* 갱신은 최신 검색으로,
+//   확인일자(checkedAt)를 함께 기록한다. 재배포 없이 RTDB 수정만으로 반영된다.
+let _LANE_DYN = {};
+export function setLaneRoutes(m) { _LANE_DYN = m || {}; }
+export function laneRouteOf(lane) {
+  const k = String(lane || '').toUpperCase();
+  return _LANE_DYN[k] || LANE_ROUTES[k] || null;
+}
+
+export const LANE_ROUTES = {
+  // 머스크 IA8 (MCAT ARTOTINA 등) — 배정표 Port Rotation 실물 그대로 (2026-08-10)
+  IA8: { rotation: ['KRPTK', 'CNDLC', 'CNTSN', 'CNTAO', 'IDJKT', 'IDSUB', 'PHDVO', 'CNTXG', 'KRSOS'],
+         note: '평택→대련→천진→청도→자카르타→수라바야→다바오→신강→속초→평택 (약 5주 순환)' },
+  // 장금상선 평택-청도 셔틀 (비관할 항로 — 관할 판정 참고용)
+  PQS: { rotation: ['KRPTK', 'CNTAO'], note: '평택-청도 셔틀 (장금상선, 비관할)' },
+};
+
+/** EDI 원문에서 출항지(LOC+5) 추출 — BAPLIE 헤더. 없으면 ''. */
+export function ediOriginOf(sec) {
+  const t = sec?.raw?.edi?.text;
+  if (!t || typeof t !== 'string') return '';
+  const m = t.match(/LOC\+5\+([A-Z]{5})/);
+  return m ? m[1] : '';
+}
+
+/** 항로 로테이션에서 출항지 다음부터 평택(KRPTK) 전까지의 기항 목록. 판단 불가면 null. */
+export function portsBeforePtk(lane, origin) {
+  const r = laneRouteOf(lane)?.rotation;
+  if (!r || !origin) return null;
+  const i = r.indexOf(String(origin).toUpperCase());
+  if (i < 0) return null;
+  const out = [];
+  for (let k = 1; k < r.length; k++) {
+    const p = r[(i + k) % r.length];
+    if (p === 'KRPTK') return out;
+    out.push(p);
+  }
+  return null;   // 로테이션에 KRPTK 없음 — 판단 불가
+}
+
+/** 항차 객체에서 시프팅 예측. raw EDI(전체 화물) 우선 — ediContainers 는 평택분만일 수 있다.
+ *  1.45: 항로·출항지를 알면 평택 도착 전에 내리는 항의 POD를 제외하고 계산한다.
+ *  반환 맵에 _meta(origin·excluded·excludedCnt)를 붙여 화면이 근거를 표시한다. */
 export function predictShiftingFromVoyage(voyage) {
   const sec = voyage?.discharge;
-  const map = ediMapFromRaw(sec) || sec?.ediContainers || null;
-  return predictShifting(map);
+  let map = ediMapFromRaw(sec) || sec?.ediContainers || null;
+  const origin = ediOriginOf(sec);
+  const lane = voyage?.info?.lane || '';
+  let excluded = null, excludedCnt = 0;
+  if (map && origin) {
+    const before = portsBeforePtk(lane, origin);
+    if (before && before.length) {
+      const gone = new Set(before.map(p => p.toUpperCase()));
+      const kept = {};
+      for (const [cn, c] of Object.entries(map)) {
+        if (gone.has(String(c?.pod || '').toUpperCase())) { excludedCnt++; continue; }
+        kept[cn] = c;
+      }
+      map = kept; excluded = before;
+    }
+  }
+  const out = predictShifting(map);
+  try {
+    Object.defineProperty(out, '_meta', { value: { origin, lane, excluded, excludedCnt }, enumerable: false });
+  } catch (e) { /* 표시 부가정보 실패는 계산에 영향 없음 */ }
+  return out;
 }
 
 // V8.98-01: 항차 객체에서 쉬프팅 계산 — raw EDI 원문 우선.

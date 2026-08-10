@@ -1,4 +1,4 @@
-# TallyOne 1.44 (구 Tallyman Master)
+# TallyOne 1.45 (구 Tallyman Master)
 
 (버전 라벨은 build.sh가 src/utils.js APP_VERSION 기준으로 자동 동기화)
 
