@@ -859,6 +859,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           (EmptySealReportButton·SealPolicyBanner는 ChiefDashboard에 이미 구현됨.) */}
 
       {/* 탭 본문 */}
+      {/* ── TallyOne 1.42: 예보 카드 — 이 모드의 EDI 가 아직 없을 때만 (검수사 확정 2026-08-10) ──
+          검수사 원문: *"말 그대로 예보입니다. 선적 갯수를 리스트 형식에 맞춰 보여 줘야하고 덱 그림도 보여 줘야 합니다."*
+          ⚠ 배치가 아니다 — *"덱에 넣으라는 이야기가 아니고요"*. 개수와 그림을 **보여주기만** 한다.
+          리스트가 들어오면 이 카드는 사라지고 실자료가 그 자리를 대신한다. */}
+      {tab === 'list' && <ForecastCard voyage={voyage} mode={mode} />}
       {tab === 'list' && (
         <ListTab
           voyageKey={voyageKey} mode={mode}
@@ -2986,3 +2991,88 @@ function WorkReportHistory({ voyageKey }) {
   );
 }
 
+
+// ── TallyOne 1.42: 예보 카드 (항차 상세 · 리스트 탭) ─────────────────────────
+//   EDI 가 오기 전까지 카톡 예보를 **리스트 형식**으로 보여주고, 같이 온 그림을 붙인다.
+//   EDI(ediContainers)가 하나라도 들어오면 스스로 사라진다 — 예보는 실자료를 이기지 않는다.
+//   ⚠ '자료 도착' 판정은 ediContainers 로만 한다. _created 같은 메타 키를 도착으로 오인하면
+//     예보가 영영 안 보인다(V9.02-01 에서 RZOR_R075E 로 겪은 일).
+function ForecastCard({ voyage, mode }) {
+  const [zoom, setZoom] = useState(false);
+  const f = voyage?.info?.forecast;
+  if (!f) return null;
+  if ((f.mode || 'loading') !== mode) return null;
+  const sec = voyage?.[mode];
+  if (sec && Object.keys(sec.ediContainers || {}).length) return null;
+
+  const rows = [];
+  const push = (label, obj, cls) => {
+    for (const [size, n] of Object.entries(obj || {})) rows.push({ label, size, n, cls });
+  };
+  push('FULL', f.full, 'text-emerald-300');
+  push('EMPTY', f.empty, 'text-sky-300');
+  push('수화물', f.luggage, 'text-violet-300');
+  if (!rows.length && !f.image) return null;
+
+  const vans = (f.vans || {});
+  const totVan = (vans.full || 0) + (vans.empty || 0) + (vans.luggage || 0);
+  const totTeu = (f.teu && f.teu.total)
+    || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));
+
+  return (
+    <div className="bg-slate-900 border border-dashed border-orange-600/60 rounded-lg p-3 mb-3">
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        <span className="text-sm font-black text-orange-300">
+          📋 {mode === 'loading' ? '선적' : '양하'} 예보{f.voy ? ` · ${f.voy}` : ''}
+        </span>
+        <span className="text-[11px] font-bold text-orange-200">{totVan}대 · {totTeu}TEU</span>
+        <span className="text-[10px] text-slate-500 ml-auto">
+          리스트(EDI)가 오면 이 카드는 사라지고 실자료로 바뀝니다
+        </span>
+      </div>
+
+      {rows.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-slate-500 text-[10px] border-b border-slate-700">
+                <th className="text-left py-1 pr-2 font-bold">구분</th>
+                <th className="text-left py-1 pr-2 font-bold">규격</th>
+                <th className="text-right py-1 pr-2 font-bold">대수</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className="border-b border-slate-800/70">
+                  <td className={`py-1 pr-2 font-bold ${r.cls}`}>{r.label}</td>
+                  <td className="py-1 pr-2 text-slate-200 font-mono">{r.size}</td>
+                  <td className="py-1 pr-2 text-right text-slate-100 font-bold">{r.n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {f.image && (
+        <div className="mt-2">
+          <img src={f.image} alt="예보 그림" onClick={() => setZoom(true)}
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 object-contain max-h-72 cursor-zoom-in"/>
+          <div className="text-[10px] text-slate-500 mt-0.5">그림을 누르면 크게 봅니다</div>
+        </div>
+      )}
+      {zoom && f.image && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2" onClick={() => setZoom(false)}>
+          <img src={f.image} alt="예보 그림 크게" className="max-w-full max-h-full object-contain"/>
+        </div>
+      )}
+
+      {f.raw && (
+        <details className="mt-2">
+          <summary className="text-[10px] text-slate-500 cursor-pointer">카톡 원문 보기</summary>
+          <pre className="text-[10px] text-slate-400 whitespace-pre-wrap mt-1 leading-relaxed">{f.raw}</pre>
+        </details>
+      )}
+    </div>
+  );
+}

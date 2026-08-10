@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.41';   // 수석 대시보드 개발용 접근권한 — 접근 판정 4벌을 canOpenChief 한 곳으로
+export const APP_VERSION = 'TallyOne 1.42';   // 선적 예보 — 칸 자동 생성·그림 첨부·리스트 형식 표시
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

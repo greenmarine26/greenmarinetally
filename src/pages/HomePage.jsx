@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
-import { fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
+import { fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
@@ -44,6 +44,27 @@ function lastWorkAt(v) {
 }
 
 // V9.57: 항차 핵심번호 비교 — 방향 접미사(E/W/N/S)·앞0·구분자 무시. utils voyCore 승격(팀F) 전까지 지역 헬퍼.
+// ── TallyOne 1.42: 예보 그림 축소 → base64 ───────────────────────────────────
+//   카톡에서 온 덱 그림·물량표 사진을 예보에 함께 담는다(검수사 확정 2026-08-10).
+//   ⚠ RTDB 에 base64 로 들어가므로 **반드시 줄인다.** 원본 그대로 넣으면 10~20MB 쓰기가 되어
+//     연결이 끊긴다(2026-08-05 STMJ 사진 보고에서 실제로 겪은 일 — 같은 축소기를 쓴다).
+//   실패하면 조용히 넘기지 않고 null 을 돌려 호출부가 알리게 한다(3금지③).
+async function shrinkToBase64(file) {
+  try {
+    const { compressForReport } = await import('../mixerUpload.js');
+    const small = await compressForReport(file, 1400);
+    return await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result || ''));
+      r.onerror = () => rej(new Error('read fail'));
+      r.readAsDataURL(small || file);
+    });
+  } catch (e) {
+    console.error('[예보 그림] 축소·변환 실패', e);
+    return null;
+  }
+}
+
 const _voyCore = (x) => {
   const n = String(x || '').toUpperCase().replace(/[\s\-_.]/g, '');
   return n.replace(/[EWNS]+$/, '').replace(/^0+/, '') || n;
@@ -59,6 +80,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   // V9.02: 카톡 물량 예보 붙여넣기
   const [showForecast, setShowForecast] = useState(false);
   const [fcText, setFcText] = useState('');
+  const [fcImage, setFcImage] = useState('');   // 1.42: 카톡 그림(덱 그림 등) base64
   // M5.82: GPS 기반 현 부두 자동 판별
   const [currentPier, setCurrentPier] = useState(null);    // { code, distance, name }
   const [gpsState, setGpsState] = useState('idle');         // 'idle' | 'loading' | 'denied' | 'ok' | 'far'
@@ -821,23 +843,85 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const totalTeu = fc ? (fc.teu ? fc.teu.total : fc.calc.full + fc.calc.empty + fc.calc.luggage) : 0;
         const save = async () => {
           if (!fc || !match) return;
-          await fbUpdateVoyageInfo(match.key, { forecast: {
+          // ── TallyOne 1.42: **예보가 자기 칸을 알아서 만든다** (검수사 확정 2026-08-10) ──
+          //   검수사 신고: *"선적자료인데 맨밑에 보여주는곳은 양하 항차에 저장이라고 되어 있습니다."*
+          //   저장 위치는 틀리지 않았다(이 앱은 항차 키 하나에 양하·선적 섹션이 같이 산다).
+          //   진짜 문제는 **그 항차에 선적칸(voy_l)이 없었던 것**이고, 그래서 이런 일이 줄줄이 났다.
+          //     voy_l 없음 → loading 섹션 없음 → 선적 탭 안 뜸 → 자료 넣을 곳이 없다(검수사 신고)
+          //   직전 항차 R084E 에는 voy_l=R084W 가 있었다. 이번 R085E 만 손으로 만들며 빠졌다 —
+          //   같은 날 아침에 고친 planDate 결측과 **같은 뿌리**(수동 생성 시 칸이 안 채워진다).
+          //   ⛔ 값이 있는 칸은 덮지 않는다. 비어 있을 때만 원문 항차번호로 채운다.
+          const _isL = (fc.mode || 'loading') === 'loading';
+          const _slot = _isL ? 'voy_l' : 'voy_d';
+          const _sec = _isL ? 'loading' : 'discharge';
+          const _patch = {};
+          if (fc.voy && !match.info[_slot]) {
+            _patch[_slot] = fc.voy;
+            // 섹션 노드가 없으면 화면에 탭이 안 뜬다 — VoyagePage 2899행과 같은 방식으로 최소 키만 만든다.
+            if (!match[_sec]) {
+              try { await fbSaveSectionData(match.key, _sec, { _created: Date.now() }); }
+              catch (e) { console.error('[예보] 섹션 생성 실패', match.key, _sec, e); }
+            }
+          }
+          await fbUpdateVoyageInfo(match.key, { ..._patch, forecast: {
             voy: fc.voy, mode: fc.mode || 'loading', full: fc.full, empty: fc.empty, luggage: fc.luggage,
             teu: fc.teu || null, calc: fc.calc, vans: fc.vans, summary: fc.summary || '',
             // V9.03: 긴급/수화물 컨번호 — 리스트·카고플랜 마커는 렌더 시점에 이 목록으로 주입
             //   (EDI가 예보보다 늦게 와도, EDI가 갱신돼도 마커 유지 — 연태훼리 CLL 메일)
             urgentCns: fc.urgentCns || [], luggageCns: fc.luggageCns || [], luggageSeals: fc.luggageSeals || {},
+            // 1.42: 카톡으로 온 **그림**(덱 그림 등). 검수사 확정 — "덱플랜파일이 아니라 그림을 올리는것입니다."
+            //   1600px JPEG 로 줄여 담는다(사진 보고와 같은 축소기). 없으면 기존 그림을 지우지 않는다.
+            ...(fcImage ? { image: fcImage, imageAt: Date.now() } : {}),
             raw: fcText, at: Date.now(), by: inspector || '',
           } });
-          setShowForecast(false); setFcText('');
+          setShowForecast(false); setFcText(''); setFcImage('');
         };
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowForecast(false)}>
-            <div className="bg-slate-900 border-2 border-orange-700 rounded-xl p-4 w-full max-w-lg space-y-2.5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-900 border-2 border-orange-700 rounded-xl p-4 w-full max-w-lg space-y-2.5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}
+              onPaste={async (e) => {
+                // 1.42: 카톡에서 그림을 복사해 바로 붙여넣는 길. 글자 붙여넣기는 그대로 통과시킨다.
+                const items = e.clipboardData && e.clipboardData.items;
+                if (!items) return;
+                for (const it of items) {
+                  if (it.type && it.type.startsWith('image/')) {
+                    const f0 = it.getAsFile();
+                    if (!f0) continue;
+                    e.preventDefault();
+                    const b64 = await shrinkToBase64(f0);
+                    if (b64) setFcImage(b64); else alert('그림을 읽지 못했습니다.');
+                    return;
+                  }
+                }
+              }}>
               <div className="font-bold text-orange-300">📋 물량 예보 붙여넣기 <span className="text-[11px] font-normal text-slate-500">카톡 원문 그대로 — EDI 오면 자동 대체</span></div>
               <textarea autoFocus value={fcText} onChange={e => setFcText(e.target.value)} rows={8}
                 placeholder={'카톡 물량 예보를 그대로 붙여넣으세요\n(RZOR: *FULL / 20D X 9 …  ·  OBWH: FULL 20GPX19 + 40HQX33 …)'}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-[12px] text-slate-100 font-mono"/>
+              {/* 1.42: 카톡 그림 첨부 — 검수사 확정 "덱플랜파일이 아니라 그림을 올리는것입니다."
+                  ⚠ 파일 선택뿐 아니라 **붙여넣기(Ctrl+V)** 도 받는다 — 카톡에서 그림 복사가 제일 빠르다. */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-300 cursor-pointer hover:border-orange-600">
+                  🖼 그림 넣기
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={async (e) => {
+                      const f0 = e.target.files && e.target.files[0];
+                      e.target.value = '';
+                      if (!f0) return;
+                      const b64 = await shrinkToBase64(f0);
+                      if (b64) setFcImage(b64); else alert('그림을 읽지 못했습니다.');
+                    }}/>
+                </label>
+                <span className="text-[10px] text-slate-500">덱 그림·물량표 사진 — 여기 붙여넣기(Ctrl+V)도 됩니다</span>
+                {fcImage && (
+                  <button onClick={() => setFcImage('')}
+                    className="ml-auto px-2 py-1 rounded bg-slate-800 text-slate-400 text-[10px] font-bold">그림 빼기</button>
+                )}
+              </div>
+              {fcImage && (
+                <img src={fcImage} alt="예보 그림"
+                  className="w-full rounded-lg border border-slate-700 max-h-52 object-contain bg-slate-950"/>
+              )}
               {fc && (
                 <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-2.5 space-y-1 text-[12px]">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -866,7 +950,16 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                   )}
                   {fc.summary && <div className="text-[10px] text-slate-500">요약 원문: {fc.summary}</div>}
                   <div className={`text-[11px] font-bold ${match ? 'text-emerald-300' : 'text-rose-300'}`}>
-                    {match ? `→ ${match.info.vsl} ${match.info.voy_d || match.info.voy || ''}${match.info.voy_l ? '/' + match.info.voy_l : ''} 항차에 저장` : '연결할 항차를 못 찾음 — 수집기 등록 후 다시 시도하거나 항차를 먼저 만드세요'}
+                    {/* 1.42: 라벨을 정확히 — 종전엔 voy_d 만 찍어 "선적 예보인데 양하 항차에 저장"으로 보였다.
+                        실제로는 그 항차의 **선적 칸**에 들어간다. 칸이 없으면 만든다는 것도 함께 알린다. */}
+                    {match ? (() => {
+                      const isL = (fc.mode || 'loading') === 'loading';
+                      const slotVoy = isL ? match.info.voy_l : match.info.voy_d;
+                      const label = isL ? '선적' : '양하';
+                      return slotVoy
+                        ? `→ ${match.info.vsl} ${slotVoy} ${label}칸에 저장`
+                        : `→ ${match.info.vsl} 항차에 ${label}칸(${fc.voy || '항차번호 미인식'})을 만들고 저장합니다`;
+                    })() : '연결할 항차를 못 찾음 — 수집기 등록 후 다시 시도하거나 항차를 먼저 만드세요'}
                   </div>
                 </div>
               )}
