@@ -266,8 +266,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (!keys.length) return [];
     return keys.map(cn => {
       const c = fullEdiMap[cn] || {};
-      return { cn, from: shiftingMap[cn].from, to: shiftingMap[cn].to, iso: c.iso || '', pod: c.pod || '', fe: c.fe || '' };
-    }).sort((a, b) => a.from.localeCompare(b.from));
+      const s = shiftingMap[cn] || {};   // 1.43-02: 예측 경로엔 from이 없었다 — 결측이 와도 안 죽게
+      return { cn, from: s.from || s.pos || '', to: s.to || '', iso: c.iso || '', pod: c.pod || '', fe: c.fe || '' };
+    }).sort((a, b) => String(a.from || '').localeCompare(String(b.from || '')));
   }, [shiftingMap, fullEdiMap]);
 
   // V9.03: 긴급/수화물 컨번호 세트 — forecast.mode가 현재 모드와 일치할 때만 적용
@@ -1647,7 +1648,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
                 <span className="mono font-bold text-slate-200">{sc.cn}</span>
                 <span className="text-slate-500">{sc.iso}</span>
                 {sc.pod && <span className="text-slate-500">{sc.pod}</span>}
-                <span className="ml-auto mono text-blue-300">{sc.from} → {sc.to}</span>
+                <span className="ml-auto mono text-blue-300">{sc.to ? `${sc.from} → ${sc.to}` : `${sc.from} (예측)`}</span>
               </div>
             ))}
           </div>

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.43-01';   // 칸은 있는데 섹션이 없으면 선적 탭이 안 생기던 것 수리
+export const APP_VERSION = 'TallyOne 1.43-02';   // 예측 시프팅에 from 결측 — 검수 리스트 정렬 크래시 수리
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3362,8 +3362,12 @@ export function predictShifting(dischEdiMap) {
     const need = openSides[b];
     if (!b || !sd || !need) continue;
     if (sd === 'C' || need.has(sd)) {
+      const _pos = `${b}-${String(c.row || '').padStart(2, '0')}-${String(c.tier || '').padStart(2, '0')}`;
+      // 1.43-02: 확정값(computeShiftingMap)과 같은 계약({from,to})을 지킨다 — from 없이 내보내
+      //   VoyagePage shiftingList 정렬(a.from.localeCompare)이 앱 전체 크래시를 냈다(2026-08-10 실증).
+      //   예측 단계는 목적지를 모르므로 to는 빈 문자열(화면이 '예측'으로 표시).
       out[cn] = { bay: b, row: String(c.row || ''), tier: String(c.tier || ''),
-                  pos: `${b}-${String(c.row || '').padStart(2, '0')}-${String(c.tier || '').padStart(2, '0')}`,
+                  pos: _pos, from: _pos, to: '',
                   iso: c.iso || '', pod: c.pod || '',
                   _why: `${b}베이 홀드 양하분 위 — 커버 열려면 이동` };
     }
