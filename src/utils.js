@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.45';   // 항로 사전 — 평택 전 기항 양하분 제외·이적 정본 표시
+export const APP_VERSION = 'TallyOne 1.45-01';   // 리퍼 카운트 통합 판정 — 43RF가 rf 플래그 없이도 잡히게
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

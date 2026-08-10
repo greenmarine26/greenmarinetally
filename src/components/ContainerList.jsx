@@ -66,7 +66,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (c.dg) k.dg++;
       if (xrayMap[c.cn]) k.xray++;
       const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
-      if (c.rf && hasTmp) k.rf++;
+      if (isReeferContainer(c) && hasTmp) k.rf++;   // 1.45-01: c.rf 원시 플래그 금지 — 통합 판정(43RF 사고)
       if (c.tk) k.tk++;
       if (c.oog || c.fr) k.oog++;
       if (c.fe === 'F') k.full++;
@@ -164,7 +164,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'tk40' && lbl !== '40TK') return false;
       if (f === 'rf') {
         const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
-        if (!(c.rf && hasTmp)) return false;
+        if (!(isReeferContainer(c) && hasTmp)) return false;   // 1.45-01: 통합 판정
       }
       if (f === 'dg' && !c.dg) return false;
       if (f === 'tk' && !c.tk) return false;
@@ -299,7 +299,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const isDone = !!comp;
   const isReefer = isReeferContainer(c);
   const hasTmp = c.tmp != null && String(c.tmp).trim() !== '';
-  const isReeferF = c.rf && hasTmp;
+  const isReeferF = isReefer && hasTmp;   // 1.45-01: 통합 판정(위 isReefer = isReeferContainer)
   const isDG = c.dg;
   // M5.79: 평택 적재 부킹 슬롯 (컨번호 미입력)
   const isBooking = isBookingSlot(c);
