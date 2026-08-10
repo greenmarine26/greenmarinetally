@@ -102,13 +102,22 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
     const fbDict = getFbBayDict();
     if (Object.keys(fbDict).length > 0) {
       const search = String(vesselNameOrCode || '').toUpperCase().replace(/\s+/g, '');
-      // 1) code 정확 매칭
-      if (search && fbDict[search]) {
+      // 1) code 정확 매칭 — TallyOne 1.45-02: **bayDef 가 있는 엔트리만** 채택한다.
+      //   EDI 자동 등록(source:'edi-auto')은 선박코드 키에 식별자만 써 둔다(bayDef 키 자체가 없음).
+      //   검수사가 매트릭스 빌더로 만든 정본은 콜사인 앞4자 키에 들어간다.
+      //   실측 2026-08-10 — 껍데기 9척(OBWH·SWSP·MCAT·MAMP·KKAK·KKLC·CNFM·MCSC·RZOR)이
+      //   전부 코드 키에 있고, 정본은 D5MO·V7A6·5LRE·3E47·3EHZ·D5MP·3E34·9VMY 에 있었다.
+      //   껍데기를 먼저 잡으면 아래 3) fb-exact(이름 완전일치)가 정본을 찾을 기회를 잃고
+      //   자동 골격(v5 임베드)이 대신 그려진다 — MAMP 26베이(정본 36) · SWSP 21(정본 28) ·
+      //   KKLC 22(정본 30) 로 **틀린 골격이 화면에 나오고 있었다.**
+      //   ⚠ 판정은 `bayDef` 존재까지만 본다 — 콘앱 cone.html `lookupBayDef` 와 같은 기준.
+      //   더 좁게(실제 베이 값까지) 재면 enrich 로 살아나던 40척이 같이 죽는다(시뮬 실측).
+      if (search && fbDict[search] && fbDict[search].bayDef) {
         return { source: 'firebase', data: fbDict[search], matchedBy: 'fb-code' };
       }
-      // 2) IMO 매칭
+      // 2) IMO 매칭 — 같은 이유로 껍데기 제외(1)과 같은 기준).
       if (imo) {
-        const entry = Object.values(fbDict).find(e => e && e.imo === imo);
+        const entry = Object.values(fbDict).find(e => e && e.imo === imo && e.bayDef);
         if (entry) return { source: 'firebase', data: entry, matchedBy: 'fb-imo' };
       }
       // 3) name·callsign — **완전 일치만.**
@@ -118,7 +127,7 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
       //   구 4) 때문에 NSFR(V7A2845)이 SWAT(V7A281)을 물어왔다.
       if (search && search.length >= 4) {
         const entry = Object.values(fbDict).find(e => {
-          if (!e) return false;
+          if (!e || !e.bayDef) return false;   // 1.45-02: 껍데기 제외 — 1)·2)와 같은 기준
           const en = String(e.name || '').toUpperCase().replace(/\s+/g, '');
           const ec = String(e.callsign || '').toUpperCase().replace(/\s+/g, '');
           return (en && en === search) || (ec && ec === search);
