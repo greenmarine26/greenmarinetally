@@ -312,7 +312,14 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           voyage: v,
           mode,
           vsl: v?.info?.vsl || '',
-          voy: v?.info?.voy || v?.info?.voyage || '',
+          // TallyOne 1.45-03: 항차 표기를 **모드별**로 고른다 (검수사 신고 2026-08-10 —
+          //   "선적 리스트라고 해놓고 양하 항차 표기함", RZOR 선적 카드에 R085E).
+          //   항차 키가 양하로 만들어지면 `info.voy` 가 양하 항차라, 선적 카드도 그것을 그대로 썼다.
+          //   데이터에는 `voy_l`(RZOR=R085W)이 멀쩡히 있다. 기준은 inspectionList.js:216 과 같은 벌.
+          //   ⚠ 이 값은 카드 표시뿐 아니라 **내보내기 meta**(제출 리스트 파일 머리)에도 들어간다.
+          voy: (mode === 'loading'
+            ? (v?.info?.voy_l || v?.info?.voy || v?.info?.voy_d)
+            : (v?.info?.voy_d || v?.info?.voy || v?.info?.voy_l)) || v?.info?.voyage || '',
           total: allCnSet.size,        // 리스트(세관) 기준 전체.
           done: doneCount,
           rows,
