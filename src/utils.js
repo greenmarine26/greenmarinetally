@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.42';   // 선적 예보 — 칸 자동 생성·그림 첨부·리스트 형식 표시
+export const APP_VERSION = 'TallyOne 1.43';   // 카톡 예보 — 머리말 때문에 FULL 누락 수리 + 담당자·일자로 항차 추정
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -41,6 +41,41 @@ export function _feFromSlash(raw) {
   return m2 ? m2[1] : '';
 }
 
+// ── TallyOne 1.43: 항차번호 없는 카톡 예보 — **담당자와 일자로** 배를 찾는다 ─────────
+//   검수사 지적(2026-08-10): *"항차 기록이 없어서 들어가질 않습니다. 그런데 판단할 근거가
+//   있습니다. 일자와 담당자입니다."*  실제 원문에 배도 항차도 없다:
+//     `26년 8월 10일` / `[이다희] [10:38] FULL 20GPX6 + 40HQX11`
+//   ⚠ **카톡으로 예보를 보내는 선사는 둘뿐이다**(검수사 확답: RZOR·OBWH).
+//     수집기 handlers.json(14건)을 통째로 동기화하는 것도 검토했으나 검수사 판단대로 접었다 —
+//     *"예보는 2건입니다. RZOR OBWH 그래서 담당자를 직접 넣는게 빠릅니다."*
+//   사람이 바뀌면 이 표만 고치면 된다. 수집기 handlers.json 과 이름이 같아야 한다.
+export const FORECAST_SENDERS = {
+  이다희: 'OBWH', 윤내경: 'OBWH',              // 연태훼리 · OCEAN BLUE WHALE
+  김지태: 'RZOR', 안지영: 'RZOR', 박성욱: 'RZOR',   // 일조국제 · RIZHAO ORIENT
+};
+
+/** 카톡 원문에서 `[이름]` 을 찾아 선박코드로. 못 찾으면 ''. */
+export function forecastVslBySender(text) {
+  for (const m of String(text || '').matchAll(/\[([^\]\n]{2,12})\]/g)) {
+    const who = m[1].replace(/\s+/g, '');
+    if (FORECAST_SENDERS[who]) return FORECAST_SENDERS[who];
+  }
+  return '';
+}
+
+/** `26년 8월 10일` · `2026-08-10` · `8/10` → 'YYYY-MM-DD'. 못 읽으면 ''. */
+export function forecastDate(text, now = new Date()) {
+  const s = String(text || '');
+  let m = s.match(/(20\d{2}|\d{2})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  if (m) {
+    const y = m[1].length === 2 ? 2000 + +m[1] : +m[1];
+    return `${y}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}`;
+  }
+  m = s.match(/(20\d{2})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${String(+m[2]).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}`;
+  return '';
+}
+
 export function parseCargoForecast(text) {
   const out = { vsl: '', voy: '', mode: '', full: {}, empty: {}, luggage: {}, teu: null, summary: '',
     vans: { full: 0, empty: 0, luggage: 0 }, calc: { full: 0, empty: 0, luggage: 0 }, teuOk: true,
@@ -56,7 +91,13 @@ export function parseCargoForecast(text) {
   let cnSec = null;      // V9.03: 'urgent' | 'lugg' — "*** 긴급리스트 ***" / "*** 수화물 컨테이너 ***" 아래 컨번호 나열 구간
   let lastLuggCn = '';   // V9.03: "SEAL NO. : X" 줄을 직전 CNTR와 짝짓기
   for (const raw of String(text || '').split(/\r?\n/)) {
-    const line = raw.trim();
+    // ── TallyOne 1.43: 카톡 발신자·시각 머리말을 떼고 읽는다 ──────────────────
+    //   카톡에서 복사하면 **말한 사람의 첫 줄에만** `[이다희] [10:38] ` 이 붙는다.
+    //   그래서 이어 쓴 줄(EMPTY…)은 읽히는데 **첫 줄(FULL…)만 통째로 누락**됐다.
+    //   실측 2026-08-10: `[이다희] [10:38] FULL 20GPX6 + 40HQX11` → FULL 0대(정답 17대 28TEU).
+    //   검수사가 화면에서 EMPTY 만 189TEU 로 뜨는 것을 보고 신고했다.
+    //   ⚠ `[이름] [시각]` **두 쌍이 연달아** 있을 때만 뗀다 — 다른 대괄호 표기를 건드리지 않기 위해서다.
+    const line = raw.trim().replace(/^\[[^\]\n]{1,20}\]\s*\[[^\]\n]{1,20}\]\s*/, '');
     if (!line) continue;
     // V9.03: 별 2개 이상 헤더 — "*** 긴급리스트 ***", "*** 수화물 컨테이너 ***", "**변경사항**".
     //   RZOR 섹션 헤더(*FULL, 별 1개)와 충돌하지 않음. 모르는 ** 헤더는 구간만 닫는다.
@@ -119,6 +160,20 @@ export function parseCargoForecast(text) {
     if (m) add(sec, m[1], m[2], +m[3]);
   }
   out.mode = /[WS]$/.test(out.voy) ? 'loading' : (/[EN]$/.test(out.voy) ? 'discharge' : '');
+  // 1.43: 항차번호가 없으면 **담당자**로 배를, **글의 낱말**로 모드를 추정한다.
+  //   ⚠ 추정한 것은 반드시 표시해서 검수사가 눈으로 확인하게 한다(out.guessed).
+  if (!out.vsl) {
+    const bySender = forecastVslBySender(text);
+    if (bySender) { out.vsl = bySender; out.guessedVsl = true; }
+  }
+  if (!out.mode) {
+    // '긴급선적분'·'선적' 이 있으면 선적, '양하'면 양하. 둘 다면 판단하지 않는다.
+    const hasL = /선적/.test(String(text || ''));
+    const hasD = /양하|양륙/.test(String(text || ''));
+    if (hasL && !hasD) { out.mode = 'loading'; out.guessedMode = true; }
+    else if (hasD && !hasL) { out.mode = 'discharge'; out.guessedMode = true; }
+  }
+  out.date = forecastDate(text);
   if (out.teu) {
     out.teuOk = out.calc.full === out.teu.full && out.calc.empty === out.teu.empty
       && out.calc.luggage === out.teu.luggage;

@@ -836,9 +836,19 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const vv = fc && fc.voy ? fc.voy.toUpperCase() : '';
         // V9.57: 항차 매칭에 voyCore 비교 적용 — 0패딩·방향 표기 차이(0529W vs 529W)로 예보가
         //   등록 항차를 못 찾던 문제. 정확 일치 → 핵심번호 일치 순으로 본다.
+        // 1.43: 항차번호가 없는 예보(연태훼리 등)는 **담당자로 추정한 선박 + 그 날짜**로 찾는다.
+        //   검수사 지적: "판단할 근거가 있습니다. 일자와 담당자입니다."
+        //   순서 — ① 항차번호 정확·핵심 일치 ② 선박코드 일치 ③ 선박코드 + planDate 날짜 일치.
+        //   ③은 같은 배가 여러 항차로 떠 있을 때 그날 것을 고르기 위한 것이다.
         const match = fc ? (voyagesWithPier.find(v =>
           vv && [v.info.voy, v.info.voy_d, v.info.voy_l].some(x => x && _voyCore(x) === _voyCore(vv)))
-          || (fc.vsl ? voyagesWithPier.find(v => (v.info.vsl || '').toUpperCase().replace(/\s+/g, '').startsWith(fc.vsl)) : null)) : null;
+          || (fc.vsl ? (
+               // 같은 배가 둘 이상이면 예보 일자와 작업일이 같은 것을 먼저 본다
+               (fc.date ? voyagesWithPier.find(v =>
+                 (v.info.vsl || '').toUpperCase().replace(/\s+/g, '').startsWith(fc.vsl)
+                 && String(v.info.planDate || '').startsWith(fc.date)) : null)
+               || voyagesWithPier.find(v => (v.info.vsl || '').toUpperCase().replace(/\s+/g, '').startsWith(fc.vsl))
+             ) : null)) : null;
         const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join('  ');
         const totalTeu = fc ? (fc.teu ? fc.teu.total : fc.calc.full + fc.calc.empty + fc.calc.luggage) : 0;
         const save = async () => {
@@ -929,6 +939,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${fc.mode === 'loading' ? 'bg-amber-900/70 text-amber-200' : fc.mode === 'discharge' ? 'bg-blue-900/70 text-blue-200' : 'bg-slate-700 text-slate-300'}`}>
                       {fc.mode === 'loading' ? '선적' : fc.mode === 'discharge' ? '양하' : '모드 미상'}
                     </span>
+                    {/* 1.43: 원문에 없어서 **추정한** 것은 반드시 티를 낸다 — 검수사가 눈으로 확인해야 한다. */}
+                    {(fc.guessedVsl || fc.guessedMode) && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-900/70 text-purple-200"
+                        title={`원문에 없어 추정했습니다 — ${[fc.guessedVsl && '선박(담당자 이름)', fc.guessedMode && '양하/선적(본문 낱말)'].filter(Boolean).join(' · ')}. 틀리면 저장하지 마세요.`}>
+                        🔍 추정 {[fc.guessedVsl && '선박', fc.guessedMode && '모드'].filter(Boolean).join('·')}
+                      </span>
+                    )}
+                    {fc.date && <span className="text-[10px] text-slate-500">{fc.date}</span>}
                     <span className="font-bold text-orange-300">{totalTeu}TEU</span>
                     {fc.teu && (fc.teuOk
                       ? <span className="text-emerald-400 text-[10px] font-bold">✓ TEU 검산 일치</span>
