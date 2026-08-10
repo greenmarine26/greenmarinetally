@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.43-02';   // 예측 시프팅에 from 결측 — 검수 리스트 정렬 크래시 수리
+export const APP_VERSION = 'TallyOne 1.44';   // 예측 시프팅에 스택 규칙 추가 — 양하분 위 통과화물 합산
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3370,6 +3370,35 @@ export function predictShifting(dischEdiMap) {
                   pos: _pos, from: _pos, to: '',
                   iso: c.iso || '', pod: c.pod || '',
                   _why: `${b}베이 홀드 양하분 위 — 커버 열려면 이동` };
+    }
+  }
+  // ③ 1.44 (검수사 지적 2026-08-10, MCAT 630N): **같은 스택에서 평택 양하분 위에 얹힌 통과화물.**
+  //   커버와 무관하게 이걸 들어내야 아래를 내린다. 종전 규칙(①②)은 커버 현측만 계산해
+  //   MCAT 630N에서 30·34·44번 데크 양하분 위 통과 엠티 등 94대를 놓쳤다(실측 — 앱 10 vs 실제 104).
+  //   SWDN 2608N 오라클 회귀: 이 규칙을 더해도 5대 그대로(추가분이 기존 5대에 포함) — 과검출 0.
+  //   데크/홀드 각각 같은 (베이,열) 스택 안에서만 본다(축 통합 금지 — 지침 Ⅱ).
+  const _stacks = {};
+  for (const [cn, c] of rows) {
+    const b = normalizeBay(c.bay || '');
+    if (!b || c.row === undefined || c.row === null || c.row === '') continue;
+    const t = parseInt(c.tier, 10);
+    if (!Number.isFinite(t)) continue;
+    const zone = _isDeckTier(c.tier) ? 'D' : 'H';
+    const k = `${b}|${String(c.row)}|${zone}`;
+    (_stacks[k] = _stacks[k] || []).push([cn, c, t]);
+  }
+  for (const arr of Object.values(_stacks)) {
+    let low = Infinity;
+    for (const [, c, t] of arr) if (isPyeongtaekPort(c.pod) && t < low) low = t;
+    if (!Number.isFinite(low)) continue;
+    for (const [cn, c, t] of arr) {
+      if (t <= low || isPyeongtaekPort(c.pod) || out[cn]) continue;
+      const b = normalizeBay(c.bay || '');
+      const _pos = `${b}-${String(c.row || '').padStart(2, '0')}-${String(c.tier || '').padStart(2, '0')}`;
+      out[cn] = { bay: b, row: String(c.row || ''), tier: String(c.tier || ''),
+                  pos: _pos, from: _pos, to: '',
+                  iso: c.iso || '', pod: c.pod || '',
+                  _why: `같은 스택 ${b}베이 양하분 위 — 들어내야 양하` };
     }
   }
   return out;
