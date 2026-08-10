@@ -11,6 +11,7 @@ import {
 } from 'firebase/storage';
 import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName } from './utils.js';   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
+import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 
 const firebaseConfig = {
   apiKey: "AIzaSyBE4lC78w6jl8uVELrj1Jjsl7AVkvVVQBY",
@@ -2179,6 +2180,54 @@ export async function fbGetAdminGuard() {
   } catch (e) {
     console.error('[fbGetAdminGuard] 조회 실패', e);
     return null;
+  }
+}
+
+// ─── TallyOne 1.41: 개발용 접근 명단 (dev_access) ──────────────────────────────
+//   수석 대시보드 **화면만** 열어 주는 명단이다. 직급(staffList.role)과 별개 축이고,
+//   비밀번호 잠금(isLockedName) 대상에도 들어가지 않는다 — 검수사 확답 2026-08-10.
+//   ⛔ 고칠 수 있는 사람은 **관리자뿐**(검수사 확답 "관리자만"). matrix_editors 처럼
+//     '명단에 있는 사람이 명단을 고치는' self-service 가 아니다.
+const DEV_ACCESS_NODE = 'dev_access';
+
+export function fbSubscribeDevAccess(callback) {
+  const r = ref(db, DEV_ACCESS_NODE);
+  const handler = onValue(r, snap => {
+    callback(snap.exists() ? (snap.val() || {}) : {});
+  }, (e) => {
+    // 3금지③ — 조용히 실패하지 않는다. 실패하면 빈 명단으로 보수적으로 간다(권한이 열리지 않음).
+    console.error('[fbSubscribeDevAccess] 구독 실패', e);
+    callback({});
+  });
+  return () => off(r, 'value', handler);
+}
+
+/**
+ * 개발용 접근 부여/회수. **관리자만** 가능.
+ * @param {string} actor  요청자 이름 (현재 로그인한 검수자)
+ * @param {string} target 대상 이름
+ * @param {boolean} on    true=부여 / false=회수
+ * @returns {Promise<{ok:boolean, reason?:string}>}
+ */
+export async function fbSetDevAccess(actor, target, on) {
+  const a = String(actor || '').trim();
+  const t = String(target || '').trim();
+  if (!a || !t) return { ok: false, reason: 'no_name' };
+  try {
+    // 권한 확인은 **서버 값을 다시 읽어서** 한다 — 화면 state 를 믿지 않는다.
+    const guard = await fbGetAdminGuard();
+    if (!isAdminName(guard, a)) return { ok: false, reason: 'not_admin' };
+    if (on) {
+      await set(ref(db, `${DEV_ACCESS_NODE}/${t}`), {
+        name: t, grantedBy: a, grantedAt: Date.now(),
+      });
+    } else {
+      await set(ref(db, `${DEV_ACCESS_NODE}/${t}`), null);
+    }
+    return { ok: true };
+  } catch (e) {
+    console.error('[fbSetDevAccess] 저장 실패', t, e);
+    return { ok: false, reason: 'fb_error' };
   }
 }
 

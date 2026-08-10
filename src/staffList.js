@@ -80,3 +80,38 @@ export function isChief(name) {
   const role = getStaffRole(name);
   return /수석검수|부수석/.test(role);
 }
+
+// ─── TallyOne 1.41: **개발용 접근 명단** (검수사 지시 2026-08-10) ───────────────
+//   검수사 원문: *"클로드가 코드수정을 수월하게 하기 위해서 입니다. 직급은 없이 개발용으로 하면 됩니다."*
+//   ⛔ **isChief 를 건드려서 해결하지 않는다.** `isLockedName = isAdminName || isChief` 라서,
+//     isChief 에 이 명단을 더하면 **비밀번호 잠금 대상까지 딸려 늘어난다.**
+//     검수사 확답: *"개발자용으로 들어온 인원은 (비밀번호) 없어도 됨."*
+//   → 직급 판정(isChief)은 그대로 두고, **화면 접근 판정만** canOpenChief 로 따로 세운다.
+//   명단은 RTDB `dev_access` 노드. 관리자만 고칠 수 있다(인원 관리 ⚙ 화면).
+let DEV_ACCESS = {};
+/** App 이 fbSubscribeDevAccess 로 받은 명단을 여기에 넣는다. setServerRoles 와 같은 방식. */
+export function setDevAccess(map) {
+  const out = {};
+  for (const [k, v] of Object.entries(map || {})) {
+    const name = String((v && typeof v === 'object' && v.name) || k).trim();
+    if (name && v) out[name] = true;
+  }
+  DEV_ACCESS = out;
+}
+export function isDevViewer(name) {
+  return !!DEV_ACCESS[String(name || '').trim()];
+}
+
+// ─── TallyOne 1.41: 수석 대시보드를 **열 수 있는가**의 단일 진입점 ──────────────
+//   왜 만들었나 — 같은 판단을 **네 곳이 각자** 하고 있었고 서로 달랐다(2026-08-10 조사).
+//     · App.jsx 라우트 게이트      isChief || isOwnerName   (소유자 포함)
+//     · App.jsx 로그인 직후 착지    isChief || isOwnerName   (소유자 포함)
+//     · ChiefDashboard 내부 가드    isChief 만               ← 소유자 빠짐
+//     · HomePage 진입 버튼 노출     isChief 만               ← 소유자 빠짐
+//   지금은 소유자(김성일)의 직책이 '대리(부수석)' 이라 우연히 넷 다 통과해 안 드러날 뿐이다.
+//   한 곳만 고치면 나머지 셋에서 막힌다 → **네 곳 모두 이 함수를 쓴다.**
+//   ⚠ 이것은 **화면을 여는 권한**이다. 화면 안의 마감 텔리 생성·아카이브 복원·정리·최종 저장은
+//     종전대로 `isChief` 로 막는다 — 되돌릴 수 없는 행위는 개발용에게 열지 않는다.
+export function canOpenChief(name, isOwner = false) {
+  return isChief(name) || isOwner || isDevViewer(name);
+}

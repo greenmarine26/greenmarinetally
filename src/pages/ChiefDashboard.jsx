@@ -14,7 +14,7 @@ import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadT
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
-import { isChief } from '../staffList.js';
+import { isChief, canOpenChief } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
 import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
@@ -88,6 +88,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 }) {
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
+  // 1.41: **화면을 여는 권한**은 따로다. 개발용 접근 명단에 든 사람도 이 화면을 볼 수 있다.
+  //   ⚠ chief 는 그대로 둔다 — 마감 텔리 생성·아카이브 복원·정리·최종 저장은 여전히 수석만.
+  //   종전 이 자리의 가드는 isChief 뿐이라 **소유자조차 직책이 수석이 아니면 막혔다**(App 게이트와 불일치).
+  const canOpen = canOpenChief(inspector, owner);
   const pfMap = pilotForecast || _EMPTY_OBJ;   // TallyOne 1.0: null 방어
   const twMap = terminalWork || _EMPTY_OBJ;    // TallyOne 1.0: null 방어
   // TallyOne 1.6-01: 마감 텔리 대기 목록 — **작은 색인 노드 하나만** 읽는다.
@@ -544,7 +548,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //   사용자: "이제야 알았네요 일반 검수원이 수석대쉬보드 진입이 가능 하다는걸. 진입을 막아 주세요.
   //           물론 수석검수사만 출입이 가능하다는 문구와 함께."
   //   ⚠ 화면 가드일 뿐 데이터 차단이 아니다 — 진짜 권한 분리는 Firebase 규칙에서 해야 한다(다음 판).
-  if (!chief) {
+  if (!canOpen) {
     return (
       <div className="max-w-3xl mx-auto px-3 py-10">
         <div className="bg-slate-900 border border-purple-800/50 rounded-2xl p-6 text-center">

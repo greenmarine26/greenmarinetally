@@ -7,7 +7,7 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
 import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
-import { isChief } from '../staffList.js';
+import { isChief, canOpenChief } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
@@ -618,7 +618,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         {/* V9.42: 수석 대시보드 — 종전 상단 3카드에서 이 줄 가운데 빈 공간으로 옮김
             V9.44: **수석 검수원에게만 보인다.** 눌러서 막히는 것보다 아예 안 보이는 편이 낫다
             (진입 차단은 ChiefDashboard 안에도 있다 — 주소로 직접 들어오는 경우 대비). */}
-        {isChief(inspector) && <button onClick={onOpenChiefDashboard}
+        {/* 1.41: 판정을 canOpenChief 로 통일 — 종전 isChief 만 봐서 App 라우트 게이트와 어긋났다
+            (소유자·개발용은 들어갈 수 있는데 버튼이 안 보였다). */}
+        {canOpenChief(inspector, isOwnerName(inspector)) && <button onClick={onOpenChiefDashboard}
           className="flex-1 min-w-0 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
           <div className="flex items-center gap-1.5">
             <BarChart3 className="w-4 h-4 text-purple-300 shrink-0"/>

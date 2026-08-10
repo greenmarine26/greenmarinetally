@@ -1,16 +1,16 @@
 // 그린마린 평택항 검수 — Master V1.1
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';   // 1.41: useMemo — 접근 판정
 import { APP_VERSION, _storage, SK } from './utils.js';
 import { loadUserBayDict, entryTimestamp, applyApprovedSync } from './data/userBayDict.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
-  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
+  fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
 } from './firebase.js';
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
-import { isChief, setServerRoles } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결)
+import { isChief, setServerRoles, setDevAccess, canOpenChief } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
 import { parseHash, exitApp } from './backHandler.js';        // TallyOne 1.0: 해시 파서 단일 소스 + 홈 뒤로가기 종료(B-6)
 import { setActivityUser, logActivity, logView } from './activityLog.js';   // TallyOne 1.3: 활동 로그(로그인·로그아웃·화면 열람)
@@ -55,6 +55,7 @@ export default function App() {
   // V9.11: 관리자 가드 — 종전에는 `inspector === '김성일'` 하드코딩이라 V9.09에서 권한을 넘겨받은
   //   관리자에게 헤더 ⚙(인원 관리) 버튼이 아예 안 보였다(인수인계가 실질적으로 반쪽).
   const [adminGuard, setAdminGuard] = useState(null);
+  const [devAccessMap, setDevAccessMap] = useState({});   // 1.41: 개발용 접근 명단(렌더 갱신용 — 판정 자체는 staffList 모듈 캐시)
   // V9.13: 무조작 자동 로그아웃 — 마지막 화면 조작 시각(ref: 리렌더 없이 갱신) + 안내 문구
   const lastInputRef = React.useRef(Date.now());
   const [autoLogoutNotice, setAutoLogoutNotice] = useState('');
@@ -113,6 +114,9 @@ export default function App() {
     // TallyOne 1.0 (K5): 서버 직책을 staffList 모듈 캐시에 먼저 밀어 넣고(setServerRoles),
     //   그 다음 state 반영(setExtraStaff) — 순서가 바뀌면 첫 렌더가 옛 직책으로 판정한다.
     const unsub2 = fbSubscribeStaffList((m) => { setServerRoles(m); setExtraStaff(m); });
+    // 1.41: 개발용 접근 명단 — 모듈 캐시(setDevAccess)에 밀어 넣고 state 도 갱신한다.
+    //   K5 와 같은 이유로 **캐시 먼저**. 순서가 바뀌면 첫 렌더가 옛 명단으로 판정한다.
+    const unsubDev = fbSubscribeDevAccess((m) => { setDevAccess(m); setDevAccessMap(m || {}); });
     const unsub3 = fbSubscribeDeletedStaff(setDeletedStaff);
     const u3 = fbSubscribeConnection(setOnline);
     const u4 = fbSubscribePortMis(setPortMisData);  // M5.21: PORT-MIS 데이터
@@ -157,7 +161,7 @@ export default function App() {
         console.error('[App] 베이사전 정본 대조 실패', err);
       }
     });
-    return () => { u1(); u2(); u3(); u4(); u4b(); u4c(); u5(); u6(); u7(); unsub2(); unsub3(); };
+    return () => { u1(); u2(); u3(); u4(); u4b(); u4c(); u5(); u6(); u7(); unsub2(); unsub3(); unsubDev(); };
   }, []);
 
   useEffect(() => {
@@ -167,7 +171,12 @@ export default function App() {
   }, [inspector]);
   const isAdmin = isAdminName(adminGuard, inspector);
   // TallyOne 1.0 (K2): 라우트 게이트 — 수석(부수석 포함) 또는 소유자만 #/chief·#/search
-  const chiefOrOwner = isChief(inspector) || isOwnerName(inspector);
+  // 1.41: 판정을 canOpenChief 한 곳으로 모았다(종전엔 네 곳이 각자 했고 서로 달랐다).
+  //   devAccessMap 을 의존성에 넣어 명단이 바뀌면 다시 그린다 — 모듈 캐시만 바뀌면 렌더가 안 돈다.
+  const chiefOrOwner = useMemo(
+    () => canOpenChief(inspector, isOwnerName(inspector)),
+    [inspector, devAccessMap],
+  );
 
   // V9.05: 관리자 승인 시 공유 정본을 로컬 사본에 반영
   const handleApproveBayDictSync = useCallback(() => {
@@ -288,7 +297,7 @@ export default function App() {
     // TallyOne 1.0: 역할별 진입 — 수석·소유자는 #/chief, 그 외 #/.
     //   로그인 전 딥링크(pendingHash)가 있으면 거기로(수석 전용 화면은 권한 통과 시에만).
     //   replaceState로 로그인 엔트리를 대체 — 뒤로가기 스택에 로그인 화면이 남지 않는다.
-    const roleGate = isChief(name) || isOwnerName(name);
+    const roleGate = canOpenChief(name, isOwnerName(name));   // 1.41: 위 게이트와 같은 판정을 쓴다
     let target = pendingHashRef.current || '';
     pendingHashRef.current = '';
     if (target) {

@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice } from '../firebase.js';
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess } from '../firebase.js';   // 1.41: 개발용 접근
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
          OWNER_NAME, isOwnerName, canRevokeAdmin } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자 · V9.10 소유자 고정
@@ -17,6 +17,29 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     fbGetAdminGuard().then(g => { if (alive) setGuardInfo(g); });
     return () => { alive = false; };
   }, []);
+  // ── TallyOne 1.41: 개발용 접근 (검수사 지시 2026-08-10) ──────────────────────
+  //   *"클로드가 코드수정을 수월하게 하기 위해서 입니다. 직급은 없이 개발용으로 하면 됩니다."*
+  //   수석 대시보드 **화면만** 열어 준다. 직급도 아니고 비밀번호 잠금 대상도 아니다.
+  //   화면 안의 마감 텔리 생성·아카이브 복원·정리·최종 저장은 여전히 수석만 할 수 있다.
+  const [devAccess, setDevAccessState] = useState({});
+  React.useEffect(() => fbSubscribeDevAccess(setDevAccessState), []);
+  const [devBusy, setDevBusy] = useState('');
+  const handleToggleDev = async (name, on) => {
+    if (on && !window.confirm(
+      `개발용 접근 부여: ${name}\n\n수석 대시보드 화면을 볼 수 있게 됩니다.\n` +
+      `· 직급은 바뀌지 않습니다.\n· 비밀번호 잠금은 걸리지 않습니다.\n` +
+      `· 마감 텔리 생성·복원·최종 저장은 여전히 수석만 가능합니다.`)) return;
+    if (!on && !window.confirm(`개발용 접근 회수: ${name}`)) return;
+    setDevBusy(name);
+    const r = await fbSetDevAccess(current, name, on);
+    setDevBusy('');
+    if (!r.ok) {
+      alert(r.reason === 'not_admin'
+        ? '관리자만 개발용 접근을 주고 뺄 수 있습니다.'
+        : '저장 실패 — 네트워크를 확인하세요.');
+    }
+  };
+
   const handleRemoveDevice = async (devId, label) => {
     if (!window.confirm(`신뢰 기기 해제: ${label || devId}\n이 기기에서는 앞으로 관리자 선택 시 비밀번호가 필요합니다.`)) return;
     const ok = await fbUpdateAdminGuard({ [`admins/${current}/devices/${devId}`]: null });
@@ -313,6 +336,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                       ? <span className="text-[9px] bg-amber-600 text-slate-900 px-1 rounded font-black">소유자</span>
                       : isAdminName(guardInfo, s.name) && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
                     {isDynamic && <span className="text-[9px] bg-purple-900 text-purple-300 px-1 rounded">추가됨</span>}
+                    {devAccess[s.name] && <span className="text-[9px] bg-cyan-900 text-cyan-300 px-1 rounded" title={`개발용 접근 — ${devAccess[s.name].grantedBy || ''} 부여`}>🛠 개발용</span>}
                     {isDeleted(s.name) && <span className="text-[9px] bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
                   </div>
                   <div className="text-[10px] text-slate-400">{s.role}</div>
@@ -340,6 +364,19 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                       권한부여
                     </button>
                   )
+                )}
+                {/* 1.41: 개발용 접근 토글 — 관리자에게만 보인다(저장 시 서버에서 한 번 더 확인한다). */}
+                {!isDeleted(s.name) && isAdminName(guardInfo, current) && !isOwnerName(s.name) && (
+                  <button onClick={() => handleToggleDev(s.name, !devAccess[s.name])}
+                    disabled={devBusy === s.name}
+                    className={`px-2 py-1 rounded text-xs font-bold ${devAccess[s.name]
+                      ? 'bg-cyan-800 hover:bg-cyan-700 text-cyan-100'
+                      : 'bg-slate-700 hover:bg-cyan-900 text-slate-200 hover:text-cyan-100'} disabled:opacity-50`}
+                    title={devAccess[s.name]
+                      ? '개발용 접근 회수 — 수석 대시보드를 못 보게 됩니다'
+                      : '개발용 접근 부여 — 수석 대시보드 화면만 열립니다(직급·비밀번호 변화 없음)'}>
+                    {devBusy === s.name ? '…' : (devAccess[s.name] ? '개발회수' : '개발부여')}
+                  </button>
                 )}
                 {(
                   <div className="flex gap-1">
