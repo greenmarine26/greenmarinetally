@@ -865,13 +865,16 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           const _slot = _isL ? 'voy_l' : 'voy_d';
           const _sec = _isL ? 'loading' : 'discharge';
           const _patch = {};
-          if (fc.voy && !match.info[_slot]) {
-            _patch[_slot] = fc.voy;
-            // 섹션 노드가 없으면 화면에 탭이 안 뜬다 — VoyagePage 2899행과 같은 방식으로 최소 키만 만든다.
-            if (!match[_sec]) {
-              try { await fbSaveSectionData(match.key, _sec, { _created: Date.now() }); }
-              catch (e) { console.error('[예보] 섹션 생성 실패', match.key, _sec, e); }
-            }
+          if (fc.voy && !match.info[_slot]) _patch[_slot] = fc.voy;
+          // ⚠ 1.43-01: **섹션 생성은 칸 채우기와 독립이다.**
+          //   1.42 는 섹션 생성을 `칸이 비었을 때` 조건 **안에** 두었다. 그래서 OBWH 2709E 처럼
+          //   `voy_l=2710W` 는 있는데 loading 섹션이 없는 항차에서 통째로 건너뛰었다 —
+          //   예보는 저장됐는데 **선적 탭이 안 생겼다**(검수사 신고 2026-08-10).
+          //   → 이 모드의 항차번호가 정해져 있으면(원래 있었든 방금 넣었든) 섹션이 없을 때 만든다.
+          const _slotVoy = match.info[_slot] || _patch[_slot];
+          if (_slotVoy && !match[_sec]) {
+            try { await fbSaveSectionData(match.key, _sec, { _created: Date.now() }); }
+            catch (e) { console.error('[예보] 섹션 생성 실패', match.key, _sec, e); }
           }
           await fbUpdateVoyageInfo(match.key, { ..._patch, forecast: {
             voy: fc.voy, mode: fc.mode || 'loading', full: fc.full, empty: fc.empty, luggage: fc.luggage,
