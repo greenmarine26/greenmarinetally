@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.51';   // LUGGAGE 는 EDI로 오지 않는다 — 부분 EDI 가 아니라 매칭 정상 + LUGGAGE N
+export const APP_VERSION = 'TallyOne 1.52';   // LUGGAGE 는 번호가 아니라 선박별 상시 대수로 — 매 항차 번호가 바뀐다
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3839,6 +3839,19 @@ export function describeMovePath(c, isCompleted = false) {
 export const LUGGAGE_CNS = new Set(['SPSU2019220']);
 export function isLuggageCn(cn) {
   return LUGGAGE_CNS.has(String(cn || '').trim().toUpperCase());
+}
+
+// TallyOne 1.52: **번호를 기억하는 게 아니라 「이 배는 항상 몇 대」를 기억한다.**
+//   1.51 은 컨번호(SPSU2019220)로 잡았는데 **번호가 항차마다 바뀐다** —
+//     082E `SPSU2019220` · 086E `SAWTBP006` · 아카이브 `SAWTBP004·005·008·009`.
+//   그래서 086E 에서 안 걸렸다(검수사 지적 2026-08-12, 화면 그대로 「부분 EDI 169」).
+//   검수사 확정 — *"170 169 LUG1이 맞습니다."* · *"그선박은 항상 양하에 20피트 1개의 엠티를 실고 옵니다."*
+//   → 선박이 상시로 싣고 오는 대수를 기억하고, 리스트−EDI 차이가 그 안이면 LUGGAGE 로 본다.
+//   ⚠ LUGGAGE 는 **양하 개수에 포함되지 않는다**(검수사 확정) — 컨RORO·벌크와 반대다.
+export const SHIP_LUGGAGE = { RZOR: 1 };
+export function shipLuggageCount(voyageKey) {
+  const code = String(voyageKey || '').split('_')[0].toUpperCase();
+  return SHIP_LUGGAGE[code] || 0;
 }
 
 export function effectivePos(c) {
