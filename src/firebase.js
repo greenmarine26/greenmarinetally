@@ -754,16 +754,24 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
   let displacedWasCompleted = false;
   if (displaced) {
-    if (displacedPlanOnly) {
-      // TallyOne 1.47: **액츄얼 — 계획 자리는 주인이 아니다.** 자리를 비우고 선적대상으로 되돌린다.
-      //   여기서 A의 옛 자리로 보내는(swap) 것은 틀리다. 그 컨은 애초에 어디에도 실려 있지 않고,
-      //   계획은 "여기 넣었으면" 하는 희망일 뿐이라 **다른 계획 자리로 옮길 근거가 없다.**
-      //   미배정 = 아직 자리가 안 정해진 선적대상. 화면이 이미 그렇게 예고하고 있었다.
-      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
-    } else if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
+    // TallyOne 1.47-01: **자리를 내준 컨은 떠돌지 않는다 — 뺏은 컨의 옛 자리로 가서 기다린다.**
+    //   검수사 지적 2026-08-11 — *"선적대상은 맞습니다만 **이렇게 떠서는 안 됩니다.**
+    //   **확정된 컨테이너 자리로 가서 기다려야 합니다.**"*
+    //   1.47 이 `displacedPlanOnly` 를 맨 앞 분기에 두어 아래 swap 을 통째로 건너뛰었다 —
+    //   **1.36 규칙을 죽인 것이다**(*"빼앗긴 컨테이너는 빼앗은 컨테이너 자리로 가 있는 것"*).
+    //   액츄얼 규칙("계획 자리에 주인은 없다")과 1.36("밀린 컨은 갈 곳이 있다")은 **둘 다 참이다.**
+    //   자리를 내주는 것과 갈 곳 없이 떠도는 것은 다른 얘기였다.
+    //   실물로도 맞다 — A가 계획(17-06-06) 대신 19-06-02 로 갔으면 17-06-06 이 비고,
+    //   19-06-02 를 빼앗긴 컨이 거기로 가면 된다. **자리 교환.**
+    if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
     } else if (opts.displacedMode === 'unassign') {
       // 검수사가 명시적으로 미배정을 고른 경우만 비운다.
+      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+    } else if (displacedPlanOnly) {
+      // 액츄얼인데 **A 자신이 자리가 없던 경우**만 여기 온다(보낼 옛 자리가 없다).
+      //   이때 자리를 그대로 두면 한 칸에 두 대가 남아 그림에서 한 대가 사라진다 — 그것이 1.47 의 사건이었다.
+      //   계획분은 아직 아무 데도 실려 있지 않으므로 미배정(선적대상)으로 두는 것이 안전하다.
       await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
     } else {
       // TallyOne 1.36: **뺏긴 컨을 미배정으로 만들지 않는다.** 검수사 확정 2026-08-09 —
