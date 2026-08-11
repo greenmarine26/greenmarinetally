@@ -1,7 +1,7 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
 import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer } from '../utils.js';
+import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath } from '../utils.js';   // 1.50: 지나온 자리
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -371,6 +371,24 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
+
+      {/* TallyOne 1.50: **지나온 자리.** 검수사 확정 2026-08-11 — *"이력을 남겨야 오류를 찾기 쉽습니다."*
+          결과만 남아 있으면 왜 여기 왔는지 되짚을 수가 없다. 오늘 없는 중복 2곳·샌 3대·겹친 두 대가
+          전부 "언제 무엇이 어디로 갔나"만 있으면 바로 나오는 것들이었다. */}
+      {(() => {
+        const path = buildMovePath(c);
+        if (!path.length) return null;
+        return (
+          <details className="mt-2 bg-slate-900 border border-slate-800 rounded">
+            <summary className="px-2 py-1.5 text-[11px] font-bold text-slate-400 cursor-pointer">
+              📍 지나온 자리 {path.length}번 — 눌러서 보기
+            </summary>
+            <div className="px-2 pb-2 text-[11px] text-slate-300 whitespace-pre-line leading-relaxed">
+              {describeMovePath(c, isDone)}
+            </div>
+          </details>
+        );
+      })()}
 
       {/* V9.51: 미배정된 컨을 계획 자리로 되돌린다 — 밀려난 컨의 유일한 출구였다 */}
       {!isDone && (

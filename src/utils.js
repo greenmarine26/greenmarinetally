@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.49-01';   // 자리는 컨이 아니라 자리다 — 빈 칸도 고를 수 있고, 짝꿍 자리가 비어도 트윈이 걸린다 · 앞뒤 맞교환 중복·멈춤 수리
+export const APP_VERSION = 'TallyOne 1.50';   // 컨이 지나온 자리를 다 남긴다 — 어디 갔어? 에 경로로 답한다 · 싱글 먼저 · 격자 한 줄
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3736,6 +3736,90 @@ export function planWorkStart(info = {}, pierOverride = null, pilotArr = null) {
 //     ② ediContainers.bay   EDI 가 진실 (M6.94.32). 값이 '' 가 아니면 이것을 쓴다.
 //     ③ records.bay         위 둘이 없을 때만.
 /** @returns {{bay:string,row:string,tier:string,src:'actual'|'edi'|'rec'|'none',inStorage:boolean}} */
+// ── TallyOne 1.50: 컨이 지나온 자리 ──────────────────────────────
+// 검수사 확정 2026-08-11 — *"처음에 어디 있었는지 부터 최종선적위치 까지 경로를 갖고 있어야 합니다."*
+//   *"사용자가 특정 컨테이너가 여기에 있어야 하는데 어디로 갔지 하고 물으면
+//     어디 선적때 어떤 컨테이너로 바뀌어서 어디로 이동 시켰습니다 라고 알려 줘야 합니다."*
+//
+// moves 가 있으면 그대로 쓴다. 없는 옛 컨은 남아 있는 세 값(orig · actual · 현재)으로
+//   **세 점짜리 경로를 복원**한다 — 사유는 기록이 없으니 비운다(_guess 로 표시).
+const _mvPos = (b, r, t) => (b ? `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}` : '미배정');
+// 숫자 끝자리 받침 — "06으로/02로", "1308이/2722가". 현장 문장이 어색하면 안 읽힌다.
+const _JONG = { '0': true, '1': true, '3': true, '6': true, '7': true, '8': true, '2': false, '4': false, '5': false, '9': false };
+const _ro = (t) => (_JONG[String(t).slice(-1)] ? '으로' : '로');
+const _iga = (t) => (_JONG[String(t).slice(-1)] ? '이' : '가');
+
+export function buildMovePath(c) {
+  if (!c) return [];
+  const mv = Array.isArray(c.moves) ? c.moves.filter(m => m && m.to) : [];
+  if (mv.length) return mv;
+  const out = [];
+  const orig = _mvPos(c.bay_orig, c.row_orig, c.tier_orig);
+  const ba = String(c.bay_actual ?? '');
+  const act = (ba && !ba.startsWith('__')) ? _mvPos(c.bay_actual, c.row_actual, c.tier_actual) : '';
+  const now = _mvPos(c.bay, c.row, c.tier);
+  let prev = orig;
+  if (act && act !== prev) { out.push({ from: prev, to: act, why: '', by: '', at: c.actual_at || 0, byCn: '', _guess: true }); prev = act; }
+  if (now && now !== prev) { out.push({ from: prev, to: now, why: '', by: '', at: 0, byCn: '', _guess: true }); }
+  return out;
+}
+
+// 사유 낱말은 검수사가 쓰는 말로. 클로드가 지어낸 용어는 현장에서 안 통한다.
+export const MOVE_WHY_KO = {
+  move: '자리를 옮김',
+  actual: '실제 실린 자리로 지정',
+  displaced: '자리를 뺏겨 밀려남',
+  unassign: '미배정 처리',
+  cancel: '완료 취소로 계획 자리 복귀',
+  restore: '원래 계획 자리로 되돌림',
+  loaded: '선적확인',
+  '': '사유 기록 없음',
+};
+
+export function movePathOrigin(c) {
+  const p = buildMovePath(c);
+  if (p.length) return p[0].from;
+  return _mvPos(c?.bay_orig, c?.row_orig, c?.tier_orig);
+}
+
+// "어디 갔어?" 답변 — 검수사가 원한 모양 그대로:
+//   *"어디 선적때 어떤 컨테이너로 바뀌어서 어디로 이동 시켰습니다."*
+export function describeMovePath(c, isCompleted = false) {
+  if (!c) return '';
+  const path = buildMovePath(c).filter(m => m.why !== 'loaded' || m.from !== m.to);
+  const cur = _mvPos(c.bay, c.row, c.tier);
+  const orig = movePathOrigin(c);
+  // 1.50: 자리 없이 완료된 건은 그 사실을 드러낸다 — 오늘 TBJU2308214 가 그랬다
+  //   (선적확인은 찍혔는데 좌표가 없어 카운터는 42/42인데 그림은 41칸).
+  const tail = cur === '미배정'
+    ? (isCompleted ? '⚠ 지금 자리가 없는데 선적확인만 되어 있습니다 — 자리를 지정해야 합니다.' : '지금은 자리가 없습니다 (미배정).')
+    : (isCompleted ? `최종 ${cur}에 선적확인했습니다.` : `지금은 ${cur}에 있습니다.`);
+  if (!path.length) {
+    return `${c.cn} — 계획 자리 ${orig} 그대로입니다. 옮긴 적 없습니다.\n${tail}`;
+  }
+  const lines = [`${c.cn} — 원래 ${orig} 계획이었습니다.`];
+  path.forEach(m => {
+    const to = m.to === '미배정' ? '미배정' : `${m.to}${_ro(m.to)}`;
+    let line;
+    switch (m.why) {
+      case 'displaced': line = (m.to === '미배정') ? '자리를 잃고 미배정이 됐습니다.' : `${to} 밀려났습니다.`; break;
+      case 'unassign':  line = `자리를 비웠습니다 (미배정).`; break;
+      case 'cancel':    line = `선적확인을 취소해 ${to} 되돌렸습니다.`; break;
+      case 'restore':   line = `원래 계획 자리 ${to} 되돌렸습니다.`; break;
+      case 'loaded':    line = `${to} 실었습니다.`; break;
+      case 'actual':
+      case 'move':      line = (m.to === '미배정') ? '자리를 비웠습니다 (미배정).' : `${to} 옮겼습니다.`; break;
+      default:          line = (m.to === '미배정')
+                          ? '자리를 잃었습니다 (미배정). (사유 기록 없음 — 이력 도입 전)'
+                          : `${to} 옮겼습니다. (사유 기록 없음 — 이력 도입 전)`; break;
+    }
+    if (m.byCn) { const b4 = String(m.byCn).slice(-4); line += ` 그 자리엔 ${b4}${_iga(b4)} 실렸습니다.`; }
+    lines.push(line);
+  });
+  lines.push(tail);
+  return lines.join('\n');
+}
+
 export function effectivePos(c) {
   if (!c) return { bay: '', row: '', tier: '', src: 'none', inStorage: false };
   const s = (v) => (v === undefined || v === null ? '' : String(v));

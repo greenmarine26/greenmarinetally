@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth } from './utils.js';   // TallyOne 1.22: 도선→작업개시
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath} from './utils.js';   // TallyOne 1.22: 도선→작업개시
 
 // ─── 항구 코드 매핑 ───
 const PORT_KR_TO_CODE = {
@@ -313,6 +313,11 @@ export function parseNaturalQuery(text) {
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
   if (/(실\s*번호|씰|실)\s*(점검|검사|오류|확인|체크)|리스트\s*(점검|검사|확인|체크)|점검\s*(?:해|좀|줘|할까)/i.test(t)) result.sealAuditQuery = true;
+  // TallyOne 1.50: **"어디 갔어?"는 현재 위치가 아니라 경로를 묻는 말이다.**
+  //   검수사 확정 2026-08-11 — *"특정 컨테이너가 여기에 있어야 하는데 어디로 갔지 하고 물으면
+  //   어디 선적때 어떤 컨테이너로 바뀌어서 어디로 이동 시켰습니다 라고 알려 줘야 합니다."*
+  //   ⚠ posQuery(현재 위치)보다 **먼저** 잡는다 — "어디 갔어"가 "어디"에 먹히면 옛 답이 나온다.
+  if (/어디\s*(?:로)?\s*(?:갔|간|감|옮|이동|보냈|치웠)|왜\s*(?:옮|이동|바뀌|바꿨)|경로|이동\s*(?:이력|기록|경로)|무빙|어떻게\s*(?:옮|이동)/i.test(t)) result.movePathQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   // TallyOne 1.17: **끝 4자리 중복 조회** (검수사 오답 신고 2026-08-06 — "끝자리 4자리 중복인거 알려줘").
   //   종전엔 listQuery 하나로만 잡혀 '중복'을 못 읽고 전체를 나열했다.
@@ -666,6 +671,16 @@ function formatShifting(ctx) {
   return lines.join('\n');
 }
 
+// TallyOne 1.50: "○○ 어디 갔어?" — 지나온 자리를 문장으로.
+//   경로가 없으면(옛 컨) buildMovePath 가 orig·actual·현재 세 점으로 복원한다.
+function formatMovePathAnswer(results, allContainers, ctx) {
+  const pool = (results && results.length ? results : []);
+  const cand = pool.filter(c => c && c.cn);
+  if (!cand.length) return null;
+  if (cand.length > 3) return null;                  // 너무 많으면 경로 답변이 아니다
+  return cand.map(c => describeMovePath(c, !!c._comp)).join('\n\n');
+}
+
 export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);
@@ -673,6 +688,12 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   // TallyOne 1.27: 시프팅 — 배정목록의 'N' 은 무브 수(양하 1 + 재선적 1)라 컨 대수의 2배다.
   if (parsed.shiftingQuery) return formatShifting(ctx);
 
+
+  // TallyOne 1.50: 경로 답변 — 컨을 특정할 수 있을 때만. 최우선(현재 위치 답보다 먼저).
+  if (parsed.movePathQuery) {
+    const ans = formatMovePathAnswer(results, allContainers, ctx);
+    if (ans) return ans;
+  }
 
   // V7.99-16: 양하신고 점검 — 그날 이상 건 정리. 최우선.
   if (parsed.customsReportQuery) {

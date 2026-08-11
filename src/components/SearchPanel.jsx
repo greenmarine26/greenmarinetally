@@ -356,6 +356,36 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         return (
           <div className="flex items-center gap-2 text-[11px] bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5">
             <span className="font-bold text-amber-300">📍 {noBay ? '⚠ 자리 미지정 작업 중' : `${bayLbl}번 ${manualTier === 'hold' ? '홀드' : '데크'} 작업 중`}</span>
+            {/* TallyOne 1.50: **싱글이 먼저다.** 검수사 확정 2026-08-11 —
+                *"그자리는 수동모드에서 싱글로 선적을 한후에 트윈으로 가서 선적 하여야 합니다."*
+                *"1단은 넣어도 되지만 스프레더를 두번을 더 바꿔야 합니다."*
+                규칙은 guidedQueue.js(V8.09-03, 2026-06-17 확정)에 이미 있었는데 **수동에는 없었다.**
+                그래서 클로드가 트윈부터 가려 했고 검수사가 말려야 했다. 짝 없는 자리를 세어 먼저 알린다. */}
+            {!noBay && manualTier === 'hold' && workFilter === 'loading' && (() => {
+              const gg = manualGroups.find(x => x.center === manualBay);
+              if (!gg) return null;
+              const bays = [...gg.bays];
+              const key = (b, r, t) => `${parseInt(b, 10)}-${r}-${t}`;
+              const spots = new Set();
+              allContainers.forEach(x => {
+                if (x._mode !== workFilter || !x._ptk || !x.bay || !x.row || !x.tier) return;
+                if (parseInt(x.tier, 10) >= 80) return;
+                if (!bays.includes(parseInt(x.bay, 10))) return;
+                spots.add(key(x.bay, x.row, x.tier));
+              });
+              // 짝 없는 자리 = 짝꿍 베이의 같은 열·단에 자리가 아예 없는 곳
+              let n = 0;
+              allContainers.forEach(x => {
+                if (x._mode !== workFilter || !x._ptk || x._comp || !x.bay || !x.row || !x.tier) return;
+                if (parseInt(x.tier, 10) >= 80) return;
+                if (!bays.includes(parseInt(x.bay, 10))) return;
+                const pb = manualBayPairs?.[String(parseInt(x.bay, 10))];
+                if (!pb) return;
+                if (!spots.has(key(pb, x.row, x.tier))) n++;
+              });
+              if (!n) return null;
+              return <span className="ml-2 px-1.5 py-0.5 rounded bg-rose-800 text-rose-100 font-black text-[10px]">✋ 싱글 먼저 {n}대 — 짝 없는 자리</span>;
+            })()}
             <span className="font-black text-emerald-300 bg-emerald-950/50 border border-emerald-800 rounded px-1.5 py-0.5">잔여 {remain}대</span>
             <button onClick={() => { setManualTier(null); }} className="text-slate-400 hover:text-amber-300">단 변경</button>
             <button onClick={() => { setManualBay(null); setManualTier(null); }} className="text-slate-400 hover:text-amber-300">베이 변경</button>

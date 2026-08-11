@@ -418,10 +418,51 @@ export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by) {
 // V7.99-16: 완료 시 이상 상태 기록(양하신고 점검용).
 //   flag: 'normal'(기본) | 'missing'(누락-선박에 없음) | 'extra'(초과-리스트에 없는데 내림) | 'swapped'(바뀜)
 //   note: 자유 메모(바뀜이면 원래 신고 번호 등). 기존 8개 호출부는 인자 안 줘서 normal — 회귀 없음.
+
+// TallyOne 1.50: **선적확인 = 실제로 그 자리에 실었다는 현장 사실.**
+//   그 순간 실체 위치(bay_actual)를 그 자리로 확정하고 경로에 마지막 점을 남긴다.
+//   왜 필요했나 — 실측 2026-08-11:
+//     TBJU2745744 는 계획 17-05-06 에 선적확인까지 됐는데 실체 기록은 옛 자리 15-04-06 이었다.
+//     effectivePos() 가 실체를 최우선으로 쓰므로 **화면 전체가 옛 자리를 진실로 봤고**,
+//     있지도 않은 자리 중복 2곳이 떴다(DB 실제 중복은 0). 마감 점검에도 그대로 올라간다.
+//   옛 실체 값은 지우는 게 아니라 경로에 남긴다 — 검수사 확정: *"이력을 남겨야 오류를 찾기 쉽습니다."*
+//   ⚠ 비차단 — 여기서 실패해도 선적확인 자체는 이미 저장됐다. 검수 흐름을 막지 않는다.
+function _markLoadedPos(voyageKey, mode, cn, by) {
+  if (mode !== 'loading' || !voyageKey || !cn) return;
+  (async () => {
+    try {
+      const recR = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+      const [recSnap, ediSnap] = await Promise.all([
+        get(recR), get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`)),
+      ]);
+      const cur = recSnap.val() || {}, edi = ediSnap.val() || {};
+      const b = cur.bay !== undefined ? cur.bay : (edi.bay || '');
+      const r = cur.row !== undefined ? cur.row : (edi.row || '');
+      const t = cur.tier !== undefined ? cur.tier : (edi.tier || '');
+      if (!b || !r || !t) return;                       // 자리 없이 완료된 건은 손대지 않는다
+      const bI = String(parseInt(b, 10));
+      const oa = String(cur.bay_actual ?? '');
+      if (oa.startsWith('__')) return;                  // 임시창고는 건드리지 않는다
+      const same = oa === bI && String(cur.row_actual ?? '') === r && String(cur.tier_actual ?? '') === t;
+      if (same) return;                                 // 이미 맞으면 줄만 늘린다
+      const pos = (bb, rr, tt) => (bb ? `${String(parseInt(bb, 10)).padStart(2, '0')}-${rr}-${tt}` : '미배정');
+      const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
+      moves.push({ at: Date.now(), by: by || '', from: pos(cur.bay_actual, cur.row_actual, cur.tier_actual),
+                   to: pos(b, r, t), why: 'loaded', byCn: '' });
+      await update(recR, {
+        bay_actual: bI, row_actual: r, tier_actual: t,
+        actual_at: Date.now(), actual_by: by || '',
+        moves: moves.slice(-40),
+      });
+    } catch { /* 경로 기록 실패가 선적확인을 막지 않는다 */ }
+  })();
+}
+
 export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'normal', note = '') {
   const rec = { by, at: Date.now() };
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
   await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
+  _markLoadedPos(voyageKey, mode, cn, by);   // 1.50: 실린 자리 확정 + 경로 마지막 점
   _tallyInspector(voyageKey, mode, by);   // V9.16: 개인 누적 실적 (비차단 — 실패해도 완료 처리는 무관)
 }
 
@@ -455,6 +496,7 @@ export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by) {
   const list = cns.filter(Boolean);
   for (const cn of list) patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = { by, at };
   await update(ref(db), patch);
+  for (const cn of list) _markLoadedPos(voyageKey, mode, cn, by);   // 1.50: 트윈 둘 다 경로 남김
   for (const _ of list) _tallyInspector(voyageKey, mode, by);   // V9.16: 트윈도 대수만큼 누적
 }
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
@@ -511,17 +553,17 @@ export async function fbCancelComplete(voyageKey, mode, cn) {
       }
     }
     if (occupant) {
-      await _updatePositionFields(voyageKey, mode, cn, '', '', '', '취소원복');
+      await _updatePositionFields(voyageKey, mode, cn, '', '', '', '취소원복', { why: 'cancel' });
       return { ok: true, restored: false, origOccupied: occupant };
     }
-    await _updatePositionFields(voyageKey, mode, cn, ob, orow, ot, '취소원복');
+    await _updatePositionFields(voyageKey, mode, cn, ob, orow, ot, '취소원복', { why: 'cancel' });
     return { ok: true, restored: true, orig: { bay: ob, row: orow, tier: ot } };
   } catch { return { ok: true }; }
 }
 
 // V8.80: 수동 배정 확인 — 컨을 미배정으로 (수동 작업은 계획 위치에 묶이지 않는다. 사용자 확정 2026-07-08).
 export async function fbUnassignContainer(voyageKey, mode, cn, by) {
-  await _updatePositionFields(voyageKey, mode, cn, '', '', '', by);
+  await _updatePositionFields(voyageKey, mode, cn, '', '', '', by, { why: 'unassign' });
 }
 
 // M4.9d-fix: 선적 실체 위치 저장 (사용자 도메인: 선적 EDI는 계획만, 선적확인 시 실체 발생)
@@ -764,15 +806,15 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     //   실물로도 맞다 — A가 계획(17-06-06) 대신 19-06-02 로 갔으면 17-06-06 이 비고,
     //   19-06-02 를 빼앗긴 컨이 거기로 가면 된다. **자리 교환.**
     if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
-      await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
+      await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by, { why: 'displaced', byCn: cn });
     } else if (opts.displacedMode === 'unassign') {
       // 검수사가 명시적으로 미배정을 고른 경우만 비운다.
-      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
     } else if (displacedPlanOnly) {
       // 액츄얼인데 **A 자신이 자리가 없던 경우**만 여기 온다(보낼 옛 자리가 없다).
       //   이때 자리를 그대로 두면 한 칸에 두 대가 남아 그림에서 한 대가 사라진다 — 그것이 1.47 의 사건이었다.
       //   계획분은 아직 아무 데도 실려 있지 않으므로 미배정(선적대상)으로 두는 것이 안전하다.
-      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
     } else {
       // TallyOne 1.36: **뺏긴 컨을 미배정으로 만들지 않는다.** 검수사 확정 2026-08-09 —
       //   *"빼앗긴 컨테이너는 빼앗은 컨테이너 자리로 가 있는 것, 그것만 확실하다면 미배정은 없습니다."*
@@ -800,7 +842,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
         }
       }
       if (planFree) {
-        await _updatePositionFields(voyageKey, mode, displaced, pb, pr, pt, by);
+        await _updatePositionFields(voyageKey, mode, displaced, pb, pr, pt, by, { why: 'displaced', byCn: cn });
       }
       // planFree 가 아니면 아무것도 하지 않는다 — 뺏긴 컨은 그 자리에 남는다.
     }
@@ -816,7 +858,9 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   }
 
   // 3) target 컨 위치 변경
-  await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
+  //   1.50: 액츄얼(실제 실린 자리로 검수원이 지정)과 단순 이동을 사유로 구분한다.
+  await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by,
+    { why: opts.actualWork ? 'actual' : 'move', byCn: displaced || '' });
 
   return {
     ok: true, displaced, displacedWasCompleted,
@@ -827,7 +871,27 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
 }
 
 // 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화
-async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by) {
+//
+// TallyOne 1.50: **컨이 지나온 자리를 전부 남긴다.** 검수사 확정 2026-08-11 —
+//   *"컨이 무빙된 자리는 다 기억하고 있어야 합니다. 왜 뭐때문에 이동 했는지를 알아야 합니다.
+//     처음에 어디 있었는지 부터 최종선적위치 까지 경로를 갖고 있어야 합니다."*
+//   *"이력이 없으면 알려주기 힘듭니다."*
+//   목표는 이 문장을 앱이 말하게 하는 것이다 —
+//     *"어디 선적때 어떤 컨테이너로 바뀌어서 어디로 이동 시켰습니다."*
+//
+//   ⚠ **위치를 바꾸는 모든 길이 이 함수 하나를 지난다**(취소원복·미배정·밀림 4갈래·검수원 지정).
+//     그래서 여기 한 줄만 쌓으면 경로가 끊기지 않는다. 흩어 놓으면 반드시 하나가 빠진다 —
+//     2026-08-11 앞뒤 맞교환이 뒤 컨을 안 옮겨 한 칸에 두 대가 된 것이 그 예다.
+//
+//   기존 `edits` 는 그대로 둔다(회귀 없음). edits 는 bay/row/tier 를 **따로** 쌓아
+//   "언제 어디서 어디로"가 한 줄로 안 읽히고, 사유와 대신 온 컨이 없다.
+//
+//   meta = { why, byCn }
+//     why   : 'move'(검수원 지정) · 'actual'(실제 실린 자리) · 'displaced'(자리를 뺏김)
+//             · 'unassign'(미배정) · 'cancel'(완료 취소 원복) · 'restore'(원래 자리로)
+//             · '' (앱이 모르는 이동 — 빈칸이 곧 찾아야 할 구멍이다)
+//     byCn  : 그 자리에 **대신 들어온 컨** — *"어떤 컨테이너로 바뀌어서"* 를 말하려면 이게 있어야 한다
+async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by, meta = {}) {
   const recR = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
   const ediR = ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`);
   const [recSnap, ediSnap] = await Promise.all([get(recR), get(ediR)]);
@@ -862,6 +926,21 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     tier_orig: cur.tier_orig !== undefined ? cur.tier_orig : oldTier,
     edits,
   };
+
+  // 1.50: 경로 한 줄 — 자리가 실제로 바뀐 때만 쌓는다(같은 자리 재저장은 줄만 늘린다).
+  const _pos = (b, r, t) => (b ? `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}` : '미배정');
+  const _from = _pos(oldBay, oldRow, oldTier);
+  const _to = _pos(nb, nr, nt);
+  if (_from !== _to) {
+    const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
+    moves.push({
+      at: Date.now(), by: by || '',
+      from: _from, to: _to,
+      why: meta.why || '',
+      byCn: meta.byCn || '',       // 그 자리에 대신 들어온 컨
+    });
+    patch.moves = moves.slice(-40);   // 한 컨이 40번 넘게 움직일 일은 없다 — 폭주 방어
+  }
 
   // TallyOne 1.34: **미배정으로 만들 때는 실체 위치도 같이 지운다.**
   //   검수사 신고 2026-08-09: *"38번 베이에 선적이 안 된 곳은 23곳인데 앱은 21개로 표시하고

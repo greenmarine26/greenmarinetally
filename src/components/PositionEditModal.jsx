@@ -363,7 +363,7 @@ export default function PositionEditModal({
             {pickBay && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 (✓회색=선적 완료 · 흐림=다른 컨 예약 · 밝은 칸=빈 자리 · 하늘=지금 자리)</div>
+                  <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 — 왼쪽이 단, 가로가 열 (종이 베이플랜과 같은 배치)</div>
                   <button onClick={() => setPickBay(null)} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
                 </div>
                 <div className="max-h-56 overflow-y-auto pr-1 space-y-1">
@@ -385,25 +385,25 @@ export default function PositionEditModal({
                       <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
                         title="지금 이 컨이 있는 자리 — 그대로 두고 트윈만 걸 수 있습니다"
                         className="px-2.5 py-2 rounded-lg bg-cyan-950 hover:bg-cyan-900 border-2 border-cyan-500 mono text-[13px] font-black text-cyan-200 flex flex-col items-center leading-tight">
-                        <span>{s.row}-{s.tier}</span>
-                        <span className="text-[9px] text-cyan-400">지금 자리</span>
+                        <span>{s.row}</span>
+                        <span className="text-[9px] text-cyan-400">지금</span>
                       </button>
                     ) : s.done ? (
                       <span key={`${s.bay}-${s.row}-${s.tier}`}
                         className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">
-                        ✓{s.row}-{s.tier}
+                        ✓{s.row}
                       </span>
                     ) : s.cn ? (
                       <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
                         title={`${s.cn} 이 예약한 자리입니다`}
                         className="px-2.5 py-2 rounded-lg bg-slate-900/70 hover:bg-amber-900 border border-slate-700 border-dashed hover:border-amber-500 mono text-[13px] font-bold text-slate-400 flex flex-col items-center leading-tight">
-                        <span>{s.row}-{s.tier}</span>
+                        <span>{s.row}</span>
                         <span className="text-[9px] text-slate-500">{String(s.cn).slice(-4)}</span>
                       </button>
                     ) : (
                       <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
                         className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-amber-800 border-2 border-amber-600 hover:border-amber-400 mono text-sm font-bold text-amber-100">
-                        {s.row}-{s.tier}
+                        {s.row}
                       </button>
                     );
                     return tiers.map(t => (
