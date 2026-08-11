@@ -16,7 +16,12 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   //   종전엔 이 셋을 PositionEditModal 로 안 내려서, 모달이 전체 베이를 다시 묻고 뒤 컨도 다시 물었다.
   workGroup = null, workTier = null, twinPartner = null,
   // TallyOne 1.49: 자리 격자의 진실원(완료분 포함 전체). 없으면 allContainers 로 폴백.
-  slotSource = null }) {
+  slotSource = null,
+  // TallyOne 1.49-01: **베이 짝 판정을 두 벌로 두지 않는다.**
+  //   아래 자체 계산은 선박 베이사전(imo·vsl)을 못 읽어 23↔25 · 3↔5 · 11↔13 짝을 놓쳤다.
+  //   그 결과 1.48 작업 구역 게이트가 23·25 홀드 자리를 통째로 걸러 「남은 자리가 없습니다」가 떴다
+  //   (실측 2026-08-11, 24번 홀드 싱글 TBJU2403485). 부르는 쪽이 쓰는 그 벌을 그대로 받는다.
+  bayPairsIn = null }) {
   // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
   //   이 카드가 그 컨으로 바뀌어야 한다. 종전엔 배정만 되고 카드는 계획 컨 그대로여서
   //   화면상 아무 일도 안 일어난 것처럼 보였다(사용자 지적 2026-08-03: 트윈 뒤 카드가 안 바뀜).
@@ -36,8 +41,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   //   존재하지 않는 자리에 무단 배정·완료되던 원인. 트윈 배정은 PositionEditModal 안에서
   //   도착지(배정 자리) 기준 + 검수사의 "트윈 지정"으로만 이뤄진다.
   const posEditBayPairs = useMemo(() => {
+    if (bayPairsIn && Object.keys(bayPairsIn).length) return bayPairsIn;   // 1.49-01: 부르는 쪽 판정 우선
     try { return getBayPairs(allContainers.filter(x => x._mode === c?._mode)); } catch { return null; }
-  }, [allContainers, c]);
+  }, [allContainers, c, bayPairsIn]);
 
   // M3.87: 위치 수정 모달 (선적 모드)
   // V7.94-10: 컨테이너 번호 수정 — 다른 컨이 왔을 때: 실제 컨 검색·선택 → [위치 선택] → 남은 자리 창
