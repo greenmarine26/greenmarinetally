@@ -502,8 +502,12 @@ export async function fbCancelComplete(voyageKey, mode, cn) {
       for (const otherCn of new Set([...Object.keys(ediMap), ...Object.keys(recMap)])) {
         if (otherCn === cn) continue;
         const e = ediMap[otherCn] || {}, r = recMap[otherCn] || {};
-        const xb = r.bay || e.bay || '';
-        if (xb && String(parseInt(xb, 10)) === obInt && (r.row || e.row) === orow && (r.tier || e.tier) === ot) { occupant = otherCn; break; }
+        // TallyOne 1.47: 위 재배정 함수와 같은 잣대(`!== undefined`). 종전 `||` 는 미배정(`''`)을
+        //   EDI 계획 자리로 되살려, **이미 비운 컨이 원자리를 막고 있는 것으로** 읽혔다.
+        const xb = r.bay !== undefined ? r.bay : (e.bay || '');
+        const xr = r.row !== undefined ? r.row : (e.row || '');
+        const xt = r.tier !== undefined ? r.tier : (e.tier || '');
+        if (xb && String(parseInt(xb, 10)) === obInt && xr === orow && xt === ot) { occupant = otherCn; break; }
       }
     }
     if (occupant) {
@@ -690,6 +694,7 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   }
   // 1) 같은 자리에 있는 다른 컨 찾기 (충돌 검사)
   let displaced = null;
+  let displacedPlanOnly = false;      // 1.47: 액츄얼에서 계획만 있던 컨을 밀어낸 경우
   let ediMap0 = {}, recMap0 = {};
   if (newBay && newRow && newTier) {
     const ediMapRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers`);
@@ -707,9 +712,14 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       if (otherCn === cn) continue;
       const ediC = ediMap[otherCn] || {};
       const recC = recMap[otherCn] || {};
-      const oBay = recC.bay || ediC.bay || '';
-      const oRow = recC.row || ediC.row || '';
-      const oTier = recC.tier || ediC.tier || '';
+      // TallyOne 1.47: **자리 판정 잣대를 이 함수 안에서 하나로 통일한다.**
+      //   종전 `recC.bay || ediC.bay` 는 미배정(`bay:''`)을 falsy 로 보고 **EDI 계획 자리로 되살렸다.**
+      //   그래서 자리를 비운 컨이 그림에서도 목록에서도 그 칸을 계속 점유했다(유령 충돌).
+      //   같은 함수의 A 옛자리·계획자리 점유검사는 이미 `!== undefined` 기준이었다 —
+      //   **한 함수가 두 잣대를 쓰고 있었다.** 아래 액츄얼 게이트가 열리면 이 차이가 그대로 버그가 된다.
+      const oBay = recC.bay !== undefined ? recC.bay : (ediC.bay || '');
+      const oRow = recC.row !== undefined ? recC.row : (ediC.row || '');
+      const oTier = recC.tier !== undefined ? recC.tier : (ediC.tier || '');
       if (!oBay) continue;
       const oBayInt = String(parseInt(oBay, 10));
       if (oBayInt === newBayInt && oRow === newRow && oTier === newTier) {
@@ -721,7 +731,20 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
         //   89칸으로 준다 — **헛충돌 96칸(52%)이 사라진다.**
         //   → 이제 **이미 선적완료된 컨이 그 자리에 있을 때만** 충돌로 본다.
         //     예약만 한 컨은 계획 자리를 그대로 지키고, 안 실리면 작업 끝에 '미선적'으로 잡힌다.
-        if (!compMap[otherCn]) continue;
+        //   TallyOne 1.47: **다만 그것은 시퀀스 작업일 때다.** (검수사 확정 2026-08-11)
+        //     원문 — *"원래는 빈 것이고 그곳에 그 컨테이너를 넣었으면 하는 계획일 뿐이라
+        //     다른 컨이 오면 바로 내줘야 합니다. 이걸 액츄얼 작업이라고 합니다.
+        //     풀 컨테이너도 액츄얼 작업일 때는 이렇게 되어야 합니다.
+        //     다만 시퀀스 작업일 때는 그 자리 주인이 될 수 있습니다. 특별한 사정이 없는 한."*
+        //   → 액츄얼(수동 배정)에서는 계획 자리에 **주인이 없다.** 예약분도 바로 내주고,
+        //     자리를 잃은 컨은 미배정(선적대상)으로 돌아간다 — 그것이 정상이지 떠돌이가 아니다.
+        //   1.31 은 반쪽만 맞았다: "예약은 입실이 아니다"까지는 맞고, 그래서 *안 밀어낸다*가 아니라
+        //     *바로 내준다*가 답이었다. 실측(DXQD 2631W 수동 선적 4건, 2026-08-11): 밀어내지 않은 탓에
+        //     EDI 한 칸에 두 대가 남아 **선적한 컨 3건이 베이 그림에서 사라졌다.**
+        if (!compMap[otherCn]) {
+          if (!opts.actualWork) continue;        // 시퀀스·자동 가이드: 예약은 자리를 지킨다
+          displacedPlanOnly = true;              // 액츄얼: 계획만 있는 컨 → 자리를 비운다
+        }
         displaced = otherCn;
         break;
       }
@@ -731,7 +754,13 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
   let displacedWasCompleted = false;
   if (displaced) {
-    if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
+    if (displacedPlanOnly) {
+      // TallyOne 1.47: **액츄얼 — 계획 자리는 주인이 아니다.** 자리를 비우고 선적대상으로 되돌린다.
+      //   여기서 A의 옛 자리로 보내는(swap) 것은 틀리다. 그 컨은 애초에 어디에도 실려 있지 않고,
+      //   계획은 "여기 넣었으면" 하는 희망일 뿐이라 **다른 계획 자리로 옮길 근거가 없다.**
+      //   미배정 = 아직 자리가 안 정해진 선적대상. 화면이 이미 그렇게 예고하고 있었다.
+      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by);
+    } else if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by);
     } else if (opts.displacedMode === 'unassign') {
       // 검수사가 명시적으로 미배정을 고른 경우만 비운다.
@@ -781,7 +810,12 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   // 3) target 컨 위치 변경
   await _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by);
 
-  return { ok: true, displaced, displacedWasCompleted, swappedTo: (displaced && opts.displacedMode !== 'unassign') ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null };
+  return {
+    ok: true, displaced, displacedWasCompleted,
+    displacedUnassigned: displacedPlanOnly,          // 1.47: 계획분을 비켜 세웠음(호출부 안내용)
+    swappedTo: (displaced && !displacedPlanOnly && opts.displacedMode !== 'unassign')
+      ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null,
+  };
 }
 
 // 내부 헬퍼: bay/row/tier 동시 변경 + 이력 추가 + ediContainers 동기화

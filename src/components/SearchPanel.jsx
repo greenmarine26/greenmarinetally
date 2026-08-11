@@ -1224,8 +1224,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     setBusy(true);
     try {
       // V9.52: 자리 교환 — 밀려난 계획 컨은 이 컨의 옛 자리로 옮겨 대기(미배정 떠돌이 방지)
-      await fbReassignContainerPosition(voyageKey, 'loading', c1.cn, bay, rowP, tierP, inspector);
-      await fbReassignContainerPosition(voyageKey, 'loading', c2.cn, backPos.bay, backPos.row, backPos.tier, inspector);
+      await fbReassignContainerPosition(voyageKey, 'loading', c1.cn, bay, rowP, tierP, inspector, { actualWork: true });
+      await fbReassignContainerPosition(voyageKey, 'loading', c2.cn, backPos.bay, backPos.row, backPos.tier, inspector, { actualWork: true });
       await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
       speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
       resetAll();

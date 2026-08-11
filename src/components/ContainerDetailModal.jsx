@@ -1199,11 +1199,11 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
           // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지)
           // V9.52: 자리 교환 — 밀려난 컨은 이 컨의 옛 자리로 (미배정 떠돌이 방지, 지침 현장 규칙)
-          const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector);
+          const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector, { actualWork: true });
           return result;
         }}
         bayPairs={posEditBayPairs}
-        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector)}   /* V9.52: 자리 교환 */
+        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true })}   /* V9.52: 자리 교환 */
         onCompleteBoth={async (cns) => {
           for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector);
           // V8.70: 자동 선적확인 완료 음성 — 무음 오해 방지.

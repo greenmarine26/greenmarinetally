@@ -381,7 +381,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           const _t = posTarget || c;
           // V9.52: 자리 교환 — 밀려난 계획 컨은 이 컨(_t)의 옛 계획 자리로 옮겨 대기시킨다.
           //   (종전 'unassign' → 미배정 떠돌이 발생. 지침 현장 규칙으로 복귀)
-          const result = await fbReassignContainerPosition(voyageKey, c._mode, _t.cn, newBay, newRow, newTier, inspector);
+          const result = await fbReassignContainerPosition(voyageKey, c._mode, _t.cn, newBay, newRow, newTier, inspector, { actualWork: true });
           // V9.50: 다른 컨이 와서 그 자리에 배정했다면 카드를 그 컨으로 갈아 끼운다.
           //   (같은 컨의 단순 위치 이동이면 갈아 끼울 것이 없다)
           if (result && result.ok !== false && _t.cn !== c.cn && onReplace) {
@@ -390,7 +390,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           return result;
         }}
         bayPairs={posEditBayPairs}
-        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector)}   /* V9.52: 자리 교환 */
+        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { actualWork: true })}   /* V9.52: 자리 교환 */
         onCompleteBoth={async (cns) => {
           for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector);
           // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
