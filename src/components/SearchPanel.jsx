@@ -1490,15 +1490,9 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
     }
     setTwinBusy(true);
     try {
-      // TallyOne 1.46: **둘 다 되거나 둘 다 안 되거나** — 순차 2회 write 를 원자 1회로.
-      //   종전엔 fbCompleteContainer 를 한 건씩 두 번 불렀다. 앞이 반영되는 순간 그 컨이
-      //   목록(filteredContainers)에서 빠져 카드가 통째로 사라지므로, 뒤가 실패해도
-      //   화면에는 "처리된 것"처럼 보였다(catch 도 없어 조용히 묻혔다).
-      const cns = [c1, c2].filter(c => !c._comp).map(c => c.cn);
-      if (cns.length) await fbCompleteContainersAtomic(voyageKey, c1._mode, cns, inspector);
+      if (!c1._comp) await fbCompleteContainer(voyageKey, c1._mode, c1.cn, inspector);
+      if (!c2._comp) await fbCompleteContainer(voyageKey, c2._mode, c2.cn, inspector);
       setTimeout(() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }, 500);
-    } catch (e) {
-      alert('처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도해 주세요.\n' + (e?.message || e));
     } finally {
       setTwinBusy(false);
     }
@@ -1575,20 +1569,6 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
         )}
       </div>
 
-      {/* TallyOne 1.46: 트윈 확인 버튼을 **카드 위로** 올린다 (검수사 지적 2026-08-11).
-          원인 원문 — *"그이유가 버튼 위치입니다. 맨밑에 있을 것입니다 '두 컨테이너 동시 선적' 비슷하게.
-          그게 안보이면 그냥 선적을 누릅니다."*
-          종전에는 앞 카드·뒤 카드 두 장을 지나 맨 아래에 있어서 스크롤하지 않으면 안 보였다.
-          각 카드 안에는 개별 「선적확인」이 있으므로, 검수원은 먼저 보이는 그것을 누르고
-          **앞 컨만 기록되고 뒤 컨은 미배정으로 떠돌았다**(실측: 5881 완료 / 짝 5755 자리·완료 모두 없음). */}
-      {c1 && c2 && (
-        <button onClick={handleCompleteBoth} disabled={twinBusy}
-          className="w-full py-3 rounded-lg font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
-          <Link2 className="w-5 h-5"/>
-          {twinBusy ? '처리 중…' : (c1._mode === 'discharge' ? '트윈 한 번에 양하확인 (두 대)' : '트윈 한 번에 선적확인 (두 대)')}
-        </button>
-      )}
-
       {c1 && (
         <BigResultCard c={c1} allContainers={allContainers}
           voyageKey={voyageKey} inspector={inspector}
@@ -1622,6 +1602,14 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
 
       {c1 && !c2 && (
         <ManualTwinPicker allContainers={allContainers} c1={c1} onPick={setC2}/>
+      )}
+
+      {c1 && c2 && (
+        <button onClick={handleCompleteBoth} disabled={twinBusy}
+          className="w-full py-3 rounded-lg font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+          <Link2 className="w-5 h-5"/>
+          {twinBusy ? '처리 중…' : (c1._mode === 'discharge' ? '트윈 한 번에 양하확인' : '트윈 한 번에 선적확인')}
+        </button>
       )}
 
       {c1 && c2 && (

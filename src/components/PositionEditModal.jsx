@@ -29,12 +29,7 @@ export default function PositionEditModal({
   const [twinOn, setTwinOn] = useState(false);           // V8.70: 검수사가 켜는 "트윈 지정"
   const [partnerQuery, setPartnerQuery] = useState('');  // V8.70: 뒤(짝꿍) 컨 검색어
   const [partnerPick, setPartnerPick] = useState(null);  // V8.70: 뒤(짝꿍) 컨 선택
-  // TallyOne 1.46: 기본을 **끔**으로 (검수사 지적 2026-08-11).
-  //   원문 — *"여기서 변경을 누르면 **위치수정만 저장되고 트윈 모드 화면으로 가야 하는데**
-  //   선적 처리가 됩니다."*
-  //   위치 지정 단계에서 선적까지 찍히면 트윈 흐름이 깨진다 — 자리를 잡은 뒤 트윈 화면으로 돌아가
-  //   앞·뒤 두 대를 **한 번에** 찍어야 한다. 필요하면 검수원이 이 자리에서 켜면 된다.
-  const [alsoComplete, setAlsoComplete] = useState(false);// 배정 후 바로 선적확인 (기본 끔)
+  const [alsoComplete, setAlsoComplete] = useState(true);// 배정 후 바로 선적확인
 
   useEffect(() => {
     if (open && container) {
@@ -45,7 +40,7 @@ export default function PositionEditModal({
       setErrMsg('');
       setManualOpen(false);
       setTwinOn(false); setPartnerQuery(''); setPartnerPick(null);
-      setAlsoComplete(false);   // 1.46: 열 때마다 끔 — 위치 저장과 선적확인을 분리
+      setAlsoComplete(true);
       setPickedSlotCn(null);
       // V7.94-20: 미배정 컨(위치 없음)인데 현재 작업 베이가 있으면 그 베이 자동 선택 — 전체 베이 재선택 단계 생략
       const wb = container.bay ? null : (workBay != null ? String(parseInt(workBay, 10)) : null);

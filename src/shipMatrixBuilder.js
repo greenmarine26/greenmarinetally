@@ -40,17 +40,8 @@ export function extractShipMetaFromVoyage(voyage) {
     const _v = String(vsl).toUpperCase().trim();
     if (/^[A-Z0-9]{3,8}$/.test(_v)) code = _v;
   }
-  // TallyOne 1.45-04: **호출부호를 자르지 않는다** (검수사 확정 2026-08-11).
-  //   검수사 원문 — *"호출부호를 자르지 말고 하세요."* · *"지금 호출부호를 보면 중복이 되지 않습니다."*
-  //   콜사인 전체(3~7자)는 배마다 유일하다. 앞 4자로 자르는 순간에만 충돌이 생긴다 —
-  //   현실에 없는 충돌을 앱이 만들어 냈다. 실측 2026-08-11:
-  //     V7A4986(KOBE TRADER, IMO 9915973) ↔ V7A4922(YOKOHAMA TRADER, IMO 9915961) → 둘 다 `V7A4`
-  //     V7A5451(STARSHIP DRACO) ↔ V7A5452(PEGASUS PROTO) → 둘 다 `V7A5`
-  //     V7A281(SAWASDEE ATLANTIC) ↔ V7A2845(STAR FRONTIER) → 둘 다 `V7A2` (NSFR이 SWAT 매트릭스를 물어온 사고)
-  //   조회 쪽은 이미 콜사인 **완전 일치**만 인정한다(shipStructure.js fb-exact · userBayDict _matchInDict).
-  //   자르지 않으면 그 경로와 기준이 맞는다.
-  if (!code && callsign) {
-    code = callsign;
+  if (!code && callsign && callsign.length >= 4) {
+    code = callsign.substring(0, 4);
   }
   if (!code && vsl) {
     const words = vsl.toUpperCase().split(/\s+/).filter(Boolean);
