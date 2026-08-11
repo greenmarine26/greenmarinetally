@@ -1,11 +1,12 @@
 import React, { useState , useMemo} from 'react';
 import { X, Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, MapPin, Volume2, RotateCcw, History, Lock, Camera } from 'lucide-react';
-import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
+import { isoToLabel, formatWt, getEquipNumber, isUnknownIso, isReeferContainer, isISO403, isISO403PhotoTaken, isBookingSlot, bayParityError, slotAdjacencyError, podZoneMismatch, buildMovePath, describeMovePath } from '../utils.js';   // TallyOne 1.53: 지나온 자리 — 배가 떠난 뒤에도 봐야 한다.
 import { speakContainer, speakDone } from '../voice.js';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbUpdateRecordField, fbSetEmptySeal, fbReassignContainerPosition, fbSetActualPosition, fbClearActualPosition } from '../firebase.js';
 import PhotoReportModal from './PhotoReportModal.jsx';
 import ISO403PhotoModal from './ISO403PhotoModal.jsx';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
+import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
 import PositionEditModal from './PositionEditModal.jsx';
 import { getBayPairs } from '../twin.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
@@ -142,15 +143,27 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     await _doSave();
   };
 
-  // M4.9d-fix: 실체 위치 삭제 (수정 취소 - 계획대로 돌아감)
-  const handleClearActualPosition = async () => {
-    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-    if (!confirm('수정 위치 기록을 삭제하시겠습니까?\n계획 위치대로 처리됩니다.')) return;
-    await fbClearActualPosition(voyageKey, mode, c.cn);
-  };
-
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  // TallyOne 1.53: 결과 알림도 앱 안에서 — 브라우저 alert/confirm 은 뜨는 순간 화면이 멈춘다(실측 2026-08-11).
+  const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
+  // 1.53: 되돌릴 수 없는 삭제는 앱 안 모달로 묻고 기다린다.
+  const ask = (title, message) => new Promise(r => askConfirm({ title, message, confirmLabel: '삭제', danger: true, onConfirm: () => r(true), onCancel: () => r(false) }));
+  const [choiceState, askChoice] = useChoice();
+
+  // M4.9d-fix: 실체 위치 삭제 (수정 취소 - 계획대로 돌아감)
+  //   1.53: 네이티브 confirm() 제거 — 브라우저가 페이지 밖에 그리는 창이라 뜨는 순간 앱이 통째로 멈춘다.
+  //   실측 2026-08-12 — 검수사가 이 버튼을 세 번 눌렀고 그때마다 PC 확인창이 떠 자동 조작이 막혔다.
+  const handleClearActualPosition = () => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    askConfirm({
+      title: '수정 위치 기록 삭제',
+      message: '수정 위치 기록을 삭제하시겠습니까?\n계획 위치대로 처리됩니다.',
+      confirmLabel: '삭제', danger: true,
+      onConfirm: async () => { await fbClearActualPosition(voyageKey, mode, c.cn); },
+    });
+  };
+
 
   const isDone = !!comp;
   const isReefer = isReeferContainer(c);
@@ -170,15 +183,29 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   const handleComplete = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (isDone) {
-      askConfirm({
-        title: '완료 취소',
-        message: `${c.cn}\n${mode === 'discharge' ? '양하확인을' : '선적확인을'} 취소하시겠습니까?`,
-        confirmLabel: '취소',
-        cancelLabel: '닫기',
-        onConfirm: async () => {
-          await fbCancelComplete(voyageKey, mode, c.cn);
-        },
+      // TallyOne 1.53: **취소에는 뜻이 둘인데 종전엔 하나만 물었다.**
+      //   검수사 확정 2026-08-12 — *"트윈으로 두 대를 들었으면, 앞 컨 기록이 틀렸다고
+      //   뒤 컨이 배에서 내려오지는 않는다. 실물은 실려 있다."*
+      //   그런데 여기서는 무조건 미완료로 되돌려, **배에 실려 있는 컨이 마감에서 안 실린 것으로 세어졌다.**
+      //   그리고 반환값을 통째로 버려 원자리 점유(origOccupied)·실패(ok:false)를 아무도 몰랐다.
+      const verb = mode === 'discharge' ? '양하확인' : '선적확인';
+      const pick = await askChoice({
+        title: `${verb} 취소`,
+        description: `${c.cn}\n왜 취소합니까? 실물이 배에 실렸는지에 따라 마감 숫자가 달라집니다.`,
+        options: [
+          { key: 'notLoaded', label: '잘못 눌렀다 (실물 안 실림)', desc: `${verb}을 지우고 계획 자리로 되돌립니다.`, recommended: true },
+          { key: 'wrongSlot', label: '실렸는데 자리가 틀렸다', desc: '실물은 배에 있습니다. 완료는 그대로 두고 자리만 비웁니다(미배정).' },
+        ],
       });
+      if (!pick) return;
+      const r = await fbCancelComplete(voyageKey, mode, c.cn, { reason: pick });
+      if (!r || r.ok === false) {
+        notify('취소하지 못했습니다', `${c.cn}\n신호를 확인하고 다시 눌러 주세요.\n${r?.error || ''}`);
+      } else if (r.keptCompleted) {
+        notify('자리만 비웠습니다', `${c.cn}\n${verb}은 그대로 둡니다(실물은 배에 있음).\n미배정 목록에서 실제 자리를 지정하세요.`);
+      } else if (r.origOccupied) {
+        notify('미배정으로 돌렸습니다', `원래 자리에 ${r.origOccupied}가 있어 미배정으로 돌렸습니다.\n미배정 목록에서 자리를 지정하세요.`);
+      }
     } else {
       // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
       if (mode === 'discharge' && isXray && !String(xSeal || '').trim()) {
@@ -199,14 +226,19 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     const owner = (allContainers || []).find(x => x.cn !== c.cn &&
       [x.sl, x.eseal, x.reseal].some(s => s && String(s).toUpperCase().replace(/[\s\-]/g, '') === n));
     if (!owner) return true;
-    return confirm(
-      `⚠ 이 실번호는 ${owner.cn?.slice(-4)} (${owner.cn})의 리스트 실번호와 같습니다.\n\n` +
-      `두 컨테이너의 실번호가 서로 바뀌어 있을 가능성이 큽니다 — ` +
-      `${owner.cn?.slice(-4)}번도 실물 실번호를 확인하세요.\n\n그대로 기록하시겠습니까?`);
+    // 1.53: 네이티브 confirm() 제거 — 앱 안 모달로 묻고 기다린다.
+    return new Promise(resolve => askConfirm({
+      title: '실번호가 겹칩니다',
+      message: `⚠ 이 실번호는 ${owner.cn?.slice(-4)} (${owner.cn})의 리스트 실번호와 같습니다.\n\n`
+        + `두 컨테이너의 실번호가 서로 바뀌어 있을 가능성이 큽니다 — `
+        + `${owner.cn?.slice(-4)}번도 실물 실번호를 확인하세요.\n\n그대로 기록하시겠습니까?`,
+      confirmLabel: '그대로 기록', danger: true,
+      onConfirm: () => resolve(true), onCancel: () => resolve(false),
+    }));
   };
 
   const handleSaveSeal = async () => {
-    if (!checkSealSwap(sealVal)) return;
+    if (!(await checkSealSwap(sealVal))) return;
     await fbUpdateRecordSeal(voyageKey, mode, c.cn, sealVal.trim(), inspector);
     setEditingSeal(false);
   };
@@ -264,7 +296,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const newVal = String(esealWrongVal || '').trim().toUpperCase();
     if (!newVal) { alert('실제 발견된 실번호를 입력하세요'); return; }
-    if (!checkSealSwap(newVal)) return;  // V7.90-06: 스왑 의심 경고
+    if (!(await checkSealSwap(newVal))) return;  // V7.90-06: 스왑 의심 경고
     await fbSetEmptySeal(voyageKey, mode, c.cn, {
       eseal: c.eseal || '',
       eseal_wrong: newVal,
@@ -280,7 +312,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const newVal = String(resealVal || '').trim().toUpperCase();
     if (!newVal) { alert('새로 부착한 실번호를 입력하세요'); return; }
-    if (!checkSealSwap(newVal)) return;  // V7.90-06: 다른 컨과 중복 경고
+    if (!(await checkSealSwap(newVal))) return;  // V7.90-06: 다른 컨과 중복 경고
     await fbSetEmptySeal(voyageKey, mode, c.cn, {
       eseal: c.eseal || '',
       eseal_wrong: c.eseal_wrong || '',
@@ -293,7 +325,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   // M4.9b-fix: 실오류/리씰 삭제 (잘못 등록한 경우)
   const handleClearEsealWrong = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-    if (!confirm('실오류 기록을 삭제하시겠습니까?')) return;
+    // 1.53: 네이티브 confirm() 제거.
+    if (!(await ask('실오류 기록 삭제', '실오류 기록을 삭제하시겠습니까?'))) return;
     await fbSetEmptySeal(voyageKey, mode, c.cn, {
       eseal: c.eseal || '',
       eseal_wrong: '',
@@ -302,7 +335,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   };
   const handleClearReseal = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-    if (!confirm('리씰 기록을 삭제하시겠습니까?')) return;
+    if (!(await ask('리씰 기록 삭제', '리씰 기록을 삭제하시겠습니까?'))) return;
     await fbSetEmptySeal(voyageKey, mode, c.cn, {
       eseal: c.eseal || '',
       eseal_wrong: c.eseal_wrong || '',
@@ -316,7 +349,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   //   eseal_wrong/reseal은 보존(별도 삭제 버튼 사용). 이력(eseal_history)은 fbSetEmptySeal이 자동 누적.
   const handleClearEseal = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-    if (!confirm('엠티 실번호 기록을 완전히 삭제하시겠습니까?\n(테스트 입력 등 잘못 기록한 경우)')) return;
+    if (!(await ask('엠티 실번호 기록 삭제', '엠티 실번호 기록을 완전히 삭제하시겠습니까?\n(테스트 입력 등 잘못 기록한 경우)'))) return;
     await fbSetEmptySeal(voyageKey, mode, c.cn, {
       eseal: '',
       eseal_wrong: c.eseal_wrong || '',
@@ -593,6 +626,26 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               )}
             </div>
           )}
+
+          {/* TallyOne 1.53: **지나온 자리 — 배가 떠난 뒤에도 봐야 한다.**
+              1.50 에 넣은 경로 기록(records.moves)이 작업 중 카드(BigResultCard)에만 붙어 있어,
+              작업이 끝나면 볼 방법이 없었다. 실측 2026-08-12 TBJU2387722 —
+              DB 에 `07-07-06 → 07-07-04 → 11-02-06 → 11-07-06 → 05-03-82` 다섯 걸음이 다 있는데
+              화면 어디서도 못 봤다. 표시 방식은 BigResultCard 그대로, 판정도 같은 벌(buildMovePath)이다. */}
+          {(() => {
+            const path = buildMovePath(c);
+            if (!path.length) return null;
+            return (
+              <details className="mt-3 bg-slate-950 border border-slate-800 rounded">
+                <summary className="px-2 py-1.5 text-[11px] font-bold text-slate-400 cursor-pointer">
+                  📍 지나온 자리 {path.length}번 — 눌러서 보기
+                </summary>
+                <div className="px-2 pb-2 text-[11px] text-slate-300 whitespace-pre-line leading-relaxed">
+                  {describeMovePath(c, isDone)}
+                </div>
+              </details>
+            );
+          })()}
         </div>
 
         {/* 화물 */}
@@ -1188,6 +1241,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />
+      {/* TallyOne 1.53: 취소 갈래 고르기 (잘못 눌렀다 / 실렸는데 자리가 틀렸다) */}
+      <ChoiceModal {...choiceState} />
 
       {/* M3.87: 위치 수정 모달 (선적 모드) */}
       <PositionEditModal

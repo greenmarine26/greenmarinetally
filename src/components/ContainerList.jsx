@@ -10,6 +10,7 @@ import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot } from '../utils.js';
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
+import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
 
 // 필터 정의 (V37 cargoFilter 그대로 + 다크 매핑)
 const FILTERS = [
@@ -295,6 +296,9 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  // TallyOne 1.53: 결과 알림도 앱 안에서 — 브라우저 alert/confirm 은 뜨는 순간 화면이 멈춘다(실측 2026-08-11).
+  const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
+  const [choiceState, askChoice] = useChoice();
 
   const isDone = !!comp;
   const isReefer = isReeferContainer(c);
@@ -331,15 +335,29 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
     e.stopPropagation();
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (isDone) {
-      askConfirm({
-        title: '완료 취소',
-        message: `${c.cn}\n${mode === 'discharge' ? '양하확인을' : '선적확인을'} 취소하시겠습니까?`,
-        confirmLabel: '취소',
-        cancelLabel: '닫기',
-        onConfirm: async () => {
-          await fbCancelComplete(voyageKey, mode, c.cn);
-        },
+      // TallyOne 1.53: **취소에는 뜻이 둘인데 종전엔 하나만 물었다.**
+      //   검수사 확정 2026-08-12 — *"트윈으로 두 대를 들었으면, 앞 컨 기록이 틀렸다고
+      //   뒤 컨이 배에서 내려오지는 않는다. 실물은 실려 있다."*
+      //   그런데 여기서는 무조건 미완료로 되돌려, **배에 실려 있는 컨이 마감에서 안 실린 것으로 세어졌다.**
+      //   그리고 반환값을 통째로 버려 원자리 점유(origOccupied)·실패(ok:false)를 아무도 몰랐다.
+      const verb = mode === 'discharge' ? '양하확인' : '선적확인';
+      const pick = await askChoice({
+        title: `${verb} 취소`,
+        description: `${c.cn}\n왜 취소합니까? 실물이 배에 실렸는지에 따라 마감 숫자가 달라집니다.`,
+        options: [
+          { key: 'notLoaded', label: '잘못 눌렀다 (실물 안 실림)', desc: `${verb}을 지우고 계획 자리로 되돌립니다.`, recommended: true },
+          { key: 'wrongSlot', label: '실렸는데 자리가 틀렸다', desc: '실물은 배에 있습니다. 완료는 그대로 두고 자리만 비웁니다(미배정).' },
+        ],
       });
+      if (!pick) return;
+      const r = await fbCancelComplete(voyageKey, mode, c.cn, { reason: pick });
+      if (!r || r.ok === false) {
+        notify('취소하지 못했습니다', `${c.cn}\n신호를 확인하고 다시 눌러 주세요.\n${r?.error || ''}`);
+      } else if (r.keptCompleted) {
+        notify('자리만 비웠습니다', `${c.cn}\n${verb}은 그대로 둡니다(실물은 배에 있음).\n미배정 목록에서 실제 자리를 지정하세요.`);
+      } else if (r.origOccupied) {
+        notify('미배정으로 돌렸습니다', `원래 자리에 ${r.origOccupied}가 있어 미배정으로 돌렸습니다.\n미배정 목록에서 자리를 지정하세요.`);
+      }
     } else {
       // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
       if (mode === 'discharge' && isXray && !String(xraySeal?.seal || '').trim()) {
@@ -540,8 +558,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
         </div>
       </div>
 
-      {/* M3.74: confirm() → ConfirmModal */}
-      <ConfirmModal {...confirmState} />
+      {/* M3.74: confirm() → ConfirmModal
+          TallyOne 1.53: 모달 클릭이 카드로 번져 상세창까지 같이 열리던 것을 여기서 막는다. */}
+      <div onClick={e => e.stopPropagation()}>
+        <ConfirmModal {...confirmState} />
+        <ChoiceModal {...choiceState} />
+      </div>
     </div>
   );
 }

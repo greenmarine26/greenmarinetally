@@ -9,6 +9,7 @@ import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { bayGroupCenter } from '../swapGrade.js';   // TallyOne 1.8-09: 해치 그룹 계산 단일 소스
 import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier } from '../utils.js';
@@ -93,6 +94,20 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [xVal, setXVal] = useState('');
   const [xEVal, setXEVal] = useState('');
 
+  // TallyOne 1.53: **네이티브 confirm() 을 앱 안 모달로 바꾼다.**
+  //   검수사 지적 2026-08-12 — *"경고를 왜 앱용으로 안 띄우고 피씨용으로 띄우냐."*
+  //   confirm() 은 브라우저가 페이지 밖에 그리는 창이라, 뜨는 순간 렌더러가 멈춰 **앱이 통째로 굳는다.**
+  //   실측(선적 335대) — 이것 때문에 작업이 30분 정지했고 「⇅ 앞뒤 맞교환」에서도 같은 이유로 두 번 얼었다.
+  //   ⚠ confirm() 은 동기 반환이라 그대로는 못 바꾼다. ask() 로 **기다릴 수 있는 물음**을 만들어
+  //     `if (!(await ask(...))) return;` 한 줄로 갈아끼운다(ChoiceModal 의 useChoice 와 같은 방식).
+  //   ⚠ alert() 는 toast.js 가 전역으로 가로채 논블로킹 토스트로 나가므로 그대로 둔다.
+  const [confirmState, askConfirm] = useConfirm();
+  const ask = (opts) => new Promise((resolve) => {
+    askConfirm({ ...opts, onConfirm: () => resolve(true), onCancel: () => resolve(false) });
+  });
+  // 알림 전용(선택지 없음) — 문구·방식은 ContainerList·ContainerDetailModal 과 같은 벌을 쓴다.
+  const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
+
   // V8.09-16 (사용자 보고 2026-06-18): 실번호 중복 입력 차단. 같은 항차·같은 모드 안에서
   //   같은 실번호를 서로 다른 컨에 입력하면 막는다. 예외: '0000'(실 부족 표기)은 중복 허용.
   //   일반 실(c.sl)·XRAY 실(c._xraySeal.seal) 각각 자기 종류끼리만 비교한다.
@@ -123,16 +138,28 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   // 접안 방향 저장 — 오선택 방지: 확인 후 저장
-  const pickBerth = (side) => {
+  const pickBerth = async (side) => {
     const label = side === 'starboard' ? '우현' : '좌현';
     const seaRows = side === 'starboard' ? '짝수' : '홀수';
-    if (!window.confirm(`접안 방향을 [${label} 접안]으로 저장합니다.\n(${seaRows} 로우가 해상쪽)\n\n양하/선적 순서가 모두 이 기준으로 계산됩니다. 맞습니까?`)) return;
+    // 1.53: window.confirm → 앱 안 모달 (렌더러 정지 제거).
+    const ok = await ask({
+      title: '접안 방향 저장',
+      message: `접안 방향을 [${label} 접안]으로 저장합니다.\n(${seaRows} 로우가 해상쪽)\n\n양하/선적 순서가 모두 이 기준으로 계산됩니다. 맞습니까?`,
+      confirmLabel: '맞습니다', cancelLabel: '취소',
+    });
+    if (!ok) return;
     // V9.57(I8): fire-and-forget 저장 실패가 조용히 사라지던 것 — 실패를 알린다
     fbUpdateVoyageInfo(voyageKey, { berthSide: side })
       .catch(e => { console.warn('[V9.57] 접안 방향 저장 실패', e); alert('접안 방향 저장에 실패했습니다. 네트워크 확인 후 다시 선택해 주세요.'); });
   };
-  const changeBerth = () => {
-    if (!window.confirm('접안 방향을 변경하면 작업 순서(육상↔해상)가 뒤집힙니다.\n변경 화면으로 이동할까요?')) return;
+  const changeBerth = async () => {
+    // 1.53: window.confirm → 앱 안 모달.
+    const ok = await ask({
+      title: '접안 방향 변경',
+      message: '접안 방향을 변경하면 작업 순서(육상↔해상)가 뒤집힙니다.\n변경 화면으로 이동할까요?',
+      confirmLabel: '변경', cancelLabel: '취소', danger: true,
+    });
+    if (!ok) return;
     fbUpdateVoyageInfo(voyageKey, { berthSide: '' })
       .catch(e => { console.warn('[V9.57] 접안 방향 초기화 실패', e); alert('접안 방향 초기화에 실패했습니다. 네트워크 확인 후 다시 시도해 주세요.'); });  // V9.57(I8)
     setSelectedGroup(null);
@@ -365,8 +392,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return hits.sort((a, b) => rankOf(a) - rankOf(b)).slice(0, 6);
   };
   // V8.71: 완료 컨을 실제 온 컨으로 지정할 때 확인 — 오선적 기록 안내.
-  const confirmIfDone = (c) => !c?._comp ||
-    confirm(`${c.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 지금 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다.\n이 자리로 옮기고 진행할까요? (완료 기록은 유지)`);
+  //   1.53: confirm() → 앱 안 모달. 부르는 쪽이 `await` 하도록 async 로 바뀌었다.
+  const confirmIfDone = async (c) => !c?._comp || await ask({
+    title: '이미 완료로 기록된 컨',
+    danger: true,
+    message: `${c.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 지금 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다.\n이 자리로 옮기고 진행할까요? (완료 기록은 유지)`,
+    confirmLabel: '진행', cancelLabel: '취소',
+  });
   const fixMatches = useMemo(() => matchFor(fixQuery, [fixPickBack?.cn, card?.main?.cn]), [fixQuery, remaining, card, fixPickBack]);
   const fixMatches2 = useMemo(() => matchFor(fixQuery2, [fixPickFront?.cn, card?.twin?.cn]), [fixQuery2, remaining, card, fixPickFront]);
 
@@ -486,20 +518,30 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         if (blk.length) {
           const where = [...new Set(blk.map((c) => `${c.bay}/${c.row}/${c.tier}`))].slice(0, 6).join('  ');
           const thru = blk.filter((c) => !c._ptk).length;
-          const ok = window.confirm(
-            `이 커버 위 데크에 컨테이너 ${blk.length}대가 있습니다`
-            + (thru ? ` (통과화물 ${thru}대 포함)` : '') + '.\n'
-            + '화물이 얹힌 커버는 열 수 없습니다.\n\n' + where + '\n\n'
-            + '자료가 틀렸다면 그래도 보고할 수 있습니다. 보고할까요?');
+          // 1.53: window.confirm → 앱 안 모달.
+          const ok = await ask({
+            title: '커버 위에 화물이 있습니다',
+            danger: true,
+            message: `이 커버 위 데크에 컨테이너 ${blk.length}대가 있습니다`
+              + (thru ? ` (통과화물 ${thru}대 포함)` : '') + '.\n'
+              + '화물이 얹힌 커버는 열 수 없습니다.\n\n' + where + '\n\n'
+              + '자료가 틀렸다면 그래도 보고할 수 있습니다. 보고할까요?',
+            confirmLabel: '그래도 보고', cancelLabel: '취소',
+          });
           if (!ok) return;
         }
       }
       // 1.8-18: 끝난 모드면 조용히 막지 않고 **사람에게 묻는다** — 진짜 뒤늦은 보고일 수도 있다.
       if (modeFinished) {
-        const ok = window.confirm(
-          `${mode === 'discharge' ? '양하' : '선적'}는 이미 완료 처리되었습니다.\n`
-          + `그래도 해치커버 ${action === 'open' ? '오픈' : '클로즈'} 보고를 남길까요?\n\n`
-          + '(실수로 눌렀다면 「취소」 — 마감 서류 타임시트에 그대로 실립니다)');
+        // 1.53: window.confirm → 앱 안 모달.
+        const ok = await ask({
+          title: '이미 완료된 작업입니다',
+          danger: true,
+          message: `${mode === 'discharge' ? '양하' : '선적'}는 이미 완료 처리되었습니다.\n`
+            + `그래도 해치커버 ${action === 'open' ? '오픈' : '클로즈'} 보고를 남길까요?\n\n`
+            + '(실수로 눌렀다면 「취소」 — 마감 서류 타임시트에 그대로 실립니다)',
+          confirmLabel: '그래도 보고', cancelLabel: '취소',
+        });
         if (!ok) return;
       }
       const voy = mode === 'discharge'
@@ -517,7 +559,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         catch (e2) { console.warn('[V9.57] 해치 보고 DB 기록 재시도 실패', e2); }
       }
       if (!dbOk) {
-        const goOn = window.confirm('해치 보고 DB 기록에 실패했습니다 (재시도 포함).\n수석 대시보드에는 이 보고가 남지 않습니다.\n\n카톡 공유만 진행할까요?');
+        // 1.53: window.confirm → 앱 안 모달.
+        const goOn = await ask({
+          title: '해치 보고 DB 기록 실패',
+          danger: true,
+          message: '해치 보고 DB 기록에 실패했습니다 (재시도 포함).\n수석 대시보드에는 이 보고가 남지 않습니다.\n\n카톡 공유만 진행할까요?',
+          confirmLabel: '카톡만 진행', cancelLabel: '취소',
+        });
         if (!goOn) return;  // finally에서 busy 해제
       }
       await shareText(message, '해치커버');
@@ -620,12 +668,38 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (busy || !card?.main || !card?.twin) return;   // V8.25: 양하·선적 모두 허용
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const a = card.main, b = card.twin;
-    if (!confirm(`앞뒤 위치를 맞바꿉니다.\n앞 ${a.cn.slice(-4)} ↔ 뒤 ${b.cn.slice(-4)}\n(자리만 교환, 완료 처리는 안 됨)`)) return;
+    // 1.53: 여기 confirm() 이 실제로 두 번 앱을 얼렸다(실측 2026-08-12). 앱 안 모달로 묻는다.
+    const ok = await ask({
+      title: '앞뒤 맞교환',
+      message: `앞뒤 위치를 맞바꿉니다.\n앞 ${a.cn.slice(-4)} ↔ 뒤 ${b.cn.slice(-4)}\n(자리만 교환, 완료 처리는 안 됨)`,
+      confirmLabel: '맞바꾼다', cancelLabel: '취소',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
-      // 앞 컨을 뒤 자리로 → swap 로직이 뒤 컨을 앞 자리로 이동시킴
-      await fbReassignContainerPosition(voyageKey, mode, a.cn, b.bay, b.row, b.tier, inspector);
-      speak('앞뒤 위치를 맞바꿨습니다');
+      // 앞 컨을 뒤 자리로 → 자리를 뺏긴 뒤 컨이 앞 자리로 간다.
+      //
+      // TallyOne 1.53: **교환은 검수사의 뜻이므로 옛 규칙을 명시로 넘긴다.**
+      //   fbReassignContainerPosition 의 기본이 1.53-02 에서 바뀌었다 — 밀려난 컨은 이제
+      //   '뺏은 컨의 옛 자리'가 아니라 **자기 계획 자리(없으면 미배정)** 로 간다.
+      //   (실측 2026-08-12 선적: TBJU2387722 가 07-07-06 → 07-07-04 → 11-02-06 → 11-07-06 으로 세 번 튕겼다.
+      //    검수사 확정 — *"컨테이너는 자리를 옮기는 것이지 빈자리를 찾아가는 것이 아니다."*)
+      //   그 기본은 **앱이 자리를 추측할 때** 맞는 규칙이고, 여기는 검수사가 **교환을 지시한** 경로다.
+      //   → `swapWith` 로 "이 컨과 맞바꾼다"를 못 박는다. 안 넘기면 뒤 컨이 앞 자리 대신
+      //     자기 계획 자리나 미배정으로 가버려, 검수사가 시킨 교환이 교환이 아니게 된다.
+      //   → `actualWork` 도 함께 준다. 뒤 컨은 아직 선적확인 전(계획만 있는 상태)이라 이것이 없으면
+      //     1.31/1.47 게이트가 그 자리를 '주인 있는 예약'으로 보고 **아무도 밀어내지 않는다** —
+      //     뒤 컨이 그대로 남아 한 칸에 두 대가 된다(2026-08-11 맞교환 증상).
+      const r = await fbReassignContainerPosition(voyageKey, mode, a.cn, b.bay, b.row, b.tier, inspector,
+        { swapWith: b.cn, actualWork: true });
+      // 조용히 실패하지 않는다 — 안 바뀐 것을 모르면 그림에서 한 칸에 두 대가 된다.
+      if (!r || r.ok === false) {
+        notify('맞바꾸지 못했습니다', `앞 ${a.cn.slice(-4)} ↔ 뒤 ${b.cn.slice(-4)}\n신호를 확인하고 다시 눌러 주세요.`);
+      } else if (r.displaced !== b.cn) {
+        notify('앞 컨만 옮겼습니다', `뒤 ${b.cn.slice(-4)}는 그 자리 주인이 아니어서 옮기지 않았습니다.\n두 컨의 위치를 확인하세요.`);
+      } else {
+        speak('앞뒤 위치를 맞바꿨습니다');
+      }
     } finally { setBusy(false); }
   };
 
@@ -656,7 +730,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
     }
-    if (!confirmIfDone(c)) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행
+    if (!(await confirmIfDone(c))) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행 (1.53: 모달이라 await)
     setBusy(true);
     try {
       await applyFixOne(c, card.main);
@@ -674,7 +748,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (!fixPickFront || !fixPickBack) {
       const sideName = !fixPickFront ? '앞' : '뒤';
       const sideCn = !fixPickFront ? card.main.cn : card.twin.cn;
-      if (!confirm(`${sideName} 자리는 예측 컨 ${(sideCn || '').slice(-4)} 그대로 맞습니까?\n[확인] → 예측대로 완료 처리\n둘 다 틀렸으면 [취소] 후 ${sideName}쪽도 수정하세요.`)) return;
+      // 1.53: window.confirm → 앱 안 모달.
+      const okSide = await ask({
+        title: `${sideName}쪽은 예측대로 맞습니까`,
+        message: `${sideName} 자리는 예측 컨 ${(sideCn || '').slice(-4)} 그대로 맞습니까?\n[맞습니다] → 예측대로 완료 처리\n둘 다 틀렸으면 [취소] 후 ${sideName}쪽도 수정하세요.`,
+        confirmLabel: '맞습니다', cancelLabel: '취소',
+      });
+      if (!okSide) return;
     }
     // V8.09-06: XRAY 실번호 검증 — 바뀐 쪽은 실제 컨, 안 바뀐 쪽은 예측 컨 기준.
     const frontCn = fixPickFront ? fixPickFront.cn : card.main.cn;
@@ -686,7 +766,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       alert(`XRAY 실번호를 먼저 입력하세요.\nXRAY 대상 (${miss.join(', ')})은 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
     }
-    if ((fixPickFront && !confirmIfDone(fixPickFront)) || (fixPickBack && !confirmIfDone(fixPickBack))) return;   // V8.71
+    // V8.71 (1.53: 모달이라 await — 한쪽씩 차례로 묻는다)
+    if (fixPickFront && !(await confirmIfDone(fixPickFront))) return;
+    if (fixPickBack && !(await confirmIfDone(fixPickBack))) return;
     setBusy(true);
     // V8.71: 원자화 — 재배정(위치)을 앞·뒤 모두 끝낸 뒤에만 완료를 찍는다.
     //   (구: 앞 재배정+완료 → 뒤 재배정+완료 순서라, 뒤가 중간에 실패하면 앞 한 대만 선적된 채 멈춤 — 현장 보고 2026-07-08.)
@@ -777,6 +859,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </button>
           </div>
         </div>
+        {/* 1.53: 확인창은 앱 안에서 뜬다 — 이 화면에서도 접안 변경 등을 묻는다. */}
+        <ConfirmModal {...confirmState} />
       </div>
     );
   }
@@ -830,6 +914,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             ))}
           </div>
         </div>
+        {/* 1.53: 확인창은 앱 안에서 뜬다 — 이 화면에서도 접안 변경 등을 묻는다. */}
+        <ConfirmModal {...confirmState} />
       </div>
     );
   }
@@ -870,6 +956,8 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </button>
           </div>
         </div>
+        {/* 1.53: 확인창은 앱 안에서 뜬다 — 이 화면에서도 접안 변경 등을 묻는다. */}
+        <ConfirmModal {...confirmState} />
       </div>
     );
   }
@@ -1206,6 +1294,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         className="w-full py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center gap-2 border border-slate-700">
         <Hand className="w-4 h-4"/>수동 모드로 전환
       </button>
+
+      {/* 1.53: 확인창은 앱 안에서 뜬다. 네이티브 confirm() 은 렌더러를 멈춰 앱을 굳혔다. */}
+      <ConfirmModal {...confirmState} />
     </div>
   );
 }

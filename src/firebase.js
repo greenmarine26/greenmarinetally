@@ -522,27 +522,48 @@ export async function fbRemoveExtraContainer(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
   await remove(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`));
 }
-export async function fbCancelComplete(voyageKey, mode, cn) {
-  await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
-  // V8.80: 취소 = 위치도 원계획(bay_orig)으로 원복 (사용자 확정 2026-07-08 — 원복돼야 수정 여부를 알 수 있다).
-  //   원자리에 다른 컨이 있으면 미배정으로 두고 알림용 정보 반환.
+// TallyOne 1.53-02: **취소에는 뜻이 둘이다.** (검수사 확정 2026-08-12)
+//   원문 — *"트윈으로 두 대를 들었으면, 앞 컨 기록이 틀렸다고 뒤 컨이 배에서 내려오지는 않는다. 실물은 실려 있다."*
+//     · opts.reason = 'notLoaded' (기본) — "잘못 눌렀다". 실물이 안 실렸다 → 완료 삭제 + 위치 원복 + 실체 정리(종전 동작).
+//     · opts.reason = 'wrongSlot'        — "실렸는데 자리가 틀렸다". 실물은 배에 있다 → **완료는 유지**하고 자리만 미상으로.
+//   종전에는 갈래가 하나뿐이어서 wrongSlot 도 미완료로 되돌렸고, 그러면 **배에 실려 있는 컨이 마감 점검에서
+//   안 실린 것으로 세어졌다.** 현장에서 많은 쪽이 wrongSlot 이다.
+//   ⛔ `{mode}/completed` 는 현장 기록이다 — wrongSlot 갈래에서는 절대 지우지 않는다.
+//   ⚠ 어느 갈래든 취소 사실은 `moves` 에 반드시 한 줄 남긴다(meta.force).
+//     실측 2026-08-12 WFHU1403890 — `bay_orig` 가 없거나 자리가 안 바뀐 컨은 조기 반환이라
+//     `_updatePositionFields` 를 지나지 않아 **아무 기록도 안 남았다.**
+//   실패를 성공으로 보고하지 않는다 — 종전 `catch { return { ok: true } }` 는 취소가 안 됐는데도 됐다고 답했다.
+export async function fbCancelComplete(voyageKey, mode, cn, opts = {}) {
+  const reason = opts.reason === 'wrongSlot' ? 'wrongSlot' : 'notLoaded';
+  const by = opts.by || (reason === 'wrongSlot' ? '자리취소' : '취소원복');
   try {
     const recSnap = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
     const rec = recSnap.val();
-    // TallyOne 1.53: 자리를 한 번도 안 옮긴 컨(계획 자리 그대로 실린 컨)은 아래 원복을 안 타므로
-    //   `_updatePositionFields` 를 지나지 않는다. 그러면 **실체 위치만 남아** 취소가 화면에 안 보인다.
-    //   실측 2026-08-12 WFHU1403890 — 취소를 눌렀는데 목록은 계속 완료 자리에 그려졌다.
-    const clearActualOnly = async () => {
-      const ba = rec?.bay_actual;
-      if (ba === undefined || ba === null || ba === '' || ba === STORAGE_BAY) return;
-      await update(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`), {
-        bay_actual: null, row_actual: null, tier_actual: null, actual_at: null, actual_by: null,
-      });
+
+    // 자리는 그대로 두고 취소 사실만 한 줄 남긴다(실체 위치는 why:'cancel' 규칙으로 함께 지워진다).
+    const logInPlace = async (why) => {
+      const ediSnap = await get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`));
+      const e = ediSnap.val() || {};
+      const b = rec && rec.bay !== undefined ? rec.bay : (e.bay || '');
+      const r = rec && rec.row !== undefined ? rec.row : (e.row || '');
+      const t = rec && rec.tier !== undefined ? rec.tier : (e.tier || '');
+      await _updatePositionFields(voyageKey, mode, cn, b, r, t, by, { why, force: true });
     };
-    if (!rec || rec.bay_orig === undefined) { await clearActualOnly(); return { ok: true }; }
+
+    if (reason === 'wrongSlot') {
+      // 실물은 배에 있다 — 완료는 그대로 두고 자리만 비워 '자리 미지정' 목록에 띄운다. 실체 위치는 지운다.
+      //   ⚠ 임시창고(`__STG__`)는 '자리 없음'을 뜻하는 정상 상태라 _updatePositionFields 가 손대지 않는다.
+      await _updatePositionFields(voyageKey, mode, cn, '', '', '', by, { why: 'wrongSlot', force: true });
+      return { ok: true, reason, keptCompleted: true, unassigned: true, restored: false };
+    }
+
+    await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
+    // V8.80: 취소 = 위치도 원계획(bay_orig)으로 원복 (사용자 확정 2026-07-08 — 원복돼야 수정 여부를 알 수 있다).
+    //   원자리에 다른 컨이 있으면 미배정으로 두고 알림용 정보 반환.
+    if (!rec || rec.bay_orig === undefined) { await logInPlace('cancel'); return { ok: true, reason, restored: false, noOrig: true }; }
     const ob = rec.bay_orig || '', orow = rec.row_orig || '', ot = rec.tier_orig || '';
     const changed = (rec.bay || '') !== ob || (rec.row || '') !== orow || (rec.tier || '') !== ot;
-    if (!changed) { await clearActualOnly(); return { ok: true }; }
+    if (!changed) { await logInPlace('cancel'); return { ok: true, reason, restored: true, alreadyOrig: true, orig: { bay: ob, row: orow, tier: ot } }; }
     let occupant = null;
     if (ob && orow && ot) {
       const [ediSnap, recAllSnap] = await Promise.all([
@@ -563,12 +584,15 @@ export async function fbCancelComplete(voyageKey, mode, cn) {
       }
     }
     if (occupant) {
-      await _updatePositionFields(voyageKey, mode, cn, '', '', '', '취소원복', { why: 'cancel' });
-      return { ok: true, restored: false, origOccupied: occupant };
+      await _updatePositionFields(voyageKey, mode, cn, '', '', '', by, { why: 'cancel', byCn: occupant, force: true });
+      return { ok: true, reason, restored: false, origOccupied: occupant };
     }
-    await _updatePositionFields(voyageKey, mode, cn, ob, orow, ot, '취소원복', { why: 'cancel' });
-    return { ok: true, restored: true, orig: { bay: ob, row: orow, tier: ot } };
-  } catch { return { ok: true }; }
+    await _updatePositionFields(voyageKey, mode, cn, ob, orow, ot, by, { why: 'cancel', force: true });
+    return { ok: true, reason, restored: true, orig: { bay: ob, row: orow, tier: ot } };
+  } catch (e) {
+    // 실패는 실패로 답한다 — 호출부가 검수사에게 "취소됐다"고 잘못 알리면 그 컨은 영영 안 고쳐진다.
+    return { ok: false, reason, error: String(e && e.message ? e.message : e) };
+  }
 }
 
 // V8.80: 수동 배정 확인 — 컨을 미배정으로 (수동 작업은 계획 위치에 묶이지 않는다. 사용자 확정 2026-07-08).
@@ -728,18 +752,20 @@ export async function fbRestorePlanFromEdi(voyageKey) {
 //   - 빈 문자열로 새 위치를 주면 → 미배정으로 변경
 //
 // 반환: { ok: true, displaced?: <빠진 컨번호> }
-// V8.71: opts.displacedMode — 'swap'(기본: 자동 가이드용, 밀려난 컨을 옮긴 컨의 옛 자리로)
-//   | 'unassign'(수동용: 밀려난 컨은 미배정 — 수동 작업에선 앱이 컨을 멋대로 재배정하지 않는다. 사용자 확정 2026-07-08).
+// opts:
+//   · actualWork    — 액츄얼(수동 배정) 작업. 계획만 있는 컨도 자리를 내준다(1.47).
+//   · displacedMode — 'unassign'(밀려난 컨을 미배정으로) | 'swap'(옛 규칙: 밀려난 컨을 뺏은 컨의 옛 자리로)
+//   · swapWith      — 명시적 자리 교환 상대 컨번호. 주면 'swap' 과 같다(「⇅ 앞뒤 맞교환」처럼 검수사가 교환을 지시한 경로용).
+//   TallyOne 1.53-02: **기본값이 바뀌었다.** 종전 기본은 'swap'(A 의 옛 자리로)이었으나, 이제 기본은
+//   밀려난 컨 **자신의 계획 자리**로 보내고 거기가 차 있으면 미배정이다. 아래 2) 주석에 실측 근거가 있다.
 export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by, opts = {}) {
-  // V7.94-24: 자리 교환(swap) — A를 B 자리로 옮기면, 자리를 뺏긴 B는 A의 원래 자리로 이동(거기서 선적 대기).
-  //   (구: B를 미배정 처리 → 떠돌이 발생). A의 현재 위치를 먼저 캡처.
+  // A(옮기는 컨)의 현재 위치를 먼저 캡처 — 명시적 자리 교환(opts.swapWith / displacedMode:'swap')에서만 쓴다.
+  //   1.53-02: A 의 계획 자리(recA0/ediA0)는 더 이상 밀려난 컨의 행선지로 쓰지 않으므로 캡처를 지웠다.
   let aOldBay = '', aOldRow = '', aOldTier = '';
-  let recA0 = {}, ediA0 = {};          // 1.36: 아래 2)에서 A의 계획 자리를 다시 쓴다
   {
     const recSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
     const ediSnapA = await get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`));
     const recA = recSnapA.val() || {}; const ediA = ediSnapA.val() || {};
-    recA0 = recA; ediA0 = ediA;
     aOldBay = recA.bay !== undefined ? recA.bay : (ediA.bay || '');
     aOldRow = recA.row !== undefined ? recA.row : (ediA.row || '');
     aOldTier = recA.tier !== undefined ? recA.tier : (ediA.tier || '');
@@ -803,58 +829,63 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     }
   }
 
-  // 2) 충돌 컨이 있으면 그 컨을 A의 원래 자리로 이동 (자리 교환). A 원자리가 없으면(A가 미배정 상태였으면) 미배정 처리.
+  // 2) 자리를 내준 컨(D)이 어디로 가는가.
+  //   TallyOne 1.53-02: **컨테이너는 자리를 옮기는 것이지 빈자리를 찾아가는 것이 아니다.** (검수사 확정 2026-08-12)
+  //   원문 — *"밀려난 컨은 자기 원래 자리로 가거나, 갈 데가 없으면 미배정으로 두고 검수사에게 물어야 한다.
+  //   앱이 대신 정하면 안 된다."*
+  //   종전 1순위는 **뺏은 컨 A 의 직전 위치**(aOldBay/Row/Tier)로 보내는 자리 교환이었다(1.36·1.47-01).
+  //   그 자리는 D 와 아무 상관이 없어 D 가 또 다른 컨을 밀어내고, 그 컨이 또 밀려나는 **연쇄**가 생겼다.
+  //   실측 2026-08-12 선적 — TBJU2387722 가 07-07-06 → 07-07-04 → 11-02-06 → 11-07-06 으로 세 번 튕겼다
+  //   (진짜 자리는 5-03-82). TBJU2587675(07-02-02 → 09-07-06 → 09-07-04 → 13-02-06)·
+  //   TBJU0089884(09-06-02 → 07-05-06 → 09-04-06 → 13-03-06)도 같은 방식으로 세 번씩 튕겼다.
+  //   → 기본은 **D 자신의 계획 자리**(bay_orig, 없으면 EDI bay/row/tier)이고, **그 자리가 비어 있을 때만** 간다.
+  //     비어 있지 않으면 **미배정**으로 두고 검수사가 정한다.
+  //     종전의 "아무것도 안 하고 한 칸에 두 대로 남기는" 길(구 1.36 말미)은 없앴다 — 그림에서 한 대가 사라진다.
+  //   ⚠ 검수사가 **교환을 의도한** 경로(「⇅ 앞뒤 맞교환」 등)는 `opts.swapWith` 또는 `opts.displacedMode:'swap'` 로
+  //     종전 규칙(A 의 옛 자리로)을 그대로 쓴다. 교환은 검수사의 뜻이지 앱의 추측이 아니다.
   let displacedWasCompleted = false;
+  let displacedTo = null;            // 밀려난 컨이 실제로 간 자리 (null = 미배정)
+  let displacedToOwnPlan = false;    // 자기 계획 자리로 돌아갔는가
   if (displaced) {
-    // TallyOne 1.47-01: **자리를 내준 컨은 떠돌지 않는다 — 뺏은 컨의 옛 자리로 가서 기다린다.**
-    //   검수사 지적 2026-08-11 — *"선적대상은 맞습니다만 **이렇게 떠서는 안 됩니다.**
-    //   **확정된 컨테이너 자리로 가서 기다려야 합니다.**"*
-    //   1.47 이 `displacedPlanOnly` 를 맨 앞 분기에 두어 아래 swap 을 통째로 건너뛰었다 —
-    //   **1.36 규칙을 죽인 것이다**(*"빼앗긴 컨테이너는 빼앗은 컨테이너 자리로 가 있는 것"*).
-    //   액츄얼 규칙("계획 자리에 주인은 없다")과 1.36("밀린 컨은 갈 곳이 있다")은 **둘 다 참이다.**
-    //   자리를 내주는 것과 갈 곳 없이 떠도는 것은 다른 얘기였다.
-    //   실물로도 맞다 — A가 계획(17-06-06) 대신 19-06-02 로 갔으면 17-06-06 이 비고,
-    //   19-06-02 를 빼앗긴 컨이 거기로 가면 된다. **자리 교환.**
-    if (opts.displacedMode !== 'unassign' && aOldBay && aOldRow && aOldTier) {
-      await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by, { why: 'displaced', byCn: cn });
-    } else if (opts.displacedMode === 'unassign') {
-      // 검수사가 명시적으로 미배정을 고른 경우만 비운다.
+    const recD = recMap0[displaced] || {}, ediD = ediMap0[displaced] || {};
+    const newBayIntD = String(parseInt(newBay, 10));
+    // 그 자리를 다른 컨이 쓰고 있는가 — 잣대는 위 충돌검사와 같다(`!== undefined`).
+    //   A(cn)는 지금 새 자리로 떠나므로 제외하고, D 자신도 제외한다.
+    const slotFree = (b, r, t) => {
+      const bi = String(parseInt(b, 10));
+      for (const oc of new Set([...Object.keys(ediMap0), ...Object.keys(recMap0)])) {
+        if (oc === cn || oc === displaced) continue;
+        const rc = recMap0[oc] || {}, ec = ediMap0[oc] || {};
+        const ob = rc.bay !== undefined ? rc.bay : (ec.bay || '');
+        const orw = rc.row !== undefined ? rc.row : (ec.row || '');
+        const ot2 = rc.tier !== undefined ? rc.tier : (ec.tier || '');
+        if (!ob) continue;
+        if (String(parseInt(ob, 10)) === bi && orw === r && ot2 === t) return false;
+      }
+      return true;
+    };
+    const explicitSwap = !!opts.swapWith || opts.displacedMode === 'swap';
+    if (opts.displacedMode === 'unassign') {
+      // 검수사가 명시적으로 미배정을 고른 경우.
       await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
-    } else if (displacedPlanOnly) {
-      // 액츄얼인데 **A 자신이 자리가 없던 경우**만 여기 온다(보낼 옛 자리가 없다).
-      //   이때 자리를 그대로 두면 한 칸에 두 대가 남아 그림에서 한 대가 사라진다 — 그것이 1.47 의 사건이었다.
-      //   계획분은 아직 아무 데도 실려 있지 않으므로 미배정(선적대상)으로 두는 것이 안전하다.
-      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
+    } else if (explicitSwap && aOldBay && aOldRow && aOldTier) {
+      // 명시적 자리 교환 — 옛 규칙 그대로 A 의 옛 자리로 보낸다.
+      await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by, { why: 'swap', byCn: cn });
+      displacedTo = { bay: aOldBay, row: aOldRow, tier: aOldTier };
     } else {
-      // TallyOne 1.36: **뺏긴 컨을 미배정으로 만들지 않는다.** 검수사 확정 2026-08-09 —
-      //   *"빼앗긴 컨테이너는 빼앗은 컨테이너 자리로 가 있는 것, 그것만 확실하다면 미배정은 없습니다."*
-      //   여기까지 오는 것은 **뺏은 컨(A) 자신이 자리가 없던 경우**뿐이다(1.31 이후로 예약 자리는 아예
-      //   안 뺏으므로, 뺏겼다는 건 상대가 이미 선적완료됐다는 뜻이다).
-      //   그때 뺏긴 컨을 미배정으로 만들면 **실물은 배에 있는데 앱에서만 사라진다** — 그게 떠돌이의 정체였다.
-      //   → A의 계획 자리(_orig/EDI)가 비어 있으면 거기로 보낸다. 그것도 없으면 **자리를 그대로 둔다.**
-      //     한 칸에 두 대로 보이는 편이, 조용히 사라져 영영 못 찾는 것보다 낫다(화면에 ⊕N 로 뜬다).
-      const pb = recA0.bay_orig !== undefined ? recA0.bay_orig : (ediA0.bay || '');
-      const pr = recA0.row_orig !== undefined ? recA0.row_orig : (ediA0.row || '');
-      const pt = recA0.tier_orig !== undefined ? recA0.tier_orig : (ediA0.tier || '');
-      const sameAsTarget = pb && String(parseInt(pb, 10)) === String(parseInt(newBay, 10)) && pr === newRow && pt === newTier;
-      let planFree = false;
-      if (pb && pr && pt && !sameAsTarget) {
-        const pbI = String(parseInt(pb, 10));
-        planFree = true;
-        for (const oc of new Set([...Object.keys(ediMap0), ...Object.keys(recMap0)])) {
-          if (oc === cn || oc === displaced) continue;
-          const rc = recMap0[oc] || {}, ec = ediMap0[oc] || {};
-          const ob = rc.bay !== undefined ? rc.bay : (ec.bay || '');
-          const orw = rc.row !== undefined ? rc.row : (ec.row || '');
-          const ot2 = rc.tier !== undefined ? rc.tier : (ec.tier || '');
-          if (!ob) continue;
-          if (String(parseInt(ob, 10)) === pbI && orw === pr && ot2 === pt) { planFree = false; break; }
-        }
-      }
-      if (planFree) {
+      const pb = recD.bay_orig !== undefined ? recD.bay_orig : (ediD.bay || '');
+      const pr = recD.row_orig !== undefined ? recD.row_orig : (ediD.row || '');
+      const pt = recD.tier_orig !== undefined ? recD.tier_orig : (ediD.tier || '');
+      // 계획 자리가 지금 A 가 들어가는 바로 그 칸이면 갈 데가 없는 것과 같다.
+      const sameAsTarget = !!pb && String(parseInt(pb, 10)) === newBayIntD && pr === newRow && pt === newTier;
+      if (pb && pr && pt && !sameAsTarget && slotFree(pb, pr, pt)) {
         await _updatePositionFields(voyageKey, mode, displaced, pb, pr, pt, by, { why: 'displaced', byCn: cn });
+        displacedTo = { bay: pb, row: pr, tier: pt };
+        displacedToOwnPlan = true;
+      } else {
+        // 갈 데가 없다 — 미배정으로 두고 검수사에게 묻는다. 앱이 대신 자리를 고르지 않는다.
+        await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
       }
-      // planFree 가 아니면 아무것도 하지 않는다 — 뺏긴 컨은 그 자리에 남는다.
     }
     // V8.70: 자리를 뺏긴 컨이 이미 검수완료된 컨이면 완료 기록을 지우지 않는다.
     //   (구: 무조건 remove → 다른 자리에서 이미 선적확인한 기록이 조용히 사라짐 — 체인시프트 데이터 유실 원인.
@@ -874,9 +905,11 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
 
   return {
     ok: true, displaced, displacedWasCompleted,
-    displacedUnassigned: displacedPlanOnly,          // 1.47: 계획분을 비켜 세웠음(호출부 안내용)
-    swappedTo: (displaced && !displacedPlanOnly && opts.displacedMode !== 'unassign')
-      ? { bay: aOldBay, row: aOldRow, tier: aOldTier } : null,
+    displacedTo,                                       // 1.53-02: 밀려난 컨이 간 자리 (null = 미배정)
+    displacedToOwnPlan,                                // 1.53-02: true = 자기 계획 자리로 돌아갔다
+    displacedUnassigned: !!displaced && !displacedTo,  // 밀려난 컨을 미배정으로 세웠음(호출부 안내용)
+    displacedPlanOnly,                                 // 1.47 호환: 계획만 있던 컨을 비켰음
+    swappedTo: displacedTo,                            // 기존 이름 유지 — 호출부 안내문이 이 필드를 읽는다
   };
 }
 
@@ -899,7 +932,9 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
 //   meta = { why, byCn }
 //     why   : 'move'(검수원 지정) · 'actual'(실제 실린 자리) · 'displaced'(자리를 뺏김)
 //             · 'unassign'(미배정) · 'cancel'(완료 취소 원복) · 'restore'(원래 자리로)
+//             · 'swap'(검수사가 지시한 자리 교환) · 'wrongSlot'(실물은 실렸고 자리만 취소 — 완료는 유지)
 //             · '' (앱이 모르는 이동 — 빈칸이 곧 찾아야 할 구멍이다)
+//     force : 자리가 안 바뀌어도 한 줄 남긴다(취소 기록용)
 //     byCn  : 그 자리에 **대신 들어온 컨** — *"어떤 컨테이너로 바뀌어서"* 를 말하려면 이게 있어야 한다
 async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTier, by, meta = {}) {
   const recR = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
@@ -938,10 +973,12 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
   };
 
   // 1.50: 경로 한 줄 — 자리가 실제로 바뀐 때만 쌓는다(같은 자리 재저장은 줄만 늘린다).
+  //   1.53-02: 단 `meta.force` 면 자리가 그대로여도 남긴다. **취소는 자리를 안 옮겨도 사건이다** —
+  //   실측 2026-08-12 WFHU1403890 은 계획 자리 그대로 실렸다가 취소돼 아무 기록도 안 남았다.
   const _pos = (b, r, t) => (b ? `${String(parseInt(b, 10)).padStart(2, '0')}-${r}-${t}` : '미배정');
   const _from = _pos(oldBay, oldRow, oldTier);
   const _to = _pos(nb, nr, nt);
-  if (_from !== _to) {
+  if (_from !== _to || meta.force) {
     const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
     moves.push({
       at: Date.now(), by: by || '',

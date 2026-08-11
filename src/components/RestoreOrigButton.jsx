@@ -8,6 +8,7 @@
 // 원칙: **남의 자리를 뺏지 않는다.** 원자리에 다른 컨이 들어가 있으면 버튼을 잠그고 누가 있는지 보여준다.
 import React, { useState, useMemo } from 'react';
 import { fbReassignContainerPosition } from '../firebase.js';
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 네이티브 confirm() 은 렌더러를 멈춘다
 
 const bn = (v) => (v !== undefined && v !== null && v !== '' ? String(parseInt(v, 10)) : '');
 
@@ -24,6 +25,7 @@ export function origSlotOf(c, allContainers = []) {
 
 export default function RestoreOrigButton({ c, allContainers = [], voyageKey, inspector, mode, onDone, compact = false }) {
   const [busy, setBusy] = useState(false);
+  const [confirmState, askConfirm] = useConfirm();   // 1.53
   const { pos, occupiedBy } = useMemo(() => origSlotOf(c, allContainers), [c, allContainers]);
   if (!pos) return null;
 
@@ -34,7 +36,16 @@ export default function RestoreOrigButton({ c, allContainers = [], voyageKey, in
     if (busy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     if (occupiedBy) return;
-    if (!confirm(`${c.cn}\n원래 계획 자리 ${label} 로 되돌립니다.\n\n진행할까요?`)) return;
+    // 1.53: 네이티브 confirm() 제거 — 브라우저가 페이지 밖에 그리는 창이라 뜨는 순간 앱이 통째로 멈춘다.
+    askConfirm({
+      title: '원래 자리로 되돌리기',
+      message: `${c.cn}\n원래 계획 자리 ${label} 로 되돌립니다.\n\n진행할까요?`,
+      confirmLabel: '되돌리기',
+      onConfirm: () => doRun(),
+    });
+  };
+
+  const doRun = async () => {
     setBusy(true);
     try {
       const r = await fbReassignContainerPosition(voyageKey, mode || c._mode, c.cn,
@@ -55,9 +66,12 @@ export default function RestoreOrigButton({ c, allContainers = [], voyageKey, in
   }
 
   return (
-    <button onClick={run} disabled={busy}
-      className={`${compact ? 'px-3 py-1.5 text-xs' : 'w-full py-2.5 text-sm'} rounded font-bold bg-sky-800 hover:bg-sky-700 border border-sky-600 text-sky-100 disabled:opacity-50 flex items-center justify-center gap-1.5`}>
-      {busy ? '되돌리는 중…' : <>↩ 원래 자리로 <span className="mono font-black">{label}</span></>}
-    </button>
+    <>
+      <button onClick={run} disabled={busy}
+        className={`${compact ? 'px-3 py-1.5 text-xs' : 'w-full py-2.5 text-sm'} rounded font-bold bg-sky-800 hover:bg-sky-700 border border-sky-600 text-sky-100 disabled:opacity-50 flex items-center justify-center gap-1.5`}>
+        {busy ? '되돌리는 중…' : <>↩ 원래 자리로 <span className="mono font-black">{label}</span></>}
+      </button>
+      <ConfirmModal {...confirmState} />
+    </>
   );
 }

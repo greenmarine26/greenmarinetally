@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage} from '../utils.js';
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert } from '../nlSearch.js';   // 1.23: answerAboutAlert
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -167,6 +167,12 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     });
     return Object.values(map).sort((a, b) => a.center - b.center);   // 자리 미지정(-1)이 맨 앞
   }, [allContainers, workFilter, manualBayPairs]);
+  // TallyOne 1.53: **작업이 끝나면 검색창까지 사라졌다.**
+  //   실측 2026-08-12(선적 335대 완주) — 남은 작업이 0이 되자 수동 모드가
+  //   「선적 작업이 없습니다」만 띄우고 **조회창 자체가 없어졌다.** 「✓ 완료」 탭을 눌러야 검색창이 나왔다.
+  //   그런데 *"이 컨 어디 있지"* 는 **작업이 끝난 뒤에 나오는 질문**이다.
+  //   → 남은 작업이 없으면 베이·단 게이트를 건너뛰고 바로 조회창을 연다(게이트는 작업용이지 조회용이 아니다).
+  const noWorkLeft = workFilter !== 'completed' && manualGroups.length === 0;
   // 작업 모드 바뀌면 선택 리셋
   useEffect(() => { setManualBay(null); setManualTier(null); }, [workFilter]);
   // 수동 작업 위치를 수석에게 전달 (가이드와 동일, auto=false). 베이/단 미선택이면 클리어.
@@ -292,7 +298,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       <>
       {/* V7.99-10 (메모6 수동): 베이→홀드/데크 선택 게이트 (A안). 완료 탭은 게이트 없이 자유 조회. */}
       {/* V8.11: LOLO선(RZOR 등)은 베이가 없으므로 게이트를 건너뛰고 바로 조회창으로. 베이만 못 알려줄 뿐 실번호·규격·F/E·온도·XRAY는 정상 조회. */}
-      {workFilter !== 'completed' && manualBay == null && !isLoloShip ? (
+      {workFilter !== 'completed' && !noWorkLeft && manualBay == null && !isLoloShip ? (
         <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
           <div className="text-sm font-bold text-amber-300">작업할 베이를 선택하세요 <span className="text-[11px] text-slate-500 font-normal">(수동)</span></div>
           {manualGroups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
@@ -318,7 +324,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
             ))}
           </div>
         </div>
-      ) : workFilter !== 'completed' && manualTier == null && !isLoloShip ? (
+      ) : workFilter !== 'completed' && !noWorkLeft && manualTier == null && !isLoloShip ? (
         (() => {
           const g = manualGroups.find(x => x.center === manualBay);
           const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${manualBay}`;
@@ -341,6 +347,12 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         })()
       ) : (
       <>
+      {/* TallyOne 1.53: 잔여 0대 — 작업은 끝났지만 조회는 계속 된다는 것을 알린다. */}
+      {noWorkLeft && (
+        <div className="bg-emerald-950/40 border border-emerald-700 rounded-lg px-3 py-2 text-[11px] text-emerald-200 font-bold">
+          ✅ 남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다 — 조회·검색은 그대로 됩니다. 끝 4자리를 넣어 보세요.
+        </div>
+      )}
       {/* V8.11: LOLO선 안내 — 베이(위치)만 없고 나머지 정보는 정상 조회됨을 알림. */}
       {isLoloShip && (
         <div className="bg-teal-950/50 border border-teal-700 rounded-lg px-3 py-2 text-[11px] text-teal-200">
@@ -461,6 +473,51 @@ function announceContainer(c) {
   else parts.push('실번호 미입력');
   if (c._xray) parts.push('엑스레이');
   speak(parts.join(', '));
+}
+
+// TallyOne 1.53: **싱글로 하려 할 때 트윈이 되는지 먼저 알린다 — 막지는 않는다.**
+//   검수사 원문 2026-08-12 — *"일반 사용자가 싱글로 작업을 하려고 했을 때 경고를 했을 것입니다.
+//   트윈 가능 작업이 가능합니다. 싱글 작업을 계속하실 건가요?"*
+//   *"다만 특수한 상황엔 싱글 작업을 할 수 있습니다. 무겁다 · 포트가 틀리다 · 규격이 틀리다."*
+//   그래서 강제 모달로 흐름을 끊지 않고 한 줄로 띄우고, 다른 항목(무게·목적지·규격)을 눈에 띄게 한다.
+//   판정은 새로 만들지 않는다 — 「✋ 싱글 먼저」 배지와 트윈 화면이 쓰는 findTwinCandidate 그 벌을 그대로 쓰고,
+//   위치는 effectivePos 하나로 본다(계획 자리와 실체 자리가 갈리면 안내가 엉뚱한 자리를 가리킨다).
+function twinHintOf(c, allContainers, shipImo, shipName) {
+  if (!c || c._comp || c._mode !== 'loading') return null;
+  const p = effectivePos(c);
+  if (!p.bay || !p.row || !p.tier) return null;
+  const mate = findTwinCandidate({ ...c, bay: p.bay, row: p.row, tier: p.tier }, allContainers, new Set(), shipImo, shipName);
+  if (!mate || mate._comp) return null;   // 짝 자리가 비었거나 이미 실었으면 트윈이 아니다.
+  const mp = effectivePos(mate);
+  const pos = mp.bay ? `${String(parseInt(mp.bay, 10)).padStart(2, '0')}-${mp.row}-${mp.tier}` : '미배정';
+  const samePod = String(c.pod || '') === String(mate.pod || '');
+  const sameIso = isoToLabel(c.iso) === isoToLabel(mate.iso);
+  return {
+    mate, pos, samePod, sameIso,
+    l4: mate.l4 || String(mate.cn || '').slice(-4),
+    wt: formatWt(mate.wt),
+    podText: samePod ? '목적지 같음' : `목적지 다름 (이 컨 ${c.pod || '-'} · 짝 ${mate.pod || '-'})`,
+    isoText: sameIso ? '규격 같음' : `규격 다름 (이 컨 ${isoToLabel(c.iso) || '-'} · 짝 ${isoToLabel(mate.iso) || '-'})`,
+  };
+}
+
+function TwinPossibleHint({ c, allContainers, voyage }) {
+  const h = useMemo(() => twinHintOf(c, allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || ''),
+                    [c, allContainers, voyage]);
+  if (!h) return null;
+  const warn = 'text-amber-300 font-black';
+  return (
+    <div className="bg-sky-950/60 border border-sky-600 rounded-lg px-3 py-2 mb-1 text-[12px] text-sky-100 font-bold leading-snug">
+      <Link2 className="w-3.5 h-3.5 inline mr-1 -mt-0.5"/>
+      짝 자리 {h.pos} 에 {h.l4} 가 있습니다. 트윈으로 두 대 한 번에 가능합니다.
+      <div className="mt-0.5 font-normal text-[11px]">
+        (무게 {h.wt} · <span className={h.samePod ? '' : warn}>{h.podText}</span> · <span className={h.sameIso ? '' : warn}>{h.isoText}</span>)
+      </div>
+      <div className="mt-0.5 font-normal text-[11px] text-slate-300">
+        싱글로 계속해도 됩니다 — 무겁다 · 포트가 틀리다 · 규격이 틀리다면 싱글이 맞습니다. 트윈으로 할 거면 위 [트윈] 탭으로 가세요.
+      </div>
+    </div>
+  );
 }
 
 function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
@@ -1080,15 +1137,29 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           선적 중 양하분이 조회에 나와 방해·중복되던 문제(사용자 제보) 해결.
           접이식이라 "있는 자료를 못 찾는" V7.53 이전 문제로는 돌아가지 않음. */}
       {!parsed.isStat && !aiAnswer && !localAnswer && chatMessages.length === 0 && (() => {
-        const main = results.filter(c => !c._comp && c._mode === workFilter);
-        const others = results.filter(c => c._comp || c._mode !== workFilter);
+        // TallyOne 1.53: **완료분을 찾으면 한 줄 요약만 나왔다.**
+        //   실측 2026-08-12 — 선적을 끝내고 `7722` 로 찾으니 「✓ 1개 일치」인데 카드가 안 열리고
+        //   「▼ 다른 작업·완료분에 1건 — 보기」뿐이었고, 펴도 한 줄 요약이라 **위치도 이력도 안 보였다.**
+        //   원인 둘 — ⓐ 「✓ 완료」 탭(workFilter='completed')에서는 `c._mode === workFilter` 가
+        //   영원히 거짓이라 main 이 항상 비었다. ⓑ 완료분 큰 카드(V8.70)가 현재 작업 모드로만 한정돼,
+        //   양하를 보다 선적 완료분을 찾으면 걸리지 않았다.
+        //   → 완료 탭은 완료분이 본목록이고, 번호 조회로 완료분 한 건이 잡히면 모드와 무관하게 정식 카드로 편다.
+        const doneTab = workFilter === 'completed';
+        const main = doneTab ? results.filter(c => c._comp)
+                             : results.filter(c => !c._comp && c._mode === workFilter);
+        const others = doneTab ? results.filter(c => !c._comp)
+                               : results.filter(c => c._comp || c._mode !== workFilter);
         // V8.70: 완료된 컨도 번호 단일 매칭이면 큰 카드로 — 취소·위치수정 접근(완료 후 재검색 시 막다른 골목 제거).
-        const doneSolo = (main.length === 0 && parsed.digits)
-          ? results.filter(c => c._comp && c._mode === workFilter) : [];
+        //   ※ 같은 번호가 양하·선적 양쪽에 완료로 있으면(중계) 종전대로 현재 모드 쪽을 편다.
+        const doneAll = (main.length === 0 && parsed.digits) ? results.filter(c => c._comp) : [];
+        const doneSolo = doneAll.length > 1 ? doneAll.filter(c => c._mode === workFilter) : doneAll;
         const othersRest = (doneSolo.length === 1) ? others.filter(c => c !== doneSolo[0]) : others;
-        const othersLabel = (n) => `다른 작업·완료분에 ${n}건 — 보기`;
+        // TallyOne 1.53: 완료 탭에서는 접힌 쪽이 '아직 안 한 작업'이다 — 라벨이 반대로 읽히면 안 눌러 본다.
+        const othersLabel = (n) => (doneTab ? `아직 안 한 작업에 ${n}건 — 보기` : `다른 작업·완료분에 ${n}건 — 보기`);
         return (
           <>
+            {/* TallyOne 1.53: 싱글로 하려는데 트윈이 되면 한 줄로 알린다(막지 않는다). */}
+            {main.length === 1 && <TwinPossibleHint c={main[0]} allContainers={allContainers} voyage={voyage}/>}
             {main.length === 1 && (
               <BigResultCard c={main[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
@@ -1099,9 +1170,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               />
             )}
             {main.length === 0 && doneSolo.length === 1 && (
+              /* TallyOne 1.53: 완료분도 위치·지나온 자리·버튼이 다 있는 정식 카드로 편다(요약 한 줄 금지). */
               <BigResultCard c={doneSolo[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(doneSolo[0])}
+                workGroup={manualCtx?.selectedGroup ?? null} workTier={manualCtx?.selectedTier ?? null}
+                slotSource={allContainers} bayPairsIn={manualCtx?.bayPairs ?? null}
                 onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
               />
             )}
@@ -1225,7 +1299,9 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (busy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const done = [c1, c2].filter(c => c._comp);
-    if (done.length && !confirm(`${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n계속할까요?`)) return;
+    // 1.53: 네이티브 confirm() 제거 — 브라우저 확인창은 뜨는 순간 앱이 통째로 멈춘다(실측 2026-08-12).
+    if (done.length && !(await askYN('이미 선적확인된 컨입니다',
+      `${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n계속할까요?`))) return;
     setBusy(true);
     try {
       await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
@@ -1240,7 +1316,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const confirmManual = async () => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const done = [c1, c2].filter(c => c._comp);
-    if (done.length && !confirm(`${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n오선적 기록일 수 있습니다. 계속할까요?`)) return;
+    if (done.length && !(await askYN('이미 선적확인된 컨입니다',
+      `${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n오선적 기록일 수 있습니다. 계속할까요?`))) return;
     setBusy(true);
     try {
       await fbUnassignContainer(voyageKey, 'loading', c1.cn, inspector);
@@ -1451,6 +1528,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
 // ─── 트윈 모드 (자동 짝꿍) ───
 function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null, workGroup = null, workTier = null, slotSource = null, bayPairsIn = null }) {
   const [confirmState, askConfirm] = useConfirm();   // 1.49: 맞교환 확인창 — 브라우저 confirm 대체
+  // 1.53: 기다릴 수 있는 물음 — 네이티브 confirm() 은 렌더러를 멈춰 앱을 굳힌다.
+  const askYN = (title, message) => new Promise(r => askConfirm({ title, message, confirmLabel: '계속', danger: true, onConfirm: () => r(true), onCancel: () => r(false) }));
   const [q1, setQ1] = useState('');
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)

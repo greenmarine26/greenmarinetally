@@ -7,6 +7,7 @@ import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } fr
 import { speakDone, speak } from '../voice.js';
 import { getBayPairs } from '../twin.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
+import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
 import PositionEditModal from './PositionEditModal.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51: 원래 자리로 되돌리기
 import { gradeSwap, confirmTextOf, GRADE_STYLE } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급
@@ -36,6 +37,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
+  const [choiceState, askChoice] = useChoice();
+  // 알림 전용(선택지 없음) — 문구·방식은 ContainerList·ContainerDetailModal 과 같은 벌을 쓴다.
+  const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
   const [posTarget, setPosTarget] = useState(null);   // V7.94-10: 위치 선택창 대상 컨 (c 또는 번호수정으로 고른 실제 컨)
   // V8.70: 출발지(계획 위치) 기준 트윈 짝꿍 자동 계산 제거 — 싱글 자리 배정에 유령 짝꿍이 붙어
   //   존재하지 않는 자리에 무단 배정·완료되던 원인. 트윈 배정은 PositionEditModal 안에서
@@ -91,17 +95,30 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
     const isDischarge = c._mode === 'discharge';
     const verb = isDischarge ? '양하확인' : '선적확인';
     if (isDone) {
-      askConfirm({
+      // TallyOne 1.53: **취소에는 뜻이 둘인데 종전엔 하나만 물었다.**
+      //   검수사 확정 2026-08-12 — *"트윈으로 두 대를 들었으면, 앞 컨 기록이 틀렸다고
+      //   뒤 컨이 배에서 내려오지는 않는다. 실물은 실려 있다."*
+      //   그런데 여기서는 무조건 미완료로 되돌려, **배에 실려 있는 컨이 마감에서 안 실린 것으로 세어졌다.**
+      //   그리고 반환값에서 ok:false 를 버려 **실패해도 검수사는 취소된 줄 알았다.**
+      //   갈래·문구는 ContainerDetailModal·ContainerList 와 같은 벌을 쓴다(잣대를 하나로).
+      const pick = await askChoice({
         title: `${verb} 취소`,
-        message: `${c.cn}\n${verb}을 취소하시겠습니까?`,
-        confirmLabel: '취소',
-        cancelLabel: '닫기',
-        onConfirm: async () => {
-          const r = await fbCancelComplete(voyageKey, c._mode, c.cn);
-          // V8.80: 취소 = 위치 원복. 원자리가 점유돼 있으면 미배정으로 두고 알림.
-          if (r?.origOccupied) alert(`원래 자리에 ${r.origOccupied}가 있어 미배정으로 돌렸습니다.\n미배정 목록에서 자리를 지정하세요.`);
-        },
+        description: `${c.cn}\n왜 취소합니까? 실물이 배에 실렸는지에 따라 마감 숫자가 달라집니다.`,
+        options: [
+          { key: 'notLoaded', label: '잘못 눌렀다 (실물 안 실림)', desc: `${verb}을 지우고 계획 자리로 되돌립니다.`, recommended: true },
+          { key: 'wrongSlot', label: '실렸는데 자리가 틀렸다', desc: '실물은 배에 있습니다. 완료는 그대로 두고 자리만 비웁니다(미배정).' },
+        ],
       });
+      if (!pick) return;
+      const r = await fbCancelComplete(voyageKey, c._mode, c.cn, { reason: pick });
+      if (!r || r.ok === false) {
+        notify('취소하지 못했습니다', `${c.cn}\n신호를 확인하고 다시 눌러 주세요.\n${r?.error || ''}`);
+      } else if (r.keptCompleted) {
+        notify('자리만 비웠습니다', `${c.cn}\n${verb}은 그대로 둡니다(실물은 배에 있음).\n미배정 목록에서 실제 자리를 지정하세요.`);
+      } else if (r.origOccupied) {
+        // V8.80: 취소 = 위치 원복. 원자리가 점유돼 있으면 미배정으로 두고 알린다.
+        notify('미배정으로 돌렸습니다', `원래 자리에 ${r.origOccupied}가 있어 미배정으로 돌렸습니다.\n미배정 목록에서 자리를 지정하세요.`);
+      }
     } else {
       // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
       if (isDischarge && c._xray && !String(c._xraySeal?.seal || '').trim()) {
@@ -334,9 +351,18 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 </div>
               )}
               <button onClick={() => {
+                  // 1.53: 네이티브 confirm() 은 브라우저가 페이지 밖에 그리는 창이라
+                  //   뜨는 순간 렌더러가 멈춰 앱이 통째로 굳는다(실측 2026-08-12, 작업 30분 정지). 앱 안 모달로 묻는다.
                   const t = confirmTextOf(swapG, cnFixPick, c);
-                  if (t && !confirm(t)) return;
-                  setPosTarget(cnFixPick); setCnFixOpen(false);
+                  const go = () => { setPosTarget(cnFixPick); setCnFixOpen(false); };
+                  if (!t) { go(); return; }
+                  askConfirm({
+                    title: '이 자리에 넣습니까',
+                    message: t,
+                    danger: swapG?.level === 'strong',
+                    confirmLabel: '진행', cancelLabel: '취소',
+                    onConfirm: go,
+                  });
                 }}
                 className={`w-full py-2.5 rounded-lg font-black text-sm text-white flex items-center justify-center gap-1.5 ${
                   swapG?.level === 'strong' ? 'bg-rose-700 hover:bg-rose-600' : 'bg-cyan-700 hover:bg-cyan-600'}`}>
@@ -350,8 +376,15 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
               {cnFixMatches.map(x => (
                 <button key={x.cn} onClick={() => {
-                    if (x._comp && !confirm(`${x.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다. 계속할까요?`)) return;
-                    setCnFixPick(x);
+                    // 1.53: confirm() → 앱 안 모달 (렌더러 정지 제거).
+                    if (!x._comp) { setCnFixPick(x); return; }
+                    askConfirm({
+                      title: '이미 완료로 기록된 컨',
+                      danger: true,
+                      message: `${x.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다. 계속할까요?`,
+                      confirmLabel: '계속', cancelLabel: '취소',
+                      onConfirm: () => setCnFixPick(x),
+                    });
                   }}
                   className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
                   <span className="mono font-bold text-slate-100">{x.cn}</span>
@@ -369,8 +402,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         </div>
       )}
 
-      {/* M3.74: confirm() → ConfirmModal */}
+      {/* M3.74: confirm() → ConfirmModal · 1.53: 취소 갈래는 ChoiceModal */}
       <ConfirmModal {...confirmState} />
+      <ChoiceModal {...choiceState} />
 
       {/* TallyOne 1.50: **지나온 자리.** 검수사 확정 2026-08-11 — *"이력을 남겨야 오류를 찾기 쉽습니다."*
           결과만 남아 있으면 왜 여기 왔는지 되짚을 수가 없다. 오늘 없는 중복 2곳·샌 3대·겹친 두 대가
