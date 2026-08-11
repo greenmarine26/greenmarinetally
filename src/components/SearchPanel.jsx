@@ -20,6 +20,7 @@ import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
@@ -405,7 +406,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
              BigResultCard 는 이미 선적을 완전히 지원한다 — 화면을 새로 만들 필요가 없었다. */
           : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}
               /* TallyOne 1.48: 검수원이 이미 고른 작업 구역·단을 위치 지정 모달까지 내린다. */
-              workGroup={manualBay} workTier={manualTier}
+              workGroup={manualBay} workTier={manualTier} slotSource={allContainers}
               onManualMode={workFilter === 'loading' ? () => setLoadTwinMode('manual') : null}/>}
       </>
       )}
@@ -1063,7 +1064,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(main[0])}
                 /* TallyOne 1.48: 싱글도 같다 — 작업 구역을 골랐으면 위치 지정에서 다시 묻지 않는다. */
-                workGroup={manualCtx?.selectedGroup ?? null} workTier={manualCtx?.selectedTier ?? null}
+                workGroup={manualCtx?.selectedGroup ?? null} workTier={manualCtx?.selectedTier ?? null} slotSource={allContainers}
                 onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
               />
             )}
@@ -1418,7 +1419,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
 }
 
 // ─── 트윈 모드 (자동 짝꿍) ───
-function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null, workGroup = null, workTier = null }) {
+function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null, workGroup = null, workTier = null, slotSource = null }) {
+  const [confirmState, askConfirm] = useConfirm();   // 1.49: 맞교환 확인창 — 브라우저 confirm 대체
   const [q1, setQ1] = useState('');
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
@@ -1525,17 +1527,30 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
 
   // V8.25: 트윈 앞뒤 위치 맞교환 — 다른 항에서 앞/뒤 자리를 바꿔 적재하고 미수정인 경우 한 번에 교정.
   //   앞(c1)을 뒤(c2) 자리로 보내면 fbReassign swap이 c2를 c1 원자리로 자동 이동. 완료 처리는 안 함.
-  const handleSwapPos = async () => {
+  const handleSwapPos = () => {
     if (!c1 || !c2 || twinBusy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
-    if (!confirm(`앞뒤 위치를 맞바꿉니다.\n앞 ${c1.cn?.slice(-4)} ↔ 뒤 ${c2.cn?.slice(-4)}\n(자리만 교환, 완료 처리는 안 됨)`)) return;
+    // TallyOne 1.49: 브라우저 confirm() 은 렌더러를 통째로 멈춘다 — 검수원에게는 "앱이 굳은" 것으로 보인다.
+    //   실측 2026-08-11: 이 버튼을 누르고 30초 무응답이 두 번. 화면이 멈춘 게 아니라 대화상자가 떠 있었다.
+    askConfirm({
+      title: '앞뒤 위치 맞바꾸기',
+      message: `앞 ${c1.cn?.slice(-4)} ↔ 뒤 ${c2.cn?.slice(-4)}\n자리만 교환합니다. 완료 처리는 하지 않습니다.`,
+      confirmLabel: '맞바꾸기',
+      onConfirm: () => doSwapPos(),
+    });
+  };
+
+  const doSwapPos = async () => {
     setTwinBusy(true);
     try {
-      await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, c2.bay, c2.row, c2.tier, inspector);
-      // V8.25-02: 화면 즉시 반영 — c1/c2는 로컬 state라 swap 후 갱신이 안 돼 위치가 그대로 보였음.
-      //   DB는 정상 교환되므로(시뮬 PASS) 표시도 앞↔뒤 위치를 맞바꿔 일치시킨다.
       const _aPos = { bay: c1.bay, row: c1.row, tier: c1.tier };
       const _bPos = { bay: c2.bay, row: c2.row, tier: c2.tier };
+      // TallyOne 1.49: **앞 컨만 옮기고 뒤 컨을 그대로 둬서 한 칸을 두 대가 차지했다**
+      //   (실측 2026-08-11: DWSU3001185 · DWSU3000276 둘 다 17-06-04).
+      //   비우고 → 채우고 → 채운다. 중간 어느 시점에도 중복이 생기지 않는다.
+      await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, '', '', '', inspector);
+      await fbReassignContainerPosition(voyageKey, c2._mode, c2.cn, _aPos.bay, _aPos.row, _aPos.tier, inspector);
+      await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, _bPos.bay, _bPos.row, _bPos.tier, inspector);
       setC1({ ...c1, ..._bPos });
       setC2({ ...c2, ..._aPos });
       speak('앞뒤 위치를 맞바꿨습니다');
@@ -1544,6 +1559,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
 
   return (
     <>
+      <ConfirmModal {...confirmState} />
       <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
         🚛 트윈: 앞 컨 입력 → EDI 베이 분석으로 짝꿍 자동 추천
         <div className="text-[10px] text-blue-400/70 mt-0.5">완료된 컨은 짝 후보 제외 · 통로 사이 단독 베이는 짝 없음</div>
@@ -1599,7 +1615,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           onOpen={() => onOpenContainer?.(c1)}
           onAfterComplete={handleAfterComplete}
           onReplace={replaceFront}
-          workGroup={workGroup} workTier={workTier} twinPartner={c2}
+          workGroup={workGroup} workTier={workTier} twinPartner={c2} slotSource={slotSource}
           label="앞" labelColor="amber"
         />
       )}
@@ -1621,7 +1637,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           onOpen={() => onOpenContainer?.(c2)}
           onAfterComplete={handleAfterComplete}
           onReplace={replaceBack}
-          workGroup={workGroup} workTier={workTier} twinPartner={c1}
+          workGroup={workGroup} workTier={workTier} twinPartner={c1} slotSource={slotSource}
           label={c2._replaced ? '뒤 (실제 온 컨)' : '뒤 (자동)'} labelColor="cyan"
         />
       )}

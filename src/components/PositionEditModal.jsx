@@ -28,6 +28,12 @@ export default function PositionEditModal({
   // TallyOne 1.48: 트윈 화면에서 이미 고른 뒤(짝꿍) 컨. 「트윈 지정」을 켜면 그대로 물려받는다.
   //   종전엔 바깥에서 고른 값이 안 넘어와 모달에서 끝4자리를 **한 번 더** 입력해야 했다.
   defaultPartner = null,
+  // TallyOne 1.49: **자리 격자의 진실원.** 완료분까지 든 항차 전체 컨 목록.
+  //   종전엔 자리를 "지금 컨이 있는 곳"에서 역산해, 컨이 떠나면 **자리 자체가 사라졌다.**
+  //   실측 2026-08-11(16번 홀드 8쌍): 진짜 빈 자리를 못 골라 5번을 직접 입력으로 쳐야 했고,
+  //   짝꿍 자리가 비면 「트윈 지정」이 통째로 없어져 트윈 작업을 한 대씩 두 번 넣었다.
+  //   ⚠ 없으면 종전대로 allContainers 를 쓴다(회귀 없음).
+  slotSource = null,
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -66,6 +72,41 @@ export default function PositionEditModal({
   //   완료된 자리도 보여주되 선택 불가(비활성) — 베이 전체 그림 파악용
   const is20 = (c) => String(c?.tp || '').startsWith('20') || String(c?.iso || '')[0] === '2';
   const [pickBay, setPickBay] = useState(null);
+
+  // TallyOne 1.49: 이 항차 이 모드에 **존재하는 자리**의 전체 집합.
+  //   현재 좌표 + 원계획 좌표(bay_orig)를 합친다 — 컨이 옮겨가 비어버린 자리도 살아 있게.
+  //   빈 자리의 20/40 판정은 그 자리에 원래 계획된 컨을 따른다.
+  const slotUniverse = useMemo(() => {
+    if (!open || !container) return [];
+    const src = (Array.isArray(slotSource) && slotSource.length) ? slotSource : allContainers;
+    const m = new Map();
+    const add = (b, r, t, c) => {
+      if (!b || !r || !t) return;
+      const bay = String(parseInt(b, 10));
+      if (!Number.isFinite(parseInt(b, 10))) return;
+      const key = `${bay}-${r}-${t}`;
+      if (!m.has(key)) m.set(key, { bay, row: r, tier: t, is20: is20(c) });
+    };
+    src.forEach(c => {
+      if (!c || c._mode !== container._mode || c._ptk === false) return;
+      add(c.bay, c.row, c.tier, c);
+      add(c.bay_orig, c.row_orig, c.tier_orig, c);
+    });
+    return [...m.values()];
+  }, [open, container, slotSource, allContainers]);
+
+  // 1.49: 지금 그 자리에 실제로 있는 컨 (완료분 포함).
+  const occupancy = useMemo(() => {
+    const src = (Array.isArray(slotSource) && slotSource.length) ? slotSource : allContainers;
+    const m = new Map();
+    if (!container) return m;
+    src.forEach(c => {
+      if (!c || c._mode !== container._mode || !c.bay || !c.row || !c.tier) return;
+      m.set(`${parseInt(c.bay, 10)}-${c.row}-${c.tier}`, c);
+    });
+    return m;
+  }, [container, slotSource, allContainers]);
+
   const allSlots = useMemo(() => {
     if (!open || !container) return [];
     const targetIs20 = is20(container);
@@ -81,15 +122,21 @@ export default function PositionEditModal({
       const ctr = bayGroupCenter(b, bayPairs || {});
       return ctr != null && String(ctr) === String(parseInt(workGroup, 10));
     };
-    return allContainers
-      .filter(c => c && c._mode === container._mode && c._ptk !== false &&
-        c.bay && c.row && c.tier &&
-        c.cn !== container.cn &&
-        is20(c) === targetIs20 && tierMatch(c.tier) && groupMatch(c.bay))
-      .map(c => ({ bay: String(parseInt(c.bay, 10)), row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp }))
+    return slotUniverse
+      .filter(s => s.is20 === targetIs20 && tierMatch(s.tier) && groupMatch(s.bay))
+      .map(s => {
+        const occ = occupancy.get(`${s.bay}-${s.row}-${s.tier}`);
+        const mine = !!(occ && occ.cn === container.cn);
+        return {
+          bay: s.bay, row: s.row, tier: s.tier,
+          cn: (occ && !mine) ? occ.cn : null,
+          done: !!(occ && !mine && occ._comp),
+          self: mine,                       // 1.49: 지금 이 컨이 있는 자리 — 제자리에서 트윈만 걸 때 쓴다
+        };
+      })
       .sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
         (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
-  }, [open, container, allContainers, workTier, workGroup, bayPairs]);
+  }, [open, container, slotUniverse, occupancy, workTier, workGroup, bayPairs]);
   const slotsByBay = useMemo(() => {
     const m = {};
     allSlots.forEach(s => { (m[s.bay] = m[s.bay] || []).push(s); });
@@ -127,10 +174,14 @@ export default function PositionEditModal({
     if (!pBay) return null;
     const rowPad = String(row).padStart(2, '0');
     const tierPad = String(tier).padStart(2, '0');
-    const slotCon = allContainers.find(x => x && (x._mode === container._mode) && x.bay &&
-      String(parseInt(x.bay, 10)) === String(parseInt(pBay, 10)) && x.row === rowPad && x.tier === tierPad);
-    return slotCon ? { bay: String(parseInt(pBay, 10)), row: rowPad, tier: tierPad, slotCn: slotCon.cn, slotDone: !!slotCon._comp } : null;
-  }, [open, container, bay, row, tier, bayPairs, allContainers]);
+    // 1.49: 컨이 실재하는지가 아니라 **자리가 실재하는지**로 판단한다.
+    //   종전엔 짝꿍 자리 컨이 다른 데로 옮겨가면 트윈 지정이 화면에서 사라졌다(실측 2026-08-11).
+    const pb = String(parseInt(pBay, 10));
+    const exists = slotUniverse.some(s => s.bay === pb && s.row === rowPad && s.tier === tierPad);
+    if (!exists) return null;
+    const occ = occupancy.get(`${pb}-${rowPad}-${tierPad}`);
+    return { bay: pb, row: rowPad, tier: tierPad, slotCn: occ ? occ.cn : null, slotDone: !!(occ && occ._comp) };
+  }, [open, container, bay, row, tier, bayPairs, slotUniverse, occupancy]);
 
   // V8.70: 뒤(짝꿍) 컨 후보 — 선박 전체 미완료에서 검색, 다른 베이 계획분은 경고 배지.
   const partnerMatches = useMemo(() => {
@@ -312,7 +363,7 @@ export default function PositionEditModal({
             {pickBay && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 (✓회색=선적 완료 · 흐림=다른 컨 예약 · 밝은 칸=빈 자리)</div>
+                  <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 (✓회색=선적 완료 · 흐림=다른 컨 예약 · 밝은 칸=빈 자리 · 하늘=지금 자리)</div>
                   <button onClick={() => setPickBay(null)} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
                 </div>
                 <div className="max-h-56 overflow-y-auto pr-1 space-y-1">
@@ -329,7 +380,15 @@ export default function PositionEditModal({
                   {(() => {
                     const list = slotsByBay[pickBay] || [];
                     const tiers = [...new Set(list.map(s => s.tier))].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
-                    const cell = (s) => s.done ? (
+                    const cell = (s) => s.self ? (
+                      // 1.49: 지금 이 컨이 있는 자리 — 자리는 그대로 두고 트윈만 걸고 싶을 때 여기를 누른다.
+                      <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
+                        title="지금 이 컨이 있는 자리 — 그대로 두고 트윈만 걸 수 있습니다"
+                        className="px-2.5 py-2 rounded-lg bg-cyan-950 hover:bg-cyan-900 border-2 border-cyan-500 mono text-[13px] font-black text-cyan-200 flex flex-col items-center leading-tight">
+                        <span>{s.row}-{s.tier}</span>
+                        <span className="text-[9px] text-cyan-400">지금 자리</span>
+                      </button>
+                    ) : s.done ? (
                       <span key={`${s.bay}-${s.row}-${s.tier}`}
                         className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">
                         ✓{s.row}-{s.tier}
