@@ -6,6 +6,7 @@ import { X, AlertTriangle, MapPin } from 'lucide-react';
 import { bayParityError } from '../utils.js';   // V9.27: 물리 불가 좌표 차단
 import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
 import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
+import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다
 
 export default function PositionEditModal({
   open,
@@ -39,6 +40,7 @@ export default function PositionEditModal({
   const [row, setRow] = useState('');
   const [tier, setTier] = useState('');
   const [step, setStep] = useState('input');  // 'input' | 'confirm' | 'saving'
+  const [confirmState, askConfirm] = useConfirm();   // 1.53
   const [errMsg, setErrMsg] = useState('');
   const [manualOpen, setManualOpen] = useState(false);   // 직접 입력 접기 (기본: 슬롯 선택)
   const [twinOn, setTwinOn] = useState(false);           // V8.70: 검수사가 켜는 "트윈 지정"
@@ -194,6 +196,13 @@ export default function PositionEditModal({
       .sort((a, b) => (!!a._comp) - (!!b._comp)).slice(0, 6);
   }, [partnerQuery, allContainers, container]);
 
+  // TallyOne 1.53: 자리 주인은 같은 작업(양하/선적) 안에서만 찾는다.
+  //   양하가 끝난 자리는 실물이 비어 있는데, 싱글 조회의 allContainers 는 두 모드를 한 배열에 담아
+  //   (SearchPanel: ['discharge','loading'].forEach) 이미 내려간 양하 컨이 자리 주인으로 잡혔다.
+  //   격자(occupancy)는 이미 _mode 게이트가 있어 빈 칸으로 그렸는데 판정만 달라 확인창이 떴다 — 잣대를 맞춘다.
+  //   _mode 가 없는 배열(단일 모드로 이미 걸러 내려온 경로)은 그대로 통과시킨다.
+  const sameMode = (x) => !x?._mode || !container?._mode || x._mode === container._mode;
+
   // 충돌 검사: 같은 자리에 있는 다른 컨
   const conflict = useMemo(() => {
     if (!bay || !row || !tier) return null;
@@ -201,15 +210,15 @@ export default function PositionEditModal({
     const rowPad = String(row).padStart(2, '0');
     const tierPad = String(tier).padStart(2, '0');
     return allContainers.find(c => {
-      if (!c || c.cn === container?.cn) return false;
+      if (!c || c.cn === container?.cn || !sameMode(c)) return false;
       const cBay = c.bay ? String(parseInt(c.bay, 10)) : '';
       return cBay === bayInt && c.row === rowPad && c.tier === tierPad;
     }) || null;
   }, [bay, row, tier, allContainers, container]);
 
   // V7.94-10: 경고 — ① 다른 베이에서 옮겨오는 컨 ② EDI 계획상 그 자리 목적지(POD) 구역 이탈
-  const findByCn = (cn) => cn ? allContainers.find(x => x?.cn === cn) : null;
-  const findAtPos = (b, r, t) => allContainers.find(x => x && x.cn !== container?.cn && x.bay &&
+  const findByCn = (cn) => cn ? allContainers.find(x => x?.cn === cn && sameMode(x)) : null;
+  const findAtPos = (b, r, t) => allContainers.find(x => x && x.cn !== container?.cn && x.bay && sameMode(x) &&
     String(parseInt(x.bay, 10)) === String(parseInt(b, 10)) && x.row === String(r).padStart(2, '0') && x.tier === String(t).padStart(2, '0'));
   const bayWarn = useMemo(() => {
     if ((!bay && !row && !tier) || !container?.bay || !bay) return false;
@@ -268,11 +277,25 @@ export default function PositionEditModal({
     const _pe = bayParityError(container, bay);
     if (_pe) { setErrMsg('⛔ ' + _pe.replace(/\n/g, ' ')); setStep('input'); return; }
     // V9.53: 강한 등급(다른 베이 풀 · 다른 포트 · 특수컨)이면 한 번 더 묻는다.
-    {
-      const slotCon = findByCn(pickedSlotCn) || findAtPos(bay, row, tier) || conflict;
-      const t0 = confirmTextOf(swapG, container, slotCon);
-      if (t0 && !confirm(t0)) { setStep('input'); return; }
+    // TallyOne 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다 — 검수원에게는 "앱이 굳은" 것으로 보인다.
+    //   실측 2026-08-12: 이 자리에서 앱이 30분 멈췄다(대화상자가 떠 있었다). 앱 안 모달로 바꾼다.
+    const slotCon = findByCn(pickedSlotCn) || findAtPos(bay, row, tier) || conflict;
+    const t0 = confirmTextOf(swapG, container, slotCon);
+    if (t0) {
+      askConfirm({
+        title: '자리를 바꿉니다',
+        message: t0,
+        confirmLabel: '바꾸기',
+        danger: true,
+        onConfirm: () => doConfirm(),
+        onCancel: () => setStep('input'),
+      });
+      return;
     }
+    await doConfirm();
+  };
+
+  const doConfirm = async () => {
     setStep('saving');
     try {
       const r = row ? String(row).padStart(2, '0') : '';
@@ -588,7 +611,17 @@ export default function PositionEditModal({
                         className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
                       {partnerMatches.map(x => (
                         <button key={x.cn} onClick={() => {
-                            if (x._comp && !confirm(`${x.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다. 계속할까요?`)) return;
+                            // 1.53: 네이티브 confirm 금지 — 앱이 멈춘다.
+                            if (x._comp) {
+                              askConfirm({
+                                title: '이미 선적확인된 컨입니다',
+                                message: `${x.cn?.slice(-4)}는 이미 선적확인으로 기록된 컨입니다.\n실물이 눈앞에 있다면 앞선 기록이 오선적일 수 있습니다. 계속할까요?`,
+                                confirmLabel: '계속',
+                                danger: true,
+                                onConfirm: () => setPartnerPick(x),
+                              });
+                              return;
+                            }
                             setPartnerPick(x);
                           }}
                           className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
@@ -642,6 +675,7 @@ export default function PositionEditModal({
           </div>
         )}
       </div>
+      <ConfirmModal {...confirmState} />
     </div>
   );
 }

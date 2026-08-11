@@ -529,10 +529,20 @@ export async function fbCancelComplete(voyageKey, mode, cn) {
   try {
     const recSnap = await get(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`));
     const rec = recSnap.val();
-    if (!rec || rec.bay_orig === undefined) return { ok: true };
+    // TallyOne 1.53: 자리를 한 번도 안 옮긴 컨(계획 자리 그대로 실린 컨)은 아래 원복을 안 타므로
+    //   `_updatePositionFields` 를 지나지 않는다. 그러면 **실체 위치만 남아** 취소가 화면에 안 보인다.
+    //   실측 2026-08-12 WFHU1403890 — 취소를 눌렀는데 목록은 계속 완료 자리에 그려졌다.
+    const clearActualOnly = async () => {
+      const ba = rec?.bay_actual;
+      if (ba === undefined || ba === null || ba === '' || ba === STORAGE_BAY) return;
+      await update(ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`), {
+        bay_actual: null, row_actual: null, tier_actual: null, actual_at: null, actual_by: null,
+      });
+    };
+    if (!rec || rec.bay_orig === undefined) { await clearActualOnly(); return { ok: true }; }
     const ob = rec.bay_orig || '', orow = rec.row_orig || '', ot = rec.tier_orig || '';
     const changed = (rec.bay || '') !== ob || (rec.row || '') !== orow || (rec.tier || '') !== ot;
-    if (!changed) return { ok: true };
+    if (!changed) { await clearActualOnly(); return { ok: true }; }
     let occupant = null;
     if (ob && orow && ot) {
       const [ediSnap, recAllSnap] = await Promise.all([
@@ -950,11 +960,31 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
   //   `KMTU9448587` 이 `bay:""` (미배정)인데 `bay_actual:"38/09/88"` 로 남아,
   //   **목록에서는 미배정으로 세면서 그림에서는 자리를 차지**했다. 그 자리는 영영 못 쓴다.
   //   ⚠ 임시창고(`__STG__`)는 건드리지 않는다 — 그것도 '자리 없음'을 뜻하는 정상 상태다.
-  if (!nb && !nr && !nt) {
+  // TallyOne 1.53: **선적확인 취소도 실체 위치를 지운다.**
+  //   실측 2026-08-12 — 취소는 `bay/row/tier` 만 원계획으로 되돌리고 `bay_actual` 을 그대로 뒀다.
+  //   그런데 화면은 `effectivePos()`·검수리스트·베이그림 전부 `bay_actual` 을 **최우선**으로 읽는다
+  //   (utils.js effectivePos · SearchPanel · VoyagePage 승격 로직). 그래서 취소를 눌러도
+  //   **화면은 취소 전 자리를 계속 진실로 봤다.** 검수사 개념: *"취소하면 그 전 자리로 돌아가야 한다."*
+  //   실체 위치는 선적확인 시점에 확정되는 값이므로(_markLoadedPos), 확인을 취소하면 같이 사라져야 한다.
+  //   ⚠ 임시창고(`__STG__`)는 건드리지 않는다 — 그것도 '자리 없음'을 뜻하는 정상 상태다.
+  if ((!nb && !nr && !nt) || meta.why === 'cancel') {
     const curActual = cur.bay_actual;
     if (curActual !== undefined && curActual !== null && curActual !== '' && curActual !== STORAGE_BAY) {
       patch.bay_actual = null; patch.row_actual = null; patch.tier_actual = null;
       patch.actual_at = null; patch.actual_by = null;
+    }
+  } else if (nb && nr && nt) {
+    // TallyOne 1.53: **이미 실린 컨의 자리를 고치면 실체 위치도 함께 옮긴다.**
+    //   실측 2026-08-12 — UXXU2413110 을 11-07-06 → 07-01-06 으로 옮겼는데 `bay_actual` 이 11-07-06 에 남았다.
+    //   화면은 `effectivePos()` 로 실체를 먼저 읽으므로 **고친 자리가 아니라 옛 자리를 그렸고**,
+    //   그 자리에 새로 들어온 DWSU2261640 과 겹쳐 「자리 중복」 경고가 떴다(실제 중복은 0곳이었다).
+    //   경고가 틀리면 검수사는 곧 경고를 안 본다 — 그래서 고친다.
+    //   ⚠ 지나온 경로는 `moves` 에 그대로 쌓이므로(1.50) 실체를 갱신해도 이력은 안 사라진다.
+    //   ⚠ 실체가 아직 없는 컨(선적확인 전)은 건드리지 않는다 — 실체는 선적확인 시점에 생기는 값이다.
+    const curActual = cur.bay_actual;
+    if (curActual !== undefined && curActual !== null && curActual !== '' && curActual !== STORAGE_BAY) {
+      patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
+      patch.actual_at = Date.now(); patch.actual_by = by || '';
     }
   }
 
