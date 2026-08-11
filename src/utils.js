@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.50';   // 컨이 지나온 자리를 다 남긴다 — 어디 갔어? 에 경로로 답한다 · 싱글 먼저 · 격자 한 줄
+export const APP_VERSION = 'TallyOne 1.51';   // LUGGAGE 는 EDI로 오지 않는다 — 부분 EDI 가 아니라 매칭 정상 + LUGGAGE N
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3818,6 +3818,27 @@ export function describeMovePath(c, isCompleted = false) {
   });
   lines.push(tail);
   return lines.join('\n');
+}
+
+// ── TallyOne 1.51: LUGGAGE (여객 수하물 컨테이너) ──────────────
+// 검수사 확정 2026-08-11 — *"그선박은 항상 양하에 20피트 1개의 엠티를 실고 옵니다.
+//   그 컨넘버를 기억하고 그게 있다면 매칭 정상에 LUGGAGE 1을 표시하면 됩니다."*
+//
+// 왜 필요한가 — RZOR 양하 카드가 「부분 EDI 169」로 떴다(평택 170 · 매칭 169).
+//   차이 1대가 이 수하물 컨이고 **원래 EDI로 오지 않는 물건**인데, 판정이 개수만 비교해서
+//   *"자료가 덜 온 것"* 처럼 보였다. 검수사 지적 — *"부분EDI로 표기하면 확정이 아닌걸로 볼수있습니다."*
+//
+// 실물 확인(검수사 제공 양하리스트 2건):
+//   123.xls(082E)  SPSU2019220  22GP  M-B/L HTFR26V082E004  B/L TYPE E  seal H42943
+//   456.xls(083E)  SPSU2019220  22GP  M-B/L HTFR26V083E004  B/L TYPE E  seal H42876
+//   → **번호가 같고 씰만 바뀐다.** 선적 요약에도 독립 항목이다(`*LUGGAGE 20D X 1` · `LUG-1TEU`).
+//
+// ⚠ 되풀이 금지 — 클로드가 아카이브의 `SAWTBP004~009` 를 보고 *"매 항차 다른 번호"* →
+//   *"번호 형식이 표준 아닌 것으로 거르자"* 고 제안했다. **틀렸다.** 진짜 LUGGAGE 는 고정 번호이고
+//   정식 형식(SPS+U+7자리)이다. 실물을 받아 보고서야 드러났다. **번호로 기억한다.**
+export const LUGGAGE_CNS = new Set(['SPSU2019220']);
+export function isLuggageCn(cn) {
+  return LUGGAGE_CNS.has(String(cn || '').trim().toUpperCase());
 }
 
 export function effectivePos(c) {

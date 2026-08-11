@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn } from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn} from '../utils.js';
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -1583,6 +1583,11 @@ function SectionBar({ label, color, stats, onClick }) {
             <span className="text-slate-400">평택 <span className={`${stats.matched > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.ptk}</span></span>
             <span className="text-slate-600">·</span>
             <span className="text-slate-400">매칭 {stats.matched > 0 ? <span className="text-emerald-300 font-bold">{stats.matched}</span> : stats.matched}</span>
+            {/* 1.51: LUGGAGE(여객 수하물) — EDI로 오지 않는 것이 정상이므로 부족이 아니다. 따로 센다. */}
+            {stats.luggage > 0 && (
+              <span className="ml-1 px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 text-[10px] font-black"
+                title="여객 수하물 컨테이너 — EDI로 오지 않는 것이 정상입니다. 리스트에는 있고 EDI에는 없지만 자료가 덜 온 것이 아닙니다. 선적 요약에서도 FULL·EMPTY와 섞지 않고 LUG 로 따로 셉니다.">LUGGAGE {stats.luggage}</span>
+            )}
           </>
         )}
         {/* V9.03: 선적 가상엠티(DUME)·엠티확정 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
@@ -1680,7 +1685,11 @@ function computeStats(section, mode, info) {
   const listOnly = !virtual && ptkCns.size === 0 && recordCns.size > 0;
   // V8.91: 부분 EDI — TNJP 26349W 사건: EDI가 리스트 일부(한 선사분 46/313)만 커버.
   //   리스트가 기준 수치(녹색), EDI·매칭은 참고로 표기. 누락 표기는 무의미하므로 숨김.
-  const partialEdi = !virtual && matched > 0 && recordCns.size > ptkCns.size;
+  // TallyOne 1.51: **LUGGAGE 는 EDI로 오지 않는다** — 그 대수를 빼고 비교한다.
+  //   검수사 확정 2026-08-11: 그 컨번호를 기억했다가 있으면 「매칭 정상 + LUGGAGE N」.
+  //   ⚠ 뺀 나머지가 여전히 EDI보다 많으면 그때는 진짜 부분본이다(TNJP 26349W 46/313) — 그대로 잡힌다.
+  const luggage = [...recordCns].filter(cn => isLuggageCn(cn) && !ptkCns.has(cn)).length;
+  const partialEdi = !virtual && matched > 0 && (recordCns.size - luggage) > ptkCns.size;
   // V9.03: 선적 가상엠티 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
   //   BAPLIE의 엠티 예약자리는 실번호가 없어 수집기(DUME…)나 선사 플래너(CASP69: CASP0000001…)가 더미번호로 채운다.
   //   실번호 개수와 섞이면 터미널 집계와 대조가 안 되므로 분리해 보여준다.
@@ -1704,7 +1713,7 @@ function computeStats(section, mode, info) {
   //   → 자리의 **규격·개수는 신뢰**하되 **개별 컨의 위치는 확정이 아니다.**
   //     이 자료로 만든 위치를 확정처럼 다루면 안 된다(카고플랜·베이플랜 표기 시 주의).
   const planOnly = planSlots > 0 && matched === 0;
-  return { total, done, ptk: ptkCns.size, matched, missing, virtual, virtualFromList, forecastEdi, listOnly, partialEdi, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
+  return { total, done, ptk: ptkCns.size, matched, missing, virtual, virtualFromList, forecastEdi, listOnly, partialEdi, luggage, recCount: recordCns.size, dummyE, emptyConfirmed, emptyConfirmedAdd, planSlots, planOnly };
 }
 
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {
