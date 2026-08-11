@@ -404,6 +404,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
              종전 선적 화면은 끝4자리 두 칸뿐이라 실번호를 볼 수가 없었다(사용자 지적 2026-08-03).
              BigResultCard 는 이미 선적을 완전히 지원한다 — 화면을 새로 만들 필요가 없었다. */
           : <TwinSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={filteredContainers} workFilter={workFilter} onOpenContainer={onOpenContainer}
+              /* TallyOne 1.48: 검수원이 이미 고른 작업 구역·단을 위치 지정 모달까지 내린다. */
+              workGroup={manualBay} workTier={manualTier}
               onManualMode={workFilter === 'loading' ? () => setLoadTwinMode('manual') : null}/>}
       </>
       )}
@@ -1060,6 +1062,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               <BigResultCard c={main[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(main[0])}
+                /* TallyOne 1.48: 싱글도 같다 — 작업 구역을 골랐으면 위치 지정에서 다시 묻지 않는다. */
+                workGroup={manualCtx?.selectedGroup ?? null} workTier={manualCtx?.selectedTier ?? null}
                 onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
               />
             )}
@@ -1414,7 +1418,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
 }
 
 // ─── 트윈 모드 (자동 짝꿍) ───
-function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null }) {
+function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, onOpenContainer, onManualMode = null, workGroup = null, workTier = null }) {
   const [q1, setQ1] = useState('');
   const [c1, setC1] = useState(null); // 앞 컨테이너 (선택됨)
   const [c2, setC2] = useState(null); // 뒤 컨테이너 (선택됨, 자동 짝꿍)
@@ -1595,6 +1599,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           onOpen={() => onOpenContainer?.(c1)}
           onAfterComplete={handleAfterComplete}
           onReplace={replaceFront}
+          workGroup={workGroup} workTier={workTier} twinPartner={c2}
           label="앞" labelColor="amber"
         />
       )}
@@ -1616,6 +1621,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           onOpen={() => onOpenContainer?.(c2)}
           onAfterComplete={handleAfterComplete}
           onReplace={replaceBack}
+          workGroup={workGroup} workTier={workTier} twinPartner={c1}
           label={c2._replaced ? '뒤 (실제 온 컨)' : '뒤 (자동)'} labelColor="cyan"
         />
       )}

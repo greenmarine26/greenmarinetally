@@ -1,10 +1,11 @@
 // M3.87: 컨테이너 위치 변경 모달 (선적 모드 전용)
 //   - bay/row/tier 직접 입력 + 충돌 검사 + 풀/엠티 차별 확인
 //   - 빈 입력 = 미배정 (선적대상으로 분류)
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
 import { bayParityError } from '../utils.js';   // V9.27: 물리 불가 좌표 차단
-import { gradeSwap, confirmTextOf, GRADE_STYLE } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급(판정 한 벌)
+import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
+import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
 
 export default function PositionEditModal({
   open,
@@ -19,6 +20,14 @@ export default function PositionEditModal({
   onCompleteBoth = null,     // async (cns[]) => void — 배정 후 선적확인
   workBay = null,            // V7.94-20: 현재 작업 중인 베이 — 미배정 컨 재배정 시 자동 선택 (전체 베이 재선택 불필요)
   workTier = null,           // V7.94-24: 작업 중인 단 — 'hold' | 'deck'. 있으면 그 단의 빈자리만 표시 (홀드 작업 중엔 홀드 자리만)
+  // TallyOne 1.48: 검수원이 이미 고른 **작업 구역**(베이 그룹 대표 번호). 있으면 그 그룹 베이의 자리만 보여준다.
+  //   지적 2026-08-11 — *"21번 작업이면 21번 안해도 되는 작업을 했습니다."*
+  //   19·20·21 홀드를 골라놓고도 모달이 B3~B25 열두 개를 매번 다시 물어, 한 쌍마다 두 번씩 헛클릭했다.
+  //   ⚠ 게이트 먼저 — workGroup 이 없으면 종전대로 전체를 보여준다(회귀 없음).
+  workGroup = null,
+  // TallyOne 1.48: 트윈 화면에서 이미 고른 뒤(짝꿍) 컨. 「트윈 지정」을 켜면 그대로 물려받는다.
+  //   종전엔 바깥에서 고른 값이 안 넘어와 모달에서 끝4자리를 **한 번 더** 입력해야 했다.
+  defaultPartner = null,
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -66,21 +75,38 @@ export default function PositionEditModal({
       const ti = parseInt(t, 10);
       return workTier === 'hold' ? ti < 80 : ti >= 80;
     };
+    // 1.48: 작업 구역 게이트 — 검수원이 고른 그룹(19·20·21 등)의 베이만. 판정은 bayGroupCenter 한 벌.
+    const groupMatch = (b) => {
+      if (workGroup == null) return true;
+      const ctr = bayGroupCenter(b, bayPairs || {});
+      return ctr != null && String(ctr) === String(parseInt(workGroup, 10));
+    };
     return allContainers
       .filter(c => c && c._mode === container._mode && c._ptk !== false &&
         c.bay && c.row && c.tier &&
         c.cn !== container.cn &&
-        is20(c) === targetIs20 && tierMatch(c.tier))
+        is20(c) === targetIs20 && tierMatch(c.tier) && groupMatch(c.bay))
       .map(c => ({ bay: String(parseInt(c.bay, 10)), row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp }))
       .sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
         (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
-  }, [open, container, allContainers, workTier]);
+  }, [open, container, allContainers, workTier, workGroup, bayPairs]);
   const slotsByBay = useMemo(() => {
     const m = {};
     allSlots.forEach(s => { (m[s.bay] = m[s.bay] || []).push(s); });
     return m;
   }, [allSlots]);
   const remainingSlots = useMemo(() => allSlots.filter(s => !s.done), [allSlots]);
+
+  // 1.48: 고를 베이가 하나뿐이면 묻지 않는다 — 베이 선택 단계를 통째로 건너뛴다.
+  //   (16번 홀드처럼 그룹 안에서 홀드가 한 베이에만 있는 경우가 흔하다)
+  //   ⚠ 열 때 한 번만 — 「← 베이 다시 선택」을 눌렀는데 곧바로 도로 들어가면 그 버튼이 죽는다.
+  const autoPickedRef = useRef(false);
+  useEffect(() => { if (!open) autoPickedRef.current = false; }, [open]);
+  useEffect(() => {
+    if (!open || pickBay || autoPickedRef.current) return;
+    const bays = Object.keys(slotsByBay).filter(b => slotsByBay[b].some(s => !s.done));
+    if (bays.length === 1) { autoPickedRef.current = true; setPickBay(bays[0]); }
+  }, [open, slotsByBay, pickBay]);
 
   // 슬롯 탭: 위치 세팅 + 트윈이면 짝꿍 자리 자동 계산 → 바로 확인 단계
   const [pickedSlotCn, setPickedSlotCn] = useState(null);   // 선택 자리의 원래 계획 컨 (POD 구역 판정용)
@@ -289,17 +315,21 @@ export default function PositionEditModal({
                   <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택 (✓회색=선적 완료 · 흐림=다른 컨 예약 · 밝은 칸=빈 자리)</div>
                   <button onClick={() => setPickBay(null)} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
                 </div>
-                <div className="max-h-56 overflow-y-auto pr-1">
-                  <div className="flex flex-wrap gap-1.5">
-                    {/* TallyOne 1.33: **세 갈래로 가른다.** 검수사 지적 2026-08-09 —
-                        BAY38에서 22자리가 다 열려 보이는데 실제로 맞는 건 1자리뿐이었다.
-                        나머지 21자리는 **다른 컨이 예약한 자리**라, 누르면 남의 자리를 뺏는 셈이 된다.
-                        어제 확정한 "계획은 예약이지 입실이 아니다"를 화면에 그대로 옮긴다.
-                          ✓회색 = 선적 완료 (입실) — 선택 불가
-                          흐림  = 다른 컨이 예약 — 누를 수는 있되 그 컨 끝4자리를 보여준다
-                          밝음  = 진짜 빈 자리 — 여기를 고르면 된다
-                        ※ 예약 자리를 막지는 않는다. 실제로 그 자리에 실렸으면 기록할 수 있어야 한다. */}
-                    {(slotsByBay[pickBay] || []).map(s => s.done ? (
+                <div className="max-h-56 overflow-y-auto pr-1 space-y-1">
+                  {/* TallyOne 1.48: **종이 베이플랜과 같은 배치로 그린다.**
+                      종전엔 6개씩 줄바꿈되는 나열이라 단이 줄 중간에서 끊겼다. 검수원은 손에 든 종이와
+                      대조하며 누르는데 모양이 달라 자리를 눈으로 못 찾았다(실측 2026-08-11, 19·21 홀드 18쌍).
+                      위가 높은 단, 왼쪽에 단 번호, 가로가 열(06 04 02 00 01 03 05 07).
+                      열 순서 규약은 getRowPositions 한 벌을 비교자로 옮긴 rowOrderRank 를 쓴다.
+
+                      칸 세 갈래는 그대로 (TallyOne 1.33, 검수사 지적 2026-08-09):
+                        ✓회색 = 선적 완료(입실) — 선택 불가
+                        흐림  = 다른 컨이 예약 — 누를 수는 있되 그 컨 끝4자리를 보여준다
+                        밝음  = 진짜 빈 자리 */}
+                  {(() => {
+                    const list = slotsByBay[pickBay] || [];
+                    const tiers = [...new Set(list.map(s => s.tier))].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+                    const cell = (s) => s.done ? (
                       <span key={`${s.bay}-${s.row}-${s.tier}`}
                         className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">
                         ✓{s.row}-{s.tier}
@@ -316,8 +346,18 @@ export default function PositionEditModal({
                         className="px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-amber-800 border-2 border-amber-600 hover:border-amber-400 mono text-sm font-bold text-amber-100">
                         {s.row}-{s.tier}
                       </button>
-                    ))}
-                  </div>
+                    );
+                    return tiers.map(t => (
+                      <div key={t} className="flex items-start gap-1.5">
+                        <span className="mono text-[10px] font-black text-slate-500 w-5 shrink-0 pt-2.5">{t}</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {list.filter(s => s.tier === t)
+                               .sort((a, b) => rowOrderRank(a.row) - rowOrderRank(b.row))
+                               .map(cell)}
+                        </div>
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
             )}
@@ -454,7 +494,15 @@ export default function PositionEditModal({
               {/* V8.70: 트윈 지정 — 짝꿍 자리가 플랜에 실재할 때만 노출. 뒤 컨은 검수사가 직접 선택. */}
               {!isUnassign && !isCompleted && pairSlot && onSavePartner && (
                 <div className="border-t border-slate-800 pt-2 space-y-1.5">
-                  <button onClick={() => { setTwinOn(v => !v); setPartnerQuery(''); setPartnerPick(null); setErrMsg(''); }}
+                  <button onClick={() => {
+                      const next = !twinOn;
+                      setTwinOn(next); setPartnerQuery(''); setErrMsg('');
+                      // 1.48: 트윈 화면에서 이미 고른 뒤 컨이 있으면 그대로 물려받는다 — 두 번 입력하지 않는다.
+                      const inherit = next && defaultPartner && defaultPartner.cn && defaultPartner.cn !== container?.cn
+                        ? allContainers.find(x => x && x.cn === defaultPartner.cn && x._mode === container._mode) || defaultPartner
+                        : null;
+                      setPartnerPick(inherit);
+                    }}
                     className={`w-full flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs font-bold ${twinOn ? 'bg-cyan-950 border-cyan-700 text-cyan-300' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
                     <span className={`w-3.5 h-3.5 rounded ${twinOn ? 'bg-cyan-400' : 'bg-slate-600'}`}/>
                     트윈 지정 — 뒤 컨을 짝꿍 자리 {pairSlot.bay}-{pairSlot.row}-{pairSlot.tier}에 함께 배정 — {twinOn ? '켬' : '끔'}

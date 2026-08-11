@@ -11,7 +11,10 @@ import PositionEditModal from './PositionEditModal.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51: 원래 자리로 되돌리기
 import { gradeSwap, confirmTextOf, GRADE_STYLE } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급
 
-export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [], onReplace = null }) {
+export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, inspector, label, labelColor = 'amber', allContainers = [], onReplace = null,
+  // TallyOne 1.48: 검수원이 고른 작업 구역·단, 그리고 트윈 화면에서 이미 고른 짝꿍 컨.
+  //   종전엔 이 셋을 PositionEditModal 로 안 내려서, 모달이 전체 베이를 다시 묻고 뒤 컨도 다시 물었다.
+  workGroup = null, workTier = null, twinPartner = null }) {
   // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
   //   이 카드가 그 컨으로 바뀌어야 한다. 종전엔 배정만 되고 카드는 계획 컨 그대로여서
   //   화면상 아무 일도 안 일어난 것처럼 보였다(사용자 지적 2026-08-03: 트윈 뒤 카드가 안 바뀜).
@@ -390,6 +393,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           return result;
         }}
         bayPairs={posEditBayPairs}
+        workGroup={workGroup}
+        workTier={workTier}
+        defaultPartner={twinPartner}
         onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { actualWork: true })}   /* V9.52: 자리 교환 */
         onCompleteBoth={async (cns) => {
           for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector);

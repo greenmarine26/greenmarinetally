@@ -224,6 +224,16 @@ export function getRowPositions(cellCount, hasZero) {
   }
 }
 
+// TallyOne 1.48: 열(row) 표기 정렬 순서 — 위 getRowPositions 와 **같은 규약**을 비교자로 옮긴 것.
+//   짝수는 큰 수부터(06 04 02) → 00 → 홀수는 작은 수부터(01 03 05 07). 종이 베이플랜의 가로 배치 그대로다.
+//   판정을 두 벌로 만들지 않으려고 여기(같은 파일)에 둔다.
+export function rowOrderRank(rowStr) {
+  const n = parseInt(rowStr, 10);
+  if (!Number.isFinite(n)) return 999;
+  if (n === 0) return 0;
+  return (n % 2 === 0) ? -n : n;
+}
+
 export function getActiveColsSymmetric(cellCount, nTotal) {
   const active = new Set();
   if (cellCount >= nTotal) {
