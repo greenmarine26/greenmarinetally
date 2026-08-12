@@ -16,6 +16,7 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
+  , fbSetSeqFull   // TallyOne 1.54: 풀 컨테이너 시퀀스 작업 여부는 항차 속성이다
   , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
@@ -98,6 +99,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [closingOpen, setClosingOpen] = useState(false);
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
   const [listFilter, setListFilter] = useState('all');
+  // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
+  const [seqEdit, setSeqEdit] = useState(false);
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
@@ -386,6 +389,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
     // M4.9e-fix 2단계: 선적 모드 effective 위치 적용 (베이그리드도 실체 위치에 그려지게)
     // M5.1 I: STG 보관 컨은 베이 그리드에서 숨김 (bay='' 처리, _in_storage 플래그)
+    //
+    // ── TallyOne 1.54: **창고 컨은 「자리 미지정」이 아니다. 계획이 살아 있는 상태다.** ──
+    //   검수사 확정 2026-08-12 — *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."*
+    //   1.54 부터 계획 자리를 남에게 내준 컨은 **계획(bay/row/tier)을 그대로 둔 채 몸만** 창고로 간다
+    //   (firebase.js `_markPlanTaken`). 그러니 여기서 bay 를 비우는 것은 **그림에서 빼기 위한 것뿐**이고,
+    //   계획 좌표는 `_bay_planned` 에 그대로 살아 있다 — 화면은 그 값을 「이름 걸린 자리」로 보여줘야 한다.
+    //   ⛔ 창고 컨을 미배정으로 세지 마라. 「자리 미지정」(계획도 없음)과 「창고」(계획은 있음)는 다른 상태다.
     if (mode === 'loading') {
       return list.map(c => {
         if (c.bay_actual === '__STG__') {
@@ -811,6 +821,60 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         </button>
       </div>
 
+      {/* ── TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」 ── (검수사 확정 2026-08-12)
+          원문 — *"선적을 하기 전에 묻습니다. 풀 컨테이너 시퀀스 작업인지 아닌지를.
+                   엠티는 안 묻는 이유는 포트만 바뀌지 않으면 언제든 액츄얼이 가능하기 때문입니다."*
+          ⚠ **항차 속성이다.** 자연어 탭의 자동/수동 모드와 별개다 — 앞선 판이 "자동=시퀀스"로 잘못 읽어
+            지침서에도 그렇게 적혀 있었고, 오늘 검수사가 정정했다. 자동/수동은 **가이드를 받을지 말지**이고
+            시퀀스/액츄얼은 **일항사가 정하는 적재 방침**이다.
+          한 번 답하면 끝이다(작업 흐름을 막지 않는다). 답이 있으면 작은 칩만 남고, 눌러서 바꿀 수 있다.
+          답을 안 하면 앱은 **액츄얼**로 본다(firebase.js — 모르면 안 막는 쪽이 안전하다). */}
+      {mode === 'loading' && (tab === 'list' || tab === 'search' || tab === 'bay' || tab === 'lolo') && (() => {
+        // 작업하는 탭에서만 묻는다 — 업로드·통계·결과 탭에서까지 붙잡지 않는다.
+        const _sf = voyage?.info?.seqFull;
+        const _decided = (_sf === true || _sf === false || _sf === 'true' || _sf === 'false' || _sf === 1 || _sf === 0);
+        const _isSeq = (_sf === true || _sf === 'true' || _sf === 1);
+        const _save = async (v) => {
+          try { await fbSetSeqFull(voyageKey, v, inspector || ''); setSeqEdit(false); }
+          catch (e) { alert('저장 실패: ' + (e?.message || e)); }
+        };
+        if (_decided && !seqEdit) {
+          return (
+            <button onClick={() => setSeqEdit(true)}
+              className="mb-3 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[11px] text-slate-300 flex items-center gap-1.5">
+              <span className={`font-black ${_isSeq ? 'text-amber-300' : 'text-slate-200'}`}>
+                {_isSeq ? '🔒 풀 시퀀스 작업' : '↔ 액츄얼 작업'}
+              </span>
+              <span className="text-slate-500">— 눌러서 바꾸기</span>
+            </button>
+          );
+        }
+        return (
+          <div className="mb-3 bg-amber-950/40 border-2 border-amber-700/60 rounded-lg p-3">
+            <div className="text-[13px] font-black text-amber-200">풀 컨테이너 시퀀스 작업입니까?</div>
+            <div className="text-[11px] text-amber-300/80 mt-0.5 leading-snug">
+              시퀀스면 계획 자리 주인(풀)이 그 자리를 지킵니다 — 다른 컨을 넣을 때 한 번 더 묻습니다.
+              <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.
+              <br/>엠티는 어느 쪽이든 묻지 않습니다.
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2.5">
+              <button onClick={() => _save(true)}
+                className="py-2.5 rounded font-bold text-sm bg-amber-700 hover:bg-amber-600 text-white">
+                예 — 시퀀스 작업
+              </button>
+              <button onClick={() => _save(false)}
+                className="py-2.5 rounded font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-100">
+                아니오 — 액츄얼 작업
+              </button>
+            </div>
+            {seqEdit && (
+              <button onClick={() => setSeqEdit(false)}
+                className="w-full mt-1.5 text-[11px] text-slate-400 py-1">그대로 두기</button>
+            )}
+          </div>
+        );
+      })()}
+
       {/* V9.15: 진단 경고는 탭 바 위(눈에 띄어야 하는 경고) — PORT-MIS 카드는 탭 본문 아래로 내림(전면 점검 2-1) */}
       {/* M3.5.4: 자동 진단 경고 패널 */}
       {diagAlerts.length > 0 && (
@@ -995,7 +1059,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 pendingMoveCn={pendingMove?.cn}
               />
             )}
-            {/* M5.1 I: 보관함 박스 (선적 전용) */}
+            {/* M5.1 I: 보관함 박스 (선적 전용)
+                TallyOne 1.54: 여기 들어오는 컨은 **계획이 살아 있는** 컨이다 —
+                StorageBox 가 `_bay_planned` 를 읽어 「이름 걸린 자리」를 같이 보여준다. */}
             {mode === 'loading' && storedContainers.length > 0 && (
               <StorageBox
                 stored={storedContainers}

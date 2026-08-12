@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert } from '../nlSearch.js';   // 1.23: answerAboutAlert
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -405,13 +405,24 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         );
       })()}
       {/* V9.28: 미배정 = 빈자리가 있다는 뜻 — 검수원이 베이 탭 빈 칸을 골라 직접 배치한다 (사용자 확정) */}
+      {/* ── TallyOne 1.54: **「자리 미지정」과 「창고」는 다른 상태다.** (검수사 확정 2026-08-12) ──
+          원문 — *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."*
+          계획 자리를 남에게 내준 컨은 이제 **계획을 그대로 둔 채 몸만** 창고로 간다(`bay_actual==='__STG__'`).
+          종전 이 목록은 `!c.bay` 만 봤다 — 창고 컨은 계획이 살아 있어 여기 아예 안 뜨고,
+          베이 탭 보관함까지 가야만 보였다. 선적대상에서 **빠져 버린다.**
+          → 창고 컨도 여기 세우되 **미배정과 섞지 않는다.** 이름 걸린 자리를 그대로 적어 준다. */}
       {workFilter !== 'completed' && manualBay != null && manualGroups.find(x => x.center === manualBay)?.noBay && onPlaceUnassigned && (
         <div className="bg-slate-900 border border-amber-800/60 rounded-lg p-2 space-y-1">
           <div className="text-[11px] text-amber-300 font-bold">🅿 배치 — 누르면 베이 화면으로 가서 빈 칸(📦+)을 고릅니다</div>
-          {allContainers.filter(c => c._mode === workFilter && !c.bay && !c._comp).map(c => (
+          {allContainers.filter(c => c._mode === workFilter && !c._comp && (!c.bay || c.bay_actual === '__STG__')).map(c => (
             <div key={c.cn} className="flex items-center gap-1.5">
               <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-slate-800 rounded px-2 py-1.5 text-xs mono font-bold text-slate-100">
                 {c.cn} <span className="text-[10px] text-slate-400 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
+                {c.bay_actual === '__STG__'
+                  ? <span className="ml-1 text-[10px] font-bold text-sky-300">
+                      📦 창고{c.bay && c.row && c.tier ? ` · 이름 걸린 자리 ${String(parseInt(c.bay, 10)).padStart(2, '0')}-${c.row}-${c.tier}` : ''}
+                    </span>
+                  : <span className="ml-1 text-[10px] font-bold text-orange-300">자리 미지정</span>}
               </button>
               {/* V9.51: 원래 계획 자리가 남아 있으면 한 번에 되돌린다 (빈 칸을 다시 찾을 필요 없음) */}
               <RestoreOrigButton c={c} allContainers={allContainers} voyageKey={voyageKey}
@@ -1217,6 +1228,15 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 //   원칙: 수동 작업은 계획 위치에 묶이지 않는다. 두 컨을 직접 입력해 짝꿍으로 묶고,
 //   [수동 배정 확인]으로 즉시 미배정 → 앞 위치를 정하면 뒤는 짝꿍 베이 자동 → 선적확인 한 번에 원자 완료.
 function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenContainer, onBackToAuto = null }) {
+  // ── TallyOne 1.54: **이 컴포넌트에는 `askYN` 이 아예 없었다.** ──
+  //   아래 두 곳(1.53 에서 네이티브 confirm 을 걷어낸 자리)이 `askYN` 을 부르는데, 그것은
+  //   `TwinSearch` 안에 선언된 지역 상수라 여기서는 보이지 않는다 — **완료 기록이 있는 컨을 고르는 순간
+  //   ReferenceError 로 손이 멈춘다.** 실오류가 나면 카메라까지 멈추므로 그냥 두면 안 된다.
+  //   같은 모양(`useConfirm` + `ConfirmModal`)으로 이 컴포넌트에도 한 벌 둔다.
+  const [confirmState, askConfirm] = useConfirm();
+  const askYN = (title, message, confirmLabel = '계속') => new Promise(r => askConfirm({
+    title, message, confirmLabel, danger: true, onConfirm: () => r(true), onCancel: () => r(false),
+  }));
   const [q1, setQ1] = useState(''); const [q2, setQ2] = useState('');
   const [c1, setC1] = useState(null); const [c2, setC2] = useState(null);
   const [step, setStep] = useState('pick');   // 'pick' | 'pos'
@@ -1327,6 +1347,24 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     finally { setBusy(false); }
   };
 
+  // TallyOne 1.54: 자리 배정 한 번 — 시퀀스 항차에서 되물어야 하면 앱 안 모달로 묻고 다시 부른다.
+  //   ⛔ 네이티브 confirm() 은 뜨는 순간 앱이 통째로 멈춘다(실측 30분 정지). 1.53 에서 전부 걷어냈다.
+  //   실패(취소 포함)면 null 을 돌려준다 — 부르는 쪽이 선적확인을 찍지 않고 멈춘다.
+  const _seqAsk = async (cn, b, r, t) => {
+    let res = await fbReassignContainerPosition(voyageKey, 'loading', cn, b, r, t, inspector, { actualWork: true });
+    if (res && res.ok === false && res.needConfirm === 'seqFull') {
+      const ok = await askYN('시퀀스 자리입니다', seqFullConfirmText(res), '그래도 넣는다');
+      if (!ok) return null;
+      res = await fbReassignContainerPosition(voyageKey, 'loading', cn, b, r, t, inspector,
+        { actualWork: true, seqConfirmed: true });
+    }
+    if (!res || res.ok === false) {
+      alert(`${cn.slice(-4)} 자리를 배정하지 못했습니다 — 선적확인은 찍지 않았습니다.`);
+      return null;
+    }
+    return res;
+  };
+
   // [트윈 선적확인] — 앞 지정 위치 + 뒤 짝꿍 자동, 재배정 후 완료 2건 원자 처리
   const completeBoth = async () => {
     if (busy) return;
@@ -1336,8 +1374,15 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     setBusy(true);
     try {
       // V9.52: 자리 교환 — 밀려난 계획 컨은 이 컨의 옛 자리로 옮겨 대기(미배정 떠돌이 방지)
-      await fbReassignContainerPosition(voyageKey, 'loading', c1.cn, bay, rowP, tierP, inspector, { actualWork: true });
-      await fbReassignContainerPosition(voyageKey, 'loading', c2.cn, backPos.bay, backPos.row, backPos.tier, inspector, { actualWork: true });
+      // TallyOne 1.54: `actualWork` 는 **자연어 탭의 자동/수동 모드**에서 온 것이지 시퀀스 여부가 아니다.
+      //   (앞선 판이 "자동=시퀀스, 수동=액츄얼"로 잘못 읽었다 — 검수사가 오늘 정정했다.
+      //    시퀀스 여부는 항차 속성 `info.seqFull` 이고, firebase 가 그것으로 판정한다.)
+      //   시퀀스 항차면 함수가 **아무것도 쓰지 않고** `needConfirm:'seqFull'` 로 돌아선다 —
+      //   안 받으면 조용한 실패다(선적확인만 찍히고 자리는 그대로).
+      const r1 = await _seqAsk(c1.cn, bay, rowP, tierP);
+      if (!r1) return;
+      const r2 = await _seqAsk(c2.cn, backPos.bay, backPos.row, backPos.tier);
+      if (!r2) return;
       await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
       speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
       resetAll();
@@ -1383,6 +1428,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
 
   return (
     <>
+      {/* 1.54: 확인창은 앱 안에서 뜬다 — 이 컴포넌트에는 모달이 없어 askYN 이 터졌다. */}
+      <ConfirmModal {...confirmState} />
       {onBackToAuto && (
         <button onClick={onBackToAuto}
           className="w-full text-[11px] text-slate-300 py-2 bg-slate-800 border border-slate-700 rounded hover:bg-slate-700">
@@ -1657,9 +1704,12 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       // TallyOne 1.49: **앞 컨만 옮기고 뒤 컨을 그대로 둬서 한 칸을 두 대가 차지했다**
       //   (실측 2026-08-11: DWSU3001185 · DWSU3000276 둘 다 17-06-04).
       //   비우고 → 채우고 → 채운다. 중간 어느 시점에도 중복이 생기지 않는다.
+      // TallyOne 1.54: **검수사가 이미 앱 안 모달에서 맞바꾸기를 확인하고 온 길이다.**
+      //   시퀀스 항차라고 여기서 또 물으면, 한 번 누른 교환을 두 번 더 확인시키는 꼴이고
+      //   중간에 취소되면 앞 컨만 비워진 채 남는다(한 칸 두 대의 반대 사고). → `seqConfirmed` 로 못 박는다.
       await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, '', '', '', inspector);
-      await fbReassignContainerPosition(voyageKey, c2._mode, c2.cn, _aPos.bay, _aPos.row, _aPos.tier, inspector);
-      await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, _bPos.bay, _bPos.row, _bPos.tier, inspector);
+      await fbReassignContainerPosition(voyageKey, c2._mode, c2.cn, _aPos.bay, _aPos.row, _aPos.tier, inspector, { seqConfirmed: true });
+      await fbReassignContainerPosition(voyageKey, c1._mode, c1.cn, _bPos.bay, _bPos.row, _bPos.tier, inspector, { seqConfirmed: true });
       setC1({ ...c1, ..._bPos });
       setC2({ ...c2, ..._aPos });
       speak('앞뒤 위치를 맞바꿨습니다');

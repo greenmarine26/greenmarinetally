@@ -8,6 +8,7 @@
 // 원칙: **남의 자리를 뺏지 않는다.** 원자리에 다른 컨이 들어가 있으면 버튼을 잠그고 누가 있는지 보여준다.
 import React, { useState, useMemo } from 'react';
 import { fbReassignContainerPosition } from '../firebase.js';
+import { seqFullConfirmText } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 네이티브 confirm() 은 렌더러를 멈춘다
 
 const bn = (v) => (v !== undefined && v !== null && v !== '' ? String(parseInt(v, 10)) : '');
@@ -41,15 +42,30 @@ export default function RestoreOrigButton({ c, allContainers = [], voyageKey, in
       title: '원래 자리로 되돌리기',
       message: `${c.cn}\n원래 계획 자리 ${label} 로 되돌립니다.\n\n진행할까요?`,
       confirmLabel: '되돌리기',
-      onConfirm: () => doRun(),
+      onConfirm: () => { doRun(); },   // 1.54: await 하지 않는다 — doRun 이 또 모달을 열 수 있는데 useConfirm 이 finally 로 닫아버린다.
     });
   };
 
-  const doRun = async () => {
+  const doRun = async (opts = null) => {
     setBusy(true);
     try {
       const r = await fbReassignContainerPosition(voyageKey, mode || c._mode, c.cn,
-        pos.bay, pos.row, pos.tier, inspector);
+        pos.bay, pos.row, pos.tier, inspector, opts || undefined);
+      // TallyOne 1.54: 시퀀스 항차에서는 원자리에 이름을 걸어둔 풀 컨이 자리 주인일 수 있다.
+      //   그때 firebase 는 **아무것도 쓰지 않고** `needConfirm:'seqFull'` 로 돌아선다 —
+      //   여기서 안 받으면 버튼을 눌러도 **아무 일도 안 일어난다**(조용한 실패).
+      //   ⛔ 네이티브 confirm() 은 쓰지 않는다(뜨는 순간 앱이 통째로 멈춘다).
+      if (r && r.ok === false && r.needConfirm === 'seqFull') {
+        setBusy(false);
+        askConfirm({
+          title: '시퀀스 자리입니다',
+          message: seqFullConfirmText(r),
+          confirmLabel: '그래도 되돌린다',
+          danger: true,
+          onConfirm: () => { doRun({ ...(opts || {}), seqConfirmed: true }); },
+        });
+        return;
+      }
       if (r && r.ok === false) { alert('되돌리지 못했습니다. 다시 시도하세요.'); return; }
       onDone?.(c, pos);
     } catch (err) {

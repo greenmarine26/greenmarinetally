@@ -531,7 +531,13 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
             <span className="text-xl font-bold mono text-slate-300">{c._row_planned || c.row || '--'}</span>
             <span className="text-slate-500">/</span>
             <span className="text-xl font-bold mono text-slate-300">{c._tier_planned || c.tier || '--'}</span>
-            {!c.bay && mode === 'loading' && (
+            {/* TallyOne 1.54: **「자리 미지정」과 「창고」는 다른 상태다.** (검수사 확정 2026-08-12)
+                *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."* — 창고 컨은 계획이 살아 있다.
+                종전엔 둘 다 「선적대상」 한 딱지였다. 계획 자리를 내준 컨이 계획도 없는 컨처럼 보였다. */}
+            {mode === 'loading' && c.bay_actual === '__STG__' && (
+              <span className="ml-2 bg-sky-800 text-sky-50 text-[10px] px-1.5 py-0.5 rounded font-black">📦 창고 · 이름만 걸려 있음</span>
+            )}
+            {!c.bay && mode === 'loading' && c.bay_actual !== '__STG__' && (
               <span className="ml-2 bg-orange-700 text-orange-50 text-[10px] px-1.5 py-0.5 rounded font-black">선적대상</span>
             )}
             {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
@@ -566,7 +572,10 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
               </div>
 
               {!editingActualPos ? (
-                (c.bay_actual || c.row_actual || c.tier_actual) ? (
+                c.bay_actual === '__STG__' ? (
+                  // 1.54: 창고는 좌표가 아니다 — `__STG__` 를 베이 번호처럼 그리면 안 된다.
+                  <div className="text-xs text-sky-300 font-bold">📦 창고에 있습니다 — 계획 자리는 위에 그대로 남아 있습니다.</div>
+                ) : (c.bay_actual || c.row_actual || c.tier_actual) ? (
                   // 수정된 실체 위치 표시 — 본위치 → 수정위치
                   <div className="flex items-center gap-2">
                     <span className="text-sm mono text-slate-400">{c._bay_planned || c.bay || '--'}/{c._row_planned || c.row || '--'}/{c._tier_planned || c.tier || '--'}</span>
@@ -1250,15 +1259,19 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         container={{ ...c, _comp: comp, _mode: c._mode || mode }}
         allContainers={allContainers}
         onClose={() => setShowPosEdit(false)}
-        onSave={async (newBay, newRow, newTier) => {
+        onSave={async (newBay, newRow, newTier, opts) => {
           if (!inspector) { alert('검수원을 먼저 선택하세요'); return { ok: false }; }
           // V8.71: 수동 위치 지정 — 밀려나는 컨은 미배정 (자동 재배정 금지)
           // V9.52: 자리 교환 — 밀려난 컨은 이 컨의 옛 자리로 (미배정 떠돌이 방지, 지침 현장 규칙)
-          const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector, { actualWork: true });
+          // TallyOne 1.54: `actualWork` 는 **시퀀스 여부가 아니다.** 자연어 탭의 자동/수동 모드에서 온 값이고,
+          //   여기서는 "검수사가 손으로 자리를 정한다"는 뜻으로 넘긴다. 시퀀스 여부는 항차 속성(`info.seqFull`)이며
+          //   firebase 가 그것으로 판정한다 — 앞선 판이 "자동=시퀀스"로 읽은 것은 틀렸다(검수사 정정 2026-08-12).
+          //   `opts` 는 모달이 되물어 받아온 `{ seqConfirmed:true }` — 그대로 흘려보낸다(안 넘기면 조용한 실패).
+          const result = await fbReassignContainerPosition(voyageKey, mode, c.cn, newBay, newRow, newTier, inspector, { actualWork: true, ...(opts || {}) });
           return result;
         }}
         bayPairs={posEditBayPairs}
-        onSavePartner={async (cn, b2, r2, t2) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true })}   /* V9.52: 자리 교환 */
+        onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
         onCompleteBoth={async (cns) => {
           for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector);
           // V8.70: 자동 선적확인 완료 음성 — 무음 오해 방지.

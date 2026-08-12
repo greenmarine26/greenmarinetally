@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.53';   // 밀려난 컨은 자기 자리로 · 취소는 두 갈래 · 확인창 앱 안으로 · 끝난 뒤에도 조회·경로
+export const APP_VERSION = 'TallyOne 1.54';   // 계획은 예약이지 입실이 아니다 — 컨은 창고에 있고 베이플랜엔 이름만 걸린다
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3764,12 +3764,20 @@ export function buildMovePath(c) {
   return out;
 }
 
+// TallyOne 1.54: **경로(moves)에 적히는 창고 표기.** firebase.js 의 `STORAGE_TXT` 와 같은 글자여야 한다.
+//   여기 값을 한 벌 더 적는 이유 — firebase.js 가 utils.js 를 부르므로(firebase.js 상단 import)
+//   utils.js 가 firebase.js 를 부르면 순환이 된다. 글자를 바꿀 일이 생기면 두 곳을 함께 고친다.
+const _MV_STORAGE = '창고';
+
 // 사유 낱말은 검수사가 쓰는 말로. 클로드가 지어낸 용어는 현장에서 안 통한다.
 export const MOVE_WHY_KO = {
   move: '자리를 옮김',
   actual: '실제 실린 자리로 지정',
   displaced: '자리를 뺏겨 밀려남',
   unassign: '미배정 처리',
+  // TallyOne 1.54: **이동이 아니다.** 이름표가 내려온 것이고 실물은 처음부터 창고에 있었다.
+  //   검수사 확정 2026-08-12 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
+  planTaken: '계획 자리를 내줌 (실물은 창고)',
   cancel: '완료 취소로 계획 자리 복귀',
   restore: '원래 계획 자리로 되돌림',
   loaded: '선적확인',
@@ -3778,12 +3786,27 @@ export const MOVE_WHY_KO = {
 
 export function movePathOrigin(c) {
   const p = buildMovePath(c);
-  if (p.length) return p[0].from;
-  return _mvPos(c?.bay_orig, c?.row_orig, c?.tier_orig);
+  // 1.54: 첫 줄이 창고에서 시작하면(계획 기록 없이 보관함으로 들어갔던 컨) 그것은 출발지가 아니다.
+  //   "원래 창고 계획이었습니다" 는 거짓말이 된다 — 계획 좌표가 남아 있으면 그것을 쓴다.
+  if (p.length && String(p[0].from) !== _MV_STORAGE) return p[0].from;
+  const og = _mvPos(c?.bay_orig, c?.row_orig, c?.tier_orig);
+  if (og !== '미배정') return og;
+  return p.length ? p[0].from : og;
 }
 
 // "어디 갔어?" 답변 — 검수사가 원한 모양 그대로:
 //   *"어디 선적때 어떤 컨테이너로 바뀌어서 어디로 이동 시켰습니다."*
+//
+// ── TallyOne 1.54: **이력이 거짓말을 하고 있었다.** (검수사 확정 2026-08-12) ──
+//   실측 DXQD 2631W 선적 335대 — 밀어내기 82회 중 **진짜 충돌 0회, 헛충돌 82회.**
+//   TBJU2387722 는 이력에 다섯 번 튕긴 것으로 남았는데 **크레인은 05-03-82 에 한 번 놓았을 뿐이다.**
+//   검수사 정정 — *"실제 이동은 마지막 한 줄뿐입니다."*
+//   *"호텔을 예약하고는 있지만 실제 입실은 안 한 상태로 보면 됩니다. 모든 자리가."*
+//   *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."*
+//   → **실물이 움직인 줄과 이름표만 내려온 줄을 눈으로 갈라 놓는다.** 한 목록에 섞이면
+//     읽는 사람은 전부 크레인이 옮긴 것으로 읽는다 — *"이력이 없으면 알려주기 힘듭니다"* 라고 해서
+//     넣은 기록이니, 있는 것보다 **맞는 것**이 먼저다.
+//   ⚠ 게이트 먼저 — 이름표 줄('planTaken')이 하나도 없으면 종전 그대로 한 목록으로 낸다(회귀 없음).
 export function describeMovePath(c, isCompleted = false) {
   if (!c) return '';
   const path = buildMovePath(c).filter(m => m.why !== 'loaded' || m.from !== m.to);
@@ -3797,27 +3820,77 @@ export function describeMovePath(c, isCompleted = false) {
   if (!path.length) {
     return `${c.cn} — 계획 자리 ${orig} 그대로입니다. 옮긴 적 없습니다.\n${tail}`;
   }
-  const lines = [`${c.cn} — 원래 ${orig} 계획이었습니다.`];
-  path.forEach(m => {
-    const to = m.to === '미배정' ? '미배정' : `${m.to}${_ro(m.to)}`;
+  // 이 컨이 그때 창고에 있었는가 — 줄을 앞에서부터 따라가며 켜고 끈다.
+  //   창고에 있는 동안의 'move'/'actual' 은 **실물을 옮긴 것이 아니라 계획을 고쳐 쓴 것**이다.
+  let inStg = false;
+  const rows = path.map(m => {
+    const fromStorage = String(m.from) === _MV_STORAGE;
+    const toStorage = String(m.to) === _MV_STORAGE;
+    const wasInStg = inStg;
+    if (toStorage) inStg = true;
+    else if (fromStorage) inStg = false;
+    const to = (m.to === '미배정' || toStorage) ? String(m.to) : `${m.to}${_ro(m.to)}`;
     let line;
     switch (m.why) {
+      // 1.54: 이름표가 내려온 사건. 실물은 안 움직였다 — 문장이 그렇게 읽혀야 한다.
+      case 'planTaken': {
+        const b4 = m.byCn ? String(m.byCn).slice(-4) : '';
+        line = b4
+          ? `${m.from}는 ${b4}${_iga(b4)} 가져갔습니다. 실물은 창고에 그대로 있었습니다.`
+          : `${m.from} 계획 자리를 내줬습니다. 실물은 창고에 그대로 있었습니다.`;
+        return { m, line, nameOnly: true };   // byCn 꼬리말을 또 붙이지 않는다 — 문장에 이미 들어 있다.
+      }
       case 'displaced': line = (m.to === '미배정') ? '자리를 잃고 미배정이 됐습니다.' : `${to} 밀려났습니다.`; break;
       case 'unassign':  line = `자리를 비웠습니다 (미배정).`; break;
       case 'cancel':    line = `선적확인을 취소해 ${to} 되돌렸습니다.`; break;
       case 'restore':   line = `원래 계획 자리 ${to} 되돌렸습니다.`; break;
-      case 'loaded':    line = `${to} 실었습니다.`; break;
+      // 1.54: 창고에서 꺼내 실은 경우도 마지막은 "실었습니다" 한 줄이다. 좌표 조사는 '에'로 통일한다.
+      case 'loaded':    line = `${m.to}에 실었습니다.`; break;
       case 'actual':
-      case 'move':      line = (m.to === '미배정') ? '자리를 비웠습니다 (미배정).' : `${to} 옮겼습니다.`; break;
+      case 'move':
+        if (m.to === '미배정') { line = '자리를 비웠습니다 (미배정).'; break; }
+        // 창고에 있는 동안 좌표를 바꾼 것은 **계획을 고친 것**이지 실물을 옮긴 것이 아니다.
+        line = wasInStg ? `${to} 계획을 바꿨습니다 (실물은 창고).` : `${to} 옮겼습니다.`;
+        break;
       default:          line = (m.to === '미배정')
                           ? '자리를 잃었습니다 (미배정). (사유 기록 없음 — 이력 도입 전)'
                           : `${to} 옮겼습니다. (사유 기록 없음 — 이력 도입 전)`; break;
     }
     if (m.byCn) { const b4 = String(m.byCn).slice(-4); line += ` 그 자리엔 ${b4}${_iga(b4)} 실렸습니다.`; }
-    lines.push(line);
+    return { m, line, nameOnly: wasInStg && (m.why === 'move' || m.why === 'actual') };
   });
-  lines.push(tail);
-  return lines.join('\n');
+
+  const head = `${c.cn} — 원래 ${orig} 계획이었습니다.`;
+  const nameRows = rows.filter(r => r.nameOnly);
+  // 게이트 — 이름표 줄이 없으면 종전 모양 그대로.
+  if (!nameRows.length) return [head, ...rows.map(r => r.line), tail].join('\n');
+
+  const realRows = rows.filter(r => !r.nameOnly);
+  const out = [head, ''];
+  if (realRows.length) {
+    out.push(`■ 실물이 움직인 것 — ${realRows.length}번`);
+    realRows.forEach(r => out.push(`· ${r.line}`));
+  } else {
+    out.push('■ 실물이 움직인 것 — 없습니다. 처음부터 창고에 있었습니다.');
+  }
+  out.push('', `■ 이름이 걸렸던 자리 — ${nameRows.length}곳 (실물은 안 움직였습니다)`);
+  nameRows.forEach(r => out.push(`· ${r.line}`));
+  out.push('', tail);
+  return out.join('\n');
+}
+
+// TallyOne 1.54: **시퀀스 항차에서 자리 주인을 밀어낼 때 물을 문구 — 한 벌만 둔다.**
+//   `fbReassignContainerPosition` 이 `{ ok:false, needConfirm:'seqFull', … }` 로 돌아설 때
+//   호출부(SearchPanel·ContainerDetailModal·BigResultCard·GuidedWorkPanel·RestoreOrigButton·PositionEditModal)가
+//   전부 이 문구로 묻는다. 여섯 곳이 각자 말을 지어내면 같은 상황이 화면마다 달리 읽힌다.
+//   검수사 원문 — *"다만 시퀀스 작업일 때는 그 자리 주인이 될 수 있습니다. 특별한 사정이 없는 한."*
+export function seqFullConfirmText(res) {
+  if (!res) return '';
+  const t = res.target || {};
+  const pos = t.bay ? `${String(parseInt(t.bay, 10)).padStart(2, '0')}-${t.row}-${t.tier}` : '그 자리';
+  const cns = (res.seqConflict || []).map(x => String(x).slice(-4));
+  const who = cns.length > 1 ? `${cns.join(', ')} (${cns.length}대)` : (cns[0] || String(res.displaced || '').slice(-4));
+  return `시퀀스 작업입니다.\n${pos} 주인 ${who}(풀)의 이름표를 내리고 넣을까요?\n\n넣으면 그 컨은 몸만 창고로 갑니다 — 계획 자리 ${pos} 는 그대로 남습니다.`;
 }
 
 // ── TallyOne 1.51: LUGGAGE (여객 수하물 컨테이너) ──────────────

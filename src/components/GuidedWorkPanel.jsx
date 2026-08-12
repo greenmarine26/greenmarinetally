@@ -12,7 +12,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier } from '../utils.js';
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -653,12 +653,40 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     speak(parts.join(', '));
   }, [card, voiceOn, choicePrompt]);
 
+  // TallyOne 1.54: **자리 배정 한 번 — 시퀀스 항차면 되묻고 다시 부른다.**
+  //   `fbReassignContainerPosition` 이 `{ ok:false, needConfirm:'seqFull' }` 로 돌아서면 **DB에 아무것도 안 썼다.**
+  //   그때 호출부가 안 물으면 시퀀스 항차에서 **아무 일도 안 일어난다**(조용한 실패) — 그러고도
+  //   선적확인만 찍히면 그림과 기록이 갈린다. 그래서 자리부터 확실히 잡고 완료를 찍는다.
+  //   ⛔ 네이티브 confirm() 은 쓰지 않는다 — 뜨는 순간 앱이 통째로 멈춘다(실측 30분 정지).
+  //   돌려주는 값: 성공하면 결과 객체, 검수사가 취소했거나 실패하면 null.
+  const reassignAsk = async (cn, b, r, t, opts) => {
+    let res = await fbReassignContainerPosition(voyageKey, mode, cn, b, r, t, inspector, opts || undefined);
+    if (res && res.ok === false && res.needConfirm === 'seqFull') {
+      const ok = await ask({
+        title: '시퀀스 자리입니다',
+        message: seqFullConfirmText(res),
+        confirmLabel: '그래도 넣는다', cancelLabel: '취소',
+      });
+      if (!ok) return null;
+      res = await fbReassignContainerPosition(voyageKey, mode, cn, b, r, t, inspector,
+        { ...(opts || {}), seqConfirmed: true });
+    }
+    if (!res || res.ok === false) {
+      notify('자리를 넣지 못했습니다', `${String(cn).slice(-4)} — 신호를 확인하고 다시 해 주세요.\n선적확인은 찍지 않았습니다.`);
+      return null;
+    }
+    return res;
+  };
+
   // 수정 1대 적용: 선적이면 실제 컨을 예측 슬롯 위치로 재배정(그 자리 예측 컨은 자동 미배정+완료취소 — 이중 수정 방지) 후 완료
+  //   1.54: 자리 배정이 안 되면 **완료를 찍지 않는다.** 돌려주는 값이 false 면 부르는 쪽이 멈춘다.
   const applyFixOne = async (actual, slot) => {
     if (mode === 'loading') {
-      await fbReassignContainerPosition(voyageKey, mode, actual.cn, slot.bay, slot.row, slot.tier, inspector);
+      const r = await reassignAsk(actual.cn, slot.bay, slot.row, slot.tier);
+      if (!r) return false;
     }
     await fbCompleteContainer(voyageKey, mode, actual.cn, inspector);
+    return true;
   };
 
   // V8.09-17 (메모6): 트윈 앞뒤 맞교환 — 선적 시 앞/뒤 위치가 바뀌어 들어가는 경우가 많아,
@@ -690,6 +718,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       //   → `actualWork` 도 함께 준다. 뒤 컨은 아직 선적확인 전(계획만 있는 상태)이라 이것이 없으면
       //     1.31/1.47 게이트가 그 자리를 '주인 있는 예약'으로 보고 **아무도 밀어내지 않는다** —
       //     뒤 컨이 그대로 남아 한 칸에 두 대가 된다(2026-08-11 맞교환 증상).
+      //   ⚠ TallyOne 1.54 정정 — `actualWork` 는 **시퀀스 여부가 아니다.** 위 1.47 주석이 자동/수동 모드를
+      //     시퀀스/액츄얼로 읽었는데, 검수사가 2026-08-12 정정했다:
+      //     *"선적을 하기 전에 묻습니다. 풀 컨테이너 시퀀스 작업인지 아닌지를."* — **항차 속성**(`info.seqFull`)이다.
+      //     1.54 부터 선적 판정은 firebase 가 `info.seqFull` 로 하고, `actualWork` 는 양하 게이트와
+      //     이동 사유 표기에만 쓰인다. 이 경로는 `swapWith` 가 있어 되묻지 않는다(검수사가 이미 확인했다).
       const r = await fbReassignContainerPosition(voyageKey, mode, a.cn, b.bay, b.row, b.tier, inspector,
         { swapWith: b.cn, actualWork: true });
       // 조용히 실패하지 않는다 — 안 바뀐 것을 모르면 그림에서 한 칸에 두 대가 된다.
@@ -732,9 +765,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     }
     if (!(await confirmIfDone(c))) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행 (1.53: 모달이라 await)
     setBusy(true);
+    let done = false;
     try {
-      await applyFixOne(c, card.main);
+      done = await applyFixOne(c, card.main);
     } finally { setBusy(false); }
+    if (!done) return;   // 1.54: 자리를 못 넣었으면(시퀀스 되묻기 취소 포함) 수정으로 세지 않는다
     adaptStream(c);   // V8.50: 실제 내려온 부류로 재앵커
     afterFix();
   };
@@ -774,8 +809,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     //   (구: 앞 재배정+완료 → 뒤 재배정+완료 순서라, 뒤가 중간에 실패하면 앞 한 대만 선적된 채 멈춤 — 현장 보고 2026-07-08.)
     try {
       if (mode === 'loading') {
-        if (fixPickFront) await fbReassignContainerPosition(voyageKey, mode, fixPickFront.cn, card.main.bay, card.main.row, card.main.tier, inspector);
-        if (fixPickBack) await fbReassignContainerPosition(voyageKey, mode, fixPickBack.cn, card.twin.bay, card.twin.row, card.twin.tier, inspector);
+        // 1.54: 시퀀스 항차면 여기서 되묻는다. 취소되면 **선적확인을 찍지 않고** 멈춘다
+        //   (자리는 안 들어갔는데 완료만 찍히는 것이 가장 나쁘다 — 그림과 기록이 갈린다).
+        if (fixPickFront && !(await reassignAsk(fixPickFront.cn, card.main.bay, card.main.row, card.main.tier))) { setBusy(false); return; }
+        if (fixPickBack && !(await reassignAsk(fixPickBack.cn, card.twin.bay, card.twin.row, card.twin.tier))) { setBusy(false); return; }
       }
       await fbCompleteContainersAtomic(voyageKey, mode,
         [fixPickFront ? fixPickFront.cn : card.main.cn, fixPickBack ? fixPickBack.cn : card.twin.cn], inspector);

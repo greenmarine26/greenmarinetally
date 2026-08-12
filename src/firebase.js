@@ -113,6 +113,23 @@ export async function fbUpdateVoyageInfo(voyageKey, patch) {
   await update(ref(db, `voyages/${voyageKey}/info`), patch);
 }
 
+// TallyOne 1.54: **풀 컨테이너 시퀀스 작업인지는 항차 속성이다.** (검수사 확정 2026-08-12)
+//   원문 — *"선적을 하기 전에 묻습니다. 풀 컨테이너 시퀀스 작업인지 아닌지를.
+//   엠티는 안 묻는 이유는 포트만 바뀌지 않으면 언제든 액츄얼이 가능하기 때문입니다."*
+//   앞선 판은 자연어 탭의 자동/수동(`opts.actualWork`)을 시퀀스/액츄얼로 잘못 읽었다.
+//   자동/수동은 **가이드를 받을지 말지**이고, 시퀀스/액츄얼은 **일항사가 정하는 적재 방침**이다. 별개다.
+//   ⛔ info 는 PATCH 원칙이다 — 통째 교체 금지(수집기가 채운 필드가 증발한다).
+//   값이 없으면 **액츄얼**로 본다. 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
+//   읽기는 따로 두지 않는다 — 화면은 이미 항차 구독으로 `info` 를 통째로 받는다.
+export async function fbSetSeqFull(voyageKey, v, by) {
+  if (!voyageKey) return;
+  await update(ref(db, `voyages/${voyageKey}/info`), {
+    seqFull: !!v,
+    seqFullAt: Date.now(),
+    seqFullBy: by || '',
+  });
+}
+
 // 양하/선적 섹션 데이터 저장 (mode = 'discharge' | 'loading')
 export async function fbSaveSectionData(voyageKey, mode, data) {
   await update(sectionRef(voyageKey, mode), data);
@@ -442,12 +459,18 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
       if (!b || !r || !t) return;                       // 자리 없이 완료된 건은 손대지 않는다
       const bI = String(parseInt(b, 10));
       const oa = String(cur.bay_actual ?? '');
-      if (oa.startsWith('__')) return;                  // 임시창고는 건드리지 않는다
+      // TallyOne 1.54: **창고에 있던 컨을 실었으면 그때가 실물이 움직인 순간이다 — 창고 → 배.**
+      //   검수사 확정 2026-08-12 — *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."*
+      //   1.54 부터 계획 자리를 뺏긴 컨은 전부 창고(`__STG__`)를 거친다. 종전처럼 여기서 그냥 돌아서면
+      //   선적확인을 해도 실체가 `__STG__` 로 남아 **그림에서 영영 창고에 갇힌다.**
+      const fromStorage = (oa === STORAGE_BAY);
+      if (oa.startsWith('__') && !fromStorage) return;   // 창고 말고 다른 `__` 표식은 건드리지 않는다
       const same = oa === bI && String(cur.row_actual ?? '') === r && String(cur.tier_actual ?? '') === t;
       if (same) return;                                 // 이미 맞으면 줄만 늘린다
       const pos = (bb, rr, tt) => (bb ? `${String(parseInt(bb, 10)).padStart(2, '0')}-${rr}-${tt}` : '미배정');
       const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
-      moves.push({ at: Date.now(), by: by || '', from: pos(cur.bay_actual, cur.row_actual, cur.tier_actual),
+      moves.push({ at: Date.now(), by: by || '',
+                   from: fromStorage ? STORAGE_TXT : pos(cur.bay_actual, cur.row_actual, cur.tier_actual),
                    to: pos(b, r, t), why: 'loaded', byCn: '' });
       await update(recR, {
         bay_actual: bI, row_actual: r, tier_actual: t,
@@ -631,6 +654,8 @@ export async function fbClearActualPosition(voyageKey, mode, cn) {
 //   - 베이 그리드에서 숨겨지고 보관함 박스에만 표시
 //   - 일괄 처리 (영역 선택분 → 보관함)
 export const STORAGE_BAY = '__STG__';
+// 경로(moves)에 적는 창고 표기 — 좌표가 아니라 장소 이름이다. 화면 문구는 utils.js 가 읽는다.
+export const STORAGE_TXT = '창고';
 
 export async function fbBatchMoveToStorage(voyageKey, mode, cns, by) {
   const updates = {};
@@ -644,6 +669,37 @@ export async function fbBatchMoveToStorage(voyageKey, mode, cns, by) {
     updates[`${path}/actual_by`] = by || '';
   });
   await update(ref(db), updates);
+}
+
+// TallyOne 1.54: **계획 자리를 남에게 내준 컨은 몸만 창고로 간다.** (검수사 확정 2026-08-12)
+//   원문 — *"호텔을 예약하고는 있지만 실제 입실은 안 한 상태로 보면 됩니다. 모든 자리가."*
+//         *"계획된 자리가 다른 컨으로 선적이 되었다면 그걸로 끝입니다. 그냥 몸만 창고로 가면 됩니다."*
+//         *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
+//   왜 이렇게 바꾸는가 — 실측 DXQD 2631W 선적 335대(2026-08-11~12): 밀어내기 82회 중
+//   **진짜 충돌 0회, 헛충돌 82회(100%)**. 종전에는 밀려날 때마다 `bay/row/tier`(계획)를
+//   **다른 자리로 고쳐 써서** (a) 계획이 오염되고 (b) 가짜 이동 기록이 쌓였다.
+//   TBJU2387722 는 앱 기록상 다섯 번 튕겼지만 **실제로는 한 번도 안 움직였고** 크레인은 05-03-82 에 한 번 놓았다.
+//   → 계획(`bay/row/tier`)은 **절대 건드리지 않는다.** 실체만 창고로 찍는다.
+//     창고 표식은 기존 `fbBatchMoveToStorage` 와 같은 모양이어야 한다(화면 StorageBox·effectivePos 가 그 모양을 읽는다).
+async function _markPlanTaken(voyageKey, mode, cn, by, byCn) {
+  const recR = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  const [recSnap, ediSnap] = await Promise.all([
+    get(recR), get(ref(db, `voyages/${voyageKey}/${mode}/ediContainers/${cn}`)),
+  ]);
+  const cur = recSnap.val() || {}, edi = ediSnap.val() || {};
+  const b = cur.bay !== undefined ? cur.bay : (edi.bay || '');
+  const r = cur.row !== undefined ? cur.row : (edi.row || '');
+  const t = cur.tier !== undefined ? cur.tier : (edi.tier || '');
+  const _pos = (bb, rr, tt) => (bb ? `${String(parseInt(bb, 10)).padStart(2, '0')}-${rr}-${tt}` : '미배정');
+  // 경로 한 줄 — **이동이 아니라 이름표가 내려온 사건**이다(why:'planTaken').
+  const moves = Array.isArray(cur.moves) ? [...cur.moves] : [];
+  moves.push({ at: Date.now(), by: by || '', from: _pos(b, r, t), to: STORAGE_TXT,
+               why: 'planTaken', byCn: byCn || '' });
+  const patch = { moves: moves.slice(-40) };
+  if (!recSnap.exists()) { patch.cn = cn; patch.l4 = cn.slice(-4); }   // EDI 만 있던 컨 — 레코드를 만든다
+  await update(recR, patch);
+  await fbBatchMoveToStorage(voyageKey, mode, [cn], by);   // 창고 표식은 기존 함수 하나로 통일
+  return { cn, plan: { bay: b, row: r, tier: t } };
 }
 
 export async function fbBatchClearActual(voyageKey, mode, cns) {
@@ -747,18 +803,42 @@ export async function fbRestorePlanFromEdi(voyageKey) {
 
 // M3.87: 컨테이너 위치 재배정 (선적 모드용)
 //   - 새 위치(bay/row/tier)로 이동
-//   - 새 위치에 다른 컨이 있으면 그 컨은 미배정 처리(bay 빈 값) + 완료 취소
-//   - 이력 추적 (edits.bay, edits.row, edits.tier)
+//   - 이력 추적 (edits.bay, edits.row, edits.tier) + 경로 한 줄(moves)
 //   - 빈 문자열로 새 위치를 주면 → 미배정으로 변경
 //
-// 반환: { ok: true, displaced?: <빠진 컨번호> }
 // opts:
-//   · actualWork    — 액츄얼(수동 배정) 작업. 계획만 있는 컨도 자리를 내준다(1.47).
+//   · actualWork    — 자연어 탭의 **자동/수동 모드**에서 온다. 1.54 부터 이것으로 시퀀스를 판단하지 않는다.
+//                     남은 쓰임은 둘뿐이다 — (a) 이 컨의 이동 사유를 'actual' 로 적는다,
+//                     (b) **양하**의 종전 게이트(양하는 판정을 안 바꿨다). 호출부는 그대로 넘기면 된다.
+//   · seqConfirmed  — 풀+시퀀스 자리를 뺏겠다고 검수사가 확인해 준 경우. 없으면 그 경우에만 멈추고 묻는다.
 //   · displacedMode — 'unassign'(밀려난 컨을 미배정으로) | 'swap'(옛 규칙: 밀려난 컨을 뺏은 컨의 옛 자리로)
 //   · swapWith      — 명시적 자리 교환 상대 컨번호. 주면 'swap' 과 같다(「⇅ 앞뒤 맞교환」처럼 검수사가 교환을 지시한 경로용).
-//   TallyOne 1.53-02: **기본값이 바뀌었다.** 종전 기본은 'swap'(A 의 옛 자리로)이었으나, 이제 기본은
-//   밀려난 컨 **자신의 계획 자리**로 보내고 거기가 차 있으면 미배정이다. 아래 2) 주석에 실측 근거가 있다.
+//
+// TallyOne 1.54: **계획은 예약이지 입실이 아니다. 선적 전에는 배 위 어느 자리에도 아무도 없다.**
+//   (검수사 확정 2026-08-12) — *"호텔을 예약하고는 있지만 실제 입실은 안 한 상태로 보면 됩니다. 모든 자리가."*
+//   *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."*
+//   실측 DXQD 2631W 선적 335대(2026-08-11~12): 밀어내기 82회 중 **진짜 충돌 0회, 헛충돌 82회(100%)**.
+//   TBJU2387722 는 앱 기록상 다섯 번 튕겼는데 **실물은 한 번도 안 움직였다** — 크레인은 05-03-82 에 한 번 놓았고
+//   종이에도 그 자리 하나뿐이다. 나머지는 앱이 만들어낸 가짜 이동 기록이다.
+//   원인은 둘이었다. (a) 예약만 한 자리를 충돌로 봤다 (b) 밀려난 컨의 **계획(bay/row/tier)을 다른 자리로 고쳐 썼다.**
+//   → 판정과 처리를 함께 고친다:
+//     · 충돌은 **선적확인된 컨**이 그 자리에 있을 때뿐이다. 예약(계획만)은 충돌이 아니다.
+//       단 **풀 + 시퀀스 작업**이면 그 컨이 자리 주인이 될 수 있어 검수사에게 묻는다.
+//       시퀀스 여부는 **항차 속성**(`info.seqFull`)이지 자동/수동 모드가 아니다 — 검수사 원문:
+//       *"선적을 하기 전에 묻습니다. 풀 컨테이너 시퀀스 작업인지 아닌지를.
+//         엠티는 안 묻는 이유는 포트만 바뀌지 않으면 언제든 액츄얼이 가능하기 때문입니다."*
+//     · 자리를 내준 예약분은 **계획을 그대로 둔 채 몸만 창고로** 간다(`_markPlanTaken`).
+//       계획을 고쳐 쓰지 않으니 연쇄 밀림이 원천적으로 없다 — 검수사 원문:
+//       *"계획된 자리가 다른 컨으로 선적이 되었다면 그걸로 끝입니다. 그냥 몸만 창고로 가면 됩니다."*
+//   ⚠ 이 판정은 **선적** 기준이다. **양하는 종전 그대로** 둔다 — 검수사 확정:
+//     *"호텔에 비유하면 손님이 나갔으니 빈방입니다. 언제든 다른 손님을 받을 수 있는(선적 또는 시프팅)."*
+//     양하는 계획=실물이라 종전 판정이 맞다.
 export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, newRow, newTier, by, opts = {}) {
+  const isLoading = (mode === 'loading');
+  // 검수사가 **교환/미배정을 직접 지시한** 경로인가. 지시가 있으면 시퀀스 여부를 되묻지 않는다
+  //   (「⇅ 앞뒤 맞교환」은 이미 검수사가 앱 안 모달에서 확인을 누른 뒤에 온다).
+  const explicitSwap = !!opts.swapWith || opts.displacedMode === 'swap';
+  const explicitMode = explicitSwap || opts.displacedMode === 'unassign';
   // A(옮기는 컨)의 현재 위치를 먼저 캡처 — 명시적 자리 교환(opts.swapWith / displacedMode:'swap')에서만 쓴다.
   //   1.53-02: A 의 계획 자리(recA0/ediA0)는 더 이상 밀려난 컨의 행선지로 쓰지 않으므로 캡처를 지웠다.
   let aOldBay = '', aOldRow = '', aOldTier = '';
@@ -772,20 +852,32 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   }
   // 1) 같은 자리에 있는 다른 컨 찾기 (충돌 검사)
   let displaced = null;
-  let displacedPlanOnly = false;      // 1.47: 액츄얼에서 계획만 있던 컨을 밀어낸 경우
+  let displacedPlanOnly = false;      // 계획만 걸려 있던(= 예약) 컨을 비켰다
+  let displacedIsCompleted = false;   // 그 자리에 **입실한**(선적확인된) 컨이 있었다 = 진짜 충돌
+  const planTaken = [];               // 계획 자리를 내준 예약분 — 몸만 창고로 간다(선적만)
   let ediMap0 = {}, recMap0 = {};
+  let seqFull = false;
   if (newBay && newRow && newTier) {
     const ediMapRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers`);
     const recMapRef = ref(db, `voyages/${voyageKey}/${mode}/records`);
     const compMapRef = ref(db, `voyages/${voyageKey}/${mode}/completed`);
-    const [ediSnap, recSnap, compSnap] = await Promise.all([get(ediMapRef), get(recMapRef), get(compMapRef)]);
+    const seqRef = ref(db, `voyages/${voyageKey}/info/seqFull`);
+    const [ediSnap, recSnap, compSnap, seqSnap] = await Promise.all([
+      get(ediMapRef), get(recMapRef), get(compMapRef),
+      isLoading ? get(seqRef) : Promise.resolve(null),   // 시퀀스 여부는 선적에서만 본다
+    ]);
     const ediMap = ediSnap.val() || {};
     const recMap = recSnap.val() || {};
     const compMap = compSnap.val() || {};
     ediMap0 = ediMap; recMap0 = recMap;   // 1.36: 아래 2)에서 계획 자리 점유 검사에 쓴다
+    // 값이 없으면 액츄얼로 본다 — 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
+    const seqVal = (seqSnap && seqSnap.exists()) ? seqSnap.val() : null;
+    seqFull = (seqVal === true || seqVal === 'true' || seqVal === 1);
     // ediContainers + records 양쪽 봐서 같은 위치 컨 검색
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
     const newBayInt = String(parseInt(newBay, 10));  // normalize
+    let compHit = null;              // 그 자리에 실려 있는(선적확인된) 컨
+    const planHits = [];             // 그 자리에 이름만 걸어 둔 컨들
     for (const otherCn of allCnSet) {
       if (otherCn === cn) continue;
       const ediC = ediMap[otherCn] || {};
@@ -793,63 +885,71 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
       // TallyOne 1.47: **자리 판정 잣대를 이 함수 안에서 하나로 통일한다.**
       //   종전 `recC.bay || ediC.bay` 는 미배정(`bay:''`)을 falsy 로 보고 **EDI 계획 자리로 되살렸다.**
       //   그래서 자리를 비운 컨이 그림에서도 목록에서도 그 칸을 계속 점유했다(유령 충돌).
-      //   같은 함수의 A 옛자리·계획자리 점유검사는 이미 `!== undefined` 기준이었다 —
-      //   **한 함수가 두 잣대를 쓰고 있었다.** 아래 액츄얼 게이트가 열리면 이 차이가 그대로 버그가 된다.
       const oBay = recC.bay !== undefined ? recC.bay : (ediC.bay || '');
       const oRow = recC.row !== undefined ? recC.row : (ediC.row || '');
       const oTier = recC.tier !== undefined ? recC.tier : (ediC.tier || '');
       if (!oBay) continue;
+      // TallyOne 1.54: **창고에 있는 컨은 배 위 자리를 차지하지 않는다.**
+      //   1.54 부터 계획은 안 지우므로 한 칸에 이름표가 둘 이상 남는다(뺏긴 컨 + 뺏은 컨).
+      //   창고 표식을 안 거르면 이미 창고에 간 컨을 또 밀어내고, 정작 그 자리에 있는 컨은 그대로 남아
+      //   **한 칸에 두 대**가 된다. 그림(StorageBox·effectivePos)도 창고 컨을 그리드에서 뺀다 — 같은 잣대다.
+      if (String(recC.bay_actual ?? '') === STORAGE_BAY) continue;
       const oBayInt = String(parseInt(oBay, 10));
       if (oBayInt === newBayInt && oRow === newRow && oTier === newTier) {
-        // TallyOne 1.31: **계획은 예약이지 입실이 아니다.** (검수사 확정 2026-08-08)
-        //   원문 — *"호텔을 예약하고는 있지만 실제 입실은 안 한 상태로 보면 됩니다. 모든 자리가."*
-        //   종전에는 그 자리에 **계획(EDI)만 있어도** 충돌로 보고 그 컨을 밀어냈다. 아무도 입실 안 한 방을
-        //   두고 "사람이 있으니 옮겨야 한다"고 판단한 것이고, 밀려난 컨은 갈 곳을 잃어 떠돌이가 됐다.
-        //   실측(NSDC_2607N 선적): 계획 188칸 중 **입실(선적완료)은 91칸뿐.** 충돌로 잡히던 185칸이
-        //   89칸으로 준다 — **헛충돌 96칸(52%)이 사라진다.**
-        //   → 이제 **이미 선적완료된 컨이 그 자리에 있을 때만** 충돌로 본다.
-        //     예약만 한 컨은 계획 자리를 그대로 지키고, 안 실리면 작업 끝에 '미선적'으로 잡힌다.
-        //   TallyOne 1.47: **다만 그것은 시퀀스 작업일 때다.** (검수사 확정 2026-08-11)
-        //     원문 — *"원래는 빈 것이고 그곳에 그 컨테이너를 넣었으면 하는 계획일 뿐이라
-        //     다른 컨이 오면 바로 내줘야 합니다. 이걸 액츄얼 작업이라고 합니다.
-        //     풀 컨테이너도 액츄얼 작업일 때는 이렇게 되어야 합니다.
-        //     다만 시퀀스 작업일 때는 그 자리 주인이 될 수 있습니다. 특별한 사정이 없는 한."*
-        //   → 액츄얼(수동 배정)에서는 계획 자리에 **주인이 없다.** 예약분도 바로 내주고,
-        //     자리를 잃은 컨은 미배정(선적대상)으로 돌아간다 — 그것이 정상이지 떠돌이가 아니다.
-        //   1.31 은 반쪽만 맞았다: "예약은 입실이 아니다"까지는 맞고, 그래서 *안 밀어낸다*가 아니라
-        //     *바로 내준다*가 답이었다. 실측(DXQD 2631W 수동 선적 4건, 2026-08-11): 밀어내지 않은 탓에
-        //     EDI 한 칸에 두 대가 남아 **선적한 컨 3건이 베이 그림에서 사라졌다.**
-        if (!compMap[otherCn]) {
-          if (!opts.actualWork) continue;        // 시퀀스·자동 가이드: 예약은 자리를 지킨다
-          displacedPlanOnly = true;              // 액츄얼: 계획만 있는 컨 → 자리를 비운다
+        if (compMap[otherCn]) { if (!compHit) compHit = otherCn; }   // 입실했다 — 진짜 충돌
+        else planHits.push(otherCn);                                 // 예약만 했다
+      }
+    }
+    if (compHit) {
+      // 실물이 그 자리에 있다. 종전 규칙 그대로 처리한다(창고로 보내면 "다시 내렸다"는 뜻이 된다).
+      displaced = compHit;
+      displacedIsCompleted = true;
+      if (isLoading) planTaken.push(...planHits);   // 같은 칸의 예약분도 이름표는 내려온다
+    } else if (planHits.length) {
+      if (!isLoading) {
+        // 양하는 계획=실물이다. 종전 게이트를 그대로 둔다(액츄얼일 때만 비킨다).
+        if (opts.actualWork) { displaced = planHits[0]; displacedPlanOnly = true; }
+      } else {
+        // 선적 — 아무도 입실 안 한 자리다.
+        //   엠티는 묻지 않는다: *"포트만 바뀌지 않으면 언제든 액츄얼이 가능하기 때문입니다."*
+        const feOf = (x) => {
+          const r0 = recMap[x] || {}, e0 = ediMap[x] || {};
+          return String(r0.fe !== undefined ? r0.fe : (e0.fe || '')).trim().toUpperCase();
+        };
+        const seqBlock = (seqFull && !opts.seqConfirmed && !explicitMode) ? planHits.filter(x => feOf(x) !== 'E') : [];
+        if (seqBlock.length) {
+          // 풀 + 시퀀스 작업 — 그 컨이 자리 주인이 될 수 있다.
+          //   **아무것도 쓰지 않고** 돌아서서 호출부가 검수사에게 묻게 한다(조용히 실패하지 않도록 사유를 준다).
+          //   검수사가 "그래도 넣는다"면 호출부가 `seqConfirmed:true` 로 다시 부른다.
+          return {
+            ok: false, needConfirm: 'seqFull',
+            displaced: seqBlock[0], seqConflict: seqBlock, seqFull: true,
+            target: { bay: newBayInt, row: newRow, tier: newTier },
+          };
         }
-        displaced = otherCn;
-        break;
+        displaced = planHits[0];
+        displacedPlanOnly = true;
+        planTaken.push(...planHits);
       }
     }
   }
 
   // 2) 자리를 내준 컨(D)이 어디로 가는가.
-  //   TallyOne 1.53-02: **컨테이너는 자리를 옮기는 것이지 빈자리를 찾아가는 것이 아니다.** (검수사 확정 2026-08-12)
-  //   원문 — *"밀려난 컨은 자기 원래 자리로 가거나, 갈 데가 없으면 미배정으로 두고 검수사에게 물어야 한다.
-  //   앱이 대신 정하면 안 된다."*
-  //   종전 1순위는 **뺏은 컨 A 의 직전 위치**(aOldBay/Row/Tier)로 보내는 자리 교환이었다(1.36·1.47-01).
-  //   그 자리는 D 와 아무 상관이 없어 D 가 또 다른 컨을 밀어내고, 그 컨이 또 밀려나는 **연쇄**가 생겼다.
-  //   실측 2026-08-12 선적 — TBJU2387722 가 07-07-06 → 07-07-04 → 11-02-06 → 11-07-06 으로 세 번 튕겼다
-  //   (진짜 자리는 5-03-82). TBJU2587675(07-02-02 → 09-07-06 → 09-07-04 → 13-02-06)·
-  //   TBJU0089884(09-06-02 → 07-05-06 → 09-04-06 → 13-03-06)도 같은 방식으로 세 번씩 튕겼다.
-  //   → 기본은 **D 자신의 계획 자리**(bay_orig, 없으면 EDI bay/row/tier)이고, **그 자리가 비어 있을 때만** 간다.
-  //     비어 있지 않으면 **미배정**으로 두고 검수사가 정한다.
-  //     종전의 "아무것도 안 하고 한 칸에 두 대로 남기는" 길(구 1.36 말미)은 없앴다 — 그림에서 한 대가 사라진다.
-  //   ⚠ 검수사가 **교환을 의도한** 경로(「⇅ 앞뒤 맞교환」 등)는 `opts.swapWith` 또는 `opts.displacedMode:'swap'` 로
-  //     종전 규칙(A 의 옛 자리로)을 그대로 쓴다. 교환은 검수사의 뜻이지 앱의 추측이 아니다.
+  //   TallyOne 1.54: **예약분은 몸만 창고로 간다. 계획 자리는 건드리지 않는다.**
+  //   검수사 정정 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
+  //   그래서 1.53 의 "밀려난 컨은 자기 계획 자리로, 아니면 미배정" 규칙은 **없어진다.**
+  //   계획을 애초에 안 건드리니 되돌릴 것이 없고, 갈 데가 없으면 창고다.
+  //   종전 규칙이 남는 자리는 둘뿐이다:
+  //     · `opts.swapWith`/`displacedMode:'swap'` — 검수사가 **의도한** 교환이다. 교환은 앱의 추측이 아니다.
+  //     · **이미 선적확인된 컨**(진짜 충돌) — 실물이 배에 있어 창고로 보내면 "다시 내렸다"가 된다.
   let displacedWasCompleted = false;
-  let displacedTo = null;            // 밀려난 컨이 실제로 간 자리 (null = 미배정)
+  let displacedTo = null;            // 밀려난 컨이 실제로 간 자리 (null = 미배정 또는 창고)
   let displacedToOwnPlan = false;    // 자기 계획 자리로 돌아갔는가
+  let displacedToStorage = false;    // 1.54: 몸만 창고로 갔는가(계획은 그대로)
   if (displaced) {
     const recD = recMap0[displaced] || {}, ediD = ediMap0[displaced] || {};
     const newBayIntD = String(parseInt(newBay, 10));
-    // 그 자리를 다른 컨이 쓰고 있는가 — 잣대는 위 충돌검사와 같다(`!== undefined`).
+    // 그 자리를 다른 컨이 쓰고 있는가 — 잣대는 위 충돌검사와 같다(`!== undefined`, 창고는 제외).
     //   A(cn)는 지금 새 자리로 떠나므로 제외하고, D 자신도 제외한다.
     const slotFree = (b, r, t) => {
       const bi = String(parseInt(b, 10));
@@ -860,19 +960,26 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
         const orw = rc.row !== undefined ? rc.row : (ec.row || '');
         const ot2 = rc.tier !== undefined ? rc.tier : (ec.tier || '');
         if (!ob) continue;
+        if (String(rc.bay_actual ?? '') === STORAGE_BAY) continue;   // 창고 컨은 자리를 안 막는다
         if (String(parseInt(ob, 10)) === bi && orw === r && ot2 === t) return false;
       }
       return true;
     };
-    const explicitSwap = !!opts.swapWith || opts.displacedMode === 'swap';
-    if (opts.displacedMode === 'unassign') {
-      // 검수사가 명시적으로 미배정을 고른 경우.
-      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
-    } else if (explicitSwap && aOldBay && aOldRow && aOldTier) {
-      // 명시적 자리 교환 — 옛 규칙 그대로 A 의 옛 자리로 보낸다.
+    if (explicitSwap && aOldBay && aOldRow && aOldTier) {
+      // 명시적 자리 교환 — 옛 규칙 그대로 A 의 옛 자리로 보낸다(검수사가 지시한 교환).
       await _updatePositionFields(voyageKey, mode, displaced, aOldBay, aOldRow, aOldTier, by, { why: 'swap', byCn: cn });
       displacedTo = { bay: aOldBay, row: aOldRow, tier: aOldTier };
+    } else if (opts.displacedMode === 'unassign') {
+      // 검수사가 명시적으로 미배정을 고른 경우.
+      await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
+    } else if (displacedPlanOnly && isLoading) {
+      // 예약만 하고 입실 안 한 컨 — **이동이 아니다. 이름표가 내려왔을 뿐이다.**
+      //   계획(bay/row/tier)은 그대로 두고 실체만 창고로 찍는다.
+      await _markPlanTaken(voyageKey, mode, displaced, by, cn);
+      displacedToStorage = true;
     } else {
+      // 진짜 충돌(이미 실린 컨) 또는 양하 — 1.53 규칙 그대로.
+      //   자기 계획 자리가 비어 있으면 거기로, 아니면 미배정으로 두고 검수사가 정한다.
       const pb = recD.bay_orig !== undefined ? recD.bay_orig : (ediD.bay || '');
       const pr = recD.row_orig !== undefined ? recD.row_orig : (ediD.row || '');
       const pt = recD.tier_orig !== undefined ? recD.tier_orig : (ediD.tier || '');
@@ -883,19 +990,20 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
         displacedTo = { bay: pb, row: pr, tier: pt };
         displacedToOwnPlan = true;
       } else {
-        // 갈 데가 없다 — 미배정으로 두고 검수사에게 묻는다. 앱이 대신 자리를 고르지 않는다.
         await _updatePositionFields(voyageKey, mode, displaced, '', '', '', by, { why: 'displaced', byCn: cn });
       }
+    }
+    // 같은 칸에 이름표를 더 걸어 둔 컨(EDI 중복 등)도 이름표는 내려온다 — 안 하면 그림에서 한 칸에 두 대가 된다.
+    for (const d of planTaken) {
+      if (d === displaced) continue;
+      await _markPlanTaken(voyageKey, mode, d, by, cn);
     }
     // V8.70: 자리를 뺏긴 컨이 이미 검수완료된 컨이면 완료 기록을 지우지 않는다.
     //   (구: 무조건 remove → 다른 자리에서 이미 선적확인한 기록이 조용히 사라짐 — 체인시프트 데이터 유실 원인.
     //    오선적이었다면 검수사가 그 번호로 검색해 직접 취소·수정한다.)
-    const dispComp = await get(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
-    if (dispComp.exists()) {
-      displacedWasCompleted = true;
-    } else {
-      await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${displaced}`));
-    }
+    //   1.54: 완료 여부는 위 1)에서 읽은 `completed` 스냅샷으로 이미 안다 — 같은 값을 또 읽지 않는다.
+    //   (종전의 `remove(completed/displaced)` 는 없는 노드를 지우는 빈 동작이라 함께 없앴다.)
+    displacedWasCompleted = displacedIsCompleted;
   }
 
   // 3) target 컨 위치 변경
@@ -905,11 +1013,14 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
 
   return {
     ok: true, displaced, displacedWasCompleted,
-    displacedTo,                                       // 1.53-02: 밀려난 컨이 간 자리 (null = 미배정)
+    displacedTo,                                       // 1.53-02: 밀려난 컨이 간 자리 (null = 미배정·창고)
     displacedToOwnPlan,                                // 1.53-02: true = 자기 계획 자리로 돌아갔다
-    displacedUnassigned: !!displaced && !displacedTo,  // 밀려난 컨을 미배정으로 세웠음(호출부 안내용)
+    displacedToStorage,                                // 1.54: true = 몸만 창고로 갔다(계획 자리는 그대로)
+    planTaken: planTaken.slice(),                      // 1.54: 이름표가 내려온 컨들(창고로 보낸 목록)
+    displacedUnassigned: !!displaced && !displacedTo && !displacedToStorage,   // 미배정으로 세웠음(호출부 안내용)
     displacedPlanOnly,                                 // 1.47 호환: 계획만 있던 컨을 비켰음
     swappedTo: displacedTo,                            // 기존 이름 유지 — 호출부 안내문이 이 필드를 읽는다
+    seqFull,                                           // 1.54: 이 항차가 풀 시퀀스 작업인가(참고용)
   };
 }
 

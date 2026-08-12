@@ -3,7 +3,7 @@
 //   - 빈 입력 = 미배정 (선적대상으로 분류)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
-import { bayParityError } from '../utils.js';   // V9.27: 물리 불가 좌표 차단
+import { bayParityError, seqFullConfirmText } from '../utils.js';   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌)
 import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
 import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다
@@ -13,11 +13,14 @@ export default function PositionEditModal({
   container,
   allContainers = [],
   onClose,
-  onSave,  // async (newBay, newRow, newTier) => { ok, displaced, displacedWasCompleted }
+  // TallyOne 1.54: 네 번째 인자 `opts` 가 늘었다 — 시퀀스 항차에서 검수사가 "그래도 넣는다"고
+  //   답하면 `{ seqConfirmed:true }` 를 그대로 firebase 로 흘려보내야 한다. 안 넘기면 되물음이
+  //   무한히 되풀이되고 **아무 일도 안 일어난다**(조용한 실패).
+  onSave,  // async (newBay, newRow, newTier, opts) => { ok, displaced, displacedWasCompleted, displacedToStorage, needConfirm }
   // V8.70: 트윈은 도착지(배정 자리) 기준 — 짝꿍 베이에 같은 row·tier 자리가 플랜에 실재할 때만
   //   "트윈 지정" 토글이 나타나고, 뒤 컨은 검수사가 직접 입력·선택한다 (출발지 기준 자동 추측 폐지).
   bayPairs = null,           // { '21': '23', ... } — 짝꿍 베이 매핑
-  onSavePartner = null,      // async (cn, bay, row, tier) => { ok }
+  onSavePartner = null,      // async (cn, bay, row, tier, opts) => { ok }   // 1.54: opts 추가(위와 같은 이유)
   onCompleteBoth = null,     // async (cns[]) => void — 배정 후 선적확인
   workBay = null,            // V7.94-20: 현재 작업 중인 베이 — 미배정 컨 재배정 시 자동 선택 (전체 베이 재선택 불필요)
   workTier = null,           // V7.94-24: 작업 중인 단 — 'hold' | 'deck'. 있으면 그 단의 빈자리만 표시 (홀드 작업 중엔 홀드 자리만)
@@ -287,7 +290,9 @@ export default function PositionEditModal({
         message: t0,
         confirmLabel: '바꾸기',
         danger: true,
-        onConfirm: () => doConfirm(),
+        // 1.54: **await 하지 않는다.** doConfirm 이 시퀀스 되묻기 모달을 다시 열 수 있는데,
+        //   useConfirm 은 onConfirm 을 await 한 뒤 finally 로 창을 닫는다 — 새 창까지 같이 닫힌다.
+        onConfirm: () => { doConfirm(); },
         onCancel: () => setStep('input'),
       });
       return;
@@ -295,23 +300,55 @@ export default function PositionEditModal({
     await doConfirm();
   };
 
-  const doConfirm = async () => {
+  // TallyOne 1.54: **밀려난 컨이 어디로 갔는지 사실대로 말한다.** (검수사 확정 2026-08-12)
+  //   원문 — *"계획된 자리가 다른 컨으로 선적이 되었다면 그걸로 끝입니다. 그냥 몸만 창고로 가면 됩니다."*
+  //   종전 문구는 `swappedTo` 가 없으면 무조건 *"미배정으로 이동했습니다"* 였다. 1.54 부터
+  //   예약분은 **계획을 그대로 둔 채 몸만 창고로** 가므로 그 말은 틀렸다 — 계획 자리는 그대로 있다.
+  const _posTxt = (p) => (p && p.bay ? `${String(parseInt(p.bay, 10)).padStart(2, '0')}-${p.row}-${p.tier}` : '');
+  const _planTxt = (r) => {
+    const src = allContainers.find(x => x.cn === r.displaced) || {};
+    const pb = src._bay_planned || src.bay || src.bay_orig || '';
+    const pr = src._row_planned || src.row || src.row_orig || '';
+    const pt = src._tier_planned || src.tier || src.tier_orig || '';
+    return (pb && pr && pt) ? `${String(parseInt(pb, 10)).padStart(2, '0')}-${pr}-${pt}` : '';
+  };
+  const noticeOf = (r) => {
+    if (!r || !r.displaced) return '';
+    if (r.displacedToStorage) {
+      const pl = _planTxt(r);
+      return `📦 ${r.displaced}는 창고로 보냈습니다 — 계획 자리${pl ? ` ${pl}` : ''} 는 그대로입니다.\n실물은 원래부터 창고에 있었고, 이름표만 내려왔습니다.`;
+    }
+    if (r.displacedWasCompleted) {
+      // V8.70: 밀려난 컨이 이미 선적확인된 컨이면 완료는 유지됨 — 검수사에게 알림만.
+      const to = _posTxt(r.swappedTo) || '미배정';
+      return `⚠ ${r.displaced}는 이미 선적확인된 컨입니다.\n완료는 유지한 채 자리만 ${to}(으)로 이동했습니다.\n오선적이었다면 그 번호로 검색해 취소·수정하세요.`;
+    }
+    if (r.displacedUnassigned) return `${r.displaced}는 자리를 잃고 미배정이 됐습니다 — 자리를 정해 주세요.`;
+    return '';
+  };
+
+  // 뒤(짝꿍) 컨 배정 + 마무리. 1.54: 뒤 컨도 시퀀스 되묻기에 걸릴 수 있어 따로 뗐다
+  //   (앞 컨은 이미 들어갔으므로 앞부터 다시 하면 안 된다).
+  const finishPartner = async (opts = null) => {
     setStep('saving');
     try {
-      const r = row ? String(row).padStart(2, '0') : '';
-      const t = tier ? String(tier).padStart(2, '0') : '';
-      const result = await onSave(bay, r, t);
-      if (!result?.ok) { setErrMsg('저장 실패'); setStep('input'); return; }
-      // V8.70: 밀려난 컨이 이미 선적확인된 컨이면 완료는 유지됨 — 검수사에게 알림만.
-      if (result.displacedWasCompleted) {
-        alert(`⚠ ${result.displaced}는 이미 선적확인된 컨입니다.\n완료는 유지한 채 자리만 ${result.swappedTo ? `${parseInt(result.swappedTo.bay, 10) || '-'}-${result.swappedTo.row}-${result.swappedTo.tier}` : '미배정'}(으)로 이동했습니다.\n오선적이었다면 그 번호로 검색해 취소·수정하세요.`);
-      }
       // V8.70: 트윈 지정 — 검수사가 고른 뒤 컨을 짝꿍 자리(실재 검증됨)로 배정.
       if (twinOn && partnerPick && pairSlot && onSavePartner) {
-        const r2 = await onSavePartner(partnerPick.cn, pairSlot.bay, pairSlot.row, pairSlot.tier);
-        if (r2?.displacedWasCompleted) {
-          alert(`⚠ ${r2.displaced}는 이미 선적확인된 컨입니다.\n완료는 유지한 채 자리만 이동했습니다. 오선적이었다면 검색해 취소·수정하세요.`);
+        const r2 = await onSavePartner(partnerPick.cn, pairSlot.bay, pairSlot.row, pairSlot.tier, opts);
+        if (r2 && r2.ok === false && r2.needConfirm === 'seqFull') {
+          setStep('input');
+          askConfirm({
+            title: '뒤 컨 자리가 시퀀스 자리입니다',
+            message: seqFullConfirmText(r2),
+            confirmLabel: '그래도 넣는다',
+            danger: true,
+            onConfirm: () => { finishPartner({ ...(opts || {}), seqConfirmed: true }); },
+            onCancel: () => setStep('input'),
+          });
+          return;
         }
+        const n2 = noticeOf(r2);
+        if (n2) alert(n2);
       }
       if (alsoComplete && !isUnassign && !isCompleted && onCompleteBoth) {
         const cns = [container.cn];
@@ -323,6 +360,38 @@ export default function PositionEditModal({
       setErrMsg(e?.message || String(e));
       setStep('input');
     }
+  };
+
+  const doConfirm = async (opts = null) => {
+    setStep('saving');
+    try {
+      const r = row ? String(row).padStart(2, '0') : '';
+      const t = tier ? String(tier).padStart(2, '0') : '';
+      const result = await onSave(bay, r, t, opts);
+      // 1.54: 시퀀스 항차 — firebase 가 **아무것도 쓰지 않고** 되물으라고 돌아섰다.
+      //   안 받으면 조용한 실패다 — 시퀀스 항차에서 자리 지정이 통째로 먹통이 된다.
+      //   ⛔ 네이티브 confirm() 을 쓰지 않는다(뜨는 순간 앱이 통째로 멈춘다 — 실측 30분 정지).
+      if (result && result.ok === false && result.needConfirm === 'seqFull') {
+        setStep('input');
+        askConfirm({
+          title: '시퀀스 자리입니다',
+          message: seqFullConfirmText(result),
+          confirmLabel: '그래도 넣는다',
+          danger: true,
+          onConfirm: () => { doConfirm({ ...(opts || {}), seqConfirmed: true }); },
+          onCancel: () => setStep('input'),
+        });
+        return;
+      }
+      if (!result?.ok) { setErrMsg('저장 실패'); setStep('input'); return; }
+      const n1 = noticeOf(result);
+      if (n1) alert(n1);
+    } catch (e) {
+      setErrMsg(e?.message || String(e));
+      setStep('input');
+      return;
+    }
+    await finishPartner(opts);
   };
 
   const oldPosLabel = container.bay
