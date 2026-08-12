@@ -16,7 +16,7 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
-  , fbSetVoyageSeqMode, resolveSeqMode   // TallyOne 1.55: 작업 개념은 셋이다(풀 시퀀스·풀만 시퀀스·풀 액츄얼). 읽기는 resolveSeqMode 하나로.
+  , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
   , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
@@ -101,6 +101,21 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [listFilter, setListFilter] = useState('all');
   // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
   const [seqEdit, setSeqEdit] = useState(false);
+  // 1.56: **선박 기억 자동 적용** (검수사 확정 — "선박·선사별로 기억, 항차마다 다시 묻지 않게").
+  //   답이 전혀 없는 항차에만 적용한다(옛 seqFull 답이 있으면 재확인 카드가 담당). 적용 즉시 칩으로 보이고 눌러 바꿀 수 있다.
+  useEffect(() => {
+    if (mode !== 'loading') return;
+    const info = voyage?.info || {};
+    if (info.seqMode || (info.seqFull !== undefined && info.seqFull !== null)) return;
+    const vsl = info.vsl;
+    if (!vsl) return;
+    let alive = true;
+    fbGetShipSeqPref(vsl).then(m3 => {
+      if (!alive || !m3) return;
+      fbSetVoyageSeqMode(voyageKey, m3, '선박 기억(자동)').catch(() => {});
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [voyageKey, mode, voyage?.info?.seqMode, voyage?.info?.seqFull, voyage?.info?.vsl]);
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
@@ -866,7 +881,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   두 모양을 아는 곳은 `resolveSeqMode` 하나뿐이다. 미정이면 null 이고 그때만 묻는 카드를 띄운다.
         const _mode3 = resolveSeqMode(voyage?.info);
         const _save = async (m3) => {
-          try { await fbSetVoyageSeqMode(voyageKey, m3, inspector || ''); setSeqEdit(false); }
+          try {
+            await fbSetVoyageSeqMode(voyageKey, m3, inspector || '');
+            // 1.56: 선박별로 기억한다(검수사 확정) — 다음 항차는 안 묻고 이 답을 자동 적용.
+            fbSetShipSeqPref(voyage?.info?.vsl, m3, inspector || '').catch(() => {});
+            setSeqEdit(false);
+          }
           catch (e) { alert('저장 실패: ' + (e?.message || e)); }
         };
         // 문구는 **검수사 표현 그대로** 쓴다. 지어낸 용어를 넣지 않는다.
@@ -882,11 +902,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             cls: 'bg-slate-700 hover:bg-slate-600 text-slate-100' },
         ];
         const _cur = _CH.find(x => x.m === _mode3) || null;
-        if (_cur && !seqEdit) {
+        // 1.56: 옛 2갈래 답(seqFull)만 있는 항차는 **한 번 재확인**한다 — 두 갈래엔 「풀 시퀀스」가 없어
+        //   답이 자동 매핑으로 조용히 굳었다(독립 재검증 P1-7). 확인 전에도 방어는 종전 답대로 동작한다.
+        const _legacyOnly = !voyage?.info?.seqMode && voyage?.info?.seqFull !== undefined && voyage?.info?.seqFull !== null;
+        const _chipCls = { fullSeq: 'text-rose-300', fullOnlySeq: 'text-amber-300', allActual: 'text-slate-200' };
+        if (_cur && !seqEdit && !_legacyOnly) {
           return (
             <button onClick={() => setSeqEdit(true)}
               className="mb-3 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[11px] text-slate-300 flex items-center gap-1.5">
-              <span className={`font-black ${_cur.lock ? 'text-amber-300' : 'text-slate-200'}`}>
+              <span className={`font-black ${_chipCls[_cur.m] || 'text-slate-200'}`}>
                 {_cur.lock ? '🔒' : '↔'} {_cur.t}
               </span>
               <span className="text-slate-500">— 눌러서 바꾸기</span>
@@ -896,6 +920,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return (
           <div className="mb-3 bg-amber-950/40 border-2 border-amber-700/60 rounded-lg p-3">
             <div className="text-[13px] font-black text-amber-200">풀 컨테이너 시퀀스 작업입니까?</div>
+            {(!voyage?.info?.seqMode && voyage?.info?.seqFull !== undefined && voyage?.info?.seqFull !== null) && (
+              <div className="text-[11px] text-amber-100 bg-amber-900/40 rounded px-2 py-1 mt-1">
+                종전 답(예/아니오)이 있습니다 — 세 갈래로 한 번만 확정해 주세요. 확정 전에도 방어는 종전 답({resolveSeqMode(voyage?.info) === 'fullOnlySeq' ? '풀만 시퀀스' : '풀 액츄얼'})대로 동작합니다.
+              </div>
+            )}
             <div className="text-[11px] text-amber-300/80 mt-0.5 leading-snug">
               시퀀스면 계획 자리 주인이 그 자리를 지킵니다 — 다른 컨을 넣을 때 한 번 더 묻습니다.
               <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.

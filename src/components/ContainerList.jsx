@@ -368,6 +368,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
       //   4호기로 다함. 이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
       //   갱은 prop 이 아니라 localStorage 한 벌(`getEquipNumber`)에서 읽는다 —
       //   헤더·가이드 작업·자연어 탭이 이미 쓰는 그 값이다. 누를 때 읽으므로 항상 최신이다.
+      // 1.56: 갱 없이 완료 금지 — 조용한 미기록이 인건비 사고의 뿌리다.
+      if (!getEquipNumber()) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
     }

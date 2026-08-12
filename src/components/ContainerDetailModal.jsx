@@ -214,6 +214,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
       }
       // TallyOne 1.55: 마지막 인자는 **갱(호기)** — 인건비 근거다(검수사 확정 2026-08-12).
       //   갱은 prop 이 아니라 localStorage 한 벌(`getEquipNumber`)에서 읽는다(헤더와 같은 값).
+      // 1.56: 갱 없이 완료 금지 — 조용한 미기록이 인건비 사고의 뿌리다.
+      if (!getEquipNumber()) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
       await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
     }

@@ -156,6 +156,23 @@ export function resolveSeqMode(info) {
 // 저장 — 세 갈래를 `info/seqMode` 에 쓰고, 옛 화면·옛 코드가 읽는 `seqFull` 도 같이 맞춘다.
 //   `fullSeq`·`fullOnlySeq` → `seqFull:true` / `allActual` → `seqFull:false`.
 //   (`seqFull` 하나만 보는 곳은 「시퀀스인가 아닌가」만 알면 되므로 이 대응으로 손실이 없다.)
+// 1.56: **선박별 작업 모드 기억** — 검수사 확정("선박·선사별로 기억, 항차마다 다시 묻지 않게").
+//   노드: ship_prefs/{선박약자}/seqMode. 새 항차에 답이 없으면 이 값을 자동 적용한다(VoyagePage).
+export async function fbSetShipSeqPref(vsl, mode3, by) {
+  const v = String(vsl || '').trim();
+  if (!v || !SEQ_MODES.includes(mode3)) return;
+  await update(ref(db, `ship_prefs/${v}`), { seqMode: mode3, seqModeBy: by || '', seqModeAt: Date.now() });
+}
+export async function fbGetShipSeqPref(vsl) {
+  const v = String(vsl || '').trim();
+  if (!v) return null;
+  try {
+    const s = await get(ref(db, `ship_prefs/${v}/seqMode`));
+    const m = s.val();
+    return SEQ_MODES.includes(m) ? m : null;
+  } catch { return null; }
+}
+
 export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
   if (!voyageKey) return;
   const m = SEQ_MODES.includes(String(mode3)) ? String(mode3) : null;
@@ -581,10 +598,12 @@ export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
 //   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).
 //   V8.04: 신고서 작성에 필요한 기본 정보(규격·F/E·타입·실번호·데미지 유무)를 함께 저장.
-export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}) {
+export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {
   const at = Date.now();
+  const eq = String(equip || '').trim();
   const rec = {
     by, at, flag: 'extra',
+    ...(eq ? { equip: eq } : {}),   // 1.56: 초과 컨도 갱을 남긴다 — equip 없던 유일한 completed 쓰기 경로였다
     size: info.size || '',      // '20' | '40ST' | '40HC' | '45'
     fe: info.fe || '',          // 'F' | 'E'
     ctype: info.ctype || '',    // '일반' | 'RF' | 'FR' | 'OT' | 'TK'
@@ -686,23 +705,41 @@ export async function fbUnassignContainer(voyageKey, mode, cn, by) {
 //   - 위치 변경 시에만 actual ≠ 계획 (현장 적치 다름)
 export async function fbSetActualPosition(voyageKey, mode, cn, actualBay, actualRow, actualTier, by) {
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  // 1.56: 이력 없는 좌표 쓰기였다(독립 재검증 P1-5) — 다른 모든 위치 변경은 moves 를 남기는데
+  //   이 직통 경로(상세 모달·베이 빈칸 클릭·수석 편집)만 안 남겨 "지나온 자리"가 끊겼다.
+  let _mv = []; let _from = '';
+  try {
+    const s = await get(r); const cur = s.val() || {};
+    _mv = Array.isArray(cur.moves) ? cur.moves : [];
+    if (cur.bay_actual && !String(cur.bay_actual).startsWith('__')) _from = `${cur.bay_actual}-${cur.row_actual}-${cur.tier_actual}`;
+  } catch { /* 이력을 못 읽어도 좌표 저장은 진행 */ }
+  const _to = actualBay ? `${actualBay}-${actualRow}-${actualTier}` : '';
   await update(r, {
     bay_actual: actualBay || '',
     row_actual: actualRow || '',
     tier_actual: actualTier || '',
     actual_at: Date.now(),
     actual_by: by || '',
+    moves: [..._mv, { at: Date.now(), by: by || '', why: 'actual', from: _from, to: _to, byCn: '' }],
   });
 }
 // 실체 위치 삭제 (수정 취소)
-export async function fbClearActualPosition(voyageKey, mode, cn) {
+export async function fbClearActualPosition(voyageKey, mode, cn, by) {
   const r = ref(db, `voyages/${voyageKey}/${mode}/records/${cn}`);
+  // 1.56: 삭제도 이력에 남긴다 — "실체 위치 → 삭제"가 어디서 왜 됐는지 되짚을 수 있게.
+  let _mv = []; let _from = '';
+  try {
+    const s = await get(r); const cur = s.val() || {};
+    _mv = Array.isArray(cur.moves) ? cur.moves : [];
+    if (cur.bay_actual && !String(cur.bay_actual).startsWith('__')) _from = `${cur.bay_actual}-${cur.row_actual}-${cur.tier_actual}`;
+  } catch { /* 이력을 못 읽어도 삭제는 진행 */ }
   await update(r, {
     bay_actual: null,
     row_actual: null,
     tier_actual: null,
     actual_at: null,
     actual_by: null,
+    moves: [..._mv, { at: Date.now(), by: by || '', why: 'cancel', from: _from, to: '', byCn: '' }],
   });
 }
 

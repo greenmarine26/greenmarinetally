@@ -197,21 +197,43 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     // V9.23-08: 좌표 없는 컨을 버리지 않는다 — 버리면 "대기 N대"인데 고를 베이가 없어진다.
     //   (2658W 실측: 남은 14대가 전부 좌표 없는 엠티라 화면이 "남은 작업 없음"으로 보였다)
     const NOBAY = -1;
-    allContainers.forEach(c => {
-      if (c._mode !== workFilter || !c._ptk || c._comp) return;
-      const center = c.bay ? manualGroupCenterOf(c.bay) : NOBAY;
-      if (center == null) return;
-      if (center === NOBAY) {
-        const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
-        g0.count++;
-        return;
-      }
-      const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
-      g.bays.add(parseInt(c.bay, 10)); g.count++;
-      const isDeck = parseInt(c.tier, 10) >= 80, big = is40(c);
-      if (isDeck) { g.deck++; big ? g.deck40++ : g.deck20++; } else { g.hold++; big ? g.hold40++ : g.hold20++; }
+    // ── 1.56: **남은 N대 = 빈 칸 수** (검수사 확정 — "remain 은 빈 칸 수. 같은 계산을 「남은 N대」에도").
+    //   종전엔 그 베이에 이름이 걸린 **미완료 컨 머릿수**를 세서, 실린 컨이 다른 베이 계획분이면
+    //   꽉 찬 베이에 「남은 5대」가 남고(B7·9 실측), 빈 베이가 「남은 0대」로 잠겼다.
+    //   DXQD 2631W 809이벤트 리플레이 실측 — 810시점 중 792시점이 빈 칸 수와 어긋났다.
+    //   칸 우주(buildSlotUniverse) ∪ 점유(buildOccupancy)는 자리 그리드(slotsByBay)와 같은 한 벌이다.
+    const workList = allContainers.filter(c => c._mode === workFilter && c._ptk);
+    const planView = workList.map(c => (c._bay_planned
+      ? { ...c, _edi_bay: c._bay_planned, _edi_row: c._row_planned, _edi_tier: c._tier_planned }
+      : c));
+    const uniSrc = [...workList, ...planView];
+    const uni20 = buildSlotUniverse(uniSrc, (c) => !is40(c));
+    const uni40 = buildSlotUniverse(uniSrc, is40);
+    const occ = buildOccupancy(workList, (c) => !!c._comp);
+    workList.forEach(c => {
+      // 자리 미지정(칸 자체가 없음)만 종전대로 컨 머릿수 — 칸이 없으니 칸으로 못 센다.
+      if (c._comp) return;
+      if ((c.bay && c.row && c.tier) || c._edi_bay || c.bay_orig) return;
+      const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
+      g0.count++;
     });
-    return Object.values(map).sort((a, b) => a.center - b.center);   // 자리 미지정(-1)이 맨 앞
+    const eat = (uni, big) => {
+      Object.keys(uni).forEach(b => {
+        const center = manualGroupCenterOf(b);
+        if (center == null) return;
+        uni[b].forEach(sl => {
+          const o = occ.get(`${parseInt(sl.bay, 10)}/${sl.row}/${sl.tier}`);
+          if (o && o.done) return;   // 실물이 찬 칸은 남은 일이 아니다
+          const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
+          g.bays.add(parseInt(sl.bay, 10)); g.count++;
+          const isDeck = parseInt(sl.tier, 10) >= 80;
+          if (isDeck) { g.deck++; big ? g.deck40++ : g.deck20++; } else { g.hold++; big ? g.hold40++ : g.hold20++; }
+        });
+      });
+    };
+    eat(uni20, false); eat(uni40, true);
+    // 빈 칸 0 인 묶음은 카드에서 내린다 — 끝난 베이가 목록에 남아 "다음"을 가리지 않게.
+    return Object.values(map).filter(g => g.count > 0 || g.noBay).sort((a, b) => a.center - b.center);
   }, [allContainers, workFilter, manualBayPairs]);
   // TallyOne 1.53: **작업이 끝나면 검색창까지 사라졌다.**
   //   실측 2026-08-12(선적 335대 완주) — 남은 작업이 0이 되자 수동 모드가
@@ -558,7 +580,9 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         mode="discharge"
         onClose={() => setExtraModalOpen(false)}
         onSave={async ({ cn, info }) => {
-          await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info);
+          // 1.56: 초과 컨도 완료 기록이다 — 갱 없이 기록 금지 + equip 동봉(유일하게 빠져 있던 쓰기 경로).
+          if (!getEquipNumber()) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
+          await fbAddExtraContainer(voyageKey, 'discharge', cn, inspector, info, getEquipNumber());
         }}
       />
     </div>
@@ -1453,6 +1477,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const completeAtPlan = async () => {
     if (busy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
+    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
     const done = [c1, c2].filter(c => c._comp);
     // 1.53: 네이티브 confirm() 제거 — 브라우저 확인창은 뜨는 순간 앱이 통째로 멈춘다(실측 2026-08-12).
     if (done.length && !(await askYN('이미 선적확인된 컨입니다',
@@ -1515,8 +1541,39 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     const bn = parseInt(bay, 10);
     if (!Number.isFinite(bn) || !rowP || !tierP) { alert('앞 컨 위치(Bay/Row/Tier)를 입력하세요'); return; }
     if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
+    // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 인건비 근거가 없다(검수사 확정).
+    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.\n갱이 없는 완료는 그 갱 인원의 인건비 근거가 없습니다.'); return; }
     setBusy(true);
     try {
+      // ── 1.56: **이 배 자료에 없는 자리 확인** (검수사 확정 — "들어갈 자리 자체가 없는데 선적이 된다는게
+      //   컨테이너 하나 분실". TBJU2326007 19-08-06 실사고). 칸 우주(slotUniverse)에 없는 좌표면
+      //   저장 전에 묻는다. 시프팅·특수 적재만 통과 — 이유 없이 계속하면 장부에서 분실된다.
+      const _known = (b, r, t) => {
+        const bb = String(parseInt(b, 10));
+        return (slotUniverse[bb] || []).some(s => s.row === String(r) && s.tier === String(t));
+      };
+      const _rowsTxt = (b) => {
+        const bb = String(parseInt(b, 10));
+        return [...new Set((slotUniverse[bb] || []).map(s => s.row))].sort().join(' ');
+      };
+      for (const [lbl, b, r, t] of [['앞', bay, rowP, tierP], ['뒤', backPos.bay, backPos.row, backPos.tier]]) {
+        if (!_known(b, r, t) && !(await askYN('이 배 자료에 없는 자리입니다',
+          `${lbl} 컨 자리 B${parseInt(b, 10)} ${r}-${t} 는 이 배의 알려진 칸에 없습니다.\n(B${parseInt(b, 10)}에 있는 열: ${_rowsTxt(b) || '없음'})\n분실 사고가 났던 그 경로입니다 — 시프팅·특수 적재가 확실할 때만 계속하세요.`))) return;
+      }
+      // ── 1.56: **아래 단이 비어 있으면 허공 적재다** (검수사 확정 — "2단이 비었는데 3단 즉 허공에 띄웠습니다").
+      //   홀드 02→04→06(→08), 데크 82→84→86 — 아래 칸이 이 배에 있고 아직 실물이 없으면 묻는다.
+      const _belowEmpty = (b, r, t) => {
+        const n = parseInt(t, 10);
+        if (!Number.isFinite(n) || n <= 2 || n === 80 || n === 82) return null;
+        const bt = String(n - 2).padStart(2, '0');
+        if (!_known(b, r, bt)) return null;
+        const o = slotOcc.get(`${parseInt(b, 10)}/${r}/${bt}`);
+        return (o && o.done) ? null : bt;
+      };
+      for (const [lbl, b, r, t] of [['앞', bay, rowP, tierP], ['뒤', backPos.bay, backPos.row, backPos.tier]]) {
+        const bt = _belowEmpty(b, r, t);
+        if (bt && !(await askYN('아래 단이 비어 있습니다', `${lbl} 컨 자리 ${r}-${t} 아래(${r}-${bt})에 아직 실물이 없습니다.\n허공에 얹는 기록이 됩니다 — 아래부터가 순서입니다. 그래도 계속할까요?`))) return;
+      }
       // 1.55-03: 이미 실물이 실린 칸이면 **배정 전에** 묻는다 — firebase 는 차단하지 않고 밀어내며,
       //   이 경로는 그 반환(displacedWasCompleted)을 안 읽어 조용히 지나갔다(독립 재검증 P1-11).
       const _occAt = (b, r, t) => { const n = parseInt(b, 10); const o = slotOcc.get(`${Number.isFinite(n) ? n : b}/${r}/${t}`); return (o && o.done) ? o : null; };
@@ -1849,6 +1906,8 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   const handleCompleteBoth = async () => {
     if (!c1 || !c2 || twinBusy) return;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    // 1.56: 갱(호기) 없이 완료 금지 — 인건비 근거(검수사 확정).
+    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
     // V8.09-06: XRAY 대상은 XRAY 실번호(seal) 입력 전까지 양하확인 차단.
     const xMiss = (c) => c._mode === 'discharge' && c._xray && !String(c._xraySeal?.seal || '').trim();
     const miss = [c1, c2].filter(c => !c._comp && xMiss(c)).map(c => c.cn?.slice(-4));

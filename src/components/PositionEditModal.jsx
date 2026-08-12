@@ -350,7 +350,18 @@ export default function PositionEditModal({
 
   // 뒤(짝꿍) 컨 배정 + 마무리. 1.54: 뒤 컨도 시퀀스 되묻기에 걸릴 수 있어 따로 뗐다
   //   (앞 컨은 이미 들어갔으므로 앞부터 다시 하면 안 된다).
-  const finishPartner = async (opts = null) => {
+  // 1.56: 트윈이 반만 저장되는 것을 막는다(독립 재검증 P1-4) — 뒤 컨이 실패·취소되면 앞 컨을 원자리로 되돌린다.
+  //   되돌릴 원자리가 없으면(원래 미배정) 사실을 숨기지 않고 붉게 알린다.
+  const _rollbackFront = async (origPos) => {
+    try {
+      if (origPos && origPos.bay && origPos.row && origPos.tier) {
+        const rb = await onSave(origPos.bay, origPos.row, origPos.tier, { seqConfirmed: true });
+        if (rb && rb.ok !== false) return '앞 컨은 원래 자리로 되돌렸습니다.';
+      }
+    } catch { /* 아래 경고 문구로 흡수 */ }
+    return '⚠ 앞 컨은 이미 새 자리에 저장된 상태입니다 — 앞 컨 자리를 확인하세요.';
+  };
+  const finishPartner = async (opts = null, origPos = null) => {
     setStep('saving');
     try {
       // V8.70: 트윈 지정 — 검수사가 고른 뒤 컨을 짝꿍 자리(실재 검증됨)로 배정.
@@ -363,9 +374,16 @@ export default function PositionEditModal({
             message: seqFullConfirmText(r2),
             confirmLabel: '그래도 넣는다',
             danger: true,
-            onConfirm: () => { finishPartner({ ...(opts || {}), seqConfirmed: true }); },
-            onCancel: () => setStep('input'),
+            onConfirm: () => { finishPartner({ ...(opts || {}), seqConfirmed: true }, origPos); },
+            onCancel: async () => { const m = await _rollbackFront(origPos); setErrMsg(`뒤 컨 배정을 취소했습니다 — 트윈이 반만 저장되지 않게 멈췄습니다. ${m}`); setStep('input'); },
           });
+          return;
+        }
+        if (r2 && r2.ok === false) {
+          // 1.56: 종전엔 여기서 그냥 지나가 **완료까지 두 대가 찍혔다** — 뒤 배정 실패가 조용히 삼켜졌다.
+          const m = await _rollbackFront(origPos);
+          setErrMsg(`뒤 컨 자리 배정 실패 — 선적확인은 찍지 않았습니다. ${m}\n${r2?.error || ''}`);
+          setStep('input');
           return;
         }
         const n2 = noticeOf(r2);
@@ -378,7 +396,8 @@ export default function PositionEditModal({
       }
       onClose();
     } catch (e) {
-      setErrMsg(e?.message || String(e));
+      const m = await _rollbackFront(origPos);
+      setErrMsg(`${e?.message || String(e)}\n${m}`);
       setStep('input');
     }
   };
@@ -388,6 +407,21 @@ export default function PositionEditModal({
     try {
       const r = row ? String(row).padStart(2, '0') : '';
       const t = tier ? String(tier).padStart(2, '0') : '';
+      // 1.56: 이 배 자료에 없는 자리 확인 — TBJU2326007 19-08-06 분실 실사고의 그 경로(직접 입력).
+      const _bb = String(parseInt(bay, 10));
+      const _exists = (slotUniverse[_bb] || []).some(s => s.row === r && s.tier === t);
+      if (!isUnassign && bay && r && t && !_exists && !opts?.slotConfirmed) {
+        setStep('input');
+        askConfirm({
+          title: '이 배 자료에 없는 자리입니다',
+          message: `B${_bb} ${r}-${t} 는 이 배의 알려진 칸에 없습니다.\n(B${_bb}에 있는 열: ${[...new Set((slotUniverse[_bb] || []).map(s => s.row))].sort().join(' ') || '없음'})\n분실 사고가 났던 경로입니다 — 시프팅·특수 적재가 확실할 때만 계속하세요.`,
+          confirmLabel: '특수 적재 — 그래도 저장',
+          danger: true,
+          onConfirm: () => { doConfirm({ ...(opts || {}), slotConfirmed: true }); },
+          onCancel: () => setStep('input'),
+        });
+        return;
+      }
       const result = await onSave(bay, r, t, opts);
       // 1.54: 시퀀스 항차 — firebase 가 **아무것도 쓰지 않고** 되물으라고 돌아섰다.
       //   안 받으면 조용한 실패다 — 시퀀스 항차에서 자리 지정이 통째로 먹통이 된다.
@@ -412,7 +446,9 @@ export default function PositionEditModal({
       setStep('input');
       return;
     }
-    await finishPartner(opts);
+    await finishPartner(opts, (container.bay
+      ? { bay: String(parseInt(container.bay, 10)), row: container.row || '', tier: container.tier || '' }
+      : null));
   };
 
   const oldPosLabel = container.bay

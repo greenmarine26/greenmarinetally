@@ -132,6 +132,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
         return;
       }
+      // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 그 갱 인원의 인건비 근거가 없다(검수사 확정).
+      //   가이드 화면만 갱을 강제하고 나머지 경로는 조용히 통과하던 것을 막는다(독립 재검증).
+      if (!getEquipNumber()) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.'); return; }
       await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
       // 완료 후 자동 비우기 콜백
