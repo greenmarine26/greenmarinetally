@@ -101,21 +101,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [listFilter, setListFilter] = useState('all');
   // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
   const [seqEdit, setSeqEdit] = useState(false);
-  // 1.56: **선박 기억 자동 적용** (검수사 확정 — "선박·선사별로 기억, 항차마다 다시 묻지 않게").
-  //   답이 전혀 없는 항차에만 적용한다(옛 seqFull 답이 있으면 재확인 카드가 담당). 적용 즉시 칩으로 보이고 눌러 바꿀 수 있다.
+  // 1.56-01: 선박 기억은 **추천으로만** 쓴다 — 검수사 정정 2026-08-12:
+  //   *"상황에 따라 틀려집니다. 선박당 1회는 매항차마다 물어야 합니다."*
+  //   1.56 이 답 없는 항차에 지난 답을 자동 적용했는데 **틀린 설계**였다. 질문은 항차마다 한 번 뜨고,
+  //   지난 답은 카드 안에 「이 배의 지난 답」으로 보여 주기만 한다(강조 링).
+  const [shipSeqPref, setShipSeqPref] = useState(null);
   useEffect(() => {
-    if (mode !== 'loading') return;
-    const info = voyage?.info || {};
-    if (info.seqMode || (info.seqFull !== undefined && info.seqFull !== null)) return;
-    const vsl = info.vsl;
-    if (!vsl) return;
+    if (mode !== 'loading') { setShipSeqPref(null); return; }
+    const vsl = voyage?.info?.vsl;
+    if (!vsl) { setShipSeqPref(null); return; }
     let alive = true;
-    fbGetShipSeqPref(vsl).then(m3 => {
-      if (!alive || !m3) return;
-      fbSetVoyageSeqMode(voyageKey, m3, '선박 기억(자동)').catch(() => {});
-    }).catch(() => {});
+    fbGetShipSeqPref(vsl).then(m3 => { if (alive) setShipSeqPref(m3 || null); }).catch(() => { if (alive) setShipSeqPref(null); });
     return () => { alive = false; };
-  }, [voyageKey, mode, voyage?.info?.seqMode, voyage?.info?.seqFull, voyage?.info?.vsl]);
+  }, [voyageKey, mode, voyage?.info?.vsl]);
 
   // 선박 정책 Firebase 구독
   useEffect(() => {
@@ -930,10 +928,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.
               <br/>풀과 엠티가 다를 수 있으니 셋 중에서 고르세요.
             </div>
+            {shipSeqPref && !_mode3 && (
+              <div className="text-[11px] text-slate-300 mt-1">
+                이 배의 지난 답: <b className="text-amber-200">{_CH.find(x => x.m === shipSeqPref)?.t || shipSeqPref}</b> — 이번 항차도 같으면 그걸 누르세요. 상황이 다르면 다르게 고르면 됩니다.
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-2 mt-2.5">
               {_CH.map(ch => (
                 <button key={ch.m} onClick={() => _save(ch.m)}
-                  className={`py-2.5 px-3 rounded text-left ${ch.cls} ${ch.m === _mode3 ? 'ring-2 ring-amber-300' : ''}`}>
+                  className={`py-2.5 px-3 rounded text-left ${ch.cls} ${ch.m === (_mode3 || shipSeqPref) ? 'ring-2 ring-amber-300' : ''}`}>
                   <div className="font-bold text-sm">{ch.lock ? '🔒' : '↔'} {ch.t}</div>
                   <div className="text-[11px] opacity-80 mt-0.5 leading-snug">{ch.d}</div>
                 </button>

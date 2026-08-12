@@ -156,8 +156,9 @@ export function resolveSeqMode(info) {
 // 저장 — 세 갈래를 `info/seqMode` 에 쓰고, 옛 화면·옛 코드가 읽는 `seqFull` 도 같이 맞춘다.
 //   `fullSeq`·`fullOnlySeq` → `seqFull:true` / `allActual` → `seqFull:false`.
 //   (`seqFull` 하나만 보는 곳은 「시퀀스인가 아닌가」만 알면 되므로 이 대응으로 손실이 없다.)
-// 1.56: **선박별 작업 모드 기억** — 검수사 확정("선박·선사별로 기억, 항차마다 다시 묻지 않게").
-//   노드: ship_prefs/{선박약자}/seqMode. 새 항차에 답이 없으면 이 값을 자동 적용한다(VoyagePage).
+// 1.56: 선박별 작업 모드 기억. ⚠ 1.56-01 정정(검수사) — *"상황에 따라 틀려집니다. 선박당 1회는
+//   매항차마다 물어야 합니다."* 자동 적용 금지. 이 값은 **질문 카드의 추천 표시**에만 쓴다.
+//   노드: ship_prefs/{선박약자}/seqMode.
 export async function fbSetShipSeqPref(vsl, mode3, by) {
   const v = String(vsl || '').trim();
   if (!v || !SEQ_MODES.includes(mode3)) return;
