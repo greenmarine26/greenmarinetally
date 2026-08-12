@@ -12,7 +12,7 @@
 //     ...
 //   ]
 
-import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort, isVirtualCn } from './utils.js';
+import { isoToLabel, isUnknownIso, isReeferContainer, isPyeongtaekPort, isVirtualCn, isLuggageCn } from './utils.js';
 
 // 평택 화물만 필터 (KRPTK 양하 또는 선적)
 function filterPyeongtaek(containers, mode) {
@@ -45,7 +45,7 @@ function extractDg(containers) {
 //   carrier:       선사 코드 (TDT에서)
 //   sealPolicy:    선박 엠티 실 정책 (matchShipPolicy 결과) — M3.5.5
 // 결과: 경고 배열
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0 }) {
   const alerts = [];
   const ediArr = Object.values(ediContainers || {});
   const ediPtk = filterPyeongtaek(ediContainers || {}, mode);
@@ -244,6 +244,28 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
           voice: '',
           count: emptyConfirmedCount,
           details: { virtualEdiCount, emptyConfirmedCount, realEdiCount },
+        });
+      }
+      // ── 1.56-02: **수화물(LUGGAGE)은 검증 대상이 아니다** (검수사 확정 2026-08-12 —
+      //   "수화물 컨테이너라고 어제도 설명 드렸고 이미 양하리스트에도 별도 1개를 표시하고 있습니다.
+      //    그러므로 선적에도 같이 별도 1개를 표기하고 저 메시지는 없어야 할것입니다.")
+      //   EDI로 오지 않는 것이 정상 — 경고에서 빼고 info 로 따로 센다. 번호는 항차마다 바뀌므로
+      //   ① 알려진 번호(isLuggageCn) ② 선박 상시 대수(lugCount) 이내의 잔여 — 두 겹으로 잡는다.
+      let lugCns = extraCns.filter(cn => isLuggageCn(cn));
+      extraCns = extraCns.filter(cn => !isLuggageCn(cn));
+      const lugRemain = Math.max(0, (lugCount || 0) - lugCns.length);
+      if (lugRemain > 0 && extraCns.length > 0 && extraCns.length <= lugRemain) {
+        lugCns = [...lugCns, ...extraCns];
+        extraCns = [];
+      }
+      if (lugCns.length > 0) {
+        alerts.push({
+          level: 'info',
+          code: 'luggage',
+          msg: `수화물 컨 ${lugCns.length}대 별도 — EDI 미포함이 정상`,
+          voice: '',
+          count: lugCns.length,
+          details: { lugCns },
         });
       }
       if (extraCns.length > 0) {

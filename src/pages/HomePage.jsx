@@ -1704,8 +1704,13 @@ function computeStats(section, mode, info, voyageKey) {
   //   양하만 — LUGGAGE 는 양하에 실려 오는 물건이다.
   const lugByCn = [...recordCns].filter(cn => isLuggageCn(cn) && !ptkCns.has(cn)).length;
   const gap = Math.max(0, recordCns.size - ptkCns.size);
-  const lugCap = mode === 'discharge' ? shipLuggageCount(voyageKey) : 0;
-  const luggage = Math.max(lugByCn, Math.min(gap, lugCap));
+  // 1.56-02: 게이트 제거 — 검수사 확정 "선적에도 같이 별도 1개를 표기". RZOR 는 양방향 모두 수화물 1대가 상시다.
+  const lugCap = shipLuggageCount(voyageKey);
+  // 1.56-02: 선적은 가상 EDI(리스트 승격)가 수화물을 품어 gap 이 0 이 된다 — 예보(카톡 물량예보)가
+  //   이 항차의 수화물 대수를 이미 선언하고 있으면(calc.luggage) 그것으로 표기한다. 번호 기억(isLuggageCn)도 겹으로.
+  const fcLug = (String(info?.forecast?.mode || 'loading') === mode) ? Number(info?.forecast?.calc?.luggage || 0) : 0;
+  const lugMarked = [...recordCns].filter(cn => isLuggageCn(cn)).length;
+  const luggage = Math.max(lugByCn, Math.min(gap, lugCap), Math.min(Math.max(fcLug, lugMarked), Math.max(lugCap, fcLug)));
   const partialEdi = !virtual && matched > 0 && (recordCns.size - luggage) > ptkCns.size;
   // V9.03: 선적 가상엠티 분리 — MCSN 629S 사건(앱 212 vs PCTC 287).
   //   BAPLIE의 엠티 예약자리는 실번호가 없어 수집기(DUME…)나 선사 플래너(CASP69: CASP0000001…)가 더미번호로 채운다.

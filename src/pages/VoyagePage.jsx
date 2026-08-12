@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
-  isoToLabel, isoCategory, formatWt, fmtPos
+  isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
 , formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
@@ -770,6 +770,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       mode,
       carrier: voyage?.info?.carrier || '',
       sealPolicy: shipPolicy,  // M3.5.5
+      lugCount: shipLuggageCount(voyageKey),  // 1.56-02: 수화물은 검증 대상이 아니다(검수사 확정)
     });
   }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
 
