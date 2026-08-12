@@ -774,13 +774,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       // 1.56-03: 이 항차의 수화물 **번호**까지 넘긴다 — 번호는 항차마다 바뀌지만, 양하에서
       //   「리스트에만 있고 EDI에 없는 컨(상시 대수 이내)」으로 판정된 그 번호가 선적 검사(엠티 실 등)에도 그 컨이다.
       lugCns: (() => {
+        // 1.56-04: CLL 본문이 선언한 수화물 번호(수집기 → forecast.luggageCns)가 1순위 —
+        //   상시 대수(SHIP_LUGGAGE) 미등록 선박(OBWH 등)도 이것으로 면제된다.
+        const out = new Set((voyage?.info?.forecast?.luggageCns || []).map(x => String(x || '').trim().toUpperCase()).filter(Boolean));
         const cap = shipLuggageCount(voyageKey);
-        if (!cap) return [];
-        const dis = voyage?.discharge;
-        if (!dis) return [];
-        const ediCns = new Set(Object.values(dis.ediContainers || {}).map(x => x?.cn).filter(Boolean));
-        const extras = Object.keys(dis.records || {}).filter(cn => !ediCns.has(cn));
-        return extras.length <= cap ? extras : [];
+        if (cap) {
+          const dis = voyage?.discharge;
+          if (dis) {
+            const ediCns = new Set(Object.values(dis.ediContainers || {}).map(x => x?.cn).filter(Boolean));
+            const extras = Object.keys(dis.records || {}).filter(cn => !ediCns.has(cn));
+            if (extras.length <= cap) extras.forEach(cn => out.add(cn));
+          }
+        }
+        return [...out];
       })(),
     });
   }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
