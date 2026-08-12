@@ -407,9 +407,10 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           1.55: **예외 경로다.** 접어 두고 문구는 SearchPanel 과 한 벌로 맞춘다
           (SearchPanel:1642·2032 「계획에 없는 칸에 실렸습니다 — 위치 지정」). */}
       {isLoading && (
-        <details className="mt-2 bg-slate-900 border border-slate-800 rounded">
-          <summary className="px-2 py-1.5 text-[11px] font-bold text-slate-500 cursor-pointer">
-            ▼ 예외 — 계획에 없는 칸에 실렸습니다
+        <details className="mt-2 bg-slate-800 border border-slate-500 rounded-lg">
+          {/* 1.56-05: 검수사 지적 — "작아서 잘 안 보이고 옅은 회색이라 누르라고 되어 있는 건지 구분이 안 감. 위치 수정 버튼임을 알려야 함." */}
+          <summary className="px-3 py-2.5 text-[13px] font-bold text-slate-100 cursor-pointer select-none hover:bg-slate-700 rounded-lg">
+            📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-slate-400 font-normal">▼ 눌러서 열기</span>
           </summary>
           <div className="px-2 pb-2">
             <button onClick={() => {

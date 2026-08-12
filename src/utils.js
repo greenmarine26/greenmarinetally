@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.56-04';   // CLL이 선언한 수화물 번호(forecast.luggageCns)도 진단 면제·카드 표기의 근거로 — 상시 대수 미등록 선박(OBWH) 대응
+export const APP_VERSION = 'TallyOne 1.56-05';   // 위치 지정 접힘을 버튼처럼 — 크고 밝게, 「위치 지정」이 먼저 보이게(검수사 지적: 옅은 회색이라 누르는 건지 구분 안 됨)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

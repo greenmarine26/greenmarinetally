@@ -1702,8 +1702,9 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                   ⇄ 실제로 맞바뀌어 실렸습니다 — 위치 지정
                 </button>
               ) : (
-                <details className="bg-slate-900 border border-slate-800 rounded-lg">
-                  <summary className="px-3 py-2 text-[11px] text-slate-400 font-bold cursor-pointer">▼ 예외 — 계획에 없는 칸에 실렸습니다</summary>
+                <details className="bg-slate-800 border border-slate-500 rounded-lg">
+                  {/* 1.56-05: 위치 지정임이 먼저 보이게 + 버튼처럼 (검수사 지적 2026-08-12 밤) */}
+                  <summary className="px-3 py-2.5 text-[13px] font-bold text-slate-100 cursor-pointer select-none hover:bg-slate-700 rounded-lg">📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-slate-400 font-normal">▼ 눌러서 열기</span></summary>
                   <div className="px-3 pb-3 pt-1 space-y-2">
                     <div className="text-[10px] text-slate-500 leading-snug">
                       번호가 다른 컨이 온 것이라면 이 길이 아닙니다 — 카드의 <b className="text-cyan-300">[컨테이너 번호 수정]</b> 을 쓰세요.
@@ -2094,8 +2095,9 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           ── TallyOne 1.55: 종전 문구 「실제 자리가 플랜과 다릅니다」는 **액츄얼에서 오도한다** —
           액츄얼에서 다른 것은 자리가 아니라 번호다(검수사 확정 2026-08-12). 예외 경로로 접어 둔다. */}
       {onManualMode && (
-        <details className="bg-slate-900 border border-slate-800 rounded">
-          <summary className="px-3 py-2 text-[11px] text-slate-400 font-bold cursor-pointer">▼ 예외 — 계획에 없는 칸에 실렸습니다</summary>
+        <details className="bg-slate-800 border border-slate-500 rounded-lg">
+          {/* 1.56-05: 위치 지정임이 먼저 보이게 + 버튼처럼 (검수사 지적 2026-08-12 밤) */}
+          <summary className="px-3 py-2.5 text-[13px] font-bold text-slate-100 cursor-pointer select-none hover:bg-slate-700 rounded-lg">📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-slate-400 font-normal">▼ 눌러서 열기</span></summary>
           <div className="px-3 pb-3 pt-1 space-y-2">
             <div className="text-[10px] text-slate-500 leading-snug">
               번호가 다른 컨이 온 것이라면 이 길이 아닙니다 — 위 카드의 <b className="text-cyan-300">[컨테이너 번호 수정]</b> 을 쓰세요.
