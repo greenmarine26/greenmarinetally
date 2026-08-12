@@ -771,6 +771,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       carrier: voyage?.info?.carrier || '',
       sealPolicy: shipPolicy,  // M3.5.5
       lugCount: shipLuggageCount(voyageKey),  // 1.56-02: 수화물은 검증 대상이 아니다(검수사 확정)
+      // 1.56-03: 이 항차의 수화물 **번호**까지 넘긴다 — 번호는 항차마다 바뀌지만, 양하에서
+      //   「리스트에만 있고 EDI에 없는 컨(상시 대수 이내)」으로 판정된 그 번호가 선적 검사(엠티 실 등)에도 그 컨이다.
+      lugCns: (() => {
+        const cap = shipLuggageCount(voyageKey);
+        if (!cap) return [];
+        const dis = voyage?.discharge;
+        if (!dis) return [];
+        const ediCns = new Set(Object.values(dis.ediContainers || {}).map(x => x?.cn).filter(Boolean));
+        const extras = Object.keys(dis.records || {}).filter(cn => !ediCns.has(cn));
+        return extras.length <= cap ? extras : [];
+      })(),
     });
   }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
 

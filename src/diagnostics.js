@@ -45,8 +45,12 @@ function extractDg(containers) {
 //   carrier:       선사 코드 (TDT에서)
 //   sealPolicy:    선박 엠티 실 정책 (matchShipPolicy 결과) — M3.5.5
 // 결과: 경고 배열
-export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0 }) {
+export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, carrier, sealPolicy, lugCount = 0, lugCns = [] }) {
   const alerts = [];
+  // 1.56-03: 수화물 판정 한 벌 — 알려진 번호(LUGGAGE_CNS) + 이 항차에서 판정된 번호(lugCns, 양하 리스트-EDI 차이).
+  //   수화물은 어느 검사에서도 검증 대상이 아니다(검수사 확정).
+  const _lugSet = new Set((lugCns || []).map(c => String(c || '').trim().toUpperCase()));
+  const _isLug = (cn) => isLuggageCn(cn) || _lugSet.has(String(cn || '').trim().toUpperCase());
   const ediArr = Object.values(ediContainers || {});
   const ediPtk = filterPyeongtaek(ediContainers || {}, mode);
   const ediCount = ediPtk.length;
@@ -251,21 +255,21 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
       //    그러므로 선적에도 같이 별도 1개를 표기하고 저 메시지는 없어야 할것입니다.")
       //   EDI로 오지 않는 것이 정상 — 경고에서 빼고 info 로 따로 센다. 번호는 항차마다 바뀌므로
       //   ① 알려진 번호(isLuggageCn) ② 선박 상시 대수(lugCount) 이내의 잔여 — 두 겹으로 잡는다.
-      let lugCns = extraCns.filter(cn => isLuggageCn(cn));
-      extraCns = extraCns.filter(cn => !isLuggageCn(cn));
-      const lugRemain = Math.max(0, (lugCount || 0) - lugCns.length);
+      let lugFound = extraCns.filter(cn => _isLug(cn));
+      extraCns = extraCns.filter(cn => !_isLug(cn));
+      const lugRemain = Math.max(0, (lugCount || 0) - lugFound.length);
       if (lugRemain > 0 && extraCns.length > 0 && extraCns.length <= lugRemain) {
-        lugCns = [...lugCns, ...extraCns];
+        lugFound = [...lugFound, ...extraCns];
         extraCns = [];
       }
-      if (lugCns.length > 0) {
+      if (lugFound.length > 0) {
         alerts.push({
           level: 'info',
           code: 'luggage',
-          msg: `수화물 컨 ${lugCns.length}대 별도 — EDI 미포함이 정상`,
+          msg: `수화물 컨 ${lugFound.length}대 별도 — EDI 미포함이 정상`,
           voice: '',
-          count: lugCns.length,
-          details: { lugCns },
+          count: lugFound.length,
+          details: { lugCns: lugFound },
         });
       }
       if (extraCns.length > 0) {
@@ -389,6 +393,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     const targetContainers = ediPtk.filter(c => {
       const fe = String(c.fe || '').toUpperCase();
       if (fe !== 'E') return false;
+      // 1.56-03: 수화물은 실 확인 대상이 아니다 — RZOR SPSU2019220 「114대 중 1대 미확인」 실사고(검수사 확정).
+      if (_isLug(c.cn)) return false;
       if (sealPolicy.target === 'all_empty') return true;
       if (sealPolicy.target === 'empty_with_pod') {
         const pod = String(c.pod || '').toUpperCase();
