@@ -77,7 +77,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       const lbl = isoToLabel(c.iso);
       let knownLbl = false;
       if (lbl === '40HC') { k.hc++; knownLbl = true; }
-      else if (lbl === '20DC' || lbl === '20GP' || lbl === '20VH') { k.dc20++; knownLbl = true; }
+      else if (lbl === '20DC' || lbl === '20GP' || lbl === '20VH' || lbl === '20HC') { k.dc20++; knownLbl = true; }   // 1.55-01: 20HC(26xx)도 20피트 칸에 — 별도 배지 없음, 종전 집계 유지
       else if (lbl === '40DC' || lbl === '40GP' || lbl === '40VH') { k.dc40++; knownLbl = true; }
       if (lbl === '20RF') { k.rf20++; knownLbl = true; }
       else if (lbl === '40RF') { k.rf40++; knownLbl = true; }
@@ -139,16 +139,16 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'feUnknown' && (c.fe === 'F' || c.fe === 'E')) return false;
       if (f === 'isoOther') {
         const lbl = isoToLabel(c.iso);
-        const known = ['20DC','20GP','40DC','40GP','40HC','45HC','20RF','40RF','45RF','20FR','40FR','45FR','20OT','40OT','45OT','20TK','40TK'];
+        const known = ['20DC','20GP','20HC','40DC','40GP','40HC','45HC','20RF','40RF','45RF','20FR','40FR','45FR','20OT','40OT','45OT','20TK','40TK'];   // 1.55-01: 20HC 추가
         if (known.includes(lbl)) return false;
       }
       if (f === 'feUnknown' && (c.fe === 'F' || c.fe === 'E')) return false;
       if (f === 'isoOther') {
         const lbl = isoToLabel(c.iso);
-        const known = ['40HC', '20DC', '20GP', '40DC', '40GP', '20RF', '40RF', '45RF', '20FR', '40FR', '45FR', '20OT', '40OT', '45OT', '20TK', '40TK', '45HC'];
+        const known = ['40HC', '20DC', '20GP', '20HC', '40DC', '40GP', '20RF', '40RF', '45RF', '20FR', '40FR', '45FR', '20OT', '40OT', '45OT', '20TK', '40TK', '45HC'];   // 1.55-01: 20HC 추가
         if (known.includes(lbl)) return false;
       }
-      if (f === '20' && !['20DC','20GP'].includes(lbl)) return false;
+      if (f === '20' && !['20DC','20GP','20HC'].includes(lbl)) return false;   // 1.55-01
       if (f === '40' && !['40DC','40GP'].includes(lbl)) return false;
       if (f === 'hc' && lbl !== '40HC') return false;
       if (f === 'rf20' && lbl !== '20RF') return false;

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.55';   // 칸은 없어지지 않는다 — 카고플랜은 고정, 바뀌는 건 그 칸에 걸린 이름뿐
+export const APP_VERSION = 'TallyOne 1.55-01';   // 같은 규격은 같은 라벨로 — 44Gx·26xx 하이큐브 정규화, TALLYBOX 저장·항차 등록 유령 참조 2건 수리
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -529,10 +529,12 @@ export const isoToLabel = (iso) => {
     return '40DC';
   }
   if (/^25[0-9][0-9]$/.test(p)) return '20DC';   // 25xx (20HC) = 20DC fallback
+  if (/^26[0-9][0-9]$/.test(p)) return '20HC';   // 1.55-01: 26xx = 20ft 하이큐브 숫자표기(2697E ZXJU0130463 실측 — tallyReport 하이큐브 계상과 동일 판정). 종전엔 fallback '20DC'로 떨어져 리스트 '20HC'와 헛불일치.
   if (/^22[0-9][0-9]$/.test(p)) {
     if (/^228[3-4]$/.test(p)) return '20FR';   // 2283/2284 = FR (먼저 좁은 범위)
     if (/^228[25]$/.test(p)) return '20RF';    // 2282/2285 = RF
     if (/^223/.test(p)) return '20RF';         // V8.98-13: 2230류 = 20ft 리퍼(ISO6346 냉동군)
+    if (/^227/.test(p)) return '20TK';         // 1.55-01: 227x = 20ft 탱크 숫자표기(구 ISO 타입 7=탱크 — 파서 t==='7' 판정과 동일). ATPR 2637W 실측 2270/22TN 헛불일치 2건.
     return '20DC';
   }
 
@@ -552,7 +554,8 @@ export const isoToLabel = (iso) => {
   if (/^43R/.test(p)) return '40RF';   // V9.28-09: 연운항 43류 리퍼 (TNJP 43RF 24대가 40HC로 뭉개지던 버그)
   if (/^43/.test(p)) return '40HC';
   if (/^40[DG]/.test(p)) return '40DC';
-  if (/^4[24][G][P0-9]/.test(p)) return '40DC';
+  if (/^44G/.test(p)) return '40HC';   // 1.55-01: 44Gx = 40ft HC급 높이(세관맵 '44GP':'45G1' 과 동일 판정). 종전 42와 한 묶음 40DC라 EDI 45G1과 헛불일치.
+  if (/^42[G][P0-9]/.test(p)) return '40DC';
 
   if (/^20R/.test(p)) return '20RF';
   if (/^2[02][R]/.test(p)) return '20RF';

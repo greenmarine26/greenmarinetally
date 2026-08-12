@@ -2451,7 +2451,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           _uploadKind: (statDischargePtk > 0 && statLoadingPtk > 0) ? 'both'
                      : statDischargePtk > 0 ? 'discharge'
                      : statLoadingPtk > 0 ? 'loading'
-                     : (ediKind || mode),
+                     : mode,   // 1.55-01: ediKind는 업로드 루프 블록 지역변수 — 여기서 ReferenceError(평택분 0 업로드에서만 발현). 동률 fallback과 같은 mode 사용
           analyzed_by: inspector || '',   // M6.15: EDI 업로드한 검수원
         });
         // M7.15: stats는 voyages에서 합산만 (fbAddShipVoyage가 기록 전담)

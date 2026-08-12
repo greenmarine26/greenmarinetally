@@ -720,7 +720,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       )}
       <Fold id="progress" title="📋 진행 상황 · 완료 저장" open={!!openSecs.progress} onToggle={() => toggleSec('progress')}>
         {/* TallyOne 1.0(L3): 도선 예보 전달 — 진행 상황 줄에 일정 정보(완료 저장 타이밍 판단 근거) */}
-        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} pilotForecast={pfMap} portMisData={portMisData} />
+        <LiveProgressSection voyages={voyages} onOpenVoyage={onOpenVoyage} chief={chief} inspector={inspector} pilotForecast={pfMap} portMisData={portMisData} resolveBox={resolveBox} />
       </Fold>
       <Fold id="archive" title="📚 선박별 자료 보관소" open={!!openSecs.archive} onToggle={() => toggleSec('archive')}>
         <ShipArchiveSection shipLib={shipLib} />
@@ -1312,7 +1312,7 @@ function FeedbackRow({ feedback: f }) {
 //   수석검수사가 최종 확인 후 [완료 저장] → archive 백업 + 보관소 기록 + voyages 삭제.
 //   양하/선적 수는 평택분(tallyVoyagesByShip이 _ptkCountOfSection로 집계).
 // ─────────────────────────────────────────────────────────────
-function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotForecast = {}, portMisData = null }) {   // 1.40-01: 🚢신고도착
+function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotForecast = {}, portMisData = null, resolveBox }) {   // 1.55-01: resolveBox 미전달 ReferenceError — TALLYBOX 저장이 항상 다운로드로 떨어지던 원인   // 1.40-01: 🚢신고도착
   const [busyKey, setBusyKey] = useState(null);
   const [confirmKey, setConfirmKey] = useState(null);
   // TallyOne 1.0(L5): 결과 통지 alert() → 섹션 안 인라인 알림(확인창 성격 window.confirm은 유지)
