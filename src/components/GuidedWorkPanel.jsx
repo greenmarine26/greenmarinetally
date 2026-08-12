@@ -237,6 +237,59 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     return Object.values(map).sort((a, b) => a.center - b.center);
   }, [remaining, bayPairs]);
 
+  // ── TallyOne 1.55: **베이 묶음을 바꿀 때 갱(호기)을 되묻는다.** (검수사 확정 2026-08-12)
+  //   원문 — *"카톡 내용을 보면 장비를 바꿔서 해야 하는데 4호기로 다함.
+  //           이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
+  //   현장에서는 두 갱이 **동시에** 다른 베이를 잡는다(2호기 4·8·12번 / 4호기 16·20·24번).
+  //   그런데 앱은 베이 묶음을 바꿔도 갱을 안 물어, 4호기 상태 그대로 2호기 담당 베이를 받아 적었다.
+  //   근거는 둘뿐이다 — ① 작업 보고(`voyages/{key}/reports` 의 `equip`+`bays`)
+  //                    ② 완료 기록(`completed/{cn}.equip`, 1.55 부터 쌓인다).
+  //   근거가 없으면(그 베이 첫 작업) **묻지 않는다.** 추측으로 묻기 시작하면 곧 아무도 안 읽는다.
+  const priorEquipOf = (center) => {
+    if (center == null) return null;
+    let best = null;                       // { equip, at }
+    const take = (eq, at) => {
+      const e = String(eq || '').trim();
+      if (!e) return;
+      const t = Number(at) || 0;
+      if (!best || t > best.at) best = { equip: e, at: t };
+    };
+    const reps = voyage?.reports;
+    if (reps) {
+      for (const r of Object.values(reps)) {
+        if (!r || !r.equip) continue;
+        if (r.mode && r.mode !== mode) continue;
+        const bs = Array.isArray(r.bays) ? r.bays : [];
+        if (!bs.some(b => groupCenterOf(b) === center)) continue;   // 베이를 모르는 보고는 근거가 아니다
+        take(r.equip, r.ts);
+      }
+    }
+    for (const c of allContainers) {
+      if (!c || c._mode !== mode || !c._comp || !c._comp.equip) continue;
+      if (groupCenterOf(c.bay) !== center) continue;
+      take(c._comp.equip, c._comp.at);
+    }
+    return best;
+  };
+
+  // 베이 묶음 선택 — 다른 갱이 이미 작업한 베이면 앱 안 모달로 되묻는다.
+  //   ⛔ window.confirm 은 쓰지 않는다(1.54 에서 검수 흐름의 네이티브 창을 전부 걷어냈다 — 뜨는 순간 앱이 굳는다).
+  const pickGroup = async (g) => {
+    if (!g) return;
+    const prior = priorEquipOf(g.center);
+    if (prior && equip && prior.equip !== equip) {
+      const bayLbl = `B${[...g.bays].sort((a, b) => a - b).join('·')}`;
+      const ok = await ask({
+        title: '이 베이는 다른 갱이 작업했습니다',
+        message: `${bayLbl}는 ${prior.equip}가 작업했습니다.\n지금 갱은 ${equip}입니다 — 바꿀까요?\n(그대로 두면 이 베이 작업이 ${equip} 실적으로 올라갑니다.)`,
+        confirmLabel: `${prior.equip}로 바꾼다`,
+        cancelLabel: `${equip} 그대로`,
+      });
+      if (ok) pickEquip(prior.equip);   // 헤더·작업 보고와 한 벌(localStorage + equipChanged)로 같이 바뀐다
+    }
+    setSelectedGroup(g.center); setConsecFix(0); setDeckPromptDone(false); setFixOpen(false);
+  };
+
   // 선택 그룹의 예측 큐 — V7.99-8 (메모6): 선택된 단(selectedTier)만 큐에 (홀드 작업=홀드만/데크 작업=데크만)
   const queue = useMemo(() => {
     if (selectedGroup == null) return [];
@@ -361,8 +414,11 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     setBusy(true);
     try {
       // V8.71: 트윈 완료 2건을 멀티패스 한 번에 — 한 대만 먼저 선적되는 틈 제거.
-      if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector);
-      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector);
+      // TallyOne 1.55: **완료에 갱(호기)을 남긴다.** 검수사 원문 —
+      //   *"장비를 바꿔서 해야 하는데 4호기로 다함. 이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
+      //   이 화면이 갱을 아는 유일한 곳이다(헤더와 localStorage 한 벌 공유). 안 넘기면 기록에 갱이 없다.
+      if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector, equip);
+      else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector, 'normal', '', equip);
       setConsecFix(0);
       setFixOpen(false); setFixQuery('');
     } finally { setBusy(false); }
@@ -685,7 +741,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       const r = await reassignAsk(actual.cn, slot.bay, slot.row, slot.tier);
       if (!r) return false;
     }
-    await fbCompleteContainer(voyageKey, mode, actual.cn, inspector);
+    await fbCompleteContainer(voyageKey, mode, actual.cn, inspector, 'normal', '', equip);   // 1.55: 갱(호기)
     return true;
   };
 
@@ -815,7 +871,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         if (fixPickBack && !(await reassignAsk(fixPickBack.cn, card.twin.bay, card.twin.row, card.twin.tier))) { setBusy(false); return; }
       }
       await fbCompleteContainersAtomic(voyageKey, mode,
-        [fixPickFront ? fixPickFront.cn : card.main.cn, fixPickBack ? fixPickBack.cn : card.twin.cn], inspector);
+        [fixPickFront ? fixPickFront.cn : card.main.cn, fixPickBack ? fixPickBack.cn : card.twin.cn], inspector, equip);   // 1.55: 갱(호기)
     } catch (e) {
       alert(`수정 적용 중 오류 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n(${e?.message || e})`);
       setBusy(false);
@@ -938,7 +994,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
           )}
           <div className="grid grid-cols-3 gap-2">
             {groups.map(g => (
-              <button key={g.center} onClick={() => { setSelectedGroup(g.center); setConsecFix(0); setDeckPromptDone(false); setFixOpen(false); }}
+              <button key={g.center} onClick={() => { pickGroup(g); }}
                 className="py-3 rounded-lg bg-slate-800 hover:bg-violet-800 border border-slate-700 text-slate-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
                 <div className="text-[10px] text-slate-400">남은 {g.count}대</div>

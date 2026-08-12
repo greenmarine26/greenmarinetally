@@ -212,7 +212,9 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
         return;
       }
-      await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
+      // TallyOne 1.55: 마지막 인자는 **갱(호기)** — 인건비 근거다(검수사 확정 2026-08-12).
+      //   갱은 prop 이 아니라 localStorage 한 벌(`getEquipNumber`)에서 읽는다(헤더와 같은 값).
+      await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
     }
   };
@@ -1273,7 +1275,8 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
         bayPairs={posEditBayPairs}
         onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
         onCompleteBoth={async (cns) => {
-          for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector);
+          // 1.55: 트윈 둘 다 같은 갱(호기)으로 남긴다 — 한 번에 든 것이니 같은 갱이다.
+          for (const cn of cns) await fbCompleteContainer(voyageKey, mode, cn, inspector, 'normal', '', getEquipNumber());
           // V8.70: 자동 선적확인 완료 음성 — 무음 오해 방지.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
         }}

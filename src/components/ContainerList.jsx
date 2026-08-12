@@ -7,7 +7,7 @@
 import React, { useState, useMemo } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
-import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot } from '../utils.js';
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
@@ -364,7 +364,11 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
         alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
         return;
       }
-      await fbCompleteContainer(voyageKey, mode, c.cn, inspector);
+      // TallyOne 1.55: 마지막 인자는 **갱(호기)**. 검수사 원문 — *"장비를 바꿔서 해야 하는데
+      //   4호기로 다함. 이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
+      //   갱은 prop 이 아니라 localStorage 한 벌(`getEquipNumber`)에서 읽는다 —
+      //   헤더·가이드 작업·자연어 탭이 이미 쓰는 그 값이다. 누를 때 읽으므로 항상 최신이다.
+      await fbCompleteContainer(voyageKey, mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
     }
   };

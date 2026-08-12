@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert } from '../nlSearch.js';   // 1.23: answerAboutAlert
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -21,6 +21,51 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
+
+// ── TallyOne 1.55: 지금 어느 갱(호기)으로 작업 중인가 ───────────────────
+//   검수사 원문 2026-08-12 — *"장비를 바꿔서 해야 하는데 4호기로 다함.
+//   이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
+//   갱은 헤더(Header)·자동 가이드(GuidedWorkPanel)가 이미 localStorage 한 벌로 쓰고 있다.
+//   같은 벌을 그대로 본다 — prop 으로 또 내리면 두 벌이 되어 서로 어긋난다.
+function useEquipNo() {
+  const [equip, setEquip] = useState(() => getEquipNumber());
+  useEffect(() => {
+    const h = (e) => setEquip((e && e.detail) || getEquipNumber());
+    window.addEventListener('equipChanged', h);
+    return () => window.removeEventListener('equipChanged', h);
+  }, []);
+  return equip;
+}
+
+// ── TallyOne 1.55: 조회창은 **전체 컨번호**도 받는다 ────────────────────
+//   검수사 실측 2026-08-12 — 싱글 조회창에 `DWSU3000276` 을 넣으면 아무것도 안 나왔다.
+//   `0276` 은 나왔다. 트윈 입력칸은 전체 번호를 받는데 싱글만 규칙이 달랐다.
+//   원인 둘 — ⓐ 글자가 섞였다는 이유로 '문장'으로 갈려 전송키를 눌러야만 답했고,
+//   ⓑ 답도 끝 4자리로만 걸러 **끝 4자리가 겹치는 배에서는 두 대가 함께** 떴다.
+//   끝 4자리 중복이 있는 배에서 유일하게 안전한 입력이 전체 번호다.
+//   ⚠ 조회창은 숫자 패드다(inputUtils 확정) — 영문 4자리를 못 치는 화면이 있으므로
+//     숫자부만(`3000276`) 쳐도 같은 한 대로 좁혀 준다.
+const CN_FULL_RE = /^[A-Z]{4}\d{6,7}$/;
+function fullCnOf(v) {
+  const s = String(v || '').replace(/[\s-]/g, '').toUpperCase();
+  return CN_FULL_RE.test(s) ? s : '';
+}
+// 끝 4자리로 이미 좁혀진 목록을 **전체 번호(또는 숫자부)** 로 한 대까지 좁힌다.
+//   못 찾으면 원래 목록을 그대로 돌려준다 — 오타로 "없습니다"가 되지 않게(회귀 방지).
+function narrowByFullCn(list, q) {
+  const s = String(q || '').replace(/[\s-]/g, '').toUpperCase();
+  const full = fullCnOf(s);
+  if (full) {
+    const hit = list.filter(c => String(c.cn || '').toUpperCase() === full);
+    return hit.length ? hit : list;
+  }
+  const dg = s.replace(/\D/g, '');
+  if (dg.length >= 5) {
+    const hit = list.filter(c => String(c.cn || '').replace(/\D/g, '').endsWith(dg));
+    return hit.length ? hit : list;
+  }
+  return list;
+}
 
 export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
@@ -37,6 +82,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   // V8.82: 아래 탭을 누르면 상단 모드도 따라가게 상위로 알림.
   const pickWorkFilter = (m) => { setWorkFilter(m); if (m !== 'completed') onWorkFilterChange?.(m); };
   const [extraModalOpen, setExtraModalOpen] = useState(false);   // V8.04: 초과 컨 입력 모달
+  const equipNo = useEquipNo();   // TallyOne 1.55: 지금 갱(호기) — 완료 기록·수석 전달에 같이 실린다
 
   const allContainers = useMemo(() => {
     const arr = [];
@@ -183,8 +229,9 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     const bays = g ? [...g.bays].sort((a, b) => a - b) : [manualBay];
     const bayLabel = g?.noBay ? '미지정' : (bays.length > 1 ? `${bays[0]}-${bays[bays.length - 1]}` : String(bays[0]).padStart(2, '0'));
     const remain = g?.noBay ? (g.count || 0) : (manualTier === 'deck' ? (g?.deck || 0) : (g?.hold || 0));
-    fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
-  }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups]);
+    // TallyOne 1.55: 갱(호기)을 같이 보낸다 — 종전엔 빈 문자열이라 수석 화면에서 어느 갱인지 알 수 없었다.
+    fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: equipNo || '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
+  }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups, equipNo]);
   // 1.26: shipLib(본선 구조·실적)을 ctx 로 내려보낸다 — "몇 대까지 싣나" 답변 근거.
   const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib };
 
@@ -404,6 +451,47 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           </div>
         );
       })()}
+      {/* ── TallyOne 1.55: **한 베이·단을 끝내면 다음으로 안내한다.** ──
+          검수사 지적 2026-08-12(DXQD 2631W 335대 실작업) — *"한 홀드를 끝냈음에도 조회창이 그대로임."*
+          끝났다고 말해 주지 않으면 검수원은 **뭘 빠뜨렸나 다시 센다.** 끝났다고 말하고 갈 곳을 준다.
+          ⚠ 잔여가 진짜로 0이 되는 것은 칸 기준 계산(위 slotsByBay·manualGroups)이 맞아야 가능하다 —
+            같은 판에서 함께 고쳤다. */}
+      {workFilter !== 'completed' && !noWorkLeft && manualBay != null && manualTier && (() => {
+        const g = manualGroups.find(x => x.center === manualBay);
+        const noBay = !!g?.noBay;
+        const left = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? g.hold : g.deck) : 0);
+        if (left > 0) return null;
+        // 같은 베이의 다른 단이 남았으면 그쪽을 먼저 권한다(스프레더를 덜 바꾼다).
+        const otherTier = manualTier === 'hold' ? 'deck' : 'hold';
+        const otherLeft = (!noBay && g) ? (otherTier === 'hold' ? g.hold : g.deck) : 0;
+        const nextG = manualGroups.find(x => x.center !== manualBay && !x.noBay && x.count > 0)
+                   || manualGroups.find(x => x.center !== manualBay && x.count > 0);
+        const lbl = (x) => (x.noBay ? '자리 미지정' : `B${[...x.bays].sort((a, b) => a - b).join('·')}`);
+        const hereLbl = g ? lbl(g) : `B${manualBay}`;
+        return (
+          <div className="bg-emerald-950/50 border-2 border-emerald-600 rounded-lg p-3 space-y-2">
+            <div className="text-sm font-black text-emerald-200">
+              ✅ {hereLbl}{noBay ? '' : ` ${manualTier === 'hold' ? '홀드' : '데크'}`} 끝났습니다 — 남은 작업 0대
+            </div>
+            {otherLeft > 0 && (
+              <button onClick={() => setManualTier(otherTier)}
+                className="w-full py-2.5 rounded-lg font-bold text-sm bg-sky-700 hover:bg-sky-600 text-sky-50">
+                같은 베이 {otherTier === 'hold' ? '홀드' : '데크'} {otherLeft}대 남았습니다 — 이어서 →
+              </button>
+            )}
+            {nextG && (
+              <button onClick={() => { setManualBay(nextG.center); setManualTier(nextG.noBay ? 'none' : null); }}
+                className="w-full py-3 rounded-lg font-black text-base bg-emerald-600 hover:bg-emerald-500 text-white">
+                다음 {lbl(nextG)} 로 → <span className="text-[11px] font-bold opacity-90">(남은 {nextG.count}대)</span>
+              </button>
+            )}
+            <button onClick={() => { setManualBay(null); setManualTier(null); }}
+              className="w-full py-2 rounded-lg text-[11px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
+              베이 목록으로
+            </button>
+          </div>
+        );
+      })()}
       {/* V9.28: 미배정 = 빈자리가 있다는 뜻 — 검수원이 베이 탭 빈 칸을 골라 직접 배치한다 (사용자 확정) */}
       {/* ── TallyOne 1.54: **「자리 미지정」과 「창고」는 다른 상태다.** (검수사 확정 2026-08-12) ──
           원문 — *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."*
@@ -538,7 +626,9 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   //   종전엔 글자마다 즉답을 만들어 "…컨테이너가 없습니다"가 타이핑 중에 튀어나왔다.
   //   ⚠ 숫자(끝 4자리)와 음성은 종전대로 즉답 — 현장 조회 속도를 늦추지 않는다.
   const [draft, setDraft] = useState('');
-  const isSentence = (v) => /[가-힣A-Za-z]/.test(String(v || '')) && !/^[\d\s-]+$/.test(String(v || ''));
+  // TallyOne 1.55: 전체 컨번호(DWSU3000276)는 **문장이 아니다.**
+  //   종전엔 글자가 섞였다는 이유로 문장으로 갈려, 다 치고 전송키를 누르기 전까지 아무것도 안 나왔다.
+  const isSentence = (v) => !fullCnOf(v) && /[가-힣A-Za-z]/.test(String(v || '')) && !/^[\d\s-]+$/.test(String(v || ''));
   const submitDraft = () => { const v = draft.trim(); if (!v) return; setQuery(v); logQuerySettled(v); };
   const [weatherText, setWeatherText] = useState(null);   // V7.92: 날씨 질문 비동기 답변
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
@@ -574,6 +664,9 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     // V7.53: 전체 자료에서 검색하되 현재 작업 모드(미완료) 우선 정렬.
     //   (구) 탭 필터 데이터만 검색 → 완료·반대 모드 컨테이너는 "없습니다" — 있는 자료를 못 알려주던 원인.
     let r = applyNLFilter(allContainers, parsed);
+    // TallyOne 1.55: 전체 컨번호(또는 숫자부)를 넣었으면 그 한 대로 좁힌다.
+    //   applyNLFilter 는 끝 4자리로만 거른다 — 끝 4자리가 겹치는 배에서는 두 대가 함께 떴다.
+    r = narrowByFullCn(r, query);
     // V7.92-02: 집계·조건 검색은 평택분만 (7.1) — 양하 탭 숫자와 챗봇 답이 달랐던 원인
     //   (allContainers는 EDI 전체 = 통과화물 포함). 단, 컨번호(digits) 단건 조회는 전체 유지
     //   — 통과화물을 스캔했을 때 "없습니다"가 아니라 찾아서 알려줘야 함 (V7.53 회귀 방지).
@@ -888,7 +981,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[10px] text-slate-500 font-bold">
-            🤖 검색/AI — 4자리 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
+            🤖 검색/AI — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
           </div>
           <button onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-[10px] font-bold border border-amber-700/40">
@@ -907,7 +1000,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               else if (query) setQuery('');
             }}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitDraft(); } }}
-            placeholder="🎤 / 4777 / 40피트 4777 / 자유 질문"
+            placeholder="🎤 / 4777 / DWSU3000276 / 40피트 4777 / 자유 질문"
             autoComplete="off"
             inputMode={manualCtx && manualCtx.selectedGroup != null && manualCtx.selectedTier ? 'numeric' : 'text'}
             className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
@@ -1245,17 +1338,51 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const [pickBay, setPickBay] = useState(null);          // V8.83: 자리 선택 그리드 — 베이 먼저
   const [manualOpen, setManualOpen] = useState(false);   // V8.83: 직접 입력 접이식
   const pool = useMemo(() => allContainers.filter(c => c._mode === 'loading'), [allContainers]);
+  const equipNo = useEquipNo();   // TallyOne 1.55: 완료 기록에 갱(호기)을 남긴다
   // V8.83: 자리 선택 그리드 — 20ft 계획 자리(완료=회색 선택불가). 위치수정 창과 같은 방식(사용자 확정).
   const is20 = (c) => String(c.tp || '').startsWith('20') || String(c.iso || '')[0] === '2';
-  const slotsByBay = useMemo(() => {
-    const m = {};
-    pool.filter(c => c.bay && c.row && c.tier && is20(c)).forEach(c => {
-      const b = String(parseInt(c.bay, 10));
-      (m[b] = m[b] || []).push({ bay: b, row: c.row, tier: c.tier, cn: c.cn, done: !!c._comp });
-    });
-    Object.values(m).forEach(a => a.sort((x, y) => (parseInt(x.tier,10)-parseInt(y.tier,10)) || (parseInt(x.row,10)-parseInt(y.row,10))));
-    return m;
+  // ── TallyOne 1.55: **칸은 컨이 아니다.** ──────────────────────────────
+  //   검수사 확정 2026-08-12 — *"컨테이너가 빠져야 하는데 자리가 빠진 이유
+  //   (손님이 나가야 하는데 방이 나가버린 상황). 카고플랜은 변함이 없어야 한다."*
+  //   *"EDI가 실어라 한대로 실었습니다. 이게 액츄얼 작업입니다."* — 자리는 계획대로 전부 찬다.
+  //   바뀌는 것은 그 칸에 걸린 번호뿐이다.
+  //   종전 이 자리 그리드는 pool 의 **컨을 하나씩 자리 항목으로 push** 했다. 중복 제거가 없어
+  //   ① 같은 칸이 두 번(`√01-02` 와 `01-02` 나란히) ② 다 찬 베이에 「남은 N자리」
+  //   ③ 계획 주인이 옮겨 가면 **칸이 소멸** ④ remain===0 으로 **베이 잠김**
+  //     (실측 DXQD 2631W: `B11 남은 0자리` 인데 실제로는 4칸이 비어 있었다)
+  //   ⑤ 베이를 끝내도 화면이 안 넘어감 — 다섯 증상이 이 한 줄에서 나왔다.
+  //   → 칸 목록은 buildSlotUniverse, 점유는 buildOccupancy(utils.js 한 벌)로 낸다.
+  //   실측 검증 완료: DXQD 2631W 15개 베이 720건 대조 — 선사 원본 칸과 불일치 0.
+  const slotUniverse = useMemo(() => {
+    // 이 패널은 상위(allContainers)에서 실체 자리를 c.bay 로 승격시켜 놨다 — 계획 좌표는 _bay_planned 에 있다.
+    //   계획 좌표를 _edi_* 로 되살려 같이 넘긴다. 그래야 컨이 옮겨 가도 **계획 칸이 남는다.**
+    //   승격 전 원본(실제 실린 자리)도 함께 넘겨 계획에 없던 칸도 목록에서 빠지지 않게 한다.
+    const planView = pool.map(c => (c._bay_planned
+      ? { ...c, _edi_bay: c._bay_planned, _edi_row: c._row_planned, _edi_tier: c._tier_planned }
+      : c));
+    return buildSlotUniverse([...pool, ...planView], is20);
   }, [pool]);
+  // 점유 — 그 칸에 지금 누가 있는가. 완료된 쪽이 이긴다(실물이 이름표를 이긴다).
+  const slotOcc = useMemo(() => buildOccupancy(pool, c => !!c._comp), [pool]);
+  // 칸의 상태는 **세 갈래**다.
+  //   done  — 그 칸에 완료된 컨이 실제로 있다(선택 불가, ✓)
+  //   named — 완료는 아니고 이름표만 걸려 있다(계획 주인이 아직 창고에 있다). **선택 가능**
+  //   empty — 진짜 빈 칸. 선택 가능
+  const slotsByBay = useMemo(() => {
+    const out = {};
+    Object.keys(slotUniverse).forEach(b => {
+      out[b] = slotUniverse[b].map(sl => {
+        const occ = slotOcc.get(`${b}/${sl.row}/${sl.tier}`);
+        return {
+          bay: b, row: sl.row, tier: sl.tier,
+          cn: occ ? occ.cn : null,
+          done: !!(occ && occ.done),
+          named: !!(occ && !occ.done),
+        };
+      });
+    });
+    return out;
+  }, [slotUniverse, slotOcc]);
   const findMatches = (q, excludeCn) => {
     if (!q || q.length < 2) return [];
     const Q = q.toUpperCase();
@@ -1288,7 +1415,10 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   const rowP = row ? String(row).padStart(2, '0') : '';
   const tierP = tier ? String(tier).padStart(2, '0') : '';
   const backPos = pairBay && rowP && tierP ? { bay: pairBay, row: rowP, tier: tierP } : null;
-  const pairSlotPlanned = backPos ? pool.some(x => x.bay && String(parseInt(x.bay, 10)) === backPos.bay && x.row === backPos.row && x.tier === backPos.tier) : false;
+  // TallyOne 1.55: 짝꿍 자리가 **플랜에 있는가**는 컨이 아니라 **칸**에 물어야 한다.
+  //   종전엔 "그 좌표에 지금 컨이 있나"로 봐서, 짝 자리 주인이 다른 데로 옮겨 가면
+  //   멀쩡한 플랜 자리에 「⚠ 플랜에 없는 자리(싱글 자리)」 경고가 붙었다(칸 소멸 증상 ③).
+  const pairSlotPlanned = backPos ? (slotUniverse[backPos.bay] || []).some(sl => sl.row === backPos.row && sl.tier === backPos.tier) : false;
 
   const resetAll = () => { setQ1(''); setQ2(''); setC1(null); setC2(null); setStep('pick'); setBay(''); setRow(''); setTier(''); setPickBay(null); setManualOpen(false); };
 
@@ -1324,7 +1454,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       `${done.map(c => c.cn.slice(-4)).join(', ')}는 이미 선적확인 기록이 있습니다.\n계속할까요?`))) return;
     setBusy(true);
     try {
-      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
+      // TallyOne 1.55: 마지막 인자 = 갱(호기). 갱이 안 남으면 갱별 대수를 되살릴 수 없다(인건비가 걸린 값).
+      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, equipNo);
       speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
       resetAll();
     } catch (e) {
@@ -1342,6 +1473,11 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     try {
       await fbUnassignContainer(voyageKey, 'loading', c1.cn, inspector);
       await fbUnassignContainer(voyageKey, 'loading', c2.cn, inspector);
+      // TallyOne 1.55: **지금 작업 중인 칸이 기본값이어야 한다.**
+      //   종전엔 자리 그리드가 빈 상태로 열려, 방금 화면에 떠 있던 그 칸을 검수원이 다시 골라야 했다
+      //   (베이 한 번 + 칸 한 번 = 쌍마다 두 번의 헛클릭). 앞 컨의 계획 칸을 미리 집어 준다.
+      const b0 = c1.bay ? String(parseInt(c1.bay, 10)) : '';
+      if (b0 && c1.row && c1.tier) { setPickBay(b0); setBay(b0); setRow(c1.row); setTier(c1.tier); }
       setStep('pos');
     } catch (e) { alert(`미배정 처리 실패: ${e?.message || e}`); }
     finally { setBusy(false); }
@@ -1383,7 +1519,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       if (!r1) return;
       const r2 = await _seqAsk(c2.cn, backPos.bay, backPos.row, backPos.tier);
       if (!r2) return;
-      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector);
+      await fbCompleteContainersAtomic(voyageKey, 'loading', [c1.cn, c2.cn], inspector, equipNo);   // 1.55: 갱(호기)
       speakDone({ cn: c1.cn }); setTimeout(() => speakDone({ cn: c2.cn }), 900);
       resetAll();
     } catch (e) { alert(`처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도하세요.\n${e?.message || e}`); }
@@ -1445,25 +1581,34 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
           {pickBox('앞', 'amber', q1, setQ1, c1, setC1, r1)}
           {pickBox('뒤', 'cyan', q2, setQ2, c2, setC2, r2)}
 
-          {/* V9.48: 앞뒤가 바뀌어 들어온 경우 — 지우고 다시 치게 하지 않고 바꿔 준다 */}
-          {planPair && planPair.swapped && (
-            <div className="bg-indigo-950/50 border border-indigo-700 rounded-lg p-3 flex items-center justify-between gap-2">
+          {/* V9.48: 앞뒤가 바뀌어 들어온 경우 — 지우고 다시 치게 하지 않고 바꿔 준다.
+              ── TallyOne 1.55: **막지 않는다.** 검수사 실증 2026-08-12(DXQD 2631W) —
+              `15-06-04` 와 `17-06-04` 는 **실제로 서로 맞바뀌어 실렸다.**
+              종전에는 뒤바뀜을 보면 「⇅ 앞뒤 바꾸기」만 남기고 진행 버튼을 전부 없애서
+              **사실대로 기록할 길이 없었다.** 검수사는 싱글 2건으로 우회해야 했다.
+              → 뒤바뀜은 **경고로만** 두고 진행 버튼을 둘 다 남긴다. 고르는 것은 검수원이다. */}
+          {c1 && c2 && planPair && planPair.swapped && (
+            <div className="bg-indigo-950/50 border border-indigo-700 rounded-lg p-3 space-y-2">
               <div className="text-[12px] text-indigo-200 leading-snug">
-                앞뒤가 바뀐 것 같습니다 — 플랜상 앞은 <b className="mono">{c2.cn?.slice(-4)}</b>(B{_bn(c2.bay)}) 입니다.
+                ⚠ 플랜상 앞은 <b className="mono">{c2.cn?.slice(-4)}</b>(B{_bn(c2.bay)}) 입니다 — 앞뒤가 반대로 들어왔습니다.
+                <div className="text-[11px] text-indigo-300/80 mt-1 leading-snug">
+                  입력 순서만 바뀐 것이면 <b>⇅</b> 를 누르세요.<br/>
+                  실제로 맞바뀌어 실렸으면 그대로 <b>[위치 지정]</b> 으로 사실대로 적으세요 — 막지 않습니다.
+                </div>
               </div>
               <button onClick={swapFrontBack}
-                className="flex-shrink-0 px-3 py-2 rounded bg-indigo-700 hover:bg-indigo-600 text-indigo-50 text-xs font-bold">
-                ⇅ 앞뒤 바꾸기
+                className="w-full px-3 py-2 rounded bg-indigo-700 hover:bg-indigo-600 text-indigo-50 text-xs font-bold">
+                ⇅ 앞뒤 바꾸기 (입력 순서만 틀렸을 때)
               </button>
             </div>
           )}
 
           {/* V9.48: 지정 자리가 우선 — 플랜 짝 자리 그대로면 미배정 없이 바로 확인 */}
-          {c1 && c2 && planPair && !planPair.swapped && (
+          {c1 && c2 && planPair && (
             <>
-              <div className="bg-emerald-950/40 border border-emerald-700/60 rounded-lg p-3">
-                <div className="text-[11px] font-bold text-emerald-300 mb-1.5 flex items-center gap-1">
-                  <Link2 className="w-3.5 h-3.5"/>지정 자리 — 플랜 그대로 (짝 확인됨)
+              <div className={`rounded-lg p-3 border ${planPair.swapped ? 'bg-indigo-950/30 border-indigo-700/60' : 'bg-emerald-950/40 border-emerald-700/60'}`}>
+                <div className={`text-[11px] font-bold mb-1.5 flex items-center gap-1 ${planPair.swapped ? 'text-indigo-300' : 'text-emerald-300'}`}>
+                  <Link2 className="w-3.5 h-3.5"/>{planPair.swapped ? '지정 자리 — 앞뒤가 플랜과 반대입니다' : '지정 자리 — 플랜 그대로 (짝 확인됨)'}
                 </div>
                 <div className="flex items-center justify-center gap-3 text-sm mono">
                   <span className="text-amber-200 font-black">{c1.cn?.slice(-4)} <span className="text-slate-400 font-normal">{fmtPos(c1)}</span></span>
@@ -1471,14 +1616,34 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                   <span className="text-cyan-200 font-black">{c2.cn?.slice(-4)} <span className="text-slate-400 font-normal">{fmtPos(c2)}</span></span>
                 </div>
               </div>
+              {/* 자리를 옮기지 않고 확인만 찍는다 — 앞뒤 입력 순서와 무관하게 안전하다. */}
               <button onClick={completeAtPlan} disabled={busy}
                 className="w-full py-4 rounded-lg font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
                 {busy ? '처리 중…' : '✅ 지정 자리 그대로 트윈 선적확인'}
               </button>
-              <button onClick={confirmManual} disabled={busy}
-                className="w-full py-2 rounded-lg text-[12px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-50">
-                실제 자리가 다릅니다 — 위치 지정하기
-              </button>
+              {/* ── TallyOne 1.55: 액츄얼 작업에서 다른 것은 **자리가 아니라 번호**다(검수사 확정 2026-08-12).
+                  종전 문구 「실제 자리가 다릅니다 — 위치 지정하기」는 **오도한다** — 자리는 계획대로 전부 찬다.
+                  예외 경로로 내리고 문구를 사실에 맞게 고친다. 다만 앞뒤가 반대로 실린 경우는
+                  이것이 **사실대로 적는 유일한 길**이라 접지 않고 그대로 내놓는다. */}
+              {planPair.swapped ? (
+                <button onClick={confirmManual} disabled={busy}
+                  className="w-full py-3 rounded-lg font-bold text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-indigo-50">
+                  ⇄ 실제로 맞바뀌어 실렸습니다 — 위치 지정
+                </button>
+              ) : (
+                <details className="bg-slate-900 border border-slate-800 rounded-lg">
+                  <summary className="px-3 py-2 text-[11px] text-slate-400 font-bold cursor-pointer">▼ 예외 — 계획에 없는 칸에 실렸습니다</summary>
+                  <div className="px-3 pb-3 pt-1 space-y-2">
+                    <div className="text-[10px] text-slate-500 leading-snug">
+                      번호가 다른 컨이 온 것이라면 이 길이 아닙니다 — 카드의 <b className="text-cyan-300">[컨테이너 번호 수정]</b> 을 쓰세요.
+                    </div>
+                    <button onClick={confirmManual} disabled={busy}
+                      className="w-full py-2 rounded-lg text-[12px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-50">
+                      계획에 없는 칸에 실렸습니다 — 위치 지정
+                    </button>
+                  </div>
+                </details>
+              )}
             </>
           )}
 
@@ -1500,17 +1665,29 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       )}
       {step === 'pos' && c1 && c2 && (
         <div className="bg-slate-900 border border-amber-700 rounded-lg p-3 space-y-3">
-          <div className="text-xs text-amber-300 font-bold">앞 {c1.cn?.slice(-4)} 위치 — 자리 선택 (✓회색=선적 완료, 선택 불가)</div>
+          <div className="text-xs text-amber-300 font-bold">앞 {c1.cn?.slice(-4)} 위치 — 자리 선택</div>
+          {/* TallyOne 1.55: 칸의 세 갈래를 그대로 적어 준다 — 「이름표만 걸린 칸」은 고를 수 있다. */}
+          <div className="text-[10px] text-slate-400 leading-snug">
+            <span className="text-slate-500">✓회색</span> = 그 칸에 <b>실린 컨</b>이 있습니다(선택 불가) ·
+            <span className="text-sky-300"> 🏷파랑</span> = <b>이름표만</b> 걸린 칸(주인은 창고, 선택 가능) · 나머지 = 빈 칸
+          </div>
           {/* V8.83: 위치수정 창과 같은 자리 선택 그리드 — 직접 입력은 접이식으로 (사용자 확정) */}
           {!pickBay ? (
             <div className="grid grid-cols-3 gap-1.5">
               {Object.keys(slotsByBay).sort((a, b) => parseInt(a, 10) - parseInt(b, 10)).map(b => {
+                // TallyOne 1.55: 남은 자리 = **완료된 컨이 실제로 있는 칸을 뺀 수.**
+                //   종전엔 "이 컨이 완료됐나"로 셌다 — 계획 주인이 창고로 가 버리면 칸이 통째로 사라져
+                //   다 찬 베이에 「남은 N자리」가 뜨고, 반대로 4칸이 비어 있는데 「남은 0자리」로 잠겼다.
                 const remain = slotsByBay[b].filter(s => !s.done).length;
+                const named = slotsByBay[b].filter(s => s.named).length;
                 return (
                   <button key={b} onClick={() => remain > 0 && setPickBay(b)} disabled={remain === 0}
                     className={`py-2.5 rounded-lg border font-black ${remain > 0 ? 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
                     <div className="mono text-base">B{b}</div>
-                    <div className="text-[10px] font-bold text-slate-400">남은 {remain}자리</div>
+                    <div className="text-[10px] font-bold text-slate-400">
+                      {remain > 0 ? `남은 ${remain}자리` : '끝났습니다'}
+                      {named > 0 && <span className="ml-1 text-sky-300">🏷{named}</span>}
+                    </div>
                   </button>
                 );
               })}
@@ -1522,12 +1699,22 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                 <button onClick={() => { setPickBay(null); setBay(''); setRow(''); setTier(''); }} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {(slotsByBay[pickBay] || []).map(s => s.done ? (
-                  <span key={`${s.row}-${s.tier}`} className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">✓{s.row}-{s.tier}</span>
+                {(slotsByBay[pickBay] || []).map(sl => sl.done ? (
+                  /* done — 그 칸에 **완료된 컨이 실제로** 있다. 선택 불가. */
+                  <span key={`${sl.row}-${sl.tier}`} title={sl.cn || ''}
+                    className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">✓{sl.row}-{sl.tier}</span>
                 ) : (
-                  <button key={`${s.row}-${s.tier}`} onClick={() => { setBay(s.bay); setRow(s.row); setTier(s.tier); }}
-                    className={`px-2.5 py-2 rounded-lg border mono text-sm font-bold ${row === s.row && tier === s.tier && bay === s.bay ? 'bg-amber-700 border-amber-400 text-amber-50' : 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100'}`}>
-                    {s.row}-{s.tier}
+                  /* named — 이름표만 걸린 칸(계획 주인은 아직 창고). **선택 가능**하고 그 컨 끝4자리를 같이 보여 준다.
+                     empty — 진짜 빈 칸. */
+                  <button key={`${sl.row}-${sl.tier}`} onClick={() => { setBay(sl.bay); setRow(sl.row); setTier(sl.tier); }}
+                    className={`px-2.5 py-2 rounded-lg border mono text-sm font-bold flex flex-col items-center leading-tight ${
+                      row === sl.row && tier === sl.tier && bay === sl.bay
+                        ? 'bg-amber-700 border-amber-400 text-amber-50'
+                        : sl.named
+                          ? 'bg-slate-800 hover:bg-amber-800 border-sky-700/70 hover:border-amber-500 text-slate-100'
+                          : 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100'}`}>
+                    <span>{sl.row}-{sl.tier}</span>
+                    {sl.named && <span className="text-[9px] font-bold text-sky-300">🏷{String(sl.cn || '').slice(-4)}</span>}
                   </button>
                 ))}
               </div>
@@ -1584,6 +1771,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   // V9.50: 검수사가 '실제 온 컨'으로 갈아 끼웠으면 자동 계산이 그걸 덮어쓰면 안 된다.
   const [replaced, setReplaced] = useState(false);
   const [twinBusy, setTwinBusy] = useState(false); // 통합 완료 처리 중
+  const equipNo = useEquipNo();   // TallyOne 1.55: 완료 기록에 갱(호기)을 남긴다
 
   // 이미 검수 완료된 컨번호 = 짝 후보에서 제외
   // 같은 트윈 작업으로 묶이지 않도록
@@ -1602,6 +1790,10 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   //        (EDI에 짝수 베이 누락된 경우에도 짝꿍 매칭 보장)
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
+  // TallyOne 1.55: 작업 모드 3갈래 — 'fullSeq' | 'fullOnlySeq' | 'allActual'.
+  //   검수사 확정 2026-08-12 — *"EDI가 실어라 한대로 실었습니다. 이게 액츄얼 작업입니다."*
+  //   액츄얼에서 검수원이 하는 일은 **칸의 번호를 바꾸는 것**이지 자리를 옮기는 것이 아니다.
+  const seqMode = voyage?.info?.seqMode || '';
   useEffect(() => {
     if (replaced) return;   // V9.50: 손으로 바꿔 놓은 카드를 자동 짝꿍이 되돌리지 않는다
     if (r1.length === 1 && autoTwin) {
@@ -1657,7 +1849,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       //   목록(filteredContainers)에서 빠져 카드가 통째로 사라지므로, 뒤가 실패해도
       //   화면에는 "처리된 것"처럼 보였다(catch 도 없어 조용히 묻혔다).
       const cns = [c1, c2].filter(c => !c._comp).map(c => c.cn);
-      if (cns.length) await fbCompleteContainersAtomic(voyageKey, c1._mode, cns, inspector);
+      if (cns.length) await fbCompleteContainersAtomic(voyageKey, c1._mode, cns, inspector, equipNo);   // 1.55: 갱(호기)
       setTimeout(() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }, 500);
     } catch (e) {
       alert('처리 실패 — 선적확인은 찍지 않았습니다. 다시 시도해 주세요.\n' + (e?.message || e));
@@ -1723,6 +1915,13 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
         🚛 트윈: 앞 컨 입력 → EDI 베이 분석으로 짝꿍 자동 추천
         <div className="text-[10px] text-blue-400/70 mt-0.5">완료된 컨은 짝 후보 제외 · 통로 사이 단독 베이는 짝 없음</div>
       </div>
+
+      {/* TallyOne 1.55: 액츄얼 항차에서 주 경로는 **번호 수정**이다 — 자리는 계획대로 전부 찬다. */}
+      {seqMode === 'allActual' && (
+        <div className="bg-cyan-950/30 border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-[11px] text-cyan-200 leading-snug">
+          🔁 액츄얼 작업 — <b>자리는 계획대로</b> 찹니다. 다른 컨이 왔으면 카드의 <b>[컨테이너 번호 수정 (다른 컨이 옴)]</b> 을 쓰세요.
+        </div>
+      )}
 
       <div className="bg-slate-900 border border-amber-700/40 rounded-lg p-3">
         <div className="text-[10px] text-amber-400 font-bold mb-2 flex items-center gap-1">
@@ -1818,12 +2017,22 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
         </button>
       )}
 
-      {/* V9.49: 선적에서 실제 자리가 플랜과 다를 때 — 두 컨을 직접 묶어 자리를 새로 정하는 방식 */}
+      {/* V9.49: 선적에서 계획에 없는 칸에 실렸을 때 — 두 컨을 직접 묶어 자리를 새로 정하는 방식.
+          ── TallyOne 1.55: 종전 문구 「실제 자리가 플랜과 다릅니다」는 **액츄얼에서 오도한다** —
+          액츄얼에서 다른 것은 자리가 아니라 번호다(검수사 확정 2026-08-12). 예외 경로로 접어 둔다. */}
       {onManualMode && (
-        <button onClick={onManualMode}
-          className="w-full text-[11px] text-slate-400 hover:text-amber-300 py-2 bg-slate-900 border border-slate-800 rounded">
-          실제 자리가 플랜과 다릅니다 — 위치 지정 방식으로
-        </button>
+        <details className="bg-slate-900 border border-slate-800 rounded">
+          <summary className="px-3 py-2 text-[11px] text-slate-400 font-bold cursor-pointer">▼ 예외 — 계획에 없는 칸에 실렸습니다</summary>
+          <div className="px-3 pb-3 pt-1 space-y-2">
+            <div className="text-[10px] text-slate-500 leading-snug">
+              번호가 다른 컨이 온 것이라면 이 길이 아닙니다 — 위 카드의 <b className="text-cyan-300">[컨테이너 번호 수정]</b> 을 쓰세요.
+            </div>
+            <button onClick={onManualMode}
+              className="w-full text-[11px] text-slate-300 hover:text-amber-300 py-2 bg-slate-800 border border-slate-700 rounded">
+              계획에 없는 칸에 실렸습니다 — 위치 지정 방식으로
+            </button>
+          </div>
+        </details>
       )}
     </>
   );
@@ -1838,7 +2047,8 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
       if (c.cn === c1.cn) return false;
       const last4 = c.l4 || c.cn?.slice(-4) || '';
       if (Q.length === 4) return last4 === Q;
-      return last4.endsWith(Q);
+      // TallyOne 1.55: 전체 컨번호도 받는다 — 다른 입력칸과 규칙을 하나로.
+      return last4.endsWith(Q) || (c.cn || '').toUpperCase().includes(Q);
     }).slice(0, 8);
   }, [q, allContainers, c1]);
 

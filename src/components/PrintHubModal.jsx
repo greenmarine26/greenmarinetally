@@ -61,6 +61,11 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   //   기존엔 리스트 값이 EDI(pol=KRPTK)를 무조건 덮어 → 엠티의 pol이 CNDLC가 되어
   //   카고플랜 별첨의 평택 필터(pol includes PTK)에서 285대가 전부 빠지던 버그.
   //   EDI에 있는 컨은 위치/항구/규격 등 핵심 필드를 EDI 진실로 유지, 보강 필드만 리스트 허용.
+  // TallyOne 1.55: **`bay/row/tier` 가 목록에 있는 것은 그대로 두는 것이 맞다.**
+  //   1.55 부터 `ediContainers.bay/row/tier` 는 선사 계획이고 검수 중 안 바뀐다 —
+  //   계획은 계획(EDI)이 이겨야 하므로 `records.bay` 가 이걸 덮으면 안 된다.
+  //   ⚠ `bay_actual/row_actual/tier_actual` 은 이 목록에 **없다**(그대로 병합된다) —
+  //     실적이 필요한 인쇄물은 아래 `getBayActual`/`effectivePos(c)` 로 읽으면 된다.
   const PROTECTED_EDI_FIELDS = new Set([
     'pol', 'pod', 'npod', 'fpod', 'bay', 'row', 'tier', 'pos',
     'iso', 'fe', 'rf', 'fr', 'ot', 'tk', 'dg', 'oog', 'voy', 'vsl',
@@ -101,32 +106,51 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.30-fix: 베이 단위 필터
   //   평택 화물이 1개라도 있는 베이의 전체 슬롯 표시 (그 베이의 통과 화물 + 빈 슬롯 포함)
   //   사용자 명세: "평택분 화물이 하나라도 있다면 그 베이 전체 티어/로우를 다 보여줘야 함"
-  //   베이 번호 추출: bay_actual (검수원 수정) 우선, 없으면 pos[0:3]
+  //
+  // TallyOne 1.55: **계획과 실적이 갈라졌다.** firebase 가 `ediContainers.bay/row/tier` 덮어쓰기를
+  //   그만두면서 `c.bay` 는 이제 선사 계획 그대로고, 검수원이 지정한 자리는 `records.bay_actual` 에만 있다.
+  //   그래서 인쇄물마다 **어느 쪽이 기준인지**를 따로 정한다.
+  //     · 카고플랜(getBay)       = 계획. 칸(방)도 이름표도 안 변한다(검수사 확정 2026-08-12).
+  //     · 베이 상세(getBayActual) = 실적. 그 칸에 실제로 무엇이 실렸는지 보는 현장 종이다.
+  //   ⚠ 위 PROTECTED_EDI_FIELDS 가 `bay/row/tier` 를 막는 것은 **그대로 두는 것이 맞다** —
+  //     계획은 계획(EDI)이 이긴다. `bay_actual` 은 막히지 않으므로 실적이 필요한 쪽은 effectivePos 로 읽는다.
   const getBay = (c) => {
     if (!c) return '';
-    // TallyOne 1.38-01: 위치 판정은 effectivePos() 로 통일.
-    //   종전 `c.bay_actual || c.bay` 는 **임시창고(`__STG__`)를 그대로 베이로 썼다** —
-    //   보관함에 넣은 컨이 `__S` 라는 베이에 있는 것처럼 인쇄물에 실린다.
-    //   effectivePos 는 `__` 로 시작하면 자리 없음으로 돌려준다.
+    const b = c.bay || (c.pos ? String(c.pos).slice(0, 3) : '');
+    if (!b) return '';
+    return String(b).padStart(3, '0').slice(0, 3);
+  };
+  // 실적 자리 — 임시창고(`__` 로 시작)는 자리가 아니라 ''. effectivePos 가 그 판정의 단일 소스다.
+  const getBayActual = (c) => {
+    if (!c) return '';
     const p = effectivePos(c);
+    if (p.inStorage) return '';
     const b = p.bay || (c.pos ? String(c.pos).slice(0, 3) : '');
     if (!b) return '';
     return String(b).padStart(3, '0').slice(0, 3);
   };
 
-  // 평택분 컨테이너의 베이 set (포함된 베이만 표시 대상)
+  // 평택분 컨테이너의 베이 set (포함된 베이만 표시 대상) — 계획·실적 두 벌.
   const ptkBays = new Set();
+  const ptkBaysActual = new Set();
   allContainers.forEach(c => {
-    if (isPtk(c)) {
-      const b = getBay(c);
-      if (b && b !== '000') ptkBays.add(b);
-    }
+    if (!isPtk(c)) return;
+    const b = getBay(c);
+    if (b && b !== '000') ptkBays.add(b);
+    const ba = getBayActual(c);
+    if (ba && ba !== '000') ptkBaysActual.add(ba);
   });
 
-  // 카고플랜/베이상세용: 평택 화물 있는 베이의 전체 컨테이너
+  // 카고플랜용 — 계획 기준. 평택 화물 있는 베이의 전체 컨테이너.
   const printContainers = allContainers.filter(c => {
     const b = getBay(c);
     return b && ptkBays.has(b);
+  });
+
+  // 베이 상세용 — 실적 기준. 창고에 넣은 컨은 자리가 없으니 이 종이에서 빠진다(실물이 배에 없다).
+  const detailContainers = allContainers.filter(c => {
+    const b = getBayActual(c);
+    return b && ptkBaysActual.has(b);
   });
 
   // 검수 리스트용 — 평택분만
@@ -134,17 +158,19 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
 
   // M5.31: 베이상세용 row/tier 계산 (BayPlan과 동일 패턴)
   //   "빈 슬롯도 표시"를 위해 — 베이가 한 컨만 있어도 모든 tier/row 슬롯 표시
+  //   1.55: 이 두 값은 베이 상세에만 넘어간다 — 그러니 **실적 자리**로 잰다.
   let maxLeft = 0, maxRight = 0;
   const tierSet = new Set();
-  printContainers.forEach(c => {
-    if (c.row) {
-      const n = parseInt(c.row);
+  detailContainers.forEach(c => {
+    const p = effectivePos(c);
+    if (p.row) {
+      const n = parseInt(p.row);
       if (n > 0) {
         if (n % 2 === 0) maxLeft = Math.max(maxLeft, n);
         else maxRight = Math.max(maxRight, n);
       }
     }
-    if (c.tier) tierSet.add(c.tier);
+    if (p.tier) tierSet.add(p.tier);
   });
   const globalRowRange = { maxLeft, maxRight };
   const globalTiers = Array.from(tierSet);
@@ -217,7 +243,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     return (
       <ErrorBoundary name="베이 상세 인쇄" onClose={() => setPrintSub(null)}>
         <PrintableBayDetail
-          containers={printContainers}
+          containers={detailContainers}
           mode={mode}
           voyageInfo={voyageInfo}
           voyageKey={voyageKey}

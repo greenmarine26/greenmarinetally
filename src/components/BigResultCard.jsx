@@ -1,7 +1,7 @@
 // 결과 카드 (실번호 거대 + 직접 완료 + 리퍼 온도 Full만)
 import React, { useState, useMemo } from 'react';
 import { Check, RotateCcw, Snowflake, AlertTriangle, AlertOctagon, MapPin } from 'lucide-react';
-import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath } from '../utils.js';   // 1.50: 지나온 자리
+import { isoToLabel, fmtPos, isReeferContainer, buildMovePath, describeMovePath, effectivePos, getEquipNumber } from '../utils.js';   // 1.50: 지나온 자리 · 1.55: 지금 작업 중인 칸
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import { fbCompleteContainer, fbCancelComplete, fbReassignContainerPosition } from '../firebase.js';
 import { speakDone, speak } from '../voice.js';
@@ -49,6 +49,13 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
     try { return getBayPairs(allContainers.filter(x => x._mode === c?._mode)); } catch { return null; }
   }, [allContainers, c, bayPairsIn]);
 
+  // TallyOne 1.55: **지금 작업 중인 칸.** 검수사 확정 2026-08-12 —
+  //   *"EDI가 실어라 한대로 실었습니다. 이게 액츄얼 작업입니다."*
+  //   자리는 계획대로 전부 찬다. 바뀌는 것은 그 칸에 걸린 번호뿐이다.
+  //   그래서 「번호 수정」으로 실제 온 컨을 고르면 기본 칸은 **그 컨의 계획 자리가 아니라 이 칸**이어야 한다.
+  //   종전엔 모달이 고른 컨 자신의 계획 자리로 열려, 쌍마다 헛클릭이 두 번씩 났다(실측 2026-08-12).
+  const cardPos = useMemo(() => effectivePos(c), [c]);
+
   // M3.87: 위치 수정 모달 (선적 모드)
   // V7.94-10: 컨테이너 번호 수정 — 다른 컨이 왔을 때: 실제 컨 검색·선택 → [위치 선택] → 남은 자리 창
   const [cnFixOpen, setCnFixOpen] = useState(false);
@@ -82,7 +89,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       confirmLabel: '누락 완료',
       cancelLabel: '취소',
       onConfirm: async () => {
-        await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'missing', '선박에 없음');
+        await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'missing', '선박에 없음', getEquipNumber());
         speak(`${(c.cn || '').slice(-4)} 누락 처리`, { conversational: true });
         if (onAfterComplete) setTimeout(() => onAfterComplete(c), 500);
       },
@@ -125,7 +132,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
         return;
       }
-      await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector);
+      await fbCompleteContainer(voyageKey, c._mode, c.cn, inspector, 'normal', '', getEquipNumber());
       speakDone(c);
       // 완료 후 자동 비우기 콜백
       if (onAfterComplete) {
@@ -305,28 +312,18 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         </button>
       )}
 
-      {/* M3.87: 선적 모드 - 위치 수정 버튼 (위치 다른 자리로 보내거나 미배정 처리) */}
-      {isLoading && (
-        <button onClick={() => {
-            // TallyOne 1.28-01: **여기서 미리 미배정하지 않는다.**
-            //   V8.80 은 자리 지정 전에 fbUnassignContainer 로 위치를 비웠다. 그러면 바로 뒤 onSave 가 부르는
-            //   fbReassignContainerPosition 이 이 컨의 **옛 자리를 못 읽는다**(이미 ''). 그 함수의 자리 교환 분기
-            //   `aOldBay && aOldRow && aOldTier` 가 절대 참이 될 수 없어, 자리를 뺏긴 컨이 매번 미배정 떠돌이가 됐다.
-            //   → V9.52 가 되살린 자리 교환이 **이 경로에서만 100% 무력화**돼 있었다.
-            //   실측(NSDC_2607N 선적 188대): 떠돌이 9대, 그중 7대가 이미 선적완료를 찍은 컨.
-            //   이력도 그대로다 — `TGBU6406311 22/05/86 → //` 다음 `KMTU9448587 22/03/86 → //`.
-            //   자리를 비우는 일은 fbReassignContainerPosition 이 한다(뺏긴 컨은 이 컨의 옛 자리로 간다).
-            //   ※ V8.80 의 취지("계획 위치에 묶이지 않는다")는 자리 선택 UI 기본값 문제이지 DB를 비울 이유가 아니다.
-            setPosTarget(c);
-          }}
-          className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-amber-700 hover:bg-amber-600 text-amber-50 flex items-center justify-center gap-1.5">
-          <MapPin className="w-4 h-4"/>{isDone ? '위치 수정 (같은 컨, 자리만 변경)' : `수동 배정 — 위치 지정${c.bay ? ` (계획 ${fmtPos(c)})` : ''}`}
-        </button>
-      )}
+      {/* ── TallyOne 1.55: **주 경로는 「컨테이너 번호 수정」이다.** ──────────────
+          검수사 확정 2026-08-12 — *"EDI가 실어라 한대로 실었습니다. 이게 액츄얼 작업입니다."*
+          335대 전수 대조(계획 칸 335 : 실제 칸 335, 안 찬 칸 0, 계획에 없는 칸 0) —
+          바뀐 것은 **173칸의 번호뿐**이었다. 액츄얼에서 검수원이 하는 일은 번호를 바꾸는 것이고,
+          위치를 지정할 일은 애초에 없다.
+          그런데 종전 화면은 「수동 배정 — 위치 지정」을 위에 크게 걸어 놨다. 작업자가 335대를 전부
+          그 버튼으로 처리해 `unassign` 182줄 · 카고플랜 173칸 덮어쓰기 · 칸 소멸 · 베이 잠김이 파생됐다.
+          → 번호 수정을 위로 올려 강조하고, 위치 지정은 **접이식 예외**로 내린다. */}
       {isLoading && !cnFixOpen && (
         <button onClick={() => { setCnFixOpen(true); setCnFixQuery(''); setCnFixPick(null); }}
-          className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-slate-800 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 flex items-center justify-center gap-1.5">
-          <RotateCcw className="w-4 h-4"/>컨테이너 번호 수정 (다른 컨이 옴)
+          className="w-full mt-2 py-3.5 rounded-lg font-black text-base bg-cyan-700 hover:bg-cyan-600 text-white border-2 border-cyan-400 flex items-center justify-center gap-1.5">
+          <RotateCcw className="w-5 h-5"/>컨테이너 번호 수정 (다른 컨이 옴)
         </button>
       )}
       {isLoading && cnFixOpen && (
@@ -402,6 +399,34 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         </div>
       )}
 
+      {/* M3.87: 선적 모드 - 위치 수정 (위치 다른 자리로 보내거나 미배정 처리)
+          1.55: **예외 경로다.** 접어 두고 문구는 SearchPanel 과 한 벌로 맞춘다
+          (SearchPanel:1642·2032 「계획에 없는 칸에 실렸습니다 — 위치 지정」). */}
+      {isLoading && (
+        <details className="mt-2 bg-slate-900 border border-slate-800 rounded">
+          <summary className="px-2 py-1.5 text-[11px] font-bold text-slate-500 cursor-pointer">
+            ▼ 예외 — 계획에 없는 칸에 실렸습니다
+          </summary>
+          <div className="px-2 pb-2">
+            <button onClick={() => {
+                // TallyOne 1.28-01: **여기서 미리 미배정하지 않는다.**
+                //   V8.80 은 자리 지정 전에 fbUnassignContainer 로 위치를 비웠다. 그러면 바로 뒤 onSave 가 부르는
+                //   fbReassignContainerPosition 이 이 컨의 **옛 자리를 못 읽는다**(이미 ''). 그 함수의 자리 교환 분기
+                //   `aOldBay && aOldRow && aOldTier` 가 절대 참이 될 수 없어, 자리를 뺏긴 컨이 매번 미배정 떠돌이가 됐다.
+                //   → V9.52 가 되살린 자리 교환이 **이 경로에서만 100% 무력화**돼 있었다.
+                //   실측(NSDC_2607N 선적 188대): 떠돌이 9대, 그중 7대가 이미 선적완료를 찍은 컨.
+                //   이력도 그대로다 — `TGBU6406311 22/05/86 → //` 다음 `KMTU9448587 22/03/86 → //`.
+                //   자리를 비우는 일은 fbReassignContainerPosition 이 한다(뺏긴 컨은 이 컨의 옛 자리로 간다).
+                //   ※ V8.80 의 취지("계획 위치에 묶이지 않는다")는 자리 선택 UI 기본값 문제이지 DB를 비울 이유가 아니다.
+                setPosTarget(c);
+              }}
+              className="w-full py-2.5 rounded-lg font-bold text-xs bg-slate-800 hover:bg-amber-900 text-amber-300 border border-amber-800/70 flex items-center justify-center gap-1.5">
+              <MapPin className="w-4 h-4"/>{isDone ? '위치 수정 (같은 컨, 자리만 변경)' : `계획에 없는 칸에 실렸습니다 — 위치 지정${c.bay ? ` (계획 ${fmtPos(c)})` : ''}`}
+            </button>
+          </div>
+        </details>
+      )}
+
       {/* M3.74: confirm() → ConfirmModal · 1.53: 취소 갈래는 ChoiceModal */}
       <ConfirmModal {...confirmState} />
       <ChoiceModal {...choiceState} />
@@ -459,10 +484,12 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         workGroup={workGroup}
         workTier={workTier}
         defaultPartner={twinPartner}
+        /* 1.55: 기본 칸은 **지금 작업 중인 칸**(이 카드의 컨이 있는 칸)이다 — 고른 컨의 계획 자리가 아니다. */
+        defaultPos={cardPos}
         slotSource={slotSource}
         onSavePartner={async (cn, b2, r2, t2, opts) => fbReassignContainerPosition(voyageKey, c._mode, cn, b2, r2, t2, inspector, { actualWork: true, ...(opts || {}) })}   /* V9.52: 자리 교환 · 1.54: 시퀀스 확인 통과 */
         onCompleteBoth={async (cns) => {
-          for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector);
+          for (const cn of cns) await fbCompleteContainer(voyageKey, c._mode, cn, inspector, 'normal', '', getEquipNumber());
           // V8.70: 자동 선적확인에도 완료 음성·화면 정리 — 무음이라 "처리 안 된 줄" 오해하던 문제.
           cns.forEach((cn2, i) => setTimeout(() => speakDone({ cn: cn2 }), i * 900));
           if (onAfterComplete) setTimeout(() => onAfterComplete(c), 600);

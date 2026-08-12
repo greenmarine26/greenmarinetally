@@ -130,6 +130,44 @@ export async function fbSetSeqFull(voyageKey, v, by) {
   });
 }
 
+// ── TallyOne 1.55: **작업 모드는 두 갈래가 아니라 세 갈래다.** ──────────────
+//   1.54 의 `seqFull` 은 참/거짓 둘뿐이라 *"풀만 시퀀스"* 와 *"풀·엠티 둘 다 시퀀스"* 를 구분 못 했다.
+//   `info.seqMode` 로 셋을 명시한다:
+//     · 'fullSeq'     — 풀·엠티 **둘 다** 시퀀스. 남의 계획 자리를 뺏으려면 풀이든 엠티든 되묻는다.
+//     · 'fullOnlySeq' — **풀만** 시퀀스(엠티는 액츄얼). 1.54 의 `seqFull:true` 와 같은 뜻이다.
+//     · 'allActual'   — 풀·엠티 **둘 다** 액츄얼. 안 묻고 바로 내준다.
+//   ⛔ info 는 PATCH 원칙이다 — 통째 교체 금지(수집기가 채운 필드가 증발한다).
+export const SEQ_MODES = ['fullSeq', 'fullOnlySeq', 'allActual'];
+
+// 하위호환 읽기 — 옛 항차는 `seqMode` 가 없고 `seqFull` 만 있다.
+//   `seqFull===true → 'fullOnlySeq'`, `false → 'allActual'`, 둘 다 없으면 **미정(null)**.
+//   ⚠ 미정을 여기서 임의로 메우지 않는다 — "안 물어봤다"와 "액츄얼로 답했다"는 다른 상태다.
+//     안 막는 쪽(액츄얼)으로 볼지는 **쓰는 쪽**이 정한다.
+export function resolveSeqMode(info) {
+  if (!info) return null;
+  const m = String(info.seqMode || '').trim();
+  if (SEQ_MODES.includes(m)) return m;
+  const v = info.seqFull;
+  if (v === true || v === 'true' || v === 1) return 'fullOnlySeq';
+  if (v === false || v === 'false' || v === 0) return 'allActual';
+  return null;
+}
+
+// 저장 — 세 갈래를 `info/seqMode` 에 쓰고, 옛 화면·옛 코드가 읽는 `seqFull` 도 같이 맞춘다.
+//   `fullSeq`·`fullOnlySeq` → `seqFull:true` / `allActual` → `seqFull:false`.
+//   (`seqFull` 하나만 보는 곳은 「시퀀스인가 아닌가」만 알면 되므로 이 대응으로 손실이 없다.)
+export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
+  if (!voyageKey) return;
+  const m = SEQ_MODES.includes(String(mode3)) ? String(mode3) : null;
+  if (!m) throw new Error(`seqMode must be one of ${SEQ_MODES.join('|')} — got ${mode3}`);
+  await update(ref(db, `voyages/${voyageKey}/info`), {
+    seqMode: m,
+    seqFull: (m !== 'allActual'),   // 하위호환 — 옛 화면이 이 값을 읽는다
+    seqFullAt: Date.now(),
+    seqFullBy: by || '',
+  });
+}
+
 // 양하/선적 섹션 데이터 저장 (mode = 'discharge' | 'loading')
 export async function fbSaveSectionData(voyageKey, mode, data) {
   await update(sectionRef(voyageKey, mode), data);
@@ -481,9 +519,17 @@ function _markLoadedPos(voyageKey, mode, cn, by) {
   })();
 }
 
-export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'normal', note = '') {
+// TallyOne 1.55: **어느 갱(호기)으로 했는지를 완료 기록에 남긴다.**
+//   검수사 원문 2026-08-12 — *"장비를 바꿔서 해야 하는데 4호기로 다함.
+//   이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
+//   완료 기록에 갱이 없으면 갱별 대수를 나중에 되살릴 방법이 없다 — 그날 인건비가 걸린 값이다.
+//   `completed/{cn}` = `{ at, by, equip }`. 빈 값이면 키를 아예 안 넣는다(옛 기록과 모양을 같게 둔다).
+//   ⚠ `equip` 은 **맨 뒤 선택 인자**다 — 기존 호출부는 안 넘겨도 종전과 똑같이 동작한다.
+export async function fbCompleteContainer(voyageKey, mode, cn, by, flag = 'normal', note = '', equip = '') {
   const rec = { by, at: Date.now() };
   if (flag && flag !== 'normal') { rec.flag = flag; if (note) rec.note = note; }
+  const eq = String(equip || '').trim();
+  if (eq) rec.equip = eq;
   await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
   _markLoadedPos(voyageKey, mode, cn, by);   // 1.50: 실린 자리 확정 + 경로 마지막 점
   _tallyInspector(voyageKey, mode, by);   // V9.16: 개인 누적 실적 (비차단 — 실패해도 완료 처리는 무관)
@@ -513,11 +559,18 @@ function _tallyInspector(voyageKey, mode, by) {
 }
 
 // V8.71: 여러 컨 완료를 한 번의 멀티패스 update로 — 트윈 수정에서 "한 대만 먼저 선적" 방지 (둘 다 되거나 둘 다 안 되거나).
-export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by) {
+// TallyOne 1.55: 트윈도 갱(호기)을 남긴다 — 위 `fbCompleteContainer` 와 같은 이유·같은 모양.
+//   검수사 원문 — *"장비를 바꿔서 해야 하는데 4호기로 다함.
+//   이걸로 제출하면 2호기에서 작업한 인원은 그날 인건비를 받지 못함."*
+//   ⚠ `equip` 은 맨 뒤 선택 인자다 — 기존 호출부 4곳은 안 넘겨도 그대로 동작한다.
+export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip = '') {
   const patch = {};
   const at = Date.now();
   const list = cns.filter(Boolean);
-  for (const cn of list) patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = { by, at };
+  const eq = String(equip || '').trim();
+  for (const cn of list) {
+    patch[`voyages/${voyageKey}/${mode}/completed/${cn}`] = eq ? { by, at, equip: eq } : { by, at };
+  }
   await update(ref(db), patch);
   for (const cn of list) _markLoadedPos(voyageKey, mode, cn, by);   // 1.50: 트윈 둘 다 경로 남김
   for (const _ of list) _tallyInspector(voyageKey, mode, by);   // V9.16: 트윈도 대수만큼 누적
@@ -801,6 +854,18 @@ export async function fbRestorePlanFromEdi(voyageKey) {
   return n;
 }
 
+// ── TallyOne 1.55: **F/E 판정은 한 곳에서만 한다. 빈 값은 「풀 아님」이다.** ─────────
+//   종전 이 파일은 시퀀스 게이트에서 `fe !== 'E'` 로 봤다. 그러면 F/E 를 못 읽은 컨(`fe:''`)이
+//   **풀로 세어져** 되묻기 모달이 튀어나왔다. 반면 화면(`PositionEditModal.jsx:256`)은 같은 값을
+//   `fe === 'F'` 로, 즉 **풀 아님**으로 본다. 같은 컨을 화면과 저장 로직이 다르게 읽으면 앱을 못 믿는다.
+//   → `fe === 'F'` 일 때만 풀이다. 빈 값은 엠티로 취급하지도 않고 시퀀스 되묻기 대상에서도 뺀다.
+//     근거는 이 파일이 이미 쓰는 원칙과 같다 — *모르면 안 막는 쪽이 안전하다.*
+function isFullCn(c) {
+  if (!c) return false;
+  const v = c.fe;
+  return String(v === undefined || v === null ? '' : v).trim().toUpperCase() === 'F';
+}
+
 // M3.87: 컨테이너 위치 재배정 (선적 모드용)
 //   - 새 위치(bay/row/tier)로 이동
 //   - 이력 추적 (edits.bay, edits.row, edits.tier) + 경로 한 줄(moves)
@@ -856,23 +921,26 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
   let displacedIsCompleted = false;   // 그 자리에 **입실한**(선적확인된) 컨이 있었다 = 진짜 충돌
   const planTaken = [];               // 계획 자리를 내준 예약분 — 몸만 창고로 간다(선적만)
   let ediMap0 = {}, recMap0 = {};
-  let seqFull = false;
+  let seqMode = null;     // 1.55: 'fullSeq' | 'fullOnlySeq' | 'allActual' — 미정이면 null
+  let seqFull = false;    // 하위호환 — 「시퀀스인가 아닌가」 한 줄짜리 답(반환값에 그대로 실어 보낸다)
   if (newBay && newRow && newTier) {
     const ediMapRef = ref(db, `voyages/${voyageKey}/${mode}/ediContainers`);
     const recMapRef = ref(db, `voyages/${voyageKey}/${mode}/records`);
     const compMapRef = ref(db, `voyages/${voyageKey}/${mode}/completed`);
-    const seqRef = ref(db, `voyages/${voyageKey}/info/seqFull`);
-    const [ediSnap, recSnap, compSnap, seqSnap] = await Promise.all([
+    // 1.55: `info/seqFull` 한 필드가 아니라 `info` 를 읽는다 — 세 갈래는 `seqMode` 에 있고
+    //   옛 항차는 `seqFull` 밖에 없어 둘을 같이 봐야 한다(`resolveSeqMode` 가 그 대응을 안다).
+    const infoRef = ref(db, `voyages/${voyageKey}/info`);
+    const [ediSnap, recSnap, compSnap, infoSnap] = await Promise.all([
       get(ediMapRef), get(recMapRef), get(compMapRef),
-      isLoading ? get(seqRef) : Promise.resolve(null),   // 시퀀스 여부는 선적에서만 본다
+      isLoading ? get(infoRef) : Promise.resolve(null),   // 시퀀스 여부는 선적에서만 본다
     ]);
     const ediMap = ediSnap.val() || {};
     const recMap = recSnap.val() || {};
     const compMap = compSnap.val() || {};
     ediMap0 = ediMap; recMap0 = recMap;   // 1.36: 아래 2)에서 계획 자리 점유 검사에 쓴다
-    // 값이 없으면 액츄얼로 본다 — 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
-    const seqVal = (seqSnap && seqSnap.exists()) ? seqSnap.val() : null;
-    seqFull = (seqVal === true || seqVal === 'true' || seqVal === 1);
+    // 값이 없으면(미정) 액츄얼로 본다 — 현장 대부분이 액츄얼이고, 모르면 안 막는 쪽이 안전하다.
+    seqMode = resolveSeqMode((infoSnap && infoSnap.exists()) ? infoSnap.val() : null);
+    seqFull = (seqMode === 'fullSeq' || seqMode === 'fullOnlySeq');
     // ediContainers + records 양쪽 봐서 같은 위치 컨 검색
     const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
     const newBayInt = String(parseInt(newBay, 10));  // normalize
@@ -911,19 +979,33 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
         if (opts.actualWork) { displaced = planHits[0]; displacedPlanOnly = true; }
       } else {
         // 선적 — 아무도 입실 안 한 자리다.
-        //   엠티는 묻지 않는다: *"포트만 바뀌지 않으면 언제든 액츄얼이 가능하기 때문입니다."*
-        const feOf = (x) => {
+        //
+        // ── TallyOne 1.55: **되묻기 게이트는 세 갈래다.** ──
+        //   · 'allActual'   — 풀·엠티 전부 바로 내준다(뺏긴 컨은 몸만 창고로).
+        //   · 'fullOnlySeq' — **엠티만** 바로 내주고, **풀이면 자리를 지킨다**(되묻기 신호를 돌려준다).
+        //                     검수사 원문 — *"엠티는 안 묻는 이유는 포트만 바뀌지 않으면
+        //                     언제든 액츄얼이 가능하기 때문입니다."*
+        //   · 'fullSeq'     — 풀·엠티 **둘 다** 자리를 지킨다.
+        //   미정(null)은 안 막는다 — 모르면 안 막는 쪽이 안전하다(위 seqMode 주석과 같은 원칙).
+        //   F/E 판정은 `isFullCn` 하나로 한다 — 빈 값(`fe:''`)은 풀이 아니므로 어느 갈래에서도 안 막힌다.
+        const feView = (x) => {
           const r0 = recMap[x] || {}, e0 = ediMap[x] || {};
-          return String(r0.fe !== undefined ? r0.fe : (e0.fe || '')).trim().toUpperCase();
+          return { fe: r0.fe !== undefined ? r0.fe : (e0.fe || '') };
         };
-        const seqBlock = (seqFull && !opts.seqConfirmed && !explicitMode) ? planHits.filter(x => feOf(x) !== 'E') : [];
+        const gateOn = !opts.seqConfirmed && !explicitMode;
+        let seqBlock = [];
+        if (gateOn && seqMode === 'fullSeq') seqBlock = planHits.slice();
+        else if (gateOn && seqMode === 'fullOnlySeq') seqBlock = planHits.filter(x => isFullCn(feView(x)));
         if (seqBlock.length) {
-          // 풀 + 시퀀스 작업 — 그 컨이 자리 주인이 될 수 있다.
+          // 시퀀스 작업 — 그 컨이 자리 주인이 될 수 있다.
           //   **아무것도 쓰지 않고** 돌아서서 호출부가 검수사에게 묻게 한다(조용히 실패하지 않도록 사유를 준다).
           //   검수사가 "그래도 넣는다"면 호출부가 `seqConfirmed:true` 로 다시 부른다.
+          //   ⚠ 반환 모양은 1.54 그대로 두고 키만 더한다(`seqMode`) — 호출부 6곳이 이 모양을 읽는다.
           return {
             ok: false, needConfirm: 'seqFull',
             displaced: seqBlock[0], seqConflict: seqBlock, seqFull: true,
+            seqMode,                                       // 1.55: 세 갈래 중 무엇 때문에 막혔나
+            needConfirmSeq: true,                          // 1.55: 되묻기가 필요하다는 명시 신호
             target: { bay: newBayInt, row: newRow, tier: newTier },
           };
         }
@@ -1020,7 +1102,9 @@ export async function fbReassignContainerPosition(voyageKey, mode, cn, newBay, n
     displacedUnassigned: !!displaced && !displacedTo && !displacedToStorage,   // 미배정으로 세웠음(호출부 안내용)
     displacedPlanOnly,                                 // 1.47 호환: 계획만 있던 컨을 비켰음
     swappedTo: displacedTo,                            // 기존 이름 유지 — 호출부 안내문이 이 필드를 읽는다
-    seqFull,                                           // 1.54: 이 항차가 풀 시퀀스 작업인가(참고용)
+    seqFull,                                           // 1.54: 이 항차가 시퀀스 작업인가(참고용)
+    seqMode,                                           // 1.55: 세 갈래 중 무엇인가 (미정이면 null)
+    needConfirmSeq: false,                             // 1.55: 여기까지 왔으면 되묻기는 필요 없었다
   };
 }
 
@@ -1128,12 +1212,20 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     //   그 자리에 새로 들어온 DWSU2261640 과 겹쳐 「자리 중복」 경고가 떴다(실제 중복은 0곳이었다).
     //   경고가 틀리면 검수사는 곧 경고를 안 본다 — 그래서 고친다.
     //   ⚠ 지나온 경로는 `moves` 에 그대로 쌓이므로(1.50) 실체를 갱신해도 이력은 안 사라진다.
-    //   ⚠ 실체가 아직 없는 컨(선적확인 전)은 건드리지 않는다 — 실체는 선적확인 시점에 생기는 값이다.
-    const curActual = cur.bay_actual;
-    if (curActual !== undefined && curActual !== null && curActual !== '' && curActual !== STORAGE_BAY) {
-      patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
-      patch.actual_at = Date.now(); patch.actual_by = by || '';
-    }
+    //
+    // ── TallyOne 1.55: **자리가 주어지면 실체를 항상 쓴다. 선적확인 전이어도 쓴다.** ──
+    //   검수사 확정 2026-08-12 — *"카고플랜은 변함이 없어야 하는데 선적 상태에 따라 변했다."*
+    //   1.55 부터 계획(`ediContainers.bay/row/tier`)은 이 함수가 **절대 손대지 않는다**(함수 끝 동기화를 지웠다).
+    //   그런데 화면 소비처 다수가 *EDI 계획이 있으면 `records.bay` 를 덮지 못하게* 막는다
+    //   (`VoyagePage.jsx:379·516` 의 `ediHasPos`·`PROTECTED_EDI_FIELDS`, `PrintHubModal.jsx:66`).
+    //   그래서 계획 덮어쓰기만 지우고 끝내면 **검수원이 지정한 자리가 화면에서 통째로 사라진다.**
+    //   실체(`bay_actual`)로 통일하면 기존 승격 경로(`VoyagePage.jsx:399-428`)를 그대로 타 그림·목록에 나온다.
+    //   종전에는 *"실체가 아직 없는 컨(선적확인 전)은 건드리지 않는다"* 며 `curActual` 이 있을 때만 갱신했는데,
+    //   그 조건이 곧 위 소멸의 원인이었다 — 조건을 없앤다.
+    //   ⚠ 창고(`__STG__`)에 있던 컨도 새 자리를 주면 갱신한다 — 창고에서 꺼내 자리를 정하는 정상 흐름이다.
+    //   ⚠ 미배정(`!nb && !nr && !nt`)·`why:'cancel'` 에서 실체를 지우는 위 분기는 그대로 둔다.
+    patch.bay_actual = nb; patch.row_actual = nr; patch.tier_actual = nt;
+    patch.actual_at = Date.now(); patch.actual_by = by || '';
   }
 
   // records가 없으면 새로 만듦 (cn은 키이지만 안전하게)
@@ -1145,10 +1237,13 @@ async function _updatePositionFields(voyageKey, mode, cn, newBay, newRow, newTie
     await update(recR, patch);
   }
 
-  // ediContainers 동기화 (화면 즉시 반영)
-  if (ediSnap.exists()) {
-    await update(ediR, { bay: nb, row: nr, tier: nt });
-  }
+  // TallyOne 1.55: **여기서 계획(`ediContainers.bay/row/tier`)을 고쳐 쓰던 3줄을 지웠다.**
+  //   검수사 확정 2026-08-12 — *"카고플랜은 변함이 없어야 하는데 선적 상태에 따라 변했다."*
+  //   `ediContainers` 는 선사 계획(카고플랜)이다. 검수원이 자리를 옮길 때마다 여기서 덮어쓰는 바람에
+  //   선사가 준 원본이 작업 중에 계속 변했고, 인쇄물·별첨·EDI 회신이 전부 그 오염된 값을 실었다.
+  //   계획을 바꿔도 되는 곳은 **EDI 업로드(`fbSaveEdiContainers`)와
+  //   컨펌플랜 확정·복원(`fbCommitPlan`·`fbRestorePlanFromEdi`) 뿐이다.**
+  //   검수원이 지정한 자리는 위에서 `bay_actual/row_actual/tier_actual` 로 쓴다.
 }
 
 // (실번호 / X-RAY 봉인 수정 함수는 위에서 정의됨 — 이력 추적 포함)

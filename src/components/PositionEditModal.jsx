@@ -3,7 +3,7 @@
 //   - 빈 입력 = 미배정 (선적대상으로 분류)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, AlertTriangle, MapPin } from 'lucide-react';
-import { bayParityError, seqFullConfirmText } from '../utils.js';   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌)
+import { bayParityError, seqFullConfirmText, buildSlotUniverse, buildOccupancy } from '../utils.js';   // V9.27: 물리 불가 좌표 차단 · 1.54: 시퀀스 되묻기 문구(한 벌) · 1.55: 칸·점유는 utils 한 벌
 import { gradeSwap, confirmTextOf, GRADE_STYLE, bayGroupCenter } from '../swapGrade.js';   // V9.53: 바꿔도 되는지 등급(판정 한 벌) · 1.48: 작업 구역 판정도 같은 벌
 import { rowOrderRank } from '../cargoPlanCore.js';   // 1.48: 자리 격자를 종이 베이플랜과 같은 열 순서로
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.53: 브라우저 confirm() 은 렌더러를 통째로 멈춘다
@@ -38,6 +38,11 @@ export default function PositionEditModal({
   //   짝꿍 자리가 비면 「트윈 지정」이 통째로 없어져 트윈 작업을 한 대씩 두 번 넣었다.
   //   ⚠ 없으면 종전대로 allContainers 를 쓴다(회귀 없음).
   slotSource = null,
+  // TallyOne 1.55: **지금 작업 중인 칸.** 부르는 쪽(BigResultCard)이 카드의 컨이 있는 칸을 내려준다.
+  //   검수사 확정 2026-08-12 — 액츄얼에서 하는 일은 **칸의 번호를 바꾸는 것**이다.
+  //   그래서 「번호 수정」으로 실제 온 컨을 고르면 기본 칸은 그 컨의 계획 자리가 아니라 **이 칸**이어야 한다.
+  //   ⚠ 없으면 종전대로 컨 자신의 자리로 연다(회귀 없음).
+  defaultPos = null,
 }) {
   const [bay, setBay] = useState('');
   const [row, setRow] = useState('');
@@ -58,9 +63,19 @@ export default function PositionEditModal({
 
   useEffect(() => {
     if (open && container) {
-      setBay(container.bay || '');
-      setRow(container.row || '');
-      setTier(container.tier || '');
+      // TallyOne 1.55: 기본 칸은 **지금 작업 중인 칸**이다(defaultPos).
+      //   종전엔 무조건 `container` 자신의 계획 자리로 열려, 번호 수정으로 실제 온 컨을 고르면
+      //   엉뚱한 베이가 펼쳐졌다 — 쌍마다 헛클릭이 두 번씩 났다(실측 2026-08-12).
+      //   ⚠ 그 칸의 주인이 이 컨 자신이면 종전과 같은 값이므로 바뀌는 것이 없다.
+      const _bn = parseInt(defaultPos?.bay, 10);
+      const dp = (defaultPos && Number.isFinite(_bn) && defaultPos.row && defaultPos.tier)
+        ? { bay: String(_bn), row: String(defaultPos.row).padStart(2, '0'), tier: String(defaultPos.tier).padStart(2, '0') }
+        : null;
+      const ownerCn = dp ? (occupancy.get(`${dp.bay}/${dp.row}/${dp.tier}`) || {}).cn : null;
+      const useDp = !!dp && ownerCn !== container.cn;
+      setBay(useDp ? dp.bay : (container.bay || ''));
+      setRow(useDp ? dp.row : (container.row || ''));
+      setTier(useDp ? dp.tier : (container.tier || ''));
       setStep('input');
       setErrMsg('');
       setManualOpen(false);
@@ -68,9 +83,13 @@ export default function PositionEditModal({
       setAlsoComplete(false);   // 1.46: 열 때마다 끔 — 위치 저장과 선적확인을 분리
       setPickedSlotCn(null);
       // V7.94-20: 미배정 컨(위치 없음)인데 현재 작업 베이가 있으면 그 베이 자동 선택 — 전체 베이 재선택 단계 생략
-      const wb = container.bay ? null : (workBay != null ? String(parseInt(workBay, 10)) : null);
+      //   1.55: 작업 중인 칸을 받았으면 그 베이를 편다 — 베이를 다시 고르게 하지 않는다.
+      const wb = useDp ? dp.bay
+        : (container.bay ? null : (workBay != null ? String(parseInt(workBay, 10)) : null));
       setPickBay(wb);
     }
+    // ⚠ 의존성은 [open, container] 그대로다. defaultPos·occupancy 는 부모가 다시 그릴 때마다
+    //   새 객체로 오므로 여기에 넣으면 **검수원이 고르던 값이 매번 초기화된다.**
   }, [open, container]);
 
   // V7.94-11: 베이 먼저 선택 → 그 베이 자리만 표시 (전체 노출은 오선적 유발 — 사용자 지적)
@@ -78,43 +97,36 @@ export default function PositionEditModal({
   const is20 = (c) => String(c?.tp || '').startsWith('20') || String(c?.iso || '')[0] === '2';
   const [pickBay, setPickBay] = useState(null);
 
-  // TallyOne 1.49: 이 항차 이 모드에 **존재하는 자리**의 전체 집합.
-  //   현재 좌표 + 원계획 좌표(bay_orig)를 합친다 — 컨이 옮겨가 비어버린 자리도 살아 있게.
-  //   빈 자리의 20/40 판정은 그 자리에 원래 계획된 컨을 따른다.
+  // ── TallyOne 1.55: **칸과 점유는 utils.js 한 벌로 낸다.** ────────────────
+  //   종전 이 모달은 1.49판 자체 구현을 들고 있었고, 점유를 `c.bay` 만 보고 판정했다.
+  //   화면 전체는 `effectivePos()`(실체 자리 우선)로 보는데 여기만 계획 자리로 봐서,
+  //   같은 배에서 이 모달과 SearchPanel 의 칸 수가 어긋났다.
+  //   → 칸 목록은 buildSlotUniverse, 점유는 buildOccupancy 로 통일한다(판정을 두 벌로 두지 않는다).
+  //   ⚠ 격자의 배치·모양은 그대로다 — 바꾼 것은 데이터 출처뿐이다.
+  //   반환 모양이 바뀌었다: 배열 → **베이별 객체** `{ '11': [{bay,row,tier}, ...] }`.
   const slotUniverse = useMemo(() => {
-    if (!open || !container) return [];
+    if (!open || !container) return {};
     const src = (Array.isArray(slotSource) && slotSource.length) ? slotSource : allContainers;
-    const m = new Map();
-    const add = (b, r, t, c) => {
-      if (!b || !r || !t) return;
-      const bay = String(parseInt(b, 10));
-      if (!Number.isFinite(parseInt(b, 10))) return;
-      const key = `${bay}-${r}-${t}`;
-      if (!m.has(key)) m.set(key, { bay, row: r, tier: t, is20: is20(c) });
-    };
-    src.forEach(c => {
-      if (!c || c._mode !== container._mode || c._ptk === false) return;
-      add(c.bay, c.row, c.tier, c);
-      add(c.bay_orig, c.row_orig, c.tier_orig, c);
-    });
-    return [...m.values()];
+    const targetIs20 = is20(container);
+    // 상위(VoyagePage)가 실체 자리를 c.bay 로 승격시켜 놓은 목록이 온다 — 계획 좌표는 _bay_planned 에 있다.
+    //   계획 좌표를 _edi_* 로 되살려 같이 넘긴다. 그래야 컨이 옮겨 가도 **계획 칸이 남는다**(SearchPanel 과 같은 벌).
+    const planView = src.map(c => (c && c._bay_planned
+      ? { ...c, _edi_bay: c._bay_planned, _edi_row: c._row_planned, _edi_tier: c._tier_planned }
+      : c));
+    return buildSlotUniverse([...src, ...planView],
+      c => c._mode === container._mode && c._ptk !== false && is20(c) === targetIs20);
   }, [open, container, slotSource, allContainers]);
 
-  // 1.49: 지금 그 자리에 실제로 있는 컨 (완료분 포함).
+  // 1.55: 지금 그 칸에 실제로 있는 컨 — 키는 `bay/row/tier`, 값은 `{ cn, done }`.
+  //   같은 칸에 둘이 걸리면 완료된 쪽이 이긴다(실물이 이름표를 이긴다).
   const occupancy = useMemo(() => {
+    if (!container) return new Map();
     const src = (Array.isArray(slotSource) && slotSource.length) ? slotSource : allContainers;
-    const m = new Map();
-    if (!container) return m;
-    src.forEach(c => {
-      if (!c || c._mode !== container._mode || !c.bay || !c.row || !c.tier) return;
-      m.set(`${parseInt(c.bay, 10)}-${c.row}-${c.tier}`, c);
-    });
-    return m;
+    return buildOccupancy(src.filter(c => c && c._mode === container._mode), c => !!c._comp);
   }, [container, slotSource, allContainers]);
 
   const allSlots = useMemo(() => {
     if (!open || !container) return [];
-    const targetIs20 = is20(container);
     // V7.94-24: 작업 단(workTier)이 지정되면 그 단(홀드 tier<80 / 데크 tier>=80)의 자리만 — 홀드 작업 중엔 홀드 빈자리만 보이게
     const tierMatch = (t) => {
       if (!workTier) return true;
@@ -127,20 +139,29 @@ export default function PositionEditModal({
       const ctr = bayGroupCenter(b, bayPairs || {});
       return ctr != null && String(ctr) === String(parseInt(workGroup, 10));
     };
-    return slotUniverse
-      .filter(s => s.is20 === targetIs20 && tierMatch(s.tier) && groupMatch(s.bay))
-      .map(s => {
-        const occ = occupancy.get(`${s.bay}-${s.row}-${s.tier}`);
+    // 1.55: 칸 상태는 **세 갈래**다 — SearchPanel 과 똑같은 잣대를 쓴다.
+    //   done  — 그 칸에 완료된 컨이 실제로 있다(선택 불가, ✓)
+    //   named — 완료는 아니고 **이름표만** 걸려 있다(계획 주인의 실물은 아직 창고에 있다). 선택 가능
+    //   empty — 진짜 빈 칸. 선택 가능
+    //   ⚠ 20/40 갈래는 이제 slotUniverse 를 만들 때 걸렀다(위 targetIs20 필터).
+    const out = [];
+    Object.keys(slotUniverse).forEach(b => {
+      if (!groupMatch(b)) return;
+      slotUniverse[b].forEach(sl => {
+        if (!tierMatch(sl.tier)) return;
+        const occ = occupancy.get(`${b}/${sl.row}/${sl.tier}`);
         const mine = !!(occ && occ.cn === container.cn);
-        return {
-          bay: s.bay, row: s.row, tier: s.tier,
+        out.push({
+          bay: b, row: sl.row, tier: sl.tier,
           cn: (occ && !mine) ? occ.cn : null,
-          done: !!(occ && !mine && occ._comp),
+          done: !!(occ && !mine && occ.done),
+          named: !!(occ && !mine && !occ.done),
           self: mine,                       // 1.49: 지금 이 컨이 있는 자리 — 제자리에서 트윈만 걸 때 쓴다
-        };
-      })
-      .sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
-        (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
+        });
+      });
+    });
+    return out.sort((a, b) => (parseInt(a.bay, 10) - parseInt(b.bay, 10)) ||
+      (parseInt(a.tier, 10) - parseInt(b.tier, 10)) || (parseInt(a.row, 10) - parseInt(b.row, 10)));
   }, [open, container, slotUniverse, occupancy, workTier, workGroup, bayPairs]);
   const slotsByBay = useMemo(() => {
     const m = {};
@@ -182,10 +203,10 @@ export default function PositionEditModal({
     // 1.49: 컨이 실재하는지가 아니라 **자리가 실재하는지**로 판단한다.
     //   종전엔 짝꿍 자리 컨이 다른 데로 옮겨가면 트윈 지정이 화면에서 사라졌다(실측 2026-08-11).
     const pb = String(parseInt(pBay, 10));
-    const exists = slotUniverse.some(s => s.bay === pb && s.row === rowPad && s.tier === tierPad);
+    const exists = (slotUniverse[pb] || []).some(s => s.row === rowPad && s.tier === tierPad);
     if (!exists) return null;
-    const occ = occupancy.get(`${pb}-${rowPad}-${tierPad}`);
-    return { bay: pb, row: rowPad, tier: tierPad, slotCn: occ ? occ.cn : null, slotDone: !!(occ && occ._comp) };
+    const occ = occupancy.get(`${pb}/${rowPad}/${tierPad}`);
+    return { bay: pb, row: rowPad, tier: tierPad, slotCn: occ ? occ.cn : null, slotDone: !!(occ && occ.done) };
   }, [open, container, bay, row, tier, bayPairs, slotUniverse, occupancy]);
 
   // V8.70: 뒤(짝꿍) 컨 후보 — 선박 전체 미완료에서 검색, 다른 베이 계획분은 경고 배지.
@@ -466,9 +487,10 @@ export default function PositionEditModal({
                       열 순서 규약은 getRowPositions 한 벌을 비교자로 옮긴 rowOrderRank 를 쓴다.
 
                       칸 세 갈래는 그대로 (TallyOne 1.33, 검수사 지적 2026-08-09):
-                        ✓회색 = 선적 완료(입실) — 선택 불가
-                        흐림  = 다른 컨이 예약 — 누를 수는 있되 그 컨 끝4자리를 보여준다
-                        밝음  = 진짜 빈 자리 */}
+                        ✓회색 = 완료된 컨이 실제로 있다(입실) — 선택 불가          [done]
+                        흐림  = 이름표만 걸렸다(실물은 창고) — 누를 수 있고 끝4자리를 보여준다  [named]
+                        밝음  = 진짜 빈 칸                                          [empty]
+                      1.55: 판정은 SearchPanel 과 같은 벌(buildOccupancy)로 낸다. */}
                   {(() => {
                     const list = slotsByBay[pickBay] || [];
                     const tiers = [...new Set(list.map(s => s.tier))].sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
@@ -485,9 +507,9 @@ export default function PositionEditModal({
                         className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">
                         ✓{s.row}
                       </span>
-                    ) : s.cn ? (
+                    ) : s.named ? (
                       <button key={`${s.bay}-${s.row}-${s.tier}`} onClick={() => pickSlot(s)}
-                        title={`${s.cn} 이 예약한 자리입니다`}
+                        title={`${s.cn} 의 이름표가 걸린 칸입니다 — 실물은 아직 안 실렸습니다`}
                         className="px-2.5 py-2 rounded-lg bg-slate-900/70 hover:bg-amber-900 border border-slate-700 border-dashed hover:border-amber-500 mono text-[13px] font-bold text-slate-400 flex flex-col items-center leading-tight">
                         <span>{s.row}</span>
                         <span className="text-[9px] text-slate-500">{String(s.cn).slice(-4)}</span>
@@ -547,10 +569,19 @@ export default function PositionEditModal({
                   <AlertTriangle className="w-4 h-4"/>이미 배정된 자리
                 </div>
                 <div className="mt-1 text-xs text-orange-200">
-                  <span className="mono font-black">{conflict.cn}</span> ({conflict.fe === 'F' ? '풀' : '엠티'})이 거기 있습니다.
+                  {/* 1.55: F/E 잣대는 이 파일 한 벌 — `fe === 'F'` 만 풀이다(firebase.js `isFullCn` 과 같다).
+                      빈 값(`fe:''`)은 **풀이 아닐 뿐 엠티도 아니다** — 위 머리글(423행)처럼 '미정'이라 말한다.
+                      종전엔 여기서만 빈 값을 '엠티'라 단정해, 같은 화면이 같은 컨을 다르게 불렀다. */}
+                  <span className="mono font-black">{conflict.cn}</span> ({conflict.fe === 'F' ? '풀' : conflict.fe === 'E' ? '엠티' : '미정'})이 거기 있습니다.
                 </div>
-                <div className="mt-1 text-[10px] text-orange-300">
-                  → 확인 시 그 컨은 미배정 처리(선적대상으로 분류)됨
+                {/* TallyOne 1.55: **사실대로 고친다.** 종전 문구 *"미배정 (선적대상으로 분류)"* 는 거짓이다 —
+                    1.54 부터 밀려나는 컨은 미배정이 아니라 **창고**로 간다(`bay_actual='__STG__'`,
+                    실측 2026-08-12 DWSU3001185). 계획 자리는 그대로 남는다.
+                    검수사 개념 — *"애초부터 컨테이너는 창고에 있었습니다. 분명 이름만 빌려줬던 것입니다."*
+                    자리를 뺏는 것이 아니라 **이름을 빌려주고 몸은 창고에 그대로** 있는 것이다. */}
+                <div className="mt-1 text-[10px] text-orange-300 leading-relaxed">
+                  → 확인하면 그 컨은 <b>이름표만 내려옵니다</b> — 계획 자리는 그대로 두고 실물은 창고에 있습니다.
+                  <br/>(이미 선적확인된 컨이면 완료는 그대로 두고 자리만 옮깁니다.)
                 </div>
               </div>
             )}
@@ -716,7 +747,8 @@ export default function PositionEditModal({
               )}
               {conflict && (
                 <div className="text-[11px] text-orange-300 mt-2">
-                  ⚠ {conflict.cn} → 미배정 (선적대상으로 분류)
+                  {/* 1.55: 위 안내와 같은 잣대 — 밀려나는 컨은 창고로 간다(계획 자리는 그대로). */}
+                  ⚠ {conflict.cn} → 이름표만 내려옴 (계획 자리는 그대로 · 실물은 창고에)
                 </div>
               )}
             </div>

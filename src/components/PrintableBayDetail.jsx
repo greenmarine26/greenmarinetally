@@ -17,7 +17,7 @@
 import React, { useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort } from '../utils.js';
+import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다
 import { getShipBayDictData } from '../shipStructure.js';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
@@ -495,8 +495,25 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in window) || ((navigator.maxTouchPoints || 0) > 0));
 
 export default function PrintableBayDetail({
-  containers, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, globalTiers, onClose
+  containers: containersRaw, mode, voyageInfo, shipImo, shipName, voyageKey, globalRowRange, globalTiers, onClose
 }) {
+  // ── TallyOne 1.55: **베이 상세는 실적이다** ─────────────────────────────
+  //   이 종이의 쓰임은 "베이별 슬롯 단위 컨테이너 위치 · 검수 현장용" 이다.
+  //   1.55 에서 firebase 가 `ediContainers.bay/row/tier` 덮어쓰기를 그만두면서 `c.bay` 는
+  //   **선사 계획**만 남았다. 그대로 그리면 검수원이 자리를 옮긴 컨이 옛 계획 칸에 찍혀
+  //   현장에서 없는 자리를 뒤지게 된다. 그래서 여기서 한 번만 실적 좌표로 갈아 끼운다 —
+  //   아래 groupByBay · formatCellLines · formatCellParts · row/tier 계산이 전부 이 값을 본다.
+  //   ⚠ 카고플랜(PrintableCargoPlanV2)은 **계획**이 맞다 — 거기는 손대지 않는다.
+  //   창고(`__` 로 시작)에 넣은 컨은 자리가 없으므로 bay 를 비워 종이에서 빠진다.
+  //   계획 좌표는 `_planBay/_planRow/_planTier` 로 남겨 둔다(대조가 필요할 때를 위해).
+  const containers = useMemo(() => (containersRaw || []).map(c => {
+    if (!c) return c;
+    const p = effectivePos(c);
+    if (p.src === 'edi' || p.src === 'rec') return c;   // 실적이 따로 없으면 원본 그대로
+    return { ...c, bay: p.bay, row: p.row, tier: p.tier,
+             _planBay: c.bay, _planRow: c.row, _planTier: c.tier };
+  }), [containersRaw]);
+
   const [printMode, setPrintMode] = useState('all');  // 'all' | 'ptk' | 'single'
   const [selectedKeys, setSelectedKeys] = useState([]);  // M4.8 다중 선택
 

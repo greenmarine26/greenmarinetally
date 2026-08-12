@@ -2,7 +2,7 @@
 //   실물 텔리 233개 분석 기반. 실데이터 시뮬로 검증:
 //   DJCT 0221W 선적 216대·ATPR 2634E 양하 251대 — 실제 텔리 매트릭스와 완전 일치.
 //   순수 계산만(파이어베이스 접근 없음) — 시뮬 가능. 렌더는 tallyExcel.js.
-import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached } from './utils.js';
+import { isoToLabel, isPyeongtaekPort, computeShiftingMapCached, effectivePos } from './utils.js';   // TallyOne 1.55: 실적 자리 판정 단일 소스
 import { getTallyFormat, orderIndex } from './data/tallyFormats.js';
 import { bayGroupCenter } from './swapGrade.js';   // 1.8-16: 해치 그룹 판정 단일 소스
 import { getBayPairs } from './twin.js';
@@ -58,6 +58,14 @@ export function ptkContainers(voyage, mode) {
     //   RF 목록에서 이 둘을 빼려면 여기서 들고 가야 한다 — 안 그러면 EDI에 없어 항상 false 다.
     if (r.rfdry === true) out.rfdry = true;
     if (r.mkcon === true) out.mkcon = true;
+    // TallyOne 1.55: **실적 자리(bay_actual/row_actual/tier_actual)를 들고 온다.**
+    //   1.55 부터 `ediContainers.bay/row/tier` 는 선사 계획이고 검수 중 안 바뀐다.
+    //   검수원이 지정한 자리는 records 에만 있어서, 이걸 안 들고 오면 아래 RF 위치와
+    //   타임시트 베이가 **계획으로 퇴행한다**(실제로 실은 자리가 서류에 안 나온다).
+    //   ⚠ 컨을 추가하지 않는다 — 필드만 채운다는 위 원칙 그대로다.
+    if (r.bay_actual != null && String(r.bay_actual) !== '') out.bay_actual = r.bay_actual;
+    if (r.row_actual != null && String(r.row_actual) !== '') out.row_actual = r.row_actual;
+    if (r.tier_actual != null && String(r.tier_actual) !== '') out.tier_actual = r.tier_actual;
     return out;
   });
   return merged.filter(c => mode === 'discharge' ? isPyeongtaekPort(c.pod) : (c._inList || isPyeongtaekPort(c.pol)));
@@ -196,7 +204,10 @@ export function buildRF(containers) {
     .filter(c => c.rf || String(c.iso || '').toUpperCase()[2] === 'R' || /^45[38]/.test(String(c.iso || '')))
     .map(c => ({
       cn: c.cn, seal: c.sl || '', size: tallySizeCol(c) === '20' ? "20'RF" : "40'RH",
-      loc: [c.bay, c.row, c.tier].filter(Boolean).join('/'),
+      // TallyOne 1.55: **최종 선적 위치**다 — 계획이 아니라 실제로 실은 자리.
+      //   effectivePos 는 실적(bay_actual) 이 있으면 그것을, 없으면 계획을 돌려준다.
+      //   창고에 있는 컨은 자리가 없으니 빈칸이 맞다(배에 없는 자리를 서류에 적지 않는다).
+      loc: (() => { const p = effectivePos(c); return [p.bay, p.row, p.tier].filter(Boolean).join('/'); })(),
       setting: t(c.rfSet) || t(c.tmp),
       actual: t(c.rfAct),
       op: String(c.op || '').toUpperCase(),
@@ -526,6 +537,11 @@ export function computeTallyData(voyage) {
   const disCs = ptkContainers(voyage, 'discharge');
   const loadCs = ptkContainers(voyage, 'loading');
   const shiftRows = buildShifting(voyage);
+  // 1.55: 베이 짝 사전 재료 — 계획 좌표(컨 원본) + 실적 좌표(effectivePos). 한 벌로 만들어 아래에서 쓴다.
+  const _bayPairBase = [...disCs, ...loadCs];
+  const bayPairSrc = [..._bayPairBase,
+    ..._bayPairBase.map((c) => { const p = effectivePos(c); return p.bay ? { bay: p.bay } : null; })
+                   .filter(Boolean)];
   const matDis = buildMatrix(disCs, 'discharge');
   const matLoad = buildMatrix(loadCs, 'loading');
   // 쉬프팅 매트릭스: op×POD 기준 (실측: DJCT SHIFT 열 = 20' 자리)
@@ -560,7 +576,10 @@ export function computeTallyData(voyage) {
     // 1.8-16: 완료 처리된 모드에서 **닫았는데 보고가 없는 커버**를 시각 없이 채운다.
     //   베이 짝 사전은 양하·선적 컨을 다 넣어야 온전하다(한쪽만 보면 홀수 짝을 못 찾는다).
     timeSheet: buildTimeSheet(voyage?.reports, {
-      groupOf: (b) => bayGroupCenter(b, getBayPairs([...disCs, ...loadCs], info.imo || '', info.vsl || '')),
+      // TallyOne 1.55: 짝 사전은 **실제로 작업한 베이**까지 알아야 한다.
+      //   계획 좌표만 넣으면, 계획에 없던 칸에 실제로 실은 베이가 짝 사전에서 빠져
+      //   그 베이의 해치 보고가 엉뚱한 그룹으로 묶인다. 계획 ∪ 실적으로 넣는다(둘 다 자리다).
+      groupOf: (b) => bayGroupCenter(b, getBayPairs(bayPairSrc, info.imo || '', info.vsl || '')),
       doneModes: [
         ...(info.dischargeDone || info.inspectorDone ? ['discharge'] : []),
         ...(info.loadingDone || info.inspectorDone ? ['loading'] : []),

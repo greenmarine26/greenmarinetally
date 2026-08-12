@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.54';   // 계획은 예약이지 입실이 아니다 — 컨은 창고에 있고 베이플랜엔 이름만 걸린다
+export const APP_VERSION = 'TallyOne 1.55';   // 칸은 없어지지 않는다 — 카고플랜은 고정, 바뀌는 건 그 칸에 걸린 이름뿐
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3940,6 +3940,63 @@ export function effectivePos(c) {
   if (eb) return { bay: eb, row: s(c._edi_row !== undefined ? c._edi_row : c.row),
                    tier: s(c._edi_tier !== undefined ? c._edi_tier : c.tier), src: 'edi', inStorage: false };
   return { bay: s(c.bay), row: s(c.row), tier: s(c.tier), src: s(c.bay) ? 'rec' : 'none', inStorage: false };
+}
+
+// ── TallyOne 1.55: 칸(slot)은 컨이 아니다 ────────────────────────────────
+//   검수사 확정 2026-08-12 — *"컨테이너가 빠져야 하는데 자리가 빠진 이유
+//   (손님이 나가야 하는데 방이 나가버린 상황). 카고플랜은 변함이 없어야 한다."*
+//   종전 `slotsByBay`(SearchPanel)는 **컨 목록을 그대로 자리 항목으로 push** 했다.
+//   그래서 ① 같은 칸이 두 번(창고 간 계획 주인 + 실린 컨) ② 다 찬 베이에 「남은 N자리」
+//   ③ 계획 주인이 옮겨 가면 칸이 통째로 소멸 ④ remain===0 으로 베이 잠김
+//   ⑤ 베이를 끝내도 화면이 안 넘어감 — 다섯 증상이 한 줄에서 나왔다.
+//   칸의 정본은 **계획 좌표 ∪ 원계획(_orig) 좌표**다. 컨이 어디로 가든 칸은 남는다.
+//   실측 검증(DXQD 2631W): 15개 베이 전 구간 720건 대조 — 선사 원본 칸과 불일치 0.
+export function buildSlotUniverse(list, filter) {
+  const m = {};
+  const add = (b, r, t) => {
+    const n = parseInt(b, 10);
+    if (!Number.isFinite(n) || !r || !t) return;
+    const bb = String(n);
+    if (!m[bb]) m[bb] = new Map();
+    m[bb].set(`${r}-${t}`, { bay: bb, row: String(r), tier: String(t) });
+  };
+  for (const c of (list || [])) {
+    if (!c) continue;
+    if (filter && !filter(c)) continue;
+    add(c._edi_bay !== undefined ? c._edi_bay : c.bay,
+        c._edi_row !== undefined ? c._edi_row : c.row,
+        c._edi_tier !== undefined ? c._edi_tier : c.tier);
+    add(c.bay_orig, c.row_orig, c.tier_orig);
+    // 계획에 없던 칸에 실제로 실린 경우도 칸이다 — 실물이 있는 자리를 목록에서 빼면 안 된다.
+    //   실측 2026-08-12: 이 줄이 없으면 옮겨 실린 칸(예 19-04-82)이 목록에서 사라진다.
+    //   창고(`__`)는 자리가 아니므로 제외한다.
+    if (c.bay_actual !== undefined && c.bay_actual !== null && !String(c.bay_actual).startsWith('__')) {
+      add(c.bay_actual, c.row_actual, c.tier_actual);
+    }
+  }
+  const out = {};
+  for (const b of Object.keys(m)) {
+    out[b] = [...m[b].values()].sort((x, y) =>
+      (parseInt(x.tier, 10) - parseInt(y.tier, 10)) || (parseInt(x.row, 10) - parseInt(y.row, 10)));
+  }
+  return out;
+}
+
+// 칸 점유 맵 — "bay/row/tier" → { cn, done }. 위치 판정은 effectivePos 하나로 통일한다.
+//   같은 칸에 둘이 걸리면 **완료된 쪽이 이긴다**(실물이 이름표를 이긴다).
+export function buildOccupancy(list, isDone) {
+  const occ = new Map();
+  for (const c of (list || [])) {
+    if (!c) continue;
+    const p = effectivePos(c);
+    if (!p.bay || !p.row || !p.tier) continue;
+    const n = parseInt(p.bay, 10);
+    const k = `${Number.isFinite(n) ? n : p.bay}/${p.row}/${p.tier}`;
+    const done = isDone ? !!isDone(c) : !!c._comp;
+    const prev = occ.get(k);
+    if (!prev || (done && !prev.done)) occ.set(k, { cn: c.cn, done });
+  }
+  return occ;
 }
 
 /** 위치 키 — 베이는 정수 정규화("038"→"38"). 자리가 없으면 '' */

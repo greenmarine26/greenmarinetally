@@ -1,4 +1,8 @@
-// M4.9e 3단계: 자리 뺏긴 컨테이너 사이드바
+// M4.9e 3단계: 이름표가 내려온 컨 사이드바 (구 「자리 뺏긴 컨테이너」)
+// TallyOne 1.55: 자리를 뺏은 것이 아니다 — 검수사 확정 2026-08-12.
+//   *"이름만 빌려줬다고 이야기 한걸 잊으면 안됩니다. 그자리는 빈자리라고 분명히 이야길 했습니다."*
+//   칸(방)은 안 없어지고 카고플랜 이름표도 안 변한다. 컨은 창고에서 자기 차례를 기다린다.
+//   ⚠ prop 이름 `displaced` 는 호출부(VoyagePage)와 맞춰 그대로 둔다 — 문구만 개념에 맞춘다.
 // M4.9f: 5단계 단순 — 카드에 "📦 이동" 버튼 추가
 //   클릭 → onStartMove(c) 호출 → VoyagePage가 pendingMove 설정
 //   이후 베이 그리드의 빈 셀 클릭하면 그 자리로 이동(fbSetActualPosition)
@@ -10,7 +14,7 @@ export default function DisplacedSidebar({ displaced, onOpenContainer, onStartMo
   if (!displaced || displaced.length === 0) {
     return (
       <div className="bg-slate-800/40 border border-slate-700/50 rounded-lg p-3">
-        <div className="text-[11px] font-bold uppercase text-slate-400 mb-1">자리 뺏긴 컨테이너</div>
+        <div className="text-[11px] font-bold uppercase text-slate-400 mb-1">이름표가 내려온 컨</div>
         <div className="text-xs text-slate-500">없음</div>
       </div>
     );
@@ -21,7 +25,7 @@ export default function DisplacedSidebar({ displaced, onOpenContainer, onStartMo
       <div className="bg-amber-800/40 px-3 py-2 flex items-center gap-2 border-b border-amber-700/40">
         <AlertTriangle className="w-4 h-4 text-amber-300"/>
         <span className="text-[11px] font-black uppercase text-amber-100">
-          자리 뺏긴 컨테이너 {displaced.length}대
+          이름표가 내려온 컨 {displaced.length}대 — 실물은 창고에 있습니다
         </span>
       </div>
       <div className="text-[10px] text-amber-200/70 px-3 py-1 border-b border-amber-700/30 leading-tight">
@@ -56,7 +60,7 @@ export default function DisplacedSidebar({ displaced, onOpenContainer, onStartMo
                     <>
                       <ArrowRight className="w-3 h-3 text-amber-400 mx-0.5"/>
                       <span className="text-[10px] text-amber-300/70">
-                        {c._displacedBy} 점유
+                        지금 {c._displacedBy}가 실려 있음
                       </span>
                     </>
                   )}

@@ -66,36 +66,48 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
     const iso403Targets = containers.filter(isISO403);
     const iso403Pending = iso403Targets.filter(c => !isISO403PhotoTaken(c));
 
-    // V9.24: 자리 중복 검출 (STSE 2658W 사고 — 두 컨이 같은 자리) — 실체 우선 유효 위치 기준
+    // ── TallyOne 1.55: 칸(방)은 안 없어지고 이름표도 안 변한다 ──────────────
+    //   검수사 확정 2026-08-12 — *"이름만 빌려줬다고 이야기 한걸 잊으면 안됩니다. 그자리는 빈자리입니다."*
+    //   `c.bay` 가 진짜 계획이 된 뒤로 **계획 칸을 다른 컨이 쓰는 것은 정상**이다.
+    //   ⚠ `bay_actual` 은 "실렸다"가 아니다 — 실렸는지는 `completed/{cn}` 하나로만 판단한다.
+    //   (마감 점검 WorkClosingChecklist 와 같은 규칙 — 두 화면이 같은 숫자를 말해야 한다.)
     const _p2d = (x) => String(x ?? '').replace(/\D/g, '').padStart(2, '0').slice(-2);
-    const _posCnt = new Map();
+    const _slotKey = (b, r, t) => `${_p2d(b)}-${_p2d(r)}-${_p2d(t)}`;
+
+    // 그 칸에 **실물이 있다**고 말하는 컨 — 기준은 `completed` 하나다.
+    //   `bay_actual` 은 검수원이 지정한 자리일 뿐 "실렸다"가 아니다. 이름표만 걸린 컨은 자리를 주장하지 않는다.
+    const _claim = new Map();
     containers.forEach(c => {
-      // TallyOne 1.38: 위치 판정은 effectivePos() 하나로 — 여덟 곳이 각자 하던 것을 모았다.
+      if (!compMap[c.cn]) return;                     // 안 실린 컨은 자리를 주장하지 않는다
       const _p = effectivePos(c);
       if (_p.inStorage) return;                       // 임시창고 = 자리 없음
       const b = _p.bay, r = _p.row, t = _p.tier;
       if (!b || !t) return;
-      const k = `${_p2d(b)}-${_p2d(r)}-${_p2d(t)}`;
+      const k = _slotKey(b, r, t);
       if (k.startsWith('00-')) return;
-      if (!_posCnt.has(k)) _posCnt.set(k, []);
-      _posCnt.get(k).push(c.cn);
+      if (!_claim.has(k)) _claim.set(k, []);
+      _claim.get(k).push(c.cn);
     });
-    const dupPos = [..._posCnt.entries()].filter(([, v]) => v.length > 1);
+    // 사고 — 한 칸에 실물이 둘 (STSE 2658W 계열). 이것만 빨강이다.
+    const dupPos = [..._claim.entries()].filter(([, v]) => v.length > 1);
 
-    // M4.9e: 자리 뺏긴 검출 (선적 모드만, VoyagePage와 동일 로직)
-    let displaced = 0;
+    // 정상 — 이름표가 내려온 컨. 계획 칸에 다른 컨이 실렸고 자기는 아직 안 실렸다(실물은 창고).
+    let nameOnly = 0;
     if (mode === 'loading') {
-      const occupiedBy = new Map();
       containers.forEach(c => {
-        if ((c.bay_actual || c.row_actual || c.tier_actual) && c.bay_actual) {
-          occupiedBy.set(`${c.bay_actual}-${c.row_actual}-${c.tier_actual}`, c.cn);
-        }
-      });
-      containers.forEach(c => {
-        if (c.bay_actual) return;
-        const k = `${c.bay || ''}-${c.row || ''}-${c.tier || ''}`;
-        const occ = occupiedBy.get(k);
-        if (occ && occ !== c.cn) displaced++;
+        if (compMap[c.cn]) return;
+        const _p = effectivePos(c);
+        if (_p.inStorage) return;                     // 창고에 넣어 둔 컨은 보관함이 따로 보여준다
+        const planB = c._edi_bay !== undefined ? c._edi_bay : c.bay;
+        const planR = c._edi_row !== undefined ? c._edi_row : c.row;
+        const planT = c._edi_tier !== undefined ? c._edi_tier : c.tier;
+        if (!planB || !planT) return;
+        const k = _slotKey(planB, planR, planT);
+        if (k.startsWith('00-')) return;
+        // 검수원이 다른 칸을 정해 준 컨은 이름표가 내려온 게 아니라 옮겨 간 것이다(마감 점검과 같은 규칙).
+        if (_p.bay && _p.tier && _slotKey(_p.bay, _p.row, _p.tier) !== k) return;
+        const owners = _claim.get(k);
+        if (owners && owners.some(cn => cn !== c.cn)) nameOnly++;
       });
     }
 
@@ -116,7 +128,7 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
       xrayCount, xraySealed, xrayUnmatched,
       iso403Total: iso403Targets.length,
       iso403Pending: iso403Pending.length,
-      displaced,
+      nameOnly,   // 1.55: 이름표가 내려온 컨 — 사고가 아니라 정보
       dupPos,   // V9.24: [[자리키, [cn,...]], ...]
     };
   }, [voyage, mode]);
@@ -182,16 +194,18 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
           <Chip
             icon={AlertTriangle}
             color="red"
-            label="🔴 자리 중복"
+            label="🔴 한 칸에 두 대"
             value={`${summary.dupPos.length}곳 — ${summary.dupPos.slice(0, 2).map(([k, v]) => `${k.replace(/-/g, '/')} ${v.join('·')}`).join(', ')}${summary.dupPos.length > 2 ? ' 외' : ''}`}
           />
         )}
-        {mode === 'loading' && summary.displaced > 0 && (
+        {/* 1.55: 「자리 뺏김」이 아니다 — 이름만 빌려준 것이고 그 자리는 빈자리다.
+            실물은 창고에서 차례를 기다린다 → 경고색(orange)이 아니라 정보색(blue). */}
+        {mode === 'loading' && summary.nameOnly > 0 && (
           <Chip
             icon={MoveRight}
-            color="orange"
-            label="자리 뺏김"
-            value={`${summary.displaced}대`}
+            color="blue"
+            label="이름표가 내려온 컨"
+            value={`${summary.nameOnly}대 — 실물은 창고`}
           />
         )}
         {/* TallyOne 1.15: **X-RAY 는 맨 뒤로** (검수사 지시 2026-08-06). 리퍼·사진이 앞, X-RAY 는 마지막. */}
@@ -203,7 +217,7 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
             value={`${summary.xraySealed}/${summary.xrayCount}${summary.xrayUnmatched?.length > 0 ? ` · ⚠${summary.xrayUnmatched.length} 미매칭` : ''}`}
           />
         )}
-        {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.displaced === 0 && (   /* 1.24: iso403 칩 삭제분 제외 */
+        {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.nameOnly === 0 && (   /* 1.24: iso403 칩 삭제분 제외 */
           <span className="text-[11px] text-slate-500 px-2 py-1">특이 항목 없음</span>
         )}
       </div>

@@ -16,7 +16,7 @@ import {
   fbSaveShipStructure, fbGetShipStructure, fbAddShipVoyage, fbAddShipStats,
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
-  , fbSetSeqFull   // TallyOne 1.54: 풀 컨테이너 시퀀스 작업 여부는 항차 속성이다
+  , fbSetVoyageSeqMode, resolveSeqMode   // TallyOne 1.55: 작업 개념은 셋이다(풀 시퀀스·풀만 시퀀스·풀 액츄얼). 읽기는 resolveSeqMode 하나로.
   , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
@@ -31,7 +31,7 @@ import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import WorkReportModal from '../components/WorkReportModal.jsx';
-import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg } from '../utils.js';   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
+import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos } from '../utils.js';   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
 import ShipIntroCard from '../components/ShipIntroCard.jsx';   // V9.18: 선박 소개·이름 유래
 import ConflictReviewModal from '../components/ConflictReviewModal.jsx';
@@ -374,8 +374,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   원인: 엠티 선적 엑셀(MCAT EMPTY)에는 진짜 선내 위치가 없고 그룹 카운트만 있어,
         //   파서가 만든 가짜 bay/row/tier가 EDI의 정확한 위치(BAPLIE LOC+147)를 덮어
         //   카고플랜 그림이 엉뚱하게 그려짐. EDI 위치 = 단일 진실 (카스피도 EDI 위치 그대로 사용).
-        //   사용자가 앱에서 직접 옮긴 위치는 bay_actual 경로(위에서 처리)라 영향 없음.
         //   EDI에 위치가 없을 때만(리스트 단독 컨 등) 리스트 위치 사용.
+        //
+        // ── TallyOne 1.55 재점검: **이 차단은 그대로 둔다.** ──
+        //   1.55 부터 `_updatePositionFields` 가 `ediContainers.bay/row/tier` 를 덮어쓰지 않는다
+        //   (덮어쓰던 3줄을 지웠다). 그래서 `merged[cn].bay` 는 **순수한 선사 계획**이고,
+        //   검수원이 지정한 자리는 `records.bay_actual/row_actual/tier_actual` 로만 들어온다
+        //   (바로 위에서 그대로 실어 보내고, 아래 승격 블록이 그림·목록에 올린다).
+        //   즉 여기서 막히는 `r.bay` 는 **리스트 파서가 만든 값**뿐이고 검수원 편집이 아니다.
+        //   계획이 계획을 이긴다 — 리스트의 가짜 좌표가 선사 계획을 덮지 못하게 막는 것이 맞다.
         const ediHasPos = merged[r.cn].bay !== undefined && merged[r.cn].bay !== '';
         if (!ediHasPos) {
           if (r.bay !== undefined) safeR.bay = r.bay;
@@ -405,6 +412,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             _bay_planned: c.bay,
             _row_planned: c.row,
             _tier_planned: c.tier,
+            // TallyOne 1.55: 계획 좌표를 `_edi_*` 이름으로도 같이 내려보낸다.
+            //   `utils.buildSlotUniverse`·`effectivePos` 가 **그 이름으로** 계획 좌표를 찾는다.
+            //   여기서 bay 를 비우는 것은 그림에서 빼기 위한 것뿐인데, 그 값만 보면
+            //   **칸(자리)까지 같이 사라진다** — 손님이 나가는데 방이 나가버리는 그 증상이다.
+            _edi_bay: c.bay,
+            _edi_row: c.row,
+            _edi_tier: c.tier,
             bay: '',  // 그리드에서 빠짐 (bayGroups에 안 들어감)
             row: '',
             tier: '',
@@ -420,6 +434,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             _bay_planned: c.bay,
             _row_planned: c.row,
             _tier_planned: c.tier,
+            // TallyOne 1.55: 계획 좌표는 `_edi_*` 이름으로도 내려보낸다(위 창고 가지와 같은 이유).
+            _edi_bay: c.bay,
+            _edi_row: c.row,
+            _edi_tier: c.tier,
             _position_moved: true,
           };
         }
@@ -512,7 +530,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (!ALLOWED_LIST_FIELDS.has(k)) return;  // 핵심 필드 무시
           // M6.94.32: EDI에 위치(bay)가 있으면 리스트 bay/row/tier가 덮지 못함.
           //   엠티 선적 엑셀엔 진짜 위치가 없어 가짜 값이 EDI 정확한 위치를 덮으면 그림이 깨짐.
-          //   사용자 직접 위치 수정은 bay_actual 경로로 처리되므로 영향 없음.
+          // TallyOne 1.55 재점검: **그대로 둔다.** `ediContainers.bay` 는 이제 선사 계획 전용이고
+          //   (`_updatePositionFields` 의 덮어쓰기 삭제), 검수원이 지정한 자리는 `bay_actual` 로 와서
+          //   아래 승격 블록을 탄다. 여기서 막히는 것은 리스트 파서가 만든 좌표뿐이다.
           if (isPositionField && ediBase.bay !== undefined && ediBase.bay !== '') return;
           // tmp는 EDI에 이미 있으면 덮어쓰지 않음 (EDI가 진실)
           if (k === 'tmp' && ediBase.tmp && !ediBase.tmp_missing) return;
@@ -563,6 +583,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             _bay_planned: c.bay,
             _row_planned: c.row,
             _tier_planned: c.tier,
+            // TallyOne 1.55: 같은 계획 좌표를 `_edi_*` 이름으로도 내려보낸다 —
+            //   `utils.buildSlotUniverse`·`effectivePos` 가 그 이름으로 계획 좌표를 찾는다.
+            //   (`effectivePos` 는 실체가 있으면 실체를 먼저 쓰므로 판정은 바뀌지 않는다.)
+            _edi_bay: c.bay,
+            _edi_row: c.row,
+            _edi_tier: c.tier,
             _position_moved: true,
           };
         }
@@ -821,29 +847,44 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         </button>
       </div>
 
-      {/* ── TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」 ── (검수사 확정 2026-08-12)
+      {/* ── TallyOne 1.55: 「풀 컨테이너 시퀀스 작업입니까?」 — **작업 개념은 셋이다.** ── (검수사 확정 2026-08-12)
           원문 — *"선적을 하기 전에 묻습니다. 풀 컨테이너 시퀀스 작업인지 아닌지를.
                    엠티는 안 묻는 이유는 포트만 바뀌지 않으면 언제든 액츄얼이 가능하기 때문입니다."*
-          ⚠ **항차 속성이다.** 자연어 탭의 자동/수동 모드와 별개다 — 앞선 판이 "자동=시퀀스"로 잘못 읽어
-            지침서에도 그렇게 적혀 있었고, 오늘 검수사가 정정했다. 자동/수동은 **가이드를 받을지 말지**이고
+          ⚠ 1.54 는 「예/아니오」 두 갈래뿐이라 *"풀만 시퀀스"* 와 *"풀·엠티 둘 다 시퀀스"* 를 구분하지 못했다.
+            실제 사고 — DXQD 2631W 는 **풀만 시퀀스**였는데(풀 11대는 계획대로, 엠티 324대 중 173칸의 번호만 섞였다)
+            작업자가 「아니오 — 액츄얼」을 골라 **풀 어긋남 방어가 꺼진 채 335대를 실었다.**
+          ⚠ **항차 속성이다.** 자연어 탭의 자동/수동 모드와 별개다 — 자동/수동은 **가이드를 받을지 말지**이고
             시퀀스/액츄얼은 **일항사가 정하는 적재 방침**이다.
           한 번 답하면 끝이다(작업 흐름을 막지 않는다). 답이 있으면 작은 칩만 남고, 눌러서 바꿀 수 있다.
-          답을 안 하면 앱은 **액츄얼**로 본다(firebase.js — 모르면 안 막는 쪽이 안전하다). */}
+          답을 안 하면(미정) 앱은 **액츄얼**로 본다(firebase.js — 모르면 안 막는 쪽이 안전하다). */}
       {mode === 'loading' && (tab === 'list' || tab === 'search' || tab === 'bay' || tab === 'lolo') && (() => {
         // 작업하는 탭에서만 묻는다 — 업로드·통계·결과 탭에서까지 붙잡지 않는다.
-        const _sf = voyage?.info?.seqFull;
-        const _decided = (_sf === true || _sf === false || _sf === 'true' || _sf === 'false' || _sf === 1 || _sf === 0);
-        const _isSeq = (_sf === true || _sf === 'true' || _sf === 1);
-        const _save = async (v) => {
-          try { await fbSetSeqFull(voyageKey, v, inspector || ''); setSeqEdit(false); }
+        //   ⛔ `info.seqFull` 을 직접 읽지 않는다. 옛 항차는 `seqFull` 만 있고 새 항차는 `seqMode` 라
+        //   두 모양을 아는 곳은 `resolveSeqMode` 하나뿐이다. 미정이면 null 이고 그때만 묻는 카드를 띄운다.
+        const _mode3 = resolveSeqMode(voyage?.info);
+        const _save = async (m3) => {
+          try { await fbSetVoyageSeqMode(voyageKey, m3, inspector || ''); setSeqEdit(false); }
           catch (e) { alert('저장 실패: ' + (e?.message || e)); }
         };
-        if (_decided && !seqEdit) {
+        // 문구는 **검수사 표현 그대로** 쓴다. 지어낸 용어를 넣지 않는다.
+        const _CH = [
+          { m: 'fullSeq', t: '풀 시퀀스 (풀+엠티)', lock: true,
+            d: '풀도 엠티도 계획 자리 주인이 그 자리를 지킵니다 — 남의 자리에 넣으면 한 번 더 묻습니다.',
+            cls: 'bg-amber-700 hover:bg-amber-600 text-white' },
+          { m: 'fullOnlySeq', t: '풀만 시퀀스 (엠티는 액츄얼)', lock: true,
+            d: '풀만 자리를 지킵니다. 엠티 자리는 안 묻고 바로 내줍니다.',
+            cls: 'bg-amber-800 hover:bg-amber-700 text-white' },
+          { m: 'allActual', t: '풀 액츄얼 (풀+엠티)', lock: false,
+            d: '풀도 엠티도 계획은 예약일 뿐 — 안 묻고 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.',
+            cls: 'bg-slate-700 hover:bg-slate-600 text-slate-100' },
+        ];
+        const _cur = _CH.find(x => x.m === _mode3) || null;
+        if (_cur && !seqEdit) {
           return (
             <button onClick={() => setSeqEdit(true)}
               className="mb-3 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[11px] text-slate-300 flex items-center gap-1.5">
-              <span className={`font-black ${_isSeq ? 'text-amber-300' : 'text-slate-200'}`}>
-                {_isSeq ? '🔒 풀 시퀀스 작업' : '↔ 액츄얼 작업'}
+              <span className={`font-black ${_cur.lock ? 'text-amber-300' : 'text-slate-200'}`}>
+                {_cur.lock ? '🔒' : '↔'} {_cur.t}
               </span>
               <span className="text-slate-500">— 눌러서 바꾸기</span>
             </button>
@@ -853,19 +894,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           <div className="mb-3 bg-amber-950/40 border-2 border-amber-700/60 rounded-lg p-3">
             <div className="text-[13px] font-black text-amber-200">풀 컨테이너 시퀀스 작업입니까?</div>
             <div className="text-[11px] text-amber-300/80 mt-0.5 leading-snug">
-              시퀀스면 계획 자리 주인(풀)이 그 자리를 지킵니다 — 다른 컨을 넣을 때 한 번 더 묻습니다.
+              시퀀스면 계획 자리 주인이 그 자리를 지킵니다 — 다른 컨을 넣을 때 한 번 더 묻습니다.
               <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.
-              <br/>엠티는 어느 쪽이든 묻지 않습니다.
+              <br/>풀과 엠티가 다를 수 있으니 셋 중에서 고르세요.
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-2.5">
-              <button onClick={() => _save(true)}
-                className="py-2.5 rounded font-bold text-sm bg-amber-700 hover:bg-amber-600 text-white">
-                예 — 시퀀스 작업
-              </button>
-              <button onClick={() => _save(false)}
-                className="py-2.5 rounded font-bold text-sm bg-slate-700 hover:bg-slate-600 text-slate-100">
-                아니오 — 액츄얼 작업
-              </button>
+            <div className="grid grid-cols-1 gap-2 mt-2.5">
+              {_CH.map(ch => (
+                <button key={ch.m} onClick={() => _save(ch.m)}
+                  className={`py-2.5 px-3 rounded text-left ${ch.cls} ${ch.m === _mode3 ? 'ring-2 ring-amber-300' : ''}`}>
+                  <div className="font-bold text-sm">{ch.lock ? '🔒' : '↔'} {ch.t}</div>
+                  <div className="text-[11px] opacity-80 mt-0.5 leading-snug">{ch.d}</div>
+                </button>
+              ))}
             </div>
             {seqEdit && (
               <button onClick={() => setSeqEdit(false)}
@@ -1006,17 +1046,21 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         //   Y는 actual 없고, Y의 계획 위치를 다른 컨이 actual로 점유
         const displaced = (() => {
           if (mode !== 'loading') return [];
-          // 1) actual 위치 → 점유한 컨번호 맵
+          // 1) 그 칸을 실제로 차지한 컨 맵.
+          //   TallyOne 1.55: **실렸는지는 `completed` 로만 판단한다.**
+          //   1.55 부터 `_updatePositionFields` 가 선적확인 전에도 `bay_actual` 을 쓰므로
+          //   "실체가 있으면 실린 것"이라는 옛 암묵 규칙이 깨졌다. 실체 유무로 세면
+          //   아직 안 실은 컨이 남의 자리를 뺏은 것으로 잡힌다.
           const occupiedBy = new Map();
           allEdiContainers.forEach(c => {
-            if (c._position_moved && c.bay_actual) {
-              const key = `${c.bay_actual}-${c.row_actual}-${c.tier_actual}`;
-              occupiedBy.set(key, c.cn);
-            }
+            if (!compMap[c.cn]) return;                   // 실린 것만 칸을 차지한다
+            const p = effectivePos(c);
+            if (!p.bay || !p.row || !p.tier) return;      // 창고(`__`)·미배정은 자리가 아니다
+            occupiedBy.set(`${p.bay}-${p.row}-${p.tier}`, c.cn);
           });
           // 2) 자기 계획 위치를 다른 컨이 점유했는데 자기는 actual 없음
           return allEdiContainers.filter(c => {
-            if (c._position_moved) return false;  // 이미 옮긴 컨 제외
+            if (compMap[c.cn]) return false;        // 이미 실린 컨은 이름표를 잃은 것이 아니다
             // _bay_planned가 있으면 그것이 진짜 계획 (effective 변환된 경우)
             // 없으면 c.bay (원본 그대로)
             const planBay = c._bay_planned || c.bay;
