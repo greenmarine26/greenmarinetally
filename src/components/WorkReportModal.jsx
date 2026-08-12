@@ -13,7 +13,7 @@ import { fbAddWorkReport, fbUpdateVoyageInfo } from '../firebase.js';
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort } from '../utils.js';
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo } from '../utils.js';
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -27,7 +27,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
   // V8.10: 현재 항차 부두 기준 장비 목록(PCTC 1~4 / PNCT 1~5). 항차 없으면 1~5 전체.
   const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));
   // V8.10: 해치 제외 4척(TMPZ·TNJP·RZOR·OBWH)은 해치커버 대신 주야간 작업갯수를 작업보고로 기록한다.
-  const isHatchSkipShip = /TMPZ|TNJP|RZOR|OBWH/i.test(`${voyage?.info?.vsl || ''} ${voyage?.info?.vslFull || ''}`);
+  const isHatchSkipShip = isHatchSkipShipInfo(voyage?.info);   // 1.56-06: 단일 소스(utils) — ATPR 추가(자동 해치, 검수사 확정 2026-08-12)
   // V8.10: 주야간 보고 — 진입 시 시각 자동 판정(reportShiftToShow), 토글로 수동 전환.
   const [dnShift, setDnShift] = useState(null);   // null이면 자동, '주간'|'야간'이면 수동 고정
 

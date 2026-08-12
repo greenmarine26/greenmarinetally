@@ -12,7 +12,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -45,7 +45,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V8.09-17 (메모4)→V8.10: 해치커버 계산·보고를 하지 않는 선박들.
   //   TMPZ는 해치가 자동(유압식)이고, TNJP·RZOR·OBWH도 해치커버 계산 대상이 아니다(사용자 확정 2026-06-19).
   //   네 선박은 해치 대신 주야간 작업갯수를 기록한다(작업보고 WorkReportModal의 주야간 보고). vsl/vslFull 어디든 매칭되면 해치 프롬프트·계산·보고를 건너뛴다.
-  const isHatchSkipShip = /TMPZ|TNJP|RZOR|OBWH/i.test(`${voyage?.info?.vsl || ''} ${voyage?.info?.vslFull || ''}`);
+  const isHatchSkipShip = isHatchSkipShipInfo(voyage?.info);   // 1.56-06: 단일 소스(utils) — ATPR 추가(자동 해치, 검수사 확정 2026-08-12)
   const berthSide = voyage?.info?.berthSide || '';          // 'starboard'(우현) | 'port'(좌현)
   // V8.10: 부두별 장비 목록. PCTC 1~4호기, PNCT 1~5호기(여객석 RORO 1대 추가). 부두 미상이면 1~5 전체.
   const equipNumbers = equipNumbersForPier(getPierFromBerth(voyage?.info?.berth || ''));

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.56-05';   // 위치 지정 접힘을 버튼처럼 — 크고 밝게, 「위치 지정」이 먼저 보이게(검수사 지적: 옅은 회색이라 누르는 건지 구분 안 됨)
+export const APP_VERSION = 'TallyOne 1.56-06';   // ATPR = 자동 해치커버 — 해치 제외 선박 명단에 추가·단일 소스화(검수사 확정: 커버 열고 다음을 체크하지 않는다)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3925,6 +3925,16 @@ export function isLuggageCn(cn) {
 //   → 선박이 상시로 싣고 오는 대수를 기억하고, 리스트−EDI 차이가 그 안이면 LUGGAGE 로 본다.
 //   ⚠ LUGGAGE 는 **양하 개수에 포함되지 않는다**(검수사 확정) — 컨RORO·벌크와 반대다.
 export const SHIP_LUGGAGE = { RZOR: 1 };
+
+// V8.10 확립 → 1.56-06 단일 소스화: **해치커버 계산·보고를 하지 않는 선박.**
+//   종전엔 GuidedWorkPanel·WorkReportModal 이 같은 정규식을 복제해 들고 있었다(한쪽만 고치면 갈라진다).
+//   TMPZ = 자동(유압식) · TNJP·RZOR·OBWH(검수사 확정 2026-06-19)
+//   ATPR = 자동 — 검수사 확정 2026-08-12: "ATPR은 해치커버 자동이라 커버 열고 다음을 체크하지 않습니다."
+//   이 선박들은 해치 프롬프트·장수 계산·커버 보고를 건너뛰고, 대신 주야간 작업갯수를 기록한다.
+export const HATCH_SKIP_RE = /TMPZ|TNJP|RZOR|OBWH|ATPR/i;
+export function isHatchSkipShipInfo(info) {
+  return HATCH_SKIP_RE.test(`${info?.vsl || ''} ${info?.vslFull || ''}`);
+}
 export function shipLuggageCount(voyageKey) {
   const code = String(voyageKey || '').split('_')[0].toUpperCase();
   return SHIP_LUGGAGE[code] || 0;
