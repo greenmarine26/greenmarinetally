@@ -433,6 +433,9 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
     const newEdi = { ...cur, [field]: newValue };
     // _orig 필드들 제거 (records 전용)
     delete newEdi.edits;
+    // 1.55-03: 위치·이력은 계획이 아니다 — EDI 에 없던 컨(리스트 단독 등)에 온도/ISO 만 찍어도
+    //   records 좌표가 「선사 계획」으로 위조 생성됐다(독립 재검증 P1-10). 계획 노드에는 안 싣는다.
+    ['bay','row','tier','bay_actual','row_actual','tier_actual','actual_at','actual_by','moves','_comp'].forEach(k => { delete newEdi[k]; });
     Object.keys(newEdi).forEach(k => {
       if (k.endsWith('_orig') || k.endsWith('_history')) delete newEdi[k];
     });

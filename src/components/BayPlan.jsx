@@ -950,7 +950,9 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             {printMode === 'cargo-v2' && (
         <ErrorBoundary name="카고 플랜 V2 (M6.81 회귀)" onClose={() => setPrintMode(null)}>
           <PrintableCargoPlanV2
-            containers={containers}
+            /* 1.55-03: 카고플랜은 계획이다 — 부모가 실체로 승격한 좌표를 계획(_edi_*)으로 되돌려 그린다.
+               종전엔 PrintHub 경유(계획)와 이 버튼 경유(실적)가 같은 종이에 다른 그림을 냈다(독립 재검증 P1-2). */
+            containers={containers.map(c => (c._edi_bay !== undefined && c._edi_bay !== '') ? { ...c, bay: c._edi_bay, row: c._edi_row, tier: c._edi_tier } : c)}
             mode={mode}
             voyageInfo={voyageInfo}
             shipImo={shipImo}

@@ -488,6 +488,7 @@ export default function App() {
         {route.name === 'voyage' && (
           voyages[route.voyageKey] ? (
           <VoyagePage
+            key={route.voyageKey}   /* 1.55-03: 항차를 바꿔 열면 앞 항차의 모드·탭 state 가 남았다(선적 전용 항차가 빈 양하 화면에 갇힘 — 독립 재검증 P1-9). 재마운트로 initModeOverride 가 다시 읽힌다. */
             initModeOverride={route.mode || null}
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}

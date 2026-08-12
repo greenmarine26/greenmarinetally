@@ -49,6 +49,8 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
           if (!c.cn) return;
           arr.push({
             ...c,
+            /* 1.55-03: 실체 위치 승격 — fbSetActualPosition 은 bay_actual 만 쓰므로 승격이 없으면 계획 자리로 답했다(독립 재검증 P1-6). 창고(__)는 제외. */
+            ...((c.bay_actual && c.row_actual && c.tier_actual && !String(c.bay_actual).startsWith('__')) ? { bay: c.bay_actual, row: c.row_actual, tier: c.tier_actual } : {}),
             voyageKey: vKey,
             vsl: v.info.vsl,
             voy: v.info.voy,

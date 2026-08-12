@@ -403,7 +403,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //   (firebase.js `_markPlanTaken`). 그러니 여기서 bay 를 비우는 것은 **그림에서 빼기 위한 것뿐**이고,
     //   계획 좌표는 `_bay_planned` 에 그대로 살아 있다 — 화면은 그 값을 「이름 걸린 자리」로 보여줘야 한다.
     //   ⛔ 창고 컨을 미배정으로 세지 마라. 「자리 미지정」(계획도 없음)과 「창고」(계획은 있음)는 다른 상태다.
-    if (mode === 'loading') {
+    // 1.55-03: 모드 게이트 제거 — 1.55가 ediContainers 동기화를 지운 뒤 양하에서 자리를 옮기면
+    //   (records.bay 는 ediHasPos 에 막혀) 그림·리스트가 계획 칸을 계속 그렸다(독립 재검증 P1-1).
+    //   실체(bay_actual)가 있으면 양하도 실체로 승격한다. 실체 없는 컨은 종전 그대로다.
+    {
       return list.map(c => {
         if (c.bay_actual === '__STG__') {
           // 보관함으로 빠진 컨 — 그리드에는 안 보이고 별도 StorageBox에서 처리
@@ -569,8 +572,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     // M4.9e-fix 2단계: 선적 모드 — 실체 위치 적용
     //   actual 있으면 → 실체 위치로 그리드에 그려짐
     //   계획 위치는 _bay_planned/_row_planned/_tier_planned에 보존 (보고서/UI용)
-    //   양하 모드는 변경 없음 (EDI가 실체)
-    if (mode === 'loading') {
+    //   1.55-03: 양하도 실체가 있으면 승격 — 양하 EDI 는 원래 실체지만, 검수원이 자리를 고치면 bay_actual 이 새 실체다.
+    {
       return baseContainers.map(c => {
         if (c.bay_actual && c.row_actual && c.tier_actual) {
           return {
@@ -3104,7 +3107,7 @@ function WorkReportHistory({ voyageKey }) {
           {list.slice(0, 50).map(r => (
             <div key={r.k} className="text-[12px] bg-slate-800/60 rounded px-2.5 py-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-200">{({work_status:'작업',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${r.equip}호기` : ''}</span>
+                <span className="font-bold text-slate-200">{({work_status:'작업',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${String(r.equip).endsWith('호기') ? r.equip : `${r.equip}호기`}` : ''}</span>
                 <span className="text-slate-500 mono">{(r.ts || r.at) ? new Date(r.ts || r.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
               </div>
               {(r.text || r.message || r.summary) && (

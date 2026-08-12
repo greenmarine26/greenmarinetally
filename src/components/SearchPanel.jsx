@@ -1517,6 +1517,12 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
     setBusy(true);
     try {
+      // 1.55-03: 이미 실물이 실린 칸이면 **배정 전에** 묻는다 — firebase 는 차단하지 않고 밀어내며,
+      //   이 경로는 그 반환(displacedWasCompleted)을 안 읽어 조용히 지나갔다(독립 재검증 P1-11).
+      const _occAt = (b, r, t) => { const n = parseInt(b, 10); const o = slotOcc.get(`${Number.isFinite(n) ? n : b}/${r}/${t}`); return (o && o.done) ? o : null; };
+      const _hits = [_occAt(bay, rowP, tierP), _occAt(backPos.bay, backPos.row, backPos.tier)].filter(Boolean);
+      if (_hits.length && !(await askYN('이미 실물이 실린 칸입니다',
+        `${_hits.map(o => String(o.cn).slice(-4)).join(', ')} 가 그 칸에 이미 선적확인돼 있습니다.\n계속하면 그 기록이 밀려납니다. 계속할까요?`))) return;
       // V9.52: 자리 교환 — 밀려난 계획 컨은 이 컨의 옛 자리로 옮겨 대기(미배정 떠돌이 방지)
       // TallyOne 1.54: `actualWork` 는 **자연어 탭의 자동/수동 모드**에서 온 것이지 시퀀스 여부가 아니다.
       //   (앞선 판이 "자동=시퀀스, 수동=액츄얼"로 잘못 읽었다 — 검수사가 오늘 정정했다.
