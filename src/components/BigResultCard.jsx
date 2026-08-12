@@ -320,13 +320,14 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           그런데 종전 화면은 「수동 배정 — 위치 지정」을 위에 크게 걸어 놨다. 작업자가 335대를 전부
           그 버튼으로 처리해 `unassign` 182줄 · 카고플랜 173칸 덮어쓰기 · 칸 소멸 · 베이 잠김이 파생됐다.
           → 번호 수정을 위로 올려 강조하고, 위치 지정은 **접이식 예외**로 내린다. */}
-      {isLoading && !cnFixOpen && (
+      {/* 1.55-02: 완료된 카드에서는 숨긴다 — 완료 컨 자리에 새 번호를 얹으면 실물 1대에 완료 2건이 남는다(독립 재검증 P0-3). 완료 기록이 틀렸으면 [선적확인 취소]가 먼저다. */}
+      {isLoading && !isDone && !cnFixOpen && (
         <button onClick={() => { setCnFixOpen(true); setCnFixQuery(''); setCnFixPick(null); }}
           className="w-full mt-2 py-3.5 rounded-lg font-black text-base bg-cyan-700 hover:bg-cyan-600 text-white border-2 border-cyan-400 flex items-center justify-center gap-1.5">
           <RotateCcw className="w-5 h-5"/>컨테이너 번호 수정 (다른 컨이 옴)
         </button>
       )}
-      {isLoading && cnFixOpen && (
+      {isLoading && !isDone && cnFixOpen && (
         <div className="mt-2 bg-slate-900 border border-cyan-800 rounded-lg p-2 space-y-2">
           <div className="text-[11px] text-cyan-300 font-bold">실제 온 컨테이너 번호 (끝 4자리 이상)</div>
           {cnFixPick ? (

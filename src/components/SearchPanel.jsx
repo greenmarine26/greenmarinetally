@@ -1268,6 +1268,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               <BigResultCard c={main[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(main[0])}
+                /* 1.55-02: 번호 수정으로 다른 컨을 배정했으면 그 컨으로 재검색 — 카드가 갈아 끼워진다.
+                   종전엔 트윈만 onReplace 를 받아, 싱글은 창고로 간 옛 컨 카드가 남고 [선적확인]이 그대로 눌렸다
+                   (fromStorage 부활 → 한 칸 두 대 + 이중 완료, 독립 재검증 P0-1). */
+                onReplace={(nc) => { if (nc?.cn) { setDraft(nc.cn); setQuery(nc.cn); } }}
                 /* TallyOne 1.48: 싱글도 같다 — 작업 구역을 골랐으면 위치 지정에서 다시 묻지 않는다. */
                 workGroup={manualCtx?.selectedGroup ?? null} workTier={manualCtx?.selectedTier ?? null} slotSource={allContainers} bayPairsIn={manualCtx?.bayPairs ?? null}
                 onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
@@ -1278,6 +1282,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               <BigResultCard c={doneSolo[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(doneSolo[0])}
+                onReplace={(nc) => { if (nc?.cn) { setDraft(nc.cn); setQuery(nc.cn); } }}
                 workGroup={manualCtx?.selectedGroup ?? null} workTier={manualCtx?.selectedTier ?? null}
                 slotSource={allContainers} bayPairsIn={manualCtx?.bayPairs ?? null}
                 onAfterComplete={() => { setDraft(''); setQuery(''); stopSpeak(); }}
@@ -1464,7 +1469,10 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   };
 
   // [수동 배정 확인] — 기존 위치를 보여준 상태에서 확인 = 두 컨 즉시 미배정 (사용자 확정)
-  const confirmManual = async () => {
+  // 1.55-02: 프리필 기준 컨을 인자로 — 맞바뀜(⇄)에서는 앞 실물 = c2 의 계획 칸이다.
+  //   종전엔 무조건 c1 계획 칸을 집어 줘서, 그대로 확정하면 맞바뀜의 반대(계획 그대로)가 기록됐다(독립 재검증 P0-2).
+  const confirmManual = async (prefillC) => {
+    const pf = (prefillC && prefillC.cn) ? prefillC : c1;
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const done = [c1, c2].filter(c => c._comp);
     if (done.length && !(await askYN('이미 선적확인된 컨입니다',
@@ -1476,8 +1484,8 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       // TallyOne 1.55: **지금 작업 중인 칸이 기본값이어야 한다.**
       //   종전엔 자리 그리드가 빈 상태로 열려, 방금 화면에 떠 있던 그 칸을 검수원이 다시 골라야 했다
       //   (베이 한 번 + 칸 한 번 = 쌍마다 두 번의 헛클릭). 앞 컨의 계획 칸을 미리 집어 준다.
-      const b0 = c1.bay ? String(parseInt(c1.bay, 10)) : '';
-      if (b0 && c1.row && c1.tier) { setPickBay(b0); setBay(b0); setRow(c1.row); setTier(c1.tier); }
+      const b0 = pf.bay ? String(parseInt(pf.bay, 10)) : '';
+      if (b0 && pf.row && pf.tier) { setPickBay(b0); setBay(b0); setRow(pf.row); setTier(pf.tier); }
       setStep('pos');
     } catch (e) { alert(`미배정 처리 실패: ${e?.message || e}`); }
     finally { setBusy(false); }
@@ -1626,7 +1634,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                   예외 경로로 내리고 문구를 사실에 맞게 고친다. 다만 앞뒤가 반대로 실린 경우는
                   이것이 **사실대로 적는 유일한 길**이라 접지 않고 그대로 내놓는다. */}
               {planPair.swapped ? (
-                <button onClick={confirmManual} disabled={busy}
+                <button onClick={() => confirmManual(c2)} disabled={busy}
                   className="w-full py-3 rounded-lg font-bold text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-indigo-50">
                   ⇄ 실제로 맞바뀌어 실렸습니다 — 위치 지정
                 </button>
@@ -1637,7 +1645,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                     <div className="text-[10px] text-slate-500 leading-snug">
                       번호가 다른 컨이 온 것이라면 이 길이 아닙니다 — 카드의 <b className="text-cyan-300">[컨테이너 번호 수정]</b> 을 쓰세요.
                     </div>
-                    <button onClick={confirmManual} disabled={busy}
+                    <button onClick={() => confirmManual()} disabled={busy}
                       className="w-full py-2 rounded-lg text-[12px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-50">
                       계획에 없는 칸에 실렸습니다 — 위치 지정
                     </button>
@@ -1655,7 +1663,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                   ? '두 컨 중 지정 자리가 없는 쪽이 있습니다 — 위치를 지정하세요.'
                   : '플랜상 짝 자리가 아닙니다 — 위치를 지정하세요.'}
               </div>
-              <button onClick={confirmManual} disabled={busy}
+              <button onClick={() => confirmManual()} disabled={busy}
                 className="w-full py-3 rounded-lg font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
                 <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 미배정 후 위치 지정'}
               </button>
