@@ -55,7 +55,7 @@ import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1.8: 리퍼 온도 확인
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, onGoHome, onModeChange, initModeOverride = null }) {
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null }) {   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   const hasDis = !!voyage?.discharge;
   const hasLoa = !!voyage?.loading;
@@ -1058,6 +1058,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           shipLib={shipLib}
           portMisData={portMisData}
           pilotForecast={pilotForecast}
+          terminalWork={terminalWork}
           isLoloShip={isLoloShip}
           diagAlerts={diagAlerts}
           mode={mode}

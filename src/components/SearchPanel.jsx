@@ -69,7 +69,7 @@ function narrowByFullCn(list, q) {
   return list;
 }
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null }) {   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, terminalWork = {} }) {   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -562,7 +562,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} />
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
@@ -646,7 +646,7 @@ function TwinPossibleHint({ c, allContainers, voyage }) {
   );
 }
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
+function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, terminalWork = {} }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
   const [query, setQuery] = useState('');
   // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
   //   "숫자가 아닌 텍스트가 입력이 될때는 대기 하고 전송키로 전송을 누르면 질문에 답을 해주게").
@@ -659,6 +659,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const submitDraft = () => { const v = draft.trim(); if (!v) return; setQuery(v); logQuerySettled(v); };
   const [weatherText, setWeatherText] = useState(null);   // V7.92: 날씨 질문 비동기 답변
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
+  const lastTopicRef = useRef(null);  // 1.69-01: 직전 답 주제 — "83건이 뭐야"류 후속 연결용(간단 캐시)
   const fixTriedRef = useRef('');     // V7.80: AI 복원 1회 제한
   const [fixingVoice, setFixingVoice] = useState(false);
   const [showOthers, setShowOthers] = useState(false);  // V7.90: 반대 모드·완료분 접이식
@@ -726,6 +727,40 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     {
       const a = answerAboutAlert(query, diagAlerts);
       if (a) return a;
+    }
+    // 1.69-01: **«진행» 질문은 터미널 실황(terminal_work)이 1순위다** — 수석 통합검색(1.68-01)과
+    //   답의 근본이 같아야 한다(검수사 원칙: "자연어 질문 답은 근본은 하나임").
+    //   신고 2026-08-14 — 같은 "STSE 진행상황"에 통합검색은 양하 306/306·선적 31/265, 여기는 "0%"라 답했다.
+    //   베이·조건이 붙은 진행 질문("20번 베이 남은 거")은 종전 formatProgress 그대로 둔다.
+    //   터미널 피드가 없는 항차는 아래 종전 경로(앱 검수 기록)로 흘러간다.
+    if (/진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났/.test(query)
+        && !/자료|브리핑|요약/.test(query)
+        && !parsed.digits && parsed.bay == null && !parsed.zone && !parsed.size && !parsed.fe && !parsed.type) {
+      const tw = (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()];
+      if (tw && (tw.disPlan || tw.lodPlan)) {
+        const ship = voyage?.info?.vslFull || voyage?.info?.vsl || '';
+        const seg = [];
+        if (tw.disPlan) seg.push(`양하 ${tw.disDone ?? 0}/${tw.disPlan}${tw.disDone >= tw.disPlan ? ' 완료' : ''}`);
+        if (tw.lodPlan) seg.push(`선적 ${tw.lodDone ?? 0}/${tw.lodPlan}`);
+        const L = [`${ship} — ${seg.join(' · ')}${tw.pct != null ? ` (전체 ${tw.pct}%)` : ''}${tw.delayed ? ' · ⚠ 지연 중' : ''}`];
+        if (tw.startAt) L.push(`작업 시작 ${String(tw.startAt).slice(5, 16)}`);
+        if (tw.depEtd) L.push(`출항 예정 ${String(tw.depEtd).slice(5, 16)} (터미널 기준)`);
+        if (tw.updatedAt) { const m = Math.round((Date.now() - tw.updatedAt) / 60000); L.push(`터미널 피드 ${m}분 전 갱신`); }
+        const dc = Object.keys(voyage?.discharge?.completed || {}).length;
+        const lc = Object.keys(voyage?.loading?.completed || {}).length;
+        if (dc || lc) L.push(`앱 검수 기록 — 양하 ${dc} · 선적 ${lc}`);
+        else L.push('앱 검수 기록은 없습니다(이 항차는 앱 검수 미사용).');
+        return L.join('\n');
+      }
+    }
+    // 1.69-01: 브리핑 속 «N건» 후속 — "실 점검 필요 83건" 뒤 "83건이 뭐야"가 끝자리 검색으로
+    //   빠졌다(검수사 신고). 직전 답 주제를 기억해 그 주제의 상세로 잇는다. howToQuery보다 앞.
+    if (/(?:\d+\s*건|그게|그거|저거|아까\s*(?:그|말한)\s*거?)\s*(?:이|가|은|는|이란)?\s*(?:뭐|뭔|무엇|무슨|내용|상세|자세)/.test(query)) {
+      const topic = parsed.sealAuditQuery ? 'seal' : lastTopicRef.current;
+      if (topic === 'seal' || (topic === 'briefing' && /건/.test(query))) {
+        const modeCs = allContainers.filter(c => c._mode === workFilter);
+        return generateSealAuditAnswer(modeCs, workFilter === 'discharge' ? '양하' : '선적');
+      }
     }
     // V8.00: 인수인계 — 남은 작업+양하신고+특이사항 정리 + 되묻기. 최우선.
     // TallyOne 1.65: "그 기능 어디서 하지?" — 컨 조회보다 **먼저** 답한다.
@@ -827,7 +862,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk),
       { ...manualCtx, shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
           return (c && Object.keys(c).length) ? c : predictShiftingFromVoyage(voyage); })() });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork]);
+
+  // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).
+  useEffect(() => {
+    if (!localAnswer) return;
+    if (parsed.sealAuditQuery) lastTopicRef.current = 'seal';
+    else if (parsed.briefingQuery) lastTopicRef.current = 'briefing';
+  }, [localAnswer, parsed]);
 
   // V7.92: 날씨 질문 — Open-Meteo(무키) 평택항 좌표. 실패 시 조용히 안내문.
   useEffect(() => {

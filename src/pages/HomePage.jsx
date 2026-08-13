@@ -72,8 +72,9 @@ const _voyCore = (x) => {
 
 // V9.57: 죽은 prop onOpenGlobalSearch 제거 — 이 컴포넌트 안에서 쓰는 곳이 없었다(App쪽 전달부 정리는 판2).
 // TallyOne 1.0 (K5): 맛집(onOpenFood)·건강점검(onOpenHealth) 개별 진입 → 보조기능(onOpenAux, #/aux) 하나로 교체
-export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux, onRefreshData, refreshing = false, refreshedAt = 0 }) {
+export default function HomePage({ voyages, inspectors, inspector, portMisData = {}, pilotForecast = {}, terminalWork = {}, onOpenVoyage, onOpenChiefDashboard, heartbeat = null, onOpenAux, onRefreshData, refreshing = false, refreshedAt = 0, onOpenGlobalSearch = null }) {   // 1.69-01: 홈 검색 진입 복원
   const [showCreate, setShowCreate] = useState(null); // 'discharge' | 'loading'
+  const [homeQ, setHomeQ] = useState('');   // 1.69-01: 홈 검색창 — 통합검색으로 들고 가는 질문
   const [vsl, setVsl] = useState('');
   const [voy, setVoy] = useState('');
   // V9.57: showPortMisCapture 상태 제거 — 켜는 버튼이 V9.42에 삭제돼 항상 false였던 고아 상태
@@ -582,6 +583,22 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           첫 화면에서 가장 큰 자리를 차지했는데 매일 쓰는 것은 아래 항차 목록이다.
           · 수석 대시보드 → '진행 중인 항차' 줄 가운데(빈 공간)로
           · 통합 검색·PORT-MIS 캡처 → 수석 대시보드 바로가기 그리드의 빈칸으로 */}
+      {/* 1.69-01: 홈 검색 진입 복원 — 검수사: "통합검색이든 자연어 검색이든 검수앱 홈화면에 넣어 달라고
+          했는데 그게 창에서 사라짐." V9.42가 3카드를 지울 때 검색 진입로까지 같이 사라졌었다.
+          카드 대신 한 줄 검색창 — 치고 검색을 누르면 통합검색이 그 질문으로 바로 답한다(검수원도 진입 가능). */}
+      {onOpenGlobalSearch && (
+        <form onSubmit={(e) => { e.preventDefault(); onOpenGlobalSearch(homeQ.trim()); }} className="relative mb-3">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
+          <input type="text" value={homeQ} onChange={(e) => setHomeQ(e.target.value)}
+            placeholder="통합검색 · 자연어 질문 — 컨번호 끝자리, 용어, 기능"
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-16 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-600"
+            style={{ minHeight: 44 }} />
+          <button type="submit"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-2 py-1">
+            검색
+          </button>
+        </form>
+      )}
       {/* TallyOne 1.19: 미회신 오답 — 소유자만 본다. 누르면 수석 대시보드(오답 리포트)로. */}
       {fbUnanswered > 0 && isOwnerName(inspector) && (
         <button onClick={onOpenChiefDashboard}

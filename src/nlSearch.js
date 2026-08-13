@@ -102,8 +102,11 @@ export function parseNaturalQuery(text) {
   // TallyOne 1.22: **시각 표현을 컨번호로 읽지 않는다.** (오답 1786057401908 직접 원인 —
   //   "도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?" 의 0830 을 끝 4자리로 잡아 "(일치 결과 없음)")
   const hasTimeCtx = /\d{1,2}\s*시\s*\d{1,2}\s*분|\d{1,2}\s*:\s*\d{2}|도선|파일럿|접안|입항|출항|작업\s*(?:시간|시각|시작|개시|예정)/i.test(t);
+  // 1.69-01: **브리핑이 말한 «N건»은 컨번호 끝자리가 아니다.** (검수사 신고 2026-08-14 —
+  //   "실 점검 필요 83건" 뒤 "83건이 뭐야"의 83이 끝자리로 잡혀 엉뚱한 컨을 답했다)
+  const hasCountFollowCtx = /\d+\s*건\s*(?:이|가|은|는|이란)?\s*(?:뭐|뭔|무엇|무슨|내용|상세|자세)/.test(t);
   const skipDigits = hasTempCtx || hasBayCtx || hasUnCtx || hasClassCtx ||
-                     hasSizeCtx || hasWeightCtx || hasStackCtx || hasTimeCtx;
+                     hasSizeCtx || hasWeightCtx || hasStackCtx || hasTimeCtx || hasCountFollowCtx;
   if (!skipDigits) {
     const digits = String(text).replace(/\D/g, '');
     if (digits.length >= 2) result.digits = digits.slice(-4);
@@ -317,6 +320,8 @@ export function parseNaturalQuery(text) {
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
   if (/(실\s*번호|씰|실)\s*(점검|검사|오류|확인|체크)|리스트\s*(점검|검사|확인|체크)|점검\s*(?:해|좀|줘|할까)/i.test(t)) result.sealAuditQuery = true;
+  // 1.69-01: «N건» 후속이 실·씰·점검 문맥이면 실 점검 상세로 — "점검 필요 83건이 뭐야"(검수사 신고).
+  if (!result.sealAuditQuery && hasCountFollowCtx && /실\s*번호|씰|(?:^|\s)실|점검/.test(t)) result.sealAuditQuery = true;
   // TallyOne 1.50: **"어디 갔어?"는 현재 위치가 아니라 경로를 묻는 말이다.**
   //   검수사 확정 2026-08-11 — *"특정 컨테이너가 여기에 있어야 하는데 어디로 갔지 하고 물으면
   //   어디 선적때 어떤 컨테이너로 바뀌어서 어디로 이동 시켰습니다 라고 알려 줘야 합니다."*

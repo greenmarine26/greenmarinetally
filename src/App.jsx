@@ -64,6 +64,7 @@ export default function App() {
   const [pilotForecast, setPilotForecast] = useState({});
   // V9.36: 터미널 작업 현황(진행률·출항 ETD) — 작업 마무리 시 출항시간 표기용
   const [terminalWork, setTerminalWork] = useState({});
+  const [searchInitQ, setSearchInitQ] = useState('');   // 1.69-01: 홈 검색창 질문을 통합검색으로 들고 간다
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력 (TallyOne 1.0: 모달 → 로그인 화면으로 승격)
   const [inspector, setInspector] = useState('');
   const [showStaffManager, setShowStaffManager] = useState(false);  // M5.73
@@ -295,7 +296,7 @@ export default function App() {
     if (target) {
       const r = parseHash(target);
       if (r.name === 'login') target = '';
-      else if ((r.name === 'chief' || r.name === 'search') && !roleGate) target = '';
+      else if (r.name === 'chief' && !roleGate) target = '';   // 1.69-01: #/search는 검수원도 연다(홈 검색 진입 복원)
     }
     if (!target) target = roleGate ? '#/chief' : '#/';
     window.history.replaceState(null, '', target);
@@ -422,6 +423,7 @@ export default function App() {
             onOpenChiefDashboard={() => navigate('chief')}
             heartbeat={heartbeat}
             onOpenAux={() => navigate('aux')}
+            onOpenGlobalSearch={(q) => { setSearchInitQ(typeof q === 'string' ? q : ''); navigate('search'); }}   /* 1.69-01: 홈 검색 진입 복원 */
           />
         )}
         {route.name === 'food' && (
@@ -433,19 +435,20 @@ export default function App() {
             onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
           />
         )}
-        {/* TallyOne 1.0 (K2): 통합검색은 수석·소유자 전용 */}
+        {/* TallyOne 1.0 (K2): 통합검색은 수석·소유자 전용이었다.
+            1.69-01: 검수원에게도 연다(홈 검색 진입 복원 — 검수사: "통합검색이든 자연어 검색이든 검수앱
+            홈화면에 넣어 달라"). 컨 조회·용어·기능 설명은 답하고, 수석 전용 통계는 GlobalSearchPage가
+            isChief로 걸러 1.69 유도 문구를 답한다. */}
         {route.name === 'search' && (
-          chiefOrOwner ? (
-            <GlobalSearchPage
-              voyages={voyages}
-              onOpenContainer={(c) => setGlobalDetail(c)}
-              portMisData={portMisData}
-              terminalWork={terminalWork}
-              heartbeat={heartbeat}
-            />
-          ) : (
-            <DeniedChiefOnly onGoHome={() => navigate('home')}/>
-          )
+          <GlobalSearchPage
+            voyages={voyages}
+            onOpenContainer={(c) => setGlobalDetail(c)}
+            portMisData={portMisData}
+            terminalWork={terminalWork}
+            heartbeat={heartbeat}
+            isChief={chiefOrOwner}
+            initialQuery={searchInitQ}
+          />
         )}
         {/* TallyOne 1.0 (K2): 수석 대시보드 게이트 (ChiefDashboard 내부 가드와 이중 방어) */}
         {route.name === 'chief' && (
@@ -459,7 +462,7 @@ export default function App() {
               onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
               onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
               onGoHome={() => navigate('home')}
-              onOpenGlobalSearch={() => navigate('search')}
+              onOpenGlobalSearch={() => { setSearchInitQ(''); navigate('search'); }}
             />
           ) : (
             <DeniedChiefOnly onGoHome={() => navigate('home')}/>
@@ -478,7 +481,8 @@ export default function App() {
         {route.name === 'voyage' && (
           voyages[route.voyageKey] ? (
           <VoyagePage
-            key={route.voyageKey}   /* 1.55-03: 항차를 바꿔 열면 앞 항차의 모드·탭 state 가 남았다(선적 전용 항차가 빈 양하 화면에 갇힘 — 독립 재검증 P1-9). 재마운트로 initModeOverride 가 다시 읽힌다. */
+            key={route.voyageKey}
+            terminalWork={terminalWork}   /* 1.69-01: 진행 질문 — 터미널 실황 1순위(수석 통합검색과 답의 근본 통일) */   /* 1.55-03: 항차를 바꿔 열면 앞 항차의 모드·탭 state 가 남았다(선적 전용 항차가 빈 양하 화면에 갇힘 — 독립 재검증 P1-9). 재마운트로 initModeOverride 가 다시 읽힌다. */
             initModeOverride={route.mode || null}
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}

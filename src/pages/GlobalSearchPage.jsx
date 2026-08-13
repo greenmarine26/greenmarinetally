@@ -9,8 +9,8 @@ import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 �
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
 import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 
-export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat }) {   // 1.69: heartbeat — 수집기 상태 즉답
-  const [query, setQuery] = useState('');
+export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '' }) {   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
+  const [query, setQuery] = useState(initialQuery || '');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -81,6 +81,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   //   ⚠ fbListArchive 는 키당 메타 4건 GET — 자동 호출 금지(1.6 사고: 요청 1,120건). 질문이 왔을 때만 1회.
   const [chiefData, setChiefData] = useState({});
   useEffect(() => {
+    if (!isChief) return;   // 1.69-01: 검수원은 수석 노드(feedback·tally_pending·archive)를 읽지 않는다
     const q = debouncedQuery || '';
     if (q.length < 2) return;
     const want = [];
@@ -120,6 +121,17 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (!debouncedQuery || debouncedQuery.length < 2) return null;
     const p = parsed;
     const Q = debouncedQuery;
+    // 1.69-01: 검수원 진입(홈 검색) — 컨 조회·용어·기능 설명은 그대로 답하고,
+    //   수석 전용 통계·자료현황은 1.69 유도 문구로 넘긴다(검수사 확정 계열).
+    //   ⚠ 기능 질문("마감 텔리 어디서 만들어")까지 막지 않게, 수석 통계 분기와 같은 모양만 잡는다.
+    if (!isChief && (
+      /오답|미회신|피드백|수집기|하트비트|mailpilot/i.test(Q)
+      || (/마감|텔리/.test(Q) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(Q))
+      || /이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*항차/.test(Q)
+      || /자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착|왔)/.test(Q)
+    )) {
+      return '수석 전용 정보입니다. 자세한 내용은 수석 검수사에게 문의하세요.';
+    }
     // ── 1.69: 수석 통계·이력 — 배 이름 없이 묻는 것 (학습서 ②′) ──
     //   ⚠ 전부 howToQuery 판정보다 앞이다 — '뭐 있어'·'어떻게' 류가 기능 색인에 먼저 먹히면 안 된다.
     const _err = (v, what) => (v && v.__error) ? `${what}를 읽지 못했습니다 — 네트워크 확인 후 다시 물어봐 주세요.` : null;
@@ -216,7 +228,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       }
     }
     if (p.howToQuery) {
-      const _a = generateHowToAnswer(debouncedQuery, p, { isChief: true });
+      const _a = generateHowToAnswer(debouncedQuery, p, { isChief });
       if (_a) return _a;
     }
     // 자료 현황 — "어느 선박 자료 다 있어" · "어느 선사 것이 없지" · "빠진 자료"
@@ -295,7 +307,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산 · 1.69-01: 검수원 게이트
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
