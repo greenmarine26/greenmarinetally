@@ -23,11 +23,10 @@ export function extractShipMetaFromVoyage(voyage) {
   const voy = info.voy_d || info.voy_l || info.voy || '';
 
   // CASP 코드 자동 추론 (사용자가 모르므로 자동)
-  //   우선순위:
+  //   우선순위 (1.58-01 로 두 단계만 남았다):
   //   1) info.code (베이사전이 이미 매칭됐으면 갖고 있음)
-  //   2) callsign 처음 4자 (예: V7A576 → V7A5)
-  //   3) vsl 단어들 첫 글자 (예: SAWASDEE ATLANTIC → SAAT)
-  //   4) vsl 처음 4자
+  //   2) info.vsl — 항차 키 앞부분, 검수사가 항차를 만들 때 넣은 진짜 약자
+  //   ⛔ 폐기: 콜사인 · 선박명 이니셜 · 선박명 앞4자 — 전부 허상 키를 만들었다(아래 참조)
   let code = info.code || '';
   // TallyOne 1.13-02: **항차의 선박 코드(info.vsl)가 콜사인 앞4자보다 먼저다.**
   //   info.vsl 은 항차 키(`NSFR_2615N`)의 앞부분 — 검수사가 항차를 만들 때 넣은 진짜 코드다.
@@ -40,27 +39,24 @@ export function extractShipMetaFromVoyage(voyage) {
     const _v = String(vsl).toUpperCase().trim();
     if (/^[A-Z0-9]{3,8}$/.test(_v)) code = _v;
   }
-  // TallyOne 1.45-04: **호출부호를 자르지 않는다** (검수사 확정 2026-08-11).
-  //   검수사 원문 — *"호출부호를 자르지 말고 하세요."* · *"지금 호출부호를 보면 중복이 되지 않습니다."*
-  //   콜사인 전체(3~7자)는 배마다 유일하다. 앞 4자로 자르는 순간에만 충돌이 생긴다 —
-  //   현실에 없는 충돌을 앱이 만들어 냈다. 실측 2026-08-11:
-  //     V7A4986(KOBE TRADER, IMO 9915973) ↔ V7A4922(YOKOHAMA TRADER, IMO 9915961) → 둘 다 `V7A4`
-  //     V7A5451(STARSHIP DRACO) ↔ V7A5452(PEGASUS PROTO) → 둘 다 `V7A5`
-  //     V7A281(SAWASDEE ATLANTIC) ↔ V7A2845(STAR FRONTIER) → 둘 다 `V7A2` (NSFR이 SWAT 매트릭스를 물어온 사고)
-  //   조회 쪽은 이미 콜사인 **완전 일치**만 인정한다(shipStructure.js fb-exact · userBayDict _matchInDict).
-  //   자르지 않으면 그 경로와 기준이 맞는다.
-  if (!code && callsign) {
-    code = callsign;
-  }
-  if (!code && vsl) {
-    const words = vsl.toUpperCase().split(/\s+/).filter(Boolean);
-    if (words.length >= 2) {
-      code = words.slice(0, 4).map(w => w[0]).join('');
-      if (code.length < 4 && words[0]) code = (code + words[0].substring(1)).substring(0, 4);
-    } else if (words[0]) {
-      code = words[0].substring(0, 4);
-    }
-  }
+  // ★ TallyOne 1.58-01: **호출부호도 선박명도 선박약자가 될 수 없다** (검수사 확정 2026-08-13).
+  //   검수사 원문: *"선박 약자에 호출부호를 붙이고 그걸 선박약자로 부르는것 같습니다."*
+  //             · *"이건 초기앱이 허상으로 만들어 낸것 같습니다. YKTD는 … YKTD로만 왔지
+  //                나머지는 사용한적이 없습니다."*
+  //
+  //   여기 있던 폴백 두 개가 사전에 **허상 키 75개**를 만들었다(2026-08-13 전수 실측).
+  //     ① 호출부호를 코드로 → `V7A4`(YKTD) · `D5MO`(OBWH) · `3E39`(MCSN) · `5LRE`(MCAT) …
+  //     ② 선박명 이니셜/앞4자를 코드로 → `YOKO`·`ARTO`·`GENE`(YKTD) · `XINQ`(DXQD) ·
+  //        `STOW`(TMPZ) · `ATLA`(SWAT) · `CARG`·`XINT`(XTPG) …
+  //   실측: 매트릭스 105키 중 **실제로 불리는 것은 30키뿐**이었다. 항차는 언제나 검수사가
+  //   쓰는 약자(YKTD·DXQD·XTPG)로 오고, 나머지는 한 번도 조회되지 않았다.
+  //   허상 키는 자리만 차지하는 데서 끝나지 않는다 — 같은 배가 여러 벌로 갈려
+  //   "빌더에서 고쳤는데 화면은 그대로"의 원인이 된다.
+  //
+  //   그래서 **약자를 못 정하면 만들지 않는다.** 빈 코드로 두면 handleSave 가 저장을 막고
+  //   검수사가 직접 넣는다(현장 호칭이 정답이고, 그건 사람만 안다).
+  //   ⚠ 콜사인·선박명은 계속 entry 의 별도 필드로 저장된다 — 조회에서 완전 일치로 쓰인다.
+  //     키로 쓰지 않을 뿐이다.
 
   return { code: code || '', name: vsl, imo, callsign, voy };
 }

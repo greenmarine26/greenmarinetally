@@ -533,7 +533,8 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       return;
     }
     if (!shipMeta.code) {
-      alert('CASP 코드를 입력하세요 (자동 추론된 값 사용 권장)');
+      // 1.58-01: 약자를 앱이 지어내지 않는다(호출부호·선박명 폴백 폐기) — 여기서 사람에게 받는다.
+      alert('선박 약자를 넣어 주세요.\n\n현장에서 부르는 약자 그대로 넣습니다 (예: YKTD · DXQD · XTPG).\n호출부호(V7A4986)나 선박명(YOKOHAMA TRADER)을 넣으면 사전이 갈라집니다.');
       return;
     }
     // M6.94.5: callsign을 인자로 직접 전달 (이전엔 사후 보강 → 단일 책임 어김)
