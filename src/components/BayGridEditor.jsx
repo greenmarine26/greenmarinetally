@@ -23,6 +23,15 @@ import { autoPairBays, generatePdfBays, buildPosMap, computeBayRenderData, defau
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import * as P from '../planEditCore.js';
 
+// 칸 한 개의 크기(px). «1번 베이나 마지막 베이나 같아야 한다» — 검수사 확정 2026-08-13.
+//   근거는 종이다. CASP 양하 베이플랜(STSE 2523E) 15장을 150dpi 로 전수 실측한 결과
+//   열이 7개인 장(BAY01)이든 15개인 장이든 칸은 «전부 140 × 96px» 로 똑같았다.
+//   달라지는 것은 칸이 아니라 격자 전체 크기이고, 그 격자가 종이 안에서 가운데로 온다.
+//   그래서 여기서도 칸을 고정하고 시트 폭을 열 수에 비례시킨다(sheetW).
+//   비율 137:94 = 1.458 은 종이 140:96 = 1.458 과 같다.
+const BGE_CELL_W_MAX = 137;
+const BGE_CELL_RATIO = 140 / 96;   // 종이 실측 칸 비율 1.458
+
 export const BGE_CSS = `
 .bge-overlay{position:fixed;inset:0;background:#0f172a;z-index:10000;display:flex;flex-direction:column;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','맑은 고딕',sans-serif}
 /* 카고플랜은 편집기 위로 — .cpv2-overlay 기본 z-index 50은 .bge-overlay 10000에 묻힌다.
@@ -48,7 +57,9 @@ export const BGE_CSS = `
 .bge-nav button.chg{border-color:#f59e0b;border-width:2px}
 .bge-body{flex:1;display:flex;min-height:0}
 .bge-stage{flex:1;overflow:auto;padding:10px;background:#1e293b;position:relative}
-.bge-sheet{background:#fff;border-radius:6px;padding:10px;color:#111;max-width:1180px;min-width:900px;margin:0 auto 12px;display:flex;flex-direction:column;height:calc(100vh - 138px);min-height:480px}
+/* 1.67: 칸이 4~5줄이 되면서 «화면 높이에 욱여넣기»가 불가능해졌다(overflow:hidden 이라 잘렸다).
+   높이를 내용에 맡기고 .bge-stage(overflow:auto)가 세로로 굴리게 한다. 인쇄는 종전대로 height:auto. */
+.bge-sheet{background:#fff;border-radius:6px;padding:10px;color:#111;min-width:420px;margin:0 auto 12px;display:flex;flex-direction:column;min-height:480px;flex-shrink:0}
 .bge-sheet:last-child{margin-bottom:0}
 .bge-sheet-body{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
 .bge-boxwrap{flex:1 1 0;min-height:0;display:flex;flex-direction:column;border:1px solid #111;border-radius:3px;overflow:hidden}
@@ -69,7 +80,74 @@ export const BGE_CSS = `
 .bge-empty-msg{flex:1;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;text-align:center;padding:30px;line-height:1.7}
 
 /* 편집 오버레이 — 상태 클래스는 색만 바꾼다 (크기 속성 금지) */
-.bge-edit .cpv2-cell{font-size:clamp(7px,0.68vw,10px) !important;line-height:1.05;border:1px solid #94a3b8 !important;box-sizing:border-box;flex:1 1 0 !important;min-width:0 !important;max-width:none !important;overflow:hidden}
+/* 1.67: 칸 폭에 «상한»을 둔다 — 종이는 열이 몇이든 칸 폭이 일정하고, 열이 적으면
+   격자 자체가 좁아져 가운데로 모인다(종이 BAY01 은 7열이라 좌우가 크게 빈다).
+   종전엔 max-width:none 이라 열이 적을수록 칸만 옆으로 늘어나, 글자가 칸의 40%만 채우고
+   «오른쪽이 남았다»(검수사 지적 2026-08-13). 폭 상한 + 줄 가운데 정렬로 종이와 같아진다.
+   container-type 은 아래 글자 크기(cqw)가 «칸 폭»을 기준으로 삼게 하려는 것이다. */
+/* 칸 폭 정본 — JS(sheetW)와 CSS 가 같은 값을 써야 격자와 시트가 어긋나지 않는다. */
+/* BGE_CELL_W = 124 */
+/* 칸 폭은 «시트를 좁혀서» 맞춘다 — 칸에 max-width 를 걸어 가운데로 모으는 방법은 쓰지 않는다.
+   그렇게 하면 격자 «틀»은 폭 100% 그대로라, 틀 오른쪽에 붙는 단 번호(88·86·84…)가
+   격자에서 150px 떨어져 오른쪽에 덩그러니 남는다(검수사 지적 "아직도 우측 여백이").
+   틀만 줄이려고 .cpv2-grid 를 flex:0 1 auto 로 바꿔 봤더니 이번엔 칸이 통째로 수축했다
+   (자식 칸이 flex-shrink:1 이라 basis 가 안 버틴다).
+   종이가 하는 방식이 답이다 — CASP 는 «칸 폭이 일정»하고 열이 적으면 종이 위 격자 자체가 좁다.
+   그래서 시트 폭을 열 수 × 칸 폭으로 잡는다(아래 렌더의 sheetW). 격자는 시트를 꽉 채우고,
+   단 번호는 격자 바로 옆에 붙고, 시트는 margin:0 auto 로 가운데 온다. */
+/* 칸 크기는 «못 박는다» — flex 로 나눠 주면 열 수에 따라 소수점이 남아 베이마다 0.8px 씩 달라진다.
+   종이(CASP 15장)가 열 수와 무관하게 140 × 96px 로 똑같으므로 여기서도 고정값을 준다.
+   남는 폭은 tier-row 의 가운데 정렬이 처리한다. */
+.bge-edit .cpv2-tier-row,.bge-edit .cpv2-row-labels{justify-content:center}
+.bge-edit .cpv2-cell,.bge-edit .cpv2-cell-empty,.bge-edit .cpv2-row-labels > span{
+  flex:0 0 var(--bge-cw) !important;width:var(--bge-cw) !important;max-width:var(--bge-cw) !important}
+.bge-edit .cpv2-cell{container-type:inline-size;font-size:clamp(7px,0.68vw,10px) !important;line-height:1.15;border:1px solid #94a3b8 !important;box-sizing:border-box;flex:1 1 0 !important;min-width:0 !important;overflow:hidden;
+  /* 1.67: 종이처럼 «왼쪽 위로 쌓는» 여러 줄. 종전 가운데 정렬(cpv2-cell)은 2줄 전용이었다. */
+  /* 정렬은 flex-start 다. 종이는 «앞 세 줄이 촘촘히 붙고, 좌표 줄만 칸 아래에» 떨어져 있다
+     (종이 실측: 3줄 연속 → 빈 줄 하나 → 좌표). 그 «빈 줄 하나»는 .bge-at 의 margin-top:auto 가 만든다.
+     ⛔ space-between 을 쓰면 안 된다 — 네 줄 «사이사이»가 모두 균등하게 벌어져
+       앞 세 줄까지 흩어진다(1.67 실측, 검수사 재지적).
+     ⛔ center 도 안 된다 — 내용이 칸보다 클 때(리퍼 5줄) «위아래 양쪽으로» 삐져나가
+       윗줄이 잘리지 않고 옆 단 칸을 덮는다(1.67 실측: 82단 리퍼가 08단을 덮었다).
+       overflow:hidden 도 이것은 못 막는다 — 넘친 쪽이 시작 지점보다 위이기 때문이다.
+     여백은 종이 실측 비율 그대로 — 위 12%·아래 13%·좌우 5%(종이 92px 칸에서 위 11px·아래 12px·좌 7px).
+     ⚠ 종전 위 3px 은 첫 줄이 «선에 붙어» 보였다(검수사 지적 2026-08-13).
+     ★ 가로는 가운데다(align-items:center + text-align:center) — 검수사 요청 2026-08-13.
+       종이는 왼쪽 정렬이지만 화면에서는 가운데가 낫다고 하셨다.
+     ⛔ 세로(justify-content)는 flex-start 를 유지한다 — center 로 바꾸면 위의 리퍼 사고가 돌아온다. */
+  flex-direction:column !important;align-items:center !important;justify-content:flex-start !important;text-align:center;padding:8px 6px 6px;font-weight:400 !important;line-height:1.35 !important}
+.bge-edit .cpv2-cell > span{width:100%;text-align:center}
+/* 1.67: 칸이 4~5줄이 되면서 «높이를 위에서 내려주는» 방식을 편집기 안에서만 뒤집는다.
+   카고플랜 원본은 시트 높이를 정해 놓고 flex:1 1 0 체인으로 단마다 나눠 준다(2줄 전용 설계).
+   줄이 늘어난 지금 그 체인 안에서 tier-row 에만 min-height 를 주면, 부모가 못 늘어나
+   ① 단 라벨이 옛 간격으로 남아 90·88·86… 이 줄과 어긋나고
+   ② 데크 마지막 단과 홀드 첫 단이 겹친다 (1.67 실측 — 82단 위에 08단이 얹혔다).
+   그래서 편집기 안에서는 높이를 «내용이 정하게» 하고 시트는 .bge-stage 가 굴린다.
+   ⚠ 줄 높이를 바꿀 때는 tier-row 와 tier-labels>span 두 값을 «반드시 같이» 바꾼다 —
+     둘은 형제 flex 컬럼이라 서로의 높이를 모른다. */
+/* ⛔ 푸는 것은 «세로»를 맡은 것만이다. .cpv2-grid 와 .cpv2-tier-labels 는 부모가 row 라
+   그 flex 는 «가로 폭»이다 — 같이 풀었더니 열이 내용 폭으로 쪼그라들었다(1.67 실측). */
+.bge-edit .cpv2-bay-section,.bge-edit .cpv2-bay-content,.bge-edit .cpv2-deck-area,
+.bge-edit .cpv2-hold-area,.bge-edit .cpv2-grid-row-wrap{flex:0 0 auto !important;min-height:0 !important}
+.bge-edit .cpv2-tier-spacer{display:none !important}
+/* 줄 높이 94px — 종이 셀 비율(가로:세로 = 142:92 = 1.54)에 칸 폭 상한 124px 을 대입한 값이다(124/1.54 ≈ 80,
+   여기에 종이의 «좌표 줄 위 빈 줄» 한 칸을 더해 94). 이 빈 줄은 .bge-at 의 margin-top:auto 가 만든다.
+   종전 58px 은 폭 165px 대비 2.84 로 «납작»했고, 그래서 글자가 좌상단에 몰리고 아래가 비었다
+   (검수사 지적 2026-08-13: "텍스트들이 너무 상단좌측에 치우칩니다").
+   4줄이면 space-between 이 좌표 줄을 아래로 밀어 종이처럼 중간이 뜨고,
+   리퍼 5줄이면 빈 줄 없이 꽉 찬다(5×13.5 = 68 ≤ 80-6). */
+/* 데크는 «아래로», 홀드는 «위로» 붙인다 — 그래야 단이 적은 베이도 경계선 높이가 같다(종이와 동일).
+   높이는 배 전체 최대 단 수로 못 박는다. 남는 쪽이 종이의 «위아래 빈 공간»이 된다.
+   ⚠ deck-area/hold-area 가 아니라 «격자와 단 라벨»에 건다 —
+     영역에 걸면 위의 min-height:0 !important 에 지고, justify-content 가 열 라벨줄까지 밀어 버린다.
+     격자와 단 라벨 두 곳에 «같이» 걸어야 단 번호가 줄과 어긋나지 않는다. */
+.bge-edit .cpv2-deck-area .cpv2-grid,.bge-edit .cpv2-deck-area .cpv2-tier-labels{
+  min-height:var(--bge-deckh) !important;justify-content:flex-end !important}
+.bge-edit .cpv2-hold-area .cpv2-grid,.bge-edit .cpv2-hold-area .cpv2-tier-labels{
+  min-height:var(--bge-holdh) !important;justify-content:flex-start !important}
+.bge-edit .cpv2-tier-row{flex:0 0 auto !important;min-height:var(--bge-ch)}
+.bge-edit .cpv2-tier-labels > span{flex:0 0 auto !important;min-height:var(--bge-ch)}
+.bge-edit .bge-boxwrap,.bge-edit .bge-boxbody,.bge-edit .bge-sheet-body{flex:0 0 auto !important}
 .bge-edit .cpv2-bay-section{padding:1px}
 .bge-edit .cpv2-cell.bge-fill{cursor:grab;background:#fff;border-color:#1e293b !important}
 .bge-edit .cpv2-cell.bge-fill:active{cursor:grabbing}
@@ -97,11 +175,31 @@ export const BGE_CSS = `
    둘 다 배치 불가(드롭 차단). 크기에 영향 주는 속성은 쓰지 않는다 — 격자 기하 고정 규칙. */
 .bge-edit .cpv2-cell.bge-x{background:#fff;border-color:#111 !important;cursor:not-allowed}
 .bge-edit .cpv2-cell.bge-shadow{background:#e5e7eb !important;border-color:#9ca3af !important;cursor:not-allowed;color:transparent}
-.bge-x-mark{font-weight:800;font-size:11px;color:#111;line-height:1}
-.bge-edit .cpv2-cell.bge-x .bge-adjcn,.bge-edit .cpv2-cell.bge-shadow .bge-adjcn{color:#334155 !important;opacity:.85}
+/* 1.67: 종이(CASP)와 같은 «칸을 가로지르는 큰 X». 종전 11px 글자 X 는 4~5줄 칸에서 안 보였다.
+   크기 속성이 아니라 배경이라 격자 기하는 건드리지 않는다. */
+.bge-x-mark{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(to top right,transparent calc(50% - 0.5px),#334155 calc(50% - 0.5px),#334155 calc(50% + 0.5px),transparent calc(50% + 0.5px)),
+             linear-gradient(to bottom right,transparent calc(50% - 0.5px),#334155 calc(50% - 0.5px),#334155 calc(50% + 0.5px),transparent calc(50% + 0.5px))}
 .bge-edit .cpv2-cell.bge-shadow{color:inherit !important}
-.bge-cn{font-weight:800;font-size:9.5px;letter-spacing:-.3px;font-family:ui-monospace,monospace;display:block}
-.bge-sub{font-size:8px;color:#64748b;display:block}
+/* 1.67: 칸 글자는 CASP 종이(STSE 2523E 양하 베이플랜)를 150dpi 로 재서 맞췄다.
+   종이 실측 — 셀 142×92px 안에서 글자 12px(셀 높이의 13%) · 줄 간격 16px(17.3%) ·
+   왼쪽 여백 7px(폭의 4.9%) · 그리고 «네 줄 모두 같은 크기·같은 색·보통 굵기»다.
+   종전에는 컨번호만 9.5px 800굵기 검정, 나머지는 8px 회색이라 종이와 달랐다.
+   ⚠ 컨번호만 굵기 600 을 남긴다 — 화면은 종이보다 작아 번호를 눈으로 집을 데가 필요하다.
+     크기·색은 종이대로 통일했으니 «크기로» 구분되지는 않는다. */
+/* 글자 크기는 «칸 폭에 비례»한다(cqw). 종이는 컨번호 11자가 칸 폭의 약 88%를 채운다 —
+   monospace 자폭이 대략 0.6em 이므로 11 × 0.6 × 13cqw ≈ 86cqw 로 그 비율이 나온다.
+   고정 px 로 두면 열 수에 따라 칸 폭이 달라져 어떤 베이는 글자가 헐렁해진다. */
+.bge-cn{font-weight:600;font-size:clamp(7px,8.8cqw,12px);letter-spacing:-.2px;font-family:ui-monospace,monospace;display:block;color:#111}
+.bge-sub{font-size:clamp(7px,8.8cqw,12px);color:#111;display:block;letter-spacing:-.2px;font-family:ui-monospace,monospace;font-weight:400}
+/* ★ 첫 줄(출발/도착)만 왼쪽에 붙인다 — 검수사 2026-08-13:
+     "맨 윗줄은 좌측에 가야 합니다. 이유는 통과화물등이 우측을 사용합니다."
+   실제로 XRAY 별표(cpv2-xray::after)와 통과 표시가 칸 «우측 상단»에 찍히므로,
+   첫 줄을 가운데 두면 그 표시와 겹친다. 나머지 줄은 가운데 정렬 그대로. */
+.bge-l1{font-size:clamp(7px,8.8cqw,12px);color:#111;display:block;letter-spacing:-.2px;font-family:ui-monospace,monospace;font-weight:400;text-align:left !important;padding-right:11px}
+/* 좌표 줄만 칸 아래로 — 종이의 «빈 줄 하나»가 이것이다. 줄이 늘면(리퍼 온도) 저절로 사라진다. */
+.bge-at{font-family:ui-monospace,monospace;color:#111;margin-top:auto}
+.bge-tmp{color:#0369a1;font-weight:600}
 @media print{
   /* 인쇄 대상 확정 — CARGO_V2_CSS가 함께 주입되면서 그 안의
        body > *:not(.cpv2-overlay):not(.bd-print-modal){display:none}   (0,2,1)
@@ -261,6 +359,51 @@ export default function BayGridEditor({
 
   // 격자 기하는 편집 시작 시점 배치로 고정 — 옮길 때마다 재계산되면 셀이 틀어진다
   const basePosMap = useMemo(() => buildPosMap(containers), [containers]);
+
+  // 이 배에서 «가장 열이 많은 베이»의 열 수. 모든 장이 이 폭을 쓴다(sheetW).
+  //   베이사전 한 벌만 훑으므로 싸다. hasZero 면 00열이 하나 더 붙는다.
+  const maxCols = useMemo(() => {
+    let m = 0, zero = false;
+    for (const b of (dictData?.bayDef?.baysSummary || [])) {
+      for (const arr of [b.deckCells, b.holdCells]) {
+        if (Array.isArray(arr)) for (const n of arr) { const v = Number(n) || 0; if (v > m) m = v; }
+      }
+      const rc = Number(b.rowCount) || 0; if (rc > m) m = rc;
+      if (b.hasZero) zero = true;
+    }
+    return Math.max(m + (zero ? 1 : 0), 7) + 1.5;   // +1.5 = 종이의 좌우 여유
+  }, [dictData]);
+
+  // 세로도 같은 원리다. 종이(CASP)는 «데크/홀드 경계선이 어느 장이든 같은 높이»에 온다 —
+  //   데크는 아래로 붙이고 홀드는 위로 붙이며, 단이 적은 베이는 데크 위·홀드 아래가 빈다.
+  //   그래서 배 전체의 최대 데크 단·최대 홀드 단으로 두 영역의 높이를 못 박는다.
+  //   검수사 2026-08-13: "좌우는 맞았습니다 이제 상하입니다."
+  const maxTiers = useMemo(() => {
+    const bs = dictData?.bayDef?.baysSummary || [];
+    let d = 0, h = 0;
+    for (const b of bs) {
+      const hl = (b.holdTiers || []).length; if (hl > h) h = hl;
+      // ⚠ 데크 최대는 «홀드가 있는 베이»에서만 센다.
+      //   선미 쪽 데크 전용 베이(STSE 27·28·29)는 92단을 갖고 홀드가 0이라, 같이 세면 6이 나온다.
+      //   검수사 확정 2026-08-13: "이 선박으로 따지면 홀드 티어 4 데크 티어 5입니다."
+      //   그 예외 베이는 min-height 를 넘겨 제 단 수(6)대로 그려지므로 잘리지 않는다.
+      if (hl > 0) { const dl = (b.deckTiers || []).length; if (dl > d) d = dl; }
+    }
+    if (!d) for (const b of bs) { const dl = (b.deckTiers || []).length; if (dl > d) d = dl; }
+    return { deck: Math.max(d, 1), hold: Math.max(h, 1) };
+  }, [dictData]);
+
+  // 칸 크기는 «화면에 최대 열이 다 들어가도록» 정한다 — 그래야 종이 한 장처럼 보인다.
+  //   배 안에서는 어느 베이든 같은 값이다(검수사 확정: 1번 베이나 마지막 베이나 같아야 한다).
+  const [stageW, setStageW] = useState(1200);
+  useEffect(() => {
+    const el = stageRef.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const read = () => setStageW(el.clientWidth || 1200);
+    const ro = new ResizeObserver(read); ro.observe(el); read();
+    return () => ro.disconnect();
+  }, []);
+  const cellW = Math.max(60, Math.min(BGE_CELL_W_MAX, Math.floor((stageW - 66) / maxCols)));
+  const cellH = Math.round(cellW / BGE_CELL_RATIO);
   const colorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
   const pod = useMemo(() => {
     const c = {}; for (const x of containers) { const p = x.pod; if (p) c[p] = (c[p] || 0) + 1; }
@@ -286,7 +429,11 @@ export default function BayGridEditor({
       //   'X'는 defaultGetSelfMark가 자기 컨의 POD 불일치에도 주는 값이라,
       //   컨을 옮기면 비운 자리가 잘못 막힌다. 현재 위치(state.pos)로 직접 계산한다.
       const adjMap = {}, adjCnMap = {}, adjBayMap = {};
-      const oddNum = isPair ? null : num(k);
+      // TallyOne 1.67: 걸침 «판정»은 양쪽(N-1·N+1) 그대로 둔다 — 40ft 는 물리적으로 두 자리를 먹으므로
+      //   그 칸은 어느 쪽 장에서 보든 막혀 있어야 한다. 바뀐 것은 판정이 아니라 «표기»다(makeContent).
+      //   다만 짝수 단독 박스(예 BAY38)는 제가 40ft 라 걸침이라는 것이 없다 —
+      //   종전엔 oddNum 에 짝수까지 넣어 37·39 컨을 끌어와 남의 베이 컨으로 칸을 막았다.
+      const oddNum = (!isPair && num(k) % 2 === 1) ? num(k) : null;
       for (const [cn, p] of Object.entries(state.pos)) {
         if (p.storage) continue;
         const b = num(p.bay);
@@ -582,6 +729,33 @@ export default function BayGridEditor({
       </div>, document.body);
   }
 
+  // TallyOne 1.67: 칸 내용을 CASP 종이(정답 그림 DPRT 2512S 10장)와 같은 4~5줄로 맞춘다.
+  //   종전 2줄(뒤 7자리 / 소유자 4자 + 규격)은 종이와 달라 나란히 놓고 대조가 안 됐다 —
+  //   검수사 지적 "뭐가 뭔지 난해합니다".
+  //   줄 구성은 종이 그대로다.
+  //     PTK/PYK*SGN   출발3/도착3(*최종3)
+  //     BEAU5179806   컨번호 «전체 11자리» — 종전엔 앞 4자를 잘라 소유자를 아랫줄로 내렸다
+  //     NSS F11.7 DCHC 선사 · F/E+중량(톤) · 규격
+  //     -18.0C        리퍼일 때만
+  //     ....101088    베이·열·단
+  //   규격 글자는 앱 공용 isoToLabel(40HC·20DC)을 그대로 쓴다. 종이의 CASP 표기(DCHC·DC20)와
+  //   글자는 다르지만 뜻은 같고, 여기서 따로 매핑을 만들면 다른 화면과 갈린다(작업표준 2-2-D).
+  const p3 = (x) => String(x || '').trim().slice(-3);
+  const cellLines = (cn) => {
+    const c = state.byCn.get(cn) || {};
+    const pos = state.pos[cn] || {};
+    const rt = [p3(c.pol), p3(c.pod)].filter(Boolean).join('/');
+    const t = Number(c.wt) > 0 ? (Number(c.wt) / 1000).toFixed(1) : '';
+    return {
+      c,
+      route: rt + (c.fpod ? `*${p3(c.fpod)}` : ''),
+      spec: [c.op || '', [c.fe || '', t].filter(Boolean).join(''), isoToLabel(c.iso) || ''].filter(Boolean).join(' '),
+      temp: (c.rf && c.tmp !== '' && c.tmp != null && !Number.isNaN(Number(c.tmp))) ? `${Number(c.tmp).toFixed(1)}C` : '',
+      // 베이는 padBay — pad2 는 100번대 베이를 '100'→'00' 으로 자른다(planEditCore 15행 주석).
+      at: pos.bay ? `....${P.padBay(pos.bay)}${P.pad2(pos.row)}${P.pad2(pos.tier)}` : '',
+    };
+  };
+
   const makeContent = (box) => (cell, tier) => {
     const cn = box.cellMap[`${P.pad2(tier)}-${cell.rowLbl}`];
     if (!cn) {
@@ -590,19 +764,38 @@ export default function BayGridEditor({
         const k2 = `${P.pad2(tier)}-${cell.rowLbl}`;
         const aCn = box.adjCnMap[k2];
         if (aCn) {
-          // V9.23-03: 옆 베이 컨이 차지한 자리 — 번호를 보여 잡을 수 있게 한다.
-          //   종전엔 'X'만 찍혀 그 컨을 편집기에서 건드릴 방법이 없었다(사용자 신고: 28데크 X 3개).
-          return (<><span className="bge-cn bge-adjcn">{aCn.slice(4)}</span>
-            <span className="bge-sub">{box.adjBayMap[k2]}베이 {box.adjMap[k2]}ft</span></>);
+          // TallyOne 1.67: 옆 베이가 먹은 자리는 «X 하나»만 그린다 — 종이와 같게.
+          //   V9.23-03 이 여기에 컨번호를 얹은 뒤로, 20ft 단독 베이 한 장이 옆 40ft 번호로 덮였다.
+          //   STSE 2662W BAY23 은 제 컨이 4대인데 24베이 40ft 64대가 얹혀 4대가 묻혔고,
+          //   그 64대는 (24)25 장에도 제 컨으로 또 나와 «같은 컨이 두 장»에 떴다.
+          //   정답 그림(CASP DPRT 2512S) BAY17 장은 먹힌 자리를 전부 큰 X 하나로만 그린다.
+          //   ⚠ V9.23-03 이 지키려던 «그 컨을 잡는 길»은 안 잃는다 —
+          //     칸을 눌러 고르기·끌어 옮기기·상태줄 안내(makeExtra)는 그대로고,
+          //     그 컨의 4줄 상세는 제 장인 (N)(N+1) 페어 박스에 «같은 탭 안에서» 나란히 있다.
+          return <span className="bge-x-mark" aria-hidden="true" />;
         }
       }
       return null;
     }
-    const c = state.byCn.get(cn) || {};
-    const unplaced = mode === 'loading' && c._placed === false;
-    return (<><span className="bge-cn">{state.shiftSet.has(cn) ? '◆' : ''}{unplaced ? '·' : ''}{cn.slice(4)}</span>
-      <span className="bge-sub">{cn.slice(0, 4)} {isoToLabel(c.iso) || ''}</span></>);
+    const L = cellLines(cn);
+    const unplaced = mode === 'loading' && L.c._placed === false;
+    return (<>
+      <span className="bge-l1">{L.route}</span>
+      <span className="bge-cn">{state.shiftSet.has(cn) ? '◆' : ''}{unplaced ? '·' : ''}{cn}</span>
+      <span className="bge-sub">{L.spec}</span>
+      {L.temp ? <span className="bge-sub bge-tmp">{L.temp}</span> : null}
+      <span className="bge-sub bge-at">{L.at}</span>
+    </>);
   };
+  // 시트 폭은 «배 전체에서 가장 열이 많은 베이» 하나로 정해 모든 장에 같이 쓴다.
+  //   검수사 확정 2026-08-13: "1번 베이를 보면 좌우 여백이 있습니다. 셀로 따지면 좌우측 각 3개 정도의
+  //   여백. 우리앱은 좌우측 여백이 없습니다. 7개 로우만으로도 꽉찼습니다. 그러면 11개 로우를 그리려면?"
+  //   종이가 정확히 그렇다 — CASP 는 «장마다 종이 크기가 같고»(A4 가로) 격자만 가운데 놓이므로,
+  //   7열짜리 BAY01 은 좌우에 3열분이 남고 11열짜리 장은 거의 꽉 찬다.
+  //   종전처럼 시트 폭을 그 베이의 열 수에 비례시키면 7열 장은 시트째로 좁아져 여백이 사라진다.
+  //   여기에 좌우 여유 1.5열분을 더해 종이의 «남는 공간»을 재현한다.
+  const sheetW = maxCols * cellW + 16 + 30;
+
   const makeExtra = (box) => (cell, tier) => {
     const cn = cell.rowLbl ? box.cellMap[`${P.pad2(tier)}-${cell.rowLbl}`] : null;
     // V9.07-05: 옆 짝수 베이가 차지한 자리 — 표기는 카고플랜과 동일, 드롭은 차단.
@@ -725,7 +918,9 @@ export default function BayGridEditor({
           onDragLeave={(e) => { if (!stageRef.current?.contains(e.relatedTarget)) clearOver(); }} onDrop={clearOver} onDragEnd={clearOver}>
           {rubber && <div className="bge-rubber" style={{ left: rubber.left, top: rubber.top, width: rubber.w, height: rubber.h }} />}
           {boxes.map((b) => (
-            <div key={b.key} className="bge-sheet bge-edit">
+            <div key={b.key} className="bge-sheet bge-edit"
+              style={{ width: sheetW, '--bge-cw': `${cellW}px`, '--bge-ch': `${cellH}px`,
+                '--bge-deckh': `${maxTiers.deck * cellH}px`, '--bge-holdh': `${maxTiers.hold * cellH}px` }}>
               <div className="bge-sheet-title" style={{ textAlign: 'center', fontWeight: 800, fontSize: 14, marginBottom: 6, flexShrink: 0 }}>
                 {shipName} {voyageInfo || ''} — {mode === 'loading' ? '선적' : '양하'} (BAY {b.label})
               </div>
