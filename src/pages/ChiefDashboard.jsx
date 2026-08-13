@@ -18,6 +18,8 @@ import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel
 import { isChief, canOpenChief } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
 import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
+import { buildReadiness } from '../dataReadiness.js';   // 1.66: 자료 다 왔나 · 빠진 것은 무엇인가
+import { fbSubscribeShipBayDict } from '../firebase.js';   // 1.66: 선사를 베이사전에서 보강
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
@@ -127,6 +129,15 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   // V9.19-02(2026-07-28): 대시보드가 길어 항목을 한참 찾아 내려가야 했다(사용자 보고).
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
   const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
+  // TallyOne 1.66 — 자료 현황. 검수사 지시: *"빠졌다면 뭐가 어느 선사 자료가 비었음을 알리고."*
+  //   선사는 항차 info.carrier 가 비어 있는 일이 많아(2026-08-13 실측) 베이사전에서 보강한다.
+  const [bayDictAll, setBayDictAll] = useState(null);
+  useEffect(() => {
+    let off = null;
+    try { off = fbSubscribeShipBayDict((d) => setBayDictAll(d || {})); } catch (e) { /* 없어도 선사만 빈다 */ }
+    return () => { try { off && off(); } catch (e) {} };
+  }, []);
+  const readiness = useMemo(() => buildReadiness(voyages, bayDictAll), [voyages, bayDictAll]);
   const [showPortMis, setShowPortMis] = useState(false);   // V9.42: 홈 상단에서 옮겨온 PORT-MIS 캡처
   const [showBayMatrix, setShowBayMatrix] = useState(false);   // 1.60: 베이매트릭스 관리(업로드 화면에서 분리)
   const toggleSec = (id) => setOpenSecs(o => ({ ...o, [id]: !o[id] }));
@@ -606,6 +617,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
           {[
             ['board', '⚓ 작업 보드'], ['progress', '📋 진행 상황'], ['tally', '📑 마감 텔리'],
+            ['ready', readiness.short.length ? `📦 자료 부족 ${readiness.short.length}` : '📦 자료 현황'],   // 1.66
             ['inspectors', '👷 검수원'], ['reports', '📤 작업 보고'], ['equip', '🏗 장비 보고'],
             ['edit', '🖐 편집'], ['archive', '📚 자료 보관소'], ['restore', '🗄 완료 보관소'],
             ['seal', '🔒 엠티 실'], ['lolo', '🚛 LOLO'], ['feedback', '❌ 오답'],
@@ -643,6 +655,74 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* V8.27: 검수원 공지 (흐르는 띠) */}
       <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>
         <BroadcastComposer inspector={inspector} />
+      </Fold>
+
+      {/* TallyOne 1.66 — 작업 자료가 다 왔나. 빠졌으면 무엇이·어느 선사 것이 비었는지 이름으로 알린다.
+          ⛔ 마감자료는 여기서 안 본다 — 검수사: "마감자료는 작업을 하면 저절로 생김." */}
+      <Fold id="ready"
+        title={`📦 자료 현황 ${readiness.short.length ? `— 부족 ${readiness.short.length}` : `— 전부 준비완료 (${readiness.total})`}`}
+        open={!!openSecs.ready} onToggle={() => toggleSec('ready')}>
+      <div className={`bg-slate-900 border rounded-xl p-3 mt-3 ${readiness.short.length ? 'border-amber-700/50' : 'border-emerald-800/40'}`}>
+        <div className="flex items-center gap-2 mb-1">
+          <div className="text-sm font-bold text-slate-100">작업 자료 준비 상태</div>
+          <span className="text-[10px] text-slate-500">EDI/ASC · 리스트 · 무게(VGM)</span>
+        </div>
+        <div className="text-[10px] text-slate-500 mb-3">
+          마감자료(타임시트·실선적 EDI·DEP.TALLY·FINAL WORKING)는 작업하면 저절로 생기므로 여기서 보지 않습니다.
+        </div>
+
+        {readiness.total === 0 ? (
+          <div className="text-xs text-slate-500 text-center py-4">작업 자료가 올라온 항차가 없습니다.</div>
+        ) : (<>
+          {readiness.short.length === 0 ? (
+            <div className="text-center py-3 text-emerald-300 font-bold text-sm">✅ {readiness.total}개 작업 전부 준비완료</div>
+          ) : (
+            <div className="mb-3">
+              <div className="text-[11px] font-bold text-amber-300 mb-1">부족 {readiness.short.length}건</div>
+              {readiness.short.map((r) => (
+                <button key={r.key + r.mode} onClick={() => onOpenVoyage && onOpenVoyage(r.key, r.mode)}
+                  className="w-full flex items-center gap-2 px-2 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 mb-1 text-left">
+                  <span className="text-[12px] font-bold text-slate-100 shrink-0">{r.code}</span>
+                  <span className="text-[11px] text-slate-400 shrink-0">{r.voy} {r.modeKr}</span>
+                  {r.carrier && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900/50 text-sky-300 shrink-0">{r.carrier}</span>}
+                  <span className="text-[11px] text-amber-300 truncate ml-auto">{r.missing}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {Object.keys(readiness.byCarrier).length > 0 && (
+            <div className="mb-3">
+              <div className="text-[11px] font-bold text-slate-300 mb-1">선사별</div>
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(readiness.byCarrier).sort((a, b) => b[1].length - a[1].length).map(([c, v]) => (
+                  <span key={c} className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-300">
+                    {c} <b className="text-amber-300">{v.length}</b> — {v.map(r => `${r.code} ${r.modeKr}`).join(', ')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="text-[11px] font-bold text-slate-400 mb-1">전체 {readiness.total}건</div>
+          {readiness.rows.map((r) => (
+            <div key={'a' + r.key + r.mode} className="flex items-center gap-2 px-2 py-1 text-[11px] border-b border-slate-800/60">
+              <span className="font-bold text-slate-200 w-12 shrink-0">{r.code}</span>
+              <span className="text-slate-500 w-16 shrink-0 truncate">{r.voy}</span>
+              <span className="text-slate-400 w-7 shrink-0">{r.modeKr}</span>
+              <span className="text-sky-400 w-10 shrink-0 truncate">{r.carrier || '-'}</span>
+              <span className="text-slate-500 shrink-0">EDI {r.edi || '-'} · 리스트 {r.list || '-'}</span>
+              <span className={`ml-auto shrink-0 ${r.state === 'ready' ? 'text-emerald-400' : 'text-amber-300'}`}>{r.label}</span>
+            </div>
+          ))}
+
+          {readiness.noCarrier > 0 && (
+            <div className="text-[10px] text-slate-500 mt-2">
+              ※ {readiness.noCarrier}건은 선사가 기록돼 있지 않습니다 — 「🧱 베이매트릭스」에서 선사를 채우면 선사별로 묶입니다.
+            </div>
+          )}
+        </>)}
+      </div>
       </Fold>
 
       {/* 전체 검수원 진행률 (인원 무제한) */}
