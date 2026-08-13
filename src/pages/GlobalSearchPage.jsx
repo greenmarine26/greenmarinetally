@@ -7,7 +7,7 @@ import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, gener
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 
-export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData }) {
+export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork }) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -103,6 +103,33 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     //   검수사 지적 2026-08-13 — *"수석 대시보드에선 자연어 즉 도우미 기능을 어디에서 사용하나요?"*
     //   1.65 에서 기능 설명을 항차 화면에만 붙였다. **수석 전용 기능일수록 수석이 묻는 자리에서 답해야 하는데 거꾸로였다.**
     //   여기는 수석·소유자만 들어오는 라우트라(App.jsx 가드) 수석 기준으로 답한다.
+    // 1.68-01: 배가 지정된 «진행 상황» — 터미널 실황(terminal_work)이 정답이다.
+    //   검수사 시험 2026-08-14: "지금 STSE 진행 상황은? 물어보면 실 상황을 아나요?" — 몰랐다.
+    //   앱 completed 만 보면 검수를 앱으로 안 하는 항차에서 "작업 전"이라는 오답이 나간다.
+    //   실측: STSE 양하 306/306·선적 31/265 인데 completed 0. 터미널 피드(트레드링스)를 우선으로,
+    //   앱 검수 기록은 있으면 병기한다.
+    if (shipCtx && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났/.test(debouncedQuery)
+        && !/자료/.test(debouncedQuery)) {
+      const code = String(shipCtx.info.vsl || '').toUpperCase();
+      const tw = (terminalWork || {})[code];
+      const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
+      const L = [];
+      if (tw && (tw.disPlan || tw.lodPlan)) {
+        const seg = [];
+        if (tw.disPlan) seg.push(`양하 ${tw.disDone ?? 0}/${tw.disPlan}${tw.disDone >= tw.disPlan ? ' 완료' : ''}`);
+        if (tw.lodPlan) seg.push(`선적 ${tw.lodDone ?? 0}/${tw.lodPlan}`);
+        L.push(`${ship} — ${seg.join(' · ')}${tw.pct != null ? ` (전체 ${tw.pct}%)` : ''}${tw.delayed ? ' · ⚠ 지연 중' : ''}`);
+        if (tw.startAt) L.push(`작업 시작 ${String(tw.startAt).slice(5, 16)}`);
+        if (tw.depEtd) L.push(`출항 예정 ${String(tw.depEtd).slice(5, 16)} (터미널 기준)`);
+        if (tw.updatedAt) { const m = Math.round((Date.now() - tw.updatedAt) / 60000); L.push(`터미널 피드 ${m}분 전 갱신`); }
+      }
+      const dc = Object.keys(shipCtx.v?.discharge?.completed || {}).length;
+      const lc = Object.keys(shipCtx.v?.loading?.completed || {}).length;
+      if (dc || lc) L.push(`앱 검수 기록 — 양하 ${dc} · 선적 ${lc}`);
+      else if (L.length) L.push('앱 검수 기록은 없습니다(이 항차는 앱 검수 미사용).');
+      if (L.length) return L.join('\n');
+      return `${ship} — 터미널 피드·앱 검수 기록이 아직 없습니다.`;
+    }
     // 1.68: 배가 지정된 콜사인·IMO 질문 — 기능 설명(howTo)보다 먼저.
     //   "STSE 콜사인 뭐야"의 '뭐야'가 기능 색인에 먼저 걸려 VRSC3 대신 기능 안내가 나왔다(시뮬 실측). — ship_bay_dict·info에 이미 있다.
     if (/콜사인|호출\s*부호|\bIMO\b|아이엠오/i.test(debouncedQuery) && shipCtx) {
@@ -160,6 +187,10 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         const L = [`${ship} — ` + [f(pm.eta) ? `입항 ${f(pm.eta)}` : null, f(pm.etd) ? `출항 ${f(pm.etd)}` : null].filter(Boolean).join(', ') + '.'];
         if (pm.pier || pm.berth) L.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
         if (pm.nextPort) L.push(`다음 항구: ${pm.nextPort}`);
+        // 1.68-01: 터미널 ETD가 PORT-MIS와 다르면 병기 — 실측: STSE 출항이 21:00 신고 후 12:00으로 당겨졌는데 터미널 피드에만 있었다.
+        const _tw = (terminalWork || {})[String(shipCtx.info.vsl || '').toUpperCase()];
+        if (_tw?.depEtd && String(_tw.depEtd).slice(0, 16) !== String(pm.etd || '').slice(0, 16))
+          L.push(`⚠ 터미널 기준 출항 ${String(_tw.depEtd).slice(5, 16)} — 신고(${f(pm.etd) || '?'})와 다릅니다`);
         return L.join('\n');
       }
       if (shipCtx.info.planDate) return `${ship} — 작업 계획 ${shipCtx.info.planDate} (PORT-MIS 신고는 아직).`;
@@ -190,7 +221,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData]);   // 1.68: 배 이름 맥락·물량·입출항이 읽는다
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork]);   // 1.68-01: 진행 실황·터미널 ETD
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
