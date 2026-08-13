@@ -156,7 +156,10 @@ export const BGE_CSS = `
 .bge-edit .cpv2-cell.bge-picked{box-shadow:inset 0 0 0 3px #1d4ed8;background:#dbeafe !important}
 .bge-edit .cpv2-cell.bge-chgd.bge-picked{box-shadow:inset 0 0 0 3px #1d4ed8,inset 0 0 0 5px #f59e0b}
 .bge-edit .cpv2-cell.bge-over{background:#fde68a !important;border-color:#d97706 !important}
-.bge-edit .cpv2-cell.bge-empty{cursor:copy;background:#fefefe;border-style:dashed !important;border-color:#cbd5e1 !important}
+/* 빈 칸도 «실선»이다 — 검수사 2026-08-13: "빈곳은 실선 처리가 안되어 있으면 공간이 없는줄 압니다."
+   종이(CASP)도 슬롯이 있는 빈 칸은 실선 테두리로 그린다. 점선은 «자리가 없다»로 읽힌다.
+   슬롯 자체가 없는 칸은 종전대로 아예 그리지 않는다(cpv2-cell-empty · visibility:hidden). */
+.bge-edit .cpv2-cell.bge-empty{cursor:copy;background:#fefefe;border-style:solid !important;border-color:#94a3b8 !important}
 .bge-edit .cpv2-cell.bge-empty:hover{background:#e0f2fe}
 .bge-edit .cpv2-cell.bge-open{background:#ecfccb;border-color:#84cc16 !important}
 .bge-edit .cpv2-cell.bge-open:hover{background:#d9f99d}
