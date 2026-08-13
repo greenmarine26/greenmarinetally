@@ -158,13 +158,24 @@ export const CARGO_V2_CSS = `
 .cpv2-empty-slot { border: none; background: transparent; }
 .cpv2-legend-box { border: 1px solid #000; background: white; padding: 4px; display: flex; flex-direction: column; overflow: hidden; }
 .cpv2-legend { width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
-.cpv2-legend-title { font-size: 9px; font-weight: bold; text-align: center; padding: 2px 0; border-bottom: 0.5px solid #888; margin-bottom: 2px; color: #333; flex-shrink: 0; }
-.cpv2-legend-table { width: 100%; border-collapse: collapse; font-size: 8px; }
-.cpv2-legend-table th, .cpv2-legend-table td { padding: 1px 3px; border: 0.3px solid #aaa; }
-.cpv2-legend-table th { background: #f5f5f5; font-size: 7px; font-weight: bold; }
-.cpv2-legend-mark { width: 14px; text-align: center; font-weight: bold; font-size: 8px; }
-.cpv2-legend-nm { font-size: 8px; font-weight: bold; text-align: center; }
-.cpv2-legend-ct { font-size: 7.5px; text-align: center; }
+.cpv2-legend-title { font-size: calc(var(--lgf, 8px) * 1.12); font-weight: bold; text-align: center; padding: 2px 0; border-bottom: 0.5px solid #888; margin-bottom: 2px; color: #333; flex-shrink: 0; }
+/* ★ TallyOne 1.63: 별첨 표를 비율로 짠다 (검수사 확정 2026-08-13).
+   검수사 원문: "항상 크기는 A4수평 절반중 아래쪽입니다. 열과 폭 비율만 정하면 어떤 형태든
+     맞출듯 합니다. 베이가 30개든 17개든"
+   문제: 별첨 칸의 폭이 배마다 다르다 — 줄당 박스 수로 갈리기 때문이다(베이 30개면 줄당 15칸이라
+     좁고, 17개면 9칸이라 넓다). 그런데 표는 width:14px, padding:1px 3px, font-size:8px 로
+     전부 고정이라 칸이 좁아져도 안 줄어들고 그대로 넘쳐 글자와 열이 잘렸다.
+   해법: 열 폭은 table-layout:fixed + colgroup 퍼센트로, 글자와 여백은 --lgf 한 변수에 묶어
+     칸 폭에 따라 함께 줄인다. 베이가 몇 개든 비율이 같으므로 모양이 유지된다.
+   (이 블록은 템플릿 문자열 안의 CSS 다 — 백틱을 쓰면 문자열이 끊긴다.) */
+.cpv2-legend-table { width: 100%; border-collapse: collapse; table-layout: fixed;
+  font-size: calc(var(--lgf, 8px)); }
+.cpv2-legend-table th, .cpv2-legend-table td { padding: calc(var(--lgf, 8px) * 0.12) calc(var(--lgf, 8px) * 0.3);
+  border: 0.3px solid #aaa; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cpv2-legend-table th { background: #f5f5f5; font-size: calc(var(--lgf, 8px) * 0.88); font-weight: bold; }
+.cpv2-legend-mark { text-align: center; font-weight: bold; font-size: calc(var(--lgf, 8px)); }
+.cpv2-legend-nm { font-size: calc(var(--lgf, 8px)); font-weight: bold; text-align: center; }
+.cpv2-legend-ct { font-size: calc(var(--lgf, 8px) * 0.94); text-align: center; }
 .cpv2-legend-total { background: #f0f0f0; }
 @media print {
   /* M6.86.8.21: M6.81 ref.html과 동일한 인쇄 처리.
@@ -640,6 +651,17 @@ export default function PrintableCargoPlanV2({
   }, [pdfBays]);
   const layout = useMemo(() => autoPageLayout(trios, singles, 5, deckOnlyKeys), [trios, singles, deckOnlyKeys]);
   const posMap = useMemo(() => buildPosMap(containers), [containers]);
+  // ★ 1.63: 별첨 글자 크기를 **칸 폭에 맞춘다** (검수사 확정 — "열과 폭 비율만 정하면 어떤 형태든 맞을 것").
+  //   별첨 칸 폭 = 페이지 폭 ÷ 줄당 박스 수. 박스가 많을수록 칸이 좁으니 글자도 같이 줄여야 한다.
+  //   실측 기준점: 줄당 9칸(HAYN 17베이)에서 8px 가 지금 보기 좋다 → 9칸=8px 로 놓고 반비례.
+  //   너무 작아지지 않게 5.5px 바닥, 너무 커지지 않게 9.5px 천장을 둔다.
+  const legendFont = useMemo(() => {
+    const perRow = Math.max(layout[0]?.length || 1, 1);
+    // 별첨이 여러 칸으로 흩어지면 한 칸이 지는 표가 줄어 세로 여유가 생긴다 → 글자를 조금 키운다.
+    const slots = Math.max(0, perRow - (layout[1]?.length ?? perRow));
+    const bonus = slots >= 3 ? 1.25 : slots === 2 ? 1.12 : 1;
+    return Math.min(9.5, Math.max(5.5, Math.round((8 * 9 / perRow) * bonus * 10) / 10));
+  }, [layout]);
 
   // 박스별 카운트 (M6.86.8.4: M6.81 정답 포맷)
   //   단독 베이 (single + trio top) = 총합 단일 숫자
@@ -925,46 +947,65 @@ export default function PrintableCargoPlanV2({
             const leg2Rows = isDischarge ? legends.cargos : legends.carriers;
             const leg2Kind = isDischarge ? 'cargo' : 'carrier-bw';
             const leg2Header = isDischarge ? '종류' : '선사';
-            if (emptySlots >= 2) {
-              slots.push(
-                <div key="leg1" className="cpv2-bay-box cpv2-legend-box">
-                  <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
-                </div>
+            // ★★★ TallyOne 1.63: 별첨은 **가로 한 칸**을 쓰고, 그 안에서 **위→아래 세 단**으로 놓는다.
+            //   검수사 지적 2026-08-13(별첨이 잘려 보인다는 인쇄물 사진과 함께):
+            //     *"별첨을 왜 두개를 나란히 놓았나요. **별첨을 좀더 크게하고 상 중 하 단으로** 놔도 될듯한데"*
+            //   되물음이 정확했다 — 종전 코드가 실제로 한 칸을 좌우로 반씩 쪼개 놓고 있었다
+            //   (`display:flex` 가로 + `flex:1` 둘). 그래서 표 두 개가 각각 칸 절반 폭에 눌려
+            //   글자와 열이 잘렸다. 세로로 쌓으면 표 하나하나가 칸 폭을 통째로 쓴다.
+            //
+            //   자리 수 실측(2026-08-13) — 별첨 칸은 `상단 − 하단` 이고 `topCount=⌈(N+1)/2⌉` 이므로
+            //     박스가 **홀수면 1칸**(HAYN 17개 · DXQD 19 · TNJP 25 · OBWH 15),
+            //     **짝수면 2칸**(XTPG 20 · MAMP 36). 종전엔 이 1칸/2칸에 따라 배치가 통째로 달라져
+            //     같은 서류가 배마다 다른 모양이었다.
+            //   → 검수사 확정 "가로 1칸". 칸이 둘 이상 남아도 별첨은 한 칸만 쓰고 나머지는 비운다
+            //     (빈 칸을 그대로 두어야 옆 베이 박스 폭이 안 늘어난다).
+            // ★★★ TallyOne 1.63: 별첨은 **빈 칸이 있는 만큼 나눠 담는다.**
+            //   검수사 확정 2026-08-13 — 처음 답은 *"빈 칸이 어디든 찾아 넣는다"* 였고,
+            //   큰 배에서 글자가 5.5px 바닥에 걸린다는 보고에 이렇게 못 박았다:
+            //     *"이 이유로 **빈곳이 있으면 별첨 하나를 옮기면** 됩니다."*
+            //   즉 "가로 1칸"은 자리가 하나뿐일 때의 이야기지 고정 규칙이 아니다.
+            //   빈 칸이 많을수록 표를 흩어 담아 **하나하나를 크게** 만든다.
+            //     1칸 → [1+2+3] 한 칸에 세로 3단   (종전처럼, 다만 좌우 분할이 아니라 세로)
+            //     2칸 → [1] · [2+3]
+            //     3칸 이상 → [1] · [2] · [3]  — 각자 한 칸을 통째로 쓴다
+            //   자리 수 실측: `상단 − 하단`, `topCount=⌈(N+1)/2⌉` 이므로 박스 홀수면 1칸·짝수면 2칸이다.
+            //   3칸 이상은 지금 배분에서는 안 나오지만, 배분이 바뀌어도 알아서 펼쳐지게 미리 받아 둔다.
+            if (emptySlots >= 1) {
+              const legend1 = (
+                <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합계']}
+                  rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
               );
-              slots.push(
-                <div key="leg2" className="cpv2-bay-box cpv2-legend-box">
-                  {/* V8.44-01: 별첨3은 별첨2 아래 세로 배치 (옆 배치가 보기 안 좋음 — 사용자 피드백) */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%' }}>
-                    <div style={{ flexShrink: 0 }}>
-                      <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
-                    </div>
-                    <div style={{ flexShrink: 0 }}>
-                      <FeLegend fe={legends.feCounts} />
-                    </div>
+              const legend2 = (
+                <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합계']}
+                  rows={leg2Rows} totalRow={true} kind={leg2Kind} />
+              );
+              const legend3 = <FeLegend fe={legends.feCounts} />;
+              // 칸 하나를 세로로 채우는 껍데기 — 표가 여럿이면 높이를 나눠 갖는다.
+              const cell = (key, items) => (
+                <div key={key} className="cpv2-bay-box cpv2-legend-box" style={{ '--lgf': `${legendFont}px` }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', height: '100%' }}>
+                    {items.map((it, k) => (
+                      <div key={k} style={{ flex: it.grow ? '1 1 0' : '0 0 auto', minHeight: 0, overflow: 'hidden' }}>
+                        {it.node}
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
-            } else if (emptySlots === 1) {
-              slots.push(
-                <div key="leg-combined" className="cpv2-bay-box cpv2-legend-box">
-                  <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <Legend title={leg1Title} headers={['', leg1Header, "20'", "40'", "45'", '합']} rows={leg1Rows} totalRow={true} kind={leg1Kind} colorMap={colorMap} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ flexShrink: 0 }}>
-                        <Legend title={leg2Title} headers={['', leg2Header, "20'", "40'", "45'", '합']} rows={leg2Rows} totalRow={true} kind={leg2Kind} />
-                      </div>
-                      <div style={{ flexShrink: 0 }}>
-                        <FeLegend fe={legends.feCounts} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            for (let i = emptySlots; i < emptySlots && i < 0; i++) {  // padding 자리 (현재 없음)
-              slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
+              if (emptySlots >= 3) {
+                slots.push(cell('leg1', [{ node: legend1, grow: true }]));
+                slots.push(cell('leg2', [{ node: legend2, grow: true }]));
+                slots.push(cell('leg3', [{ node: legend3, grow: true }]));
+                for (let i = 3; i < emptySlots; i++) slots.push(<div key={`pad-${i}`} className="cpv2-bay-box cpv2-empty-slot"></div>);
+              } else if (emptySlots === 2) {
+                slots.push(cell('leg1', [{ node: legend1, grow: true }]));
+                slots.push(cell('leg23', [{ node: legend2, grow: true }, { node: legend3, grow: false }]));
+              } else {
+                slots.push(cell('leg123', [
+                  { node: legend1, grow: true }, { node: legend2, grow: true }, { node: legend3, grow: false },
+                ]));
+              }
             }
             // 그 다음 실제 박스들
             // M6.94.12: 박스 폭은 모두 동일(flex 1). 셀 폭 통일은 grid를 전체 최대 칸 수로
@@ -1062,6 +1103,16 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
     <div className="cpv2-legend">
       <div className="cpv2-legend-title">{title}</div>
       <table className="cpv2-legend-table">
+        {/* 1.63: 열 폭을 퍼센트로 못 박는다 — 칸이 좁아도 넓어도 같은 비율로 나뉜다.
+            마크 · 이름 · 20' · 40' · 45' · 합계 (마크 칸이 없는 표는 이름이 그만큼 넓어진다) */}
+        <colgroup>
+          {hasMarkColumn && <col style={{ width: '9%' }} />}
+          <col style={{ width: hasMarkColumn ? '31%' : '40%' }} />
+          <col style={{ width: '15%' }} />
+          <col style={{ width: '15%' }} />
+          <col style={{ width: '15%' }} />
+          <col style={{ width: '15%' }} />
+        </colgroup>
         <thead>
           <tr>{effHeaders.map((h, i) => <th key={i}>{h}</th>)}</tr>
         </thead>
