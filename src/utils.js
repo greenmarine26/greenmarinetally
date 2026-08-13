@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.56-06';   // ATPR = 자동 해치커버 — 해치 제외 선박 명단에 추가·단일 소스화(검수사 확정: 커버 열고 다음을 체크하지 않는다)
+export const APP_VERSION = 'TallyOne 1.57';   // 유도 순서 — 부류 우선을 고정 규칙에서 3대 연속 감지로. 리퍼는 풀만. 선적에도 흐름 감지. EDI 순번(eseq) 보존
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -769,6 +769,16 @@ export const isoCategory = (iso) => {
 //   세그먼트: '00:BAPLIE:BAYPLAN:..., 10:콜사인:선박명:국가:항차:::ETD:ETA:POL...,
 //             50:컨번호:ISO:F/E:위치7자리(BBBRRTT):...:무게:..:선사:.., 52:POL::POD::FPOD:::
 //   표준 parseBAPLIE와 동일한 반환 구조({vsl,voy,pol,callsign,containers,errors})로 맞춤.
+// TallyOne 1.57: EDI 원문에 실린 컨테이너 등장 순번을 남긴다 (`eseq`).
+//   검수사 확정 2026-08-13 — "연속으로 EDI대로 선적할 때는 그게 우선입니다."
+//   유도 큐가 '지금 EDI 순번대로 가고 있는가'를 판단하려면 원문 순서가 필요한데,
+//   RTDB `ediContainers` 는 컨번호 키 맵이라 배열 순서가 남지 않는다 → 필드로 박아야 보존된다.
+//   파서 네 벌(BAPLIE·숫자코드 BAPLIE·IFCSUM·ASC)이 전부 이 한 벌을 거친다.
+export function stampEdiSeq(result) {
+  if (Array.isArray(result?.containers)) result.containers.forEach((c, i) => { if (c) c.eseq = i; });
+  return result;
+}
+
 export function parseNumericBAPLIE(ediText) {
   const result = { vsl: '', voy: '', pol: '', etd: '', eta: '', carrier: '', callsign: '', containers: [], errors: [] };
   const text = ediText.replace(/\r?\n/g, '');
@@ -855,7 +865,7 @@ export function parseNumericBAPLIE(ediText) {
   }
   if (cur) result.containers.push(cur);
   if (result.containers.length === 0) result.errors.push('숫자코드 BAPLIE: 컨테이너(50 세그먼트)를 찾지 못했습니다.');
-  return result;
+  return stampEdiSeq(result);
 }
 
 // RIZHAO 계열 숫자코드 IFCSUM(매니페스트) 파서 (V8.06).
@@ -932,7 +942,7 @@ export function parseNumericIFCSUM(ediText) {
   }
   result.containers = [...byCn.values()];
   if (result.containers.length === 0) result.errors.push('숫자코드 IFCSUM: 컨테이너(51 세그먼트)를 찾지 못했습니다.');
-  return result;
+  return stampEdiSeq(result);
 }
 
 export function parseBAPLIE(ediText) {
@@ -1253,7 +1263,7 @@ export function parseBAPLIE(ediText) {
 
   if (!result.vsl) result.errors.push('선박명을 인식하지 못했습니다.');
   if (result.containers.length === 0) result.errors.push('컨테이너를 찾지 못했습니다.');
-  return result;
+  return stampEdiSeq(result);
 }
 
 // === ASC Parser (V38 보조) ===
@@ -1454,7 +1464,7 @@ export function parseAscFile(text) {
       podFinal,
     });
   }
-  return { vsl, voy, serviceCode, containers };
+  return stampEdiSeq({ vsl, voy, serviceCode, containers });
 }
 
 // === M6.47: ASC 파일 → 베이사전 엔트리 변환 (Gemini 호출 0) ===

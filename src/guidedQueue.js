@@ -19,10 +19,24 @@
 //   V8.50 (사용자 확정 2026-07-06 — 양하 우선순위 협의):
 //     ① 기본 순서는 층(티어) 단위 절대 유지 — V8.09-04의 스택 통째 배치(로우 단위 붕괴) 폐기.
 //        (실증: 625N bay26 위엠티/풀리퍼/바닥엠티 홀드에서 로우 단위로 파고들던 문제.)
-//     ② 같은 층 안 부류 기본 순서 = 풀일반 → 풀리퍼 → 엠티 (같은 층 로우끼리는 물리 종속 없음).
 //     ③ 갈림(지금 내릴 수 있는 카드에 부류 혼재) 시 검수사 선택 = streamPref('F'|'E'|'RF'|'GEN'|'40'|'20').
 //        선택 부류를 물리 종속을 지키며 앞당겨 연속 제시(내리던 흐름 계속), 막히면 기본 순서 잔류.
 //     ④ 예측과 다른 컨이 내려오면 그 부류로 자동 재앵커(무언 적응 — GuidedWorkPanel에서 처리).
+//   ★ TallyOne 1.57 (검수사 확정 2026-08-13) — 부류 우선을 '고정 규칙'에서 '감지'로 옮긴다.
+//     검수사 원문: "일단 모든 컨테이너를 기본 컨테이너 취급을 하고 같은 순서로 선적하거나 양하를 합니다.
+//                   그렇게 하다가 혼재 되어 있을때 연속으로 리퍼(또는 20피트) 먼저 양하를 하는것 같으면
+//                   그 순서를 감지 하고 방식을 바꿉니다."
+//     ⓐ 기본 순서에서 부류 가산점을 전부 뺀다 — 폐기: V8.50②(풀일반→풀리퍼→엠티) ·
+//        V7.99-6/V8.09-03(같은 층 40ft 먼저 · 40ft 모아 먼저) · 선적 '트윈 전부 → 40ft 전부'.
+//        남는 것은 순수 물리 순서(데크/홀드 → 층 → 로우)뿐이다.
+//     ⓑ 선적 20싱글 우선은 유지하되 **아래 단이 안 채워졌으면 못 당긴다**(허공 적재 금지).
+//        검수사 원문: "20피트 트윈은 40피트 한개랑 같습니다. 그래서 40피트가 먼저 선적되면 40피트부터,
+//                      20피트 트윈이 먼저 실리면 20피트 트윈부터."
+//     ⓒ 흐름 감지(streamPref)를 **선적에도** 건다. 종전엔 양하 전용이었다.
+//     ⓓ 리퍼는 **풀일 때만** 리퍼로 센다. 검수사 원문: "리퍼 엠티는 일반 엠티랑 같습니다."
+//        실증(DJCF 0149N 선적): 리퍼 15대가 전부 엠티인데 종전 「리퍼 흐름」이 15대를 다 끌어왔다.
+//     ⓔ EDI 순번(`eseq`)대로 연속 진행 중이면 흐름 전환을 하지 않는다 — GuidedWorkPanel 에서 판정.
+//        검수사 원문: "단 연속으로 EDI대로 선적할때는 그게 우선입니다."
 
 const isDeckTier = (t) => parseInt(t, 10) >= 80;
 const is20ft = (c) => String(c.tp || '').startsWith("20") || String(c.iso || '')[0] === '2';
@@ -71,15 +85,8 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     }
     const at = parseInt(a.tier, 10), bt = parseInt(b.tier, 10);
     if (at !== bt) return topFirst ? bt - at : at - bt;
-    // V7.99-6 (메모2): 양하 — 같은 티어에 40ft와 20ft가 공존하면(짝수 베이 40ft가 양옆 홀수 트윈 위에 걸침)
-    //   작업 방해가 없으므로 40ft를 먼저 내린다. 선적은 holdTwins 스택 로직이 따로 처리하므로 양하에만 적용.
-    if (mode === 'discharge') {
-      const a40 = is40ft(a), b40 = is40ft(b);
-      if (a40 !== b40) return a40 ? -1 : 1;
-      // V8.50 ②: 같은 층 안에서 풀일반 → 풀리퍼 → 엠티 (V8.09-04 대체 — 층 순서는 안 깨짐)
-      const ar2 = conClassRank(a), br2 = conClassRank(b);
-      if (ar2 !== br2) return ar2 - br2;
-    }
+    // 1.57: 같은 층 안 부류 가산점(40ft 먼저 · 풀일반→풀리퍼→엠티) 전부 제거.
+    //   기본은 순수 물리 순서다. 부류를 앞당기는 것은 흐름 감지(streamPref)가 맡는다.
     const ar = rowRank(a.row, { evenRowsSeaSide, landToSea });
     const br = rowRank(b.row, { evenRowsSeaSide, landToSea });
     if (ar !== br) return ar - br;
@@ -150,52 +157,34 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   const flow = [...normal, ...keepInFlow].sort((a, b) => cmp(a.main, b.main));
   if (mode === 'discharge') {
     // V8.09-03 (사용자 확정 2026-06-17): 양하는 "40ft 작업 전부 끝낸 뒤 20ft 작업".
-    //   이유: 같은 단에 40/20 혼재 시 층마다 40↔20 순서가 되면 스프레더를 40전용↔20트윈으로
-    //   반복 전환해 작업 시간이 지연됨. 40ft를 모아 먼저 다 내리고 20ft(트윈)를 나중에 모아 내린다.
-    //   ★단, 적재 종속 유지 — 어떤 40ft 카드 '위'(같은 단·같은 로우·더 높은 티어)에 아직 안 내린
-    //   20ft 작업분이 얹혀 있으면 그 40ft를 앞으로 끌어올 수 없다(20ft를 먼저 내려야 함). 이 경우
-    //   해당 40ft는 20ft와의 상대 순서를 기존 층 순서대로 둔다. (이 베이는 40ft가 20ft 위/독립이라
-    //   전부 앞으로 모임 — 검증 EDI STSE 2645E 24번 홀드로 PASS.)
-    const ordered40First = reorder40FirstForDischarge(flow);
-    const base = [...pureFrs, ...ordered40First, ...pureSingles];
-    // V8.50 ③: 검수사가 고른 부류를 물리 종속 지키며 앞당김. FR 우선 양하는 그대로 고정.
+    //   ★1.57 폐기 — 스프레더 전환을 줄이려는 이 규칙이 '고정'이라 현장이 반대로 갈 때도 밀어붙였다.
+    //   검수사 확정 2026-08-13: 40/20 어느 쪽을 먼저 하는지는 배마다·날마다 다르므로 감지에 맡긴다.
+    //   40ft 를 모아 먼저 내리는 흐름이면 「40피트」 칩이 걸리거나 3연속 감지가 잡아 같은 결과가 된다.
+    const base = [...pureFrs, ...flow, ...pureSingles];
+    // V8.50 ③: 고른 부류를 물리 종속 지키며 앞당김. FR 우선 양하는 그대로 고정.
     if (streamPref) return [...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)];
     return base;
   }
-  // ── 선적: 홀드·데크 모두 "트윈 전부 → 40ft 전부" (각 단 내부). 단 사이는 홀드 먼저 → 데크. ──
-  //   V8.09-03 (사용자 확정 2026-06-17): 선적 순서는 20ft싱글 → 트윈 → 40ft, 순서 절대 우선.
-  //   도메인 사실(사용자 확정): 40ft 위에는 20ft가 절대 안 실린다(40ft 중간에 콘 구멍 없음).
-  //   따라서 "트윈을 먼저 다 싣고 40ft를 나중에" 실어도 적재 종속이 깨지지 않는다(40ft가 20ft 위/독립).
-  //   ★V7.99-6의 "트윈 아래 깔린 40ft 먼저 끌어오기"는 발동할 일이 없고, 발동 시 트윈↔40 순서를
-  //     깨므로 제거. 트윈끼리 스택 순서(POD→로우→바닥티어)만 유지하고, 40ft는 그 뒤에 층 순서로.
-  //   ★데크도 자동모드는 홀드와 동일 규칙으로 제시(사용자 확정 2026-06-17): 포트가 갈리거나 선적
-  //     난이도로 순서가 달라지는 경우는 검수사가 수동 작업으로 보정한다(자동은 기본 제시).
+  // ── 선적 (1.57 개편). 단 사이 순서는 종전대로 홀드 먼저 → 데크. ──
+  //   폐기: "단 내부 = 20싱글 → 트윈 → 40ft" 고정.
+  //     검수사 확정 2026-08-13 — "20피트 트윈은 40피트 한개랑 같습니다."
+  //     트윈과 40ft 는 같은 크기의 자리를 먹으므로 둘 사이에 고정 순서가 성립하지 않는다.
+  //     어느 쪽을 먼저 싣는지는 그날 현장이 정하고, 앱은 그것을 감지해 따라간다.
+  //   남기는 것: 20싱글 우선. 단 **아래 단이 아직 안 실린 싱글은 못 당긴다**(허공 적재 금지).
+  //     종전엔 이 검사가 홀드에만 있어(`singles` 수집 조건이 `!isDeckTier`) 데크 20싱글이
+  //     아래 단 트윈보다 먼저 갔다 — DJCF 0149N `7-07-84` 싱글이 `7-07-82` 트윈보다 앞선 실증.
   const buildStageOrder = (cards) => {
-    const twins = cards.filter(card => card.twin);
-    const single20 = cards.filter(card => !card.twin && !cardIs40(card));   // 짝 없는 20ft
-    const forties = cards.filter(card => !card.twin && cardIs40(card));     // 40ft
-    const podOrder = {}; let seq = 0;
-    for (const c of twins) { const p = c.main.pod || ''; if (!(p in podOrder)) podOrder[p] = seq++; }
-    twins.sort((a, b) => {
-      const ap = podOrder[a.main.pod || ''] ?? 99, bp = podOrder[b.main.pod || ''] ?? 99;
-      if (ap !== bp) return ap - bp;
-      // V8.09-18 (사용자 보고 2026-06-18): 트윈 선적은 한 티어의 전체 로우를 다 채운 뒤 위 티어로.
-      //   기존 로우→티어 순서는 한 로우의 02·04·06을 먼저 쌓아 올려 "02 전체 로우 미완"인 채 위로 감.
-      //   → 티어를 로우보다 먼저 비교(바닥 02부터). 같은 티어 안에서는 로우 해상→육상.
-      const at = parseInt(a.main.tier, 10), bt = parseInt(b.main.tier, 10);
-      if (at !== bt) return at - bt;
-      const ar = rowRank(a.main.row, { evenRowsSeaSide, landToSea: false });
-      const br = rowRank(b.main.row, { evenRowsSeaSide, landToSea: false });
-      return ar - br;
-    });
-    single20.sort((a, b) => cmp(a.main, b.main));
-    forties.sort((a, b) => cmp(a.main, b.main));
-    return [...single20, ...twins, ...forties];   // 단 내부: 20싱글 → 트윈 → 40ft
+    const ordered = [...cards].sort((a, b) => cmp(a.main, b.main));   // 순수 물리 순서(층 → 로우)
+    return pullStreamForward(ordered, '20SINGLE', 'below');           // 20싱글을 종속 지키며 앞으로
   };
   const holdOrdered = buildStageOrder(flow.filter(card => !isDeckTier(card.main.tier)));
   const deckOrdered = buildStageOrder(flow.filter(card => isDeckTier(card.main.tier)));
-  // pureSingles(홀드 짝없는 20ft) → 홀드(싱글·트윈·40) → 데크(싱글·트윈·40) → FR(마지막)
-  return [...pureSingles, ...holdOrdered, ...deckOrdered, ...pureFrs];
+  // 1.57: 흐름 감지를 선적에도 건다(종전엔 양하 전용이라 선적은 고정 순서만 나왔다).
+  //   FR·OT 마지막 선적은 그대로 고정 — 검수사 확정 "FR/OT는 그대로".
+  let body = [...holdOrdered, ...deckOrdered];
+  if (streamPref) body = pullStreamForward(body, streamPref, 'below');
+  // pureSingles(홀드 짝없는 20ft) → 홀드 → 데크 → FR·OT(마지막)
+  return [...pureSingles, ...body, ...pureFrs];
 }
 
 // 카드의 대표 규격이 40ft인지 (트윈 카드는 20ft 짝이므로 20ft 취급)
@@ -204,46 +193,7 @@ function cardIs40(card) {
   return is40ft(card.main);
 }
 
-// V8.09-03: 양하 — 같은 단(데크/홀드) 안에서 40ft 카드를 20ft 카드보다 앞으로 모은다.
-//   적재 종속 유지: 40ft '위'(같은 단·같은 로우·더 높은 티어)에 아직 안 내린 20ft 카드가 있으면
-//   그 40ft는 앞으로 끌어올 수 없다(그 20ft를 먼저 내려야 하므로) → 기존 상대 순서 유지.
-//   입력 flow는 이미 cmp(데크먼저 → 위층먼저 → 같은 티어 40먼저 → 로우)로 정렬돼 있다.
-//   여기서는 그 안에서 40ft를 안전하게 앞당기기만 한다(stable).
-function reorder40FirstForDischarge(flow) {
-  // 단(데크/홀드)별로 분리 — 단 사이 순서(데크 먼저)는 그대로 유지.
-  const deckCards = flow.filter(c => isDeckTier(c.main.tier));
-  const holdCards = flow.filter(c => !isDeckTier(c.main.tier));
-
-  const reorderWithinTier = (cards) => {
-    // 같은 단 안에서, 어떤 20ft 카드가 어떤 40ft '아래'에 깔려 있는지(=그 40ft를 먼저 내려야 함)
-    //   판정은 "같은 로우 + 더 높은 티어에 40ft가 있는 20ft"로 한다. 그런 20ft는 40ft보다 뒤여야 하므로
-    //   40ft 우선과 충돌하지 않는다(40ft가 어차피 앞). 반대로 40ft 위에 20ft가 얹힌 경우만 종속 위반이 되는데,
-    //   그 20ft는 해당 40ft보다 앞에 와야 한다.
-    const rowsBlock = new Set();   // 'row' 키: 이 로우엔 (40ft 위에 20ft가 얹힘) → 단순 40우선 금지
-    for (const card of cards) {
-      const isC40 = cardIs40(card);
-      const t = parseInt(card.main.tier, 10);
-      const row = card.main.row;
-      if (!isC40) {
-        // 이 20ft보다 '아래'(낮은 티어) 같은 로우에 40ft가 있으면 = 40ft 위에 20ft 얹힘 → 종속
-        const fortyBelow = cards.some(o => cardIs40(o) && o.main.row === row && parseInt(o.main.tier,10) < t);
-        if (fortyBelow) rowsBlock.add(row);
-      }
-    }
-    // 종속 없는 로우는 40ft를 앞으로, 20ft를 뒤로 (각 그룹 내부는 기존 cmp 순서 유지=stable).
-    // 종속 있는 로우(rowsBlock)는 기존 층 순서를 그대로 둔다.
-    const safe40 = [], safe20 = [], blocked = [];
-    for (const card of cards) {
-      if (rowsBlock.has(card.main.row)) blocked.push(card);
-      else if (cardIs40(card)) safe40.push(card);
-      else safe20.push(card);
-    }
-    // V8.50 ①: reorderFullReeferLast(스택 통째 배치) 폐기 — safe40은 cmp 층 순서 그대로 둔다.
-    return [...safe40, ...safe20, ...blocked];
-  };
-
-  return [...reorderWithinTier(deckCards), ...reorderWithinTier(holdCards)];
-}
+// 1.57: reorder40FirstForDischarge(양하 40ft 모아 먼저) 삭제 — 고정 규칙을 감지로 옮겼다(호출부 0).
 
 // 리퍼 판정 (이 모듈 자체 완결성 위해 로컬 헬퍼 — ISO 3번째 글자 R 또는 변형코드)
 function cardIsReefer(c) {
@@ -261,20 +211,21 @@ function cardIsReefer(c) {
 export function conClassOf(c) {
   return { size: is40ft(c) ? '40' : '20', fe: c.fe === 'E' ? 'E' : 'F', rf: cardIsReefer(c) };
 }
-// 같은 층 안 부류 기본 순서: 풀일반 0 → 풀리퍼 1 → 엠티 2.
-function conClassRank(c) {
-  if (c.fe === 'E') return 2;
-  return cardIsReefer(c) ? 1 : 0;
-}
+// 1.57: conClassRank(풀일반0→풀리퍼1→엠티2) 삭제 — 기본 순서에서 부류 가산점을 뺐다(호출부 0).
 // 카드가 선호 부류에 맞는지.
 export function cardMatchesPref(card, pref) {
   const c = card.main;
   if (pref === 'F') return c.fe !== 'E';
   if (pref === 'E') return c.fe === 'E';
-  if (pref === 'RF') return cardIsReefer(c);
-  if (pref === 'GEN') return !cardIsReefer(c) && c.fe !== 'E';
+  // 1.57: 리퍼는 풀일 때만. 엠티 리퍼는 일반 엠티와 같다(검수사 확정 2026-08-13).
+  //   종전 `cardIsReefer(c)` 만 보던 식이 엠티 리퍼까지 「리퍼 흐름」으로 끌어왔다.
+  //   화면 칩 개수(GuidedWorkPanel forkChips)는 처음부터 풀 기준이라 표시와 동작이 어긋나 있었다.
+  if (pref === 'RF') return c.fe !== 'E' && cardIsReefer(c);
+  if (pref === 'GEN') return c.fe !== 'E' && !cardIsReefer(c);
   if (pref === '40') return cardIs40(card);
   if (pref === '20') return !cardIs40(card);
+  // 1.57: 선적 20싱글 우선 — 물리 종속을 지키며 당기기 위해 내부 전용 키로 둔다.
+  if (pref === '20SINGLE') return !card.twin && !cardIs40(card);
   return true;
 }
 // 같은 수직 스택 판정 — 같은 로우 + (같은 베이거나 한쪽이 짝수베이 40(양쪽 20슬롯에 걸침)).
@@ -297,12 +248,26 @@ function blockedByAbove(card, cards) {
 }
 // 지금 바로 내릴 수 있는 카드들 — 패널의 갈림 감지용.
 export function availableCardsOf(queue) { return queue.filter(card => !blockedByAbove(card, queue)); }
-// 선호 부류를 물리 종속 지키며 앞으로 — 위가 막힌 카드는 못 당기고, 못 당긴 것은 기본 순서에 남는다.
-function pullStreamForward(cards, pref) {
+// 1.57: 선적은 '아래 단이 아직 안 실렸으면' 못 당긴다 — 양하의 blockedByAbove 와 대칭.
+//   이것이 없으면 20싱글 우선이 아래 단을 건너뛰고 허공에 얹는다(DJCF 0149N 선적 `7-07-84` 실증).
+//   검수사 교정 2026-08-11: "2단이 비었는데 3단 즉 허공에 띄웠습니다."
+function blockedByBelow(card, cards) {
+  const poss = cardPositions(card);
+  return cards.some(o => {
+    if (o === card) return false;
+    if (isDeckTier(o.main.tier) !== isDeckTier(card.main.tier)) return false;
+    return cardPositions(o).some(op => poss.some(p =>
+      sameStackPos(op, p) && parseInt(op.tier, 10) < parseInt(p.tier, 10)));
+  });
+}
+// 선호 부류를 물리 종속 지키며 앞으로 — 막힌 카드는 못 당기고, 못 당긴 것은 기본 순서에 남는다.
+//   dir='above' = 양하(위가 안 내려갔으면 못 당김) · dir='below' = 선적(아래가 안 실렸으면 못 당김).
+function pullStreamForward(cards, pref, dir = 'above') {
+  const blocked = dir === 'below' ? blockedByBelow : blockedByAbove;
   const rest = [...cards];
   const out = [];
   for (;;) {
-    const idx = rest.findIndex(card => cardMatchesPref(card, pref) && !blockedByAbove(card, rest));
+    const idx = rest.findIndex(card => cardMatchesPref(card, pref) && !blocked(card, rest));
     if (idx === -1) break;
     out.push(...rest.splice(idx, 1));
   }

@@ -17,6 +17,9 @@ import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
 const AUTO_MANUAL_THRESHOLD = 3;   // 수정 연속 N회 → 수동 전환
+// TallyOne 1.57: 같은 부류가 몇 대 연속되면 그 흐름으로 보는가 (검수사 확정 2026-08-13 — 3대).
+//   2대면 층 순서상 우연히 붙은 것과 구분이 안 되고, 4대면 작은 베이에서 끝날 때까지 안 걸린다.
+const STREAM_STREAK = 3;
 // V8.50: 갈림 부류 라벨 (streamPref 키 → 표시·음성)
 const PREF_LABEL = { F: '풀', E: '엠티', RF: '리퍼', GEN: '일반', '40': '40피트', '20': '20피트' };
 
@@ -307,9 +310,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const card = queue[0] || null;
 
   // V8.50: 갈림 감지 — 지금 바로 내릴 수 있는 카드들에 부류가 섞여 있으면 선택 버튼 제시 (양하만).
-  const availCards = useMemo(() => (mode === 'discharge' ? availableCardsOf(queue) : []), [queue, mode]);
+  //   1.57: 선적에도 건다. 종전엔 양하 전용이라 선적은 고정 순서(20싱글→트윈→40)밖에 안 나왔다.
+  const availCards = useMemo(() => availableCardsOf(queue), [queue]);
   const forkChips = useMemo(() => {
-    if (mode !== 'discharge' || availCards.length < 2) return null;
+    if (availCards.length < 2) return null;
     const cnt = { F: 0, E: 0, RF: 0, GEN: 0, '40': 0, '20': 0 };
     for (const cd of availCards) {
       const k = conClassOf(cd.main);
@@ -330,14 +334,33 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (!queue.some(cd => cardMatchesPref(cd, streamPref))) setStreamPref(null);
   }, [queue, streamPref]);
 
-  // V8.50: 무언 적응 — 예측과 다른 컨이 실제로 내려오면(수정 입력) 그 부류를 흐름으로 잡는다 (양하만).
-  const adaptStream = (actual) => {
-    if (mode !== 'discharge' || !card?.main || !actual) return;
-    const ac = conClassOf(actual), pc = conClassOf(card.main);
-    let next = null;
-    if (ac.fe !== pc.fe) next = ac.fe;
-    else if (ac.fe === 'F' && ac.rf !== pc.rf) next = ac.rf ? 'RF' : 'GEN';
-    else if (ac.size !== pc.size) next = ac.size;
+  // ★ TallyOne 1.57: 흐름 감지 — 실제로 처리한 컨 3대가 연속 같은 부류면 그 흐름으로 바꾼다.
+  //   검수사 원문 2026-08-13: "일단 모든 컨테이너를 기본 컨테이너 취급을 하고 같은 순서로 …
+  //     그렇게 하다가 혼재 되어 있을때 연속으로 리퍼(또는 20피트) 먼저 양하를 하는것 같으면
+  //     그 순서를 감지 하고 방식을 바꿉니다."
+  //   V8.50 의 무언 적응(예측과 1대만 달라도 즉시 재앵커)을 대체한다 — 1대는 우연일 수 있다.
+  //   ⓐ 혼재일 때만 본다(forkChips 가 없으면 갈림이 아니다) — 안 그러면 층 순서상 우연히 붙은
+  //      3대에도 계속 흐름이 잡힌다.
+  //   ⓑ EDI 순번(`eseq`)대로 오름차순 진행 중이면 바꾸지 않는다.
+  //      검수사 원문: "단 연속으로 EDI대로 선적할때는 그게 우선입니다."
+  //   ⓒ 리퍼는 풀일 때만 리퍼로 센다 — "리퍼 엠티는 일반 엠티랑 같습니다."
+  const recentRef = useRef([]);
+  const noteWorked = (c) => {
+    if (!c) return;
+    const k = conClassOf(c);
+    const eseq = Number.isFinite(c.eseq) ? c.eseq : null;
+    recentRef.current = [...recentRef.current, { fe: k.fe, rf: k.rf, size: k.size, eseq }].slice(-STREAM_STREAK);
+    const r = recentRef.current;
+    if (r.length < STREAM_STREAK) return;
+    if (!forkChips) return;                                   // ⓐ 혼재가 아니면 감지하지 않는다
+    const sq = r.map(x => x.eseq);
+    if (sq.every(v => v != null) && sq.every((v, i) => i === 0 || v > sq[i - 1])) return;   // ⓑ EDI 순번대로면 유지
+    let next = null;                                          // 좁은 부류부터 본다
+    if (r.every(x => x.fe === 'F' && x.rf)) next = 'RF';
+    else if (r.every(x => x.fe === 'F' && !x.rf)) next = 'GEN';
+    else if (r.every(x => x.fe === 'E')) next = 'E';
+    else if (r.every(x => x.size === '20')) next = '20';
+    else if (r.every(x => x.size === '40')) next = '40';
     if (next && next !== streamPref) { setStreamPref(next); speak(`${PREF_LABEL[next]} 흐름으로 바꿉니다`); }
   };
 
@@ -419,6 +442,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       //   이 화면이 갱을 아는 유일한 곳이다(헤더와 localStorage 한 벌 공유). 안 넘기면 기록에 갱이 없다.
       if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector, equip);
       else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector, 'normal', '', equip);
+      noteWorked(card.main);   // 1.57: 예측대로 친 것도 흐름 감지에 넣는다(감지 기준은 '실제로 무엇을 쳤나'다)
       setConsecFix(0);
       setFixOpen(false); setFixQuery('');
     } finally { setBusy(false); }
@@ -466,8 +490,9 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [showUnassigned, setShowUnassigned] = useState(false);
 
   // V7.94-16: 그룹(베이) 변경 시 프롬프트 플래그 리셋
-  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); setStreamPref(null); }, [selectedGroup]);
-  useEffect(() => { setStreamPref(null); }, [selectedTier]);   // V8.50: 단 변경 시 스트림 리셋
+  // 1.57: 베이 그룹·단이 바뀌면 최근 처리분(recentRef)도 비운다 — 앞 베이의 흐름을 끌고 오지 않게.
+  useEffect(() => { setDeckPromptDone(false); setHatchOpenDone(false); setHatchCloseDone(false); setSelectedTier(null); setStreamPref(null); recentRef.current = []; }, [selectedGroup]);
+  useEffect(() => { setStreamPref(null); recentRef.current = []; }, [selectedTier]);   // V8.50: 단 변경 시 스트림 리셋
 
   // V7.94-16: 그룹의 실제 베이 번호들 (해치 보고 표기용)
   // V7.99-6 (메모5): holdOnly=true면 홀드(t<80)에 평택 작업분이 있는 베이만.
@@ -826,7 +851,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       done = await applyFixOne(c, card.main);
     } finally { setBusy(false); }
     if (!done) return;   // 1.54: 자리를 못 넣었으면(시퀀스 되묻기 취소 포함) 수정으로 세지 않는다
-    adaptStream(c);   // V8.50: 실제 내려온 부류로 재앵커
+    noteWorked(c);   // 1.57: 실제 처리한 컨을 흐름 감지에 넣는다
     afterFix();
   };
 
@@ -877,7 +902,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       setBusy(false);
       return;
     } finally { setBusy(false); }
-    adaptStream(fixPickFront || fixPickBack);   // V8.50: 실제 내려온 부류로 재앵커
+    noteWorked(fixPickFront || fixPickBack);   // 1.57: 실제 처리한 컨을 흐름 감지에 넣는다
     afterFix();
   };
 
