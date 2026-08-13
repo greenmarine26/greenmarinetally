@@ -201,8 +201,11 @@ export function addToUserBayDict(entry) {
       //   남아 있으면 lookupUserBayDict가 옛 키를 잡아 "지운 베이가 다시 살아나" 카고플랜과 불일치.
       //   확정본 = 유일한 진실 → 옛 중복 entry 삭제. (사용자 확정 저장일 때만, 데이터 보호 위해 user 소스끼리만)
       const newIsUser = entry.bayDef?._userOwned === true || entry.bayDef?.source === 'user';
-      if (newIsUser) {
-        delete dict[k];  // 옛 중복 제거 → 새 확정본만 남김
+      // 1.58-02: 주석은 "user 소스끼리만"이라 적혀 있었지만 코드는 상대가 user 인지 **검사하지 않았다**.
+      //   이름 접두 매칭(sameShip)이 느슨해 다른 배의 정본까지 지울 수 있었다.
+      const otherIsUser = other?.bayDef?._userOwned === true || other?.bayDef?.source === 'user';
+      if (newIsUser && !otherIsUser) {
+        delete dict[k];  // 옛 자동본 중복 제거 → 새 확정본만 남김
       } else {
         // 새 entry가 자동본이면 옛 것 보존 (사용자 데이터 보호)
         if (!other.imo && entry.imo) other.imo = entry.imo;
@@ -212,6 +215,21 @@ export function addToUserBayDict(entry) {
     }
   }
 
+  // ★ TallyOne 1.58-02: 로컬에도 Firebase(`fbSaveShipBayDict:2426`)와 **같은 보호**를 건다.
+  //   종전엔 `dict[entry.code] = entry` 한 줄로 조건 없이 교체했다 — 기존이 검수사 정본이든
+  //   새 것이 ASC/`.def`/PDF 자동본이든 무조건. Firebase 에는 있던 방어가 로컬에는 없었고,
+  //   그 로컬을 「전체 동기화」가 그대로 보관소로 밀어 올렸다(검수사 증언의 오염 경로).
+  const _cur = dict[entry.code];
+  const _curIsUser = _cur?.bayDef?.source === 'user' || _cur?.bayDef?._userOwned === true;
+  const _newIsUser = entry?.bayDef?.source === 'user' || entry?.bayDef?._userOwned === true;
+  if (_curIsUser && !_newIsUser) {
+    // 정본이 있는데 자동본이 들어왔다 — 신원 정보만 보완하고 매트릭스는 지킨다.
+    if (!_cur.imo && entry.imo) _cur.imo = entry.imo;
+    if (!_cur.callsign && entry.callsign) _cur.callsign = entry.callsign;
+    if (!_cur.name && entry.name) _cur.name = entry.name;
+    console.warn('[베이사전] 자동 생성본이 검수사 매트릭스를 덮으려 해 막았습니다 —', entry.code);
+    return _ls.set(STORAGE_KEY, JSON.stringify(dict));
+  }
   dict[entry.code] = entry;
   return _ls.set(STORAGE_KEY, JSON.stringify(dict));
 }

@@ -196,15 +196,23 @@ function importUserDict(json) {
   else if (json && typeof json === 'object') list = Object.values(json).filter((v) => v && v.bayDef);
   const ok = [];
   let store = {};
+  const skipped = [];   // 1.58-02: 정본이 있어 건너뛴 코드
   try { store = JSON.parse(localStorage.getItem(USER_DICT_KEY) || '{}') || {}; } catch (e) { store = {}; }
   for (const e of list) {
     const code = String(e?.code || '').trim().toUpperCase();
     const bs = e?.bayDef?.baysSummary;
     if (!code || !Array.isArray(bs) || bs.length === 0) continue;
+    // ★ TallyOne 1.58-02: **정본이 이미 있으면 덮지 않는다.**
+    //   종전엔 JSON 으로 들어온 아무 사전이나 `source:'user'` 로 승격시켜 같은 localStorage 키에 썼다.
+    //   게이트(addToUserBayDict)도 우회하므로 검수사 매트릭스가 조용히 사라질 수 있었다.
+    const cur = store[code];
+    const curIsUser = cur?.bayDef?.source === 'user' || cur?.bayDef?._userOwned === true;
+    if (curIsUser) { skipped.push(code); continue; }
     store[code] = { ...e, code, bayDef: { ...e.bayDef, source: 'user', _userOwned: true, verified: true } };
     ok.push({ code, name: e.name || code, bays: bs.length });
   }
   if (ok.length) localStorage.setItem(USER_DICT_KEY, JSON.stringify(store));
+  if (skipped.length) console.warn('[베이사전] 이미 정본이 있어 가져오지 않은 선박 —', skipped.join(', '));
   return ok;
 }
 

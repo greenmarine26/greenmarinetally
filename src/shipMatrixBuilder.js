@@ -520,7 +520,14 @@ export function augmentMatrixFromDef(matrix, defResult) {
       augmented++;
     }
     const m = matrix.byBay[bay];
-    // .def가 정답 — rowCount/hasZero/tier를 덮어씀
+    // ★ TallyOne 1.58-02: **`.def` 는 정답이 아니다. 검수사 매트릭스가 정답이다.**
+    //   검수사 증언 2026-08-13: *"`.def` 전체를 파악해서 베이사전을 만들었는데 311척이 생성되었습니다.
+    //     그런데 **사용할때마다 베이구조가 틀려져서** 베이메트릭스를 만들게 되었습니다.
+    //     그런데도 베이구조 문제만 발생되면 클로드는 **구버전인 베이사전으로 베이메트릭스를 수정**해왔습니다.
+    //     그게 오염의 원인입니다."*
+    //   종전 주석이 문자 그대로 `// .def가 정답` 이었고 조건 없이 전 필드를 덮어썼다.
+    //   검수사가 확정한 베이(`_userConfirmed`)는 건드리지 않고, 없는 베이를 채우는 데만 쓴다.
+    if (m._userConfirmed) { augmented--; continue; }
     m.rowCount = e.rowCount;
     m.hasZero = e.hasZero;
     m.deckHasZero = e.hasZero;

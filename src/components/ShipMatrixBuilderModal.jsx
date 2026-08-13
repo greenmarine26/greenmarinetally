@@ -196,12 +196,24 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   const initAnalyzedRef = useRef(false);
   useEffect(() => {
     if (initAnalyzedRef.current) return;
-    // 1) 사용자가 이전에 저장한 매트릭스 있으면 그것 우선 복원 (사용자 작업 보호)
-    const saved = lookupUserBayDict(autoMeta.imo, autoMeta.code);
+    // ★ TallyOne 1.58-02: **보관소 정본을 먼저 읽는다.**
+    //   종전엔 `lookupUserBayDict`(localStorage 전용) 하나만 봤다. 그래서 폰·엣지·사전을 지운 기기에서
+    //   빌더를 열면 정본이 없는 것으로 보고 아래 2)로 내려가 **구사전(v2/v5/v1)으로 매트릭스를 조립**했고,
+    //   그것을 저장하면 `updatedAt = Date.now()` 라 **보관소의 진짜 정본을 밀어냈다.**
+    //   검수사 증언: *"베이메트릭스가 우선임을 알렸음에도 … 구버전 베이사전으로 베이메트릭스를 수정해왔다."*
+    let saved = null;
+    try {
+      const fb = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
+      const key = String(autoMeta.code || '').toUpperCase().replace(/\s+/g, '');
+      if (key && fb[key]?.bayDef?.baysSummary?.length > 0) saved = fb[key];
+    } catch (e) { /* 오프라인 등 — 아래 로컬 사본으로 */ }
+    if (!saved) saved = lookupUserBayDict(autoMeta.imo, autoMeta.code);   // 오프라인 폴백
     if (saved?.bayDef?.baysSummary?.length > 0) {
       const restored = bayDictEntryToMatrix(saved);
       if (restored) {
         if (saved.provisional || saved.bayDef?.provisional) restored.provisional = true;   // V7.99-5: 보정중 복원
+        // 1.58-02: 복원된 베이는 **검수사가 확정한 것**이다 — `.def` 업로드가 덮지 못하게 표시한다.
+        for (const b of Object.values(restored.byBay || {})) { if (b) b._userConfirmed = true; }
         setMatrix(restored);
         initAnalyzedRef.current = true;
         return;
@@ -633,9 +645,26 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     const stamp = Date.now();
     const payload = {};
     let skipped = 0;
+    // ★ TallyOne 1.58-02: **자동본에 user 표식을 찍지 않는다** (검수사 증언 2026-08-13).
+    //   검수사 원문: *"베이메트릭스가 우선임을 알렸음에도 불구하고 베이구조 문제만 발생되면
+    //     클로드는 **구버전인 베이사전으로 베이메트릭스를 수정**해왔었습니다. 그게 오염의 원인입니다.
+    //     그때도 베이메트릭스 하나가 정본이라고 했고 **수정불가**라고 했었음."*
+    //
+    //   종전 코드가 정확히 그 반대였다 — 로컬 사전 **전량**에 `source:'user'`·`_userOwned:true` 를
+    //   덧씌워 올렸다. ASC·STOWAGE·`.def` 자동본이 전부 정본으로 위장하니
+    //   `firebase.js:2426` 의 보호 분기(`existingIsUser && !entryIsUser`)가 **아예 진입하지 않았고**,
+    //   자동본에는 `updatedAt` 이 없어 `Date.now()` 가 찍혀 타임스탬프 방어도 무조건 통과했다.
+    //   → 검수사가 이 버튼을 한 번 누르면 자동본이 보관소 정본을 갈아엎었다. 2026-08-11 92건이 이것이다.
+    //
+    //   1.58-02: **user 매트릭스만 올린다.** 자동본은 표식을 위조하지 않고 아예 제외한다.
+    //   (보관소에 없는 것을 올리는 일은 App.jsx 가 앱 시작 때 이미 한다 — 이 버튼은 보조다.)
+    let autoSkipped = 0;
     for (const code of Object.keys(dict)) {
       const e = dict[code];
       if (!e || !e.bayDef) { skipped++; continue; }  // 빈 껍데기 제외
+      const isUser = e.bayDef?.source === 'user' || e.bayDef?._userOwned === true
+        || e.source === 'user' || e._userOwned === true;
+      if (!isUser) { autoSkipped++; continue; }      // 1.58-02: 자동본(.def·ASC·PDF)은 올리지 않는다
       payload[code] = {
         code: e.code || code,
         name: e.name || '',
@@ -643,7 +672,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         imo: e.imo || '',
         source: 'user',
         _userOwned: true,
-        bayDef: { ...e.bayDef, source: 'user', _userOwned: true },
+        bayDef: e.bayDef,                            // 1.58-02: 표식 덧씌우기 제거 — 원본 그대로
         editorName: currentInspector,
         // 기존 updatedAt 보존(있으면) → 다기기 충돌 시 최신 판정 정확.
         updatedAt: Number(e.updatedAt) || stamp,
@@ -652,7 +681,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     }
     const total = Object.keys(payload).length;
     if (total === 0) {
-      setBulkSyncMsg(`동기화할 매트릭스가 없습니다${skipped ? ` (빈 항목 ${skipped}개 제외)` : ''}.`);
+      setBulkSyncMsg(`동기화할 매트릭스가 없습니다${skipped ? ` (빈 항목 ${skipped}개 제외)` : ''}${autoSkipped ? ` (자동 생성본 ${autoSkipped}개 제외 — 정본이 아닙니다)` : ''}.`);
       return;
     }
     if (!confirm(`이 기기의 매트릭스 ${total}개를 전체 동기화할까요?\n(다른 기기에서도 보이게 됩니다)`)) return;
@@ -662,7 +691,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       const res = await fbBatchSaveShipBayDict(payload);
       setBulkSyncMsg(
         `✅ 동기화 완료 — 성공 ${res.saved}개${res.failed ? `, 실패 ${res.failed}개` : ''}` +
-        `${skipped ? ` (빈 항목 ${skipped}개 제외)` : ''}. 폰에서 새로고침하면 보입니다.`
+        `${skipped ? ` (빈 항목 ${skipped}개 제외)` : ''}${autoSkipped ? ` (자동 생성본 ${autoSkipped}개 제외)` : ''}. 폰에서 새로고침하면 보입니다.`
       );
     } catch (err) {
       console.error('[handleBulkSync] 실패', err);
