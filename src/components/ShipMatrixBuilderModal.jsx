@@ -43,7 +43,8 @@ function masterDict() {
     const fb = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
     const out = {};
     for (const [k, e] of Object.entries(fb)) {
-      const n = e?.bayDef?.recordCount || (e?.bayDef?.baysSummary || []).length;
+      // 1.66-02: 베이 수는 실제 목록을 센다 — `recordCount` 는 자동생성본에서 슬롯 수를 담는다(DPRT 2112).
+      const n = (e?.bayDef?.baysSummary || []).length || e?.bayDef?.recordCount || 0;
       if (n > 0) out[k] = e;      // 빈 껍데기는 비교 대상이 아니다
     }
     return out;
