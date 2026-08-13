@@ -42,10 +42,6 @@ import StorageBox from '../components/StorageBox.jsx';
 import VoyageSummaryCard from '../components/VoyageSummaryCard.jsx';
 import WorkClosingChecklist from '../components/WorkClosingChecklist.jsx';
 import StowageReviewModal from '../components/StowageReviewModal.jsx'; // M6.14
-import BulkStowageModal from '../components/BulkStowageModal.jsx'; // M6.42
-import BulkAscModal from '../components/BulkAscModal.jsx'; // M6.47
-import BayDictLibraryWidget from '../components/BayDictLibraryWidget.jsx'; // M6.43
-import BayDictDiagnosticsWidget from '../components/BayDictDiagnosticsWidget.jsx'; // M6.50
 import VoyFixWidget from '../components/VoyFixWidget.jsx'; // M6.46
 import { runDiagnostics } from '../diagnostics.js';
 import { logView, logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 활동 로그(열람·조회 기록)
@@ -1939,9 +1935,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
   // M6.14a: STOWAGE PDF 자동 분석 검토 모달 — DataTab 스코프에서만 사용
   const [stowagePdfFile, setStowagePdfFile] = useState(null);
   // M6.42: 일괄 STOWAGE PDF 등록 모달
-  const [bulkStowageOpen, setBulkStowageOpen] = useState(false);
   // M6.47: 일괄 ASC 등록 모달 (Gemini 0)
-  const [bulkAscOpen, setBulkAscOpen] = useState(false);
   // M6.93.1: 신규 선박 베이 매트릭스 빌더 (EDI + 사전 + PDF + 사용자 폼)
   const ediRef = useRef(null);
   const listRef = useRef(null);
@@ -2842,18 +2836,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     <div className="space-y-3">
       {/* M6.46: 항차 번호 확인/정정 위젯 — 정확한 voy_d/voy_l 보장 */}
       <VoyFixWidget voyage={voyage} voyageKey={voyageKey}/>
-      {/* M6.43: 베이사전 라이브러리 위젯 — PDF 등록 + 누락 선박 식별 통합 */}
-      <BayDictLibraryWidget
-        onSingleUpload={(file) => setStowagePdfFile(file)}
-        onBulkUpload={() => setBulkStowageOpen(true)}
-        onAscUpload={() => setBulkAscOpen(true)}
-      />
-      {/* TallyOne 1.60: 「신규 선박 베이 매트릭스 빌더」 버튼을 여기서 **뺐다** (검수사 지시 2026-08-13).
-          *"업로드를 누르면 일반 검수사도 보이기 때문에 건드릴수 있습니다."*
-          → 수석 대시보드 「🧱 베이매트릭스」로 옮겼다. 거기서는 항차가 없어도 선박을 조회해 고치고,
-            조회가 안 되는 선박은 새로 만들 수 있다. */}
-      {/* M6.50: 베이사전 진단 위젯 — 등록 entry 필드 완성도 + 잠재 오류 자동 감지 */}
-      <BayDictDiagnosticsWidget/>
+      {/* ★ TallyOne 1.60: 업로드 화면에서 **베이사전 라이브러리·매트릭스 빌더·베이사전 진단**을 전부 뺐다.
+          검수사 지시 2026-08-13: *"업로드를 누르면 일반 검수사도 보이기 때문에 건드릴수 있습니다."*
+            · *"올리기 전에 업로드 화면에서 이건 안보이게 해주세요 **검수사에겐 필요 없는 기능입니다.**"*
+          → 셋 다 수석 대시보드 「🧱 베이매트릭스」(권한 화면)로 옮겼다.
+          업로드 화면에는 검수원이 실제로 쓰는 자료 올리기만 남는다. */}
       {/* M5.26: 통합 출력 진입 */}
       <button
         onClick={() => setShowPrintHub(true)}
@@ -2901,28 +2888,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           }}
         />
       )}
-      {/* M6.42: STOWAGE PDF 일괄 등록 */}
-      {bulkStowageOpen && (
-        <BulkStowageModal
-          open={bulkStowageOpen}
-          inspector={inspector}
-          onClose={() => setBulkStowageOpen(false)}
-          onCompleted={(res) => {
-            setStatus(`✅ 베이사전 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패`);
-          }}
-        />
-      )}
-      {/* M6.47: ASC 일괄 등록 (Gemini 0) */}
-      {bulkAscOpen && (
-        <BulkAscModal
-          open={bulkAscOpen}
-          inspector={inspector}
-          onClose={() => setBulkAscOpen(false)}
-          onCompleted={(res) => {
-            setStatus(`⚡ ASC 일괄 등록: ${res.saved}개 성공, ${res.failed}개 실패 (Gemini 0회)`);
-          }}
-        />
-      )}
+      {/* TallyOne 1.60: STOWAGE PDF·ASC **일괄 등록**도 여기서 뺐다.
+          여는 버튼(베이사전 라이브러리)이 사라져 트리거가 없는 죽은 코드가 됐고,
+          내용상으로도 자동 생성본을 대량으로 만드는 경로라 1.58-02 의 정본 원칙과 맞지 않는다
+          (검수사 확정: 베이매트릭스 하나가 정본이고 사본이 정본을 고칠 수 없다).
+          베이 구조는 수석 대시보드 「🧱 베이매트릭스」에서 한 척씩 만들고 확정한다. */}
       {/* V9.46: 이 항차의 메일함 폴더를 바로 펼친다 — 파일 창에서 찾아 들어갈 필요가 없다.
           지원 안 되는 브라우저(폰 등)에서는 아무것도 안 그리고 아래 파일 입력이 그대로 쓰인다. */}
       <MailboxFilePicker

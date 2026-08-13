@@ -16,6 +16,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Search, Plus, Lock, Wrench } from 'lucide-react';
 import ShipMatrixBuilderModal from './ShipMatrixBuilderModal.jsx';
+import BayDictDiagnosticsWidget from './BayDictDiagnosticsWidget.jsx';   // 1.60: 업로드 화면에서 여기로 옮겨왔다
 import { canWriteBayDict } from '../bayDictGuard.js';
 
 const U = (s) => String(s || '').toUpperCase().replace(/\s+/g, '');
@@ -170,6 +171,9 @@ export default function BayMatrixManagerModal({ onClose }) {
               <Plus className="w-4 h-4" />조회가 안 되는 선박 추가
             </button>
           ))}
+
+          {/* 1.60: 베이사전 진단 — 종전엔 업로드 화면에 있어 일반 검수원에게도 보였다. 여기로 옮겼다. */}
+          <div className="pt-1"><BayDictDiagnosticsWidget /></div>
         </div>
       </div>
 
