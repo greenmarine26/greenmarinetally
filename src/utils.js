@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.66-02';   // 베이 수를 실제 목록으로 센다 — recordCount 는 자동생성본에서 슬롯 수였다(DPRT 2112베이)
+export const APP_VERSION = 'TallyOne 1.66-03';   // 수석 통합검색에도 기능 설명·자료 현황 · 띄어쓰기 무시 · 빈자리 어디 보호
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

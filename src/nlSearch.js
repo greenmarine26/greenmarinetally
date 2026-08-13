@@ -331,10 +331,19 @@ export function parseNaturalQuery(text) {
   const _strong = new RegExp(`도움말|사용법|사용\\s*방법|매뉴얼|무슨\\s*버튼|어느\\s*버튼|버튼\\s*(?:어디|어느)|(?:어디서|어디에서|어디에)\\s*(?:${_actV})|어떻게\\s*(?:${_actV})|보는\\s*법|하는\\s*법|쓰는\\s*법`);
   // 약한 신호("○○ 어디 있어")는 **컨테이너 조건이 하나도 없을 때만** 기능 질문으로 본다.
   //   "리퍼 어디 있어"는 컨 조회이고 "돌림판 어디 있어"는 기능 질문이다 — 가르는 것은 컨 조건의 유무다.
-  const _weak = /어디\s*있|어디\s*(?:냐|야|지|에요|인가)|어디\s*나(?:와|오)|어느\s*(?:화면|탭|메뉴)|어느\s*쪽/;
+  //   1.66-03: 검수사 실측 — `플랜편집 기능어디에` 가 안 걸려 컨 2,727대가 나왔다.
+  //   ① `어디에`·`어디` 로 **문장이 끝나는** 물음 ② `기능·메뉴·버튼·화면` 이 들어간 물음도 받는다.
+  //   둘 다 컨 조건이 없을 때만이라 `4777 어디` 같은 조회는 그대로 간다.
+  const _weak = /어디\s*있|어디\s*(?:냐|야|지|에요|인가)|어디\s*나(?:와|오)|어디에?\s*$|어느\s*(?:화면|탭|메뉴)|어느\s*쪽|기능|메뉴|버튼|화면\s*(?:어디|어느)/;
+  //   ⚠ 1.66-03: 컨 조건뿐 아니라 **컨 관련 인텐트가 하나라도 켜져 있으면 약한 신호는 안 받는다.**
+  //     실측 — `빈자리 어디` 가 기능 설명(「베이 분석」)에 뺏겼다. 그건 작업 질문이다.
   const _noCond = !result.digits && !result.size && !result.fe && !result.type && result.temp === null
                   && result.bay == null && !result.pol && !result.pod && !result.portAny && !result.zone
-                  && !result.dgClass && !result.un;
+                  && !result.dgClass && !result.un
+                  && !result.vacantQuery && !result.capacityQuery && !result.bayBreakdown
+                  && !result.tierStackQuery && !result.progressQuery && !result.bottomQuery
+                  && !result.topQuery && !result.weightSum && !result.dupL4Query
+                  && !result.shiftingQuery && !result.tierPlaceCountQuery && !result.tierInContextQuery;
   if (!result.digits && (_strong.test(t) || (_weak.test(t) && _noCond))) {
     result.howToQuery = true;
   }
@@ -562,7 +571,7 @@ export function hasAnyCondition(parsed) {
 //   둘을 같이 뒤져 가장 맞는 것을 낸다. 매뉴얼이 충실해질수록 이 답도 좋아진다.
 
 // 조사·어미를 떼고 뜻있는 낱말만 남긴다. 질문투 낱말은 버린다.
-const _HT_STOP = /^(어디서|어디에|어디|어떻게|보는법|보는|하지|하나|해요|하는|한다|되나|보나|봐|줘|좀|것|수|때|왜|무슨|어느|방법|사용법|기능|설명|알려|가르쳐|합니까|합니꺼|하죠|하나요)$/;
+const _HT_STOP = /^(어디서|어디에|어디|어떻게|보는법|보는|하지|하나|해요|하는|한다|되나|보나|봐|줘|좀|것|수|때|왜|무슨|어느|방법|사용법|기능|메뉴|버튼|화면|설명|알려|알려줘|알려주세요|가르쳐|가르쳐줘|합니까|합니꺼|하죠|하나요|도움말|매뉴얼|쓰는법|하는법)$/;
 // 한 글자여도 현장에서 그대로 쓰는 말은 살린다 — "씰 어떻게 넣어" 가 통째로 버려지던 것을 막는다.
 const _HT_KEEP1 = new Set(['씰', '실', '갱', '콘', '홀', '단', '열', '판', '컨']);
 function _htToks(s) {
@@ -619,10 +628,16 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
     ...FEATURE_INDEX.map(f => ({ ...f, blob: [f.l, f.w, f.d, ...(f.a || [])].join(' ') })),
     ..._htManualIndex(),
   ];
+  // 1.66-03: **띄어쓰기 차이로 못 찾던 것을 없앤다.**
+  //   검수사 실측 — `플랜편집` 이 색인의 `플랜 편집` 과 안 맞아 답을 못 냈다.
+  //   현장에서는 붙여 쓰기도 하고 띄어 쓰기도 한다. 비교할 때 공백을 지운다.
+  const _sq = (x) => String(x || '').replace(/\s+/g, '');
   const score = (it) => {
     let s = 0;
-    const l = it.l || '', w = it.w || '', d = it.d || '', al = (it.a || []).join(' '), blob = it.blob || '';
-    for (const t of T) {
+    const l = _sq(it.l), w = _sq(it.w), d = _sq(it.d), al = _sq((it.a || []).join(' ')), blob = _sq(it.blob);
+    for (const t0 of T) {
+      const t = _sq(t0);
+      if (!t) continue;
       if (l.includes(t)) s += 10;
       if (al.includes(t)) s += 9;
       if (w.includes(t)) s += 6;

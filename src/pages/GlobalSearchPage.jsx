@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake } from 'lucide-react';
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
+import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 
 export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   const [query, setQuery] = useState('');
@@ -78,6 +79,20 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   const localAnswer = useMemo(() => {
     if (!debouncedQuery || debouncedQuery.length < 2) return null;
     const p = parsed;
+    // TallyOne 1.66-03: **수석 화면에서도 기능 위치를 묻는다.**
+    //   검수사 지적 2026-08-13 — *"수석 대시보드에선 자연어 즉 도우미 기능을 어디에서 사용하나요?"*
+    //   1.65 에서 기능 설명을 항차 화면에만 붙였다. **수석 전용 기능일수록 수석이 묻는 자리에서 답해야 하는데 거꾸로였다.**
+    //   여기는 수석·소유자만 들어오는 라우트라(App.jsx 가드) 수석 기준으로 답한다.
+    if (p.howToQuery) {
+      const _a = generateHowToAnswer(debouncedQuery, p, { isChief: true });
+      if (_a) return _a;
+    }
+    // 자료 현황 — "어느 선박 자료 다 있어" · "어느 선사 것이 없지" · "빠진 자료"
+    //   항차 하나가 아니라 **전체를 가로질러** 봐야 하는 물음이라 통합 검색이 제자리다.
+    if (/자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착)|어느\s*(?:선박|배|선사)[^?]*(?:없|빠|안\s*왔)|안\s*온\s*자료|EDI\s*없/.test(debouncedQuery)) {
+      try { return describeReadiness(buildReadiness(voyages, (typeof window !== 'undefined' && window.__fbShipBayDict) || null)); }
+      catch (e) { /* 아래 종전 경로로 */ }
+    }
     if (p.briefingQuery || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
         p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.schedQuery || p.foodQuery) {
       return '이 질문은 항차 화면에서 답합니다.\n홈에서 그 배의 [양하]/[선적] 막대를 누른 뒤 🎤 자연어 탭에서 물어보세요.';
@@ -87,7 +102,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;
-  }, [parsed, debouncedQuery]);
+  }, [parsed, debouncedQuery, voyages]);   // 1.66-03: 자료 현황이 voyages 를 읽는다
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
