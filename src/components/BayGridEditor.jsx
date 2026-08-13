@@ -30,7 +30,11 @@ import * as P from '../planEditCore.js';
 //   그래서 여기서도 칸을 고정하고 시트 폭을 열 수에 비례시킨다(sheetW).
 //   비율 137:94 = 1.458 은 종이 140:96 = 1.458 과 같다.
 const BGE_CELL_W_MAX = 137;
-const BGE_CELL_RATIO = 140 / 96;   // 종이 실측 칸 비율 1.458
+// 칸 가로:세로. 종이 실측은 140/96 = 1.458 인데 1.32 를 쓴다 —
+//   검수사 요청 2026-08-13 "폰트크기는 지금보다 한단계높게요" 로 글자를 키우면
+//   리퍼 칸(온도 줄이 붙어 5줄)이 종이 비율에서는 넘쳐 잘린다.
+//   가로는 «한 화면에 최대 열»을 지켜야 하므로 세로만 늘려 5줄을 담는다.
+const BGE_CELL_RATIO = 1.32;
 
 export const BGE_CSS = `
 .bge-overlay{position:fixed;inset:0;background:#0f172a;z-index:10000;display:flex;flex-direction:column;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic','맑은 고딕',sans-serif}
@@ -115,7 +119,7 @@ export const BGE_CSS = `
      ★ 가로는 가운데다(align-items:center + text-align:center) — 검수사 요청 2026-08-13.
        종이는 왼쪽 정렬이지만 화면에서는 가운데가 낫다고 하셨다.
      ⛔ 세로(justify-content)는 flex-start 를 유지한다 — center 로 바꾸면 위의 리퍼 사고가 돌아온다. */
-  flex-direction:column !important;align-items:center !important;justify-content:flex-start !important;text-align:center;padding:8px 6px 6px;font-weight:400 !important;line-height:1.35 !important}
+  flex-direction:column !important;align-items:center !important;justify-content:flex-start !important;text-align:center;padding:6px 5px 5px;font-weight:400 !important;line-height:1.25 !important}
 .bge-edit .cpv2-cell > span{width:100%;text-align:center}
 /* 1.67: 칸이 4~5줄이 되면서 «높이를 위에서 내려주는» 방식을 편집기 안에서만 뒤집는다.
    카고플랜 원본은 시트 높이를 정해 놓고 flex:1 1 0 체인으로 단마다 나눠 준다(2줄 전용 설계).
@@ -193,16 +197,20 @@ export const BGE_CSS = `
 /* 글자 크기는 «칸 폭에 비례»한다(cqw). 종이는 컨번호 11자가 칸 폭의 약 88%를 채운다 —
    monospace 자폭이 대략 0.6em 이므로 11 × 0.6 × 13cqw ≈ 86cqw 로 그 비율이 나온다.
    고정 px 로 두면 열 수에 따라 칸 폭이 달라져 어떤 베이는 글자가 헐렁해진다. */
-.bge-cn{font-weight:600;font-size:clamp(7px,8.8cqw,12px);letter-spacing:-.2px;font-family:ui-monospace,monospace;display:block;color:#111}
-.bge-sub{font-size:clamp(7px,8.8cqw,12px);color:#111;display:block;letter-spacing:-.2px;font-family:ui-monospace,monospace;font-weight:400}
+/* 1.67-02: 자간을 벌리고 굵기를 하나로 통일한다 — 검수사 2026-08-13:
+     "텍스트들이 너무 붙어 있습니다 읽기 힘듭니다. 자간은 조금 넓게 굵기도 통일해주세요."
+   종전 -0.2px 는 칸에 글자를 밀어 넣으려고 좁힌 값이라 번호가 한 덩어리로 읽혔다.
+   종이(CASP)도 네 줄이 «전부 같은 굵기»고 자간이 좁지 않다. 컨번호만 600 이던 것도 400 으로 맞춘다. */
+.bge-cn{font-weight:400;font-size:clamp(9px,10.2cqw,14px);letter-spacing:.45px;font-family:ui-monospace,monospace;display:block;color:#111}
+.bge-sub{font-size:clamp(9px,10.2cqw,14px);color:#111;display:block;letter-spacing:.45px;font-family:ui-monospace,monospace;font-weight:400}
 /* ★ 첫 줄(출발/도착)만 왼쪽에 붙인다 — 검수사 2026-08-13:
      "맨 윗줄은 좌측에 가야 합니다. 이유는 통과화물등이 우측을 사용합니다."
    실제로 XRAY 별표(cpv2-xray::after)와 통과 표시가 칸 «우측 상단»에 찍히므로,
    첫 줄을 가운데 두면 그 표시와 겹친다. 나머지 줄은 가운데 정렬 그대로. */
-.bge-l1{font-size:clamp(7px,8.8cqw,12px);color:#111;display:block;letter-spacing:-.2px;font-family:ui-monospace,monospace;font-weight:400;text-align:left !important;padding-right:11px}
+.bge-l1{font-size:clamp(9px,10.2cqw,14px);color:#111;display:block;letter-spacing:.45px;font-family:ui-monospace,monospace;font-weight:400;text-align:left !important;padding-right:11px}
 /* 좌표 줄만 칸 아래로 — 종이의 «빈 줄 하나»가 이것이다. 줄이 늘면(리퍼 온도) 저절로 사라진다. */
 .bge-at{font-family:ui-monospace,monospace;color:#111;margin-top:auto}
-.bge-tmp{color:#0369a1;font-weight:600}
+.bge-tmp{color:#0369a1;font-weight:400}
 @media print{
   /* 인쇄 대상 확정 — CARGO_V2_CSS가 함께 주입되면서 그 안의
        body > *:not(.cpv2-overlay):not(.bd-print-modal){display:none}   (0,2,1)
@@ -374,7 +382,7 @@ export default function BayGridEditor({
       const rc = Number(b.rowCount) || 0; if (rc > m) m = rc;
       if (b.hasZero) zero = true;
     }
-    return Math.max(m + (zero ? 1 : 0), 7) + 1.5;   // +1.5 = 종이의 좌우 여유
+    return Math.max(m + (zero ? 1 : 0), 7) + 1.0;   // +1.0 = 종이의 좌우 여유
   }, [dictData]);
 
   // 세로도 같은 원리다. 종이(CASP)는 «데크/홀드 경계선이 어느 장이든 같은 높이»에 온다 —
