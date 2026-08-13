@@ -563,7 +563,8 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     if (ok) {
       setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이${matrix.provisional ? ' · 🛠 보정중(복제 기반, 계속 수정 가능)' : ''}`);
       setDone(true);
-      // M6.94.20: Firebase 업로드 (다른 기기 수신용) — fire-and-forget
+      // 1.58: 보관소가 정본이다 — 여기 실패하면 **저장이 안 된 것**이다(화면도 옛것을 그린다).
+      //   종전 문구 "이 기기에는 저장됨"은 로컬이 정본이던 시절 이야기라 이제 거짓이 된다.
       fbSaveShipBayDict(entry.code, {
         code: entry.code,
         name: entry.name,
@@ -577,10 +578,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         updatedAt: stamp,
         _inspector: currentInspector,
       }).then(r => {
-        if (r) setSavingMsg(s => s + ' · ☁ 동기화됨 (다른 기기에서도 보임)');
-        else setSavingMsg(s => s + ' · ⚠ 동기화 실패 (이 기기에는 저장됨)');
-      }).catch(() => {
-        setSavingMsg(s => s + ' · ⚠ 동기화 실패 (이 기기에는 저장됨)');
+        if (r) setSavingMsg(s => s + ' · ☁ 보관소에 저장됨 (폰·엣지·다른 기기에서도 같이 보입니다)');
+        else setSavingMsg(s => s + ' · ⛔ 보관소 저장 실패 — 화면에는 반영되지 않습니다. 인터넷을 확인하고 다시 저장하세요.');
+      }).catch((e) => {
+        console.error('[매트릭스 빌더] 보관소 저장 실패', e);
+        setSavingMsg(s => s + ' · ⛔ 보관소 저장 실패 — 화면에는 반영되지 않습니다. 인터넷을 확인하고 다시 저장하세요.');
       });
       if (onSaved) onSaved(entry);
     } else {

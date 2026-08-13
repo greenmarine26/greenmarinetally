@@ -1,14 +1,15 @@
 // 그린마린 평택항 검수 — Master V1.1
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
-import React, { useState, useEffect, useCallback, useMemo } from 'react';   // 1.41: useMemo — 접근 판정
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
 import { APP_VERSION, _storage, SK , setLaneRoutes } from './utils.js';
-import { loadUserBayDict, entryTimestamp, applyApprovedSync } from './data/userBayDict.js';
+import { loadUserBayDict } from './data/userBayDict.js';   // 1.58: 조회용 아님 — 누락분 업로드에만 쓴다
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
-, fbSubscribeLaneRoutes } from './firebase.js';
+, fbSubscribeLaneRoutes,
+  fbSaveShipBayDict } from './firebase.js';   // 1.58: 보관소에 없는 이 기기 사본 올리기
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
@@ -95,8 +96,10 @@ export default function App() {
   const [greeting, setGreeting] = useState(null);  // {type: 'login'|'logout', lines, voice, ...}
   const [weather, setWeather] = useState(null);
   const [heartbeat, setHeartbeat] = useState(null);  // V8.40: 수집기 하트비트
-  // V9.05: 공유 정본보다 오래된 로컬 베이사전 사본 목록 (관리자 승인 후 갱신)
-  const [bayDictSyncPending, setBayDictSyncPending] = useState([]);
+  // 1.58: 「오래됨」 배너 폐기(보관소가 정본이라 로컬과 대조할 이유가 없다).
+  //   대신 이 기기 사본 중 보관소에 없던 것을 올린 결과만 한 줄로 알린다.
+  const [bayDictUploadNote, setBayDictUploadNote] = useState(null);
+  const bayDictUploadedRef = useRef(false);   // 세션당 1회
 
   // TallyOne 1.0: 앱 시작은 항상 로그인 화면(자동 로그인 없음 — 사용자 확정 사양).
   //   원래 열려던 해시는 pendingHashRef에 보관 → 로그인 성공 시 권한 검사 후 그 해시로 진입.
@@ -137,29 +140,46 @@ export default function App() {
       // V7.94-07: 콘앱(Firebase 미로드, 같은 오리진)이 읽을 수 있게 localStorage에 미러.
       //   용량 초과(QuotaExceeded) 시 조용히 생략 — 메인 앱 동작에는 영향 없음.
       try { localStorage.setItem('gm_fb_baydict_cache', JSON.stringify(data || {})); } catch (e) { /* skip */ }
-      // ── V9.05: 조용한 자동 덮어쓰기 제거 (관리자 원칙: 매트릭스는 앱이 스스로 수정 금지) ──
-      //   기존 M6.94.20 자동 머지는 ①타임스탬프 비교가 NaN(ISO 문자열)으로 깨져 있었고
-      //   ②알림·이력 없이 로컬 user 사전을 덮어썼다 (2026-07-21 SWAT 사건 계기 재설계).
-      //   이제는 "공유 정본이 로컬 사본보다 최신"인 항목을 탐지만 하고,
-      //   관리자가 배너에서 승인해야 applyApprovedSync로 반영한다.
-      //   (오프라인 조회는 gm_fb_baydict_cache 폴백이 있어 자동 머지 없이도 동작.)
-      try {
-        const fb = data || {};
-        const local = loadUserBayDict() || {};
-        const pending = [];
-        for (const code of Object.keys(fb)) {
-          const e = fb[code];
-          const isUser =
-            e?.source === 'user' || e?.bayDef?.source === 'user' ||
-            e?._userOwned === true || e?.bayDef?._userOwned === true;
-          if (!isUser || !e?.bayDef) continue;
-          const cur = local[code];
-          if (!cur) continue;   // 로컬에 사본이 없으면 FB 폴백 조회 — 문제 없음
-          if (entryTimestamp(e) > entryTimestamp(cur)) pending.push(code);
-        }
-        setBayDictSyncPending(pending);
-      } catch (err) {
-        console.error('[App] 베이사전 정본 대조 실패', err);
+      // ── ★ TallyOne 1.58: 보관소가 정본이다 (검수사 확정 2026-08-13) ──
+      //   검수사 원문: *"보관소가 정본입니다. 제가 폰으로 수정을 하든 컴으로 수정을 하든
+      //     엣지로 하든 크롬으로 하든 모두 같아야 합니다. 보이는것도 같아야 합니다."*
+      //
+      //   종전 구조: 조회 1순위가 브라우저 localStorage(`master_user_bay_dict_v1`)였다.
+      //     그래서 크롬 프로필·엣지·폰마다 사전이 따로였고, 같은 배가 기기마다 다르게 그려졌다.
+      //     게다가 V9.05 「오래됨」 배너는 updatedAt 만 비교해 **내용이 같아도** 알렸고
+      //     (2026-08-11 「전체 동기화」 한 번에 92건 도장 → 헛경고 96건),
+      //     승인은 병합이 아니라 통째 교체라 그 기기에만 있던 수정이 사라졌다. 배너 자체가 오염 경로였다.
+      //
+      //   새 구조: 조회는 보관소(shipStructure.getFbBayDict)만 본다. 로컬은 오프라인 캐시로만 남는다.
+      //   여기서 하는 일은 **유실 방지 한 가지**다 — 이 기기 사본 중 보관소에 **없는** 코드만 올린다.
+      //     · 기존 보관소 항목은 건드리지 않는다(신규만, 덮어쓰기 없음).
+      //     · 검수사는 폰·크롬·엣지를 한 번씩 열기만 하면 된다. 누를 것이 없다.
+      //     · 편집 권한자는 검수사 한 사람뿐이라(bayDictGuard) 남의 사본이 섞일 위험이 없다.
+      //   실패해도 조용히 넘기지 않는다 — 콘솔에 남기고 배너로 알린다.
+      if (!bayDictUploadedRef.current) {
+        bayDictUploadedRef.current = true;
+        (async () => {
+          try {
+            const fb = data || {};
+            const local = loadUserBayDict() || {};
+            const missing = Object.keys(local).filter(code => {
+              const e = local[code];
+              const isUser = e?.bayDef?.source === 'user' || e?.bayDef?._userOwned === true;
+              return isUser && e?.bayDef && !fb[code];        // 보관소에 없는 것만
+            });
+            if (missing.length === 0) return;
+            console.info('[베이사전] 보관소에 없는 이 기기 사본', missing.length, '건 올림 —', missing.join(', '));
+            let ok = 0;
+            for (const code of missing) {
+              // 순차로 올린다 — 병렬(Promise.all)은 4초에 92건을 쏟아 2026-08-11 도장 사고를 냈다.
+              if (await fbSaveShipBayDict(code, local[code])) ok++;
+            }
+            setBayDictUploadNote({ tried: missing.length, ok, codes: missing });
+          } catch (err) {
+            console.error('[베이사전] 누락분 업로드 실패', err);
+            setBayDictUploadNote({ tried: -1, ok: 0, codes: [], error: String(err?.message || err) });
+          }
+        })();
       }
     });
     return () => { u1(); u2(); u3(); u4(); u4b(); u4c(); u5(); u6(); u7(); unsub2(); unsub3(); unsubDev(); };
@@ -179,20 +199,7 @@ export default function App() {
     [inspector, devAccessMap],
   );
 
-  // V9.05: 관리자 승인 시 공유 정본을 로컬 사본에 반영
-  const handleApproveBayDictSync = useCallback(() => {
-    const codes = bayDictSyncPending;
-    if (!codes || codes.length === 0) return;
-    const okGo = window.confirm(`베이사전 로컬 사본 ${codes.length}건(${codes.join(', ')})을 공유 정본으로 갱신할까요?`);
-    if (!okGo) return;
-    const res = applyApprovedSync(window.__fbShipBayDict || {}, codes);
-    if (res.ok && res.applied > 0) {
-      setBayDictSyncPending([]);
-      alert(`✅ ${res.applied}건 갱신 완료`);
-    } else if (!res.ok) {
-      alert('갱신 실패 — 권한 또는 저장 오류. 콘솔을 확인하세요.');
-    }
-  }, [bayDictSyncPending]);
+  // 1.58: handleApproveBayDictSync 삭제 — 보관소가 정본이라 승인·반영 절차 자체가 없다.
 
   // TallyOne 1.0 (B-12): 해시 → 라우트 동기화는 parseHash 단일 파서만 쓴다
   useEffect(() => {
@@ -416,11 +423,14 @@ export default function App() {
 
       <BroadcastMarquee inspector={inspector} />
 
-      {/* V9.05: 베이사전 정본 갱신 대기 배너 — 관리자에게만, 승인해야 반영 */}
-      {isAdmin && bayDictSyncPending.length > 0 && (
-        <div className="bg-amber-900/60 border-b border-amber-600/50 text-amber-100 text-xs px-3 py-2 flex items-center justify-between gap-2">
-          <span>📚 베이사전 로컬 사본 {bayDictSyncPending.length}건이 공유 정본보다 오래됨: {bayDictSyncPending.slice(0, 6).join(', ')}{bayDictSyncPending.length > 6 ? ' 외' : ''}</span>
-          <button onClick={handleApproveBayDictSync} className="bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold px-3 py-1 rounded flex-shrink-0">정본으로 갱신</button>
+      {/* 1.58: V9.05 「오래됨」 배너 철거. 보관소가 정본이라 로컬과 대조할 일이 없다 —
+          검수사가 뜻도 모르고 「확인」을 눌러 그 기기 수정을 잃던 경로였다.
+          남은 것은 이 기기에만 있던 것을 보관소로 올린 결과 통지뿐이다(누를 것 없음). */}
+      {isAdmin && bayDictUploadNote && (
+        <div className="bg-slate-800 border-b border-slate-600 text-slate-200 text-xs px-3 py-2">
+          {bayDictUploadNote.tried < 0
+            ? <span>📚 베이사전 — 이 기기 사본을 보관소로 올리지 못했습니다: {bayDictUploadNote.error}</span>
+            : <span>📚 베이사전 — 보관소에 없던 이 기기 사본 <b>{bayDictUploadNote.ok}건</b>을 보관소에 올렸습니다{bayDictUploadNote.ok !== bayDictUploadNote.tried ? ` (${bayDictUploadNote.tried}건 중)` : ''}: {bayDictUploadNote.codes.slice(0, 8).join(', ')}{bayDictUploadNote.codes.length > 8 ? ' 외' : ''}</span>}
         </div>
       )}
       <main className="pb-20">

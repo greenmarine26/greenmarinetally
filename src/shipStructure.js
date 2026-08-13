@@ -10,7 +10,6 @@
 
 import { lookupBayDict } from './data/shipBayDict.js';
 import { lookupBayDictV2, lookupBayDictV2Enhanced } from './data/shipBayDict_v2.js';
-import { lookupUserBayDict, loadUserBayDict } from './data/userBayDict.js';
 import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 // M6.55: v5 — .def 매트릭스 디코드 자동 추출
 //   - supplement: v2에 없는 13척 (DAP, DBM, DHA, ESTM, FN7, FSR, HAHM, HECN, MDB, MEB, ORT, PCBS, WBC)
@@ -61,41 +60,20 @@ function getFbBayDict() {
 }
 
 function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
-  // M6.93.12 fix #2 (검수앱지침서 §6.3): userBayDict가 최우선 (절대 보호).
-  //   사용자가 매트릭스 빌더에서 직접 입력한 정답이 다른 어떤 사전보다 우선.
-  //   이전엔 v2-verified-newer > Firebase > user 순이어서 v2/Firebase가 사용자 데이터를 가리는 사고.
-  try {
-    const userResultFirst = lookupUserBayDict(imo, vesselNameOrCode);
-    if (userResultFirst) return { source: 'user', data: userResultFirst, matchedBy: 'user-dict-priority' };
-  } catch (e) { /* fallthrough */ }
-
-  // M6.62: v2 verified 최신본이 Firebase 옛 정정본보다 우선
-  //   같은 선박이 Firebase + v2 양쪽에 있을 때
-  //   - v2의 parsedAt이 Firebase보다 최신 + verified=true → v2 사용
-  //   - 안 그러면 기존 우선순위 (Firebase > user > v2)
-  //   이유: PCBJ 같은 케이스 — Firebase에 옛 부정확 entry, v2에 STOWAGE PDF 재정정.
-  //   클로드가 v2 정정해도 Firebase가 가려서 사용자가 새 버전 못 봄.
-  try {
-    const v2Enhanced = lookupBayDictV2Enhanced(imo, vesselNameOrCode);
-    if (v2Enhanced && !v2Enhanced.matchedBy.startsWith('name-fuzzy')) {
-      const def = v2Enhanced.entry?.bayDef;
-      if (def?.verified === true && def?.parsedAt) {
-        const fbDict = getFbBayDict();
-        // 같은 선박 Firebase entry 찾기
-        const fbEntry = Object.values(fbDict).find(e => 
-          e && ((imo && e.imo === imo) || (v2Enhanced.entry.code && e.code === v2Enhanced.entry.code))
-        );
-        const fbParsedAt = fbEntry?.bayDef?.parsedAt;
-        if (!fbParsedAt || def.parsedAt > fbParsedAt) {
-          return { 
-            source: 'v2-verified-newer', 
-            data: v2Enhanced.entry, 
-            matchedBy: 'v2-verified-override-firebase-' + v2Enhanced.matchedBy
-          };
-        }
-      }
-    }
-  } catch (e) { /* fallthrough */ }
+  // ★ TallyOne 1.58 — 정본은 보관소 하나다 (검수사 확정 2026-08-13).
+  //   검수사 원문: *"사전도 통일합니다. 하나로. 베이메트릭스 단 하나만이 정본이며,
+  //     아무리 많은 선박의 정보를 갖고 있더라도 사본입니다. **사본이 정본을 고칠 수 없습니다.**"*
+  //
+  //   폐기한 것 둘 — 이 자리에 있던 코드가 정확히 그 원칙을 어기고 있었다.
+  //     ① M6.93.12 "userBayDict가 최우선(절대 보호)" — 브라우저 localStorage 개인 사본이 1순위였다.
+  //        그래서 크롬 프로필·엣지·폰마다 같은 배가 다르게 그려졌다. 검수사 원문:
+  //        *"보이는것도 같아야 합니다. 무엇으로 보든 틀리면 안됩니다."*
+  //     ② M6.62 "v2-verified-newer" — 코드에 박힌 v2 사본의 parsedAt 이 보관소보다 최신이면
+  //        **v2 가 보관소를 이겼다.** 사본이 정본을 가리는 경로다.
+  //   남은 규칙: 정본(보관소)에 bayDef 가 있으면 거기서 끝난다. 사본은 정본이 없을 때만 빌려 쓴다.
+  //   ⚠ 로컬 개인 사본(master_user_bay_dict_v1)은 조회 경로에서 완전히 빠졌다.
+  //     그것은 이제 '아직 보관소에 못 올린 편집분'을 담아 두는 곳일 뿐이고,
+  //     App.jsx 가 앱 시작 때 보관소에 없는 것만 올린다(덮어쓰기 없음).
 
   // M5.88: 0. Firebase 베이사전 (최우선 — 모든 검수원 공유)
   try {
@@ -137,9 +115,8 @@ function fuzzyLookupAcrossDicts(imo, vesselNameOrCode) {
     }
   } catch (e) { /* fallthrough */ }
 
-  // 1. user 사전 (localStorage)
-  const userResult = lookupUserBayDict(imo, vesselNameOrCode);
-  if (userResult) return { source: 'user', data: userResult, matchedBy: 'user-dict' };
+  // 1.58: user 사전(localStorage) 조회 제거 — 기기마다 다른 유일한 사전이었다.
+  //   여기 있으면 "무엇으로 보든 같다"가 성립하지 않는다. 아래는 전부 코드 내장이라 기기 간 동일하다.
 
   // 2. v2 사전 — 강화된 매칭 (IMO + callsign + code + name 4가지 시도)
   //   M6.55: 정확 매칭(code/IMO/callsign)과 fuzzy(name-fuzzy) 분리.
@@ -352,8 +329,8 @@ function findSeriesSubstitute(code, ediBayCount) {
   const prefix2 = codeU.slice(0, 2);
 
   // 후보 수집: userBayDict + Firebase 사전
+  // 1.58: 후보 풀에서 로컬 개인 사본 제거 — 계열 대체 결과까지 기기마다 달라지면 안 된다.
   const pools = [];
-  try { pools.push(loadUserBayDict() || {}); } catch (e) { /* skip */ }
   try { const _fb = getFbBayDict(); if (Object.keys(_fb).length > 0) pools.push(_fb); } catch (e) { /* skip */ }
 
   const candidates = [];
@@ -410,8 +387,8 @@ function pickBestVariant(matchedData, imo, ediBayCount) {
   };
 
   // 후보 수집: localStorage + Firebase
+  // 1.58: 후보 풀에서 로컬 개인 사본 제거 — 계열 대체 결과까지 기기마다 달라지면 안 된다.
   const pools = [];
-  try { pools.push(loadUserBayDict() || {}); } catch (e) { /* skip */ }
   try { const _fb = getFbBayDict(); if (Object.keys(_fb).length > 0) pools.push(_fb); } catch (e) { /* skip */ }
 
   const variants = [];
@@ -461,25 +438,25 @@ function _dictIdentityConflict(entry, opts) {
 }
 
 export function getShipBayDictData(imo, code, opts) {
-  // V8.23: 빌더는 코드로 저장/조회하므로, 화면도 코드(opts.vslCode)로 user 매트릭스를 "최우선" 조회한다.
-  //   배경: 같은 배가 코드키(예: DJCT, name "DJCT")와 선박명키(예: DCON, name "DONGJIN CONTINENTAL")로
-  //   중복 저장돼 있을 때, 빌더는 코드로 DJCT를 편집하는데 화면은 선박명으로 DCON을 읽어 수정이 반영 안 됨.
-  //   → 코드 조회를 선박명 조회보다 우선해, 빌더가 편집하는 바로 그 엔트리를 화면도 읽게 통일.
+  // ★ TallyOne 1.58: 코드(vslCode) 조회도 **정본(보관소)** 에서 한다.
+  //   V8.23 이 이 자리에서 로컬 개인 사본(lookupUserBayDict)을 최우선으로 봤다 — 그 한 줄이
+  //   "폰과 컴이 다르게 보인다"의 출발점이었다. 빌더가 코드로 저장하니 화면도 코드로 읽는다는
+  //   원래 취지는 그대로 두고, 읽는 곳만 로컬 → 보관소로 옮긴다.
   let result = null;
   if (opts && opts.vslCode) {
     try {
-      const _byCode = lookupUserBayDict(imo, opts.vslCode);
+      const _fb = getFbBayDict();
+      const _key = String(opts.vslCode).toUpperCase().replace(/\s+/g, '');
+      const _byCode = (_fb[_key] && _fb[_key].bayDef) ? _fb[_key] : null;   // 껍데기(bayDef 없음) 제외
       // TallyOne 1.13-02: **코드로 잡았어도 신원을 확인한다.**
       //   vslCode 는 콜사인 앞4자로 추론되기도 해서, 앞4자가 겹치는 다른 배의 매트릭스를 그대로 물어왔다
       //   (실측: NSFR 콜사인 V7A2845 → 코드 V7A2 → 사전 V7A2 = SWAT(V7A281) 매트릭스).
-      //   기존 V7.31 오염 방어는 `matchedBy` 에 'code' 가 들어가면 통과시켜 이 경로를 못 걸렀다.
       //   규칙: 양쪽 콜사인이 다 있는데 **서로 접두 관계도 아니면 다른 배**다.
-      //     V7A281 vs V7A2845 → 다른 배(버림) · V7A623 vs V7A623 → 같은 배(채택)
       if (_byCode && !_dictIdentityConflict(_byCode, opts)) {
-        result = { source: 'user', data: _byCode, matchedBy: 'user-dict-vslcode' };
+        result = { source: 'firebase', data: _byCode, matchedBy: 'fb-vslcode' };
       } else if (_byCode) {
         console.warn('[베이사전] 코드는 맞지만 신원이 다른 항목을 버립니다 —',
-          `조회코드 ${opts.vslCode}`, `사전 ${_byCode.code}/${_byCode.name}/${_byCode.callsign}`,
+          `조회코드 ${opts.vslCode}`, `정본 ${_byCode.code}/${_byCode.name}/${_byCode.callsign}`,
           `항차 ${opts.vslFull || ''}/${opts.callsign || ''}`);
       }
     } catch (e) { /* fallthrough */ }
@@ -527,7 +504,12 @@ export function getShipBayDictData(imo, code, opts) {
   // V8.23-01: vslCode(코드)로 찾은 user 매트릭스는 빌더가 편집하는 바로 그 엔트리이므로,
   //   콜사인 공유(예: BSDU를 DJCT/XTPG가 공유)로 인한 pickBestVariant 바꿔치기를 막는다.
   //   (양하/선적 베이수 차이로 양하만 엉뚱한 계열로 바뀌던 버그.)
-  if (!_substituted && result.matchedBy !== 'user-dict-vslcode') {
+  // ★ 1.58: 정본에서 온 것은 바꿔치기하지 않는다 — "사본이 정본을 고칠 수 없다"(검수사 확정).
+  //   pickBestVariant 는 EDI 베이수에 가까운 '다른 벌'로 갈아끼우는 보정이다. 정본을 코드로
+  //   정확히 찾았는데 베이수가 조금 다르다고 다른 벌로 바꾸면, 검수사가 저장한 매트릭스가 아닌
+  //   것이 화면에 나온다. 종전 가드는 이름이 'user-dict-vslcode' 라 1.58 에서 안 걸렸다.
+  const _fromMaster = result.source === 'firebase';
+  if (!_substituted && !_fromMaster) {
     const ediBayCount = opts && Number.isFinite(opts.ediBayCount) ? opts.ediBayCount : null;
     if (ediBayCount != null) {
       const better = pickBestVariant(data, imo, ediBayCount);

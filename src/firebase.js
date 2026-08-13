@@ -2475,9 +2475,26 @@ export async function fbSaveShipBayDict(code, entry) {
       name: entry.name || existing.name || '',
       // bayDef는 새 데이터가 있으면 갱신 (def 파일 재업로드 케이스)
       bayDef: entry.bayDef || existing.bayDef || null,
-      updatedAt: Date.now(),
+      // ★ TallyOne 1.57-01: 부르는 쪽이 updatedAt 을 명시하면 그것을 존중한다.
+      //   종전에는 무조건 Date.now() 로 덮어써서, 「☁ 전체 동기화」가 옛 도장을 보존해 보내도
+      //   (ShipMatrixBuilderModal 의 "기존 updatedAt 보존" 주석) 여기서 그 의도가 무효화됐다.
+      updatedAt: Number(entry.updatedAt) > 0 ? Number(entry.updatedAt) : Date.now(),
       updatedBy: entry._inspector || entry.editorName || existing.updatedBy || '',
     };
+    // ★ TallyOne 1.57-01: 내용이 같으면 쓰지 않는다 (검수사 신고 2026-08-13).
+    //   사고 — 2026-08-11 11:25 「☁ 전체 동기화」 한 번에 92건의 updatedAt 이 4초 만에 갱신됐다.
+    //   내용은 그대로였다(bayDef.parsedAt 은 5~8월 옛날 값 유지). 그런데 앱은 로컬 사본 95건을
+    //   "공유 정본보다 오래됨"으로 띄웠고, 검수사는 무엇이 다른지 모른 채 승인을 눌러야 했다.
+    //   승인은 applyApprovedSync 의 통째 교체라 **로컬에만 있던 수정이 날아간다** — 오염 경로다.
+    //   updatedAt·updatedBy 를 뺀 나머지가 같으면 쓸 이유가 없다. 도장만 새로 찍는 쓰기를 막는다.
+    //   ⚠ 키 순서에 안 흔들리게 정렬 직렬화를 쓴다(RTDB 는 키를 정렬해 주고 로컬은 저장 순서를 지킨다).
+    const _stable = (v) => {
+      if (v === null || typeof v !== 'object') return JSON.stringify(v ?? null);
+      if (Array.isArray(v)) return '[' + v.map(_stable).join(',') + ']';
+      return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + _stable(v[k])).join(',') + '}';
+    };
+    const _cmp = (o) => { const { updatedAt, updatedBy, ...rest } = o || {}; return _stable(rest); };
+    if (existing && _cmp(existing) === _cmp(merged)) return true;   // 무변경 — 쓰지 않고 성공으로 본다
     await set(r, merged);
     return true;
   } catch (e) {
@@ -2519,11 +2536,15 @@ export async function fbDeleteShipBayDict(code) {
  */
 export async function fbBatchSaveShipBayDict(entries) {
   if (!entries || typeof entries !== 'object') return { saved: 0, failed: 0 };
+  // 1.58: 병렬(Promise.all) → 순차. 2026-08-11 11:25 이 함수가 4초에 92건을 쏟아
+  //   전 엔트리 updatedAt 을 한꺼번에 갱신했고, 검수사는 그날부터 헛경고 95건을 봤다.
+  //   순차면 느리지만 사전은 백 건 규모라 문제가 안 되고, 무엇이 언제 올라갔는지가 남는다.
+  //   (무변경 항목은 fbSaveShipBayDict 안에서 이미 걸러져 쓰지 않는다.)
   let saved = 0, failed = 0;
-  await Promise.all(Object.entries(entries).map(async ([code, entry]) => {
+  for (const [code, entry] of Object.entries(entries)) {
     const ok = await fbSaveShipBayDict(code, entry);
     if (ok) saved++; else failed++;
-  }));
+  }
   return { saved, failed };
 }
 
