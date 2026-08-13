@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.68-01';   // 진행 실황(terminal_work) 즉답 · 터미널 ETD 병기
+export const APP_VERSION = 'TallyOne 1.69';   // 자연어 2차 판 — 용어 12·수석 통계·계산 96~100·검수원 유도
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

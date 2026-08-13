@@ -349,6 +349,18 @@ export function parseNaturalQuery(text) {
   if (!result.digits && (_strong.test(t) || (_weak.test(t) && _noCond))) {
     result.howToQuery = true;
   }
+  // 1.69: **뜻 질문은 용어집이 먼저다.** "리퍼가 뭐예요"의 '리퍼'가 컨 조건으로 잡혀
+  //   _noCond 가드에 막히고 컨 조회로 빠졌다(인계함 「소소한 한계」). 순수한 뜻 물음
+  //   ("~가 뭐야"·"~ 무슨 뜻")이면 컨 조건이 있어도 용어집을 먼저 시도한다.
+  //   못 찾으면 generateHowToAnswer 가 null 을 돌려 종전 컨 조회로 흘러가므로 오탐 피해가 없다.
+  //   ⚠ 집계·진행 등 작업 인텐트가 이미 잡힌 문장("남은 거 뭐야")은 뜻 질문으로 보지 않는다.
+  const _termQ = /무슨\s*뜻|뜻이?\s*(?:뭐|무엇)|(?:이|가)\s*뭐(?:야|예요|에요|죠|지|냐|니)\s*\??\s*$|(?:이|가)\s*무엇/;
+  if (!result.digits && _termQ.test(t)
+      && !result.isStat && !result.progressQuery && result.bay == null && !result.listQuery
+      && !result.vacantQuery && !result.capacityQuery && !result.etaQuery && !result.weightSum) {
+    result.termQuery = true;
+    result.howToQuery = true;
+  }
   // ⚠ howToQuery 여도 아래 둘을 **끄지 않는다.** 기능 색인에서 못 찾으면(null) 종전 경로가 답해야 하기 때문이다.
   //    순서만 SearchPanel 에서 howTo 를 먼저 시도하는 것으로 정한다.
   if (/어디\s*(?:로)?\s*(?:갔|간|감|옮|이동|보냈|치웠)|왜\s*(?:옮|이동|바뀌|바꿨)|경로|이동\s*(?:이력|기록|경로)|무빙|어떻게\s*(?:옮|이동)/i.test(t)) result.movePathQuery = true;
@@ -607,7 +619,7 @@ function _htManualIndex() {
     // TallyOne 1.68: 용어집(terms)도 색인한다 — 18항목이 앱에 있는데 자연어가 못 읽고 있었다.
     //   검수사 지적 2026-08-13: "있는것도 많은것을 모릅니다." 신참의 "시프팅이 뭐야"가 이걸로 즉답된다.
     (HELP_DATA?.terms || []).forEach((t) => out.push({
-      l: t.term || '', w: '용어집', d: t.desc || '', r: 't', a: [],
+      l: t.term || '', w: '용어집', d: t.desc || '', r: 't', a: [], k: 'term',   // 1.69: 뜻 질문 우선용 표식
       blob: [t.term, t.desc].filter(Boolean).join(' '),
     }));
   } catch (e) { /* 매뉴얼이 없어도 색인만으로 답한다 */ }
@@ -618,8 +630,12 @@ const _ROLE_KR = { t: '', c: '수석 검수사 화면', a: '보조기능', o: '�
 
 /** 기능 위치 답변 — 못 찾으면 null (그러면 종전 경로로 넘어간다) */
 export function generateHowToAnswer(query, parsed, opts = {}) {
+  // 1.69: 육공 — 검수사 확정 원문 *"육공은 저도 모름"*. 지어내지 않는다.
+  if (/육공/.test(String(query || ''))) return '「육공」은 확인된 용어가 아닙니다.';
   const T = _htExpand(_htToks(query));
   const isChief = !!opts.isChief;
+  // 1.69: 뜻 질문("~가 뭐야")이면 용어집 항목에 가점 — usage 색인(기능 위치)보다 정의가 먼저다.
+  const termFirst = !!(opts.termFirst || (parsed && parsed.termQuery));
   // "사용법 알려줘"처럼 대상 낱말이 없는 물음 — 매뉴얼 자체로 안내한다.
   if (!T.length) {
     return ['📍 사용 매뉴얼',
@@ -652,11 +668,18 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
       if (d.includes(t)) s += 4;
       else if (blob.includes(t)) s += 2;
     }
+    if (termFirst && it.k === 'term' && s > 0) s += 12;   // 1.69: 뜻 질문은 용어집 우선
     return s;
   };
-  const hits = pool.map(it => ({ it, s: score(it) })).filter(x => x.s >= 9)
+  let hits = pool.map(it => ({ it, s: score(it) })).filter(x => x.s >= 9)
     .sort((a, b) => b.s - a.s);
   if (!hits.length) return null;
+  // 1.69: 뜻 질문이면 용어집 히트를 맨 위로 — 동의어 확장 점수가 기능 색인을 밀어 올려도 정의가 먼저다.
+  //   용어집에 없으면 종전대로 기능 색인이 답한다(예: "돌림판이 뭐야").
+  if (termFirst) {
+    const th = hits.filter((h) => h.it.k === 'term');
+    if (th.length) hits = [...th, ...hits.filter((h) => h.it.k !== 'term')];
+  }
 
   const top = hits[0].it;
   const lines = [];

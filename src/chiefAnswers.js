@@ -1,0 +1,456 @@
+// 수석 통합검색 통계·이력·계산 답변 엔진 (TallyOne 1.69)
+//
+// 왜 이 파일인가 — 학습서(★자연어_학습서_검수사앱_수석대시보드.md) ②′·2-F 의
+//   수석 인텐트(오답·마감·월통계·겹침·자료도착·수집기·해치 실황)와
+//   계산 인텐트 96~100(갱 분배·총 무브수·최초 양하·X-RAY 조별·교대 브리핑)을
+//   **순수 함수**로 모아 GlobalSearchPage 가 얇게 배선한다. 순수라서 node 시뮬로 그대로 검증된다.
+//
+// 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
+//   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
+import { isPyeongtaekPort, normalizeBay, predictShiftingFromVoyage, computeShiftingMapCached } from './utils.js';
+import { addWorkMinutes } from './nlSearch.js';
+
+const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
+const _ptk = (c, mode) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
+const _bayN = (c) => parseInt(normalizeBay(c.bay), 10);
+const _isDeck = (c) => parseInt(c.tier, 10) >= 80;
+const _fmtT = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const _hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+// ─── 갱 분배의 공용 뿌리 ─────────────────────────────────────────────
+// 베이사전 baysSummary(pairEven)로 «장(시트) 그룹»을 만들고, 그룹별 평택분 무브수를 센다.
+// 크레인은 서로 못 넘으므로 절단은 그룹 경계 위 «연속 구간»으로만 한다(학습서 2-F #96).
+export function buildGangPlan(voyage, bayDef) {
+  const bays = (bayDef && bayDef.baysSummary) || [];
+  if (!bays.length) return null;
+  const byNo = {};
+  bays.forEach((b) => { const n = parseInt(b.bayNo || b.bay, 10); if (Number.isFinite(n)) byNo[n] = b; });
+  const nums = Object.keys(byNo).map(Number).sort((a, b) => a - b);
+  // 짝(even↔odd) — pairEven 은 홀수 베이에 «내 짝 짝수»로 적혀 있다
+  const evenOf = {};   // odd → even
+  nums.forEach((n) => { const p = parseInt(byNo[n].pairEven, 10); if (Number.isFinite(p)) evenOf[n] = p; });
+  const used = new Set();
+  const groups = [];
+  for (const n of nums) {
+    if (used.has(n)) continue;
+    let members = [n];
+    if (evenOf[n] != null && byNo[evenOf[n]]) members = [evenOf[n], n];           // 홀수 → (짝수)홀수
+    else { const odd = nums.find((m) => evenOf[m] === n); if (odd != null) members = [n, odd]; }
+    members.forEach((m) => used.add(m));
+    members.sort((a, b) => a - b);
+    const defs = members.map((m) => byNo[m]).filter(Boolean);
+    groups.push({
+      members,
+      label: members.length === 2 ? `(${String(members[0]).padStart(2, '0')})${String(members[1]).padStart(2, '0')}` : `B${members[0]}`,
+      deckOnly: defs.every((d) => !d.hasHold),
+      hatch: Math.max(0, ...defs.map((d) => Number(d.hatchCount) || 0)),
+      dis: 0, lod: 0, disDeck: 0, disHold: 0, _disByBay: {},
+    });
+  }
+  groups.sort((a, b) => a.members[0] - b.members[0]);
+  const idxOfBay = {};
+  groups.forEach((g, i) => g.members.forEach((m) => { idxOfBay[m] = i; }));
+  // 평택분 무브 집계
+  for (const [mode, kd, kz] of [['discharge', 'dis', true], ['loading', 'lod', false]]) {
+    for (const c of _list(voyage?.[mode]?.ediContainers)) {
+      if (!_ptk(c, mode)) continue;
+      const g = groups[idxOfBay[_bayN(c)]];
+      if (!g) continue;
+      g[kd]++;
+      if (kz) { const bn = _bayN(c); g._disByBay[bn] = (g._disByBay[bn] || 0) + 1; if (_isDeck(c)) g.disDeck++; else g.disHold++; }
+    }
+  }
+  const cargo = groups.filter((g) => g.dis + g.lod > 0);
+  if (!cargo.length) return null;
+  const total = cargo.reduce((s, g) => s + g.dis + g.lod, 0);
+  // 절단점 — 화물 있는 그룹 경계에서 좌/우 합이 가장 균등한 곳
+  let best = { i: 0, diff: Infinity };
+  let acc = 0;
+  for (let i = 0; i < cargo.length - 1; i++) {
+    acc += cargo[i].dis + cargo[i].lod;
+    const diff = Math.abs(acc - (total - acc));
+    if (diff < best.diff) best = { i, diff };
+  }
+  const seg = (arr) => ({
+    groups: arr,
+    moves: arr.reduce((s, g) => s + g.dis + g.lod, 0),
+    dis: arr.reduce((s, g) => s + g.dis, 0),
+    lod: arr.reduce((s, g) => s + g.lod, 0),
+    fromBay: Math.min(...arr.flatMap((g) => g.members)),
+    toBay: Math.max(...arr.flatMap((g) => g.members)),
+  });
+  return {
+    groups, cargo, total,
+    disTotal: cargo.reduce((s, g) => s + g.dis, 0),
+    lodTotal: cargo.reduce((s, g) => s + g.lod, 0),
+    left: seg(cargo.slice(0, best.i + 1)),
+    right: seg(cargo.slice(best.i + 1)),
+    diff: best.diff,
+  };
+}
+
+// #96 갱 분배 — "갱 2개로 하면 베이플랜 어떻게 분배해?"
+export function answerGangSplit(voyage, bayDef, shipName = '') {
+  const p = buildGangPlan(voyage, bayDef);
+  if (!p) {
+    if (!_list(voyage?.discharge?.ediContainers).length && !_list(voyage?.loading?.ediContainers).length)
+      return `${shipName || '이 배'} — EDI 가 아직 없어 갱 분배를 계산할 수 없습니다.`;
+    return `${shipName || '이 배'} — 베이매트릭스(페어 정보)가 없어 갱 분배를 계산할 수 없습니다. 베이매트릭스를 먼저 만들어 주세요.`;
+  }
+  const L = [];
+  L.push(`베이 ${p.left.toBay}/${p.right.fromBay} 사이에서 자릅니다. 1번 갱 ${p.left.fromBay}~${p.left.toBay} = ${p.left.moves}무브 · 2번 갱 ${p.right.fromBay}~${p.right.toBay} = ${p.right.moves}무브, 차이 ${p.diff}.`);
+  L.push(`베이플랜은 1번 갱에 ${p.left.groups.map((g) => g.label).join('·')} 장,`);
+  L.push(`2번 갱에 ${p.right.groups.map((g) => g.label).join('·')} 장.`);
+  const lodNote = (p.left.lod || p.right.lod) ? ` 선적분은 1번 갱 ${p.left.lod} · 2번 갱 ${p.right.lod}.` : '';
+  L.push('', `근거 — 크레인은 서로 못 넘으므로 연속 구간으로만 자르고, 양하+선적 합계가 가장 균등한 그룹 경계를 골랐습니다.${lodNote}`);
+  L.push('최종은 포맨 지시가 우선입니다.');
+  return L.join('\n');
+}
+
+// #97 총 무브수 — "총 무브수 몇이야?"
+export function answerTotalMoves(voyage, shipName = '') {
+  const dis = _list(voyage?.discharge?.ediContainers);
+  const lod = _list(voyage?.loading?.ediContainers);
+  if (!dis.length && !lod.length) return `${shipName || '이 배'} — EDI 가 아직 없어 무브수를 셀 수 없습니다.`;
+  const dp = dis.filter((c) => _ptk(c, 'discharge')).length;
+  const lp = lod.filter((c) => _ptk(c, 'loading')).length;
+  let shifting = 0;
+  try {
+    const m = computeShiftingMapCached(voyage.key || 'k', voyage);
+    shifting = Object.keys((m && Object.keys(m).length) ? m : (predictShiftingFromVoyage(voyage) || {})).length;
+  } catch (e) { shifting = -1; }
+  const allPtk = dp === dis.length && lp === lod.length;
+  const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}무브 — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dp - lp} 제외)`}.`];
+  L.push(`시프팅 ${shifting < 0 ? '계산 불가' : shifting} · 해치커버 별도.`);
+  return L.join('\n');
+}
+
+// #98 최초 양하 시작 — "최초 양하 어디부터야?"
+export function answerFirstStart(voyage, bayDef, shipName = '') {
+  const p = buildGangPlan(voyage, bayDef);
+  if (!p) return answerGangSplit(voyage, bayDef, shipName);   // 같은 정직 고지
+  const lg = p.left.groups[0];                                 // 선수 끝 그룹
+  const rg = p.right.groups[p.right.groups.length - 1];        // 선미 끝 그룹
+  const nameOf = (g, outerBay) => {
+    // 페어면 양하가 실제 실린 멤버 베이 이름으로 (예: (32)33 → 32번)
+    const withCargo = g.members.filter((m) => g._disByBay[m]);
+    if (withCargo.length === 1) return withCargo[0];
+    if (!withCargo.length) return outerBay;
+    return withCargo.sort((a, b) => (g._disByBay[b] - g._disByBay[a]) || Math.abs(outerBay - a) - Math.abs(outerBay - b))[0];
+  };
+  const note = (g) => g.deckOnly && !g.hatch ? `, 데크 전용이라 커버 없이 바로 ${g.dis}무브` : '';
+  const L = [];
+  L.push(`1번 갱은 ${nameOf(lg, lg.members[0])}번 베이 데크부터(선수 끝${note(lg)}), 2번 갱은 ${nameOf(rg, rg.members[rg.members.length - 1])}번 베이 데크부터(선미 끝${note(rg)}) — 양쪽 끝에서 가운데(${p.left.toBay}/${p.right.fromBay})로 좁혀 들어옵니다.`);
+  L.push('', '근거 — ① 각 구간 바깥 끝에서 안쪽으로(크레인 이격 최대) ② 데크부터(홀드는 커버 개방 후) ③ 커버 없는 데크 전용 베이가 구간 끝에 있으면 그쪽 우선.');
+  L.push('최종은 포맨 지시가 우선입니다.');
+  return L.join('\n');
+}
+
+// ─── X-RAY 조별 계산 — 갱 진행 순서(끝→중앙·그룹마다 데크→홀드) 타임라인에 얹는다 ───
+
+// #99 X-RAY 조별 부착 가능 수 — "엑스레이 주간에 몇 대 가능해?"
+//   xrayList × EDI 위치 × 갱 진행 순서 × 근무시간표(2-F′). 답에는 근거와 포맨 우선을 붙인다.
+export function answerXrayShifts(voyage, bayDef, opts = {}) {
+  const shipName = opts.shipName || '';
+  const xl = voyage?.discharge?.xrayList || {};
+  const cns = Object.keys(xl);
+  if (!cns.length) return `${shipName || '이 배'} — X-RAY 리스트가 없습니다(0건).`;
+  const plan = buildGangPlan(voyage, bayDef);
+  if (!plan) return `${shipName || '이 배'} — 베이매트릭스가 없어 갱 진행 순서를 계산할 수 없습니다. X-RAY 는 ${cns.length}대입니다.`;
+  const ed = voyage?.discharge?.ediContainers || {};
+  const pace = opts.pace || 25;   // 무브/시간·갱 (2-F′ 기본값)
+  const pier = opts.pier || voyage?.info?.pier || '';
+  // 작업시작 — planDate 앞 시각(작업시작)이 정본, 없으면 지금
+  let startMs = opts.startMs;
+  if (!startMs) {
+    const m = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+    startMs = m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : Date.now();
+  }
+  // 갱별 진행 순서 인덱스
+  const gangSegs = [
+    { name: '1번 갱', groups: plan.left.groups, outerFirst: true },
+    { name: '2번 갱', groups: plan.right.groups.slice().reverse(), outerFirst: true },  // 선미 끝부터
+  ];
+  const gangOfBay = {};
+  plan.left.groups.forEach((g) => g.members.forEach((m) => { gangOfBay[m] = 0; }));
+  plan.right.groups.forEach((g) => g.members.forEach((m) => { gangOfBay[m] = 1; }));
+  // 그룹 순서대로 데크→홀드 블록 시작 인덱스
+  gangSegs.forEach((seg) => {
+    let acc = 0;
+    seg.groups.forEach((g) => {
+      g._deckStart = acc; g._holdStart = acc + g.disDeck; acc += g.dis;
+    });
+  });
+  const rows = [];
+  for (const cn of cns.sort()) {
+    const c = ed[cn];
+    if (!c || !Number.isFinite(_bayN(c))) { rows.push({ cn, shift: '위치미상' }); continue; }
+    const gi = gangOfBay[_bayN(c)];
+    const seg = gangSegs[gi];
+    const g = seg?.groups.find((x) => x.members.includes(_bayN(c)));
+    if (!g) { rows.push({ cn, shift: '위치미상' }); continue; }
+    // 블록 안 등수 — 같은 블록 X-RAY 끼리는 컨번호순(결과 분류에는 영향 없음)
+    const zoneStart = _isDeck(c) ? g._deckStart : g._holdStart;
+    const zoneN = _isDeck(c) ? g.disDeck : g.disHold;
+    const idx = zoneStart + Math.min(zoneN, Math.max(1, Math.round(zoneN / 2)));   // 블록 중간으로 본다
+    const minutes = Math.round((idx / pace) * 60);
+    const eta = addWorkMinutes(startMs, minutes, pier);
+    const mm = eta.getHours() * 60 + eta.getMinutes();
+    const shift = (mm >= 480 && mm < 1050) ? '주간' : '야간';
+    rows.push({ cn, c, gang: seg.name, shift, eta });
+  }
+  const day = rows.filter((r) => r.shift === '주간');
+  const night = rows.filter((r) => r.shift === '야간');
+  const unk = rows.filter((r) => r.shift === '위치미상');
+  const pos = (c) => c ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '';
+  const L = [`X-RAY ${cns.length}대 — 주간조 ${day.length} · 야간조 ${night.length}${unk.length ? ` · 위치미상 ${unk.length}` : ''} (2갱·시간당 ${pace}무브·작업시작 ${_hm(new Date(startMs))} 기준).`];
+  if (day.length) L.push('', `주간: ${day.map((r) => `${r.cn.slice(-4)} @${pos(r.c)}`).join(' · ')}`);
+  if (night.length) L.push(`야간: ${night.map((r) => `${r.cn.slice(-4)} @${pos(r.c)} (${_hm(r.eta)}쯤)`).join(' · ')}`);
+  if (unk.length) L.push(`위치미상: ${unk.map((r) => r.cn.slice(-4)).join(' · ')}`);
+  L.push('', '갱 진행 순서(끝→중앙·데크 먼저)로 내려오는 시각을 근무시간표에 얹어 계산했습니다. 1갱이면 시간이 ×2 로 늘어 조가 바뀔 수 있습니다. 최종은 포맨 지시가 우선입니다.');
+  return L.join('\n');
+}
+
+// #100 교대 브리핑 — "교대 브리핑 해줘"
+export function answerShiftBriefing(voyage, bayDef, opts = {}) {
+  const shipName = opts.shipName || voyage?.info?.vslFull || voyage?.info?.vsl || '이 배';
+  const now = opts.now ? new Date(opts.now) : new Date();
+  const pier = voyage?.info?.pier || '';
+  const plan = buildGangPlan(voyage, bayDef);
+  const L = [];
+  // ① 전환 시각 — 주·야 조 경계(2-F′): 주간 종료 17:30 → 야간 19:00 / 야간 종료 06:30 → 주간 08:00
+  const mmNow = now.getHours() * 60 + now.getMinutes();
+  const isDayNow = mmNow >= 480 && mmNow < 1050;
+  const hand = new Date(now);
+  if (isDayNow) hand.setHours(19, 0, 0, 0);
+  else { hand.setHours(8, 0, 0, 0); if (mmNow >= 1050) hand.setDate(hand.getDate() + 1); }
+  const endLbl = isDayNow ? '주간 종료 17:30 → 야간 시작 19:00' : '야간 종료 06:30 → 주간 시작 08:00';
+  L.push(`${shipName} 교대 브리핑 — 전환 ${endLbl}.`);
+  // ② 인수 시점 예상 진행 — 앱 완료 기록이 있으면 그것, 없으면 시작시각+페이스(2갱×25)
+  const dis = _list(voyage?.discharge?.ediContainers).filter((c) => _ptk(c, 'discharge'));
+  const lod = _list(voyage?.loading?.ediContainers).filter((c) => _ptk(c, 'loading'));
+  const total = dis.length + lod.length;
+  const doneD = Object.keys(voyage?.discharge?.completed || {}).length;
+  const doneL = Object.keys(voyage?.loading?.completed || {}).length;
+  if (total) {
+    const m = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+    const startMs = m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null;
+    if (doneD + doneL > 0) {
+      L.push(`진행 — 앱 검수 기록 양하 ${doneD}/${dis.length} · 선적 ${doneL}/${lod.length}.`);
+    } else if (startMs && startMs < hand.getTime()) {
+      // 시작~전환까지 근무 창 안의 분 × 2갱 × 25무브/h
+      let mins = 0; let probe = startMs;
+      // addWorkMinutes 역산 대신 1분씩 세지 않고 근사: 전환까지 반복 60분 단위 전진
+      while (probe < hand.getTime() && mins < 3000) {
+        const nx = addWorkMinutes(probe, 30, pier).getTime();
+        if (nx > hand.getTime()) break;
+        mins += 30; probe = nx;
+      }
+      const est = Math.min(total, Math.round((mins / 60) * 25 * 2));
+      L.push(`인수 시점 예상 — 전체 ${total}무브 중 약 ${est}무브 진행(2갱·시간당 25무브 기준, 1갱이면 절반). 남을 것 약 ${Math.max(0, total - est)}무브.`);
+    } else {
+      L.push(`물량 — 양하 ${dis.length} + 선적 ${lod.length} = ${total}무브(평택분). 작업 전이거나 시작 시각 미상이라 진행 예상은 생략합니다.`);
+    }
+  } else {
+    L.push('EDI 가 아직 없어 물량·진행 예상을 낼 수 없습니다.');
+  }
+  // ③ 자료 준비 — 다음 조가 이어받을 자료가 되어 있는가
+  const rdy = [];
+  [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
+    const s = voyage?.[md]; if (!s) return;
+    const e = _list(s.ediContainers).length, r = _list(s.records).length;
+    rdy.push(`${kr} EDI ${e} · 리스트 ${r}${e && r && e !== r ? ` ⚠ ${Math.abs(e - r)}건 차이` : ''}${!e ? ' ⚠ EDI 없음' : !r ? ' ⚠ 리스트 없음' : ''}`);
+  });
+  if (rdy.length) L.push(`자료 — ${rdy.join(' / ')}.`);
+  // ④ 두 배 겹침 — 전환 시각 전후로 같이 걸리는 항차
+  if (opts.voyages) {
+    const ov = findOverlaps(opts.voyages).filter((o) => o.aKey === voyage._key || o.bKey === voyage._key);
+    if (ov.length) ov.forEach((o) => L.push(`⚠ 겹침 — ${o.text}`));
+    else L.push('겹치는 배 없음.');
+  }
+  // ⑤ 특수화물 — 다음 조 초반(구간 바깥 끝)에 걸리는 것 먼저
+  const xr = Object.keys(voyage?.discharge?.xrayList || {}).length;
+  const rf = dis.concat(lod).filter((c) => c.rf || (c.iso && c.iso[2] === 'R') || (c.tmp && String(c.tmp).trim() !== '')).length;
+  const dg = dis.concat(lod).filter((c) => c.dg).length;
+  if (xr + rf + dg) {
+    const sp = [];
+    if (xr) sp.push(`X-RAY ${xr}`);
+    if (rf) sp.push(`리퍼 ${rf}`);
+    if (dg) sp.push(`위험물 ${dg}`);
+    let early = '';
+    if (plan) {
+      const outer = [plan.left.groups[0], plan.right.groups[plan.right.groups.length - 1]].filter(Boolean);
+      const outerBays = new Set(outer.flatMap((g) => g.members));
+      const earlyN = dis.filter((c) => outerBays.has(_bayN(c)) && (c.dg || c.rf || (c.iso && c.iso[2] === 'R'))).length;
+      if (earlyN) early = ` — 이 중 ${earlyN}대가 구간 끝 베이(초반 순서)에 있습니다`;
+    }
+    L.push(`특수화물 — ${sp.join(' · ')}${early}.`);
+  }
+  L.push('', '2갱 기준입니다. 1갱이면 소요 시간을 ×2 로 보십시오. 최종은 포맨 지시가 우선입니다.');
+  return L.join('\n');
+}
+
+// ─── 수석 통계·이력 ─────────────────────────────────────────────────
+// 오답 리포트 — feedback 노드. 미회신 = resolved 아님 + claudeStatus 없음.
+export function answerFeedback(fb) {
+  if (fb == null) return '오답 리포트를 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';
+  const all = Object.entries(fb || {});
+  if (!all.length) return '오답 리포트가 한 건도 없습니다.';
+  const un = all.filter(([, v]) => !v.resolved && !v.claudeStatus);
+  const pend = all.filter(([, v]) => !v.resolved && v.claudeStatus && v.claudeStatus !== 'fixed');
+  const L = [];
+  if (!un.length) L.push(`미회신 오답 0건 — 전부 처리됐습니다. (전체 ${all.length}건${pend.length ? ` · 수리 진행 중 ${pend.length}` : ''})`);
+  else {
+    L.push(`미회신 오답 ${un.length}건.`);
+    un.slice(0, 10).forEach(([k, v], i) => {
+      L.push(`${i + 1}. ${(v.query || v.text || '').slice(0, 40)} — ${v.voyageVsl || v.voyageKey || ''} ${v.appVersion || ''}`);
+    });
+  }
+  if (pend.length && un.length) L.push(`수리 진행 중 ${pend.length}건.`);
+  return L.join('\n');
+}
+
+// 수집기 상태 — collector_heartbeat {at, cycleMin, version}
+export function answerCollector(hb, now = Date.now()) {
+  if (!hb || !hb.at) return '수집기 하트비트가 없습니다 — 수집기 상태를 확인해 주세요.';
+  const min = Math.round((now - hb.at) / 60000);
+  const cyc = Number(hb.cycleMin) || 5;
+  const ok = min <= cyc * 2;
+  return `${hb.version || 'MailPilot'} — ${min}분 전 하트비트, ${cyc}분 주기 ${ok ? '정상' : `⚠ 끊김 의심(${min}분째 무신호)`}.`;
+}
+
+// 마감 미발송(미생성) — tally_pending {key: {vsl, voy_d, voy_l, archivedAt, tallyMadeAt}}
+export function answerTallyPending(tp) {
+  if (tp == null) return '마감 목록을 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';
+  const rows = Object.entries(tp || {});
+  if (!rows.length) return '완료 저장된 항차가 없습니다.';
+  const un = rows.filter(([, v]) => !v.tallyMadeAt).sort((a, b) => (b[1].archivedAt || 0) - (a[1].archivedAt || 0));
+  if (!un.length) return `마감텔리 미생성 0건 — 완료 ${rows.length}항차 전부 생성됐습니다.`;
+  const L = [`마감텔리 미생성 ${un.length}건 (완료 ${rows.length}항차 중).`];
+  un.slice(0, 15).forEach(([k, v], i) => {
+    const md = [v.voy_d ? `양하 ${v.voy_d}` : null, v.voy_l ? `선적 ${v.voy_l}` : null].filter(Boolean).join('·');
+    L.push(`${i + 1}. ${v.vsl || k} ${md} — 완료 ${_fmtT(v.archivedAt)}`);
+  });
+  L.push('', '수석 대시보드 → 마감 텔리에서 생성할 수 있습니다.');
+  return L.join('\n');
+}
+
+// 월 통계·어제 실적·완료 항차 — fbListArchive 결과(경량 메타)로 답한다.
+export function answerArchiveStats(list, opts = {}) {
+  if (list == null) return '보관소를 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';
+  if (!list.length) return '보관소에 완료 항차가 없습니다.';
+  const now = opts.now ? new Date(opts.now) : new Date();
+  const bayDict = opts.bayDict || {};
+  const carrierOf = (vsl) => (bayDict[String(vsl || '').toUpperCase()]?.carrier || '').toUpperCase();
+  const kind = opts.kind || 'month';
+  if (kind === 'yesterday' || kind === 'recent') {
+    const d0 = new Date(now); d0.setHours(0, 0, 0, 0);
+    const from = kind === 'yesterday' ? d0.getTime() - 86400000 : 0;
+    const to = kind === 'yesterday' ? d0.getTime() : Infinity;
+    const rows = list.filter((a) => a.archivedAt >= from && a.archivedAt < to).slice(0, kind === 'recent' ? 5 : 99);
+    if (!rows.length) return kind === 'yesterday' ? '어제 완료 저장된 항차가 없습니다.' : '완료 항차가 없습니다.';
+    const L = [kind === 'yesterday' ? `어제 완료 ${rows.length}항차.` : `최근 완료 ${rows.length}항차.`];
+    rows.forEach((a) => L.push(`· ${a.voyageKey.replace('_', ' ')} — 양하 ${a.discharge_ptk} · 선적 ${a.loading_ptk} (${_fmtT(a.archivedAt)} 저장)`));
+    return L.join('\n');
+  }
+  // 월 통계 — 이번 달(또는 지난달) 척수·물량·선사 순위
+  const base = new Date(now.getFullYear(), now.getMonth() + (opts.prevMonth ? -1 : 0), 1);
+  const next = new Date(base.getFullYear(), base.getMonth() + 1, 1);
+  const rows = list.filter((a) => a.archivedAt >= base.getTime() && a.archivedAt < next.getTime());
+  if (!rows.length) return `${base.getMonth() + 1}월 완료 저장된 항차가 없습니다.`;
+  const disSum = rows.reduce((s, a) => s + (a.discharge_ptk || 0), 0);
+  const lodSum = rows.reduce((s, a) => s + (a.loading_ptk || 0), 0);
+  const ships = new Set(rows.map((a) => a.vsl));
+  const byCar = {};
+  rows.forEach((a) => { const c = carrierOf(a.vsl) || '(선사 미상)'; const v = byCar[c] = byCar[c] || { n: 0, mv: 0 }; v.n++; v.mv += (a.discharge_ptk || 0) + (a.loading_ptk || 0); });
+  const rank = Object.entries(byCar).sort((a, b) => b[1].mv - a[1].mv);
+  const L = [`${base.getMonth() + 1}월 완료 ${rows.length}항차(${ships.size}척) — 양하 ${disSum.toLocaleString()} · 선적 ${lodSum.toLocaleString()} · 계 ${(disSum + lodSum).toLocaleString()}대.`];
+  L.push('선사 순위(물량):');
+  rank.slice(0, 6).forEach(([c, v], i) => L.push(`${i + 1}. ${c} — ${v.mv.toLocaleString()}대 (${v.n}항차)`));
+  L.push('', '※ 완료 저장(보관) 기준 집계입니다. 진행 중 항차는 들어 있지 않습니다.');
+  return L.join('\n');
+}
+
+// 두 배 겹침 — voyages planDate("YYYY-MM-DD HH:MM ~ YYYY-MM-DD HH:MM") 교차
+export function findOverlaps(voyages) {
+  const parse = (s) => {
+    const m = String(s || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})\s*~\s*(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+    if (!m) return null;
+    return [new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime(), new Date(+m[6], +m[7] - 1, +m[8], +m[9], +m[10]).getTime()];
+  };
+  const rows = Object.entries(voyages || {})
+    .map(([k, v]) => ({ k, info: v?.info, span: parse(v?.info?.planDate) }))
+    .filter((r) => r.span);
+  const out = [];
+  for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) {
+    const [a1, a2] = rows[i].span, [b1, b2] = rows[j].span;
+    const s = Math.max(a1, b1), e = Math.min(a2, b2);
+    if (s < e) {
+      out.push({
+        aKey: rows[i].k, bKey: rows[j].k,
+        text: `${rows[i].info?.vsl || rows[i].k}(${rows[i].info?.pier || ''}) ↔ ${rows[j].info?.vsl || rows[j].k}(${rows[j].info?.pier || ''}) — ${_fmtT(s)}~${_fmtT(e)} 겹침`,
+        from: s, to: e,
+      });
+    }
+  }
+  return out.sort((a, b) => a.from - b.from);
+}
+
+export function answerOverlaps(voyages) {
+  const ov = findOverlaps(voyages);
+  if (!ov.length) return '작업 시간이 겹치는 배가 없습니다. (작업 계획 시각이 등록된 항차 기준)';
+  const L = [`작업 시간 겹침 ${ov.length}건.`];
+  ov.slice(0, 10).forEach((o) => L.push(`· ${o.text}`));
+  L.push('', '※ 항차 카드의 작업 계획 시각 기준입니다. 도선 예보가 갱신되면 달라질 수 있습니다.');
+  return L.join('\n');
+}
+
+// 자료 도착·확정 시각 — dataAt vs dataFixedAt (#62 #63)
+export function answerDataArrival(voyage, shipName = '') {
+  if (!voyage) return null;
+  const L = [];
+  const fx = Number(voyage.info?.dataFixedAt) || 0;
+  let lateAfterFix = false;
+  [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
+    const at = Number(voyage[md]?.dataAt) || 0;
+    if (at) {
+      L.push(`${kr} 자료 ${_fmtT(at)} 갱신${fx && at > fx ? ' ⚠ 확정 이후' : ''}`);
+      if (fx && at > fx) lateAfterFix = true;
+    } else if (voyage[md]) L.push(`${kr} — 자료 도착 시각 기록 없음`);
+  });
+  if (!L.length) return `${shipName || '이 배'} — 자료 도착 기록이 없습니다.`;
+  const head = fx
+    ? (lateAfterFix ? `⚠ 확정(${_fmtT(fx)}) 이후에 자료가 또 왔습니다 — 다시 확인이 필요합니다.` : `자료 확정 ${_fmtT(fx)} — 이후 갱신 없음.`)
+    : '자료 확정 기록은 아직 없습니다.';
+  return `${shipName ? shipName + '\n' : ''}${head}\n${L.join('\n')}`;
+}
+
+// 해치 개폐 실황 — voyages/{key}/reports 의 type:'hatch' 최종 상태 (#12) + 구조(#11)
+export function answerHatchStatus(voyage, bayDef, shipName = '') {
+  const reports = _list(voyage?.reports).filter((r) => r && r.type === 'hatch').sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  // 구조 — 페어 그룹 단위 해치 수(멤버 공유라 최댓값)
+  let structLine = '';
+  const plan = bayDef ? buildGangPlan(voyage, bayDef) : null;
+  if (bayDef?.baysSummary?.length) {
+    const groups = plan ? plan.groups : null;
+    if (groups) {
+      const holdGroups = groups.filter((g) => !g.deckOnly);
+      const totalHatch = holdGroups.reduce((s, g) => s + (g.hatch || 0), 0);
+      if (totalHatch) structLine = `이 배 해치 ${totalHatch}장 — 홀드 있는 그룹 ${holdGroups.length}곳.`;
+    }
+  }
+  if (!reports.length) {
+    return `${shipName ? shipName + ' — ' : ''}해치 개폐 보고가 아직 없습니다.${structLine ? '\n' + structLine : ''}`;
+  }
+  // 베이(묶음)별 최종 상태
+  const last = {};
+  reports.forEach((r) => { const key = String(r.bays || r.bay || '?'); last[key] = r; });
+  const open = Object.values(last).filter((r) => /open|열/.test(String(r.action || '')));
+  const closed = Object.values(last).filter((r) => !/open|열/.test(String(r.action || '')));
+  const fmt = (r) => `${r.bays || ''}${r.equip ? ` (${r.equip}호기` : ''}${r.equip ? ` ${_fmtT(r.ts)})` : ` (${_fmtT(r.ts)})`}`;
+  const L = [`${shipName ? shipName + ' — ' : ''}보고 기준 해치: 열림 ${open.length}곳 · 닫힘 ${closed.length}곳.`];
+  if (open.length) L.push(`열림: ${open.map(fmt).join(' · ')}`);
+  if (closed.length) L.push(`닫힘: ${closed.map(fmt).join(' · ')}`);
+  if (structLine) L.push(structLine);
+  return L.join('\n');
+}

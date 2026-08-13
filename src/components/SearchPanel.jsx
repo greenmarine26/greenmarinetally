@@ -8,6 +8,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOct
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
+import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
 import { fixQuestionWithAI } from '../gemini.js';
@@ -733,6 +734,17 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const _a = generateHowToAnswer(query, parsed, { isChief: _isChiefName(inspector) });
       if (_a) return _a;
       // 못 찾으면 종전 경로로 흘려보낸다 (막지 않는다)
+    }
+    // 1.69: **자료현황류 질문은 수석의 영역이다** (검수사 확정 — 인계함 「자연어 2차 판」 ③).
+    //   항차 화면에서 물으면 이 항차의 유무만 한 줄로 답하고 수석에게 유도한다.
+    if (/자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착|왔)|EDI\s*(?:없|왔|들어왔)|리스트\s*(?:없|왔|들어왔)|베이플랜\s*(?:없|왔)/.test(query)) {
+      const L = [];
+      [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
+        if (!voyage?.[md]) return;
+        const j = judgeMode(voyage[md]);
+        L.push(`${kr} — ${j.state === 'ready' ? `준비완료 (EDI ${j.edi} · 리스트 ${j.list})` : j.label}`);
+      });
+      if (L.length) return `${L.join(' · ')}\n자세한 내용은 수석 검수사에게 문의하세요.`;
     }
     if (parsed.handoverQuery) {
       const ptk = allContainers.filter(c => c._ptk);

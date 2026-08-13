@@ -6,8 +6,10 @@ import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
+import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
+import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 
-export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork }) {
+export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat }) {   // 1.69: heartbeat — 수집기 상태 즉답
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -74,6 +76,24 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   // 자연어 파싱 (M6.10: debouncedQuery 사용)
   const parsed = useMemo(() => parseNaturalQuery(debouncedQuery), [debouncedQuery]);
 
+  // ── TallyOne 1.69: 물었을 때만 1회 읽는 노드 (feedback·tally_pending·archive 메타) ──
+  //   구독이 없는 노드라 질문이 오면 그때 GET 하고 세션 동안 캐시한다.
+  //   ⚠ fbListArchive 는 키당 메타 4건 GET — 자동 호출 금지(1.6 사고: 요청 1,120건). 질문이 왔을 때만 1회.
+  const [chiefData, setChiefData] = useState({});
+  useEffect(() => {
+    const q = debouncedQuery || '';
+    if (q.length < 2) return;
+    const want = [];
+    if (/오답|미회신|피드백/.test(q) && chiefData.feedback === undefined) want.push(['feedback', () => fbGetSimple('feedback'), {}]);
+    if (/마감|텔리/.test(q) && chiefData.tallyPending === undefined) want.push(['tallyPending', () => fbGetSimple('tally_pending'), {}]);
+    if (/이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*(?:항차|된\s*배)/.test(q) && chiefData.archiveList === undefined) want.push(['archiveList', fbListArchive, []]);
+    if (!want.length) return;
+    setChiefData((d) => { const n = { ...d }; want.forEach(([k]) => { n[k] = null; }); return n; });   // null = 읽는 중
+    want.forEach(([k, fn, fallback]) => fn()
+      .then((v) => setChiefData((d) => ({ ...d, [k]: v ?? fallback })))
+      .catch((e) => { console.warn('[통합검색] 노드 읽기 실패 —', k, e); setChiefData((d) => ({ ...d, [k]: { __error: true } })); }));
+  }, [debouncedQuery, chiefData]);
+
   // ── TallyOne 1.68: 배 이름 맥락 ──
   //   "STSE 출항 몇 시"·"HAYN 양하 자료 다 있어"처럼 질문에 배가 지정되면 그 항차를 맥락으로 잡는다.
   //   종전에는 배를 지정해도 무시하고 "항차 화면 가서 물어보세요"로 떠넘겼다(검수사 지적 2026-08-13).
@@ -99,6 +119,32 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   const localAnswer = useMemo(() => {
     if (!debouncedQuery || debouncedQuery.length < 2) return null;
     const p = parsed;
+    const Q = debouncedQuery;
+    // ── 1.69: 수석 통계·이력 — 배 이름 없이 묻는 것 (학습서 ②′) ──
+    //   ⚠ 전부 howToQuery 판정보다 앞이다 — '뭐 있어'·'어떻게' 류가 기능 색인에 먼저 먹히면 안 된다.
+    const _err = (v, what) => (v && v.__error) ? `${what}를 읽지 못했습니다 — 네트워크 확인 후 다시 물어봐 주세요.` : null;
+    if (/오답|미회신|피드백/.test(Q)) {
+      return _err(chiefData.feedback, '오답 리포트') || answerFeedback(chiefData.feedback ?? null);
+    }
+    if (/수집기|메일\s*수집|하트비트|mailpilot/i.test(Q)) {
+      return answerCollector(heartbeat);
+    }
+    if (/마감|텔리/.test(Q) && /(안\s*보|미발송|미생성|안\s*만|안\s*나간|빠진|남은|몇\s*건)/.test(Q)) {
+      return _err(chiefData.tallyPending, '마감 목록') || answerTallyPending(chiefData.tallyPending ?? null);
+    }
+    if (/이번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위/.test(Q) || /지난\s*달|저번\s*달/.test(Q)) {
+      return _err(chiefData.archiveList, '보관소')
+        || answerArchiveStats(Array.isArray(chiefData.archiveList) ? chiefData.archiveList : null,
+             { bayDict: (typeof window !== 'undefined' && window.__fbShipBayDict) || {}, prevMonth: /지난\s*달|저번\s*달/.test(Q) });
+    }
+    if (/어제\s*실적|완료\s*(?:항차|된\s*배)/.test(Q)) {
+      return _err(chiefData.archiveList, '보관소')
+        || answerArchiveStats(Array.isArray(chiefData.archiveList) ? chiefData.archiveList : null,
+             { kind: /어제/.test(Q) ? 'yesterday' : 'recent' });
+    }
+    if (/(?:배|선박|항차|작업|시간).{0,10}겹치|겹치는\s*(?:배|선박|항차|시간)/.test(Q) && !/끝\s*자리|끝자리|번호/.test(Q)) {
+      return answerOverlaps(voyages);
+    }
     // TallyOne 1.66-03: **수석 화면에서도 기능 위치를 묻는다.**
     //   검수사 지적 2026-08-13 — *"수석 대시보드에선 자연어 즉 도우미 기능을 어디에서 사용하나요?"*
     //   1.65 에서 기능 설명을 항차 화면에만 붙였다. **수석 전용 기능일수록 수석이 묻는 자리에서 답해야 하는데 거꾸로였다.**
@@ -140,6 +186,34 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       if (d.imo) L.push(`IMO ${d.imo}`);
       if (L.length) return `${shipCtx.info.vslFull || shipCtx.info.vsl} — ${L.join(' · ')}`;
       return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 콜사인·IMO가 아직 등록 전입니다.`;
+    }
+    // ── 1.69: 배 지정 — 자료 도착 시각·해치 실황·작업 준비 계산(학습서 2-F 96~100) ──
+    //   ⚠ 전부 howToQuery·자료현황 판정보다 앞 — '언제 왔'은 자료현황 정규식에도 걸린다.
+    {
+      const _dict = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
+      const _bayDef = shipCtx ? (_dict[String(shipCtx.info.vsl || '').toUpperCase()] || {}).bayDef : null;
+      const _voy = shipCtx ? { ...shipCtx.v, key: shipCtx.key, _key: shipCtx.key } : null;
+      const _ship = shipCtx ? (shipCtx.info.vslFull || shipCtx.info.vsl) : '';
+      const isArrivalQ = /(?:자료|리스트|EDI).{0,12}(?:언제|몇\s*시).{0,8}(?:왔|도착|들어)|(?:자료|리스트|EDI).{0,8}(?:언제|몇\s*시)$|도착\s*시각|확정\s*(?:뒤|후|이후).{0,10}(?:왔|갱신|자료)/.test(Q);
+      const isHatchQ = /해치|커버/.test(Q) && /(?:열|오픈|개방|닫|몇\s*장|실황|상태|어디)/.test(Q);
+      const isGangQ = /(?:갱|크레인).{0,14}(?:분배|나눠|나누|분할)|분배.{0,10}(?:갱|크레인)|(?:갱|크레인)\s*2\s*개/.test(Q);
+      const isMoveQ = /무브/.test(Q) && /(?:몇|총|얼마)/.test(Q);
+      const isFirstQ = /(?:최초|처음|어디서?\s*부터|몇\s*번\s*부터).{0,10}(?:양하|시작|해)|양하.{0,12}(?:어디부터|어디서\s*시작|시작\s*어디|몇\s*번\s*부터)/.test(Q);
+      const isXrayShiftQ = /엑스레이|x[\s.\-]*ray|xray/i.test(Q) && /(?:조별|주간|야간|부착|몇\s*대\s*가능)/.test(Q);
+      const isShiftBriefQ = /교대.{0,8}브리핑|브리핑.{0,8}교대|교대\s*준비|인수\s*브리핑/.test(Q);
+      const anyCalc = isArrivalQ || isHatchQ || isGangQ || isMoveQ || isFirstQ || isXrayShiftQ || isShiftBriefQ;
+      if (anyCalc && !shipCtx) {
+        return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 계산합니다. (예: "HAYN 갱 2개로 분배")';
+      }
+      if (shipCtx) {
+        if (isArrivalQ) return answerDataArrival(_voy, _ship);
+        if (isHatchQ) return answerHatchStatus(_voy, _bayDef, _ship);
+        if (isGangQ) return answerGangSplit(_voy, _bayDef, _ship);
+        if (isMoveQ) return answerTotalMoves(_voy, _ship);
+        if (isFirstQ) return answerFirstStart(_voy, _bayDef, _ship);
+        if (isXrayShiftQ) return answerXrayShifts(_voy, _bayDef, { shipName: _ship, pier: shipCtx.info.pier });
+        if (isShiftBriefQ) return answerShiftBriefing(_voy, _bayDef, { shipName: _ship, voyages });
+      }
     }
     if (p.howToQuery) {
       const _a = generateHowToAnswer(debouncedQuery, p, { isChief: true });
@@ -221,7 +295,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork]);   // 1.68-01: 진행 실황·터미널 ETD
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
@@ -288,7 +362,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (!autoSpeak) return;
     if (!debouncedQuery || debouncedQuery.length < 2) return;
     if (settledQuery !== debouncedQuery) return;   // 1.68: 아직 치는 중 — 침묵
-    const sig = `${debouncedQuery}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}`;
+    const sig = `${debouncedQuery}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}-${(localAnswer || '').slice(0, 24)}`;   // 1.69: 비동기 답(보관소 조회)이 도착해도 읽는다
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
 

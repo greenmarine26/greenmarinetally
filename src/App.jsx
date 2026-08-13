@@ -441,6 +441,7 @@ export default function App() {
               onOpenContainer={(c) => setGlobalDetail(c)}
               portMisData={portMisData}
               terminalWork={terminalWork}
+              heartbeat={heartbeat}
             />
           ) : (
             <DeniedChiefOnly onGoHome={() => navigate('home')}/>
