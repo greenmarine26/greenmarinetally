@@ -16,7 +16,6 @@
 import React, { useState, useMemo } from 'react';
 import { X, Search, Plus, Lock, Wrench } from 'lucide-react';
 import ShipMatrixBuilderModal from './ShipMatrixBuilderModal.jsx';
-import BayDictDiagnosticsWidget from './BayDictDiagnosticsWidget.jsx';   // 1.60: 업로드 화면에서 여기로 옮겨왔다
 import { canWriteBayDict } from '../bayDictGuard.js';
 
 const U = (s) => String(s || '').toUpperCase().replace(/\s+/g, '');
@@ -198,8 +197,18 @@ export default function BayMatrixManagerModal({ onClose }) {
             </button>
           ))}
 
-          {/* 1.60: 베이사전 진단 — 종전엔 업로드 화면에 있어 일반 검수원에게도 보였다. 여기로 옮겼다. */}
-          <div className="pt-1"><BayDictDiagnosticsWidget /></div>
+          {/* ★ 1.64: 베이사전 진단 위젯 **철거** (검수사 판단 2026-08-13).
+              검수사 원문: *"지금 그림 기준은 틀린것 같습니다. **100% 여야 합니다.** 점수기준이 뭔지
+                모르겠습니다. 예전엔 너무 틀린게 많아서 넣었던 기능 같은데 **지금은 필요 없는 기능** 같습니다."*
+              실측으로 확인 — 31척 **전부** `deckTiersLocal`·`holdTiersLocal`·`rowMaxLocal` 이 0/N 이었다.
+                매트릭스 빌더가 쓰는 필드와 진단이 찾는 필드가 **아예 다르다.** 어느 배도 100점이 못 나온다.
+                점수 분포도 52·55·57 세 값뿐이었고, 화면 설명(`baysSummary(30)+…`)은 코드(기본 50+20+15+5+5+3+2)와
+                숫자부터 달랐다 — 설명이 옛 판 그대로였다.
+              `.def` 자동 파싱으로 사전을 만들던 시절의 "무엇이 덜 채워졌나" 지표라, 검수사가 직접
+              매트릭스를 그려 확정하는 지금 구조에서는 **재는 대상 자체가 없다.**
+              대신 검수사가 남긴 기준 하나 — *"실갯수와 카고플랜 갯수가 맞나"* — 는 항차 단위라
+              카고플랜(PrintableCargoPlanV2)에 넣었다. */}
+
         </div>
       </div>
 
