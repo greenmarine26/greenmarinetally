@@ -27,13 +27,24 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = (() => {
   }
 })();
 
-const RE_BAY_TAIL = /^(?:\((\d+)\)\s+)?(\d+)\s+(.+)$/;
+// ★ TallyOne 1.62: 베이 표기가 선사마다 앞뒤가 다르다 — **둘 다 받는다.**
+//   실측 2026-08-13 (HAYN 9001E STOWAGE.PDF): `Bay 01 (02)` · `Bay 17 (18)` — 홀수 먼저, 짝수가 괄호로 뒤.
+//   종전 정규식은 `(04) 05` 처럼 **짝수가 앞**인 표기만 받았고, 뒤에 `(.+)` 를 강제해
+//   `01 (02)` 는 베이 번호만 겨우 잡고 **페어(02)를 통째로 놓쳤다.**
+const RE_BAY_EVEN_FIRST = /^\((\d+)\)\s+(\d+)\b/;   // (02) 01
+const RE_BAY_ODD_FIRST  = /^(\d+)\s+\((\d+)\)/;      // 01 (02)
+const RE_BAY_PLAIN      = /^(\d+)\b/;                 // 01
 
 function parseBayTail(tokens) {
-  const s = tokens.join(' ');
-  const m = s.match(RE_BAY_TAIL);
-  if (!m) return null;
-  return { bayNum: m[2], pairEven: m[1] || null };
+  const s = tokens.join(' ').trim();
+  if (!s) return null;
+  let m = s.match(RE_BAY_ODD_FIRST);
+  if (m) return { bayNum: m[1], pairEven: m[2] };
+  m = s.match(RE_BAY_EVEN_FIRST);
+  if (m) return { bayNum: m[2], pairEven: m[1] };
+  m = s.match(RE_BAY_PLAIN);
+  if (m) return { bayNum: m[1], pairEven: null };
+  return null;
 }
 
 function isTwoDigit(t) { return /^\d{1,2}$/.test(t); }
@@ -93,7 +104,11 @@ function findAnchors(words) {
   const out = [];
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
-    if (w.text !== 'BAY' || w.top < 50) continue;
+    // 1.62: `BAY` 완전 일치 + `top >= 50` 두 조건이 이 PDF 를 통째로 걸렀다(실측 앵커 17 → 0).
+    //   · 표기가 `Bay` 였다(첫 글자만 대문자). 선사마다 다르므로 대소문자를 보지 않는다.
+    //   · `top >= 50` 은 헤더를 거르려던 좌표 하드코딩인데, 이 PDF 의 top 은 -148~509 라
+    //     정상 베이 8개를 같이 버렸다. 'Bay' 라는 낱말은 헤더에 나오지 않으므로 좌표로 거를 이유가 없다.
+    if (!/^bay$/i.test(w.text)) continue;
     const tail = [];
     for (let j = i + 1; j < Math.min(i + 8, words.length); j++) {
       const w2 = words[j];
@@ -248,18 +263,46 @@ function extractBay(words, anchor, colStep, rowStep) {
  * @param {File} pdfFile - 사용자가 업로드한 PDF
  * @returns {Promise<{shipName, voy, bays: [...]}>}
  */
+// ★ TallyOne 1.62: 페어 표기를 **정본 방향으로 되돌린다** (검수사 교정 2026-08-13).
+//   검수사 원문: *"`01(02) · 03 · 05(06) · 07 · 09(10)` 는 **기본 구조가 아닙니다.**
+//     자동으로 **(2)3 으로 바꿔야** 합니다."*
+//
+//   도메인 정본(지침서): **베이 페어링 = 짝수 + 뒤 홀수. 방향은 항상 `(작은 짝수)(큰 홀수)`.**
+//   그런데 선사 PDF 는 `Bay 01 (02)` 처럼 **홀수 뒤에 짝수**를 적어 온다(HAYN 9001E 실측).
+//   같은 40ft 자리를 반대로 쓴 것이라, 그대로 두면 앱의 페어 판정이 통째로 어긋난다.
+//   `01` 에 붙은 `02` 는 실제로 **`03` 의 페어**다 — 02 는 01 과 03 사이에 있기 때문이다.
+//   → 짝수 E 가 자기 베이 번호 +1 이면 E+1 홀수 베이로 옮긴다. 그 홀수가 목록에 없으면 그대로 둔다
+//     (없는 자리를 지어내지 않는다).
+function normalizePairs(bays) {
+  if (!Array.isArray(bays) || bays.length === 0) return;
+  const byNum = new Map(bays.map(b => [parseInt(b.bayNum, 10), b]));
+  for (const b of bays) {
+    const self = parseInt(b.bayNum, 10);
+    const even = parseInt(b.pairEven, 10);
+    if (!Number.isFinite(self) || !Number.isFinite(even)) continue;
+    if (even !== self + 1) continue;              // 이미 정본 방향이거나 무관 — 건드리지 않는다
+    const target = byNum.get(even + 1);
+    if (!target) continue;                        // 짝이 될 홀수 베이가 없다 — 그대로 둔다
+    target.pairEven = b.pairEven;
+    b.pairEven = null;
+  }
+}
+
 export async function parsePdfStowage(pdfFile) {
   const { words, pageWidth, pageHeight } = await extractWords(pdfFile);
   
-  // 헤더 (선박명/항차) — STOWAGE INSTRUCTION 다음 줄
-  const header2 = words.filter(w => w.top >= 40 && w.top < 50);
-  const header2Text = header2.map(w => w.text).join(' ');
+  // 헤더 (선박명/항차)
+  //   1.62: 종전엔 `top 40~50` 이라는 좌표를 박아 뒀다 — 이 PDF 에서는 그 범위가 **비어 있어**
+  //     선박명이 통째로 안 잡혔다(화면에 코드만 떴다). 좌표 대신 **`VOY` 가 있는 줄**을 찾는다.
   let shipName = '';
   let voy = '';
-  const idxVoy = header2Text.indexOf('VOY');
-  if (idxVoy >= 0) {
-    shipName = header2Text.substring(0, idxVoy).trim();
-    const m = header2Text.match(/NO\s*:\s*(\S+)/);
+  const voyWord = words.find(w => /^VOY$/i.test(w.text));
+  if (voyWord) {
+    const line = words.filter(w => Math.abs(w.top - voyWord.top) < 4).sort((a, b) => a.x0 - b.x0);
+    const lineText = line.map(w => w.text).join(' ');
+    const idxVoy = lineText.toUpperCase().indexOf('VOY');
+    if (idxVoy > 0) shipName = lineText.substring(0, idxVoy).trim();
+    const m = lineText.match(/NO\s*:?\s*(\S+)/i);
     if (m) voy = m[1];
   }
   
@@ -271,6 +314,7 @@ export async function parsePdfStowage(pdfFile) {
     const b = extractBay(words, a, colStep, rowStep);
     if (b) bays.push(b);
   }
-  
+
+  normalizePairs(bays);
   return { shipName, voy, bays, _meta: { colStep, rowStep, anchorCount: anchors.length } };
 }

@@ -2541,8 +2541,17 @@ export async function fbSaveShipBayDict(code, entry) {
       bayDef: entry.bayDef || existing.bayDef || null,
       // 1.59: 보정중 플래그는 **부르는 쪽이 명시하면 그대로 따른다**(끄는 길이 없던 버그의 나머지 절반).
       //   종전엔 entry 에 키가 없으면 `...existing` 의 옛 true 가 그대로 남아 영원히 보정중이었다.
-      provisional: (entry.provisional !== undefined ? entry.provisional === true
-        : (existing.provisional === true)),
+      //   ★ 1.62 보완 — 매트릭스를 안 들고 오는 등록(EDI 자동 등록 등)은 **확정/보정중을 말할 자격이 없다.**
+      //     1.59 코드가 그런 경우에도 `provisional:false` 를 찍어, 베이가 0인 HAYN 이 "확정" 으로 기록됐다.
+      //     bayDef 가 없거나 비었으면 기존 값을 그대로 둔다(새로 생기는 엔트리면 아예 안 찍는다).
+      provisional: (() => {
+        const _bd = entry.bayDef || existing.bayDef;
+        const _hasBays = !!(_bd && (_bd.recordCount > 0
+          || (Array.isArray(_bd.baysSummary) && _bd.baysSummary.length > 0)));
+        if (!_hasBays) return existing.provisional;               // 판단 보류 — 있던 값 유지
+        return entry.provisional !== undefined ? entry.provisional === true
+          : (existing.provisional === true);
+      })(),
       // ★ TallyOne 1.57-01: 부르는 쪽이 updatedAt 을 명시하면 그것을 존중한다.
       //   종전에는 무조건 Date.now() 로 덮어써서, 「☁ 전체 동기화」가 옛 도장을 보존해 보내도
       //   (ShipMatrixBuilderModal 의 "기존 updatedAt 보존" 주석) 여기서 그 의도가 무효화됐다.

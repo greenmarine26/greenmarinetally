@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.61-02';   // PDF 워커 경로를 문서 기준 절대 URL로 — base './' 탓에 assets/ 안을 찾아 404 나던 것
+export const APP_VERSION = 'TallyOne 1.62';   // CASP PDF 파싱 살림(Bay 대소문자·좌표 하드코딩·페어 방향) + PDF 올리면 정본 30척과 자동 비교
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

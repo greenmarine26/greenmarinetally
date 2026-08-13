@@ -34,6 +34,22 @@ import { _storage, SK } from '../utils.js';
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
 
+// ★ TallyOne 1.62: 비교·복제 후보는 **보관소(정본)** 에서 읽는다.
+//   검수사 지시 2026-08-13: *"PDF를 올리면 **기존 30척과 비교**해서 가까운것을 보여 줘야 합니다."*
+//   종전엔 `loadUserBayDict()`(브라우저 로컬)를 읽어 화면에 **55척**이 떴다 — 보관소는 30척인데
+//   로컬에 옛 허상·자동본이 남아 있었기 때문이다. 정본만 본다.
+function masterDict() {
+  try {
+    const fb = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
+    const out = {};
+    for (const [k, e] of Object.entries(fb)) {
+      const n = e?.bayDef?.recordCount || (e?.bayDef?.baysSummary || []).length;
+      if (n > 0) out[k] = e;      // 빈 껍데기는 비교 대상이 아니다
+    }
+    return out;
+  } catch (e) { return {}; }
+}
+
 export default function ShipMatrixBuilderModal({ voyage, containers, onClose, onSaved }) {
   const [matrix, setMatrix] = useState(null);
   // 선박 메타 자동 채움 (voyage.info의 EDI 자동 추출 데이터)
@@ -251,10 +267,22 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         alert('이 선박의 베이매트릭스는 이미 확정되어 있습니다.\n\n확정본은 CASP PDF·.def 로 바꿀 수 없습니다.\n고쳐야 하면 매트릭스에서 직접 수정하고 다시 저장하세요.');
         return;
       }
+      // ★ 1.62: PDF 에서 베이를 한 개도 못 읽으면 **조용히 넘어가지 않는다**(3금지 3번).
+      //   검수사 신고 2026-08-13: *"PDF 읽은후 아무 반응이 없습니다"* — 실제로는 앵커가 0개였고
+      //   화면엔 「✓ 보강」만 떠서 성공처럼 보였다. 무엇이 안 됐는지 말해 준다.
+      const gotBays = Array.isArray(result?.bays) ? result.bays.length : 0;
+      if (gotBays === 0) {
+        setPdfStatus('error');
+        setPdfError('이 PDF에서 베이를 한 개도 읽지 못했습니다. 베이 표(Bay 01 (02) …)가 있는 페이지인지 확인해 주세요.');
+        return;
+      }
       let merged = augmentMatrixFromPdf({ ...matrix }, result);
       merged = fillEmptyBaysSequential(merged); // PDF 보강 후 1~max 다시 채움
       setMatrix(merged);
       setPdfStatus('done');
+      // 1.62: 검수사 지시 — *"PDF를 올리면 기존 30척과 비교해서 가까운것을 보여 줘야 합니다."*
+      //   읽자마자 정본 30척과 대조해 가까운 순으로 띄운다(복제 버튼을 따로 누를 필요가 없다).
+      setTimeout(() => { try { openClone(merged); } catch (e) { console.warn('[빌더] 유사 선박 비교 실패', e); } }, 0);
     } catch (err) {
       console.error('[ShipMatrixBuilder] PDF parse error:', err);
       setPdfError(err.message || 'PDF 파싱 실패');
@@ -294,14 +322,15 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
 
   // V7.99: 기존 선박 복제 패널 열기 — 등록된 베이사전 목록 로드
   //   같은 베이 구조의 선박(예: 자매선)을 골라 매트릭스만 복제, 선박 메타는 현재 입력값 유지.
-  const openClone = () => {
-    const dict = loadUserBayDict();
+  const openClone = (matrixOverride = null) => {
+    const dict = masterDict();   // 1.62: 보관소 정본
     // V7.99: 현재 매트릭스 구조와 가장 비슷한 선박 자동 추천 (점수 내림차순).
     //   매트릭스가 있으면 findSimilarShips로 일치도 계산, 없으면 이름순 폴백.
     let list;
-    const hasMatrix = matrix && matrix.byBay && Object.keys(matrix.byBay).length > 0;
+    const _m = matrixOverride || matrix;   // 1.62: PDF 직후엔 state 가 아직 옛것이라 인자로 받는다
+    const hasMatrix = _m && _m.byBay && Object.keys(_m.byBay).length > 0;
     if (hasMatrix) {
-      const ranked = findSimilarShips(matrix, dict, { minBays: 1 });
+      const ranked = findSimilarShips(_m, dict, { minBays: 1 });
       // V7.99-3: 각 후보에 현재 EDI를 얹은 실제 수용률도 미리 계산(있으면 정렬·표시에 활용).
       const hasEdi = containers && containers.length > 0;
       list = ranked.map(r => {
@@ -346,7 +375,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   // V7.99: 선택한 선박의 베이 구조를 현재 매트릭스로 복제 (메타는 유지 → 신규 선박 정보 그대로).
   const handleCloneFrom = (code) => {
     if (!code) return;
-    const dict = loadUserBayDict();
+    const dict = masterDict();   // 1.62: 보관소 정본
     const src = dict[code];
     if (!src) { alert('선택한 선박을 찾을 수 없습니다.'); return; }
     const restored = bayDictEntryToMatrix(src);

@@ -27,9 +27,14 @@ function rowsFromMaster() {
   const out = [];
   for (const [code, e] of Object.entries(fb)) {
     if (!e) continue;
+    // ★ 1.62: **빈 껍데기를 매트릭스로 세지 않는다.** 검수사 실측 2026-08-13 —
+    //   HAYN 이 EDI 자동 등록으로 들어오며 `bayDef: {}` 를 갖게 됐는데, 종전 `!!bd` 판정이
+    //   빈 객체를 truthy 로 봐서 목록에 **「0베이 · 🔒 확정」** 이라는 거짓말이 떴다.
+    //   실제로는 베이가 하나도 없고 잠기지도 않은 상태다. 베이가 있어야 매트릭스다.
     const bd = e.bayDef || null;
     const bays = bd?.baysSummary || bd?.bayList || bd?.bays || [];
     const n = bd?.recordCount || (Array.isArray(bays) ? bays.length : 0);
+    const hasMatrix = !!bd && n > 0;
     out.push({
       code,
       name: String(e.name || '').replace(/\n/g, ' / ').trim(),
@@ -37,7 +42,7 @@ function rowsFromMaster() {
       imo: e.imo || '',
       carrier: e.carrier || '',
       bays: n,
-      hasMatrix: !!bd,
+      hasMatrix,
       provisional: e.provisional === true || bd?.provisional === true,
     });
   }
