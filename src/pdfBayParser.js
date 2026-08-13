@@ -9,10 +9,23 @@
 
 import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 // worker는 빌드 시 vite로 처리 (필요시 별도 설정)
-pdfjsLib.GlobalWorkerOptions.workerSrc = 
-  // V7.94-13: Vite new URL 자산 처리가 해시를 중첩시켜 404 (pdf.worker.min-HASH-HASH.mjs)
-  //   → public 정적 파일로 고정 (빌드 시 dist 루트로 복사됨)
-  (import.meta.env?.BASE_URL || '/') + 'pdf.worker.min.mjs';
+// ★ TallyOne 1.61-02: 워커 경로를 **문서 기준 절대 URL**로 만든다.
+//   사고 2026-08-13 — 검수사가 CASP 플랜 PDF 를 열자
+//     `Failed to fetch dynamically imported module: .../greenmarinetally/assets/pdf.worker.min.mjs`
+//   V7.94-13 이 `BASE_URL + 'pdf.worker.min.mjs'` 로 바꿔 놨는데, vite.config 의 `base: './'` 때문에
+//   번들에 박히는 문자열이 **`"./pdf.worker.min.mjs"`(상대)** 다. 그 번들은 `/assets/` 안에 있으므로
+//   브라우저가 `assets/pdf.worker.min.mjs` 로 풀어 404 가 났다. **파일을 루트에 둬도 안 낫는다.**
+//   `document.baseURI` 는 문서(index.html·cone.html)의 위치라 Pages 하위 경로에서도 정확히 루트를 가리킨다.
+pdfjsLib.GlobalWorkerOptions.workerSrc = (() => {
+  try {
+    const base = (typeof document !== 'undefined' && document.baseURI)
+      || (typeof window !== 'undefined' && window.location?.href) || '/';
+    return new URL('pdf.worker.min.mjs', base).href;
+  } catch (e) {
+    console.warn('[pdfBayParser] 워커 경로 계산 실패 — 상대 경로로 진행', e);
+    return (import.meta.env?.BASE_URL || '/') + 'pdf.worker.min.mjs';
+  }
+})();
 
 const RE_BAY_TAIL = /^(?:\((\d+)\)\s+)?(\d+)\s+(.+)$/;
 

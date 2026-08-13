@@ -169,6 +169,14 @@ if [ ! -f ./pdf.worker.min.mjs ]; then
   echo "⛔ pdf.worker.min.mjs 가 루트에 없습니다 — CASP 플랜 PDF 읽기가 통째로 막힙니다."
   exit 1
 fi
+# 1.61-02: 파일이 있어도 **번들이 찾는 경로**가 틀리면 소용없다(그래서 한 번 놓쳤다).
+#   base:'./' 라 `workerSrc="./pdf.worker.min.mjs"` 가 박히면 브라우저가 assets/ 안을 찾아 404 다.
+#   문서 기준 절대 URL(new URL(...,document.baseURI))이 박혔는지 번들에서 직접 본다.
+_WJS=$(ls assets/index-*.js 2>/dev/null | head -1)
+if [ -n "$_WJS" ] && grep -q 'workerSrc="\./pdf\.worker\.min\.mjs"' "$_WJS"; then
+  echo "⛔ 번들에 상대 경로 workerSrc 가 박혔습니다 — assets/ 안을 찾아 404 가 납니다(2026-08-13 사고)."
+  exit 1
+fi
 
 echo "[6/6] 검증..."
 JSFILE=$(ls assets/index-*.js 2>/dev/null | head -1)
