@@ -146,6 +146,30 @@ echo "✓ cone-cargoplan.js 생성·복사 ($(du -h public/cone-cargoplan.js | c
 [ -f dist/sw.js ] && cp dist/sw.js ./ && echo "  ✓ 루트 sw.js 갱신 (캐시 무효화 반영)"
 [ -f dist/manifest.webmanifest ] && cp dist/manifest.webmanifest ./
 
+# ★ TallyOne 1.61-01: public/ 의 루트 자산을 **목록에 기대지 않고** 전부 복사한다.
+#   사고 2026-08-13 — 검수사가 CASP 플랜 PDF 를 올리자
+#     `Failed to fetch dynamically imported module: .../pdf.worker.min.mjs` 로 막혔다.
+#   원인: `public/pdf.worker.min.mjs` 는 있는데 **루트로 복사하는 줄이 없었다.**
+#     이 위 복사문들은 sw.js·manifest·cone.html 처럼 **파일 이름을 하나씩 적어 둔** 방식이라,
+#     public/ 에 새 파일이 생기면 누가 여기 한 줄을 더 적어야만 배포된다. 워커는 그 줄이 없었다.
+#     (1GB 정리 커밋 3e36816 이 dist/pdf.worker.min.mjs 를 지운 뒤로 루트에도 없는 상태였다.)
+#   pdfBayParser.js:15 는 `BASE_URL + 'pdf.worker.min.mjs'` 로 **루트**를 찾으므로 404 였다.
+#   → 이름을 적는 대신 public/ 의 최상위 파일을 통째로 민다. 다음에 무엇이 추가돼도 안 빠진다.
+echo "[+] public/ 루트 자산 복사..."
+_pub=0
+for f in public/*; do
+  [ -f "$f" ] || continue                       # 디렉터리는 위에서 개별 처리(tally_templates 등)
+  b=$(basename "$f")
+  cp "$f" ./ && cp "$f" dist/ 2>/dev/null
+  _pub=$((_pub+1))
+done
+echo "  ✓ public 루트 파일 ${_pub}개 복사 (pdf.worker.min.mjs 포함)"
+# 워커는 PDF 파싱의 필수 자산이라 없으면 빌드를 세운다 — 조용히 나가면 현장에서 막힌다.
+if [ ! -f ./pdf.worker.min.mjs ]; then
+  echo "⛔ pdf.worker.min.mjs 가 루트에 없습니다 — CASP 플랜 PDF 읽기가 통째로 막힙니다."
+  exit 1
+fi
+
 echo "[6/6] 검증..."
 JSFILE=$(ls assets/index-*.js 2>/dev/null | head -1)
 if [ -z "$JSFILE" ]; then
