@@ -334,7 +334,9 @@ export function parseNaturalQuery(text) {
   //   1.66-03: 검수사 실측 — `플랜편집 기능어디에` 가 안 걸려 컨 2,727대가 나왔다.
   //   ① `어디에`·`어디` 로 **문장이 끝나는** 물음 ② `기능·메뉴·버튼·화면` 이 들어간 물음도 받는다.
   //   둘 다 컨 조건이 없을 때만이라 `4777 어디` 같은 조회는 그대로 간다.
-  const _weak = /어디\s*있|어디\s*(?:냐|야|지|에요|인가)|어디\s*나(?:와|오)|어디에?\s*$|어느\s*(?:화면|탭|메뉴)|어느\s*쪽|기능|메뉴|버튼|화면\s*(?:어디|어느)/;
+  //   1.68: 뜻 질문("시프팅이 뭐야"·"VGM이 무슨 뜻")도 약한 신호로 받는다 — 용어집이 색인에 들어갔다.
+  //     못 찾으면 generateHowToAnswer 가 null 을 돌려 종전 경로로 흘러가므로 오탐 피해가 없다.
+  const _weak = /어디\s*있|어디\s*(?:냐|야|지|에요|인가)|어디\s*나(?:와|오)|어디에?\s*$|어느\s*(?:화면|탭|메뉴)|어느\s*쪽|기능|메뉴|버튼|화면\s*(?:어디|어느)|(?:이|가|은|는)?\s*뭐(?:야|예요|에요|죠|지)\s*\??\s*$|무슨\s*뜻|뜻이?\s*뭐/;
   //   ⚠ 1.66-03: 컨 조건뿐 아니라 **컨 관련 인텐트가 하나라도 켜져 있으면 약한 신호는 안 받는다.**
   //     실측 — `빈자리 어디` 가 기능 설명(「베이 분석」)에 뺏겼다. 그건 작업 질문이다.
   const _noCond = !result.digits && !result.size && !result.fe && !result.type && result.temp === null
@@ -602,6 +604,12 @@ function _htManualIndex() {
   try {
     for (const arr of Object.values(HELP_DATA?.usage || {})) (arr || []).forEach(push);
     (HELP_COURSE || []).forEach(push);
+    // TallyOne 1.68: 용어집(terms)도 색인한다 — 18항목이 앱에 있는데 자연어가 못 읽고 있었다.
+    //   검수사 지적 2026-08-13: "있는것도 많은것을 모릅니다." 신참의 "시프팅이 뭐야"가 이걸로 즉답된다.
+    (HELP_DATA?.terms || []).forEach((t) => out.push({
+      l: t.term || '', w: '용어집', d: t.desc || '', r: 't', a: [],
+      blob: [t.term, t.desc].filter(Boolean).join(' '),
+    }));
   } catch (e) { /* 매뉴얼이 없어도 색인만으로 답한다 */ }
   _htManual = out;
   return out;
@@ -1668,6 +1676,33 @@ function formatProgress(parsed, results, allContainers) {
 //   데이터에 이미 있는 완료 타임스탬프(c._comp.at)로 실제 작업 페이스를 직접 계산한다.
 //   사용자가 속도를 말해줄 필요 없음. AI도 필요 없음 — 순수 로컬 계산.
 //   검수사가 종일 단조로운 작업 중이라, 숫자만 던지지 않고 동료처럼 한마디 거든다.
+// ─── TallyOne 1.68: 터미널별 근무시간표 (검수사 확정 2026-08-13) ───
+//   "오전 근무는 08:00~17:30 중간에 12:00-13:00 중식" · 야간(PCTC) 19~24시·야식·01~03:30·티타임·04~06:30
+//   PNCT 주간 08~11:30·중식~13·13~17:30 / 야간 19~23:30·야식~01·01~05:30.
+//   자정 기준 분(minute) 창 목록 — ETA 계산은 이 창 안의 시간만 센다(중식·야식·티타임·조간 공백 제외).
+export const WORK_SHIFTS = {
+  PCTC: [[60, 210], [240, 390], [480, 720], [780, 1050], [1140, 1440]],
+  PNCT: [[60, 330], [480, 690], [780, 1050], [1140, 1410]],
+};
+// startMs 시점부터 workMin(작업분)을 근무 창만 세며 전진해 끝나는 시각을 돌려준다.
+export function addWorkMinutes(startMs, workMin, pier) {
+  const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
+  let t = new Date(startMs); let left = workMin; let guard = 0;
+  while (left > 0 && guard++ < 20000) {
+    const m = t.getHours() * 60 + t.getMinutes();
+    const win = wins.find(([a, b]) => m >= a && m < b);
+    if (win) {
+      const usable = Math.min(left, win[1] - m);
+      t = new Date(t.getTime() + usable * 60000); left -= usable;
+    } else {
+      const next = wins.map(([a]) => a).filter((a) => a > m).sort((a, b) => a - b)[0];
+      if (next != null) t = new Date(t.getTime() + (next - m) * 60000);
+      else { t = new Date(t.getTime() + (1440 - m) * 60000); }
+    }
+  }
+  return t;
+}
+
 function formatEta(parsed, allContainers, ctx) {
   // allContainers는 호출부에서 이미 평택분만 넘어옴(SearchPanel _ptk 필터).
   //   반환은 다른 답변과 동일하게 '문자열' — 첫 줄이 음성으로 읽히므로 첫 줄에 대화체 한 문장.
@@ -1698,7 +1733,8 @@ function formatEta(parsed, allContainers, ctx) {
   }
 
   const remainMin = Math.round((remain / perHour) * 60);
-  const eta = new Date(Date.now() + remainMin * 60000);
+  // 1.68: 중식·야식·티타임·조 사이 공백을 건너뛰어 계산한다(터미널별 근무시간표 — 검수사 확정).
+  const eta = addWorkMinutes(Date.now(), remainMin, ctx?.pier);
   const hh = eta.getHours(), mm = eta.getMinutes();
   const ampm = hh < 12 ? '오전' : '오후';
   const h12 = hh % 12 === 0 ? 12 : hh % 12;

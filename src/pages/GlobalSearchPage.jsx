@@ -5,8 +5,9 @@ import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '..
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
+import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 
-export default function GlobalSearchPage({ voyages, onOpenContainer }) {
+export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData }) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -73,6 +74,25 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
   // 자연어 파싱 (M6.10: debouncedQuery 사용)
   const parsed = useMemo(() => parseNaturalQuery(debouncedQuery), [debouncedQuery]);
 
+  // ── TallyOne 1.68: 배 이름 맥락 ──
+  //   "STSE 출항 몇 시"·"HAYN 양하 자료 다 있어"처럼 질문에 배가 지정되면 그 항차를 맥락으로 잡는다.
+  //   종전에는 배를 지정해도 무시하고 "항차 화면 가서 물어보세요"로 떠넘겼다(검수사 지적 2026-08-13).
+  const shipCtx = useMemo(() => {
+    const Q = String(debouncedQuery || '').toUpperCase();
+    if (Q.length < 3) return null;
+    let best = null;
+    Object.entries(voyages || {}).forEach(([k, v]) => {
+      const i = v?.info; if (!i) return;
+      const names = [i.vsl, i.vslFull].filter(Boolean).map((x) => String(x).toUpperCase());
+      if (names.some((nm) => nm.length >= 3 && Q.includes(nm))) {
+        // 자료가 실린 항차 우선(같은 배 예정/진행 중복 대비)
+        const has = !!(v.discharge?.ediContainers || v.loading?.ediContainers);
+        if (!best || (has && !best.has)) best = { key: k, info: i, v, has };
+      }
+    });
+    return best;
+  }, [voyages, debouncedQuery]);
+
   // ── V9.14: 통합검색 즉답 — 종전에는 "브리핑·몇 시야·날씨" 등이 여기서 전부 무응답이었다.
   //   시간·자기소개처럼 항차와 무관한 질문은 바로 답하고,
   //   항차 맥락이 필요한 질문(브리핑·점검·인계·ETA·날씨 등)은 어디서 물어야 하는지 안내한다.
@@ -83,26 +103,94 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     //   검수사 지적 2026-08-13 — *"수석 대시보드에선 자연어 즉 도우미 기능을 어디에서 사용하나요?"*
     //   1.65 에서 기능 설명을 항차 화면에만 붙였다. **수석 전용 기능일수록 수석이 묻는 자리에서 답해야 하는데 거꾸로였다.**
     //   여기는 수석·소유자만 들어오는 라우트라(App.jsx 가드) 수석 기준으로 답한다.
+    // 1.68: 배가 지정된 콜사인·IMO 질문 — 기능 설명(howTo)보다 먼저.
+    //   "STSE 콜사인 뭐야"의 '뭐야'가 기능 색인에 먼저 걸려 VRSC3 대신 기능 안내가 나왔다(시뮬 실측). — ship_bay_dict·info에 이미 있다.
+    if (/콜사인|호출\s*부호|\bIMO\b|아이엠오/i.test(debouncedQuery) && shipCtx) {
+      const dict = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
+      const d = dict[String(shipCtx.info.vsl || '').toUpperCase()] || {};
+      const L = [];
+      const cs = shipCtx.info.callsign || d.callsign; if (cs) L.push(`콜사인 ${cs}`);
+      if (d.imo) L.push(`IMO ${d.imo}`);
+      if (L.length) return `${shipCtx.info.vslFull || shipCtx.info.vsl} — ${L.join(' · ')}`;
+      return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 콜사인·IMO가 아직 등록 전입니다.`;
+    }
     if (p.howToQuery) {
       const _a = generateHowToAnswer(debouncedQuery, p, { isChief: true });
       if (_a) return _a;
     }
     // 자료 현황 — "어느 선박 자료 다 있어" · "어느 선사 것이 없지" · "빠진 자료"
     //   항차 하나가 아니라 **전체를 가로질러** 봐야 하는 물음이라 통합 검색이 제자리다.
-    if (/자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착)|어느\s*(?:선박|배|선사)[^?]*(?:없|빠|안\s*왔)|안\s*온\s*자료|EDI\s*없/.test(debouncedQuery)) {
-      try { return describeReadiness(buildReadiness(voyages, (typeof window !== 'undefined' && window.__fbShipBayDict) || null)); }
+    if (/자료\s*(?:현황|다\s*있|준비|빠|없|부족|미도착|왔)|어느\s*(?:선박|배|선사)[^?]*(?:없|빠|안\s*왔)|안\s*온\s*자료|EDI\s*(?:없|왔)|리스트\s*(?:없|왔)/.test(debouncedQuery)) {
+      try {
+        const rd = buildReadiness(voyages, (typeof window !== 'undefined' && window.__fbShipBayDict) || null);
+        // 1.68: 배가 지정되면 그 배만 — "STSE 양하 자료 다 있어" → 결론부터.
+        //   검수사 지적: "준비 되었으면 준비 되었다, 출력만 하면 된다고 답해야 하는데 필요없는 말만 합니다."
+        if (shipCtx) {
+          const wantMode = /양하/.test(debouncedQuery) ? 'discharge' : /선적/.test(debouncedQuery) ? 'loading' : null;
+          const mine = (rd.rows || []).filter((r) => r.key === shipCtx.key && (!wantMode || r.mode === wantMode));
+          if (mine.length) {
+            const lines = [];
+            let allReady = true;
+            mine.forEach((r) => {
+              if (r.state === 'ready') {
+                const cnt = r.edi && r.list && r.edi !== r.list ? ` (⚠ EDI ${r.edi} vs 리스트 ${r.list} — ${Math.abs(r.edi - r.list)}건 차이)` : ` — EDI ${r.edi || 0}건 = 리스트 ${r.list || 0}건`;
+                if (r.edi && r.list && r.edi !== r.list) allReady = false;
+                lines.push(`${r.modeKr}${cnt}`);
+              } else {
+                allReady = false;
+                lines.push(`${r.modeKr} — ${r.label}${r.carrier ? ` (${r.carrier})` : ''}`);
+              }
+            });
+            const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
+            return (allReady ? `예. ${ship} 자료 준비돼 있습니다. 출력만 하면 됩니다.\n` : `⚠ ${ship} 자료가 아직입니다.\n`) + lines.join('\n');
+          }
+          return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 등록만 있고 자료가 아직 안 왔습니다.`;
+        }
+        return describeReadiness(rd);
+      }
       catch (e) { /* 아래 종전 경로로 */ }
     }
+    // 1.68: 배가 지정된 입출항 질문은 그 자리에서 답한다 — "STSE 출항 몇 시".
+    //   종전에는 PORT-MIS 데이터가 옆에 있는데도 안 읽고 떠넘겼다.
+    if (p.schedQuery && shipCtx) {
+      const pm = matchPortMis(portMisData || {}, shipCtx.info);
+      const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
+      if (pm) {
+        const f = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? `${parseInt(m[2], 10)}월 ${parseInt(m[3], 10)}일 ${m[4]}:${m[5]}` : null; };
+        const L = [`${ship} — ` + [f(pm.eta) ? `입항 ${f(pm.eta)}` : null, f(pm.etd) ? `출항 ${f(pm.etd)}` : null].filter(Boolean).join(', ') + '.'];
+        if (pm.pier || pm.berth) L.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
+        if (pm.nextPort) L.push(`다음 항구: ${pm.nextPort}`);
+        return L.join('\n');
+      }
+      if (shipCtx.info.planDate) return `${ship} — 작업 계획 ${shipCtx.info.planDate} (PORT-MIS 신고는 아직).`;
+    }
+    // 1.68: 배가 지정된 물량 질문 — "STSE 양하 몇 개야" 를 여기서 바로 센다(평택분).
+    if (shipCtx && (p.isStat || p.isAll || /몇\s*(?:개|대)/.test(debouncedQuery))) {
+      const mine = flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk);
+      if (mine.length) {
+        const mk = (mode, kr) => {
+          const arr = mine.filter((c) => c._mode === mode);
+          if (!arr.length) return null;
+          const f = arr.filter((c) => c.fe === 'F').length;
+          const deck = arr.filter((c) => parseInt(String(c.tier || '0'), 10) >= 80).length;
+          return `${kr} 평택분 ${arr.length}대 — Full ${f} / Empty ${arr.length - f} · 데크 ${deck} / 홀드 ${arr.length - deck}`;
+        };
+        const wantMode = p.mode || (/양하/.test(debouncedQuery) ? 'discharge' : /선적/.test(debouncedQuery) ? 'loading' : null);
+        const L = wantMode ? [mk(wantMode, wantMode === 'discharge' ? '양하' : '선적')] : [mk('discharge', '양하'), mk('loading', '선적')];
+        const body = L.filter(Boolean).join('\n');
+        if (body) return `${shipCtx.info.vslFull || shipCtx.info.vsl}\n${body}`;
+      }
+    }
     if (p.briefingQuery || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
-        p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.schedQuery || p.foodQuery) {
-      return '이 질문은 항차 화면에서 답합니다.\n홈에서 그 배의 [양하]/[선적] 막대를 누른 뒤 🎤 자연어 탭에서 물어보세요.';
+        p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.foodQuery || (p.schedQuery && !shipCtx)) {
+      return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 답합니다. (예: "STSE 출항 몇 시")\n작업 중 상세(브리핑·ETA·인계)는 항차 화면 🎤 자연어 탭이 더 자세합니다.';
     }
     // TallyOne 1.21: 기상 시각 — 통합검색엔 항차 맥락이 없어 근무조(주간 08시·야간 19시) 기준으로 답한다.
     if (p.wakeQuery) { try { return generateWakeAnswer({}); } catch { return null; } }
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;
-  }, [parsed, debouncedQuery, voyages]);   // 1.66-03: 자료 현황이 voyages 를 읽는다
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData]);   // 1.68: 배 이름 맥락·물량·입출항이 읽는다
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
@@ -156,10 +244,19 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     return () => { try { r.abort(); } catch(_) {} };
   }, []);
 
+  // 1.68: 음성은 «타자가 멈춘 뒤 한 번만» — 검수사 신고: "글 칠 때마다 전체없음을 외칩니다."
+  //   200ms 검색 debounce와 별도로, 1.2초 더 조용해야 말한다. 스피커 끄면 화면만(검수사 확정).
+  const [settledQuery, setSettledQuery] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setSettledQuery(query), 1200);
+    return () => clearTimeout(t);
+  }, [query]);
+
   // 자동 음성 안내
   useEffect(() => {
     if (!autoSpeak) return;
     if (!debouncedQuery || debouncedQuery.length < 2) return;
+    if (settledQuery !== debouncedQuery) return;   // 1.68: 아직 치는 중 — 침묵
     const sig = `${debouncedQuery}-${matches.length}-${parsed.isStat}-${matches[0]?.cn || 'none'}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
@@ -175,6 +272,9 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     }
 
     if (matches.length === 0) {
+      // 1.68: 조건을 하나도 못 알아들었으면 "전체 없음"을 외치지 않는다 — 문장 질문을 컨 검색으로
+      //   오인해 매 타자마다 외치던 원인(검수사 신고). 화면은 종전대로 조용히 비워 둔다.
+      if (!hasAnyCondition(parsed)) return;
       speak(`${describeQuery(parsed)} 없음`);
     } else if (matches.length === 1) {
       const c = matches[0];
@@ -189,7 +289,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer }) {
     } else {
       speak(`${matches.length}개 일치. 더 자세히`);
     }
-  }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer]);
+  }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer, settledQuery]);
 
   const startListening = () => {
     if (!recognitionRef.current) return;

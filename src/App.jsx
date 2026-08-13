@@ -439,6 +439,7 @@ export default function App() {
             <GlobalSearchPage
               voyages={voyages}
               onOpenContainer={(c) => setGlobalDetail(c)}
+              portMisData={portMisData}
             />
           ) : (
             <DeniedChiefOnly onGoHome={() => navigate('home')}/>

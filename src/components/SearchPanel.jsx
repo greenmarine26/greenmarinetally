@@ -256,7 +256,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     fbSetInspectorActivity(inspector, voyageKey, workFilter, { equip: equipNo || '', bayLabel, tier: manualTier, remain, auto: false }).catch(() => {});
   }, [guideMode, inspector, voyageKey, workFilter, manualBay, manualTier, manualGroups, equipNo]);
   // 1.26: shipLib(본선 구조·실적)을 ctx 로 내려보낸다 — "몇 대까지 싣나" 답변 근거.
-  const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib };
+  const manualCtx = { mode: workFilter, bayPairs: manualBayPairs, selectedGroup: manualBay, selectedTier: manualTier, shipLib,
+    pier: voyage?.info?.pier || '' };   // 1.68: ETA가 터미널 근무시간표(중식·야식 제외)로 계산하도록
 
   return (
     <div className="space-y-3">
@@ -775,6 +776,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const eta = fmtDT(pm.eta), etd = fmtDT(pm.etd);
       lines.push(`${ship} — ` + [eta ? `입항 ${eta}` : null, etd ? `출항 ${etd}` : null].filter(Boolean).join(', ') + '.');
       if (pm.pier || pm.berth) lines.push(`부두: ${[pm.pier, pm.berth].filter(Boolean).join(' ')}`);
+      if (pm.nextPort) lines.push(`다음 항구: ${pm.nextPort}`);   // 1.68: "출항하고 어디 가?" — PORT-MIS에 이미 있었다
       if (pm.port && pm.port !== '평택') lines.push(`⚠ ${pm.port} 항만 데이터입니다.`);
       return lines.join('\n');
     }
