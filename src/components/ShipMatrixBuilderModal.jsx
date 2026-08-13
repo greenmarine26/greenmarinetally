@@ -334,7 +334,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         .map(([code, e]) => {
           const bays = (e?.bayDef?.baysSummary || [])
             .filter(b => { const n = parseInt(b?.bay, 10); return Number.isFinite(n) && n > 0; });
-          return { code, name: e?.name || '', callsign: e?.callsign || '', bayCount: bays.length, score: null };
+          return { code, name: e?.name || '', callsign: e?.callsign || '', carrier: e?.carrier || '', bayCount: bays.length, score: null };
         })
         .filter(x => x.bayCount > 0)
         .sort((a, b) => (a.name || a.code).localeCompare(b.name || b.code));
@@ -571,7 +571,8 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       shipMeta.code,
       shipMeta.name,
       shipMeta.imo,
-      shipMeta.callsign || ''
+      shipMeta.callsign || '',
+      shipMeta.carrier || ''      // 1.61: 선사
     );
     // M6.94.20: user 소스 + 편집자 + 시각 마킹 (Firebase 보호/충돌 판정 기준)
     const stamp = Date.now();
@@ -614,6 +615,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         name: entry.name,
         callsign: entry.callsign || '',
         imo: entry.imo || '',
+        carrier: entry.carrier || '',   // 1.61: 선사도 보관소에 남긴다
         source: 'user',
         _userOwned: true,
         provisional: _provisional,        // 1.59: 항상 명시 — 없으면 Firebase merged 가 옛 true 를 남긴다
@@ -833,6 +835,10 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                   <div className="text-[10px] text-blue-300/70">CASP 코드 (자동 추론)</div>
                   <div className="font-mono font-bold text-emerald-300">{shipMeta.code || <span className="text-red-400">없음 — 입력 필요</span>}</div>
                 </div>
+                <div>
+                  <div className="text-[10px] text-blue-300/70">선사</div>
+                  <div className="font-mono font-bold text-sky-300">{shipMeta.carrier || <span className="text-zinc-500">미상</span>}</div>
+                </div>
                 <div className="col-span-2">
                   <div className="text-[10px] text-blue-300/70">항차</div>
                   <div className="font-mono text-xs">{shipMeta.voy || <span className="text-zinc-500">—</span>}</div>
@@ -840,6 +846,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <label>
+                  <div className="text-[10px] text-blue-300/70">선사 (예: SKR · MAE · DJS)</div>
+                  <input value={shipMeta.carrier || ''} onChange={e => setShipMeta(m => ({ ...m, carrier: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
+                    className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 font-mono" />
+                </label>
                 <label>
                   <div className="text-[10px] text-blue-300/70">선박명</div>
                   <input value={shipMeta.name || ''} onChange={e => setShipMeta(m => ({ ...m, name: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
@@ -995,18 +1006,35 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                       })}
                     </div>
                   )}
-                  <div className="text-[10px] text-zinc-500 mb-1">전체 목록에서 선택{cloneList[0]?.fitPct != null ? ' (% = 이번 EDI 수용률)' : ''}:</div>
+                  {/* ★ TallyOne 1.61: **같은 선사 배를 맨 위로.** 검수사 확정 2026-08-13 —
+                      *"같은 선사 배는 구조가 비슷하다"* 가 복제의 첫 단서다. 종전엔 이름순이라
+                      같은 선사가 목록 곳곳에 흩어져 있어 눈으로 찾아야 했다. */}
+                  <div className="text-[10px] text-zinc-500 mb-1">
+                    전체 목록에서 선택{cloneList[0]?.fitPct != null ? ' (% = 이번 EDI 수용률)' : ''}
+                    {shipMeta.carrier ? ` · 같은 선사(${shipMeta.carrier}) 먼저` : ''}:
+                  </div>
                   <select defaultValue="" onChange={e => handleCloneFrom(e.target.value)}
                           className="w-full px-2 py-1.5 bg-zinc-700 rounded text-sm font-mono">
                     <option value="" disabled>— 선박 선택 ({cloneList.length}척) —</option>
-                    {cloneList.map(s => {
-                      const p = s.fitPct != null ? s.fitPct : s.score;
+                    {(() => {
+                      const my = String(shipMeta.carrier || '').toUpperCase();
+                      const same = my ? cloneList.filter(s => String(s.carrier || '').toUpperCase() === my) : [];
+                      const rest = my ? cloneList.filter(s => String(s.carrier || '').toUpperCase() !== my) : cloneList;
+                      const opt = (s) => {
+                        const p = s.fitPct != null ? s.fitPct : s.score;
+                        return (
+                          <option key={s.code} value={s.code}>
+                            {p != null ? `[${Math.round(p * 100)}%] ` : ''}{(s.name || '(이름없음)')}{s.carrier ? ` · ${s.carrier}` : ''}{s.callsign ? ` · ${s.callsign}` : ''} · {s.code} · {s.bayCount}베이
+                          </option>
+                        );
+                      };
                       return (
-                        <option key={s.code} value={s.code}>
-                          {p != null ? `[${Math.round(p * 100)}%] ` : ''}{(s.name || '(이름없음)')}{s.callsign ? ` · ${s.callsign}` : ''} · {s.code} · {s.bayCount}베이
-                        </option>
+                        <>
+                          {same.length > 0 && <optgroup label={`같은 선사 ${my} — 구조가 비슷합니다`}>{same.map(opt)}</optgroup>}
+                          {rest.length > 0 && <optgroup label={same.length ? '그 밖의 선박' : '전체'}>{rest.map(opt)}</optgroup>}
+                        </>
                       );
-                    })}
+                    })()}
                   </select>
                 </>
               )}

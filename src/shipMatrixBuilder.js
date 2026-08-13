@@ -58,7 +58,8 @@ export function extractShipMetaFromVoyage(voyage) {
   //   ⚠ 콜사인·선박명은 계속 entry 의 별도 필드로 저장된다 — 조회에서 완전 일치로 쓰인다.
   //     키로 쓰지 않을 뿐이다.
 
-  return { code: code || '', name: vsl, imo, callsign, voy };
+  // 1.61: 선사도 항차에서 그대로 가져온다(수집기가 EDI TDT 에서 넣어 둔 값).
+  return { code: code || '', name: vsl, imo, callsign, voy, carrier: (info.carrier || '').toUpperCase().trim() };
 }
 
 /**
@@ -571,7 +572,7 @@ export function augmentMatrixFromDef(matrix, defResult) {
  * @param {string} callsign  M6.94.5: 추가 — 단일 책임 (호출처에서 따로 보강 X)
  * @returns {Object} bayDictEntry
  */
-export function matrixToBayDictEntry(matrix, code, name, imo, callsign) {
+export function matrixToBayDictEntry(matrix, code, name, imo, callsign, carrier = '') {
   const baysSummary = Object.keys(matrix.byBay)
     // M6.94.36: 깨진 베이 키(NaN/0/비숫자)는 저장에서 제외 — 유령 entry 영구 제거.
     .filter(bay => { const n = parseInt(bay, 10); return Number.isFinite(n) && n > 0; })
@@ -609,6 +610,13 @@ export function matrixToBayDictEntry(matrix, code, name, imo, callsign) {
     code: code || '',
     name: name || '',
     callsign: callsign || '',  // M6.94.5: 인자로 받음 (이전엔 ''로 하드코딩)
+    // ★ TallyOne 1.61: 선사(carrier). 검수사 지시 2026-08-13 —
+    //   *"수정하다보니 **관련선사가 보입니다.** 그런데 저희앱엔 **기록할곳이 안보입니다.**"*
+    //   쓰임새(검수사 확정): ① **같은 선사 배는 구조가 비슷하다** — 신규 매트릭스를 만들 때 참고·복제한다
+    //                        ② **선사별로 서류·규칙이 다르다**
+    //   손으로 받지 않는다 — 항차 `info.carrier`(EDI TDT 에서 추출)에 이미 있다(§2-2-B).
+    //   자동으로 채우고 다르면 고친다.
+    carrier: carrier || '',
     bayDef: {
       // M6.94.4: 카고플랜이 사용자 데이터로 인식하도록 source/_userOwned 명시
       //   원인: 이게 없으면 cargoPlanCore의 isUserSource=false → 자동 보강 분기로 흘러

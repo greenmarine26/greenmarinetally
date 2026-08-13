@@ -35,6 +35,7 @@ function rowsFromMaster() {
       name: String(e.name || '').replace(/\n/g, ' / ').trim(),
       callsign: e.callsign || '',
       imo: e.imo || '',
+      carrier: e.carrier || '',
       bays: n,
       hasMatrix: !!bd,
       provisional: e.provisional === true || bd?.provisional === true,
@@ -65,13 +66,14 @@ export default function BayMatrixManagerModal({ onClose }) {
     const s = U(q);
     if (!s) return all;
     return all.filter(r => U(r.code).includes(s) || U(r.name).includes(s)
-      || U(r.callsign).includes(s) || U(r.imo).includes(s));
+      || U(r.callsign).includes(s) || U(r.imo).includes(s) || U(r.carrier).includes(s));
   }, [all, q]);
 
   // 빌더는 항차를 받도록 만들어져 있다 — 선박만 담은 최소 항차 모양으로 넘긴다.
   //   `info.vsl` 이 곧 선박 약자이고, extractShipMetaFromVoyage 가 그것을 코드로 쓴다(1.58-01).
   const fakeVoyage = target ? { info: { vsl: target.code, code: target.code,
-    name: target.name || '', callsign: target.callsign || '', imo: target.imo || '' } } : null;
+    name: target.name || '', callsign: target.callsign || '', imo: target.imo || '',
+    carrier: target.carrier || '' } } : null;
 
   const startAdd = () => {
     const code = U(newShip.code);
@@ -114,7 +116,7 @@ export default function BayMatrixManagerModal({ onClose }) {
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={q} onChange={e => setQ(e.target.value)}
-              placeholder="선박 약자 · 선박명 · 호출부호 · IMO 로 찾기"
+              placeholder="선박 약자 · 선박명 · 선사 · 호출부호 · IMO 로 찾기"
               className="w-full h-11 pl-9 pr-3 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 placeholder-slate-500"
             />
           </div>
@@ -136,10 +138,11 @@ export default function BayMatrixManagerModal({ onClose }) {
           <div className="max-h-[46vh] overflow-y-auto rounded-lg border border-slate-800 divide-y divide-slate-800">
             {hits.map(r => (
               <button key={r.code} disabled={!canEdit}
-                onClick={() => setTarget({ code: r.code, name: r.name, callsign: r.callsign, imo: r.imo })}
+                onClick={() => setTarget({ code: r.code, name: r.name, callsign: r.callsign, imo: r.imo, carrier: r.carrier })}
                 className="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-slate-800 disabled:opacity-60 disabled:hover:bg-transparent">
                 <span className="font-bold text-slate-100 text-sm w-16 shrink-0">{r.code}</span>
                 <span className="flex-1 text-[12px] text-slate-400 truncate">{r.name || '—'}</span>
+                {r.carrier && <span className="text-[10px] font-bold text-sky-300 shrink-0">{r.carrier}</span>}
                 <span className="text-[11px] text-slate-500 shrink-0">{r.bays ? `${r.bays}베이` : '매트릭스 없음'}</span>
                 {r.hasMatrix && (r.provisional
                   ? <span className="text-[10px] font-bold text-amber-400 shrink-0 flex items-center gap-0.5"><Wrench className="w-3 h-3" />보정중</span>
