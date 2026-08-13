@@ -2,14 +2,12 @@
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
 import { APP_VERSION, _storage, SK , setLaneRoutes } from './utils.js';
-import { loadUserBayDict } from './data/userBayDict.js';   // 1.58: 조회용 아님 — 누락분 업로드에만 쓴다
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
   fbSubscribeConnection, fbSetInspectorActivity, fbLogoutInspector, fbSubscribePortMis, fbSubscribePilotForecast, fbSubscribeTerminalWork,
   fbSubscribeStaffList, fbSubscribeDeletedStaff, fbSubscribeDevAccess, fbSubscribeShipBayDict, fbSubscribeHeartbeat,
   fbSubscribeMatrixEditors, fbGetAdminGuard, fbReconnect
-, fbSubscribeLaneRoutes,
-  fbSaveShipBayDict } from './firebase.js';   // 1.58: 보관소에 없는 이 기기 사본 올리기
+, fbSubscribeLaneRoutes } from './firebase.js';
 import { isAdminName, isOwnerName } from './adminGuard.js';   // V9.11: 관리자 판정 + TallyOne 1.0: 소유자 판정(라우트 게이트)
 import { isChief, setServerRoles, setDevAccess, canOpenChief } from './staffList.js';     // TallyOne 1.0: 역할 게이트 + 서버 직책 캐시(B-4 선행분 연결) // 1.41: 개발용 접근
 import { IDLE_LOGOUT_MS, isIdleLogout } from './inspectorStatus.js';   // V9.13: 30분 무조작 자동 로그아웃
@@ -97,9 +95,7 @@ export default function App() {
   const [weather, setWeather] = useState(null);
   const [heartbeat, setHeartbeat] = useState(null);  // V8.40: 수집기 하트비트
   // 1.58: 「오래됨」 배너 폐기(보관소가 정본이라 로컬과 대조할 이유가 없다).
-  //   대신 이 기기 사본 중 보관소에 없던 것을 올린 결과만 한 줄로 알린다.
-  const [bayDictUploadNote, setBayDictUploadNote] = useState(null);
-  const bayDictUploadedRef = useRef(false);   // 세션당 1회
+  //   1.60-01: 업로드 결과 통지도 함께 폐기 — 자동 업로드 자체가 없어졌다.
 
   // TallyOne 1.0: 앱 시작은 항상 로그인 화면(자동 로그인 없음 — 사용자 확정 사양).
   //   원래 열려던 해시는 pendingHashRef에 보관 → 로그인 성공 시 권한 검사 후 그 해시로 진입.
@@ -156,31 +152,19 @@ export default function App() {
       //     · 검수사는 폰·크롬·엣지를 한 번씩 열기만 하면 된다. 누를 것이 없다.
       //     · 편집 권한자는 검수사 한 사람뿐이라(bayDictGuard) 남의 사본이 섞일 위험이 없다.
       //   실패해도 조용히 넘기지 않는다 — 콘솔에 남기고 배너로 알린다.
-      if (!bayDictUploadedRef.current) {
-        bayDictUploadedRef.current = true;
-        (async () => {
-          try {
-            const fb = data || {};
-            const local = loadUserBayDict() || {};
-            const missing = Object.keys(local).filter(code => {
-              const e = local[code];
-              const isUser = e?.bayDef?.source === 'user' || e?.bayDef?._userOwned === true;
-              return isUser && e?.bayDef && !fb[code];        // 보관소에 없는 것만
-            });
-            if (missing.length === 0) return;
-            console.info('[베이사전] 보관소에 없는 이 기기 사본', missing.length, '건 올림 —', missing.join(', '));
-            let ok = 0;
-            for (const code of missing) {
-              // 순차로 올린다 — 병렬(Promise.all)은 4초에 92건을 쏟아 2026-08-11 도장 사고를 냈다.
-              if (await fbSaveShipBayDict(code, local[code])) ok++;
-            }
-            setBayDictUploadNote({ tried: missing.length, ok, codes: missing });
-          } catch (err) {
-            console.error('[베이사전] 누락분 업로드 실패', err);
-            setBayDictUploadNote({ tried: -1, ok: 0, codes: [], error: String(err?.message || err) });
-          }
-        })();
-      }
+      // ★ TallyOne 1.60-01: **로컬 사본 자동 업로드를 폐기한다** (2026-08-13 사고).
+      //   1.58 에서 "유실 방지"로 넣었다 — 이 기기 사본 중 보관소에 없는 것만 올리는 장치였다.
+      //   그런데 같은 날 보관소를 108키 → 30키로 정리하자, 로컬에 남아 있던 허상 키 72개를
+      //   **그대로 되살렸다**(XINT·ATLA·STAR·DONG·PEGA…). 검수사 화면에 "72건을 보관소에 올렸습니다"가
+      //   떴고 보관소는 102키로 되돌아갔다. 유실 방지 장치가 오염 복구 장치가 된 것이다.
+      //
+      //   근본은 이것이다 — **사본이 정본에 항목을 더하는 것도 정본을 고치는 일이다.**
+      //   검수사 확정: *"베이메트릭스 단 하나만이 정본이며 … 사본이 정본을 고칠 수 없습니다."*
+      //   새 매트릭스가 필요하면 수석 대시보드 「🧱 베이매트릭스」에서 사람이 만든다(1.60).
+      //   그 길이 생겼으므로 자동 업로드는 존재 이유가 없다.
+      //
+      //   ⚠ 되살리지 마라. 로컬 사본에는 옛 허상·자동 생성본이 섞여 있고, 그것을 걸러낼 방법이
+      //     기계에는 없다. 무엇이 정본인지는 검수사만 안다.
     });
     return () => { u1(); u2(); u3(); u4(); u4b(); u4c(); u5(); u6(); u7(); unsub2(); unsub3(); unsubDev(); };
   }, []);
@@ -423,16 +407,9 @@ export default function App() {
 
       <BroadcastMarquee inspector={inspector} />
 
-      {/* 1.58: V9.05 「오래됨」 배너 철거. 보관소가 정본이라 로컬과 대조할 일이 없다 —
-          검수사가 뜻도 모르고 「확인」을 눌러 그 기기 수정을 잃던 경로였다.
-          남은 것은 이 기기에만 있던 것을 보관소로 올린 결과 통지뿐이다(누를 것 없음). */}
-      {isAdmin && bayDictUploadNote && (
-        <div className="bg-slate-800 border-b border-slate-600 text-slate-200 text-xs px-3 py-2">
-          {bayDictUploadNote.tried < 0
-            ? <span>📚 베이사전 — 이 기기 사본을 보관소로 올리지 못했습니다: {bayDictUploadNote.error}</span>
-            : <span>📚 베이사전 — 보관소에 없던 이 기기 사본 <b>{bayDictUploadNote.ok}건</b>을 보관소에 올렸습니다{bayDictUploadNote.ok !== bayDictUploadNote.tried ? ` (${bayDictUploadNote.tried}건 중)` : ''}: {bayDictUploadNote.codes.slice(0, 8).join(', ')}{bayDictUploadNote.codes.length > 8 ? ' 외' : ''}</span>}
-        </div>
-      )}
+      {/* 1.58: V9.05 「오래됨」 배너 철거 — 보관소가 정본이라 로컬과 대조할 일이 없다.
+          1.60-01: 그 자리에 잠깐 있던 「이 기기 사본을 올렸습니다」 통지도 없앴다.
+          자동 업로드가 지운 허상 72건을 되살린 사고(2026-08-13) 뒤 장치 자체를 폐기했다. */}
       <main className="pb-20">
         {route.name === 'home' && (
           <HomePage
