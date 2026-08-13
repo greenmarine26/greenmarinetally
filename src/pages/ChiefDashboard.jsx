@@ -10,6 +10,7 @@ import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자�
 import { isTallyboxSupported, pickTallyboxRoot, getSavedTallybox, requestWritePermission, readyRoot, writeTallyboxFile } from '../tallyboxFs.js';
 import { folderName, fileNameFor } from '../data/tallyBoxRules.js';
 import KakaoLogImportModal from '../components/KakaoLogImportModal.jsx';   // TallyOne 1.8-15
+import BayMatrixManagerModal from '../components/BayMatrixManagerModal.jsx';   // 1.60: 베이매트릭스 관리
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
@@ -127,6 +128,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   //   상단 바로가기 + 항목별 접기(버튼 누르면 보임). 작업 보드·진행 상황만 기본 펼침.
   const [openSecs, setOpenSecs] = useState({ board: true, progress: true });
   const [showPortMis, setShowPortMis] = useState(false);   // V9.42: 홈 상단에서 옮겨온 PORT-MIS 캡처
+  const [showBayMatrix, setShowBayMatrix] = useState(false);   // 1.60: 베이매트릭스 관리(업로드 화면에서 분리)
   const toggleSec = (id) => setOpenSecs(o => ({ ...o, [id]: !o[id] }));
   const jumpSec = (id) => {
     setOpenSecs(o => ({ ...o, [id]: true }));
@@ -613,11 +615,16 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             // V9.42(사용자 지시 2026-08-02): 홈 상단 3카드를 없애면서 이 두 개를 여기 빈칸으로 옮겼다.
             //   섹션 접기가 아니라 각자 동작이 있어 onAct 로 구분한다.
             ['__search', '🔍 통합 검색'], ['__portmis', '📸 PORT-MIS 캡처'],
+            // TallyOne 1.60 (검수사 지시 2026-08-13): 베이매트릭스를 업로드 화면에서 **분리**해 여기로.
+            //   *"업로드를 누르면 일반 검수사도 보이기 때문에 건드릴수 있습니다."* — 권한 화면으로 옮긴다.
+            //   항차가 없어도 선박을 조회해 고치고, 조회가 안 되는 선박은 새로 만든다.
+            ['__baymatrix', '🧱 베이매트릭스'],
             // TallyOne 1.0(L4): 보조기능 바로가기 — 판2 신설 #/aux 라우트(팀K)로 이동
             ['__aux', '🧰 보조기능'],
           ].map(([id, label]) => (
             <button key={id} onClick={() => (id === '__search' ? (onOpenGlobalSearch && onOpenGlobalSearch())
                                             : id === '__portmis' ? setShowPortMis(true)
+                                            : id === '__baymatrix' ? setShowBayMatrix(true)
                                             : id === '__aux' ? (window.location.hash = '#/aux')
                                             : jumpSec(id))}
               className="px-2 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-[12px] font-bold text-slate-200 text-left truncate"
@@ -630,6 +637,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* V9.42: PORT-MIS 캡처 모달 — 홈 상단 3카드 정리로 이리로 옮겨왔다 */}
       {showPortMis && <PortMisCaptureModal onClose={() => setShowPortMis(false)} />}
+      {/* 1.60: 베이매트릭스 — 항차 없이 선박 조회·수정, 조회가 안 되는 선박은 신규 추가 */}
+      {showBayMatrix && <BayMatrixManagerModal onClose={() => setShowBayMatrix(false)} />}
 
       {/* V8.27: 검수원 공지 (흐르는 띠) */}
       <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>
