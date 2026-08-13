@@ -19,6 +19,13 @@ export function extractShipMetaFromVoyage(voyage) {
   const info = voyage?.info || {};
   const callsign = (info.callsign || '').toUpperCase().trim();
   const vsl = info.vsl || info.vesselName || info.name || '';
+  // TallyOne 1.66-01: **선박명 칸에는 선박명을 넣는다 — 약자가 아니라.**
+  //   검수사 지적 2026-08-13 — *"베이매트릭스 겉화면을 보면 풀네임이 맞게 보이는데 카드를 누르면 안 보이는 이유는?"*
+  //   목록은 사전의 `name`(= 풀네임)을 그대로 그리는데, 빌더는 이 함수를 거치며 `info.vsl`(= 약자)을
+  //   `name` 자리에 넣고 있었다. 같은 자료를 두 화면이 다르게 읽은 것이다.
+  //   ⛔ 그냥 두면 더 나쁘다 — 빌더에서 저장하면 이 값이 사전에 덮여 **검수사가 채운 풀네임이 약자로 지워진다.**
+  //   `vslFull`(항차 EDI 추출본) → `info.name`(목록이 넘긴 사전 풀네임) → 없으면 약자 순으로 본다.
+  const fullName = String(info.vslFull || info.name || '').trim() || vsl;
   const imo = info.imo || '';
   const voy = info.voy_d || info.voy_l || info.voy || '';
 
@@ -59,7 +66,7 @@ export function extractShipMetaFromVoyage(voyage) {
   //     키로 쓰지 않을 뿐이다.
 
   // 1.61: 선사도 항차에서 그대로 가져온다(수집기가 EDI TDT 에서 넣어 둔 값).
-  return { code: code || '', name: vsl, imo, callsign, voy, carrier: (info.carrier || '').toUpperCase().trim() };
+  return { code: code || '', name: fullName, imo, callsign, voy, carrier: (info.carrier || '').toUpperCase().trim() };
 }
 
 /**
