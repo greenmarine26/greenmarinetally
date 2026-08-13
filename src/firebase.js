@@ -2489,17 +2489,52 @@ export async function fbSaveShipBayDict(code, entry) {
     //   user 사전은 위 existingIsUser 분기에서 이미 보호되므로 여기 도달하지 않음.
     const _norm = s => String(s || '').toUpperCase().replace(/[\s\-_.]/g, '');
     const exName = _norm(existing.name), enName = _norm(entry.name);
-    const nameConflict = exName.length >= 5 && enName.length >= 5
-      && !exName.includes(enName.slice(0, 5)) && !enName.includes(exName.slice(0, 5));
+    //   1.60-02: 길이 조건을 5 → 4 로 낮춘다. 사전 name 칸에 약자 4자가 들어 있는 엔트리가 많아
+    //     `>= 5` 에서는 검사가 통째로 꺼졌다(PCSZ·DJCT 오염을 놓친 이유). 4자면 약자도 비교된다.
+    //     비교 길이도 min(4, 짧은 쪽)으로 맞춰 'PCSZ' ↔ 'PACIFIC SHENZHEN' 같은 약자↔풀네임 쌍이
+    //     엉뚱하게 충돌로 잡히지 않게 한다(둘 다 P·C·S·Z 를 공유하지 않으므로 실제로는 충돌로 잡히나,
+    //     그 경우에도 아래 콜사인 유일성 검사가 최종 판단을 하므로 안전한 쪽으로 기운다).
+    const _cmpLen = Math.min(4, exName.length, enName.length);
+    const nameConflict = exName.length >= 4 && enName.length >= 4
+      && !exName.includes(enName.slice(0, _cmpLen)) && !enName.includes(exName.slice(0, _cmpLen));
     const mergedCallsign = nameConflict
       ? (entry.callsign || '')                       // 선박명 충돌 → 기존 콜사인 버림
       : (entry.callsign || existing.callsign || ''); // 같은 배 → 기존 보존
 
+    // ★★★ TallyOne 1.60-02: **콜사인은 배마다 유일하다** — 남의 것이면 붙이지 않는다.
+    //   검수사 신고 2026-08-13: *"PCBJ PCSZ가 같게 되어 있습니다. **D5QW2 콜사인 이건 명백히 오류**입니다."*
+    //   실측 — 겹침 두 건. `D5QW2`(PCBJ·PCSZ) · `BSDU`(XTPG·DJCT). 항차 자료(199건)는 전부 정확했다.
+    //     PCSZ 진짜 콜사인은 `9V8012`, DJCT 는 콜사인 없음. **사전만 남의 것을 달고 있었다.**
+    //
+    //   왜 위 V7.30 방어가 못 잡았나 — `nameConflict` 가 `exName.length >= 5 && enName.length >= 5`
+    //   라서 **선박명이 5자 미만이면 검사가 통째로 꺼진다.** 사전의 name 칸에는 풀네임이 아니라
+    //   약자 4자(`PCSZ`·`DJCT`)가 들어 있는 엔트리가 많아 방어가 대부분 무력했다.
+    //   (주석의 예시가 하필 BSDU/DONGJIN 인데 그 사례를 못 걸렀다.)
+    //
+    //   그래서 이름에 기대지 않는 검사를 하나 더 둔다 — **그 콜사인을 이미 다른 코드가 쓰고 있으면
+    //   붙이지 않는다.** 검수사 확정 2026-08-11: *"지금 호출부호를 보면 중복이 되지 않습니다."*
+    //   조용히 넘기지 않고 콘솔에 남긴다(§2-4 3번).
+    let _callsign = mergedCallsign;
+    if (_callsign) {
+      try {
+        const _all = (typeof window !== 'undefined' && window.__fbShipBayDict) || {};
+        const _owner = Object.keys(_all).find(k =>
+          k.toUpperCase() !== cleanCode.toUpperCase() &&
+          String(_all[k]?.callsign || '').toUpperCase().trim() === String(_callsign).toUpperCase().trim());
+        if (_owner) {
+          console.warn('[베이사전] 콜사인', _callsign, '은 이미', _owner, '의 것입니다 —',
+            cleanCode, '에는 붙이지 않습니다(콜사인은 배마다 유일).');
+          _callsign = existing.callsign && String(existing.callsign).toUpperCase() !== String(_callsign).toUpperCase()
+            ? existing.callsign : '';
+        }
+      } catch (e) { /* 보관소 캐시 없으면 검사 생략 — 막지는 않는다 */ }
+    }
+
     const merged = {
       ...existing,
       ...entry,
-      // 콜사인: 선박명 충돌 시 기존(오염) 버림. 아니면 기존 보존.
-      callsign: mergedCallsign,
+      // 콜사인: 선박명 충돌 시 기존(오염) 버림 · 남의 콜사인이면 안 붙임(1.60-02).
+      callsign: _callsign,
       imo: entry.imo || existing.imo || '',
       name: entry.name || existing.name || '',
       // bayDef는 새 데이터가 있으면 갱신 (def 파일 재업로드 케이스)

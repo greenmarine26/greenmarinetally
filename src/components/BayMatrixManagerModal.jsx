@@ -52,6 +52,15 @@ export default function BayMatrixManagerModal({ onClose }) {
   const canEdit = canWriteBayDict();
 
   const all = useMemo(() => rowsFromMaster(), [target]);   // 저장 후 닫으면 다시 읽는다
+  // 1.60-02: 콜사인은 배마다 유일하다 — 겹치면 하나는 남의 것이다(검수사 신고로 PCBJ/PCSZ 실측).
+  const csDupes = useMemo(() => {
+    const by = {};
+    for (const r of all) {
+      const c = U(r.callsign);
+      if (c) (by[c] ||= []).push(r.code);
+    }
+    return Object.entries(by).filter(([, ks]) => ks.length > 1);
+  }, [all]);
   const hits = useMemo(() => {
     const s = U(q);
     if (!s) return all;
@@ -113,6 +122,15 @@ export default function BayMatrixManagerModal({ onClose }) {
           <div className="text-[11px] text-slate-500">
             보관소 {all.length}척 · 검색 결과 {hits.length}척
           </div>
+
+          {csDupes.length > 0 && (
+            <div className="bg-rose-900/40 border border-rose-700/50 rounded-lg px-3 py-2 text-[12px] text-rose-200">
+              ⚠ 같은 호출부호가 두 선박에 붙어 있습니다 — 하나는 남의 것입니다. 항차 자료의 호출부호가 정답입니다.
+              <div className="mt-1 font-bold">
+                {csDupes.map(([c, ks]) => `${c} → ${ks.join(', ')}`).join(' · ')}
+              </div>
+            </div>
+          )}
 
           {/* 목록 */}
           <div className="max-h-[46vh] overflow-y-auto rounded-lg border border-slate-800 divide-y divide-slate-800">
