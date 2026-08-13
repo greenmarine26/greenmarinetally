@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
@@ -728,30 +728,21 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const a = answerAboutAlert(query, diagAlerts);
       if (a) return a;
     }
-    // 1.69-01: **«진행» 질문은 터미널 실황(terminal_work)이 1순위다** — 수석 통합검색(1.68-01)과
-    //   답의 근본이 같아야 한다(검수사 원칙: "자연어 질문 답은 근본은 하나임").
-    //   신고 2026-08-14 — 같은 "STSE 진행상황"에 통합검색은 양하 306/306·선적 31/265, 여기는 "0%"라 답했다.
+    // 1.69-02: **«진행» 질문은 두 갈래다** (검수사 확정 2026-08-14 — "그냥 진행 상태를 질문하면
+    //   앱대상이 맞고, 실제 진행 상황을 물으면 수석대쉬보드에 실시간 작업보드처럼 알려줘야 함.
+    //   현 진행 상황은/실제 진행 상황은 — 2가지 다른 답이 나와야 함").
+    //   «실제·실시간·실황·터미널»이 들어가면 → 터미널 실황(terminal_work) 작업보드형.
+    //   없으면(진행 상태·현 진행·얼마나 했어·몇 대 했어) → 앱 검수 기록 기준(completed/전체·%·검수사별).
+    //   근본은 nlSearch 두 함수 하나 — 수석 통합검색(GlobalSearchPage)과 같은 뿌리다(1.69-01 원칙 유지).
     //   베이·조건이 붙은 진행 질문("20번 베이 남은 거")은 종전 formatProgress 그대로 둔다.
-    //   터미널 피드가 없는 항차는 아래 종전 경로(앱 검수 기록)로 흘러간다.
-    if (/진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났/.test(query)
+    if (/진행|어디까지\s*(?:했|왔|됐)|얼마나\s*(?:했|됐)|몇\s*(?:프로|퍼)|퍼센트|다\s*했|끝났|몇\s*대\s*(?:했|됐)/.test(query)
         && !/자료|브리핑|요약/.test(query)
         && !parsed.digits && parsed.bay == null && !parsed.zone && !parsed.size && !parsed.fe && !parsed.type) {
-      const tw = (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()];
-      if (tw && (tw.disPlan || tw.lodPlan)) {
-        const ship = voyage?.info?.vslFull || voyage?.info?.vsl || '';
-        const seg = [];
-        if (tw.disPlan) seg.push(`양하 ${tw.disDone ?? 0}/${tw.disPlan}${tw.disDone >= tw.disPlan ? ' 완료' : ''}`);
-        if (tw.lodPlan) seg.push(`선적 ${tw.lodDone ?? 0}/${tw.lodPlan}`);
-        const L = [`${ship} — ${seg.join(' · ')}${tw.pct != null ? ` (전체 ${tw.pct}%)` : ''}${tw.delayed ? ' · ⚠ 지연 중' : ''}`];
-        if (tw.startAt) L.push(`작업 시작 ${String(tw.startAt).slice(5, 16)}`);
-        if (tw.depEtd) L.push(`출항 예정 ${String(tw.depEtd).slice(5, 16)} (터미널 기준)`);
-        if (tw.updatedAt) { const m = Math.round((Date.now() - tw.updatedAt) / 60000); L.push(`터미널 피드 ${m}분 전 갱신`); }
-        const dc = Object.keys(voyage?.discharge?.completed || {}).length;
-        const lc = Object.keys(voyage?.loading?.completed || {}).length;
-        if (dc || lc) L.push(`앱 검수 기록 — 양하 ${dc} · 선적 ${lc}`);
-        else L.push('앱 검수 기록은 없습니다(이 항차는 앱 검수 미사용).');
-        return L.join('\n');
+      const ship = voyage?.info?.vslFull || voyage?.info?.vsl || '';
+      if (isRealtimeProgressQuery(query)) {
+        return formatTerminalWorkAnswer(ship, (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()]);
       }
+      return formatAppTallyAnswer(ship, allContainers);
     }
     // 1.69-01: 브리핑 속 «N건» 후속 — "실 점검 필요 83건" 뒤 "83건이 뭐야"가 끝자리 검색으로
     //   빠졌다(검수사 신고). 직전 답 주제를 기억해 그 주제의 상세로 잇는다. howToQuery보다 앞.

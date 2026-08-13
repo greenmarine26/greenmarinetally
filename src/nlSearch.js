@@ -1700,6 +1700,53 @@ function formatProgress(parsed, results, allContainers) {
   return lines.join('\n');
 }
 
+// ─── TallyOne 1.69-02: 진행 질문 두 갈래 — 근본 하나 (검수사 확정 2026-08-14) ───
+//   "그냥 진행 상태를 질문하면 앱대상이 맞고, 실제 진행 상황을 물으면 수석대쉬보드에
+//    실시간 작업보드처럼 알려줘야 함. 현 진행 상황은/실제 진행 상황은 — 2가지 다른 답이 나와야 함."
+//   항차 화면(SearchPanel)과 통합검색(GlobalSearchPage)이 이 함수들을 함께 쓴다 — 답의 근본은 하나.
+//   각 답 끝에 반대쪽 안내 한 줄을 붙여 두 갈래가 서로를 가리킨다.
+export const isRealtimeProgressQuery = (q) => /실제|실시간|실황|터미널/.test(String(q || ''));
+
+// 터미널 실황 답 — 실시간 작업보드형 (양하 N/N · 선적 N/N · % · 지연 · 시작 · 터미널 ETD · 피드 나이)
+export function formatTerminalWorkAnswer(ship, tw) {
+  if (!tw || !(tw.disPlan || tw.lodPlan)) {
+    return `${ship} — 터미널 실황 피드가 아직 없습니다.\n앱 검수 기록은 «진행 상태»로 물어보세요.`;
+  }
+  const L = [];
+  const seg = [];
+  if (tw.disPlan) seg.push(`양하 ${tw.disDone ?? 0}/${tw.disPlan}${tw.disDone >= tw.disPlan ? ' 완료' : ''}`);
+  if (tw.lodPlan) seg.push(`선적 ${tw.lodDone ?? 0}/${tw.lodPlan}`);
+  L.push(`${ship} — ${seg.join(' · ')}${tw.pct != null ? ` (전체 ${tw.pct}%)` : ''}${tw.delayed ? ' · ⚠ 지연 중' : ''}`);
+  if (tw.startAt) L.push(`작업 시작 ${String(tw.startAt).slice(5, 16)}`);
+  if (tw.depEtd) L.push(`출항 예정 ${String(tw.depEtd).slice(5, 16)} (터미널 기준)`);
+  if (tw.updatedAt) { const m = Math.round((Date.now() - tw.updatedAt) / 60000); L.push(`터미널 피드 ${m}분 전 갱신`); }
+  L.push('앱 검수 기록은 «진행 상태»로 물어보세요.');
+  return L.join('\n');
+}
+
+// 앱 검수 기록 답 — completed/전체 · % · 검수사별(기록에 by 가 있으면). 평택분 기준(7.1).
+export function formatAppTallyAnswer(ship, containers) {
+  const pool = (containers || []).filter((c) => c._ptk);
+  const done = pool.filter((c) => c._comp);
+  if (!done.length) {
+    return `${ship} — 앱 검수 기록 없음(이 항차는 앱 검수 미사용).\n실제(터미널) 진행은 «실제 진행 상황»으로 물어보세요.`;
+  }
+  const seg = [];
+  [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
+    const p = pool.filter((c) => c._mode === md);
+    if (!p.length) return;
+    const d = p.filter((c) => c._comp).length;
+    seg.push(`${kr} ${d}/${p.length} (${Math.round(d / p.length * 100)}%)`);
+  });
+  const out = [`${ship} — 앱 검수 기록 기준 ${seg.join(' · ')}`];
+  const by = {};
+  done.forEach((c) => { const n = c._comp && c._comp.by; if (n) by[n] = (by[n] || 0) + 1; });
+  const names = Object.entries(by).sort((a, b) => b[1] - a[1]);
+  if (names.length) out.push(`검수사별 — ${names.map(([n, k]) => `${n} ${k}대`).join(' · ')}`);
+  out.push('실제(터미널) 진행은 «실제 진행 상황»으로 물어보세요.');
+  return out.join('\n');
+}
+
 // ─── V7.99-15: 완료 예정 시각 (대화체) ───
 //   데이터에 이미 있는 완료 타임스탬프(c._comp.at)로 실제 작업 페이스를 직접 계산한다.
 //   사용자가 속도를 말해줄 필요 없음. AI도 필요 없음 — 순수 로컬 계산.

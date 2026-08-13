@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake } from 'lucide-react';
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -161,32 +161,16 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     //   검수사 지적 2026-08-13 — *"수석 대시보드에선 자연어 즉 도우미 기능을 어디에서 사용하나요?"*
     //   1.65 에서 기능 설명을 항차 화면에만 붙였다. **수석 전용 기능일수록 수석이 묻는 자리에서 답해야 하는데 거꾸로였다.**
     //   여기는 수석·소유자만 들어오는 라우트라(App.jsx 가드) 수석 기준으로 답한다.
-    // 1.68-01: 배가 지정된 «진행 상황» — 터미널 실황(terminal_work)이 정답이다.
-    //   검수사 시험 2026-08-14: "지금 STSE 진행 상황은? 물어보면 실 상황을 아나요?" — 몰랐다.
-    //   앱 completed 만 보면 검수를 앱으로 안 하는 항차에서 "작업 전"이라는 오답이 나간다.
-    //   실측: STSE 양하 306/306·선적 31/265 인데 completed 0. 터미널 피드(트레드링스)를 우선으로,
-    //   앱 검수 기록은 있으면 병기한다.
-    if (shipCtx && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났/.test(debouncedQuery)
+    // 1.69-02: 배가 지정된 «진행» 질문 — 두 갈래 (검수사 확정 2026-08-14). 항차 화면
+    //   SearchPanel과 근본 하나(nlSearch formatTerminalWorkAnswer·formatAppTallyAnswer).
+    //   «실제·실시간·실황·터미널» → 터미널 실황 작업보드 / 없으면 → 앱 검수 기록 기준.
+    if (shipCtx && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났|몇\s*대\s*(?:했|됐)/.test(debouncedQuery)
         && !/자료/.test(debouncedQuery)) {
-      const code = String(shipCtx.info.vsl || '').toUpperCase();
-      const tw = (terminalWork || {})[code];
       const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
-      const L = [];
-      if (tw && (tw.disPlan || tw.lodPlan)) {
-        const seg = [];
-        if (tw.disPlan) seg.push(`양하 ${tw.disDone ?? 0}/${tw.disPlan}${tw.disDone >= tw.disPlan ? ' 완료' : ''}`);
-        if (tw.lodPlan) seg.push(`선적 ${tw.lodDone ?? 0}/${tw.lodPlan}`);
-        L.push(`${ship} — ${seg.join(' · ')}${tw.pct != null ? ` (전체 ${tw.pct}%)` : ''}${tw.delayed ? ' · ⚠ 지연 중' : ''}`);
-        if (tw.startAt) L.push(`작업 시작 ${String(tw.startAt).slice(5, 16)}`);
-        if (tw.depEtd) L.push(`출항 예정 ${String(tw.depEtd).slice(5, 16)} (터미널 기준)`);
-        if (tw.updatedAt) { const m = Math.round((Date.now() - tw.updatedAt) / 60000); L.push(`터미널 피드 ${m}분 전 갱신`); }
+      if (isRealtimeProgressQuery(debouncedQuery)) {
+        return formatTerminalWorkAnswer(ship, (terminalWork || {})[String(shipCtx.info.vsl || '').toUpperCase()]);
       }
-      const dc = Object.keys(shipCtx.v?.discharge?.completed || {}).length;
-      const lc = Object.keys(shipCtx.v?.loading?.completed || {}).length;
-      if (dc || lc) L.push(`앱 검수 기록 — 양하 ${dc} · 선적 ${lc}`);
-      else if (L.length) L.push('앱 검수 기록은 없습니다(이 항차는 앱 검수 미사용).');
-      if (L.length) return L.join('\n');
-      return `${ship} — 터미널 피드·앱 검수 기록이 아직 없습니다.`;
+      return formatAppTallyAnswer(ship, flat.filter((c) => c.voyageKey === shipCtx.key));
     }
     // 1.68: 배가 지정된 콜사인·IMO 질문 — 기능 설명(howTo)보다 먼저.
     //   "STSE 콜사인 뭐야"의 '뭐야'가 기능 색인에 먼저 걸려 VRSC3 대신 기능 안내가 나왔다(시뮬 실측). — ship_bay_dict·info에 이미 있다.
