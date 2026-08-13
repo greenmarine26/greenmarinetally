@@ -212,8 +212,14 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       const restored = bayDictEntryToMatrix(saved);
       if (restored) {
         if (saved.provisional || saved.bayDef?.provisional) restored.provisional = true;   // V7.99-5: 보정중 복원
-        // 1.58-02: 복원된 베이는 **검수사가 확정한 것**이다 — `.def` 업로드가 덮지 못하게 표시한다.
-        for (const b of Object.values(restored.byBay || {})) { if (b) b._userConfirmed = true; }
+        // 1.59: **확정본일 때만** 잠근다. 보정중(provisional)이면 `.def`·PDF 보강을 계속 받는다 —
+        //   신규 선박은 "디파인 → CASP PDF → 뼈대 → 매트릭스" 순서로 만들어야 하기 때문이다(검수사 확정).
+        //   확정되는 순간부터 그 둘은 매트릭스에 영향을 주지 못한다.
+        const _isProvisional = saved.provisional === true || saved.bayDef?.provisional === true;
+        restored._confirmed = !_isProvisional;
+        if (!_isProvisional) {
+          for (const b of Object.values(restored.byBay || {})) { if (b) b._userConfirmed = true; }
+        }
         setMatrix(restored);
         initAnalyzedRef.current = true;
         return;
@@ -240,6 +246,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       if (result.shipName && !shipMeta.name) {
         setShipMeta(m => ({ ...m, name: result.shipName }));
       }
+      if (matrix?._confirmed) {
+        // 1.59: 확정된 매트릭스에는 CASP 플랜 PDF 도 반영하지 않는다 (검수사 확정 2026-08-13).
+        alert('이 선박의 베이매트릭스는 이미 확정되어 있습니다.\n\n확정본은 CASP PDF·.def 로 바꿀 수 없습니다.\n고쳐야 하면 매트릭스에서 직접 수정하고 다시 저장하세요.');
+        return;
+      }
       let merged = augmentMatrixFromPdf({ ...matrix }, result);
       merged = fillEmptyBaysSequential(merged); // PDF 보강 후 1~max 다시 채움
       setMatrix(merged);
@@ -264,6 +275,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
       }
       if (result.callsign && !shipMeta.callsign) {
         setShipMeta(m => ({ ...m, callsign: result.callsign }));
+      }
+      if (matrix?._confirmed) {
+        // 1.59: 확정된 매트릭스에는 `.def` 를 반영하지 않는다 (검수사 확정 2026-08-13).
+        alert('이 선박의 베이매트릭스는 이미 확정되어 있습니다.\n\n확정본은 .def·CASP PDF 로 바꿀 수 없습니다.\n고쳐야 하면 매트릭스에서 직접 수정하고 다시 저장하세요.');
+        return;
       }
       let merged = augmentMatrixFromDef({ ...matrix }, result);
       merged = fillEmptyBaysSequential(merged);
@@ -563,19 +579,34 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
     entry._userOwned = true;
     entry.editorName = currentInspector;
     entry.updatedAt = stamp;
-    // V7.99-5: 복제로 만든 보정중 선박이면 표시 보존 (확정본과 구분).
-    if (matrix.provisional) {
-      entry.provisional = true;
-      if (entry.bayDef) entry.bayDef.provisional = true;
+    // ★★★ TallyOne 1.59: **보정중을 벗어나는 길을 만든다.**
+    //   검수사 지적 2026-08-13: *"KBTR·MCSC·NSFR·SWAT·SWSP 보정중으로 표시 되어 있나요?
+    //     **다 수정한줄 알았는데**"*
+    //   실측 — `provisional` 을 **끄는 코드가 저장소 전체에 0건**이었다. 복제로 만들면 `:361` 에서
+    //   켜지고, 복원할 때 `:214` 로 되살아나고, 저장할 때 여기서 다시 찍혔다. 영원한 순환이다.
+    //   게다가 Firebase 병합은 `{...existing, ...entry}` 라 새 저장에 그 키가 없으면 옛 true 가 남는다.
+    //   → 저장할 때 **확정할지 묻고**, 답을 항상 명시적으로(true/false) 기록한다.
+    //   확정 = 이후 `.def`·CASP PDF·ASC·자동경로가 못 고친다(검수사 확정 규칙).
+    let _provisional = matrix.provisional === true;
+    if (_provisional) {
+      _provisional = !window.confirm(
+        `${shipMeta.code} 베이매트릭스를 **확정**할까요?\n\n` +
+        `확정하면 이후 .def·CASP PDF·ASC 가 이 매트릭스를 고칠 수 없습니다.\n` +
+        `(매트릭스에서 직접 고쳐 다시 저장하는 것은 계속 됩니다.)\n\n` +
+        `확인 = 확정 · 취소 = 보정중으로 계속`);
     }
+    entry.provisional = _provisional;                      // 1.59: 항상 명시 — 빠뜨리면 옛 값이 남는다
+    if (entry.bayDef) entry.bayDef.provisional = _provisional;
     if (entry.bayDef) {
       entry.bayDef.source = 'user';
       entry.bayDef._userOwned = true;
     }
     const ok = addToUserBayDict(entry);
     if (ok) {
-      setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이${matrix.provisional ? ' · 🛠 보정중(복제 기반, 계속 수정 가능)' : ''}`);
+      setSavingMsg(`✅ ${shipMeta.code} (${shipMeta.name}) 베이사전 저장 완료 — ${entry.bayDef.recordCount}개 베이${_provisional ? ' · 🛠 보정중(계속 수정 가능)' : ' · 🔒 확정 — 이제 .def·PDF 가 못 고칩니다'}`);
       setDone(true);
+      // 1.59: 확정본이면 그 자리에서 잠근다(모달을 닫지 않고 .def 를 올리는 경로 방어).
+      setMatrix(m => ({ ...m, provisional: _provisional, _confirmed: !_provisional }));
       // 1.58: 보관소가 정본이다 — 여기 실패하면 **저장이 안 된 것**이다(화면도 옛것을 그린다).
       //   종전 문구 "이 기기에는 저장됨"은 로컬이 정본이던 시절 이야기라 이제 거짓이 된다.
       fbSaveShipBayDict(entry.code, {
@@ -585,7 +616,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
         imo: entry.imo || '',
         source: 'user',
         _userOwned: true,
-        ...(matrix.provisional ? { provisional: true } : {}),
+        provisional: _provisional,        // 1.59: 항상 명시 — 없으면 Firebase merged 가 옛 true 를 남긴다
         bayDef: entry.bayDef,
         editorName: currentInspector,
         updatedAt: stamp,

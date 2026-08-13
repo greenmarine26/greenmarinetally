@@ -2436,6 +2436,35 @@ export async function fbSaveShipBayDict(code, entry) {
       return true;
     }
 
+    // ★★★ TallyOne 1.59: **확정된 베이매트릭스는 앱이 못 고친다** (검수사 확정 2026-08-13).
+    //   검수사 원문: *"새로운 선박은 베이정보를 갖고 있지 않습니다. 그래서 순서를 정합니다.
+    //     먼저 디파인을 읽고 CASP플랜(PDF)를 읽고 뼈대를 만든후에 베이메트릭스를 만듭니다.
+    //     여기서 **베이메트릭스가 확정되면 그후로는 앱이 쓰기(즉 수정)이 불가**하며
+    //     **관리자만 수정**할수 있으며 그후 **DEF과 PDF는 베이메트릭스에 영향을 주면 안됩니다.**"*
+    //
+    //   확정본 = user 소스이면서 `provisional`(보정중)이 아닌 것. 새 필드를 만들지 않는다 —
+    //   `provisional` 이 이미 "아직 다듬는 중"을 뜻하고, 그 반대가 곧 확정이다.
+    //   통과시키는 것은 **매트릭스 빌더에서 온 저장 하나뿐**이다(`sourceFile:'matrix_builder'`).
+    //   `.def`·CASP PDF·ASC·전체동기화는 확정본의 bayDef 를 건드릴 수 없다.
+    //   ⚠ 이 분기가 없으면 위 `entryIsUser` 조건만으로는 못 막는다 — 자동 경로도 user 표식을
+    //     달고 올 수 있었기 때문이다(1.58-02 에서 표식 위조는 막았지만, 잠금은 별개 장치다).
+    const existingConfirmed = existingIsUser
+      && !(existing?.provisional === true || existing?.bayDef?.provisional === true);
+    const fromBuilder = entry?.bayDef?.sourceFile === 'matrix_builder';
+    if (existingConfirmed && entry?.bayDef && !fromBuilder) {
+      console.warn('[베이사전] 확정된 매트릭스라 자동 경로의 수정을 막았습니다 —', cleanCode,
+        '(들어온 출처:', entry?.bayDef?.sourceFile || entry?.source || '미상', ')');
+      const guarded = {
+        ...existing,
+        callsign: existing.callsign || entry.callsign || '',
+        imo: existing.imo || entry.imo || '',
+        name: existing.name || entry.name || '',
+        // bayDef 는 기존 확정본 그대로 — 신원만 빈 곳을 채운다.
+      };
+      await set(r, guarded);
+      return true;
+    }
+
     // 다기기 충돌: 양쪽 user인데 기존이 더 최신이면 덮어쓰지 않음
     if (existingIsUser && entryIsUser) {
       const exTs = Number(existing.updatedAt || existing.bayDef?.parsedAt || 0);
@@ -2475,6 +2504,10 @@ export async function fbSaveShipBayDict(code, entry) {
       name: entry.name || existing.name || '',
       // bayDef는 새 데이터가 있으면 갱신 (def 파일 재업로드 케이스)
       bayDef: entry.bayDef || existing.bayDef || null,
+      // 1.59: 보정중 플래그는 **부르는 쪽이 명시하면 그대로 따른다**(끄는 길이 없던 버그의 나머지 절반).
+      //   종전엔 entry 에 키가 없으면 `...existing` 의 옛 true 가 그대로 남아 영원히 보정중이었다.
+      provisional: (entry.provisional !== undefined ? entry.provisional === true
+        : (existing.provisional === true)),
       // ★ TallyOne 1.57-01: 부르는 쪽이 updatedAt 을 명시하면 그것을 존중한다.
       //   종전에는 무조건 Date.now() 로 덮어써서, 「☁ 전체 동기화」가 옛 도장을 보존해 보내도
       //   (ShipMatrixBuilderModal 의 "기존 updatedAt 보존" 주석) 여기서 그 의도가 무효화됐다.

@@ -222,6 +222,16 @@ export function addToUserBayDict(entry) {
   const _cur = dict[entry.code];
   const _curIsUser = _cur?.bayDef?.source === 'user' || _cur?.bayDef?._userOwned === true;
   const _newIsUser = entry?.bayDef?.source === 'user' || entry?.bayDef?._userOwned === true;
+  // 1.59: 확정본 잠금 — firebase.js 와 같은 기준. 매트릭스 빌더 저장만 통과한다.
+  const _curConfirmed = _curIsUser && !(_cur?.provisional === true || _cur?.bayDef?.provisional === true);
+  const _fromBuilder = entry?.bayDef?.sourceFile === 'matrix_builder';
+  if (_curConfirmed && entry?.bayDef && !_fromBuilder) {
+    if (!_cur.imo && entry.imo) _cur.imo = entry.imo;
+    if (!_cur.callsign && entry.callsign) _cur.callsign = entry.callsign;
+    console.warn('[베이사전] 확정된 매트릭스라 자동 경로의 수정을 막았습니다 —', entry.code,
+      '(들어온 출처:', entry?.bayDef?.sourceFile || entry?.source || '미상', ')');
+    return _ls.set(STORAGE_KEY, JSON.stringify(dict));
+  }
   if (_curIsUser && !_newIsUser) {
     // 정본이 있는데 자동본이 들어왔다 — 신원 정보만 보완하고 매트릭스는 지킨다.
     if (!_cur.imo && entry.imo) _cur.imo = entry.imo;
