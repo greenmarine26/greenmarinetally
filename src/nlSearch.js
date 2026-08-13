@@ -5,6 +5,9 @@
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
 import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath} from './utils.js';   // TallyOne 1.22: 도선→작업개시
+// TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
+import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
+import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
 
 // ─── 항구 코드 매핑 ───
 const PORT_KR_TO_CODE = {
@@ -64,6 +67,7 @@ export function parseNaturalQuery(text) {
     dgClass: null, un: null,
     weightMin: null, weightMax: null, weightSum: false,
     capacityQuery: false, bayBreakdown: false,
+    howToQuery: false,          // 1.65: "그 기능 어디서 하지?" — 컨 조회가 아니라 기능 위치를 묻는 말
     progressQuery: null,        // 'done' | 'pending'
     tierStackQuery: false,
     bottomQuery: false, topQuery: false,
@@ -317,6 +321,25 @@ export function parseNaturalQuery(text) {
   //   검수사 확정 2026-08-11 — *"특정 컨테이너가 여기에 있어야 하는데 어디로 갔지 하고 물으면
   //   어디 선적때 어떤 컨테이너로 바뀌어서 어디로 이동 시켰습니다 라고 알려 줘야 합니다."*
   //   ⚠ posQuery(현재 위치)보다 **먼저** 잡는다 — "어디 갔어"가 "어디"에 먹히면 옛 답이 나온다.
+  // TallyOne 1.65: **"그 기능 어디서 하지?"는 컨테이너 질문이 아니라 기능 위치 질문이다.**
+  //   검수사 지적 2026-08-13 — *"자연어가 설명만 했더라면 그 자리에서 해결할 일을 클로드에게 물었습니다."*
+  //   실측: "컨테이너 위치 수정 어디서 하지?"가 posQuery 에 먹혀 **전 컨테이너 베이 분포표**를 답하고 있었다.
+  //   ⚠ movePathQuery·posQuery 보다 **먼저** 잡고, 잡히면 그 둘을 끈다(아래 두 줄에 !howToQuery 가드도 같이 있다).
+  //   ⚠ 단독 '어디'는 절대 안 잡는다 — "4777 어디" "엑스레이 어디" 는 종전대로 컨 조회다.
+  //      동작 동사와 붙은 '어디서/어디에/어떻게' 만 받고, 컨번호(digits)가 잡히면 무조건 끈다.
+  const _actV = '하|해|찾|눌|바꾸|바꿔|고치|고쳐|수정|등록|설정|지정|켜|끄|보|봐|뽑|만들|만드|쓰|써|넣|입력|적|치|찍|사용|확인|남기|남겨|올리|올려|지우|지워|불러|열|골라|고르|인쇄|출력|나와|나오|시작|가';
+  const _strong = new RegExp(`도움말|사용법|사용\\s*방법|매뉴얼|무슨\\s*버튼|어느\\s*버튼|버튼\\s*(?:어디|어느)|(?:어디서|어디에서|어디에)\\s*(?:${_actV})|어떻게\\s*(?:${_actV})|보는\\s*법|하는\\s*법|쓰는\\s*법`);
+  // 약한 신호("○○ 어디 있어")는 **컨테이너 조건이 하나도 없을 때만** 기능 질문으로 본다.
+  //   "리퍼 어디 있어"는 컨 조회이고 "돌림판 어디 있어"는 기능 질문이다 — 가르는 것은 컨 조건의 유무다.
+  const _weak = /어디\s*있|어디\s*(?:냐|야|지|에요|인가)|어디\s*나(?:와|오)|어느\s*(?:화면|탭|메뉴)|어느\s*쪽/;
+  const _noCond = !result.digits && !result.size && !result.fe && !result.type && result.temp === null
+                  && result.bay == null && !result.pol && !result.pod && !result.portAny && !result.zone
+                  && !result.dgClass && !result.un;
+  if (!result.digits && (_strong.test(t) || (_weak.test(t) && _noCond))) {
+    result.howToQuery = true;
+  }
+  // ⚠ howToQuery 여도 아래 둘을 **끄지 않는다.** 기능 색인에서 못 찾으면(null) 종전 경로가 답해야 하기 때문이다.
+  //    순서만 SearchPanel 에서 howTo 를 먼저 시도하는 것으로 정한다.
   if (/어디\s*(?:로)?\s*(?:갔|간|감|옮|이동|보냈|치웠)|왜\s*(?:옮|이동|바뀌|바꿨)|경로|이동\s*(?:이력|기록|경로)|무빙|어떻게\s*(?:옮|이동)/i.test(t)) result.movePathQuery = true;
   if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
   // TallyOne 1.17: **끝 4자리 중복 조회** (검수사 오답 신고 2026-08-06 — "끝자리 4자리 중복인거 알려줘").
@@ -324,7 +347,7 @@ export function parseNaturalQuery(text) {
   //   끝 4자리는 컨번호 조회의 기준이라, 겹치는 것이 있으면 반드시 짚어야 조회를 믿을 수 있다.
   //   listQuery 판정보다 **먼저** 본다 — "중복인 거 알려줘"의 '알려줘'가 목록 질문으로 먹히기 때문.
   if (/중복|겹치|겹쳐|같은\s*(?:번호|끝자리|끝\s*자리)|duplicate|dup\b/i.test(t)) result.dupL4Query = true;
-  if (/리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등
+  if (!result.howToQuery && /리스트|목록|(보여|알려)\s*(줘|주세요|달라|다오)|불러\s*줘|뽑아\s*줘|list/i.test(t)) result.listQuery = true;   // V7.91-02: 주세요·달라·불러줘 등 · 1.65: 기능 위치 질문("리스트 어디서 뽑아")은 제외
 
   // 전체 / 통계
   // V7.91-02: 일상 동의어 확장 — "전체"만 되고 "전부/다/모두"는 안 되던 것 (사용자 요청).
@@ -529,7 +552,109 @@ export function hasAnyCondition(parsed) {
             parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
             // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
             parsed.briefingQuery || parsed.sealAuditQuery || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
-            parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery);
+            parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery ||
+            parsed.howToQuery);   // 1.65
+}
+
+// ─── TallyOne 1.65: 기능 위치 답변 ────────────────────────────────────────
+//   검수사 지시 — *"앱이 할 수 있는 건 다 설명할 수 있어야 합니다."*
+//   지식원은 두 곳이다. featureIndex(574개 전수, 화면 글자 그대로) + helpData(사람이 읽는 매뉴얼).
+//   둘을 같이 뒤져 가장 맞는 것을 낸다. 매뉴얼이 충실해질수록 이 답도 좋아진다.
+
+// 조사·어미를 떼고 뜻있는 낱말만 남긴다. 질문투 낱말은 버린다.
+const _HT_STOP = /^(어디서|어디에|어디|어떻게|보는법|보는|하지|하나|해요|하는|한다|되나|보나|봐|줘|좀|것|수|때|왜|무슨|어느|방법|사용법|기능|설명|알려|가르쳐|합니까|합니꺼|하죠|하나요)$/;
+// 한 글자여도 현장에서 그대로 쓰는 말은 살린다 — "씰 어떻게 넣어" 가 통째로 버려지던 것을 막는다.
+const _HT_KEEP1 = new Set(['씰', '실', '갱', '콘', '홀', '단', '열', '판', '컨']);
+function _htToks(s) {
+  return String(s || '').replace(/[^가-힣A-Za-z0-9]+/g, ' ').split(' ')
+    .map(w => w.replace(/(을|를|이|가|은|는|에|의|로|으로|에서|와|과|도|만|까지|부터)$/, ''))
+    .filter(w => (w.length > 1 || _HT_KEEP1.has(w)) && !_HT_STOP.test(w));
+}
+// 같은 뜻 다른 말을 한 줄에 세운다 — 검수사: "말은 다 틀리지만 맥락은 같음"
+function _htExpand(toks) {
+  const out = new Set(toks);
+  for (const w of toks) {
+    for (const group of FEATURE_SYNONYMS) {
+      if (group.some(g => g.replace(/\s/g, '') === w.replace(/\s/g, ''))) group.forEach(g => out.add(g));
+    }
+  }
+  return [...out];
+}
+// 매뉴얼(helpData)을 색인과 같은 모양으로 눕힌다.
+let _htManual = null;
+function _htManualIndex() {
+  if (_htManual) return _htManual;
+  const out = [];
+  const push = (b) => out.push({
+    l: b.title || '', w: b.where || '', d: b.lead || '', r: 't', a: [],
+    blob: [b.title, b.where, b.lead, ...(b.dos || []), ...(b.warns || []),
+           ...((b.says || []).flatMap(s => [s.in, s.out]))].filter(Boolean).join(' '),
+  });
+  try {
+    for (const arr of Object.values(HELP_DATA?.usage || {})) (arr || []).forEach(push);
+    (HELP_COURSE || []).forEach(push);
+  } catch (e) { /* 매뉴얼이 없어도 색인만으로 답한다 */ }
+  _htManual = out;
+  return out;
+}
+const _ROLE_KR = { t: '', c: '수석 검수사 화면', a: '보조기능', o: '소유자 전용', m: '관리자 전용' };
+
+/** 기능 위치 답변 — 못 찾으면 null (그러면 종전 경로로 넘어간다) */
+export function generateHowToAnswer(query, parsed, opts = {}) {
+  const T = _htExpand(_htToks(query));
+  const isChief = !!opts.isChief;
+  // "사용법 알려줘"처럼 대상 낱말이 없는 물음 — 매뉴얼 자체로 안내한다.
+  if (!T.length) {
+    return ['📍 사용 매뉴얼',
+      '   헤더 ⋯ 메뉴 → [사용 매뉴얼] · 보조기능 → [사용 매뉴얼]',
+      '',
+      '하루 작업 순서 10단계와 기능 사전, 검수 용어·회화가 들어 있습니다.',
+      '',
+      '찾는 기능 이름을 같이 넣어 물으시면 그 자리를 바로 알려 드립니다.',
+      '  예) 카고플랜 어디서 뽑아 · 리퍼 온도 어디에 넣어 · 해치커버 어떻게 보고해',
+    ].join('\n');
+  }
+
+  const pool = [
+    ...FEATURE_INDEX.map(f => ({ ...f, blob: [f.l, f.w, f.d, ...(f.a || [])].join(' ') })),
+    ..._htManualIndex(),
+  ];
+  const score = (it) => {
+    let s = 0;
+    const l = it.l || '', w = it.w || '', d = it.d || '', al = (it.a || []).join(' '), blob = it.blob || '';
+    for (const t of T) {
+      if (l.includes(t)) s += 10;
+      if (al.includes(t)) s += 9;
+      if (w.includes(t)) s += 6;
+      if (d.includes(t)) s += 4;
+      else if (blob.includes(t)) s += 2;
+    }
+    return s;
+  };
+  const hits = pool.map(it => ({ it, s: score(it) })).filter(x => x.s >= 9)
+    .sort((a, b) => b.s - a.s);
+  if (!hits.length) return null;
+
+  const top = hits[0].it;
+  const lines = [];
+  // 첫 줄이 음성으로 읽히므로 여기에 핵심을 놓는다.
+  lines.push(`📍 ${top.l}`);
+  if (top.w) lines.push(`   ${top.w}`);
+  if (top.d) lines.push('', top.d);
+
+  // 권한 — 검수사 확정: "있다고 말하되 수석 기능임을 밝힌다"
+  if (top.r === 'c' && !isChief) lines.push('', '🔒 수석 검수사 화면의 기능입니다. 수석에게 요청하십시오.');
+  else if (top.r === 'o') lines.push('', '🔒 소유자 전용 기능입니다.');
+  else if (top.r === 'm') lines.push('', '🔒 관리자 전용 기능입니다.');
+  else if (top.r === 'a') lines.push('', '🧰 보조기능 화면에 있습니다 — 모든 검수사가 쓸 수 있습니다.');
+
+  const others = hits.slice(1, 4).filter(h => h.it.l && h.it.l !== top.l);
+  if (others.length) {
+    lines.push('', '이것도 찾으셨나요');
+    others.forEach(h => lines.push(`  · ${h.it.l}${h.it.w ? ` — ${h.it.w}` : ''}`));
+  }
+  lines.push('', '더 자세히는 [사용 매뉴얼]에서 볼 수 있습니다.');
+  return lines.join('\n');
 }
 
 // ─── 베이별 슬롯 맵 (재사용) ───
