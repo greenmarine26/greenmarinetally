@@ -894,6 +894,23 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
   };
 }
 
+// ── TallyOne 1.69-03(2026-08-14): 선사 코드 → 한글 선사명 (선박 소개 정답지) ─────────
+//   검수사 신고: *"KRSINOKOR를 앱에서 고려해운으로 표기하는 곳이 다수 있음. 한글로는 장금이며
+//   표기는 SKR임. SINOKOR = SKR. 선박소개에서도 고려해운이라고 설명함."*
+//   실측: 소개 캐시(ship_intros) 중 SWBT(SAWASDEE BALTIC, 장금상선)가 "고려해운 소속"으로
+//   생성돼 있었다 — 아래 프롬프트의 예시가 고려해운 하나뿐이라 앵커링됐고, Gemini가
+//   Sinokor Merchant Marine을 고려해운으로 옮겼다. 코드 정답지를 프롬프트에 박아 재발을 막는다.
+//   ⚠ SINOKOR(장금상선, 코드 SKR)와 고려해운(KMTC, 코드 KMD·KMT)은 서로 다른 회사다.
+//   라벨은 수집기 CARRIER_KO(auto.py)와 동일, EDI 4자 변형(SNKO 등)은 utils.js OP_CANON과 동기.
+export const SHIP_CARRIER_KO = {
+  SKR: '장금상선', SNKO: '장금상선', SINOKOR: '장금상선', KRSINOKOR: '장금상선',
+  KMTC: '고려해운', KMD: '고려해운', KMT: '고려해운',
+  HAS: '흥아라인', HASL: '흥아라인', HSL: '한성라인',
+  NSL: '남성해운', NSSL: '남성해운', NSS: '남성해운',
+  DJS: '동진상선', DJSC: '동진상선', DYS: '동영해운',
+  SIT: 'SITC', SITC: 'SITC', CKL: '천경해운',
+};
+
 // ── V9.18-01(2026-07-27): 선박 정보 조회 — Google 검색 그라운딩으로 실제 제원을 가져온다.
 //   V9.18 초판은 이름 풀이만 했는데 사용자 확정: "선종·IMO·국적·길이·너비·건조년도·선사·항로 같은
 //   실제 정보를 출처와 함께" (KMTC OSAKA 예시 제시). Gemini google_search 도구로 웹을 찾아 답하고,
@@ -905,17 +922,19 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
   // V9.18-02: 앱 내부 약자(DXQD 등)로 검색하면 "확인되지 않았습니다"가 나온다(사용자 보고).
   //   IMO·콜사인이 있으면 그것을 우선 검색 키로 쓰고, 이름이 약자일 수 있음을 명시한다.
   const looksCode = /^[A-Z0-9]{2,5}$/.test(shipName);
+  // 1.69-03: 사내 선사 코드의 한글 정답 — 프롬프트에 같이 넘겨 선사 오표기(장금↔고려 혼동)를 막는다.
+  const carrierKo = SHIP_CARRIER_KO[String(carrier || '').trim().toUpperCase()] || '';
   const prompt =
     `다음 선박의 실제 정보를 웹에서 찾아 정리하라: 선박명 "${shipName}"` +
     (imo ? `, IMO ${imo}` : '') + (callsign ? `, 콜사인 ${callsign}` : '') +
-    (carrier ? `, 선사 코드 ${carrier}` : '') +
+    (carrier ? `, 선사 코드 ${carrier}${carrierKo ? ` (= ${carrierKo})` : ''}` : '') +
     // TallyOne 1.39-02: 사내 약자(code)도 같이 넘긴다 — 검수사 지적 *"기본 검색에도 추가해야 합니다."*
     //   이름만으로 못 찾을 때 IMO·콜사인·약자가 같이 있으면 검색이 붙는다.
     (code && code !== shipName ? `, 사내 약자 ${code}` : '') +
     (looksCode ? `.\n주의: "${shipName}"은 사내 약자일 수 있다. ${imo ? `IMO ${imo}` : ''}${imo && callsign ? '와 ' : ''}${callsign ? `콜사인 ${callsign}` : ''}${(imo || callsign) ? '으로 먼저 실제 선박명을 확정한 뒤 정리하라.' : '실제 선박명을 찾지 못하면 첫 줄에 "선박 풀네임이 필요합니다"라고 써라.'}` : '') + `.
 
 한국어로 아래 형식으로 답하라 (마크다운 굵게 금지, 각 줄은 "· 항목: 값"):
-첫 줄: 한 문장 소개 (예: "KMTC OSAKA는 고려해운 소속의 파나마 국적 컨테이너선입니다.")
+첫 줄: 한 문장 소개 (예: "KMTC OSAKA는 고려해운 소속의 파나마 국적 컨테이너선입니다." / "NINGBO TRADER는 장금상선 소속의 대한민국 국적 컨테이너선입니다.")
 
 [선박 제원]
 · 선박 종류: …
@@ -940,7 +959,9 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
 [이름 이야기]
 · 선박명의 뜻·유래를 3~5문장으로. 한자 이름이면 한자 표기와 글자별 뜻을 먼저 밝힌다(예: XIN QUN DAO = 新群岛, '새로운 섬들의 무리'). 선사의 명명 규칙(자매선 이름 패턴·접두어)과, 사람 이름·지명이면 그 배경을 덧붙인다. 얽힌 설화나 개명 이력이 확인되면 짧게.
 
-규칙: 검색으로 확인된 값만 적고, 확인 안 되는 항목은 "확인 안 됨"이라고 쓴다. 숫자를 추측하지 마라. 이름 풀이도 지어내지 말고 확인된 것만 쓴다.`;
+규칙: 검색으로 확인된 값만 적고, 확인 안 되는 항목은 "확인 안 됨"이라고 쓴다. 숫자를 추측하지 마라. 이름 풀이도 지어내지 말고 확인된 것만 쓴다.
+선사 이름 주의: SINOKOR(Sinokor Merchant Marine)의 한글 이름은 "장금상선"(사내 표기 SKR)이다. 고려해운(KMTC)은 전혀 다른 회사다 — Sinokor 선박을 "고려해운"으로 적으면 오답이다.` +
+    (carrierKo ? `\n이 선박의 사내 기록 선사는 ${carrierKo}(코드 ${carrier})다. 웹 검색 결과와 대조하되, 다른 선사로 적으려면 확실한 근거가 있어야 한다.` : '');
 
   const call = async (useSearch) => {
     const body = {
