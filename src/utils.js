@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.69-07';   // 버그픽스 — 로테이션 온보드 판정 일반화(EDI 다음 기항 정본): KKLC 인천 선행 시프팅 제외 · YKTD 유령 17 해소 · MAMP 직항(신강분 온보드 복원·30번 베이 1건)
+export const APP_VERSION = 'TallyOne 1.69-08';   // 버그픽스 — 시프팅 패널 축을 홀드 행으로 교정: KKLC 30번 광양 데크 8대 오검출 해소(안 여는 중앙 패널 위)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3362,32 +3362,69 @@ export function predictShifting(dischEdiMap, baysInfo) {
   //   패널만 연다. ⚠ 패널-열 경계의 실측 데이터는 없다(등분은 근사) — 사전에 hatchCount 가
   //   없는 배는 종전 E/O 모델 그대로다(SWDN 오라클 경로 보존).
   const _info = baysInfo || {};
-  const _bayRows = {};
+  // ── 1.69-08: 패널 축은 **홀드 행**으로 짠다 (검수사 현장 신고 2026-08-14, KKLC 30번) ──
+  //   *"그곳은 커버를 열지 않는 곳"* — 커버가 덮는 것은 홀드다. 종전 축은 사전 rowCount(데크 폭)로
+  //   행을 채워, KKLC 30번(데크 11행·홀드 9행)에서 유령 행 9·10·11이 등분을 밀어 중앙 패널이
+  //   {2,0,1,3}이 됐고, 홀드 3행(평택)이 중앙을 여는 셈이 되어 그 위 광양 데크 8대를 오검출했다.
+  //   실측(KKLC 29·30·31 한 홀드): 홀드 0·1·2행=광양, 3~8행=평택 — 중앙 패널 {2,0,1}은 안 연다.
+  //   ① 축 = 홀드 그룹(ISO 한 홀드: 짝수 e와 e±1 — rowCount 같은 이웃만)의 홀드 실행(공백 1..max 채움)
+  //   ② 등분 나머지는 중앙 패널부터(MAMP 26번 홀드 10행 → 3·4·3, 중앙 {4,2,1,3} — 1.69-06 실측 보존)
+  //   ③ 열림 판정은 종전대로 **베이별** — SWDN 25/27 실측(이웃 26번 홀드 양하가 열려도 25/27
+  //      00행 데크는 안 움직였다, 1.27 선적EDI 오라클 5대): 그룹 공유로 하면 5→10 과검출된다
+  //   ④ 축 밖 데크 행(홀드보다 넓은 데크 9·10행 등)은 물리 순서로 끼워 가장 가까운 패널에 붙인다
+  const _holdRows = {};                       // 베이번호 → 홀드(t<80) 실행 집합
   for (const [, c] of rows) {
-    const b = normalizeBay(c.bay || '');
+    if (_isDeckTier(c.tier)) continue;
+    const bn = parseInt(normalizeBay(c.bay || ''), 10);
     const r = parseInt(c.row, 10);
-    if (!b || !Number.isFinite(r)) continue;
-    (_bayRows[b] = _bayRows[b] || new Set()).add(r);
+    if (!Number.isFinite(bn) || !Number.isFinite(r)) continue;
+    (_holdRows[bn] = _holdRows[bn] || new Set()).add(r);
   }
+  const _groupOf = (bn) => {                  // ISO 한 홀드: 40ft 짝수 베이 e 와 20ft e±1 (e ≡ 2 mod 4)
+    if (!Number.isFinite(bn) || bn % 2 === 0) return bn;
+    const e = ((bn + 1) % 4 === 2) ? bn + 1 : bn - 1;
+    return (_info[e] || _holdRows[e]) ? e : bn;   // 짝수 베이 실체가 없으면 자기 혼자
+  };
+  const _physKey = (r) => (r === 0 ? 0 : (r % 2 === 0 ? -r : r));   // 물리 순서: 짝수 내림 → 00 → 홀수 오름
   const _axisCache = {};
+  const _groupAxis = (g) => {
+    if (_axisCache[g]) return _axisCache[g];
+    const set = new Set();
+    const rc0 = _info[g] ? parseInt(_info[g].rowCount, 10) : NaN;
+    const members = (g % 2 === 0) ? [g - 1, g, g + 1] : [g];
+    for (const m of members) {
+      if (!_holdRows[m]) continue;
+      const rcM = _info[m] ? parseInt(_info[m].rowCount, 10) : NaN;
+      if (m !== g && Number.isFinite(rc0) && Number.isFinite(rcM) && rc0 !== rcM) continue;   // 다른 홀드 이웃 배제
+      for (const r of _holdRows[m]) set.add(r);
+    }
+    let max = -1; for (const r of set) if (r > max) max = r;
+    for (let i = 1; i <= max; i++) set.add(i);   // 관측 공백(빈 스택)이 등분을 흔들지 않게 채움 — 0행은 관측될 때만
+    const ax = [...set].sort((a, b) => _physKey(a) - _physKey(b));
+    _axisCache[g] = ax;
+    return ax;
+  };
   const _panelOf = (bay, row) => {
-    const inf = _info[parseInt(bay, 10)];
+    const bn = parseInt(bay, 10);
+    const inf = _info[bn];
     const n = inf ? parseInt(inf.hatchCount, 10) : NaN;
     if (!Number.isFinite(n) || n < 1) return null;   // 패널 정보 없음 → 종전 현측(E/O) 모델
-    let ax = _axisCache[bay];
-    if (!ax) {
-      const set = new Set(_bayRows[bay] || []);
-      const rc = parseInt(inf.rowCount, 10);
-      if (Number.isFinite(rc) && rc > 0) { for (let i = 1; i <= rc; i++) set.add(i); }
-      if (inf.hasZero) set.add(0);
-      const evens = [...set].filter((r) => r > 0 && r % 2 === 0).sort((a, b) => b - a);
-      const odds = [...set].filter((r) => r % 2 === 1).sort((a, b) => a - b);
-      ax = set.has(0) ? [...evens, 0, ...odds] : [...evens, ...odds];
-      _axisCache[bay] = ax;
+    const ax = _groupAxis(_groupOf(bn));
+    const r = parseInt(row, 10);
+    if (!ax.length || !Number.isFinite(r)) return null;
+    let i = ax.indexOf(r);
+    if (i < 0) {                                     // 축 밖 행(데크가 홀드보다 넓다) — 물리 순서로 끼움
+      const k = _physKey(r); let c0 = 0;
+      for (const a of ax) if (_physKey(a) < k) c0++;
+      i = Math.min(c0, ax.length - 1);
     }
-    const i = ax.indexOf(parseInt(row, 10));
-    if (i < 0 || !ax.length) return null;
-    return Math.min(n - 1, Math.floor((i * n) / ax.length));
+    const base = Math.floor(ax.length / n), rem = ax.length % n;
+    const sizes = Array(n).fill(base);               // 등분 나머지는 중앙 패널부터 (MAMP 26번 실측)
+    const order = [...Array(n).keys()].sort((a, b) => Math.abs(a - (n - 1) / 2) - Math.abs(b - (n - 1) / 2) || a - b);
+    for (let j = 0; j < rem; j++) sizes[order[j]]++;
+    let cum = 0;
+    for (let p = 0; p < n; p++) { cum += sizes[p]; if (i < cum) return p; }
+    return n - 1;
   };
   // ① 홀드에 평택 양하분이 있는 베이 → 열어야 할 커버 (패널 정보 있으면 패널, 없으면 현측)
   const openSides = {};
@@ -3415,7 +3452,7 @@ export function predictShifting(dischEdiMap, baysInfo) {
     let hit = false;
     if (openPanels[b]) {
       const p = _panelOf(b, c.row);
-      hit = (p == null) ? true : openPanels[b].has(p);   // 축 밖 행(비정상)은 보수적으로 포함
+      hit = (p == null) ? true : openPanels[b].has(p);   // 패널 미상(행 미상 등)은 보수적으로 포함
     } else if (openSides[b]) {
       const sd = _sideOf(c.row);
       hit = !!sd && (sd === 'C' || openSides[b].has(sd));
