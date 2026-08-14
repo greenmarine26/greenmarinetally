@@ -835,8 +835,15 @@ export function answerAboutAlert(query, alerts) {
 function formatShifting(ctx) {
   const map = (ctx && ctx.shiftMap) || null;
   const cns = map ? Object.keys(map) : [];
+  // 1.69-07: 판정 근거 한 줄 — 예측(_meta 있음)일 때만. 확정 대조 맵은 근거 표기 불필요.
+  //   검수사 확정(2026-08-14, KKLC 인천 선행): 기항 순서를 모르면 모른다고 말한다.
+  const meta = map && map._meta;
+  const basis = !meta ? '' :
+    (meta.rot === 'direct') ? `\n${meta.origin || '출항지'} 출항본 기준 — 다음 기항이 평택(EDI)이라 도착 전 하선 없음.` :
+    (meta.excluded && meta.excluded.length) ? `\n평택 전 기항(${meta.excluded.join('·')}) 양하 ${meta.excludedCnt}대는 평택 도착 전에 내려 제외했습니다${meta.rot === 'edi' ? ' (다음 기항 EDI 실측)' : ' (항로 사전)'}.` :
+    '\n⚠ 로테이션 미확인 — 평택 전 기항 양하분이 섞여 있을 수 있습니다.';
   if (!cns.length) {
-    return '🔄 시프팅 0대\n홀드 양하분 위(커버 여는 현측)에 얹힌 통과화물이 없습니다.';
+    return '🔄 시프팅 0대\n홀드 양하분 위(커버 여는 현측)에 얹힌 통과화물이 없습니다.' + basis;
   }
   const posOf = (v) => {
     if (v && v.pos) return v.pos;                       // 예측값
@@ -851,7 +858,7 @@ function formatShifting(ctx) {
     lines.push(`${cn.slice(-4)}  ${posOf(v)}${to}  ${v.iso || ''} ${v.pod ? 'POD ' + v.pod : ''}`.trimEnd());
   }
   lines.push('', '커버를 열려면 치워야 하는 통과화물입니다 — 평택 양하분은 세지 않습니다.');
-  return lines.join('\n');
+  return lines.join('\n') + basis;
 }
 
 // TallyOne 1.50: "○○ 어디 갔어?" — 지나온 자리를 문장으로.

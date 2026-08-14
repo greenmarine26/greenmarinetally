@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, portsBeforePtk } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -293,10 +293,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
   //   검수사 확정(2026-08-14, MAMP 631N): "미리 양하하고 오는 거라면 차라리 화면에 안 보여야 함."
   //   근거는 1.45 예측 제외와 동일 — 출항본(LOC+5) + 항로 사전(portsBeforePtk). 판정 불가면 null(숨김 없음).
+  //   1.69-07: 다음 기항(LOC+61)이 정본 — MAMP 631N 실측 «다바오→평택 직항»이라 신강분은 배에 실려
+  //   온다(숨기면 안 됨 — 검수사 «30번 베이 1개» = 그 위 신강 엠티가 진짜 시프팅). 직항이면 before=[].
   const preGoneInfo = useMemo(() => {
     if (mode !== 'discharge') return null;
     const origin = ediOriginOf(sec);
-    const before = portsBeforePtk(voyage?.info?.lane, origin);
+    const before = portsBeforePtk(voyage?.info?.lane, origin, ediNextPortOf(sec));
     if (!before || !before.length) return null;
     return { ports: new Set(before.map((p) => String(p).toUpperCase())), list: before, origin };
   }, [mode, sec?.raw?.edi?.uploadedAt, voyage?.info?.lane]);
@@ -1824,10 +1826,12 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
             )}
             <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
           </div>
-          {shiftInfo?.meta?.origin && (
+          {(shiftInfo?.meta?.origin || shiftInfo?.meta?.nextPort) && (
             <div className="px-3 py-1 text-[10px] text-slate-400 bg-slate-950/60 border-b border-slate-800">
-              {shiftInfo.lane ? `항로 ${shiftInfo.lane} · ` : ''}{shiftInfo.meta.origin} 출항본 기준
-              {shiftInfo.meta.excluded ? ` — 평택 전 기항(${shiftInfo.meta.excluded.join('·')}) 양하 ${shiftInfo.meta.excludedCnt}대 제외` : ' — 항로 미등록: 평택 전 기항 양하분이 섞여 있을 수 있음'}
+              {shiftInfo.lane ? `항로 ${shiftInfo.lane} · ` : ''}{shiftInfo.meta.origin || '출항지 미상'} 출항본 기준
+              {shiftInfo.meta.rot === 'direct' ? ' — 다음 기항 평택(EDI): 도착 전 하선 없음'
+                : shiftInfo.meta.excluded ? ` — 평택 전 기항(${shiftInfo.meta.excluded.join('·')}) 양하 ${shiftInfo.meta.excludedCnt}대 제외${shiftInfo.meta.rot === 'edi' ? ' (다음 기항 EDI 실측)' : ' (항로 사전)'}`
+                : ' — 로테이션 미확인: 평택 전 기항 양하분이 섞여 있을 수 있음'}
             </div>
           )}
           <div className="divide-y divide-slate-800">

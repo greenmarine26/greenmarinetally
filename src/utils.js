@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.69-06';   // 버그픽스 — 현장 신고 2건: 완료 항차 질문에 «완료+종료 시각» 결론 · MAMP 시프팅 해치패널 모델+전항 양하 예정 화면 숨김
+export const APP_VERSION = 'TallyOne 1.69-07';   // 버그픽스 — 로테이션 온보드 판정 일반화(EDI 다음 기항 정본): KKLC 인천 선행 시프팅 제외 · YKTD 유령 17 해소 · MAMP 직항(신강분 온보드 복원·30번 베이 1건)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3484,19 +3484,69 @@ export const LANE_ROUTES = {
          note: '평택→대련→천진→청도→자카르타→수라바야→다바오→신강→속초→평택 (약 5주 순환)' },
   // 장금상선(주) 평택-청도 셔틀 (비관할 항로 — 관할 판정 참고용)
   PQS: { rotation: ['KRPTK', 'CNTAO'], note: '평택-청도 셔틀 (장금상선(주), 비관할)' },
+  // 1.69-07 고려해운 KPX (KKLC KMTC LAEM CHABANG) — 검수사 확정 «인천 먼저 갔다 옵니다».
+  //   실물 근거(추측 아님): 평택 양하 정본 EDI가 매 항차 **인천 출항본**이다 — archive 실측
+  //   KKLC_2606N←KKLC2607SINCB.EDI · KKLC_2605N←KKLC2606SINCPA.EDI · KKAK_2607N←KKAK2607NINCB.EDI.
+  //   인천에서 항차번호가 N→S로 바뀜(2606N 양하 정본이 2607S INCB) = 인천이 회항점, 평택 직전 기항.
+  //   광양이 평택 다음인 것은 PORT-MIS D5MP9 nextPort=광양 실측. 부산 이후 구간은 걸음이
+  //   KRPTK에서 멈춰 판정에 쓰이지 않는다(포항·필리핀 구간 순서 미상이라 넣지 않음).
+  KPX: { rotation: ['KRINC', 'KRPTK', 'KRKAN', 'KRPUS', 'CNSHK'], note: '…셰코우→인천(회항점)→평택→광양→부산… (고려해운, 평택 양하 정본=인천 출항본)' },
 };
 
-/** EDI 원문에서 출항지(LOC+5) 추출 — BAPLIE 헤더. 없으면 ''. */
+/** EDI 원문에서 출항지(LOC+5) 추출 — BAPLIE 헤더. 없으면 ''.
+ *  1.69-07: ASC($604)는 LOC 세그먼트가 없다 — 헤더의 /POD:XXX/(3자 출항항, KKLC2607NSHKB 실측 SHK)를
+ *  컨 라인 꼬리 POL5(LOCODE=국가2+항3, CNSHK←SHK)와 대응해 5자로 해석한다. */
 export function ediOriginOf(sec) {
   const t = sec?.raw?.edi?.text;
   if (!t || typeof t !== 'string') return '';
   const m = t.match(/LOC\+5\+([A-Z]{5})/);
+  if (m) return m[1];
+  const h = t.match(/\$604[^\n]*POD:([A-Z]{3})/);
+  if (h) {
+    const p3 = h[1];
+    for (const ln of t.split(/\r?\n/)) {
+      const pp = ln.match(/([A-Z]{5})([A-Z]{5})\s*$/);
+      if (pp && pp[1].slice(2) === p3) return pp[1];
+    }
+  }
+  return '';
+}
+
+/** EDI 원문에서 다음 기항지(LOC+61) 추출 — BAPLIE 헤더. 없으면 ''.
+ *  1.69-07(검수사 확정 2026-08-14): 다음 기항은 로테이션 사전보다 EDI가 정본이다 — MAMP 631N 실측
+ *  LOC+5=PHDVO·LOC+61=KRPTK(다바오 08-10 출항→평택 08-16 ETA — 신강·속초 경유가 물리적으로 불가능한
+ *  직항). IA8 사전으로만 걸으면 신강분 364대를 «평택 도착 전 하선»으로 오판해 숨겼다(1.69-06). */
+export function ediNextPortOf(sec) {
+  const t = sec?.raw?.edi?.text;
+  if (!t || typeof t !== 'string') return '';
+  const m = t.match(/LOC\+61\+([A-Z]{5})/);
   return m ? m[1] : '';
 }
 
-/** 항로 로테이션에서 출항지 다음부터 평택(KRPTK) 전까지의 기항 목록. 판단 불가면 null. */
-export function portsBeforePtk(lane, origin) {
+/** 항로 로테이션에서 평택(KRPTK) 도착 전에 들르는 기항 목록. 판단 불가면 null.
+ *  1.69-07 우선순위(검수사 확정 — «기항 순서가 시프팅 판정에 빠져 있다»):
+ *  ① EDI 다음 기항(LOC+61)이 평택 → [] (직항 — 그 사이에 내리는 항 없음. MAMP 631N)
+ *  ② 다음 기항이 타항 + 로테이션 사전에 있음 → 그 항부터 평택 전까지
+ *  ③ 다음 기항이 타항 + 사전 없음 → [다음 기항] (최소 확정 집합 — 다음 기항 하선은 확실. YKTD KRINC)
+ *  ④ 다음 기항 미상 → 종전 출항지+사전 걸음 (KKLC ASC — 출항지는 ediOriginOf ASC 해석)
+ *  ⑤ 다 모르면 null — 종전 판정 유지, 답변에 «로테이션 미확인» 표기 */
+export function portsBeforePtk(lane, origin, nextPort) {
+  const np = String(nextPort || '').toUpperCase();
+  if (np === 'KRPTK') return [];
   const r = laneRouteOf(lane)?.rotation;
+  if (np) {
+    if (r && r.indexOf(np) >= 0) {
+      const j = r.indexOf(np);
+      const out = [];
+      for (let k = 0; k < r.length; k++) {
+        const p = r[(j + k) % r.length];
+        if (p === 'KRPTK') return out;
+        out.push(p);
+      }
+      return null;   // 로테이션에 KRPTK 없음 — 판단 불가
+    }
+    return [np];
+  }
   if (!r || !origin) return null;
   const i = r.indexOf(String(origin).toUpperCase());
   if (i < 0) return null;
@@ -3516,10 +3566,11 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
   const sec = voyage?.discharge;
   let map = ediMapFromRaw(sec) || sec?.ediContainers || null;
   const origin = ediOriginOf(sec);
+  const nextPort = ediNextPortOf(sec);   // 1.69-07: LOC+61이 정본 — 평택이면 «도착 전 하선» 없음
   const lane = voyage?.info?.lane || '';
   let excluded = null, excludedCnt = 0;
-  if (map && origin) {
-    const before = portsBeforePtk(lane, origin);
+  if (map && (origin || nextPort)) {
+    const before = portsBeforePtk(lane, origin, nextPort);
     if (before && before.length) {
       const gone = new Set(before.map(p => p.toUpperCase()));
       const kept = {};
@@ -3546,11 +3597,30 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
                          hasZero: !!(e?.hasZero || e?.deckHasZero || e?.holdHasZero) };
       }
       if (!Object.keys(baysInfo).length) baysInfo = null;
+      // 1.69-07: 같은 홀드 이웃 베이의 hatchCount 어긋남 보정 — MAMP 실측(사전 33번=3장·34번=1장,
+      //   ISO 베이 규칙상 33·34·35는 한 홀드라 커버 장수가 같아야 한다. 1.69-06 함정 메모 그대로).
+      //   34번=1장으로 두면 홀드 양하(05~08열=좌·우 패널)가 중앙 패널까지 여는 셈이 되어
+      //   중앙 데크 맨 아래 통과분(CAAU9967900, 01열 82단 — 위가 전부 평택분)을 시프팅으로 오검출.
+      //   게이트: 이웃(±1) 베이가 rowCount 같을 때만, 더 큰 hatchCount 로 올린다(내림 없음).
+      if (baysInfo) {
+        for (const bn of Object.keys(baysInfo)) {
+          const e = baysInfo[bn]; const n0 = parseInt(bn, 10);
+          for (const d of [n0 - 1, n0 + 1]) {
+            const ne = baysInfo[d];
+            if (ne && parseInt(ne.rowCount, 10) === parseInt(e.rowCount, 10) &&
+                (parseInt(ne.hatchCount, 10) || 0) > (parseInt(e.hatchCount, 10) || 0)) {
+              e.hatchCount = ne.hatchCount;
+            }
+          }
+        }
+      }
     }
   } catch (e) { baysInfo = null; }
   const out = predictShifting(map, baysInfo);
   try {
-    Object.defineProperty(out, '_meta', { value: { origin, lane, excluded, excludedCnt, hatchInfo: !!baysInfo }, enumerable: false });
+    Object.defineProperty(out, '_meta', { value: { origin, nextPort, lane, excluded, excludedCnt, hatchInfo: !!baysInfo,
+      // rot: 판정 근거 — direct(EDI 다음 기항=평택) · edi(다음 기항 실측) · rotation(사전 걸음) · unknown(미확인)
+      rot: (nextPort === 'KRPTK') ? 'direct' : (excluded ? (nextPort ? 'edi' : 'rotation') : 'unknown') }, enumerable: false });
   } catch (e) { /* 표시 부가정보 실패는 계산에 영향 없음 */ }
   return out;
 }
