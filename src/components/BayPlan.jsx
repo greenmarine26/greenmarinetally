@@ -34,7 +34,8 @@ const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in win
 export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
-  enableSelection = false, onBatchToStorage
+  enableSelection = false, onBatchToStorage,
+  preGoneInfo = null   // 1.69-06: 전항 양하 예정(평택 도착 전 하선) — {ports:Set, list, origin} 또는 null
 }) {
   const [pageIdx, setPageIdx] = useState(0);
   const [allBaysMode, setAllBaysMode] = useState(true); // 기본 ON: 모든 베이 세로 스크롤
@@ -113,11 +114,31 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     return s;
   }, [containers, mode]);
 
+  // ── TallyOne 1.69-06: 전항 양하 예정 통과분은 **화면에서만** 숨긴다 (검수사 확정 2026-08-14, MAMP) ──
+  //   "미리 양하하고 오는 거라면 차라리 화면에 안 보여야 함." — 평택 도착 시점엔 이미 내린 화물이라
+  //   그 칸은 실제로 빈다. 예측 시프팅(1.45 항로 제외)과 화면이 서로 다른 말을 하던 것을 맞춘다.
+  //   ⚠ 리스트(records) 등재분은 POD가 타항이라도 평택 검수 대상(TS — MCAP 62대 사건)이라 숨기지 않고(_inList),
+  //   완료 기록이 있는 컨도 숨기지 않는다. 인쇄물(카고플랜 V2·베이상세)은 선사 원본 전체를 그대로 쓴다.
+  const preGoneCns = useMemo(() => {
+    if (mode !== 'discharge' || !preGoneInfo || !preGoneInfo.ports) return null;
+    const hide = new Set();
+    containers.forEach((c) => {
+      if (!c.cn || c._inList) return;
+      if (compMap && compMap[c.cn]) return;
+      if (isPyeongtaekPort(c.pod)) return;   // 이중 안전 — 평택분은 어떤 경우에도 숨기지 않는다
+      if (preGoneInfo.ports.has(String(c.pod || '').toUpperCase())) hide.add(c.cn);
+    });
+    return hide.size ? hide : null;
+  }, [containers, preGoneInfo, mode, compMap]);
+  const viewContainers = useMemo(
+    () => (preGoneCns ? containers.filter((c) => !preGoneCns.has(c.cn)) : containers),
+    [containers, preGoneCns]);
+
   // 베이별 그룹화 (전체 EDI 컨테이너로)
   // M3.1: 키를 정규화된 정수 문자열("016"→"16")로 통일 — 이전 데이터/혼합 형식 호환
   const bayGroups = useMemo(() => {
     const g = {};
-    containers.forEach(c => {
+    viewContainers.forEach(c => {   // 1.69-06: 화면 격자는 숨김 적용본
       if (!c.bay) return;
       const key = normalizeBay(c.bay);
       if (!key) return;
@@ -125,7 +146,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       g[key].push(c);
     });
     return g;
-  }, [containers]);
+  }, [viewContainers]);
 
   // 베이별 구조 (행/단 모두)
   const bayStructureMap = useMemo(() => {
@@ -148,12 +169,12 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     const result = { needsShift: {}, shiftCns: {} };
     if (!dischargeCns || dischargeCns.size === 0) return result;
     const tierZone = (t) => parseInt(t) >= 80 ? 'deck' : 'hold';
-    for (const c of containers) {
+    for (const c of viewContainers) {   // 1.69-06: 숨김 적용본 — 전항 양하 예정분을 '위에 얹힌 화물'로 안 센다
       if (!c.cn || !dischargeCns.has(c.cn)) continue;   // V9.39: 컨번호 미배정 자리는 쉬프팅 대상이 아니다
       if (!c.bay || !c.tier) continue;
       const zone = tierZone(c.tier);
       const tier = parseInt(c.tier);
-      const above = containers.filter(o =>
+      const above = viewContainers.filter(o =>
         // V9.39: 아직 컨번호가 배정되지 않은 자리(플랜 슬롯)는 '위에 얹힌 화물'로 세지 않는다
         o.cn && o.cn !== c.cn && !dischargeCns.has(o.cn) &&
         !(compMap && compMap[o.cn]) &&
@@ -166,7 +187,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       }
     }
     return result;
-  }, [containers, dischargeCns, compMap]);
+  }, [viewContainers, dischargeCns, compMap]);
 
   // 좌우 균형 (전 베이 통일)
   const globalRowRange = useMemo(() => {
@@ -552,6 +573,12 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       {bayDictSubstituted && (
         <div className="bg-amber-100 border border-amber-600 text-amber-900 rounded-lg p-2 text-xs">
           ⚠ {bayDictSubstituted.fromCode} 베이정보가 없어 같은 계열 {bayDictSubstituted.usedName ? `${bayDictSubstituted.usedName}(${bayDictSubstituted.usedCode})` : bayDictSubstituted.usedCode}(으)로 대체했습니다. 구조가 미세하게 다를 수 있습니다.
+        </div>
+      )}
+      {/* 1.69-06: 전항 양하 예정 통과분 숨김 안내 — 무엇이 왜 안 보이는지 근거를 남긴다 */}
+      {preGoneCns && (
+        <div className="bg-sky-100 border border-sky-600 text-sky-900 rounded-lg p-2 text-xs">
+          ⚓ 전항 양하 예정 {preGoneCns.size}대를 화면에서 숨겼습니다 — {preGoneInfo?.origin || '출항지'} 출항본의 {(preGoneInfo?.list || []).join('·')} 양하분(평택 도착 전 하선). 인쇄물에는 그대로 나옵니다.
         </div>
       )}
       {pendingMove && (

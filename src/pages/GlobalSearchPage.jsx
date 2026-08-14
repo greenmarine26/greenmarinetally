@@ -124,6 +124,22 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     return best;
   }, [voyages, debouncedQuery]);
 
+  // ── 1.69-06: 진행 질문인데 배가 현재 항차에 없으면 — 보관소 메타 1회 GET (완료·보관 답 준비) ──
+  //   검수사 신고(2026-08-14): "이미 완료된 작업을 물어보면 언제 작업 종료했는지 알려줘야 함."
+  //   STSE처럼 수석 완료 저장으로 voyages에서 빠진 배는 종전엔 무응답이었다.
+  //   shipCtx가 이 이펙트보다 아래 선언이면 TDZ라 — 반드시 shipCtx 메모 **뒤에** 둔다.
+  useEffect(() => {
+    if (!isChief) return;   // 검수원은 수석 노드(archive)를 읽지 않는다(1.69-01 K2)
+    const q = debouncedQuery || '';
+    if (q.length < 3 || shipCtx) return;
+    if (!/진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났|몇\s*대\s*(?:했|됐)/.test(q) || /자료/.test(q)) return;
+    if (chiefData.archiveList !== undefined) return;
+    setChiefData((d) => ({ ...d, archiveList: null }));   // null = 읽는 중
+    fbListArchive()
+      .then((v) => setChiefData((d) => ({ ...d, archiveList: v ?? [] })))
+      .catch((e) => { console.warn('[통합검색] 보관소 읽기 실패 —', e); setChiefData((d) => ({ ...d, archiveList: { __error: true } })); });
+  }, [debouncedQuery, shipCtx, chiefData, isChief]);
+
   // ── V9.14: 통합검색 즉답 — 종전에는 "브리핑·몇 시야·날씨" 등이 여기서 전부 무응답이었다.
   //   시간·자기소개처럼 항차와 무관한 질문은 바로 답하고,
   //   항차 맥락이 필요한 질문(브리핑·점검·인계·ETA·날씨 등)은 어디서 물어야 하는지 안내한다.
@@ -181,6 +197,28 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         return formatTerminalWorkAnswer(ship, (terminalWork || {})[String(shipCtx.info.vsl || '').toUpperCase()]);
       }
       return formatAppTallyAnswer(ship, flat.filter((c) => c.voyageKey === shipCtx.key));
+    }
+    // 1.69-06: 완료·보관된 배의 진행 질문 — 보관소에서 찾아 «완료·보관됨»으로 결론부터 (검수사 신고 2026-08-14).
+    if (!shipCtx && isChief
+        && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났|몇\s*대\s*(?:했|됐)/.test(debouncedQuery)
+        && !/자료/.test(debouncedQuery)) {
+      const Q2 = String(debouncedQuery).toUpperCase();
+      const arch = chiefData.archiveList;
+      if (Array.isArray(arch)) {
+        const hits = arch.filter((a) => a && a.vsl && String(a.vsl).length >= 3 && Q2.includes(String(a.vsl).toUpperCase()));
+        if (hits.length) {
+          const h = hits.reduce((m, a) => (((a.archivedAt || 0) > (m.archivedAt || 0)) ? a : m));
+          const t = h.archivedAt ? new Date(h.archivedAt) : null;
+          const f = t ? `${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : '';
+          const voy = String(h.voyageKey || '').split('_')[1] || '';
+          return `✅ ${h.vsl}${voy ? ' ' + voy : ''} — ${f ? f + ' ' : ''}완료·보관됨 (수석 완료 저장 기준).\n평택분 양하 ${h.discharge_ptk ?? '?'} · 선적 ${h.loading_ptk ?? '?'} — 상세는 보관소에서.`;
+        }
+      } else if (arch === null || arch === undefined) {
+        // 이펙트가 곧 채운다 — 배 이름이 보관소에 있을지 모르니 정직하게 '읽는 중'
+        if (/[A-Z]{3,}/.test(Q2)) return '보관소 기록을 읽는 중입니다 — 잠시 후 다시 물어봐 주세요.';
+      } else if (arch && arch.__error) {
+        return '보관소를 읽지 못했습니다 — 네트워크 확인 후 다시 물어봐 주세요.';
+      }
     }
     // 1.68: 배가 지정된 콜사인·IMO 질문 — 기능 설명(howTo)보다 먼저.
     //   "STSE 콜사인 뭐야"의 '뭐야'가 기능 색인에 먼저 걸려 VRSC3 대신 기능 안내가 나왔다(시뮬 실측). — ship_bay_dict·info에 이미 있다.

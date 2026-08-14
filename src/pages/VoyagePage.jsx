@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, portsBeforePtk } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -289,6 +289,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     berthShift: (voyage?.info?.berthShift ?? null),
     lane: voyage?.info?.lane || '',
   };
+
+  // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
+  //   검수사 확정(2026-08-14, MAMP 631N): "미리 양하하고 오는 거라면 차라리 화면에 안 보여야 함."
+  //   근거는 1.45 예측 제외와 동일 — 출항본(LOC+5) + 항로 사전(portsBeforePtk). 판정 불가면 null(숨김 없음).
+  const preGoneInfo = useMemo(() => {
+    if (mode !== 'discharge') return null;
+    const origin = ediOriginOf(sec);
+    const before = portsBeforePtk(voyage?.info?.lane, origin);
+    if (!before || !before.length) return null;
+    return { ports: new Set(before.map((p) => String(p).toUpperCase())), list: before, origin };
+  }, [mode, sec?.raw?.edi?.uploadedAt, voyage?.info?.lane]);
 
   // V9.03: 긴급/수화물 컨번호 세트 — forecast.mode가 현재 모드와 일치할 때만 적용
   //   (선적 예보 마커가 양하 리스트에 새지 않게). 상세는 tagForecastMarks 주석.
@@ -1184,6 +1195,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             )}
             <BayPlan
               containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
+              preGoneInfo={preGoneInfo}
               onOpenContainer={(c) => setDetailC(c)}
               shipImo={voyage?.info?.imo}
               shipName={voyage?.info?.vsl}

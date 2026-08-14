@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.69-05';   // 버그픽스 — 현장 신고 3건: «몇시에 들어와»=입항 답 · 같은 질문 재질문 응답 · 엔터/전송 버튼+접수 표시
+export const APP_VERSION = 'TallyOne 1.69-06';   // 버그픽스 — 현장 신고 2건: 완료 항차 질문에 «완료+종료 시각» 결론 · MAMP 시프팅 해치패널 모델+전항 양하 예정 화면 숨김
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3349,32 +3349,78 @@ const _isDeckTier = (tier) => {
 /** 양하 EDI 맵 하나로 시프팅(치워야 할 통과화물)을 예측한다.
  *  dischEdiMap: {cn: 컨} — **평택분만 거른 것이 아니라 전체**여야 한다(통과화물이 대상이므로).
  *  반환 {cn: {bay,row,tier,pos,iso,pod,_why}} */
-export function predictShifting(dischEdiMap) {
+export function predictShifting(dischEdiMap, baysInfo) {
   const out = {};
   if (!dischEdiMap) return out;
   const rows = Object.entries(dischEdiMap).filter(([cn, c]) => cn && cn.length === 11 && !cn.startsWith('__') && c);
-  // ① 홀드에 평택 양하분이 있는 베이 → 열어야 할 현측
+  // ── 1.69-06: 해치커버 **패널 모델** (검수사 현장 신고 2026-08-14, MAMP 631N) ──
+  //   *"지금 있는 곳은 중간 커버를 열지 않음."* — 커버는 현측 2장이 아니라 **베이당 hatchCount장**
+  //   (예: MAMP 3장 — 좌현/중앙/우현)으로 갈린다. 종전 E/O(짝홀 현측) 모델은 2장 가정이라,
+  //   MAMP 26번(홀드 양하 05~08열 = 좌·우 패널)에서 **중앙 패널 위** 통과분 8대를 오검출했다
+  //   (배정표 이적 0과도 어긋남 — 실측 재현 후 수정). 베이사전 hatchCount·rowCount 가 있으면
+  //   행을 물리 순서(짝수 내림→00→홀수 오름)로 세워 hatchCount 등분 — 홀드 양하분이 있는
+  //   패널만 연다. ⚠ 패널-열 경계의 실측 데이터는 없다(등분은 근사) — 사전에 hatchCount 가
+  //   없는 배는 종전 E/O 모델 그대로다(SWDN 오라클 경로 보존).
+  const _info = baysInfo || {};
+  const _bayRows = {};
+  for (const [, c] of rows) {
+    const b = normalizeBay(c.bay || '');
+    const r = parseInt(c.row, 10);
+    if (!b || !Number.isFinite(r)) continue;
+    (_bayRows[b] = _bayRows[b] || new Set()).add(r);
+  }
+  const _axisCache = {};
+  const _panelOf = (bay, row) => {
+    const inf = _info[parseInt(bay, 10)];
+    const n = inf ? parseInt(inf.hatchCount, 10) : NaN;
+    if (!Number.isFinite(n) || n < 1) return null;   // 패널 정보 없음 → 종전 현측(E/O) 모델
+    let ax = _axisCache[bay];
+    if (!ax) {
+      const set = new Set(_bayRows[bay] || []);
+      const rc = parseInt(inf.rowCount, 10);
+      if (Number.isFinite(rc) && rc > 0) { for (let i = 1; i <= rc; i++) set.add(i); }
+      if (inf.hasZero) set.add(0);
+      const evens = [...set].filter((r) => r > 0 && r % 2 === 0).sort((a, b) => b - a);
+      const odds = [...set].filter((r) => r % 2 === 1).sort((a, b) => a - b);
+      ax = set.has(0) ? [...evens, 0, ...odds] : [...evens, ...odds];
+      _axisCache[bay] = ax;
+    }
+    const i = ax.indexOf(parseInt(row, 10));
+    if (i < 0 || !ax.length) return null;
+    return Math.min(n - 1, Math.floor((i * n) / ax.length));
+  };
+  // ① 홀드에 평택 양하분이 있는 베이 → 열어야 할 커버 (패널 정보 있으면 패널, 없으면 현측)
   const openSides = {};
+  const openPanels = {};
   for (const [, c] of rows) {
     if (_isDeckTier(c.tier)) continue;
     if (!isPyeongtaekPort(c.pod)) continue;
     const b = normalizeBay(c.bay || '');
+    if (!b) continue;
+    const p = _panelOf(b, c.row);
+    if (p != null) { (openPanels[b] = openPanels[b] || new Set()).add(p); continue; }
     const sd = _sideOf(c.row);
-    if (!b || !sd) continue;
+    if (!sd) continue;
     (openSides[b] = openSides[b] || new Set()).add(sd);
   }
   for (const b in openSides) {
     if (openSides[b].has('C')) { openSides[b].add('E'); openSides[b].add('O'); }   // 중앙이면 양쪽
   }
-  // ② 그 현측의 데크에 얹힌 통과화물
+  // ② 열어야 할 커버의 데크에 얹힌 통과화물
   for (const [cn, c] of rows) {
     if (!_isDeckTier(c.tier)) continue;
     if (isPyeongtaekPort(c.pod)) continue;            // 평택 양하분은 어차피 내리므로 시프팅 아님
     const b = normalizeBay(c.bay || '');
-    const sd = _sideOf(c.row);
-    const need = openSides[b];
-    if (!b || !sd || !need) continue;
-    if (sd === 'C' || need.has(sd)) {
+    if (!b) continue;
+    let hit = false;
+    if (openPanels[b]) {
+      const p = _panelOf(b, c.row);
+      hit = (p == null) ? true : openPanels[b].has(p);   // 축 밖 행(비정상)은 보수적으로 포함
+    } else if (openSides[b]) {
+      const sd = _sideOf(c.row);
+      hit = !!sd && (sd === 'C' || openSides[b].has(sd));
+    }
+    if (hit) {
       const _pos = `${b}-${String(c.row || '').padStart(2, '0')}-${String(c.tier || '').padStart(2, '0')}`;
       // 1.43-02: 확정값(computeShiftingMap)과 같은 계약({from,to})을 지킨다 — from 없이 내보내
       //   VoyagePage shiftingList 정렬(a.from.localeCompare)이 앱 전체 크래시를 냈다(2026-08-10 실증).
@@ -3466,7 +3512,7 @@ export function portsBeforePtk(lane, origin) {
 /** 항차 객체에서 시프팅 예측. raw EDI(전체 화물) 우선 — ediContainers 는 평택분만일 수 있다.
  *  1.45: 항로·출항지를 알면 평택 도착 전에 내리는 항의 POD를 제외하고 계산한다.
  *  반환 맵에 _meta(origin·excluded·excludedCnt)를 붙여 화면이 근거를 표시한다. */
-export function predictShiftingFromVoyage(voyage) {
+export function predictShiftingFromVoyage(voyage, dictEntry) {
   const sec = voyage?.discharge;
   let map = ediMapFromRaw(sec) || sec?.ediContainers || null;
   const origin = ediOriginOf(sec);
@@ -3484,9 +3530,27 @@ export function predictShiftingFromVoyage(voyage) {
       map = kept; excluded = before;
     }
   }
-  const out = predictShifting(map);
+  // 1.69-06: 베이사전 해치 패널 정보 — 명시 인자 우선, 없으면 전역 사전(window.__fbShipBayDict —
+  //   BayMatrix 계열·GlobalSearchPage 와 같은 접근 패턴). 사전이 늦게 오면 그 렌더까지는 E/O 모델이다.
+  let baysInfo = null;
   try {
-    Object.defineProperty(out, '_meta', { value: { origin, lane, excluded, excludedCnt }, enumerable: false });
+    const vsl = String(voyage?.info?.vsl || '').toUpperCase();
+    const de = dictEntry || ((typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[vsl] : null);
+    const bs = de?.bayDef?.baysSummary || de?.baysSummary;
+    if (Array.isArray(bs)) {
+      baysInfo = {};
+      for (const e of bs) {
+        const bn = parseInt(e?.bayNo ?? e?.bay, 10);
+        if (!Number.isFinite(bn)) continue;
+        baysInfo[bn] = { hatchCount: e?.hatchCount, rowCount: e?.rowCount,
+                         hasZero: !!(e?.hasZero || e?.deckHasZero || e?.holdHasZero) };
+      }
+      if (!Object.keys(baysInfo).length) baysInfo = null;
+    }
+  } catch (e) { baysInfo = null; }
+  const out = predictShifting(map, baysInfo);
+  try {
+    Object.defineProperty(out, '_meta', { value: { origin, lane, excluded, excludedCnt, hatchInfo: !!baysInfo }, enumerable: false });
   } catch (e) { /* 표시 부가정보 실패는 계산에 영향 없음 */ }
   return out;
 }

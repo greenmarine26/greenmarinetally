@@ -1720,6 +1720,14 @@ export function formatTerminalWorkAnswer(ship, tw) {
     return `${ship} — 터미널 실황 피드가 아직 없습니다.\n앱 검수 기록은 «진행 상태»로 물어보세요.`;
   }
   const L = [];
+  // 1.69-06: 이미 끝난 작업이면 **결론부터** — «완료» + 종료 시각(터미널 endAt) (검수사 신고 2026-08-14
+  //   "이미 완료된 작업을 물어보면 언제 작업 종료했는지 알려줘야 함"). ⚠ 피드가 24시간 넘게 낡으면
+  //   직전 기항 실적일 수 있어(HAYN — 8/4 인천 피드 실측) 완료 결론을 내리지 않는다.
+  const _fresh = tw.updatedAt && (Date.now() - tw.updatedAt) < 24 * 3600 * 1000;
+  const _doneByCnt = (tw.disPlan ? (tw.disDone ?? 0) >= tw.disPlan : true) && (tw.lodPlan ? (tw.lodDone ?? 0) >= tw.lodPlan : true);
+  if (_fresh && (tw.endAt || tw.pct >= 100 || _doneByCnt)) {
+    L.push(`✅ ${ship} — 작업 완료${tw.endAt ? ` · 종료 ${String(tw.endAt).slice(5, 16)}` : ' (종료 시각 미수신)'} — 터미널 실황(endAt) 기준`);
+  }
   const seg = [];
   if (tw.disPlan) seg.push(`양하 ${tw.disDone ?? 0}/${tw.disPlan}${tw.disDone >= tw.disPlan ? ' 완료' : ''}`);
   if (tw.lodPlan) seg.push(`선적 ${tw.lodDone ?? 0}/${tw.lodPlan}`);
@@ -1745,7 +1753,16 @@ export function formatAppTallyAnswer(ship, containers) {
     const d = p.filter((c) => c._comp).length;
     seg.push(`${kr} ${d}/${p.length} (${Math.round(d / p.length * 100)}%)`);
   });
-  const out = [`${ship} — 앱 검수 기록 기준 ${seg.join(' · ')}`];
+  const out = [];
+  // 1.69-06: 평택분 전량 완료면 **결론부터** — «완료» + 종료 시각(마지막 completed.at, 앱 기록 기준).
+  if (pool.length && done.length === pool.length) {
+    let _last = 0;
+    done.forEach((c) => { const t = c._comp && c._comp.at; if (t && t > _last) _last = t; });
+    const d = _last ? new Date(_last) : null;
+    const _f = d ? `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+    out.push(`✅ ${ship} — 작업 완료${_f ? ` · 종료 ${_f}` : ''} — 앱 검수 기록(마지막 완료 시각) 기준`);
+  }
+  out.push(`${ship} — 앱 검수 기록 기준 ${seg.join(' · ')}`);
   const by = {};
   done.forEach((c) => { const n = c._comp && c._comp.by; if (n) by[n] = (by[n] || 0) + 1; });
   const names = Object.entries(by).sort((a, b) => b[1] - a[1]);
