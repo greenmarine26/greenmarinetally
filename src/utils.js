@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.69-03';   // 버그픽스 — 선박소개 선사 오표기(장금상선 SKR을 고려해운으로) 정답지·캐시 정리
+export const APP_VERSION = 'TallyOne 1.69-04';   // 버그픽스 — 검수사 정정 2건: 표기 «장금상선(주)» 통일 · 고려해운 사내 약자 KK 접두(KKUS 등) 반영
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3436,8 +3436,8 @@ export const LANE_ROUTES = {
   // 머스크 IA8 (MCAT ARTOTINA 등) — 배정표 Port Rotation 실물 그대로 (2026-08-10)
   IA8: { rotation: ['KRPTK', 'CNDLC', 'CNTSN', 'CNTAO', 'IDJKT', 'IDSUB', 'PHDVO', 'CNTXG', 'KRSOS'],
          note: '평택→대련→천진→청도→자카르타→수라바야→다바오→신강→속초→평택 (약 5주 순환)' },
-  // 장금상선 평택-청도 셔틀 (비관할 항로 — 관할 판정 참고용)
-  PQS: { rotation: ['KRPTK', 'CNTAO'], note: '평택-청도 셔틀 (장금상선, 비관할)' },
+  // 장금상선(주) 평택-청도 셔틀 (비관할 항로 — 관할 판정 참고용)
+  PQS: { rotation: ['KRPTK', 'CNTAO'], note: '평택-청도 셔틀 (장금상선(주), 비관할)' },
 };
 
 /** EDI 원문에서 출항지(LOC+5) 추출 — BAPLIE 헤더. 없으면 ''. */

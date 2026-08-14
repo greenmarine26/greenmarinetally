@@ -897,13 +897,20 @@ export function stowageToBayDictEntry(stowageData, fileName, extra = {}) {
 // ── TallyOne 1.69-03(2026-08-14): 선사 코드 → 한글 선사명 (선박 소개 정답지) ─────────
 //   검수사 신고: *"KRSINOKOR를 앱에서 고려해운으로 표기하는 곳이 다수 있음. 한글로는 장금이며
 //   표기는 SKR임. SINOKOR = SKR. 선박소개에서도 고려해운이라고 설명함."*
-//   실측: 소개 캐시(ship_intros) 중 SWBT(SAWASDEE BALTIC, 장금상선)가 "고려해운 소속"으로
+//   실측: 소개 캐시(ship_intros) 중 SWBT(SAWASDEE BALTIC, 장금상선(주))가 "고려해운 소속"으로
 //   생성돼 있었다 — 아래 프롬프트의 예시가 고려해운 하나뿐이라 앵커링됐고, Gemini가
 //   Sinokor Merchant Marine을 고려해운으로 옮겼다. 코드 정답지를 프롬프트에 박아 재발을 막는다.
-//   ⚠ SINOKOR(장금상선, 코드 SKR)와 고려해운(KMTC, 코드 KMD·KMT)은 서로 다른 회사다.
+//   ⚠ SINOKOR(장금상선(주), 코드 SKR)와 고려해운(코드 KMT·KMD·KMTC)은 서로 다른 회사다.
+//   1.69-04(2026-08-14) 검수사 정정 2건 — ① *"제가 장금으로 이야기했지만 표기는 장금상선(주) 로 해주시기
+//      바랍니다."* → 한글 라벨을 «장금상선(주)»로 통일. ② *"고려해운은 KK로 시작합니다. KKUS 등등."*
+//      → 고려해운 선박의 사내 약자는 KK 접두다. 실측(라이브 archive): KKAK_2607N=KMTC OSAKA(3EHZ9,
+//      info.carrier=KMT)·KKLC_2606N=KMTC LAEM CHABANG(D5MP9, info.carrier=KMD). 약자 KK* 폴백을 신설했다.
 //   라벨은 수집기 CARRIER_KO(auto.py)와 동일, EDI 4자 변형(SNKO 등)은 utils.js OP_CANON과 동기.
 export const SHIP_CARRIER_KO = {
-  SKR: '장금상선', SNKO: '장금상선', SINOKOR: '장금상선', KRSINOKOR: '장금상선',
+  SKR: '장금상선(주)', SNKO: '장금상선(주)', SINOKOR: '장금상선(주)', KRSINOKOR: '장금상선(주)',
+  // 고려해운 코드 실측 근거(2026-08-14 라이브): KMT=archive/KKAK_2607N info.carrier(KMTC OSAKA·3EHZ9),
+  // KMD=archive/KKLC_2606N info.carrier(KMTC LAEM CHABANG·D5MP9)+ships(SUNNY KALMIA),
+  // KMTC=수집기 auto.py CARRIER_KO 정본 키(자동등록이 이 코드를 쓴다) — 셋 다 실데이터에 있어 유지.
   KMTC: '고려해운', KMD: '고려해운', KMT: '고려해운',
   HAS: '흥아라인', HASL: '흥아라인', HSL: '한성라인',
   NSL: '남성해운', NSSL: '남성해운', NSS: '남성해운',
@@ -923,7 +930,11 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
   //   IMO·콜사인이 있으면 그것을 우선 검색 키로 쓰고, 이름이 약자일 수 있음을 명시한다.
   const looksCode = /^[A-Z0-9]{2,5}$/.test(shipName);
   // 1.69-03: 사내 선사 코드의 한글 정답 — 프롬프트에 같이 넘겨 선사 오표기(장금↔고려 혼동)를 막는다.
-  const carrierKo = SHIP_CARRIER_KO[String(carrier || '').trim().toUpperCase()] || '';
+  // 1.69-04: 검수사 확정 *"고려해운은 KK로 시작합니다. KKUS 등등."* — carrier 코드가 비어도
+  //   사내 약자(code)가 KK 접두 4자면 고려해운이다(실측: KKAK=KMTC OSAKA·KKLC=KMTC LAEM CHABANG).
+  const _codeUp = String(code || (looksCode ? shipName : '')).trim().toUpperCase();
+  const carrierKo = SHIP_CARRIER_KO[String(carrier || '').trim().toUpperCase()]
+    || (/^KK[A-Z0-9]{2}$/.test(_codeUp) ? '고려해운' : '');
   const prompt =
     `다음 선박의 실제 정보를 웹에서 찾아 정리하라: 선박명 "${shipName}"` +
     (imo ? `, IMO ${imo}` : '') + (callsign ? `, 콜사인 ${callsign}` : '') +
@@ -934,7 +945,7 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
     (looksCode ? `.\n주의: "${shipName}"은 사내 약자일 수 있다. ${imo ? `IMO ${imo}` : ''}${imo && callsign ? '와 ' : ''}${callsign ? `콜사인 ${callsign}` : ''}${(imo || callsign) ? '으로 먼저 실제 선박명을 확정한 뒤 정리하라.' : '실제 선박명을 찾지 못하면 첫 줄에 "선박 풀네임이 필요합니다"라고 써라.'}` : '') + `.
 
 한국어로 아래 형식으로 답하라 (마크다운 굵게 금지, 각 줄은 "· 항목: 값"):
-첫 줄: 한 문장 소개 (예: "KMTC OSAKA는 고려해운 소속의 파나마 국적 컨테이너선입니다." / "NINGBO TRADER는 장금상선 소속의 대한민국 국적 컨테이너선입니다.")
+첫 줄: 한 문장 소개 (예: "KMTC OSAKA는 고려해운 소속의 파나마 국적 컨테이너선입니다." / "NINGBO TRADER는 장금상선(주) 소속의 대한민국 국적 컨테이너선입니다.")
 
 [선박 제원]
 · 선박 종류: …
@@ -960,8 +971,8 @@ export async function askShipIntro({ name = '', callsign = '', imo = '', carrier
 · 선박명의 뜻·유래를 3~5문장으로. 한자 이름이면 한자 표기와 글자별 뜻을 먼저 밝힌다(예: XIN QUN DAO = 新群岛, '새로운 섬들의 무리'). 선사의 명명 규칙(자매선 이름 패턴·접두어)과, 사람 이름·지명이면 그 배경을 덧붙인다. 얽힌 설화나 개명 이력이 확인되면 짧게.
 
 규칙: 검색으로 확인된 값만 적고, 확인 안 되는 항목은 "확인 안 됨"이라고 쓴다. 숫자를 추측하지 마라. 이름 풀이도 지어내지 말고 확인된 것만 쓴다.
-선사 이름 주의: SINOKOR(Sinokor Merchant Marine)의 한글 이름은 "장금상선"(사내 표기 SKR)이다. 고려해운(KMTC)은 전혀 다른 회사다 — Sinokor 선박을 "고려해운"으로 적으면 오답이다.` +
-    (carrierKo ? `\n이 선박의 사내 기록 선사는 ${carrierKo}(코드 ${carrier})다. 웹 검색 결과와 대조하되, 다른 선사로 적으려면 확실한 근거가 있어야 한다.` : '');
+선사 이름 주의: SINOKOR(Sinokor Merchant Marine)의 한글 표기는 "장금상선(주)"(사내 코드 SKR)다 — 반드시 "장금상선(주)"로 적는다. 고려해운(KMTC)은 전혀 다른 회사다 — Sinokor 선박을 "고려해운"으로 적으면 오답이다. 고려해운 선박의 사내 약자는 KK로 시작한다(KKAK·KKLC·KKUS 등).` +
+    (carrierKo ? `\n이 선박의 사내 기록 선사는 ${carrierKo}(코드 ${carrier || _codeUp})다. 웹 검색 결과와 대조하되, 다른 선사로 적으려면 확실한 근거가 있어야 한다.` : '');
 
   const call = async (useSearch) => {
     const body = {
