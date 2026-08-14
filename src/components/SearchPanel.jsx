@@ -646,6 +646,9 @@ function TwinPossibleHint({ c, allContainers, voyage }) {
   );
 }
 
+// 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
+const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
 function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, terminalWork = {} }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
   const [query, setQuery] = useState('');
   // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
@@ -656,7 +659,19 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // TallyOne 1.55: 전체 컨번호(DWSU3000276)는 **문장이 아니다.**
   //   종전엔 글자가 섞였다는 이유로 문장으로 갈려, 다 치고 전송키를 누르기 전까지 아무것도 안 나왔다.
   const isSentence = (v) => !fullCnOf(v) && /[가-힣A-Za-z]/.test(String(v || '')) && !/^[\d\s-]+$/.test(String(v || ''));
-  const submitDraft = () => { const v = draft.trim(); if (!v) return; setQuery(v); logQuerySettled(v); };
+  // 1.69-05: 같은 질문 두 번 — 종전엔 setQuery(같은 문자열)가 무반응이었다(검수사 신고 2026-08-14
+  //   "같은 질문 두 번 하면 반응 없음. 엔터 기능이 없어서 전달되었는지 모름").
+  //   재제출이면 lastSpokenRef를 풀어 다시 말하고, 답 박스에 «다시 확인했습니다» 한 줄로 갱신을 보여준다.
+  const submitDraft = () => {
+    const v = draft.trim(); if (!v) return;
+    setReasked(v === lastAskRef.current);
+    lastSpokenRef.current = null;
+    setAskedAt(Date.now());
+    setQuery(v); logQuerySettled(v);
+  };
+  const [askedAt, setAskedAt] = useState(null);   // 1.69-05: 질문 접수 시각 — «질문 접수 HH:MM» + 재발화 트리거
+  const [reasked, setReasked] = useState(false);  // 1.69-05: 같은 질문 재제출 표시
+  const lastAskRef = useRef('');                  // 1.69-05: 직전 질문 — 재질문 판정
   const [weatherText, setWeatherText] = useState(null);   // V7.92: 날씨 질문 비동기 답변
   const voiceQueryRef = useRef('');   // V7.80: 음성으로 들어온 질문 추적
   const lastTopicRef = useRef(null);  // 1.69-01: 직전 답 주제 — "83건이 뭐야"류 후속 연결용(간단 캐시)
@@ -682,6 +697,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const lastSpokenRef = useRef(null);
 
   const parsed = useMemo(() => parseNaturalQuery(query), [query]);
+  // 1.69-05: 방금 물은 질문 기억 — 같은 질문 재제출(엔터·전송·음성) 판정용
+  useEffect(() => { if (query.trim().length >= 2) lastAskRef.current = query.trim(); }, [query]);
   // V8.00: 인계 질문이 아니게 되면 메모 상태 리셋 (다른 질문으로 넘어갈 때)
   useEffect(() => {
     if (!parsed.handoverQuery) { setHandoverFinalized(false); }
@@ -898,10 +915,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
         const t = pickSpeechAlternative(alts).trim();
         setTranscript(t);
-        if (t.length >= 2) { voiceQueryRef.current = t; setDraft(t); setQuery(t); logQuerySettled(t); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록
+        if (t.length >= 2) { voiceQueryRef.current = t; setReasked(t === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(t); setQuery(t); logQuerySettled(t); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록   // 1.69-05: 같은 질문 다시 말해도 답한다
         else {
           const digits = parseSpokenDigits(text);
-          if (digits && digits.length >= 2) { setDraft(digits); setQuery(digits); logQuerySettled(digits); }
+          if (digits && digits.length >= 2) { setReasked(digits === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(digits); setQuery(digits); logQuerySettled(digits); }
           else speak('인식 실패');
         }
       }
@@ -982,7 +999,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     } else {
       speak(`${results.length}개 일치, 더 자세히`);
     }
-  }, [results, query, parsed, autoSpeak, aiLoading, aiAnswer, localAnswer]);
+  }, [results, query, parsed, autoSpeak, aiLoading, aiAnswer, localAnswer, askedAt]);   // 1.69-05: 재제출 시 재발화
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -1074,6 +1091,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             onChange={e => {
               const v = e.target.value;
               setDraft(v);
+              setAskedAt(null); setReasked(false);           // 1.69-05: 새로 치는 중 — 접수 표시 해제
+              if (!v.trim()) lastSpokenRef.current = null;   // 1.69-05: 지웠다가 다시 물으면 다시 말한다
               // 숫자·빈 입력은 즉답(종전 동작). 문장은 전송키를 누를 때까지 답하지 않는다.
               if (!isSentence(v)) { setQuery(v); logQuerySettled(v); }
               else if (query) setQuery('');
@@ -1096,15 +1115,16 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-slate-500'}`}>
               {autoSpeak ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
             </button>
-            {/* TallyOne 1.22: 전송키 — 문장을 다 쓰고 누르면 그때 답한다. */}
-            {isSentence(draft) && draft.trim() !== query && (
+            {/* TallyOne 1.22: 전송키 — 문장을 다 쓰고 누르면 그때 답한다.
+                1.69-05: 제출 뒤에도 남긴다 — 같은 질문을 다시 눌러 물을 수 있게(검수사 신고). */}
+            {isSentence(draft) && !!draft.trim() && (
               <button onClick={submitDraft} title="질문 전송"
                 className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-slate-900">
                 <SendHorizontal className="w-5 h-5"/>
               </button>
             )}
             {(draft || query || chatMessages.length > 0) && (
-              <button onClick={() => { setDraft(''); setQuery(''); handleNewChat(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
+              <button onClick={() => { setDraft(''); setQuery(''); setAskedAt(null); setReasked(false); lastSpokenRef.current = null; handleNewChat(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
                 <X className="w-4 h-4 text-slate-500"/>
               </button>
             )}
@@ -1154,6 +1174,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           {!isListening && query.length >= 2 && results.length === 1 && !parsed.isStat && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
           {!isListening && query.length >= 2 && results.length > 1 && !parsed.isStat && <span className="text-amber-400 font-bold">⚠ {results.length}개 일치</span>}
           {isListening && <span className="text-red-300 font-bold">🎙 듣는 중...</span>}
+          {askedAt && !isListening && <span className="text-emerald-400 font-bold ml-2">✓ 질문 접수 {_hm(askedAt)}</span>}
         </div>
       </div>
 
@@ -1268,6 +1289,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               ❌ 오답
             </button>
           </div>
+          {reasked && askedAt && <div className="text-[11px] text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
           {parsed.foodQuery && (
             <button onClick={() => { window.location.hash = `#/food?spin=${parsed.foodQuery}`; }}

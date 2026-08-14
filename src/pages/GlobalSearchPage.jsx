@@ -1,6 +1,6 @@
 // 모든 항차 + 양/선적 통합 검색 + 음성 입력 + AI 자연어 (M1.9)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake } from 'lucide-react';
+import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
@@ -8,6 +8,9 @@ import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
 import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
+
+// 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
+const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
 export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '' }) {   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
   const [query, setQuery] = useState(initialQuery || '');
@@ -18,13 +21,20 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   const [autoSpeak, setAutoSpeak] = useState(true);
   const recognitionRef = useRef(null);
   const lastSpokenRef = useRef(null);
+  // 1.69-05: 같은 질문 두 번 — 재제출 판정·접수 표시 (검수사 신고 2026-08-14 "같은 질문 두 번 하면 반응 없음. 엔터 기능이 없어서 전달되었는지 모름")
+  const lastAskRef = useRef('');                  // 마지막으로 물은 질문 — 재질문 판정
+  const [askedAt, setAskedAt] = useState(null);   // 질문 접수 시각 — «질문 접수 HH:MM» + 재발화 트리거
+  const [reasked, setReasked] = useState(false);  // 같은 질문 재제출 — 답 박스에 «다시 확인했습니다»
 
   // M6.10: debounce — 키 입력마다 즉시 검색하지 않고 200ms 후 검색
   //   대용량 (수천 대 컨테이너) 환경에서 입력 반응성 개선
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 200);
+    if (!query.trim()) lastSpokenRef.current = null;   // 1.69-05: 지웠다가 다시 물으면 다시 말한다
     return () => clearTimeout(t);
   }, [query]);
+  // 1.69-05: 방금 물어서 답이 붙은 질문을 기억 — 같은 질문 재제출(엔터·전송·음성) 판정용
+  useEffect(() => { if (debouncedQuery.trim().length >= 2) lastAskRef.current = debouncedQuery.trim(); }, [debouncedQuery]);
 
   // 모든 항차 양/선적 펼치기
   const flat = useMemo(() => {
@@ -328,10 +338,10 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       if (last.isFinal) {
         // 자연어 그대로 저장
         const t = text.trim();
-        if (t.length >= 2) setQuery(t);
+        if (t.length >= 2) submitNow(t);   // 1.69-05: 같은 질문을 다시 말해도 답한다(종전 setQuery는 같은 문자열이면 무반응)
         else {
           const digits = parseSpokenDigits(text);
-          if (digits && digits.length >= 2) setQuery(digits);
+          if (digits && digits.length >= 2) submitNow(digits);
           else speak('인식 실패');
         }
       }
@@ -352,6 +362,20 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     const t = setTimeout(() => setSettledQuery(query), 1200);
     return () => clearTimeout(t);
   }, [query]);
+
+  // 1.69-05: 엔터·전송 버튼·음성 제출 — debounce(200ms)·침묵 대기(1.2초)를 건너뛰고 바로 답한다.
+  //   같은 질문을 다시 물어도 lastSpokenRef를 풀어 다시 말하고(음성 켜져 있으면),
+  //   답 박스에 «다시 확인했습니다 (HH:MM 기준)» 한 줄로 갱신이 보이게 한다.
+  const submitNow = (raw) => {
+    const t = String(raw ?? '').trim();
+    if (t.length < 2) return;
+    setReasked(t === lastAskRef.current);
+    lastSpokenRef.current = null;
+    setAskedAt(Date.now());
+    setQuery(t);
+    setDebouncedQuery(t);
+    setSettledQuery(t);
+  };
 
   // 자동 음성 안내
   useEffect(() => {
@@ -390,7 +414,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     } else {
       speak(`${matches.length}개 일치. 더 자세히`);
     }
-  }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer, settledQuery]);
+  }, [matches, debouncedQuery, parsed, autoSpeak, localAnswer, settledQuery, askedAt]);   // 1.69-05: 재제출 시 재발화
 
   const startListening = () => {
     if (!recognitionRef.current) return;
@@ -414,11 +438,12 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
           <input type="text" value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { setQuery(e.target.value); setAskedAt(null); setReasked(false); }}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitNow(query); } }}
             placeholder="🎤 / 4777 / 40피트 4777 / 리퍼 몇개"
             autoComplete="off"
             autoFocus
-            className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
+            className="w-full pl-9 pr-40 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {voiceSupported && (
               <button onClick={isListening ? stopListening : startListening}
@@ -432,8 +457,15 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
               className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-slate-500'}`}>
               {autoSpeak ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
             </button>
+            {/* 1.69-05: 전송 버튼 — 폰 자판에 엔터가 없어도 질문을 보낸다. 같은 질문도 다시 답한다. */}
+            {query.trim().length >= 2 && (
+              <button onClick={() => submitNow(query)} title="질문 전송"
+                className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-slate-900">
+                <SendHorizontal className="w-5 h-5"/>
+              </button>
+            )}
             {query && (
-              <button onClick={() => { setQuery(''); stopSpeak(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
+              <button onClick={() => { setQuery(''); setAskedAt(null); setReasked(false); stopSpeak(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
                 <X className="w-4 h-4 text-slate-500"/>
               </button>
             )}
@@ -457,6 +489,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           {!isListening && query.length >= 2 && matches.length === 1 && !parsed.isStat && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
           {!isListening && query.length >= 2 && matches.length > 1 && !parsed.isStat && <span className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 100 ? '+' : ''}</span>}
           {isListening && <span className="text-red-300 font-bold">🎙 듣는 중...</span>}
+          {askedAt && !isListening && <span className="text-emerald-400 font-bold ml-2">✓ 질문 접수 {_hm(askedAt)}</span>}
         </div>
       </div>
 
@@ -464,6 +497,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       {localAnswer && (
         <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-xl p-4 mb-3">
           <div className="text-[11px] text-emerald-400 font-bold uppercase mb-1">🤖 즉답</div>
+          {reasked && askedAt && <div className="text-[11px] text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
         </div>
       )}

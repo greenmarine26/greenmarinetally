@@ -288,7 +288,14 @@ export function parseNaturalQuery(text) {
   if (/일어\s*나|일어날|일어남|깨워|깨우|기상\s*(?:시간|시각|몇|해야|하나)|몇\s*시\s*(?:에\s*)?(?:일어|기상)|알람|출근\s*(?:몇|시간|언제|해야)|몇\s*시(?:에|까지)?\s*출근|몇\s*시에\s*나가/i.test(t)) {
     result.wakeQuery = true;
   }
-  if (!result.etaQuery && !result.wakeQuery && !result.pilotQuery && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|시간\s*좀|오늘\s*며칠|며칠이야|며칠인가|무슨\s*요일|오늘\s*날짜|날짜\s*알려|오늘\s*무슨\s*날/i.test(t)) result.timeQuery = true;   // TallyOne 1.18: 며칠인가·시간 좀 추가
+  // 1.69-05: «몇 시에 들어와»는 **입항 질문이다** (검수사 신고 2026-08-14 — "HAYN 몇시에 들어와 → 답이 현재시간").
+  //   "몇 시"가 timeQuery에 먼저 먹혀 현재 시각을 답했다. wakeQuery와 같은 순서 게이트 —
+  //   timeQuery보다 먼저 판정하고 timeQuery를 끈다. 순수 시계 질문("지금 몇 시야")은 그대로 시계로.
+  if (/몇\s*시\s*(?:에|쯤|경|께)?\s*(?:들어\s*[오와]|입항|접안|도착)/i.test(t)
+      || /(?:들어\s*[오와][가-힣]*|입항|접안|도착)\s*(?:이|은|는|가|을|를)?\s*몇\s*시/i.test(t)) {
+    result.schedQuery = true;
+  }
+  if (!result.etaQuery && !result.wakeQuery && !result.pilotQuery && !result.schedQuery && /몇\s*시(?!간)|지금\s*시간|현재\s*시간|시간\s*알려|시간\s*좀|오늘\s*며칠|며칠이야|며칠인가|무슨\s*요일|오늘\s*날짜|날짜\s*알려|오늘\s*무슨\s*날/i.test(t)) result.timeQuery = true;   // TallyOne 1.18: 며칠인가·시간 좀 추가 · 1.69-05: schedQuery 게이트
   // V8.60: 맛집/식사 추천 — "점심 뭐 먹을까"·"저녁 먹으러 어디 가지"·"야식 추천" → 돌림판.
   //   ⚠ etaQuery("점심까지 끝나?")와 충돌 금지 — 끝/완료/까지 들어간 문장은 제외.
   // TallyOne 1.18: 출출·허기·요기·시켜먹 등 실제로 쓰는 말 추가 (검수사: 「출출한데 뭘 먹을까」 는 이미 됐다)
@@ -316,7 +323,7 @@ export function parseNaturalQuery(text) {
       )) result.weatherQuery = true;
   // V9.18: 선박 소개·이름 유래 — "이 배 뭐야", "선박 소개", "배 이름 뜻/유래", "무슨 배야"
   if (/이\s*배\s*(뭐|무슨|어떤|소개)|선박\s*소개|배\s*소개|(?:배|선박)\s*이름\s*(?:뜻|유래|의미)|무슨\s*배|어떤\s*배(?:야|에요|예요|인가)/i.test(t)) result.shipIntroQuery = true;
-  if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어오|언제\s*나가/i.test(t)) result.schedQuery = true;
+  if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어[오와]|언제\s*나가/i.test(t)) result.schedQuery = true;   // 1.69-05: "언제 들어와"도 입항 질문
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
   if (/(실\s*번호|씰|실)\s*(점검|검사|오류|확인|체크)|리스트\s*(점검|검사|확인|체크)|점검\s*(?:해|좀|줘|할까)/i.test(t)) result.sealAuditQuery = true;
