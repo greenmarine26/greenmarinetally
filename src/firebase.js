@@ -272,10 +272,25 @@ const _emptyFor = (k, v) => _isEmptyVal(v) || (_ZERO_IS_EMPTY.has(k) && Number(v
 // ⚠ '검수 흔적' 판정은 KEEP 목록과 다르다.
 //   sl_orig·mkcon 은 리스트 업로드가 자동으로 붙이는 값이라 흔적이 아니다. 그걸 흔적으로 세면
 //   리스트에서 빠진 컨이 영영 안 지워지고 재업로드마다 죽은 컨이 쌓인다(시뮬 2026-08-04에서 잡음).
-const _FIELD_WORK_SIGNS = ['sl_history', 'eseal', 'rfCheckedAt', 'rfSet', 'rfAct', 'iso403', 'photo', 'photos', 'memo'];
+// TallyOne 1.69-09(2026-08-14): eseal 도 같은 성격이었다 — 위 경고가 예언한 그대로 터졌다.
+//   검수사 신고 — *"파일을 교체하면 전껄 무시하고 새걸로 등록해야 하는데 231개 있는데다
+//   223개로 교체했는데 231개 그대로임"*. 실측 OBWH 2713E 선적: 231 = 223 + 8, 그 8대에
+//   `_keptNotInList:true` 가 붙어 있었고 흔적은 전부 `eseal:"W"` 한 글자였다.
+//   그런데 8대 모두 `eseal === eseal_orig` — **검수원이 고친 적이 없다.** 이 항차 231대 중
+//   `eseal !== eseal_orig` 는 0건. 리스트가 자동으로 채운 값을 손댄 기록으로 착각한 것이다.
+//   검수사는 결국 **항차를 통째로 지우고 다시 등록**해야 했다(가드 없는 위험한 우회).
+//   → 실번호와 같은 규칙으로 바꾼다: 값이 있으면이 아니라 **고쳤으면** 흔적이다.
+const _FIELD_WORK_SIGNS = ['sl_history', 'rfCheckedAt', 'rfSet', 'rfAct', 'iso403', 'photo', 'photos', 'memo'];
 function _hasFieldWork(o) {
   if (!o) return false;
   if (Array.isArray(o.sl_history) && o.sl_history.length) return true;
+  // 1.69-09: 엠티 실은 리스트·EDI 파서가 자동으로 채운다(autoRegApi.js:294 `if (c.eseal) rec.eseal = c.eseal`).
+  //   값 존재만으로는 흔적이 아니고, **검수원이 실제로 고쳤을 때만** 흔적이다.
+  //   eseal_orig 가 아예 없는데 eseal 만 있으면 = 파서가 안 채운 것을 사람이 넣은 것 → 흔적으로 지킨다.
+  if (!_isEmptyVal(o.eseal)) {
+    const _eo = o.eseal_orig;
+    if (_isEmptyVal(_eo) || String(o.eseal).trim() !== String(_eo).trim()) return true;
+  }
   for (const k of _FIELD_WORK_SIGNS) {
     if (k === 'sl_history') continue;
     if (!_isEmptyVal(o[k])) return true;
