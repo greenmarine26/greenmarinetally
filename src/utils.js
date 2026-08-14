@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.69-09';   // 버그픽스 — 리스트 교체가 안 먹던 문제: 자동값 eseal 을 '검수 흔적'으로 오인해 빠진 컨이 안 지워짐(OBWH 2713E 231→3→223)
+export const APP_VERSION = 'TallyOne 1.69-10';   // 버그픽스 — 선적 EDI 미도착인데 «평택 도착 적부도»를 선적본으로 써서 남의 항 화물이 통째로 시프팅 허수가 되던 문제(SWBT 2614S 27대). 평택 출항본이 아니면 확정 대조 안 함 + 화면에 «선적 EDI 미도착» 표기
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3262,9 +3262,28 @@ export function isOogOrOt(c) {
 //     - 통과화물만: 양하측 POD가 평택이 아니고, 선적측 POL도 평택이 아닌 것.
 //       (평택 양하분·선적분은 위치가 달라도 쉬프팅이 아님 — 야드 경유 재선적 등)
 // ------------------------------------------------------------
+// TallyOne 1.69-10: 선적 EDI 가 **평택 출항본**인가 — 평택 POL 컨이 하나라도 있어야 한다.
+//   하나도 없으면 그건 «평택에 도착했을 때» 적부도지 «평택에서 싣고 나간» 적부도가 아니다(선적 EDI 미도착).
+//   판정은 여기 한 벌만 둔다 — computeShiftingMap 과 화면 안내가 같은 함수를 쓴다.
+export function loadEdiIsDeparture(loadEdiMap) {
+  if (!loadEdiMap) return false;
+  return Object.values(loadEdiMap).some((c) => c && c.pol && isPyeongtaekPort(c.pol));
+}
+
 export function computeShiftingMap(dischEdiMap, loadEdiMap) {
   const out = {};
   if (!dischEdiMap || !loadEdiMap) return out;
+  // TallyOne 1.69-10 (검수사 확정 2026-08-15, SWBT 2614S): 선적 EDI 가 아직 안 왔는데
+  //   도착 적부도를 선적본으로 쓰면, 배에 실려 온 **남의 항 화물이 통째로 「통과화물 시프팅」**이 된다.
+  //   실측 — SWBT 2614S 는 광양·부산에서 평택 화물을 실어 와 예정에 없던 양하 40대가 생긴 배다.
+  //   선적 대표가 `BAPLIE_SMDG15_2614S_KRPTK`(LOC+5+KRPTK 인데 컨 POL 전부 KRPUS → 평택 선적분 0)라
+  //   부산발 27대가 허수 시프팅으로 잡혔고 **배정표 이적 0 과 어긋난 것이 신호였다.**
+  //   → 평택 출항본이 아니면 확정 대조를 하지 않는다. 사유는 _meta 로 넘겨 화면이 «자료 대기»를 말하게 한다.
+  //   (_meta 는 non-enumerable 이라 Object.keys 카운트에 안 잡힌다 — 예측 경로와 같은 방식.)
+  if (!loadEdiIsDeparture(loadEdiMap)) {
+    Object.defineProperty(out, '_meta', { value: { reason: 'loadEdiPending' } });
+    return out;
+  }
   const posOf = (c) => {
     if (!c) return '';
     const b = normalizeBay(c.bay || '');

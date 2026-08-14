@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture } from '../utils.js';
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -283,11 +283,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     }).sort((a, b) => String(a.from || '').localeCompare(String(b.from || '')));
   }, [shiftingMap, fullEdiMap]);
 
+  // TallyOne 1.69-10: 선적 EDI 미도착(=평택 출항본 아님) — 조용히 0 으로 두지 않고 화면에 말한다.
+  //   판정은 utils.loadEdiIsDeparture 한 벌만 쓴다(같은 판정을 두 기준으로 하지 않는다).
+  const loadEdiPending = useMemo(() => {
+    const lm = ediMapFromRaw(voyage?.loading);
+    return !!lm && !loadEdiIsDeparture(lm);
+  }, [voyage?.loading?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.sizeBytes]);
+
   // 1.45: 시프팅 근거 — 예측이면 출항본·제외 기항, 배정표 이적(수집기 berthShift)이 있으면 그것이 정본
   const shiftInfo = {
     meta: (shiftingMap && shiftingMap._meta) || null,
     berthShift: (voyage?.info?.berthShift ?? null),
     lane: voyage?.info?.lane || '',
+    loadEdiPending,
   };
 
   // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
@@ -1817,7 +1825,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
       />
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
-      {(shiftingList.length > 0 || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && shiftInfo.meta.excludedCnt > 0)))) && (
+      {(shiftingList.length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && shiftInfo.meta.excludedCnt > 0)))) && (
         <div className="mt-3 bg-slate-900 border border-blue-800/50 rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
@@ -1826,6 +1834,13 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
             )}
             <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
           </div>
+          {/* TallyOne 1.69-10: 선적 EDI 미도착 — 조용히 0 으로 두지 않는다(검수사 확정 2026-08-15, SWBT 2614S). */}
+          {shiftInfo?.loadEdiPending && (
+            <div className="px-3 py-1.5 text-[11px] text-amber-200 bg-amber-950/40 border-b border-amber-800/40">
+              ⏳ 선적 EDI 미도착 — 지금 올라온 선적 자료는 <b>평택 도착 적부도</b>(평택에서 싣는 화물이 아직 0)입니다.
+              <span className="text-amber-300/80"> 시프팅은 선적 EDI가 와야 확정됩니다.</span>
+            </div>
+          )}
           {(shiftInfo?.meta?.origin || shiftInfo?.meta?.nextPort) && (
             <div className="px-3 py-1 text-[10px] text-slate-400 bg-slate-950/60 border-b border-slate-800">
               {shiftInfo.lane ? `항로 ${shiftInfo.lane} · ` : ''}{shiftInfo.meta.origin || '출항지 미상'} 출항본 기준
