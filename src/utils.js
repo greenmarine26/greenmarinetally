@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.76-01';   // 버그픽스 — 1.76 이 **작업 전 항차의 berthShift:0 을 정답으로 단정**해 XTPG 536E(8/17 예정·확정 EDI 아님)를 «불일치» 로 찍었다. 검수사 지적 «그것이 확정EDI인가요?» — 실측: berthShift 0 인 8항차 중 7항차가 terminalStatus 'planned'(작업 전), 값이 있는 것은 working 인 MAMP 뿐. 이제 working/departed 이후에만 정본으로 인정하고 그 전에는 «보류» 로 표시한다(지침 5-3)
+export const APP_VERSION = 'TallyOne 1.76-02';   // 버그픽스 — 확정 대조(computeShiftingMap)가 «좌표가 달라진 통과화물 전부»를 시프팅으로 세던 것을 검수사 정의대로 교정 — 시프팅은 평택 작업(양하·선적)에 방해가 되는 컨의 이동만이다. SWBT 2614S 실측: 잡힌 10대 전부(같은 스택 맞교환 8 + 18→38 이동 2)가 평택 양하·선적이 없는 스택이라 전부 허수(배정표 이적 0 일치). from 자리가 ①같은 스택 아래 평택 양하 ②같은 스택 그 단 이하 평택 선적 ③데크컨이고 그 베이(짝수면 e±1) 홀드에 평택 작업 — 셋 중 하나에 걸릴 때만 남긴다 // (1.76-01) — 1.76 이 **작업 전 항차의 berthShift:0 을 정답으로 단정**해 XTPG 536E(8/17 예정·확정 EDI 아님)를 «불일치» 로 찍었다. 검수사 지적 «그것이 확정EDI인가요?» — 실측: berthShift 0 인 8항차 중 7항차가 terminalStatus 'planned'(작업 전), 값이 있는 것은 working 인 MAMP 뿐. 이제 working/departed 이후에만 정본으로 인정하고 그 전에는 «보류» 로 표시한다(지침 5-3)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3358,6 +3358,29 @@ export function computeShiftingMap(dischEdiMap, loadEdiMap) {
     const tos = new Set(cns.map((c) => out[c].to));
     for (const cn of cns) {
       if (tos.has(out[cn].from) && froms.has(out[cn].to)) delete out[cn];   // 순열 구성원 — 서류상 교환
+    }
+  }
+  // TallyOne 1.76-02 (검수사 정의 확정 2026-08-15): **시프팅 = 평택 작업에 방해가 되는 컨의 이동만.**
+  //   «시프팅은 양하대상을 양하할때 걸리는 화물을 옮기는것 + 선적대상 자리에 있어도 대상» (원문).
+  //   좌표만 다르고 아무 평택 작업에도 안 걸리는 통과화물은 서류 차이다 — SWBT 2614S 실측:
+  //   확정 대조 10대 전부(베이 25·27 홀드 04↔06 맞교환 8 + 18→38 이동 2)가 평택 양하·선적 없는
+  //   스택이었고 배정표 이적 0. 38번 평택 엠티 10대는 저희끼리만 쌓여 위에 걸린 것이 없었다.
+  //   from 자리가 ①같은 스택 아래 평택 양하 ②같은 스택 그 단 이하 평택 선적 ③데크 컨이고
+  //   그 베이(짝수 40ft면 e±1 포함) 홀드에 평택 양하/선적 — 셋 중 하나일 때만 시프팅으로 남긴다.
+  //   진짜 들어올리는 맞교환(아래에 평택 작업)은 ①②로 살아남는다. 커버 판정은 베이 단위 근사(보수적 유지).
+  {
+    const _n = (x) => parseInt(x, 10);
+    const ptkD = [], ptkL = [];
+    for (const d2 of Object.values(dischEdiMap)) { if (d2 && d2.pod && isPyeongtaekPort(d2.pod)) { const p = posOf(d2); if (p) ptkD.push(p); } }
+    for (const l2 of Object.values(loadEdiMap)) { if (l2 && l2.pol && isPyeongtaekPort(l2.pol)) { const p = posOf(l2); if (p) ptkL.push(p); } }
+    const holdPtkBays = new Set([...ptkD, ...ptkL].filter((p) => _n(p.slice(5)) < 80).map((p) => _n(p.slice(0, 3))));
+    for (const [cn, v] of Object.entries(out)) {
+      const p = v.from, b = _n(p.slice(0, 3)), t = _n(p.slice(5));
+      const deck = t >= 80;
+      const stackBelowDis = ptkD.some((q) => q.slice(0, 5) === p.slice(0, 5) && ((_n(q.slice(5)) >= 80) === deck) && _n(q.slice(5)) < t);
+      const stackLoadLE  = ptkL.some((q) => q.slice(0, 5) === p.slice(0, 5) && ((_n(q.slice(5)) >= 80) === deck) && _n(q.slice(5)) <= t);
+      const coverWork = deck && (holdPtkBays.has(b) || (b % 2 === 0 && (holdPtkBays.has(b - 1) || holdPtkBays.has(b + 1))));
+      if (!(stackBelowDis || stackLoadLE || coverWork)) delete out[cn];
     }
   }
   for (const v of Object.values(out)) { delete v._iso; delete v._fe; }   // 내부 필드 정리(호환 형태 유지)
