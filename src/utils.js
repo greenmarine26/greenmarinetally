@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.74-02';   // 되돌림 — 1.74-01 의 «데크 40ft 는 e±1 홀드 커버 위» 규칙 철회. SWBT 2614S 에 시프팅 9대를 만들었으나 배정표 이적 0 이다(검수사 지적). 예측 시프팅은 1.74 동작으로 복귀 — 16항차 전부 1.74 와 동일
+export const APP_VERSION = 'TallyOne 1.75';   // 기능 — 베이사전에 **해치커버 실측 경계**(hatchRows)를 받아 등분 근사보다 우선한다. 00열이 항상 센터가 아니다(SWBT 검수사 확정 «08·06·04·02 / 00·01·03·05·07 2장»). 경계를 아는 배는 40ft 데크가 e±1 두 홀드 커버 위에 걸치는 것까지 계산 — SWBT 2614S 시프팅 0(배정표 이적 0 일치). 16항차 회귀 전부 1.74-02 와 동일
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3460,6 +3460,17 @@ export function predictShifting(dischEdiMap, baysInfo) {
   const _panelOf = (bay, row) => {
     const bn = parseInt(bay, 10);
     const inf = _info[bn];
+    // ── 1.75: 사전에 **실측 커버 경계**(hatchRows)가 있으면 등분 근사를 쓰지 않는다 ──
+    //   검수사 확정 2026-08-15 (SWBT) — *"08·06·04·02 / 00·01·03·05·07  2장입니다."*
+    //   ⚠ **00열(센터)이 항상 양쪽에 걸치는 것이 아니다.** SWBT 는 00 이 홀수측 패널에 속한다.
+    //   등분 근사(9열÷2)는 00 을 짝수측에 넣어 커버 판정을 뒤집었다 — 실측 경계가 있으면 그게 이긴다.
+    const hr = inf && Array.isArray(inf.hatchRows) ? inf.hatchRows : null;
+    if (hr) {
+      const r0 = parseInt(row, 10);
+      if (!Number.isFinite(r0)) return null;
+      for (let p = 0; p < hr.length; p++) if ((hr[p] || []).map(Number).includes(r0)) return p;
+      return null;                                    // 경계에 없는 열 — 판정 보류(보수적으로 포함)
+    }
     const n = inf ? parseInt(inf.hatchCount, 10) : NaN;
     if (!Number.isFinite(n) || n < 1) return null;   // 패널 정보 없음 → 종전 현측(E/O) 모델
     const ax = _groupAxis(_groupOf(bn));
@@ -3502,13 +3513,28 @@ export function predictShifting(dischEdiMap, baysInfo) {
     if (isPyeongtaekPort(c.pod)) continue;            // 평택 양하분은 어차피 내리므로 시프팅 아님
     const b = normalizeBay(c.bay || '');
     if (!b) continue;
+    // ── 1.75: 40ft 데크 한 짝은 **20ft 두 베이(e-1·e+1) 커버 위에 걸친다** ──
+    //   SWBT 2614S 실측 — 9·11번 홀드에 평택 양하 30대가 있는데 9·11 데크는 비어 있다.
+    //   그 위 데크가 40ft 라 **10번**으로 실려 있기 때문이다. 베이 번호만 맞추면 영원히 못 본다.
+    //   ⛔ **경계를 아는 배에서만 넓힌다.** 1.74-01 은 이 게이트 없이 넓혀 SWBT 에 허수 9대를 냈다
+    //     (등분 근사가 00열을 짝수측에 넣어 커버가 양쪽 다 열리는 것으로 잡혔다).
+    //     경계(hatchRows)가 없으면 커버가 어디서 갈리는지 모르는 것이므로 **1.74 동작 그대로** 둔다.
+    const _knowsCover = (x) => { const inf = _info[parseInt(x, 10)]; return !!(inf && Array.isArray(inf.hatchRows)); };
+    const _coverBays = (() => {
+      const bn = parseInt(b, 10);
+      if (!Number.isFinite(bn) || bn % 2 === 1) return [b];       // 20ft 데크 — 자기 베이만
+      if (!_knowsCover(bn - 1) && !_knowsCover(bn + 1)) return [b];
+      return [b, String(bn - 1), String(bn + 1)];                 // 40ft 데크 — 걸친 두 홀드까지
+    })();
     let hit = false;
-    if (openPanels[b]) {
-      const p = _panelOf(b, c.row);
-      hit = (p == null) ? true : openPanels[b].has(p);   // 패널 미상(행 미상 등)은 보수적으로 포함
-    } else if (openSides[b]) {
-      const sd = _sideOf(c.row);
-      hit = !!sd && (sd === 'C' || openSides[b].has(sd));
+    for (const cb of _coverBays) {
+      if (openPanels[cb]) {
+        const p = _panelOf(cb, c.row);
+        if (p == null || openPanels[cb].has(p)) { hit = true; break; }   // 패널 미상은 보수적으로 포함
+      } else if (openSides[cb]) {
+        const sd = _sideOf(c.row);
+        if (sd && (sd === 'C' || openSides[cb].has(sd))) { hit = true; break; }
+      }
     }
     if (hit) {
       const _pos = `${b}-${String(c.row || '').padStart(2, '0')}-${String(c.tier || '').padStart(2, '0')}`;
@@ -3521,12 +3547,6 @@ export function predictShifting(dischEdiMap, baysInfo) {
                   _why: `${b}베이 홀드 양하분 위 — 커버 열려면 이동` };
     }
   }
-  // ⛔ 1.74-02 되돌림 — 1.74-01 이 «짝수 베이 데크 40ft 는 e±1 홀드 커버 위» 규칙을 넣어
-  //   SWBT 2614S 에 시프팅 9대를 만들었다. **배정표 이적 0 과 어긋난다.** 같은 날 아침 1.69-10 이
-  //   지운 허수 27대와 같은 부류를 저녁에 되살린 셈이다(검수사 지적 — *"시프팅이 있다고요?"*).
-  //   SWBT 는 평택에서 **선적만** 하는 배이고, 이번 양하 40대는 광양·부산에서 실어 온 예정 밖 화물이다.
-  //   9·11번 홀드에 그 30대가 있고 그 위 데크가 40ft 라 10번으로 실려 있는데도 이적이 0 인 **이유는
-  //   아직 모른다.** 이유를 모른 채 규칙을 넓히지 않는다 — 물리 추론보다 배정표가 정본이다.
   // ③ 1.44 (검수사 지적 2026-08-10, MCAT 630N): **같은 스택에서 평택 양하분 위에 얹힌 통과화물.**
   //   커버와 무관하게 이걸 들어내야 아래를 내린다. 종전 규칙(①②)은 커버 현측만 계산해
   //   MCAT 630N에서 30·34·44번 데크 양하분 위 통과 엠티 등 94대를 놓쳤다(실측 — 앱 10 vs 실제 104).
@@ -3689,7 +3709,7 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
       for (const e of bs) {
         const bn = parseInt(e?.bayNo ?? e?.bay, 10);
         if (!Number.isFinite(bn)) continue;
-        baysInfo[bn] = { hatchCount: e?.hatchCount, rowCount: e?.rowCount,
+        baysInfo[bn] = { hatchCount: e?.hatchCount, rowCount: e?.rowCount, hatchRows: e?.hatchRows,
                          hasZero: !!(e?.hasZero || e?.deckHasZero || e?.holdHasZero) };
       }
       if (!Object.keys(baysInfo).length) baysInfo = null;
