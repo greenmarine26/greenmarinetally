@@ -85,6 +85,17 @@ const EXEC_RANKS = ['회장', '대표이사', '부사장', '전무이사', '상�
 const RANK_ORDER = ['회장', '대표이사', '부사장', '전무이사', '상무이사', '이사', '실장', '부장', '차장', '과장', '대리'];
 const DUTY_ORDER = ['__EXEC__', '실장', '수석검수', '부수석', '검수'];   // 검수사 확정 순서
 
+// TallyOne 1.72: **직급 없는 인원은 입사일 순** (검수사가 직접 준 순서 2026-08-15).
+//   *"검수들도 직급순 정렬 부탁드립니다. 직급이 없으면 입사일 순입니다."*
+//   ⚠ 입사일 자체는 앱 어디에도 없다 — 검수사가 불러 준 **순서**가 정본이다.
+//     `staffList/{name}.addedAt` 은 «앱에 등록한 시각»이지 입사일이 아니다(실측 — 2026-06 이후만 있다).
+//   ⚠ 여기 없는 이름(신규 입사)은 이 배열 뒤에 붙고, 그 안에서는 이름순이다.
+//     새 사람이 들어오면 **이 배열에 자리를 넣어 줘야** 순서가 맞는다.
+const HIRE_ORDER = [
+  '장문영', '오종하', '최관식', '김판석', '한성호', '이인철', '이종부',
+  '이종현', '송제욱', '박진우', '고현석', '이형출', '김유신', '최원형',
+];
+
 /** role 문자열을 { rank, duty } 로 가른다. `부장(수석검수)` → { rank:'부장', duty:'수석검수' } */
 export function splitRole(role) {
   const s = String(role || '').trim();
@@ -104,21 +115,28 @@ export function displayRole(name) {
   return '검수';                                    // 차장·과장·대리 등 직책 없는 직급 → 검수
 }
 
-/** 정렬 키 — 1차 직책, 2차 직급. 직급은 화면에 안 보이고 순서에만 쓴다. */
+/** 정렬 키 — 1차 직책, 2차 직급, 3차 입사일(직급 없는 사람끼리). 직급·입사일은 화면에 안 보인다. */
 export function staffSortKey(name) {
-  const { rank } = splitRole(getStaffRole(name));
-  const shown = displayRole(name);
+  const nm = String(name || '').trim();
+  const { rank } = splitRole(getStaffRole(nm));
+  const shown = displayRole(nm);
   const dutyIdx = EXEC_RANKS.includes(rank) ? 0 : (DUTY_ORDER.indexOf(shown) < 0 ? DUTY_ORDER.length : DUTY_ORDER.indexOf(shown));
-  const rankIdx = RANK_ORDER.indexOf(rank) < 0 ? RANK_ORDER.length : RANK_ORDER.indexOf(rank);
-  return [dutyIdx, rankIdx, String(name || '')];
+  // HIRE_ORDER 에 이름이 있으면 **직급을 무시하고** 입사일 순으로 본다.
+  //   검수사 확정 2026-08-15 — *"김유신도 퇴사자이지만 **지원인원이므로 직급 무시** 했습니다."*
+  //   (명단 role 은 '대리'로 두고 정렬만 검수 취급한다 — 원 명단을 고치지 않는다.)
+  const _hi = HIRE_ORDER.indexOf(nm);
+  const hireIdx = _hi < 0 ? HIRE_ORDER.length : _hi;   // 목록에 없는 이름(신규)은 맨 뒤
+  const rankIdx = _hi >= 0 ? RANK_ORDER.length
+    : (RANK_ORDER.indexOf(rank) < 0 ? RANK_ORDER.length : RANK_ORDER.indexOf(rank));
+  return [dutyIdx, rankIdx, hireIdx, nm];
 }
 
 /** 배열 정렬용 비교자 — staffSortKey 를 그대로 쓴다. */
 export function compareStaff(a, b) {
   const ka = staffSortKey(typeof a === 'string' ? a : a?.name);
   const kb = staffSortKey(typeof b === 'string' ? b : b?.name);
-  for (let i = 0; i < 2; i++) { if (ka[i] !== kb[i]) return ka[i] - kb[i]; }
-  return ka[2].localeCompare(kb[2], 'ko');
+  for (let i = 0; i < 3; i++) { if (ka[i] !== kb[i]) return ka[i] - kb[i]; }
+  return ka[3].localeCompare(kb[3], 'ko');
 }
 
 // 수석검수 여부 (작업 권한) — 수석검수 또는 부수석 포함
