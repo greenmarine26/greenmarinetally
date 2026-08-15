@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.69-10';   // 버그픽스 — 선적 EDI 미도착인데 «평택 도착 적부도»를 선적본으로 써서 남의 항 화물이 통째로 시프팅 허수가 되던 문제(SWBT 2614S 27대). 평택 출항본이 아니면 확정 대조 안 함 + 화면에 «선적 EDI 미도착» 표기
+export const APP_VERSION = 'TallyOne 1.70';   // 기능 — 자리(LOC+147) 없는 EDI 를 읽는다. COPRAR 선적리스트(컨번호·규격·POD·VGM·씰)가 0건으로 버려지던 것 수리 + SEL 씰 세그먼트 + 헤더 선적항(LOC+9) 반영
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -945,6 +945,27 @@ export function parseNumericIFCSUM(ediText) {
   return stampEdiSeq(result);
 }
 
+// TallyOne 1.70: BAPLIE 컨 한 대의 빈 틀 — LOC+147(자리 있음)과 EQD+CN(자리 없는 COPRAR) 두 시작점이
+//   같은 틀을 써야 한다. 복제하면 한쪽만 고쳐진다(작업표준 §2-2-D).
+function newBaplieCont() {
+  return {
+    cn: '', l4: '', iso: '', tp: '', fe: 'F',
+    pol: '', pod: '', npod: '',           // npod = next POD (LOC+76)
+    tspot: '',                             // M5.79: 환적항 (LOC+83)
+    fpod: '',                              // M5.79: 최종 목적지 (LOC+97 또는 LOC+98)
+    wt: 0, wtt: '',
+    bay: '', row: '', tier: '',
+    op: '',
+    dg: false, dgc: '', un: '', pg: '',   // M5.79: pg = packaging group
+    rf: false, fr: false, tk: false, oog: false,
+    sl: '', sh: '', bl: '',
+    tmp: '',
+    st: '',                                // V38: raw status code
+    isBooking: false,                      // M5.79: 평택 부킹 슬롯 (컨번호 미입력)
+    pendingCn: false,                      // M5.79: 컨번호 입력 대기 마커
+  };
+}
+
 export function parseBAPLIE(ediText) {
   // V8.05: CASP/CKL 계열 숫자코드 BAPLIE 지원 (표준 EDIFACT가 아닌 형식).
   //   헤더가 "00:BAPLIE:BAYPLAN..."이고 세그먼트가 50:/52: 숫자코드면 전용 파서로.
@@ -1028,28 +1049,19 @@ export function parseBAPLIE(ediText) {
       }
     } else if (seg.startsWith('LOC+5+') && !cur) {
       result.pol = seg.substring(6).split(':')[0];
+    } else if (seg.startsWith('LOC+9+') && !cur) {
+      // TallyOne 1.70: 문서 전체의 선적항 — COPRAR 는 컨마다 안 적고 **헤더에 한 번만** 적는다.
+      //   (`TDT` 다음 `LOC+9+KRPTK:139:6`). 컨에 pol 이 없으면 아래 마무리 루프에서 이 값을 채운다.
+      //   ⚠ 컨이 시작된 뒤의 LOC+9 는 종전대로 그 컨의 pol 이다(이 분기는 `!cur` 일 때만).
+      //   회귀 범위 실측 — 메일함 EDI 538개 중 헤더 LOC+9 를 가진 파일은 COPRAR 4개뿐.
+      result.docPol = seg.substring(6).split(':')[0];
     } else if (seg.startsWith('DTM+178:') || seg.startsWith('DTM+136:')) {
       const v = seg.split(':')[1];
       if (v) result.etd = v.substring(0, 8);
     } else if (seg.startsWith('LOC+147+')) {
       if (cur) result.containers.push(cur);
       const slot = seg.substring(8).split(':')[0];
-      cur = {
-        cn: '', l4: '', iso: '', tp: '', fe: 'F',
-        pol: '', pod: '', npod: '',           // npod = next POD (LOC+76)
-        tspot: '',                             // M5.79: 환적항 (LOC+83)
-        fpod: '',                              // M5.79: 최종 목적지 (LOC+97 또는 LOC+98)
-        wt: 0, wtt: '',
-        bay: '', row: '', tier: '',
-        op: '',
-        dg: false, dgc: '', un: '', pg: '',   // M5.79: pg = packaging group
-        rf: false, fr: false, tk: false, oog: false,
-        sl: '', sh: '', bl: '',
-        tmp: '',
-        st: '',                                // V38: raw status code
-        isBooking: false,                      // M5.79: 평택 부킹 슬롯 (컨번호 미입력)
-        pendingCn: false,                      // M5.79: 컨번호 입력 대기 마커
-      };
+      cur = newBaplieCont();
       // 위치는 보통 7자리(BBBRRTT) 또는 6자리(BBRRTT)
       // M3.1: bay는 정규화해서 저장 (앞 0 제거, "016"→"16", "001"→"1")
       if (slot.length >= 7) {
@@ -1061,7 +1073,20 @@ export function parseBAPLIE(ediText) {
         cur.row = slot.substring(2, 4);
         cur.tier = slot.substring(4, 6);
       }
-    } else if (cur && seg.startsWith('EQD+CN+')) {
+    } else if (seg.startsWith('EQD+CN+')) {
+      // TallyOne 1.70 (검수사 지적 2026-08-15): **자리 없는 EDI 도 읽는다.**
+      //   COPRAR(선사 선적리스트, `UNH+…+COPRAR:D:95B:UN:SMDG16`)는 선내 자리(LOC+147)가 없고
+      //   `EQD+CN` 으로 컨이 시작한다. 종전 파서는 `cur`(=LOC+147 이 만든 것)가 없으면 통째로 건너뛰어
+      //   **0건**을 냈다 — MAMP 633S 의 선적 실번호 60대(규격·POD·VGM·씰 포함)가 그렇게 버려졌다.
+      //   대조리포트에 `[edi] 0건` 이 찍혀 있었는데 아무도 안 봤다(조용한 실패).
+      //   → `cur` 가 없으면 여기서 새로 시작한다. 자리는 빈 채로 둔다(있는 자료만 쓴다).
+      //   ⚠ 컨을 끊는 것도 여기다 — COPRAR 는 LOC+147 이 없어 «다음 EQD+CN» 이 유일한 경계다.
+      //     안 끊으면 뒤 컨이 앞 컨을 덮어써 파일 하나가 1대로 줄어든다(실측 60대 → 1대).
+      //     정상 BAPLIE 는 LOC+147 이 새 컨을 만들어 이 시점 `cur.cn` 이 비어 있으므로 안 걸린다.
+      if (!cur || cur.cn) {
+        if (cur) result.containers.push(cur);
+        cur = newBaplieCont(); cur._noSlot = true;
+      }
       const parts = seg.split('+');
       cur.cn = (parts[2] || '').replace(/[\s\-]/g, '').toUpperCase().trim();
       // M5.79: 빈 컨번호 (평택 적재 부킹 슬롯) — 임시 ID로 살려둠
@@ -1232,6 +1257,12 @@ export function parseBAPLIE(ediText) {
       // NAD+CA+CLL:172:20  → CLL
       const code = seg.substring(7).split(':')[0];
       if (code && !cur.op) cur.op = code;
+    } else if (cur && seg.startsWith('SEL+')) {
+      // TallyOne 1.70: 씰번호 — COPRAR(선사 선적리스트)가 `SEL+KR0989283+CA` 로 준다.
+      //   종전 파서는 이 세그먼트를 아예 안 읽어 씰이 EDI 에서 하나도 안 들어왔다.
+      //   풀은 sl(실번호), 엠티는 eseal 로 나눈다(앱 전역 규약 — 리스트 파서와 같은 갈래).
+      const _sv = (seg.split('+')[1] || '').trim();
+      if (_sv) { if (String(cur.fe).toUpperCase() === 'E') { if (!cur.eseal) cur.eseal = _sv; } else if (!cur.sl) cur.sl = _sv; }
     } else if (cur && seg.startsWith('RFF+BM:')) {
       // BL 참조
       cur.bl = seg.substring(7);
@@ -1249,6 +1280,9 @@ export function parseBAPLIE(ediText) {
   for (const c of result.containers) {
     // M6.39: voy 메타 저장
     if (result.voy && !c.voy) c.voy = result.voy;
+    // TallyOne 1.70: 헤더에만 적힌 선적항(COPRAR) 을 빈 컨에 채운다 — 안 채우면 평택 선적분 0 으로 잡혀
+    //   방향 필터에서 전량 제외된다(자료를 읽고도 못 쓰는 상태).
+    if (result.docPol && !c.pol) c.pol = result.docPol;
 
     if (!c.iso || c.iso.length < 4) continue;
     const last = c.iso[c.iso.length - 1];
