@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
-import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES } from '../staffList.js';
+import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
 import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess } from '../firebase.js';   // 1.41: 개발용 접근
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
@@ -162,6 +162,8 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   if (filter === 'inspectors') filtered = allStaff.filter(s => inspectorMap[s.name] && !isDeleted(s.name));
   else if (filter === 'deleted') filtered = allStaff.filter(s => isDeleted(s.name));
   else filtered = allStaff.filter(s => !isDeleted(s.name));
+  // TallyOne 1.71: 직책 1차 · 직급 2차 정렬(검수사 확정 2026-08-15). 직급은 순서에만 쓰고 화면엔 안 보인다.
+  filtered = [...filtered].sort(compareStaff);
 
   const handleAdd = async () => {
     const raw = newName.trim();
@@ -339,7 +341,8 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     {devAccess[s.name] && <span className="text-[9px] bg-cyan-900 text-cyan-300 px-1 rounded" title={`개발용 접근 — ${devAccess[s.name].grantedBy || ''} 부여`}>🛠 개발용</span>}
                     {isDeleted(s.name) && <span className="text-[9px] bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
                   </div>
-                  <div className="text-[10px] text-slate-400">{s.role}</div>
+                  {/* TallyOne 1.71: 이사급 이상만 직급, 그 아래는 직책. 직책 없으면 «검수». */}
+                  <div className="text-[10px] text-slate-400">{displayRole(s.name)}</div>
                 </div>
                 {isActive && <span className="text-[9px] bg-emerald-700/40 text-emerald-300 px-1.5 py-0.5 rounded font-bold">●작업중</span>}
                 {isLoggedIn && <span className="text-[9px] bg-sky-900/50 text-sky-300 px-1.5 py-0.5 rounded font-bold">○로그인</span>}

@@ -5,7 +5,7 @@
 //   앱 시작은 항상 이 화면(자동 로그인 없음). 로그인 성공 시 App이 역할별 해시로 보낸다.
 import React, { useState, useEffect, useCallback } from 'react';
 import { Anchor, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
-import { getStaffRole, isChief, STAFF_NAMES } from '../staffList.js';
+import { getStaffRole, isChief, STAFF_NAMES, displayRole } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus } from '../inspectorStatus.js';
 import {
   MAX_TRUSTED_DEVICES,
@@ -213,7 +213,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         {list.length > 0 && (
           <div className="space-y-1.5 mb-3 max-h-[42vh] overflow-y-auto">
             {list.map(i => {
-              const role = getStaffRole(i.name);
+              const role = displayRole(i.name);   // 1.71: 이사급 이상만 직급, 그 아래는 직책(없으면 검수)
               const chief = isChief(i.name);
               const isSel = i.name === selected;
               return (
@@ -273,7 +273,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             </button>
           </div>
           {selected && !selectedInList && (
-            <div className="mt-2 text-[12px] text-amber-200">선택됨: <b>{selected}</b>{getStaffRole(selected) ? ` · ${getStaffRole(selected)}` : ''}</div>
+            <div className="mt-2 text-[12px] text-amber-200">선택됨: <b>{selected}</b>{displayRole(selected) ? ` · ${displayRole(selected)}` : ''}</div>
           )}
         </div>
 
@@ -305,7 +305,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             </div>
             {gateMode === 'setup' && (
               <div className="text-[11px] text-slate-400 mb-2">
-                <b className="text-amber-300">{getStaffRole(gateName) || '보호 대상'}</b> 이름은 본인만 쓸 수 있습니다. 처음 한 번 비밀번호를 정하세요.
+                <b className="text-amber-300">{displayRole(gateName) || '보호 대상'}</b> 이름은 본인만 쓸 수 있습니다. 처음 한 번 비밀번호를 정하세요.
                 이 기기가 신뢰 기기 1호가 되고, 신뢰 기기(최대 {MAX_TRUSTED_DEVICES}대)에서는 다음부터 비밀번호 없이 선택됩니다.
               </div>
             )}

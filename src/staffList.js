@@ -75,6 +75,52 @@ export function getStaffRole(name) {
   return SERVER_ROLES[norm] || STAFF_ROLES[norm] || '';
 }
 
+// ─── TallyOne 1.71: 화면에 보이는 직책 (검수사 확정 2026-08-15) ────────────────
+//   *"이사급이상만 직급을 보여주고 그 이하는 직책만 보여주세요. 직책이 없는 인원은 검수로 적어주세요."*
+//   *"정렬순은 같은 직책이면 직급순위로 보여주시면 됩니다. (직급은 정렬용으로만, 보여주지 말고)"*
+//
+//   명단의 `role` 은 「직급(직책)」 한 덩어리다 — 예 `부장(수석검수)` · `대리(부수석)` · `차장` · `검수`.
+//   ⚠ 판정은 여기 한 벌만 둔다. 인원관리·로그인 화면이 같은 함수를 쓴다(같은 판정 두 벌 금지).
+const EXEC_RANKS = ['회장', '대표이사', '부사장', '전무이사', '상무이사', '이사'];   // 이사급 이상 = 직급을 그대로 보여준다
+const RANK_ORDER = ['회장', '대표이사', '부사장', '전무이사', '상무이사', '이사', '실장', '부장', '차장', '과장', '대리'];
+const DUTY_ORDER = ['__EXEC__', '실장', '수석검수', '부수석', '검수'];   // 검수사 확정 순서
+
+/** role 문자열을 { rank, duty } 로 가른다. `부장(수석검수)` → { rank:'부장', duty:'수석검수' } */
+export function splitRole(role) {
+  const s = String(role || '').trim();
+  const m = s.match(/^([^(（]*)[\s]*[(（]([^)）]*)[)）]\s*$/);
+  const rank = (m ? m[1] : s).trim();
+  const duty = (m ? m[2] : '').trim();
+  return { rank, duty };
+}
+
+/** 화면에 찍을 한 줄. 이사급 이상 = 직급, 그 이하 = 직책(없으면 '검수'). */
+export function displayRole(name) {
+  const { rank, duty } = splitRole(getStaffRole(name));
+  if (EXEC_RANKS.includes(rank)) return rank;      // 임원은 직급 그대로
+  if (duty) return duty;                            // 부장(수석검수) → 수석검수
+  if (rank === '실장') return '실장';               // 실장은 직책으로 본다(검수사 확정)
+  if (rank === '검수' || !rank) return '검수';
+  return '검수';                                    // 차장·과장·대리 등 직책 없는 직급 → 검수
+}
+
+/** 정렬 키 — 1차 직책, 2차 직급. 직급은 화면에 안 보이고 순서에만 쓴다. */
+export function staffSortKey(name) {
+  const { rank } = splitRole(getStaffRole(name));
+  const shown = displayRole(name);
+  const dutyIdx = EXEC_RANKS.includes(rank) ? 0 : (DUTY_ORDER.indexOf(shown) < 0 ? DUTY_ORDER.length : DUTY_ORDER.indexOf(shown));
+  const rankIdx = RANK_ORDER.indexOf(rank) < 0 ? RANK_ORDER.length : RANK_ORDER.indexOf(rank);
+  return [dutyIdx, rankIdx, String(name || '')];
+}
+
+/** 배열 정렬용 비교자 — staffSortKey 를 그대로 쓴다. */
+export function compareStaff(a, b) {
+  const ka = staffSortKey(typeof a === 'string' ? a : a?.name);
+  const kb = staffSortKey(typeof b === 'string' ? b : b?.name);
+  for (let i = 0; i < 2; i++) { if (ka[i] !== kb[i]) return ka[i] - kb[i]; }
+  return ka[2].localeCompare(kb[2], 'ko');
+}
+
 // 수석검수 여부 (작업 권한) — 수석검수 또는 부수석 포함
 export function isChief(name) {
   const role = getStaffRole(name);
