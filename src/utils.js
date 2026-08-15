@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.74-01';   // 버그픽스 — 예측 시프팅이 **데크 40ft 를 놓쳤다**. 데크와 홀드를 베이 번호가 같을 때만 맞춰, 9·11번 홀드 평택 양하 30대 위 40ft 데크(=10번) 9대를 0 으로 냈다(SWBT 2614S 실측). 짝수 베이 데크는 e±1 홀드 커버까지 본다 — 16항차 회귀 대조 SWBT 만 0→9, 나머지 15항차 불변   // 기능 — 인원 추가 폼 직급·직책 두 칸(직책 기본 «검수», 이름만 넣고 저장). 새 인원은 김유신·최원형 위로. 직급 없이 직책만 있어도 그 직책으로 표기
+export const APP_VERSION = 'TallyOne 1.74-02';   // 되돌림 — 1.74-01 의 «데크 40ft 는 e±1 홀드 커버 위» 규칙 철회. SWBT 2614S 에 시프팅 9대를 만들었으나 배정표 이적 0 이다(검수사 지적). 예측 시프팅은 1.74 동작으로 복귀 — 16항차 전부 1.74 와 동일
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3496,34 +3496,19 @@ export function predictShifting(dischEdiMap, baysInfo) {
   for (const b in openSides) {
     if (openSides[b].has('C')) { openSides[b].add('E'); openSides[b].add('O'); }   // 중앙이면 양쪽
   }
-  // ── 1.75: 데크 40ft 는 **홀드 두 베이에 걸쳐** 얹힌다 (SWBT 2614S 실측 2026-08-15) ──
-  //   짝수 베이 e 에 실린 데크 컨은 40ft — 물리적으로 e-1 · e+1 두 20ft 홀드의 커버 위에 놓인다.
-  //   종전 판정은 데크와 홀드를 **베이 번호가 같을 때만** 맞췄다. SWBT 2614S 는 9·11번 홀드에
-  //   평택 양하 30대가 있는데 9·11 데크는 비어 있고 그 위가 40ft 라 **10번**으로 실려 있다
-  //   → 커버를 열려면 10번 데크 9대를 치워야 하는데 앱은 0 을 냈다(실측 재현).
-  //   ⚠ 역방향(홀수 베이 20ft 데크 ↔ 이웃 짝수 베이 홀드)은 넣지 않는다 — SWDN 2608N 실측에서
-  //     26번 홀드 양하가 열려도 25·27번 00행 데크는 움직이지 않았다(1.27 선적EDI 오라클 5대,
-  //     그룹 공유로 넓히면 5→10 과검출). 40ft 한 짝의 물리 footprint 만 인정한다.
-  const _deckCoverBays = (b) => {
-    const bn = parseInt(b, 10);
-    if (!Number.isFinite(bn) || bn % 2 === 1) return [b];        // 20ft 데크 — 자기 베이만
-    return [b, String(bn - 1), String(bn + 1)];                  // 40ft 데크 — 자기 + 두 홀드 베이
-  };
   // ② 열어야 할 커버의 데크에 얹힌 통과화물
   for (const [cn, c] of rows) {
     if (!_isDeckTier(c.tier)) continue;
     if (isPyeongtaekPort(c.pod)) continue;            // 평택 양하분은 어차피 내리므로 시프팅 아님
     const b = normalizeBay(c.bay || '');
     if (!b) continue;
-    let hit = false, hitBay = b;
-    for (const cb of _deckCoverBays(b)) {
-      if (openPanels[cb]) {
-        const p = _panelOf(cb, c.row);
-        if (p == null || openPanels[cb].has(p)) { hit = true; hitBay = cb; break; }   // 패널 미상(행 미상 등)은 보수적으로 포함
-      } else if (openSides[cb]) {
-        const sd = _sideOf(c.row);
-        if (sd && (sd === 'C' || openSides[cb].has(sd))) { hit = true; hitBay = cb; break; }
-      }
+    let hit = false;
+    if (openPanels[b]) {
+      const p = _panelOf(b, c.row);
+      hit = (p == null) ? true : openPanels[b].has(p);   // 패널 미상(행 미상 등)은 보수적으로 포함
+    } else if (openSides[b]) {
+      const sd = _sideOf(c.row);
+      hit = !!sd && (sd === 'C' || openSides[b].has(sd));
     }
     if (hit) {
       const _pos = `${b}-${String(c.row || '').padStart(2, '0')}-${String(c.tier || '').padStart(2, '0')}`;
@@ -3533,9 +3518,15 @@ export function predictShifting(dischEdiMap, baysInfo) {
       out[cn] = { bay: b, row: String(c.row || ''), tier: String(c.tier || ''),
                   pos: _pos, from: _pos, to: '',
                   iso: c.iso || '', pod: c.pod || '',
-                  _why: `${hitBay}베이 홀드 양하분 위 — 커버 열려면 이동` };
+                  _why: `${b}베이 홀드 양하분 위 — 커버 열려면 이동` };
     }
   }
+  // ⛔ 1.74-02 되돌림 — 1.74-01 이 «짝수 베이 데크 40ft 는 e±1 홀드 커버 위» 규칙을 넣어
+  //   SWBT 2614S 에 시프팅 9대를 만들었다. **배정표 이적 0 과 어긋난다.** 같은 날 아침 1.69-10 이
+  //   지운 허수 27대와 같은 부류를 저녁에 되살린 셈이다(검수사 지적 — *"시프팅이 있다고요?"*).
+  //   SWBT 는 평택에서 **선적만** 하는 배이고, 이번 양하 40대는 광양·부산에서 실어 온 예정 밖 화물이다.
+  //   9·11번 홀드에 그 30대가 있고 그 위 데크가 40ft 라 10번으로 실려 있는데도 이적이 0 인 **이유는
+  //   아직 모른다.** 이유를 모른 채 규칙을 넓히지 않는다 — 물리 추론보다 배정표가 정본이다.
   // ③ 1.44 (검수사 지적 2026-08-10, MCAT 630N): **같은 스택에서 평택 양하분 위에 얹힌 통과화물.**
   //   커버와 무관하게 이걸 들어내야 아래를 내린다. 종전 규칙(①②)은 커버 현측만 계산해
   //   MCAT 630N에서 30·34·44번 데크 양하분 위 통과 엠티 등 94대를 놓쳤다(실측 — 앱 10 vs 실제 104).
