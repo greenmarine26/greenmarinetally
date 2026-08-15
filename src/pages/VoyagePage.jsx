@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture } from '../utils.js';
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows } from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -290,12 +290,34 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return !!lm && !loadEdiIsDeparture(lm);
   }, [voyage?.loading?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.sizeBytes]);
 
+  // ── 1.76: 정답표(배정표 이적) 자가 대조 — 어긋나면 **조용히 두지 않는다** ──
+  //   검수사 지적 2026-08-15: *"앱이 똑똑 하다면 왜 배정목록에 시프팅 0인데 커버가 어떻해야
+  //   시프팅이 0인지를 계산 했을것입니다."* 정답은 `info.berthShift` 로 이미 들어와 있었는데
+  //   앱은 두 숫자를 나란히 보여주기만 하고 «틀렸다» 고 말하지 않았다.
+  //   그래서 KSKM 2615N 4대·XTPG 536E 7대 허수가 조용히 떠 있었다.
+  const truthChk = useMemo(
+    () => shiftingTruthCheck(voyage, shiftingList.length),
+    [voyage?.info?.berthShift, shiftingList.length]);
+  //   불일치면 커버 분할을 역산한다. 축이 길면 조합이 폭주하므로 상한을 둔다(무응답 방지).
+  const hatchSolve = useMemo(() => {
+    if (!truthChk || truthChk.ok) return null;
+    try {
+      // 사전 접근 경로는 predictShiftingFromVoyage 와 같은 한 벌을 쓴다(전역 __fbShipBayDict).
+      const vsl = String(voyage?.info?.vsl || '').toUpperCase();
+      const de = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[vsl] : null;
+      if (!de) return null;
+      return solveHatchRows(voyage, de, truthChk.truth);
+    } catch (e) { return null; }
+  }, [truthChk?.ok, truthChk?.truth, voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.info?.vsl]);
+
   // 1.45: 시프팅 근거 — 예측이면 출항본·제외 기항, 배정표 이적(수집기 berthShift)이 있으면 그것이 정본
   const shiftInfo = {
     meta: (shiftingMap && shiftingMap._meta) || null,
     berthShift: (voyage?.info?.berthShift ?? null),
     lane: voyage?.info?.lane || '',
     loadEdiPending,
+    truthChk,
+    hatchSolve,
   };
 
   // ── TallyOne 1.69-06: 전항 양하 예정 통과분(평택 도착 전 하선) — 베이플랜 **화면**에서 숨긴다 ──
@@ -1830,10 +1852,37 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
             {shiftInfo?.berthShift != null && (
-              <span className="text-amber-300">· 배정표 이적 {shiftInfo.berthShift}모브(정본)</span>
+              <span className={shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300'}>
+                · 배정표 이적 {shiftInfo.berthShift}모브({shiftInfo.truthChk ? `${shiftInfo.truthChk.truth}대` : '정본'})
+                {shiftInfo?.truthChk && (shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치')}
+              </span>
             )}
             <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
           </div>
+          {/* TallyOne 1.76: 정답표 불일치 — 어느 한쪽이 틀렸다는 것을 화면이 말한다. */}
+          {shiftInfo?.truthChk && !shiftInfo.truthChk.ok && (
+            <div className="px-3 py-1.5 text-[11px] text-rose-200 bg-rose-950/40 border-b border-rose-800/40">
+              ⛔ <b>배정표 이적 {shiftInfo.truthChk.truth}대</b>({shiftInfo.truthChk.moves}모브)인데 앱은 <b>{shiftInfo.truthChk.pred}대</b>를 냈습니다 — 어느 한쪽이 틀립니다.
+              {shiftInfo.hatchSolve && (
+                shiftInfo.hatchSolve.best ? (
+                  <div className="mt-1 text-emerald-200">
+                    ↳ 해치커버를 <b className="mono">{shiftInfo.hatchSolve.best.map(p => p.map(r => String(r).padStart(2, '0')).join('·')).join(' | ')}</b>
+                    {' '}({shiftInfo.hatchSolve.best.length}장)로 보면 정답과 맞습니다.
+                    <span className="text-emerald-300/70"> 베이매트릭스에서 이 값으로 저장하면 이 배는 다음 항차부터 맞습니다.</span>
+                  </div>
+                ) : shiftInfo.hatchSolve.solutions?.length ? (
+                  <div className="mt-1 text-slate-300">
+                    ↳ 커버 분할 후보 {shiftInfo.hatchSolve.tried}가지 중 {shiftInfo.hatchSolve.solutions.length}가지가 정답과 맞습니다 — <b>아직 하나로 좁혀지지 않았습니다.</b>
+                  </div>
+                ) : (
+                  <div className="mt-1 text-slate-300">
+                    ↳ 커버 분할 {shiftInfo.hatchSolve.tried}가지를 전부 돌려도 정답이 안 나옵니다 — <b>커버 문제가 아닙니다.</b>
+                    <span className="text-slate-400"> 항로 등록({shiftInfo.lane || '미상'})과 양하 EDI 정본 여부를 보십시오.</span>
+                  </div>
+                )
+              )}
+            </div>
+          )}
           {/* TallyOne 1.69-10: 선적 EDI 미도착 — 조용히 0 으로 두지 않는다(검수사 확정 2026-08-15, SWBT 2614S). */}
           {shiftInfo?.loadEdiPending && (
             <div className="px-3 py-1.5 text-[11px] text-amber-200 bg-amber-950/40 border-b border-amber-800/40">

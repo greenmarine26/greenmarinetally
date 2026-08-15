@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.75';   // 기능 — 베이사전에 **해치커버 실측 경계**(hatchRows)를 받아 등분 근사보다 우선한다. 00열이 항상 센터가 아니다(SWBT 검수사 확정 «08·06·04·02 / 00·01·03·05·07 2장»). 경계를 아는 배는 40ft 데크가 e±1 두 홀드 커버 위에 걸치는 것까지 계산 — SWBT 2614S 시프팅 0(배정표 이적 0 일치). 16항차 회귀 전부 1.74-02 와 동일
+export const APP_VERSION = 'TallyOne 1.76';   // 기능 — **정답표 자가 대조**: 배정표 이적(info.berthShift)과 예측을 매 항차 대조해 어긋나면 화면이 붉게 말한다(종전엔 두 숫자를 나란히 보여주기만 했다 — KSKM 4대·XTPG 7대 허수가 조용히 떠 있었다). 불일치면 **커버 분할을 역산**해 정답과 맞는 배치를 제안한다(SWBT 실증: 93후보 → 최소장수 유일해가 검수사 값과 일치)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3577,6 +3577,87 @@ export function predictShifting(dischEdiMap, baysInfo) {
     }
   }
   return out;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TallyOne 1.76: **정답표 자가 대조 + 커버 역산** (검수사 지적 2026-08-15)
+//
+//   > *"앱이 똑똑 하다면 왜 배정목록에 시프팅 0인데 커버가 어떻해야 시프팅이 0인지를
+//   >   계산 했을것입니다. 몇장인지도 알았을 것입니다."*
+//
+//   맞다. 정답은 앱 안에 이미 있었다 — `info.berthShift`(수집기가 배정목록 S/H 칸에서 넣는다).
+//   그런데 앱은 자기 예측과 그 정답을 **나란히 보여주기만 하고 어긋났다고 말하지 않았다.**
+//   그래서 KSKM 2615N 허수 4대·XTPG 536E 허수 7대가 조용히 떠 있었다(2026-08-15 전수 대조로 발견).
+//   조용히 틀리는 코드 금지(3금지 ③) — 어긋나면 화면이 말한다.
+// ══════════════════════════════════════════════════════════════════════
+
+/** 배정표 이적(모브)과 예측 대수를 대조한다.
+ *  배정목록의 "이적 N"은 **왕복 무브 수**라 대수는 N/2 (지침 5-1B).
+ *  반환 null = 정답 자료 없음. { truth, pred, ok } */
+export function shiftingTruthCheck(voyage, predCount) {
+  const bs = voyage?.info?.berthShift;
+  if (bs === null || bs === undefined || bs === '') return null;
+  const n = Number(bs);
+  if (!Number.isFinite(n)) return null;
+  const truth = n / 2;
+  const pred = Number(predCount) || 0;
+  return { truth, pred, ok: truth === pred, moves: n };
+}
+
+const _physRowKey = (r) => (r === 0 ? 0 : (r % 2 === 0 ? -r : r));
+
+/** 이 배 홀드의 열 축(물리 순서: 짝수 내림 → 00 → 홀수 오름). */
+export function holdRowAxis(voyage) {
+  const map = ediMapFromRaw(voyage?.discharge) || voyage?.discharge?.ediContainers || {};
+  const rows = new Set();
+  for (const c of Object.values(map || {})) {
+    if (!c) continue;
+    const t = parseInt(c.tier, 10), r = parseInt(c.row, 10);
+    if (!Number.isFinite(t) || !Number.isFinite(r) || t >= 80) continue;
+    rows.add(r);
+  }
+  let max = -1; for (const r of rows) if (r > max) max = r;
+  for (let i = 1; i <= max; i++) rows.add(i);
+  return [...rows].sort((a, b) => _physRowKey(a) - _physRowKey(b));
+}
+
+/** 커버 역산 — 배정표 이적 정답을 만족하는 커버 분할을 전수로 찾는다.
+ *  축을 n개 **연속 구간**으로 자르는 모든 방법을 돌린다(1~maxPanels 장).
+ *  반환 { axis, tried, solutions:[[...],[...]], best } — best 는 장수 최소 해가 유일할 때만 채운다.
+ *  ⚠ 한 항차로는 후보가 여럿 남는다(SWBT 실측 93후보 → 해 29). 장수 최소 해가 유일할 때만 제안한다. */
+export function solveHatchRows(voyage, dictEntry, targetUnits, maxPanels = 4) {
+  const axis = holdRowAxis(voyage);
+  if (axis.length < 2) return { axis, tried: 0, solutions: [], best: null };
+  const cuts = (n) => {
+    const res = []; const rec = (st, left, acc) => {
+      if (left === 1) { res.push([...acc, axis.slice(st)]); return; }
+      for (let i = st + 1; i <= axis.length - (left - 1); i++) rec(i, left - 1, [...acc, axis.slice(st, i)]);
+    }; rec(0, n, []); return res;
+  };
+  const base = JSON.parse(JSON.stringify(dictEntry || {}));
+  const bays = base?.bayDef?.baysSummary || base?.baysSummary || [];
+  if (!bays.length) return { axis, tried: 0, solutions: [], best: null };
+  //   조합 폭주 방지 — 축이 길면 4장 분할이 수백 가지가 된다. 화면이 멈추지 않게 상한을 둔다.
+  //   ⛔ 조용히 자르지 않는다 — 잘렸으면 capped 로 알린다(3금지 ③).
+  const LIMIT = 800;
+  const solutions = []; let tried = 0, capped = false;
+  for (let n = 1; n <= maxPanels; n++) {
+    for (const cfg of cuts(n)) {
+      if (tried >= LIMIT) { capped = true; break; }
+      tried++;
+      for (const b of bays) { b.hatchCount = n; b.hatchRows = cfg; }
+      let got = -1;
+      try { got = Object.keys(predictShiftingFromVoyage(voyage, base) || {}).length; } catch (e) { got = -1; }
+      if (got === targetUnits) solutions.push(cfg);
+    }
+  }
+  let best = null;
+  if (solutions.length) {
+    const min = Math.min(...solutions.map(c => c.length));
+    const mins = solutions.filter(c => c.length === min);
+    if (mins.length === 1) best = mins[0];       // 장수 최소 해가 유일할 때만 제안
+  }
+  return { axis, tried, solutions, best, capped };
 }
 
 // ── 1.45: 항로(Port Rotation) 사전 — 키는 배정목록의 항로 코드 (검수사 확정 2026-08-10) ──
