@@ -58,15 +58,19 @@ export function isStaff(name) {
 //   구독부(App 등, 연결은 판2)가 setServerRoles로 밀어 넣는다. 모듈 캐시 방식이라 React 의존이 없고
 //   getStaffRole/isChief는 순수 함수 형태를 유지한다. 서버 값 우선, 코드 STAFF_ROLES는 폴백.
 let SERVER_ROLES = {};
+let SERVER_ADDED = {};   // TallyOne 1.74: 앱에서 추가한 시각 — 새 인원끼리의 순서에 쓴다
 export function setServerRoles(map) {
-  const out = {};
+  const out = {}; const at = {};
   for (const [k, v] of Object.entries(map || {})) {
     const name = String((v && typeof v === 'object' && v.name) || k).trim();
     const role = typeof v === 'string' ? v.trim() : String((v && v.role) || '').trim();
     if (name && role) out[name] = role;
+    const t = Number(v && typeof v === 'object' && v.addedAt) || 0;
+    if (name && t) at[name] = t;
   }
-  SERVER_ROLES = out;
+  SERVER_ROLES = out; SERVER_ADDED = at;
 }
+export function getStaffAddedAt(name) { return SERVER_ADDED[String(name || '').trim()] || 0; }
 
 export function getStaffRole(name) {
   if (!name) return '';
@@ -93,8 +97,13 @@ const DUTY_ORDER = ['__EXEC__', '실장', '수석검수', '부수석', '검수']
 //     새 사람이 들어오면 **이 배열에 자리를 넣어 줘야** 순서가 맞는다.
 const HIRE_ORDER = [
   '장문영', '오종하', '최관식', '김판석', '한성호', '이인철', '이종부',
-  '이종현', '송제욱', '박진우', '고현석', '이형출', '김유신', '최원형',
+  '이종현', '송제욱', '박진우', '고현석', '이형출',
 ];
+
+// TallyOne 1.74: **맨 아래 고정** (검수사 확정 2026-08-15)
+//   *"지금이후 부터 인원 추가를 누르면 김유신 최원형 위로 올라가게 하면 됩니다."*
+//   → 이 둘은 앞으로 들어오는 사람보다 항상 아래다. 새로 추가되는 사람은 그 위에 쌓인다.
+const TAIL_ORDER = ['김유신', '최원형'];
 
 /** role 문자열을 { rank, duty } 로 가른다. `부장(수석검수)` → { rank:'부장', duty:'수석검수' } */
 export function splitRole(role) {
@@ -112,6 +121,9 @@ export function displayRole(name) {
   if (duty) return duty;                            // 부장(수석검수) → 수석검수
   if (rank === '실장') return '실장';               // 실장은 직책으로 본다(검수사 확정)
   if (rank === '검수' || !rank) return '검수';
+  // TallyOne 1.74: 괄호 없이 **직책만** 적힌 경우(직급 없는 수석검수·부수석 등) — 그대로 직책이다.
+  //   1.71 은 이 경우를 「검수」로 떨어뜨렸다(인원 추가 폼에서 직급 없이 직책만 고르면 바로 걸린다).
+  if (!RANK_ORDER.includes(rank)) return rank;
   return '검수';                                    // 차장·과장·대리 등 직책 없는 직급 → 검수
 }
 
@@ -125,18 +137,23 @@ export function staffSortKey(name) {
   //   검수사 확정 2026-08-15 — *"김유신도 퇴사자이지만 **지원인원이므로 직급 무시** 했습니다."*
   //   (명단 role 은 '대리'로 두고 정렬만 검수 취급한다 — 원 명단을 고치지 않는다.)
   const _hi = HIRE_ORDER.indexOf(nm);
-  const hireIdx = _hi < 0 ? HIRE_ORDER.length : _hi;   // 목록에 없는 이름(신규)은 맨 뒤
-  const rankIdx = _hi >= 0 ? RANK_ORDER.length
+  const _ti = TAIL_ORDER.indexOf(nm);
+  // 직급 없는 사람 안에서의 자리 — 3덩이. 검수사 확정 2026-08-15.
+  //   0) 기존 입사순 명단  1) 그 뒤에 새로 추가된 사람(추가 시각순)  2) 맨 아래 고정
+  const grp = _hi >= 0 ? 0 : (_ti >= 0 ? 2 : 1);
+  const sub = _hi >= 0 ? _hi : (_ti >= 0 ? _ti : getStaffAddedAt(nm));
+  // 기존 명단·맨아래 고정에 이름이 있으면 **직급을 무시**한다(지원인원 등).
+  const rankIdx = (_hi >= 0 || _ti >= 0) ? RANK_ORDER.length
     : (RANK_ORDER.indexOf(rank) < 0 ? RANK_ORDER.length : RANK_ORDER.indexOf(rank));
-  return [dutyIdx, rankIdx, hireIdx, nm];
+  return [dutyIdx, rankIdx, grp, sub, nm];
 }
 
 /** 배열 정렬용 비교자 — staffSortKey 를 그대로 쓴다. */
 export function compareStaff(a, b) {
   const ka = staffSortKey(typeof a === 'string' ? a : a?.name);
   const kb = staffSortKey(typeof b === 'string' ? b : b?.name);
-  for (let i = 0; i < 3; i++) { if (ka[i] !== kb[i]) return ka[i] - kb[i]; }
-  return ka[3].localeCompare(kb[3], 'ko');
+  for (let i = 0; i < 4; i++) { if (ka[i] !== kb[i]) return ka[i] - kb[i]; }
+  return ka[4].localeCompare(kb[4], 'ko');
 }
 
 // ─── TallyOne 1.73: 소유자에게만 보이는 계정 (검수사 확정 2026-08-15) ────────────

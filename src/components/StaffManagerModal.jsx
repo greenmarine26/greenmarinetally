@@ -61,7 +61,17 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     else alert('변경 실패 — 네트워크를 확인하세요.');
   };
   const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState('검수');
+  // TallyOne 1.74: 직급·직책 두 칸 (검수사 확정 2026-08-15)
+  //   *"직급 직책 칸을 보여주시고 직책에 검수를 기본으로 넣어 주면 전 이름만 넣고 저장 누르면 되게끔"*
+  //   저장 형식은 명단 규약 그대로 「직급(직책)」 한 덩어리. 직책이 '검수'면 괄호 없이 직급만/검수만 쓴다.
+  const [newRank, setNewRank] = useState('');     // 직급 — 없으면 빈칸
+  const [newDuty, setNewDuty] = useState('검수'); // 직책 — 기본 검수
+  const composedRole = (() => {
+    const r = newRank.trim(), d = newDuty.trim();
+    if (r && d && d !== '검수') return `${r}(${d})`;
+    if (r) return r;                 // 직급만 — 화면엔 「검수」로 보인다(직책 없음)
+    return d || '검수';
+  })();
   const [filter, setFilter] = useState('all'); // all | inspectors | staff
   const [backupBusy, setBackupBusy] = useState(false);
 
@@ -177,11 +187,11 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
       alert(`"${raw}" — 이미 명단에 있습니다.`);
       return;
     }
-    if (!confirm(`"${raw}" (${newRole}) — 신규 직원 추가하시겠습니까?\n(Firebase 영구 저장 — 전 직원 접속 가능)`)) return;
+    if (!confirm(`"${raw}" (${composedRole}) — 신규 직원 추가하시겠습니까?\n(Firebase 영구 저장 — 전 직원 접속 가능)`)) return;
     try {
-      await fbAddStaff(raw, newRole);
+      await fbAddStaff(raw, composedRole);
       setNewName('');
-      setNewRole('검수');
+      setNewRank(''); setNewDuty('검수');
     } catch (e) {
       alert('추가 실패: ' + e.message);
     }
@@ -303,19 +313,47 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
         {/* 신규 추가 폼 */}
         <div className="p-3 border-b border-slate-700 bg-slate-800/30">
           <div className="text-xs text-slate-400 mb-2 flex items-center gap-1"><UserPlus className="w-3 h-3"/> 신규 직원 추가</div>
+          {/* TallyOne 1.74: 이름만 넣고 저장 — 직책은 «검수»가 기본. 직급·직책 있는 사람이 오면 그때 고른다. */}
           <div className="flex gap-2">
             <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
               placeholder="이름" className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"/>
-            <select value={newRole} onChange={e => setNewRole(e.target.value)}
-              className="bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100">
-              <option>검수</option>
+            <button onClick={handleAdd}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-sm font-bold">저장</button>
+          </div>
+          <div className="flex gap-2 mt-1.5 items-center">
+            <label className="text-[10px] text-slate-500 w-7 shrink-0">직급</label>
+            <select value={newRank} onChange={e => setNewRank(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100">
+              <option value="">없음</option>
               <option>대리</option>
               <option>과장</option>
               <option>차장</option>
               <option>부장</option>
+              <option>실장</option>
+              <option>이사</option>
+              <option>상무이사</option>
+              <option>대표이사</option>
+              <option>회장</option>
             </select>
-            <button onClick={handleAdd}
-              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-sm font-bold">추가</button>
+            <label className="text-[10px] text-slate-500 w-7 shrink-0 text-right">직책</label>
+            <select value={newDuty} onChange={e => setNewDuty(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100">
+              <option>검수</option>
+              <option>수석검수</option>
+              <option>부수석</option>
+              <option>실장</option>
+            </select>
+          </div>
+          <div className="mt-1 text-[10px] text-slate-500">
+            저장되는 값 <span className="text-slate-300 font-bold">{composedRole}</span>
+            <span className="ml-1">· 화면 표기 <span className="text-amber-300 font-bold">{
+              (() => { const r = newRank.trim(), d = newDuty.trim();
+                if (['회장','대표이사','상무이사','이사'].includes(r)) return r;
+                if (d && d !== '검수') return d;
+                if (r === '실장') return '실장';
+                return '검수'; })()
+            }</span></span>
           </div>
         </div>
 
