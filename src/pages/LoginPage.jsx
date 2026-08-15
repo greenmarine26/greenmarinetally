@@ -5,7 +5,7 @@
 //   앱 시작은 항상 이 화면(자동 로그인 없음). 로그인 성공 시 App이 역할별 해시로 보낸다.
 import React, { useState, useEffect, useCallback } from 'react';
 import { Anchor, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
-import { getStaffRole, isChief, STAFF_NAMES, displayRole } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
+import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus } from '../inspectorStatus.js';
 import {
   MAX_TRUSTED_DEVICES,
@@ -139,8 +139,10 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     }
   };
 
+  // TallyOne 1.73: 개발·시험 계정은 로그인 목록에서 숨긴다(보는 사람을 알 수 없는 화면).
+  //   「목록에 없으면 이름 직접 입력」으로는 그대로 들어간다 — 화이트리스트는 안 건드린다.
   const list = Object.values(inspectors || {})
-    .filter(i => i && i.name)
+    .filter(i => i && i.name && !isHiddenStaff(i.name))
     .sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
 
   // M5.61 계승: 이름 정규화 — 공백/콤마/특수문자 제거 후 비교

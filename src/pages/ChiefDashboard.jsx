@@ -15,7 +15,7 @@ import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadT
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
 import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
-import { isChief, canOpenChief } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
+import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
 import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
 import { buildReadiness } from '../dataReadiness.js';   // 1.66: 자료 다 왔나 · 빠진 것은 무엇인가
@@ -490,8 +490,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       stats[i.name].lastMode = i.lastMode;
     });
 
-    return Object.values(stats).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
-  }, [voyages, inspectors]);
+    // TallyOne 1.73: 개발·시험 계정은 소유자에게만 보인다(집계에는 손대지 않고 목록에서만 뺀다).
+    return Object.values(stats).filter(x => isVisibleStaff(x.name, isOwnerName(inspector)))
+      .sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
+  }, [voyages, inspectors, inspector]);
 
   // V7.40: 실시간 보드용 — 항차별 작업 중 검수원 (90초 이내 활동, HomePage activeInspectors와 동일 기준)
   // V7.99-8 (메모6): 작업 위치(호기·베이·홀드/데크·잔여)도 포함 — 수석이 어디 작업 중인지 본다.
@@ -500,6 +502,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     Object.values(inspectors || {}).forEach(i => {
       if (!i?.name || !i.lastVoyage || !i.lastActive) return;
       if (Date.now() - i.lastActive > 90000) return;
+      if (!isVisibleStaff(i.name, isOwnerName(inspector))) return;   // 1.73
       if (!out[i.lastVoyage]) out[i.lastVoyage] = [];
       out[i.lastVoyage].push({
         name: i.name, mode: i.lastMode,
@@ -508,7 +511,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       });
     });
     return out;
-  }, [inspectors]);
+  }, [inspectors, inspector]);
 
   // V7.40: 항차별 마지막 작업 보고 1건
   const lastReportByVoyage = useMemo(() => {

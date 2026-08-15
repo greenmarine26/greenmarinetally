@@ -139,6 +139,21 @@ export function compareStaff(a, b) {
   return ka[3].localeCompare(kb[3], 'ko');
 }
 
+// ─── TallyOne 1.73: 소유자에게만 보이는 계정 (검수사 확정 2026-08-15) ────────────
+//   *"클로드는 제 눈에만 보이게 할수 있나요? 접속인원에서도 안보이게"*
+//   개발·시험용 계정이라 다른 검수원 화면에 뜨면 «누구지?» 가 된다.
+//   ⚠ **로그인 화면에서는 보는 사람이 누군지 알 수 없으므로 무조건 숨긴다.**
+//     숨겨도 「목록에 없으면 이름 직접 입력」으로 그대로 로그인된다(화이트리스트는 손대지 않음).
+//   ⚠ 권한·집계에는 쓰지 않는다 — **보이기만** 가린다.
+export const HIDDEN_STAFF = ['클로드'];
+export function isHiddenStaff(name) {
+  return HIDDEN_STAFF.includes(String(name || '').trim());
+}
+/** 그 사람을 이 화면에 보여도 되는가. viewer 가 소유자면 다 보인다. */
+export function isVisibleStaff(name, viewerIsOwner = false) {
+  return viewerIsOwner || !isHiddenStaff(name);
+}
+
 // 수석검수 여부 (작업 권한) — 수석검수 또는 부수석 포함
 export function isChief(name) {
   const role = getStaffRole(name);

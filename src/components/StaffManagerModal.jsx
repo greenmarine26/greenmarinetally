@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
-import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
+import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
 import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess } from '../firebase.js';   // 1.41: 개발용 접근
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
@@ -163,7 +163,8 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   else if (filter === 'deleted') filtered = allStaff.filter(s => isDeleted(s.name));
   else filtered = allStaff.filter(s => !isDeleted(s.name));
   // TallyOne 1.71: 직책 1차 · 직급 2차 정렬(검수사 확정 2026-08-15). 직급은 순서에만 쓰고 화면엔 안 보인다.
-  filtered = [...filtered].sort(compareStaff);
+  // TallyOne 1.73: 개발·시험 계정은 소유자에게만 보인다.
+  filtered = [...filtered].filter(s => isVisibleStaff(s.name, isOwnerName(current))).sort(compareStaff);
 
   const handleAdd = async () => {
     const raw = newName.trim();

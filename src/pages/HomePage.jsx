@@ -7,7 +7,7 @@ import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
 import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   // V9.57: ±12h 창 가드 단일화(inWindow)
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
-import { isChief, canOpenChief } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
+import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
@@ -467,11 +467,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       if (!i || !i.lastVoyage || !i.lastActive) return;
       if (i.loggedIn === false) return;              // V7.94-14: 로그아웃 마킹 제외
       if (Date.now() - i.lastActive > 90000) return; // 90초 이내만
+      if (!isVisibleStaff(i.name, isOwnerName(inspector))) return;   // 1.73: 개발·시험 계정은 소유자에게만
       if (!out[i.lastVoyage]) out[i.lastVoyage] = [];
       out[i.lastVoyage].push({ name: i.name, mode: i.lastMode });
     });
     return out;
-  }, [inspectors]);
+  }, [inspectors, inspector]);
 
   const handleCreate = async () => {
     if (!vsl.trim() || !voy.trim()) return;
