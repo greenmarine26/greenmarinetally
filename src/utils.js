@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 1.76';   // 기능 — **정답표 자가 대조**: 배정표 이적(info.berthShift)과 예측을 매 항차 대조해 어긋나면 화면이 붉게 말한다(종전엔 두 숫자를 나란히 보여주기만 했다 — KSKM 4대·XTPG 7대 허수가 조용히 떠 있었다). 불일치면 **커버 분할을 역산**해 정답과 맞는 배치를 제안한다(SWBT 실증: 93후보 → 최소장수 유일해가 검수사 값과 일치)
+export const APP_VERSION = 'TallyOne 1.76-01';   // 버그픽스 — 1.76 이 **작업 전 항차의 berthShift:0 을 정답으로 단정**해 XTPG 536E(8/17 예정·확정 EDI 아님)를 «불일치» 로 찍었다. 검수사 지적 «그것이 확정EDI인가요?» — 실측: berthShift 0 인 8항차 중 7항차가 terminalStatus 'planned'(작업 전), 값이 있는 것은 working 인 MAMP 뿐. 이제 working/departed 이후에만 정본으로 인정하고 그 전에는 «보류» 로 표시한다(지침 5-3)
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3593,14 +3593,30 @@ export function predictShifting(dischEdiMap, baysInfo) {
 
 /** 배정표 이적(모브)과 예측 대수를 대조한다.
  *  배정목록의 "이적 N"은 **왕복 무브 수**라 대수는 N/2 (지침 5-1B).
- *  반환 null = 정답 자료 없음. { truth, pred, ok } */
+ *  반환 null = 대조 불가. { truth, pred, ok, moves } 또는 { pending:true, reason } */
+//
+// ── 1.76-01: **작업 전 항차의 `berthShift:0` 은 «이적 없음» 이 아니라 «아직 안 나온 것»이다 ──
+//   검수사 지적 2026-08-15 — *"그것이 확정EDI인가요?"*
+//   1.76 은 `berthShift` 가 숫자이기만 하면 정답으로 삼았다. 그런데 라이브 실측에서
+//   **`berthShift:0` 인 8항차 중 7항차가 `terminalStatus:'planned'`(작업 전)** 였고,
+//   유일하게 `working` 인 MAMP 631N 만 0 이 아닌 값(2모브)을 갖고 있었다.
+//   XTPG 536E 는 8/17 예정 항차이고 EDI 도 `XTPG 536W INC-Confirm.ASC`(확정 전)인데
+//   1.76 은 그것을 «⛔ 불일치» 로 단정했다. 지침 5-3 위반 — **확정 전에는 수치 불일치를 판단하지 않는다.**
+//   → 배정표 이적은 **작업이 시작된 뒤**(working/departed/done)에만 정본으로 인정한다.
+//     그 전에는 대조를 «보류» 로 두고 화면이 그렇게 말한다(조용히 넘기지 않는다).
+const _TRUTH_READY = new Set(['working', 'departed', 'done', 'finished', 'completed']);
 export function shiftingTruthCheck(voyage, predCount) {
   const bs = voyage?.info?.berthShift;
-  if (bs === null || bs === undefined || bs === '') return null;
+  const pred = Number(predCount) || 0;
+  if (bs === null || bs === undefined || bs === '') return null;      // 자료 자체가 없음
   const n = Number(bs);
   if (!Number.isFinite(n)) return null;
+  const ts = String(voyage?.info?.terminalStatus || '').trim().toLowerCase();
+  if (!_TRUTH_READY.has(ts)) {
+    return { pending: true, pred, moves: n, terminalStatus: ts || '미상',
+             reason: '작업 시작 전 — 배정표 이적이 아직 확정값이 아니다' };
+  }
   const truth = n / 2;
-  const pred = Number(predCount) || 0;
   return { truth, pred, ok: truth === pred, moves: n };
 }
 

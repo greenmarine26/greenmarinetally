@@ -300,7 +300,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     [voyage?.info?.berthShift, shiftingList.length]);
   //   불일치면 커버 분할을 역산한다. 축이 길면 조합이 폭주하므로 상한을 둔다(무응답 방지).
   const hatchSolve = useMemo(() => {
-    if (!truthChk || truthChk.ok) return null;
+    if (!truthChk || truthChk.pending || truthChk.ok) return null;   // 1.76-01: 확정 전에는 역산도 하지 않는다
     try {
       // 사전 접근 경로는 predictShiftingFromVoyage 와 같은 한 벌을 쓴다(전역 __fbShipBayDict).
       const vsl = String(voyage?.info?.vsl || '').toUpperCase();
@@ -1852,15 +1852,23 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
             {shiftInfo?.berthShift != null && (
-              <span className={shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300'}>
-                · 배정표 이적 {shiftInfo.berthShift}모브({shiftInfo.truthChk ? `${shiftInfo.truthChk.truth}대` : '정본'})
-                {shiftInfo?.truthChk && (shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치')}
+              <span className={shiftInfo?.truthChk?.pending ? 'text-slate-400'
+                : (shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300')}>
+                · 배정표 이적 {shiftInfo.berthShift}모브
+                {shiftInfo?.truthChk?.pending ? ' (작업 전 — 대조 보류)'
+                  : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치'}` : '(정본)'}
               </span>
             )}
             <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
           </div>
           {/* TallyOne 1.76: 정답표 불일치 — 어느 한쪽이 틀렸다는 것을 화면이 말한다. */}
-          {shiftInfo?.truthChk && !shiftInfo.truthChk.ok && (
+          {shiftInfo?.truthChk?.pending && (
+            <div className="px-3 py-1.5 text-[11px] text-slate-300 bg-slate-950/60 border-b border-slate-800">
+              ⏳ 배정표 이적 대조 <b>보류</b> — 아직 작업 시작 전({shiftInfo.truthChk.terminalStatus})입니다.
+              <span className="text-slate-400"> 이적 칸이 채워지기 전의 0은 «이적 없음»이 아니라 «아직 안 나온 것»이라 판정하지 않습니다.</span>
+            </div>
+          )}
+          {shiftInfo?.truthChk && !shiftInfo.truthChk.pending && !shiftInfo.truthChk.ok && (
             <div className="px-3 py-1.5 text-[11px] text-rose-200 bg-rose-950/40 border-b border-rose-800/40">
               ⛔ <b>배정표 이적 {shiftInfo.truthChk.truth}대</b>({shiftInfo.truthChk.moves}모브)인데 앱은 <b>{shiftInfo.truthChk.pred}대</b>를 냈습니다 — 어느 한쪽이 틀립니다.
               {shiftInfo.hatchSolve && (
