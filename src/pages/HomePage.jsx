@@ -379,7 +379,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const ra = rank(a), rb = rank(b);
         if (ra[0] !== rb[0]) return ra[0] - rb[0];
         if (ra[1] !== rb[1]) return ra[1] - rb[1];
-        // ── 여기부터는 작업일시가 **같을 때만** 갈린다 ──
+        // ── 여기부터는 작업시작이 **같을 때만** 갈린다 ──
+        // 1.77-01 검수사 확정 2026-08-17: *"같은 시작시간이라고 끝나는 시간이 먼저인 걸 앞에 놓겠습니다.
+        //   이유는 먼저 사라지기 때문입니다."* · *"같이 08시 시작이지만 하나는 16:00 하나는 중간
+        //   하나는 그 다음날까지 갑니다."* → **끝나는 시각이 빠른 배가 위.** 종료 미상은 뒤로.
+        if ((a._etdMs == null) !== (b._etdMs == null)) return a._etdMs == null ? 1 : -1;
+        if (a._etdMs != null && b._etdMs != null && a._etdMs !== b._etdMs) return a._etdMs - b._etdMs;
         if (!!b._hasData !== !!a._hasData) return (b._hasData ? 1 : 0) - (a._hasData ? 1 : 0);
         return (b._ready || 0) - (a._ready || 0);
       });

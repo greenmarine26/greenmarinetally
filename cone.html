@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.6</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.6-01</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -663,8 +663,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 1.77';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.6';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 1.77-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 1.6-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -679,6 +679,8 @@ function _planMs(x){
   const m=String(x||'').match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
   return m? new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime() : null;
 }
+// ConeOne 1.6-01: 항차 작업 종료(출항) 시각 — planDate 뒷자리.
+function _planEnd(v){ const pd=String(v.planDate||''); return pd.includes('~')? _planMs(pd.split('~')[1]) : null; }
 
 // 항차 목록 (raw EDI가 있는 항차만) 가져오기
 async function fbFetchVoyages(){
@@ -742,7 +744,11 @@ async function fbFetchVoyages(){
     const rx=_rank(x), ry=_rank(y);
     if(rx[0]!==ry[0]) return rx[0]-ry[0];
     if(rx[1]!==ry[1]) return rx[1]-ry[1];
-    if(!!x.noEdi!==!!y.noEdi) return x.noEdi?1:-1;     // 작업일시가 같을 때만 — 자료 있는 배가 위
+    // ConeOne 1.6-01 (검수사 확정 2026-08-17): 시작이 같으면 **끝나는 시각이 빠른 배가 위** — 먼저 사라지므로.
+    const ex=_planEnd(x), ey=_planEnd(y);
+    if((ex==null)!==(ey==null)) return ex==null?1:-1;
+    if(ex!=null&&ey!=null&&ex!==ey) return ex-ey;
+    if(!!x.noEdi!==!!y.noEdi) return x.noEdi?1:-1;     // 그래도 같으면 — 자료 있는 배가 위
     return (y.createdAt||0)-(x.createdAt||0);
   });
   return out;
