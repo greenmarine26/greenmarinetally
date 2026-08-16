@@ -653,6 +653,21 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, [ediMap, recMap, mode, sec.extras]);
 
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
+  // TallyOne 1.76-03: 같은 실번호를 단 컨이 둘 이상이면 그 실번호를 모아 둔다(목록 배지용).
+  //   '0000'(실 부족 표기)은 중복이 정상이라 뺀다 — 입력 차단(dupSealOwner)과 같은 예외.
+  const dupSeals = useMemo(() => {
+    const by = new Map();
+    for (const c of containersBase) {
+      const v = String(c?.sl || '').trim().toUpperCase().replace(/[\s-]/g, '');
+      if (!v || v === '0000') continue;
+      if (!by.has(v)) by.set(v, new Set());
+      by.get(v).add(c.cn);
+    }
+    const out = new Set();
+    for (const [v, cns] of by) if (cns.size > 1) out.add(v);
+    return out;
+  }, [containersBase]);
+
   const containers = useMemo(
     () => tagForecastMarks(containersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null),
     [containersBase, urgentSet, luggSet, _fc, _fcApply]);
@@ -1077,6 +1092,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
           shiftingList={shiftingList} shiftInfo={shiftInfo}
+          dupSeals={dupSeals}
         />
       )}
       {tab === 'search' && (
@@ -1129,6 +1145,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           xrayMap={xrayMap} xraySeals={xraySeals}
           inspector={inspector}
           onOpenContainer={(c) => setDetailC(c)}
+          dupSeals={dupSeals}
         />
         </>
       )}
@@ -1751,7 +1768,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, dupSeals = null }) {
   const [filter, setFilter] = useState('all'); // all | done | undone | xray
   const [search, setSearch] = useState('');
 
@@ -1844,6 +1861,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         voyageKey={voyageKey}
         inspector={inspector}
         onOpenContainer={onOpenContainer}
+        dupSeals={dupSeals}
       />
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
@@ -1928,7 +1946,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // RIZHAO ORIENT 등 RORO/LOLO 혼용선 전용. 베이 그림 없이 리스트로 검수.
 //   기존 ContainerList·ContainerDetailModal·firebase 함수를 그대로 재사용.
 //   "조회·실체크한 것만 누적" — 검수사가 실제 처리(완료)한 컨만 누적분으로 모음.
-function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer }) {
+function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, dupSeals = null }) {
   const [filter, setFilter] = useState('all'); // all | done(누적) | undone
   const [search, setSearch] = useState('');
 
@@ -2009,6 +2027,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         voyageKey={voyageKey}
         inspector={inspector}
         onOpenContainer={onOpenContainer}
+        dupSeals={dupSeals}
       />
     </div>
   );

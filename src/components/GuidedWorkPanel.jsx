@@ -366,6 +366,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.99-6 (메모3): 트윈 카드 무게 점검 — 합계 55톤 초과 = 트윈 불가, 무게차 부두한계 초과 = 수평 불가.
   //   nlSearch의 검증된 상수 재사용. 부두는 voyage.info.pier(미상이면 보수적 14톤).
+  // 1.76-03: 실(봉인)번호 중복 — 지금 카드의 컨이 **다른 컨과 같은 실번호**를 달고 있으면 알린다.
+  //   검수사 신고(2026-08-16) «MAMP 실번호 중복이 있었는데 알림없음 0570668».
+  //   실측 — PH0570668 이 MNBU3256200(30-03-84)·MNBU4383895(34-07-08) 두 대에 함께 들어 있었고
+  //   둘 다 그대로 검수 완료됐다. 판정기(auditSeals·dupSealOwner)는 있었지만 **손으로 칠 때만** 돌아
+  //   리스트가 실어 온 중복은 화면에 한 번도 안 떴다. 여기서 카드가 뜰 때마다 본다.
+  const sealDupWarn = useMemo(() => {
+    if (!card) return [];
+    const out = [];
+    for (const [c, lab] of [[card.main, card.twin ? '앞' : ''], [card.twin, '뒤']]) {
+      if (!c) continue;
+      const owner = dupSealOwner(c.sl, c.cn, 'normal');
+      if (owner) out.push({ cn: c.cn, lab, seal: String(c.sl).trim(), owner });
+    }
+    return out;
+  }, [card, allContainers, mode]);
+
   const twinWtWarn = useMemo(() => {
     if (!card?.twin) return null;
     const wa = parseInt(card.main.wt, 10) || 0, wb = parseInt(card.twin.wt, 10) || 0;
@@ -660,12 +676,24 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (mode !== 'discharge' || hatchOpenDone || isHatchDoneSaved(selectedGroup, 'open') || selectedGroup == null) return false;
     const groupRemain = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     const deckRemain = groupRemain.filter(c => parseInt(c.tier, 10) >= 80).length;
-    if (deckBlockers(selectedGroup).length) return false;   // 1.8-19: 화물이 얹힌 커버는 권하지 않는다
+    // 1.76-03: 「화물이 얹힌 커버는 권하지 않는다」(1.8-19)로 배너를 통째로 죽이던 것을 뗐다.
+    //   실측(MAMP 631N 2026-08-16) — 34(33/35) 그룹 데크에 통과화물 CAAU9967900 **한 대**가
+    //   얹혀 있어 오픈 배너도 음성도 나오지 않았다. 30 그룹은 통과화물 6대라 역시 무음.
+    //   여기 걸리는 것은 사실상 통과화물뿐이다 — 평택 데크분은 아래 deckRemain===0 이 이미 요구한다.
+    //   그리고 통과화물은 평택에서 안 내리므로 **영원히 안 없어진다** = 그 그룹은 영구 무음이었다.
+    //   커버 위 통과화물은 오히려 검수사에게 알려야 하는 것이다(시프팅 대상). 배너는 띄우되
+    //   문구를 갈라 «치우고 열라»고 말한다. 오판 방지용 확인 모달은 sendHatchReport 에 그대로 있다.
     const holdRemain = groupRemain.filter(c => parseInt(c.tier, 10) < 80).length;
     const deckDone = allContainers.filter(c => c._mode === mode && c._ptk && c._comp &&
       groupCenterOf(c.bay) === selectedGroup && parseInt(c.tier, 10) >= 80).length;
     return deckRemain === 0 && holdRemain > 0 && deckDone > 0;
   }, [mode, hatchOpenDone, selectedGroup, remaining, allContainers, bayPairs, voyage, modeFinished]);
+
+  // 1.76-03: 커버 위에 남아 있는 것(사실상 통과화물) — 배너 문구를 가르는 데 쓴다.
+  const coverBlockers = useMemo(
+    () => (deckDonePromptD ? deckBlockers(selectedGroup) : []),
+    [deckDonePromptD, selectedGroup, allContainers, bayPairs, mode]
+  );
 
   // V7.94-16: 양하 — 그룹 홀드까지 완료 시 클로즈 제안 조건 (그룹 완료 화면에서 사용)
   // V8.09-05 (사용자 보고 2026-06-18): 같은 베이 그룹에 선적할 평택분이 남아 있으면 닫지 않는다.
@@ -1193,10 +1221,23 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         </div>
       )}
 
-      {deckDonePromptD && card ? (
+      {/* 1.76-03: 종전 `deckDonePromptD && card` — 데크를 다 내린 **그 순간** 큐가 비어 card 가 null 이 되고
+            아래 `!card` 분기(「이 베이 그룹 양하 완료!」)로 떨어져, 홀드가 남았는데도 오픈 배너에 도달할 수
+            없었다. MAMP 631N 실측 — 34 데크를 09:16 에 끝내고 홀드는 11:10 에야 시작했다. */}
+      {deckDonePromptD ? (
         <div className="bg-amber-950/50 border-2 border-amber-600 rounded-lg p-4 text-center space-y-3">
           <div className="font-bold text-amber-200">⚓ 이 베이 데크 양하 완료!</div>
-          <div className="text-[11px] text-slate-400">홀드를 하려면 해치커버를 열어야 합니다. 다음 작업을 선택하세요.</div>
+          {coverBlockers.length > 0 ? (
+            <div className="text-[11px] text-rose-200 bg-rose-950/50 border border-rose-800 rounded px-2 py-1.5 space-y-0.5">
+              <div className="font-bold">⚠ 커버 위에 통과화물 {coverBlockers.length}대 — 치워야 열립니다 (시프팅)</div>
+              <div className="mono text-[10px] text-rose-300">
+                {[...new Set(coverBlockers.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
+                {coverBlockers.length > 8 ? ' …' : ''}
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-slate-400">홀드를 하려면 해치커버를 열어야 합니다. 다음 작업을 선택하세요.</div>
+          )}
           <div className="flex gap-2">
             <button disabled={hatchBusy} onClick={async () => { await sendHatchReport('open'); setHatchOpenDone(true); markHatchDone(selectedGroup, 'open'); }}
               className="flex-1 py-3 rounded-lg bg-amber-700 hover:bg-amber-600 text-white font-bold text-sm">🔓 해치커버 오픈 → 홀드 진행</button>
@@ -1253,6 +1294,20 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               </div>
               {renderCon(card.twin, '뒤', 'cyan')}
             </>
+          )}
+
+          {sealDupWarn.length > 0 && (
+            <div className="rounded-lg px-3 py-2 text-sm font-bold flex items-start gap-2 bg-rose-950/60 border border-rose-700 text-rose-200">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5"/>
+              <div className="space-y-0.5 text-left">
+                {sealDupWarn.map(d => (
+                  <div key={d.cn}>
+                    🔒 실번호 중복 — {d.lab ? `${d.lab} ` : ''}{d.cn.slice(-4)} 의 실 <span className="mono">{d.seal}</span> 이(가)
+                    {' '}<span className="mono">{d.owner.slice(-4)}</span> 와 같습니다. 양쪽 다 실물 확인.
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {twinWtWarn && (twinWtWarn.over || twinWtWarn.imbal) && (

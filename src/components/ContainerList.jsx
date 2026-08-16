@@ -43,7 +43,7 @@ const FILTERS = [
   { key: 'isoOther', label: '⚠️ 기타 ISO', color: 'bg-amber-700' },
 ];
 
-export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer }) {
+export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer, dupSeals = null }) {
   const [cargoFilter, setCargoFilter] = useState('all');
   const [opFilter, setOpFilter] = useState('all'); // 검수업체 필터
   const [podFilter, setPodFilter] = useState('all'); // POD 도시 필터 (선적용)
@@ -281,6 +281,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
             voyageKey={voyageKey}
             inspector={inspector}
             onOpenContainer={onOpenContainer}
+            dupSeals={dupSeals}
           />
         ))}
       </div>
@@ -288,7 +289,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   );
 }
 
-function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer }) {
+function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer, dupSeals = null }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
@@ -317,6 +318,10 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const sealEdited = Array.isArray(c.sl_history) && c.sl_history.length > 0;
   const sealError = sealEdited && c.sl && slOrig && c.sl !== slOrig;
   const sealConflict = !sealError && Array.isArray(c.sl_conflict) && c.sl_conflict.length > 1;
+  // TallyOne 1.76-03: 실번호 중복 — **다른 컨이 같은 실번호**를 달고 있는 것(위 둘과 축이 다르다).
+  //   sl_conflict 는 «한 컨에 두 실»(리스트끼리 다름)이고, 이것은 «두 컨에 한 실»이다.
+  //   실측 2026-08-16 MAMP 631N — PH0570668 이 두 대에 함께 들어간 채 둘 다 완료됐다.
+  const sealDup = !!(dupSeals && c.sl && dupSeals.has(String(c.sl).trim().toUpperCase().replace(/[\s-]/g, '')));
   const xSealOrig = xraySeal?.seal_orig != null ? xraySeal.seal_orig : xraySeal?.seal || '';
   const xSeal = xraySeal?.seal || '';
   const xSealError = xSeal && xSealOrig && xSeal !== xSealOrig;
@@ -435,6 +440,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {(sealError || xSealError) && (
                 <span className="bg-red-700/80 text-red-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
                   <AlertOctagon className="w-2.5 h-2.5"/>실오류
+                </span>
+              )}
+              {sealDup && (
+                <span className="bg-rose-700/90 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
+                  title={`이 실번호(${c.sl})가 다른 컨테이너에도 들어 있습니다 — 양쪽 모두 실물 확인`}>
+                  🔒 실번호 중복
                 </span>
               )}
               {sealConflict && (
