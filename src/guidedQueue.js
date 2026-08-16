@@ -157,20 +157,10 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   const flow = [...normal, ...keepInFlow].sort((a, b) => cmp(a.main, b.main));
   if (mode === 'discharge') {
     // V8.09-03 (사용자 확정 2026-06-17): 양하는 "40ft 작업 전부 끝낸 뒤 20ft 작업".
-    //   이유: 같은 단에 40/20 혼재 시 층마다 40↔20 순서가 되면 스프레더를 40전용↔20트윈으로
-    //   반복 전환해 작업 시간이 지연됨. 40ft를 모아 먼저 다 내리고 20ft(트윈)를 나중에 모아 내린다.
-    //   ★적재 종속 유지 — 어떤 40ft 카드 '위'에 아직 안 내린 20ft가 얹혀 있으면 앞으로 못 당긴다.
-    //
-    //   ★1.57 에서 폐기했다가 1.76-03 에서 되살렸다 (검수사 확정 2026-08-16).
-    //   폐기 사유는 «고정이라 현장이 반대로 갈 때도 밀어붙인다» 였고 3연속 흐름 감지에 맡겼다.
-    //   그런데 감지가 규격을 **부류(풀·엠티·리퍼) 다음에** 보는 탓에, 40ft 를 수십 대 연속으로 쳐도
-    //   「40 흐름」에 도달하지 못했다 — MAMP 631N 실측(2026-08-16 11:26~11:28):
-    //     34-05-04(40ft) → 35/33-06-02 트윈(20ft) → 34-05-02(40ft)
-    //   같은 02단에서 육상쪽(짝수열·좌현 접안) 트윈이 규칙대로 이겨 40ft 하나를 남기고 끼어들었다.
-    //   ⚠ «현장이 반대로 갈 때»는 streamPref 가 계속 이긴다 — 20 흐름이 잡히거나 검수사가 「20피트」
-    //     칩을 누르면 아래 pullStreamForward 가 20ft 를 앞으로 당긴다. 고정 규칙은 기본값일 뿐이다.
-    const ordered40First = reorder40FirstForDischarge(flow);
-    const base = [...pureFrs, ...ordered40First, ...pureSingles];
+    //   ★1.57 폐기 — 스프레더 전환을 줄이려는 이 규칙이 '고정'이라 현장이 반대로 갈 때도 밀어붙였다.
+    //   검수사 확정 2026-08-13: 40/20 어느 쪽을 먼저 하는지는 배마다·날마다 다르므로 감지에 맡긴다.
+    //   40ft 를 모아 먼저 내리는 흐름이면 「40피트」 칩이 걸리거나 3연속 감지가 잡아 같은 결과가 된다.
+    const base = [...pureFrs, ...flow, ...pureSingles];
     // V8.50 ③: 고른 부류를 물리 종속 지키며 앞당김. FR 우선 양하는 그대로 고정.
     if (streamPref) return [...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)];
     return base;
@@ -203,43 +193,7 @@ function cardIs40(card) {
   return is40ft(card.main);
 }
 
-// 1.76-03: reorder40FirstForDischarge 복원 (1.57 에서 삭제했던 것 — 검수사 확정 2026-08-16).
-//   같은 단 안에서 40ft 를 앞으로 모은다. 단(데크/홀드) 사이 순서는 건드리지 않는다.
-function reorder40FirstForDischarge(flow) {
-  // 단(데크/홀드)별로 분리 — 단 사이 순서(데크 먼저)는 그대로 유지.
-  const deckCards = flow.filter(c => isDeckTier(c.main.tier));
-  const holdCards = flow.filter(c => !isDeckTier(c.main.tier));
-
-  const reorderWithinTier = (cards) => {
-    // 같은 단 안에서, 어떤 20ft 카드가 어떤 40ft '아래'에 깔려 있는지(=그 40ft를 먼저 내려야 함)
-    //   판정은 "같은 로우 + 더 높은 티어에 40ft가 있는 20ft"로 한다. 그런 20ft는 40ft보다 뒤여야 하므로
-    //   40ft 우선과 충돌하지 않는다(40ft가 어차피 앞). 반대로 40ft 위에 20ft가 얹힌 경우만 종속 위반이 되는데,
-    //   그 20ft는 해당 40ft보다 앞에 와야 한다.
-    const rowsBlock = new Set();   // 'row' 키: 이 로우엔 (40ft 위에 20ft가 얹힘) → 단순 40우선 금지
-    for (const card of cards) {
-      const isC40 = cardIs40(card);
-      const t = parseInt(card.main.tier, 10);
-      const row = card.main.row;
-      if (!isC40) {
-        // 이 20ft보다 '아래'(낮은 티어) 같은 로우에 40ft가 있으면 = 40ft 위에 20ft 얹힘 → 종속
-        const fortyBelow = cards.some(o => cardIs40(o) && o.main.row === row && parseInt(o.main.tier, 10) < t);
-        if (fortyBelow) rowsBlock.add(row);
-      }
-    }
-    // 종속 없는 로우는 40ft를 앞으로, 20ft를 뒤로 (각 그룹 내부는 기존 cmp 순서 유지=stable).
-    // 종속 있는 로우(rowsBlock)는 기존 층 순서를 그대로 둔다.
-    const safe40 = [], safe20 = [], blocked = [];
-    for (const card of cards) {
-      if (rowsBlock.has(card.main.row)) blocked.push(card);
-      else if (cardIs40(card)) safe40.push(card);
-      else safe20.push(card);
-    }
-    // V8.50 ①: reorderFullReeferLast(스택 통째 배치) 폐기 — safe40은 cmp 층 순서 그대로 둔다.
-    return [...safe40, ...safe20, ...blocked];
-  };
-
-  return [...reorderWithinTier(deckCards), ...reorderWithinTier(holdCards)];
-}
+// 1.57: reorder40FirstForDischarge(양하 40ft 모아 먼저) 삭제 — 고정 규칙을 감지로 옮겼다(호출부 0).
 
 // 리퍼 판정 (이 모듈 자체 완결성 위해 로컬 헬퍼 — ISO 3번째 글자 R 또는 변형코드)
 function cardIsReefer(c) {
