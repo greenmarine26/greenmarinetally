@@ -1439,6 +1439,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
         {/* V8.81: 양하/선적 막대를 누르면 그 모드로 항차를 연다 (구: 둘 다 기본 모드로 열려 "반응 없음"처럼 보임). */}
         {dis && <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>}
         {loa && <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>}
+        {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건).
+            한쪽이라도 자료가 있는 항차만 — 순수 예정 항차는 이미 「자료 없음」 한 줄로 충분하다. */}
+        {(dis || loa) && !dis && <MissingSideNote label="양하" qty={voyage.info?.planDis}/>}
+        {(dis || loa) && !loa && <MissingSideNote label="선적" qty={voyage.info?.planLod}/>}
         {(() => {
           // V9.02: 카톡 물량 예보 — 해당 모드의 EDI(컨 리스트)가 아직 없을 때만 표시, 생기면 자동 대체(숨김)
           const f = voyage.info?.forecast;
@@ -1572,6 +1576,40 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── TallyOne 1.78: 한쪽 섹션이 없을 때 «없음»의 근거 (인계함 2026-08-17) ──
+//   검수사 확정 — *"선적만 있을수도 있습니다. 세관 자료에도 안보입니다. 양하가 안넘어 왔거나 없다는 이야기."*
+//   지금까지는 «자료 미도착(재촉)»과 «해당 없음(정상)»이 화면에서 똑같이 '없음'이라
+//   검수사가 기다려야 하는지·재촉해야 하는지·원래 없는지 구분할 수 없었다.
+//   근거는 수집기 1.5-06 이 배정목록에서 실어 오는 info.planDis/planLod (PCTC 수량 열).
+//   ⚠ 이 수치는 근거 표시 전용 — 카운트 기준으로 쓰지 않는다(예정 수량이 섞인다, v2.17.26 교훈).
+//   ⚠ PNCT 배정표에는 수량 열이 없다(실측) — 판정 불가를 넘겨짚지 않고 «수량 미상»으로 말한다.
+function MissingSideNote({ label, qty }) {
+  const has = qty != null;
+  const n = Number(qty) || 0;
+  if (has && n > 0) {
+    return (
+      <div className="text-[11px] text-amber-300"
+        title={`배정목록에 ${label} ${n} 이 잡혀 있는데 자료(EDI·리스트)가 아직 없습니다 — 자료를 재촉할 대상입니다.`}>
+        ⏳ {label} 자료 미도착 — 배정 {label} {n}
+      </div>
+    );
+  }
+  if (has) {
+    return (
+      <div className="text-[11px] text-slate-500"
+        title={`배정목록에도 ${label} 0 — 이 항차는 ${label} 작업이 원래 없는 배입니다. 기다릴 자료가 아닙니다.`}>
+        {label} 없음 — 배정에도 0 (정상)
+      </div>
+    );
+  }
+  return (
+    <div className="text-[11px] text-slate-600"
+      title={`배정표에 수량 정보가 없는 부두(PNCT 등)라 자료 대기인지 ${label} 없음인지 판정할 수 없습니다.`}>
+      {label} 자료 없음 · 배정 수량 미상
     </div>
   );
 }

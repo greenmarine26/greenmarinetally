@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.6-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.6-02</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -663,8 +663,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 1.77-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.6-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 1.78';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 1.6-02';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1174,7 +1174,7 @@ function render(){
           // C7.69 가드: 터미널 자료는 선박코드로만 와서 '직전 항차' 것이 다음 기항 카드에 붙는다.
           //   이 항차 작업창(planDate) 앞뒤 12시간 안에서 시작한 작업만 인정한다.
           const _win=(()=>{ const pd=String(v.planDate||''); if(!pd||!tw||!tw.startAt) return false;
-            const P=x=>{ const m=String(x).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime():null; };
+            const P=_planMs;   // ConeOne 1.6-02: 복제본 제거 — 공용 _planMs 한 벌
             const a=P(pd.split('~')[0].trim()), b=pd.includes('~')?P(pd.split('~')[1].trim()):null, st=P(tw.startAt);
             if(!st||(!a&&!b)) return false;
             return st>=((a||b)-12*3600000) && st<=((b||a)+12*3600000); })();
@@ -1185,7 +1185,7 @@ function render(){
           const _departed = !!v.departBadgeAt || String(v.terminalStatus||'').toLowerCase()==='departed';
           if(_departed && _win && tw){
             const _pfOk=(()=>{ if(!pf||!pf.nextDep) return false;
-              const P=x=>{ const m=String(x).match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/); return m?new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime():null; };
+              const P=_planMs;   // ConeOne 1.6-02: 복제본 제거 — 공용 _planMs 한 벌
               const pd=String(v.planDate||''), a=pd?P(pd.split('~')[0].trim()):null,
                     b=pd.includes('~')?P(pd.split('~')[1].trim()):null, t=P(pf.nextDep);
               if(!t||(!a&&!b)) return false;
