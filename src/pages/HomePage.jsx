@@ -359,32 +359,29 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                  _etaSrc: _pick ? _pick.src : '' };    // V9.35: 작업일시 배지 출처 표기용
       })
       .sort((a, b) => {
-        // TallyOne 1.12: **자료 완성율이 1차 키.** 자료가 갖춰진 배가 위로 온다.
-        //   자료 없는 배는 완성율 0이라 자연히 아래로 밀리고, 자료가 올라오면 그만큼 위로 올라온다.
-        //   완성율이 같으면(대개 둘 다 100% 또는 둘 다 0) 아래 작업시간 근접순이 그대로 결정한다.
-        const _rd = (b._ready || 0) - (a._ready || 0);
-        if (Math.abs(_rd) > 0.0001) return _rd;    // 부동소수 오차로 순서가 흔들리지 않게
-        // 완성율이 같아도(대개 둘 다 0) **자료가 있는 배가 위**다 — 검수사 확정:
-        //   "금일 작업 선박이라도 자료가 없으면 자료 있는 선박 밑에 놓고".
-        //   EDI만 왔고 리스트가 아직인 항차(매칭 0 → 완성율 0)가 자료 한 장 없는 항차와
-        //   섞이면 안 된다. 실측 NSDC 2607N — EDI 231대 보유, 리스트 미도착.
-        if (!!b._hasData !== !!a._hasData) return (b._hasData ? 1 : 0) - (a._hasData ? 1 : 0);
-        // V9.01: 작업시간 근접순 (사용자 확정 2026-07-17)
-        //   ①정박·작업중(출항 임박한 순) ②입항 예정(접안 가까운 순) ③출항·지남(최근 순) ④일정 미상(등록 최신순)
-        //   PORT-MIS 신고 + 수집기 선석배정(berth_schedule) 레코드의 eta/etd 기준. 부두 그룹(현 위치 우선)은 이 정렬 위에 얹힘.
+        // ★ TallyOne 1.77 — **작업일시가 1순위다** (검수사 확정 2026-08-17: "선박 순서도 작업 일시순으로").
+        //   종전(1.12)엔 ①자료 완성율 ②자료 유무가 앞에 있어 시간 순서가 통째로 깨졌다.
+        //   그 규칙(검수사 원문 "금일 작업 선박이라도 자료가 없으면 자료 있는 선박 밑에 놓고")은
+        //   **폐기가 아니라 동률 판정으로 내려왔다** — 검수사 확답: "작업일시 먼저, 같은 시간대면 자료 있는 배 위".
+        //   08:00 처럼 같은 시각에 여러 배가 서는 일이 흔해서 그 동률 판정이 실제로 쓰인다.
+        //   등급: ⓪작업 중·예정(작업시작 빠른 순 한 줄) ①출항 지남(최근 순) ②일정 미상(등록 최신순)
+        //   ⚠ 종전엔 '작업 중'과 '입항 예정'이 다른 등급이라 두 덩어리로 갈렸다 — 그것도 시간순을 깨는 요인이었다.
         const now = Date.now();
         const rank = (v) => {
           const eta = v._etaMs, etd = v._etdMs;
-          if (eta != null && eta <= now && (etd == null || now <= etd)) return [0, etd != null ? etd - now : 86400000];
-          if (eta != null && eta > now) return [1, eta - now];
-          // V9.36-01: 도선만 있는 항차(nextArr 없이 nextDep만 — "도선만 잡고 대기")가 ④미상으로
-          //   떨어지던 결함. etd만 미래면 입항 예정과 같은 급으로 정렬한다.
-          if (eta == null && etd != null && etd >= now) return [1, etd - now];
-          if (etd != null && etd < now) return [2, now - etd];
-          return [3, -(v.info.createdAt || 0)];
+          if (eta != null && (etd == null || etd >= now)) return [0, eta];
+          // V9.36-01: 도선만 있는 항차(nextArr 없이 nextDep만 — "도선만 잡고 대기")가 미상으로
+          //   떨어지던 결함. etd만 미래면 같은 급에 두고 그 시각으로 줄 세운다.
+          if (eta == null && etd != null && etd >= now) return [0, etd];
+          if (etd != null && etd < now) return [1, -etd];
+          return [2, -(v.info.createdAt || 0)];
         };
         const ra = rank(a), rb = rank(b);
-        return ra[0] - rb[0] || ra[1] - rb[1];
+        if (ra[0] !== rb[0]) return ra[0] - rb[0];
+        if (ra[1] !== rb[1]) return ra[1] - rb[1];
+        // ── 여기부터는 작업일시가 **같을 때만** 갈린다 ──
+        if (!!b._hasData !== !!a._hasData) return (b._hasData ? 1 : 0) - (a._hasData ? 1 : 0);
+        return (b._ready || 0) - (a._ready || 0);
       });
   }, [voyages, portMisData, pilotForecast]);
 

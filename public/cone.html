@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.5-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.6</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -663,8 +663,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 1.76-05';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.5-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 1.77';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 1.6';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -672,6 +672,13 @@ const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false,
 // 검수앱(Tallyman Master)이 voyages/{key}/{mode}/raw/edi 에 보관한 EDI 원문을 직접 읽어온다.
 //   mode: discharge=양하, loading=선적
 const FB_BASE='https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// ConeOne 1.6: 'YYYY-MM-DD HH:MM' → ms. 항차 정렬·작업창 판정 공용(같은 식을 또 복사하지 않는다).
+//   ⚠ 종전 복제본이 아래 카드 렌더 안에 두 벌 더 있다(작업창·도선 출항 판정) — 그쪽을 손댈 때 이것으로 합칠 것.
+function _planMs(x){
+  const m=String(x||'').match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  return m? new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime() : null;
+}
 
 // 항차 목록 (raw EDI가 있는 항차만) 가져오기
 async function fbFetchVoyages(){
@@ -719,7 +726,25 @@ async function fbFetchVoyages(){
       createdAt: info.createdAt||0,
     });
   }
-  out.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)); // 최신 항차 먼저
+  // ★ ConeOne 1.6 — **작업일시 순** (검수사 확정 2026-08-17: "콘앱도 같이 작업일시순으로").
+  //   검수앱 HomePage 1.77 과 같은 등급으로 맞춘다 — 두 앱의 배 순서가 어긋나면 현장에서 헷갈린다.
+  //   ⓪작업 중·예정(작업시작 빠른 순) ①출항 지남(최근 순) ②일정 미상(등록 최신순)
+  //   콘앱은 잔여·완성율을 모르므로 동률 판정(자료 있는 배 위)은 EDI 유무(noEdi)로만 가른다.
+  const _now=Date.now();
+  const _rank=(v)=>{
+    const pd=String(v.planDate||''), a=_planMs(pd.split('~')[0]), b=pd.includes('~')?_planMs(pd.split('~')[1]):null;
+    if(a!=null && (b==null||b>=_now)) return [0,a];
+    if(a==null && b!=null && b>=_now) return [0,b];
+    if(b!=null && b<_now) return [1,-b];
+    return [2,-(v.createdAt||0)];
+  };
+  out.sort((x,y)=>{
+    const rx=_rank(x), ry=_rank(y);
+    if(rx[0]!==ry[0]) return rx[0]-ry[0];
+    if(rx[1]!==ry[1]) return rx[1]-ry[1];
+    if(!!x.noEdi!==!!y.noEdi) return x.noEdi?1:-1;     // 작업일시가 같을 때만 — 자료 있는 배가 위
+    return (y.createdAt||0)-(x.createdAt||0);
+  });
   return out;
 }
 
