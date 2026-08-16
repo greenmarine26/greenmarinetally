@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount} from '../utils.js';
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -231,6 +231,19 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const hbView = heartbeatState(heartbeat, hbNow);
 
   const voyagesWithPier = useMemo(() => {
+    // ★ 1.77-02 — **선박 단위 값(도선 예보·PORT-MIS)을 아무 항차에나 붙이지 않는다.**
+    //   검수사 지적 2026-08-17: *"089항차랑 088항차랑 같이 들어 오나요?"* — RZOR 한 배의 두 항차
+    //   R088E·R089E 가 **둘 다 오늘 일정**으로 떴다. 오늘 도선은 한 번(09:30 입항 / 17:30 출항)뿐이고
+    //   그건 배정표 현재 기항인 R088E 것이다.
+    //   원인: `pilot_forecast[선박코드]` 는 **선박 단위**라 항차 구분이 없다. 수집기는 이미 이것을 알고
+    //   배정과 대조해 «이 항차 것이 아니면 안 붙인다»(autoreg `_voy_scoped` H-11) — 그래서 R089E 에는
+    //   planDate 가 없다. 그런데 **앱이 그 판정을 우회해** 선박 단위 값으로 직접 채웠다.
+    //   → 같은 선박의 항차가 둘 이상이면, planDate 가 없는 쪽에는 선박 단위 값을 안 쓴다(일정 미상으로 둔다).
+    const _voyCntByVsl = {};
+    Object.values(voyages || {}).forEach((v) => {
+      const s = String((v && v.info && v.info.vsl) || '').toUpperCase();
+      if (s) _voyCntByVsl[s] = (_voyCntByVsl[s] || 0) + 1;
+    });
     return Object.entries(voyages || {})
       .filter(([k, v]) => v && v.info)
       .map(([k, v]) => {
@@ -279,13 +292,24 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         //   "작업일시는 선석배정목록이 먼저 입니다. 도선만 해놓고 대기 하는 경우도 있으니까요."
         //   → 도선 예보는 도선사 배정일 뿐 작업 시작이 아니다. V9.34에서 도선을 1순위로 둔 것을 교정한다.
         //   출항 시각 표시(항차 상세의 ⚓ 도선 예보 줄)는 그대로 — 거기선 도선이 확정에 가깝다.
-        const _pfRec = pilotForecast[(info.vsl || '').toUpperCase()];
+        // 1.77-02: 같은 선박 항차가 둘 이상인데 이 항차엔 planDate 가 없다 = 수집기가 «이 항차 것 아니다»로
+        //   판정한 것이다. 그러면 선박 단위 값(도선·PORT-MIS)을 끌어오지 않는다.
+        const _shipWide = !(_voyCntByVsl[(info.vsl || '').toUpperCase()] > 1 && _pdEta == null && _pdEtd == null);
+        const _pfRec = _shipWide ? pilotForecast[(info.vsl || '').toUpperCase()] : null;
+        const _pmRec = _shipWide ? pm : null;
+        // 1.77-02: 도선 예보를 **직접** 쓸 때는 작업시작으로 환산한다(PNCT +120 · PCTC +90).
+        //   ⚠ planDate 는 수집기가 이미 환산해 넣은 값이라 손대지 않는다(1.40-01 이중가산 사고).
+        //     여기서 더하는 것은 planDate 가 없어 도선 원본을 그대로 쓰는 경우뿐이다.
+        //     안 더하면 카드가 「09:30 ⚓도선」처럼 **도선 시각을 작업시작인 양** 보여준다
+        //     (오답 1786057401908 «도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?»의 뿌리).
+        //   출항(nextDep)은 그대로 — 오프셋은 앞자리에만.
+        const _pfArr = _pfRec ? parsePortMisDateTime(_pfRec.nextArr) : null;
         const _cands = [
           { p: 3, src: 'plan', eta: _pdEta, etd: _pdEtd },                        // ① 선석배정(작업일시의 기준)
-          { p: 2, src: 'pilot', eta: _pfRec ? parsePortMisDateTime(_pfRec.nextArr) : null,
-                  etd: _pfRec ? parsePortMisDateTime(_pfRec.nextDep) : null },     // ② 도선 예보
-          { p: 1, src: 'portmis', eta: pm ? parsePortMisDateTime(pm.eta) : null,
-                  etd: pm ? parsePortMisDateTime(pm.etd) : null },                 // ③ PORT-MIS 신고
+          { p: 2, src: 'pilot', eta: _pfArr != null ? _pfArr + pilotToWorkMin(pier) * 60000 : null,
+                  etd: _pfRec ? parsePortMisDateTime(_pfRec.nextDep) : null },     // ② 도선 예보(작업시작 환산)
+          { p: 1, src: 'portmis', eta: _pmRec ? parsePortMisDateTime(_pmRec.eta) : null,
+                  etd: _pmRec ? parsePortMisDateTime(_pmRec.etd) : null },         // ③ PORT-MIS 신고
         ].filter(c => c.eta != null || c.etd != null);
         const _now = Date.now();
         const _live = _cands.filter(c => (c.etd == null ? (c.eta == null || c.eta >= _now) : c.etd >= _now));
