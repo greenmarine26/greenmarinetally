@@ -1186,8 +1186,21 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const disStats = computeStats(dis, 'discharge', voyage.info, voyage.key);
   const loaStats = computeStats(loa, 'loading', voyage.info, voyage.key);   // V9.03: info.emptyConfirmed(엠티 확정) 표시용
   // V8.98-03: 쉬프팅(재적부) 개수 — 양하·선적 공통(같은 기항의 재적부 컨). 캐시라 스냅샷 틱에도 가벼움.
-  const shiftCount = Object.keys(computeShiftingMapCached(voyage.key, voyage) || {}).length;
-  if (shiftCount > 0) { disStats.shiftCount = shiftCount; loaStats.shiftCount = shiftCount; }
+  const _shiftMap = computeShiftingMapCached(voyage.key, voyage) || {};
+  const shiftCount = Object.keys(_shiftMap).length;
+  if (shiftCount > 0) {
+    disStats.shiftCount = shiftCount; loaStats.shiftCount = shiftCount;
+    // 1.78-01(인계함 2026-08-16): 모브 수를 «×2 고정»이 아니라 **실제 완료로** 센다.
+    //   검수사 확정 — *"그게 그래서 양하 리스트에 있어야 하고 선적 리스트에 있어야 하는 이유입니다.
+    //   그러면 투타임이 적히게 되었을테니까요."* 마감텔리 실물(MAMP 631N&633S Vol 시트)도
+    //   SHIFT 를 1 TIME / 2 TIME 으로 나눠 센다 — 양하 완료 1 + 선적 완료 1 = 2 TIME.
+    //   1.76-05 카드 둘(_shift:'out'/'in') 구조가 그대로 답이다: 완료 도장(sec.completed)을 양쪽에서 센다.
+    //   완료가 하나도 없으면(작업 전) 종전대로 ×2 를 보여주되 «예정»임을 밝힌다.
+    const _dc = voyage.discharge?.completed || {}, _lc = voyage.loading?.completed || {};
+    let _mv = 0;
+    for (const _cn of Object.keys(_shiftMap)) { if (_dc[_cn]) _mv += 1; if (_lc[_cn]) _mv += 1; }
+    disStats.shiftMoves = _mv; loaStats.shiftMoves = _mv;
+  }
 
   // M5.82: 부두 정보 (voyage._pier가 HomePage에서 채워짐)
   const pier = voyage._pier || '';
@@ -1706,7 +1719,7 @@ function SectionBar({ label, color, stats, onClick }) {
         {stats.shiftCount > 0 && (
           <>
             <span className="text-slate-600">·</span>
-            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 터미널 배정표는 모브 수(1대=양하+재선적 2모브). 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({stats.shiftCount * 2}모브)</span>
+            <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 모브는 실제 완료로 센다 — 내림(양하) 1 + 실음(선적) 1 = 2모브(2 TIME). 내림만 했으면 1모브(1 TIME). 아직 작업 전이면 예정 ×2. 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoves}모브` : `예정 ${stats.shiftCount * 2}모브`})</span>
           </>
         )}
         {stats.virtualFromList && (
