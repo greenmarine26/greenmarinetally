@@ -7,7 +7,7 @@
 import React, { useState, useMemo } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
-import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
@@ -43,7 +43,19 @@ const FILTERS = [
   { key: 'isoOther', label: '⚠️ 기타 ISO', color: 'bg-amber-700' },
 ];
 
-export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer }) {
+// 1.76-05: 시프팅 자리 문자열 → 사람 말. 확정 대조는 7자리(`0301086` = bay030 row10 tier86),
+//   예측 경로는 이미 `34-01-82` 꼴이라 둘 다 받는다(둘 중 하나만 처리하면 한쪽이 조용히 빈칸이 된다).
+function shiftPosLabel(p) {
+  const s = String(p || '').trim();
+  if (!s) return '';
+  if (s.includes('-')) return s;
+  if (s.length !== 7) return s;
+  return `${parseInt(s.slice(0, 3), 10)}-${s.slice(3, 5)}-${s.slice(5, 7)}`;
+}
+
+// 1.76-05: dupSeals = utils.dupSealMap(그 모드 전체 컨) — **거른 목록이 아니라 전체**로 판정한다.
+//   필터로 짝이 화면에서 빠져도 중복 배지가 사라지면 안 된다(조용히 실패하는 화면 금지).
+export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode, voyageKey, inspector, onOpenContainer, dupSeals = null }) {
   const [cargoFilter, setCargoFilter] = useState('all');
   const [opFilter, setOpFilter] = useState('all'); // 검수업체 필터
   const [podFilter, setPodFilter] = useState('all'); // POD 도시 필터 (선적용)
@@ -281,6 +293,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
             voyageKey={voyageKey}
             inspector={inspector}
             onOpenContainer={onOpenContainer}
+            dupSeals={dupSeals}
           />
         ))}
       </div>
@@ -288,7 +301,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   );
 }
 
-function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer }) {
+function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, onOpenContainer, dupSeals = null }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [sealVal, setSealVal] = useState(c.sl || '');
@@ -317,6 +330,11 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const sealEdited = Array.isArray(c.sl_history) && c.sl_history.length > 0;
   const sealError = sealEdited && c.sl && slOrig && c.sl !== slOrig;
   const sealConflict = !sealError && Array.isArray(c.sl_conflict) && c.sl_conflict.length > 1;
+  // 1.76-05: 실번호 중복 — **두 컨에 한 실**(sealConflict 는 «한 컨에 두 실»로 축이 다르다).
+  //   검수사 신고 2026-08-16 MAMP 631N — PH0570668 이 두 대에 들어간 채 둘 다 완료됐다.
+  //   ⛔ sealError·sealConflict 와 달리 게이트를 걸지 않는다. 세 배지는 서로 다른 사고이므로
+  //     같이 떠야 한다(sealConflict 가 sealError 뒤에 가려지는 기존 문제와 같은 실수를 반복하지 않는다).
+  const dupPartners = dupSealPartners(c, dupSeals);
   const xSealOrig = xraySeal?.seal_orig != null ? xraySeal.seal_orig : xraySeal?.seal || '';
   const xSeal = xraySeal?.seal || '';
   const xSealError = xSeal && xSealOrig && xSeal !== xSealOrig;
@@ -435,6 +453,21 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {(sealError || xSealError) && (
                 <span className="bg-red-700/80 text-red-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
                   <AlertOctagon className="w-2.5 h-2.5"/>실오류
+                </span>
+              )}
+              {/* 1.76-05: 시프팅 — 이 컨은 «양하 처리»가 되는 작업 항목이다(표시 전용이 아니다).
+                    검수사 확정 2026-08-16: *"앱에서 양하처리 되어야 합니다."* 어디서 어디로 가는지 같이 보여 준다. */}
+              {c._shift && (
+                <span className="bg-sky-700/90 text-sky-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
+                  title={`시프팅(재적부) — 크레인이 두 번 듭니다. ${c._shiftFrom || '?'} 에서 내려 ${c._shiftTo || '?'} 에 싣습니다.`}>
+                  ◆ 시프팅 {c._shift === 'out' ? '내림' : '실음'}
+                  {c._shiftFrom && c._shiftTo ? ` ${shiftPosLabel(c._shiftFrom)}→${shiftPosLabel(c._shiftTo)}` : ''}
+                </span>
+              )}
+              {dupPartners.length > 0 && (
+                <span className="bg-rose-700/90 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
+                  title={`이 실번호가 다른 컨테이너에도 들어 있습니다 — ${dupPartners.join(' / ')}. 양쪽 모두 실물 확인.`}>
+                  🔒 실번호 중복 {dupPartners.map(x => (x || '').slice(-4)).join('·')}
                 </span>
               )}
               {sealConflict && (

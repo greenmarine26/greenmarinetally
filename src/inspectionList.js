@@ -255,13 +255,15 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
       sheet2PagesList.map((rows, i) => renderPageWithHdr(rows, i + 1, sheet2PagesList.length)).join('');
   }
 
-  // V8.98-05: [별첨2] 쉬프팅(재적부) — 통과화물 위치 이동, 양하·선적 공통. 크레인 작업 확인용.
+  // [별첨2] 시프팅(재적부) — **평택 작업에 방해가 되어 옮기는 화물**, 양하·선적 공통.
+  //   1.76-05: 구 문구 «통과화물 위치 이동» 폐기 — 정의는 «통과화물이냐»가 아니라 «방해가 되느냐»다
+  //   (검수사 확정 2026-08-15, 정본 ★앱_통합지침서.md §5-1B). 좌표만 달라진 통과화물은 서류 차이다.
   let shiftHtml = '';
   if (Array.isArray(shiftingList) && shiftingList.length > 0) {
     const rows = shiftingList.map((c, i) => `<tr>
       <td>${i + 1}</td><td class="cn">${c.cn || ''}</td><td>${c.iso || ''}</td><td>${c.pod || ''}</td>
       <td class="cn">${c.from || ''}</td><td class="cn">${c.to || ''}</td><td></td></tr>`).join('');
-    shiftHtml = `<div class="ititle">[별첨2] ◆ 쉬프팅(재적부) ${shiftingList.length}대 — 통과화물 위치 이동 (양하·선적 공통)</div>
+    shiftHtml = `<div class="ititle">[별첨2] ◆ 시프팅(재적부) ${shiftingList.length}대 — 평택 작업에 걸려 옮기는 화물 (양하·선적 공통, 1대=크레인 2모브)</div>
       <div class="ipage"><table class="ilist" style="max-width:120mm;margin:0 auto;">
       <tr><th>No</th><th>컨테이너</th><th>규격</th><th>POD</th><th>전 위치</th><th>후 위치</th><th>확인</th></tr>
       ${rows}</table></div>`;

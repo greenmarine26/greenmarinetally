@@ -7,7 +7,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows } from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap } from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -273,6 +273,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap]);
 
   // V8.98-05: 검수 리스트용 쉬프팅 목록 — shiftingMap + 컨 정보(규격/POD) 보강
+  // 1.76-05: **작업 항목으로 승격할 수 있는 것 = 확정 대조뿐.** 예측은 알림·예보로만 쓴다.
+  //   예측은 대기 단계 자료다 — 그걸 카드로 만들면 KSKM 2615N 4대(인천 하선분)·XTPG 536E 7대
+  //   (접안 8/17 예정, 아직 인천 작업 중) 같은 허수가 「치우라」는 작업 지시가 된다.
+  const shiftingConfirmed = useMemo(() => {
+    try { return computeShiftingMapCached(voyageKey, voyage) || {}; } catch (e) { return {}; }
+  }, [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]);
+
   const shiftingList = useMemo(() => {
     const keys = Object.keys(shiftingMap || {});
     if (!keys.length) return [];
@@ -524,6 +532,28 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       merged[k] = { ...c, cn: k, pendingCn: true, _slot: true, _src: 'edi' };
     });
 
+    // ★ 1.76-05: 시프팅 컨을 **검수 리스트에 올린다 — 양하 처리가 되어야 한다.**
+    //   검수사 확정 원문 2026-08-16: *"TCLU9762509는 앱에서 양하처리 되어야 합니다.
+    //   그런데 시프팅이라고 알려는 주었지만 양하 리스트 아니면 시프팅 리스트를 보여주지
+    //   않았던게 문제였습니다."*
+    //   → 「알려주기」로는 부족하다. 완료 체크가 되는 **작업 항목**이어야 한다.
+    //   실측 MAMP 631N — TCLU9762509(30-10-86 → 22-10-90, 배정표 이적 2모브=1대와 일치)는
+    //   POD 가 평택이 아니고 선사 양하리스트(records)에도 없어 isPtk 두 조건이 다 false 였다.
+    //   그래서 리스트에도 큐에도 없이 화면 아래 파란 박스로만 «보여지고» 있었다.
+    //   ⚠ 자리 정보는 fullEdiMap(raw 전문) — ediMap 은 통과화물을 못 들고 오는 경로가 있다.
+    //   ⚠ 카운트는 섞지 않는다(검수사 확정) — _shift 는 stats 총계·진행률에서 빼고 별도로 센다.
+    //   ⛔ shiftingMap(확정∨예측)이 아니라 **확정 대조만** 쓴다 — 예측은 작업 항목이 아니다.
+    for (const [cn, s] of Object.entries(shiftingConfirmed || {})) {
+      if (!cn || cn.startsWith('__') || merged[cn]) continue;
+      const c = fullEdiMap[cn];
+      if (!c) continue;
+      merged[cn] = {
+        ...c, cn, _src: 'shift',
+        _shift: mode === 'discharge' ? 'out' : 'in',
+        _shiftFrom: s.from || s.pos || '', _shiftTo: s.to || '',
+      };
+    }
+
     // 리스트가 채울 수 있는 필드 (보강 정보만)
     // EDI 핵심 필드(iso, rf, fr, ot, tk, dg, fe, bay, row, tier, pol, pod 등)는 제외
     // M4.9b-fix: 검수원이 폰에서 입력한 엠티실/ISO403 사진 필드도 records 단일 진실 원천
@@ -650,7 +680,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return baseContainers;
-  }, [ediMap, recMap, mode, sec.extras]);
+  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap]);   // 1.76-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다
 
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
   const containers = useMemo(
@@ -1769,6 +1799,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
+    else if (filter === 'shift') arr = arr.filter(c => c._shift);   // 1.76-05: 시프팅만 보기
     // V9.14: 마감 점검 「리퍼 온도 미입력」 점프용 — Full 리퍼인데 온도 빈 것만 (판정은 체크리스트와 동일)
     else if (filter === 'reeferTemp') arr = arr.filter(c =>
       (c.rf || /^..R/.test(c.iso || '')) && !c.rfdry && !c.mkcon &&
@@ -1780,11 +1811,23 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     return arr;
   }, [containers, filter, search, compMap, xrayMap]);
 
-  const stats = useMemo(() => ({
-    total: containers.length,
-    done: containers.filter(c => compMap[c.cn]).length,
-    xray: mode === 'discharge' ? containers.filter(c => xrayMap[c.cn]).length : 0,
-  }), [containers, compMap, xrayMap, mode]);
+  // 1.76-05: 실번호 중복(두 컨에 한 실) — **거른 목록이 아니라 `containers` 전체**로 판정한다.
+  const dupSeals = useMemo(() => dupSealMap(containers), [containers]);
+
+  // 1.76-05: 시프팅은 **총계에 섞지 않는다**(검수사 확정 2026-08-16 «별도 칸으로 따로»).
+  //   리스트 진행률은 선사 양하리스트 대수 그대로 두고, 시프팅은 자기 칸에서 센다.
+  //   그래야 «리스트 190대 중 N대 완료»가 선사·터미널 숫자와 계속 맞는다.
+  const stats = useMemo(() => {
+    const base = containers.filter(c => !c._shift);
+    const sh = containers.filter(c => c._shift);
+    return {
+      total: base.length,
+      done: base.filter(c => compMap[c.cn]).length,
+      xray: mode === 'discharge' ? base.filter(c => xrayMap[c.cn]).length : 0,
+      shift: sh.length,
+      shiftDone: sh.filter(c => compMap[c.cn]).length,
+    };
+  }, [containers, compMap, xrayMap, mode]);
 
   const handleExport = () => {
     exportSectionToCSV(voyageKey, mode, containers, compMap, xrayMap, xraySeals);
@@ -1827,6 +1870,8 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           { k: 'undone', t: `미완 ${stats.total - stats.done}` },
           { k: 'done', t: `완료 ${stats.done}` },
           ...(mode === 'discharge' ? [{ k: 'xray', t: `🔍 X-RAY ${stats.xray}` }] : []),
+          // 1.76-05: 시프팅 별도 칸 — 총계에 안 섞고 따로 센다(검수사 확정). 탭하면 시프팅만 본다.
+          ...(stats.shift > 0 ? [{ k: 'shift', t: `◆ 시프팅 ${stats.shiftDone}/${stats.shift}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(k)}
             className={`px-2.5 py-1 rounded font-bold ${
@@ -1844,6 +1889,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         voyageKey={voyageKey}
         inspector={inspector}
         onOpenContainer={onOpenContainer}
+        dupSeals={dupSeals}
       />
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
@@ -1859,7 +1905,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
                   : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치'}` : '(정본)'}
               </span>
             )}
-            <span className="ml-auto text-[10px] font-normal text-slate-500">통과화물 위치 이동 — 양하·선적 공통</span>
+            <span className="ml-auto text-[10px] font-normal text-slate-500">평택 작업에 걸려 옮기는 화물 — 1대 = 크레인 2모브</span>
           </div>
           {/* TallyOne 1.76: 정답표 불일치 — 어느 한쪽이 틀렸다는 것을 화면이 말한다. */}
           {shiftInfo?.truthChk?.pending && (
@@ -1946,6 +1992,9 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
     return arr;
   }, [containers, filter, search, compMap]);
 
+  // 1.76-05: 실번호 중복 — LOLO 탭도 같은 벌을 쓴다(ListTab 만 고치고 여기를 빠뜨리던 사고 방지).
+  const dupSeals = useMemo(() => dupSealMap(containers), [containers]);
+
   const stats = useMemo(() => ({
     total: containers.length,
     done: containers.filter(c => compMap[c.cn]).length,
@@ -2009,6 +2058,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         voyageKey={voyageKey}
         inspector={inspector}
         onOpenContainer={onOpenContainer}
+        dupSeals={dupSeals}
       />
     </div>
   );

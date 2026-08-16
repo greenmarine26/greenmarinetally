@@ -15,7 +15,14 @@
 //     양하 우선 불가(층 순서 유지). 선적은 FR 위에 실릴 작업분이 있으면 마지막 불가(층 순서 유지).
 //   40ft/20ft 혼재 시 40ft 먼저: 별도 규칙이 아니라 층 단위 정렬에서 자연 충족
 //     (양하: 트윈 위 40ft가 위층 차례에 먼저 / 선적: 바닥 40ft가 아래층 차례에 먼저).
-//   쉬프팅: 가이드 모드에서 감지하지 않음 — 발생 시 수동 모드 사용 (사용자 결정).
+//   시프팅: 1.76-05 부터 **작업 카드로 큐에 들어온다**(구 «가이드 모드에서 감지하지 않음» 폐기).
+//     검수사 확정 2026-08-16 — *"앱에서 양하처리 되어야 합니다."* 시프팅은 크레인이 두 번 드는
+//     실작업(양하 1 + 재선적 1)이라 «보여주기»가 아니라 완료 체크가 되는 작업 항목이어야 한다.
+//     카드는 둘 — 양하 모드 `_shift:'out'`(내림), 선적 모드 `_shift:'in'`(실음).
+//     순서는 여기서 따로 손대지 않는다: 시프팅 컨은 걸린 화물 **위**에 있으므로 «위 티어부터»가
+//     알아서 먼저 내보낸다(MAMP 631N 실측 — TCLU9762509 30-10-86 이 B30 데크 큐 1번째, 같은 스택
+//     평택분 30-10-84·30-10-82 는 5·15번째). 큐 입력(GuidedWorkPanel.remaining)만 넓히면 된다.
+//     ⚠ 카운트는 섞지 않는다 — `_shift` 는 진행률·마감텔리 총계에서 빼고 별도 칸으로 센다.
 //   V8.50 (사용자 확정 2026-07-06 — 양하 우선순위 협의):
 //     ① 기본 순서는 층(티어) 단위 절대 유지 — V8.09-04의 스택 통째 배치(로우 단위 붕괴) 폐기.
 //        (실증: 625N bay26 위엠티/풀리퍼/바닥엠티 홀드에서 로우 단위로 파고들던 문제.)
@@ -156,11 +163,30 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   //   선적 = 순수 싱글 → 트윈(같은 로우 스택 연속, 아래 깔린 40ft 종속 끌어오기) → 남은 40ft(층 순서) → FR·OT(마지막)
   const flow = [...normal, ...keepInFlow].sort((a, b) => cmp(a.main, b.main));
   if (mode === 'discharge') {
-    // V8.09-03 (사용자 확정 2026-06-17): 양하는 "40ft 작업 전부 끝낸 뒤 20ft 작업".
-    //   ★1.57 폐기 — 스프레더 전환을 줄이려는 이 규칙이 '고정'이라 현장이 반대로 갈 때도 밀어붙였다.
-    //   검수사 확정 2026-08-13: 40/20 어느 쪽을 먼저 하는지는 배마다·날마다 다르므로 감지에 맡긴다.
-    //   40ft 를 모아 먼저 내리는 흐름이면 「40피트」 칩이 걸리거나 3연속 감지가 잡아 같은 결과가 된다.
-    const base = [...pureFrs, ...flow, ...pureSingles];
+    // ★ 양하 순서 규칙 — 목적은 «순서»가 아니라 **스프레더 전환 횟수 최소화**다.
+    //
+    //   검수사 확정 원문 (2026-08-16): *"40피트 작업중 20피트로 바꾸면 장비 모드 변환을 해야 함으로
+    //   그 횟수를 늘리면 안된다."* 40ft 모드에서 20ft 트윈 하나를 끼우면 40→20→40 **전환 2회**,
+    //   즉 크레인이 두 번 멈춘다. 얻는 것은 20ft 2대뿐이다.
+    //
+    //   ⛔ 「40ft 먼저」는 목적이 아니라 결과다. 목적(전환 최소화)을 적어 두지 않았더니
+    //     1.57 이 이 규칙을 «고정이라 현장이 반대로 갈 때 밀어붙인다»는 이유로 감지로 갈아치웠다.
+    //     이유가 코드에 없으면 다음 판에서 또 갈아치워진다 — 이 문단을 지우지 마라.
+    //
+    //   물리 근거: **40ft 위에 20ft 는 못 올린다(콘 홀 없음).** 그래서 같은 스택이면 40ft 가 항상 위이고,
+    //     위에서부터 내리는 양하는 40ft 를 먼저 칠 수밖에 없다. 다른 스택끼리는 순서가 자유롭다.
+    //     → 40ft 를 앞으로 모아도 적재 종속을 깨뜨릴 수 없다. 종속 검사가 필요 없는 이유다.
+    //
+    //   ⚠ 현장이 반대로 가는 날은 streamPref 가 이긴다 — 20 흐름이 감지되거나 검수사가 「20피트」 칩을
+    //     누르면 아래 pullStreamForward 가 20ft 를 앞으로 당긴다. 40ft 우선은 기본값일 뿐이다.
+    //
+    //   ★ 1.76-05 재작성 — 1.76-03 의 복원판은 **한 대도 재정렬하지 못했다**(라이브에서 무효).
+    //     그 판의 rowsBlock 은 «40ft 위에 20ft 가 얹힌 로우»를 예외로 빼려 했는데,
+    //     ① 그 적재는 물리적으로 존재할 수 없고 ② 판정에 **베이 비교가 빠져** 로우 번호만 봤다.
+    //     그래서 9번 베이 20ft(티어 04)와 14번 베이 40ft(티어 02)처럼 **다른 스택**이 종속으로 잡혔다.
+    //     MAMP 631N 실데이터(양하 977대) 실측 — **20개 로우 전부 차단** → 전량 blocked → 재정렬 0건.
+    //     게다가 꺼져도 화면에 아무 표시가 없어 검수사가 현장에서 순서를 볼 때까지 아무도 몰랐다.
+    const base = [...pureFrs, ...reorder40FirstForDischarge(flow), ...pureSingles];
     // V8.50 ③: 고른 부류를 물리 종속 지키며 앞당김. FR 우선 양하는 그대로 고정.
     if (streamPref) return [...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)];
     return base;
@@ -193,7 +219,42 @@ function cardIs40(card) {
   return is40ft(card.main);
 }
 
-// 1.57: reorder40FirstForDischarge(양하 40ft 모아 먼저) 삭제 — 고정 규칙을 감지로 옮겼다(호출부 0).
+// 40ft 베이(짝수 b)는 20ft 베이 b-1·b+1 을 물리적으로 덮는다 — 같은 스택인지 판정.
+//   ⛔ 베이를 안 보고 로우 번호만 비교하면 전혀 다른 스택이 «위아래»로 잡힌다(1.76-03 사고).
+function sameStack40vs20(c40, c20) {
+  if (String(c40.row ?? '') !== String(c20.row ?? '')) return false;
+  const b40 = parseInt(c40.bay, 10), b20 = parseInt(c20.bay, 10);
+  if (!Number.isFinite(b40) || !Number.isFinite(b20)) return false;
+  return b20 === b40 || b20 === b40 - 1 || b20 === b40 + 1;
+}
+
+// 1.76-05: 양하 40ft 모아 먼저 — 스프레더 전환 횟수를 줄인다(호출부 = buildGuidedQueue 양하 분기).
+//   단(데크/홀드) 사이 순서는 건드리지 않는다. 단 안에서 40ft 를 앞으로 모으고, 각 무리 내부는
+//   기존 cmp 순서를 그대로 둔다(stable). 40ft 위에 20ft 가 없으므로 종속 예외는 두지 않는다.
+function reorder40FirstForDischarge(flow) {
+  const withinTier = (cards) => {
+    const c40 = cards.filter(cardIs40);
+    const c20 = cards.filter((card) => !cardIs40(card));
+    if (!c40.length || !c20.length) return cards;
+    // 물리 점검 — 40ft 위의 20ft 는 존재할 수 없다. 데이터에 있으면 EDI·파싱이 틀린 것이다.
+    //   조용히 넘기지 않는다(빈 catch 금지와 같은 원칙). 근거가 흔들리면 순서를 손대지 않는다.
+    const bad = [];
+    for (const s of c20) {
+      const st = parseInt(s.main.tier, 10);
+      if (!Number.isFinite(st)) continue;
+      const under = c40.find((f) => parseInt(f.main.tier, 10) < st && sameStack40vs20(f.main, s.main));
+      if (under) bad.push(`${s.main.cn || '?'} ${s.main.bay}-${s.main.row}-${s.main.tier} 아래 40ft ${under.main.bay}-${under.main.row}-${under.main.tier}`);
+    }
+    if (bad.length) {
+      console.warn('[guidedQueue] 40ft 위에 20ft — 물리적으로 불가능한 적재다. EDI 확인 필요:', bad);
+      return cards;   // 자료가 틀렸으므로 재정렬하지 않고 층 순서 그대로 둔다
+    }
+    return [...c40, ...c20];
+  };
+  const deck = flow.filter((card) => isDeckTier(card.main.tier));
+  const hold = flow.filter((card) => !isDeckTier(card.main.tier));
+  return [...withinTier(deck), ...withinTier(hold)];
+}
 
 // 리퍼 판정 (이 모듈 자체 완결성 위해 로컬 헬퍼 — ISO 3번째 글자 R 또는 변형코드)
 function cardIsReefer(c) {

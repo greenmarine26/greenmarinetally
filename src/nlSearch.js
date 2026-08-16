@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath} from './utils.js';   // TallyOne 1.22: 도선→작업개시
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -1084,14 +1084,13 @@ export function auditSeals(containers) {
   }
   if (!entries.length) return { items, checked: 0 };
   // ① 중복 (같은 정규화 씰, 서로 다른 컨)
-  const bySeal = {};
-  for (const e of entries) { (bySeal[e.n] = bySeal[e.n] || []).push(e); }
-  for (const k in bySeal) {
-    const g = bySeal[k];
-    const cns = [...new Set(g.map(e => e.c.cn))];
-    if (cns.length >= 2) {
-      items.push({ cn: cns.map(x => (x || '').slice(-4)).join('·'), seal: g[0].raw, reason: `같은 실번호가 ${cns.length}개 컨테이너에 — 서로 바뀌어 있을 가능성, 양쪽 모두 실물 확인` });
-    }
+  //   1.76-05: 판정을 utils.dupSealMap 한 벌로 모았다 — 목록 배지·가이드 카드·이 답변이 같은 것을 본다.
+  //   ⚠ 종전 이 자리의 자체 구현은 '0000'(실 부족 표기)을 중복으로 셌다. dupSealMap 은 제외한다
+  //     (손입력 차단 dupSealOwner 가 처음부터 제외해 온 규칙 — 두 기준이 갈려 있던 것을 맞춘다).
+  const rawOf = {};
+  for (const e of entries) if (!rawOf[e.n]) rawOf[e.n] = e.raw;
+  for (const [n, cns] of dupSealMap(containers || [])) {
+    items.push({ cn: cns.map(x => (x || '').slice(-4)).join('·'), seal: rawOf[n] || n, reason: `같은 실번호가 ${cns.length}개 컨테이너에 — 서로 바뀌어 있을 가능성, 양쪽 모두 실물 확인` });
   }
   // ②③④ 개별 점검
   const allCns = new Set((containers || []).map(c => norm(c.cn)).filter(Boolean));

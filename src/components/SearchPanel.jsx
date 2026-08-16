@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
@@ -86,6 +86,27 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   const [extraModalOpen, setExtraModalOpen] = useState(false);   // V8.04: 초과 컨 입력 모달
   const equipNo = useEquipNo();   // TallyOne 1.55: 지금 갱(호기) — 완료 기록·수석 전달에 같이 실린다
 
+  // 1.76-05: 시프팅 판정·자리 정보 — 확정 대조가 있으면 그것, 없으면 예측(양하 EDI 하나로).
+  //   판정은 utils 한 벌만 쓴다(같은 판정을 두 기준으로 하지 않는다). raw 서명이 바뀔 때만 다시 푼다.
+  const _rawSig = `${voyage?.discharge?.raw?.edi?.uploadedAt || 0}|${voyage?.discharge?.raw?.edi?.sizeBytes || 0}`
+    + `|${voyage?.loading?.raw?.edi?.uploadedAt || 0}|${voyage?.loading?.raw?.edi?.sizeBytes || 0}`;
+  //   ⛔ **작업 카드는 «확정 대조»만.** 예측으로는 절대 카드를 만들지 않는다 (1.76-05).
+  //     예측은 성격상 «대기 단계 자료»다 — §5-1B «판정은 같은 단계 자료끼리».
+  //     실측 2026-08-16: 예측을 카드로 올렸다면 KSKM 2615N 4대(인천 하선분)·XTPG 536E 7대
+  //     (아직 인천 작업 중, 접안 예정 8/17)가 **없는 시프팅 11대**로 양하 리스트에 올라가
+  //     검수사에게 «치우라»고 지시했을 것이다. 지침서에 이미 허수로 기록된 바로 그 건들이다.
+  //     예측은 종전대로 «알림·예보»로만 쓴다(챗봇 답·홈 카드) — 작업 항목이 아니다.
+  const shiftMapAll = useMemo(() => {
+    try { return computeShiftingMapCached(voyageKey, voyage) || {}; }
+    catch (e) { console.warn('[SearchPanel] 시프팅 확정 대조 실패 — 작업 카드에서 빠진다:', e); return {}; }
+  }, [voyageKey, _rawSig]);
+  // 시프팅 컨의 규격·POD 등 — 통과화물이라 ediContainers 에 없다. raw 전문 재파싱본에서 가져온다.
+  const shiftInfoAll = useMemo(() => {
+    if (!Object.keys(shiftMapAll || {}).length) return {};
+    try { return { ...(ediMapFromRaw(voyage?.loading) || {}), ...(ediMapFromRaw(voyage?.discharge) || {}) }; }
+    catch (e) { return {}; }
+  }, [shiftMapAll, _rawSig]);
+
   const allContainers = useMemo(() => {
     const arr = [];
     ['discharge', 'loading'].forEach(m => {
@@ -148,6 +169,39 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           bay: '', row: '', tier: '',        // 위치 미지정(리스트에 없던 컨)
         });
       });
+
+      // ★ 1.76-05: 시프팅 컨을 **작업 대상**으로 올린다.
+      //   검수사 메모 2026-08-16 — *"시프팅 화물이 양하대상에 목록에 안보임. 순서에서도 빠짐."*
+      //   시프팅은 크레인이 두 번 드는 실작업(양하 1 + 재선적 1)인데, 앱은 「작업 대상 = 평택분」
+      //   으로만 정의해 세 곳에서 통째로 빠졌다 — 목록 원천 · 큐 입력(_ptk) · 큐 생성기.
+      //   ⚠ 수집기가 올리는 ediContainers 에는 통과화물이 **이미 없다.** 그래서 필터만 풀어서는
+      //     안 나온다 — 자리 정보는 raw EDI 재파싱본(shiftMap)에서 가져온다.
+      //   ⚠ 카드는 **둘**이다 (검수사 확정 2026-08-16) — 양하 모드에서 «내린다»(_shift:'out'),
+      //     선적 모드에서 «싣는다»(_shift:'in'). 크레인 2모브와 1:1로 맞는다.
+      //   ⚠ 카운트는 **섞지 않는다** (검수사 확정 2026-08-16) — _shift 는 진행률·리스트 총계에서
+      //     빼고 별도 칸으로 센다. §5-2 「평택분만 센다」와 부딪히지 않게 하는 지점이다.
+      //   순서는 따로 손대지 않는다 — 시프팅 컨은 물리적으로 걸린 화물 **위**에 있으므로
+      //     «위 티어부터» 규칙이 알아서 먼저 내보낸다. 큐에 들어가기만 하면 된다.
+      Object.entries(shiftMapAll || {}).forEach(([cn, s]) => {
+        if (!cn || cn.startsWith('__') || merged[cn]) return;
+        const pos = m === 'discharge' ? (s.from || s.pos || '') : (s.to || '');
+        if (!pos || pos.length < 7) return;   // 자리를 모르면 큐에 못 넣는다(조용히 빠지지 않게 아래 경고)
+        const info = shiftInfoAll?.[cn] || {};
+        arr.push({
+          ...info, cn,
+          _mode: m,
+          // ⛔ _ptk 는 **false 로 둔다.** 여기에 true 를 주면 저장소 전체 90곳의 `_ptk` 판정이
+          //   한꺼번에 바뀐다(firebase 31 · chiefAnswers 10 · HomePage 5 · ChiefDashboard 5 …).
+          //   그러면 마감텔리·수석 대시보드·홈 카드 총계가 조용히 부풀고, 검수사가 확정한
+          //   «카운트는 섞지 않는다»를 정면으로 어긴다. 특정 케이스를 공용 경로 앞단에 두지 않는다.
+          //   → 큐·목록은 `_ptk || _shift` 로 **입력 쪽에서만** 넓힌다(호출부를 세어 가며).
+          _ptk: false,
+          _shift: m === 'discharge' ? 'out' : 'in',
+          _shiftFrom: s.from || s.pos || '', _shiftTo: s.to || '',
+          _comp: sec.completed?.[cn] || null,
+          bay: pos.slice(0, 3), row: pos.slice(3, 5), tier: pos.slice(5, 7),
+        });
+      });
     });
     // TallyOne 1.35: **실체 위치를 계획 자리로 승격한다.**
     //   검수사 신고 2026-08-09: *"한 곳에서 자리를 배정했는데 다른 한 곳은 아직도 미배정으로 뜹니다."*
@@ -163,7 +217,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       }
       return c;
     });
-  }, [voyage]);
+  }, [voyage, shiftMapAll, shiftInfoAll]);   // 1.76-05: 시프팅 카드가 큐·목록에 들어가려면 의존에 있어야 한다
 
   // M5.75: 작업 모드 필터 적용 — 양하 작업 중엔 양하만, 선적엔 선적만, 완료는 별도
   const filteredContainers = useMemo(() => {
