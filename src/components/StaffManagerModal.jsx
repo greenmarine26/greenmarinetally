@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
 import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess } from '../firebase.js';   // 1.41: 개발용 접근
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
          OWNER_NAME, isOwnerName, canRevokeAdmin } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자 · V9.10 소유자 고정
@@ -37,6 +37,36 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
       alert(r.reason === 'not_admin'
         ? '관리자만 개발용 접근을 주고 뺄 수 있습니다.'
         : '저장 실패 — 네트워크를 확인하세요.');
+    }
+  };
+
+  // ── TallyOne 1.80: 매트릭스 편집 권한 (검수사 확정 2026-08-17) ──────────────
+  //   *"베이 매트릭스 편집 이권한도 인원관리로 들어가야 할듯 합니다. 지금은 선박을 하나
+  //    선택해야만 정할수 있게 되어 있습니다."*
+  //   저장은 기존 matrix_editors 노드 그대로 — 빌더 안 「권한자 관리」 패널과 같은 명단을 본다.
+  //   fbSetMatrixEditors 자격은 1.80 에서 «명단 포함 ∨ 관리자»로 넓혔다(인원관리는 관리자 전용 화면).
+  const [matrixEditors, setMatrixEditors] = useState([]);
+  React.useEffect(() => fbSubscribeMatrixEditors(setMatrixEditors), []);
+  const [mxBusy, setMxBusy] = useState('');
+  const handleToggleMatrix = async (name, on) => {
+    if (on && !window.confirm(
+      `매트릭스 편집 권한 부여: ${name}
+
+베이 매트릭스(베이사전)를 만들고 고칠 수 있게 됩니다.
+` +
+      `· 매트릭스는 배 구조의 정본입니다 — 잘못 고치면 전 화면이 틀어집니다.`)) return;
+    if (!on && !window.confirm(`매트릭스 편집 권한 회수: ${name}`)) return;
+    if (!on && matrixEditors.length <= 1) { alert('마지막 권한자는 회수할 수 없습니다(잠금 방지).'); return; }
+    setMxBusy(name);
+    const next = on ? [...matrixEditors, name] : matrixEditors.filter(e => e !== name);
+    const r = await fbSetMatrixEditors(current, next);
+    setMxBusy('');
+    if (!r.ok) {
+      alert(r.reason === 'not_authorized'
+        ? '관리자 또는 기존 권한자만 매트릭스 권한을 주고 뺄 수 있습니다.'
+        : r.reason === 'empty_not_allowed'
+          ? '마지막 권한자는 회수할 수 없습니다(잠금 방지).'
+          : '저장 실패 — 네트워크를 확인하세요.');
     }
   };
 
@@ -379,6 +409,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                       : isAdminName(guardInfo, s.name) && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
                     {isDynamic && <span className="text-[9px] bg-purple-900 text-purple-300 px-1 rounded">추가됨</span>}
                     {devAccess[s.name] && <span className="text-[9px] bg-cyan-900 text-cyan-300 px-1 rounded" title={`개발용 접근 — ${devAccess[s.name].grantedBy || ''} 부여`}>🛠 개발용</span>}
+                    {matrixEditors.includes(s.name) && <span className="text-[9px] bg-indigo-900 text-indigo-300 px-1 rounded" title="베이 매트릭스(베이사전) 편집 권한">📐 매트릭스</span>}
                     {isDeleted(s.name) && <span className="text-[9px] bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
                   </div>
                   {/* TallyOne 1.71: 이사급 이상만 직급, 그 아래는 직책. 직책 없으면 «검수». */}
@@ -419,6 +450,19 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                       ? '개발용 접근 회수 — 수석 대시보드를 못 보게 됩니다'
                       : '개발용 접근 부여 — 수석 대시보드 화면만 열립니다(직급·비밀번호 변화 없음)'}>
                     {devBusy === s.name ? '…' : (devAccess[s.name] ? '개발회수' : '개발부여')}
+                  </button>
+                )}
+                {/* 1.80: 매트릭스 편집 권한 토글 — 관리자에게만 보인다(저장 시 서버 판정 한 번 더). */}
+                {!isDeleted(s.name) && isAdminName(guardInfo, current) && (
+                  <button onClick={() => handleToggleMatrix(s.name, !matrixEditors.includes(s.name))}
+                    disabled={mxBusy === s.name}
+                    className={`px-2 py-1 rounded text-xs font-bold ${matrixEditors.includes(s.name)
+                      ? 'bg-indigo-800 hover:bg-indigo-700 text-indigo-100'
+                      : 'bg-slate-700 hover:bg-indigo-900 text-slate-200 hover:text-indigo-100'} disabled:opacity-50`}
+                    title={matrixEditors.includes(s.name)
+                      ? '매트릭스 편집 권한 회수'
+                      : '매트릭스 편집 권한 부여 — 베이 매트릭스(베이사전)를 만들고 고칠 수 있습니다'}>
+                    {mxBusy === s.name ? '…' : (matrixEditors.includes(s.name) ? '📐회수' : '📐부여')}
                   </button>
                 )}
                 {(

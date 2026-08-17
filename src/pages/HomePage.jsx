@@ -676,7 +676,11 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         <ChevronRight size={14} className="text-slate-500 shrink-0" />
       </button>
 
-      <div className="flex items-center justify-between mb-3 gap-3">
+      {/* 1.80(검수사 신고 2026-08-17): 폰에서 이 줄이 한 줄에 안 들어가 — 수석 대시보드 버튼이
+          형태를 알아볼 수 없게 쭈그러들고, 데이터 새로고침이 화면 밖으로 밀렸다.
+          → 폰(<640px)에서는 두 줄로 갈라 앉힌다. ①항차 수+수석 대시보드 ②양하·선적·예보·새로고침.
+          PC(sm 이상)는 종전 그대로 한 줄. */}
+      <div className="flex flex-wrap items-center justify-between mb-3 gap-x-3 gap-y-2">
         <div className="shrink-0">
           <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
           <div className="text-lg font-bold text-slate-100">{list.length}건</div>
@@ -687,14 +691,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         {/* 1.41: 판정을 canOpenChief 로 통일 — 종전 isChief 만 봐서 App 라우트 게이트와 어긋났다
             (소유자·개발용은 들어갈 수 있는데 버튼이 안 보였다). */}
         {canOpenChief(inspector, isOwnerName(inspector)) && <button onClick={onOpenChiefDashboard}
-          className="flex-1 min-w-0 bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
+          className="flex-1 min-w-[170px] bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2.5 sm:py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
           <div className="flex items-center gap-1.5">
-            <BarChart3 className="w-4 h-4 text-purple-300 shrink-0"/>
-            <span className="font-bold text-xs text-purple-100 truncate">수석 대시보드</span>
+            <BarChart3 className="w-5 h-5 sm:w-4 sm:h-4 text-purple-300 shrink-0"/>
+            <span className="font-bold text-sm sm:text-xs text-purple-100 truncate">수석 대시보드</span>
           </div>
-          <div className="text-[10px] text-purple-300/70 truncate">전체 검수원 진행률·통계</div>
+          <div className="text-[11px] sm:text-[10px] text-purple-300/70 truncate">전체 검수원 진행률·통계</div>
         </button>}
-        <div className="flex gap-2 flex-wrap shrink-0">
+        <div className="flex gap-2 flex-wrap w-full sm:w-auto sm:shrink-0">
           <button
             onClick={() => setShowCreate('discharge')}
             className="bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"

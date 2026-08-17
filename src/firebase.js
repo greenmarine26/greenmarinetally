@@ -2706,7 +2706,18 @@ export async function fbSetMatrixEditors(actor, nextEditors) {
   try {
     const current = await fbGetMatrixEditors();
     const allowed = current.length === 0 ? MATRIX_EDITORS_SEED : current;
+    // 1.80(검수사 확정 2026-08-17): **관리자도 명단을 수정할 수 있다** — 매트릭스 권한 부여가
+    //   빌더(배를 하나 열어야 접근)에 묻혀 있어 인원관리(관리자 전용)로 옮기면서, 관리자가
+    //   명단에 없어도 주고 뺄 수 있어야 한다. 종전 «명단에 있는 사람만» 규칙은 그대로 살아 있다.
+    let actorIsAdmin = false;
     if (!allowed.includes(actorName)) {
+      try {
+        const g = await fbGetAdminGuard();
+        actorIsAdmin = !!(g && g.admins && g.admins[actorName] && g.admins[actorName].revoked !== true)
+          || actorName === '김성일';   // 소유자는 DB와 무관(adminGuard.OWNER_NAME과 동일 규칙)
+      } catch (e) { actorIsAdmin = false; }
+    }
+    if (!allowed.includes(actorName) && !actorIsAdmin) {
       return { ok: false, reason: 'not_authorized' };
     }
     // 정규화: 트림 + 중복 제거 + 빈 값 제거
