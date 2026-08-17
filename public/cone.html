@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.6-02</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.7</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -663,8 +663,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 1.82';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.6-02';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 1.82-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 1.7';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -695,13 +695,17 @@ async function fbFetchVoyages(){
   if(!keys.length) return [];
   const jget=async(p)=>{ try{ const r=await fetch(`${FB_BASE}/${p}`); return r.ok? await r.json() : null; }catch(e){ return null; } };
   const metas=await Promise.all(keys.map(async(key)=>{
-    const [info, dKeys, lKeys] = await Promise.all([
+    const [info, dKeys, lKeys, dCnt, lCnt] = await Promise.all([
       jget(`voyages/${encodeURIComponent(key)}/info.json`),
       jget(`voyages/${encodeURIComponent(key)}/discharge.json?shallow=true`),
       jget(`voyages/${encodeURIComponent(key)}/loading.json?shallow=true`),
+      // ConeOne 1.7(검수사 메모 2026-08-18): 양·적하 대수 — 키 목록만 받아 센다(shallow, 컨 내용 안 받음).
+      jget(`voyages/${encodeURIComponent(key)}/discharge/ediContainers.json?shallow=true`),
+      jget(`voyages/${encodeURIComponent(key)}/loading/ediContainers.json?shallow=true`),
     ]);
     const has=(ks)=>!!(ks && (ks.raw || ks.ediContainers));
-    return { key, info: info||{}, hasD: has(dKeys), hasL: has(lKeys) };
+    const cnt=(o)=>o&&typeof o==='object'?Object.keys(o).length:0;
+    return { key, info: info||{}, hasD: has(dKeys), hasL: has(lKeys), ediD: cnt(dCnt), ediL: cnt(lCnt) };
   }));
   const out=[];
   for(const m of metas){
@@ -724,6 +728,9 @@ async function fbFetchVoyages(){
       voy_d: info.voy_d||'', voy_l: info.voy_l||'',
       dischargeDoneAt: info.dischargeDone ? (info.dischargeDoneAt||0) : (info.inspectorDone ? (info.inspectorDoneAt||0) : 0),  // V7.90: 양하 완료 기록 (분리작업 자동 판정)
       hasD, hasL,
+      ediD: m.ediD||0, ediL: m.ediL||0,                 // 1.7: 앱이 가진 양·적하 대수
+      planDis: info.planDis!=null?Number(info.planDis):null,   // 1.7: 터미널 배정 수량(수집기 1.6)
+      planLod: info.planLod!=null?Number(info.planLod):null,
       noEdi: !hasD && !hasL,
       createdAt: info.createdAt||0,
     });
@@ -1168,6 +1175,29 @@ function render(){
       listHtml+=`<button class="voy-item ${sel?'sel':''}" data-vk="${v.key}" ${v.noEdi?'style="opacity:.55"':''}>
         <div class="vi-top"><b>${v.vsl}</b> ${tags.join('')}</div>
         <div class="vi-sub">${v.voy?('항차 '+v.voy):''}${v.noEdi?' · 검수앱에서 EDI 업로드 후 계산 가능':''}</div>
+        ${(()=>{ // ConeOne 1.7(검수사 메모 2026-08-18): *"콘앱도 검수앱처럼 입출항 도선 작업예정시간
+          //   양적하 갯수 터미널갯수 볼수있게 해주세요"* — 작업예정시간은 planDate 앞자리(이미 작업시작으로
+          //   환산돼 온다, 수집기 _to_work_start). 뒷자리는 출항.
+          const pd=String(v.planDate||''); if(!pd) return '';
+          const F=(ms)=>{ if(ms==null) return ''; const d=new Date(ms), p=(n)=>String(n).padStart(2,'0');
+            return `${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+          const a=_planMs(pd.split('~')[0]), b=_planEnd(v);
+          if(a==null&&b==null) return '';
+          return `<div class="vi-sub" style="color:#c4b5fd">📅 작업 ${F(a)||'미상'}${b!=null?' ~ '+F(b):''}</div>`;
+        })()}
+        ${(()=>{ // 1.7: 양·적하 갯수 ↔ 터미널 배정 수량 대조(검수앱 1.82와 같은 규칙).
+          const seg=(lb,app,plan,col)=>{
+            if(!app && plan==null) return '';
+            const gap=(plan!=null)?(app-plan):null;
+            const t=(plan==null)?'<span style="color:#64748b">터미널 –</span>'
+              :(gap===0?`<span style="color:#64748b">터미널 ${plan} ✓</span>`
+                       :`<span style="color:#fbbf24">터미널 ${plan} (${gap>0?'+':''}${gap})</span>`);
+            return `<span style="color:${col}">${lb} <b>${app}</b></span> · ${t}`;
+          };
+          const d=seg('양하',v.ediD,v.planDis,'#7dd3fc'), l=seg('선적',v.ediL,v.planLod,'#fbbf24');
+          const parts=[d,l].filter(Boolean); if(!parts.length) return '';
+          return `<div class="vi-sub" title="앱이 가진 대수 ↔ 터미널 배정목록 수량. 배정 수량은 예정치가 섞일 수 있어 참고치입니다.">${parts.join(' &nbsp; ')}</div>`;
+        })()}
         ${(()=>{ const code=(v.vsl||'').toUpperCase();
           const pf=(state.pilotForecast||{})[code], tw=(state.terminalWork||{})[code];
           // C7.69: 작업 마무리(진행률 ≥ 90%)면 출항시간만 — 도선 예보 우선, 없으면 터미널 ETD.

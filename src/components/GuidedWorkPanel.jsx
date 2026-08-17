@@ -28,16 +28,38 @@ const PREF_LABEL = { F: '풀', E: '엠티', RF: '리퍼', GEN: '일반', '40': '
 //     · 그 베이 그룹에 평택 선적분이 있으면(완료·미완료 무관) 묻지 않는다 → 닫는 건 선적 흐름이 맡는다.
 //     · 선적 자료(위치 있는 선적 컨)가 아예 없으면 = 모름 → 묻지 않는다.
 //       (종전에는 '선적 EDI 미도착'이 '선적 없음'으로 읽혀 닫자고 물었다 — 그 구멍을 막는다.)
-//   holdDone = 그 그룹 홀드에서 평택 양하분을 실제로 한 대라도 쳤는가(작업한 그룹만 대상).
+//
+// ★ 1.82-01 (검수사 메모 2026-08-18 04:56): *"홀드에 선적될 화물이 있는데 커버 클로징 멘트 나옴"*
+//   종전 판정에 구멍이 셋 있었다. 셋 다 «닫자고 잘못 묻는» 방향이라 현장에서 그대로 드러났다.
+//   ① holdDone 이 `some(완료 1대)` 였다 — 배너는 «홀드 작업이 끝났습니다» 인데 조건은 «홀드를 시작했다».
+//      → 그 그룹 홀드의 평택 양하 **잔여 0** 이라야 끝이다.
+//   ② loadingHere 가 `_ptk` 를 요구했다 — 자리만 있고 POL 이 안 채워진 선적(가상 EDI·플랜 자리)이
+//      «선적 없음» 으로 읽혔다. 선적 섹션에 올라온 컨은 수집기가 이미 평택분만 올린 것이라 _ptk 를 따질 필요가 없다.
+//   ③ 베이 짝을 사전에서만 봤다 — 베이사전이 없는 배는 홀수 베이(21)가 짝(20)과 다른 그룹으로 계산돼
+//      같은 해치에 실을 화물을 못 봤다. 인접 베이(±1)는 같은 커버로 본다(사전이 있으면 사전이 이긴다).
+//   ④ 자리를 모르는 선적이 남아 있으면(리스트만 와서 bay 미상) 어디 실릴지 모르는 것 → 묻지 않는다.
+//   ⛔ 판정이 애매하면 **묻지 않는 쪽**으로 기운다 — 검수사 확정 «모를 때는 묻지 않는다».
+//      되물음은 성가심이지만, 실을 게 남았는데 닫는 것은 사고다.
 export function shouldAskHatchClose(allContainers, group, centerOf) {
   const list = Array.isArray(allContainers) ? allContainers : [];
-  const holdDone = list.some(c => c._mode === 'discharge' && c._ptk && c._comp &&
-    centerOf(c.bay) === group && parseInt(c.tier, 10) < 80);
-  if (!holdDone) return false;
-  const loadingKnown = list.some(c => c._mode === 'loading' && centerOf(c.bay) != null);
-  if (!loadingKnown) return false;                 // 선적을 모름 → 묻지 않음
-  const loadingHere = list.some(c => c._mode === 'loading' && c._ptk && centerOf(c.bay) === group);
-  if (loadingHere) return false;                   // 이 그룹에 선적 있음 → 묻지 않음
+  const isHold = (c) => parseInt(c.tier, 10) < 80;
+  // ③ 인접 베이(±1)도 같은 커버로 본다 — 사전이 있으면 centerOf 가 이미 맞춘다.
+  const here = (c) => {
+    const ctr = centerOf(c.bay);
+    if (ctr === group) return true;
+    const b = parseInt(c.bay, 10);
+    return Number.isFinite(b) && Math.abs(b - group) <= 1;
+  };
+  // ① 이 그룹 홀드의 평택 양하가 **전부** 끝났는가 (한 대라도 남으면 아직 아니다)
+  const holdD = list.filter(c => c._mode === 'discharge' && c._ptk && here(c) && isHold(c));
+  if (!holdD.length || holdD.some(c => !c._comp)) return false;
+  // 선적 자료를 아는가 — 자리 있는 선적 컨이 하나도 없으면 «모름»
+  const loadPlaced = list.filter(c => c._mode === 'loading' && centerOf(c.bay) != null);
+  if (!loadPlaced.length) return false;
+  // ④ 자리 모르는 선적이 남아 있으면 어디 실릴지 모른다 → 묻지 않는다
+  if (list.some(c => c._mode === 'loading' && !c._comp && centerOf(c.bay) == null)) return false;
+  // ② 이 그룹에 선적이 있으면 묻지 않는다 (_ptk 를 요구하지 않는다 — 자리만 있는 컨 포함)
+  if (loadPlaced.some(here)) return false;
   return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
 }
 
