@@ -1189,6 +1189,12 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
 
   const disStats = computeStats(dis, 'discharge', voyage.info, voyage.key);
   const loaStats = computeStats(loa, 'loading', voyage.info, voyage.key);   // V9.03: info.emptyConfirmed(엠티 확정) 표시용
+  // 1.82(검수사 요청 2026-08-17): *"항차목록에 터미널과 수집량을 비교할 수 있도록"*
+  //   수집기 1.6 이 PCTC·PNCT 배정목록에서 HTTP 로 직접 받아 info.planDis/planLod 에 실어 온다
+  //   (1.6 전에는 PCTC 만 왔다 — 이제 양쪽 다 온다). 앱이 모은 수와 나란히 놓아 눈으로 대조한다.
+  //   ⚠ 이 값은 **대조용 참고치**다 — 카운트 기준으로 쓰지 않는다(예정 수량이 섞인다, 수집기 v2.17.26 교훈).
+  disStats.planQty = voyage.info?.planDis != null ? Number(voyage.info.planDis) : null;
+  loaStats.planQty = voyage.info?.planLod != null ? Number(voyage.info.planLod) : null;
   // V8.98-03: 쉬프팅(재적부) 개수 — 양하·선적 공통(같은 기항의 재적부 컨). 캐시라 스냅샷 틱에도 가벼움.
   const _shiftMap = computeShiftingMapCached(voyage.key, voyage) || {};
   const shiftCount = Object.keys(_shiftMap).length;
@@ -1720,6 +1726,24 @@ function SectionBar({ label, color, stats, onClick }) {
             </span>
           </>
         )}
+        {/* 1.82: 터미널 배정 수량 ↔ 앱 수집량 대조. 같으면 회색, 어긋나면 호박색으로 차이를 적는다. */}
+        {stats.planQty != null && (() => {
+          const app = stats.planOnly ? stats.planSlots
+            : (stats.forecastEdi || stats.listOnly || stats.partialEdi || stats.luggage > 0) ? stats.recCount
+            : stats.ptk;
+          const gap = (Number(app) || 0) - stats.planQty;
+          return (
+            <>
+              <span className="text-slate-600">·</span>
+              <span className={gap === 0 ? 'text-slate-500' : 'text-amber-300 font-bold'}
+                title={gap === 0
+                  ? `터미널 배정 ${stats.planQty}대 = 앱 ${app}대 — 일치합니다.`
+                  : `터미널 배정 ${stats.planQty}대 · 앱 ${app}대 (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'}). 배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정(작업중·완료) 전에는 어긋나는 것이 정상입니다.`}>
+                터미널 {stats.planQty}{gap === 0 ? ' ✓' : ` (${gap > 0 ? '+' : ''}${gap})`}
+              </span>
+            </>
+          );
+        })()}
         {stats.shiftCount > 0 && (
           <>
             <span className="text-slate-600">·</span>
