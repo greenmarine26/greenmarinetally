@@ -254,7 +254,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.7</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.7-01</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -663,8 +663,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 1.82-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.7';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 1.82-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 1.7-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1185,18 +1185,18 @@ function render(){
           if(a==null&&b==null) return '';
           return `<div class="vi-sub" style="color:#c4b5fd">📅 작업 ${F(a)||'미상'}${b!=null?' ~ '+F(b):''}</div>`;
         })()}
-        ${(()=>{ // 1.7: 양·적하 갯수 ↔ 터미널 배정 수량 대조(검수앱 1.82와 같은 규칙).
-          const seg=(lb,app,plan,col)=>{
-            if(!app && plan==null) return '';
-            const gap=(plan!=null)?(app-plan):null;
-            const t=(plan==null)?'<span style="color:#64748b">터미널 –</span>'
-              :(gap===0?`<span style="color:#64748b">터미널 ${plan} ✓</span>`
-                       :`<span style="color:#fbbf24">터미널 ${plan} (${gap>0?'+':''}${gap})</span>`);
-            return `<span style="color:${col}">${lb} <b>${app}</b></span> · ${t}`;
-          };
-          const d=seg('양하',v.ediD,v.planDis,'#7dd3fc'), l=seg('선적',v.ediL,v.planLod,'#fbbf24');
-          const parts=[d,l].filter(Boolean); if(!parts.length) return '';
-          return `<div class="vi-sub" title="앱이 가진 대수 ↔ 터미널 배정목록 수량. 배정 수량은 예정치가 섞일 수 있어 참고치입니다.">${parts.join(' &nbsp; ')}</div>`;
+        ${(()=>{ // 1.7-01(검수사 확정 2026-08-18): *"콘앱 양하/선적 터미널 양하/선적 이렇게"*
+          //   출처별로 묶어 한 줄에 나란히 — 양하/선적을 «/» 로 붙여 눈으로 바로 대조된다.
+          const has = v.ediD || v.ediL || v.planDis!=null || v.planLod!=null;
+          if(!has) return '';
+          const N=(x)=>x==null?'–':x;
+          const gapD=(v.planDis!=null)?(v.ediD-v.planDis):null, gapL=(v.planLod!=null)?(v.ediL-v.planLod):null;
+          const off=(gapD!=null&&gapD!==0)||(gapL!=null&&gapL!==0);
+          const tail=(gapD==null&&gapL==null) ? ''
+            : (off ? ` <span style="color:#fbbf24">(${[gapD,gapL].map(g=>g==null?'–':(g>0?'+':'')+g).join('/')})</span>` : ' <span style="color:#4ade80">✓</span>');
+          return `<div class="vi-sub" title="콘앱이 받은 대수(검수앱 자료) ↔ 터미널 배정목록 수량. 배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정 전에는 어긋나는 것이 정상입니다.">`
+            + `<span style="color:#7dd3fc">콘앱 <b>${v.ediD}/${v.ediL}</b></span>`
+            + ` &nbsp;·&nbsp; <span style="color:#a3a3a3">터미널 <b>${N(v.planDis)}/${N(v.planLod)}</b></span>${tail}</div>`;
         })()}
         ${(()=>{ const code=(v.vsl||'').toUpperCase();
           const pf=(state.pilotForecast||{})[code], tw=(state.terminalWork||{})[code];
