@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { inspectorStatus } from '../inspectorStatus.js';
 import { X, UserPlus, Trash2, Shield, RefreshCw, Download } from 'lucide-react';
-import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
-import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
+import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareStaff, isVisibleStaff, isChief, isTester, splitRole } from '../staffList.js';   // 1.71: 직책 표시·정렬 단일 소스
+import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSetStaffRole } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
          OWNER_NAME, isOwnerName, canRevokeAdmin } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자 · V9.10 소유자 고정
@@ -68,6 +68,33 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
           ? '마지막 권한자는 회수할 수 없습니다(잠금 방지).'
           : '저장 실패 — 네트워크를 확인하세요.');
     }
+  };
+
+  // ── TallyOne 1.81: 기존 인원 테스터 부여/회수 (검수사 확정 2026-08-17) ────────
+  //   왜 — *"임원들에게 테스터 자격을 부여하고 앱 설명을 하기 위해서"* · *"임원 전체가 아니고 한두명".*
+  //   임원은 전부 코드 명단의 기존 인원이라 «지웠다 재추가»가 불가능(중복 거부) — 행별 토글이 답이다.
+  //   직급은 살리고 직책만 얹는다: 회장 → 회장(테스터), 회수하면 회장. 서버 role 이 코드 명단보다
+  //   우선하므로 재배포 없이 반영된다. 테스터는 잠금 대상 — 첫 로그인 때 본인 비밀번호를 정한다.
+  const [testerBusy, setTesterBusy] = useState('');
+  const grantTesterRole = (role) => { const { rank } = splitRole(role); return rank && rank !== '검수' ? `${rank}(테스터)` : '테스터'; };
+  const revokeTesterRole = (role) => { const { rank } = splitRole(role); return rank && rank !== '테스터' ? rank : '검수'; };
+  const handleToggleTester = async (name) => {
+    const cur = getStaffRole(name);
+    const on = !isTester(name);
+    const next = on ? grantTesterRole(cur) : revokeTesterRole(cur);
+    if (on && !window.confirm(
+      `테스터 부여: ${name}
+
+직책이 «${cur || '검수'}» → «${next}» 로 바뀝니다.
+` +
+      `· 수석 대시보드·마감텔리까지 전 기능을 쓸 수 있습니다(소유자 고유만 제외).
+` +
+      `· 첫 로그인 때 본인 비밀번호(4자 이상)를 정하는 창이 뜹니다.`)) return;
+    if (!on && !window.confirm(`테스터 회수: ${name} — 직책이 «${next}» 로 돌아갑니다.`)) return;
+    setTesterBusy(name);
+    const ok = await fbSetStaffRole(name, next);
+    setTesterBusy('');
+    if (!ok) alert('저장 실패 — 네트워크를 확인하세요.');
   };
 
   const handleRemoveDevice = async (devId, label) => {
@@ -463,6 +490,21 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                       ? '매트릭스 편집 권한 회수'
                       : '매트릭스 편집 권한 부여 — 베이 매트릭스(베이사전)를 만들고 고칠 수 있습니다'}>
                     {mxBusy === s.name ? '…' : (matrixEditors.includes(s.name) ? '📐회수' : '📐부여')}
+                  </button>
+                )}
+                {/* 1.81: 테스터 부여/회수 — 기존 인원의 직책에 (테스터)를 얹었다 뗐다 한다.
+                    이미 수석검수·부수석인 사람은 얹을 게 없어 버튼을 숨긴다. */}
+                {!isDeleted(s.name) && isAdminName(guardInfo, current) && !isOwnerName(s.name)
+                  && (isTester(s.name) || !isChief(s.name)) && (
+                  <button onClick={() => handleToggleTester(s.name)}
+                    disabled={testerBusy === s.name}
+                    className={`px-2 py-1 rounded text-xs font-bold ${isTester(s.name)
+                      ? 'bg-purple-800 hover:bg-purple-700 text-purple-100'
+                      : 'bg-slate-700 hover:bg-purple-900 text-slate-200 hover:text-purple-100'} disabled:opacity-50`}
+                    title={isTester(s.name)
+                      ? '테스터 회수 — 원래 직급으로 돌아갑니다'
+                      : '테스터 부여 — 수석 기능까지 전부 사용(소유자 고유만 제외). 직급은 유지됩니다'}>
+                    {testerBusy === s.name ? '…' : (isTester(s.name) ? '테스터회수' : '테스터부여')}
                   </button>
                 )}
                 {(

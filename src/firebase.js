@@ -1427,6 +1427,19 @@ export async function fbAddStaff(name, role) {
     addedAt: Date.now(),
   });
 }
+// 1.81(검수사 확정 2026-08-17): 기존 인원의 role 만 고친다 — fbAddStaff 를 재사용하면 addedAt 이
+//   초기화되므로 분리. 용도: 임원 한두 명에게 테스터 직책을 얹었다 뗐다 하는 인원관리 토글.
+//   서버 staffList/{이름}.role 은 코드 명단(STAFF_ROLES)보다 우선하므로 재배포 없이 반영된다.
+export async function fbSetStaffRole(name, role) {
+  if (!name || !role) return false;
+  try {
+    await update(ref(db, `staffList/${name}`), { name, role, roleAt: Date.now() });
+    return true;
+  } catch (e) {
+    console.error('[fbSetStaffRole] 저장 실패', e);
+    return false;
+  }
+}
 export async function fbDeleteStaff(name) {
   if (!name) return;
   await remove(ref(db, `staffList/${name}`));
