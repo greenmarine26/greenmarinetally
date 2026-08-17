@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 // TallyOne 1.1: 클로드에게 메모 아이콘(NotebookPen) 추가
 import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
-import { isChief } from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
+import { isChief , isTester} from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
 import { isOwnerName } from '../adminGuard.js';
 import { APP_VERSION } from '../utils.js';   // 1.29-01: 헤더에 판 번호 상시 표시
 import HelpModal from './HelpModal.jsx';
@@ -50,7 +50,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
     });
   };
   // TallyOne 1.0 (K4): 현재 역할 표시 — 소유자 > 수석 > 검수사
-  const roleLabel = !inspector ? '' : isOwnerName(inspector) ? '소유자' : isChief(inspector) ? '수석' : '검수사';
+  const roleLabel = !inspector ? '' : isOwnerName(inspector) ? '소유자' : isTester(inspector) ? '테스터' : isChief(inspector) ? '수석' : '검수사';   // 1.79: 테스터 호칭 분리
 
   const handleSelectEquip = (num) => {
     setEquipNumber(num);

@@ -343,6 +343,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
               <option>수석검수</option>
               <option>부수석</option>
               <option>실장</option>
+              <option>테스터</option>{/* 1.79: 수석과 동일 권한 + 비번 잠금, 소유자 고유만 제외 */}
             </select>
           </div>
           <div className="mt-1 text-[10px] text-slate-500">

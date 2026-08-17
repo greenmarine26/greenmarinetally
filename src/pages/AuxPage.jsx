@@ -3,6 +3,7 @@
 //   계약 — App이 <AuxPage inspector isChief isOwner voyages collectorHb />로 렌더. 모든 prop 옵셔널 방어.
 //   화면 이동은 window.location.hash 직접 변경(#/food, #/health, #/). 라우트 등록(#/aux)은 팀K 소관.
 import React, { useState, useMemo, useEffect } from 'react';
+import { isTester } from '../staffList.js';   // 1.79: 테스터 호칭
 import { ChevronLeft, BookOpen, Languages, MessageCircle, Dices, Activity,
   Key, Sun, Wrench, Search, X, RefreshCw, NotebookPen, Bell, BellOff, MessageSquareReply } from 'lucide-react';   // TallyOne 1.1: 클로드 메모 아이콘 추가 / 1.22: 오답노트
 import HelpModal from '../components/HelpModal.jsx';
@@ -340,7 +341,8 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
   const go = (hash) => { try { window.location.hash = hash; } catch (e) { /* SSR·테스트 환경 방어 */ } };
 
   // 보조기능은 전원 공개 — isChief/isOwner는 인사 옆 역할 표시에만 사용 (권한 게이트 없음)
-  const roleTag = isOwner ? '소유자' : (isChief ? '수석' : '');
+  const isTesterName = isTester(inspector);   // 1.79: 표시 전용 — 권한은 isChief prop 그대로
+  const roleTag = isOwner ? '소유자' : (isChief ? (isTesterName ? '테스터' : '수석') : '');   // 1.79: 테스터 호칭 분리
 
   const hbBadge = hb.state === 'ok'
     ? <span className="px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700/50 text-emerald-300 text-[10px] font-bold shrink-0">수집기 정상</span>

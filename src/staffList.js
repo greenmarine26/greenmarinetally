@@ -172,9 +172,19 @@ export function isVisibleStaff(name, viewerIsOwner = false) {
 }
 
 // 수석검수 여부 (작업 권한) — 수석검수 또는 부수석 포함
+// ★ 1.79 (검수사 확정 2026-08-17): **테스터 편입** — "모든 기능을 사용하되 제(소유자) 고유 기능만 빼고".
+//   수석 게이트 전부(대시보드 입장 canOpenChief·마감텔리 생성·완료 저장·복원·정리·수석 노드 조회)와
+//   비번 잠금(isLockedName)이 이 한 함수를 보므로 여기 한 곳 편입으로 빠지는 게이트가 없다.
+//   쓰기까지 전부 허용 + 잠금 포함은 검수사 확답. 소유자 고유(isOwnerName)·인원 관리(isAdminName)는
+//   다른 축이라 자동 제외된다. 화면 호칭만 isTester 로 갈라 '테스터'라고 보여준다(Header·AuxPage).
 export function isChief(name) {
   const role = getStaffRole(name);
-  return /수석검수|부수석/.test(role);
+  return /수석검수|부수석|테스터/.test(role);
+}
+
+// 1.79: 테스터 여부 — 권한은 isChief 와 동일, **표시(호칭)** 전용 판정.
+export function isTester(name) {
+  return /테스터/.test(getStaffRole(name));
 }
 
 // ─── TallyOne 1.41: **개발용 접근 명단** (검수사 지시 2026-08-10) ───────────────
