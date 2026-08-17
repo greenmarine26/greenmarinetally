@@ -469,9 +469,16 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   return (
     <div className="max-w-2xl mx-auto px-3 py-3">
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 mb-3">
-        <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between">
-          <span>🤖 AI 통합 검색 — 모든 항차·양/선적</span>
-          <span className="text-slate-400 mono">전체 {flat.length.toLocaleString()}대</span>
+        <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between gap-2">
+          {/* 1.81-01(검수사 요청 2026-08-17): 나가기 — 검색을 마치면 들어온 화면(수석 대시보드/홈)으로 돌아간다.
+              해시 라우팅이라 history.back 이 직전 화면을 그대로 되살린다. 이력이 없으면(직접 진입) 홈으로. */}
+          <button onClick={() => { try { if (window.history.length > 1) window.history.back(); else window.location.hash = '#/'; } catch (e) { window.location.hash = '#/'; } }}
+            className="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-600 text-slate-200 text-xs font-bold normal-case"
+            title="검색을 마치고 들어온 화면으로 돌아갑니다">
+            ← 나가기
+          </button>
+          <span className="min-w-0 truncate">🤖 AI 통합 검색 — 모든 항차·양/선적</span>
+          <span className="text-slate-400 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
         </div>
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>

@@ -600,6 +600,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <div className="text-lg font-bold text-slate-100">전체 현황</div>
       </div>
 
+      {/* 1.81-01(검수사 요청 2026-08-17): TOP 버튼 — 대시보드가 길어서 맨 위로 한 번에. */}
+      <ScrollTopButton />
+
       {/* TallyOne 1.0(L1): 수집기 상태 배너 — 끊기면 아래 모든 숫자가 갱신 정지임을 맨 위에서 알린다.
           하트비트 미수신(prop 미전달 포함)도 조용히 넘기지 않고 '자료 없음'으로 명시. */}
       <CollectorStatusBanner hbView={hbView} hb={collectorHb} issueCount={healthIssueCount} />
@@ -2589,5 +2592,26 @@ function ActivityLogSection({ voyages }) {
         </button>
       )}
     </div>
+  );
+}
+
+
+// ── TallyOne 1.81-01: TOP 버튼 (검수사 요청 2026-08-17 «TOP화면버튼») ──────────
+//   대시보드가 길어 아래에서 위로 돌아가기 힘들다. 300px 넘게 내려가면 우하단에 뜬다.
+function ScrollTopButton() {
+  const [show, setShow] = React.useState(false);
+  React.useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 300);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  if (!show) return null;
+  return (
+    <button onClick={() => { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); } }}
+      className="fixed bottom-5 right-4 z-40 w-12 h-12 rounded-full bg-purple-700/90 hover:bg-purple-600 active:scale-95 border border-purple-500/60 shadow-lg shadow-black/40 text-white font-black text-[11px] leading-tight"
+      title="맨 위로">
+      ▲<br/>TOP
+    </button>
   );
 }
