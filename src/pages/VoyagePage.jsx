@@ -2239,7 +2239,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback }) {
   useEffect(() => {
     if (!answer || readRef.current === q + answer.length) return;
     readRef.current = q + answer.length;
-    const first = (answer.split('\n').find(l => l.trim()) || '').replace(/[📊📍📭⚖️🏗•·⏱🎉]/g, '').trim();
+    const first = (answer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();   // 1.92-02: 이모지 벗겨 읽기
     if (first) { try { speak(first); } catch (e) { /* 낭독 실패 무시 */ } }
   }, [answer, q]);
   if (!ask) return null;

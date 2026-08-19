@@ -504,7 +504,9 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     lastSpokenRef.current = sig;
 
     if (localAnswer) {
-      const first = localAnswer.split('\n').find(l => l.trim());
+      // 1.92-02: 미르 인사는 짧게, 이모지 벗겨 읽기 — «미르야» 낭독이 이상하게 들리던 문제(검수사).
+      const first = parsed.mirHello ? '네, 말씀하세요'
+        : (localAnswer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·«»]/g, ' ').replace(/\s+/g, ' ').trim();
       if (first) speak(first);
       return;
     }

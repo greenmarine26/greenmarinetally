@@ -1121,7 +1121,9 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 
     // V7.80: 음성 답변 간결화 — 핵심 한 문장만 (상세는 화면). 0대면 "~없습니다" (사용자 확정 형식).
     if (localAnswer) {
-      const first = (localAnswer.split('\n').find(l => l.trim()) || '').replace(/[📊📍📭⚖️•·⏱🎉]/g, '').trim();
+      // 1.92-02 (검수사: «미르야 하면 답변이 이상하게 들립니다») — 인사는 짧게, 이모지는 전부 벗겨 읽는다.
+      const first = parsed.mirHello ? '네, 말씀하세요'
+        : (localAnswer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();
       const zm = first.match(/^(.+?):\s*0대/);
       if (zm) speak(`${zm[1].trim()} 없습니다`);
       else if (first) speak(first.replace(/:\s*/, ' '), (parsed.etaQuery || parsed.handoverQuery || parsed.customsReportQuery) ? { conversational: true } : {});  // V7.99-15/V8.00: 대화형 답변은 부드럽게
