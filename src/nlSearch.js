@@ -1308,6 +1308,24 @@ function formatBayDist(desc, results, parsed = {}) {
     if (v.l4.length && v.l4.length <= 6) parts.push(v.l4.join(', '));
     lines.push(`${String(b).padStart(2, '0')}번 베이 ${v.n}대${parts.length ? ' · ' + parts.join(' · ') : ''}`);
   }
+  // 1.84-04 (검수사 확정): FR·OOG 는 폭·높이, DG 는 UN 번호·클래스·포장등급까지 — «설명이 있어야 합니다».
+  //   파서가 이미 담는 값(un·dgc·pg — DGS 세그 / ovh·ovw·ovl — DIM 세그)을 컨별 줄로 보여준다.
+  //   대수가 적을 때만(≤12) — 많으면 위 베이 집계가 답이다.
+  if (['fr', 'ot', 'oog', 'dg', 'tk'].includes(parsed.type) && results.length > 0 && results.length <= 12) {
+    lines.push('');
+    for (const c of results) {
+      const bits = [];
+      if (c.dg) bits.push(`cl.${c.dgc || '?'}${c.un ? ` UN${c.un}` : ' (UN 미기재)'}${c.pg ? ` PG ${c.pg}` : ''}`);
+      const dims = [];
+      if (c.ovh) dims.push(`높이+${c.ovh}cm`);
+      if (c.ovw) dims.push(`폭+${c.ovw}cm`);
+      if (c.ovl) dims.push(`길이+${c.ovl}cm`);
+      if (dims.length) bits.push(dims.join(' '));
+      else if ((parsed.type === 'fr' || parsed.type === 'oog') && !c.dg) bits.push('초과 치수 기재 없음');
+      if (c.wt) bits.push(`${(Number(c.wt) / 1000).toFixed(1)}t`);
+      lines.push(`  ${c.cn || '?'} — ${fmtPos(c)}${bits.length ? ' · ' + bits.join(' · ') : ''}`);
+    }
+  }
   if (byBay['?']) lines.push(`위치미상 ${byBay['?'].n}대`);
   return lines.join('\n');
 }

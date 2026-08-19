@@ -732,23 +732,30 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 1.84-03 (검수사 확정 2026-08-19): 답변 속 «"실번호 점검"으로 상세 확인» 류 안내를 **버튼**으로.
   //   누르면 그 질문을 바로 제출해 상세를 보여주고, 「← 이전 답으로」 를 누르면 원래 답(브리핑)으로 돌아온다.
   const [askStack, setAskStack] = useState([]);
+  // 1.84-04: **모든 프로그램적 질문은 음성 입력과 같은 제출 경로를 탄다.**
+  //   1.84-03 은 setDraft+setQuery 만 해서 askedAt·reasked·낭독 리셋이 빠졌고,
+  //   «← 이전 답으로»가 브리핑을 못 되살렸다(검수사: "이전 화면으로 가지 않고 작업시작 화면으로").
+  const askProgrammatic = (q) => {
+    setReasked(q === lastAskRef.current);
+    lastSpokenRef.current = null;
+    setAskedAt(Date.now());
+    setDraft(q); setQuery(q); logQuerySettled(q);
+  };
   const followUp = (q) => {
     const cur = (draft || query || '').trim();
     if (cur) setAskStack(st => [...st, cur]);
-    setDraft(q); setQuery(q); logQuerySettled(q);
+    askProgrammatic(q);
   };
   const backAnswer = () => {
-    setAskStack(st => {
-      const prev = st[st.length - 1];
-      if (prev) { setDraft(prev); setQuery(prev); }
-      return st.slice(0, -1);
-    });
+    const prev = askStack[askStack.length - 1];
+    setAskStack(st => st.slice(0, -1));   // 부작용은 updater 밖에서 (StrictMode 이중 호출 안전)
+    if (prev) askProgrammatic(prev);
   };
   useEffect(() => {
     const q = String(relayQuery || '').trim();
     if (!q || q === relayRef.current) return;
     relayRef.current = q;
-    setDraft(q); setQuery(q);
+    askProgrammatic(q);   // 1.84-04: 릴레이도 같은 제출 경로
   }, [relayQuery]);
   // TallyOne 1.55: 전체 컨번호(DWSU3000276)는 **문장이 아니다.**
   //   종전엔 글자가 섞였다는 이유로 문장으로 갈려, 다 치고 전송키를 누르기 전까지 아무것도 안 나왔다.
