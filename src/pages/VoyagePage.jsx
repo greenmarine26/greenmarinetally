@@ -1175,6 +1175,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
         />
         <LoloTab
+          onAsk={(q) => { setRelayQ(q); setTab('search'); }}
           voyageKey={voyageKey} mode={mode}
           containers={containers} compMap={compMap}
           xrayMap={xrayMap} xraySeals={xraySeals}
@@ -2065,9 +2066,36 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // RIZHAO ORIENT 등 RORO/LOLO 혼용선 전용. 베이 그림 없이 리스트로 검수.
 //   기존 ContainerList·ContainerDetailModal·firebase 함수를 그대로 재사용.
 //   "조회·실체크한 것만 누적" — 검수사가 실제 처리(완료)한 컨만 누적분으로 모음.
-function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer }) {
+function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk }) {
   const [filter, setFilter] = useState('all'); // all | done(누적) | undone
   const [search, setSearch] = useState('');
+  // 1.85-02 (검수사 실측 «RZOR은 화면이 안바뀌었습니다. LOLO라 빠트리신듯» «검색창도 같이 바꿔 주세요»):
+  //   ListTab 1.84-01 통합검색줄을 LOLO에도. ⚠ ListTab 과 복제 두 벌 — 공용 추출은 인계함.
+  const [kb, setKb] = useState('numeric');
+  const [listening, setListening] = useState(false);
+  const [autoRead, setAutoRead] = useState(true);
+  const searchRef = useRef(null);
+  const srRef = useRef(null);
+  const toggleListen = () => {
+    if (listening) { try { srRef.current?.stop(); } catch (e) { /* 무시 */ } return; }
+    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) { speak('이 기기는 음성 입력이 안 됩니다'); return; }
+    const r = new SR();
+    r.lang = 'ko-KR'; r.continuous = false; r.interimResults = false; r.maxAlternatives = 5;
+    r.onresult = (e) => {
+      const last = e.results[e.results.length - 1];
+      const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
+      const t = pickSpeechAlternative(alts).trim();
+      const digits = parseSpokenDigits(t);
+      if (digits && digits.length >= 2) setSearch(digits);
+      else if (t.length >= 2 && onAsk) onAsk(t);
+      else speak('인식 실패');
+    };
+    r.onend = () => setListening(false);
+    r.onerror = (e) => { setListening(false); if (e.error === 'not-allowed') speak('마이크 권한 필요'); };
+    srRef.current = r; setListening(true);
+    try { r.start(); } catch (e) { setListening(false); }
+  };
 
   // TallyOne 1.3: 조회 기록 — ListTab과 같은 기준(타이핑 멈춤 = 조회 확정 1회)
   useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
@@ -2082,6 +2110,17 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
     }
     return arr;
   }, [containers, filter, search, compMap]);
+
+  // 1.85-02: 자동 읽기 — 끝4자리 조회 결과 1건이면 위치 낭독 (ListTab 1.84-01과 같은 기준)
+  const readRef = useRef('');
+  useEffect(() => {
+    if (!autoRead || !search || search.trim().length < 4) { readRef.current = ''; return; }
+    if (filtered.length !== 1) return;
+    const c = filtered[0];
+    if (readRef.current === c.cn + search) return;
+    readRef.current = c.cn + search;
+    try { speakContainer(c, { xray: !!xrayMap[c.cn] }); } catch (e) { /* 낭독 실패는 조용히 */ }
+  }, [filtered, search, autoRead, xrayMap]);
 
   // 1.76-05: 실번호 중복 — LOLO 탭도 같은 벌을 쓴다(ListTab 만 고치고 여기를 빠뜨리던 사고 방지).
   const dupSeals = useMemo(() => dupSealMap(containers), [containers]);
@@ -2113,18 +2152,40 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2">
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5">
         <div className="relative flex-1">
           <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"/>
           <input
+            key={kb}
+            ref={searchRef}
             type="text"
             value={search}
+            inputMode={kb}
             onChange={e => setSearch(e.target.value.toUpperCase())}
-            placeholder="끝4자리 / 컨번호"
-            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-1.5 text-sm mono focus:outline-none focus:border-cyan-500"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && onAsk && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
+                e.preventDefault(); const q = search.trim(); setSearch(''); onAsk(q);
+              }
+            }}
+            placeholder={kb === 'numeric' ? '🎤 / 4777 / 컨번호 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
+            autoComplete="off"
+            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:border-cyan-500"
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
         </div>
+        <button onClick={toggleListen} title="음성 입력"
+          className={`w-9 h-9 rounded flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
+          🎤
+        </button>
+        <button onClick={() => setAutoRead(v => !v)} title="조회 결과 자동 읽기"
+          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+          {autoRead ? '🔊' : '🔇'}
+        </button>
+        <button onClick={() => { setKb(k => (k === 'numeric' ? 'text' : 'numeric')); setTimeout(() => searchRef.current?.focus(), 50); }}
+          title={kb === 'numeric' ? '문자 키보드로 (질문 입력)' : '숫자판으로 (작업 조회)'}
+          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
+          ⌨
+        </button>
       </div>
 
       <div className="flex gap-1 flex-wrap text-[11px]">
