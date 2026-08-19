@@ -388,7 +388,8 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
   // (기존 코드 제거 - isUnknownIso 함수가 위에서 검사)
 
   // ─── 🔴 9. 엠티 실 부착/확인 누락 (M3.5.5) ───
-  if (sealPolicy) {
+  // 1.83: «일반» 정책은 실 작업이 없다 — 경고 대상 아님(종전엔 존재만 보고 전 엠티를 미확인으로 세었다).
+  if (sealPolicy && sealPolicy.mode && sealPolicy.mode !== 'none') {
     // 정책 적용 대상 컨테이너 추출
     const targetContainers = ediPtk.filter(c => {
       const fe = String(c.fe || '').toUpperCase();

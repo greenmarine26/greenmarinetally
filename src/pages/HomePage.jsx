@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
 import { fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
+import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
+import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
+import { db as _fbdb } from '../firebase.js';
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
@@ -229,6 +232,16 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   }, []);
   const healthIssueCount = useMemo(() => healthSummary(voyages).issueCount, [voyages]);
   const hbView = heartbeatState(heartbeat, hbNow);
+
+  // ── 1.83 (검수사 확정 2026-08-19): 선박 실 정책 판 ──────────────────────────
+  //   *"이미 지정한 선박은 선박메인 화면 한쪽에 보여주면 될듯합니다."*
+  //   한번 정하면 거의 안 변하는 속성이라 조회가 목적 — 접이식, 탭하면 수정 모달(선박수정 모드).
+  const [shipPols, setShipPols] = useState({});
+  const [polOpen, setPolOpen] = useState(false);
+  const [polEdit, setPolEdit] = useState(null);   // { vsl, policy } — 수정 모달 대상
+  useEffect(() => {
+    try { return fbSubscribeShipPolicies(_fbdb, setShipPols) || undefined; } catch (e) { return undefined; }
+  }, []);
 
   const voyagesWithPier = useMemo(() => {
     // ★ 1.77-02 — **선박 단위 값(도선 예보·PORT-MIS)을 아무 항차에나 붙이지 않는다.**
@@ -863,6 +876,50 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           );
         })}
       </div>
+
+      {/* ── 1.83: 선박 실 정책 판 — 조합(LOLO+실확인)이 한눈에. 탭하면 수정 모드. ── */}
+      <div className="mt-3 bg-slate-900/60 border border-slate-800 rounded-xl">
+        <button onClick={() => setPolOpen(o => !o)}
+          className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
+          <span className="text-[13px] font-bold text-slate-300">🔒 선박 실 정책</span>
+          <span className="text-[11px] text-slate-500">{Object.keys({ ...DEFAULT_SHIP_POLICIES, ...shipPols }).length}척 등록 · 탭하면 수정</span>
+          <span className="ml-auto text-slate-600">{polOpen ? '▾' : '▸'}</span>
+        </button>
+        {polOpen && (() => {
+          const all = { ...DEFAULT_SHIP_POLICIES, ...shipPols };
+          const groups = {};
+          Object.entries(all).forEach(([k, pol]) => {
+            const lbl = policyComboLabel(pol) || '일반';
+            (groups[lbl] = groups[lbl] || []).push({ k, pol });
+          });
+          const order = ['일반', '엠티실 확인', '엠티실 부착', 'LOLO', 'LOLO+엠티실 확인', 'LOLO+엠티실 부착'];
+          const keys = [...order.filter(o => groups[o]), ...Object.keys(groups).filter(g => !order.includes(g))];
+          return (
+            <div className="px-3 pb-3 space-y-1.5">
+              {keys.map(g => (
+                <div key={g} className="flex items-start gap-2 text-[12px]">
+                  <span className={`flex-none px-1.5 py-0.5 rounded font-bold ${g === '일반' ? 'bg-slate-800 text-slate-400'
+                    : g.startsWith('LOLO') ? 'bg-purple-900/60 text-purple-200' : 'bg-cyan-900/50 text-cyan-200'}`}>{g}</span>
+                  <span className="flex flex-wrap gap-1">
+                    {groups[g].map(({ k, pol }) => (
+                      <button key={k} onClick={() => setPolEdit({ vsl: pol.name || k, policy: pol })}
+                        className="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-200">
+                        {pol.code || pol.name || k}
+                      </button>
+                    ))}
+                  </span>
+                </div>
+              ))}
+              <div className="text-[11px] text-slate-600">신규 선박은 선적 화면을 처음 열 때 한 번만 묻습니다.</div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {polEdit && (
+        <ShipPolicyModal open vsl={polEdit.vsl} code={polEdit.policy?.code || ''} inspector={inspector}
+          initial={polEdit.policy} onSaved={() => setPolEdit(null)} onClose={() => setPolEdit(null)} />
+      )}
 
       {/* TallyOne 1.0 (K5): 맛집 수첩 개별 버튼 제거 — 보조기능(#/aux) 안으로 통합 */}
 

@@ -765,7 +765,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   useEffect(() => {
     if (policyAsked) return;
     if (!voyage?.info?.vsl) return;
-    if (shipPolicy) return;  // 이미 매칭됨
+    if (shipPolicy) return;  // 이미 매칭됨 — 1.83: «일반»도 저장되므로 등록된 배는 여기서 걸러진다(신규만 묻는다)
+    if (mode !== 'loading') return;   // 1.83: 엠티 실은 선적 작업(M8.08) — 양하 화면에서 묻지 않는다
     const hasEdi = (containers || []).length > 0;
     if (!hasEdi) return;
 
@@ -782,7 +783,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       }
       // Firebase 백업 확인 (다른 기기에서 오늘 이미 물어봤을 가능성)
       try {
-        const { default: fb } = await import('../firebase.js');
+        const fb = await import('../firebase.js');   // 1.83: default export 가 없어 항상 예외 → 기기 간 1일 1회 가드가 죽어 있었다
         // inspectorActivity에 정책 확인 기록 — 검수원별
         const inspName = inspector || 'anon';
         const fbKey = `policyAsked/${inspName}/${policyAskKey}`;
@@ -805,7 +806,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         }
       } catch (e) { console.warn('[정책질문 기록] Firebase 백업 저장 실패(로컬 기록은 유지)', e); }  // V9.57: 조용한 실패 금지
     })();
-  }, [voyage, shipPolicy, policyAsked, containers, voyageKey, inspector]);
+  }, [voyage, shipPolicy, policyAsked, containers, voyageKey, inspector, mode]);
 
   // M3.5.4: 자동 진단 (containers/recMap/xrayMap 변경 시 재계산)
   const diagAlerts = useMemo(() => {

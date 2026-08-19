@@ -90,7 +90,10 @@ export function applyPolicyToContainer(policy, container) {
   if (fe !== 'E') return null;  // Empty가 아니면 적용 X
 
   if (policy.target === 'all_empty') {
-    return policy.mode;  // 'verify' 또는 'attach'
+    // 1.83: «일반(실 작업 없음)» 정책은 실 UI 를 열지 않는다 — 종전엔 문자열 'none'(truthy)이
+  //   그대로 나가 정책상 실 작업이 없는 배에도 실 입력칸·경고가 열렸다(검수사: "필요 없는데 말이죠").
+  if (policy.mode === 'none') return null;
+  return policy.mode;  // 'verify' 또는 'attach'
   }
 
   if (policy.target === 'empty_with_pod') {
@@ -173,4 +176,14 @@ export function countSealProgress(matchedContainers, recordsMap) {
     pending: pending.length,
     missingSeal: pending,
   };
+}
+
+
+// ★ 1.83: 정책 조합 라벨 — 검수사 표현 그대로 (RZOR = LOLO+실확인이 한눈에).
+//   «일반 / 엠티실 확인 / 엠티실 부착 / LOLO» 의 조합. 홈 「선박 실 정책」 판과 모달 요약이 같이 쓴다.
+export function policyComboLabel(policy) {
+  if (!policy) return '';
+  const seal = policy.mode === 'attach' ? '엠티실 부착'
+    : policy.mode === 'verify' ? '엠티실 확인' : '일반';
+  return policy.lolo ? (policy.mode && policy.mode !== 'none' ? `LOLO+${seal}` : 'LOLO') : seal;
 }

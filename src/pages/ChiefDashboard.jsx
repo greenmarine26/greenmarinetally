@@ -211,7 +211,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     const list = [];
     Object.entries(voyages || {}).forEach(([key, v]) => {
       const policy = matchShipPolicy(v?.info?.vsl || '', extraPolicies);
-      if (!policy) return;
+      if (!policy || !policy.mode || policy.mode === 'none') return;   // 1.83: «일반» 배는 실 카드 없음(LOLO 는 별도 경로라 무관)
       // M8.08: 엠티 실 작업은 선적(loading) 때만 적용. 양하는 제외.
       //   (양하 EDI엔 엠티 실 부착·확인 개념이 없음 — 선적 시 부착/확인하는 작업.)
       // V9.57(I5): 죽은 분기 정리 — ['loading'] 순회 안에서 discharge 비교하던 삼항 제거, mode 상수화.

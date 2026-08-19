@@ -16,12 +16,13 @@ const COMMON_PODS = [
   { code: 'CNDLC', name: '대련 (DALIAN)' },
 ];
 
-export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, inspector }) {
-  const [mode, setMode] = useState('none');     // 'none' | 'verify' | 'attach'
-  const [target, setTarget] = useState('all_empty');  // 'all_empty' | 'empty_with_pod'
-  const [selectedPods, setSelectedPods] = useState([]);
+export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, inspector, initial = null }) {
+  // 1.83: initial — 홈 「실 정책 판」에서 수정 모드로 열 때 기존 정책 프리필(검수사: "선박수정 모드가 있어서 그안에서 따로").
+  const [mode, setMode] = useState(initial?.mode || 'none');     // 'none' | 'verify' | 'attach'
+  const [target, setTarget] = useState(initial?.target || 'all_empty');  // 'all_empty' | 'empty_with_pod'
+  const [selectedPods, setSelectedPods] = useState(Array.isArray(initial?.pod) ? initial.pod : []);
   const [customPod, setCustomPod] = useState('');
-  const [lolo, setLolo] = useState(false);   // V8.09-08: LOLO 선박(베이 없는 IFCSUM 명세선). 대체선 대응.
+  const [lolo, setLolo] = useState(!!initial?.lolo);   // V8.09-08: LOLO 선박(베이 없는 IFCSUM 명세선). 대체선 대응.
   const [saving, setSaving] = useState(false);
 
   if (!open) return null;
@@ -43,13 +44,10 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
   const handleSave = async () => {
     setSaving(true);
     try {
-      // V8.09-08: LOLO만 켜고 엠티 정책은 none인 대체선도 저장해야 함.
-      //   mode가 none이고 lolo도 꺼져 있을 때만 "정책 없음".
-      if (mode === 'none' && !lolo) {
-        if (onSaved) onSaved(null);
-        onClose();
-        return;
-      }
+      // ★ 1.83 (검수사 확정 2026-08-19): **「일반」도 저장한다.**
+      //   *"한번 정하면 거의 변하지 않는 속성인데 매번 확인을 해야만 합니다."*
+      //   종전엔 mode none+lolo 꺼짐이면 저장 없이 닫아서(RTDB 노드가 안 생겨) matchShipPolicy 가
+      //   영원히 null → **대부분의 선박(일반)이 매일 다시 물었다.** 저장하면 신규 선박만 묻게 된다.
 
       const finalPods = (mode !== 'none' && target === 'empty_with_pod') ? selectedPods : [];
       if (mode !== 'none' && target === 'empty_with_pod' && finalPods.length === 0) {
@@ -91,7 +89,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
         <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Ship className="w-5 h-5 text-amber-400"/>
-            <h2 className="text-base font-black text-amber-300">새 선박 등록</h2>
+            <h2 className="text-base font-black text-amber-300">선박 실 정책</h2>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded">
             <X className="w-5 h-5 text-slate-400"/>
@@ -244,7 +242,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
 
           <div className="bg-blue-950/30 border border-blue-700/40 rounded p-2 text-[10px] text-blue-200 flex items-start gap-1.5">
             <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5"/>
-            <span>저장하면 다음부터 같은 선박이 EDI에 들어올 때 자동 적용됩니다. 수석 대시보드에서 변경 가능합니다.</span>
+            <span>저장하면 다음부터 같은 선박이 EDI에 들어올 때 자동 적용됩니다. 홈 화면 아래 「선박 실 정책」 판에서 언제든 바꿀 수 있습니다.</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-2">
