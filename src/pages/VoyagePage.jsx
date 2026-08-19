@@ -60,8 +60,11 @@ import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null }) {   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
-  const hasDis = !!voyage?.discharge;
-  const hasLoa = !!voyage?.loading;
+  // 1.94 (검수사 실측 SWSP — 선적 243 매칭까지 된 배가 들어가면 빈 양하부터 열림): 노드 껍데기가 아니라
+  //   **실자료(ediContainers·records) 유무**로 판정한다 — 양하 없는 배는 선적이 바로 열린다.
+  const _secCnt = (sec) => (sec ? Object.keys(sec.ediContainers || {}).length + Object.keys(sec.records || {}).length : 0);
+  const hasDis = _secCnt(voyage?.discharge) > 0;
+  const hasLoa = _secCnt(voyage?.loading) > 0;
   // V8.81: 홈에서 양하/선적 막대로 연 경우 그 모드 우선 (route.mode 전달).
   // V8.82-01: 양하·선적이 둘 다 있으면 양하 우선 — 수집기가 선적 항차를 먼저 등록해 info.mode='loading'이
   //   박혀 있어도, 작업 순서(양하→선적)대로 양하부터 연다. 양하가 완료 표시된 항차만 선적으로 바로.

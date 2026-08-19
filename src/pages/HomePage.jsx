@@ -364,10 +364,18 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         if (_info.voy_l) _expect.push('loading');
         if (!_expect.length) _expect.push(_info.mode === 'loading' ? 'loading' : 'discharge');   // 옛 항차 폴백
         // 섹션마다 완성율을 따로 낸다. 자료가 아직 없는 예정 섹션은 0 — 몇 대일지 모르므로 가중치는 균등하다.
-        const _sr = _expect.map(m => {
+        const _srAll = _expect.map(m => {
           const r = _readyOf(m === 'discharge' ? v.discharge : v.loading, m);
           return { mode: m, ratio: r ? r.matched / r.den : 0, has: !!r };
         });
+        // 1.93-03 (검수사 실측 SWSP — 터미널 «P/I, 양하 없음»·배정 0 인데 카드엔 «⏳ 양하자료 대기중»):
+        //   배정목록에도 0 인 모드는 기다릴 자료가 아니다 — 예정 섹션에서 뺀다(자료가 실제로 오면 다시 포함).
+        //   MissingSideNote(1.78)와 같은 판정: 배정 수량이 «확인된 0»(null 아님) && 그 모드 자료 없음.
+        const _srKept = _srAll.filter(x => {
+          const q = x.mode === 'discharge' ? _info.planDis : _info.planLod;
+          return !(q != null && Number(q) === 0 && !x.has);
+        });
+        const _sr = _srKept.length ? _srKept : _srAll;   // 전부 걸러지면 폴백(왜곡 방지)
         const _rDen = _sr.filter(x => x.has).length;   // 자료가 들어온 예정 섹션 수
         const _done = _sr.filter(x => x.ratio >= 0.9999);
         const _wait = _sr.filter(x => x.ratio < 0.9999);
