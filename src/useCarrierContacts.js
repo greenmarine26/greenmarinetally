@@ -11,3 +11,14 @@ export function useCarrierContacts() {
   }, []);
   return cc;
 }
+
+// 1.92: 선박별 작업 속도(shipSpeed — 텔리 리포트 배치 분석, 이후 수집기 축적) 1회 로드.
+let _speed = null;
+export function useShipSpeed() {
+  const [sp, setSp] = useState(_speed);
+  useEffect(() => {
+    if (_speed) return;
+    fbGetSimple('shipSpeed').then((v) => { _speed = v || {}; setSp(_speed); }).catch(() => { /* 없으면 안내 */ });
+  }, []);
+  return sp;
+}

@@ -406,6 +406,50 @@ export function answerOverlaps(voyages) {
 }
 
 // 자료 도착·확정 시각 — dataAt vs dataFixedAt (#62 #63)
+// 1.92 (검수사 확정 «그걸 앱에 반영을 하고 PCTC도 적용을 해야합니다»): 선박별 작업 속도 + 소요 시간 예측.
+//   데이터: RTDB shipSpeed/{VSL}_{PIER} — 텔리 리포트 51개 배치 분석(2026-08-19, 정상범위 채택 23항차).
+export function isSpeedQuery(q) {
+  const Q = String(q || '');
+  return /평균\s*(?:작업\s*)?속도|작업\s*속도|몇\s*시간\s*걸|얼마나\s*걸(?:리|려)|시간\s*걸릴/i.test(Q);
+}
+
+export function answerShipSpeed(voyage, shipSpeed, shipName = '') {
+  if (!voyage) return null;
+  const info = voyage.info || {};
+  const vsl = String(info.vsl || '').toUpperCase();
+  if (!shipSpeed) return '작업 속도 자료를 아직 못 불러왔어요 — 잠시 후 다시 물어봐 주세요.';
+  const pier = String(info.pier || '').toUpperCase().includes('PCTC') ? 'PCTC'
+    : String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : null;
+  let rec = (pier && shipSpeed[`${vsl}_${pier}`]) || shipSpeed[`${vsl}_PNCT`] || shipSpeed[`${vsl}_PCTC`] || null;
+  const L = [`작업 속도${shipName ? ' — ' + shipName : ''}`];
+  if (rec) {
+    L.push(`${rec.vsl}(${rec.pier}) 평균 ${rec.movesPerCraneHour} 무브/크레인h — 표본 ${rec.voys}항차 ${rec.moves}무브${rec.voys < 3 ? ' ⚠ 표본 적음(참고치)' : ''}`);
+  } else {
+    // 같은 부두 전체 평균 폴백
+    const same = Object.values(shipSpeed).filter((v) => v && typeof v === 'object' && v.pier && (!pier || v.pier === pier));
+    if (same.length) {
+      const mv = same.reduce((s, v) => s + v.moves, 0); const h = same.reduce((s, v) => s + v.craneHours, 0);
+      L.push(`이 배 실측 기록은 아직 없어요 — ${pier || '전체'} 평균 ${(mv / h).toFixed(1)} 무브/크레인h (${same.length}종 선박) 기준으로 말씀드려요`);
+      rec = { movesPerCraneHour: +(mv / h).toFixed(1), avgCranes: 1.5, pier: pier || '전체' };
+    } else {
+      L.push('실측 기록이 아직 없어요 — 텔리 리포트가 쌓이면 이 배 평균이 잡힙니다.');
+      return L.join('\n');
+    }
+  }
+  // 소요 시간 예측 — 배정(planDis/planLod) 우선, 없으면 리스트 수
+  const nD = Number(info.planDis) || (voyage.discharge?.records ? Object.keys(voyage.discharge.records).length : 0);
+  const nL = Number(info.planLod) || (voyage.loading?.records ? Object.keys(voyage.loading.records).length : 0);
+  const total = nD + nL;
+  if (total && rec.movesPerCraneHour) {
+    const cr = Math.max(1, Math.round(rec.avgCranes || 1));
+    const hrs = total / (rec.movesPerCraneHour * cr);
+    const hh = Math.floor(hrs); const mm = Math.round((hrs - hh) * 60);
+    L.push(`이번 물량 ${total}무브(양하 ${nD}+선적 ${nL}) ÷ (${rec.movesPerCraneHour} × 크레인 ${cr}대) ≈ **약 ${hh}시간 ${mm ? mm + '분' : ''}**`);
+    L.push('(해치커버·시프팅·식사 시간은 별도 — 대략치입니다)');
+  }
+  return L.join('\n');
+}
+
 // 1.91-01 (검수사 확정 «선적 계획을 알면 양하 계획도 알겠죠?»): 전망 답을 양하·선적 공용으로.
 export function isPlanOutlookQuery(q) {
   const Q = String(q || '');

@@ -4,11 +4,11 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, Arro
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
-import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
+import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
-import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
+import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -110,6 +110,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   //   "STSE 출항 몇 시"·"HAYN 양하 자료 다 있어"처럼 질문에 배가 지정되면 그 항차를 맥락으로 잡는다.
   //   종전에는 배를 지정해도 무시하고 "항차 화면 가서 물어보세요"로 떠넘겼다(검수사 지적 2026-08-13).
   const carrierContacts = useCarrierContacts();   // 1.89
+  const shipSpeed = useShipSpeed();   // 1.92
   const shipCtx = useMemo(() => {
     const Q = String(debouncedQuery || '').toUpperCase();
     if (Q.length < 3) return null;
@@ -371,6 +372,10 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         const body = L.filter(Boolean).join('\n');
         if (body) return `${shipCtx.info.vslFull || shipCtx.info.vsl}\n${body}`;
       }
+    }
+    // 1.92: 배 지정 «평균 속도·몇 시간»
+    if (isSpeedQuery(debouncedQuery) && shipCtx) {
+      try { const a = answerShipSpeed(shipCtx.v, shipSpeed, shipCtx.info.vslFull || shipCtx.info.vsl); if (a) return a; } catch (e) { /* 아래로 */ }
     }
     // 1.91-01: 배 지정 양하·선적 계획 전망 (공용)
     if (isPlanOutlookQuery(debouncedQuery) && shipCtx) {

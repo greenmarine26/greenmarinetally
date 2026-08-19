@@ -8,8 +8,8 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOct
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
-import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89
-import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf } from '../chiefAnswers.js';   // 1.90·1.91·1.91-02
+import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
+import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery } from '../chiefAnswers.js';   // 1.90·1.91·1.92
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
@@ -734,6 +734,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 1.84-03 (검수사 확정 2026-08-19): 답변 속 «"실번호 점검"으로 상세 확인» 류 안내를 **버튼**으로.
   //   누르면 그 질문을 바로 제출해 상세를 보여주고, 「← 이전 답으로」 를 누르면 원래 답(브리핑)으로 돌아온다.
   const carrierContacts = useCarrierContacts();   // 1.89: 담당자 명부(1회 로드, 모듈 캐시)
+  const shipSpeed = useShipSpeed();   // 1.92: 선박별 작업 속도
   // 1.91-02 (검수사 확정: 되묻고 기다린다 — 양하/선적 선택 시간을 주고, 답 없으면 둘 다):
   const [modeChoice, setModeChoice] = useState(null);   // null(되묻는 중)|'discharge'|'loading'|'both'
   useEffect(() => { setModeChoice(null); }, [query]);
@@ -960,6 +961,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');
       return generateTwinCheckAnswer(parsed, pool, pairs, voyage?.info?.pier || '');   // V7.93-02: 부두별 무게차 한계
     }
+    // 1.92 (검수사 확정 — PCTC 포함): «평균 속도»·«몇 시간 걸릴까» — 실측 shipSpeed 기반.
+    if (isSpeedQuery(query)) {
+      try { const a = answerShipSpeed(voyage, shipSpeed, voyage?.info?.vslFull || voyage?.info?.vsl || ''); if (a) return a; } catch (e) { /* 아래로 */ }
+    }
     // 1.91-01 (검수사 확정 «선적 계획을 알면 양하 계획도 알겠죠?»): 양하·선적 계획 전망 공용.
     if (isPlanOutlookQuery(query)) {
       try {
@@ -1005,7 +1010,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       { ...manualCtx, carrierContacts,   // 1.89: 담당자 명부 — «관련 선사·담당자» 즉답
         shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
           return (c && Object.keys(c).length) ? c : predictShiftingFromVoyage(voyage); })() });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed]);
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).
   useEffect(() => {
