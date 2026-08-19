@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
+import { parseNaturalQuery, applyNLFilter, generateLocalAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드)
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
   AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
@@ -1806,6 +1807,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null }) {
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
+  const [ask, setAsk] = useState(null);           // 1.85-05: 인라인 즉답 {q, stack[]} — 질문한 탭에서 바로 답
   const [kb, setKb] = useState('numeric');        // 폰 자판: 작업(숫자) 기본, ⌨로 질문(문자)
   const [listening, setListening] = useState(false);
   const [autoRead, setAutoRead] = useState(true);  // 조회 결과 1건이면 위치를 읽어준다
@@ -1823,7 +1825,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
       const t = pickSpeechAlternative(alts).trim();
       const digits = parseSpokenDigits(t);
       if (digits && digits.length >= 2) setSearch(digits);          // 숫자 = 즉시 조회(종전 규칙)
-      else if (t.length >= 2 && onAsk) onAsk(t);                    // 문장 = 작업 시작 탭에 질문
+      else if (t.length >= 2) setAsk({ q: t, stack: [] });          // 1.85-05: 문장 = 이 화면에서 바로 답
       else speak('인식 실패');
     };
     r.onend = () => setListening(false);
@@ -1918,8 +1920,8 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
             inputMode={kb}
             onChange={e => setSearch(e.target.value.toUpperCase())}
             onKeyDown={e => {
-              if (e.key === 'Enter' && onAsk && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
-                e.preventDefault(); const q = search.trim(); setSearch(''); onAsk(q);
+              if (e.key === 'Enter' && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
+                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
               }
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 베이 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
@@ -1949,6 +1951,8 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           <Download className="w-3.5 h-3.5"/>CSV
         </button>
       </div>
+
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} />}
 
       <div className="flex gap-1 flex-wrap text-[11px]">
         {[
@@ -2066,12 +2070,81 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // RIZHAO ORIENT 등 RORO/LOLO 혼용선 전용. 베이 그림 없이 리스트로 검수.
 //   기존 ContainerList·ContainerDetailModal·firebase 함수를 그대로 재사용.
 //   "조회·실체크한 것만 누적" — 검수사가 실제 처리(완료)한 컨만 누적분으로 모음.
+// 1.85-05 (검수사 확정 «양하화면에서 조회했는데 답은 작업시작 화면에서 나옴»): 질문한 탭에서 바로 답.
+//   ListTab·LoloTab 공용 — 로컬 즉답만(AI 폴백·오답 신고는 ▶ 작업 시작 탭). 후속 버튼·«← 이전 답으로» 는
+//   SearchPanel 1.84-03 과 같은 규칙(검수사: «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼»).
+function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback }) {
+  const q = ask?.q || '';
+  const parsed = useMemo(() => { try { return parseNaturalQuery(q); } catch (e) { return null; } }, [q]);
+  const results = useMemo(() => { try { return parsed ? applyNLFilter(containers, parsed) : []; } catch (e) { return []; } },
+    [containers, parsed]);
+  const answer = useMemo(() => {
+    try { return parsed ? generateLocalAnswer(parsed, results, containers, { mode }) : null; } catch (e) { return null; }
+  }, [parsed, results, containers, mode]);
+  const readRef = useRef('');
+  useEffect(() => {
+    if (!answer || readRef.current === q + answer.length) return;
+    readRef.current = q + answer.length;
+    const first = (answer.split('\n').find(l => l.trim()) || '').replace(/[📊📍📭⚖️🏗•·⏱🎉]/g, '').trim();
+    if (first) { try { speak(first); } catch (e) { /* 낭독 실패 무시 */ } }
+  }, [answer, q]);
+  if (!ask) return null;
+  const hints = [];
+  if (answer) {
+    hints.push(...[...String(answer).matchAll(/"([^"]{2,14})"\s*[으로]*로?\s*상세 확인/g)].map(m => m[1]));
+    [['❄', '리퍼'], ['🩻', '엑스레이'], ['☣', '위험물'], ['⊞', 'FR'], ['△', 'OT'], ['🛢', '탱크'], ['📐', 'OOG']]
+      .forEach(([emo, h]) => { if (String(answer).includes(emo + ' ')) hints.push(h); });
+  }
+  const uniq = [...new Set(hints)];
+  return (
+    <div className="bg-slate-900 border border-emerald-700/60 rounded-xl p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] text-emerald-300 font-bold">💬 «{q}»</div>
+        <button onClick={() => setAsk(null)} className="text-slate-500 hover:text-slate-300 text-[11px] font-bold">✕ 닫기</button>
+      </div>
+      {answer ? (
+        <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{answer}</div>
+      ) : (
+        <div className="text-[12px] text-slate-400">
+          이 질문은 여기서 바로 못 냅니다 — 아래 버튼으로 ▶ 작업 시작 탭에서 이어집니다.
+          {onFallback && (
+            <button onClick={() => { const _q = q; setAsk(null); onFallback(_q); }}
+              className="mt-2 w-full py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
+              ▶ 작업 시작 탭에서 답 보기
+            </button>
+          )}
+        </div>
+      )}
+      {(uniq.length > 0 || (ask.stack || []).length > 0) && (
+        <div className="flex gap-2 flex-wrap">
+          {uniq.map(h => (
+            <button key={h} onClick={() => setAsk(a => ({ q: h, stack: [...(a?.stack || []), a?.q].filter(Boolean) }))}
+              className="flex-1 min-w-[110px] py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
+              🔍 {h} 보기
+            </button>
+          ))}
+          {(ask.stack || []).length > 0 && (
+            <button onClick={() => setAsk(a => {
+              const s = [...(a?.stack || [])]; const prev = s.pop();
+              return prev ? { q: prev, stack: s } : null;
+            })}
+              className="flex-1 min-w-[110px] py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
+              ← 이전 답으로
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk }) {
   // 1.85-03 (검수사 실측 «여기는 그대로 입니다»): ListTab 1.84와 같은 게이트 — 기본 미선택, 칩·검색 시에만 목록.
   const [filter, setFilter] = useState(null); // null(숨김) | all | done(누적) | undone
   const [search, setSearch] = useState('');
   // 1.85-02 (검수사 실측 «RZOR은 화면이 안바뀌었습니다. LOLO라 빠트리신듯» «검색창도 같이 바꿔 주세요»):
   //   ListTab 1.84-01 통합검색줄을 LOLO에도. ⚠ ListTab 과 복제 두 벌 — 공용 추출은 인계함.
+  const [ask, setAsk] = useState(null);   // 1.85-05: 인라인 즉답
   const [kb, setKb] = useState('numeric');
   const [listening, setListening] = useState(false);
   const [autoRead, setAutoRead] = useState(true);
@@ -2089,7 +2162,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
       const t = pickSpeechAlternative(alts).trim();
       const digits = parseSpokenDigits(t);
       if (digits && digits.length >= 2) setSearch(digits);
-      else if (t.length >= 2 && onAsk) onAsk(t);
+      else if (t.length >= 2) setAsk({ q: t, stack: [] });          // 1.85-05: 문장 = 이 화면에서 바로 답
       else speak('인식 실패');
     };
     r.onend = () => setListening(false);
@@ -2165,8 +2238,8 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
             inputMode={kb}
             onChange={e => setSearch(e.target.value.toUpperCase())}
             onKeyDown={e => {
-              if (e.key === 'Enter' && onAsk && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
-                e.preventDefault(); const q = search.trim(); setSearch(''); onAsk(q);
+              if (e.key === 'Enter' && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
+                e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
               }
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 컨번호 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
@@ -2189,6 +2262,8 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
           ⌨
         </button>
       </div>
+
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} />}
 
       <div className="flex gap-1 flex-wrap text-[11px]">
         {[

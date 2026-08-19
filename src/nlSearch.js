@@ -133,7 +133,7 @@ export function parseNaturalQuery(text) {
   else if (/\boog\b|아웃\s*오브\s*게이지/i.test(t)) result.type = 'oog';
   // V9.56: RO/RO 겸용선(RZOR) — 크레인으로 검수하는 건 갠트리(落地) 분뿐이다.
   //   선사 표현 그대로 "갠트리 40van" 이라 부른다. 섀시분은 램프로 굴려 나가 검수 대상이 아니다.
-  else if (/갠트리|gantry|락지|落地|크레인\s*작업|로로\s*제외/i.test(t)) result.type = 'lolo';
+  else if (/갠트리|gantry|락지|落地|크레인\s*작업|로로\s*제외|lolo/i.test(t)) result.type = 'lolo';   // 1.85-05: «LOLO 리스트는?» — LOLO 단어 자체가 트리거에 없었다(검수사 실측 — 전체 203대가 나열됨)
   else if (/双背|쌍배|2단\s*적재|이단\s*적재/i.test(t)) result.type = 'dbl';
 
   // 베이 번호
@@ -929,7 +929,11 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   // V7.90-02: 베이 분포 — 명시 질문이거나, 위치 질문인데 결과가 많으면(개별 나열 무의미) 분포로
   if (parsed.bayDistQuery || (parsed.posQuery && results.length > 5)) return formatBayDist(desc, results, parsed);
   if (parsed.dupL4Query) return formatDupL4(desc, results);   // TallyOne 1.17: 중복 질문은 목록보다 먼저
-  if (parsed.posQuery || parsed.listQuery) return formatLocationList(desc, results, parsed);
+  if (parsed.posQuery || parsed.listQuery) {
+    // 1.85-05: «LOLO 리스트는?» — '리스트'가 listQuery 로 먼저 잡혀 0건이 «없음»으로만 나왔다. 사정을 말한다.
+    if (parsed.type === 'lolo' && !results.length) return '🏗 갠트리(낙지) 지정 자료가 아직 없습니다 — 선사 덱플랜이 오면 대상이 여기 잡힙니다. 지금은 리스트 전체가 검수 대상입니다.';
+    return formatLocationList(desc, results, parsed);
+  }
   if (parsed.isStat) return formatStats(desc, results);
 
   // 베이 단독 → 베이 통계
@@ -947,7 +951,12 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   // 1.85-01 (검수사 확정 «브리핑 자료 답변 버튼은 컨번호나 실번호를 볼려고 하는것 보다 그것들의 정보를 보고자 함»):
   //   특수화물 타입(리퍼·X-RAY 포함)은 대수와 무관하게 **정보 답**을 낸다 — 종전엔 리퍼가 null 로 떨어져
   //   작업 카드(실번호·양하확인)가 떴다(검수사 실측). 다대는 베이 분포(온도·클래스 집계), ≤5 는 나열+컨별 상세.
-  if (SPECIAL_TYPES.includes(parsed.type) && results.length) {
+  if (SPECIAL_TYPES.includes(parsed.type)) {
+    if (!results.length) {
+      // 1.85-05: 0건도 즉답 — 종전엔 null 로 떨어져 작업 카드가 떴다. LOLO 는 «지정 자료 미도착»을 구분해 말한다.
+      if (parsed.type === 'lolo') return '🏗 갠트리(낙지) 지정 자료가 아직 없습니다 — 선사 덱플랜이 오면 대상이 여기 잡힙니다. 지금은 리스트 전체가 검수 대상입니다.';
+      return `📭 ${desc} 없음`;
+    }
     return results.length > 5 ? formatBayDist(desc, results, parsed) : formatLocationList(desc, results, parsed);
   }
   if (hasStrong && results.length >= 2) return formatLocationList(desc, results, parsed);
@@ -1379,7 +1388,7 @@ function formatDupL4(desc, results) {
 //   1.84-04 는 베이 분포 답(formatBayDist)에만 있어 **나열 답·1대 답에서는 안 보였다**(검수사 실측).
 //   ① 화물 자체 치수(cg* — 수집기 1.8이 선사 치수 엑셀 BH2717YP063货物尺寸 류를 ediContainers 에 patch)
 //   ② EDI DIM 초과 치수(ov*) ③ DG 는 cl./UN/PG. 대수가 적을 때만(≤12) — 많으면 집계가 답이다.
-const SPECIAL_TYPES = ['fr', 'ot', 'oog', 'dg', 'tk', 'rf', 'xray'];   // 1.85-01: 리퍼·X-RAY 도 정보 답
+const SPECIAL_TYPES = ['fr', 'ot', 'oog', 'dg', 'tk', 'rf', 'xray', 'lolo'];   // 1.85-01: 리퍼·X-RAY 도 정보 답 · 1.85-05: LOLO(갠트리)도
 function specialDetailLines(results, parsed) {
   if (!SPECIAL_TYPES.includes(parsed?.type) || !results.length || results.length > 12) return [];
   const lines = [''];
