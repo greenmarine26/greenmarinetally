@@ -411,7 +411,8 @@ export function answerOverlaps(voyages) {
 export function isSpeedQuery(q) {
   const Q = String(q || '');
   // 1.92-03 (검수사 실측 «미르야SWSP 몇시간 작업이야?» 무응답): «몇 시간» 화법 전반을 잡는다 — 단 «남았»(진행 질문)은 제외.
-  return /평균\s*(?:작업\s*)?속도|작업\s*속도|얼마나\s*걸(?:리|려)|시간\s*걸릴/i.test(Q)
+  // 1.92-04: «얼마나 걸릴까»(걸릴) 포함 — 걸리/걸려/걸릴 전부.
+  return /평균\s*(?:작업\s*)?속도|작업\s*속도|얼마나\s*걸|시간\s*걸릴|걸릴까/i.test(Q)
     || (/몇\s*시간/.test(Q) && !/남(?:았|아)/.test(Q));
 }
 

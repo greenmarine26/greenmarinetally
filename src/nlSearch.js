@@ -1837,6 +1837,11 @@ function formatProgress(parsed, results, allContainers) {
   } else {
     lines.push(`⏳ ${baseDesc} 남은 작업: ${pendingCount}대 / 전체 ${totalCount}대`);
     lines.push(`완료: ${doneCount}대 (${pct}%)`);
+  
+    // 1.93 (검수사 확정): 애매한 «얼마나 남았어»는 기본 답(이해 차원)만 주고,
+    //   «질문 방식을 바꿔 달라고 사용자에게 어필» — 유도 문구는 1.84-03 패턴이라 자동으로 버튼이 된다.
+    lines.push('');
+    lines.push('더 자세히 물으실 수 있어요 — "지금 홀드 몇 개 남았어"로 상세 확인 · "몇 시에 끝나"로 상세 확인 · "몇 시간 걸릴까"로 상세 확인');
   }
 
   if (results.length > 0 && results.length <= 50) {

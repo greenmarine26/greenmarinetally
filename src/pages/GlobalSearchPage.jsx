@@ -356,6 +356,10 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       }
       if (shipCtx.info.planDate) return `${ship} — 작업 계획 ${shipCtx.info.planDate} (PORT-MIS 신고는 아직).`;
     }
+    // 1.92-04 (검수사 실측 «SWSP 작업 얼마나 걸릴까?» 가 물량 답으로 빠짐): 속도 질문은 물량(isStat)보다 먼저.
+    if (isSpeedQuery(debouncedQuery) && shipCtx) {
+      try { const a = answerShipSpeed(shipCtx.v, shipSpeed, shipCtx.info.vslFull || shipCtx.info.vsl); if (a) return a; } catch (e) { /* 아래로 */ }
+    }
     // 1.68: 배가 지정된 물량 질문 — "STSE 양하 몇 개야" 를 여기서 바로 센다(평택분).
     if (shipCtx && (p.isStat || p.isAll || /몇\s*(?:개|대)/.test(debouncedQuery))) {
       const mine = flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk);
@@ -372,10 +376,6 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         const body = L.filter(Boolean).join('\n');
         if (body) return `${shipCtx.info.vslFull || shipCtx.info.vsl}\n${body}`;
       }
-    }
-    // 1.92: 배 지정 «평균 속도·몇 시간»
-    if (isSpeedQuery(debouncedQuery) && shipCtx) {
-      try { const a = answerShipSpeed(shipCtx.v, shipSpeed, shipCtx.info.vslFull || shipCtx.info.vsl); if (a) return a; } catch (e) { /* 아래로 */ }
     }
     // 1.91-01: 배 지정 양하·선적 계획 전망 (공용)
     if (isPlanOutlookQuery(debouncedQuery) && shipCtx) {
