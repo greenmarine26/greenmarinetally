@@ -410,7 +410,9 @@ export function answerOverlaps(voyages) {
 //   데이터: RTDB shipSpeed/{VSL}_{PIER} — 텔리 리포트 51개 배치 분석(2026-08-19, 정상범위 채택 23항차).
 export function isSpeedQuery(q) {
   const Q = String(q || '');
-  return /평균\s*(?:작업\s*)?속도|작업\s*속도|몇\s*시간\s*걸|얼마나\s*걸(?:리|려)|시간\s*걸릴/i.test(Q);
+  // 1.92-03 (검수사 실측 «미르야SWSP 몇시간 작업이야?» 무응답): «몇 시간» 화법 전반을 잡는다 — 단 «남았»(진행 질문)은 제외.
+  return /평균\s*(?:작업\s*)?속도|작업\s*속도|얼마나\s*걸(?:리|려)|시간\s*걸릴/i.test(Q)
+    || (/몇\s*시간/.test(Q) && !/남(?:았|아)/.test(Q));
 }
 
 export function answerShipSpeed(voyage, shipSpeed, shipName = '') {
