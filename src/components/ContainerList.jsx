@@ -487,10 +487,13 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {c.urgent && <span className="bg-rose-600 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black">▲ 긴급</span>}
               {c.lugg && <span className="bg-violet-700/70 text-violet-100 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-400/60">🧳 수화물{c.luggSeal ? ` 실 ${c.luggSeal}` : ''}</span>}
               {isDG && <span className="bg-red-700/60 text-red-100 text-[9px] px-1.5 py-0.5 rounded font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
-              {/* 리퍼 - 온도 있으면 항상 큰 뱃지 (F/E 무관) */}
-              {isReefer && hasTmp
-                ? <span className="bg-cyan-600 text-cyan-50 text-[10px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {c.tmp}°C</span>
-                : isReefer && <span className="bg-cyan-900/70 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded font-bold border border-cyan-700/50">RF</span>}
+              {/* 1.86 (검수사 확정 «풀만 눈꽃표시 색을 넣어주시고 엠티는 눈꽃을 회색 처리»):
+                  엠티 리퍼는 전원을 안 꽂아 잴 것이 없다 — 회색 눈꽃으로 가라앉히고, 풀만 색(온도 뱃지). */}
+              {isReefer && (c.fe === 'E'
+                ? <span className="bg-slate-800 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold border border-slate-600/60 flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF</span>
+                : hasTmp
+                  ? <span className="bg-cyan-600 text-cyan-50 text-[10px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {c.tmp}°C</span>
+                  : <span className="bg-cyan-900/70 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded font-bold border border-cyan-700/50 flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF</span>)}
               {c.fr && <span className="bg-orange-700/60 text-orange-100 text-[9px] px-1.5 py-0.5 rounded font-black">FR</span>}
               {c.ot && <span className="bg-yellow-700/60 text-yellow-100 text-[9px] px-1.5 py-0.5 rounded font-black">OT</span>}
               {c.tk && <span className="bg-pink-700/60 text-pink-100 text-[9px] px-1.5 py-0.5 rounded font-black">TK</span>}

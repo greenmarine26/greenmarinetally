@@ -729,7 +729,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (rfAutoRef.current === key) return;
     if (!reefers.length) return;          // 리퍼 자체가 없으면 아무 일 없다
     rfAutoRef.current = key;
-    if (rfUnchecked > 0) setShowReefer(true);
+    if (rfUnchecked > 0 && !shipPolicy?.rfSkip) setShowReefer(true);   // 1.86: 리퍼 체크 안 함 배는 자동으로 안 띄움
   }, [voyageKey, mode, reefers.length, rfUnchecked]);
 
   // V8.06: LOLO/IFCSUM 선박 판정 — 컨테이너에 베이 위치가 하나도 없으면 LOLO 전용.
@@ -955,7 +955,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
       <VoyageSummaryCard voyage={voyage} mode={mode}
         reeferCheck={reefers.length > 0
-          ? { total: reefers.length, unchecked: rfUnchecked, onOpen: () => setShowReefer(true) }
+          ? { total: reefers.length, unchecked: shipPolicy?.rfSkip ? 0 : rfUnchecked, onOpen: () => setShowReefer(true) }   // 1.86: rfSkip 배는 미확인 배지 끔
           : null} />
 
       {/* M5.1 G: 작업 보고 + 마감 점검 두 큰 버튼 */}
@@ -1161,6 +1161,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           else logQuerySettled('nls', v, { voyageKey });
         }}>
         <SearchPanel
+          rfSkip={!!shipPolicy?.rfSkip}
           relayQuery={relayQ}
           voyage={voyage}
           voyageKey={voyageKey}

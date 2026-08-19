@@ -23,6 +23,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
   const [selectedPods, setSelectedPods] = useState(Array.isArray(initial?.pod) ? initial.pod : []);
   const [customPod, setCustomPod] = useState('');
   const [lolo, setLolo] = useState(!!initial?.lolo);   // V8.09-08: LOLO 선박(베이 없는 IFCSUM 명세선). 대체선 대응.
+  const [rfSkip, setRfSkip] = useState(!!initial?.rfSkip);   // 1.86: 리퍼 체크 안 함(머스크류 — 리퍼 다수)
   const [saving, setSaving] = useState(false);
 
   if (!open) return null;
@@ -69,6 +70,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
         target,
         pod: finalPods,
         lolo: lolo === true,   // V8.09-08: LOLO 선박 플래그 (대체선 대응)
+        rfSkip: rfSkip === true,   // 1.86: 리퍼 체크 안 함
         label: lolo ? `${baseLabel} · LOLO` : baseLabel,
         description: '',
       };
@@ -236,6 +238,28 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
               <div className="font-bold text-sm">LOLO 선박 (베이플랜 없음)</div>
               <div className="text-[10px] text-slate-400 mt-0.5">
                 베이 그림 없이 리스트로만 검수하는 IFCSUM 명세선. 본선 수리·고장 시 대체선을 여기에 지정하면 LOLO 검수 리스트가 생성됩니다.
+              </div>
+            </div>
+          </button>
+
+          {/* 1.86 (검수사 확정): «머스크는 리퍼가 다수입니다. 그래서 리퍼 체크를 하지 않습니다» —
+              리퍼 확인 모달 자동 띄움·미확인 배지·브리핑 온도 경고를 이 배에서 끈다. 수동 조회는 그대로. */}
+          <button
+            onClick={() => setRfSkip(v => !v)}
+            className={`w-full p-3 rounded-lg text-left border flex items-start gap-2 ${
+              rfSkip
+                ? 'bg-sky-900/30 border-sky-500 text-sky-100'
+                : 'bg-slate-800 border-slate-700 text-slate-300'
+            }`}>
+            <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+              rfSkip ? 'bg-sky-500 border-sky-400' : 'border-slate-500'
+            }`}>
+              {rfSkip && <CheckCircle2 className="w-3.5 h-3.5 text-white"/>}
+            </div>
+            <div>
+              <div className="font-bold text-sm">리퍼 체크 안 함 (리퍼 다수 선박)</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                머스크처럼 리퍼가 다수인 배 — 리퍼 확인 창이 자동으로 뜨지 않고 온도 경고도 안 나옵니다. 수동 조회는 그대로 됩니다.
               </div>
             </div>
           </button>

@@ -185,5 +185,6 @@ export function policyComboLabel(policy) {
   if (!policy) return '';
   const seal = policy.mode === 'attach' ? '엠티실 부착'
     : policy.mode === 'verify' ? '엠티실 확인' : '일반';
-  return policy.lolo ? (policy.mode && policy.mode !== 'none' ? `LOLO+${seal}` : 'LOLO') : seal;
+  const base = policy.lolo ? (policy.mode && policy.mode !== 'none' ? `LOLO+${seal}` : 'LOLO') : seal;
+  return policy.rfSkip ? `${base}·리퍼 체크 없음` : base;   // 1.86: 머스크류 — 리퍼 다수라 체크 안 함
 }

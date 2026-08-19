@@ -442,6 +442,8 @@ export function applyNLFilter(containers, parsed) {
   if (parsed.fe) r = r.filter(c => c.fe === parsed.fe);
   if (parsed.type === 'rf') {
     r = r.filter(c => c.rf || (c.iso && c.iso[2] === 'R') || /RF$/.test(isoToLabel(c.iso) || '') || (c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0'));
+    // 1.86 (검수사 확정): «리퍼» = 풀이 기본 — 엠티는 «리퍼 엠티»로 물을 때만. 전면에 엠티가 섞이면 헷갈린다.
+    if (!parsed.fe) r = r.filter(c => c.fe !== 'E');
   } else if (parsed.type === 'dg') r = r.filter(c => c.dg);
   else if (parsed.type === 'xray') r = r.filter(c => c._xray);
   else if (parsed.type === 'lolo') r = r.filter(c => c.lolo);       // V9.56: 갠트리(落地) 분
@@ -1169,7 +1171,7 @@ export function auditSeals(containers) {
 
 // V7.90-04: 작업 브리핑 (사용자 요청) — 검수 시작·중간에 현재 작업 핵심을 한눈에.
 //   첫 줄은 음성으로 읽히는 한 문장 요약. 이후 화면용 상세.
-export function generateBriefing(containers, modeLabel, mode = 'discharge', pairsMap = null, pier = '') {   // V7.93: pairsMap·pier — 트윈 무게 예견
+export function generateBriefing(containers, modeLabel, mode = 'discharge', pairsMap = null, pier = '', opts = null) {   // V7.93: pairsMap·pier — 트윈 무게 예견 · 1.86: opts.rfSkip(머스크류 — 리퍼 체크 안 함)
   // V7.90-07 재구성 (사용자 피드백): ① 평택분(작업 대상)만 집계 — 통과화물 포함 금지(7.1)
   //   ② 일반 통계 나열 대신 "검수원이 인지해야 할 특이사항" 중심, 행동 지향 문구.
   const all = containers || [];
@@ -1194,7 +1196,7 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     const b = parseInt(c.bay, 10); if (Number.isFinite(b)) bays.add(b);
     const t = parseInt(c.tier, 10);
     if (Number.isFinite(t)) { if (t >= 80) deck++; else hold++; }
-    if (isReeferContainer(c)) { rf.push(c); if (c.fe !== 'E' && !c.rfdry && !c.mkcon && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }
+    if (isReeferContainer(c) && c.fe !== 'E') { rf.push(c); if (!c.rfdry && !c.mkcon && (c.tmp == null || String(c.tmp).trim() === '')) noTmp.push(c); }   // 1.86: 리퍼 전면 표시는 풀만(검수사 확정)
     if (c.dg) dg.push(c);
     if (c._xray) xr.push(c);
     if (c.fr || /FR$/.test(isoToLabel(c.iso) || '')) fr.push(c);
@@ -1209,7 +1211,8 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   };
   // ── 주의사항 수집 (일반적이지 않은 것만)
   const warns = [];
-  if (rf.length) {
+  // 1.86 (검수사 확정): rfSkip 배(머스크류 — 리퍼 다수)는 리퍼 주의 줄 자체를 생략 — «리퍼 체크를 하지 않습니다».
+  if (rf.length && !opts?.rfSkip) {
     const tail = noTmp.length ? ` · ⚠ 온도 미입력 ${noTmp.length}대 — 조회 시 온도 입력` : ' — 조회 시 온도 확인';
     warns.push({ k: `리퍼 ${rf.length}`, line: `❄ 리퍼 ${rf.length}대 (${baysOf(rf)})${tail}` });
   }
@@ -2106,7 +2109,8 @@ export function generateHandover(allContainers, handoverInfo = {}) {
   const special = [];
   const reefers = cs.filter(c => isReeferContainer(c) && !c._comp);
   const reeferNoTmp = reefers.filter(c => !c.tmp && c.fe !== 'E' && !c.rfdry && !c.mkcon);
-  if (reeferNoTmp.length) special.push(`냉동 온도 미입력 ${reeferNoTmp.length}대 (조회 시 입력 필요)`);
+  // 1.86 (검수사 확정 «머스크는 리퍼가 다수입니다. 그래서 리퍼 체크를 하지 않습니다»): rfSkip 배는 온도 경고 억제.
+  if (reeferNoTmp.length && !opts?.rfSkip) special.push(`냉동 온도 미입력 ${reeferNoTmp.length}대 (조회 시 입력 필요)`);
   const dg = cs.filter(c => c.dg && !c._comp);
   if (dg.length) special.push(`위험물 ${dg.length}대 — 별도 취급`);
   const fr = cs.filter(c => (c.fr || c.ot) && !c._comp);
