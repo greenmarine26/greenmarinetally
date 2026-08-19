@@ -8,6 +8,7 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOct
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
+import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
@@ -731,6 +732,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const relayRef = useRef('');
   // 1.84-03 (검수사 확정 2026-08-19): 답변 속 «"실번호 점검"으로 상세 확인» 류 안내를 **버튼**으로.
   //   누르면 그 질문을 바로 제출해 상세를 보여주고, 「← 이전 답으로」 를 누르면 원래 답(브리핑)으로 돌아온다.
+  const carrierContacts = useCarrierContacts();   // 1.89: 담당자 명부(1회 로드, 모듈 캐시)
   const [askStack, setAskStack] = useState([]);
   // 1.84-04: **모든 프로그램적 질문은 음성 입력과 같은 제출 경로를 탄다.**
   //   1.84-03 은 setDraft+setQuery 만 해서 askedAt·reasked·낭독 리셋이 빠졌고,
@@ -969,9 +971,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (onlyDigits) return null;
     // TallyOne 1.27: 시프팅은 **평택분 필터 전** 원본 voyage 로 계산해 넘긴다(통과화물이 대상이라서).
     return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk),
-      { ...manualCtx, shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
+      { ...manualCtx, carrierContacts,   // 1.89: 담당자 명부 — «관련 선사·담당자» 즉답
+        shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
           return (c && Object.keys(c).length) ? c : predictShiftingFromVoyage(voyage); })() });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts]);
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).
   useEffect(() => {

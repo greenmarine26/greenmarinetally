@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드)
+import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
   AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
@@ -2226,13 +2227,14 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
 //   ListTab·LoloTab 공용 — 로컬 즉답만(AI 폴백·오답 신고는 ▶ 작업 시작 탭). 후속 버튼·«← 이전 답으로» 는
 //   SearchPanel 1.84-03 과 같은 규칙(검수사: «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼»).
 function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback }) {
+  const carrierContacts = useCarrierContacts();   // 1.89: «관련 선사·담당자» 즉답용
   const q = ask?.q || '';
   const parsed = useMemo(() => { try { return parseNaturalQuery(q); } catch (e) { return null; } }, [q]);
   const results = useMemo(() => { try { return parsed ? applyNLFilter(containers, parsed) : []; } catch (e) { return []; } },
     [containers, parsed]);
   const answer = useMemo(() => {
-    try { return parsed ? generateLocalAnswer(parsed, results, containers, { mode }) : null; } catch (e) { return null; }
-  }, [parsed, results, containers, mode]);
+    try { return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts }) : null; } catch (e) { return null; }
+  }, [parsed, results, containers, mode, carrierContacts]);
   const readRef = useRef('');
   useEffect(() => {
     if (!answer || readRef.current === q + answer.length) return;

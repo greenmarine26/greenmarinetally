@@ -3,7 +3,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
+import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -108,6 +109,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   // ── TallyOne 1.68: 배 이름 맥락 ──
   //   "STSE 출항 몇 시"·"HAYN 양하 자료 다 있어"처럼 질문에 배가 지정되면 그 항차를 맥락으로 잡는다.
   //   종전에는 배를 지정해도 무시하고 "항차 화면 가서 물어보세요"로 떠넘겼다(검수사 지적 2026-08-13).
+  const carrierContacts = useCarrierContacts();   // 1.89
   const shipCtx = useMemo(() => {
     const Q = String(debouncedQuery || '').toUpperCase();
     if (Q.length < 3) return null;
@@ -367,6 +369,12 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         const body = L.filter(Boolean).join('\n');
         if (body) return `${shipCtx.info.vslFull || shipCtx.info.vsl}\n${body}`;
       }
+    }
+    // 1.89 (검수사 예시 «이번 SWSP 관련선사는 몇군데이고 각각 몇대씩이고 담당자가 누구지?»)
+    if (p.carrierQuery && shipCtx) {
+      const mine = flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk);
+      const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
+      return `${ship}\n` + formatCarriers(mine, { carrierContacts });
     }
     // 1.85 (검수사 실측 «OWBH 브리핑»): 배가 지정된 브리핑은 통합검색에서도 즉답 — 종전엔 배 이름이 있어도 되물었다.
     if (p.briefingQuery && shipCtx) {

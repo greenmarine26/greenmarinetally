@@ -72,7 +72,7 @@ export function parseNaturalQuery(text) {
     tierStackQuery: false,
     bottomQuery: false, topQuery: false,
     vacantQuery: false,
-    posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false,
+    posQuery: false, listQuery: false, bayDistQuery: false, briefingQuery: false, sealAuditQuery: false, carrierQuery: false,
     dupL4Query: false,   // TallyOne 1.17: 끝 4자리 중복 조회
     bayTrio: null,   // V8.03-01: 짝수 베이+구역 = 트리오(23·24·25) 전체
     introQuery: false, timeQuery: false, weatherQuery: false, schedQuery: false,   // V7.92: 챗봇형 질문
@@ -275,6 +275,8 @@ export function parseNaturalQuery(text) {
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어떤\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;   // V7.91-02: 어떤 베이
   // TallyOne 1.18: "상황 어때"·"어떻게 돼가"·"진행 어디까지" 도 브리핑으로. 현장에서 실제로 쓰는 말이다.
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약|상황\s*(?:어때|어떻|알려|보고)|어떻게\s*(?:돼|되)\s*가|진행\s*(?:상황|어디|어때|얼마)|어디까지\s*(?:했|왔|됐)/i.test(t)) result.briefingQuery = true;
+  // 1.89 (검수사 예시 «이번 SWSP 관련선사는 몇군데이고 각각 몇대씩이고 담당자가 누구지?»)
+  if (/관련\s*선사|선사\s*(?:몇|현황|분포|별로)|담당자/i.test(t)) result.carrierQuery = true;
   // V7.92: 챗봇형 질문 — 자기소개·시간·날씨·입출항 (사용자 요청: "넌 뭐야"에 답하기)
   if (/(?:^|\s)(?:넌|너는|네가|니가|너|당신|당신이)\s*(?:뭐|누구|하는\s*일|할\s*수|어떤\s*일)|누구세요|누구냐|누구니|누구야|자기\s*소개|소개\s*해|무슨\s*(?:일|기능)|뭐\s*(?:하는|할\s*수)|어떤\s*(?:일|기능|걸\s*할)/i.test(t)) result.introQuery = true;
   // TallyOne 1.22: 도선·접안·작업개시 — "도선이 08시 30분인데 작업시간이 08시 30분 가능한가요?"
@@ -588,7 +590,7 @@ export function hasAnyCondition(parsed) {
             parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery ||
             parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
             // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
-            parsed.briefingQuery || parsed.sealAuditQuery || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
+            parsed.briefingQuery || parsed.sealAuditQuery || parsed.carrierQuery || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
             parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery ||
             parsed.howToQuery);   // 1.65
 }
@@ -878,6 +880,8 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   const desc = describeQuery(parsed);
 
   // TallyOne 1.27: 시프팅 — 배정목록의 'N' 은 무브 수(양하 1 + 재선적 1)라 컨 대수의 2배다.
+  // 1.89: 관련 선사·담당자 — 결과가 조건에 안 걸렸으면 항차 전체 기준.
+  if (parsed.carrierQuery) return formatCarriers(results && results.length ? results : (allContainers || []), ctx);
   if (parsed.shiftingQuery) return formatShifting(ctx);
 
 
@@ -1413,6 +1417,33 @@ function formatDupL4(desc, results) {
 //   1.84-04 는 베이 분포 답(formatBayDist)에만 있어 **나열 답·1대 답에서는 안 보였다**(검수사 실측).
 //   ① 화물 자체 치수(cg* — 수집기 1.8이 선사 치수 엑셀 BH2717YP063货物尺寸 류를 ediContainers 에 patch)
 //   ② EDI DIM 초과 치수(ov*) ③ DG 는 cl./UN/PG. 대수가 적을 때만(≤12) — 많으면 집계가 답이다.
+// 1.89 (검수사 확정 — 통합검색 답변 담당이 두 앱 데이터를 응용): 관련 선사 분포 + 담당자(carrierContacts).
+export function formatCarriers(cs, ctx = null) {
+  if (!cs || !cs.length) return '📭 컨테이너 자료가 아직 없어 선사 분포를 셀 수 없습니다 (리스트/EDI 도착 후 다시 물어보세요)';
+  const by = {};
+  for (const c of cs) {
+    const op = String(c.op || '?').toUpperCase();
+    const v = by[op] = by[op] || { n: 0, d: 0, l: 0 };
+    v.n++; if (c._mode === 'loading') v.l++; else v.d++;
+  }
+  const cc = ctx?.carrierContacts || null;
+  const ks = Object.keys(by).sort((a, b) => by[b].n - by[a].n);
+  const named = ks.filter(k => k !== '?');
+  const lines = [`📦 관련 선사 ${named.length}곳 — 총 ${cs.length}대`];
+  ks.forEach((k, i) => {
+    const v = by[k];
+    const ent = cc && cc[k];
+    const label = k === '?' ? '(선사 미기재)' : (ent?.label ? `${k}(${ent.label})` : k);
+    const md = (v.d && v.l) ? ` (양하 ${v.d} / 선적 ${v.l})` : '';
+    const who = k === '?' ? '' : (ent && Array.isArray(ent.contacts) && ent.contacts.length
+      ? ' — 담당 ' + ent.contacts.map(x => x.name || x.email).filter(Boolean).join('·')
+      : (cc ? ' — 담당자 미등록' : ''));
+    lines.push(`${i + 1}. ${label} ${v.n}대${md}${who}`);
+  });
+  if (!cc) lines.push('(담당자 명부가 아직 안 올라왔습니다 — 수집기 업로드 후 이름이 붙습니다)');
+  return lines.join('\n');
+}
+
 const SPECIAL_TYPES = ['fr', 'ot', 'oog', 'dg', 'tk', 'rf', 'xray', 'lolo'];   // 1.85-01: 리퍼·X-RAY 도 정보 답 · 1.85-05: LOLO(갠트리)도
 function specialDetailLines(results, parsed) {
   if (!SPECIAL_TYPES.includes(parsed?.type) || !results.length || results.length > 12) return [];
