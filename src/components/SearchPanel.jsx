@@ -9,7 +9,7 @@ import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpee
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
 import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89
-import { answerDataArrival, isDataArrivalQuery, answerLoadOutlook, isLoadOutlookQuery } from '../chiefAnswers.js';   // 1.90·1.91
+import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, isPlanOutlookQuery, outlookModeOf } from '../chiefAnswers.js';   // 1.90·1.91·1.91-01
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
@@ -952,9 +952,13 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');
       return generateTwinCheckAnswer(parsed, pool, pairs, voyage?.info?.pier || '');   // V7.93-02: 부두별 무게차 한계
     }
-    // 1.91 (검수사 테스트 «미르야 이번 선적 계획 어떻게 진행 될것 같아»): 선적 계획 전망.
-    if (isLoadOutlookQuery(query)) {
-      try { const a = answerLoadOutlook(voyage, voyage?.info?.vslFull || voyage?.info?.vsl || ''); if (a) return a; } catch (e) { /* 아래로 */ }
+    // 1.91-01 (검수사 확정 «선적 계획을 알면 양하 계획도 알겠죠?»): 양하·선적 계획 전망 공용.
+    if (isPlanOutlookQuery(query)) {
+      try {
+        const _m = outlookModeOf(query) || workFilter || 'discharge';
+        const a = answerPlanOutlook(voyage, _m, voyage?.info?.vslFull || voyage?.info?.vsl || '');
+        if (a) return a;
+      } catch (e) { /* 아래로 */ }
     }
     // 1.90 (검수사 테스트 «EDI 자료 몇시쯤에 받은거야? 최종본 맞아?»): 항차 화면 검색창에서도 즉답.
     if (isDataArrivalQuery(query)) {
