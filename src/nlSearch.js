@@ -1211,6 +1211,21 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   };
   // ── 주의사항 수집 (일반적이지 않은 것만)
   const warns = [];
+  // 1.87 (검수사 확정 — ATPR·WEIHAI): 엠티실 부착 배는 브리핑에 부착 대상 베이별·규격별 분포와 실 현황을 붙인다.
+  //   «그부분도 베이별 규격별 설명도 첨부 … 엠티실 갯수도 알려줘야»
+  if (opts?.eseal && opts.eseal.n > 0) {
+    const es = opts.eseal;
+    const bl = Object.keys(es.byBay || {}).filter(k => k !== '?').map(Number).sort((a, b) => a - b)
+      .map(b => { const v = es.byBay[b]; const p = [v.s20 ? `20×${v.s20}` : null, v.s40 ? `40×${v.s40}` : null].filter(Boolean).join(' '); return `${b}(${p})`; });
+    const blTxt = bl.length > 10 ? bl.slice(0, 10).join(' · ') + ` 외 ${bl.length - 10}베이` : bl.join(' · ');
+    let tail;
+    if (es.ranges && es.ranges.length) {
+      tail = `실 ${es.ranges.map(r => `${r.from}~${r.to}`).join(' · ')} — 배정 ${es.poolN} · 부착 ${es.usedN} · 잔여 ${es.remainN}`;
+    } else {
+      tail = '⚠ 실 범위 미입력 — 선적 목록 화면의 🔖 카드에 «몇 번부터 몇 번까지» 넣어 주세요';
+    }
+    warns.push({ k: `엠티실 ${es.n}`, line: `🔖 엠티실 부착 ${es.n}대 — 베이 ${blTxt}\n     ${tail}` });
+  }
   // 1.86 (검수사 확정): rfSkip 배(머스크류 — 리퍼 다수)는 리퍼 주의 줄 자체를 생략 — «리퍼 체크를 하지 않습니다».
   if (rf.length && !opts?.rfSkip) {
     const tail = noTmp.length ? ` · ⚠ 온도 미입력 ${noTmp.length}대 — 조회 시 온도 입력` : ' — 조회 시 온도 확인';

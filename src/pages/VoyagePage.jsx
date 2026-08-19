@@ -19,7 +19,7 @@ import {
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
   , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
-  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone} from '../firebase.js';
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple} from '../firebase.js';   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -776,6 +776,41 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return { byCn, list };
   }, [shipPolicy, containers]);
 
+  // ── 1.87 (검수사 확정 — ATPR·WEIHAI 엠티실): 항차 엠티실 범위(복수 구간)와 정리 ──
+  //   «엠티실이 6자리인데 앞세자리는 같습니다 … 100개가 넘어가면 앞자리 세자리가 바뀝니다.
+  //    그때는 1. 521001~522000 2. 523001~524000 이런식으로» — 구간 여러 개.
+  //   «번호가 입력되면 그걸 정리해서 리스트로 제출 … 200개를 입력했고 컨테이너가 168개라면
+  //    32개의 잔여 실번호 리스트도 제출해야 합니다. 그래야 오기입 문제를 찾습니다.»
+  const esealRanges = voyage?.loading?.esealRanges?.list || null;   // [{from,to}]
+  const esealInfo = useMemo(() => {
+    if (shipPolicy?.mode !== 'attach' || !sealTargets.list.length) return null;
+    const targets = sealTargets.list;
+    // 베이별·규격별 분포
+    const byBay = {};
+    for (const c of targets) {
+      const b = parseInt(c.bay, 10);
+      const k = Number.isFinite(b) ? b : '?';
+      const sz = (String(c.iso || '')[0] === '2') ? '20' : '40';
+      const v = byBay[k] = byBay[k] || { n: 0, s20: 0, s40: 0 };
+      v.n++; v[sz === '20' ? 's20' : 's40']++;
+    }
+    // 범위 전개(구간당 10,000 가드) — 사용/잔여
+    const pool = [];
+    for (const r of (esealRanges || [])) {
+      const f = parseInt(r.from, 10), t = parseInt(r.to, 10);
+      if (!Number.isFinite(f) || !Number.isFinite(t) || t < f || t - f > 10000) continue;
+      for (let n = f; n <= t; n++) pool.push(String(n).padStart(String(r.from).length, '0'));
+    }
+    const usedPairs = [];
+    for (const c of targets) {
+      const e = String(recMap[c.cn]?.eseal ?? c.eseal ?? '').trim();
+      if (e) usedPairs.push({ cn: c.cn, seal: e });
+    }
+    const usedSet = new Set(usedPairs.map(u => u.seal));
+    const remain = pool.filter(s => !usedSet.has(s));
+    return { targets, byBay, ranges: esealRanges || [], pool, usedPairs, remain };
+  }, [sealTargets, esealRanges, recMap, shipPolicy]);
+
   // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
   //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
   //   - 등록 안 하고 닫기 → 같은 날 다시 안 뜸, 다음 날부터 다시 표시
@@ -1134,6 +1169,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           ⚠ 배치가 아니다 — *"덱에 넣으라는 이야기가 아니고요"*. 개수와 그림을 **보여주기만** 한다.
           리스트가 들어오면 이 카드는 사라지고 실자료가 그 자리를 대신한다. */}
       {tab === 'list' && <ForecastCard voyage={voyage} mode={mode} />}
+      {tab === 'list' && mode === 'loading' && esealInfo && (
+        <EsealRangeCard voyageKey={voyageKey} info={esealInfo} inspector={inspector} />
+      )}
       {tab === 'list' && (
         <ListTab
           voyageKey={voyageKey} mode={mode}
@@ -1162,6 +1200,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         }}>
         <SearchPanel
           rfSkip={!!shipPolicy?.rfSkip}
+          esealBrief={esealInfo ? {
+            n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
+            poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
+          } : null}
           relayQuery={relayQ}
           voyage={voyage}
           voyageKey={voyageKey}
@@ -2087,6 +2129,99 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 // RIZHAO ORIENT 등 RORO/LOLO 혼용선 전용. 베이 그림 없이 리스트로 검수.
 //   기존 ContainerList·ContainerDetailModal·firebase 함수를 그대로 재사용.
 //   "조회·실체크한 것만 누적" — 검수사가 실제 처리(완료)한 컨만 누적분으로 모음.
+// 1.87 (검수사 확정): 엠티실 범위 카드 — ATPR(WEIHAI 부착) 선적에서 «이번 항차 엠티실은 몇 번 실부터
+//   ~ 몇 번 실까지입니까?» 를 묻고 구간(복수)을 저장한다. 입력되면 부착 현황·잔여 실 정리를 보여준다.
+function EsealRangeCard({ voyageKey, info, inspector }) {
+  const has = info.ranges.length > 0;
+  const [edit, setEdit] = useState(false);
+  const [rows, setRows] = useState(() => (has ? info.ranges.map(r => ({ ...r })) : [{ from: '', to: '' }]));
+  const [showList, setShowList] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    const list = rows.map(r => ({ from: String(r.from).trim(), to: String(r.to).trim() }))
+      .filter(r => /^\d{4,8}$/.test(r.from) && /^\d{4,8}$/.test(r.to) && parseInt(r.to, 10) >= parseInt(r.from, 10));
+    if (!list.length) { alert('구간을 확인하세요 — 예: 521001 ~ 522000'); return; }
+    setSaving(true);
+    try {
+      await fbSetSimple(`voyages/${voyageKey}/loading/esealRanges`, { list, by: inspector || '', at: Date.now() });
+      setEdit(false);
+    } catch (e) { alert('저장 실패: ' + (e?.message || e)); }
+    setSaving(false);
+  };
+  const bays = Object.keys(info.byBay).filter(k => k !== '?').map(Number).sort((a, b) => a - b);
+  const dist = bays.map(b => {
+    const v = info.byBay[b];
+    const p = [v.s20 ? `20×${v.s20}` : null, v.s40 ? `40×${v.s40}` : null].filter(Boolean).join(' ');
+    return `${b}(${p})`;
+  }).join(' · ');
+  return (
+    <div className="bg-teal-950/40 border border-teal-700/50 rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[12px] font-bold text-teal-200">🔖 엠티실 부착 — 대상 {info.targets.length}대</div>
+        {has && !edit && (
+          <button onClick={() => { setRows(info.ranges.map(r => ({ ...r }))); setEdit(true); }}
+            className="text-[10px] text-teal-400 underline">수정</button>
+        )}
+      </div>
+      <div className="text-[11px] text-teal-300/90">베이별: {dist || '위치 미상'}</div>
+      {(!has || edit) ? (
+        <div className="space-y-1.5">
+          <div className="text-[12px] text-teal-100 font-bold">이번 항차 엠티실은 몇 번 실부터 ~ 몇 번 실까지입니까?</div>
+          <div className="text-[10px] text-teal-400/80">실은 6자리 — 100개가 넘어 앞 세 자리가 바뀌면 [+ 구간 추가]로 나눠 넣으세요.</div>
+          {rows.map((r, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <input value={r.from} inputMode="numeric" placeholder="521001"
+                onChange={e => setRows(a => a.map((x, j) => (j === i ? { ...x, from: e.target.value.replace(/\D/g, '') } : x)))}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
+              <span className="text-teal-400">~</span>
+              <input value={r.to} inputMode="numeric" placeholder="522000"
+                onChange={e => setRows(a => a.map((x, j) => (j === i ? { ...x, to: e.target.value.replace(/\D/g, '') } : x)))}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
+              {rows.length > 1 && (
+                <button onClick={() => setRows(a => a.filter((_, j) => j !== i))} className="text-red-400 text-xs px-1">✕</button>
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <button onClick={() => setRows(a => [...a, { from: '', to: '' }])}
+              className="flex-1 py-2 rounded bg-slate-800 border border-slate-600 text-slate-300 text-xs font-bold">+ 구간 추가</button>
+            <button onClick={save} disabled={saving}
+              className="flex-1 py-2 rounded bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold">{saving ? '저장 중…' : '저장'}</button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <div className="text-[11px] mono text-teal-100">
+            실 {info.ranges.map(r => `${r.from}~${r.to}`).join(' · ')} — 배정 {info.pool.length}개
+          </div>
+          <div className="text-[11px] text-teal-300">
+            부착 {info.usedPairs.length} / 대상 {info.targets.length} · <b>잔여 실 {info.remain.length}개</b>
+          </div>
+          <button onClick={() => setShowList(v => !v)}
+            className="w-full py-2 rounded bg-teal-800/70 hover:bg-teal-700 text-teal-100 text-xs font-bold">
+            {showList ? '접기' : '🔖 엠티실 정리 리스트 (제출용)'}
+          </button>
+          {showList && (() => {
+            const usedTxt = info.usedPairs
+              .slice().sort((a, b) => a.seal.localeCompare(b.seal))
+              .map(u => `${u.seal}  ${u.cn}`).join('\n');
+            const remainTxt = info.remain.join('\n');
+            const full = `【엠티실 정리 — 부착 ${info.usedPairs.length} / 배정 ${info.pool.length}】\n${usedTxt}\n\n【잔여 실 ${info.remain.length}개】\n${remainTxt}`;
+            return (
+              <div className="space-y-1.5">
+                <textarea readOnly value={full} rows={10}
+                  className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-[10px] mono text-slate-200"/>
+                <button onClick={() => { try { navigator.clipboard.writeText(full); alert('복사됐습니다'); } catch (e) { /* 무시 */ } }}
+                  className="w-full py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold">📋 복사 (카톡 제출용)</button>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 1.85-05 (검수사 확정 «양하화면에서 조회했는데 답은 작업시작 화면에서 나옴»): 질문한 탭에서 바로 답.
 //   ListTab·LoloTab 공용 — 로컬 즉답만(AI 폴백·오답 신고는 ▶ 작업 시작 탭). 후속 버튼·«← 이전 답으로» 는
 //   SearchPanel 1.84-03 과 같은 규칙(검수사: «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼»).
