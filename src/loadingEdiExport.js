@@ -248,7 +248,7 @@ export function buildActualAsc(rows, meta = {}) {
   const out = [];
   out.push(line([[0, '$604' + shipCode], [8, '/'], [9, vslName], [29, '/'], [30, voy], [42, '/'],
                  [55, '/POL:' + pol3], [63, '/'], [64, yymmdd], [72, '/RECORD=' + num(rows.length, 4)], [84, '/']]));
-  out.push(line([[0, '$609PORT ROTATION/']]));
+  out.push(line([[0, (meta.ascHdr === '$600' ? '$600' : '$609') + 'PORT ROTATION/']]));   // 1.88-01: 받은 ASC 머리대로(수집기 1.8-02 info.ascHdr)
 
   const dgList = [];
   for (const r of rows) {

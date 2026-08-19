@@ -1522,7 +1522,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
     const ediVer = detectEdiVer(v?.loading?.raw?.edi?.text || v?.discharge?.raw?.edi?.text || '');
     return { vsl: info.vsl || key.split('_')[0] || 'VSL', vslFull: info.vslFull || '',
              voy: info.voy_l || info.voy || '', callsign: info.callsign || '', imo: info.imo || '',
-             carrier: info.carrier || '', ediVer };
+             carrier: info.carrier || '', ediVer, ascHdr: info.ascHdr || '' };   // 1.88-01: 수집기가 실은 수신 ASC 머리
   };
   const _collectOrWarn = (row) => {
     const v = voyages[row.key];
