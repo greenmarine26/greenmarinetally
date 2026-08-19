@@ -738,11 +738,6 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 1.91-02 (검수사 확정: 되묻고 기다린다 — 양하/선적 선택 시간을 주고, 답 없으면 둘 다):
   const [modeChoice, setModeChoice] = useState(null);   // null(되묻는 중)|'discharge'|'loading'|'both'
   useEffect(() => { setModeChoice(null); }, [query]);
-  useEffect(() => {
-    if (!(needsModeChoice(parsed, results) && modeChoice === null)) return undefined;
-    const tm = setTimeout(() => setModeChoice('both'), 8000);   // 선택 시간 8초 — 답 없으면 둘 다
-    return () => clearTimeout(tm);
-  }, [parsed, results, modeChoice]);
   const [askStack, setAskStack] = useState([]);
   // 1.84-04: **모든 프로그램적 질문은 음성 입력과 같은 제출 경로를 탄다.**
   //   1.84-03 은 setDraft+setQuery 만 해서 askedAt·reasked·낭독 리셋이 빠졌고,
@@ -849,6 +844,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // M3.2: 로컬 답변 (AI 의존 없이 즉답)
   // 베이/POL/POD/구역/무게합/위치 질문은 모두 여기서 처리
   // 단, 단순 컨번호 검색(digits만)이거나 결과가 단 1개면 BigResultCard 우선
+  // 1.92-01: 되묻기 무응답 타이머 — ⚠ parsed·results 선언 **뒤**에 둔다(useEffect deps 는 렌더 중 즉시 평가,
+  //   1.86-01 TDZ 크래시와 같은 유형이 1.91-02 에서 재발 — «작업시작 누르면 오류뜸» 검수사 실측).
+  useEffect(() => {
+    if (!(needsModeChoice(parsed, results) && modeChoice === null)) return undefined;
+    const tm = setTimeout(() => setModeChoice('both'), 8000);   // 선택 시간 8초 — 답 없으면 둘 다
+    return () => clearTimeout(tm);
+  }, [parsed, results, modeChoice]);
+
   const localAnswer = useMemo(() => {
     if (!query || query.length < 2) return null;
     // 1.23: **경고 문장을 그대로 물은 것인가**를 가장 먼저 본다.
