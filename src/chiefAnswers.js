@@ -447,8 +447,10 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '') {
     const cr = Math.max(1, Math.round(rec.avgCranes || 1));
     const hrs = total / (rec.movesPerCraneHour * cr);
     const hh = Math.floor(hrs); const mm = Math.round((hrs - hh) * 60);
-    L.push(`이번 물량 ${total}무브(양하 ${nD}+선적 ${nL}) ÷ (${rec.movesPerCraneHour} × 크레인 ${cr}대) ≈ **약 ${hh}시간 ${mm ? mm + '분' : ''}**`);
-    L.push('(해치커버·시프팅·식사 시간은 별도 — 대략치입니다)');
+    const hrs1 = total / rec.movesPerCraneHour;
+    const h1 = Math.floor(hrs1); const m1 = Math.round((hrs1 - h1) * 60);
+    L.push(`이번 물량 ${total}무브(양하 ${nD}+선적 ${nL}) — 크레인 ${cr}대가 같이 하면 **약 ${hh}시간 ${mm ? mm + '분' : ''}**${cr > 1 ? ` (1대면 약 ${h1}시간 ${m1}분)` : ''}`);
+    L.push('(대수=무브로 계산 — 트윈 미반영이라 20피트 트윈이 많으면 실제는 더 빠릅니다 · 해치커버·시프팅·식사 별도)');
   }
   return L.join('\n');
 }

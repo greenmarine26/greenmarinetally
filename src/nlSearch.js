@@ -1988,7 +1988,9 @@ function formatEta(parsed, allContainers, ctx) {
     const cr = Math.max(1, Math.round(rec.avgCranes || 1));
     const hrs = remain / (rec.movesPerCraneHour * cr);
     const hh = Math.floor(hrs); const mm = Math.round((hrs - hh) * 60);
-    return `${label} 실측 평균으로 보면 약 ${hh ? hh + '시간 ' : ''}${mm}분 예상이에요.\n${src_} ${rec.movesPerCraneHour}무브/크레인h × 크레인 ${cr}대 · ${remain}대 기준 — 해치커버·식사 별도`;
+    const hrs1 = remain / rec.movesPerCraneHour;
+    const h1 = Math.floor(hrs1); const m1 = Math.round((hrs1 - h1) * 60);
+    return `${label} 크레인 ${cr}대가 같이 하면 약 ${hh ? hh + '시간 ' : ''}${mm}분 예상이에요.${cr > 1 ? ` (1대면 약 ${h1}시간 ${m1}분)` : ''}\n${src_} ${rec.movesPerCraneHour}무브/크레인h · ${remain}대=무브로 계산(트윈 미반영 — 20피트 트윈이 많으면 실제는 더 빨라요) · 해치커버·식사 별도`;
   };
   if (doneCount === 0) {
     const g = _speedGuess('아직 시작 전인데,');
