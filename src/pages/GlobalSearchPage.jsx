@@ -8,7 +8,7 @@ import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89   // V9
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
-import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, isPlanOutlookQuery, outlookModeOf } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
+import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -373,7 +373,9 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     // 1.91-01: 배 지정 양하·선적 계획 전망 (공용)
     if (isPlanOutlookQuery(debouncedQuery) && shipCtx) {
       try {
-        const a = answerPlanOutlook(shipCtx.v, outlookModeOf(debouncedQuery) || 'discharge', shipCtx.info.vslFull || shipCtx.info.vsl);
+        const _m = outlookModeOf(debouncedQuery);
+        const _ship = shipCtx.info.vslFull || shipCtx.info.vsl;
+        const a = _m ? answerPlanOutlook(shipCtx.v, _m, _ship) : answerPlanOutlookBoth(shipCtx.v, _ship);   // 1.91-02
         if (a) return a;
       } catch (e) { /* 아래로 */ }
     }

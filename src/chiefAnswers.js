@@ -409,8 +409,10 @@ export function answerOverlaps(voyages) {
 // 1.91-01 (검수사 확정 «선적 계획을 알면 양하 계획도 알겠죠?»): 전망 답을 양하·선적 공용으로.
 export function isPlanOutlookQuery(q) {
   const Q = String(q || '');
-  return /(양하|선적)/.test(Q) && (/(?:계획|플랜|어떻게|어찌).{0,14}(?:진행|전망|될\s*것|될것|돼|같아)/i.test(Q)
-    || /(?:양하|선적)\s*(?:계획|전망|플랜)\s*(?:은|는|\?|$)/i.test(Q));   // 1.91-01: «양하 전망» 단독형
+  // 1.91-02 (검수사 확정 «계획 하나지만 답은 양하일지 선적일지 모릅니다»): 모드 없이 «계획 …»만 물어도 잡는다.
+  return /(?:계획|플랜).{0,14}(?:어떻|진행|전망|될\s*것|될것|돼|같아)/i.test(Q)
+    || /(?:양하|선적)\s*(?:계획|전망|플랜)\s*(?:은|는|\?|$)/i.test(Q)
+    || (/(양하|선적)/.test(Q) && /(?:어떻게|어찌).{0,10}(?:진행|전망|될|돼|같아)/i.test(Q));
 }
 
 export function outlookModeOf(q) {
@@ -418,6 +420,22 @@ export function outlookModeOf(q) {
   if (/양하/.test(Q)) return 'discharge';
   if (/선적/.test(Q)) return 'loading';
   return null;
+}
+
+// 1.91-02: 모드 미지정(null)이면 양하·선적 **둘 다** 답한다 — «두가지 다를 알고 있어야 합니다»(검수사).
+export function answerPlanOutlookBoth(voyage, shipName = '') {
+  const parts = [];
+  for (const m of ['discharge', 'loading']) {
+    const info = voyage?.info || {};
+    const sec = voyage?.[m];
+    const plan = Number(m === 'discharge' ? info.planDis : info.planLod) || 0;
+    const has = (sec && ((sec.records && Object.keys(sec.records).length) || (sec.ediContainers && Object.keys(sec.ediContainers).length))) || plan;
+    if (!has) continue;   // 자료도 배정도 없는 쪽은 생략 (한쪽 항차)
+    const a = answerPlanOutlook(voyage, m, '');
+    if (a) parts.push(a);
+  }
+  if (!parts.length) return `${shipName ? shipName + ' — ' : ''}양하·선적 자료가 아직입니다.`;
+  return (shipName ? shipName + '\n' : '') + parts.join('\n\n');
 }
 
 export function answerPlanOutlook(voyage, mode = 'loading', shipName = '') {

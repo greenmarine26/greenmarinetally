@@ -957,7 +957,7 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   if (parsed.posQuery || parsed.listQuery) {
     // 1.85-05: «LOLO 리스트는?» — '리스트'가 listQuery 로 먼저 잡혀 0건이 «없음»으로만 나왔다. 사정을 말한다.
     if (parsed.type === 'lolo' && !results.length) return '🏗 갠트리(낙지) 지정 자료가 아직 없습니다 — 선사 덱플랜이 오면 대상이 여기 잡힙니다. 지금은 리스트 전체가 검수 대상입니다.';
-    return formatLocationList(desc, results, parsed);
+    return splitByModeAnswer(results, parsed, (rs) => formatLocationList(desc, rs, parsed));
   }
   if (parsed.isStat) return formatStats(desc, results);
 
@@ -982,7 +982,8 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
       if (parsed.type === 'lolo') return '🏗 갠트리(낙지) 지정 자료가 아직 없습니다 — 선사 덱플랜이 오면 대상이 여기 잡힙니다. 지금은 리스트 전체가 검수 대상입니다.';
       return `📭 ${desc} 없음`;
     }
-    return results.length > 5 ? formatBayDist(desc, results, parsed) : formatLocationList(desc, results, parsed);
+    return splitByModeAnswer(results, parsed,
+      (rs) => (rs.length > 5 ? formatBayDist(desc, rs, parsed) : formatLocationList(desc, rs, parsed)));
   }
   if (hasStrong && results.length >= 2) return formatLocationList(desc, results, parsed);
 
@@ -1454,6 +1455,17 @@ export function formatCarriers(cs, ctx = null) {
   });
   if (!cc) lines.push('(담당자 명부가 아직 안 올라왔습니다 — 수집기 업로드 후 이름이 붙습니다)');
   return lines.join('\n');
+}
+
+// 1.91-02 (검수사 확정 «리퍼 어디에 있어? → 양하인가요 선적인가요? 하고 되묻고 둘다 답»):
+//   모드 미명시 조회에 양하·선적이 섞여 있으면 되묻는 말과 함께 갈라서 답한다.
+function splitByModeAnswer(results, parsed, fmt) {
+  if (parsed?.mode) return fmt(results);   // «양하 리퍼» 처럼 명시하면 종전대로
+  const d = results.filter(c => c._mode !== 'loading');
+  const l = results.filter(c => c._mode === 'loading');
+  if (!d.length || !l.length) return fmt(results);   // 한쪽뿐이면 그대로
+  return '양하인가요, 선적인가요? 🐱 둘 다 말씀드릴게요.\n\n【양하 — 여기 있어요】\n' + fmt(d)
+    + '\n\n【선적 — 여기에 실릴 거예요】\n' + fmt(l);
 }
 
 const SPECIAL_TYPES = ['fr', 'ot', 'oog', 'dg', 'tk', 'rf', 'xray', 'lolo'];   // 1.85-01: 리퍼·X-RAY 도 정보 답 · 1.85-05: LOLO(갠트리)도
