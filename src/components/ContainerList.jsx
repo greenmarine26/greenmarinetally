@@ -24,9 +24,9 @@ const FILTERS = [
   { key: '40', label: '40DC', color: 'bg-blue-600' },
   { key: 'hc', label: '40HC', color: 'bg-blue-600' },
   { key: 'hc45', label: '45HC', color: 'bg-blue-600' },
-  { key: 'rf20', label: '❄ 20RF', color: 'bg-cyan-600' },
-  { key: 'rf40', label: '❄ 40RF', color: 'bg-cyan-600' },
-  { key: 'rf45', label: '❄ 45RF', color: 'bg-cyan-600' },
+  { key: 'rf20', label: '20RF', color: 'bg-cyan-600', rfSnow: true },   // 1.86-02: 눈꽃은 아이콘으로 — 풀 있으면 파란·전부 엠티면 회색(검수사 확정)
+  { key: 'rf40', label: '40RF', color: 'bg-cyan-600', rfSnow: true },
+  { key: 'rf45', label: '45RF', color: 'bg-cyan-600', rfSnow: true },
   { key: 'fr20', label: '▱ 20FR', color: 'bg-yellow-600' },
   { key: 'fr40', label: '▱ 40FR', color: 'bg-yellow-600' },
   { key: 'fr45', label: '▱ 45FR', color: 'bg-yellow-600' },
@@ -66,7 +66,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       all: list.length,
       completed: 0, remaining: 0, full: 0, empty: 0, feUnknown: 0, xray: 0, dg: 0, rf: 0, tk: 0, oog: 0,
       hc: 0, dc20: 0, dc40: 0,
-      rf20: 0, rf40: 0, rf45: 0, fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
+      rf20: 0, rf20f: 0, rf40f: 0, rf45f: 0, rf40: 0, rf45: 0, fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
       hc45: 0,
       isoOther: 0,
       isoOtherList: [],
@@ -91,8 +91,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (lbl === '40HC') { k.hc++; knownLbl = true; }
       else if (lbl === '20DC' || lbl === '20GP' || lbl === '20VH' || lbl === '20HC') { k.dc20++; knownLbl = true; }   // 1.55-01: 20HC(26xx)도 20피트 칸에 — 별도 배지 없음, 종전 집계 유지
       else if (lbl === '40DC' || lbl === '40GP' || lbl === '40VH') { k.dc40++; knownLbl = true; }
-      if (lbl === '20RF') { k.rf20++; knownLbl = true; }
-      else if (lbl === '40RF') { k.rf40++; knownLbl = true; }
+      if (lbl === '20RF') { k.rf20++; if (c.fe === 'F') k.rf20f++; knownLbl = true; }
+      else if (lbl === '40RF') { k.rf40++; if (c.fe === 'F') k.rf40f++; knownLbl = true; }
       if (lbl === '20FR') { k.fr20++; knownLbl = true; }
       else if (lbl === '40FR') { k.fr40++; knownLbl = true; }
       else if (lbl === '45FR') { k.fr45++; knownLbl = true; }
@@ -101,7 +101,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       else if (lbl === '45OT') { k.ot45++; knownLbl = true; }
       if (lbl === '20TK') { k.tk20++; knownLbl = true; }
       else if (lbl === '40TK') { k.tk40++; knownLbl = true; }
-      if (lbl === '45RF') { k.rf45++; knownLbl = true; }
+      if (lbl === '45RF') { k.rf45++; if (c.fe === 'F') k.rf45f++; knownLbl = true; }
       if (lbl === '45HC') { k.hc45++; knownLbl = true; }
 
       // M3.5.6: 알려진 카테고리에 없는 ISO 카운트 (검수원 확인 필요)
@@ -236,7 +236,12 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
                 className={`px-2 py-1 rounded text-[10px] font-bold ${
                   cargoFilter === f.key ? `${f.color} text-white` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                 }`}>
-                {f.label} {cnt}
+                {f.rfSnow
+                  ? <span className="inline-flex items-center gap-0.5">
+                      <Snowflake className={`w-3 h-3 ${(counts[f.key + 'f'] || 0) > 0 ? 'text-cyan-300' : 'text-slate-500'}`}/>
+                      {f.label} {cnt}
+                    </span>
+                  : <>{f.label} {cnt}</>}
               </button>
             );
           })}
