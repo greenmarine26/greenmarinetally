@@ -8,7 +8,7 @@ import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89   // V9
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
-import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
+import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -278,7 +278,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       const _bayDef = shipCtx ? (_dict[String(shipCtx.info.vsl || '').toUpperCase()] || {}).bayDef : null;
       const _voy = shipCtx ? { ...shipCtx.v, key: shipCtx.key, _key: shipCtx.key } : null;
       const _ship = shipCtx ? (shipCtx.info.vslFull || shipCtx.info.vsl) : '';
-      const isArrivalQ = /(?:자료|리스트|EDI).{0,12}(?:언제|몇\s*시).{0,8}(?:왔|도착|들어)|(?:자료|리스트|EDI).{0,8}(?:언제|몇\s*시)$|도착\s*시각|확정\s*(?:뒤|후|이후).{0,10}(?:왔|갱신|자료)/.test(Q);
+      const isArrivalQ = isDataArrivalQuery(Q);   // 1.90: «받은거야»·«최종본 맞아» 포함 — 공용 트리거
       const isHatchQ = /해치|커버/.test(Q) && /(?:열|오픈|개방|닫|몇\s*장|실황|상태|어디)/.test(Q);
       const isGangQ = /(?:갱|크레인).{0,14}(?:분배|나눠|나누|분할)|분배.{0,10}(?:갱|크레인)|(?:갱|크레인)\s*2\s*개/.test(Q);
       const isMoveQ = /무브/.test(Q) && /(?:몇|총|얼마)/.test(Q);

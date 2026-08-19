@@ -406,17 +406,49 @@ export function answerOverlaps(voyages) {
 }
 
 // 자료 도착·확정 시각 — dataAt vs dataFixedAt (#62 #63)
+// 1.90 (검수사 테스트 질문 «SWSP 선적 EDI 자료 몇시쯤에 받은거야? 최종본 맞아?»): 트리거 공용(통합검색+항차 검색창).
+export function isDataArrivalQuery(q) {
+  const Q = String(q || '');
+  return /(?:자료|리스트|EDI).{0,12}(?:언제|몇\s*시).{0,10}(?:왔|도착|들어|받)|(?:자료|리스트|EDI).{0,8}(?:언제|몇\s*시)$|도착\s*시각|확정\s*(?:뒤|후|이후).{0,10}(?:왔|갱신|자료)|최종본|파이널.{0,6}(?:맞|인가|이야)/i.test(Q);
+}
+
 export function answerDataArrival(voyage, shipName = '') {
   if (!voyage) return null;
   const L = [];
   const fx = Number(voyage.info?.dataFixedAt) || 0;
   let lateAfterFix = false;
   [['discharge', '양하'], ['loading', '선적']].forEach(([md, kr]) => {
-    const at = Number(voyage[md]?.dataAt) || 0;
+    const sec = voyage[md];
+    if (!sec) return;
+    const at = Number(sec.dataAt) || 0;
+    // 1.90: EDI 파일 단위 시각 + 최종본 판정 — 파일명(PRE/최종형)과 EDI·리스트 수량 대조가 근거.
+    const edi = sec.raw?.edi || null;
+    if (edi && edi.uploadedAt) {
+      const fn = String(edi.fileName || '');
+      const nEdi = sec.ediContainers ? Object.keys(sec.ediContainers).length : 0;
+      const nList = sec.records ? Object.keys(sec.records).length : 0;
+      L.push(`${kr} EDI — ${_fmtT(edi.uploadedAt)} 앱 반영 · «${fn}»${fx && edi.uploadedAt > fx ? ' ⚠ 확정 이후' : ''}`);
+      if (fx && edi.uploadedAt > fx) lateAfterFix = true;
+      const isPre = /PRE|PRELIM|예비|가배정/i.test(fn);
+      const isFin = /FINAL|FNL|최종|LOAD\s*EDI/i.test(fn);
+      let verdict;
+      if (isPre) verdict = '⚠ 파일명이 PRE(예비)판 — 최종본이 더 올 수 있습니다';
+      else {
+        const why = [];
+        if (isFin) why.push('파일명 최종형');
+        if (nEdi && nList) why.push(nEdi === nList ? `EDI ${nEdi}대 = 리스트 ${nList}대 ✓` : `⚠ EDI ${nEdi} vs 리스트 ${nList} — ${Math.abs(nEdi - nList)}대 차이`);
+        else if (nEdi) why.push(`EDI ${nEdi}대 (리스트 미도착 — 수량 대조 불가)`);
+        const cntOk = nEdi > 0 && nEdi === nList;
+        verdict = (isFin && cntOk) ? `최종본으로 보입니다 — ${why.join(' · ')}`
+          : cntOk ? `수량은 일치 — ${why.join(' · ')}`
+            : why.length ? why.join(' · ') : '판단 근거 부족 — 리스트 도착 후 다시 물어보세요';
+      }
+      L.push(`  최종본 판단: ${verdict}`);
+    }
     if (at) {
       L.push(`${kr} 자료 ${_fmtT(at)} 갱신${fx && at > fx ? ' ⚠ 확정 이후' : ''}`);
       if (fx && at > fx) lateAfterFix = true;
-    } else if (voyage[md]) L.push(`${kr} — 자료 도착 시각 기록 없음`);
+    } else if (!edi) L.push(`${kr} — 자료 도착 시각 기록 없음`);
   });
   if (!L.length) return `${shipName || '이 배'} — 자료 도착 기록이 없습니다.`;
   const head = fx
