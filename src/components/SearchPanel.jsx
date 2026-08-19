@@ -76,7 +76,12 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   // V7.94: 자동 가이드 모드 — 앱이 크레인 순서대로 다음 컨을 예측 제시 (수동 = 기존 검색 방식)
   const [guideMode, setGuideMode] = useState(false);
   // M5.75: 작업 모드 필터 (양하/선적/완료) — 현재 작업 중인 모드만 검색
-  const [workFilter, setWorkFilter] = useState(mode === 'loading' ? 'loading' : 'discharge');  // 'discharge' | 'loading' | 'completed'
+  const [workFilter, setWorkFilter] = useState(mode === 'loading' ? 'loading' : 'discharge');
+  // 1.84-02: 양하 탭 검색줄에서 질문이 넘어오면 **맨 위에 답 카드**를 바로 띄운다.
+  //   종전(1.84-01)엔 릴레이만 하고 답을 그리는 SingleSearch 가 수동 모드+베이 선택 뒤에 있어
+  //   검수사가 질문하고 엔터를 쳐도 작업 시작 화면만 보였다(검수사 스크린샷 2026-08-19).
+  const [askMode, setAskMode] = useState(false);
+  useEffect(() => { if (String(relayQuery || '').trim()) setAskMode(true); }, [relayQuery]);  // 'discharge' | 'loading' | 'completed'
   // V8.82: 상단 양하/선적 탭(VoyagePage mode)이 바뀌면 작업 모드도 따라간다 — 위·아래가 반대로 엇갈리던 혼선 제거.
   useEffect(() => {
     if ((mode === 'discharge' || mode === 'loading') && workFilter !== mode) setWorkFilter(mode);
@@ -316,6 +321,16 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
   return (
     <div className="space-y-3">
+      {askMode && (
+        <div className="bg-slate-900 border border-amber-700/40 rounded-lg p-2 space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[12px] font-bold text-amber-300">💬 질문 답변</span>
+            <button onClick={() => setAskMode(false)} className="text-[12px] text-slate-400 px-2 py-1 rounded hover:bg-slate-800">✕ 닫고 작업으로</button>
+          </div>
+          <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} terminalWork={terminalWork} relayQuery={relayQuery} />
+        </div>
+      )}
+
       {/* ★ 1.84 (검수사 확정 2026-08-19): **지금 모드 것만 크게.** 종전엔 양하·선적 카드가 나란히 서서
           *"잘못해서 선적인데 양하를 누르고 안된다고 할 수 있죠"* — 선택지가 아닌 것을 선택지처럼 보였다.
           모드 전환은 화면 위 양하/선적 토글이 맡는다(검수사: *"따로 선적/양하 모드 변경탭은 필요합니다"* — 이미 있음).
@@ -618,7 +633,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} relayQuery={relayQuery} />
+        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
