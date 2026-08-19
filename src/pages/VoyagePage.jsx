@@ -2067,7 +2067,8 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
 //   기존 ContainerList·ContainerDetailModal·firebase 함수를 그대로 재사용.
 //   "조회·실체크한 것만 누적" — 검수사가 실제 처리(완료)한 컨만 누적분으로 모음.
 function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk }) {
-  const [filter, setFilter] = useState('all'); // all | done(누적) | undone
+  // 1.85-03 (검수사 실측 «여기는 그대로 입니다»): ListTab 1.84와 같은 게이트 — 기본 미선택, 칩·검색 시에만 목록.
+  const [filter, setFilter] = useState(null); // null(숨김) | all | done(누적) | undone
   const [search, setSearch] = useState('');
   // 1.85-02 (검수사 실측 «RZOR은 화면이 안바뀌었습니다. LOLO라 빠트리신듯» «검색창도 같이 바꿔 주세요»):
   //   ListTab 1.84-01 통합검색줄을 LOLO에도. ⚠ ListTab 과 복제 두 벌 — 공용 추출은 인계함.
@@ -2101,6 +2102,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
   useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
 
   const filtered = useMemo(() => {
+    if (!filter && !search) return [];   // 1.85-03: 기본 숨김 — ListTab 1.84와 동일
     let arr = containers;
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
@@ -2194,13 +2196,14 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
           { k: 'undone', t: `미처리 ${stats.total - stats.done}` },
           { k: 'done', t: `누적(처리) ${stats.done}` },
         ].map(({ k, t }) => (
-          <button key={k} onClick={() => setFilter(k)}
+          <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
             className={`px-2.5 py-1 rounded font-bold ${
               filter === k ? 'bg-cyan-700 text-cyan-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}>{t}</button>
         ))}
       </div>
 
+      {(filter || search) ? (
       <ContainerList
         list={filtered}
         compMap={compMap}
@@ -2212,6 +2215,11 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         onOpenContainer={onOpenContainer}
         dupSeals={dupSeals}
       />
+      ) : (
+        <div className="text-center text-[12px] text-slate-600 py-6 bg-slate-900/40 border border-slate-800/60 rounded-lg">
+          위 칩을 누르거나 검색하면 그 컨테이너만 보입니다
+        </div>
+      )}
     </div>
   );
 }

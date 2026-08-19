@@ -1100,20 +1100,6 @@ export function auditSeals(containers) {
   }
   // ②③④ 개별 점검
   const allCns = new Set((containers || []).map(c => norm(c.cn)).filter(Boolean));
-  // 접두 그룹별 숫자부 길이 최빈값 (④용)
-  const grpLens = {};
-  for (const e of entries) {
-    const m = e.n.match(/^([A-Z]*)(\d+)$/);
-    if (m) { const g = m[1] || '(숫자만)'; (grpLens[g] = grpLens[g] || []).push(m[2].length); }
-  }
-  const modeLen = {};
-  for (const g in grpLens) {
-    if (grpLens[g].length < 3) continue;  // 표본 적으면 판단 보류
-    const cnt = {};
-    for (const L of grpLens[g]) cnt[L] = (cnt[L] || 0) + 1;
-    const top = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
-    if (cnt[top] >= grpLens[g].length * 0.7) modeLen[g] = +top;  // 70% 이상이 같은 길이일 때만
-  }
   const seen = new Set();
   for (const e of entries) {
     const key = (e.c.cn || '') + '|' + e.n;
@@ -1130,17 +1116,19 @@ export function auditSeals(containers) {
     let hit = null;
     if (e.n.length >= 10) { for (const cn of allCns) { if (cn && e.n.includes(cn)) { hit = cn; break; } } }
     if (hit) { items.push({ cn: last4, seal: e.raw, reason: `${e.field}에 컨테이너 번호(${hit.slice(-4)}) 포함` }); continue; }
-    // ③ 형식 특이
+    // ③ 형식 특이 — 1.85-03 (검수사 확정): **자릿수 판정 전면 제거.** «실번호4자리 인 경우도 있습니다.
+    //   알림은 자릿수 기준이 아니라 일반적인것에서 벗어난것» — 종전 절대 자릿수(<4)·그룹 최빈 길이 비교가
+    //   4자리 실번호 등 정상 실을 의심으로 올렸다(RZOR 실측 «실번호 의심 9건» 오탐).
     if (/[^A-Z0-9]/.test(e.n)) { items.push({ cn: last4, seal: e.raw, reason: `${e.field}에 특수문자` }); continue; }
-    if (e.n.length < 4) { items.push({ cn: last4, seal: e.raw, reason: `${e.field} 자리수 비정상(${e.n.length}자)` }); continue; }
-    // ④ 그룹 대비 자리수 부족
-    const m = e.n.match(/^([A-Z]*)(\d+)$/);
-    if (m) {
-      const g = m[1] || '(숫자만)';
-      if (modeLen[g] != null && m[2].length < modeLen[g]) {
-        items.push({ cn: last4, seal: e.raw, reason: `${e.field} 자리수 부족 — 같은 형식 대부분 ${modeLen[g]}자리, 이 건 ${m[2].length}자리 (앞자리 누락 의심)` });
-      }
+  }
+  // ⑤ 1.85-03 (검수사 확정): **풀(F)인데 실번호가 없는 것** — 실을 주는 배(실이 하나라도 있는 항차)에서만.
+  const noSeal = (containers || []).filter(c =>
+    c.fe === 'F' && (c.sl == null || String(c.sl).trim() === '') && c.cn);
+  if (noSeal.length && noSeal.length <= (containers || []).length * 0.5) {   // 절반 넘게 없으면 자료 자체가 무실 — 오탐 방지
+    for (const c of noSeal.slice(0, 15)) {
+      items.push({ cn: (c.cn || '').slice(-4), seal: '(없음)', reason: '풀(F)인데 실번호 없음 — 실물 확인' });
     }
+    if (noSeal.length > 15) items.push({ cn: `외 ${noSeal.length - 15}대`, seal: '(없음)', reason: '풀(F)인데 실번호 없음' });
   }
   return { items, checked: entries.length };
 }
