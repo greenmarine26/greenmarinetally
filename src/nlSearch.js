@@ -944,9 +944,13 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
                     (parsed.temp !== null) || parsed.mode ||
                     parsed.weightMin !== null || parsed.weightMax !== null ||
                     (parsed.type && parsed.type !== 'rf');
-  // 1.85 (검수사 실측): FR 1대 조회가 답 없이 작업 카드로 빠져 «설명(치수)»이 안 보였다 —
-  //   특수화물 타입 질의는 1대여도 나열 답(상세 줄 포함)을 낸다.
-  if (hasStrong && (results.length >= 2 || ['fr', 'ot', 'oog', 'dg', 'tk'].includes(parsed.type))) return formatLocationList(desc, results, parsed);
+  // 1.85-01 (검수사 확정 «브리핑 자료 답변 버튼은 컨번호나 실번호를 볼려고 하는것 보다 그것들의 정보를 보고자 함»):
+  //   특수화물 타입(리퍼·X-RAY 포함)은 대수와 무관하게 **정보 답**을 낸다 — 종전엔 리퍼가 null 로 떨어져
+  //   작업 카드(실번호·양하확인)가 떴다(검수사 실측). 다대는 베이 분포(온도·클래스 집계), ≤5 는 나열+컨별 상세.
+  if (SPECIAL_TYPES.includes(parsed.type) && results.length) {
+    return results.length > 5 ? formatBayDist(desc, results, parsed) : formatLocationList(desc, results, parsed);
+  }
+  if (hasStrong && results.length >= 2) return formatLocationList(desc, results, parsed);
 
   return null;
 }
@@ -1369,11 +1373,14 @@ function formatDupL4(desc, results) {
 //   1.84-04 는 베이 분포 답(formatBayDist)에만 있어 **나열 답·1대 답에서는 안 보였다**(검수사 실측).
 //   ① 화물 자체 치수(cg* — 수집기 1.8이 선사 치수 엑셀 BH2717YP063货物尺寸 류를 ediContainers 에 patch)
 //   ② EDI DIM 초과 치수(ov*) ③ DG 는 cl./UN/PG. 대수가 적을 때만(≤12) — 많으면 집계가 답이다.
+const SPECIAL_TYPES = ['fr', 'ot', 'oog', 'dg', 'tk', 'rf', 'xray'];   // 1.85-01: 리퍼·X-RAY 도 정보 답
 function specialDetailLines(results, parsed) {
-  if (!['fr', 'ot', 'oog', 'dg', 'tk'].includes(parsed?.type) || !results.length || results.length > 12) return [];
+  if (!SPECIAL_TYPES.includes(parsed?.type) || !results.length || results.length > 12) return [];
   const lines = [''];
   for (const c of results) {
     const bits = [];
+    if (c.rf) bits.push(c.tmp != null && String(c.tmp).trim() !== '' ? `설정 ${c.tmp}°C` : '온도 미입력');
+    if (c._xray) bits.push('X-RAY 대상');
     if (c.dg) bits.push(`cl.${c.dgc || '?'}${c.un ? ` UN${c.un}` : ' (UN 미기재)'}${c.pg ? ` PG ${c.pg}` : ''}`);
     if (c.cgL || c.cgW || c.cgH) {
       bits.push(`화물 ${c.cgL || '?'}×${c.cgW || '?'}×${c.cgH || '?'}mm${c.cgWt ? ` ${(Number(c.cgWt) / 1000).toFixed(1)}t` : ''}${c.cgPcs ? ` ×${c.cgPcs}건` : ''}`);
