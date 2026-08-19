@@ -427,7 +427,11 @@ export function answerDataArrival(voyage, shipName = '') {
       const fn = String(edi.fileName || '');
       const nEdi = sec.ediContainers ? Object.keys(sec.ediContainers).length : 0;
       const nList = sec.records ? Object.keys(sec.records).length : 0;
-      L.push(`${kr} EDI — ${_fmtT(edi.uploadedAt)} 앱 반영 · «${fn}»${fx && edi.uploadedAt > fx ? ' ⚠ 확정 이후' : ''}`);
+      // 1.90-01 (검수사 확정 «수집기가 기록한 시간이 있을것입니다. 그걸 말하면 될것»): 메일 수신 시각(recvAt)이 정답.
+      const recv = Number(edi.recvAt) || 0;
+      L.push(recv
+        ? `${kr} EDI — ${_fmtT(recv)} 메일 수신 (앱 반영 ${_fmtT(edi.uploadedAt)}) · «${fn}»${fx && edi.uploadedAt > fx ? ' ⚠ 확정 이후' : ''}`
+        : `${kr} EDI — ${_fmtT(edi.uploadedAt)} 앱 반영 · «${fn}»${fx && edi.uploadedAt > fx ? ' ⚠ 확정 이후' : ''}`);
       if (fx && edi.uploadedAt > fx) lateAfterFix = true;
       const isPre = /PRE|PRELIM|예비|가배정/i.test(fn);
       const isFin = /FINAL|FNL|최종|LOAD\s*EDI/i.test(fn);
