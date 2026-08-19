@@ -316,24 +316,26 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
   return (
     <div className="space-y-3">
-      {/* M5.75: 작업 모드 탭 (양하/선적/완료) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
-        <button onClick={() => pickWorkFilter('discharge')}
-          className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
-            workFilter === 'discharge' ? 'bg-rose-700 text-rose-100' : 'text-slate-400 hover:bg-slate-800'
+      {/* ★ 1.84 (검수사 확정 2026-08-19): **지금 모드 것만 크게.** 종전엔 양하·선적 카드가 나란히 서서
+          *"잘못해서 선적인데 양하를 누르고 안된다고 할 수 있죠"* — 선택지가 아닌 것을 선택지처럼 보였다.
+          모드 전환은 화면 위 양하/선적 토글이 맡는다(검수사: *"따로 선적/양하 모드 변경탭은 필요합니다"* — 이미 있음).
+          완료 보기는 작은 칸으로 유지. pickWorkFilter·setWorkFilter 배선은 그대로(표시만 줄임). */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1 items-stretch">
+        {workFilter !== 'completed' ? (
+          <div className={`flex-[3] py-2.5 rounded text-center font-bold ${
+            workFilter === 'loading' ? 'bg-sky-800/70 text-sky-100' : 'bg-rose-800/70 text-rose-100'
           }`}>
-          <span>⬇ 양하 작업</span>
-          <span className="text-[10px] opacity-80">대기 {dischCount}대</span>
-        </button>
-        <button onClick={() => pickWorkFilter('loading')}
-          className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
-            workFilter === 'loading' ? 'bg-sky-700 text-sky-100' : 'text-slate-400 hover:bg-slate-800'
-          }`}>
-          <span>⬆ 선적 작업</span>
-          <span className="text-[10px] opacity-80">대기 {loadCount}대</span>
-        </button>
-        <button onClick={() => setWorkFilter('completed')}
-          className={`flex-1 py-2 rounded text-xs font-bold flex flex-col items-center ${
+            <span className="text-[14px]">{workFilter === 'loading' ? '⬆ 선적 시작' : '⬇ 양하 시작'}</span>
+            <span className="block text-[11px] opacity-80">대기 {workFilter === 'loading' ? loadCount : dischCount}대</span>
+          </div>
+        ) : (
+          <button onClick={() => pickWorkFilter(mode === 'loading' ? 'loading' : 'discharge')}
+            className="flex-[3] py-2.5 rounded text-center font-bold bg-slate-800 text-slate-300 text-[13px]">
+            ← {mode === 'loading' ? '선적' : '양하'} 작업으로 돌아가기
+          </button>
+        )}
+        <button onClick={() => setWorkFilter(workFilter === 'completed' ? (mode === 'loading' ? 'loading' : 'discharge') : 'completed')}
+          className={`flex-1 py-2 rounded text-[11px] font-bold flex flex-col items-center justify-center ${
             workFilter === 'completed' ? 'bg-emerald-700 text-emerald-100' : 'text-slate-400 hover:bg-slate-800'
           }`}>
           <span>✓ 완료</span>

@@ -69,6 +69,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       : (voyage?.info?.mode || (hasDis ? 'discharge' : 'loading')));
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
+  const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과·업로드 접이 메뉴(표시 전용)
   const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
   const [procState, setProcState] = useState('');  // V9.37(판6): ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
   const [procMsg, setProcMsg] = useState('');
@@ -93,7 +94,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // M5.1 G: 작업 마감 체크리스트 모달
   const [closingOpen, setClosingOpen] = useState(false);
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
-  const [listFilter, setListFilter] = useState('all');
+  const [listFilter, setListFilter] = useState(null);   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
   // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
   const [seqEdit, setSeqEdit] = useState(false);
   // 1.56-01: 선박 기억은 **추천으로만** 쓴다 — 검수사 정정 2026-08-12:
@@ -1057,24 +1058,39 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
       {/* 탭 네비게이션 — M5.0: 명칭 산뜻하게 정리 */}
       <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto sticky top-[52px] z-20 shadow-lg shadow-slate-950/60">
+        {/* ★ 1.84 (검수사 확정 2026-08-19, UI 1차 판2): 탭 «표시»만 정리 — tab state·점프 경로는 불변.
+            ① 「🎤 자연어」 → 「▶ 작업 시작」 — *"자연어는 이름이 검수용어가 아닙니다. 작업시작 모드가 되어야겠죠."*
+            ② 통계·결과·업로드는 요약·필터 칩과 겹쳐(*"중복 되는거 같습니다"*) 「더보기 ⋯」 한 버튼으로 접었다.
+              누르면 그 자리에서 셋 중 고른다. jumpTo(tab:'report' 등 8곳)는 setTab 그대로라 전부 살아 있다. */}
         {[
           { k: 'list', t: mode === 'discharge' ? '양하' : '선적', i: ListChecks },
-          { k: 'search', t: '🎤 자연어', i: SearchIcon },
+          { k: 'search', t: '▶ 작업 시작', i: SearchIcon },
           ...(isLoloShip
             ? [{ k: 'lolo', t: 'LOLO', i: ListChecks }]
             : [{ k: 'bay', t: '베이', i: MapPin }]),
-          { k: 'stats', t: '통계', i: BarChart3 },
-          { k: 'report', t: '결과', i: FileCheck },
-          { k: 'data', t: '업로드', i: Upload },
         ].map(({ k, t, i: Icon }) => (
-          <button key={k} onClick={() => setTab(k)}
-            className={`flex-1 px-2 py-2.5 text-[11px] font-bold flex items-center justify-center gap-1 border-b-2 whitespace-nowrap ${
+          <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
+            className={`flex-1 px-2 py-2.5 text-[12px] font-bold flex items-center justify-center gap-1 border-b-2 whitespace-nowrap ${
               tab === k ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-400'
             }`}>
             <Icon className="w-3.5 h-3.5"/>{t}
           </button>
         ))}
+        <button onClick={() => setMoreTabs(v => !v)}
+          className={`flex-none px-3 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap ${
+            ['stats', 'report', 'data'].includes(tab) ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-500'
+          }`} title="통계 · 결과 · 업로드">
+          {['stats', 'report', 'data'].includes(tab) ? ({ stats: '통계', report: '결과', data: '업로드' })[tab] : '⋯'}
+        </button>
       </nav>
+      {moreTabs && (
+        <div className="flex gap-1.5 mb-3 -mt-1.5">
+          {[['stats', '📊 통계'], ['report', '📋 결과'], ['data', '📤 업로드']].map(([k, t]) => (
+            <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
+              className={`flex-1 py-2 rounded-lg text-[12px] font-bold ${tab === k ? 'bg-slate-700 text-amber-300' : 'bg-slate-900 border border-slate-800 text-slate-300'}`}>{t}</button>
+          ))}
+        </div>
+      )}
 
       {/* TallyOne 1.8: 리퍼가 있으면 언제든 온도 확인 화면을 다시 연다.
           미확인이 남아 있으면 숫자를 붉게 띄워 '아직 안 봤다'를 숨기지 않는다. */}
@@ -1783,7 +1799,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
 // === 리스트 탭 ===
 function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null }) {
-  const [filter, setFilter] = useState('all'); // all | done | undone | xray
+  const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   const [search, setSearch] = useState('');
 
   // M5.1: 외부 filter (마감 체크리스트 점프) 동기화
@@ -1796,6 +1812,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
   useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
 
   const filtered = useMemo(() => {
+    if (!filter && !search) return [];   // 1.84: 칩 미선택·검색어 없음 = 목록 안 연다
     let arr = containers;
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
@@ -1874,14 +1891,15 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           // 1.76-05: 시프팅 별도 칸 — 총계에 안 섞고 따로 센다(검수사 확정). 탭하면 시프팅만 본다.
           ...(stats.shift > 0 ? [{ k: 'shift', t: `◆ 시프팅 ${stats.shiftDone}/${stats.shift}` }] : []),
         ].map(({ k, t }) => (
-          <button key={k} onClick={() => setFilter(k)}
+          <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
             className={`px-2.5 py-1 rounded font-bold ${
               filter === k ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
             }`}>{t}</button>
         ))}
       </div>
 
-      <ContainerList
+      {(filter || search) ? (
+            <ContainerList
         list={filtered}
         compMap={compMap}
         xrayMap={xrayMap}
@@ -1892,6 +1910,11 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         onOpenContainer={onOpenContainer}
         dupSeals={dupSeals}
       />
+      ) : (
+        <div className="text-center text-[12px] text-slate-600 py-6 bg-slate-900/40 border border-slate-800/60 rounded-lg">
+          위 칩을 누르거나 검색하면 그 컨테이너만 보입니다
+        </div>
+      )}
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
       {(shiftingList.length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && shiftInfo.meta.excludedCnt > 0)))) && (

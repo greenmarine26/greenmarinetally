@@ -49,6 +49,11 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
     return o;
   });
   const [busy, setBusy] = useState('');
+  // ★ 1.84 (검수사 확정 2026-08-19 시안): **방식 선택이 먼저다.**
+  //   *"1개든 100개든 이걸 한줄로 보여주고 클릭하면 리스트 입력인지 개별 사진 촬영인지 수기 입력인지
+  //    선택해서 할수있게. 처음부터 양이 많으면 스크롤하기 짜증납니다."*
+  //   열자마자 38줄이 아니라 [촬영 / 전부 리스트대로 / 수기] 세 버튼만. 목록은 고른 뒤에.
+  const [step, setStep] = useState('pick');   // 'pick' | 'edit'
   const [note, setNote] = useState('');
   const camRef = useRef(null);
   const albumRef = useRef(null);
@@ -66,6 +71,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
       return n;
     });
     setNote('EDI 온도를 전부 그대로 적용했습니다 — 다른 것만 고치세요.');
+    setStep('edit');   // 1.84: 일괄 적용 후 결과 확인 화면으로
   };
 
   /** ① 선원 리스트 사진 판독 */
@@ -103,6 +109,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
       setNote(`판독 실패: ${err?.message || err}`);
     } finally {
       setBusy('');
+    setStep('edit');   // 1.84: 판독 결과 확인 화면으로(실패해도 note 를 보며 수기로 잇는다)
     }
   };
 
@@ -132,6 +139,36 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
           <button onClick={() => onClose?.(false)} className="text-slate-500 p-2" style={{ minHeight: 40 }}><X className="w-5 h-5"/></button>
         </div>
 
+        {step === 'pick' && (
+          <div className="p-4 space-y-2">
+            <button onClick={() => camRef.current?.click()} disabled={!!busy}
+              className="w-full text-left px-4 py-3 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 border border-cyan-700/40 disabled:opacity-50" style={{ minHeight: 56 }}>
+              <span className="text-[14px] font-bold text-cyan-100 flex items-center gap-2">
+                {busy === 'photo' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
+                {busy === 'photo' ? '읽는 중…' : '선원 리스트 촬영'}
+              </span>
+              <span className="block text-[11px] text-cyan-300/70 mt-0.5">종이 리스트를 찍으면 온도를 읽어 채웁니다 · <button onClick={(e) => { e.stopPropagation(); albumRef.current?.click(); }} className="underline">앨범에서</button>도 가능</span>
+            </button>
+            <button onClick={() => applyAll()} disabled={!!busy}
+              className="w-full text-left px-4 py-3 rounded-lg bg-slate-800/70 hover:bg-slate-700/70 border border-slate-600/40 disabled:opacity-50" style={{ minHeight: 56 }}>
+              <span className="text-[14px] font-bold text-slate-100">전부 리스트대로</span>
+              <span className="block text-[11px] text-slate-400 mt-0.5">EDI 온도 그대로 인정 — 한 번에 {list.length}대 채우고 확인만 누르면 끝</span>
+            </button>
+            <button onClick={() => setStep('edit')} disabled={!!busy}
+              className="w-full text-left px-4 py-3 rounded-lg bg-slate-800/70 hover:bg-slate-700/70 border border-slate-600/40 disabled:opacity-50" style={{ minHeight: 56 }}>
+              <span className="text-[14px] font-bold text-slate-100">수기 입력</span>
+              <span className="block text-[11px] text-slate-400 mt-0.5">목록을 열어 EDI와 다른 컨만 직접 고칩니다</span>
+            </button>
+            <div className="text-right">
+              <button onClick={() => onClose?.(false)} className="text-[12px] text-slate-500 px-2 py-1">나중에</button>
+            </div>
+            <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden"/>
+            <input ref={albumRef} type="file" accept="image/*" onChange={onPhoto} className="hidden"/>
+            {note && <div className="text-[11px] text-amber-300">{note}</div>}
+          </div>
+        )}
+
+        {step === 'edit' && <>
         {/* 상단 — 많을 때 일일이 못 하니 사진·일괄 두 길을 먼저 준다 */}
         <div className="px-4 py-2 border-b border-slate-800 flex items-center gap-2 flex-wrap">
           <button onClick={() => camRef.current?.click()} disabled={!!busy}
@@ -192,6 +229,7 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             확인 완료 ({list.length}대)
           </button>
         </div>
+        </>}
       </div>
     </div>
   );
