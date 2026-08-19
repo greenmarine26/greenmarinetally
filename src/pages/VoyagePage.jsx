@@ -688,8 +688,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
   const containers = useMemo(
-    () => tagForecastMarks(containersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null),
-    [containersBase, urgentSet, luggSet, _fc, _fcApply]);
+    () => {
+      const base = tagForecastMarks(containersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null);
+      // 1.85-06 (검수사 지적 «덱이 보이면 컨이 지정되어 있는거 아닙니까» — 맞다): 덱플랜(stowagePlan)의
+      //   갠트리(lolo)·자리(pos)·2단(dbl) 지정을 조회용 컨 속성에 병합한다. RZOR R089E 실측 — 덱플랜은
+      //   와 있는데(갠트리 49) ediContainers 엔 주입 전이라 «LOLO 리스트» 조회가 0건이었다.
+      //   화면(DeckPlanView)은 plan 을 직접 그려 보였고, 조회(nlSearch)만 못 보던 불일치를 여기서 없앤다.
+      const decks = sec.stowagePlan?.decks;
+      if (!Array.isArray(decks) || !decks.length) return base;
+      const mark = {};
+      for (const dk of decks) for (const s of (dk?.slots || [])) if (s && s.cn && !s.empty) mark[s.cn] = s;
+      if (!Object.keys(mark).length) return base;
+      return base.map(c => {
+        const s = mark[c.cn];
+        if (!s) return c;
+        return { ...c, lolo: c.lolo || !!s.lolo, pos: c.pos || s.pos || '', dbl: c.dbl || !!s.dbl };
+      });
+    },
+    [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan]);
 
   // ── TallyOne 1.8: 리퍼 온도 확인 ─────────────────────────────────────────
   //   "작업전 먼저 선박을 선택합니다. 그러면 앱은 리퍼 유무를 판단하고 있으면 리퍼메모 화면을
