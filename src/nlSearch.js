@@ -929,6 +929,13 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   // V7.90-02: 베이 분포 — 명시 질문이거나, 위치 질문인데 결과가 많으면(개별 나열 무의미) 분포로
   if (parsed.bayDistQuery || (parsed.posQuery && results.length > 5)) return formatBayDist(desc, results, parsed);
   if (parsed.dupL4Query) return formatDupL4(desc, results);   // TallyOne 1.17: 중복 질문은 목록보다 먼저
+  // 1.85-07 (검수사 확정 «양하는 볼수 있습니다. 선적은 작업시 볼수 없습니다. 그래서 전체 리스트를 보여 줘야 합니다»):
+  //   LOLO 질의 — 양하는 덱플랜 지정(갠트리)만, **선적은 자리 지정이 없으므로 전체 리스트**가 곧 작업 대상.
+  if (parsed.type === 'lolo' && ctx?.mode === 'loading') {
+    const all = (allContainers || []).filter(c => (c._mode ? c._mode === 'loading' : true));
+    if (!all.length) return '📭 선적 리스트가 아직 없습니다';
+    return formatLocationList('LOLO 선적 — 자리 지정 없이 전체가 대상', all, parsed);
+  }
   if (parsed.posQuery || parsed.listQuery) {
     // 1.85-05: «LOLO 리스트는?» — '리스트'가 listQuery 로 먼저 잡혀 0건이 «없음»으로만 나왔다. 사정을 말한다.
     if (parsed.type === 'lolo' && !results.length) return '🏗 갠트리(낙지) 지정 자료가 아직 없습니다 — 선사 덱플랜이 오면 대상이 여기 잡힙니다. 지금은 리스트 전체가 검수 대상입니다.';
