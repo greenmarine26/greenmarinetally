@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드)
-import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89
+import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
   AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
@@ -1175,6 +1175,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {tab === 'list' && (
         <ListTab
+          vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           voyageKey={voyageKey} mode={mode}
           containers={containers} ediMap={ediMap} recMap={recMap}
           xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap}
@@ -1236,6 +1237,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
         />
         <LoloTab
+          vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           onAsk={(q) => { setRelayQ(q); setTab('search'); }}
           voyageKey={voyageKey} mode={mode}
           containers={containers} compMap={compMap}
@@ -1864,7 +1866,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '' }) {
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
   const [ask, setAsk] = useState(null);           // 1.85-05: 인라인 즉답 {q, stack[]} — 질문한 탭에서 바로 답
@@ -2012,7 +2014,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} />}
 
       <div className="flex gap-1 flex-wrap text-[11px]">
         {[
@@ -2226,15 +2228,16 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
 // 1.85-05 (검수사 확정 «양하화면에서 조회했는데 답은 작업시작 화면에서 나옴»): 질문한 탭에서 바로 답.
 //   ListTab·LoloTab 공용 — 로컬 즉답만(AI 폴백·오답 신고는 ▶ 작업 시작 탭). 후속 버튼·«← 이전 답으로» 는
 //   SearchPanel 1.84-03 과 같은 규칙(검수사: «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼»).
-function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback }) {
+function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '', pier = '' }) {
   const carrierContacts = useCarrierContacts();   // 1.89: «관련 선사·담당자» 즉답용
+  const shipSpeed = useShipSpeed();   // 1.93-01: 시작 전 «얼마나 걸릴까» 실측 예측
   const q = ask?.q || '';
   const parsed = useMemo(() => { try { return parseNaturalQuery(q); } catch (e) { return null; } }, [q]);
   const results = useMemo(() => { try { return parsed ? applyNLFilter(containers, parsed) : []; } catch (e) { return []; } },
     [containers, parsed]);
   const answer = useMemo(() => {
-    try { return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts }) : null; } catch (e) { return null; }
-  }, [parsed, results, containers, mode, carrierContacts]);
+    try { return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier }) : null; } catch (e) { return null; }
+  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier]);
   const readRef = useRef('');
   useEffect(() => {
     if (!answer || readRef.current === q + answer.length) return;
@@ -2292,7 +2295,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback }) {
   );
 }
 
-function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk }) {
+function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '' }) {
   // 1.85-03 (검수사 실측 «여기는 그대로 입니다»): ListTab 1.84와 같은 게이트 — 기본 미선택, 칩·검색 시에만 목록.
   const [filter, setFilter] = useState(null); // null(숨김) | all | done(누적) | undone
   const [search, setSearch] = useState('');
@@ -2432,7 +2435,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} />}
 
       <div className="flex gap-1 flex-wrap text-[11px]">
         {[

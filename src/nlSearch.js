@@ -1967,10 +1967,37 @@ function formatEta(parsed, allContainers, ctx) {
   if (total > 0 && remain === 0) {
     return `작업 다 끝났어요. 수고 많으셨습니다.\n🎉 평택분 ${total}대 전부 완료했어요.`;
   }
+  // 1.93-01 (검수사 실측 «미르야 얼마나 걸릴까?» 가 «몇 대 진행되면…»으로 끝남): 시작 전·페이스 부족이면
+  //   실측 평균(shipSpeed, 1.92)으로 먼저 예측한다 — 진행되면 페이스 기반이 자동으로 이어받는다.
+  const _speedGuess = (label) => {
+    const sp = ctx?.shipSpeed; const vsl = String(ctx?.vsl || '').toUpperCase();
+    if (!sp || !vsl || !remain) return null;
+    const pier = String(ctx?.pier || '').toUpperCase().includes('PCTC') ? 'PCTC'
+      : String(ctx?.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : null;
+    let rec = (pier && sp[`${vsl}_${pier}`]) || sp[`${vsl}_PNCT`] || sp[`${vsl}_PCTC`] || null;
+    let src_ = rec ? `${rec.vsl}(${rec.pier}) 평균` : '';
+    if (!rec) {
+      // 1.93-01: 이 배 기록이 없으면 같은 부두 평균으로(1.92 answerShipSpeed 와 같은 폴백)
+      const same = Object.values(sp).filter((v) => v && typeof v === 'object' && v.pier && (!pier || v.pier === pier));
+      if (same.length) {
+        const mvS = same.reduce((s, v) => s + v.moves, 0); const hS = same.reduce((s, v) => s + v.craneHours, 0);
+        if (hS > 0) { rec = { movesPerCraneHour: +(mvS / hS).toFixed(1), avgCranes: 1.5 }; src_ = `${pier || '부두'} 전체 평균(이 배 기록 없음)`; }
+      }
+    }
+    if (!rec || !rec.movesPerCraneHour) return null;
+    const cr = Math.max(1, Math.round(rec.avgCranes || 1));
+    const hrs = remain / (rec.movesPerCraneHour * cr);
+    const hh = Math.floor(hrs); const mm = Math.round((hrs - hh) * 60);
+    return `${label} 실측 평균으로 보면 약 ${hh ? hh + '시간 ' : ''}${mm}분 예상이에요.\n${src_} ${rec.movesPerCraneHour}무브/크레인h × 크레인 ${cr}대 · ${remain}대 기준 — 해치커버·식사 별도`;
+  };
   if (doneCount === 0) {
+    const g = _speedGuess('아직 시작 전인데,');
+    if (g) return g;
     return `아직 시작 전이에요. 평택분 ${total}대 남았어요.\n몇 대 진행되면 페이스를 보고 완료 시각을 알려드릴게요.`;
   }
   if (doneAts.length < 2) {
+    const g = _speedGuess(`${remain}대 남았어요.`);
+    if (g) return g;
     return `${remain}대 남았어요. 조금 더 진행되면 끝날 시각을 알려드릴게요.\n완료 ${doneCount}대 · 남은 ${remain}대 — 아직 페이스를 잴 기록이 부족해요.`;
   }
 
