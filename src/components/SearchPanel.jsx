@@ -729,6 +729,21 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const [draft, setDraft] = useState('');
   // 1.84-01: 양하 탭 통합검색줄에서 문장이 넘어오면 음성 입력과 같은 규칙으로 즉시 답한다.
   const relayRef = useRef('');
+  // 1.84-03 (검수사 확정 2026-08-19): 답변 속 «"실번호 점검"으로 상세 확인» 류 안내를 **버튼**으로.
+  //   누르면 그 질문을 바로 제출해 상세를 보여주고, 「← 이전 답으로」 를 누르면 원래 답(브리핑)으로 돌아온다.
+  const [askStack, setAskStack] = useState([]);
+  const followUp = (q) => {
+    const cur = (draft || query || '').trim();
+    if (cur) setAskStack(st => [...st, cur]);
+    setDraft(q); setQuery(q); logQuerySettled(q);
+  };
+  const backAnswer = () => {
+    setAskStack(st => {
+      const prev = st[st.length - 1];
+      if (prev) { setDraft(prev); setQuery(prev); }
+      return st.slice(0, -1);
+    });
+  };
   useEffect(() => {
     const q = String(relayQuery || '').trim();
     if (!q || q === relayRef.current) return;
@@ -1376,6 +1391,34 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               🎰 돌림판 돌리기
             </button>
           )}
+          {/* 1.84-03 (검수사 확정): **점검·확인할 내용이 있으면 버튼을 만든다.**
+              ① «"질문"으로 상세 확인» 인용 패턴 → 그 질문 버튼(실번호 점검 등)
+              ② 브리핑 주의사항 줄의 이모지 → 해당 조건 조회 버튼(리퍼·X-RAY·위험물·FR·O/T·탱크·OOG)
+              전부 nlSearch 가 이미 답하는 질의만 연결한다(없는 인텐트로 유도하지 않는다). */}
+          {(() => {
+            const txt = String(localAnswer);
+            const hints = [...txt.matchAll(/"([^"]{2,14})"\s*[으로]*로?\s*상세 확인/g)].map(m => m[1]);
+            const WARN_BTN = [['❄', '리퍼'], ['🩻', '엑스레이'], ['☣', '위험물'], ['⊞', 'FR'], ['△', 'OT'], ['🛢', '탱크'], ['📐', 'OOG']];
+            WARN_BTN.forEach(([emo, q]) => { if (txt.includes(emo + ' ')) hints.push(q); });
+            const uniq = [...new Set(hints)];
+            if (!uniq.length && !askStack.length) return null;
+            return (
+              <div className="mt-2 flex gap-2 flex-wrap">
+                {uniq.map(h => (
+                  <button key={h} onClick={() => followUp(h)}
+                    className="flex-1 min-w-[120px] py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
+                    🔍 {h} 보기
+                  </button>
+                ))}
+                {askStack.length > 0 && (
+                  <button onClick={backAnswer}
+                    className="flex-1 min-w-[120px] py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
+                    ← 이전 답으로
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
