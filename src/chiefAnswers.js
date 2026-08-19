@@ -406,6 +406,43 @@ export function answerOverlaps(voyages) {
 }
 
 // 자료 도착·확정 시각 — dataAt vs dataFixedAt (#62 #63)
+// 1.91 (검수사 테스트 «미르야 이번 선적 계획 어떻게 진행 될것 같아»): 선적 계획 전망 — 여러 답의 조합.
+export function isLoadOutlookQuery(q) {
+  const Q = String(q || '');
+  return /선적/.test(Q) && /(?:계획|플랜|어떻게|어찌).{0,14}(?:진행|전망|될\s*것|될것|돼|같아)/i.test(Q);
+}
+
+export function answerLoadOutlook(voyage, shipName = '') {
+  if (!voyage) return null;
+  const info = voyage.info || {};
+  const sec = voyage.loading || {};
+  const L = [`선적 계획 전망${shipName ? ' — ' + shipName : ''}`];
+  if (info.planDate) L.push(`작업 예정: ${info.planDate}`);
+  const planLod = Number(info.planLod) || 0;
+  const nList = sec.records ? Object.keys(sec.records).length : 0;
+  const nEdi = sec.ediContainers ? Object.keys(sec.ediContainers).length : 0;
+  const qty = [];
+  if (planLod) qty.push(`배정 ${planLod}대`);
+  if (nList) qty.push(`리스트 ${nList}대${planLod ? (nList === planLod ? ' ✓' : ` (배정 대비 ${nList - planLod > 0 ? '+' : ''}${nList - planLod})`) : ''}`);
+  if (nEdi) qty.push(`EDI ${nEdi}대`);
+  if (qty.length) L.push(`물량: ${qty.join(' · ')}`);
+  const edi = sec.raw?.edi || null;
+  if (edi && edi.uploadedAt) {
+    const fn = String(edi.fileName || '');
+    const isPre = /PRE|PRELIM|예비|가배정/i.test(fn);
+    const recv = Number(edi.recvAt) || 0;
+    L.push(`선적 EDI: ${recv ? _fmtT(recv) + ' 수신' : _fmtT(edi.uploadedAt) + ' 반영'} · «${fn}»${isPre ? ' — ⚠ PRE(예비)판, 최종본 대기' : ''}`);
+  } else if (nList) {
+    L.push('선적 EDI: 아직 — 리스트만 도착 (적부 자리는 EDI 후 확정)');
+  } else {
+    L.push('선적 자료가 아직입니다 — 리스트·EDI 가 오면 다시 물어보세요');
+  }
+  const done = sec.completed ? Object.keys(sec.completed).length : 0;
+  if (done) L.push(`진행: 선적확인 ${done}대 완료${nList ? ` / ${nList}대` : ''}`);
+  L.push('(상세는 "브리핑" · 자료 시각은 "EDI 언제 받았어")');
+  return L.join('\n');
+}
+
 // 1.90 (검수사 테스트 질문 «SWSP 선적 EDI 자료 몇시쯤에 받은거야? 최종본 맞아?»): 트리거 공용(통합검색+항차 검색창).
 export function isDataArrivalQuery(q) {
   const Q = String(q || '');

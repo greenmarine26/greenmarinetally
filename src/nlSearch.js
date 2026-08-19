@@ -87,9 +87,19 @@ export function parseNaturalQuery(text) {
     handoverQuery: false,        // V8.00: "인수인계" — 남은 작업+양하신고+특이사항 정리 (되묻기 2단계)
     isAll: false, isStat: false, mode: null,
     shiftingQuery: false,   // TallyOne 1.27: 시프팅(치워야 할 통과화물)
+    mirCalled: false, mirHello: false,   // 1.91: «미르» — 즉답 비서 이름(검수사 고양이). «미르야 …» 호출어
   };
   if (!text) return result;
-  const t = String(text).toLowerCase();
+  let t = String(text).toLowerCase();
+  // 1.91 (검수사 확정 «미르야 하면 네 하고 답변도 하고»): 호출어를 벗기고 나머지를 질문으로.
+  {
+    const _mir = /^\s*미르\s*(?:야|아|님)?\s*[,!~.\s]*/;
+    if (_mir.test(t)) {
+      result.mirCalled = true;
+      t = t.replace(_mir, '');
+      if (!t.trim()) result.mirHello = true;
+    }
+  }
 
   // 컨텍스트 우선 체크 (digits 추출 제외용)
   const hasTempCtx = /도\s|도$|°|온도|영하|영상|마이너스|temperature|reefer|리퍼|냉장|냉동/i.test(t);
@@ -590,7 +600,7 @@ export function hasAnyCondition(parsed) {
             parsed.weightSum || parsed.posQuery || parsed.listQuery || parsed.bayDistQuery ||
             parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
             // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
-            parsed.briefingQuery || parsed.sealAuditQuery || parsed.carrierQuery || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
+            parsed.briefingQuery || parsed.sealAuditQuery || parsed.carrierQuery || parsed.mirHello || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
             parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery ||
             parsed.howToQuery);   // 1.65
 }
@@ -876,6 +886,8 @@ function formatMovePathAnswer(results, allContainers, ctx) {
 }
 
 export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
+  // 1.91: «미르야» 단독 호출 — 네, 하고 대답한다(검수사 확정).
+  if (parsed.mirHello) return '네, 미르예요 🐱 무엇을 확인해 드릴까요?\n(예: "미르야 이번 선적 계획 어떻게 진행 될것 같아" · "리퍼 몇개" · "브리핑")';
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);
 
