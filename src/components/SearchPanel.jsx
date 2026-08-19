@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
 import { useCarrierContacts } from '../useCarrierContacts.js';   // 1.89
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf } from '../chiefAnswers.js';   // 1.90·1.91·1.91-02
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
@@ -734,6 +734,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   // 1.84-03 (검수사 확정 2026-08-19): 답변 속 «"실번호 점검"으로 상세 확인» 류 안내를 **버튼**으로.
   //   누르면 그 질문을 바로 제출해 상세를 보여주고, 「← 이전 답으로」 를 누르면 원래 답(브리핑)으로 돌아온다.
   const carrierContacts = useCarrierContacts();   // 1.89: 담당자 명부(1회 로드, 모듈 캐시)
+  // 1.91-02 (검수사 확정: 되묻고 기다린다 — 양하/선적 선택 시간을 주고, 답 없으면 둘 다):
+  const [modeChoice, setModeChoice] = useState(null);   // null(되묻는 중)|'discharge'|'loading'|'both'
+  useEffect(() => { setModeChoice(null); }, [query]);
+  useEffect(() => {
+    if (!(needsModeChoice(parsed, results) && modeChoice === null)) return undefined;
+    const tm = setTimeout(() => setModeChoice('both'), 8000);   // 선택 시간 8초 — 답 없으면 둘 다
+    return () => clearTimeout(tm);
+  }, [parsed, results, modeChoice]);
   const [askStack, setAskStack] = useState([]);
   // 1.84-04: **모든 프로그램적 질문은 음성 입력과 같은 제출 경로를 탄다.**
   //   1.84-03 은 setDraft+setQuery 만 해서 askedAt·reasked·낭독 리셋이 빠졌고,
@@ -984,11 +992,20 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                        !parsed.posQuery && !parsed.listQuery && !parsed.bayDistQuery && !parsed.isStat;
     if (onlyDigits) return null;
     // TallyOne 1.27: 시프팅은 **평택분 필터 전** 원본 voyage 로 계산해 넘긴다(통과화물이 대상이라서).
-    return generateLocalAnswer(parsed, results, allContainers.filter(c => c._ptk),
+    // 1.91-02: 모드 미명시 + 양쪽 혼재 — 먼저 되묻는다(검수사: «되묻고 기다려 줘야 합니다»).
+    if (needsModeChoice(parsed, results) && modeChoice === null) {
+      return '양하인가요, 선적인가요? 🐱 아래 버튼으로 골라 주세요 — 잠시 뒤엔 둘 다 보여드릴게요.';
+    }
+    // 1.91-02: 되묻기에서 한쪽을 고르면 그 모드만, both 면 갈라서 둘 다(splitByModeAnswer).
+    const effParsed = (modeChoice && modeChoice !== 'both') ? { ...parsed, mode: modeChoice } : parsed;
+    const effResults = (modeChoice && modeChoice !== 'both')
+      ? results.filter(c => (modeChoice === 'loading' ? c._mode === 'loading' : c._mode !== 'loading'))
+      : results;
+    return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
       { ...manualCtx, carrierContacts,   // 1.89: 담당자 명부 — «관련 선사·담당자» 즉답
         shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
           return (c && Object.keys(c).length) ? c : predictShiftingFromVoyage(voyage); })() });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice]);
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).
   useEffect(() => {
@@ -1419,6 +1436,17 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           </div>
           {reasked && askedAt && <div className="text-[11px] text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
+          {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다 */}
+          {needsModeChoice(parsed, results) && modeChoice === null && (
+            <div className="mt-2 flex gap-2">
+              <button onClick={() => setModeChoice('discharge')}
+                className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-black text-base">⬇ 양하</button>
+              <button onClick={() => setModeChoice('loading')}
+                className="flex-1 py-3 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-black text-base">⬆ 선적</button>
+              <button onClick={() => setModeChoice('both')}
+                className="flex-1 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-sm">둘 다</button>
+            </div>
+          )}
           {parsed.foodQuery && (
             <button onClick={() => { window.location.hash = `#/food?spin=${parsed.foodQuery}`; }}
               className="mt-2 w-full py-2.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white font-bold text-sm">

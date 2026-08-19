@@ -1459,6 +1459,14 @@ export function formatCarriers(cs, ctx = null) {
 
 // 1.91-02 (검수사 확정 «리퍼 어디에 있어? → 양하인가요 선적인가요? 하고 되묻고 둘다 답»):
 //   모드 미명시 조회에 양하·선적이 섞여 있으면 되묻는 말과 함께 갈라서 답한다.
+export function needsModeChoice(parsed, results) {
+  if (!parsed || parsed.mode) return false;
+  if (!(SPECIAL_TYPES.includes(parsed.type) || parsed.posQuery || parsed.listQuery)) return false;
+  const hasD = (results || []).some(c => c._mode !== 'loading');
+  const hasL = (results || []).some(c => c._mode === 'loading');
+  return hasD && hasL;
+}
+
 function splitByModeAnswer(results, parsed, fmt) {
   if (parsed?.mode) return fmt(results);   // «양하 리퍼» 처럼 명시하면 종전대로
   const d = results.filter(c => c._mode !== 'loading');
