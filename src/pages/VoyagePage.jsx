@@ -2190,17 +2190,24 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
   // TallyOne 1.3: 조회 기록 — ListTab과 같은 기준(타이핑 멈춤 = 조회 확정 1회)
   useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
 
-  const filtered = useMemo(() => {
-    if (!filter && !search) return [];   // 1.85-03: 기본 숨김 — ListTab 1.84와 동일
-    let arr = containers;
+  const { filtered, searchFallback } = useMemo(() => {
+    if (!filter && !search) return { filtered: [], searchFallback: false };   // 1.85-03: 기본 숨김
+    let arr = base;
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     if (search) {
       const q = search.toUpperCase();
-      arr = arr.filter(c => c.cn?.includes(q) || c.l4?.includes(q));
+      const match = (c) => c.cn?.includes(q) || c.l4?.includes(q);
+      const hit = arr.filter(match);
+      // 1.85-08: 갠트리 지정(base)에서 못 찾으면 이번 항차 전체에서 — 상대 항구 선적 과실 확인용
+      if (!hit.length && base !== containers) {
+        const whole = containers.filter(match);
+        if (whole.length) return { filtered: whole, searchFallback: true };
+      }
+      return { filtered: hit, searchFallback: false };
     }
-    return arr;
-  }, [containers, filter, search, compMap]);
+    return { filtered: arr, searchFallback: false };
+  }, [base, containers, filter, search, compMap]);
 
   // 1.85-02: 자동 읽기 — 끝4자리 조회 결과 1건이면 위치 낭독 (ListTab 1.84-01과 같은 기준)
   const readRef = useRef('');
@@ -2216,22 +2223,30 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
   // 1.76-05: 실번호 중복 — LOLO 탭도 같은 벌을 쓴다(ListTab 만 고치고 여기를 빠뜨리던 사고 방지).
   const dupSeals = useMemo(() => dupSealMap(containers), [containers]);
 
+  // 1.85-08 (검수사 확정): 양하 LOLO 탭의 기준은 **덱플랜 갠트리 지정분**(RZOR R089E = 49) — 목록·통계·칩 전부.
+  //   «LOLO 49개 리스트에서 조회가 안되면 이번항차 203개 안에서 조회가 되어야» — 검색만 항차 전체로 폴백.
+  //   덱플랜에 없는 컨이 실물로 나오면 상대 항구 선적 과실 후보라, 폴백 결과에 그 경고를 붙인다.
+  //   선적 모드·지정 0(덱플랜 미도착)은 종전대로 전체가 기준.
+  const base = useMemo(() => {
+    if (mode === 'discharge' && containers.some(c => c.lolo)) return containers.filter(c => c.lolo);
+    return containers;
+  }, [containers, mode]);
   const stats = useMemo(() => ({
-    total: containers.length,
-    done: containers.filter(c => compMap[c.cn]).length,
-  }), [containers, compMap]);
+    total: base.length,
+    done: base.filter(c => compMap[c.cn]).length,
+  }), [base, compMap]);
 
   // 규격별 누적 집계 (제출 양식 하단 합계와 동일 기준)
   const sizeStats = useMemo(() => {
     const acc = { '20': 0, '40': 0, '45': 0 };
-    containers.filter(c => compMap[c.cn]).forEach(c => {
+    base.filter(c => compMap[c.cn]).forEach(c => {
       const lbl = isoToLabel(c.iso) || '';
       if (lbl.startsWith('20')) acc['20']++;
       else if (lbl.startsWith('45')) acc['45']++;
       else acc['40']++;
     });
     return acc;
-  }, [containers, compMap]);
+  }, [base, compMap]);
 
   return (
     <div className="space-y-3">
@@ -2294,6 +2309,12 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         ))}
       </div>
 
+      {searchFallback && (
+        <div className="bg-amber-950/50 border border-amber-700/60 rounded-lg px-3 py-2 text-[12px] text-amber-200">
+          ⚠ <b>갠트리(덱플랜) 지정에 없는 컨</b> — 이번 항차 전체에서 찾았습니다.
+          배에는 실었는데 지정 자리에 없는 경우 = <b>상대 항구 선적 과실</b>입니다. 실물 위치를 기록해 두세요.
+        </div>
+      )}
       {(filter || search) ? (
       <ContainerList
         list={filtered}
