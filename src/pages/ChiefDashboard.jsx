@@ -14,7 +14,7 @@ import BayMatrixManagerModal from '../components/BayMatrixManagerModal.jsx';   /
 import { buildLoloRows, buildActualSealListText, buildLoadingListText, downloadText } from '../loloReport.js';
 import PortMisCaptureModal from '../components/PortMisCaptureModal.jsx';  // V9.42: 홈 상단에서 이리로 이동
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5
-import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel } from '../loadingEdiExport.js';
+import { collectActualLoading, buildActualBaplie, buildActualAsc, buildEditExcel, parseEditExcel, detectEdiVer } from '../loadingEdiExport.js';   // 1.88: 받은 판대로 생성
 import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 화면 접근은 canOpenChief, 기능 권한은 isChief 그대로
 import { computeTallyData } from '../tallyReport.js';   // V9.19-01: 마감 텔리(수석 전용 이동)
 import { generateEmptySealReport } from '../components/EmptySealReport.jsx';
@@ -1518,9 +1518,11 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
   const [ediUpKey, setEdiUpKey] = useState(null);
   const _ediMeta = (key, v) => {
     const info = (v && v.info) || {};
+    // 1.88 (검수사 확정): 그 배가 «받은 판대로» 내보낸다 — 선적 수신 EDI 우선, 없으면 양하 수신 EDI 의 UNH 판.
+    const ediVer = detectEdiVer(v?.loading?.raw?.edi?.text || v?.discharge?.raw?.edi?.text || '');
     return { vsl: info.vsl || key.split('_')[0] || 'VSL', vslFull: info.vslFull || '',
              voy: info.voy_l || info.voy || '', callsign: info.callsign || '', imo: info.imo || '',
-             carrier: info.carrier || '' };
+             carrier: info.carrier || '', ediVer };
   };
   const _collectOrWarn = (row) => {
     const v = voyages[row.key];

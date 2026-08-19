@@ -128,6 +128,24 @@ export function ediIso(iso) {
 //   머리 = DTM+137(작성):201 → LOC+5+KRPTK → DTM+132(입항)·DTM+133(출항) → RFF+VON.
 //   컨 블록 = LOC147 → MEA(평택 만재분은 VGM, 그 외 WT) → TMP(정수 3자리) → LOC9/11/83(:139:6)
 //   → RFF+BM → EQD(컨번호 4+7 사이 공백, ISO꼴 유지) → NAD → DGS. CRLF.
+// ── 1.88 (검수사 확정 «선박별로 edi asc 받을때 그버전으로 만들게»): 수신 EDI 원문에서 판 감지 ──
+//   실물: SMDG20(XTPG 536E) = UNOA:2 · DTM 12자리 :203 · UNB 날짜 8+4 / SMDG15(INC-Confirm) = UNOA:1 · 10자리 :201
+//   / SMDG22(우리 송신, CASP 검증) = UNOA:2 · 10자리 :201. UNH 문자열은 원문 그대로 따른다.
+export function detectEdiVer(rawText) {
+  const t = String(rawText || '');
+  const m = t.match(/UNH\+\d+\+(BAPLIE:[^']+)/);
+  if (!m) return null;
+  const unb = t.match(/UNB\+(UNOA:\d)\+/);
+  const dtm = t.match(/DTM\+137:(\d+):(\d{3})/);
+  return {
+    unh: m[1],
+    smdg: +((m[1].match(/SMDG(\d+)/) || [])[1] || 0) || null,
+    unoa: unb ? unb[1] : 'UNOA:2',
+    dtmLen: dtm ? dtm[1].length : 10,
+    dtmCode: dtm ? dtm[2] : '201',
+  };
+}
+
 export function buildActualBaplie(rows, meta = {}) {
   const now = new Date();
   const p = (n, w) => String(n).padStart(w, '0');
@@ -146,15 +164,23 @@ export function buildActualBaplie(rows, meta = {}) {
   const eta = meta.eta || yymmddhhmm;
   const etd = meta.etd || yymmddhhmm;
 
+  // 1.88: 받은 판대로 — meta.ediVer(detectEdiVer 결과)가 있으면 UNB 문법·UNH·DTM 포맷을 그 판으로.
+  const ver = meta.ediVer || null;
+  const unoa = ver?.unoa || 'UNOA:2';
+  const unhStr = ver?.unh || 'BAPLIE:D:95B:UN:SMDG22';
+  const is12 = ver?.dtmLen === 12;
+  const dtmCode = is12 ? (ver.dtmCode || '203') : '201';
+  const dtmVal = is12 ? '20' + dtm137 : dtm137;
+  const unbDate = is12 ? `${dtmVal.slice(0, 8)}:${dtmVal.slice(8)}` : `${dtm137.slice(0, 6)}:${dtm137.slice(6)}`;
   const segs = [];
-  segs.push(`UNB+UNOA:2+${sender}+${rcpt}+${dtm137.slice(0, 6)}:${dtm137.slice(6)}+${ref}+++++`);
-  segs.push('UNH+1+BAPLIE:D:95B:UN:SMDG22');
+  segs.push(`UNB+${unoa}+${sender}+${rcpt}+${unbDate}+${ref}+++++`);
+  segs.push(`UNH+1+${unhStr}`);
   segs.push(`BGM++${bgmRef}+9`);
-  segs.push(`DTM+137:${dtm137}:201`);
+  segs.push(`DTM+137:${dtmVal}:${dtmCode}`);
   segs.push(`TDT+20+${voy}+++${carrier}:172:20+++${callsign}:103:11:${vslName}`);
   segs.push(`LOC+5+${pol}:139:6`);
-  segs.push(`DTM+132:${eta}:201`);
-  segs.push(`DTM+133:${etd}:201`);
+  segs.push(`DTM+132:${is12 ? '20' + eta : eta}:${dtmCode}`);
+  segs.push(`DTM+133:${is12 ? '20' + etd : etd}:${dtmCode}`);
   segs.push(`RFF+VON:${voy}`);
   for (const r of rows) {
     const bay3 = p(String(parseInt(r.bay, 10) || 0), 3);
