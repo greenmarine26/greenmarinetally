@@ -1375,6 +1375,16 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       )}
 
       {/* M3.2: 로컬 답변 카드 (베이/POL/POD/구역/무게합/위치 등 - AI 의존 X) */}
+      {/* 1.85 (검수사 확정): «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼이 있어야 합니다» —
+          후속 버튼으로 온 화면이 텍스트 답이 아니어도(컨번호 조회·리퍼/OOG 결과가 작업 카드로 그려질 때)
+          「← 이전 답으로」 를 결과 위에 상시 노출. 텍스트 답일 땐 종전대로 답 카드 안 버튼만. */}
+      {askStack.length > 0 && !localAnswer && chatMessages.length === 0 && (
+        <button onClick={backAnswer}
+          className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
+          ← 이전 답으로
+        </button>
+      )}
+
       {localAnswer && chatMessages.length === 0 && (
         <div className="bg-gradient-to-br from-emerald-950 to-slate-900 border-2 border-emerald-600 rounded-xl p-4">
           <div className="flex items-center justify-between mb-2">

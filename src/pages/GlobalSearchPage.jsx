@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer } from '../nlSearch.js';   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답   // V9.14: 통합검색에도 즉답 연결 · 1.66-03: 기능 설명
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -121,6 +121,44 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         if (!best || (has && !best.has)) best = { key: k, info: i, v, has };
       }
     });
+    // 1.85 (검수사 실측): «OWBH 브리핑» — 실제 코드는 OBWH(전위 오타)인데 정확 포함 매칭뿐이라 못 알아들었다.
+    //   질의의 영문 토큰과 편집거리(교환 포함) 1 이내인 선박이 **유일할 때만** 교정해 붙인다 —
+    //   두 배 이상 걸리면 오답 위험이므로 종전대로 되묻는다.
+    if (!best) {
+      const dl1 = (a, b) => {   // Damerau–Levenshtein ≤1 (교환 1회 포함)
+        if (a === b) return true;
+        const la = a.length, lb = b.length;
+        if (Math.abs(la - lb) > 1) return false;
+        if (la === lb) {
+          const diff = [];
+          for (let x = 0; x < la; x++) if (a[x] !== b[x]) diff.push(x);
+          if (diff.length === 1) return true;
+          if (diff.length === 2 && diff[1] === diff[0] + 1 && a[diff[0]] === b[diff[1]] && a[diff[1]] === b[diff[0]]) return true;
+          return false;
+        }
+        const [s, l] = la < lb ? [a, b] : [b, a];
+        let si = 0, li = 0, used = false;
+        while (si < s.length && li < l.length) {
+          if (s[si] === l[li]) { si++; li++; continue; }
+          if (used) return false;
+          used = true; li++;
+        }
+        return true;
+      };
+      const toks = Q.split(/[^A-Z0-9]+/).filter((w) => /^[A-Z]{3,8}$/.test(w));
+      const byShip = new Map();   // vsl → 후보 항차 (선박 단위 유일성 판정)
+      Object.entries(voyages || {}).forEach(([k, v]) => {
+        const i = v?.info; if (!i) return;
+        const names2 = [i.vsl, i.vslFull].filter(Boolean).map((x) => String(x).toUpperCase());
+        if (names2.some((nm) => nm.length >= 3 && toks.some((tk) => dl1(tk, nm)))) {
+          const has = !!(v.discharge?.ediContainers || v.loading?.ediContainers);
+          const shipId = String(i.vsl || names2[0] || k).toUpperCase();
+          const prev = byShip.get(shipId);
+          if (!prev || (has && !prev.has)) byShip.set(shipId, { key: k, info: i, v, has });
+        }
+      });
+      if (byShip.size === 1) best = [...byShip.values()][0];
+    }
     return best;
   }, [voyages, debouncedQuery]);
 
@@ -330,7 +368,23 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         if (body) return `${shipCtx.info.vslFull || shipCtx.info.vsl}\n${body}`;
       }
     }
-    if (p.briefingQuery || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
+    // 1.85 (검수사 실측 «OWBH 브리핑»): 배가 지정된 브리핑은 통합검색에서도 즉답 — 종전엔 배 이름이 있어도 되물었다.
+    if (p.briefingQuery && shipCtx) {
+      const mine = flat.filter((c) => c.voyageKey === shipCtx.key && c._ptk);
+      if (mine.length) {
+        const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
+        const wantMode = p.mode || (/양하/.test(debouncedQuery) ? 'discharge' : /선적/.test(debouncedQuery) ? 'loading' : null);
+        const parts = [];
+        for (const [mode, kr] of [['discharge', '양하'], ['loading', '선적']]) {
+          if (wantMode && mode !== wantMode) continue;
+          const arr = mine.filter((c) => c._mode === mode);
+          if (!arr.length) continue;
+          try { parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode)); } catch (e) { /* 폴백 아래로 */ }
+        }
+        if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
+      }
+    }
+    if ((p.briefingQuery && !shipCtx) || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
         p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.foodQuery || (p.schedQuery && !shipCtx)) {
       return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 답합니다. (예: "STSE 출항 몇 시")\n작업 중 상세(브리핑·ETA·인계)는 항차 화면 🎤 자연어 탭이 더 자세합니다.';
     }

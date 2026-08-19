@@ -929,7 +929,7 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   // V7.90-02: 베이 분포 — 명시 질문이거나, 위치 질문인데 결과가 많으면(개별 나열 무의미) 분포로
   if (parsed.bayDistQuery || (parsed.posQuery && results.length > 5)) return formatBayDist(desc, results, parsed);
   if (parsed.dupL4Query) return formatDupL4(desc, results);   // TallyOne 1.17: 중복 질문은 목록보다 먼저
-  if (parsed.posQuery || parsed.listQuery) return formatLocationList(desc, results);
+  if (parsed.posQuery || parsed.listQuery) return formatLocationList(desc, results, parsed);
   if (parsed.isStat) return formatStats(desc, results);
 
   // 베이 단독 → 베이 통계
@@ -944,7 +944,9 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
                     (parsed.temp !== null) || parsed.mode ||
                     parsed.weightMin !== null || parsed.weightMax !== null ||
                     (parsed.type && parsed.type !== 'rf');
-  if (hasStrong && results.length >= 2) return formatLocationList(desc, results);
+  // 1.85 (검수사 실측): FR 1대 조회가 답 없이 작업 카드로 빠져 «설명(치수)»이 안 보였다 —
+  //   특수화물 타입 질의는 1대여도 나열 답(상세 줄 포함)을 낸다.
+  if (hasStrong && (results.length >= 2 || ['fr', 'ot', 'oog', 'dg', 'tk'].includes(parsed.type))) return formatLocationList(desc, results, parsed);
 
   return null;
 }
@@ -1308,24 +1310,8 @@ function formatBayDist(desc, results, parsed = {}) {
     if (v.l4.length && v.l4.length <= 6) parts.push(v.l4.join(', '));
     lines.push(`${String(b).padStart(2, '0')}번 베이 ${v.n}대${parts.length ? ' · ' + parts.join(' · ') : ''}`);
   }
-  // 1.84-04 (검수사 확정): FR·OOG 는 폭·높이, DG 는 UN 번호·클래스·포장등급까지 — «설명이 있어야 합니다».
-  //   파서가 이미 담는 값(un·dgc·pg — DGS 세그 / ovh·ovw·ovl — DIM 세그)을 컨별 줄로 보여준다.
-  //   대수가 적을 때만(≤12) — 많으면 위 베이 집계가 답이다.
-  if (['fr', 'ot', 'oog', 'dg', 'tk'].includes(parsed.type) && results.length > 0 && results.length <= 12) {
-    lines.push('');
-    for (const c of results) {
-      const bits = [];
-      if (c.dg) bits.push(`cl.${c.dgc || '?'}${c.un ? ` UN${c.un}` : ' (UN 미기재)'}${c.pg ? ` PG ${c.pg}` : ''}`);
-      const dims = [];
-      if (c.ovh) dims.push(`높이+${c.ovh}cm`);
-      if (c.ovw) dims.push(`폭+${c.ovw}cm`);
-      if (c.ovl) dims.push(`길이+${c.ovl}cm`);
-      if (dims.length) bits.push(dims.join(' '));
-      else if ((parsed.type === 'fr' || parsed.type === 'oog') && !c.dg) bits.push('초과 치수 기재 없음');
-      if (c.wt) bits.push(`${(Number(c.wt) / 1000).toFixed(1)}t`);
-      lines.push(`  ${c.cn || '?'} — ${fmtPos(c)}${bits.length ? ' · ' + bits.join(' · ') : ''}`);
-    }
-  }
+  // 1.85: 컨별 상세 줄은 헬퍼(specialDetailLines) — 나열 답(formatLocationList)과 공유.
+  lines.push(...specialDetailLines(results, parsed));
   if (byBay['?']) lines.push(`위치미상 ${byBay['?'].n}대`);
   return lines.join('\n');
 }
@@ -1379,7 +1365,32 @@ function formatDupL4(desc, results) {
   return lines.join('\n');
 }
 
-function formatLocationList(desc, results) {
+// 1.85 (검수사 확정 — 1.84-04 확장): FR·OOG·OT 는 치수, DG 는 UN 번호까지 «설명이 있어야 합니다».
+//   1.84-04 는 베이 분포 답(formatBayDist)에만 있어 **나열 답·1대 답에서는 안 보였다**(검수사 실측).
+//   ① 화물 자체 치수(cg* — 수집기 1.8이 선사 치수 엑셀 BH2717YP063货物尺寸 류를 ediContainers 에 patch)
+//   ② EDI DIM 초과 치수(ov*) ③ DG 는 cl./UN/PG. 대수가 적을 때만(≤12) — 많으면 집계가 답이다.
+function specialDetailLines(results, parsed) {
+  if (!['fr', 'ot', 'oog', 'dg', 'tk'].includes(parsed?.type) || !results.length || results.length > 12) return [];
+  const lines = [''];
+  for (const c of results) {
+    const bits = [];
+    if (c.dg) bits.push(`cl.${c.dgc || '?'}${c.un ? ` UN${c.un}` : ' (UN 미기재)'}${c.pg ? ` PG ${c.pg}` : ''}`);
+    if (c.cgL || c.cgW || c.cgH) {
+      bits.push(`화물 ${c.cgL || '?'}×${c.cgW || '?'}×${c.cgH || '?'}mm${c.cgWt ? ` ${(Number(c.cgWt) / 1000).toFixed(1)}t` : ''}${c.cgPcs ? ` ×${c.cgPcs}건` : ''}`);
+    }
+    const dims = [];
+    if (c.ovh) dims.push(`높이+${c.ovh}cm`);
+    if (c.ovw) dims.push(`폭+${c.ovw}cm`);
+    if (c.ovl) dims.push(`길이+${c.ovl}cm`);
+    if (dims.length) bits.push(dims.join(' '));
+    else if (['fr', 'oog', 'ot'].includes(parsed?.type) && !c.dg && !(c.cgL || c.cgW || c.cgH)) bits.push('초과 치수 기재 없음');
+    if (c.wt) bits.push(`${(Number(c.wt) / 1000).toFixed(1)}t`);
+    lines.push(`  ${c.cn || '?'} — ${fmtPos(c)}${bits.length ? ' · ' + bits.join(' · ') : ''}`);
+  }
+  return lines;
+}
+
+function formatLocationList(desc, results, parsed = null) {
   if (results.length === 0) return `📭 ${desc} 없음`;
   const lines = [`📍 ${desc} 총 ${results.length}대`];
   if (results.length > 5) {
@@ -1407,6 +1418,7 @@ function formatLocationList(desc, results) {
     lines.push(`${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${fmtPos(c) || '위치미상'}${tagStr}`);
   });
   if (results.length > max) lines.push(`(${results.length - max}대 더 있음)`);
+  lines.push(...specialDetailLines(results, parsed));   // 1.85: 나열 답에도 특수화물 상세
   return lines.join('\n');
 }
 
