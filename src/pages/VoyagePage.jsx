@@ -2191,6 +2191,14 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
   // TallyOne 1.3: 조회 기록 — ListTab과 같은 기준(타이핑 멈춤 = 조회 확정 1회)
   useEffect(() => { logQuerySettled('lookup', search, { voyageKey, mode }); }, [search, voyageKey, mode]);
 
+  // 1.85-08 (검수사 확정): 양하 LOLO 탭의 기준은 **덱플랜 갠트리 지정분**(RZOR R089E = 49) — 목록·통계·칩 전부.
+  //   «LOLO 49개 리스트에서 조회가 안되면 이번항차 203개 안에서 조회가 되어야» — 검색만 항차 전체로 폴백.
+  //   덱플랜에 없는 컨이 실물로 나오면 상대 항구 선적 과실 후보라, 폴백 결과에 그 경고를 붙인다.
+  //   선적 모드·지정 0(덱플랜 미도착)은 종전대로 전체가 기준.
+  const base = useMemo(() => {
+    if (mode === 'discharge' && containers.some(c => c.lolo)) return containers.filter(c => c.lolo);
+    return containers;
+  }, [containers, mode]);
   const { filtered, searchFallback } = useMemo(() => {
     if (!filter && !search) return { filtered: [], searchFallback: false };   // 1.85-03: 기본 숨김
     let arr = base;
@@ -2224,14 +2232,6 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
   // 1.76-05: 실번호 중복 — LOLO 탭도 같은 벌을 쓴다(ListTab 만 고치고 여기를 빠뜨리던 사고 방지).
   const dupSeals = useMemo(() => dupSealMap(containers), [containers]);
 
-  // 1.85-08 (검수사 확정): 양하 LOLO 탭의 기준은 **덱플랜 갠트리 지정분**(RZOR R089E = 49) — 목록·통계·칩 전부.
-  //   «LOLO 49개 리스트에서 조회가 안되면 이번항차 203개 안에서 조회가 되어야» — 검색만 항차 전체로 폴백.
-  //   덱플랜에 없는 컨이 실물로 나오면 상대 항구 선적 과실 후보라, 폴백 결과에 그 경고를 붙인다.
-  //   선적 모드·지정 0(덱플랜 미도착)은 종전대로 전체가 기준.
-  const base = useMemo(() => {
-    if (mode === 'discharge' && containers.some(c => c.lolo)) return containers.filter(c => c.lolo);
-    return containers;
-  }, [containers, mode]);
   const stats = useMemo(() => ({
     total: base.length,
     done: base.filter(c => compMap[c.cn]).length,
