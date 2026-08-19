@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
   AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
@@ -94,7 +95,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // M5.1 G: 작업 마감 체크리스트 모달
   const [closingOpen, setClosingOpen] = useState(false);
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
-  const [listFilter, setListFilter] = useState(null);   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
+  const [listFilter, setListFilter] = useState(null);
+  const [relayQ, setRelayQ] = useState('');   // 1.84-01: 양하 탭 검색창의 문장 질문을 「작업 시작」 탭으로 릴레이   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
   // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
   const [seqEdit, setSeqEdit] = useState(false);
   // 1.56-01: 선박 기억은 **추천으로만** 쓴다 — 검수사 정정 2026-08-12:
@@ -1124,6 +1126,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
           shiftingList={shiftingList} shiftInfo={shiftInfo}
+          onAsk={(q) => { setRelayQ(q); setTab('search'); }}
         />
       )}
       {tab === 'search' && (
@@ -1141,6 +1144,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           else logQuerySettled('nls', v, { voyageKey });
         }}>
         <SearchPanel
+          relayQuery={relayQ}
           voyage={voyage}
           voyageKey={voyageKey}
           inspector={inspector}
@@ -1798,8 +1802,34 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null }) {
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
+  // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
+  const [kb, setKb] = useState('numeric');        // 폰 자판: 작업(숫자) 기본, ⌨로 질문(문자)
+  const [listening, setListening] = useState(false);
+  const [autoRead, setAutoRead] = useState(true);  // 조회 결과 1건이면 위치를 읽어준다
+  const searchRef = useRef(null);
+  const srRef = useRef(null);
+  const toggleListen = () => {
+    if (listening) { try { srRef.current?.stop(); } catch (e) { /* 무시 */ } return; }
+    const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!SR) { speak('이 기기는 음성 입력이 안 됩니다'); return; }
+    const r = new SR();
+    r.lang = 'ko-KR'; r.continuous = false; r.interimResults = false; r.maxAlternatives = 5;
+    r.onresult = (e) => {
+      const last = e.results[e.results.length - 1];
+      const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
+      const t = pickSpeechAlternative(alts).trim();
+      const digits = parseSpokenDigits(t);
+      if (digits && digits.length >= 2) setSearch(digits);          // 숫자 = 즉시 조회(종전 규칙)
+      else if (t.length >= 2 && onAsk) onAsk(t);                    // 문장 = 작업 시작 탭에 질문
+      else speak('인식 실패');
+    };
+    r.onend = () => setListening(false);
+    r.onerror = (e) => { setListening(false); if (e.error === 'not-allowed') speak('마이크 권한 필요'); };
+    srRef.current = r; setListening(true);
+    try { r.start(); } catch (e) { setListening(false); }
+  };
   const [search, setSearch] = useState('');
 
   // M5.1: 외부 filter (마감 체크리스트 점프) 동기화
@@ -1828,6 +1858,17 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     }
     return arr;
   }, [containers, filter, search, compMap, xrayMap]);
+
+  // 1.84-01: 자동 읽기 — 끝4자리 조회 결과가 딱 1건이면 위치를 말해준다(장갑 낀 손, 화면 안 봐도 되게).
+  const readRef = useRef('');
+  useEffect(() => {
+    if (!autoRead || !search || search.trim().length < 4) { readRef.current = ''; return; }
+    if (filtered.length !== 1) return;
+    const c = filtered[0];
+    if (readRef.current === c.cn + search) return;   // 같은 결과 반복 낭독 방지
+    readRef.current = c.cn + search;
+    try { speakContainer(c, { xray: !!xrayMap[c.cn] }); } catch (e) { /* 낭독 실패는 조용히 — 조회는 화면에 있다 */ }
+  }, [autoRead, search, filtered, xrayMap]);
 
   // 1.76-05: 실번호 중복(두 컨에 한 실) — **거른 목록이 아니라 `containers` 전체**로 판정한다.
   const dupSeals = useMemo(() => dupSealMap(containers), [containers]);
@@ -1861,21 +1902,47 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         voyageKey={voyageKey}
       />
 
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-2">
+      {/* ★ 1.84-01 (검수사 확정 2026-08-19): **검색창은 통합검색 하나로.**
+          *"작업전 선박화면에서 앞사진을 빼고 두번째 통합검색으로 바꾸자는 이야기. 마이크 스피커 키보드 csv 네개가 우측에."*
+          숫자·컨번호·베이 = 종전 라이브 필터 그대로(기능 불변). 문장은 Enter/음성으로 「작업 시작」 탭에 릴레이.
+          폰 자판은 **숫자판이 기본**(작업용), ⌨ 를 누르면 문자 키보드(질문용) — 검수사 확정. */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5">
         <div className="relative flex-1">
           <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"/>
           <input
+            key={kb}
+            ref={searchRef}
             type="text"
             value={search}
+            inputMode={kb}
             onChange={e => setSearch(e.target.value.toUpperCase())}
-            placeholder="끝4자리 / 컨번호 / 베이"
-            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-1.5 text-sm mono focus:outline-none focus:border-amber-500"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && onAsk && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
+                e.preventDefault(); const q = search.trim(); setSearch(''); onAsk(q);
+              }
+            }}
+            placeholder={kb === 'numeric' ? '🎤 / 4777 / 베이 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
+            autoComplete="off"
+            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
         </div>
+        <button onClick={toggleListen} title="음성 입력"
+          className={`w-9 h-9 rounded flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
+          🎤
+        </button>
+        <button onClick={() => setAutoRead(v => !v)} title="조회 결과 자동 읽기"
+          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+          {autoRead ? '🔊' : '🔇'}
+        </button>
+        <button onClick={() => { setKb(k => (k === 'numeric' ? 'text' : 'numeric')); setTimeout(() => searchRef.current?.focus(), 50); }}
+          title={kb === 'numeric' ? '문자 키보드로 (질문 입력)' : '숫자판으로 (작업 조회)'}
+          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
+          ⌨
+        </button>
         <button
           onClick={handleExport}
-          className="bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700/40 text-emerald-200 px-2 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+          className="bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700/40 text-emerald-200 px-2 py-1.5 rounded text-xs font-bold flex items-center gap-1 flex-none"
           title="CSV 내보내기"
         >
           <Download className="w-3.5 h-3.5"/>CSV
