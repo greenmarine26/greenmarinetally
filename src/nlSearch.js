@@ -1100,14 +1100,32 @@ export function auditSeals(containers) {
   }
   // ②③④ 개별 점검
   const allCns = new Set((containers || []).map(c => norm(c.cn)).filter(Boolean));
+  // 1.85-04 (검수사 실측 — SDYT079831·YTZL2458967 등 9건 오탐): 4문자+숫자는 **실 브랜드**(SDYT·YTZL·BHGJ…)에도
+  //   흔한 형식이다. «일반적인 것에서 벗어난 것»만 올린다(검수사 원칙) —
+  //   ① 같은 접두 실이 그 배에 3개 이상이면 그 배의 실 형식으로 인정(통과)
+  //   ② 접두가 그 항차 컨테이너 소유코드(컨번호 앞 4자)와 일치할 때만 컨번호 혼입 의심
+  //   ③ 이 항차 컨번호와 정확히 같으면 무조건 의심
+  const ownerCodes = new Set([...allCns].map(cn => cn.slice(0, 4)));
+  const prefCnt = {};
+  for (const e of entries) {
+    const m4 = e.n.match(/^([A-Z]{4})\d+$/);
+    if (m4) prefCnt[m4[1]] = (prefCnt[m4[1]] || 0) + 1;
+  }
   const seen = new Set();
   for (const e of entries) {
     const key = (e.c.cn || '') + '|' + e.n;
     if (seen.has(key)) continue; seen.add(key);
     const last4 = (e.c.cn || '').slice(-4);
-    // ② 컨번호 혼입: ISO 컨번호 형식이거나, 이 항차의 어떤 컨번호를 포함
+    // ② 컨번호 혼입 — 1.85-04: 형식만으로 판정하지 않는다
     if (/^[A-Z]{4}\d{6,7}$/.test(e.n)) {
-      items.push({ cn: last4, seal: e.raw, reason: `${e.field}이 컨테이너 번호 형식` }); continue;
+      const pre = e.n.slice(0, 4);
+      if (allCns.has(e.n)) {
+        items.push({ cn: last4, seal: e.raw, reason: `${e.field}이 이 항차 컨테이너 번호(${e.n.slice(-4)})와 동일` }); continue;
+      }
+      if (ownerCodes.has(pre) && (prefCnt[pre] || 0) < 3) {
+        items.push({ cn: last4, seal: e.raw, reason: `${e.field}이 컨테이너 번호 형식(${pre} — 이 배 컨 소유코드)` }); continue;
+      }
+      // 실 브랜드(같은 접두 다수 또는 소유코드 아님) — 정상 통과
     }
     const cnDigits = norm(e.c.cn).slice(4);
     if (cnDigits.length >= 6 && e.n.includes(cnDigits)) {
