@@ -69,10 +69,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // V8.82-01: 양하·선적이 둘 다 있으면 양하 우선 — 수집기가 선적 항차를 먼저 등록해 info.mode='loading'이
   //   박혀 있어도, 작업 순서(양하→선적)대로 양하부터 연다. 양하가 완료 표시된 항차만 선적으로 바로.
   const dischargeMarkedDone = !!(voyage?.info?.inspectorDone || voyage?.info?.dischargeDone);
+  // 1.94-01 (검수사 실측 — 1.94 후에도 SWSP 가 양하로 열림): 한쪽만 자료가 있으면 **자료 있는 쪽이 info.mode 를 이긴다.**
+  //   수집기가 등록 때 박은 info.mode='discharge' 폴백이 실자료 판정보다 앞서 있었다. info.mode 는 자료가 아예 없을 때만.
   const initMode = initModeOverride
     || (hasDis && hasLoa
       ? (dischargeMarkedDone ? 'loading' : 'discharge')
-      : (voyage?.info?.mode || (hasDis ? 'discharge' : 'loading')));
+      : hasDis ? 'discharge'
+        : hasLoa ? 'loading'
+          : (voyage?.info?.mode || 'discharge'));
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과·업로드 접이 메뉴(표시 전용)
