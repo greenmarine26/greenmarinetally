@@ -687,7 +687,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* V8.27: 검수원 공지 (흐르는 띠) */}
       <Fold id="notice" title="📢 검수원 공지 작성" open={!!openSecs.notice} onToggle={() => toggleSec('notice')}>
-        <BroadcastComposer inspector={inspector} />
+        <BroadcastComposer inspector={inspector} owner={owner} />
       </Fold>
 
       {/* TallyOne 1.66 — 작업 자료가 다 왔나. 빠졌으면 무엇이·어느 선사 것이 비었는지 이름으로 알린다.
@@ -2079,7 +2079,7 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
   );
 }
 
-function BroadcastComposer({ inspector }) {
+function BroadcastComposer({ inspector, owner = false }) {   // 2.05-07: owner — 소유자 공지는 «개발자» 명의(검수사 확정 «전 개발자로 띄우는거지 개인으로 띄우는게 아닙니다»)
   const [text, setText] = useState('');
   const [cur, setCur] = useState(null);
   const [reads, setReads] = useState({});
@@ -2091,7 +2091,7 @@ function BroadcastComposer({ inspector }) {
   const send = async () => {
     const t = text.trim();
     if (!t) return;
-    await fbSetBroadcast(t, inspector || '수석');
+    await fbSetBroadcast(t, owner ? '개발자' : (inspector || '수석'));   // 2.05-07: 소유자 = 개발자 명의(이름 안 나감)
     setText('');
   };
   const clear = async () => { await fbClearBroadcast(); };
