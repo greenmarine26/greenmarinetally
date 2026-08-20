@@ -199,6 +199,8 @@ export async function buildAutoPayload(files, opts) {
             if (feRaw === 'F' || feRaw === 'E') rec.fe = feRaw;
             const isoRaw = String(row['ISO'] || '').trim().toUpperCase();
             if (isoRaw) rec.iso = isoRaw;
+            const tmpRaw = String(row['Temp'] == null ? '' : row['Temp']).trim();
+            if (tmpRaw !== '') { rec.tmp = tmpRaw; rec.rf = true; }   // 1.99-01: 합본 Temp 왕복
             if (row['Line'] != null && row['Line'] !== '') rec.op = String(row['Line']).trim().toUpperCase();
             if (row['POL'] != null && row['POL'] !== '') rec.pol = String(row['POL']).trim().toUpperCase();
             if (row['POD'] != null && row['POD'] !== '') rec.pod = String(row['POD']).trim().toUpperCase();

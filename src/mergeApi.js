@@ -36,6 +36,7 @@ function readMergedSheet(XLSX,wb,name){
     const w=parseListWeightKg(row['Weight']); if(w>0)rec.wt=w;   // 1.23: 톤 표기 절사 방지
     const feRaw=String(row['F/E']||'').trim().toUpperCase(); if(feRaw==='F'||feRaw==='E')rec.fe=feRaw;
     const isoRaw=String(row['ISO']||'').trim().toUpperCase(); if(isoRaw)rec.iso=isoRaw;
+    const tmpRaw=String(row['Temp']==null?'':row['Temp']).trim(); if(tmpRaw!==''){rec.tmp=tmpRaw;rec.rf=true;}   // 1.99-01
     if(row['Line']!=null&&row['Line']!=='')rec.op=String(row['Line']).trim().toUpperCase();
     if(row['POL']!=null&&row['POL']!=='')rec.pol=String(row['POL']).trim().toUpperCase();
     if(row['POD']!=null&&row['POD']!=='')rec.pod=String(row['POD']).trim().toUpperCase();
@@ -72,7 +73,7 @@ export async function mergeFolder(files){
     }catch(e){ perFile.push({name,error:String(e&&e.message||e)}); }
   }
   const {merged,conflicts,unmatched}=mergeWithEdi(edi,listResults,xrayResults);
-  const rows=Object.values(merged).map(c=>({'Cntr No':c.cn||'','ISO':c.iso||'','Line':c.op||'','F/E':c.fe||'','POL':c.pol||'','POD':c.pod||'','Seal':c.sl||'','EmptySeal':c.eseal||'','Weight':c.wt||'','XRAY':c._xray?'Y':''}));
+  const rows=Object.values(merged).map(c=>({'Cntr No':c.cn||'','ISO':c.iso||'','Line':c.op||'','F/E':c.fe||'','POL':c.pol||'','POD':c.pod||'','Seal':c.sl||'','EmptySeal':c.eseal||'','Weight':c.wt||'','Temp':c.tmp||'','XRAY':c._xray?'Y':''}));   // 1.99-01: Temp 왕복 — 합본이 리퍼 온도를 안 날라 TNJP 26360E 온도 실종
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'MERGED');
   if(conflicts.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(conflicts),'CONFLICTS');
   const unm=Object.values(unmatched);
