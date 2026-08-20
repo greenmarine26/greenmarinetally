@@ -46,8 +46,8 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
     if (!voyagePhotos || !c?.cn) return [];
     const C = String(c.cn).toUpperCase().replace(/\s/g, '');
     return Object.values(voyagePhotos)
-      .filter((p) => p && p.type === 'damage' && String(p.cn || '').toUpperCase().replace(/\s/g, '') === C)
-      .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      .filter((p) => p && (p.type === 'damage' || p.type === 'mailPhoto') && String(p.cn || '').toUpperCase().replace(/\s/g, '') === C)
+      .sort((a, b) => (a.ts || 0) - (b.ts || 0));   // 2.05: 메일 사진(씰 위치·FR 고정)도 함께
   }, [voyagePhotos, c]);
   // 알림 전용(선택지 없음) — 문구·방식은 ContainerList·ContainerDetailModal 과 같은 벌을 쓴다.
   const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
@@ -166,7 +166,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           데미지 기록이 있으면 카드 맨 위에 주황 띠 + 썸네일. 탭하면 크게. */}
       {dmgList.length > 0 && (
         <div className="mb-2 bg-orange-950/50 border border-orange-700 rounded-lg p-2">
-          <div className="text-[11px] font-black text-orange-300 mb-1">📷 데미지 기록 {dmgList.length}건 — 실물 확인하세요</div>
+          <div className="text-[11px] font-black text-orange-300 mb-1">📷 {dmgList.some((p) => p.type === 'damage') ? '데미지·' : ''}사진 {dmgList.length}건 — 탭하면 크게 (씰 위치·고정 상태·데미지)</div>
           <div className="flex gap-1.5 flex-wrap">
             {dmgList.map((p) => (
               <button key={p.ts} onClick={() => setDmgView(p)} className="text-left">
@@ -175,7 +175,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
             ))}
           </div>
           <div className="text-[10px] text-orange-200/90 mt-1">
-            {dmgList.map((p) => [(p.damageParts || []).join('&'), (p.damageTypes || []).join('&'), p.promotedFrom ? '(예약분)' : ''].filter(Boolean).join(' ')).join(' · ')}
+            {dmgList.map((p) => p.type === 'mailPhoto' ? (p.label || '메일 사진') : [(p.damageParts || []).join('&'), (p.damageTypes || []).join('&'), p.promotedFrom ? '(예약분)' : ''].filter(Boolean).join(' ')).join(' · ')}
           </div>
         </div>
       )}

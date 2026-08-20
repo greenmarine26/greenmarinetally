@@ -1494,6 +1494,7 @@ function specialDetailLines(results, parsed) {
     if (c.ovl) dims.push(`길이+${c.ovl}cm`);
     if (dims.length) bits.push(dims.join(' '));
     else if (['fr', 'oog', 'ot'].includes(parsed?.type) && !c.dg && !(c.cgL || c.cgW || c.cgH)) bits.push('초과 치수 기재 없음');
+    if (c.sl) bits.push(`씰 ${c.sl}`);   // 2.05 (검수사 «FR 실 어디에 있어» — 씰 질문에 씰번호가 답에 있어야)
     if (c.wt) bits.push(`${(Number(c.wt) / 1000).toFixed(1)}t`);
     lines.push(`  ${c.cn || '?'} — ${fmtPos(c)}${bits.length ? ' · ' + bits.join(' · ') : ''}`);
   }

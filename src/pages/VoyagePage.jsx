@@ -856,6 +856,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, [voyage, voyageKey]);
 
   const briefCtx = useMemo(() => ({
+    photos: voyage?.photos || null,   // 2.05: 조회 결과 컨의 사진(데미지·메일 사진)을 인라인 카드가 보여준다
     pairs: (() => { try { return getBayPairs(containers, voyage?.info?.imo || '', voyage?.info?.vsl || ''); } catch (e) { return null; } })(),
     rfSkip: !!shipPolicy?.rfSkip,
     eseal: esealInfo ? {
@@ -2309,6 +2310,17 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
     const first = (answer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();   // 1.92-02: 이모지 벗겨 읽기
     if (first) { try { speak(first); } catch (e) { /* 낭독 실패 무시 */ } }
   }, [answer, q]);
+  // 2.05 (검수사 «제질문은 FR 실위치를 물어봤습니다» · «그냥 FR 정보 알려줘 하면 다알려주고»):
+  //   결과 컨(≤12)의 사진(데미지·메일 사진 — 씰 위치·FR 고정 등)을 답 아래 썸네일로. 탭하면 크게.
+  const [photoView, setPhotoView] = useState(null);
+  const resultPhotos = useMemo(() => {
+    try {
+      const ph = briefCtx?.photos; if (!ph || !results.length || results.length > 12) return [];
+      const cns = new Set(results.map((c) => String(c.cn || '').toUpperCase()).filter(Boolean));
+      return Object.values(ph).filter((p) => p && (p.type === 'damage' || p.type === 'mailPhoto') && cns.has(String(p.cn || '').toUpperCase()))
+        .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    } catch (e) { return []; }
+  }, [briefCtx, results]);
   if (!ask) return null;
   const hints = [];
   if (answer) {
@@ -2324,7 +2336,30 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
         <button onClick={() => setAsk(null)} className="text-slate-500 hover:text-slate-300 text-[11px] font-bold">✕ 닫기</button>
       </div>
       {answer ? (
+        <>
         <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{answer}</div>
+        {resultPhotos.length > 0 && (
+          <div className="pt-1">
+            <div className="text-[10px] font-black text-orange-300 mb-1">📷 사진 {resultPhotos.length}장 — 탭하면 크게 (씰 위치·고정 상태 등)</div>
+            <div className="flex gap-1.5 flex-wrap">
+              {resultPhotos.map((p) => (
+                <button key={p.ts} onClick={() => setPhotoView(p)} className="text-left">
+                  <img src={p.data} alt="" className="w-16 h-16 object-cover rounded border border-orange-700" />
+                  <div className="text-[9px] text-slate-400 w-16 truncate">{p.label || (p.type === 'damage' ? '데미지' : '메일')}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {photoView && (
+          <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={() => setPhotoView(null)}>
+            {[photoView.data, photoView.detailPhoto].filter(Boolean).map((src, i) => (
+              <img key={i} src={src} alt="" className="max-h-[70vh] max-w-full rounded-lg border border-slate-600" />
+            ))}
+            <div className="text-slate-200 text-[12px] font-bold text-center">{photoView.cn} — {photoView.label || ''}<br/>화면을 누르면 닫힙니다</div>
+          </div>
+        )}
+        </>
       ) : (
         <div className="text-[12px] text-slate-400">
           이 질문은 여기서 바로 못 냅니다 — 아래 버튼으로 ▶ 작업 시작 탭에서 이어집니다.
