@@ -5,7 +5,7 @@ import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '..
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
-import { fbGetDamagePhoto } from '../firebase.js';   // 2.03: 데미지 사진 단건(보관 폴백)
+import { fbGetDamagePhoto, fbAddClaudeMemo } from '../firebase.js';   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -463,6 +463,33 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     // 2.01 (검수사 확정 «항차목록에서 브리핑은 선박명을 특정 안하면 그날 작업할 선박들 전부를 브리핑»):
     //   배 미지정 «브리핑» = planDate 가 오늘과 겹치는 항차 전부 — 배별 개요 브리핑(1.97 answerShipOverview)
     //   + 컨 자료가 있으면 특수화물 한 줄. 오늘 배가 없으면 아래 기존 안내로 폴백.
+    // 2.06 (검수사 실측 «실오류가 있는 선박은?» — 무응답·컨 100개 나열): 실오류/실번호 불일치 현황.
+    //   실오류 = 검수원이 실물로 고친 기록(sl_orig ≠ sl) · 불일치 = 리스트끼리 값이 다름(sl_conflict).
+    if (/[실씰]\s*오류|실번호\s*(불일치|오류)/.test(debouncedQuery)) {
+      try {
+        const _rows = [];
+        for (const c of flat) {
+          if (!c || !c.cn) continue;
+          const _fix = c.sl_orig && c.sl && String(c.sl) !== String(c.sl_orig);
+          const _cf = Array.isArray(c.sl_conflict) && [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))].length > 1;
+          if (_fix || _cf) _rows.push({ c, _fix, _cf });
+        }
+        if (!_rows.length) return '실오류·실번호 불일치로 기록된 컨이 없습니다 (앱 기록 기준 — 현장 발견분은 실오류 보고로 남겨 주세요).';
+        const _byShip = new Map();
+        for (const r of _rows) { const k = r.c.voyageKey || '?'; if (!_byShip.has(k)) _byShip.set(k, []); _byShip.get(k).push(r); }
+        const L = [`⚠ 실오류·실번호 불일치 ${_rows.length}건 — ${_byShip.size}척`];
+        for (const [k, arr] of _byShip) {
+          L.push(`【${k}】 ${arr.length}건`);
+          arr.slice(0, 10).forEach(({ c, _fix, _cf }) => {
+            const d = _fix ? `리스트 ${c.sl_orig} → 실물 ${c.sl}` :
+              `불일치 ${[...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim()))].join(' ↔ ')}`;
+            L.push(`  ${c.cn} — ${d}`);
+          });
+          if (arr.length > 10) L.push(`  … 외 ${arr.length - 10}건`);
+        }
+        return L.join('\n');
+      } catch (e) { /* 아래로 */ }
+    }
     // 2.03-04 (검수사 실측 «미르야 PCSZ 우리가 작업해야해?» — 무응답): «우리가 작업하는 배인가» 판정.
     //   항차 목록(수집기가 배정·메일로 만든 카드 포함)에 있으면 = 저희 배 — 개요로 답.
     //   없으면 = 저희 부두 배정·자료에 안 잡힌 배 — 근거와 함께 아니라고 답한다.
@@ -600,6 +627,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     // 알파벳 포함 → 선박명 검색도 포함
     if (parsed.mirHello) return [];   // 1.91-03: «미르야» 단독 — 컨 나열 억제(인사 카드만)
     if (parsed.briefingQuery) return [];   // 1.97: 브리핑 질의 — 컨 100개 나열이 답을 가리지 않게(검수사 실측 tnjp 브리핑)
+    if (/[실씰]\s*오류|실번호\s*(불일치|오류)/.test(debouncedQuery)) return [];   // 2.06: 실오류 질의 — 컨 나열 억제
     const Q = debouncedQuery.toUpperCase();
     const isOnlyDigits = /^\d+$/.test(Q.replace(/\s/g, ''));
     let r = applyNLFilter(flat, parsed);
@@ -612,6 +640,29 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     }
     return r.slice(0, 100);
   }, [flat, debouncedQuery, parsed]);
+
+  // 2.06 (검수사 확정 «답을 모를때는 솔직하게 — 아직은 저 미르가 그기능을 할수가 없습니다. 열심히 배워서
+  //   알려 드리겠습니다» + «답을 못했을때는 그 문제를 클로드에게 보냅니다. 자동으로»):
+  //   문장형 질문(한글 포함)이 즉답·데미지·컨 일치 전부 0이면 = 미르가 모르는 질문.
+  const _mirDontKnow = useMemo(() => {
+    const q = String(debouncedQuery || '').trim();
+    if (q.length < 4 || !/[가-힣]{2,}/.test(q)) return false;   // 문장형(한글)만 — 끝4·컨번호 조회는 제외
+    return !localAnswer && !dmgQ && matches.length === 0;
+  }, [debouncedQuery, localAnswer, dmgQ, matches]);
+  const _reportedRef = useRef(new Set());
+  useEffect(() => {
+    // 질문이 «접수»(엔터·전송)된 것만 1회 자동 신고 — 타이핑 중 오발송 방지
+    if (!_mirDontKnow || !askedAt) return;
+    const q = String(debouncedQuery || '').trim();
+    if (!q || _reportedRef.current.has(q)) return;
+    _reportedRef.current.add(q);
+    fbAddClaudeMemo({
+      kind: 'mir_unanswered', status: 'new', at: Date.now(),
+      inspector: '미르(자동)',
+      text: `미르 무응답 질문 — "${q}" (통합검색). 답할 수 있게 배워서 반영할 것.`,
+    }).catch(() => { /* 신고 실패는 무해 — 다음 질문 때 재시도 */ });
+  }, [_mirDontKnow, askedAt, debouncedQuery]);
+
 
   // Web Speech API
   useEffect(() => {
@@ -834,6 +885,17 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         </div>
       )}
 
+      {/* 2.06: 미르가 모르는 질문 — 솔직하게 + 자동으로 개발에 전달됐음을 알림 (검수사 확정 문구 그대로) */}
+      {_mirDontKnow && (
+        <div className="bg-slate-900 border-2 border-slate-600 rounded-xl p-4 mb-3">
+          <div className="text-[11px] text-slate-400 font-bold uppercase mb-1">🐱 미르</div>
+          <div className="text-sm text-slate-200 leading-relaxed">
+            아직은 미르가 그 기능을 할 수 없습니다. 열심히 배워서 알려 드리겠습니다.
+            {askedAt ? <span className="block text-[11px] text-slate-400 mt-1">이 질문은 개발자에게 자동 전달됐습니다.</span>
+              : <span className="block text-[11px] text-slate-500 mt-1">전송(➤)을 누르면 이 질문이 개발자에게 자동 전달됩니다.</span>}
+          </div>
+        </div>
+      )}
       {/* V9.14: 즉답/안내 카드 */}
       {localAnswer && (
         <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-xl p-4 mb-3">

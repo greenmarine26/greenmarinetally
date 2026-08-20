@@ -721,7 +721,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       return base.map(c => {
         const s = mark[c.cn];
         if (!s) return c;
-        return { ...c, lolo: c.lolo || !!s.lolo, pos: c.pos || s.pos || '', dbl: c.dbl || !!s.dbl };
+        // 2.06 (검수사 실측 «RZOR 자료에서 수화물이 안보입니다» — SPSU2019220): RZOR 수화물은 별도 리스트가
+        //   아니라 **덱플랜 칸의 LUG 마킹**으로 온다. 파서(rzorPlan)는 flags 로 뽑고 있었는데 여기 병합이
+        //   버려서 보라 박스·브리핑·«수화물» 조회에 안 잡혔다. 긴급 플래그도 같이 얹는다.
+        const _fl = Array.isArray(s.flags) ? s.flags : [];
+        return { ...c, lolo: c.lolo || !!s.lolo, pos: c.pos || s.pos || '', dbl: c.dbl || !!s.dbl,
+          lugg: c.lugg || _fl.includes('LUG'), urgent: c.urgent || _fl.includes('긴급') };
       });
     },
     [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan]);
