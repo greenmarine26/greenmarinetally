@@ -406,6 +406,54 @@ export function answerOverlaps(voyages) {
 }
 
 // 자료 도착·확정 시각 — dataAt vs dataFixedAt (#62 #63)
+// 1.97 (검수사 확정 «자료가 없으면 첫화면(컨 나열)이 아니라 두번째 화면(홈 카드) 정보를 최대한 자세히» +
+//   «메일수집에서 보면 패턴이 있을것 — 보통 언제쯤에 edi가 도착하는지도 설명»):
+//   컨 자료 없는 배의 브리핑 — 항차 info·자료 상태·PORT-MIS·EDI 도착 패턴(ediPattern)으로 개요를 조립.
+export function answerShipOverview(voyage, shipName = '', pm = null, ediPattern = null) {
+  if (!voyage) return null;
+  const info = voyage.info || {};
+  const L = [`${shipName || info.vsl || ''} — 개요 브리핑`];
+  const loc = [info.pier, info.berth].filter(Boolean).join(' · ');
+  if (loc) L.push(`부두: ${loc}`);
+  const voys = [info.voy_d ? `양하 ${info.voy_d}` : null, info.voy_l ? `선적 ${info.voy_l}` : null].filter(Boolean).join(' / ');
+  if (voys) L.push(`항차: ${voys}`);
+  if (info.planDate) L.push(`작업 예정: ${info.planDate}`);
+  if (pm) {
+    const f = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? `${parseInt(m[2], 10)}/${parseInt(m[3], 10)} ${m[4]}:${m[5]}` : null; };
+    const t = [f(pm.eta) ? `입항 ${f(pm.eta)}` : null, f(pm.etd) ? `출항 ${f(pm.etd)}` : null].filter(Boolean).join(' · ');
+    if (t) L.push(`PORT-MIS: ${t}`);
+  }
+  let ediWaiting = false;
+  for (const [m, kr, planKey] of [['discharge', '양하', 'planDis'], ['loading', '선적', 'planLod']]) {
+    const sec = voyage[m] || {};
+    const nList = sec.records ? Object.keys(sec.records).length : 0;
+    const nEdi = sec.ediContainers ? Object.keys(sec.ediContainers).length : 0;
+    const plan = info[planKey];
+    if (!nList && !nEdi) {
+      if (plan != null && Number(plan) === 0) L.push(`${kr}: 없음 — 배정에도 0 (정상)`);
+      else if (plan != null) { L.push(`${kr}: ⏳ 자료 미도착 — 배정 ${plan}대`); ediWaiting = true; }
+      continue;
+    }
+    const parts = [];
+    if (plan != null && Number(plan) > 0) parts.push(`배정 ${plan}대`);
+    if (nList) parts.push(`리스트 ${nList}대`);
+    if (nEdi) parts.push(`EDI ${nEdi}대`);
+    else { parts.push('⏳ EDI 대기 (적부 자리는 EDI 후)'); ediWaiting = true; }
+    const done = sec.completed ? Object.keys(sec.completed).length : 0;
+    if (done) parts.push(`완료 ${done}`);
+    L.push(`${kr}: ${parts.join(' · ')}`);
+  }
+  // EDI 도착 패턴 — 수집기록 배치 분석(ediPattern/{VSL}): «보통 작업 시작 몇 시간 전에 오는 배»
+  const pat = ediPattern && ediPattern[String(info.vsl || '').toUpperCase()];
+  if (pat && pat.n) {
+    L.push(`EDI 도착 패턴: 이 배는 보통 작업 시작 약 ${pat.medianHrs}시간 전에 옵니다 (과거 ${pat.n}항차, ${pat.minHrs}~${pat.maxHrs}시간 전)${ediWaiting ? ' — 아직 그 범위 안이면 기다려도 정상입니다' : ''}`);
+  }
+  const dAt = Math.max(Number(voyage.discharge?.dataAt) || 0, Number(voyage.loading?.dataAt) || 0);
+  if (dAt) L.push(`자료 갱신: ${_fmtT(dAt)}`);
+  L.push('(컨테이너 상세 브리핑은 EDI 도착 후 — «EDI 언제 받았어»·«계획 어떻게 돼» 로도 물을 수 있어요)');
+  return L.join('\n');
+}
+
 // 1.92 (검수사 확정 «그걸 앱에 반영을 하고 PCTC도 적용을 해야합니다»): 선박별 작업 속도 + 소요 시간 예측.
 //   데이터: RTDB shipSpeed/{VSL}_{PIER} — 텔리 리포트 51개 배치 분석(2026-08-19, 정상범위 채택 23항차).
 export function isSpeedQuery(q) {

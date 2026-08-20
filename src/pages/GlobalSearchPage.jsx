@@ -4,11 +4,11 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, Arro
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
-import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
+import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';   // 1.89·1.92·1.97
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
-import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
+import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -111,6 +111,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   //   종전에는 배를 지정해도 무시하고 "항차 화면 가서 물어보세요"로 떠넘겼다(검수사 지적 2026-08-13).
   const carrierContacts = useCarrierContacts();   // 1.89
   const shipSpeed = useShipSpeed();   // 1.92
+  const ediPattern = useEdiPattern();   // 1.97
   const shipCtx = useMemo(() => {
     const Q = String(debouncedQuery || '').toUpperCase();
     if (Q.length < 3) return null;
@@ -407,6 +408,12 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         }
         if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
       }
+      // 1.97 (검수사 확정): 컨 자료가 없으면 컨 나열 대신 **홈 카드 수준 개요 브리핑** — 부두·일정·자료 상태·EDI 도착 패턴.
+      try {
+        const pmv = matchPortMis(portMisData || {}, shipCtx.info);
+        const ov = answerShipOverview(shipCtx.v, shipCtx.info.vslFull || shipCtx.info.vsl, pmv, ediPattern);
+        if (ov) return ov;
+      } catch (e) { /* 아래로 */ }
     }
     if ((p.briefingQuery && !shipCtx) || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
         p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.foodQuery || (p.schedQuery && !shipCtx)) {
@@ -425,6 +432,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (!hasAnyCondition(parsed)) return [];
     // 알파벳 포함 → 선박명 검색도 포함
     if (parsed.mirHello) return [];   // 1.91-03: «미르야» 단독 — 컨 나열 억제(인사 카드만)
+    if (parsed.briefingQuery) return [];   // 1.97: 브리핑 질의 — 컨 100개 나열이 답을 가리지 않게(검수사 실측 tnjp 브리핑)
     const Q = debouncedQuery.toUpperCase();
     const isOnlyDigits = /^\d+$/.test(Q.replace(/\s/g, ''));
     let r = applyNLFilter(flat, parsed);

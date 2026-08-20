@@ -22,3 +22,14 @@ export function useShipSpeed() {
   }, []);
   return sp;
 }
+
+// 1.97: EDI 도착 패턴(ediPattern — 수집기록 배치 분석) 1회 로드.
+let _pat = null;
+export function useEdiPattern() {
+  const [v, setV] = useState(_pat);
+  useEffect(() => {
+    if (_pat) return;
+    fbGetSimple('ediPattern').then((x) => { _pat = x || {}; setV(_pat); }).catch(() => { /* 없으면 생략 */ });
+  }, []);
+  return v;
+}
