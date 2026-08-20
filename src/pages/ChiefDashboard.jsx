@@ -23,6 +23,7 @@ import { fbSubscribeShipBayDict } from '../firebase.js';   // 1.66: 선사를 �
 import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
+import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보드 안 인라인 통합검색(화면 전환 없음)
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -90,6 +91,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
 }) {
   const [chiefSearchQ, setChiefSearchQ] = useState('');   // 2.03-01: 대시보드 통합검색창
+  const [dashQ, setDashQ] = useState('');   // 2.03-02: 제출된 질문 — 있으면 그 자리에 통합검색 패널을 펼친다(화면 전환 없음, 검수사 확정)
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   // 1.41: **화면을 여는 권한**은 따로다. 개발용 접근 명단에 든 사람도 이 화면을 볼 수 있다.
@@ -618,7 +620,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           2.03-01 (검수사 지시 «수석대쉬보드엔 통합검색이 버튼을 클릭해야… 데이터 새로 고침 버튼옆에 통합검색창을»):
           입력하고 엔터(또는 🔍)를 치면 그 질문을 들고 통합검색으로 간다. */}
       <div className="flex gap-2 items-center">
-        <form className="flex-1 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const q = String(chiefSearchQ || '').trim(); onOpenGlobalSearch?.(q); }}>
+        <form className="flex-1 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const q = String(chiefSearchQ || '').trim(); if (q) setDashQ(q); }}>
           <input value={chiefSearchQ} onChange={(e) => setChiefSearchQ(e.target.value)}
             placeholder="통합검색 · 미르에게 질문 — 컨번호·데미지·브리핑"
             className="flex-1 bg-slate-800 border border-slate-600 focus:border-emerald-500 focus:outline-none rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500"/>
@@ -626,6 +628,21 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         </form>
         <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
       </div>
+
+      {/* 2.03-02 (검수사 실측 «검색창에 입력했더니 역시 화면이 바뀝니다» — 그 자리에서 답한다):
+          제출하면 화면 전환 없이 여기 통합검색 패널이 펼쳐진다. key 로 질문마다 새로 연다. */}
+      {dashQ && (
+        <div className="bg-slate-900 border-2 border-emerald-700/60 rounded-xl p-2">
+          <div className="flex items-center justify-between px-1 pb-1">
+            <div className="text-[11px] text-emerald-300 font-bold">🔍 통합검색 — 이 자리에서 답합니다</div>
+            <button onClick={() => setDashQ('')} className="text-slate-400 hover:text-slate-200 text-[11px] font-bold px-2 py-1">✕ 닫기</button>
+          </div>
+          <GlobalSearchPage key={dashQ} embedded
+            voyages={voyages} portMisData={portMisData} terminalWork={terminalWork}
+            heartbeat={collectorHb} isChief initialQuery={dashQ}
+            onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}/>
+        </div>
+      )}
 
       {/* V9.19-02: 바로가기 — 누르면 그 항목이 펼쳐지며 이동 */}
       <div className="bg-slate-900 border border-slate-700 rounded-xl p-2">

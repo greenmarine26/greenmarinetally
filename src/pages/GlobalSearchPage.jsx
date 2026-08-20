@@ -46,7 +46,7 @@ export function filterDamageHits(damageIndex, dq, now = new Date()) {
   });
 }
 
-export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '' }) {   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
+export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '', embedded = false }) {   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
   const [query, setQuery] = useState(initialQuery || '');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -463,10 +463,38 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     // 2.01 (검수사 확정 «항차목록에서 브리핑은 선박명을 특정 안하면 그날 작업할 선박들 전부를 브리핑»):
     //   배 미지정 «브리핑» = planDate 가 오늘과 겹치는 항차 전부 — 배별 개요 브리핑(1.97 answerShipOverview)
     //   + 컨 자료가 있으면 특수화물 한 줄. 오늘 배가 없으면 아래 기존 안내로 폴백.
+    // 2.03-02 (검수사 실측 «내일 작업 대상 선박은?» — 통합검색이 무응답): 오늘/내일/모레 작업 선박 질의.
+    //   «(오늘|내일|명일|모레) … 작업 … (선박|배|대상)» → 그날 planDate 가 겹치는 항차를 시작순으로 나열.
+    const _dayOff = /모레/.test(debouncedQuery) ? 2 : /내일|명일/.test(debouncedQuery) ? 1 : 0;
+    if (/오늘|내일|명일|모레/.test(debouncedQuery) && /작업|양하|선적|일정/.test(debouncedQuery) && /선박|배|대상|뭐|뭔|몇|무슨/.test(debouncedQuery) && !shipCtx) {
+      try {
+        const _now = new Date();
+        const _b0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + _dayOff).getTime();
+        const _b1 = _b0 + 24 * 3600 * 1000;
+        const _pT2 = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
+        const _ships = Object.entries(voyages || {}).map(([k, v]) => {
+          const seg = String(v?.info?.planDate || '').split('~');
+          const a = _pT2(seg[0]); const b = seg[1] ? _pT2(seg[1]) : a;
+          return { k, v, a, b: (b == null ? a : b) };
+        }).filter(x => x.a != null && x.a < _b1 && x.b >= _b0).sort((x, y) => x.a - y.a);
+        const _lbl = _dayOff === 2 ? '모레' : _dayOff === 1 ? '내일' : '오늘';
+        if (!_ships.length) return `${_lbl} 작업 예정으로 잡힌 선박이 없습니다 — 배정·도선이 아직이면 수집기가 잡는 대로 항차 카드에 뜹니다.`;
+        const L = [`${_lbl} 작업 선박 ${_ships.length}척`];
+        for (const { k, v, a } of _ships) {
+          const i2 = v?.info || {};
+          const t = new Date(a);
+          const hh = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+          const amt = [i2.planDis != null && Number(i2.planDis) > 0 ? `양하 ${i2.planDis}` : null, i2.planLod != null && Number(i2.planLod) > 0 ? `선적 ${i2.planLod}` : null].filter(Boolean).join(' · ');
+          L.push(`${i2.vslFull || i2.vsl || k} — ${i2.pier || '?'} ${hh} 시작${amt ? ` (${amt})` : ''}`);
+        }
+        L.push(`\n«${_lbl === '오늘' ? '' : _lbl + ' '}브리핑» 이라고 하면 배별 상세까지 답합니다.`);
+        return L.join('\n');
+      } catch (e) { /* 아래로 */ }
+    }
     if (p.briefingQuery && !shipCtx) {
       try {
         const _now = new Date();
-        const _d0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
+        const _d0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + _dayOff).getTime();
         const _d1 = _d0 + 24 * 3600 * 1000;
         const _pT = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
         const _today = Object.entries(voyages || {}).map(([k, v]) => {
@@ -475,7 +503,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           return { k, v, a, b: (b == null ? a : b) };
         }).filter(x => x.a != null && x.a < _d1 && x.b >= _d0).sort((x, y) => x.a - y.a);
         if (_today.length) {
-          const _parts = [`📋 오늘 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
+          const _parts = [`📋 ${_dayOff === 2 ? '모레' : _dayOff === 1 ? '내일' : '오늘'} 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
           for (const { k, v } of _today) {
             const _ship = v?.info?.vslFull || v?.info?.vsl || k;
             let _blk = null;
@@ -648,11 +676,11 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between gap-2">
           {/* 1.81-01(검수사 요청 2026-08-17): 나가기 — 검색을 마치면 들어온 화면(수석 대시보드/홈)으로 돌아간다.
               해시 라우팅이라 history.back 이 직전 화면을 그대로 되살린다. 이력이 없으면(직접 진입) 홈으로. */}
-          <button onClick={() => { try { if (window.history.length > 1) window.history.back(); else window.location.hash = '#/'; } catch (e) { window.location.hash = '#/'; } }}
+          {!embedded && <button onClick={() => { try { if (window.history.length > 1) window.history.back(); else window.location.hash = '#/'; } catch (e) { window.location.hash = '#/'; } }}
             className="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-600 text-slate-200 text-xs font-bold normal-case"
             title="검색을 마치고 들어온 화면으로 돌아갑니다">
             ← 나가기
-          </button>
+          </button>}
           <span className="min-w-0 truncate">🤖 AI 통합 검색 — 모든 항차·양/선적</span>
           <span className="text-slate-400 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
         </div>
