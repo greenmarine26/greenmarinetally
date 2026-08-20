@@ -1040,7 +1040,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (parsed.briefingQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
       const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');   // V7.93: 트윈 무게 예견
-      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '', { rfSkip, eseal: workFilter === 'loading' ? esealBrief : null });   // 1.86·1.87
+      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '', { rfSkip, eseal: workFilter === 'loading' ? esealBrief : null, photos: voyage?.photos || null });   // 1.86·1.87·2.05-01(사전 데미지)
     }
     // V7.90-05: 실번호 점검 (사용자 요청 — 씰 오류 사전 예측)
     if (parsed.sealAuditQuery) {

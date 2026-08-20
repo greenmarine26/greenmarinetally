@@ -1228,6 +1228,23 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   };
   // ── 주의사항 수집 (일반적이지 않은 것만)
   const warns = [];
+  // 2.05-01 (검수사 확정 «이번 브리핑이 중요합니다. 아까 데미지 이슈부터 FR 수화물을 몰라서 이적으로
+  //   인식할수도 있었습니다») — 수화물·긴급·사전 데미지를 브리핑 맨 앞 주의로.
+  const _lug = cs.filter((c) => c.lugg);
+  if (_lug.length) {
+    warns.push({ k: `수화물 ${_lug.length}`, line: `🧳 수화물 컨 ${_lug.length}대 — ${_lug.map((c) => `${c.cn}${c.luggSeal ? `(씰 ${c.luggSeal})` : ''}`).join(', ')}\n     여객 수하물입니다 — **이적(시프팅) 대상이 아닙니다.** 목록에 보라 박스로 표시됩니다` });
+  }
+  const _urg = cs.filter((c) => c.urgent);
+  if (_urg.length) {
+    warns.push({ k: `긴급 ${_urg.length}`, line: `⚡ 긴급 하역 ${_urg.length}대 — 긴급블럭 최우선 (${baysOf(_urg) || '위치 자료 대기'}) · 목록은 «긴급» 조회` });
+  }
+  if (opts?.photos) {
+    try {
+      const _cns = new Set(cs.map((c) => String(c.cn || '').toUpperCase()));
+      const _dmg = [...new Set(Object.values(opts.photos).filter((p) => p && p.type === 'damage' && _cns.has(String(p.cn || '').toUpperCase())).map((p) => String(p.cn).toUpperCase()))];
+      if (_dmg.length) warns.push({ k: `데미지 ${_dmg.length}`, line: `📷 데미지 등록 ${_dmg.length}대 — ${_dmg.join(', ')} · 실물 확인, 끝4 조회로 사진 확인` });
+    } catch (e) { /* 사진 집계 실패는 브리핑을 막지 않는다 */ }
+  }
   // 1.87 (검수사 확정 — ATPR·WEIHAI): 엠티실 부착 배는 브리핑에 부착 대상 베이별·규격별 분포와 실 현황을 붙인다.
   //   «그부분도 베이별 규격별 설명도 첨부 … 엠티실 갯수도 알려줘야»
   if (opts?.eseal && opts.eseal.n > 0) {

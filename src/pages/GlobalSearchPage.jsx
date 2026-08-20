@@ -449,7 +449,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           if (wantMode && mode !== wantMode) continue;
           const arr = mine.filter((c) => c._mode === mode);
           if (!arr.length) continue;
-          try { parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode)); } catch (e) { /* 폴백 아래로 */ }
+          try { parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null })); } catch (e) { /* 폴백 아래로 */ }
         }
         if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
       }

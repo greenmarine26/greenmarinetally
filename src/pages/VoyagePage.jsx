@@ -2297,7 +2297,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       //   containers 는 이미 현재 모드 병합본(VoyagePage :704)이라 SearchPanel 의 modeCs 와 같은 재료.
       if (parsed?.briefingQuery) {
         return generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
-          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null });
+          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null });
       }
       if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
       return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier }) : null;

@@ -425,6 +425,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
     <div onClick={handleCardClick}
       className={`bg-slate-900 border rounded-lg overflow-hidden transition cursor-pointer hover:bg-slate-800/50 flex ${
         sealError || xSealError ? 'border-red-700/60 bg-red-950/30' :
+        c.lugg ? 'border-violet-500 border-2 bg-violet-950/25' :   /* 2.05-01 검수사 확정 «보라였으면 보라 박스로 — 수화물은 이적대상으로 안보게 정확히 인지» */
         isDone ? 'border-emerald-700/40 bg-emerald-950/20' :
         isXray ? 'border-purple-700/40 bg-purple-950/20' :
         'border-slate-700'
@@ -490,7 +491,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1.5 py-0.5 rounded font-black">🔍 XRAY</span>}
               {/* V9.03: 긴급/수화물 — 예보(CLL 메일) 컨번호 마커. 카고플랜의 ▲·보라테두리와 짝. */}
               {c.urgent && <span className="bg-rose-600 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black">▲ 긴급</span>}
-              {c.lugg && <span className="bg-violet-700/70 text-violet-100 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-400/60">🧳 수화물{c.luggSeal ? ` 실 ${c.luggSeal}` : ''}</span>}
+              {c.lugg && <span className="bg-violet-700 text-violet-50 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-300/60">🧳 수화물 — 이적 아님{c.luggSeal ? ` · 실 ${c.luggSeal}` : ''}</span>}
               {isDG && <span className="bg-red-700/60 text-red-100 text-[9px] px-1.5 py-0.5 rounded font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
               {/* 1.86 (검수사 확정 «풀만 눈꽃표시 색을 넣어주시고 엠티는 눈꽃을 회색 처리»):
                   엠티 리퍼는 전원을 안 꽂아 잴 것이 없다 — 회색 눈꽃으로 가라앉히고, 풀만 색(온도 뱃지). */}
