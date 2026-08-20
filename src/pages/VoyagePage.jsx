@@ -841,6 +841,27 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // 2.03: 데미지 예약 승격 — 자료가 도착해 예약 컨이 이 항차(양하·선적 어느 쪽이든)에 나타나면
   //   pendingDamage → voyages/{key}/photos 로 옮긴다(멱등 — waiting 만, 승격 후 promoted 마킹).
   //   승격되면 기존 경로(CARGO DAMAGE REPORT·조회 사진·색인)가 그대로 동작한다.
+  // 2.06-01 (검수사 «항차 목록에서도 LUG 표기가 없습니다»): 수화물의 정본 통로는 info.forecast.luggageCns —
+  //   홈 항차 카드(🧳 배지)·검증 면제(lugCns)·브리핑이 전부 이걸 본다. RZOR 은 수화물이 덱플랜 LUG 로만 와서
+  //   이 통로가 비어 있었다. 덱플랜에서 발견한 LUG 컨을 forecast.luggageCns 로 승격(합집합, 다를 때만 1회 PATCH).
+  const lugPromoRef = useRef('');
+  useEffect(() => {
+    if (lugPromoRef.current === voyageKey) return;
+    const found = new Set();
+    for (const _m of ['discharge', 'loading']) {
+      const decks = voyage?.[_m]?.stowagePlan?.decks;
+      if (!Array.isArray(decks)) continue;
+      for (const dk of decks) for (const sl of (dk?.slots || []))
+        if (sl && sl.cn && !sl.empty && Array.isArray(sl.flags) && sl.flags.includes('LUG')) found.add(String(sl.cn).toUpperCase());
+    }
+    if (!found.size) return;
+    const cur = (voyage?.info?.forecast?.luggageCns || []).map((x) => String(x || '').trim().toUpperCase()).filter(Boolean);
+    const merged = Array.from(new Set([...cur, ...found]));
+    if (merged.length === cur.length) { lugPromoRef.current = voyageKey; return; }   // 이미 다 있음
+    lugPromoRef.current = voyageKey;
+    fbUpdateVoyageInfo(voyageKey, { 'forecast/luggageCns': merged }).catch(() => {});
+  }, [voyageKey, voyage]);
+
   const dmgPromoRef = useRef('');
   useEffect(() => {
     if (dmgPromoRef.current === voyageKey) return;

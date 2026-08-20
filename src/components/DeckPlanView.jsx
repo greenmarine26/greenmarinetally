@@ -95,8 +95,9 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
             const isXray = !!xrayMap[s.cn];
             const tmp = c && c.tmp != null && String(c.tmp).trim() !== '' ? String(c.tmp) : '';
             const sl = c && c.sl ? String(c.sl) : (c && c.eseal ? String(c.eseal) : '');
+            const isLug = !!((s.flags && s.flags.includes('LUG')) || (c && c.lugg));   // 2.06-01: 수화물 — 덱 칸도 보라 박스 (검수사 «9220을 찾았는데 보라박스가 없습니다 — C덱에서 입니다»)
             const marks = [isRf ? (tmp ? `❄${tmp}` : '❄') : '', isDg ? '⚠DG' : '',
-                           s.flags && s.flags.length ? s.flags.join('·') : ''].filter(Boolean).join(' ');
+                           s.flags && s.flags.length ? s.flags.filter((f) => f !== 'LUG').join('·') : ''].filter(Boolean).join(' ');
             return (
               <button key={`${s.cn}${s.ri}${s.ci}`}
                 title={s.pos || ''}   /* V9.54: 자리 표기 — "D덱 3줄 5칸" */
@@ -104,10 +105,11 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
                   ${isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-slate-700/80 border-slate-500' : 'bg-sky-900/80 border-sky-600'}
                   ${isRf ? 'ring-1 ring-cyan-400' : ''} ${isXray ? 'ring-2 ring-yellow-400' : ''}
-                  ${s.lolo ? 'ring-2 ring-lime-400' : ''} ${s.dbl ? 'ring-2 ring-amber-300' : ''}`}
+                  ${s.lolo ? 'ring-2 ring-lime-400' : ''} ${s.dbl ? 'ring-2 ring-amber-300' : ''}
+                  ${isLug ? 'ring-2 ring-violet-400 border-violet-400 bg-violet-900/70' : ''}`}
                 style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
                 <div className="text-[10px] font-black mono text-slate-100 truncate">
-                  {s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
+                  {s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
                 </div>
                 <div className="text-[8.5px] text-slate-300 truncate">{s.iso} {fe}</div>
                 {s.line ? <div className="text-[8px] mono text-slate-400/90 truncate">{s.line}줄 {s.col}칸</div> : null}
@@ -127,6 +129,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         <span><span className="inline-block w-2.5 h-2.5 bg-amber-900 border border-amber-400 rounded-sm mr-1" />📌지정됨</span>
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-lime-400 rounded-sm mr-1" />🏗갠트리(落地·LO/LO)</span>
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-amber-300 rounded-sm mr-1" />⇅双背(2단)</span>
+        <span><span className="inline-block w-2.5 h-2.5 bg-violet-900 border-2 border-violet-400 rounded-sm mr-1" />🧳수화물(이적 아님)</span>
       </div>
     </div>
   );
