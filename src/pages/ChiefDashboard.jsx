@@ -92,6 +92,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 }) {
   const [chiefSearchQ, setChiefSearchQ] = useState('');   // 2.03-01: 대시보드 통합검색창
   const [dashQ, setDashQ] = useState('');   // 2.03-02: 제출된 질문 — 있으면 그 자리에 통합검색 패널을 펼친다(화면 전환 없음, 검수사 확정)
+  const [dashOpen, setDashOpen] = useState(false);   // 2.03-03: 바로가기 [🔍 통합 검색]도 화면 전환 없이 이 패널을 연다(빈 질문)
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   // 1.41: **화면을 여는 권한**은 따로다. 개발용 접근 명단에 든 사람도 이 화면을 볼 수 있다.
@@ -631,13 +632,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* 2.03-02 (검수사 실측 «검색창에 입력했더니 역시 화면이 바뀝니다» — 그 자리에서 답한다):
           제출하면 화면 전환 없이 여기 통합검색 패널이 펼쳐진다. key 로 질문마다 새로 연다. */}
-      {dashQ && (
+      {(dashQ || dashOpen) && (
         <div className="bg-slate-900 border-2 border-emerald-700/60 rounded-xl p-2">
           <div className="flex items-center justify-between px-1 pb-1">
             <div className="text-[11px] text-emerald-300 font-bold">🔍 통합검색 — 이 자리에서 답합니다</div>
-            <button onClick={() => setDashQ('')} className="text-slate-400 hover:text-slate-200 text-[11px] font-bold px-2 py-1">✕ 닫기</button>
+            <button onClick={() => { setDashQ(''); setDashOpen(false); }} className="text-slate-400 hover:text-slate-200 text-[11px] font-bold px-2 py-1">✕ 닫기</button>
           </div>
-          <GlobalSearchPage key={dashQ} embedded
+          <GlobalSearchPage key={dashQ || '__open'} embedded
             voyages={voyages} portMisData={portMisData} terminalWork={terminalWork}
             heartbeat={collectorHb} isChief initialQuery={dashQ}
             onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}/>
@@ -666,7 +667,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             // TallyOne 1.0(L4): 보조기능 바로가기 — 판2 신설 #/aux 라우트(팀K)로 이동
             ['__aux', '🧰 보조기능'],
           ].map(([id, label]) => (
-            <button key={id} onClick={() => (id === '__search' ? (onOpenGlobalSearch && onOpenGlobalSearch())
+            <button key={id} onClick={() => (id === '__search' ? setDashOpen(true)   /* 2.03-03: 화면 전환 없이 그 자리 패널 — «또 수석 홈화면을 벗어 납니다» */
                                             : id === '__portmis' ? setShowPortMis(true)
                                             : id === '__baymatrix' ? setShowBayMatrix(true)
                                             : id === '__aux' ? (window.location.hash = '#/aux')
