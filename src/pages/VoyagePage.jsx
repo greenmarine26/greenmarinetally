@@ -2300,7 +2300,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
           briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null });
       }
       if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
-      return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier }) : null;
+      return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier, photos: briefCtx?.photos || null }) : null;   // 2.05-01
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx]);
   const readRef = useRef('');
@@ -2315,17 +2315,25 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   const [photoView, setPhotoView] = useState(null);
   const resultPhotos = useMemo(() => {
     try {
-      const ph = briefCtx?.photos; if (!ph || !results.length || results.length > 12) return [];
-      const cns = new Set(results.map((c) => String(c.cn || '').toUpperCase()).filter(Boolean));
+      const ph = briefCtx?.photos; if (!ph) return [];
+      // 2.05-01: 데미지·수화물 버튼 답은 결과(results)가 아니라 항차 전체 기준 — 그 컨들 사진을 띄운다
+      let cns;
+      if (parsed?.dmgQuery) cns = new Set(Object.values(ph).filter((p) => p && p.type === 'damage' && p.cn).map((p) => String(p.cn).toUpperCase()));
+      else if (parsed?.luggQuery) cns = new Set(containers.filter((c) => c.lugg).map((c) => String(c.cn || '').toUpperCase()));
+      else {
+        if (!results.length || results.length > 12) return [];
+        cns = new Set(results.map((c) => String(c.cn || '').toUpperCase()).filter(Boolean));
+      }
+      if (!cns.size) return [];
       return Object.values(ph).filter((p) => p && (p.type === 'damage' || p.type === 'mailPhoto') && cns.has(String(p.cn || '').toUpperCase()))
         .sort((a, b) => (a.ts || 0) - (b.ts || 0));
     } catch (e) { return []; }
-  }, [briefCtx, results]);
+  }, [briefCtx, results, parsed, containers]);
   if (!ask) return null;
   const hints = [];
   if (answer) {
     hints.push(...[...String(answer).matchAll(/"([^"]{2,14})"\s*[으로]*로?\s*상세 확인/g)].map(m => m[1]));
-    [['❄', '리퍼'], ['🩻', '엑스레이'], ['☣', '위험물'], ['⊞', 'FR'], ['△', 'OT'], ['🛢', '탱크'], ['📐', 'OOG']]
+    [['❄', '리퍼'], ['🩻', '엑스레이'], ['☣', '위험물'], ['⊞', 'FR'], ['△', 'OT'], ['🛢', '탱크'], ['📐', 'OOG'], ['📷', '데미지'], ['🧳', '수화물'], ['⚡', '긴급']]   // 2.05-01
       .forEach(([emo, h]) => { if (String(answer).includes(emo + ' ')) hints.push(h); });
   }
   const uniq = [...new Set(hints)];

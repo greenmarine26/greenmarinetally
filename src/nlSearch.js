@@ -285,6 +285,10 @@ export function parseNaturalQuery(text) {
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어떤\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;   // V7.91-02: 어떤 베이
   // TallyOne 1.18: "상황 어때"·"어떻게 돼가"·"진행 어디까지" 도 브리핑으로. 현장에서 실제로 쓰는 말이다.
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약|상황\s*(?:어때|어떻|알려|보고)|어떻게\s*(?:돼|되)\s*가|진행\s*(?:상황|어디|어때|얼마)|어디까지\s*(?:했|왔|됐)/i.test(t)) result.briefingQuery = true;
+  // 2.05-01 (검수사 «데미지·OOG도 버튼을 눌러 확인하게 — 재질문 감소»): 브리핑 후속 버튼용 로컬 인텐트 3종.
+  if (/데미지|파손|손상/.test(t)) result.dmgQuery = true;
+  if (/수화물/.test(t)) result.luggQuery = true;
+  if (/긴급|최우선/.test(t) && !/긴급수화물/.test(t)) result.urgentQuery = true;
   // 1.89 (검수사 예시 «이번 SWSP 관련선사는 몇군데이고 각각 몇대씩이고 담당자가 누구지?»)
   if (/관련\s*선사|선사\s*(?:몇|현황|분포|별로)|담당자/i.test(t)) result.carrierQuery = true;
   // V7.92: 챗봇형 질문 — 자기소개·시간·날씨·입출항 (사용자 요청: "넌 뭐야"에 답하기)
@@ -601,6 +605,7 @@ export function hasAnyCondition(parsed) {
             parsed.tierPlaceCountQuery || parsed.tierInContextQuery || parsed.etaQuery || parsed.customsReportQuery || parsed.handoverQuery ||
             // V9.14: 챗봇형 의도도 '조건 있음'으로 — 통합검색 무응답·SearchPanel의 8종 수동 나열(구조적 부채) 해소
             parsed.briefingQuery || parsed.sealAuditQuery || parsed.carrierQuery || parsed.mirHello || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
+            parsed.dmgQuery || parsed.luggQuery || parsed.urgentQuery ||   // 2.05-01
             parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery ||
             parsed.howToQuery);   // 1.65
 }
@@ -892,6 +897,37 @@ export function generateLocalAnswer(parsed, results, allContainers, ctx = null) 
   const desc = describeQuery(parsed);
 
   // TallyOne 1.27: 시프팅 — 배정목록의 'N' 은 무브 수(양하 1 + 재선적 1)라 컨 대수의 2배다.
+  // 2.05-01: 브리핑 후속 버튼 3종 — 수화물·긴급·데미지 (그 자리 즉답, 인라인 카드는 사진 썸네일 동반)
+  if (parsed.luggQuery && !parsed.digits) {
+    const lug = (allContainers || []).filter((c) => c.lugg);
+    if (!lug.length) return '🧳 이 항차에 수화물 컨 등록이 없습니다 (선사 메일 기준)';
+    const L = [`🧳 수화물 컨 ${lug.length}대 — 여객 수하물, **이적(시프팅) 대상이 아닙니다**`];
+    lug.forEach((c) => L.push(`  ${c.cn} — ${fmtPos(c)}${c.luggSeal ? ` · 씰 ${c.luggSeal}` : ''}${c.fe ? ` [${c.fe}]` : ''}`));
+    L.push('목록에서 보라 박스로 표시됩니다. 씰·컨번호 사진이 있으면 아래에 뜹니다.');
+    return L.join('\n');
+  }
+  if (parsed.urgentQuery && !parsed.digits) {
+    const urg = (allContainers || []).filter((c) => c.urgent);
+    if (!urg.length) return '⚡ 이 항차에 긴급 하역 등록이 없습니다 (선사 메일·긴급 리스트 기준)';
+    const L = [`⚡ 긴급 하역 ${urg.length}대 — 긴급블럭 최우선`];
+    urg.forEach((c) => L.push(`  ${c.cn} — ${fmtPos(c)}${c.rf ? ' ❄' : ''}${c.fe ? ` [${c.fe}]` : ''}`));
+    return L.join('\n');
+  }
+  if (parsed.dmgQuery && !parsed.digits) {
+    const ph = ctx && ctx.photos ? Object.values(ctx.photos).filter((p) => p && p.type === 'damage' && p.cn) : [];
+    if (!ph.length) return '📷 이 항차에 등록된 데미지가 없습니다 (앱 보고·예약 기준)';
+    const byCn = new Map();
+    const posOf = new Map((allContainers || []).map((c) => [String(c.cn || '').toUpperCase(), c]));
+    ph.forEach((p) => { const C = String(p.cn).toUpperCase(); if (!byCn.has(C)) byCn.set(C, []); byCn.get(C).push(p); });
+    const L = [`📷 데미지 등록 ${byCn.size}대 — 실물 확인하세요`];
+    for (const [C, arr] of byCn) {
+      const c = posOf.get(C);
+      const kinds = [...new Set(arr.flatMap((p) => p.damageTypes || []))].join('·');
+      L.push(`  ${C} — ${c ? fmtPos(c) : '위치 자료 대기'}${kinds ? ` · ${kinds}` : ''}${arr.some((p) => p.promotedFrom) ? ' (예약분)' : ''}`);
+    }
+    L.push('사진은 아래 썸네일(작업 탭은 끝4 조회 카드)에서 봅니다.');
+    return L.join('\n');
+  }
   // 1.89: 관련 선사·담당자 — 결과가 조건에 안 걸렸으면 항차 전체 기준.
   if (parsed.carrierQuery) return formatCarriers(results && results.length ? results : (allContainers || []), ctx);
   if (parsed.shiftingQuery) return formatShifting(ctx);

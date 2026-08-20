@@ -1065,7 +1065,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       ? results.filter(c => (modeChoice === 'loading' ? c._mode === 'loading' : c._mode !== 'loading'))
       : results;
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
-      { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier,   // 1.89·1.93-01
+      { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
         shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
           return (c && Object.keys(c).length) ? c : predictShiftingFromVoyage(voyage); })() });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed]);
@@ -1525,7 +1525,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           {(() => {
             const txt = String(localAnswer);
             const hints = [...txt.matchAll(/"([^"]{2,14})"\s*[으로]*로?\s*상세 확인/g)].map(m => m[1]);
-            const WARN_BTN = [['❄', '리퍼'], ['🩻', '엑스레이'], ['☣', '위험물'], ['⊞', 'FR'], ['△', 'OT'], ['🛢', '탱크'], ['📐', 'OOG']];
+            const WARN_BTN = [['❄', '리퍼'], ['🩻', '엑스레이'], ['☣', '위험물'], ['⊞', 'FR'], ['△', 'OT'], ['🛢', '탱크'], ['📐', 'OOG'], ['📷', '데미지'], ['🧳', '수화물'], ['⚡', '긴급']];   // 2.05-01
             WARN_BTN.forEach(([emo, q]) => { if (txt.includes(emo + ' ')) hints.push(q); });
             const uniq = [...new Set(hints)];
             if (!uniq.length && !askStack.length) return null;
