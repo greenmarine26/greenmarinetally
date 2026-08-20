@@ -22,7 +22,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   //   아래 자체 계산은 선박 베이사전(imo·vsl)을 못 읽어 23↔25 · 3↔5 · 11↔13 짝을 놓쳤다.
   //   그 결과 1.48 작업 구역 게이트가 23·25 홀드 자리를 통째로 걸러 「남은 자리가 없습니다」가 떴다
   //   (실측 2026-08-11, 24번 홀드 싱글 TBJU2403485). 부르는 쪽이 쓰는 그 벌을 그대로 받는다.
-  bayPairsIn = null }) {
+  bayPairsIn = null,
+  // TallyOne 2.03: 항차 photos(데미지 사진 포함) — 있으면 이 컨의 데미지 기록·사진을 카드에 띄운다.
+  voyagePhotos = null }) {
   // V9.50: onReplace — '컨테이너 번호 수정(다른 컨이 옴)'으로 **실제 온 컨**을 그 자리에 배정하면
   //   이 카드가 그 컨으로 바뀌어야 한다. 종전엔 배정만 되고 카드는 계획 컨 그대로여서
   //   화면상 아무 일도 안 일어난 것처럼 보였다(사용자 지적 2026-08-03: 트윈 뒤 카드가 안 바뀜).
@@ -38,6 +40,15 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
   const [choiceState, askChoice] = useChoice();
+  // 2.03: 이 컨의 데미지 기록(예약 승격분 + 작업 중 보고분 전부) — photos 에서 컨번호로 골라낸다
+  const [dmgView, setDmgView] = useState(null);
+  const dmgList = useMemo(() => {
+    if (!voyagePhotos || !c?.cn) return [];
+    const C = String(c.cn).toUpperCase().replace(/\s/g, '');
+    return Object.values(voyagePhotos)
+      .filter((p) => p && p.type === 'damage' && String(p.cn || '').toUpperCase().replace(/\s/g, '') === C)
+      .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  }, [voyagePhotos, c]);
   // 알림 전용(선택지 없음) — 문구·방식은 ContainerList·ContainerDetailModal 과 같은 벌을 쓴다.
   const notify = (title, message) => askConfirm({ title, message, confirmLabel: '확인', cancelLabel: '닫기', onConfirm: () => {} });
   const [posTarget, setPosTarget] = useState(null);   // V7.94-10: 위치 선택창 대상 컨 (c 또는 번호수정으로 고른 실제 컨)
@@ -151,6 +162,34 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       c._xray ? 'border-purple-600 bg-purple-950/20' :
       'border-amber-600 bg-amber-950/10'
     }`}>
+      {/* 2.03 (검수사 확정 «지정된 컨번호를 조회하면 사진을 띄울수 있나요?» — 예약분·작업 중 기록분 다):
+          데미지 기록이 있으면 카드 맨 위에 주황 띠 + 썸네일. 탭하면 크게. */}
+      {dmgList.length > 0 && (
+        <div className="mb-2 bg-orange-950/50 border border-orange-700 rounded-lg p-2">
+          <div className="text-[11px] font-black text-orange-300 mb-1">📷 데미지 기록 {dmgList.length}건 — 실물 확인하세요</div>
+          <div className="flex gap-1.5 flex-wrap">
+            {dmgList.map((p) => (
+              <button key={p.ts} onClick={() => setDmgView(p)} className="text-left">
+                {p.data ? <img src={p.data} alt="" className="w-14 h-14 object-cover rounded border border-orange-700" /> : <span className="text-[10px] text-orange-200 underline">기록 보기</span>}
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] text-orange-200/90 mt-1">
+            {dmgList.map((p) => [(p.damageParts || []).join('&'), (p.damageTypes || []).join('&'), p.promotedFrom ? '(예약분)' : ''].filter(Boolean).join(' ')).join(' · ')}
+          </div>
+        </div>
+      )}
+      {dmgView && (
+        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={(e) => { e.stopPropagation(); setDmgView(null); }}>
+          {[dmgView.data, dmgView.detailPhoto].filter(Boolean).map((src, i) => (
+            <img key={i} src={src} alt="" className="max-h-[42vh] max-w-full rounded-lg border border-slate-600" />
+          ))}
+          <div className="text-slate-200 text-[12px] font-bold text-center">
+            {c.cn} — {(dmgView.damageParts || []).join(' & ')} {(dmgView.damageTypes || []).join(' & ')}{dmgView.dims ? ` (${dmgView.dims})` : ''}{dmgView.note ? ` · ${dmgView.note}` : ''}
+            <br/>화면을 누르면 닫힙니다
+          </div>
+        </div>
+      )}
       <button onClick={onOpen} className="w-full text-left">
         {/* M3.86: 라벨/모드 배지만 한 줄에 (컨번호는 다음 줄에 크게) */}
         <div className="flex items-center gap-2 flex-wrap mb-2">

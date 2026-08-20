@@ -54,6 +54,7 @@ import { isDeckPlanWorkbook, parseDeckPlanWorkbook } from '../rzorPlan.js';
 import DeckPlanView from '../components/DeckPlanView.jsx';
 import MailboxFilePicker from '../components/MailboxFilePicker.jsx';   // V9.46: 메일함 폴더 직결
 import { db } from '../firebase.js';
+import { fbGetPendingDamage, fbPromotePendingDamage } from '../firebase.js';   // 2.03: 데미지 예약 승격
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
@@ -828,6 +829,32 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // TallyOne 2.01 (검수사 확정 «양하 탭이든 선적 탭이든 어디든 브리핑 해달라고 하면 그자리에서» ):
   //   인라인 즉답 카드가 브리핑을 직접 내도록 재료 한 벌(briefCtx)로 묶어 내린다 — SearchPanel 1043행과 같은 재료.
   //   ⚠ prop 체인: VoyagePage → ListTab/LoloTab → InlineAnswerCard (1.98 교훈 — 시그니처 전부 갱신).
+  // 2.03: 데미지 예약 승격 — 자료가 도착해 예약 컨이 이 항차(양하·선적 어느 쪽이든)에 나타나면
+  //   pendingDamage → voyages/{key}/photos 로 옮긴다(멱등 — waiting 만, 승격 후 promoted 마킹).
+  //   승격되면 기존 경로(CARGO DAMAGE REPORT·조회 사진·색인)가 그대로 동작한다.
+  const dmgPromoRef = useRef('');
+  useEffect(() => {
+    if (dmgPromoRef.current === voyageKey) return;
+    const cns = new Set();
+    for (const _m of ['discharge', 'loading']) {
+      const sec2 = voyage?.[_m] || {};
+      Object.keys(sec2.ediContainers || {}).forEach((k) => { if (/^[A-Z]{4}\d{7}$/.test(k)) cns.add(k.toUpperCase()); });
+      Object.keys(sec2.records || {}).forEach((k) => { if (/^[A-Z]{4}\d{7}$/.test(k)) cns.add(k.toUpperCase()); });
+    }
+    if (!cns.size) return;   // 자료가 아직 — 다음 갱신 때 다시
+    dmgPromoRef.current = voyageKey;
+    (async () => {
+      try {
+        const pend = await fbGetPendingDamage();
+        for (const [cn, entries] of Object.entries(pend || {})) {
+          if (!cns.has(String(cn).toUpperCase())) continue;
+          const waiting = Object.values(entries || {}).filter((e) => e && e.status === 'waiting');
+          if (waiting.length) await fbPromotePendingDamage(voyageKey, cn, waiting);
+        }
+      } catch (e) { console.warn('[데미지 예약] 승격 확인 실패:', e); }
+    })();
+  }, [voyage, voyageKey]);
+
   const briefCtx = useMemo(() => ({
     pairs: (() => { try { return getBayPairs(containers, voyage?.info?.imo || '', voyage?.info?.vsl || ''); } catch (e) { return null; } })(),
     rfSkip: !!shipPolicy?.rfSkip,

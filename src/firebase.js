@@ -2096,7 +2096,66 @@ export async function fbAddPhotoReport(voyageKey, photoData, meta) {
     data: photoData,  // base64 string
     ...meta,
   });
+  // TallyOne 2.03: 데미지는 경량 색인에도 기록 — «SPSU2041959 데미지 있었어?»·«8월 17일 데미지» 를
+  //   보관된 옛 항차까지 사진 없이 훑을 수 있게(사진은 [사진 보기] 때 그 건만 불러온다).
+  if (meta && meta.type === 'damage' && meta.cn) {
+    try { await _writeDamageIndex(voyageKey, ts, meta); } catch (e) { console.warn('[damageIndex] 기록 실패(사진 저장은 됨):', e); }
+  }
   return ts;
+}
+
+// ── TallyOne 2.03: 데미지 색인 damageIndex/{CN}/{ts} — 메타만(사진 제외), 조회는 전체 1회 로드 ──
+async function _writeDamageIndex(voyageKey, ts, meta) {
+  const C = String(meta.cn || '').toUpperCase().replace(/\s/g, '');
+  if (!C) return;
+  await set(ref(db, `damageIndex/${C}/${ts}`), {
+    ts, cn: C, voyageKey,
+    damageTypes: meta.damageTypes || null, damageParts: meta.damageParts || null,
+    points: meta.points || null, dims: meta.dims || null,
+    note: meta.note || '', by: meta.by || meta.equip || '',
+  });
+}
+export async function fbGetDamageIndex() {
+  const snap = await get(ref(db, 'damageIndex'));
+  return snap.exists() ? (snap.val() || {}) : {};
+}
+// 사진 단건 — 현행 voyages 먼저, 없으면 보관(archive) 폴백 (수석 완료 저장은 항차를 archive 로 옮긴다)
+export async function fbGetDamagePhoto(voyageKey, ts) {
+  let snap = await get(ref(db, `voyages/${voyageKey}/photos/${ts}`));
+  if (!snap.exists()) snap = await get(ref(db, `archive/${voyageKey}/photos/${ts}`));
+  return snap.exists() ? snap.val() : null;
+}
+
+// ── TallyOne 2.03: 데미지 예약 — 자료 도착 전 컨번호로 미리 등록 (검수사 확정 «아무 자료도 도착하지
+//    않았습니다. 예약기능이 있어야 할것 같습니다» — 카톡으로 받은 명일 양하 컨 데미지 사진 사건) ──
+//    저장: pendingDamage/{CN}/{ts} — photos 항목과 같은 필드(type:'damage', data, detailPhoto,
+//    damageTypes/Parts, points, dims, note). 자료가 도착해 그 컨이 어느 항차에 나타나면
+//    fbPromotePendingDamage 가 voyages/{key}/photos 로 복사(승격)하고 status 를 promoted 로 남긴다.
+//    승격되면 기존 경로(CARGO DAMAGE REPORT buildDamage · 조회 사진)가 그대로 동작한다.
+export async function fbAddPendingDamage(cn, entry) {
+  const C = String(cn || '').toUpperCase().replace(/\s/g, '');
+  const ts = Date.now();
+  await set(ref(db, `pendingDamage/${C}/${ts}`), { ts, cn: C, status: 'waiting', type: 'damage', ...entry });
+  return ts;
+}
+export async function fbGetPendingDamage() {
+  const snap = await get(ref(db, 'pendingDamage'));
+  return snap.exists() ? (snap.val() || {}) : {};
+}
+export async function fbDeletePendingDamage(cn, ts) {
+  const C = String(cn || '').toUpperCase().replace(/\s/g, '');
+  await set(ref(db, `pendingDamage/${C}/${ts}`), null);
+}
+export async function fbPromotePendingDamage(voyageKey, cn, entries) {
+  const C = String(cn || '').toUpperCase().replace(/\s/g, '');
+  for (const e of entries || []) {
+    if (!e || e.status !== 'waiting') continue;   // 멱등 — 승격된 건 다시 안 옮긴다
+    const { status, ...body } = e;
+    await set(ref(db, `voyages/${voyageKey}/photos/${e.ts}`), { ...body, mode: 'unknown', promotedFrom: 'pendingDamage' });
+    try { await _writeDamageIndex(voyageKey, e.ts, body); } catch (er) { console.warn('[damageIndex] 승격 색인 실패:', er); }
+    await set(ref(db, `pendingDamage/${C}/${e.ts}/status`), 'promoted');
+    await set(ref(db, `pendingDamage/${C}/${e.ts}/promotedTo`), voyageKey);
+  }
 }
 
 // M4.9: ISO403 사진 저장 (컨테이너별 1장)

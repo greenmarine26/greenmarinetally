@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 // TallyOne 1.0 (K4): 미사용 아이콘 임포트 제거(Cloud·RefreshCw·Power) + 보조기능 아이콘 추가
 // TallyOne 1.1: 클로드에게 메모 아이콘(NotebookPen) 추가
-import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen } from 'lucide-react';
+import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen, Camera } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import { isChief , isTester} from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
 import { isOwnerName } from '../adminGuard.js';
@@ -9,6 +9,7 @@ import { APP_VERSION } from '../utils.js';   // 1.29-01: 헤더에 판 번호 �
 import HelpModal from './HelpModal.jsx';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
 import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
+import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: 데미지 예약(자료 도착 전 사전 등록)
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
 
@@ -20,6 +21,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   const [helpOpen, setHelpOpen] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);   // M6.14d: Gemini 키 설정 모달
   const [memoOpen, setMemoOpen] = useState(false); // TallyOne 1.1: 클로드에게 메모 모달 (HelpModal과 같은 Header 내부 state 패턴)
+  const [dmgResvOpen, setDmgResvOpen] = useState(false); // TallyOne 2.03: 데미지 예약 모달
   // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
   const [equipOpen, setEquipOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);   // V9.15: 부가 버튼 4개(도움말·키·인원·종료)를 ⋯ 메뉴로 — 선박명 자리 확보
@@ -154,6 +156,12 @@ export default function Header({ version, inspector, online, route, voyages, onC
                     <NotebookPen className="w-5 h-5 text-violet-300 shrink-0"/>
                     <span className="text-sm text-slate-200 font-bold">📝 개발 요청 · 미르에게 원함</span>
                   </button>
+                  {/* TallyOne 2.03: 데미지 예약 — 자료 도착 전 컨번호로 사전 등록 (전 화면 접근) */}
+                  <button onClick={() => { setMenuOpen(false); setDmgResvOpen(true); }}
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                    <Camera className="w-5 h-5 text-orange-300 shrink-0"/>
+                    <span className="text-sm text-slate-200 font-bold">📷 데미지 예약</span>
+                  </button>
                   {/* TallyOne 1.0 (K4): 보조기능(#/aux) 진입 — 건강 점검·맛집 수첩 등 */}
                   {onOpenAux && (
                     <button onClick={() => { setMenuOpen(false); onOpenAux(); }}
@@ -207,6 +215,8 @@ export default function Header({ version, inspector, online, route, voyages, onC
           onClose={() => setMemoOpen(false)}
         />
       )}
+      {/* TallyOne 2.03: 데미지 예약 */}
+      {dmgResvOpen && <PendingDamageModal inspector={inspector} onClose={() => setDmgResvOpen(false)} />}
       {/* M5.0: ContainerPhrasebook은 HelpModal 안에서 호출됨 */}
 
       {/* M3.5.6: 장비 번호 선택 모달 */}

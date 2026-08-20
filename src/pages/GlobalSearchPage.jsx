@@ -4,7 +4,8 @@ import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, Arro
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
-import { useCarrierContacts, useShipSpeed, useEdiPattern } from '../useCarrierContacts.js';   // 1.89·1.92·1.97
+import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
+import { fbGetDamagePhoto } from '../firebase.js';   // 2.03: 데미지 사진 단건(보관 폴백)
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
@@ -12,6 +13,38 @@ import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
+// 2.03 (검수사 확정 «SPSU2041959 혹시 17일날 데미지 잡힌게 있었을까요? 가끔 이런 메시지가 옵니다» ·
+//   «쉽게 미르에게 8월 17일에 발생한 데미지건 알려줘 하면 보여줄수 있게»):
+//   데미지 이력 질의 — 컨번호(전체) 또는 날짜(8월 17일 / 17일)와 «데미지» 가 같이 오면 색인을 뒤진다.
+export function parseDamageHistoryQuery(q) {
+  const t = String(q || '');
+  if (!/데미지|damage|손상/i.test(t)) return null;
+  const cnM = t.toUpperCase().replace(/\s/g, '').match(/[A-Z]{4}\d{7}/);
+  let day = null;
+  let m = t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  if (m) day = { mo: parseInt(m[1], 10), d: parseInt(m[2], 10) };
+  else { m = t.match(/(\d{1,2})\s*일/); if (m) day = { mo: null, d: parseInt(m[1], 10) }; }
+  if (!cnM && !day) return { recent: true };   // «데미지 기록/데미지건» — 최근 전부
+  return { cn: cnM ? cnM[0] : null, day };
+}
+export function filterDamageHits(damageIndex, dq, now = new Date()) {
+  const rows = [];
+  Object.values(damageIndex || {}).forEach((m) => Object.values(m || {}).forEach((e) => { if (e && e.ts) rows.push(e); }));
+  rows.sort((a, b) => b.ts - a.ts);
+  if (!dq) return [];
+  if (dq.recent) return rows.slice(0, 20);
+  return rows.filter((e) => {
+    if (dq.cn && String(e.cn).toUpperCase() !== dq.cn) return false;
+    if (dq.day) {
+      const d = new Date(e.ts);
+      if (d.getDate() !== dq.day.d) return false;
+      if (dq.day.mo != null && (d.getMonth() + 1) !== dq.day.mo) return false;
+      if (dq.day.mo == null && (now - d) > 62 * 86400000) return false;   // 월 없이 «17일» = 최근 두 달 안
+    }
+    return true;
+  });
+}
 
 export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '' }) {   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
   const [query, setQuery] = useState(initialQuery || '');
@@ -112,6 +145,18 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   const carrierContacts = useCarrierContacts();   // 1.89
   const shipSpeed = useShipSpeed();   // 1.92
   const ediPattern = useEdiPattern();   // 1.97
+  const damageIndex = useDamageIndex();   // 2.03: 데미지 색인(메타만)
+  const [dmgPhotoView, setDmgPhotoView] = useState(null);   // 2.03: { loading } | { imgs:[..], cn } | { err }
+  const dmgQ = useMemo(() => parseDamageHistoryQuery(debouncedQuery), [debouncedQuery]);
+  const dmgHits = useMemo(() => (dmgQ ? filterDamageHits(damageIndex, dmgQ) : []), [damageIndex, dmgQ]);
+  const openDmgPhoto = async (e) => {
+    setDmgPhotoView({ loading: true });
+    try {
+      const p = await fbGetDamagePhoto(e.voyageKey, e.ts);
+      const imgs = [p?.data, p?.detailPhoto].filter(Boolean);
+      setDmgPhotoView(imgs.length ? { imgs, cn: e.cn } : { err: '사진을 찾지 못했습니다 — 보관에서 지워졌을 수 있습니다' });
+    } catch (er) { setDmgPhotoView({ err: '사진 불러오기 실패: ' + (er?.message || er) }); }
+  };
   const shipCtx = useMemo(() => {
     const Q = String(debouncedQuery || '').toUpperCase();
     if (Q.length < 3) return null;
@@ -668,6 +713,46 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           {askedAt && !isListening && <span className="text-emerald-400 font-bold ml-2">✓ 질문 접수 {_hm(askedAt)}</span>}
         </div>
       </div>
+
+      {/* 2.03: 데미지 이력 카드 — 컨번호·날짜로 과거(보관 포함) 데미지 조회 + 사진 */}
+      {dmgQ && (
+        <div className="bg-orange-950/40 border-2 border-orange-700 rounded-xl p-4 mb-3">
+          <div className="text-[11px] text-orange-400 font-bold uppercase mb-1">📷 데미지 이력</div>
+          {damageIndex == null ? (
+            <div className="text-sm text-slate-400">색인 불러오는 중…</div>
+          ) : dmgHits.length === 0 ? (
+            <div className="text-sm text-slate-200">기록 없음 — {dmgQ.cn ? `${dmgQ.cn} 의 데미지 기록이 없습니다` : '해당 날짜의 데미지 기록이 없습니다'} (앱으로 보고·예약한 건 기준)</div>
+          ) : (
+            <div className="space-y-2">
+              {dmgHits.map((e) => {
+                const d = new Date(e.ts);
+                const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                return (
+                  <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] mono font-bold text-slate-100">{e.cn} <span className="text-slate-400 font-normal">{when} · {e.voyageKey}</span></div>
+                      <div className="text-[11px] text-slate-300 truncate">
+                        {(e.damageParts || []).join(' & ')} {(e.damageTypes || []).join(' & ')}{e.points ? ` ${e.points}P` : ''}{e.dims ? ` (${e.dims})` : ''}{e.note ? ` — ${e.note}` : ''}
+                      </div>
+                    </div>
+                    <button onClick={() => openDmgPhoto(e)} className="px-3 py-2 rounded-lg bg-orange-700 hover:bg-orange-600 text-white text-[12px] font-bold shrink-0">📷 사진</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+      {dmgPhotoView && (
+        <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={() => setDmgPhotoView(null)}>
+          {dmgPhotoView.loading && <div className="text-slate-200 font-bold">사진 불러오는 중…</div>}
+          {dmgPhotoView.err && <div className="text-red-300 font-bold text-sm">{dmgPhotoView.err}</div>}
+          {(dmgPhotoView.imgs || []).map((src, i) => (
+            <img key={i} src={src} alt="" className="max-h-[45vh] max-w-full rounded-lg border border-slate-600" />
+          ))}
+          {dmgPhotoView.imgs && <div className="text-slate-300 text-[12px] font-bold">{dmgPhotoView.cn} — 화면을 누르면 닫힙니다</div>}
+        </div>
+      )}
 
       {/* V9.14: 즉답/안내 카드 */}
       {localAnswer && (

@@ -33,3 +33,17 @@ export function useEdiPattern() {
   }, []);
   return v;
 }
+
+// 2.03: 데미지 색인(damageIndex — 컨번호·날짜로 과거 데미지 조회) 1회 로드.
+//   전체가 메타만이라 가볍다(사진 제외). 새 데미지 저장 직후엔 페이지 재진입 시 갱신된다.
+let _dmgIdx = null;
+export function useDamageIndex() {
+  const [di, setDi] = useState(_dmgIdx);
+  useEffect(() => {
+    if (_dmgIdx) return;
+    import('./firebase.js').then(({ fbGetDamageIndex }) => fbGetDamageIndex())
+      .then((v) => { _dmgIdx = v || {}; setDi(_dmgIdx); })
+      .catch(() => { /* 색인 없으면 «기록 없음» 답 */ });
+  }, []);
+  return di;
+}

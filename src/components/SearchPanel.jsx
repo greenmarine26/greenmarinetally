@@ -1615,7 +1615,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             {/* TallyOne 1.53: 싱글로 하려는데 트윈이 되면 한 줄로 알린다(막지 않는다). */}
             {main.length === 1 && <TwinPossibleHint c={main[0]} allContainers={allContainers} voyage={voyage}/>}
             {main.length === 1 && (
-              <BigResultCard c={main[0]} allContainers={allContainers}
+              <BigResultCard voyagePhotos={voyage?.photos || null} c={main[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(main[0])}
                 /* 1.55-02: 번호 수정으로 다른 컨을 배정했으면 그 컨으로 재검색 — 카드가 갈아 끼워진다.
@@ -1629,7 +1629,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             )}
             {main.length === 0 && doneSolo.length === 1 && (
               /* TallyOne 1.53: 완료분도 위치·지나온 자리·버튼이 다 있는 정식 카드로 편다(요약 한 줄 금지). */
-              <BigResultCard c={doneSolo[0]} allContainers={allContainers}
+              <BigResultCard voyagePhotos={voyage?.photos || null} c={doneSolo[0]} allContainers={allContainers}
                 voyageKey={voyageKey} inspector={inspector}
                 onOpen={() => onOpenContainer?.(doneSolo[0])}
                 onReplace={(nc) => { if (nc?.cn) { setDraft(nc.cn); setQuery(nc.cn); } }}
@@ -2368,7 +2368,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       )}
 
       {c1 && (
-        <BigResultCard c={c1} allContainers={allContainers}
+        <BigResultCard voyagePhotos={voyage?.photos || null} c={c1} allContainers={allContainers}
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(c1)}
           onAfterComplete={handleAfterComplete}
@@ -2390,7 +2390,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       )}
 
       {c1 && c2 && (
-        <BigResultCard c={c2} allContainers={allContainers}
+        <BigResultCard voyagePhotos={voyage?.photos || null} c={c2} allContainers={allContainers}
           voyageKey={voyageKey} inspector={inspector}
           onOpen={() => onOpenContainer?.(c2)}
           onAfterComplete={handleAfterComplete}
