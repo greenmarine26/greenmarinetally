@@ -86,17 +86,17 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
                   쉬운 거면 10분 이내, 복잡하면 클로드의 처리 속도에 맞춰 알려줘야 사용자가 기다리지 않습니다."
                   파일로 내려받을 필요가 없다 — 클로드가 서버(feedback 노드)를 직접 읽는다. */}
               <div className="text-slate-300 text-sm mt-2 leading-relaxed">
-                클로드가 <b className="text-slate-100">서버에서 바로 읽습니다.</b><br/>
+                개발자가 <b className="text-slate-100">서버에서 바로 읽습니다.</b><br/>
                 파일로 내려받지 않으셔도 됩니다.
               </div>
               <div className="text-[12px] text-slate-400 mt-3 bg-slate-800/60 border border-slate-700/60 rounded-lg p-2.5 leading-relaxed text-left">
                 <div className="text-slate-300 font-bold mb-1">처리 계획은 이 신고에 적힙니다</div>
                 수석 대시보드 「오답 리포트」에서 이 건을 보시면
-                <b className="text-sky-300"> 클로드 회신</b>이 붙습니다 —
+                <b className="text-sky-300"> 개발 회신</b>이 붙습니다 —
                 <b className="text-slate-200"> 무엇을 고칠지</b>와 <b className="text-slate-200">언제 되는지</b>.
                 <div className="text-[11px] text-slate-500 mt-1.5">
                   {/* TallyOne 1.17: 검수사 지시 — "실제 얼마의 시간이 걸리는지. 그래야 앱을 신용하고 더 쓰고 싶어진다." */}
-                  <b className="text-slate-300">답이 먼저 옵니다</b> — 앱이 못 낸 답을 클로드가 직접 적어 둡니다.
+                  <b className="text-slate-300">답이 먼저 옵니다</b> — 앱이 못 낸 답을 개발자가 직접 적어 둡니다.
                   그 다음 <b className="text-slate-300">앱이 언제부터 스스로 답하는지</b>를 분 단위로 적습니다.
                 </div>
               </div>
@@ -136,7 +136,7 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
 
               <div className="text-[11px] text-slate-500 leading-relaxed bg-slate-800/50 rounded p-2 border border-slate-700/50">
                 💡 검수자({inspector || '익명'}) · 항차({voyageVsl || '-'}) · 앱 v{APP_VERSION} 자동 기록됩니다.
-                <br/>클로드가 서버에서 바로 읽습니다 — 파일로 내려받지 않아도 됩니다.
+                <br/>개발자가 서버에서 바로 읽습니다 — 파일로 내려받지 않아도 됩니다.
                 <br/>처리 계획은 수석 대시보드 "오답 리포트"의 이 건에 붙습니다.
               </div>
             </>

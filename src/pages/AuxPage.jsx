@@ -172,7 +172,7 @@ function ClaudeReplyView({ inspector, isOwner = false, onBack }) {
 
   return (
     <div className="space-y-2">
-      <SubHeader title="오답노트 — 클로드 회신" onBack={onBack} />
+      <SubHeader title="오답노트 — 개발 회신" onBack={onBack} />
       <div className="text-[11px] text-slate-400 px-1">
         신고 {rows.length}건 · 회신 대기 {waiting}건 {isOwner ? '· (전체 검수사)' : '· (내 신고분)'}
       </div>
@@ -192,7 +192,7 @@ function ClaudeReplyView({ inspector, isOwner = false, onBack }) {
             <div className="text-xs text-amber-200 mono break-all mb-1">Q: {f.query}</div>
             {!f.claudeStatus && !f.claudeAnswer && (
               <div className="text-[11px] text-slate-500 bg-slate-900/60 border border-slate-800 rounded px-2 py-1">
-                🕐 클로드 확인 대기 — 아직 회신이 없습니다
+                🕐 개발 확인 대기 — 아직 회신이 없습니다
               </div>
             )}
             {(f.claudeAnswer || f.claudeStatus) && (
@@ -204,7 +204,7 @@ function ClaudeReplyView({ inspector, isOwner = false, onBack }) {
                   </div>
                 )}
                 <div className={`font-bold ${t.head}`}>
-                  {t.icon} 클로드 — {t.label}
+                  {t.icon} 개발 — {t.label}
                   {f.claudeEta && f.claudeStatus !== 'fixed' && <span className="ml-1 text-slate-300">· {f.claudeEta}분 예정</span>}
                   {f.fixedVersion && f.claudeStatus === 'fixed' && <span className="ml-1 text-slate-300 mono">· {f.fixedVersion}</span>}
                 </div>
@@ -411,12 +411,12 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
           {/* TallyOne 1.22: 오답노트 — 내가 신고한 오답에 클로드가 뭐라고 답했는지 여기서 본다.
               종전엔 수석 대시보드에만 있어 검수사가 회신을 볼 수 없었다(검수사 지적 2026-08-07). */}
           <AuxCard icon={MessageSquareReply} accent="rose" title="오답노트"
-            sub={replyBadge ? `클로드 회신 ${replyBadge}건 · 눌러서 보기` : '내가 신고한 오답 · 클로드 답'}
+            sub={replyBadge ? `개발 회신 ${replyBadge}건 · 눌러서 보기` : '내가 신고한 오답 · 개발 답'}
             badge={waitingBadge ? `대기 ${waitingBadge}` : null}
             onClick={() => setView('reply')} />
           {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청 기록, 클로드 세션이 나중에 처리 */}
-          <AuxCard icon={NotebookPen} accent="violetDeep" title="클로드에게 메모"
-            sub="발견한 문제·요청 기록 → 클로드가 처리"
+          <AuxCard icon={NotebookPen} accent="violetDeep" title="개발 요청 · 미르에게 원함"
+            sub="발견한 문제·개발 요청, 미르가 더 해줬으면 하는 것"
             onClick={() => setMemoOpen(true)} />
         </div>
       )}

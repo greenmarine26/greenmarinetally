@@ -14,8 +14,9 @@ import { APP_VERSION } from '../utils.js';
 export const CLAUDE_MEMO_QUEUE_KEY = 'tallyone_claude_memo_queue';
 
 // 서버에 저장할 메모 1건 조립 — firebase.js fbAddClaudeMemo와 필드 계약을 여기서 고정한다
-export function buildClaudeMemo({ text, inspector, route, voyageKey, mode, appVersion } = {}) {
+export function buildClaudeMemo({ text, inspector, route, voyageKey, mode, appVersion, kind } = {}) {   // 2.02: kind — 'dev'(개발 요청) | 'mir'(미르에게 원함). 저장소는 종전대로 claude_inbox 하나(검수사 확정 «메모함은 하나일지라도 수집함은 이름은 달라도 됩니다»)
   return {
+    kind: kind === 'mir' ? 'mir' : 'dev',
     text: String(text || '').trim(),
     inspector: inspector || '',
     route: route || '',
@@ -120,6 +121,7 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
   const modeLabel = curMode === 'loading' ? '선적' : curMode === 'discharge' ? '양하' : '';
 
   const [text, setText] = useState('');
+  const [kind, setKind] = useState('dev');   // 2.02: 입력상자 구분 — 개발 요청 / 미르에게 원함 (저장은 같은 메모함)
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState(null);              // { tone:'ok'|'wait'|'err', msg }
   const [queueItems, setQueueItems] = useState(() => readMemoQueue());
@@ -160,7 +162,7 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
       return;
     }
     setSending(true);
-    const memo = buildClaudeMemo({ text: t, inspector, route: hash, voyageKey: vKey, mode: curMode, appVersion: ver });
+    const memo = buildClaudeMemo({ text: t, inspector, route: hash, voyageKey: vKey, mode: curMode, appVersion: ver, kind });
     const r = await sendMemoOrQueue(memo);
     if (r.result === 'sent') {
       setText('');
@@ -168,7 +170,7 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
       const f = await flushMemoQueue();
       setNotice({
         tone: 'ok',
-        msg: `클로드 메모함에 저장됐습니다 — 다음 클로드 세션에서 처리됩니다${f.sent ? ` (보관 메모 ${f.sent}건도 함께 전송)` : ''}`,
+        msg: `개발 메모함에 저장됐습니다 — 개발자가 읽고 처리합니다${f.sent ? ` (보관 메모 ${f.sent}건도 함께 전송)` : ''}`,
       });
       await refresh();
     } else if (r.result === 'queued') {
@@ -220,7 +222,7 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
         <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <NotebookPen className="w-5 h-5 text-violet-300" />
-            <div className="font-black text-base text-violet-200">클로드에게 메모</div>
+            <div className="font-black text-base text-violet-200">개발 요청 · 미르에게 원함</div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg" aria-label="닫기">
             <X className="w-5 h-5 text-slate-400" />
@@ -229,7 +231,19 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
 
         <div className="p-4 space-y-3">
           <div className="text-[11px] text-slate-400 leading-relaxed">
-            작업 중 발견한 문제·요청을 남기면 클로드 메모함에 저장되고, 다음 클로드 세션이 읽어 처리합니다.
+            남긴 글은 개발 메모함에 저장되고, 개발자가 읽어 처리합니다.
+          </div>
+
+          {/* 2.02: 입력상자 구분 — 저장소는 하나, 이름만 다르다 (검수사 확정) */}
+          <div className="flex gap-2">
+            <button onClick={() => setKind('dev')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 ${kind === 'dev' ? 'bg-violet-700 border-violet-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+              🔧 개발 요청
+            </button>
+            <button onClick={() => setKind('mir')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 ${kind === 'mir' ? 'bg-amber-700 border-amber-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+              🐱 미르에게 원함
+            </button>
           </div>
 
           {/* ① 자동 첨부 정보 */}
@@ -249,7 +263,7 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={4}
-            placeholder="예: SWDN 2608S 선적 리스트에 리퍼 온도가 안 보입니다"
+            placeholder={kind === 'mir' ? '미르가 더 해줬으면 하는 것 — 예: 베이별 남은 콘 수도 알려줘' : '예: SWDN 2608S 선적 리스트에 리퍼 온도가 안 보입니다'}
             className="w-full bg-slate-800 border-2 border-slate-700 focus:border-violet-500 focus:outline-none rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 leading-relaxed resize-y"
           />
 

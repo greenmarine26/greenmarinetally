@@ -1037,7 +1037,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             {/* TallyOne 1.16: 클로드는 서버(feedback 노드)를 직접 읽는다 — 내려받아 전달할 필요가 없다.
                 파일이 필요한 때(외부 공유·보관)를 위해 버튼은 남기되 주 용도가 아님을 안내한다. */}
             <button onClick={exportFeedback}
-              title="파일로 보관하거나 외부에 전달할 때만 — 클로드는 서버에서 바로 읽습니다"
+              title="파일로 보관하거나 외부에 전달할 때만 — 개발자는 서버에서 바로 읽습니다"
               className="text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-slate-700">
               📥 파일로 저장
             </button>
@@ -1059,9 +1059,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <InlineNotice notice={fbNotice} onClose={() => setFbNotice(null)} />
         <div className="text-[10px] text-slate-500 mb-2 leading-relaxed">
           검수원이 잘못된 답변에 ❌ 오답 버튼을 누르면 여기 모입니다.
-          <br/><b className="text-sky-300">클로드가 서버에서 바로 읽습니다</b> — 파일로 내보내 전달하지 않아도 됩니다.
-          처리 계획은 각 건에 <b className="text-sky-300">클로드 회신</b>으로 붙습니다.
-          <br/><b className="text-amber-300">비우기는 회신이 붙은 뒤에</b> 누르십시오 — 지우면 클로드도 못 봅니다.
+          <br/><b className="text-sky-300">개발자가 서버에서 바로 읽습니다</b> — 파일로 내보내 전달하지 않아도 됩니다.
+          처리 계획은 각 건에 <b className="text-sky-300">개발 회신</b>으로 붙습니다.
+          <br/><b className="text-amber-300">비우기는 회신이 붙은 뒤에</b> 누르십시오 — 지우면 개발자도 못 봅니다.
         </div>
         {feedbackList.length === 0 ? (
           <div className="text-xs text-slate-500 text-center py-4">
@@ -1338,7 +1338,7 @@ function FeedbackRow({ feedback: f }) {
         if (!st) {
           return (
             <div className="text-[11px] text-slate-500 bg-slate-900/60 border border-slate-800 rounded px-2 py-1 mb-1">
-              🕐 클로드 확인 대기 — 아직 회신이 없습니다
+              🕐 개발 확인 대기 — 아직 회신이 없습니다
             </div>
           );
         }
@@ -1361,7 +1361,7 @@ function FeedbackRow({ feedback: f }) {
               </div>
             )}
             <div className={`font-bold ${tone.head}`}>
-              {tone.icon} 클로드 — {tone.label}
+              {tone.icon} 개발 — {tone.label}
               {f.claudeEta && st !== 'fixed' && <span className="ml-1 text-slate-300">· {f.claudeEta}</span>}
               {/* 남은 시간 — 막연한 '곧'이 아니라 숫자로. 지나면 그것도 그대로 적는다. */}
               {remainMin != null && st !== 'fixed' && (

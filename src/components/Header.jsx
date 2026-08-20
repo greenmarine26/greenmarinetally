@@ -152,7 +152,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
                   <button onClick={() => { setMenuOpen(false); setMemoOpen(true); }}
                     className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
                     <NotebookPen className="w-5 h-5 text-violet-300 shrink-0"/>
-                    <span className="text-sm text-slate-200 font-bold">📝 클로드에게 메모</span>
+                    <span className="text-sm text-slate-200 font-bold">📝 개발 요청 · 미르에게 원함</span>
                   </button>
                   {/* TallyOne 1.0 (K4): 보조기능(#/aux) 진입 — 건강 점검·맛집 수첩 등 */}
                   {onOpenAux && (
