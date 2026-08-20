@@ -89,6 +89,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   collectorHb = null, pilotForecast = null, terminalWork = null, portMisData = null,   // 1.40-01: 🚢신고도착
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
 }) {
+  const [chiefSearchQ, setChiefSearchQ] = useState('');   // 2.03-01: 대시보드 통합검색창
   const chief = isChief(inspector);  // V7.94-18: 완료 권한 — 수석검수/부수석만
   const owner = isOwnerName(inspector);   // TallyOne 1.3: 활동 로그 섹션 — 소유자가 아니면 렌더 자체를 안 한다
   // 1.41: **화면을 여는 권한**은 따로다. 개발용 접근 명단에 든 사람도 이 화면을 볼 수 있다.
@@ -613,8 +614,16 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <BigStat label="누락 (선사 추가 필요)" value={total.missing} sub={`평택 ${total.ptkAll}대 중`} color={total.missing > 0 ? "red" : "slate"}/>
       </div>
 
-      {/* TallyOne 1.5: 화면 데이터만 새로고침 — 페이지 리로드 없이 구독 재연결(로그인 유지) */}
-      <div className="flex justify-end">
+      {/* TallyOne 1.5: 화면 데이터만 새로고침 — 페이지 리로드 없이 구독 재연결(로그인 유지)
+          2.03-01 (검수사 지시 «수석대쉬보드엔 통합검색이 버튼을 클릭해야… 데이터 새로 고침 버튼옆에 통합검색창을»):
+          입력하고 엔터(또는 🔍)를 치면 그 질문을 들고 통합검색으로 간다. */}
+      <div className="flex gap-2 items-center">
+        <form className="flex-1 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const q = String(chiefSearchQ || '').trim(); onOpenGlobalSearch?.(q); }}>
+          <input value={chiefSearchQ} onChange={(e) => setChiefSearchQ(e.target.value)}
+            placeholder="통합검색 · 미르에게 질문 — 컨번호·데미지·브리핑"
+            className="flex-1 bg-slate-800 border border-slate-600 focus:border-emerald-500 focus:outline-none rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500"/>
+          <button type="submit" className="px-3 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-sm font-bold shrink-0">🔍</button>
+        </form>
         <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
       </div>
 
@@ -2422,7 +2431,7 @@ function Fold({ id, title, open, onToggle, children }) {
 
 // 타임라인 한 줄 문구 — 순수 함수(노드 시뮬 검증 겸 단일 소스)
 const _ACT_ROUTE_KO = { home: '홈', chief: '수석 대시보드', search: '통합 검색', health: '항차 건강', food: '맛집', aux: '보조기능' };
-const _ACT_TAB_KO = { list: '검수', search: '자연어', bay: '베이', lolo: 'LOLO', stats: '통계', report: '결과', data: '자료' };
+const _ACT_TAB_KO = { list: '검수', search: '작업 시작', bay: '베이', lolo: 'LOLO', stats: '통계', report: '결과', data: '자료' };   // 2.03-01: 자연어 → 실제 탭 이름
 export function formatActivityLine(r, voyages) {
   if (!r) return '?';
   if (r.type === 'login') return '로그인';

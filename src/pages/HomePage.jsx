@@ -638,7 +638,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         <form onSubmit={(e) => { e.preventDefault(); onOpenGlobalSearch(homeQ.trim()); }} className="relative mb-3">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
           <input type="text" value={homeQ} onChange={(e) => setHomeQ(e.target.value)}
-            placeholder="통합검색 · 자연어 질문 — 컨번호 끝자리, 용어, 기능"
+            placeholder="통합검색 · 미르에게 질문 — 컨번호 끝자리, 용어, 기능"
             className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-16 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-600"
             style={{ minHeight: 44 }} />
           <button type="submit"

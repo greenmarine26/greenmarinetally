@@ -462,7 +462,7 @@ export default function App() {
               onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
               onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
               onGoHome={() => navigate('home')}
-              onOpenGlobalSearch={() => { setSearchInitQ(''); navigate('search'); }}
+              onOpenGlobalSearch={(q) => { setSearchInitQ(typeof q === 'string' ? q : ''); navigate('search'); }}   /* 2.03-01: 대시보드 검색창 질문을 들고 간다 */
             />
           ) : (
             <DeniedChiefOnly onGoHome={() => navigate('home')}/>

@@ -504,7 +504,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     }
     if ((p.briefingQuery && !shipCtx) || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
         p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.foodQuery || (p.schedQuery && !shipCtx)) {
-      return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 답합니다. (예: "STSE 출항 몇 시")\n작업 중 상세(브리핑·ETA·인계)는 항차 화면 🎤 자연어 탭이 더 자세합니다.';
+      return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 답합니다. (예: "STSE 출항 몇 시")\n작업 중 상세(브리핑·ETA·인계)는 항차 화면 [▶ 작업 시작] 탭의 미르가 더 자세합니다.';
     }
     // TallyOne 1.21: 기상 시각 — 통합검색엔 항차 맥락이 없어 근무조(주간 08시·야간 19시) 기준으로 답한다.
     if (p.wakeQuery) { try { return generateWakeAnswer({}); } catch { return null; } }
