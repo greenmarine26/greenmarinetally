@@ -453,7 +453,7 @@ export function applyNLFilter(containers, parsed) {
   else if (parsed.size === '45') r = r.filter(c => /^L5/i.test(c.iso || '') || (isoToLabel(c.iso) || '').startsWith('45'));
   if (parsed.fe) r = r.filter(c => c.fe === parsed.fe);
   if (parsed.type === 'rf') {
-    r = r.filter(c => c.rf || (c.iso && c.iso[2] === 'R') || /RF$/.test(isoToLabel(c.iso) || '') || (c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0'));
+    r = r.filter(c => c.rf || (c.iso && c.iso[2] === 'R') || /R[FH]$/.test(isoToLabel(c.iso) || '') || (c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0'));
     // 1.86 (검수사 확정): «리퍼» = 풀이 기본 — 엠티는 «리퍼 엠티»로 물을 때만. 전면에 엠티가 섞이면 헷갈린다.
     if (!parsed.fe) r = r.filter(c => c.fe !== 'E');
   } else if (parsed.type === 'dg') r = r.filter(c => c.dg);

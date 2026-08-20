@@ -25,7 +25,7 @@ const FILTERS = [
   { key: 'hc', label: '40HC', color: 'bg-blue-600' },
   { key: 'hc45', label: '45HC', color: 'bg-blue-600' },
   { key: 'rf20', label: '20RF', color: 'bg-cyan-600', rfSnow: true },   // 1.86-02: 눈꽃은 아이콘으로 — 풀 있으면 파란·전부 엠티면 회색(검수사 확정)
-  { key: 'rf40', label: '40RF', color: 'bg-cyan-600', rfSnow: true },
+  { key: 'rf40', label: '40RH', color: 'bg-cyan-600', rfSnow: true },   // 1.99: 선사 제출 형식(HC 리퍼) — 40RF(표준높이)도 이 칩에 합산
   { key: 'rf45', label: '45RF', color: 'bg-cyan-600', rfSnow: true },
   { key: 'fr20', label: '▱ 20FR', color: 'bg-yellow-600' },
   { key: 'fr40', label: '▱ 40FR', color: 'bg-yellow-600' },
@@ -92,7 +92,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       else if (lbl === '20DC' || lbl === '20GP' || lbl === '20VH' || lbl === '20HC') { k.dc20++; knownLbl = true; }   // 1.55-01: 20HC(26xx)도 20피트 칸에 — 별도 배지 없음, 종전 집계 유지
       else if (lbl === '40DC' || lbl === '40GP' || lbl === '40VH') { k.dc40++; knownLbl = true; }
       if (lbl === '20RF') { k.rf20++; if (c.fe === 'F') k.rf20f++; knownLbl = true; }
-      else if (lbl === '40RF') { k.rf40++; if (c.fe === 'F') k.rf40f++; knownLbl = true; }
+      else if (lbl === '40RF' || lbl === '40RH') { k.rf40++; if (c.fe === 'F') k.rf40f++; knownLbl = true; }
       if (lbl === '20FR') { k.fr20++; knownLbl = true; }
       else if (lbl === '40FR') { k.fr40++; knownLbl = true; }
       else if (lbl === '45FR') { k.fr45++; knownLbl = true; }
@@ -151,20 +151,20 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'feUnknown' && (c.fe === 'F' || c.fe === 'E')) return false;
       if (f === 'isoOther') {
         const lbl = isoToLabel(c.iso);
-        const known = ['20DC','20GP','20HC','40DC','40GP','40HC','45HC','20RF','40RF','45RF','20FR','40FR','45FR','20OT','40OT','45OT','20TK','40TK'];   // 1.55-01: 20HC 추가
+        const known = ['20DC','20GP','20HC','40DC','40GP','40HC','45HC','20RF','40RF','40RH','45RF','20FR','40FR','45FR','20OT','40OT','45OT','20TK','40TK'];   // 1.55-01: 20HC 추가
         if (known.includes(lbl)) return false;
       }
       if (f === 'feUnknown' && (c.fe === 'F' || c.fe === 'E')) return false;
       if (f === 'isoOther') {
         const lbl = isoToLabel(c.iso);
-        const known = ['40HC', '20DC', '20GP', '20HC', '40DC', '40GP', '20RF', '40RF', '45RF', '20FR', '40FR', '45FR', '20OT', '40OT', '45OT', '20TK', '40TK', '45HC'];   // 1.55-01: 20HC 추가
+        const known = ['40HC', '20DC', '20GP', '20HC', '40DC', '40GP', '20RF', '40RF', '40RH', '45RF', '20FR', '40FR', '45FR', '20OT', '40OT', '45OT', '20TK', '40TK', '45HC'];   // 1.55-01: 20HC 추가
         if (known.includes(lbl)) return false;
       }
       if (f === '20' && !['20DC','20GP','20HC'].includes(lbl)) return false;   // 1.55-01
       if (f === '40' && !['40DC','40GP'].includes(lbl)) return false;
       if (f === 'hc' && lbl !== '40HC') return false;
       if (f === 'rf20' && lbl !== '20RF') return false;
-      if (f === 'rf40' && lbl !== '40RF') return false;
+      if (f === 'rf40' && lbl !== '40RF' && lbl !== '40RH') return false;
       if (f === 'fr20' && lbl !== '20FR') return false;
       if (f === 'fr40' && lbl !== '40FR') return false;
       if (f === 'fr45' && lbl !== '45FR') return false;
