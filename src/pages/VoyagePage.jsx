@@ -718,7 +718,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       const mark = {};
       for (const dk of decks) for (const s of (dk?.slots || [])) if (s && s.cn && !s.empty) mark[s.cn] = s;
       if (!Object.keys(mark).length) return base;
-      return base.map(c => {
+      const out = base.map(c => {
         const s = mark[c.cn];
         if (!s) return c;
         // 2.06 (검수사 실측 «RZOR 자료에서 수화물이 안보입니다» — SPSU2019220): RZOR 수화물은 별도 리스트가
@@ -728,6 +728,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         return { ...c, lolo: c.lolo || !!s.lolo, pos: c.pos || s.pos || '', dbl: c.dbl || !!s.dbl,
           lugg: c.lugg || _fl.includes('LUG'), urgent: c.urgent || _fl.includes('긴급') };
       });
+      // 2.06-02 (검수사 «리스트 목록에도 카드색이 반영안됨» — R090E 실측): SPSU2019220 은 EDI(208)에도
+      //   양하 리스트(208)에도 없고 **덱플랜에만 있다**. 그래서 리스트에 행 자체가 없어 보라 카드가
+      //   나올 수 없었다. 덱플랜 전용 LUG(수화물) 컨만 행으로 추가한다 — R087E(163/164, 수화물 +1)처럼
+      //   수화물은 실작업 대상이라 총계에 드는 것이 현장과 맞다. 다른 덱 전용 컨은 추가하지 않는다(외과적).
+      const have = new Set(out.map(c => c.cn));
+      for (const [cn, s] of Object.entries(mark)) {
+        if (have.has(cn)) continue;
+        const _fl = Array.isArray(s.flags) ? s.flags : [];
+        if (!_fl.includes('LUG')) continue;
+        out.push({ cn, l4: cn.slice(-4), iso: String(s.iso || '').replace(/\s/g, ''), fe: s.fe || '',
+          bay: s.bay || '', row: s.row || '', tier: s.tier || '', pos: s.pos || '',
+          lugg: true, urgent: _fl.includes('긴급'), lolo: !!s.lolo, dbl: !!s.dbl, _deckOnly: true });
+      }
+      return out;
     },
     [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan]);
 
