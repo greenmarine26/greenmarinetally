@@ -1540,9 +1540,24 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           //   _created 같은 메타 키를 도착으로 오인해 예보가 숨던 버그 수정 (RZOR_R075E 사례).
           const hasReal = isL ? !!(loa && Object.keys(loa.ediContainers || {}).length)
             : !!(dis && Object.keys(dis.ediContainers || {}).length);
-          if (hasReal) return null;
           const fmt = (o) => Object.entries(o || {}).map(([s, n]) => `${s}×${n}`).join(' ');
           const tot = (f.teu && f.teu.total) || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));
+          // 2.06-03 (검수사 스크린샷 «선적 예보 · 0TEU» — R090E): 덱플랜 LUG 승격(2.06-01)이 luggageCns 만
+          //   있는 forecast 를 만들자, 물량 예보가 아닌데 mode 기본값(loading) 탓에 «선적 예보 0TEU» 카드가
+          //   떠버렸다. 물량(teu/full/empty/calc)이 하나도 없으면 예보 카드가 아니다 — 수화물·긴급 배지만
+          //   모드 라벨 없이 한 줄로 보인다(EDI 도착 여부와 무관 — 번호 정보는 계속 유효하므로).
+          const hasQty = !!(tot || (f.full && Object.keys(f.full).length) || (f.empty && Object.keys(f.empty).length));
+          if (!hasQty) {
+            const nUrg = (f.urgentCns || []).length, nLug = (f.luggageCns || []).length;
+            if (!nUrg && !nLug) return null;
+            return (
+              <div className="flex gap-2 flex-wrap text-[10px] font-bold">
+                {nUrg > 0 && <span className="text-rose-300">▲ 긴급 {nUrg}대</span>}
+                {nLug > 0 && <span className="text-violet-300">🧳 수화물 컨 {nLug}대</span>}
+              </div>
+            );
+          }
+          if (hasReal) return null;
           return (
             <div className="rounded-lg border border-dashed border-orange-600/50 bg-orange-950/30 px-2.5 py-1.5">
               <div className="text-[11px] font-bold text-orange-300">
