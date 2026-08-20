@@ -1370,6 +1370,14 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   if (warns.length) {
     lines.push(`⚠ 주의사항`);
     for (const w of warns) lines.push(`  ${w.line}`);
+    // 2.05-02 (검수사 확정 «브리핑 후 추가 자료가 있는 항목은 버튼을 만들어 보여주는 방식으로»):
+    //   주의로 뜬 항목 전부를 기존 규격("라벨"로 상세 확인 — 1.84-03 렌더러가 자동 버튼화)으로 심는다.
+    //   warns.k 의 첫 단어 → 조회 가능한 라벨 매핑. 새 warn 을 추가하면 여기 매핑도 한 줄 넣는다(같은 파일).
+    const BTN_Q = { '리퍼': '리퍼', '위험물': '위험물', '엑스레이': '엑스레이', 'FR': 'FR', 'OT': 'OT', '탱크': '탱크', 'OOG': 'OOG',
+      '데미지': '데미지', '수화물': '수화물', '긴급': '긴급', '45피트': '45피트',
+      '트윈초과': '트윈 점검', '트윈무게차': '트윈 점검', '실번호': '실번호 점검', '실번호확인': '실번호 점검' };
+    const _btns = [...new Set(warns.map((w) => BTN_Q[String(w.k || '').split(' ')[0]]).filter(Boolean))];
+    if (_btns.length) lines.push('', _btns.map((q) => `"${q}"로 상세 확인`).join(' · '));
   } else {
     lines.push(`✅ 특이사항 없음 — 일반 화물만`);
   }
