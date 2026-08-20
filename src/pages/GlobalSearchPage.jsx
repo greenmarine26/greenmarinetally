@@ -463,6 +463,24 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     // 2.01 (검수사 확정 «항차목록에서 브리핑은 선박명을 특정 안하면 그날 작업할 선박들 전부를 브리핑»):
     //   배 미지정 «브리핑» = planDate 가 오늘과 겹치는 항차 전부 — 배별 개요 브리핑(1.97 answerShipOverview)
     //   + 컨 자료가 있으면 특수화물 한 줄. 오늘 배가 없으면 아래 기존 안내로 폴백.
+    // 2.03-04 (검수사 실측 «미르야 PCSZ 우리가 작업해야해?» — 무응답): «우리가 작업하는 배인가» 판정.
+    //   항차 목록(수집기가 배정·메일로 만든 카드 포함)에 있으면 = 저희 배 — 개요로 답.
+    //   없으면 = 저희 부두 배정·자료에 안 잡힌 배 — 근거와 함께 아니라고 답한다.
+    if (/(우리|저희)\s*(가|는|도)?\s*(작업|검수)|작업\s*해야|검수\s*해야|우리\s*배/.test(debouncedQuery)) {
+      if (shipCtx) {
+        try {
+          const pmv = matchPortMis(portMisData || {}, shipCtx.info);
+          const ov = answerShipOverview(shipCtx.v, shipCtx.info.vslFull || shipCtx.info.vsl, pmv, ediPattern);
+          return `네 — 저희가 작업하는 배로 잡혀 있습니다.\n\n${ov || ''}`.trim();
+        } catch (e) { return `네 — ${shipCtx.info.vslFull || shipCtx.info.vsl} 는 항차 목록에 있습니다 (${shipCtx.key}).`; }
+      }
+      // 배 이름 후보(영문 3~5자 토큰) — 항차 목록에 없다
+      const _tok = (String(debouncedQuery).toUpperCase().match(/\b[A-Z]{3,5}\b/g) || []).filter((t) => !['PTK', 'PCTC', 'PNCT'].includes(t));
+      if (_tok.length) {
+        return `${_tok[0]} — 지금 항차 목록·선석배정 자료에 없는 배입니다. 저희가 작업할 배로 잡혀 있지 않습니다.\n(배정목록·메일에 뜨면 수집기가 자동으로 항차 카드를 만듭니다 — 그때 다시 물으면 «네»라고 답합니다)`;
+      }
+      return '어느 배 말씀인지 배 이름을 붙여 주세요 — 예: "PCSZ 우리가 작업해야해?"';
+    }
     // 2.03-02 (검수사 실측 «내일 작업 대상 선박은?» — 통합검색이 무응답): 오늘/내일/모레 작업 선박 질의.
     //   «(오늘|내일|명일|모레) … 작업 … (선박|배|대상)» → 그날 planDate 가 겹치는 항차를 시작순으로 나열.
     const _dayOff = /모레/.test(debouncedQuery) ? 2 : /내일|명일/.test(debouncedQuery) ? 1 : 0;
