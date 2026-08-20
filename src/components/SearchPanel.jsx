@@ -276,9 +276,20 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     workList.forEach(c => {
       // 자리 미지정(칸 자체가 없음)만 종전대로 컨 머릿수 — 칸이 없으니 칸으로 못 센다.
       if (c._comp) return;
-      if ((c.bay && c.row && c.tier) || c._edi_bay || c.bay_orig) return;
-      const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
+      const hasPos = (c.bay && c.row && c.tier) || c._edi_bay || c.bay_orig;
+      // 1.96 (검수사 확정 «남은컨은 다른방법으로 빈자리에서 배정되어야 합니다» — SWSP 34번 실측):
+      //   계획 칸을 다른 컨이 실체로 차지한 «자리 뺏긴» 미완 컨은 그 베이 남은 수가 아니라 **재배정 대상** —
+      //   미지정 그룹에 편입해 기존 🅿 빈자리 배치 흐름을 그대로 탄다.
+      let displaced = false;
+      if (hasPos) {
+        const b = parseInt(c.bay, 10);
+        const o = occ.get(`${Number.isFinite(b) ? b : c.bay}/${c.row}/${c.tier}`);
+        displaced = !!(o && o.done && o.cn !== c.cn);
+      }
+      if (hasPos && !displaced) return;
+      const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0, displaced: 0 });
       g0.count++;
+      if (displaced) g0.displaced++;
     });
     const eat = (uni, big) => {
       Object.keys(uni).forEach(b => {
@@ -301,6 +312,9 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       if (c._comp) return;
       const center = manualGroupCenterOf(c.bay);
       if (center == null) return;
+      const b = parseInt(c.bay, 10);
+      const o = occ.get(`${Number.isFinite(b) ? b : c.bay}/${c.row}/${c.tier}`);
+      if (o && o.done && o.cn !== c.cn) return;   // 1.96: 자리 뺏긴 컨은 재배정 대상 — 이 베이 남은 컨에서 제외
       const g = map[center];
       if (g) g.contLeft = (g.contLeft || 0) + 1;
     });
@@ -461,8 +475,8 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
             {manualGroups.map(g => g.noBay ? (
               <button key="nobay" onClick={() => { setManualBay(g.center); setManualTier('none'); }}
                 className="py-3 rounded-lg bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
-                <div className="font-bold text-base">⚠ 자리 미지정</div>
-                <div className="text-[10px] text-amber-300">남은 {g.count}대 — 리스트엔 있는데 적부 좌표가 없습니다</div>
+                <div className="font-bold text-base">⚠ 자리 미지정{g.displaced ? '·자리 뺏김' : ''}</div>
+                <div className="text-[10px] text-amber-300">남은 {g.count}대{g.displaced ? ` (자리 뺏김 ${g.displaced} — 원자리에 다른 컨이 실렸습니다)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
               </button>
             ) : (
