@@ -468,24 +468,29 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     //   없으면 = 저희 부두 배정·자료에 안 잡힌 배 — 근거와 함께 아니라고 답한다.
     if (/(우리|저희)\s*(가|는|도)?\s*(작업|검수)|작업\s*해야|검수\s*해야|우리\s*배/.test(debouncedQuery)) {
       if (shipCtx) {
-        // 2.03-05 (검수사 교정 «질문의 의도는 항로 변경을 미르가 알고 있는지» — 수집기가 가끔 저희 항차가
-        //   아닌 메일도 수집한다. 항차 카드 존재만으로 «네»라고 하면 PCSZ 같은 배에 오답):
-        //   근거 등급 — ①선석배정(planDis/planLod — 수집기 1.6 이 배정목록에서 실어 옴)에 잡힘 = 네
-        //   ②PORT-MIS 입항 신고만 있음 = 신고는 있음(배정 대기) ③카드만(메일 수집) = ⚠ 유보, 항로 변경 가능.
+        // 2.04 (검수사 확정 «답은 이번 항차는 PSS입니다. 저희 작업 대상선박입니다. 라고 알리고
+        //   양하 선적 구분은 안하는게 좋습니다. 만약 물어보면 자세한건 수석검수사에게 물어 보라고 넘기십시요»):
+        //   항로(lane)는 수집기가 배정목록에서 info.lane 으로 실어 온다(push_sched_extras v1.1 — 이미 있었다).
+        //   같은 배라도 항로가 바뀔 수 있고 담당(양하만/선적만/둘다)은 입항 시점에야 확정되므로 구분하지 않는다.
         try {
           const _i = shipCtx.info || {};
           const pmv = matchPortMis(portMisData || {}, _i);
-          const _assigned = _i.planDis != null || _i.planLod != null;
           const ov = answerShipOverview(shipCtx.v, _i.vslFull || _i.vsl, pmv, ediPattern);
+          const _detail = /양하|선적|하역만|어느\s*쪽/.test(debouncedQuery)
+            ? '\n양하·선적 구분 같은 자세한 것은 수석검수사에게 확인해 주세요.' : '';
+          if (_i.lane) {
+            return `이번 항차는 ${_i.lane}입니다. 저희 작업 대상 선박입니다.${_detail}\n\n${ov || ''}`.trim();
+          }
+          // lane 미수집 — 근거 등급 폴백(2.03-05)
+          const _assigned = _i.planDis != null || _i.planLod != null;
           if (_assigned) {
-            const amt = [_i.planDis != null ? `양하 ${_i.planDis}` : null, _i.planLod != null ? `선적 ${_i.planLod}` : null].filter(Boolean).join(' · ');
-            return `네 — 선석배정목록에 잡혀 있습니다 (배정 ${amt}). 저희가 작업하는 배입니다.\n(근거는 수집기가 마지막으로 실어 온 배정 수량입니다 — 항로가 최근 바뀌었다면 다음 배정 수집에서 빠지는지 봐야 합니다. 항로 변경을 아시면 카드에서 지워 주세요.)\n\n${ov || ''}`.trim();
+            return `저희 작업 대상 선박입니다 — 선석배정목록에 잡혀 있습니다. (항로는 다음 배정 수집 때 표시됩니다)${_detail}\n\n${ov || ''}`.trim();
           }
           if (pmv) {
-            return `입항 신고(PORT-MIS)는 있는데 선석배정 수량은 아직입니다 — 배정이 뜨면 확정입니다.\n\n${ov || ''}`.trim();
+            return `입항 신고(PORT-MIS)는 있는데 선석배정에는 아직입니다 — 배정이 뜨면 확정입니다. 자세한 것은 수석검수사에게 확인해 주세요.\n\n${ov || ''}`.trim();
           }
-          return `⚠ 판단 유보 — ${_i.vslFull || _i.vsl} 항차 카드는 있지만(메일 자료로 생성) 선석배정·PORT-MIS 에는 안 잡혔습니다.\n수집기가 가끔 저희 항차가 아닌 메일도 수집합니다 — 항로가 바뀐 배면 배정에 끝내 안 뜹니다. 배정목록을 확인하고, 저희 배가 아니면 카드를 지워 주세요.\n\n${ov || ''}`.trim();
-        } catch (e) { return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 항차 목록에는 있습니다 (${shipCtx.key}). 배정 여부는 카드에서 확인하세요.`; }
+          return `⚠ 판단 유보 — ${_i.vslFull || _i.vsl} 항차 카드는 있지만(메일 자료로 생성) 선석배정·PORT-MIS 에는 안 잡혔습니다. 자세한 것은 수석검수사에게 확인해 주세요.\n\n${ov || ''}`.trim();
+        } catch (e) { return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 항차 목록에는 있습니다 (${shipCtx.key}). 자세한 것은 수석검수사에게 확인해 주세요.`; }
       }
       // 배 이름 후보(영문 3~5자 토큰) — 항차 목록에 없다
       const _tok = (String(debouncedQuery).toUpperCase().match(/\b[A-Z]{3,5}\b/g) || []).filter((t) => !['PTK', 'PCTC', 'PNCT'].includes(t));
