@@ -468,11 +468,24 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     //   없으면 = 저희 부두 배정·자료에 안 잡힌 배 — 근거와 함께 아니라고 답한다.
     if (/(우리|저희)\s*(가|는|도)?\s*(작업|검수)|작업\s*해야|검수\s*해야|우리\s*배/.test(debouncedQuery)) {
       if (shipCtx) {
+        // 2.03-05 (검수사 교정 «질문의 의도는 항로 변경을 미르가 알고 있는지» — 수집기가 가끔 저희 항차가
+        //   아닌 메일도 수집한다. 항차 카드 존재만으로 «네»라고 하면 PCSZ 같은 배에 오답):
+        //   근거 등급 — ①선석배정(planDis/planLod — 수집기 1.6 이 배정목록에서 실어 옴)에 잡힘 = 네
+        //   ②PORT-MIS 입항 신고만 있음 = 신고는 있음(배정 대기) ③카드만(메일 수집) = ⚠ 유보, 항로 변경 가능.
         try {
-          const pmv = matchPortMis(portMisData || {}, shipCtx.info);
-          const ov = answerShipOverview(shipCtx.v, shipCtx.info.vslFull || shipCtx.info.vsl, pmv, ediPattern);
-          return `네 — 저희가 작업하는 배로 잡혀 있습니다.\n\n${ov || ''}`.trim();
-        } catch (e) { return `네 — ${shipCtx.info.vslFull || shipCtx.info.vsl} 는 항차 목록에 있습니다 (${shipCtx.key}).`; }
+          const _i = shipCtx.info || {};
+          const pmv = matchPortMis(portMisData || {}, _i);
+          const _assigned = _i.planDis != null || _i.planLod != null;
+          const ov = answerShipOverview(shipCtx.v, _i.vslFull || _i.vsl, pmv, ediPattern);
+          if (_assigned) {
+            const amt = [_i.planDis != null ? `양하 ${_i.planDis}` : null, _i.planLod != null ? `선적 ${_i.planLod}` : null].filter(Boolean).join(' · ');
+            return `네 — 선석배정목록에 잡혀 있습니다 (배정 ${amt}). 저희가 작업하는 배입니다.\n(근거는 수집기가 마지막으로 실어 온 배정 수량입니다 — 항로가 최근 바뀌었다면 다음 배정 수집에서 빠지는지 봐야 합니다. 항로 변경을 아시면 카드에서 지워 주세요.)\n\n${ov || ''}`.trim();
+          }
+          if (pmv) {
+            return `입항 신고(PORT-MIS)는 있는데 선석배정 수량은 아직입니다 — 배정이 뜨면 확정입니다.\n\n${ov || ''}`.trim();
+          }
+          return `⚠ 판단 유보 — ${_i.vslFull || _i.vsl} 항차 카드는 있지만(메일 자료로 생성) 선석배정·PORT-MIS 에는 안 잡혔습니다.\n수집기가 가끔 저희 항차가 아닌 메일도 수집합니다 — 항로가 바뀐 배면 배정에 끝내 안 뜹니다. 배정목록을 확인하고, 저희 배가 아니면 카드를 지워 주세요.\n\n${ov || ''}`.trim();
+        } catch (e) { return `${shipCtx.info.vslFull || shipCtx.info.vsl} — 항차 목록에는 있습니다 (${shipCtx.key}). 배정 여부는 카드에서 확인하세요.`; }
       }
       // 배 이름 후보(영문 3~5자 토큰) — 항차 목록에 없다
       const _tok = (String(debouncedQuery).toUpperCase().match(/\b[A-Z]{3,5}\b/g) || []).filter((t) => !['PTK', 'PCTC', 'PNCT'].includes(t));
@@ -503,7 +516,9 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           const t = new Date(a);
           const hh = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
           const amt = [i2.planDis != null && Number(i2.planDis) > 0 ? `양하 ${i2.planDis}` : null, i2.planLod != null && Number(i2.planLod) > 0 ? `선적 ${i2.planLod}` : null].filter(Boolean).join(' · ');
-          L.push(`${i2.vslFull || i2.vsl || k} — ${i2.pier || '?'} ${hh} 시작${amt ? ` (${amt})` : ''}`);
+          // 2.03-05: 선석배정에 안 잡힌 배는 ⚠ — 수집기가 잘못 물어온 카드(항로 변경)일 수 있다(검수사 교정, PCSZ 사건)
+          const _mark = (i2.planDis != null || i2.planLod != null) ? '' : ' ⚠배정 미확인 — 저희 항차가 아닐 수 있음';
+          L.push(`${i2.vslFull || i2.vsl || k} — ${i2.pier || '?'} ${hh} 시작${amt ? ` (${amt})` : ''}${_mark}`);
         }
         L.push(`\n«${_lbl === '오늘' ? '' : _lbl + ' '}브리핑» 이라고 하면 배별 상세까지 답합니다.`);
         return L.join('\n');
