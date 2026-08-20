@@ -626,6 +626,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //   false→true 승격만 허용. tmp_missing 은 대상 아님(EDI 온도가 있는데 «미기재»로 뒤집히면 안 된다).
           const FLAG_FILL = (k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk' || k === 'dg' || k === 'oog') &&
             v === true && ediBase[k] !== true;
+          // 2.05-05 (검수사 실측 CAAU4289478 — 배지는 RF -2°C 인데 아래는 «온도 미입력»): 자료 온도(tmp)가
+          //   이미 있으면 리스트의 «미기재» 마킹(tmp_missing:true)을 얹지 않는다 — EDI 에 tmp_missing 이
+          //   없어서(undefined) CORE_FILL 이 true 를 채우던 모순.
+          if (k === 'tmp_missing' && v === true && ediBase.tmp) return;
           if ((CORE_FILL && (ediBase._virtualEdi || ediBase[k] === undefined || ediBase[k] === '')) || FLAG_FILL) {
             safeR[k] = v; return;
           }

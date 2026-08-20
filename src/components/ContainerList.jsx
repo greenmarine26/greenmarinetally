@@ -334,7 +334,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   //   자료 불일치 = 리스트끼리 안 맞음. **아무도 실물을 안 봤다.** 검수 전에 확인할 신호.
   const sealEdited = Array.isArray(c.sl_history) && c.sl_history.length > 0;
   const sealError = sealEdited && c.sl && slOrig && c.sl !== slOrig;
-  const sealConflict = !sealError && Array.isArray(c.sl_conflict) && c.sl_conflict.length > 1;
+  // 2.05-05 (검수사 실측 CAAU4289478 «자료 불일치? 내용을 설명 안함» — 실체는 같은 리스트의 035634 vs
+  //   0035634, 앞 0 차이): ①앞 0만 다른 동일 번호는 불일치가 아니다(숫자 정규화 비교) ②배지에 값을 쓴다.
+  const _slcVals = Array.isArray(c.sl_conflict)
+    ? [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))] : [];
+  const _slcNorm = [...new Set(_slcVals.map((v) => v.replace(/^0+(?=\d)/, '')))];
+  const sealConflict = !sealError && _slcVals.length > 1 && _slcNorm.length > 1;
   // 1.76-05: 실번호 중복 — **두 컨에 한 실**(sealConflict 는 «한 컨에 두 실»로 축이 다르다).
   //   검수사 신고 2026-08-16 MAMP 631N — PH0570668 이 두 대에 들어간 채 둘 다 완료됐다.
   //   ⛔ sealError·sealConflict 와 달리 게이트를 걸지 않는다. 세 배지는 서로 다른 사고이므로
@@ -479,7 +484,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {sealConflict && (
                 <span className="bg-amber-700/80 text-amber-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
                   title={`리스트마다 실번호가 다릅니다 — ${c.sl_conflict.map(h => h.sl + (h.src ? ` (${h.src})` : '')).join(' / ')}`}>
-                  ⚠ 자료 불일치
+                  ⚠ 실번호 불일치 {_slcVals.join('↔')}
                 </span>
               )}
               <span className={`text-[9px] mono px-1 py-0.5 rounded font-bold ${

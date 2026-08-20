@@ -518,6 +518,22 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
           </div>
         </div>
 
+        {/* 2.05-05 (검수사 실측 «자료 불일치? 내용을 설명 안함»): 실번호 불일치 — 무엇이 어떻게 다른지 여기서 설명 */}
+        {(() => {
+          const _v = Array.isArray(c.sl_conflict) ? [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))] : [];
+          const _n = [...new Set(_v.map((x) => x.replace(/^0+(?=\d)/, '')))];
+          if (_v.length < 2 || _n.length < 2) return null;
+          return (
+            <div className="mx-4 my-3 bg-amber-950/40 border border-amber-700/60 rounded-lg p-3">
+              <div className="text-[11px] font-black text-amber-300 mb-1">⚠ 실번호 자료 불일치 — 리스트마다 다르게 적혀 있습니다</div>
+              {c.sl_conflict.map((h, i) => (
+                <div key={i} className="text-[11px] mono text-amber-100">{h.sl}{h.src ? <span className="text-amber-400/80"> — {h.src}</span> : null}</div>
+              ))}
+              <div className="text-[10px] text-amber-200/90 mt-1">실물 씰을 확인하고 맞는 번호로 입력·수정하세요. 현재 채택값: <b className="mono">{c.sl || '없음'}</b></div>
+            </div>
+          );
+        })()}
+
         {/* 위치 */}
         <div className="px-4 py-3 border-b border-slate-800">
           <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
@@ -769,7 +785,7 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
                     /* M3.75: 엠티 리퍼는 온도 없는 게 정상 */
                     <span className="text-sm font-bold text-cyan-400/80">엠티 리퍼 (온도 표시 정상)</span>
                   ) : (
-                    <span className="text-sm font-bold text-red-300 animate-pulse">⚠️ 온도 미입력 (현장 확인 필요)</span>
+                    <span className="text-sm font-bold text-red-300 animate-pulse">⚠️ 자료에 설정온도 없음 — 현장에서 확인해 입력하세요</span>
                   )}
                   {/* V9.57(I10): c.tmp_orig → 폴백 조회값(tmpOrigShow) — 병합 누락으로 안 뜨던 표기 복원 */}
                   {tmpOrigShow !== undefined && tmpOrigShow !== c.tmp && (

@@ -83,6 +83,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       //   리스트의 DG true 를 지워 검수 리스트·카고플랜에서 위험물 23대가 통째로 사라졌다(TNJP 26360E 실측).
       //   false→true 승격만 허용(반대 방향은 종전대로 EDI 보호). VoyagePage FLAG_FILL 과 같은 규칙.
       const _flagUp = (k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk' || k === 'dg' || k === 'oog') && v === true && e[k] !== true;
+      if (k === 'tmp_missing' && v === true && e.tmp) return;   // 2.05-05: 자료 온도가 있으면 «미기재» 마킹을 얹지 않는다
       if (hasEdi && PROTECTED_EDI_FIELDS.has(k) && !_flagUp) return;
       merged[k] = v;
     });
