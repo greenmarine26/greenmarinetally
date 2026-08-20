@@ -196,11 +196,11 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         // 1.56: 보고만 있고 **완료 대수에 갱이 하나도 안 붙었으면** 그것도 빨간불이다 —
         //   "4호기 보고 하나"로 2호기 몫 0대인 채 마감이 통과하던 구멍(독립 재검증 P1-8⑤).
         label: gangs.length === 0
-          ? '🔴 갱(호기) 기록 없음 — 인건비 근거'
-          : (equipDone.size === 0 ? '🔴 완료 대수에 갱이 없음 — 인건비 근거' : '갱(호기)별 작업 대수'),
+          ? '🔴 갱(호기) 기록 없음 — 갱별 대수 근거'
+          : (equipDone.size === 0 ? '🔴 완료 대수에 갱이 없음 — 갱별 대수 근거' : '갱(호기)별 작업 대수'),
         count: gangs.length === 0 ? doneN : (equipDone.size === 0 ? doneN : 0),
         desc: gangs.length === 0
-          ? `${doneN}대 완료인데 ${mode === 'discharge' ? '양하' : '선적'} 갱 기록이 0건입니다. 이대로 제출하면 그 갱 인원이 인건비를 못 받습니다 — [작업 보고]에서 남기세요.`
+          ? `${doneN}대 완료인데 ${mode === 'discharge' ? '양하' : '선적'} 갱 기록이 0건입니다. 이대로 제출하면 그 갱의 작업 기록이 통째로 빠집니다(아주 중요한 값) — [작업 보고]에서 남기세요.`
           : (equipDone.size > 0
             ? `${gangDoneTxt}${doneNoEquip > 0 ? ` · 갱 미기록 ${doneNoEquip}대` : ''}`
             : `${gangs.join(' · ')} 작업 보고 있음 · 완료 ${doneN}대는 갱이 안 적혀 있습니다 — 갱별 몇 대인지 근거가 없습니다`),

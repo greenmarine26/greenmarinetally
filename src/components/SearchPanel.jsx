@@ -1868,7 +1868,7 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
     if (!Number.isFinite(bn) || !rowP || !tierP) { alert('앞 컨 위치(Bay/Row/Tier)를 입력하세요'); return; }
     if (!backPos) { alert('짝꿍 베이가 없는 자리입니다 — 싱글 모드로 처리하세요'); return; }
     // 1.56: 갱(호기) 없이 완료 금지 — 갱 없는 완료는 인건비 근거가 없다(검수사 확정).
-    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.\n갱이 없는 완료는 그 갱 인원의 인건비 근거가 없습니다.'); return; }
+    if (!equipNo) { alert('갱(호기)을 먼저 선택하세요 — 상단 호기 버튼.\n갱이 없는 완료는 그 갱의 작업 기록이 남지 않습니다 — 아주 중요한 값입니다.'); return; }
     setBusy(true);
     try {
       // ── 1.56: **이 배 자료에 없는 자리 확인** (검수사 확정 — "들어갈 자리 자체가 없는데 선적이 된다는게
