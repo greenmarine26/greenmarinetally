@@ -295,6 +295,15 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       });
     };
     eat(uni20, false); eat(uni40, true);
+    // 1.95 (검수사 확정 «빈 칸 수 유지 + 병기» — SWSP 실측: 자동 94 vs 수동 103, 9대가 계획과 다른 자리에 실림):
+    //   자동 가이드와 같은 기준(미완 컨 머릿수)을 contLeft 로 같이 센다 — 버튼에 «빈 칸 N · 남은 컨 M» 병기.
+    workList.forEach(c => {
+      if (c._comp) return;
+      const center = manualGroupCenterOf(c.bay);
+      if (center == null) return;
+      const g = map[center];
+      if (g) g.contLeft = (g.contLeft || 0) + 1;
+    });
     // 빈 칸 0 인 묶음은 카드에서 내린다 — 끝난 베이가 목록에 남아 "다음"을 가리지 않게.
     return Object.values(map).filter(g => g.count > 0 || g.noBay).sort((a, b) => a.center - b.center);
   }, [allContainers, workFilter, manualBayPairs]);
@@ -433,6 +442,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
 
       {guideMode && workFilter !== 'completed' && !isLoloShip ? (
         <GuidedWorkPanel
+          slotGroups={manualGroups}
           onPlaceUnassigned={onPlaceUnassigned}
           voyage={voyage} voyageKey={voyageKey} inspector={inspector}
           allContainers={allContainers} workFilter={workFilter}
@@ -459,7 +469,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
               <button key={g.center} onClick={() => setManualBay(g.center)}
                 className="py-3 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-700 text-slate-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
-                <div className="text-[10px] text-slate-400">남은 {g.count}대</div>
+                <div className="text-[10px] text-slate-400">빈 칸 {g.count} · 남은 컨 {g.contLeft || 0}대</div>
                 <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[10px] font-bold">
                   {g.deck > 0 && <span className="text-sky-300">데크 {g.deck}</span>}
                   {g.deck > 0 && g.hold > 0 && <span className="text-slate-600">·</span>}

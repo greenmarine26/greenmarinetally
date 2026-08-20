@@ -63,7 +63,7 @@ export function shouldAskHatchClose(allContainers, group, centerOf) {
   return true;                                     // 선적 자료가 있고, 이 그룹엔 선적 없음 → 묻는다
 }
 
-export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null }) {   // V9.28
+export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allContainers, workFilter, onSwitchManual, onOpenContainer, onPlaceUnassigned = null, slotGroups = null }) {   // V9.28 · 1.95: slotGroups — 수동(빈 칸) 계산 한 벌을 받아 병기(검수사 «자동보다 수동이 우선함»)
   const mode = workFilter;                                  // 'discharge' | 'loading'
   const shipImo = voyage?.info?.imo || '';
   const shipName = voyage?.info?.vsl || '';
@@ -1101,7 +1101,10 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
               <button key={g.center} onClick={() => { pickGroup(g); }}
                 className="py-3 rounded-lg bg-slate-800 hover:bg-violet-800 border border-slate-700 text-slate-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
-                <div className="text-[10px] text-slate-400">남은 {g.count}대</div>
+                {/* 1.95: 빈 칸(수동 기준·정본)을 앞에, 컨 머릿수를 뒤에 — 계산은 SearchPanel manualGroups 한 벌 */}
+                <div className="text-[10px] text-slate-400">
+                  {(() => { const s = slotGroups && slotGroups.find(x => x.center === g.center); return s ? `빈 칸 ${s.count} · ` : ''; })()}남은 컨 {g.count}대
+                </div>
                 <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[10px] font-bold">
                   {g.deck > 0 && <span className="text-sky-300">데크 {g.deck}</span>}
                   {g.deck > 0 && g.hold > 0 && <span className="text-slate-600">·</span>}
