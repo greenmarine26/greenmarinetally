@@ -128,9 +128,20 @@ function renderRow(c, idx) {
     const hasUnit = /℃|°|C$/i.test(reeferTmp);
     notes.push(hasUnit ? reeferTmp : `${reeferTmp}℃`);
   }
-  if (type === 'fr') notes.push('FR');
-  if (type === 'ot') notes.push('OT');
-  if (type === 'tk') notes.push('TK');
+  if (type === 'fr' || c.fr) notes.push('FR');
+  if (type === 'ot' || c.ot) notes.push('OT');
+  if (type === 'tk' || c.tk) notes.push('TK');
+  // TallyOne 2.00 (검수사 지시 2026-08-20 «검수용 리스트에 DG(클래스·유엔넘버)·리퍼온도·OOG(높이 폭)·특수화물 다 기록»):
+  //   DG — 클래스·UN·포장등급 (nlSearch specialDetailLines 와 같은 필드 dgc/un/pg. TNJP 26360E 실측: cl.9 UN3480)
+  if (c.dg) notes.push(`<span style="color:#b91c1c;font-weight:bold">DG${c.dgc ? ' cl.' + c.dgc : ''}${c.un ? ' UN' + c.un : ''}${c.pg ? ' PG' + c.pg : ''}</span>`);
+  //   OOG — EDI DIM 초과 치수(cm, 1.84-04 가 담은 ovh/ovw/ovl), 없으면 치수 엑셀 실치수 폭×높이(mm)
+  const _ov = [];
+  if (c.ovh) _ov.push(`H+${c.ovh}`);
+  if (c.ovw) _ov.push(`W+${c.ovw}`);
+  if (c.ovl) _ov.push(`L+${c.ovl}`);
+  if (_ov.length) notes.push(`<span style="color:#92400e;font-weight:bold">OOG ${_ov.join(' ')}cm</span>`);
+  else if (c.oog && type === 'normal' && !c.fr && !c.ot) notes.push('<span style="color:#92400e;font-weight:bold">OOG</span>');
+  if ((c.cgW || c.cgH) && !_ov.length) notes.push(`${c.cgW || '?'}×${c.cgH || '?'}mm`);
   const note = notes.join(' ');
   return `<tr style="background:${bg}">
     <td>${idx}</td>
@@ -202,7 +213,8 @@ export function generateInspectionListHTML(containers, mode, voyageInfo, shiftin
   // 시트2 대상 필터: 리퍼/FR/OT/TK + X-RAY 대상 일반 화물
   const special = list.filter(c => {
     const { type } = getContainerCategory(c);
-    return type !== 'normal' || c._xray;
+    // TallyOne 2.00: DG·OOG·FR·OT·TK 플래그도 별첨 대상 — 일반 ISO 에 실린 위험물이 별첨에서 빠졌다
+    return type !== 'normal' || c._xray || c.dg || c.oog || c.fr || c.ot || c.tk;
   });
 
   let sheet2Html = special.length > 0 ? 'PENDING' : '';  // 아래에서 헤더 있는 버전으로 생성
@@ -350,14 +362,20 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
     csv += '순번,컨테이너번호,실번호,규격,F/E,선사,비고\n';
     d.containers.forEach((c, i) => {
       const cn = (c.cn || '').replace(/,/g, '');
-      const seal = (c.seal || '').replace(/,/g, '');
+      const seal = String(c.sl || c.seal || '').replace(/,/g, '');   // TallyOne 2.00: 실번호 필드는 sl — seal 만 봐서 CSV 실번호가 늘 비었다
       const iso = (c.iso || '').replace(/,/g, '');
       const fe = c.fe === 'E' ? 'E' : 'F';
       const op = normalizeCarrier(c);
       const cat = getContainerCategory(c);
       const memo = [];
-      if (c.dg) memo.push('DG');
-      if (cat.type === 'reefer') memo.push('R' + (c.temp != null ? c.temp + '℃' : ''));
+      if (c.dg) memo.push(`DG${c.dgc ? ' cl.' + c.dgc : ''}${c.un ? ' UN' + c.un : ''}${c.pg ? ' PG' + c.pg : ''}`);   // TallyOne 2.00
+      const _t = (c.tmp != null && String(c.tmp).trim() !== '') ? c.tmp : c.temp;   // TallyOne 2.00: 온도 필드는 tmp (temp 만 봐서 늘 비었다)
+      if (cat.type === 'reefer') memo.push('R' + (_t != null && String(_t).trim() !== '' ? _t + '℃' : ''));
+      const _ov = [];
+      if (c.ovh) _ov.push('H+' + c.ovh);
+      if (c.ovw) _ov.push('W+' + c.ovw);
+      if (c.ovl) _ov.push('L+' + c.ovl);
+      if (_ov.length) memo.push('OOG ' + _ov.join(' ') + 'cm');   // TallyOne 2.00
       if (cat.type === 'fr') memo.push('FR');
       if (cat.type === 'ot') memo.push('OT');
       if (cat.type === 'tk') memo.push('TK');
