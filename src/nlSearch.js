@@ -1142,14 +1142,23 @@ function formatBayStats(bay, results) {
 //   실오류, 선사리스트끼리 틀리고 신고리스트와 맞는게 있다면 관심 대상»): 불일치는 출처와 등급으로 말한다.
 //   신고리스트(세관) 식별은 파일명 — 적하목록·CDL·세관·MANIFEST·신고 (STMJ 2643E 실증: 세관 CDL 도 리스트로 업로드됨).
 const _isCustomsSrc = (src) => /적하\s*목록|적하|세관|CDL|MANIFEST|신고/i.test(String(src || ''));
+// 2.06-06 (검수사 최종 단순화 «세관리스트와 다르면 실오류 의심으로 표기. 자료중 세관리스트가 빠진 선박은
+//   세관리스트를 첨부해 주세요 라고 알림»): 판정은 두 가지뿐 —
+//   suspect = 선사 값이 세관(신고)값과 다름 → 실오류 의심
+//   pending = 선사 리스트끼리 다른데 세관리스트가 아직 없음 → 세관리스트 도착 시 판정
+//   그리고 «선사 자료 부족을 세관리스트로 보충한 컨(선사 값 없음)»은 비교 제외 — 어차피 세관자료(검수사 확정).
+//   hasCustoms: 이 항차 자료에 세관리스트가 하나라도 있는가 — 없으면 첨부 요청 알림을 띄운다.
 export function sealIssuesOf(containers) {
   const errs = [], confs = [];
+  let hasCustoms = false;
   for (const c of containers || []) {
+    if (_isCustomsSrc(c._source)) hasCustoms = true;
+    const hist = Array.isArray(c.sl_conflict) ? c.sl_conflict : [];
+    if (hist.some((h) => _isCustomsSrc(h.src))) hasCustoms = true;
     const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
     if (Array.isArray(c.sl_history) && c.sl_history.length > 0 && c.sl && slOrig && c.sl !== slOrig) {
       errs.push({ cn: c.cn, from: slOrig, to: c.sl }); continue;
     }
-    const hist = Array.isArray(c.sl_conflict) ? c.sl_conflict : [];
     const seen = new Map();   // 값 → 출처들 (값은 문자 그대로 — 정규화 금지)
     for (const h of hist) {
       const v = String(h.sl || '').trim().toUpperCase();
@@ -1159,40 +1168,37 @@ export function sealIssuesOf(containers) {
       if (src && !seen.get(v).includes(src)) seen.get(v).push(src);
     }
     if (seen.size < 2) continue;
-    // 값마다 «신고(세관) 출처»와 «선사 출처»를 따로 본다 — 같은 값이 양쪽에서 올 수 있다(0035634 실측).
-    //   출처 미기록은 선사로 간주(세관인지 확인 안 된 값을 조용히 제외하지 않기 위해 — 문구에 «출처 미기록» 표시).
     const entries = [...seen.entries()].map(([v, srcs]) => ({ v, srcs,
       customs: srcs.some(_isCustomsSrc),
       carrier: srcs.length === 0 || srcs.some(x => !_isCustomsSrc(x)) }));
     const carrierVals = entries.filter(e => e.carrier);
     const customsVals = entries.filter(e => e.customs);
-    // 2.06-06 (검수사 확정 «선사 리스트 자료가 부족해서 세관리스트로 보충한거는 비교 대상에서 제외 —
-    //   어차피 세관자료. 안그러면 세관자료로 채운 컨은 전부 불일치로 나올것»): 선사 값이 없으면 판정하지 않는다.
-    if (!carrierVals.length) continue;
-    let grade, note;
-    if (!customsVals.length) { grade = 'unknown'; note = '선사 리스트끼리 다름 — 신고리스트(적하목록)와 대조 필요'; }
-    else if (carrierVals.some(e => customsVals.some(cv => cv.v === e.v))) {
-      // 선사 값 중 신고값과 일치하는 것이 하나라도 있다 = 선사끼리만 갈린 것 → 관심 대상 (검수사 확정)
-      grade = 'watch'; note = '선사 리스트끼리 다름 · 신고리스트와 일치하는 값 있음 — 관심 대상';
-    } else { grade = 'error'; note = '신고리스트와 다름 — 실오류 사안'; }
-    confs.push({ cn: c.cn, vals: entries.map(e => e.v), entries, grade, note });
+    if (!carrierVals.length) continue;   // 세관자료로 보충된 값뿐 — 비교 대상 아님
+    if (customsVals.length) {
+      if (carrierVals.some(e => customsVals.every(cv => cv.v !== e.v)))
+        confs.push({ cn: c.cn, vals: entries.map(e => e.v), entries, grade: 'suspect', note: '세관리스트와 다름 — 실오류 의심' });
+      // 선사 값이 전부 세관값과 일치하면 문제 없음 — 표기 안 함
+    } else {
+      confs.push({ cn: c.cn, vals: entries.map(e => e.v), entries, grade: 'pending', note: '선사 리스트끼리 다름 — 세관리스트 도착 시 판정' });
+    }
   }
-  return { errs, confs };
+  return { errs, confs, hasCustoms };
 }
 
 // V7.90-05: 실번호 점검 전용 답변 ("실번호 점검" 질문)
 export function generateSealAuditAnswer(containers, modeLabel) {
   const audit = auditSeals(containers || []);
-  const { errs, confs } = sealIssuesOf(containers);   // 2.06-05: 실오류·불일치 합류
+  const { errs, confs, hasCustoms } = sealIssuesOf(containers);   // 2.06-05·06: 실오류·불일치 합류(세관 기준)
   if (!audit.checked && !errs.length && !confs.length) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
   if (!audit.items.length && !errs.length && !confs.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음 (실오류·불일치 기록도 없음)`;
   const lines = [`🔍 ${modeLabel} 실번호 주의 ${audit.items.length + errs.length + confs.length}건 (점검 ${audit.checked}건 중)`];
   for (const e of errs) lines.push(`• ${e.cn} — ⚠ 실오류: 리스트 「${e.from}」 → 실물 「${e.to}」 (세관 신고 사안)`);
   for (const f of confs) {
-    const det = (f.entries || []).map(e => `「${e.v}」(${e.srcs.length ? e.srcs.join('·') : '출처 미기록'}${e.customs ? ' — 신고리스트' : ''})`).join(' ↔ ');
-    const mark = f.grade === 'error' ? '🔴 실오류' : f.grade === 'watch' ? '🟡 관심 대상' : '⚠ 불일치';
+    const det = (f.entries || []).map(e => `「${e.v}」(${e.srcs.length ? e.srcs.join('·') : '출처 미기록'}${e.customs ? ' — 세관리스트' : ''})`).join(' ↔ ');
+    const mark = f.grade === 'suspect' ? '🔴 실오류 의심' : '⚠ 불일치';
     lines.push(`• ${f.cn} — ${mark}: ${det}\n    ${f.note}`);
   }
+  if (!hasCustoms && confs.length) lines.push('📋 이 항차 자료에 세관리스트가 없습니다 — **세관리스트를 첨부해 주세요.** 실오류 판정은 세관리스트 기준입니다.');
   for (const it of audit.items) lines.push(`• ${it.cn} 「${it.seal}」 — ${it.reason}`);
   return lines.join('\n');
 }
@@ -1378,14 +1384,16 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   // 2.06-05: 실오류(수정 기록)·실번호 불일치(sl_conflict)도 브리핑에 — 검수사 «브리핑에서 실오류 내용이 없던데»
   const _si = sealIssuesOf(cs);
   if (_si.errs.length || _si.confs.length) {
-    // 2.06-06: 등급으로 나눠 말한다 — 신고리스트와 다름=실오류, 선사끼리만 다름=관심/대조 필요
-    const _ce = _si.confs.filter(f => f.grade === 'error'), _cw = _si.confs.filter(f => f.grade === 'watch'), _cu = _si.confs.filter(f => f.grade === 'unknown');
+    // 2.06-06 (검수사 단순화): 세관리스트와 다름=실오류 의심 / 세관리스트 없으면 도착 시 판정
+    const _cs2 = _si.confs.filter(f => f.grade === 'suspect'), _cp = _si.confs.filter(f => f.grade === 'pending');
     const parts = [];
     if (_si.errs.length) parts.push(`실오류(현장 수정) ${_si.errs.length}건(${_si.errs.slice(0, 3).map(e => e.cn?.slice(-4)).join(', ')})`);
-    if (_ce.length) parts.push(`🔴 신고리스트와 다름 ${_ce.length}건(${_ce.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')})`);
-    if (_cw.length) parts.push(`🟡 관심 대상(선사끼리 다름·신고와 일치 있음) ${_cw.length}건(${_cw.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')})`);
-    if (_cu.length) parts.push(`선사 리스트끼리 다름 ${_cu.length}건(${_cu.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')}) — 신고리스트 대조 필요`);
+    if (_cs2.length) parts.push(`🔴 실오류 의심(세관리스트와 다름) ${_cs2.length}건(${_cs2.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')})`);
+    if (_cp.length) parts.push(`선사 리스트끼리 다름 ${_cp.length}건(${_cp.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')}) — 세관리스트 도착 시 판정`);
     warns.push({ k: `실번호 ${_si.errs.length + _si.confs.length}건`, line: `⚠ ${parts.join(' · ')} — "실번호 점검"으로 출처까지 상세 확인` });
+  }
+  if (!_si.hasCustoms && _si.confs.length) {
+    warns.push({ k: null, line: `📋 이 항차 자료에 세관리스트가 없습니다 — **세관리스트를 첨부해 주세요.** 실오류 판정은 세관리스트 기준입니다.` });
   }
   if (audit.items.length) {
     const kinds = [...new Set(audit.items.map(it => it.reason.split(' — ')[0].replace(/^(풀씰|엠티실)\s*/, '')))].slice(0, 2).join(', ');
