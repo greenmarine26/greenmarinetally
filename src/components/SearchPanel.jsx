@@ -260,6 +260,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     // V9.23-08: 좌표 없는 컨을 버리지 않는다 — 버리면 "대기 N대"인데 고를 베이가 없어진다.
     //   (2658W 실측: 남은 14대가 전부 좌표 없는 엠티라 화면이 "남은 작업 없음"으로 보였다)
     const NOBAY = -1;
+    const swapDestByCn = new Map();   // 1.96-01: 자리 뺏긴 컨 → 맞교환 목적지
     // ── 1.56: **남은 N대 = 빈 칸 수** (검수사 확정 — "remain 은 빈 칸 수. 같은 계산을 「남은 N대」에도").
     //   종전엔 그 베이에 이름이 걸린 **미완료 컨 머릿수**를 세서, 실린 컨이 다른 베이 계획분이면
     //   꽉 찬 베이에 「남은 5대」가 남고(B7·9 실측), 빈 베이가 「남은 0대」로 잠겼다.
@@ -280,14 +281,34 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       // 1.96 (검수사 확정 «남은컨은 다른방법으로 빈자리에서 배정되어야 합니다» — SWSP 34번 실측):
       //   계획 칸을 다른 컨이 실체로 차지한 «자리 뺏긴» 미완 컨은 그 베이 남은 수가 아니라 **재배정 대상** —
       //   미지정 그룹에 편입해 기존 🅿 빈자리 배치 흐름을 그대로 탄다.
-      let displaced = false;
+      let displaced = false; let taker = null;
       if (hasPos) {
         const b = parseInt(c.bay, 10);
         const o = occ.get(`${Number.isFinite(b) ? b : c.bay}/${c.row}/${c.tier}`);
-        displaced = !!(o && o.done && o.cn !== c.cn);
+        if (o && o.done && o.cn !== c.cn) { displaced = true; taker = o.cn; }
       }
       if (hasPos && !displaced) return;
-      const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0, displaced: 0 });
+      // 1.96-01 (검수사 확정 «자리를 빼앗은컨이 갖고있던자리로 가면됩니다 — 그래야 빼앗긴 베이도 갯수가 맞습니다»):
+      //   뺏은 컨의 원계획 자리가 비어 있으면 그 자리가 이 컨의 목적지(맞교환) — 그 베이 «남은 컨»으로 센다.
+      let swapTo = null;
+      if (displaced) {
+        const tk = taker && workList.find(x => x.cn === taker);
+        const pb = tk && (tk._bay_planned || tk.bay_orig);
+        const pr = tk && (tk._row_planned || tk.row_orig);
+        const pt = tk && (tk._tier_planned || tk.tier_orig);
+        if (pb && pr && pt) {
+          const bn = parseInt(pb, 10);
+          const po = occ.get(`${Number.isFinite(bn) ? bn : pb}/${pr}/${pt}`);
+          if (!(po && po.done)) swapTo = { bay: pb, row: pr, tier: pt };
+        }
+      }
+      const g0 = (map[NOBAY] ||= { center: NOBAY, noBay: true, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0, displaced: 0, swapHints: [] });
+      if (displaced && swapTo) {
+        // 목적지가 확정된 맞교환 — 재배정 카드 count 엔 안 넣고 안내만. 컨 수는 목적지 베이(contLeft)로 이관.
+        g0.swapHints.push({ l4: String(c.cn || '').slice(-4), to: `${String(swapTo.bay).padStart(2, '0')}-${swapTo.row}-${swapTo.tier}`, taker: String(taker).slice(-4) });
+        swapDestByCn.set(c.cn, swapTo);   // 아래 contLeft 집계에서 사용 — 지역 Map(원본 객체 오염 금지)
+        return;
+      }
       g0.count++;
       if (displaced) g0.displaced++;
     });
@@ -310,11 +331,13 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
     //   자동 가이드와 같은 기준(미완 컨 머릿수)을 contLeft 로 같이 센다 — 버튼에 «빈 칸 N · 남은 컨 M» 병기.
     workList.forEach(c => {
       if (c._comp) return;
-      const center = manualGroupCenterOf(c.bay);
-      if (center == null) return;
       const b = parseInt(c.bay, 10);
       const o = occ.get(`${Number.isFinite(b) ? b : c.bay}/${c.row}/${c.tier}`);
-      if (o && o.done && o.cn !== c.cn) return;   // 1.96: 자리 뺏긴 컨은 재배정 대상 — 이 베이 남은 컨에서 제외
+      const stolen = !!(o && o.done && o.cn !== c.cn);
+      // 1.96-01: 자리 뺏긴 컨 — 맞교환 목적지가 있으면 **그 베이**의 남은 컨으로 센다(«그래야 빼앗긴 베이도 갯수가 맞습니다»).
+      const dest = stolen ? swapDestByCn.get(c.cn) : null;
+      const center = stolen ? (dest ? manualGroupCenterOf(dest.bay) : null) : manualGroupCenterOf(c.bay);
+      if (center == null) return;
       const g = map[center];
       if (g) g.contLeft = (g.contLeft || 0) + 1;
     });
@@ -478,6 +501,14 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
                 <div className="font-bold text-base">⚠ 자리 미지정{g.displaced ? '·자리 뺏김' : ''}</div>
                 <div className="text-[10px] text-amber-300">남은 {g.count}대{g.displaced ? ` (자리 뺏김 ${g.displaced} — 원자리에 다른 컨이 실렸습니다)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
+                {g.swapHints && g.swapHints.length > 0 && (
+                  <div className="mt-1 text-left text-[10px] text-emerald-300 mono">
+                    {g.swapHints.slice(0, 6).map(h => (
+                      <div key={h.l4}>🔁 {h.l4} → {h.to} (뺏은 컨 {h.taker}의 원자리)</div>
+                    ))}
+                    {g.swapHints.length > 6 && <div>… 외 {g.swapHints.length - 6}건</div>}
+                  </div>
+                )}
               </button>
             ) : (
               <button key={g.center} onClick={() => setManualBay(g.center)}
