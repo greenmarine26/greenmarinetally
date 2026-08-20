@@ -737,13 +737,17 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         if (have.has(cn)) continue;
         const _fl = Array.isArray(s.flags) ? s.flags : [];
         if (!_fl.includes('LUG')) continue;
+        // 2.06-04: 카톡·메시지로 «내린다» 통보가 오면 카드의 [양하 확정] 버튼으로 확정 —
+        //   확정(luggConfirm)되면 _deckOnly 가 풀려 총계(전체)에 편입되고 미정 칸에서 빠진다.
+        const _cf = !!(sec.luggConfirm && sec.luggConfirm[cn]);
         out.push({ cn, l4: cn.slice(-4), iso: String(s.iso || '').replace(/\s/g, ''), fe: s.fe || '',
           bay: s.bay || '', row: s.row || '', tier: s.tier || '', pos: s.pos || '',
-          lugg: true, urgent: _fl.includes('긴급'), lolo: !!s.lolo, dbl: !!s.dbl, _deckOnly: true });
+          lugg: true, urgent: _fl.includes('긴급'), lolo: !!s.lolo, dbl: !!s.dbl,
+          _deckOnly: !_cf, _luggConfirmed: _cf });
       }
       return out;
     },
-    [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan]);
+    [containersBase, urgentSet, luggSet, _fc, _fcApply, sec.stowagePlan, sec.luggConfirm]);
 
   // ── TallyOne 1.8: 리퍼 온도 확인 ─────────────────────────────────────────
   //   "작업전 먼저 선박을 선택합니다. 그러면 앱은 리퍼 유무를 판단하고 있으면 리퍼메모 화면을
@@ -2012,6 +2016,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
     else if (filter === 'xray') arr = arr.filter(c => xrayMap[c.cn]);
     else if (filter === 'shift') arr = arr.filter(c => c._shift);   // 1.76-05: 시프팅만 보기
+    else if (filter === 'lugg') arr = arr.filter(c => c._deckOnly || c.lugg);   // 2.06-04: 수화물(미정)만 보기
     // V9.14: 마감 점검 「리퍼 온도 미입력」 점프용 — Full 리퍼인데 온도 빈 것만 (판정은 체크리스트와 동일)
     else if (filter === 'reeferTemp') arr = arr.filter(c =>
       (c.rf || /^..R/.test(c.iso || '')) && !c.rfdry && !c.mkcon &&
@@ -2041,14 +2046,20 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
   //   리스트 진행률은 선사 양하리스트 대수 그대로 두고, 시프팅은 자기 칸에서 센다.
   //   그래야 «리스트 190대 중 N대 완료»가 선사·터미널 숫자와 계속 맞는다.
   const stats = useMemo(() => {
-    const base = containers.filter(c => !c._shift);
+    // 2.06-04 (검수사 확정 «실려 있는건 209개가 맞는거죠 내리는거 확정은 208이고» + «LUG는 미정으로 노면 됩니다»):
+    //   덱 전용 수화물(_deckOnly — EDI·리스트에 없고 덱플랜에만, 내릴지 미정)은 시프팅(1.76-05)처럼
+    //   총계에 섞지 않고 자기 칸(미정)에서 센다. 전체=확정분(선사·터미널 숫자와 일치) 유지.
+    const base = containers.filter(c => !c._shift && !c._deckOnly);
     const sh = containers.filter(c => c._shift);
+    const lg = containers.filter(c => c._deckOnly);
     return {
       total: base.length,
       done: base.filter(c => compMap[c.cn]).length,
       xray: mode === 'discharge' ? base.filter(c => xrayMap[c.cn]).length : 0,
       shift: sh.length,
       shiftDone: sh.filter(c => compMap[c.cn]).length,
+      lug: lg.length,
+      lugDone: lg.filter(c => compMap[c.cn]).length,
     };
   }, [containers, compMap, xrayMap, mode]);
 
@@ -2123,6 +2134,8 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           ...(mode === 'discharge' ? [{ k: 'xray', t: `🔍 X-RAY ${stats.xray}` }] : []),
           // 1.76-05: 시프팅 별도 칸 — 총계에 안 섞고 따로 센다(검수사 확정). 탭하면 시프팅만 본다.
           ...(stats.shift > 0 ? [{ k: 'shift', t: `◆ 시프팅 ${stats.shiftDone}/${stats.shift}` }] : []),
+          // 2.06-04: 덱 전용 수화물 = 미정 칸 — 총계(확정분)에 안 섞는다 (검수사 «LUG는 미정으로 노면 됩니다»)
+          ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
             className={`px-2.5 py-1 rounded font-bold ${

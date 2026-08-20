@@ -6,7 +6,7 @@
 //  - 실오류 (원본 ≠ 실제) 빨강 강조
 import React, { useState, useMemo } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
-import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
 import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -497,6 +497,22 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {/* V9.03: 긴급/수화물 — 예보(CLL 메일) 컨번호 마커. 카고플랜의 ▲·보라테두리와 짝. */}
               {c.urgent && <span className="bg-rose-600 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black">▲ 긴급</span>}
               {c.lugg && <span className="bg-violet-700 text-violet-50 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-300/60">🧳 수화물 — 이적 아님{c.luggSeal ? ` · 실 ${c.luggSeal}` : ''}</span>}
+              {/* 2.06-04 (검수사 «있기는 하되 내릴지는 모르는 미정상태 — 카톡이나 메시지가 오면 그때 확정»):
+                  덱 전용 수화물은 미정 배지 + [양하 확정] 버튼. 확정하면 총계 편입, [미정으로]로 되돌림. */}
+              {c._deckOnly && <span className="bg-slate-700 text-slate-200 text-[9px] px-1.5 py-0.5 rounded font-bold border border-slate-500">⏳ 내릴지 미정</span>}
+              {c._deckOnly && (
+                <button onClick={async (e) => { e.stopPropagation();
+                    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+                    if (window.confirm(`${c.cn} — 양하 확정할까요? (카톡·메시지로 통보받은 경우)`))
+                      await fbSetLuggConfirm(voyageKey, mode, c.cn, inspector); }}
+                  className="bg-violet-800 hover:bg-violet-700 text-violet-100 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-400/60">양하 확정</button>
+              )}
+              {c._luggConfirmed && (
+                <button onClick={async (e) => { e.stopPropagation();
+                    if (window.confirm(`${c.cn} — 다시 미정으로 되돌릴까요?`))
+                      await fbCancelLuggConfirm(voyageKey, mode, c.cn); }}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] px-1.5 py-0.5 rounded font-bold border border-slate-600">✔ 양하 확정됨 · 미정으로</button>
+              )}
               {isDG && <span className="bg-red-700/60 text-red-100 text-[9px] px-1.5 py-0.5 rounded font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
               {/* 1.86 (검수사 확정 «풀만 눈꽃표시 색을 넣어주시고 엠티는 눈꽃을 회색 처리»):
                   엠티 리퍼는 전원을 안 꽂아 잴 것이 없다 — 회색 눈꽃으로 가라앉히고, 풀만 색(온도 뱃지). */}

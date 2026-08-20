@@ -631,6 +631,15 @@ export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, eq
   await set(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`), rec);
   await set(ref(db, `voyages/${voyageKey}/${mode}/extras/${cn}`), rec);
 }
+// 2.06-04 (검수사 «있기는 하되 내릴지는 모르는 미정상태 카톡이나 메시지가 오면 그때 확정하는 상태로»):
+//   덱 전용 수화물(EDI·리스트에 없음)의 양하 확정 플래그. records 가 아니라 앱 자체 노드에 두는 이유 —
+//   수집기 리스트 병합이 records 를 다시 쓸 때 수동 확정이 증발하지 않게(통째 PUT 보존 원칙).
+export async function fbSetLuggConfirm(voyageKey, mode, cn, by) {
+  await set(ref(db, `voyages/${voyageKey}/${mode}/luggConfirm/${cn}`), { by: by || '', at: Date.now() });
+}
+export async function fbCancelLuggConfirm(voyageKey, mode, cn) {
+  await remove(ref(db, `voyages/${voyageKey}/${mode}/luggConfirm/${cn}`));
+}
 // V8.04: 잘못 기록한 초과 컨 취소(삭제) — completed·extras 양쪽에서 제거.
 export async function fbRemoveExtraContainer(voyageKey, mode, cn) {
   await remove(ref(db, `voyages/${voyageKey}/${mode}/completed/${cn}`));
