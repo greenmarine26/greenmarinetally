@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
-import { parseNaturalQuery, applyNLFilter, generateLocalAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드)
+import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
+import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
@@ -824,6 +825,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     return { targets, byBay, ranges: esealRanges || [], pool, usedPairs, remain };
   }, [sealTargets, esealRanges, recMap, shipPolicy]);
 
+  // TallyOne 2.01 (검수사 확정 «양하 탭이든 선적 탭이든 어디든 브리핑 해달라고 하면 그자리에서» ):
+  //   인라인 즉답 카드가 브리핑을 직접 내도록 재료 한 벌(briefCtx)로 묶어 내린다 — SearchPanel 1043행과 같은 재료.
+  //   ⚠ prop 체인: VoyagePage → ListTab/LoloTab → InlineAnswerCard (1.98 교훈 — 시그니처 전부 갱신).
+  const briefCtx = useMemo(() => ({
+    pairs: (() => { try { return getBayPairs(containers, voyage?.info?.imo || '', voyage?.info?.vsl || ''); } catch (e) { return null; } })(),
+    rfSkip: !!shipPolicy?.rfSkip,
+    eseal: esealInfo ? {
+      n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
+      poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
+    } : null,
+  }), [containers, voyage, shipPolicy, esealInfo]);
+
   // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
   //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
   //   - 등록 안 하고 닫기 → 같은 날 다시 안 뜸, 다음 날부터 다시 표시
@@ -1195,6 +1208,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
           externalFilter={listFilter}
           shiftingList={shiftingList} shiftInfo={shiftInfo}
+          briefCtx={briefCtx}
           onAsk={(q) => { setRelayQ(q); setTab('search'); }}
         />
       )}
@@ -1250,6 +1264,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
         <LoloTab
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
+          briefCtx={briefCtx}
           onAsk={(q) => { setRelayQ(q); setTab('search'); }}
           voyageKey={voyageKey} mode={mode}
           containers={containers} compMap={compMap}
@@ -1878,7 +1893,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '' }) {
+function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx — 인라인 브리핑 재료
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
   const [ask, setAsk] = useState(null);           // 1.85-05: 인라인 즉답 {q, stack[]} — 질문한 탭에서 바로 답
@@ -2026,7 +2041,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
       <div className="flex gap-1 flex-wrap text-[11px]">
         {[
@@ -2240,7 +2255,7 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
 // 1.85-05 (검수사 확정 «양하화면에서 조회했는데 답은 작업시작 화면에서 나옴»): 질문한 탭에서 바로 답.
 //   ListTab·LoloTab 공용 — 로컬 즉답만(AI 폴백·오답 신고는 ▶ 작업 시작 탭). 후속 버튼·«← 이전 답으로» 는
 //   SearchPanel 1.84-03 과 같은 규칙(검수사: «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼»).
-function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '', pier = '' }) {
+function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx
   const carrierContacts = useCarrierContacts();   // 1.89: «관련 선사·담당자» 즉답용
   const shipSpeed = useShipSpeed();   // 1.93-01: 시작 전 «얼마나 걸릴까» 실측 예측
   const q = ask?.q || '';
@@ -2248,8 +2263,18 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   const results = useMemo(() => { try { return parsed ? applyNLFilter(containers, parsed) : []; } catch (e) { return []; } },
     [containers, parsed]);
   const answer = useMemo(() => {
-    try { return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier }) : null; } catch (e) { return null; }
-  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier]);
+    try {
+      // TallyOne 2.01 (검수사 확정 «어디든 브리핑 해달라고 하면 그자리에서 해줘야 합니다. 굳이 작업시작을
+      //   누르는 불편함을 주어서는 안됩니다») — 브리핑·실번호 점검을 인라인에서 직접 낸다.
+      //   containers 는 이미 현재 모드 병합본(VoyagePage :704)이라 SearchPanel 의 modeCs 와 같은 재료.
+      if (parsed?.briefingQuery) {
+        return generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
+          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null });
+      }
+      if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
+      return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier }) : null;
+    } catch (e) { return null; }
+  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx]);
   const readRef = useRef('');
   useEffect(() => {
     if (!answer || readRef.current === q + answer.length) return;
@@ -2307,7 +2332,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   );
 }
 
-function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '' }) {
+function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx — 인라인 브리핑 재료
   // 1.85-03 (검수사 실측 «여기는 그대로 입니다»): ListTab 1.84와 같은 게이트 — 기본 미선택, 칩·검색 시에만 목록.
   const [filter, setFilter] = useState(null); // null(숨김) | all | done(누적) | undone
   const [search, setSearch] = useState('');
@@ -2447,7 +2472,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
       <div className="flex gap-1 flex-wrap text-[11px]">
         {[

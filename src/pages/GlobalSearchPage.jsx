@@ -415,6 +415,48 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         if (ov) return ov;
       } catch (e) { /* 아래로 */ }
     }
+    // 2.01 (검수사 확정 «항차목록에서 브리핑은 선박명을 특정 안하면 그날 작업할 선박들 전부를 브리핑»):
+    //   배 미지정 «브리핑» = planDate 가 오늘과 겹치는 항차 전부 — 배별 개요 브리핑(1.97 answerShipOverview)
+    //   + 컨 자료가 있으면 특수화물 한 줄. 오늘 배가 없으면 아래 기존 안내로 폴백.
+    if (p.briefingQuery && !shipCtx) {
+      try {
+        const _now = new Date();
+        const _d0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate()).getTime();
+        const _d1 = _d0 + 24 * 3600 * 1000;
+        const _pT = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
+        const _today = Object.entries(voyages || {}).map(([k, v]) => {
+          const seg = String(v?.info?.planDate || '').split('~');
+          const a = _pT(seg[0]); const b = seg[1] ? _pT(seg[1]) : a;
+          return { k, v, a, b: (b == null ? a : b) };
+        }).filter(x => x.a != null && x.a < _d1 && x.b >= _d0).sort((x, y) => x.a - y.a);
+        if (_today.length) {
+          const _parts = [`📋 오늘 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
+          for (const { k, v } of _today) {
+            const _ship = v?.info?.vslFull || v?.info?.vsl || k;
+            let _blk = null;
+            try { const _pmv = matchPortMis(portMisData || {}, v?.info || {}); _blk = answerShipOverview(v, _ship, _pmv, ediPattern); } catch (e) { /* 배 하나 실패해도 계속 */ }
+            if (!_blk) continue;
+            const _lines = _blk.split('\n').filter(l => !l.startsWith('(컨테이너 상세'));   // 다척 나열에선 안내 줄 생략
+            try {
+              const _mine = flat.filter(c => c.voyageKey === k && c._ptk);
+              if (_mine.length) {
+                const _c = (f) => _mine.filter(f).length;
+                const _sp = [];
+                const _rfF = _c(c => c.rf && String(c.fe).toUpperCase() === 'F'); if (_rfF) _sp.push(`리퍼 ${_rfF}`);
+                const _dg = _c(c => c.dg); if (_dg) _sp.push(`위험물 ${_dg}`);
+                const _fr = _c(c => c.fr); if (_fr) _sp.push(`FR ${_fr}`);
+                const _ot = _c(c => c.ot); if (_ot) _sp.push(`OT ${_ot}`);
+                const _tk = _c(c => c.tk); if (_tk) _sp.push(`탱크 ${_tk}`);
+                const _xr = _c(c => c._xray); if (_xr) _sp.push(`X-RAY ${_xr}`);
+                if (_sp.length) _lines.push(`특수: ${_sp.join(' · ')}`);
+              }
+            } catch (e) { /* 특수 줄만 생략 */ }
+            _parts.push(`【${_ship}】\n` + _lines.join('\n'));
+          }
+          if (_parts.length > 1) return _parts.join('\n\n');
+        }
+      } catch (e) { /* 아래 안내로 */ }
+    }
     if ((p.briefingQuery && !shipCtx) || p.sealAuditQuery || p.twinCheckQuery || p.etaQuery ||
         p.customsReportQuery || p.handoverQuery || p.weatherQuery || p.foodQuery || (p.schedQuery && !shipCtx)) {
       return '어느 배 말씀인지 배 이름을 붙여 주시면 여기서 바로 답합니다. (예: "STSE 출항 몇 시")\n작업 중 상세(브리핑·ETA·인계)는 항차 화면 🎤 자연어 탭이 더 자세합니다.';
