@@ -1135,12 +1135,32 @@ function formatBayStats(bay, results) {
 }
 
 // V7.90-02: 베이 분포 답변 — "리퍼가 몇 번 베이에 있어?" 첫 줄은 음성으로 읽히므로 베이 나열.
+// 2.06-05 (검수사 메모 «브리핑에서 실오류 내용이 없던데 모르는 대답을 하네요?»): auditSeals 는
+//   형식 점검(중복·혼입·자리수)만 보고 **실오류(sl_history 수정 기록)·실번호 불일치(sl_conflict)** 를
+//   안 봤다 — 불일치가 있어도 «이상 없음»이라 답하던 원인. ContainerList(1.8-03·2.05-06)와 같은 판정.
+export function sealIssuesOf(containers) {
+  const errs = [], confs = [];
+  for (const c of containers || []) {
+    const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;
+    if (Array.isArray(c.sl_history) && c.sl_history.length > 0 && c.sl && slOrig && c.sl !== slOrig) {
+      errs.push({ cn: c.cn, from: slOrig, to: c.sl }); continue;
+    }
+    const vals = Array.isArray(c.sl_conflict)
+      ? [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))] : [];
+    if (vals.length > 1) confs.push({ cn: c.cn, vals });
+  }
+  return { errs, confs };
+}
+
 // V7.90-05: 실번호 점검 전용 답변 ("실번호 점검" 질문)
 export function generateSealAuditAnswer(containers, modeLabel) {
   const audit = auditSeals(containers || []);
-  if (!audit.checked) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
-  if (!audit.items.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음`;
-  const lines = [`🔍 ${modeLabel} 실번호 주의 ${audit.items.length}건 (점검 ${audit.checked}건 중)`];
+  const { errs, confs } = sealIssuesOf(containers);   // 2.06-05: 실오류·불일치 합류
+  if (!audit.checked && !errs.length && !confs.length) return `📭 ${modeLabel} — 점검할 실번호 데이터가 없습니다 (양하리스트 업로드 필요)`;
+  if (!audit.items.length && !errs.length && !confs.length) return `✅ ${modeLabel} 실번호 점검 — ${audit.checked}건 모두 이상 없음 (실오류·불일치 기록도 없음)`;
+  const lines = [`🔍 ${modeLabel} 실번호 주의 ${audit.items.length + errs.length + confs.length}건 (점검 ${audit.checked}건 중)`];
+  for (const e of errs) lines.push(`• ${e.cn} — ⚠ 실오류: 리스트 「${e.from}」 → 실물 「${e.to}」 (세관 신고 사안)`);
+  for (const f of confs) lines.push(`• ${f.cn} — ⚠ 실번호 불일치: ${f.vals.join(' ↔ ')} (리스트끼리 다름 — 실물 대조 필요)`);
   for (const it of audit.items) lines.push(`• ${it.cn} 「${it.seal}」 — ${it.reason}`);
   return lines.join('\n');
 }
@@ -1323,6 +1343,14 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
     if (tw.diff.length) warns.push({ k: `트윈무게차 ${tw.diff.length}`, line: `⚖ 트윈 무게차 초과 ${tw.diff.length}쌍 (한계 ${(limit / 1000)}톤↑): ${posOf(tw.diff)} — 수평 불가, 싱글 작업 검토` });
   }
   const audit = auditSeals(cs);
+  // 2.06-05: 실오류(수정 기록)·실번호 불일치(sl_conflict)도 브리핑에 — 검수사 «브리핑에서 실오류 내용이 없던데»
+  const _si = sealIssuesOf(cs);
+  if (_si.errs.length || _si.confs.length) {
+    const parts = [];
+    if (_si.errs.length) parts.push(`실오류 ${_si.errs.length}건(${_si.errs.slice(0, 3).map(e => e.cn?.slice(-4)).join(', ')})`);
+    if (_si.confs.length) parts.push(`실번호 불일치 ${_si.confs.length}건(${_si.confs.slice(0, 3).map(f => f.cn?.slice(-4)).join(', ')})`);
+    warns.push({ k: `실번호 ${_si.errs.length + _si.confs.length}건`, line: `⚠ ${parts.join(' · ')} — "실번호 점검"으로 상세 확인` });
+  }
   if (audit.items.length) {
     const kinds = [...new Set(audit.items.map(it => it.reason.split(' — ')[0].replace(/^(풀씰|엠티실)\s*/, '')))].slice(0, 2).join(', ');
     warns.push({ k: `실번호 ${audit.items.length}건`, line: `🔍 실번호 의심 ${audit.items.length}건 (${kinds}${audit.items.length > 2 ? ' 등' : ''}) — "실번호 점검"으로 상세 확인` });
