@@ -542,22 +542,20 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
             return { k, v, a, b: (b == null ? a : b) };
           }).filter(x => x.a != null && x.a < d1 && x.b >= d0).sort((x, y) => x.a - y.a);
         };
-        // 2.05-03 (검수사 실측 — 밤에 «미르야 브리핑해줘»가 «배 이름을 붙여 주시면» 폴백):
-        //   오늘 겹치는 항차가 0척이면(작업이 다 끝난 밤) **내일 배로 자동 폴백**해 브리핑한다.
-        //   내일/모레를 명시했으면 그날만. 둘 다 없으면 명시적으로 «없습니다» 답(폴백 문구 금지).
-        let _off = _dayOff;
-        let _today = _shipsOf(_off);
-        let _autoTomorrow = false;
-        if (!_today.length && _dayOff === 0) {
-          const _tm = _shipsOf(1);
-          if (_tm.length) { _today = _tm; _off = 1; _autoTomorrow = true; }
-        }
+        // 2.05-03 (검수사 확정 «특정 선박명이 없으면 그날 작업할 선박 전부 브리핑 해야 하는데 없으면
+        //   작업할 선박이 없습니다. 내일 작업할것을 브리핑 할까요? 네 아니오 선택할수 있게»):
+        //   오늘 0척이면 자동 진행이 아니라 **되묻는다** — [네]는 «내일 브리핑» 질의로 이어진다(아래 버튼 렌더).
+        const _off = _dayOff;
+        const _today = _shipsOf(_off);
         if (!_today.length) {
+          if (_dayOff === 0 && _shipsOf(1).length) {
+            return `오늘 작업할 선박이 없습니다. 내일 작업할 것을 브리핑할까요?`;
+          }
           const _lbl0 = _dayOff === 2 ? '모레' : _dayOff === 1 ? '내일' : '오늘·내일';
           return `${_lbl0} 작업 예정으로 잡힌 선박이 없습니다 — 배정·도선이 잡히면 항차 카드에 뜹니다.\n배 이름을 붙이면 그 배 브리핑을 바로 합니다 (예: "TNJP 브리핑").`;
         }
         if (_today.length) {
-          const _parts = [`${_autoTomorrow ? '오늘 작업 선박은 없습니다 — 내일 배를 브리핑합니다.\n' : ''}📋 ${_off === 2 ? '모레' : _off === 1 ? '내일' : '오늘'} 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
+          const _parts = [`📋 ${_off === 2 ? '모레' : _off === 1 ? '내일' : '오늘'} 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
           for (const { k, v } of _today) {
             const _ship = v?.info?.vslFull || v?.info?.vsl || k;
             let _blk = null;
@@ -842,6 +840,27 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           <div className="text-[11px] text-emerald-400 font-bold uppercase mb-1">🤖 즉답</div>
           {reasked && askedAt && <div className="text-[11px] text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
+          {/* 2.05-03 (검수사 확정): «내일 작업할 것을 브리핑할까요?» — [네][아니오] 선택 */}
+          {/내일 작업할 것을 브리핑할까요/.test(localAnswer) && (
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => setQuery('내일 브리핑')}
+                className="flex-1 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm">네 — 내일 브리핑</button>
+              <button onClick={() => setQuery('')}
+                className="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm border border-slate-600">아니오</button>
+            </div>
+          )}
+          {/* 2.05-03: 통합검색에도 유도 버튼 규격("라벨"로 상세 확인 — 1.84-03) — 브리핑 주의 버튼 등 */}
+          {(() => {
+            const _hs = [...new Set([...String(localAnswer).matchAll(/"([^"]{2,14})"\s*[으로]*로?\s*상세 확인/g)].map((m) => m[1]))];
+            return _hs.length ? (
+              <div className="flex gap-2 flex-wrap mt-3">
+                {_hs.map((h) => (
+                  <button key={h} onClick={() => setQuery(h)}
+                    className="flex-1 min-w-[110px] py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">🔍 {h} 보기</button>
+                ))}
+              </div>
+            ) : null;
+          })()}
         </div>
       )}
 
