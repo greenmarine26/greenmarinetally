@@ -79,7 +79,11 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
     Object.entries(r).forEach(([k, v]) => {
       if (v === '' || v == null) return;
       // EDI에 있는 컨테이너는 핵심 필드를 리스트가 덮지 못함 (EDI가 진실)
-      if (hasEdi && PROTECTED_EDI_FIELDS.has(k)) return;
+      // TallyOne 2.00-01: 단, 특수화물 플래그는 EDI 의 false 가 «정보 없음»일 수 있다 — DGS 없는 EDI(연운항형)가
+      //   리스트의 DG true 를 지워 검수 리스트·카고플랜에서 위험물 23대가 통째로 사라졌다(TNJP 26360E 실측).
+      //   false→true 승격만 허용(반대 방향은 종전대로 EDI 보호). VoyagePage FLAG_FILL 과 같은 규칙.
+      const _flagUp = (k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk' || k === 'dg' || k === 'oog') && v === true && e[k] !== true;
+      if (hasEdi && PROTECTED_EDI_FIELDS.has(k) && !_flagUp) return;
       merged[k] = v;
     });
     // V8.86: 컨번호 없는 EDI 자리(배열 인덱스 키) → 배열 인덱스가 컨번호로 둔갑하지 않게 __SLOT_ 키 부여

@@ -618,8 +618,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //   records엔 fe/iso 전수 있는데 화면은 미정·기타 — 사용자 신고 "풀엠티·규격 다 있는데 적용 안 됨").
           //   실 EDI에 값이 있으면 기존 원칙 그대로 EDI가 진실.
           const CORE_FILL = k === 'fe' || k === 'iso' || k === 'tp' || k === 'rf' || k === 'fr' ||
-            k === 'ot' || k === 'tk' || k === 'dg' || k === 'dgc' || k === 'un' || k === 'pod' || k === 'tmp_missing';
-          if (CORE_FILL && (ediBase._virtualEdi || ediBase[k] === undefined || ediBase[k] === '')) {
+            k === 'ot' || k === 'tk' || k === 'dg' || k === 'dgc' || k === 'un' || k === 'pg' || k === 'pod' || k === 'tmp_missing';
+          // TallyOne 2.00-01: 특수화물 플래그는 EDI 초기값 false 가 «정보 없음»이다 — DGS 없는 EDI(연운항형)의
+          //   dg:false 가 리스트의 true 를 막아 DG 23대가 화면·미르 답에서 사라졌다(TNJP 26360E 실측).
+          //   false→true 승격만 허용. tmp_missing 은 대상 아님(EDI 온도가 있는데 «미기재»로 뒤집히면 안 된다).
+          const FLAG_FILL = (k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk' || k === 'dg' || k === 'oog') &&
+            v === true && ediBase[k] !== true;
+          if ((CORE_FILL && (ediBase._virtualEdi || ediBase[k] === undefined || ediBase[k] === '')) || FLAG_FILL) {
             safeR[k] = v; return;
           }
           // EDI 매칭됨 → 핵심 필드는 보호, 보강 필드만 허용
