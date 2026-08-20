@@ -316,12 +316,18 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
     //   ⚠ 이것은 '실오류'가 아니다 — 실물 봉인을 본 사람이 없다. 검수 전에 확인할 신호다.
     if (nv && nv.sl && ov.sl && String(nv.sl).trim() !== String(ov.sl).trim()) {
       const hist = Array.isArray(ov.sl_conflict) ? [...ov.sl_conflict] : [];
-      const prevSrc = ov._source || '';
+      // 2.06-07 (검수사 «같은 리스트에서 다른 실번호라는 이야기 인가요?» — 아니었다): 종전엔 기존 값의
+      //   출처를 ov._source 로 찍었는데 _source 는 **마지막으로 이 컨을 덮은 파일명**이라, 세관 값도
+      //   선사 파일명으로 표시됐다(2719E 실측 — 0035634 는 적하목록 값인데 RF LIST 로 찍힘).
+      //   sl 의 진짜 출처는 sl_src 에 따로 지킨다.
+      const prevSrc = ov.sl_src || ov._source || '';
       const nextSrc = nv._source || '';
       if (!hist.length) hist.push({ sl: String(ov.sl), src: prevSrc });
       if (!hist.some((h) => h.sl === String(nv.sl))) hist.push({ sl: String(nv.sl), src: nextSrc });
       m.sl_conflict = hist;
     }
+    // 2.06-07: 이번 리스트가 sl 을 실제로 쓰면(빈 값 아님) 그 출처를 sl_src 로 동봉 — 다음 충돌 때 정확한 출처 표기
+    if (nv && nv.sl && String(nv.sl).trim() !== '') m.sl_src = nv._source || '';
     for (const [k, v] of Object.entries(nv || {})) {
       if (_emptyFor(k, v)) continue;           // ① 빈 값(무게 0 포함)은 기존을 덮지 않는다
       m[k] = v;

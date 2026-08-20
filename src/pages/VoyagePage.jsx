@@ -587,6 +587,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       'rfSet', 'rfAct', 'rfSrc', 'rfCheckedAt', 'rfCheckedBy',
       'sl_conflict',   // 1.8-03: 리스트끼리 실번호가 다를 때 두 값 모두 — 배지가 이걸 읽는다
       '_source',       // 2.06-06: 이 컨을 채운 리스트 파일명 — 세관리스트 존재 판정(sealIssuesOf)이 읽는다
+      'sl_src',        // 2.06-07: 채택 씰(sl)의 진짜 출처 — _source 는 마지막 파일로 덮이므로 따로 지킨다
       'desc',  // M8.07: 품명(내용물) — EDI에 없는 참조 정보, 카고플랜 그림에 영향 없음
       // M4.9b-fix: 엠티 실 — EDI에 봉인 정보 없는 게 일반적, records가 진실
       'eseal', 'eseal_orig', 'eseal_wrong', 'reseal',
