@@ -133,8 +133,8 @@ function renderRow(c, idx) {
   if (type === 'tk' || c.tk) notes.push('TK');
   // TallyOne 2.00 (검수사 지시 2026-08-20 «검수용 리스트에 DG(클래스·유엔넘버)·리퍼온도·OOG(높이 폭)·특수화물 다 기록»):
   //   DG — 클래스·UN·포장등급 (nlSearch specialDetailLines 와 같은 필드 dgc/un/pg. TNJP 26360E 실측: cl.9 UN3480)
-  // TallyOne 2.00-02 (검수사 지시): 표기 형식 «DG 9/3480» — 클래스/UN 을 슬래시로
-  if (c.dg) notes.push(`<span style="color:#b91c1c;font-weight:bold">DG${(c.dgc || c.un) ? ' ' + [c.dgc, c.un].filter(Boolean).join('/') : ''}${c.pg ? ' PG' + c.pg : ''}</span>`);
+  // TallyOne 2.00-03 (검수사 지시 «DG 표기는 */**** 형식으로»): 클래스/UN 만 — 예 «9/3480». 번호 없으면 DG 로 폴백
+  if (c.dg) notes.push(`<span style="color:#b91c1c;font-weight:bold">${(c.dgc || c.un) ? [c.dgc, c.un].filter(Boolean).join('/') : 'DG'}${c.pg ? ' PG' + c.pg : ''}</span>`);
   //   OOG — EDI DIM 초과 치수(cm, 1.84-04 가 담은 ovh/ovw/ovl), 없으면 치수 엑셀 실치수 폭×높이(mm)
   const _ov = [];
   if (c.ovh) _ov.push(`H+${c.ovh}`);
@@ -369,7 +369,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       const op = normalizeCarrier(c);
       const cat = getContainerCategory(c);
       const memo = [];
-      if (c.dg) memo.push(`DG${(c.dgc || c.un) ? ' ' + [c.dgc, c.un].filter(Boolean).join('/') : ''}${c.pg ? ' PG' + c.pg : ''}`);   // TallyOne 2.00-02: «DG 9/3480» 형식
+      if (c.dg) memo.push(`${(c.dgc || c.un) ? [c.dgc, c.un].filter(Boolean).join('/') : 'DG'}${c.pg ? ' PG' + c.pg : ''}`);   // TallyOne 2.00-03: «9/3480» 형식(클래스/UN만)
       const _t = (c.tmp != null && String(c.tmp).trim() !== '') ? c.tmp : c.temp;   // TallyOne 2.00: 온도 필드는 tmp (temp 만 봐서 늘 비었다)
       if (cat.type === 'reefer') memo.push('R' + (_t != null && String(_t).trim() !== '' ? _t + '℃' : ''));
       const _ov = [];
