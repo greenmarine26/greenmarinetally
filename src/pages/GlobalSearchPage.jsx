@@ -532,16 +532,32 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (p.briefingQuery && !shipCtx) {
       try {
         const _now = new Date();
-        const _d0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + _dayOff).getTime();
-        const _d1 = _d0 + 24 * 3600 * 1000;
         const _pT = (x) => { const m = String(x || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
-        const _today = Object.entries(voyages || {}).map(([k, v]) => {
-          const seg = String(v?.info?.planDate || '').split('~');
-          const a = _pT(seg[0]); const b = seg[1] ? _pT(seg[1]) : a;
-          return { k, v, a, b: (b == null ? a : b) };
-        }).filter(x => x.a != null && x.a < _d1 && x.b >= _d0).sort((x, y) => x.a - y.a);
+        const _shipsOf = (off) => {
+          const d0 = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate() + off).getTime();
+          const d1 = d0 + 24 * 3600 * 1000;
+          return Object.entries(voyages || {}).map(([k, v]) => {
+            const seg = String(v?.info?.planDate || '').split('~');
+            const a = _pT(seg[0]); const b = seg[1] ? _pT(seg[1]) : a;
+            return { k, v, a, b: (b == null ? a : b) };
+          }).filter(x => x.a != null && x.a < d1 && x.b >= d0).sort((x, y) => x.a - y.a);
+        };
+        // 2.05-03 (검수사 실측 — 밤에 «미르야 브리핑해줘»가 «배 이름을 붙여 주시면» 폴백):
+        //   오늘 겹치는 항차가 0척이면(작업이 다 끝난 밤) **내일 배로 자동 폴백**해 브리핑한다.
+        //   내일/모레를 명시했으면 그날만. 둘 다 없으면 명시적으로 «없습니다» 답(폴백 문구 금지).
+        let _off = _dayOff;
+        let _today = _shipsOf(_off);
+        let _autoTomorrow = false;
+        if (!_today.length && _dayOff === 0) {
+          const _tm = _shipsOf(1);
+          if (_tm.length) { _today = _tm; _off = 1; _autoTomorrow = true; }
+        }
+        if (!_today.length) {
+          const _lbl0 = _dayOff === 2 ? '모레' : _dayOff === 1 ? '내일' : '오늘·내일';
+          return `${_lbl0} 작업 예정으로 잡힌 선박이 없습니다 — 배정·도선이 잡히면 항차 카드에 뜹니다.\n배 이름을 붙이면 그 배 브리핑을 바로 합니다 (예: "TNJP 브리핑").`;
+        }
         if (_today.length) {
-          const _parts = [`📋 ${_dayOff === 2 ? '모레' : _dayOff === 1 ? '내일' : '오늘'} 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
+          const _parts = [`${_autoTomorrow ? '오늘 작업 선박은 없습니다 — 내일 배를 브리핑합니다.\n' : ''}📋 ${_off === 2 ? '모레' : _off === 1 ? '내일' : '오늘'} 작업 선박 ${_today.length}척 브리핑 — 배 이름을 붙이면 그 배만 자세히 (예: "${_today[0].v?.info?.vsl || 'SWSP'} 브리핑")`];
           for (const { k, v } of _today) {
             const _ship = v?.info?.vslFull || v?.info?.vsl || k;
             let _blk = null;
