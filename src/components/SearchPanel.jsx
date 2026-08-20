@@ -375,7 +375,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
             <span className="text-[12px] font-bold text-amber-300">💬 질문 답변</span>
             <button onClick={() => setAskMode(false)} className="text-[12px] text-slate-400 px-2 py-1 rounded hover:bg-slate-800">✕ 닫고 작업으로</button>
           </div>
-          <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} terminalWork={terminalWork} relayQuery={relayQuery} />
+          <SingleSearch rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} terminalWork={terminalWork} relayQuery={relayQuery} />
         </div>
       )}
 
@@ -690,7 +690,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       </div>
 
       {searchMode === 'single'
-        ? <SingleSearch voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} />
+        ? <SingleSearch rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={manualCtx} terminalWork={terminalWork} />
         : (workFilter === 'loading' && loadTwinMode === 'manual')
           /* V9.49: 위치 지정 방식(PCTC식 두 조회창) — 실제 자리가 플랜과 다를 때만 쓴다 */
           ? <ManualTwinLoad voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} onOpenContainer={onOpenContainer}
@@ -777,7 +777,7 @@ function TwinPossibleHint({ c, allContainers, voyage }) {
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, terminalWork = {}, relayQuery = '' }) {   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
+function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, terminalWork = {}, relayQuery = '', rfSkip = false, esealBrief = null }) {   // 1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해 «rfSkip is not defined» 전체 크래시(검수사 실측)   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
   const [query, setQuery] = useState('');
   // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
   //   "숫자가 아닌 텍스트가 입력이 될때는 대기 하고 전송키로 전송을 누르면 질문에 답을 해주게").
