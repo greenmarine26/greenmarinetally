@@ -24,9 +24,14 @@ const FILTERS = [
   { key: '40', label: '40DC', color: 'bg-blue-600' },
   { key: 'hc', label: '40HC', color: 'bg-blue-600' },
   { key: 'hc45', label: '45HC', color: 'bg-blue-600' },
-  { key: 'rf20', label: '20RF', color: 'bg-cyan-600', rfSnow: true },   // 1.86-02: 눈꽃은 아이콘으로 — 풀 있으면 파란·전부 엠티면 회색(검수사 확정)
-  { key: 'rf40', label: '40RH', color: 'bg-cyan-600', rfSnow: true },   // 1.99: 선사 제출 형식(HC 리퍼) — 40RF(표준높이)도 이 칩에 합산
-  { key: 'rf45', label: '45RF', color: 'bg-cyan-600', rfSnow: true },
+  // 2.08-04 (검수사 확정 «제가 원하는건 40RH E22 ❄40RH F2(온도1, 온도없음1) 이런식» — OBWH 2720W
+  //   풀2+엠티22가 한 칩 24로 뭉침): 리퍼 규격 칩을 엠티/풀 둘로 분리. 풀 칩엔 온도 입력 현황.
+  { key: 'rf20e', label: '20RF', color: 'bg-slate-600', rfEmpty: true },
+  { key: 'rf20f', label: '20RF', color: 'bg-cyan-600', rfFull: true },
+  { key: 'rf40e', label: '40RH', color: 'bg-slate-600', rfEmpty: true },
+  { key: 'rf40f', label: '40RH', color: 'bg-cyan-600', rfFull: true },
+  { key: 'rf45e', label: '45RF', color: 'bg-slate-600', rfEmpty: true },
+  { key: 'rf45f', label: '45RF', color: 'bg-cyan-600', rfFull: true },
   { key: 'fr20', label: '▱ 20FR', color: 'bg-yellow-600' },
   { key: 'fr40', label: '▱ 40FR', color: 'bg-yellow-600' },
   { key: 'fr45', label: '▱ 45FR', color: 'bg-yellow-600' },
@@ -66,7 +71,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       all: list.length,
       completed: 0, remaining: 0, full: 0, empty: 0, feUnknown: 0, xray: 0, dg: 0, rf: 0, tk: 0, oog: 0,
       hc: 0, dc20: 0, dc40: 0,
-      rf20: 0, rf20f: 0, rf40f: 0, rf45f: 0, rf40: 0, rf45: 0, fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
+      rf20: 0, rf20f: 0, rf40f: 0, rf45f: 0, rf40: 0, rf45: 0,
+      rf20e: 0, rf40e: 0, rf45e: 0, rf20ft: 0, rf40ft: 0, rf45ft: 0,   // 2.08-04: 리퍼 엠티·온도입력 카운트 fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
       hc45: 0,
       isoOther: 0,
       isoOtherList: [],
@@ -91,8 +97,9 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (lbl === '40HC') { k.hc++; knownLbl = true; }
       else if (lbl === '20DC' || lbl === '20GP' || lbl === '20VH' || lbl === '20HC') { k.dc20++; knownLbl = true; }   // 1.55-01: 20HC(26xx)도 20피트 칸에 — 별도 배지 없음, 종전 집계 유지
       else if (lbl === '40DC' || lbl === '40GP' || lbl === '40VH') { k.dc40++; knownLbl = true; }
-      if (lbl === '20RF') { k.rf20++; if (c.fe === 'F') k.rf20f++; knownLbl = true; }
-      else if (lbl === '40RF' || lbl === '40RH') { k.rf40++; if (c.fe === 'F') k.rf40f++; knownLbl = true; }
+      const _rfT = hasTmp ? 1 : 0;   // 2.08-04: 풀 리퍼 온도 입력 여부
+      if (lbl === '20RF') { k.rf20++; if (c.fe === 'F') { k.rf20f++; k.rf20ft += _rfT; } else if (c.fe === 'E') k.rf20e++; knownLbl = true; }
+      else if (lbl === '40RF' || lbl === '40RH') { k.rf40++; if (c.fe === 'F') { k.rf40f++; k.rf40ft += _rfT; } else if (c.fe === 'E') k.rf40e++; knownLbl = true; }
       if (lbl === '20FR') { k.fr20++; knownLbl = true; }
       else if (lbl === '40FR') { k.fr40++; knownLbl = true; }
       else if (lbl === '45FR') { k.fr45++; knownLbl = true; }
@@ -101,7 +108,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       else if (lbl === '45OT') { k.ot45++; knownLbl = true; }
       if (lbl === '20TK') { k.tk20++; knownLbl = true; }
       else if (lbl === '40TK') { k.tk40++; knownLbl = true; }
-      if (lbl === '45RF') { k.rf45++; if (c.fe === 'F') k.rf45f++; knownLbl = true; }
+      if (lbl === '45RF') { k.rf45++; if (c.fe === 'F') { k.rf45f++; k.rf45ft += (hasTmp ? 1 : 0); } else if (c.fe === 'E') k.rf45e++; knownLbl = true; }
       if (lbl === '45HC') { k.hc45++; knownLbl = true; }
 
       // M3.5.6: 알려진 카테고리에 없는 ISO 카운트 (검수원 확인 필요)
@@ -165,6 +172,13 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'hc' && lbl !== '40HC') return false;
       if (f === 'rf20' && lbl !== '20RF') return false;
       if (f === 'rf40' && lbl !== '40RF' && lbl !== '40RH') return false;
+      // 2.08-04: 엠티/풀 분리 칩 매칭
+      if (f === 'rf20e' && !(lbl === '20RF' && c.fe === 'E')) return false;
+      if (f === 'rf20f' && !(lbl === '20RF' && c.fe !== 'E')) return false;
+      if (f === 'rf40e' && !((lbl === '40RF' || lbl === '40RH') && c.fe === 'E')) return false;
+      if (f === 'rf40f' && !((lbl === '40RF' || lbl === '40RH') && c.fe !== 'E')) return false;
+      if (f === 'rf45e' && !(lbl === '45RF' && c.fe === 'E')) return false;
+      if (f === 'rf45f' && !(lbl === '45RF' && c.fe !== 'E')) return false;
       if (f === 'fr20' && lbl !== '20FR') return false;
       if (f === 'fr40' && lbl !== '40FR') return false;
       if (f === 'fr45' && lbl !== '45FR') return false;
@@ -236,19 +250,16 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
                 className={`px-2 py-1 rounded text-[10px] font-bold ${
                   cargoFilter === f.key ? `${f.color} text-white` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                 }`}>
-                {f.rfSnow
+                {f.rfEmpty
+                  ? <>{f.label} E{cnt}</>
+                  : f.rfFull
                   ? (() => {
-                      // 2.08-03 (검수사 확정 «리퍼 엠티 22개와 풀 2개를 분리 표기 — 40리퍼 엠티가 풀리퍼와
-                      //   같은 색으로 24개로 표기»): 풀·엠티를 한 숫자로 뭉치지 않는다.
-                      //   혼합 = F2·E22 / 전부 엠티 = E22(회색) / 전부 풀 = 종전대로 숫자만.
-                      const _f = counts[f.key + 'f'] || 0, _e = cnt - _f;
-                      const _txt = (_f > 0 && _e > 0) ? `F${_f}·E${_e}` : (_e > 0 ? `E${_e}` : `${cnt}`);
+                      const _t = counts[f.key + 't'] || 0, _no = cnt - _t;
                       return (
                         <span className="inline-flex items-center gap-0.5">
-                          <Snowflake className={`w-3 h-3 ${_f > 0 ? 'text-cyan-300' : 'text-slate-500'}`}/>
-                          {f.label} {_f > 0 && _e > 0
-                            ? <><span>F{_f}</span><span className="text-slate-400">·E{_e}</span></>
-                            : _txt}
+                          <Snowflake className="w-3 h-3 text-cyan-300"/>
+                          {f.label} F{cnt}
+                          <span className="text-cyan-100/80">({_no > 0 ? `온도${_t}·없음${_no}` : `온도${_t}`})</span>
                         </span>
                       );
                     })()
