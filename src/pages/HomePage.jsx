@@ -262,7 +262,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       .map(([k, v]) => {
         const info = v.info || {};
         // PORT-MIS에서 매칭 시도 — 우선
-        const callsign = info.callsign || '';
+        // 2.08-10 (검수사 «PORT-MIS 매칭 미확인 RZOR — 여러번 수정한거 같은데 어디를 수정?»):
+        //   항차 화면(dictCallsign)은 베이사전 콜사인 폴백이 있는데 홈 카드는 info.callsign 만 봤다.
+        //   RZOR 처럼 수집기가 콜사인을 못 싣는 배는 사전(ship_bay_dict_v3/{VSL}.callsign)이 정본.
+        const _dict = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict : {};
+        const _vslKey = String(info.vsl || '').toUpperCase();
+        const callsign = info.callsign || _dict[_vslKey]?.callsign || _dict[_vslKey]?.bayDef?.callsign || '';
         const imo = info.imo || '';
         const vsl = (info.vsl || '').toUpperCase();
         let pm = null;
