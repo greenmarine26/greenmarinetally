@@ -3374,8 +3374,13 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         }
 
         // 공통: cnMap에 병합 (skipExisting이면 기존 컨번호는 건너뜀)
+        // 2.06-10 (2719E 실측 — 검수사가 올린 세관 Excel 148건이 _source 공란): 인앱 업로드는 파일명을
+        //   안 실어서, 세관리스트(Excel_타임스탬프)를 올려도 세관 기준 판정(sealIssuesOf hasCustoms)이
+        //   인식 못 하고 «세관리스트를 첨부해 주세요»가 계속 떴다. 파일명을 _source 로 싣는다 —
+        //   fbSaveListRecords 가 이걸로 sl_src(채택 씰 출처)·sl_conflict 출처를 기록한다.
         for (const r of records) {
           if (!r.cn) continue;
+          r._source = file.name;
           if (cnMap[r.cn]) {
             if (skipExisting) continue;  // 신규만 모드 → 기존 유지
             // M8.08: 스마트 병합 — 새 값(주로 세관리스트)이 비어있으면 기존 값(선사리스트) 보존.
@@ -3399,6 +3404,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             // 온도: 기존(선사)에 유효 온도 있으면 보존.
             const prevTmp = String(prev.tmp || '').trim();
             if (prevTmp && !prev.tmp_missing) { merged.tmp = prev.tmp; merged.tmp_missing = false; }
+            merged._source = file.name;   // 2.06-10: 마지막으로 이 컨을 덮은 파일 — _source 의 정의 그대로
             cnMap[r.cn] = merged;
           } else {
             added++;
