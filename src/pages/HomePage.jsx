@@ -1911,9 +1911,14 @@ function computeStats(section, mode, info, voyageKey) {
   const lugCap = shipLuggageCount(voyageKey);
   // 1.56-02: 선적은 가상 EDI(리스트 승격)가 수화물을 품어 gap 이 0 이 된다 — 예보(카톡 물량예보)가
   //   이 항차의 수화물 대수를 이미 선언하고 있으면(calc.luggage) 그것으로 표기한다. 번호 기억(isLuggageCn)도 겹으로.
-  const fcLug = (String(info?.forecast?.mode || 'loading') === mode)
-    ? Math.max(Number(info?.forecast?.calc?.luggage || 0), (info?.forecast?.luggageCns || []).length)   // 1.56-04: CLL 선언 번호 수도 근거
-    : 0;
+  // 2.08-08 (검수사 실화면 — OBWH 선적 줄만 LUG 배지 없음): forecast.mode 게이트가 여기에도 있었다.
+  //   2.08-07 원칙 그대로 — 물량 선언(calc.luggage)은 mode 게이트 유지, **컨번호(luggageCns)는
+  //   이 모드 자료(records·EDI)에 실재하는 컨만 세되 mode 무관**(수집기가 만든 mode 딱지에 안 걸리게).
+  const _fcLugQty = (String(info?.forecast?.mode || 'loading') === mode)
+    ? Number(info?.forecast?.calc?.luggage || 0) : 0;
+  const _fcLugCns = (info?.forecast?.luggageCns || [])
+    .filter(cn => recordCns.has(cn) || ptkCns.has(cn)).length;
+  const fcLug = Math.max(_fcLugQty, _fcLugCns);   // 1.56-04: CLL 선언 번호 수도 근거
   const lugMarked = [...recordCns].filter(cn => isLuggageCn(cn)).length;
   const luggage = Math.max(lugByCn, Math.min(gap, lugCap), Math.min(Math.max(fcLug, lugMarked), Math.max(lugCap, fcLug)));
   const partialEdi = !virtual && matched > 0 && (recordCns.size - luggage) > ptkCns.size;
