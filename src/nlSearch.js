@@ -1155,7 +1155,7 @@ export function sealIssuesOf(containers) {
   const errs = [], confs = [];
   let hasCustoms = false;
   for (const c of containers || []) {
-    if (_isCustomsSrc(c._source)) hasCustoms = true;
+    if (_isCustomsSrc(c._source) || _isCustomsSrc(c.sl_src)) hasCustoms = true;   // 2.06-11: 채택 씰 출처(sl_src)도 근거 — 세관 올린 뒤 선사 리스트가 _source 를 덮어도 유지
     const hist = Array.isArray(c.sl_conflict) ? c.sl_conflict : [];
     if (hist.some((h) => _isCustomsSrc(h.src))) hasCustoms = true;
     const slOrig = c.sl_orig != null ? c.sl_orig : c.sl;

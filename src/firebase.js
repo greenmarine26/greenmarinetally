@@ -327,7 +327,16 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
       m.sl_conflict = hist;
     }
     // 2.06-07: 이번 리스트가 sl 을 실제로 쓰면(빈 값 아님) 그 출처를 sl_src 로 동봉 — 다음 충돌 때 정확한 출처 표기
-    if (nv && nv.sl && String(nv.sl).trim() !== '') m.sl_src = nv._source || '';
+    // 2.06-11 (R090E 실측 — 세관 Excel 업로드 후 수집기가 선사 리스트를 재처리하며 sl_src 를 선사로 덮어
+    //   세관리스트 인식(hasCustoms)이 꺼짐): **같은 값이면 세관 출처를 유지한다.** 세관이 정본이고,
+    //   값이 달라질 때만 새 출처로 바뀐다(그때는 sl_conflict 도 함께 남는다). 정규식은 nlSearch _isCustomsSrc 와 동일.
+    if (nv && nv.sl && String(nv.sl).trim() !== '') {
+      const _CUSTOMS_RE = /적하\s*목록|적하|세관|CDL|MANIFEST|신고|^Excel_\d{14}/i;
+      const _newSrc = nv._source || '';
+      const _keepCustoms = _CUSTOMS_RE.test(String(ov.sl_src || '').trim()) && !_CUSTOMS_RE.test(String(_newSrc).trim())
+        && String(nv.sl).trim() === String(ov.sl || '').trim();
+      if (!_keepCustoms) m.sl_src = _newSrc;
+    }
     for (const [k, v] of Object.entries(nv || {})) {
       if (_emptyFor(k, v)) continue;           // ① 빈 값(무게 0 포함)은 기존을 덮지 않는다
       m[k] = v;
