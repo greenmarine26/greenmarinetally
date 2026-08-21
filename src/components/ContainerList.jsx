@@ -20,18 +20,9 @@ const FILTERS = [
   { key: 'full', label: 'F (적컨)', color: 'bg-emerald-600' },
   { key: 'empty', label: 'E (공컨)', color: 'bg-slate-500' },
   { key: 'feUnknown', label: '? (미정)', color: 'bg-amber-600' },
-  { key: '20', label: '20DC', color: 'bg-blue-600' },
-  { key: '40', label: '40DC', color: 'bg-blue-600' },
-  { key: 'hc', label: '40HC', color: 'bg-blue-600' },
-  { key: 'hc45', label: '45HC', color: 'bg-blue-600' },
-  // 2.08-04 (검수사 확정 «제가 원하는건 40RH E22 ❄40RH F2(온도1, 온도없음1) 이런식» — OBWH 2720W
-  //   풀2+엠티22가 한 칩 24로 뭉침): 리퍼 규격 칩을 엠티/풀 둘로 분리. 풀 칩엔 온도 입력 현황.
-  { key: 'rf20e', label: '20RF', color: 'bg-slate-600', rfEmpty: true },
-  { key: 'rf20f', label: '20RF', color: 'bg-cyan-600', rfFull: true },
-  { key: 'rf40e', label: '40RH', color: 'bg-slate-600', rfEmpty: true },
-  { key: 'rf40f', label: '40RH', color: 'bg-cyan-600', rfFull: true },
-  { key: 'rf45e', label: '45RF', color: 'bg-slate-600', rfEmpty: true },
-  { key: 'rf45f', label: '45RF', color: 'bg-cyan-600', rfFull: true },
+  // 2.08-05: 규격 칩(20DC/40DC/40HC/45HC)은 F줄/E줄 동적 그룹으로 이동
+  // 2.08-05 (검수사 확정 «풀은 풀대로 엠티는 엠티대로 총계 후 규격별 갯수. 너무 난잡합니다»):
+  //   규격 칩은 아래 F줄/E줄 동적 그룹으로 이동 — FILTERS 에는 안 둔다.
   { key: 'fr20', label: '▱ 20FR', color: 'bg-yellow-600' },
   { key: 'fr40', label: '▱ 40FR', color: 'bg-yellow-600' },
   { key: 'fr45', label: '▱ 45FR', color: 'bg-yellow-600' },
@@ -66,13 +57,43 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   const [podFilter, setPodFilter] = useState('all'); // POD 도시 필터 (선적용)
 
   // 카운트 계산 (V37 cargoCounts 그대로)
+  // 2.08-05 (검수사 확정 «풀은 풀대로 엠티는 엠티대로 총계 후 규격별 갯수. 너무 난잡합니다»):
+  //   규격 칩을 F줄/E줄 두 그룹으로 — 각 줄 = 총계 헤더 + 규격별 칩. 리퍼 풀 칩엔 온도 현황.
+  const chipLbl = (c) => {
+    const lbl = isoToLabel(c.iso);
+    if (['20DC', '20GP', '20VH', '20HC'].includes(lbl)) return '20DC';
+    if (['40DC', '40GP', '40VH'].includes(lbl)) return '40DC';
+    if (lbl === '40HC') return '40HC';
+    if (lbl === '45HC') return '45HC';
+    if (lbl === '20RF') return '20RF';
+    if (lbl === '40RF' || lbl === '40RH') return '40RH';
+    if (lbl === '45RF') return '45RF';
+    return null;   // FR/OT/TK/기타는 기존 특수 칩으로
+  };
+  const feChips = useMemo(() => {
+    const g = { F: new Map(), E: new Map() };
+    for (const c of list) {
+      const lbl = chipLbl(c);
+      if (!lbl) continue;
+      const fe = c.fe === 'E' ? 'E' : 'F';
+      const e = g[fe].get(lbl) || { n: 0, t: 0 };
+      e.n++;
+      if (/RF|RH/.test(lbl) && c.tmp != null && String(c.tmp).trim() !== '') e.t++;
+      g[fe].set(lbl, e);
+    }
+    const ORDER = ['20DC', '40DC', '40HC', '45HC', '20RF', '40RH', '45RF'];
+    const sortM = (m) => [...m.entries()].sort((a, b) => ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]));
+    return { F: sortM(g.F), E: sortM(g.E) };
+  }, [list]);
+
   const counts = useMemo(() => {
     const k = {
       all: list.length,
       completed: 0, remaining: 0, full: 0, empty: 0, feUnknown: 0, xray: 0, dg: 0, rf: 0, tk: 0, oog: 0,
       hc: 0, dc20: 0, dc40: 0,
       rf20: 0, rf20f: 0, rf40f: 0, rf45f: 0, rf40: 0, rf45: 0,
-      rf20e: 0, rf40e: 0, rf45e: 0, rf20ft: 0, rf40ft: 0, rf45ft: 0,   // 2.08-04: 리퍼 엠티·온도입력 카운트 fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
+      rf20e: 0, rf40e: 0, rf45e: 0, rf20ft: 0, rf40ft: 0, rf45ft: 0,   // 2.08-04: 리퍼 엠티·온도입력
+      fr20: 0, fr40: 0, fr45: 0, ot20: 0, ot40: 0, ot45: 0, tk20: 0, tk40: 0,
       hc45: 0,
       isoOther: 0,
       isoOtherList: [],
@@ -172,13 +193,12 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (f === 'hc' && lbl !== '40HC') return false;
       if (f === 'rf20' && lbl !== '20RF') return false;
       if (f === 'rf40' && lbl !== '40RF' && lbl !== '40RH') return false;
-      // 2.08-04: 엠티/풀 분리 칩 매칭
-      if (f === 'rf20e' && !(lbl === '20RF' && c.fe === 'E')) return false;
-      if (f === 'rf20f' && !(lbl === '20RF' && c.fe !== 'E')) return false;
-      if (f === 'rf40e' && !((lbl === '40RF' || lbl === '40RH') && c.fe === 'E')) return false;
-      if (f === 'rf40f' && !((lbl === '40RF' || lbl === '40RH') && c.fe !== 'E')) return false;
-      if (f === 'rf45e' && !(lbl === '45RF' && c.fe === 'E')) return false;
-      if (f === 'rf45f' && !(lbl === '45RF' && c.fe !== 'E')) return false;
+      // 2.08-05: F줄/E줄 규격 칩 매칭 — 키 'fe:{라벨}|{F|E}'
+      if (f && f.startsWith('fe:')) {
+        const [gl, gfe] = f.slice(3).split('|');
+        if (chipLbl(c) !== gl) return false;
+        if ((c.fe === 'E' ? 'E' : 'F') !== gfe) return false;
+      }
       if (f === 'fr20' && lbl !== '20FR') return false;
       if (f === 'fr40' && lbl !== '40FR') return false;
       if (f === 'fr45' && lbl !== '45FR') return false;
@@ -250,24 +270,44 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
                 className={`px-2 py-1 rounded text-[10px] font-bold ${
                   cargoFilter === f.key ? `${f.color} text-white` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                 }`}>
-                {f.rfEmpty
-                  ? <>{f.label} E{cnt}</>
-                  : f.rfFull
-                  ? (() => {
-                      const _t = counts[f.key + 't'] || 0, _no = cnt - _t;
-                      return (
-                        <span className="inline-flex items-center gap-0.5">
-                          <Snowflake className="w-3 h-3 text-cyan-300"/>
-                          {f.label} F{cnt}
-                          <span className="text-cyan-100/80">({_no > 0 ? `온도${_t}·없음${_no}` : `온도${_t}`})</span>
-                        </span>
-                      );
-                    })()
-                  : <>{f.label} {cnt}</>}
+                {f.label} {cnt}
               </button>
             );
           })}
         </div>
+
+        {/* 2.08-05 (검수사 확정 «풀은 풀대로 엠티는 엠티대로 총계 후 규격별 갯수»): F줄 / E줄 */}
+        {(['F', 'E']).map((fe) => {
+          const chips = feChips[fe];
+          if (!chips.length) return null;
+          const tot = chips.reduce((a, [, v]) => a + v.n, 0);
+          return (
+            <div key={fe} className="flex flex-wrap items-center gap-1 mt-1.5">
+              <span className={`text-[10px] font-black px-1.5 py-1 rounded ${fe === 'F' ? 'text-emerald-300 bg-emerald-950/60' : 'text-slate-300 bg-slate-800/80'}`}>
+                {fe === 'F' ? `풀 ${tot}` : `엠티 ${tot}`}
+              </span>
+              {chips.map(([lbl, v]) => {
+                const key = `fe:${lbl}|${fe}`;
+                const isRfChip = /RF|RH/.test(lbl);
+                const on = cargoFilter === key;
+                return (
+                  <button key={key} onClick={() => setCargoFilter(on ? 'all' : key)}
+                    className={`px-2 py-1 rounded text-[10px] font-bold ${
+                      on ? (fe === 'F' ? 'bg-emerald-700 text-white' : 'bg-slate-600 text-white')
+                         : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                    {isRfChip
+                      ? <span className="inline-flex items-center gap-0.5">
+                          <Snowflake className={`w-3 h-3 ${fe === 'F' ? 'text-cyan-300' : 'text-slate-500'}`}/>
+                          {lbl} {v.n}
+                          {fe === 'F' && <span className="text-cyan-200/80">({v.n - v.t > 0 ? `온도${v.t}·없음${v.n - v.t}` : `온도${v.t}`})</span>}
+                        </span>
+                      : <>{lbl} {v.n}</>}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
 
         {/* 검수업체 필터 + POD 필터 */}
         {(ops.length > 1 || pods.length > 1) && (
