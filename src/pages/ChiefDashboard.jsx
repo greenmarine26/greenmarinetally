@@ -2348,9 +2348,53 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
           new Blob([r.buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
         where = `TALLYBOX\\${p}`;
       }
+      // 2.08 (검수사 확정 «마감 텔리를 작성을 누르면 마감텔리와 EDI ASC VGM리스트 또한 부가 서류등을
+      //   한번에 저장되게» + «거기다 부가 자료만 더 첨부 하는 작업입니다»): 텔리와 같은 폴더에
+      //   실선적 EDI·ASC·VGM 리스트를 함께 만든다. 선적분 없는 항차(양하만)는 텔리만 — 셋은 선적 산출물.
+      const extras = [];
+      try {
+        const got = collectActualLoading(v);
+        if (got.rows.length) {
+          const info2 = v.info || {};
+          const _voy = (info2.voy_l || info2.voy_d || '').toUpperCase();
+          const meta2 = { vsl: (info2.vsl || row.vsl || '').toUpperCase(), voy: _voy,
+            carrier: info2.carrier || '',
+            ediVer: detectEdiVer(v?.loading?.raw?.edi?.text || v?.discharge?.raw?.edi?.text || ''),
+            ascHdr: info2.ascHdr || '' };
+          const _put = async (kind, fallbackName, text, mime = 'text/plain') => {
+            let name = fallbackName;
+            try { name = fileNameFor(kind, meta2.vsl, info2.voy_d, info2.voy_l, null); } catch { /* 규칙 없으면 기본명 */ }
+            if (root) {
+              await writeTallyboxFile(root, meta2.vsl, folderName(info2.voy_d, info2.voy_l), name,
+                new Blob([text], { type: mime }));
+            } else {
+              const url = URL.createObjectURL(new Blob([text], { type: mime }));
+              const a = document.createElement('a'); a.href = url; a.download = name;
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            extras.push(name);
+          };
+          await _put('edi', `${meta2.vsl}_${meta2.voy}_ACTUAL_BAPLIE.edi`, buildActualBaplie(got.rows, meta2));
+          // ASC 선박코드 — 저장된 값 있으면 안 묻고 쓴다(일괄 흐름에서 프롬프트 최소화)
+          let shipCode = '';
+          try { shipCode = localStorage.getItem('ascShipCode_' + meta2.vsl) || ''; } catch { /* 무시 */ }
+          if (!shipCode) {
+            const input = window.prompt('ASC 선박코드(4자) — 기본은 검수앱 코드', meta2.vsl);
+            shipCode = ((input == null ? '' : input.trim().toUpperCase()) || meta2.vsl).slice(0, 4);
+            try { localStorage.setItem('ascShipCode_' + meta2.vsl, shipCode); } catch { /* 무시 */ }
+          }
+          await _put('asc', `${meta2.vsl}${meta2.voy}.ASC`, buildActualAsc(got.rows, { ...meta2, shipCode }));
+          const { generateVgmListHTML } = await import('../inspectionList.js');
+          await _put('vgm', `${meta2.vsl}_${meta2.voy}_VGM_LIST.html`,
+            generateVgmListHTML(got.rows, { vsl: meta2.vsl, voy_l: _voy }), 'text/html');
+        }
+      } catch (e2) {
+        setMsg(`⚠ 부속 서류 일부 실패: ${e2?.message || e2}`);
+      }
       await fbMarkTallyMade(row.key);
       if (onArchiveChanged) onArchiveChanged();
-      setMsg(`✅ ${where}${r.note ? ` · ${r.note}` : ''} — 발송 전 Final Work 총계 확인.`);
+      setMsg(`✅ ${where}${r.note ? ` · ${r.note}` : ''}${extras.length ? ` + 부속 ${extras.length}종(${extras.join(', ')})` : ' (선적분 없음 — 텔리만)'} — 발송 전 Final Work 총계 확인.`);
     } catch (e) {
       setMsg(`생성 실패(${row.vsl} ${row.voy}): ${e?.message || e}`);
     } finally {
