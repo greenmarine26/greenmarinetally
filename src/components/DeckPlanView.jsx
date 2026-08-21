@@ -104,12 +104,12 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
                 onClick={() => onOpenContainer?.(c || { cn: s.cn, iso: String(s.iso || '').replace(/\s/g, ''), fe, pos: s.pos, tier: s.tier, row: s.row, bay: s.bay })}  /* V9.57(I11): s.iso null 가드 — 플랜에 iso 없는 슬롯 클릭 시 크래시 방지 */
                 className={`rounded-sm border text-left px-1 py-0.5 overflow-hidden leading-tight
                   ${isDone ? 'bg-emerald-800/90 border-emerald-500' : fe === 'E' ? 'bg-slate-700/80 border-slate-500' : 'bg-sky-900/80 border-sky-600'}
-                  ${isRf ? 'ring-1 ring-cyan-400' : ''} ${isXray ? 'ring-2 ring-yellow-400' : ''}
+                  ${isXray ? 'ring-2 ring-yellow-400' : isRf ? 'ring-1 ring-cyan-400' : ''}
                   ${s.lolo ? 'ring-2 ring-lime-400' : ''} ${s.dbl ? 'ring-2 ring-amber-300' : ''}
                   ${isLug ? 'ring-2 ring-violet-400 border-violet-400 bg-violet-900/70' : ''}`}
                 style={{ gridColumn: `${s.ci + 1} / span ${s.span}`, gridRow: `${s.ri + 1}` }}>
                 <div className="text-[10px] font-black mono text-slate-100 truncate">
-                  {s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
+                  {s.lolo ? <span className="text-lime-300">🏗</span> : null}{s.dbl ? <span className="text-amber-300">⇅</span> : null}{isLug ? <span className="text-violet-300">🧳</span> : null}{isXray ? <span className="bg-yellow-400 text-black px-0.5 rounded-sm font-black">X</span> : null}{s.cn.slice(-4)}{isDone ? ' ✓' : ''}{marks ? <span className="text-cyan-300 font-bold"> {marks}</span> : null}
                 </div>
                 <div className="text-[8.5px] text-slate-300 truncate">{s.iso} {fe}</div>
                 {s.line ? <div className="text-[8px] mono text-slate-400/90 truncate">{s.line}줄 {s.col}칸</div> : null}
@@ -124,7 +124,7 @@ export default function DeckPlanView({ plan, containers = [], compMap = {}, xray
         <span><span className="inline-block w-2.5 h-2.5 bg-slate-700 border border-slate-500 rounded-sm mr-1" />엠티</span>
         <span><span className="inline-block w-2.5 h-2.5 bg-emerald-800 border border-emerald-500 rounded-sm mr-1" />완료</span>
         <span><span className="inline-block w-2.5 h-2.5 border border-cyan-400 rounded-sm mr-1" />리퍼</span>
-        <span><span className="inline-block w-2.5 h-2.5 border-2 border-yellow-400 rounded-sm mr-1" />X-RAY</span>
+        <span><span className="inline-block w-2.5 h-2.5 border-2 border-yellow-400 rounded-sm mr-1" />Ⓧ X-RAY</span>
         <span><span className="inline-block w-2.5 h-2.5 border border-dashed border-slate-500 rounded-sm mr-1" />빈자리(탭=지정)</span>
         <span><span className="inline-block w-2.5 h-2.5 bg-amber-900 border border-amber-400 rounded-sm mr-1" />📌지정됨</span>
         <span><span className="inline-block w-2.5 h-2.5 border-2 border-lime-400 rounded-sm mr-1" />🏗갠트리(落地·LO/LO)</span>
