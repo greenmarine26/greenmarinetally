@@ -102,11 +102,12 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // TallyOne 1.10-01: 긴급/수화물 예보 마커 주입 — VoyagePage와 같은 게이트 규칙.
   //   forecast.mode가 현재 모드와 일치할 때만 적용(선적 예보 마커가 양하 인쇄물에 새지 않게).
   const _fc = voyage?.info?.forecast;
-  const _fcApply = _fc && (_fc.mode || 'loading') === mode;
-  const urgentSet = new Set((_fcApply && Array.isArray(_fc.urgentCns)) ? _fc.urgentCns : []);
-  const luggSet = new Set((_fcApply && Array.isArray(_fc.luggageCns)) ? _fc.luggageCns : []);
+  // 2.08-09 (2.08-07·08 과 같은 구멍의 인쇄판): 컨번호 마커는 forecast.mode 게이트 없이 —
+  //   tagForecastMarks 가 그 모드 컨 목록에 실재하는 컨만 찍으므로 오적용 없음.
+  const urgentSet = new Set(Array.isArray(_fc?.urgentCns) ? _fc.urgentCns : []);
+  const luggSet = new Set(Array.isArray(_fc?.luggageCns) ? _fc.luggageCns : []);
   const allContainers = tagForecastMarks(
-    allContainersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null);
+    allContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null);
 
   // M5.30-fix: 베이 단위 필터
   //   평택 화물이 1개라도 있는 베이의 전체 슬롯 표시 (그 베이의 통과 화물 + 빈 슬롯 포함)
