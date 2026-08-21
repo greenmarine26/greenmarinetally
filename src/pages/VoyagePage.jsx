@@ -674,6 +674,26 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     Object.keys(extrasMap).forEach(cn => {
       if (!merged[cn]) merged[cn] = { cn, _src: 'extra', pod: 'KRPTK', _extraNote: extrasMap[cn]?.note || '' };
     });
+    // 2.08-11 (검수사 확정 «실 리스트가 존재 하는데 예상EDI에 있는 가상리스트를 선적리스트에
+    //   포함시키는것은 없어야 합니다 — 원천봉쇄», SWAT 2607N 실측: 실번호 리스트 523(F166·E357)이
+    //   있는데 예상 EDI 의 __BOOK 자리 523이 별도 행으로 잡혀 목록이 1046으로 두 배):
+    //   실번호 리스트가 F/E 각각 가상 자리 수를 채우면 그 가상 자리는 작업 목록에서 뺀다.
+    //   부분 리스트만 온 배(실번호 < 자리)는 보수적으로 유지 — 자리 그림(베이플랜·카고플랜)은
+    //   raw 전문(fullEdiMap) 기준이라 여기서 빼도 그대로 그려진다. V9.08 원칙: 확정이 오면 그것이 진실.
+    {
+      const _isSlot = (c) => !!(c._slot || c.pendingCn || String(c.cn || '').startsWith('__'));
+      const _cnt = { F: { real: 0, slot: 0 }, E: { real: 0, slot: 0 } };
+      for (const c of Object.values(merged)) {
+        const fe = c.fe === 'E' ? 'E' : 'F';
+        if (_isSlot(c)) _cnt[fe].slot++;
+        else if (recMap[c.cn]) _cnt[fe].real++;
+      }
+      for (const [k, c] of Object.entries(merged)) {
+        if (!_isSlot(c)) continue;
+        const fe = c.fe === 'E' ? 'E' : 'F';
+        if (_cnt[fe].slot > 0 && _cnt[fe].real >= _cnt[fe].slot) delete merged[k];
+      }
+    }
     const baseContainers = Object.values(merged).sort((a, b) => {
       const ka = `${a.bay || 'zz'}-${a.row || 'zz'}-${a.tier || 'zz'}`;
       const kb = `${b.bay || 'zz'}-${b.row || 'zz'}-${b.tier || 'zz'}`;
