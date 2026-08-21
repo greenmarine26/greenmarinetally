@@ -67,6 +67,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const _secCnt = (sec) => (sec ? Object.keys(sec.ediContainers || {}).length + Object.keys(sec.records || {}).length : 0);
   const hasDis = _secCnt(voyage?.discharge) > 0;
   const hasLoa = _secCnt(voyage?.loading) > 0;
+  // 2.08-13 (검수사 확정 «문제는 자료가 없다고 열어 놓지 않아서 세관 리스트를 선적카드에 등록시키는
+  //   오류가 발생됩니다» — DJCT 0222E 실측: 양하 EDI 미도착이라 양하 탭이 없어 세관 리스트를 올릴 곳이
+  //   선적뿐이었다): **작업이 예정된 모드는 자료가 없어도 탭을 연다.** 근거 = 배정 수량(planDis/planLod)
+  //   또는 항차번호(voy_d/voy_l). 진입 기본 모드는 종전대로 «자료 있는 쪽»(1.94-01) — 표시만 넓힌다.
+  const _pd = Number(voyage?.info?.planDis || 0), _pl = Number(voyage?.info?.planLod || 0);
+  const showDis = hasDis || _pd > 0 || !!voyage?.info?.voy_d;
+  const showLoa = hasLoa || _pl > 0 || !!voyage?.info?.voy_l;
   // V8.81: 홈에서 양하/선적 막대로 연 경우 그 모드 우선 (route.mode 전달).
   // V8.82-01: 양하·선적이 둘 다 있으면 양하 우선 — 수집기가 선적 항차를 먼저 등록해 info.mode='loading'이
   //   박혀 있어도, 작업 순서(양하→선적)대로 양하부터 연다. 양하가 완료 표시된 항차만 선적으로 바로.
@@ -1047,7 +1054,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   return (
     <div className="max-w-6xl mx-auto px-3 py-2">
       {/* 모드 탭 (둘 다 있을 때만) */}
-      {hasDis && hasLoa && (
+      {showDis && showLoa && (
         <div className="flex gap-1 mb-3 bg-slate-900 border border-slate-800 rounded-lg p-1">
           <button
             onClick={() => setMode('discharge')}
@@ -1055,7 +1062,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               mode === 'discharge' ? 'bg-blue-700 text-blue-100' : 'text-slate-400 hover:bg-slate-800'
             }`}
           >
-            <ArrowDown className="w-4 h-4"/>양하
+            <ArrowDown className="w-4 h-4"/>양하{!hasDis && <span className="text-[10px] font-normal opacity-70">(자료 대기)</span>}
           </button>
           <button
             onClick={() => setMode('loading')}
@@ -1063,14 +1070,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               mode === 'loading' ? 'bg-amber-700 text-amber-100' : 'text-slate-400 hover:bg-slate-800'
             }`}
           >
-            <ArrowUp className="w-4 h-4"/>선적
+            <ArrowUp className="w-4 h-4"/>선적{!hasLoa && <span className="text-[10px] font-normal opacity-70">(자료 대기)</span>}
           </button>
         </div>
       )}
-      {!hasDis && !hasLoa && <ModeSetup voyageKey={voyageKey} />}
+      {!showDis && !showLoa && <ModeSetup voyageKey={voyageKey} />}
 
       {/* 모드 라벨 (한 모드만 있을 때) */}
-      {(hasDis !== hasLoa) && (
+      {(showDis !== showLoa) && (
         <div className="mb-2">
           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-black ${
             mode === 'discharge' ? 'bg-blue-900/50 text-blue-200' : 'bg-amber-900/50 text-amber-200'
@@ -3447,6 +3454,24 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     //   자동등록(autoRegApi)만 막으면, 같은 폴더의 합본을 손으로 올렸을 때 그대로 합산된다.
     //   레코드의 POL/POD 로 반대 방향이 확정된 것만 뺀다(근거 없으면 유지). 뺐으면 화면에 알린다 —
     //   말없이 줄어들면 검수사가 리스트가 모자란 줄 알고 다시 올린다.
+    // 2.08-13 (검수사 «세관 리스트를 선적카드에 등록시키는 오류»): 올린 파일의 방향을 POL/POD 로
+    //   판정해 현재 탭과 다르면 **묻는다**. 양하분 = POD 평택 / 선적분 = POL 평택. 자동 이동은 하지 않는다
+    //   (검수사 확정 없이 남의 섹션에 쓰면 더 큰 사고 — 확인 대화 후 진행/취소만).
+    {
+      const _vals = Object.values(cnMap);
+      const _disN = _vals.filter(r => isPyeongtaekPort(r?.pod)).length;
+      const _loaN = _vals.filter(r => isPyeongtaekPort(r?.pol)).length;
+      const _guess = (_disN > _loaN * 2 && _disN >= 5) ? 'discharge'
+        : (_loaN > _disN * 2 && _loaN >= 5) ? 'loading' : '';
+      if (_guess && _guess !== mode) {
+        const _kr = (m) => (m === 'discharge' ? '양하' : '선적');
+        const ok = window.confirm(
+          `⚠ 방향이 달라 보입니다\n\n올린 파일: ${_kr(_guess)}분 (평택 ${_guess === 'discharge' ? '양하(POD)' : '선적(POL)'} ${Math.max(_disN, _loaN)}대)\n` +
+          `지금 화면: ${_kr(mode)} 탭\n\n이대로 ${_kr(mode)}에 등록하면 자료가 섞입니다.\n` +
+          `취소하고 ${_kr(_guess)} 탭에서 올리시겠어요?\n\n[확인] 취소 · [취소] 그대로 진행`);
+        if (ok) { setStatus(`↩ 등록 취소 — ${_kr(_guess)} 탭으로 이동해 다시 올려 주세요.`); if (listRef.current) listRef.current.value = ''; return; }
+      }
+    }
     const dirDropped = Object.keys(cnMap).filter(cn => isOppositeDirRecord(cnMap[cn], mode));
     dirDropped.forEach(cn => { delete cnMap[cn]; });
     if (dirDropped.length) {
