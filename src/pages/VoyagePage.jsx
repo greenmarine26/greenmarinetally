@@ -359,10 +359,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   (선적 예보 마커가 양하 리스트에 새지 않게). 상세는 tagForecastMarks 주석.
   const _fc = voyage?.info?.forecast;
   const _fcApply = _fc && (_fc.mode || 'loading') === mode;
+  // 2.08-07 (검수사 «긴급화물을 카고플랜이 표기를 안하고 있는데» — OBWH 2720W 실측): forecast.mode 가
+  //   양하(2719E 카톡 예보)로 먼저 잡혀 있으면, 수집기가 선적 CLL 긴급 28대를 실어도(mode 보존 원칙)
+  //   선적 화면 _fcApply 가 false 라 ▲가 전부 숨었다. **컨번호 마커(긴급·수화물)는 모드 게이트를 떼고
+  //   그 모드 컨 목록에 실재하는 컨에만 마킹**한다(tagForecastMarks 가 base 에 있는 컨만 찍으므로
+  //   다른 모드 컨번호는 자동 무시 — 오적용 없음). 물량 예보(full/empty 카드)는 종전대로 _fcApply.
   const urgentSet = useMemo(
-    () => new Set((_fcApply && Array.isArray(_fc.urgentCns)) ? _fc.urgentCns : []), [_fc, _fcApply]);
+    () => new Set(Array.isArray(_fc?.urgentCns) ? _fc.urgentCns : []), [_fc]);
   const luggSet = useMemo(
-    () => new Set((_fcApply && Array.isArray(_fc.luggageCns)) ? _fc.luggageCns : []), [_fc, _fcApply]);
+    () => new Set(Array.isArray(_fc?.luggageCns) ? _fc.luggageCns : []), [_fc]);
 
   const allEdiContainersBase = useMemo(() => {
     const merged = {};
@@ -525,7 +530,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
   // V9.03: 베이플랜/카고플랜용 목록에 긴급/수화물 마커 주입
   const allEdiContainers = useMemo(
-    () => tagForecastMarks(allEdiContainersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null),
+    () => tagForecastMarks(allEdiContainersBase, urgentSet, luggSet, _fc?.luggageSeals || null),   // 2.08-07: 씰도 컨 실재 기준
     [allEdiContainersBase, urgentSet, luggSet, _fc, _fcApply]);
 
   // 표시용 컨테이너 (EDI 평택 + 리스트 병합)
@@ -710,7 +715,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
   const containers = useMemo(
     () => {
-      const base = tagForecastMarks(containersBase, urgentSet, luggSet, _fcApply ? _fc.luggageSeals : null);
+      const base = tagForecastMarks(containersBase, urgentSet, luggSet, _fc?.luggageSeals || null);   // 2.08-07
       // 1.85-06 (검수사 지적 «덱이 보이면 컨이 지정되어 있는거 아닙니까» — 맞다): 덱플랜(stowagePlan)의
       //   갠트리(lolo)·자리(pos)·2단(dbl) 지정을 조회용 컨 속성에 병합한다. RZOR R089E 실측 — 덱플랜은
       //   와 있는데(갠트리 49) ediContainers 엔 주입 전이라 «LOLO 리스트» 조회가 0건이었다.
