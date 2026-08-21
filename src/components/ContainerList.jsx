@@ -237,10 +237,21 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
                   cargoFilter === f.key ? `${f.color} text-white` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                 }`}>
                 {f.rfSnow
-                  ? <span className="inline-flex items-center gap-0.5">
-                      <Snowflake className={`w-3 h-3 ${(counts[f.key + 'f'] || 0) > 0 ? 'text-cyan-300' : 'text-slate-500'}`}/>
-                      {f.label} {cnt}
-                    </span>
+                  ? (() => {
+                      // 2.08-03 (검수사 확정 «리퍼 엠티 22개와 풀 2개를 분리 표기 — 40리퍼 엠티가 풀리퍼와
+                      //   같은 색으로 24개로 표기»): 풀·엠티를 한 숫자로 뭉치지 않는다.
+                      //   혼합 = F2·E22 / 전부 엠티 = E22(회색) / 전부 풀 = 종전대로 숫자만.
+                      const _f = counts[f.key + 'f'] || 0, _e = cnt - _f;
+                      const _txt = (_f > 0 && _e > 0) ? `F${_f}·E${_e}` : (_e > 0 ? `E${_e}` : `${cnt}`);
+                      return (
+                        <span className="inline-flex items-center gap-0.5">
+                          <Snowflake className={`w-3 h-3 ${_f > 0 ? 'text-cyan-300' : 'text-slate-500'}`}/>
+                          {f.label} {_f > 0 && _e > 0
+                            ? <><span>F{_f}</span><span className="text-slate-400">·E{_e}</span></>
+                            : _txt}
+                        </span>
+                      );
+                    })()
                   : <>{f.label} {cnt}</>}
               </button>
             );
