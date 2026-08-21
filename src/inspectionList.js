@@ -8,6 +8,7 @@
 //   - 시트1=전체, 시트2=특수화물 별첨
 
 import { openPrintWindow } from './printHelper.js';
+import { isoToLabel } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
   full: '#ffffff',
   empty: '#e5e5e5',
@@ -333,6 +334,46 @@ ${shiftHtml}
 }
 
 // 새 창에서 인쇄 가능한 HTML 열기
+// TallyOne 2.07 (검수사 확정 2026-08-21 «선박별로 만들어 놨다가 요청시 제출할수 있게»):
+//   본선(선장)이 마감 무렵 «Please provide the VGM list for {항차} KRPTK» 로 요구하는
+//   평택 선적분 VGM(검증총중량) 리스트 — 실사례: SWSP SAWASDEE SPICA 2608S.
+//   컨별 무게(wt — EDI/선사리스트 신고값, kg)로 영문 제출용 표를 만든다. 무게 없는 컨은 공란+경고.
+export function generateVgmListHTML(containers, voyageInfo) {
+  const vsl = String(voyageInfo?.vsl || '').toUpperCase();
+  const voy = voyageInfo?.voy_l || voyageInfo?.voy || '';
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = [...containers].sort((a, b) => String(a.cn).localeCompare(String(b.cn)));
+  let total = 0, missing = 0;
+  const trs = rows.map((c, i) => {
+    const w = parseInt(c.wt, 10);
+    const ok = Number.isFinite(w) && w > 0;
+    if (ok) total += w; else missing++;
+    return `<tr><td>${i + 1}</td><td class="mono">${c.cn || ''}</td><td>${isoToLabel(c.iso) || c.iso || ''}</td>` +
+      `<td>${c.fe || ''}</td><td class="num">${ok ? w.toLocaleString() : '<span class="warn">—</span>'}</td></tr>`;
+  }).join('');
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VGM LIST ${vsl} ${voy}</title><style>
+    body{font-family:'Malgun Gothic',sans-serif;font-size:11px;margin:24px;color:#111}
+    h1{font-size:16px;margin:0 0 2px} .sub{color:#555;margin-bottom:12px}
+    table{border-collapse:collapse;width:100%} th,td{border:1px solid #999;padding:3px 6px;text-align:center}
+    th{background:#eee} .mono{font-family:Consolas,monospace} .num{text-align:right}
+    .warn{color:#b91c1c;font-weight:bold} tfoot td{font-weight:bold;background:#f5f5f5}
+    @media print{body{margin:8mm}}
+  </style></head><body>
+    <h1>VGM LIST — M/V ${vsl} VOY ${voy}</h1>
+    <div class="sub">POL: KRPTK (PYEONGTAEK) · DATE: ${today} · TOTAL ${rows.length} UNITS` +
+    (missing ? ` · <span class="warn">⚠ ${missing} unit(s) without VGM</span>` : '') + `</div>
+    <table><thead><tr><th>NO</th><th>CONTAINER NO</th><th>TYPE</th><th>F/E</th><th>VGM (KG)</th></tr></thead>
+    <tbody>${trs}</tbody>
+    <tfoot><tr><td colspan="4">TOTAL ${rows.length} UNITS</td><td class="num">${total.toLocaleString()} KG</td></tr></tfoot>
+    </table></body></html>`;
+}
+export function openVgmListPrint(containers, voyageInfo) {
+  const w = window.open('', '_blank', 'width=900,height=1200');
+  if (!w) { alert('팝업 차단을 해제해주세요'); return; }
+  w.document.write(generateVgmListHTML(containers, voyageInfo));
+  w.document.close();
+}
+
 export function openInspectionListPrint(containers, mode, voyageInfo, shiftingList = []) {
   const html = generateInspectionListHTML(containers, mode, voyageInfo, shiftingList);
   const w = window.open('', '_blank', 'width=900,height=1200');

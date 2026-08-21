@@ -4,7 +4,7 @@
 //   - 컨테이너는 이미 mode별로 분리되어 voyage.discharge / voyage.loading에 있음
 import React, { useState, useMemo } from 'react';
 import { X, FileText, Grid3x3, Ship, ArrowDown, ArrowUp, Printer } from 'lucide-react';
-import { openInspectionListPrint } from '../inspectionList.js';
+import { openInspectionListPrint, openVgmListPrint } from '../inspectionList.js';
 import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
@@ -403,6 +403,26 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                 </div>
                 <Printer className="w-4 h-4 text-emerald-400" />
               </button>
+
+              {/* 2.07: VGM 리스트 — 선적분만 의미 있음(본선 «VGM list for {voy} KRPTK» 요청 대응) */}
+              {mode === 'loading' && (
+                <button
+                  onClick={() => {
+                    if (!ptkContainers.length) { alert('선적 컨테이너가 없습니다'); return; }
+                    openVgmListPrint(ptkContainers, voyageInfo);
+                  }}
+                  className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-4 text-left flex items-center gap-3"
+                >
+                  <FileText className="w-8 h-8 text-amber-400 shrink-0" />
+                  <div className="flex-1">
+                    <div className="font-bold text-slate-100">⚖ VGM 리스트</div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      평택 선적분 컨별 VGM(kg) · 본선 요청 시 제출용 (영문)
+                    </div>
+                  </div>
+                  <Printer className="w-4 h-4 text-slate-500" />
+                </button>
+              )}
 
               {/* 3. 베이 상세 */}
               <button
