@@ -49,7 +49,10 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
     const _realN = Math.max(containers.length - _slotN, 0);   // 자리 제외한 실컨(리스트) 수
     const total = _slotN > 0 ? Math.max(_slotN, _realN) : containers.length;
     const done = Object.keys(compMap).length;
-    const reefers = containers.filter(isReeferContainer);
+    // 2.08-02 (검수사 «전에 한번 수정한건 같습니다. 리퍼 엠티 알림건» — OBWH 선적 실측: 엠티 리퍼 26대가
+    //   «리퍼 26대 · 위치미상26» 빨간 알림으로): 1.85-04 정책 «리퍼 전면 표시는 풀만»이 이 요약 카드에는
+    //   빠져 있었다. 카운트·위치미상·온도X 전부 풀 리퍼 기준(F 또는 F/E 미상 — 조회·브리핑과 동일 판정).
+    const reefers = containers.filter(c => isReeferContainer(c) && (c.fe === 'F' || c.fe === '' || c.fe == null));
     const reeferTempMissing = reefers.filter(c =>
       !c.rfdry && !c.mkcon && (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === '')
     );
