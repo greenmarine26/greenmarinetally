@@ -61,7 +61,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   //   규격 칩을 F줄/E줄 두 그룹으로 — 각 줄 = 총계 헤더 + 규격별 칩. 리퍼 풀 칩엔 온도 현황.
   const chipLbl = (c) => {
     const lbl = isoToLabel(c.iso);
-    if (['20DC', '20GP', '20VH', '20HC'].includes(lbl)) return '20DC';
+    if (lbl === '20HC') return '20HC';   // 2.08-06 (검수사 «20 HC?»): 하이큐 20피트는 별도 칩
+    if (['20DC', '20GP', '20VH'].includes(lbl)) return '20DC';
     if (['40DC', '40GP', '40VH'].includes(lbl)) return '40DC';
     if (lbl === '40HC') return '40HC';
     if (lbl === '45HC') return '45HC';
@@ -81,7 +82,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       if (/RF|RH/.test(lbl) && c.tmp != null && String(c.tmp).trim() !== '') e.t++;
       g[fe].set(lbl, e);
     }
-    const ORDER = ['20DC', '40DC', '40HC', '45HC', '20RF', '40RH', '45RF'];
+    const ORDER = ['20DC', '20HC', '40DC', '40HC', '45HC', '20RF', '40RH', '45RF'];
     const sortM = (m) => [...m.entries()].sort((a, b) => ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]));
     return { F: sortM(g.F), E: sortM(g.E) };
   }, [list]);
