@@ -4,7 +4,7 @@ import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyag
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, voyageLegOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -1428,6 +1428,13 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   });
   // V9.57(H6): 한 번 뜨면 유지(sticky) 기록 — 렌더 IIFE 안 fire-and-forget에서 useEffect로 이동.
   //   departBadgeAt이 이미 있으면 발화하지 않고, 실패는 console.warn으로 드러낸다.
+  // ── 2.09-01 (검수사 확정 2026-08-23 «전항구 어디인지 알고 다음 항구가 어딘지 알면 연결이 될것입니다») ──
+  //   터미널 항로표는 순환 목록이라 이번 항차가 어느 구간인지 말해 주지 않는다.
+  //   전 항구 = 양하 EDI 출항지 · 다음 항구 = 선적 EDI(«선적 EDI를 보면 보충이 될것입니다»).
+  const leg = useMemo(() => { try { return voyageLegOf(voyage); } catch (e) { return null; } },
+    [voyage.key, voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes]);
+
   const _isDepart = !!(departBadge && departBadge.kind === 'depart');
   useEffect(() => {
     if (!_isDepart || voyage.info?.departBadgeAt) return;
@@ -1596,6 +1603,18 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               {showRoute && laneRow.ports.length === 0 && (
                 <span className="text-amber-400/80"> · 기항 순서 미등록</span>
               )}
+            </div>
+          )}
+          {/* 2.09-01: 이번 항차 구간 — 항로표가 없는 배(PLS·PTLY·YTFF)에서도 이 줄은 뜬다. */}
+          {showRoute && leg && (
+            <div className="text-[10px]">
+              <span className="text-slate-500">이번 항차 </span>
+              <span className="text-slate-300">{leg.prev || '?'}</span>
+              <span className="text-slate-600"> → </span>
+              <span className="text-emerald-300 font-bold">평택</span>
+              <span className="text-slate-600"> → </span>
+              <span className="text-slate-300">{leg.next || '?'}</span>
+              <span className="text-slate-600"> · EDI 실측</span>
             </div>
           )}
           {/* TallyOne 1.13: 등록일자 → **작업일시 + 자료 상태**.

@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.09';   // 검수사 지시 «각선박의 자세히 항로 약자와 항로 전체를 홈화면 각선박에 등록 하세요. 항로는 각선박 배정목록에 있으니 검색을 하든 배정목록을 참고를 하든 정확한 데이터를 기록해주기 바랍니다. 그리고 당일과 명일 까지만만 자세히 보여주고 나머지는 클릭하면 보여지고 평소엔 접혀있게» + 수정 «작업중인 선박과 당일 명일 최대 3일치 선박이 펼쳐질수도 있습니다»: ①홈 카드에 «항로 {약자} · {항로명}» + 펼친 카드엔 기항 순서(평택 강조) — 자료는 수집기 2.0-05 가 올리는 lane_info(PCTC 「코드조회 › 서비스 Lane」 표) ②펼침 = 작업중 ∨ 당일 ∨ 명일, 나머지는 「🚢 그 밖의 배 N척 ▸」 접이(실 정책 판과 같은 규격). ⛔ 접힘 그룹은 hidden 으로만 감춘다 — 언마운트하면 departBadgeAt sticky useEffect 가 죽어 콘앱 출항 표시가 멈춘다. ⛔ 시프팅 판정(portsBeforePtk)은 계속 lane_routes — 터미널 표 순서가 실측과 어긋나는 항로가 있다(IHS1·IHP). 표시(lane_info)와 판정(lane_routes)을 섞지 않는다. 동봉: dayLabel 복제 2벌을 모듈 공용 한 벌로(dayDiff/dayLabel/isOpenVoyage).
+export const APP_VERSION = 'TallyOne 2.09-01';   // 검수사 교정 «우리 EDI는 인천에서 받아쓴 EDI라 그렇습니다. 그럴때는 선적 EDI를 보면 보충이 될것입니다» «홍콩 인천 평택 이 될수도 있씁니다» «전항구 어디인지 알고 다음 항구가 어딘지 알면 연결이 될것입니다» — ★내 오독 정정: 터미널 항로표는 **순환 목록**인데 그것을 직선으로 읽고 «표가 실측과 어긋난다»고 적었다. 양하 EDI 는 직전 기항 한 항만 말하고 평택 뒤는 선적 EDI 가 말한다. voyageLegOf(voyage) 신설 — 전 항구(양하 EDI LOC+5) → 평택 → 다음 항구(선적 EDI LOC+61 ∨ 선적분 POD 최다). 펼친 홈 카드에 «이번 항차 KRINC → 평택 → VNHPH · EDI 실측» 한 줄. 항로표가 없는 배(PLS·PTLY·YTFF)에서도 이 줄은 뜬다. 실측 대조 — ATPR PDX4 는 표·실측이 CNWEI→평택 일치, MCSN IA8 은 다음 기항 CNDLC 일치.
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3991,6 +3991,47 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
 //   raw가 없거나 파싱 실패면 ediContainers로 폴백(하위호환 — 인앱 업로드 항차는 통과분 포함).
 // V8.98-02: {mode} 섹션의 raw EDI 원문을 파싱해 전체 컨테이너 맵(cn→컨)을 만든다.
 //   raw 없거나 파싱 실패면 null. 인앱 합본 저장("----- FILE: x -----" 구분자)은 나눠 파싱해 컨 수 최다 파일 채택.
+// ══════════════════════════════════════════════════════
+// TallyOne 2.09-01: **이번 항차의 구간 — 전 항구 → 평택 → 다음 항구** (검수사 확정 2026-08-23)
+//
+//   > *"우리 EDI는 인천에서 받아쓴 EDI라 그렇습니다. 그럴때는 **선적 EDI를 보면 보충이 될것**입니다."*
+//   > *"홍콩 인천 평택 이 될수도 있씁니다."*
+//   > *"**전항구 어디인지 알고 다음 항구가 어딘지 알면 연결이 될것입니다.**"*
+//
+//   ⚠ 클로드 오독 교정 — 터미널 항로표는 **순환 목록**이다. 그것을 직선으로 읽고
+//     «표는 홍콩→평택인데 실측은 인천→평택이라 표가 틀렸다» 고 적었던 것은 **틀렸다.**
+//     양하 EDI 는 «직전 기항에서 받아쓴 것» 이라 **평택 앞 한 항**만 말해 주고,
+//     평택 **뒤**는 선적 EDI(평택 출항본)가 말한다. 둘을 붙여야 이번 항차가 순환의 어느 구간인지 «연결»된다.
+//   실측(2026-08-23) — ATPR PDX4 는 실측·표가 CNWEI→평택으로 **일치**, MCSN IA8 은 다음 기항 CNDLC 로 **일치**.
+// ══════════════════════════════════════════════════════
+
+/** 이번 항차의 구간 — { prev, next }. 없으면 null.
+ *  prev = 양하 EDI 출항지(LOC+5) · next = 선적 EDI 다음 기항(LOC+61) ∨ 선적분 목적지 최다(평택 제외). */
+export function voyageLegOf(voyage) {
+  let prev = '';
+  try { prev = ediOriginOf(voyage?.discharge) || ''; } catch (e) { prev = ''; }
+  if (isPyeongtaekPort(prev)) prev = '';        // 평택 출항본이 양하 자리에 들어온 항차 — 앞 항구로 못 쓴다
+  let next = '';
+  try { next = ediNextPortOf(voyage?.loading) || ''; } catch (e) { next = ''; }
+  if (!next) {
+    try {
+      const m = ediMapFromRaw(voyage?.loading);
+      if (m) {
+        const cnt = {};
+        for (const c of Object.values(m)) {
+          const p = String(c?.pod || '').trim().toUpperCase();
+          if (!p || isPyeongtaekPort(p)) continue;
+          cnt[p] = (cnt[p] || 0) + 1;
+        }
+        const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+        if (top) next = top[0];
+      }
+    } catch (e) { /* 파싱 실패는 표시만 비운다 — 계산에 영향 없음 */ }
+  }
+  if (isPyeongtaekPort(next)) next = '';
+  return (prev || next) ? { prev, next } : null;
+}
+
 export function ediMapFromRaw(sec) {
   const t = sec?.raw?.edi?.text;
   if (!t || typeof t !== 'string' || t.length <= 50) return null;
