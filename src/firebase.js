@@ -2335,6 +2335,16 @@ export function fbSubscribeTerminalWork(callback) {
   return unsub;
 }
 
+// 2.09: 항로표(lane_info) — 수집기가 PCTC 「코드조회 › 서비스 Lane」 표를 하루 1회 올린다.
+//   {항로코드: {name, ports[], carriers, upd, src}} — **화면 표시 전용**이다.
+//   ⛔ 시프팅 판정(portsBeforePtk)은 계속 lane_routes 를 쓴다 — 터미널 표의 기항 순서가
+//      우리 EDI 실측과 어긋나는 항로가 있다(IHS1·IHP 실측 2026-08-23). 두 노드를 섞지 말 것.
+export function fbSubscribeLaneInfo(callback) {
+  const r = ref(db, 'lane_info');
+  const unsub = onValue(r, (snap) => callback(snap.val() || {}));
+  return unsub;
+}
+
 // 1.45: 항로 로테이션 사전(lane_routes) — utils.LANE_ROUTES 내장 시드를 덮어쓴다.
 export function fbSubscribeLaneRoutes(callback) {
   const r = ref(db, 'lane_routes');

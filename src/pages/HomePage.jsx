@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, ArrowDown, ArrowUp, Trash2, Users, ChevronRight, Search, BarChart3, MapPin, Loader2, Anchor, CheckCircle, X } from 'lucide-react';
-import { fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
+import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyage, fbDeleteSection, fbSavePierCoord, fbSubscribePierCoords, fbUpdateVoyageInfo, fbArchiveVoyageBeforeDelete , fbRequestProcessNow, fbSubscribeProcessDone, fbSaveSectionData} from '../firebase.js';   // 1.42: 예보가 선적칸을 만든다
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -22,6 +22,32 @@ import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미�
 // V9.38: 출항 전환 기준은 badgeRule.js 로 이관 — 퍼센트가 아니라 **남은 개수**(사용자 확답 2026-08-02).
 //   "600개의 10%는 60개, 2갱이면 한 시간 이상 / 100개의 10%면 10개, 2갱이면 5분이면 끝남."
 //   같은 10%가 한 시간도 5분도 되므로 준비 시간 확보에 쓸 수 없다. → DEPART_REMAIN_MAX(=20)
+// ── 2.09: 날짜 라벨 한 벌 (검수사 확정 2026-08-23 «작업중인 선박과 당일 명일 최대 3일치») ──
+//   종전엔 같은 식이 VoyageCard 안에 두 벌 복제돼 있었다. 접기 판정까지 쓰면 세 벌이 된다 — 여기로 올린다.
+const _two = (n) => String(n).padStart(2, '0');
+function dayDiff(ms) {
+  if (!ms) return null;
+  const d = new Date(ms), t = new Date();
+  return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
+}
+function dayLabel(ms) {
+  const n = dayDiff(ms);
+  if (n === null) return '';
+  if (n === 0) return '오늘';
+  if (n === 1) return '내일';
+  if (n === -1) return '어제';
+  const d = new Date(ms);
+  return `${_two(d.getMonth() + 1)}-${_two(d.getDate())}(${'일월화수목금토'[d.getDay()]})`;
+}
+/** 홈 목록에서 **펼쳐 두는** 항차인가 — 검수사 확정: 작업중 ∨ 당일 ∨ 명일.
+ *  작업중인 배가 어제 시작했으면 어제·오늘·내일 3일치가 펼쳐진다(«최대 3일치»의 뜻). */
+function isOpenVoyage(v) {
+  if (String(v?.info?.terminalStatus || '').toLowerCase() === 'working') return true;
+  const n = dayDiff(v?._etaMs ?? v?._etdMs ?? null);
+  return n === 0 || n === 1;
+}
+
 function lastWorkAt(v) {
   let last = 0;
   const scanAt = (obj) => {
@@ -242,6 +268,29 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   useEffect(() => {
     try { return fbSubscribeShipPolicies(_fbdb, setShipPols) || undefined; } catch (e) { return undefined; }
   }, []);
+
+  // ── 2.09 (검수사 지시 2026-08-23): 각 선박 카드에 **항로 약자 + 항로 전체(기항 순서)** ──
+  //   자료원은 수집기(MailPilot 2.0-05)가 올리는 `lane_info` — PCTC 「코드조회 › 서비스 Lane」 표.
+  //   배정목록에는 항로 약자(info.lane)만 있고 기항 순서가 없다.
+  //   ⛔ 시프팅 판정(portsBeforePtk)은 계속 lane_routes 를 쓴다 — 두 노드를 섞지 않는다.
+  //   폴백은 lane_routes ∨ 내장 시드(laneRouteOf) — PNCT 전용 항로(KPX·PLS·PTLY·YTFF 등)는 터미널 표에 없다.
+  const [laneInfo, setLaneInfo] = useState({});
+  useEffect(() => {
+    try { return fbSubscribeLaneInfo(setLaneInfo) || undefined; } catch (e) { return undefined; }
+  }, []);
+  const laneOf = useMemo(() => (lane) => {
+    const k = String(lane || '').trim().toUpperCase();
+    if (!k) return null;
+    const e = laneInfo[k];
+    if (e && Array.isArray(e.ports) && e.ports.length) {
+      return { lane: k, name: e.name || '', ports: e.ports, src: e.src || '터미널 항로표' };
+    }
+    const r = laneRouteOf(k);
+    if (r && Array.isArray(r.rotation) && r.rotation.length) {
+      return { lane: k, name: '', ports: r.rotation, src: '앱 사전' };
+    }
+    return { lane: k, name: '', ports: [], src: '' };
+  }, [laneInfo]);
 
   const voyagesWithPier = useMemo(() => {
     // ★ 1.77-02 — **선박 단위 값(도선 예보·PORT-MIS)을 아무 항차에나 붙이지 않는다.**
@@ -512,6 +561,16 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     const others = voyagesWithPier.filter(v => v._pier !== effectivePier);
     return [...here, ...others];
   }, [voyagesWithPier, effectivePier]);
+
+  // ── 2.09: 펼침(작업중 ∨ 당일 ∨ 명일) / 접힘 두 벌 ──
+  //   ⚠ 접힘 그룹은 **언마운트하지 않는다**(`hidden`). VoyageCard 안의 departBadgeAt sticky useEffect 가
+  //     죽으면 콘앱(cone.html 이 이 값을 그대로 읽는다)의 출항 표시가 멈춘다. 표시 계층만 바꾼다.
+  const [foldOpen, setFoldOpen] = useState(false);
+  const { openList, foldList } = useMemo(() => {
+    const o = [], f = [];
+    for (const v of list) (isOpenVoyage(v) ? o : f).push(v);
+    return { openList: o, foldList: f };
+  }, [list]);
 
   const activeInspectors = useMemo(() => {
     const out = {};
@@ -848,11 +907,13 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         </div>
       )}
 
+      {/* 2.09: 부두 구분줄의 idx 계산은 **그룹 배열 기준**이다 — 전체 list 기준으로 두면 접을 때 헤더가 사라지거나 겹친다. */}
       <div className="space-y-2">
-        {list.map((v, idx) => {
+        {openList.map((v, idx) => {
+          const _grp = openList;
           const isHerePier = effectivePier && v._pier === effectivePier;
-          const isFirstHere = isHerePier && (idx === 0 || list[idx - 1]._pier !== effectivePier);
-          const isFirstOther = effectivePier && !isHerePier && idx > 0 && list[idx - 1]._pier === effectivePier;
+          const isFirstHere = isHerePier && (idx === 0 || _grp[idx - 1]._pier !== effectivePier);
+          const isFirstOther = effectivePier && !isHerePier && idx > 0 && _grp[idx - 1]._pier === effectivePier;
           return (
             <React.Fragment key={v.key}>
               {isFirstHere && effectivePier && (
@@ -884,11 +945,65 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                   hasL: !!(v.loading && Object.keys(v.loading).length),
                 }}
                 onUndoComplete={(mode) => undoInspectorDone(v.key, mode)}
+                laneRow={laneOf(v.info?.lane)}
+                showRoute
               />
             </React.Fragment>
           );
         })}
       </div>
+
+      {/* ── 2.09 (검수사 확정 2026-08-23): 나머지 배는 접어 둔다. 규격은 「선박 실 정책」 판과 같다. ── */}
+      {foldList.length > 0 && (
+        <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-xl">
+          <button onClick={() => setFoldOpen(o => !o)}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
+            <span className="text-[13px] font-bold text-slate-300">🚢 그 밖의 배</span>
+            <span className="text-[11px] text-slate-500">{foldList.length}척 · 탭하면 펼침</span>
+            <span className="ml-auto text-slate-600">{foldOpen ? '▾' : '▸'}</span>
+          </button>
+          {/* ⚠ 언마운트하지 않는다 — departBadgeAt sticky 기록이 죽으면 콘앱 출항 표시가 멈춘다. */}
+          <div className={foldOpen ? 'px-2 pb-2 space-y-2' : 'hidden'}>
+            {foldList.map((v, idx) => {
+              const _grp = foldList;
+              const isHerePier = effectivePier && v._pier === effectivePier;
+              const isFirstHere = isHerePier && (idx === 0 || _grp[idx - 1]._pier !== effectivePier);
+              const isFirstOther = effectivePier && !isHerePier && idx > 0 && _grp[idx - 1]._pier === effectivePier;
+              return (
+                <React.Fragment key={v.key}>
+                  {isFirstHere && effectivePier && (
+                    <div className={`text-[10px] font-bold uppercase tracking-wider px-2 ${
+                      effectivePier === 'PCTC' ? 'text-blue-300' : 'text-purple-300'
+                    }`}>📍 {effectivePier} (현 위치)</div>
+                  )}
+                  {isFirstOther && (
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-2 mt-3">── 다른 부두 ──</div>
+                  )}
+                  <VoyageCard
+                    voyage={v}
+                    inspector={inspector}
+                    pilotForecast={pilotForecast}
+                    terminalWork={terminalWork}
+                    activeInspectors={activeInspectors[v.key] || []}
+                    onOpen={(m) => onOpenVoyage(v.key, m)}
+                    onDelete={() => handleDelete(v.key, v.info.vsl, v.info.voy)}
+                    onComplete={(mode) => setCompleteTarget({ key: v.key, vsl: v.info.vsl, voy: v.info.voy, mode })}
+                    inspectorDone={isAllDone(v)}
+                    modeDone={{
+                      d: v.info?.inspectorDone || !!v.info?.dischargeDone,
+                      l: v.info?.inspectorDone || !!v.info?.loadingDone,
+                      hasD: !!(v.discharge && Object.keys(v.discharge).length),
+                      hasL: !!(v.loading && Object.keys(v.loading).length),
+                    }}
+                    onUndoComplete={(mode) => undoInspectorDone(v.key, mode)}
+                    laneRow={laneOf(v.info?.lane)}
+                  />
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── 1.83: 선박 실 정책 판 — 조합(LOLO+실확인)이 한눈에. 탭하면 수정 모드. ── */}
       <div className="mt-3 bg-slate-900/60 border border-slate-800 rounded-xl">
@@ -1250,7 +1365,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
   );
 }
 
-function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {}, inspector = '' }) {
+function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {}, inspector = '', laneRow = null, showRoute = false }) {
   // V9.37-01: ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
   const [zap, setZap] = useState('');
   const [zapMsg, setZapMsg] = useState('');
@@ -1361,13 +1476,8 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               const _b = departBadge;
               if (_b && _b.kind === 'depart') {
                 const dep = _b.at;
-                const two2 = (n) => String(n).padStart(2, '0');
-                const d = new Date(dep), t = new Date();
-                const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
-                  - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
-                const w = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
-                const day = diff === 0 ? '오늘' : diff === 1 ? '내일' : diff === -1 ? '어제'
-                  : `${two2(d.getMonth() + 1)}-${two2(d.getDate())}(${w})`;
+                const day = dayLabel(dep);   // 2.09: 복제본 제거 — 모듈 공용 한 벌
+                const _hm = (ms) => { const x = new Date(ms); return `${_two(x.getHours())}:${_two(x.getMinutes())}`; };
                 const src = _b.src === 'pilot' ? '⚓도선' : '🏭터미널';
                 const late = _b.delayed;
                 // V9.38: 한 번 뜨면 유지(사용자 확답) — sticky 기록은 V9.57에서 useEffect로 이동(위).
@@ -1379,7 +1489,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                     className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${dep < Date.now()
                     ? 'bg-slate-800 border-slate-600 text-slate-400'
                     : 'bg-amber-900/60 border-amber-700/50 text-amber-200'}`}>
-                    🚢 출항 {day} {two2(d.getHours())}:{two2(d.getMinutes())} {src}
+                    🚢 출항 {day} {_hm(dep)} {src}
                     {late ? <span className="text-red-300 ml-1">· 지연</span> : ''}
                   </span>
                 );
@@ -1388,16 +1498,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               if (!eta && !etd) return null;
               const two = (n) => String(n).padStart(2, '0');
               const hm = (ms) => { const d = new Date(ms); return `${two(d.getHours())}:${two(d.getMinutes())}`; };
-              const dayLabel = (ms) => {
-                const d = new Date(ms), t = new Date();
-                const base = new Date(t.getFullYear(), t.getMonth(), t.getDate());
-                const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - base) / 86400000);
-                if (diff === 0) return '오늘';
-                if (diff === 1) return '내일';
-                if (diff === -1) return '어제';
-                const w = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
-                return `${two(d.getMonth() + 1)}-${two(d.getDate())}(${w})`;
-              };
+              // 2.09: dayLabel 은 모듈 공용(위) — 복제본 제거. 접기 판정(isOpenVoyage)과 같은 식을 쓴다.
               // V9.40: 선사 일정 메일(VESSEL MOVEMENT)에서 온 일정은 📧메일 로 구분한다.
               //   수집기가 planDate 를 메일 값으로 교체하면 info.planSrc='mail' 을 함께 남긴다
               //   (사용자 지시 2026-08-02: 같으면 패스, 틀리면 메일 정보로 교체).
@@ -1473,6 +1574,30 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             })()}
             {' · '}{voyage.info.carrier || ''}
           </div>
+          {/* ── 2.09 (검수사 지시 2026-08-23 «각선박의 자세히 항로 약자와 항로 전체를 홈화면 각선박에 등록») ── */}
+          {laneRow && laneRow.lane && (
+            <div className="text-[11px] leading-snug">
+              <span className="text-slate-500">항로 </span>
+              <span className="font-bold text-cyan-300">{laneRow.lane}</span>
+              {laneRow.name ? <span className="text-slate-500"> · {laneRow.name}</span> : null}
+              {showRoute && laneRow.ports.length > 0 && (
+                <div className="mt-0.5 text-[10px] text-slate-400 break-words">
+                  {laneRow.ports.map((pt, i) => (
+                    <span key={`${pt}-${i}`}>
+                      {i > 0 && <span className="text-slate-600"> › </span>}
+                      {isPyeongtaekPort(pt)
+                        ? <span className="text-emerald-300 font-bold">평택</span>
+                        : <span>{pt}</span>}
+                    </span>
+                  ))}
+                  {laneRow.src ? <span className="text-slate-600"> · {laneRow.src}</span> : null}
+                </div>
+              )}
+              {showRoute && laneRow.ports.length === 0 && (
+                <span className="text-amber-400/80"> · 기항 순서 미등록</span>
+              )}
+            </div>
+          )}
           {/* TallyOne 1.13: 등록일자 → **작업일시 + 자료 상태**.
                 검수사 확정 2026-08-06 — "등록일자는 사실상 무의미하다. 작업일자를 표기하고 자료 갱신일시를 그 옆에.
                 자료가 완성되면 갱신일시를 없애고 '자료 확정', 확정 후 수정 자료가 있으면 '수정본'.
