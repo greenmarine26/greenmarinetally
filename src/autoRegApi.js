@@ -261,11 +261,26 @@ export async function buildAutoPayload(files, opts) {
         // V8.35-01: 동률이면 규격(iso) 보유 수가 많은 쪽 우선 — ASC(규격 일부 누락)가 알파벳순으로
         //   BAPLIE를 밀어내 카고플랜 규격 180대 누락(PCSZ 2619E 사건, 사용자 발견 2026-07-03).
         const isoCount = cs.filter(c => c.cn && c.iso).length;
-        perFile.push({ name, kind, count: cs.length, cnCount, isoCount });
-        if (!best || cnCount > best.cnCount
-            || (cnCount === best.cnCount && isoCount > (best.isoCount || 0))
-            || (cnCount === best.cnCount && isoCount === (best.isoCount || 0) && cs.length > best.containers.length)) {
-          best = { name, text, containers: cs, cnCount, isoCount, virtual: isVirtual };
+        // ★ 2.08-16: **그 모드의 평택분이 있는 파일이 1순위다** (DJCT 0222E·XTPG 537E 실측 2026-08-23).
+        //   양하 = POD 평택 · 선적 = POL 평택. 이 게이트가 없으면 같은 폴더에 남은 «타항 출항본»이
+        //   실번호가 더 많다는 이유만으로 대표 EDI 로 당선되고, 수집기 방향필터(_edi_dir_filter)가
+        //   그것을 전량 걸러 «⤫ EDI 업로드 생략»으로 **조용히** 끝난다(autoreg.py:1052).
+        //   실측 — DJCT 0223W 폴더에 남은 인천 출항본 `DJCT0223WINC(FINAL69).ASC`(509대·평택 POL 0)가
+        //   진짜 선적본 `REVISED)DJCT-0223W LOAD EDI FILE.EDI`(501대·평택 POL 197)를 509>501 로 이겨
+        //   08-23 00:55 부터 매 사이클 선적 등록이 0 이었다. 검수사가 손으로 올려야 했다.
+        //   ⚠ 구 helper(V8.84-05)에는 이 키가 있었다(`__PT`) — 1.8-06 helper 재생성 때 유실된 것을 복원한다.
+        //     autoreg.py:1050 주석 «대표 EDI 선택 자체는 helper 가 '해당 모드 평택분'으로 교정(두 겹 안전)»이 그 근거다.
+        //   게이트는 **있다/없다** 로만 건다 — 수를 1순위로 두면 PRE 가 FINAL 을 이기는 새 사고가 난다.
+        const ptkCount = cs.filter(c => c.cn && (mode === 'discharge'
+          ? isPyeongtaekPort(c.pod)
+          : (c._inList || isPyeongtaekPort(c.pol)))).length;
+        perFile.push({ name, kind, count: cs.length, cnCount, isoCount, ptkCount });
+        const _has = ptkCount > 0, _bestHas = (best?.ptkCount || 0) > 0;
+        if (!best || (_has !== _bestHas ? _has
+            : (cnCount > best.cnCount
+               || (cnCount === best.cnCount && isoCount > (best.isoCount || 0))
+               || (cnCount === best.cnCount && isoCount === (best.isoCount || 0) && cs.length > best.containers.length)))) {
+          best = { name, text, containers: cs, cnCount, isoCount, ptkCount, virtual: isVirtual };
         }
       }
     } catch (e) { perFile.push({ name, error: String(e && e.message || e) }); }
