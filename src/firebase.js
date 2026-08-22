@@ -326,6 +326,14 @@ export async function fbSaveListRecords(voyageKey, mode, recordsObj) {
       if (!hist.some((h) => h.sl === String(nv.sl))) hist.push({ sl: String(nv.sl), src: nextSrc });
       m.sl_conflict = hist;
     }
+    // 2.08-14 (검수사 «MCSN 실번호 이상이 재발되었네요» — 실측: records 는 정상 PH계열인데
+    //   **sl_orig 에 옛 파서의 Bookno 가 남아** sl_orig≠sl 191건이 «실오류(현장 수정)»로 보였다):
+    //   sl_orig 는 «검수원이 실물을 보고 고치기 전의 값»이어야 한다. 리스트 재파싱으로 sl 이 바뀌면
+    //   현장 수정 이력(sl_history)이 없는 한 옛 sl_orig 는 근거가 아니다 — 함께 지운다.
+    if (m.sl && ov.sl_orig && !(Array.isArray(ov.sl_history) && ov.sl_history.length)
+        && String(m.sl).trim() !== String(ov.sl_orig).trim()) {
+      m.sl_orig = null;
+    }
     // 2.06-07: 이번 리스트가 sl 을 실제로 쓰면(빈 값 아님) 그 출처를 sl_src 로 동봉 — 다음 충돌 때 정확한 출처 표기
     // 2.06-11 (R090E 실측 — 세관 Excel 업로드 후 수집기가 선사 리스트를 재처리하며 sl_src 를 선사로 덮어
     //   세관리스트 인식(hasCustoms)이 꺼짐): **같은 값이면 세관 출처를 유지한다.** 세관이 정본이고,
