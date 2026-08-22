@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { isPyeongtaekPort, normalizeBay, predictShiftingFromVoyage, computeShiftingMapCached } from './utils.js';
+import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay } from './utils.js';
 import { addWorkMinutes } from './nlSearch.js';
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
@@ -116,8 +116,8 @@ export function answerTotalMoves(voyage, shipName = '') {
   const lp = lod.filter((c) => _ptk(c, 'loading')).length;
   let shifting = 0;
   try {
-    const m = computeShiftingMapCached(voyage.key || 'k', voyage);
-    shifting = Object.keys((m && Object.keys(m).length) ? m : (predictShiftingFromVoyage(voyage) || {})).length;
+    // 2.08-15: 확정∨예측 폴백 한 벌 — 배정표 확정 이적 0이면 허수를 수석 집계에 넣지 않는다.
+    shifting = Object.keys(shiftingMapForDisplay(voyage.key || 'k', voyage) || {}).length;
   } catch (e) { shifting = -1; }
   const allPtk = dp === dis.length && lp === lod.length;
   const L = [`${shipName ? shipName + ' — ' : ''}${dp + lp}무브 — 양하 ${dp} + 선적 ${lp}${allPtk ? ' (전량 평택분)' : ` (평택분 기준 · 통과 ${dis.length + lod.length - dp - lp} 제외)`}.`];

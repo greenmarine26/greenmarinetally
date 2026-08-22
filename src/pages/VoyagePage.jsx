@@ -11,7 +11,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, predictShiftingFromVoyage, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap } from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay } from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -249,9 +249,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //     선적 EDI 가 오면 대조값이 채워지고 그쪽이 자동으로 우선한다 — 예측은 그때까지의 다리다.
   const shiftingMap = useMemo(
     () => {
-      const cmp = computeShiftingMapCached(voyageKey, voyage);
-      if (cmp && Object.keys(cmp).length) return cmp;      // 선적 EDI 있음 = 확정값
-      return predictShiftingFromVoyage(voyage);            // 없으면 예측(양하 EDI만)
+      // 2.08-15: 확정∨예측 폴백은 utils 한 벌(shiftingMapForDisplay)로 — 배정표 확정 이적 0이면
+      //   예측을 대수에서 빼되 «의심 자리»는 _meta.suspects 로 넘어와 화면이 커버 영역을 알린다.
+      return shiftingMapForDisplay(voyageKey, voyage);
     },
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey,
@@ -2216,6 +2216,24 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
             <div className="px-3 py-1.5 text-[11px] text-slate-300 bg-slate-950/60 border-b border-slate-800">
               ⏳ 배정표 이적 대조 <b>보류</b> — 아직 작업 시작 전({shiftInfo.truthChk.terminalStatus})입니다.
               <span className="text-slate-400"> 이적 칸이 채워지기 전의 0은 «이적 없음»이 아니라 «아직 안 나온 것»이라 판정하지 않습니다.</span>
+            </div>
+          )}
+          {/* ★ 2.08-15 (검수사 지시 2026-08-23 — *"그래도 의심은 지우지 말고 커버영역 알림을 띄워주세요."*)
+              배정목록 이적이 확정 0이라 예측을 대수에서 뺐다. 그러나 **어느 커버 어느 자리를 의심했는지는 남긴다.** */}
+          {shiftInfo?.meta?.truthZero > 0 && (
+            <div className="px-3 py-1.5 text-[11px] text-amber-100 bg-amber-950/40 border-b border-amber-800/50 space-y-0.5">
+              <div>🔍 <b>커버 영역 확인 {shiftInfo.meta.truthZero}대</b> — 앱은 커버 위로 봤는데 <b>배정목록 이적은 확정 0모브</b>입니다. 작업 대수에서는 뺐습니다.</div>
+              {(shiftInfo.meta.suspects || []).slice(0, 6).map(sp => (
+                <div key={sp.cn} className="mono text-[10px] text-amber-300">
+                  · {sp.cn} <b>{sp.pos || `${parseInt(sp.bay, 10)}-${sp.row}-${sp.tier}`}</b>
+                  {sp.pod ? ` POD ${sp.pod}` : ''}{sp.why ? ` — ${sp.why}` : ''}
+                </div>
+              ))}
+              {(shiftInfo.meta.suspects || []).length > 6 && <div className="text-[10px] text-amber-400">… 외 {shiftInfo.meta.suspects.length - 6}대</div>}
+              <div className="text-[10px] text-amber-200/80">
+                커버가 이 자리를 무는지 현장에서 봐 주십시오. 물면 그대로 시프팅이고, 안 물면
+                <b> 베이매트릭스에 그 베이 커버 경계</b>를 저장해 주십시오 — 다음 항차부터 예측도 0이 됩니다.
+              </div>
             </div>
           )}
           {shiftInfo?.truthChk && !shiftInfo.truthChk.pending && !shiftInfo.truthChk.ok && (

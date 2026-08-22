@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, predictShiftingFromVoyage, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery } from '../chiefAnswers.js';   // 1.90·1.91·1.92
@@ -1066,8 +1066,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       : results;
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
       { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
-        shiftMap: (() => { const c = computeShiftingMapCached(voyageKey, voyage);
-          return (c && Object.keys(c).length) ? c : predictShiftingFromVoyage(voyage); })() });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락
+        shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed]);
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).

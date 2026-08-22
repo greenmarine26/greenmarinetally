@@ -12,7 +12,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -728,20 +728,24 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   → 패널 판정이 들어 있는 시프팅 예측(predictShiftingFromVoyage)과 교집합만 쓴다.
   //     예측을 못 내면(사전·항로 미상) 그룹 전체를 보수적으로 보여 주되 근사임을 문구에 밝힌다.
   const coverInfo = useMemo(() => {
-    if (!deckDonePromptD) return { list: [], approx: false };
+    if (!deckDonePromptD) return { list: [], approx: false, doubt: false };
     const blockers = deckBlockers(selectedGroup);
-    if (!blockers.length) return { list: [], approx: false };
-    let pred = null;
+    if (!blockers.length) return { list: [], approx: false, doubt: false };
+    let pred = null, doubt = false;
     try {
       const vsl = String(voyage?.info?.vsl || '').toUpperCase();
       const de = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[vsl] : null;
       pred = predictShiftingFromVoyage(voyage, de || undefined);
+      // ★ 2.08-15 (검수사 확정 2026-08-23): 배정목록 이적이 **확정 0** 이면 «치워야 열린다»가 아니라
+      //   «커버 영역 확인»으로 낮춘다 — *"그래도 의심은 지우지 말고 커버영역 알림을 띄워주세요."*
+      const tc = shiftingTruthCheck(voyage, Object.keys(pred || {}).length);
+      if (tc && !tc.pending && tc.truth === 0) doubt = true;
     } catch (e) { pred = null; }
     const keys = pred ? Object.keys(pred) : [];
-    if (!keys.length) return { list: blockers, approx: true };
+    if (!keys.length) return { list: blockers, approx: true, doubt };
     const set = new Set(keys);
     const hit = blockers.filter(c => set.has(c.cn));
-    return hit.length ? { list: hit, approx: false } : { list: [], approx: false };
+    return hit.length ? { list: hit, approx: false, doubt } : { list: [], approx: false, doubt: false };
   }, [deckDonePromptD, selectedGroup, allContainers, bayPairs, mode, voyage]);
 
   // V7.94-16: 양하 — 그룹 홀드까지 완료 시 클로즈 제안 조건 (그룹 완료 화면에서 사용)
@@ -1281,7 +1285,17 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       {deckDonePromptD ? (
         <div className="bg-amber-950/50 border-2 border-amber-600 rounded-lg p-4 text-center space-y-3">
           <div className="font-bold text-amber-200">⚓ 이 베이 데크 양하 완료!</div>
-          {coverInfo.list.length > 0 ? (
+          {coverInfo.list.length > 0 && coverInfo.doubt ? (
+            /* 2.08-15: 배정목록 이적 확정 0 — 대수에서는 뺐지만 «커버 영역»은 알린다(검수사 지시). */
+            <div className="text-[11px] text-amber-100 bg-amber-950/50 border border-amber-700 rounded px-2 py-1.5 space-y-0.5">
+              <div className="font-bold">🔍 커버 영역 확인 {coverInfo.list.length}대 — 배정목록 이적은 <b>확정 0모브</b>입니다</div>
+              <div className="mono text-[10px] text-amber-300">
+                {[...new Set(coverInfo.list.map(c => `${parseInt(c.bay, 10)}-${c.row}-${c.tier}`))].slice(0, 8).join('  ')}
+                {coverInfo.list.length > 8 ? ' …' : ''}
+              </div>
+              <div className="text-[10px] text-amber-200/80">커버가 이 자리를 무는지 보십시오. 물면 치우고 <b>베이매트릭스에 그 베이 커버 경계</b>를 저장해 주십시오 — 다음 항차부터 앱이 맞춥니다.</div>
+            </div>
+          ) : coverInfo.list.length > 0 ? (
             <div className="text-[11px] text-rose-200 bg-rose-950/50 border border-rose-800 rounded px-2 py-1.5 space-y-0.5">
               <div className="font-bold">⚠ 커버 위에 통과화물 {coverInfo.list.length}대 — 치워야 열립니다 (시프팅){coverInfo.approx ? ' · 패널 미확인' : ''}</div>
               <div className="mono text-[10px] text-rose-300">
