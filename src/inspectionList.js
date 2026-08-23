@@ -8,7 +8,7 @@
 //   - 시트1=전체, 시트2=특수화물 별첨
 
 import { openPrintWindow } from './printHelper.js';
-import { isoToLabel } from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
+import { isoToLabel, overDims} from './utils.js';   // 2.07: VGM 리스트 TYPE 표기
 const COLOR = {
   full: '#ffffff',
   empty: '#e5e5e5',
@@ -141,6 +141,8 @@ function renderRow(c, idx) {
   if (c.ovh) _ov.push(`H+${c.ovh}`);
   if (c.ovw) _ov.push(`W+${c.ovw}`);
   if (c.ovl) _ov.push(`L+${c.ovl}`);
+  //  2.25: 선사가 DIM 을 안 적어도 실치수가 있으면 앱이 판정한다(단위 cm — 위 신고분과 같게).
+  if (!_ov.length) { const _o = overDims(c); if (_o && _o.over) _ov.push(..._o.short); }
   if (_ov.length) notes.push(`<span style="color:#92400e;font-weight:bold">OOG ${_ov.join(' ')}cm</span>`);
   else if (c.oog && type === 'normal' && !c.fr && !c.ot) notes.push('<span style="color:#92400e;font-weight:bold">OOG</span>');
   if ((c.cgW || c.cgH) && !_ov.length) notes.push(`${c.cgW || '?'}×${c.cgH || '?'}mm`);
@@ -417,6 +419,7 @@ export function openInspectionListPrint(containers, mode, voyageInfo, shiftingLi
       if (c.ovh) _ov.push('H+' + c.ovh);
       if (c.ovw) _ov.push('W+' + c.ovw);
       if (c.ovl) _ov.push('L+' + c.ovl);
+      if (!_ov.length) { const _o = overDims(c); if (_o && _o.over) _ov.push(..._o.short); }   // 2.25
       if (_ov.length) memo.push('OOG ' + _ov.join(' ') + 'cm');   // TallyOne 2.00
       if (cat.type === 'fr') memo.push('FR');
       if (cat.type === 'ot') memo.push('OT');

@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -1628,8 +1628,16 @@ function specialDetailLines(results, parsed) {
     if (c.ovh) dims.push(`높이+${c.ovh}cm`);
     if (c.ovw) dims.push(`폭+${c.ovw}cm`);
     if (c.ovl) dims.push(`길이+${c.ovl}cm`);
-    if (dims.length) bits.push(dims.join(' '));
-    else if (['fr', 'oog', 'ot'].includes(parsed?.type) && !c.dg && !(c.cgL || c.cgW || c.cgH)) bits.push('초과 치수 기재 없음');
+    if (dims.length) bits.push(`선사 신고 ${dims.join(' ')}`);
+    /* ★ 2.25 (검수사 정의 2026-08-23): *«초과치수는 폭 길이 높이 셋중에 하나라도 FR범위를 벗어나면
+       초과치수인데 사진을 보더라도 높이에서 걸리는데 왜 초과치수 없음인지?»* — 맞다.
+       종전엔 판정이 없었다. `ovh/ovw/ovl` 은 **선사가 EDI DIM 에 적어 보낸** 값일 뿐이고,
+       그것이 없으면 실치수를 갖고 있으면서도 «초과 치수 기재 없음» 이라고만 했다.
+       이제 실치수가 있으면 **앱이 대본다** — 걸리는 것이 무엇인지까지 말한다. */
+    const _od = overDims(c);
+    if (_od && _od.over) bits.push(`⚠ 규격 초과 ${_od.parts.join(' · ')}`);
+    else if (_od) bits.push('규격 안');
+    else if (['fr', 'oog', 'ot'].includes(parsed?.type) && !c.dg && !dims.length) bits.push('치수 자료 없음');
     if (c.sl) bits.push(`씰 ${c.sl}`);   // 2.05 (검수사 «FR 실 어디에 있어» — 씰 질문에 씰번호가 답에 있어야)
     if (c.wt) bits.push(`${(Number(c.wt) / 1000).toFixed(1)}t`);
     lines.push(`  ${c.cn || '?'} — ${fmtPos(c)}${bits.length ? ' · ' + bits.join(' · ') : ''}`);
