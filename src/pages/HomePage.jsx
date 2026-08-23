@@ -1359,6 +1359,9 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
 }
 
 function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {}, inspector = '', laneRow = null, showRoute = false }) {
+  // 2.19: 카드 하단 액션 버튼 **한 규격**. 높이 48 고정 · 한 줄 고정 · 폰 균등 / PC 전폭.
+  //   ⚠ 여기에 색만 이어 붙인다. 높이·패딩·글자 크기를 개별 버튼에서 다시 주지 않는다.
+  const ACT_BTN = 'h-12 px-2.5 rounded-lg text-xs2 font-bold border flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-1 min-w-0 lg:flex-none lg:w-full';
   // V9.37-01: ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
   const [zap, setZap] = useState('');
   const [zapMsg, setZapMsg] = useState('');
@@ -1754,7 +1757,14 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               )}
             </div>
           )}
-          {/* 하단 — 버튼. 폰은 가로 한 줄, PC 는 세로 스택(시안). */}
+          {/* 하단 — 버튼. 폰은 가로 한 줄, PC 는 세로 스택(시안).
+              ★ 2.19 (검수사 지적) — *«양하완료 선적완료 버튼 크기가 틀리고 지금 처리는 두줄로 보입니다.
+                 같은 4자씩인데 지금 처리만 두줄이라 다른것보다 박스 높이가 틀립니다»*
+              원인이 셋이었다. ①「지금 처리」만 minHeight 48, 나머지는 44 — **4px 을 코드가 직접 벌려 놨다.**
+              ② 패딩도 px-2.5 / px-3 로 달랐다. ③ **셋 다 줄바꿈 금지가 없어** 폭이 모자라면 두 줄이 됐고,
+                 두 줄이 되는 순간 그 버튼만 키가 커진다.
+              ⇒ 아래 한 규격(ACT_BTN)으로 묶는다. 높이·패딩·글자를 개별 버튼에서 다시 주지 않는다.
+                 폰은 flex-1 로 **균등 분할**(같은 4자면 같은 폭), PC 는 w-full 세로 스택. */}
           <div className="flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-1.5">
             {/* V9.37-01(사용자 지시 2026-08-01): ⚡ 지금 처리 — **홈 카드에** 둔다.
                 "홈화면에 있어야 하죠 거기에 정보가 거의 있는데" — 자료를 폴더에 넣은 직후
@@ -1785,35 +1795,32 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                       setZap('fail'); setZapMsg('❌ 요청 실패');
                     }
                   }}
-                  className={`px-2.5 py-2 rounded-lg text-xs2 font-bold border w-full justify-center flex items-center ${busy
+                  className={`${ACT_BTN} ${busy
                     ? 'bg-slate-800 border-slate-700 text-slate-500'
                     : zap === 'ok' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
                     : zap === 'fail' || zap === 'timeout' ? 'bg-red-900/40 border-red-700/50 text-red-300'
                     : 'bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 border-amber-800/40'}`}
-                  style={{ minHeight: 48 }}
                   title={zapMsg || '수집기에 이 항차를 지금 처리하라고 요청 (메일박스 폴더에 자료를 넣은 직후 사용)'}
-                >{busy ? '⚡ 처리 중…' : zap === 'timeout' ? '⚡ 응답 없음' : zapMsg ? `⚡ ${zapMsg.slice(0, 18)}` : '⚡ 지금 처리'}</button>
+                >{busy ? '⚡ 처리 중…' : zap === 'timeout' ? '⚡ 응답 없음' : zapMsg ? `⚡ ${zapMsg.slice(0, 8)}` : '⚡ 지금 처리'}</button>
               );
             })()}
             {/* V7.90: 완료 분리 — 양하/선적 각각 완료 표시 (작업시간 구분 + 콘앱 분리작업 자동 판정 근거) */}
             {onComplete && inspectorDone && (
-              <span className="flex items-center gap-1 px-2 py-1 rounded bg-amber-900/40 text-amber-300 text-[10px] font-bold border border-amber-700/40" title="모든 작업 완료 — 수석검수사 최종 확인 대기 중">
-                <CheckCircle className="w-3.5 h-3.5"/>검수 완료 · 수석 대기
+              <span className="h-12 flex items-center justify-center gap-1 px-2.5 rounded-lg bg-amber-900/40 text-amber-300 text-[11px] font-bold border border-amber-700/40 whitespace-nowrap flex-1 min-w-0 overflow-hidden lg:flex-none lg:w-full" title="모든 작업 완료 — 수석검수사 최종 확인 대기 중">
+                <CheckCircle className="ico-s"/>검수 완료 · 수석 대기
               </span>
             )}
             {onComplete && modeDone?.hasD && (
               modeDone.d ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('discharge'); }}
-                  className="px-3 py-2 rounded-lg bg-blue-900/40 text-blue-300 text-xs2 font-bold border border-blue-700/40 w-full"
-                  style={{ minHeight: 44 }}
+                  className={`${ACT_BTN} bg-blue-900/40 text-blue-300 border-blue-700/40`}
                   title="양하 완료됨 — 누르면 취소 (수석 확인 전까지)"
-                >⬇ 양하 ✓</button>
+                >⬇ 양하 완료 ✓</button>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); onComplete('discharge'); }}
-                  className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 text-xs2 font-bold border border-blue-800/40 w-full"
-                  style={{ minHeight: 44 }}
+                  className={`${ACT_BTN} bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 border-blue-800/40`}
                   title="양하 작업 완료 표시 — 삭제 안 됨"
                 >⬇ 양하 완료</button>
               )
@@ -1822,15 +1829,13 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               modeDone.l ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('loading'); }}
-                  className="px-3 py-2 rounded-lg bg-amber-900/40 text-amber-300 text-xs2 font-bold border border-amber-700/40 w-full"
-                  style={{ minHeight: 44 }}
+                  className={`${ACT_BTN} bg-amber-900/40 text-amber-300 border-amber-700/40`}
                   title="선적 완료됨 — 누르면 취소 (수석 확인 전까지)"
-                >⬆ 선적 ✓</button>
+                >⬆ 선적 완료 ✓</button>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); onComplete('loading'); }}
-                  className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 text-xs2 font-bold border border-amber-800/40 w-full"
-                  style={{ minHeight: 44 }}
+                  className={`${ACT_BTN} bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 border-amber-800/40`}
                   title="선적 작업 완료 표시 — 삭제 안 됨"
                 >⬆ 선적 완료
                 </button>
