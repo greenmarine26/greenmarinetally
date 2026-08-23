@@ -40,19 +40,26 @@ setTimeout(() => {
   if (!/KC0012345/.test(t)) { console.log('✗ 입력된 세관봉인이 안 보인다'); process.exit(1); }
   if (!/박철민/.test(t)) { console.log('✗ 봉인자 폴백(완료 기록의 검수자)이 안 붙었다'); process.exit(1); }
 
-  // ④ 인쇄 머리 — **기존 양식 여섯 칸이 한 칸도 빠지면 안 된다** (검수사 실물 대조 2026-08-24)
-  const pr = doc.querySelector('.xr-print');
-  if (!pr) { console.log('✗ 인쇄 블록(.xr-print)이 없다'); process.exit(1); }
-  const pt = pr.textContent || '';
-  for (const [label, val] of [['항차/항공편명', '2601E'], ['운항선사', ''], ['입항일자', ''],
-                              ['양륙항', 'KRPTK'], ['선박명', ''], ['선박 호출부호', 'SMK9'], ['MRN', '26SMOK2601I']]) {
-    if (!pt.includes(label)) { console.log('✗ 인쇄 머리에 «' + label + '» 칸이 없다 — 기존 양식에서 빠졌다'); process.exit(1); }
-    if (val && !pt.includes(val)) { console.log('✗ 인쇄 머리 «' + label + '» 값(' + val + ')이 안 찍힌다'); process.exit(1); }
+  // ④ 인쇄물 — **기존 양식 여섯 칸이 한 칸도 빠지면 안 된다** (검수사 실물 대조 2026-08-24)
+  const html = dom.window.__xrayHtml || '';
+  if (!html) { console.log('✗ 인쇄 문서가 안 만들어졌다'); process.exit(1); }
+  for (const [label, val] of [['항차/항공편명', '2601E'], ['운항선사', 'SMOK'], ['입항일자', '2026.08.24'],
+                              ['양륙항', 'KRPTK'], ['선박명', 'SMOKE VESSEL'], ['선박 호출부호', 'SMK9'], ['MRN', '26SMOK2601I']]) {
+    if (!html.includes(label)) { console.log('✗ 인쇄 머리에 «' + label + '» 칸이 없다 — 기존 양식에서 빠졌다'); process.exit(1); }
+    if (val && !html.includes(val)) { console.log('✗ 인쇄 머리 «' + label + '» 값(' + val + ')이 안 찍힌다'); process.exit(1); }
   }
-  if (!/XRAY리스트/.test(pt)) { console.log('✗ 인쇄 제목에 «XRAY리스트»가 없다'); process.exit(1); }
-  if (!pr.querySelector('.xr-blank')) { console.log('✗ 값 없는 칸이 손글씨용 밑줄(.xr-blank)로 안 나온다'); process.exit(1); }
+  for (const c of ['컨테이너번호', '선사SEAL NO', '화물구분', '규격', '선내위치', '부착 세관봉인번호', '봉인자']) {
+    if (!html.includes(c)) { console.log('✗ 인쇄 열 «' + c + '» 이 없다'); process.exit(1); }
+  }
+  if (!/XRAY리스트/.test(html)) { console.log('✗ 인쇄 제목에 «XRAY리스트»가 없다'); process.exit(1); }
+  if (!/class="bl"/.test(html)) { console.log('✗ 값 없는 칸이 손글씨용 밑줄로 안 나온다'); process.exit(1); }
+  //  40대 → 20+20 균등 분할(검수사 «40대라면 20대 20대»)
+  const pgs = (html.match(/class="pg"/g) || []).length;
+  if (pgs !== 2) { console.log('✗ 40대가 2장으로 안 갈린다 (나온 장수 ' + pgs + ')'); process.exit(1); }
+  if (!/1 \/ 2 장/.test(html) || !/2 \/ 2 장/.test(html)) { console.log('✗ 쪽마다 «N / M 장» 표기가 없다'); process.exit(1); }
+  if ((html.match(/항차\/항공편명/g) || []).length !== 2) { console.log('✗ 쪽마다 머리가 안 반복된다'); process.exit(1); }
 
   const kpi = doc.querySelectorAll('button.rounded-xl').length;
-  console.log(`✓ X-RAY 탭 연막검사 통과 (${t.length}자 · 정렬 O · 화물구분 4종 O · 미입력 O · 인쇄 머리 6칸 O · 밑줄칸 O · 카드 ${kpi}장 · 오류 0)`);
+  console.log(`✓ X-RAY 탭 연막검사 통과 (${t.length}자 · 정렬 O · 화물구분 4종 O · 미입력 O · 인쇄 머리 6칸·7열 O · 밑줄칸 O · 40대→2장 O · 카드 ${kpi}장 · 오류 0)`);
   process.exit(0);
 }, 900);

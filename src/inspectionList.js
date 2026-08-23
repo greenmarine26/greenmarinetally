@@ -369,6 +369,73 @@ export function generateVgmListHTML(containers, voyageInfo) {
     <tfoot><tr><td colspan="4">TOTAL ${rows.length} UNITS</td><td class="num">${total.toLocaleString()} KG</td></tr></tfoot>
     </table></body></html>`;
 }
+/** X-RAY 세관봉인 확인서 HTML — 2.26-02.
+ *
+ *  ⚠ **인쇄는 별도 문서로 연다.** 2.26 은 앱 화면 안에 `.xr-print` 를 두고
+ *    `@media print { body > *:not(.xr-print){display:none} }` 로 가렸는데,
+ *    그 블록은 body 직계가 아니라 React 트리(`#root`) 안이라 **부모가 숨으면 같이 숨는다.**
+ *    미리보기가 통째로 **검은 화면**으로 나왔다(검수사 실측 2026-08-24).
+ *    ★ 이 사고는 저장소에 이미 있었다 — planedit V9.12 «인쇄 백지 — CARGO_V2_CSS 의
+ *      `body>*:not(.cpv2-overlay)` 규칙이 #root 를 숨기던 문제». 같은 함정을 새로 짜서 또 밟았다.
+ *    ⇒ 검수 리스트·VGM 과 **같은 벌**을 쓴다 — 문자열로 문서를 만들어 새 창에 쓴다. 앱 CSS 와 안 싸운다.
+ *
+ *  머리 여섯 칸은 **기존 출력물 그대로다**(검수사 «출력물이 기존자료에서 빠진게 없어야 합니다»).
+ *  값이 없는 칸은 손글씨용 밑줄로 — 백지로 뽑아 현장에서 적는 쓰임을 위해서다. */
+export function generateXrayListHTML(rows, head = {}, perPage = 20) {
+  const esc = (v) => String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const n = Math.max(1, Math.ceil(rows.length / perPage));
+  const per = Math.ceil(rows.length / n) || 1;          // 균등 분할 — 40대는 20+20
+  const pages = Array.from({ length: n }, (_, i) => rows.slice(i * per, (i + 1) * per));
+  const BLANK = '<span class="bl"></span>';
+  const body = pages.map((pg, pi) => `
+    <div class="pg">
+      <div class="ti"><b>${esc(head.name || '')} XRAY리스트</b>${n > 1 ? `<span class="pn">${pi + 1} / ${n} 장</span>` : ''}</div>
+      <table class="hd">
+        <tr><th>항차/항공편명</th><td>${esc(head.voy)}</td><th>운항선사</th><td colspan="3">${esc(head.carrier)}</td></tr>
+        <tr><th>입항일자</th><td>${esc(head.eta)}</td><th>양륙항</th><td colspan="3">${esc(head.pod)}</td></tr>
+        <tr><th>선박명</th><td>${esc(head.name)}</td><th>선박 호출부호</th><td>${esc(head.callsign)}</td><th class="w8">MRN</th><td>${esc(head.mrn)}</td></tr>
+      </table>
+      <table class="ls">
+        <thead><tr>
+          <th class="w4">No.</th><th class="w15">컨테이너번호</th><th class="w13">선사SEAL NO</th>
+          <th class="w12">화물구분</th><th class="w8">규격</th><th class="w12">선내위치</th>
+          <th class="w20">부착 세관봉인번호</th><th class="w16">봉인자</th>
+        </tr></thead>
+        <tbody>${pg.map((r, i) => `<tr>
+          <td>${pi * per + i + 1}</td><td class="b">${esc(r.cn)}</td><td>${esc(r.seal)}</td>
+          <td>${esc(r.kind)}</td><td>${esc(r.iso)}</td><td>${esc(r.pos)}</td>
+          <td>${r.cSeal ? esc(r.cSeal) : BLANK}</td><td>${r.sealer ? esc(r.sealer) : BLANK}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`).join('');
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<title>${esc(head.name || '')} XRAY리스트</title><style>
+@page { size: A4 landscape; margin: 1.9cm 1.8cm; }
+body { font-family:'Malgun Gothic',sans-serif; margin:0; padding:12px; color:#000; background:#fff; font-size:8pt; }
+.pg { page-break-after: always; }
+.pg:last-child { page-break-after: auto; }
+.ti { font-size:13pt; margin-bottom:5px; display:flex; justify-content:space-between; align-items:flex-end; }
+.pn { font-size:8pt; font-weight:400; }
+table { width:100%; border-collapse:collapse; }
+.hd { margin-bottom:5px; }
+th,td { border:1px solid #333; padding:4px 3px; text-align:center; }
+th { background:#eee; font-weight:700; }
+.hd td { text-align:left; padding-left:6px; }
+.b { font-weight:700; }
+.bl { display:block; min-height:13px; border-bottom:1px solid #999; }
+.w4{width:4%}.w8{width:8%}.w12{width:12%}.w13{width:13%}.w15{width:15%}.w16{width:16%}.w20{width:20%}
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:0; } }
+</style></head><body>${body}</body></html>`;
+}
+
+export function openXrayListPrint(rows, head, perPage = 20) {
+  const w = window.open('', '_blank', 'width=1200,height=900');
+  if (!w) { alert('팝업 차단을 해제해주세요'); return; }
+  w.document.write(generateXrayListHTML(rows, head, perPage));
+  w.document.close();
+}
+
 export function openVgmListPrint(containers, voyageInfo) {
   const w = window.open('', '_blank', 'width=900,height=1200');
   if (!w) { alert('팝업 차단을 해제해주세요'); return; }

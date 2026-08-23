@@ -17,6 +17,7 @@ import React, { useMemo, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { sortByDischargePlan } from '../utils.js';
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.26-01: 선박 풀네임은 정본 한 벌로
+import { openXrayListPrint } from '../inspectionList.js';        // 2.26-02: 인쇄는 검수리스트·VGM 과 같은 벌(별도 문서)
 
 //  세관 파일의 화물구분 4종 — 실측 64개 358행(X-RAY 252 · Sea & Air 84 · 반입후검사 14 · 즉시검사 8).
 //  ⚠ 시안에는 «즉시검사»가 빠져 있었다. 실물에 있으므로 넣는다.
@@ -121,18 +122,9 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
   return (
     <div className="space-y-3">
       <style>{`
-        @media print {
-          body > *:not(.xr-print) { display: none !important; }
-          .xr-print { display: block !important; }
-          @page { size: A4 landscape; margin: 1.9cm 1.8cm; }
-          .xr-page { page-break-after: always; }
-          .xr-page:last-child { page-break-after: auto; }
-        }
-        .xr-print { display: none; }
-        .xr-t { width: 100%; border-collapse: collapse; font-size: 8pt; }
-        .xr-t th, .xr-t td { border: 1px solid #333; padding: 4px 3px; text-align: center; }
-        .xr-t th { background: #eee; font-weight: 700; }
-        .xr-blank { display: block; min-height: 13px; border-bottom: 1px solid #999; }
+        /*  2.26-02: 인쇄 CSS 는 여기 없다 — 인쇄는 별도 문서로 연다(inspectionList.generateXrayListHTML).
+            2.26 은 앱 화면 안에 인쇄 블록을 두고 @media print 로 형제를 가렸는데, 그 블록이
+            body 직계가 아니라 #root 안이라 **부모가 숨으면 같이 숨어** 미리보기가 새까맣게 나왔다. */
       `}</style>
 
       {/* ── 조회 ── */}
@@ -154,7 +146,8 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
             className="flex-1 bg-transparent text-[13px] outline-none"/>
           {q && <button onClick={() => setQ('')}><X className="w-4 h-4 text-slate-500"/></button>}
         </div>
-        <button onClick={() => window.print()} disabled={!shown.length}
+        <button onClick={() => openXrayListPrint(shown.map(r => ({ ...r, pos: pos(r) })), head, PER_PAGE)}
+          disabled={!shown.length}
           className="h-11 px-4 rounded-lg bg-amber-500 text-slate-900 font-bold text-[13px] flex items-center gap-1.5 disabled:opacity-40">
           <Printer className="w-4 h-4"/>출력 {pages.length > 1 ? `(${pages.length}장)` : ''}
         </button>
@@ -197,66 +190,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
         </div>
       </div>
 
-      {/* ── 인쇄 ── 값이 없으면 «밑줄 칸»으로 찍어 손으로 적게 한다.
-           ⚠ **항상 그려 둔다**(화면에서는 CSS 로 숨김). 눌렀을 때 만들면 ①한 박자 늦고
-             ②연막검사가 머리 여섯 칸을 확인할 길이 없다 — 2.26 이 넷을 빠뜨린 채 나간 이유다. */}
-      <div className="xr-print" style={{ color: '#000', background: '#fff' }}>
-          {pages.map((pg, pi) => (
-            <div className="xr-page" key={pi}>
-              {/* 제목 — 검수사 «출력시 화면 상단에 선박명 + XRAY리스트라고 표기» */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '4px' }}>
-                <div style={{ fontSize: '13pt', fontWeight: 700 }}>{head.name} XRAY리스트</div>
-                <div style={{ fontSize: '8pt' }}>{pages.length > 1 ? `${pi + 1} / ${pages.length} 장` : ''}</div>
-              </div>
-              {/* 머리 여섯 칸 — **기존 양식 그대로다. 한 칸도 빼지 않는다.** */}
-              <table className="xr-t" style={{ marginBottom: '4px' }}>
-                <tbody>
-                  <tr>
-                    <th style={{ width: '13%' }}>항차/항공편명</th><td style={{ width: '20%' }}>{head.voy}</td>
-                    <th style={{ width: '13%' }}>운항선사</th><td colSpan={3}>{head.carrier}</td>
-                  </tr>
-                  <tr>
-                    <th>입항일자</th><td>{head.eta}</td>
-                    <th>양륙항</th><td colSpan={3}>{head.pod}</td>
-                  </tr>
-                  <tr>
-                    <th>선박명</th><td>{head.name}</td>
-                    <th>선박 호출부호</th><td style={{ width: '14%' }}>{head.callsign}</td>
-                    <th style={{ width: '8%' }}>MRN</th><td>{head.mrn}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <table className="xr-t">
-                <thead>
-                  <tr>
-                    <th style={{ width: '4%' }}>No.</th>
-                    <th style={{ width: '15%' }}>컨테이너번호</th>
-                    <th style={{ width: '13%' }}>선사SEAL NO</th>
-                    <th style={{ width: '12%' }}>화물구분</th>
-                    <th style={{ width: '8%' }}>규격</th>
-                    <th style={{ width: '12%' }}>선내위치</th>
-                    <th style={{ width: '20%' }}>부착 세관봉인번호</th>
-                    <th style={{ width: '16%' }}>봉인자</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pg.map((r, i) => (
-                    <tr key={r.cn}>
-                      <td>{pi * (pages[0]?.length || PER_PAGE) + i + 1}</td>
-                      <td style={{ fontWeight: 700 }}>{r.cn}</td>
-                      <td>{r.seal || ''}</td>
-                      <td>{r.kind || ''}</td>
-                      <td>{r.iso || ''}</td>
-                      <td>{pos(r)}</td>
-                      <td>{r.cSeal || <span className="xr-blank"/>}</td>
-                      <td>{r.sealer || <span className="xr-blank"/>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
-      </div>
     </div>
   );
 }
+

@@ -4,6 +4,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import XrayTab from '../src/components/XrayTab.jsx';
+import { generateXrayListHTML } from '../src/inspectionList.js';   // 2.26-02: 인쇄는 별도 문서 — 문자열로 검사한다
 
 //  일부러 섞어 넣는다 — 정렬이 살아 있으면 아래 기대 순서로 나와야 한다.
 //    베이 2 데크 84 → 베이 2 데크 82 → 베이 2 홀드 08 → 베이 2 홀드 06 → 베이 10 데크 88
@@ -38,3 +39,10 @@ createRoot(document.getElementById('root')).render(
     portMisData: { SMK9: { callsign: 'SMK9', mrnIn: '26SMOK2601I', mrnOut: '26SMOK2602E' } },
   })
 );
+
+//  2.26-02: 인쇄물은 이제 **문자열 문서**다. 창을 열지 않고 그대로 검사한다.
+//    2.26 은 인쇄 블록을 눌렀을 때 만들어 연막검사가 볼 수 없었고, 그래서 머리 넷이 빠진 채 나갔다.
+const HEAD = { voy: '2601E', carrier: 'SMOK', eta: '2026.08.24', pod: 'KRPTK',
+               name: 'SMOKE VESSEL', callsign: 'SMK9', mrn: '26SMOK2601I' };
+const R = (cn, i) => ({ cn, seal: 'S' + i, kind: 'X-RAY', iso: '45GP', pos: '02-01-84', cSeal: '', sealer: '' });
+window.__xrayHtml = generateXrayListHTML(Array.from({ length: 40 }, (_, i) => R('SMOKU10' + String(i).padStart(4, '0'), i)), HEAD, 20);
