@@ -183,9 +183,36 @@
     width:34px; height:26px; border:1px solid var(--line); margin:1px; border-radius:4px;
     font-size:13px; font-weight:700; background:var(--panel2);}
   .footer-note{font-size:11px; color:var(--dim); text-align:center; padding:20px 16px; line-height:1.6;}
-  .intro-card{text-align:center; background:linear-gradient(135deg,#1a2a1f,#1c2230); border:1px solid #2a4a38;}
+  .intro-card{text-align:center; background:linear-gradient(135deg,#0B1F1A,#0F172A); border:1px solid rgba(16,185,129,.22);}
+  
+  /* ── ConeOne 2.1 «메인 화면 구성» (검수사 2026-08-23: *"메인화면이 하나도 안바뀌었네요"*) ──
+     종전엔 인사말 SVG → 설치 → 사용순서 → 선박정보 → **작업 선택** 순서라, 정작 매번 쓰는
+     「작업 선택」이 스크롤 세 번 아래에 있었다. 시안대로 상태 4장을 맨 위에 두고,
+     PC(1000px+)는 좌 목록 / 우 실행 2단, 폰은 한 줄로 내려 순서만 바꾼다.
+     ⚠ 마크업 id·class 는 한 글자도 안 바꿨다 — bindEvents 가 id 로 잡으므로 배선은 그대로다. */
+  .kpi-row{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:14px;}
+  @media(min-width:720px){ .kpi-row{grid-template-columns:repeat(4,1fr); gap:14px;} }
+  .kpi{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:13px 15px; min-width:0; box-shadow:var(--shadow);}
+  .kpi.on{border-color:var(--accent);}
+  .k-cap{font-size:10px; letter-spacing:.13em; color:var(--dim); font-weight:700;}
+  .k-val{font-size:21px; font-weight:800; line-height:1.15; margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  @media(min-width:720px){ .k-val{font-size:25px;} }
+  .k-sub{font-size:11px; color:var(--dim); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .home-grid{display:grid; grid-template-columns:1fr; gap:0; align-items:start;}
+  @media(min-width:1000px){
+    .home-grid{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:16px;}
+    .home-side{position:sticky; top:16px;}
+  }
+  .fold{margin-bottom:16px;}
+  .fold>summary{list-style:none; cursor:pointer; padding:14px 18px; font-size:13px; font-weight:700;
+    color:var(--dim); background:var(--panel); border:1px solid var(--line); border-radius:20px;
+    display:flex; align-items:center; justify-content:space-between; min-height:44px; box-shadow:var(--shadow);}
+  .fold>summary::-webkit-details-marker{display:none;}
+  .fold>summary::after{content:'▾'; font-size:12px; color:var(--dim);}
+  .fold[open]>summary::after{content:'▴';}
+  .fold[open]>summary{margin-bottom:14px;}
   .port-art{margin:-4px -4px 14px; border-radius:10px; overflow:hidden; line-height:0; box-shadow:0 2px 12px rgba(0,0,0,.3);}
-  .intro-msg{font-size:16px; font-weight:800; color:#7fe0b0; margin:4px 0 10px; line-height:1.5;}
+  .intro-msg{font-size:16px; font-weight:800; color:var(--add); margin:4px 0 10px; line-height:1.5;}
   .intro-sub{font-size:12.5px; color:var(--dim); line-height:1.7; margin:0;}
   .badge{display:inline-block; font-size:10px; padding:2px 7px; border-radius:20px;
     background:var(--panel2); color:var(--dim); margin-left:6px;}
@@ -269,7 +296,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.0</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.1</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -688,7 +715,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 2.23';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.0';   // 2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 2.1';   // 2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1036,6 +1063,47 @@ function render(){
     gt.onclick=()=>{ state.resultMode=false; render(); };
     app.appendChild(gt);
   }
+  // ── ConeOne 2.1: 상태 4장 ──
+  //   ⚠ 값은 **앱이 실제로 아는 것**만 쓴다. 모르면 «—» 로 두고 지어내지 않는다.
+  const _sel=(state.voyages||[]).find(v=>v.key===state.voyageKey)||null;
+  const _dn=(state.disch&&state.disch.ediRows)?state.disch.ediRows.length:null;
+  const _ln=(state.stow&&state.stow.ediRows)?state.stow.ediRows.length:null;
+  const _typeShort = state.shipType==='container' ? '컨테이너선'
+    : (state.shipType==='multi'||state.shipType==='general') ? ('복합선 '+state.multiCount+'개')
+    : '미지정';
+  const kpiRow=document.createElement('div');
+  kpiRow.className='kpi-row';
+  kpiRow.innerHTML=[
+    ['작업', _sel?(_sel.vsl||'—'):'미선택', _sel?(_sel.voy?('항차 '+_sel.voy):'항차 미상'):'아래에서 고르세요',
+      _sel?'var(--ink)':'var(--dim)', !!_sel],
+    ['양하', _dn==null?'—':String(_dn), _dn==null?'자료 없음':'대', 'var(--accent2)', _dn!=null],
+    ['선적', _ln==null?'—':String(_ln), _ln==null?'자료 없음':'대', 'var(--add)', _ln!=null],
+    ['선종', _typeShort, state.shipType?'확인됨':'②에서 고르세요',
+      state.shipType?'var(--accent)':'var(--dim)', !!state.shipType],
+  ].map(([cap,val,sub,col,on])=>
+    `<div class="kpi ${on?'on':''}"><div class="k-cap">${cap}</div>`+
+    `<div class="k-val" style="color:${col}">${val}</div><div class="k-sub">${sub}</div></div>`
+  ).join('');
+  app.appendChild(kpiRow);
+
+  // ── ConeOne 2.1: 2단 그리드 — 좌«고르는 것» / 우«하는 것» ──
+  const grid=document.createElement('div'); grid.className='home-grid';
+  const colA=document.createElement('div'); colA.className='home-main';
+  const colB=document.createElement('div'); colB.className='home-side';
+  grid.appendChild(colA); grid.appendChild(colB);
+  app.appendChild(grid);
+
+  // 안내 접이 — 인사말·설치·사용순서는 매번 볼 것이 아니라 접어 둔다(첫 방문엔 펼침).
+  const fold=document.createElement('details');
+  fold.className='fold';
+  if(!state.resultMode && !localStorage.getItem('cone_seen_intro')) fold.open=true;
+  fold.innerHTML='<summary>ℹ️ 사용 안내 · 설치 · 인사말</summary>';
+  // ⚠ 'toggle' 은 fold.open=true 로 «프로그램이» 열어도 발화한다 — 그걸로 기록하면
+  //   첫 렌더에서 곧바로 «봤음»이 찍혀 다시는 안 펼쳐진다(연막검사에서 잡힘).
+  //   그래서 사람이 실제로 누른 것만 센다.
+  const _sm=fold.querySelector('summary');
+  if(_sm) _sm.addEventListener('click',()=>{ try{localStorage.setItem('cone_seen_intro','1');}catch(e){} });
+
   // 인사말 (무료 배포의 뜻) + 컨테이너 항구 일러스트
   const intro=document.createElement('div');
   intro.className='card intro-card';
@@ -1108,7 +1176,7 @@ function render(){
     <p class="intro-msg">수고를 덜어 드리고자 이 앱을 드립니다.</p>
     <p class="intro-sub">오늘도 안전하게, 다치지 말고 집에 가세요.</p>
   `;
-  app.appendChild(intro);
+  fold.appendChild(intro);
 
   // 설치 버튼 (이미 설치된 경우 숨김)
   if(!isStandalone() && !state.resultMode){
@@ -1121,7 +1189,7 @@ function render(){
       </button>
       <p style="margin:10px 0 0;font-size:12px;color:var(--dim)">한 번 설치하면 다음부턴 아이콘만 누르면 바로 열립니다<br>(브라우저를 닫아도 사라지지 않아요)</p>
     `;
-    app.appendChild(inst);
+    fold.appendChild(inst);
     const ib=document.getElementById('installBtn');
     if(ib){ ib.onclick=doInstall; if(!deferredPrompt && !isIOS()) { /* 데스크탑 등 */ } }
   }
@@ -1145,7 +1213,7 @@ function render(){
     </ol>
     <div class="hint">검수앱에 올라온 EDI를 그대로 읽어옵니다. <b>파일을 올릴 필요가 없습니다.</b></div>
   `;
-  app.appendChild(steps);
+  fold.appendChild(steps);
 
   // 선박 정보 (자동) + 선종 질문 — 파일이 하나라도 올라오면 표시
   if(state.stow || state.disch){
@@ -1176,7 +1244,7 @@ function render(){
           </div>
         </div>`:''}
     `;
-    app.appendChild(sv);
+    colB.appendChild(sv);
   }
 
   // 작업(항차) 선택 카드 — 검수앱 자료 읽어오기
@@ -1266,19 +1334,30 @@ function render(){
   up.innerHTML=`
     <h2>작업 선택 <span class="badge">검수앱 자료</span></h2>
     ${listHtml}
-    <button class="btn-primary" id="calcBtn" style="margin-top:14px" ${((state.stow||state.disch)&&state.shipType)?'':'disabled'}>
+  `;
+  colA.appendChild(up);
+
+  // ── ConeOne 2.1: 계산·보기 — 우 칼럼(폰에선 목록 바로 아래). 버튼 id 는 종전 그대로다. ──
+  const act=document.createElement('div');
+  act.className='card';
+  act.innerHTML=`
+    <h2>계산 · 보기</h2>
+    <button class="btn-primary" id="calcBtn" ${((state.stow||state.disch)&&state.shipType)?'':'disabled'}>
       ③ 콘 계산하기
     </button>
     ${(state.disch||state.stow)?'<button class="btn-up" id="cargoViewBtn" style="margin-top:10px;flex:none;width:100%">📊 카고플랜 보기 (전체 화물 비교)</button>':''}
     ${(state.disch||state.stow)?'<button class="btn-up" id="bayViewBtn" style="margin-top:10px;flex:none;width:100%">🗺️ 베이플랜 보기 (양하·선적 비교)</button>':''}
     ${((state.stow||state.disch)&&!state.shipType)?'<div class="hint" style="color:var(--accent)">위에서 선종을 먼저 선택하세요.</div>':''}
+    ${!(state.stow||state.disch)?'<div class="hint">먼저 왼쪽에서 작업(선박)을 고르세요.</div>':''}
     ${(state.voyageKey&&(!state.disch||!state.stow))?'<div class="hint">'+(!state.disch?'이 작업엔 양하 EDI가 없습니다. ':'')+(!state.stow?'이 작업엔 선적 EDI가 없습니다. ':'')+'있는 자료만으로 콘 계산합니다.</div>':''}
   `;
-  app.appendChild(up);
+  colB.appendChild(act);
 
   const resultArea=document.createElement('div');
   resultArea.id='resultArea';
   app.appendChild(resultArea);
+
+  app.appendChild(fold);   // 안내는 맨 아래 — 매번 지나칠 것이 아니다
 
   bindEvents();
 }
