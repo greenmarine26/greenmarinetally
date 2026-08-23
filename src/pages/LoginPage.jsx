@@ -214,7 +214,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       <div className="hidden lg:block rounded-3xl border border-cyan-950/70 p-7 bg-slate-950"
            style={{ background: 'radial-gradient(120% 90% at 12% 0%, #0d2b33 0%, #071420 55%, #050c14 100%)' }}>
         <span className="inline-flex items-center gap-2 text-[11px] text-teal-300 bg-teal-500/10 border border-teal-400/25 rounded-full px-3 py-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>평택항만공사 공식 파트너 · PYEONGTAEK PORT
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>그린마린 검수팀 전용 · 평택항 컨테이너 검수
         </span>
         <div className="flex items-center gap-4 mt-6 mb-2">
           <div className="w-[62px] h-[62px] rounded-2xl bg-gradient-to-br from-cyan-900 to-slate-900 border border-cyan-700/60 flex items-center justify-center">
