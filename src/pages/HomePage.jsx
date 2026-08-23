@@ -1413,6 +1413,8 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   //   V9.57: disStats/loaStats(위에서 같은 인자로 계산)를 재사용 — IIFE 안 중복 computeStats 제거.
   const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0));
   const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
+  // 2.15: 우측 액션 패널의 «남은 수» — 좌측 총계와 다른 숫자라야 두 번 쓰는 값이 안 된다.
+  const remD = _rem(disStats), remL = _rem(loaStats);
   const departBadge = decideBadge({
     remainLoad: _rem(loaStats), remainDis: _rem(disStats), hasLoad: _hasLoad,
     terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
@@ -1432,27 +1434,32 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
 
   // V9.15: 카드 테두리 부두색 제거 — 파랑=양하/호박=선적 전용으로 잠금(전면 점검 1-4). 부두는 📍배지가 말한다.
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+    // ── 2.15 (검수사 시안 «컴용 — 우측 여백 활용») ──────────────────────────────
+    //   *«카드 전체를 좌(정보) 70% + 우(액션) 30% 로 분할 … 우측 280px 전용 액션 패널»*
+    //   PC 에서 카드 오른쪽이 비어 있던 자리에 «지금 처리 / 양하 완료 / 선적 완료» 를 세로로 세운다.
+    //   ⚠ 트리는 그대로 두고 클래스만 뒤집는다(LoginPage 에서 검증한 관용구) — 폰은 종전 세로 흐름.
+    <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden lg:flex lg:items-stretch">
+      <div className="lg:flex-1 lg:min-w-0">
       <button
         onClick={() => onOpen()}
         className="w-full px-3 py-2.5 hover:bg-slate-800/50 flex items-center justify-between gap-2"
       >
         <div className="text-left min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-bold text-sm text-slate-100 truncate">{voyage.info.vsl}</span>
+            <span className="font-black text-base sm:text-sm text-slate-100 truncate">{voyage.info.vsl}</span>
             {/* M5.82: 부두 배지 */}
             {pier === 'PCTC' && (
-              <span className="text-[11px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-sm2 sm:text-xxs bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded font-bold leading-none">
                 📍 PCTC {berth ? `· ${formatBerth(berth)}` : ''}
               </span>
             )}
             {pier === 'PNCT' && (
-              <span className="text-[11px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-sm2 sm:text-xxs bg-purple-900/60 border border-purple-700/50 text-purple-200 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded font-bold leading-none">
                 📍 PNCT {berth ? `· ${formatBerth(berth)}` : ''}
               </span>
             )}
             {!pier && berth && (
-              <span className="text-[11px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">
+              <span className="text-sm2 sm:text-xxs bg-slate-700 text-slate-400 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded leading-none">
                 📍 {berth}
               </span>
             )}
@@ -1710,19 +1717,43 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           );
         })()}
       </div>
+      </div>{/* 2.15: 좌측 정보 영역 닫기 */}
 
       {(activeInspectors.length > 0 || onDelete) && (
-        <div className="px-3 pb-2 flex items-center justify-between gap-2 border-t border-slate-800 pt-2">
-          <div className="flex items-center gap-1 text-[10px] text-slate-500 flex-1 min-w-0">
+        <div className="px-3 pb-2 flex items-center justify-between gap-2 border-t border-slate-800 pt-2
+                        lg:w-[280px] lg:shrink-0 lg:flex-col lg:items-stretch lg:justify-between
+                        lg:border-t-0 lg:border-l lg:border-slate-800 lg:bg-[#0F172A] lg:p-3.5 lg:gap-3
+                        lg:hover:bg-[#131F36] lg:transition-colors">
+          {/* 상단 — 상태 */}
+          <div className="row-1 text-2xs text-slate-500 flex-1 min-w-0 lg:flex-none">
             {activeInspectors.length > 0 ? (
               <>
-                <Users className="w-3 h-3 text-emerald-400"/>
+                <Users className="ico-s text-emerald-400"/>
                 <span className="text-emerald-300 font-bold">●</span>
                 <span className="truncate">{activeInspectors.map(a => a.name).join(', ')} 작업중</span>
               </>
             ) : <span className="text-slate-600">대기 중</span>}
           </div>
-          <div className="flex items-center gap-1">
+          {/* 중단 — PC 전용 큰 숫자. ⚠ 좌측에 이미 «양하 271 · 매칭 271» 이 있으므로 같은 수를 또 쓰지 않는다.
+              현장에서 필요한 것은 «남은 수» 다 — 작업이 진행되면 좌측 총계와 갈라진다. */}
+          {(remD != null || remL != null) && (
+            <div className="hidden lg:flex items-end gap-3 border-y border-slate-800/70 py-2.5">
+              {remD != null && (
+                <div className="min-w-0">
+                  <div className="text-3xs text-blue-400/70 font-bold">양하 남음</div>
+                  <div className="text-2xl font-black text-blue-200 leading-none">{remD}</div>
+                </div>
+              )}
+              {remL != null && (
+                <div className="min-w-0">
+                  <div className="text-3xs text-amber-400/70 font-bold">선적 남음</div>
+                  <div className="text-2xl font-black text-amber-200 leading-none">{remL}</div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* 하단 — 버튼. 폰은 가로 한 줄, PC 는 세로 스택(시안). */}
+          <div className="flex items-center gap-1 lg:flex-col lg:items-stretch lg:gap-1.5">
             {/* V9.37-01(사용자 지시 2026-08-01): ⚡ 지금 처리 — **홈 카드에** 둔다.
                 "홈화면에 있어야 하죠 거기에 정보가 거의 있는데" — 자료를 폴더에 넣은 직후
                 수집기 5분 사이클을 기다리지 않고 이 항차만 즉시 합본·등록시킨다.
@@ -1752,12 +1783,12 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                       setZap('fail'); setZapMsg('❌ 요청 실패');
                     }
                   }}
-                  className={`px-2.5 py-2 rounded-lg text-[12px] font-bold border ${busy
+                  className={`px-2.5 py-2 rounded-lg text-xs2 font-bold border w-full justify-center flex items-center ${busy
                     ? 'bg-slate-800 border-slate-700 text-slate-500'
                     : zap === 'ok' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
                     : zap === 'fail' || zap === 'timeout' ? 'bg-red-900/40 border-red-700/50 text-red-300'
                     : 'bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 border-amber-800/40'}`}
-                  style={{ minHeight: 40 }}
+                  style={{ minHeight: 48 }}
                   title={zapMsg || '수집기에 이 항차를 지금 처리하라고 요청 (메일박스 폴더에 자료를 넣은 직후 사용)'}
                 >{busy ? '⚡ 처리 중…' : zap === 'timeout' ? '⚡ 응답 없음' : zapMsg ? `⚡ ${zapMsg.slice(0, 18)}` : '⚡ 지금 처리'}</button>
               );
@@ -1772,15 +1803,15 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               modeDone.d ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('discharge'); }}
-                  className="px-3 py-2 rounded-lg bg-blue-900/40 text-blue-300 text-[12px] font-bold border border-blue-700/40"
-                  style={{ minHeight: 40 }}
+                  className="px-3 py-2 rounded-lg bg-blue-900/40 text-blue-300 text-xs2 font-bold border border-blue-700/40 w-full"
+                  style={{ minHeight: 44 }}
                   title="양하 완료됨 — 누르면 취소 (수석 확인 전까지)"
                 >⬇ 양하 ✓</button>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); onComplete('discharge'); }}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 text-[12px] font-bold border border-blue-800/40"
-                  style={{ minHeight: 40 }}
+                  className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-blue-900/30 hover:bg-blue-800/50 text-blue-400 text-xs2 font-bold border border-blue-800/40 w-full"
+                  style={{ minHeight: 44 }}
                   title="양하 작업 완료 표시 — 삭제 안 됨"
                 >⬇ 양하 완료</button>
               )
@@ -1789,15 +1820,15 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               modeDone.l ? (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (onUndoComplete) onUndoComplete('loading'); }}
-                  className="px-3 py-2 rounded-lg bg-amber-900/40 text-amber-300 text-[12px] font-bold border border-amber-700/40"
-                  style={{ minHeight: 40 }}
+                  className="px-3 py-2 rounded-lg bg-amber-900/40 text-amber-300 text-xs2 font-bold border border-amber-700/40 w-full"
+                  style={{ minHeight: 44 }}
                   title="선적 완료됨 — 누르면 취소 (수석 확인 전까지)"
                 >⬆ 선적 ✓</button>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); onComplete('loading'); }}
-                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 text-[12px] font-bold border border-amber-800/40"
-                  style={{ minHeight: 40 }}
+                  className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-amber-900/30 hover:bg-amber-800/50 text-amber-400 text-xs2 font-bold border border-amber-800/40 w-full"
+                  style={{ minHeight: 44 }}
                   title="선적 작업 완료 표시 — 삭제 안 됨"
                 >⬆ 선적 완료
                 </button>
@@ -1860,11 +1891,12 @@ function SectionBar({ label, color, stats, onClick }) {
   }[color];
 
   const pct = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
+  // 2.15 시안: 폰은 «양하/선적 행 높이 36px» — 현장에서 눈에 들어와야 한다.
 
   return (
     <div onClick={onClick} className="cursor-pointer">
-      <div className="flex items-center gap-2 mb-1.5 text-[11px]">
-        <span className={`${colorClasses.label} border px-1.5 py-0.5 rounded font-black`}>{label}</span>
+      <div className="flex items-center gap-2 mb-1.5 text-sm2 sm:text-xxs min-h-[36px] sm:min-h-0">
+        <span className={`${colorClasses.label} border px-2 sm:px-1.5 py-1 sm:py-0.5 rounded font-black leading-none`}>{label}</span>
         {/* V8.90: 예상 EDI 구분(사용자 확정 2026-07-13, SWDN 2608S 사건) —
             리스트(실데이터)가 있는데 EDI 평택분과 매칭 0이면 그 EDI는 확정본이 아니라 예상(프리스토우)본.
             '누락 293' 같은 허수 대신 리스트 개수를 녹색(기준 수치)으로 + '예상 EDI · 확정 대기' 배지.
@@ -1976,7 +2008,8 @@ function SectionBar({ label, color, stats, onClick }) {
           </>
         )}
       </div>
-      <div className="bg-slate-800 rounded-full h-1.5 overflow-hidden">
+      {/* 2.15 시안: 폰은 «진행바 2px → 6px 두껍게», PC 는 «얇은 4px». */}
+      <div className="bg-slate-800 rounded-full h-1.5 sm:h-1 overflow-hidden">
         <div className={`${colorClasses.bg} h-full transition-all`} style={{ width: `${pct}%` }}/>
       </div>
       <div className="flex items-center justify-between text-[10px] mt-0.5 text-slate-500">
