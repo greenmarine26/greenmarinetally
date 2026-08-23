@@ -437,6 +437,39 @@ function _dictIdentityConflict(entry, opts) {
   return true;                                           // 아무 근거도 못 찾음 → 다른 배
 }
 
+/** 베이 매트릭스가 없어도 **신원(선박명·콜사인·IMO)** 은 돌려준다 — 2.23.
+ *
+ *  왜 따로 두는가 (검수사 «이 문제도 해결한 거 같은데 또 나오고») —
+ *  `getShipBayDictData` 는 «베이 구조»를 주는 함수라, 구조가 없는 항목(껍데기)을 일부러 버린다.
+ *      const _byCode = (_fb[_key] && _fb[_key].bayDef) ? _fb[_key] : null;   // 껍데기 제외
+ *  그래서 **RZOR(RIZHAO ORIENT)** 처럼 LOLO 라 베이 매트릭스가 애초에 없는 배는
+ *  사전에 콜사인(HOAG)이 멀쩡히 있는데도 조회가 **언제나 null** 이었다.
+ *  PORT-MIS 카드는 콜사인만 있으면 되는데 구조 조회에 얹혀 있어서 매번 «콜사인: 없음» 이 떴다.
+ *  실측 2026-08-23: 사전 39척 중 껍데기는 RZOR **한 척**, 그 한 척이 계속 안 잡히던 배다.
+ *
+ *  ⚠ 구조를 주지 않는다. 베이 그림·카고플랜은 계속 `getShipBayDictData` 를 쓴다.
+ *  ⚠ 계열 대체(series-substitute)를 하지 않는다 — 남의 배 콜사인을 빌려 오면
+ *     PORT-MIS 가 엉뚱한 배에 매칭된다(V7.26 에서 이미 한 번 겪었다).
+ */
+export function getShipIdentity(imo, code) {
+  try {
+    const fb = getFbBayDict() || {};
+    const key = String(code || '').toUpperCase().replace(/\s+/g, '');
+    const vals = Object.values(fb).filter(v => v && typeof v === 'object');
+    let hit = (key && fb[key]) ? fb[key] : null;
+    if (!hit && imo) hit = vals.find(v => String(v.imo || '') && String(v.imo || '') === String(imo)) || null;
+    if (!hit && key) hit = vals.find(v =>
+      String(v.callsign || '').toUpperCase() === key ||
+      String(v.code || '').toUpperCase() === key) || null;
+    if (!hit) return null;
+    const name = hit.name || hit.bayDef?.name || '';
+    const callsign = hit.callsign || hit.bayDef?.callsign || '';
+    const vimo = hit.imo || hit.bayDef?.imo || '';
+    if (!name && !callsign && !vimo) return null;
+    return { name, callsign, imo: vimo, hasBayDef: !!(hit.bayDef || hit.baysSummary) };
+  } catch (e) { return null; }
+}
+
 export function getShipBayDictData(imo, code, opts) {
   // ★ TallyOne 1.58: 코드(vslCode) 조회도 **정본(보관소)** 에서 한다.
   //   V8.23 이 이 자리에서 로컬 개인 사본(lookupUserBayDict)을 최우선으로 봤다 — 그 한 줄이

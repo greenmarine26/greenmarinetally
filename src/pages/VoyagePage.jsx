@@ -22,7 +22,7 @@ import {
   fbBatchMoveToStorage, fbBatchClearActual
   , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
   , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple} from '../firebase.js';   // 1.87: 엠티실 범위 저장
-import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData } from '../shipStructure.js';
+import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
 import { addToUserBayDict } from '../data/userBayDict.js';
@@ -1653,8 +1653,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           catch { return null; }
         })();
         // M5.87: voyage.info.callsign 우선 (EDI 자동 추출), 없으면 베이사전
-        const dictCallsign = voyage?.info?.callsign || dictData?.callsign || dictData?.bayDef?.callsign || '';
-        const dictImo = dictData?.imo || voyage?.info?.imo || '';
+        // ★ 2.23 (검수사 «이 문제도 해결한 거 같은데 또 나오고») — **껍데기 항목에서도 신원을 읽는다.**
+        //   `getShipBayDictData` 는 «베이 구조»를 주는 함수라 구조 없는 항목을 일부러 버린다.
+        //   RZOR(RIZHAO ORIENT)는 LOLO 라 베이 매트릭스가 애초에 없다 — 사전에 콜사인 HOAG 가
+        //   멀쩡히 있는데도 조회가 언제나 null 이라 이 카드가 매번 «콜사인: 없음» 을 띄웠다.
+        //   PORT-MIS 에는 그 배가 키 HOAG 로 들어와 있었다 — **콜사인만 있으면 붙는 자리였다.**
+        const identData = (() => {
+          try { return getShipIdentity(voyage?.info?.imo, voyage?.info?.vsl); } catch { return null; }
+        })();
+        const dictCallsign = voyage?.info?.callsign || dictData?.callsign || dictData?.bayDef?.callsign || identData?.callsign || '';
+        const dictImo = dictData?.imo || voyage?.info?.imo || identData?.imo || '';
         let pm = null;
         let matchedBy = '';
 
