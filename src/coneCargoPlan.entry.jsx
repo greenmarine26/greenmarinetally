@@ -4,7 +4,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
-import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel } from './utils.js';   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용
+import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort } from './utils.js';   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용
 // ConeOne 1.2: 베이뷰 격자 단일 소스 — 검수앱 BayPlan이 쓰는 바로 그 모듈들을 임포트해 재사용
 import { getShipBayDictData } from './shipStructure.js';
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
@@ -37,7 +37,14 @@ window.ConeCargoPlan = { open, close };
 // V9.05-03: 파서 단일 소스 통합 — 콘앱(cone.html)이 본체 parseBAPLIE/parseAscFile을 그대로 쓰도록 노출.
 //   콘앱 내부 약식 파서의 Full/Empty 미인식(실측: EQD 상태 +5/+4 안 읽음)·ISO 불일치 해소.
 //   숫자코드 BAPLIE(CASP)·IFCSUM(RIZHAO)도 parseBAPLIE가 내부 라우팅하므로 콘앱에서 그대로 처리됨.
-window.ConeParse = { parseBAPLIE, parseAscFile };
+// ConeOne 1.9 (검수사 확정 2026-08-23) — **판정도 같이 내보낸다.**
+//   검수사: *«그럼 같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?»*
+//   파서는 이미 같았다. 갈린 것은 **파서 뒤의 판정**이다 — 번들이 파서 둘만 내보내서
+//   콘앱은 평택 여부를 자기 정규식 `/(PTK|PYT|PYOTM|PYO)$/` 로 판정할 수밖에 없었다.
+//   그래서 `PTK02`(부두번호, 실측 407건)·`PYEONGTAEK` 철자를 **평택이 아니라고** 봤다
+//   — TallyOne 1.11 이 511건 오판을 고친 그 수정이 콘앱에는 안 넘어간 것이다.
+//   ⚠ 콘앱에서 이 판정은 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅). 시프팅만의 문제가 아니었다.
+window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort };
 
 // ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.
 window.ConeShipPolicy = { isLolo: isLoloShipByPolicy };
