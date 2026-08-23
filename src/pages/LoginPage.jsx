@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Anchor, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus } from '../inspectorStatus.js';
+import { dayDiff, dayLabel, voyagePlanMs } from '../utils.js';   // 2.10: PC 좌측 현황판
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -17,7 +18,7 @@ import {
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 import { useBackHandler } from '../backHandler.js';
 
-export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null }) {
+export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {} }) {
   const [newName, setNewName] = useState('');
   // TallyOne 1.0: 목록에서 이름을 고르면 선택만 되고, 하단 [로그인] 버튼으로 확정한다.
   const [selected, setSelected] = useState('');
@@ -183,9 +184,88 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   // 직접 입력으로 고른 이름이 목록에 없는 경우 표시용
   const selectedInList = list.some(i => i.name === selected);
 
+  // ── 2.10 (검수사 확정 2026-08-23, 시안 승인 «컴화면 마음에 듭니다») — PC 좌측 현황판 ──
+  //   ⚠ 추가 조회 0. App.jsx:112 이 **로그인 전에도** voyages 를 구독하고 있어 그 값을 그대로 쓴다.
+  //   ⚠ 폰은 종전 화면 그대로다(«컴용 로그인 화면») — lg 이상에서만 2단이 된다.
+  const board = React.useMemo(() => {
+    const vs = Object.entries(voyages || {}).map(([key, v]) => ({ key, ...v }));
+    let boxes = 0;
+    const ships = [];
+    for (const v of vs) {
+      const d = v?.discharge?.ediContainers, l = v?.loading?.ediContainers;
+      boxes += (d ? Object.keys(d).length : 0) + (l ? Object.keys(l).length : 0);
+      const st = String(v?.info?.terminalStatus || '').toLowerCase();
+      const ms = voyagePlanMs(v);
+      const n = dayDiff(ms);
+      const rank = st === 'working' ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
+      if (rank < 9) ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, key: v.key });
+    }
+    ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));
+    return { total: vs.length, boxes, ships };
+  }, [voyages]);
+  const hhmm = (ms) => (ms ? `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}` : '');
+  const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center px-4 py-8">
-      <div className="w-full max-w-sm flex-1 flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 px-4 py-8 lg:px-6">
+      <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:max-w-[1500px] lg:mx-auto lg:items-start">
+
+      {/* ══ PC 전용 좌측 현황판 (폰에서는 숨김 — 종전 화면 불변) ══ */}
+      <div className="hidden lg:block rounded-3xl border border-cyan-950/70 p-7 bg-slate-950"
+           style={{ background: 'radial-gradient(120% 90% at 12% 0%, #0d2b33 0%, #071420 55%, #050c14 100%)' }}>
+        <span className="inline-flex items-center gap-2 text-[11px] text-teal-300 bg-teal-500/10 border border-teal-400/25 rounded-full px-3 py-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>평택항만공사 공식 파트너 · PYEONGTAEK PORT
+        </span>
+        <div className="flex items-center gap-4 mt-6 mb-2">
+          <div className="w-[62px] h-[62px] rounded-2xl bg-gradient-to-br from-cyan-900 to-slate-900 border border-cyan-700/60 flex items-center justify-center">
+            <Anchor className="w-8 h-8 text-cyan-300"/>
+          </div>
+          <div>
+            <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-cyan-50 to-sky-300 bg-clip-text text-transparent">TallyOne</h1>
+            <div className="text-[13px] text-slate-400 mt-0.5">평택항 컨테이너 검수 시스템</div>
+            <div className="text-[10px] text-slate-600 tracking-[0.22em] mt-2">— CONTROL CENTER EDITION</div>
+          </div>
+        </div>
+
+        <div className="mt-6 bg-slate-950/60 border border-cyan-950 rounded-2xl p-4">
+          <div className="text-[10px] tracking-[0.18em] text-slate-500 mb-3">■ 오늘 · 내일 작업 선박 — LIVE</div>
+          {board.ships.length === 0 ? (
+            <div className="text-[12px] text-slate-600">오늘·내일 작업 선박 없음</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {board.ships.slice(0, 12).map(sp => (
+                <span key={sp.key} className={`rounded-lg px-3 py-1.5 text-[12px] font-black tracking-wide border ${
+                  sp.rank === 0 ? 'bg-emerald-900/70 text-emerald-200 border-emerald-500'
+                  : sp.rank === 1 ? 'bg-cyan-950 text-cyan-200 border-cyan-700'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                  {sp.vsl}
+                  <span className="text-[9.5px] font-semibold opacity-75 ml-1.5">
+                    {sp.rank === 0 ? `작업중${berthNo(sp.berth) ? ` · ${berthNo(sp.berth)}` : ''}` : `${dayLabel(sp.ms)} ${hhmm(sp.ms)}`}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mt-4">
+          {[
+            { n: board.total, cap: '진행 중 항차', tag: '진행', tone: 'text-emerald-300 bg-emerald-500/15' },
+            { n: board.boxes.toLocaleString(), cap: '검수 대상 컨테이너', tag: '대기', tone: 'text-amber-300 bg-amber-500/15' },
+            { n: working.length, cap: '작업 중 검수원', tag: 'LIVE', tone: 'text-sky-300 bg-sky-500/15' },
+          ].map(st => (
+            <div key={st.cap} className="bg-slate-950/60 border border-cyan-950 rounded-xl p-3.5">
+              <div className="flex justify-end mb-2">
+                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${st.tone}`}>{st.tag}</span>
+              </div>
+              <div className="text-3xl font-black text-slate-100">{st.n}</div>
+              <div className="text-[10.5px] text-slate-500 mt-0.5">{st.cap}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="w-full max-w-sm mx-auto lg:max-w-none lg:mx-0 flex-1 flex flex-col lg:rounded-3xl lg:border lg:border-slate-800 lg:bg-slate-900/40 lg:p-7">
         {/* ── 앱 로고/이름 — TallyOne 리브랜딩 (버전 문자열은 App 푸터가 담당) ── */}
         <div className="flex flex-col items-center mb-6 mt-4">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-800 to-blue-950 border border-blue-600/50 flex items-center justify-center shadow-lg shadow-blue-950/60 mb-3">
@@ -295,6 +375,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           </button>
         )}
       </div>
+      </div>{/* 2.10: lg 2단 래퍼 닫기 — 게이트 오버레이는 fixed 라 바깥에 둔다 */}
 
       {/* ── 비밀번호 게이트 (setup/verify/owner) — 전체 화면 오버레이 ── */}
       {gateMode && (

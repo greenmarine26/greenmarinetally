@@ -367,6 +367,7 @@ export default function App() {
         <LoginPage
           current={inspector}
           inspectors={inspectors}
+          voyages={voyages}
           extraStaff={extraStaff}
           deletedStaff={deletedStaff}
           notice={autoLogoutNotice}

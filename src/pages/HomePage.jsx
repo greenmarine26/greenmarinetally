@@ -4,7 +4,7 @@ import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyag
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -24,22 +24,8 @@ import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미�
 //   같은 10%가 한 시간도 5분도 되므로 준비 시간 확보에 쓸 수 없다. → DEPART_REMAIN_MAX(=20)
 // ── 2.09: 날짜 라벨 한 벌 (검수사 확정 2026-08-23 «작업중인 선박과 당일 명일 최대 3일치») ──
 //   종전엔 같은 식이 VoyageCard 안에 두 벌 복제돼 있었다. 접기 판정까지 쓰면 세 벌이 된다 — 여기로 올린다.
+//   2.10: dayDiff/dayLabel 은 utils 로 승격(LoginPage 공용). 여기선 import 해 쓴다.
 const _two = (n) => String(n).padStart(2, '0');
-function dayDiff(ms) {
-  if (!ms) return null;
-  const d = new Date(ms), t = new Date();
-  return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
-    - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
-}
-function dayLabel(ms) {
-  const n = dayDiff(ms);
-  if (n === null) return '';
-  if (n === 0) return '오늘';
-  if (n === 1) return '내일';
-  if (n === -1) return '어제';
-  const d = new Date(ms);
-  return `${_two(d.getMonth() + 1)}-${_two(d.getDate())}(${'일월화수목금토'[d.getDay()]})`;
-}
 /** 홈 목록에서 **펼쳐 두는** 항차인가 — 검수사 확정: 작업중 ∨ 당일 ∨ 명일.
  *  작업중인 배가 어제 시작했으면 어제·오늘·내일 3일치가 펼쳐진다(«최대 3일치»의 뜻). */
 function isOpenVoyage(v) {

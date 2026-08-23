@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.09-03';   // 검수사 «두줄입니다. 전체항로에 다음항만 다른색으로표기 그러니 **위 한줄만 있으면 됩니다**» — 홈 카드의 «이번 항차 A → 평택 → B» 줄 제거. 항로 줄의 호박색(평택 다음)이 같은 답을 말하므로 두 줄은 군더더기였다. utils.voyageLegOf/normPortCode 는 남긴다(미르 답변·항로 미등록 배 진단용). HomePage 의 import·useMemo 는 고아라 정리.
+export const APP_VERSION = 'TallyOne 2.10';   // 검수사 «컴용 로그인 화면을 이런식으로 만들수 있나요?» → 시안 제시 → «컴화면 마음에 듭니다» 확정. PC(lg 이상) 로그인 2단 — 좌측 «컨트롤 센터» 현황판(오늘·내일 작업 선박 칩 + 진행 항차·검수 대상 컨·작업 중 검수원 3칸), 우측은 종전 작업자 선택 그대로. ⚠ 추가 조회 0 — App.jsx:112 가 로그인 전에도 voyages 를 구독하고 있어 그 값을 쓴다. ⚠ 폰은 종전 화면 불변(«컴용»). 비밀번호 게이트·잠금·직접입력·상태배지·돌아가기 전부 불변. 동봉: dayDiff/dayLabel 을 utils 로 승격(LoginPage 공용 — 복제 금지) + voyagePlanMs 신설(planDate 기반 가벼운 폴백).
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -4020,6 +4020,33 @@ const _PORT_ALIAS = {
   LIANYUNGANG: 'CNLYG', RIZHAO: 'CNRZH', NINGBO: 'CNNGB', INCHEON: 'KRINC', PYEONGTAEK: 'KRPTK',
   BUSAN: 'KRPUS', GWANGYANG: 'KRKAN', HAIPHONG: 'VNHPH', SAIGON: 'VNSGN', BANGKOK: 'THBKK',
 };
+// ── 2.10: 날짜 헬퍼 공용 (HomePage 에 있던 것을 승격 — LoginPage 도 쓴다) ──
+const _two2 = (n) => String(n).padStart(2, '0');
+/** 오늘 기준 며칠 차이. 없으면 null. */
+export function dayDiff(ms) {
+  if (!ms) return null;
+  const d = new Date(ms), t = new Date();
+  return Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
+}
+/** 오늘/내일/어제/MM-DD(요일) */
+export function dayLabel(ms) {
+  const n = dayDiff(ms);
+  if (n === null) return '';
+  if (n === 0) return '오늘';
+  if (n === 1) return '내일';
+  if (n === -1) return '어제';
+  const d = new Date(ms);
+  return `${_two2(d.getMonth() + 1)}-${_two2(d.getDate())}(${'일월화수목금토'[d.getDay()]})`;
+}
+/** 항차 작업 시작 예정 — `info.planDate` 앞부분(«2026-08-23 16:00 ~ …») → ms. 없으면 0.
+ *  ⚠ HomePage 의 `_etaMs`(선석배정>도선>PORT-MIS 순 선택)와 다르다. 로그인 화면처럼
+ *    그 계산을 다 돌릴 수 없는 곳에서 쓰는 가벼운 폴백이다. */
+export function voyagePlanMs(voyage) {
+  const m = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0;
+}
+
 export function normPortCode(v) {
   let s = String(v || '').trim().toUpperCase();
   if (!s) return '';
