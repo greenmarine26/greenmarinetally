@@ -420,6 +420,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const _done = _sr.filter(x => x.ratio >= 0.9999);
         const _wait = _sr.filter(x => x.ratio < 0.9999);
         return { key: k, ...v, _berth: berth, _pier: pier, _rawBerth: rawBerth,
+                 _pm: pm,   // 2.26: 「평택 다음」 판정용 — PORT-MIS 차항지가 1순위다
                  // 1.40-01: PORT-MIS **항 도착** 시각 원본 (검수사 확정 2026-08-10).
                  //   "포트미스는 항 도착시간이고 도선은 도선 시작입니다. 그리고 포트미스는 세관에 신고된
                  //    시간이기 때문에 따로 표기 해야 합니다."
@@ -1597,7 +1598,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                    ⚠ 화물만 믿어도 안 된다 — MCSN 632N 은 화물 최다가 신강 344 인데 실제 다음은 대련 214 다.
                      그래서 «2등의 1.5배 이상»일 때만 화물이 헤더를 이긴다(nextPortAfterPtk).
                    ⚠ 색은 하나만 칠한다 — 못 가리면 종전 항로표 자리를 칠하고 «항로표 기준»이라고 밝힌다. */
-                const nx = nextPortAfterPtk(voyage);
+                const nx = nextPortAfterPtk(voyage, voyage._pm);
                 const pi = laneRow.ports.findIndex(p => isPyeongtaekPort(p));
                 const rot = pi >= 0 ? normPortCode(laneRow.ports[(pi + 1) % laneRow.ports.length]) : '';
                 const pick = (nx && nx.port) || rot;
@@ -1615,6 +1616,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                     ))}
                     {pick && <span className="text-amber-400/70"> ← 평택 다음</span>}
                     {/* 근거를 같이 적는다 — 검수사 확정 «화물 최다 + 근거 표기». 조용히 단정하지 않는다. */}
+                    {nx && nx.basis === 'portmis' && <span className="text-slate-500"> · PORT-MIS 차항지</span>}
                     {nx && nx.basis === 'cargo' && (
                       <span className="text-slate-500"> · 남는 화물 {nx.cnt}대{nx.hdrDisagree ? ` (자료 헤더는 ${nx.hdr})` : ''}</span>
                     )}

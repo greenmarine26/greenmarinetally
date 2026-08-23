@@ -33,6 +33,7 @@ import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
 import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
+import XrayTab from '../components/XrayTab.jsx';   // 2.26: X-RAY 조회 + 세관봉인 확인서 인쇄
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
 import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
@@ -1309,14 +1310,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         ))}
         <button onClick={() => setMoreTabs(v => !v)}
           className={`flex-none px-3 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap ${
-            ['stats', 'report', 'data'].includes(tab) ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-500'
-          }`} title="통계 · 결과 · 업로드">
-          {['stats', 'report', 'data'].includes(tab) ? ({ stats: '통계', report: '결과', data: '업로드' })[tab] : '⋯'}
+            ['stats', 'report', 'data', 'xray'].includes(tab) ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-500'
+          }`} title="통계 · 결과 · 업로드 · X-RAY">
+          {['stats', 'report', 'data', 'xray'].includes(tab) ? ({ stats: '통계', report: '결과', data: '업로드', xray: 'X-RAY' })[tab] : '⋯'}
         </button>
       </nav>
       {moreTabs && (
         <div className="flex gap-1.5 mb-3 -mt-1.5">
-          {[['stats', '📊 통계'], ['report', '📋 결과'], ['data', '📤 업로드']].map(([k, t]) => (
+          {/* 2.26: X-RAY 는 양하에서만 — 세관 검사 대상은 내리는 화물이다 */}
+          {[['stats', '📊 통계'], ['report', '📋 결과'], ['data', '📤 업로드'],
+            ...(mode === 'discharge' ? [['xray', '🔍 X-RAY']] : [])].map(([k, t]) => (
             <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
               className={`flex-1 py-2 rounded-lg text-[12px] font-bold ${tab === k ? 'bg-slate-700 text-amber-300' : 'bg-slate-900 border border-slate-800 text-slate-300'}`}>{t}</button>
           ))}
@@ -1591,6 +1594,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           {/* V9.15: BayDictVerifyWidget(자료 진단)은 업로드 탭으로 — 통계 탭 첫 화면은 통계여야 한다(전면 점검 2-5) */}
           <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
         </div>
+      )}
+      {tab === 'xray' && (
+        <XrayTab voyage={voyage} voyageKey={voyageKey} mode={mode} containers={containers}
+                 xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap} portMisData={portMisData}/>
       )}
       {tab === 'report' && (
         <div className="space-y-3">
@@ -3662,9 +3669,20 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
     for (const file of Array.from(files)) {
       try {
         const buf = await file.arrayBuffer();
-        const { containers } = await parseXrayList(buf);
+        //  2.26: 세관 파일 6열을 그대로 담는다 — 선사SEAL·화물구분·규격·도착예정지.
+        //    `xrayList[cn]` 은 원래부터 객체({at})고 읽는 쪽은 truthy 검사만 하므로 파급 0.
+        //    ⚠ 이미 있는 컨도 **덮지 말고 채운다** — 다시 올렸을 때 새 열이 붙게.
+        const { containers, rows } = await parseXrayList(buf);
+        const byCn = new Map((rows || []).map(r => [r.cn, r]));
         containers.forEach(cn => {
-          if (!cnObj[cn]) { cnObj[cn] = { at: Date.now() }; added++; }
+          const r = byCn.get(cn) || null;
+          const prev = cnObj[cn];
+          if (!prev) added++;
+          cnObj[cn] = {
+            at: (prev && prev.at) || Date.now(),
+            ...(prev || {}),
+            ...(r ? { seal: r.seal || '', kind: r.kind || '', iso: r.iso || '', dest: r.dest || '' } : {}),
+          };
         });
       } catch (e) { console.warn('[X-RAY] 파일 파싱 실패 — 이 파일은 건너뜀:', file.name, e); }  // V9.57: 조용한 실패 금지
     }

@@ -242,6 +242,15 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic 
   else
     echo "⚠ 리스트 탭 연막 번들 실패 — 건너뜀"
   fi
+  # 2.26: X-RAY 탭 연막검사 — 조인이 넷(xrayList·EDI·xraySeals·completed)이라 그려 봐야 안다.
+  #   정렬(베이별순+우선양하순)·화물구분 4종·«미입력» 표시가 살아 있는지 본다.
+  SMOKE_XR=$(mktemp /tmp/_smokexr_XXXXXX.js)
+  if npx esbuild tools/smoke_xray.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
+       --outfile="$SMOKE_XR" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_xray.cjs "$SMOKE_XR" || { echo "✗ X-RAY 탭 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "⚠ X-RAY 연막 번들 실패 — 건너뜀"
+  fi
   # 2.22: 로그인 목록 연막검사 — «지금 로그인한 사람 ∪ 오늘의 본인» 규칙이 살아 있는지 본다.
   #   검수사가 두 번 교정한 규칙이라(2.12-01 → 2.22) 조용히 되돌아가면 매번 이름을 쳐야 한다.
   SMOKE_LG=$(mktemp /tmp/_smokelg_XXXXXX.js)

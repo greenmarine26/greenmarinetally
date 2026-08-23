@@ -2377,6 +2377,23 @@ export async function fbSavePortMisBatch(ships) {
   const now = Date.now();
   // 1단계: 새 데이터 저장
   const newKeys = new Set();
+  // ── TallyOne 2.26: **같은 콜사인의 입항·출항 두 줄이 서로를 덮던 것** ──
+  //   실측 2026-08-24 PORT-MIS — OCEAN BLUE WHALE(`D5MO4`)이 입항·출항 **두 줄**로 온다.
+  //     입항 MRN `26YTFF2721I` · 출항 MRN `26YTFF2722E` (끝 글자 I=입항 · E=출항, 9척 예외 없음).
+  //   콜사인당 1레코드라 뒤에 온 줄이 앞엣것을 지웠다. 그래서 두 가지가 동시에 틀어졌다.
+  //     ① 양하 서류에 **출항 MRN** 이 붙을 수 있다(양하는 I 를 써야 한다).
+  //     ② 검수사 신고 — KMTC OSAKA 차항지가 이번 기항은 **인천**인데 앱엔 **광양**(다음 기항)이 남았다.
+  //   ⛔ 키는 못 바꾼다 — `port_mis_data[콜사인]` 을 읽는 곳이 8개 파일 30여 곳이다(전수 확인).
+  //   ⇒ 키는 그대로 두고 **레코드 안에서 나눈다.** 최상위 필드도 종전 그대로라 읽는 쪽은 무변경.
+  const _isIn = (s) => /입/.test(String(s?.ibobprtSe || s?.voyageInOut || ''));
+  const _byKey = new Map();
+  for (const s of ships) {
+    const rk = s && (s.callsign || s.vesselName);
+    if (!rk) continue;
+    const k = String(rk).replace(/[.#$/[\]\s'"]/g, '_').trim();
+    if (!k) continue;
+    (_byKey.get(k) || _byKey.set(k, []).get(k)).push(s);
+  }
   await Promise.all(ships.map(async (s) => {
     const rawKey = s.callsign || s.vesselName;
     if (!rawKey) { failed++; return; }
@@ -2403,7 +2420,16 @@ export async function fbSavePortMisBatch(ships) {
         shipClean.pier = '';   // TallyOne 1.26-01: berth 를 버렸으면 그것으로 만든 pier 도 함께 버린다
         shipClean.pier = '';   // pier도 무효화
       }
-      await set(ref(db, `port_mis_data/${key}`), { ...shipClean, updatedAt: now });
+      //  2.26: 같은 콜사인의 다른 줄(입항↔출항)을 같이 담는다 — 어느 줄이 먼저 와도 결과가 같다.
+      const grp = _byKey.get(key) || [s];
+      const rowIn = grp.find(_isIn), rowOut = grp.find((x) => !_isIn(x));
+      const extra = {
+        mrnIn: (rowIn && rowIn.mrn) || (_isIn(s) ? s.mrn : '') || '',
+        mrnOut: (rowOut && rowOut.mrn) || (!_isIn(s) ? s.mrn : '') || '',
+        //  차항지는 **출항 신고**에 붙는다(이 항을 떠나 어디로 가나). 없으면 이 줄 값.
+        nextPortOut: (rowOut && rowOut.nextPort) || s.nextPort || '',
+      };
+      await set(ref(db, `port_mis_data/${key}`), { ...shipClean, ...extra, updatedAt: now });
       saved++;
     } catch (e) {
       console.error('[fbSavePortMisBatch] 저장 실패', key, e);

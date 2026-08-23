@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.25';   // **초과 치수를 앱이 판정한다.** 검수사 «초과치수는 누가 지정한것? 치수 다 보여줘야 하는데. 폭 길이 높이 셋중에 하나라도 FR범위를 벗어나면 초과치수인데 사진을 보더라도 높이에서 걸리는데 왜 초과치수 없음인지?» — 맞다. 종전엔 **판정이 아예 없었다.** `ovh/ovw/ovl` 은 선사가 EDI DIM(코드 5·6 길이 / 7·8 폭 / 9·13 높이)에 «적어 보낸» 값일 뿐이고, 그것이 없으면 실치수를 갖고 있으면서도 «초과 치수 기재 없음» 이라고만 했다. 규격 상수도 저장소에 하나도 없었다. 실측 OBWH 2721E — CICU0002041 이 8,000×3,600×3,800mm 인데 선사가 DIM 을 안 적었다는 이유로 «기재 없음». ⇒ `overDims` 신설. 판정은 **검수사 문장 그대로** — «FR의 기본 폭 길이 높이, 스프레더로 찍을때 와 선적시 옆에 컨테이너를 실을때 걸리거나 하면 초과». 높이는 화물 꼭대기가 컨 상단을 넘는가(FR 은 데크 위에 실리므로 데크 높이를 더해서 잰다 — **스프레더 걸림**), 폭은 컨 폭을 넘는가(**옆 컨 걸림**), 길이는 컨 길이를 넘는가(**앞뒤 컨 걸림**). 상수 — 폭 2,438 · 높이 2,591 · 길이 20ft 6,058 / 40ft 12,192 / 45ft 13,716 · FR 데크 20ft 370 · 40ft 648(mm). ⚠ 데크 높이는 형식마다 다르다 — 화면이 계산식을 같이 보여주니 현장 숫자가 다르면 바로 잡을 수 있다(조용히 단정 금지). **쓰는 자리 세 곳 전부** 반영 — 채팅 답(nlSearch) · 검수 리스트 비고 · 별첨(inspectionList ×2). 인쇄물은 선사 신고분과 단위를 맞춰 cm. ✅ 검증 8건 — OBWH 두 대(H+1057 / H+1857·W+1162) · 연태 2719E(H+517) · 1.8 실측 HDMU7202406(H+179) · 규격 안 1건 · 길이 초과 2건 · 치수 없음 1건. 문구도 고쳤다 — «초과 치수 기재 없음» → **«치수 자료 없음»**(검수사 «치수 다 보여줘야 하는데»), 선사 신고분은 «선사 신고» 라고 밝힌다. 매뉴얼 FR 항목 동시 갱신.  **RZOR PORT-MIS 매칭 수리** (검수사 «이 문제도 해결한 거 같은데 또 나오고»). 여러 번 고쳤는데 또 나온 이유가 있었다 — 매칭이 `getShipBayDictData` 에 얹혀 있는데 그 함수는 «베이 **구조**»를 주는 함수라 **구조 없는 항목(껍데기)을 일부러 버린다**(`_fb[_key].bayDef` 없으면 제외). RZOR(RIZHAO ORIENT)는 **LOLO 라 베이 매트릭스가 애초에 없다** — 카고플랜을 덱플랜에서 받는 배다. 그래서 사전에 콜사인 HOAG 가 멀쩡히 있는데도 조회가 **언제나 null**, 카드는 매번 «콜사인: 없음». 실측 2026-08-23: 사전 39척 중 껍데기는 **RZOR 한 척**, 그 한 척이 계속 안 잡히던 바로 그 배다. PORT-MIS 에는 키 `HOAG` 로 들어와 있었다 — **콜사인만 있으면 붙는 자리였다.** ⇒ `getShipIdentity(imo, code)` 신설 — 구조 없이 **신원(선박명·콜사인·IMO)만** 돌려준다. 베이 그림·카고플랜은 종전 함수를 그대로 쓴다. ⚠ 계열 대체(series-substitute)는 **하지 않는다** — 남의 배 콜사인을 빌려 오면 PORT-MIS 가 엉뚱한 배에 붙는다(V7.26 에서 겪었다). ✅ 파급 검증 — 전 항차 17개 전후 대조: RZOR 만 «매칭 X → O (RIZHAO ORIENT · ETA 08-24 09:00 · 동부두 14번선석)», **나머지 16항차 변화 0**.
+export const APP_VERSION = 'TallyOne 2.26';   // **X-RAY 세관봉인 확인서 — 조회 화면 + A4 양식.** 검수사 시안 «Xray-Integrated-Dashboard-Print» 대응. ①**PORT-MIS 파서에 MRN(14열 「MRN 번호」)** — 주석엔 V5.82 부터 «14:MRN» 이라 적혀 있었는데 열 지도에 없어 여태 안 읽었다. **끝 글자 I=입항 · E=출항**(실측 9척 예외 없음) — 양하 서류는 I, 선적 서류는 E. ②**같은 콜사인의 입항·출항 두 줄이 서로를 덮던 것 수리** — 실측 OCEAN BLUE WHALE(D5MO4)이 두 줄로 온다(입항 26YTFF2721I · 출항 26YTFF2722E). 그 하나 때문에 «양하 서류에 출항 MRN» 과 «KMTC OSAKA 차항지가 인천인데 앱엔 광양»(2.24 사건)이 같이 났다. ⛔ 키는 못 바꾼다(`port_mis_data[콜사인]` 읽는 곳 8파일 30여 곳, 전수 확인) → **레코드 안에서 나눈다**(mrnIn·mrnOut·nextPortOut). 최상위 필드 무변경 = 하위호환. ③**「평택 다음」 1순위를 PORT-MIS 차항지로** — 화물 추정보다 실측이 낫다. 2.24 의 화물 판정은 2순위로 내렸다. ④**한글 항명을 정본에 넣었다** — PORT-MIS 는 국내항을 한글로 준다(인천·광양). `normPortCode('인천')` 이 그대로였고 그래서 평택 판정도 못 했다. ⚠ `nlSearch.PORT_KR_TO_CODE` 에 같은 표가 또 있다(청도·연태 코드까지 다르다) — 합치는 것은 별도 판. ⑤**세관 파일 파서 6열 확장** — 실측 64개 358행, 헤더 64개 전부 동일(`컨테이너번호|선사SEAL NO|화물구분|규격|도착 예정지|부착 세관봉인번호`). 화물구분 4종(X-RAY 252·Sea & Air 84·반입후검사 14·**즉시검사 8** — 시안엔 즉시검사가 없었다). ★ 같이 잡힌 버그 — 전수 스캔이 **선사 씰을 컨번호로 잡고 있었다**(`SITZ611581` 등 SITC 씰은 4번째가 Z 라 ISO 게이트를 통과). 배에 있지도 않은 **8대가 X-RAY 대상**이었다(64 중 2항차). 헤더가 있으면 열로 뽑아 없앴다 — 악화 0 · 개선 8. ⚠ 검수사 확정 «화물구분은 그대로 두면 됩니다. XRAY조회시+출력시에만» → `containers` 는 종전 형태 유지, 앱 전반 X-RAY 표시 판정 **무변경**. ⑥**`sortByDischargePlan` 신설** — 검수사 정의 «베이별순 + 우선양하순», «데크 젤 높은곳이 먼저이고 홀드 젤 낮은곳이 젤 나중». 실측 OBWH 263대 확인. ⑦**X-RAY 탭 신설**(양하 전용, ⋯더보기) — 통계 5장·화물구분 필터·검색·목록, 그리고 **A4 가로 양식**: 머리 «선박명 + XRAY리스트» + MRN, 8열, **값이 없는 칸은 손글씨용 밑줄**(검수사 «앱을 사용하지 않고 양식만 출력할때는 수동으로 봉인자를 입력»), 하한 8pt·20대/장·**균등 분할**(40대=20+20)·쪽마다 머리와 N/M장. 봉인자는 따로 적은 것이 없으면 **그 컨을 완료한 검수자**를 쓴다(갱별로 검수자가 정해지므로 그것이 곧 봉인자다). ✅ 검증 — 세관 64파일 전수(헤더 64/64·containers==rows 64/64) · PORT-MIS 9척 그룹핑 · 쪽 나눔 산수 9케이스 · X-RAY 탭 jsdom 연막검사(정렬·4종·미입력) 를 build.sh 에 걸었다.  **RZOR PORT-MIS 매칭 수리** (검수사 «이 문제도 해결한 거 같은데 또 나오고»). 여러 번 고쳤는데 또 나온 이유가 있었다 — 매칭이 `getShipBayDictData` 에 얹혀 있는데 그 함수는 «베이 **구조**»를 주는 함수라 **구조 없는 항목(껍데기)을 일부러 버린다**(`_fb[_key].bayDef` 없으면 제외). RZOR(RIZHAO ORIENT)는 **LOLO 라 베이 매트릭스가 애초에 없다** — 카고플랜을 덱플랜에서 받는 배다. 그래서 사전에 콜사인 HOAG 가 멀쩡히 있는데도 조회가 **언제나 null**, 카드는 매번 «콜사인: 없음». 실측 2026-08-23: 사전 39척 중 껍데기는 **RZOR 한 척**, 그 한 척이 계속 안 잡히던 바로 그 배다. PORT-MIS 에는 키 `HOAG` 로 들어와 있었다 — **콜사인만 있으면 붙는 자리였다.** ⇒ `getShipIdentity(imo, code)` 신설 — 구조 없이 **신원(선박명·콜사인·IMO)만** 돌려준다. 베이 그림·카고플랜은 종전 함수를 그대로 쓴다. ⚠ 계열 대체(series-substitute)는 **하지 않는다** — 남의 배 콜사인을 빌려 오면 PORT-MIS 가 엉뚱한 배에 붙는다(V7.26 에서 겪었다). ✅ 파급 검증 — 전 항차 17개 전후 대조: RZOR 만 «매칭 X → O (RIZHAO ORIENT · ETA 08-24 09:00 · 동부두 14번선석)», **나머지 16항차 변화 0**.
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -2589,9 +2589,61 @@ export async function parseXrayList(arrayBuffer) {
       }
     }
   }
+  // ★ TallyOne 2.26: **6열을 전부 읽는다.** (검수사 시안 «X-RAY 리스트» 대응)
+  //   실측 2026-08-24 — 세관 파일 **64개 358행** 전수 확인. 헤더가 64개 한 글자도 안 틀리고 같다.
+  //     `컨테이너번호 | 선사SEAL NO | 화물구분 | 규격 | 도착 예정지 | 부착 세관봉인번호`
+  //   화물구분은 **4종** — X-RAY 252 · Sea & Air 84 · 반입후검사 14 · 즉시검사 8.
+  //   종전엔 컨번호만 뽑아 **파일에 있는 건 전부 X-RAY 대상**이 됐다(섞인 항차가 64 중 15개).
+  //   ⚠ 검수사 확정 — *«화물구분은 그대로 두면 됩니다. XRAY조회시+출력시에만 구분 하면 됩니다»*
+  //     → `containers` 는 **종전 그대로** 돌려준다(앱 전반의 X-RAY 표시 판정 무변경, 파급 0).
+  //       새로 붙는 `rows` 는 X-RAY 조회·출력 화면에서만 쓴다.
+  //   ⚠ 확장자는 `.xls` 인데 내용은 xlsx(zip) 다 — SheetJS 는 내용으로 읽으니 문제 없다.
+  //     (파이썬 openpyxl 은 *확장자만 보고* 거부한다. 다음 클로드가 헛수고하지 않게 적어 둔다.)
+  const rows = [];
+  try {
+    for (const sheetName of wb.SheetNames) {
+      const ws = fixSheetRange(wb.Sheets[sheetName], XLSX);
+      const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+      let col = null;
+      for (let i = 0; i < Math.min(8, grid.length); i++) {
+        const r = (grid[i] || []).map((v) => String(v || '').trim());
+        const idx = {
+          cn:    r.findIndex((c) => /컨테이너\s*번호/.test(c)),
+          seal:  r.findIndex((c) => /선사\s*SEAL|SEAL\s*NO/i.test(c)),
+          kind:  r.findIndex((c) => /화물\s*구분/.test(c)),
+          iso:   r.findIndex((c) => /^규격$/.test(c)),
+          dest:  r.findIndex((c) => /도착\s*예정지/.test(c)),
+          cSeal: r.findIndex((c) => /부착.*세관봉인|세관봉인번호/.test(c)),
+        };
+        if (idx.cn >= 0 && idx.kind >= 0) { col = { ...idx, _hdr: i }; break; }
+      }
+      if (!col) continue;                       // 헤더가 없는 옛 형식 — 위 전수 스캔이 이미 컨번호를 담았다
+      for (let i = col._hdr + 1; i < grid.length; i++) {
+        const r = grid[i] || [];
+        const g = (k) => (col[k] >= 0 && col[k] < r.length ? String(r[col[k]] || '').trim() : '');
+        const cn = g('cn').replace(/[\s-]/g, '').toUpperCase();
+        if (!/^[A-Z]{3}[UJZ]\d{6,7}$/.test(cn)) continue;   // M4.1 과 같은 ISO 6346 게이트
+        rows.push({ cn, seal: g('seal'), kind: g('kind'), iso: g('iso').toUpperCase(),
+                    dest: g('dest'), cSeal: g('cSeal') });
+      }
+    }
+  } catch (e) {
+    console.warn('[parseXrayList] 6열 읽기 실패 — 컨번호만 씁니다:', e);
+  }
+  // ★ 2.26 — **헤더를 찾았으면 컨번호도 «컨테이너번호 열»에서만 뽑는다.**
+  //   전수 스캔은 시트의 모든 셀을 훑어 ISO 6346 패턴을 찾는다. 그런데 **선사 씰 번호가
+  //   그 패턴을 그대로 맞는 경우가 있다** — 실측 STSE 2657E·2661E: `SITZ611581` `SITZ953592` 등
+  //   SITC 씰은 네 번째 글자가 **Z** 라 게이트(U/J/Z)를 통과한다.
+  //   그래서 **배에 있지도 않은 컨 8대가 X-RAY 대상**으로 잡혀 있었다(64개 중 2항차).
+  //   M4.1 주석이 «봉인번호(KRPN0001234)와 일련번호 차단» 이라 적었지만 그 규칙으로는 못 막는다.
+  //   ⇒ 헤더가 있으면 열로 뽑고(정확), 없으면 종전 전수 스캔으로 폴백한다(옛 형식 보호).
+  //   ✅ 실측 64개 — 62개는 결과 동일, 2개에서 씰 8건이 빠진다(악화 0 · 개선 8).
+  const cns = rows.length ? Array.from(new Set(rows.map((r) => r.cn))) : Array.from(containers);
   return {
-    containers: Array.from(containers),
+    containers: cns,
+    rows,                            // 2.26: X-RAY 조회·출력 전용. 없으면 빈 배열.
     _matchCount: allMatches.length,  // 진단용: 잘못된 매칭 추적
+    _byHeader: rows.length > 0,      // 진단용: 열로 뽑았는가(정확) vs 전수 스캔(폴백)
   };
 }
 
@@ -3042,6 +3094,9 @@ export async function parsePortMisExcel(arrayBuffer) {
         berthRaw:  row.findIndex(c => /계선장소(?![부두번호코드])/.test(c)),  // "동부두 7번선석" (M6.11: "계선장소부두/번호/코드" 제외, "계선장소"/"계선장소(...)" 매칭)
         nextPort:  row.findIndex(c => /차항지/.test(c)),
         usage:     row.findIndex(c => /선박용도/.test(c)),
+        //  TallyOne 2.26: MRN(적하목록관리번호). 헤더 실측은 «MRN 번호»(14열, 2026-08-24 download.xlsx).
+        //    주석에는 V5.82 때부터 «14:MRN» 이라 적혀 있었는데 **열 지도에 없어 여태 안 읽었다.**
+        mrn:       row.findIndex(c => /MRN|화물관리번호/i.test(c)),
       };
       if (idx.callsign >= 0 && idx.vessel >= 0 && idx.berthRaw >= 0) {
         headerRow = i;
@@ -3114,6 +3169,8 @@ export async function parsePortMisExcel(arrayBuffer) {
         pier: pier,                       // PCTC | PNCT | null
         nextPort: colMap.nextPort >= 0 ? String(row[colMap.nextPort] || '').trim() : '',
         vesselType: colMap.usage >= 0 ? String(row[colMap.usage] || '').trim() : '',
+        //  2.26: MRN — 끝 글자가 I=입항 · E=출항(실측 9척 예외 없음). 양하 서류는 I, 선적 서류는 E.
+        mrn: colMap.mrn >= 0 ? String(row[colMap.mrn] || '').trim().toUpperCase() : '',
       });
     }
   }
@@ -3363,6 +3420,28 @@ export function overDims(c) {
   }
   //  short 는 cm — 선사 신고분(ovh/ovw/ovl)이 cm 라 인쇄물에서 단위가 섞이지 않게 맞춘다.
   return { over: parts.length > 0, parts, short, calc, ft, deck };
+}
+
+/** 양하 계획 순서로 줄 세운다 — **베이별순 + 우선양하순** (검수사 확정 2026-08-24).
+ *
+ *  > *«앱의 양하시 자동과 수동이 있습니다. 거기서 **자동가이드가 양하하는 순서**를 따릅니다. 베이별로»*
+ *  > *«10번 베이에 10개가 있는데 그 순서는 **데크 젤 높은곳이 먼저**이고 **홀드 젤 낮은곳이 젤 나중**»*
+ *
+ *  위에서부터 내리는 순서 그대로다 — 베이를 훑으며 데크를 위에서 아래로 걷어내고, 그다음 홀드를 위에서 아래로.
+ *  ⚠ `guidedQueue.buildGuidedQueue` 와 목적이 다르다 — 그쪽은 «지금 집을 한 대»를 고르느라
+ *    트윈·갈림·접안방향까지 본다. 이쪽은 **종이에 줄 세우는 순서**다. 둘을 섞지 않는다.
+ *  실측 OBWH 2721E 263대 — 베이2 데크 84→82 → 홀드 08→06 순으로 나온다. */
+export function sortByDischargePlan(list) {
+  const n = (v) => { const x = parseInt(v, 10); return Number.isFinite(x) ? x : 0; };
+  return [...(list || [])].sort((a, b) => {
+    const ab = n(a.bay), bb = n(b.bay);
+    if (ab !== bb) return ab - bb;                       // 베이 오름차순
+    const at = n(a.tier), bt = n(b.tier);
+    const ad = at >= 80 ? 0 : 1, bd = bt >= 80 ? 0 : 1;  // 데크(0) 먼저, 홀드(1) 나중
+    if (ad !== bd) return ad - bd;
+    if (at !== bt) return bt - at;                       // 같은 구역이면 **높은 단부터**
+    return String(a.row || '').localeCompare(String(b.row || ''));
+  });
 }
 
 export function isValidCn(cn) {
@@ -4121,6 +4200,19 @@ const _PORT_ALIAS = {
   XINGANG: 'CNTXG', SHANGHAI: 'CNSHA', SHEKOU: 'CNSHK', XIAMEN: 'CNXMN', YANTAI: 'CNYNT',
   LIANYUNGANG: 'CNLYG', RIZHAO: 'CNRZH', NINGBO: 'CNNGB', INCHEON: 'KRINC', PYEONGTAEK: 'KRPTK',
   BUSAN: 'KRPUS', GWANGYANG: 'KRKAN', HAIPHONG: 'VNHPH', SAIGON: 'VNSGN', BANGKOK: 'THBKK',
+  //  ★ 2.26: **PORT-MIS 는 국내항을 한글로 준다**(인천·광양·부산). 외국항만 영문이다.
+  //    실측 2026-08-24 download.xlsx 차항지 — «인천» · «NANTONG» · «YANTAI APT» · «HAIPHONG».
+  //    한글이 없어 `normPortCode('인천')` 이 «인천» 그대로였고, 그래서 평택 판정도 못 했다.
+  //    ⚠ 같은 표가 `nlSearch.js PORT_KR_TO_CODE` 에도 있다(검색어 해석용) — **두 벌이다.**
+  //      거기는 청도=CNQDG · 연태=CNYAT 로 여기(CNTAO · CNYNT)와 코드도 다르다. 합치는 것은 별도 판.
+  '평택': 'KRPTK', '인천': 'KRINC', '부산': 'KRPUS', '광양': 'KRKAN', '울산': 'KRUSN',
+  '여수': 'KRYOS', '군산': 'KRKUV', '목포': 'KRMOK', '마산': 'KRMAS', '포항': 'KRKPO',
+  '대산': 'KRTSN', '동해': 'KRDHA', '평택항': 'KRPTK', '인천항': 'KRINC',
+  '대련': 'CNDLC', '청도': 'CNTAO', '위해': 'CNWEI', '상해': 'CNSHA', '천진': 'CNTSN',
+  '연태': 'CNYNT', '연운항': 'CNLYG', '남통': 'CNNTG', '태창': 'CNTAG', '일조': 'CNRZH',
+  '홍콩': 'HKHKG', '셰코우': 'CNSHK',
+  //  PORT-MIS 표기 변형 — 공백이 지워진 뒤의 모양으로 적는다(normPortCode 가 먼저 지운다).
+  YANTAIAPT: 'CNYNT', SHEKOUPT: 'CNSHK', TOYOHASHI: 'JPTYH', GLADSTONE: 'AUGLT',
 };
 // ── 2.10: 날짜 헬퍼 공용 (HomePage 에 있던 것을 승격 — LoginPage 도 쓴다) ──
 const _two2 = (n) => String(n).padStart(2, '0');
@@ -4218,7 +4310,21 @@ export function voyageLegOf(voyage) {
  *    sure=false 는 «2등과 차이가 뚜렷하지 않음» — 화면은 단정하지 말고 둘 다 보여야 한다
  *    (XTPG 537W 실측 태창 145 대 남통 107 — 이런 배는 화물로 못 가린다).
  *  ⛔ 시프팅 판정(portsBeforePtk)은 건드리지 않는다 — 그쪽은 계속 항로 사전을 쓴다. */
-export function nextPortAfterPtk(voyage) {
+export function nextPortAfterPtk(voyage, pm) {
+  /* ★ 2.26 — **PORT-MIS 차항지가 1순위다.** 검수사 신고로 시작해 실물로 확인됐다.
+     실측 2026-08-24 PORT-MIS 엑셀 18열 «차항지» — KMTC OSAKA 이번 기항은 **인천**이다.
+     화물로 추정할 필요가 없다. 다만 **입항·출항 두 줄이 서로를 덮던 것**을 같은 판에서
+     고친 뒤라야 믿을 수 있다(fbSavePortMisBatch 2.26 — `nextPortOut` 이 그 결과다).
+     차항지는 **출항 신고**에 붙는다(이 항을 떠나 어디로 가나) — 그래서 nextPortOut 이 먼저다. */
+  const _pmNext = normPortCode((pm && (pm.nextPortOut || pm.nextPort)) || '');
+  if (_pmNext && !isPyeongtaekPort(_pmNext)) {
+    return { port: _pmNext, basis: 'portmis', cargo: '', cnt: 0, second: '', secondCnt: 0,
+             hdr: '', src: 'pm', hdrDisagree: false };
+  }
+  return _nextPortByCargo(voyage);
+}
+
+function _nextPortByCargo(voyage) {
   const pick = (sec) => { try { return ediMapFromRaw(sec); } catch (e) { return null; } };
   //  평택 출항본이 1순위 — 평택 선적분까지 반영된 «떠날 때» 모습이다.
   //  없으면 도착본으로도 같은 답을 낼 수 있다(평택에서 안 내리는 화물 = 배에 남는 화물).
