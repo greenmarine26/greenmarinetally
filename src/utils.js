@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.09-01';   // 검수사 교정 «우리 EDI는 인천에서 받아쓴 EDI라 그렇습니다. 그럴때는 선적 EDI를 보면 보충이 될것입니다» «홍콩 인천 평택 이 될수도 있씁니다» «전항구 어디인지 알고 다음 항구가 어딘지 알면 연결이 될것입니다» — ★내 오독 정정: 터미널 항로표는 **순환 목록**인데 그것을 직선으로 읽고 «표가 실측과 어긋난다»고 적었다. 양하 EDI 는 직전 기항 한 항만 말하고 평택 뒤는 선적 EDI 가 말한다. voyageLegOf(voyage) 신설 — 전 항구(양하 EDI LOC+5) → 평택 → 다음 항구(선적 EDI LOC+61 ∨ 선적분 POD 최다). 펼친 홈 카드에 «이번 항차 KRINC → 평택 → VNHPH · EDI 실측» 한 줄. 항로표가 없는 배(PLS·PTLY·YTFF)에서도 이 줄은 뜬다. 실측 대조 — ATPR PDX4 는 표·실측이 CNWEI→평택 일치, MCSN IA8 은 다음 기항 CNDLC 일치.
+export const APP_VERSION = 'TallyOne 2.09-02';   // 검수사 확정 «항로 전체를 보여주고 **평택 다음 항구에 다른색**을 표기 하면 됩니다» — 항로표는 순환이라 (평택 자리+1) mod 길이가 다음 기항이다. 호박색 + «← 평택 다음». 이번 항차 EDI 가 없어도 이 색 하나로 «어디로 가는 배인가»가 보인다 (검수사 지적 «이건 다음 기항지를 모를때 찾는 방법인데 **기존의 항차 EDI를 봤다면 바로 알수 있는데** 안보셨나요?» — 리스트를 뜯을 일이 아니었다). 동봉: normPortCode(3자리 약어·풀네임·부두코드 정규화 — 원본 리스트가 CNNTG/NANTONG/NTG/CN NTG 로 섞여 온다) + voyageLegOf 가 EDI 없으면 리스트(records)까지 본다(검수사 «리스트에 컨테이너 상세 목록은 안보시고?»).
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -4005,30 +4005,67 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
 //   실측(2026-08-23) — ATPR PDX4 는 실측·표가 CNWEI→평택으로 **일치**, MCSN IA8 은 다음 기항 CNDLC 로 **일치**.
 // ══════════════════════════════════════════════════════
 
+/** 항구 표기 정규화 — 리스트 원본은 3자리 약어·풀네임·부두코드가 섞여 온다 (검수사 확정 2026-08-23).
+ *  실측(XTPG 537W 원본 8종): `CNNTG` · `NANTONG` · `NTG` · `CN NTG` 가 전부 남통,
+ *  `CNTAG` · `TAICANG` · `TAICANG, CHINA` 가 전부 태창, `PTK` · `PTK02` 가 평택.
+ *  ⛔ 정규화 못 하면 같은 항구가 여러 값으로 세어져 «다음 기항»이 흩어진다. */
+const _PORT_ALIAS = {
+  PTK: 'KRPTK', INC: 'KRINC', PUS: 'KRPUS', KAN: 'KRKAN', SOS: 'KRSOS', MAS: 'KRMAS', ULS: 'KRUSN',
+  NTG: 'CNNTG', TAG: 'CNTAG', TAO: 'CNTAO', TAC: 'CNTAC', DLC: 'CNDLC', TSN: 'CNTSN', TXG: 'CNTXG',
+  SHA: 'CNSHA', SHK: 'CNSHK', XMN: 'CNXMN', YNT: 'CNYNT', LYG: 'CNLYG', RZH: 'CNRZH', NGB: 'CNNGB',
+  SHD: 'CNSHD', WEI: 'CNWEI', SGN: 'VNSGN', HPH: 'VNHPH', HKG: 'HKHKG', BKK: 'THBKK', LCH: 'THLCH',
+  JKT: 'IDJKT', SUB: 'IDSUB', DVO: 'PHDVO', MNL: 'PHMNL', MIP: 'PHMIP', MNN: 'PHMNN',
+  NANTONG: 'CNNTG', TAICANG: 'CNTAG', QINGDAO: 'CNTAO', DALIAN: 'CNDLC', TIANJIN: 'CNTSN',
+  XINGANG: 'CNTXG', SHANGHAI: 'CNSHA', SHEKOU: 'CNSHK', XIAMEN: 'CNXMN', YANTAI: 'CNYNT',
+  LIANYUNGANG: 'CNLYG', RIZHAO: 'CNRZH', NINGBO: 'CNNGB', INCHEON: 'KRINC', PYEONGTAEK: 'KRPTK',
+  BUSAN: 'KRPUS', GWANGYANG: 'KRKAN', HAIPHONG: 'VNHPH', SAIGON: 'VNSGN', BANGKOK: 'THBKK',
+};
+export function normPortCode(v) {
+  let s = String(v || '').trim().toUpperCase();
+  if (!s) return '';
+  s = s.split(',')[0].trim();                       // 'TAICANG, CHINA' → 'TAICANG'
+  const c = s.replace(/[\s.]+/g, '');
+  if (/^PTK\d*$/.test(c)) return 'KRPTK';           // 부두코드 PTK02
+  if (/^[A-Z]{5}$/.test(c)) return c;
+  if (_PORT_ALIAS[c]) return _PORT_ALIAS[c];
+  return c;
+}
+
+/** 한 섹션에서 항구 필드 최다값 — EDI(raw) 우선, 없으면 **리스트(records)**.
+ *  검수사 확정 2026-08-23: *«리스트에 컨테이너 상세 목록은 안보시고?»* — EDI 가 아직 안 온 항차도
+ *  리스트에는 목적지가 들어 있다(XTPG 537W 실측 — 선적 EDI 없이 리스트 POD 남통 40·태창 29). */
+function _topPortOf(sec, field) {
+  const cnt = {};
+  const add = (v) => {
+    const p = normPortCode(v);
+    if (!p || isPyeongtaekPort(p)) return;
+    cnt[p] = (cnt[p] || 0) + 1;
+  };
+  try {
+    const m = ediMapFromRaw(sec);
+    if (m) for (const c of Object.values(m)) add(c && c[field]);
+  } catch (e) { /* 파싱 실패는 리스트로 넘어간다 */ }
+  if (!Object.keys(cnt).length) {
+    const rc = sec && sec.records;
+    if (rc) for (const r of Object.values(rc)) add(r && r[field]);
+  }
+  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : '';
+}
+
 /** 이번 항차의 구간 — { prev, next }. 없으면 null.
  *  prev = 양하 EDI 출항지(LOC+5) · next = 선적 EDI 다음 기항(LOC+61) ∨ 선적분 목적지 최다(평택 제외). */
 export function voyageLegOf(voyage) {
+  // 전 항구 — 양하 EDI 출항지(직전 한 항)가 1순위, 없으면 «양하분이 실린 곳»(POL) 최다.
   let prev = '';
-  try { prev = ediOriginOf(voyage?.discharge) || ''; } catch (e) { prev = ''; }
+  try { prev = normPortCode(ediOriginOf(voyage?.discharge) || ''); } catch (e) { prev = ''; }
   if (isPyeongtaekPort(prev)) prev = '';        // 평택 출항본이 양하 자리에 들어온 항차 — 앞 항구로 못 쓴다
+  if (!prev) prev = _topPortOf(voyage?.discharge, 'pol');
+  // 다음 항구 — 선적 EDI 다음 기항이 1순위, 없으면 «선적분 목적지»(POD) 최다.
   let next = '';
-  try { next = ediNextPortOf(voyage?.loading) || ''; } catch (e) { next = ''; }
-  if (!next) {
-    try {
-      const m = ediMapFromRaw(voyage?.loading);
-      if (m) {
-        const cnt = {};
-        for (const c of Object.values(m)) {
-          const p = String(c?.pod || '').trim().toUpperCase();
-          if (!p || isPyeongtaekPort(p)) continue;
-          cnt[p] = (cnt[p] || 0) + 1;
-        }
-        const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
-        if (top) next = top[0];
-      }
-    } catch (e) { /* 파싱 실패는 표시만 비운다 — 계산에 영향 없음 */ }
-  }
+  try { next = normPortCode(ediNextPortOf(voyage?.loading) || ''); } catch (e) { next = ''; }
   if (isPyeongtaekPort(next)) next = '';
+  if (!next) next = _topPortOf(voyage?.loading, 'pod');
   return (prev || next) ? { prev, next } : null;
 }
 

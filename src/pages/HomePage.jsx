@@ -1587,19 +1587,29 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               <span className="text-slate-500">항로 </span>
               <span className="font-bold text-cyan-300">{laneRow.lane}</span>
               {laneRow.name ? <span className="text-slate-500"> · {laneRow.name}</span> : null}
-              {showRoute && laneRow.ports.length > 0 && (
-                <div className="mt-0.5 text-[10px] text-slate-400 break-words">
-                  {laneRow.ports.map((pt, i) => (
-                    <span key={`${pt}-${i}`}>
-                      {i > 0 && <span className="text-slate-600"> › </span>}
-                      {isPyeongtaekPort(pt)
-                        ? <span className="text-emerald-300 font-bold">평택</span>
-                        : <span>{pt}</span>}
-                    </span>
-                  ))}
-                  {laneRow.src ? <span className="text-slate-600"> · {laneRow.src}</span> : null}
-                </div>
-              )}
+              {showRoute && laneRow.ports.length > 0 && (() => {
+                // ★ 2.09-02 (검수사 확정 2026-08-23): *«항로 전체를 보여주고 **평택 다음 항구에 다른색**을 표기 하면 됩니다.»*
+                //   항로표는 순환이라 **평택 다음 = (평택 자리 + 1) mod 길이**. 이번 항차 EDI 가 아직 없어도
+                //   이 색 하나로 «어디로 가는 배인가» 가 보인다 — 검수사 지적 *«기존의 항차 EDI를 봤다면 바로 알수 있는데»*.
+                const pi = laneRow.ports.findIndex(p => isPyeongtaekPort(p));
+                const ni = pi >= 0 ? (pi + 1) % laneRow.ports.length : -1;
+                return (
+                  <div className="mt-0.5 text-[10px] text-slate-400 break-words">
+                    {laneRow.ports.map((pt, i) => (
+                      <span key={`${pt}-${i}`}>
+                        {i > 0 && <span className="text-slate-600"> › </span>}
+                        {isPyeongtaekPort(pt)
+                          ? <span className="text-emerald-300 font-bold">평택</span>
+                          : i === ni
+                            ? <span className="text-amber-300 font-bold">{pt}</span>
+                            : <span>{pt}</span>}
+                      </span>
+                    ))}
+                    {ni >= 0 && <span className="text-amber-400/70"> ← 평택 다음</span>}
+                    {laneRow.src ? <span className="text-slate-600"> · {laneRow.src}</span> : null}
+                  </div>
+                );
+              })()}
               {showRoute && laneRow.ports.length === 0 && (
                 <span className="text-amber-400/80"> · 기항 순서 미등록</span>
               )}
