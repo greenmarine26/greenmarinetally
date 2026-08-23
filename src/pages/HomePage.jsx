@@ -4,7 +4,7 @@ import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyag
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel} from '../utils.js';   // 1.77-02: 도선→작업시작 환산
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -1586,11 +1586,21 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               <span className="font-bold text-cyan-300">{laneRow.lane}</span>
               {laneRow.name ? <span className="text-slate-500"> · {laneRow.name}</span> : null}
               {showRoute && laneRow.ports.length > 0 && (() => {
-                // ★ 2.09-02 (검수사 확정 2026-08-23): *«항로 전체를 보여주고 **평택 다음 항구에 다른색**을 표기 하면 됩니다.»*
-                //   항로표는 순환이라 **평택 다음 = (평택 자리 + 1) mod 길이**. 이번 항차 EDI 가 아직 없어도
-                //   이 색 하나로 «어디로 가는 배인가» 가 보인다 — 검수사 지적 *«기존의 항차 EDI를 봤다면 바로 알수 있는데»*.
+                /* ★ 2.24 (검수사 신고 2026-08-23) — «평택 다음»은 **이번 항차 화물이 정본이다.**
+                   검수사: *«KKAK 제가 알기론 인천인듯 한데 앱은 다른곳을 잡습니다»* — 맞았다.
+                   2.09-02 는 항로표에서 «평택 자리 +1»을 집었다. 그런데 KPX 는 **인천이 회항점이라
+                   한 바퀴에 평택을 두 번 기항한다**(올라갈 때 남중국→평택→인천 · 내려올 때 인천→평택→광양).
+                   배열엔 평택이 한 칸뿐이라 방향과 무관하게 언제나 같은 답이 나왔다.
+                   실측 KKAK 2608N — 항로표·PORT-MIS 차항지·EDI 헤더가 **셋 다 광양**인데
+                   배에 남는 화물은 인천 429대다. 셋은 독립 근거가 아니다 — 선사 신고 하나가 세 곳으로 흘러간 것이다.
+                   같은 항차 자료에 «인천» 선적지시서가 따로 온 것이 결정타였다.
+                   ⚠ 화물만 믿어도 안 된다 — MCSN 632N 은 화물 최다가 신강 344 인데 실제 다음은 대련 214 다.
+                     그래서 «2등의 1.5배 이상»일 때만 화물이 헤더를 이긴다(nextPortAfterPtk).
+                   ⚠ 색은 하나만 칠한다 — 못 가리면 종전 항로표 자리를 칠하고 «항로표 기준»이라고 밝힌다. */
+                const nx = nextPortAfterPtk(voyage);
                 const pi = laneRow.ports.findIndex(p => isPyeongtaekPort(p));
-                const ni = pi >= 0 ? (pi + 1) % laneRow.ports.length : -1;
+                const rot = pi >= 0 ? normPortCode(laneRow.ports[(pi + 1) % laneRow.ports.length]) : '';
+                const pick = (nx && nx.port) || rot;
                 return (
                   <div className="mt-0.5 text-[10px] text-slate-400 break-words">
                     {laneRow.ports.map((pt, i) => (
@@ -1598,12 +1608,20 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                         {i > 0 && <span className="text-slate-600"> › </span>}
                         {isPyeongtaekPort(pt)
                           ? <span className="text-emerald-300 font-bold">평택</span>
-                          : i === ni
+                          : (pick && normPortCode(pt) === pick)
                             ? <span className="text-amber-300 font-bold">{pt}</span>
                             : <span>{pt}</span>}
                       </span>
                     ))}
-                    {ni >= 0 && <span className="text-amber-400/70"> ← 평택 다음</span>}
+                    {pick && <span className="text-amber-400/70"> ← 평택 다음</span>}
+                    {/* 근거를 같이 적는다 — 검수사 확정 «화물 최다 + 근거 표기». 조용히 단정하지 않는다. */}
+                    {nx && nx.basis === 'cargo' && (
+                      <span className="text-slate-500"> · 남는 화물 {nx.cnt}대{nx.hdrDisagree ? ` (자료 헤더는 ${nx.hdr})` : ''}</span>
+                    )}
+                    {nx && nx.basis === 'header' && <span className="text-slate-500"> · 자료 헤더</span>}
+                    {(!nx || nx.basis === 'unsure') && (
+                      <span className="text-slate-500"> · 항로표 기준{nx ? ` (화물로는 ${nx.cargo} ${nx.cnt} · ${nx.second} ${nx.secondCnt} — 못 가림)` : ''}</span>
+                    )}
                     {laneRow.src ? <span className="text-slate-600"> · {laneRow.src}</span> : null}
                   </div>
                 );

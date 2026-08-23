@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.23';   // **RZOR PORT-MIS 매칭 수리** (검수사 «이 문제도 해결한 거 같은데 또 나오고»). 여러 번 고쳤는데 또 나온 이유가 있었다 — 매칭이 `getShipBayDictData` 에 얹혀 있는데 그 함수는 «베이 **구조**»를 주는 함수라 **구조 없는 항목(껍데기)을 일부러 버린다**(`_fb[_key].bayDef` 없으면 제외). RZOR(RIZHAO ORIENT)는 **LOLO 라 베이 매트릭스가 애초에 없다** — 카고플랜을 덱플랜에서 받는 배다. 그래서 사전에 콜사인 HOAG 가 멀쩡히 있는데도 조회가 **언제나 null**, 카드는 매번 «콜사인: 없음». 실측 2026-08-23: 사전 39척 중 껍데기는 **RZOR 한 척**, 그 한 척이 계속 안 잡히던 바로 그 배다. PORT-MIS 에는 키 `HOAG` 로 들어와 있었다 — **콜사인만 있으면 붙는 자리였다.** ⇒ `getShipIdentity(imo, code)` 신설 — 구조 없이 **신원(선박명·콜사인·IMO)만** 돌려준다. 베이 그림·카고플랜은 종전 함수를 그대로 쓴다. ⚠ 계열 대체(series-substitute)는 **하지 않는다** — 남의 배 콜사인을 빌려 오면 PORT-MIS 가 엉뚱한 배에 붙는다(V7.26 에서 겪었다). ✅ 파급 검증 — 전 항차 17개 전후 대조: RZOR 만 «매칭 X → O (RIZHAO ORIENT · ETA 08-24 09:00 · 동부두 14번선석)», **나머지 16항차 변화 0**.
+export const APP_VERSION = 'TallyOne 2.24';   // **«평택 다음 항»을 항로표 추측이 아니라 이번 항차 화물로 잡는다.** 검수사 «KKAK 제가 알기론 인천인듯 한데 앱은 다른곳을 잡습니다» — 맞았다. 2.09-02 는 항로표에서 «평택 자리 +1»을 집었는데, **KPX 는 인천이 회항점이라 한 바퀴에 평택을 두 번 기항한다** (올라갈 때 남중국→평택→인천 · 내려올 때 인천→평택→광양→부산). 배열엔 평택이 한 칸뿐이라 방향과 무관하게 언제나 같은 답이 나왔다. 실측 KKAK 2608N — **항로표·PORT-MIS 차항지·EDI 헤더 LOC+61 이 셋 다 «광양»**인데 평택 출항본(794대)에 남는 화물은 **인천 429** · 부산 136 · 광양 94 다. 셋은 독립 근거가 아니다 — 선사 신고 하나가 세 곳으로 흘러간 것이다. 결정타는 같은 항차 자료에 **«인천» 선적지시서**(KKAK2609SKRINC SI.edi)가 따로 온 것 — 그 인천 출항본에 남는 화물이 광양 270·부산 174 라 순서는 평택→인천→광양→부산이 확실하다. ⇒ `nextPortAfterPtk` 신설 — 평택 출항본(없으면 도착본)에서 배에 남는 화물 목적지 최다를 다음 항으로 본다. ⚠ **화물만 믿어도 안 된다** — MCSN 632N 은 화물 최다가 신강 344 인데 실제 다음은 **대련 214(3등)** 다. 그래서 «2등의 1.5배 이상»일 때만 화물이 헤더를 이기고, 안 뚜렷하면 헤더를, 헤더도 없으면 종전 항로표를 쓴다. 홈 카드는 고른 근거를 같이 적는다(검수사 확정 «화물 최다 + 근거 표기») — «남는 화물 429대 (자료 헤더는 KRKAN)» 처럼. ✅ 검증 KKAK 인천 ✓ · MCSN 대련 ✓ · XTPG 단정 안 함 ✓. ⛔ 시프팅 판정(portsBeforePtk)은 안 건드렸다 — 그쪽은 계속 항로 사전을 쓴다.  · 같은 판에 **콘앱 시프팅 정본을 번들이 내보낸다** — `coneCargoPlan.entry.jsx` 가 `computeShiftingMap`·`loadEdiIsDeparture` 를 노출한다. 검수앱 동작은 불변이고, 버전을 올려야 `build.sh` 가 `__APPV`(콘앱 번들 캐시키)를 동기화해 폰이 새 번들을 받는다. 내력은 `__CONEV` 2.1-01 참조.  **RZOR PORT-MIS 매칭 수리** (검수사 «이 문제도 해결한 거 같은데 또 나오고»). 여러 번 고쳤는데 또 나온 이유가 있었다 — 매칭이 `getShipBayDictData` 에 얹혀 있는데 그 함수는 «베이 **구조**»를 주는 함수라 **구조 없는 항목(껍데기)을 일부러 버린다**(`_fb[_key].bayDef` 없으면 제외). RZOR(RIZHAO ORIENT)는 **LOLO 라 베이 매트릭스가 애초에 없다** — 카고플랜을 덱플랜에서 받는 배다. 그래서 사전에 콜사인 HOAG 가 멀쩡히 있는데도 조회가 **언제나 null**, 카드는 매번 «콜사인: 없음». 실측 2026-08-23: 사전 39척 중 껍데기는 **RZOR 한 척**, 그 한 척이 계속 안 잡히던 바로 그 배다. PORT-MIS 에는 키 `HOAG` 로 들어와 있었다 — **콜사인만 있으면 붙는 자리였다.** ⇒ `getShipIdentity(imo, code)` 신설 — 구조 없이 **신원(선박명·콜사인·IMO)만** 돌려준다. 베이 그림·카고플랜은 종전 함수를 그대로 쓴다. ⚠ 계열 대체(series-substitute)는 **하지 않는다** — 남의 배 콜사인을 빌려 오면 PORT-MIS 가 엉뚱한 배에 붙는다(V7.26 에서 겪었다). ✅ 파급 검증 — 전 항차 17개 전후 대조: RZOR 만 «매칭 X → O (RIZHAO ORIENT · ETA 08-24 09:00 · 동부두 14번선석)», **나머지 16항차 변화 0**.
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -4129,6 +4129,59 @@ export function voyageLegOf(voyage) {
   if (isPyeongtaekPort(next)) next = '';
   if (!next) next = _topPortOf(voyage?.loading, 'pod');
   return (prev || next) ? { prev, next } : null;
+}
+
+/** 이번 항차의 «평택 다음 항» — **배에 남는 화물이 정본이다.** (검수사 확정 2026-08-23)
+ *
+ *  검수사 신고: *«KKAK 제가 알기론 인천인듯 한데 앱은 다른곳을 잡습니다»* — 맞았다.
+ *  실측 KKAK 2608N 평택 출항본(794대) 안에서 **헤더와 화물이 서로 다른 말을 한다.**
+ *    `LOC+61`(다음 기항 헤더) = KRKAN 광양 · 배에 남는 화물 = **인천 429** · 부산 136 · 광양 94
+ *  인천행 429대를 싣고 광양으로 갈 수는 없다. 같은 항차 자료에 `KKAK2609SKRINC SI.edi`
+ *  (**인천** 선적지시서)가 따로 와 있고 그 인천 출항본에 남는 화물이 광양 270·부산 174 다 —
+ *  순서는 평택 → 인천 → 광양 → 부산이 확실하다.
+ *
+ *  ⚠ 종전 홈 카드는 항로표에서 «평택 자리 +1»을 집었다. **KPX 는 인천이 회항점이라 한 바퀴에
+ *    평택을 두 번 기항한다**(올라갈 때 남중국→평택→인천 · 내려올 때 인천→평택→광양→부산).
+ *    배열엔 평택이 한 칸뿐이라 방향과 무관하게 언제나 같은 답이 나왔다.
+ *    실측 KKAK 네 항차가 방향이 번갈아 나타난다 — 2607N·2608S 는 인천발, 2608N·2609S 는 남중국발.
+ *  ⚠ 헤더(LOC+61)·PORT-MIS 차항지·항로표가 **셋 다 광양**이었다. 선사 신고가 그대로 흘러간 것이라
+ *    서로 독립된 근거가 아니다. 화물만이 다른 말을 했고 그쪽이 맞았다.
+ *
+ *  반환 { port, cnt, second, secondCnt, sure, hdr, src }.
+ *    sure=false 는 «2등과 차이가 뚜렷하지 않음» — 화면은 단정하지 말고 둘 다 보여야 한다
+ *    (XTPG 537W 실측 태창 145 대 남통 107 — 이런 배는 화물로 못 가린다).
+ *  ⛔ 시프팅 판정(portsBeforePtk)은 건드리지 않는다 — 그쪽은 계속 항로 사전을 쓴다. */
+export function nextPortAfterPtk(voyage) {
+  const pick = (sec) => { try { return ediMapFromRaw(sec); } catch (e) { return null; } };
+  //  평택 출항본이 1순위 — 평택 선적분까지 반영된 «떠날 때» 모습이다.
+  //  없으면 도착본으로도 같은 답을 낼 수 있다(평택에서 안 내리는 화물 = 배에 남는 화물).
+  let m = pick(voyage?.loading), src = 'load';
+  if (!m) { m = pick(voyage?.discharge); src = 'disch'; }
+  if (!m) return null;
+  const cnt = {};
+  for (const c of Object.values(m)) {
+    const p = normPortCode(c && c.pod);
+    if (!p || isPyeongtaekPort(p)) continue;
+    cnt[p] = (cnt[p] || 0) + 1;
+  }
+  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]);
+  if (!top.length) return null;
+  let hdr = '';
+  try { hdr = normPortCode(ediNextPortOf(voyage?.loading) || ''); } catch (e) { hdr = ''; }
+  const [cargo, n] = top[0];
+  const [second, n2] = top[1] || ['', 0];
+  //  «뚜렷한가» = 2등의 1.5배 이상. 이 문턱이 규칙의 전부다 — 실측으로 정했다.
+  //    KKAK 2608N 인천 429 : 부산 136 → 뚜렷(3.2배). 화물이 헤더를 이긴다 → 인천 ✓
+  //    MCSN 632N 신강 344 : 청도 267 → 안 뚜렷(1.29배). 헤더 CNDLC(대련)를 쓴다 ✓
+  //      ⚠ 이 배는 **화물 최다가 틀렸다** — 대련은 214대로 3등인데 그것이 다음 항이다.
+  //        화물만 믿었으면 신강이라 답했을 것이다. 문턱이 그것을 막는다.
+  //    XTPG 537E 태창 145 : 남통 107 → 안 뚜렷, 헤더도 없음 → 단정하지 않고 둘 다 보인다 ✓
+  const sure = !second || n >= n2 * 1.5;
+  const basis = sure ? 'cargo' : (hdr ? 'header' : 'unsure');
+  const port = basis === 'cargo' ? cargo : (basis === 'header' ? hdr : '');
+  return { port, basis, cargo, cnt: n, second, secondCnt: n2, hdr, src,
+           //  화물이 헤더를 이긴 경우 — 화면이 «자료 헤더는 다르게 적혀 있다»를 말할 수 있게.
+           hdrDisagree: !!(hdr && port && hdr !== port) };
 }
 
 export function ediMapFromRaw(sec) {
