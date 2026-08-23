@@ -146,15 +146,17 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     .filter(i => i && i.name && !isHiddenStaff(i.name))
     .sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
 
-  // ── 2.12 (검수사 지적 2026-08-23): *«폰용은 너무길어서 스크롤이 필요 합니다. 이유는 로그인화면에
-  //   **사용중인 사람만 보여야 하는데 사용했던 사람들이 보여서**입니다.»*
-  //   실측 — 명단 11명 중 최근 48시간 활동은 6명, 나머지는 2일·5일·23일 전이다.
-  //   → 최근 이틀 안에 쓴 사람만 기본 표시. 나머지는 「그 밖의 검수원 N명」 접기(로그인 길은 막지 않는다).
-  const RECENT_MS = 48 * 60 * 60 * 1000;
+  // ── 2.12-01 (검수사 확정 2026-08-23): *«**로그인한 작업자만** 보이게 하고 나머지는 분리해서
+  //   선택해서 볼수 있게 하는게 폰엔 한페이지로 남을것 같습니다.»* → *«**로그인한 사람과 로그인 안된 사람**입니다.»*
+  //   판정은 `inspectorStatus` 한 벌을 그대로 쓴다 — 그것이 이미 «로그아웃 없이 앱을 닫아
+  //   loggedIn=true 가 영구 잔존하는 허상»을 30분 신선도로 걸러 준다(1.3-01).
+  //   실측 2026-08-23 — loggedIn 플래그는 9명이 true 지만 신선도까지 보면 **로그인 1명**이다.
   const [showAll, setShowAll] = useState(false);
-  const recentList = list.filter(i => i.lastActive && (Date.now() - i.lastActive) < RECENT_MS);
-  //   최근 활동자가 너무 적으면(휴무·주말) 접기가 오히려 불편하다 — 3명 미만이면 전체를 편다.
-  const shownList = (showAll || recentList.length < 3) ? list : recentList;
+  const loggedList = list.filter(i => !!inspectorStatus(i));
+  //   ⚠ 로그인 0명이어도 **전체를 펴지 않는다** — 검수사 확정: *«로그인 안했던 사람은 저는 보이고
+  //   본인이름은 **입력해야 나오니 입력칸이 보이면 맞습니다**.»* 즉 명단이 아니라 **입력칸**이 그 길이다.
+  //   전체를 자동으로 펴면 다시 스크롤이 생겨 «폰 한 페이지»가 깨진다.
+  const shownList = showAll ? list : loggedList;
   const hiddenCount = list.length - shownList.length;
 
   // M5.61 계승: 이름 정규화 — 공백/콤마/특수문자 제거 후 비교
@@ -350,6 +352,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         )}
 
         {/* ── 검수원 목록 (역할 뱃지 — 수석/부수석 강조) ── */}
+        {shownList.length === 0 && !showAll && (
+          <div className="px-3.5 pb-2 shrink-0">
+            <div className="rounded-2xl border border-dashed border-[#2A3958] px-4 py-5 text-center">
+              <div className="text-[13px] font-bold text-slate-300">지금 로그인한 작업자가 없습니다</div>
+              <div className="mt-1.5 text-[11.5px] text-[#6E7E9E] leading-relaxed">아래에 이름을 입력해 시작하거나,<br/>«로그인 안 된 작업자»에서 고르세요.</div>
+            </div>
+          </div>
+        )}
         {shownList.length > 0 && (
           <div className="flex-1 overflow-y-auto px-3.5 pb-1 space-y-2 lg:flex-none lg:px-0 lg:space-y-0 lg:mb-3 lg:max-h-none lg:grid lg:grid-cols-2 lg:gap-2">
             {shownList.map(i => {
@@ -399,21 +409,23 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 </button>
               );
             })}
-            {/* 2.12: 최근에 안 쓴 사람은 접어 둔다 — 로그인 길을 막지 않게 언제든 펼 수 있다. */}
-            {hiddenCount > 0 && (
-              <button onClick={() => setShowAll(true)}
-                className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-[12px] font-bold text-[#6E7E9E] hover:text-slate-300 hover:border-[#3A4A6A] lg:col-span-2">
-                그 밖의 검수원 {hiddenCount}명 보기
-              </button>
-            )}
-            {showAll && recentList.length >= 3 && (
-              <button onClick={() => setShowAll(false)}
-                className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-[12px] font-bold text-[#6E7E9E] hover:text-slate-300 lg:col-span-2">
-                최근 작업자만 보기
-              </button>
-            )}
           </div>
         )}
+        {/* 2.12-01: 로그인 안 된 사람은 접어 둔다 — 목록이 비어도 이 버튼은 보여야 길이 열린다. */}
+        <div className="px-3.5 pb-2 shrink-0 lg:px-0">
+          {hiddenCount > 0 && !showAll && (
+            <button onClick={() => setShowAll(true)}
+              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-[12px] font-bold text-[#6E7E9E] hover:text-slate-300 hover:border-[#3A4A6A]">
+              로그인 안 된 작업자 {hiddenCount}명 보기
+            </button>
+          )}
+          {showAll && (
+            <button onClick={() => setShowAll(false)}
+              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-[12px] font-bold text-[#6E7E9E] hover:text-slate-300">
+              로그인한 작업자만 보기
+            </button>
+          )}
+        </div>
 
         {/* ── 직접 입력 + 로그인 — 2.11: 폰은 시트 하단에 고정(shrink-0), PC 는 종전 흐름 ── */}
         <div className="shrink-0 bg-[#121A2B] border-t border-[#1E2B45] px-3.5 pt-3.5 pb-3.5 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]
