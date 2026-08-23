@@ -751,10 +751,15 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           형태를 알아볼 수 없게 쭈그러들고, 데이터 새로고침이 화면 밖으로 밀렸다.
           → 폰(<640px)에서는 두 줄로 갈라 앉힌다. ①항차 수+수석 대시보드 ②양하·선적·예보·새로고침.
           PC(sm 이상)는 종전 그대로 한 줄. */}
-      <div className="flex flex-wrap items-center justify-between mb-3 gap-x-3 gap-y-2">
-        <div className="shrink-0">
-          <div className="text-[10px] text-slate-500 letter-spacing-wide font-bold uppercase mb-0.5">진행 중인 항차</div>
-          <div className="text-lg font-bold text-slate-100">{list.length}건</div>
+      <div className="flex flex-wrap items-center justify-between mb-3 gap-x-3 gap-y-1.5">
+        {/* 2.14 (검수사 지적 2026-08-23): *«진행중인 항차·수석대쉬보드·양하·선적·예보·데이터 새로고침
+            이것이 **세줄**을 차지 합니다. 분명 **2줄**로 줄이고도 남을수 있씁니다.»*
+            → 폰: ①「진행 N건」+수석 대시보드 한 줄 ②양하·선적·예보·새로고침 한 줄. 라벨은 폰에서 줄인다. */}
+        <div className="shrink-0 flex items-baseline gap-1.5 sm:block">
+          <span className="text-2xs text-slate-500 font-bold uppercase sm:block sm:mb-0.5">
+            <span className="sm:hidden">진행</span><span className="hidden sm:inline">진행 중인 항차</span>
+          </span>
+          <span className="text-lg font-bold text-slate-100 leading-none">{list.length}건</span>
         </div>
         {/* V9.42: 수석 대시보드 — 종전 상단 3카드에서 이 줄 가운데 빈 공간으로 옮김
             V9.44: **수석 검수원에게만 보인다.** 눌러서 막히는 것보다 아예 안 보이는 편이 낫다
@@ -762,29 +767,31 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         {/* 1.41: 판정을 canOpenChief 로 통일 — 종전 isChief 만 봐서 App 라우트 게이트와 어긋났다
             (소유자·개발용은 들어갈 수 있는데 버튼이 안 보였다). */}
         {canOpenChief(inspector, isOwnerName(inspector)) && <button onClick={onOpenChiefDashboard}
-          className="flex-1 min-w-[170px] bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2.5 sm:py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
-          <div className="flex items-center gap-1.5">
-            <BarChart3 className="w-5 h-5 sm:w-4 sm:h-4 text-purple-300 shrink-0"/>
-            <span className="font-bold text-sm sm:text-xs text-purple-100 truncate">수석 대시보드</span>
+          className="flex-1 min-w-[140px] bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
+          <div className="row-1">
+            <BarChart3 className="ico text-purple-300"/>
+            <span className="font-bold text-xs2 sm:text-xs text-purple-100">수석 대시보드</span>
           </div>
-          <div className="text-[11px] sm:text-[10px] text-purple-300/70 truncate">전체 검수원 진행률·통계</div>
+          {/* 폰에서는 부제를 숨긴다 — 이 한 줄이 세 줄의 원인이었다. */}
+          <div className="hidden sm:block text-2xs text-purple-300/70 truncate">전체 검수원 진행률·통계</div>
         </button>}
-        <div className="flex gap-2 flex-wrap w-full sm:w-auto sm:shrink-0">
+        {/* 2.14: 폰은 **한 줄 고정** — 앞 3개는 균등(flex-1), 새로고침은 아이콘만. flex-wrap 을 빼서 줄바꿈 자체를 막는다. */}
+        <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto sm:shrink-0">
           <button
             onClick={() => setShowCreate('discharge')}
-            className="bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
+            className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
           >
-            <Plus className="w-3.5 h-3.5"/><ArrowDown className="w-3.5 h-3.5"/>양하
+            <Plus className="ico-s"/><ArrowDown className="ico-s"/>양하
           </button>
           <button
             onClick={() => setShowCreate('loading')}
-            className="bg-amber-900/50 hover:bg-amber-800 border border-amber-700/50 text-amber-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
+            className="flex-1 sm:flex-none bg-amber-900/50 hover:bg-amber-800 border border-amber-700/50 text-amber-100 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
           >
-            <Plus className="w-3.5 h-3.5"/><ArrowUp className="w-3.5 h-3.5"/>선적
+            <Plus className="ico-s"/><ArrowUp className="ico-s"/>선적
           </button>
           <button
             onClick={() => { setShowForecast(true); setFcText(''); }}
-            className="bg-orange-900/50 hover:bg-orange-800 border border-orange-700/50 text-orange-100 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
+            className="flex-1 sm:flex-none bg-orange-900/50 hover:bg-orange-800 border border-orange-700/50 text-orange-100 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
             title="카톡으로 받은 물량 예보 붙여넣기 — EDI 도착 전 개수 먼저 등록"
           >
             📋 예보

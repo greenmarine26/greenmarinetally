@@ -18,14 +18,15 @@ export default function RefreshDataButton({ onRefreshData, refreshing = false, r
       onClick={onRefreshData}
       disabled={refreshing}
       title="화면을 다시 불러오지 않고 데이터만 최신으로 — 로그인이 풀리지 않습니다"
-      className={`text-[11px] px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 border ${refreshing
+      className={`text-xxs px-2.5 sm:px-3 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 border ${refreshing
         ? 'bg-slate-800 text-slate-500 border-slate-700'
         : 'bg-cyan-900/50 hover:bg-cyan-800/70 text-cyan-100 border-cyan-700/50'} ${className}`}
       style={{ minHeight: 34 }}
     >
-      <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`}/>
-      {refreshing ? '새로고침 중…' : '데이터 새로고침'}
-      {!refreshing && ago && <span className="text-[10px] font-normal text-cyan-300/70">({ago})</span>}
+      {/* 2.14: 폰은 아이콘만 — «데이터 새로고침 (5분 전)» 이 폰 한 줄을 통째로 먹었다(검수사 지적). */}
+      <RefreshCw className={`ico-s ${refreshing ? 'animate-spin' : ''}`}/>
+      <span className="hidden sm:inline">{refreshing ? '새로고침 중…' : '데이터 새로고침'}</span>
+      {!refreshing && ago && <span className="hidden sm:inline text-2xs font-normal text-cyan-300/70">({ago})</span>}
     </button>
   );
 }
