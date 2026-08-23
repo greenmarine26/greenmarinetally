@@ -14,3 +14,23 @@
 }
 
 .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+
+/* ══════════════════════════════════════════════════════════
+   TallyOne 2.13 — 아이콘 규격 (검수사 확정 2026-08-23)
+     «폰은 아이콘 크기를 맞추면 한줄이면 될껄 크기가 틀려 다음줄을 만들기도 합니다.»
+   실태: 아이콘 크기 19종, 한 파일에 5~8종 혼용 → 줄 정렬이 깨졌다.
+   ⇒ **세 종만 쓴다.** lucide 아이콘의 className 에 아래를 준다(w-N h-N 직접 쓰지 않는다).
+     .ico-s  14px  뱃지·칩 안
+     .ico    16px  기본 — 목록·본문 인라인
+     .ico-l  20px  버튼·상단바
+   flex 줄에서 세로 정렬이 흔들리지 않게 shrink-0 을 물려 둔다.
+   ══════════════════════════════════════════════════════════ */
+.ico-s, .ico, .ico-l { flex-shrink: 0; }
+.ico-s { width: 14px; height: 14px; }
+.ico   { width: 16px; height: 16px; }
+.ico-l { width: 20px; height: 20px; }
+
+/* 한 줄에 아이콘과 글자를 나란히 둘 때 — 세로 가운데, 줄바꿈 금지.
+   검수사: «아이콘 크기를 맞추면 한 줄이면 될 걸» → 이 유틸이 그 한 줄을 보장한다. */
+.row-1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.row-1 > span, .row-1 > b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
