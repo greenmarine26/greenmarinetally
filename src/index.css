@@ -81,3 +81,17 @@ svg.lucide {
 /* 폰은 카드 간격 12px, PC 는 16px (시안 V2: «Cards 16px desktop / 12px mobile») */
 .cards-v2 { display: flex; flex-direction: column; gap: 12px; }
 @media (min-width: 640px) { .cards-v2 { gap: 16px; } }
+
+/* ══════════════════════════════════════════════════════════
+   2.17 — 뱃지 규격 (검수사 «뱃지가 너무 작아서 현장에서 안 보였다»)
+     실태: 리스트 한 줄에 9px 뱃지가 16종 — 장갑 끼고 흔들리는 갑판에서 안 읽힌다.
+     ⇒ 폰 11px/22px · PC 10px/20px. **폰이 더 크다** — 폰은 손가락·현장, PC는 마우스·사무실.
+   ⚠ font-weight·색은 건드리지 않는다. 호출부의 font-black/font-bold 와 색 클래스가 그대로 살아야 한다.
+     (이 파일은 @tailwind utilities 뒤라 여기서 font-weight 를 주면 Tailwind 를 이겨 버린다.)
+   ══════════════════════════════════════════════════════════ */
+.bdg {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 22px; padding: 0 7px; border-radius: 6px;
+  font-size: 11px; line-height: 1; white-space: nowrap; flex-shrink: 0;
+}
+@media (min-width: 640px) { .bdg { height: 20px; padding: 0 6px; font-size: 10px; gap: 2px; } }

@@ -2115,9 +2115,9 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           *"작업전 선박화면에서 앞사진을 빼고 두번째 통합검색으로 바꾸자는 이야기. 마이크 스피커 키보드 csv 네개가 우측에."*
           숫자·컨번호·베이 = 종전 라이브 필터 그대로(기능 불변). 문장은 Enter/음성으로 「작업 시작」 탭에 릴레이.
           폰 자판은 **숫자판이 기본**(작업용), ⌨ 를 누르면 문자 키보드(질문용) — 검수사 확정. */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5">
+      <div className="bg-ink-850 border border-line rounded-card p-2 flex items-center gap-1.5">
         <div className="relative flex-1">
-          <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"/>
+          <SearchIcon className="ico absolute left-2.5 top-1/2 -translate-y-1/2 text-dim-200"/>
           <input
             key={kb}
             ref={searchRef}
@@ -2132,35 +2132,35 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 베이 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
             autoComplete="off"
-            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"
+            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-lg pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-amber-500"
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
         </div>
         <button onClick={toggleListen} title="음성 입력"
-          className={`w-9 h-9 rounded flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
           🎤
         </button>
         <button onClick={() => setAutoRead(v => !v)} title="조회 결과 자동 읽기"
-          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
           {autoRead ? '🔊' : '🔇'}
         </button>
         <button onClick={() => { setKb(k => (k === 'numeric' ? 'text' : 'numeric')); setTimeout(() => searchRef.current?.focus(), 50); }}
           title={kb === 'numeric' ? '문자 키보드로 (질문 입력)' : '숫자판으로 (작업 조회)'}
-          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
           ⌨
         </button>
         <button
           onClick={handleExport}
-          className="bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700/40 text-emerald-200 px-2 py-1.5 rounded text-xs font-bold flex items-center gap-1 flex-none"
+          className="h-11 sm:h-9 bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700/40 text-emerald-200 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 flex-none"
           title="CSV 내보내기"
         >
-          <Download className="w-3.5 h-3.5"/>CSV
+          <Download className="ico-s"/>CSV
         </button>
       </div>
 
       {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
-      <div className="flex gap-1 flex-wrap text-[11px]">
+      <div className="flex gap-1.5 flex-wrap text-[12px] sm:text-[11px]">
         {[
           { k: 'all', t: `전체 ${stats.total}` },
           { k: 'undone', t: `미완 ${stats.total - stats.done}` },
@@ -2172,8 +2172,8 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
-            className={`px-2.5 py-1 rounded font-bold ${
-              filter === k ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-lg font-bold transition-colors ${
+              filter === k ? 'bg-amber-700 text-amber-100' : 'bg-ink-850 text-dim-200 hover:bg-ink-750'
             }`}>{t}</button>
         ))}
       </div>
@@ -2191,7 +2191,7 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
         dupSeals={dupSeals}
       />
       ) : (
-        <div className="text-center text-[12px] text-slate-600 py-6 bg-slate-900/40 border border-slate-800/60 rounded-lg">
+        <div className="text-center text-[13px] sm:text-[12px] text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
           위 칩을 누르거나 검색하면 그 컨테이너만 보입니다
         </div>
       )}
@@ -2615,9 +2615,9 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5">
+      <div className="bg-ink-850 border border-line rounded-card p-2 flex items-center gap-1.5">
         <div className="relative flex-1">
-          <SearchIcon className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"/>
+          <SearchIcon className="ico absolute left-2.5 top-1/2 -translate-y-1/2 text-dim-200"/>
           <input
             key={kb}
             ref={searchRef}
@@ -2632,36 +2632,36 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 컨번호 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
             autoComplete="off"
-            className="w-full bg-slate-800 border border-slate-700 rounded pl-8 pr-2 py-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:border-cyan-500"
+            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-lg pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-cyan-500"
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
         </div>
         <button onClick={toggleListen} title="음성 입력"
-          className={`w-9 h-9 rounded flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
           🎤
         </button>
         <button onClick={() => setAutoRead(v => !v)} title="조회 결과 자동 읽기"
-          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
           {autoRead ? '🔊' : '🔇'}
         </button>
         <button onClick={() => { setKb(k => (k === 'numeric' ? 'text' : 'numeric')); setTimeout(() => searchRef.current?.focus(), 50); }}
           title={kb === 'numeric' ? '문자 키보드로 (질문 입력)' : '숫자판으로 (작업 조회)'}
-          className={`w-9 h-9 rounded flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
           ⌨
         </button>
       </div>
 
       {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
-      <div className="flex gap-1 flex-wrap text-[11px]">
+      <div className="flex gap-1.5 flex-wrap text-[12px] sm:text-[11px]">
         {[
           { k: 'all', t: `전체 ${stats.total}` },
           { k: 'undone', t: `미처리 ${stats.total - stats.done}` },
           { k: 'done', t: `누적(처리) ${stats.done}` },
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
-            className={`px-2.5 py-1 rounded font-bold ${
-              filter === k ? 'bg-cyan-700 text-cyan-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-lg font-bold transition-colors ${
+              filter === k ? 'bg-cyan-700 text-cyan-100' : 'bg-ink-850 text-dim-200 hover:bg-ink-750'
             }`}>{t}</button>
         ))}
       </div>
@@ -2685,7 +2685,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         dupSeals={dupSeals}
       />
       ) : (
-        <div className="text-center text-[12px] text-slate-600 py-6 bg-slate-900/40 border border-slate-800/60 rounded-lg">
+        <div className="text-center text-[13px] sm:text-[12px] text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
           위 칩을 누르거나 검색하면 그 컨테이너만 보입니다
         </div>
       )}

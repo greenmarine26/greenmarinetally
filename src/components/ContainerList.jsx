@@ -501,14 +501,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
       {/* 좌측 색깔 띠 */}
       <div className={`w-1.5 ${typeBar} flex-shrink-0`}/>
 
-      <div className="flex-1 p-2.5 min-w-0">
+      <div className="flex-1 p-3 sm:p-2.5 min-w-0 min-h-[72px] sm:min-h-[64px] flex flex-col justify-center">
         <div className="flex items-start gap-2">
           {/* 완료 버튼 */}
           <button onClick={handleComplete}
-            className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center font-black ${
+            className={`flex-shrink-0 w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-black ${
               isDone ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
             }`}>
-            {isDone ? <Check className="w-5 h-5"/> : '✓'}
+            {isDone ? <Check className="w-6 h-6 sm:w-5 sm:h-5"/> : '✓'}
           </button>
 
           <div className="min-w-0 flex-1">
@@ -520,73 +520,73 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                 </>
               ) : (
                 <>
-                  <span className="font-black text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-                  <span className="text-[11px] text-slate-400 mono truncate">{c.cn}</span>
+                  <span className="font-black text-base sm:text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
+                  <span className="text-[12px] sm:text-[11px] text-slate-400 mono truncate">{c.cn}</span>
                 </>
               )}
               {(sealError || xSealError) && (
-                <span className="bg-red-700/80 text-red-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5">
+                <span className="bg-red-700/80 text-red-50 bdg font-black">
                   <AlertOctagon className="w-2.5 h-2.5"/>실오류
                 </span>
               )}
               {/* 1.76-05: 시프팅 — 이 컨은 «양하 처리»가 되는 작업 항목이다(표시 전용이 아니다).
                     검수사 확정 2026-08-16: *"앱에서 양하처리 되어야 합니다."* 어디서 어디로 가는지 같이 보여 준다. */}
               {c._shift && (
-                <span className="bg-sky-700/90 text-sky-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
+                <span className="bg-sky-700/90 text-sky-50 bdg font-black"
                   title={`시프팅(재적부) — 크레인이 두 번 듭니다. ${c._shiftFrom || '?'} 에서 내려 ${c._shiftTo || '?'} 에 싣습니다.`}>
                   ◆ 시프팅 {c._shift === 'out' ? '내림' : '실음'}
                   {c._shiftFrom && c._shiftTo ? ` ${shiftPosLabel(c._shiftFrom)}→${shiftPosLabel(c._shiftTo)}` : ''}
                 </span>
               )}
               {dupPartners.length > 0 && (
-                <span className="bg-rose-700/90 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
+                <span className="bg-rose-700/90 text-rose-50 bdg font-black"
                   title={`이 실번호가 다른 컨테이너에도 들어 있습니다 — ${dupPartners.join(' / ')}. 양쪽 모두 실물 확인.`}>
                   🔒 실번호 중복 {dupPartners.map(x => (x || '').slice(-4)).join('·')}
                 </span>
               )}
               {sealConflict && (
-                <span className="bg-amber-700/80 text-amber-50 text-[9px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"
+                <span className="bg-amber-700/80 text-amber-50 bdg font-black"
                   title={`리스트마다 실번호가 다릅니다 — ${c.sl_conflict.map(h => h.sl + (h.src ? ` (${h.src})` : '')).join(' / ')}`}>
                   ⚠ 실번호 불일치 {_slcVals.join('↔')}
                 </span>
               )}
-              <span className={`text-[9px] mono px-1 py-0.5 rounded font-bold ${
+              <span className={`bdg mono font-bold ${
                 c.fe === 'F' ? 'bg-emerald-700 text-emerald-100' :
                 c.fe === 'E' ? 'bg-slate-600 text-slate-200' :
                 'bg-amber-800/60 text-amber-200 border border-amber-600/40'
               }`}>{c.fe || '⚠?'}</span>
-              <span className="text-[9px] mono px-1 py-0.5 rounded font-bold bg-blue-900 text-blue-300">{isoToLabel(c.iso) || c.tp || ''}</span>
-              {isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1.5 py-0.5 rounded font-black">🔍 XRAY</span>}
+              <span className="bdg mono font-bold bg-blue-900 text-blue-300">{isoToLabel(c.iso) || c.tp || ''}</span>
+              {isXray && <span className="bg-purple-700/60 text-purple-100 bdg font-black">🔍 XRAY</span>}
               {/* V9.03: 긴급/수화물 — 예보(CLL 메일) 컨번호 마커. 카고플랜의 ▲·보라테두리와 짝. */}
-              {c.urgent && <span className="bg-rose-600 text-rose-50 text-[9px] px-1.5 py-0.5 rounded font-black">▲ 긴급</span>}
-              {c.lugg && <span className="bg-violet-700 text-violet-50 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-300/60">🧳 수화물 — 이적 아님{c.luggSeal ? ` · 실 ${c.luggSeal}` : ''}</span>}
+              {c.urgent && <span className="bg-rose-600 text-rose-50 bdg font-black">▲ 긴급</span>}
+              {c.lugg && <span className="bg-violet-700 text-violet-50 bdg font-black border border-violet-300/60">🧳 수화물 — 이적 아님{c.luggSeal ? ` · 실 ${c.luggSeal}` : ''}</span>}
               {/* 2.06-04 (검수사 «있기는 하되 내릴지는 모르는 미정상태 — 카톡이나 메시지가 오면 그때 확정»):
                   덱 전용 수화물은 미정 배지 + [양하 확정] 버튼. 확정하면 총계 편입, [미정으로]로 되돌림. */}
-              {c._deckOnly && <span className="bg-slate-700 text-slate-200 text-[9px] px-1.5 py-0.5 rounded font-bold border border-slate-500">⏳ 내릴지 미정</span>}
+              {c._deckOnly && <span className="bg-slate-700 text-slate-200 bdg font-bold border border-slate-500">⏳ 내릴지 미정</span>}
               {c._deckOnly && (
                 <button onClick={async (e) => { e.stopPropagation();
                     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
                     if (window.confirm(`${c.cn} — 양하 확정할까요? (카톡·메시지로 통보받은 경우)`))
                       await fbSetLuggConfirm(voyageKey, mode, c.cn, inspector); }}
-                  className="bg-violet-800 hover:bg-violet-700 text-violet-100 text-[9px] px-1.5 py-0.5 rounded font-black border border-violet-400/60">양하 확정</button>
+                  className="bg-violet-800 hover:bg-violet-700 text-violet-100 bdg font-black border border-violet-400/60">양하 확정</button>
               )}
               {c._luggConfirmed && (
                 <button onClick={async (e) => { e.stopPropagation();
                     if (window.confirm(`${c.cn} — 다시 미정으로 되돌릴까요?`))
                       await fbCancelLuggConfirm(voyageKey, mode, c.cn); }}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] px-1.5 py-0.5 rounded font-bold border border-slate-600">✔ 양하 확정됨 · 미정으로</button>
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 bdg font-bold border border-slate-600">✔ 양하 확정됨 · 미정으로</button>
               )}
-              {isDG && <span className="bg-red-700/60 text-red-100 text-[9px] px-1.5 py-0.5 rounded font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
+              {isDG && <span className="bg-red-700/60 text-red-100 bdg font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
               {/* 1.86 (검수사 확정 «풀만 눈꽃표시 색을 넣어주시고 엠티는 눈꽃을 회색 처리»):
                   엠티 리퍼는 전원을 안 꽂아 잴 것이 없다 — 회색 눈꽃으로 가라앉히고, 풀만 색(온도 뱃지). */}
               {isReefer && (c.fe === 'E'
-                ? <span className="bg-slate-800 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold border border-slate-600/60 flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF</span>
+                ? <span className="bg-slate-800 text-slate-500 bdg font-bold border border-slate-600/60"><Snowflake className="w-2.5 h-2.5"/>RF</span>
                 : hasTmp
                   ? <span className="bg-cyan-600 text-cyan-50 text-[10px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {c.tmp}°C</span>
-                  : <span className="bg-cyan-900/70 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded font-bold border border-cyan-700/50 flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF</span>)}
-              {c.fr && <span className="bg-orange-700/60 text-orange-100 text-[9px] px-1.5 py-0.5 rounded font-black">FR</span>}
-              {c.ot && <span className="bg-yellow-700/60 text-yellow-100 text-[9px] px-1.5 py-0.5 rounded font-black">OT</span>}
-              {c.tk && <span className="bg-pink-700/60 text-pink-100 text-[9px] px-1.5 py-0.5 rounded font-black">TK</span>}
+                  : <span className="bg-cyan-900/70 text-cyan-300 bdg font-bold border border-cyan-700/50"><Snowflake className="w-2.5 h-2.5"/>RF</span>)}
+              {c.fr && <span className="bg-orange-700/60 text-orange-100 bdg font-black">FR</span>}
+              {c.ot && <span className="bg-yellow-700/60 text-yellow-100 bdg font-black">OT</span>}
+              {c.tk && <span className="bg-pink-700/60 text-pink-100 bdg font-black">TK</span>}
             </div>
 
             {/* 위치 + 무게 + 검수업체 + POD 강조 */}
