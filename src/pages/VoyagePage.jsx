@@ -2226,7 +2226,7 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
       )}
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
-      {(shiftingList.length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && shiftInfo.meta.excludedCnt > 0)))) && (
+      {(shiftingList.length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && (shiftInfo.meta.excludedCnt > 0 || (shiftInfo.meta.customsFixed || []).length > 0))))) && (
         <div className="mt-3 bg-slate-900 border border-blue-800/50 rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
@@ -2262,6 +2262,24 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
               <div className="text-[10px] text-amber-200/80">
                 커버가 이 자리를 무는지 현장에서 봐 주십시오. 물면 그대로 시프팅이고, 안 물면
                 <b> 베이매트릭스에 그 베이 커버 경계</b>를 저장해 주십시오 — 다음 항차부터 예측도 0이 됩니다.
+              </div>
+            </div>
+          )}
+          {/* ★ 2.21 (검수사 확정 2026-08-23) — **환적분을 시프팅에서 뺐다.** 뺀 이유를 남긴다.
+              검수사: *«조회 해보니 인천짐으로 되어 있지만 이선박은 인천엔 가지 않습니다. 그리고
+              세관리스트에는 평택짐으로 양하목록에 포함되어 있습니다. 제생각엔 평택에서 양하후에
+              다른선박으로 환적할것 같습니다. 고로 시프팅은 없는듯 합니다.»* */}
+          {(shiftInfo?.meta?.customsFixed || []).length > 0 && (
+            <div className="px-3 py-1.5 text-[11px] text-cyan-100 bg-cyan-950/40 border-b border-cyan-800/50 space-y-0.5">
+              <div>🔁 <b>환적분 {shiftInfo.meta.customsFixed.length}대</b> — EDI 는 다른 항구 짐이라 하는데 <b>세관 양하리스트에는 평택짐</b>으로 들어 있습니다. 평택에서 내려 다른 배로 옮겨 싣는 것으로 보고 <b>시프팅에서 뺐습니다.</b></div>
+              {shiftInfo.meta.customsFixed.slice(0, 6).map(cf => (
+                <div key={cf.cn} className="mono text-[10px] text-cyan-300">
+                  · {cf.cn} <b>{cf.pos}</b> {cf.iso} — EDI POD {cf.ediPod} → 세관 {cf.recPod}
+                </div>
+              ))}
+              {shiftInfo.meta.customsFixed.length > 6 && <div className="text-[10px] text-cyan-400">… 외 {shiftInfo.meta.customsFixed.length - 6}대</div>}
+              <div className="text-[10px] text-cyan-200/80">
+                EDI 의 POD 는 <b>옮겨 실은 뒤의 최종 목적지</b>라 배가 실제로 그 항구에 가는 것이 아닙니다. 짐은 평택에서 내립니다.
               </div>
             </div>
           )}

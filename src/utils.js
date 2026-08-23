@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.20';   // **로그아웃 인사를 「미르 10초 쇼」로** (검수사 지시). 검수사가 처음엔 로딩화면을 물었는데 그 자리는 안 맞았다 — **소리는 «사람이 누른 뒤»에만 브라우저가 허용한다.** 앱이 켜질 때는 누른 적이 없어 그림만 나오고 소리가 죽는다. 로그아웃은 손으로 누른 동작이라 **여기서는 소리가 난다.** 10초도 여기서는 부담이 아니다 — 일이 끝난 뒤니까. ★ 쇼는 시안 원본을 **그대로** 쓴다(`public/intro.html`, 518KB). 다시 그리면 로고가 달라진다 — 로고는 시안 안에 **이미지로 박혀** 있고, 소리는 오디오 파일이 아니라 Web Audio 로 **실시간 합성**한다(야옹·퍽·꽈당·뿅…). 재구현 대상이 아니다. 번들에 섞지 않고 별도 파일로 두어 **로그아웃할 때만 받는다** — 평소 실행 비용 0. `?auto=1` 이면 재생 버튼을 대신 눌러 준다(못 찾으면 조용히 포기, 화면은 산다). ⚠ **인사 문구는 버리지 않았다** — 「오늘 N시간 작업하셨습니다」는 지어낸 말이 아니라 실제 근무 시간이다. 쇼 아래 띠에 얹고 자동 닫힘을 5→15초로 늘렸다. ✅ jsdom 렌더 검사로 iframe·인사 문구·닫기 버튼을 확인했다(로그인 인사는 종전 모달 그대로).
+export const APP_VERSION = 'TallyOne 2.21';   // **환적분을 시프팅에서 뺀다** (검수사 확정 2026-08-23). 원문 — «ATPR 양하에 시프팅이 잡혀있습니다. 조회 해보니 **인천짐**으로 되어 있지만 **이선박은 인천엔 가지 않습니다.** 그리고 **세관리스트에는 평택짐으로 양하목록에 포함**되어 있습니다. 제생각엔 평택에서 양하후에 다른선박으로 **환적**할것 같습니다. 고로 시프팅은 없는듯 합니다». 실측(ATPR 2638E) — EDI POD=KRINC 인 5대(TCNU6972089·SKHU9614024·HALU5633358·SKHU8125501·SKHU8718087, 전부 24베이 84단 45GP)를 «24베이 홀드 양하분 위 — 커버 열려면 이동»으로 잡았는데, **그 5대가 세관 양하리스트에는 POD=KRPTK 로 들어 있었다**(리스트에만 있는 5대와 정확히 일치). LOC+61 이 KRPTK 라 «평택 전 기항»도 없어 종전 제외 규칙(portsBeforePtk)에는 안 걸렸다. ★ **규칙 — 세관 양하리스트가 «평택 양하분»이라 하면 그 말이 맞다.** EDI 의 POD 는 **환적 뒤의 최종 목적지**를 적어 놓은 것이라 배가 그 항구에 가는 것이 아니다. 짐은 평택에서 내린다. 내리는 짐은 시프팅이 아니다. ⚠ map 에서 **빼지 않고 POD 를 바로잡는다** — 빼면 그 자리가 빈 자리가 되어 아래 짐의 커버 판정이 틀어진다. ⚠ **반대 방향은 안 뒤집는다** — 세관 리스트는 «평택에서 내리는 것»의 명단이지 «안 내리는 것»의 명단이 아니다. ✅ 파급 검증 — 전 항차 17개 전후 대조: ATPR 5→0(의도), **나머지 16항차 변화 0**(DJCT 1건은 세관 리스트에 없어 그대로 유지). 화면에는 «환적분 N대 — 시프팅에서 뺐습니다»와 컨별 근거(EDI POD → 세관 POD)를 남긴다 — 의심을 지우지 않는다는 8-23 원칙 그대로.
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -3929,6 +3929,40 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
   const nextPort = ediNextPortOf(sec);   // 1.69-07: LOC+61이 정본 — 평택이면 «도착 전 하선» 없음
   const lane = voyage?.info?.lane || '';
   let excluded = null, excludedCnt = 0;
+
+  /* ★ 2.21 (검수사 확정 2026-08-23) — **세관 양하리스트가 «평택 양하분»이라 하면 그 말이 맞다.**
+       검수사 원문: *«ATPR 양하에 시프팅이 잡혀있습니다. 조회 해보니 인천짐으로 되어 있지만 이선박은
+       인천엔 가지 않습니다. 그리고 세관리스트에는 평택짐으로 양하목록에 포함되어 있습니다.
+       제생각엔 평택에서 양하후에 다른선박으로 환적할것 같습니다. 고로 시프팅은 없는듯 합니다.»*
+
+     실측(ATPR 2638E) — EDI POD 가 KRINC 인 5대(TCNU6972089·SKHU9614024·HALU5633358·
+     SKHU8125501·SKHU8718087, 전부 24베이 84단 45GP)를 앱이 «24베이 홀드 양하분 위 — 커버 열려면 이동»
+     으로 잡았다. 그런데 **그 5대가 세관 양하리스트에는 POD=KRPTK 로 들어 있다**(리스트에만 있는 5대와 정확히 일치).
+     LOC+61 은 KRPTK 라 «평택 전에 들르는 항구»도 없어서 종전 제외 규칙(portsBeforePtk)에는 안 걸린다.
+
+     왜 EDI 가 인천이라 했나 — **환적(T/S)이다.** EDI 의 POD 는 «평택에서 다른 배로 옮겨 실은 뒤의
+     최종 목적지»를 적어 놓았다. 배가 실제로 인천에 가는 것이 아니다. 짐은 **평택에서 내린다.**
+     ⇒ 내리는 짐은 시프팅이 아니다. 세관 리스트 값으로 POD 를 바로잡는다.
+
+     ⚠ 지우지 않고 **바로잡는다.** map 에서 빼면 그 자리가 «빈 자리»가 되어 아래 짐의 커버 판정이 틀어진다.
+        POD 만 평택으로 고치면 «내리는 짐»이 되어 물리 계산이 맞다.
+     ⚠ 반대 방향은 건드리지 않는다 — 세관 리스트가 평택이 아니라고 해서 EDI 의 평택을 뒤집지는 않는다.
+        세관 리스트는 «평택에서 내리는 것»의 명단이지, 안 내리는 것의 명단이 아니다. */
+  let customsFixed = [];
+  const _recs = sec?.records || null;
+  if (map && _recs && Object.keys(_recs).length) {
+    const fixed = {};
+    for (const [cn, c] of Object.entries(map)) {
+      const ediPod = String(c?.pod || '').toUpperCase();
+      const recPod = String(_recs[cn]?.pod || '').toUpperCase();
+      if (ediPod && recPod && !isPyeongtaekPort(ediPod) && isPyeongtaekPort(recPod)) {
+        customsFixed.push({ cn, ediPod, recPod,
+          pos: `${parseInt(c?.bay, 10) || c?.bay || ''}-${c?.row || ''}-${c?.tier || ''}`, iso: c?.iso || '' });
+        fixed[cn] = { ...c, pod: recPod, _podEdi: ediPod, _podFrom: 'customs' };
+      } else fixed[cn] = c;
+    }
+    map = fixed;
+  }
   if (map && (origin || nextPort)) {
     const before = portsBeforePtk(lane, origin, nextPort);
     if (before && before.length) {
@@ -3979,6 +4013,7 @@ export function predictShiftingFromVoyage(voyage, dictEntry) {
   const out = predictShifting(map, baysInfo);
   try {
     Object.defineProperty(out, '_meta', { value: { origin, nextPort, lane, excluded, excludedCnt, hatchInfo: !!baysInfo,
+      customsFixed,   // 2.21: 세관 양하리스트가 평택분이라 해서 POD 를 바로잡은 건 — 화면이 근거로 보여 준다
       // rot: 판정 근거 — direct(EDI 다음 기항=평택) · edi(다음 기항 실측) · rotation(사전 걸음) · unknown(미확인)
       rot: (nextPort === 'KRPTK') ? 'direct' : (excluded ? (nextPort ? 'edi' : 'rotation') : 'unknown') }, enumerable: false });
   } catch (e) { /* 표시 부가정보 실패는 계산에 영향 없음 */ }
