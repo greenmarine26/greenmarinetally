@@ -901,7 +901,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       )}
 
       {/* 2.09: 부두 구분줄의 idx 계산은 **그룹 배열 기준**이다 — 전체 list 기준으로 두면 접을 때 헤더가 사라지거나 겹친다. */}
-      <div className="space-y-2">
+      <div className="space-y-3 sm:space-y-4">
         {openList.map((v, idx) => {
           const _grp = openList;
           const isHerePier = effectivePier && v._pier === effectivePier;
@@ -956,7 +956,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             <span className="ml-auto text-slate-600">{foldOpen ? '▾' : '▸'}</span>
           </button>
           {/* ⚠ 언마운트하지 않는다 — departBadgeAt sticky 기록이 죽으면 콘앱 출항 표시가 멈춘다. */}
-          <div className={foldOpen ? 'px-2 pb-2 space-y-2' : 'hidden'}>
+          <div className={foldOpen ? 'px-2 pb-2 space-y-3 sm:space-y-4' : 'hidden'}>
             {foldList.map((v, idx) => {
               const _grp = foldList;
               const isHerePier = effectivePier && v._pier === effectivePier;
@@ -1438,7 +1438,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
     //   *«카드 전체를 좌(정보) 70% + 우(액션) 30% 로 분할 … 우측 280px 전용 액션 패널»*
     //   PC 에서 카드 오른쪽이 비어 있던 자리에 «지금 처리 / 양하 완료 / 선적 완료» 를 세로로 세운다.
     //   ⚠ 트리는 그대로 두고 클래스만 뒤집는다(LoginPage 에서 검증한 관용구) — 폰은 종전 세로 흐름.
-    <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden lg:flex lg:items-stretch">
+    <div className="card-v2 bg-ink-850 overflow-hidden lg:flex lg:items-stretch">  {/* 2.16 시안 V2: card-v2 가 radius 20 · 보더 white/6% · shadow · hover 2px 들림(PC만)을 준다.
+      카드면은 #151F32(ink-850), 우측 액션 패널은 한 단계 깊은 #0F172A — 종전엔 둘 다 #0F172A 라
+      패널이 카드에서 안 떨어져 보였다. */}
       <div className="lg:flex-1 lg:min-w-0">
       <button
         onClick={() => onOpen()}
@@ -1722,7 +1724,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       {(activeInspectors.length > 0 || onDelete) && (
         <div className="px-3 pb-2 flex items-center justify-between gap-2 border-t border-slate-800 pt-2
                         lg:w-[280px] lg:shrink-0 lg:flex-col lg:items-stretch lg:justify-between
-                        lg:border-t-0 lg:border-l lg:border-slate-800 lg:bg-[#0F172A] lg:p-3.5 lg:gap-3
+                        lg:border-t-0 lg:border-l lg:border-line lg:bg-ink-900 lg:p-5 lg:gap-3
                         lg:hover:bg-[#131F36] lg:transition-colors">
           {/* 상단 — 상태 */}
           <div className="row-1 text-2xs text-slate-500 flex-1 min-w-0 lg:flex-none">
