@@ -20,6 +20,7 @@
     --bg:#0f1419; --panel:#1a222c; --panel2:#222d3a; --line:#324155;
     --ink:#eef4fb; --dim:#8fa3b8; --accent:#ffb020; --accent2:#39d98a;
     --add:#39d98a; --rem:#ff6b6b; --keep:#8fa3b8;
+    /* C7.70: 콘 소요 요약 카드 — 시안 규격(모서리 20px·여백 넉넉히·숫자 크게) */
     --tap:#2d3a4a;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -33,6 +34,15 @@
   .wrap{padding:16px;}
   .card{background:var(--panel); border:1px solid var(--line); border-radius:14px;
     padding:16px; margin-bottom:14px;}
+  .cone-kpi{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:0 0 12px;}
+  @media(min-width:720px){ .cone-kpi{grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px;} }
+  .ck{background:#111a26; border:1px solid #22304b; border-radius:20px; padding:16px 18px; min-width:0;}
+  .ck-cap{font-size:11px; color:var(--dim); letter-spacing:.04em;}
+  .ck-num{font-size:30px; font-weight:800; line-height:1.1; margin-top:6px; white-space:nowrap;}
+  .ck-num span{font-size:14px; font-weight:700; margin-left:3px; opacity:.7;}
+  .ck-sub{font-size:11px; color:var(--dim); margin-top:4px;}
+  .ck-add .ck-num{color:var(--add);} .ck-rem .ck-num{color:var(--rem);}
+  .ck-accent .ck-num{color:var(--accent);} .ck-keep .ck-num{color:var(--ink);}
   .card h2{margin:0 0 12px; font-size:14px; color:var(--accent); font-weight:700;
     letter-spacing:.2px; text-transform:uppercase;}
   .row{display:flex; gap:10px; flex-wrap:wrap;}
@@ -254,7 +264,7 @@
 <body>
 <header>
   <h1>콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.7-01</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 1.8</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -664,7 +674,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 2.23';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 1.7-01';  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 1.8';   // 1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -2612,6 +2622,33 @@ function renderResults(groups){
   html+=coneQaBarHtml();  // V7.55: 콘 질문바
   html+=`<div class="confirm-bar"><p><b>⚠ 인식 결과 확인</b> — 콘 작업 전 반드시 대조하세요.</p></div>`;
 
+  // V7.29: 동선표 — 양하 회수분을 선적 베이로 보내고, 모자란 분만 콘박스에서.
+  //   ★ C7.70: 계산을 작업표 **위로** 올렸다 — 아래 요약 카드가 이 값을 그대로 쓴다.
+  const routeDeck = computeRoutes(rows, 'deck', 4);
+  const routeEle  = computeRoutes(rows, 'ele', 2);
+  const routeHold = computeRoutes(rows, 'hold', 1);
+
+  /* ★ C7.70 — 콘 소요 요약 (검수사 시안 «cone-premium-100» 의 KPI 4장).
+       숫자는 **지어내지 않았다.** 셋 다 computeRoutes 가 이미 내던 값이다:
+         totalBox      콘박스에서 실어 와야 할 개수
+         leftoverToBox 콘박스로 돌려보낼 개수
+         usedFromSupply 베이끼리 옮기는 개수(양하 회수분을 선적 베이로)
+       시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다 — 현장에서 움직여야 하는 수라
+       그쪽이 쓸모 있다. 베이별 가감은 아래 표에 그대로 있다. */
+  const _rs = [routeDeck, routeEle, routeHold];
+  const _sum = k => _rs.reduce((a, r) => a + (r[k] || 0), 0);
+  const _box = _sum('totalBox'), _back = _sum('leftoverToBox'), _move = _sum('usedFromSupply');
+  html += `<div class="cone-kpi">
+    ${[['콘박스에서', _box, 'add', '실어 와야 할 콘'],
+       ['콘박스로', _back, 'rem', '돌려보낼 콘'],
+       ['베이끼리', _move, 'accent', '옮기는 콘'],
+       ['총 작업량', _box + _back + _move, 'keep', '오늘 만질 콘']]
+      .map(([cap, n, cls, sub]) => `<div class="ck ck-${cls}">
+        <div class="ck-cap">${cap}</div>
+        <div class="ck-num">${n}<span>개</span></div>
+        <div class="ck-sub">${sub}</div></div>`).join('')}
+  </div>`;
+
   html+=`<div class="card" id="shareCard">
     <div class="share-head">
       <div class="sh-title">콘 작업표</div>
@@ -2633,10 +2670,6 @@ function renderResults(groups){
     <div class="legend"><span class="lg add">초록 +추가</span><span class="lg rem">빨강 −반납</span><span class="lg keep">회색 그대로</span> · <span style="color:#888">큰숫자=곳당 가감 · 회수=양하에서 나옴 · 필요=선적에 듦</span></div>
   </div>`;
 
-  // V7.29: 동선표 — 양하 회수분을 선적 베이로 보내고, 모자란 분만 콘박스에서.
-  const routeDeck = computeRoutes(rows, 'deck', 4);
-  const routeEle  = computeRoutes(rows, 'ele', 2);
-  const routeHold = computeRoutes(rows, 'hold', 1);
   function routeRowsHtml(route, kindName, kindCls){
     if(!route.plan.length) return '';
     let h='';
