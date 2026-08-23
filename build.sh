@@ -232,6 +232,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic 
   else
     echo "⚠ BayPlan 연막 번들 실패 — 건너뜀"
   fi
+  # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
+  #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
+  #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.
+  SMOKE_LT=$(mktemp /tmp/_smokelt_XXXXXX.js)
+  if npx esbuild tools/smoke_listtab.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
+       --outfile="$SMOKE_LT" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_listtab.cjs "$SMOKE_LT" || { echo "✗ 리스트 탭 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "⚠ 리스트 탭 연막 번들 실패 — 건너뜀"
+  fi
 else
   echo "⚠ 연막검사 번들 실패 — 건너뜀"
 fi

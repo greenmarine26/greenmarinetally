@@ -6,7 +6,7 @@ import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   /
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
   AlertCircle, Plus, FileSpreadsheet, FileText, X, RotateCcw, Download, Camera,
-  BarChart3, FileCheck
+  BarChart3, FileCheck, Package as PackageIcon
 } from 'lucide-react';
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
@@ -34,6 +34,7 @@ import StatsTab from '../components/StatsTab.jsx';
 import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
 import ReportTab from '../components/ReportTab.jsx';
 import ContainerDetailModal from '../components/ContainerDetailModal.jsx';
+import useIsWide from '../useIsWide.js';
 import WorkReportModal from '../components/WorkReportModal.jsx';
 import { getEquipNumber, isPyeongtaekPort, isOppositeDirRecord, ownDirCns, resolveShipKey, parseListWeightKg, effectivePos } from '../utils.js';   // 1.23: parseListWeightKg — 리스트 무게 톤 표기 보정(단일 소스)
 import DiagnosticsPanel from '../components/DiagnosticsPanel.jsx';
@@ -89,7 +90,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [mode, setMode] = useState(initMode);
   const [tab, setTab] = useState('list');
   const [moreTabs, setMoreTabs] = useState(false);   // 1.84: 통계·결과·업로드 접이 메뉴(표시 전용)
-  const [detailC, setDetailC] = useState(null); // 컨테이너 상세 모달
+  const [detailC, setDetailC] = useState(null); // 컨테이너 상세 (넓은 화면 = 우측 고정 칼럼 / 폰 = 바텀시트)
+  const isWide = useIsWide();   // 2.18: **어디에 그릴지**를 JS 로 정한다 — 인스턴스는 하나(구독 중복 방지)
   const [procState, setProcState] = useState('');  // V9.37(판6): ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
   const [procMsg, setProcMsg] = useState('');
   const [showWorkReport, setShowWorkReport] = useState(false);  // M3.5.6: 작업 보고 모달
@@ -216,7 +218,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, [voyageKey, voyage?.discharge?.ediContainers, voyage?.loading?.ediContainers]);
 
   if (!voyage) {
-    return (
+  return (
       <div className="max-w-3xl mx-auto px-3 py-10 text-center">
         <div className="text-slate-400">항차를 찾을 수 없습니다</div>
         <button onClick={onGoHome} className="mt-4 px-4 py-2 bg-slate-800 rounded text-sm">홈으로</button>
@@ -1051,6 +1053,45 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     });
   }, [containers, ediMap, recMap, xrayMap, mode, diagDismissed, voyage, shipPolicy]);
 
+    // 2.18 — 컨테이너 상세는 **한 벌**만 만들고 담기는 자리만 바꾼다.
+  //   넓은 화면(lg+) 이고 리스트 탭이면 → 우측 고정 칼럼(variant='panel').
+  //   그 외(폰·다른 탭·검색 결과) → 종전대로 오버레이(폰에서는 바텀시트).
+  //   ⚠ 두 자리에 각각 그리면 Firebase 구독과 입력 상태가 두 벌이 된다 — 그래서 조건은 JS 로 가른다.
+  const detailPanelHere = isWide && tab === 'list' && !!detailC && !detailC._mode;
+  const renderDetail = (variant) => {
+        // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
+    const cMode = detailC._mode || mode;
+    const cSec = voyage[cMode] || {};
+    // M3.87: 위치 수정 충돌 검사용 - 같은 모드 전체 컨테이너 머지
+    const ediMap = cSec.ediContainers || {};
+    const recMap = cSec.records || {};
+    const compMap = cSec.completed || {};
+    const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
+    const allContainersForMode = [...allCnSet].map(cn => {
+      const e = ediMap[cn] || {};
+      const r = recMap[cn] || {};
+      return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
+    });
+    return (
+      <ContainerDetailModal
+        variant={variant}
+        c={detailC}
+        workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}
+        workTier={(() => { const t = parseInt(detailC.tier || detailC.tier_planned || recMap[detailC.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
+        comp={cSec.completed?.[detailC.cn]}
+        isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
+        xraySeal={cSec.xraySeals?.[detailC.cn] || null}
+        mode={cMode}
+        voyageKey={voyageKey}
+        voyageInfo={voyage.info}
+        inspector={inspector}
+        sealMode={sealTargets.byCn[detailC.cn] || null}
+        onClose={() => setDetailC(null)}
+        allContainers={allContainersForMode}
+      />
+    );
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-3 py-2">
       {/* 모드 탭 (둘 다 있을 때만) */}
@@ -1320,6 +1361,21 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           shiftingList={shiftingList} shiftInfo={shiftInfo}
           briefCtx={briefCtx}
           onAsk={(q) => { setRelayQ(q); setTab('search'); }}
+          detailPanel={!isWide ? null : (detailPanelHere ? renderDetail('panel') : (
+            /* 2.18 — 아무것도 안 골랐을 때 **칼럼을 비워 두지 않는다.**
+               검수사 «어쩔수 없이 여백이 남으면 관련그림이나 부가 설명을 넣고».
+               칼럼 자체는 늘 있어야 한다 — 고를 때마다 목록 폭이 출렁이면 그게 더 불편하다. */
+            <div className="card-v2 bg-ink-900 p-5 text-center">
+              <PackageIcon className="ico-l mx-auto text-dim-500 mb-2.5"/>
+              <div className="text-[13px] font-bold text-dim-200 mb-1.5">컨테이너를 고르면 여기 열립니다</div>
+              <div className="text-[12px] text-dim-300 leading-relaxed">
+                선내 위치 · 실번호 · 규격 · 무게 · 리퍼 온도를 보고<br/>그 자리에서 고칠 수 있습니다.
+              </div>
+              <div className="text-[11px] text-dim-500 mt-3 pt-3 border-t border-line">
+                목록을 훑는 동안 <b className="text-dim-200">닫히지 않고 붙어 있습니다</b>
+              </div>
+            </div>
+          ))}
         />
       )}
       {tab === 'search' && (
@@ -1560,38 +1616,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
 
       {/* 컨테이너 상세 모달 */}
-      {detailC && (() => {
-        // 검색에서 온 경우 _mode 사용, 아니면 현재 mode
-        const cMode = detailC._mode || mode;
-        const cSec = voyage[cMode] || {};
-        // M3.87: 위치 수정 충돌 검사용 - 같은 모드 전체 컨테이너 머지
-        const ediMap = cSec.ediContainers || {};
-        const recMap = cSec.records || {};
-        const compMap = cSec.completed || {};
-        const allCnSet = new Set([...Object.keys(ediMap), ...Object.keys(recMap)]);
-        const allContainersForMode = [...allCnSet].map(cn => {
-          const e = ediMap[cn] || {};
-          const r = recMap[cn] || {};
-          return { ...e, ...Object.fromEntries(Object.entries(r).filter(([k,vv]) => vv !== '' && vv != null)), cn, _comp: compMap[cn] || null };
-        });
-        return (
-          <ContainerDetailModal
-            c={detailC}
-            workBay={detailC.bay || detailC.bay_orig || (recMap[detailC.cn]?.bay_orig) || null}
-            workTier={(() => { const t = parseInt(detailC.tier || detailC.tier_planned || recMap[detailC.cn]?.tier_orig || '', 10); return Number.isFinite(t) ? (t < 80 ? 'hold' : 'deck') : null; })()}
-            comp={cSec.completed?.[detailC.cn]}
-            isXray={cMode === 'discharge' && !!(cSec.xrayList?.[detailC.cn])}
-            xraySeal={cSec.xraySeals?.[detailC.cn] || null}
-            mode={cMode}
-            voyageKey={voyageKey}
-            voyageInfo={voyage.info}
-            inspector={inspector}
-            sealMode={sealTargets.byCn[detailC.cn] || null}
-            onClose={() => setDetailC(null)}
-            allContainers={allContainersForMode}
-          />
-        );
-      })()}
+      {detailC && !detailPanelHere && renderDetail('modal')}
 
       {/* M3.5.5: 새 선박 정책 등록 모달 */}
       <ShipPolicyModal
@@ -2003,7 +2028,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx — 인라인 브리핑 재료
+export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null }) {   // 2.01: briefCtx — 인라인 브리핑 재료
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
   const [ask, setAsk] = useState(null);           // 1.85-05: 인라인 즉답 {q, stack[]} — 질문한 탭에서 바로 답
@@ -2102,7 +2127,11 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
   };
 
   return (
-    <div className="space-y-3">
+    /* 2.18 — **PC 는 2단, 폰은 1단.** 검수사 «컴용은 여백이 많은곳이 많다» 에 대한 답이다.
+       컨을 고르면 오른쪽 340px 칼럼에 상세가 **붙어 있는다** — 종전엔 모달이 떴다 닫혔다 해서
+       다음 컨으로 넘어갈 때마다 목록을 다시 찾아야 했다. 폰에는 이 칼럼이 없다(바텀시트로 간다). */
+    <div className={detailPanel ? 'lg:flex lg:gap-5 lg:items-start' : ''}>
+    <div className="space-y-3 lg:flex-1 lg:min-w-0">
       <ValidationBox
         ediContainers={Object.values(ediMap)}
         records={Object.values(recMap)}
@@ -2286,6 +2315,10 @@ function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySea
           </div>
         </div>
       )}
+    </div>
+    {detailPanel && (
+      <div className="hidden lg:block lg:w-[340px] lg:shrink-0 lg:sticky lg:top-4">{detailPanel}</div>
+    )}
     </div>
   );
 }

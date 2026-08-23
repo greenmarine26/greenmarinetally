@@ -53,7 +53,7 @@ const ISO_OPTIONS = [
   { iso: '45T1', label: '40HC 탱크',                  flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null }) {
+export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
@@ -396,8 +396,18 @@ export default function ContainerDetailModal({ c, comp, isXray, xraySeal, mode, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto">
+    /* 2.18: variant — 같은 내용을 **어디에 담을지**만 다르다.
+         'panel' = PC 항차 리스트의 우측 고정 칼럼 안(오버레이 없음).
+         'modal' = 종전. 폰에서는 아래에서 올라오는 **바텀시트**다.
+       ⚠ 폰 시트를 92vh → 70vh 로 낮췄다. 시안 «바텀시트 60%» 의 요지는 높이가 아니라
+         **뒤에 목록이 남아 다음 컨으로 바로 넘어가는 것**이라, 배경 흐림도 걷고 어둡기만 낮췄다.
+         60% 로 자르면 상세 항목이 너무 잘려서 70% 로 뒀다. */
+    <div className={variant === 'panel'
+      ? 'h-full'
+      : 'fixed inset-0 z-50 bg-slate-950/70 flex items-end sm:items-center justify-center p-0 sm:p-4'}>
+      <div className={variant === 'panel'
+        ? 'card-v2 bg-ink-850 w-full max-h-[calc(100vh-7rem)] overflow-y-auto'
+        : 'bg-ink-850 border border-line rounded-t-2xl sm:rounded-card w-full max-w-md max-h-[70vh] sm:max-h-[92vh] overflow-y-auto'}>
         {/* 헤더 */}
         <div className={`sticky top-0 px-4 py-3 border-b border-slate-700 flex items-center justify-between ${
           sealError || xSealError ? 'bg-red-950' :
