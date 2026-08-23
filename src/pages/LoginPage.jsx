@@ -228,7 +228,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         </div>
 
         <div className="mt-6 bg-slate-950/60 border border-cyan-950 rounded-2xl p-4">
-          <div className="text-[10px] tracking-[0.18em] text-slate-500 mb-3">■ 오늘 · 내일 작업 선박 — LIVE</div>
+          <div className="text-[10.5px] tracking-[0.16em] text-slate-400 mb-3 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
           {board.ships.length === 0 ? (
             <div className="text-[12px] text-slate-600">오늘·내일 작업 선박 없음</div>
           ) : (
@@ -266,8 +266,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       </div>
 
       <div className="w-full max-w-sm mx-auto lg:max-w-none lg:mx-0 flex-1 flex flex-col lg:rounded-3xl lg:border lg:border-slate-800 lg:bg-slate-900/40 lg:p-7">
-        {/* ── 앱 로고/이름 — TallyOne 리브랜딩 (버전 문자열은 App 푸터가 담당) ── */}
-        <div className="flex flex-col items-center mb-6 mt-4">
+        {/* 2.10: PC 는 좌측 패널에 로고가 이미 크게 있다 — 시안대로 「작업자 선택」 제목으로 대체 */}
+        <div className="hidden lg:block mb-5">
+          <h2 className="text-2xl font-black text-slate-100">작업자 선택</h2>
+          <div className="text-[12px] text-slate-500 mt-1">{list.length}명의 검수사 · 평택항 컨테이너 터미널</div>
+        </div>
+
+        {/* ── 앱 로고/이름 — TallyOne 리브랜딩 (폰 전용, 버전 문자열은 App 푸터가 담당) ── */}
+        <div className="lg:hidden flex flex-col items-center mb-6 mt-4">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-800 to-blue-950 border border-blue-600/50 flex items-center justify-center shadow-lg shadow-blue-950/60 mb-3">
             <Anchor className="w-9 h-9 text-blue-300"/>
           </div>
