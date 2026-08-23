@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Anchor, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus } from '../inspectorStatus.js';
+import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
 import { dayDiff, dayLabel, voyagePlanMs } from '../utils.js';   // 2.10: PC 좌측 현황판
 import {
   MAX_TRUSTED_DEVICES,
@@ -55,16 +56,21 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   useBackHandler(closeGate, !!gateMode);
 
   // 이름 확정 진입점 — 잠금 대상(관리자 + 수석검수·부수석)만 비밀번호 게이트를 거친다.
+  // 2.22: 로그인이 확정되는 지점이 여섯 곳이다(일반·세션통과·신뢰기기·설정·검증·소유자).
+  //   전부 이 한 줄을 거치게 해 «오늘의 본인»을 기억한다 — 한 곳이라도 빠지면
+  //   그 경로로 들어온 사람만 다음에 또 이름을 쳐야 한다.
+  const commitSelect = (name) => { rememberMe(name); onSelect(name); };
+
   const handlePick = (name) => {
     // V9.45 계승: 로딩 검사를 맨 앞으로 — guard가 null인 사이에 잠금 대상을 고르면
     //   "미설정"으로 읽혀 남의 비밀번호 설정 화면이 뜨는 사고를 막는다.
     if (!guardLoaded) { alert('이름 보호 정보를 불러오는 중 — 잠시 후 다시 시도하세요.'); return; }
-    if (!isLockedName(guard, name)) { onSelect(name); return; }  // 일반 검수원은 그대로
-    if (hasSessionPassFor(name)) { onSelect(name); return; }     // 이 탭에서 이미 비번 통과
+    if (!isLockedName(guard, name)) { commitSelect(name); return; }  // 일반 검수원은 그대로
+    if (hasSessionPassFor(name)) { commitSelect(name); return; }     // 이 탭에서 이미 비번 통과
     setGateName(name);
     // 비번 미설정 = 아직 한 번도 안 정한 사람 → 본인이 직접 정한다
     if (needsPasswordSetup(guard, name)) { setGateMode('setup'); return; }
-    if (isTrustedDeviceFor(guard, name)) { onSelect(name); return; }   // 신뢰 기기
+    if (isTrustedDeviceFor(guard, name)) { commitSelect(name); return; }   // 신뢰 기기
     setGateMode('verify');                                             // 그 외 기기 → 비밀번호
   };
 
@@ -91,7 +97,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       setGateMode(null); setPw1(''); setPw2('');
       alert(`✅ ${gateName} 비밀번호 설정 완료 — 이 기기가 신뢰 기기 1호로 등록됐습니다.\n다른 기기에서는 비밀번호를 넣고 "기기 등록"을 체크하면 신뢰 기기(최대 ${MAX_TRUSTED_DEVICES}대)가 됩니다.\n\n잊었을 때는 ${OWNER_NAME}에게 초기화를 요청하세요.`);
       await refreshGuard();
-      onSelect(gateName);
+      commitSelect(gateName);
     } finally {
       setGateBusy(false);
     }
@@ -112,7 +118,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         await refreshGuard();
       }
       setGateMode(null); setPw1(''); setRegDevice(false);
-      onSelect(gateName);
+      commitSelect(gateName);
     } finally {
       setGateBusy(false);
     }
@@ -134,7 +140,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       }
       setSessionPassFor(gateName);
       setGateMode(null); setPw1(''); setPw2('');
-      onSelect(gateName);
+      commitSelect(gateName);
     } finally {
       setGateBusy(false);
     }
@@ -152,12 +158,24 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   //   loggedIn=true 가 영구 잔존하는 허상»을 30분 신선도로 걸러 준다(1.3-01).
   //   실측 2026-08-23 — loggedIn 플래그는 9명이 true 지만 신선도까지 보면 **로그인 1명**이다.
   const [showAll, setShowAll] = useState(false);
-  const loggedList = list.filter(i => !!inspectorStatus(i));
+  // ── 2.22 (검수사 확정 2026-08-23): *«한번 로그인하면 그날 하루는 **본인것은 지워지지 않게**
+  //   매번 이름을 넣지 않게. **로그인중인 사람과 본인은 보이게** 해야 한다고.»*
+  //   2.12-01 은 «지금 로그인한 사람»만 남겼는데, 본인이 로그아웃하거나 30분 신선도가 지나면
+  //   **본인 이름까지 사라져** 다시 들어올 때마다 이름을 쳐야 했다.
+  //   ⇒ 목록 = 지금 로그인한 사람 **∪ 오늘 이 기기에서 로그인한 본인**(날이 바뀌면 저절로 빠진다).
+  const meName = getMeToday();
+  const loggedList = (() => {
+    const arr = list.filter(i => !!inspectorStatus(i) || (meName && i.name === meName));
+    // 명단(inspectors)에 아직 안 올라온 이름으로 들어왔던 경우에도 본인은 보여 준다.
+    if (meName && !arr.some(i => i.name === meName)) arr.push({ name: meName });
+    // 본인을 맨 앞으로 — 매번 고르는 줄이다.
+    return arr.sort((a, b) => (a.name === meName ? -1 : b.name === meName ? 1 : 0));
+  })();
   //   ⚠ 로그인 0명이어도 **전체를 펴지 않는다** — 검수사 확정: *«로그인 안했던 사람은 저는 보이고
   //   본인이름은 **입력해야 나오니 입력칸이 보이면 맞습니다**.»* 즉 명단이 아니라 **입력칸**이 그 길이다.
   //   전체를 자동으로 펴면 다시 스크롤이 생겨 «폰 한 페이지»가 깨진다.
   const shownList = showAll ? list : loggedList;
-  const hiddenCount = list.length - shownList.length;
+  const hiddenCount = Math.max(0, list.length - shownList.length);   // 2.22: 본인이 명단 밖 이름이면 음수가 될 수 있다
 
   // M5.61 계승: 이름 정규화 — 공백/콤마/특수문자 제거 후 비교
   const normalizeName = (s) => String(s || '')
@@ -355,7 +373,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         {shownList.length === 0 && !showAll && (
           <div className="px-3.5 pb-2 shrink-0">
             <div className="rounded-2xl border border-dashed border-[#2A3958] px-4 py-5 text-center">
-              <div className="text-[13px] font-bold text-slate-300">지금 로그인한 작업자가 없습니다</div>
+              <div className="text-[13px] font-bold text-slate-300">오늘 이 기기에서 로그인한 사람이 없습니다</div>
               <div className="mt-1.5 text-[11.5px] text-[#6E7E9E] leading-relaxed">아래에 이름을 입력해 시작하거나,<br/>«로그인 안 된 작업자»에서 고르세요.</div>
             </div>
           </div>
@@ -385,6 +403,11 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[15px] font-bold tracking-tight text-white truncate leading-none">{i.name}</span>
+                      {/* 2.22: 본인 표시 — 로그인 중이 **아니어도** 오늘 하루는 목록에 남는다.
+                          표가 없으면 «왜 이 사람만 남아 있지?» 가 된다. */}
+                      {meName && i.name === meName && (
+                        <span className="h-5 px-1.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300 text-[10px] font-bold flex items-center flex-shrink-0">나</span>
+                      )}
                       {inspectorStatus(i) === 'working' && (
                         <span className="h-5 px-1.5 rounded-full text-[10px] font-bold flex items-center flex-shrink-0"
                               style={{ background: 'rgba(0,209,143,.14)', border: '1px solid rgba(0,209,143,.28)', color: '#7CF1C2' }}>작업중</span>

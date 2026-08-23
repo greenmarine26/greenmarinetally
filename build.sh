@@ -242,6 +242,15 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic 
   else
     echo "⚠ 리스트 탭 연막 번들 실패 — 건너뜀"
   fi
+  # 2.22: 로그인 목록 연막검사 — «지금 로그인한 사람 ∪ 오늘의 본인» 규칙이 살아 있는지 본다.
+  #   검수사가 두 번 교정한 규칙이라(2.12-01 → 2.22) 조용히 되돌아가면 매번 이름을 쳐야 한다.
+  SMOKE_LG=$(mktemp /tmp/_smokelg_XXXXXX.js)
+  if npx esbuild tools/smoke_login.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
+       --outfile="$SMOKE_LG" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_login.cjs "$SMOKE_LG" || { echo "✗ 로그인 목록 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "⚠ 로그인 연막 번들 실패 — 건너뜀"
+  fi
 else
   echo "⚠ 연막검사 번들 실패 — 건너뜀"
 fi
