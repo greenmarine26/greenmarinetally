@@ -16,6 +16,7 @@
 import React, { useMemo, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { sortByDischargePlan } from '../utils.js';
+import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.26-01: 선박 풀네임은 정본 한 벌로
 
 //  세관 파일의 화물구분 4종 — 실측 64개 358행(X-RAY 252 · Sea & Air 84 · 반입후검사 14 · 즉시검사 8).
 //  ⚠ 시안에는 «즉시검사»가 빠져 있었다. 실물에 있으므로 넣는다.
@@ -35,22 +36,41 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
                                   xrayMap = {}, xraySeals = {}, compMap = {}, portMisData = {} }) {
   const [kindFilter, setKindFilter] = useState('');
   const [q, setQ] = useState('');
-  const [printing, setPrinting] = useState(false);
 
   const info = voyage?.info || {};
 
-  //  MRN — PORT-MIS 14열. **양하 서류는 입항(I), 선적 서류는 출항(E)** (실측 9척 예외 없음).
-  //  2.26 에서 `port_mis_data` 한 레코드에 mrnIn/mrnOut 을 나눠 담았기에 여기서 고를 수 있다.
-  const mrn = useMemo(() => {
-    const cs = String(info.callsign || '').toUpperCase();
+  /* ★ 2.26-01 — **기존 출력물에서 한 칸도 빠지면 안 된다.** (검수사 실물 `OWBH_2721_XRAY2.pdf`)
+       종전 양식 머리는 여섯 칸이다.
+         항차/항공편명 · 운항선사 · 입항일자 · 양륙항 · 선박명 · 선박 호출부호  (+ MRN)
+       2.26 첫 판은 제목 한 줄과 MRN 만 찍어 **넷을 빠뜨렸다**(운항선사·입항일자·양륙항·호출부호).
+       게다가 선박명을 `info.vsl`(코드 `OBWH`)로 써서 기존 풀네임 `OCEAN BLUE WHALE` 과 달랐다. */
+  const head = useMemo(() => {
+    const dict = (typeof window !== 'undefined' && window.__fbShipBayDict) || null;   // 사전은 전역 한 벌
+    const code = String(info.vsl || '').toUpperCase();
+    //  호출부호 — info 에 없는 항차가 많다(실측 OBWH_2721E). 사전에서 코드로 찾는다.
+    const dictE = dict ? (dict[code] || Object.values(dict).find((e) => e
+                    && String(e.code || '').toUpperCase() === code)) : null;
+    const cs = String(info.callsign || dictE?.callsign || '').toUpperCase();
     let pm = cs && portMisData[cs];
     if (!pm && cs) pm = Object.values(portMisData).find((p) => {
       const pcs = String(p?.callsign || '').toUpperCase();
       return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
     });
-    if (!pm) return '';
-    return (mode === 'loading' ? pm.mrnOut : pm.mrnIn) || pm.mrn || '';
-  }, [info.callsign, portMisData, mode]);
+    const mrn = pm ? ((mode === 'loading' ? pm.mrnOut : pm.mrnIn) || pm.mrn || '') : '';
+    //  입항일자 — PORT-MIS 입항일시가 1순위, 없으면 항차 작업창 앞자리. «2026.08.24» 형태.
+    const rawEta = String(pm?.eta || info.planDate || '').trim();
+    const md = rawEta.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
+    return {
+      voy: (mode === 'loading' ? info.voy_l : info.voy_d) || info.voy || '',
+      //  운항선사 — 실측 OBWH 는 `lane`(YTFF)이 곧 선사다. 없으면 MRN 2~5자가 선사 코드다(26**YTFF**2721I).
+      carrier: info.carrier || info.lane || (mrn.length >= 6 ? mrn.slice(2, 6) : ''),
+      eta: md ? `${md[1]}.${md[2]}.${md[3]}` : '',
+      pod: 'KRPTK',                                    // 평택항 앱이다 — 양륙항은 고정
+      name: resolveShipDisplayName(info, portMisData, dict).name || code,
+      callsign: cs,
+      mrn,
+    };
+  }, [info, portMisData, mode]);
 
   //  세관 목록 = xrayList. 위치·봉인은 각각 EDI·xraySeals·completed 에서 붙인다.
   const rows = useMemo(() => {
@@ -92,7 +112,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
     return Array.from({ length: n }, (_, i) => shown.slice(i * per, (i + 1) * per));
   }, [shown]);
 
-  const title = `${info.vsl || ''} ${(mode === 'loading' ? info.voy_l : info.voy_d) || info.voy || ''}`.trim();
+  const title = `${head.name} ${head.voy}`.trim();
 
   if (mode !== 'discharge' && !rows.length) {
     return <div className="p-6 text-center text-[13px] text-slate-500">X-RAY 목록은 양하에서 봅니다.</div>;
@@ -134,8 +154,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
             className="flex-1 bg-transparent text-[13px] outline-none"/>
           {q && <button onClick={() => setQ('')}><X className="w-4 h-4 text-slate-500"/></button>}
         </div>
-        <button onClick={() => { setPrinting(true); setTimeout(() => { window.print(); setPrinting(false); }, 60); }}
-          disabled={!shown.length}
+        <button onClick={() => window.print()} disabled={!shown.length}
           className="h-11 px-4 rounded-lg bg-amber-500 text-slate-900 font-bold text-[13px] flex items-center gap-1.5 disabled:opacity-40">
           <Printer className="w-4 h-4"/>출력 {pages.length > 1 ? `(${pages.length}장)` : ''}
         </button>
@@ -149,7 +168,8 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
           <table className="w-full text-[12px]">
             <thead className="text-[10px] text-slate-500">
               <tr className="border-b border-slate-800">
-                {['No.', '컨테이너번호', 'SEAL NO', '화물구분', '규격', '선내위치', '부착 세관봉인', '봉인자'].map((h) => (
+                {/* 열 이름은 **기존 출력물 그대로** — 「SEAL NO」가 아니라 「선사SEAL NO」다 */}
+                {['No.', '컨테이너번호', '선사SEAL NO', '화물구분', '규격', '선내위치', '부착 세관봉인번호', '봉인자'].map((h) => (
                   <th key={h} className="px-2 py-2 text-left whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -177,24 +197,41 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
         </div>
       </div>
 
-      {/* ── 인쇄 ── 값이 없으면 «밑줄 칸»으로 찍어 손으로 적게 한다 */}
-      {printing && (
-        <div className="xr-print" style={{ color: '#000', background: '#fff' }}>
+      {/* ── 인쇄 ── 값이 없으면 «밑줄 칸»으로 찍어 손으로 적게 한다.
+           ⚠ **항상 그려 둔다**(화면에서는 CSS 로 숨김). 눌렀을 때 만들면 ①한 박자 늦고
+             ②연막검사가 머리 여섯 칸을 확인할 길이 없다 — 2.26 이 넷을 빠뜨린 채 나간 이유다. */}
+      <div className="xr-print" style={{ color: '#000', background: '#fff' }}>
           {pages.map((pg, pi) => (
             <div className="xr-page" key={pi}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '6px' }}>
-                <div style={{ fontSize: '13pt', fontWeight: 700 }}>{title} XRAY리스트</div>
-                <div style={{ fontSize: '8pt' }}>
-                  {mrn ? `MRN ${mrn}` : ''}{mrn && info.pier ? ' · ' : ''}{info.pier || ''}
-                  {pages.length > 1 ? ` · ${pi + 1}/${pages.length} 장` : ''}
-                </div>
+              {/* 제목 — 검수사 «출력시 화면 상단에 선박명 + XRAY리스트라고 표기» */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '4px' }}>
+                <div style={{ fontSize: '13pt', fontWeight: 700 }}>{head.name} XRAY리스트</div>
+                <div style={{ fontSize: '8pt' }}>{pages.length > 1 ? `${pi + 1} / ${pages.length} 장` : ''}</div>
               </div>
+              {/* 머리 여섯 칸 — **기존 양식 그대로다. 한 칸도 빼지 않는다.** */}
+              <table className="xr-t" style={{ marginBottom: '4px' }}>
+                <tbody>
+                  <tr>
+                    <th style={{ width: '13%' }}>항차/항공편명</th><td style={{ width: '20%' }}>{head.voy}</td>
+                    <th style={{ width: '13%' }}>운항선사</th><td colSpan={3}>{head.carrier}</td>
+                  </tr>
+                  <tr>
+                    <th>입항일자</th><td>{head.eta}</td>
+                    <th>양륙항</th><td colSpan={3}>{head.pod}</td>
+                  </tr>
+                  <tr>
+                    <th>선박명</th><td>{head.name}</td>
+                    <th>선박 호출부호</th><td style={{ width: '14%' }}>{head.callsign}</td>
+                    <th style={{ width: '8%' }}>MRN</th><td>{head.mrn}</td>
+                  </tr>
+                </tbody>
+              </table>
               <table className="xr-t">
                 <thead>
                   <tr>
                     <th style={{ width: '4%' }}>No.</th>
                     <th style={{ width: '15%' }}>컨테이너번호</th>
-                    <th style={{ width: '13%' }}>SEAL NO</th>
+                    <th style={{ width: '13%' }}>선사SEAL NO</th>
                     <th style={{ width: '12%' }}>화물구분</th>
                     <th style={{ width: '8%' }}>규격</th>
                     <th style={{ width: '12%' }}>선내위치</th>
@@ -219,8 +256,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
               </table>
             </div>
           ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
