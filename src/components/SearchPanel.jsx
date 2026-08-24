@@ -24,7 +24,8 @@ import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
-import { mirTone } from '../mirChat.js';   // 2.33: 미르 말투 — 출구 한 겹
+import { mirTone } from '../mirChat.js';
+import { mirKnowledge } from '../data/mirKnowledge.js';   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
 import mirFaceUrl from '../assets/mir-face.png';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
 
@@ -1070,7 +1071,12 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed]);
-  const localAnswer = useMemo(() => mirTone(_localAnswerRaw), [_localAnswerRaw]);   // 2.33: 미르 말투 — 출구 한 겹
+  const localAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합
+    const raw = mirTone(_localAnswerRaw);
+    const know = mirKnowledge(query);
+    if (know && raw) return know + '\n\n────────\n' + raw;
+    return know || raw;
+  }, [_localAnswerRaw, query]);
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).
   useEffect(() => {

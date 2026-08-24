@@ -5,7 +5,8 @@ import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '..
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
-import { mirTone, mirSmallTalk } from '../mirChat.js';   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
+import { mirTone, mirSmallTalk } from '../mirChat.js';
+import { mirKnowledge } from '../data/mirKnowledge.js';   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
 import { fbGetDamagePhoto, fbAddClaudeMemo } from '../firebase.js';   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
@@ -625,7 +626,14 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   // 2.33: 출구 한 겹 — 데이터는 그대로, 종결어미만 미르 말투로(검수사 확정 «살짝 친근»).
   //   업무 인텐트 전부 침묵일 때만 잡담 그물(검수사 제공 대본)이 받는다 —
   //   잡담이 답하면 아래 _mirDontKnow 가 자연히 false 라 무응답 신고도 안 나간다.
-  const localAnswer = useMemo(() => mirTone(_localAnswerRaw) || mirSmallTalk(debouncedQuery), [_localAnswerRaw, debouncedQuery]);
+  // 2.34: 기본 지식 층 — «FR이 뭐야»에 앱 기능 안내만 나오던 것(검수사 «기본 지식이 없어요»).
+  //   지식이 있으면 위에 붙이고 기존 앱 안내는 아래에 잇는다. 지식은 질문형에만 나선다(집계는 업무 몫).
+  const localAnswer = useMemo(() => {
+    const raw = mirTone(_localAnswerRaw);
+    const know = mirKnowledge(debouncedQuery);
+    if (know && raw) return know + '\n\n────────\n' + raw;
+    return know || raw || mirSmallTalk(debouncedQuery);
+  }, [_localAnswerRaw, debouncedQuery]);
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
