@@ -4,7 +4,10 @@
 //   InspectorModal.jsx는 삭제됨 (중복 두 벌 금지 — 이 파일이 유일한 로그인 진입점).
 //   앱 시작은 항상 이 화면(자동 로그인 없음). 로그인 성공 시 App이 역할별 해시로 보낸다.
 import React, { useState, useEffect, useCallback } from 'react';
-import { Anchor, UserPlus, LogIn, ArrowLeft } from 'lucide-react';
+import { UserPlus, LogIn, ArrowLeft } from 'lucide-react';
+//  2.29-02: 로그인 화면 로고 — 검수사 «지금도 구버전 띄우셨네요».
+//    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
+import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus } from '../inspectorStatus.js';
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
@@ -248,9 +251,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>그린마린 검수팀 전용 · 평택항 컨테이너 검수
         </span>
         <div className="flex items-center gap-4 mt-6 mb-2">
-          <div className="w-[62px] h-[62px] rounded-2xl bg-gradient-to-br from-cyan-900 to-slate-900 border border-cyan-700/60 flex items-center justify-center">
-            <Anchor className="w-8 h-8 text-cyan-300"/>
-          </div>
+          <img src={logoUrl} alt="TallyOne" draggable="false"
+            className="w-[62px] h-[62px] rounded-2xl select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
           <div>
             <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-cyan-50 to-sky-300 bg-clip-text text-transparent">TallyOne</h1>
             <div className="text-[13px] text-slate-400 mt-0.5">평택항 컨테이너 검수 시스템</div>
@@ -310,10 +312,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           <div className="absolute top-4 right-7 w-[120px] h-[120px] rounded-full blur-[32px] opacity-60"
                style={{ background: 'radial-gradient(closest-side, rgba(56,189,248,.35), transparent)' }}/>
           <div className="relative z-10 flex flex-col items-center pt-5">
-            <div className="w-[56px] h-[56px] rounded-[18px] flex items-center justify-center bg-gradient-to-br from-emerald-800 to-emerald-950"
-                 style={{ boxShadow: '0 12px 32px rgba(0,209,143,.28), inset 0 2px 0 1px rgba(255,255,255,.08)' }}>
-              <Anchor className="w-7 h-7 text-emerald-300"/>
-            </div>
+            <img src={logoUrl} alt="TallyOne" draggable="false"
+                 className="w-[56px] h-[56px] rounded-[18px] select-none"
+                 style={{ boxShadow: '0 12px 32px rgba(212,175,55,.26)' }}/>
             <div className="mt-2.5 text-[23px] font-black tracking-tight text-white leading-none">TallyOne</div>
             <div className="mt-1 text-[11.5px] font-medium text-[#9AA3B8]">평택항 컨테이너 검수</div>
             <span className="mt-2.5 h-[26px] px-3 rounded-full inline-flex items-center gap-2 text-[11px] font-semibold text-[#A7F0D0]"
