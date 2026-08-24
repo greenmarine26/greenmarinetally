@@ -251,6 +251,18 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic 
   else
     echo "⚠ 리스트 탭 연막 번들 실패 — 건너뜀"
   fi
+  # 2.26-10: 미르가 «EDI 가 아직 안 와서 위치를 모른다» 고 답하는가 (검수사 확정 — 경보는 빼되 물으면 답한다)
+  node --input-type=module -e "
+    const N = await import('$PWD/src/nlSearch.js');
+    const q = N.parseNaturalQuery('1200 어디야');
+    const noPos = [{ cn: 'GWSU8001200', iso: '40DC', fe: 'F', pod: 'KRPTK' }];
+    const yesPos = [{ cn: 'GWSU8001200', bay: '07', row: '02', tier: '84', iso: '40DC', fe: 'F', pod: 'KRPTK' }];
+    const a1 = N.generateLocalAnswer(q, noPos, noPos) || '';
+    const a2 = N.generateLocalAnswer(q, yesPos, yesPos) || '';
+    if (!/EDI.*아직 안 와서/.test(a1)) { console.log('✗ EDI 없을 때 사유를 안 알려준다'); process.exit(1); }
+    if (/EDI.*아직 안 와서/.test(a2)) { console.log('✗ EDI 있는데도 사유를 붙인다 — 잔소리'); process.exit(1); }
+    console.log('✓ 미르 EDI 미도착 안내 통과 (없을 때 알림 O · 있을 때 조용 O)');
+  " || { echo "✗ 미르 EDI 안내 검사 실패 — 배포 금지"; exit 1; }
   # 2.26: X-RAY 탭 연막검사 — 조인이 넷(xrayList·EDI·xraySeals·completed)이라 그려 봐야 안다.
   #   정렬(베이별순+우선양하순)·화물구분 4종·«미입력» 표시가 살아 있는지 본다.
   SMOKE_XR=$(mktemp /tmp/_smokexr_XXXXXX.js)

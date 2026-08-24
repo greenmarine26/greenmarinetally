@@ -890,7 +890,15 @@ function formatMovePathAnswer(results, allContainers, ctx) {
   return cand.map(c => describeMovePath(c, !!c._comp)).join('\n\n');
 }
 
-export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
+/** 2.26-10 (검수사 확정 2026-08-24) — *«EDI 보충되면 자동으로 보이는거니 … 다만 누가 미르에게
+ *  물으면 EDI가 도착하지 않아서 위치 조회가 안된다는 답은 해줘야 합니다»*
+ *
+ *  경보로 띄우는 것과 물었을 때 답하는 것은 다르다. 적부도가 늦는 것은 흔한 일이라 경보에서는
+ *  뺐지만(diagnostics 2.26-10), **물었는데 빈칸만 주는 것**은 «앱이 모르는 건지 화물이 없는 건지»
+ *  를 검수사가 알 수 없게 만든다.
+ *  ⇒ 답을 내보내기 전에 한 번 본다. 화물은 있는데 **어느 것도 자리를 모르면** 적부도가 안 온 것이다.
+ *  ⚠ 출구가 스무 곳이 넘어 각 자리에 붙이지 않는다 — 내보내는 문 하나를 감싼다. */
+function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   // 1.91: «미르야» 단독 호출 — 네, 하고 대답한다(검수사 확정).
   if (parsed.mirHello) return '네, 미르예요 🐱 무엇을 확인해 드릴까요?\n(예: "미르야 이번 선적 계획 어떻게 진행 될것 같아" · "리퍼 몇개" · "브리핑")';
   if (!hasAnyCondition(parsed)) return null;
@@ -2594,4 +2602,17 @@ export function generateTwinCheckAnswer(parsed, containers, pairsMap, pier = '')
 export function generateFoodAnswer(slot) {
   const label = { breakfast: '아침', lunch: '점심', dinner: '저녁', night: '야식', any: '식사' }[slot] || '식사';
   return `🎰 ${label} 뭐 먹을지 돌림판으로 정해 드릴게요!\n\n음성이면 잠시 후 돌림판이 자동으로 열립니다. 아래 버튼으로 바로 돌릴 수도 있어요.\n(홈 화면 🍽 맛집 메뉴에서 식당 추가·별점도 가능합니다.)`;
+}
+
+export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
+  const out = _localAnswerCore(parsed, results, allContainers, ctx);
+  if (!out || typeof out !== 'string') return out;
+  //  위치를 묻는 갈래에서만 본다 — 대수·온도 질문에까지 붙이면 잔소리가 된다.
+  const asksPos = !!(parsed && (parsed.posQuery || parsed.digits || parsed.listQuery || parsed.bayDistQuery));
+  if (!asksPos) return out;
+  const all = allContainers || [];
+  //  화물은 있는데 **한 대도** 자리를 모른다 = 적부도(EDI)가 아직 안 왔다.
+  //  (한두 대만 비는 것은 다른 사정이므로 여기서 말하지 않는다.)
+  if (!all.length || all.some((c) => c && (c.pos || c.bay))) return out;
+  return out + '\n\n⚠ 양하 EDI(적부도)가 아직 안 와서 **선내 위치를 모릅니다.**\n   지금 보이는 목록은 양하 리스트 것이고, EDI 가 도착하면 위치가 저절로 채워집니다.';
 }

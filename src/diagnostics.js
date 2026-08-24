@@ -368,14 +368,23 @@ export function runDiagnostics({ ediContainers, listRecords, xrayList, mode, car
     // M3.5.4-fix2: 진짜 컨테이너 번호만 카운트 (4자 영문 + 7자 숫자)
     const xrayCns = Object.keys(xrayList).filter(cn => /^[A-Z]{4}\d{7}$/i.test(cn));
     if (xrayCns.length > 0) {
-      // 평택 EDI 컨번호와 비교 (전체 EDI 아님)
-      const ediPtkCns = new Set(ediPtk.map(c => c.cn));
-      const noLocation = xrayCns.filter(cn => !ediPtkCns.has(cn.toUpperCase()));
-      if (noLocation.length > 0) {
+      /* ★ 2.26-10 (검수사 확정 2026-08-24) — *«그건 경보거리가 안됩니다. EDI 보충되면 자동으로
+         보이는거니»* → **양하 EDI 가 아직 안 온 배는 경보를 띄우지 않는다.**
+         실측 DXQD 2633E — `records` 237대만 있고 `ediContainers`·`raw/edi` 는 아예 없다.
+         적부도가 늦게 오는 것은 흔한 일이고, 오면 위치가 저절로 채워진다. 기다리면 되는 일에
+         경보를 띄우면 **진짜 경보가 묻힌다.**
+         ⚠ 다만 «묻지도 않았는데 조용한 것»과 «물었는데 안 알려주는 것»은 다르다 —
+           위치를 물으면 미르가 «EDI 가 아직 안 와서 위치를 모른다» 고 답한다(nlSearch 2.26-10).
+         ⚠ 대조가 한쪽만 정규화하고 있었다(EDI 쪽 raw · X-RAY 쪽 toUpperCase). 202행과 같은 벌로 맞춘다 —
+           컨번호에 공백이 섞이면 조용히 어긋난다. */
+      const _nc = (v) => String(v || '').replace(/[\s\-]/g, '').toUpperCase();
+      const ediPtkCns = new Set(ediPtk.map((c) => _nc(c.cn)));
+      const noLocation = xrayCns.filter((cn) => !ediPtkCns.has(_nc(cn)));
+      if (noLocation.length > 0 && ediPtk.length > 0) {
         alerts.push({
           level: 'info',
           code: 'xray_no_location',
-          msg: `X-RAY ${xrayCns.length}대 중 ${noLocation.length}대 EDI 매칭 안됨`,
+          msg: `X-RAY ${xrayCns.length}대 중 ${noLocation.length}대가 EDI 에 없음`,
           voice: '',
           count: noLocation.length,
           details: noLocation,
