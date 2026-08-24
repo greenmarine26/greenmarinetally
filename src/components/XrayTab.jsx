@@ -63,8 +63,12 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
     const md = rawEta.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);
     return {
       voy: (mode === 'loading' ? info.voy_l : info.voy_d) || info.voy || '',
-      //  운항선사 — 실측 OBWH 는 `lane`(YTFF)이 곧 선사다. 없으면 MRN 2~5자가 선사 코드다(26**YTFF**2721I).
-      carrier: info.carrier || info.lane || (mrn.length >= 6 ? mrn.slice(2, 6) : ''),
+      /*  운항선사 — **MRN 이 `lane` 보다 정확하다**(2.26-05, 검수사 화면에서 드러남).
+          MRN 은 세관 신고번호라 2~6자가 **신고인(선사) 부호**다 — 26**YTFF**2721I · 26**HTFR**091EI ·
+          26**KMTC**AK07E · 26**DJSC**D45PE. 실측 9척 전부 선사 코드였다.
+          `lane` 은 **항로** 코드라 다를 수 있다 — RZOR 은 lane `RZPT`(일조–평택)인데 선사는 `HTFR` 다.
+          OBWH 는 둘 다 YTFF 라 우연히 같았고, 그것만 보고 lane 을 먼저 뒀던 것이 2.26-01 의 실수다. */
+      carrier: info.carrier || (mrn.length >= 6 ? mrn.slice(2, 6) : '') || info.lane || '',
       eta: md ? `${md[1]}.${md[2]}.${md[3]}` : '',
       pod: 'KRPTK',                                    // 평택항 앱이다 — 양륙항은 고정
       name: resolveShipDisplayName(info, portMisData, dict).name || code,
@@ -139,6 +143,14 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
         ))}
       </div>
 
+      {/*  2.26-05: MRN 이 비면 **왜 비었는지** 말한다 — 조용히 빈칸으로 두지 않는다(3금지 ③).
+           PORT-MIS 엑셀을 2.26 이후에 다시 올려야 MRN 이 담긴다(그 전 레코드엔 필드가 없다). */}
+      {!head.mrn && !!rows.length && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+          ⚠ MRN 이 비어 있습니다 — <b>업로드 탭에서 PORT-MIS 엑셀을 다시 올리면</b> 채워집니다.
+          (2026-08-24 이전에 올린 자료에는 MRN 칸이 없습니다.)
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <div className="flex-1 flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 h-11">
           <SearchIcon className="w-4 h-4 text-slate-500"/>
