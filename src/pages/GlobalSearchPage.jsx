@@ -5,6 +5,7 @@ import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '..
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
+import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
 import { mirTone, mirSmallTalk } from '../mirChat.js';
 import { mirKnowledge } from '../data/mirKnowledge.js';   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
@@ -238,6 +239,17 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     const p = parsed;
     const Q = debouncedQuery;
     // 1.91-03 (검수사 실측 — 통합검색 «미르야»가 인사 대신 컨 100개 나열): 미르 호출 즉답을 최우선으로.
+    // 2.35 (검수사 실측 KBTR 2605E «양하갯수가 하나 틀리는데 뭐가 틀리는지»):
+    //   «대수가 안 맞아»·«몇 대 차이»·«왜 다르지» 류에 **어느 컨이 왜인지**를 답한다.
+    //   배 이름이 붙었을 때만(shipCtx) — 전 항차 스캔은 느리고 답도 흐려진다.
+    if (shipCtx && /(안\s*맞|다르|차이|틀리|어긋|왜\s*(달라|다르))/.test(Q) && /(대수|갯수|개수|양하|선적|EDI|리스트|숫자)/i.test(Q)) {
+      const _mode = /선적|LOLO|로딩/i.test(Q) ? 'loading' : 'discharge';
+      const _sec = shipCtx.v?.[_mode];
+      const _raw = shipCtx.v?.[_mode]?.raw?.edi?.text || shipCtx.v?.raw?.edi?.text || '';
+      const _d = diffEdiList(_sec, _raw);
+      if (_d) return explainEdiGap(_d, shipCtx.info?.vsl);
+      if (_sec?.ediContainers && _sec?.records) return `${shipCtx.info?.vsl || ''} ${_mode === 'loading' ? '선적' : '양하'} — EDI와 리스트가 딱 맞아요. 어긋나는 컨이 없어요 😺`;
+    }
     if (p.mirHello) return '네, 미르예요 🐱 뭐 확인해 드릴까요?\n(예: "미르야 OBWH 브리핑" · "미르야 이번 선적 계획 어떻게 진행 될것 같아")';
     // 1.69-01: 검수원 진입(홈 검색) — 컨 조회·용어·기능 설명은 그대로 답하고,
     //   수석 전용 통계·자료현황은 1.69 유도 문구로 넘긴다(검수사 확정 계열).
