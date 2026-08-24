@@ -289,6 +289,30 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic 
     fi
   done
   echo "   ✓ 수석 전용 항목 공용 권 이탈 0건"
+  # 2.29: 로고 — 아이콘 6장이 다 있고 «옛 자리표시 그림»이 아닌지 본다.
+  #   종전 아이콘은 1.7KB·4.3KB 짜리 단색 그림이었다. 새것은 배지 사진이라 10KB 아래로 내려올 수 없다.
+  for _i in icon-192 icon-512 icon-maskable-512 cone-icon-192 cone-icon-512 cone-icon-maskable-512; do
+    _f="public/$_i.png"
+    [ -f "$_f" ] || { echo "✗ 아이콘 없음: $_f — 배포 금지"; exit 1; }
+    _sz=$(wc -c < "$_f")
+    [ "$_sz" -gt 10000 ] || { echo "✗ 아이콘이 너무 작다($_sz B): $_f — 옛 자리표시 그림일 수 있다"; exit 1; }
+  done
+  echo "   ✓ 아이콘 6장 확인"
+  # 콘앱 매니페스트가 파일로 빠졌는지 (data: URL 로 되돌아가면 아이콘 base64 가 다시 박힌다)
+  grep -q 'rel="manifest" href="./cone.webmanifest"' public/cone.html \
+    || { echo "✗ cone.html 매니페스트가 파일 참조가 아니다 — 배포 금지"; exit 1; }
+  [ -f public/cone.webmanifest ] || { echo "✗ public/cone.webmanifest 없음 — 배포 금지"; exit 1; }
+  echo "   ✓ 콘앱 매니페스트 파일 참조"
+  # 2.29: 빌드본 파비콘이 **public 의 새 아이콘**을 가리키는지.
+  #   실측 — 진입 html 이 "./icon-192.png" 였을 때 vite 가 **루트에 남은 직전 판 아이콘**을 집어
+  #   해시 자산으로 만들어 버렸다(assets/icon-192-Cf9ehjsD.png, 1.2KB 짜리 옛 그림).
+  #   public/ 자산은 "/" 로 시작해야 해시 없이 그대로 나간다.
+  if grep -q 'rel="icon"[^>]*href="./assets/icon-' index.html; then
+    echo "✗ 빌드본 파비콘이 해시 자산을 가리킨다 — 루트에 남은 옛 아이콘을 집었다. 배포 금지"; exit 1
+  fi
+  grep -q 'rel="icon"[^>]*href="./icon-192.png"' index.html \
+    || { echo "✗ 빌드본에 파비콘 링크가 없다 — 배포 금지"; exit 1; }
+  echo "   ✓ 빌드본 파비콘 = ./icon-192.png"
   # 2.22: 로그인 목록 연막검사 — «지금 로그인한 사람 ∪ 오늘의 본인» 규칙이 살아 있는지 본다.
   #   검수사가 두 번 교정한 규칙이라(2.12-01 → 2.22) 조용히 되돌아가면 매번 이름을 쳐야 한다.
   SMOKE_LG=$(mktemp /tmp/_smokelg_XXXXXX.js)

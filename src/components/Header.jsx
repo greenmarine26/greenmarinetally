@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 // TallyOne 1.0 (K4): 미사용 아이콘 임포트 제거(Cloud·RefreshCw·Power) + 보조기능 아이콘 추가
 // TallyOne 1.1: 클로드에게 메모 아이콘(NotebookPen) 추가
-import { CloudOff, Home, Anchor, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen, Camera } from 'lucide-react';
+import { CloudOff, Home, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen, Camera } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import { isChief , isTester} from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
 import { isOwnerName } from '../adminGuard.js';
 import { APP_VERSION } from '../utils.js';   // 1.29-01: 헤더에 판 번호 상시 표시
 import HelpModal from './HelpModal.jsx';
+//  2.29: 앱 로고 — 검수사가 만들어 준 Tally_One 배지(흰 바탕 지우고 둥근 사각으로 잘라 낸 것).
+//    src/assets 에 두고 import 하는 이유는 vite 가 해시를 붙여 주기 때문 —
+//    판을 올리면 파일 이름이 바뀌어 **옛 로고가 캐시에 남지 않는다.**
+import logoUrl from '../assets/logo-tallyone.png';
 import GeminiKeyModal from './GeminiKeyModal.jsx';
 import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로드에게 메모 모달
 import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: 데미지 예약(자료 도착 전 사전 등록)
@@ -72,9 +76,9 @@ export default function Header({ version, inspector, online, route, voyages, onC
               <Home className="w-5 h-5 text-blue-300"/>
             </button>
           ) : (
-            <div className="w-9 h-9 rounded-lg bg-blue-900/60 border border-blue-700/40 flex items-center justify-center flex-shrink-0">
-              <Anchor className="w-5 h-5 text-blue-300"/>
-            </div>
+            <img src={logoUrl} alt="TallyOne" draggable="false"
+              className="w-9 h-9 rounded-lg flex-shrink-0 select-none"
+              style={{ imageRendering: 'auto' }} />
           )}
           <div className="min-w-0">
             <div className="font-bold text-sm text-blue-100 truncate leading-tight">
@@ -83,7 +87,9 @@ export default function Header({ version, inspector, online, route, voyages, onC
             </div>
             <div className="text-[10px] text-slate-500 truncate leading-tight">
               {/* V8.82: 모드 따라 항차 표시 — 양하=voy_d, 선적=voy_l (구: 항상 voy_d 우선이라 선적 중에도 양하 항차가 보임) */}
-              {info ? `${(route?.mode === 'loading' ? (info.voy_l || info.voy_d) : (info.voy_d || info.voy_l)) || info.voy || ''} · ${info.carrier || ''}` : '🌊 그린마린 검수팀 전용'}
+              {info
+                ? `${(route?.mode === 'loading' ? (info.voy_l || info.voy_d) : (info.voy_d || info.voy_l)) || info.voy || ''} · ${info.carrier || ''}`
+                : (<><img src={logoUrl} alt="" className="inline-block w-3 h-3 rounded-[3px] align-[-1px] mr-1"/>그린마린 검수팀 전용</>)}
             </div>
             {/* TallyOne 1.29-01: **판 번호를 늘 보이게 한다.**
                 검수사 지적 2026-08-08: *"버전 확인을 하려도 버튼을 누르는건 불편합니다."*
