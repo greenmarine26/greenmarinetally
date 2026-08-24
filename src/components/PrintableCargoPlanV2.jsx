@@ -28,7 +28,11 @@ import {
 // ------------------------------------------------------------
 // 검수앱 마크 규칙 (M6.91.5 사용자 확정):
 //   - 일반 Full = 'F', Empty = 'E'
-//   - 리퍼 Full = 'R/F', Empty = 'R/E'
+//   - 리퍼 Full = 'RF', Empty = 'RE'   ← 2.38-01 검수사 «RE RF»
+//     그림 칸에서만 슬래시를 뺀다. 슬래시는 풀/엠티를 가르려고 있던 것인데
+//     이제 «칠했나»가 그 일을 한다 — 검수사 «엠티이니 색이 없으나 풀로 오해 안함».
+//     세 글자가 두 글자가 되면서 좁은 배(MCSC 한 줄 12칸 = 칸 17px)에서도 글자를 키울 수 있다.
+//     ⚠ 리스트·서류 표기는 R/F·R/E·R/D 그대로다(2026-08-04 확정, utils.js 2226행).
 //   - FR = 'FR' (2글자), DG = 'D', Tank = 'T', OOG = 'A'
 //   - 양하/선적 동일 마크. 색만 다름 (양하=선사별, 선적=POD별).
 //   - PTK = 컬러 배경 + 글자. 통과 = 회색 + 빈(일반) / 글자(특수).
@@ -38,7 +42,7 @@ import {
 function isSpecialMark(mark) {
   if (!mark) return false;
   const m = String(mark).toUpperCase();
-  return m === 'D' || m === 'R' || m === 'R/F' || m === 'R/E' ||
+  return m === 'D' || m === 'R' || m === 'RF' || m === 'RE' ||
          m.startsWith('R') || m === 'FR' || m === 'T' || m === 'A';
 }
 
@@ -50,9 +54,9 @@ function _is20ft(c) {
   return Number.isFinite(b) ? (b % 2 === 1) : false;
 }
 
-// V8.88: 엠티 마커 여부(일반 엠티 e/E — 리퍼 R/E는 기존 표기 유지, 사용자 확정 2026-07-13).
+// V8.88: 엠티 마커 여부. 2.38-01: 그림 칸 리퍼 엠티는 RE(슬래시 뺌).
 function isMtMark(m) {
-  return m === 'e' || m === 'E' || m === 'R/E';
+  return m === 'e' || m === 'E' || m === 'RE';
 }
 
 // V8.88: 엠티 셀 배경 = 그 컨의 포트(선적)/선사(양하) 색을 연하게(파스텔) — 풀/엠티 구역이 면으로 구분.
@@ -69,6 +73,29 @@ function pastelOf(col) {
   return '#eef2f7';
 }
 
+// 2.38-01 검수사 확정 — **글자는 언제나 진한 검정, 색은 «칠»이 혼자 말한다.**
+//   «기존 특수화물에 고유색이 있지 않았나요?» → 있었는데 목적지/선사 색이 덮고 있었다.
+//   «그러면 일반 풀만 하늘색으로 칠하면 될듯합니다» · «엠티든 풀이든 특수화물이든 글자색은 진한 검정».
+//   그래서 칠에는 **연한 색**만 쓴다 — 진한 색(DG #b71c1c 같은) 위에서는 검정 글자가 안 읽힌다.
+//   값은 별첨2 범례(Legend 의 cargoColors)의 bg 와 **같은 것**을 쓴다. 두 곳이 갈라지면 범례가 거짓말이 된다.
+const SPECIAL_FILL = {
+  // 2.38-01 흑백 인쇄 대비 — 색조는 그대로 두고 **회색값만 190으로 맞췄다**.
+  //   검수사 «흑백프린터로 인쇄하면 어떻게 나오느냐가 문제입니다. 구분이 되나 안되나».
+  //   실측(Rec.601): 종전 값은 205~228에 몰려 흰 칸(255)과 27~50밖에 안 벌어졌고,
+  //   특히 TK 연주황은 차이 27이라 흑백에서 «칠했나»가 안 보였다.
+  //   흑백에서 색끼리 구분하는 건 어차피 불가능하다(여섯 색이 한 줄에 몰린다) —
+  //   종류는 글자(DG·TK·FR·A·RF)가 말하므로 흑백에서도 안 잃는다.
+  //   그래서 흑백이 지킬 것은 하나, «칠했나 안 칠했나 = 풀이냐 엠티냐»뿐이고
+  //   여섯 칠을 모두 회색 190에 맞춰 흰 칸과 65만큼 벌렸다.
+  'DG': '#ffa1aa',   // 위험물 = 빨강 계열
+  'RF': '#75dbe8',   // 리퍼 풀 = 청록 계열
+  'FR': '#9fd3a1',   // 플랫랙 = 초록 계열
+  'A': '#d8aae0',    // 오픈탑/OOG = 보라 계열
+  'TK': '#ffb445',   // 탱크 = 주황 계열
+};
+const PLAIN_FULL_BG = '#7dd3fc';   // 일반 풀 = 하늘색
+const MARK_FG = '#000';            // 글자는 전부 진한 검정 (검수사 확정)
+
 function getMarkV2(c, pod, mode) {
   // M6.94.34: _inList(리스트=평택)는 선적 모드에서만. 양하는 pod 평택만 인정.
   //   (양하에서 _inList 인정 시 타항 양하분 PHDVO 등이 평택으로 잘못 조회됨)
@@ -81,7 +108,7 @@ function getMarkV2(c, pod, mode) {
   // 특수화물 종류 우선 판정 (PTK든 통과든 같은 글자)
   let specialLetter = null;
   if (c.dg) specialLetter = 'DG';   // 2.38 (검수사): DG는 D가 아니라 DG 2글자
-  else if (isReeferContainer(c)) specialLetter = isEmpty ? 'R/E' : 'R/F';
+  else if (isReeferContainer(c)) specialLetter = isEmpty ? 'RE' : 'RF';   // 2.38-01: 그림은 RE·RF (리스트는 R/E·R/F 유지)
   else if (c.fr) specialLetter = 'FR';
   else if (c.tk) specialLetter = 'TK';   // 2.38 (검수사): 탱크도 TK 2글자
   else if (c.ot || c.oog) specialLetter = 'A';
@@ -121,7 +148,7 @@ export const CARGO_V2_CSS = `
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
 .cpv2-tier-row.cpv2-invisible-row { display: none; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(6px, 0.55vw, 8px); display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(7.5px, 0.69vw, 10px);   /* 2.38-01 검수사 «B로 해서» — 마크 전부 1.25배. 두 글자(DG 1.5em)가 최대라 최악 배(MCSC 칸 17px)에서도 15px로 들어간다 */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
@@ -144,6 +171,11 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-mark-TK { color: #e65100; }
 .cpv2-cell.cpv2-mark-E { color: #555; }
 .cpv2-cell.cpv2-mark-e { color: #555; }
+/* 2.38-01 (검수사 «소문자 e를 조금 더 크고 잘보이게 해주세요 적어서 안보임»):
+   소문자 e는 x-height 만 차지해 같은 폰트 크기에서도 대문자 E보다 눈에 띄게 작다.
+   글자를 키워 대문자와 비슷한 높이로 맞춘다 — 20ft/40ft 구분은 «모양»이 하지 «크기»가 하지 않는다. */
+.cpv2-cell.cpv2-mark-e { font-size: 1.1em; font-weight: normal; padding-bottom: 0.14em; }  /* 2.38-01 검수사 «e를 1.1 볼드 없이» + «가운데 보정». 소문자 e는 위로 뻗는 획이 없어 줄 아래쪽에 앉는다 —
+     칸이 flex 가운데 정렬이라 아래 여백을 주면 그만큼 올라온다. box-sizing:border-box 라 칸 크기는 안 변한다. */
 /* 2.38: 엠티 동그라미 폐지 — 20ft=e · 40/45ft=E 글자만 (검수사 확정) */
 .cpv2-cell.cpv2-mark-L { color: #1565c0; }
 .cpv2-cell.cpv2-mark-K { color: #0d47a1; }
@@ -325,10 +357,19 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
-                      // 2.38 (검수사 확정): **풀은 셀에 색을 넣고 엠티는 색을 안 넣는다.**
-                      //   풀 = 배경을 그 색으로 칠하고 글자는 흰색(면으로 보인다).
-                      //   엠티 = 배경 없음·글자만 그 색(테두리도 없음) — 풀/엠티가 «칠했나 아닌가»로 갈린다.
-                      style = isMtMark(cell.mark) ? { color: bg } : { background: bg, color: '#fff' };
+                      // 2.38-01 검수사 확정 — **칠은 «리스트가 풀이냐»로 정하고, 색은 특수화물이 우선이다.**
+                      //   ㉠ «카고플랜에서 F만이 아니고 리스트에서 F여야만 합니다. 이유는 DG TK FR OT로
+                      //      표기되면 풀로 안보일수 있으니까요» → 마크가 아니라 isFull(fe 가 E 가 아님)로 가른다.
+                      //   ㉡ «기존 특수화물에 고유색이 있지 않았나요?» → 있다. 별첨2 범례의 그 색을 그림에도 쓴다.
+                      //      특수화물은 제 색(DG 빨강·리퍼 청록·FR 초록·OT 보라·TK 주황)으로 칠하고,
+                      //      일반 화물만 목적지/선사 색을 쓴다. 범례와 그림이 같은 값을 본다.
+                      //   ㉢ X(옆 짝수 40피트가 차지한 홀수 자리)는 자기 셀이 아니라 isFull이 안 붙어
+                      //      40피트가 풀이어도 안 칠한다 — «풀이라고 해도 홀수베이에는 셀색을 넣지 않습니다».
+                      // 칠은 풀에만, 글자는 언제나 검정. 특수화물은 제 연한 색, 일반 풀은 하늘색.
+                      // 엠티·X는 안 칠하고 검정 글자만 남는다(X = 옆 짝수 40피트가 차지한 홀수 자리).
+                      style = cell.isFull
+                        ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
+                        : { color: MARK_FG };
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -388,10 +429,19 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
-                      // 2.38 (검수사 확정): **풀은 셀에 색을 넣고 엠티는 색을 안 넣는다.**
-                      //   풀 = 배경을 그 색으로 칠하고 글자는 흰색(면으로 보인다).
-                      //   엠티 = 배경 없음·글자만 그 색(테두리도 없음) — 풀/엠티가 «칠했나 아닌가»로 갈린다.
-                      style = isMtMark(cell.mark) ? { color: bg } : { background: bg, color: '#fff' };
+                      // 2.38-01 검수사 확정 — **칠은 «리스트가 풀이냐»로 정하고, 색은 특수화물이 우선이다.**
+                      //   ㉠ «카고플랜에서 F만이 아니고 리스트에서 F여야만 합니다. 이유는 DG TK FR OT로
+                      //      표기되면 풀로 안보일수 있으니까요» → 마크가 아니라 isFull(fe 가 E 가 아님)로 가른다.
+                      //   ㉡ «기존 특수화물에 고유색이 있지 않았나요?» → 있다. 별첨2 범례의 그 색을 그림에도 쓴다.
+                      //      특수화물은 제 색(DG 빨강·리퍼 청록·FR 초록·OT 보라·TK 주황)으로 칠하고,
+                      //      일반 화물만 목적지/선사 색을 쓴다. 범례와 그림이 같은 값을 본다.
+                      //   ㉢ X(옆 짝수 40피트가 차지한 홀수 자리)는 자기 셀이 아니라 isFull이 안 붙어
+                      //      40피트가 풀이어도 안 칠한다 — «풀이라고 해도 홀수베이에는 셀색을 넣지 않습니다».
+                      // 칠은 풀에만, 글자는 언제나 검정. 특수화물은 제 연한 색, 일반 풀은 하늘색.
+                      // 엠티·X는 안 칠하고 검정 글자만 남는다(X = 옆 짝수 40피트가 차지한 홀수 자리).
+                      style = cell.isFull
+                        ? { background: SPECIAL_FILL[cell.mark] || PLAIN_FULL_BG, color: MARK_FG }
+                        : { color: MARK_FG };
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -908,7 +958,7 @@ export default function PrintableCargoPlanV2({
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
-          <div className="col" style={{ fontSize: 8, color: '#555' }}>색칠=풀 · 색글자=엠티(e=20ft·E=40ft) · 회색=통과 · DG=위험물 · TK=탱크{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
+          <div className="col" style={{ fontSize: 8, color: '#555' }}>칠한 칸=풀(하늘색=일반, 특수화물은 제 색) · 안 칠한 칸=엠티 · e=20ft·E=40ft · X=옆 40ft가 차지 · 회색=통과{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
           {shiftCount > 0 && <div className="col" style={{ fontSize: 9, color: '#1d4ed8', fontWeight: 'bold' }}>쉬프팅 {shiftCount}</div>}
           {urgentCount > 0 && <div className="col" style={{ fontSize: 9, color: '#dc2626', fontWeight: 'bold' }}>긴급 {urgentCount}</div>}
           {luggCount > 0 && <div className="col" style={{ fontSize: 9, color: '#7c3aed', fontWeight: 'bold' }}>수화물 {luggCount}</div>}
@@ -1083,12 +1133,12 @@ function FeLegend({ fe }) {
 // 별첨 렌더링 (선사별 / 화물 종류별)
 function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
   const cargoColors = {
-    '일반': { bg: '#fff', fg: '#000', mark: 'o' },
-    'Reefer': { bg: '#b2ebf2', fg: '#006064', mark: 'R' },
-    'DG': { bg: '#ffcdd2', fg: '#b71c1c', mark: 'DG' },   // 2.38: 그림이 DG 2글자라 범례도 DG
-    'FR': { bg: '#c8e6c9', fg: '#1b5e20', mark: 'F' },
-    'OT': { bg: '#e1bee7', fg: '#4a148c', mark: 'A' },
-    'Tank': { bg: '#ffe0b2', fg: '#e65100', mark: 'TK' },   // 2.38: 그림이 TK 2글자라 범례도 TK
+    '일반': { bg: PLAIN_FULL_BG, fg: MARK_FG, mark: 'o' },   // 2.38-01: 일반 풀 = 하늘색 (그림과 같은 값)
+    'Reefer': { bg: SPECIAL_FILL['RF'], fg: MARK_FG, mark: 'R' },
+    'DG': { bg: SPECIAL_FILL['DG'], fg: MARK_FG, mark: 'DG' },   // 2.38: 그림이 DG 2글자라 범례도 DG
+    'FR': { bg: SPECIAL_FILL['FR'], fg: MARK_FG, mark: 'F' },
+    'OT': { bg: SPECIAL_FILL['A'], fg: MARK_FG, mark: 'A' },
+    'Tank': { bg: SPECIAL_FILL['TK'], fg: MARK_FG, mark: 'TK' },   // 2.38: 그림이 TK 2글자라 범례도 TK
   };
   // kind: 'carrier' / 'pod' = colorMap 사용 / 'cargo' = cargoColors / 'carrier-bw' = 흑백 (선사 표는 흑백 처리, 사용자 약속)
   const useColorMap = kind === 'carrier' || kind === 'pod';
