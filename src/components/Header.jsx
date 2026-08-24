@@ -69,16 +69,22 @@ export default function Header({ version, inspector, online, route, voyages, onC
     <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-3 py-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* 2.29-01: 로고를 **왼쪽 큰 자리**로 올린다 — 검수사 «너무 작아서 안보여요»
+              → «로고를 홈화면 버튼으로 사용해주셔도 됩니다»(승인).
+              2.29 는 홈에서만 로고를 보이고 다른 화면에서는 12px 짜리를 글줄에 끼웠다 — 안 보인다.
+              ⇒ 로고를 늘 44px 로 두고, 홈이 아닐 때는 **그것이 곧 홈 버튼**이다(모서리에 🏠 배지).
+              자리를 더 먹지 않는다 — 종전 홈 버튼이 있던 그 칸이다(V9.15 헤더 폭 규칙 유지). */}
           {route.name !== 'home' ? (
-            <button onClick={onGoHome}
-              title="홈으로 (항차 선택 화면)"
-              className="p-1.5 rounded bg-blue-900/40 hover:bg-blue-900/70 active:bg-blue-900/90 border border-blue-700/50 flex-shrink-0">
-              <Home className="w-5 h-5 text-blue-300"/>
+            <button onClick={onGoHome} title="홈으로 (항차 선택 화면)"
+              className="relative w-11 h-11 rounded-xl flex-shrink-0 hover:brightness-110 active:brightness-95 transition">
+              <img src={logoUrl} alt="홈으로" draggable="false" className="w-11 h-11 rounded-xl select-none"/>
+              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-md bg-blue-600 border border-blue-300/60 flex items-center justify-center">
+                <Home className="w-2.5 h-2.5 text-white"/>
+              </span>
             </button>
           ) : (
             <img src={logoUrl} alt="TallyOne" draggable="false"
-              className="w-9 h-9 rounded-lg flex-shrink-0 select-none"
-              style={{ imageRendering: 'auto' }} />
+              className="w-11 h-11 rounded-xl flex-shrink-0 select-none"/>
           )}
           <div className="min-w-0">
             <div className="font-bold text-sm text-blue-100 truncate leading-tight">
@@ -89,7 +95,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
               {/* V8.82: 모드 따라 항차 표시 — 양하=voy_d, 선적=voy_l (구: 항상 voy_d 우선이라 선적 중에도 양하 항차가 보임) */}
               {info
                 ? `${(route?.mode === 'loading' ? (info.voy_l || info.voy_d) : (info.voy_d || info.voy_l)) || info.voy || ''} · ${info.carrier || ''}`
-                : (<><img src={logoUrl} alt="" className="inline-block w-3 h-3 rounded-[3px] align-[-1px] mr-1"/>그린마린 검수팀 전용</>)}
+                : '그린마린 검수팀 전용'}
             </div>
             {/* TallyOne 1.29-01: **판 번호를 늘 보이게 한다.**
                 검수사 지적 2026-08-08: *"버전 확인을 하려도 버튼을 누르는건 불편합니다."*
