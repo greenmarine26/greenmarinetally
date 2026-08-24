@@ -37,11 +37,12 @@ const USAGE_CATS = [
 
 // 2.27: 수석 권 카테고리 — id 는 HELP_DATA_CHIEF.usage 키와 1:1. 화면 전환은 'cat:c:<id>' 로 간다.
 const CHIEF_CATS = [
-  { id: 'board',   label: '수석 대시보드', icon: LayoutGrid,   accent: 'violet',  desc: '오늘 도는 배 전부 · 진행률 · 자료 대기' },
+  { id: 'rules',   label: '먼저 읽을 것',  icon: AlertTriangle, accent: 'red',    desc: '되돌아오는 것 · 안 오는 것 · 확인창 없는 셋' },
+  { id: 'board',   label: '수석 대시보드', icon: LayoutGrid,   accent: 'violet',  desc: '구역 지도 · 작업 보드 · 공지 · 오답' },
   { id: 'portmis', label: 'PORT-MIS',      icon: Anchor,       accent: 'sky',     desc: '입항시각 · 선석 · 차항지 · MRN' },
-  { id: 'matrix',  label: '베이매트릭스',  icon: LayoutGrid,   accent: 'lime',    desc: '처음 보는 배 그림 만들기' },
+  { id: 'matrix',  label: '베이매트릭스',  icon: LayoutGrid,   accent: 'lime',    desc: '만드는 순서 · 확정 · 자료 잃는 다섯 가지' },
   { id: 'closing', label: '마감 텔리',     icon: Printer,      accent: 'blue',    desc: 'DEP.TALLY · 실적 EDI · ASC · VGM' },
-  { id: 'voyage',  label: '항차 관리',     icon: CheckCircle2, accent: 'emerald', desc: '만들기 · 지우기 · 완료 처리' },
+  { id: 'voyage',  label: '항차 관리',     icon: CheckCircle2, accent: 'emerald', desc: '완료 저장 · 복원 · 삭제 · 편집' },
 ];
 
 // 테일윈드 정적 클래스 (동적 생성 금지 — purge 회피)
@@ -80,6 +81,21 @@ function HelpBlock({ b }) {
 
       {b.lead && (
         <div className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-2">{b.lead}</div>
+      )}
+
+      {/* 2.28: 「왜 이렇게 하나」 — 검수사 지시 «또 왜 그렇게 해야 되는지도 설명해야 합니다».
+          까닭을 모르면 순서를 지킬 이유도 모른다. 그림보다 **먼저** 온다. */}
+      {b.why && b.why.length > 0 && (
+        <div className="bg-indigo-950/40 border border-indigo-700/40 rounded-lg px-2.5 py-2 mb-2">
+          <div className="text-[10px] font-black text-indigo-300/90 tracking-wide mb-1">왜 이렇게 하나</div>
+          <div className="space-y-1">
+            {b.why.map((w, i) => (
+              <div key={i} className="flex gap-1.5 text-[11px] sm:text-xs text-indigo-100/90 leading-relaxed">
+                <span className="shrink-0 text-indigo-400">·</span><span className="flex-1">{w}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* 2.27: 말로만 설명하면 어느 버튼인지 못 찾는다 — 그 화면을 그려 준다(검수사 지시). */}
@@ -121,6 +137,21 @@ function HelpBlock({ b }) {
               <span className="shrink-0">⚠</span><span className="flex-1">{w}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 2.28: 「한 번 잘못 누르면 잃는 것」 — 검수사 지시 «수석은 한번 실수로 검수 작업에 영향을 주고
+          또 많은 자료를 잃을수가 있기 때문입니다». 경고(⚠)와 **다른 칸**으로 둔다 — 섞으면 안 읽는다. */}
+      {b.never && b.never.length > 0 && (
+        <div className="mt-2 rounded-lg border-2 border-red-800/60 bg-red-950/40 px-2.5 py-2">
+          <div className="text-[10px] font-black text-red-300 tracking-wide mb-1">⛔ 한 번 잘못 누르면 잃는 것</div>
+          <div className="space-y-1">
+            {b.never.map((w, i) => (
+              <div key={i} className="flex gap-1.5 text-[11px] sm:text-xs text-red-100/90 leading-relaxed">
+                <span className="shrink-0 text-red-400">✕</span><span className="flex-1">{w}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -278,6 +309,8 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
         <div className="p-3 sm:p-4 overflow-y-auto">
           <div className="text-[11px] text-violet-300/80 bg-violet-950/30 border border-violet-800/40 rounded-lg px-3 py-2 mb-3 leading-relaxed">
             검수 방법은 <b>기능 사전</b>(공용)에 있습니다. 이 권은 <b>수석만 쓰는 것</b>만 담았습니다.
+            <br/>여기 나오는 버튼에는 <b className="text-red-300">되돌릴 수 없는 것</b>이 섞여 있습니다 —
+            처음이면 <b className="text-red-300">「먼저 읽을 것」</b>부터 보십시오.
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             {CHIEF_CATS.map((cat) => {

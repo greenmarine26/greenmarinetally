@@ -52,12 +52,34 @@ const die = (m, extra) => { console.log('✗ ' + m); if (extra) console.log('   
   if (!chiefBtn) die('홈에 수석 권 버튼이 없다');
   click(chiefBtn); await wait(150);
   if (!/수석검수사 매뉴얼/.test(txt())) die('수석 권을 눌렀는데 화면이 안 바뀐다 — setView 가 빈 데로 간다');
-  const CC = ['수석 대시보드', 'PORT-MIS', '베이매트릭스', '마감 텔리', '항차 관리'];
+  const CC = ['먼저 읽을 것', '수석 대시보드', 'PORT-MIS', '베이매트릭스', '마감 텔리', '항차 관리'];
   for (const c of CC) if (!txt().includes(c)) die('수석 권에 «' + c + '» 이 없다');
-  const cb = find(/마감 텔리/);
-  click(cb); await wait(120);
-  if (!/DEP\.TALLY/.test(txt())) die('수석 권 카테고리가 안 열린다 (cat:c: 경로)');
-  if (!/화면/.test(txt())) die('수석 권 화면 그림이 안 그려진다');
+
+  //  2.28: 칸마다 **여러 장**이어야 한다 — 검수사 «항목당 1장 정도입니다. 이걸로 앱을 사용 가능 할까요?»
+  //   한 장짜리는 사전이지 매뉴얼이 아니다. 2칸 미만이면 빌드를 멈춘다.
+  let chiefBlocks = 0, chiefShots = 0, sawWhy = false, sawNever = false;
+  for (const c of CC) {
+    const b = find(new RegExp(c));
+    if (!b) die('수석 권 카테고리 «' + c + '» 버튼을 못 찾았다');
+    click(b); await wait(110);
+    const n = doc().querySelectorAll('.bg-slate-800\\/50.border.border-slate-700.rounded-xl').length;
+    if (n < 2) die('수석 권 «' + c + '» 이 ' + n + '장뿐이다 — 항목마다 여러 장이어야 한다');
+    chiefBlocks += n;
+    chiefShots += (txt().match(/화면/g) || []).length;
+    if (/왜 이렇게 하나/.test(txt())) sawWhy = true;
+    if (/한 번 잘못 누르면 잃는 것/.test(txt())) sawNever = true;
+    click(doc().querySelectorAll('button')[0]); await wait(100);   // 뒤로 = 수석 권 목록
+    if (!/수석검수사 매뉴얼/.test(txt())) die('«' + c + '» 에서 뒤로 눌렀더니 수석 권 목록으로 안 온다');
+  }
+  if (!sawWhy) die('«왜 이렇게 하나» 칸이 한 번도 안 그려졌다 — 검수사 지시 항목이다');
+  if (!sawNever) die('«한 번 잘못 누르면 잃는 것» 칸이 한 번도 안 그려졌다 — 검수사 지시 항목이다');
+
+  //  매트릭스는 특히 여러 장이어야 한다 (검수사 «메트릭스만 설명해도 여러장이 나올것입니다»)
+  click(find(/베이매트릭스/)); await wait(120);
+  const mx = doc().querySelectorAll('.bg-slate-800\\/50.border.border-slate-700.rounded-xl').length;
+  if (mx < 5) die('베이매트릭스가 ' + mx + '장뿐이다 — 최소 5장');
+  if (!/확정/.test(txt()) || !/보정중/.test(txt())) die('매트릭스에 «확정/보정중» 설명이 없다');
+  click(doc().querySelectorAll('button')[0]); await wait(100);
 
   // ④ 2.27-01: 이름이 없으면 «잠김»으로 보여야 한다 — 통째로 사라지면 «수석용은 어디서 보나»가 된다
   const dom2 = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',
@@ -71,6 +93,6 @@ const die = (m, extra) => { console.log('✗ ' + m); if (extra) console.log('   
   if ([...dom2.window.document.querySelectorAll('button')].some((b) => /수석검수사 매뉴얼/.test(b.textContent || '')))
     die('로그아웃인데 수석 권이 **눌린다** — 직책을 모르는 채로 열면 안 된다');
 
-  console.log(`✓ 매뉴얼 연막검사 통과 (공용 ${opened}칸 · 그림 ${shots}칸 · 수석 권 ${CC.length}칸 · 로그아웃 잠김 O · 오류 0)`);
+  console.log(`✓ 매뉴얼 연막검사 통과 (공용 ${opened}칸 · 그림 ${shots}칸 · 수석 권 ${CC.length}칸 ${chiefBlocks}장(매트릭스 ${mx}장) · 왜/잃는것 O · 로그아웃 잠김 O · 오류 0)`);
   process.exit(0);
 })().catch((e) => die('THROW: ' + e.message));
