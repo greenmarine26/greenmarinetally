@@ -231,11 +231,11 @@ echo "✓ 루트 참조 파일 존재 확인: $REFJS, $REFCSS"
 #   빌드 성공·번들 grep 통과에도 앱이 죽은 사고(hidden→issues TDZ)를 겪었다.
 echo "[+] 렌더 연막검사 (BayGridEditor)..."
 SMOKE_OUT=$(mktemp /tmp/_smoke_XXXXXX.js)   # V9.24: 고정 경로가 타 세션 잔재(권한 다른 uid)와 충돌해 검사가 통째로 건너뛰어졌다
-if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
      --outfile="$SMOKE_OUT" --define:process.env.NODE_ENV='"development"' --log-level=error; then
   node tools/smoke_render.cjs "$SMOKE_OUT" || { echo "✗ 렌더 연막검사 실패 — 배포 금지"; exit 1; }
   SMOKE_BP=$(mktemp /tmp/_smokebp_XXXXXX.js)
-  if npx esbuild tools/smoke_bayplan.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+  if npx esbuild tools/smoke_bayplan.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
        --outfile="$SMOKE_BP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_bayplan.cjs "$SMOKE_BP" || { echo "✗ BayPlan 연막검사 실패 — 배포 금지"; exit 1; }
   else
@@ -245,7 +245,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
   #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.
   SMOKE_LT=$(mktemp /tmp/_smokelt_XXXXXX.js)
-  if npx esbuild tools/smoke_listtab.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+  if npx esbuild tools/smoke_listtab.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
        --outfile="$SMOKE_LT" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_listtab.cjs "$SMOKE_LT" || { echo "✗ 리스트 탭 연막검사 실패 — 배포 금지"; exit 1; }
   else
@@ -266,7 +266,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 2.26: X-RAY 탭 연막검사 — 조인이 넷(xrayList·EDI·xraySeals·completed)이라 그려 봐야 안다.
   #   정렬(베이별순+우선양하순)·화물구분 4종·«미입력» 표시가 살아 있는지 본다.
   SMOKE_XR=$(mktemp /tmp/_smokexr_XXXXXX.js)
-  if npx esbuild tools/smoke_xray.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+  if npx esbuild tools/smoke_xray.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
        --outfile="$SMOKE_XR" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_xray.cjs "$SMOKE_XR" || { echo "✗ X-RAY 탭 연막검사 실패 — 배포 금지"; exit 1; }
   else
@@ -276,7 +276,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
   #   매뉴얼은 «있는 줄도 모르면 안 만든 것과 같다»(CLAUDE.md 0-B) — 안 열리는 권은 없는 권이다.
   SMOKE_HP=$(mktemp /tmp/_smokehelp_XXXXXX.js)
-  if npx esbuild tools/smoke_help.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+  if npx esbuild tools/smoke_help.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
        --outfile="$SMOKE_HP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_help.cjs "$SMOKE_HP" || { echo "✗ 매뉴얼 연막검사 실패 — 배포 금지"; exit 1; }
   else
@@ -320,7 +320,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 2.22: 로그인 목록 연막검사 — «지금 로그인한 사람 ∪ 오늘의 본인» 규칙이 살아 있는지 본다.
   #   검수사가 두 번 교정한 규칙이라(2.12-01 → 2.22) 조용히 되돌아가면 매번 이름을 쳐야 한다.
   SMOKE_LG=$(mktemp /tmp/_smokelg_XXXXXX.js)
-  if npx esbuild tools/smoke_login.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+  if npx esbuild tools/smoke_login.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
        --outfile="$SMOKE_LG" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_login.cjs "$SMOKE_LG" || { echo "✗ 로그인 목록 연막검사 실패 — 배포 금지"; exit 1; }
   else

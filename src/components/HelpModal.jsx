@@ -65,32 +65,32 @@ const ACCENT = {
 // ── 블록 한 장 (코스 단계·사전 항목 공통) ─────────────────────────────
 function HelpBlock({ b }) {
   return (
-    <div className="bg-ink-800/50 border border-line rounded-btn p-3 sm:p-3.5">
+    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 sm:p-3.5">
       <div className="flex items-start gap-2 mb-1.5">
         {b.step && (
-          <span className="shrink-0 text-2xs font-black bg-amber-600 text-ink-950 rounded px-1.5 py-0.5 mt-0.5">{b.step}</span>
+          <span className="shrink-0 text-[10px] font-black bg-amber-600 text-slate-900 rounded px-1.5 py-0.5 mt-0.5">{b.step}</span>
         )}
         <div className="text-sm sm:text-base font-black text-amber-200 leading-snug">{b.title}</div>
       </div>
 
       {b.where && (
-        <div className="text-xxs sm:text-xs text-sky-300 bg-sky-950/40 border border-sky-800/50 rounded-pill px-2 py-1.5 mb-2 leading-relaxed">
+        <div className="text-[11px] sm:text-xs text-sky-300 bg-sky-950/40 border border-sky-800/50 rounded-lg px-2 py-1.5 mb-2 leading-relaxed">
           📍 {b.where}
         </div>
       )}
 
       {b.lead && (
-        <div className="text-xs sm:text-sm text-dim-200 leading-relaxed mb-2">{b.lead}</div>
+        <div className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-2">{b.lead}</div>
       )}
 
       {/* 2.28: 「왜 이렇게 하나」 — 검수사 지시 «또 왜 그렇게 해야 되는지도 설명해야 합니다».
           까닭을 모르면 순서를 지킬 이유도 모른다. 그림보다 **먼저** 온다. */}
       {b.why && b.why.length > 0 && (
-        <div className="bg-indigo-950/40 border border-indigo-700/40 rounded-pill px-2.5 py-2 mb-2">
-          <div className="text-2xs font-black text-indigo-300/90 tracking-wide mb-1">왜 이렇게 하나</div>
+        <div className="bg-indigo-950/40 border border-indigo-700/40 rounded-lg px-2.5 py-2 mb-2">
+          <div className="text-[10px] font-black text-indigo-300/90 tracking-wide mb-1">왜 이렇게 하나</div>
           <div className="space-y-1">
             {b.why.map((w, i) => (
-              <div key={i} className="flex gap-1.5 text-xxs sm:text-xs text-indigo-100/90 leading-relaxed">
+              <div key={i} className="flex gap-1.5 text-[11px] sm:text-xs text-indigo-100/90 leading-relaxed">
                 <span className="shrink-0 text-indigo-400">·</span><span className="flex-1">{w}</span>
               </div>
             ))}
@@ -104,8 +104,8 @@ function HelpBlock({ b }) {
       {b.dos && b.dos.length > 0 && (
         <ol className="space-y-1.5 mb-2">
           {b.dos.map((d, i) => (
-            <li key={i} className="flex gap-2 text-xs sm:text-sm text-dim-100 leading-relaxed">
-              <span className="shrink-0 w-4 h-4 mt-0.5 rounded-full bg-ink-750 text-dim-200 text-2xs font-black flex items-center justify-center">{i + 1}</span>
+            <li key={i} className="flex gap-2 text-xs sm:text-sm text-slate-200 leading-relaxed">
+              <span className="shrink-0 w-4 h-4 mt-0.5 rounded-full bg-slate-700 text-slate-300 text-[10px] font-black flex items-center justify-center">{i + 1}</span>
               <span className="flex-1">{d}</span>
             </li>
           ))}
@@ -114,15 +114,15 @@ function HelpBlock({ b }) {
 
       {b.says && b.says.length > 0 && (
         <div className="mb-2">
-          <div className="text-2xs font-black text-cyan-300/80 mb-1">이렇게 치면 (또는 🎤로 말하면)</div>
+          <div className="text-[10px] font-black text-cyan-300/80 mb-1">이렇게 치면 (또는 🎤로 말하면)</div>
           <div className="space-y-1">
             {b.says.map((s, i) => (
-              <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-1 sm:gap-2 py-1 border-b border-line/40 last:border-0">
-                <code className="sm:col-span-2 text-xs sm:text-sm font-bold mono text-cyan-300 bg-ink-950/60 px-2 py-1 rounded break-all self-start">
+              <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-1 sm:gap-2 py-1 border-b border-slate-700/40 last:border-0">
+                <code className="sm:col-span-2 text-xs sm:text-sm font-bold mono text-cyan-300 bg-slate-950/60 px-2 py-1 rounded break-all self-start">
                   {s.in}
                 </code>
-                <div className="sm:col-span-3 text-xxs sm:text-sm text-dim-200 leading-relaxed">
-                  <span className="text-dim-400">→ </span>{s.out}
+                <div className="sm:col-span-3 text-[11px] sm:text-sm text-slate-300 leading-relaxed">
+                  <span className="text-slate-500">→ </span>{s.out}
                 </div>
               </div>
             ))}
@@ -131,9 +131,9 @@ function HelpBlock({ b }) {
       )}
 
       {b.warns && b.warns.length > 0 && (
-        <div className="space-y-1 mt-2 pt-2 border-t border-line">
+        <div className="space-y-1 mt-2 pt-2 border-t border-slate-700/50">
           {b.warns.map((w, i) => (
-            <div key={i} className="flex gap-1.5 text-xxs sm:text-xs text-amber-100/80 leading-relaxed">
+            <div key={i} className="flex gap-1.5 text-[11px] sm:text-xs text-amber-100/80 leading-relaxed">
               <span className="shrink-0">⚠</span><span className="flex-1">{w}</span>
             </div>
           ))}
@@ -143,11 +143,11 @@ function HelpBlock({ b }) {
       {/* 2.28: 「한 번 잘못 누르면 잃는 것」 — 검수사 지시 «수석은 한번 실수로 검수 작업에 영향을 주고
           또 많은 자료를 잃을수가 있기 때문입니다». 경고(⚠)와 **다른 칸**으로 둔다 — 섞으면 안 읽는다. */}
       {b.never && b.never.length > 0 && (
-        <div className="mt-2 rounded-pill border-2 border-red-800/60 bg-red-950/40 px-2.5 py-2">
-          <div className="text-2xs font-black text-red-300 tracking-wide mb-1">{b.neverTitle || '⛔ 한 번 잘못 누르면 잃는 것'}</div>
+        <div className="mt-2 rounded-lg border-2 border-red-800/60 bg-red-950/40 px-2.5 py-2">
+          <div className="text-[10px] font-black text-red-300 tracking-wide mb-1">{b.neverTitle || '⛔ 한 번 잘못 누르면 잃는 것'}</div>
           <div className="space-y-1">
             {b.never.map((w, i) => (
-              <div key={i} className="flex gap-1.5 text-xxs sm:text-xs text-red-100/90 leading-relaxed">
+              <div key={i} className="flex gap-1.5 text-[11px] sm:text-xs text-red-100/90 leading-relaxed">
                 <span className="shrink-0 text-red-400">✕</span><span className="flex-1">{w}</span>
               </div>
             ))}
@@ -171,17 +171,17 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
   const chief = isChief(inspector);
 
   const Header = ({ title, back }) => (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-ink-900/90 sticky top-0 z-10">
+    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/90 sticky top-0 z-10">
       <div className="flex items-center gap-2 min-w-0">
         {back && (
-          <button onClick={back} className="p-1.5 -ml-1.5 hover:bg-ink-750 rounded-pill shrink-0">
-            <ChevronLeft className="w-5 h-5 text-dim-200" />
+          <button onClick={back} className="p-1.5 -ml-1.5 hover:bg-slate-800 rounded-lg shrink-0">
+            <ChevronLeft className="w-5 h-5 text-slate-300" />
           </button>
         )}
-        <span className="text-base font-black text-dim-100 truncate">{title}</span>
+        <span className="text-base font-black text-slate-100 truncate">{title}</span>
       </div>
-      <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill shrink-0">
-        <X className="w-5 h-5 text-dim-300" />
+      <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg shrink-0">
+        <X className="w-5 h-5 text-slate-400" />
       </button>
     </div>
   );
@@ -193,8 +193,8 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
         <Header title="사용 매뉴얼" />
         <div className="p-4 space-y-3 overflow-y-auto">
           <button onClick={() => setView('course')}
-            className="w-full text-left bg-gradient-to-br from-amber-900/50 to-slate-900 border-2 border-amber-600/50 hover:border-amber-400 rounded-card p-5 flex items-center gap-4 transition">
-            <div className="w-14 h-14 rounded-card bg-amber-500/20 flex items-center justify-center shrink-0">
+            className="w-full text-left bg-gradient-to-br from-amber-900/50 to-slate-900 border-2 border-amber-600/50 hover:border-amber-400 rounded-2xl p-5 flex items-center gap-4 transition">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center shrink-0">
               <Play className="w-7 h-7 text-amber-300" />
             </div>
             <div className="min-w-0 flex-1">
@@ -205,8 +205,8 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
           </button>
 
           <button onClick={() => setView('usage')}
-            className="w-full text-left bg-gradient-to-br from-sky-900/50 to-slate-900 border-2 border-sky-700/40 hover:border-sky-500 rounded-card p-5 flex items-center gap-4 transition">
-            <div className="w-14 h-14 rounded-card bg-sky-500/20 flex items-center justify-center shrink-0">
+            className="w-full text-left bg-gradient-to-br from-sky-900/50 to-slate-900 border-2 border-sky-700/40 hover:border-sky-500 rounded-2xl p-5 flex items-center gap-4 transition">
+            <div className="w-14 h-14 rounded-2xl bg-sky-500/20 flex items-center justify-center shrink-0">
               <BookOpen className="w-7 h-7 text-sky-300" />
             </div>
             <div className="min-w-0 flex-1">
@@ -221,13 +221,13 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
               직책은 이름으로만 알 수 있으니 로그아웃 상태에서 열어 줄 수는 없다.
               ⇒ 열지는 않되 **왜 안 열리는지**는 말한다. 조용히 없어지는 것이 문제였다. */}
           {!inspector && (
-            <div className="w-full text-left bg-ink-900/60 border-2 border-line border-dashed rounded-card p-4 flex items-center gap-3.5">
-              <div className="w-14 h-14 rounded-card bg-ink-750/40 flex items-center justify-center shrink-0">
-                <Lock className="w-7 h-7 text-dim-400" />
+            <div className="w-full text-left bg-slate-900/60 border-2 border-slate-700/50 border-dashed rounded-2xl p-4 flex items-center gap-3.5">
+              <div className="w-14 h-14 rounded-2xl bg-slate-700/40 flex items-center justify-center shrink-0">
+                <Lock className="w-7 h-7 text-slate-500" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-lg font-black text-dim-300">수석검수사 매뉴얼</div>
-                <div className="text-sm text-dim-400 mt-0.5">
+                <div className="text-lg font-black text-slate-400">수석검수사 매뉴얼</div>
+                <div className="text-sm text-slate-500 mt-0.5">
                   <b className="text-amber-400/90">이름을 고르면 열립니다</b> — 화면 맨 위 오른쪽 [이름] 버튼.
                   수석·부수석만 보는 책이라 누구인지 알아야 엽니다.
                 </div>
@@ -238,8 +238,8 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
           {/* 2.27: 수석 권 — 수석에게만 보인다. 검수원 화면에 나오면 안 되는 서류가 들어 있다. */}
           {chief && (
             <button onClick={() => setView('chief')}
-              className="w-full text-left bg-gradient-to-br from-violet-900/50 to-slate-900 border-2 border-violet-700/40 hover:border-violet-500 rounded-card p-4 flex items-center gap-3.5 transition">
-              <div className="w-14 h-14 rounded-card bg-violet-500/20 flex items-center justify-center shrink-0">
+              className="w-full text-left bg-gradient-to-br from-violet-900/50 to-slate-900 border-2 border-violet-700/40 hover:border-violet-500 rounded-2xl p-4 flex items-center gap-3.5 transition">
+              <div className="w-14 h-14 rounded-2xl bg-violet-500/20 flex items-center justify-center shrink-0">
                 <BookOpen className="w-7 h-7 text-violet-300" />
               </div>
               <div className="min-w-0 flex-1">
@@ -251,8 +251,8 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
           )}
 
           <button onClick={() => setView('terms')}
-            className="w-full text-left bg-gradient-to-br from-emerald-900/50 to-slate-900 border-2 border-emerald-700/40 hover:border-emerald-500 rounded-card p-5 flex items-center gap-4 transition">
-            <div className="w-14 h-14 rounded-card bg-emerald-500/20 flex items-center justify-center shrink-0">
+            className="w-full text-left bg-gradient-to-br from-emerald-900/50 to-slate-900 border-2 border-emerald-700/40 hover:border-emerald-500 rounded-2xl p-5 flex items-center gap-4 transition">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 flex items-center justify-center shrink-0">
               <Languages className="w-7 h-7 text-emerald-300" />
             </div>
             <div className="min-w-0 flex-1">
@@ -270,7 +270,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
         <Header title="하루 작업 순서" back={() => setView('home')} />
         <div className="overflow-y-auto">
           <div className="px-3 sm:px-4 pt-3">
-            <div className="text-xxs sm:text-xs text-dim-300 bg-ink-800/60 border border-line rounded-pill px-3 py-2 leading-relaxed">
+            <div className="text-[11px] sm:text-xs text-slate-400 bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 leading-relaxed">
               위에서부터 그대로 따라 하면 됩니다. 📍는 화면 어디인지, 파란 글씨는 실제로 쳐 보는 말입니다.
             </div>
           </div>
@@ -291,10 +291,10 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
               const a = ACCENT[cat.accent];
               return (
                 <button key={cat.id} onClick={() => setView('cat:' + cat.id)}
-                  className={`text-left border-2 rounded-card p-3.5 transition ${a.card}`}>
+                  className={`text-left border-2 rounded-2xl p-3.5 transition ${a.card}`}>
                   <Icon className={`w-7 h-7 mb-2 ${a.icon}`} />
                   <div className={`text-sm font-black ${a.title}`}>{cat.label}</div>
-                  <div className="text-xxs text-dim-300 mt-0.5 leading-snug">{cat.desc}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">{cat.desc}</div>
                 </button>
               );
             })}
@@ -307,7 +307,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
       <>
         <Header title="수석검수사 매뉴얼" back={() => setView('home')} />
         <div className="p-3 sm:p-4 overflow-y-auto">
-          <div className="text-xxs text-violet-300/80 bg-violet-950/30 border border-violet-800/40 rounded-pill px-3 py-2 mb-3 leading-relaxed">
+          <div className="text-[11px] text-violet-300/80 bg-violet-950/30 border border-violet-800/40 rounded-lg px-3 py-2 mb-3 leading-relaxed">
             검수 방법은 <b>기능 사전</b>(공용)에 있습니다. 이 권은 <b>수석만 쓰는 것</b>만 담았습니다.
             <br/>여기 나오는 버튼에는 <b className="text-red-300">되돌릴 수 없는 것</b>이 섞여 있습니다 —
             처음이면 <b className="text-red-300">「먼저 읽을 것」</b>부터 보십시오.
@@ -318,10 +318,10 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
               const a = ACCENT[cat.accent] || ACCENT.sky;
               return (
                 <button key={cat.id} onClick={() => setView('cat:c:' + cat.id)}
-                  className={`text-left border-2 rounded-card p-3.5 transition ${a.card}`}>
+                  className={`text-left border-2 rounded-2xl p-3.5 transition ${a.card}`}>
                   <Icon className={`w-7 h-7 mb-2 ${a.icon}`} />
                   <div className={`text-sm font-black ${a.title}`}>{cat.label}</div>
-                  <div className="text-xxs text-dim-300 mt-0.5 leading-snug">{cat.desc}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">{cat.desc}</div>
                 </button>
               );
             })}
@@ -342,7 +342,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
           <div className="p-3 sm:p-4 space-y-3">
             {blocks.length > 0
               ? blocks.map((b, i) => <HelpBlock key={i} b={b} />)
-              : <div className="text-sm text-dim-300 text-center py-8">준비 중입니다.</div>}
+              : <div className="text-sm text-slate-400 text-center py-8">준비 중입니다.</div>}
           </div>
         </div>
       </>
@@ -353,8 +353,8 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
         <Header title="검수 용어 · 회화" back={() => setView('home')} />
         <div className="p-3 sm:p-4 overflow-y-auto space-y-4">
           <button onClick={() => setPhraseOpen(true)}
-            className="w-full bg-gradient-to-br from-blue-900/50 to-slate-900 border-2 border-blue-700/40 hover:border-blue-500 rounded-card p-4 flex items-center gap-3 transition">
-            <div className="w-12 h-12 rounded-btn bg-blue-500/20 flex items-center justify-center shrink-0">
+            className="w-full bg-gradient-to-br from-blue-900/50 to-slate-900 border-2 border-blue-700/40 hover:border-blue-500 rounded-2xl p-4 flex items-center gap-3 transition">
+            <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center shrink-0">
               <Languages className="w-6 h-6 text-blue-300" />
             </div>
             <div className="text-left flex-1 min-w-0">
@@ -368,9 +368,9 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
             <div className="text-sm font-black text-emerald-200 mb-2 px-1">📖 검수 용어 풀이</div>
             <div className="space-y-1.5">
               {(HELP_DATA.terms || []).map((t, i) => (
-                <div key={i} className="bg-ink-800/50 border border-line rounded-btn px-3 py-2.5 flex gap-3">
+                <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-2.5 flex gap-3">
                   <div className="text-sm font-black text-emerald-300 mono shrink-0 min-w-[5.5rem]">{t.term}</div>
-                  <div className="text-xs sm:text-sm text-dim-200 leading-relaxed">{t.desc}</div>
+                  <div className="text-xs sm:text-sm text-slate-300 leading-relaxed">{t.desc}</div>
                 </div>
               ))}
             </div>
@@ -383,10 +383,10 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
   return (
     <div className="fixed inset-0 z-[200] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={onClose}>
-      <div className="bg-ink-950 border border-line rounded-t-3xl sm:rounded-card w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden shadow-card"
+      <div className="bg-slate-950 border border-slate-700 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}>
         {body}
-        <div className="px-4 py-2 border-t border-line bg-ink-950 text-2xs text-dim-500 text-center shrink-0">
+        <div className="px-4 py-2 border-t border-slate-800 bg-slate-950 text-[10px] text-slate-600 text-center shrink-0">
           여기에 없는 자유 질문은 검색창의 ✨ AI 버튼으로 — 답이 틀리면 ❌ 오답으로 남겨 주세요
         </div>
       </div>

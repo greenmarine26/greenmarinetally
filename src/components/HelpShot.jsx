@@ -19,7 +19,7 @@ const C = {
   amber: 'bg-amber-500/15 text-amber-300 border-amber-500/25',
   rose: 'bg-rose-500/15 text-rose-300 border-rose-500/25',
   emerald: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
-  slate: 'bg-ink-750/50 text-dim-200 border-line-strong/40',
+  slate: 'bg-slate-700/50 text-slate-300 border-slate-600/40',
 };
 const tone = (c) => C[c] || C.slate;
 
@@ -28,10 +28,10 @@ function Row({ r }) {
   //  탭 줄 — 항차 화면 위쪽
   if (r.kind === 'tabs') {
     return (
-      <div className="flex rounded-pill border border-line bg-ink-900 overflow-hidden">
+      <div className="flex rounded-lg border border-slate-700 bg-slate-900 overflow-hidden">
         {r.items.map((t, i) => (
-          <div key={i} className={`flex-1 text-center px-2 py-1.5 text-2xs font-bold border-b-2 ${
-            i === r.on ? 'border-amber-400 text-amber-300 bg-ink-800/40' : 'border-transparent text-dim-400'}`}>{t}</div>
+          <div key={i} className={`flex-1 text-center px-2 py-1.5 text-[10px] font-bold border-b-2 ${
+            i === r.on ? 'border-amber-400 text-amber-300 bg-slate-800/40' : 'border-transparent text-slate-500'}`}>{t}</div>
         ))}
       </div>
     );
@@ -41,8 +41,8 @@ function Row({ r }) {
     return (
       <div className="flex flex-wrap gap-1">
         {r.items.map((x, i) => (
-          <span key={i} className={`px-1.5 py-0.5 rounded border text-2xs font-bold ${
-            x.on ? 'bg-amber-500 text-ink-950 border-amber-500' : tone(x.c)}`}>{x.t}</span>
+          <span key={i} className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${
+            x.on ? 'bg-amber-500 text-slate-900 border-amber-500' : tone(x.c)}`}>{x.t}</span>
         ))}
       </div>
     );
@@ -52,8 +52,8 @@ function Row({ r }) {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
         {r.items.map((x, i) => (
-          <div key={i} className={`rounded-pill border px-2 py-1.5 ${tone(x.c)}`}>
-            <div className="text-3xs opacity-70 leading-none">{x.t}</div>
+          <div key={i} className={`rounded-lg border px-2 py-1.5 ${tone(x.c)}`}>
+            <div className="text-[9px] opacity-70 leading-none">{x.t}</div>
             <div className="text-[15px] font-black leading-tight mt-0.5">{x.n}</div>
           </div>
         ))}
@@ -63,16 +63,16 @@ function Row({ r }) {
   //  컨테이너 카드 한 장
   if (r.kind === 'card') {
     return (
-      <div className="rounded-pill border border-line bg-ink-900 px-2.5 py-2">
+      <div className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm2 font-black text-amber-300">{r.big}</span>
-          <span className="text-2xs mono text-dim-300">{r.cn}</span>
+          <span className="text-[13px] font-black text-amber-300">{r.big}</span>
+          <span className="text-[10px] mono text-slate-400">{r.cn}</span>
           {(r.tags || []).map((t, i) => (
-            <span key={i} className={`px-1.5 py-0.5 rounded border text-3xs font-bold ${tone(t.c)}`}>{t.t}</span>
+            <span key={i} className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${tone(t.c)}`}>{t.t}</span>
           ))}
         </div>
         {(r.lines || []).map((l, i) => (
-          <div key={i} className="text-2xs text-dim-300 mt-1">{l}</div>
+          <div key={i} className="text-[10px] text-slate-400 mt-1">{l}</div>
         ))}
       </div>
     );
@@ -81,17 +81,17 @@ function Row({ r }) {
   if (r.kind === 'table') {
     return (
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-3xs">
+        <table className="w-full border-collapse text-[9px]">
           <thead>
             <tr>{r.head.map((h, i) => (
-              <th key={i} className="border border-line-strong bg-ink-800 text-dim-200 px-1 py-1 font-bold whitespace-nowrap">{h}</th>
+              <th key={i} className="border border-slate-600 bg-slate-800 text-slate-300 px-1 py-1 font-bold whitespace-nowrap">{h}</th>
             ))}</tr>
           </thead>
           <tbody>
             {r.rows.map((row, i) => (
               <tr key={i}>{row.map((c, j) => (
-                <td key={j} className="border border-line px-1 py-1 text-center text-dim-200 whitespace-nowrap">
-                  {c === '_' ? <span className="block border-b border-line-strong min-h-[9px]"/> : c}
+                <td key={j} className="border border-slate-700 px-1 py-1 text-center text-slate-300 whitespace-nowrap">
+                  {c === '_' ? <span className="block border-b border-slate-500 min-h-[9px]"/> : c}
                 </td>
               ))}</tr>
             ))}
@@ -105,8 +105,8 @@ function Row({ r }) {
     return (
       <div className="flex gap-1.5 flex-wrap">
         {r.items.map((x, i) => (
-          <span key={i} className={`px-2.5 py-1 rounded-md text-2xs font-bold ${
-            x.c === 'go' ? 'bg-amber-500 text-ink-950' : 'bg-ink-750 text-dim-100'}`}>{x.t || x}</span>
+          <span key={i} className={`px-2.5 py-1 rounded-md text-[10px] font-bold ${
+            x.c === 'go' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-200'}`}>{x.t || x}</span>
         ))}
       </div>
     );
@@ -115,26 +115,26 @@ function Row({ r }) {
   if (r.kind === 'field') {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-2xs text-dim-300">{r.label}</span>
-        <span className="px-2 py-1 rounded border border-line-strong bg-ink-800 text-2xs mono text-dim-100 min-w-[80px]">
-          {r.value || <span className="text-dim-500">미입력</span>}
+        <span className="text-[10px] text-slate-400">{r.label}</span>
+        <span className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[10px] mono text-slate-200 min-w-[80px]">
+          {r.value || <span className="text-slate-600">미입력</span>}
         </span>
-        {r.pen && <span className="text-2xs text-amber-400">✏</span>}
+        {r.pen && <span className="text-[10px] text-amber-400">✏</span>}
       </div>
     );
   }
   //  미르 답 말풍선
   if (r.kind === 'answer') {
     return (
-      <div className="rounded-pill border border-amber-700/40 bg-amber-950/20 px-2.5 py-2">
-        {r.q && <div className="text-2xs text-dim-300 mb-1">🔍 {r.q}</div>}
-        <div className="text-2xs text-amber-100 leading-relaxed whitespace-pre-line">{r.a}</div>
+      <div className="rounded-lg border border-amber-700/40 bg-amber-950/20 px-2.5 py-2">
+        {r.q && <div className="text-[10px] text-slate-400 mb-1">🔍 {r.q}</div>}
+        <div className="text-[10px] text-amber-100 leading-relaxed whitespace-pre-line">{r.a}</div>
       </div>
     );
   }
   //  한 줄 설명
   if (r.kind === 'note') {
-    return <div className="text-2xs text-dim-400 leading-relaxed">{r.t}</div>;
+    return <div className="text-[10px] text-slate-500 leading-relaxed">{r.t}</div>;
   }
   return null;
 }
@@ -143,12 +143,12 @@ function Row({ r }) {
 export default function HelpShot({ shot }) {
   if (!shot || !Array.isArray(shot.rows) || !shot.rows.length) return null;
   return (
-    <div className="mt-2 mb-2 rounded-btn border border-line bg-ink-950/60 p-2.5">
-      <div className="text-3xs font-bold text-dim-400 tracking-widest mb-1.5">화면</div>
+    <div className="mt-2 mb-2 rounded-xl border border-slate-700 bg-slate-950/60 p-2.5">
+      <div className="text-[9px] font-bold text-slate-500 tracking-widest mb-1.5">화면</div>
       <div className="space-y-1.5">
         {shot.rows.map((r, i) => <Row key={i} r={r}/>)}
       </div>
-      {shot.cap && <div className="text-2xs text-sky-300/80 mt-2 leading-relaxed">↑ {shot.cap}</div>}
+      {shot.cap && <div className="text-[10px] text-sky-300/80 mt-2 leading-relaxed">↑ {shot.cap}</div>}
     </div>
   );
 }
