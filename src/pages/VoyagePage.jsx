@@ -64,7 +64,7 @@ import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1.8: 리퍼 온도 확인
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null }) {   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null }) {   // 2.36: voyages·heartbeat — 항차 화면 미르도 홈과 **같은 범위**로 답한다(검수사 «홈이든 작업중이든 수석화면이든 말그대로 통합검색»)   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   // 1.94 (검수사 실측 SWSP — 선적 243 매칭까지 된 배가 들어가면 빈 양하부터 열림): 노드 껍데기가 아니라
   //   **실자료(ediContainers·records) 유무**로 판정한다 — 양하 없는 배는 선적이 바로 열린다.
@@ -1403,11 +1403,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             즉 «묻는 것»은 미르가, «작업하는 것»은 SearchPanel 이 맡는다. */}
         <div className="mb-2">
           <GlobalSearchPage embedded
-            voyages={{ [voyageKey]: voyage }}
+            voyages={voyages || { [voyageKey]: voyage }}
             ctxVoyageKey={voyageKey}
             portMisData={portMisData}
             terminalWork={terminalWork}
-            heartbeat={null}
+            heartbeat={heartbeat}
             isChief={isChief(inspector)}
             onOpenContainer={(c) => setDetailC(c)}/>
         </div>

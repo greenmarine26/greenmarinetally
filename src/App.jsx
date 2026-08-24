@@ -487,6 +487,8 @@ export default function App() {
             initModeOverride={route.mode || null}
             voyageKey={route.voyageKey}
             voyage={voyages[route.voyageKey]}
+            voyages={voyages}   /* 2.36: 통합검색 — 항차 화면 미르도 전 항차를 본다 */
+            heartbeat={heartbeat}
             inspector={inspector}
             inspectors={inspectors}
             portMisData={portMisData}
