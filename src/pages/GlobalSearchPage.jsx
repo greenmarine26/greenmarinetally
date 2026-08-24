@@ -135,7 +135,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     const want = [];
     if (/오답|미회신|피드백/.test(q) && chiefData.feedback === undefined) want.push(['feedback', () => fbGetSimple('feedback'), {}]);
     if (/마감|텔리/.test(q) && chiefData.tallyPending === undefined) want.push(['tallyPending', () => fbGetSimple('tally_pending'), {}]);
-    if (/이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*(?:항차|된\s*배)/.test(q) && chiefData.archiveList === undefined) want.push(['archiveList', fbListArchive, []]);
+    if (/이번\s*달|지난\s*달|저번\s*달|월\s*(?:통계|실적|물량)|선사\s*순위|어제\s*실적|완료\s*(?:항차|된\s*배)|보관|몇\s*항차|최근\s*완료/.test(q) && chiefData.archiveList === undefined) want.push(['archiveList', fbListArchive, []]);   // 2.37: «보관»·«몇 항차»(검수사 «몇항차 텔리 보관하고 있어»)
     if (!want.length) return;
     setChiefData((d) => { const n = { ...d }; want.forEach(([k]) => { n[k] = null; }); return n; });   // null = 읽는 중
     want.forEach(([k, fn, fallback]) => fn()
@@ -293,6 +293,26 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     }
     if (/(?:배|선박|항차|작업|시간).{0,10}겹치|겹치는\s*(?:배|선박|항차|시간)/.test(Q) && !/끝\s*자리|끝자리|번호/.test(Q)) {
       return answerOverlaps(voyages);
+    }
+    // 2.37 (검수사 «쉽게 몇항차 텔리 보관하고 있어 등등»): 보관소에 무엇이 몇 건 있는지 — 배 이름 없이.
+    if (isChief && /(보관|아카이브)/.test(Q) && /(몇|얼마|있어|있나|현황|목록|뭐)/.test(Q) && !shipCtx) {
+      const arch = chiefData.archiveList;
+      if (arch === null || arch === undefined) return '보관소를 읽는 중이에요 — 잠시 후 다시 물어봐 주세요.';
+      if (arch && arch.__error) return '보관소를 읽지 못했어요 — 네트워크 확인 후 다시 물어봐 주세요.';
+      const list = Array.isArray(arch) ? arch : [];
+      if (!list.length) return '보관소에 완료 저장된 항차가 아직 없어요.';
+      const ships = new Set(list.map((a) => a.vsl));
+      const sorted = list.slice().sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+      const _t = (ms) => { if (!ms) return ''; const d = new Date(ms); return `${d.getMonth() + 1}/${d.getDate()}`; };
+      const L = [`📦 보관소에 완료 항차 ${list.length}건이 있어요 (${ships.size}척).`];
+      L.push(`가장 최근: ${_t(sorted[0].archivedAt)} ${String(sorted[0].voyageKey || '').replace('_', ' ')}`);
+      L.push(`가장 오래된 것: ${_t(sorted[sorted.length - 1].archivedAt)} ${String(sorted[sorted.length - 1].voyageKey || '').replace('_', ' ')}`);
+      L.push('');
+      L.push('최근 5항차');
+      sorted.slice(0, 5).forEach((a) => L.push(`· ${_t(a.archivedAt)} ${String(a.voyageKey || '').replace('_', ' ')} — 양하 ${a.discharge_ptk ?? '?'} · 선적 ${a.loading_ptk ?? '?'}`));
+      L.push('');
+      L.push('배 이름을 붙여 물으면 그 배 것만 짚어 드려요 — 예: «DXQD 완료됐어?»');
+      return L.join('\n');
     }
     // TallyOne 1.66-03: **수석 화면에서도 기능 위치를 묻는다.**
     //   검수사 지적 2026-08-13 — *"수석 대시보드에선 자연어 즉 도우미 기능을 어디에서 사용하나요?"*

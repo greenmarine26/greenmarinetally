@@ -42,7 +42,7 @@ function isSpecialMark(mark) {
          m.startsWith('R') || m === 'FR' || m === 'T' || m === 'A';
 }
 
-// V8.88: 20피트 판정 — iso 앞자리(2x=20ft), 없으면 베이 홀수 폴백. 엠티 마커 ⓔ/Ⓔ 분기용.
+// V8.88: 20피트 판정 — iso 앞자리(2x=20ft), 없으면 베이 홀수 폴백. 2.38부터 엠티 e/E 분기용.
 function _is20ft(c) {
   const iso = String(c.iso || '').trim();
   if (iso) return /^2/.test(iso);
@@ -80,15 +80,17 @@ function getMarkV2(c, pod, mode) {
 
   // 특수화물 종류 우선 판정 (PTK든 통과든 같은 글자)
   let specialLetter = null;
-  if (c.dg) specialLetter = 'D';
+  if (c.dg) specialLetter = 'DG';   // 2.38 (검수사): DG는 D가 아니라 DG 2글자
   else if (isReeferContainer(c)) specialLetter = isEmpty ? 'R/E' : 'R/F';
   else if (c.fr) specialLetter = 'FR';
-  else if (c.tk) specialLetter = 'T';
+  else if (c.tk) specialLetter = 'TK';   // 2.38 (검수사): 탱크도 TK 2글자
   else if (c.ot || c.oog) specialLetter = 'A';
 
   // 통과화물: 특수면 글자만 (회색 배경은 cell render), 일반은 빈
   if (!ptk) return specialLetter || '';
-  // PTK: 특수면 특수글자, 일반이면 F / 엠티는 ⓔ(20ft)·Ⓔ(40/45ft) — E·F 오독 방지(V8.88, 사용자 요청 2026-07-13)
+  // PTK: 특수면 특수글자, 일반이면 F / 엠티는 e(20ft)·E(40·45ft)
+  //   2.38 검수사 확정: 동그라미(ⓐ 모양)를 없앴다 — «그냥 소문자 e로 40피트는 그냥 E로».
+  //   E·F 오독은 이제 «칠했나 아닌가»가 막는다(풀=색 채움·엠티=글자만).
   return specialLetter || (isEmpty ? (_is20ft(c) ? 'e' : 'E') : 'F');
 }
 
@@ -136,14 +138,13 @@ export const CARGO_V2_CSS = `
 .cpv2-cell.cpv2-mark-X { color: #000; }
 .cpv2-cell.cpv2-mark-R { color: #006064; }
 .cpv2-cell.cpv2-mark-r { color: #00838f; }
-.cpv2-cell.cpv2-mark-D { color: #b71c1c; }
+.cpv2-cell.cpv2-mark-DG { color: #b71c1c; }
 .cpv2-cell.cpv2-mark-F { color: #1b5e20; }
 .cpv2-cell.cpv2-mark-A { color: #4a148c; }
-.cpv2-cell.cpv2-mark-T { color: #e65100; }
+.cpv2-cell.cpv2-mark-TK { color: #e65100; }
 .cpv2-cell.cpv2-mark-E { color: #555; }
 .cpv2-cell.cpv2-mark-e { color: #555; }
-/* V8.88: 엠티 마커 동그라미 — ⓔ(20ft)·Ⓔ(40/45ft). E·F 오독 방지(사용자 요청 2026-07-13) */
-.cpv2-mtc { display: inline-flex; align-items: center; justify-content: center; font-size: 0.7em; width: 1.43em; height: 1.43em; padding-bottom: 0.08em; border: 1px solid currentColor; border-radius: 50%; line-height: 1; box-sizing: border-box; }  /* padding-bottom = 글자 정중앙 보정(-0.04em 상향, 사용자 확정) */  /* 동그라미 외경 ≈ 풀(F) 폰트 크기, 글자는 그 안에(사용자 확정) */
+/* 2.38: 엠티 동그라미 폐지 — 20ft=e · 40/45ft=E 글자만 (검수사 확정) */
 .cpv2-cell.cpv2-mark-L { color: #1565c0; }
 .cpv2-cell.cpv2-mark-K { color: #0d47a1; }
 .cpv2-cell.cpv2-mark-P { color: #6a1b9a; }
@@ -324,10 +325,10 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
-                      style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
-                      if (isMtMark(cell.mark)) style.background = pastelOf(bg);   // V8.88: 엠티 = 연한 파스텔 배경(풀/엠티 구역 구분)
-                    } else if (isMtMark(cell.mark)) {
-                      style = { background: '#eef2f7' };                          // V8.88: 색 없는 엠티도 옅은 음영
+                      // 2.38 (검수사 확정): **풀은 셀에 색을 넣고 엠티는 색을 안 넣는다.**
+                      //   풀 = 배경을 그 색으로 칠하고 글자는 흰색(면으로 보인다).
+                      //   엠티 = 배경 없음·글자만 그 색(테두리도 없음) — 풀/엠티가 «칠했나 아닌가»로 갈린다.
+                      style = isMtMark(cell.mark) ? { color: bg } : { background: bg, color: '#fff' };
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -336,9 +337,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
-                        {(displayMark === 'e' || displayMark === 'E')
-                          ? <span className="cpv2-mtc">{displayMark}</span>   /* V8.88: 엠티 동그라미 ⓔ/Ⓔ */
-                          : displayMark}
+                        {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
+                        {displayMark}
                         {cell.isUrgent && <i className="cpv2-um">▲</i>}
                       </span>
                     );
@@ -388,10 +388,10 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                     } else if (cell.isThrough) {
                       style = { background: '#d4d4d8', color: '#52525b' };  // 통과화물 = 회색
                     } else if (bg) {  /* M6.94.35: 특수마크(엠티 리퍼 R/E 등)도 평택분이면 목적지 색 적용. 통과화물은 위 isThrough에서 회색 처리됨 */
-                      style = { color: bg };  // M6.94.23: line/port color -> text color (bg white)
-                      if (isMtMark(cell.mark)) style.background = pastelOf(bg);   // V8.88: 엠티 = 연한 파스텔 배경(풀/엠티 구역 구분)
-                    } else if (isMtMark(cell.mark)) {
-                      style = { background: '#eef2f7' };                          // V8.88: 색 없는 엠티도 옅은 음영
+                      // 2.38 (검수사 확정): **풀은 셀에 색을 넣고 엠티는 색을 안 넣는다.**
+                      //   풀 = 배경을 그 색으로 칠하고 글자는 흰색(면으로 보인다).
+                      //   엠티 = 배경 없음·글자만 그 색(테두리도 없음) — 풀/엠티가 «칠했나 아닌가»로 갈린다.
+                      style = isMtMark(cell.mark) ? { color: bg } : { background: bg, color: '#fff' };
                     }
                     const displayMark = cell.isShadow20 ? '' : (cell.mark || '');
                     return (
@@ -400,9 +400,8 @@ export function BayBoxV2({ data, count, colorMap = {}, gridCols, applyHatch = tr
                         className={`cpv2-cell${cell.mark && !cell.isShadow20 ? ` cpv2-mark-${cell.mark}` : ''}${cell.isXray ? ' cpv2-xray' : ''}${cell.isShift ? ' cpv2-shift' : ''}${cell.isUrgent ? ' cpv2-urgent' : ''}${cell.isLugg ? ' cpv2-lugg' : ''}${cell.isThrough ? ' cpv2-through' : ''}${cell.isShadow20 ? ' cpv2-shadow20' : ''}`}
                         style={style}
                       >
-                        {(displayMark === 'e' || displayMark === 'E')
-                          ? <span className="cpv2-mtc">{displayMark}</span>   /* V8.88: 엠티 동그라미 ⓔ/Ⓔ */
-                          : displayMark}
+                        {/* 2.38 (검수사): 엠티 동그라미 제거 — 20ft=e · 40ft=E 글자만 */}
+                        {displayMark}
                         {cell.isUrgent && <i className="cpv2-um">▲</i>}
                       </span>
                     );
@@ -909,7 +908,7 @@ export default function PrintableCargoPlanV2({
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
-          <div className="col" style={{ fontSize: 8, color: '#555' }}>Ⓔ=엠티(소문자 e=20ft) · 연한배경=엠티 구역{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
+          <div className="col" style={{ fontSize: 8, color: '#555' }}>색칠=풀 · 색글자=엠티(e=20ft·E=40ft) · 회색=통과 · DG=위험물 · TK=탱크{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
           {shiftCount > 0 && <div className="col" style={{ fontSize: 9, color: '#1d4ed8', fontWeight: 'bold' }}>쉬프팅 {shiftCount}</div>}
           {urgentCount > 0 && <div className="col" style={{ fontSize: 9, color: '#dc2626', fontWeight: 'bold' }}>긴급 {urgentCount}</div>}
           {luggCount > 0 && <div className="col" style={{ fontSize: 9, color: '#7c3aed', fontWeight: 'bold' }}>수화물 {luggCount}</div>}
@@ -943,10 +942,13 @@ export default function PrintableCargoPlanV2({
             const leg1Rows = isDischarge ? legends.carriers : legends.pods;
             const leg1Kind = isDischarge ? 'carrier' : 'pod';
             const leg1Header = isDischarge ? '선사' : 'POD';
-            const leg2Title = isDischarge ? '별첨2 · 화물 종류별 (양하)' : '별첨2 · 선사별 (선적)';
-            const leg2Rows = isDischarge ? legends.cargos : legends.carriers;
-            const leg2Kind = isDischarge ? 'cargo' : 'carrier-bw';
-            const leg2Header = isDischarge ? '종류' : '선사';
+            // 2.38 (검수사 확정 «선적시 선사색은 표기안함»): 선적 별첨2를 선사 → **화물 종류**로 바꾼다.
+            //   선적 셀 색은 원래 POD 전용인데(getContainerColorKey), 별첨2에 선사표가 남아 있어
+            //   인쇄물에서 «선사 색도 있나» 하고 읽혔다. 선적은 POD 하나로만 구분한다.
+            const leg2Title = isDischarge ? '별첨2 · 화물 종류별 (양하)' : '별첨2 · 화물 종류별 (선적)';
+            const leg2Rows = legends.cargos;
+            const leg2Kind = 'cargo';
+            const leg2Header = '종류';
             // ★★★ TallyOne 1.63: 별첨은 **가로 한 칸**을 쓰고, 그 안에서 **위→아래 세 단**으로 놓는다.
             //   검수사 지적 2026-08-13(별첨이 잘려 보인다는 인쇄물 사진과 함께):
             //     *"별첨을 왜 두개를 나란히 놓았나요. **별첨을 좀더 크게하고 상 중 하 단으로** 놔도 될듯한데"*
@@ -1083,10 +1085,10 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
   const cargoColors = {
     '일반': { bg: '#fff', fg: '#000', mark: 'o' },
     'Reefer': { bg: '#b2ebf2', fg: '#006064', mark: 'R' },
-    'DG': { bg: '#ffcdd2', fg: '#b71c1c', mark: 'D' },
+    'DG': { bg: '#ffcdd2', fg: '#b71c1c', mark: 'DG' },   // 2.38: 그림이 DG 2글자라 범례도 DG
     'FR': { bg: '#c8e6c9', fg: '#1b5e20', mark: 'F' },
     'OT': { bg: '#e1bee7', fg: '#4a148c', mark: 'A' },
-    'Tank': { bg: '#ffe0b2', fg: '#e65100', mark: 'T' },
+    'Tank': { bg: '#ffe0b2', fg: '#e65100', mark: 'TK' },   // 2.38: 그림이 TK 2글자라 범례도 TK
   };
   // kind: 'carrier' / 'pod' = colorMap 사용 / 'cargo' = cargoColors / 'carrier-bw' = 흑백 (선사 표는 흑백 처리, 사용자 약속)
   const useColorMap = kind === 'carrier' || kind === 'pod';
