@@ -96,7 +96,7 @@ const MIR_SONGS = [
   'Bent Fabric의 «Alley Cat» — 경쾌한 피아노 재즈 경음악이에요. 골목길 건너다니는 제 모습이 떠오르실걸요?',
 ];
 function mirSong() {
-  return '오늘의 추천곡은 ' + MIR_SONGS[Math.floor(Math.random() * MIR_SONGS.length)] + ' 🎵';
+  return '제가 좋아하는 노래요? ' + MIR_SONGS[Math.floor(Math.random() * MIR_SONGS.length)] + ' 🎵';
 }
 
 function mirTea(nim) {
@@ -131,7 +131,9 @@ export function mirSmallTalk(q) {
     return '오늘 정말 고생 많으셨어요, ' + nim + '! 남은 정리는 제가 마무리할 테니 편하게 들어가세요. 내일 봬요! 👷';
   if (/(티\s*타임|티타임|커피\s*(마실|타임|한\s*잔)|차\s*한\s*잔)/.test(d) && !/(어디|추천|맛집|몇\s*시)/.test(d))
     return mirTea(nim);
-  if (/(노래|음악|곡|플레이리스트).{0,8}(좋아|추천|들려|뭐|틀어)|애창곡/.test(d))
+  if (/(노래|한\s*곡|송).{0,8}(불러|뽑아)|불러\s*줘|불러줄래/.test(d))
+    return '🎵 검은 고양이 네로 네로~ 이름도 예쁜 네로 네로~ 야옹야옹 🐾 …헤헤, 한 소절만 불렀어요. 제 애창곡은 «검은 고양이 네로» 딱 하나뿐이에요 😼 고양이가 고양이 노래를 불러야죠!';
+  if (/(노래|음악|곡|플레이리스트).{0,8}(좋아|들려|뭐|틀어|어떤)/.test(d))
     return mirSong();
   if (/(미르|넌|너는?).{0,8}(뭘?\s*잘\s*먹|뭐\s*좋아|좋아하는\s*(음식|간식|거)|잘\s*먹어)/.test(d))
     return '저는 열빙어, 츄르, 참치캔, 북어 트릿, 삶은 닭가슴살 다 좋아해요! 그중 최애는 ' + ['역시 열빙어예요 🐟','츄르죠! 못 참아요','특식 날의 연어 한 점이에요 😻','야드에서 얻는 멸치예요 히히'][Math.floor(Math.random()*4)] + ' ' + mirCall() + '는 뭘 제일 좋아하세요?';
