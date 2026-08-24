@@ -66,6 +66,13 @@ setTimeout(() => {
   const small = dom.window.__xrayHtml10 || '';
   if (!/font-size:9\.5pt/.test(small) || !/padding:8px/.test(small)) { console.log('✗ 10대 이하에서 9.5pt·pad8 로 안 커진다 — 시안 폰트 자동조절'); process.exit(1); }
   if (!/전체 40대/.test(html)) { console.log('✗ 머리 부제(전체 N대)가 안 찍힌다'); process.exit(1); }
+  //  ⑦ 검수사 정정 — 세관 목록은 **전부 X-RAY 대상**. «X-RAY N대» 만 뽑아 쓰면 그것만 대상인 것처럼 읽힌다.
+  if (!/X-RAY 대상/.test(t)) { console.log('✗ 조회 화면이 «X-RAY 대상 전체»임을 안 밝힌다'); process.exit(1); }
+  //  ⑧ 출력 방식 — 검수사 «PDF가 기본이지만 인쇄도 가능해야 하고 엑셀로도 받아져야»
+  for (const b2 of ['PDF 저장 / 인쇄', '엑셀(CSV) 받기']) {
+    if (!html.includes(b2)) { console.log('✗ 출력 버튼 «' + b2 + '» 이 없다'); process.exit(1); }
+  }
+  if (!/class="actions no-print"/.test(html)) { console.log('✗ 버튼이 인쇄에서 안 숨겨진다(no-print)'); process.exit(1); }
   //  ⑥ 검수사 확정 — **출력양식은 전부 중앙정렬**
   if (/text-align\s*:\s*left/.test(html)) { console.log('✗ 출력양식에 왼쪽 정렬이 남아 있다 — 전부 중앙이어야 한다'); process.exit(1); }
 

@@ -439,8 +439,19 @@ th { background:#eee; font-weight:700; }
 .b { font-weight:700; }
 .bl { display:block; min-height:13px; border-bottom:1px solid #999; }
 .w4{width:4%}.w8{width:8%}.w12{width:12%}.w13{width:13%}.w15{width:15%}.w16{width:16%}.w20{width:20%}
-@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:0; } }
-</style></head><body>${body}</body></html>`;
+/*  검수사 확정 2026-08-24 — 출력은 PDF 가 기본이지만 인쇄도 되고 엑셀로도 받아져야 한다.
+    검수 리스트·VGM 과 같은 벌이다 — 새 창 위에 버튼을 두고, 인쇄할 때만 숨긴다. */
+.actions { position:sticky; top:0; background:#1e293b; padding:8px; display:flex; gap:8px; z-index:100; margin:-12px -12px 10px; }
+.actions button { flex:1; padding:10px; font-size:13px; font-weight:700; border:none; border-radius:6px; cursor:pointer; color:#fff; }
+.btn-print { background:#0369a1; } .btn-excel { background:#15803d; } .btn-close { background:#475569; }
+@media print { .no-print { display:none !important; }
+  body { -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:0; } }
+</style></head><body>
+<div class="actions no-print">
+  <button class="btn-print" onclick="window.print()">PDF 저장 / 인쇄</button>
+  <button class="btn-excel" onclick="window.__exportXrayCsv &amp;&amp; window.__exportXrayCsv()">엑셀(CSV) 받기</button>
+  <button class="btn-close" onclick="window.close()">닫기</button>
+</div>${body}</body></html>`;
 }
 
 export function openXrayListPrint(rows, head, perPage = 20) {
@@ -448,6 +459,30 @@ export function openXrayListPrint(rows, head, perPage = 20) {
   if (!w) { alert('팝업 차단을 해제해주세요'); return; }
   w.document.write(generateXrayListHTML(rows, head, perPage));
   w.document.close();
+  //  엑셀(CSV) 내보내기 주입 — 검수 리스트(M6.71)와 같은 방식이다.
+  //  머리 여섯 칸까지 담는다. 표만 있으면 어느 배 것인지 모르는 종이가 된다.
+  w.__exportXrayCsv = function () {
+    const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const L = [];
+    L.push(['선박명', head.name].map(q).join(','));
+    L.push(['항차/항공편명', head.voy].map(q).join(','));
+    L.push(['운항선사', head.carrier].map(q).join(','));
+    L.push(['입항일자', head.eta].map(q).join(','));
+    L.push(['양륙항', head.pod].map(q).join(','));
+    L.push(['선박 호출부호', head.callsign].map(q).join(','));
+    L.push(['MRN', head.mrn].map(q).join(','));
+    L.push('');
+    L.push(['No.', '컨테이너번호', '선사SEAL NO', '화물구분', '규격', '선내위치', '부착 세관봉인번호', '봉인자'].map(q).join(','));
+    rows.forEach((r, i) => L.push([i + 1, r.cn, r.seal, r.kind, r.iso, r.pos, r.cSeal, r.sealer].map(q).join(',')));
+    const blob = new Blob(['\uFEFF' + L.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = w.document.createElement('a');
+    a.href = url;
+    a.download = 'XRAY리스트_' + (head.name || '') + '_' + (head.voy || '') + '_'
+               + new Date().toISOString().slice(0, 10) + '.csv';
+    w.document.body.appendChild(a); a.click(); w.document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 }
 
 export function openVgmListPrint(containers, voyageInfo) {

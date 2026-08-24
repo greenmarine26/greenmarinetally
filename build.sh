@@ -73,6 +73,15 @@ fi
 # sw.js VERSION이 바뀌면 서비스워커가 새 버전으로 인식 → 옛 캐시 삭제 + 자동 새로고침.
 # (이전: sw.js가 V7.13에 멈춰 새 배포해도 캐시 안 비워지던 문제 해결)
 APPVER=$(grep -E "^export const APP_VERSION" src/utils.js | sed -E "s/.*=\s*['\"]([^'\"]+)['\"].*/\1/")
+# ⛔ 2.26-07 사고 — APP_VERSION 주석에 따옴표가 들어가면 위 sed 가 **주석 속 문자열**을 잡는다.
+#   실측: 주석에 kind===<작은따옴표>X-RAY<작은따옴표> 를 적었더니 APPVER 가 "X-RAY" 가 됐고
+#   sw.js 와 콘앱 캐시키(__APPV)가 통째로 "X-RAY" 로 동기화됐다(배포 직전 발견).
+#   ⇒ 형식(«이름 숫자.숫자[-숫자]»)에 안 맞으면 여기서 멈춘다. 조용히 나가면 캐시가 통째로 어긋난다.
+if ! echo "$APPVER" | grep -qE "^[A-Za-z][A-Za-z ]* [0-9]+\.[0-9]+(-[0-9]+)?$"; then
+  echo "✗ APP_VERSION 추출 실패 — 뽑힌 값: '"'"'$APPVER'"'"'"
+  echo "   src/utils.js 의 APP_VERSION 줄 주석에 따옴표가 있는지 확인하십시오."
+  exit 1
+fi
 if [ -n "$APPVER" ]; then
   sed -i "s/^const VERSION = '.*';/const VERSION = '$APPVER';/" public/sw.js
   echo "✓ sw.js VERSION → $APPVER 동기화"

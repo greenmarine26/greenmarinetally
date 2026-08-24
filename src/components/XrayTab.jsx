@@ -133,7 +133,8 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
 
       {/* ── 조회 ── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-        {[{ k: '', t: '전체', n: counts._all, c: 'text-slate-100', bg: 'bg-slate-800/60 border-slate-700' },
+        {/* 첫 장이 «X-RAY 대상 전체» 다 — 뒤 넷은 그 안의 검사 유형 구분이지 대상 여부가 아니다. */}
+        {[{ k: '', t: 'X-RAY 대상', n: counts._all, c: 'text-slate-100', bg: 'bg-slate-800/60 border-slate-700' },
           ...KINDS.map((x) => ({ k: x.k, t: x.k, n: counts[x.k] || 0, c: x.c, bg: x.bg }))].map((x) => (
           <button key={x.k || 'all'} onClick={() => setKindFilter(x.k)}
             className={`rounded-xl border p-3 text-left ${x.bg} ${kindFilter === x.k ? 'ring-2 ring-amber-400' : ''}`}>
@@ -162,9 +163,15 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
             머리 부제는 그 결과를 밝힌다 — «전체 N대 · X-RAY M대», 필터가 걸렸으면 그것도. */}
         <button onClick={() => openXrayListPrint(
           shown.map(r => ({ ...r, pos: pos(r) })),
+          /* ★ 2.26-07 (검수사 정정 2026-08-24) — *«20대 전부가 XRAY입니다. 다만 구분만 틀린것»*
+             세관 목록에 오른 것은 **전부 X-RAY 대상**이고, 「화물구분」은 그 안의 **검사 유형**이다.
+             종전 부제 «전체 20대 · X-RAY 5대» 는 5대만 대상인 것처럼 읽혔다.
+             ⇒ 총 대수를 앞에 두고, 구분은 **내역으로 전부** 나열한다(없는 구분은 뺀다). */
           { ...head, sub: `전체 ${rows.length}대`
-            + (kindFilter ? ` 중 ${kindFilter} ${shown.length}대` : '')
-            + (!kindFilter && counts['X-RAY'] ? ` · X-RAY ${counts['X-RAY']}대` : '') },
+            + (kindFilter ? ` 중 ${kindFilter} ${shown.length}대`
+                          : (() => { const d = KINDS.map(k => counts[k.k] ? `${k.k} ${counts[k.k]}` : '')
+                                       .filter(Boolean).join(' · ');
+                                     return d ? ` (${d})` : ''; })()) },
           PER_PAGE)}
           disabled={!shown.length}
           className="h-11 px-4 rounded-lg bg-amber-500 text-slate-900 font-bold text-[13px] flex items-center gap-1.5 disabled:opacity-40">
@@ -174,7 +181,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="px-4 py-2.5 border-b border-slate-800 text-[12px] text-slate-400">
-          {title} · {shown.length}대 {kindFilter && `· ${kindFilter}`} · 베이별순 + 우선양하순
+          {title} · X-RAY 대상 {rows.length}대{kindFilter ? ` 중 ${kindFilter} ${shown.length}대` : ''} · 베이별순 + 우선양하순
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
