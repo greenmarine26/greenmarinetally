@@ -422,7 +422,12 @@ export function generateXrayListHTML(rows, head = {}, perPage = 20) {
 /*  여백은 시안 기준 그대로 — 좌우 1.8cm · 상 1.9cm · 하 1cm (검수사 TXT·시안 @page 일치) */
 @page { size: A4 landscape; margin-top:1.9cm; margin-left:1.8cm; margin-right:1.8cm; margin-bottom:1cm; }
 body { font-family:'Malgun Gothic',sans-serif; margin:0; padding:12px; color:#000; background:#fff; font-size:${cfg.f}pt; }
-.pg { page-break-after: always; }
+/*  검수사 확정 2026-08-24 — 회사명은 **용지 맨 아래**에 붙어야 한다. 표 바로 밑에 두면
+    행 수에 따라 위아래로 움직여 서류마다 자리가 달라진다(2대짜리와 20대짜리가 다르게 나온다).
+    ⇒ 쪽마다 내용 높이를 확보하고 바닥글을 아래로 밀어붙인다.
+      A4 가로 높이 21cm − 상 1.9cm − 하 1cm = **18.1cm** 가 한 쪽의 내용 높이다.
+      세로 flex 에서 margin-top:auto 가 남는 공간을 전부 위로 밀어 바닥에 붙인다. */
+.pg { page-break-after: always; min-height: 18.1cm; display: flex; flex-direction: column; }
 .pg:last-child { page-break-after: auto; }
 .ti { font-size:13pt; margin-bottom:5px; display:flex; justify-content:space-between; align-items:flex-end; }
 .pn { font-size:8pt; font-weight:400; }
@@ -443,7 +448,7 @@ th { background:#eee; font-weight:700; }
     ⚠ about:blank 은 **브라우저가 찍는 그 탭의 주소**다(내용이 아니라 주소). 새 창을 빈 주소로 열어
       문서를 써 넣는 방식이라 주소가 없고, 그래서 브라우저가 그렇게 적는다. 그 자리는 페이지에서 못 바꾼다.
     ⇒ 우리 바닥글을 쪽마다 직접 찍는다. 브라우저 머리글·바닥글은 인쇄 설정에서 끄면 사라진다. */
-.ft { margin-top:6px; text-align:center; font-size:7pt; letter-spacing:0.06em; color:#333; }
+.ft { margin-top:auto; padding-top:6px; text-align:center; font-size:7pt; letter-spacing:0.06em; color:#333; }
 .w4{width:4%}.w8{width:8%}.w12{width:12%}.w13{width:13%}.w15{width:15%}.w16{width:16%}.w20{width:20%}
 /*  검수사 확정 2026-08-24 — 출력은 PDF 가 기본이지만 인쇄도 되고 엑셀로도 받아져야 한다.
     검수 리스트·VGM 과 같은 벌이다 — 새 창 위에 버튼을 두고, 인쇄할 때만 숨긴다. */

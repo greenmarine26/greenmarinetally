@@ -75,6 +75,9 @@ setTimeout(() => {
   if (!/class="actions no-print"/.test(html)) { console.log('✗ 버튼이 인쇄에서 안 숨겨진다(no-print)'); process.exit(1); }
   //  ⑨ 쪽마다 회사명 바닥글 (검수사 지시 — 브라우저가 찍는 about:blank 대신 우리 것을 넣는다)
   if ((html.match(/GREEN MARINE CO\., LTD\./g) || []).length !== 2) { console.log('✗ 회사명 바닥글이 쪽마다 안 찍힌다'); process.exit(1); }
+  //  바닥글은 **용지 맨 아래 고정**이어야 한다 — 표 밑에 두면 행 수마다 자리가 달라진다(검수사 지적).
+  if (!/min-height:\s*18\.1cm/.test(html)) { console.log('✗ 쪽 높이(18.1cm)가 없다 — 바닥글이 표에 붙어 떠다닌다'); process.exit(1); }
+  if (!/\.ft \{ margin-top:auto/.test(html)) { console.log('✗ 바닥글이 아래로 밀리지 않는다(margin-top:auto)'); process.exit(1); }
   //  ⑥ 검수사 확정 — **출력양식은 전부 중앙정렬**
   if (/text-align\s*:\s*left/.test(html)) { console.log('✗ 출력양식에 왼쪽 정렬이 남아 있다 — 전부 중앙이어야 한다'); process.exit(1); }
 
