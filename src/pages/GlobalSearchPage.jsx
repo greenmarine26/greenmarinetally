@@ -853,8 +853,8 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         <div className="text-xxs text-center mt-2">
           {!isListening && query.length === 0 && <span className="text-dim-400">🎤 마이크 또는 키보드</span>}
           {!isListening && query.length >= 2 && matches.length === 0 && hasAnyCondition(parsed) && !localAnswer && !dmgQ && <span className="text-red-400 font-bold">⚠ 일치 없음</span>}   {/* 2.05-04: 즉답·데미지 답이 있으면 컨 매칭 표시는 혼란만(검수사 «중간에 일치 없음?») */}
-          {!isListening && query.length >= 2 && matches.length === 1 && !parsed.isStat && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
-          {!isListening && query.length >= 2 && matches.length > 1 && !parsed.isStat && <span className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 100 ? '+' : ''}</span>}
+          {!isListening && query.length >= 2 && matches.length === 1 && !parsed.isStat && !localAnswer && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
+          {!isListening && query.length >= 2 && matches.length > 1 && !parsed.isStat && !localAnswer && <span   /* 2.34-08: 즉답 있으면 숨김 — 답과 딴소리(검수사 실측 «24개 일치는 오류») */ className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 100 ? '+' : ''}</span>}
           {isListening && <span className="text-red-300 font-bold">🎙 듣는 중...</span>}
           {askedAt && !isListening && <span className="text-emerald-400 font-bold ml-2">✓ 질문 접수 {_hm(askedAt)}</span>}
         </div>
