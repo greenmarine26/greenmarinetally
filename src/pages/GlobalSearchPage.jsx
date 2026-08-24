@@ -237,7 +237,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     const p = parsed;
     const Q = debouncedQuery;
     // 1.91-03 (검수사 실측 — 통합검색 «미르야»가 인사 대신 컨 100개 나열): 미르 호출 즉답을 최우선으로.
-    if (p.mirHello) return '네, 미르예요 🐱 무엇을 확인해 드릴까요?\n(예: "미르야 OBWH 브리핑" · "미르야 이번 선적 계획 어떻게 진행 될것 같아")';
+    if (p.mirHello) return '응, 나 미르야 🐱 뭐 확인해 줄까?\n(예: "미르야 OBWH 브리핑" · "미르야 이번 선적 계획 어떻게 진행 될것 같아")';
     // 1.69-01: 검수원 진입(홈 검색) — 컨 조회·용어·기능 설명은 그대로 답하고,
     //   수석 전용 통계·자료현황은 1.69 유도 문구로 넘긴다(검수사 확정 계열).
     //   ⚠ 기능 질문("마감 텔리 어디서 만들어")까지 막지 않게, 수석 통계 분기와 같은 모양만 잡는다.
@@ -895,9 +895,9 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       {/* 2.06: 미르가 모르는 질문 — 솔직하게 + 자동으로 개발에 전달됐음을 알림 (검수사 확정 문구 그대로) */}
       {_mirDontKnow && (
         <div className="bg-ink-900 border-2 border-line-strong rounded-btn p-4 mb-3">
-          <div className="text-xxs text-dim-300 font-bold uppercase mb-1">🐱 미르</div>
+          <div className="text-xxs text-dim-300 font-bold uppercase mb-1 flex items-center gap-1.5"><img src={mirFaceUrl} alt="" className="w-5 h-5 rounded-full"/>미르</div>
           <div className="text-sm text-dim-100 leading-relaxed">
-            아직은 미르가 그 기능을 할 수 없습니다. 열심히 배워서 알려 드리겠습니다.
+            아직은 미르가 그 기능을 할 수 없어 😿 열심히 배워서 꼭 알려줄게!
             {askedAt ? <span className="block text-xxs text-dim-300 mt-1">이 질문은 개발자에게 자동 전달됐습니다.</span>
               : <span className="block text-xxs text-dim-400 mt-1">전송(➤)을 누르면 이 질문이 개발자에게 자동 전달됩니다.</span>}
           </div>
