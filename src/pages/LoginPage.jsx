@@ -241,36 +241,36 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
 
   return (
-    <div className="min-h-screen bg-[#080C1A] text-slate-100 lg:bg-slate-950 lg:px-6 lg:py-8">
+    <div className="min-h-screen bg-[#080C1A] text-dim-100 lg:bg-ink-950 lg:px-6 lg:py-8">
       <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:max-w-[1500px] lg:mx-auto lg:items-start">
 
       {/* ══ PC 전용 좌측 현황판 (폰에서는 숨김 — 종전 화면 불변) ══ */}
-      <div className="hidden lg:block rounded-3xl border border-cyan-950/70 p-7 bg-slate-950"
+      <div className="hidden lg:block rounded-card border border-cyan-950/70 p-7 bg-ink-950"
            style={{ background: 'radial-gradient(120% 90% at 12% 0%, #0d2b33 0%, #071420 55%, #050c14 100%)' }}>
-        <span className="inline-flex items-center gap-2 text-[11px] text-teal-300 bg-teal-500/10 border border-teal-400/25 rounded-full px-3 py-1.5">
+        <span className="inline-flex items-center gap-2 text-xxs text-teal-300 bg-teal-500/10 border border-teal-400/25 rounded-full px-3 py-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>그린마린 검수팀 전용 · 평택항 컨테이너 검수
         </span>
         <div className="flex items-center gap-4 mt-6 mb-2">
           <img src={logoUrl} alt="TallyOne" draggable="false"
-            className="w-[62px] h-[62px] rounded-2xl select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
+            className="w-[62px] h-[62px] rounded-card select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
           <div>
             <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-cyan-50 to-sky-300 bg-clip-text text-transparent">TallyOne</h1>
-            <div className="text-[13px] text-slate-400 mt-0.5">평택항 컨테이너 검수 시스템</div>
-            <div className="text-[10px] text-slate-600 tracking-[0.22em] mt-2">— CONTROL CENTER EDITION</div>
+            <div className="text-sm2 text-dim-300 mt-0.5">평택항 컨테이너 검수 시스템</div>
+            <div className="text-2xs text-dim-500 tracking-[0.22em] mt-2">— CONTROL CENTER EDITION</div>
           </div>
         </div>
 
-        <div className="mt-6 bg-slate-950/60 border border-cyan-950 rounded-2xl p-4">
-          <div className="text-[10.5px] tracking-[0.16em] text-slate-400 mb-3 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
+        <div className="mt-6 bg-ink-950/60 border border-cyan-950 rounded-card p-4">
+          <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-3 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
           {board.ships.length === 0 ? (
-            <div className="text-[12px] text-slate-600">오늘·내일 작업 선박 없음</div>
+            <div className="text-xs2 text-dim-500">오늘·내일 작업 선박 없음</div>
           ) : (
             <div className="flex flex-wrap gap-2">
               {board.ships.slice(0, 12).map(sp => (
-                <span key={sp.key} className={`rounded-lg px-3 py-1.5 text-[12px] font-black tracking-wide border ${
+                <span key={sp.key} className={`rounded-pill px-3 py-1.5 text-xs2 font-black tracking-wide border ${
                   sp.rank === 0 ? 'bg-emerald-900/70 text-emerald-200 border-emerald-500'
                   : sp.rank === 1 ? 'bg-cyan-950 text-cyan-200 border-cyan-700'
-                  : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                  : 'bg-ink-800 text-dim-300 border-line'}`}>
                   {sp.vsl}
                   <span className="text-[9.5px] font-semibold opacity-75 ml-1.5">
                     {sp.rank === 0 ? `작업중${berthNo(sp.berth) ? ` · ${berthNo(sp.berth)}` : ''}` : `${dayLabel(sp.ms)} ${hhmm(sp.ms)}`}
@@ -287,22 +287,22 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             { n: board.boxes.toLocaleString(), cap: '검수 대상 컨테이너', tag: '대기', tone: 'text-amber-300 bg-amber-500/15' },
             { n: working.length, cap: '작업 중 검수원', tag: 'LIVE', tone: 'text-sky-300 bg-sky-500/15' },
           ].map(st => (
-            <div key={st.cap} className="bg-slate-950/60 border border-cyan-950 rounded-xl p-3.5">
+            <div key={st.cap} className="bg-ink-950/60 border border-cyan-950 rounded-btn p-3.5">
               <div className="flex justify-end mb-2">
-                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${st.tone}`}>{st.tag}</span>
+                <span className={`text-3xs font-black px-1.5 py-0.5 rounded ${st.tone}`}>{st.tag}</span>
               </div>
-              <div className="text-3xl font-black text-slate-100">{st.n}</div>
-              <div className="text-[10.5px] text-slate-500 mt-0.5">{st.cap}</div>
+              <div className="text-3xl font-black text-dim-100">{st.n}</div>
+              <div className="text-[10.5px] text-dim-400 mt-0.5">{st.cap}</div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="min-h-screen flex flex-col lg:min-h-0 lg:rounded-3xl lg:border lg:border-slate-800 lg:bg-slate-900/40 lg:p-7">
+      <div className="min-h-screen flex flex-col lg:min-h-0 lg:rounded-card lg:border lg:border-line lg:bg-ink-900/40 lg:p-7">
         {/* 2.10: PC 는 좌측 패널에 로고가 이미 크게 있다 — 시안대로 「작업자 선택」 제목으로 대체 */}
         <div className="hidden lg:block mb-5">
-          <h2 className="text-2xl font-black text-slate-100">작업자 선택</h2>
-          <div className="text-[12px] text-slate-500 mt-1">{list.length}명의 검수사 · 평택항 컨테이너 터미널</div>
+          <h2 className="text-2xl font-black text-dim-100">작업자 선택</h2>
+          <div className="text-xs2 text-dim-400 mt-1">{list.length}명의 검수사 · 평택항 컨테이너 터미널</div>
         </div>
 
         {/* ── 2.11 폰 히어로 (검수사 시안 «폰용도 마음에 듭니다») — PC 는 좌측 패널이 대신한다 ── */}
@@ -317,7 +317,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                  style={{ boxShadow: '0 12px 32px rgba(212,175,55,.26)' }}/>
             <div className="mt-2.5 text-[23px] font-black tracking-tight text-white leading-none">TallyOne</div>
             <div className="mt-1 text-[11.5px] font-medium text-[#9AA3B8]">평택항 컨테이너 검수</div>
-            <span className="mt-2.5 h-[26px] px-3 rounded-full inline-flex items-center gap-2 text-[11px] font-semibold text-[#A7F0D0]"
+            <span className="mt-2.5 h-[26px] px-3 rounded-full inline-flex items-center gap-2 text-xxs font-semibold text-[#A7F0D0]"
                   style={{ border: '1px solid rgba(0,209,143,.28)', background: 'rgba(0,209,143,.10)' }}>
               <span className="relative flex w-2 h-2">
                 <span className="animate-ping absolute inline-flex w-full h-full rounded-full bg-[#00D18F] opacity-60"/>
@@ -335,18 +335,18 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           <div className="lg:hidden flex justify-center pt-3 pb-2 shrink-0"><div className="w-9 h-[5px] rounded-full bg-[#2A3449]"/></div>
           <div className="lg:hidden px-5 pb-2.5 flex items-center justify-between shrink-0">
             <h2 className="text-[18px] font-bold tracking-tight text-white">작업자 선택</h2>
-            <span className="text-[12px] font-semibold px-2.5 h-[22px] rounded-full bg-[#1C2740] text-[#8CA0C2] border border-[#24324E] flex items-center">{list.length}명</span>
+            <span className="text-xs2 font-semibold px-2.5 h-[22px] rounded-full bg-[#1C2740] text-[#8CA0C2] border border-[#24324E] flex items-center">{list.length}명</span>
           </div>
           {board.ships.length > 0 && (
-            <div className="hidden mx-3.5 mb-2.5 bg-[#0E1727] border border-[#1E2B45] rounded-2xl px-3 py-2.5 shrink-0">
-              <div className="text-[10px] font-bold tracking-[0.12em] text-[#6E7E9E] mb-2">■ 오늘 · 내일 작업 선박</div>
+            <div className="hidden mx-3.5 mb-2.5 bg-[#0E1727] border border-[#1E2B45] rounded-card px-3 py-2.5 shrink-0">
+              <div className="text-2xs font-bold tracking-[0.12em] text-[#6E7E9E] mb-2">■ 오늘 · 내일 작업 선박</div>
               <div className="flex flex-wrap gap-1.5">
                 {board.ships.slice(0, 8).map(sp => (
-                  <span key={sp.key} className={`rounded-lg px-2.5 py-1 text-[11px] font-black tracking-wide border ${
+                  <span key={sp.key} className={`rounded-pill px-2.5 py-1 text-xxs font-black tracking-wide border ${
                     sp.rank === 0 ? 'bg-emerald-500/15 text-[#7CF1C2] border-emerald-500/35'
                     : sp.rank === 1 ? 'bg-[#0f2a3d] text-[#9BD8F5] border-[#1d4a68]'
                     : 'bg-[#182238] text-[#7C8CA8] border-[#26324B]'}`}>
-                    {sp.vsl}<span className="text-[9px] font-semibold opacity-75 ml-1">
+                    {sp.vsl}<span className="text-3xs font-semibold opacity-75 ml-1">
                       {sp.rank === 0 ? (berthNo(sp.berth) || '작업중') : (sp.rank === 1 ? hhmm(sp.ms) : '내일')}</span>
                   </span>
                 ))}
@@ -356,16 +356,16 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
 
         {/* V9.13 계승: 자동 로그아웃 안내 */}
         {notice && (
-          <div className="mb-3 text-[12px] text-amber-100 bg-amber-900/40 border border-amber-700/60 rounded-lg px-3 py-2 leading-relaxed">
+          <div className="mb-3 text-xs2 text-amber-100 bg-amber-900/40 border border-amber-700/60 rounded-pill px-3 py-2 leading-relaxed">
             ⏱ {notice}
           </div>
         )}
 
         {/* 현재 작업중/로그인 인원 요약 */}
         {(working.length > 0 || online.length > 0) && (
-          <div className="text-[11px] mb-2 px-1">
+          <div className="text-xxs mb-2 px-1">
             {working.length > 0 && <span className="text-emerald-300">● {working.length}명 작업중: {working.map(a => a.name).join(', ')}</span>}
-            {working.length > 0 && online.length > 0 && <span className="text-slate-500"> · </span>}
+            {working.length > 0 && online.length > 0 && <span className="text-dim-400"> · </span>}
             {online.length > 0 && <span className="text-sky-300">○ {online.length}명 로그인: {online.map(a => a.name).join(', ')}</span>}
           </div>
         )}
@@ -373,8 +373,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         {/* ── 검수원 목록 (역할 뱃지 — 수석/부수석 강조) ── */}
         {shownList.length === 0 && !showAll && (
           <div className="px-3.5 pb-2 shrink-0">
-            <div className="rounded-2xl border border-dashed border-[#2A3958] px-4 py-5 text-center">
-              <div className="text-[13px] font-bold text-slate-300">오늘 이 기기에서 로그인한 사람이 없습니다</div>
+            <div className="rounded-card border border-dashed border-[#2A3958] px-4 py-5 text-center">
+              <div className="text-sm2 font-bold text-dim-200">오늘 이 기기에서 로그인한 사람이 없습니다</div>
               <div className="mt-1.5 text-[11.5px] text-[#6E7E9E] leading-relaxed">아래에 이름을 입력해 시작하거나,<br/>«로그인 안 된 작업자»에서 고르세요.</div>
             </div>
           </div>
@@ -390,7 +390,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   key={i.name}
                   onClick={() => setSelected(i.name)}
                   className={`relative w-full h-16 rounded-[16px] flex items-center gap-3 px-3 text-left border transition-all
-                    lg:h-[62px] lg:px-3 lg:rounded-xl ${
+                    lg:h-[62px] lg:px-3 lg:rounded-btn ${
                     isSel ? 'bg-[#132a2b] border-emerald-500/45'
                           : 'bg-[#1A2338] border-[#22304B] hover:border-[#2C3D5E] hover:bg-[#1D2940]'}`}
                 >
@@ -407,19 +407,19 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                       {/* 2.22: 본인 표시 — 로그인 중이 **아니어도** 오늘 하루는 목록에 남는다.
                           표가 없으면 «왜 이 사람만 남아 있지?» 가 된다. */}
                       {meName && i.name === meName && (
-                        <span className="h-5 px-1.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300 text-[10px] font-bold flex items-center flex-shrink-0">나</span>
+                        <span className="h-5 px-1.5 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300 text-2xs font-bold flex items-center flex-shrink-0">나</span>
                       )}
                       {inspectorStatus(i) === 'working' && (
-                        <span className="h-5 px-1.5 rounded-full text-[10px] font-bold flex items-center flex-shrink-0"
+                        <span className="h-5 px-1.5 rounded-full text-2xs font-bold flex items-center flex-shrink-0"
                               style={{ background: 'rgba(0,209,143,.14)', border: '1px solid rgba(0,209,143,.28)', color: '#7CF1C2' }}>작업중</span>
                       )}
                       {inspectorStatus(i) === 'online' && (
-                        <span className="h-5 px-1.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-[10px] font-bold flex items-center flex-shrink-0">로그인</span>
+                        <span className="h-5 px-1.5 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-300 text-2xs font-bold flex items-center flex-shrink-0">로그인</span>
                       )}
                       {/* 2.11: 비밀번호를 물을 이름은 **미리** 알려 준다 — 시안엔 없던 것.
                           모르고 누르면 «왜 비밀번호 창이 뜨지?» 가 된다. */}
                       {isLockedName(guard, i.name) && (
-                        <span className="h-5 px-1.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-violet-300 text-[10px] font-bold flex items-center flex-shrink-0">🔒 보호</span>
+                        <span className="h-5 px-1.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-violet-300 text-2xs font-bold flex items-center flex-shrink-0">🔒 보호</span>
                       )}
                     </div>
                     {role && (
@@ -439,13 +439,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         <div className="px-3.5 pb-2 shrink-0 lg:px-0">
           {hiddenCount > 0 && !showAll && (
             <button onClick={() => setShowAll(true)}
-              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-[12px] font-bold text-[#6E7E9E] hover:text-slate-300 hover:border-[#3A4A6A]">
+              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-xs2 font-bold text-[#6E7E9E] hover:text-dim-200 hover:border-[#3A4A6A]">
               로그인 안 된 작업자 {hiddenCount}명 보기
             </button>
           )}
           {showAll && (
             <button onClick={() => setShowAll(false)}
-              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-[12px] font-bold text-[#6E7E9E] hover:text-slate-300">
+              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-xs2 font-bold text-[#6E7E9E] hover:text-dim-200">
               로그인한 작업자만 보기
             </button>
           )}
@@ -453,8 +453,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
 
         {/* ── 직접 입력 + 로그인 — 2.11: 폰은 시트 하단에 고정(shrink-0), PC 는 종전 흐름 ── */}
         <div className="shrink-0 bg-[#121A2B] border-t border-[#1E2B45] px-3.5 pt-3.5 pb-3.5 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]
-                        lg:bg-transparent lg:border-slate-800 lg:px-0 lg:pb-0 lg:shadow-none lg:mb-3">
-          <div className="hidden lg:block text-[11px] text-slate-400 mb-1.5 font-bold">목록에 없으면 이름 직접 입력</div>
+                        lg:bg-transparent lg:border-line lg:px-0 lg:pb-0 lg:shadow-none lg:mb-3">
+          <div className="hidden lg:block text-xxs text-dim-300 mb-1.5 font-bold">목록에 없으면 이름 직접 입력</div>
           <div className="flex gap-2.5 items-center">
             <input
               type="text"
@@ -462,21 +462,21 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleDirect()}
               placeholder="목록에 없으면 이름 입력"
-              className="flex-1 min-w-0 h-14 bg-[#1A2338] border border-[#2A3958] rounded-2xl px-3.5 text-[15px] font-medium text-white placeholder:text-[#5A6B8A] focus:outline-none focus:border-[#00D18F]/60
-                         lg:h-auto lg:rounded lg:py-2 lg:text-sm lg:bg-slate-800 lg:border-slate-700"
+              className="flex-1 min-w-0 h-14 bg-[#1A2338] border border-[#2A3958] rounded-card px-3.5 text-[15px] font-medium text-white placeholder:text-[#5A6B8A] focus:outline-none focus:border-[#00D18F]/60
+                         lg:h-auto lg:rounded lg:py-2 lg:text-sm lg:bg-ink-800 lg:border-line"
               autoFocus={list.length === 0}
             />
             <button
               onClick={handleDirect}
               disabled={!newName.trim()}
-              className="h-14 px-4 rounded-2xl bg-[#232F4A] hover:bg-[#2A3958] disabled:bg-[#1A2338] disabled:text-slate-600 text-sm font-bold text-slate-100 flex items-center gap-1 shrink-0
-                         lg:h-auto lg:py-2 lg:rounded lg:bg-slate-700"
+              className="h-14 px-4 rounded-card bg-[#232F4A] hover:bg-[#2A3958] disabled:bg-[#1A2338] disabled:text-dim-500 text-sm font-bold text-dim-100 flex items-center gap-1 shrink-0
+                         lg:h-auto lg:py-2 lg:rounded lg:bg-ink-750"
             >
               <UserPlus className="w-4 h-4"/>선택
             </button>
           </div>
           {selected && !selectedInList && (
-            <div className="mt-2 text-[12px] text-emerald-200">선택됨: <b>{selected}</b>{displayRole(selected) ? ` · ${displayRole(selected)}` : ''}</div>
+            <div className="mt-2 text-xs2 text-emerald-200">선택됨: <b>{selected}</b>{displayRole(selected) ? ` · ${displayRole(selected)}` : ''}</div>
           )}
 
         {/* ── 로그인 버튼 ── */}
@@ -485,14 +485,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           disabled={!selected}
           className="w-full h-[60px] mt-3 rounded-[18px] font-black text-base flex items-center justify-center gap-2 transition-all active:scale-[0.99]
                      bg-gradient-to-r from-[#00c281] to-[#00e89e] hover:brightness-110 shadow-[0_10px_24px_rgba(0,209,143,0.28)]
-                     disabled:bg-none disabled:bg-[#1A2338] disabled:text-slate-600 disabled:shadow-none text-[#04120c] lg:h-auto lg:py-3.5 lg:rounded-xl lg:mt-0"
+                     disabled:bg-none disabled:bg-[#1A2338] disabled:text-dim-500 disabled:shadow-none text-[#04120c] lg:h-auto lg:py-3.5 lg:rounded-btn lg:mt-0"
         >
           <LogIn className="w-5 h-5"/>{selected ? `${selected} 님으로 시작` : '작업자를 선택해주세요'}
         </button>
 
         {/* 검수원 변경으로 들어온 경우(이미 로그인됨) — 돌아가기 */}
         {current && onCancel && (
-          <button onClick={onCancel} className="mt-3 w-full py-2 text-sm text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5">
+          <button onClick={onCancel} className="mt-3 w-full py-2 text-sm text-dim-300 hover:text-dim-100 flex items-center justify-center gap-1.5">
             <ArrowLeft className="w-4 h-4"/>{current} 그대로 돌아가기
           </button>
         )}
@@ -504,26 +504,26 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
 
       {/* ── 비밀번호 게이트 (setup/verify/owner) — 전체 화면 오버레이 ── */}
       {gateMode && (
-        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xs bg-slate-900 border border-amber-600/60 rounded-lg p-4">
+        <div className="fixed inset-0 z-50 bg-ink-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xs bg-ink-900 border border-amber-600/60 rounded-pill p-4">
             <div className="font-bold text-amber-200 text-sm mb-2">
               {gateMode === 'setup' ? `🔐 ${gateName} 비밀번호 설정`
                 : gateMode === 'owner' ? `🔑 ${OWNER_NAME} 비밀번호로 ${gateName} 열기`
                 : `🔐 ${gateName} 선택 — 비밀번호`}
             </div>
             {gateMode === 'setup' && (
-              <div className="text-[11px] text-slate-400 mb-2">
+              <div className="text-xxs text-dim-300 mb-2">
                 <b className="text-amber-300">{displayRole(gateName) || '보호 대상'}</b> 이름은 본인만 쓸 수 있습니다. 처음 한 번 비밀번호를 정하세요.
                 이 기기가 신뢰 기기 1호가 되고, 신뢰 기기(최대 {MAX_TRUSTED_DEVICES}대)에서는 다음부터 비밀번호 없이 선택됩니다.
               </div>
             )}
             {gateMode === 'verify' && (
-              <div className="text-[11px] text-slate-400 mb-2">
+              <div className="text-xxs text-dim-300 mb-2">
                 이 기기는 <b className="text-amber-300">{gateName}</b> 님의 신뢰 기기가 아닙니다. 본인 비밀번호를 입력하세요.
               </div>
             )}
             {gateMode === 'owner' && (
-              <div className="text-[11px] text-slate-400 mb-2">
+              <div className="text-xxs text-dim-300 mb-2">
                 {gateName} 님이 비밀번호를 잊었을 때 씁니다. {OWNER_NAME} 비밀번호를 입력하면 이번 접속만 열립니다
                 (이 기기는 신뢰 기기로 등록되지 않습니다).
               </div>
@@ -532,7 +532,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               type="password" value={pw1} onChange={e => setPw1(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && (gateMode === 'setup' ? handleSetup() : gateMode === 'owner' ? handleOwnerUnlock() : handleVerify())}
               placeholder={gateMode === 'owner' ? `${OWNER_NAME} 비밀번호` : '비밀번호'}
-              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 mb-2 focus:outline-none focus:border-amber-500"
+              className="w-full bg-ink-800 border border-line rounded px-3 py-2 text-sm text-dim-100 mb-2 focus:outline-none focus:border-amber-500"
               autoFocus
             />
             {gateMode === 'setup' && (
@@ -540,12 +540,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 type="password" value={pw2} onChange={e => setPw2(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSetup()}
                 placeholder="비밀번호 확인"
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 mb-2 focus:outline-none focus:border-amber-500"
+                className="w-full bg-ink-800 border border-line rounded px-3 py-2 text-sm text-dim-100 mb-2 focus:outline-none focus:border-amber-500"
               />
             )}
             {/* V9.45 계승: 그 사람 기기 수 기준으로 신뢰 기기 등록 여부 노출 */}
             {gateMode === 'verify' && Object.keys(lockEntry(guard, gateName)?.devices || {}).length < MAX_TRUSTED_DEVICES && (
-              <label className="flex items-center gap-2 text-[11px] text-slate-300 mb-2 select-none">
+              <label className="flex items-center gap-2 text-xxs text-dim-200 mb-2 select-none">
                 <input type="checkbox" checked={regDevice} onChange={e => setRegDevice(e.target.checked)}/>
                 이 기기를 신뢰 기기로 등록 ({Object.keys(lockEntry(guard, gateName)?.devices || {}).length}/{MAX_TRUSTED_DEVICES})
               </label>
@@ -554,13 +554,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               <button
                 onClick={gateMode === 'setup' ? handleSetup : gateMode === 'owner' ? handleOwnerUnlock : handleVerify}
                 disabled={gateBusy || !pw1}
-                className="flex-1 bg-amber-700 hover:bg-amber-600 disabled:bg-slate-700 disabled:text-slate-500 px-3 py-2 rounded text-sm font-bold text-amber-100"
+                className="flex-1 bg-amber-700 hover:bg-amber-600 disabled:bg-ink-750 disabled:text-dim-400 px-3 py-2 rounded text-sm font-bold text-amber-100"
               >
                 {gateBusy ? '확인 중…' : '확인'}
               </button>
               <button
                 onClick={closeGate}
-                className="px-3 py-2 rounded text-sm bg-slate-800 border border-slate-700 text-slate-300"
+                className="px-3 py-2 rounded text-sm bg-ink-800 border border-line text-dim-200"
               >
                 취소
               </button>
@@ -569,7 +569,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             {gateMode !== 'owner' && ownerCanUnlock(guard, gateName) && (
               <button
                 onClick={() => { setGateMode('owner'); setPw1(''); setPw2(''); }}
-                className="mt-2 w-full text-[11px] text-slate-400 hover:text-amber-300 underline underline-offset-2"
+                className="mt-2 w-full text-xxs text-dim-300 hover:text-amber-300 underline underline-offset-2"
               >
                 비밀번호를 잊으셨나요? — {OWNER_NAME} 비밀번호로 열기
               </button>

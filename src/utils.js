@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.31';   // **공용 3부품에 시안 V2 규격 첫 적용 — 일체감 판 1** — 검수사 «일체감이 있는게 좋습니다. 전부 A안으로» (3안 비교 후 확정). Header·ConfirmModal·ChoiceModal 클래스만 교체, 동작 불변: ink/line/act/st/dim 토큰 + rounded-card/btn/pill + 주버튼 60px. 규격(2.13 신설·2.16 시안V2 값)이 화면에 처음 닿았다 — 종전 적용률 1.1%(토큰 64 vs 구식·임의값 5,979). 확인 버튼 amber→act(민트), danger는 st-bad 유지, 검수원 아바타 호박색은 정체성으로 유지. 복제 오버레이 3곳(GeminiKey·SlotPicker·StowageReview)은 다음 판.
+export const APP_VERSION = 'TallyOne 2.32';   // **일체감 판 2 — 전 화면 완결** — 검수사 «전부 바꿔 주세요». 61개 화면 파일 전부에 A안(시안 V2) 토큰 적용: slate→ink/line/dim 2,700여 곳, 모서리 3xl/2xl→card·xl→btn·lg→pill, 임의 글자 9~13px→3xs~sm2, shadow-2xl→card. 인쇄물 2종(PrintableBayDetail·PrintableCargoPlanV2)은 종이 규격이라 제외. 베이플랜 «빈 자리» 밝은 셀 8건은 의미색이라 유지. 상태색(양하 파랑·선적 주황·위험 빨강·수석 보라) 전부 보존 — 클래스 문자열만, 동작 불변.
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가

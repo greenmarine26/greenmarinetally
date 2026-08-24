@@ -265,26 +265,26 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center">
-      <div className="bg-slate-900 w-full sm:max-w-lg sm:rounded-xl rounded-t-2xl max-h-[95vh] overflow-y-auto flex flex-col">
+      <div className="bg-ink-900 w-full sm:max-w-lg sm:rounded-btn rounded-t-2xl max-h-[95vh] overflow-y-auto flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700 sticky top-0 bg-slate-900 z-10">
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+        <div className="flex items-center justify-between p-4 border-b border-line sticky top-0 bg-ink-900 z-10">
+          <h2 className="text-lg font-bold text-dim-100 flex items-center gap-2">
             <Printer className="w-5 h-5 text-amber-300" />
             검수 자료 출력
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg">
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* 양하/선적 탭 */}
-        <div className="flex border-b border-slate-700 sticky top-[65px] bg-slate-900 z-10">
+        <div className="flex border-b border-line sticky top-[65px] bg-ink-900 z-10">
           <button
             onClick={() => setMode('discharge')}
             className={`flex-1 py-3 font-bold flex items-center justify-center gap-2 ${
               mode === 'discharge'
                 ? 'bg-blue-900/40 text-blue-200 border-b-2 border-blue-400'
-                : 'text-slate-400 hover:bg-slate-800'
+                : 'text-dim-300 hover:bg-ink-750'
             }`}
           >
             <ArrowDown className="w-4 h-4" />
@@ -295,7 +295,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
             className={`flex-1 py-3 font-bold flex items-center justify-center gap-2 ${
               mode === 'loading'
                 ? 'bg-amber-900/40 text-amber-200 border-b-2 border-amber-400'
-                : 'text-slate-400 hover:bg-slate-800'
+                : 'text-dim-300 hover:bg-ink-750'
             }`}
           >
             <ArrowUp className="w-4 h-4" />
@@ -306,39 +306,39 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
         {/* 항목 리스트 */}
         <div className="p-4 space-y-3">
           {/* FINAL WORKING REPORT (VOUCHER) — 입력 폼 + 두 버튼 */}
-          <div className="bg-slate-800/50 border-2 border-amber-600/30 rounded-lg p-3 space-y-2">
+          <div className="bg-ink-800/50 border-2 border-amber-600/30 rounded-pill p-3 space-y-2">
             <div className="text-sm font-bold text-amber-200 mb-2">📄 FINAL WORKING REPORT 출력</div>
             {/* 항차 + BERTH 입력 */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10px] text-slate-400 block mb-0.5">양하 항차</label>
+                <label className="text-2xs text-dim-300 block mb-0.5">양하 항차</label>
                 <input
                   type="text"
                   value={voucherDischVoy}
                   onChange={(e) => setVoucherDischVoy(e.target.value)}
                   placeholder="예: 0145N"
-                  className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"
+                  className="w-full bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-400 block mb-0.5">선적 항차</label>
+                <label className="text-2xs text-dim-300 block mb-0.5">선적 항차</label>
                 <input
                   type="text"
                   value={voucherLoadVoy}
                   onChange={(e) => setVoucherLoadVoy(e.target.value)}
                   placeholder="예: 0146S"
-                  className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"
+                  className="w-full bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100"
                 />
               </div>
             </div>
             <div>
-              <label className="text-[10px] text-slate-400 block mb-0.5">BERTH</label>
+              <label className="text-2xs text-dim-300 block mb-0.5">BERTH</label>
               <input
                 type="text"
                 value={voucherBerth}
                 onChange={(e) => setVoucherBerth(e.target.value)}
                 placeholder="예: 6"
-                className="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"
+                className="w-full bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100"
               />
             </div>
             {/* 출력 버튼 두 개 */}
@@ -350,7 +350,7 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                 className="bg-amber-900/40 hover:bg-amber-900/60 border border-amber-600/50 rounded p-2 text-center"
               >
                 <div className="font-bold text-amber-100 text-xs">📄 결제용</div>
-                <div className="text-[10px] text-amber-200/70">완료 가정</div>
+                <div className="text-2xs text-amber-200/70">완료 가정</div>
               </button>
               <button
                 onClick={() => openWorkingReportPrint(voyage, voyage?.info || {}, 'actual', {
@@ -359,41 +359,41 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                 className="bg-blue-900/40 hover:bg-blue-900/60 border border-blue-600/50 rounded p-2 text-center"
               >
                 <div className="font-bold text-blue-100 text-xs">📄 작업용</div>
-                <div className="text-[10px] text-blue-200/70">진행 현황</div>
+                <div className="text-2xs text-blue-200/70">진행 현황</div>
               </button>
             </div>
           </div>
 
           {count === 0 ? (
-            <div className="text-center py-8 text-slate-400">
+            <div className="text-center py-8 text-dim-300">
               <p>이 모드에 컨테이너 자료가 없습니다</p>
               <p className="text-xs mt-1">자료 탭에서 EDI/리스트 업로드 후 사용</p>
             </div>
           ) : (
             <>
-              <p className="text-xs text-slate-400">
-                {modeKo} <strong className="text-slate-200">{count}대</strong> · 평택항 {modeKo} 대상만 포함
+              <p className="text-xs text-dim-300">
+                {modeKo} <strong className="text-dim-100">{count}대</strong> · 평택항 {modeKo} 대상만 포함
               </p>
 
               {/* 1. 검수 리스트 */}
               <button
                 onClick={handlePrintInspection}
-                className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-4 text-left flex items-center gap-3"
+                className="w-full bg-ink-800 hover:bg-ink-750 border border-line-strong rounded-pill p-4 text-left flex items-center gap-3"
               >
                 <FileText className="w-8 h-8 text-emerald-400 shrink-0" />
                 <div className="flex-1">
-                  <div className="font-bold text-slate-100">📋 검수 리스트</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
+                  <div className="font-bold text-dim-100">📋 검수 리스트</div>
+                  <div className="text-xs text-dim-300 mt-0.5">
                     A4 세로, 좌우 2단, 페이지당 140대 · 시트1(전체) + 시트2(특수화물 별첨)
                   </div>
                 </div>
-                <Printer className="w-4 h-4 text-slate-500" />
+                <Printer className="w-4 h-4 text-dim-400" />
               </button>
 
               {/* 2. 카고플랜 V2 (M6.93.11: V1 폐기, V2만 사용 - 사용자 결정) */}
               <button
                 onClick={() => setPrintSub('cargo-v2')}
-                className="w-full bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 rounded-lg p-4 text-left flex items-center gap-3"
+                className="w-full bg-emerald-900 hover:bg-emerald-800 border border-emerald-700 rounded-pill p-4 text-left flex items-center gap-3"
               >
                 <Grid3x3 className="w-8 h-8 text-emerald-300 shrink-0" />
                 <div className="flex-1">
@@ -412,39 +412,39 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
                     if (!ptkContainers.length) { alert('선적 컨테이너가 없습니다'); return; }
                     openVgmListPrint(ptkContainers, voyageInfo);
                   }}
-                  className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-4 text-left flex items-center gap-3"
+                  className="w-full bg-ink-800 hover:bg-ink-750 border border-line-strong rounded-pill p-4 text-left flex items-center gap-3"
                 >
                   <FileText className="w-8 h-8 text-amber-400 shrink-0" />
                   <div className="flex-1">
-                    <div className="font-bold text-slate-100">⚖ VGM 리스트</div>
-                    <div className="text-xs text-slate-400 mt-0.5">
+                    <div className="font-bold text-dim-100">⚖ VGM 리스트</div>
+                    <div className="text-xs text-dim-300 mt-0.5">
                       평택 선적분 컨별 VGM(kg) · 본선 요청 시 제출용 (영문)
                     </div>
                   </div>
-                  <Printer className="w-4 h-4 text-slate-500" />
+                  <Printer className="w-4 h-4 text-dim-400" />
                 </button>
               )}
 
               {/* 3. 베이 상세 */}
               <button
                 onClick={() => setPrintSub('detail')}
-                className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg p-4 text-left flex items-center gap-3"
+                className="w-full bg-ink-800 hover:bg-ink-750 border border-line-strong rounded-pill p-4 text-left flex items-center gap-3"
               >
                 <Ship className="w-8 h-8 text-purple-400 shrink-0" />
                 <div className="flex-1">
-                  <div className="font-bold text-slate-100">🚢 베이 상세</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
+                  <div className="font-bold text-dim-100">🚢 베이 상세</div>
+                  <div className="text-xs text-dim-300 mt-0.5">
                     베이별 슬롯 단위 컨테이너 위치 · 검수 현장용
                   </div>
                 </div>
-                <Printer className="w-4 h-4 text-slate-500" />
+                <Printer className="w-4 h-4 text-dim-400" />
               </button>
             </>
           )}
         </div>
 
         {/* 하단 안내 */}
-        <div className="p-4 border-t border-slate-700 text-xs text-slate-500 leading-relaxed">
+        <div className="p-4 border-t border-line text-xs text-dim-400 leading-relaxed">
           출력 클릭 → 새 창 미리보기 → Ctrl+P (인쇄 또는 PDF 저장)<br />
           💡 컬러 인쇄 권장 (특수화물 색상 구분)
         </div>

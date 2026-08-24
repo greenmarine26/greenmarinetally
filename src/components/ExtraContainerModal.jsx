@@ -13,8 +13,8 @@ const DAMAGES = ['없음', '있음'];
 function Chip({ active, onClick, children }) {
   return (
     <button onClick={onClick}
-      className={`px-3 py-2 rounded-lg text-sm font-bold border-2 transition ${
-        active ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500'
+      className={`px-3 py-2 rounded-pill text-sm font-bold border-2 transition ${
+        active ? 'bg-amber-500 text-ink-950 border-amber-400' : 'bg-ink-800 text-dim-200 border-line hover:border-line-strong'
       }`}>{children}</button>
   );
 }
@@ -68,20 +68,20 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
 
   return (
     <div className="fixed inset-0 z-[200] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="bg-slate-950 border border-amber-700/50 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden shadow-2xl"
+      <div className="bg-ink-950 border border-amber-700/50 rounded-t-3xl sm:rounded-card w-full sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden shadow-card"
         onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/90 sticky top-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-ink-900/90 sticky top-0">
           <span className="text-base font-black text-amber-300">➕ 초과 컨테이너 ({mode === 'discharge' ? '양하' : '선적'})</span>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg"><X className="w-5 h-5 text-slate-400" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill"><X className="w-5 h-5 text-dim-300" /></button>
         </div>
 
         <div className="p-4 overflow-y-auto">
-          <div className="text-[11px] text-slate-500 mb-3">신고 리스트에 없는데 내려진 컨테이너. 신고서 작성을 위해 기본 정보를 입력합니다.</div>
+          <div className="text-xxs text-dim-400 mb-3">신고 리스트에 없는데 내려진 컨테이너. 신고서 작성을 위해 기본 정보를 입력합니다.</div>
 
           <div className="mb-3">
             <div className="text-xs font-bold text-amber-200 mb-1.5">컨테이너 번호 *</div>
             <input value={cn} onChange={engChange(setCn)} {...ENG_INPUT_PROPS} placeholder="예: ABCD1234567"
-              className="w-full bg-slate-900 border-2 border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2 text-sm mono text-slate-100 outline-none" />
+              className="w-full bg-ink-900 border-2 border-line focus:border-amber-500 rounded-pill px-3 py-2 text-sm mono text-dim-100 outline-none" />
           </div>
 
           <Field label="규격 *">
@@ -100,14 +100,14 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
             <div className="mb-3">
               <div className="text-xs font-bold text-cyan-200 mb-1.5">리퍼 온도</div>
               <input value={temp} onChange={(e) => setTemp(e.target.value)} {...DECIMAL_INPUT_PROPS} placeholder="예: -18"
-                className="w-full bg-slate-900 border-2 border-slate-700 focus:border-cyan-500 rounded-lg px-3 py-2 text-sm mono text-slate-100 outline-none" />
+                className="w-full bg-ink-900 border-2 border-line focus:border-cyan-500 rounded-pill px-3 py-2 text-sm mono text-dim-100 outline-none" />
             </div>
           )}
 
           <div className="mb-3">
             <div className="text-xs font-bold text-amber-200 mb-1.5">실번호</div>
             <input value={seal} onChange={(e) => setSeal(e.target.value)} {...NUM_INPUT_PROPS} placeholder="실 번호 (선택)"
-              className="w-full bg-slate-900 border-2 border-slate-700 focus:border-amber-500 rounded-lg px-3 py-2 text-sm mono text-slate-100 outline-none" />
+              className="w-full bg-ink-900 border-2 border-line focus:border-amber-500 rounded-pill px-3 py-2 text-sm mono text-dim-100 outline-none" />
           </div>
 
           <Field label="데미지 유무 *">
@@ -117,25 +117,25 @@ export default function ExtraContainerModal({ open, mode = 'discharge', onClose,
           {damage === '있음' && (
             <div className="mb-3">
               <input value={damageNote} onChange={(e) => setDamageNote(e.target.value)} placeholder="데미지 내용 (예: 좌측 찌그러짐)"
-                className="w-full bg-slate-900 border-2 border-orange-700/50 focus:border-orange-500 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none" />
+                className="w-full bg-ink-900 border-2 border-orange-700/50 focus:border-orange-500 rounded-pill px-3 py-2 text-sm text-dim-100 outline-none" />
             </div>
           )}
 
           <div className="mb-2">
-            <div className="text-xs font-bold text-slate-400 mb-1.5">메모 (선택)</div>
+            <div className="text-xs font-bold text-dim-300 mb-1.5">메모 (선택)</div>
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="위치·비고"
-              className="w-full bg-slate-900 border-2 border-slate-700 focus:border-slate-500 rounded-lg px-3 py-2 text-sm text-slate-100 outline-none" />
+              className="w-full bg-ink-900 border-2 border-line focus:border-line-strong rounded-pill px-3 py-2 text-sm text-dim-100 outline-none" />
           </div>
         </div>
 
-        <div className="p-3 border-t border-slate-800 bg-slate-950 sticky bottom-0">
+        <div className="p-3 border-t border-line bg-ink-950 sticky bottom-0">
           <button onClick={handleSave} disabled={!canSave}
-            className={`w-full py-3 rounded-xl font-black text-sm ${
-              canSave ? 'bg-amber-500 text-slate-950 hover:bg-amber-400' : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+            className={`w-full py-3 rounded-btn font-black text-sm ${
+              canSave ? 'bg-amber-500 text-ink-950 hover:bg-amber-400' : 'bg-ink-800 text-dim-500 cursor-not-allowed'
             }`}>
             {saving ? '저장 중…' : '초과 컨 기록'}
           </button>
-          {!canSave && !saving && <div className="text-[10px] text-slate-500 text-center mt-1.5">번호·규격·적공·타입·데미지는 필수입니다.</div>}
+          {!canSave && !saving && <div className="text-2xs text-dim-400 text-center mt-1.5">번호·규격·적공·타입·데미지는 필수입니다.</div>}
         </div>
       </div>
     </div>

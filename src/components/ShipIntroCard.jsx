@@ -125,66 +125,66 @@ export default function ShipIntroCard({ info, inspector, portMisData = {},
   if (!shipId || !shipName) return null;
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden mb-3">
+    <div className="bg-ink-900 border border-line rounded-pill overflow-hidden mb-3">
       <button onClick={() => setOpen(v => !v)}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left" style={{ minHeight: 44 }}>
         <Ship className="w-4 h-4 text-sky-300 shrink-0"/>
-        <span className="text-[13px] font-bold text-slate-200 flex-1 truncate">이 배는? — {shipName}</span>
-        {intro === undefined && <span className="text-[10px] text-slate-600">…</span>}
-        {intro && <span className="text-[10px] text-emerald-400 font-bold shrink-0">소개 있음</span>}
-        <span className="text-slate-500 text-xs shrink-0">{open ? '▲' : '▼'}</span>
+        <span className="text-sm2 font-bold text-dim-100 flex-1 truncate">이 배는? — {shipName}</span>
+        {intro === undefined && <span className="text-2xs text-dim-500">…</span>}
+        {intro && <span className="text-2xs text-emerald-400 font-bold shrink-0">소개 있음</span>}
+        <span className="text-dim-400 text-xs shrink-0">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div className="px-3 pb-3">
           {intro ? (
             <>
-              <div className="text-[13px] text-slate-300 leading-relaxed whitespace-pre-wrap">{intro.text}</div>
+              <div className="text-sm2 text-dim-200 leading-relaxed whitespace-pre-wrap">{intro.text}</div>
               {Array.isArray(intro.sources) && intro.sources.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {intro.sources.map((sc, i) => (
                     <a key={i} href={sc.uri} target="_blank" rel="noreferrer"
-                      className="text-[10px] px-2 py-1 rounded bg-slate-800 border border-slate-700 text-sky-300 truncate max-w-[160px]">
+                      className="text-2xs px-2 py-1 rounded bg-ink-800 border border-line text-sky-300 truncate max-w-[160px]">
                       🔗 {sc.title || `출처 ${i + 1}`}
                     </a>
                   ))}
                 </div>
               )}
               <div className="flex items-center justify-between mt-2">
-                <div className="text-[10px] text-slate-600">
+                <div className="text-2xs text-dim-500">
                   ✨ AI 웹 검색 · 참고용{intro.by ? ` · ${intro.by}` : ''}{intro.at ? ` · ${new Date(intro.at).toLocaleDateString('ko-KR')}` : ''}
                 </div>
                 <button onClick={generate} disabled={busy}
-                  className="flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700">
+                  className="flex items-center gap-1 text-xxs px-2.5 py-1.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-300 border border-line">
                   <RefreshCw className={`w-3 h-3 ${busy ? 'animate-spin' : ''}`}/>{busy ? '생성 중…' : '다시 만들기'}
                 </button>
               </div>
             </>
           ) : intro === null ? (
             <>
-              <div className="text-[12px] text-slate-500 mb-2 leading-relaxed">
+              <div className="text-xs2 text-dim-400 mb-2 leading-relaxed">
                 아직 이 배의 정보가 없습니다. AI가 웹을 검색해 제원(선종·IMO·국적·크기·건조년도)·선사·항로와 이름의 유래까지 정리합니다 (한 번 만들면 모든 검수원이 같이 봅니다).
               </div>
               {resolved.needsName && (
                 <div className="mb-2">
-                  <div className="text-[11px] text-amber-300/90 mb-1 leading-relaxed">
+                  <div className="text-xxs text-amber-300/90 mb-1 leading-relaxed">
                     ⚠ 지금은 약자({resolved.name})뿐이라 검색이 안 될 수 있습니다{info?.imo ? ' (IMO로 시도는 가능)' : ''}. 선박 영문 풀네임을 알면 넣어 주세요.
                   </div>
                   <input type="text" value={manualName} onChange={e => setManualName(e.target.value)}
                     placeholder="예: XIN QUN DAO"
-                    className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-[13px] text-slate-100 placeholder-slate-600 focus:outline-none focus:border-sky-500"
+                    className="w-full bg-ink-800 border border-line-strong rounded-pill px-3 py-2 text-sm2 text-dim-100 placeholder-dim-500 focus:outline-none focus:border-sky-500"
                     style={{ minHeight: 40 }}/>
                 </div>
               )}
               <button onClick={generate} disabled={busy || (needsName && !info?.imo)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-sky-800 hover:bg-sky-700 disabled:bg-slate-800 disabled:text-slate-600 text-sky-100 text-[13px] font-bold"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-pill bg-sky-800 hover:bg-sky-700 disabled:bg-ink-800 disabled:text-dim-500 text-sky-100 text-sm2 font-bold"
                 style={{ minHeight: 44 }}>
                 <Sparkles className="w-4 h-4"/>{busy ? '웹 검색 중…' : needsName && !info?.imo ? '풀네임 입력 후 검색 가능' : 'AI로 선박 정보 찾기'}
               </button>
             </>
           ) : (
-            <div className="text-[12px] text-slate-600">불러오는 중…</div>
+            <div className="text-xs2 text-dim-500">불러오는 중…</div>
           )}
-          {err && <div className="mt-2 text-[11px] text-red-300 leading-relaxed">{err}</div>}
+          {err && <div className="mt-2 text-xxs text-red-300 leading-relaxed">{err}</div>}
         </div>
       )}
     </div>

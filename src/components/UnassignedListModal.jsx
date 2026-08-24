@@ -18,35 +18,35 @@ export default function UnassignedListModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3" onClick={onClose}>
-      <div className="bg-slate-900 border-2 border-orange-700 rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-slate-800 flex-shrink-0">
+      <div className="bg-ink-900 border-2 border-orange-700 rounded-btn max-w-lg w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-line flex-shrink-0">
           <div className="flex items-center gap-2">
             <Truck className="w-5 h-5 text-orange-400"/>
             <h2 className="text-lg font-black text-orange-300">선적대상 ({list.length}대)</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200"><X className="w-5 h-5"/></button>
+          <button onClick={onClose} className="text-dim-300 hover:text-dim-100"><X className="w-5 h-5"/></button>
         </div>
 
         <div className="overflow-y-auto p-3 flex-1">
           {list.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">선적대상 없음 (모든 컨이 베이에 배정됨)</div>
+            <div className="text-center py-8 text-dim-400">선적대상 없음 (모든 컨이 베이에 배정됨)</div>
           ) : (
             <div className="space-y-2">
               {list.map(c => {
                 const isFull = c.fe === 'F';
                 const isCompleted = !!c._comp;
                 return (
-                  <div key={c.cn} className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+                  <div key={c.cn} className="bg-ink-800 border border-line rounded-pill p-3">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-2xl font-black mono text-amber-300">{c.l4 || c.cn?.slice(-4)}</span>
-                      <span className="text-sm font-bold mono text-slate-200 flex-1 truncate">{c.cn}</span>
+                      <span className="text-sm font-bold mono text-dim-100 flex-1 truncate">{c.cn}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] flex-wrap mb-2">
-                      <span className={`px-1.5 py-0.5 rounded font-black ${isFull ? 'bg-rose-700 text-rose-50' : 'bg-slate-700 text-slate-300'}`}>
+                    <div className="flex items-center gap-2 text-2xs flex-wrap mb-2">
+                      <span className={`px-1.5 py-0.5 rounded font-black ${isFull ? 'bg-rose-700 text-rose-50' : 'bg-ink-750 text-dim-200'}`}>
                         {isFull ? '풀' : c.fe === 'E' ? '엠티' : '미정'}
                       </span>
-                      {c.iso && <span className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded mono">{c.iso}</span>}
-                      {c.sl && <span className="bg-slate-700 text-amber-300 px-1.5 py-0.5 rounded mono">실 {c.sl}</span>}
+                      {c.iso && <span className="bg-ink-750 text-dim-200 px-1.5 py-0.5 rounded mono">{c.iso}</span>}
+                      {c.sl && <span className="bg-ink-750 text-amber-300 px-1.5 py-0.5 rounded mono">실 {c.sl}</span>}
                       {isCompleted && <span className="bg-emerald-700 text-emerald-50 px-1.5 py-0.5 rounded font-black">✓완료</span>}
                     </div>
                     <button onClick={() => onPickContainer(c)}

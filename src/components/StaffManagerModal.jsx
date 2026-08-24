@@ -203,10 +203,10 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
   if (!isAdminName(guardInfo, current)) {
     return (
       <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3">
-        <div className="bg-slate-900 border border-red-700 rounded-xl p-6 max-w-sm text-center">
+        <div className="bg-ink-900 border border-red-700 rounded-btn p-6 max-w-sm text-center">
           <div className="text-red-300 font-bold mb-2">⛔ 권한 없음</div>
-          <div className="text-slate-300 text-sm mb-4">인원 관리는 관리자(<b>{getAdminNames(guardInfo).join(', ')}</b>)만 가능합니다.</div>
-          <button onClick={onClose} className="bg-slate-700 px-4 py-2 rounded text-white">확인</button>
+          <div className="text-dim-200 text-sm mb-4">인원 관리는 관리자(<b>{getAdminNames(guardInfo).join(', ')}</b>)만 가능합니다.</div>
+          <button onClick={onClose} className="bg-ink-750 px-4 py-2 rounded text-white">확인</button>
         </div>
       </div>
     );
@@ -306,82 +306,82 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3">
-      <div className="bg-slate-900 border border-amber-700 rounded-xl w-full max-w-md max-h-[90vh] flex flex-col">
+      <div className="bg-ink-900 border border-amber-700 rounded-btn w-full max-w-md max-h-[90vh] flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+        <div className="flex items-center justify-between p-4 border-b border-line">
           <div className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-amber-400" />
             <div>
               <div className="font-bold text-amber-200">인원 관리</div>
-              <div className="text-[10px] text-slate-400">관리자: {adminNames.join(', ')}</div>
+              <div className="text-2xs text-dim-300">관리자: {adminNames.join(', ')}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={downloadBackup} disabled={backupBusy}
-              className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded text-xs font-bold flex items-center gap-1"
+              className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 disabled:bg-ink-750 disabled:text-dim-400 text-white rounded text-xs font-bold flex items-center gap-1"
               title="Firebase 전체 데이터 JSON 백업">
               <Download className="w-3.5 h-3.5"/>
               {backupBusy ? '백업 중...' : '백업'}
             </button>
-            <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded">
-              <X className="w-5 h-5 text-slate-400" />
+            <button onClick={onClose} className="p-1 hover:bg-ink-750 rounded">
+              <X className="w-5 h-5 text-dim-300" />
             </button>
           </div>
         </div>
 
         {/* V9.05: 관리자 이름 보호 — 신뢰 기기 관리 */}
-        <div className="px-4 py-2 border-b border-slate-700 bg-slate-800/40">
+        <div className="px-4 py-2 border-b border-line bg-ink-800/40">
           <div className="flex items-center justify-between">
-            <div className="text-[11px] font-bold text-amber-300">🔐 {current} 보호 — 신뢰 기기 {Object.keys(adminEntry(guardInfo, current)?.devices || {}).length}/{MAX_TRUSTED_DEVICES}</div>
-            <button onClick={handleChangePw} className="text-[10px] px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200">
+            <div className="text-xxs font-bold text-amber-300">🔐 {current} 보호 — 신뢰 기기 {Object.keys(adminEntry(guardInfo, current)?.devices || {}).length}/{MAX_TRUSTED_DEVICES}</div>
+            <button onClick={handleChangePw} className="text-2xs px-2 py-1 bg-ink-750 hover:bg-ink-700 rounded text-dim-100">
               {adminEntry(guardInfo, current)?.pwHash ? '비밀번호 변경' : '비밀번호 미설정'}
             </button>
           </div>
           {Object.entries(adminEntry(guardInfo, current)?.devices || {}).map(([devId, d]) => (
-            <div key={devId} className="flex items-center justify-between mt-1 text-[11px] text-slate-300">
+            <div key={devId} className="flex items-center justify-between mt-1 text-xxs text-dim-200">
               <span>
                 {d?.label || devId}{devId === getAdminDeviceId() && <span className="text-emerald-400"> (현재 기기)</span>}
-                {d?.addedAt ? <span className="text-slate-500"> · {new Date(d.addedAt).toISOString().slice(0, 10)}</span> : null}
+                {d?.addedAt ? <span className="text-dim-400"> · {new Date(d.addedAt).toISOString().slice(0, 10)}</span> : null}
               </span>
               <button onClick={() => handleRemoveDevice(devId, d?.label)} className="text-red-400 hover:text-red-300 px-1.5">해제</button>
             </div>
           ))}
           {Object.keys(adminEntry(guardInfo, current)?.devices || {}).length === 0 && (
-            <div className="text-[10px] text-slate-500 mt-1">등록된 신뢰 기기 없음 — 검수원 선택에서 {current} 클릭 시 설정됩니다.</div>
+            <div className="text-2xs text-dim-400 mt-1">등록된 신뢰 기기 없음 — 검수원 선택에서 {current} 클릭 시 설정됩니다.</div>
           )}
         </div>
 
         {/* 필터 탭 */}
-        <div className="flex gap-1 p-2 border-b border-slate-700">
+        <div className="flex gap-1 p-2 border-b border-line">
           <button onClick={() => setFilter('all')}
-            className={`flex-1 py-2 text-xs rounded ${filter === 'all' ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-300'}`}>
+            className={`flex-1 py-2 text-xs rounded ${filter === 'all' ? 'bg-amber-700 text-white' : 'bg-ink-800 text-dim-200'}`}>
             재직 ({allStaff.filter(s => !deletedStaff[s.name]).length})
           </button>
           <button onClick={() => setFilter('inspectors')}
-            className={`flex-1 py-2 text-xs rounded ${filter === 'inspectors' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-300'}`}>
+            className={`flex-1 py-2 text-xs rounded ${filter === 'inspectors' ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-200'}`}>
             접속 ({inspectorList.filter(i => !deletedStaff[i.name]).length})
           </button>
           <button onClick={() => setFilter('deleted')}
-            className={`flex-1 py-2 text-xs rounded ${filter === 'deleted' ? 'bg-red-800 text-white' : 'bg-slate-800 text-slate-300'}`}>
+            className={`flex-1 py-2 text-xs rounded ${filter === 'deleted' ? 'bg-red-800 text-white' : 'bg-ink-800 text-dim-200'}`}>
             퇴사 ({Object.keys(deletedStaff).length})
           </button>
         </div>
 
         {/* 신규 추가 폼 */}
-        <div className="p-3 border-b border-slate-700 bg-slate-800/30">
-          <div className="text-xs text-slate-400 mb-2 flex items-center gap-1"><UserPlus className="w-3 h-3"/> 신규 직원 추가</div>
+        <div className="p-3 border-b border-line bg-ink-800/30">
+          <div className="text-xs text-dim-300 mb-2 flex items-center gap-1"><UserPlus className="w-3 h-3"/> 신규 직원 추가</div>
           {/* TallyOne 1.74: 이름만 넣고 저장 — 직책은 «검수»가 기본. 직급·직책 있는 사람이 오면 그때 고른다. */}
           <div className="flex gap-2">
             <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder="이름" className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100"/>
+              placeholder="이름" className="flex-1 bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100"/>
             <button onClick={handleAdd}
               className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded text-sm font-bold">저장</button>
           </div>
           <div className="flex gap-2 mt-1.5 items-center">
-            <label className="text-[10px] text-slate-500 w-7 shrink-0">직급</label>
+            <label className="text-2xs text-dim-400 w-7 shrink-0">직급</label>
             <select value={newRank} onChange={e => setNewRank(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100">
+              className="flex-1 bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100">
               <option value="">없음</option>
               <option>대리</option>
               <option>과장</option>
@@ -393,9 +393,9 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
               <option>대표이사</option>
               <option>회장</option>
             </select>
-            <label className="text-[10px] text-slate-500 w-7 shrink-0 text-right">직책</label>
+            <label className="text-2xs text-dim-400 w-7 shrink-0 text-right">직책</label>
             <select value={newDuty} onChange={e => setNewDuty(e.target.value)}
-              className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100">
+              className="flex-1 bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-sm text-dim-100">
               <option>검수</option>
               <option>수석검수</option>
               <option>부수석</option>
@@ -403,8 +403,8 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
               <option>테스터</option>{/* 1.79: 수석과 동일 권한 + 비번 잠금, 소유자 고유만 제외 */}
             </select>
           </div>
-          <div className="mt-1 text-[10px] text-slate-500">
-            저장되는 값 <span className="text-slate-300 font-bold">{composedRole}</span>
+          <div className="mt-1 text-2xs text-dim-400">
+            저장되는 값 <span className="text-dim-200 font-bold">{composedRole}</span>
             <span className="ml-1">· 화면 표기 <span className="text-amber-300 font-bold">{
               (() => { const r = newRank.trim(), d = newDuty.trim();
                 if (['회장','대표이사','상무이사','이사'].includes(r)) return r;
@@ -424,32 +424,32 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
             const isOnline = !!inspectorMap[s.name];
             const isDynamic = !STAFF_NAMES.includes(s.name);  // Firebase에 동적 추가된 직원
             return (
-              <div key={s.name} className="flex items-center gap-2 px-2 py-1.5 bg-slate-800/50 border border-slate-700 rounded">
+              <div key={s.name} className="flex items-center gap-2 px-2 py-1.5 bg-ink-800/50 border border-line rounded">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  isAdminName(guardInfo, s.name) ? 'bg-amber-500 text-slate-900' : 'bg-slate-600 text-slate-200'
+                  isAdminName(guardInfo, s.name) ? 'bg-amber-500 text-ink-950' : 'bg-ink-700 text-dim-100'
                 }`}>{s.name[0]}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1 text-sm font-bold text-slate-100">
+                  <div className="flex items-center gap-1 text-sm font-bold text-dim-100">
                     {s.name}
                     {isOwnerName(s.name)
-                      ? <span className="text-[9px] bg-amber-600 text-slate-900 px-1 rounded font-black">소유자</span>
-                      : isAdminName(guardInfo, s.name) && <span className="text-[9px] bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
-                    {isDynamic && <span className="text-[9px] bg-purple-900 text-purple-300 px-1 rounded">추가됨</span>}
-                    {devAccess[s.name] && <span className="text-[9px] bg-cyan-900 text-cyan-300 px-1 rounded" title={`개발용 접근 — ${devAccess[s.name].grantedBy || ''} 부여`}>🛠 개발용</span>}
-                    {matrixEditors.includes(s.name) && <span className="text-[9px] bg-indigo-900 text-indigo-300 px-1 rounded" title="베이 매트릭스(베이사전) 편집 권한">📐 매트릭스</span>}
-                    {isDeleted(s.name) && <span className="text-[9px] bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
+                      ? <span className="text-3xs bg-amber-600 text-ink-950 px-1 rounded font-black">소유자</span>
+                      : isAdminName(guardInfo, s.name) && <span className="text-3xs bg-amber-900 text-amber-300 px-1 rounded">관리자</span>}
+                    {isDynamic && <span className="text-3xs bg-purple-900 text-purple-300 px-1 rounded">추가됨</span>}
+                    {devAccess[s.name] && <span className="text-3xs bg-cyan-900 text-cyan-300 px-1 rounded" title={`개발용 접근 — ${devAccess[s.name].grantedBy || ''} 부여`}>🛠 개발용</span>}
+                    {matrixEditors.includes(s.name) && <span className="text-3xs bg-indigo-900 text-indigo-300 px-1 rounded" title="베이 매트릭스(베이사전) 편집 권한">📐 매트릭스</span>}
+                    {isDeleted(s.name) && <span className="text-3xs bg-red-900 text-red-300 px-1 rounded">퇴사</span>}
                   </div>
                   {/* TallyOne 1.71: 이사급 이상만 직급, 그 아래는 직책. 직책 없으면 «검수». */}
-                  <div className="text-[10px] text-slate-400">{displayRole(s.name)}</div>
+                  <div className="text-2xs text-dim-300">{displayRole(s.name)}</div>
                 </div>
-                {isActive && <span className="text-[9px] bg-emerald-700/40 text-emerald-300 px-1.5 py-0.5 rounded font-bold">●작업중</span>}
-                {isLoggedIn && <span className="text-[9px] bg-sky-900/50 text-sky-300 px-1.5 py-0.5 rounded font-bold">○로그인</span>}
-                {isOnline && !isActive && !isLoggedIn && <span className="text-[9px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">접속이력</span>}
+                {isActive && <span className="text-3xs bg-emerald-700/40 text-emerald-300 px-1.5 py-0.5 rounded font-bold">●작업중</span>}
+                {isLoggedIn && <span className="text-3xs bg-sky-900/50 text-sky-300 px-1.5 py-0.5 rounded font-bold">○로그인</span>}
+                {isOnline && !isActive && !isLoggedIn && <span className="text-3xs bg-ink-750 text-dim-300 px-1.5 py-0.5 rounded">접속이력</span>}
                 {/* 액션 버튼 */}
                 {/* V9.09: 관리자 권한 부여·회수 — 인수인계 */}
                 {!isDeleted(s.name) && (
                   isOwnerName(s.name) ? (
-                    <span className="px-2 py-1 bg-slate-800 rounded text-amber-400/70 text-[10px] font-bold" title="소유자 권한은 회수할 수 없습니다">
+                    <span className="px-2 py-1 bg-ink-800 rounded text-amber-400/70 text-2xs font-bold" title="소유자 권한은 회수할 수 없습니다">
                       권한고정
                     </span>
                   ) : isAdminName(guardInfo, s.name) ? (
@@ -460,7 +460,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     </button>
                   ) : (
                     <button onClick={() => handleGrantAdmin(s.name)}
-                      className="px-2 py-1 bg-slate-700 hover:bg-amber-800 rounded text-slate-200 hover:text-amber-100 text-xs font-bold"
+                      className="px-2 py-1 bg-ink-750 hover:bg-amber-800 rounded text-dim-100 hover:text-amber-100 text-xs font-bold"
                       title="관리자 권한 부여 — 비밀번호는 본인이 정합니다">
                       권한부여
                     </button>
@@ -472,7 +472,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     disabled={devBusy === s.name}
                     className={`px-2 py-1 rounded text-xs font-bold ${devAccess[s.name]
                       ? 'bg-cyan-800 hover:bg-cyan-700 text-cyan-100'
-                      : 'bg-slate-700 hover:bg-cyan-900 text-slate-200 hover:text-cyan-100'} disabled:opacity-50`}
+                      : 'bg-ink-750 hover:bg-cyan-900 text-dim-100 hover:text-cyan-100'} disabled:opacity-50`}
                     title={devAccess[s.name]
                       ? '개발용 접근 회수 — 수석 대시보드를 못 보게 됩니다'
                       : '개발용 접근 부여 — 수석 대시보드 화면만 열립니다(직급·비밀번호 변화 없음)'}>
@@ -485,7 +485,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     disabled={mxBusy === s.name}
                     className={`px-2 py-1 rounded text-xs font-bold ${matrixEditors.includes(s.name)
                       ? 'bg-indigo-800 hover:bg-indigo-700 text-indigo-100'
-                      : 'bg-slate-700 hover:bg-indigo-900 text-slate-200 hover:text-indigo-100'} disabled:opacity-50`}
+                      : 'bg-ink-750 hover:bg-indigo-900 text-dim-100 hover:text-indigo-100'} disabled:opacity-50`}
                     title={matrixEditors.includes(s.name)
                       ? '매트릭스 편집 권한 회수'
                       : '매트릭스 편집 권한 부여 — 베이 매트릭스(베이사전)를 만들고 고칠 수 있습니다'}>
@@ -500,7 +500,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
                     disabled={testerBusy === s.name}
                     className={`px-2 py-1 rounded text-xs font-bold ${isTester(s.name)
                       ? 'bg-purple-800 hover:bg-purple-700 text-purple-100'
-                      : 'bg-slate-700 hover:bg-purple-900 text-slate-200 hover:text-purple-100'} disabled:opacity-50`}
+                      : 'bg-ink-750 hover:bg-purple-900 text-dim-100 hover:text-purple-100'} disabled:opacity-50`}
                     title={isTester(s.name)
                       ? '테스터 회수 — 원래 직급으로 돌아갑니다'
                       : '테스터 부여 — 수석 기능까지 전부 사용(소유자 고유만 제외). 직급은 유지됩니다'}>
@@ -535,7 +535,7 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
           })}
         </div>
 
-        <div className="p-3 border-t border-slate-700 text-[10px] text-slate-500">
+        <div className="p-3 border-t border-line text-2xs text-dim-400">
           🗑 퇴사 처리 (접속 차단, 복구 가능 · 관리자면 권한도 함께 삭제) · 🔄 접속 기록만 제거 · 소유자({OWNER_NAME}) 권한은 고정
         </div>
       </div>

@@ -87,112 +87,112 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[95vh] overflow-y-auto">
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+      <div className="bg-ink-900 border border-line rounded-t-2xl sm:rounded-card w-full sm:max-w-md max-h-[95vh] overflow-y-auto">
+        <div className="sticky top-0 bg-ink-900 border-b border-line px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Ship className="w-5 h-5 text-amber-400"/>
             <h2 className="text-base font-black text-amber-300">선박 실 정책</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded">
-            <X className="w-5 h-5 text-slate-400"/>
+          <button onClick={onClose} className="p-1.5 hover:bg-ink-750 rounded">
+            <X className="w-5 h-5 text-dim-300"/>
           </button>
         </div>
 
         <div className="p-4 space-y-3">
-          <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
-            <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">선박</div>
+          <div className="bg-ink-800 border border-line rounded-pill p-3">
+            <div className="text-2xs text-dim-400 font-bold uppercase mb-1">선박</div>
             <div className="text-lg font-black text-amber-200 mono">{vsl}</div>
-            {code && <div className="text-xs text-slate-400 mono">{code}</div>}
+            {code && <div className="text-xs text-dim-300 mono">{code}</div>}
           </div>
 
-          <div className="text-xs text-slate-300 font-bold">엠티 컨테이너 실 정책을 선택하세요:</div>
+          <div className="text-xs text-dim-200 font-bold">엠티 컨테이너 실 정책을 선택하세요:</div>
 
           {/* 정책 선택 */}
           <div className="space-y-2">
             <button
               onClick={() => setMode('none')}
-              className={`w-full p-3 rounded-lg text-left border-2 transition ${
+              className={`w-full p-3 rounded-pill text-left border-2 transition ${
                 mode === 'none'
-                  ? 'bg-slate-700 border-slate-500 text-slate-100'
-                  : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700/50'
+                  ? 'bg-ink-750 border-line-strong text-dim-100'
+                  : 'bg-ink-800/50 border-line text-dim-200 hover:bg-ink-750/50'
               }`}>
               <div className="flex items-center gap-2 mb-1">
-                <CheckCircle2 className={`w-4 h-4 ${mode === 'none' ? 'text-emerald-400' : 'text-slate-500'}`}/>
+                <CheckCircle2 className={`w-4 h-4 ${mode === 'none' ? 'text-emerald-400' : 'text-dim-400'}`}/>
                 <span className="font-bold text-sm">일반 (실 작업 없음)</span>
               </div>
-              <div className="text-[10px] text-slate-400 ml-6">F만 실, E는 실 없음 (대부분의 선박)</div>
+              <div className="text-2xs text-dim-300 ml-6">F만 실, E는 실 없음 (대부분의 선박)</div>
             </button>
 
             <button
               onClick={() => setMode('verify')}
-              className={`w-full p-3 rounded-lg text-left border-2 transition ${
+              className={`w-full p-3 rounded-pill text-left border-2 transition ${
                 mode === 'verify'
                   ? 'bg-cyan-900/40 border-cyan-500 text-cyan-100'
-                  : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700/50'
+                  : 'bg-ink-800/50 border-line text-dim-200 hover:bg-ink-750/50'
               }`}>
               <div className="flex items-center gap-2 mb-1">
-                <Lock className={`w-4 h-4 ${mode === 'verify' ? 'text-cyan-400' : 'text-slate-500'}`}/>
+                <Lock className={`w-4 h-4 ${mode === 'verify' ? 'text-cyan-400' : 'text-dim-400'}`}/>
                 <span className="font-bold text-sm">엠티 실 확인 (이미 부착됨)</span>
               </div>
-              <div className="text-[10px] text-slate-400 ml-6">예: TEN JUPITER, RIZHAO ORIENT — 리씰 가능</div>
+              <div className="text-2xs text-dim-300 ml-6">예: TEN JUPITER, RIZHAO ORIENT — 리씰 가능</div>
             </button>
 
             <button
               onClick={() => setMode('attach')}
-              className={`w-full p-3 rounded-lg text-left border-2 transition ${
+              className={`w-full p-3 rounded-pill text-left border-2 transition ${
                 mode === 'attach'
                   ? 'bg-red-900/40 border-red-500 text-red-100'
-                  : 'bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700/50'
+                  : 'bg-ink-800/50 border-line text-dim-200 hover:bg-ink-750/50'
               }`}>
               <div className="flex items-center gap-2 mb-1">
-                <Lock className={`w-4 h-4 ${mode === 'attach' ? 'text-red-400' : 'text-slate-500'}`}/>
+                <Lock className={`w-4 h-4 ${mode === 'attach' ? 'text-red-400' : 'text-dim-400'}`}/>
                 <span className="font-bold text-sm">엠티 실 부착 (작업 필요)</span>
               </div>
-              <div className="text-[10px] text-slate-400 ml-6">예: ATLANTIC PIONEER 위해행 — 검수원이 직접 부착</div>
+              <div className="text-2xs text-dim-300 ml-6">예: ATLANTIC PIONEER 위해행 — 검수원이 직접 부착</div>
             </button>
           </div>
 
           {/* 적용 대상 선택 (mode가 verify/attach일 때만) */}
           {mode !== 'none' && (
             <>
-              <div className="text-xs text-slate-300 font-bold mt-3">적용 대상:</div>
+              <div className="text-xs text-dim-200 font-bold mt-3">적용 대상:</div>
               <div className="space-y-2">
                 <button
                   onClick={() => setTarget('all_empty')}
-                  className={`w-full p-2.5 rounded-lg text-left border ${
+                  className={`w-full p-2.5 rounded-pill text-left border ${
                     target === 'all_empty'
                       ? 'bg-amber-900/30 border-amber-500 text-amber-100'
-                      : 'bg-slate-800 border-slate-700 text-slate-300'
+                      : 'bg-ink-800 border-line text-dim-200'
                   }`}>
                   <div className="font-bold text-sm">모든 엠티 컨테이너</div>
-                  <div className="text-[10px] text-slate-400">POD 무관</div>
+                  <div className="text-2xs text-dim-300">POD 무관</div>
                 </button>
                 <button
                   onClick={() => setTarget('empty_with_pod')}
-                  className={`w-full p-2.5 rounded-lg text-left border ${
+                  className={`w-full p-2.5 rounded-pill text-left border ${
                     target === 'empty_with_pod'
                       ? 'bg-amber-900/30 border-amber-500 text-amber-100'
-                      : 'bg-slate-800 border-slate-700 text-slate-300'
+                      : 'bg-ink-800 border-line text-dim-200'
                   }`}>
                   <div className="font-bold text-sm">특정 POD행 엠티만</div>
-                  <div className="text-[10px] text-slate-400">목적지 항구로 필터</div>
+                  <div className="text-2xs text-dim-300">목적지 항구로 필터</div>
                 </button>
               </div>
 
               {target === 'empty_with_pod' && (
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-3 space-y-2">
-                  <div className="text-[11px] text-amber-300 font-bold">POD 선택 (다중 가능):</div>
+                <div className="bg-ink-800/50 border border-line rounded-pill p-3 space-y-2">
+                  <div className="text-xxs text-amber-300 font-bold">POD 선택 (다중 가능):</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {COMMON_PODS.map(p => (
                       <button key={p.code}
                         onClick={() => togglePod(p.code)}
-                        className={`px-2 py-1.5 rounded text-[11px] font-bold border ${
+                        className={`px-2 py-1.5 rounded text-xxs font-bold border ${
                           selectedPods.includes(p.code)
                             ? 'bg-amber-700 border-amber-500 text-white'
-                            : 'bg-slate-800 border-slate-600 text-slate-300'
+                            : 'bg-ink-800 border-line-strong text-dim-200'
                         }`}>
                         {p.code}
-                        <div className="text-[9px] opacity-70">{p.name.split(' ')[0]}</div>
+                        <div className="text-3xs opacity-70">{p.name.split(' ')[0]}</div>
                       </button>
                     ))}
                   </div>
@@ -202,7 +202,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
                       value={customPod}
                       onChange={e => setCustomPod(e.target.value.toUpperCase())}
                       placeholder="기타 POD (예: CNXMG)"
-                      className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-100 mono"
+                      className="flex-1 bg-ink-900 border border-line-strong rounded px-2 py-1.5 text-xs text-dim-100 mono"
                       onKeyDown={e => e.key === 'Enter' && handleAddCustomPod()}
                     />
                     <button onClick={handleAddCustomPod}
@@ -211,7 +211,7 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
                     </button>
                   </div>
                   {selectedPods.length > 0 && (
-                    <div className="text-[10px] text-emerald-300 mono">
+                    <div className="text-2xs text-emerald-300 mono">
                       선택됨: {selectedPods.join(', ')}
                     </div>
                   )}
@@ -224,19 +224,19 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
               엠티 실 정책(위 mode)과 독립. LOLO만 켜고 mode=none도 가능. */}
           <button
             onClick={() => setLolo(v => !v)}
-            className={`w-full p-3 rounded-lg text-left border flex items-start gap-2 ${
+            className={`w-full p-3 rounded-pill text-left border flex items-start gap-2 ${
               lolo
                 ? 'bg-cyan-900/30 border-cyan-500 text-cyan-100'
-                : 'bg-slate-800 border-slate-700 text-slate-300'
+                : 'bg-ink-800 border-line text-dim-200'
             }`}>
             <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-              lolo ? 'bg-cyan-500 border-cyan-400' : 'border-slate-500'
+              lolo ? 'bg-cyan-500 border-cyan-400' : 'border-line-strong'
             }`}>
               {lolo && <CheckCircle2 className="w-3.5 h-3.5 text-white"/>}
             </div>
             <div>
               <div className="font-bold text-sm">LOLO 선박 (베이플랜 없음)</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-2xs text-dim-300 mt-0.5">
                 베이 그림 없이 리스트로만 검수하는 IFCSUM 명세선. 본선 수리·고장 시 대체선을 여기에 지정하면 LOLO 검수 리스트가 생성됩니다.
               </div>
             </div>
@@ -246,36 +246,36 @@ export default function ShipPolicyModal({ open, vsl, code, onClose, onSaved, ins
               리퍼 확인 모달 자동 띄움·미확인 배지·브리핑 온도 경고를 이 배에서 끈다. 수동 조회는 그대로. */}
           <button
             onClick={() => setRfSkip(v => !v)}
-            className={`w-full p-3 rounded-lg text-left border flex items-start gap-2 ${
+            className={`w-full p-3 rounded-pill text-left border flex items-start gap-2 ${
               rfSkip
                 ? 'bg-sky-900/30 border-sky-500 text-sky-100'
-                : 'bg-slate-800 border-slate-700 text-slate-300'
+                : 'bg-ink-800 border-line text-dim-200'
             }`}>
             <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-              rfSkip ? 'bg-sky-500 border-sky-400' : 'border-slate-500'
+              rfSkip ? 'bg-sky-500 border-sky-400' : 'border-line-strong'
             }`}>
               {rfSkip && <CheckCircle2 className="w-3.5 h-3.5 text-white"/>}
             </div>
             <div>
               <div className="font-bold text-sm">리퍼 체크 안 함 (리퍼 다수 선박)</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">
+              <div className="text-2xs text-dim-300 mt-0.5">
                 머스크처럼 리퍼가 다수인 배 — 리퍼 확인 창이 자동으로 뜨지 않고 온도 경고도 안 나옵니다. 수동 조회는 그대로 됩니다.
               </div>
             </div>
           </button>
 
-          <div className="bg-blue-950/30 border border-blue-700/40 rounded p-2 text-[10px] text-blue-200 flex items-start gap-1.5">
+          <div className="bg-blue-950/30 border border-blue-700/40 rounded p-2 text-2xs text-blue-200 flex items-start gap-1.5">
             <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5"/>
             <span>저장하면 다음부터 같은 선박이 EDI에 들어올 때 자동 적용됩니다. 홈 화면 아래 「선박 실 정책」 판에서 언제든 바꿀 수 있습니다.</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-2">
             <button onClick={onClose}
-              className="py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm font-bold">
+              className="py-3 bg-ink-750 hover:bg-ink-700 text-dim-200 rounded-pill text-sm font-bold">
               나중에
             </button>
             <button onClick={handleSave} disabled={saving}
-              className="py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold disabled:opacity-50">
+              className="py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-pill text-sm font-bold disabled:opacity-50">
               {saving ? '저장 중...' : '💾 정책 저장'}
             </button>
           </div>

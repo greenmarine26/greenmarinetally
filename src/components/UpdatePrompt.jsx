@@ -136,13 +136,13 @@ export default function UpdatePrompt() {
 
   return (
     <div className="fixed top-12 left-2 right-2 z-50 max-w-md mx-auto">
-      <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 border-2 border-emerald-400 rounded-lg shadow-2xl p-3 flex items-center gap-3 animate-pulse">
-        <div className="bg-emerald-900 p-2 rounded-lg flex-shrink-0">
+      <div className="bg-gradient-to-r from-emerald-700 to-emerald-600 border-2 border-emerald-400 rounded-pill shadow-card p-3 flex items-center gap-3 animate-pulse">
+        <div className="bg-emerald-900 p-2 rounded-pill flex-shrink-0">
           <Download className="w-5 h-5 text-emerald-200"/>
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-black text-sm text-emerald-50">🆕 새 버전 출시</div>
-          <div className="text-[11px] text-emerald-100/90">탭 한 번으로 최신 버전 적용</div>
+          <div className="text-xxs text-emerald-100/90">탭 한 번으로 최신 버전 적용</div>
         </div>
         <button onClick={handleUpdate}
           className="bg-emerald-100 text-emerald-900 px-3 py-2 rounded font-black text-xs flex items-center gap-1 active:scale-95 transition">

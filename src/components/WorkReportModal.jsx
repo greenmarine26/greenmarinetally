@@ -372,13 +372,13 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 p-0 md:p-4" onClick={onClose}>
-      <div className="bg-slate-900 border-2 border-slate-700 rounded-t-2xl md:rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+      <div className="bg-ink-900 border-2 border-line rounded-t-2xl md:rounded-card w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="sticky top-0 bg-ink-900 border-b border-line px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Send className="w-5 h-5 text-emerald-400"/>
             <span className="font-bold text-emerald-300">작업 보고</span>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-ink-750 rounded">
             <X className="w-5 h-5"/>
           </button>
         </div>
@@ -389,9 +389,9 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             {/* 활성 작업 카드 - 장비별 양하/선적 분리 */}
             {Object.keys(activeByEquip).length > 0 && (
               <div className="space-y-2">
-                <div className="text-xs font-bold text-slate-300">진행 중인 작업</div>
+                <div className="text-xs font-bold text-dim-200">진행 중인 작업</div>
                 {Object.entries(activeByEquip).map(([equip, works]) => (
-                  <div key={equip} className="bg-slate-800/40 border border-slate-700 rounded-lg p-2 space-y-2">
+                  <div key={equip} className="bg-ink-800/40 border border-line rounded-pill p-2 space-y-2">
                     <div className="flex items-center gap-2 mb-1">
                       <Truck className="w-4 h-4 text-orange-400"/>
                       <span className="font-bold text-base text-orange-200">{equip}</span>
@@ -405,12 +405,12 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-sm">{modeIcon} {modeLabel}</span>
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isPaused ? 'bg-amber-700 text-white' : 'bg-emerald-700 text-white'}`}>
+                              <span className={`text-2xs font-bold px-1.5 py-0.5 rounded ${isPaused ? 'bg-amber-700 text-white' : 'bg-emerald-700 text-white'}`}>
                                 {isPaused ? '⏸ 중단' : '🟢 진행'}
                               </span>
                             </div>
                           </div>
-                          <div className="text-[10px] text-slate-400">
+                          <div className="text-2xs text-dim-300">
                             시작: {w.startedAt ? new Date(w.startedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
                             {w.pauseReason && <div className="text-amber-300 mt-0.5">사유: {w.pauseReason}</div>}
                           </div>
@@ -441,40 +441,40 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
             {/* 새 작업 시작 */}
             <button onClick={() => setView('start')}
-              className="w-full py-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-base flex items-center justify-center gap-2">
+              className="w-full py-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-pill font-bold text-base flex items-center justify-center gap-2">
               <Play className="w-5 h-5"/> 새 작업 시작
             </button>
 
             {/* 추가 보고 (해치/콘박스) */}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setView('hatch')}
-                className="py-3 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1">
+                className="py-3 bg-cyan-700 hover:bg-cyan-600 text-white rounded-pill font-bold text-xs flex items-center justify-center gap-1">
                 <Unlock className="w-4 h-4"/> 해치커버
               </button>
               <button onClick={() => setView('conbox')}
-                className="py-3 bg-purple-700 hover:bg-purple-600 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1">
+                className="py-3 bg-purple-700 hover:bg-purple-600 text-white rounded-pill font-bold text-xs flex items-center justify-center gap-1">
                 <Box className="w-4 h-4"/> 콘박스
               </button>
             </div>
             {/* V8.10: 해치 제외 4척(TMPZ·TNJP·RZOR·OBWH)은 해치커버 대신 주야간 작업보고를 쓴다. */}
             {isHatchSkipShip && (
               <button onClick={() => { setDnShift(null); setView('daynight'); }}
-                className="w-full py-3 bg-teal-700 hover:bg-teal-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-teal-500">
+                className="w-full py-3 bg-teal-700 hover:bg-teal-600 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-teal-500">
                 📋 주야간 작업보고
               </button>
             )}
             {/* M5.79: 수동 보고 (시작 안 누른 작업) — 이어받기 / 한 갱 먼저 완료 케이스 */}
             <button onClick={() => { setManualAction(''); setManualReason(''); setView('manual'); }}
-              className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-indigo-500">
+              className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-indigo-500">
               <RefreshCw className="w-4 h-4"/> 🔧 수동 보고 (시작 안 누른 작업)
             </button>
             {/* M5.76: 외부 요인 작업 중단 (장비고장/강풍/안개/기타) */}
             <button onClick={() => setView('external')}
-              className="w-full py-3 bg-red-800 hover:bg-red-700 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 border border-red-600">
+              className="w-full py-3 bg-red-800 hover:bg-red-700 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 border border-red-600">
               <AlertTriangle className="w-4 h-4"/> 작업 중단 (장비고장 / 강풍 / 안개 / 기타)
             </button>
 
-            <div className="text-[10px] text-slate-500 text-center">
+            <div className="text-2xs text-dim-400 text-center">
               💡 카톡 공유창이 열리면 단톡방을 선택하세요
             </div>
           </div>
@@ -483,14 +483,14 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         {/* 작업 시작 화면 */}
         {view === 'start' && (
           <div className="p-3 space-y-3">
-            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
 
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-2">1) 장비 선택</div>
+              <div className="text-xs font-bold text-dim-200 mb-2">1) 장비 선택</div>
               <div className="grid grid-cols-2 gap-2">
                 {equipNumbers.map(n => (
                   <button key={n} onClick={() => setSelectedEquip(n)}
-                    className={`py-3 rounded-lg font-bold ${selectedEquip === n ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-slate-800 text-slate-300'}`}>
+                    className={`py-3 rounded-pill font-bold ${selectedEquip === n ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-ink-800 text-dim-200'}`}>
                     🏗 {n}
                   </button>
                 ))}
@@ -498,26 +498,26 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             </div>
 
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-2">2) 작업 종류</div>
+              <div className="text-xs font-bold text-dim-200 mb-2">2) 작업 종류</div>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setSelectedMode('discharge')}
-                  className={`py-3 rounded-lg font-bold ${selectedMode === 'discharge' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
+                  className={`py-3 rounded-pill font-bold ${selectedMode === 'discharge' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-ink-800 text-dim-200'}`}>
                   ⬇ 양하
                 </button>
                 <button onClick={() => setSelectedMode('loading')}
-                  className={`py-3 rounded-lg font-bold ${selectedMode === 'loading' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-slate-800 text-slate-300'}`}>
+                  className={`py-3 rounded-pill font-bold ${selectedMode === 'loading' ? 'bg-emerald-600 text-white border-2 border-emerald-300' : 'bg-ink-800 text-dim-200'}`}>
                   ⬆ 선적
                 </button>
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded p-2 text-xs text-slate-300">
+            <div className="bg-ink-800 rounded p-2 text-xs text-dim-200">
               <div>📍 {vsl} {voy}</div>
               <div>🏗 {selectedEquip} - {selectedMode === 'discharge' ? '양하' : '선적'} 시작</div>
             </div>
 
             <button onClick={handleStartWork}
-              className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              className="w-full py-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-pill font-bold flex items-center justify-center gap-2">
               <Send className="w-4 h-4"/> ▶ 시작 + 카톡 보고
             </button>
           </div>
@@ -526,26 +526,26 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         {/* 중단 화면 */}
         {view === 'pause' && (
           <div className="p-3 space-y-3">
-            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
             <div className="bg-amber-950/30 border border-amber-700 rounded p-2 text-sm">
               <div className="font-bold text-amber-200">
                 {pauseTarget.equip} {pauseTarget.mode === 'discharge' ? '양하' : '선적'} 중단
               </div>
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">중단 사유 — 빠른 선택</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">중단 사유 — 빠른 선택</div>
               <div className="grid grid-cols-2 gap-1.5 mb-2">
                 {['장비 고장', '강풍 대기', '안개 대기', '우천 대기', '화물 이상', '점심 식사'].map(r => (
                   <button key={r} type="button" onClick={() => setPauseReason(r)}
-                    className={`py-2 rounded text-xs font-bold border ${pauseReason === r ? 'bg-amber-700 text-white border-amber-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>{r}</button>
+                    className={`py-2 rounded text-xs font-bold border ${pauseReason === r ? 'bg-amber-700 text-white border-amber-500' : 'bg-ink-800 text-dim-200 border-line'}`}>{r}</button>
                 ))}
               </div>
               <input type="text" value={pauseReason} onChange={e => setPauseReason(e.target.value)}
                 placeholder="또는 기타 사유 직접 입력"
-                className="w-full bg-slate-800 border border-amber-600 rounded px-3 py-2 text-sm text-slate-100"/>
+                className="w-full bg-ink-800 border border-amber-600 rounded px-3 py-2 text-sm text-dim-100"/>
             </div>
             <button onClick={() => handlePause(pauseTarget.equip, pauseTarget.mode)}
-              className="w-full py-3 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              className="w-full py-3 bg-amber-700 hover:bg-amber-600 text-white rounded-pill font-bold flex items-center justify-center gap-2">
               <Pause className="w-4 h-4"/> 중단 보고
             </button>
           </div>
@@ -554,30 +554,30 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         {/* M5.76: 외부 요인 작업 중단 화면 */}
         {view === 'external' && (
           <div className="p-3 space-y-3">
-            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
             <div className="bg-red-950/40 border border-red-700 rounded p-2">
               <div className="font-bold text-red-200 text-sm flex items-center gap-1">
                 <AlertTriangle className="w-4 h-4"/> 작업 중단 보고 (외부 요인)
               </div>
-              <div className="text-[11px] text-red-300/80 mt-1">전체 작업 중단 — 작업 시작 안 한 상태에서도 보고 가능</div>
+              <div className="text-xxs text-red-300/80 mt-1">전체 작업 중단 — 작업 시작 안 한 상태에서도 보고 가능</div>
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">중단 사유</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">중단 사유</div>
               <div className="grid grid-cols-2 gap-1.5">
                 {['장비 고장', '강풍 대기', '안개 대기', '우천 대기', '항만 사정', '기타'].map(r => (
                   <button key={r} type="button" onClick={() => setExternalReason(r)}
-                    className={`py-2.5 rounded text-xs font-bold border ${externalReason === r ? 'bg-red-700 text-white border-red-500' : 'bg-slate-800 text-slate-300 border-slate-700'}`}>{r}</button>
+                    className={`py-2.5 rounded text-xs font-bold border ${externalReason === r ? 'bg-red-700 text-white border-red-500' : 'bg-ink-800 text-dim-200 border-line'}`}>{r}</button>
                 ))}
               </div>
               {externalReason === '기타' && (
                 <input type="text" value={externalDetail} onChange={e => setExternalDetail(e.target.value)}
                   placeholder="세부 사유 입력"
-                  className="w-full mt-2 bg-slate-800 border border-red-600 rounded px-3 py-2 text-sm text-slate-100" autoFocus/>
+                  className="w-full mt-2 bg-ink-800 border border-red-600 rounded px-3 py-2 text-sm text-dim-100" autoFocus/>
               )}
             </div>
             <button onClick={handleExternalPause}
               disabled={!externalReason || (externalReason === '기타' && !externalDetail.trim())}
-              className="w-full py-3 bg-red-700 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              className="w-full py-3 bg-red-700 hover:bg-red-600 disabled:bg-ink-750 disabled:text-dim-400 text-white rounded-pill font-bold flex items-center justify-center gap-2">
               <AlertTriangle className="w-4 h-4"/> 작업 중단 보고
             </button>
           </div>
@@ -586,12 +586,12 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         {/* M5.79: 수동 보고 화면 — 시작 안 누른 작업의 중단/재개/완료 */}
         {view === 'manual' && (
           <div className="p-3 space-y-3">
-            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
-            <div className="bg-indigo-950/40 border border-indigo-700/50 rounded-lg p-3">
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
+            <div className="bg-indigo-950/40 border border-indigo-700/50 rounded-pill p-3">
               <div className="text-base font-black text-indigo-200 flex items-center gap-2 mb-1">
                 <RefreshCw className="w-4 h-4"/> 수동 보고
               </div>
-              <div className="text-[11px] text-indigo-300/90 leading-relaxed">
+              <div className="text-xxs text-indigo-300/90 leading-relaxed">
                 • 다른 검수원이 시작한 작업을 <b>이어받아</b> 중단/완료할 때<br/>
                 • 한 갱이 먼저 완료하여 <b>시작 기록 없이 완료 보고</b>가 필요할 때<br/>
                 • 시작 버튼을 못 누른 상태에서 <b>장비/모드 직접 선택</b>해 보고
@@ -600,11 +600,11 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
             {/* 장비 선택 */}
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">장비</div>
               <div className="grid grid-cols-4 gap-1">
                 {equipNumbers.map(n => (
                   <button key={n} onClick={() => setManualEquip(n)}
-                    className={`py-2 rounded font-bold text-xs ${manualEquip === n ? 'bg-indigo-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    className={`py-2 rounded font-bold text-xs ${manualEquip === n ? 'bg-indigo-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}
                   </button>
                 ))}
@@ -613,14 +613,14 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
             {/* 모드 선택 */}
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">작업 종류</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">작업 종류</div>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setManualMode('discharge')}
-                  className={`py-3 rounded-lg font-bold text-sm ${manualMode === 'discharge' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  className={`py-3 rounded-pill font-bold text-sm ${manualMode === 'discharge' ? 'bg-blue-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                   ⬇ 양하
                 </button>
                 <button onClick={() => setManualMode('loading')}
-                  className={`py-3 rounded-lg font-bold text-sm ${manualMode === 'loading' ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  className={`py-3 rounded-pill font-bold text-sm ${manualMode === 'loading' ? 'bg-amber-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                   ⬆ 선적
                 </button>
               </div>
@@ -636,33 +636,33 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                     <div className="text-xs font-bold mb-0.5">
                       {isPaused ? '⏸ 중단 상태' : '🟢 진행 중'} — Firebase에 기록 있음
                     </div>
-                    {aw.startedAt && <div className="text-[10px] text-slate-400">시작: {new Date(aw.startedAt).toLocaleString('ko-KR')}</div>}
-                    {aw.pauseReason && <div className="text-[10px] text-amber-300">사유: {aw.pauseReason}</div>}
+                    {aw.startedAt && <div className="text-2xs text-dim-300">시작: {new Date(aw.startedAt).toLocaleString('ko-KR')}</div>}
+                    {aw.pauseReason && <div className="text-2xs text-amber-300">사유: {aw.pauseReason}</div>}
                   </div>
                 );
               }
               return (
-                <div className="px-3 py-2 rounded border bg-slate-800/40 border-slate-700">
-                  <div className="text-xs font-bold text-slate-300">📭 Firebase에 시작 기록 없음</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">수동 완료/중단 보고 가능 (이어받기·한 갱 먼저 완료 케이스)</div>
+                <div className="px-3 py-2 rounded border bg-ink-800/40 border-line">
+                  <div className="text-xs font-bold text-dim-200">📭 Firebase에 시작 기록 없음</div>
+                  <div className="text-2xs text-dim-300 mt-0.5">수동 완료/중단 보고 가능 (이어받기·한 갱 먼저 완료 케이스)</div>
                 </div>
               );
             })()}
 
             {/* 액션 선택 */}
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">보고 종류</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">보고 종류</div>
               <div className="grid grid-cols-3 gap-2">
                 <button onClick={() => setManualAction('pause')}
-                  className={`py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'pause' ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'pause' ? 'bg-amber-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                   <Pause className="w-3.5 h-3.5"/> 중단
                 </button>
                 <button onClick={() => setManualAction('resume')}
-                  className={`py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'resume' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'resume' ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                   <Play className="w-3.5 h-3.5"/> 재개
                 </button>
                 <button onClick={() => setManualAction('done')}
-                  className={`py-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'done' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                  className={`py-3 rounded-pill font-bold text-xs flex items-center justify-center gap-1 ${manualAction === 'done' ? 'bg-blue-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                   <CheckCircle2 className="w-3.5 h-3.5"/> 완료
                 </button>
               </div>
@@ -671,18 +671,18 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             {/* 중단 사유 (pause만) */}
             {manualAction === 'pause' && (
               <div>
-                <div className="text-xs font-bold text-slate-300 mb-1">중단 사유 — 빠른 선택</div>
+                <div className="text-xs font-bold text-dim-200 mb-1">중단 사유 — 빠른 선택</div>
                 <div className="grid grid-cols-2 gap-1.5 mb-2">
                   {['장비 고장', '강풍 대기', '안개 대기', '우천 대기', '화물 이상', '점심 식사'].map(r => (
                     <button key={r} onClick={() => setManualReason(r)}
-                      className={`py-2 rounded text-xs font-bold ${manualReason === r ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                      className={`py-2 rounded text-xs font-bold ${manualReason === r ? 'bg-amber-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                       {r}
                     </button>
                   ))}
                 </div>
                 <input type="text" value={manualReason} onChange={(e) => setManualReason(e.target.value)}
                   placeholder="또는 직접 입력"
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100"/>
+                  className="w-full bg-ink-800 border border-line rounded px-3 py-2 text-sm text-dim-100"/>
               </div>
             )}
 
@@ -716,7 +716,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                   setManualAction(''); setView('main');
                 }
               }}
-              className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              className="w-full py-3 bg-indigo-700 hover:bg-indigo-600 disabled:bg-ink-750 disabled:text-dim-400 text-white rounded-pill font-bold flex items-center justify-center gap-2">
               <Send className="w-4 h-4"/>
               {manualAction === 'pause' ? '중단 보고' :
                manualAction === 'resume' ? '재개 보고' :
@@ -728,14 +728,14 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         {/* 해치 화면 */}
         {view === 'hatch' && (
           <div className="p-3 space-y-3">
-            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
 
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">장비</div>
               <div className="grid grid-cols-4 gap-1">
                 {equipNumbers.map(n => (
                   <button key={n} onClick={() => setHatchEquip(n)}
-                    className={`py-2 rounded text-xs font-bold ${(hatchEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    className={`py-2 rounded text-xs font-bold ${(hatchEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}
                   </button>
                 ))}
@@ -744,33 +744,33 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
 
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => setHatchAction('open')}
-                className={`py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${hatchAction === 'open' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                className={`py-3 rounded-pill font-bold flex items-center justify-center gap-2 ${hatchAction === 'open' ? 'bg-emerald-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                 <Unlock className="w-4 h-4"/> OPEN
               </button>
               <button onClick={() => setHatchAction('close')}
-                className={`py-3 rounded-lg font-bold flex items-center justify-center gap-2 ${hatchAction === 'close' ? 'bg-blue-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                className={`py-3 rounded-pill font-bold flex items-center justify-center gap-2 ${hatchAction === 'close' ? 'bg-blue-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                 <Lock className="w-4 h-4"/> CLOSE
               </button>
             </div>
 
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">베이 번호</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">베이 번호</div>
               <input
                 type="text"
                 value={bayInput}
                 onChange={e => setBayInput(e.target.value)}
                 placeholder="예: 1, 3, 5"
-                className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-3 text-base mono text-slate-100 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-ink-800 border border-line-strong rounded px-3 py-3 text-base mono text-dim-100 focus:outline-none focus:border-cyan-500"
               />
             </div>
 
             {/* V8.31: 해치커버 장수 수동 선택(1~3장) — 자동계산 제거 */}
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">장수 선택</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">장수 선택</div>
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3].map(n => (
                   <button key={n} onClick={() => setHatchPanels(n)}
-                    className={`py-3 rounded-lg font-bold ${hatchPanels === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    className={`py-3 rounded-pill font-bold ${hatchPanels === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}장
                   </button>
                 ))}
@@ -778,7 +778,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             </div>
 
             <button onClick={handleHatch}
-              className={`w-full py-3 rounded-lg font-bold text-white flex items-center justify-center gap-2 ${hatchAction === 'open' ? 'bg-emerald-700' : 'bg-blue-700'}`}>
+              className={`w-full py-3 rounded-pill font-bold text-white flex items-center justify-center gap-2 ${hatchAction === 'open' ? 'bg-emerald-700' : 'bg-blue-700'}`}>
               <Send className="w-4 h-4"/> 해치 {hatchAction === 'open' ? 'OPEN' : 'CLOSE'} 보고
             </button>
           </div>
@@ -787,14 +787,14 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         {/* 콘박스 화면 */}
         {view === 'conbox' && (
           <div className="p-3 space-y-3">
-            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
 
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">장비</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">장비</div>
               <div className="grid grid-cols-4 gap-1">
                 {equipNumbers.map(n => (
                   <button key={n} onClick={() => setConBoxEquip(n)}
-                    className={`py-2 rounded text-xs font-bold ${(conBoxEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    className={`py-2 rounded text-xs font-bold ${(conBoxEquip || Object.keys(activeByEquip)[0]) === n ? 'bg-orange-600 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}
                   </button>
                 ))}
@@ -802,33 +802,33 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
             </div>
 
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">규격</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">규격</div>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setConBoxType('20')}
-                  className={`py-3 rounded-lg font-bold ${conBoxType === '20' ? 'bg-purple-700 text-white' : 'bg-slate-800 text-slate-400'}`}>20자</button>
+                  className={`py-3 rounded-pill font-bold ${conBoxType === '20' ? 'bg-purple-700 text-white' : 'bg-ink-800 text-dim-300'}`}>20자</button>
                 <button onClick={() => setConBoxType('40')}
-                  className={`py-3 rounded-lg font-bold ${conBoxType === '40' ? 'bg-purple-700 text-white' : 'bg-slate-800 text-slate-400'}`}>40자</button>
+                  className={`py-3 rounded-pill font-bold ${conBoxType === '40' ? 'bg-purple-700 text-white' : 'bg-ink-800 text-dim-300'}`}>40자</button>
               </div>
             </div>
 
             <div>
-              <div className="text-xs font-bold text-slate-300 mb-1">개수</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">개수</div>
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3].map(n => (
                   <button key={n} onClick={() => setConBoxCount(n)}
-                    className={`py-3 rounded-lg font-bold text-lg ${conBoxCount === n ? 'bg-purple-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    className={`py-3 rounded-pill font-bold text-lg ${conBoxCount === n ? 'bg-purple-700 text-white' : 'bg-ink-800 text-dim-300'}`}>
                     {n}개
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="bg-slate-800 rounded p-2 text-center text-sm font-bold">
+            <div className="bg-ink-800 rounded p-2 text-center text-sm font-bold">
               📦 콘박스 {conBoxType}자 {conBoxCount}개
             </div>
 
             <button onClick={handleConBox}
-              className="w-full py-3 bg-purple-700 hover:bg-purple-600 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+              className="w-full py-3 bg-purple-700 hover:bg-purple-600 text-white rounded-pill font-bold flex items-center justify-center gap-2">
               <Send className="w-4 h-4"/> 콘박스 보고
             </button>
           </div>
@@ -837,48 +837,48 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
         {/* V8.10: 주야간 작업보고 (해치 제외 4척 전용) */}
         {view === 'daynight' && (
           <div className="space-y-3">
-            <button onClick={() => setView('main')} className="text-xs text-slate-400">← 돌아가기</button>
+            <button onClick={() => setView('main')} className="text-xs text-dim-300">← 돌아가기</button>
             <div className="text-sm font-bold text-teal-300 text-center">📋 주야간 작업보고</div>
             {/* 주/야 토글 (자동 선택이 기본, 수동 전환 가능) */}
             <div className="grid grid-cols-2 gap-2">
               {['주간', '야간'].map(s => (
                 <button key={s} onClick={() => setDnShift(s)}
-                  className={`py-2.5 rounded-lg font-bold text-sm border ${
+                  className={`py-2.5 rounded-pill font-bold text-sm border ${
                     dnActiveShift === s
                       ? (s === '주간' ? 'bg-amber-700 border-amber-400 text-white' : 'bg-sky-800 border-sky-400 text-white')
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                      : 'bg-ink-800 border-line text-dim-200 hover:bg-ink-750'
                   }`}>
                   {s === '주간' ? '☀ 주간보고 08–17' : '🌙 야간보고 19–05:30'}
                 </button>
               ))}
             </div>
-            <div className="text-[10px] text-slate-500 text-center">
+            <div className="text-2xs text-dim-400 text-center">
               {dnShift ? '수동 선택됨' : '현재 시각 기준 자동 선택'} · 보고 마감 +30분 여유
             </div>
             {/* 양하/선적 각 표 */}
             {[['discharge', '양하', dnReportD], ['loading', '선적', dnReportL]].map(([m, label, rep]) => (
-              <div key={m} className="bg-slate-900 border border-slate-700 rounded-lg p-2">
-                <div className="text-xs font-bold text-slate-200 mb-1 flex items-center justify-between">
+              <div key={m} className="bg-ink-900 border border-line rounded-pill p-2">
+                <div className="text-xs font-bold text-dim-100 mb-1 flex items-center justify-between">
                   <span>{label}</span>
                   {!rep.excluded && (
-                    <span className="text-[10px] text-teal-300">
+                    <span className="text-2xs text-teal-300">
                       {rep.basis} 기준 (완료 {rep.doneTotal} · 잔여 {rep.remainTotal})
                     </span>
                   )}
                 </div>
                 {rep.excluded ? (
-                  <div className="text-[11px] text-slate-500 text-center py-2">{rep.reason}</div>
+                  <div className="text-xxs text-dim-400 text-center py-2">{rep.reason}</div>
                 ) : (
-                  <table className="w-full text-[11px] tabular-nums">
+                  <table className="w-full text-xxs tabular-nums">
                     <thead>
-                      <tr className="text-slate-400 border-b border-slate-700">
+                      <tr className="text-dim-300 border-b border-line">
                         <th className="text-left py-1">규격</th><th>F</th><th>E</th><th>TOTAL</th>
                       </tr>
                     </thead>
-                    <tbody className="text-slate-100">
+                    <tbody className="text-dim-100">
                       {[['20ft', rep.tbl.s20], ['40ft', rep.tbl.s40], ['45ft', rep.tbl.s45]].map(([nm, o]) => (
-                        <tr key={nm} className="border-b border-slate-800">
-                          <td className="text-left py-1 text-slate-300">{nm}</td>
+                        <tr key={nm} className="border-b border-line">
+                          <td className="text-left py-1 text-dim-200">{nm}</td>
                           <td className="text-center">{o.F}</td><td className="text-center">{o.E}</td>
                           <td className="text-center font-bold">{o.F + o.E}</td>
                         </tr>
@@ -894,7 +894,7 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
                 )}
               </div>
             ))}
-            <div className="text-[10px] text-slate-500 text-center">
+            <div className="text-2xs text-dim-400 text-center">
               💡 적은 쪽(작업량/잔여)을 세는 게 빠릅니다. 어느 기준인지 표에 표기됩니다.
             </div>
           </div>

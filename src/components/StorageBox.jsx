@@ -18,21 +18,21 @@ export default function StorageBox({ stored, onOpenContainer, onStartMove, pendi
   if (!stored || stored.length === 0) return null;
 
   return (
-    <div className="bg-slate-800/40 border-2 border-slate-600/50 rounded-lg overflow-hidden">
-      <div className="bg-slate-700/50 px-3 py-2 flex items-center gap-2 border-b border-slate-600/40">
-        <Archive className="w-4 h-4 text-slate-200"/>
-        <span className="text-[11px] font-black uppercase text-slate-100 flex-1">
-          창고 {stored.length}대 <span className="font-normal text-slate-400 normal-case">— 몸만 와 있고 이름은 계획 자리에 걸려 있습니다</span>
+    <div className="bg-ink-800/40 border-2 border-line-strong/50 rounded-pill overflow-hidden">
+      <div className="bg-ink-750/50 px-3 py-2 flex items-center gap-2 border-b border-line-strong/40">
+        <Archive className="w-4 h-4 text-dim-100"/>
+        <span className="text-xxs font-black uppercase text-dim-100 flex-1">
+          창고 {stored.length}대 <span className="font-normal text-dim-300 normal-case">— 몸만 와 있고 이름은 계획 자리에 걸려 있습니다</span>
         </span>
         {onBatchRestore && (
           <button onClick={onBatchRestore}
-            className="px-2 py-0.5 bg-slate-900/60 hover:bg-slate-900 text-slate-200 rounded text-[10px] font-bold flex items-center gap-1"
+            className="px-2 py-0.5 bg-ink-900/60 hover:bg-ink-850 text-dim-100 rounded text-2xs font-bold flex items-center gap-1"
             title="창고의 모든 컨을 계획 자리로 되돌립니다">
             <RotateCcw className="w-3 h-3"/>일괄 복원
           </button>
         )}
       </div>
-      <div className="text-[10px] text-slate-400 px-3 py-1 border-b border-slate-700/30 leading-tight">
+      <div className="text-2xs text-dim-300 px-3 py-1 border-b border-line/30 leading-tight">
         📦 [이동] 누르면 → 베이그리드 빈 셀 클릭 / 카드 본문은 직접 입력
       </div>
       <div className="max-h-72 overflow-y-auto">
@@ -40,16 +40,16 @@ export default function StorageBox({ stored, onOpenContainer, onStartMove, pendi
           const isPending = pendingMoveCn === c.cn;
           return (
             <div key={c.cn}
-              className={`flex items-stretch border-b border-slate-700/20 ${
-                isPending ? 'bg-slate-600/40 ring-2 ring-amber-300' : 'hover:bg-slate-700/20'
+              className={`flex items-stretch border-b border-line/20 ${
+                isPending ? 'bg-ink-700/40 ring-2 ring-amber-300' : 'hover:bg-ink-750/20'
               } transition`}>
               <button
                 onClick={() => onOpenContainer && onOpenContainer(c)}
-                className="flex-1 text-left px-3 py-2 active:bg-slate-700/40">
+                className="flex-1 text-left px-3 py-2 active:bg-ink-700/40">
                 <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-sm font-black mono text-slate-100">{c.cn}</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                    c.fe === 'F' ? 'bg-emerald-700 text-emerald-50' : 'bg-slate-600 text-slate-200'
+                  <span className="text-sm font-black mono text-dim-100">{c.cn}</span>
+                  <span className={`text-3xs px-1.5 py-0.5 rounded font-bold ${
+                    c.fe === 'F' ? 'bg-emerald-700 text-emerald-50' : 'bg-ink-700 text-dim-100'
                   }`}>{c.fe || '?'}</span>
                 </div>
                 {/* 1.54: 계획은 살아 있다 — `_bay_planned` 를 먼저 읽는다(VoyagePage 가 그림용으로 bay 를 비운다). */}
@@ -59,8 +59,8 @@ export default function StorageBox({ stored, onOpenContainer, onStartMove, pendi
                   const pt = c._tier_planned || c.tier || '';
                   const has = pb && pr && pt;
                   return (
-                    <div className="flex items-center gap-1 text-[11px] text-slate-300/80">
-                      <MapPin className="w-3 h-3 text-slate-400"/>
+                    <div className="flex items-center gap-1 text-xxs text-dim-200/80">
+                      <MapPin className="w-3 h-3 text-dim-300"/>
                       <span className="mono">
                         {has
                           ? `창고 · 이름 걸린 자리 ${String(parseInt(pb, 10)).padStart(2, '0')}-${pr}-${pt}`
@@ -72,15 +72,15 @@ export default function StorageBox({ stored, onOpenContainer, onStartMove, pendi
               </button>
               <button
                 onClick={() => onStartMove && onStartMove(c)}
-                className={`px-3 flex flex-col items-center justify-center gap-0.5 border-l border-slate-700/30 ${
+                className={`px-3 flex flex-col items-center justify-center gap-0.5 border-l border-line/30 ${
                   isPending
-                    ? 'bg-amber-500 text-slate-900'
-                    : 'bg-slate-700/30 text-slate-200 hover:bg-slate-600/50 active:bg-slate-500'
+                    ? 'bg-amber-500 text-ink-950'
+                    : 'bg-ink-750/30 text-dim-100 hover:bg-ink-700/50 active:bg-ink-700'
                 } transition`}
                 title="베이 그리드 빈 셀로 이동"
               >
                 <Move className="w-4 h-4"/>
-                <span className="text-[9px] font-black">{isPending ? '선택중' : '이동'}</span>
+                <span className="text-3xs font-black">{isPending ? '선택중' : '이동'}</span>
               </button>
             </div>
           );

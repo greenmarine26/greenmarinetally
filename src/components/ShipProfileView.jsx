@@ -70,7 +70,7 @@ export default function ShipProfileView({
 
   const { cell, spec, bayList, slots, deckTiers, holdTiers } = model;
   if (!bayList.length) {
-    return <div className="text-slate-400 text-sm p-6 text-center">표시할 베이가 없습니다 (EDI/사전 확인)</div>;
+    return <div className="text-dim-300 text-sm p-6 text-center">표시할 베이가 없습니다 (EDI/사전 확인)</div>;
   }
 
   // ── 좌표계: 선수(bow) 오른쪽 — 슬롯 번호가 작을수록 오른쪽

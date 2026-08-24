@@ -41,38 +41,38 @@ export default function TestLabModal({ voyage, voyageKey, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border border-fuchsia-700 rounded-2xl w-full sm:max-w-md flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-950">
+      <div className="bg-ink-900 border border-fuchsia-700 rounded-card w-full sm:max-w-md flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-ink-950">
           <div className="flex items-center gap-2">
             <FlaskConical className="w-5 h-5 text-fuchsia-400"/>
             <div>
               <div className="text-base font-black text-fuchsia-300">검증 모드 (테스트 랩)</div>
-              <div className="text-[10px] text-slate-400">{voyageKey} · 성일님 전용 — 다른 검수원에겐 보이지 않습니다</div>
+              <div className="text-2xs text-dim-300">{voyageKey} · 성일님 전용 — 다른 검수원에겐 보이지 않습니다</div>
             </div>
           </div>
-          <button onClick={onClose}><X className="w-5 h-5 text-slate-400"/></button>
+          <button onClick={onClose}><X className="w-5 h-5 text-dim-300"/></button>
         </div>
         <div className="p-4 space-y-3">
-          <label className="flex items-center gap-2 text-xs text-slate-300 bg-slate-800 rounded-lg px-3 py-2.5">
+          <label className="flex items-center gap-2 text-xs text-dim-200 bg-ink-800 rounded-pill px-3 py-2.5">
             <input type="checkbox" checked={resetActuals} onChange={e => setResetActuals(e.target.checked)} className="w-4 h-4"/>
             수동 배치·임시창고 기록도 원계획으로 원복 (완전 초기화)
           </label>
           {['loading', 'discharge'].map(mode => (
             <button key={mode} onClick={() => run(mode)} disabled={busy || !stat[mode].comp}
-              className={`w-full py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 border ${mode === 'loading' ? 'bg-rose-900/60 hover:bg-rose-800 border-rose-600 text-rose-100' : 'bg-indigo-900/60 hover:bg-indigo-800 border-indigo-600 text-indigo-100'} disabled:opacity-40`}>
+              className={`w-full py-3 rounded-pill font-bold text-sm flex items-center justify-center gap-2 border ${mode === 'loading' ? 'bg-rose-900/60 hover:bg-rose-800 border-rose-600 text-rose-100' : 'bg-indigo-900/60 hover:bg-indigo-800 border-indigo-600 text-indigo-100'} disabled:opacity-40`}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin"/> : '🧨'}
               {mode === 'loading' ? '선적' : '양하'}확인 전체 취소 — {stat[mode].comp}건{resetActuals && stat[mode].actuals ? ` (+배치 원복 ${stat[mode].actuals})` : ''}
             </button>
           ))}
-          <div className="text-[10px] text-slate-500 leading-relaxed">
+          <div className="text-2xs text-dim-400 leading-relaxed">
             리스트·EDI·실번호·X-RAY 기록은 지우지 않습니다. 완료 체크와 (옵션) 수동 배치만 초기화해
             처음부터 다시 검수 흐름을 태울 수 있습니다.
           </div>
           {/* V9.26: 부분 취소 — 베이 격자에서 드래그/탭으로 일부만 골라 취소 (사용자: "일부분이 잘못되었을 때 전체를 수정할 필요는 없다") */}
           <PartialCancel voyage={voyage} voyageKey={voyageKey} busy={busy} setBusy={setBusy} setLog={setLog}/>
           {log.length > 0 && (
-            <div className="bg-slate-950 rounded-lg p-2 space-y-1 max-h-32 overflow-y-auto">
-              {log.map((l, i) => <div key={i} className="text-[11px] mono text-slate-300">{l}</div>)}
+            <div className="bg-ink-950 rounded-pill p-2 space-y-1 max-h-32 overflow-y-auto">
+              {log.map((l, i) => <div key={i} className="text-xxs mono text-dim-200">{l}</div>)}
             </div>
           )}
         </div>
@@ -144,24 +144,24 @@ function PartialCancel({ voyage, voyageKey, busy, setBusy, setLog }) {
   };
 
   return (
-    <div className="border border-slate-700 rounded-lg p-2.5 space-y-2"
+    <div className="border border-line rounded-pill p-2.5 space-y-2"
       onMouseUp={() => { dragRef.current = false; }} onMouseLeave={() => { dragRef.current = false; }}>
       <div className="flex items-center justify-between">
-        <div className="text-xs font-bold text-slate-200">✂️ 부분 취소 — 드래그/탭으로 골라서</div>
+        <div className="text-xs font-bold text-dim-100">✂️ 부분 취소 — 드래그/탭으로 골라서</div>
         <div className="flex gap-1">
           {['loading', 'discharge'].map(m2 => (
             <button key={m2} onClick={() => { setMode(m2); setSelBay(null); setSel(new Set()); }}
-              className={`px-2 py-0.5 rounded text-[10px] font-bold ${mode === m2 ? 'bg-fuchsia-700 text-fuchsia-50' : 'bg-slate-800 text-slate-400'}`}>
+              className={`px-2 py-0.5 rounded text-2xs font-bold ${mode === m2 ? 'bg-fuchsia-700 text-fuchsia-50' : 'bg-ink-800 text-dim-300'}`}>
               {m2 === 'loading' ? '선적' : '양하'}
             </button>
           ))}
         </div>
       </div>
       <div className="flex flex-wrap gap-1">
-        {bays.length === 0 && <div className="text-[10px] text-slate-500">완료된 컨이 없습니다</div>}
+        {bays.length === 0 && <div className="text-2xs text-dim-400">완료된 컨이 없습니다</div>}
         {bays.map(b => (
           <button key={b} onClick={() => setSelBay(selBay === b ? null : b)}
-            className={`px-2 py-1 rounded text-[10px] font-black ${selBay === b ? 'bg-fuchsia-600 text-fuchsia-50' : 'bg-slate-800 text-slate-300'}`}>
+            className={`px-2 py-1 rounded text-2xs font-black ${selBay === b ? 'bg-fuchsia-600 text-fuchsia-50' : 'bg-ink-800 text-dim-200'}`}>
             {b === '미배정' ? '미배정' : `B${b}`} {byBay[b].length}
           </button>
         ))}
@@ -171,17 +171,17 @@ function PartialCancel({ voyage, voyageKey, busy, setBusy, setLog }) {
           <div className="inline-block">
             {grid.tiers.map(t => (
               <div key={t} className="flex gap-0.5 mb-0.5 items-center">
-                <span className="text-[9px] text-slate-500 mono w-5 flex-shrink-0">{t}</span>
+                <span className="text-3xs text-dim-400 mono w-5 flex-shrink-0">{t}</span>
                 {grid.rows.map(rw => {
                   const c = grid.at[`${t}-${rw}`];
-                  if (!c) return <div key={rw} className="w-12 h-8 rounded-sm border border-dashed border-slate-800 flex-shrink-0"/>;
+                  if (!c) return <div key={rw} className="w-12 h-8 rounded-sm border border-dashed border-line flex-shrink-0"/>;
                   const on = sel.has(c.cn);
                   return (
                     <button key={rw}
                       onMouseDown={(e) => { e.preventDefault(); dragRef.current = true; toggle(c.cn); }}
                       onMouseEnter={() => { if (dragRef.current) toggle(c.cn, true); }}
                       onTouchStart={(e) => { e.preventDefault(); toggle(c.cn); }}
-                      className={`w-12 h-8 rounded-sm border text-[10px] mono font-bold flex-shrink-0 ${on ? 'bg-rose-700 border-rose-400 text-rose-50' : 'bg-emerald-900/70 border-emerald-600 text-emerald-100'}`}>
+                      className={`w-12 h-8 rounded-sm border text-2xs mono font-bold flex-shrink-0 ${on ? 'bg-rose-700 border-rose-400 text-rose-50' : 'bg-emerald-900/70 border-emerald-600 text-emerald-100'}`}>
                       {c.cn.slice(-4)}
                     </button>
                   );
@@ -190,18 +190,18 @@ function PartialCancel({ voyage, voyageKey, busy, setBusy, setLog }) {
             ))}
             <div className="flex gap-0.5 mt-0.5">
               <span className="w-5 flex-shrink-0"/>
-              {grid.rows.map(rw => <span key={rw} className="w-12 text-center text-[9px] text-slate-500 mono flex-shrink-0">{rw}</span>)}
+              {grid.rows.map(rw => <span key={rw} className="w-12 text-center text-3xs text-dim-400 mono flex-shrink-0">{rw}</span>)}
             </div>
           </div>
         </div>
       )}
       {sel.size > 0 && (
         <button onClick={cancelSel} disabled={busy}
-          className="w-full py-2.5 rounded-lg font-bold text-sm bg-rose-700 hover:bg-rose-600 disabled:opacity-40 text-white">
+          className="w-full py-2.5 rounded-pill font-bold text-sm bg-rose-700 hover:bg-rose-600 disabled:opacity-40 text-white">
           선택 {sel.size}건 검수확인 취소
         </button>
       )}
-      <div className="text-[9.5px] text-slate-500">초록=완료(선택 가능) · 빨강=선택됨 · PC는 누른 채 드래그, 폰은 탭</div>
+      <div className="text-[9.5px] text-dim-400">초록=완료(선택 가능) · 빨강=선택됨 · PC는 누른 채 드래그, 폰은 탭</div>
     </div>
   );
 }

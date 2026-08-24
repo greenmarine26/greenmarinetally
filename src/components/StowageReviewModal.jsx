@@ -160,18 +160,18 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border border-cyan-700/40 rounded-xl w-full max-w-3xl max-h-[95vh] overflow-y-auto">
+      <div className="bg-ink-900 border border-cyan-700/40 rounded-btn w-full max-w-3xl max-h-[95vh] overflow-y-auto">
         {/* 헤더 */}
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-ink-900 border-b border-line px-4 py-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-cyan-400" />
             <div>
               <div className="font-black text-base text-cyan-300">📄 STOWAGE PDF 자동 분석</div>
-              <div className="text-[10px] text-slate-500 mono">{file?.name || ''}</div>
+              <div className="text-2xs text-dim-400 mono">{file?.name || ''}</div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded">
-            <X className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded">
+            <X className="w-5 h-5 text-dim-300" />
           </button>
         </div>
 
@@ -181,7 +181,7 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
             <div className="py-12 text-center">
               <Loader2 className="w-12 h-12 text-cyan-400 mx-auto animate-spin mb-4" />
               <div className="text-cyan-200 font-bold mb-1">M6.70 자동 파서 분석 중...</div>
-              <div className="text-xs text-slate-500">PDF 페이지 수에 따라 10~30초 소요</div>
+              <div className="text-xs text-dim-400">PDF 페이지 수에 따라 10~30초 소요</div>
             </div>
           )}
 
@@ -195,7 +195,7 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
                 </div>
                 <div className="text-xs text-red-200/80 whitespace-pre-wrap break-all">{error}</div>
               </div>
-              <button onClick={onClose} className="w-full py-3 bg-slate-700 hover:bg-slate-600 rounded font-bold">닫기</button>
+              <button onClick={onClose} className="w-full py-3 bg-ink-750 hover:bg-ink-700 rounded font-bold">닫기</button>
             </div>
           )}
 
@@ -212,7 +212,7 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
                     {voyage.info.callsign && ` · 콜사인 ${voyage.info.callsign}`}
                     {voyage.info.imo && ` · IMO ${voyage.info.imo}`}
                   </div>
-                  <div className="text-slate-400 mt-1 text-[10px]">
+                  <div className="text-dim-300 mt-1 text-2xs">
                     아래 입력란에 자동 채워졌습니다. 그대로 [등록]하시면 EDI와 정확히 매칭됩니다.
                   </div>
                 </div>
@@ -221,29 +221,29 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
               {/* 선박 메타 */}
               <div className="bg-cyan-950/30 border border-cyan-700/40 rounded p-3 mb-3">
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-slate-500 text-xs">PDF 선박명:</span> <b className="text-cyan-200">{stowageData.vesselName || '(없음)'}</b></div>
-                  <div><span className="text-slate-500 text-xs">항차:</span> <b className="text-cyan-200">{stowageData.voyageNo || '-'}</b></div>
-                  <div><span className="text-slate-500 text-xs">POL:</span> <b className="text-cyan-200">{stowageData.pol || '-'}</b></div>
-                  <div><span className="text-slate-500 text-xs">DATE:</span> <b className="text-cyan-200">{stowageData.date || '-'}</b></div>
+                  <div><span className="text-dim-400 text-xs">PDF 선박명:</span> <b className="text-cyan-200">{stowageData.vesselName || '(없음)'}</b></div>
+                  <div><span className="text-dim-400 text-xs">항차:</span> <b className="text-cyan-200">{stowageData.voyageNo || '-'}</b></div>
+                  <div><span className="text-dim-400 text-xs">POL:</span> <b className="text-cyan-200">{stowageData.pol || '-'}</b></div>
+                  <div><span className="text-dim-400 text-xs">DATE:</span> <b className="text-cyan-200">{stowageData.date || '-'}</b></div>
                 </div>
               </div>
 
               {/* 검출 요약 */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                <div className="bg-slate-800/60 rounded p-2 text-center">
-                  <div className="text-[10px] text-slate-500">베이 박스</div>
+                <div className="bg-ink-800/60 rounded p-2 text-center">
+                  <div className="text-2xs text-dim-400">베이 박스</div>
                   <div className="text-xl font-black text-emerald-300">{bays.length}</div>
                 </div>
-                <div className="bg-slate-800/60 rounded p-2 text-center">
-                  <div className="text-[10px] text-slate-500">트윈/단독</div>
+                <div className="bg-ink-800/60 rounded p-2 text-center">
+                  <div className="text-2xs text-dim-400">트윈/단독</div>
                   <div className="text-xl font-black text-cyan-300">{paired}/{standalone}</div>
                 </div>
-                <div className="bg-slate-800/60 rounded p-2 text-center">
-                  <div className="text-[10px] text-slate-500">데크 전용</div>
+                <div className="bg-ink-800/60 rounded p-2 text-center">
+                  <div className="text-2xs text-dim-400">데크 전용</div>
                   <div className="text-xl font-black text-amber-300">{deckOnly}</div>
                 </div>
-                <div className="bg-slate-800/60 rounded p-2 text-center">
-                  <div className="text-[10px] text-slate-500">extraTier</div>
+                <div className="bg-ink-800/60 rounded p-2 text-center">
+                  <div className="text-2xs text-dim-400">extraTier</div>
                   <div className="text-xl font-black text-purple-300">{withExtra}</div>
                 </div>
               </div>
@@ -258,57 +258,57 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
                     적재량 합계 {totalsMatch ? '검증 일치' : '불일치 — 확인 필요'}
                   </span>
                 </div>
-                <div className="text-slate-400 mt-1">
-                  PDF 표시: <b className="text-slate-200 mono">{totals._20}/{totals._40}/{totals._45}</b>
+                <div className="text-dim-300 mt-1">
+                  PDF 표시: <b className="text-dim-100 mono">{totals._20}/{totals._40}/{totals._45}</b>
                   &nbsp; ↔ &nbsp;
-                  계산 합: <b className="text-slate-200 mono">{calcTotal._20}/{calcTotal._40}/{calcTotal._45}</b>
+                  계산 합: <b className="text-dim-100 mono">{calcTotal._20}/{calcTotal._40}/{calcTotal._45}</b>
                 </div>
               </div>
 
               {/* 사용자 보완 입력 */}
-              <div className="bg-slate-800/40 rounded p-3 mb-3">
-                <div className="text-xs font-bold text-slate-400 mb-2">⚓ 매칭 정보 보완 (PDF에 없는 정보)</div>
+              <div className="bg-ink-800/40 rounded p-3 mb-3">
+                <div className="text-xs font-bold text-dim-300 mb-2">⚓ 매칭 정보 보완 (PDF에 없는 정보)</div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">선박 코드*</label>
+                    <label className="text-2xs text-dim-400 block mb-0.5">선박 코드*</label>
                     <input
                       type="text"
                       value={extra.code}
                       onChange={e => setExtra(p => ({ ...p, code: e.target.value.toUpperCase() }))}
                       maxLength={6}
                       placeholder="XINT"
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm text-cyan-100 mono font-bold focus:outline-none focus:border-cyan-500"
+                      className="w-full bg-ink-900 border border-line rounded px-2 py-2 text-sm text-cyan-100 mono font-bold focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">콜사인</label>
+                    <label className="text-2xs text-dim-400 block mb-0.5">콜사인</label>
                     <input
                       type="text"
                       value={extra.callsign}
                       onChange={e => setExtra(p => ({ ...p, callsign: e.target.value.toUpperCase() }))}
                       placeholder="V7A123"
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm text-cyan-100 mono focus:outline-none focus:border-cyan-500"
+                      className="w-full bg-ink-900 border border-line rounded px-2 py-2 text-sm text-cyan-100 mono focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">IMO</label>
+                    <label className="text-2xs text-dim-400 block mb-0.5">IMO</label>
                     <input
                       type="text"
                       value={extra.imo}
                       onChange={e => setExtra(p => ({ ...p, imo: e.target.value }))}
                       placeholder="9123456"
-                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-sm text-cyan-100 mono focus:outline-none focus:border-cyan-500"
+                      className="w-full bg-ink-900 border border-line rounded px-2 py-2 text-sm text-cyan-100 mono focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                 </div>
                 {PROTECTED_CODES.includes(extra.code) && (
-                  <div className="mt-2 text-[11px] text-red-300 font-bold">
+                  <div className="mt-2 text-xxs text-red-300 font-bold">
                     ⛔ {extra.code}는 정밀 등록 보호 선박입니다. 다른 코드 사용하세요.
                   </div>
                 )}
                 {/* M6.14e: 항차 코드와 다를 시 경고 */}
                 {voyage?.info?.vsl && extra.code && extra.code !== (voyage.info.vsl || '').toUpperCase().replace(/\s+/g, '') && (
-                  <div className="mt-2 text-[11px] text-amber-300 font-bold bg-amber-950/30 border border-amber-700/40 rounded px-2 py-1">
+                  <div className="mt-2 text-xxs text-amber-300 font-bold bg-amber-950/30 border border-amber-700/40 rounded px-2 py-1">
                     ⚠️ 현재 항차 코드 "{voyage.info.vsl}"와 다릅니다. 검수앱 EDI 매칭이 안 될 수 있습니다.
                     <br/>일치시키려면 코드란을 "{(voyage.info.vsl || '').toUpperCase().replace(/\s+/g, '')}"로 변경하세요.
                   </div>
@@ -316,12 +316,12 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
               </div>
 
               {/* 베이별 상세 */}
-              <div className="bg-slate-800/40 rounded p-2 mb-3">
-                <div className="text-xs font-bold text-slate-400 mb-2 px-1">📋 추출된 베이 상세</div>
+              <div className="bg-ink-800/40 rounded p-2 mb-3">
+                <div className="text-xs font-bold text-dim-300 mb-2 px-1">📋 추출된 베이 상세</div>
                 <div className="max-h-64 overflow-y-auto text-xs">
                   <table className="w-full mono">
-                    <thead className="sticky top-0 bg-slate-800">
-                      <tr className="text-slate-500 text-[10px]">
+                    <thead className="sticky top-0 bg-ink-800">
+                      <tr className="text-dim-400 text-2xs">
                         <th className="text-left px-2 py-1">베이</th>
                         <th className="text-left px-1 py-1">형식</th>
                         <th className="text-left px-1 py-1">deck</th>
@@ -332,16 +332,16 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
                     </thead>
                     <tbody>
                       {bays.map((b, idx) => (
-                        <tr key={idx} className="border-t border-slate-800/60">
+                        <tr key={idx} className="border-t border-line-soft">
                           <td className="px-2 py-1 text-cyan-200 font-bold">{b.bayLabel || `BAY ${b.bayNo}`}</td>
                           <td className="px-1 py-1">
                             {b.isPair ? <span className="text-cyan-400">트윈</span>
                               : b.isStandalone ? <span className="text-amber-400">단독</span>
-                              : <span className="text-slate-400">-</span>}
+                              : <span className="text-dim-300">-</span>}
                             {!b.hasHold && <span className="text-purple-400 ml-1">·데크</span>}
                           </td>
-                          <td className="px-1 py-1 text-slate-300">{(b.deckTiers || []).join(',')}</td>
-                          <td className="px-1 py-1 text-slate-300">{(b.holdTiers || []).join(',') || <span className="text-slate-600">-</span>}</td>
+                          <td className="px-1 py-1 text-dim-200">{(b.deckTiers || []).join(',')}</td>
+                          <td className="px-1 py-1 text-dim-200">{(b.holdTiers || []).join(',') || <span className="text-dim-500">-</span>}</td>
                           <td className="px-1 py-1 text-purple-300 font-bold">{b.extraTier || ''}</td>
                           <td className="px-2 py-1 text-right text-emerald-300">
                             {(b.loadCounts?._20 || 0)}/{(b.loadCounts?._40 || 0)}/{(b.loadCounts?._45 || 0)}
@@ -356,12 +356,12 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
               {/* 원본 JSON 토글 (디버그) */}
               <button
                 onClick={() => setShowRaw(!showRaw)}
-                className="text-xs text-slate-500 hover:text-slate-300 mb-2 flex items-center gap-1"
+                className="text-xs text-dim-400 hover:text-dim-200 mb-2 flex items-center gap-1"
               >
                 <Eye className="w-3 h-3" /> {showRaw ? '원본 JSON 숨기기' : '원본 JSON 보기 (디버그)'}
               </button>
               {showRaw && (
-                <pre className="bg-slate-950/80 border border-slate-800 rounded p-2 text-[10px] text-slate-400 overflow-auto max-h-40 mb-3">
+                <pre className="bg-ink-950/80 border border-line rounded p-2 text-2xs text-dim-300 overflow-auto max-h-40 mb-3">
                   {JSON.stringify(stowageData, null, 2)}
                 </pre>
               )}
@@ -370,21 +370,21 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
               <div className="flex gap-2">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 rounded font-bold text-slate-200"
+                  className="flex-1 py-3 bg-ink-750 hover:bg-ink-700 rounded font-bold text-dim-100"
                 >
                   취소
                 </button>
                 <button
                   onClick={handleRegister}
                   disabled={!extra.code || PROTECTED_CODES.includes(extra.code)}
-                  className="flex-[2] py-3 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-800 disabled:text-slate-600 rounded font-bold text-white flex items-center justify-center gap-2"
+                  className="flex-[2] py-3 bg-cyan-700 hover:bg-cyan-600 disabled:bg-ink-800 disabled:text-dim-500 rounded font-bold text-white flex items-center justify-center gap-2"
                 >
                   <Save className="w-4 h-4" />
                   베이사전 등록 + Firebase 동기화
                 </button>
               </div>
 
-              <div className="mt-3 text-[10px] text-slate-500 leading-relaxed">
+              <div className="mt-3 text-2xs text-dim-400 leading-relaxed">
                 💡 등록 후엔 자동으로 모든 검수원과 공유됩니다. 추출이 잘못된 경우 [취소] 하고 PDF 재확인 후 재시도하세요.
                 NBTD/MCSC는 정밀 등록 보호되어 덮어쓰기 불가합니다.
               </div>
@@ -406,7 +406,7 @@ export default function StowageReviewModal({ file, onClose, onRegistered, inspec
               <div className="text-emerald-300 font-black text-lg mb-2">베이사전 등록 완료</div>
               <div className="bg-emerald-950/30 border border-emerald-700/40 rounded p-3 text-sm mb-3 text-left">
                 <div><b>{savedResult.entry.name}</b> ({savedResult.entry.code})</div>
-                <div className="text-xs text-slate-400 mt-1">
+                <div className="text-xs text-dim-300 mt-1">
                   베이 {savedResult.entry.bayDef.recordCount}개 · {savedResult.entry.bayDef.sectionCount}섹션
                 </div>
                 <div className="text-xs mt-2">

@@ -404,12 +404,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
          60% 로 자르면 상세 항목이 너무 잘려서 70% 로 뒀다. */
     <div className={variant === 'panel'
       ? 'h-full'
-      : 'fixed inset-0 z-50 bg-slate-950/70 flex items-end sm:items-center justify-center p-0 sm:p-4'}>
+      : 'fixed inset-0 z-50 bg-ink-950/70 flex items-end sm:items-center justify-center p-0 sm:p-4'}>
       <div className={variant === 'panel'
         ? 'card-v2 bg-ink-850 w-full max-h-[calc(100vh-7rem)] overflow-y-auto'
         : 'bg-ink-850 border border-line rounded-t-2xl sm:rounded-card w-full max-w-md max-h-[70vh] sm:max-h-[92vh] overflow-y-auto'}>
         {/* 헤더 */}
-        <div className={`sticky top-0 px-4 py-3 border-b border-slate-700 flex items-center justify-between ${
+        <div className={`sticky top-0 px-4 py-3 border-b border-line flex items-center justify-between ${
           sealError || xSealError ? 'bg-red-950' :
           isDone ? 'bg-emerald-950' :
           isXray ? 'bg-purple-950' :
@@ -417,24 +417,24 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         }`}>
           <div className="flex items-center gap-2">
             <span className="text-3xl font-black mono text-amber-300 tracking-wider">{c.l4 || c.cn?.slice(-4)}</span>
-            <button onClick={() => speakContainer(c, { xray: isXray })} className="p-2 bg-slate-800/50 rounded-lg hover:bg-slate-700">
+            <button onClick={() => speakContainer(c, { xray: isXray })} className="p-2 bg-ink-800/50 rounded-pill hover:bg-ink-750">
               <Volume2 className="w-4 h-4 text-amber-300"/>
             </button>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg">
-            <X className="w-5 h-5 text-slate-400"/>
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill">
+            <X className="w-5 h-5 text-dim-300"/>
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-slate-800">
-          <div className="text-base mono text-slate-200 font-bold mb-2">
+        <div className="px-4 py-3 border-b border-line">
+          <div className="text-base mono text-dim-100 font-bold mb-2">
             {isBookingSlot(c) ? (
-              <span className="text-amber-300">📝 컨번호 입력대기 <span className="text-[11px] text-slate-400 ml-1">({c.cn})</span></span>
+              <span className="text-amber-300">📝 컨번호 입력대기 <span className="text-xxs text-dim-300 ml-1">({c.cn})</span></span>
             ) : c.cn}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {(sealError || xSealError) && (
-              <span className="bg-red-700 text-red-50 text-[11px] px-2 py-0.5 rounded font-black flex items-center gap-1">
+              <span className="bg-red-700 text-red-50 text-xxs px-2 py-0.5 rounded font-black flex items-center gap-1">
                 <AlertOctagon className="w-3 h-3"/>실오류 (세관 신고 대상)
               </span>
             )}
@@ -467,8 +467,8 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
 
           {/* M5.79: DG 상세 정보 박스 (UN 화물명 + 위험 등급 + PG) */}
           {isDG && (
-            <div className="mt-2 px-3 py-2 bg-red-950/40 border border-red-700/40 rounded-lg">
-              <div className="text-[11px] text-red-200 leading-relaxed">
+            <div className="mt-2 px-3 py-2 bg-red-950/40 border border-red-700/40 rounded-pill">
+              <div className="text-xxs text-red-200 leading-relaxed">
                 <span className="font-black">⚠ 위험물: </span>
                 {formatDgLabel(c.dgc, c.un)}
                 {c.pg && (
@@ -482,12 +482,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
 
           {/* M4.9: ISO403 사진 의무 강조 박스 (미촬영 시) */}
           {needsISO403Photo && !iso403PhotoTaken && (
-            <div className="mt-3 px-3 py-2 bg-blue-950/50 border-2 border-blue-600 rounded-lg">
+            <div className="mt-3 px-3 py-2 bg-blue-950/50 border-2 border-blue-600 rounded-pill">
               <div className="flex items-start gap-2">
                 <span className="text-xl">📷</span>
                 <div className="flex-1">
                   <div className="text-xs font-black text-blue-200">풀 리퍼 사진 촬영 필요</div>
-                  <div className="text-[11px] text-blue-300 mt-0.5">
+                  <div className="text-xxs text-blue-300 mt-0.5">
                     이 컨테이너는 풀 리퍼입니다 (코드 {c.iso}). 온도 확인 사진 1장 촬영이 필요합니다.
                   </div>
                   <button onClick={() => setIso403PhotoOpen(true)}
@@ -500,16 +500,16 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           )}
           {/* M4.9: ISO403 사진 촬영 완료 시 - 다시 촬영/보기 */}
           {needsISO403Photo && iso403PhotoTaken && (
-            <div className="mt-2 px-3 py-2 bg-emerald-950/30 border border-emerald-700/50 rounded-lg flex items-center justify-between">
+            <div className="mt-2 px-3 py-2 bg-emerald-950/30 border border-emerald-700/50 rounded-pill flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-400"/>
                 <span className="text-xs font-bold text-emerald-200">풀 리퍼 사진 촬영 완료</span>
                 {c.iso403_photo_by && (
-                  <span className="text-[10px] text-emerald-400/80">({c.iso403_photo_by})</span>
+                  <span className="text-2xs text-emerald-400/80">({c.iso403_photo_by})</span>
                 )}
               </div>
               <button onClick={() => setIso403PhotoOpen(true)}
-                className="px-2 py-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-50 rounded text-[10px] font-bold flex items-center gap-1">
+                className="px-2 py-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-50 rounded text-2xs font-bold flex items-center gap-1">
                 <Camera className="w-3 h-3"/>보기/재촬영
               </button>
             </div>
@@ -533,19 +533,19 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           const _v = Array.isArray(c.sl_conflict) ? [...new Set(c.sl_conflict.map((h) => String(h.sl || '').trim().toUpperCase()))] : [];
           if (_v.length < 2) return null;   // 2.05-06: 앞 0 차이도 다른 번호 — 억제하지 않는다(검수사 확정 «실오류 입니다»)
           return (
-            <div className="mx-4 my-3 bg-amber-950/40 border border-amber-700/60 rounded-lg p-3">
-              <div className="text-[11px] font-black text-amber-300 mb-1">⚠ 실번호 자료 불일치 — 리스트마다 다르게 적혀 있습니다</div>
+            <div className="mx-4 my-3 bg-amber-950/40 border border-amber-700/60 rounded-pill p-3">
+              <div className="text-xxs font-black text-amber-300 mb-1">⚠ 실번호 자료 불일치 — 리스트마다 다르게 적혀 있습니다</div>
               {c.sl_conflict.map((h, i) => (
-                <div key={i} className="text-[11px] mono text-amber-100">{h.sl}{h.src ? <span className="text-amber-400/80"> — {h.src}</span> : null}</div>
+                <div key={i} className="text-xxs mono text-amber-100">{h.sl}{h.src ? <span className="text-amber-400/80"> — {h.src}</span> : null}</div>
               ))}
-              <div className="text-[10px] text-amber-200/90 mt-1">⚠ 실오류 사안 — 자릿수(앞 0)까지 다른 번호입니다. <b>세관 신고 번호(적하목록)</b>와 실물 씰을 대조해 맞는 번호로 확정하세요. 현재 채택값: <b className="mono">{c.sl || '없음'}</b>{c._customs ? ' (세관 자료 계열)' : ''}</div>
+              <div className="text-2xs text-amber-200/90 mt-1">⚠ 실오류 사안 — 자릿수(앞 0)까지 다른 번호입니다. <b>세관 신고 번호(적하목록)</b>와 실물 씰을 대조해 맞는 번호로 확정하세요. 현재 채택값: <b className="mono">{c.sl || '없음'}</b>{c._customs ? ' (세관 자료 계열)' : ''}</div>
             </div>
           );
         })()}
 
         {/* 위치 */}
-        <div className="px-4 py-3 border-b border-slate-800">
-          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-line">
+          <div className="text-2xs text-dim-400 font-bold uppercase mb-1 flex items-center justify-between">
             <span>{mode === 'loading' ? '선내 위치 (계획)' : '선내 위치'}</span>
             {/* M4.9e-fix: M3.87 "위치 변경" 버튼 제거.
                 사용자 도메인 흐름: 계획은 EDI 단일 진실, 검수원은 실체만 결정.
@@ -556,37 +556,37 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             {/* M4.9e-fix 2단계: 선적 모드에서 c.bay는 effective 위치(actual로 치환됨).
                 계획 위치 표시는 _bay_planned 우선, 없으면 c.bay (양하 모드는 그대로) */}
             <span className="text-2xl font-black mono text-amber-300">{c._bay_planned || c.bay || '-'}</span>
-            <span className="text-slate-500">/</span>
-            <span className="text-xl font-bold mono text-slate-300">{c._row_planned || c.row || '--'}</span>
-            <span className="text-slate-500">/</span>
-            <span className="text-xl font-bold mono text-slate-300">{c._tier_planned || c.tier || '--'}</span>
+            <span className="text-dim-400">/</span>
+            <span className="text-xl font-bold mono text-dim-200">{c._row_planned || c.row || '--'}</span>
+            <span className="text-dim-400">/</span>
+            <span className="text-xl font-bold mono text-dim-200">{c._tier_planned || c.tier || '--'}</span>
             {/* TallyOne 1.54: **「자리 미지정」과 「창고」는 다른 상태다.** (검수사 확정 2026-08-12)
                 *"모든 컨을 창고에 넣어두고 이름만 베이플랜에 적어놓는다."* — 창고 컨은 계획이 살아 있다.
                 종전엔 둘 다 「선적대상」 한 딱지였다. 계획 자리를 내준 컨이 계획도 없는 컨처럼 보였다. */}
             {mode === 'loading' && c.bay_actual === '__STG__' && (
-              <span className="ml-2 bg-sky-800 text-sky-50 text-[10px] px-1.5 py-0.5 rounded font-black">📦 창고 · 이름만 걸려 있음</span>
+              <span className="ml-2 bg-sky-800 text-sky-50 text-2xs px-1.5 py-0.5 rounded font-black">📦 창고 · 이름만 걸려 있음</span>
             )}
             {!c.bay && mode === 'loading' && c.bay_actual !== '__STG__' && (
-              <span className="ml-2 bg-orange-700 text-orange-50 text-[10px] px-1.5 py-0.5 rounded font-black">선적대상</span>
+              <span className="ml-2 bg-orange-700 text-orange-50 text-2xs px-1.5 py-0.5 rounded font-black">선적대상</span>
             )}
             {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
-              <span className="ml-2 bg-indigo-900 text-indigo-200 text-[10px] px-1.5 py-0.5 rounded font-bold">
+              <span className="ml-2 bg-indigo-900 text-indigo-200 text-2xs px-1.5 py-0.5 rounded font-bold">
                 📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '미배정'}
               </span>
             )}
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">베이 / 열 / 단</div>
+          <div className="text-2xs text-dim-400 mt-0.5">베이 / 열 / 단</div>
 
           {/* M4.9d-fix: 선적 실체 위치 — 사용자 도메인:
               선적 EDI 위치는 계획(예정), 선적확인 시 실체 발생.
               현장에서 다른 위치에 적치된 경우 여기에 입력. */}
           {mode === 'loading' && (
-            <div className="mt-3 pt-3 border-t border-slate-700">
-              <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between">
+            <div className="mt-3 pt-3 border-t border-line">
+              <div className="text-2xs text-dim-400 font-bold uppercase mb-2 flex items-center justify-between">
                 <span>실체 위치 (선적확인 시)</span>
                 {!editingActualPos && (c.bay_actual || c.row_actual || c.tier_actual) ? (
                   <button onClick={handleClearActualPosition}
-                    className="text-[10px] text-rose-400 hover:text-rose-300">삭제</button>
+                    className="text-2xs text-rose-400 hover:text-rose-300">삭제</button>
                 ) : !editingActualPos ? (
                   <button onClick={() => {
                     setActualBay(c.bay_actual || c.bay || '');
@@ -594,7 +594,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     setActualTier(c.tier_actual || c.tier || '');
                     setEditingActualPos(true);
                   }}
-                  className="bg-cyan-700 hover:bg-cyan-600 text-cyan-50 px-2 py-1 rounded text-[10px] font-black flex items-center gap-1">
+                  className="bg-cyan-700 hover:bg-cyan-600 text-cyan-50 px-2 py-1 rounded text-2xs font-black flex items-center gap-1">
                     <Edit3 className="w-3 h-3"/>수정 위치 입력
                   </button>
                 ) : null}
@@ -607,56 +607,56 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 ) : (c.bay_actual || c.row_actual || c.tier_actual) ? (
                   // 수정된 실체 위치 표시 — 본위치 → 수정위치
                   <div className="flex items-center gap-2">
-                    <span className="text-sm mono text-slate-400">{c._bay_planned || c.bay || '--'}/{c._row_planned || c.row || '--'}/{c._tier_planned || c.tier || '--'}</span>
+                    <span className="text-sm mono text-dim-300">{c._bay_planned || c.bay || '--'}/{c._row_planned || c.row || '--'}/{c._tier_planned || c.tier || '--'}</span>
                     <span className="text-cyan-400 font-bold">→</span>
                     <MapPin className="w-4 h-4 text-cyan-400"/>
                     <span className="text-lg font-black mono text-cyan-200">{c.bay_actual || '--'}</span>
-                    <span className="text-slate-500">/</span>
+                    <span className="text-dim-400">/</span>
                     <span className="text-base font-bold mono text-cyan-200">{c.row_actual || '--'}</span>
-                    <span className="text-slate-500">/</span>
+                    <span className="text-dim-400">/</span>
                     <span className="text-base font-bold mono text-cyan-200">{c.tier_actual || '--'}</span>
                     {c.actual_by && (
-                      <span className="text-[10px] text-slate-400 ml-1">({c.actual_by})</span>
+                      <span className="text-2xs text-dim-300 ml-1">({c.actual_by})</span>
                     )}
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-dim-400">
                     미입력 (계획 위치대로 선적 예정)
                   </div>
                 )
               ) : (
                 // 입력 모드
                 <div className="space-y-2">
-                  <div className="text-[10px] text-cyan-300">
+                  <div className="text-2xs text-cyan-300">
                     계획: {c._bay_planned || c.bay || '--'}/{c._row_planned || c.row || '--'}/{c._tier_planned || c.tier || '--'} → 실제 적치 위치 입력
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <div className="text-[9px] text-slate-500 mb-0.5">베이</div>
+                      <div className="text-3xs text-dim-400 mb-0.5">베이</div>
                       <input type="text" value={actualBay}
                         onChange={e => setActualBay(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="01"
-                        className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"
+                        className="w-full bg-ink-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"
                         autoFocus/>
                     </div>
                     <div>
-                      <div className="text-[9px] text-slate-500 mb-0.5">열(row)</div>
+                      <div className="text-3xs text-dim-400 mb-0.5">열(row)</div>
                       <input type="text" value={actualRow}
                         onChange={e => setActualRow(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="00"
-                        className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
+                        className="w-full bg-ink-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
                     </div>
                     <div>
-                      <div className="text-[9px] text-slate-500 mb-0.5">단(tier)</div>
+                      <div className="text-3xs text-dim-400 mb-0.5">단(tier)</div>
                       <input type="text" value={actualTier}
                         onChange={e => setActualTier(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="02"
-                        className="w-full bg-slate-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
+                        className="w-full bg-ink-800 border-2 border-cyan-700 rounded px-2 py-2 text-base font-bold mono text-cyan-100 focus:outline-none focus:border-cyan-400"/>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => { setEditingActualPos(false); setActualBay(''); setActualRow(''); setActualTier(''); }}
-                      className="py-2 bg-slate-700 text-slate-300 rounded text-xs font-bold">취소</button>
+                      className="py-2 bg-ink-750 text-dim-200 rounded text-xs font-bold">취소</button>
                     <button onClick={handleSaveActualPosition}
                       className="py-2 bg-cyan-700 hover:bg-cyan-600 text-white rounded text-xs font-bold">저장</button>
                   </div>
@@ -674,11 +674,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             const path = buildMovePath(c);
             if (!path.length) return null;
             return (
-              <details className="mt-3 bg-slate-950 border border-slate-800 rounded">
-                <summary className="px-2 py-1.5 text-[11px] font-bold text-slate-400 cursor-pointer">
+              <details className="mt-3 bg-ink-950 border border-line rounded">
+                <summary className="px-2 py-1.5 text-xxs font-bold text-dim-300 cursor-pointer">
                   📍 지나온 자리 {path.length}번 — 눌러서 보기
                 </summary>
-                <div className="px-2 pb-2 text-[11px] text-slate-300 whitespace-pre-line leading-relaxed">
+                <div className="px-2 pb-2 text-xxs text-dim-200 whitespace-pre-line leading-relaxed">
                   {describeMovePath(c, isDone)}
                 </div>
               </details>
@@ -687,14 +687,14 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         </div>
 
         {/* 화물 */}
-        <div className="px-4 py-3 border-b border-slate-800">
+        <div className="px-4 py-3 border-b border-line">
           {/* M3.5.4-fix2: 규격 수정 영역 */}
           <div className={`mb-3 rounded p-2 ${editingIso ? 'bg-amber-900/20 border border-amber-700/40' : ''}`}>
-            <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+            <div className="text-2xs text-dim-400 font-bold uppercase mb-1 flex items-center justify-between">
               <span>규격 (ISO)</span>
               {!editingIso && (
                 <button onClick={() => setEditingIso(true)}
-                  className="text-amber-400 hover:text-amber-300 flex items-center gap-1 text-[10px]">
+                  className="text-amber-400 hover:text-amber-300 flex items-center gap-1 text-2xs">
                   <Edit3 className="w-3 h-3"/>실물과 다름?
                 </button>
               )}
@@ -702,21 +702,21 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             {!editingIso ? (
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-base font-bold mono text-slate-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
-                  <span className="text-xs text-slate-500 mono">({c.iso || '-'})</span>
+                  <span className="text-base font-bold mono text-dim-100">{isoToLabel(c.iso) || c.tp || '-'}</span>
+                  <span className="text-xs text-dim-400 mono">({c.iso || '-'})</span>
                   {/* V9.57(I10): c.iso_orig → 폴백 조회값(isoOrigShow) — 병합 누락으로 안 뜨던 표기 복원 */}
                   {isoOrigShow && isoOrigShow !== c.iso && (
-                    <span className="text-[10px] text-amber-400 mono">원본: {isoOrigShow} → 수정됨</span>
+                    <span className="text-2xs text-amber-400 mono">원본: {isoOrigShow} → 수정됨</span>
                   )}
                 </div>
                 {/* M3.6: 알 수 없는 ISO 표기 → 사진 보고 강력 유도 */}
                 {isUnknownIso(c.iso) && (
-                  <div className="mt-2 px-3 py-2 bg-red-950/50 border-2 border-red-600 rounded-lg animate-pulse">
+                  <div className="mt-2 px-3 py-2 bg-red-950/50 border-2 border-red-600 rounded-pill animate-pulse">
                     <div className="flex items-start gap-2">
                       <span className="text-xl">⚠️</span>
                       <div className="flex-1">
                         <div className="text-xs font-black text-red-200">알 수 없는 규격 표기</div>
-                        <div className="text-[11px] text-red-300 mt-0.5">
+                        <div className="text-xxs text-red-300 mt-0.5">
                           "{c.iso}"는 처음 보는 표기입니다. 실물 사진 촬영 + 1항사 확인 부탁드립니다.
                         </div>
                         <button onClick={() => setPhotoMode('damage')}
@@ -739,7 +739,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
               </div>
             ) : (
               <div className="space-y-1.5">
-                <div className="text-[10px] text-amber-300 mb-2">
+                <div className="text-2xs text-amber-300 mb-2">
                   실물에 맞는 규격을 선택하세요. 검수원이 본 실물이 정답입니다.
                 </div>
                 <div className="grid grid-cols-1 gap-1 max-h-72 overflow-y-auto">
@@ -749,17 +749,17 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                       className={`px-3 py-2 rounded text-left text-xs font-bold border ${
                         c.iso === opt.iso
                           ? 'bg-amber-900/40 border-amber-500 text-amber-200'
-                          : 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200'
+                          : 'bg-ink-800 border-line hover:bg-ink-750 text-dim-100'
                       }`}>
                       <div className="flex items-center justify-between">
                         <span className="mono">{opt.iso}</span>
-                        <span className="text-[10px] text-slate-400">{opt.label}</span>
+                        <span className="text-2xs text-dim-300">{opt.label}</span>
                       </div>
                     </button>
                   ))}
                 </div>
                 <button onClick={() => setEditingIso(false)}
-                  className="w-full mt-2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
+                  className="w-full mt-2 py-2 bg-ink-750 hover:bg-ink-700 text-dim-200 rounded text-xs font-bold">
                   취소
                 </button>
               </div>
@@ -769,13 +769,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           {/* M3.5.4-fix3: 리퍼 온도 수정 (리퍼인 경우만 표시) */}
           {isReefer && (
             <div className={`mb-3 rounded p-2 ${editingTmp ? 'bg-cyan-900/20 border border-cyan-700/40' : ''}`}>
-              <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+              <div className="text-2xs text-dim-400 font-bold uppercase mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1">
                   <Snowflake className="w-3 h-3 text-cyan-400"/>리퍼 온도
                 </span>
                 {!editingTmp && (
                   <button onClick={() => { setTmpVal(c.tmp || ''); setEditingTmp(true); }}
-                    className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 text-[10px]">
+                    className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 text-2xs">
                     <Edit3 className="w-3 h-3"/>{c.tmp_missing || !c.tmp ? '온도 입력' : '수정'}
                   </button>
                 )}
@@ -798,7 +798,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   )}
                   {/* V9.57(I10): c.tmp_orig → 폴백 조회값(tmpOrigShow) — 병합 누락으로 안 뜨던 표기 복원 */}
                   {tmpOrigShow !== undefined && tmpOrigShow !== c.tmp && (
-                    <span className="text-[10px] text-amber-400 mono">원본: {tmpOrigShow || '(없음)'} → 수정됨</span>
+                    <span className="text-2xs text-amber-400 mono">원본: {tmpOrigShow || '(없음)'} → 수정됨</span>
                   )}
                   {/* V9.20-03: 리퍼드라이 토글 — 선사 요청(넌플러그) 반영. 경고·사진 대상에서 빠진다 */}
                   <button
@@ -809,7 +809,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                       await fbUpdateRecordField(voyageKey, mode, c.cn, 'rfdry', nv, inspector);
                       c.rfdry = nv;   // 즉시 반영 (RTDB 구독이 곧 덮어씀)
                     }}
-                    className={`ml-auto text-[10px] px-2 py-1 rounded font-bold border ${c.rfdry ? 'bg-teal-900 border-teal-500 text-teal-200' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>
+                    className={`ml-auto text-2xs px-2 py-1 rounded font-bold border ${c.rfdry ? 'bg-teal-900 border-teal-500 text-teal-200' : 'bg-ink-800 border-line-strong text-dim-300'}`}>
                     {c.rfdry ? '드라이 해제' : '리퍼드라이 지정'}
                   </button>
                   {/* V9.23: 제작컨테이너 토글 — 컨 자체가 상품(빈 컨). 리퍼드라이와 별도 분류 (사용자 확정 2026-07-29) */}
@@ -821,13 +821,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                       await fbUpdateRecordField(voyageKey, mode, c.cn, 'mkcon', nv, inspector);
                       c.mkcon = nv;   // 즉시 반영 (RTDB 구독이 곧 덮어씀)
                     }}
-                    className={`text-[10px] px-2 py-1 rounded font-bold border ${c.mkcon ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>
+                    className={`text-2xs px-2 py-1 rounded font-bold border ${c.mkcon ? 'bg-purple-900 border-purple-500 text-purple-200' : 'bg-ink-800 border-line-strong text-dim-300'}`}>
                     {c.mkcon ? '제작컨 해제' : '제작컨 지정'}
                   </button>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="text-[10px] text-cyan-300">
+                  <div className="text-2xs text-cyan-300">
                     실물 온도계를 보고 입력하세요. 빈칸 = 미입력 처리.
                   </div>
                   <div className="flex items-center gap-2">
@@ -837,23 +837,23 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                       value={tmpVal}
                       onChange={e => setTmpVal(e.target.value)}
                       placeholder="예: -18, 4.5, 0"
-                      className="flex-1 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-base font-bold text-cyan-100 focus:outline-none focus:border-cyan-400 mono"
+                      className="flex-1 bg-ink-800 border border-line-strong rounded px-3 py-2 text-base font-bold text-cyan-100 focus:outline-none focus:border-cyan-400 mono"
                       autoFocus
                     />
-                    <span className="text-slate-400 text-sm font-bold">°C</span>
+                    <span className="text-dim-300 text-sm font-bold">°C</span>
                   </div>
                   {/* 빠른 선택 버튼 */}
                   <div className="grid grid-cols-5 gap-1">
                     {['-25', '-18', '-15', '0', '4'].map(t => (
                       <button key={t} onClick={() => setTmpVal(t)}
-                        className="py-1.5 bg-slate-800 hover:bg-cyan-900/40 border border-slate-700 rounded text-xs font-bold text-slate-200 mono">
+                        className="py-1.5 bg-ink-800 hover:bg-cyan-900/40 border border-line rounded text-xs font-bold text-dim-100 mono">
                         {t}°
                       </button>
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setEditingTmp(false)}
-                      className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
+                      className="py-2 bg-ink-750 hover:bg-ink-700 text-dim-200 rounded text-xs font-bold">
                       취소
                     </button>
                     <button onClick={handleSaveTmp}
@@ -877,7 +877,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 ? (sealMode === 'attach' ? 'bg-red-900/20 border border-red-700/40' : 'bg-cyan-900/20 border border-cyan-700/40')
                 : (sealMode === 'attach' && !c.eseal ? 'bg-red-950/30 border-2 border-red-600 animate-pulse' : '')
             }`}>
-              <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+              <div className="text-2xs text-dim-400 font-bold uppercase mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1">
                   <Lock className={`w-3 h-3 ${sealMode === 'attach' ? 'text-red-400' : 'text-cyan-400'}`}/>
                   엠티 실 {sealMode === 'attach' ? '부착 (작업 필요)' : '표기'}
@@ -886,12 +886,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   <span className="flex items-center gap-2">
                     {c.eseal && (
                       <button onClick={handleClearEseal}
-                        className="hover:opacity-80 text-[10px] text-rose-400 hover:text-rose-300">
+                        className="hover:opacity-80 text-2xs text-rose-400 hover:text-rose-300">
                         삭제
                       </button>
                     )}
                     <button onClick={() => { setEsealVal(c.eseal || ''); setEditingEseal(true); }}
-                      className={`hover:opacity-80 flex items-center gap-1 text-[10px] ${
+                      className={`hover:opacity-80 flex items-center gap-1 text-2xs ${
                         sealMode === 'attach' ? 'text-red-300' : 'text-cyan-400'
                       }`}>
                       <Edit3 className="w-3 h-3"/>{c.eseal ? '수정' : '실번호 입력'}
@@ -908,13 +908,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                         🔒 {c.eseal}
                       </span>
                       {c.eseal_by && (
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-2xs text-dim-300">
                           ({c.eseal_by}, {c.eseal_at ? new Date(c.eseal_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''})
                         </span>
                       )}
                       {/* M4.9b: 수정 이력 있으면 작은 표시 (경고 아님, 단순 정보) */}
                       {Array.isArray(c.eseal_history) && c.eseal_history.length > 0 && (
-                        <span className="text-[10px] text-slate-500 font-bold">
+                        <span className="text-2xs text-dim-400 font-bold">
                           (수정 {c.eseal_history.length}회)
                         </span>
                       )}
@@ -926,7 +926,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                         ⚠️ 실 부착 필요
                       </span>
                     ) : (
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-dim-300">
                         실번호 미입력
                       </span>
                     )
@@ -934,18 +934,18 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   {/* M4.9b: verify 모드의 옛 틀린실/리씰 표시는 호환 위해 유지 (이미 저장된 데이터 있을 수 있음) */}
                   {c.eseal_wrong && (
                     <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-amber-950/40 border border-amber-700/40 rounded">
-                      <span className="text-[10px] text-amber-400 font-bold">⚠️ 실오류</span>
+                      <span className="text-2xs text-amber-400 font-bold">⚠️ 실오류</span>
                       <span className="text-sm font-bold mono text-amber-200">{c.eseal_wrong}</span>
                       <button onClick={handleClearEsealWrong}
-                        className="ml-auto text-[10px] text-amber-400 hover:text-amber-200">삭제</button>
+                        className="ml-auto text-2xs text-amber-400 hover:text-amber-200">삭제</button>
                     </div>
                   )}
                   {c.reseal && (
                     <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-purple-950/40 border border-purple-700/40 rounded">
-                      <span className="text-[10px] text-purple-400 font-bold">🔄 리씰</span>
+                      <span className="text-2xs text-purple-400 font-bold">🔄 리씰</span>
                       <span className="text-sm font-bold mono text-purple-200">{c.reseal}</span>
                       <button onClick={handleClearReseal}
-                        className="ml-auto text-[10px] text-purple-400 hover:text-purple-200">삭제</button>
+                        className="ml-auto text-2xs text-purple-400 hover:text-purple-200">삭제</button>
                     </div>
                   )}
 
@@ -968,7 +968,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   {/* 실오류 입력 폼 */}
                   {editingEsealWrong && (
                     <div className="mt-2 p-2 bg-amber-950/30 border border-amber-700/50 rounded space-y-2">
-                      <div className="text-[10px] text-amber-300 font-bold">
+                      <div className="text-2xs text-amber-300 font-bold">
                         ⚠️ 실오류 — 현장에서 발견한 실제 번호 입력 (계획 번호와 다름)
                       </div>
                       <input
@@ -976,12 +976,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                         value={esealWrongVal}
                         onChange={e => setEsealWrongVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="실제 발견 실번호"
-                        className="w-full bg-slate-800 border-2 border-amber-700 rounded px-3 py-2 text-base font-bold mono text-amber-100 focus:outline-none focus:border-amber-400"
+                        className="w-full bg-ink-800 border-2 border-amber-700 rounded px-3 py-2 text-base font-bold mono text-amber-100 focus:outline-none focus:border-amber-400"
                         autoFocus
                       />
                       <div className="grid grid-cols-2 gap-2">
                         <button onClick={() => { setEditingEsealWrong(false); setEsealWrongVal(''); }}
-                          className="py-2 bg-slate-700 text-slate-300 rounded text-xs font-bold">취소</button>
+                          className="py-2 bg-ink-750 text-dim-200 rounded text-xs font-bold">취소</button>
                         <button onClick={handleSaveEsealWrong}
                           className="py-2 bg-amber-700 hover:bg-amber-600 text-white rounded text-xs font-bold">저장</button>
                       </div>
@@ -991,7 +991,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   {/* 리씰 입력 폼 */}
                   {editingReseal && (
                     <div className="mt-2 p-2 bg-purple-950/30 border border-purple-700/50 rounded space-y-2">
-                      <div className="text-[10px] text-purple-300 font-bold">
+                      <div className="text-2xs text-purple-300 font-bold">
                         🔄 리씰 — 실이 없거나 손상되어 새로 부착한 실번호 입력
                       </div>
                       <input
@@ -999,12 +999,12 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                         value={resealVal}
                         onChange={e => setResealVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                         placeholder="새로 부착한 실번호"
-                        className="w-full bg-slate-800 border-2 border-purple-700 rounded px-3 py-2 text-base font-bold mono text-purple-100 focus:outline-none focus:border-purple-400"
+                        className="w-full bg-ink-800 border-2 border-purple-700 rounded px-3 py-2 text-base font-bold mono text-purple-100 focus:outline-none focus:border-purple-400"
                         autoFocus
                       />
                       <div className="grid grid-cols-2 gap-2">
                         <button onClick={() => { setEditingReseal(false); setResealVal(''); }}
-                          className="py-2 bg-slate-700 text-slate-300 rounded text-xs font-bold">취소</button>
+                          className="py-2 bg-ink-750 text-dim-200 rounded text-xs font-bold">취소</button>
                         <button onClick={handleSaveReseal}
                           className="py-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-xs font-bold">저장</button>
                       </div>
@@ -1013,7 +1013,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className={`text-[10px] ${sealMode === 'attach' ? 'text-red-300' : 'text-cyan-300'}`}>
+                  <div className={`text-2xs ${sealMode === 'attach' ? 'text-red-300' : 'text-cyan-300'}`}>
                     {sealMode === 'attach'
                       ? '실 부착 후 실번호를 입력하세요. POD: ' + (c.pod || '?')
                       : (c.eseal
@@ -1025,7 +1025,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                     value={esealVal}
                     onChange={e => setEsealVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
                     placeholder="실번호 (예: ABC1234)"
-                    className={`w-full bg-slate-800 border-2 rounded px-3 py-2 text-base font-bold mono focus:outline-none ${
+                    className={`w-full bg-ink-800 border-2 rounded px-3 py-2 text-base font-bold mono focus:outline-none ${
                       sealMode === 'attach'
                         ? 'border-red-700 text-red-100 focus:border-red-400'
                         : 'border-cyan-700 text-cyan-100 focus:border-cyan-400'
@@ -1035,7 +1035,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                   {/* M4.9b: 라디오 강제 선택 제거 — 단순 덮어쓰기, 이력 자동 저장 */}
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => setEditingEseal(false)}
-                      className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold">
+                      className="py-2 bg-ink-750 hover:bg-ink-700 text-dim-200 rounded text-xs font-bold">
                       취소
                     </button>
                     <button onClick={handleSaveEseal}
@@ -1071,13 +1071,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             <div className="mt-2">
               <button
                 onClick={() => setShowDesc(v => !v)}
-                className="w-full flex items-center justify-between px-2 py-1.5 bg-slate-800/40 border border-slate-700/50 rounded text-[11px] text-slate-400 font-bold"
+                className="w-full flex items-center justify-between px-2 py-1.5 bg-ink-800/40 border border-line rounded text-xxs text-dim-300 font-bold"
               >
                 <span>📦 내용물 {showDesc ? '숨기기' : '보기'}</span>
                 <span>{showDesc ? '▲' : '▼'}</span>
               </button>
               {showDesc && (
-                <div className="mt-1 px-2 py-2 bg-slate-900/60 border border-slate-700/40 rounded text-[12px] text-slate-200 break-words whitespace-pre-wrap">
+                <div className="mt-1 px-2 py-2 bg-ink-900/60 border border-line/40 rounded text-xs2 text-dim-100 break-words whitespace-pre-wrap">
                   {c.desc}
                 </div>
               )}
@@ -1085,7 +1085,7 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
           )}
           {/* M5.79: 2단 환적 경고 — POD를 거쳐 다시 환적되는 화물 */}
           {c.tspot && c.tspot !== c.pod && c.pod && (
-            <div className="mt-2 px-2 py-1.5 bg-amber-950/40 border border-amber-700/40 rounded text-[11px] text-amber-200 font-bold">
+            <div className="mt-2 px-2 py-1.5 bg-amber-950/40 border border-amber-700/40 rounded text-xxs text-amber-200 font-bold">
               🔁 2단 환적: <span className="mono">{c.pol}</span> → <span className="mono">{c.pod}</span> → <span className="mono">{c.tspot}</span>
               {c.fpod && c.fpod !== c.tspot && <> → <span className="mono">{c.fpod}</span></>}
             </div>
@@ -1093,13 +1093,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         </div>
 
         {/* 실번호 */}
-        <div className={`px-4 py-3 border-b border-slate-800 ${sealError ? 'bg-red-950/30' : ''}`}>
-          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+        <div className={`px-4 py-3 border-b border-line ${sealError ? 'bg-red-950/30' : ''}`}>
+          <div className="text-2xs text-dim-400 font-bold uppercase mb-1 flex items-center justify-between">
             <span>실번호 (Seal No)</span>
             {sealError && <span className="text-red-400 font-black">⚠ 실오류</span>}
           </div>
           {sealError && (
-            <div className="bg-red-950/50 border border-red-700/50 rounded p-2 mb-2 text-[11px]">
+            <div className="bg-red-950/50 border border-red-700/50 rounded p-2 mb-2 text-xxs">
               <div className="text-red-300 font-bold mb-0.5">세관 신고 양식:</div>
               <div className="mono text-red-100">원실번호 <span className="font-black">{slOrig}</span> → 실제 <span className="font-black">{c.sl}</span></div>
             </div>
@@ -1108,11 +1108,11 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             <div className="flex gap-2">
               <input type="text" value={sealVal}
                 onChange={e => setSealVal(e.target.value.toUpperCase())} {...NUM_INPUT_PROPS}
-                className="flex-1 bg-slate-800 border border-amber-500 rounded px-3 py-2 mono text-amber-200 focus:outline-none"
+                className="flex-1 bg-ink-800 border border-amber-500 rounded px-3 py-2 mono text-amber-200 focus:outline-none"
                 autoFocus
                 onKeyDown={e => e.key === 'Enter' && handleSaveSeal()}/>
               <button onClick={handleSaveSeal} className="px-3 py-2 bg-emerald-700 text-emerald-100 rounded font-bold">저장</button>
-              <button onClick={() => { setEditingSeal(false); setSealVal(c.sl || ''); }} className="px-3 py-2 bg-slate-700 text-slate-300 rounded">취소</button>
+              <button onClick={() => { setEditingSeal(false); setSealVal(c.sl || ''); }} className="px-3 py-2 bg-ink-750 text-dim-200 rounded">취소</button>
             </div>
           ) : (
             <button onClick={() => setEditingSeal(true)} className="flex items-center gap-2 w-full text-left">
@@ -1120,28 +1120,28 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
                 <span className={`text-lg mono font-bold ${sealError ? 'text-red-300' : 'text-amber-200'}`}>{c.sl}</span>
               ) : c.fe === 'E' ? (
                 // M3.88: 엠티는 실번호 없는 게 정상
-                <span className="text-lg mono font-bold text-slate-300">📦 엠티 (실번호 없음)</span>
+                <span className="text-lg mono font-bold text-dim-200">📦 엠티 (실번호 없음)</span>
               ) : (
-                <span className="text-lg mono font-bold text-slate-600 italic">미입력</span>
+                <span className="text-lg mono font-bold text-dim-500 italic">미입력</span>
               )}
-              <Edit3 className="w-4 h-4 text-slate-500"/>
+              <Edit3 className="w-4 h-4 text-dim-400"/>
             </button>
           )}
           {slHistory.length > 0 && (
             <button onClick={() => setShowHistory(!showHistory)}
-              className="mt-2 text-[10px] text-slate-400 hover:text-slate-300 flex items-center gap-1">
+              className="mt-2 text-2xs text-dim-300 hover:text-dim-200 flex items-center gap-1">
               <History className="w-3 h-3"/>수정 이력 ({slHistory.length}회) {showHistory ? '▾' : '▸'}
             </button>
           )}
           {showHistory && slHistory.length > 0 && (
-            <div className="mt-1.5 bg-slate-950 rounded p-2 space-y-1 text-[10px] mono">
+            <div className="mt-1.5 bg-ink-950 rounded p-2 space-y-1 text-2xs mono">
               {slHistory.map((h, i) => (
-                <div key={i} className="text-slate-400">
-                  <span className="text-slate-500">{new Date(h.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                <div key={i} className="text-dim-300">
+                  <span className="text-dim-400">{new Date(h.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                   <span className="text-emerald-400 ml-1">[{h.by}]</span>
-                  <span className="text-slate-600 ml-1">{h.from || '∅'}</span>
-                  <span className="text-slate-500 mx-1">→</span>
-                  <span className="text-slate-200">{h.to || '∅'}</span>
+                  <span className="text-dim-500 ml-1">{h.from || '∅'}</span>
+                  <span className="text-dim-400 mx-1">→</span>
+                  <span className="text-dim-100">{h.to || '∅'}</span>
                 </div>
               ))}
             </div>
@@ -1150,13 +1150,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
 
         {/* X-RAY 봉인 (양하 X-RAY 대상) */}
         {mode === 'discharge' && isXray && (
-          <div className={`px-4 py-3 border-b border-slate-800 ${xSealError ? 'bg-red-950/30' : 'bg-purple-950/20'}`}>
-            <div className="text-[10px] text-purple-400 font-bold uppercase mb-1 flex items-center justify-between">
+          <div className={`px-4 py-3 border-b border-line ${xSealError ? 'bg-red-950/30' : 'bg-purple-950/20'}`}>
+            <div className="text-2xs text-purple-400 font-bold uppercase mb-1 flex items-center justify-between">
               <span>X-RAY 봉인 (세관 + 전자)</span>
               {xSealError && <span className="text-red-400 font-black">⚠ 실오류</span>}
             </div>
             {xSealError && (
-              <div className="bg-red-950/50 border border-red-700/50 rounded p-2 mb-2 text-[11px]">
+              <div className="bg-red-950/50 border border-red-700/50 rounded p-2 mb-2 text-xxs">
                 <div className="text-red-300 font-bold mb-0.5">세관 신고 양식:</div>
                 <div className="mono text-red-100">원봉인 <span className="font-black">{xSealOrig}</span> → 실제 <span className="font-black">{xSeal}</span></div>
               </div>
@@ -1164,55 +1164,55 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             {editingXSeal ? (
               <div className="space-y-2">
                 <div>
-                  <label className="text-[10px] text-purple-400">세관봉인</label>
+                  <label className="text-2xs text-purple-400">세관봉인</label>
                   <input type="text" value={xSealVal}
                     onChange={e => setXSealVal(e.target.value.toUpperCase())}
-                    className="w-full bg-slate-800 border border-purple-500 rounded px-3 py-2 mono text-purple-200 focus:outline-none"
+                    className="w-full bg-ink-800 border border-purple-500 rounded px-3 py-2 mono text-purple-200 focus:outline-none"
                     autoFocus/>
                 </div>
                 <div>
-                  <label className="text-[10px] text-cyan-400">전자봉인 (E-Seal)</label>
+                  <label className="text-2xs text-cyan-400">전자봉인 (E-Seal)</label>
                   <input type="text" value={xEsealVal}
                     onChange={e => setXEsealVal(e.target.value.toUpperCase())}
-                    className="w-full bg-slate-800 border border-cyan-600 rounded px-3 py-2 mono text-cyan-200 focus:outline-none"
+                    className="w-full bg-ink-800 border border-cyan-600 rounded px-3 py-2 mono text-cyan-200 focus:outline-none"
                     onKeyDown={e => e.key === 'Enter' && handleSaveXSeal()}/>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={handleSaveXSeal} className="flex-1 px-3 py-2 bg-emerald-700 text-emerald-100 rounded font-bold">저장</button>
-                  <button onClick={() => { setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="px-3 py-2 bg-slate-700 text-slate-300 rounded">취소</button>
+                  <button onClick={() => { setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="px-3 py-2 bg-ink-750 text-dim-200 rounded">취소</button>
                 </div>
               </div>
             ) : (
               <button onClick={() => setEditingXSeal(true)} className="w-full text-left space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-500">세관:</span>
-                  <span className={`text-base mono font-bold ${xSeal ? (xSealError ? 'text-red-300' : 'text-purple-200') : 'text-slate-600 italic'}`}>{xSeal || '미입력'}</span>
-                  <Edit3 className="w-3.5 h-3.5 text-slate-500"/>
+                  <span className="text-2xs text-dim-400">세관:</span>
+                  <span className={`text-base mono font-bold ${xSeal ? (xSealError ? 'text-red-300' : 'text-purple-200') : 'text-dim-500 italic'}`}>{xSeal || '미입력'}</span>
+                  <Edit3 className="w-3.5 h-3.5 text-dim-400"/>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-500">전자:</span>
-                  <span className={`text-base mono font-bold ${xraySeal?.eseal ? 'text-cyan-200' : 'text-slate-600 italic'}`}>{xraySeal?.eseal || '미입력'}</span>
+                  <span className="text-2xs text-dim-400">전자:</span>
+                  <span className={`text-base mono font-bold ${xraySeal?.eseal ? 'text-cyan-200' : 'text-dim-500 italic'}`}>{xraySeal?.eseal || '미입력'}</span>
                 </div>
               </button>
             )}
             {xHistory.length > 0 && (
               <details className="mt-2">
-                <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-slate-300">
+                <summary className="text-2xs text-dim-300 cursor-pointer hover:text-dim-200">
                   <History className="w-3 h-3 inline mr-1"/>수정 이력 ({xHistory.length}회)
                 </summary>
-                <div className="mt-1.5 bg-slate-950 rounded p-2 space-y-1 text-[10px] mono">
+                <div className="mt-1.5 bg-ink-950 rounded p-2 space-y-1 text-2xs mono">
                   {xHistory.map((h, i) => (
-                    <div key={i} className="text-slate-400">
-                      <span className="text-slate-500">{new Date(h.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    <div key={i} className="text-dim-300">
+                      <span className="text-dim-400">{new Date(h.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                       <span className="text-emerald-400 ml-1">[{h.by}]</span>
-                      <div className="ml-3 text-[9px]">
-                        <span className="text-slate-600">세관: {h.from?.seal || '∅'}</span>
-                        <span className="text-slate-500 mx-1">→</span>
+                      <div className="ml-3 text-3xs">
+                        <span className="text-dim-500">세관: {h.from?.seal || '∅'}</span>
+                        <span className="text-dim-400 mx-1">→</span>
                         <span className="text-purple-200">{h.to?.seal || '∅'}</span>
                       </div>
-                      <div className="ml-3 text-[9px]">
-                        <span className="text-slate-600">전자: {h.from?.eseal || '∅'}</span>
-                        <span className="text-slate-500 mx-1">→</span>
+                      <div className="ml-3 text-3xs">
+                        <span className="text-dim-500">전자: {h.from?.eseal || '∅'}</span>
+                        <span className="text-dim-400 mx-1">→</span>
                         <span className="text-cyan-200">{h.to?.eseal || '∅'}</span>
                       </div>
                     </div>
@@ -1224,24 +1224,24 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
         )}
 
         {c.bl && (
-          <div className="px-4 py-3 border-b border-slate-800">
-            <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">B/L</div>
-            <div className="mono text-sm text-slate-300">{c.bl}</div>
+          <div className="px-4 py-3 border-b border-line">
+            <div className="text-2xs text-dim-400 font-bold uppercase mb-1">B/L</div>
+            <div className="mono text-sm text-dim-200">{c.bl}</div>
           </div>
         )}
 
         {/* 액션 */}
-        <div className="sticky bottom-0 bg-slate-900 border-t border-slate-700 p-3 flex gap-2">
+        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3 flex gap-2">
           {mode === 'discharge' && (
             <button onClick={handleToggleXray}
-              className={`px-4 py-3 rounded-lg font-bold text-sm ${
-                isXray ? 'bg-purple-700 text-purple-100' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              className={`px-4 py-3 rounded-pill font-bold text-sm ${
+                isXray ? 'bg-purple-700 text-purple-100' : 'bg-ink-800 text-dim-200 hover:bg-ink-750'
               }`}>
               🔍 {isXray ? '해제' : '추가'}
             </button>
           )}
           <button onClick={handleComplete}
-            className={`flex-1 py-3 rounded-lg font-black text-base ${
+            className={`flex-1 py-3 rounded-pill font-black text-base ${
               isDone
                 ? 'bg-rose-800 hover:bg-rose-700 text-rose-100'
                 : 'bg-emerald-700 hover:bg-emerald-600 text-emerald-100'
@@ -1325,15 +1325,15 @@ function Badge({ color, children }) {
     pink: 'bg-pink-700/60 text-pink-100',
     blue: 'bg-blue-700/60 text-blue-100',
   };
-  return <span className={`${map[color]} text-[11px] px-2 py-0.5 rounded font-black flex items-center gap-1`}>{children}</span>;
+  return <span className={`${map[color]} text-xxs px-2 py-0.5 rounded font-black flex items-center gap-1`}>{children}</span>;
 }
 
 function Field({ label, value, mono, highlight }) {
   const colors = { rose: 'text-rose-400' };
   return (
     <div>
-      <div className="text-[10px] text-slate-500 font-bold uppercase">{label}</div>
-      <div className={`text-base ${mono ? 'mono' : ''} ${colors[highlight] || 'text-slate-200'} font-bold`}>{value}</div>
+      <div className="text-2xs text-dim-400 font-bold uppercase">{label}</div>
+      <div className={`text-base ${mono ? 'mono' : ''} ${colors[highlight] || 'text-dim-100'} font-bold`}>{value}</div>
     </div>
   );
 }

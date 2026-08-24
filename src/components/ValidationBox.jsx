@@ -43,32 +43,32 @@ function ShiftingModal({ list, voyageKey, onClose }) {
   };
   return (
     <div className="fixed inset-0 z-[95] bg-black/70 flex items-center justify-center p-3" onClick={onClose}>
-      <div className="bg-slate-900 border border-blue-800/60 rounded-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-ink-900 border border-blue-800/60 rounded-btn w-full max-w-md max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="px-3 py-2.5 bg-blue-950/60 rounded-t-xl flex items-center gap-2">
           <span className="text-blue-400 font-black">◆</span>
-          <div className="text-[13px] font-black text-blue-100">쉬프팅(재적부) {list.length}</div>
-          <div className="text-[10px] text-slate-400">양하·선적 공통</div>
-          <button onClick={onClose} className="ml-auto p-1 text-slate-400 hover:text-white"><X className="w-4 h-4"/></button>
+          <div className="text-sm2 font-black text-blue-100">쉬프팅(재적부) {list.length}</div>
+          <div className="text-2xs text-dim-300">양하·선적 공통</div>
+          <button onClick={onClose} className="ml-auto p-1 text-dim-300 hover:text-white"><X className="w-4 h-4"/></button>
         </div>
-        <div className="p-2 flex gap-1.5 border-b border-slate-800">
-          <button onClick={openPrint} className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-blue-800 hover:bg-blue-700 rounded text-[12px] font-bold text-white">
+        <div className="p-2 flex gap-1.5 border-b border-line">
+          <button onClick={openPrint} className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-blue-800 hover:bg-blue-700 rounded text-xs2 font-bold text-white">
             <Printer className="w-3.5 h-3.5"/> 인쇄
           </button>
-          <button onClick={openPrint} className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-slate-700 hover:bg-slate-600 rounded text-[12px] font-bold text-white">
+          <button onClick={openPrint} className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-ink-750 hover:bg-ink-700 rounded text-xs2 font-bold text-white">
             <FileDown className="w-3.5 h-3.5"/> PDF 저장
           </button>
-          <button onClick={saveXlsx} className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-emerald-800 hover:bg-emerald-700 rounded text-[12px] font-bold text-white">
+          <button onClick={saveXlsx} className="flex-1 flex items-center justify-center gap-1 px-2 py-2 bg-emerald-800 hover:bg-emerald-700 rounded text-xs2 font-bold text-white">
             <FileDown className="w-3.5 h-3.5"/> 엑셀 저장
           </button>
         </div>
-        <div className="px-3 py-1 text-[10px] text-slate-500">인쇄·PDF는 새 창에서 열립니다 — PDF는 인쇄 대상에서 "PDF로 저장"을 선택하세요.</div>
-        <div className="overflow-y-auto divide-y divide-slate-800">
+        <div className="px-3 py-1 text-2xs text-dim-400">인쇄·PDF는 새 창에서 열립니다 — PDF는 인쇄 대상에서 "PDF로 저장"을 선택하세요.</div>
+        <div className="overflow-y-auto divide-y divide-line">
           {list.map((s, i) => (
-            <div key={s.cn} className="px-3 py-1.5 flex items-center gap-2 text-[12px]">
-              <span className="text-slate-600 w-5 text-right">{i + 1}</span>
-              <span className="mono font-bold text-slate-200">{s.cn}</span>
-              <span className="text-slate-500">{s.iso}</span>
-              {s.pod && <span className="text-slate-500">{s.pod}</span>}
+            <div key={s.cn} className="px-3 py-1.5 flex items-center gap-2 text-xs2">
+              <span className="text-dim-500 w-5 text-right">{i + 1}</span>
+              <span className="mono font-bold text-dim-100">{s.cn}</span>
+              <span className="text-dim-400">{s.iso}</span>
+              {s.pod && <span className="text-dim-400">{s.pod}</span>}
               <span className="ml-auto mono text-blue-300">{_sp(s.from)} → {_sp(s.to)}</span>
             </div>
           ))}
@@ -139,8 +139,8 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
   const allOk = v.missingCount === 0 && v.extraCount === 0 && v.listTotal > 0;
 
   return (
-    <div className={`rounded-lg p-3 ${
-      allOk ? 'bg-emerald-950/40 border border-emerald-800' : 'bg-slate-900 border border-slate-800'
+    <div className={`rounded-pill p-3 ${
+      allOk ? 'bg-emerald-950/40 border border-emerald-800' : 'bg-ink-900 border border-line'
     }`}>
       <div className="flex items-center gap-2 mb-2">
         {allOk ? (
@@ -148,37 +148,37 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
         ) : (
           <AlertTriangle className="w-4 h-4 text-amber-400"/>
         )}
-        <div className="text-xs font-bold text-slate-200">
+        <div className="text-xs font-bold text-dim-100">
           데이터 검증 (EDI ↔ 리스트)
         </div>
       </div>
 
-      <div className={`grid ${shiftCount > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-center text-[11px] mb-2`}>
-        <div className="bg-slate-800/60 rounded p-1.5">
-          <div className="text-slate-500 text-[10px]">EDI 평택</div>
+      <div className={`grid ${shiftCount > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-2 text-center text-xxs mb-2`}>
+        <div className="bg-ink-800/60 rounded p-1.5">
+          <div className="text-dim-400 text-2xs">EDI 평택</div>
           <div className="text-amber-300 font-black mono">{v.ptkTotal}</div>
         </div>
-        <div className="bg-slate-800/60 rounded p-1.5">
-          <div className="text-slate-500 text-[10px]">리스트</div>
-          <div className="text-slate-200 font-black mono">{v.listTotal}</div>
+        <div className="bg-ink-800/60 rounded p-1.5">
+          <div className="text-dim-400 text-2xs">리스트</div>
+          <div className="text-dim-100 font-black mono">{v.listTotal}</div>
         </div>
-        <div className="bg-slate-800/60 rounded p-1.5">
-          <div className="text-slate-500 text-[10px]">매칭</div>
+        <div className="bg-ink-800/60 rounded p-1.5">
+          <div className="text-dim-400 text-2xs">매칭</div>
           <div className="text-emerald-400 font-black mono">{v.matched}</div>
         </div>
         {shiftCount > 0 && (
           <button onClick={() => setShiftOpen(true)}
             className="bg-blue-950/50 rounded p-1.5 border border-blue-800/40 hover:bg-blue-900/60 active:scale-95 transition">
-            <div className="text-blue-300/80 text-[10px]">◆ 쉬프팅</div>
+            <div className="text-blue-300/80 text-2xs">◆ 쉬프팅</div>
             <div className="text-blue-300 font-black mono">{shiftCount}</div>
-            <div className="text-blue-400/60 text-[9px]">목록·인쇄 ▸</div>
+            <div className="text-blue-400/60 text-3xs">목록·인쇄 ▸</div>
           </button>
         )}
       </div>
       {/* V8.98-07: 총 작업 합계 — 쉬프팅(재적부)은 양하+재선적 실작업이라 청구 근거에 포함(사용자 확정 2026-07-14).
           상세 목록은 리스트 하단 ◆ 박스 + 인쇄 검수리스트 [별첨2]. */}
       {shiftCount > 0 && (
-        <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-[11px] text-blue-200 font-bold">
+        <div className="mb-2 px-2 py-1.5 bg-blue-950/40 border border-blue-800/40 rounded text-xxs text-blue-200 font-bold">
           총 작업 {v.listTotal + shiftCount}대 = 리스트 {v.listTotal} + 쉬프팅 {shiftCount}
           <span className="ml-1 font-normal text-blue-300/70">(재적부 상세는 하단 ◆ 목록 · 인쇄 [별첨2])</span>
         </div>
@@ -190,7 +190,7 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
           예상 수와 달라도 부족이 아니다(예상 202·확정 201이어도 정상, 확정 2면 2가 맞다).
           확정이 있으면 예상 자리수는 표시하지 않는다 — 남아 있으면 미확정으로 오해된다. */}
       {v.virtualCount > 0 && (
-        <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-[11px] text-purple-200 font-bold">
+        <div className="mb-2 px-2 py-1.5 bg-purple-950/40 border border-purple-800/40 rounded text-xxs text-purple-200 font-bold">
           {v.emptyConfirmed > 0 ? (
             <>실 {v.ptkTotal - v.virtualCount} + E확정 {v.emptyConfirmed} = 총 {v.ptkTotal - v.virtualCount + v.emptyConfirmed}</>
           ) : (
@@ -204,35 +204,35 @@ export default function ValidationBox({ ediContainers, records, mode, shiftingLi
 
       {v.missingCount > 0 && (
         <div className="bg-red-950/40 border border-red-800/50 rounded p-2 mb-2">
-          <div className="text-[11px] text-red-300 font-bold mb-1.5">
+          <div className="text-xxs text-red-300 font-bold mb-1.5">
             🚢 EDI 평택 대상 → 리스트에 없음: {v.missingCount}대
           </div>
           <div className="bg-amber-950/40 border border-amber-800/40 rounded p-1.5 mb-1.5">
-            <div className="text-[10px] text-amber-300/80 mb-1">▼ 선사별 누락 (해당 검수업체 리스트 추가 필요)</div>
+            <div className="text-2xs text-amber-300/80 mb-1">▼ 선사별 누락 (해당 검수업체 리스트 추가 필요)</div>
             {Object.entries(v.missingByOp).sort((a, b) => b[1] - a[1]).map(([op, n]) => (
-              <div key={op} className="flex items-center gap-1.5 text-amber-200 text-[11px] font-bold">
-                <span className="bg-amber-700/60 text-amber-100 px-1.5 py-0.5 rounded text-[10px] mono">{op}</span>
+              <div key={op} className="flex items-center gap-1.5 text-amber-200 text-xxs font-bold">
+                <span className="bg-amber-700/60 text-amber-100 px-1.5 py-0.5 rounded text-2xs mono">{op}</span>
                 <span>{n}대</span>
               </div>
             ))}
           </div>
-          <div className="text-[10px] text-orange-300/70 mb-0.5">샘플:</div>
+          <div className="text-2xs text-orange-300/70 mb-0.5">샘플:</div>
           {v.missingDetails.map((c, i) => (
-            <div key={i} className="text-[10px] text-orange-200 mono">
+            <div key={i} className="text-2xs text-orange-200 mono">
               • {c.cn} ({c.op || '?'}) {fmtPos(c)}
             </div>
           ))}
-          {v.missingCount > 5 && <div className="text-[10px] text-red-400/60">... 외 {v.missingCount - 5}대</div>}
+          {v.missingCount > 5 && <div className="text-2xs text-red-400/60">... 외 {v.missingCount - 5}대</div>}
         </div>
       )}
 
       {v.extraCount > 0 && (
         <div className="bg-orange-950/40 border border-orange-800/50 rounded p-2">
-          <div className="text-[11px] text-orange-300 font-bold mb-1.5">
+          <div className="text-xxs text-orange-300 font-bold mb-1.5">
             📋 리스트에 있는데 EDI에 없음: {v.extraCount}대
           </div>
           {Object.entries(v.extraByOp).sort((a, b) => b[1] - a[1]).map(([op, n]) => (
-            <div key={op} className="text-[11px] text-orange-200 ml-1">
+            <div key={op} className="text-xxs text-orange-200 ml-1">
               • {op}: {n}대 (해당 선사 EDI 추가 필요)
             </div>
           ))}

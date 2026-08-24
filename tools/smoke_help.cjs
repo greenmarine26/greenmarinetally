@@ -62,7 +62,7 @@ const die = (m, extra) => { console.log('✗ ' + m); if (extra) console.log('   
     const b = find(new RegExp(c));
     if (!b) die('수석 권 카테고리 «' + c + '» 버튼을 못 찾았다');
     click(b); await wait(110);
-    const n = doc().querySelectorAll('.bg-slate-800\\/50.border.border-slate-700.rounded-xl').length;
+    const n = doc().querySelectorAll('.bg-ink-800\\/50.border.border-line.rounded-btn').length;
     if (n < 2) die('수석 권 «' + c + '» 이 ' + n + '장뿐이다 — 항목마다 여러 장이어야 한다');
     chiefBlocks += n;
     chiefShots += (txt().match(/화면/g) || []).length;
@@ -76,7 +76,7 @@ const die = (m, extra) => { console.log('✗ ' + m); if (extra) console.log('   
 
   //  매트릭스는 특히 여러 장이어야 한다 (검수사 «메트릭스만 설명해도 여러장이 나올것입니다»)
   click(find(/베이매트릭스/)); await wait(120);
-  const mx = doc().querySelectorAll('.bg-slate-800\\/50.border.border-slate-700.rounded-xl').length;
+  const mx = doc().querySelectorAll('.bg-ink-800\\/50.border.border-line.rounded-btn').length;
   if (mx < 5) die('베이매트릭스가 ' + mx + '장뿐이다 — 최소 5장');
   if (!/확정/.test(txt()) || !/보정중/.test(txt())) die('매트릭스에 «확정/보정중» 설명이 없다');
   click(doc().querySelectorAll('button')[0]); await wait(100);

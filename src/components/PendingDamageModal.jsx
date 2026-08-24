@@ -70,44 +70,44 @@ export default function PendingDamageModal({ inspector = '', onClose }) {
     setSending(false);
   };
 
-  const chip = (on) => `px-2 py-1.5 rounded-lg text-[11px] font-bold border ${on ? 'bg-orange-700 border-orange-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`;
+  const chip = (on) => `px-2 py-1.5 rounded-pill text-xxs font-bold border ${on ? 'bg-orange-700 border-orange-500 text-white' : 'bg-ink-800 border-line text-dim-300'}`;
 
   return (
     <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-3" onClick={onClose}>
-      <div className="bg-slate-900 border-2 border-orange-700/60 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between z-10">
+      <div className="bg-ink-900 border-2 border-orange-700/60 rounded-card w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-ink-900 border-b border-line px-4 py-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <CalendarClock className="w-5 h-5 text-orange-300" />
             <div className="font-black text-base text-orange-200">📷 데미지 예약</div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg" aria-label="닫기"><X className="w-5 h-5 text-slate-400" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill" aria-label="닫기"><X className="w-5 h-5 text-dim-300" /></button>
         </div>
 
         <div className="p-4 space-y-3">
-          <div className="text-[11px] text-slate-400 leading-relaxed">
+          <div className="text-xxs text-dim-300 leading-relaxed">
             자료가 오기 전에 컨번호로 데미지를 미리 걸어 둡니다. 자료가 도착해 그 컨이 항차에 나타나면
             자동으로 데미지 기록에 붙고, CARGO DAMAGE REPORT와 조회 사진에도 실립니다.
           </div>
 
           <input value={cn} onChange={(e) => setCn(e.target.value.toUpperCase())} placeholder="컨테이너 번호 — DSYU0070126"
-            className="w-full bg-slate-800 border-2 border-slate-700 focus:border-orange-500 focus:outline-none rounded-xl px-3 py-2.5 text-base mono text-center text-slate-100 placeholder-slate-500" />
+            className="w-full bg-ink-800 border-2 border-line focus:border-orange-500 focus:outline-none rounded-btn px-3 py-2.5 text-base mono text-center text-dim-100 placeholder-dim-400" />
 
           <div className="grid grid-cols-2 gap-2">
             {[[photo1, setPhoto1, '데미지 사진 (필수)'], [photo2, setPhoto2, '추가 사진 (선택)']].map(([p, setP, lbl], i) => (
               <div key={i} className="space-y-1">
-                <div className="text-[10px] font-black text-orange-300/80">{lbl}</div>
+                <div className="text-2xs font-black text-orange-300/80">{lbl}</div>
                 {p ? (
                   <div className="relative">
-                    <img src={p.url} alt="" className="w-full h-28 object-cover rounded-lg border border-slate-700" />
+                    <img src={p.url} alt="" className="w-full h-28 object-cover rounded-pill border border-line" />
                     <button onClick={() => setP(null)} className="absolute top-1 right-1 bg-black/70 rounded-full p-1"><X className="w-4 h-4 text-white" /></button>
                   </div>
                 ) : (
                   <div className="flex gap-1">
-                    <label className="flex-1 h-14 rounded-lg bg-slate-800 border border-slate-600 flex flex-col items-center justify-center text-[10px] text-slate-300 font-bold cursor-pointer">
+                    <label className="flex-1 h-14 rounded-pill bg-ink-800 border border-line-strong flex flex-col items-center justify-center text-2xs text-dim-200 font-bold cursor-pointer">
                       <Camera className="w-4 h-4 mb-0.5" />촬영
                       <input type="file" accept="image/*" capture="environment" onChange={pick(setP)} className="hidden" />
                     </label>
-                    <label className="flex-1 h-14 rounded-lg bg-slate-800 border border-slate-600 flex flex-col items-center justify-center text-[10px] text-slate-300 font-bold cursor-pointer">
+                    <label className="flex-1 h-14 rounded-pill bg-ink-800 border border-line-strong flex flex-col items-center justify-center text-2xs text-dim-200 font-bold cursor-pointer">
                       🖼 갤러리
                       <input type="file" accept="image/*" onChange={pick(setP)} className="hidden" />
                     </label>
@@ -118,53 +118,53 @@ export default function PendingDamageModal({ inspector = '', onClose }) {
           </div>
 
           <div>
-            <div className="text-[10px] font-black text-orange-300/80 mb-1">데미지 종류 (복수 선택)</div>
+            <div className="text-2xs font-black text-orange-300/80 mb-1">데미지 종류 (복수 선택)</div>
             <div className="flex flex-wrap gap-1">{DAMAGE_TYPES.map((t) => (
               <button key={t.code} onClick={() => toggle(types, setTypes, t.code)} className={chip(types.includes(t.code))}>{t.label}</button>))}</div>
           </div>
           <div>
-            <div className="text-[10px] font-black text-orange-300/80 mb-1">부위 (복수 선택)</div>
+            <div className="text-2xs font-black text-orange-300/80 mb-1">부위 (복수 선택)</div>
             <div className="flex flex-wrap gap-1">{DAMAGE_PARTS.map((t) => (
               <button key={t.code} onClick={() => toggle(parts, setParts, t.code)} className={chip(parts.includes(t.code))}>{t.label}</button>))}</div>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-slate-300">
+          <div className="flex items-center gap-2 text-xxs text-dim-200">
             <span className="font-bold">POINT</span>
-            <input value={points} onChange={(e) => setPoints(e.target.value.replace(/\D/g, ''))} className="w-12 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-center mono" />
+            <input value={points} onChange={(e) => setPoints(e.target.value.replace(/\D/g, ''))} className="w-12 bg-ink-800 border border-line rounded px-2 py-1.5 text-center mono" />
             <span className="font-bold ml-2">치수(cm)</span>
             {[[dimW, setDimW, 'W'], [dimH, setDimH, 'H'], [dimD, setDimD, 'D']].map(([v, setV, ph]) => (
-              <input key={ph} value={v} onChange={(e) => setV(e.target.value.replace(/\D/g, ''))} placeholder={ph} className="w-12 bg-slate-800 border border-slate-700 rounded px-1 py-1.5 text-center mono placeholder-slate-600" />
+              <input key={ph} value={v} onChange={(e) => setV(e.target.value.replace(/\D/g, ''))} placeholder={ph} className="w-12 bg-ink-800 border border-line rounded px-1 py-1.5 text-center mono placeholder-dim-500" />
             ))}
           </div>
 
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="메모 — 예: 터미널 동민님 카톡 접수, 명일 양하분"
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 resize-y" />
+            className="w-full bg-ink-800 border border-line rounded-btn px-3 py-2 text-sm text-dim-100 placeholder-dim-400 resize-y" />
 
           {notice && (
-            <div className={`text-[11px] rounded-lg px-3 py-2 font-bold ${notice.tone === 'ok' ? 'bg-emerald-900/40 text-emerald-200' : 'bg-red-900/40 text-red-200'}`}>{notice.msg}</div>
+            <div className={`text-xxs rounded-pill px-3 py-2 font-bold ${notice.tone === 'ok' ? 'bg-emerald-900/40 text-emerald-200' : 'bg-red-900/40 text-red-200'}`}>{notice.msg}</div>
           )}
 
           <button onClick={handleSave} disabled={sending}
-            className="w-full h-12 rounded-xl bg-orange-700 hover:bg-orange-600 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-black flex items-center justify-center gap-2">
+            className="w-full h-12 rounded-btn bg-orange-700 hover:bg-orange-600 disabled:bg-ink-800 disabled:text-dim-400 text-white text-sm font-black flex items-center justify-center gap-2">
             <Send className="w-4 h-4" />{sending ? '저장 중…' : '예약 저장'}
           </button>
 
           {list.length > 0 && (
-            <div className="space-y-1.5 pt-1 border-t border-slate-800">
-              <div className="text-[10px] font-black text-slate-400">예약 목록 ({list.length}건)</div>
+            <div className="space-y-1.5 pt-1 border-t border-line">
+              <div className="text-2xs font-black text-dim-300">예약 목록 ({list.length}건)</div>
               {list.map((e) => (
-                <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-lg px-2 py-1.5">
+                <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-ink-800/60 border border-line rounded-pill px-2 py-1.5">
                   {e.data ? <img src={e.data} alt="" className="w-10 h-10 object-cover rounded" /> : null}
                   <div className="flex-1 min-w-0">
-                    <div className="text-[12px] mono font-bold text-slate-100">{e.cn}</div>
-                    <div className="text-[10px] text-slate-400 truncate">{(e.damageTypes || []).join(' ')} {(e.damageParts || []).join(' ')}</div>
-                    <div className={`text-[10px] font-bold ${e.status === 'promoted' ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    <div className="text-xs2 mono font-bold text-dim-100">{e.cn}</div>
+                    <div className="text-2xs text-dim-300 truncate">{(e.damageTypes || []).join(' ')} {(e.damageParts || []).join(' ')}</div>
+                    <div className={`text-2xs font-bold ${e.status === 'promoted' ? 'text-emerald-300' : 'text-amber-300'}`}>
                       {e.status === 'promoted' ? `✅ 반영됨 — ${e.promotedTo || ''}` : '⏳ 자료 대기 중'}
                     </div>
                   </div>
                   {e.status !== 'promoted' && (
                     <button onClick={async () => { if (confirm(`${e.cn} 예약을 지울까요?`)) { await fbDeletePendingDamage(e.cn, e.ts); refresh(); } }}
-                      className="p-1.5 text-red-400 hover:bg-slate-700 rounded"><Trash2 className="w-4 h-4" /></button>
+                      className="p-1.5 text-red-400 hover:bg-ink-750 rounded"><Trash2 className="w-4 h-4" /></button>
                   )}
                 </div>
               ))}

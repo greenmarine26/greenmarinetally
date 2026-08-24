@@ -687,13 +687,13 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           카드 대신 한 줄 검색창 — 치고 검색을 누르면 통합검색이 그 질문으로 바로 답한다(검수원도 진입 가능). */}
       {onOpenGlobalSearch && (
         <form onSubmit={(e) => { e.preventDefault(); onOpenGlobalSearch(homeQ.trim()); }} className="relative mb-3">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dim-400 pointer-events-none"/>
           <input type="text" value={homeQ} onChange={(e) => setHomeQ(e.target.value)}
             placeholder="통합검색 · 미르에게 질문 — 컨번호 끝자리, 용어, 기능"
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-16 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-600"
+            className="w-full bg-ink-900 border border-line rounded-pill pl-9 pr-16 py-2.5 text-sm text-dim-100 placeholder-dim-400 focus:outline-none focus:border-sky-600"
             style={{ minHeight: 44 }} />
           <button type="submit"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-2 py-1">
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xxs font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-2 py-1">
             검색
           </button>
         </form>
@@ -701,12 +701,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {/* TallyOne 1.19: 미회신 오답 — 소유자만 본다. 누르면 수석 대시보드(오답 리포트)로. */}
       {fbUnanswered > 0 && isOwnerName(inspector) && (
         <button onClick={onOpenChiefDashboard}
-          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-lg px-3 py-2 mb-3 hover:bg-red-900/40 transition"
+          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-pill px-3 py-2 mb-3 hover:bg-red-900/40 transition"
           style={{ minHeight: 44 }}>
-          <span className="flex items-center gap-2 text-[12px] font-bold text-red-200">
+          <span className="flex items-center gap-2 text-xs2 font-bold text-red-200">
             ❌ 오답 <b className="text-base mono">{fbUnanswered}</b>건 — 아직 회신 안 함
           </span>
-          <span className="text-[11px] text-red-300/80">눌러서 보기 →</span>
+          <span className="text-xxs text-red-300/80">눌러서 보기 →</span>
         </button>
       )}
 
@@ -716,12 +716,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         if (!me || me.count === 0) return null;
         const ago = me.lastAt ? Math.round((Date.now() - me.lastAt) / 60000) : null;
         return (
-          <div className="flex items-center gap-3 bg-slate-900 border border-emerald-800/50 rounded-lg px-3 py-2 mb-3">
-            <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-slate-950 text-[12px] font-black shrink-0">{inspector[0]}</span>
-            <div className="flex items-baseline gap-3 flex-wrap text-[12px]">
-              <span className="text-slate-300">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
-              {me.perHour != null && <span className="text-slate-400">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대</span>}
-              {ago != null && <span className="text-slate-500">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
+          <div className="flex items-center gap-3 bg-ink-900 border border-emerald-800/50 rounded-pill px-3 py-2 mb-3">
+            <span className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center text-ink-950 text-xs2 font-black shrink-0">{inspector[0]}</span>
+            <div className="flex items-baseline gap-3 flex-wrap text-xs2">
+              <span className="text-dim-200">오늘 <b className="text-emerald-300 text-base mono">{me.count}</b>대</span>
+              {me.perHour != null && <span className="text-dim-300">시간당 <b className="text-emerald-300 mono">{me.perHour}</b>대</span>}
+              {ago != null && <span className="text-dim-400">마지막 완료 {ago < 1 ? '방금' : `${ago}분 전`}</span>}
             </div>
           </div>
         );
@@ -730,13 +730,13 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       {/* TallyOne 1.0 (K5): 수집기 상태 요약은 유지하되 진입은 보조기능(#/aux)으로 —
           건강 점검·맛집 수첩 등 개별 버튼은 AuxPage 안으로 통합됐다 */}
       <button onClick={() => onOpenAux && onOpenAux()}
-        className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 mb-3 text-left transition-colors ${
+        className={`w-full flex items-center gap-2 rounded-pill border px-3 py-2 mb-3 text-left transition-colors ${
           hbView.state === 'down' || healthIssueCount
             ? 'border-amber-700/60 bg-amber-950/30 hover:bg-amber-950/45'
-            : 'border-slate-700/40 bg-slate-900/50 hover:bg-slate-800/60'}`}>
+            : 'border-line/40 bg-ink-900/50 hover:bg-ink-750/60'}`}>
         <span className={`w-2 h-2 rounded-full shrink-0 ${
-          hbView.state === 'ok' ? 'bg-emerald-400 animate-pulse' : hbView.state === 'down' ? 'bg-red-500' : 'bg-slate-500'}`} />
-        <span className="text-xs font-bold text-slate-200">
+          hbView.state === 'ok' ? 'bg-emerald-400 animate-pulse' : hbView.state === 'down' ? 'bg-red-500' : 'bg-dim-500'}`} />
+        <span className="text-xs font-bold text-dim-100">
           {hbView.state === 'ok' ? `수집기 정상 · ${hbView.ageMin}분 전`
             : hbView.state === 'down' ? `수집기 끊김 · ${hbView.ageMin}분 전` : '수집기 기록 없음'}
         </span>
@@ -744,8 +744,8 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           {healthIssueCount ? `⚠ 검증 필요 ${healthIssueCount}건` : '✓ 자료 정상'}
         </span>
         {/* TallyOne 1.0: 보조기능 진입 표시 (건강 점검 · 맛집 수첩 등) */}
-        <span className="text-[10px] font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-1.5 py-0.5 shrink-0">보조기능</span>
-        <ChevronRight size={14} className="text-slate-500 shrink-0" />
+        <span className="text-2xs font-bold text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded px-1.5 py-0.5 shrink-0">보조기능</span>
+        <ChevronRight size={14} className="text-dim-400 shrink-0" />
       </button>
 
       {/* 1.80(검수사 신고 2026-08-17): 폰에서 이 줄이 한 줄에 안 들어가 — 수석 대시보드 버튼이
@@ -757,10 +757,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             이것이 **세줄**을 차지 합니다. 분명 **2줄**로 줄이고도 남을수 있씁니다.»*
             → 폰: ①「진행 N건」+수석 대시보드 한 줄 ②양하·선적·예보·새로고침 한 줄. 라벨은 폰에서 줄인다. */}
         <div className="shrink-0 flex items-baseline gap-1.5 sm:block">
-          <span className="text-2xs text-slate-500 font-bold uppercase sm:block sm:mb-0.5">
+          <span className="text-2xs text-dim-400 font-bold uppercase sm:block sm:mb-0.5">
             <span className="sm:hidden">진행</span><span className="hidden sm:inline">진행 중인 항차</span>
           </span>
-          <span className="text-lg font-bold text-slate-100 leading-none">{list.length}건</span>
+          <span className="text-lg font-bold text-dim-100 leading-none">{list.length}건</span>
         </div>
         {/* V9.42: 수석 대시보드 — 종전 상단 3카드에서 이 줄 가운데 빈 공간으로 옮김
             V9.44: **수석 검수원에게만 보인다.** 눌러서 막히는 것보다 아예 안 보이는 편이 낫다
@@ -768,7 +768,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         {/* 1.41: 판정을 canOpenChief 로 통일 — 종전 isChief 만 봐서 App 라우트 게이트와 어긋났다
             (소유자·개발용은 들어갈 수 있는데 버튼이 안 보였다). */}
         {canOpenChief(inspector, isOwnerName(inspector)) && <button onClick={onOpenChiefDashboard}
-          className="flex-1 min-w-[140px] bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-lg px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
+          className="flex-1 min-w-[140px] bg-gradient-to-br from-purple-900/40 to-purple-950/40 border border-purple-700/40 rounded-pill px-3 py-2 text-left hover:from-purple-900/60 active:scale-95 transition">
           <div className="row-1">
             <BarChart3 className="ico text-purple-300"/>
             <span className="font-bold text-xs2 sm:text-xs text-purple-100">수석 대시보드</span>
@@ -780,19 +780,19 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto sm:shrink-0">
           <button
             onClick={() => setShowCreate('discharge')}
-            className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
+            className="flex-1 sm:flex-none bg-blue-900/50 hover:bg-blue-800 border border-blue-700/50 text-blue-100 px-2.5 sm:px-3 py-2 rounded-pill text-xs font-bold flex items-center justify-center gap-1"
           >
             <Plus className="ico-s"/><ArrowDown className="ico-s"/>양하
           </button>
           <button
             onClick={() => setShowCreate('loading')}
-            className="flex-1 sm:flex-none bg-amber-900/50 hover:bg-amber-800 border border-amber-700/50 text-amber-100 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
+            className="flex-1 sm:flex-none bg-amber-900/50 hover:bg-amber-800 border border-amber-700/50 text-amber-100 px-2.5 sm:px-3 py-2 rounded-pill text-xs font-bold flex items-center justify-center gap-1"
           >
             <Plus className="ico-s"/><ArrowUp className="ico-s"/>선적
           </button>
           <button
             onClick={() => { setShowForecast(true); setFcText(''); }}
-            className="flex-1 sm:flex-none bg-orange-900/50 hover:bg-orange-800 border border-orange-700/50 text-orange-100 px-2.5 sm:px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
+            className="flex-1 sm:flex-none bg-orange-900/50 hover:bg-orange-800 border border-orange-700/50 text-orange-100 px-2.5 sm:px-3 py-2 rounded-pill text-xs font-bold flex items-center justify-center gap-1"
             title="카톡으로 받은 물량 예보 붙여넣기 — EDI 도착 전 개수 먼저 등록"
           >
             📋 예보
@@ -804,10 +804,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       </div>
 
       {/* M5.82: 부두 필터 바 - GPS 자동 판별 + 수동 전환 / M6.17: 부두 좌표 등록 추가 */}
-      <div className="bg-slate-900/60 border border-slate-700/40 rounded-lg px-3 py-2 mb-2">
+      <div className="bg-ink-900/60 border border-line/40 rounded-pill px-3 py-2 mb-2">
         <div className="flex items-center gap-2 flex-wrap text-xs">
           {gpsState === 'loading' && (
-            <span className="flex items-center gap-1.5 text-slate-400">
+            <span className="flex items-center gap-1.5 text-dim-300">
               <Loader2 className="w-3 h-3 animate-spin"/> 위치 확인 중...
             </span>
           )}
@@ -817,7 +817,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               <span className={`font-bold ${currentPier.code === 'PCTC' ? 'text-blue-200' : 'text-purple-200'}`}>
                 현 위치: {currentPier.code}
               </span>
-              <span className="text-slate-500 text-[10px]">({currentPier.distance}m)</span>
+              <span className="text-dim-400 text-2xs">({currentPier.distance}m)</span>
             </span>
           )}
           {gpsState === 'far' && (
@@ -826,7 +826,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
             </span>
           )}
           {gpsState === 'denied' && (
-            <span className="flex items-center gap-1.5 text-slate-400">
+            <span className="flex items-center gap-1.5 text-dim-300">
               <MapPin className="w-3 h-3"/> 위치 안 씀 — 수동 선택 ▶
             </span>
           )}
@@ -838,12 +838,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               { id: 'all', label: '전체' },
             ].map(b => (
               <button key={b.id} onClick={() => setPierFilter(b.id)}
-                className={`px-3 py-1.5 rounded-lg text-[12px] font-bold ${
+                className={`px-3 py-1.5 rounded-pill text-xs2 font-bold ${
                   pierFilter === b.id
                     ? (b.id === 'PCTC' ? 'bg-blue-700 text-white' :
                        b.id === 'PNCT' ? 'bg-purple-700 text-white' :
-                       'bg-amber-600 text-slate-950')
-                    : 'bg-slate-800 text-slate-400'
+                       'bg-amber-600 text-ink-950')
+                    : 'bg-ink-800 text-dim-300'
                 }`}>
                 {b.label}
               </button>
@@ -853,21 +853,21 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
         {/* M6.17: 현재 좌표 + 부두 등록 버튼 — '외부' 또는 잘못 잡힌 경우 사용 */}
         {(gpsState === 'far' || gpsState === 'ok') && currentCoord && (
-          <div className="mt-2 pt-2 border-t border-slate-800/60">
+          <div className="mt-2 pt-2 border-t border-line-soft">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] text-slate-500 mono">
+              <span className="text-2xs text-dim-400 mono">
                 현재 좌표: {currentCoord.lat.toFixed(5)}, {currentCoord.lng.toFixed(5)}
               </span>
               <button
                 onClick={() => measureGps(true)}
-                className="text-[11px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300"
+                className="text-xxs px-3 py-1.5 bg-ink-800 hover:bg-ink-750 rounded-pill text-dim-200"
               >
                 🔄 다시 측정
               </button>
               <div className="flex gap-1 ml-auto">
                 <button
                   onClick={() => handleRegisterPier('PCTC')}
-                  className="text-[11px] px-3 py-1.5 bg-blue-900/60 hover:bg-blue-800/80 rounded-lg text-blue-200 font-bold border border-blue-700/40"
+                  className="text-xxs px-3 py-1.5 bg-blue-900/60 hover:bg-blue-800/80 rounded-pill text-blue-200 font-bold border border-blue-700/40"
                   title="현재 GPS 위치를 PCTC 부두 좌표로 등록"
                 >
                   <Anchor className="w-3 h-3 inline mr-1"/>
@@ -875,7 +875,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                 </button>
                 <button
                   onClick={() => handleRegisterPier('PNCT')}
-                  className="text-[11px] px-3 py-1.5 bg-purple-900/60 hover:bg-purple-800/80 rounded-lg text-purple-200 font-bold border border-purple-700/40"
+                  className="text-xxs px-3 py-1.5 bg-purple-900/60 hover:bg-purple-800/80 rounded-pill text-purple-200 font-bold border border-purple-700/40"
                 >
                   <Anchor className="w-3 h-3 inline mr-1"/>
                   여기를 PNCT로 등록
@@ -883,11 +883,11 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               </div>
             </div>
             {pierRegisterState.msg && (
-              <div className={`mt-1 text-[10px] font-bold ${pierRegisterState.error ? 'text-red-300' : 'text-emerald-300'}`}>
+              <div className={`mt-1 text-2xs font-bold ${pierRegisterState.error ? 'text-red-300' : 'text-emerald-300'}`}>
                 {pierRegisterState.msg}
               </div>
             )}
-            <div className="mt-1 text-[10px] text-slate-500">
+            <div className="mt-1 text-2xs text-dim-400">
               💡 '외부'로 잡히면 부두에서 위 버튼 클릭 → 좌표 자동 등록 (모든 검수원 공유)
             </div>
           </div>
@@ -895,9 +895,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       </div>
 
       {list.length === 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center">
-          <div className="text-slate-500 text-sm mb-2">진행 중인 항차가 없습니다</div>
-          <div className="text-xs text-slate-600">위 + 양하 / + 선적 버튼으로 새 항차를 만드세요</div>
+        <div className="bg-ink-900 border border-line rounded-btn p-10 text-center">
+          <div className="text-dim-400 text-sm mb-2">진행 중인 항차가 없습니다</div>
+          <div className="text-xs text-dim-500">위 + 양하 / + 선적 버튼으로 새 항차를 만드세요</div>
         </div>
       )}
 
@@ -911,14 +911,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           return (
             <React.Fragment key={v.key}>
               {isFirstHere && effectivePier && (
-                <div className={`text-[10px] font-bold uppercase tracking-wider px-2 ${
+                <div className={`text-2xs font-bold uppercase tracking-wider px-2 ${
                   effectivePier === 'PCTC' ? 'text-blue-300' : 'text-purple-300'
                 }`}>
                   📍 {effectivePier} (현 위치)
                 </div>
               )}
               {isFirstOther && (
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-2 mt-3">
+                <div className="text-2xs font-bold uppercase tracking-wider text-dim-400 px-2 mt-3">
                   ── 다른 부두 ──
                 </div>
               )}
@@ -949,12 +949,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
 
       {/* ── 2.09 (검수사 확정 2026-08-23): 나머지 배는 접어 둔다. 규격은 「선박 실 정책」 판과 같다. ── */}
       {foldList.length > 0 && (
-        <div className="mt-2 bg-slate-900/60 border border-slate-800 rounded-xl">
+        <div className="mt-2 bg-ink-900/60 border border-line rounded-btn">
           <button onClick={() => setFoldOpen(o => !o)}
             className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
-            <span className="text-[13px] font-bold text-slate-300">🚢 그 밖의 배</span>
-            <span className="text-[11px] text-slate-500">{foldList.length}척 · 탭하면 펼침</span>
-            <span className="ml-auto text-slate-600">{foldOpen ? '▾' : '▸'}</span>
+            <span className="text-sm2 font-bold text-dim-200">🚢 그 밖의 배</span>
+            <span className="text-xxs text-dim-400">{foldList.length}척 · 탭하면 펼침</span>
+            <span className="ml-auto text-dim-500">{foldOpen ? '▾' : '▸'}</span>
           </button>
           {/* ⚠ 언마운트하지 않는다 — departBadgeAt sticky 기록이 죽으면 콘앱 출항 표시가 멈춘다. */}
           <div className={foldOpen ? 'px-2 pb-2 space-y-3 sm:space-y-4' : 'hidden'}>
@@ -966,12 +966,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               return (
                 <React.Fragment key={v.key}>
                   {isFirstHere && effectivePier && (
-                    <div className={`text-[10px] font-bold uppercase tracking-wider px-2 ${
+                    <div className={`text-2xs font-bold uppercase tracking-wider px-2 ${
                       effectivePier === 'PCTC' ? 'text-blue-300' : 'text-purple-300'
                     }`}>📍 {effectivePier} (현 위치)</div>
                   )}
                   {isFirstOther && (
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-2 mt-3">── 다른 부두 ──</div>
+                    <div className="text-2xs font-bold uppercase tracking-wider text-dim-400 px-2 mt-3">── 다른 부두 ──</div>
                   )}
                   <VoyageCard
                     voyage={v}
@@ -1000,12 +1000,12 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       )}
 
       {/* ── 1.83: 선박 실 정책 판 — 조합(LOLO+실확인)이 한눈에. 탭하면 수정 모드. ── */}
-      <div className="mt-3 bg-slate-900/60 border border-slate-800 rounded-xl">
+      <div className="mt-3 bg-ink-900/60 border border-line rounded-btn">
         <button onClick={() => setPolOpen(o => !o)}
           className="w-full flex items-center gap-2 px-3 py-2.5 text-left">
-          <span className="text-[13px] font-bold text-slate-300">🔒 선박 실 정책</span>
-          <span className="text-[11px] text-slate-500">{Object.keys({ ...DEFAULT_SHIP_POLICIES, ...shipPols }).length}척 등록 · 탭하면 수정</span>
-          <span className="ml-auto text-slate-600">{polOpen ? '▾' : '▸'}</span>
+          <span className="text-sm2 font-bold text-dim-200">🔒 선박 실 정책</span>
+          <span className="text-xxs text-dim-400">{Object.keys({ ...DEFAULT_SHIP_POLICIES, ...shipPols }).length}척 등록 · 탭하면 수정</span>
+          <span className="ml-auto text-dim-500">{polOpen ? '▾' : '▸'}</span>
         </button>
         {polOpen && (() => {
           const all = { ...DEFAULT_SHIP_POLICIES, ...shipPols };
@@ -1019,20 +1019,20 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
           return (
             <div className="px-3 pb-3 space-y-1.5">
               {keys.map(g => (
-                <div key={g} className="flex items-start gap-2 text-[12px]">
-                  <span className={`flex-none px-1.5 py-0.5 rounded font-bold ${g === '일반' ? 'bg-slate-800 text-slate-400'
+                <div key={g} className="flex items-start gap-2 text-xs2">
+                  <span className={`flex-none px-1.5 py-0.5 rounded font-bold ${g === '일반' ? 'bg-ink-800 text-dim-300'
                     : g.startsWith('LOLO') ? 'bg-purple-900/60 text-purple-200' : 'bg-cyan-900/50 text-cyan-200'}`}>{g}</span>
                   <span className="flex flex-wrap gap-1">
                     {groups[g].map(({ k, pol }) => (
                       <button key={k} onClick={() => setPolEdit({ vsl: pol.name || k, policy: pol })}
-                        className="px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-200">
+                        className="px-1.5 py-0.5 rounded bg-ink-800/80 hover:bg-ink-750 text-dim-100">
                         {pol.code || pol.name || k}
                       </button>
                     ))}
                   </span>
                 </div>
               ))}
-              <div className="text-[11px] text-slate-600">신규 선박은 선적 화면을 처음 열 때 한 번만 묻습니다.</div>
+              <div className="text-xxs text-dim-500">신규 선박은 선적 화면을 처음 열 때 한 번만 묻습니다.</div>
             </div>
           );
         })()}
@@ -1118,7 +1118,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         };
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowForecast(false)}>
-            <div className="bg-slate-900 border-2 border-orange-700 rounded-xl p-4 w-full max-w-lg space-y-2.5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}
+            <div className="bg-ink-900 border-2 border-orange-700 rounded-btn p-4 w-full max-w-lg space-y-2.5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}
               onPaste={async (e) => {
                 // 1.42: 카톡에서 그림을 복사해 바로 붙여넣는 길. 글자 붙여넣기는 그대로 통과시킨다.
                 const items = e.clipboardData && e.clipboardData.items;
@@ -1134,14 +1134,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                   }
                 }
               }}>
-              <div className="font-bold text-orange-300">📋 물량 예보 붙여넣기 <span className="text-[11px] font-normal text-slate-500">카톡 원문 그대로 — EDI 오면 자동 대체</span></div>
+              <div className="font-bold text-orange-300">📋 물량 예보 붙여넣기 <span className="text-xxs font-normal text-dim-400">카톡 원문 그대로 — EDI 오면 자동 대체</span></div>
               <textarea autoFocus value={fcText} onChange={e => setFcText(e.target.value)} rows={8}
                 placeholder={'카톡 물량 예보를 그대로 붙여넣으세요\n(RZOR: *FULL / 20D X 9 …  ·  OBWH: FULL 20GPX19 + 40HQX33 …)'}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-[12px] text-slate-100 font-mono"/>
+                className="w-full bg-ink-800 border border-line rounded-pill p-2 text-xs2 text-dim-100 font-mono"/>
               {/* 1.42: 카톡 그림 첨부 — 검수사 확정 "덱플랜파일이 아니라 그림을 올리는것입니다."
                   ⚠ 파일 선택뿐 아니라 **붙여넣기(Ctrl+V)** 도 받는다 — 카톡에서 그림 복사가 제일 빠르다. */}
               <div className="flex items-center gap-2 flex-wrap">
-                <label className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-300 cursor-pointer hover:border-orange-600">
+                <label className="px-2.5 py-1.5 rounded-pill bg-ink-800 border border-line text-xxs font-bold text-dim-200 cursor-pointer hover:border-orange-600">
                   🖼 그림 넣기
                   <input type="file" accept="image/*" className="hidden"
                     onChange={async (e) => {
@@ -1152,52 +1152,52 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
                       if (b64) setFcImage(b64); else alert('그림을 읽지 못했습니다.');
                     }}/>
                 </label>
-                <span className="text-[10px] text-slate-500">덱 그림·물량표 사진 — 여기 붙여넣기(Ctrl+V)도 됩니다</span>
+                <span className="text-2xs text-dim-400">덱 그림·물량표 사진 — 여기 붙여넣기(Ctrl+V)도 됩니다</span>
                 {fcImage && (
                   <button onClick={() => setFcImage('')}
-                    className="ml-auto px-2 py-1 rounded bg-slate-800 text-slate-400 text-[10px] font-bold">그림 빼기</button>
+                    className="ml-auto px-2 py-1 rounded bg-ink-800 text-dim-300 text-2xs font-bold">그림 빼기</button>
                 )}
               </div>
               {fcImage && (
                 <img src={fcImage} alt="예보 그림"
-                  className="w-full rounded-lg border border-slate-700 max-h-52 object-contain bg-slate-950"/>
+                  className="w-full rounded-pill border border-line max-h-52 object-contain bg-ink-950"/>
               )}
               {fc && (
-                <div className="bg-slate-800/70 border border-slate-700 rounded-lg p-2.5 space-y-1 text-[12px]">
+                <div className="bg-ink-800/70 border border-line rounded-pill p-2.5 space-y-1 text-xs2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-slate-100">{fc.vsl || (match ? match.info.vsl : '')} {fc.voy || '항차 미인식'}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${fc.mode === 'loading' ? 'bg-amber-900/70 text-amber-200' : fc.mode === 'discharge' ? 'bg-blue-900/70 text-blue-200' : 'bg-slate-700 text-slate-300'}`}>
+                    <span className="font-bold text-dim-100">{fc.vsl || (match ? match.info.vsl : '')} {fc.voy || '항차 미인식'}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-2xs font-bold ${fc.mode === 'loading' ? 'bg-amber-900/70 text-amber-200' : fc.mode === 'discharge' ? 'bg-blue-900/70 text-blue-200' : 'bg-ink-750 text-dim-200'}`}>
                       {fc.mode === 'loading' ? '선적' : fc.mode === 'discharge' ? '양하' : '모드 미상'}
                     </span>
                     {/* 1.43: 원문에 없어서 **추정한** 것은 반드시 티를 낸다 — 검수사가 눈으로 확인해야 한다. */}
                     {(fc.guessedVsl || fc.guessedMode) && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-900/70 text-purple-200"
+                      <span className="px-1.5 py-0.5 rounded text-2xs font-bold bg-purple-900/70 text-purple-200"
                         title={`원문에 없어 추정했습니다 — ${[fc.guessedVsl && '선박(담당자 이름)', fc.guessedMode && '양하/선적(본문 낱말)'].filter(Boolean).join(' · ')}. 틀리면 저장하지 마세요.`}>
                         🔍 추정 {[fc.guessedVsl && '선박', fc.guessedMode && '모드'].filter(Boolean).join('·')}
                       </span>
                     )}
-                    {fc.date && <span className="text-[10px] text-slate-500">{fc.date}</span>}
+                    {fc.date && <span className="text-2xs text-dim-400">{fc.date}</span>}
                     <span className="font-bold text-orange-300">{totalTeu}TEU</span>
                     {fc.teu && (fc.teuOk
-                      ? <span className="text-emerald-400 text-[10px] font-bold">✓ TEU 검산 일치</span>
-                      : <span className="text-rose-400 text-[10px] font-bold">⚠ TEU 검산 불일치 (원문 확인)</span>)}
+                      ? <span className="text-emerald-400 text-2xs font-bold">✓ TEU 검산 일치</span>
+                      : <span className="text-rose-400 text-2xs font-bold">⚠ TEU 검산 불일치 (원문 확인)</span>)}
                   </div>
-                  {Object.keys(fc.full).length > 0 && <div><span className="text-emerald-300 font-bold">FULL</span> <span className="text-slate-200">{fmt(fc.full)}</span> <span className="text-slate-500">({fc.vans.full}대 {fc.calc.full}TEU)</span></div>}
-                  {Object.keys(fc.empty).length > 0 && <div><span className="text-sky-300 font-bold">EMPTY</span> <span className="text-slate-300">{fmt(fc.empty)}</span> <span className="text-slate-500">({fc.vans.empty}대 {fc.calc.empty}TEU)</span></div>}
-                  {Object.keys(fc.luggage).length > 0 && <div><span className="text-violet-300 font-bold">수화물</span> <span className="text-slate-300">{fmt(fc.luggage)}</span></div>}
+                  {Object.keys(fc.full).length > 0 && <div><span className="text-emerald-300 font-bold">FULL</span> <span className="text-dim-100">{fmt(fc.full)}</span> <span className="text-dim-400">({fc.vans.full}대 {fc.calc.full}TEU)</span></div>}
+                  {Object.keys(fc.empty).length > 0 && <div><span className="text-sky-300 font-bold">EMPTY</span> <span className="text-dim-200">{fmt(fc.empty)}</span> <span className="text-dim-400">({fc.vans.empty}대 {fc.calc.empty}TEU)</span></div>}
+                  {Object.keys(fc.luggage).length > 0 && <div><span className="text-violet-300 font-bold">수화물</span> <span className="text-dim-200">{fmt(fc.luggage)}</span></div>}
                   {/* V9.03: 긴급/수화물 컨번호 미리보기 — 저장 시 리스트·카고플랜에 마커로 표시 */}
                   {fc.urgentCns && fc.urgentCns.length > 0 && (
                     <div><span className="text-rose-300 font-bold">▲ 긴급 {fc.urgentCns.length}대</span>{' '}
-                      <span className="text-slate-400 mono text-[10px] break-all">{fc.urgentCns.join(' ')}</span></div>
+                      <span className="text-dim-300 mono text-2xs break-all">{fc.urgentCns.join(' ')}</span></div>
                   )}
                   {fc.luggageCns && fc.luggageCns.length > 0 && (
                     <div><span className="text-violet-300 font-bold">🧳 수화물 컨 {fc.luggageCns.length}대</span>{' '}
-                      <span className="text-slate-400 mono text-[10px] break-all">
+                      <span className="text-dim-300 mono text-2xs break-all">
                         {fc.luggageCns.map(cn => fc.luggageSeals && fc.luggageSeals[cn] ? `${cn}(실 ${fc.luggageSeals[cn]})` : cn).join(' ')}
                       </span></div>
                   )}
-                  {fc.summary && <div className="text-[10px] text-slate-500">요약 원문: {fc.summary}</div>}
-                  <div className={`text-[11px] font-bold ${match ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {fc.summary && <div className="text-2xs text-dim-400">요약 원문: {fc.summary}</div>}
+                  <div className={`text-xxs font-bold ${match ? 'text-emerald-300' : 'text-rose-300'}`}>
                     {/* 1.42: 라벨을 정확히 — 종전엔 voy_d 만 찍어 "선적 예보인데 양하 항차에 저장"으로 보였다.
                         실제로는 그 항차의 **선적 칸**에 들어간다. 칸이 없으면 만든다는 것도 함께 알린다. */}
                     {match ? (() => {
@@ -1213,10 +1213,10 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
               )}
               {/* V9.15: 버튼 순서 통일 — 이 모달만 [저장][취소] 역순이라 근육기억 오작동(전면 점검 1-6) */}
               <div className="flex gap-2">
-                <button onClick={() => setShowForecast(false)} className="px-4 rounded-lg bg-slate-800 text-slate-400 text-sm" style={{ minHeight: 44 }}>취소</button>
+                <button onClick={() => setShowForecast(false)} className="px-4 rounded-pill bg-ink-800 text-dim-300 text-sm" style={{ minHeight: 44 }}>취소</button>
                 <button onClick={save} disabled={!fc || !match}
                   style={{ minHeight: 44 }}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold ${fc && match ? 'bg-orange-600 hover:bg-orange-500 text-white' : 'bg-slate-800 text-slate-600'}`}>
+                  className={`flex-1 py-2.5 rounded-pill text-sm font-bold ${fc && match ? 'bg-orange-600 hover:bg-orange-500 text-white' : 'bg-ink-800 text-dim-500'}`}>
                   예보 저장
                 </button>
               </div>
@@ -1242,21 +1242,21 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         const lCnt = computeStats(v?.loading, 'loading').ptk;
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setCompleteTarget(null)}>
-            <div className="bg-slate-900 border border-emerald-700/50 rounded-xl p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-ink-900 border border-emerald-700/50 rounded-btn p-5 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle className="w-6 h-6 text-emerald-400"/>
-                <h3 className="text-lg font-bold text-slate-100">{completeTarget.mode === 'discharge' ? '⬇ 양하 완료' : '⬆ 선적 완료'}</h3>
+                <h3 className="text-lg font-bold text-dim-100">{completeTarget.mode === 'discharge' ? '⬇ 양하 완료' : '⬆ 선적 완료'}</h3>
               </div>
-              <p className="text-sm text-slate-300 mb-1">{completeTarget.vsl} {completeTarget.voy}</p>
-              <p className="text-sm text-slate-400 mb-3">이 항차의 <b className="text-emerald-300">{completeTarget.mode === 'discharge' ? '양하 작업' : '선적 작업'}</b>을 완료로 표시합니다 (완료 시각 기록). 자료는 삭제되지 않으며, 모든 작업이 완료되면 수석검수사가 최종 확인합니다.</p>
-              <div className="bg-slate-800/60 rounded-lg p-3 mb-4 text-sm">
+              <p className="text-sm text-dim-200 mb-1">{completeTarget.vsl} {completeTarget.voy}</p>
+              <p className="text-sm text-dim-300 mb-3">이 항차의 <b className="text-emerald-300">{completeTarget.mode === 'discharge' ? '양하 작업' : '선적 작업'}</b>을 완료로 표시합니다 (완료 시각 기록). 자료는 삭제되지 않으며, 모든 작업이 완료되면 수석검수사가 최종 확인합니다.</p>
+              <div className="bg-ink-800/60 rounded-pill p-3 mb-4 text-sm">
                 {completeTarget.mode === 'discharge'
-                  ? <div className="flex justify-between"><span className="text-blue-300">양하</span><span className="font-bold text-slate-100">{dCnt}대</span></div>
-                  : <div className="flex justify-between"><span className="text-amber-300">선적</span><span className="font-bold text-slate-100">{lCnt}대</span></div>}
+                  ? <div className="flex justify-between"><span className="text-blue-300">양하</span><span className="font-bold text-dim-100">{dCnt}대</span></div>
+                  : <div className="flex justify-between"><span className="text-amber-300">선적</span><span className="font-bold text-dim-100">{lCnt}대</span></div>}
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setCompleteTarget(null)} className="flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold text-sm">취소</button>
-                <button onClick={performComplete} className="flex-1 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">{completeTarget.mode === 'discharge' ? '양하 완료 표시' : '선적 완료 표시'}</button>
+                <button onClick={() => setCompleteTarget(null)} className="flex-1 py-2.5 rounded-pill bg-ink-750 hover:bg-ink-700 text-dim-100 font-bold text-sm">취소</button>
+                <button onClick={performComplete} className="flex-1 py-2.5 rounded-pill bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm">{completeTarget.mode === 'discharge' ? '양하 완료 표시' : '선적 완료 표시'}</button>
               </div>
             </div>
           </div>
@@ -1288,18 +1288,18 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
     const L = labels[confirming];
     return (
       <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-2 sm:p-4">
-        <div className="bg-slate-900 border-2 border-red-700/50 rounded-2xl w-full sm:max-w-md overflow-hidden">
-          <div className="p-4 border-b border-slate-700 bg-red-950/40">
+        <div className="bg-ink-900 border-2 border-red-700/50 rounded-card w-full sm:max-w-md overflow-hidden">
+          <div className="p-4 border-b border-line bg-red-950/40">
             <div className="text-base font-black text-red-200">⚠️ {L.title}</div>
-            <div className="text-xs text-slate-400 mt-1">{vsl} {voy}</div>
+            <div className="text-xs text-dim-300 mt-1">{vsl} {voy}</div>
           </div>
           <div className="p-4">
-            <div className="text-sm text-slate-200 mb-4">{L.desc}</div>
-            <div className="text-xs text-slate-400">정말 진행하시겠습니까?</div>
+            <div className="text-sm text-dim-100 mb-4">{L.desc}</div>
+            <div className="text-xs text-dim-300">정말 진행하시겠습니까?</div>
           </div>
-          <div className="grid grid-cols-2 gap-2 p-3 border-t border-slate-700 bg-slate-950">
+          <div className="grid grid-cols-2 gap-2 p-3 border-t border-line bg-ink-950">
             <button onClick={() => setConfirming(null)}
-              className="py-3 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold rounded"
+              className="py-3 bg-ink-750 hover:bg-ink-700 text-dim-100 font-bold rounded"
               style={{ minHeight: 48 }}>
               ← 뒤로
             </button>
@@ -1316,24 +1316,24 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border-2 border-slate-700 rounded-2xl w-full sm:max-w-md overflow-hidden">
-        <div className="p-4 border-b border-slate-700">
-          <div className="text-base font-black text-slate-100">항차 삭제</div>
-          <div className="text-xs text-slate-400 mt-1">{vsl} {voy}</div>
+      <div className="bg-ink-900 border-2 border-line rounded-card w-full sm:max-w-md overflow-hidden">
+        <div className="p-4 border-b border-line">
+          <div className="text-base font-black text-dim-100">항차 삭제</div>
+          <div className="text-xs text-dim-300 mt-1">{vsl} {voy}</div>
         </div>
         <div className="p-3 space-y-2">
           {showSplit && (
             <>
               {/* M3.74: 색깔 통일 - 양하=blue (VoyagePage 모드 탭과 일치) */}
               <button onClick={() => setConfirming('discharge')}
-                className="w-full py-4 bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-700/40 rounded-lg text-left px-4"
+                className="w-full py-4 bg-blue-900/30 hover:bg-blue-900/50 border-2 border-blue-700/40 rounded-pill text-left px-4"
                 style={{ minHeight: 56 }}>
                 <div className="text-base font-bold text-blue-300">⬇️ 양하만 삭제</div>
                 <div className="text-xs text-blue-400/70 mt-0.5">선적은 유지됩니다</div>
               </button>
               {/* M3.74: 색깔 통일 - 선적=amber */}
               <button onClick={() => setConfirming('loading')}
-                className="w-full py-4 bg-amber-900/30 hover:bg-amber-900/50 border-2 border-amber-700/40 rounded-lg text-left px-4"
+                className="w-full py-4 bg-amber-900/30 hover:bg-amber-900/50 border-2 border-amber-700/40 rounded-pill text-left px-4"
                 style={{ minHeight: 56 }}>
                 <div className="text-base font-bold text-amber-300">⬆️ 선적만 삭제</div>
                 <div className="text-xs text-amber-400/70 mt-0.5">양하는 유지됩니다</div>
@@ -1341,16 +1341,16 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
             </>
           )}
           <button onClick={() => setConfirming('all')}
-            className="w-full py-4 bg-red-900/30 hover:bg-red-900/50 border-2 border-red-700/40 rounded-lg text-left px-4">
+            className="w-full py-4 bg-red-900/30 hover:bg-red-900/50 border-2 border-red-700/40 rounded-pill text-left px-4">
             <div className="text-base font-bold text-red-300">🗑 항차 전체 삭제</div>
             <div className="text-xs text-red-400/70 mt-0.5">
               {showSplit ? '양하 + 선적 + 정보 모두 삭제' : '모든 데이터 삭제'}
             </div>
           </button>
         </div>
-        <div className="p-3 border-t border-slate-700">
+        <div className="p-3 border-t border-line">
           <button onClick={onClose}
-            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded">
+            className="w-full py-3 bg-ink-800 hover:bg-ink-750 text-dim-200 font-bold rounded">
             취소
           </button>
         </div>
@@ -1362,7 +1362,7 @@ function DeleteVoyageModal({ target, onClose, onConfirm }) {
 function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, inspectorDone, modeDone, onUndoComplete, pilotForecast = {}, terminalWork = {}, inspector = '', laneRow = null, showRoute = false }) {
   // 2.19: 카드 하단 액션 버튼 **한 규격**. 높이 48 고정 · 한 줄 고정 · 폰 균등 / PC 전폭.
   //   ⚠ 여기에 색만 이어 붙인다. 높이·패딩·글자 크기를 개별 버튼에서 다시 주지 않는다.
-  const ACT_BTN = 'h-12 px-2.5 rounded-lg text-xs2 font-bold border flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-1 min-w-0 lg:flex-none lg:w-full';
+  const ACT_BTN = 'h-12 px-2.5 rounded-pill text-xs2 font-bold border flex items-center justify-center gap-1 whitespace-nowrap overflow-hidden flex-1 min-w-0 lg:flex-none lg:w-full';
   // V9.37-01: ⚡ 지금 처리 상태 ''|run|ok|fail|timeout
   const [zap, setZap] = useState('');
   const [zapMsg, setZapMsg] = useState('');
@@ -1448,11 +1448,11 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       <div className="lg:flex-1 lg:min-w-0">
       <button
         onClick={() => onOpen()}
-        className="w-full px-3 py-2.5 hover:bg-slate-800/50 flex items-center justify-between gap-2"
+        className="w-full px-3 py-2.5 hover:bg-ink-750/50 flex items-center justify-between gap-2"
       >
         <div className="text-left min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-black text-base sm:text-sm text-slate-100 truncate">{voyage.info.vsl}</span>
+            <span className="font-black text-base sm:text-sm text-dim-100 truncate">{voyage.info.vsl}</span>
             {/* M5.82: 부두 배지 */}
             {pier === 'PCTC' && (
               <span className="text-sm2 sm:text-xxs bg-blue-900/60 border border-blue-700/50 text-blue-200 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded font-bold leading-none">
@@ -1465,7 +1465,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               </span>
             )}
             {!pier && berth && (
-              <span className="text-sm2 sm:text-xxs bg-slate-700 text-slate-400 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded leading-none">
+              <span className="text-sm2 sm:text-xxs bg-ink-750 text-dim-300 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded leading-none">
                 📍 {berth}
               </span>
             )}
@@ -1492,8 +1492,8 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                   || `선적 잔여 ${String(_b.reason).replace('remain', '')}개 이하 (기준 ${DEPART_REMAIN_MAX}개 · 갱당 시간당 20개 ≈ 1시간분)`;
                 return (
                   <span title={`출항 표시 이유: ${_why}`}
-                    className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${dep < Date.now()
-                    ? 'bg-slate-800 border-slate-600 text-slate-400'
+                    className={`text-xxs px-1.5 py-0.5 rounded font-bold border ${dep < Date.now()
+                    ? 'bg-ink-800 border-line-strong text-dim-300'
                     : 'bg-amber-900/60 border-amber-700/50 text-amber-200'}`}>
                     🚢 출항 {day} {_hm(dep)} {src}
                     {late ? <span className="text-red-300 ml-1">· 지연</span> : ''}
@@ -1539,8 +1539,8 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               const past = etd && etd < Date.now();
               return (
                 <span title={srcTip || undefined}
-                  className={`text-[11px] px-1.5 py-0.5 rounded font-bold border ${past
-                  ? 'bg-slate-800 border-slate-600 text-slate-400'
+                  className={`text-xxs px-1.5 py-0.5 rounded font-bold border ${past
+                  ? 'bg-ink-800 border-line-strong text-dim-300'
                   : 'bg-sky-900/60 border-sky-700/50 text-sky-200'}`}>
                   📅 {body}{srcMark ? ` ${srcMark}` : ''}
                 </span>
@@ -1554,24 +1554,24 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               const d = new Date(ms), p2 = (n) => String(n).padStart(2, '0');
               return (
                 <span title="PORT-MIS 세관 신고 기준 항 도착시각입니다. 도선 시작·작업시작과는 다릅니다."
-                  className="text-[11px] px-1.5 py-0.5 rounded font-bold border bg-slate-800/70 border-slate-600 text-slate-300">
+                  className="text-xxs px-1.5 py-0.5 rounded font-bold border bg-ink-800/70 border-line-strong text-dim-200">
                   🚢신고도착 {p2(d.getHours())}:{p2(d.getMinutes())}
                 </span>
               );
             })()}
             {/* V8.32: 수집기 자동 등록 항차 표시 — 수집중(가등록)/확정. V9.06: expected는 위 예정 배지가 대신. */}
             {voyage.info?.autoRegistered && voyage.info?.autoStatus !== 'confirmed' && voyage.info?.autoStatus !== 'expected' && (
-              <span className="text-[11px] bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-xxs bg-amber-900/60 border border-amber-700/50 text-amber-200 px-1.5 py-0.5 rounded font-bold">
                 🤖 자동(수집중)
               </span>
             )}
             {voyage.info?.autoRegistered && voyage.info?.autoStatus === 'confirmed' && (
-              <span className="text-[11px] bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold">
+              <span className="text-xxs bg-emerald-900/60 border border-emerald-700/50 text-emerald-200 px-1.5 py-0.5 rounded font-bold">
                 🤖 자동(확정)
               </span>
             )}
           </div>
-          <div className="text-[11px] text-slate-500 truncate">
+          <div className="text-xxs text-dim-400 truncate">
             {/* M6.45: voy_d / voy_l 다르면 둘 다 표시 (예: 0523E/0523W) */}
             {(() => {
               const d = voyage.info.voy_d, l = voyage.info.voy_l, v = voyage.info.voy;
@@ -1582,10 +1582,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           </div>
           {/* ── 2.09 (검수사 지시 2026-08-23 «각선박의 자세히 항로 약자와 항로 전체를 홈화면 각선박에 등록») ── */}
           {laneRow && laneRow.lane && (
-            <div className="text-[11px] leading-snug">
-              <span className="text-slate-500">항로 </span>
+            <div className="text-xxs leading-snug">
+              <span className="text-dim-400">항로 </span>
               <span className="font-bold text-cyan-300">{laneRow.lane}</span>
-              {laneRow.name ? <span className="text-slate-500"> · {laneRow.name}</span> : null}
+              {laneRow.name ? <span className="text-dim-400"> · {laneRow.name}</span> : null}
               {showRoute && laneRow.ports.length > 0 && (() => {
                 /* ★ 2.24 (검수사 신고 2026-08-23) — «평택 다음»은 **이번 항차 화물이 정본이다.**
                    검수사: *«KKAK 제가 알기론 인천인듯 한데 앱은 다른곳을 잡습니다»* — 맞았다.
@@ -1603,10 +1603,10 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 const rot = pi >= 0 ? normPortCode(laneRow.ports[(pi + 1) % laneRow.ports.length]) : '';
                 const pick = (nx && nx.port) || rot;
                 return (
-                  <div className="mt-0.5 text-[10px] text-slate-400 break-words">
+                  <div className="mt-0.5 text-2xs text-dim-300 break-words">
                     {laneRow.ports.map((pt, i) => (
                       <span key={`${pt}-${i}`}>
-                        {i > 0 && <span className="text-slate-600"> › </span>}
+                        {i > 0 && <span className="text-dim-500"> › </span>}
                         {isPyeongtaekPort(pt)
                           ? <span className="text-emerald-300 font-bold">평택</span>
                           : (pick && normPortCode(pt) === pick)
@@ -1616,15 +1616,15 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                     ))}
                     {pick && <span className="text-amber-400/70"> ← 평택 다음</span>}
                     {/* 근거를 같이 적는다 — 검수사 확정 «화물 최다 + 근거 표기». 조용히 단정하지 않는다. */}
-                    {nx && nx.basis === 'portmis' && <span className="text-slate-500"> · PORT-MIS 차항지</span>}
+                    {nx && nx.basis === 'portmis' && <span className="text-dim-400"> · PORT-MIS 차항지</span>}
                     {nx && nx.basis === 'cargo' && (
-                      <span className="text-slate-500"> · 남는 화물 {nx.cnt}대{nx.hdrDisagree ? ` (자료 헤더는 ${nx.hdr})` : ''}</span>
+                      <span className="text-dim-400"> · 남는 화물 {nx.cnt}대{nx.hdrDisagree ? ` (자료 헤더는 ${nx.hdr})` : ''}</span>
                     )}
-                    {nx && nx.basis === 'header' && <span className="text-slate-500"> · 자료 헤더</span>}
+                    {nx && nx.basis === 'header' && <span className="text-dim-400"> · 자료 헤더</span>}
                     {(!nx || nx.basis === 'unsure') && (
-                      <span className="text-slate-500"> · 항로표 기준{nx ? ` (화물로는 ${nx.cargo} ${nx.cnt} · ${nx.second} ${nx.secondCnt} — 못 가림)` : ''}</span>
+                      <span className="text-dim-400"> · 항로표 기준{nx ? ` (화물로는 ${nx.cargo} ${nx.cnt} · ${nx.second} ${nx.secondCnt} — 못 가림)` : ''}</span>
                     )}
-                    {laneRow.src ? <span className="text-slate-600"> · {laneRow.src}</span> : null}
+                    {laneRow.src ? <span className="text-dim-500"> · {laneRow.src}</span> : null}
                   </div>
                 );
               })()}
@@ -1642,7 +1642,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 작업일시도 변경될 수 있으니 변경 시점으로 표기."
                 작업일시(_etaMs/_etdMs)는 선석배정 > 도선 > PORT-MIS 순으로 **매 렌더 다시 고르므로**
                 일정이 바뀌면 저절로 바뀐 값이 나온다(V9.35). 별도 보관이 필요 없다. */}
-          <div className="text-[11px] text-slate-500 mt-0.5">
+          <div className="text-xxs text-dim-400 mt-0.5">
             {(() => {
               const fmt = (ms, withDate = true) => {
                 if (!ms) return '';
@@ -1653,7 +1653,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
               const eta = voyage._etaMs, etd = voyage._etdMs;
               const sameDay = eta && etd && new Date(eta).toDateString() === new Date(etd).toDateString();
               const work = eta && etd ? `${fmt(eta)} ~ ${fmt(etd, !sameDay)}` : (eta ? fmt(eta) : (etd ? `~ ${fmt(etd)}` : ''));
-              return <>🗓 작업 {work || <span className="text-slate-600">일정 미상</span>}</>;
+              return <>🗓 작업 {work || <span className="text-dim-500">일정 미상</span>}</>;
             })()}
             {(() => {
               // 자료 상태 — 확정 > 수정본 > 갱신일시 > 자료 없음.
@@ -1674,8 +1674,8 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                 return <span className="ml-1 text-sky-300">· ⏳ {voyage._waitFor}자료 대기중{at ? ` · 갱신 ${fmt2(at)}` : ''}</span>;
               }
               if (at) return <span className="ml-1">· 갱신 {fmt2(at)}</span>;
-              if (voyage._hasData) return <span className="ml-1 text-slate-600">· 갱신 —</span>;
-              return <span className="ml-1 text-slate-600">· 자료 없음</span>;
+              if (voyage._hasData) return <span className="ml-1 text-dim-500">· 갱신 —</span>;
+              return <span className="ml-1 text-dim-500">· 자료 없음</span>;
             })()}
             {(() => {
               // V8.01: '곧 자동삭제'는 실제 삭제 기준(마지막 작업 활동)과 일치시킨다. 이 경고만 남긴다.
@@ -1688,7 +1688,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             })()}
           </div>
         </div>
-        <ChevronRight className="w-5 h-5 text-slate-600 flex-shrink-0"/>
+        <ChevronRight className="w-5 h-5 text-dim-500 flex-shrink-0"/>
       </button>
 
       <div className="px-3 pb-3 space-y-2">
@@ -1719,7 +1719,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             const nUrg = (f.urgentCns || []).length, nLug = (f.luggageCns || []).length;
             if (!nUrg && !nLug) return null;
             return (
-              <div className="flex gap-2 flex-wrap text-[10px] font-bold">
+              <div className="flex gap-2 flex-wrap text-2xs font-bold">
                 {nUrg > 0 && <span className="text-rose-300">▲ 긴급 {nUrg}대</span>}
                 {nLug > 0 && <span className="text-violet-300">🧳 수화물 컨 {nLug}대</span>}
               </div>
@@ -1727,17 +1727,17 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
           }
           if (hasReal) return null;
           return (
-            <div className="rounded-lg border border-dashed border-orange-600/50 bg-orange-950/30 px-2.5 py-1.5">
-              <div className="text-[11px] font-bold text-orange-300">
+            <div className="rounded-pill border border-dashed border-orange-600/50 bg-orange-950/30 px-2.5 py-1.5">
+              <div className="text-xxs font-bold text-orange-300">
                 📋 {isL ? '선적' : '양하'} 예보 {f.voy || ''} · {tot}TEU
                 <span className="font-normal text-orange-400/60 ml-1">(EDI 도착 시 자동 대체)</span>
               </div>
-              {f.full && Object.keys(f.full).length > 0 && <div className="text-[10px] text-slate-300">FULL {fmt(f.full)}</div>}
-              {f.empty && Object.keys(f.empty).length > 0 && <div className="text-[10px] text-slate-400">EMPTY {fmt(f.empty)}</div>}
-              {f.luggage && Object.keys(f.luggage).length > 0 && <div className="text-[10px] text-slate-500">수화물 {fmt(f.luggage)}</div>}
+              {f.full && Object.keys(f.full).length > 0 && <div className="text-2xs text-dim-200">FULL {fmt(f.full)}</div>}
+              {f.empty && Object.keys(f.empty).length > 0 && <div className="text-2xs text-dim-300">EMPTY {fmt(f.empty)}</div>}
+              {f.luggage && Object.keys(f.luggage).length > 0 && <div className="text-2xs text-dim-400">수화물 {fmt(f.luggage)}</div>}
               {/* V9.03: 긴급/수화물 컨번호 — EDI 도착 후엔 리스트·카고플랜에 ▲·보라 마커로 표시됨 */}
-              {f.urgentCns && f.urgentCns.length > 0 && <div className="text-[10px] text-rose-300 font-bold">▲ 긴급 {f.urgentCns.length}대</div>}
-              {f.luggageCns && f.luggageCns.length > 0 && <div className="text-[10px] text-violet-300 font-bold">🧳 수화물 컨 {f.luggageCns.length}대</div>}
+              {f.urgentCns && f.urgentCns.length > 0 && <div className="text-2xs text-rose-300 font-bold">▲ 긴급 {f.urgentCns.length}대</div>}
+              {f.luggageCns && f.luggageCns.length > 0 && <div className="text-2xs text-violet-300 font-bold">🧳 수화물 컨 {f.luggageCns.length}대</div>}
             </div>
           );
         })()}
@@ -1745,24 +1745,24 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
       </div>{/* 2.15: 좌측 정보 영역 닫기 */}
 
       {(activeInspectors.length > 0 || onDelete) && (
-        <div className="px-3 pb-2 flex items-center justify-between gap-2 border-t border-slate-800 pt-2
+        <div className="px-3 pb-2 flex items-center justify-between gap-2 border-t border-line pt-2
                         lg:w-[280px] lg:shrink-0 lg:flex-col lg:items-stretch lg:justify-between
                         lg:border-t-0 lg:border-l lg:border-line lg:bg-ink-900 lg:p-5 lg:gap-3
                         lg:hover:bg-[#131F36] lg:transition-colors">
           {/* 상단 — 상태 */}
-          <div className="row-1 text-2xs text-slate-500 flex-1 min-w-0 lg:flex-none">
+          <div className="row-1 text-2xs text-dim-400 flex-1 min-w-0 lg:flex-none">
             {activeInspectors.length > 0 ? (
               <>
                 <Users className="ico-s text-emerald-400"/>
                 <span className="text-emerald-300 font-bold">●</span>
                 <span className="truncate">{activeInspectors.map(a => a.name).join(', ')} 작업중</span>
               </>
-            ) : <span className="text-slate-600">대기 중</span>}
+            ) : <span className="text-dim-500">대기 중</span>}
           </div>
           {/* 중단 — PC 전용 큰 숫자. ⚠ 좌측에 이미 «양하 271 · 매칭 271» 이 있으므로 같은 수를 또 쓰지 않는다.
               현장에서 필요한 것은 «남은 수» 다 — 작업이 진행되면 좌측 총계와 갈라진다. */}
           {(remD != null || remL != null) && (
-            <div className="hidden lg:flex items-end gap-3 border-y border-slate-800/70 py-2.5">
+            <div className="hidden lg:flex items-end gap-3 border-y border-line/70 py-2.5">
               {remD != null && (
                 <div className="min-w-0">
                   <div className="text-3xs text-blue-400/70 font-bold">양하 남음</div>
@@ -1816,7 +1816,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
                     }
                   }}
                   className={`${ACT_BTN} ${busy
-                    ? 'bg-slate-800 border-slate-700 text-slate-500'
+                    ? 'bg-ink-800 border-line text-dim-400'
                     : zap === 'ok' ? 'bg-emerald-900/40 border-emerald-700/50 text-emerald-300'
                     : zap === 'fail' || zap === 'timeout' ? 'bg-red-900/40 border-red-700/50 text-red-300'
                     : 'bg-amber-900/30 hover:bg-amber-800/50 text-amber-300 border-amber-800/40'}`}
@@ -1826,7 +1826,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             })()}
             {/* V7.90: 완료 분리 — 양하/선적 각각 완료 표시 (작업시간 구분 + 콘앱 분리작업 자동 판정 근거) */}
             {onComplete && inspectorDone && (
-              <span className="h-12 flex items-center justify-center gap-1 px-2.5 rounded-lg bg-amber-900/40 text-amber-300 text-[11px] font-bold border border-amber-700/40 whitespace-nowrap flex-1 min-w-0 overflow-hidden lg:flex-none lg:w-full" title="모든 작업 완료 — 수석검수사 최종 확인 대기 중">
+              <span className="h-12 flex items-center justify-center gap-1 px-2.5 rounded-pill bg-amber-900/40 text-amber-300 text-xxs font-bold border border-amber-700/40 whitespace-nowrap flex-1 min-w-0 overflow-hidden lg:flex-none lg:w-full" title="모든 작업 완료 — 수석검수사 최종 확인 대기 중">
                 <CheckCircle className="ico-s"/>검수 완료 · 수석 대기
               </span>
             )}
@@ -1864,7 +1864,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
             {/* V9.15: 삭제는 완료 버튼과 오터치되지 않게 간격 + 40px 타깃 */}
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="p-2 ml-2 rounded-lg hover:bg-red-900/30 text-slate-600 hover:text-red-400 border border-transparent hover:border-red-800/40"
+              className="p-2 ml-2 rounded-pill hover:bg-red-900/30 text-dim-500 hover:text-red-400 border border-transparent hover:border-red-800/40"
               style={{ minWidth: 40, minHeight: 40 }}
               title="항차 삭제 (기록 없이 제거)"
             >
@@ -1889,7 +1889,7 @@ function MissingSideNote({ label, qty }) {
   const n = Number(qty) || 0;
   if (has && n > 0) {
     return (
-      <div className="text-[11px] text-amber-300"
+      <div className="text-xxs text-amber-300"
         title={`배정목록에 ${label} ${n} 이 잡혀 있는데 자료(EDI·리스트)가 아직 없습니다 — 자료를 재촉할 대상입니다.`}>
         ⏳ {label} 자료 미도착 — 배정 {label} {n}
       </div>
@@ -1897,14 +1897,14 @@ function MissingSideNote({ label, qty }) {
   }
   if (has) {
     return (
-      <div className="text-[11px] text-slate-500"
+      <div className="text-xxs text-dim-400"
         title={`배정목록에도 ${label} 0 — 이 항차는 ${label} 작업이 원래 없는 배입니다. 기다릴 자료가 아닙니다.`}>
         {label} 없음 — 배정에도 0 (정상)
       </div>
     );
   }
   return (
-    <div className="text-[11px] text-slate-600"
+    <div className="text-xxs text-dim-500"
       title={`배정표에 수량 정보가 없는 부두(PNCT 등)라 자료 대기인지 ${label} 없음인지 판정할 수 없습니다.`}>
       {label} 자료 없음 · 배정 수량 미상
     </div>
@@ -1932,31 +1932,31 @@ function SectionBar({ label, color, stats, onClick }) {
           /* V9.37-02: 프리스토우 플랜 자리(TMPZ) — 컨번호 없는 __SLOT_ 이라 매칭·누락이 성립하지 않는다.
              자리 수(플랜)와 리스트 수(NOLIST 등)를 나란히. 사용자 확답 2026-07-11 ④. */
           <>
-            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.planSlots}</span><span className="text-slate-500">자리</span></span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400">리스트 <span className={`${stats.recCount > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.recCount}</span></span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/40 text-[10px] font-black" title="컨펌전 플랜 — 선사가 선적 EDI 대신 프리스토우 플랜(격자)만 보내는 선박. 자리마다 규격은 정해져 있고 컨번호만 배정하면 되는 상태입니다(컨번호는 NOLIST 담당). 일항사가 컨펌하면 규격 자리는 그대로지만 개별 컨의 위치는 바뀔 수 있습니다 — 확정 위치가 아닙니다. 자리와 리스트는 서로 다른 것을 세므로 매칭·누락을 표시하지 않습니다.">컨펌전</span>
+            <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.planSlots}</span><span className="text-dim-400">자리</span></span>
+            <span className="text-dim-500">·</span>
+            <span className="text-dim-300">리스트 <span className={`${stats.recCount > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.recCount}</span></span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-indigo-900/60 text-indigo-200 border border-indigo-700/40 text-2xs font-black" title="컨펌전 플랜 — 선사가 선적 EDI 대신 프리스토우 플랜(격자)만 보내는 선박. 자리마다 규격은 정해져 있고 컨번호만 배정하면 되는 상태입니다(컨번호는 NOLIST 담당). 일항사가 컨펌하면 규격 자리는 그대로지만 개별 컨의 위치는 바뀔 수 있습니다 — 확정 위치가 아닙니다. 자리와 리스트는 서로 다른 것을 세므로 매칭·누락을 표시하지 않습니다.">컨펌전</span>
           </>
         ) : stats.forecastEdi ? (
           <>
-            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-500">예상EDI {stats.ptk}</span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-[10px] font-black" title="EDI 컨번호가 리스트(실데이터)와 하나도 일치하지 않음 — 예상(프리스토우) EDI로 판단. 평택 개수는 리스트 기준. 확정 EDI가 오면 자동으로 매칭·누락 표기로 전환됩니다.">예상 EDI · 확정 대기</span>
+            <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
+            <span className="text-dim-500">·</span>
+            <span className="text-dim-400">예상EDI {stats.ptk}</span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-2xs font-black" title="EDI 컨번호가 리스트(실데이터)와 하나도 일치하지 않음 — 예상(프리스토우) EDI로 판단. 평택 개수는 리스트 기준. 확정 EDI가 오면 자동으로 매칭·누락 표기로 전환됩니다.">예상 EDI · 확정 대기</span>
           </>
         ) : stats.listOnly ? (
           /* V8.91: 리스트만(EDI 없음) — 평택 = 리스트 개수(실데이터 기준), MAMP 628S 사건 */
           <>
-            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-700/40 text-[10px] font-black" title="EDI가 아직 없음 — 수집된 리스트(실데이터) 기준 개수. EDI가 오면 매칭·누락 표기로 전환됩니다.">리스트만 · EDI 대기</span>
+            <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-sky-900/60 text-sky-200 border border-sky-700/40 text-2xs font-black" title="EDI가 아직 없음 — 수집된 리스트(실데이터) 기준 개수. EDI가 오면 매칭·누락 표기로 전환됩니다.">리스트만 · EDI 대기</span>
           </>
         ) : stats.partialEdi ? (
           /* V8.91: 부분 EDI(리스트 > EDI) — 평택 = 리스트 개수, EDI·매칭은 참고, TNJP 26349W 사건 */
           <>
-            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-500">매칭 {stats.matched}</span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-[10px] font-black" title="EDI가 리스트 일부(한 선사분 등)만 담은 부분본 — 평택 개수는 리스트(실데이터) 기준. 전체 EDI가 오면 매칭·누락 표기로 전환됩니다.">부분 EDI {stats.ptk}</span>
+            <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
+            <span className="text-dim-500">·</span>
+            <span className="text-dim-400">매칭 {stats.matched}</span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-orange-900/60 text-orange-200 border border-orange-700/40 text-2xs font-black" title="EDI가 리스트 일부(한 선사분 등)만 담은 부분본 — 평택 개수는 리스트(실데이터) 기준. 전체 EDI가 오면 매칭·누락 표기로 전환됩니다.">부분 EDI {stats.ptk}</span>
           </>
         ) : stats.luggage > 0 ? (
           /* TallyOne 1.52: LUGGAGE(여객 수하물) 만큼 차이가 나는 것은 **부분본이 아니다.**
@@ -1964,20 +1964,20 @@ function SectionBar({ label, color, stats, onClick }) {
              평택은 리스트 기준(수하물 포함), 매칭은 EDI 기준, 차이는 LUG 로 따로 적는다.
              ⚠ LUGGAGE 는 **양하 개수에 포함되지 않는다** — 컨RORO·벌크와 반대다. */
           <>
-            <span className="text-slate-400">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400">매칭 <span className="text-emerald-300 font-bold">{stats.matched}</span></span>
-            <span className="ml-1 px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 text-[10px] font-black"
+            <span className="text-dim-300">평택 <span className="text-emerald-300 font-bold">{stats.recCount}</span></span>
+            <span className="text-dim-500">·</span>
+            <span className="text-dim-300">매칭 <span className="text-emerald-300 font-bold">{stats.matched}</span></span>
+            <span className="ml-1 px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 text-2xs font-black"
               title="여객 수하물 컨테이너 — EDI로 오지 않는 것이 정상입니다. 자료가 덜 온 것이 아니며, 양하 개수에는 포함되지 않습니다.">LUG {stats.luggage}</span>
           </>
         ) : (
           <>
-            <span className="text-slate-400">평택 <span className={`${stats.matched > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.ptk}</span></span>
-            <span className="text-slate-600">·</span>
-            <span className="text-slate-400">매칭 {stats.matched > 0 ? <span className="text-emerald-300 font-bold">{stats.matched}</span> : stats.matched}</span>
+            <span className="text-dim-300">평택 <span className={`${stats.matched > 0 ? 'text-emerald-300' : 'text-amber-300'} font-bold`}>{stats.ptk}</span></span>
+            <span className="text-dim-500">·</span>
+            <span className="text-dim-300">매칭 {stats.matched > 0 ? <span className="text-emerald-300 font-bold">{stats.matched}</span> : stats.matched}</span>
             {/* 1.51: LUGGAGE(여객 수하물) — EDI로 오지 않는 것이 정상이므로 부족이 아니다. 따로 센다. */}
             {stats.luggage > 0 && (
-              <span className="ml-1 px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 text-[10px] font-black"
+              <span className="ml-1 px-1 py-0.5 rounded bg-teal-900/60 text-teal-200 border border-teal-700/40 text-2xs font-black"
                 title="여객 수하물 컨테이너 — EDI로 오지 않는 것이 정상입니다. 리스트에는 있고 EDI에는 없지만 자료가 덜 온 것이 아닙니다. 선적 요약에서도 FULL·EMPTY와 섞지 않고 LUG 로 따로 셉니다.">LUGGAGE {stats.luggage}</span>
             )}
           </>
@@ -1987,7 +1987,7 @@ function SectionBar({ label, color, stats, onClick }) {
             "실+E확정=총"으로 터미널 집계와 바로 대조되게 한다. */}
         {(stats.dummyE > 0 || stats.emptyConfirmed > 0) && (
           <>
-            <span className="text-slate-600">·</span>
+            <span className="text-dim-500">·</span>
             <span className="text-purple-300" title="실 = EDI 실번호. E확정 = 선사가 엑셀로 준 엠티 실번호(수집기 기록). 총 = 실 + E확정 — 터미널 선적 집계와 대조용. 가상E는 EDI의 엠티 예약자리(예상치)라 확정이 오면 표시하지 않는다 — 예상과 확정 수가 달라도 부족이 아니다.">
               실 {stats.ptk - stats.dummyE}
               {/* V9.08(2026-07-26, 사용자 확정): 가상E는 '예상치'다. 확정이 들어오면 그것이 진실이고
@@ -2009,8 +2009,8 @@ function SectionBar({ label, color, stats, onClick }) {
           const gap = (Number(app) || 0) - stats.planQty;
           return (
             <>
-              <span className="text-slate-600">·</span>
-              <span className={gap === 0 ? 'text-slate-500' : 'text-amber-300 font-bold'}
+              <span className="text-dim-500">·</span>
+              <span className={gap === 0 ? 'text-dim-400' : 'text-amber-300 font-bold'}
                 title={gap === 0
                   ? `터미널 배정 ${stats.planQty}대 = 앱 ${app}대 — 일치합니다.`
                   : `터미널 배정 ${stats.planQty}대 · 앱 ${app}대 (${gap > 0 ? '앱이 ' + gap + '대 많음' : '앱이 ' + (-gap) + '대 적음'}). 배정 수량은 예정치가 섞일 수 있어 참고치입니다 — 확정(작업중·완료) 전에는 어긋나는 것이 정상입니다.`}>
@@ -2021,25 +2021,25 @@ function SectionBar({ label, color, stats, onClick }) {
         })()}
         {stats.shiftCount > 0 && (
           <>
-            <span className="text-slate-600">·</span>
+            <span className="text-dim-500">·</span>
             <span className="text-sky-300 font-bold" title="쉬프팅(재적부) — 실제로 옮기는 통과화물(동형 공컨 서류교환 제외). 모브는 실제 완료로 센다 — 내림(양하) 1 + 실음(선적) 1 = 2모브(2 TIME). 내림만 했으면 1모브(1 TIME). 아직 작업 전이면 예정 ×2. 카고플랜의 파란 ◆.">쉬프팅 {stats.shiftCount} ({(stats.shiftMoves || 0) > 0 ? `${stats.shiftMoves}모브` : `예정 ${stats.shiftCount * 2}모브`})</span>
           </>
         )}
         {stats.virtualFromList && (
-          <span className="ml-1 px-1 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/40 text-[10px] font-black" title="선적 EDI 미도착 — 선적 리스트로 채운 가상 카운트(베이 없음). 실 EDI 도착 시 자동 대체.">가상/리스트</span>
+          <span className="ml-1 px-1 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/40 text-2xs font-black" title="선적 EDI 미도착 — 선적 리스트로 채운 가상 카운트(베이 없음). 실 EDI 도착 시 자동 대체.">가상/리스트</span>
         )}
         {!stats.forecastEdi && !stats.listOnly && !stats.partialEdi && stats.missing > 0 && (
           <>
-            <span className="text-slate-600">·</span>
+            <span className="text-dim-500">·</span>
             <span className="text-red-300">누락 {stats.missing}</span>
           </>
         )}
       </div>
       {/* 2.15 시안: 폰은 «진행바 2px → 6px 두껍게», PC 는 «얇은 4px». */}
-      <div className="bg-slate-800 rounded-full h-1.5 sm:h-1 overflow-hidden">
+      <div className="bg-ink-800 rounded-full h-1.5 sm:h-1 overflow-hidden">
         <div className={`${colorClasses.bg} h-full transition-all`} style={{ width: `${pct}%` }}/>
       </div>
-      <div className="flex items-center justify-between text-[10px] mt-0.5 text-slate-500">
+      <div className="flex items-center justify-between text-2xs mt-0.5 text-dim-400">
         <span>완료 {stats.done}/{stats.total} ({pct}%)</span>
       </div>
     </div>
@@ -2147,8 +2147,8 @@ function computeStats(section, mode, info, voyageKey) {
 function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }) {
   const isDis = mode === 'discharge';
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-4 w-full max-w-sm">
+    <div className="fixed inset-0 z-50 bg-ink-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-ink-900 border border-line rounded-btn p-4 w-full max-w-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="font-bold text-lg flex items-center gap-2">
             {isDis
@@ -2159,24 +2159,24 @@ function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }
 
         <div className="space-y-3 mb-4">
           <div>
-            <label className="text-[11px] text-slate-400 font-bold block mb-1">선박명 (VSL)</label>
+            <label className="text-xxs text-dim-300 font-bold block mb-1">선박명 (VSL)</label>
             <input
               type="text"
               value={vsl}
               onChange={e => setVsl(e.target.value)}
               placeholder="예: XIN TAI PING"
-              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm uppercase mono focus:outline-none focus:border-blue-500"
+              className="w-full bg-ink-800 border border-line rounded px-3 py-2 text-sm uppercase mono focus:outline-none focus:border-blue-500"
               autoFocus
             />
           </div>
           <div>
-            <label className="text-[11px] text-slate-400 font-bold block mb-1">항차 (VOY)</label>
+            <label className="text-xxs text-dim-300 font-bold block mb-1">항차 (VOY)</label>
             <input
               type="text"
               value={voy}
               onChange={e => setVoy(e.target.value)}
               placeholder="예: 0521W"
-              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm uppercase mono focus:outline-none focus:border-blue-500"
+              className="w-full bg-ink-800 border border-line rounded px-3 py-2 text-sm uppercase mono focus:outline-none focus:border-blue-500"
               onKeyDown={e => e.key === 'Enter' && onCreate()}
             />
           </div>
@@ -2185,7 +2185,7 @@ function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }
         <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm font-bold text-slate-300"
+            className="flex-1 px-3 py-2 bg-ink-800 hover:bg-ink-750 rounded text-sm font-bold text-dim-200"
           >
             취소
           </button>
@@ -2194,15 +2194,15 @@ function CreateVoyageModal({ mode, vsl, voy, setVsl, setVoy, onClose, onCreate }
             disabled={!vsl.trim() || !voy.trim()}
             className={`flex-1 px-3 py-2 rounded text-sm font-bold ${
               isDis
-                ? 'bg-blue-700 hover:bg-blue-600 disabled:bg-slate-700 text-blue-100'
-                : 'bg-amber-700 hover:bg-amber-600 disabled:bg-slate-700 text-amber-100'
-            } disabled:text-slate-500`}
+                ? 'bg-blue-700 hover:bg-blue-600 disabled:bg-ink-750 text-blue-100'
+                : 'bg-amber-700 hover:bg-amber-600 disabled:bg-ink-750 text-amber-100'
+            } disabled:text-dim-400`}
           >
             만들기 + 자료 업로드 →
           </button>
         </div>
 
-        <div className="mt-3 text-[10px] text-slate-500 text-center">
+        <div className="mt-3 text-2xs text-dim-400 text-center">
           만든 후 EDI/엑셀 자료를 업로드합니다
         </div>
       </div>

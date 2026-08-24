@@ -131,11 +131,11 @@ export default function PortMisCaptureModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center">
-      <div className="bg-slate-900 w-full sm:max-w-2xl sm:rounded-xl rounded-t-2xl max-h-[95vh] overflow-y-auto flex flex-col">
+      <div className="bg-ink-900 w-full sm:max-w-2xl sm:rounded-btn rounded-t-2xl max-h-[95vh] overflow-y-auto flex flex-col">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700 sticky top-0 bg-slate-900 z-10">
+        <div className="flex items-center justify-between p-4 border-b border-line sticky top-0 bg-ink-900 z-10">
           <h2 className="text-lg font-bold text-cyan-300">📸 PORT-MIS 캡처 업로드</h2>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg">
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -144,7 +144,7 @@ export default function PortMisCaptureModal({ onClose }) {
           {/* 단계 1: 파일 선택 */}
           {step === 'pick' && (
             <div>
-              <p className="text-slate-300 text-sm mb-3">
+              <p className="text-dim-200 text-sm mb-3">
                 PORT-MIS에서 <strong className="text-amber-300">엑셀 다운로드</strong> 또는 <strong className="text-cyan-300">화면 캡처</strong>를 올려주세요.
                 자동으로 호출부호/선박명/입출항/<b className="text-emerald-300">부두(PCTC/PNCT)</b>를 추출해 모든 검수원과 공유합니다.
               </p>
@@ -155,29 +155,29 @@ export default function PortMisCaptureModal({ onClose }) {
                 </div>
               )}
               {/* M5.82: 엑셀 업로드 (권장 — Gemini 안 부름, 100% 정확) */}
-              <label className="block bg-emerald-600 hover:bg-emerald-700 text-white text-center font-bold py-4 rounded-lg cursor-pointer flex items-center justify-center gap-2 mb-2">
+              <label className="block bg-emerald-600 hover:bg-emerald-700 text-white text-center font-bold py-4 rounded-pill cursor-pointer flex items-center justify-center gap-2 mb-2">
                 <FileSpreadsheet className="w-5 h-5" />
                 📊 엑셀 업로드 (권장)
                 <input type="file" accept=".xlsx,.xls" onChange={handleExcelFile} className="hidden" />
               </label>
-              <p className="text-[10px] text-emerald-400/80 mb-3 text-center">
+              <p className="text-2xs text-emerald-400/80 mb-3 text-center">
                 ⭐ PORT-MIS 다운로드 엑셀 → 100% 정확 + 부두 자동 추출
               </p>
-              <div className="text-center text-xs text-slate-500 mb-2">또는</div>
-              <label className="block bg-cyan-600 hover:bg-cyan-700 text-white text-center font-bold py-4 rounded-lg cursor-pointer flex items-center justify-center gap-2">
+              <div className="text-center text-xs text-dim-400 mb-2">또는</div>
+              <label className="block bg-cyan-600 hover:bg-cyan-700 text-white text-center font-bold py-4 rounded-pill cursor-pointer flex items-center justify-center gap-2">
                 <Camera className="w-5 h-5" />
                 📷 화면 캡처 (AI OCR)
                 <input type="file" accept="image/*" onChange={handleFile} className="hidden" />{/* TallyOne 1.2: capture 제거 — 갤러리의 캡처 이미지 선택 가능 */}
               </label>
-              <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+              <p className="text-xs text-dim-400 mt-3 leading-relaxed">
                 💡 팁: 평택항 + 입출항 기간으로 검색 후 <b>엑셀 다운로드</b>가 가장 정확합니다.
                 캡처는 빠르지만 작은 글씨 인식 어려울 수 있음.
               </p>
 
               {/* M5.84: 현재 Firebase에 저장된 PORT-MIS 데이터 보기 */}
-              <div className="text-center mt-4 pt-3 border-t border-slate-700">
+              <div className="text-center mt-4 pt-3 border-t border-line">
                 <button onClick={() => setStep('view')}
-                  className="text-xs text-slate-400 hover:text-amber-300 underline">
+                  className="text-xs text-dim-300 hover:text-amber-300 underline">
                   📋 현재 Firebase에 저장된 PORT-MIS 데이터 보기 (진단)
                 </button>
               </div>
@@ -190,17 +190,17 @@ export default function PortMisCaptureModal({ onClose }) {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-amber-300 font-bold">📋 현재 Firebase 데이터</p>
-                  <p className="text-xs text-slate-500">총 {Object.keys(currentData || {}).length}건 등록</p>
+                  <p className="text-xs text-dim-400">총 {Object.keys(currentData || {}).length}건 등록</p>
                 </div>
                 <button onClick={() => setStep('pick')}
-                  className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded">
+                  className="text-xs bg-ink-750 hover:bg-ink-700 text-dim-200 px-3 py-1.5 rounded">
                   ← 돌아가기
                 </button>
               </div>
               {/* 검색 */}
               <input type="text" placeholder="🔍 콜사인 / 선박명 검색"
                 value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-200 mb-3"/>
+                className="w-full bg-ink-800 border border-line rounded px-3 py-2 text-sm text-dim-100 mb-3"/>
               {/* 통계 */}
               <div className="flex gap-2 mb-3 text-xs flex-wrap">
                 {(() => {
@@ -240,18 +240,18 @@ export default function PortMisCaptureModal({ onClose }) {
                     const isOld = !val?.berth;
                     return (
                       <div key={key} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${
-                        isOld ? 'bg-red-950/30 border border-red-800/40' : 'bg-slate-800/50'
+                        isOld ? 'bg-red-950/30 border border-red-800/40' : 'bg-ink-800/50'
                       }`}>
                         <span className="font-mono text-amber-400 w-20 truncate">{key}</span>
-                        <span className="text-slate-200 flex-1 truncate">{val?.vesselName || '?'}</span>
+                        <span className="text-dim-100 flex-1 truncate">{val?.vesselName || '?'}</span>
                         {val?.berth ? (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                          <span className={`text-2xs px-1.5 py-0.5 rounded font-bold ${
                             val.pier === 'PCTC' ? 'bg-blue-900/60 text-blue-200' :
                             val.pier === 'PNCT' ? 'bg-purple-900/60 text-purple-200' :
-                            'bg-slate-700 text-slate-400'
+                            'bg-ink-750 text-dim-300'
                           }`}>{val.pier || '?'} · {formatBerth(val.berth)}</span>
                         ) : (
-                          <span className="text-[10px] text-red-400">⚠ 옛 데이터</span>
+                          <span className="text-2xs text-red-400">⚠ 옛 데이터</span>
                         )}
                         <button onClick={() => handleDeleteOne(key)}
                           className="text-red-400 hover:text-red-300 p-1">
@@ -261,7 +261,7 @@ export default function PortMisCaptureModal({ onClose }) {
                     );
                   })}
                 {Object.keys(currentData || {}).length === 0 && (
-                  <div className="text-center text-slate-500 py-8">
+                  <div className="text-center text-dim-400 py-8">
                     저장된 PORT-MIS 데이터 없음<br/>
                     <span className="text-xs">엑셀 업로드로 등록하세요</span>
                   </div>
@@ -280,10 +280,10 @@ export default function PortMisCaptureModal({ onClose }) {
           {/* 단계 2: 분석 중 */}
           {step === 'analyzing' && (
             <div className="py-12 text-center">
-              {imageUrl && <img src={imageUrl} alt="" className="max-h-48 mx-auto mb-4 rounded border border-slate-700" />}
+              {imageUrl && <img src={imageUrl} alt="" className="max-h-48 mx-auto mb-4 rounded border border-line" />}
               <Loader2 className="w-8 h-8 animate-spin text-cyan-400 mx-auto mb-2" />
               <p className="text-cyan-300 font-bold">Gemini Vision 분석 중...</p>
-              <p className="text-slate-400 text-sm mt-1">10~20초 정도 걸립니다</p>
+              <p className="text-dim-300 text-sm mt-1">10~20초 정도 걸립니다</p>
             </div>
           )}
 
@@ -292,7 +292,7 @@ export default function PortMisCaptureModal({ onClose }) {
             <div>
               <p className="text-emerald-400 font-bold mb-3">
                 ✓ {ships.length}척 추출 완료
-                <span className="ml-2 text-xs text-slate-400">
+                <span className="ml-2 text-xs text-dim-300">
                   ({sourceType === 'excel' ? '엑셀 — 100% 정확' : 'AI 캡처'})
                 </span>
               </p>
@@ -311,7 +311,7 @@ export default function PortMisCaptureModal({ onClose }) {
                         PNCT {pnctCnt}척
                       </span>
                       {otherCnt > 0 && (
-                        <span className="bg-slate-800 border border-slate-700 text-slate-400 px-2 py-1 rounded font-bold">
+                        <span className="bg-ink-800 border border-line text-dim-300 px-2 py-1 rounded font-bold">
                           기타 {otherCnt}척
                         </span>
                       )}
@@ -321,33 +321,33 @@ export default function PortMisCaptureModal({ onClose }) {
               </div>
               <div className="space-y-2 mb-4 max-h-96 overflow-y-auto">
                 {ships.map((s, i) => (
-                  <div key={i} className="bg-slate-800 rounded p-3 text-sm">
+                  <div key={i} className="bg-ink-800 rounded p-3 text-sm">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-bold text-cyan-300">{s.callsign || '(콜사인 없음)'}</span>
-                      <span className="text-slate-200">{s.vesselName}</span>
+                      <span className="text-dim-100">{s.vesselName}</span>
                       {/* M5.82: 부두 배지 */}
                       {s.pier === 'PCTC' && (
-                        <span className="text-[10px] bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
+                        <span className="text-2xs bg-blue-900/60 border border-blue-700/50 text-blue-200 px-1.5 py-0.5 rounded font-bold">
                           PCTC · {formatBerth(s.berth)}
                         </span>
                       )}
                       {s.pier === 'PNCT' && (
-                        <span className="text-[10px] bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
+                        <span className="text-2xs bg-purple-900/60 border border-purple-700/50 text-purple-200 px-1.5 py-0.5 rounded font-bold">
                           PNCT · {formatBerth(s.berth)}
                         </span>
                       )}
                       {!s.pier && s.berth && (
-                        <span className="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">
+                        <span className="text-2xs bg-ink-750 text-dim-300 px-1.5 py-0.5 rounded">
                           {s.berth}
                         </span>
                       )}
-                      {s.port && <span className="text-xs text-slate-400">[{s.port}]</span>}
+                      {s.port && <span className="text-xs text-dim-300">[{s.port}]</span>}
                     </div>
-                    <div className="text-xs text-slate-400 flex gap-3 flex-wrap">
+                    <div className="text-xs text-dim-300 flex gap-3 flex-wrap">
                       {s.eta && <span>입 {s.eta}</span>}
                       {s.etd && <span>출 {s.etd}</span>}
                       {s.voyageType && <span>[{s.voyageType}]</span>}
-                      {s.vesselType && <span className="text-slate-500">{s.vesselType}</span>}
+                      {s.vesselType && <span className="text-dim-400">{s.vesselType}</span>}
                     </div>
                   </div>
                 ))}
@@ -361,7 +361,7 @@ export default function PortMisCaptureModal({ onClose }) {
                 }
                 const detectedPort = Object.entries(portCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '평택';
                 return (
-                  <div className="bg-amber-950/40 border border-amber-700/50 rounded-lg px-3 py-2 mb-3">
+                  <div className="bg-amber-950/40 border border-amber-700/50 rounded-pill px-3 py-2 mb-3">
                     <label className="flex items-start gap-2 cursor-pointer">
                       <input type="checkbox" checked={replaceAll}
                         onChange={e => setReplaceAll(e.target.checked)}
@@ -370,7 +370,7 @@ export default function PortMisCaptureModal({ onClose }) {
                         <div className="text-xs font-bold text-amber-200 flex items-center gap-1">
                           <Trash2 className="w-3 h-3"/> <b>{detectedPort}</b> 옛 데이터 삭제 + 새로 저장 (권장)
                         </div>
-                        <div className="text-[10px] text-amber-300/70 mt-0.5">
+                        <div className="text-2xs text-amber-300/70 mt-0.5">
                           체크: 기존 <b>{detectedPort}</b> PORT-MIS 데이터 모두 삭제 후 이번 데이터로 교체<br/>
                           해제: 같은 호출부호만 갱신 (다른 항만 데이터는 어느 쪽이든 보존)
                         </div>
@@ -379,10 +379,10 @@ export default function PortMisCaptureModal({ onClose }) {
                   </div>
                 );
               })()}
-              <button onClick={handleSave} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg">
+              <button onClick={handleSave} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-pill">
                 {replaceAll ? '🔄 PORT-MIS 데이터 갱신' : '💾 추가/갱신 저장'} → 모든 검수원 공유
               </button>
-              <button onClick={() => setStep('pick')} className="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-slate-300 py-2 rounded-lg text-sm">
+              <button onClick={() => setStep('pick')} className="w-full mt-2 bg-ink-750 hover:bg-ink-700 text-dim-200 py-2 rounded-pill text-sm">
                 다른 파일로 다시
               </button>
             </div>
@@ -418,10 +418,10 @@ export default function PortMisCaptureModal({ onClose }) {
               {saveResult?.failed > 0 && (
                 <p className="text-amber-400 text-sm">실패 {saveResult.failed}건</p>
               )}
-              <p className="text-slate-400 text-sm mt-3">
+              <p className="text-dim-300 text-sm mt-3">
                 모든 검수원의 항차 화면에 ⚓ PORT-MIS 카드가 자동 표시됩니다
               </p>
-              <button onClick={onClose} className="mt-6 bg-cyan-600 hover:bg-cyan-700 text-white font-bold px-8 py-3 rounded-lg">
+              <button onClick={onClose} className="mt-6 bg-cyan-600 hover:bg-cyan-700 text-white font-bold px-8 py-3 rounded-pill">
                 닫기
               </button>
             </div>

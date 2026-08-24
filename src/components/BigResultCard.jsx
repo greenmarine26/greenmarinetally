@@ -156,7 +156,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
   };
 
   return (
-    <div className={`bg-slate-900 border-2 rounded-xl p-3 ${
+    <div className={`bg-ink-900 border-2 rounded-btn p-3 ${
       sealError ? 'border-red-600 bg-red-950/30' :
       isDone ? 'border-emerald-600 bg-emerald-950/30' :
       c._xray ? 'border-purple-600 bg-purple-950/20' :
@@ -165,16 +165,16 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       {/* 2.03 (검수사 확정 «지정된 컨번호를 조회하면 사진을 띄울수 있나요?» — 예약분·작업 중 기록분 다):
           데미지 기록이 있으면 카드 맨 위에 주황 띠 + 썸네일. 탭하면 크게. */}
       {dmgList.length > 0 && (
-        <div className="mb-2 bg-orange-950/50 border border-orange-700 rounded-lg p-2">
-          <div className="text-[11px] font-black text-orange-300 mb-1">📷 {dmgList.some((p) => p.type === 'damage') ? '데미지·' : ''}사진 {dmgList.length}건 — 탭하면 크게 (씰 위치·고정 상태·데미지)</div>
+        <div className="mb-2 bg-orange-950/50 border border-orange-700 rounded-pill p-2">
+          <div className="text-xxs font-black text-orange-300 mb-1">📷 {dmgList.some((p) => p.type === 'damage') ? '데미지·' : ''}사진 {dmgList.length}건 — 탭하면 크게 (씰 위치·고정 상태·데미지)</div>
           <div className="flex gap-1.5 flex-wrap">
             {dmgList.map((p) => (
               <button key={p.ts} onClick={() => setDmgView(p)} className="text-left">
-                {p.data ? <img src={p.data} alt="" className="w-14 h-14 object-cover rounded border border-orange-700" /> : <span className="text-[10px] text-orange-200 underline">기록 보기</span>}
+                {p.data ? <img src={p.data} alt="" className="w-14 h-14 object-cover rounded border border-orange-700" /> : <span className="text-2xs text-orange-200 underline">기록 보기</span>}
               </button>
             ))}
           </div>
-          <div className="text-[10px] text-orange-200/90 mt-1">
+          <div className="text-2xs text-orange-200/90 mt-1">
             {dmgList.map((p) => p.type === 'mailPhoto' ? (p.label || '메일 사진') : [(p.damageParts || []).join('&'), (p.damageTypes || []).join('&'), p.promotedFrom ? '(예약분)' : ''].filter(Boolean).join(' ')).join(' · ')}
           </div>
         </div>
@@ -182,9 +182,9 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       {dmgView && (
         <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={(e) => { e.stopPropagation(); setDmgView(null); }}>
           {[dmgView.data, dmgView.detailPhoto].filter(Boolean).map((src, i) => (
-            <img key={i} src={src} alt="" className="max-h-[42vh] max-w-full rounded-lg border border-slate-600" />
+            <img key={i} src={src} alt="" className="max-h-[42vh] max-w-full rounded-pill border border-line-strong" />
           ))}
-          <div className="text-slate-200 text-[12px] font-bold text-center">
+          <div className="text-dim-100 text-xs2 font-bold text-center">
             {c.cn} — {(dmgView.damageParts || []).join(' & ')} {(dmgView.damageTypes || []).join(' & ')}{dmgView.dims ? ` (${dmgView.dims})` : ''}{dmgView.note ? ` · ${dmgView.note}` : ''}
             <br/>화면을 누르면 닫힙니다
           </div>
@@ -193,37 +193,37 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       <button onClick={onOpen} className="w-full text-left">
         {/* M3.86: 라벨/모드 배지만 한 줄에 (컨번호는 다음 줄에 크게) */}
         <div className="flex items-center gap-2 flex-wrap mb-2">
-          {label && <span className={`${labelMap[labelColor]} px-2 py-0.5 rounded text-[10px] font-black`}>{label}</span>}
-          <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+          {label && <span className={`${labelMap[labelColor]} px-2 py-0.5 rounded text-2xs font-black`}>{label}</span>}
+          <span className={`px-2 py-0.5 rounded text-2xs font-black ${
             c._mode === 'discharge' ? 'bg-blue-900 text-blue-200'
             : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
-            : 'bg-gray-700 text-gray-300'
+            : 'bg-gray-700 text-dim-200'
           }`}>
             {c._mode === 'discharge' ? '양하'
               : c._mode === 'loading' ? '선적'
               : '중계'}
           </span>
-          {isDone && <span className="bg-emerald-700 text-emerald-100 text-[10px] px-1.5 py-0.5 rounded font-black">✓완료</span>}
+          {isDone && <span className="bg-emerald-700 text-emerald-100 text-2xs px-1.5 py-0.5 rounded font-black">✓완료</span>}
         </div>
         {/* M3.86: 컨번호 한 줄 별도, 크게 표시 (끝4 + 전체 컨번호) */}
         <div className="flex items-baseline gap-2 mb-3 px-1">
           <span className="text-3xl font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-          <span className="text-lg sm:text-xl font-bold mono text-slate-200 truncate flex-1">{c.cn}</span>
+          <span className="text-lg sm:text-xl font-bold mono text-dim-100 truncate flex-1">{c.cn}</span>
         </div>
 
         {/* 1순위: 실번호 거대 + 반짝임 */}
-        <div className={`bg-slate-950 rounded-lg p-3 mb-2 border-2 ${sealError ? 'border-red-500' : c.sl ? 'border-amber-700/50' : 'border-slate-700'}`}>
-          <div className="text-[10px] text-slate-500 font-bold uppercase mb-1 flex items-center justify-between">
+        <div className={`bg-ink-950 rounded-pill p-3 mb-2 border-2 ${sealError ? 'border-red-500' : c.sl ? 'border-amber-700/50' : 'border-line'}`}>
+          <div className="text-2xs text-dim-400 font-bold uppercase mb-1 flex items-center justify-between">
             <span>실번호 (Seal No)</span>
             {sealError && (
-              <span className="bg-red-700 text-red-50 text-[9px] px-1.5 py-0.5 rounded font-black animate-pulse flex items-center gap-0.5">
+              <span className="bg-red-700 text-red-50 text-3xs px-1.5 py-0.5 rounded font-black animate-pulse flex items-center gap-0.5">
                 <AlertOctagon className="w-2.5 h-2.5"/>실오류
               </span>
             )}
           </div>
           {sealError ? (
             <div>
-              <div className="text-[10px] text-slate-500">원: <span className="text-slate-400 line-through mono">{slOrig}</span></div>
+              <div className="text-2xs text-dim-400">원: <span className="text-dim-300 line-through mono">{slOrig}</span></div>
               <div className="text-3xl sm:text-4xl font-black mono text-red-300 tracking-wider text-center py-1 animate-pulse"
                 style={{ textShadow: '0 0 20px rgba(248, 113, 113, 0.6)' }}>
                 {c.sl}
@@ -238,7 +238,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           ) : (c.fe === 'E' && c.eseal && String(c.eseal).trim().length >= 4) ? (
             // V9.20-02: 엠티실 — 엠티에도 실이 붙는 선박(26353W LYG 실측). eseal을 크게, 청록으로 구분.
             <div>
-              <div className="text-[10px] text-cyan-500 font-bold text-center">📦 엠티실 (Empty Seal)</div>
+              <div className="text-2xs text-cyan-500 font-bold text-center">📦 엠티실 (Empty Seal)</div>
               <div className="text-4xl sm:text-5xl font-black mono text-cyan-300 tracking-wider text-center py-1 animate-pulse"
                 style={{ textShadow: '0 0 20px rgba(34, 211, 238, 0.6)' }}>
                 {String(c.eseal).trim()}
@@ -247,16 +247,16 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           ) : c.fe === 'E' ? (
             // M3.88: 엠티 컨테이너는 실번호 없는 게 정상 → 엠티 표시
             // M3.88.1: 엠티에 짧은/이상 sl이 들어있어도 무시 ("1", "TJM" 같은 잘못된 데이터)
-            <div className="text-3xl font-black mono text-slate-300 text-center py-2 bg-slate-800/40 rounded">
+            <div className="text-3xl font-black mono text-dim-200 text-center py-2 bg-ink-800/40 rounded">
               📦 엠티 (실번호 없음 정상)
               {c.sl && c.sl.length < 5 && (
-                <div className="text-[10px] text-slate-500 italic mt-1">
+                <div className="text-2xs text-dim-400 italic mt-1">
                   (데이터 sl="{c.sl}" 무시 - 의심값)
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-2xl font-bold mono text-slate-600 italic text-center py-2">
+            <div className="text-2xl font-bold mono text-dim-500 italic text-center py-2">
               ⚠ 실번호 미입력
             </div>
           )}
@@ -264,7 +264,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
         {/* 2순위: X-RAY */}
         {c._xray && (
-          <div className="bg-purple-950 border-2 border-purple-500 rounded-lg p-2.5 mb-2 animate-pulse">
+          <div className="bg-purple-950 border-2 border-purple-500 rounded-pill p-2.5 mb-2 animate-pulse">
             <div className="text-center font-black text-lg text-purple-200 flex items-center justify-center gap-2">
               🔍 X-RAY 대상
             </div>
@@ -315,19 +315,19 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         )}
 
         {/* 부가 정보 */}
-        <div className="flex items-center gap-2 text-[11px] mono flex-wrap text-slate-400 pt-2 border-t border-slate-800">
+        <div className="flex items-center gap-2 text-xxs mono flex-wrap text-dim-300 pt-2 border-t border-line">
           {c.bay && <span className="text-amber-300 font-bold">{fmtPos(c)}</span>}
           {/* V9.56: RO/RO 겸용선(RZOR) — 갠트리(落地) 작업분인지 한눈에. 크레인 검수 대상이 이것뿐이다. */}
-          {c.lolo && <span className="px-1.5 py-0.5 rounded bg-lime-700 text-lime-50 text-[10px] font-black">🏗갠트리</span>}
-          {c.dbl && <span className="px-1.5 py-0.5 rounded bg-amber-700 text-amber-50 text-[10px] font-black">⇅2단</span>}
+          {c.lolo && <span className="px-1.5 py-0.5 rounded bg-lime-700 text-lime-50 text-2xs font-black">🏗갠트리</span>}
+          {c.dbl && <span className="px-1.5 py-0.5 rounded bg-amber-700 text-amber-50 text-2xs font-black">⇅2단</span>}
           {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) && (
-            <span className="ml-1 px-1 rounded bg-indigo-900 text-indigo-200 text-[10px] font-bold">
+            <span className="ml-1 px-1 rounded bg-indigo-900 text-indigo-200 text-2xs font-bold">
               📍수정됨 · 원래 {c.bay_orig ? `${String(parseInt(c.bay_orig, 10)).padStart(2, '0')}-${c.row_orig}-${c.tier_orig}` : '미배정'}
             </span>
           )}
           <span>{isoToLabel(c.iso) || c.tp || ''}</span>
           <span className={c.fe === 'F' ? 'text-rose-400' : ''}>{c.fe || '?'}</span>
-          {c.op && <span className="bg-slate-800 px-1 py-0.5 rounded">{c.op}</span>}
+          {c.op && <span className="bg-ink-800 px-1 py-0.5 rounded">{c.op}</span>}
           {c.pol && <span>POL {c.pol}</span>}
           {c.pod && <span>POD {c.pod}</span>}
         </div>
@@ -335,7 +335,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
 
       {/* 완료 버튼 (직접 누르면 검색창 자동 비워짐) */}
       <button onClick={handleComplete}
-        className={`w-full mt-3 py-3 rounded-lg font-black text-base flex items-center justify-center gap-1.5 ${
+        className={`w-full mt-3 py-3 rounded-pill font-black text-base flex items-center justify-center gap-1.5 ${
           isDone
             ? 'bg-rose-800 hover:bg-rose-700 text-rose-100'
             : 'bg-emerald-700 hover:bg-emerald-600 text-emerald-100'
@@ -349,7 +349,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       {/* V7.99-16: 양하 모드 — 선박에 없는 컨(누락) 처리. V8.09-17: 양하 전용 — 선적엔 위치/번호수정이 따로 있어 누락 버튼이 뜨면 안 됨(메모1). */}
       {!isLoading && !isDone && c._mode === 'discharge' && (
         <button onClick={handleMissing}
-          className="w-full mt-2 py-2.5 rounded-lg font-black text-sm bg-slate-800 hover:bg-rose-900 text-rose-300 border border-rose-800 flex items-center justify-center gap-1.5">
+          className="w-full mt-2 py-2.5 rounded-pill font-black text-sm bg-ink-800 hover:bg-rose-900 text-rose-300 border border-rose-800 flex items-center justify-center gap-1.5">
           🚫 선박에 없음 (누락 처리)
         </button>
       )}
@@ -365,27 +365,27 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
       {/* 1.55-02: 완료된 카드에서는 숨긴다 — 완료 컨 자리에 새 번호를 얹으면 실물 1대에 완료 2건이 남는다(독립 재검증 P0-3). 완료 기록이 틀렸으면 [선적확인 취소]가 먼저다. */}
       {isLoading && !isDone && !cnFixOpen && (
         <button onClick={() => { setCnFixOpen(true); setCnFixQuery(''); setCnFixPick(null); }}
-          className="w-full mt-2 py-3.5 rounded-lg font-black text-base bg-cyan-700 hover:bg-cyan-600 text-white border-2 border-cyan-400 flex items-center justify-center gap-1.5">
+          className="w-full mt-2 py-3.5 rounded-pill font-black text-base bg-cyan-700 hover:bg-cyan-600 text-white border-2 border-cyan-400 flex items-center justify-center gap-1.5">
           <RotateCcw className="w-5 h-5"/>컨테이너 번호 수정 (다른 컨이 옴)
         </button>
       )}
       {isLoading && !isDone && cnFixOpen && (
-        <div className="mt-2 bg-slate-900 border border-cyan-800 rounded-lg p-2 space-y-2">
-          <div className="text-[11px] text-cyan-300 font-bold">실제 온 컨테이너 번호 (끝 4자리 이상)</div>
+        <div className="mt-2 bg-ink-900 border border-cyan-800 rounded-pill p-2 space-y-2">
+          <div className="text-xxs text-cyan-300 font-bold">실제 온 컨테이너 번호 (끝 4자리 이상)</div>
           {cnFixPick ? (
             <>
               <div className="flex items-center justify-between bg-cyan-950/50 border border-cyan-700 rounded px-2 py-2">
                 <div>
                   <div className="mono text-sm font-bold text-cyan-200">{cnFixPick.cn}</div>
-                  <div className="text-[10px] mono text-slate-400">
+                  <div className="text-2xs mono text-dim-300">
                     계획 {cnFixPick.bay ? `${parseInt(cnFixPick.bay, 10)}-${cnFixPick.row}-${cnFixPick.tier}` : '미배정'} · {cnFixPick.pod || '-'} · {cnFixPick.fe === 'E' ? '엠티' : '풀'}
                   </div>
                 </div>
-                <button onClick={() => setCnFixPick(null)} className="text-[11px] text-slate-400 px-1.5">✕</button>
+                <button onClick={() => setCnFixPick(null)} className="text-xxs text-dim-300 px-1.5">✕</button>
               </div>
               {/* V9.53: 등급별 안내 — 엠티·같은포트는 그냥 진행, 다른 베이/다른 포트는 강하게 확인 */}
               {swapG && (
-                <div className={`rounded-lg border px-2.5 py-2 text-[11px] font-bold leading-snug ${GRADE_STYLE[swapG.level].box} ${GRADE_STYLE[swapG.level].text}`}>
+                <div className={`rounded-pill border px-2.5 py-2 text-xxs font-bold leading-snug ${GRADE_STYLE[swapG.level].box} ${GRADE_STYLE[swapG.level].text}`}>
                   {GRADE_STYLE[swapG.level].icon} {swapG.reason}
                   {swapG.level === 'strong' && <div className="mt-0.5 font-normal opacity-90">누르면 한 번 더 확인합니다.</div>}
                 </div>
@@ -404,7 +404,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                     onConfirm: go,
                   });
                 }}
-                className={`w-full py-2.5 rounded-lg font-black text-sm text-white flex items-center justify-center gap-1.5 ${
+                className={`w-full py-2.5 rounded-pill font-black text-sm text-white flex items-center justify-center gap-1.5 ${
                   swapG?.level === 'strong' ? 'bg-rose-700 hover:bg-rose-600' : 'bg-cyan-700 hover:bg-cyan-600'}`}>
                 <MapPin className="w-4 h-4"/>위치 선택 →
               </button>
@@ -413,7 +413,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
             <>
               <input autoFocus value={cnFixQuery} onChange={e => setCnFixQuery(e.target.value)} {...NUM_INPUT_PROPS}
                 placeholder="예: 1234 또는 SKLU1972626"
-                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm mono text-slate-100"/>
+                className="w-full bg-ink-800 border border-line rounded px-2 py-2 text-sm mono text-dim-100"/>
               {cnFixMatches.map(x => (
                 <button key={x.cn} onClick={() => {
                     // 1.53: confirm() → 앱 안 모달 (렌더러 정지 제거).
@@ -426,19 +426,19 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                       onConfirm: () => setCnFixPick(x),
                     });
                   }}
-                  className="w-full flex justify-between items-center bg-slate-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
-                  <span className="mono font-bold text-slate-100">{x.cn}</span>
-                  <span className="mono text-slate-400">
+                  className="w-full flex justify-between items-center bg-ink-800 hover:bg-cyan-900 rounded px-2 py-1.5 text-xs">
+                  <span className="mono font-bold text-dim-100">{x.cn}</span>
+                  <span className="mono text-dim-300">
                     {x._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
                     {x.bay ? `${parseInt(x.bay, 10)}-${x.row}-${x.tier}` : '미배정'} · {x.pod || '-'}
                   </span>
                 </button>
               ))}
               {cnFixQuery.length >= 3 && cnFixMatches.length === 0 &&
-                <div className="text-[11px] text-slate-500 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}
+                <div className="text-xxs text-dim-400 text-center">남은 작업분에 일치하는 컨이 없습니다.</div>}
             </>
           )}
-          <button onClick={() => setCnFixOpen(false)} className="w-full text-[11px] text-slate-400 py-1">닫기</button>
+          <button onClick={() => setCnFixOpen(false)} className="w-full text-xxs text-dim-300 py-1">닫기</button>
         </div>
       )}
 
@@ -446,10 +446,10 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           1.55: **예외 경로다.** 접어 두고 문구는 SearchPanel 과 한 벌로 맞춘다
           (SearchPanel:1642·2032 「계획에 없는 칸에 실렸습니다 — 위치 지정」). */}
       {isLoading && (
-        <details className="mt-2 bg-slate-800 border border-slate-500 rounded-lg">
+        <details className="mt-2 bg-ink-800 border border-line-strong rounded-pill">
           {/* 1.56-05: 검수사 지적 — "작아서 잘 안 보이고 옅은 회색이라 누르라고 되어 있는 건지 구분이 안 감. 위치 수정 버튼임을 알려야 함." */}
-          <summary className="px-3 py-2.5 text-[13px] font-bold text-slate-100 cursor-pointer select-none hover:bg-slate-700 rounded-lg">
-            📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-slate-400 font-normal">▼ 눌러서 열기</span>
+          <summary className="px-3 py-2.5 text-sm2 font-bold text-dim-100 cursor-pointer select-none hover:bg-ink-750 rounded-pill">
+            📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-dim-300 font-normal">▼ 눌러서 열기</span>
           </summary>
           <div className="px-2 pb-2">
             <button onClick={() => {
@@ -464,7 +464,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
                 //   ※ V8.80 의 취지("계획 위치에 묶이지 않는다")는 자리 선택 UI 기본값 문제이지 DB를 비울 이유가 아니다.
                 setPosTarget(c);
               }}
-              className="w-full py-2.5 rounded-lg font-bold text-xs bg-slate-800 hover:bg-amber-900 text-amber-300 border border-amber-800/70 flex items-center justify-center gap-1.5">
+              className="w-full py-2.5 rounded-pill font-bold text-xs bg-ink-800 hover:bg-amber-900 text-amber-300 border border-amber-800/70 flex items-center justify-center gap-1.5">
               <MapPin className="w-4 h-4"/>{isDone ? '위치 수정 (같은 컨, 자리만 변경)' : `계획에 없는 칸에 실렸습니다 — 위치 지정${c.bay ? ` (계획 ${fmtPos(c)})` : ''}`}
             </button>
           </div>
@@ -482,11 +482,11 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
         const path = buildMovePath(c);
         if (!path.length) return null;
         return (
-          <details className="mt-2 bg-slate-900 border border-slate-800 rounded">
-            <summary className="px-2 py-1.5 text-[11px] font-bold text-slate-400 cursor-pointer">
+          <details className="mt-2 bg-ink-900 border border-line rounded">
+            <summary className="px-2 py-1.5 text-xxs font-bold text-dim-300 cursor-pointer">
               📍 지나온 자리 {path.length}번 — 눌러서 보기
             </summary>
-            <div className="px-2 pb-2 text-[11px] text-slate-300 whitespace-pre-line leading-relaxed">
+            <div className="px-2 pb-2 text-xxs text-dim-200 whitespace-pre-line leading-relaxed">
               {describeMovePath(c, isDone)}
             </div>
           </details>

@@ -75,8 +75,8 @@ export default function RestoreOrigButton({ c, allContainers = [], voyageKey, in
 
   if (occupiedBy) {
     return (
-      <div className={`${compact ? 'px-2 py-1' : 'w-full px-3 py-2'} rounded bg-slate-900 border border-slate-700 text-[11px] text-slate-500 text-center`}>
-        원자리 {label} 에 <span className="mono text-slate-400">{occupiedBy.cn?.slice(-4)}</span> 있음 — 되돌릴 수 없습니다
+      <div className={`${compact ? 'px-2 py-1' : 'w-full px-3 py-2'} rounded bg-ink-900 border border-line text-xxs text-dim-400 text-center`}>
+        원자리 {label} 에 <span className="mono text-dim-300">{occupiedBy.cn?.slice(-4)}</span> 있음 — 되돌릴 수 없습니다
       </div>
     );
   }

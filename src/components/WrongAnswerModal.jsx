@@ -61,18 +61,18 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border-2 border-red-700/50 rounded-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-ink-900 border-2 border-red-700/50 rounded-card w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-red-950/40">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-red-950/40">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-400"/>
             <div>
               <div className="text-base font-black text-red-200">오답 신고</div>
-              <div className="text-[11px] text-slate-400">다음 버전 개선에 반영됩니다</div>
+              <div className="text-xxs text-dim-300">다음 버전 개선에 반영됩니다</div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg" disabled={sending}>
-            <X className="w-5 h-5 text-slate-300"/>
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill" disabled={sending}>
+            <X className="w-5 h-5 text-dim-200"/>
           </button>
         </div>
 
@@ -85,42 +85,42 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
               {/* TallyOne 1.16: 검수사 지시 2026-08-06 — "접수 확인 문구와 처리 계획을 알려 줘야 함.
                   쉬운 거면 10분 이내, 복잡하면 클로드의 처리 속도에 맞춰 알려줘야 사용자가 기다리지 않습니다."
                   파일로 내려받을 필요가 없다 — 클로드가 서버(feedback 노드)를 직접 읽는다. */}
-              <div className="text-slate-300 text-sm mt-2 leading-relaxed">
-                개발자가 <b className="text-slate-100">서버에서 바로 읽습니다.</b><br/>
+              <div className="text-dim-200 text-sm mt-2 leading-relaxed">
+                개발자가 <b className="text-dim-100">서버에서 바로 읽습니다.</b><br/>
                 파일로 내려받지 않으셔도 됩니다.
               </div>
-              <div className="text-[12px] text-slate-400 mt-3 bg-slate-800/60 border border-slate-700/60 rounded-lg p-2.5 leading-relaxed text-left">
-                <div className="text-slate-300 font-bold mb-1">처리 계획은 이 신고에 적힙니다</div>
+              <div className="text-xs2 text-dim-300 mt-3 bg-ink-800/60 border border-line rounded-pill p-2.5 leading-relaxed text-left">
+                <div className="text-dim-200 font-bold mb-1">처리 계획은 이 신고에 적힙니다</div>
                 수석 대시보드 「오답 리포트」에서 이 건을 보시면
                 <b className="text-sky-300"> 개발 회신</b>이 붙습니다 —
-                <b className="text-slate-200"> 무엇을 고칠지</b>와 <b className="text-slate-200">언제 되는지</b>.
-                <div className="text-[11px] text-slate-500 mt-1.5">
+                <b className="text-dim-100"> 무엇을 고칠지</b>와 <b className="text-dim-100">언제 되는지</b>.
+                <div className="text-xxs text-dim-400 mt-1.5">
                   {/* TallyOne 1.17: 검수사 지시 — "실제 얼마의 시간이 걸리는지. 그래야 앱을 신용하고 더 쓰고 싶어진다." */}
-                  <b className="text-slate-300">답이 먼저 옵니다</b> — 앱이 못 낸 답을 개발자가 직접 적어 둡니다.
-                  그 다음 <b className="text-slate-300">앱이 언제부터 스스로 답하는지</b>를 분 단위로 적습니다.
+                  <b className="text-dim-200">답이 먼저 옵니다</b> — 앱이 못 낸 답을 개발자가 직접 적어 둡니다.
+                  그 다음 <b className="text-dim-200">앱이 언제부터 스스로 답하는지</b>를 분 단위로 적습니다.
                 </div>
               </div>
             </div>
           ) : (
             <>
               <div>
-                <div className="text-[11px] text-slate-500 font-bold uppercase mb-1">내가 한 질문</div>
-                <div className="bg-slate-800 border border-slate-700 rounded p-2 text-sm text-amber-200 mono break-all">
+                <div className="text-xxs text-dim-400 font-bold uppercase mb-1">내가 한 질문</div>
+                <div className="bg-ink-800 border border-line rounded p-2 text-sm text-amber-200 mono break-all">
                   {query || '(없음)'}
                 </div>
               </div>
 
               <div>
-                <div className="text-[11px] text-slate-500 font-bold uppercase mb-1">
+                <div className="text-xxs text-dim-400 font-bold uppercase mb-1">
                   앱 답변 ({answerType === 'ai' ? 'AI' : answerType === 'local' ? '로컬 즉답' : '검색 결과'})
                 </div>
-                <div className="bg-slate-800 border border-slate-700 rounded p-2 text-xs text-slate-300 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
+                <div className="bg-ink-800 border border-line rounded p-2 text-xs text-dim-200 whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">
                   {answerText || '(없음)'}
                 </div>
               </div>
 
               <div>
-                <div className="text-[11px] text-slate-500 font-bold uppercase mb-1">
+                <div className="text-xxs text-dim-400 font-bold uppercase mb-1">
                   뭐가 잘못됐는지 알려주세요 (선택)
                 </div>
                 <textarea
@@ -129,12 +129,12 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
                   placeholder="예: 28번 베이만 답하고 짝꿍 베이 27/29까지 합산 안 해줌&#10;예: 답변이 너무 길어서 못 읽음&#10;예: 베이는 잘 잡았는데 무게 계산이 틀림"
                   rows={4}
                   maxLength={500}
-                  className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 resize-none"
+                  className="w-full bg-ink-800 border border-line rounded p-2 text-sm text-dim-100 placeholder-dim-400 focus:outline-none focus:border-amber-500 resize-none"
                 />
-                <div className="text-[10px] text-slate-500 text-right mt-0.5">{note.length}/500</div>
+                <div className="text-2xs text-dim-400 text-right mt-0.5">{note.length}/500</div>
               </div>
 
-              <div className="text-[11px] text-slate-500 leading-relaxed bg-slate-800/50 rounded p-2 border border-slate-700/50">
+              <div className="text-xxs text-dim-400 leading-relaxed bg-ink-800/50 rounded p-2 border border-line">
                 💡 검수자({inspector || '익명'}) · 항차({voyageVsl || '-'}) · 앱 v{APP_VERSION} 자동 기록됩니다.
                 <br/>개발자가 서버에서 바로 읽습니다 — 파일로 내려받지 않아도 됩니다.
                 <br/>처리 계획은 수석 대시보드 "오답 리포트"의 이 건에 붙습니다.
@@ -145,17 +145,17 @@ export default function WrongAnswerModal({ open, onClose, query, answerType, ans
 
         {/* 버튼 */}
         {!done && (
-          <div className="flex gap-2 px-4 py-3 border-t border-slate-700 bg-slate-950">
+          <div className="flex gap-2 px-4 py-3 border-t border-line bg-ink-950">
             <button
               onClick={onClose}
               disabled={sending}
-              className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-bold text-sm">
+              className="flex-1 px-4 py-2 bg-ink-800 hover:bg-ink-750 text-dim-200 rounded font-bold text-sm">
               취소
             </button>
             <button
               onClick={handleSubmit}
               disabled={sending}
-              className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded font-bold text-sm flex items-center justify-center gap-1.5">
+              className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:bg-ink-750 disabled:text-dim-400 text-white rounded font-bold text-sm flex items-center justify-center gap-1.5">
               {sending ? <><Loader2 className="w-4 h-4 animate-spin"/>전송 중</> : <><Send className="w-4 h-4"/>오답 신고</>}
             </button>
           </div>

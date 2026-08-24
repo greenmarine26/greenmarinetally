@@ -168,25 +168,25 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 p-0 md:p-4" onClick={onClose}>
-      <div className="bg-slate-900 border-2 border-slate-700 rounded-t-2xl md:rounded-2xl w-full max-w-lg max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className={`sticky top-0 border-b border-slate-700 px-4 py-3 flex items-center justify-between ${isError ? 'bg-red-950' : 'bg-amber-950'}`}>
+      <div className="bg-ink-900 border-2 border-line rounded-t-2xl md:rounded-card w-full max-w-lg max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className={`sticky top-0 border-b border-line px-4 py-3 flex items-center justify-between ${isError ? 'bg-red-950' : 'bg-amber-950'}`}>
           <div className="flex items-center gap-2">
             {isError ? <AlertOctagon className="w-5 h-5 text-red-300"/> : <AlertTriangle className="w-5 h-5 text-amber-300"/>}
             <span className={`font-bold ${isError ? 'text-red-100' : 'text-amber-100'}`}>
               {isError ? '🚨 실오류 보고' : '⚠️ 데미지 보고'}
             </span>
-            {equipNo && <span className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded font-bold">{equipNo}</span>}
+            {equipNo && <span className="text-xs bg-ink-800 text-white px-2 py-0.5 rounded font-bold">{equipNo}</span>}
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-slate-800 rounded">
+          <button onClick={onClose} className="p-1 hover:bg-ink-750 rounded">
             <X className="w-5 h-5"/>
           </button>
         </div>
 
         <div className="p-4 space-y-3">
           {/* 컨번호 */}
-          <div className="bg-slate-800 rounded-lg p-2">
-            <div className="text-[10px] text-slate-400 font-bold uppercase">컨번호</div>
-            <div className="text-base font-bold mono text-slate-100">{cn}</div>
+          <div className="bg-ink-800 rounded-pill p-2">
+            <div className="text-2xs text-dim-300 font-bold uppercase">컨번호</div>
+            <div className="text-base font-bold mono text-dim-100">{cn}</div>
           </div>
 
           {/* M5.78: label 직접 클릭 — PWA에서 button+ref.click()보다 안정적 */}
@@ -195,18 +195,18 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
             <div className="text-xs font-bold text-amber-300 mb-1">📷 1/2 컨테이너 번호 (필수)</div>
             {cnPhotoUrl && (
               <div className="relative mb-1">
-                <img src={cnPhotoUrl} alt="" className="w-full rounded-lg border-2 border-emerald-700"/>
-                <div className="absolute top-1 right-1 bg-emerald-700 text-white text-[10px] px-2 py-0.5 rounded font-bold">✓ 촬영됨</div>
+                <img src={cnPhotoUrl} alt="" className="w-full rounded-pill border-2 border-emerald-700"/>
+                <div className="absolute top-1 right-1 bg-emerald-700 text-white text-2xs px-2 py-0.5 rounded font-bold">✓ 촬영됨</div>
               </div>
             )}
-            <label className={`w-full block cursor-pointer rounded-lg font-bold text-white text-center flex items-center justify-center gap-2 ${
-              cnPhotoUrl ? 'bg-slate-700 hover:bg-slate-600 py-2 text-xs' : (isError ? 'bg-red-700 hover:bg-red-600 py-5' : 'bg-amber-700 hover:bg-amber-600 py-5')
+            <label className={`w-full block cursor-pointer rounded-pill font-bold text-white text-center flex items-center justify-center gap-2 ${
+              cnPhotoUrl ? 'bg-ink-750 hover:bg-ink-700 py-2 text-xs' : (isError ? 'bg-red-700 hover:bg-red-600 py-5' : 'bg-amber-700 hover:bg-amber-600 py-5')
             }`}>
               <input type="file" accept="image/*" capture="environment" onChange={handleCnPhoto} className="hidden"/>
               <Camera className="w-5 h-5"/> {cnPhotoUrl ? '📷 다시 촬영' : '컨테이너 번호 촬영'}
             </label>
             {/* TallyOne 1.2: 찍어둔 사진 등록 — capture 강제로 앨범 선택이 막혀 있던 문제(2026-08-02 파손 보고 실패) */}
-            <label className="w-full block cursor-pointer rounded-lg font-bold text-center py-2 mt-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200">
+            <label className="w-full block cursor-pointer rounded-pill font-bold text-center py-2 mt-1 text-xs bg-ink-750 hover:bg-ink-700 text-dim-100">
               <input type="file" accept="image/*" onChange={handleCnPhoto} className="hidden"/>
               🖼 앨범에서 선택 (찍어둔 사진)
             </label>
@@ -217,17 +217,17 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
             <div className="text-xs font-bold text-amber-300 mb-1">📷 2/2 {isError ? '액츄얼 실 (필수)' : '데미지 부분 (필수)'}</div>
             {detailPhotoUrl && (
               <div className="relative mb-1">
-                <img src={detailPhotoUrl} alt="" className="w-full rounded-lg border-2 border-emerald-700"/>
-                <div className="absolute top-1 right-1 bg-emerald-700 text-white text-[10px] px-2 py-0.5 rounded font-bold">✓ 촬영됨</div>
+                <img src={detailPhotoUrl} alt="" className="w-full rounded-pill border-2 border-emerald-700"/>
+                <div className="absolute top-1 right-1 bg-emerald-700 text-white text-2xs px-2 py-0.5 rounded font-bold">✓ 촬영됨</div>
               </div>
             )}
-            <label className={`w-full block cursor-pointer rounded-lg font-bold text-white text-center flex items-center justify-center gap-2 ${
-              detailPhotoUrl ? 'bg-slate-700 hover:bg-slate-600 py-2 text-xs' : (isError ? 'bg-red-700 hover:bg-red-600 py-5' : 'bg-amber-700 hover:bg-amber-600 py-5')
+            <label className={`w-full block cursor-pointer rounded-pill font-bold text-white text-center flex items-center justify-center gap-2 ${
+              detailPhotoUrl ? 'bg-ink-750 hover:bg-ink-700 py-2 text-xs' : (isError ? 'bg-red-700 hover:bg-red-600 py-5' : 'bg-amber-700 hover:bg-amber-600 py-5')
             }`}>
               <input type="file" accept="image/*" capture="environment" onChange={handleDetailPhoto} className="hidden"/>
               <Camera className="w-5 h-5"/> {detailPhotoUrl ? '📷 다시 촬영' : (isError ? '액츄얼 실 촬영' : '데미지 부분 촬영')}
             </label>
-            <label className="w-full block cursor-pointer rounded-lg font-bold text-center py-2 mt-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200">
+            <label className="w-full block cursor-pointer rounded-pill font-bold text-center py-2 mt-1 text-xs bg-ink-750 hover:bg-ink-700 text-dim-100">
               <input type="file" accept="image/*" onChange={handleDetailPhoto} className="hidden"/>
               🖼 앨범에서 선택 (찍어둔 사진)
             </label>
@@ -237,23 +237,23 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
           {isError && (
             <>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">기존 실번호</div>
+                <div className="text-2xs text-dim-300 font-bold uppercase mb-1">기존 실번호</div>
                 <input
                   type="text"
                   value={sealOrig}
                   onChange={e => setSealOrig(e.target.value.toUpperCase())}
                   placeholder="기존 실번호"
-                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm mono text-slate-100 focus:outline-none focus:border-red-500"
+                  className="w-full bg-ink-800 border border-line-strong rounded px-3 py-2 text-sm mono text-dim-100 focus:outline-none focus:border-red-500"
                 />
               </div>
               <div>
-                <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">발견된 실번호</div>
+                <div className="text-2xs text-dim-300 font-bold uppercase mb-1">발견된 실번호</div>
                 <input
                   type="text"
                   value={sealNew}
                   onChange={e => setSealNew(e.target.value.toUpperCase())}
                   placeholder="현장에서 발견한 실번호"
-                  className="w-full bg-slate-800 border-2 border-red-700 rounded px-3 py-2 text-sm mono text-red-100 focus:outline-none focus:border-red-400"
+                  className="w-full bg-ink-800 border-2 border-red-700 rounded px-3 py-2 text-sm mono text-red-100 focus:outline-none focus:border-red-400"
                 />
               </div>
             </>
@@ -266,11 +266,11 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
                 <div className="text-xs font-bold text-amber-300 mb-2">데미지 종류 (다중 선택)</div>
                 <div className="grid grid-cols-2 gap-1">
                   {DAMAGE_TYPES.map(d => (
-                    <label key={d.code} className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-[11px] ${
-                      damageTypes.includes(d.code) ? 'bg-amber-900/60 border border-amber-500' : 'bg-slate-800 hover:bg-slate-700'
+                    <label key={d.code} className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-xxs ${
+                      damageTypes.includes(d.code) ? 'bg-amber-900/60 border border-amber-500' : 'bg-ink-800 hover:bg-ink-750'
                     }`}>
                       <input type="checkbox" checked={damageTypes.includes(d.code)} onChange={() => toggleType(d.code)} className="w-3.5 h-3.5"/>
-                      <span className={`font-bold ${damageTypes.includes(d.code) ? 'text-amber-100' : 'text-slate-300'}`}>{d.label}</span>
+                      <span className={`font-bold ${damageTypes.includes(d.code) ? 'text-amber-100' : 'text-dim-200'}`}>{d.label}</span>
                     </label>
                   ))}
                 </div>
@@ -280,11 +280,11 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
                 <div className="text-xs font-bold text-amber-300 mb-2">부위 (다중 선택)</div>
                 <div className="grid grid-cols-2 gap-1">
                   {DAMAGE_PARTS.map(p => (
-                    <label key={p.code} className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-[11px] ${
-                      damageParts.includes(p.code) ? 'bg-amber-900/60 border border-amber-500' : 'bg-slate-800 hover:bg-slate-700'
+                    <label key={p.code} className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer text-xxs ${
+                      damageParts.includes(p.code) ? 'bg-amber-900/60 border border-amber-500' : 'bg-ink-800 hover:bg-ink-750'
                     }`}>
                       <input type="checkbox" checked={damageParts.includes(p.code)} onChange={() => togglePart(p.code)} className="w-3.5 h-3.5"/>
-                      <span className={`font-bold ${damageParts.includes(p.code) ? 'text-amber-100' : 'text-slate-300'}`}>{p.label}</span>
+                      <span className={`font-bold ${damageParts.includes(p.code) ? 'text-amber-100' : 'text-dim-200'}`}>{p.label}</span>
                     </label>
                   ))}
                 </div>
@@ -293,24 +293,24 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
               {/* TallyOne 1.10: 서류용 POINT·치수 — 비워도 된다(그 부분만 문구에서 빠진다) */}
               <div>
                 <div className="text-xs font-bold text-amber-300 mb-2">
-                  손상 개소 · 크기 <span className="font-normal text-slate-400">(선택 — 적으면 서류에 그대로 들어갑니다)</span>
+                  손상 개소 · 크기 <span className="font-normal text-dim-300">(선택 — 적으면 서류에 그대로 들어갑니다)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <input type="number" min="1" inputMode="numeric" value={points} onChange={e => setPoints(e.target.value)}
-                    className="w-14 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
-                  <span className="text-[11px] text-slate-400 font-bold">POINT</span>
-                  <span className="text-slate-600 mx-1">·</span>
+                    className="w-14 bg-ink-800 border border-line-strong rounded px-2 py-1.5 text-sm text-center text-dim-100 focus:outline-none focus:border-amber-500"/>
+                  <span className="text-xxs text-dim-300 font-bold">POINT</span>
+                  <span className="text-dim-500 mx-1">·</span>
                   <input type="number" inputMode="numeric" placeholder="가로" value={dimW} onChange={e => setDimW(e.target.value)}
-                    className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
-                  <span className="text-slate-500">x</span>
+                    className="w-16 bg-ink-800 border border-line-strong rounded px-2 py-1.5 text-sm text-center text-dim-100 focus:outline-none focus:border-amber-500"/>
+                  <span className="text-dim-400">x</span>
                   <input type="number" inputMode="numeric" placeholder="세로" value={dimH} onChange={e => setDimH(e.target.value)}
-                    className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
-                  <span className="text-slate-500">x</span>
+                    className="w-16 bg-ink-800 border border-line-strong rounded px-2 py-1.5 text-sm text-center text-dim-100 focus:outline-none focus:border-amber-500"/>
+                  <span className="text-dim-400">x</span>
                   <input type="number" inputMode="numeric" placeholder="깊이" value={dimD} onChange={e => setDimD(e.target.value)}
-                    className="w-16 bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-sm text-center text-slate-100 focus:outline-none focus:border-amber-500"/>
+                    className="w-16 bg-ink-800 border border-line-strong rounded px-2 py-1.5 text-sm text-center text-dim-100 focus:outline-none focus:border-amber-500"/>
                 </div>
                 {(damageParts.length > 0 || damageTypes.length > 0) && (
-                  <div className="mt-2 text-[11px] text-slate-300 bg-slate-800/70 border border-slate-700 rounded px-2 py-1.5">
+                  <div className="mt-2 text-xxs text-dim-200 bg-ink-800/70 border border-line rounded px-2 py-1.5">
                     서류 문구 <span className="text-amber-200 font-bold">
                       {[damageParts.map(x => PART_DOC[x] || x).join(' & '),
                         String(points).trim() ? `${String(points).trim()} POINT` : '',
@@ -325,18 +325,18 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
 
           {/* 추가 설명 */}
           <div>
-            <div className="text-[10px] text-slate-400 font-bold uppercase mb-1">추가 설명 (선택)</div>
+            <div className="text-2xs text-dim-300 font-bold uppercase mb-1">추가 설명 (선택)</div>
             <textarea
               value={note}
               onChange={e => setNote(e.target.value)}
               placeholder={isError ? '추가 설명' : '예: 좌측면 30cm 길이 손상'}
               rows={2}
-              className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500"
+              className="w-full bg-ink-800 border border-line-strong rounded px-3 py-2 text-sm text-dim-100 focus:outline-none focus:border-amber-500"
             />
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-slate-900 border-t border-slate-700 p-3">
+        <div className="sticky bottom-0 bg-ink-900 border-t border-line p-3">
           {/* 검증 상태 표시 */}
           {(() => {
             const missing = [];
@@ -346,24 +346,24 @@ export default function PhotoReportModal({ open, type, c, voyageKey, voyage, equ
             if (type === 'seal_error' && !sealNew.trim()) missing.push('발견 실번호');
             if (missing.length > 0) {
               return (
-                <div className="mb-2 px-3 py-2 bg-red-950/40 border border-red-700/50 rounded text-[11px] text-red-200 font-bold">
+                <div className="mb-2 px-3 py-2 bg-red-950/40 border border-red-700/50 rounded text-xxs text-red-200 font-bold">
                   ⚠️ 입력 필요: {missing.join(', ')}
                 </div>
               );
             }
             return (
-              <div className="mb-2 px-3 py-2 bg-emerald-950/40 border border-emerald-700/50 rounded text-[11px] text-emerald-200 font-bold">
+              <div className="mb-2 px-3 py-2 bg-emerald-950/40 border border-emerald-700/50 rounded text-xxs text-emerald-200 font-bold">
                 ✅ 전송 준비 완료
               </div>
             );
           })()}
           <button onClick={handleSend} disabled={sending}
-            className={`w-full py-3 rounded-lg font-bold text-white flex items-center justify-center gap-2 ${
+            className={`w-full py-3 rounded-pill font-bold text-white flex items-center justify-center gap-2 ${
               isError ? 'bg-red-700 hover:bg-red-600 active:bg-red-800' : 'bg-amber-700 hover:bg-amber-600 active:bg-amber-800'
             } disabled:opacity-50`}>
             <Send className="w-5 h-5"/> {sending ? '전송 중...' : '카톡으로 전송'}
           </button>
-          <div className="text-[10px] text-slate-500 text-center mt-1">
+          <div className="text-2xs text-dim-400 text-center mt-1">
             💡 사진 위에 정보가 합성되어 한 장으로 카톡 발송
           </div>
         </div>

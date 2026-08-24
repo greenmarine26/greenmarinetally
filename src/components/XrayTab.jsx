@@ -120,7 +120,7 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
   const title = `${head.name} ${head.voy}`.trim();
 
   if (mode !== 'discharge' && !rows.length) {
-    return <div className="p-6 text-center text-[13px] text-slate-500">X-RAY 목록은 양하에서 봅니다.</div>;
+    return <div className="p-6 text-center text-sm2 text-dim-400">X-RAY 목록은 양하에서 봅니다.</div>;
   }
 
   return (
@@ -134,11 +134,11 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
       {/* ── 조회 ── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         {/* 첫 장이 «X-RAY 대상 전체» 다 — 뒤 넷은 그 안의 검사 유형 구분이지 대상 여부가 아니다. */}
-        {[{ k: '', t: 'X-RAY 대상', n: counts._all, c: 'text-slate-100', bg: 'bg-slate-800/60 border-slate-700' },
+        {[{ k: '', t: 'X-RAY 대상', n: counts._all, c: 'text-dim-100', bg: 'bg-ink-800/60 border-line' },
           ...KINDS.map((x) => ({ k: x.k, t: x.k, n: counts[x.k] || 0, c: x.c, bg: x.bg }))].map((x) => (
           <button key={x.k || 'all'} onClick={() => setKindFilter(x.k)}
-            className={`rounded-xl border p-3 text-left ${x.bg} ${kindFilter === x.k ? 'ring-2 ring-amber-400' : ''}`}>
-            <div className="text-[10px] text-slate-400">{x.t}</div>
+            className={`rounded-btn border p-3 text-left ${x.bg} ${kindFilter === x.k ? 'ring-2 ring-amber-400' : ''}`}>
+            <div className="text-2xs text-dim-300">{x.t}</div>
             <div className={`text-[22px] font-black leading-none mt-1 ${x.c}`}>{x.n}</div>
           </button>
         ))}
@@ -147,17 +147,17 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
       {/*  2.26-05: MRN 이 비면 **왜 비었는지** 말한다 — 조용히 빈칸으로 두지 않는다(3금지 ③).
            PORT-MIS 엑셀을 2.26 이후에 다시 올려야 MRN 이 담긴다(그 전 레코드엔 필드가 없다). */}
       {!head.mrn && !!rows.length && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+        <div className="rounded-pill border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xxs text-amber-200">
           ⚠ MRN 이 비어 있습니다 — <b>업로드 탭에서 PORT-MIS 엑셀을 다시 올리면</b> 채워집니다.
           (2026-08-24 이전에 올린 자료에는 MRN 칸이 없습니다.)
         </div>
       )}
       <div className="flex items-center gap-2">
-        <div className="flex-1 flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 h-11">
-          <SearchIcon className="w-4 h-4 text-slate-500"/>
+        <div className="flex-1 flex items-center gap-2 bg-ink-900 border border-line rounded-pill px-3 h-11">
+          <SearchIcon className="w-4 h-4 text-dim-400"/>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="컨번호 · 씰번호"
-            className="flex-1 bg-transparent text-[13px] outline-none"/>
-          {q && <button onClick={() => setQ('')}><X className="w-4 h-4 text-slate-500"/></button>}
+            className="flex-1 bg-transparent text-sm2 outline-none"/>
+          {q && <button onClick={() => setQ('')}><X className="w-4 h-4 text-dim-400"/></button>}
         </div>
         {/* 조회의 필터·검색이 그대로 인쇄로 간다(시안 «연계» — 같은 `shown` 을 넘긴다).
             머리 부제는 그 결과를 밝힌다 — «전체 N대 · X-RAY M대», 필터가 걸렸으면 그것도. */}
@@ -174,19 +174,19 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
                                      return d ? ` (${d})` : ''; })()) },
           PER_PAGE)}
           disabled={!shown.length}
-          className="h-11 px-4 rounded-lg bg-amber-500 text-slate-900 font-bold text-[13px] flex items-center gap-1.5 disabled:opacity-40">
+          className="h-11 px-4 rounded-pill bg-amber-500 text-ink-950 font-bold text-sm2 flex items-center gap-1.5 disabled:opacity-40">
           <Printer className="w-4 h-4"/>출력 {pages.length > 1 ? `(${pages.length}장)` : ''}
         </button>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-slate-800 text-[12px] text-slate-400">
+      <div className="bg-ink-900 border border-line rounded-btn overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-line text-xs2 text-dim-300">
           {title} · X-RAY 대상 {rows.length}대{kindFilter ? ` 중 ${kindFilter} ${shown.length}대` : ''} · 베이별순 + 우선양하순
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
-            <thead className="text-[10px] text-slate-500">
-              <tr className="border-b border-slate-800">
+          <table className="w-full text-xs2">
+            <thead className="text-2xs text-dim-400">
+              <tr className="border-b border-line">
                 {/* 열 이름은 **기존 출력물 그대로** — 「SEAL NO」가 아니라 「선사SEAL NO」다 */}
                 {['No.', '컨테이너번호', '선사SEAL NO', '화물구분', '규격', '선내위치', '부착 세관봉인번호', '봉인자'].map((h) => (
                   <th key={h} className="px-2 py-2 text-left whitespace-nowrap">{h}</th>
@@ -195,19 +195,19 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
             </thead>
             <tbody>
               {shown.map((r, i) => (
-                <tr key={r.cn} className="border-b border-slate-800/50">
-                  <td className="px-2 py-2 text-slate-500">{i + 1}</td>
+                <tr key={r.cn} className="border-b border-line-soft">
+                  <td className="px-2 py-2 text-dim-400">{i + 1}</td>
                   <td className="px-2 py-2 mono font-bold">{r.cn}</td>
-                  <td className="px-2 py-2 mono text-slate-300">{r.seal || '—'}</td>
-                  <td className={`px-2 py-2 ${(KINDS.find((k) => k.k === r.kind) || {}).c || 'text-slate-400'}`}>{r.kind || '—'}</td>
-                  <td className="px-2 py-2 mono text-slate-400">{r.iso || '—'}</td>
-                  <td className="px-2 py-2 mono text-slate-300">{pos(r) || <span className="text-rose-400">위치 미상</span>}</td>
-                  <td className="px-2 py-2 mono">{r.cSeal || <span className="text-slate-600">미입력</span>}</td>
-                  <td className="px-2 py-2">{r.sealer || <span className="text-slate-600">미입력</span>}</td>
+                  <td className="px-2 py-2 mono text-dim-200">{r.seal || '—'}</td>
+                  <td className={`px-2 py-2 ${(KINDS.find((k) => k.k === r.kind) || {}).c || 'text-dim-300'}`}>{r.kind || '—'}</td>
+                  <td className="px-2 py-2 mono text-dim-300">{r.iso || '—'}</td>
+                  <td className="px-2 py-2 mono text-dim-200">{pos(r) || <span className="text-rose-400">위치 미상</span>}</td>
+                  <td className="px-2 py-2 mono">{r.cSeal || <span className="text-dim-500">미입력</span>}</td>
+                  <td className="px-2 py-2">{r.sealer || <span className="text-dim-500">미입력</span>}</td>
                 </tr>
               ))}
               {!shown.length && (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-[12px] text-slate-600">
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-xs2 text-dim-500">
                   세관 X-RAY 목록이 없습니다 — 업로드 탭에서 「검수업체컨테이너목록조회」 파일을 올려 주세요.
                 </td></tr>
               )}

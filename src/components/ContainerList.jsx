@@ -14,11 +14,11 @@ import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 
 
 // 필터 정의 (V37 cargoFilter 그대로 + 다크 매핑)
 const FILTERS = [
-  { key: 'all', label: '모두', color: 'bg-slate-600' },
+  { key: 'all', label: '모두', color: 'bg-ink-700' },
   { key: 'remaining', label: '미완', color: 'bg-amber-700' },
   { key: 'completed', label: '완료', color: 'bg-emerald-700' },
   { key: 'full', label: 'F (적컨)', color: 'bg-emerald-600' },
-  { key: 'empty', label: 'E (공컨)', color: 'bg-slate-500' },
+  { key: 'empty', label: 'E (공컨)', color: 'bg-dim-500' },
   { key: 'feUnknown', label: '? (미정)', color: 'bg-amber-600' },
   // 2.08-05: 규격 칩(20DC/40DC/40HC/45HC)은 F줄/E줄 동적 그룹으로 이동
   // 2.08-05 (검수사 확정 «풀은 풀대로 엠티는 엠티대로 총계 후 규격별 갯수. 너무 난잡합니다»):
@@ -236,7 +236,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
 
   if (!list || list.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
+      <div className="bg-ink-900 border border-line rounded-pill p-8 text-center text-dim-400 text-sm">
         컨테이너 없음
       </div>
     );
@@ -256,8 +256,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
   return (
     <div className="space-y-2">
       {/* 필터 버튼 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
-        <div className="text-[10px] text-slate-500 font-bold uppercase mb-1.5">필터 ({filtered.length}/{list.length})</div>
+      <div className="bg-ink-900 border border-line rounded-pill p-2">
+        <div className="text-2xs text-dim-400 font-bold uppercase mb-1.5">필터 ({filtered.length}/{list.length})</div>
         <div className="flex flex-wrap gap-1">
           {visibleFilters.map(f => {
             const cnt = f.key === 'all' ? list.length :
@@ -268,8 +268,8 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
                         counts[f.key] || 0;
             return (
               <button key={f.key} onClick={() => setCargoFilter(f.key)}
-                className={`px-2 py-1 rounded text-[10px] font-bold ${
-                  cargoFilter === f.key ? `${f.color} text-white` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                className={`px-2 py-1 rounded text-2xs font-bold ${
+                  cargoFilter === f.key ? `${f.color} text-white` : 'bg-ink-800 text-dim-300 hover:bg-ink-750'
                 }`}>
                 {f.label} {cnt}
               </button>
@@ -284,7 +284,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
           const tot = chips.reduce((a, [, v]) => a + v.n, 0);
           return (
             <div key={fe} className="flex flex-wrap items-center gap-1 mt-1.5">
-              <span className={`text-[10px] font-black px-1.5 py-1 rounded ${fe === 'F' ? 'text-emerald-300 bg-emerald-950/60' : 'text-slate-300 bg-slate-800/80'}`}>
+              <span className={`text-2xs font-black px-1.5 py-1 rounded ${fe === 'F' ? 'text-emerald-300 bg-emerald-950/60' : 'text-dim-200 bg-ink-800/80'}`}>
                 {fe === 'F' ? `풀 ${tot}` : `엠티 ${tot}`}
               </span>
               {chips.map(([lbl, v]) => {
@@ -293,12 +293,12 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
                 const on = cargoFilter === key;
                 return (
                   <button key={key} onClick={() => setCargoFilter(on ? 'all' : key)}
-                    className={`px-2 py-1 rounded text-[10px] font-bold ${
-                      on ? (fe === 'F' ? 'bg-emerald-700 text-white' : 'bg-slate-600 text-white')
-                         : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                    className={`px-2 py-1 rounded text-2xs font-bold ${
+                      on ? (fe === 'F' ? 'bg-emerald-700 text-white' : 'bg-ink-700 text-white')
+                         : 'bg-ink-800 text-dim-300 hover:bg-ink-750'}`}>
                     {isRfChip
                       ? <span className="inline-flex items-center gap-0.5">
-                          <Snowflake className={`w-3 h-3 ${fe === 'F' ? 'text-cyan-300' : 'text-slate-500'}`}/>
+                          <Snowflake className={`w-3 h-3 ${fe === 'F' ? 'text-cyan-300' : 'text-dim-400'}`}/>
                           {lbl} {v.n}
                           {fe === 'F' && <span className="text-cyan-200/80">({v.n - v.t > 0 ? `온도${v.t}·없음${v.n - v.t}` : `온도${v.t}`})</span>}
                         </span>
@@ -312,12 +312,12 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
 
         {/* 검수업체 필터 + POD 필터 */}
         {(ops.length > 1 || pods.length > 1) && (
-          <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2 flex-wrap">
+          <div className="mt-2 pt-2 border-t border-line flex items-center gap-2 flex-wrap">
             {ops.length > 1 && (
               <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-500 font-bold">검수업체:</span>
+                <span className="text-2xs text-dim-400 font-bold">검수업체:</span>
                 <select value={opFilter} onChange={e => setOpFilter(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded text-[11px] mono text-slate-200 px-1.5 py-0.5">
+                  className="bg-ink-800 border border-line rounded text-xxs mono text-dim-100 px-1.5 py-0.5">
                   <option value="all">전체</option>
                   {ops.map(op => <option key={op} value={op}>{op}</option>)}
                 </select>
@@ -325,9 +325,9 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
             )}
             {pods.length > 1 && (
               <div className="flex items-center gap-1">
-                <span className="text-[10px] text-slate-500 font-bold">목적지:</span>
+                <span className="text-2xs text-dim-400 font-bold">목적지:</span>
                 <select value={podFilter} onChange={e => setPodFilter(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded text-[11px] mono text-slate-200 px-1.5 py-0.5">
+                  className="bg-ink-800 border border-line rounded text-xxs mono text-dim-100 px-1.5 py-0.5">
                   <option value="all">전체</option>
                   {pods.map(pod => <option key={pod} value={pod}>{pod}</option>)}
                 </select>
@@ -335,7 +335,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
             )}
             {(opFilter !== 'all' || podFilter !== 'all') && (
               <button onClick={() => { setOpFilter('all'); setPodFilter('all'); }}
-                className="text-[10px] text-amber-400 hover:text-amber-300 flex items-center gap-0.5">
+                className="text-2xs text-amber-400 hover:text-amber-300 flex items-center gap-0.5">
                 <X className="w-2.5 h-2.5"/>해제
               </button>
             )}
@@ -346,7 +346,7 @@ export default function ContainerList({ list, compMap, xrayMap, xraySeals, mode,
       {/* 카드 리스트 */}
       <div className="space-y-1.5">
         {filtered.length === 0 && (
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-6 text-center text-slate-500 text-sm">
+          <div className="bg-ink-900 border border-line rounded-pill p-6 text-center text-dim-400 text-sm">
             필터 조건에 맞는 컨테이너 없음
           </div>
         )}
@@ -413,14 +413,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const xSealError = xSeal && xSealOrig && xSeal !== xSealOrig;
 
   // 좌측 색깔 띠 (V37 typeBar)
-  let typeBar = 'bg-slate-700';
+  let typeBar = 'bg-ink-750';
   if (isBooking) typeBar = 'bg-amber-500';   // M5.79: 부킹 슬롯
   else if (isDG) typeBar = 'bg-red-500';
   else if (isReefer) typeBar = 'bg-cyan-500';
   else if (c.tk) typeBar = 'bg-orange-500';
   else if (c.fr || c.oog) typeBar = 'bg-purple-500';
   else if (c.fe === 'F') typeBar = 'bg-emerald-500';
-  else typeBar = 'bg-slate-500';
+  else typeBar = 'bg-dim-500';
 
   const handleComplete = async (e) => {
     e.stopPropagation();
@@ -491,12 +491,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
 
   return (
     <div onClick={handleCardClick}
-      className={`bg-slate-900 border rounded-lg overflow-hidden transition cursor-pointer hover:bg-slate-800/50 flex ${
+      className={`bg-ink-900 border rounded-pill overflow-hidden transition cursor-pointer hover:bg-ink-750/50 flex ${
         sealError || xSealError ? 'border-red-700/60 bg-red-950/30' :
         c.lugg ? 'border-violet-500 border-2 bg-violet-950/25' :   /* 2.05-01 검수사 확정 «보라였으면 보라 박스로 — 수화물은 이적대상으로 안보게 정확히 인지» */
         isDone ? 'border-emerald-700/40 bg-emerald-950/20' :
         isXray ? 'border-purple-700/40 bg-purple-950/20' :
-        'border-slate-700'
+        'border-line'
       }`}>
       {/* 좌측 색깔 띠 */}
       <div className={`w-1.5 ${typeBar} flex-shrink-0`}/>
@@ -505,8 +505,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
         <div className="flex items-start gap-2">
           {/* 완료 버튼 */}
           <button onClick={handleComplete}
-            className={`flex-shrink-0 w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-black ${
-              isDone ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
+            className={`flex-shrink-0 w-11 h-11 sm:w-9 sm:h-9 rounded-pill flex items-center justify-center font-black ${
+              isDone ? 'bg-emerald-700 text-emerald-100' : 'bg-ink-800 text-dim-400 hover:bg-ink-750'
             }`}>
             {isDone ? <Check className="w-6 h-6 sm:w-5 sm:h-5"/> : '✓'}
           </button>
@@ -516,12 +516,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {isBooking ? (
                 <>
                   <span className="font-black text-sm text-amber-300 mono">📝 대기</span>
-                  <span className="text-[10px] text-amber-400/80 font-bold">컨번호 입력대기</span>
+                  <span className="text-2xs text-amber-400/80 font-bold">컨번호 입력대기</span>
                 </>
               ) : (
                 <>
                   <span className="font-black text-base sm:text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-                  <span className="text-[12px] sm:text-[11px] text-slate-400 mono truncate">{c.cn}</span>
+                  <span className="text-xs2 sm:text-xxs text-dim-300 mono truncate">{c.cn}</span>
                 </>
               )}
               {(sealError || xSealError) && (
@@ -552,7 +552,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               )}
               <span className={`bdg mono font-bold ${
                 c.fe === 'F' ? 'bg-emerald-700 text-emerald-100' :
-                c.fe === 'E' ? 'bg-slate-600 text-slate-200' :
+                c.fe === 'E' ? 'bg-ink-700 text-dim-100' :
                 'bg-amber-800/60 text-amber-200 border border-amber-600/40'
               }`}>{c.fe || '⚠?'}</span>
               <span className="bdg mono font-bold bg-blue-900 text-blue-300">{isoToLabel(c.iso) || c.tp || ''}</span>
@@ -562,7 +562,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
               {c.lugg && <span className="bg-violet-700 text-violet-50 bdg font-black border border-violet-300/60">🧳 수화물 — 이적 아님{c.luggSeal ? ` · 실 ${c.luggSeal}` : ''}</span>}
               {/* 2.06-04 (검수사 «있기는 하되 내릴지는 모르는 미정상태 — 카톡이나 메시지가 오면 그때 확정»):
                   덱 전용 수화물은 미정 배지 + [양하 확정] 버튼. 확정하면 총계 편입, [미정으로]로 되돌림. */}
-              {c._deckOnly && <span className="bg-slate-700 text-slate-200 bdg font-bold border border-slate-500">⏳ 내릴지 미정</span>}
+              {c._deckOnly && <span className="bg-ink-750 text-dim-100 bdg font-bold border border-line-strong">⏳ 내릴지 미정</span>}
               {c._deckOnly && (
                 <button onClick={async (e) => { e.stopPropagation();
                     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
@@ -574,15 +574,15 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                 <button onClick={async (e) => { e.stopPropagation();
                     if (window.confirm(`${c.cn} — 다시 미정으로 되돌릴까요?`))
                       await fbCancelLuggConfirm(voyageKey, mode, c.cn); }}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 bdg font-bold border border-slate-600">✔ 양하 확정됨 · 미정으로</button>
+                  className="bg-ink-800 hover:bg-ink-750 text-dim-200 bdg font-bold border border-line-strong">✔ 양하 확정됨 · 미정으로</button>
               )}
               {isDG && <span className="bg-red-700/60 text-red-100 bdg font-black"><AlertTriangle className="w-2.5 h-2.5 inline mr-0.5"/>DG{c.un ? ` UN${c.un}` : ''}</span>}
               {/* 1.86 (검수사 확정 «풀만 눈꽃표시 색을 넣어주시고 엠티는 눈꽃을 회색 처리»):
                   엠티 리퍼는 전원을 안 꽂아 잴 것이 없다 — 회색 눈꽃으로 가라앉히고, 풀만 색(온도 뱃지). */}
               {isReefer && (c.fe === 'E'
-                ? <span className="bg-slate-800 text-slate-500 bdg font-bold border border-slate-600/60"><Snowflake className="w-2.5 h-2.5"/>RF</span>
+                ? <span className="bg-ink-800 text-dim-400 bdg font-bold border border-line-strong"><Snowflake className="w-2.5 h-2.5"/>RF</span>
                 : hasTmp
-                  ? <span className="bg-cyan-600 text-cyan-50 text-[10px] px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {c.tmp}°C</span>
+                  ? <span className="bg-cyan-600 text-cyan-50 text-2xs px-1.5 py-0.5 rounded font-black flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>RF {c.tmp}°C</span>
                   : <span className="bg-cyan-900/70 text-cyan-300 bdg font-bold border border-cyan-700/50"><Snowflake className="w-2.5 h-2.5"/>RF</span>)}
               {c.fr && <span className="bg-orange-700/60 text-orange-100 bdg font-black">FR</span>}
               {c.ot && <span className="bg-yellow-700/60 text-yellow-100 bdg font-black">OT</span>}
@@ -590,14 +590,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
             </div>
 
             {/* 위치 + 무게 + 검수업체 + POD 강조 */}
-            <div className="flex items-center gap-2 mt-1 text-[10px] mono flex-wrap">
+            <div className="flex items-center gap-2 mt-1 text-2xs mono flex-wrap">
               {c.bay && <span className="text-amber-200 font-bold">{fmtPos(c)}</span>}
-              {c.wt > 0 && <span className="text-slate-400">{formatWt(c.wt)}</span>}
-              {c.op && <span className="bg-slate-800 px-1 py-0.5 rounded text-slate-300 font-bold">{c.op}</span>}
-              {c.pol && <span className="text-slate-500">POL <span className="text-slate-300">{c.pol}</span></span>}
+              {c.wt > 0 && <span className="text-dim-300">{formatWt(c.wt)}</span>}
+              {c.op && <span className="bg-ink-800 px-1 py-0.5 rounded text-dim-200 font-bold">{c.op}</span>}
+              {c.pol && <span className="text-dim-400">POL <span className="text-dim-200">{c.pol}</span></span>}
               {c.pod && (
-                <span className="text-slate-500">
-                  POD <span className={mode === 'loading' ? 'text-amber-300 font-bold' : 'text-slate-300'}>{c.pod}</span>
+                <span className="text-dim-400">
+                  POD <span className={mode === 'loading' ? 'text-amber-300 font-bold' : 'text-dim-200'}>{c.pod}</span>
                 </span>
               )}
               {comp?.by && <span className="text-emerald-400">[{comp.by}]</span>}
@@ -605,22 +605,22 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
 
             {/* 실번호 (원본 vs 실제) */}
             <div className="flex items-center gap-1 mt-1 flex-wrap">
-              <span className="text-[10px] text-slate-500">실:</span>
+              <span className="text-2xs text-dim-400">실:</span>
               {editingSeal ? (
                 <div onClick={e => e.stopPropagation()} className="flex items-center gap-1">
                   <input type="text" value={sealVal}
                     onChange={e => setSealVal(e.target.value.toUpperCase())}
-                    className="bg-slate-800 border border-amber-600 rounded px-1.5 py-0.5 text-[11px] mono text-amber-200 w-32 focus:outline-none"
+                    className="bg-ink-800 border border-amber-600 rounded px-1.5 py-0.5 text-xxs mono text-amber-200 w-32 focus:outline-none"
                     autoFocus
                     onKeyDown={e => e.key === 'Enter' && handleSaveSeal(e)}/>
                   <button onClick={handleSaveSeal} className="text-emerald-400 text-xs px-1">저장</button>
-                  <button onClick={(e) => { e.stopPropagation(); setEditingSeal(false); setSealVal(c.sl || ''); }} className="text-slate-500 text-xs px-1">×</button>
+                  <button onClick={(e) => { e.stopPropagation(); setEditingSeal(false); setSealVal(c.sl || ''); }} className="text-dim-400 text-xs px-1">×</button>
                 </div>
               ) : (
-                <button onClick={(e) => { e.stopPropagation(); setEditingSeal(true); setSealVal(c.sl || ''); }} className="flex items-center gap-1 text-[11px] mono">
+                <button onClick={(e) => { e.stopPropagation(); setEditingSeal(true); setSealVal(c.sl || ''); }} className="flex items-center gap-1 text-xxs mono">
                   {sealError ? (
                     <>
-                      <span className="text-slate-500 line-through">{slOrig}</span>
+                      <span className="text-dim-400 line-through">{slOrig}</span>
                       <span className="text-red-400 mx-0.5">→</span>
                       <span className="text-red-300 font-black">{c.sl}</span>
                     </>
@@ -629,12 +629,12 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                     c.sl && (c.fe !== 'E' || c.sl.length >= 5) ? (
                       <span className="text-amber-200 font-bold">{c.sl}</span>
                     ) : c.fe === 'E' ? (
-                      <span className="text-slate-300">📦 엠티{c.sl && c.sl.length < 5 ? ` (sl="${c.sl}" 무시)` : ''}</span>
+                      <span className="text-dim-200">📦 엠티{c.sl && c.sl.length < 5 ? ` (sl="${c.sl}" 무시)` : ''}</span>
                     ) : (
-                      <span className="text-slate-600 italic">미입력</span>
+                      <span className="text-dim-500 italic">미입력</span>
                     )
                   )}
-                  <Edit3 className="w-3 h-3 text-slate-600"/>
+                  <Edit3 className="w-3 h-3 text-dim-500"/>
                 </button>
               )}
             </div>
@@ -642,37 +642,37 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
             {/* X-RAY 봉인 */}
             {mode === 'discharge' && isXray && (
               <div className="flex items-center gap-1 mt-1 flex-wrap">
-                <span className="text-[10px] text-purple-400">XRAY:</span>
+                <span className="text-2xs text-purple-400">XRAY:</span>
                 {editingXSeal ? (
                   <div onClick={e => e.stopPropagation()} className="flex items-center gap-1 flex-wrap">
                     <input type="text" value={xSealVal}
                       onChange={e => setXSealVal(e.target.value.toUpperCase())}
                       placeholder="세관"
-                      className="bg-slate-800 border border-purple-600 rounded px-1.5 py-0.5 text-[11px] mono text-purple-200 w-20 focus:outline-none"
+                      className="bg-ink-800 border border-purple-600 rounded px-1.5 py-0.5 text-xxs mono text-purple-200 w-20 focus:outline-none"
                       autoFocus/>
                     <input type="text" value={xEsealVal}
                       onChange={e => setXEsealVal(e.target.value.toUpperCase())}
                       placeholder="전자"
-                      className="bg-slate-800 border border-purple-600 rounded px-1.5 py-0.5 text-[11px] mono text-purple-200 w-20 focus:outline-none"
+                      className="bg-ink-800 border border-purple-600 rounded px-1.5 py-0.5 text-xxs mono text-purple-200 w-20 focus:outline-none"
                       onKeyDown={e => e.key === 'Enter' && handleSaveXSeal(e)}/>
                     <button onClick={handleSaveXSeal} className="text-emerald-400 text-xs px-1">저장</button>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="text-slate-500 text-xs px-1">×</button>
+                    <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="text-dim-400 text-xs px-1">×</button>
                   </div>
                 ) : (
-                  <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(true); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="flex items-center gap-1 text-[11px] mono">
+                  <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(true); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="flex items-center gap-1 text-xxs mono">
                     {xSealError ? (
                       <>
-                        <span className="text-slate-500 line-through">{xSealOrig}</span>
+                        <span className="text-dim-400 line-through">{xSealOrig}</span>
                         <span className="text-red-400 mx-0.5">→</span>
                         <span className="text-red-300 font-black">{xSeal}</span>
                       </>
                     ) : (
-                      <span className={xSeal ? 'text-purple-200 font-bold' : 'text-slate-600 italic'}>
+                      <span className={xSeal ? 'text-purple-200 font-bold' : 'text-dim-500 italic'}>
                         {xSeal || '미입력'}
                         {xraySeal?.eseal && <span className="text-cyan-300"> / {xraySeal.eseal}</span>}
                       </span>
                     )}
-                    <Edit3 className="w-3 h-3 text-slate-600"/>
+                    <Edit3 className="w-3 h-3 text-dim-500"/>
                   </button>
                 )}
               </div>
@@ -681,8 +681,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
 
           {mode === 'discharge' && (
             <button onClick={handleToggleXray}
-              className={`flex-shrink-0 px-2 py-1 rounded text-[10px] font-black ${
-                isXray ? 'bg-purple-700 text-purple-100' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
+              className={`flex-shrink-0 px-2 py-1 rounded text-2xs font-black ${
+                isXray ? 'bg-purple-700 text-purple-100' : 'bg-ink-800 text-dim-400 hover:bg-ink-750'
               }`}>
               🔍
             </button>

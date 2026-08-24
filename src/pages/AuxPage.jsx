@@ -48,13 +48,13 @@ function AuxCard({ icon: Icon, accent, title, sub, badge, onClick }) {
   const a = ACCENT[accent] || ACCENT.sky;
   return (
     <button onClick={onClick}
-      className={`text-left border-2 rounded-2xl p-3.5 min-h-[104px] flex flex-col transition active:scale-95 ${a.card}`}>
+      className={`text-left border-2 rounded-card p-3.5 min-h-[104px] flex flex-col transition active:scale-95 ${a.card}`}>
       <div className="flex items-start justify-between">
         <Icon className={`w-7 h-7 mb-2 ${a.icon}`} />
         {badge || null}
       </div>
       <div className={`text-sm font-black leading-snug ${a.title}`}>{title}</div>
-      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">{sub}</div>
+      <div className="text-xxs text-dim-300 mt-0.5 leading-snug">{sub}</div>
     </button>
   );
 }
@@ -63,10 +63,10 @@ function AuxCard({ icon: Icon, accent, title, sub, badge, onClick }) {
 function SubHeader({ title, onBack }) {
   return (
     <div className="flex items-center gap-1 mb-2">
-      <button onClick={onBack} className="p-2.5 -ml-2 hover:bg-slate-800 rounded-lg" aria-label="뒤로">
-        <ChevronLeft className="w-5 h-5 text-slate-300" />
+      <button onClick={onBack} className="p-2.5 -ml-2 hover:bg-ink-750 rounded-pill" aria-label="뒤로">
+        <ChevronLeft className="w-5 h-5 text-dim-200" />
       </button>
-      <div className="text-base font-black text-slate-100">{title}</div>
+      <div className="text-base font-black text-dim-100">{title}</div>
     </div>
   );
 }
@@ -85,22 +85,22 @@ function TermsView({ onBack }) {
     <div>
       <SubHeader title="검수 용어집" onBack={onBack} />
       <div className="relative mb-2.5">
-        <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+        <Search className="w-4 h-4 text-dim-400 absolute left-3 top-1/2 -translate-y-1/2" />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="용어 검색 (예. POL, 트윈)"
-          className="w-full h-11 pl-9 pr-9 bg-slate-800 border-2 border-slate-700 focus:border-emerald-500 focus:outline-none rounded-xl text-sm text-slate-100 placeholder-slate-500" />
+          className="w-full h-11 pl-9 pr-9 bg-ink-800 border-2 border-line focus:border-emerald-500 focus:outline-none rounded-btn text-sm text-dim-100 placeholder-dim-400" />
         {q && (
-          <button onClick={() => setQ('')} className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-400" aria-label="지우기">✕</button>
+          <button onClick={() => setQ('')} className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-dim-300" aria-label="지우기">✕</button>
         )}
       </div>
       <div className="space-y-1.5">
         {list.map((t, i) => (
-          <div key={i} className="bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-2.5 flex gap-3">
+          <div key={i} className="bg-ink-800/50 border border-line rounded-btn px-3 py-2.5 flex gap-3">
             <div className="text-sm font-black text-emerald-300 mono shrink-0 min-w-[5.5rem]">{t.term}</div>
-            <div className="text-xs sm:text-sm text-slate-300 leading-relaxed">{t.desc}</div>
+            <div className="text-xs sm:text-sm text-dim-200 leading-relaxed">{t.desc}</div>
           </div>
         ))}
         {list.length === 0 && (
-          <div className="text-center text-xs text-slate-500 py-10">검색 결과가 없습니다.</div>
+          <div className="text-center text-xs text-dim-400 py-10">검색 결과가 없습니다.</div>
         )}
       </div>
     </div>
@@ -118,26 +118,26 @@ function EquipView({ onBack }) {
     <div>
       <SubHeader title="장비 번호 안내" onBack={onBack} />
       <div className="space-y-2.5">
-        <div className="bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2.5 flex items-center gap-2">
+        <div className="bg-ink-800/60 border border-line rounded-btn px-3 py-2.5 flex items-center gap-2">
           <Wrench className="w-4 h-4 text-orange-300 shrink-0" />
-          <span className="text-xs text-slate-300">
+          <span className="text-xs text-dim-200">
             내가 저장한 호기 — {mine
               ? <b className="text-orange-200">{mine}</b>
-              : <span className="text-slate-500">아직 없음 (상단 메뉴에서 선택하면 여기 표시됩니다)</span>}
+              : <span className="text-dim-400">아직 없음 (상단 메뉴에서 선택하면 여기 표시됩니다)</span>}
           </span>
         </div>
         {piers.map(p => (
-          <div key={p.code} className="bg-slate-900 border border-slate-800 rounded-xl p-3">
-            <div className="text-sm font-black text-slate-100">{p.label}</div>
-            <div className="text-[11px] text-slate-500 mb-2">{p.note}</div>
+          <div key={p.code} className="bg-ink-900 border border-line rounded-btn p-3">
+            <div className="text-sm font-black text-dim-100">{p.label}</div>
+            <div className="text-xxs text-dim-400 mb-2">{p.note}</div>
             <div className="flex flex-wrap gap-1.5">
               {equipNumbersForPier(p.code).map(n => (
-                <span key={n} className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-bold text-orange-200 mono">{n}</span>
+                <span key={n} className="px-2.5 py-1.5 rounded-pill bg-ink-800 border border-line text-xs font-bold text-orange-200 mono">{n}</span>
               ))}
             </div>
           </div>
         ))}
-        <div className="text-[10px] text-slate-600 leading-relaxed px-1">
+        <div className="text-2xs text-dim-500 leading-relaxed px-1">
           부두를 모르면 최대 기준(1~5호기)으로 봅니다. 작업 보고·워킹 리포트의 호기 선택과 같은 목록입니다.
         </div>
       </div>
@@ -167,56 +167,56 @@ function ClaudeReplyView({ inspector, isOwner = false, onBack }) {
   const stTone = (st) => st === 'fixed'
     ? { box: 'border-emerald-700/50 bg-emerald-950/30', head: 'text-emerald-300', icon: '✅', label: '반영 완료' }
     : st === 'built' ? { box: 'border-sky-700/50 bg-sky-950/25', head: 'text-sky-300', icon: '📦', label: '수정 완료 · 배포 대기' }
-    : st === 'wontfix' ? { box: 'border-slate-700 bg-slate-900/60', head: 'text-slate-300', icon: '↩', label: '수정 안 함' }
+    : st === 'wontfix' ? { box: 'border-line bg-ink-900/60', head: 'text-dim-200', icon: '↩', label: '수정 안 함' }
     : { box: 'border-sky-700/50 bg-sky-950/25', head: 'text-sky-300', icon: '🔧', label: '처리 예정' };
 
   return (
     <div className="space-y-2">
       <SubHeader title="오답노트 — 개발 회신" onBack={onBack} />
-      <div className="text-[11px] text-slate-400 px-1">
+      <div className="text-xxs text-dim-300 px-1">
         신고 {rows.length}건 · 회신 대기 {waiting}건 {isOwner ? '· (전체 검수사)' : '· (내 신고분)'}
       </div>
       {rows.length === 0 && (
-        <div className="text-xs text-slate-500 text-center py-6">신고한 오답이 없습니다.</div>
+        <div className="text-xs text-dim-400 text-center py-6">신고한 오답이 없습니다.</div>
       )}
       {rows.map(f => {
         const t = stTone(f.claudeStatus || '');
         const when = new Date(f.ts || f.at || 0).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
         return (
-          <div key={f._key} className={`bg-slate-950 border rounded-lg p-2.5 ${f.resolved ? 'border-slate-800 opacity-70' : 'border-red-900/40'}`}>
+          <div key={f._key} className={`bg-ink-950 border rounded-pill p-2.5 ${f.resolved ? 'border-line opacity-70' : 'border-red-900/40'}`}>
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <span className="text-[10px] text-slate-500">{when}</span>
-              {f.voyageVsl && <span className="text-[10px] text-slate-500">{f.voyageVsl}</span>}
-              <span className="text-[9px] text-slate-600 mono">v{f.appVersion || '-'}</span>
+              <span className="text-2xs text-dim-400">{when}</span>
+              {f.voyageVsl && <span className="text-2xs text-dim-400">{f.voyageVsl}</span>}
+              <span className="text-3xs text-dim-500 mono">v{f.appVersion || '-'}</span>
             </div>
             <div className="text-xs text-amber-200 mono break-all mb-1">Q: {f.query}</div>
             {!f.claudeStatus && !f.claudeAnswer && (
-              <div className="text-[11px] text-slate-500 bg-slate-900/60 border border-slate-800 rounded px-2 py-1">
+              <div className="text-xxs text-dim-400 bg-ink-900/60 border border-line rounded px-2 py-1">
                 🕐 개발 확인 대기 — 아직 회신이 없습니다
               </div>
             )}
             {(f.claudeAnswer || f.claudeStatus) && (
-              <div className={`text-[11px] rounded px-2 py-1.5 border leading-relaxed ${t.box}`}>
+              <div className={`text-xxs rounded px-2 py-1.5 border leading-relaxed ${t.box}`}>
                 {f.claudeAnswer && (
-                  <div className="mb-1.5 pb-1.5 border-b border-slate-700/50">
-                    <div className="text-[10px] font-bold text-amber-300 mb-0.5">💬 답</div>
-                    <div className="text-[11px] text-slate-100 whitespace-pre-wrap leading-snug">{f.claudeAnswer}</div>
+                  <div className="mb-1.5 pb-1.5 border-b border-line">
+                    <div className="text-2xs font-bold text-amber-300 mb-0.5">💬 답</div>
+                    <div className="text-xxs text-dim-100 whitespace-pre-wrap leading-snug">{f.claudeAnswer}</div>
                   </div>
                 )}
                 <div className={`font-bold ${t.head}`}>
                   {t.icon} 개발 — {t.label}
-                  {f.claudeEta && f.claudeStatus !== 'fixed' && <span className="ml-1 text-slate-300">· {f.claudeEta}분 예정</span>}
-                  {f.fixedVersion && f.claudeStatus === 'fixed' && <span className="ml-1 text-slate-300 mono">· {f.fixedVersion}</span>}
+                  {f.claudeEta && f.claudeStatus !== 'fixed' && <span className="ml-1 text-dim-200">· {f.claudeEta}분 예정</span>}
+                  {f.fixedVersion && f.claudeStatus === 'fixed' && <span className="ml-1 text-dim-200 mono">· {f.fixedVersion}</span>}
                 </div>
-                {f.claudePlan && <div className="text-slate-300 mt-0.5 whitespace-pre-wrap">{f.claudePlan}</div>}
+                {f.claudePlan && <div className="text-dim-200 mt-0.5 whitespace-pre-wrap">{f.claudePlan}</div>}
               </div>
             )}
             <button onClick={() => setOpenKey(openKey === f._key ? null : f._key)}
-              className="mt-1 text-[10px] text-slate-500 hover:text-slate-300">
+              className="mt-1 text-2xs text-dim-400 hover:text-dim-200">
               {openKey === f._key ? '▼ 앱 답변 숨기기' : '▶ 그때 앱이 한 답 보기'}
             </button>
             {openKey === f._key && (
-              <div className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap leading-relaxed bg-slate-900/40 rounded p-2 max-h-40 overflow-y-auto">
+              <div className="mt-1 text-xxs text-dim-300 whitespace-pre-wrap leading-relaxed bg-ink-900/40 rounded p-2 max-h-40 overflow-y-auto">
                 {f.answerText || '(없음)'}
               </div>
             )}
@@ -244,41 +244,41 @@ function BriefingModal({ inspector, onClose }) {
   const { loading, msg, weatherOk } = state;
   return (
     <div className="fixed inset-0 z-[150] bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-slate-900 border-2 border-sky-700/60 rounded-2xl w-full max-w-sm p-4 space-y-3" onClick={e => e.stopPropagation()}>
+      <div className="bg-ink-900 border-2 border-sky-700/60 rounded-card w-full max-w-sm p-4 space-y-3" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="font-black text-sky-200 flex items-center gap-2"><Sun className="w-5 h-5 text-amber-300" />오늘의 브리핑</div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg" aria-label="닫기">
-            <X className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill" aria-label="닫기">
+            <X className="w-5 h-5 text-dim-300" />
           </button>
         </div>
         {loading ? (
-          <div className="text-center text-xs text-slate-500 py-8">평택항 날씨를 조회하는 중...</div>
+          <div className="text-center text-xs text-dim-400 py-8">평택항 날씨를 조회하는 중...</div>
         ) : (
           <>
             <div className="space-y-1">
               {(msg?.lines || []).map((l, i) => (
-                <div key={i} className={`leading-relaxed ${i === 0 ? 'text-base font-bold text-slate-100' : 'text-sm text-slate-200'}`}>{l}</div>
+                <div key={i} className={`leading-relaxed ${i === 0 ? 'text-base font-bold text-dim-100' : 'text-sm text-dim-100'}`}>{l}</div>
               ))}
             </div>
             {!weatherOk && (
-              <div className="bg-amber-950/40 border border-amber-700/50 rounded-lg px-3 py-2 text-[11px] text-amber-200 leading-relaxed">
+              <div className="bg-amber-950/40 border border-amber-700/50 rounded-pill px-3 py-2 text-xxs text-amber-200 leading-relaxed">
                 ⚠ 날씨 조회에 실패했습니다 — 네트워크 확인 후 아래 [다시 조회]를 눌러 주세요.
               </div>
             )}
             {weatherOk && (msg?.workForecast || []).length > 0 && (
-              <div className="bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2">
-                <div className="text-[10px] font-black text-sky-300/80 mb-1">근무 시간대 예보</div>
+              <div className="bg-ink-800/60 border border-line rounded-pill px-3 py-2">
+                <div className="text-2xs font-black text-sky-300/80 mb-1">근무 시간대 예보</div>
                 {msg.workForecast.map((l, i) => (
-                  <div key={i} className="text-xs text-slate-200 mono leading-relaxed">{l}</div>
+                  <div key={i} className="text-xs text-dim-100 mono leading-relaxed">{l}</div>
                 ))}
               </div>
             )}
-            <div className="text-[10px] text-slate-600">하루 1회 자동 인사와 별개로 언제든 다시 볼 수 있어요.</div>
+            <div className="text-2xs text-dim-500">하루 1회 자동 인사와 별개로 언제든 다시 볼 수 있어요.</div>
             <div className="flex gap-2">
-              <button onClick={load} className="flex-1 h-11 rounded-lg bg-sky-800 hover:bg-sky-700 text-white text-sm font-bold flex items-center justify-center gap-1.5">
+              <button onClick={load} className="flex-1 h-11 rounded-pill bg-sky-800 hover:bg-sky-700 text-white text-sm font-bold flex items-center justify-center gap-1.5">
                 <RefreshCw className="w-4 h-4" />다시 조회
               </button>
-              <button onClick={onClose} className="flex-1 h-11 rounded-lg bg-slate-800 text-slate-300 text-sm font-bold">닫기</button>
+              <button onClick={onClose} className="flex-1 h-11 rounded-pill bg-ink-800 text-dim-200 text-sm font-bold">닫기</button>
             </div>
           </>
         )}
@@ -345,26 +345,26 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
   const roleTag = isOwner ? '소유자' : (isChief ? (isTesterName ? '테스터' : '수석') : '');   // 1.79: 테스터 호칭 분리
 
   const hbBadge = hb.state === 'ok'
-    ? <span className="px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700/50 text-emerald-300 text-[10px] font-bold shrink-0">수집기 정상</span>
+    ? <span className="px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700/50 text-emerald-300 text-2xs font-bold shrink-0">수집기 정상</span>
     : hb.state === 'down'
-      ? <span className="px-1.5 py-0.5 rounded bg-red-950 border border-red-700/60 text-red-300 text-[10px] font-bold shrink-0">수집기 끊김</span>
-      : <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-500 text-[10px] font-bold shrink-0">기록 없음</span>;
+      ? <span className="px-1.5 py-0.5 rounded bg-red-950 border border-red-700/60 text-red-300 text-2xs font-bold shrink-0">수집기 끊김</span>
+      : <span className="px-1.5 py-0.5 rounded bg-ink-800 border border-line text-dim-400 text-2xs font-bold shrink-0">기록 없음</span>;
 
   return (
     <div className="max-w-3xl mx-auto px-3 py-3 space-y-3">
       {/* 상단 — 홈 복귀 + 타이틀 */}
       <div className="flex items-center justify-between">
-        <button onClick={() => go('#/')} className="flex items-center gap-1 py-2.5 pr-3 text-sm text-slate-400 hover:text-sky-300">
+        <button onClick={() => go('#/')} className="flex items-center gap-1 py-2.5 pr-3 text-sm text-dim-300 hover:text-sky-300">
           <ChevronLeft className="w-4 h-4" />홈
         </button>
-        <div className="font-black text-slate-100">🧰 보조기능</div>
+        <div className="font-black text-dim-100">🧰 보조기능</div>
         <div className="w-12" />
       </div>
 
       {/* 인사 한 줄 */}
-      <div className="bg-slate-900/70 border border-slate-800 rounded-xl px-3.5 py-3 flex items-center gap-2">
-        <span className="text-sm text-slate-200 leading-relaxed flex-1">{greetLine(inspector)}</span>
-        {roleTag && <span className="px-1.5 py-0.5 rounded bg-amber-950 border border-amber-700/50 text-amber-300 text-[10px] font-bold shrink-0">{roleTag}</span>}
+      <div className="bg-ink-900/70 border border-line rounded-btn px-3.5 py-3 flex items-center gap-2">
+        <span className="text-sm text-dim-100 leading-relaxed flex-1">{greetLine(inspector)}</span>
+        {roleTag && <span className="px-1.5 py-0.5 rounded bg-amber-950 border border-amber-700/50 text-amber-300 text-2xs font-bold shrink-0">{roleTag}</span>}
       </div>
 
       {view === 'terms' ? (
@@ -422,7 +422,7 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
       )}
 
       {view === 'grid' && (
-        <div className="text-[10px] text-slate-600 text-center flex items-center justify-center gap-1">
+        <div className="text-2xs text-dim-500 text-center flex items-center justify-center gap-1">
           <MessageCircle className="w-3 h-3" />보조기능은 모든 검수사에게 열려 있습니다
         </div>
       )}

@@ -246,20 +246,20 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 flex items-end sm:items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-ink-900 border border-line rounded-card w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-950">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-ink-950">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🏁</span>
             <div>
               <div className="text-lg font-black text-amber-300">작업 마감 점검</div>
-              <div className="text-[11px] text-slate-400">
+              <div className="text-xxs text-dim-300">
                 {mode === 'discharge' ? '양하' : '선적'} · 배 내리기 전 마지막 점검
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg">
-            <X className="w-5 h-5 text-slate-300"/>
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill">
+            <X className="w-5 h-5 text-dim-200"/>
           </button>
         </div>
 
@@ -267,7 +267,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {allClear ? (
             <>
-            <div className="bg-emerald-900/30 border-2 border-emerald-600 rounded-xl p-8 text-center">
+            <div className="bg-emerald-900/30 border-2 border-emerald-600 rounded-btn p-8 text-center">
               <div className="text-7xl mb-3">✅</div>
               <div className="text-2xl font-black text-emerald-200 mb-2">마감 가능</div>
               <div className="text-sm text-emerald-300/80 leading-relaxed">
@@ -282,7 +282,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
             </>
           ) : (
             <>
-              <div className="bg-amber-950/40 border border-amber-700/40 rounded-lg p-3 flex items-start gap-2 mb-3">
+              <div className="bg-amber-950/40 border border-amber-700/40 rounded-pill p-3 flex items-start gap-2 mb-3">
                 <AlertTriangle className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5"/>
                 <div className="text-sm text-amber-100 font-bold">
                   {pending.length}개 항목 미해결 — 항목을 누르면 해당 화면으로 이동합니다.
@@ -296,7 +296,7 @@ export default function WorkClosingChecklist({ open, voyage, mode, onClose, onJu
         </div>
 
         {/* 푸터 */}
-        <div className="px-4 py-2 border-t border-slate-700 bg-slate-950 text-[10px] text-slate-500 text-center">
+        <div className="px-4 py-2 border-t border-line bg-ink-950 text-2xs text-dim-400 text-center">
           M5.1 · 검수 종료 전 최종 점검용 — 항목별 카운트는 실시간 갱신됩니다
         </div>
       </div>
@@ -327,16 +327,16 @@ function ChecklistItem({ item, onJump, onClose }) {
     <button
       onClick={handleClick}
       disabled={!clickable}
-      className={`w-full text-left ${c.bg} border-2 ${c.border} rounded-xl p-3 flex items-center gap-3 transition ${
+      className={`w-full text-left ${c.bg} border-2 ${c.border} rounded-btn p-3 flex items-center gap-3 transition ${
         clickable ? 'hover:brightness-125 active:scale-[0.98] cursor-pointer' : 'opacity-60 cursor-default'
       }`}
     >
-      <div className={`w-10 h-10 rounded-full bg-slate-900/60 flex items-center justify-center flex-shrink-0 ${c.text}`}>
+      <div className={`w-10 h-10 rounded-full bg-ink-900/60 flex items-center justify-center flex-shrink-0 ${c.text}`}>
         {item.count === 0 ? <CheckCircle2 className="w-6 h-6"/> : <Icon className="w-5 h-5"/>}
       </div>
       <div className="flex-1 min-w-0">
         <div className={`font-black text-sm ${c.text}`}>{item.label}</div>
-        <div className="text-[11px] text-slate-400 leading-tight mt-0.5">{item.desc}</div>
+        <div className="text-xxs text-dim-300 leading-tight mt-0.5">{item.desc}</div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         <span className={`text-2xl font-black mono ${c.count}`}>{item.count}</span>

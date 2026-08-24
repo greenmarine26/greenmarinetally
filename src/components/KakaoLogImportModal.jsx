@@ -103,40 +103,40 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-slate-900 border border-amber-800/60 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl max-h-[92vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+      <div className="bg-ink-900 border border-amber-800/60 rounded-t-2xl sm:rounded-card w-full sm:max-w-3xl max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
           <div className="flex items-center gap-2">
             <ClipboardPaste className="w-4 h-4 text-amber-400"/>
             <span className="font-bold text-amber-200 text-[14px]">작업 기록 보강 · 정리</span>
           </div>
-          <button onClick={onClose} className="text-slate-500 p-2" style={{ minHeight: 40 }}><X className="w-5 h-5"/></button>
+          <button onClick={onClose} className="text-dim-400 p-2" style={{ minHeight: 40 }}><X className="w-5 h-5"/></button>
         </div>
 
-        <div className="px-4 pt-2 flex gap-1 border-b border-slate-800">
+        <div className="px-4 pt-2 flex gap-1 border-b border-line">
           {[['add', '카톡으로 채우기'], ['clean', `기록 정리 (${saved.length})`]].map(([k, lbl]) => (
             <button key={k} onClick={() => { setTab(k); setMsg(''); setConfirmKey(null); }}
-              className={`px-3 py-2 text-[12px] rounded-t-lg border-b-2 ${
-                tab === k ? 'border-amber-500 text-amber-200 font-bold' : 'border-transparent text-slate-500'}`}
+              className={`px-3 py-2 text-xs2 rounded-t-lg border-b-2 ${
+                tab === k ? 'border-amber-500 text-amber-200 font-bold' : 'border-transparent text-dim-400'}`}
               style={{ minHeight: 40 }}>{lbl}</button>
           ))}
         </div>
 
         {tab === 'add' && (<>
-        <div className="px-4 py-2 border-b border-slate-800">
-          <div className="text-[11px] text-slate-400 mb-1">
+        <div className="px-4 py-2 border-b border-line">
+          <div className="text-xxs text-dim-300 mb-1">
             작업방 대화를 그대로 붙여넣으세요. 앱이 보낸 것·손으로 친 것 섞여 있어도 됩니다.
-            <span className="text-slate-500"> (사진·잡담은 자동으로 걸러집니다)</span>
+            <span className="text-dim-400"> (사진·잡담은 자동으로 걸러집니다)</span>
           </div>
           <textarea value={text} onChange={(e) => { setText(e.target.value); setPicked(null); setMsg(''); }}
             rows={5} placeholder={'[검수사] [22:16] 26번베이 커버 2장 오픈\n[검수사] [22:47] 13&15 H/O 2장 입니다'}
-            className="w-full bg-slate-800 border border-slate-700 focus:border-amber-600 rounded px-2 py-1.5 text-[12px] text-slate-200 focus:outline-none"/>
+            className="w-full bg-ink-800 border border-line focus:border-amber-600 rounded px-2 py-1.5 text-xs2 text-dim-100 focus:outline-none"/>
         </div>
 
         {text.trim() && (
-          <div className="px-4 py-1.5 text-[11px] border-b border-slate-800 flex items-center gap-3 flex-wrap">
-            <span className="text-slate-400">읽음 <b className="text-slate-200">{rows.length}</b>건</span>
+          <div className="px-4 py-1.5 text-xxs border-b border-line flex items-center gap-3 flex-wrap">
+            <span className="text-dim-300">읽음 <b className="text-dim-100">{rows.length}</b>건</span>
             <span className="text-amber-300">앱에 없음 <b>{missing.length}</b>건</span>
-            <span className="text-slate-600">이미 있음 {rows.length - missing.length}건</span>
+            <span className="text-dim-500">이미 있음 {rows.length - missing.length}건</span>
           </div>
         )}
 
@@ -150,31 +150,31 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
             return (
               <button key={k + Math.random()} onClick={() => !r.dup && toggle(r)} disabled={r.dup}
                 className={`w-full text-left px-2 py-1.5 rounded border flex items-start gap-2 ${
-                  r.dup ? 'bg-slate-900 border-slate-800 opacity-50'
-                    : on ? 'bg-amber-900/25 border-amber-700/60' : 'bg-slate-800/40 border-slate-700'}`}>
-                <span className={`mt-0.5 w-4 h-4 rounded shrink-0 flex items-center justify-center text-[10px] ${
-                  r.dup ? 'bg-slate-700 text-slate-500' : on ? 'bg-amber-600 text-white' : 'border border-slate-600'}`}>
+                  r.dup ? 'bg-ink-900 border-line opacity-50'
+                    : on ? 'bg-amber-900/25 border-amber-700/60' : 'bg-ink-800/40 border-line'}`}>
+                <span className={`mt-0.5 w-4 h-4 rounded shrink-0 flex items-center justify-center text-2xs ${
+                  r.dup ? 'bg-ink-750 text-dim-400' : on ? 'bg-amber-600 text-white' : 'border border-line-strong'}`}>
                   {r.dup ? '–' : on ? '✓' : ''}
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="text-[12px] text-slate-200">{HHMM(r.ts)}</span>
-                  <span className="text-[12px] text-amber-200 ml-2">{label}</span>
-                  {r.equip && <span className="text-[11px] text-slate-500 ml-2">{r.equip}</span>}
-                  {r.dup && <span className="text-[10px] text-slate-500 ml-2">이미 기록됨</span>}
-                  <span className="block text-[10px] text-slate-600 truncate">← {r.raw}</span>
+                  <span className="text-xs2 text-dim-100">{HHMM(r.ts)}</span>
+                  <span className="text-xs2 text-amber-200 ml-2">{label}</span>
+                  {r.equip && <span className="text-xxs text-dim-400 ml-2">{r.equip}</span>}
+                  {r.dup && <span className="text-2xs text-dim-400 ml-2">이미 기록됨</span>}
+                  <span className="block text-2xs text-dim-500 truncate">← {r.raw}</span>
                 </span>
               </button>
             );
           })}
           {text.trim() && rows.length === 0 && (
-            <div className="text-[12px] text-slate-500 py-4 text-center">읽을 수 있는 작업 기록이 없습니다.</div>
+            <div className="text-xs2 text-dim-400 py-4 text-center">읽을 수 있는 작업 기록이 없습니다.</div>
           )}
         </div>
         </>)}
 
         {tab === 'clean' && (
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1">
-          <div className="text-[11px] text-slate-400 flex items-start gap-1.5 pb-1">
+          <div className="text-xxs text-dim-300 flex items-start gap-1.5 pb-1">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-px"/>
             <span>테스트하다 묻어 들어온 보고를 지웁니다. 앱이 쓴 기록이라 앱은 진짜와 구분하지 못합니다 — <b className="text-amber-300">판단은 수석이</b> 합니다. 지우면 되돌릴 수 없습니다.</span>
           </div>
@@ -185,41 +185,41 @@ export default function KakaoLogImportModal({ voyage, voyageKey, base, onClose, 
             const asking = confirmKey === k;
             return (
               <div key={k} className={`px-2 py-1.5 rounded border flex items-center gap-2 ${
-                gone.has(k) ? 'bg-slate-900 border-slate-800 opacity-40'
-                  : asking ? 'bg-rose-900/30 border-rose-700' : 'bg-slate-800/40 border-slate-700'}`}>
+                gone.has(k) ? 'bg-ink-900 border-line opacity-40'
+                  : asking ? 'bg-rose-900/30 border-rose-700' : 'bg-ink-800/40 border-line'}`}>
                 <span className="flex-1 min-w-0">
-                  <span className="text-[12px] text-slate-200">{HHMM(r.ts)}</span>
-                  <span className="text-[12px] text-amber-200 ml-2">{label}</span>
-                  <span className={`text-[10px] ml-2 px-1 rounded ${r._src === 'kakao' ? 'bg-amber-900/60 text-amber-300' : 'bg-slate-700 text-slate-400'}`}>
+                  <span className="text-xs2 text-dim-100">{HHMM(r.ts)}</span>
+                  <span className="text-xs2 text-amber-200 ml-2">{label}</span>
+                  <span className={`text-2xs ml-2 px-1 rounded ${r._src === 'kakao' ? 'bg-amber-900/60 text-amber-300' : 'bg-ink-750 text-dim-300'}`}>
                     {r._src === 'kakao' ? '카톡' : '앱'}
                   </span>
-                  {gone.has(k) && <span className="text-[10px] text-rose-400 ml-2">지움</span>}
+                  {gone.has(k) && <span className="text-2xs text-rose-400 ml-2">지움</span>}
                 </span>
                 {!gone.has(k) && (asking ? (
                   <>
                     <button onClick={() => del(k)} disabled={busy}
-                      className="px-2 py-1.5 rounded text-[11px] font-bold bg-rose-700 hover:bg-rose-600 text-white disabled:opacity-50"
+                      className="px-2 py-1.5 rounded text-xxs font-bold bg-rose-700 hover:bg-rose-600 text-white disabled:opacity-50"
                       style={{ minHeight: 36 }}>{busy ? '…' : '지웁니다'}</button>
-                    <button onClick={() => setConfirmKey(null)} className="px-2 py-1.5 rounded text-[11px] bg-slate-700 text-slate-300" style={{ minHeight: 36 }}>취소</button>
+                    <button onClick={() => setConfirmKey(null)} className="px-2 py-1.5 rounded text-xxs bg-ink-750 text-dim-200" style={{ minHeight: 36 }}>취소</button>
                   </>
                 ) : (
-                  <button onClick={() => { setConfirmKey(k); setMsg(''); }} className="p-2 text-slate-500 hover:text-rose-400" style={{ minHeight: 36 }}>
+                  <button onClick={() => { setConfirmKey(k); setMsg(''); }} className="p-2 text-dim-400 hover:text-rose-400" style={{ minHeight: 36 }}>
                     <Trash2 className="w-4 h-4"/>
                   </button>
                 ))}
               </div>
             );
           })}
-          {!saved.length && <div className="text-[12px] text-slate-500 py-4 text-center">작업 보고가 없습니다.</div>}
+          {!saved.length && <div className="text-xs2 text-dim-400 py-4 text-center">작업 보고가 없습니다.</div>}
         </div>
         )}
 
-        {msg && <div className={`px-4 py-1.5 text-[11px] border-t border-slate-800 ${/실패/.test(msg) ? 'text-rose-300' : 'text-emerald-300'}`}>{msg}</div>}
-        <div className="px-4 py-3 border-t border-slate-800 flex items-center gap-2">
-          <button onClick={onClose} className="px-3 py-2 rounded-lg text-[12px] bg-slate-800 text-slate-400" style={{ minHeight: 44 }}>닫기</button>
+        {msg && <div className={`px-4 py-1.5 text-xxs border-t border-line ${/실패/.test(msg) ? 'text-rose-300' : 'text-emerald-300'}`}>{msg}</div>}
+        <div className="px-4 py-3 border-t border-line flex items-center gap-2">
+          <button onClick={onClose} className="px-3 py-2 rounded-pill text-xs2 bg-ink-800 text-dim-300" style={{ minHeight: 44 }}>닫기</button>
           {tab === 'add' && (
           <button onClick={add} disabled={busy || !missing.length}
-            className="flex-1 px-3 py-2 rounded-lg text-[13px] font-bold bg-amber-700 hover:bg-amber-600 text-white flex items-center justify-center gap-1 disabled:opacity-50"
+            className="flex-1 px-3 py-2 rounded-pill text-sm2 font-bold bg-amber-700 hover:bg-amber-600 text-white flex items-center justify-center gap-1 disabled:opacity-50"
             style={{ minHeight: 44 }}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
             기록에 추가 ({missing.filter((r) => sel.has(keyOf(r))).length}건)

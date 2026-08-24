@@ -461,16 +461,16 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   // V7.32: 선사 배경색 폐지 → 배경은 우리화물/통과만 구분. 선사는 글자색(getOpColor). XRAY만 배경 보라.
   const cellColor = (c) => {
     // V8.25-06: 흰 배경 + 지정색 글자(B안). XRAY 보라 배경 제거(붉은 별로 대체).
-    if (!c?.cn) return 'bg-white text-slate-400 border-slate-300';
+    if (!c?.cn) return 'bg-white text-dim-300 border-slate-300';
     if (xrayMap && xrayMap[c.cn]) {
-      if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-slate-500 border-emerald-500 ring-1 ring-emerald-400';   // V8.85: XRAY 완료도 초록 배경
-      return 'bg-white text-slate-900 border-red-400';
+      if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-dim-400 border-emerald-500 ring-1 ring-emerald-400';   // V8.85: XRAY 완료도 초록 배경
+      return 'bg-white text-ink-950 border-red-400';
     }
-    if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-slate-500 border-emerald-400';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
-    if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-50 text-slate-900 border-orange-500 ring-1 ring-orange-400';
+    if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-dim-400 border-emerald-400';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
+    if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
     const isOurContainer = isPtk(c) || (!!c.cn && dischargeCns.has(c.cn));   // V9.39: undefined 오염 차단
-    if (isOurContainer) return 'bg-white text-slate-900 border-slate-400';
-    return 'bg-slate-50 text-slate-400 border-slate-200';
+    if (isOurContainer) return 'bg-white text-ink-950 border-line-strong';
+    return 'bg-slate-50 text-dim-300 border-slate-200';
   };
 
   // 셀 크기 (zoom 적용) - PDF 5줄 다 보이게
@@ -551,7 +551,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
   if (containers.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
+      <div className="bg-ink-900 border border-line rounded-pill p-8 text-center text-dim-400 text-sm">
         베이 데이터 없음 — 자료 탭에서 EDI/ASC 업로드
       </div>
     );
@@ -559,7 +559,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
   if (pages.length === 0) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-8 text-center text-slate-500 text-sm">
+      <div className="bg-ink-900 border border-line rounded-pill p-8 text-center text-dim-400 text-sm">
         베이 정보 없음
       </div>
     );
@@ -571,28 +571,28 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     <div className="space-y-2">
       {/* V7.01: 계열 대체 안내 — 정확한 베이정보 없어 같은 계열 선박으로 대체 시 */}
       {bayDictSubstituted && (
-        <div className="bg-amber-100 border border-amber-600 text-amber-900 rounded-lg p-2 text-xs">
+        <div className="bg-amber-100 border border-amber-600 text-amber-900 rounded-pill p-2 text-xs">
           ⚠ {bayDictSubstituted.fromCode} 베이정보가 없어 같은 계열 {bayDictSubstituted.usedName ? `${bayDictSubstituted.usedName}(${bayDictSubstituted.usedCode})` : bayDictSubstituted.usedCode}(으)로 대체했습니다. 구조가 미세하게 다를 수 있습니다.
         </div>
       )}
       {/* 1.69-06: 전항 양하 예정 통과분 숨김 안내 — 무엇이 왜 안 보이는지 근거를 남긴다 */}
       {preGoneCns && (
-        <div className="bg-sky-100 border border-sky-600 text-sky-900 rounded-lg p-2 text-xs">
+        <div className="bg-sky-100 border border-sky-600 text-sky-900 rounded-pill p-2 text-xs">
           ⚓ 전항 양하 예정 {preGoneCns.size}대를 화면에서 숨겼습니다 — {preGoneInfo?.origin || '출항지'} 출항본의 {(preGoneInfo?.list || []).join('·')} 양하분(평택 도착 전 하선). 인쇄물에는 그대로 나옵니다.
         </div>
       )}
       {pendingMove && (
-        <div className="bg-amber-500 text-slate-900 rounded-lg p-3 flex items-center gap-3 sticky top-0 z-30 shadow-lg border-2 border-amber-300">
+        <div className="bg-amber-500 text-ink-950 rounded-pill p-3 flex items-center gap-3 sticky top-0 z-30 shadow-lg border-2 border-amber-300">
           <span className="text-xl">📦</span>
           <div className="flex-1">
             <div className="text-sm font-black mono">{pendingMove.cn}</div>
-            <div className="text-[11px] font-bold leading-tight">
+            <div className="text-xxs font-bold leading-tight">
               본위치 {pendingMove.fromBay}/{pendingMove.fromRow}/{pendingMove.fromTier} →
               <span className="ml-1 underline">베이그리드에서 빈 셀(점선/X)을 누르세요</span>
             </div>
           </div>
           <button onClick={() => onCancelMove && onCancelMove()}
-            className="px-3 py-2 bg-slate-900 text-amber-200 hover:bg-slate-800 rounded text-xs font-black">
+            className="px-3 py-2 bg-ink-900 text-amber-200 hover:bg-ink-750 rounded text-xs font-black">
             취소
           </button>
         </div>
@@ -600,10 +600,10 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
       {/* M5.1 I: 영역 선택 진행 바 — 선택 모드 + 1개 이상 */}
       {selectionMode && selectedCns.size > 0 && (
-        <div className="bg-sky-700 text-sky-50 rounded-lg p-3 flex items-center gap-2 sticky top-0 z-20 shadow-lg border-2 border-sky-400 flex-wrap">
+        <div className="bg-sky-700 text-sky-50 rounded-pill p-3 flex items-center gap-2 sticky top-0 z-20 shadow-lg border-2 border-sky-400 flex-wrap">
           <span className="text-base">🔲</span>
           <span className="text-sm font-black">선택 {selectedCns.size}대</span>
-          <span className="text-[11px] text-sky-200 flex-1 leading-tight min-w-[120px]">
+          <span className="text-xxs text-sky-200 flex-1 leading-tight min-w-[120px]">
             컨 셀을 더 클릭해서 추가/제외하세요
           </span>
           <button onClick={() => {
@@ -616,7 +616,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             📦 보관함으로
           </button>
           <button onClick={() => setSelectedCns(new Set())}
-            className="px-2 py-1.5 bg-sky-900 hover:bg-sky-800 rounded text-[11px] font-bold">
+            className="px-2 py-1.5 bg-sky-900 hover:bg-sky-800 rounded text-xxs font-bold">
             해제
           </button>
         </div>
@@ -626,31 +626,31 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       {/* TallyOne 1.15: **고정 위치 교정** (검수사 신고 2026-08-06 — "스크롤 대상이 아니다. 베이만 스크롤되고
           이 부분은 고정되어야 한다"). sticky 는 걸려 있었지만 `top-0` 이라 앱 헤더(52px)와
           항차 탭 네비(`sticky top-[52px]`, 높이 ≈38px) 뒤로 숨어 안 보였다. 그 아래로 내린다. */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex items-center gap-1.5 flex-wrap sticky top-[92px] z-10 shadow-lg shadow-slate-950/60">
+      <div className="bg-ink-900 border border-line rounded-pill p-2 flex items-center gap-1.5 flex-wrap sticky top-[92px] z-10 shadow-lg shadow-slate-950/60">
         {/* V8.25-06: PC(터치없음)만 +/− 버튼 표시. 폰은 핀치, PC는 버튼+Ctrl휠 */}
         {!IS_TOUCH_DEVICE && (
-          <div className="flex items-center bg-slate-800 rounded-lg overflow-hidden">
-            <button onClick={() => setZoom(z => Math.max(0.15, Math.round((z - 0.05) * 100) / 100))} className="px-2 py-1.5 hover:bg-slate-700 text-slate-200 font-black" title="축소">−</button>
-            <button onClick={() => setZoom(isMobile ? 0.22 : 1.0)} className="text-xs mono text-slate-300 font-bold px-2 py-1.5 hover:bg-slate-700 border-x border-slate-700" title="기본 배율">{Math.round(zoom * 100)}%</button>
-            <button onClick={() => setZoom(z => Math.min(3, Math.round((z + 0.05) * 100) / 100))} className="px-2 py-1.5 hover:bg-slate-700 text-slate-200 font-black" title="확대">＋</button>
+          <div className="flex items-center bg-ink-800 rounded-pill overflow-hidden">
+            <button onClick={() => setZoom(z => Math.max(0.15, Math.round((z - 0.05) * 100) / 100))} className="px-2 py-1.5 hover:bg-ink-750 text-dim-100 font-black" title="축소">−</button>
+            <button onClick={() => setZoom(isMobile ? 0.22 : 1.0)} className="text-xs mono text-dim-200 font-bold px-2 py-1.5 hover:bg-ink-750 border-x border-line" title="기본 배율">{Math.round(zoom * 100)}%</button>
+            <button onClick={() => setZoom(z => Math.min(3, Math.round((z + 0.05) * 100) / 100))} className="px-2 py-1.5 hover:bg-ink-750 text-dim-100 font-black" title="확대">＋</button>
           </div>
         )}
 
         {/* 시각적 분리선 */}
-        <div className="w-px h-6 bg-slate-700"/>
+        <div className="w-px h-6 bg-ink-750"/>
 
         {/* 전체 모드 토글 (기본 ON) */}
         <button onClick={() => setAllBaysMode(!allBaysMode)}
-          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
-            allBaysMode ? 'bg-emerald-700 text-emerald-50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          className={`px-2.5 py-1.5 rounded-pill text-xs font-bold transition ${
+            allBaysMode ? 'bg-emerald-700 text-emerald-50' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'
           }`}>
           {allBaysMode ? '✓ 전체' : '단일'}
         </button>
 
         {/* V7.97: 3D 입체 베이뷰 토글 */}
         <button onClick={() => setView3D(v => !v)}
-          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
-            view3D ? 'bg-cyan-600 text-cyan-50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          className={`px-2.5 py-1.5 rounded-pill text-xs font-bold transition ${
+            view3D ? 'bg-cyan-600 text-cyan-50' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'
           }`}
           title="3D 입체 베이뷰">
           {view3D ? '✓ ⛴ 측면' : '⛴ 측면'}
@@ -659,7 +659,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
         {/* M5.0: 인쇄 드롭다운 — 2개 버튼 → 1개 메뉴 */}
         <div className="relative">
           <button onClick={() => setPrintMenuOpen(v => !v)}
-            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-50 flex items-center gap-1"
+            className="px-2.5 py-1.5 rounded-pill text-xs font-bold bg-cyan-800 hover:bg-cyan-700 text-cyan-50 flex items-center gap-1"
             title="인쇄 옵션">
             <Printer className="w-3.5 h-3.5"/>인쇄 ▾
           </button>
@@ -667,13 +667,13 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             <>
               {/* 백드롭 — 바깥 클릭으로 닫기 */}
               <div className="fixed inset-0 z-20" onClick={() => setPrintMenuOpen(false)}/>
-              <div className="absolute top-full left-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-30 min-w-[180px] overflow-hidden">
+              <div className="absolute top-full left-0 mt-1 bg-ink-800 border border-line-strong rounded-pill shadow-xl z-30 min-w-[180px] overflow-hidden">
                 <button onClick={() => { setPrintMode('cargo-v2'); setPrintMenuOpen(false); }}
-                  className="w-full px-3 py-2 text-left hover:bg-emerald-900 text-xs text-emerald-100 border-b border-slate-700 flex items-center gap-2 bg-emerald-950">
+                  className="w-full px-3 py-2 text-left hover:bg-emerald-900 text-xs text-emerald-100 border-b border-line flex items-center gap-2 bg-emerald-950">
                   <span className="text-base">🆕</span>
                   <div>
                     <div className="font-black">카고 플랜 V2 · M6.81 회귀</div>
-                    <div className="text-[10px] text-emerald-300">카스피 양식 그대로</div>
+                    <div className="text-2xs text-emerald-300">카스피 양식 그대로</div>
                   </div>
                 </button>
                 <button onClick={() => { setPrintMode('detail'); setPrintMenuOpen(false); }}
@@ -681,7 +681,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
                   <span className="text-base">📋</span>
                   <div>
                     <div className="font-black">베이 상세</div>
-                    <div className="text-[10px] text-slate-400">베이당 1페이지</div>
+                    <div className="text-2xs text-dim-300">베이당 1페이지</div>
                   </div>
                 </button>
               </div>
@@ -692,8 +692,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
         {/* M5.1 I: PC 영역 선택 토글 (모바일/이동중 비활성, 선적 전용) */}
         {enableSelection && !isMobile && !pendingMove && (
           <button onClick={() => setSelectionMode(v => !v)}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-              selectionMode ? 'bg-sky-600 text-sky-50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+            className={`px-2.5 py-1.5 rounded-pill text-xs font-bold ${
+              selectionMode ? 'bg-sky-600 text-sky-50' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'
             }`}
             title="선택 모드 — 컨 셀 클릭하여 다중 선택 → 보관함으로 일괄 이동">
             🔲 {selectionMode ? '선택 ✓' : '선택'}
@@ -702,27 +702,27 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
         {/* 시각적 분리선 — 알림 배지 영역 시작 */}
         {(iso403Stats.total > 0 || (mode === 'loading' && unassignedCount > 0)) && (
-          <div className="w-px h-6 bg-slate-700"/>
+          <div className="w-px h-6 bg-ink-750"/>
         )}
 
         {/* M4.9: ISO403 사진 미촬영 배지 */}
         {iso403Stats.total > 0 && (
           <button onClick={() => setShowISO403List(v => !v)}
-            className={`px-2 py-1.5 rounded-lg text-xs font-black flex items-center gap-1 ${
+            className={`px-2 py-1.5 rounded-pill text-xs font-black flex items-center gap-1 ${
               iso403Stats.pending > 0
                 ? 'bg-blue-700 hover:bg-blue-600 text-blue-50 animate-pulse'
                 : 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100'
             }`}
             title="풀 리퍼 사진 촬영 대상">
             📷 {iso403Stats.taken}/{iso403Stats.total}
-            {iso403Stats.pending > 0 && <span className="bg-blue-900/60 px-1 rounded text-[10px]">⚠{iso403Stats.pending}</span>}
+            {iso403Stats.pending > 0 && <span className="bg-blue-900/60 px-1 rounded text-2xs">⚠{iso403Stats.pending}</span>}
           </button>
         )}
 
         {/* M3.87: 선적 모드 - 미배정(선적대상) 배지 */}
         {mode === 'loading' && unassignedCount > 0 && (
           <button onClick={() => setShowUnassigned(true)}
-            className="px-2 py-1.5 rounded-lg text-xs font-black bg-orange-700 hover:bg-orange-600 text-orange-50 flex items-center gap-1">
+            className="px-2 py-1.5 rounded-pill text-xs font-black bg-orange-700 hover:bg-orange-600 text-orange-50 flex items-center gap-1">
             🚛 선적대상 {unassignedCount}
           </button>
         )}
@@ -732,11 +732,11 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           <>
             <button onClick={() => setPageIdx(i => Math.max(0, i - 1))}
               disabled={pageIdx === 0}
-              className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">◀</button>
-            <span className="text-xs mono text-slate-300 font-bold">{pageIdx + 1} / {pages.length}</span>
+              className="px-2 py-1 bg-ink-800 disabled:opacity-30 rounded text-xs font-bold text-dim-200">◀</button>
+            <span className="text-xs mono text-dim-200 font-bold">{pageIdx + 1} / {pages.length}</span>
             <button onClick={() => setPageIdx(i => Math.min(pages.length - 1, i + 1))}
               disabled={pageIdx === pages.length - 1}
-              className="px-2 py-1 bg-slate-800 disabled:opacity-30 rounded text-xs font-bold text-slate-300">▶</button>
+              className="px-2 py-1 bg-ink-800 disabled:opacity-30 rounded text-xs font-bold text-dim-200">▶</button>
           </>
         )}
 
@@ -752,7 +752,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
           }}
-          className="bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 mono px-1 py-1 ml-auto">
+          className="bg-ink-800 border border-line rounded text-xs text-dim-100 mono px-1 py-1 ml-auto">
           {pages.map((p, i) => (
             <option key={i} value={i}>{p.title}</option>
           ))}
@@ -761,7 +761,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
       {/* M4.9: ISO403 미촬영 목록 펼침 패널 */}
       {showISO403List && iso403Stats.total > 0 && (
-        <div className={`border-2 rounded-lg p-3 ${
+        <div className={`border-2 rounded-pill p-3 ${
           iso403Stats.pending > 0
             ? 'bg-blue-950/40 border-blue-700'
             : 'bg-emerald-950/30 border-emerald-700'
@@ -772,17 +772,17 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
               <span className={iso403Stats.pending > 0 ? 'text-blue-200' : 'text-emerald-200'}>
                 풀 리퍼 사진 촬영
               </span>
-              <span className="text-xs font-bold text-slate-400 mono">
+              <span className="text-xs font-bold text-dim-300 mono">
                 {iso403Stats.taken}/{iso403Stats.total} 완료
               </span>
               {iso403Stats.pending > 0 && (
-                <span className="bg-blue-700 text-white text-[10px] px-2 py-0.5 rounded font-black">
+                <span className="bg-blue-700 text-white text-2xs px-2 py-0.5 rounded font-black">
                   미촬영 {iso403Stats.pending}대
                 </span>
               )}
             </div>
             <button onClick={() => setShowISO403List(false)}
-              className="text-xs text-slate-400 hover:text-slate-200">접기 ▲</button>
+              className="text-xs text-dim-300 hover:text-dim-100">접기 ▲</button>
           </div>
           {iso403Stats.pending === 0 ? (
             <div className="text-xs text-emerald-300 font-bold flex items-center gap-1">
@@ -790,17 +790,17 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             </div>
           ) : (
             <>
-              <div className="text-[11px] text-blue-300 mb-2">
+              <div className="text-xxs text-blue-300 mb-2">
                 아래 컨테이너를 탭해 사진 촬영 모달을 여세요.
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
                 {iso403Stats.pendingList.map(c => (
                   <button key={c.cn} onClick={() => onOpenContainer && onOpenContainer(c)}
-                    className="px-2 py-1.5 bg-slate-800 hover:bg-blue-900 active:bg-blue-800 border border-slate-700 hover:border-blue-600 rounded text-left flex items-center gap-2">
+                    className="px-2 py-1.5 bg-ink-800 hover:bg-blue-900 active:bg-blue-800 border border-line hover:border-blue-600 rounded text-left flex items-center gap-2">
                     <span className="text-blue-400 text-base">📷</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-black mono text-slate-100 truncate">{c.cn}</div>
-                      <div className="text-[10px] text-slate-400 mono">
+                      <div className="text-xs font-black mono text-dim-100 truncate">{c.cn}</div>
+                      <div className="text-2xs text-dim-300 mono">
                         {c.iso || '-'} · {c.bay || '-'}/{c.row || '-'}/{c.tier || '-'}
                       </div>
                     </div>
@@ -813,19 +813,19 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       )}
 
       {/* 범례 - M3.77: 양하/선적 통일 (POL/POD 색깔 + 평택 노랑 ring) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
-        <div className="flex items-center gap-2 flex-wrap text-[10px]">
-          <span className="text-slate-500 font-bold uppercase w-12">셀색:</span>
+      <div className="bg-ink-900 border border-line rounded-pill p-2 space-y-1.5">
+        <div className="flex items-center gap-2 flex-wrap text-2xs">
+          <span className="text-dim-400 font-bold uppercase w-12">셀색:</span>
           <span className="text-cyan-300 font-bold">흰 배경 · 글자색 = {mode === 'discharge' ? '선사(양하)' : 'POD(선적)'} 지정색</span>
           <span className="text-red-400 font-bold">★ 붉은별 = X-RAY</span>
           <Legend color="bg-orange-400" label="시프팅"/>
           <Legend color="bg-emerald-200" label="✔ 완료"/>
-          <span className="text-slate-500 font-bold">검정 글자 = 비평택</span>
+          <span className="text-dim-400 font-bold">검정 글자 = 비평택</span>
           {/* TallyOne 1.29: 빈 자리와 '배에 칸이 없는 곳'을 눈으로 가른다 */}
           <Legend color="bg-slate-100" label="빈 자리 (아직 안 실림)"/>
         </div>
-        <div className="flex items-center gap-2 flex-wrap text-[10px]">
-          <span className="text-slate-500 font-bold uppercase w-12">종류:</span>
+        <div className="flex items-center gap-2 flex-wrap text-2xs">
+          <span className="text-dim-400 font-bold uppercase w-12">종류:</span>
           <span className="flex items-center gap-1"><span className="bg-red-500 w-1 h-3 inline-block rounded-sm"/><span className="text-red-300 font-bold">⚠ DG</span></span>
           <span className="flex items-center gap-1"><span className="bg-cyan-400 w-1 h-3 inline-block rounded-sm"/><span className="text-cyan-300 font-bold">❄ 리퍼</span></span>
           <span className="flex items-center gap-1"><span className="bg-purple-500 w-1 h-3 inline-block rounded-sm"/><span className="text-purple-300 font-bold">⊞ FR</span></span>
@@ -835,7 +835,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       </div>
 
       {/* 베이 그리드 본체 */}
-      <div ref={scrollRef} className="bg-slate-950 border border-slate-700 rounded-lg p-3 overflow-auto"
+      <div ref={scrollRef} className="bg-ink-950 border border-line rounded-pill p-3 overflow-auto"
            style={{ maxHeight: '78vh' }}>
         {view3D ? (
           // V9.20: 배 옆모습 프로파일 뷰 — 3D 카드뷰 대체 (사용자 선택). 베이 클릭 → 2D 해당 베이로.
@@ -1014,8 +1014,8 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 function Legend({ color, label }) {
   return (
     <span className="flex items-center gap-1">
-      <span className={`${color} w-3 h-3 rounded-sm border border-slate-600`}/>
-      <span className="text-slate-400">{label}</span>
+      <span className={`${color} w-3 h-3 rounded-sm border border-line-strong`}/>
+      <span className="text-dim-300">{label}</span>
     </span>
   );
 }
@@ -1479,7 +1479,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
   const renderCell = (row, tier) => {
     const key = `${row || '_'}-${tier || '_'}`;
     if (!row || !tier) {
-      return <div key={key} className="border border-dashed border-slate-800 flex-shrink-0 bg-slate-950"
+      return <div key={key} className="border border-dashed border-line flex-shrink-0 bg-ink-950"
         style={{ width: cellW, height: cellH }}/>;
     }
     // M3.74: 다중 적재 검출
@@ -1489,9 +1489,9 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     if (!c && isXmark(row, tier)) {
       // M4.9f 5단계: 이동 모드에서도 X마크는 다른 컨이 점유 → 비활성 (클릭 무시)
       return (
-        <div key={key} className="border border-slate-700 bg-slate-800 flex-shrink-0 flex items-center justify-center"
+        <div key={key} className="border border-line bg-ink-800 flex-shrink-0 flex items-center justify-center"
           style={{ width: cellW, height: cellH }}>
-          <span className="text-slate-500 font-black" style={{ fontSize: fontSize * 2.5 }}>×</span>
+          <span className="text-dim-400 font-black" style={{ fontSize: fontSize * 2.5 }}>×</span>
         </div>
       );
     }
@@ -1518,7 +1518,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       // TallyOne 1.29: **컨이 떠난 자리를 '배에 없는 칸'처럼 어둡게 남기지 않는다.**
       //   검수사 지적 2026-08-08: *"비어 있다면 빈자리가 표시되어야 합니다. 그런데 검은색입니다.
       //   뭔가 있는거죠 고스트"* — 컨을 88단에서 84단으로 옮기면 88단이 어둡게 남아, 배에 칸이
-      //   아예 없는 90단(`bg-slate-950`)과 눈으로 구분이 안 됐다. 실제로는 **그냥 빈 자리**다.
+      //   아예 없는 90단(`bg-ink-950`)과 눈으로 구분이 안 됐다. 실제로는 **그냥 빈 자리**다.
       //   → 화물이 실리는 단이면 흰 빈 칸으로 그린다. 화물이 안 실리는 단·구조 밖은 종전대로 어둡게.
       //   TallyOne 1.32 정정: **단이 아니라 자리(열+단) 기준으로 본다.**
       //     1.29는 `some(x => x.tier === tier)` 로 단만 보고 그 단의 **전 열**을 빈 자리로 그렸다.
@@ -1532,10 +1532,10 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         (x._row_planned === row && x._tier_planned === tier)
       );
       if (slotExists) {
-        return <div key={key} className="border border-slate-400 flex-shrink-0 bg-slate-100"
+        return <div key={key} className="border border-line-strong flex-shrink-0 bg-slate-100"
           style={{ width: cellW, height: cellH }}/>;
       }
-      return <div key={key} className="border border-dashed border-slate-800 flex-shrink-0 bg-slate-950/40"
+      return <div key={key} className="border border-dashed border-line flex-shrink-0 bg-ink-950/40"
         style={{ width: cellW, height: cellH }}/>;
     }
 
@@ -1563,7 +1563,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
     const tmpMissing = isFullReefer && (c.tmp_missing || tmpStr === '');
 
     let specialLine = '';
-    let specialColor = 'text-slate-500';
+    let specialColor = 'text-dim-400';
     if (c.dg) {
       // M5.79: UN 코드북에서 짧은 화물명 (예: "에탄올 (Cl.3)") - 베이 셀이 좁아서 짧게
       specialLine = c.un ? formatDgShort(c.un) : 'DG';
@@ -1672,14 +1672,14 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
           </div>
         )}
         {needsShift && !compactCell && (
-          <div className="absolute top-0 left-0 bg-amber-400 text-slate-900 px-0.5 font-black leading-none rounded-br z-10"
+          <div className="absolute top-0 left-0 bg-amber-400 text-ink-950 px-0.5 font-black leading-none rounded-br z-10"
             style={{ fontSize: fontSize - 1, marginLeft: typeBarBg ? Math.max(6, Math.round(cellW * 0.1)) + 2 : 0 }}>
             ⬆{needsShift}
           </div>
         )}
         {/* M3.74: 다중 적재 ⊕N 배지 (우상단, 심볼 옆) */}
         {stackCount >= 2 && !compactCell && (
-          <div className="absolute top-0 right-0 z-30 bg-amber-500 text-slate-900 font-black leading-none rounded-bl px-0.5"
+          <div className="absolute top-0 right-0 z-30 bg-amber-500 text-ink-950 font-black leading-none rounded-bl px-0.5"
             style={{ fontSize: fontSize + 1, marginRight: typeSymbol ? Math.max(13, fontSize * 2) + 10 : 0 }}>
             ⊕{stackCount - 1}
           </div>
@@ -1762,11 +1762,11 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         const totalH = deckH + (holdH > 0 ? HATCH + holdH : 0);
         return (
           <div>
-            <div className="text-[10px] text-cyan-400 mb-0.5 font-bold">⬆ DECK / ⬇ HOLD</div>
+            <div className="text-2xs text-cyan-400 mb-0.5 font-bold">⬆ DECK / ⬇ HOLD</div>
             {/* 상단 row 라벨 = 데크 축 (00 없음) */}
             <div style={{ position: 'relative', height: 12, marginLeft: LBL, width: gridW }}>
               {deckAxis.map((r, i) => (
-                <div key={`dl-${i}`} style={{ position: 'absolute', left: (deckOff + i) * STEP, width: cellW, textAlign: 'center', fontSize: 9, fontWeight: 'bold' }} className="text-slate-500 mono">{r}</div>
+                <div key={`dl-${i}`} style={{ position: 'absolute', left: (deckOff + i) * STEP, width: cellW, textAlign: 'center', fontSize: 9, fontWeight: 'bold' }} className="text-dim-400 mono">{r}</div>
               ))}
             </div>
             <div style={{ position: 'relative', height: totalH, marginLeft: LBL, width: gridW }}>
@@ -1775,8 +1775,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
                 const y = ti * rowH;
                 return (
                   <React.Fragment key={`d-${ti}`}>
-                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
-                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
                     {tr.cells.filter(c => c.active && c.rowLbl != null).map((c) => (
                       <div key={`dc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
                         {renderCell(c.rowLbl, String(tr.tier).padStart(2, '0'))}
@@ -1796,8 +1796,8 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
                 const y = deckH + HATCH + ti * rowH;
                 return (
                   <React.Fragment key={`h-${ti}`}>
-                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
-                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-slate-500 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
+                    <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
                     {tr.cells.filter(c => c.active && c.rowLbl != null).map((c) => (
                       <div key={`hc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
                         {renderCell(c.rowLbl, String(tr.tier).padStart(2, '0'))}
@@ -1811,7 +1811,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
             {holdAxis.length > 0 && (
               <div style={{ position: 'relative', height: 12, marginTop: 2, marginLeft: LBL, width: gridW }}>
                 {holdAxis.map((r, i) => (
-                  <div key={`hbl-${i}`} style={{ position: 'absolute', left: (holdOff + i) * STEP, width: cellW, textAlign: 'center', fontSize: 9, fontWeight: 'bold' }} className="text-slate-500 mono">{r}</div>
+                  <div key={`hbl-${i}`} style={{ position: 'absolute', left: (holdOff + i) * STEP, width: cellW, textAlign: 'center', fontSize: 9, fontWeight: 'bold' }} className="text-dim-400 mono">{r}</div>
                 ))}
               </div>
             )}
@@ -1820,22 +1820,22 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       })() : (<>
       {/* DECK (기존 flex 폴백) */}
       <div>
-        <div className="text-[10px] text-cyan-400 mb-0.5 font-bold">⬆ DECK</div>
+        <div className="text-2xs text-cyan-400 mb-0.5 font-bold">⬆ DECK</div>
         <div className="flex gap-0.5 mb-0.5 justify-center">
           <div style={{ width: 24 }}></div>
           {deckHeaderRowsArr.map((row, idx) => (
-            <div key={`dh-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
+            <div key={`dh-${idx}`} className="text-center text-3xs text-dim-400 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
           <div style={{ width: 24 }}></div>
         </div>
         {deckTiersPadded.map((tier, ti) => (
           <div key={`dt-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
-            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
+            <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {deckRowsArr.map((row, ri) => (
               <React.Fragment key={`d-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
             ))}
-            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
+            <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
           </div>
         ))}
       </div>
@@ -1859,20 +1859,20 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
 
       {/* HOLD (기존 flex 폴백) */}
       <div>
-        <div className="text-[10px] text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
+        <div className="text-2xs text-amber-400 mb-0.5 font-bold">⬇ HOLD</div>
         {holdTiersPadded.map((tier, ti) => (
           <div key={`ht-${ti}`} className="flex gap-0.5 mb-0.5 items-center justify-center">
-            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
+            <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 text-right pr-1" style={{ width: 24 }}>{tier || ''}</div>
             {holdRowsArr.map((row, ri) => (
               <React.Fragment key={`h-${ti}-${ri}`}>{renderCell(row, tier)}</React.Fragment>
             ))}
-            <div className="text-[9px] text-slate-500 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
+            <div className="text-3xs text-dim-400 mono font-bold flex-shrink-0 pl-1" style={{ width: 24 }}>{tier || ''}</div>
           </div>
         ))}
         <div className="flex gap-0.5 mt-0.5 justify-center">
           <div style={{ width: 24 }}></div>
           {holdHeaderRowsArr.map((row, idx) => (
-            <div key={`hb-${idx}`} className="text-center text-[9px] text-slate-500 mono font-bold flex-shrink-0"
+            <div key={`hb-${idx}`} className="text-center text-3xs text-dim-400 mono font-bold flex-shrink-0"
               style={{ width: cellW }}>{row || ''}</div>
           ))}
           <div style={{ width: 24 }}></div>

@@ -77,18 +77,18 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center sm:p-4">
-      <div className="bg-slate-900 border-2 border-amber-700/50 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl h-[92vh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-ink-900 border-2 border-amber-700/50 rounded-t-2xl sm:rounded-card w-full sm:max-w-xl h-[92vh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden">
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-amber-950/40">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line bg-amber-950/40">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-400"/>
             <div>
               <div className="text-base font-black text-amber-200">업로드 검토 필요</div>
-              <div className="text-[11px] text-slate-400">{total}건 — EDI와 다른 점 확인</div>
+              <div className="text-xxs text-dim-300">{total}건 — EDI와 다른 점 확인</div>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg">
-            <X className="w-5 h-5 text-slate-300"/>
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill">
+            <X className="w-5 h-5 text-dim-200"/>
           </button>
         </div>
 
@@ -103,24 +103,24 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => setAllUnmatched('add')}
-                    className="text-[10px] px-2 py-1 bg-emerald-700 text-white rounded font-bold">
+                    className="text-2xs px-2 py-1 bg-emerald-700 text-white rounded font-bold">
                     모두 추가
                   </button>
                   <button onClick={() => setAllUnmatched('ignore')}
-                    className="text-[10px] px-2 py-1 bg-slate-700 text-slate-200 rounded font-bold">
+                    className="text-2xs px-2 py-1 bg-ink-750 text-dim-100 rounded font-bold">
                     모두 무시
                   </button>
                 </div>
               </div>
-              <div className="text-[10px] text-slate-500 mb-2">
+              <div className="text-2xs text-dim-400 mb-2">
                 리스트엔 있는데 EDI에 없는 컨테이너 — 새로 추가하시겠습니까?
               </div>
               <div className="space-y-1.5">
                 {unmatched.map((c) => (
-                  <div key={c.cn} className="bg-slate-800 border border-slate-700 rounded p-2">
+                  <div key={c.cn} className="bg-ink-800 border border-line rounded p-2">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <div className="font-bold text-amber-200 mono text-xs">{c.cn}</div>
-                      <div className="text-[10px] text-slate-400">
+                      <div className="text-2xs text-dim-300">
                         {c.sl && <span>실: {c.sl}</span>}
                         {c.wt > 0 && <span className="ml-2">{(c.wt/1000).toFixed(1)}t</span>}
                       </div>
@@ -130,15 +130,15 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
                         className={`py-1.5 text-xs font-bold rounded border ${
                           decisions['unmatched:' + c.cn] === 'add'
                             ? 'bg-emerald-600 text-white border-emerald-400'
-                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                            : 'bg-ink-900 text-dim-300 border-line'
                         }`}>
                         ➕ 추가
                       </button>
                       <button onClick={() => setDecision('unmatched:' + c.cn, 'ignore')}
                         className={`py-1.5 text-xs font-bold rounded border ${
                           decisions['unmatched:' + c.cn] === 'ignore'
-                            ? 'bg-slate-600 text-white border-slate-400'
-                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                            ? 'bg-ink-700 text-white border-line-strong'
+                            : 'bg-ink-900 text-dim-300 border-line'
                         }`}>
                         ✕ 무시
                       </button>
@@ -158,28 +158,28 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => setAllWeights('edi')}
-                    className="text-[10px] px-2 py-1 bg-blue-700 text-white rounded font-bold">
+                    className="text-2xs px-2 py-1 bg-blue-700 text-white rounded font-bold">
                     모두 EDI
                   </button>
                   <button onClick={() => setAllWeights('list')}
-                    className="text-[10px] px-2 py-1 bg-emerald-700 text-white rounded font-bold">
+                    className="text-2xs px-2 py-1 bg-emerald-700 text-white rounded font-bold">
                     모두 리스트
                   </button>
                 </div>
               </div>
-              <div className="text-[10px] text-slate-500 mb-2">
+              <div className="text-2xs text-dim-400 mb-2">
                 EDI 무게와 리스트 무게가 다릅니다 — 어느 쪽을 사용하시겠습니까?
               </div>
               <div className="space-y-1.5">
                 {weightDiffs.map((c) => (
-                  <div key={c.cn} className="bg-slate-800 border border-slate-700 rounded p-2">
+                  <div key={c.cn} className="bg-ink-800 border border-line rounded p-2">
                     <div className="font-bold text-orange-200 mono text-xs mb-1.5">{c.cn}</div>
                     <div className="grid grid-cols-2 gap-1">
                       <button onClick={() => setDecision('weight:' + c.cn, 'edi')}
                         className={`py-1.5 text-xs font-bold rounded border ${
                           decisions['weight:' + c.cn] === 'edi'
                             ? 'bg-blue-600 text-white border-blue-400'
-                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                            : 'bg-ink-900 text-dim-300 border-line'
                         }`}>
                         EDI {(c.ediW/1000).toFixed(1)}t
                       </button>
@@ -187,7 +187,7 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
                         className={`py-1.5 text-xs font-bold rounded border ${
                           decisions['weight:' + c.cn] === 'list'
                             ? 'bg-emerald-600 text-white border-emerald-400'
-                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                            : 'bg-ink-900 text-dim-300 border-line'
                         }`}>
                         리스트 {(c.listW/1000).toFixed(1)}t
                       </button>
@@ -207,37 +207,37 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => setAllSeals('edi')}
-                    className="text-[10px] px-2 py-1 bg-blue-700 text-white rounded font-bold">
+                    className="text-2xs px-2 py-1 bg-blue-700 text-white rounded font-bold">
                     모두 EDI
                   </button>
                   <button onClick={() => setAllSeals('list')}
-                    className="text-[10px] px-2 py-1 bg-emerald-700 text-white rounded font-bold">
+                    className="text-2xs px-2 py-1 bg-emerald-700 text-white rounded font-bold">
                     모두 리스트
                   </button>
                 </div>
               </div>
               <div className="space-y-1.5">
                 {sealDiffs.map((c) => (
-                  <div key={c.cn} className="bg-slate-800 border border-slate-700 rounded p-2">
+                  <div key={c.cn} className="bg-ink-800 border border-line rounded p-2">
                     <div className="font-bold text-purple-200 mono text-xs mb-1.5">{c.cn}</div>
                     <div className="grid grid-cols-2 gap-1">
                       <button onClick={() => setDecision('seal:' + c.cn, 'edi')}
                         className={`py-1.5 text-xs font-bold rounded border text-left px-2 ${
                           decisions['seal:' + c.cn] === 'edi'
                             ? 'bg-blue-600 text-white border-blue-400'
-                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                            : 'bg-ink-900 text-dim-300 border-line'
                         }`}>
-                        <div className="text-[9px] opacity-70">EDI</div>
-                        <div className="mono text-[11px]">{c.ediSl}</div>
+                        <div className="text-3xs opacity-70">EDI</div>
+                        <div className="mono text-xxs">{c.ediSl}</div>
                       </button>
                       <button onClick={() => setDecision('seal:' + c.cn, 'list')}
                         className={`py-1.5 text-xs font-bold rounded border text-left px-2 ${
                           decisions['seal:' + c.cn] === 'list'
                             ? 'bg-emerald-600 text-white border-emerald-400'
-                            : 'bg-slate-900 text-slate-400 border-slate-700'
+                            : 'bg-ink-900 text-dim-300 border-line'
                         }`}>
-                        <div className="text-[9px] opacity-70">리스트</div>
-                        <div className="mono text-[11px]">{c.listSl}</div>
+                        <div className="text-3xs opacity-70">리스트</div>
+                        <div className="mono text-xxs">{c.listSl}</div>
                       </button>
                     </div>
                   </div>
@@ -248,9 +248,9 @@ export default function ConflictReviewModal({ open, onClose, conflicts, onResolv
         </div>
 
         {/* 버튼 */}
-        <div className="grid grid-cols-2 gap-2 p-3 border-t border-slate-700 bg-slate-950 flex-shrink-0">
+        <div className="grid grid-cols-2 gap-2 p-3 border-t border-line bg-ink-950 flex-shrink-0">
           <button onClick={onClose}
-            className="py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold rounded text-sm">
+            className="py-3 bg-ink-750 hover:bg-ink-700 text-dim-100 font-bold rounded text-sm">
             취소 (저장 안함)
           </button>
           <button onClick={handleApply}

@@ -429,16 +429,16 @@ export default function App({ open = true, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 overflow-y-auto" onClick={onClose}>
-    <div className="min-h-screen bg-slate-900 text-slate-100" onClick={e => e.stopPropagation()} style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Pretendard, system-ui, sans-serif" }}>
+    <div className="min-h-screen bg-ink-900 text-dim-100" onClick={e => e.stopPropagation()} style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Pretendard, system-ui, sans-serif" }}>
       {/* M3.6: 닫기 버튼 (검수앱 모달용) */}
       {onClose && (
         <button onClick={onClose}
-          className="fixed top-2 right-2 z-50 w-10 h-10 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-full flex items-center justify-center text-slate-300 text-xl font-bold shadow-lg">
+          className="fixed top-2 right-2 z-50 w-10 h-10 bg-ink-800 hover:bg-ink-750 border border-line-strong rounded-full flex items-center justify-center text-dim-200 text-xl font-bold shadow-lg">
           ×
         </button>
       )}
       {/* 헤더 */}
-      <header className="sticky top-0 z-20 bg-slate-900 border-b-2 border-yellow-500/40 shadow-lg">
+      <header className="sticky top-0 z-20 bg-ink-900 border-b-2 border-yellow-500/40 shadow-lg">
         <div className="px-3 pt-3 pb-2">
           <div className="flex items-center justify-between mb-2">
             <div>
@@ -447,7 +447,7 @@ export default function App({ open = true, onClose }) {
             </div>
             <button
               onClick={() => setShowSet(!showSet)}
-              className="w-11 h-11 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-yellow-400 text-xl"
+              className="w-11 h-11 flex items-center justify-center rounded-pill bg-ink-800 hover:bg-ink-750 active:bg-ink-700 text-yellow-400 text-xl"
             >⚙</button>
           </div>
 
@@ -457,21 +457,21 @@ export default function App({ open = true, onClose }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="한국어 또는 영어로 검색..."
-              className="w-full h-11 px-3 pr-10 bg-slate-800 border-2 border-slate-700 focus:border-yellow-500 focus:outline-none rounded-lg text-sm text-slate-100 placeholder-slate-500"
+              className="w-full h-11 px-3 pr-10 bg-ink-800 border-2 border-line focus:border-yellow-500 focus:outline-none rounded-pill text-sm text-dim-100 placeholder-dim-400"
             />
             {search && (
-              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-400">✕</button>
+              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-dim-300">✕</button>
             )}
           </div>
 
           {showSet && (
-            <div className="mb-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
+            <div className="mb-2 p-3 bg-ink-800 rounded-pill border border-line">
               <div className="mb-3">
                 <div className="text-xs font-bold text-yellow-400 mb-2 tracking-wider">재생 속도</div>
                 <div className="flex gap-1">
                   {[{ v: 0.7, l: '느리게' }, { v: 0.85, l: '약간 느리게' }, { v: 1.0, l: '보통' }, { v: 1.15, l: '빠르게' }].map((o) => (
                     <button key={o.v} onClick={() => setRate(o.v)}
-                      className={`flex-1 h-9 text-xs font-semibold rounded ${rate === o.v ? 'bg-yellow-500 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>
+                      className={`flex-1 h-9 text-xs font-semibold rounded ${rate === o.v ? 'bg-yellow-500 text-ink-950' : 'bg-ink-750 text-dim-200'}`}>
                       {o.l}
                     </button>
                   ))}
@@ -481,7 +481,7 @@ export default function App({ open = true, onClose }) {
                 <div>
                   <div className="text-xs font-bold text-yellow-400 mb-2 tracking-wider">음성 ({voices.length}개)</div>
                   <select value={voiceURI} onChange={(e) => setVoiceURI(e.target.value)}
-                    className="w-full h-9 px-2 bg-slate-700 border border-slate-600 rounded text-xs text-slate-100">
+                    className="w-full h-9 px-2 bg-ink-750 border border-line-strong rounded text-xs text-dim-100">
                     {voices.map((v) => (<option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>))}
                   </select>
                 </div>
@@ -504,14 +504,14 @@ export default function App({ open = true, onClose }) {
         </div>
       </header>
 
-      <div className="px-3 pt-3 pb-1 text-xs text-slate-400">
+      <div className="px-3 pt-3 pb-1 text-xs text-dim-300">
         {filtered.length}개 항목
-        {cat === 'fav' && favs.size === 0 && <span className="ml-2 text-slate-500">— ⭐로 추가</span>}
+        {cat === 'fav' && favs.size === 0 && <span className="ml-2 text-dim-400">— ⭐로 추가</span>}
       </div>
 
       <main className="px-3 pb-32 pt-2 space-y-3">
         {filtered.length === 0 ? (
-          <div className="py-20 text-center text-slate-500">
+          <div className="py-20 text-center text-dim-400">
             <div className="text-5xl mb-3">🔎</div>
             <div className="text-sm">검색 결과가 없습니다.</div>
           </div>
@@ -537,7 +537,7 @@ export default function App({ open = true, onClose }) {
       {playing && (
         <div className="fixed bottom-3 left-3 right-3 z-30">
           <button onClick={handleStop}
-            className="w-full h-13 py-3 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold rounded-xl shadow-2xl flex items-center justify-center gap-2">
+            className="w-full h-13 py-3 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold rounded-btn shadow-card flex items-center justify-center gap-2">
             <span className="text-xl">⏹</span> 재생 중지
           </button>
         </div>
@@ -551,33 +551,33 @@ function Chip({ a, onClick, l, i, c }) {
   return (
     <button onClick={onClick}
       className={`flex-shrink-0 h-9 px-3 rounded-full text-xs font-semibold whitespace-nowrap flex items-center gap-1 ${
-        a ? 'bg-yellow-500 text-slate-900 shadow' : 'bg-slate-800 text-slate-300 border border-slate-700'
+        a ? 'bg-yellow-500 text-ink-950 shadow' : 'bg-ink-800 text-dim-200 border border-line'
       }`}>
       <span>{i}</span><span>{l}</span>
-      <span className={`px-1.5 py-0.5 rounded text-xs ${a ? 'bg-slate-900/20' : 'bg-slate-900 text-slate-400'}`}>{c}</span>
+      <span className={`px-1.5 py-0.5 rounded text-xs ${a ? 'bg-ink-900/20' : 'bg-ink-900 text-dim-300'}`}>{c}</span>
     </button>
   );
 }
 
 function PhraseCard({ item, fav, playing, onSpeak, onFav, showCat }) {
   return (
-    <div className={`bg-slate-800 rounded-xl border-2 overflow-hidden ${playing ? 'border-yellow-500 shadow-lg shadow-yellow-500/20' : 'border-slate-700'}`}>
+    <div className={`bg-ink-800 rounded-btn border-2 overflow-hidden ${playing ? 'border-yellow-500 shadow-lg shadow-yellow-500/20' : 'border-line'}`}>
       <div className="p-3">
         <div className="flex items-start justify-between mb-1.5">
           {showCat ? (
-            <div className="text-xs text-slate-400 flex items-center gap-1">
+            <div className="text-xs text-dim-300 flex items-center gap-1">
               <span>{item.catIcon}</span><span>{item.catLabel}</span>
             </div>
           ) : <div />}
           <button onClick={onFav} className="-mt-1 -mr-1 w-9 h-9 flex items-center justify-center text-xl">
-            <span className={fav ? 'text-yellow-400' : 'text-slate-600'}>★</span>
+            <span className={fav ? 'text-yellow-400' : 'text-dim-500'}>★</span>
           </button>
         </div>
-        <div className="text-base text-slate-100 mb-2 leading-snug font-medium">{item.ko}</div>
+        <div className="text-base text-dim-100 mb-2 leading-snug font-medium">{item.ko}</div>
         <div className="text-base text-yellow-300/90 mb-3 leading-snug" style={{ fontFamily: "Charter, Georgia, serif" }}>{item.en}</div>
         <button onClick={onSpeak}
-          className={`w-full h-13 py-3 rounded-lg font-bold text-base flex items-center justify-center gap-2 active:scale-95 ${
-            playing ? 'bg-yellow-500 text-slate-900 animate-pulse' : 'bg-slate-700 text-slate-100 border-2 border-slate-600'
+          className={`w-full h-13 py-3 rounded-pill font-bold text-base flex items-center justify-center gap-2 active:scale-95 ${
+            playing ? 'bg-yellow-500 text-ink-950 animate-pulse' : 'bg-ink-750 text-dim-100 border-2 border-line-strong'
           }`}>
           <span className="text-xl">{playing ? '🔊' : '▶'}</span>
           <span>{playing ? '재생 중...' : '들려주기'}</span>
@@ -589,23 +589,23 @@ function PhraseCard({ item, fav, playing, onSpeak, onFav, showCat }) {
 
 function QACard({ item, fav, playingHeard, playingReplyIdx, onSpeakHeard, onSpeakReply, onFav, showCat }) {
   return (
-    <div className="bg-slate-800 rounded-xl border-2 border-slate-700 overflow-hidden">
+    <div className="bg-ink-800 rounded-btn border-2 border-line overflow-hidden">
       {/* 선원 질문 */}
       <div className="p-3 bg-cyan-950/40 border-b-2 border-cyan-500/30">
         <div className="flex items-start justify-between mb-1.5">
           <div className="text-xs text-cyan-300 font-bold tracking-wider flex items-center gap-1">
             <span>🎧</span><span>선원이 묻습니다</span>
-            {showCat && <span className="ml-2 text-slate-400 font-normal">· {item.catIcon} {item.catLabel}</span>}
+            {showCat && <span className="ml-2 text-dim-300 font-normal">· {item.catIcon} {item.catLabel}</span>}
           </div>
           <button onClick={onFav} className="-mt-1 -mr-1 w-9 h-9 flex items-center justify-center text-xl">
-            <span className={fav ? 'text-yellow-400' : 'text-slate-600'}>★</span>
+            <span className={fav ? 'text-yellow-400' : 'text-dim-500'}>★</span>
           </button>
         </div>
-        <div className="text-base text-slate-100 mb-1.5 leading-snug font-medium">{item.heard.ko}</div>
+        <div className="text-base text-dim-100 mb-1.5 leading-snug font-medium">{item.heard.ko}</div>
         <div className="text-base text-cyan-200 mb-2.5 leading-snug" style={{ fontFamily: "Charter, Georgia, serif" }}>{item.heard.en}</div>
         <button onClick={onSpeakHeard}
-          className={`w-full h-11 py-2 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 ${
-            playingHeard ? 'bg-cyan-500 text-slate-900 animate-pulse' : 'bg-slate-700 text-slate-200 border border-slate-600'
+          className={`w-full h-11 py-2 rounded-pill font-semibold text-sm flex items-center justify-center gap-2 active:scale-95 ${
+            playingHeard ? 'bg-cyan-500 text-ink-950 animate-pulse' : 'bg-ink-750 text-dim-100 border border-line-strong'
           }`}>
           <span>{playingHeard ? '🔊' : '▶'}</span>
           <span>{playingHeard ? '재생 중...' : '어떻게 들리는지 듣기'}</span>
@@ -613,7 +613,7 @@ function QACard({ item, fav, playingHeard, playingReplyIdx, onSpeakHeard, onSpea
       </div>
 
       {/* 답변 옵션들 */}
-      <div className="p-3 bg-slate-800">
+      <div className="p-3 bg-ink-800">
         <div className="text-xs text-yellow-400 font-bold tracking-wider mb-2 flex items-center gap-1">
           <span>↩️</span><span>답변 (들려주기)</span>
         </div>
@@ -621,12 +621,12 @@ function QACard({ item, fav, playingHeard, playingReplyIdx, onSpeakHeard, onSpea
           {item.replies.map((r, idx) => {
             const isPlay = playingReplyIdx === idx;
             return (
-              <div key={idx} className={`rounded-lg border-2 p-2.5 ${isPlay ? 'border-yellow-500 bg-yellow-500/10' : 'border-slate-700 bg-slate-900/50'}`}>
-                <div className="text-sm text-slate-100 mb-1 leading-snug">{r.ko}</div>
+              <div key={idx} className={`rounded-pill border-2 p-2.5 ${isPlay ? 'border-yellow-500 bg-yellow-500/10' : 'border-line bg-ink-900/50'}`}>
+                <div className="text-sm text-dim-100 mb-1 leading-snug">{r.ko}</div>
                 <div className="text-sm text-yellow-300/90 mb-2 leading-snug" style={{ fontFamily: "Charter, Georgia, serif" }}>{r.en}</div>
                 <button onClick={() => onSpeakReply(idx, r.en)}
                   className={`w-full h-11 py-2 rounded font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95 ${
-                    isPlay ? 'bg-yellow-500 text-slate-900 animate-pulse' : 'bg-slate-700 text-slate-100 border border-slate-600'
+                    isPlay ? 'bg-yellow-500 text-ink-950 animate-pulse' : 'bg-ink-750 text-dim-100 border border-line-strong'
                   }`}>
                   <span>{isPlay ? '🔊' : '▶'}</span>
                   <span>{isPlay ? '재생 중...' : '들려주기'}</span>

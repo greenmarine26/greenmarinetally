@@ -142,7 +142,7 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
   const modeColor = mode === 'discharge' ? 'blue' : 'amber';
 
   return (
-    <div className={`mb-3 rounded-xl border-2 overflow-hidden ${
+    <div className={`mb-3 rounded-btn border-2 overflow-hidden ${
       mode === 'discharge' ? 'border-blue-700/50 bg-blue-950/30' : 'border-amber-700/50 bg-amber-950/30'
     }`}>
       {/* 진행률 바 */}
@@ -157,9 +157,9 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
               ({summary.pct}%)
             </span>
           </div>
-          <span className="text-[10px] text-slate-400 font-bold uppercase">현황 요약</span>
+          <span className="text-2xs text-dim-300 font-bold uppercase">현황 요약</span>
         </div>
-        <div className="h-2 bg-slate-900/60 rounded-full overflow-hidden">
+        <div className="h-2 bg-ink-900/60 rounded-full overflow-hidden">
           <div className={`h-full transition-all ${
             summary.pct === 100 ? 'bg-emerald-500' : (mode === 'discharge' ? 'bg-blue-500' : 'bg-amber-500')
           }`}
@@ -221,7 +221,7 @@ export default function VoyageSummaryCard({ voyage, mode, reeferCheck = null }) 
           />
         )}
         {summary.reeferTotal === 0 && summary.xrayCount === 0 && summary.nameOnly === 0 && (   /* 1.24: iso403 칩 삭제분 제외 */
-          <span className="text-[11px] text-slate-500 px-2 py-1">특이 항목 없음</span>
+          <span className="text-xxs text-dim-400 px-2 py-1">특이 항목 없음</span>
         )}
       </div>
     </div>
@@ -237,10 +237,10 @@ function Chip({ icon: Icon, color, label, value, onClick = null }) {
     emerald: 'bg-emerald-900/40 border-emerald-700/40 text-emerald-200',
     orange:  'bg-orange-900/40 border-orange-700/50 text-orange-200',
   };
-  const cls = `inline-flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-bold ${colorMap[color] || colorMap.cyan}`;
+  const cls = `inline-flex items-center gap-1 px-2 py-1 rounded border text-xxs font-bold ${colorMap[color] || colorMap.cyan}`;
   const body = (<>
     <Icon className="w-3 h-3"/>
-    <span className="text-slate-300/80">{label}</span>
+    <span className="text-dim-200/80">{label}</span>
     <span className="mono">{value}</span>
   </>);
   // TallyOne 1.15: 누를 수 있는 칩 지원 — 리퍼 확인 칩이 온도 확인 화면을 다시 연다.

@@ -18,8 +18,8 @@ export default function RefreshDataButton({ onRefreshData, refreshing = false, r
       onClick={onRefreshData}
       disabled={refreshing}
       title="화면을 다시 불러오지 않고 데이터만 최신으로 — 로그인이 풀리지 않습니다"
-      className={`text-xxs px-2.5 sm:px-3 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1.5 border ${refreshing
-        ? 'bg-slate-800 text-slate-500 border-slate-700'
+      className={`text-xxs px-2.5 sm:px-3 py-1.5 rounded-pill font-bold flex items-center justify-center gap-1.5 border ${refreshing
+        ? 'bg-ink-800 text-dim-400 border-line'
         : 'bg-cyan-900/50 hover:bg-cyan-800/70 text-cyan-100 border-cyan-700/50'} ${className}`}
       style={{ minHeight: 34 }}
     >

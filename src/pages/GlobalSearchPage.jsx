@@ -775,50 +775,50 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
 
   return (
     <div className="max-w-2xl mx-auto px-3 py-3">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 mb-3">
-        <div className="text-[10px] text-slate-500 font-bold uppercase mb-2 flex items-center justify-between gap-2">
+      <div className="bg-ink-900 border border-line rounded-btn p-3 mb-3">
+        <div className="text-2xs text-dim-400 font-bold uppercase mb-2 flex items-center justify-between gap-2">
           {/* 1.81-01(검수사 요청 2026-08-17): 나가기 — 검색을 마치면 들어온 화면(수석 대시보드/홈)으로 돌아간다.
               해시 라우팅이라 history.back 이 직전 화면을 그대로 되살린다. 이력이 없으면(직접 진입) 홈으로. */}
           {!embedded && <button onClick={() => { try { if (window.history.length > 1) window.history.back(); else window.location.hash = '#/'; } catch (e) { window.location.hash = '#/'; } }}
-            className="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-600 text-slate-200 text-xs font-bold normal-case"
+            className="shrink-0 px-2.5 py-1.5 rounded-pill bg-ink-800 hover:bg-ink-750 active:bg-ink-700 border border-line-strong text-dim-100 text-xs font-bold normal-case"
             title="검색을 마치고 들어온 화면으로 돌아갑니다">
             ← 나가기
           </button>}
           <span className="min-w-0 truncate">🤖 AI 통합 검색 — 모든 항차·양/선적</span>
-          <span className="text-slate-400 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
+          <span className="text-dim-300 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
         </div>
         <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim-400"/>
           <input type="text" value={query}
             onChange={e => { setQuery(e.target.value); setAskedAt(null); setReasked(false); }}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitNow(query); } }}
             placeholder="🎤 / 4777 / 40피트 4777 / 리퍼 몇개"
             autoComplete="off"
             autoFocus
-            className="w-full pl-9 pr-40 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
+            className="w-full pl-9 pr-40 py-3 bg-ink-800 border border-line rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {voiceSupported && (
               <button onClick={isListening ? stopListening : startListening}
                 className={`w-10 h-10 rounded flex items-center justify-center transition ${
-                  isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'
+                  isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-ink-950'
                 }`}>
                 {isListening ? <MicOff className="w-5 h-5"/> : <Mic className="w-5 h-5"/>}
               </button>
             )}
             <button onClick={() => setAutoSpeak(!autoSpeak)}
-              className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-slate-500'}`}>
+              className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-dim-400'}`}>
               {autoSpeak ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
             </button>
             {/* 1.69-05: 전송 버튼 — 폰 자판에 엔터가 없어도 질문을 보낸다. 같은 질문도 다시 답한다. */}
             {query.trim().length >= 2 && (
               <button onClick={() => submitNow(query)} title="질문 전송"
-                className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-slate-900">
+                className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-ink-950">
                 <SendHorizontal className="w-5 h-5"/>
               </button>
             )}
             {query && (
-              <button onClick={() => { setQuery(''); setAskedAt(null); setReasked(false); stopSpeak(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
-                <X className="w-4 h-4 text-slate-500"/>
+              <button onClick={() => { setQuery(''); setAskedAt(null); setReasked(false); stopSpeak(); }} className="w-7 h-10 rounded hover:bg-ink-750 flex items-center justify-center">
+                <X className="w-4 h-4 text-dim-400"/>
               </button>
             )}
           </div>
@@ -830,13 +830,13 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         )}
         {/* AI 인식 결과 표시 */}
         {hasAnyCondition(parsed) && (
-          <div className="mt-2 text-[11px] text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
+          <div className="mt-2 text-xxs text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
             🤖 인식: <span className="font-bold">{describeQuery(parsed)}</span>
             {parsed.isStat && <span className="ml-1 text-amber-300">(개수 질의)</span>}
           </div>
         )}
-        <div className="text-[11px] text-center mt-2">
-          {!isListening && query.length === 0 && <span className="text-slate-500">🎤 마이크 또는 키보드</span>}
+        <div className="text-xxs text-center mt-2">
+          {!isListening && query.length === 0 && <span className="text-dim-400">🎤 마이크 또는 키보드</span>}
           {!isListening && query.length >= 2 && matches.length === 0 && hasAnyCondition(parsed) && !localAnswer && !dmgQ && <span className="text-red-400 font-bold">⚠ 일치 없음</span>}   {/* 2.05-04: 즉답·데미지 답이 있으면 컨 매칭 표시는 혼란만(검수사 «중간에 일치 없음?») */}
           {!isListening && query.length >= 2 && matches.length === 1 && !parsed.isStat && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
           {!isListening && query.length >= 2 && matches.length > 1 && !parsed.isStat && <span className="text-amber-400 font-bold">⚠ {matches.length}개 일치{matches.length === 100 ? '+' : ''}</span>}
@@ -847,26 +847,26 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
 
       {/* 2.03: 데미지 이력 카드 — 컨번호·날짜로 과거(보관 포함) 데미지 조회 + 사진 */}
       {dmgQ && (
-        <div className="bg-orange-950/40 border-2 border-orange-700 rounded-xl p-4 mb-3">
-          <div className="text-[11px] text-orange-400 font-bold uppercase mb-1">📷 데미지 이력</div>
+        <div className="bg-orange-950/40 border-2 border-orange-700 rounded-btn p-4 mb-3">
+          <div className="text-xxs text-orange-400 font-bold uppercase mb-1">📷 데미지 이력</div>
           {damageIndex == null ? (
-            <div className="text-sm text-slate-400">색인 불러오는 중…</div>
+            <div className="text-sm text-dim-300">색인 불러오는 중…</div>
           ) : dmgHits.length === 0 ? (
-            <div className="text-sm text-slate-200">기록 없음 — {dmgQ.cn ? `${dmgQ.cn} 의 데미지 기록이 없습니다` : '해당 날짜의 데미지 기록이 없습니다'} (앱으로 보고·예약한 건 기준)</div>
+            <div className="text-sm text-dim-100">기록 없음 — {dmgQ.cn ? `${dmgQ.cn} 의 데미지 기록이 없습니다` : '해당 날짜의 데미지 기록이 없습니다'} (앱으로 보고·예약한 건 기준)</div>
           ) : (
             <div className="space-y-2">
               {dmgHits.map((e) => {
                 const d = new Date(e.ts);
                 const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
                 return (
-                  <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
+                  <div key={`${e.cn}_${e.ts}`} className="flex items-center gap-2 bg-ink-900/60 border border-line rounded-pill px-3 py-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[13px] mono font-bold text-slate-100">{e.cn} <span className="text-slate-400 font-normal">{when} · {e.voyageKey}</span></div>
-                      <div className="text-[11px] text-slate-300 truncate">
+                      <div className="text-sm2 mono font-bold text-dim-100">{e.cn} <span className="text-dim-300 font-normal">{when} · {e.voyageKey}</span></div>
+                      <div className="text-xxs text-dim-200 truncate">
                         {(e.damageParts || []).join(' & ')} {(e.damageTypes || []).join(' & ')}{e.points ? ` ${e.points}P` : ''}{e.dims ? ` (${e.dims})` : ''}{e.note ? ` — ${e.note}` : ''}
                       </div>
                     </div>
-                    <button onClick={() => openDmgPhoto(e)} className="px-3 py-2 rounded-lg bg-orange-700 hover:bg-orange-600 text-white text-[12px] font-bold shrink-0">📷 사진</button>
+                    <button onClick={() => openDmgPhoto(e)} className="px-3 py-2 rounded-pill bg-orange-700 hover:bg-orange-600 text-white text-xs2 font-bold shrink-0">📷 사진</button>
                   </div>
                 );
               })}
@@ -876,39 +876,39 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       )}
       {dmgPhotoView && (
         <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={() => setDmgPhotoView(null)}>
-          {dmgPhotoView.loading && <div className="text-slate-200 font-bold">사진 불러오는 중…</div>}
+          {dmgPhotoView.loading && <div className="text-dim-100 font-bold">사진 불러오는 중…</div>}
           {dmgPhotoView.err && <div className="text-red-300 font-bold text-sm">{dmgPhotoView.err}</div>}
           {(dmgPhotoView.imgs || []).map((src, i) => (
-            <img key={i} src={src} alt="" className="max-h-[45vh] max-w-full rounded-lg border border-slate-600" />
+            <img key={i} src={src} alt="" className="max-h-[45vh] max-w-full rounded-pill border border-line-strong" />
           ))}
-          {dmgPhotoView.imgs && <div className="text-slate-300 text-[12px] font-bold">{dmgPhotoView.cn} — 화면을 누르면 닫힙니다</div>}
+          {dmgPhotoView.imgs && <div className="text-dim-200 text-xs2 font-bold">{dmgPhotoView.cn} — 화면을 누르면 닫힙니다</div>}
         </div>
       )}
 
       {/* 2.06: 미르가 모르는 질문 — 솔직하게 + 자동으로 개발에 전달됐음을 알림 (검수사 확정 문구 그대로) */}
       {_mirDontKnow && (
-        <div className="bg-slate-900 border-2 border-slate-600 rounded-xl p-4 mb-3">
-          <div className="text-[11px] text-slate-400 font-bold uppercase mb-1">🐱 미르</div>
-          <div className="text-sm text-slate-200 leading-relaxed">
+        <div className="bg-ink-900 border-2 border-line-strong rounded-btn p-4 mb-3">
+          <div className="text-xxs text-dim-300 font-bold uppercase mb-1">🐱 미르</div>
+          <div className="text-sm text-dim-100 leading-relaxed">
             아직은 미르가 그 기능을 할 수 없습니다. 열심히 배워서 알려 드리겠습니다.
-            {askedAt ? <span className="block text-[11px] text-slate-400 mt-1">이 질문은 개발자에게 자동 전달됐습니다.</span>
-              : <span className="block text-[11px] text-slate-500 mt-1">전송(➤)을 누르면 이 질문이 개발자에게 자동 전달됩니다.</span>}
+            {askedAt ? <span className="block text-xxs text-dim-300 mt-1">이 질문은 개발자에게 자동 전달됐습니다.</span>
+              : <span className="block text-xxs text-dim-400 mt-1">전송(➤)을 누르면 이 질문이 개발자에게 자동 전달됩니다.</span>}
           </div>
         </div>
       )}
       {/* V9.14: 즉답/안내 카드 */}
       {localAnswer && (
-        <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-xl p-4 mb-3">
-          <div className="text-[11px] text-emerald-400 font-bold uppercase mb-1">🤖 즉답</div>
-          {reasked && askedAt && <div className="text-[11px] text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
-          <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
+        <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-btn p-4 mb-3">
+          <div className="text-xxs text-emerald-400 font-bold uppercase mb-1">🤖 즉답</div>
+          {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
+          <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
           {/* 2.05-03 (검수사 확정): «내일 작업할 것을 브리핑할까요?» — [네][아니오] 선택 */}
           {/내일 작업할 것을 브리핑할까요/.test(localAnswer) && (
             <div className="flex gap-2 mt-3">
               <button onClick={() => setQuery('내일 브리핑')}
-                className="flex-1 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm">네 — 내일 브리핑</button>
+                className="flex-1 py-2.5 rounded-pill bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm">네 — 내일 브리핑</button>
               <button onClick={() => setQuery('')}
-                className="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm border border-slate-600">아니오</button>
+                className="flex-1 py-2.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-200 font-bold text-sm border border-line-strong">아니오</button>
             </div>
           )}
           {/* 2.05-03: 통합검색에도 유도 버튼 규격("라벨"로 상세 확인 — 1.84-03) — 브리핑 주의 버튼 등 */}
@@ -918,7 +918,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
               <div className="flex gap-2 flex-wrap mt-3">
                 {_hs.map((h) => (
                   <button key={h} onClick={() => setQuery(h)}
-                    className="flex-1 min-w-[110px] py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">🔍 {h} 보기</button>
+                    className="flex-1 min-w-[110px] py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">🔍 {h} 보기</button>
                 ))}
               </div>
             ) : null;
@@ -928,9 +928,9 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
 
       {/* 통계 답변 카드 */}
       {!localAnswer && parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && (
-        <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-xl p-4 text-center mb-3">
-          <div className="text-[11px] text-cyan-400 font-bold uppercase mb-1">🤖 AI 답변</div>
-          <div className="text-base text-slate-300 mb-2">{describeQuery(parsed)}</div>
+        <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-btn p-4 text-center mb-3">
+          <div className="text-xxs text-cyan-400 font-bold uppercase mb-1">🤖 AI 답변</div>
+          <div className="text-base text-dim-200 mb-2">{describeQuery(parsed)}</div>
           <div className="text-6xl sm:text-7xl font-black mono text-cyan-300 my-2"
             style={{ textShadow: '0 0 30px rgba(34, 211, 238, 0.6)' }}>
             {matches.length}
@@ -957,12 +957,12 @@ function GlobalResultCard({ c, onOpen }) {
   const hasTmp = c.tmp && String(c.tmp).trim() !== '' && String(c.tmp).trim() !== '0';
   return (
     <button onClick={onOpen}
-      className={`w-full text-left bg-slate-900 border rounded-lg p-2.5 flex items-center gap-2 ${
+      className={`w-full text-left bg-ink-900 border rounded-pill p-2.5 flex items-center gap-2 ${
         isDone ? 'border-emerald-700/30 bg-emerald-950/10' :
         c.isXray ? 'border-purple-700/30 bg-purple-950/10' :
-        'border-slate-700 hover:bg-slate-800/50'
+        'border-line hover:bg-ink-750/50'
       }`}>
-      <div className={`flex-shrink-0 px-2 py-1.5 rounded text-[10px] font-black flex flex-col items-center gap-0.5 ${
+      <div className={`flex-shrink-0 px-2 py-1.5 rounded text-2xs font-black flex flex-col items-center gap-0.5 ${
         c.mode === 'discharge' ? 'bg-blue-900/60 text-blue-200' : 'bg-amber-900/60 text-amber-200'
       }`}>
         {c.mode === 'discharge' ? <ArrowDown className="w-3.5 h-3.5"/> : <ArrowUp className="w-3.5 h-3.5"/>}
@@ -971,26 +971,26 @@ function GlobalResultCard({ c, onOpen }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-black text-sm text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
-          <span className="text-[11px] text-slate-400 mono truncate">{c.cn}</span>
-          <span className={`text-[9px] mono px-1 rounded font-bold ${
+          <span className="text-xxs text-dim-300 mono truncate">{c.cn}</span>
+          <span className={`text-3xs mono px-1 rounded font-bold ${
             c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :
-            c.fe === 'E' ? 'bg-slate-700 text-slate-300' :
+            c.fe === 'E' ? 'bg-ink-750 text-dim-200' :
             'bg-amber-900/60 text-amber-300'
           }`}>{c.fe || '?'}</span>
-          {isReefer && hasTmp && <span className="bg-cyan-700/60 text-cyan-100 text-[9px] px-1 rounded font-bold flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>{c.tmp}°</span>}
-          {c.isXray && <span className="bg-purple-700/60 text-purple-100 text-[9px] px-1 rounded font-bold">🔍</span>}
+          {isReefer && hasTmp && <span className="bg-cyan-700/60 text-cyan-100 text-3xs px-1 rounded font-bold flex items-center gap-0.5"><Snowflake className="w-2.5 h-2.5"/>{c.tmp}°</span>}
+          {c.isXray && <span className="bg-purple-700/60 text-purple-100 text-3xs px-1 rounded font-bold">🔍</span>}
           {c.dg && <span className="text-red-400 text-xs">🔥</span>}
-          {isDone && <span className="bg-emerald-700/60 text-emerald-100 text-[9px] px-1 rounded font-bold">✓</span>}
+          {isDone && <span className="bg-emerald-700/60 text-emerald-100 text-3xs px-1 rounded font-bold">✓</span>}
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-slate-500 mono mt-0.5">
-          <span className="text-slate-300 font-bold">{c.vsl}</span>
+        <div className="flex items-center gap-2 text-2xs text-dim-400 mono mt-0.5">
+          <span className="text-dim-200 font-bold">{c.vsl}</span>
           <span>·</span>
           <span>{c.voy}</span>
           {c.bay && <><span>·</span><MapPin className="w-2.5 h-2.5"/><span className="text-amber-300">{fmtPos(c)}</span></>}
-          {c.op && <><span>·</span><span className="text-slate-400">{c.op}</span></>}
+          {c.op && <><span>·</span><span className="text-dim-300">{c.op}</span></>}
         </div>
       </div>
-      <ChevronRight className="w-4 h-4 text-slate-600 flex-shrink-0"/>
+      <ChevronRight className="w-4 h-4 text-dim-500 flex-shrink-0"/>
     </button>
   );
 }

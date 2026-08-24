@@ -370,10 +370,10 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
   return (
     <div className="space-y-3">
       {askMode && (
-        <div className="bg-slate-900 border border-amber-700/40 rounded-lg p-2 space-y-2">
+        <div className="bg-ink-900 border border-amber-700/40 rounded-pill p-2 space-y-2">
           <div className="flex items-center justify-between px-1">
-            <span className="text-[12px] font-bold text-amber-300">💬 질문 답변</span>
-            <button onClick={() => setAskMode(false)} className="text-[12px] text-slate-400 px-2 py-1 rounded hover:bg-slate-800">✕ 닫고 작업으로</button>
+            <span className="text-xs2 font-bold text-amber-300">💬 질문 답변</span>
+            <button onClick={() => setAskMode(false)} className="text-xs2 text-dim-300 px-2 py-1 rounded hover:bg-ink-750">✕ 닫고 작업으로</button>
           </div>
           <SingleSearch rfSkip={rfSkip} esealBrief={esealBrief} voyage={voyage} voyageKey={voyageKey} inspector={inspector} allContainers={allContainers} workFilter={workFilter} onOpenContainer={onOpenContainer} portMisData={portMisData} pilotForecast={pilotForecast} diagAlerts={diagAlerts} manualCtx={null} terminalWork={terminalWork} relayQuery={relayQuery} />
         </div>
@@ -383,26 +383,26 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           *"잘못해서 선적인데 양하를 누르고 안된다고 할 수 있죠"* — 선택지가 아닌 것을 선택지처럼 보였다.
           모드 전환은 화면 위 양하/선적 토글이 맡는다(검수사: *"따로 선적/양하 모드 변경탭은 필요합니다"* — 이미 있음).
           완료 보기는 작은 칸으로 유지. pickWorkFilter·setWorkFilter 배선은 그대로(표시만 줄임). */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1 items-stretch">
+      <div className="bg-ink-900 border border-line rounded-pill p-1.5 flex gap-1 items-stretch">
         {workFilter !== 'completed' ? (
           <div className={`flex-[3] py-2.5 rounded text-center font-bold ${
             workFilter === 'loading' ? 'bg-sky-800/70 text-sky-100' : 'bg-rose-800/70 text-rose-100'
           }`}>
             <span className="text-[14px]">{workFilter === 'loading' ? '⬆ 선적 시작' : '⬇ 양하 시작'}</span>
-            <span className="block text-[11px] opacity-80">대기 {workFilter === 'loading' ? loadCount : dischCount}대</span>
+            <span className="block text-xxs opacity-80">대기 {workFilter === 'loading' ? loadCount : dischCount}대</span>
           </div>
         ) : (
           <button onClick={() => pickWorkFilter(mode === 'loading' ? 'loading' : 'discharge')}
-            className="flex-[3] py-2.5 rounded text-center font-bold bg-slate-800 text-slate-300 text-[13px]">
+            className="flex-[3] py-2.5 rounded text-center font-bold bg-ink-800 text-dim-200 text-sm2">
             ← {mode === 'loading' ? '선적' : '양하'} 작업으로 돌아가기
           </button>
         )}
         <button onClick={() => setWorkFilter(workFilter === 'completed' ? (mode === 'loading' ? 'loading' : 'discharge') : 'completed')}
-          className={`flex-1 py-2 rounded text-[11px] font-bold flex flex-col items-center justify-center ${
-            workFilter === 'completed' ? 'bg-emerald-700 text-emerald-100' : 'text-slate-400 hover:bg-slate-800'
+          className={`flex-1 py-2 rounded text-xxs font-bold flex flex-col items-center justify-center ${
+            workFilter === 'completed' ? 'bg-emerald-700 text-emerald-100' : 'text-dim-300 hover:bg-ink-750'
           }`}>
           <span>✓ 완료</span>
-          <span className="text-[10px] opacity-80">{completedCount}대</span>
+          <span className="text-2xs opacity-80">{completedCount}대</span>
         </button>
       </div>
       {/* V7.99-16 / V8.04: 양하 — 신고 리스트에 없는데 내려진 컨(초과) 기록 (모달) */}
@@ -412,13 +412,13 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
             if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
             setExtraModalOpen(true);
           }}
-          className="w-full mt-1.5 py-2 rounded-lg font-bold text-xs bg-slate-900 hover:bg-amber-900 text-amber-300 border border-amber-800 flex items-center justify-center gap-1.5">
+          className="w-full mt-1.5 py-2 rounded-pill font-bold text-xs bg-ink-900 hover:bg-amber-900 text-amber-300 border border-amber-800 flex items-center justify-center gap-1.5">
           ➕ 초과 컨 추가 (리스트에 없는데 내려진 컨)
         </button>
       )}
       {/* V8.04: 초과분 별도 집계·제출 (검수리스트처럼) + 잘못 넣은 것 삭제 */}
       {workFilter === 'discharge' && extraList.length > 0 && (
-        <div className="bg-amber-950/20 border border-amber-700/50 rounded-lg p-2.5 mt-1.5">
+        <div className="bg-amber-950/20 border border-amber-700/50 rounded-pill p-2.5 mt-1.5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-black text-amber-300">초과분 {extraList.length}건 (신고 대상)</span>
             <button onClick={() => {
@@ -433,15 +433,15 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
               document.body.appendChild(a); a.click(); document.body.removeChild(a);
               URL.revokeObjectURL(url);
             }}
-              className="text-[10px] px-2 py-0.5 rounded border border-amber-600 bg-amber-900/40 text-amber-200 hover:bg-amber-800/60 font-bold">
+              className="text-2xs px-2 py-0.5 rounded border border-amber-600 bg-amber-900/40 text-amber-200 hover:bg-amber-800/60 font-bold">
               📥 초과분 내보내기 (CSV)
             </button>
           </div>
           <div className="space-y-1">
             {extraList.map(c => (
-              <div key={c.cn} className="flex items-center gap-2 text-[11px] bg-slate-900/60 rounded px-2 py-1">
+              <div key={c.cn} className="flex items-center gap-2 text-xxs bg-ink-900/60 rounded px-2 py-1">
                 <span className="mono font-bold text-amber-300 flex-1 truncate">{c.cn}</span>
-                <span className="text-slate-400">{c._extraSize} · {c.fe} · {c._extraType}</span>
+                <span className="text-dim-300">{c._extraSize} · {c.fe} · {c._extraType}</span>
                 {c.tmp && <span className="text-cyan-300">❄{c.tmp}°</span>}
                 {c._extraDamage && c._extraDamage !== '없음' && <span className="text-orange-400" title={c._extraDamage}>⚠</span>}
                 <button onClick={async () => {
@@ -456,23 +456,23 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         </div>
       )}
       {workFilter !== 'completed' && !isLoloShip && (
-        <div className={`rounded-lg p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
+        <div className={`rounded-pill p-1.5 flex gap-1 border-2 ${guideMode ? 'bg-violet-950/60 border-violet-600' : 'bg-amber-950/40 border-amber-700'}`}>
           <button onClick={() => setGuideMode(true)}
             className={`flex-1 py-2.5 rounded font-bold text-sm flex items-center justify-center gap-1.5 ${
-              guideMode ? 'bg-violet-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'
+              guideMode ? 'bg-violet-600 text-white shadow-lg' : 'text-dim-300 hover:bg-ink-750'
             }`}>
             🤖 자동 가이드
           </button>
           <button onClick={() => setGuideMode(false)}
             className={`flex-1 py-2.5 rounded font-bold text-sm flex items-center justify-center gap-1.5 ${
-              !guideMode ? 'bg-amber-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'
+              !guideMode ? 'bg-amber-600 text-white shadow-lg' : 'text-dim-300 hover:bg-ink-750'
             }`}>
             ✋ 수동
           </button>
         </div>
       )}
       {guideMode && workFilter !== 'completed' && (
-        <div className="text-center text-[11px] font-bold text-violet-300 -mt-1">
+        <div className="text-center text-xxs font-bold text-violet-300 -mt-1">
           자동 가이드 모드 — 앱이 다음 컨테이너를 순서대로 제시합니다
         </div>
       )}
@@ -491,18 +491,18 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       {/* V7.99-10 (메모6 수동): 베이→홀드/데크 선택 게이트 (A안). 완료 탭은 게이트 없이 자유 조회. */}
       {/* V8.11: LOLO선(RZOR 등)은 베이가 없으므로 게이트를 건너뛰고 바로 조회창으로. 베이만 못 알려줄 뿐 실번호·규격·F/E·온도·XRAY는 정상 조회. */}
       {workFilter !== 'completed' && !noWorkLeft && manualBay == null && !isLoloShip ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
-          <div className="text-sm font-bold text-amber-300">작업할 베이를 선택하세요 <span className="text-[11px] text-slate-500 font-normal">(수동)</span></div>
-          {manualGroups.length === 0 && <div className="text-xs text-slate-500 text-center py-4">남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
+        <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
+          <div className="text-sm font-bold text-amber-300">작업할 베이를 선택하세요 <span className="text-xxs text-dim-400 font-normal">(수동)</span></div>
+          {manualGroups.length === 0 && <div className="text-xs text-dim-400 text-center py-4">남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다.</div>}
           <div className="grid grid-cols-3 gap-2">
             {manualGroups.map(g => g.noBay ? (
               <button key="nobay" onClick={() => { setManualBay(g.center); setManualTier('none'); }}
-                className="py-3 rounded-lg bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
+                className="py-3 rounded-pill bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
                 <div className="font-bold text-base">⚠ 자리 미지정{g.displaced ? '·자리 뺏김' : ''}</div>
-                <div className="text-[10px] text-amber-300">남은 {g.count}대{g.displaced ? ` (자리 뺏김 ${g.displaced} — 원자리에 다른 컨이 실렸습니다)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
+                <div className="text-2xs text-amber-300">남은 {g.count}대{g.displaced ? ` (자리 뺏김 ${g.displaced} — 원자리에 다른 컨이 실렸습니다)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
+                <div className="text-2xs text-dim-300 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
                 {g.swapHints && g.swapHints.length > 0 && (
-                  <div className="mt-1 text-left text-[10px] text-emerald-300 mono">
+                  <div className="mt-1 text-left text-2xs text-emerald-300 mono">
                     {g.swapHints.slice(0, 6).map(h => (
                       <div key={h.l4}>🔁 {h.l4} → {h.to} (뺏은 컨 {h.taker}의 원자리)</div>
                     ))}
@@ -512,12 +512,12 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
               </button>
             ) : (
               <button key={g.center} onClick={() => setManualBay(g.center)}
-                className="py-3 rounded-lg bg-slate-800 hover:bg-amber-800 border border-slate-700 text-slate-100">
+                className="py-3 rounded-pill bg-ink-800 hover:bg-amber-800 border border-line text-dim-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
-                <div className="text-[10px] text-slate-400">빈 칸 {g.count} · 남은 컨 {g.contLeft || 0}대</div>
-                <div className="flex items-center justify-center gap-1.5 mt-0.5 text-[10px] font-bold">
+                <div className="text-2xs text-dim-300">빈 칸 {g.count} · 남은 컨 {g.contLeft || 0}대</div>
+                <div className="flex items-center justify-center gap-1.5 mt-0.5 text-2xs font-bold">
                   {g.deck > 0 && <span className="text-sky-300">데크 {g.deck}</span>}
-                  {g.deck > 0 && g.hold > 0 && <span className="text-slate-600">·</span>}
+                  {g.deck > 0 && g.hold > 0 && <span className="text-dim-500">·</span>}
                   {g.hold > 0 && <span className="text-amber-300">홀드 {g.hold}</span>}
                 </div>
               </button>
@@ -529,17 +529,17 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           const g = manualGroups.find(x => x.center === manualBay);
           const bayLbl = g ? `B${[...g.bays].sort((a, b) => a - b).join('·')}` : `B${manualBay}`;
           return (
-            <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-3">
+            <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-3">
               <div className="flex items-center gap-2">
-                <button onClick={() => setManualBay(null)} className="text-xs text-slate-400 hover:text-amber-300">‹ 베이</button>
+                <button onClick={() => setManualBay(null)} className="text-xs text-dim-300 hover:text-amber-300">‹ 베이</button>
                 <div className="text-sm font-bold text-amber-300">{bayLbl} — 작업할 단을 선택하세요</div>
               </div>
               <button disabled={!g || g.deck === 0} onClick={() => setManualTier('deck')}
-                className={`w-full py-4 rounded-lg border text-left px-4 ${!g || g.deck === 0 ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-sky-950/40 border-sky-700 hover:bg-sky-900/50 text-sky-100'}`}>
+                className={`w-full py-4 rounded-pill border text-left px-4 ${!g || g.deck === 0 ? 'bg-ink-800/40 border-line text-dim-500' : 'bg-sky-950/40 border-sky-700 hover:bg-sky-900/50 text-sky-100'}`}>
                 <div className="flex items-center justify-between"><span className="font-bold text-base">🔵 데크 {g ? g.deck : 0}개</span><span className="text-xs mono text-sky-300">20FT:{g ? g.deck20 : 0} / 40FT:{g ? g.deck40 : 0}</span></div>
               </button>
               <button disabled={!g || g.hold === 0} onClick={() => setManualTier('hold')}
-                className={`w-full py-4 rounded-lg border text-left px-4 ${!g || g.hold === 0 ? 'bg-slate-800/40 border-slate-800 text-slate-600' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
+                className={`w-full py-4 rounded-pill border text-left px-4 ${!g || g.hold === 0 ? 'bg-ink-800/40 border-line text-dim-500' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
                 <div className="flex items-center justify-between"><span className="font-bold text-base">🟠 홀드 {g ? g.hold : 0}개</span><span className="text-xs mono text-amber-300">20FT:{g ? g.hold20 : 0} / 40FT:{g ? g.hold40 : 0}</span></div>
               </button>
             </div>
@@ -549,13 +549,13 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
       <>
       {/* TallyOne 1.53: 잔여 0대 — 작업은 끝났지만 조회는 계속 된다는 것을 알린다. */}
       {noWorkLeft && (
-        <div className="bg-emerald-950/40 border border-emerald-700 rounded-lg px-3 py-2 text-[11px] text-emerald-200 font-bold">
+        <div className="bg-emerald-950/40 border border-emerald-700 rounded-pill px-3 py-2 text-xxs text-emerald-200 font-bold">
           ✅ 남은 {workFilter === 'discharge' ? '양하' : '선적'} 작업이 없습니다 — 조회·검색은 그대로 됩니다. 끝 4자리를 넣어 보세요.
         </div>
       )}
       {/* V8.11: LOLO선 안내 — 베이(위치)만 없고 나머지 정보는 정상 조회됨을 알림. */}
       {isLoloShip && (
-        <div className="bg-teal-950/50 border border-teal-700 rounded-lg px-3 py-2 text-[11px] text-teal-200">
+        <div className="bg-teal-950/50 border border-teal-700 rounded-pill px-3 py-2 text-xxs text-teal-200">
           🚢 LOLO 선박 — 끝 4자리로 조회하세요. 덱플랜이 올라오면 <b className="text-lime-300">자리(D덱 3줄 5칸)</b>와 <b className="text-lime-300">🏗갠트리 대상</b>까지 함께 나옵니다.
         </div>
       )}
@@ -566,7 +566,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         // V8.09-17 (메모5): 수동도 자동 가이드처럼 진행상태(잔여 N대)를 보이게. 현재 단의 미완료 잔여.
         const remain = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? g.hold : g.deck) : 0);
         return (
-          <div className="flex items-center gap-2 text-[11px] bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5">
+          <div className="flex items-center gap-2 text-xxs bg-ink-900 border border-line rounded-pill px-3 py-1.5">
             <span className="font-bold text-amber-300">📍 {noBay ? '⚠ 자리 미지정 작업 중' : `${bayLbl}번 ${manualTier === 'hold' ? '홀드' : '데크'} 작업 중`}</span>
             {/* TallyOne 1.50: **싱글이 먼저다.** 검수사 확정 2026-08-11 —
                 *"그자리는 수동모드에서 싱글로 선적을 한후에 트윈으로 가서 선적 하여야 합니다."*
@@ -596,11 +596,11 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
                 if (!spots.has(key(pb, x.row, x.tier))) n++;
               });
               if (!n) return null;
-              return <span className="ml-2 px-1.5 py-0.5 rounded bg-rose-800 text-rose-100 font-black text-[10px]">✋ 싱글 먼저 {n}대 — 짝 없는 자리</span>;
+              return <span className="ml-2 px-1.5 py-0.5 rounded bg-rose-800 text-rose-100 font-black text-2xs">✋ 싱글 먼저 {n}대 — 짝 없는 자리</span>;
             })()}
             <span className="font-black text-emerald-300 bg-emerald-950/50 border border-emerald-800 rounded px-1.5 py-0.5">잔여 {remain}대</span>
-            <button onClick={() => { setManualTier(null); }} className="text-slate-400 hover:text-amber-300">단 변경</button>
-            <button onClick={() => { setManualBay(null); setManualTier(null); }} className="text-slate-400 hover:text-amber-300">베이 변경</button>
+            <button onClick={() => { setManualTier(null); }} className="text-dim-300 hover:text-amber-300">단 변경</button>
+            <button onClick={() => { setManualBay(null); setManualTier(null); }} className="text-dim-300 hover:text-amber-300">베이 변경</button>
           </div>
         );
       })()}
@@ -622,24 +622,24 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         const lbl = (x) => (x.noBay ? '자리 미지정' : `B${[...x.bays].sort((a, b) => a - b).join('·')}`);
         const hereLbl = g ? lbl(g) : `B${manualBay}`;
         return (
-          <div className="bg-emerald-950/50 border-2 border-emerald-600 rounded-lg p-3 space-y-2">
+          <div className="bg-emerald-950/50 border-2 border-emerald-600 rounded-pill p-3 space-y-2">
             <div className="text-sm font-black text-emerald-200">
               ✅ {hereLbl}{noBay ? '' : ` ${manualTier === 'hold' ? '홀드' : '데크'}`} 끝났습니다 — 남은 작업 0대
             </div>
             {otherLeft > 0 && (
               <button onClick={() => setManualTier(otherTier)}
-                className="w-full py-2.5 rounded-lg font-bold text-sm bg-sky-700 hover:bg-sky-600 text-sky-50">
+                className="w-full py-2.5 rounded-pill font-bold text-sm bg-sky-700 hover:bg-sky-600 text-sky-50">
                 같은 베이 {otherTier === 'hold' ? '홀드' : '데크'} {otherLeft}대 남았습니다 — 이어서 →
               </button>
             )}
             {nextG && (
               <button onClick={() => { setManualBay(nextG.center); setManualTier(nextG.noBay ? 'none' : null); }}
-                className="w-full py-3 rounded-lg font-black text-base bg-emerald-600 hover:bg-emerald-500 text-white">
-                다음 {lbl(nextG)} 로 → <span className="text-[11px] font-bold opacity-90">(남은 {nextG.count}대)</span>
+                className="w-full py-3 rounded-pill font-black text-base bg-emerald-600 hover:bg-emerald-500 text-white">
+                다음 {lbl(nextG)} 로 → <span className="text-xxs font-bold opacity-90">(남은 {nextG.count}대)</span>
               </button>
             )}
             <button onClick={() => { setManualBay(null); setManualTier(null); }}
-              className="w-full py-2 rounded-lg text-[11px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300">
+              className="w-full py-2 rounded-pill text-xxs bg-ink-800 hover:bg-ink-750 border border-line text-dim-200">
               베이 목록으로
             </button>
           </div>
@@ -653,17 +653,17 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           베이 탭 보관함까지 가야만 보였다. 선적대상에서 **빠져 버린다.**
           → 창고 컨도 여기 세우되 **미배정과 섞지 않는다.** 이름 걸린 자리를 그대로 적어 준다. */}
       {workFilter !== 'completed' && manualBay != null && manualGroups.find(x => x.center === manualBay)?.noBay && onPlaceUnassigned && (
-        <div className="bg-slate-900 border border-amber-800/60 rounded-lg p-2 space-y-1">
-          <div className="text-[11px] text-amber-300 font-bold">🅿 배치 — 누르면 베이 화면으로 가서 빈 칸(📦+)을 고릅니다</div>
+        <div className="bg-ink-900 border border-amber-800/60 rounded-pill p-2 space-y-1">
+          <div className="text-xxs text-amber-300 font-bold">🅿 배치 — 누르면 베이 화면으로 가서 빈 칸(📦+)을 고릅니다</div>
           {allContainers.filter(c => c._mode === workFilter && !c._comp && (!c.bay || c.bay_actual === '__STG__')).map(c => (
             <div key={c.cn} className="flex items-center gap-1.5">
-              <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-slate-800 rounded px-2 py-1.5 text-xs mono font-bold text-slate-100">
-                {c.cn} <span className="text-[10px] text-slate-400 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
+              <button onClick={() => onOpenContainer?.(c)} className="flex-1 text-left bg-ink-800 rounded px-2 py-1.5 text-xs mono font-bold text-dim-100">
+                {c.cn} <span className="text-2xs text-dim-300 font-normal">{isoToLabel(c.iso) || c.tp || ''} {c.fe || ''}</span>
                 {c.bay_actual === '__STG__'
-                  ? <span className="ml-1 text-[10px] font-bold text-sky-300">
+                  ? <span className="ml-1 text-2xs font-bold text-sky-300">
                       📦 창고{c.bay && c.row && c.tier ? ` · 이름 걸린 자리 ${String(parseInt(c.bay, 10)).padStart(2, '0')}-${c.row}-${c.tier}` : ''}
                     </span>
-                  : <span className="ml-1 text-[10px] font-bold text-orange-300">자리 미지정</span>}
+                  : <span className="ml-1 text-2xs font-bold text-orange-300">자리 미지정</span>}
               </button>
               {/* V9.51: 원래 계획 자리가 남아 있으면 한 번에 되돌린다 (빈 칸을 다시 찾을 필요 없음) */}
               <RestoreOrigButton c={c} allContainers={allContainers} voyageKey={voyageKey}
@@ -674,16 +674,16 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
           ))}
         </div>
       )}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-1.5 flex gap-1">
+      <div className="bg-ink-900 border border-line rounded-pill p-1.5 flex gap-1">
         <button onClick={() => setSearchMode('single')}
           className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${
-            searchMode === 'single' ? 'bg-amber-700 text-amber-100' : 'text-slate-400 hover:bg-slate-800'
+            searchMode === 'single' ? 'bg-amber-700 text-amber-100' : 'text-dim-300 hover:bg-ink-750'
           }`}>
           <Truck className="w-4 h-4"/>싱글 🎤
         </button>
         <button onClick={() => setSearchMode('twin')}
           className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 ${
-            searchMode === 'twin' ? 'bg-blue-700 text-blue-100' : 'text-slate-400 hover:bg-slate-800'
+            searchMode === 'twin' ? 'bg-blue-700 text-blue-100' : 'text-dim-300 hover:bg-ink-750'
           }`}>
           <Truck className="w-4 h-4"/><Truck className="w-4 h-4"/>트윈
         </button>
@@ -761,13 +761,13 @@ function TwinPossibleHint({ c, allContainers, voyage }) {
   if (!h) return null;
   const warn = 'text-amber-300 font-black';
   return (
-    <div className="bg-sky-950/60 border border-sky-600 rounded-lg px-3 py-2 mb-1 text-[12px] text-sky-100 font-bold leading-snug">
+    <div className="bg-sky-950/60 border border-sky-600 rounded-pill px-3 py-2 mb-1 text-xs2 text-sky-100 font-bold leading-snug">
       <Link2 className="w-3.5 h-3.5 inline mr-1 -mt-0.5"/>
       짝 자리 {h.pos} 에 {h.l4} 가 있습니다. 트윈으로 두 대 한 번에 가능합니다.
-      <div className="mt-0.5 font-normal text-[11px]">
+      <div className="mt-0.5 font-normal text-xxs">
         (무게 {h.wt} · <span className={h.samePod ? '' : warn}>{h.podText}</span> · <span className={h.sameIso ? '' : warn}>{h.isoText}</span>)
       </div>
-      <div className="mt-0.5 font-normal text-[11px] text-slate-300">
+      <div className="mt-0.5 font-normal text-xxs text-dim-200">
         싱글로 계속해도 됩니다 — 무겁다 · 포트가 틀리다 · 규격이 틀리다면 싱글이 맞습니다. 트윈으로 할 거면 위 [트윈] 탭으로 가세요.
       </div>
     </div>
@@ -1273,19 +1273,19 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 
   return (
     <>
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
+      <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-[10px] text-slate-500 font-bold">
+          <div className="text-2xs text-dim-400 font-bold">
             🤖 검색/AI — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
           </div>
           <button onClick={() => setHelpOpen(true)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-[10px] font-bold border border-amber-700/40">
+            className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-2xs font-bold border border-amber-700/40">
             <HelpCircle className="w-3 h-3"/>
             예시
           </button>
         </div>
         <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim-400"/>
           <input type="text" value={draft}
             onChange={e => {
               const v = e.target.value;
@@ -1300,31 +1300,31 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             placeholder="🎤 / 4777 / DWSU3000276 / 40피트 4777 / 자유 질문"
             autoComplete="off"
             inputMode={manualCtx && manualCtx.selectedGroup != null && manualCtx.selectedTier ? 'numeric' : 'text'}
-            className="w-full pl-9 pr-32 py-3 bg-slate-800 border border-slate-700 rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
+            className="w-full pl-9 pr-32 py-3 bg-ink-800 border border-line rounded text-xl font-black mono text-amber-200 text-center tracking-wider focus:outline-none focus:border-amber-500"/>
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {voiceSupported && (
               <button onClick={isListening ? stopListening : startListening}
                 className={`w-10 h-10 rounded flex items-center justify-center ${
-                  isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'
+                  isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-ink-950'
                 }`}>
                 {isListening ? <MicOff className="w-5 h-5"/> : <Mic className="w-5 h-5"/>}
               </button>
             )}
             <button onClick={() => setAutoSpeak(!autoSpeak)}
-              className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-slate-500'}`}>
+              className={`w-7 h-10 rounded flex items-center justify-center ${autoSpeak ? 'text-amber-300' : 'text-dim-400'}`}>
               {autoSpeak ? <Volume2 className="w-4 h-4"/> : <VolumeX className="w-4 h-4"/>}
             </button>
             {/* TallyOne 1.22: 전송키 — 문장을 다 쓰고 누르면 그때 답한다.
                 1.69-05: 제출 뒤에도 남긴다 — 같은 질문을 다시 눌러 물을 수 있게(검수사 신고). */}
             {isSentence(draft) && !!draft.trim() && (
               <button onClick={submitDraft} title="질문 전송"
-                className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-slate-900">
+                className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-ink-950">
                 <SendHorizontal className="w-5 h-5"/>
               </button>
             )}
             {(draft || query || chatMessages.length > 0) && (
-              <button onClick={() => { setDraft(''); setQuery(''); setAskedAt(null); setReasked(false); lastSpokenRef.current = null; handleNewChat(); }} className="w-7 h-10 rounded hover:bg-slate-700 flex items-center justify-center">
-                <X className="w-4 h-4 text-slate-500"/>
+              <button onClick={() => { setDraft(''); setQuery(''); setAskedAt(null); setReasked(false); lastSpokenRef.current = null; handleNewChat(); }} className="w-7 h-10 rounded hover:bg-ink-750 flex items-center justify-center">
+                <X className="w-4 h-4 text-dim-400"/>
               </button>
             )}
           </div>
@@ -1337,7 +1337,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         )}
 
         {hasAnyCondition(parsed) && !aiAnswer && chatMessages.length === 0 && (
-          <div className="mt-2 text-[11px] text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
+          <div className="mt-2 text-xxs text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-800/40">
             🤖 인식: <span className="font-bold">{describeQuery(parsed)}</span>
             {parsed.isStat && <span className="ml-1 text-amber-300">(개수)</span>}
           </div>
@@ -1352,7 +1352,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         )}
 
         {fixingVoice && (
-          <div className="mt-2 text-[11px] text-center text-sky-300 font-bold animate-pulse">🎙 문장 복원 중…</div>
+          <div className="mt-2 text-xxs text-center text-sky-300 font-bold animate-pulse">🎙 문장 복원 중…</div>
         )}
         {/* V7.54: 못 알아들었거나 일치 0인 질문 기록 — 나중에 지원 추가용 (사용자 요청) */}
         {!isListening && !fixingVoice && query.length >= 4 && !aiLoading && !aiAnswer && chatMessages.length === 0 && !localAnswer
@@ -1362,13 +1362,13 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               setWrongPayload({ query, answerType: 'unanswered', answerText: hasAnyCondition(parsed) ? '(일치 결과 없음)' : '(질문 인식 실패)', parsed });
               setWrongOpen(true);
             }}
-            className="mt-2 w-full py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-amber-700/50 text-amber-300 text-[11px] font-bold">
+            className="mt-2 w-full py-1.5 rounded bg-ink-800 hover:bg-ink-750 border border-amber-700/50 text-amber-300 text-xxs font-bold">
             📌 이 질문을 기록 (나중에 답할 수 있게 개선)
           </button>
         )}
 
-        <div className="text-[11px] text-center mt-2">
-          {!isListening && query.length === 0 && <span className="text-slate-500">🎤 마이크 또는 키보드</span>}
+        <div className="text-xxs text-center mt-2">
+          {!isListening && query.length === 0 && <span className="text-dim-400">🎤 마이크 또는 키보드</span>}
           {!isListening && query.length >= 2 && results.length === 0 && hasAnyCondition(parsed) && <span className="text-red-400 font-bold">⚠ 일치 없음</span>}
           {!isListening && query.length >= 2 && results.length === 1 && !parsed.isStat && <span className="text-emerald-400 font-bold">✓ 1개 일치</span>}
           {!isListening && query.length >= 2 && results.length > 1 && !parsed.isStat && <span className="text-amber-400 font-bold">⚠ {results.length}개 일치</span>}
@@ -1379,15 +1379,15 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 
       {/* M5.80: 멀티턴 AI 대화 카드 */}
       {chatMessages.length > 0 && (
-        <div className="bg-gradient-to-br from-purple-950 via-slate-900 to-cyan-950 border-2 border-purple-500 rounded-xl p-4">
+        <div className="bg-gradient-to-br from-purple-950 via-slate-900 to-cyan-950 border-2 border-purple-500 rounded-btn p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-purple-300"/>
-              <div className="text-[11px] text-purple-300 font-bold uppercase">
+              <div className="text-xxs text-purple-300 font-bold uppercase">
                 AI 대화 (Gemini Flash)
               </div>
               {ragInfo && ragInfo.narrowed && (
-                <span className="text-[10px] text-cyan-300 bg-cyan-950/50 px-1.5 py-0.5 rounded font-bold">
+                <span className="text-2xs text-cyan-300 bg-cyan-950/50 px-1.5 py-0.5 rounded font-bold">
                   🎯 RAG: {ragInfo.filterDesc} ({ragInfo.candidateCount}대)
                 </span>
               )}
@@ -1404,11 +1404,11 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                 });
                 setWrongOpen(true);
               }}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-[10px] font-bold border border-red-700/40">
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-2xs font-bold border border-red-700/40">
                 ❌ 오답
               </button>
               <button onClick={handleNewChat}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-slate-700/60 hover:bg-slate-600/60 text-slate-200 text-[10px] font-bold border border-slate-600/40">
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-ink-750/60 hover:bg-ink-700/60 text-dim-100 text-2xs font-bold border border-line-strong/40">
                 🔄 새 대화
               </button>
             </div>
@@ -1418,17 +1418,17 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
             {chatMessages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] px-3 py-2 rounded-lg ${
+                <div className={`max-w-[85%] px-3 py-2 rounded-pill ${
                   m.role === 'user'
                     ? 'bg-amber-700/40 border border-amber-600/40 text-amber-100 text-sm'
-                    : 'bg-slate-800/60 border border-purple-600/30 text-slate-100 text-base'
+                    : 'bg-ink-800/60 border border-purple-600/30 text-dim-100 text-base'
                 }`}>
-                  <div className="text-[9px] uppercase font-bold mb-0.5 opacity-70">
+                  <div className="text-3xs uppercase font-bold mb-0.5 opacity-70">
                     {m.role === 'user' ? '검수원' : 'AI'}
                   </div>
                   <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
                   {m.role === 'model' && m.ragInfo && m.ragInfo.narrowed && (
-                    <div className="mt-1 text-[9px] text-cyan-400/80 font-bold">
+                    <div className="mt-1 text-3xs text-cyan-400/80 font-bold">
                       📌 {m.ragInfo.filterDesc} ({m.ragInfo.candidateCount}대 참조)
                     </div>
                   )}
@@ -1437,9 +1437,9 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             ))}
             {aiLoading && (
               <div className="flex justify-start">
-                <div className="px-3 py-2 rounded-lg bg-slate-800/60 border border-purple-600/30">
+                <div className="px-3 py-2 rounded-pill bg-ink-800/60 border border-purple-600/30">
                   <Loader2 className="w-4 h-4 animate-spin text-purple-300 inline"/>
-                  <span className="ml-2 text-xs text-slate-400">AI 생각 중...</span>
+                  <span className="ml-2 text-xs text-dim-300">AI 생각 중...</span>
                 </div>
               </div>
             )}
@@ -1456,17 +1456,17 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
                   if (e.key === 'Enter' && followupQuery.trim()) handleSendFollowup();
                 }}
                 placeholder="후속 질문 (예: 그 중 양하만, 위험물은?)"
-                className="flex-1 px-3 py-2 bg-slate-800 border border-purple-700/40 rounded text-sm text-slate-100 focus:outline-none focus:border-purple-500"
+                className="flex-1 px-3 py-2 bg-ink-800 border border-purple-700/40 rounded text-sm text-dim-100 focus:outline-none focus:border-purple-500"
               />
               <button onClick={handleSendFollowup}
                 disabled={!followupQuery.trim()}
-                className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded font-bold text-sm">
+                className="px-4 py-2 bg-purple-700 hover:bg-purple-600 disabled:bg-ink-750 disabled:text-dim-400 text-white rounded font-bold text-sm">
                 보내기
               </button>
             </div>
           )}
 
-          <div className="mt-2 text-[10px] text-slate-500">
+          <div className="mt-2 text-2xs text-dim-400">
             💡 이전 대화 기억함 — "그 중...", "위에 뭐 있어?" 같은 후속 질문 가능 · {chatMessages.length / 2}턴
           </div>
         </div>
@@ -1478,42 +1478,42 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           「← 이전 답으로」 를 결과 위에 상시 노출. 텍스트 답일 땐 종전대로 답 카드 안 버튼만. */}
       {askStack.length > 0 && !localAnswer && chatMessages.length === 0 && (
         <button onClick={backAnswer}
-          className="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
+          className="w-full py-2.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-100 font-bold text-sm border border-line-strong">
           ← 이전 답으로
         </button>
       )}
 
       {localAnswer && chatMessages.length === 0 && (
-        <div className="bg-gradient-to-br from-emerald-950 to-slate-900 border-2 border-emerald-600 rounded-xl p-4">
+        <div className="bg-gradient-to-br from-emerald-950 to-slate-900 border-2 border-emerald-600 rounded-btn p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-300"/>
-              <div className="text-[11px] text-emerald-300 font-bold">🐱 미르 즉답</div>
+              <div className="text-xxs text-emerald-300 font-bold">🐱 미르 즉답</div>
             </div>
             <button onClick={() => {
               setWrongPayload({ query, answerType: 'local', answerText: localAnswer, parsed });
               setWrongOpen(true);
             }}
-              className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-[10px] font-bold border border-red-700/40">
+              className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 text-2xs font-bold border border-red-700/40">
               ❌ 오답
             </button>
           </div>
-          {reasked && askedAt && <div className="text-[11px] text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
-          <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
+          {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
+          <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
           {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다 */}
           {needsModeChoice(parsed, results) && modeChoice === null && (
             <div className="mt-2 flex gap-2">
               <button onClick={() => setModeChoice('discharge')}
-                className="flex-1 py-3 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-black text-base">⬇ 양하</button>
+                className="flex-1 py-3 rounded-pill bg-sky-700 hover:bg-sky-600 text-white font-black text-base">⬇ 양하</button>
               <button onClick={() => setModeChoice('loading')}
-                className="flex-1 py-3 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-black text-base">⬆ 선적</button>
+                className="flex-1 py-3 rounded-pill bg-emerald-700 hover:bg-emerald-600 text-white font-black text-base">⬆ 선적</button>
               <button onClick={() => setModeChoice('both')}
-                className="flex-1 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold text-sm">둘 다</button>
+                className="flex-1 py-3 rounded-pill bg-ink-750 hover:bg-ink-700 text-dim-100 font-bold text-sm">둘 다</button>
             </div>
           )}
           {parsed.foodQuery && (
             <button onClick={() => { window.location.hash = `#/food?spin=${parsed.foodQuery}`; }}
-              className="mt-2 w-full py-2.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white font-bold text-sm">
+              className="mt-2 w-full py-2.5 rounded-pill bg-violet-700 hover:bg-violet-600 text-white font-bold text-sm">
               🎰 돌림판 돌리기
             </button>
           )}
@@ -1532,13 +1532,13 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               <div className="mt-2 flex gap-2 flex-wrap">
                 {uniq.map(h => (
                   <button key={h} onClick={() => followUp(h)}
-                    className="flex-1 min-w-[120px] py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
+                    className="flex-1 min-w-[120px] py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
                     🔍 {h} 보기
                   </button>
                 ))}
                 {askStack.length > 0 && (
                   <button onClick={backAnswer}
-                    className="flex-1 min-w-[120px] py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
+                    className="flex-1 min-w-[120px] py-2.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-100 font-bold text-sm border border-line-strong">
                     ← 이전 답으로
                   </button>
                 )}
@@ -1550,22 +1550,22 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 
       {/* V8.00: 인수인계 되묻기 — 검수사가 특이사항/전달사항 직접 입력 */}
       {parsed.handoverQuery && localAnswer && !handoverFinalized && chatMessages.length === 0 && (
-        <div className="bg-slate-900 border border-amber-700 rounded-xl p-3 space-y-2">
-          <div className="text-[12px] text-amber-300 font-bold">📝 더 전달할 내용 (특이사항·다음 검수사 참고)</div>
+        <div className="bg-ink-900 border border-amber-700 rounded-btn p-3 space-y-2">
+          <div className="text-xs2 text-amber-300 font-bold">📝 더 전달할 내용 (특이사항·다음 검수사 참고)</div>
           <textarea
             value={handoverNote}
             onChange={(e) => setHandoverNote(e.target.value)}
             placeholder="예: 12번 베이 리퍼 1대 온도 확인 필요. 3호기 크레인 점심 후 점검 예정. 없으면 비워두세요."
             rows={3}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm text-slate-100 resize-none"
+            className="w-full bg-ink-950 border border-line rounded-pill p-2 text-sm text-dim-100 resize-none"
           />
           <div className="flex gap-2">
             <button onClick={() => setHandoverFinalized(true)}
-              className="flex-1 py-2.5 rounded-lg font-black text-sm bg-emerald-700 hover:bg-emerald-600 text-emerald-50">
+              className="flex-1 py-2.5 rounded-pill font-black text-sm bg-emerald-700 hover:bg-emerald-600 text-emerald-50">
               ✓ 인계서 완성
             </button>
             <button onClick={() => { setHandoverNote(''); setHandoverFinalized(true); }}
-              className="px-4 py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600">
+              className="px-4 py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-ink-750 text-dim-200 border border-line-strong">
               특이사항 없음
             </button>
           </div>
@@ -1574,9 +1574,9 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 
       {/* 통계 답변 카드 (단순 카운트) — 로컬 답변이 없을 때만 */}
       {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && !aiAnswer && !localAnswer && chatMessages.length === 0 && (
-        <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-xl p-4 text-center">
-          <div className="text-[11px] text-cyan-400 font-bold uppercase mb-1">개수 답변</div>
-          <div className="text-base text-slate-300 mb-2">{describeQuery(parsed)}</div>
+        <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-btn p-4 text-center">
+          <div className="text-xxs text-cyan-400 font-bold uppercase mb-1">개수 답변</div>
+          <div className="text-base text-dim-200 mb-2">{describeQuery(parsed)}</div>
           <div className="text-6xl sm:text-7xl font-black mono text-cyan-300 my-2"
             style={{ textShadow: '0 0 30px rgba(34, 211, 238, 0.6)' }}>
             {results.length}
@@ -1643,7 +1643,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
             {othersRest.length > 0 && results.length > 0 && (
               <div className="mt-1">
                 <button onClick={() => setShowOthers(v => !v)}
-                  className="w-full py-1.5 rounded bg-slate-800/60 border border-slate-700/50 text-[11px] text-slate-400 font-bold">
+                  className="w-full py-1.5 rounded bg-ink-800/60 border border-line text-xxs text-dim-300 font-bold">
                   {showOthers ? '▲ 접기' : `▼ ${othersLabel(othersRest.length)}`}
                 </button>
                 {showOthers && othersRest.slice(0, 20).map(c => (
@@ -1923,31 +1923,31 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
   };
 
   const pickBox = (label, color, q, setQ, cSel, setCSel, rr) => (
-    <div className={`bg-slate-900 border ${color === 'amber' ? 'border-amber-700/40' : 'border-cyan-700/40'} rounded-lg p-3`}>
-      <div className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>
-        <span className={`${color === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'} px-1.5 py-0.5 rounded text-[10px] font-black`}>{label}</span>
+    <div className={`bg-ink-900 border ${color === 'amber' ? 'border-amber-700/40' : 'border-cyan-700/40'} rounded-pill p-3`}>
+      <div className={`text-2xs font-bold mb-2 flex items-center gap-1 ${color === 'amber' ? 'text-amber-400' : 'text-cyan-400'}`}>
+        <span className={`${color === 'amber' ? 'bg-amber-700 text-amber-50' : 'bg-cyan-700 text-cyan-50'} px-1.5 py-0.5 rounded text-2xs font-black`}>{label}</span>
         {label} 컨테이너 — 끝4자리
       </div>
       <input type="text" value={q} onChange={e => setQ(e.target.value.toUpperCase())}
         placeholder="끝 4자리 또는 컨번호" inputMode="numeric" autoComplete="off"
-        className={`w-full px-3 py-3 bg-slate-800 border rounded text-2xl font-black mono text-center tracking-widest focus:outline-none ${color === 'amber' ? 'border-amber-700/40 text-amber-200 focus:border-amber-500' : 'border-cyan-700/40 text-cyan-200 focus:border-cyan-500'}`}/>
+        className={`w-full px-3 py-3 bg-ink-800 border rounded text-2xl font-black mono text-center tracking-widest focus:outline-none ${color === 'amber' ? 'border-amber-700/40 text-amber-200 focus:border-amber-500' : 'border-cyan-700/40 text-cyan-200 focus:border-cyan-500'}`}/>
       {cSel ? (
-        <div className="mt-2 flex items-center justify-between bg-slate-800 rounded px-2 py-1.5">
+        <div className="mt-2 flex items-center justify-between bg-ink-800 rounded px-2 py-1.5">
           <div>
-            <span className="mono text-sm font-bold text-slate-100">{cSel.cn}</span>
-            <span className="ml-2 text-[10px] mono text-slate-400">기존 위치 {cSel.bay ? fmtPos(cSel) : '미배정'}</span>
-            {cSel._comp && <span className="ml-1 px-1 rounded bg-rose-800 text-rose-200 text-[10px] font-bold">⚠ 완료기록</span>}
+            <span className="mono text-sm font-bold text-dim-100">{cSel.cn}</span>
+            <span className="ml-2 text-2xs mono text-dim-300">기존 위치 {cSel.bay ? fmtPos(cSel) : '미배정'}</span>
+            {cSel._comp && <span className="ml-1 px-1 rounded bg-rose-800 text-rose-200 text-2xs font-bold">⚠ 완료기록</span>}
           </div>
-          <button onClick={() => { setCSel(null); setQ(''); }} className="text-[11px] text-slate-400 px-1.5">✕</button>
+          <button onClick={() => { setCSel(null); setQ(''); }} className="text-xxs text-dim-300 px-1.5">✕</button>
         </div>
       ) : (
         <>
-          {q.length >= 2 && rr.length === 0 && <div className="mt-2 text-[11px] text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
+          {q.length >= 2 && rr.length === 0 && <div className="mt-2 text-xxs text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
           {rr.length > 1 && (
             <div className="flex flex-wrap gap-1 mt-2 justify-center">
               {rr.map(c => (
                 <button key={c.cn} onClick={() => setCSel(c)}
-                  className="bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-[10px] mono text-slate-200">
+                  className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-dim-100">
                   {c.cn}{c._comp ? ' ⚠완료' : ''}
                 </button>
               ))}
@@ -1964,13 +1964,13 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
       <ConfirmModal {...confirmState} />
       {onBackToAuto && (
         <button onClick={onBackToAuto}
-          className="w-full text-[11px] text-slate-300 py-2 bg-slate-800 border border-slate-700 rounded hover:bg-slate-700">
+          className="w-full text-xxs text-dim-200 py-2 bg-ink-800 border border-line rounded hover:bg-ink-750">
           ← 조회 방식으로 돌아가기 (실번호 확인 화면)
         </button>
       )}
-      <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
+      <div className="bg-blue-950/30 border border-blue-800/40 rounded-pill p-2 text-xs text-blue-300 text-center">
         📍 위치 지정 방식 — 두 컨을 직접 묶고 자리를 새로 정합니다
-        <div className="text-[10px] text-blue-400/70 mt-0.5">지정 자리대로면 그대로 확인 · 실제가 다를 때만 위치를 고칩니다</div>
+        <div className="text-2xs text-blue-400/70 mt-0.5">지정 자리대로면 그대로 확인 · 실제가 다를 때만 위치를 고칩니다</div>
       </div>
       {step === 'pick' && (
         <>
@@ -1984,10 +1984,10 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
               **사실대로 기록할 길이 없었다.** 검수사는 싱글 2건으로 우회해야 했다.
               → 뒤바뀜은 **경고로만** 두고 진행 버튼을 둘 다 남긴다. 고르는 것은 검수원이다. */}
           {c1 && c2 && planPair && planPair.swapped && (
-            <div className="bg-indigo-950/50 border border-indigo-700 rounded-lg p-3 space-y-2">
-              <div className="text-[12px] text-indigo-200 leading-snug">
+            <div className="bg-indigo-950/50 border border-indigo-700 rounded-pill p-3 space-y-2">
+              <div className="text-xs2 text-indigo-200 leading-snug">
                 ⚠ 플랜상 앞은 <b className="mono">{c2.cn?.slice(-4)}</b>(B{_bn(c2.bay)}) 입니다 — 앞뒤가 반대로 들어왔습니다.
-                <div className="text-[11px] text-indigo-300/80 mt-1 leading-snug">
+                <div className="text-xxs text-indigo-300/80 mt-1 leading-snug">
                   입력 순서만 바뀐 것이면 <b>⇅</b> 를 누르세요.<br/>
                   실제로 맞바뀌어 실렸으면 그대로 <b>[위치 지정]</b> 으로 사실대로 적으세요 — 막지 않습니다.
                 </div>
@@ -2002,19 +2002,19 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
           {/* V9.48: 지정 자리가 우선 — 플랜 짝 자리 그대로면 미배정 없이 바로 확인 */}
           {c1 && c2 && planPair && (
             <>
-              <div className={`rounded-lg p-3 border ${planPair.swapped ? 'bg-indigo-950/30 border-indigo-700/60' : 'bg-emerald-950/40 border-emerald-700/60'}`}>
-                <div className={`text-[11px] font-bold mb-1.5 flex items-center gap-1 ${planPair.swapped ? 'text-indigo-300' : 'text-emerald-300'}`}>
+              <div className={`rounded-pill p-3 border ${planPair.swapped ? 'bg-indigo-950/30 border-indigo-700/60' : 'bg-emerald-950/40 border-emerald-700/60'}`}>
+                <div className={`text-xxs font-bold mb-1.5 flex items-center gap-1 ${planPair.swapped ? 'text-indigo-300' : 'text-emerald-300'}`}>
                   <Link2 className="w-3.5 h-3.5"/>{planPair.swapped ? '지정 자리 — 앞뒤가 플랜과 반대입니다' : '지정 자리 — 플랜 그대로 (짝 확인됨)'}
                 </div>
                 <div className="flex items-center justify-center gap-3 text-sm mono">
-                  <span className="text-amber-200 font-black">{c1.cn?.slice(-4)} <span className="text-slate-400 font-normal">{fmtPos(c1)}</span></span>
-                  <span className="text-slate-600">+</span>
-                  <span className="text-cyan-200 font-black">{c2.cn?.slice(-4)} <span className="text-slate-400 font-normal">{fmtPos(c2)}</span></span>
+                  <span className="text-amber-200 font-black">{c1.cn?.slice(-4)} <span className="text-dim-300 font-normal">{fmtPos(c1)}</span></span>
+                  <span className="text-dim-500">+</span>
+                  <span className="text-cyan-200 font-black">{c2.cn?.slice(-4)} <span className="text-dim-300 font-normal">{fmtPos(c2)}</span></span>
                 </div>
               </div>
               {/* 자리를 옮기지 않고 확인만 찍는다 — 앞뒤 입력 순서와 무관하게 안전하다. */}
               <button onClick={completeAtPlan} disabled={busy}
-                className="w-full py-4 rounded-lg font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+                className="w-full py-4 rounded-pill font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
                 {busy ? '처리 중…' : '✅ 지정 자리 그대로 트윈 선적확인'}
               </button>
               {/* ── TallyOne 1.55: 액츄얼 작업에서 다른 것은 **자리가 아니라 번호**다(검수사 확정 2026-08-12).
@@ -2023,19 +2023,19 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                   이것이 **사실대로 적는 유일한 길**이라 접지 않고 그대로 내놓는다. */}
               {planPair.swapped ? (
                 <button onClick={() => confirmManual(c2)} disabled={busy}
-                  className="w-full py-3 rounded-lg font-bold text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-indigo-50">
+                  className="w-full py-3 rounded-pill font-bold text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-indigo-50">
                   ⇄ 실제로 맞바뀌어 실렸습니다 — 위치 지정
                 </button>
               ) : (
-                <details className="bg-slate-800 border border-slate-500 rounded-lg">
+                <details className="bg-ink-800 border border-line-strong rounded-pill">
                   {/* 1.56-05: 위치 지정임이 먼저 보이게 + 버튼처럼 (검수사 지적 2026-08-12 밤) */}
-                  <summary className="px-3 py-2.5 text-[13px] font-bold text-slate-100 cursor-pointer select-none hover:bg-slate-700 rounded-lg">📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-slate-400 font-normal">▼ 눌러서 열기</span></summary>
+                  <summary className="px-3 py-2.5 text-sm2 font-bold text-dim-100 cursor-pointer select-none hover:bg-ink-750 rounded-pill">📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-dim-300 font-normal">▼ 눌러서 열기</span></summary>
                   <div className="px-3 pb-3 pt-1 space-y-2">
-                    <div className="text-[10px] text-slate-500 leading-snug">
+                    <div className="text-2xs text-dim-400 leading-snug">
                       번호가 다른 컨이 온 것이라면 이 길이 아닙니다 — 카드의 <b className="text-cyan-300">[컨테이너 번호 수정]</b> 을 쓰세요.
                     </div>
                     <button onClick={() => confirmManual()} disabled={busy}
-                      className="w-full py-2 rounded-lg text-[12px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 disabled:opacity-50">
+                      className="w-full py-2 rounded-pill text-xs2 bg-ink-800 hover:bg-ink-750 border border-line text-dim-200 disabled:opacity-50">
                       계획에 없는 칸에 실렸습니다 — 위치 지정
                     </button>
                   </div>
@@ -2047,13 +2047,13 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
           {/* 짝 자리가 아니거나 미배정 — 종전대로 자리를 지정한다 */}
           {c1 && c2 && !planPair && (
             <>
-              <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg p-2 text-[11px] text-amber-200 text-center leading-snug">
+              <div className="bg-amber-950/30 border border-amber-800/50 rounded-pill p-2 text-xxs text-amber-200 text-center leading-snug">
                 {(!c1.bay || !c2.bay)
                   ? '두 컨 중 지정 자리가 없는 쪽이 있습니다 — 위치를 지정하세요.'
                   : '플랜상 짝 자리가 아닙니다 — 위치를 지정하세요.'}
               </div>
               <button onClick={() => confirmManual()} disabled={busy}
-                className="w-full py-3 rounded-lg font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+                className="w-full py-3 rounded-pill font-bold text-base bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
                 <Link2 className="w-5 h-5"/>{busy ? '처리 중…' : '수동 배정 확인 — 두 컨 미배정 후 위치 지정'}
               </button>
             </>
@@ -2061,11 +2061,11 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
         </>
       )}
       {step === 'pos' && c1 && c2 && (
-        <div className="bg-slate-900 border border-amber-700 rounded-lg p-3 space-y-3">
+        <div className="bg-ink-900 border border-amber-700 rounded-pill p-3 space-y-3">
           <div className="text-xs text-amber-300 font-bold">앞 {c1.cn?.slice(-4)} 위치 — 자리 선택</div>
           {/* TallyOne 1.55: 칸의 세 갈래를 그대로 적어 준다 — 「이름표만 걸린 칸」은 고를 수 있다. */}
-          <div className="text-[10px] text-slate-400 leading-snug">
-            <span className="text-slate-500">✓회색</span> = 그 칸에 <b>실린 컨</b>이 있습니다(선택 불가) ·
+          <div className="text-2xs text-dim-300 leading-snug">
+            <span className="text-dim-400">✓회색</span> = 그 칸에 <b>실린 컨</b>이 있습니다(선택 불가) ·
             <span className="text-sky-300"> 🏷파랑</span> = <b>이름표만</b> 걸린 칸(주인은 창고, 선택 가능) · 나머지 = 빈 칸
           </div>
           {/* V8.83: 위치수정 창과 같은 자리 선택 그리드 — 직접 입력은 접이식으로 (사용자 확정) */}
@@ -2079,9 +2079,9 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
                 const named = slotsByBay[b].filter(s => s.named).length;
                 return (
                   <button key={b} onClick={() => remain > 0 && setPickBay(b)} disabled={remain === 0}
-                    className={`py-2.5 rounded-lg border font-black ${remain > 0 ? 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100' : 'bg-slate-900 border-slate-800 text-slate-600'}`}>
+                    className={`py-2.5 rounded-pill border font-black ${remain > 0 ? 'bg-ink-800 hover:bg-amber-800 border-line-strong hover:border-amber-500 text-dim-100' : 'bg-ink-900 border-line text-dim-500'}`}>
                     <div className="mono text-base">B{b}</div>
-                    <div className="text-[10px] font-bold text-slate-400">
+                    <div className="text-2xs font-bold text-dim-300">
                       {remain > 0 ? `남은 ${remain}자리` : '끝났습니다'}
                       {named > 0 && <span className="ml-1 text-sky-300">🏷{named}</span>}
                     </div>
@@ -2093,42 +2093,42 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <div className="text-xs text-amber-300 font-bold">📍 BAY {pickBay} — 자리 선택</div>
-                <button onClick={() => { setPickBay(null); setBay(''); setRow(''); setTier(''); }} className="text-[11px] text-slate-400 px-2 py-1 border border-slate-700 rounded">← 베이 다시 선택</button>
+                <button onClick={() => { setPickBay(null); setBay(''); setRow(''); setTier(''); }} className="text-xxs text-dim-300 px-2 py-1 border border-line rounded">← 베이 다시 선택</button>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {(slotsByBay[pickBay] || []).map(sl => sl.done ? (
                   /* done — 그 칸에 **완료된 컨이 실제로** 있다. 선택 불가. */
                   <span key={`${sl.row}-${sl.tier}`} title={sl.cn || ''}
-                    className="px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mono text-sm font-bold text-slate-600 cursor-not-allowed">✓{sl.row}-{sl.tier}</span>
+                    className="px-2.5 py-2 rounded-pill bg-ink-900 border border-line mono text-sm font-bold text-dim-500 cursor-not-allowed">✓{sl.row}-{sl.tier}</span>
                 ) : (
                   /* named — 이름표만 걸린 칸(계획 주인은 아직 창고). **선택 가능**하고 그 컨 끝4자리를 같이 보여 준다.
                      empty — 진짜 빈 칸. */
                   <button key={`${sl.row}-${sl.tier}`} onClick={() => { setBay(sl.bay); setRow(sl.row); setTier(sl.tier); }}
-                    className={`px-2.5 py-2 rounded-lg border mono text-sm font-bold flex flex-col items-center leading-tight ${
+                    className={`px-2.5 py-2 rounded-pill border mono text-sm font-bold flex flex-col items-center leading-tight ${
                       row === sl.row && tier === sl.tier && bay === sl.bay
                         ? 'bg-amber-700 border-amber-400 text-amber-50'
                         : sl.named
-                          ? 'bg-slate-800 hover:bg-amber-800 border-sky-700/70 hover:border-amber-500 text-slate-100'
-                          : 'bg-slate-800 hover:bg-amber-800 border-slate-600 hover:border-amber-500 text-slate-100'}`}>
+                          ? 'bg-ink-800 hover:bg-amber-800 border-sky-700/70 hover:border-amber-500 text-dim-100'
+                          : 'bg-ink-800 hover:bg-amber-800 border-line-strong hover:border-amber-500 text-dim-100'}`}>
                     <span>{sl.row}-{sl.tier}</span>
-                    {sl.named && <span className="text-[9px] font-bold text-sky-300">🏷{String(sl.cn || '').slice(-4)}</span>}
+                    {sl.named && <span className="text-3xs font-bold text-sky-300">🏷{String(sl.cn || '').slice(-4)}</span>}
                   </button>
                 ))}
               </div>
             </div>
           )}
           <button onClick={() => setManualOpen(v => !v)}
-            className="w-full py-1.5 text-[11px] text-slate-400 hover:text-slate-200 border border-dashed border-slate-700 rounded">
+            className="w-full py-1.5 text-xxs text-dim-300 hover:text-dim-100 border border-dashed border-line rounded">
             {manualOpen ? '▲ 직접 입력 닫기' : '▼ 직접 입력 (플랜에 없는 자리)'}
           </button>
           {manualOpen && (
           <div className="grid grid-cols-3 gap-2">
             {[['BAY', bay, setBay, 3], ['ROW', row, setRow, 2], ['TIER', tier, setTier, 2]].map(([lb, v, setV, mx]) => (
               <div key={lb}>
-                <label className="text-[10px] text-slate-500 font-bold">{lb}</label>
+                <label className="text-2xs text-dim-400 font-bold">{lb}</label>
                 <input type="text" inputMode="numeric" value={v}
                   onChange={e => setV(e.target.value.replace(/[^\d]/g, '').slice(0, mx))}
-                  className="w-full px-3 py-3 bg-slate-800 border border-slate-700 rounded text-2xl font-black mono text-amber-200 text-center"/>
+                  className="w-full px-3 py-3 bg-ink-800 border border-line rounded text-2xl font-black mono text-amber-200 text-center"/>
               </div>
             ))}
           </div>
@@ -2146,10 +2146,10 @@ function ManualTwinLoad({ voyage, voyageKey, inspector, allContainers, onOpenCon
             )
           )}
           <button onClick={completeBoth} disabled={busy || !backPos}
-            className="w-full py-3 rounded-lg font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white flex items-center justify-center gap-2">
+            className="w-full py-3 rounded-pill font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white flex items-center justify-center gap-2">
             <Check className="w-5 h-5"/>{busy ? '처리 중…' : '트윈 선적확인 (두 대 한 번에)'}
           </button>
-          <button onClick={() => setStep('pick')} className="w-full text-[11px] text-slate-400 py-1">← 컨 선택으로</button>
+          <button onClick={() => setStep('pick')} className="w-full text-xxs text-dim-300 py-1">← 컨 선택으로</button>
         </div>
       )}
     </>
@@ -2310,40 +2310,40 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
   return (
     <>
       <ConfirmModal {...confirmState} />
-      <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-2 text-xs text-blue-300 text-center">
+      <div className="bg-blue-950/30 border border-blue-800/40 rounded-pill p-2 text-xs text-blue-300 text-center">
         🚛 트윈: 앞 컨 입력 → EDI 베이 분석으로 짝꿍 자동 추천
-        <div className="text-[10px] text-blue-400/70 mt-0.5">완료된 컨은 짝 후보 제외 · 통로 사이 단독 베이는 짝 없음</div>
+        <div className="text-2xs text-blue-400/70 mt-0.5">완료된 컨은 짝 후보 제외 · 통로 사이 단독 베이는 짝 없음</div>
       </div>
 
       {/* TallyOne 1.55: 액츄얼 항차에서 주 경로는 **번호 수정**이다 — 자리는 계획대로 전부 찬다. */}
       {seqMode === 'allActual' && (
-        <div className="bg-cyan-950/30 border border-cyan-800/50 rounded-lg px-2.5 py-1.5 text-[11px] text-cyan-200 leading-snug">
+        <div className="bg-cyan-950/30 border border-cyan-800/50 rounded-pill px-2.5 py-1.5 text-xxs text-cyan-200 leading-snug">
           🔁 액츄얼 작업 — <b>자리는 계획대로</b> 찹니다. 다른 컨이 왔으면 카드의 <b>[컨테이너 번호 수정 (다른 컨이 옴)]</b> 을 쓰세요.
         </div>
       )}
 
-      <div className="bg-slate-900 border border-amber-700/40 rounded-lg p-3">
-        <div className="text-[10px] text-amber-400 font-bold mb-2 flex items-center gap-1">
-          <span className="bg-amber-700 text-amber-50 px-1.5 py-0.5 rounded text-[10px] font-black">앞</span>
+      <div className="bg-ink-900 border border-amber-700/40 rounded-pill p-3">
+        <div className="text-2xs text-amber-400 font-bold mb-2 flex items-center gap-1">
+          <span className="bg-amber-700 text-amber-50 px-1.5 py-0.5 rounded text-2xs font-black">앞</span>
           앞 컨테이너 — 끝4자리
         </div>
         <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim-400"/>
           <input type="text" value={q1}
             onChange={e => { setReplaced(false); setQ1(e.target.value.toUpperCase()); }}
             placeholder="끝 4자리 또는 컨번호"
             inputMode="numeric" autoComplete="off"
-            className="w-full pl-9 pr-10 py-3 bg-slate-800 border border-amber-700/40 rounded text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"/>
-          {q1 && <button onClick={() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-5 h-5 text-slate-500"/></button>}
+            className="w-full pl-9 pr-10 py-3 bg-ink-800 border border-amber-700/40 rounded text-2xl font-black mono text-amber-200 text-center tracking-widest focus:outline-none focus:border-amber-500"/>
+          {q1 && <button onClick={() => { setReplaced(false); setQ1(''); setC1(null); setC2(null); }} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-5 h-5 text-dim-400"/></button>}
         </div>
-        {q1.length >= 2 && r1.length === 0 && <div className="mt-2 text-[11px] text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
+        {q1.length >= 2 && r1.length === 0 && <div className="mt-2 text-xxs text-red-400 text-center font-bold">⚠ 컨테이너 없음</div>}
         {r1.length > 1 && (
-          <div className="mt-2 text-[11px] text-amber-400 text-center">
+          <div className="mt-2 text-xxs text-amber-400 text-center">
             {r1.length}개 일치 — 정확히 입력 또는 선택:
             <div className="flex flex-wrap gap-1 mt-1 justify-center">
               {r1.slice(0, 8).map(c => (
                 <button key={c.cn} onClick={() => { setC1(c); setC2(findTwinCandidate(c, allContainers, new Set(), shipImo, shipName)); }}
-                  className="bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded text-[10px] mono text-amber-300">
+                  className="bg-ink-800 hover:bg-ink-750 px-2 py-0.5 rounded text-2xs mono text-amber-300">
                   {c.cn}
                 </button>
               ))}
@@ -2360,7 +2360,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           **앞 컨만 기록되고 뒤 컨은 미배정으로 떠돌았다**(실측: 5881 완료 / 짝 5755 자리·완료 모두 없음). */}
       {c1 && c2 && (
         <button onClick={handleCompleteBoth} disabled={twinBusy}
-          className="w-full py-3 rounded-lg font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+          className="w-full py-3 rounded-pill font-bold text-base bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
           <Link2 className="w-5 h-5"/>
           {twinBusy ? '처리 중…' : (c1._mode === 'discharge' ? '트윈 한 번에 양하확인 (두 대)' : '트윈 한 번에 선적확인 (두 대)')}
         </button>
@@ -2380,11 +2380,11 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       {/* 짝꿍 표시 / 수정 */}
       {c1 && (
         <div className="flex items-center gap-2 px-2">
-          <div className="flex-1 border-t border-slate-700"/>
-          <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+          <div className="flex-1 border-t border-line"/>
+          <div className="text-2xs text-dim-400 font-bold flex items-center gap-1">
             <Link2 className="w-3 h-3"/>트윈 짝꿍
           </div>
-          <div className="flex-1 border-t border-slate-700"/>
+          <div className="flex-1 border-t border-line"/>
         </div>
       )}
 
@@ -2404,7 +2404,7 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
       )}
 
       {c1 && c2 && (
-        <button onClick={handleSwapTwin} className="w-full text-xs text-slate-400 hover:text-amber-300 py-2 bg-slate-900 rounded">
+        <button onClick={handleSwapTwin} className="w-full text-xs text-dim-300 hover:text-amber-300 py-2 bg-ink-900 rounded">
           뒤 컨 짝꿍 변경 (수동 선택)
         </button>
       )}
@@ -2420,15 +2420,15 @@ function TwinSearch({ voyage, voyageKey, inspector, allContainers, workFilter, o
           ── TallyOne 1.55: 종전 문구 「실제 자리가 플랜과 다릅니다」는 **액츄얼에서 오도한다** —
           액츄얼에서 다른 것은 자리가 아니라 번호다(검수사 확정 2026-08-12). 예외 경로로 접어 둔다. */}
       {onManualMode && (
-        <details className="bg-slate-800 border border-slate-500 rounded-lg">
+        <details className="bg-ink-800 border border-line-strong rounded-pill">
           {/* 1.56-05: 위치 지정임이 먼저 보이게 + 버튼처럼 (검수사 지적 2026-08-12 밤) */}
-          <summary className="px-3 py-2.5 text-[13px] font-bold text-slate-100 cursor-pointer select-none hover:bg-slate-700 rounded-lg">📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-slate-400 font-normal">▼ 눌러서 열기</span></summary>
+          <summary className="px-3 py-2.5 text-sm2 font-bold text-dim-100 cursor-pointer select-none hover:bg-ink-750 rounded-pill">📍 위치 지정 — 계획에 없는 칸에 실렸을 때 <span className="text-dim-300 font-normal">▼ 눌러서 열기</span></summary>
           <div className="px-3 pb-3 pt-1 space-y-2">
-            <div className="text-[10px] text-slate-500 leading-snug">
+            <div className="text-2xs text-dim-400 leading-snug">
               번호가 다른 컨이 온 것이라면 이 길이 아닙니다 — 위 카드의 <b className="text-cyan-300">[컨테이너 번호 수정]</b> 을 쓰세요.
             </div>
             <button onClick={onManualMode}
-              className="w-full text-[11px] text-slate-300 hover:text-amber-300 py-2 bg-slate-800 border border-slate-700 rounded">
+              className="w-full text-xxs text-dim-200 hover:text-amber-300 py-2 bg-ink-800 border border-line rounded">
               계획에 없는 칸에 실렸습니다 — 위치 지정 방식으로
             </button>
           </div>
@@ -2453,31 +2453,31 @@ function ManualTwinPicker({ allContainers, c1, onPick }) {
   }, [q, allContainers, c1]);
 
   return (
-    <div className="bg-slate-900 border border-cyan-700/40 rounded-lg p-3">
-      <div className="text-[10px] text-cyan-400 font-bold mb-2 flex items-center gap-1">
-        <span className="bg-cyan-700 text-cyan-50 px-1.5 py-0.5 rounded text-[10px] font-black">뒤</span>
+    <div className="bg-ink-900 border border-cyan-700/40 rounded-pill p-3">
+      <div className="text-2xs text-cyan-400 font-bold mb-2 flex items-center gap-1">
+        <span className="bg-cyan-700 text-cyan-50 px-1.5 py-0.5 rounded text-2xs font-black">뒤</span>
         짝꿍 자동 못 찾음 — 수동 입력
       </div>
       <div className="relative">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500"/>
+        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim-400"/>
         <input type="text" value={q}
           onChange={e => setQ(e.target.value.toUpperCase())}
           placeholder="끝 4자리"
           inputMode="numeric" autoComplete="off"
-          className="w-full pl-9 pr-3 py-3 bg-slate-800 border border-cyan-700/40 rounded text-2xl font-black mono text-cyan-200 text-center tracking-widest focus:outline-none focus:border-cyan-500"/>
+          className="w-full pl-9 pr-3 py-3 bg-ink-800 border border-cyan-700/40 rounded text-2xl font-black mono text-cyan-200 text-center tracking-widest focus:outline-none focus:border-cyan-500"/>
       </div>
       {matches.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {matches.map(c => (
             <button key={c.cn} onClick={() => onPick(c)}
-              className="bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-[11px] mono text-cyan-300">
+              className="bg-ink-800 hover:bg-ink-750 px-2 py-1 rounded text-xxs mono text-cyan-300">
               {c.cn}
             </button>
           ))}
         </div>
       )}
       {q.length >= 2 && matches.length === 0 && (
-        <div className="mt-2 text-[11px] text-red-400 text-center">컨테이너 없음</div>
+        <div className="mt-2 text-xxs text-red-400 text-center">컨테이너 없음</div>
       )}
     </div>
   );
@@ -2490,26 +2490,26 @@ function SmallResultCard({ c, onOpen }) {
   const isReeferF = c.rf && hasTmp && c.fe === 'F';
   return (
     <button onClick={onOpen}
-      className={`w-full text-left bg-slate-900 border rounded-lg p-2 flex items-center gap-2 ${
-        c._extra ? 'border-amber-500/70 bg-amber-950/20' : isDone ? 'border-emerald-700/30' : c._xray ? 'border-purple-700/30' : 'border-slate-700 hover:bg-slate-800/50'
+      className={`w-full text-left bg-ink-900 border rounded-pill p-2 flex items-center gap-2 ${
+        c._extra ? 'border-amber-500/70 bg-amber-950/20' : isDone ? 'border-emerald-700/30' : c._xray ? 'border-purple-700/30' : 'border-line hover:bg-ink-750/50'
       }`}>
-      {c._extra && <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500 text-slate-950">초과</span>}
-      <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${
+      {c._extra && <span className="px-1.5 py-0.5 rounded text-3xs font-black bg-amber-500 text-ink-950">초과</span>}
+      <span className={`px-1.5 py-0.5 rounded text-3xs font-black ${
         c._mode === 'discharge' ? 'bg-blue-900 text-blue-200'
         : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
-        : 'bg-gray-700 text-gray-300'
+        : 'bg-gray-700 text-dim-200'
       }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
       {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) &&
-        <span className="px-1 rounded text-[9px] font-black bg-indigo-900 text-indigo-200">수정</span>}
-      <span className="text-[10px] text-slate-400 mono truncate flex-1">{c.cn}</span>
-      <span className="text-[9px] mono text-slate-400">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>
-      <span className={`text-[9px] mono px-1 rounded font-bold ${
+        <span className="px-1 rounded text-3xs font-black bg-indigo-900 text-indigo-200">수정</span>}
+      <span className="text-2xs text-dim-300 mono truncate flex-1">{c.cn}</span>
+      <span className="text-3xs mono text-dim-300">{isoToLabel(c.iso) || c.tp || c._extraSize || ''}</span>
+      <span className={`text-3xs mono px-1 rounded font-bold ${
         c.fe === 'F' ? 'bg-emerald-900/60 text-emerald-300' :
-        c.fe === 'E' ? 'bg-slate-700 text-slate-300' :
+        c.fe === 'E' ? 'bg-ink-750 text-dim-200' :
         'bg-amber-900/60 text-amber-300'
       }`}>{c.fe || '?'}</span>
-      {isReeferF && <span className="bg-cyan-700/60 text-cyan-100 text-[9px] px-1 rounded font-bold">❄{c.tmp}°</span>}
+      {isReeferF && <span className="bg-cyan-700/60 text-cyan-100 text-3xs px-1 rounded font-bold">❄{c.tmp}°</span>}
       {!isReeferF && isReefer && <span className="text-cyan-400 text-xs">❄</span>}
       {c.dg && <span className="text-red-400 text-xs">🔥</span>}
       {c._xray && <span className="text-purple-400 text-xs">🔍</span>}

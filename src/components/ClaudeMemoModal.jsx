@@ -99,12 +99,12 @@ function summarize(text, max = 64) {
 // 상태칩 — 큐 대기(⏳)와 서버 접수(📥)를 한눈에 구분
 function StatusChip({ queued, status }) {
   if (queued) {
-    return <span className="px-1.5 py-0.5 rounded bg-amber-950 border border-amber-700/50 text-amber-300 text-[10px] font-bold shrink-0">⏳대기</span>;
+    return <span className="px-1.5 py-0.5 rounded bg-amber-950 border border-amber-700/50 text-amber-300 text-2xs font-bold shrink-0">⏳대기</span>;
   }
   if (!status || status === 'new') {
-    return <span className="px-1.5 py-0.5 rounded bg-sky-950 border border-sky-700/50 text-sky-300 text-[10px] font-bold shrink-0">📥접수</span>;
+    return <span className="px-1.5 py-0.5 rounded bg-sky-950 border border-sky-700/50 text-sky-300 text-2xs font-bold shrink-0">📥접수</span>;
   }
-  return <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-bold shrink-0">{status}</span>;
+  return <span className="px-1.5 py-0.5 rounded bg-ink-800 border border-line text-dim-300 text-2xs font-bold shrink-0">{status}</span>;
 }
 
 // ── 모달 본체 ────────────────────────────────────────────────────────────────
@@ -217,42 +217,42 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
 
   return (
     <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-3" onClick={onClose}>
-      <div className="bg-slate-900 border-2 border-violet-700/60 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-ink-900 border-2 border-violet-700/60 rounded-card w-full max-w-md max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* 헤더 */}
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-ink-900 border-b border-line px-4 py-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <NotebookPen className="w-5 h-5 text-violet-300" />
             <div className="font-black text-base text-violet-200">개발 요청 · 미르에게 원함</div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg" aria-label="닫기">
-            <X className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill" aria-label="닫기">
+            <X className="w-5 h-5 text-dim-300" />
           </button>
         </div>
 
         <div className="p-4 space-y-3">
-          <div className="text-[11px] text-slate-400 leading-relaxed">
+          <div className="text-xxs text-dim-300 leading-relaxed">
             남긴 글은 개발 메모함에 저장되고, 개발자가 읽어 처리합니다.
           </div>
 
           {/* 2.02: 입력상자 구분 — 저장소는 하나, 이름만 다르다 (검수사 확정) */}
           <div className="flex gap-2">
             <button onClick={() => setKind('dev')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 ${kind === 'dev' ? 'bg-violet-700 border-violet-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+              className={`flex-1 py-2.5 rounded-btn text-sm font-black border-2 ${kind === 'dev' ? 'bg-violet-700 border-violet-500 text-white' : 'bg-ink-800 border-line text-dim-300'}`}>
               🔧 개발 요청
             </button>
             <button onClick={() => setKind('mir')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-black border-2 ${kind === 'mir' ? 'bg-amber-700 border-amber-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+              className={`flex-1 py-2.5 rounded-btn text-sm font-black border-2 ${kind === 'mir' ? 'bg-amber-700 border-amber-500 text-white' : 'bg-ink-800 border-line text-dim-300'}`}>
               🐱 미르에게 원함
             </button>
           </div>
 
           {/* ① 자동 첨부 정보 */}
-          <div className="bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2.5">
-            <div className="text-[10px] font-black text-violet-300/80 mb-1">자동 첨부 정보</div>
-            <div className="text-[11px] text-slate-300 mono leading-relaxed break-all">
-              검수원 <b className="text-slate-100">{inspector || '(없음)'}</b>
+          <div className="bg-ink-800/60 border border-line rounded-btn px-3 py-2.5">
+            <div className="text-2xs font-black text-violet-300/80 mb-1">자동 첨부 정보</div>
+            <div className="text-xxs text-dim-200 mono leading-relaxed break-all">
+              검수원 <b className="text-dim-100">{inspector || '(없음)'}</b>
               {' · '}화면 {hash}
-              {vKey ? <>{' · '}항차 <b className="text-slate-100">{vKey}</b></> : null}
+              {vKey ? <>{' · '}항차 <b className="text-dim-100">{vKey}</b></> : null}
               {modeLabel ? ` · ${modeLabel}` : ''}
               {' · '}{ver}
             </div>
@@ -264,14 +264,14 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
             onChange={(e) => setText(e.target.value)}
             rows={4}
             placeholder={kind === 'mir' ? '미르가 더 해줬으면 하는 것 — 예: 베이별 남은 콘 수도 알려줘' : '예: SWDN 2608S 선적 리스트에 리퍼 온도가 안 보입니다'}
-            className="w-full bg-slate-800 border-2 border-slate-700 focus:border-violet-500 focus:outline-none rounded-xl px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 leading-relaxed resize-y"
+            className="w-full bg-ink-800 border-2 border-line focus:border-violet-500 focus:outline-none rounded-btn px-3 py-2.5 text-sm text-dim-100 placeholder-dim-400 leading-relaxed resize-y"
           />
 
           {/* ③ 보내기 */}
           <button
             onClick={handleSend}
             disabled={sending || !text.trim()}
-            className="w-full h-12 rounded-xl bg-violet-700 hover:bg-violet-600 active:bg-violet-800 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-black flex items-center justify-center gap-2"
+            className="w-full h-12 rounded-btn bg-violet-700 hover:bg-violet-600 active:bg-violet-800 disabled:bg-ink-800 disabled:text-dim-400 text-white text-sm font-black flex items-center justify-center gap-2"
           >
             <Send className="w-4 h-4" />
             {sending ? '전송 중...' : '보내기'}
@@ -279,59 +279,59 @@ export default function ClaudeMemoModal({ inspector, route, voyageKey, mode, app
 
           {/* 결과 안내 — 성공·보관·실패 전부 문구로 드러낸다 */}
           {notice && (
-            <div className={`border rounded-lg px-3 py-2 text-[11px] leading-relaxed ${noticeClass}`}>
+            <div className={`border rounded-pill px-3 py-2 text-xxs leading-relaxed ${noticeClass}`}>
               {notice.msg}
             </div>
           )}
 
           {/* ④ 최근 내 메모 목록 — 기기 보관분(⏳대기)이 위, 서버 접수분(📥접수)이 아래 */}
           <div>
-            <div className="text-[10px] font-black text-slate-500 mb-1.5">최근 내 메모</div>
+            <div className="text-2xs font-black text-dim-400 mb-1.5">최근 내 메모</div>
             <div className="space-y-1.5">
               {queueItems.map((m) => (
-                <div key={`q_${m.at}`} className="bg-slate-800/50 border border-amber-800/40 rounded-xl px-3 py-2 flex items-start gap-2">
+                <div key={`q_${m.at}`} className="bg-ink-800/50 border border-amber-800/40 rounded-btn px-3 py-2 flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <StatusChip queued />
-                      <span className="text-[10px] text-slate-500 mono">{fmtTime(m.at)}</span>
-                      {m.voyageKey ? <span className="text-[10px] text-slate-600 mono truncate">{m.voyageKey}</span> : null}
+                      <span className="text-2xs text-dim-400 mono">{fmtTime(m.at)}</span>
+                      {m.voyageKey ? <span className="text-2xs text-dim-500 mono truncate">{m.voyageKey}</span> : null}
                     </div>
-                    <div className="text-xs text-slate-200 leading-snug">{summarize(m.text)}</div>
+                    <div className="text-xs text-dim-100 leading-snug">{summarize(m.text)}</div>
                   </div>
-                  <button onClick={() => handleDeleteQueued(m)} className="p-2 -mr-1 hover:bg-slate-700 rounded-lg shrink-0" aria-label="보관 메모 삭제">
-                    <Trash2 className="w-4 h-4 text-slate-500" />
+                  <button onClick={() => handleDeleteQueued(m)} className="p-2 -mr-1 hover:bg-ink-750 rounded-pill shrink-0" aria-label="보관 메모 삭제">
+                    <Trash2 className="w-4 h-4 text-dim-400" />
                   </button>
                 </div>
               ))}
               {serverMemos.map((m) => (
-                <div key={m.key} className="bg-slate-800/50 border border-slate-700 rounded-xl px-3 py-2 flex items-start gap-2">
+                <div key={m.key} className="bg-ink-800/50 border border-line rounded-btn px-3 py-2 flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
                       <StatusChip status={m.status} />
-                      <span className="text-[10px] text-slate-500 mono">{fmtTime(m.at)}</span>
-                      {m.voyageKey ? <span className="text-[10px] text-slate-600 mono truncate">{m.voyageKey}</span> : null}
+                      <span className="text-2xs text-dim-400 mono">{fmtTime(m.at)}</span>
+                      {m.voyageKey ? <span className="text-2xs text-dim-500 mono truncate">{m.voyageKey}</span> : null}
                     </div>
-                    <div className="text-xs text-slate-200 leading-snug">{summarize(m.text)}</div>
+                    <div className="text-xs text-dim-100 leading-snug">{summarize(m.text)}</div>
                   </div>
-                  <button onClick={() => handleDeleteServer(m)} className="p-2 -mr-1 hover:bg-slate-700 rounded-lg shrink-0" aria-label="메모 삭제">
-                    <Trash2 className="w-4 h-4 text-slate-500" />
+                  <button onClick={() => handleDeleteServer(m)} className="p-2 -mr-1 hover:bg-ink-750 rounded-pill shrink-0" aria-label="메모 삭제">
+                    <Trash2 className="w-4 h-4 text-dim-400" />
                   </button>
                 </div>
               ))}
               {loadState === 'loading' && (
-                <div className="text-center text-[11px] text-slate-500 py-3">목록을 불러오는 중...</div>
+                <div className="text-center text-xxs text-dim-400 py-3">목록을 불러오는 중...</div>
               )}
               {loadState === 'err' && (
-                <div className="text-center text-[11px] text-red-300 py-3">목록 조회 실패 — 네트워크 확인 후 다시 열어 주세요</div>
+                <div className="text-center text-xxs text-red-300 py-3">목록 조회 실패 — 네트워크 확인 후 다시 열어 주세요</div>
               )}
               {loadState === 'ok' && queueItems.length === 0 && serverMemos.length === 0 && (
-                <div className="text-center text-[11px] text-slate-600 py-3">아직 보낸 메모가 없습니다</div>
+                <div className="text-center text-xxs text-dim-500 py-3">아직 보낸 메모가 없습니다</div>
               )}
             </div>
           </div>
 
           {/* ⑤ 닫기 */}
-          <button onClick={onClose} className="w-full h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold">
+          <button onClick={onClose} className="w-full h-11 rounded-btn bg-ink-800 hover:bg-ink-750 text-dim-200 text-sm font-bold">
             닫기
           </button>
         </div>

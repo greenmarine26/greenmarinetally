@@ -81,7 +81,7 @@ setTimeout(() => {
   //  ⑥ 검수사 확정 — **출력양식은 전부 중앙정렬**
   if (/text-align\s*:\s*left/.test(html)) { console.log('✗ 출력양식에 왼쪽 정렬이 남아 있다 — 전부 중앙이어야 한다'); process.exit(1); }
 
-  const kpi = doc.querySelectorAll('button.rounded-xl').length;
+  const kpi = doc.querySelectorAll('button.rounded-btn').length;
   console.log(`✓ X-RAY 탭 연막검사 통과 (${t.length}자 · 정렬 O · 화물구분 4종 O · 미입력 O · 인쇄 머리 6칸·7열 O · 밑줄칸 O · 40대→2장 O · 여백 O · 폰트조절 O · 카드 ${kpi}장 · 오류 0)`);
   process.exit(0);
 }, 900);

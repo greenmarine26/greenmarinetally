@@ -578,18 +578,18 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   if (!canOpen) {
     return (
       <div className="max-w-3xl mx-auto px-3 py-10">
-        <div className="bg-slate-900 border border-purple-800/50 rounded-2xl p-6 text-center">
+        <div className="bg-ink-900 border border-purple-800/50 rounded-card p-6 text-center">
           <div className="text-4xl mb-3">🔒</div>
           <div className="text-lg font-bold text-purple-200 mb-2">수석 검수원 전용 화면입니다</div>
-          <div className="text-sm text-slate-400 leading-relaxed">
+          <div className="text-sm text-dim-300 leading-relaxed">
             수석 검수원만 출입이 가능합니다.<br/>
             전체 진행률·보관소·편집 기능은 수석 검수원에게 요청해 주세요.
           </div>
-          <div className="text-[11px] text-slate-500 mt-3">
-            현재 로그인: <b className="text-slate-300">{inspector || '미상'}</b>
+          <div className="text-xxs text-dim-400 mt-3">
+            현재 로그인: <b className="text-dim-200">{inspector || '미상'}</b>
           </div>
           <button onClick={onGoHome}
-            className="mt-5 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-bold text-slate-200">
+            className="mt-5 px-4 py-2 rounded-pill bg-ink-800 hover:bg-ink-750 text-sm font-bold text-dim-100">
             ← 홈으로 돌아가기
           </button>
         </div>
@@ -600,8 +600,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
   return (
     <div className="max-w-3xl mx-auto px-3 py-3 space-y-3">
       <div>
-        <div className="text-[10px] text-purple-400 font-bold uppercase mb-1">수석 검수원 대시보드</div>
-        <div className="text-lg font-bold text-slate-100">전체 현황</div>
+        <div className="text-2xs text-purple-400 font-bold uppercase mb-1">수석 검수원 대시보드</div>
+        <div className="text-lg font-bold text-dim-100">전체 현황</div>
       </div>
 
       {/* 1.81-01(검수사 요청 2026-08-17): TOP 버튼 — 대시보드가 길어서 맨 위로 한 번에. */}
@@ -624,8 +624,8 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
         <form className="flex-1 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const q = String(chiefSearchQ || '').trim(); if (q) setDashQ(q); }}>
           <input value={chiefSearchQ} onChange={(e) => setChiefSearchQ(e.target.value)}
             placeholder="통합검색 · 미르에게 질문 — 컨번호·데미지·브리핑"
-            className="flex-1 bg-slate-800 border border-slate-600 focus:border-emerald-500 focus:outline-none rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500"/>
-          <button type="submit" className="px-3 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-sm font-bold shrink-0">🔍</button>
+            className="flex-1 bg-ink-800 border border-line-strong focus:border-emerald-500 focus:outline-none rounded-pill px-3 py-2 text-sm text-dim-100 placeholder-dim-400"/>
+          <button type="submit" className="px-3 py-2 rounded-pill bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-sm font-bold shrink-0">🔍</button>
         </form>
         <RefreshDataButton onRefreshData={onRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}/>
       </div>
@@ -633,10 +633,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* 2.03-02 (검수사 실측 «검색창에 입력했더니 역시 화면이 바뀝니다» — 그 자리에서 답한다):
           제출하면 화면 전환 없이 여기 통합검색 패널이 펼쳐진다. key 로 질문마다 새로 연다. */}
       {(dashQ || dashOpen) && (
-        <div className="bg-slate-900 border-2 border-emerald-700/60 rounded-xl p-2">
+        <div className="bg-ink-900 border-2 border-emerald-700/60 rounded-btn p-2">
           <div className="flex items-center justify-between px-1 pb-1">
-            <div className="text-[11px] text-emerald-300 font-bold">🔍 통합검색 — 이 자리에서 답합니다</div>
-            <button onClick={() => { setDashQ(''); setDashOpen(false); }} className="text-slate-400 hover:text-slate-200 text-[11px] font-bold px-2 py-1">✕ 닫기</button>
+            <div className="text-xxs text-emerald-300 font-bold">🔍 통합검색 — 이 자리에서 답합니다</div>
+            <button onClick={() => { setDashQ(''); setDashOpen(false); }} className="text-dim-300 hover:text-dim-100 text-xxs font-bold px-2 py-1">✕ 닫기</button>
           </div>
           <GlobalSearchPage key={dashQ || '__open'} embedded
             voyages={voyages} portMisData={portMisData} terminalWork={terminalWork}
@@ -646,7 +646,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       )}
 
       {/* V9.19-02: 바로가기 — 누르면 그 항목이 펼쳐지며 이동 */}
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-2">
+      <div className="bg-ink-900 border border-line rounded-btn p-2">
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
           {[
             ['board', '⚓ 작업 보드'], ['progress', '📋 진행 상황'], ['tally', '📑 마감 텔리'],
@@ -672,7 +672,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                                             : id === '__baymatrix' ? setShowBayMatrix(true)
                                             : id === '__aux' ? (window.location.hash = '#/aux')
                                             : jumpSec(id))}
-              className="px-2 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-[12px] font-bold text-slate-200 text-left truncate"
+              className="px-2 py-2 rounded-pill bg-ink-800 hover:bg-ink-750 active:bg-ink-700 text-xs2 font-bold text-dim-100 text-left truncate"
               style={{ minHeight: 40 }}>
               {label}
             </button>
@@ -695,30 +695,30 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       <Fold id="ready"
         title={`📦 자료 현황 ${readiness.short.length ? `— 부족 ${readiness.short.length}` : `— 전부 준비완료 (${readiness.total})`}`}
         open={!!openSecs.ready} onToggle={() => toggleSec('ready')}>
-      <div className={`bg-slate-900 border rounded-xl p-3 mt-3 ${readiness.short.length ? 'border-amber-700/50' : 'border-emerald-800/40'}`}>
+      <div className={`bg-ink-900 border rounded-btn p-3 mt-3 ${readiness.short.length ? 'border-amber-700/50' : 'border-emerald-800/40'}`}>
         <div className="flex items-center gap-2 mb-1">
-          <div className="text-sm font-bold text-slate-100">작업 자료 준비 상태</div>
-          <span className="text-[10px] text-slate-500">EDI/ASC · 리스트 · 무게(VGM)</span>
+          <div className="text-sm font-bold text-dim-100">작업 자료 준비 상태</div>
+          <span className="text-2xs text-dim-400">EDI/ASC · 리스트 · 무게(VGM)</span>
         </div>
-        <div className="text-[10px] text-slate-500 mb-3">
+        <div className="text-2xs text-dim-400 mb-3">
           마감자료(타임시트·실선적 EDI·DEP.TALLY·FINAL WORKING)는 작업하면 저절로 생기므로 여기서 보지 않습니다.
         </div>
 
         {readiness.total === 0 ? (
-          <div className="text-xs text-slate-500 text-center py-4">작업 자료가 올라온 항차가 없습니다.</div>
+          <div className="text-xs text-dim-400 text-center py-4">작업 자료가 올라온 항차가 없습니다.</div>
         ) : (<>
           {readiness.short.length === 0 ? (
             <div className="text-center py-3 text-emerald-300 font-bold text-sm">✅ {readiness.total}개 작업 전부 준비완료</div>
           ) : (
             <div className="mb-3">
-              <div className="text-[11px] font-bold text-amber-300 mb-1">부족 {readiness.short.length}건</div>
+              <div className="text-xxs font-bold text-amber-300 mb-1">부족 {readiness.short.length}건</div>
               {readiness.short.map((r) => (
                 <button key={r.key + r.mode} onClick={() => onOpenVoyage && onOpenVoyage(r.key, r.mode)}
-                  className="w-full flex items-center gap-2 px-2 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700 mb-1 text-left">
-                  <span className="text-[12px] font-bold text-slate-100 shrink-0">{r.code}</span>
-                  <span className="text-[11px] text-slate-400 shrink-0">{r.voy} {r.modeKr}</span>
-                  {r.carrier && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-900/50 text-sky-300 shrink-0">{r.carrier}</span>}
-                  <span className="text-[11px] text-amber-300 truncate ml-auto">{r.missing}</span>
+                  className="w-full flex items-center gap-2 px-2 py-2 rounded-pill bg-ink-800/60 hover:bg-ink-750 mb-1 text-left">
+                  <span className="text-xs2 font-bold text-dim-100 shrink-0">{r.code}</span>
+                  <span className="text-xxs text-dim-300 shrink-0">{r.voy} {r.modeKr}</span>
+                  {r.carrier && <span className="text-2xs px-1.5 py-0.5 rounded bg-sky-900/50 text-sky-300 shrink-0">{r.carrier}</span>}
+                  <span className="text-xxs text-amber-300 truncate ml-auto">{r.missing}</span>
                 </button>
               ))}
             </div>
@@ -726,10 +726,10 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
           {Object.keys(readiness.byCarrier).length > 0 && (
             <div className="mb-3">
-              <div className="text-[11px] font-bold text-slate-300 mb-1">선사별</div>
+              <div className="text-xxs font-bold text-dim-200 mb-1">선사별</div>
               <div className="flex flex-wrap gap-1">
                 {Object.entries(readiness.byCarrier).sort((a, b) => b[1].length - a[1].length).map(([c, v]) => (
-                  <span key={c} className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-300">
+                  <span key={c} className="text-2xs px-2 py-1 rounded bg-ink-800 text-dim-200">
                     {c} <b className="text-amber-300">{v.length}</b> — {v.map(r => `${r.code} ${r.modeKr}`).join(', ')}
                   </span>
                 ))}
@@ -737,20 +737,20 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             </div>
           )}
 
-          <div className="text-[11px] font-bold text-slate-400 mb-1">전체 {readiness.total}건</div>
+          <div className="text-xxs font-bold text-dim-300 mb-1">전체 {readiness.total}건</div>
           {readiness.rows.map((r) => (
-            <div key={'a' + r.key + r.mode} className="flex items-center gap-2 px-2 py-1 text-[11px] border-b border-slate-800/60">
-              <span className="font-bold text-slate-200 w-12 shrink-0">{r.code}</span>
-              <span className="text-slate-500 w-16 shrink-0 truncate">{r.voy}</span>
-              <span className="text-slate-400 w-7 shrink-0">{r.modeKr}</span>
+            <div key={'a' + r.key + r.mode} className="flex items-center gap-2 px-2 py-1 text-xxs border-b border-line-soft">
+              <span className="font-bold text-dim-100 w-12 shrink-0">{r.code}</span>
+              <span className="text-dim-400 w-16 shrink-0 truncate">{r.voy}</span>
+              <span className="text-dim-300 w-7 shrink-0">{r.modeKr}</span>
               <span className="text-sky-400 w-10 shrink-0 truncate">{r.carrier || '-'}</span>
-              <span className="text-slate-500 shrink-0">EDI {r.edi || '-'} · 리스트 {r.list || '-'}</span>
+              <span className="text-dim-400 shrink-0">EDI {r.edi || '-'} · 리스트 {r.list || '-'}</span>
               <span className={`ml-auto shrink-0 ${r.state === 'ready' ? 'text-emerald-400' : 'text-amber-300'}`}>{r.label}</span>
             </div>
           ))}
 
           {readiness.noCarrier > 0 && (
-            <div className="text-[10px] text-slate-500 mt-2">
+            <div className="text-2xs text-dim-400 mt-2">
               ※ {readiness.noCarrier}건은 선사가 기록돼 있지 않습니다 — 「🧱 베이매트릭스」에서 선사를 채우면 선사별로 묶입니다.
             </div>
           )}
@@ -760,13 +760,13 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* 전체 검수원 진행률 (인원 무제한) */}
       <Fold id="inspectors" title={`👷 검수원 활동 (${inspectorStats.length}명)`} open={!!openSecs.inspectors} onToggle={() => toggleSec('inspectors')}>
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+      <div className="bg-ink-900 border border-line rounded-btn p-3">
         <div className="flex items-center gap-2 mb-3">
           <Users className="w-4 h-4 text-amber-400"/>
-          <div className="text-sm font-bold text-slate-100">검수원 활동 ({inspectorStats.length}명)</div>
+          <div className="text-sm font-bold text-dim-100">검수원 활동 ({inspectorStats.length}명)</div>
         </div>
         {inspectorStats.length === 0 ? (
-          <div className="text-xs text-slate-500 text-center py-4">아직 검수 기록 없음</div>
+          <div className="text-xs text-dim-400 text-center py-4">아직 검수 기록 없음</div>
         ) : (
           <div className="space-y-1.5">
             {inspectorStats.map(s => (
@@ -779,14 +779,14 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
       {/* V7.40: ⚓ 실시간 작업 보드 — 동시 작업 선박을 카드로 한눈에 (기존 "항차별 진행" 대체) */}
       <Fold id="board" title={`⚓ 실시간 작업 보드 (${voyageStats.length}척)`} open={!!openSecs.board} onToggle={() => toggleSec('board')}>
-      <div className="bg-slate-900 border border-blue-800/60 rounded-xl p-3">
+      <div className="bg-ink-900 border border-blue-800/60 rounded-btn p-3">
         <div className="flex items-center gap-2 mb-3">
           <Anchor className="w-4 h-4 text-blue-400"/>
-          <div className="text-sm font-bold text-slate-100">실시간 작업 보드 ({voyageStats.length}척)</div>
-          <span className="text-[10px] text-slate-500">실시간</span>
+          <div className="text-sm font-bold text-dim-100">실시간 작업 보드 ({voyageStats.length}척)</div>
+          <span className="text-2xs text-dim-400">실시간</span>
         </div>
         {voyageStats.length === 0 ? (
-          <div className="text-xs text-slate-500 text-center py-4">진행 중 항차 없음</div>
+          <div className="text-xs text-dim-400 text-center py-4">진행 중 항차 없음</div>
         ) : (
           <div className={`grid gap-2 grid-cols-1 ${voyageStats.length >= 2 ? 'sm:grid-cols-2' : ''} ${voyageStats.length >= 3 ? 'lg:grid-cols-3' : ''}`}>
             {/* TallyOne 1.0(L2): boardRows = voyageStats + 터미널 실적(_tw)·출항(_departed) 합성, 출항은 하단 */}
@@ -806,12 +806,12 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* M7.22: 라이브러리(진행 상황) + 선박별 자료 보관소(완료 기록) 분리 */}
       {chief && voyageStats.length > 0 && (
         <Fold id="edit" title="🖐 베이상세 편집 · 📐 컨펌용 플랜편집" open={!!openSecs.edit} onToggle={() => toggleSec('edit')}>
-        <div className="bg-slate-900 border border-emerald-800/50 rounded-xl p-3">
-          <div className="text-sm font-bold text-emerald-200 mb-2">🖐 베이상세 편집 <span className="text-[11px] text-slate-400 font-normal">— 오선적 정정 (수석 전용 · [저장]해야 검수사 화면 반영)</span></div>
+        <div className="bg-ink-900 border border-emerald-800/50 rounded-btn p-3">
+          <div className="text-sm font-bold text-emerald-200 mb-2">🖐 베이상세 편집 <span className="text-xxs text-dim-300 font-normal">— 오선적 정정 (수석 전용 · [저장]해야 검수사 화면 반영)</span></div>
           <div className="flex flex-wrap gap-2">
             {voyageStats.map(v => (
               <button key={v.key} onClick={() => setEditKey(v.key)}
-                className="px-3 py-1.5 rounded-lg text-sm font-bold bg-emerald-700 text-white hover:bg-emerald-600">
+                className="px-3 py-1.5 rounded-pill text-sm font-bold bg-emerald-700 text-white hover:bg-emerald-600">
                 {v.info?.vsl || v.key}
               </button>
             ))}
@@ -819,16 +819,16 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 
           {/* V9.07: 선적 확정 플랜 편집 — 일항사 협의용. 초안(planDraft) → [확정] 시 검수앱 선적 플랜이 된다.
               실선적 기록(records.bay_actual)은 건드리지 않는다. */}
-          <div className="text-sm font-bold text-violet-200 mt-3 mb-2">📐 컨펌용 플랜편집 <span className="text-[11px] text-slate-400 font-normal">— 일항사 협의용 ([확정] 눌러야 선적 플랜 반영 · 실선적 무관)</span></div>
+          <div className="text-sm font-bold text-violet-200 mt-3 mb-2">📐 컨펌용 플랜편집 <span className="text-xxs text-dim-300 font-normal">— 일항사 협의용 ([확정] 눌러야 선적 플랜 반영 · 실선적 무관)</span></div>
           <div className="flex flex-wrap gap-2">
             {voyageStats.filter(v => voyages[v.key]?.loading?.ediContainers).map(v => (
               <button key={'p' + v.key} onClick={() => setPlanKey(v.key)}
-                className="px-3 py-1.5 rounded-lg text-sm font-bold bg-violet-700 text-white hover:bg-violet-600">
+                className="px-3 py-1.5 rounded-pill text-sm font-bold bg-violet-700 text-white hover:bg-violet-600">
                 {v.info?.vsl || v.key}
               </button>
             ))}
             {voyageStats.filter(v => voyages[v.key]?.loading?.ediContainers).length === 0 && (
-              <span className="text-[11px] text-slate-500">선적 EDI가 올라온 항차가 없습니다</span>
+              <span className="text-xxs text-dim-400">선적 EDI가 올라온 항차가 없습니다</span>
             )}
           </div>
         </div>
@@ -864,14 +864,14 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* M3.5.6: 장비별 오늘 작업 보고 통계 */}
       {Object.keys(equipStats).length > 0 && (
         <Fold id="equip" title="🏗 오늘 장비별 작업 보고" open={!!openSecs.equip} onToggle={() => toggleSec('equip')}>
-        <div className="bg-slate-900 border border-orange-700/40 rounded-xl p-3 mt-3">
+        <div className="bg-ink-900 border border-orange-700/40 rounded-btn p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="w-4 h-4 text-orange-400"/>
             <div className="text-sm font-bold text-orange-100">오늘 장비별 작업 보고</div>
-            <span className="text-[10px] text-slate-500">실시간</span>
+            <span className="text-2xs text-dim-400">실시간</span>
             {/* V9.57(I3): 구독 한도(300건)에 걸리면 오늘 통계가 잘렸을 수 있음을 명시 */}
             {(allReports || []).length >= 300 && (
-              <span className="text-[10px] text-amber-400 font-bold">최근 300건 기준 (더 오래된 보고는 미집계)</span>
+              <span className="text-2xs text-amber-400 font-bold">최근 300건 기준 (더 오래된 보고는 미집계)</span>
             )}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -886,16 +886,16 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             })().map(eq => {
               const s = equipStats[eq];
               if (!s) return (
-                <div key={eq} className="bg-slate-800/40 border border-slate-700/40 rounded p-2 opacity-50">
-                  <div className="text-sm font-bold text-slate-400">🏗 {eq}</div>
-                  <div className="text-[10px] text-slate-500">작업 없음</div>
+                <div key={eq} className="bg-ink-800/40 border border-line/40 rounded p-2 opacity-50">
+                  <div className="text-sm font-bold text-dim-300">🏗 {eq}</div>
+                  <div className="text-2xs text-dim-400">작업 없음</div>
                 </div>
               );
               return (
                 <div key={eq} className="bg-orange-900/20 border border-orange-700/40 rounded p-2">
                   <div className="text-sm font-bold text-orange-200">🏗 {eq}</div>
                   <div className="text-lg font-black text-orange-100">{s.total}건</div>
-                  <div className="text-[10px] text-slate-400 space-y-0.5 mt-1">
+                  <div className="text-2xs text-dim-300 space-y-0.5 mt-1">
                     {s.status > 0 && <div>📤 작업상태 {s.status}</div>}
                     {s.hatch > 0 && <div>🔓 해치 {s.hatch}</div>}
                     {s.conbox > 0 && <div>📦 콘박스 {s.conbox}</div>}
@@ -915,11 +915,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* M3.5.6: 최근 작업 보고 (시간순) */}
       {recentReports.length > 0 && (
         <Fold id="reports" title="📤 최근 작업 보고 (30건)" open={!!openSecs.reports} onToggle={() => toggleSec('reports')}>
-        <div className="bg-slate-900 border border-emerald-700/40 rounded-xl p-3 mt-3">
+        <div className="bg-ink-900 border border-emerald-700/40 rounded-btn p-3 mt-3">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Send className="w-4 h-4 text-emerald-400"/>
             <div className="text-sm font-bold text-emerald-100">최근 작업 보고</div>
-            <span className="text-[10px] text-slate-500">최근 30건</span>
+            <span className="text-2xs text-dim-400">최근 30건</span>
             <div className="flex-1"/>
             <button onClick={() => {
               askConfirm({
@@ -937,7 +937,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                 },
               });
             }}
-              className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-[10px] font-bold flex items-center gap-1">
+              className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-2xs font-bold flex items-center gap-1">
               <Trash2 className="w-3 h-3"/> 전체 삭제 (테스트용)
             </button>
           </div>
@@ -954,15 +954,15 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                 : r.mode === 'loading' ? (rInfo?.voy_l || rInfo?.voy || r.voy)
                 : r.voy;
               return (
-                <div key={i} className={`bg-slate-950 border rounded p-2 text-xs group ${r.type === 'external_pause' ? 'border-red-700/70' : 'border-slate-800'}`}>
+                <div key={i} className={`bg-ink-950 border rounded p-2 text-xs group ${r.type === 'external_pause' ? 'border-red-700/70' : 'border-line'}`}>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <div className="flex items-center gap-1">
                       <span>{icon}</span>
-                      <span className="font-bold text-slate-200">{r.vsl} {rVoy}</span>
-                      {r.equip && <span className="text-[10px] bg-orange-700 text-white px-1 py-0.5 rounded font-bold">{r.equip}</span>}
+                      <span className="font-bold text-dim-100">{r.vsl} {rVoy}</span>
+                      {r.equip && <span className="text-2xs bg-orange-700 text-white px-1 py-0.5 rounded font-bold">{r.equip}</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-500 mono">{time}</span>
+                      <span className="text-2xs text-dim-400 mono">{time}</span>
                       <button onClick={() => {
                         askConfirm({
                           title: '보고 삭제',
@@ -983,7 +983,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                       </button>
                     </div>
                   </div>
-                  <div className="text-[11px] text-slate-300 whitespace-pre-line ml-4">{r.message || ''}</div>
+                  <div className="text-xxs text-dim-200 whitespace-pre-line ml-4">{r.message || ''}</div>
                 </div>
               );
             })}
@@ -995,11 +995,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* M3.5.5: 엠티 실 작업 실시간 현황 */}
       {sealVoyages.length > 0 && (
         <Fold id="seal" title={`🔒 엠티 실 작업 현황 (${sealVoyages.length})`} open={!!openSecs.seal} onToggle={() => toggleSec('seal')}>
-        <div className="bg-slate-900 border border-amber-700/40 rounded-xl p-3 mt-3">
+        <div className="bg-ink-900 border border-amber-700/40 rounded-btn p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Lock className="w-4 h-4 text-amber-400"/>
             <div className="text-sm font-bold text-amber-100">엠티 실 작업 실시간 현황</div>
-            <span className="text-[10px] text-slate-500">실시간 갱신</span>
+            <span className="text-2xs text-dim-400">실시간 갱신</span>
           </div>
           <div className="space-y-3">
             {sealVoyages.map(sv => (
@@ -1013,11 +1013,11 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* V8.06: LOLO 검수 제출 리스트 (RIZHAO 등 RORO/LOLO 혼용선) */}
       {loloVoyages.length > 0 && (
         <Fold id="lolo" title={`🚛 LOLO 검수 제출 리스트 (${loloVoyages.length})`} open={!!openSecs.lolo} onToggle={() => toggleSec('lolo')}>
-        <div className="bg-slate-900 border border-cyan-800/40 rounded-xl p-3 mt-3">
+        <div className="bg-ink-900 border border-cyan-800/40 rounded-btn p-3 mt-3">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="w-4 h-4 text-cyan-400"/>
-            <div className="text-sm font-bold text-slate-100">LOLO 검수 제출 리스트</div>
-            <span className="text-[10px] text-cyan-300/70">베이 없는 LOLO 선박 · 처리분만 내보냄</span>
+            <div className="text-sm font-bold text-dim-100">LOLO 검수 제출 리스트</div>
+            <span className="text-2xs text-cyan-300/70">베이 없는 LOLO 선박 · 처리분만 내보냄</span>
           </div>
           {/* TallyOne 1.0(L5): 내보내기 결과 인라인 통지 */}
           <InlineNotice notice={loloNotice} onClose={() => setLoloNotice(null)} />
@@ -1037,25 +1037,25 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
       {/* TallyOne 1.19: 미회신이 있으면 **섹션 위에** 눈에 띄게. 접힌 섹션 안에 있으면 못 본다. */}
       {unansweredCount > 0 && (
         <button onClick={() => { if (!openSecs.feedback) toggleSec('feedback'); }}
-          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-xl px-3 py-2.5 mt-3 hover:bg-red-900/40 transition"
+          className="w-full flex items-center justify-between gap-3 bg-red-950/40 border border-red-800/60 rounded-btn px-3 py-2.5 mt-3 hover:bg-red-900/40 transition"
           style={{ minHeight: 44 }}>
-          <span className="flex items-center gap-2 text-[13px] font-bold text-red-200">
+          <span className="flex items-center gap-2 text-sm2 font-bold text-red-200">
             ❌ 오답 <b className="text-lg mono">{unansweredCount}</b>건 — 아직 회신 안 함
           </span>
-          <span className="text-[11px] text-red-300/80">
+          <span className="text-xxs text-red-300/80">
             {openSecs.feedback ? '아래에 있습니다' : '눌러서 펼치기 →'}
           </span>
         </button>
       )}
       {/* M3.4: 오답 리포트 (검수원 신고 → 다음 버전 개선용) */}
       <Fold id="feedback" title={`❌ 오답 리포트${unresolvedCount > 0 ? ` (미해결 ${unresolvedCount})` : ''}`} open={!!openSecs.feedback} onToggle={() => toggleSec('feedback')}>
-      <div className="bg-slate-900 border border-red-800/40 rounded-xl p-3 mt-3">
+      <div className="bg-ink-900 border border-red-800/40 rounded-btn p-3 mt-3">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-400"/>
-            <div className="text-sm font-bold text-slate-100">오답 리포트</div>
+            <div className="text-sm font-bold text-dim-100">오답 리포트</div>
             {unresolvedCount > 0 && (
-              <span className="bg-red-700 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+              <span className="bg-red-700 text-white text-2xs font-black px-1.5 py-0.5 rounded-full">
                 미해결 {unresolvedCount}
               </span>
             )}
@@ -1065,33 +1065,33 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
                 파일이 필요한 때(외부 공유·보관)를 위해 버튼은 남기되 주 용도가 아님을 안내한다. */}
             <button onClick={exportFeedback}
               title="파일로 보관하거나 외부에 전달할 때만 — 개발자는 서버에서 바로 읽습니다"
-              className="text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-slate-700">
+              className="text-2xs text-dim-300 hover:text-dim-100 px-2 py-0.5 rounded border border-line">
               📥 파일로 저장
             </button>
             <button onClick={clearExported}
               title="방금 내보낸 오답만 비우기 (안 본 것은 보호)"
               disabled={exportedTs.length === 0}
-              className={`text-[10px] px-2 py-0.5 rounded border ${exportedTs.length === 0
-                ? 'text-slate-600 border-slate-800 cursor-not-allowed'
+              className={`text-2xs px-2 py-0.5 rounded border ${exportedTs.length === 0
+                ? 'text-dim-500 border-line cursor-not-allowed'
                 : 'text-amber-300 hover:text-amber-100 border-amber-700/50 bg-amber-900/30'}`}>
               🧹 비우기
             </button>
             <button onClick={() => setShowResolved(v => !v)}
-              className="text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded border border-slate-700">
+              className="text-2xs text-dim-300 hover:text-dim-100 px-2 py-0.5 rounded border border-line">
               {showResolved ? '미해결만' : '해결된 것도'}
             </button>
           </div>
         </div>
         {/* TallyOne 1.0(L5): 내보내기·비우기 결과 인라인 통지 */}
         <InlineNotice notice={fbNotice} onClose={() => setFbNotice(null)} />
-        <div className="text-[10px] text-slate-500 mb-2 leading-relaxed">
+        <div className="text-2xs text-dim-400 mb-2 leading-relaxed">
           검수원이 잘못된 답변에 ❌ 오답 버튼을 누르면 여기 모입니다.
           <br/><b className="text-sky-300">개발자가 서버에서 바로 읽습니다</b> — 파일로 내보내 전달하지 않아도 됩니다.
           처리 계획은 각 건에 <b className="text-sky-300">개발 회신</b>으로 붙습니다.
           <br/><b className="text-amber-300">비우기는 회신이 붙은 뒤에</b> 누르십시오 — 지우면 개발자도 못 봅니다.
         </div>
         {feedbackList.length === 0 ? (
-          <div className="text-xs text-slate-500 text-center py-4">
+          <div className="text-xs text-dim-400 text-center py-4">
             {showResolved ? '오답 리포트 없음' : '미해결 오답 없음 ✓'}
           </div>
         ) : (
@@ -1100,7 +1100,7 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
               <FeedbackRow key={f._key || f.ts} feedback={f}/>
             ))}
             {feedbackList.length > 50 && (
-              <div className="text-[10px] text-slate-500 text-center pt-1">
+              <div className="text-2xs text-dim-400 text-center pt-1">
                 ... {feedbackList.length - 50}건 더 있음
               </div>
             )}
@@ -1127,26 +1127,26 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
 function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
   const modeKo = item.mode === 'discharge' ? '양하' : '선적';
   return (
-    <div className="border-2 border-cyan-700/50 bg-cyan-950/15 rounded-lg p-2.5">
+    <div className="border-2 border-cyan-700/50 bg-cyan-950/15 rounded-pill p-2.5">
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-slate-100">
-            🔍 {item.vsl || '(선박명 없음)'} <span className="text-slate-400">{item.voy}</span>
+          <div className="text-sm font-bold text-dim-100">
+            🔍 {item.vsl || '(선박명 없음)'} <span className="text-dim-300">{item.voy}</span>
           </div>
-          <div className="text-[10px] text-slate-500">{modeKo} 검수 · LOLO(베이 없음)</div>
+          <div className="text-2xs text-dim-400">{modeKo} 검수 · LOLO(베이 없음)</div>
         </div>
         <div className="text-right">
           <div className={`text-lg font-black ${item.done === item.total ? 'text-emerald-400' : 'text-amber-400'}`}>
             {item.done} / {item.total}
           </div>
-          <div className="text-[10px] text-slate-500">{item.total - item.done}대 남음</div>
+          <div className="text-2xs text-dim-400">{item.total - item.done}대 남음</div>
         </div>
       </div>
 
       {/* 실시간 표 (최대 50줄) */}
-      <div className="bg-slate-950 rounded border border-slate-700 overflow-hidden">
-        <table className="w-full text-[11px]">
-          <thead className="bg-slate-800 text-slate-400">
+      <div className="bg-ink-950 rounded border border-line overflow-hidden">
+        <table className="w-full text-xxs">
+          <thead className="bg-ink-800 text-dim-300">
             <tr>
               <th className="px-1.5 py-1 text-left w-8">No</th>
               <th className="px-1.5 py-1 text-left">컨번호</th>
@@ -1159,22 +1159,22 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
           </thead>
           <tbody>
             {item.rows.slice(0, 50).map((c, i) => (
-              <tr key={i} className={`border-t border-slate-800 ${c.done ? '' : 'opacity-50'}`}>
-                <td className="px-1.5 py-1 text-slate-500 mono">{i + 1}</td>
-                <td className="px-1.5 py-1 mono text-slate-200">{c.cn}</td>
-                <td className="px-1.5 py-1 mono text-slate-400">{c.iso}</td>
+              <tr key={i} className={`border-t border-line ${c.done ? '' : 'opacity-50'}`}>
+                <td className="px-1.5 py-1 text-dim-400 mono">{i + 1}</td>
+                <td className="px-1.5 py-1 mono text-dim-100">{c.cn}</td>
+                <td className="px-1.5 py-1 mono text-dim-300">{c.iso}</td>
                 <td className="px-1.5 py-1 mono">
                   {c.fe === 'E'
                     ? <span className="text-amber-300 font-bold">E</span>
                     : <span className="text-rose-300">F</span>}
                 </td>
-                <td className="px-1.5 py-1 mono text-slate-300 text-[10px] break-all">
-                  {c.sl || <span className="text-slate-600">-</span>}
+                <td className="px-1.5 py-1 mono text-dim-200 text-2xs break-all">
+                  {c.sl || <span className="text-dim-500">-</span>}
                 </td>
-                <td className="px-1.5 py-1 text-slate-400 text-[10px]">
-                  {c.done ? (c.by || '✓') : <span className="text-slate-600">⏳ 대기</span>}
+                <td className="px-1.5 py-1 text-dim-300 text-2xs">
+                  {c.done ? (c.by || '✓') : <span className="text-dim-500">⏳ 대기</span>}
                 </td>
-                <td className="px-1.5 py-1 text-slate-500 text-[10px] mono">
+                <td className="px-1.5 py-1 text-dim-400 text-2xs mono">
                   {c.at ? new Date(c.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-'}
                 </td>
               </tr>
@@ -1182,7 +1182,7 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
           </tbody>
         </table>
         {item.rows.length > 50 && (
-          <div className="text-[10px] text-slate-500 text-center py-1 border-t border-slate-800">
+          <div className="text-2xs text-dim-400 text-center py-1 border-t border-line">
             ... 외 {item.rows.length - 50}대 (엑셀 다운로드로 전체 확인)
           </div>
         )}
@@ -1190,7 +1190,7 @@ function LoloVoyageCard({ item, onOpenVoyage, onExport }) {
 
       <div className="mt-2 grid grid-cols-3 gap-2">
         <button onClick={() => onOpenVoyage?.(item.voyageKey)}
-          className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-bold">
+          className="py-2 bg-ink-750 hover:bg-ink-700 text-dim-100 rounded text-xs font-bold">
           항차 열기
         </button>
         <button onClick={() => onExport(item, 'seal')}
@@ -1231,19 +1231,19 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
   };
 
   return (
-    <div className={`border-2 rounded-lg p-2.5 ${isAttach ? 'border-red-700/50 bg-red-950/15' : 'border-cyan-700/50 bg-cyan-950/15'}`}>
+    <div className={`border-2 rounded-pill p-2.5 ${isAttach ? 'border-red-700/50 bg-red-950/15' : 'border-cyan-700/50 bg-cyan-950/15'}`}>
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-slate-100">
-            {isAttach ? '🔧' : '🔍'} {sv.voyage?.info?.vsl} <span className="text-slate-400">{sv.voyage?.info?.voy_l || sv.voyage?.info?.voy}</span>
+          <div className="text-sm font-bold text-dim-100">
+            {isAttach ? '🔧' : '🔍'} {sv.voyage?.info?.vsl} <span className="text-dim-300">{sv.voyage?.info?.voy_l || sv.voyage?.info?.voy}</span>
           </div>
-          <div className="text-[10px] text-slate-500">{sv.policy.label}</div>
+          <div className="text-2xs text-dim-400">{sv.policy.label}</div>
         </div>
         <div className="text-right">
           <div className={`text-lg font-black ${sv.done === sv.total ? 'text-emerald-400' : 'text-amber-400'}`}>
             {sv.done} / {sv.total}
           </div>
-          <div className="text-[10px] text-slate-500">{sv.total - sv.done}대 남음</div>
+          <div className="text-2xs text-dim-400">{sv.total - sv.done}대 남음</div>
         </div>
       </div>
 
@@ -1251,9 +1251,9 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
       <InlineNotice notice={notice} onClose={() => setNotice(null)} />
 
       {/* 실시간 표 (최대 50줄) */}
-      <div className="bg-slate-950 rounded border border-slate-700 overflow-hidden">
-        <table className="w-full text-[11px]">
-          <thead className="bg-slate-800 text-slate-400">
+      <div className="bg-ink-950 rounded border border-line overflow-hidden">
+        <table className="w-full text-xxs">
+          <thead className="bg-ink-800 text-dim-300">
             <tr>
               <th className="px-1.5 py-1 text-left w-8">No</th>
               <th className="px-1.5 py-1 text-left">컨번호</th>
@@ -1268,12 +1268,12 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
             {sv.targets.slice(0, 50).map((c, i) => {
               const filled = !!c.eseal;
               return (
-                <tr key={i} className={`border-t border-slate-800 ${filled ? '' : 'opacity-50'}`}>
-                  <td className="px-1.5 py-1 text-slate-500 mono">{i + 1}</td>
-                  <td className="px-1.5 py-1 mono text-slate-200">{c.cn || '(현장부여)'}</td>
-                  <td className="px-1.5 py-1 mono text-slate-400">{emptySealSpec(c)}</td>
+                <tr key={i} className={`border-t border-line ${filled ? '' : 'opacity-50'}`}>
+                  <td className="px-1.5 py-1 text-dim-400 mono">{i + 1}</td>
+                  <td className="px-1.5 py-1 mono text-dim-100">{c.cn || '(현장부여)'}</td>
+                  <td className="px-1.5 py-1 mono text-dim-300">{emptySealSpec(c)}</td>
                   <td className="px-1.5 py-1 mono">
-                    {c.eseal ? <span className="text-emerald-300 font-bold">{c.eseal}</span> : <span className="text-slate-600">⏳ 대기</span>}
+                    {c.eseal ? <span className="text-emerald-300 font-bold">{c.eseal}</span> : <span className="text-dim-500">⏳ 대기</span>}
                   </td>
                   {sv.policy.mode === 'verify' && (
                     <td className="px-1.5 py-1 mono">
@@ -1281,8 +1281,8 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
                       {c.eseal_wrong && <span className="text-amber-300 ml-1">⚠️{c.eseal_wrong}</span>}
                     </td>
                   )}
-                  <td className="px-1.5 py-1 text-slate-400 text-[10px]">{c.eseal_by || '-'}</td>
-                  <td className="px-1.5 py-1 text-slate-500 text-[10px] mono">
+                  <td className="px-1.5 py-1 text-dim-300 text-2xs">{c.eseal_by || '-'}</td>
+                  <td className="px-1.5 py-1 text-dim-400 text-2xs mono">
                     {c.eseal_at ? new Date(c.eseal_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '-'}
                   </td>
                 </tr>
@@ -1291,7 +1291,7 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
           </tbody>
         </table>
         {sv.targets.length > 50 && (
-          <div className="text-[10px] text-slate-500 text-center py-1 border-t border-slate-800">
+          <div className="text-2xs text-dim-400 text-center py-1 border-t border-line">
             ... 외 {sv.targets.length - 50}대 (엑셀 다운로드로 전체 확인)
           </div>
         )}
@@ -1299,7 +1299,7 @@ function SealVoyageCard({ sv, onOpenVoyage }) {
 
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button onClick={() => onOpenVoyage?.(sv.voyageKey)}
-          className="py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-bold">
+          className="py-2 bg-ink-750 hover:bg-ink-700 text-dim-100 rounded text-xs font-bold">
           항차 열기
         </button>
         <button onClick={handleDownload} disabled={downloading}
@@ -1325,20 +1325,20 @@ function FeedbackRow({ feedback: f }) {
   const typeLabel = f.answerType === 'ai' ? 'AI' : f.answerType === 'local' ? '즉답' : '?';
 
   return (
-    <div className={`bg-slate-950 border ${f.resolved ? 'border-slate-800 opacity-60' : 'border-red-900/40'} rounded-lg p-2.5`}>
+    <div className={`bg-ink-950 border ${f.resolved ? 'border-line opacity-60' : 'border-red-900/40'} rounded-pill p-2.5`}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           {f.resolved && <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0"/>}
-          <span className="text-[10px] text-slate-500">{dateStr}</span>
-          <span className="text-[10px] text-amber-300 font-bold">{f.inspector}</span>
-          <span className={`text-[10px] font-bold ${typeColor}`}>[{typeLabel}]</span>
-          {f.voyageVsl && <span className="text-[10px] text-slate-500 truncate">{f.voyageVsl}</span>}
-          <span className="text-[9px] text-slate-600 mono">v{f.appVersion}</span>
+          <span className="text-2xs text-dim-400">{dateStr}</span>
+          <span className="text-2xs text-amber-300 font-bold">{f.inspector}</span>
+          <span className={`text-2xs font-bold ${typeColor}`}>[{typeLabel}]</span>
+          {f.voyageVsl && <span className="text-2xs text-dim-400 truncate">{f.voyageVsl}</span>}
+          <span className="text-3xs text-dim-500 mono">v{f.appVersion}</span>
         </div>
         <div className="flex gap-1 flex-shrink-0">
           <button onClick={() => fbResolveFeedback(f._key || f.ts, !f.resolved)}
             title={f.resolved ? '미해결로 되돌리기' : '해결됨 표시'}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-700/40">
+            className="text-2xs px-1.5 py-0.5 rounded bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-700/40">
             {f.resolved ? '↩' : '✓'}
           </button>
           <button onClick={() => askConfirm({
@@ -1350,7 +1350,7 @@ function FeedbackRow({ feedback: f }) {
             onConfirm: async () => { await fbDeleteFeedback(f._key || f.ts); },
           })}
             title="삭제"
-            className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-700/40">
+            className="text-2xs px-1.5 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 border border-red-700/40">
             <Trash2 className="w-2.5 h-2.5"/>
           </button>
         </div>
@@ -1364,7 +1364,7 @@ function FeedbackRow({ feedback: f }) {
         const st = f.claudeStatus || '';
         if (!st) {
           return (
-            <div className="text-[11px] text-slate-500 bg-slate-900/60 border border-slate-800 rounded px-2 py-1 mb-1">
+            <div className="text-xxs text-dim-400 bg-ink-900/60 border border-line rounded px-2 py-1 mb-1">
               🕐 개발 확인 대기 — 아직 회신이 없습니다
             </div>
           );
@@ -1376,35 +1376,35 @@ function FeedbackRow({ feedback: f }) {
         const tone = st === 'fixed'
           ? { box: 'border-emerald-700/50 bg-emerald-950/30', head: 'text-emerald-300', icon: '✅', label: '반영 완료' }
           : st === 'wontfix'
-            ? { box: 'border-slate-700 bg-slate-900/60', head: 'text-slate-300', icon: '↩', label: '수정 안 함' }
+            ? { box: 'border-line bg-ink-900/60', head: 'text-dim-200', icon: '↩', label: '수정 안 함' }
             : { box: 'border-sky-700/50 bg-sky-950/25', head: 'text-sky-300', icon: '🔧', label: '처리 예정' };
         return (
-          <div className={`text-[11px] rounded px-2 py-1.5 mb-1 border leading-relaxed ${tone.box}`}>
+          <div className={`text-xxs rounded px-2 py-1.5 mb-1 border leading-relaxed ${tone.box}`}>
             {/* 질문에 대한 답 — 앱이 못 낸 답을 클로드가 직접 낸 것. 가장 위에 크게. */}
             {f.claudeAnswer && (
-              <div className="mb-1.5 pb-1.5 border-b border-slate-700/50">
-                <div className="text-[10px] font-bold text-amber-300 mb-0.5">💬 답</div>
-                <div className="text-[11px] text-slate-100 whitespace-pre-wrap mono leading-snug">{f.claudeAnswer}</div>
+              <div className="mb-1.5 pb-1.5 border-b border-line">
+                <div className="text-2xs font-bold text-amber-300 mb-0.5">💬 답</div>
+                <div className="text-xxs text-dim-100 whitespace-pre-wrap mono leading-snug">{f.claudeAnswer}</div>
               </div>
             )}
             <div className={`font-bold ${tone.head}`}>
               {tone.icon} 개발 — {tone.label}
-              {f.claudeEta && st !== 'fixed' && <span className="ml-1 text-slate-300">· {f.claudeEta}</span>}
+              {f.claudeEta && st !== 'fixed' && <span className="ml-1 text-dim-200">· {f.claudeEta}</span>}
               {/* 남은 시간 — 막연한 '곧'이 아니라 숫자로. 지나면 그것도 그대로 적는다. */}
               {remainMin != null && st !== 'fixed' && (
-                <span className={`ml-1 ${remainMin >= 0 ? 'text-slate-400' : 'text-amber-400'}`}>
+                <span className={`ml-1 ${remainMin >= 0 ? 'text-dim-300' : 'text-amber-400'}`}>
                   {remainMin >= 0 ? `(약 ${remainMin}분 남음)` : `(예정 ${-remainMin}분 지남 — 확인 중)`}
                 </span>
               )}
-              {f.fixedVersion && st === 'fixed' && <span className="ml-1 text-slate-300 mono">· {f.fixedVersion}</span>}
+              {f.fixedVersion && st === 'fixed' && <span className="ml-1 text-dim-200 mono">· {f.fixedVersion}</span>}
               {/* 반영된 것은 신고 후 몇 분 만이었는지 남긴다 — 다음에 얼마나 기다리면 되는지의 근거. */}
               {st === 'fixed' && f.claudeAt && f.ts && (
                 <span className="ml-1 text-emerald-400/80">· 신고 후 {Math.max(1, Math.round((f.claudeAt - f.ts) / 60000))}분</span>
               )}
             </div>
-            {f.claudePlan && <div className="text-slate-300 mt-0.5 whitespace-pre-wrap">{f.claudePlan}</div>}
+            {f.claudePlan && <div className="text-dim-200 mt-0.5 whitespace-pre-wrap">{f.claudePlan}</div>}
             {f.claudeAt && (
-              <div className="text-[10px] text-slate-500 mt-0.5">
+              <div className="text-2xs text-dim-400 mt-0.5">
                 {new Date(f.claudeAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
               </div>
             )}
@@ -1412,16 +1412,16 @@ function FeedbackRow({ feedback: f }) {
         );
       })()}
       {f.userNote && (
-        <div className="text-xs text-slate-300 bg-slate-900/60 rounded px-2 py-1 mb-1 leading-relaxed">
+        <div className="text-xs text-dim-200 bg-ink-900/60 rounded px-2 py-1 mb-1 leading-relaxed">
           💬 {f.userNote}
         </div>
       )}
       <button onClick={() => setExpanded(v => !v)}
-        className="text-[10px] text-slate-500 hover:text-slate-300">
+        className="text-2xs text-dim-400 hover:text-dim-200">
         {expanded ? '▼ 답변 숨기기' : '▶ 앱 답변 보기'}
       </button>
       {expanded && (
-        <div className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap leading-relaxed bg-slate-900/40 rounded p-2 max-h-40 overflow-y-auto">
+        <div className="mt-1 text-xxs text-dim-300 whitespace-pre-wrap leading-relaxed bg-ink-900/40 rounded p-2 max-h-40 overflow-y-auto">
           {f.answerText || '(없음)'}
         </div>
       )}
@@ -1635,10 +1635,10 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
   };
 
   return (
-    <div className="bg-slate-900 border border-cyan-800/40 rounded-xl p-3 mt-3">
+    <div className="bg-ink-900 border border-cyan-800/40 rounded-btn p-3 mt-3">
       <div className="flex items-center gap-2 mb-2">
         <Ship className="w-4 h-4 text-cyan-400" />
-        <div className="text-sm font-bold text-slate-100 flex-1">
+        <div className="text-sm font-bold text-dim-100 flex-1">
           진행 상황 ({rows.length}척 작업 중)
         </div>
       </div>
@@ -1647,49 +1647,49 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
       {/* V8.93: 엑셀→EDI 업로드용 숨은 파일 선택 */}
       <input ref={ediFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onExcelpicked} />
       {rows.length === 0 ? (
-        <div className="text-center text-slate-500 text-xs py-6">현재 작업 중인 항차가 없습니다.</div>
+        <div className="text-center text-dim-400 text-xs py-6">현재 작업 중인 항차가 없습니다.</div>
       ) : (
         <div className="space-y-2">
           {rows.map((r) => (
-            <div key={r.key} className="bg-slate-800/60 border border-slate-700/50 rounded-lg px-3 py-2">
+            <div key={r.key} className="bg-ink-800/60 border border-line rounded-pill px-3 py-2">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onOpenVoyage && onOpenVoyage(r.key)}
-                  className="font-bold text-slate-100 text-sm flex-1 text-left hover:text-cyan-300 truncate"
+                  className="font-bold text-dim-100 text-sm flex-1 text-left hover:text-cyan-300 truncate"
                   title="항차 열기"
                 >
                   🚢 {r.vsl}
                 </button>
                 {confirmKey === r.key ? (
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-amber-300 mr-1">최종 저장?</span>
+                    <span className="text-2xs text-amber-300 mr-1">최종 저장?</span>
                     <button
                       onClick={() => doComplete(r)}
                       disabled={busyKey === r.key}
-                      className="text-[11px] px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
+                      className="text-xxs px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold disabled:opacity-50"
                     >{busyKey === r.key ? '저장 중…' : '예'}</button>
                     <button
                       onClick={() => setConfirmKey(null)}
-                      className="text-[11px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-200"
+                      className="text-xxs px-2 py-1 rounded bg-ink-750 hover:bg-ink-700 text-dim-100"
                     >취소</button>
                   </div>
                 ) : r.inspectorDone ? (
                   chief ? (
                     <button
                       onClick={() => setConfirmKey(r.key)}
-                      className="text-[11px] px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
+                      className="text-xxs px-2 py-1 rounded bg-emerald-700/40 hover:bg-emerald-600/60 text-emerald-200 border border-emerald-700/50 font-bold"
                       title="검수사 완료 확인됨 — 수석 최종 저장 (보관소로 이동)"
                     >✓ 수석 완료 저장</button>
                   ) : (
                     <button
                       onClick={() => alert('⚠️ 완료 저장 권한이 없습니다.\n\n항차 완료 저장은 수석검수사만 할 수 있습니다.\n(현재 로그인: ' + (inspector || '미상') + ')\n\n수석검수사에게 완료 저장을 요청하세요.')}
-                      className="text-[11px] px-2 py-1 rounded bg-slate-700/40 text-slate-400 border border-slate-600/40 font-bold"
+                      className="text-xxs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40 font-bold"
                       title="수석검수사만 완료 저장할 수 있습니다"
                     >🔒 수석 전용</button>
                   )
                 ) : (
                   <span
-                    className="text-[10px] px-2 py-1 rounded bg-slate-700/40 text-slate-400 border border-slate-600/40"
+                    className="text-2xs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40"
                     title="검수사가 항차 화면에서 '검수 완료'를 눌러야 수석이 최종 저장할 수 있습니다"
                   >검수 진행 중</span>
                 )}
@@ -1698,10 +1698,10 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
                 <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b>{r.discharge > 0 && r.dDone && <b className="text-emerald-400"> ✓{r.dDoneAt ? new Date(r.dDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
                 <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b>{r.loading > 0 && r.lDone && <b className="text-emerald-400"> ✓{r.lDoneAt ? new Date(r.lDoneAt).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</b>}</span>
                 {r.inspectorDone && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
+                  <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-700/40 font-bold">검수 완료 · 수석 확인 대기</span>
                 )}
                 {(r.voyD || r.voyL) && (
-                  <span className="text-slate-500 text-[10px] ml-auto">
+                  <span className="text-dim-400 text-2xs ml-auto">
                     {r.voyD && `양하 ${r.voyD}`}{r.voyD && r.voyL && ' · '}{r.voyL && `선적 ${r.voyL}`}
                   </span>
                 )}
@@ -1713,16 +1713,16 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
               {r.loading > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5">
                   <button onClick={() => exportActualEdi(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-[11px] font-bold"
+                    className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
                     title="실선적 EDI 내려받기 — 평택 선적분(실체 위치 기준)을 표준 BAPLIE로 생성. 카스피에서 읽을 수 있습니다.">실선적 EDI</button>
                   <button onClick={() => exportActualAsc(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-[11px] font-bold"
+                    className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
                     title="실선적 ASC 내려받기 — 카스피와 같은 $604 ASC 형식. 선박코드는 저장 전에 고칠 수 있습니다.">실선적 ASC</button>
                   <button onClick={() => exportEditExcel(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-[11px] font-bold"
+                    className="px-2 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 text-cyan-200 border border-cyan-700/40 text-xxs font-bold"
                     title="EDI 수정용 엑셀 내려받기 — 컨번호·위치·POD 등을 고친 뒤 [엑셀→EDI]로 올리면 수정본 EDI가 나옵니다. 헤더 줄은 그대로 두세요.">수정 엑셀</button>
                   <button onClick={() => startExcelToEdi(r)} style={{ minHeight: 40 }}
-                    className="px-2 rounded-lg bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 text-[11px] font-bold"
+                    className="px-2 rounded-pill bg-indigo-900/50 hover:bg-indigo-800/60 text-indigo-200 border border-indigo-700/40 text-xxs font-bold"
                     title="수정한 엑셀을 선택하면 수정본 EDI 파일을 만들어 내려줍니다.">엑셀→EDI</button>
                 </div>
               )}
@@ -1730,7 +1730,7 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
           ))}
         </div>
       )}
-      <div className="text-[10px] text-slate-500 mt-2">평택분 기준 · 수석검수사 최종 확인 후 완료 저장 → 자료 보관소로 이동</div>
+      <div className="text-2xs text-dim-400 mt-2">평택분 기준 · 수석검수사 최종 확인 후 완료 저장 → 자료 보관소로 이동</div>
     </div>
   );
 }
@@ -1808,10 +1808,10 @@ function ShipArchiveSection({ shipLib }) {
   };
 
   return (
-    <div className="bg-slate-900 border border-purple-800/40 rounded-xl p-3 mt-3">
+    <div className="bg-ink-900 border border-purple-800/40 rounded-btn p-3 mt-3">
       <div className="flex items-center gap-2 mb-2">
         <Library className="w-4 h-4 text-purple-400" />
-        <div className="text-sm font-bold text-slate-100 flex-1">
+        <div className="text-sm font-bold text-dim-100 flex-1">
           선박별 자료 보관소 ({ships.length}척)
         </div>
       </div>
@@ -1819,21 +1819,21 @@ function ShipArchiveSection({ shipLib }) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="선박명 / IMO 검색"
-        className="w-full mb-2 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-xs placeholder-slate-500"
+        className="w-full mb-2 px-3 py-1.5 rounded-pill bg-ink-800 border border-line text-dim-100 text-xs placeholder-dim-400"
       />
       {filtered.length === 0 ? (
-        <div className="text-center text-slate-500 text-xs py-6">완료 저장된 항차가 없습니다.</div>
+        <div className="text-center text-dim-400 text-xs py-6">완료 저장된 항차가 없습니다.</div>
       ) : (
         <div className="space-y-2">
           {filtered.map((s) => (
-            <div key={s.imo} className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-2">
+            <div key={s.imo} className="bg-ink-800/50 border border-line rounded-pill p-2">
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-bold text-slate-100 text-sm flex-1 truncate">⚓ {s.name}</span>
-                <span className="text-[10px] text-slate-500">{/^[0-9]{7}$/.test(s.imo) ? `IMO ${s.imo}` : s.imo}</span>
+                <span className="font-bold text-dim-100 text-sm flex-1 truncate">⚓ {s.name}</span>
+                <span className="text-2xs text-dim-400">{/^[0-9]{7}$/.test(s.imo) ? `IMO ${s.imo}` : s.imo}</span>
               </div>
               <div className="space-y-0.5">
                 {s.voyRows.map((r) => (
-                  <div key={r.key} className="flex items-center gap-2 text-xs px-1 py-0.5 border-b border-slate-700/30 last:border-0">
+                  <div key={r.key} className="flex items-center gap-2 text-xs px-1 py-0.5 border-b border-line/30 last:border-0">
                     {/* V8.84-01: 양하/선적 항차가 truncate로 잘려 선적이 안 보이던 문제 — 두 줄로 쌓아 표시 */}
                     <span className="text-amber-300 font-bold w-16 shrink-0 leading-tight">
                       {String(r.voy).includes('/')
@@ -1842,12 +1842,12 @@ function ShipArchiveSection({ shipLib }) {
                     </span>
                     <span className="text-sky-300">양하 <b className="text-sky-200">{r.discharge}</b></span>
                     <span className="text-emerald-300">선적 <b className="text-emerald-200">{r.loading}</b></span>
-                    <span className="text-slate-500 text-[10px] ml-auto">{fmtDate(r.at)}</span>
+                    <span className="text-dim-400 text-2xs ml-auto">{fmtDate(r.at)}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex items-center gap-3 mt-1 pt-1 border-t border-slate-600/40 text-xs">
-                <span className="text-slate-400">누적 <b className="text-slate-200">{s.voyRows.length}</b>항차</span>
+              <div className="flex items-center gap-3 mt-1 pt-1 border-t border-line-strong/40 text-xs">
+                <span className="text-dim-300">누적 <b className="text-dim-100">{s.voyRows.length}</b>항차</span>
                 <span className="text-sky-400">양하 누적 <b className="text-sky-300">{s.totalD}</b></span>
                 <span className="text-emerald-400">선적 누적 <b className="text-emerald-300">{s.totalL}</b></span>
               </div>
@@ -1855,7 +1855,7 @@ function ShipArchiveSection({ shipLib }) {
           ))}
         </div>
       )}
-      <div className="text-[10px] text-slate-500 mt-2">평택분 기준 · 최근 완료순 · 완료 저장 시 자동 기록</div>
+      <div className="text-2xs text-dim-400 mt-2">평택분 기준 · 최근 완료순 · 완료 저장 시 자동 기록</div>
     </div>
   );
 }
@@ -1867,19 +1867,19 @@ function CollectorStatusBanner({ hbView, hb, issueCount }) {
   const healthBtn = (
     <button onClick={() => { window.location.hash = '#/health'; }}
       title="항차 건강 점검(#/health)으로 이동"
-      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border shrink-0 ${issueCount > 0
+      className={`px-2.5 py-1.5 rounded-pill text-xxs font-bold border shrink-0 ${issueCount > 0
         ? 'bg-amber-900/40 border-amber-700/50 text-amber-300 hover:bg-amber-800/50'
-        : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
+        : 'bg-ink-800 border-line text-dim-300 hover:bg-ink-750'}`}
       style={{ minHeight: 36 }}>
       {issueCount > 0 ? `⚠ 검증 필요 ${issueCount}항차` : '✓ 항차 검증 이상 없음'}
     </button>
   );
   if (hbView.state === 'down') {
     return (
-      <div className="bg-red-950/60 border-2 border-red-600/70 rounded-xl px-3 py-2 flex items-center gap-2 flex-wrap">
+      <div className="bg-red-950/60 border-2 border-red-600/70 rounded-btn px-3 py-2 flex items-center gap-2 flex-wrap">
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold text-red-200">🔴 수집기 끊김 — 아래 숫자는 갱신 정지 상태</div>
-          <div className="text-[11px] text-red-300/80 mt-0.5">
+          <div className="text-xxs text-red-300/80 mt-0.5">
             마지막 갱신 {hbView.ageMin}분 전{hb?.version ? ` · 수집기 v${hb.version}` : ''} · 끊김 기준 주기 {hbView.cycleMin}분×2
           </div>
         </div>
@@ -1888,8 +1888,8 @@ function CollectorStatusBanner({ hbView, hb, issueCount }) {
     );
   }
   return (
-    <div className={`flex items-center gap-2 flex-wrap rounded-xl border px-3 py-1.5 text-[11px] ${hbView.state === 'ok'
-      ? 'bg-slate-900 border-emerald-800/40 text-slate-400' : 'bg-slate-900 border-slate-700 text-slate-500'}`}>
+    <div className={`flex items-center gap-2 flex-wrap rounded-btn border px-3 py-1.5 text-xxs ${hbView.state === 'ok'
+      ? 'bg-ink-900 border-emerald-800/40 text-dim-300' : 'bg-ink-900 border-line text-dim-400'}`}>
       {hbView.state === 'ok'
         ? <span>🟢 수집기 v{hb?.version || '?'} · {hbView.ageMin}분 전 갱신 (주기 {hbView.cycleMin}분)</span>
         : <span>⚪ 수집기 상태 자료 없음 — 하트비트 미수신</span>}
@@ -1914,9 +1914,9 @@ function ScheduleLine({ planDate, planSrc, pf, pmEta = '' }) {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
   const hasAny = planDate || (pf && (pf.nextArr || pf.nextDep));
-  if (!hasAny) return <div className="text-[10px] text-slate-600 mt-0.5">📅 일정 자료 없음 (수집기 미수신)</div>;
+  if (!hasAny) return <div className="text-2xs text-dim-500 mt-0.5">📅 일정 자료 없음 (수집기 미수신)</div>;
   return (
-    <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+    <div className="text-2xs text-dim-300 mt-0.5 flex items-center gap-1.5 flex-wrap">
       {planDate && <span>📅 {planDate}{srcLabel ? ` (${srcLabel})` : ''}</span>}
       {/* TallyOne 1.40-01: 🛠 작업예정 줄 삭제. planDate 앞자리가 **이미 작업시작**이라(수집기가 환산해
           넣는다) 여기서 부두 소요를 또 더해 2시간 초과 표시가 났다 — 위 📅 줄과 같은 값이므로 중복이기도 했다.
@@ -1924,7 +1924,7 @@ function ScheduleLine({ planDate, planSrc, pf, pmEta = '' }) {
           수집기 v1.0-16 환산이 들어오기 전 이야기다. */}
       {pf?.nextArr && <span className="text-sky-300">⚓ 입항 {fmt(pf.nextArr)}</span>}
       {/* 1.40-01: 🚢 신고도착 — PORT-MIS 세관 신고 항 도착시각(원본). 도선 시작과 다른 사건이다. */}
-      {pmEta && <span className="text-slate-400" title="PORT-MIS 세관 신고 기준 항 도착시각">🚢 신고도착 {fmt(pmEta)}</span>}
+      {pmEta && <span className="text-dim-300" title="PORT-MIS 세관 신고 기준 항 도착시각">🚢 신고도착 {fmt(pmEta)}</span>}
       {pf?.nextDep && <span className="text-amber-300">⚓ 출항 {fmt(pf.nextDep)}</span>}
     </div>
   );
@@ -1935,12 +1935,12 @@ function InlineNotice({ notice, onClose }) {
   if (!notice) return null;
   const ok = notice.kind !== 'err';
   return (
-    <div className={`flex items-start gap-2 text-[11px] rounded-lg border px-2.5 py-1.5 mb-2 ${ok
+    <div className={`flex items-start gap-2 text-xxs rounded-pill border px-2.5 py-1.5 mb-2 ${ok
       ? 'bg-emerald-950/40 border-emerald-700/50 text-emerald-200'
       : 'bg-red-950/40 border-red-700/50 text-red-200'}`}>
       <span className="flex-1 whitespace-pre-line break-all">{notice.text}</span>
       <button onClick={onClose} title="알림 닫기"
-        className="shrink-0 px-1.5 font-bold text-slate-400 hover:text-slate-200" style={{ minWidth: 28, minHeight: 24 }}>✕</button>
+        className="shrink-0 px-1.5 font-bold text-dim-300 hover:text-dim-100" style={{ minWidth: 28, minHeight: 24 }}>✕</button>
     </div>
   );
 }
@@ -1949,32 +1949,32 @@ function BigStat({ label, value, sub, color }) {
   const map = {
     emerald: 'border-emerald-700/40 bg-emerald-950/30 text-emerald-300',
     red: 'border-red-700/40 bg-red-950/30 text-red-300',
-    slate: 'border-slate-700 bg-slate-900 text-slate-300',
+    slate: 'border-line bg-ink-900 text-dim-200',
   };
   return (
-    <div className={`rounded-xl border p-3 ${map[color]}`}>
-      <div className="text-[10px] uppercase font-bold opacity-70">{label}</div>
+    <div className={`rounded-btn border p-3 ${map[color]}`}>
+      <div className="text-2xs uppercase font-bold opacity-70">{label}</div>
       <div className="text-3xl font-black mono mt-0.5">{value}</div>
-      <div className="text-[11px] opacity-60 mono">{sub}</div>
+      <div className="text-xxs opacity-60 mono">{sub}</div>
     </div>
   );
 }
 
 function InspectorRow({ s }) {
   return (
-    <div className="bg-slate-800/40 border border-slate-700 rounded-lg p-2 flex items-center gap-2">
+    <div className="bg-ink-800/40 border border-line rounded-pill p-2 flex items-center gap-2">
       <div className="relative">
         <div className="w-9 h-9 bg-amber-600 rounded-full flex items-center justify-center text-amber-100 font-black">
           {s.name[0]}
         </div>
-        {s.active && <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900"/>}
+        {s.active && <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-ink-900"/>}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="font-bold text-sm text-slate-200 truncate">{s.name}</div>
-        <div className="text-[10px] text-slate-500 mono flex items-center gap-2 flex-wrap">
+        <div className="font-bold text-sm text-dim-100 truncate">{s.name}</div>
+        <div className="text-2xs text-dim-400 mono flex items-center gap-2 flex-wrap">
           <span><span className="text-emerald-400 font-bold">{s.today}</span> 오늘</span>
           <span>·</span>
-          <span><span className="text-slate-300 font-bold">{s.total}</span> 누적</span>
+          <span><span className="text-dim-200 font-bold">{s.total}</span> 누적</span>
           {s.lastAt > 0 && (
             <>
               <span>·</span>
@@ -1983,7 +1983,7 @@ function InspectorRow({ s }) {
           )}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-0.5 text-[10px] mono">
+      <div className="flex flex-col items-end gap-0.5 text-2xs mono">
         {s.dis > 0 && <span className="bg-blue-900/60 text-blue-200 px-1.5 py-0.5 rounded font-black">양 {s.dis}</span>}
         {s.loa > 0 && <span className="bg-amber-900/60 text-amber-200 px-1.5 py-0.5 rounded font-black">선 {s.loa}</span>}
       </div>
@@ -2002,16 +2002,16 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
     lastReport.type === 'seal_error' ? '🚨' :
     lastReport.type === 'external_pause' ? '⛔' : '📋') : null;  // V9.57(I2): 작업중단 아이콘 추가
   return (
-    <button onClick={onOpen} className={`w-full text-left bg-slate-800/40 border border-slate-700 rounded-lg p-2.5 hover:bg-slate-800/70 flex flex-col gap-1.5 ${departed ? 'opacity-60' : ''}`}>
+    <button onClick={onOpen} className={`w-full text-left bg-ink-800/40 border border-line rounded-pill p-2.5 hover:bg-ink-750/70 flex flex-col gap-1.5 ${departed ? 'opacity-60' : ''}`}>
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="font-bold text-sm text-slate-200 truncate flex items-center gap-1.5">
+          <div className="font-bold text-sm text-dim-100 truncate flex items-center gap-1.5">
             {v.info.vsl}
             {/* TallyOne 1.0(L2): 터미널이 출항 처리한 항차 — 흐린 카드 + 출항 뱃지 */}
-            {departed && <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-bold shrink-0">⚓ 출항</span>}
+            {departed && <span className="text-2xs bg-ink-750 text-dim-200 px-1.5 py-0.5 rounded font-bold shrink-0">⚓ 출항</span>}
             {workers.length > 0 && <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shrink-0"/>}
           </div>
-          <div className="text-[10px] text-slate-500 truncate">
+          <div className="text-2xs text-dim-400 truncate">
             {(() => {
               const d = v.info.voy_d, l = v.info.voy_l, vv = v.info.voy;
               if (d && l && d !== l) return `${d} / ${l}`;
@@ -2020,31 +2020,31 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
             {v.info.carrier ? ` · ${v.info.carrier}` : ''}
           </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-slate-600 shrink-0"/>
+        <ChevronRight className="w-4 h-4 text-dim-500 shrink-0"/>
       </div>
-      <div className="space-y-1.5 text-[10px] mono">
+      <div className="space-y-1.5 text-2xs mono">
         {v.dis.total > 0 && <MiniBar label="양하" color="blue" stats={v.dis}/>}
         {v.loa.total > 0 && <MiniBar label="선적" color="amber" stats={v.loa}/>}
       </div>
       {/* TallyOne 1.0(L2): 터미널 실적 대조 — 앱 내부 완료수 vs 트레드링스 실적(disDone/disPlan·lodDone/lodPlan).
           미수신도 조용히 비우지 않고 명시(±12h 창 밖 자료는 이 항차 것이 아니라 버려진 상태 포함). */}
       {tw ? (
-        <div className="text-[10px] mono text-slate-400 flex items-center gap-1.5 flex-wrap">
+        <div className="text-2xs mono text-dim-300 flex items-center gap-1.5 flex-wrap">
           <span className="text-cyan-300 font-bold">🏗 터미널</span>
           {(tw.disPlan > 0 || tw.disDone > 0) && (
-            <span>양하 {tw.disDone}/{tw.disPlan} <span className="text-slate-600">(앱 {v.dis.done})</span></span>
+            <span>양하 {tw.disDone}/{tw.disPlan} <span className="text-dim-500">(앱 {v.dis.done})</span></span>
           )}
           {(tw.lodPlan > 0 || tw.lodDone > 0) && (
-            <span>선적 {tw.lodDone}/{tw.lodPlan} <span className="text-slate-600">(앱 {v.loa.done})</span></span>
+            <span>선적 {tw.lodDone}/{tw.lodPlan} <span className="text-dim-500">(앱 {v.loa.done})</span></span>
           )}
-          {typeof tw.pct === 'number' && tw.pct >= 0 && <span className="text-slate-500">{tw.pct}%</span>}
+          {typeof tw.pct === 'number' && tw.pct >= 0 && <span className="text-dim-400">{tw.pct}%</span>}
           {tw.delayed && <span className="bg-red-900/60 text-red-200 px-1.5 rounded font-bold">지연</span>}
           {/* TallyOne 1.5: 신선도 — 이 값이 언제 것인지 화면이 말해주지 않아 새로고침하게 되던 문제.
               수집기 사이클이 5분이므로 10분 넘으면 이상 신호. 실측(2026-08-04): 같은 화면에
               9분 전(TNJP·DXQD)과 2일 전(XTPG)이 구분 없이 섞여 있었다. */}
           {(() => {
             const t = Number(tw.updatedAt) || 0;
-            if (!t) return <span className="text-slate-600" title="갱신 시각 정보 없음">시각 미상</span>;
+            if (!t) return <span className="text-dim-500" title="갱신 시각 정보 없음">시각 미상</span>;
             const m = Math.floor((Date.now() - t) / 60000);
             const txt = m < 1 ? '방금' : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`;
             const cls = m <= 10 ? 'text-emerald-300' : m <= 60 ? 'text-amber-300' : 'text-rose-300 font-bold';
@@ -2052,27 +2052,27 @@ function LiveShipCard({ v, workers, lastReport, alerts, onOpen, tw = null, depar
           })()}
         </div>
       ) : (
-        <div className="text-[10px] text-slate-600">터미널 실적 미수신</div>
+        <div className="text-2xs text-dim-500">터미널 실적 미수신</div>
       )}
       {/* 작업 중 검수원 */}
       <div className="flex items-center gap-1 flex-wrap min-h-[18px]">
         {workers.length > 0 ? workers.map(w => (
-          <span key={w.name} className="inline-flex items-center gap-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-200 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+          <span key={w.name} className="inline-flex items-center gap-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-200 text-2xs font-bold px-1.5 py-0.5 rounded-full">
             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"/>
             {w.name}{w.mode === 'discharge' ? ' (양하)' : w.mode === 'loading' ? ' (선적)' : ''}
           </span>
         )) : (
-          <span className="text-[10px] text-slate-600">작업 중 검수원 없음</span>
+          <span className="text-2xs text-dim-500">작업 중 검수원 없음</span>
         )}
       </div>
-      <div className="flex items-center gap-2 pt-1.5 border-t border-slate-700/50 text-[10px] flex-wrap">
+      <div className="flex items-center gap-2 pt-1.5 border-t border-line text-2xs flex-wrap">
         <span className="text-emerald-300 font-black mono">{v.totalDone}</span>
-        <span className="text-slate-500">/{v.totalAll} ({pct}%)</span>
+        <span className="text-dim-400">/{v.totalAll} ({pct}%)</span>
         <div className="flex-1"/>
         {alerts?.damage > 0 && <span className="bg-amber-900/60 text-amber-200 px-1.5 rounded font-bold">⚠️ {alerts.damage}</span>}
         {alerts?.sealError > 0 && <span className="bg-red-900/60 text-red-200 px-1.5 rounded font-bold">🚨 {alerts.sealError}</span>}
         {lastReport && (
-          <span className="text-slate-500 mono">{repIcon} {lastReport.equip || ''} {timeAgo(lastReport.ts)}</span>
+          <span className="text-dim-400 mono">{repIcon} {lastReport.equip || ''} {timeAgo(lastReport.ts)}</span>
         )}
       </div>
     </button>
@@ -2097,28 +2097,28 @@ function BroadcastComposer({ inspector, owner = false }) {   // 2.05-07: owner �
   const clear = async () => { await fbClearBroadcast(); };
   const readNames = Object.keys(reads || {});
   return (
-    <div className="bg-slate-900 border border-amber-700/40 rounded-xl p-3">
+    <div className="bg-ink-900 border border-amber-700/40 rounded-btn p-3">
       <div className="flex items-center gap-2 mb-2">
         <Send className="w-4 h-4 text-amber-400"/>
-        <div className="text-sm font-bold text-slate-100">검수원 공지 (흐르는 띠)</div>
-        <span className="text-[10px] text-slate-500">로그인된 검수원 모든 화면에 흘러감 · 확인 전까지</span>
+        <div className="text-sm font-bold text-dim-100">검수원 공지 (흐르는 띠)</div>
+        <span className="text-2xs text-dim-400">로그인된 검수원 모든 화면에 흘러감 · 확인 전까지</span>
       </div>
       <textarea value={text} onChange={e => setText(e.target.value)} rows={2}
         placeholder="예: 이번 선박 23번 베이에 중요한 FR 실림 — 사진 촬영 바랍니다"
-        className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-slate-100 resize-none"/>
+        className="w-full bg-ink-800 border border-line rounded p-2 text-sm text-dim-100 resize-none"/>
       <div className="flex items-center gap-2 mt-2">
         <button onClick={send} disabled={!text.trim()}
           className="px-3 py-1.5 rounded text-sm font-bold bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white flex items-center gap-1">
           <Send className="w-3.5 h-3.5"/> 보내기
         </button>
         {cur?.text && (
-          <button onClick={clear} className="px-3 py-1.5 rounded text-sm font-bold bg-slate-700 hover:bg-slate-600 text-slate-200">공지 내리기</button>
+          <button onClick={clear} className="px-3 py-1.5 rounded text-sm font-bold bg-ink-750 hover:bg-ink-700 text-dim-100">공지 내리기</button>
         )}
       </div>
       {cur?.text && (
         <div className="mt-2 bg-amber-950/40 border border-amber-800/40 rounded p-2 text-xs">
           <div className="text-amber-200 font-bold">📢 현재 공지: {cur.text}</div>
-          <div className="text-slate-400 mt-1">읽음 {readNames.length}명{readNames.length > 0 ? ` · ${readNames.join(', ')}` : ''}</div>
+          <div className="text-dim-300 mt-1">읽음 {readNames.length}명{readNames.length > 0 ? ` · ${readNames.join(', ')}` : ''}</div>
         </div>
       )}
     </div>
@@ -2134,11 +2134,11 @@ function MiniBar({ label, color, stats }) {
   };
   return (
     <div className="flex items-center gap-2">
-      <span className={`${map[color].tag} px-1.5 rounded text-[9px] font-black w-9 text-center`}>{label}</span>
-      <div className="flex-1 bg-slate-900 rounded-full h-1.5 overflow-hidden">
+      <span className={`${map[color].tag} px-1.5 rounded text-3xs font-black w-9 text-center`}>{label}</span>
+      <div className="flex-1 bg-ink-900 rounded-full h-1.5 overflow-hidden">
         <div className={`${map[color].bar} h-full`} style={{ width: `${pct}%` }}/>
       </div>
-      <span className="text-slate-400 w-16 text-right">{stats.done}/{stats.total}</span>
+      <span className="text-dim-300 w-16 text-right">{stats.done}/{stats.total}</span>
       {/* V9.57(I4): 모수 밖 완료(추가컨 등)는 진행률에 안 섞고 따로 알린다 */}
       {stats.extra > 0 && <span className="text-violet-300 text-right" title="리스트(모수) 밖에서 완료 처리된 컨테이너 — 추가컨·리스트 교체 잔재 등">+{stats.extra} 초과</span>}
       {stats.forecastEdi
@@ -2230,44 +2230,44 @@ function ArchiveRestoreSection({ chief }) {
     finally { setBusy(false); }
   };
   return (
-    <section className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+    <section className="bg-ink-900 border border-line rounded-btn p-4">
       <div className="flex items-center justify-between mb-2">
-        <h2 className="font-bold text-slate-200 text-sm">🗄 완료 보관소 (복원)</h2>
+        <h2 className="font-bold text-dim-100 text-sm">🗄 완료 보관소 (복원)</h2>
         <div className="flex gap-2">
           {items && items.length > 0 && (
             <button onClick={cleanup} disabled={busy}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-bold border border-slate-700">
+              className="px-2.5 py-1.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-300 text-xxs font-bold border border-line">
               🧹 1년 지난 것 정리
             </button>
           )}
           <button onClick={load} disabled={busy}
-            className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[12px] font-bold" style={{ minHeight: 36 }}>
+            className="px-3 py-1.5 rounded-pill bg-ink-750 hover:bg-ink-700 text-dim-100 text-xs2 font-bold" style={{ minHeight: 36 }}>
             {busy ? '불러오는 중…' : items ? '새로고침' : '목록 불러오기'}
           </button>
         </div>
       </div>
-      <div className="text-[11px] text-slate-500 mb-2">
+      <div className="text-xxs text-dim-400 mb-2">
         수석 [완료 저장]으로 화면에서 내려간 항차의 원본. 실수로 지웠거나 재작업이 잡히면 여기서 [복원].
       </div>
       {/* TallyOne 1.0(L5): 조회·복원·정리 결과 인라인 통지 */}
       <InlineNotice notice={notice} onClose={() => setNotice(null)} />
       {items === null ? (
-        <div className="text-[12px] text-slate-600">버튼을 눌러 목록을 확인하세요 (필요할 때만 읽음).</div>
+        <div className="text-xs2 text-dim-500">버튼을 눌러 목록을 확인하세요 (필요할 때만 읽음).</div>
       ) : items.length === 0 ? (
-        <div className="text-[12px] text-slate-600">보관된 항차가 없습니다.</div>
+        <div className="text-xs2 text-dim-500">보관된 항차가 없습니다.</div>
       ) : (
         <div className="space-y-1 max-h-72 overflow-y-auto">
           {items.map(it => (
-            <div key={it.voyageKey} className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
+            <div key={it.voyageKey} className="flex items-center gap-2 bg-ink-800/60 rounded-pill px-3 py-2">
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-bold text-slate-200 mono truncate">{it.voyageKey}</div>
-                <div className="text-[11px] text-slate-500">
+                <div className="text-sm2 font-bold text-dim-100 mono truncate">{it.voyageKey}</div>
+                <div className="text-xxs text-dim-400">
                   {it.archivedAt ? new Date(it.archivedAt).toLocaleDateString('ko-KR') : '?'} 저장
                   {it.discharge_ptk ? ` · 양하 ${it.discharge_ptk}` : ''}{it.loading_ptk ? ` · 선적 ${it.loading_ptk}` : ''}
                 </div>
               </div>
               <button onClick={() => restore(it.voyageKey)} disabled={busy}
-                className="px-3 py-2 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-[12px] font-bold shrink-0" style={{ minHeight: 40 }}>
+                className="px-3 py-2 rounded-pill bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs2 font-bold shrink-0" style={{ minHeight: 40 }}>
                 복원
               </button>
             </div>
@@ -2402,10 +2402,10 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
     }
   };
   return (
-    <section className="bg-slate-900 border border-emerald-800/60 rounded-xl p-4">
-      <h2 className="font-bold text-emerald-200 text-sm mb-1">📑 마감 텔리 (DEP.TALLY REPORT) {!chief && <span className="text-[10px] text-slate-500">— 🔒 수석 전용</span>}</h2>
-      <div className="text-[11px] text-slate-500 mb-2">실물 양식 그대로 엑셀 생성 · 선사/포트 순서 선박별 고정 · 발송 전 숫자 확인 필수</div>
-      <div className="text-[11px] text-amber-300/80 mb-2">🔒 「✓ 수석 완료 저장」을 누른 항차만 생성할 수 있습니다 — 작업 중인 항차는 잠겨 있습니다.</div>
+    <section className="bg-ink-900 border border-emerald-800/60 rounded-btn p-4">
+      <h2 className="font-bold text-emerald-200 text-sm mb-1">📑 마감 텔리 (DEP.TALLY REPORT) {!chief && <span className="text-2xs text-dim-400">— 🔒 수석 전용</span>}</h2>
+      <div className="text-xxs text-dim-400 mb-2">실물 양식 그대로 엑셀 생성 · 선사/포트 순서 선박별 고정 · 발송 전 숫자 확인 필수</div>
+      <div className="text-xxs text-amber-300/80 mb-2">🔒 「✓ 수석 완료 저장」을 누른 항차만 생성할 수 있습니다 — 작업 중인 항차는 잠겨 있습니다.</div>
       {/* ⚠ 모달은 이 섹션 트리 안에 둔다 — 1.8 에서 DataTab 안에 넣어 상태만 켜지고 안 뜬 적이 있다. */}
       {kakaoKey && kakaoVoyage && (
         <KakaoLogImportModal voyage={kakaoVoyage} voyageKey={kakaoKey} base={`archive/${kakaoKey}`}
@@ -2415,57 +2415,57 @@ function TallyExportSection({ voyages, chief, pfMap, twMap, archiveList, onArchi
       {/* TallyOne 1.7: 폴더 직결 — 처음 한 번만 고르면 그 뒤로는 안 묻는다(IndexedDB 보관) */}
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         {boxRoot ? (
-          <span className="text-[11px] text-emerald-300">📁 TALLYBOX 연결됨 — 만든 서류가 <b>{'{선박}\\{항차}'}</b> 폴더에 바로 저장됩니다 (다운로드 거치지 않음)</span>
+          <span className="text-xxs text-emerald-300">📁 TALLYBOX 연결됨 — 만든 서류가 <b>{'{선박}\\{항차}'}</b> 폴더에 바로 저장됩니다 (다운로드 거치지 않음)</span>
         ) : isTallyboxSupported() ? (
           <>
-            <button onClick={pickBox} className="px-3 py-2 rounded-lg text-[12px] font-bold bg-sky-800 hover:bg-sky-700 text-sky-100" style={{ minHeight: 40 }}>
+            <button onClick={pickBox} className="px-3 py-2 rounded-pill text-xs2 font-bold bg-sky-800 hover:bg-sky-700 text-sky-100" style={{ minHeight: 40 }}>
               📁 TALLYBOX 폴더 지정 (처음 한 번만)
             </button>
-            <span className="text-[11px] text-slate-500">지정하면 저장창 없이 바로 들어갑니다. 안 하면 종전대로 다운로드됩니다.</span>
+            <span className="text-xxs text-dim-400">지정하면 저장창 없이 바로 들어갑니다. 안 하면 종전대로 다운로드됩니다.</span>
           </>
         ) : (
-          <span className="text-[11px] text-slate-500">이 브라우저는 폴더 직결을 지원하지 않아 다운로드로 저장됩니다 (크롬·엣지 데스크톱에서 지원).</span>
+          <span className="text-xxs text-dim-400">이 브라우저는 폴더 직결을 지원하지 않아 다운로드로 저장됩니다 (크롬·엣지 데스크톱에서 지원).</span>
         )}
       </div>
       <div className="space-y-1">
         {rows.map((r) => {
           const ready = r.state === 'ready';
           return (
-            <div key={r.key} className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${
-              ready ? 'bg-emerald-900/20 border-emerald-800/50' : 'bg-slate-800/40 border-slate-800'}`}>
+            <div key={r.key} className={`flex items-center gap-2 rounded-pill px-3 py-2 border ${
+              ready ? 'bg-emerald-900/20 border-emerald-800/50' : 'bg-ink-800/40 border-line'}`}>
               <div className="flex-1 min-w-0">
-                <span className={`text-[13px] font-bold ${ready ? 'text-emerald-100' : 'text-slate-500'}`}>{r.vsl}</span>
-                <span className={`text-[11px] ml-2 ${ready ? 'text-emerald-300/70' : 'text-slate-600'}`}>{r.voy}</span>
-                <div className="text-[10px] mt-0.5">
+                <span className={`text-sm2 font-bold ${ready ? 'text-emerald-100' : 'text-dim-400'}`}>{r.vsl}</span>
+                <span className={`text-xxs ml-2 ${ready ? 'text-emerald-300/70' : 'text-dim-500'}`}>{r.voy}</span>
+                <div className="text-2xs mt-0.5">
                   {ready
                     ? (r.madeAt
                         ? <span className="text-emerald-400">✓ 생성함 · {new Date(r.madeAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} — 다시 뽑을 수 있습니다</span>
                         : <span className="text-emerald-300 font-bold">● 완료 저장됨 — 지금 만드세요</span>)
                     : r.state === 'done'
                       ? <span className="text-amber-400/80">검수 완료 · 수석 완료 저장을 누르면 열립니다</span>
-                      : <span className="text-slate-600">작업 중</span>}
+                      : <span className="text-dim-500">작업 중</span>}
                 </div>
               </div>
               {/* TallyOne 1.8-15: 카톡방 기록으로 타임시트를 메운다 — 손으로 친 해치 보고가 앱에 없을 때 */}
               {ready && (
                 <button onClick={() => setKakaoKey(r.key)}
                   title="카톡 작업방 기록을 붙여넣어 빠진 해치·작업 기록을 채웁니다"
-                  className="shrink-0 px-2.5 py-2 rounded-lg text-[12px] font-bold bg-amber-800/70 hover:bg-amber-700 text-amber-100"
+                  className="shrink-0 px-2.5 py-2 rounded-pill text-xs2 font-bold bg-amber-800/70 hover:bg-amber-700 text-amber-100"
                   style={{ minHeight: 40 }}>📋 카톡</button>
               )}
               <button onClick={() => gen(r)} disabled={!ready || busyKey === r.key}
                 title={ready ? '마감 텔리 엑셀 생성' : '수석 완료 저장 전에는 생성할 수 없습니다'}
-                className={`shrink-0 px-3 py-2 rounded-lg text-[12px] font-bold ${
-                  ready && chief ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-slate-800 text-slate-600 cursor-not-allowed'}`}
+                className={`shrink-0 px-3 py-2 rounded-pill text-xs2 font-bold ${
+                  ready && chief ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-ink-800 text-dim-500 cursor-not-allowed'}`}
                 style={{ minHeight: 40 }}>
                 {busyKey === r.key ? '생성 중…' : ready ? '엑셀 생성' : '🔒 잠김'}
               </button>
             </div>
           );
         })}
-        {rows.length === 0 && <div className="text-[12px] text-slate-600">작업 중이거나 완료 저장된 항차가 없습니다. (입항 전 항차는 표시하지 않습니다)</div>}
+        {rows.length === 0 && <div className="text-xs2 text-dim-500">작업 중이거나 완료 저장된 항차가 없습니다. (입항 전 항차는 표시하지 않습니다)</div>}
       </div>
-      {msg && <div className="mt-2 text-[11px] text-slate-300 whitespace-pre-wrap">{msg}</div>}
+      {msg && <div className="mt-2 text-xxs text-dim-200 whitespace-pre-wrap">{msg}</div>}
     </section>
   );
 }
@@ -2476,11 +2476,11 @@ function Fold({ id, title, open, onToggle, children }) {
   return (
     <div id={'sec-' + id} className="scroll-mt-16">
       <button onClick={onToggle}
-        className={`w-full flex items-center justify-between px-3 rounded-xl border text-left ${
-          open ? 'bg-slate-800/80 border-slate-600' : 'bg-slate-900 border-slate-800 hover:border-slate-600'}`}
+        className={`w-full flex items-center justify-between px-3 rounded-btn border text-left ${
+          open ? 'bg-ink-800/80 border-line-strong' : 'bg-ink-900 border-line hover:border-line-strong'}`}
         style={{ minHeight: 44 }}>
-        <span className="text-[13px] font-bold text-slate-200 truncate">{title}</span>
-        <span className="text-slate-500 text-xs shrink-0 ml-2">{open ? '▲ 접기' : '▼ 열기'}</span>
+        <span className="text-sm2 font-bold text-dim-100 truncate">{title}</span>
+        <span className="text-dim-400 text-xs shrink-0 ml-2">{open ? '▲ 접기' : '▼ 열기'}</span>
       </button>
       {open && <div className="mt-2">{children}</div>}
     </div>
@@ -2524,7 +2524,7 @@ const _actMD = (at) => {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 // 타입별 색 — 열람은 무채색, 조회·질문은 눈에 띄게(뭘 찾으러 왔는지가 핵심 데이터)
-const _ACT_COLOR = { login: 'text-emerald-300', logout: 'text-amber-300/80', view: 'text-slate-300', lookup: 'text-cyan-300', nls: 'text-purple-300' };
+const _ACT_COLOR = { login: 'text-emerald-300', logout: 'text-amber-300/80', view: 'text-dim-200', lookup: 'text-cyan-300', nls: 'text-purple-300' };
 
 function ActivityLogSection({ voyages }) {
   const [period, setPeriod] = useState('today');   // today | yesterday | 7d
@@ -2584,12 +2584,12 @@ function ActivityLogSection({ voyages }) {
 
   const shown = view.slice(0, limit);
   return (
-    <div className="bg-slate-900 border border-fuchsia-800/40 rounded-xl p-3">
+    <div className="bg-ink-900 border border-fuchsia-800/40 rounded-btn p-3">
       <div className="flex items-center gap-2 mb-1">
-        <div className="text-sm font-bold text-slate-100">🕵️ 활동 로그</div>
-        <span className="text-[10px] text-fuchsia-300/70">소유자 전용 — 열람 자체를 기록</span>
+        <div className="text-sm font-bold text-dim-100">🕵️ 활동 로그</div>
+        <span className="text-2xs text-fuchsia-300/70">소유자 전용 — 열람 자체를 기록</span>
       </div>
-      <div className="text-[10px] text-slate-500 mb-2">
+      <div className="text-2xs text-dim-400 mb-2">
         완료 건수는 현재 항차 기준(voyages의 completed만 합산 — 보관소로 넘어간 실적 제외)
       </div>
 
@@ -2597,22 +2597,22 @@ function ActivityLogSection({ voyages }) {
       <div className="flex gap-1 mb-2">
         {[['today', '오늘'], ['yesterday', '어제'], ['7d', '7일']].map(([k, t]) => (
           <button key={k} onClick={() => setPeriod(k)}
-            className={`px-2.5 py-1 rounded text-[11px] font-bold ${
-              period === k ? 'bg-fuchsia-700 text-fuchsia-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+            className={`px-2.5 py-1 rounded text-xxs font-bold ${
+              period === k ? 'bg-fuchsia-700 text-fuchsia-100' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'}`}>
             {t}
           </button>
         ))}
       </div>
       <div className="flex gap-1 flex-wrap mb-2">
         <button onClick={() => setWho('')}
-          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-            who === '' ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+          className={`px-2 py-0.5 rounded text-xxs font-bold ${
+            who === '' ? 'bg-amber-700 text-amber-100' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'}`}>
           전체
         </button>
         {names.map(n => (
           <button key={n} onClick={() => setWho(n)}
-            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-              who === n ? 'bg-amber-700 text-amber-100' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+            className={`px-2 py-0.5 rounded text-xxs font-bold ${
+              who === n ? 'bg-amber-700 text-amber-100' : 'bg-ink-800 text-dim-300 hover:bg-ink-750'}`}>
             {n}
           </button>
         ))}
@@ -2622,10 +2622,10 @@ function ActivityLogSection({ voyages }) {
       {summary.length > 0 && (
         <div className="space-y-1 mb-2">
           {summary.map(([n, s]) => (
-            <div key={n} className="text-[11px] text-slate-300 bg-slate-950/60 border border-slate-800 rounded px-2 py-1">
-              <b className="text-slate-100">{n}</b>
-              <span className="text-slate-500"> — </span>
-              로그인 {s.login}회 · 열람 {s.view}건 · 조회 {s.lookup}건 · <span className={s.done > 0 ? 'text-emerald-300' : 'text-slate-500'}>완료 {s.done}건</span>
+            <div key={n} className="text-xxs text-dim-200 bg-ink-950/60 border border-line rounded px-2 py-1">
+              <b className="text-dim-100">{n}</b>
+              <span className="text-dim-400"> — </span>
+              로그인 {s.login}회 · 열람 {s.view}건 · 조회 {s.lookup}건 · <span className={s.done > 0 ? 'text-emerald-300' : 'text-dim-400'}>완료 {s.done}건</span>
             </div>
           ))}
         </div>
@@ -2633,25 +2633,25 @@ function ActivityLogSection({ voyages }) {
 
       {/* 타임라인 — 최신순, 300건 + 더보기 */}
       {rows === null ? (
-        <div className="text-xs text-slate-500 text-center py-4">불러오는 중…</div>
+        <div className="text-xs text-dim-400 text-center py-4">불러오는 중…</div>
       ) : error ? (
         <div className="text-xs text-red-300 text-center py-3">활동 로그 조회 실패 — {error}</div>
       ) : shown.length === 0 ? (
-        <div className="text-xs text-slate-500 text-center py-4">이 기간의 활동 기록이 없습니다</div>
+        <div className="text-xs text-dim-400 text-center py-4">이 기간의 활동 기록이 없습니다</div>
       ) : (
-        <div className="bg-slate-950 rounded border border-slate-800 divide-y divide-slate-800/60 max-h-[50vh] overflow-y-auto">
+        <div className="bg-ink-950 rounded border border-line divide-y divide-line/60 max-h-[50vh] overflow-y-auto">
           {shown.map((r, i) => {
             const prev = shown[i - 1];
             const dayBreak = !prev || _actMD(prev.at) !== _actMD(r.at);
             return (
               <React.Fragment key={r.day + '_' + r.id}>
                 {dayBreak && period !== 'today' && (
-                  <div className="px-2 py-0.5 text-[10px] font-bold text-slate-500 bg-slate-900/80">{_actMD(r.at)}</div>
+                  <div className="px-2 py-0.5 text-2xs font-bold text-dim-400 bg-ink-900/80">{_actMD(r.at)}</div>
                 )}
-                <div className="px-2 py-1 flex items-baseline gap-2 text-[11px]">
-                  <span className="mono text-slate-500 shrink-0">{_actHHMM(r.at)}</span>
-                  <span className="font-bold text-slate-200 shrink-0">{r.who}</span>
-                  <span className={`min-w-0 break-all ${_ACT_COLOR[r.type] || 'text-slate-300'}`}>{formatActivityLine(r, voyages)}</span>
+                <div className="px-2 py-1 flex items-baseline gap-2 text-xxs">
+                  <span className="mono text-dim-400 shrink-0">{_actHHMM(r.at)}</span>
+                  <span className="font-bold text-dim-100 shrink-0">{r.who}</span>
+                  <span className={`min-w-0 break-all ${_ACT_COLOR[r.type] || 'text-dim-200'}`}>{formatActivityLine(r, voyages)}</span>
                 </div>
               </React.Fragment>
             );
@@ -2660,7 +2660,7 @@ function ActivityLogSection({ voyages }) {
       )}
       {view.length > limit && (
         <button onClick={() => setLimit(l => l + 300)}
-          className="mt-2 w-full py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-bold text-slate-300">
+          className="mt-2 w-full py-1.5 rounded bg-ink-800 hover:bg-ink-750 text-xxs font-bold text-dim-200">
           더보기 ({view.length - limit}건 남음)
         </button>
       )}
@@ -2682,7 +2682,7 @@ function ScrollTopButton() {
   if (!show) return null;
   return (
     <button onClick={() => { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); } }}
-      className="fixed bottom-5 right-4 z-40 w-12 h-12 rounded-full bg-purple-700/90 hover:bg-purple-600 active:scale-95 border border-purple-500/60 shadow-lg shadow-black/40 text-white font-black text-[11px] leading-tight"
+      className="fixed bottom-5 right-4 z-40 w-12 h-12 rounded-full bg-purple-700/90 hover:bg-purple-600 active:scale-95 border border-purple-500/60 shadow-lg shadow-black/40 text-white font-black text-xxs leading-tight"
       title="맨 위로">
       ▲<br/>TOP
     </button>

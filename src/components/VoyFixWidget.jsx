@@ -64,8 +64,8 @@ export default function VoyFixWidget({ voyage, voyageKey }) {
   };
 
   return (
-    <div className={`rounded-lg overflow-hidden ${
-      hasIssue ? 'bg-amber-950/30 border border-amber-700/60' : 'bg-slate-900/50 border border-slate-700/50'
+    <div className={`rounded-pill overflow-hidden ${
+      hasIssue ? 'bg-amber-950/30 border border-amber-700/60' : 'bg-ink-900/50 border border-line'
     }`}>
       <button
         onClick={() => setExpanded(v => !v)}
@@ -75,22 +75,22 @@ export default function VoyFixWidget({ voyage, voyageKey }) {
         <div className="flex-1 min-w-0">
           <div className={`text-xs font-black ${hasIssue ? 'text-amber-200' : 'text-emerald-200'}`}>
             📋 항차 번호 확인
-            {hasIssue && <span className="ml-2 text-[10px] bg-amber-700/60 px-1.5 py-0.5 rounded">정정 필요</span>}
+            {hasIssue && <span className="ml-2 text-2xs bg-amber-700/60 px-1.5 py-0.5 rounded">정정 필요</span>}
           </div>
-          <div className="text-[10px] text-slate-400 mt-0.5">
+          <div className="text-2xs text-dim-300 mt-0.5">
             양하 <span className={info.voy_d ? 'text-cyan-300' : 'text-amber-400'}>{info.voy_d || '(미입력)'}</span>
             {' · '}
             선적 <span className={info.voy_l ? 'text-cyan-300' : 'text-amber-400'}>{info.voy_l || '(미입력)'}</span>
           </div>
         </div>
-        <span className="text-slate-400 px-1 shrink-0">
+        <span className="text-dim-300 px-1 shrink-0">
           {expanded ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
         </span>
       </button>
 
       {expanded && (
-        <div className="border-t border-slate-700/40 p-2.5 space-y-2">
-          <div className="text-[10px] text-slate-400 leading-relaxed">
+        <div className="border-t border-line/40 p-2.5 space-y-2">
+          <div className="text-2xs text-dim-300 leading-relaxed">
             💡 EDI는 송신측 항차(예: 인천 선적)를 포함할 수 있어 신뢰하지 않습니다.<br/>
             여기에 입력한 양하/선적 항차가 카고플랜·베이상세·작업 보고에 정확히 표시됩니다.
           </div>
@@ -98,16 +98,16 @@ export default function VoyFixWidget({ voyage, voyageKey }) {
           {/* 양하 voy */}
           {(hasDischarge || info.voy_d) && (
             <div>
-              <label className="text-[10px] font-bold text-blue-300 block mb-1">
+              <label className="text-2xs font-bold text-blue-300 block mb-1">
                 양하 항차 (voy_d) {hasDischarge && <span className="text-amber-400">*</span>}
-                {dCombined && <span className="ml-1 text-red-300 text-[9px]">⚠️ 결합 의심 ({info.voy_d.length}자)</span>}
+                {dCombined && <span className="ml-1 text-red-300 text-3xs">⚠️ 결합 의심 ({info.voy_d.length}자)</span>}
               </label>
               <input
                 type="text"
                 value={voyD}
                 onChange={e => setVoyD(e.target.value.toUpperCase())}
                 placeholder="예: 0523E"
-                className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono uppercase focus:outline-none focus:border-blue-500"
+                className="w-full px-2 py-1.5 bg-ink-900 border border-line rounded text-xs font-mono uppercase focus:outline-none focus:border-blue-500"
               />
             </div>
           )}
@@ -115,22 +115,22 @@ export default function VoyFixWidget({ voyage, voyageKey }) {
           {/* 선적 voy */}
           {(hasLoading || info.voy_l) && (
             <div>
-              <label className="text-[10px] font-bold text-amber-300 block mb-1">
+              <label className="text-2xs font-bold text-amber-300 block mb-1">
                 선적 항차 (voy_l) {hasLoading && <span className="text-amber-400">*</span>}
-                {lCombined && <span className="ml-1 text-red-300 text-[9px]">⚠️ 결합 의심 ({info.voy_l.length}자)</span>}
+                {lCombined && <span className="ml-1 text-red-300 text-3xs">⚠️ 결합 의심 ({info.voy_l.length}자)</span>}
               </label>
               <input
                 type="text"
                 value={voyL}
                 onChange={e => setVoyL(e.target.value.toUpperCase())}
                 placeholder="예: 0523W"
-                className="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono uppercase focus:outline-none focus:border-amber-500"
+                className="w-full px-2 py-1.5 bg-ink-900 border border-line rounded text-xs font-mono uppercase focus:outline-none focus:border-amber-500"
               />
             </div>
           )}
 
           {suspicious && (
-            <div className="text-[10px] text-amber-300 bg-amber-950/40 rounded p-1.5">
+            <div className="text-2xs text-amber-300 bg-amber-950/40 rounded p-1.5">
               ⚠️ 양하 voy와 선적 voy가 동일 — 별개라면 정정하세요
             </div>
           )}
@@ -139,13 +139,13 @@ export default function VoyFixWidget({ voyage, voyageKey }) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-700 text-white rounded text-xs font-bold flex items-center justify-center gap-1.5"
+              className="flex-1 py-2 bg-emerald-700 hover:bg-emerald-600 disabled:bg-ink-750 text-white rounded text-xs font-bold flex items-center justify-center gap-1.5"
             >
               <Save className="w-3.5 h-3.5"/>
               {saving ? '저장 중...' : '저장'}
             </button>
             {savedMsg && (
-              <span className="text-[10px] text-emerald-300">{savedMsg}</span>
+              <span className="text-2xs text-emerald-300">{savedMsg}</span>
             )}
           </div>
         </div>

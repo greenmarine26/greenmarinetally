@@ -53,11 +53,11 @@ function RouletteModal({ spots, slot, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-slate-900 border-2 border-violet-700 rounded-2xl p-4 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
+      <div className="bg-ink-900 border-2 border-violet-700 rounded-card p-4 w-full max-w-sm space-y-3" onClick={e => e.stopPropagation()}>
         <div className="text-center font-bold text-violet-300">🎰 오늘 {label} 뭐 먹지 돌림판</div>
         <div className="relative mx-auto" style={{ width: 260, height: 260 }}>
           <div className="absolute left-1/2 -top-1 -translate-x-1/2 z-10 text-2xl">🔻</div>
-          <div className="w-full h-full rounded-full border-4 border-slate-700 relative overflow-hidden"
+          <div className="w-full h-full rounded-full border-4 border-line relative overflow-hidden"
             style={{ background: grad, transform: `rotate(${rot}deg)`, transition: 'transform 3.2s cubic-bezier(0.15, 0.9, 0.25, 1)' }}
             onTransitionEnd={onEnd}>
             {wheelList.map((s, i) => {
@@ -66,7 +66,7 @@ function RouletteModal({ spots, slot, onClose }) {
               const a = i * seg + seg / 2;
               return (
                 <div key={s.name + i} className="absolute inset-0" style={{ transform: `rotate(${a - 90}deg)` }}>
-                  <div className="absolute top-1/2 text-[10px] font-bold text-white"
+                  <div className="absolute top-1/2 text-2xs font-bold text-white"
                     style={{ left: '50%', width: 128, paddingLeft: 34, transform: 'translateY(-50%)', textAlign: 'left',
                       textShadow: '0 1px 2px rgba(0,0,0,.8)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                     {s.name}
@@ -79,18 +79,18 @@ function RouletteModal({ spots, slot, onClose }) {
         {done && winner && (
           <div className="text-center space-y-2">
             <div className="text-lg font-black text-amber-300">🎉 {winner.name}</div>
-            <div className="text-xs text-slate-400">{winner.cat}{winner.area ? ` · ${winner.area}` : ''}{avgRating(winner) ? ` · ★${avgRating(winner)}` : ''}</div>
+            <div className="text-xs text-dim-300">{winner.cat}{winner.area ? ` · ${winner.area}` : ''}{avgRating(winner) ? ` · ★${avgRating(winner)}` : ''}</div>
             <div className="flex gap-2">
               {winner.tel && (
-                <a href={`tel:${winner.tel}`} className="flex-1 py-2 rounded-lg bg-emerald-700 text-white text-sm font-bold text-center">📞 전화</a>
+                <a href={`tel:${winner.tel}`} className="flex-1 py-2 rounded-pill bg-emerald-700 text-white text-sm font-bold text-center">📞 전화</a>
               )}
-              <a href={mapUrlOf(winner)} target="_blank" rel="noreferrer" className="flex-1 py-2 rounded-lg bg-sky-700 text-white text-sm font-bold text-center">🗺 지도</a>
-              <button onClick={() => doSpin()} className="flex-1 py-2 rounded-lg bg-violet-700 text-white text-sm font-bold">🎲 다시</button>
+              <a href={mapUrlOf(winner)} target="_blank" rel="noreferrer" className="flex-1 py-2 rounded-pill bg-sky-700 text-white text-sm font-bold text-center">🗺 지도</a>
+              <button onClick={() => doSpin()} className="flex-1 py-2 rounded-pill bg-violet-700 text-white text-sm font-bold">🎲 다시</button>
             </div>
           </div>
         )}
-        {!done && <div className="text-center text-xs text-slate-500">두구두구두구...</div>}
-        <button onClick={onClose} className="w-full py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold">닫기</button>
+        {!done && <div className="text-center text-xs text-dim-400">두구두구두구...</div>}
+        <button onClick={onClose} className="w-full py-2 rounded-pill bg-ink-800 text-dim-200 text-xs font-bold">닫기</button>
       </div>
     </div>
   );
@@ -152,12 +152,12 @@ export default function FoodPage({ inspector, onGoHome }) {
     <div className="max-w-3xl mx-auto px-3 py-3 space-y-3">
       <div className="flex items-center justify-between">
         {/* TallyOne 1.0(판2 팀M): 헤더 톤을 보조기능 허브(AuxPage)·건강 점검과 통일 — 스타일만, 동작 불변 */}
-        <button onClick={onGoHome} className="flex items-center gap-1 py-2.5 pr-3 text-sm text-slate-400 hover:text-sky-300">
+        <button onClick={onGoHome} className="flex items-center gap-1 py-2.5 pr-3 text-sm text-dim-300 hover:text-sky-300">
           <ChevronLeft className="w-4 h-4"/>홈
         </button>
-        <div className="font-black text-slate-100">🍽 평택항 맛집 수첩</div>
+        <div className="font-black text-dim-100">🍽 평택항 맛집 수첩</div>
         <button onClick={() => setRoulette(slot)}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-600 text-white text-sm font-bold">
+          className="flex items-center gap-1 px-3 py-1.5 rounded-pill bg-violet-700 hover:bg-violet-600 text-white text-sm font-bold">
           <Dices className="w-4 h-4"/>돌림판
         </button>
       </div>
@@ -166,13 +166,13 @@ export default function FoodPage({ inspector, onGoHome }) {
         {['breakfast', 'lunch', 'dinner', 'night', 'any'].map(sl => (
           <button key={sl} onClick={() => setSlot(sl)}
             className={`px-3 py-1.5 rounded-full text-xs font-bold border ${slot === sl
-              ? 'bg-emerald-700 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
+              ? 'bg-emerald-700 border-emerald-500 text-white' : 'bg-ink-800 border-line text-dim-200'}`}>
             {SLOT_LABEL[sl]}{sl === mealSlotNow() ? ' ·지금' : ''}
           </button>
         ))}
       </div>
 
-      {spots === null && <div className="text-center text-xs text-slate-500 py-8">불러오는 중...</div>}
+      {spots === null && <div className="text-center text-xs text-dim-400 py-8">불러오는 중...</div>}
 
       <div className="space-y-2">
         {list.map(s => {
@@ -180,28 +180,28 @@ export default function FoodPage({ inspector, onGoHome }) {
           const comments = Object.values(s.comments || {}).sort((a, b) => (b.ts || 0) - (a.ts || 0));
           const isClosed = s.status === 'closed';   // V9.00: 일일 점검이 폐업 추정으로 표시한 곳
           return (
-            <div key={s.id} className={`bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-1.5 ${isClosed ? 'opacity-55' : ''}`}>
+            <div key={s.id} className={`bg-ink-900 border border-line rounded-btn p-3 space-y-1.5 ${isClosed ? 'opacity-55' : ''}`}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="font-bold text-slate-100">{s.name} <span className="text-[11px] font-normal text-slate-400">{s.cat}</span>
-                    {isClosed && <span className="ml-1 px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 text-[10px] font-bold align-middle">⚠ 폐업 추정</span>}
+                  <div className="font-bold text-dim-100">{s.name} <span className="text-xxs font-normal text-dim-300">{s.cat}</span>
+                    {isClosed && <span className="ml-1 px-1.5 py-0.5 rounded bg-rose-950 text-rose-300 text-2xs font-bold align-middle">⚠ 폐업 추정</span>}
                   </div>
-                  <div className="text-[11px] text-slate-500">{[s.area, s.hours, s.note].filter(Boolean).join(' · ')}</div>
+                  <div className="text-xxs text-dim-400">{[s.area, s.hours, s.note].filter(Boolean).join(' · ')}</div>
                 </div>
                 {canDelete(s) && (
                   <button onClick={() => { if (confirm(`${s.name} 삭제할까요?`)) fbDeleteFoodSpot(s.id); }}
-                    className="text-slate-600 hover:text-rose-400"><Trash2 className="w-4 h-4"/></button>
+                    className="text-dim-500 hover:text-rose-400"><Trash2 className="w-4 h-4"/></button>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-1">
-                {(s.tags || []).map(t => <span key={t} className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-bold">{t}</span>)}
-                {s.addedBy && s.addedBy !== '시드' && <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 text-[10px]">{s.addedBy} 추천</span>}
+                {(s.tags || []).map(t => <span key={t} className="px-1.5 py-0.5 rounded bg-ink-800 text-dim-200 text-2xs font-bold">{t}</span>)}
+                {s.addedBy && s.addedBy !== '시드' && <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 text-2xs">{s.addedBy} 추천</span>}
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center">
                   {[1, 2, 3, 4, 5].map(i => (
                     <button key={i} onClick={() => rate(s, i)} aria-label={`별점 ${i}`}>
-                      <Star className={`w-5 h-5 ${(s.ratings?.[inspector] || 0) >= i ? 'text-amber-400 fill-amber-400' : 'text-slate-600'}`}/>
+                      <Star className={`w-5 h-5 ${(s.ratings?.[inspector] || 0) >= i ? 'text-amber-400 fill-amber-400' : 'text-dim-500'}`}/>
                     </button>
                   ))}
                 </div>
@@ -209,76 +209,76 @@ export default function FoodPage({ inspector, onGoHome }) {
                 <div className="ml-auto flex gap-1.5">
                   {Array.isArray(s.menu) && s.menu.length > 0 && (
                     <button onClick={() => setMenuFor(menuFor === s.id ? null : s.id)}
-                      className={`px-2 py-1.5 rounded-lg text-[11px] font-bold ${menuFor === s.id ? 'bg-amber-700 text-white' : 'bg-amber-900/60 text-amber-300'}`}>
+                      className={`px-2 py-1.5 rounded-pill text-xxs font-bold ${menuFor === s.id ? 'bg-amber-700 text-white' : 'bg-amber-900/60 text-amber-300'}`}>
                       🍜 메뉴 {s.menu.length}
                     </button>
                   )}
-                  {s.tel && <a href={`tel:${s.tel}`} className="p-1.5 rounded-lg bg-emerald-900/60 text-emerald-300"><Phone className="w-4 h-4"/></a>}
-                  <a href={mapUrlOf(s)} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg bg-sky-900/60 text-sky-300"><MapPin className="w-4 h-4"/></a>
+                  {s.tel && <a href={`tel:${s.tel}`} className="p-1.5 rounded-pill bg-emerald-900/60 text-emerald-300"><Phone className="w-4 h-4"/></a>}
+                  <a href={mapUrlOf(s)} target="_blank" rel="noreferrer" className="p-1.5 rounded-pill bg-sky-900/60 text-sky-300"><MapPin className="w-4 h-4"/></a>
                 </div>
               </div>
               {menuFor === s.id && Array.isArray(s.menu) && (
-                <div className="border-t border-slate-800 pt-1.5 space-y-0.5">
+                <div className="border-t border-line pt-1.5 space-y-0.5">
                   {s.menu.map((m, i) => (
-                    <div key={i} className="flex justify-between text-[12px]">
-                      <span className="text-slate-200">{m.n}</span>
+                    <div key={i} className="flex justify-between text-xs2">
+                      <span className="text-dim-100">{m.n}</span>
                       <span className="text-amber-300 font-bold">{typeof m.p === 'number' ? m.p.toLocaleString() + '원' : (m.p || '')}</span>
                     </div>
                   ))}
-                  {s.checkedAt && <div className="text-[10px] text-slate-600 text-right">웹 확인 {new Date(s.checkedAt).toLocaleDateString('ko-KR')} — 가격은 변동될 수 있음</div>}
+                  {s.checkedAt && <div className="text-2xs text-dim-500 text-right">웹 확인 {new Date(s.checkedAt).toLocaleDateString('ko-KR')} — 가격은 변동될 수 있음</div>}
                 </div>
               )}
               {comments.length > 0 && (
-                <div className="text-[11px] text-slate-400 space-y-0.5 border-t border-slate-800 pt-1.5">
-                  {comments.slice(0, 3).map((c, i) => <div key={i}>💬 {c.text} <span className="text-slate-600">— {c.by}</span></div>)}
+                <div className="text-xxs text-dim-300 space-y-0.5 border-t border-line pt-1.5">
+                  {comments.slice(0, 3).map((c, i) => <div key={i}>💬 {c.text} <span className="text-dim-500">— {c.by}</span></div>)}
                 </div>
               )}
               {commentFor === s.id ? (
                 <div className="flex gap-1.5">
                   <input autoFocus value={commentText} onChange={e => setCommentText(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') submitComment(s); }}
-                    placeholder="한줄평 (예: 김치찌개 최고)" className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100"/>
+                    placeholder="한줄평 (예: 김치찌개 최고)" className="flex-1 min-w-0 bg-ink-800 border border-line rounded px-2 py-1 text-xs text-dim-100"/>
                   <button onClick={() => submitComment(s)} className="px-2.5 rounded bg-emerald-700 text-white text-xs font-bold">등록</button>
                 </div>
               ) : (
-                <button onClick={() => { setCommentFor(s.id); setCommentText(''); }} className="text-[11px] text-slate-500 hover:text-slate-300">+ 한줄평</button>
+                <button onClick={() => { setCommentFor(s.id); setCommentText(''); }} className="text-xxs text-dim-400 hover:text-dim-200">+ 한줄평</button>
               )}
             </div>
           );
         })}
-        {spots !== null && list.length === 0 && <div className="text-center text-xs text-slate-500 py-8">이 시간대 식당이 없습니다 — 아래에서 추가해 주세요.</div>}
+        {spots !== null && list.length === 0 && <div className="text-center text-xs text-dim-400 py-8">이 시간대 식당이 없습니다 — 아래에서 추가해 주세요.</div>}
       </div>
 
       {addOpen ? (
-        <div className="bg-slate-900 border-2 border-emerald-700 rounded-xl p-3 space-y-2">
+        <div className="bg-ink-900 border-2 border-emerald-700 rounded-btn p-3 space-y-2">
           <div className="text-sm font-bold text-emerald-300">새 맛집 추가</div>
           <div className="grid grid-cols-2 gap-2">
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="식당 이름 *" className="col-span-2 bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-slate-100"/>
-            <input value={form.cat} onChange={e => setForm(f => ({ ...f, cat: e.target.value }))} placeholder="종류 (국밥 등)" className="bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-slate-100"/>
-            <input value={form.tel} onChange={e => setForm(f => ({ ...f, tel: e.target.value }))} placeholder="전화 (선택)" className="bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-slate-100"/>
-            <input value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))} placeholder="위치 (만호리 등)" className="bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-slate-100"/>
-            <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="메모 (선택)" className="bg-slate-800 border border-slate-700 rounded px-2 py-2 text-sm text-slate-100"/>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="식당 이름 *" className="col-span-2 bg-ink-800 border border-line rounded px-2 py-2 text-sm text-dim-100"/>
+            <input value={form.cat} onChange={e => setForm(f => ({ ...f, cat: e.target.value }))} placeholder="종류 (국밥 등)" className="bg-ink-800 border border-line rounded px-2 py-2 text-sm text-dim-100"/>
+            <input value={form.tel} onChange={e => setForm(f => ({ ...f, tel: e.target.value }))} placeholder="전화 (선택)" className="bg-ink-800 border border-line rounded px-2 py-2 text-sm text-dim-100"/>
+            <input value={form.area} onChange={e => setForm(f => ({ ...f, area: e.target.value }))} placeholder="위치 (만호리 등)" className="bg-ink-800 border border-line rounded px-2 py-2 text-sm text-dim-100"/>
+            <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="메모 (선택)" className="bg-ink-800 border border-line rounded px-2 py-2 text-sm text-dim-100"/>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {TAG_OPTS.map(t => (
               <button key={t} onClick={() => toggleTag(t)}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold border ${form.tags.includes(t) ? 'bg-emerald-700 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                className={`px-2.5 py-1 rounded-full text-xs font-bold border ${form.tags.includes(t) ? 'bg-emerald-700 border-emerald-500 text-white' : 'bg-ink-800 border-line text-dim-300'}`}>
                 {t}
               </button>
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={submitAdd} className="flex-1 py-2 rounded-lg bg-emerald-700 text-white text-sm font-bold">등록</button>
-            <button onClick={() => setAddOpen(false)} className="px-4 rounded-lg bg-slate-800 text-slate-400 text-sm">취소</button>
+            <button onClick={submitAdd} className="flex-1 py-2 rounded-pill bg-emerald-700 text-white text-sm font-bold">등록</button>
+            <button onClick={() => setAddOpen(false)} className="px-4 rounded-pill bg-ink-800 text-dim-300 text-sm">취소</button>
           </div>
         </div>
       ) : (
         <button onClick={() => setAddOpen(true)}
-          className="w-full py-2.5 rounded-xl border-2 border-dashed border-slate-700 text-slate-400 text-sm font-bold hover:border-emerald-700 hover:text-emerald-300 flex items-center justify-center gap-1">
+          className="w-full py-2.5 rounded-btn border-2 border-dashed border-line text-dim-300 text-sm font-bold hover:border-emerald-700 hover:text-emerald-300 flex items-center justify-center gap-1">
           <Plus className="w-4 h-4"/>맛집 추가
         </button>
       )}
-      <div className="text-[10px] text-slate-600 text-center">시드 정보는 웹 조사 기반 — 전화·영업시간은 확인 후 수정하세요. 삭제는 등록자·수석만 가능.</div>
+      <div className="text-2xs text-dim-500 text-center">시드 정보는 웹 조사 기반 — 전화·영업시간은 확인 후 수정하세요. 삭제는 등록자·수석만 가능.</div>
 
       {roulette && <RouletteModal spots={Object.entries(spots || {}).map(([id, s]) => ({ ...s, id }))} slot={roulette} onClose={() => setRoulette(null)}/>}
     </div>

@@ -100,21 +100,21 @@ export default function BayMatrixManagerModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[160] bg-black/80 flex items-start justify-center p-3 overflow-y-auto">
-      <div className="bg-slate-900 border-2 border-emerald-700/60 rounded-2xl w-full max-w-2xl my-4">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 sticky top-0 bg-slate-900 rounded-t-2xl">
+      <div className="bg-ink-900 border-2 border-emerald-700/60 rounded-card w-full max-w-2xl my-4">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line sticky top-0 bg-ink-900 rounded-t-2xl">
           <div>
             <div className="text-base font-bold text-emerald-300">🧱 베이매트릭스</div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
+            <div className="text-xxs text-dim-300 mt-0.5">
               보관소가 정본입니다 — 여기서 고치면 폰·엣지·다른 기기에서 같이 보입니다.
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg" aria-label="닫기">
-            <X className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded-pill" aria-label="닫기">
+            <X className="w-5 h-5 text-dim-300" />
           </button>
         </div>
 
         {!canEdit && (
-          <div className="mx-4 mt-3 bg-amber-900/40 border border-amber-700/50 rounded-lg px-3 py-2 text-[12px] text-amber-200">
+          <div className="mx-4 mt-3 bg-amber-900/40 border border-amber-700/50 rounded-pill px-3 py-2 text-xs2 text-amber-200">
             수정 권한이 없습니다. 조회만 됩니다.
           </div>
         )}
@@ -122,20 +122,20 @@ export default function BayMatrixManagerModal({ onClose }) {
         <div className="p-4 space-y-3">
           {/* 조회 */}
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-dim-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={q} onChange={e => setQ(e.target.value)}
               placeholder="선박 약자 · 선박명 · 선사 · 호출부호 · IMO 로 찾기"
-              className="w-full h-11 pl-9 pr-3 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 placeholder-slate-500"
+              className="w-full h-11 pl-9 pr-3 rounded-pill bg-ink-800 border border-line text-sm text-dim-100 placeholder-dim-400"
             />
           </div>
 
-          <div className="text-[11px] text-slate-500">
+          <div className="text-xxs text-dim-400">
             보관소 {all.length}척 · 검색 결과 {hits.length}척
           </div>
 
           {csDupes.length > 0 && (
-            <div className="bg-rose-900/40 border border-rose-700/50 rounded-lg px-3 py-2 text-[12px] text-rose-200">
+            <div className="bg-rose-900/40 border border-rose-700/50 rounded-pill px-3 py-2 text-xs2 text-rose-200">
               ⚠ 같은 호출부호가 두 선박에 붙어 있습니다 — 하나는 남의 것입니다. 항차 자료의 호출부호가 정답입니다.
               <div className="mt-1 font-bold">
                 {csDupes.map(([c, ks]) => `${c} → ${ks.join(', ')}`).join(' · ')}
@@ -144,22 +144,22 @@ export default function BayMatrixManagerModal({ onClose }) {
           )}
 
           {/* 목록 */}
-          <div className="max-h-[46vh] overflow-y-auto rounded-lg border border-slate-800 divide-y divide-slate-800">
+          <div className="max-h-[46vh] overflow-y-auto rounded-pill border border-line divide-y divide-line">
             {hits.map(r => (
               <button key={r.code} disabled={!canEdit}
                 onClick={() => setTarget({ code: r.code, name: r.name, callsign: r.callsign, imo: r.imo, carrier: r.carrier })}
-                className="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-slate-800 disabled:opacity-60 disabled:hover:bg-transparent">
-                <span className="font-bold text-slate-100 text-sm w-16 shrink-0">{r.code}</span>
-                <span className="flex-1 text-[12px] text-slate-400 truncate">{r.name || '—'}</span>
-                {r.carrier && <span className="text-[10px] font-bold text-sky-300 shrink-0">{r.carrier}</span>}
-                <span className="text-[11px] text-slate-500 shrink-0">{r.bays ? `${r.bays}베이` : '매트릭스 없음'}</span>
+                className="w-full px-3 py-2.5 flex items-center gap-3 text-left hover:bg-ink-750 disabled:opacity-60 disabled:hover:bg-transparent">
+                <span className="font-bold text-dim-100 text-sm w-16 shrink-0">{r.code}</span>
+                <span className="flex-1 text-xs2 text-dim-300 truncate">{r.name || '—'}</span>
+                {r.carrier && <span className="text-2xs font-bold text-sky-300 shrink-0">{r.carrier}</span>}
+                <span className="text-xxs text-dim-400 shrink-0">{r.bays ? `${r.bays}베이` : '매트릭스 없음'}</span>
                 {r.hasMatrix && (r.provisional
-                  ? <span className="text-[10px] font-bold text-amber-400 shrink-0 flex items-center gap-0.5"><Wrench className="w-3 h-3" />보정중</span>
-                  : <span className="text-[10px] font-bold text-emerald-400 shrink-0 flex items-center gap-0.5"><Lock className="w-3 h-3" />확정</span>)}
+                  ? <span className="text-2xs font-bold text-amber-400 shrink-0 flex items-center gap-0.5"><Wrench className="w-3 h-3" />보정중</span>
+                  : <span className="text-2xs font-bold text-emerald-400 shrink-0 flex items-center gap-0.5"><Lock className="w-3 h-3" />확정</span>)}
               </button>
             ))}
             {hits.length === 0 && (
-              <div className="px-3 py-6 text-center text-[12px] text-slate-500">
+              <div className="px-3 py-6 text-center text-xs2 text-dim-400">
                 「{q}」 로 찾은 선박이 없습니다. 아래에서 새로 추가하세요.
               </div>
             )}
@@ -167,37 +167,37 @@ export default function BayMatrixManagerModal({ onClose }) {
 
           {/* 신규 추가 — 조회가 안 되는 선박 */}
           {canEdit && (adding ? (
-            <div className="bg-slate-800/60 border border-slate-700 rounded-lg p-3 space-y-2">
-              <div className="text-[12px] font-bold text-slate-200">새 선박 추가</div>
-              <div className="text-[11px] text-slate-500">
+            <div className="bg-ink-800/60 border border-line rounded-pill p-3 space-y-2">
+              <div className="text-xs2 font-bold text-dim-100">새 선박 추가</div>
+              <div className="text-xxs text-dim-400">
                 약자는 <b>현장에서 부르는 그대로</b> 넣습니다. 호출부호·선박명을 약자 자리에 넣지 마세요 — 사전이 갈라집니다.
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <input value={newShip.code} onChange={e => setNewShip(s => ({ ...s, code: e.target.value.toUpperCase() }))}
-                  placeholder="선박 약자 (예: HAYN)" className="h-10 px-2 rounded bg-slate-900 border border-slate-700 text-sm text-slate-100 placeholder-slate-600" />
+                  placeholder="선박 약자 (예: HAYN)" className="h-10 px-2 rounded bg-ink-900 border border-line text-sm text-dim-100 placeholder-dim-500" />
                 <input value={newShip.name} onChange={e => setNewShip(s => ({ ...s, name: e.target.value }))}
-                  placeholder="선박명 (풀네임)" className="h-10 px-2 rounded bg-slate-900 border border-slate-700 text-sm text-slate-100 placeholder-slate-600" />
+                  placeholder="선박명 (풀네임)" className="h-10 px-2 rounded bg-ink-900 border border-line text-sm text-dim-100 placeholder-dim-500" />
                 <input value={newShip.callsign} onChange={e => setNewShip(s => ({ ...s, callsign: e.target.value.toUpperCase() }))}
-                  placeholder="호출부호 (선택)" className="h-10 px-2 rounded bg-slate-900 border border-slate-700 text-sm text-slate-100 placeholder-slate-600" />
+                  placeholder="호출부호 (선택)" className="h-10 px-2 rounded bg-ink-900 border border-line text-sm text-dim-100 placeholder-dim-500" />
                 <input value={newShip.imo} onChange={e => setNewShip(s => ({ ...s, imo: e.target.value }))}
-                  placeholder="IMO (선택)" className="h-10 px-2 rounded bg-slate-900 border border-slate-700 text-sm text-slate-100 placeholder-slate-600" />
+                  placeholder="IMO (선택)" className="h-10 px-2 rounded bg-ink-900 border border-line text-sm text-dim-100 placeholder-dim-500" />
               </div>
-              {msg && <div className="text-[11px] text-rose-300">{msg}</div>}
+              {msg && <div className="text-xxs text-rose-300">{msg}</div>}
               <div className="flex gap-2">
-                <button onClick={startAdd} className="flex-1 h-10 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-bold">
+                <button onClick={startAdd} className="flex-1 h-10 rounded-pill bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-bold">
                   매트릭스 만들기
                 </button>
-                <button onClick={() => { setAdding(false); setMsg(''); }} className="px-4 h-10 rounded-lg bg-slate-800 text-slate-300 text-sm font-bold">
+                <button onClick={() => { setAdding(false); setMsg(''); }} className="px-4 h-10 rounded-pill bg-ink-800 text-dim-200 text-sm font-bold">
                   취소
                 </button>
               </div>
-              <div className="text-[11px] text-slate-500">
+              <div className="text-xxs text-dim-400">
                 만드는 순서 — <b>.def 읽기 → CASP 플랜(PDF) 읽기 → 뼈대 → 매트릭스 → 확정</b>. 확정하면 그 뒤로 .def·PDF 가 못 고칩니다.
               </div>
             </div>
           ) : (
             <button onClick={() => { setAdding(true); setNewShip({ code: q.trim().toUpperCase(), name: '', callsign: '', imo: '' }); }}
-              className="w-full h-11 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sm font-bold text-slate-200 flex items-center justify-center gap-1.5">
+              className="w-full h-11 rounded-pill bg-ink-800 hover:bg-ink-750 border border-line-strong text-sm font-bold text-dim-100 flex items-center justify-center gap-1.5">
               <Plus className="w-4 h-4" />조회가 안 되는 선박 추가
             </button>
           ))}

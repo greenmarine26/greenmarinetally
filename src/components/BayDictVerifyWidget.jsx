@@ -112,12 +112,12 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
   // 베이사전 미등록 — 어떤 사전에도 없음
   if (result.status === 'not-registered') {
     return (
-      <div className="bg-slate-900 border border-slate-700 rounded-lg p-3">
+      <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="flex items-start gap-2">
-          <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5"/>
+          <Info className="w-4 h-4 text-dim-300 flex-shrink-0 mt-0.5"/>
           <div className="flex-1">
-            <div className="text-xs font-bold text-slate-300">베이사전 미등록</div>
-            <div className="text-[10px] text-slate-500 mt-0.5">
+            <div className="text-xs font-bold text-dim-200">베이사전 미등록</div>
+            <div className="text-2xs text-dim-400 mt-0.5">
               {result.shipName || result.imo || '이 선박'}은 베이사전이 없습니다.
               EDI 좌표 기반으로 베이플랜 자동 형성됩니다.
             </div>
@@ -137,10 +137,10 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
   const color = noBasis ? 'slate' : isGood ? 'emerald' : isOK ? 'amber' : 'red';
 
   return (
-    <div className={`bg-slate-900 border border-${color}-700/40 rounded-lg p-3`}>
+    <div className={`bg-ink-900 border border-${color}-700/40 rounded-pill p-3`}>
       <div className="flex items-start gap-2">
         {noBasis ? (
-          <Info className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5"/>
+          <Info className="w-4 h-4 text-dim-300 flex-shrink-0 mt-0.5"/>
         ) : isGood ? (
           <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"/>
         ) : (
@@ -148,44 +148,44 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
         )}
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <Database className="w-3 h-3 text-slate-400"/>
-            <span className="text-xs font-bold text-slate-200">베이사전 매칭</span>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-black bg-${color}-900/60 text-${color}-200`}>
+            <Database className="w-3 h-3 text-dim-300"/>
+            <span className="text-xs font-bold text-dim-100">베이사전 매칭</span>
+            <span className={`px-1.5 py-0.5 rounded text-2xs font-black bg-${color}-900/60 text-${color}-200`}>
               {noBasis ? '대조 불가' : `${ratePct}%`}
             </span>
             {result.isUser ? (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-cyan-900/50 text-cyan-200">사용자 매트릭스</span>
+              <span className="px-1.5 py-0.5 rounded text-2xs bg-cyan-900/50 text-cyan-200">사용자 매트릭스</span>
             ) : !result.verified && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-900/40 text-amber-300">미검증</span>
+              <span className="px-1.5 py-0.5 rounded text-2xs bg-amber-900/40 text-amber-300">미검증</span>
             )}
             {/* V9.57(I13): 매트릭스 확정 배지 — StatusWidget 이관 */}
             {result.matrix?.total > 0 && (
               result.matrix.allConfirmed ? (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-900/60 text-emerald-200">📐 매트릭스 확정</span>
+                <span className="px-1.5 py-0.5 rounded text-2xs font-black bg-emerald-900/60 text-emerald-200">📐 매트릭스 확정</span>
               ) : result.matrix.defAll ? (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-sky-900/60 text-sky-200">🚢 .def 사전 (검증 전)</span>
+                <span className="px-1.5 py-0.5 rounded text-2xs font-black bg-sky-900/60 text-sky-200">🚢 .def 사전 (검증 전)</span>
               ) : (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-red-900/60 text-red-200">⚠️ 매트릭스 확정 필요</span>
+                <span className="px-1.5 py-0.5 rounded text-2xs font-black bg-red-900/60 text-red-200">⚠️ 매트릭스 확정 필요</span>
               )
             )}
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">
+          <div className="text-2xs text-dim-300 mt-1">
             {result.shipName} (IMO: {result.imo || '-'})
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5 mono">
+          <div className="text-2xs text-dim-400 mt-0.5 mono">
             {noBasis
               ? 'EDI 에 베이 좌표가 없어 대조할 수 없습니다'
               : `EDI 베이 ${result.ediBayCount}개 중 ${result.matched}개 매칭`}
-            <span className="text-slate-600"> · 사전 {result.dictBayCount}개 보유</span>
+            <span className="text-dim-500"> · 사전 {result.dictBayCount}개 보유</span>
           </div>
           {noBasis && (
-            <div className="text-[10px] text-slate-400 mt-1">
+            <div className="text-2xs text-dim-300 mt-1">
               비셀형(덱 적부) 선박이거나 EDI 가 위치 없는 포맷(IFCSUM 등)입니다.
               사전이 맞는지 틀린지는 이 자료로 판정할 수 없습니다.
             </div>
           )}
           {!noBasis && !isGood && (
-            <div className={`text-[10px] text-${color}-300 mt-1`}>
+            <div className={`text-2xs text-${color}-300 mt-1`}>
               {result.rate < 0.7
                 ? '⚠️ 매칭률 낮음 — 베이 번호 매핑 재검토 필요'
                 : '⚠️ 일부 베이 매칭 안 됨 — 페어/추가 베이 확인 권장'}
@@ -193,7 +193,7 @@ export default function BayDictVerifyWidget({ shipInfo, ediContainers }) {
           )}
           {/* V9.57(I13): 미확정 베이 상세 — 매트릭스 빌더에서 확정 안내 */}
           {result.matrix?.total > 0 && !result.matrix.allConfirmed && (
-            <div className="text-[10px] mt-1 space-y-0.5">
+            <div className="text-2xs mt-1 space-y-0.5">
               {result.matrix.unconfirmed.length > 0 && (
                 <div className="text-red-300">⚠️ 매트릭스 확정 필요 (EDI 추정값 표시 중): <span className="mono font-bold">{result.matrix.unconfirmed.join(', ')}</span></div>
               )}

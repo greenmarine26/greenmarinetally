@@ -104,15 +104,15 @@ export default function GeminiKeyModal({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border border-amber-700/40 rounded-xl w-full max-w-lg max-h-[95vh] overflow-y-auto">
+      <div className="bg-ink-900 border border-amber-700/40 rounded-btn w-full max-w-lg max-h-[95vh] overflow-y-auto">
         {/* 헤더 */}
-        <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-ink-900 border-b border-line px-4 py-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <Key className="w-5 h-5 text-amber-400" />
             <div className="font-black text-base text-amber-300">Gemini API 키 설정</div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded">
-            <X className="w-5 h-5 text-slate-400" />
+          <button onClick={onClose} className="p-2 hover:bg-ink-750 rounded">
+            <X className="w-5 h-5 text-dim-300" />
           </button>
         </div>
 
@@ -132,7 +132,7 @@ export default function GeminiKeyModal({ onClose }) {
                 </>
               )}
             </div>
-            <div className="text-xs text-slate-300">
+            <div className="text-xs text-dim-200">
               {usingDefault ? (
                 <>코드 하드코딩 키가 GitHub public repo 노출 → Google 차단. 새 키 입력 필요.</>
               ) : (
@@ -142,9 +142,9 @@ export default function GeminiKeyModal({ onClose }) {
           </div>
 
           {/* 키 발급 안내 */}
-          <div className="bg-slate-800/40 rounded p-3 text-xs leading-relaxed">
-            <div className="font-bold text-slate-300 mb-1">📌 새 키 발급 방법</div>
-            <ol className="text-slate-400 space-y-1 ml-3 list-decimal">
+          <div className="bg-ink-800/40 rounded p-3 text-xs leading-relaxed">
+            <div className="font-bold text-dim-200 mb-1">📌 새 키 발급 방법</div>
+            <ol className="text-dim-300 space-y-1 ml-3 list-decimal">
               <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" className="text-cyan-400 underline inline-flex items-center gap-1">aistudio.google.com/apikey <ExternalLink className="w-3 h-3" /></a> 접속</li>
               <li>차단된 옛 키 옆 [삭제]</li>
               <li>[Create API key] → 새 키 복사</li>
@@ -154,24 +154,24 @@ export default function GeminiKeyModal({ onClose }) {
 
           {/* 키 입력 */}
           <div>
-            <label className="text-xs font-bold text-slate-400 block mb-1">새 API 키 (AIza...)</label>
+            <label className="text-xs font-bold text-dim-300 block mb-1">새 API 키 (AIza...)</label>
             <div className="flex gap-2">
               <input
                 type={showFull ? 'text' : 'password'}
                 value={keyInput}
                 onChange={e => setKeyInput(e.target.value)}
                 placeholder="AIzaSy..."
-                className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 mono focus:outline-none focus:border-amber-500"
+                className="flex-1 bg-ink-800 border border-line rounded px-3 py-2 text-sm text-dim-100 mono focus:outline-none focus:border-amber-500"
               />
               <button
                 onClick={() => setShowFull(!showFull)}
-                className="px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded"
+                className="px-3 bg-ink-800 hover:bg-ink-750 border border-line rounded"
                 title={showFull ? '숨기기' : '보이기'}
               >
-                {showFull ? <EyeOff className="w-4 h-4 text-slate-400" /> : <Eye className="w-4 h-4 text-slate-400" />}
+                {showFull ? <EyeOff className="w-4 h-4 text-dim-300" /> : <Eye className="w-4 h-4 text-dim-300" />}
               </button>
             </div>
-            <div className="text-[10px] text-slate-500 mt-1">
+            <div className="text-2xs text-dim-400 mt-1">
               localStorage에만 저장됩니다. GitHub/Firebase에 전송되지 않습니다.
             </div>
           </div>
@@ -181,14 +181,14 @@ export default function GeminiKeyModal({ onClose }) {
             <button
               onClick={handleSave}
               disabled={!keyInput.trim()}
-              className="flex-1 py-2.5 bg-amber-700 hover:bg-amber-600 disabled:bg-slate-800 disabled:text-slate-600 rounded font-bold text-white text-sm"
+              className="flex-1 py-2.5 bg-amber-700 hover:bg-amber-600 disabled:bg-ink-800 disabled:text-dim-500 rounded font-bold text-white text-sm"
             >
               💾 저장
             </button>
             <button
               onClick={handleTest}
               disabled={testing || (usingDefault && !keyInput)}
-              className="flex-1 py-2.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-800 disabled:text-slate-600 rounded font-bold text-white text-sm"
+              className="flex-1 py-2.5 bg-cyan-700 hover:bg-cyan-600 disabled:bg-ink-800 disabled:text-dim-500 rounded font-bold text-white text-sm"
             >
               {testing ? '⏳ 테스트 중...' : '🧪 키 테스트'}
             </button>
@@ -220,8 +220,8 @@ export default function GeminiKeyModal({ onClose }) {
           )}
 
           {/* 설명 */}
-          <div className="bg-slate-800/30 rounded p-2 text-[10px] text-slate-500 leading-relaxed">
-            <b className="text-slate-400">🔒 보안:</b> 키는 본인 폰의 localStorage에만 저장됩니다. 다른 검수원과 공유되지 않습니다.<br/>
+          <div className="bg-ink-800/30 rounded p-2 text-2xs text-dim-400 leading-relaxed">
+            <b className="text-dim-300">🔒 보안:</b> 키는 본인 폰의 localStorage에만 저장됩니다. 다른 검수원과 공유되지 않습니다.<br/>
             각 검수원이 본인 키 발급해서 입력하세요. 무료 한도(1500회/일) 검수원당 충분합니다.
           </div>
         </div>

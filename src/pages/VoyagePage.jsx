@@ -221,8 +221,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   if (!voyage) {
   return (
       <div className="max-w-3xl mx-auto px-3 py-10 text-center">
-        <div className="text-slate-400">항차를 찾을 수 없습니다</div>
-        <button onClick={onGoHome} className="mt-4 px-4 py-2 bg-slate-800 rounded text-sm">홈으로</button>
+        <div className="text-dim-300">항차를 찾을 수 없습니다</div>
+        <button onClick={onGoHome} className="mt-4 px-4 py-2 bg-ink-800 rounded text-sm">홈으로</button>
       </div>
     );
   }
@@ -1097,22 +1097,22 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     <div className="max-w-6xl mx-auto px-3 py-2">
       {/* 모드 탭 (둘 다 있을 때만) */}
       {showDis && showLoa && (
-        <div className="flex gap-1 mb-3 bg-slate-900 border border-slate-800 rounded-lg p-1">
+        <div className="flex gap-1 mb-3 bg-ink-900 border border-line rounded-pill p-1">
           <button
             onClick={() => setMode('discharge')}
             className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 transition ${
-              mode === 'discharge' ? 'bg-blue-700 text-blue-100' : 'text-slate-400 hover:bg-slate-800'
+              mode === 'discharge' ? 'bg-blue-700 text-blue-100' : 'text-dim-300 hover:bg-ink-750'
             }`}
           >
-            <ArrowDown className="w-4 h-4"/>양하{!hasDis && <span className="text-[10px] font-normal opacity-70">(자료 대기)</span>}
+            <ArrowDown className="w-4 h-4"/>양하{!hasDis && <span className="text-2xs font-normal opacity-70">(자료 대기)</span>}
           </button>
           <button
             onClick={() => setMode('loading')}
             className={`flex-1 py-2 rounded text-sm font-bold flex items-center justify-center gap-1.5 transition ${
-              mode === 'loading' ? 'bg-amber-700 text-amber-100' : 'text-slate-400 hover:bg-slate-800'
+              mode === 'loading' ? 'bg-amber-700 text-amber-100' : 'text-dim-300 hover:bg-ink-750'
             }`}
           >
-            <ArrowUp className="w-4 h-4"/>선적{!hasLoa && <span className="text-[10px] font-normal opacity-70">(자료 대기)</span>}
+            <ArrowUp className="w-4 h-4"/>선적{!hasLoa && <span className="text-2xs font-normal opacity-70">(자료 대기)</span>}
           </button>
         </div>
       )}
@@ -1155,11 +1155,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (rfMiss) parts.push(`리퍼 온도 미입력 ${rfMiss}대`);
           return (
             <button onClick={() => setClosingOpen(true)}
-              className="w-full mb-3 bg-red-950/70 border-2 border-red-600 rounded-lg px-3 py-2.5 text-left active:scale-[0.99]">
-              <div className="text-[13px] font-black text-red-200">
+              className="w-full mb-3 bg-red-950/70 border-2 border-red-600 rounded-pill px-3 py-2.5 text-left active:scale-[0.99]">
+              <div className="text-sm2 font-black text-red-200">
                 🚨 출항 {mins >= 60 ? `${Math.floor(mins / 60)}시간 ${mins % 60}분` : `${mins}분`} 전 — {parts.join(' · ')}
               </div>
-              <div className="text-[11px] text-red-300/80 mt-0.5">탭하면 마감 점검이 열립니다</div>
+              <div className="text-xxs text-red-300/80 mt-0.5">탭하면 마감 점검이 열립니다</div>
             </button>
           );
         } catch { return null; }
@@ -1174,11 +1174,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {/* M5.1 G: 작업 보고 + 마감 점검 두 큰 버튼 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
         <button onClick={() => setShowWorkReport(true)}
-          className="py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+          className="py-3 bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
           📤 작업 보고
         </button>
         <button onClick={() => setClosingOpen(true)}
-          className="py-3 bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+          className="py-3 bg-amber-700 hover:bg-amber-600 active:bg-amber-800 text-white rounded-pill font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
           🏁 마감 점검
         </button>
       </div>
@@ -1217,39 +1217,39 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             cls: 'bg-amber-800 hover:bg-amber-700 text-white' },
           { m: 'allActual', t: '풀 액츄얼 (풀+엠티)', lock: false,
             d: '풀도 엠티도 계획은 예약일 뿐 — 안 묻고 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.',
-            cls: 'bg-slate-700 hover:bg-slate-600 text-slate-100' },
+            cls: 'bg-ink-750 hover:bg-ink-700 text-dim-100' },
         ];
         const _cur = _CH.find(x => x.m === _mode3) || null;
         // 1.56: 옛 2갈래 답(seqFull)만 있는 항차는 **한 번 재확인**한다 — 두 갈래엔 「풀 시퀀스」가 없어
         //   답이 자동 매핑으로 조용히 굳었다(독립 재검증 P1-7). 확인 전에도 방어는 종전 답대로 동작한다.
         const _legacyOnly = !voyage?.info?.seqMode && voyage?.info?.seqFull !== undefined && voyage?.info?.seqFull !== null;
-        const _chipCls = { fullSeq: 'text-rose-300', fullOnlySeq: 'text-amber-300', allActual: 'text-slate-200' };
+        const _chipCls = { fullSeq: 'text-rose-300', fullOnlySeq: 'text-amber-300', allActual: 'text-dim-100' };
         if (_cur && !seqEdit && !_legacyOnly) {
           return (
             <button onClick={() => setSeqEdit(true)}
-              className="mb-3 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[11px] text-slate-300 flex items-center gap-1.5">
-              <span className={`font-black ${_chipCls[_cur.m] || 'text-slate-200'}`}>
+              className="mb-3 px-2 py-1 rounded border border-line bg-ink-900 text-xxs text-dim-200 flex items-center gap-1.5">
+              <span className={`font-black ${_chipCls[_cur.m] || 'text-dim-100'}`}>
                 {_cur.lock ? '🔒' : '↔'} {_cur.t}
               </span>
-              <span className="text-slate-500">— 눌러서 바꾸기</span>
+              <span className="text-dim-400">— 눌러서 바꾸기</span>
             </button>
           );
         }
         return (
-          <div className="mb-3 bg-amber-950/40 border-2 border-amber-700/60 rounded-lg p-3">
-            <div className="text-[13px] font-black text-amber-200">풀 컨테이너 시퀀스 작업입니까?</div>
+          <div className="mb-3 bg-amber-950/40 border-2 border-amber-700/60 rounded-pill p-3">
+            <div className="text-sm2 font-black text-amber-200">풀 컨테이너 시퀀스 작업입니까?</div>
             {(!voyage?.info?.seqMode && voyage?.info?.seqFull !== undefined && voyage?.info?.seqFull !== null) && (
-              <div className="text-[11px] text-amber-100 bg-amber-900/40 rounded px-2 py-1 mt-1">
+              <div className="text-xxs text-amber-100 bg-amber-900/40 rounded px-2 py-1 mt-1">
                 종전 답(예/아니오)이 있습니다 — 세 갈래로 한 번만 확정해 주세요. 확정 전에도 방어는 종전 답({resolveSeqMode(voyage?.info) === 'fullOnlySeq' ? '풀만 시퀀스' : '풀 액츄얼'})대로 동작합니다.
               </div>
             )}
-            <div className="text-[11px] text-amber-300/80 mt-0.5 leading-snug">
+            <div className="text-xxs text-amber-300/80 mt-0.5 leading-snug">
               시퀀스면 계획 자리 주인이 그 자리를 지킵니다 — 다른 컨을 넣을 때 한 번 더 묻습니다.
               <br/>액츄얼이면 계획은 예약일 뿐이라 바로 내주고, 자리를 내준 컨은 몸만 창고로 갑니다.
               <br/>풀과 엠티가 다를 수 있으니 셋 중에서 고르세요.
             </div>
             {shipSeqPref && !_mode3 && (
-              <div className="text-[11px] text-slate-300 mt-1">
+              <div className="text-xxs text-dim-200 mt-1">
                 이 배의 지난 답: <b className="text-amber-200">{_CH.find(x => x.m === shipSeqPref)?.t || shipSeqPref}</b> — 이번 항차도 같으면 그걸 누르세요. 상황이 다르면 다르게 고르면 됩니다.
               </div>
             )}
@@ -1258,13 +1258,13 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 <button key={ch.m} onClick={() => _save(ch.m)}
                   className={`py-2.5 px-3 rounded text-left ${ch.cls} ${ch.m === (_mode3 || shipSeqPref) ? 'ring-2 ring-amber-300' : ''}`}>
                   <div className="font-bold text-sm">{ch.lock ? '🔒' : '↔'} {ch.t}</div>
-                  <div className="text-[11px] opacity-80 mt-0.5 leading-snug">{ch.d}</div>
+                  <div className="text-xxs opacity-80 mt-0.5 leading-snug">{ch.d}</div>
                 </button>
               ))}
             </div>
             {seqEdit && (
               <button onClick={() => setSeqEdit(false)}
-                className="w-full mt-1.5 text-[11px] text-slate-400 py-1">그대로 두기</button>
+                className="w-full mt-1.5 text-xxs text-dim-300 py-1">그대로 두기</button>
             )}
           </div>
         );
@@ -1289,7 +1289,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
 
       {/* 탭 네비게이션 — M5.0: 명칭 산뜻하게 정리 */}
-      <nav className="bg-slate-900 border border-slate-800 rounded-lg flex mb-3 overflow-x-auto sticky top-[52px] z-20 shadow-lg shadow-slate-950/60">
+      <nav className="bg-ink-900 border border-line rounded-pill flex mb-3 overflow-x-auto sticky top-[52px] z-20 shadow-lg shadow-slate-950/60">
         {/* ★ 1.84 (검수사 확정 2026-08-19, UI 1차 판2): 탭 «표시»만 정리 — tab state·점프 경로는 불변.
             ① 「🎤 자연어」 → 「▶ 작업 시작」 — *"자연어는 이름이 검수용어가 아닙니다. 작업시작 모드가 되어야겠죠."*
             ② 통계·결과·업로드는 요약·필터 칩과 겹쳐(*"중복 되는거 같습니다"*) 「더보기 ⋯」 한 버튼으로 접었다.
@@ -1302,15 +1302,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             : [{ k: 'bay', t: '베이', i: MapPin }]),
         ].map(({ k, t, i: Icon }) => (
           <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
-            className={`flex-1 px-2 py-2.5 text-[12px] font-bold flex items-center justify-center gap-1 border-b-2 whitespace-nowrap ${
-              tab === k ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-400'
+            className={`flex-1 px-2 py-2.5 text-xs2 font-bold flex items-center justify-center gap-1 border-b-2 whitespace-nowrap ${
+              tab === k ? 'border-amber-400 text-amber-300 bg-ink-800/30' : 'border-transparent text-dim-300'
             }`}>
             <Icon className="w-3.5 h-3.5"/>{t}
           </button>
         ))}
         <button onClick={() => setMoreTabs(v => !v)}
-          className={`flex-none px-3 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap ${
-            ['stats', 'report', 'data', 'xray'].includes(tab) ? 'border-amber-400 text-amber-300 bg-slate-800/30' : 'border-transparent text-slate-500'
+          className={`flex-none px-3 py-2.5 text-xs2 font-bold border-b-2 whitespace-nowrap ${
+            ['stats', 'report', 'data', 'xray'].includes(tab) ? 'border-amber-400 text-amber-300 bg-ink-800/30' : 'border-transparent text-dim-400'
           }`} title="통계 · 결과 · 업로드 · X-RAY">
           {['stats', 'report', 'data', 'xray'].includes(tab) ? ({ stats: '통계', report: '결과', data: '업로드', xray: 'X-RAY' })[tab] : '⋯'}
         </button>
@@ -1321,7 +1321,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           {[['stats', '📊 통계'], ['report', '📋 결과'], ['data', '📤 업로드'],
             ...(mode === 'discharge' ? [['xray', '🔍 X-RAY']] : [])].map(([k, t]) => (
             <button key={k} onClick={() => { setTab(k); setMoreTabs(false); }}
-              className={`flex-1 py-2 rounded-lg text-[12px] font-bold ${tab === k ? 'bg-slate-700 text-amber-300' : 'bg-slate-900 border border-slate-800 text-slate-300'}`}>{t}</button>
+              className={`flex-1 py-2 rounded-pill text-xs2 font-bold ${tab === k ? 'bg-ink-750 text-amber-300' : 'bg-ink-900 border border-line text-dim-200'}`}>{t}</button>
           ))}
         </div>
       )}
@@ -1370,11 +1370,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                칼럼 자체는 늘 있어야 한다 — 고를 때마다 목록 폭이 출렁이면 그게 더 불편하다. */
             <div className="card-v2 bg-ink-900 p-5 text-center">
               <PackageIcon className="ico-l mx-auto text-dim-500 mb-2.5"/>
-              <div className="text-[13px] font-bold text-dim-200 mb-1.5">컨테이너를 고르면 여기 열립니다</div>
-              <div className="text-[12px] text-dim-300 leading-relaxed">
+              <div className="text-sm2 font-bold text-dim-200 mb-1.5">컨테이너를 고르면 여기 열립니다</div>
+              <div className="text-xs2 text-dim-300 leading-relaxed">
                 선내 위치 · 실번호 · 규격 · 무게 · 리퍼 온도를 보고<br/>그 자리에서 고칠 수 있습니다.
               </div>
-              <div className="text-[11px] text-dim-500 mt-3 pt-3 border-t border-line">
+              <div className="text-xxs text-dim-500 mt-3 pt-3 border-t border-line">
                 목록을 훑는 동안 <b className="text-dim-200">닫히지 않고 붙어 있습니다</b>
               </div>
             </div>
@@ -1850,11 +1850,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             `${p.vesselName || '?'} (${p.callsign || 'no-callsign'})`
           ).join(', ');
           return (
-            <div className="mb-3 bg-orange-950/40 border border-orange-700/50 rounded-lg px-3 py-2 text-xs">
+            <div className="mb-3 bg-orange-950/40 border border-orange-700/50 rounded-pill px-3 py-2 text-xs">
               <span className="text-orange-300 font-bold">⚠ PORT-MIS 매칭 미확인</span>
-              <span className="text-slate-300 ml-2">선박명: <b>{vsl}</b> · 콜사인: <b>{dictCallsign || '없음'}</b></span>
-              <div className="text-slate-400 mt-1">PORT-MIS 후보: {candidates}</div>
-              <div className="text-slate-500 text-[10px] mt-0.5">베이사전 callsign 또는 선박명을 PORT-MIS와 일치시키면 자동 매칭됩니다</div>
+              <span className="text-dim-200 ml-2">선박명: <b>{vsl}</b> · 콜사인: <b>{dictCallsign || '없음'}</b></span>
+              <div className="text-dim-300 mt-1">PORT-MIS 후보: {candidates}</div>
+              <div className="text-dim-400 text-2xs mt-0.5">베이사전 callsign 또는 선박명을 PORT-MIS와 일치시키면 자동 매칭됩니다</div>
             </div>
           );
         }
@@ -1910,12 +1910,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         const toneClass = {
           sailing: 'bg-sky-900/50 border-sky-700/50 text-sky-200',
           berthed: 'bg-emerald-900/40 border-emerald-700/50 text-emerald-200',
-          departed: 'bg-slate-700/60 border-slate-600/50 text-slate-300',
+          departed: 'bg-ink-750/60 border-line-strong/50 text-dim-200',
           unsure: 'bg-amber-900/40 border-amber-600/50 text-amber-200',
-          unknown: 'bg-slate-700 border-slate-600 text-slate-300',
-        }[shipSt.tone] || 'bg-slate-700 text-slate-300';
+          unknown: 'bg-ink-750 border-line-strong text-dim-200',
+        }[shipSt.tone] || 'bg-ink-750 text-dim-200';
         return (
-          <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-lg px-3 py-2 text-sm">
+          <div className="mb-3 bg-cyan-950/40 border border-cyan-700/50 rounded-pill px-3 py-2 text-sm">
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-cyan-300 font-bold">⚓ PORT-MIS</span>
               {/* V8.09-11: 평택 정박중 + 부두 있음 → 부두 배지 */}
@@ -1930,7 +1930,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 </span>
               )}
               {shipSt.showBerth && !pm.pier && pm.berth && (
-                <span className="bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-xs">
+                <span className="bg-ink-750 text-dim-200 px-2 py-0.5 rounded text-xs">
                   📍 {formatBerth(pm.berth)}
                 </span>
               )}
@@ -1946,14 +1946,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                   {shipSt.label}
                 </span>
               )}
-              <span className="text-slate-200">
+              <span className="text-dim-100">
                 입항 <span className="font-bold text-emerald-300">{fmtDT(pm.eta)}</span>
               </span>
-              <span className="text-slate-500">·</span>
-              <span className="text-slate-200">
+              <span className="text-dim-400">·</span>
+              <span className="text-dim-100">
                 출항 <span className="font-bold text-amber-300">{fmtDT(pm.etd)}</span>
               </span>
-              {pm.voyageType && <span className="text-slate-400 text-xs">[{pm.voyageType}]</span>}
+              {pm.voyageType && <span className="text-dim-300 text-xs">[{pm.voyageType}]</span>}
             </div>
             {/* V9.33: 평택도선사회 도선 예보 (사용자 확정 2026-08-01 — "포트미스는 예보 성격,
                 도선사협회는 확정과 비슷"). PORT-MIS 값을 덮지 않고 아래 줄에 확정시각으로 함께 표시. */}
@@ -1969,19 +1969,19 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 <div className="mt-1 flex items-center gap-2 flex-wrap text-sm bg-sky-950/50 border border-sky-800/50 rounded px-2 py-1">
                   <span className="text-sky-300 font-bold text-xs">⚓ 도선 예보</span>
                   {pf.nextArr && (
-                    <span className="text-slate-200">
+                    <span className="text-dim-100">
                       입항 <span className="font-bold text-emerald-300">{fmtPf(pf.nextArr)}</span>
-                      {pf.nextArrBerth && <span className="text-slate-400 text-xs ml-1">({pf.nextArrBerth})</span>}
+                      {pf.nextArrBerth && <span className="text-dim-300 text-xs ml-1">({pf.nextArrBerth})</span>}
                     </span>
                   )}
-                  {pf.nextArr && pf.nextDep && <span className="text-slate-500">·</span>}
+                  {pf.nextArr && pf.nextDep && <span className="text-dim-400">·</span>}
                   {pf.nextDep && (
-                    <span className="text-slate-200">
+                    <span className="text-dim-100">
                       출항 <span className="font-bold text-amber-300">{fmtPf(pf.nextDep)}</span>
-                      {pf.nextDepBerth && <span className="text-slate-400 text-xs ml-1">({pf.nextDepBerth})</span>}
+                      {pf.nextDepBerth && <span className="text-dim-300 text-xs ml-1">({pf.nextDepBerth})</span>}
                     </span>
                   )}
-                  <span className="text-sky-400/70 text-[10px]">평택도선사회 · 확정에 가까움</span>
+                  <span className="text-sky-400/70 text-2xs">평택도선사회 · 확정에 가까움</span>
                 </div>
               );
             })()}
@@ -1995,7 +1995,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
               </div>
             )}
             {/* M5.83: 매칭 진단 정보 (작은 글씨로 카드 아래) */}
-            <div className="text-[10px] text-slate-500 mt-1 font-mono flex gap-3 flex-wrap">
+            <div className="text-2xs text-dim-400 mt-1 font-mono flex gap-3 flex-wrap">
               <span>매칭: <span className="text-cyan-400">{matchedBy}</span></span>
               <span>키: <span className="text-amber-400">{matchedKey || '?'}</span></span>
               <span>선박명: <span className="text-emerald-400">{pm.vesselName || '?'}</span></span>
@@ -2176,26 +2176,26 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 베이 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
             autoComplete="off"
-            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-lg pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-amber-500"
+            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-pill pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-amber-500"
           />
-          {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
+          {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-dim-400"><X className="w-4 h-4"/></button>}
         </div>
         <button onClick={toggleListen} title="음성 입력"
-          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-pill flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-ink-950'}`}>
           🎤
         </button>
         <button onClick={() => setAutoRead(v => !v)} title="조회 결과 자동 읽기"
-          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-pill flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-ink-750 text-amber-300' : 'bg-ink-800 text-dim-400'}`}>
           {autoRead ? '🔊' : '🔇'}
         </button>
         <button onClick={() => { setKb(k => (k === 'numeric' ? 'text' : 'numeric')); setTimeout(() => searchRef.current?.focus(), 50); }}
           title={kb === 'numeric' ? '문자 키보드로 (질문 입력)' : '숫자판으로 (작업 조회)'}
-          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-pill flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-ink-750 text-amber-300' : 'bg-ink-800 text-dim-300'}`}>
           ⌨
         </button>
         <button
           onClick={handleExport}
-          className="h-11 sm:h-9 bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700/40 text-emerald-200 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1 flex-none"
+          className="h-11 sm:h-9 bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700/40 text-emerald-200 px-2.5 rounded-pill text-xs font-bold flex items-center gap-1 flex-none"
           title="CSV 내보내기"
         >
           <Download className="ico-s"/>CSV
@@ -2204,7 +2204,7 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
 
       {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
-      <div className="flex gap-1.5 flex-wrap text-[12px] sm:text-[11px]">
+      <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
         {[
           { k: 'all', t: `전체 ${stats.total}` },
           { k: 'undone', t: `미완 ${stats.total - stats.done}` },
@@ -2216,7 +2216,7 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
           ...(stats.lug > 0 ? [{ k: 'lugg', t: `🧳 수화물(미정) ${stats.lugDone}/${stats.lug}` }] : []),
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
-            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-lg font-bold transition-colors ${
+            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-pill font-bold transition-colors ${
               filter === k ? 'bg-amber-700 text-amber-100' : 'bg-ink-850 text-dim-200 hover:bg-ink-750'
             }`}>{t}</button>
         ))}
@@ -2235,46 +2235,46 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
         dupSeals={dupSeals}
       />
       ) : (
-        <div className="text-center text-[13px] sm:text-[12px] text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
+        <div className="text-center text-sm2 sm:text-xs2 text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
           위 칩을 누르거나 검색하면 그 컨테이너만 보입니다
         </div>
       )}
 
       {/* V8.98-05: 쉬프팅(재적부) 목록 — 통과화물이라 검수 완료 대상은 아니지만 크레인 작업 확인용 */}
       {(shiftingList.length > 0 || shiftInfo?.loadEdiPending || (shiftInfo && (shiftInfo.berthShift != null || (shiftInfo.meta && (shiftInfo.meta.excludedCnt > 0 || (shiftInfo.meta.customsFixed || []).length > 0))))) && (
-        <div className="mt-3 bg-slate-900 border border-blue-800/50 rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-[12px] font-black flex items-center gap-1.5 flex-wrap">
+        <div className="mt-3 bg-ink-900 border border-blue-800/50 rounded-pill overflow-hidden">
+          <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
             {shiftInfo?.berthShift != null && (
-              <span className={shiftInfo?.truthChk?.pending ? 'text-slate-400'
+              <span className={shiftInfo?.truthChk?.pending ? 'text-dim-300'
                 : (shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300')}>
                 · 배정표 이적 {shiftInfo.berthShift}모브
                 {shiftInfo?.truthChk?.pending ? ' (작업 전 — 대조 보류)'
                   : shiftInfo?.truthChk ? `(${shiftInfo.truthChk.truth}대)${shiftInfo.truthChk.ok ? ' ✓ 일치' : ' ⛔ 불일치'}` : '(정본)'}
               </span>
             )}
-            <span className="ml-auto text-[10px] font-normal text-slate-500">평택 작업에 걸려 옮기는 화물 — 1대 = 크레인 2모브</span>
+            <span className="ml-auto text-2xs font-normal text-dim-400">평택 작업에 걸려 옮기는 화물 — 1대 = 크레인 2모브</span>
           </div>
           {/* TallyOne 1.76: 정답표 불일치 — 어느 한쪽이 틀렸다는 것을 화면이 말한다. */}
           {shiftInfo?.truthChk?.pending && (
-            <div className="px-3 py-1.5 text-[11px] text-slate-300 bg-slate-950/60 border-b border-slate-800">
+            <div className="px-3 py-1.5 text-xxs text-dim-200 bg-ink-950/60 border-b border-line">
               ⏳ 배정표 이적 대조 <b>보류</b> — 아직 작업 시작 전({shiftInfo.truthChk.terminalStatus})입니다.
-              <span className="text-slate-400"> 이적 칸이 채워지기 전의 0은 «이적 없음»이 아니라 «아직 안 나온 것»이라 판정하지 않습니다.</span>
+              <span className="text-dim-300"> 이적 칸이 채워지기 전의 0은 «이적 없음»이 아니라 «아직 안 나온 것»이라 판정하지 않습니다.</span>
             </div>
           )}
           {/* ★ 2.08-15 (검수사 지시 2026-08-23 — *"그래도 의심은 지우지 말고 커버영역 알림을 띄워주세요."*)
               배정목록 이적이 확정 0이라 예측을 대수에서 뺐다. 그러나 **어느 커버 어느 자리를 의심했는지는 남긴다.** */}
           {shiftInfo?.meta?.truthZero > 0 && (
-            <div className="px-3 py-1.5 text-[11px] text-amber-100 bg-amber-950/40 border-b border-amber-800/50 space-y-0.5">
+            <div className="px-3 py-1.5 text-xxs text-amber-100 bg-amber-950/40 border-b border-amber-800/50 space-y-0.5">
               <div>🔍 <b>커버 영역 확인 {shiftInfo.meta.truthZero}대</b> — 앱은 커버 위로 봤는데 <b>배정목록 이적은 확정 0모브</b>입니다. 작업 대수에서는 뺐습니다.</div>
               {(shiftInfo.meta.suspects || []).slice(0, 6).map(sp => (
-                <div key={sp.cn} className="mono text-[10px] text-amber-300">
+                <div key={sp.cn} className="mono text-2xs text-amber-300">
                   · {sp.cn} <b>{sp.pos || `${parseInt(sp.bay, 10)}-${sp.row}-${sp.tier}`}</b>
                   {sp.pod ? ` POD ${sp.pod}` : ''}{sp.why ? ` — ${sp.why}` : ''}
                 </div>
               ))}
-              {(shiftInfo.meta.suspects || []).length > 6 && <div className="text-[10px] text-amber-400">… 외 {shiftInfo.meta.suspects.length - 6}대</div>}
-              <div className="text-[10px] text-amber-200/80">
+              {(shiftInfo.meta.suspects || []).length > 6 && <div className="text-2xs text-amber-400">… 외 {shiftInfo.meta.suspects.length - 6}대</div>}
+              <div className="text-2xs text-amber-200/80">
                 커버가 이 자리를 무는지 현장에서 봐 주십시오. 물면 그대로 시프팅이고, 안 물면
                 <b> 베이매트릭스에 그 베이 커버 경계</b>를 저장해 주십시오 — 다음 항차부터 예측도 0이 됩니다.
               </div>
@@ -2285,21 +2285,21 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
               세관리스트에는 평택짐으로 양하목록에 포함되어 있습니다. 제생각엔 평택에서 양하후에
               다른선박으로 환적할것 같습니다. 고로 시프팅은 없는듯 합니다.»* */}
           {(shiftInfo?.meta?.customsFixed || []).length > 0 && (
-            <div className="px-3 py-1.5 text-[11px] text-cyan-100 bg-cyan-950/40 border-b border-cyan-800/50 space-y-0.5">
+            <div className="px-3 py-1.5 text-xxs text-cyan-100 bg-cyan-950/40 border-b border-cyan-800/50 space-y-0.5">
               <div>🔁 <b>환적분 {shiftInfo.meta.customsFixed.length}대</b> — EDI 는 다른 항구 짐이라 하는데 <b>세관 양하리스트에는 평택짐</b>으로 들어 있습니다. 평택에서 내려 다른 배로 옮겨 싣는 것으로 보고 <b>시프팅에서 뺐습니다.</b></div>
               {shiftInfo.meta.customsFixed.slice(0, 6).map(cf => (
-                <div key={cf.cn} className="mono text-[10px] text-cyan-300">
+                <div key={cf.cn} className="mono text-2xs text-cyan-300">
                   · {cf.cn} <b>{cf.pos}</b> {cf.iso} — EDI POD {cf.ediPod} → 세관 {cf.recPod}
                 </div>
               ))}
-              {shiftInfo.meta.customsFixed.length > 6 && <div className="text-[10px] text-cyan-400">… 외 {shiftInfo.meta.customsFixed.length - 6}대</div>}
-              <div className="text-[10px] text-cyan-200/80">
+              {shiftInfo.meta.customsFixed.length > 6 && <div className="text-2xs text-cyan-400">… 외 {shiftInfo.meta.customsFixed.length - 6}대</div>}
+              <div className="text-2xs text-cyan-200/80">
                 EDI 의 POD 는 <b>옮겨 실은 뒤의 최종 목적지</b>라 배가 실제로 그 항구에 가는 것이 아닙니다. 짐은 평택에서 내립니다.
               </div>
             </div>
           )}
           {shiftInfo?.truthChk && !shiftInfo.truthChk.pending && !shiftInfo.truthChk.ok && (
-            <div className="px-3 py-1.5 text-[11px] text-rose-200 bg-rose-950/40 border-b border-rose-800/40">
+            <div className="px-3 py-1.5 text-xxs text-rose-200 bg-rose-950/40 border-b border-rose-800/40">
               ⛔ <b>배정표 이적 {shiftInfo.truthChk.truth}대</b>({shiftInfo.truthChk.moves}모브)인데 앱은 <b>{shiftInfo.truthChk.pred}대</b>를 냈습니다 — 어느 한쪽이 틀립니다.
               {shiftInfo.hatchSolve && (
                 shiftInfo.hatchSolve.best ? (
@@ -2309,13 +2309,13 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
                     <span className="text-emerald-300/70"> 베이매트릭스에서 이 값으로 저장하면 이 배는 다음 항차부터 맞습니다.</span>
                   </div>
                 ) : shiftInfo.hatchSolve.solutions?.length ? (
-                  <div className="mt-1 text-slate-300">
+                  <div className="mt-1 text-dim-200">
                     ↳ 커버 분할 후보 {shiftInfo.hatchSolve.tried}가지 중 {shiftInfo.hatchSolve.solutions.length}가지가 정답과 맞습니다 — <b>아직 하나로 좁혀지지 않았습니다.</b>
                   </div>
                 ) : (
-                  <div className="mt-1 text-slate-300">
+                  <div className="mt-1 text-dim-200">
                     ↳ 커버 분할 {shiftInfo.hatchSolve.tried}가지를 전부 돌려도 정답이 안 나옵니다 — <b>커버 문제가 아닙니다.</b>
-                    <span className="text-slate-400"> 항로 등록({shiftInfo.lane || '미상'})과 양하 EDI 정본 여부를 보십시오.</span>
+                    <span className="text-dim-300"> 항로 등록({shiftInfo.lane || '미상'})과 양하 EDI 정본 여부를 보십시오.</span>
                   </div>
                 )
               )}
@@ -2323,25 +2323,25 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
           )}
           {/* TallyOne 1.69-10: 선적 EDI 미도착 — 조용히 0 으로 두지 않는다(검수사 확정 2026-08-15, SWBT 2614S). */}
           {shiftInfo?.loadEdiPending && (
-            <div className="px-3 py-1.5 text-[11px] text-amber-200 bg-amber-950/40 border-b border-amber-800/40">
+            <div className="px-3 py-1.5 text-xxs text-amber-200 bg-amber-950/40 border-b border-amber-800/40">
               ⏳ 선적 EDI 미도착 — 지금 올라온 선적 자료는 <b>평택 도착 적부도</b>(평택에서 싣는 화물이 아직 0)입니다.
               <span className="text-amber-300/80"> 시프팅은 선적 EDI가 와야 확정됩니다.</span>
             </div>
           )}
           {(shiftInfo?.meta?.origin || shiftInfo?.meta?.nextPort) && (
-            <div className="px-3 py-1 text-[10px] text-slate-400 bg-slate-950/60 border-b border-slate-800">
+            <div className="px-3 py-1 text-2xs text-dim-300 bg-ink-950/60 border-b border-line">
               {shiftInfo.lane ? `항로 ${shiftInfo.lane} · ` : ''}{shiftInfo.meta.origin || '출항지 미상'} 출항본 기준
               {shiftInfo.meta.rot === 'direct' ? ' — 다음 기항 평택(EDI): 도착 전 하선 없음'
                 : shiftInfo.meta.excluded ? ` — 평택 전 기항(${shiftInfo.meta.excluded.join('·')}) 양하 ${shiftInfo.meta.excludedCnt}대 제외${shiftInfo.meta.rot === 'edi' ? ' (다음 기항 EDI 실측)' : ' (항로 사전)'}`
                 : ' — 로테이션 미확인: 평택 전 기항 양하분이 섞여 있을 수 있음'}
             </div>
           )}
-          <div className="divide-y divide-slate-800">
+          <div className="divide-y divide-line">
             {shiftingList.map(sc => (
-              <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-[12px]">
-                <span className="mono font-bold text-slate-200">{sc.cn}</span>
-                <span className="text-slate-500">{sc.iso}</span>
-                {sc.pod && <span className="text-slate-500">{sc.pod}</span>}
+              <div key={sc.cn} className="px-3 py-1.5 flex items-center gap-2 text-xs2">
+                <span className="mono font-bold text-dim-100">{sc.cn}</span>
+                <span className="text-dim-400">{sc.iso}</span>
+                {sc.pod && <span className="text-dim-400">{sc.pod}</span>}
                 <span className="ml-auto mono text-blue-300">{sc.to ? `${sc.from} → ${sc.to}` : `${sc.from} (예측)`}</span>
               </div>
             ))}
@@ -2388,28 +2388,28 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
     return `${b}(${p})`;
   }).join(' · ');
   return (
-    <div className="bg-teal-950/40 border border-teal-700/50 rounded-lg p-3 space-y-2">
+    <div className="bg-teal-950/40 border border-teal-700/50 rounded-pill p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-[12px] font-bold text-teal-200">🔖 엠티실 부착 — 대상 {info.targets.length}대</div>
+        <div className="text-xs2 font-bold text-teal-200">🔖 엠티실 부착 — 대상 {info.targets.length}대</div>
         {has && !edit && (
           <button onClick={() => { setRows(info.ranges.map(r => ({ ...r }))); setEdit(true); }}
-            className="text-[10px] text-teal-400 underline">수정</button>
+            className="text-2xs text-teal-400 underline">수정</button>
         )}
       </div>
-      <div className="text-[11px] text-teal-300/90">베이별: {dist || '위치 미상'}</div>
+      <div className="text-xxs text-teal-300/90">베이별: {dist || '위치 미상'}</div>
       {(!has || edit) ? (
         <div className="space-y-1.5">
-          <div className="text-[12px] text-teal-100 font-bold">이번 항차 엠티실은 몇 번 실부터 ~ 몇 번 실까지입니까?</div>
-          <div className="text-[10px] text-teal-400/80">실은 6자리 — 100개가 넘어 앞 세 자리가 바뀌면 [+ 구간 추가]로 나눠 넣으세요.</div>
+          <div className="text-xs2 text-teal-100 font-bold">이번 항차 엠티실은 몇 번 실부터 ~ 몇 번 실까지입니까?</div>
+          <div className="text-2xs text-teal-400/80">실은 6자리 — 100개가 넘어 앞 세 자리가 바뀌면 [+ 구간 추가]로 나눠 넣으세요.</div>
           {rows.map((r, i) => (
             <div key={i} className="flex items-center gap-1.5">
               <input value={r.from} inputMode="numeric" placeholder="521001"
                 onChange={e => setRows(a => a.map((x, j) => (j === i ? { ...x, from: e.target.value.replace(/\D/g, '') } : x)))}
-                className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
+                className="flex-1 bg-ink-800 border border-line rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
               <span className="text-teal-400">~</span>
               <input value={r.to} inputMode="numeric" placeholder="522000"
                 onChange={e => setRows(a => a.map((x, j) => (j === i ? { ...x, to: e.target.value.replace(/\D/g, '') } : x)))}
-                className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
+                className="flex-1 bg-ink-800 border border-line rounded px-2 py-1.5 text-sm mono text-center text-teal-100"/>
               {rows.length > 1 && (
                 <button onClick={() => setRows(a => a.filter((_, j) => j !== i))} className="text-red-400 text-xs px-1">✕</button>
               )}
@@ -2417,17 +2417,17 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
           ))}
           <div className="flex gap-2">
             <button onClick={() => setRows(a => [...a, { from: '', to: '' }])}
-              className="flex-1 py-2 rounded bg-slate-800 border border-slate-600 text-slate-300 text-xs font-bold">+ 구간 추가</button>
+              className="flex-1 py-2 rounded bg-ink-800 border border-line-strong text-dim-200 text-xs font-bold">+ 구간 추가</button>
             <button onClick={save} disabled={saving}
               className="flex-1 py-2 rounded bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold">{saving ? '저장 중…' : '저장'}</button>
           </div>
         </div>
       ) : (
         <div className="space-y-1.5">
-          <div className="text-[11px] mono text-teal-100">
+          <div className="text-xxs mono text-teal-100">
             실 {info.ranges.map(r => `${r.from}~${r.to}`).join(' · ')} — 배정 {info.pool.length}개
           </div>
-          <div className="text-[11px] text-teal-300">
+          <div className="text-xxs text-teal-300">
             부착 {info.usedPairs.length} / 대상 {info.targets.length} · <b>잔여 실 {info.remain.length}개</b>
           </div>
           <button onClick={() => setShowList(v => !v)}
@@ -2443,7 +2443,7 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
             return (
               <div className="space-y-1.5">
                 <textarea readOnly value={full} rows={10}
-                  className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-[10px] mono text-slate-200"/>
+                  className="w-full bg-ink-950 border border-line rounded p-2 text-2xs mono text-dim-100"/>
                 <button onClick={() => { try { navigator.clipboard.writeText(full); alert('복사됐습니다'); } catch (e) { /* 무시 */ } }}
                   className="w-full py-2 rounded bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold">📋 복사 (카톡 제출용)</button>
               </div>
@@ -2513,22 +2513,22 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   }
   const uniq = [...new Set(hints)];
   return (
-    <div className="bg-slate-900 border border-emerald-700/60 rounded-xl p-3 space-y-2">
+    <div className="bg-ink-900 border border-emerald-700/60 rounded-btn p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-[11px] text-emerald-300 font-bold">💬 «{q}»</div>
-        <button onClick={() => setAsk(null)} className="text-slate-500 hover:text-slate-300 text-[11px] font-bold">✕ 닫기</button>
+        <div className="text-xxs text-emerald-300 font-bold">💬 «{q}»</div>
+        <button onClick={() => setAsk(null)} className="text-dim-400 hover:text-dim-200 text-xxs font-bold">✕ 닫기</button>
       </div>
       {answer ? (
         <>
-        <div className="text-sm text-slate-100 whitespace-pre-wrap leading-relaxed mono">{answer}</div>
+        <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{answer}</div>
         {resultPhotos.length > 0 && (
           <div className="pt-1">
-            <div className="text-[10px] font-black text-orange-300 mb-1">📷 사진 {resultPhotos.length}장 — 탭하면 크게 (씰 위치·고정 상태 등)</div>
+            <div className="text-2xs font-black text-orange-300 mb-1">📷 사진 {resultPhotos.length}장 — 탭하면 크게 (씰 위치·고정 상태 등)</div>
             <div className="flex gap-1.5 flex-wrap">
               {resultPhotos.map((p) => (
                 <button key={p.ts} onClick={() => setPhotoView(p)} className="text-left">
                   <img src={p.data} alt="" className="w-16 h-16 object-cover rounded border border-orange-700" />
-                  <div className="text-[9px] text-slate-400 w-16 truncate">{p.label || (p.type === 'damage' ? '데미지' : '메일')}</div>
+                  <div className="text-3xs text-dim-300 w-16 truncate">{p.label || (p.type === 'damage' ? '데미지' : '메일')}</div>
                 </button>
               ))}
             </div>
@@ -2537,18 +2537,18 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
         {photoView && (
           <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-3 gap-2" onClick={() => setPhotoView(null)}>
             {[photoView.data, photoView.detailPhoto].filter(Boolean).map((src, i) => (
-              <img key={i} src={src} alt="" className="max-h-[70vh] max-w-full rounded-lg border border-slate-600" />
+              <img key={i} src={src} alt="" className="max-h-[70vh] max-w-full rounded-pill border border-line-strong" />
             ))}
-            <div className="text-slate-200 text-[12px] font-bold text-center">{photoView.cn} — {photoView.label || ''}<br/>화면을 누르면 닫힙니다</div>
+            <div className="text-dim-100 text-xs2 font-bold text-center">{photoView.cn} — {photoView.label || ''}<br/>화면을 누르면 닫힙니다</div>
           </div>
         )}
         </>
       ) : (
-        <div className="text-[12px] text-slate-400">
+        <div className="text-xs2 text-dim-300">
           이 질문은 여기서 바로 못 냅니다 — 아래 버튼으로 ▶ 작업 시작 탭에서 이어집니다.
           {onFallback && (
             <button onClick={() => { const _q = q; setAsk(null); onFallback(_q); }}
-              className="mt-2 w-full py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
+              className="mt-2 w-full py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
               ▶ 작업 시작 탭에서 답 보기
             </button>
           )}
@@ -2558,7 +2558,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
         <div className="flex gap-2 flex-wrap">
           {uniq.map(h => (
             <button key={h} onClick={() => setAsk(a => ({ q: h, stack: [...(a?.stack || []), a?.q].filter(Boolean) }))}
-              className="flex-1 min-w-[110px] py-2.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
+              className="flex-1 min-w-[110px] py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
               🔍 {h} 보기
             </button>
           ))}
@@ -2567,7 +2567,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
               const s = [...(a?.stack || [])]; const prev = s.pop();
               return prev ? { q: prev, stack: s } : null;
             })}
-              className="flex-1 min-w-[110px] py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-600">
+              className="flex-1 min-w-[110px] py-2.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-100 font-bold text-sm border border-line-strong">
               ← 이전 답으로
             </button>
           )}
@@ -2673,7 +2673,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
 
   return (
     <div className="space-y-3">
-      <div className="bg-cyan-950/40 border border-cyan-800/40 rounded-lg px-3 py-2 text-[12px] text-cyan-200">
+      <div className="bg-cyan-950/40 border border-cyan-800/40 rounded-pill px-3 py-2 text-xs2 text-cyan-200">
         <b>LOLO 검수</b> — 베이 없이 리스트로 작업합니다. 컨테이너를 조회해 실체크·데미지·확인하면 누적분에 모입니다.
         <div className="mt-1 text-cyan-300/80">
           누적 {stats.done} / 전체 {stats.total}
@@ -2698,42 +2698,42 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
             }}
             placeholder={kb === 'numeric' ? '🎤 / 4777 / 컨번호 — ⌨로 질문' : '자유 질문 — Enter로 전송'}
             autoComplete="off"
-            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-lg pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-cyan-500"
+            className="w-full h-12 sm:h-11 bg-ink-900 border border-line rounded-pill pl-9 pr-2 text-base mono font-black text-amber-200 text-center tracking-wider focus:outline-none focus:bg-ink-800 focus:border-cyan-500"
           />
-          {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500"><X className="w-4 h-4"/></button>}
+          {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-dim-400"><X className="w-4 h-4"/></button>}
         </div>
         <button onClick={toggleListen} title="음성 입력"
-          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-slate-900'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-pill flex items-center justify-center flex-none ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-amber-500 hover:bg-amber-400 text-ink-950'}`}>
           🎤
         </button>
         <button onClick={() => setAutoRead(v => !v)} title="조회 결과 자동 읽기"
-          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-500'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-pill flex items-center justify-center flex-none text-[15px] ${autoRead ? 'bg-ink-750 text-amber-300' : 'bg-ink-800 text-dim-400'}`}>
           {autoRead ? '🔊' : '🔇'}
         </button>
         <button onClick={() => { setKb(k => (k === 'numeric' ? 'text' : 'numeric')); setTimeout(() => searchRef.current?.focus(), 50); }}
           title={kb === 'numeric' ? '문자 키보드로 (질문 입력)' : '숫자판으로 (작업 조회)'}
-          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-slate-700 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
+          className={`w-11 h-11 sm:w-9 sm:h-9 rounded-pill flex items-center justify-center flex-none text-[15px] ${kb === 'text' ? 'bg-ink-750 text-amber-300' : 'bg-ink-800 text-dim-300'}`}>
           ⌨
         </button>
       </div>
 
       {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
-      <div className="flex gap-1.5 flex-wrap text-[12px] sm:text-[11px]">
+      <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
         {[
           { k: 'all', t: `전체 ${stats.total}` },
           { k: 'undone', t: `미처리 ${stats.total - stats.done}` },
           { k: 'done', t: `누적(처리) ${stats.done}` },
         ].map(({ k, t }) => (
           <button key={k} onClick={() => setFilter(f => (f === k ? null : k))}
-            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-lg font-bold transition-colors ${
+            className={`inline-flex items-center h-9 sm:h-8 px-3 rounded-pill font-bold transition-colors ${
               filter === k ? 'bg-cyan-700 text-cyan-100' : 'bg-ink-850 text-dim-200 hover:bg-ink-750'
             }`}>{t}</button>
         ))}
       </div>
 
       {searchFallback && (
-        <div className="bg-amber-950/50 border border-amber-700/60 rounded-lg px-3 py-2 text-[12px] text-amber-200">
+        <div className="bg-amber-950/50 border border-amber-700/60 rounded-pill px-3 py-2 text-xs2 text-amber-200">
           ⚠ <b>갠트리(덱플랜) 지정에 없는 컨</b> — 이번 항차 전체에서 찾았습니다.
           배에는 실었는데 지정 자리에 없는 경우 = <b>상대 항구 선적 과실</b>입니다. 실물 위치를 기록해 두세요.
         </div>
@@ -2751,7 +2751,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         dupSeals={dupSeals}
       />
       ) : (
-        <div className="text-center text-[13px] sm:text-[12px] text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
+        <div className="text-center text-sm2 sm:text-xs2 text-dim-300 py-8 bg-ink-900/40 border border-line rounded-card">
           위 칩을 누르거나 검색하면 그 컨테이너만 보입니다
         </div>
       )}
@@ -3713,12 +3713,12 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       {/* M5.26: 통합 출력 진입 */}
       <button
         onClick={() => setShowPrintHub(true)}
-        className="w-full bg-gradient-to-br from-amber-900/40 to-orange-900/40 hover:from-amber-900/60 border border-amber-700/50 rounded-lg p-3 flex items-center gap-3 active:scale-[0.98] transition"
+        className="w-full bg-gradient-to-br from-amber-900/40 to-orange-900/40 hover:from-amber-900/60 border border-amber-700/50 rounded-pill p-3 flex items-center gap-3 active:scale-[0.98] transition"
       >
         <span className="text-2xl">📄</span>
         <div className="flex-1 text-left">
           <div className="font-bold text-amber-100">검수 자료 출력</div>
-          <div className="text-[10px] text-amber-300/80">양하/선적 × 검수리스트 / 카고플랜 / 베이상세 통합</div>
+          <div className="text-2xs text-amber-300/80">양하/선적 × 검수리스트 / 카고플랜 / 베이상세 통합</div>
         </div>
         <span className="text-amber-300">›</span>
       </button>
@@ -3732,11 +3732,11 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       {/* V9.25: 🧪 검증 모드 — 검수원 '김성일' 선택 시에만 노출 (사용자 요청: "저만 보이게") */}
       {inspector === '김성일' && (
         <button onClick={() => setShowTestLab(true)}
-          className="w-full bg-fuchsia-950/40 hover:bg-fuchsia-900/50 border border-fuchsia-700/50 rounded-lg p-3 flex items-center gap-3 active:scale-[0.98] transition">
+          className="w-full bg-fuchsia-950/40 hover:bg-fuchsia-900/50 border border-fuchsia-700/50 rounded-pill p-3 flex items-center gap-3 active:scale-[0.98] transition">
           <span className="text-2xl">🧪</span>
           <div className="flex-1 text-left">
             <div className="font-bold text-fuchsia-200">검증 모드 (테스트 랩)</div>
-            <div className="text-[10px] text-fuchsia-300/70">검수확인 전체 취소 등 재검수 도구 — 성일님 전용</div>
+            <div className="text-2xs text-fuchsia-300/70">검수확인 전체 취소 등 재검수 도구 — 성일님 전용</div>
           </div>
           <span className="text-fuchsia-300">›</span>
         </button>
@@ -3775,15 +3775,15 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
         onList={handleListUpload}
         onXray={handleXrayUpload}
       />
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+      <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileText className="w-4 h-4 text-blue-400"/>
-          1. EDI / ASC (필수) <span className="text-[10px] text-cyan-400 font-normal">+ .def / STOWAGE PDF</span>
+          1. EDI / ASC (필수) <span className="text-2xs text-cyan-400 font-normal">+ .def / STOWAGE PDF</span>
         </div>
         <input ref={ediRef} type="file" multiple accept="*/*"
           onChange={e => handleEdiUpload(e.target.files)}
-          className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-700 file:text-blue-100 file:font-bold file:cursor-pointer"/>
-        <div className="text-[10px] text-slate-500 mt-1">
+          className="text-xs text-dim-200 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-blue-700 file:text-blue-100 file:font-bold file:cursor-pointer"/>
+        <div className="text-2xs text-dim-400 mt-1">
           현재 EDI 컨테이너: {Object.keys(sec.ediContainers || {}).length}대
           <br/>지원: .edi .asc .txt (확장자 무관, 내용으로 판별)
           <br/><span className="text-cyan-400">📚 .def (CASP) 같이 올리면 베이사전 자동 등록</span>
@@ -3793,27 +3793,27 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
 
         {/* M5.11: 보관된 EDI 원본 + 재처리 버튼 */}
         {rawMeta?.text ? (
-          <div className="mt-2 pt-2 border-t border-slate-800/60">
+          <div className="mt-2 pt-2 border-t border-line-soft">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] text-emerald-400 font-bold">💾 EDI 원본 보관됨</span>
-              <span className="text-[10px] text-slate-500 mono">
+              <span className="text-xxs text-emerald-400 font-bold">💾 EDI 원본 보관됨</span>
+              <span className="text-2xs text-dim-400 mono">
                 {(rawMeta.sizeBytes / 1024).toFixed(1)}KB
                 · {rawMeta.parserVersion || '?'}
                 {rawMeta.uploadedAt && ` · ${new Date(rawMeta.uploadedAt).toLocaleString('ko-KR', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}`}
               </span>
             </div>
             <button onClick={handleReprocess}
-              className="mt-1.5 w-full bg-slate-700/60 hover:bg-slate-700 active:bg-slate-800 text-slate-200 px-3 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5">
-              🔄 EDI 다시 분석 <span className="text-slate-400 font-normal">(선택사항)</span>
+              className="mt-1.5 w-full bg-ink-750/60 hover:bg-ink-750 active:bg-ink-750 text-dim-100 px-3 py-2 rounded text-xs font-bold flex items-center justify-center gap-1.5">
+              🔄 EDI 다시 분석 <span className="text-dim-300 font-normal">(선택사항)</span>
             </button>
-            <div className="text-[10px] text-slate-500 mt-1 leading-tight">
+            <div className="text-2xs text-dim-400 mt-1 leading-tight">
               필요시에만. 검수 입력(실번호/사진/완료/X-RAY)은 항상 보존됨.
             </div>
           </div>
         ) : null /* M5.27: "다음 EDI 업로드부터..." 안내 메시지 제거 — 사용자 혼란 유발 */}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+      <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="text-sm font-bold mb-2 flex items-center gap-2">
           <FileSpreadsheet className="w-4 h-4 text-emerald-400"/>
           2. {mode === 'discharge' ? '양하' : '선적'} 리스트
@@ -3822,7 +3822,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
           <input ref={listRef} type="file" multiple
             accept="*/*"
             onChange={e => handleListUpload(e.target.files)}
-            className="flex-1 text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-700 file:text-emerald-100 file:font-bold file:cursor-pointer"/>
+            className="flex-1 text-xs text-dim-200 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-emerald-700 file:text-emerald-100 file:font-bold file:cursor-pointer"/>
           <button
             onClick={() => cameraRef.current?.click()}
             className="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 flex-shrink-0"
@@ -3834,22 +3834,22 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             onChange={e => { handleListUpload(e.target.files); if (cameraRef.current) cameraRef.current.value = ''; }}
             className="hidden"/>
         </div>
-        <div className="text-[10px] text-slate-500">
+        <div className="text-2xs text-dim-400">
           현재 리스트: {Object.keys(sec.records || {}).length}대
           <br/>📊 엑셀 (.xls .xlsx .csv) · 📄 PDF · 📷 사진 (자동 인식)
         </div>
       </div>
 
       {mode === 'discharge' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+        <div className="bg-ink-900 border border-line rounded-pill p-3">
           <div className="text-sm font-bold mb-2 flex items-center gap-2">
             🔍 3. X-RAY 리스트 (양하만)
           </div>
           <input ref={xrayRef} type="file" multiple
             accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"
             onChange={e => handleXrayUpload(e.target.files)}
-            className="text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-purple-700 file:text-purple-100 file:font-bold file:cursor-pointer"/>
-          <div className="text-[10px] text-slate-500 mt-1">
+            className="text-xs text-dim-200 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-purple-700 file:text-purple-100 file:font-bold file:cursor-pointer"/>
+          <div className="text-2xs text-dim-400 mt-1">
             현재 X-RAY: {Object.keys(sec.xrayList || {}).length}대
             {(() => {   // V7.94-03: EDI/리스트에 없는 X-RAY 컨번호 노출 + V7.94-04: 잔존 키 정리 버튼
               //   업로드는 누적(merge) 방식 — 이전 업로드의 옛 키가 안 지워져 미매칭 잔존 발생 (사용자 제보)
@@ -3878,15 +3878,15 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       )}
 
       {!hasOther && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
-          <div className="text-xs text-slate-400">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
+        <div className="bg-ink-900 border border-line rounded-pill p-3 space-y-2">
+          <div className="text-xs text-dim-300">이 항차에 {otherMode === 'discharge' ? '양하' : '선적'} 작업이 같이 있나요?</div>
           {/* M6.46: voy 입력 받기 — 추측하지 않음 */}
           <input
             type="text"
             value={otherVoyInput}
             onChange={e => setOtherVoyInput(e.target.value.toUpperCase())}
             placeholder={`${otherMode === 'discharge' ? '양하' : '선적'} 항차 번호 (예: ${otherMode === 'discharge' ? '0521E' : '0521W'})`}
-            className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs uppercase mono focus:outline-none focus:border-blue-500"
+            className="w-full bg-ink-800 border border-line rounded px-2 py-1.5 text-xs uppercase mono focus:outline-none focus:border-blue-500"
           />
           <button
             onClick={async () => {
@@ -3906,8 +3906,8 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
             disabled={!otherVoyInput.trim()}
             className={`w-full py-2 rounded text-sm font-bold ${
               otherMode === 'discharge'
-                ? 'bg-blue-900/50 hover:bg-blue-800 disabled:bg-slate-800 text-blue-100 border border-blue-700/40 disabled:text-slate-500'
-                : 'bg-amber-900/50 hover:bg-amber-800 disabled:bg-slate-800 text-amber-100 border border-amber-700/40 disabled:text-slate-500'
+                ? 'bg-blue-900/50 hover:bg-blue-800 disabled:bg-ink-800 text-blue-100 border border-blue-700/40 disabled:text-dim-400'
+                : 'bg-amber-900/50 hover:bg-amber-800 disabled:bg-ink-800 text-amber-100 border border-amber-700/40 disabled:text-dim-400'
             }`}
           >
             + {otherMode === 'discharge' ? '양하' : '선적'} 섹션 추가
@@ -3916,7 +3916,7 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
       )}
 
       {status && (
-        <pre className="bg-slate-950 border border-slate-800 rounded p-2 text-[11px] text-slate-300 whitespace-pre-wrap mono">
+        <pre className="bg-ink-950 border border-line rounded p-2 text-xxs text-dim-200 whitespace-pre-wrap mono">
 {status}
         </pre>
       )}
@@ -3940,9 +3940,9 @@ function DataTab({ voyageKey, mode, voyage, setMode, inspector }) {
 
 function ModeSetup({ voyageKey }) {
   return (
-    <div className="bg-amber-900/30 border border-amber-800 rounded-lg p-4 text-center mb-3">
+    <div className="bg-amber-900/30 border border-amber-800 rounded-pill p-4 text-center mb-3">
       <div className="text-amber-200 text-sm mb-2">자료를 업로드해주세요</div>
-      <div className="text-[11px] text-amber-300/70">자료 탭에서 EDI/ASC 파일부터 시작하세요</div>
+      <div className="text-xxs text-amber-300/70">자료 탭에서 EDI/ASC 파일부터 시작하세요</div>
     </div>
   );
 }
@@ -3963,24 +3963,24 @@ function WorkReportHistory({ voyageKey }) {
     .sort((a, b) => (b.ts || b.at || 0) - (a.ts || a.at || 0));
   if (list.length === 0) return null;
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+    <div className="bg-ink-900 border border-line rounded-pill overflow-hidden">
       <button onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-3 py-2.5 text-left" style={{ minHeight: 44 }}>
-        <span className="text-[13px] font-bold text-slate-200">📤 이 항차 작업 보고 {list.length}건 {open ? '접기' : '보기'}</span>
-        <span className="text-slate-500 text-xs">{open ? '▲' : '▼'}</span>
+        <span className="text-sm2 font-bold text-dim-100">📤 이 항차 작업 보고 {list.length}건 {open ? '접기' : '보기'}</span>
+        <span className="text-dim-400 text-xs">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div className="px-3 pb-3 max-h-80 overflow-y-auto space-y-1">
           {list.slice(0, 50).map(r => (
-            <div key={r.k} className="text-[12px] bg-slate-800/60 rounded px-2.5 py-1.5">
+            <div key={r.k} className="text-xs2 bg-ink-800/60 rounded px-2.5 py-1.5">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-200">{({work_status:'작업',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${String(r.equip).endsWith('호기') ? r.equip : `${r.equip}호기`}` : ''}</span>
-                <span className="text-slate-500 mono">{(r.ts || r.at) ? new Date(r.ts || r.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                <span className="font-bold text-dim-100">{({work_status:'작업',hatch:'해치',conbox:'콘박스',daynight:'주야간',stop:'중단'}[r.type]) || r.type || '보고'}{r.action ? ` · ${r.action}` : ''}{r.equip ? ` · ${String(r.equip).endsWith('호기') ? r.equip : `${r.equip}호기`}` : ''}</span>
+                <span className="text-dim-400 mono">{(r.ts || r.at) ? new Date(r.ts || r.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
               </div>
               {(r.text || r.message || r.summary) && (
-                <div className="text-slate-400 whitespace-pre-wrap mt-0.5 leading-snug">{String(r.text || r.message || r.summary).slice(0, 200)}</div>
+                <div className="text-dim-300 whitespace-pre-wrap mt-0.5 leading-snug">{String(r.text || r.message || r.summary).slice(0, 200)}</div>
               )}
-              {r.by && <div className="text-slate-600 text-[11px] mt-0.5">{r.by}</div>}
+              {r.by && <div className="text-dim-500 text-xxs mt-0.5">{r.by}</div>}
             </div>
           ))}
         </div>
@@ -4018,22 +4018,22 @@ function ForecastCard({ voyage, mode }) {
     || ((f.calc?.full || 0) + (f.calc?.empty || 0) + (f.calc?.luggage || 0));
 
   return (
-    <div className="bg-slate-900 border border-dashed border-orange-600/60 rounded-lg p-3 mb-3">
+    <div className="bg-ink-900 border border-dashed border-orange-600/60 rounded-pill p-3 mb-3">
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <span className="text-sm font-black text-orange-300">
           📋 {mode === 'loading' ? '선적' : '양하'} 예보{f.voy ? ` · ${f.voy}` : ''}
         </span>
-        <span className="text-[11px] font-bold text-orange-200">{totVan}대 · {totTeu}TEU</span>
-        <span className="text-[10px] text-slate-500 ml-auto">
+        <span className="text-xxs font-bold text-orange-200">{totVan}대 · {totTeu}TEU</span>
+        <span className="text-2xs text-dim-400 ml-auto">
           리스트(EDI)가 오면 이 카드는 사라지고 실자료로 바뀝니다
         </span>
       </div>
 
       {rows.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
+          <table className="w-full text-xs2">
             <thead>
-              <tr className="text-slate-500 text-[10px] border-b border-slate-700">
+              <tr className="text-dim-400 text-2xs border-b border-line">
                 <th className="text-left py-1 pr-2 font-bold">구분</th>
                 <th className="text-left py-1 pr-2 font-bold">규격</th>
                 <th className="text-right py-1 pr-2 font-bold">대수</th>
@@ -4041,10 +4041,10 @@ function ForecastCard({ voyage, mode }) {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i} className="border-b border-slate-800/70">
+                <tr key={i} className="border-b border-line/70">
                   <td className={`py-1 pr-2 font-bold ${r.cls}`}>{r.label}</td>
-                  <td className="py-1 pr-2 text-slate-200 font-mono">{r.size}</td>
-                  <td className="py-1 pr-2 text-right text-slate-100 font-bold">{r.n}</td>
+                  <td className="py-1 pr-2 text-dim-100 font-mono">{r.size}</td>
+                  <td className="py-1 pr-2 text-right text-dim-100 font-bold">{r.n}</td>
                 </tr>
               ))}
             </tbody>
@@ -4055,8 +4055,8 @@ function ForecastCard({ voyage, mode }) {
       {f.image && (
         <div className="mt-2">
           <img src={f.image} alt="예보 그림" onClick={() => setZoom(true)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 object-contain max-h-72 cursor-zoom-in"/>
-          <div className="text-[10px] text-slate-500 mt-0.5">그림을 누르면 크게 봅니다</div>
+            className="w-full rounded-pill border border-line bg-ink-950 object-contain max-h-72 cursor-zoom-in"/>
+          <div className="text-2xs text-dim-400 mt-0.5">그림을 누르면 크게 봅니다</div>
         </div>
       )}
       {zoom && f.image && (
@@ -4067,8 +4067,8 @@ function ForecastCard({ voyage, mode }) {
 
       {f.raw && (
         <details className="mt-2">
-          <summary className="text-[10px] text-slate-500 cursor-pointer">카톡 원문 보기</summary>
-          <pre className="text-[10px] text-slate-400 whitespace-pre-wrap mt-1 leading-relaxed">{f.raw}</pre>
+          <summary className="text-2xs text-dim-400 cursor-pointer">카톡 원문 보기</summary>
+          <pre className="text-2xs text-dim-300 whitespace-pre-wrap mt-1 leading-relaxed">{f.raw}</pre>
         </details>
       )}
     </div>

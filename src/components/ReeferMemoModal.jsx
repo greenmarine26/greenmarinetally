@@ -129,67 +129,67 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-slate-900 border border-cyan-800/60 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl max-h-[92vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+      <div className="bg-ink-900 border border-cyan-800/60 rounded-t-2xl sm:rounded-card w-full sm:max-w-3xl max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
           <div className="flex items-center gap-2">
             <Snowflake className="w-4 h-4 text-cyan-400"/>
             <span className="font-bold text-cyan-200 text-[14px]">리퍼 온도 확인</span>
-            <span className="text-[11px] text-slate-500">{list.length}대</span>
+            <span className="text-xxs text-dim-400">{list.length}대</span>
           </div>
-          <button onClick={() => onClose?.(false)} className="text-slate-500 p-2" style={{ minHeight: 40 }}><X className="w-5 h-5"/></button>
+          <button onClick={() => onClose?.(false)} className="text-dim-400 p-2" style={{ minHeight: 40 }}><X className="w-5 h-5"/></button>
         </div>
 
         {step === 'pick' && (
           <div className="p-4 space-y-2">
             <button onClick={() => camRef.current?.click()} disabled={!!busy}
-              className="w-full text-left px-4 py-3 rounded-lg bg-cyan-900/50 hover:bg-cyan-800/60 border border-cyan-700/40 disabled:opacity-50" style={{ minHeight: 56 }}>
+              className="w-full text-left px-4 py-3 rounded-pill bg-cyan-900/50 hover:bg-cyan-800/60 border border-cyan-700/40 disabled:opacity-50" style={{ minHeight: 56 }}>
               <span className="text-[14px] font-bold text-cyan-100 flex items-center gap-2">
                 {busy === 'photo' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
                 {busy === 'photo' ? '읽는 중…' : '선원 리스트 촬영'}
               </span>
-              <span className="block text-[11px] text-cyan-300/70 mt-0.5">종이 리스트를 찍으면 온도를 읽어 채웁니다 · <button onClick={(e) => { e.stopPropagation(); albumRef.current?.click(); }} className="underline">앨범에서</button>도 가능</span>
+              <span className="block text-xxs text-cyan-300/70 mt-0.5">종이 리스트를 찍으면 온도를 읽어 채웁니다 · <button onClick={(e) => { e.stopPropagation(); albumRef.current?.click(); }} className="underline">앨범에서</button>도 가능</span>
             </button>
             <button onClick={() => applyAll()} disabled={!!busy}
-              className="w-full text-left px-4 py-3 rounded-lg bg-slate-800/70 hover:bg-slate-700/70 border border-slate-600/40 disabled:opacity-50" style={{ minHeight: 56 }}>
-              <span className="text-[14px] font-bold text-slate-100">전부 리스트대로</span>
-              <span className="block text-[11px] text-slate-400 mt-0.5">EDI 온도 그대로 인정 — 한 번에 {list.length}대 채우고 확인만 누르면 끝</span>
+              className="w-full text-left px-4 py-3 rounded-pill bg-ink-800/70 hover:bg-ink-750/70 border border-line-strong/40 disabled:opacity-50" style={{ minHeight: 56 }}>
+              <span className="text-[14px] font-bold text-dim-100">전부 리스트대로</span>
+              <span className="block text-xxs text-dim-300 mt-0.5">EDI 온도 그대로 인정 — 한 번에 {list.length}대 채우고 확인만 누르면 끝</span>
             </button>
             <button onClick={() => setStep('edit')} disabled={!!busy}
-              className="w-full text-left px-4 py-3 rounded-lg bg-slate-800/70 hover:bg-slate-700/70 border border-slate-600/40 disabled:opacity-50" style={{ minHeight: 56 }}>
-              <span className="text-[14px] font-bold text-slate-100">수기 입력</span>
-              <span className="block text-[11px] text-slate-400 mt-0.5">목록을 열어 EDI와 다른 컨만 직접 고칩니다</span>
+              className="w-full text-left px-4 py-3 rounded-pill bg-ink-800/70 hover:bg-ink-750/70 border border-line-strong/40 disabled:opacity-50" style={{ minHeight: 56 }}>
+              <span className="text-[14px] font-bold text-dim-100">수기 입력</span>
+              <span className="block text-xxs text-dim-300 mt-0.5">목록을 열어 EDI와 다른 컨만 직접 고칩니다</span>
             </button>
             <div className="text-right">
-              <button onClick={() => onClose?.(false)} className="text-[12px] text-slate-500 px-2 py-1">나중에</button>
+              <button onClick={() => onClose?.(false)} className="text-xs2 text-dim-400 px-2 py-1">나중에</button>
             </div>
             <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden"/>
             <input ref={albumRef} type="file" accept="image/*" onChange={onPhoto} className="hidden"/>
-            {note && <div className="text-[11px] text-amber-300">{note}</div>}
+            {note && <div className="text-xxs text-amber-300">{note}</div>}
           </div>
         )}
 
         {step === 'edit' && <>
         {/* 상단 — 많을 때 일일이 못 하니 사진·일괄 두 길을 먼저 준다 */}
-        <div className="px-4 py-2 border-b border-slate-800 flex items-center gap-2 flex-wrap">
+        <div className="px-4 py-2 border-b border-line flex items-center gap-2 flex-wrap">
           <button onClick={() => camRef.current?.click()} disabled={!!busy}
-            className="px-3 py-2 rounded-lg text-[12px] font-bold bg-violet-800 hover:bg-violet-700 text-violet-100 flex items-center gap-1 disabled:opacity-50"
+            className="px-3 py-2 rounded-pill text-xs2 font-bold bg-violet-800 hover:bg-violet-700 text-violet-100 flex items-center gap-1 disabled:opacity-50"
             style={{ minHeight: 40 }}>
             {busy === 'photo' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Camera className="w-4 h-4"/>}
             {busy === 'photo' ? '읽는 중…' : '선원 리스트 촬영'}
           </button>
           <button onClick={() => albumRef.current?.click()} disabled={!!busy}
-            className="px-3 py-2 rounded-lg text-[12px] bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-50"
+            className="px-3 py-2 rounded-pill text-xs2 bg-ink-800 hover:bg-ink-750 text-dim-200 disabled:opacity-50"
             style={{ minHeight: 40 }}>앨범에서</button>
-          <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/60 text-[12px] text-slate-300 cursor-pointer" style={{ minHeight: 40 }}>
+          <label className="flex items-center gap-2 px-3 py-2 rounded-pill bg-ink-800/60 text-xs2 text-dim-200 cursor-pointer" style={{ minHeight: 40 }}>
             <input type="checkbox" onChange={(e) => e.target.checked && applyAll()} className="w-4 h-4 accent-cyan-500"/>
             전부 리스트대로 (EDI 온도 그대로 인정)
           </label>
           <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={onPhoto} className="hidden"/>
           <input ref={albumRef} type="file" accept="image/*" onChange={onPhoto} className="hidden"/>
         </div>
-        {note && <div className="px-4 py-1.5 text-[11px] text-amber-300 border-b border-slate-800">{note}</div>}
+        {note && <div className="px-4 py-1.5 text-xxs text-amber-300 border-b border-line">{note}</div>}
 
-        <div className="px-4 py-1 grid grid-cols-[1fr_58px_72px_72px] gap-1 text-[10px] text-slate-500 border-b border-slate-800">
+        <div className="px-4 py-1 grid grid-cols-[1fr_58px_72px_72px] gap-1 text-2xs text-dim-400 border-b border-line">
           <span>컨테이너 번호</span><span className="text-center">EDI</span><span className="text-center">셋팅</span><span className="text-center">실제</span>
         </div>
 
@@ -199,31 +199,31 @@ export default function ReeferMemoModal({ containers, voyageKey, mode, inspector
             const v = vals[c.cn] || { set: '', act: '' };
             const changed = (v.set !== edi) || (v.act !== edi);
             return (
-              <div key={c.cn} className="grid grid-cols-[1fr_58px_72px_72px] gap-1 items-center py-1 border-b border-slate-800/50">
+              <div key={c.cn} className="grid grid-cols-[1fr_58px_72px_72px] gap-1 items-center py-1 border-b border-line-soft">
                 <div className="min-w-0">
-                  <div className="text-[12px] mono text-slate-200 truncate">{c.cn}</div>
-                  <div className="text-[10px] text-slate-600">
+                  <div className="text-xs2 mono text-dim-100 truncate">{c.cn}</div>
+                  <div className="text-2xs text-dim-500">
                     {[c.bay, c.row, c.tier].filter(Boolean).join('/')}
                     {v.src === 'photo' && <span className="text-violet-400 ml-1">📷</span>}
                     {changed && <span className="text-amber-400 ml-1">수정</span>}
                   </div>
                 </div>
-                <div className="text-[12px] mono text-center text-slate-500">{edi || '—'}</div>
+                <div className="text-xs2 mono text-center text-dim-400">{edi || '—'}</div>
                 <input value={v.set} onChange={(e) => setField(c.cn, 'set', e.target.value)}
                   inputMode="text" placeholder="—"
-                  className="bg-slate-800 border border-slate-700 focus:border-cyan-600 rounded px-1 py-1.5 text-[12px] mono text-center text-cyan-200 focus:outline-none w-full"/>
+                  className="bg-ink-800 border border-line focus:border-cyan-600 rounded px-1 py-1.5 text-xs2 mono text-center text-cyan-200 focus:outline-none w-full"/>
                 <input value={v.act} onChange={(e) => setField(c.cn, 'act', e.target.value)}
                   inputMode="text" placeholder="—"
-                  className="bg-slate-800 border border-slate-700 focus:border-emerald-600 rounded px-1 py-1.5 text-[12px] mono text-center text-emerald-200 focus:outline-none w-full"/>
+                  className="bg-ink-800 border border-line focus:border-emerald-600 rounded px-1 py-1.5 text-xs2 mono text-center text-emerald-200 focus:outline-none w-full"/>
               </div>
             );
           })}
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-800 flex items-center gap-2">
-          <button onClick={() => onClose?.(false)} className="px-3 py-2 rounded-lg text-[12px] bg-slate-800 text-slate-400" style={{ minHeight: 44 }}>나중에</button>
+        <div className="px-4 py-3 border-t border-line flex items-center gap-2">
+          <button onClick={() => onClose?.(false)} className="px-3 py-2 rounded-pill text-xs2 bg-ink-800 text-dim-300" style={{ minHeight: 44 }}>나중에</button>
           <button onClick={save} disabled={!!busy}
-            className="flex-1 px-3 py-2 rounded-lg text-[13px] font-bold bg-cyan-700 hover:bg-cyan-600 text-white flex items-center justify-center gap-1 disabled:opacity-50"
+            className="flex-1 px-3 py-2 rounded-pill text-sm2 font-bold bg-cyan-700 hover:bg-cyan-600 text-white flex items-center justify-center gap-1 disabled:opacity-50"
             style={{ minHeight: 44 }}>
             {busy === 'save' ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}
             확인 완료 ({list.length}대)

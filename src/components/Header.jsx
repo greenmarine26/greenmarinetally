@@ -76,15 +76,15 @@ export default function Header({ version, inspector, online, route, voyages, onC
               자리를 더 먹지 않는다 — 종전 홈 버튼이 있던 그 칸이다(V9.15 헤더 폭 규칙 유지). */}
           {route.name !== 'home' ? (
             <button onClick={onGoHome} title="홈으로 (항차 선택 화면)"
-              className="relative w-11 h-11 rounded-xl flex-shrink-0 hover:brightness-110 active:brightness-95 transition">
-              <img src={logoUrl} alt="홈으로" draggable="false" className="w-11 h-11 rounded-xl select-none"/>
+              className="relative w-11 h-11 rounded-btn flex-shrink-0 hover:brightness-110 active:brightness-95 transition">
+              <img src={logoUrl} alt="홈으로" draggable="false" className="w-11 h-11 rounded-btn select-none"/>
               <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-md bg-blue-600 border border-blue-300/60 flex items-center justify-center">
                 <Home className="w-2.5 h-2.5 text-white"/>
               </span>
             </button>
           ) : (
             <img src={logoUrl} alt="TallyOne" draggable="false"
-              className="w-11 h-11 rounded-xl flex-shrink-0 select-none"/>
+              className="w-11 h-11 rounded-btn flex-shrink-0 select-none"/>
           )}
           <div className="min-w-0">
             <div className="font-bold text-sm text-dim-100 truncate leading-tight">

@@ -42,14 +42,14 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
         <div className="shrink-0 bg-ink-950/95 border-t border-line px-4 py-3 flex items-center gap-3">
           <div className="min-w-0 flex-1">
             {lines.map((line, i) => (
-              <div key={i} className={`${i === 0 ? 'text-[15px] font-black text-white' : 'text-[12px] text-dim-200'} leading-snug truncate`}>
+              <div key={i} className={`${i === 0 ? 'text-[15px] font-black text-white' : 'text-xs2 text-dim-200'} leading-snug truncate`}>
                 {line}
               </div>
             ))}
           </div>
           <button
             onClick={onClose}
-            className="h-12 px-5 shrink-0 rounded-lg bg-act text-act-on font-bold text-sm whitespace-nowrap"
+            className="h-12 px-5 shrink-0 rounded-pill bg-act text-act-on font-bold text-sm whitespace-nowrap"
           >
             로그아웃 완료
           </button>
@@ -68,7 +68,7 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className={`bg-gradient-to-br ${bgGradient} border-2 ${borderColor} rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto`}
+        className={`bg-gradient-to-br ${bgGradient} border-2 ${borderColor} rounded-card w-full max-w-md p-6 shadow-card max-h-[90vh] overflow-y-auto`}
         onClick={e => e.stopPropagation()}
       >
         <div className={`text-xs font-bold ${titleColor} mb-3 uppercase tracking-wider`}>
@@ -79,7 +79,7 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
           {lines.map((line, i) => (
             <div
               key={i}
-              className={`${i === 0 ? 'text-2xl font-black text-white' : 'text-base text-slate-100'} leading-snug`}
+              className={`${i === 0 ? 'text-2xl font-black text-white' : 'text-base text-dim-100'} leading-snug`}
             >
               {line}
             </div>
@@ -88,11 +88,11 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
 
         {/* M3.68: 근무 시간대 예보 (로그인 시만) */}
         {isLogin && workForecast && workForecast.length > 0 && (
-          <div className="mb-4 p-3 bg-slate-900/50 border border-slate-600 rounded-lg">
-            <div className="text-[10px] font-bold text-slate-400 mb-2 uppercase">근무 시간 예보</div>
+          <div className="mb-4 p-3 bg-ink-900/50 border border-line-strong rounded-pill">
+            <div className="text-2xs font-bold text-dim-300 mb-2 uppercase">근무 시간 예보</div>
             <div className="space-y-1.5">
               {workForecast.map((line, i) => (
-                <div key={i} className="text-sm font-mono text-slate-200">
+                <div key={i} className="text-sm font-mono text-dim-100">
                   {line}
                 </div>
               ))}
@@ -100,8 +100,8 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-3 text-[11px] text-slate-400">
-          <div className="flex-1 bg-slate-800 rounded-full h-1 overflow-hidden">
+        <div className="flex items-center gap-2 mb-3 text-xxs text-dim-300">
+          <div className="flex-1 bg-ink-800 rounded-full h-1 overflow-hidden">
             <div
               className={`h-full ${isLogin ? 'bg-emerald-500' : 'bg-purple-500'} transition-all duration-1000`}
               style={{ width: `${(remaining / totalSec) * 100}%` }}
@@ -112,7 +112,7 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
 
         <button
           onClick={onClose}
-          className={`w-full py-3 rounded-lg font-bold text-base ${
+          className={`w-full py-3 rounded-pill font-bold text-base ${
             isLogin
               ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
               : 'bg-purple-600 hover:bg-purple-500 text-white'
