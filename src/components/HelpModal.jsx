@@ -144,7 +144,7 @@ function HelpBlock({ b }) {
           또 많은 자료를 잃을수가 있기 때문입니다». 경고(⚠)와 **다른 칸**으로 둔다 — 섞으면 안 읽는다. */}
       {b.never && b.never.length > 0 && (
         <div className="mt-2 rounded-lg border-2 border-red-800/60 bg-red-950/40 px-2.5 py-2">
-          <div className="text-[10px] font-black text-red-300 tracking-wide mb-1">⛔ 한 번 잘못 누르면 잃는 것</div>
+          <div className="text-[10px] font-black text-red-300 tracking-wide mb-1">{b.neverTitle || '⛔ 한 번 잘못 누르면 잃는 것'}</div>
           <div className="space-y-1">
             {b.never.map((w, i) => (
               <div key={i} className="flex gap-1.5 text-[11px] sm:text-xs text-red-100/90 leading-relaxed">

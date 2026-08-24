@@ -8,6 +8,7 @@ import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeong
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
+import { HELP_DATA_CHIEF } from './data/helpDataChief.js';   // 2.30: 미르가 수석 권도 안다(가르치진 않고 «있다»고 알린다)
 
 // ─── 항구 코드 매핑 ───
 const PORT_KR_TO_CODE = {
@@ -639,14 +640,21 @@ let _htManual = null;
 function _htManualIndex() {
   if (_htManual) return _htManual;
   const out = [];
-  const push = (b) => out.push({
-    l: b.title || '', w: b.where || '', d: b.lead || '', r: 't', a: [],
+  //  2.30: **블록 원본(b)을 그대로 달고 다닌다** — 종전엔 제목·자리·머리글만 답에 썼고
+  //    순서(dos)·경고(warns)는 검색용 blob 에만 넣어 **답에는 한 줄도 안 나갔다.**
+  //    검수사 지시 «메뉴얼 만들면서 생긴 지식을 미르에게 인식 시켜 주세요 미르가 교관이 될수 있도록».
+  //    매뉴얼이 **단일 소스**다 — 여기에 지식을 따로 복사해 두지 않는다.
+  const push = (r) => (b) => out.push({
+    l: b.title || '', w: b.where || '', d: b.lead || '', r, a: b.keys || [], b,
     blob: [b.title, b.where, b.lead, ...(b.dos || []), ...(b.warns || []),
+           ...(b.why || []), ...(b.never || []),
            ...((b.says || []).flatMap(s => [s.in, s.out]))].filter(Boolean).join(' '),
   });
   try {
-    for (const arr of Object.values(HELP_DATA?.usage || {})) (arr || []).forEach(push);
-    (HELP_COURSE || []).forEach(push);
+    for (const arr of Object.values(HELP_DATA?.usage || {})) (arr || []).forEach(push('t'));
+    (HELP_COURSE || []).forEach(push('t'));
+    //  수석 권 — 검수원에게는 «있다»고만 알리고 하는 법은 안 가르친다(권한 처리는 아래 답 만들 때).
+    for (const arr of Object.values(HELP_DATA_CHIEF?.usage || {})) (arr || []).forEach(push('c'));
     // TallyOne 1.68: 용어집(terms)도 색인한다 — 18항목이 앱에 있는데 자연어가 못 읽고 있었다.
     //   검수사 지적 2026-08-13: "있는것도 많은것을 모릅니다." 신참의 "시프팅이 뭐야"가 이걸로 즉답된다.
     (HELP_DATA?.terms || []).forEach((t) => out.push({
@@ -659,12 +667,44 @@ function _htManualIndex() {
 }
 const _ROLE_KR = { t: '', c: '수석 검수사 화면', a: '보조기능', o: '소유자 전용', m: '관리자 전용' };
 
+//  2.30: 매뉴얼 한 장을 **가르치는 말투로** 편다.
+//    답은 whitespace-pre-wrap 로 그대로 찍히므로 «**» 는 걷어낸다(안 그러면 별표가 그대로 읽힌다).
+const _clean = (x) => String(x || '').replace(/\*\*/g, '');
+function _teachLines(b, { canDo = true } = {}) {
+  const L = [];
+  if (b.lead) L.push('', _clean(b.lead));
+  const why = (b.why || []).slice(0, 3);
+  if (why.length) { L.push('', '왜 이렇게 하나'); why.forEach((w) => L.push(`  · ${_clean(w)}`)); }
+  if (canDo) {
+    const dos = (b.dos || []).slice(0, 6);
+    if (dos.length) { L.push('', '이렇게 합니다'); dos.forEach((d, i) => L.push(`  ${i + 1}. ${_clean(d)}`)); }
+    const says = (b.says || []).slice(0, 4);
+    if (says.length) { L.push('', '이렇게 물으면 됩니다'); says.forEach((x) => L.push(`  · ${_clean(x.in)} → ${_clean(x.out)}`)); }
+  }
+  const warns = (b.warns || []).slice(0, 3);
+  if (warns.length) { L.push('', '조심할 것'); warns.forEach((w) => L.push(`  ⚠ ${_clean(w)}`)); }
+  const never = (b.never || []).slice(0, 3);
+  if (never.length) {
+    L.push('', _clean(b.neverTitle || '⛔ 한 번 잘못 누르면 잃는 것'));
+    never.forEach((w) => L.push(`  ✕ ${_clean(w)}`));
+  }
+  return L;
+}
+
 /** 기능 위치 답변 — 못 찾으면 null (그러면 종전 경로로 넘어간다) */
 export function generateHowToAnswer(query, parsed, opts = {}) {
   // 1.69: 육공 — 검수사 확정 원문 *"육공은 저도 모름"*. 지어내지 않는다.
   if (/육공/.test(String(query || ''))) return '「육공」은 확인된 용어가 아닙니다.';
-  const T = _htExpand(_htToks(query));
+  const T0 = _htToks(query);                     // 사용자가 **실제로 한 말**
+  const T = _htExpand(T0);                       // + 같은 뜻 다른 말
+  //  2.30: 동의어는 **절반만** 센다.
+  //    실측 — «리퍼 온도 어떻게 넣어» 가 「리퍼 (냉동·냉장)」로 갔다.
+  //    사용자는 «냉동»·«냉장» 을 말한 적이 없는데 그 두 낱말이 제목에 있어 +20 을 벌었다.
+  //    실제로 한 말이 제목에 있는 쪽이 먼저다.
+  const _said = new Set(T0.map((x) => String(x).replace(/\s+/g, '')));
   const isChief = !!opts.isChief;
+  //  «어떻게 해»·«왜 그래»·«조심할 것» — 자리가 아니라 방법을 묻는 물음
+  const _asksHow = /어떻게|어떡|방법|하는\s*법|쓰는\s*법|왜|어째|조심|주의|순서|절차|해야|하나요|합니까/.test(String(query || ''));
   // 1.69: 뜻 질문("~가 뭐야")이면 용어집 항목에 가점 — usage 색인(기능 위치)보다 정의가 먼저다.
   const termFirst = !!(opts.termFirst || (parsed && parsed.termQuery));
   // "사용법 알려줘"처럼 대상 낱말이 없는 물음 — 매뉴얼 자체로 안내한다.
@@ -693,13 +733,20 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
     for (const t0 of T) {
       const t = _sq(t0);
       if (!t) continue;
-      if (l.includes(t)) s += 10;
-      if (al.includes(t)) s += 9;
-      if (w.includes(t)) s += 6;
-      if (d.includes(t)) s += 4;
-      else if (blob.includes(t)) s += 2;
+      const k = _said.has(t) ? 1 : 0.5;           // 동의어는 절반
+      if (l.includes(t)) s += 10 * k;
+      if (al.includes(t)) s += 9 * k;
+      if (w.includes(t)) s += 6 * k;
+      if (d.includes(t)) s += 4 * k;
+      else if (blob.includes(t)) s += 2 * k;
     }
     if (termFirst && it.k === 'term' && s > 0) s += 12;   // 1.69: 뜻 질문은 용어집 우선
+    //  2.30: «어떻게·왜·조심» 을 물으면 **매뉴얼이 먼저**다 — 색인은 «어디 있나»에 답하는 것이라
+    //    라벨이 짧아 늘 이겼고, 그래서 방법을 물어도 자리만 알려 주고 끝났다.
+    if (it.b && s > 0 && _asksHow) s += 8;
+    //  2.30: 검수원이 물었는데 **수석 항목이 답을 뺏지 않게** 한다 — 찾히기는 하되 뒤에 선다.
+    //    실측 — «완료가 안 눌려» 가 「완료 보관소(복원)」(수석)로 갔다. 검수원에게 쓸모없는 답이다.
+    if (it.r === 'c' && !isChief && s > 0) s -= 8;
     return s;
   };
   let hits = pool.map(it => ({ it, s: score(it) })).filter(x => x.s >= 9)
@@ -716,8 +763,24 @@ export function generateHowToAnswer(query, parsed, opts = {}) {
   const lines = [];
   // 첫 줄이 음성으로 읽히므로 여기에 핵심을 놓는다.
   lines.push(`📍 ${top.l}`);
-  if (top.w) lines.push(`   ${top.w}`);
-  if (top.d) lines.push('', top.d);
+  if (top.w) lines.push(`   ${_clean(top.w)}`);
+
+  //  2.30: 매뉴얼 항목이면 **가르친다** — 머리글만 읽어 주고 마는 것이 아니라 왜·순서·조심할 것까지.
+  //    수석 권 항목을 검수원이 물으면 «있다»까지만 알리고 하는 법은 펴지 않는다.
+  if (top.b) {
+    const canDo = !(top.r === 'c' && !isChief);
+    lines.push(..._teachLines(top.b, { canDo }));
+  } else {
+    if (top.d) lines.push('', _clean(top.d));
+    //  2.30: 색인이 이겼어도(«어디 있나» 라벨이 짧아 늘 이긴다) **매뉴얼이 있으면 이어서 가르친다.**
+    //    자리는 색인이, 방법은 매뉴얼이 답한다 — 검수사 지시 «미르가 교관이 될수 있도록».
+    const mh = hits.find((h) => h.it.b && h.s >= 9);
+    if (mh) {
+      const canDo = !(mh.it.r === 'c' && !isChief);
+      lines.push('', `— ${mh.it.l}`);
+      lines.push(..._teachLines(mh.it.b, { canDo }));
+    }
+  }
 
   // 권한 — 검수사 확정: "있다고 말하되 수석 기능임을 밝힌다"
   if (top.r === 'c' && !isChief) lines.push('', '🔒 수석 검수사 화면의 기능입니다. 수석에게 요청하십시오.');

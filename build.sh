@@ -303,6 +303,10 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic 
     || { echo "✗ cone.html 매니페스트가 파일 참조가 아니다 — 배포 금지"; exit 1; }
   [ -f public/cone.webmanifest ] || { echo "✗ public/cone.webmanifest 없음 — 배포 금지"; exit 1; }
   echo "   ✓ 콘앱 매니페스트 파일 참조"
+  # 2.30: 미르 교관 — 매뉴얼을 **가르치는지** 본다.
+  #   매뉴얼이 단일 소스다(nlSearch 가 helpData·helpDataChief 를 읽는다).
+  #   전 블록에 「왜」가 있는지, 실제로 순서·경고까지 답하는지, 수석 전용을 검수원에게 펴지 않는지 본다.
+  node tools/smoke_teach.mjs || { echo "✗ 미르 교관 연막검사 실패 — 배포 금지"; exit 1; }
   # 2.29: 빌드본 파비콘이 **public 의 새 아이콘**을 가리키는지.
   #   실측 — 진입 html 이 "./icon-192.png" 였을 때 vite 가 **루트에 남은 직전 판 아이콘**을 집어
   #   해시 자산으로 만들어 버렸다(assets/icon-192-Cf9ehjsD.png, 1.2KB 짜리 옛 그림).
