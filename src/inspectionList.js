@@ -415,6 +415,7 @@ export function generateXrayListHTML(rows, head = {}, perPage = 20) {
           <td>${r.cSeal ? esc(r.cSeal) : BLANK}</td><td>${r.sealer ? esc(r.sealer) : BLANK}</td>
         </tr>`).join('')}</tbody>
       </table>
+      <div class="ft">GREEN MARINE CO., LTD.</div>
     </div>`).join('');
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
 <title>${esc(head.name || '')} XRAY리스트</title><style>
@@ -438,6 +439,11 @@ th { background:#eee; font-weight:700; }
 /*  검수사 확정 2026-08-24: **출력양식은 전부 중앙정렬.** 머리 표 값칸도 예외 없다. */
 .b { font-weight:700; }
 .bl { display:block; min-height:13px; border-bottom:1px solid #999; }
+/*  검수사 지시 2026-08-24 — 출력물 좌측 하단의 about:blank 자리를 회사명으로.
+    ⚠ about:blank 은 **브라우저가 찍는 그 탭의 주소**다(내용이 아니라 주소). 새 창을 빈 주소로 열어
+      문서를 써 넣는 방식이라 주소가 없고, 그래서 브라우저가 그렇게 적는다. 그 자리는 페이지에서 못 바꾼다.
+    ⇒ 우리 바닥글을 쪽마다 직접 찍는다. 브라우저 머리글·바닥글은 인쇄 설정에서 끄면 사라진다. */
+.ft { margin-top:6px; text-align:center; font-size:7pt; letter-spacing:0.06em; color:#333; }
 .w4{width:4%}.w8{width:8%}.w12{width:12%}.w13{width:13%}.w15{width:15%}.w16{width:16%}.w20{width:20%}
 /*  검수사 확정 2026-08-24 — 출력은 PDF 가 기본이지만 인쇄도 되고 엑셀로도 받아져야 한다.
     검수 리스트·VGM 과 같은 벌이다 — 새 창 위에 버튼을 두고, 인쇄할 때만 숨긴다. */

@@ -73,6 +73,8 @@ setTimeout(() => {
     if (!html.includes(b2)) { console.log('✗ 출력 버튼 «' + b2 + '» 이 없다'); process.exit(1); }
   }
   if (!/class="actions no-print"/.test(html)) { console.log('✗ 버튼이 인쇄에서 안 숨겨진다(no-print)'); process.exit(1); }
+  //  ⑨ 쪽마다 회사명 바닥글 (검수사 지시 — 브라우저가 찍는 about:blank 대신 우리 것을 넣는다)
+  if ((html.match(/GREEN MARINE CO\., LTD\./g) || []).length !== 2) { console.log('✗ 회사명 바닥글이 쪽마다 안 찍힌다'); process.exit(1); }
   //  ⑥ 검수사 확정 — **출력양식은 전부 중앙정렬**
   if (/text-align\s*:\s*left/.test(html)) { console.log('✗ 출력양식에 왼쪽 정렬이 남아 있다 — 전부 중앙이어야 한다'); process.exit(1); }
 
