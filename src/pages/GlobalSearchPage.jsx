@@ -50,7 +50,7 @@ export function filterDamageHits(damageIndex, dq, now = new Date()) {
   });
 }
 
-export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '', embedded = false }) {   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
+export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '', embedded = false, ctxVoyageKey = null }) {   // 2.36: ctxVoyageKey — 항차 화면에 심을 때 배 이름을 안 붙여도 그 배로 답한다(검수사 «검색은 어디서든 같아야»)   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
   const [query, setQuery] = useState(initialQuery || '');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -163,7 +163,14 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   };
   const shipCtx = useMemo(() => {
     const Q = String(debouncedQuery || '').toUpperCase();
-    if (Q.length < 3) return null;
+    // 2.36: 항차 화면에 심긴 경우 — 질의에 배 이름이 없어도 **그 배**가 맥락이다.
+    //   («해치 열렸어?» 를 그 배 화면에서 물으면 그 배 답이 나와야 한다)
+    const _ctxFallback = () => {
+      if (!ctxVoyageKey) return null;
+      const v = (voyages || {})[ctxVoyageKey];
+      return v?.info ? { key: ctxVoyageKey, info: v.info, v, has: true } : null;
+    };
+    if (Q.length < 3) return _ctxFallback();
     let best = null;
     Object.entries(voyages || {}).forEach(([k, v]) => {
       const i = v?.info; if (!i) return;
@@ -212,8 +219,8 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       });
       if (byShip.size === 1) best = [...byShip.values()][0];
     }
-    return best;
-  }, [voyages, debouncedQuery]);
+    return best || _ctxFallback();
+  }, [voyages, debouncedQuery, ctxVoyageKey]);
 
   // ── 1.69-06: 진행 질문인데 배가 현재 항차에 없으면 — 보관소 메타 1회 GET (완료·보관 답 준비) ──
   //   검수사 신고(2026-08-14): "이미 완료된 작업을 물어보면 언제 작업 종료했는지 알려줘야 함."

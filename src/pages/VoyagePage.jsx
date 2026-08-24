@@ -29,6 +29,8 @@ import { addToUserBayDict } from '../data/userBayDict.js';
 import ContainerList from '../components/ContainerList.jsx';
 import ValidationBox from '../components/ValidationBox.jsx';
 import SearchPanel from '../components/SearchPanel.jsx';
+import GlobalSearchPage from './GlobalSearchPage.jsx';
+import { isChief } from '../staffList.js';   // 2.36: 항차 미르도 수석 전용 통계는 가린다   // 2.36: 항차 화면에도 **같은 미르** — 검수사 «검색은 어디서든 같아야 합니다»
 import BayPlan from '../components/BayPlan.jsx';
 import StatsTab from '../components/StatsTab.jsx';
 import BayDictVerifyWidget from '../components/BayDictVerifyWidget.jsx';
@@ -1395,6 +1397,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (/^[0-9\s]+$/.test(v)) logQuerySettled('lookup', v, { voyageKey, mode });
           else logQuerySettled('nls', v, { voyageKey });
         }}>
+        {/* 2.36 (검수사 확정 «누구는 안다고 하고 누구는 모른다고 하면 안되니까요. 지금 통합해주세요»):
+            항차 화면에도 홈과 **같은 미르**를 심는다. 배 이름을 안 붙여도 ctxVoyageKey 로 이 배가 맥락이 된다.
+            ⚠ 아래 SearchPanel 은 그대로 둔다 — 컨 조회·자동 가이드·트윈 짝꿍·완료 처리는 그쪽이 정본이다.
+            즉 «묻는 것»은 미르가, «작업하는 것»은 SearchPanel 이 맡는다. */}
+        <div className="mb-2">
+          <GlobalSearchPage embedded
+            voyages={{ [voyageKey]: voyage }}
+            ctxVoyageKey={voyageKey}
+            portMisData={portMisData}
+            terminalWork={terminalWork}
+            heartbeat={null}
+            isChief={isChief(inspector)}
+            onOpenContainer={(c) => setDetailC(c)}/>
+        </div>
         <SearchPanel
           rfSkip={!!shipPolicy?.rfSkip}
           esealBrief={esealInfo ? {
