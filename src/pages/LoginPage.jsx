@@ -231,7 +231,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       const st = String(v?.info?.terminalStatus || '').toLowerCase();
       const ms = voyagePlanMs(v);
       const n = dayDiff(ms);
-      const rank = st === 'working' ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
+      // 2.34-10 (검수사 실측 «NSFR 작업중?» — 내일 14:00 시작인데 작업중 배지): 터미널 표의 행 상태(working)는
+      //   내일 배에도 미리 칠해져 올 수 있다. 시작이 2시간 넘게 남았으면 예정으로 본다(수집기 Face 2.0-15와 같은 부류 — 상태만 믿지 말고 시간과 결합).
+      const rank = (st === 'working' && !(ms && ms - Date.now() > 2 * 3600000)) ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
       if (rank < 9) ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, key: v.key });
     }
     ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));
