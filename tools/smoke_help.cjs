@@ -59,6 +59,18 @@ const die = (m, extra) => { console.log('✗ ' + m); if (extra) console.log('   
   if (!/DEP\.TALLY/.test(txt())) die('수석 권 카테고리가 안 열린다 (cat:c: 경로)');
   if (!/화면/.test(txt())) die('수석 권 화면 그림이 안 그려진다');
 
-  console.log(`✓ 매뉴얼 연막검사 통과 (공용 ${opened}칸 · 그림 ${shots}칸 · 수석 권 ${CC.length}칸 · 오류 0)`);
+  // ④ 2.27-01: 이름이 없으면 «잠김»으로 보여야 한다 — 통째로 사라지면 «수석용은 어디서 보나»가 된다
+  const dom2 = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',
+    { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
+  dom2.window.__SMOKE_NO_INSPECTOR = 1;
+  try { dom2.window.eval(fs.readFileSync(process.argv[2], 'utf8')); } catch (e) { die('로그아웃 렌더 THROW: ' + e.message); }
+  await wait(500);
+  const t2 = dom2.window.document.body.textContent || '';
+  if (!/수석검수사 매뉴얼/.test(t2)) die('로그아웃 상태에서 수석 권이 **통째로 사라졌다** — 왜 안 열리는지 말해야 한다');
+  if (!/이름을 고르면 열립니다/.test(t2)) die('로그아웃 상태에서 «왜 안 열리는지» 안내가 없다');
+  if ([...dom2.window.document.querySelectorAll('button')].some((b) => /수석검수사 매뉴얼/.test(b.textContent || '')))
+    die('로그아웃인데 수석 권이 **눌린다** — 직책을 모르는 채로 열면 안 된다');
+
+  console.log(`✓ 매뉴얼 연막검사 통과 (공용 ${opened}칸 · 그림 ${shots}칸 · 수석 권 ${CC.length}칸 · 로그아웃 잠김 O · 오류 0)`);
   process.exit(0);
 })().catch((e) => die('THROW: ' + e.message));

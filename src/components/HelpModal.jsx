@@ -9,7 +9,7 @@ import React, { useState } from 'react';
 import HelpShot from './HelpShot.jsx';   // 2.27: 기능마다 화면 그림
 import { X, Search, Mic, MessageCircle, Anchor, Truck, AlertTriangle, Wrench,
   Camera, Bot, CheckCircle2, LayoutGrid, Upload, Printer, Play,
-  BookOpen, Languages, ChevronRight, ChevronLeft } from 'lucide-react';
+  BookOpen, Languages, ChevronRight, ChevronLeft, Lock } from 'lucide-react';
 import ContainerPhrasebook from './ContainerPhrasebook.jsx';
 import { HELP_DATA, HELP_COURSE } from '../data/helpData.js';
 //  2.27: 매뉴얼을 두 권으로 나눴다(검수사 지시 «검수사 공용, 수석검수사 메뉴얼 두권으로»).
@@ -184,6 +184,25 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
             </div>
             <ChevronRight className="w-6 h-6 text-sky-400 shrink-0" />
           </button>
+
+          {/* 2.27-01: 이름이 없으면 «잠김»으로 보여 준다 — 종전엔 통째로 사라져 «수석용은 어디서 보나»가 됐다.
+              검수사 실측 2026-08-24 10:54 로그아웃 → 11:01 매뉴얼을 여니 이 카드가 없었다.
+              직책은 이름으로만 알 수 있으니 로그아웃 상태에서 열어 줄 수는 없다.
+              ⇒ 열지는 않되 **왜 안 열리는지**는 말한다. 조용히 없어지는 것이 문제였다. */}
+          {!inspector && (
+            <div className="w-full text-left bg-slate-900/60 border-2 border-slate-700/50 border-dashed rounded-2xl p-4 flex items-center gap-3.5">
+              <div className="w-14 h-14 rounded-2xl bg-slate-700/40 flex items-center justify-center shrink-0">
+                <Lock className="w-7 h-7 text-slate-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-black text-slate-400">수석검수사 매뉴얼</div>
+                <div className="text-sm text-slate-500 mt-0.5">
+                  <b className="text-amber-400/90">이름을 고르면 열립니다</b> — 화면 맨 위 오른쪽 [이름] 버튼.
+                  수석·부수석만 보는 책이라 누구인지 알아야 엽니다.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 2.27: 수석 권 — 수석에게만 보인다. 검수원 화면에 나오면 안 되는 서류가 들어 있다. */}
           {chief && (

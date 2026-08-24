@@ -7,5 +7,9 @@ import { createRoot } from 'react-dom/client';
 import HelpModal from '../src/components/HelpModal.jsx';
 
 createRoot(document.getElementById('root')).render(
-  React.createElement(HelpModal, { open: true, onClose: () => {}, inspector: '김성일' })
+  React.createElement(HelpModal, {
+    open: true, onClose: () => {},
+    //  2.27-01: 로그아웃 경우도 같은 번들로 본다 — 이름이 없으면 «잠김»이어야 한다.
+    inspector: (typeof window !== 'undefined' && window.__SMOKE_NO_INSPECTOR) ? '' : '김성일',
+  })
 );
