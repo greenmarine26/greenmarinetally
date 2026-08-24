@@ -24,6 +24,8 @@ import ExtraContainerModal from './ExtraContainerModal.jsx';
 import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
+import { mirTone } from '../mirChat.js';   // 2.33: 미르 말투 — 출구 한 겹
+import mirFaceUrl from '../assets/mir-face.png';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
 
 // ── TallyOne 1.55: 지금 어느 갱(호기)으로 작업 중인가 ───────────────────
@@ -907,7 +909,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     return () => clearTimeout(tm);
   }, [parsed, results, modeChoice]);
 
-  const localAnswer = useMemo(() => {
+  const _localAnswerRaw = useMemo(() => {
     if (!query || query.length < 2) return null;
     // 1.23: **경고 문장을 그대로 물은 것인가**를 가장 먼저 본다.
     //   검색 파서보다 앞에 둬야 한다 — 뒤에 두면 `풀` 한 글자와 `5톤 이상` 이 먼저 잡혀
@@ -1068,6 +1070,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed]);
+  const localAnswer = useMemo(() => mirTone(_localAnswerRaw), [_localAnswerRaw]);   // 2.33: 미르 말투 — 출구 한 겹
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).
   useEffect(() => {
@@ -1179,18 +1182,18 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const first = parsed.mirHello ? '네, 말씀하세요'
         : (localAnswer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();
       const zm = first.match(/^(.+?):\s*0대/);
-      if (zm) speak(`${zm[1].trim()} 없습니다`);
+      if (zm) speak(`${zm[1].trim()} 없어`);   // 2.33: 미르 말투
       else if (first) speak(first.replace(/:\s*/, ' '), (parsed.etaQuery || parsed.handoverQuery || parsed.customsReportQuery) ? { conversational: true } : {});  // V7.99-15/V8.00: 대화형 답변은 부드럽게
       return;
     }
 
     if (parsed.isStat) {
       const n = results.length;
-      speak(n === 0 ? `${describeQuery(parsed)} 없습니다` : `${describeQuery(parsed)} ${n}대`);
+      speak(n === 0 ? `${describeQuery(parsed)} 없어` : `${describeQuery(parsed)} ${n}대`);   // 2.33
       return;
     }
     if (results.length === 0 && hasAnyCondition(parsed)) {
-      speak(`${describeQuery(parsed)} 없습니다`);
+      speak(`${describeQuery(parsed)} 없어`);   // 2.33
     } else if (results.length === 1) {
       announceContainer(results[0]);
     } else if (results.length <= 5) {
@@ -1239,7 +1242,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           { role: 'user', content: q },
           { role: 'model', content: res.answer, ragInfo: res.ragInfo },
         ]);
-        if (autoSpeak) speak(res.answer);
+        if (autoSpeak) speak(mirTone(res.answer));   // 2.33: AI 답도 같은 말투
       } else {
         // V9.14: 실패 시 aiAnswer를 세우지 않는다 — aiAnswer는 렌더되지 않는 게이트 변수라
         //   '오류:' 문자열을 넣으면 오류도 안 보이고 기존 검색 결과까지 사라졌다(지침서 V9.11 기록).
@@ -1276,7 +1279,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       <div className="bg-ink-900 border border-line rounded-pill p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="text-2xs text-dim-400 font-bold">
-            🤖 검색/AI — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
+            <img src={mirFaceUrl} alt="미르" className="w-5 h-5 rounded-full inline-block align-middle mr-1"/>미르 검색 — 4자리 / 전체번호 / "리퍼 몇개" / "16번 베이" / 자유 질문 · 작업 {allContainers.filter(c => c._ptk).length}대
           </div>
           <button onClick={() => setHelpOpen(true)}
             className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 text-2xs font-bold border border-amber-700/40">
@@ -1488,7 +1491,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-300"/>
-              <div className="text-xxs text-emerald-300 font-bold">🐱 미르 즉답</div>
+              <div className="text-xxs text-emerald-300 font-bold flex items-center gap-1.5"><img src={mirFaceUrl} alt="" className="w-5 h-5 rounded-full"/>미르 즉답</div>
             </div>
             <button onClick={() => {
               setWrongPayload({ query, answerType: 'local', answerText: localAnswer, parsed });

@@ -5,6 +5,8 @@ import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '..
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
+import { mirTone, mirSmallTalk } from '../mirChat.js';   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
+import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
 import { fbGetDamagePhoto, fbAddClaudeMemo } from '../firebase.js';   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
@@ -230,7 +232,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   // ── V9.14: 통합검색 즉답 — 종전에는 "브리핑·몇 시야·날씨" 등이 여기서 전부 무응답이었다.
   //   시간·자기소개처럼 항차와 무관한 질문은 바로 답하고,
   //   항차 맥락이 필요한 질문(브리핑·점검·인계·ETA·날씨 등)은 어디서 물어야 하는지 안내한다.
-  const localAnswer = useMemo(() => {
+  const _localAnswerRaw = useMemo(() => {
     if (!debouncedQuery || debouncedQuery.length < 2) return null;
     const p = parsed;
     const Q = debouncedQuery;
@@ -620,6 +622,11 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     return null;
   }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산 · 1.69-01: 검수원 게이트
 
+  // 2.33: 출구 한 겹 — 데이터는 그대로, 종결어미만 미르 말투로(검수사 확정 «살짝 친근»).
+  //   업무 인텐트 전부 침묵일 때만 잡담 그물(검수사 제공 대본)이 받는다 —
+  //   잡담이 답하면 아래 _mirDontKnow 가 자연히 false 라 무응답 신고도 안 나간다.
+  const localAnswer = useMemo(() => mirTone(_localAnswerRaw) || mirSmallTalk(debouncedQuery), [_localAnswerRaw, debouncedQuery]);
+
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
     if (!debouncedQuery || debouncedQuery.length < 2) return [];
@@ -784,7 +791,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
             title="검색을 마치고 들어온 화면으로 돌아갑니다">
             ← 나가기
           </button>}
-          <span className="min-w-0 truncate">🤖 AI 통합 검색 — 모든 항차·양/선적</span>
+          <span className="min-w-0 truncate flex items-center gap-1.5"><img src={mirFaceUrl} alt="미르" className="w-5 h-5 rounded-full inline-block"/>미르 통합 검색 — 모든 항차·양/선적</span>
           <span className="text-dim-300 mono shrink-0">전체 {flat.length.toLocaleString()}대</span>
         </div>
         <div className="relative">
@@ -899,7 +906,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       {/* V9.14: 즉답/안내 카드 */}
       {localAnswer && (
         <div className="bg-emerald-950/40 border-2 border-emerald-700 rounded-btn p-4 mb-3">
-          <div className="text-xxs text-emerald-400 font-bold uppercase mb-1">🤖 즉답</div>
+          <div className="text-xxs text-emerald-400 font-bold uppercase mb-1 flex items-center gap-1.5"><img src={mirFaceUrl} alt="" className="w-5 h-5 rounded-full"/>미르 즉답</div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed">{localAnswer}</div>
           {/* 2.05-03 (검수사 확정): «내일 작업할 것을 브리핑할까요?» — [네][아니오] 선택 */}
