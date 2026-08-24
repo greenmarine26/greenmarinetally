@@ -146,7 +146,14 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [],
             className="flex-1 bg-transparent text-[13px] outline-none"/>
           {q && <button onClick={() => setQ('')}><X className="w-4 h-4 text-slate-500"/></button>}
         </div>
-        <button onClick={() => openXrayListPrint(shown.map(r => ({ ...r, pos: pos(r) })), head, PER_PAGE)}
+        {/* 조회의 필터·검색이 그대로 인쇄로 간다(시안 «연계» — 같은 `shown` 을 넘긴다).
+            머리 부제는 그 결과를 밝힌다 — «전체 N대 · X-RAY M대», 필터가 걸렸으면 그것도. */}
+        <button onClick={() => openXrayListPrint(
+          shown.map(r => ({ ...r, pos: pos(r) })),
+          { ...head, sub: `전체 ${rows.length}대`
+            + (kindFilter ? ` 중 ${kindFilter} ${shown.length}대` : '')
+            + (!kindFilter && counts['X-RAY'] ? ` · X-RAY ${counts['X-RAY']}대` : '') },
+          PER_PAGE)}
           disabled={!shown.length}
           className="h-11 px-4 rounded-lg bg-amber-500 text-slate-900 font-bold text-[13px] flex items-center gap-1.5 disabled:opacity-40">
           <Printer className="w-4 h-4"/>출력 {pages.length > 1 ? `(${pages.length}장)` : ''}

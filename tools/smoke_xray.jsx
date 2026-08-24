@@ -45,4 +45,6 @@ createRoot(document.getElementById('root')).render(
 const HEAD = { voy: '2601E', carrier: 'SMOK', eta: '2026.08.24', pod: 'KRPTK',
                name: 'SMOKE VESSEL', callsign: 'SMK9', mrn: '26SMOK2601I' };
 const R = (cn, i) => ({ cn, seal: 'S' + i, kind: 'X-RAY', iso: '45GP', pos: '02-01-84', cSeal: '', sealer: '' });
-window.__xrayHtml = generateXrayListHTML(Array.from({ length: 40 }, (_, i) => R('SMOKU10' + String(i).padStart(4, '0'), i)), HEAD, 20);
+const mk = (n) => generateXrayListHTML(Array.from({ length: n }, (_, i) => R('SMOKU10' + String(i).padStart(4, '0'), i)), { ...HEAD, sub: `전체 ${n}대` }, 20);
+window.__xrayHtml = mk(40);        // 40대 → 20+20 · 8pt
+window.__xrayHtml10 = mk(8);       // 8대  → 1장    · 9.5pt (시안 폰트 자동조절)

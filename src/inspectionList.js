@@ -386,11 +386,18 @@ export function generateXrayListHTML(rows, head = {}, perPage = 20) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const n = Math.max(1, Math.ceil(rows.length / perPage));
   const per = Math.ceil(rows.length / n) || 1;          // 균등 분할 — 40대는 20+20
+  //  ★ 폰트 자동조절 — 시안 표 그대로(10대 9.5pt/pad8 · 20대 8pt/pad5).
+  //    시안의 «30대 6.5pt · 40대+ 6pt» 구간은 **쓰지 않는다** — 검수사 확정
+  //    *«최소 크기가 넘어가면 2장이 되면 됩니다»* 로, 6pt 는 선내 조명에 장갑 낀 손으로 못 읽는다.
+  //    한 장에 20대까지만 담으므로 여기 오는 `per` 는 언제나 20 이하다.
+  //    ⚠ **장당 대수로 정한다** — 전체 대수로 하면 21대(11+10)에서 장마다 글씨가 달라진다.
+  const cfg = per <= 10 ? { f: 9.5, p: 8 } : { f: 8, p: 5 };
   const pages = Array.from({ length: n }, (_, i) => rows.slice(i * per, (i + 1) * per));
   const BLANK = '<span class="bl"></span>';
   const body = pages.map((pg, pi) => `
     <div class="pg">
-      <div class="ti"><b>${esc(head.name || '')} XRAY리스트</b>${n > 1 ? `<span class="pn">${pi + 1} / ${n} 장</span>` : ''}</div>
+      <div class="ti"><b>${esc(head.name || '')} XRAY리스트</b><span class="pn">${
+        esc(head.sub || '')}${head.sub && n > 1 ? ' · ' : ''}${n > 1 ? `${pi + 1} / ${n} 장` : ''}</span></div>
       <table class="hd">
         <tr><th>항차/항공편명</th><td>${esc(head.voy)}</td><th>운항선사</th><td colspan="3">${esc(head.carrier)}</td></tr>
         <tr><th>입항일자</th><td>${esc(head.eta)}</td><th>양륙항</th><td colspan="3">${esc(head.pod)}</td></tr>
@@ -411,15 +418,16 @@ export function generateXrayListHTML(rows, head = {}, perPage = 20) {
     </div>`).join('');
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
 <title>${esc(head.name || '')} XRAY리스트</title><style>
-@page { size: A4 landscape; margin: 1.9cm 1.8cm; }
-body { font-family:'Malgun Gothic',sans-serif; margin:0; padding:12px; color:#000; background:#fff; font-size:8pt; }
+/*  여백은 시안 기준 그대로 — 좌우 1.8cm · 상 1.9cm · 하 1cm (검수사 TXT·시안 @page 일치) */
+@page { size: A4 landscape; margin-top:1.9cm; margin-left:1.8cm; margin-right:1.8cm; margin-bottom:1cm; }
+body { font-family:'Malgun Gothic',sans-serif; margin:0; padding:12px; color:#000; background:#fff; font-size:${cfg.f}pt; }
 .pg { page-break-after: always; }
 .pg:last-child { page-break-after: auto; }
 .ti { font-size:13pt; margin-bottom:5px; display:flex; justify-content:space-between; align-items:flex-end; }
 .pn { font-size:8pt; font-weight:400; }
 table { width:100%; border-collapse:collapse; }
 .hd { margin-bottom:5px; }
-th,td { border:1px solid #333; padding:4px 3px; text-align:center; }
+th,td { border:1px solid #333; padding:${cfg.p}px 3px; text-align:center; }
 th { background:#eee; font-weight:700; }
 .hd td { text-align:left; padding-left:6px; }
 .b { font-weight:700; }

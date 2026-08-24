@@ -58,8 +58,16 @@ setTimeout(() => {
   if (pgs !== 2) { console.log('✗ 40대가 2장으로 안 갈린다 (나온 장수 ' + pgs + ')'); process.exit(1); }
   if (!/1 \/ 2 장/.test(html) || !/2 \/ 2 장/.test(html)) { console.log('✗ 쪽마다 «N / M 장» 표기가 없다'); process.exit(1); }
   if ((html.match(/항차\/항공편명/g) || []).length !== 2) { console.log('✗ 쪽마다 머리가 안 반복된다'); process.exit(1); }
+  //  ⑤ 시안 양식 기준 — 여백(좌우1.8 상1.9 하1) · 폰트 자동조절(10대 9.5pt/pad8 · 20대 8pt/pad5)
+  for (const m of ['margin-top:1.9cm', 'margin-left:1.8cm', 'margin-right:1.8cm', 'margin-bottom:1cm']) {
+    if (!html.includes(m)) { console.log('✗ 시안 여백 기준 «' + m + '» 이 없다'); process.exit(1); }
+  }
+  if (!/font-size:8pt/.test(html) || !/padding:5px/.test(html)) { console.log('✗ 20대/장에서 8pt·pad5 가 아니다'); process.exit(1); }
+  const small = dom.window.__xrayHtml10 || '';
+  if (!/font-size:9\.5pt/.test(small) || !/padding:8px/.test(small)) { console.log('✗ 10대 이하에서 9.5pt·pad8 로 안 커진다 — 시안 폰트 자동조절'); process.exit(1); }
+  if (!/전체 40대/.test(html)) { console.log('✗ 머리 부제(전체 N대)가 안 찍힌다'); process.exit(1); }
 
   const kpi = doc.querySelectorAll('button.rounded-xl').length;
-  console.log(`✓ X-RAY 탭 연막검사 통과 (${t.length}자 · 정렬 O · 화물구분 4종 O · 미입력 O · 인쇄 머리 6칸·7열 O · 밑줄칸 O · 40대→2장 O · 카드 ${kpi}장 · 오류 0)`);
+  console.log(`✓ X-RAY 탭 연막검사 통과 (${t.length}자 · 정렬 O · 화물구분 4종 O · 미입력 O · 인쇄 머리 6칸·7열 O · 밑줄칸 O · 40대→2장 O · 여백 O · 폰트조절 O · 카드 ${kpi}장 · 오류 0)`);
   process.exit(0);
 }, 900);
