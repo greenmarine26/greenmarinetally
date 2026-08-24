@@ -16,20 +16,20 @@ export default function ChoiceModal({
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border-2 border-amber-700/40 rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-ink-900 border border-line rounded-card shadow-card w-full sm:max-w-md overflow-hidden max-h-[90vh] flex flex-col">
         {/* 헤더 */}
-        <div className="px-4 py-3 border-b border-slate-700 bg-slate-800 flex items-center gap-2">
-          <div className="flex-1 font-black text-base text-amber-200">
+        <div className="px-4 py-3 border-b border-line bg-ink-800 flex items-center gap-2">
+          <div className="flex-1 font-black text-base text-st-lodHi">
             {title}
           </div>
-          <button onClick={onCancel} className="text-slate-500 hover:text-slate-300 p-1">
+          <button onClick={onCancel} className="text-dim-400 hover:text-dim-200 p-1">
             <X className="w-4 h-4"/>
           </button>
         </div>
 
         {/* 설명 */}
         {description && (
-          <div className="px-4 py-3 border-b border-slate-800 bg-slate-950/50 text-xs text-slate-300 whitespace-pre-line leading-relaxed">
+          <div className="px-4 py-3 border-b border-line bg-ink-950/50 text-xs text-dim-200 whitespace-pre-line leading-relaxed">
             {description}
           </div>
         )}
@@ -40,21 +40,21 @@ export default function ChoiceModal({
             <button
               key={opt.key}
               onClick={() => onSelect?.(opt.key)}
-              className={`w-full text-left px-4 py-4 rounded-lg border-2 transition active:scale-[0.98] ${
+              className={`w-full text-left px-4 py-4 rounded-btn border transition active:scale-[0.98] ${
                 opt.recommended
-                  ? 'bg-amber-900/30 hover:bg-amber-900/50 border-amber-700/50'
-                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700'
+                  ? 'bg-ink-800 hover:bg-ink-750 border-act'
+                  : 'bg-ink-800 hover:bg-ink-750 border-line'
               }`}
               style={{ minHeight: 56 }}
             >
               <div className={`text-base font-black flex items-center gap-2 ${
-                opt.recommended ? 'text-amber-200' : 'text-slate-100'
+                opt.recommended ? 'text-dim-100' : 'text-dim-100'
               }`}>
-                {opt.recommended && <span className="text-[10px] bg-amber-600 text-amber-100 px-1.5 py-0.5 rounded">추천</span>}
+                {opt.recommended && <span className="text-2xs bg-act text-act-on px-2 py-0.5 rounded-pill">추천</span>}
                 {opt.label}
               </div>
               {opt.desc && (
-                <div className={`text-xs mt-1 ${opt.recommended ? 'text-amber-300/80' : 'text-slate-400'}`}>
+                <div className={`text-xs mt-1 ${opt.recommended ? 'text-act-soft' : 'text-dim-300'}`}>
                   {opt.desc}
                 </div>
               )}
@@ -63,11 +63,11 @@ export default function ChoiceModal({
         </div>
 
         {/* 취소 버튼 */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950">
+        <div className="p-3 border-t border-line bg-ink-950">
           <button
             onClick={onCancel}
-            className="w-full py-3 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold rounded text-sm"
-            style={{ minHeight: 48 }}
+            className="w-full py-3 bg-ink-750 hover:bg-ink-700 text-dim-100 font-bold rounded-btn text-base"
+            style={{ minHeight: 60 }}
           >
             취소
           </button>

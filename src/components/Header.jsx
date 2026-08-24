@@ -66,7 +66,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   };
 
   return (
-    <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
+    <header className="bg-ink-900 border-b border-line sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-3 py-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {/* 2.29-01: 로고를 **왼쪽 큰 자리**로 올린다 — 검수사 «너무 작아서 안보여요»
@@ -87,11 +87,11 @@ export default function Header({ version, inspector, online, route, voyages, onC
               className="w-11 h-11 rounded-xl flex-shrink-0 select-none"/>
           )}
           <div className="min-w-0">
-            <div className="font-bold text-sm text-blue-100 truncate leading-tight">
+            <div className="font-bold text-sm text-dim-100 truncate leading-tight">
               {/* TallyOne 1.0 (K4): 앱 이름 리브랜딩 — 버전 문자열은 건드리지 않음(통합 시 처리) */}
               {info ? info.vsl : 'TallyOne'}
             </div>
-            <div className="text-[10px] text-slate-500 truncate leading-tight">
+            <div className="text-2xs text-dim-400 truncate leading-tight">
               {/* V8.82: 모드 따라 항차 표시 — 양하=voy_d, 선적=voy_l (구: 항상 voy_d 우선이라 선적 중에도 양하 항차가 보임) */}
               {info
                 ? `${(route?.mode === 'loading' ? (info.voy_l || info.voy_d) : (info.voy_d || info.voy_l)) || info.voy || ''} · ${info.carrier || ''}`
@@ -101,7 +101,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
                 검수사 지적 2026-08-08: *"버전 확인을 하려도 버튼을 누르는건 불편합니다."*
                 업데이트 배너가 안 뜨는 건(인계함 별건) 아직 못 고쳤으니, 그 사이 검수사가
                 **아무것도 안 눌러도** 지금 판을 알 수 있어야 한다. 푸터까지 내려갈 필요 없다. */}
-            <div className="text-[9px] text-slate-600 truncate leading-tight mono">
+            <div className="text-3xs text-dim-500 truncate leading-tight mono">
               {APP_VERSION}
             </div>
           </div>
@@ -115,10 +115,10 @@ export default function Header({ version, inspector, online, route, voyages, onC
           <button
             onClick={() => setEquipOpen(true)}
             title="장비 번호 변경"
-            className={`px-2 py-2 rounded-lg text-sm font-bold flex items-center gap-1 ${
+            className={`px-2 py-2 rounded-pill text-sm font-bold flex items-center gap-1 ${
               equipNo
-                ? 'bg-orange-700 text-white border border-orange-500'
-                : 'bg-slate-800 text-slate-400 border border-slate-600 animate-pulse'
+                ? 'bg-st-lod text-ink-950 border border-st-lodHi'
+                : 'bg-ink-800 text-dim-300 border border-line-strong animate-pulse'
             }`}
           >
             <Truck className="w-4 h-4"/>
@@ -126,70 +126,70 @@ export default function Header({ version, inspector, online, route, voyages, onC
           </button>
           <button
             onClick={onChangeInspector}
-            className="bg-amber-900/40 border border-amber-700/40 px-2 py-1.5 rounded-lg text-xs flex items-center gap-1.5 active:bg-amber-900/60"
+            className="bg-ink-800 border border-line px-2 py-1.5 rounded-pill text-xs flex items-center gap-1.5 active:bg-ink-750"
           >
-            <span className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-slate-900 text-[11px] font-black">
+            <span className="w-6 h-6 bg-st-lodHi rounded-full flex items-center justify-center text-ink-950 text-xxs font-black">
               {(inspector && inspector[0]) || '?'}
             </span>
             {/* TallyOne 1.0 (K4): 이름 아래 현재 역할 표시 */}
             <span className="flex flex-col items-start leading-tight min-w-0">
-              <span className="font-bold text-amber-200 max-w-[56px] truncate">{inspector || '검수원'}</span>
-              {roleLabel && <span className="text-[9px] text-amber-400/90">{roleLabel}</span>}
+              <span className="font-bold text-dim-100 max-w-[56px] truncate">{inspector || '검수원'}</span>
+              {roleLabel && <span className="text-3xs text-dim-300">{roleLabel}</span>}
             </span>
           </button>
           <div className="relative">
             <button
               onClick={() => setMenuOpen(v => !v)}
               title="메뉴 (도움말·설정)"
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-600 relative"
+              className="p-2 rounded-pill bg-ink-800 hover:bg-ink-750 active:bg-ink-700 border border-line-strong relative"
             >
-              <MoreVertical className="w-5 h-5 text-slate-300"/>
-              {!hasUserKey && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"/>}
+              <MoreVertical className="w-5 h-5 text-dim-200"/>
+              {!hasUserKey && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-st-bad animate-pulse"/>}
             </button>
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)}/>
-                <div className="absolute right-0 top-full mt-1 z-50 w-52 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 z-50 w-52 bg-ink-850 border border-line-strong rounded-card shadow-card overflow-hidden">
                   <button onClick={() => { setMenuOpen(false); setHelpOpen(true); }}
-                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
-                    <HelpCircle className="w-5 h-5 text-amber-300 shrink-0"/>
-                    <span className="text-sm text-slate-200 font-bold">사용 매뉴얼</span>
-                    <span className="ml-auto text-[10px] text-slate-500">{version}</span>
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
+                    <HelpCircle className="w-5 h-5 text-st-lodHi shrink-0"/>
+                    <span className="text-sm text-dim-100 font-bold">사용 매뉴얼</span>
+                    <span className="ml-auto text-2xs text-dim-400">{version}</span>
                   </button>
                   <button onClick={() => { setMenuOpen(false); setKeyOpen(true); }}
-                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
                     <Key className={`w-5 h-5 shrink-0 ${hasUserKey ? 'text-emerald-300' : 'text-red-300'}`}/>
-                    <span className="text-sm text-slate-200 font-bold">AI 검색 키</span>
-                    {!hasUserKey && <span className="ml-auto text-[10px] text-red-300 font-bold">설정 필요</span>}
+                    <span className="text-sm text-dim-100 font-bold">AI 검색 키</span>
+                    {!hasUserKey && <span className="ml-auto text-2xs text-red-300 font-bold">설정 필요</span>}
                   </button>
                   {/* TallyOne 1.1: 클로드에게 메모 — 발견한 문제·요청을 claude_inbox로 보낸다 (전 화면 접근) */}
                   <button onClick={() => { setMenuOpen(false); setMemoOpen(true); }}
-                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
                     <NotebookPen className="w-5 h-5 text-violet-300 shrink-0"/>
-                    <span className="text-sm text-slate-200 font-bold">📝 개발 요청 · 미르에게 원함</span>
+                    <span className="text-sm text-dim-100 font-bold">📝 개발 요청 · 미르에게 원함</span>
                   </button>
                   {/* TallyOne 2.03: 데미지 예약 — 자료 도착 전 컨번호로 사전 등록 (전 화면 접근) */}
                   <button onClick={() => { setMenuOpen(false); setDmgResvOpen(true); }}
-                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
-                    <Camera className="w-5 h-5 text-orange-300 shrink-0"/>
-                    <span className="text-sm text-slate-200 font-bold">📷 데미지 예약</span>
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
+                    <Camera className="w-5 h-5 text-st-lod shrink-0"/>
+                    <span className="text-sm text-dim-100 font-bold">📷 데미지 예약</span>
                   </button>
                   {/* TallyOne 1.0 (K4): 보조기능(#/aux) 진입 — 건강 점검·맛집 수첩 등 */}
                   {onOpenAux && (
                     <button onClick={() => { setMenuOpen(false); onOpenAux(); }}
-                      className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
+                      className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
                       <Wrench className="w-5 h-5 text-sky-300 shrink-0"/>
-                      <span className="text-sm text-slate-200 font-bold">보조기능</span>
+                      <span className="text-sm text-dim-100 font-bold">보조기능</span>
                     </button>
                   )}
                   {onOpenStaffManager && (
                     <button onClick={() => { setMenuOpen(false); onOpenStaffManager(); }}
-                      className="w-full flex items-center gap-3 px-4 text-left hover:bg-slate-800 active:bg-slate-700" style={{ minHeight: 48 }}>
-                      <Users className="w-5 h-5 text-amber-300 shrink-0"/>
-                      <span className="text-sm text-slate-200 font-bold">인원 관리</span>
+                      className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
+                      <Users className="w-5 h-5 text-st-lodHi shrink-0"/>
+                      <span className="text-sm text-dim-100 font-bold">인원 관리</span>
                     </button>
                   )}
-                  <div className="border-t border-slate-700"/>
+                  <div className="border-t border-line"/>
                   {/* TallyOne 1.0 (K3): 로그아웃/앱 종료 2메뉴 분리 — 각각 확인 후 실행 */}
                   {onLogout && (
                     <button onClick={() => { setMenuOpen(false); handleLogoutClick(); }}
@@ -211,7 +211,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
       </div>
       {/* V9.15: 오프라인은 14px 아이콘 대신 놓칠 수 없는 띠로 */}
       {!online && (
-        <div className="bg-red-900/80 text-red-100 text-[12px] font-bold text-center py-1">
+        <div className="bg-st-bad/80 text-white text-xs2 font-bold text-center py-1">
           <CloudOff className="w-3.5 h-3.5 inline mr-1 -mt-0.5"/>오프라인 — 저장은 연결 복구 후 서버에 반영됩니다
         </div>
       )}
@@ -234,17 +234,17 @@ export default function Header({ version, inspector, online, route, voyages, onC
       {/* M3.5.6: 장비 번호 선택 모달 */}
       {equipOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setEquipOpen(false)}>
-          <div className="bg-slate-900 border-2 border-orange-700 rounded-2xl w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-ink-900 border border-st-lod rounded-card shadow-card w-full max-w-sm p-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-3">
-              <Truck className="w-5 h-5 text-orange-400"/>
-              <span className="font-bold text-orange-300">장비 번호 선택</span>
+              <Truck className="w-5 h-5 text-st-lod"/>
+              <span className="font-bold text-st-lodHi">장비 번호 선택</span>
             </div>
-            <div className="text-[11px] text-slate-400 mb-3">현재 작업 중인 장비를 선택하세요. 작업 보고에 자동 포함됩니다.</div>
+            <div className="text-xxs text-dim-300 mb-3">현재 작업 중인 장비를 선택하세요. 작업 보고에 자동 포함됩니다.</div>
             <div className="grid grid-cols-2 gap-2">
               {equipNumbers.map(num => (
                 <button key={num} onClick={() => handleSelectEquip(num)}
-                  className={`py-4 rounded-lg font-black text-lg ${
-                    equipNo === num ? 'bg-orange-600 text-white border-2 border-orange-300' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  className={`py-4 rounded-btn font-black text-lg ${
+                    equipNo === num ? 'bg-st-lod text-ink-950 border-2 border-st-lodHi' : 'bg-ink-800 text-dim-200 hover:bg-ink-750'
                   }`}>
                   {num}
                 </button>
@@ -252,7 +252,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
             </div>
             {equipNo && (
               <button onClick={() => handleSelectEquip('')}
-                className="w-full mt-2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs">
+                className="w-full mt-2 py-2 bg-ink-750 hover:bg-ink-700 text-dim-200 rounded-pill text-xs">
                 장비 번호 해제
               </button>
             )}

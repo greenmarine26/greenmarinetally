@@ -18,42 +18,42 @@ export default function ConfirmModal({
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4">
-      <div className={`bg-slate-900 border-2 ${danger ? 'border-red-700/60' : 'border-slate-700'} rounded-2xl w-full sm:max-w-md overflow-hidden shadow-2xl`}>
+      <div className={`bg-ink-900 border ${danger ? 'border-st-bad/60' : 'border-line'} rounded-card w-full sm:max-w-md overflow-hidden shadow-card`}>
         {/* 헤더 */}
-        <div className={`px-4 py-3 border-b ${danger ? 'bg-red-950/40 border-red-900/40' : 'bg-slate-800 border-slate-700'} flex items-center gap-2`}>
-          {danger && <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0"/>}
-          <div className={`flex-1 font-black text-base ${danger ? 'text-red-200' : 'text-slate-100'}`}>
+        <div className={`px-4 py-3 border-b ${danger ? 'bg-st-bad/15 border-st-bad/40' : 'bg-ink-850 border-line'} flex items-center gap-2`}>
+          {danger && <AlertTriangle className="w-5 h-5 text-st-bad flex-shrink-0"/>}
+          <div className={`flex-1 font-black text-base ${danger ? 'text-st-badHi' : 'text-dim-100'}`}>
             {title || (danger ? '⚠️ 확인 필요' : '확인')}
           </div>
-          <button onClick={onCancel} className="text-slate-500 hover:text-slate-300 p-1">
+          <button onClick={onCancel} className="text-dim-400 hover:text-dim-200 p-1">
             <X className="w-4 h-4"/>
           </button>
         </div>
 
         {/* 본문 */}
         <div className="px-4 py-5">
-          <div className="text-sm text-slate-200 whitespace-pre-line leading-relaxed">
+          <div className="text-sm text-dim-100 whitespace-pre-line leading-relaxed">
             {message}
           </div>
         </div>
 
         {/* 버튼 - 풀 너비 큰 버튼 (44px+) */}
-        <div className="grid grid-cols-2 gap-2 p-3 border-t border-slate-800 bg-slate-950">
+        <div className="grid grid-cols-2 gap-2 p-3 border-t border-line bg-ink-950">
           <button
             onClick={onCancel}
-            className="py-3.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-slate-100 font-bold rounded text-sm"
-            style={{ minHeight: 48 }}
+            className="py-3.5 bg-ink-750 hover:bg-ink-700 active:bg-ink-750 text-dim-100 font-bold rounded-btn text-base"
+            style={{ minHeight: 60 }}
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className={`py-3.5 font-bold rounded text-sm text-white ${
+            className={`py-3.5 font-bold rounded-btn text-base ${
               danger
-                ? 'bg-red-700 hover:bg-red-600 active:bg-red-800'
-                : 'bg-amber-700 hover:bg-amber-600 active:bg-amber-800'
+                ? 'bg-st-bad hover:brightness-110 active:brightness-95 text-white'
+                : 'bg-act hover:bg-act-hi active:bg-act-dn text-act-on'
             }`}
-            style={{ minHeight: 48 }}
+            style={{ minHeight: 60 }}
           >
             {confirmLabel}
           </button>
