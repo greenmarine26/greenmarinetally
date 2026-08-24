@@ -1182,18 +1182,18 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       const first = parsed.mirHello ? '네, 말씀하세요'
         : (localAnswer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();
       const zm = first.match(/^(.+?):\s*0대/);
-      if (zm) speak(`${zm[1].trim()} 없어`);   // 2.33: 미르 말투
+      if (zm) speak(`${zm[1].trim()} 없어요`);   // 2.33: 미르 말투
       else if (first) speak(first.replace(/:\s*/, ' '), (parsed.etaQuery || parsed.handoverQuery || parsed.customsReportQuery) ? { conversational: true } : {});  // V7.99-15/V8.00: 대화형 답변은 부드럽게
       return;
     }
 
     if (parsed.isStat) {
       const n = results.length;
-      speak(n === 0 ? `${describeQuery(parsed)} 없어` : `${describeQuery(parsed)} ${n}대`);   // 2.33
+      speak(n === 0 ? `${describeQuery(parsed)} 없어요` : `${describeQuery(parsed)} ${n}대`);   // 2.33
       return;
     }
     if (results.length === 0 && hasAnyCondition(parsed)) {
-      speak(`${describeQuery(parsed)} 없어`);   // 2.33
+      speak(`${describeQuery(parsed)} 없어요`);   // 2.33
     } else if (results.length === 1) {
       announceContainer(results[0]);
     } else if (results.length <= 5) {
