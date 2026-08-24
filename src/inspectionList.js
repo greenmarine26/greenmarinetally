@@ -429,7 +429,7 @@ table { width:100%; border-collapse:collapse; }
 .hd { margin-bottom:5px; }
 th,td { border:1px solid #333; padding:${cfg.p}px 3px; text-align:center; }
 th { background:#eee; font-weight:700; }
-.hd td { text-align:left; padding-left:6px; }
+/*  검수사 확정 2026-08-24: **출력양식은 전부 중앙정렬.** 머리 표 값칸도 예외 없다. */
 .b { font-weight:700; }
 .bl { display:block; min-height:13px; border-bottom:1px solid #999; }
 .w4{width:4%}.w8{width:8%}.w12{width:12%}.w13{width:13%}.w15{width:15%}.w16{width:16%}.w20{width:20%}
