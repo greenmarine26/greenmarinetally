@@ -1655,7 +1655,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         );
       })()}
 
-      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} inspector={inspector}/>
       <WrongAnswerModal
         open={wrongOpen}
         onClose={() => setWrongOpen(false)}

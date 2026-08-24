@@ -272,6 +272,23 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --jsx=automatic 
   else
     echo "⚠ X-RAY 연막 번들 실패 — 건너뜀"
   fi
+  # 2.27: 매뉴얼 연막검사 — 두 권을 **눌러서** 열어 본다.
+  #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
+  #   매뉴얼은 «있는 줄도 모르면 안 만든 것과 같다»(CLAUDE.md 0-B) — 안 열리는 권은 없는 권이다.
+  SMOKE_HP=$(mktemp /tmp/_smokehelp_XXXXXX.js)
+  if npx esbuild tools/smoke_help.jsx --bundle --loader:.jsx=jsx --jsx=automatic \
+       --outfile="$SMOKE_HP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
+    node tools/smoke_help.cjs "$SMOKE_HP" || { echo "✗ 매뉴얼 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "⚠ 매뉴얼 연막 번들 실패 — 건너뜀"
+  fi
+  # 2.27: 수석 전용 항목이 공용 권에 되돌아왔는지 — 검수원이 보면 안 되는 서류다(V9.19-01).
+  for _t in "마감 텔리 (DEP.TALLY REPORT)" "베이매트릭스 만들기"; do
+    if grep -qF "$_t" src/data/helpData.js; then
+      echo "✗ 수석 전용 «$_t» 이 공용 매뉴얼(helpData.js)에 있다 — 배포 금지"; exit 1
+    fi
+  done
+  echo "   ✓ 수석 전용 항목 공용 권 이탈 0건"
   # 2.22: 로그인 목록 연막검사 — «지금 로그인한 사람 ∪ 오늘의 본인» 규칙이 살아 있는지 본다.
   #   검수사가 두 번 교정한 규칙이라(2.12-01 → 2.22) 조용히 되돌아가면 매번 이름을 쳐야 한다.
   SMOKE_LG=$(mktemp /tmp/_smokelg_XXXXXX.js)

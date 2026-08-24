@@ -203,7 +203,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
           <CloudOff className="w-3.5 h-3.5 inline mr-1 -mt-0.5"/>오프라인 — 저장은 연결 복구 후 서버에 반영됩니다
         </div>
       )}
-      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)}/>
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} inspector={inspector}/>
       {/* M6.14d: Gemini API 키 설정 모달 */}
       {keyOpen && <GeminiKeyModal onClose={() => setKeyOpen(false)} />}
       {/* TallyOne 1.1: 클로드에게 메모 — Header가 이미 받는 props로 자동 첨부 정보 구성 (route 없으면 모달이 해시 파싱 폴백) */}

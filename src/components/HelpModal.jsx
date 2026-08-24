@@ -3,14 +3,19 @@
 //   구성 ① 하루 작업 순서 코스(HELP_COURSE) — 처음 온 검수사가 따라만 하면 되는 10단계
 //        ② 기능 사전(HELP_DATA.usage) — 궁금할 때 찾아보는 기능별 상세 13갈래
 //        ③ 검수 용어·회화(HELP_DATA.terms + ContainerPhrasebook) — V8.02부터 유지
-//   블록 스키마: { title, step?, where?, lead?, dos?[], says?[{in,out}], warns?[] }
+//   블록 스키마: { title, step?, where?, lead?, shot?{cap,rows[]}, dos?[], says?[{in,out}], warns?[] }
 //     화면 위치(📍)와 실제 입력→답변 예시를 항상 같이 보여준다.
 import React, { useState } from 'react';
+import HelpShot from './HelpShot.jsx';   // 2.27: 기능마다 화면 그림
 import { X, Search, Mic, MessageCircle, Anchor, Truck, AlertTriangle, Wrench,
   Camera, Bot, CheckCircle2, LayoutGrid, Upload, Printer, Play,
   BookOpen, Languages, ChevronRight, ChevronLeft } from 'lucide-react';
 import ContainerPhrasebook from './ContainerPhrasebook.jsx';
 import { HELP_DATA, HELP_COURSE } from '../data/helpData.js';
+//  2.27: 매뉴얼을 두 권으로 나눴다(검수사 지시 «검수사 공용, 수석검수사 메뉴얼 두권으로»).
+//    수석 권은 «검수원이 안 쓰거나 봐서는 안 되는 것»만 담는다 — 공용 권을 대체하지 않고 더한다.
+import { HELP_DATA_CHIEF } from '../data/helpDataChief.js';
+import { isChief } from '../staffList.js';
 
 // 기능 사전 카테고리: id → {label, icon, accent, desc} — id는 HELP_DATA.usage 키와 1:1
 const USAGE_CATS = [
@@ -26,7 +31,17 @@ const USAGE_CATS = [
   { id: 'report',  label: '보고 · 사진', icon: Camera,        accent: 'pink',    desc: '작업 보고 · 해치 · 사진 · 마감 점검' },
   { id: 'data',    label: '자료 업로드', icon: Upload,        accent: 'orange',  desc: 'EDI → 리스트 → X-RAY 순서' },
   { id: 'print',   label: '출력',        icon: Printer,       accent: 'blue',    desc: '검수 리스트 · 카고플랜 · 워킹 리포트' },
+  { id: 'cone',    label: '콘앱',        icon: Truck,         accent: 'cyan',    desc: '콘 계산 · 카고플랜 · 베이플랜 (다른 앱)' },
   { id: 'trouble', label: '안 될 때',    icon: Wrench,        accent: 'red',     desc: '막히는 조건과 푸는 법' },
+];
+
+// 2.27: 수석 권 카테고리 — id 는 HELP_DATA_CHIEF.usage 키와 1:1. 화면 전환은 'cat:c:<id>' 로 간다.
+const CHIEF_CATS = [
+  { id: 'board',   label: '수석 대시보드', icon: LayoutGrid,   accent: 'violet',  desc: '오늘 도는 배 전부 · 진행률 · 자료 대기' },
+  { id: 'portmis', label: 'PORT-MIS',      icon: Anchor,       accent: 'sky',     desc: '입항시각 · 선석 · 차항지 · MRN' },
+  { id: 'matrix',  label: '베이매트릭스',  icon: LayoutGrid,   accent: 'lime',    desc: '처음 보는 배 그림 만들기' },
+  { id: 'closing', label: '마감 텔리',     icon: Printer,      accent: 'blue',    desc: 'DEP.TALLY · 실적 EDI · ASC · VGM' },
+  { id: 'voyage',  label: '항차 관리',     icon: CheckCircle2, accent: 'emerald', desc: '만들기 · 지우기 · 완료 처리' },
 ];
 
 // 테일윈드 정적 클래스 (동적 생성 금지 — purge 회피)
@@ -66,6 +81,9 @@ function HelpBlock({ b }) {
       {b.lead && (
         <div className="text-xs sm:text-sm text-slate-300 leading-relaxed mb-2">{b.lead}</div>
       )}
+
+      {/* 2.27: 말로만 설명하면 어느 버튼인지 못 찾는다 — 그 화면을 그려 준다(검수사 지시). */}
+      <HelpShot shot={b.shot}/>
 
       {b.dos && b.dos.length > 0 && (
         <ol className="space-y-1.5 mb-2">
@@ -109,13 +127,17 @@ function HelpBlock({ b }) {
   );
 }
 
-export default function HelpModal({ open, onClose }) {
+export default function HelpModal({ open, onClose, inspector = '' }) {
   // view: 'home' | 'course'(하루 작업 순서) | 'usage'(기능 사전 그리드) | 'cat:<id>' | 'terms'
   const [view, setView] = useState('home');
   const [phraseOpen, setPhraseOpen] = useState(false);
   if (!open) return null;
 
-  const catBlocks = (id) => (HELP_DATA.usage?.[id] || []);
+  const _isChiefBook = (id) => String(id || '').startsWith('c:');
+  const catBlocks = (id) => (_isChiefBook(id)
+    ? (HELP_DATA_CHIEF.usage?.[id.slice(2)] || [])
+    : (HELP_DATA.usage?.[id] || []));
+  const chief = isChief(inspector);
 
   const Header = ({ title, back }) => (
     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-900/90 sticky top-0 z-10">
@@ -162,6 +184,21 @@ export default function HelpModal({ open, onClose }) {
             </div>
             <ChevronRight className="w-6 h-6 text-sky-400 shrink-0" />
           </button>
+
+          {/* 2.27: 수석 권 — 수석에게만 보인다. 검수원 화면에 나오면 안 되는 서류가 들어 있다. */}
+          {chief && (
+            <button onClick={() => setView('chief')}
+              className="w-full text-left bg-gradient-to-br from-violet-900/50 to-slate-900 border-2 border-violet-700/40 hover:border-violet-500 rounded-2xl p-4 flex items-center gap-3.5 transition">
+              <div className="w-14 h-14 rounded-2xl bg-violet-500/20 flex items-center justify-center shrink-0">
+                <BookOpen className="w-7 h-7 text-violet-300" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-black text-violet-100">수석검수사 매뉴얼</div>
+                <div className="text-sm text-violet-300/70 mt-0.5">대시보드 · PORT-MIS · 베이매트릭스 · 마감 텔리 · 항차 관리</div>
+              </div>
+              <ChevronRight className="w-6 h-6 text-violet-400 shrink-0" />
+            </button>
+          )}
 
           <button onClick={() => setView('terms')}
             className="w-full text-left bg-gradient-to-br from-emerald-900/50 to-slate-900 border-2 border-emerald-700/40 hover:border-emerald-500 rounded-2xl p-5 flex items-center gap-4 transition">
@@ -215,13 +252,40 @@ export default function HelpModal({ open, onClose }) {
         </div>
       </>
     );
+  } else if (view === 'chief') {
+    body = (
+      <>
+        <Header title="수석검수사 매뉴얼" back={() => setView('home')} />
+        <div className="p-3 sm:p-4 overflow-y-auto">
+          <div className="text-[11px] text-violet-300/80 bg-violet-950/30 border border-violet-800/40 rounded-lg px-3 py-2 mb-3 leading-relaxed">
+            검수 방법은 <b>기능 사전</b>(공용)에 있습니다. 이 권은 <b>수석만 쓰는 것</b>만 담았습니다.
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            {CHIEF_CATS.map((cat) => {
+              const Icon = cat.icon;
+              const a = ACCENT[cat.accent] || ACCENT.sky;
+              return (
+                <button key={cat.id} onClick={() => setView('cat:c:' + cat.id)}
+                  className={`text-left border-2 rounded-2xl p-3.5 transition ${a.card}`}>
+                  <Icon className={`w-7 h-7 mb-2 ${a.icon}`} />
+                  <div className={`text-sm font-black ${a.title}`}>{cat.label}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">{cat.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    );
   } else if (view.startsWith('cat:')) {
     const id = view.slice(4);
-    const cat = USAGE_CATS.find((c) => c.id === id);
+    const cat = _isChiefBook(id)
+      ? CHIEF_CATS.find((c) => c.id === id.slice(2))
+      : USAGE_CATS.find((c) => c.id === id);
     const blocks = catBlocks(id);
     body = (
       <>
-        <Header title={cat ? cat.label : '사용 매뉴얼'} back={() => setView('usage')} />
+        <Header title={cat ? cat.label : '사용 매뉴얼'} back={() => setView(_isChiefBook(id) ? 'chief' : 'usage')} />
         <div className="overflow-y-auto">
           <div className="p-3 sm:p-4 space-y-3">
             {blocks.length > 0

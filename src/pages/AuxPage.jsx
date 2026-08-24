@@ -428,7 +428,7 @@ export default function AuxPage({ inspector, isChief = false, isOwner = false, v
       )}
 
       {/* 모달들 — HelpModal·ContainerPhrasebook은 open prop, GeminiKeyModal은 조건부 마운트 */}
-      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} inspector={inspector} />
       <ContainerPhrasebook open={phraseOpen} onClose={() => setPhraseOpen(false)} />
       {keyOpen && <GeminiKeyModal onClose={() => setKeyOpen(false)} />}
       {briefOpen && <BriefingModal inspector={inspector} onClose={() => setBriefOpen(false)} />}
