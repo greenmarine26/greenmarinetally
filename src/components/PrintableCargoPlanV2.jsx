@@ -146,9 +146,26 @@ export const CARGO_V2_CSS = `
 .cpv2-hold-area { flex: 1 1 0; display: flex; flex-direction: column; width: 100%; min-height: 0; }
 .cpv2-grid-row-wrap { display: flex; flex-direction: row; align-items: stretch; gap: 2px; flex: 1 1 0; min-height: 0; }
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
-.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
+.cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; --mf: 9.6px; }
+/* 2.38-03 «--mf» = 칸 마크 글자 크기의 단일 소스. **9.6px 고정**(원래 8px 의 1.2배).
+   ⛔ 이 CSS 는 JS 템플릿 문자열 안이다 — 주석에도 백틱을 쓰지 마라(문자열이 끊겨 빌드가 죽는다, 실측 2026-08-25).
+
+   ⛔ clamp(vw) 를 뺀 이유 — 2026-08-25 인쇄본 실측.
+      종전 값은 clamp(7.2px, 0.66vw, 9.6px) 였는데 인쇄 뷰포트에서 **최솟값 7.2px 로 떨어졌다**
+      (검수사가 보내 준 PDF 실측: 대문자 5.40pt = 7.2px). 즉 내가 시안으로 보여 준 9.6px 과 실제 인쇄가 달랐다.
+      칸 폭은 .cpv2-page 의 min-width:1200px 로 정해져 뷰포트와 무관한데 글자만 vw 를 따라가 어긋난 것이다.
+      고정값이 맞다. 최악 배 MCSC(가로 12칸·세로 13단 → 칸 17.0×15.7px)에서 가장 넓은 두 글자 DG 가
+      14.4px, 글자 높이 11.0px 라 여유 있게 들어간다.
+
+   ⛔ 칸 글자 크기를 여기서 갈라 쓰면 안 되는 이유 — 같은 날 잡은 다른 사고.
+      칸 규칙 .cpv2-tier-row .cpv2-cell 과 e 규칙 .cpv2-cell.cpv2-mark-e 는 **명시도가 (0,2,0)로 같다.**
+      그래서 나중에 선언된 e 규칙이 칸의 크기를 통째로 덮었고, 거기 쓴 1.1em 은
+      «칸 글자의 1.1배»가 아니라 **부모(.cpv2-tier-row, font-size 미지정 → 기본 16px)의 1.1배**로 잡혀
+      17.6px 로 나갔다. 인쇄본 실측 대문자 5.40pt 대 소문자 e 13.20pt = 2.4배.
+      검수사가 «알파벳이 각자 폰트가 틀리게 보입니다» · «대문자가 소문자보다 작게 보입니다» 라고 한 것이
+      전부 이 한 줄 때문이었다. em 은 폰트 크기를 정할 때 **자기 부모**를 본다. */
 .cpv2-tier-row.cpv2-invisible-row { display: none; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(7.2px, 0.66vw, 9.6px);   /* 2.38-02 검수사 «1.2와 1로 가야 겠어요» — 마크 전부 1.2배(원래 8px 기준 9.6px). 선박 사전 23척 실측: 최악 MCSC 가로 12칸·세로 13단 → 칸 17.0×15.7px, DG(가장 넓은 두 글자 1.5em) 14.4px·글자 높이 11.0px 로 여유 있게 들어간다 */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: var(--mf, 9.6px);   /* 2.38-02 마크 전부 1.2배 — 값은 .cpv2-tier-row 의 --mf 한 곳에서만 정한다(폴백은 같은 값) */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
@@ -174,13 +191,10 @@ export const CARGO_V2_CSS = `
 /* 2.38-01 (검수사 «소문자 e를 조금 더 크고 잘보이게 해주세요 적어서 안보임»):
    소문자 e는 x-height 만 차지해 같은 폰트 크기에서도 대문자 E보다 눈에 띄게 작다.
    글자를 키워 대문자와 비슷한 높이로 맞춘다 — 20ft/40ft 구분은 «모양»이 하지 «크기»가 하지 않는다. */
-.cpv2-cell.cpv2-mark-e { font-size: 1.1em; font-weight: 600; padding-bottom: 0.15em; }  /* 2.38-02 검수사 «1.1로 볼드를 조금만 주고» — 화면만 보면 배율 없는 쪽이 차분하지만,
-     «인쇄하면 어떨런지» 라는 판단으로 이쪽을 골랐다. 레이저 인쇄에서 9.6px 짜리 얇은 획은
-     날아가기 쉬워, 소문자 e 는 1.1배에 굵기 600(다른 글자는 700)으로 살짝만 세운다.
-     가운데 보정 — Arial 줄상자 가운데는 0.5em 인데 소문자 e 잉크 가운데는 0.587em 이라 처져 앉는다.
-     칸이 flex 가운데 정렬이라 아래 여백을 주면 그 절반만큼 올라온다(검수사 «가운데로 보정 하니 잘보입니다»).
-     box-sizing:border-box 라 칸 크기는 안 변한다.
-     폭 검증: 최악 배 MCSC(가로 12칸·세로 13단 → 칸 17.0×15.7px)에서 DG 14.4px·글자높이 11.0px 로 안 잘린다. */  /* 2.38-01 검수사 «e를 1.1 볼드 없이» + «가운데 보정». 소문자 e는 위로 뻗는 획이 없어 줄 아래쪽에 앉는다 —
+.cpv2-cell.cpv2-mark-e { font-size: calc(var(--mf, 9.6px) * 1.1); font-weight: 600; padding-bottom: 0.15em; }  /* 2.38-03: em 대신 **calc(var(--mf) * 1.1)** — 칸 글자 크기를 정확히 1.1배 한다.
+     검수사 «1.1로 볼드를 조금만 주고» · 인쇄 기준으로 고른 안(레이저에서 얇은 획은 날아간다).
+     가운데 보정: Arial 줄상자 가운데는 0.5em 인데 소문자 e 잉크 가운데는 0.587em 이라 처져 앉는다.
+     칸이 flex 가운데 정렬이라 아래 여백을 주면 그 절반만큼 올라온다(padding 의 em 은 자기 크기 기준이라 맞다). */  /* 2.38-01 검수사 «e를 1.1 볼드 없이» + «가운데 보정». 소문자 e는 위로 뻗는 획이 없어 줄 아래쪽에 앉는다 —
      칸이 flex 가운데 정렬이라 아래 여백을 주면 그만큼 올라온다. box-sizing:border-box 라 칸 크기는 안 변한다. */
 /* 2.38: 엠티 동그라미 폐지 — 20ft=e · 40/45ft=E 글자만 (검수사 확정) */
 .cpv2-cell.cpv2-mark-L { color: #1565c0; }
