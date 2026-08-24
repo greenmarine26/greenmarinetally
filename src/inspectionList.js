@@ -401,7 +401,7 @@ export function generateXrayListHTML(rows, head = {}, perPage = 20) {
       <table class="hd">
         <tr><th>항차/항공편명</th><td>${esc(head.voy)}</td><th>운항선사</th><td colspan="3">${esc(head.carrier)}</td></tr>
         <tr><th>입항일자</th><td>${esc(head.eta)}</td><th>양륙항</th><td colspan="3">${esc(head.pod)}</td></tr>
-        <tr><th>선박명</th><td>${esc(head.name)}</td><th>선박 호출부호</th><td>${esc(head.callsign)}</td><th class="w8">MRN</th><td>${esc(head.mrn)}</td></tr>
+        <tr><th>선박명</th><td>${esc(head.name)}</td><th>선박 호출부호</th><td>${esc(head.callsign)}</td><th>MRN</th><td>${esc(head.mrn) || '&nbsp;'}</td></tr>
       </table>
       <table class="ls">
         <thead><tr>
@@ -426,7 +426,13 @@ body { font-family:'Malgun Gothic',sans-serif; margin:0; padding:12px; color:#00
 .ti { font-size:13pt; margin-bottom:5px; display:flex; justify-content:space-between; align-items:flex-end; }
 .pn { font-size:8pt; font-weight:400; }
 table { width:100%; border-collapse:collapse; }
-.hd { margin-bottom:5px; }
+/*  검수사 확정 2026-08-24 — 머리표에 MRN 이 너무 작아 보인다. 리스트와 같은 폭으로 늘려 놓으니
+    여섯 칸이 균등하게 쪼개져 MRN 값칸이 눌렸다. 기존 샘플은 머리표가 리스트보다 좁다.
+    ⇒ 폭을 줄이고 table-layout:auto 로 내용에 맞게 잡는다. 라벨은 줄바꿈 금지.
+    ⚠ 이 주석은 템플릿 문자열 안이다 — 백틱을 쓰면 문자열이 끊긴다(지침서 2026-08-13 실측). */
+.hd { width:64%; margin-bottom:6px; table-layout:auto; }
+.hd th { white-space:nowrap; padding-left:8px; padding-right:8px; }
+.hd td { white-space:nowrap; padding-left:10px; padding-right:10px; }
 th,td { border:1px solid #333; padding:${cfg.p}px 3px; text-align:center; }
 th { background:#eee; font-weight:700; }
 /*  검수사 확정 2026-08-24: **출력양식은 전부 중앙정렬.** 머리 표 값칸도 예외 없다. */
