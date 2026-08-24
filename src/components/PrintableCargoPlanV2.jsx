@@ -148,7 +148,7 @@ export const CARGO_V2_CSS = `
 .cpv2-grid { display: flex; flex-direction: column; align-items: stretch; gap: 0; flex: 1 1 0; min-width: 0; }
 .cpv2-tier-row { display: flex; gap: 0; flex: 1 1 0; min-height: 0; }
 .cpv2-tier-row.cpv2-invisible-row { display: none; }
-.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(7.5px, 0.69vw, 10px);   /* 2.38-01 검수사 «B로 해서» — 마크 전부 1.25배. 두 글자(DG 1.5em)가 최대라 최악 배(MCSC 칸 17px)에서도 15px로 들어간다 */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
+.cpv2-tier-row .cpv2-cell { flex: 1 1 0; min-width: 0; min-height: 0; border: 0.5px solid #555; box-sizing: border-box; background: #fff; font-size: clamp(7.2px, 0.66vw, 9.6px);   /* 2.38-02 검수사 «1.2와 1로 가야 겠어요» — 마크 전부 1.2배(원래 8px 기준 9.6px). 선박 사전 23척 실측: 최악 MCSC 가로 12칸·세로 13단 → 칸 17.0×15.7px, DG(가장 넓은 두 글자 1.5em) 14.4px·글자 높이 11.0px 로 여유 있게 들어간다 */ display: flex; align-items: center; justify-content: center; line-height: 1; font-weight: bold; color: #000; position: relative; overflow: hidden; }
 .cpv2-tier-row .cpv2-cell-empty { flex: 1 1 0; min-width: 0; min-height: 0; visibility: hidden; }
 .cpv2-row-labels { display: flex; flex: 0 0 auto; font-size: clamp(7px, 0.75vw, 10px); color: #444; gap: 0; margin: 1px 0; margin-right: 16px; }
 .cpv2-row-labels > span { flex: 1 1 0; min-width: 0; text-align: center; line-height: 1.2; }
@@ -174,7 +174,13 @@ export const CARGO_V2_CSS = `
 /* 2.38-01 (검수사 «소문자 e를 조금 더 크고 잘보이게 해주세요 적어서 안보임»):
    소문자 e는 x-height 만 차지해 같은 폰트 크기에서도 대문자 E보다 눈에 띄게 작다.
    글자를 키워 대문자와 비슷한 높이로 맞춘다 — 20ft/40ft 구분은 «모양»이 하지 «크기»가 하지 않는다. */
-.cpv2-cell.cpv2-mark-e { font-size: 1.1em; font-weight: normal; padding-bottom: 0.14em; }  /* 2.38-01 검수사 «e를 1.1 볼드 없이» + «가운데 보정». 소문자 e는 위로 뻗는 획이 없어 줄 아래쪽에 앉는다 —
+.cpv2-cell.cpv2-mark-e { font-size: 1.1em; font-weight: 600; padding-bottom: 0.15em; }  /* 2.38-02 검수사 «1.1로 볼드를 조금만 주고» — 화면만 보면 배율 없는 쪽이 차분하지만,
+     «인쇄하면 어떨런지» 라는 판단으로 이쪽을 골랐다. 레이저 인쇄에서 9.6px 짜리 얇은 획은
+     날아가기 쉬워, 소문자 e 는 1.1배에 굵기 600(다른 글자는 700)으로 살짝만 세운다.
+     가운데 보정 — Arial 줄상자 가운데는 0.5em 인데 소문자 e 잉크 가운데는 0.587em 이라 처져 앉는다.
+     칸이 flex 가운데 정렬이라 아래 여백을 주면 그 절반만큼 올라온다(검수사 «가운데로 보정 하니 잘보입니다»).
+     box-sizing:border-box 라 칸 크기는 안 변한다.
+     폭 검증: 최악 배 MCSC(가로 12칸·세로 13단 → 칸 17.0×15.7px)에서 DG 14.4px·글자높이 11.0px 로 안 잘린다. */  /* 2.38-01 검수사 «e를 1.1 볼드 없이» + «가운데 보정». 소문자 e는 위로 뻗는 획이 없어 줄 아래쪽에 앉는다 —
      칸이 flex 가운데 정렬이라 아래 여백을 주면 그만큼 올라온다. box-sizing:border-box 라 칸 크기는 안 변한다. */
 /* 2.38: 엠티 동그라미 폐지 — 20ft=e · 40/45ft=E 글자만 (검수사 확정) */
 .cpv2-cell.cpv2-mark-L { color: #1565c0; }
