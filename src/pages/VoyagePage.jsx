@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
+import { mirSee } from '../mirEyes.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
@@ -2484,6 +2485,14 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
     [containers, parsed]);
   const answer = useMemo(() => {
     try {
+      //  ★ 2.50-01 — **여기가 검수사가 실제로 쓰는 검색줄이다.**
+      //    2.50 은 `SearchPanel`(수동 모드 안쪽)과 통합검색에만 겹을 붙였는데, 양하 탭 검색줄은
+      //    이 자리(VoyagePage:2495)가 직접 답한다. 그래서 «미르야 순서대로 양하하자» 를 쳐도
+      //    옛 미르가 140대를 통째로 나열했다 — **화면에서 눌러 보고서야 알았다.**
+      //    ⚠ 배선을 붙일 때 «어느 화면이 그 답을 내는가»를 먼저 확인한다. 파일이 있다고 걸리는 것이 아니다.
+      const _eyes = mirSee(q, { containers, info: voyage?.info || null, mode,
+        bayPairs: briefCtx?.pairs || null });
+      if (_eyes) return _eyes;
       // TallyOne 2.01 (검수사 확정 «어디든 브리핑 해달라고 하면 그자리에서 해줘야 합니다. 굳이 작업시작을
       //   누르는 불편함을 주어서는 안됩니다») — 브리핑·실번호 점검을 인라인에서 직접 낸다.
       //   containers 는 이미 현재 모드 병합본(VoyagePage :704)이라 SearchPanel 의 modeCs 와 같은 재료.
@@ -2494,7 +2503,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
       return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier, photos: briefCtx?.photos || null }) : null;   // 2.05-01
     } catch (e) { return null; }
-  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx]);
+  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, voyage]);
   const readRef = useRef('');
   useEffect(() => {
     if (!answer || readRef.current === q + answer.length) return;
