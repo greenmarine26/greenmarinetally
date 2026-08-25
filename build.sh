@@ -239,17 +239,23 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
        --outfile="$SMOKE_BP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_bayplan.cjs "$SMOKE_BP" || { echo "✗ BayPlan 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "⚠ BayPlan 연막 번들 실패 — 건너뜀"
+    echo "✗ BayPlan 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   # 2.18: 리스트 탭 연막검사 — PC 2단 배치(우측 고정 상세 칼럼)가 실제로 그려지는지 본다.
   #   이 판에서 1,300줄짜리 상세 렌더를 함수로 들어내 두 자리에서 같이 쓰게 바꿨다.
   #   빌드와 번들 grep 은 «어디에 그려지는가»를 모른다 — 그려 봐야 안다.
   SMOKE_LT=$(mktemp /tmp/_smokelt_XXXXXX.js)
+  #  ⚠ 2.46 — X-RAY 와 **같은 병**이 여기서도 조용히 돌고 있었다.
+  #    inspectionList → tallyExcel 로 이어지는 경로에 Node 전용 `await import('fs')` 가 있어
+  #    esbuild 번들이 «Could not resolve fs» 로 깨졌고, 이 자리는 그걸 «건너뜀» 으로 삼켰다.
+  #    X-RAY 쪽은 2.45 에서 고쳤는데 **여기는 안 고쳤다** — 한쪽만 고치고 같은 병을 남긴 것이다.
   if npx esbuild tools/smoke_listtab.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+       --external:fs --external:path --external:url \
        --outfile="$SMOKE_LT" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_listtab.cjs "$SMOKE_LT" || { echo "✗ 리스트 탭 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "⚠ 리스트 탭 연막 번들 실패 — 건너뜀"
+    #  ⛔ «건너뜀» 금지 — 검사가 안 돌면 검증이 없는 것이다(3금지 ③).
+    echo "✗ 리스트 탭 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   # 2.26-10: 미르가 «EDI 가 아직 안 와서 위치를 모른다» 고 답하는가 (검수사 확정 — 경보는 빼되 물으면 답한다)
   node --input-type=module -e "
@@ -286,7 +292,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     BUILT_CSS=$(ls -t assets/index-*.css 2>/dev/null | head -1)
     node tools/smoke_bright.cjs "$SMOKE_BR" "$BUILT_CSS" || { echo "✗ 밝기·소리 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "⚠ 밝기 연막 번들 실패 — 건너뜀"
+    echo "✗ 밝기·소리 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   # 2.27: 매뉴얼 연막검사 — 두 권을 **눌러서** 열어 본다.
   #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
@@ -296,7 +302,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
        --outfile="$SMOKE_HP" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_help.cjs "$SMOKE_HP" || { echo "✗ 매뉴얼 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "⚠ 매뉴얼 연막 번들 실패 — 건너뜀"
+    echo "✗ 매뉴얼 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   # 2.27: 수석 전용 항목이 공용 권에 되돌아왔는지 — 검수원이 보면 안 되는 서류다(V9.19-01).
   for _t in "마감 텔리 (DEP.TALLY REPORT)" "베이매트릭스 만들기"; do
@@ -340,10 +346,18 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
        --outfile="$SMOKE_LG" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_login.cjs "$SMOKE_LG" || { echo "✗ 로그인 목록 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "⚠ 로그인 연막 번들 실패 — 건너뜀"
+    echo "✗ 로그인 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
+  # 2.46: **작업중 판정 전수 회귀** — 고친 배 하나가 아니라 **그날 떠 있는 배 전부**를 돌린다.
+  #   검수사 — «하나가 살면 하나가 죽고 시뮬레이션은 하는 건가요?»
+  #   실제로 그랬다: KBTR 을 고친 2.44 가 NSFR 을 죽였고, 그 판은 **KBTR 자신도** 19시 이후 영영
+  #   「예정」이 되게 만들고 있었는데 아무도 못 봤다. 한 척만 돌려 보면 그렇게 된다.
+  #   ⇒ RTDB 실항차 스냅샷 전부 × 하루 13시각을 기준표와 대조하고, 한 척이라도 바뀌면 **여기서 선다.**
+  #     그 위에 검수사가 확답한 12건은 절대 조항이라 기준표를 다시 떠도 통과 못 한다.
+  #   ⚠ 「건너뜀」 금지 — X-RAY 검사가 2.41~2.44 동안 조용히 건너뛰어져 버그를 놓친 전례가 있다.
+  node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
 else
-  echo "⚠ 연막검사 번들 실패 — 건너뜀"
+  echo "✗ 렌더 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
 fi
 
 # M6.94.5: 빌드된 JS 안에 APP_VERSION 문자열이 박혀있는지 검증.
