@@ -672,7 +672,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           //   ⛔ 예외를 만들지 마라 — "같은 B/L 에서 20ft·40ft 무게가 같으면 총중량 복사" 라는
           //   예외를 넣었다가 교정받았다(2026-08-07). **20ft 도 30톤까지 싣고, 20ft 가 40ft 보다
           //   무거울 수도 있다**(40ft 에 부피만 큰 가벼운 화물을 넣기도 한다).
-          if (k === 'wt') { safeR.wt = parseListWeightKg(v); return; }   // 톤 보정 후 리스트 값 채택
+          //  ★ 2.52-03 — **리스트 무게가 «빈칸/0» 이면 EDI 무게를 지우지 않는다.**
+          //    규칙(1.23 «무게는 리스트가 기준»)은 그대로다 — 다만 그것은 **리스트에 값이 있을 때** 하는 말이다.
+          //    실측: `records.wt = 0` 이 `parseListWeightKg(0) → 0` 으로 EDI 27,600kg 을 덮고 있었다.
+          //    NSFR 2616N 은 **140대 전부**, 전 항차 합계 **1,032대** 가 이렇게 무게를 잃고 있었다.
+          //    ⚠ 화면 두 곳이 서로 다른 값을 보고 있었다 —
+          //      자동 가이드(SearchPanel.allContainers 경로)는 «27.6t» 로 트윈 하중까지 계산해 막는데,
+          //      양하 탭 리스트·미르(이 경로)는 무게 칸이 통째로 비어 있었다(실선 확인).
+          //    ⚠ 0kg 컨테이너는 없다 — 타레만 2톤이다. 0 은 언제나 «값 없음»이지 «0킬로»가 아니다.
+          if (k === 'wt') { const _w = parseListWeightKg(v); if (_w > 0) safeR.wt = _w; return; }   // 톤 보정 후 리스트 값 채택
           safeR[k] = v;
         } else {
           // EDI에 없는 컨번호 → 리스트만 있는 항목 (참고용으로 허용)

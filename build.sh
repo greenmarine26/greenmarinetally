@@ -368,6 +368,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   SMOKE_ME=$(mktemp /tmp/_smokeme_XXXXXX.cjs)
   if npx esbuild src/mirEyes.js --bundle --platform=node --format=cjs --outfile="$SMOKE_ME" --log-level=error; then
     node tools/smoke_mireyes.cjs "$SMOKE_ME" || { echo "✗ 미르의 눈 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.52-03: 무게 병합 — 리스트의 «빈칸/0» 이 EDI 무게를 지우면 안 된다(소스 직접 검사, 번들 불필요)
+    node tools/smoke_weight_merge.cjs || { echo "✗ 무게 병합 연막검사 실패 — 배포 금지"; exit 1; }
   else
     echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
