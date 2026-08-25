@@ -9,9 +9,9 @@ import { UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 //    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
 import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
-import { inspectorStatus } from '../inspectorStatus.js';
+import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, isWorkingNow } from '../utils.js';   // 2.10: PC 좌측 현황판
+import { dayDiff, dayLabel, voyagePlanMs, isWorkingNow, isoFeet, isReeferContainer } from '../utils.js';   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -218,26 +218,63 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   // 직접 입력으로 고른 이름이 목록에 없는 경우 표시용
   const selectedInList = list.some(i => i.name === selected);
 
-  // ── 2.10 (검수사 확정 2026-08-23, 시안 승인 «컴화면 마음에 듭니다») — PC 좌측 현황판 ──
+  // -- 2.4x (검수사 확정): 배별 "지금 활동 중인 검수원" 수. 판정은 inspectorStatus.js 의
+  //   WORKING_WINDOW_MS 한 벌 그대로 쓴다(새로 만들지 않는다). i.lastVoyage(fbSetInspectorActivity 가
+  //   심는 필드)가 board.ships[].key 와 같은 항차 키다. 명시 로그아웃(loggedIn===false)은 최근
+  //   활동이어도 카운트하지 않는다 -- inspectorStatus 판정 기준과 동일하게 맞춘다.
+  const activeByShip = (() => {
+    const now = Date.now();
+    const out = {};
+    for (const i of list) {
+      if (!i || !i.lastVoyage || !i.lastActive) continue;
+      if (i.loggedIn === false) continue;
+      if (now - i.lastActive >= WORKING_WINDOW_MS) continue;
+      out[i.lastVoyage] = (out[i.lastVoyage] || 0) + 1;
+    }
+    return out;
+  })();
+
+  // -- 2.10 (검수사 확정 2026-08-23, 시안 승인 "컴화면 마음에 듭니다") -- PC 좌측 현황판 --
   //   ⚠ 추가 조회 0. App.jsx:112 이 **로그인 전에도** voyages 를 구독하고 있어 그 값을 그대로 쓴다.
-  //   ⚠ 폰은 종전 화면 그대로다(«컴용 로그인 화면») — lg 이상에서만 2단이 된다.
+  //   ⚠ 폰은 종전 화면 그대로다("컴용 로그인 화면") -- lg 이상에서만 2단이 된다.
   const board = React.useMemo(() => {
     const vs = Object.entries(voyages || {}).map(([key, v]) => ({ key, ...v }));
     let boxes = 0;
+    // -- 2.4x (검수사 확정): KPI「검수 대상 컨테이너」터미널별 분해 -- info.pier 로 가른다.
+    //   PCTC→평택컨테이너터미널 · PNCT→동방아이포트 · 그 외(빈 배 있음, 실측 OBWH·RZOR)→미상.
+    const byPier = { PCTC: 0, PNCT: 0, unknown: 0 };
     const ships = [];
     for (const v of vs) {
       const d = v?.discharge?.ediContainers, l = v?.loading?.ediContainers;
-      boxes += (d ? Object.keys(d).length : 0) + (l ? Object.keys(l).length : 0);
+      const vBoxes = (d ? Object.keys(d).length : 0) + (l ? Object.keys(l).length : 0);
+      boxes += vBoxes;
+      const pier = v?.info?.pier || '';
+      if (pier === 'PCTC') byPier.PCTC += vBoxes;
+      else if (pier === 'PNCT') byPier.PNCT += vBoxes;
+      else byPier.unknown += vBoxes;
       const ms = voyagePlanMs(v);
       const n = dayDiff(ms);
       //  2.40-02: 판정을 utils.isWorkingNow 한 벌로 옮겼다.
-      //    종전 «시작이 2시간 이내면 작업중»(2.34-10)은 **시작 전 2시간을 통째로 작업중**으로 만들었다 —
-      //    13시 시작인 배가 12시 30분에 «작업중»으로 떠서 담당자가 준비도 못 한 채 볼 뻔했다.
+      //    종전 "시작이 2시간 이내면 작업중"(2.34-10)은 **시작 전 2시간을 통째로 작업중**으로 만들었다 --
+      //    13시 시작인 배가 12시 30분에 "작업중"으로 떠서 담당자가 준비도 못 한 채 볼 뻔했다.
       const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
-      if (rank < 9) ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, key: v.key });
+      if (rank < 9) {
+        // ① 2.4x (검수사 확정): 선박 카드 수량 배지 -- 추가 통신 0. 이미 받은 ediContainers 의
+        //   iso·fe·rf 를 그대로 센다(판정은 전부 기존 utils 헬퍼 -- isoFeet·fe==='E'·isReeferContainer,
+        //   새로 만들지 않는다).
+        let c20 = 0, mty = 0, rf = 0;
+        const allC = [...(d ? Object.values(d) : []), ...(l ? Object.values(l) : [])];
+        for (const c of allC) {
+          if (isoFeet(c?.iso) === 20) c20++;
+          if (c?.fe === 'E') mty++;
+          if (isReeferContainer(c)) rf++;
+        }
+        const xray = Object.keys(v?.discharge?.xrayList || {}).length;   // XRAY는 양하 전용
+        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, key: v.key, c20, mty, rf, xray });
+      }
     }
     ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));
-    return { total: vs.length, boxes, ships };
+    return { total: vs.length, boxes, byPier, ships };
   }, [voyages]);
   const hhmm = (ms) => (ms ? `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}` : '');
   const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
@@ -246,55 +283,101 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     <div className="min-h-screen bg-ink-950 text-dim-100 lg:bg-ink-950 lg:px-6 lg:py-8">
       <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:max-w-[1500px] lg:mx-auto lg:items-start">
 
-      {/* ══ PC 전용 좌측 현황판 (폰에서는 숨김 — 종전 화면 불변) ══ */}
-      <div className="hidden lg:block rounded-card border border-cyan-950/70 p-7 bg-ink-950"
-           style={{ background: 'radial-gradient(120% 90% at 12% 0%, #0d2b33 0%, #071420 55%, #050c14 100%)' }}>
-        <span className="inline-flex items-center gap-2 text-xxs text-teal-300 bg-teal-500/10 border border-teal-400/25 rounded-full px-3 py-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>그린마린 검수팀 전용 · 평택항 컨테이너 검수
-        </span>
-        <div className="flex items-center gap-4 mt-6 mb-2">
-          <img src={logoUrl} alt="TallyOne" draggable="false"
-            className="w-[62px] h-[62px] rounded-card select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
-          <div>
-            <h1 className="text-4xl font-black tracking-tight bg-gradient-to-r from-cyan-50 to-sky-300 bg-clip-text text-transparent">TallyOne</h1>
-            <div className="text-sm2 text-dim-300 mt-0.5">평택항 컨테이너 검수 시스템</div>
-            <div className="text-2xs text-dim-500 tracking-[0.22em] mt-2">— CONTROL CENTER EDITION</div>
+      {/* == PC 전용 좌측 현황판 (폰에서는 숨김 -- 종전 화면 불변) == */}
+      {/* 2.4x (검수사 확정 -- 시안 "구조"만 채용, 데이터는 실물): 헤더 한 줄 통합.
+          이 패널은 배경 · 테두리를 반드시 토큰(bg-ink-950 / border-line)으로만 그린다 -- 시안처럼
+          hex 그라디언트를 박아두면 밝기 4단계(2.40)에서 이 패널만 항상 어둡게 남는 "섬"이 된다. */}
+      <div className="hidden lg:block rounded-card border border-line p-7 bg-ink-950">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <img src={logoUrl} alt="TallyOne" draggable="false"
+              className="w-[62px] h-[62px] rounded-card select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
+            <div>
+              <h1 className="text-4xl font-black tracking-tight text-dim-100">TallyOne</h1>
+              <div className="text-sm2 text-dim-300 mt-0.5">
+                평택항 컨테이너 검수 시스템 <span className="text-dim-500">·</span>{' '}
+                <span className="text-2xs text-dim-500 tracking-[0.18em]">CONTROL CENTER EDITION</span>
+              </div>
+            </div>
           </div>
+          {/* 헤더 우측 배지 -- 맥박 점은 모바일 히어로(위)와 동일한 act 토큰 패턴을 그대로 쓴다 */}
+          <span className="inline-flex items-center gap-2 text-xxs text-act-soft bg-act/10 border border-act/30 rounded-full px-3 py-1.5 shrink-0">
+            <span className="relative flex w-2 h-2">
+              <span className="animate-ping absolute inline-flex w-full h-full rounded-full bg-act opacity-60"/>
+              <span className="relative inline-flex w-2 h-2 rounded-full bg-act-hi"/>
+            </span>
+            그린마린 검수팀 전용
+          </span>
         </div>
 
-        <div className="mt-6 bg-ink-950/60 border border-cyan-950 rounded-card p-4">
+        <div className="mt-6 bg-ink-950/60 border border-line rounded-card p-4">
           <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-3 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
           {board.ships.length === 0 ? (
             <div className="text-xs2 text-dim-500">오늘·내일 작업 선박 없음</div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {board.ships.slice(0, 12).map(sp => (
-                <span key={sp.key} className={`rounded-pill px-3 py-1.5 text-xs2 font-black tracking-wide border ${
-                  sp.rank === 0 ? 'bg-emerald-900/70 text-emerald-200 border-emerald-500'
-                  : sp.rank === 1 ? 'bg-cyan-950 text-cyan-200 border-cyan-700'
-                  : 'bg-ink-800 text-dim-300 border-line'}`}>
-                  {sp.vsl}
-                  <span className="text-[9.5px] font-semibold opacity-75 ml-1.5">
-                    {sp.rank === 0 ? `작업중${berthNo(sp.berth) ? ` · ${berthNo(sp.berth)}` : ''}` : `${dayLabel(sp.ms)} ${hhmm(sp.ms)}`}
-                  </span>
-                </span>
-              ))}
+            // 2.4x (검수사 확정 -- 시안 구조): 선박 2열 카드 그리드. 좌측 코드 박스(작업중=act 초록 /
+            //   예정=회색) · 우측 상태 2줄(1줄 작업중·번선석 또는 예정 시각 / 2줄 수량 배지 + 인원 0 경고).
+            <div className="grid grid-cols-2 gap-2">
+              {board.ships.slice(0, 12).map(sp => {
+                const isWorking = sp.rank === 0;
+                // ② 2.4x (검수사 확정): 시작 시각이 지난(=작업중) 배인데 활동 검수원이 0일 때만 경고.
+                //   시작 전 배는 0명이 정상이라 절대 경고하지 않는다 (2026-08-25 NSFR 사고 재발 방지).
+                const zeroWarn = isWorking && !activeByShip[sp.key];
+                return (
+                  <div key={sp.key} className={`flex items-stretch gap-2.5 rounded-btn border p-2.5 ${
+                    zeroWarn ? 'border-st-bad/50 bg-st-bad/10' : 'border-line bg-ink-950/60'}`}>
+                    <div className={`shrink-0 w-14 rounded-[10px] flex items-center justify-center text-center px-1 py-1 font-black text-xs2 leading-tight break-words border ${
+                      isWorking ? 'bg-act/20 text-act-hi border-act/40' : 'bg-ink-800 text-dim-400 border-line-faint'}`}>
+                      {sp.vsl}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 py-0.5">
+                      <div className={`text-xs2 font-bold truncate ${isWorking ? 'text-act-hi' : 'text-dim-300'}`}>
+                        {isWorking ? `작업중${berthNo(sp.berth) ? ` · ${berthNo(sp.berth)}` : ''}` : `${dayLabel(sp.ms)} ${hhmm(sp.ms)}`}
+                      </div>
+                      {/* ① 2.4x (검수사 확정): 수량 배지 -- 0이면 안 그린다(빈 배지가 줄을 늘린다) */}
+                      <div className="flex flex-wrap gap-1">
+                        {sp.c20 > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-st-dis/15 text-st-disHi border border-st-dis/30">20FT {sp.c20}</span>}
+                        {sp.mty > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-ink-800 text-dim-300 border border-line-faint">MTY {sp.mty}</span>}
+                        {sp.rf > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-st-chief/15 text-st-chief border border-st-chief/30">리퍼 {sp.rf}</span>}
+                        {sp.xray > 0 && <span className="text-3xs font-bold px-1.5 py-0.5 rounded bg-st-lod/15 text-st-lodHi border border-st-lod/30">XRAY {sp.xray}</span>}
+                        {zeroWarn && <span className="text-3xs font-black px-1.5 py-0.5 rounded bg-st-bad/20 text-st-badHi border border-st-bad/40">검수원 0명</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-3 gap-3 mt-4">
           {[
-            { n: board.total, cap: '진행 중 항차', tag: '진행', tone: 'text-emerald-300 bg-emerald-500/15' },
-            { n: board.boxes.toLocaleString(), cap: '검수 대상 컨테이너', tag: '대기', tone: 'text-amber-300 bg-amber-500/15' },
-            { n: working.length, cap: '작업 중 검수원', tag: 'LIVE', tone: 'text-sky-300 bg-sky-500/15' },
+            { n: board.total, cap: '진행 중 항차', tag: '진행', tone: 'text-act-hi bg-act/15' },
+            { n: board.boxes.toLocaleString(), cap: '검수 대상 컨테이너', tag: '대기', tone: 'text-st-lodHi bg-st-lod/15',
+              // ③ 2.4x (검수사 확정): 이 KPI만 터미널별로 분해한다 -- info.pier 로 가른다.
+              //   라벨은 검수사 확정 그대로: PCTC=평택컨테이너터미널 · PNCT=동방아이포트 · 그 외=미상. 0이면 칸을 안 그린다.
+              breakdown: [
+                board.byPier.PCTC > 0 ? ['평택컨테이너터미널', board.byPier.PCTC] : null,
+                board.byPier.PNCT > 0 ? ['동방아이포트', board.byPier.PNCT] : null,
+                board.byPier.unknown > 0 ? ['미상', board.byPier.unknown] : null,
+              ].filter(Boolean) },
+            { n: working.length, cap: '작업 중 검수원', tag: 'LIVE', tone: 'text-st-disHi bg-st-dis/15' },
           ].map(st => (
-            <div key={st.cap} className="bg-ink-950/60 border border-cyan-950 rounded-btn p-3.5">
+            <div key={st.cap} className="bg-ink-950/60 border border-line rounded-btn p-3.5">
               <div className="flex justify-end mb-2">
                 <span className={`text-3xs font-black px-1.5 py-0.5 rounded ${st.tone}`}>{st.tag}</span>
               </div>
               <div className="text-3xl font-black text-dim-100">{st.n}</div>
               <div className="text-[10.5px] text-dim-400 mt-0.5">{st.cap}</div>
+              {st.breakdown && st.breakdown.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-line-faint flex flex-col gap-0.5">
+                  {st.breakdown.map(([label, n]) => (
+                    <div key={label} className="flex items-center justify-between text-[10px] text-dim-400">
+                      <span>{label}</span><span className="font-bold text-dim-200">{n.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -346,7 +429,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 {board.ships.slice(0, 8).map(sp => (
                   <span key={sp.key} className={`rounded-pill px-2.5 py-1 text-xxs font-black tracking-wide border ${
                     sp.rank === 0 ? 'bg-emerald-500/15 text-act-soft border-emerald-500/35'
-                    : sp.rank === 1 ? 'bg-[#0f2a3d] text-st-disHi border-[#1d4a68]'
+                    : sp.rank === 1 ? 'bg-st-dis/15 text-st-disHi border-st-dis/35'
                     : 'bg-ink-850 text-dim-300 border-line-faint'}`}>
                     {sp.vsl}<span className="text-3xs font-semibold opacity-75 ml-1">
                       {sp.rank === 0 ? (berthNo(sp.berth) || '작업중') : (sp.rank === 1 ? hhmm(sp.ms) : '내일')}</span>
@@ -393,7 +476,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   onClick={() => setSelected(i.name)}
                   className={`relative w-full h-16 rounded-[16px] flex items-center gap-3 px-3 text-left border transition-all
                     lg:h-[62px] lg:px-3 lg:rounded-btn ${
-                    isSel ? 'bg-[#132a2b] border-emerald-500/45'
+                    isSel ? 'bg-act/15 border-act/45'
                           : 'bg-ink-800 border-line-faint hover:border-line-faint hover:bg-ink-850'}`}
                 >
                   {isSel && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-act"/>}
