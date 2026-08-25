@@ -1112,15 +1112,20 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     //    ⚠ 터져도 앱은 안 멈춘다. 다만 조용히 넘기지 않고 콘솔에 남긴다(3금지 ③).
     let eyes = null;
     try {
-      eyes = mirSee(query, { containers: allContainers, bayPairs: manualBayPairs,
-        info: voyage?.info || null, shipLib, mode: workFilter });   // 2.48: 단계 판단에 필요한 것 — 전부 이미 쥐고 있던 값이다
+      //  🔴 2.48-01 — 여기는 **SingleSearch 안**이다. `manualBayPairs`·`shipLib` 은 부모(SearchPanel) 지역 변수라
+      //    이 스코프에 없다. 2.48 이 그것을 그대로 참조해 **앱 전체 크래시**를 냈다(`manualBayPairs is not defined`).
+      //    ⚠ 이 함수 머리에 **같은 사고가 이미 적혀 있었다** — «1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해
+      //      «rfSkip is not defined» 전체 크래시». 같은 자리에서 같은 실수를 반복했다.
+      //    ⇒ 부모가 내려주는 `manualCtx` 안에 그 둘이 이미 들어 있다(SearchPanel:372). 그것을 쓴다.
+      eyes = mirSee(query, { containers: allContainers, bayPairs: manualCtx?.bayPairs || {},
+        info: voyage?.info || null, shipLib: manualCtx?.shipLib || null, mode: workFilter });
     }
     catch (e) { console.warn('[미르의 눈] 실패 — 옛 미르로 넘깁니다:', e); }
     if (eyes) return eyes;
     const know = mirKnowledge(query);
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw;
-  }, [_localAnswerRaw, query, allContainers, manualBayPairs, voyage, shipLib, workFilter]);
+  }, [_localAnswerRaw, query, allContainers, manualCtx, voyage, workFilter]);
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
       실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
       ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */
