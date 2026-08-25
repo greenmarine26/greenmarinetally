@@ -4,6 +4,7 @@
 // - 평택항 좌표 고정
 // - TTS 음성 출력
 
+import { currentVolume } from './utils.js';   // 2.40: 볼륨 단일 소스
 const PYEONGTAEK_LAT = 36.9826;
 const PYEONGTAEK_LON = 126.8244;
 
@@ -298,7 +299,7 @@ export function speakGreeting(text) {
     utter.lang = 'ko-KR';
     utter.rate = 1.1;       // 약간 빠르게 (낭랑하게)
     utter.pitch = 1.4;      // 높이 (밝고 청아하게)
-    utter.volume = 1.0;
+    utter.volume = currentVolume();   // 2.40: 하드코딩 1.0 → 단일 소스
 
     // 한국어 여성 음성 우선 선택 (밝은 음색)
     const voices = window.speechSynthesis.getVoices();

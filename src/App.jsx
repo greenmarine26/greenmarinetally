@@ -32,11 +32,11 @@ import UpdatePrompt from './components/UpdatePrompt.jsx';
 // TallyOne 1.0 (K2): 수석 전용 라우트(#/chief·#/search) 접근 차단 안내 화면
 function DeniedChiefOnly({ onGoHome }) {
   return (
-    <div className="max-w-3xl mx-auto px-3 py-16 text-center text-slate-400">
+    <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400">
       <div className="text-5xl mb-4">🔒</div>
-      <div className="text-lg font-bold text-slate-200 mb-1">수석 검수사 전용</div>
+      <div className="text-lg font-bold text-dim-100 mb-1">수석 검수사 전용</div>
       <div className="text-sm mb-5">이 화면은 수석·부수석 검수사와 소유자만 열 수 있습니다.</div>
-      <button onClick={onGoHome} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 font-bold">홈으로</button>
+      <button onClick={onGoHome} className="px-4 py-2 bg-ink-800 hover:bg-ink-750 rounded text-dim-100 font-bold">홈으로</button>
     </div>
   );
 }
@@ -362,7 +362,7 @@ export default function App() {
   //   로그인 상태에서 #/login에 오면 검수원 변경 화면(돌아가기 버튼 제공).
   if (!inspector || route.name === 'login') {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="min-h-screen bg-ink-950 text-dim-100">
         <UpdatePrompt/>
         <LoginPage
           current={inspector}
@@ -383,7 +383,7 @@ export default function App() {
             onClose={handleCloseGreeting}
           />
         )}
-        <footer className="text-center text-[11px] text-slate-600 pb-8 pt-2 leading-relaxed">
+        <footer className="text-center text-[11px] text-dim-500 pb-8 pt-2 leading-relaxed">
           © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
           <span className="opacity-70">{APP_VERSION}</span>
         </footer>
@@ -392,7 +392,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-ink-950 text-dim-100">
       <UpdatePrompt/>
       <Header
         version={APP_VERSION}
@@ -503,17 +503,17 @@ export default function App() {
             }}
           />
           ) : voyagesLoaded ? (
-            <div className="max-w-3xl mx-auto px-3 py-16 text-center text-slate-400">
+            <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400">
               항차를 찾을 수 없습니다.
-              <div className="mt-3"><button onClick={() => navigate('home')} className="px-4 py-2 bg-slate-800 rounded text-slate-200">홈으로</button></div>
+              <div className="mt-3"><button onClick={() => navigate('home')} className="px-4 py-2 bg-ink-800 rounded text-dim-100">홈으로</button></div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-3 py-16 text-center text-slate-400">항차 불러오는 중…</div>
+            <div className="max-w-3xl mx-auto px-3 py-16 text-center text-dim-400">항차 불러오는 중…</div>
           )
         )}
       </main>
 
-      <footer className="text-center text-[11px] text-slate-600 pb-24 pt-4 leading-relaxed">
+      <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">
         © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
         <span className="opacity-70">{APP_VERSION}</span>
       </footer>

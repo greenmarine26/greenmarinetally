@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 // TallyOne 1.0 (K4): 미사용 아이콘 임포트 제거(Cloud·RefreshCw·Power) + 보조기능 아이콘 추가
 // TallyOne 1.1: 클로드에게 메모 아이콘(NotebookPen) 추가
-import { CloudOff, Home, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen, Camera } from 'lucide-react';
+import { CloudOff, Home, HelpCircle, Truck, LogOut, Key, MoreVertical, Users, Wrench, DoorOpen, NotebookPen, Camera, Sun } from 'lucide-react';
 import { exitApp } from '../backHandler.js';
 import { isChief , isTester} from '../staffList.js';       // TallyOne 1.0: 상단 역할 표시(검수사/수석/소유자)
 import { isOwnerName } from '../adminGuard.js';
@@ -16,6 +16,7 @@ import ClaudeMemoModal from './ClaudeMemoModal.jsx';   // TallyOne 1.1: 클로�
 import PendingDamageModal from './PendingDamageModal.jsx';   // TallyOne 2.03: 데미지 예약(자료 도착 전 사전 등록)
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import { getEquipNumber, setEquipNumber, _storage, SK, getPierFromBerth, equipNumbersForPier } from '../utils.js';
+import DisplaySettingsModal from './DisplaySettingsModal.jsx';   // 2.40: 화면 밝기·소리
 
 export default function Header({ version, inspector, online, route, voyages, onChangeInspector, onGoHome, onLogout, onOpenStaffManager, onOpenAux }) {
   const cur = route.name === 'voyage' ? voyages[route.voyageKey] : null;
@@ -29,6 +30,7 @@ export default function Header({ version, inspector, online, route, voyages, onC
   // M5.0: 영어회화집은 HelpModal 안의 [영어회화] 탭으로 이동 (헤더에서 별도 버튼 제거)
   const [equipOpen, setEquipOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);   // V9.15: 부가 버튼 4개(도움말·키·인원·종료)를 ⋯ 메뉴로 — 선박명 자리 확보
+  const [dispOpen, setDispOpen] = useState(false);   // 2.40: 화면·소리 설정
   const [equipNo, setEquipNoState] = useState(getEquipNumber());
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
@@ -156,6 +158,12 @@ export default function Header({ version, inspector, online, route, voyages, onC
                     <span className="text-sm text-dim-100 font-bold">사용 매뉴얼</span>
                     <span className="ml-auto text-2xs text-dim-400">{version}</span>
                   </button>
+                  {/* 2.40: 화면 밝기·소리 — 검수사 «사무실 컴에서 너무 어둡고 캄캄합니다» */}
+                  <button onClick={() => { setMenuOpen(false); setDispOpen(true); }}
+                    className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
+                    <Sun className="w-5 h-5 text-st-lodHi shrink-0"/>
+                    <span className="text-sm text-dim-100 font-bold">화면 · 소리</span>
+                  </button>
                   <button onClick={() => { setMenuOpen(false); setKeyOpen(true); }}
                     className="w-full flex items-center gap-3 px-4 text-left hover:bg-ink-750 active:bg-ink-700" style={{ minHeight: 48 }}>
                     <Key className={`w-5 h-5 shrink-0 ${hasUserKey ? 'text-emerald-300' : 'text-red-300'}`}/>
@@ -259,6 +267,9 @@ export default function Header({ version, inspector, online, route, voyages, onC
           </div>
         </div>
       )}
+
+      {/* 2.40: 화면 밝기·소리 — 기기마다 따로 기억한다 */}
+      <DisplaySettingsModal open={dispOpen} onClose={() => setDispOpen(false)} />
 
       {/* M3.74: confirm() → ConfirmModal */}
       <ConfirmModal {...confirmState} />

@@ -193,7 +193,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
         <Header title="사용 매뉴얼" />
         <div className="p-4 space-y-3 overflow-y-auto">
           <button onClick={() => setView('course')}
-            className="w-full text-left bg-gradient-to-br from-amber-900/50 to-slate-900 border-2 border-amber-600/50 hover:border-amber-400 rounded-card p-5 flex items-center gap-4 transition">
+            className="w-full text-left bg-gradient-to-br from-amber-900/50 to-ink-900 border-2 border-amber-600/50 hover:border-amber-400 rounded-card p-5 flex items-center gap-4 transition">
             <div className="w-14 h-14 rounded-card bg-amber-500/20 flex items-center justify-center shrink-0">
               <Play className="w-7 h-7 text-amber-300" />
             </div>
@@ -205,7 +205,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
           </button>
 
           <button onClick={() => setView('usage')}
-            className="w-full text-left bg-gradient-to-br from-sky-900/50 to-slate-900 border-2 border-sky-700/40 hover:border-sky-500 rounded-card p-5 flex items-center gap-4 transition">
+            className="w-full text-left bg-gradient-to-br from-sky-900/50 to-ink-900 border-2 border-sky-700/40 hover:border-sky-500 rounded-card p-5 flex items-center gap-4 transition">
             <div className="w-14 h-14 rounded-card bg-sky-500/20 flex items-center justify-center shrink-0">
               <BookOpen className="w-7 h-7 text-sky-300" />
             </div>
@@ -238,7 +238,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
           {/* 2.27: 수석 권 — 수석에게만 보인다. 검수원 화면에 나오면 안 되는 서류가 들어 있다. */}
           {chief && (
             <button onClick={() => setView('chief')}
-              className="w-full text-left bg-gradient-to-br from-violet-900/50 to-slate-900 border-2 border-violet-700/40 hover:border-violet-500 rounded-card p-4 flex items-center gap-3.5 transition">
+              className="w-full text-left bg-gradient-to-br from-violet-900/50 to-ink-900 border-2 border-violet-700/40 hover:border-violet-500 rounded-card p-4 flex items-center gap-3.5 transition">
               <div className="w-14 h-14 rounded-card bg-violet-500/20 flex items-center justify-center shrink-0">
                 <BookOpen className="w-7 h-7 text-violet-300" />
               </div>
@@ -251,7 +251,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
           )}
 
           <button onClick={() => setView('terms')}
-            className="w-full text-left bg-gradient-to-br from-emerald-900/50 to-slate-900 border-2 border-emerald-700/40 hover:border-emerald-500 rounded-card p-5 flex items-center gap-4 transition">
+            className="w-full text-left bg-gradient-to-br from-emerald-900/50 to-ink-900 border-2 border-emerald-700/40 hover:border-emerald-500 rounded-card p-5 flex items-center gap-4 transition">
             <div className="w-14 h-14 rounded-card bg-emerald-500/20 flex items-center justify-center shrink-0">
               <Languages className="w-7 h-7 text-emerald-300" />
             </div>
@@ -353,7 +353,7 @@ export default function HelpModal({ open, onClose, inspector = '' }) {
         <Header title="검수 용어 · 회화" back={() => setView('home')} />
         <div className="p-3 sm:p-4 overflow-y-auto space-y-4">
           <button onClick={() => setPhraseOpen(true)}
-            className="w-full bg-gradient-to-br from-blue-900/50 to-slate-900 border-2 border-blue-700/40 hover:border-blue-500 rounded-card p-4 flex items-center gap-3 transition">
+            className="w-full bg-gradient-to-br from-blue-900/50 to-ink-900 border-2 border-blue-700/40 hover:border-blue-500 rounded-card p-4 flex items-center gap-3 transition">
             <div className="w-12 h-12 rounded-btn bg-blue-500/20 flex items-center justify-center shrink-0">
               <Languages className="w-6 h-6 text-blue-300" />
             </div>

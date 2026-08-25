@@ -1748,7 +1748,7 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
         <div className="px-3 pb-2 flex items-center justify-between gap-2 border-t border-line pt-2
                         lg:w-[280px] lg:shrink-0 lg:flex-col lg:items-stretch lg:justify-between
                         lg:border-t-0 lg:border-l lg:border-line lg:bg-ink-900 lg:p-5 lg:gap-3
-                        lg:hover:bg-[#131F36] lg:transition-colors">
+                        lg:hover:bg-ink-900 lg:transition-colors">
           {/* 상단 — 상태 */}
           <div className="row-1 text-2xs text-dim-400 flex-1 min-w-0 lg:flex-none">
             {activeInspectors.length > 0 ? (

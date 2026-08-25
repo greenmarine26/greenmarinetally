@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { currentVolume } from '../utils.js';   // 2.40: 볼륨 단일 소스
 
 // ============================================================================
 // 데이터 (p = 단일 문장 / q = 선원질문+답변옵션)
@@ -354,7 +355,7 @@ function useSpeech() {
     u.lang = 'en-US';
     u.rate = rate;
     u.pitch = 1.0;
-    u.volume = 1.0;
+    u.volume = currentVolume();   // 2.40: 하드코딩 1.0 → 단일 소스
     const voice = voices.find((v) => v.voiceURI === voiceURI);
     if (voice) u.voice = voice;
     window.speechSynthesis.speak(u);
@@ -443,7 +444,7 @@ export default function App({ open = true, onClose }) {
           <div className="flex items-center justify-between mb-2">
             <div>
               <div className="text-xs tracking-widest text-yellow-400 font-bold">PYEONGTAEK PORT · TALLY</div>
-              <h1 className="text-base font-black text-slate-50">컨테이너 검수 영어 회화</h1>
+              <h1 className="text-base font-black text-dim-100">컨테이너 검수 영어 회화</h1>
             </div>
             <button
               onClick={() => setShowSet(!showSet)}

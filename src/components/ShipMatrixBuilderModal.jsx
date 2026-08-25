@@ -824,7 +824,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
   if (!matrix) {
     return (
       <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center">
-        <div className="bg-zinc-900 p-6 rounded-pill text-white">
+        <div className="bg-ink-900 p-6 rounded-pill text-white">
           <div>매트릭스 분석 중...</div>
         </div>
       </div>
@@ -836,16 +836,16 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/70 flex items-start justify-center overflow-auto py-8">
-      <div className="bg-zinc-900 rounded-pill text-white w-full max-w-7xl mx-2 flex flex-col" style={{ maxHeight: '95vh' }}>
+      <div className="bg-ink-900 rounded-pill text-white w-full max-w-7xl mx-2 flex flex-col" style={{ maxHeight: '95vh' }}>
         {/* 헤더 */}
-        <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
+        <div className="p-4 border-b border-line-faint flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold">🚢 신규 선박 베이 매트릭스 빌더{matrix?.provisional && <span className="ml-2 text-xs px-2 py-0.5 bg-sky-600 rounded align-middle">🛠 보정중</span>}</h2>
-            <div className="text-xs text-zinc-400 mt-1">
+            <div className="text-xs text-dim-400 mt-1">
               현재 항차의 EDI에서 선박 정보 자동 추출 + 베이 구조 분석
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white text-2xl px-2">×</button>
+          <button onClick={onClose} className="text-dim-400 hover:text-white text-2xl px-2">×</button>
         </div>
 
         {/* 본문 */}
@@ -865,15 +865,15 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <div>
                   <div className="text-2xs text-blue-300/70">선박명</div>
-                  <div className="font-bold text-base">{shipMeta.name || <span className="text-zinc-500">미상</span>}</div>
+                  <div className="font-bold text-base">{shipMeta.name || <span className="text-dim-500">미상</span>}</div>
                 </div>
                 <div>
                   <div className="text-2xs text-blue-300/70">콜사인 (호출부호)</div>
-                  <div className="font-mono font-bold">{shipMeta.callsign || <span className="text-zinc-500">미상</span>}</div>
+                  <div className="font-mono font-bold">{shipMeta.callsign || <span className="text-dim-500">미상</span>}</div>
                 </div>
                 <div>
                   <div className="text-2xs text-blue-300/70">IMO</div>
-                  <div className="font-mono">{shipMeta.imo || <span className="text-zinc-500">미상</span>}</div>
+                  <div className="font-mono">{shipMeta.imo || <span className="text-dim-500">미상</span>}</div>
                 </div>
                 <div>
                   <div className="text-2xs text-blue-300/70">CASP 코드 (자동 추론)</div>
@@ -881,11 +881,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 </div>
                 <div>
                   <div className="text-2xs text-blue-300/70">선사</div>
-                  <div className="font-mono font-bold text-sky-300">{shipMeta.carrier || <span className="text-zinc-500">미상</span>}</div>
+                  <div className="font-mono font-bold text-sky-300">{shipMeta.carrier || <span className="text-dim-500">미상</span>}</div>
                 </div>
                 <div className="col-span-2">
                   <div className="text-2xs text-blue-300/70">항차</div>
-                  <div className="font-mono text-xs">{shipMeta.voy || <span className="text-zinc-500">—</span>}</div>
+                  <div className="font-mono text-xs">{shipMeta.voy || <span className="text-dim-500">—</span>}</div>
                 </div>
               </div>
             ) : (
@@ -893,69 +893,69 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 <label>
                   <div className="text-2xs text-blue-300/70">선사 (예: SKR · MAE · DJS)</div>
                   <input value={shipMeta.carrier || ''} onChange={e => setShipMeta(m => ({ ...m, carrier: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
-                    className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1 font-mono" />
+                    className="w-full bg-ink-850 border border-line-strong rounded px-2 py-1 font-mono" />
                 </label>
                 <label>
                   <div className="text-2xs text-blue-300/70">선박명</div>
                   <input value={shipMeta.name || ''} onChange={e => setShipMeta(m => ({ ...m, name: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
-                         className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded" />
+                         className="w-full mt-1 px-2 py-1 bg-ink-750 rounded" />
                 </label>
                 <label>
                   <div className="text-2xs text-blue-300/70">콜사인</div>
                   <input value={shipMeta.callsign || ''} onChange={e => setShipMeta(m => ({ ...m, callsign: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
-                         className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono" />
+                         className="w-full mt-1 px-2 py-1 bg-ink-750 rounded font-mono" />
                 </label>
                 <label>
                   <div className="text-2xs text-blue-300/70">IMO</div>
                   <input value={shipMeta.imo || ''} onChange={e => setShipMeta(m => ({ ...m, imo: e.target.value }))} {...NUM_INPUT_PROPS}
-                         className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono" />
+                         className="w-full mt-1 px-2 py-1 bg-ink-750 rounded font-mono" />
                 </label>
                 <label>
                   <div className="text-2xs text-blue-300/70">CASP 코드 *</div>
                   <input value={shipMeta.code || ''} onChange={e => setShipMeta(m => ({ ...m, code: toEngU(e.target.value) }))} {...ENG_INPUT_PROPS}
-                         className="w-full mt-1 px-2 py-1 bg-zinc-700 rounded font-mono font-bold" />
+                         className="w-full mt-1 px-2 py-1 bg-ink-750 rounded font-mono font-bold" />
                 </label>
               </div>
             )}
           </div>
 
           {/* === 베이 분석 상태 카드 === */}
-          <div className="bg-zinc-800 p-3 rounded mb-4">
-            <div className="text-xs text-zinc-400 font-bold mb-2">📊 베이 구조 분석 결과</div>
+          <div className="bg-ink-850 p-3 rounded mb-4">
+            <div className="text-xs text-dim-400 font-bold mb-2">📊 베이 구조 분석 결과</div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-center text-sm">
-              <div className="bg-zinc-900 rounded p-2">
+              <div className="bg-ink-900 rounded p-2">
                 <div className="text-2xl font-bold text-emerald-400">{summary.totalBays}</div>
-                <div className="text-2xs text-zinc-400">총 베이</div>
+                <div className="text-2xs text-dim-400">총 베이</div>
               </div>
-              <div className="bg-zinc-900 rounded p-2">
+              <div className="bg-ink-900 rounded p-2">
                 <div className="text-2xl font-bold text-blue-400">{summary.pairCount}</div>
-                <div className="text-2xs text-zinc-400">페어</div>
+                <div className="text-2xs text-dim-400">페어</div>
               </div>
-              <div className="bg-zinc-900 rounded p-2">
+              <div className="bg-ink-900 rounded p-2">
                 <div className="text-2xl font-bold text-purple-400">{summary.singleCount}</div>
-                <div className="text-2xs text-zinc-400">단독</div>
+                <div className="text-2xs text-dim-400">단독</div>
               </div>
-              <div className="bg-zinc-900 rounded p-2">
+              <div className="bg-ink-900 rounded p-2">
                 <div className="text-2xl font-bold text-cyan-400">{summary.hasHoldCount}</div>
-                <div className="text-2xs text-zinc-400">Hold 있음</div>
+                <div className="text-2xs text-dim-400">Hold 있음</div>
               </div>
-              <div className="bg-zinc-900 rounded p-2">
+              <div className="bg-ink-900 rounded p-2">
                 <div className="text-2xl font-bold text-yellow-400">{summary.deckOnlyCount}</div>
-                <div className="text-2xs text-zinc-400">Deck only</div>
+                <div className="text-2xs text-dim-400">Deck only</div>
               </div>
-              <div className="bg-zinc-900 rounded p-2">
-                <div className={`text-2xl font-bold ${summary.needReviewCount > 0 ? 'text-amber-400' : 'text-zinc-500'}`}>
+              <div className="bg-ink-900 rounded p-2">
+                <div className={`text-2xl font-bold ${summary.needReviewCount > 0 ? 'text-amber-400' : 'text-dim-500'}`}>
                   {summary.needReviewCount}
                 </div>
-                <div className="text-2xs text-zinc-400">검토 필요</div>
+                <div className="text-2xs text-dim-400">검토 필요</div>
               </div>
             </div>
             {summary.estimatedCount > 0 && (
-              <div className="text-xxs text-zinc-400 mt-2">
+              <div className="text-xxs text-dim-400 mt-2">
                 ⚠ 추정 베이 {summary.estimatedCount}개 (EDI/PDF 발견 안 됨, 1~max 자동 채움). [×]로 삭제하거나 수정.
               </div>
             )}
-            <div className="text-xxs text-zinc-500 mt-2">
+            <div className="text-xxs text-dim-500 mt-2">
               출처: EDI ({matrix._empty ? '없음' : '✓'}) · 베이사전 ({matrix.bayDictUsed ? '✓ 매칭' : '없음'}) · .def ({matrix.defUsed ? '✓ 자동' : '미사용'}) · PDF ({matrix.pdfUsed ? '✓ 보강' : '미사용'})
               {matrix.bayDictMeta?.name && <span className="ml-2 text-cyan-400">(사전: {matrix.bayDictMeta.name})</span>}
               {matrix.bayDictRejected && (
@@ -967,8 +967,8 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           </div>
 
           {/* === PDF 업로드 (옵션 보강) === */}
-          <div className="bg-zinc-800 p-3 rounded mb-4 flex justify-between items-center">
-            <div className="text-xs text-zinc-400">
+          <div className="bg-ink-850 p-3 rounded mb-4 flex justify-between items-center">
+            <div className="text-xs text-dim-400">
               {matrix.fromSaved && (
                 <span className="text-emerald-400">✓ 저장된 매트릭스 복원됨{matrix.savedAt && ` (${new Date(matrix.savedAt).toLocaleString('ko-KR')})`}</span>
               )}
@@ -991,7 +991,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded text-sm">
                 🚢 .def 업로드 (자동 생성)
               </button>
-              {defStatus === 'parsing' && <span className="text-xs text-zinc-400">.def 디코딩 중...</span>}
+              {defStatus === 'parsing' && <span className="text-xs text-dim-400">.def 디코딩 중...</span>}
               {defStatus === 'done' && matrix.defStats && (
                 <span className="text-xs text-emerald-400">
                   ✓ .def {matrix.defStats.format} — 신규 {matrix.defStats.added} / 보강 {matrix.defStats.augmented}
@@ -1005,7 +1005,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm">
                 📄 PDF 업로드 (선택)
               </button>
-              {pdfStatus === 'parsing' && <span className="text-xs text-zinc-400">파싱 중...</span>}
+              {pdfStatus === 'parsing' && <span className="text-xs text-dim-400">파싱 중...</span>}
               {pdfStatus === 'done' && matrix.pdfStats && (
                 <span className="text-xs text-emerald-400">
                   ✓ 신규 {matrix.pdfStats.added} / 보강 {matrix.pdfStats.augmented} (PDF {matrix.pdfStats.totalPdfBays}베이)
@@ -1017,13 +1017,13 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
 
           {/* V7.99: 기존 선박 복제 선택 패널 (구조 자동 추천) */}
           {cloneOpen && (
-            <div className="bg-zinc-800 p-3 rounded mb-4 border border-violet-500/40">
+            <div className="bg-ink-850 p-3 rounded mb-4 border border-violet-500/40">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xs text-violet-300 font-bold">🔁 복제할 선박 선택 — 현재 베이 구조와 가까운 순으로 추천</div>
-                <button onClick={() => setCloneOpen(false)} className="text-xs text-zinc-400 hover:text-zinc-200">닫기 ✕</button>
+                <button onClick={() => setCloneOpen(false)} className="text-xs text-dim-400 hover:text-dim-200">닫기 ✕</button>
               </div>
               {cloneList.length === 0 ? (
-                <div className="text-xs text-zinc-500">등록된 베이사전 선박이 없습니다.</div>
+                <div className="text-xs text-dim-500">등록된 베이사전 선박이 없습니다.</div>
               ) : (
                 <>
                   {/* 상위 추천 3척 — 수용률%(있으면) 우선, 없으면 구조 일치도% 버튼 */}
@@ -1037,12 +1037,12 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                         const top = i === 0;
                         return (
                           <button key={s.code} onClick={() => handleCloneFrom(s.code)}
-                                  className={`text-left px-3 py-2 rounded border ${top ? 'bg-violet-700/40 border-violet-400' : 'bg-zinc-700/60 border-zinc-600 hover:border-violet-400'}`}>
+                                  className={`text-left px-3 py-2 rounded border ${top ? 'bg-violet-700/40 border-violet-400' : 'bg-ink-750/60 border-line-strong hover:border-violet-400'}`}>
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-bold">{top ? '⭐ ' : ''}{s.name || s.code}</span>
-                              <span className={`text-xs font-mono ${mainPct >= 95 ? 'text-emerald-400' : mainPct >= 80 ? 'text-yellow-400' : 'text-zinc-400'}`}>{mainPct}%</span>
+                              <span className={`text-xs font-mono ${mainPct >= 95 ? 'text-emerald-400' : mainPct >= 80 ? 'text-yellow-400' : 'text-dim-400'}`}>{mainPct}%</span>
                             </div>
-                            <div className="text-2xs text-zinc-400 mt-0.5">
+                            <div className="text-2xs text-dim-400 mt-0.5">
                               {hasFit ? `EDI 수용 ${fitPct}% · 구조 ${strPct}%` : `구조 일치 ${strPct}%`} · {s.code} · {s.bayCount}베이
                             </div>
                           </button>
@@ -1053,12 +1053,12 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                   {/* ★ TallyOne 1.61: **같은 선사 배를 맨 위로.** 검수사 확정 2026-08-13 —
                       *"같은 선사 배는 구조가 비슷하다"* 가 복제의 첫 단서다. 종전엔 이름순이라
                       같은 선사가 목록 곳곳에 흩어져 있어 눈으로 찾아야 했다. */}
-                  <div className="text-2xs text-zinc-500 mb-1">
+                  <div className="text-2xs text-dim-500 mb-1">
                     전체 목록에서 선택{cloneList[0]?.fitPct != null ? ' (% = 이번 EDI 수용률)' : ''}
                     {shipMeta.carrier ? ` · 같은 선사(${shipMeta.carrier}) 먼저` : ''}:
                   </div>
                   <select defaultValue="" onChange={e => handleCloneFrom(e.target.value)}
-                          className="w-full px-2 py-1.5 bg-zinc-700 rounded text-sm font-mono">
+                          className="w-full px-2 py-1.5 bg-ink-750 rounded text-sm font-mono">
                     <option value="" disabled>— 선박 선택 ({cloneList.length}척) —</option>
                     {(() => {
                       const my = String(shipMeta.carrier || '').toUpperCase();
@@ -1125,20 +1125,20 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               {/* === 좌측: 베이 편집 영역 === */}
               <div className="flex-1 space-y-2 overflow-y-auto" style={{ maxHeight: '70vh' }}>
               {/* 베이 추가 폼 */}
-              <div className="bg-zinc-900/60 border border-zinc-700 rounded p-3 flex items-center gap-2 flex-wrap">
+              <div className="bg-ink-900/60 border border-line-faint rounded p-3 flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-bold text-emerald-300">➕ 베이 추가</span>
                 <input
                   type="number" placeholder="BAY 번호 (예: 1)"
                   value={addBayInput}
                   onChange={e => setAddBayInput(e.target.value)}
-                  className="w-32 px-2 py-1 bg-zinc-700 rounded text-sm"
+                  className="w-32 px-2 py-1 bg-ink-750 rounded text-sm"
                   min="1" max="999"
                 />
                 <input
                   type="number" placeholder="페어 짝수 (옵션, 예: 2)"
                   value={addPairInput}
                   onChange={e => setAddPairInput(e.target.value)}
-                  className="w-40 px-2 py-1 bg-zinc-700 rounded text-sm"
+                  className="w-40 px-2 py-1 bg-ink-750 rounded text-sm"
                   min="2" max="998" step="2"
                 />
                 <button
@@ -1148,7 +1148,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 >
                   추가
                 </button>
-                <span className="text-2xs text-zinc-500">
+                <span className="text-2xs text-dim-500">
                   ※ 페어 비우면 단독, 채우면 페어 (홀수 → 짝수 짝꿍)
                 </span>
               </div>
@@ -1178,32 +1178,32 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               })()}
 
               {bayList.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mb-2 px-2 py-1.5 bg-zinc-900/60 border border-zinc-700 rounded text-xs">
-                  <span className="text-zinc-400">⚓ 해치 일괄:</span>
+                <div className="flex flex-wrap items-center gap-2 mb-2 px-2 py-1.5 bg-ink-900/60 border border-line-faint rounded text-xs">
+                  <span className="text-dim-400">⚓ 해치 일괄:</span>
                   <button onClick={() => applyHatchBulk('hold2')}
-                    className="px-2 py-0.5 bg-zinc-700 hover:bg-cyan-700 rounded"
+                    className="px-2 py-0.5 bg-ink-750 hover:bg-cyan-700 rounded"
                     title="홀드 있는 베이 전부 해치 2, 홀드 없는 데크전용 베이 0. 가장 흔한 패턴.">
                     홀드=2 · 데크=0
                   </button>
                   <button onClick={() => applyHatchBulk('auto')}
-                    className="px-2 py-0.5 bg-zinc-700 hover:bg-cyan-700 rounded"
+                    className="px-2 py-0.5 bg-ink-750 hover:bg-cyan-700 rounded"
                     title="해치 수를 자동으로(미명시). 저장 시 홀드 있으면 1·없으면 0. 해치가 자동인 선박용.">
                     전부 자동
                   </button>
-                  <span className="text-zinc-500 ml-1">1번 베이만:</span>
+                  <span className="text-dim-500 ml-1">1번 베이만:</span>
                   <button onClick={() => applyHatchFirstBay(2)}
-                    className="px-2 py-0.5 bg-zinc-700 hover:bg-amber-700 rounded" title="가장 앞 베이 해치 2">2</button>
+                    className="px-2 py-0.5 bg-ink-750 hover:bg-amber-700 rounded" title="가장 앞 베이 해치 2">2</button>
                   <button onClick={() => applyHatchFirstBay(3)}
-                    className="px-2 py-0.5 bg-zinc-700 hover:bg-amber-700 rounded" title="가장 앞 베이 해치 3">3</button>
-                  <span className="text-2xs text-zinc-500">예외 베이는 아래 각 베이 ‘해치’에서 조정</span>
+                    className="px-2 py-0.5 bg-ink-750 hover:bg-amber-700 rounded" title="가장 앞 베이 해치 3">3</button>
+                  <span className="text-2xs text-dim-500">예외 베이는 아래 각 베이 ‘해치’에서 조정</span>
                 </div>
               )}
 
               {/* TallyOne 1.28: 해치 줄 — 해치마다 한 번만 입력한다 */}
               {hatchGroups.length > 0 && (
-                <div className="mb-2 px-2 py-2 bg-zinc-900/60 border border-zinc-700 rounded text-xs">
+                <div className="mb-2 px-2 py-2 bg-ink-900/60 border border-line-faint rounded text-xs">
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="text-zinc-200">⚓ 해치커버 — 해치마다 한 번만 넣습니다</span>
+                    <span className="text-dim-200">⚓ 해치커버 — 해치마다 한 번만 넣습니다</span>
                     {coversDictKnown
                       ? <span className="px-1.5 py-0.5 bg-emerald-900/50 text-emerald-300 rounded">사전에 있는 선박 · 자동으로 채웠습니다</span>
                       : <span className="px-1.5 py-0.5 bg-amber-900/50 text-amber-300 rounded">사전에 없는 선박입니다 — 카고플랜의 해치선 조각 수를 넣어 주세요</span>}
@@ -1214,13 +1214,13 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                       const miss = v == null;
                       return (
                         <label key={g.no}
-                          className={`flex items-center gap-1 px-2 py-1 rounded border ${miss ? 'border-amber-500 bg-amber-950/30' : 'border-zinc-700 bg-zinc-800'}`}
+                          className={`flex items-center gap-1 px-2 py-1 rounded border ${miss ? 'border-amber-500 bg-amber-950/30' : 'border-line-faint bg-ink-850'}`}
                           title={`해치 ${g.no} · 베이 ${g.label}`}>
-                          <span className="text-zinc-400">해치 {g.no}</span>
-                          <span className="text-zinc-300 mono">{g.label}</span>
+                          <span className="text-dim-400">해치 {g.no}</span>
+                          <span className="text-dim-300 mono">{g.label}</span>
                           <select value={miss ? '' : v}
                             onChange={ev => setGroupCovers(g, parseInt(ev.target.value, 10))}
-                            className={`px-1 py-0.5 rounded text-center ${miss ? 'bg-amber-800 text-amber-100' : 'bg-zinc-700'}`}>
+                            className={`px-1 py-0.5 rounded text-center ${miss ? 'bg-amber-800 text-amber-100' : 'bg-ink-750'}`}>
                             {miss && <option value="">입력</option>}
                             <option value={0}>0</option>
                             <option value={1}>1</option>
@@ -1231,13 +1231,13 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                       );
                     })}
                   </div>
-                  <div className="text-2xs text-zinc-500 mt-1">
+                  <div className="text-2xs text-dim-500 mt-1">
                     0 = 홀드 없음(상시 개방). 커버는 현측마다 열리므로 보통 2장, 좁은 해치는 1장입니다.
                   </div>
                 </div>
               )}
               {bayList.length === 0 && (
-                <div className="text-center py-8 text-zinc-400">
+                <div className="text-center py-8 text-dim-400">
                   EDI 데이터가 없습니다. 위에서 베이를 직접 추가하거나 PDF 업로드 후 진행하세요.
                 </div>
               )}
@@ -1248,33 +1248,33 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 const isSelected = selectedBay === bay;
                 return (
                   <div key={bay}
-                    className={`border ${isSelected ? 'border-cyan-400 bg-cyan-950/30 ring-2 ring-cyan-500' : isEst ? 'border-zinc-700 bg-zinc-900/40 opacity-70' : needsReview ? 'border-amber-600 bg-zinc-800' : 'border-zinc-700 bg-zinc-800'} rounded p-3 transition-colors`}>
+                    className={`border ${isSelected ? 'border-cyan-400 bg-cyan-950/30 ring-2 ring-cyan-500' : isEst ? 'border-line-faint bg-ink-900/40 opacity-70' : needsReview ? 'border-amber-600 bg-ink-850' : 'border-line-faint bg-ink-850'} rounded p-3 transition-colors`}>
                     <div className="flex items-center gap-3 mb-2 text-sm">
                       <button
                         onClick={() => setSelectedBay(isSelected ? null : bay)}
-                        className={`px-2 py-1 rounded font-bold ${isSelected ? 'bg-cyan-500 text-white' : 'bg-zinc-700 hover:bg-cyan-700'}`}
+                        className={`px-2 py-1 rounded font-bold ${isSelected ? 'bg-cyan-500 text-white' : 'bg-ink-750 hover:bg-cyan-700'}`}
                         title="우측 미리보기 표시">
                         👁 BAY {bay}
                       </button>
                       {isSelected && <span className="text-2xs px-1.5 py-0.5 bg-cyan-600 rounded font-bold">미리보기 →</span>}
-                      <label className="flex items-center gap-1 text-xxs text-zinc-400" title="페어 짝수 짝꿍 (비우면 단독). 베이 삭제 없이 변경 가능.">
+                      <label className="flex items-center gap-1 text-xxs text-dim-400" title="페어 짝수 짝꿍 (비우면 단독). 베이 삭제 없이 변경 가능.">
                         페어:
                         <input type="number" defaultValue={e.pairEven || ''} placeholder="단독"
                           key={`pair-${bay}-${e.pairEven || ''}`}
                           onBlur={ev => { if ((ev.target.value || '') !== (e.pairEven || '')) updatePairEven(bay, ev.target.value); }}
-                          className="w-16 px-2 py-0.5 bg-zinc-700 rounded text-center" min="0" max="99" step="2" />
+                          className="w-16 px-2 py-0.5 bg-ink-750 rounded text-center" min="0" max="99" step="2" />
                       </label>
-                      {isEst && <span className="text-2xs px-2 py-0.5 bg-zinc-700 text-zinc-300 rounded">⚠ 추정 (EDI/PDF 없음)</span>}
-                      {!isEst && <span className="text-2xs px-2 py-0.5 bg-zinc-700 rounded">{e.source || '?'}</span>}
+                      {isEst && <span className="text-2xs px-2 py-0.5 bg-ink-750 text-dim-300 rounded">⚠ 추정 (EDI/PDF 없음)</span>}
+                      {!isEst && <span className="text-2xs px-2 py-0.5 bg-ink-750 rounded">{e.source || '?'}</span>}
                       <label className="ml-auto flex items-center gap-1">
                         rowCount:
                         <input type="number" value={e.rowCount || ''} onChange={ev => updateBay(bay, 'rowCount', parseInt(ev.target.value) || 0)}
-                               className="w-14 px-2 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
+                               className="w-14 px-2 py-0.5 bg-ink-750 rounded text-center" min="0" max="20" />
                       </label>
                       <label className="flex items-center gap-1" title="해치커버 수 (deck/hold 경계 굵은선 등분). 0=해치 없음(상시 개방). 홀드 없는 베이는 0.">
                         해치:
                         <select value={(e.hatchCount ?? (e.holdTiers && e.holdTiers.length > 0 ? 1 : 0))} onChange={ev => updateBay(bay, 'hatchCount', parseInt(ev.target.value))}
-                                className="px-1 py-0.5 bg-zinc-700 rounded text-center">
+                                className="px-1 py-0.5 bg-ink-750 rounded text-center">
                           <option value={0}>0</option>
                           <option value={1}>1</option>
                           <option value={2}>2</option>
@@ -1309,21 +1309,21 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                         </div>
                         {(e.deckTiers || []).map((t, idx) => (
                           <div key={`d-${bay}-${idx}`} className="flex items-center gap-1 mb-0.5">
-                            <span className="text-zinc-400">D</span>
+                            <span className="text-dim-400">D</span>
                             <input type="number" value={t}
                                    onChange={ev => updateTier(bay, 'deck', idx, ev.target.value)}
-                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center font-mono" min="1" max="99" />
-                            <span className="text-zinc-500">cells</span>
+                                   className="w-12 px-1 py-0.5 bg-ink-750 rounded text-center font-mono" min="1" max="99" />
+                            <span className="text-dim-500">cells</span>
                             <input type="number" value={e.deckCells?.[idx] || 0}
                                    onChange={ev => updateCells(bay, 'deck', idx, ev.target.value)}
-                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
+                                   className="w-12 px-1 py-0.5 bg-ink-750 rounded text-center" min="0" max="20" />
                             <button onClick={() => deleteTier(bay, 'deck', idx)}
                                     className="ml-auto w-5 h-5 bg-red-900/50 hover:bg-red-700 rounded text-2xs"
                                     title="이 tier 삭제">×</button>
                           </div>
                         ))}
                         {(!e.deckTiers || e.deckTiers.length === 0) && (
-                          <div className="text-zinc-500 italic text-xxs">없음 — 위 [+ 추가] 사용</div>
+                          <div className="text-dim-500 italic text-xxs">없음 — 위 [+ 추가] 사용</div>
                         )}
                       </div>
                       {/* Hold */}
@@ -1334,21 +1334,21 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                         </div>
                         {(e.holdTiers || []).map((t, idx) => (
                           <div key={`h-${bay}-${idx}`} className="flex items-center gap-1 mb-0.5">
-                            <span className="text-zinc-400">H</span>
+                            <span className="text-dim-400">H</span>
                             <input type="number" value={t}
                                    onChange={ev => updateTier(bay, 'hold', idx, ev.target.value)}
-                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center font-mono" min="1" max="99" />
-                            <span className="text-zinc-500">cells</span>
+                                   className="w-12 px-1 py-0.5 bg-ink-750 rounded text-center font-mono" min="1" max="99" />
+                            <span className="text-dim-500">cells</span>
                             <input type="number" value={e.holdCells?.[idx] || 0}
                                    onChange={ev => updateCells(bay, 'hold', idx, ev.target.value)}
-                                   className="w-12 px-1 py-0.5 bg-zinc-700 rounded text-center" min="0" max="20" />
+                                   className="w-12 px-1 py-0.5 bg-ink-750 rounded text-center" min="0" max="20" />
                             <button onClick={() => deleteTier(bay, 'hold', idx)}
                                     className="ml-auto w-5 h-5 bg-red-900/50 hover:bg-red-700 rounded text-2xs"
                                     title="이 tier 삭제">×</button>
                           </div>
                         ))}
                         {(!e.holdTiers || e.holdTiers.length === 0) && (
-                          <div className="text-zinc-500 italic text-xxs">없음 — 위 [+ 추가] 사용</div>
+                          <div className="text-dim-500 italic text-xxs">없음 — 위 [+ 추가] 사용</div>
                         )}
                       </div>
                     </div>
@@ -1361,7 +1361,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               {/* M6.94.4: 모바일은 풀폭(w-full), 데스크탑(lg)만 420px 고정. */}
               <div className="w-full lg:w-[420px] lg:flex-shrink-0">
                 <style>{CARGO_V2_CSS}</style>
-                <div className="sticky top-0 bg-zinc-800 border border-zinc-600 rounded p-3" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                <div className="sticky top-0 bg-ink-850 border border-line-strong rounded p-3" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                   <div className="text-sm font-bold text-cyan-300 mb-2 flex items-center justify-between">
                     <span>🎯 베이플랜 시뮬레이션</span>
                     {selectedBay && (
@@ -1369,7 +1369,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                     )}
                   </div>
                   {!selectedBay ? (
-                    <div className="text-center text-zinc-500 text-sm py-12 italic">
+                    <div className="text-center text-dim-500 text-sm py-12 italic">
                       ⬅ 좌측 베이를 클릭하면<br/>여기에 미리보기가 나옵니다
                     </div>
                   ) : (() => {
@@ -1403,7 +1403,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                           const nBlk = blkArr('deck').length + blkArr('hold').length;
                           const renderRows = (rows, kind) => rows.filter(r => !r.invisible).map(r => (
                             <div key={`${kind}-${r.tier}`} className="flex items-center gap-0.5 mb-0.5">
-                              <span className="w-6 text-3xs text-zinc-500 text-right mr-1 font-mono">{String(r.tier).padStart(2, '0')}</span>
+                              <span className="w-6 text-3xs text-dim-500 text-right mr-1 font-mono">{String(r.tier).padStart(2, '0')}</span>
                               {r.cells.map((cell, i) => cell.rowLbl != null && (cell.active || cell.blocked) ? (
                                 <button key={i}
                                   onClick={() => toggleBlockedCell(selectedBay, kind, r.tier, cell.rowLbl)}
@@ -1411,7 +1411,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                                   className={`w-7 h-6 rounded text-3xs font-mono font-bold ${
                                     isBlk(kind, r.tier, cell.rowLbl)
                                       ? 'bg-red-900/70 text-red-300 border border-red-600'
-                                      : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300'
+                                      : 'bg-ink-750 hover:bg-ink-700 text-dim-300'
                                   }`}>
                                   {isBlk(kind, r.tier, cell.rowLbl) ? '✕' : cell.rowLbl}
                                 </button>
@@ -1419,12 +1419,12 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                             </div>
                           ));
                           return (
-                            <div className="bg-zinc-900/50 rounded p-2 mb-2">
-                              <div className="text-xs text-zinc-300 font-bold mb-1">
-                                🧱 사용불가 셀 <span className="font-normal text-zinc-500">(선박 구조상 없는 자리 — 셀을 눌러 ✕ 지정)</span>
+                            <div className="bg-ink-900/50 rounded p-2 mb-2">
+                              <div className="text-xs text-dim-300 font-bold mb-1">
+                                🧱 사용불가 셀 <span className="font-normal text-dim-500">(선박 구조상 없는 자리 — 셀을 눌러 ✕ 지정)</span>
                                 {nBlk > 0 && <span className="ml-2 px-1.5 py-0.5 bg-red-900/60 text-red-300 rounded text-2xs">{nBlk}곳</span>}
                               </div>
-                              <div className="text-2xs text-zinc-500 mb-2">
+                              <div className="text-2xs text-dim-500 mb-2">
                                 예: 80티어에 로우가 부분만 있는 베이 — 없는 자리를 ✕ 지정하면 베이플랜·카고플랜·콘앱 그림에서 빈 자리로 빠집니다.
                               </div>
                               {grid.deckRows.some(r => !r.invisible) && (
@@ -1444,16 +1444,16 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                         })()}
 
                         {/* === Padding/Alignment 컨트롤 === */}
-                        <div className="bg-zinc-900/50 rounded p-2 mb-2">
-                          <div className="text-xs text-zinc-300 font-bold mb-2">📐 데크-홀드 정렬</div>
+                        <div className="bg-ink-900/50 rounded p-2 mb-2">
+                          <div className="text-xs text-dim-300 font-bold mb-2">📐 데크-홀드 정렬</div>
                           {/* Hold align */}
                           <div className="mb-2">
-                            <div className="text-2xs text-zinc-400 mb-1">Hold 정렬</div>
+                            <div className="text-2xs text-dim-400 mb-1">Hold 정렬</div>
                             <div className="flex gap-1">
                               {['left', 'center', 'right'].map(a => (
                                 <button key={a}
                                   onClick={() => updateAlignPad(selectedBay, 'holdAlign', a)}
-                                  className={`flex-1 px-2 py-1 text-xs rounded ${e.holdAlign === a || (!e.holdAlign && a === 'center') ? 'bg-cyan-600 font-bold' : 'bg-zinc-700 hover:bg-zinc-600'}`}>
+                                  className={`flex-1 px-2 py-1 text-xs rounded ${e.holdAlign === a || (!e.holdAlign && a === 'center') ? 'bg-cyan-600 font-bold' : 'bg-ink-750 hover:bg-ink-700'}`}>
                                   {a === 'left' ? '← 좌' : a === 'center' ? '∙ 가운데' : '우 →'}
                                 </button>
                               ))}
@@ -1462,25 +1462,25 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                           {/* Hold padding micro — M6.94.3: 0.5 단위 미세 조정 (사용자 요청) */}
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <label className="flex items-center gap-1">
-                              <span className="text-zinc-400">왼쪽 +</span>
+                              <span className="text-dim-400">왼쪽 +</span>
                               <input type="number" min="0" max="20" step="0.5" value={e.holdPadLeft || 0}
                                 onChange={ev => updateAlignPad(selectedBay, 'holdPadLeft', parseFloat(ev.target.value) || 0)}
-                                className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center" />
+                                className="w-14 px-1 py-0.5 bg-ink-750 rounded text-center" />
                             </label>
                             <label className="flex items-center gap-1">
-                              <span className="text-zinc-400">오른쪽 +</span>
+                              <span className="text-dim-400">오른쪽 +</span>
                               <input type="number" min="0" max="20" step="0.5" value={e.holdPadRight || 0}
                                 onChange={ev => updateAlignPad(selectedBay, 'holdPadRight', parseFloat(ev.target.value) || 0)}
-                                className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center" />
+                                className="w-14 px-1 py-0.5 bg-ink-750 rounded text-center" />
                             </label>
                           </div>
-                          <div className="text-2xs text-zinc-500 mt-1">cells 단위 미세 조정 (0.5 가능). 0이면 위 정렬 자동.</div>
+                          <div className="text-2xs text-dim-500 mt-1">cells 단위 미세 조정 (0.5 가능). 0이면 위 정렬 자동.</div>
                         </div>
 
                         {/* === 베이 복사 === */}
                         <div className="bg-amber-900/20 border border-amber-700/50 rounded p-2">
                           <div className="text-xs text-amber-300 font-bold mb-1">📋 베이 구조 복사</div>
-                          <div className="text-2xs text-zinc-400 mb-2">
+                          <div className="text-2xs text-dim-400 mb-2">
                             이 베이 (BAY {selectedBay})의 tier/cells/정렬을 다른 베이에 복사
                           </div>
                           <button
@@ -1501,10 +1501,10 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           {copyMode && (
             <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4"
                  onClick={() => setCopyMode(null)}>
-              <div className="bg-zinc-900 rounded-pill p-4 max-w-2xl w-full max-h-[80vh] overflow-auto"
+              <div className="bg-ink-900 rounded-pill p-4 max-w-2xl w-full max-h-[80vh] overflow-auto"
                    onClick={e => e.stopPropagation()}>
                 <div className="text-base font-bold mb-1">📋 BAY {copyMode.sourceBay} 구조를 복사할 대상 베이 선택</div>
-                <div className="text-xs text-zinc-400 mb-3">tier/cells/정렬/padding 모두 복사. 페어 짝수는 안 바뀜.</div>
+                <div className="text-xs text-dim-400 mb-3">tier/cells/정렬/padding 모두 복사. 페어 짝수는 안 바뀜.</div>
                 <div className="grid grid-cols-6 gap-2 mb-4">
                   {Object.keys(matrix.byBay).sort().map(bay => {
                     if (bay === copyMode.sourceBay) return null;
@@ -1516,7 +1516,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                           if (checked) next.delete(bay); else next.add(bay);
                           setCopyMode({ ...copyMode, selectedTargets: next });
                         }}
-                        className={`p-2 rounded text-sm font-bold ${checked ? 'bg-emerald-600' : 'bg-zinc-700 hover:bg-zinc-600'}`}>
+                        className={`p-2 rounded text-sm font-bold ${checked ? 'bg-emerald-600' : 'bg-ink-750 hover:bg-ink-700'}`}>
                         BAY {bay}
                       </button>
                     );
@@ -1524,10 +1524,10 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
                 </div>
                 <div className="flex justify-between items-center">
                   <button onClick={() => setCopyMode({ ...copyMode, selectedTargets: new Set(Object.keys(matrix.byBay).filter(b => b !== copyMode.sourceBay)) })}
-                    className="text-xs px-3 py-1 bg-zinc-700 hover:bg-zinc-600 rounded">전체 선택</button>
+                    className="text-xs px-3 py-1 bg-ink-750 hover:bg-ink-700 rounded">전체 선택</button>
                   <div className="flex gap-2">
                     <button onClick={() => setCopyMode(null)}
-                      className="px-4 py-2 bg-zinc-700 rounded">취소</button>
+                      className="px-4 py-2 bg-ink-750 rounded">취소</button>
                     <button
                       disabled={copyMode.selectedTargets.size === 0}
                       onClick={() => {
@@ -1546,18 +1546,18 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           {done && (
             <div className="text-center py-12">
               <div className="text-2xl mb-3">{savingMsg}</div>
-              <div className="text-sm text-zinc-400">이제 카고플랜에서 이 선박이 정상 표시됩니다.</div>
+              <div className="text-sm text-dim-400">이제 카고플랜에서 이 선박이 정상 표시됩니다.</div>
             </div>
           )}
         </div>
 
         {/* 푸터 */}
-        <div className="p-4 border-t border-zinc-700 flex justify-between items-center gap-2 flex-wrap">
+        <div className="p-4 border-t border-line-faint flex justify-between items-center gap-2 flex-wrap">
           {/* 좌측: 권한자만 명단 관리 버튼 */}
           <div className="flex items-center gap-2">
             {canEdit && !done && (
               <button onClick={() => { setShowEditorMgr(v => !v); setEditorMsg(''); }}
-                      className="px-3 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-xs">
+                      className="px-3 py-2 bg-ink-750 hover:bg-ink-700 rounded text-xs">
                 👤 권한자 관리{Array.isArray(editors) ? ` (${editors.length})` : ''}
               </button>
             )}
@@ -1580,7 +1580,7 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
           <div className="flex justify-end gap-2">
             {!done ? (
               <>
-                <button onClick={onClose} className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm">취소</button>
+                <button onClick={onClose} className="px-4 py-2 bg-ink-750 hover:bg-ink-700 rounded text-sm">취소</button>
                 {canEdit && shipMeta.code && (
                   <button onClick={handleDelete}
                           className="px-4 py-2 bg-red-700 hover:bg-red-600 rounded text-sm font-bold">
@@ -1602,14 +1602,14 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
 
         {/* M6.94.20: 권한자 관리 패널 (권한자만) */}
         {canEdit && showEditorMgr && (
-          <div className="px-4 pb-4 border-t border-zinc-700 pt-3">
+          <div className="px-4 pb-4 border-t border-line-faint pt-3">
             <div className="text-sm font-bold text-white mb-2">👤 매트릭스 권한자 명단</div>
-            <div className="text-xxs text-zinc-400 mb-2">
+            <div className="text-xxs text-dim-400 mb-2">
               명단에 있는 검수자만 매트릭스를 저장하고 이 명단을 수정할 수 있습니다. 일반 사용자는 자동으로 받아보기만 합니다.
             </div>
             <div className="flex flex-wrap gap-2 mb-3">
               {Array.isArray(editors) && editors.map(name => (
-                <span key={name} className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-800 rounded text-xs text-white">
+                <span key={name} className="inline-flex items-center gap-1 px-2 py-1 bg-ink-850 rounded text-xs text-white">
                   {name}
                   {editors.length > 1 && (
                     <button onClick={() => handleRemoveEditor(name)}
@@ -1622,11 +1622,11 @@ export default function ShipMatrixBuilderModal({ voyage, containers, onClose, on
               <input value={editorInput} onChange={e => setEditorInput(e.target.value)}
                      onKeyDown={e => { if (e.key === 'Enter') handleAddEditor(); }}
                      placeholder="검수자 이름 (예: 김성일)"
-                     className="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-sm text-white" />
+                     className="flex-1 px-3 py-2 bg-ink-850 border border-line-strong rounded text-sm text-white" />
               <button onClick={handleAddEditor}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm font-bold">추가</button>
             </div>
-            {editorMsg && <div className="text-xs text-zinc-300 mt-2">{editorMsg}</div>}
+            {editorMsg && <div className="text-xs text-dim-300 mt-2">{editorMsg}</div>}
             <div className="text-2xs text-amber-400 mt-2">
               ⚠ 이름은 검수자 로그인 이름과 정확히 일치해야 합니다 (공백·철자 주의).
             </div>
@@ -1653,7 +1653,7 @@ function TierAddInline({ onAdd, placeholder }) {
         onChange={e => setV(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') submit(); }}
         placeholder={placeholder || 'tier'}
-        className="w-14 px-1 py-0.5 bg-zinc-700 rounded text-center text-xxs"
+        className="w-14 px-1 py-0.5 bg-ink-750 rounded text-center text-xxs"
         min="1" max="99"
       />
       <button

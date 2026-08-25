@@ -243,7 +243,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
 
   return (
-    <div className="min-h-screen bg-[#080C1A] text-dim-100 lg:bg-ink-950 lg:px-6 lg:py-8">
+    <div className="min-h-screen bg-ink-950 text-dim-100 lg:bg-ink-950 lg:px-6 lg:py-8">
       <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:max-w-[1500px] lg:mx-auto lg:items-start">
 
       {/* ══ PC 전용 좌측 현황판 (폰에서는 숨김 — 종전 화면 불변) ══ */}
@@ -318,12 +318,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                  className="w-[56px] h-[56px] rounded-[18px] select-none"
                  style={{ boxShadow: '0 12px 32px rgba(212,175,55,.26)' }}/>
             <div className="mt-2.5 text-[23px] font-black tracking-tight text-white leading-none">TallyOne</div>
-            <div className="mt-1 text-[11.5px] font-medium text-[#9AA3B8]">평택항 컨테이너 검수</div>
-            <span className="mt-2.5 h-[26px] px-3 rounded-full inline-flex items-center gap-2 text-xxs font-semibold text-[#A7F0D0]"
+            <div className="mt-1 text-[11.5px] font-medium text-dim-300">평택항 컨테이너 검수</div>
+            <span className="mt-2.5 h-[26px] px-3 rounded-full inline-flex items-center gap-2 text-xxs font-semibold text-act-soft"
                   style={{ border: '1px solid rgba(0,209,143,.28)', background: 'rgba(0,209,143,.10)' }}>
               <span className="relative flex w-2 h-2">
-                <span className="animate-ping absolute inline-flex w-full h-full rounded-full bg-[#00D18F] opacity-60"/>
-                <span className="relative inline-flex w-2 h-2 rounded-full bg-[#00E89E]"/>
+                <span className="animate-ping absolute inline-flex w-full h-full rounded-full bg-act opacity-60"/>
+                <span className="relative inline-flex w-2 h-2 rounded-full bg-act-hi"/>
               </span>
               그린마린 검수팀 · {board.ships.filter(x => x.rank === 0).length > 0
                 ? `오늘 ${board.ships.filter(x => x.rank === 0).length}척 작업중` : `진행 ${board.total}항차`}
@@ -332,22 +332,22 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         </div>
 
         {/* ── 2.11 폰 바텀시트 — PC 에서는 껍데기만 남고 종전 흐름 그대로 ── */}
-        <div className="flex-1 flex flex-col bg-[#121A2B] rounded-t-[32px] -mt-3 relative z-20 overflow-hidden border-t border-white/5 shadow-[0_-12px_40px_rgba(0,0,0,0.45)]
+        <div className="flex-1 flex flex-col bg-ink-900 rounded-t-[32px] -mt-3 relative z-20 overflow-hidden border-t border-white/5 shadow-[0_-12px_40px_rgba(0,0,0,0.45)]
                         lg:bg-transparent lg:rounded-none lg:mt-0 lg:border-0 lg:overflow-visible lg:shadow-none lg:flex-none">
-          <div className="lg:hidden flex justify-center pt-3 pb-2 shrink-0"><div className="w-9 h-[5px] rounded-full bg-[#2A3449]"/></div>
+          <div className="lg:hidden flex justify-center pt-3 pb-2 shrink-0"><div className="w-9 h-[5px] rounded-full bg-ink-750"/></div>
           <div className="lg:hidden px-5 pb-2.5 flex items-center justify-between shrink-0">
             <h2 className="text-[18px] font-bold tracking-tight text-white">작업자 선택</h2>
-            <span className="text-xs2 font-semibold px-2.5 h-[22px] rounded-full bg-[#1C2740] text-[#8CA0C2] border border-[#24324E] flex items-center">{list.length}명</span>
+            <span className="text-xs2 font-semibold px-2.5 h-[22px] rounded-full bg-ink-850 text-dim-200 border border-line-faint flex items-center">{list.length}명</span>
           </div>
           {board.ships.length > 0 && (
-            <div className="hidden mx-3.5 mb-2.5 bg-[#0E1727] border border-[#1E2B45] rounded-card px-3 py-2.5 shrink-0">
-              <div className="text-2xs font-bold tracking-[0.12em] text-[#6E7E9E] mb-2">■ 오늘 · 내일 작업 선박</div>
+            <div className="hidden mx-3.5 mb-2.5 bg-ink-900 border border-line-faint rounded-card px-3 py-2.5 shrink-0">
+              <div className="text-2xs font-bold tracking-[0.12em] text-dim-400 mb-2">■ 오늘 · 내일 작업 선박</div>
               <div className="flex flex-wrap gap-1.5">
                 {board.ships.slice(0, 8).map(sp => (
                   <span key={sp.key} className={`rounded-pill px-2.5 py-1 text-xxs font-black tracking-wide border ${
-                    sp.rank === 0 ? 'bg-emerald-500/15 text-[#7CF1C2] border-emerald-500/35'
-                    : sp.rank === 1 ? 'bg-[#0f2a3d] text-[#9BD8F5] border-[#1d4a68]'
-                    : 'bg-[#182238] text-[#7C8CA8] border-[#26324B]'}`}>
+                    sp.rank === 0 ? 'bg-emerald-500/15 text-act-soft border-emerald-500/35'
+                    : sp.rank === 1 ? 'bg-[#0f2a3d] text-st-disHi border-[#1d4a68]'
+                    : 'bg-ink-850 text-dim-300 border-line-faint'}`}>
                     {sp.vsl}<span className="text-3xs font-semibold opacity-75 ml-1">
                       {sp.rank === 0 ? (berthNo(sp.berth) || '작업중') : (sp.rank === 1 ? hhmm(sp.ms) : '내일')}</span>
                   </span>
@@ -375,9 +375,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         {/* ── 검수원 목록 (역할 뱃지 — 수석/부수석 강조) ── */}
         {shownList.length === 0 && !showAll && (
           <div className="px-3.5 pb-2 shrink-0">
-            <div className="rounded-card border border-dashed border-[#2A3958] px-4 py-5 text-center">
+            <div className="rounded-card border border-dashed border-line-faint px-4 py-5 text-center">
               <div className="text-sm2 font-bold text-dim-200">오늘 이 기기에서 로그인한 사람이 없습니다</div>
-              <div className="mt-1.5 text-[11.5px] text-[#6E7E9E] leading-relaxed">아래에 이름을 입력해 시작하거나,<br/>«로그인 안 된 작업자»에서 고르세요.</div>
+              <div className="mt-1.5 text-[11.5px] text-dim-400 leading-relaxed">아래에 이름을 입력해 시작하거나,<br/>«로그인 안 된 작업자»에서 고르세요.</div>
             </div>
           </div>
         )}
@@ -394,9 +394,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   className={`relative w-full h-16 rounded-[16px] flex items-center gap-3 px-3 text-left border transition-all
                     lg:h-[62px] lg:px-3 lg:rounded-btn ${
                     isSel ? 'bg-[#132a2b] border-emerald-500/45'
-                          : 'bg-[#1A2338] border-[#22304B] hover:border-[#2C3D5E] hover:bg-[#1D2940]'}`}
+                          : 'bg-ink-800 border-line-faint hover:border-line-faint hover:bg-ink-850'}`}
                 >
-                  {isSel && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-[#00D18F]"/>}
+                  {isSel && <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-act"/>}
                   <span className={`w-[42px] h-[42px] rounded-full flex items-center justify-center text-[15px] font-bold text-white flex-shrink-0
                     lg:w-10 lg:h-10 lg:text-sm bg-gradient-to-br ${
                     chief ? 'from-violet-400 to-violet-700' : 'from-amber-400 to-amber-700'}`}
@@ -425,13 +425,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                       )}
                     </div>
                     {role && (
-                      <div className={`mt-1 text-[11.5px] truncate leading-none ${chief ? 'text-violet-300 font-bold' : 'text-[#8CA0C2]'}`}>
+                      <div className={`mt-1 text-[11.5px] truncate leading-none ${chief ? 'text-violet-300 font-bold' : 'text-dim-200'}`}>
                         {chief && '👑 '}{role}
                       </div>
                     )}
                   </div>
                   <span className={`w-7 h-7 rounded-full flex items-center justify-center border text-[14px] font-black flex-shrink-0 lg:hidden ${
-                    isSel ? 'bg-[#00D18F] border-[#00D18F] text-[#04120c]' : 'bg-[#121E34] border-[#2A3958] text-transparent'}`}>✓</span>
+                    isSel ? 'bg-act border-act text-act-on' : 'bg-ink-900 border-line-faint text-transparent'}`}>✓</span>
                 </button>
               );
             })}
@@ -441,20 +441,20 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         <div className="px-3.5 pb-2 shrink-0 lg:px-0">
           {hiddenCount > 0 && !showAll && (
             <button onClick={() => setShowAll(true)}
-              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-xs2 font-bold text-[#6E7E9E] hover:text-dim-200 hover:border-[#3A4A6A]">
+              className="w-full h-11 rounded-[14px] border border-dashed border-line-faint text-xs2 font-bold text-dim-400 hover:text-dim-200 hover:border-line-strong">
               로그인 안 된 작업자 {hiddenCount}명 보기
             </button>
           )}
           {showAll && (
             <button onClick={() => setShowAll(false)}
-              className="w-full h-11 rounded-[14px] border border-dashed border-[#2A3958] text-xs2 font-bold text-[#6E7E9E] hover:text-dim-200">
+              className="w-full h-11 rounded-[14px] border border-dashed border-line-faint text-xs2 font-bold text-dim-400 hover:text-dim-200">
               로그인한 작업자만 보기
             </button>
           )}
         </div>
 
         {/* ── 직접 입력 + 로그인 — 2.11: 폰은 시트 하단에 고정(shrink-0), PC 는 종전 흐름 ── */}
-        <div className="shrink-0 bg-[#121A2B] border-t border-[#1E2B45] px-3.5 pt-3.5 pb-3.5 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]
+        <div className="shrink-0 bg-ink-900 border-t border-line-faint px-3.5 pt-3.5 pb-3.5 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]
                         lg:bg-transparent lg:border-line lg:px-0 lg:pb-0 lg:shadow-none lg:mb-3">
           <div className="hidden lg:block text-xxs text-dim-300 mb-1.5 font-bold">목록에 없으면 이름 직접 입력</div>
           <div className="flex gap-2.5 items-center">
@@ -464,14 +464,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleDirect()}
               placeholder="목록에 없으면 이름 입력"
-              className="flex-1 min-w-0 h-14 bg-[#1A2338] border border-[#2A3958] rounded-card px-3.5 text-[15px] font-medium text-white placeholder:text-[#5A6B8A] focus:outline-none focus:border-[#00D18F]/60
+              className="flex-1 min-w-0 h-14 bg-ink-800 border border-line-faint rounded-card px-3.5 text-[15px] font-medium text-white placeholder:text-dim-500 focus:outline-none focus:border-act/60
                          lg:h-auto lg:rounded lg:py-2 lg:text-sm lg:bg-ink-800 lg:border-line"
               autoFocus={list.length === 0}
             />
             <button
               onClick={handleDirect}
               disabled={!newName.trim()}
-              className="h-14 px-4 rounded-card bg-[#232F4A] hover:bg-[#2A3958] disabled:bg-[#1A2338] disabled:text-dim-500 text-sm font-bold text-dim-100 flex items-center gap-1 shrink-0
+              className="h-14 px-4 rounded-card bg-ink-700 hover:bg-ink-700 disabled:bg-ink-800 disabled:text-dim-500 text-sm font-bold text-dim-100 flex items-center gap-1 shrink-0
                          lg:h-auto lg:py-2 lg:rounded lg:bg-ink-750"
             >
               <UserPlus className="w-4 h-4"/>선택
@@ -486,8 +486,8 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           onClick={handleLogin}
           disabled={!selected}
           className="w-full h-[60px] mt-3 rounded-[18px] font-black text-base flex items-center justify-center gap-2 transition-all active:scale-[0.99]
-                     bg-gradient-to-r from-[#00c281] to-[#00e89e] hover:brightness-110 shadow-[0_10px_24px_rgba(0,209,143,0.28)]
-                     disabled:bg-none disabled:bg-[#1A2338] disabled:text-dim-500 disabled:shadow-none text-[#04120c] lg:h-auto lg:py-3.5 lg:rounded-btn lg:mt-0"
+                     bg-gradient-to-r from-act-dn to-act-hi hover:brightness-110 shadow-[0_10px_24px_rgba(0,209,143,0.28)]
+                     disabled:bg-none disabled:bg-ink-800 disabled:text-dim-500 disabled:shadow-none text-act-on lg:h-auto lg:py-3.5 lg:rounded-btn lg:mt-0"
         >
           <LogIn className="w-5 h-5"/>{selected ? `${selected} 님으로 시작` : '작업자를 선택해주세요'}
         </button>
@@ -498,7 +498,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             <ArrowLeft className="w-4 h-4"/>{current} 그대로 돌아가기
           </button>
         )}
-        <div className="lg:hidden mt-2 text-center text-[10.5px] text-[#5A6B8A] font-medium">🔒 표시는 비밀번호를 한 번 확인합니다</div>
+        <div className="lg:hidden mt-2 text-center text-[10.5px] text-dim-500 font-medium">🔒 표시는 비밀번호를 한 번 확인합니다</div>
         </div>{/* 2.11: 하단 고정 바 닫기 */}
         </div>{/* 2.11: 폰 바텀시트 닫기 (PC 에서는 껍데기만) */}
       </div>

@@ -89,6 +89,12 @@ export function parseNaturalQuery(text) {
     isAll: false, isStat: false, mode: null,
     shiftingQuery: false,   // TallyOne 1.27: 시프팅(치워야 할 통과화물)
     mirCalled: false, mirHello: false,   // 1.91: «미르» — 즉답 비서 이름(검수사 고양이). «미르야 …» 호출어
+    //  ★ 2.40: 미르가 **직접 만지는** 것 — 화면 밝기와 소리, 둘뿐이다(검수사 확정).
+    //    *«화면 밝기와 볼륨 정도만 하면 될듯 합니다. 미르의 조작기술은»*
+    //    둘 다 **그 자리에서 되돌릴 수 있는 것**이라 안전하다(작업표준 2-0-B).
+    //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
+    //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
+    deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
   };
   if (!text) return result;
   let t = String(text).toLowerCase();
@@ -434,6 +440,42 @@ export function parseNaturalQuery(text) {
     if (tempMatch !== null && Number.isFinite(tempMatch)) {
       result.temp = tempMatch;
       if (!result.type) result.type = 'rf';
+    }
+  }
+
+  //  ══ 2.40 미르 조작 (밝기·소리) ═══════════════════════════════════
+  //    ⛔ 가장 중요한 것은 «거는 것»이 아니라 **«안 거는 것»**이다.
+  //      컨 조회를 가로채면 현장이 멈춘다 — 업무 문맥이면 무조건 종전 답변으로 보낸다.
+  {
+    const RE_SCREEN  = /(화면|밝기|스크린|눈이?\s*아프|눈\s*피로|침침|캄캄)/;
+    const RE_UP      = /(밝게|밝혀|환하게|더\s*밝|밝은\s*쪽)/;
+    const RE_DOWN    = /(어둡게|어둡혀|눈부시|너무\s*밝|원래대로|기본으로)/;
+    const RE_MAX     = /(제일|가장|최대|끝까지)/;
+    const RE_MIN     = /(제일|가장|최소|원래대로|기본)/;
+    const RE_SOUND   = /(소리|볼륨|음량|목소리|조용히|말\s*하지\s*마)/;
+    const RE_SND_UP  = /(크게|키워|올려|높여)/;
+    const RE_SND_DN  = /(작게|줄여|낮춰|조용)/;
+    const RE_SND_OFF = /(꺼|끄|음소거|조용히\s*해|말\s*하지\s*마)/;
+    //  업무 낱말 — 이게 있으면 조작이 아니다. «밝은 색 컨테이너»·«봉인자 어떻게 등록해» 같은 말을 지킨다.
+    const RE_WORK = /\d{4}|컨테이너|리퍼|엑스레이|x-?ray|베이|양하|선적|트윈|씰|실번호|봉인|어디서\s*(하|보)|어떻게\s*(하|해)/i;
+    const hasScreen = RE_SCREEN.test(t);
+    const hasSound = RE_SOUND.test(t);
+    if (RE_WORK.test(t) && !hasScreen && !hasSound) {
+      /* 업무 문맥 — 조작으로 보지 않는다 */
+    } else if (hasSound) {
+      if (RE_SND_OFF.test(t)) result.deviceCmd = { kind: 'volume', to: 'off' };
+      else if (RE_SND_UP.test(t)) result.deviceCmd = { kind: 'volume', dir: +1 };
+      else if (RE_SND_DN.test(t)) result.deviceCmd = { kind: 'volume', dir: -1 };
+    } else if (RE_UP.test(t) && (hasScreen || !RE_WORK.test(t))) {
+      result.deviceCmd = RE_MAX.test(t) ? { kind: 'bright', to: 4 } : { kind: 'bright', dir: +1 };
+    } else if (RE_DOWN.test(t) && (hasScreen || !RE_WORK.test(t))) {
+      result.deviceCmd = RE_MIN.test(t) ? { kind: 'bright', to: 1 } : { kind: 'bright', dir: -1 };
+    } else if (hasScreen && /(어두|침침|캄캄|안\s*보여)/.test(t)) {
+      //  검수사 원문이 이 형태다 — *«미르야 화면이 어두운데?»*. 되묻지 말고 한 단계 올린다.
+      result.deviceCmd = { kind: 'bright', dir: +1 };
+    } else if (hasScreen || /(눈이?\s*아프|눈\s*피로)/.test(t)) {
+      //  ⚠ «눈이 아프다»는 **어두워서인지 눈부셔서인지 모른다.** 지어내지 말고 되묻는다(2-0-D).
+      result.deviceCmd = { kind: 'bright', ask: true };
     }
   }
 
@@ -2438,7 +2480,11 @@ export function generateHandover(allContainers, handoverInfo = {}) {
   const reefers = cs.filter(c => isReeferContainer(c) && !c._comp);
   const reeferNoTmp = reefers.filter(c => !c.tmp && c.fe !== 'E' && !c.rfdry && !c.mkcon);
   // 1.86 (검수사 확정 «머스크는 리퍼가 다수입니다. 그래서 리퍼 체크를 하지 않습니다»): rfSkip 배는 온도 경고 억제.
-  if (reeferNoTmp.length && !opts?.rfSkip) special.push(`냉동 온도 미입력 ${reeferNoTmp.length}대 (조회 시 입력 필요)`);
+  //  🔴 2.40 수리 — 여기 `opts` 는 **이 함수에 없는 변수**였다(generateBriefing 의 인자를 복사해 온 흔적).
+  //    옵셔널 체이닝이라도 **선언 자체가 없으면 ReferenceError** 다 — 즉 「인계 알려줘」를 물었을 때
+  //    리퍼 온도 미입력이 1대라도 있으면 그 자리에서 앱이 터진다. babel 스코프 검사로 잡았다.
+  //    이 함수의 인자는 handoverInfo 다. rfSkip 을 받을 자리를 그쪽으로 옮긴다.
+  if (reeferNoTmp.length && !handoverInfo?.rfSkip) special.push(`냉동 온도 미입력 ${reeferNoTmp.length}대 (조회 시 입력 필요)`);
   const dg = cs.filter(c => c.dg && !c._comp);
   if (dg.length) special.push(`위험물 ${dg.length}대 — 별도 취급`);
   const fr = cs.filter(c => (c.fr || c.ot) && !c._comp);

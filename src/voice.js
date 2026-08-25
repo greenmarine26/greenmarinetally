@@ -3,7 +3,7 @@
 // 알파벳: 에이/비/씨/디/...
 // M3.1: speak() 시 좌표 패턴(16-01-86)을 자동으로 한국어로 변환
 
-import { spellPosString } from './utils.js';
+import { spellPosString, currentVolume } from './utils.js';   // 2.40: 볼륨은 utils 단일 소스
 
 // V7.99-15: 가장 자연스러운 한국어 TTS 목소리를 골라 캐시한다.
 //   기존엔 u.lang='ko-KR'만 줘서 브라우저가 멋대로 첫 번째(보통 가장 기계적인)
@@ -95,6 +95,8 @@ let currentSpeakPriority = null;  // 현재 출력 중인 음성의 priority
 
 export function speak(text, opts = {}) {
   if (!text) return;
+  //  2.40: 「소리 끔」이면 말하지 않는다. 검수사가 미르에게 «조용히 해» 라고 할 수 있다.
+  if (opts.volume == null && currentVolume() === 0) return;
   try {
     const isHigh = opts.priority === 'high';
     if (window.speechSynthesis.speaking && !opts.append) {
@@ -124,7 +126,9 @@ export function speak(text, opts = {}) {
       u.rate = opts.rate || 1.3;
       u.pitch = opts.pitch || 1.0;
     }
-    u.volume = opts.volume || 1.0;
+    //  2.40: 종전엔 여기 1.0 이 박혀 있어 소리를 줄일 방법이 없었다.
+    //    ⚠ opts.volume 을 명시로 넘긴 호출부는 그대로 존중한다(회귀 없음).
+    u.volume = opts.volume != null ? opts.volume : currentVolume();
     u.onend = () => { currentSpeakPriority = null; };
     u.onerror = () => { currentSpeakPriority = null; };
     window.speechSynthesis.speak(u);
@@ -185,6 +189,7 @@ export function speakContainer(c, opts = {}) {
 
     const text = parts.join(', ');
     const u = new SpeechSynthesisUtterance(text);
+    u.volume = currentVolume();   // 2.40: 이 갈래도 같은 단일 소스를 쓴다
     u.lang = 'ko-KR';
     const kov = ensureKoVoice();   // V7.99-15: 자연스러운 한국어 목소리 적용
     if (kov) u.voice = kov;

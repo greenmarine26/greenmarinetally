@@ -19,16 +19,16 @@ import { fbSubscribeFeedback } from '../firebase.js';   // TallyOne 1.22: 오답
 
 // 테일윈드 정적 클래스 (동적 생성 금지 — purge 회피, HelpModal ACCENT 패턴과 동일)
 const ACCENT = {
-  amber:   { card: 'bg-gradient-to-br from-amber-900/40 to-slate-900 border-amber-700/40 hover:border-amber-500',     icon: 'text-amber-300',   title: 'text-amber-100' },
-  emerald: { card: 'bg-gradient-to-br from-emerald-900/40 to-slate-900 border-emerald-700/40 hover:border-emerald-500', icon: 'text-emerald-300', title: 'text-emerald-100' },
-  sky:     { card: 'bg-gradient-to-br from-sky-900/40 to-slate-900 border-sky-700/40 hover:border-sky-500',           icon: 'text-sky-300',     title: 'text-sky-100' },
-  violet:  { card: 'bg-gradient-to-br from-violet-900/40 to-slate-900 border-violet-700/40 hover:border-violet-500',   icon: 'text-violet-300',  title: 'text-violet-100' },
-  teal:    { card: 'bg-gradient-to-br from-teal-900/40 to-slate-900 border-teal-700/40 hover:border-teal-500',         icon: 'text-teal-300',    title: 'text-teal-100' },
-  rose:    { card: 'bg-gradient-to-br from-rose-900/40 to-slate-900 border-rose-700/40 hover:border-rose-500',         icon: 'text-rose-300',    title: 'text-rose-100' },
-  cyan:    { card: 'bg-gradient-to-br from-cyan-900/40 to-slate-900 border-cyan-700/40 hover:border-cyan-500',         icon: 'text-cyan-300',    title: 'text-cyan-100' },
-  orange:  { card: 'bg-gradient-to-br from-orange-900/40 to-slate-900 border-orange-700/40 hover:border-orange-500',   icon: 'text-orange-300',  title: 'text-orange-100' },
+  amber:   { card: 'bg-gradient-to-br from-amber-900/40 to-ink-900 border-amber-700/40 hover:border-amber-500',     icon: 'text-amber-300',   title: 'text-amber-100' },
+  emerald: { card: 'bg-gradient-to-br from-emerald-900/40 to-ink-900 border-emerald-700/40 hover:border-emerald-500', icon: 'text-emerald-300', title: 'text-emerald-100' },
+  sky:     { card: 'bg-gradient-to-br from-sky-900/40 to-ink-900 border-sky-700/40 hover:border-sky-500',           icon: 'text-sky-300',     title: 'text-sky-100' },
+  violet:  { card: 'bg-gradient-to-br from-violet-900/40 to-ink-900 border-violet-700/40 hover:border-violet-500',   icon: 'text-violet-300',  title: 'text-violet-100' },
+  teal:    { card: 'bg-gradient-to-br from-teal-900/40 to-ink-900 border-teal-700/40 hover:border-teal-500',         icon: 'text-teal-300',    title: 'text-teal-100' },
+  rose:    { card: 'bg-gradient-to-br from-rose-900/40 to-ink-900 border-rose-700/40 hover:border-rose-500',         icon: 'text-rose-300',    title: 'text-rose-100' },
+  cyan:    { card: 'bg-gradient-to-br from-cyan-900/40 to-ink-900 border-cyan-700/40 hover:border-cyan-500',         icon: 'text-cyan-300',    title: 'text-cyan-100' },
+  orange:  { card: 'bg-gradient-to-br from-orange-900/40 to-ink-900 border-orange-700/40 hover:border-orange-500',   icon: 'text-orange-300',  title: 'text-orange-100' },
   // TallyOne 1.1: 클로드에게 메모 카드용 (정적 문자열 유지 — purge 회피 규칙 동일)
-  violetDeep: { card: 'bg-gradient-to-br from-violet-950/60 to-slate-900 border-violet-700/40 hover:border-violet-500', icon: 'text-violet-300', title: 'text-violet-100' },
+  violetDeep: { card: 'bg-gradient-to-br from-violet-950/60 to-ink-900 border-violet-700/40 hover:border-violet-500', icon: 'text-violet-300', title: 'text-violet-100' },
 };
 
 // 시간대별 인사 한 줄 — 상단을 따뜻하게 (greeting.js의 시간대 구분과 같은 기준)

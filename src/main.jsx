@@ -4,9 +4,14 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import './index.css';
+import './brightLight.css';   // 2.40: «4 사무실»(흰 바탕)에서 Tailwind 기본 팔레트 스톱 뒤집기 — 기계 생성본
+import { getBrightness, applyBrightness } from './utils.js';
 import './mergeApi.js'; // V8.20: 수집기 연동 입구 — window.GMmerge(files) 전역 등록
 import './autoRegApi.js'; // V8.32: 수집기 자동 항차 등록 입구 — window.GMautoPayload 전역 등록
 import { installToastAlert, showToast } from './toast.js';
+
+//  2.40: 화면을 그리기 **전에** 밝기를 건다. 나중에 걸면 어두운 화면이 한 번 번쩍인다.
+applyBrightness(getBrightness());
 
 // V9.14: alert() 254곳 → 논블로킹 토스트로 일괄 전환 (toast.js는 M-대 완성돼 있었으나 연결 0회였다).
 //   confirm/prompt는 그대로 — 사용자의 결정이 필요한 창은 막지 않는다.

@@ -28,6 +28,7 @@ import { mirTone } from '../mirChat.js';
 import { mirKnowledge } from '../data/mirKnowledge.js';   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
 import mirFaceUrl from '../assets/mir-face.png';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
+import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
 
 // ── TallyOne 1.55: 지금 어느 갱(호기)으로 작업 중인가 ───────────────────
 //   검수사 원문 2026-08-12 — *"장비를 바꿔서 해야 하는데 4호기로 다함.
@@ -1071,12 +1072,33 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed]);
-  const localAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합
+  const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합
     const raw = mirTone(_localAnswerRaw);
     const know = mirKnowledge(query);
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw;
   }, [_localAnswerRaw, query]);
+  /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
+      실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
+      ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */
+  const [devAnswer, setDevAnswer] = useState(null);
+  const devRanRef = useRef('');
+  useEffect(() => {
+    const cmd = parsed.deviceCmd;
+    if (!cmd || !askedAt) { return; }
+    const key = String(askedAt) + '|' + JSON.stringify(cmd);
+    if (devRanRef.current === key) return;
+    devRanRef.current = key;
+    let msg = null;
+    try { msg = runDeviceCmd(cmd); }
+    catch (e) { console.warn('[미르 조작] 실패', e); msg = '그건 지금 바꾸지 못했어요.'; }
+    if (msg) { setDevAnswer(msg); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
+  }, [parsed.deviceCmd, askedAt]);
+  //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
+  useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, query]);
+  //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
+  const localAnswer = devAnswer || _mirAnswer;
+
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).
   useEffect(() => {
@@ -1493,7 +1515,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       )}
 
       {localAnswer && chatMessages.length === 0 && (
-        <div className="bg-gradient-to-br from-emerald-950 to-slate-900 border-2 border-emerald-600 rounded-btn p-4">
+        <div className="bg-gradient-to-br from-emerald-950 to-ink-900 border-2 border-emerald-600 rounded-btn p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-emerald-300"/>
@@ -1583,7 +1605,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
 
       {/* 통계 답변 카드 (단순 카운트) — 로컬 답변이 없을 때만 */}
       {parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && !aiAnswer && !localAnswer && chatMessages.length === 0 && (
-        <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-btn p-4 text-center">
+        <div className="bg-gradient-to-br from-cyan-950 to-ink-900 border-2 border-cyan-600 rounded-btn p-4 text-center">
           <div className="text-xxs text-cyan-400 font-bold uppercase mb-1">개수 답변</div>
           <div className="text-base text-dim-200 mb-2">{describeQuery(parsed)}</div>
           <div className="text-6xl sm:text-7xl font-black mono text-cyan-300 my-2"
@@ -2506,7 +2528,7 @@ function SmallResultCard({ c, onOpen }) {
       <span className={`px-1.5 py-0.5 rounded text-3xs font-black ${
         c._mode === 'discharge' ? 'bg-blue-900 text-blue-200'
         : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
-        : 'bg-gray-700 text-dim-200'
+        : 'bg-ink-750 text-dim-200'
       }`}>{c._mode === 'discharge' ? '양하' : c._mode === 'loading' ? '선적' : '중계'}</span>
       <span className="font-black text-amber-300 mono">{c.l4 || c.cn?.slice(-4)}</span>
       {c.bay_orig !== undefined && ((c.bay || '') !== (c.bay_orig || '') || (c.row || '') !== (c.row_orig || '') || (c.tier || '') !== (c.tier_orig || '')) &&

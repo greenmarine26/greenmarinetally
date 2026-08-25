@@ -272,6 +272,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "⚠ X-RAY 연막 번들 실패 — 건너뜀"
   fi
+  # 2.40: 화면 밝기·소리 연막검사 — 색은 «빌드 통과»로 증명되지 않는다.
+  #   변수가 안 걸리면 화면만 캄캄한 채로 빌드는 성공한다. 눌러서 실제로 갈리는지 본다.
+  SMOKE_BR=$(mktemp /tmp/_smokebr_XXXXXX.cjs)
+  if npx esbuild tools/smoke_bright_entry.js --bundle --platform=node --format=cjs \
+       --outfile="$SMOKE_BR" --log-level=error; then
+    BUILT_CSS=$(ls -t assets/index-*.css 2>/dev/null | head -1)
+    node tools/smoke_bright.cjs "$SMOKE_BR" "$BUILT_CSS" || { echo "✗ 밝기·소리 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "⚠ 밝기 연막 번들 실패 — 건너뜀"
+  fi
   # 2.27: 매뉴얼 연막검사 — 두 권을 **눌러서** 열어 본다.
   #   2.27 이전 판에서 수석 권 버튼이 setView('chief') 로 가는데 그 화면이 없어 **눌러도 아무 데도 안 갔다.**
   #   매뉴얼은 «있는 줄도 모르면 안 만든 것과 같다»(CLAUDE.md 0-B) — 안 열리는 권은 없는 권이다.

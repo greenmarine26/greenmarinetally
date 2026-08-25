@@ -60,7 +60,7 @@ export default function GreetingModal({ type, lines, workForecast, onClose }) {
 
   const bgGradient = isLogin
     ? 'from-emerald-900 via-teal-900 to-blue-900'
-    : 'from-purple-900 via-indigo-900 to-slate-900';
+    : 'from-purple-900 via-indigo-900 to-ink-900';
   const borderColor = isLogin ? 'border-emerald-500' : 'border-purple-500';
   const titleColor = isLogin ? 'text-emerald-300' : 'text-purple-300';
   const title = isLogin ? '✨ 환영합니다' : '👋 수고하셨습니다';

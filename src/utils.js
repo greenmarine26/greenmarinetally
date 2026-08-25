@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.39';   // **인쇄본 실측으로 글자 크기 버그 두 건을 잡았다 — 검수사가 보내 준 PDF 를 직접 재서 찾았다.** ①**소문자 e 가 2.4배로 나가고 있었다.** 인쇄본 실측: 대문자 5.40pt(7.2px) 대 소문자 e 13.20pt(17.6px). 원인은 CSS 명시도와 em 이다 — 칸 규칙 `.cpv2-tier-row .cpv2-cell` 과 e 규칙 `.cpv2-cell.cpv2-mark-e` 는 명시도가 (0,2,0)로 같아 나중에 선언된 e 규칙이 칸의 clamp 를 통째로 덮었고, 거기 쓴 1.1em 은 «칸 글자의 1.1배»가 아니라 **부모(font-size 미지정 → 기본 16px)의 1.1배**로 잡혔다. 검수사가 «알파벳이 각자 폰트가 틀리게 보입니다» · «대문자가 소문자보다 작게 보입니다» 라 한 것이 전부 이 한 줄 탓이었다. → `--mf` 변수를 단일 소스로 두고 `calc(var(--mf) * 1.1)` 로 고쳤다. ②**clamp(vw) 가 인쇄에서 최솟값으로 떨어졌다.** 내가 시안으로 보여준 9.6px 과 실제 인쇄 7.2px 이 달랐다. 칸 폭은 page 의 min-width 1200px 로 정해지는데 글자만 vw 를 따라가 어긋났다 → **9.6px 고정**. 최악 배 MCSC(칸 17.0×15.7px)에서 DG 14.4px·글자높이 11.0px 로 들어간다. 결과: 대문자 7.20pt · 소문자 e 7.92pt(1.1배·굵기 600·가운데 보정). 칠·색·RE/RF 규칙은 2.38-01 그대로. ⚠ 이 주석 줄에 따옴표 금지 — build.sh 버전 추출이 깨진다.
+export const APP_VERSION = 'TallyOne 2.40';   // **인쇄본 실측으로 글자 크기 버그 두 건을 잡았다 — 검수사가 보내 준 PDF 를 직접 재서 찾았다.** ①**소문자 e 가 2.4배로 나가고 있었다.** 인쇄본 실측: 대문자 5.40pt(7.2px) 대 소문자 e 13.20pt(17.6px). 원인은 CSS 명시도와 em 이다 — 칸 규칙 `.cpv2-tier-row .cpv2-cell` 과 e 규칙 `.cpv2-cell.cpv2-mark-e` 는 명시도가 (0,2,0)로 같아 나중에 선언된 e 규칙이 칸의 clamp 를 통째로 덮었고, 거기 쓴 1.1em 은 «칸 글자의 1.1배»가 아니라 **부모(font-size 미지정 → 기본 16px)의 1.1배**로 잡혔다. 검수사가 «알파벳이 각자 폰트가 틀리게 보입니다» · «대문자가 소문자보다 작게 보입니다» 라 한 것이 전부 이 한 줄 탓이었다. → `--mf` 변수를 단일 소스로 두고 `calc(var(--mf) * 1.1)` 로 고쳤다. ②**clamp(vw) 가 인쇄에서 최솟값으로 떨어졌다.** 내가 시안으로 보여준 9.6px 과 실제 인쇄 7.2px 이 달랐다. 칸 폭은 page 의 min-width 1200px 로 정해지는데 글자만 vw 를 따라가 어긋났다 → **9.6px 고정**. 최악 배 MCSC(칸 17.0×15.7px)에서 DG 14.4px·글자높이 11.0px 로 들어간다. 결과: 대문자 7.20pt · 소문자 e 7.92pt(1.1배·굵기 600·가운데 보정). 칠·색·RE/RF 규칙은 2.38-01 그대로. ⚠ 이 주석 줄에 따옴표 금지 — build.sh 버전 추출이 깨진다.
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -395,7 +395,80 @@ export const SK = {
   //   검수원이 폰에서 직접 입력 → 노출 차단되어도 5초 내 본인이 새 키 입력해서 복구.
   geminiKey: 'master_gemini_api_key_v1',
   geminiKeyLast6: 'master_gemini_api_key_last6_v1',   // 확인용 마지막 6자리 (UI 표시)
+  //  2.40: 화면 밝기·소리 — **기기마다 따로**다(계정이 아니라 localStorage).
+  //    검수사 원문 — *«검수앱 하나때문에 전체 화면을 바꾸기는 어렵습니다»* ·
+  //    사무실 컴은 밝게, 배에서 쓰는 폰은 어둡게. 같은 사람이라도 기기가 다르면 답이 다르다.
+  brightness: 'master_brightness_v1',
+  volume: 'master_volume_v1',
 };
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2.40 화면 밝기 — 4단계 (검수사 확정 2026-08-25)
+     «쉽게 컴에선 한다는건 일반 업무용과 같으면 됩니다. 더 바라는건 없습니다.»
+   실제 색은 `src/index.css` 의 :root[data-bright="N"] 이 정한다. 여기는 «지금 몇 단계인가»만 다룬다.
+   ⚠ 3 → 4 사이가 크게 벌어져 있다. 중간톤(카드 L34~55)은 밝은 글자도 진한 글자도 안 읽히는
+     죽은 구간이라 **건너뛴다**(2.40 대비비 실측). 1~3 은 어두운 배경, 4 는 엑셀과 같은 흰 바탕.
+   ══════════════════════════════════════════════════════════ */
+export const BRIGHT_STEPS = [
+  { n: 1, label: '어두움', hint: '배 안 · 야간' },
+  { n: 2, label: '보통',   hint: '실내' },
+  { n: 3, label: '밝음',   hint: '밝은 실내' },
+  { n: 4, label: '사무실', hint: '흰 바탕 · 엑셀과 같은 밝기' },
+];
+export const VOLUME_STEPS = [
+  { n: 0, label: '끔',   v: 0 },
+  { n: 1, label: '작게', v: 0.35 },
+  { n: 2, label: '보통', v: 0.7 },
+  { n: 3, label: '크게', v: 1.0 },
+];
+
+//  기기가 처음일 때 — OS 가 밝은 테마면 «사무실», 아니면 «어두움».
+//  ⚠ 넘겨짚지 않는다. matchMedia 를 못 쓰는 환경이면 종전 그대로 1 단계다.
+function _defaultBright() {
+  try {
+    if (typeof window !== 'undefined' && window.matchMedia
+        && window.matchMedia('(prefers-color-scheme: light)').matches) return 4;
+  } catch { /* 판정 못 하면 종전대로 */ }
+  return 1;
+}
+export function getBrightness() {
+  const raw = _storage.get(SK.brightness);
+  const n = parseInt(raw, 10);
+  return (n >= 1 && n <= 4) ? n : _defaultBright();
+}
+//  ⚠ 실제로 화면을 바꾸는 곳은 여기 한 곳뿐이다(판정 두 벌 금지).
+//    <html data-bright="N"> 하나로 CSS 변수 전체가 갈린다.
+export function applyBrightness(n) {
+  const v = Math.max(1, Math.min(4, parseInt(n, 10) || 1));
+  try {
+    if (typeof document !== 'undefined') {
+      if (v === 1) document.documentElement.removeAttribute('data-bright');
+      else document.documentElement.setAttribute('data-bright', String(v));
+    }
+    _storage.set(SK.brightness, String(v));
+  } catch (e) {
+    //  조용히 실패하지 않는다(3금지 ③) — 저장이 막혀도 화면은 바뀌어야 한다.
+    console.warn('[밝기] 저장 실패 — 이번 세션만 적용됩니다.', e);
+  }
+  return v;
+}
+export function getVolumeStep() {
+  const raw = _storage.get(SK.volume);
+  const n = parseInt(raw, 10);
+  return (n >= 0 && n <= 3) ? n : 2;      // 기본 «보통»
+}
+export function setVolumeStep(n) {
+  const v = Math.max(0, Math.min(3, parseInt(n, 10)));
+  try { _storage.set(SK.volume, String(v)); }
+  catch (e) { console.warn('[소리] 저장 실패 — 이번 세션만 적용됩니다.', e); }
+  return v;
+}
+//  ⚠ 실제 볼륨 값(0~1)의 **단일 소스**. voice.js·greeting.js·회화집 셋이 이것만 읽는다.
+//    종전엔 세 곳이 각자 `u.volume = 1.0` 을 박아 두고 있었다.
+export function currentVolume() {
+  const st = VOLUME_STEPS.find((s) => s.n === getVolumeStep());
+  return st ? st.v : 0.7;
+}
 
 // === Helpers ===
 // M3.1: bay 정규화 — EDI는 BBBRRTT 7자리지만 검수원 표시는 ##-##-## 형식
@@ -2696,10 +2769,10 @@ export const podColorMap = {
   'THBKK': { bg: 'bg-green-600', text: 'text-green-50' },      // 방콕
   'MYPKG': { bg: 'bg-green-700', text: 'text-green-50' },      // 클랑
   // 미주/유럽 (슬레이트)
-  'USLAX': { bg: 'bg-slate-600', text: 'text-slate-50' },      // LA
-  'USNYC': { bg: 'bg-slate-500', text: 'text-slate-50' },      // 뉴욕
-  'USSEA': { bg: 'bg-slate-700', text: 'text-slate-50' },      // 시애틀
-  'DEHAM': { bg: 'bg-zinc-600', text: 'text-zinc-50' },        // 함부르크
+  'USLAX': { bg: 'bg-ink-700', text: 'text-dim-100' },      // LA
+  'USNYC': { bg: 'bg-slate-500', text: 'text-dim-100' },      // 뉴욕
+  'USSEA': { bg: 'bg-ink-750', text: 'text-dim-100' },      // 시애틀
+  'DEHAM': { bg: 'bg-ink-700', text: 'text-zinc-50' },        // 함부르크
   'NLRTM': { bg: 'bg-zinc-500', text: 'text-zinc-50' },        // 로테르담
 };
 
@@ -4949,4 +5022,38 @@ export function xraySealerOf(xs, comp) {
   //  sealerAt 이 없는 옛 모양 — 적힌 봉인자가 있으면 그것을 존중하고, 없으면 종전대로 완료자.
   //  (2.39 이전에는 sealer 를 쓰는 코드가 없었으므로 실자료엔 이 조합이 없다. 방어용이다.)
   return ((xs && xs.sealer) || (comp && comp.by) || '');
+}
+
+/*  ★ 2.40 미르 조작 실행 — **여기 한 벌뿐이다.**
+    통합검색·항차검색 두 화면이 이것을 부른다. 각자 계산하면 답이 갈린다.
+    검수사 확정 — 미르가 만지는 것은 «화면 밝기와 볼륨 정도만». 둘 다 그 자리에서 되돌릴 수 있다.
+    ⚠ 되돌릴 수 없는 것(삭제·완료·업로드)은 절대 여기에 넣지 마라. */
+export function runDeviceCmd(cmd) {
+  if (!cmd) return null;
+  if (cmd.kind === 'bright') {
+    const cur = getBrightness();
+    if (cmd.ask) {
+      const now = BRIGHT_STEPS.find((s) => s.n === cur);
+      return `지금 «${now ? now.label : cur}»이에요. 밝게 할까요, 어둡게 할까요?`;
+    }
+    const next = cmd.to != null ? cmd.to : Math.max(1, Math.min(4, cur + (cmd.dir || 0)));
+    const st = BRIGHT_STEPS.find((s) => s.n === next);
+    if (next === cur) {
+      return next === 4 ? '이미 제일 밝아요. 더 올릴 데가 없네요.'
+           : next === 1 ? '이미 제일 어두워요.'
+           : `이미 «${st ? st.label : next}»이에요.`;
+    }
+    applyBrightness(next);
+    return `화면을 «${st ? st.label : next}»으로 바꿨어요.${next === 4 ? ' 엑셀이랑 비슷한 밝기예요.' : ''}`;
+  }
+  if (cmd.kind === 'volume') {
+    const cur = getVolumeStep();
+    const next = cmd.to === 'off' ? 0 : Math.max(0, Math.min(3, cur + (cmd.dir || 0)));
+    const st = VOLUME_STEPS.find((s) => s.n === next);
+    if (next === cur) return `이미 «${st ? st.label : next}»이에요.`;
+    setVolumeStep(next);
+    return next === 0 ? '소리를 껐어요. 다시 켜려면 «소리 켜줘» 하세요.'
+                      : `소리를 «${st ? st.label : next}»으로 했어요.`;
+  }
+  return null;
 }

@@ -14,6 +14,7 @@ import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
 import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
+import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -667,12 +668,33 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   //   잡담이 답하면 아래 _mirDontKnow 가 자연히 false 라 무응답 신고도 안 나간다.
   // 2.34: 기본 지식 층 — «FR이 뭐야»에 앱 기능 안내만 나오던 것(검수사 «기본 지식이 없어요»).
   //   지식이 있으면 위에 붙이고 기존 앱 안내는 아래에 잇는다. 지식은 질문형에만 나선다(집계는 업무 몫).
-  const localAnswer = useMemo(() => {
+  const _mirAnswer = useMemo(() => {
     const raw = mirTone(_localAnswerRaw);
     const know = mirKnowledge(debouncedQuery);
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw || mirSmallTalk(debouncedQuery);
   }, [_localAnswerRaw, debouncedQuery]);
+  /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
+      실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
+      ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */
+  const [devAnswer, setDevAnswer] = useState(null);
+  const devRanRef = useRef('');
+  useEffect(() => {
+    const cmd = parsed.deviceCmd;
+    if (!cmd || !askedAt) { return; }
+    const key = String(askedAt) + '|' + JSON.stringify(cmd);
+    if (devRanRef.current === key) return;
+    devRanRef.current = key;
+    let msg = null;
+    try { msg = runDeviceCmd(cmd); }
+    catch (e) { console.warn('[미르 조작] 실패', e); msg = '그건 지금 바꾸지 못했어요.'; }
+    if (msg) { setDevAnswer(msg); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
+  }, [parsed.deviceCmd, askedAt]);
+  //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
+  useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, debouncedQuery]);
+  //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
+  const localAnswer = devAnswer || _mirAnswer;
+
 
   // 검색 결과 (AI 자연어 적용)
   const matches = useMemo(() => {
@@ -982,7 +1004,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
 
       {/* 통계 답변 카드 */}
       {!localAnswer && parsed.isStat && hasAnyCondition(parsed) && query.length >= 2 && (
-        <div className="bg-gradient-to-br from-cyan-950 to-slate-900 border-2 border-cyan-600 rounded-btn p-4 text-center mb-3">
+        <div className="bg-gradient-to-br from-cyan-950 to-ink-900 border-2 border-cyan-600 rounded-btn p-4 text-center mb-3">
           <div className="text-xxs text-cyan-400 font-bold uppercase mb-1">🤖 AI 답변</div>
           <div className="text-base text-dim-200 mb-2">{describeQuery(parsed)}</div>
           <div className="text-6xl sm:text-7xl font-black mono text-cyan-300 my-2"

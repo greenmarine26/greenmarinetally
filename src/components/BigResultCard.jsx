@@ -197,7 +197,7 @@ export default function BigResultCard({ c, onOpen, onAfterComplete, voyageKey, i
           <span className={`px-2 py-0.5 rounded text-2xs font-black ${
             c._mode === 'discharge' ? 'bg-blue-900 text-blue-200'
             : c._mode === 'loading' ? 'bg-amber-900 text-amber-200'
-            : 'bg-gray-700 text-dim-200'
+            : 'bg-ink-750 text-dim-200'
           }`}>
             {c._mode === 'discharge' ? '양하'
               : c._mode === 'loading' ? '선적'
