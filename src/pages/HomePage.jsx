@@ -4,7 +4,7 @@ import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyag
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -29,7 +29,8 @@ const _two = (n) => String(n).padStart(2, '0');
 /** 홈 목록에서 **펼쳐 두는** 항차인가 — 검수사 확정: 작업중 ∨ 당일 ∨ 명일.
  *  작업중인 배가 어제 시작했으면 어제·오늘·내일 3일치가 펼쳐진다(«최대 3일치»의 뜻). */
 function isOpenVoyage(v) {
-  if (String(v?.info?.terminalStatus || '').toLowerCase() === 'working') return true;
+  //  2.40-02: 종전엔 터미널 상태만 보고 **시각을 안 봤다** — 시작 전 배가 종일 «작업중»으로 펼쳐졌다.
+  if (isWorkingNow(v)) return true;
   const n = dayDiff(v?._etaMs ?? v?._etdMs ?? null);
   return n === 0 || n === 1;
 }

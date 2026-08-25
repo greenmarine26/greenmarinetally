@@ -11,7 +11,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus } from '../inspectorStatus.js';
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs } from '../utils.js';   // 2.10: PC 좌측 현황판
+import { dayDiff, dayLabel, voyagePlanMs, isWorkingNow } from '../utils.js';   // 2.10: PC 좌측 현황판
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -228,12 +228,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
     for (const v of vs) {
       const d = v?.discharge?.ediContainers, l = v?.loading?.ediContainers;
       boxes += (d ? Object.keys(d).length : 0) + (l ? Object.keys(l).length : 0);
-      const st = String(v?.info?.terminalStatus || '').toLowerCase();
       const ms = voyagePlanMs(v);
       const n = dayDiff(ms);
-      // 2.34-10 (검수사 실측 «NSFR 작업중?» — 내일 14:00 시작인데 작업중 배지): 터미널 표의 행 상태(working)는
-      //   내일 배에도 미리 칠해져 올 수 있다. 시작이 2시간 넘게 남았으면 예정으로 본다(수집기 Face 2.0-15와 같은 부류 — 상태만 믿지 말고 시간과 결합).
-      const rank = (st === 'working' && !(ms && ms - Date.now() > 2 * 3600000)) ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
+      //  2.40-02: 판정을 utils.isWorkingNow 한 벌로 옮겼다.
+      //    종전 «시작이 2시간 이내면 작업중»(2.34-10)은 **시작 전 2시간을 통째로 작업중**으로 만들었다 —
+      //    13시 시작인 배가 12시 30분에 «작업중»으로 떠서 담당자가 준비도 못 한 채 볼 뻔했다.
+      const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
       if (rank < 9) ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, key: v.key });
     }
     ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));

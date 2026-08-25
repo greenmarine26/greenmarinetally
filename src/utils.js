@@ -1,5 +1,5 @@
 // 공통 유틸리티 — V48 (2026.05.09 / M4.9e)
-export const APP_VERSION = 'TallyOne 2.40-01';   // **인쇄본 실측으로 글자 크기 버그 두 건을 잡았다 — 검수사가 보내 준 PDF 를 직접 재서 찾았다.** ①**소문자 e 가 2.4배로 나가고 있었다.** 인쇄본 실측: 대문자 5.40pt(7.2px) 대 소문자 e 13.20pt(17.6px). 원인은 CSS 명시도와 em 이다 — 칸 규칙 `.cpv2-tier-row .cpv2-cell` 과 e 규칙 `.cpv2-cell.cpv2-mark-e` 는 명시도가 (0,2,0)로 같아 나중에 선언된 e 규칙이 칸의 clamp 를 통째로 덮었고, 거기 쓴 1.1em 은 «칸 글자의 1.1배»가 아니라 **부모(font-size 미지정 → 기본 16px)의 1.1배**로 잡혔다. 검수사가 «알파벳이 각자 폰트가 틀리게 보입니다» · «대문자가 소문자보다 작게 보입니다» 라 한 것이 전부 이 한 줄 탓이었다. → `--mf` 변수를 단일 소스로 두고 `calc(var(--mf) * 1.1)` 로 고쳤다. ②**clamp(vw) 가 인쇄에서 최솟값으로 떨어졌다.** 내가 시안으로 보여준 9.6px 과 실제 인쇄 7.2px 이 달랐다. 칸 폭은 page 의 min-width 1200px 로 정해지는데 글자만 vw 를 따라가 어긋났다 → **9.6px 고정**. 최악 배 MCSC(칸 17.0×15.7px)에서 DG 14.4px·글자높이 11.0px 로 들어간다. 결과: 대문자 7.20pt · 소문자 e 7.92pt(1.1배·굵기 600·가운데 보정). 칠·색·RE/RF 규칙은 2.38-01 그대로. ⚠ 이 주석 줄에 따옴표 금지 — build.sh 버전 추출이 깨진다.
+export const APP_VERSION = 'TallyOne 2.40-02';   // **인쇄본 실측으로 글자 크기 버그 두 건을 잡았다 — 검수사가 보내 준 PDF 를 직접 재서 찾았다.** ①**소문자 e 가 2.4배로 나가고 있었다.** 인쇄본 실측: 대문자 5.40pt(7.2px) 대 소문자 e 13.20pt(17.6px). 원인은 CSS 명시도와 em 이다 — 칸 규칙 `.cpv2-tier-row .cpv2-cell` 과 e 규칙 `.cpv2-cell.cpv2-mark-e` 는 명시도가 (0,2,0)로 같아 나중에 선언된 e 규칙이 칸의 clamp 를 통째로 덮었고, 거기 쓴 1.1em 은 «칸 글자의 1.1배»가 아니라 **부모(font-size 미지정 → 기본 16px)의 1.1배**로 잡혔다. 검수사가 «알파벳이 각자 폰트가 틀리게 보입니다» · «대문자가 소문자보다 작게 보입니다» 라 한 것이 전부 이 한 줄 탓이었다. → `--mf` 변수를 단일 소스로 두고 `calc(var(--mf) * 1.1)` 로 고쳤다. ②**clamp(vw) 가 인쇄에서 최솟값으로 떨어졌다.** 내가 시안으로 보여준 9.6px 과 실제 인쇄 7.2px 이 달랐다. 칸 폭은 page 의 min-width 1200px 로 정해지는데 글자만 vw 를 따라가 어긋났다 → **9.6px 고정**. 최악 배 MCSC(칸 17.0×15.7px)에서 DG 14.4px·글자높이 11.0px 로 들어간다. 결과: 대문자 7.20pt · 소문자 e 7.92pt(1.1배·굵기 600·가운데 보정). 칠·색·RE/RF 규칙은 2.38-01 그대로. ⚠ 이 주석 줄에 따옴표 금지 — build.sh 버전 추출이 깨진다.
 
 // ── V9.04-01: 가상(더미) 컨번호 판정 — MCSN 629S 사건 2026-07-18 ─────────
 //   실번호는 ISO 6346 규칙상 4번째 글자가 항상 U/J/Z (MSKU…, TCLU…). 플래너·수집기가
@@ -4312,6 +4312,41 @@ export function dayLabel(ms) {
 export function voyagePlanMs(voyage) {
   const m = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
   return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0;
+}
+
+/** planDate 의 **끝** 시각(`… ~ 2026-08-26 03:00`). 없으면 0. */
+export function voyagePlanEndMs(voyage) {
+  const all = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/g);
+  if (!all || all.length < 2) return 0;
+  const m = all[all.length - 1].match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+}
+
+/** ★ 지금 «작업중»인가 — **판정은 여기 한 벌뿐이다** (2.40-02).
+ *
+ *  🔴 사고 (검수사 실측 2026-08-25 12:30) — 로그인 화면 첫 줄에 «NSFR 작업중»이 떠 있었다.
+ *     배정목록 확정은 **13시 시작**이고 그때는 12시 30분이었다. 아직 시작도 안 한 배다.
+ *     검수사 원문 — *«저 선박 담당자는 놀라 기겁을 할것입니다. 13시 작업이라 준비도 안했는데 작업중이라이»*
+ *     *«첫화면이 중요 합니다 접속하자 마자 틀린 정보를 보고 있어야 합니다»*
+ *
+ *  원인이 두 곳에 갈라져 있었다.
+ *    · `LoginPage` — 터미널 상태가 working 이고 **시작이 2시간 이내면** 작업중(2.34-10).
+ *      «내일 배가 오늘 작업중으로 뜨는 것»을 막으려던 창인데, 그 창이 **시작 전 2시간을 통째로**
+ *      작업중으로 만들었다.
+ *    · `HomePage` — 터미널 상태만 보고 **시각은 아예 안 봤다.** 더 넓게 틀렸다.
+ *
+ *  ⇒ 규칙은 하나다. **시작 시각을 지나야 작업중이다.**
+ *  ⚠ 여유(그레이스)를 두지 않는다. «작업중이 아닌데 작업중»은 사람을 뛰게 만들고,
+ *    «작업중인데 아직»은 한 번 더 보게 만들 뿐이다. 틀릴 거면 늦게 틀리는 쪽이 안전하다.
+ *  ⚠ 시각을 모르면(planDate 없음) 터미널 상태가 유일한 근거라 종전대로 믿는다.
+ *  ⚠ 끝 시각으로는 끄지 않는다 — 배는 늦어진다. 출항 판정은 terminalStatus 가 한다(badgeRule).
+ */
+export function isWorkingNow(voyage, now = Date.now()) {
+  const ts = String(voyage?.info?.terminalStatus || '').trim().toLowerCase();
+  if (ts !== 'working') return false;
+  const s = voyagePlanMs(voyage);
+  if (!s) return true;
+  return now >= s;
 }
 
 export function normPortCode(v) {
