@@ -373,6 +373,8 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
+  #  ConeOne 2.3: **콘앱이 약신호에서 영영 멈추지 않는가** — 응답 없는 서버에 실제로 붙여서 잰다.
+  node tools/smoke_cone_net.cjs || { echo "✗ 콘앱 약신호 연막검사 실패 — 배포 금지"; exit 1; }
   #  2.53: **복구 코드** — 소유자가 잠기면 아무도 못 여는 구멍을 막은 것이 실제로 도는가.
   #    ⚠ 「건너뜀」 분기를 만들지 않는다(§2-2-M) — 번들이 실패하면 그것도 배포 금지다.
   SMOKE_RC=$(mktemp /tmp/_smokerc_XXXXXX.cjs)

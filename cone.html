@@ -300,7 +300,7 @@
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.2</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.3</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -719,7 +719,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 2.53';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.2';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 2.3';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -727,6 +727,44 @@ const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false,
 // 검수앱(Tallyman Master)이 voyages/{key}/{mode}/raw/edi 에 보관한 EDI 원문을 직접 읽어온다.
 //   mode: discharge=양하, loading=선적
 const FB_BASE='https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// ── ★ ConeOne 2.3 — **약신호에서 화면이 영영 멈추던 것** ─────────────────────
+//  검수사 2026-08-26 — *«콘앱이 나는 되는데 다른 사람은 화면이 멈춰서 작동을 안함»*.
+//  원인은 딱 하나였다 — **Firebase 조회 10곳 전부 타임아웃이 없었다.**
+//    `fetch` 는 신호가 약해 응답이 안 오면 실패도 성공도 하지 않고 **영원히 매달린다.**
+//    그러면 `showLoading()` 이 그려 놓은 「불러오는 중…」 이 `resultArea` 에 남은 채 끝난다
+//    (showLoading 은 innerHTML 을 갈아끼우는 방식이라, 다음 화면이 안 그려지면 안 지워진다).
+//  ⚠ **에러 처리는 원래 잘 돼 있었다** — `loadVoyageList`·`selectVoyage` 둘 다 try/catch 로
+//    `friendlyErr` 를 화면에 띄운다. 다만 fetch 가 **실패조차 안 해서** 그 코드에 닿지를 못했다.
+//    그래서 타임아웃 하나만 넣으면 이미 있는 안내가 전부 살아난다.
+//  ★ 검수사가 못 겪은 이유 — 사무실·집은 빨라서 늘 응답이 온다. 배 안에서만 걸린다.
+//    실제로 V7.61 주석이 *«폰 약신호에서 타임아웃 → 항차 목록·카고플랜 실패의 보조 원인»* 이라고
+//    적어 두고 **데이터 양만 줄였다.** 타임아웃 자체는 그때도 안 넣었다.
+//  ⚠ 재시도 1회 — 약신호는 두 번째에 붙는 일이 흔하다. 다만 두 번으로 끝낸다(무한 재시도 금지).
+const FB_TIMEOUT_MS = 12000;
+async function fbFetch(path, opts){
+  const url = /^https?:/.test(path) ? path : (FB_BASE + '/' + String(path).replace(/^\//, ''));
+  let last = null;
+  for (let i = 0; i < 2; i++){
+    let ctrl = null, timer = null;
+    try{
+      ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      if (ctrl) timer = setTimeout(function(){ try{ ctrl.abort(); }catch(_){} }, FB_TIMEOUT_MS);
+      const r = await fetch(url, Object.assign({}, opts || {}, ctrl ? { signal: ctrl.signal } : {}));
+      if (timer) clearTimeout(timer);
+      return r;
+    }catch(e){
+      if (timer) clearTimeout(timer);
+      last = e;
+      if (i === 0) await new Promise(function(r){ setTimeout(r, 1200); });
+    }
+  }
+  //  ⚠ 조용히 실패하지 않는다 — 왜 안 됐는지 사람 말로 남긴다(friendlyErr 가 이 문구를 그대로 쓴다).
+  const aborted = last && (last.name === 'AbortError' || /abort/i.test(String(last && last.message)));
+  throw new Error(aborted
+    ? 'network — 신호가 약해 자료를 못 받았습니다'
+    : 'failed to fetch — 인터넷에 연결되지 않았습니다');
+}
 
 // ConeOne 1.6: 'YYYY-MM-DD HH:MM' → ms. 항차 정렬·작업창 판정 공용(같은 식을 또 복사하지 않는다).
 //   ⚠ 종전 복제본이 아래 카드 렌더 안에 두 벌 더 있다(작업창·도선 출항 판정) — 그쪽을 손댈 때 이것으로 합칠 것.
@@ -744,11 +782,11 @@ async function fbFetchVoyages(){
   // V7.61: (구) voyages.json?shallow=false 전체 다운로드 — 모든 항차의 EDI 원문·컨테이너까지
   //   통째로 받아 수 MB~수십 MB. 폰 약신호에서 타임아웃 → 항차 목록·카고플랜 실패의 보조 원인.
   //   → 키 목록(shallow)만 받고, 항차별 info + 모드 키 존재만 병렬 조회 (총 수십 KB).
-  const kres=await fetch(`${FB_BASE}/voyages.json?shallow=true`);
+  const kres=await fbFetch(`voyages.json?shallow=true`);
   if(!kres.ok) throw new Error('Firebase 응답 오류 ('+kres.status+')');
   const keys=Object.keys(await kres.json()||{});
   if(!keys.length) return [];
-  const jget=async(p)=>{ try{ const r=await fetch(`${FB_BASE}/${p}`); return r.ok? await r.json() : null; }catch(e){ return null; } };
+  const jget=async(p)=>{ try{ const r=await fbFetch(`${p}`); return r.ok? await r.json() : null; }catch(e){ return null; } };
   const metas=await Promise.all(keys.map(async(key)=>{
     const [info, dKeys, lKeys, dCnt, lCnt] = await Promise.all([
       jget(`voyages/${encodeURIComponent(key)}/info.json`),
@@ -820,7 +858,7 @@ async function fbFetchVoyages(){
 //   수집기(pilot.py)가 pilot_forecast/{선박코드}에 기록. 실패해도 목록은 정상 표시(빈 객체).
 async function fbFetchPilotForecast(){
   try{
-    const res=await fetch(`${FB_BASE}/pilot_forecast.json`);
+    const res=await fbFetch(`pilot_forecast.json`);
     if(!res.ok) return {};
     return (await res.json())||{};
   }catch(e){ return {}; }
@@ -833,7 +871,7 @@ function _pfShort(v){ if(!v) return ''; const p=String(v).split(' '); return ((p
 // V9.38: WORK_DONE_PCT 폐지 — 전환 판정은 검수앱(badgeRule.js)이 하고 콘앱은 결과만 읽는다.
 async function fbFetchTerminalWork(){
   try{
-    const res=await fetch(`${FB_BASE}/terminal_work.json`);
+    const res=await fbFetch(`terminal_work.json`);
     if(!res.ok) return {};
     return (await res.json())||{};
   }catch(e){ return {}; }
@@ -842,7 +880,7 @@ async function fbFetchTerminalWork(){
 // 항차 mode의 ediContainers(이미 파싱된 좌표)를 콘앱 rows 형식으로 가져오기.
 //   검수앱이 저장한 그대로 → 재업로드 불필요, 검수앱과 동일 데이터. 없으면 null(→raw 폴백).
 async function fbFetchEdiContainers(voyageKey, mode){
-  const res=await fetch(`${FB_BASE}/voyages/${encodeURIComponent(voyageKey)}/${mode}/ediContainers.json`);
+  const res=await fbFetch(`voyages/${encodeURIComponent(voyageKey)}/${mode}/ediContainers.json`);
   if(!res.ok) return null;
   const obj=await res.json();
   if(!obj || typeof obj!=='object') return null;
@@ -874,7 +912,7 @@ async function fbFetchEdiContainers(voyageKey, mode){
 
 // 특정 항차의 mode별 raw EDI 텍스트 가져오기
 async function fbFetchRawEdi(voyageKey, mode){
-  const res=await fetch(`${FB_BASE}/voyages/${encodeURIComponent(voyageKey)}/${mode}/raw/edi.json`);
+  const res=await fbFetch(`voyages/${encodeURIComponent(voyageKey)}/${mode}/raw/edi.json`);
   if(!res.ok) return null;
   const d=await res.json();
   return d&&d.text? d.text : null;
@@ -886,7 +924,7 @@ async function fbFetchVoyageInfo(){
   if(!state.voyageKey) return {};
   if(state._voyInfo && state._voyInfoKey===state.voyageKey) return state._voyInfo;
   try{
-    const res=await fetch(`${FB_BASE}/voyages/${encodeURIComponent(state.voyageKey)}/info.json`);
+    const res=await fbFetch(`voyages/${encodeURIComponent(state.voyageKey)}/info.json`);
     if(res.ok){
       const d=await res.json();
       if(d && typeof d==='object'){ state._voyInfo=d; state._voyInfoKey=state.voyageKey; return d; }
@@ -901,7 +939,7 @@ let _fbBayDict = null;
 async function fbFetchBayDict(){
   if(_fbBayDict) return _fbBayDict;
   try{
-    const res=await fetch(`${FB_BASE}/ship_bay_dict_v3.json`);
+    const res=await fbFetch(`ship_bay_dict_v3.json`);
     if(!res.ok){ _fbBayDict={}; return _fbBayDict; }
     _fbBayDict = await res.json() || {};
   }catch(e){ _fbBayDict={}; }
@@ -1499,7 +1537,7 @@ async function fbFetchStowagePlan(mode){
   const ck='_sp_'+mode;
   if(state[ck] && state._spKey===state.voyageKey) return state[ck];
   try{
-    const res=await fetch(`${FB_BASE}/voyages/${encodeURIComponent(state.voyageKey)}/${mode}/stowagePlan.json`);
+    const res=await fbFetch(`voyages/${encodeURIComponent(state.voyageKey)}/${mode}/stowagePlan.json`);
     if(res.ok){ const d=await res.json(); state[ck]=(d&&d.decks)?d:null; state._spKey=state.voyageKey; return state[ck]; }
   }catch(e){ console.warn('[ConeOne 1.4] 덱플랜 조회 실패', e); }
   return null;
@@ -1766,10 +1804,18 @@ async function loadCargoPlanV2(){
   showLoading('카고플랜 모듈 불러오는 중...');
   // V7.60: 약신호(배 안)에서 1.6MB 번들 로드가 실패하면 1회 자동 재시도.
   //   onload 후에도 window.ConeCargoPlan이 없으면(파싱 실패 — 너무 오래된 브라우저) 구분 안내.
+  //  ★ ConeOne 2.3 — **여기에도 타임아웃이 없었다.**
+  //    `onerror` 는 «연결이 끊겼을 때»만 난다. 약신호에서 **천천히 받는 중**이면 onload 도 onerror 도
+  //    안 오고 그대로 매달린다 — 「카고플랜 모듈 불러오는 중…」 이 영영 남는다.
+  //    바로 위 `ensureMasterParser` 는 Promise.race 로 시간을 재는데 여기만 안 쟀다(같은 파일, 같은 병).
+  //    ⚠ 1.6MB 다. 배 안에서는 25초도 짧을 수 있어 넉넉히 준다 — 다만 «영영»은 아니어야 한다.
   const tryLoad=()=>new Promise((res,rej)=>{
     const s=document.createElement('script');
     s.src='cone-cargoplan.js?v='+(window.__APPV||'');  // V7.61: r=Date.now() 제거 — 매번 1.6MB 재다운로드가 약신호 카고플랜 실패 원인. 버전 바뀔 때만 갱신.
-    s.onload=res; s.onerror=()=>{ s.remove(); rej(new Error('NETWORK')); };
+    let done=false;
+    const t=setTimeout(()=>{ if(done) return; done=true; s.remove(); rej(new Error('NETWORK')); }, 25000);
+    s.onload=()=>{ if(done) return; done=true; clearTimeout(t); res(); };
+    s.onerror=()=>{ if(done) return; done=true; clearTimeout(t); s.remove(); rej(new Error('NETWORK')); };
     document.head.appendChild(s);
   });
   try{
@@ -1819,7 +1865,7 @@ async function openCargoPlanV2(mode){
     //   records가 없으면(옛 항차) 안 넘김 → 기존 동작(containers 집계) 유지.
     let legendContainers = null;
     try{
-      const _res = await fetch(`${FB_BASE}/voyages/${encodeURIComponent(state.voyageKey)}/${mode}/records.json`);
+      const _res = await fbFetch(`voyages/${encodeURIComponent(state.voyageKey)}/${mode}/records.json`);
       const _recs = _res.ok ? (await _res.json()) : null;
       if(_recs && typeof _recs === 'object' && Object.keys(_recs).length){
         // 검수앱 PrintHubModal과 동일 원칙: EDI(컨번호 있는 것)에 리스트를 병합하되 핵심 필드는 EDI 진실.
