@@ -178,8 +178,15 @@ export function mirSee(q, ctx) {
   if (!info) return null;                       // 통합검색(배 여럿)에서는 «순서»가 뜻이 없다
 
   const mode = (ctx && ctx.mode) === 'loading' ? 'loading' : 'discharge';
+  //  ★ 2.52-01 — 완료를 어디서 읽는지가 화면마다 다르다.
+  //    · SearchPanel 의 `allContainers` 는 컨마다 `_comp` 가 붙어 온다.
+  //    · VoyagePage 의 `containers` 에는 **없고** 별도 `compMap` 이 따로 다닌다(GuidedWorkPanel 도 둘을 따로 받는다).
+  //    한쪽만 보고 있었더니 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다 — 시뮬은 `_comp` 를
+  //    직접 심어 통과했고 **실선에서만 드러났다.** 둘 다 본다.
+  const cmap = (ctx && ctx.compMap) || null;
+  const compOf = (c) => (c ? (c._comp || (cmap ? cmap[c.cn] : null) || null) : null);
   //  아직 안 한 평택분만이 대상이다 — 화면(`remaining`)과 같은 기준.
-  const remaining = all.filter((c) => c && c._ptk !== false && !c._comp && (c._mode || mode) === mode);
+  const remaining = all.filter((c) => c && c._ptk !== false && !compOf(c) && (c._mode || mode) === mode);
   if (!remaining.length) return `${mode === 'loading' ? '선적은' : '양하는'} 남은 것이 없습니다.`;
 
   const side = String(info.berthSide || '').trim();
@@ -198,12 +205,12 @@ export function mirSee(q, ctx) {
 
   //  2.52: 베이를 안 댔으면 **내가 하던 베이를 이어간다.** 상태를 들지 않고 완료 기록으로 안다.
   if (!wish) {
-    const doneAll = all.filter((c) => c && c._comp && (c._mode || mode) === mode);
+    const doneAll = all.filter((c) => c && compOf(c) && (c._mode || mode) === mode).map((c) => ({ c, cp: compOf(c) }));
     if (doneAll.length) {
       let myEq = ''; try { myEq = String(getEquipNumber() || '').trim(); } catch (e) { myEq = ''; }
-      const mine = myEq ? doneAll.filter((c) => String(c._comp.equip || '').trim() === myEq) : [];
+      const mine = myEq ? doneAll.filter((x) => String(x.cp.equip || '').trim() === myEq) : [];
       const base = mine.length ? mine : doneAll;   // 내 갱 기록이 없으면 갱을 안 가린다
-      const last = base.reduce((a, b) => ((b._comp.at || 0) > (a._comp.at || 0) ? b : a));
+      const last = base.reduce((a, b) => ((b.cp.at || 0) > (a.cp.at || 0) ? b : a)).c;
       const lc = centerOf(last.bay);
       if (lc != null) {
         const left = remaining.filter((c) => centerOf(c.bay) === lc);
@@ -215,7 +222,7 @@ export function mirSee(q, ctx) {
           const st = (info.hatchDone || {})[`${mode}_${lc}`];
           //  번호는 **이 묶음 기준**이다 — 배 전체 통산으로 세면 남의 갱이 내린 것까지 번호에 들어가
           //  「4번째」가 이 베이의 2번째를 가리키게 된다(실측에서 바로 헷갈렸다).
-          goneHere = doneAll.filter((c) => centerOf(c.bay) === lc).length;
+          goneHere = doneAll.filter((x) => centerOf(x.c.bay) === lc).length;
           head = `${lbl} 이어서 — 이 베이 ${goneHere}대 완료 · 남은 ${left.length}대 (데크 ${dk} · 홀드 ${left.length - dk})`
             //  데크가 다 빠졌으면 그 다음은 커버다 — 배너는 자동 가이드 화면에만 뜬다.
             + (!dk && st !== 'open' ? `\n  ⚠ 데크는 비었습니다. 홀드로 들어가려면 **커버부터입니다** — 열렸나요?` : '');
@@ -271,7 +278,7 @@ export function mirSee(q, ctx) {
   } catch (e) { return null; }
   if (!queue.length) return null;
 
-  const done = all.filter((c) => c && c._comp && (c._mode || mode) === mode).length;
+  const done = all.filter((c) => c && compOf(c) && (c._mode || mode) === mode).length;
   const lines = [];
   if (head) lines.push(head);
   else {

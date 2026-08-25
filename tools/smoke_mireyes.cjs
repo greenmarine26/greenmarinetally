@@ -171,5 +171,33 @@ T('순서대로 양하하자', null, '`info` 없으면 넘긴다', { containers,
   try { localStorage.removeItem('gm_equip_no'); } catch (e) {}
 }
 
+// ⑨ ★ 2.52-01 — **완료를 두 곳에서 읽는다.** 화면마다 완료가 오는 길이 다르다.
+//   · SearchPanel 의 `allContainers` → 컨마다 `_comp` 가 붙어 온다 (위 ⑧ 이 그 경로다)
+//   · VoyagePage 의 `containers`     → **`_comp` 가 없고** 별도 `compMap` 이 따로 온다
+//   한쪽만 보다가 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다.
+//   ⚠ 시뮬은 `_comp` 를 직접 심어 통과했고 **실선에서만 드러났다** — 그래서 이 검사가 있다.
+{
+  const B = [
+    C('AAAU2400001', '24', '01', '86', { sl: 'S1' }),
+    C('AAAU2400002', '24', '02', '86', { sl: 'S2' }),
+    C('BBBU1200001', '12', '05', '88', { sl: 'S4' }),
+  ];
+  //  compMap 경로 — 컨에는 표시가 없고 표만 따로 온다
+  const cm = { AAAU2400001: { at: 100, by: 'ㄱ', equip: '4호기' } };
+  try { localStorage.setItem('gm_equip_no', '4호기'); } catch (e) {}
+  const c5 = { containers: B, info, mode: 'discharge', compMap: cm };
+  T('다음', '완료', '완료 표가 따로 와도 완료를 센다', c5);
+  T('다음', 'AAAU2400002', 'compMap 으로도 내 베이를 이어간다', c5);
+  T('다음', /^(?!.*BBBU1200001)/s, '남의 베이로 안 넘어간다', c5);
+  T('순서대로 양하하자', '이 베이 1대 완료 · 남은 1대', '완료분을 남은 수에서 뺀다 — «완료 0대» 사고의 본체', c5);
+  //  배 전체 셈도 본다 — 이어갈 베이가 없는(다 끝난) 경우
+  const cmAll24 = { AAAU2400001: { at: 100, by: 'ㄱ', equip: '4호기' }, AAAU2400002: { at: 200, by: 'ㄱ', equip: '4호기' } };
+  T('다음', /끝났습니다/, '내 베이를 다 하면 끝났다고', { containers: B, info, mode: 'discharge', compMap: cmAll24 });
+  T('다음', 'BBBU1200001', '그리고 다음 베이를 부른다', { containers: B, info, mode: 'discharge', compMap: cmAll24 });
+  //  표가 없으면 종전대로 (회귀 없음)
+  T('순서대로 양하하자', /남은 3대/, 'compMap 이 없으면 종전과 같다', { containers: B, info, mode: 'discharge' });
+  try { localStorage.removeItem('gm_equip_no'); } catch (e) {}
+}
+
 if (bad) { console.error(`✗ 미르의 눈 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 미르의 눈 연막검사 통과 (순서 부르기 14 · 베이·커버 16 · 이어가기 11 · 안 가로챔 11)');
+console.log('✓ 미르의 눈 연막검사 통과 (순서 부르기 14 · 베이·커버 16 · 이어가기 11 · 완료 두 경로 7 · 안 가로챔 11)');
