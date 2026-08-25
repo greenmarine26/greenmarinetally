@@ -18,6 +18,7 @@ import {
   getAdminNames, isTrustedDeviceFor, isOwnerName, OWNER_NAME,
   verifyPasswordFor, needsPasswordSetup, hasSessionPassFor, setSessionPassFor,
   isLockedName, lockEntry, lockPath, ownerCanUnlock,
+  hasRecoveryCode, verifyRecoveryCode,   // 2.53: 복구 코드 — 소유자가 잠겼을 때의 유일한 길
 } from '../adminGuard.js';
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 import { useBackHandler } from '../backHandler.js';
@@ -29,7 +30,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   // ── V9.05→V9.45 계승: 잠금 대상(관리자 + 수석검수·부수석) 비밀번호 게이트 ──
   const [guard, setGuard] = useState(null);          // admin_guard 노드 (null = 미설정/로딩전)
   const [guardLoaded, setGuardLoaded] = useState(false);
-  const [gateMode, setGateMode] = useState(null);    // null | 'verify' | 'setup' | 'owner'
+  const [gateMode, setGateMode] = useState(null);    // null | 'verify' | 'setup' | 'owner' | 'recovery'(2.53)
   const [gateName, setGateName] = useState('');      // 지금 인증 중인 이름
   const [pw1, setPw1] = useState('');
   const [pw2, setPw2] = useState('');
@@ -144,6 +145,31 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       setSessionPassFor(gateName);
       setGateMode(null); setPw1(''); setPw2('');
       commitSelect(gateName);
+    } finally {
+      setGateBusy(false);
+    }
+  };
+
+  // ── ★ 2.53 복구 코드로 열기 ───────────────────────────────────────────────
+  //  왜 있는가 — 바로 위 `handleOwnerUnlock` 은 **소유자를 열어 주지 못한다**(adminGuard.ownerCanUnlock 이
+  //  첫 줄에서 소유자를 제외한다). 수석·임원이 잠기면 소유자가 열어 주는데, 소유자가 잠기면 아무도 못 연다.
+  //  검수사 2026-08-26 — *«수석 임원 그리고 저 비밀번호 분실시 접속할 방법이 없어요»*.
+  //  ⚠ 이건 뒷문이 아니다 — 검수사가 **미리 만들어 자기가 보관한** 코드이고, 그것을 아는 사람만 쓸 수 있다.
+  //  ⚠ 통과하면 비밀번호를 **바로 새로 정하게** 한다(setup 모드). 열어만 주고 끝내면 다음에 또 잠긴다.
+  const handleRecovery = async () => {
+    if (gateBusy) return;
+    setGateBusy(true);
+    try {
+      const r = await verifyRecoveryCode(guard, gateName, pw1);
+      if (!r.ok) { alert(r.why); setPw1(''); return; }
+      //  ⛔ 코드를 먼저 소멸시킨다. 비밀번호를 새로 정하다가 창을 닫아도 그 코드는 이미 쓴 것이다
+      //    — 한 번 쓴 코드가 남아 있으면 «한 번만»이 무너진다.
+      const ok = await fbUpdateAdminGuard({ [`recovery/${gateName}/usedAt`]: Date.now() });
+      if (!ok) { alert('저장 실패 — 네트워크를 확인하고 다시 해 주세요.'); return; }
+      await refreshGuard();
+      setPw1(''); setPw2('');
+      setGateMode('setup');      // 이어서 새 비밀번호를 정한다
+      alert('✅ 복구 코드 확인. 이어서 새 비밀번호를 정하십시오.\n\n⚠ 이 코드는 방금 소멸했습니다 — 나중에 ⚙ 인원 관리에서 새로 만들어 두십시오.');
     } finally {
       setGateBusy(false);
     }
@@ -594,6 +620,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             <div className="font-bold text-amber-200 text-sm mb-2">
               {gateMode === 'setup' ? `🔐 ${gateName} 비밀번호 설정`
                 : gateMode === 'owner' ? `🔑 ${OWNER_NAME} 비밀번호로 ${gateName} 열기`
+                : gateMode === 'recovery' ? `🔑 복구 코드로 ${gateName} 열기`
                 : `🔐 ${gateName} 선택 — 비밀번호`}
             </div>
             {gateMode === 'setup' && (
@@ -613,10 +640,26 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 (이 기기는 신뢰 기기로 등록되지 않습니다).
               </div>
             )}
+            {/* ★ 2.53 */}
+            {gateMode === 'recovery' && (
+              <div className="text-xxs text-dim-300 mb-2">
+                미리 받아 두신 <b className="text-amber-300">복구 코드 파일</b>의 코드를 입력하세요.
+                통과하면 <b className="text-amber-300">이어서 새 비밀번호를 정합니다.</b><br />
+                소문자로 치셔도, 하이픈(-)을 빼고 치셔도 됩니다.
+                <span className="text-amber-300"> ⚠ 이 코드는 한 번 쓰면 소멸합니다.</span>
+              </div>
+            )}
             <input
-              type="password" value={pw1} onChange={e => setPw1(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && (gateMode === 'setup' ? handleSetup() : gateMode === 'owner' ? handleOwnerUnlock() : handleVerify())}
-              placeholder={gateMode === 'owner' ? `${OWNER_NAME} 비밀번호` : '비밀번호'}
+              /*  ⚠ 2.53: 복구 코드는 가리지 않는다 — 종이·파일에서 옮겨 적는 값이라
+                    안 보이면 오타를 못 잡는다. 비밀번호가 아니라 일회용 코드다. */
+              type={gateMode === 'recovery' ? 'text' : 'password'} value={pw1} onChange={e => setPw1(e.target.value)}
+              autoCapitalize={gateMode === 'recovery' ? 'characters' : 'off'}
+              autoComplete={gateMode === 'recovery' ? 'off' : 'current-password'}
+              onKeyDown={e => e.key === 'Enter' && (gateMode === 'setup' ? handleSetup()
+                : gateMode === 'owner' ? handleOwnerUnlock()
+                : gateMode === 'recovery' ? handleRecovery() : handleVerify())}
+              placeholder={gateMode === 'owner' ? `${OWNER_NAME} 비밀번호`
+                : gateMode === 'recovery' ? 'XXXX-XXXX-XXXX-XXXX' : '비밀번호'}
               className="w-full bg-ink-800 border border-line rounded px-3 py-2 text-sm text-dim-100 mb-2 focus:outline-none focus:border-amber-500"
               autoFocus
             />
@@ -637,7 +680,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             )}
             <div className="flex gap-2">
               <button
-                onClick={gateMode === 'setup' ? handleSetup : gateMode === 'owner' ? handleOwnerUnlock : handleVerify}
+                onClick={gateMode === 'setup' ? handleSetup
+                  : gateMode === 'owner' ? handleOwnerUnlock
+                  : gateMode === 'recovery' ? handleRecovery : handleVerify}
                 disabled={gateBusy || !pw1}
                 className="flex-1 bg-amber-700 hover:bg-amber-600 disabled:bg-ink-750 disabled:text-dim-400 px-3 py-2 rounded text-sm font-bold text-amber-100"
               >
@@ -650,13 +695,23 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 취소
               </button>
             </div>
-            {/* 비밀번호를 잊었을 때의 유일한 출구 — 소유자가 열어준다 */}
-            {gateMode !== 'owner' && ownerCanUnlock(guard, gateName) && (
+            {/* 비밀번호를 잊었을 때의 출구 ① — 소유자가 열어준다(소유자 본인에게는 안 뜬다) */}
+            {gateMode !== 'owner' && gateMode !== 'recovery' && ownerCanUnlock(guard, gateName) && (
               <button
                 onClick={() => { setGateMode('owner'); setPw1(''); setPw2(''); }}
                 className="mt-2 w-full text-xxs text-dim-300 hover:text-amber-300 underline underline-offset-2"
               >
                 비밀번호를 잊으셨나요? — {OWNER_NAME} 비밀번호로 열기
+              </button>
+            )}
+            {/* ★ 2.53 출구 ② — 복구 코드. **소유자에게는 이것이 유일한 길이다.**
+                미리 만들어 둔 사람에게만 뜬다 — 없으면 뜨지 않는다(있는 척하지 않는다). */}
+            {gateMode !== 'recovery' && hasRecoveryCode(guard, gateName) && (
+              <button
+                onClick={() => { setGateMode('recovery'); setPw1(''); setPw2(''); }}
+                className="mt-2 w-full text-xxs text-dim-300 hover:text-amber-300 underline underline-offset-2"
+              >
+                🔑 복구 코드로 열기 — 미리 받아 둔 파일의 코드
               </button>
             )}
           </div>

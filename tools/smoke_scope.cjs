@@ -23,7 +23,7 @@ const OK = new Set(['window','document','console','Object','Array','String','Num
 'FileReader','Image','speechSynthesis','SpeechSynthesisUtterance','AbortController','TextDecoder','TextEncoder','crypto',
 'ResizeObserver','process','globalThis','DOMParser','XMLSerializer','Worker','IntersectionObserver','MutationObserver',
 'history','location','CustomEvent','Event','KeyboardEvent','MouseEvent','FormData','atob','btoa','encodeURIComponent',
-'decodeURIComponent','queueMicrotask','Uint8Array','Uint16Array','Float64Array','ArrayBuffer','DataView','WeakMap','WeakSet',
+'decodeURIComponent','queueMicrotask','Uint8Array','Uint16Array','Uint32Array','Int8Array','Int16Array','Int32Array','Float32Array','Float64Array','ArrayBuffer','DataView','WeakMap','WeakSet',
 'Symbol','BigInt','performance','Notification','matchMedia','getComputedStyle','scrollTo','print','open','close','self',
 'HTMLInputElement','HTMLElement','Node','NodeList','Element','SVGElement','Response','Request','Headers','AbortSignal','MessageChannel','MessagePort','indexedDB','IDBKeyRange','BroadcastChannel','showDirectoryPicker','showOpenFilePicker','showSaveFilePicker','ClipboardItem','MediaRecorder','AudioContext','OffscreenCanvas','WebSocket','EventSource','caches','ServiceWorkerRegistration','PushManager','geolocation','webkitSpeechRecognition','SpeechRecognition','wakeLock','BarcodeDetector']);
 

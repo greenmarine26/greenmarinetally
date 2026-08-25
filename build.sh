@@ -373,6 +373,14 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
+  #  2.53: **복구 코드** — 소유자가 잠기면 아무도 못 여는 구멍을 막은 것이 실제로 도는가.
+  #    ⚠ 「건너뜀」 분기를 만들지 않는다(§2-2-M) — 번들이 실패하면 그것도 배포 금지다.
+  SMOKE_RC=$(mktemp /tmp/_smokerc_XXXXXX.cjs)
+  if npx esbuild src/adminGuard.js --bundle --platform=node --format=cjs --outfile="$SMOKE_RC" --log-level=error; then
+    node tools/smoke_recovery.cjs "$SMOKE_RC" || { echo "✗ 복구 코드 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "✗ 복구 코드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+  fi
   rm -f "$SMOKE_ME"
 else
   echo "✗ 렌더 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1

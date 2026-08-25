@@ -7,7 +7,9 @@ import { isStaff, getStaffRole, STAFF_LIST, STAFF_NAMES, displayRole, compareSta
 import { fbAddStaff, fbDeleteStaff, fbDeleteInspector, fbMarkDeletedStaff, fbUnmarkDeletedStaff, fbBackupAll, fbGetAdminGuard, fbUpdateAdminGuard, fbRemoveAdminDevice, fbSubscribeDevAccess, fbSetDevAccess, fbSubscribeMatrixEditors, fbSetMatrixEditors, fbSetStaffRole } from '../firebase.js';   // 1.41: 개발용 접근  // 1.80: 매트릭스 권한
 import { getAdminDeviceId, hashPassword, makeSalt, MAX_TRUSTED_DEVICES,
          getAdminNames, isAdminName, adminEntry, ADMIN_NAME,
-         OWNER_NAME, isOwnerName, canRevokeAdmin } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자 · V9.10 소유자 고정
+         OWNER_NAME, isOwnerName, canRevokeAdmin,
+         makeRecoveryCode, buildRecoveryRecord, hasRecoveryCode,
+         recoveryFileText, recoveryFileName } from '../adminGuard.js';   // V9.05 · V9.09 다중 관리자 · V9.10 소유자 고정 · 2.53 복구 코드
 
 export default function StaffManagerModal({ current, inspectors, extraStaff = {}, deletedStaff = {}, onClose }) {
   // ── V9.05: 관리자 이름 보호 — 신뢰 기기 관리 ────────────────────────────
@@ -117,6 +119,36 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
     if (ok) { alert('✅ 비밀번호 변경 완료'); const g = await fbGetAdminGuard(); setGuardInfo(g); }
     else alert('변경 실패 — 네트워크를 확인하세요.');
   };
+  // ── ★ 2.53 복구 코드 만들기 ───────────────────────────────────────────────
+  //  검수사 2026-08-26 — *«수석 임원 그리고 저 비밀번호 분실시 접속할 방법이 없어요»* · *«그종이를 파일로 주세요»*
+  //  ⚠ 코드는 **여기(브라우저)에서** 만든다. 서버에도 클로드에게도 평문이 가지 않는다.
+  //  ⚠ 화면에 한 번 보여주고 파일로 내린 뒤 **다시는 못 본다** — 그래서 저장을 확인한 뒤에 알린다.
+  const handleMakeRecovery = async () => {
+    const already = hasRecoveryCode(guardInfo, current);
+    if (already && !window.confirm(
+      `${current} 님의 복구 코드가 이미 있습니다.\n\n새로 만들면 **옛 코드는 그 순간 쓸 수 없게 됩니다.**\n`
+      + '전에 받아 둔 파일이 있으면 버리셔야 합니다.\n\n새로 만들까요?')) return;
+    const code = makeRecoveryCode();
+    const rec = await buildRecoveryRecord(code);
+    //  ⛔ 저장이 안 됐는데 코드를 보여주면 «있는 줄 알았는데 없는» 최악이 된다 — 저장 먼저.
+    const ok = await fbUpdateAdminGuard({ [`recovery/${current}`]: rec });
+    if (!ok) { alert('⛔ 저장 실패 — 코드를 만들지 않았습니다. 네트워크를 확인하고 다시 해 주세요.'); return; }
+    try {
+      const blob = new Blob(['\ufeff' + recoveryFileText(current, code)], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = recoveryFileName(current);
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) {
+      //  파일이 안 내려가도 코드는 이미 유효하다 — 화면 값이라도 반드시 보여준다(조용히 실패 금지).
+      console.error('[복구 코드] 파일 저장 실패', e);
+    }
+    setRecoveryShown(code);
+    const g = await fbGetAdminGuard(); setGuardInfo(g);
+  };
+  const [recoveryShown, setRecoveryShown] = useState('');
+
   const [newName, setNewName] = useState('');
   // TallyOne 1.74: 직급·직책 두 칸 (검수사 확정 2026-08-15)
   //   *"직급 직책 칸을 보여주시고 직책에 검수를 기본으로 넣어 주면 전 이름만 넣고 저장 누르면 되게끔"*
@@ -333,10 +365,37 @@ export default function StaffManagerModal({ current, inspectors, extraStaff = {}
         <div className="px-4 py-2 border-b border-line bg-ink-800/40">
           <div className="flex items-center justify-between">
             <div className="text-xxs font-bold text-amber-300">🔐 {current} 보호 — 신뢰 기기 {Object.keys(adminEntry(guardInfo, current)?.devices || {}).length}/{MAX_TRUSTED_DEVICES}</div>
-            <button onClick={handleChangePw} className="text-2xs px-2 py-1 bg-ink-750 hover:bg-ink-700 rounded text-dim-100">
-              {adminEntry(guardInfo, current)?.pwHash ? '비밀번호 변경' : '비밀번호 미설정'}
-            </button>
+            <div className="flex items-center gap-1">
+              {/* ★ 2.53: 복구 코드 — 소유자에게만. 잠기면 아무도 못 열어 주기 때문이다(adminGuard.ownerCanUnlock 참조). */}
+              {isOwnerName(current) && (
+                <button onClick={handleMakeRecovery}
+                  title="잠겼을 때 쓸 코드를 만들어 파일로 저장합니다. 화면에 한 번만 보여 줍니다."
+                  className={`text-2xs px-2 py-1 rounded ${hasRecoveryCode(guardInfo, current)
+                    ? 'bg-ink-750 hover:bg-ink-700 text-dim-100' : 'bg-amber-600/80 hover:bg-amber-600 text-white font-bold'}`}>
+                  {hasRecoveryCode(guardInfo, current) ? '🔑 복구 코드 다시 만들기' : '🔑 복구 코드 만들기'}
+                </button>
+              )}
+              <button onClick={handleChangePw} className="text-2xs px-2 py-1 bg-ink-750 hover:bg-ink-700 rounded text-dim-100">
+                {adminEntry(guardInfo, current)?.pwHash ? '비밀번호 변경' : '비밀번호 미설정'}
+              </button>
+            </div>
           </div>
+          {/* ★ 2.53: 만든 코드는 여기 한 번만 뜬다. 창을 닫으면 다시 못 본다. */}
+          {recoveryShown && (
+            <div className="mt-2 p-2 rounded border border-amber-500/60 bg-amber-500/10">
+              <div className="text-xxs font-bold text-amber-300">🔑 복구 코드 — 지금 적어 두십시오. 다시 보여주지 않습니다.</div>
+              <div className="my-1 text-center text-sm font-bold tracking-widest text-white select-all mono">{recoveryShown}</div>
+              <div className="text-3xs text-dim-200 leading-relaxed">
+                파일로도 저장했습니다(다운로드 폴더). 인쇄하거나 안전한 곳에 두십시오.<br />
+                한 번 쓰면 소멸합니다 — 쓰고 나면 새로 만드십시오.<br />
+                잠겼을 때 로그인 화면의 「복구 코드로 열기」에서 씁니다.
+              </div>
+              <button onClick={() => setRecoveryShown('')}
+                className="mt-1 w-full text-3xs py-1 bg-ink-750 hover:bg-ink-700 rounded text-dim-100">
+                적었습니다 — 닫기
+              </button>
+            </div>
+          )}
           {Object.entries(adminEntry(guardInfo, current)?.devices || {}).map(([devId, d]) => (
             <div key={devId} className="flex items-center justify-between mt-1 text-xxs text-dim-200">
               <span>

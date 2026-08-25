@@ -9,7 +9,11 @@ import { isChief } from './staffList.js';
 
 export const OWNER_NAME = '김성일';          // V9.10: 소유자(개발·운영자) — 권한 회수 불가, 퇴사해도 유지
 export const ADMIN_NAME = OWNER_NAME;        // 하위호환 별칭 (기존 호출부 유지)
-export const MAX_TRUSTED_DEVICES = 3;
+//  2.53: 3 → 4 (검수사 확정 2026-08-26 «1대추가면 됩니다»).
+//    집 PC · 사무실 PC · 폰 셋을 쓰면 3대가 꽉 차서 새 기기를 등록할 자리가 없다.
+//    실측 그날 — 소유자 신뢰 기기 3대(PC 1호·PC 3호·안드로이드 2호)로 이미 한도였다.
+//    ⚠ 늘릴수록 그중 하나가 새면 위험도 늘어난다. 검수사가 «1대»라고 못박은 대로 4로만 둔다.
+export const MAX_TRUSTED_DEVICES = 4;
 const DEVICE_KEY = 'gm_admin_device_id_v1';
 const SESSION_KEY = 'gm_admin_session_ok';
 
@@ -161,6 +165,100 @@ export function ownerCanUnlock(guard, name) {
   if (isOwnerName(name)) return false;
   const e = adminEntry(guard, OWNER_NAME);
   return !!(e && e.pwHash && e.salt);
+}
+
+// ── ★ 2.53 복구 코드 ────────────────────────────────────────────────────────
+//  왜 있는가 (검수사 2026-08-26 — *«수석 임원 그리고 저 비밀번호 분실시 접속할 방법이 없어요»*).
+//    바로 위 `ownerCanUnlock` 이 첫 줄에서 **소유자를 제외**한다. 그래서 구조가 이렇게 갈려 있었다 —
+//      수석·임원이 잠기면 → 소유자가 열어 준다 (owner 모드, 구현돼 있음)
+//      **소유자가 잠기면 → 아무도 못 연다**
+//    지금까지는 신뢰 기기가 버텨 왔을 뿐이다. PC 를 바꾸거나 브라우저 자료를 지우면 그 열쇠가 사라지고,
+//    비밀번호를 잊었으면 인원 관리·백업·수석 대시보드·마감 텔리가 통째로 막힌다.
+//    ⚠ 그리고 신뢰 기기가 살아 있으면 비밀번호를 칠 일이 없어 **잊게 된다** — 검수사가 실제로 그렇게 됐다
+//      (*«내꺼에서만 하다가 다른데에서 할려니 생각이 안나요»*). 잠기는 것은 예외가 아니라 시간문제다.
+//
+//  ⛔ 여기서 하지 않는 것 — 뒷문을 만들지 않는다.
+//    마스터키·개발자 우회·«특정 조건이면 비번 없이 통과» 같은 것은 넣지 않는다.
+//    복구 코드는 **검수사가 미리 만들어 자기가 보관한 것**이고, 그것을 아는 사람만 쓸 수 있다.
+//
+//  ★ 코드는 **브라우저에서** 만든다. 서버도, 클로드도 평문을 보지 못한다.
+//    RTDB 에는 해시와 솔트만 남는다(`admin_guard/recovery/{이름}`).
+//  ★ 한 번 쓰면 소멸(`usedAt`) — 쓰고 나면 새로 만들어 다시 보관한다.
+//  ⚠ 헷갈리는 글자(0·O·1·I·L)는 뺀다 — 종이에 적었다가 다시 칠 때 그것부터 틀린다.
+//    첫 시뮬이 이 규칙을 어긴 것을 잡았다(L 이 알파벳에 남아 있었다).
+
+const RECOVERY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';   // 0·O·1·I·L 없음
+
+/** 복구 코드 한 벌 생성 — XXXX-XXXX-XXXX-XXXX. **브라우저에서만 만든다.**
+ *  ⚠ 거부 샘플링을 쓴다. 256 을 31 로 그냥 나누면 앞쪽 글자가 더 자주 나온다(편향).
+ *    31×8=248 이상은 버리고 다시 뽑아 모든 글자가 똑같은 확률이 되게 한다.
+ *  ⚠ `Uint8Array` 를 쓴다 — 같은 파일 `makeSalt` 와 한 벌이고, 8비트면 31글자에 충분하다. */
+export function makeRecoveryCode() {
+  const A = RECOVERY_ALPHABET, L = A.length;
+  const cut = Math.floor(256 / L) * L;      // 이 위는 버린다
+  const out = [];
+  const buf = new Uint8Array(64);
+  while (out.length < 16) {
+    crypto.getRandomValues(buf);
+    for (let i = 0; i < buf.length && out.length < 16; i++) {
+      if (buf[i] >= cut) continue;
+      out.push(A[buf[i] % L]);
+    }
+  }
+  return [0, 4, 8, 12].map((i) => out.slice(i, i + 4).join('')).join('-');
+}
+
+/** 입력받은 코드를 대조용으로 다듬는다 — 소문자·하이픈·앞뒤 공백을 너그럽게 받는다.
+ *  ⚠ 가운데 공백은 다듬지 않는다. 다른 글자를 친 것과 구별이 안 되기 때문이다. */
+export function normalizeRecoveryCode(raw) {
+  return String(raw || '').trim().toUpperCase().replace(/-/g, '');
+}
+
+/** 저장할 모양 — 평문은 담지 않는다. */
+export async function buildRecoveryRecord(code) {
+  const salt = makeSalt();
+  return { salt, hash: await hashPassword(normalizeRecoveryCode(code), salt), madeAt: Date.now(), usedAt: 0 };
+}
+
+/** 이 사람에게 쓸 수 있는 복구 코드가 있는가 */
+export function hasRecoveryCode(guard, name) {
+  const r = guard && guard.recovery && guard.recovery[String(name || '').trim()];
+  return !!(r && r.hash && r.salt && !r.usedAt);
+}
+
+/** 복구 코드 검증 — 결과를 «왜 안 되는지»까지 말한다(조용히 실패하지 않는다). */
+export async function verifyRecoveryCode(guard, name, entered) {
+  const r = guard && guard.recovery && guard.recovery[String(name || '').trim()];
+  if (!r || !r.hash || !r.salt) return { ok: false, why: '복구 코드를 만든 적이 없습니다.' };
+  if (r.usedAt) return { ok: false, why: '이미 사용한 코드입니다. 새 코드를 만들어야 합니다.' };
+  const h = await hashPassword(normalizeRecoveryCode(entered), r.salt);
+  return h === r.hash ? { ok: true, why: '' } : { ok: false, why: '코드가 맞지 않습니다.' };
+}
+
+/** 파일로 내려줄 내용 — 검수사가 인쇄하거나 안전한 곳에 보관한다. */
+export function recoveryFileText(name, code) {
+  const now = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return [
+    `TallyOne 복구 코드 — ${name}`,
+    `만든 날 : ${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`,
+    '',
+    `    ${code}`,
+    '',
+    '⚠ 이 코드는 다시 보여주지 않습니다. 인쇄하거나 안전한 곳에 보관하십시오.',
+    '⚠ 한 번 쓰면 소멸합니다. 쓰고 나면 새로 만드십시오.',
+    '⚠ 이 코드를 아는 사람은 관리자 계정을 열 수 있습니다.',
+    '',
+    '쓰는 법 — 로그인 화면에서 이름을 고르면 나오는 비밀번호 칸 아래',
+    '「복구 코드로 열기」를 누르고 위 코드를 입력하면 비밀번호를 새로 정할 수 있습니다.',
+  ].join('\n');
+}
+
+/** 파일 이름 */
+export function recoveryFileName(name) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `TallyOne_복구코드_${name}_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.txt`;
 }
 
 /** 세션 통과 키를 관리자별로 — 다른 관리자 세션이 서로 열어주지 않게 */
