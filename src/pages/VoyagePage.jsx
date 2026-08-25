@@ -944,6 +944,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   }, [voyage, voyageKey]);
 
   const briefCtx = useMemo(() => ({
+    //  ★ 2.50-02 — `info` 를 같이 싣는다. 미르가 순서를 부르려면 접안 방향(`berthSide`)·IMO 가 필요한데,
+    //    `InlineAnswerCard` 는 `voyage` 를 안 받는다(prop 체인: VoyagePage → ListTab/LoloTab → InlineAnswerCard).
+    //    🔴 2.50-01 이 그 자리에서 `voyage?.info` 를 그대로 참조해 **앱 전체 크래시**를 냈다.
+    //      898행 주석이 «시그니처 전부 갱신 (1.98 교훈)» 이라고 이미 경고하고 있었는데 또 밟았다.
+    info: voyage?.info || null,
     photos: voyage?.photos || null,   // 2.05: 조회 결과 컨의 사진(데미지·메일 사진)을 인라인 카드가 보여준다
     pairs: (() => { try { return getBayPairs(containers, voyage?.info?.imo || '', voyage?.info?.vsl || ''); } catch (e) { return null; } })(),
     rfSkip: !!shipPolicy?.rfSkip,
@@ -2490,7 +2495,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       //    이 자리(VoyagePage:2495)가 직접 답한다. 그래서 «미르야 순서대로 양하하자» 를 쳐도
       //    옛 미르가 140대를 통째로 나열했다 — **화면에서 눌러 보고서야 알았다.**
       //    ⚠ 배선을 붙일 때 «어느 화면이 그 답을 내는가»를 먼저 확인한다. 파일이 있다고 걸리는 것이 아니다.
-      const _eyes = mirSee(q, { containers, info: voyage?.info || null, mode,
+      const _eyes = mirSee(q, { containers, info: briefCtx?.info || null, mode,
         bayPairs: briefCtx?.pairs || null });
       if (_eyes) return _eyes;
       // TallyOne 2.01 (검수사 확정 «어디든 브리핑 해달라고 하면 그자리에서 해줘야 합니다. 굳이 작업시작을
@@ -2503,7 +2508,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
       return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier, photos: briefCtx?.photos || null }) : null;   // 2.05-01
     } catch (e) { return null; }
-  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q, voyage]);
+  }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q]);
   const readRef = useRef('');
   useEffect(() => {
     if (!answer || readRef.current === q + answer.length) return;
