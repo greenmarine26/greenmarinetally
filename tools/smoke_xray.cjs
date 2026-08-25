@@ -92,7 +92,7 @@ setTimeout(() => {
   //  ⑦ 검수사 정정 — 세관 목록은 **전부 X-RAY 대상**. «X-RAY N대» 만 뽑아 쓰면 그것만 대상인 것처럼 읽힌다.
   if (!/X-RAY 대상/.test(t)) { console.log('✗ 조회 화면이 «X-RAY 대상 전체»임을 안 밝힌다'); process.exit(1); }
   //  ⑧ 출력 방식 — 검수사 «PDF가 기본이지만 인쇄도 가능해야 하고 엑셀로도 받아져야»
-  for (const b2 of ['PDF 저장 / 인쇄', '엑셀(CSV) 받기']) {
+  for (const b2 of ['PDF 저장 / 인쇄', '엑셀 받기']) {
     if (!html.includes(b2)) { console.log('✗ 출력 버튼 «' + b2 + '» 이 없다'); process.exit(1); }
   }
   if (!/class="actions no-print"/.test(html)) { console.log('✗ 버튼이 인쇄에서 안 숨겨진다(no-print)'); process.exit(1); }

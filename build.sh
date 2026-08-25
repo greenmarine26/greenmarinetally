@@ -266,11 +266,17 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   # 2.26: X-RAY 탭 연막검사 — 조인이 넷(xrayList·EDI·xraySeals·completed)이라 그려 봐야 안다.
   #   정렬(베이별순+우선양하순)·화물구분 4종·«미입력» 표시가 살아 있는지 본다.
   SMOKE_XR=$(mktemp /tmp/_smokexr_XXXXXX.js)
+  #  ⚠ --external:fs — inspectionList 가 2.41 부터 tallyExcel(ExcelJS) 을 동적 import 하는데
+  #    그 안에 Node 전용 `await import('fs')` 가 있다(템플릿 읽기용, 브라우저에서는 안 탄다).
+  #    브라우저 빌드(vite)는 갈라 내지만 esbuild 연막 번들은 못 갈라 «Could not resolve fs» 로 깨진다.
   if npx esbuild tools/smoke_xray.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+       --external:fs --external:path --external:url \
        --outfile="$SMOKE_XR" --define:process.env.NODE_ENV='"development"' --log-level=error; then
     node tools/smoke_xray.cjs "$SMOKE_XR" || { echo "✗ X-RAY 탭 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "⚠ X-RAY 연막 번들 실패 — 건너뜀"
+    #  ⛔ «건너뜀» 으로 넘어가지 않는다 — 검사가 안 돌면 검증이 없는 것이다(3금지 ③).
+    #    실제로 2.41 은 이 자리가 조용히 건너뛴 채 배포됐다(2026-08-25).
+    echo "✗ X-RAY 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   # 2.40: 화면 밝기·소리 연막검사 — 색은 «빌드 통과»로 증명되지 않는다.
   #   변수가 안 걸리면 화면만 캄캄한 채로 빌드는 성공한다. 눌러서 실제로 갈리는지 본다.

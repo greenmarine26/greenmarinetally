@@ -95,6 +95,12 @@ export function parseNaturalQuery(text) {
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
+    //  ★ 2.41: 미르가 선박 연락처(이메일)를 **답한다** — 발송·확답 추적은 범위 밖(검수사 확정).
+    //    *«우리는 선박에 자료를 주고 확답을 받아야 합니다»*(본선 일항사와 메일로 컨펌) ·
+    //    *«수석이 PCSZ 이메일이 뭐지 물으면 답만 해주면 됩니다»* · *«그 주소가 있을것이니까 같이 보인다»*
+    //    (본선 아닌 연락처도 버리지 않는다). ⚠ 실제 자료(RTDB shipContacts)는 화면이 갖고 있다 —
+    //    여기서는 «누구를 찾는지»만 담는다(순수 함수 유지, deviceCmd와 같은 방식).
+    contactQuery: null,   // { code, onboardOnly } — code: 원문에서 뽑은 선박 코드/풀네임 후보(없으면 "이 배" 맥락)
   };
   if (!text) return result;
   let t = String(text).toLowerCase();
@@ -481,6 +487,35 @@ export function parseNaturalQuery(text) {
     }
   }
 
+  //  ══ 2.41 미르 — 선박 연락처(이메일) ═══════════════════════════════
+  //    검수사 원문 — «우리는 선박에 자료를 주고 확답을 받아야 합니다»(본선 일항사와 메일로 컨펌) ·
+  //    «수석이 PCSZ 이메일이 뭐지 물으면 답만 해주면 됩니다»(미르는 답만, 발송·추적은 범위 밖) ·
+  //    «어떤이유로든 연관이 있으니까 그 주소가 있을것이니까»(본선 아닌 연락처도 버리지 않는다).
+  //    ⛔ 업무 질문 가로채기 0 — "이메일/메일주소"가 뚜렷하지 않으면 절대 안 건드린다.
+  {
+    const RE_CONTACT_STRONG = /(이메일|메일\s?주소|email)/i;
+    const RE_ONBOARD = /(본선|일항사|선장)/;
+    //  업무 낱말 — 있으면(수치·컨/리퍼/베이/양하/선적 등) 연락처 조회로 보지 않는다. 2.40 RE_WORK와 같은 목적.
+    const RE_CONTACT_GATE = /\d{4}|컨테이너|리퍼|엑스레이|x-?ray|베이|양하|선적|트윈|씰|실번호|봉인/i;
+    const hasContactStrong = RE_CONTACT_STRONG.test(t);
+    const hasOnboardWord = RE_ONBOARD.test(t);
+    //  "본선 메일"처럼 "이메일/메일주소"가 아닌 낱말 "메일"만 있는 경우(온보드 낱말과 붙었을 때만 받는다).
+    const hasBareMail = !hasContactStrong && /메일/.test(t);
+    if ((hasContactStrong || (hasOnboardWord && hasBareMail)) && !RE_CONTACT_GATE.test(t)) {
+      const onboardOnly = hasOnboardWord;
+      //  트리거·잡동사를 걷어내고 남는 토큰을 선박 코드/풀네임 후보로 — 최종 판정(voyages 대조)은 화면(shipCtx)이 한다.
+      const cand = t
+        .replace(RE_CONTACT_STRONG, ' ')
+        .replace(RE_ONBOARD, ' ')
+        .replace(/메일/g, ' ')
+        .replace(/이\s*배|찾기|찾아\s*줘?|찾아|알려\s*줘?|알려|가르쳐\s*줘?|가르쳐|주소|뭐(?:야|지|예요|에요|길래)?|좀|줘|해\s*줘?|무엇|인가요?|일까요?|일까|있(?:어|나|니)|보내\s*줘?|보내|줄래/g, ' ')
+        .replace(/[?!.,]/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+      result.contactQuery = { code: cand ? cand.toUpperCase() : null, onboardOnly };
+    }
+  }
+
   return result;
 }
 
@@ -652,7 +687,7 @@ export function hasAnyCondition(parsed) {
             parsed.briefingQuery || parsed.sealAuditQuery || parsed.carrierQuery || parsed.mirHello || parsed.introQuery || parsed.timeQuery || parsed.wakeQuery || parsed.pilotQuery ||
             parsed.dmgQuery || parsed.luggQuery || parsed.urgentQuery ||   // 2.05-01
             parsed.weatherQuery || parsed.schedQuery || parsed.twinCheckQuery || parsed.foodQuery || parsed.shipIntroQuery ||
-            parsed.howToQuery);   // 1.65
+            parsed.howToQuery || parsed.contactQuery);   // 1.65 · 2.41: 선박 연락처 질의도 '조건 있음'
 }
 
 // ─── TallyOne 1.65: 기능 위치 답변 ────────────────────────────────────────
@@ -2708,6 +2743,29 @@ export function generateTwinCheckAnswer(parsed, containers, pairsMap, pier = '')
   return lines.join('\n');
 }
 
+
+// TallyOne 2.41: 미르 — 선박 연락처(이메일). RTDB shipContacts/{code} = { onboard:[{email,name,last}], contacts:[{email,name,last}] }.
+//   검수사 원문 «우리는 선박에 자료를 주고 확답을 받아야 합니다»(본선 일항사와 메일로 컨펌) ·
+//   «수석이 PCSZ 이메일이 뭐지 물으면 답만 해주면 됩니다»(미르는 답만 — 발송·확답 추적은 범위 밖) ·
+//   «어떤이유로든 연관이 있으니까 그 주소가 있을것이니까»(본선 아닌 연락처도 버리지 않는다).
+//   ⛔ 모르면 모른다 — 주소를 지어내지 않는다(일항사에게 보내는 주소라 틀리면 남의 배로 간다).
+export function generateContactAnswer(entry, shipLabel, onboardOnly = false) {
+  const label = shipLabel || '그 배';
+  const onboard = Array.isArray(entry?.onboard) ? entry.onboard.filter((x) => x && x.email) : [];
+  const contacts = Array.isArray(entry?.contacts) ? entry.contacts.filter((x) => x && x.email) : [];
+  const fmt = (x) => `  • ${x.email}${x.name ? ` (${x.name})` : ''}${x.last ? ` — 최근 ${x.last}` : ''}`;
+  if (!entry || (!onboard.length && !contacts.length)) {
+    return `${label} 연락처를 아직 모릅니다 — 수집기가 메일에서 확인하는 대로 답해 드리겠습니다.`;
+  }
+  if (onboardOnly) {
+    if (!onboard.length) return `${label} 본선 주소는 아직 모릅니다. ("${label} 이메일"이라고 물으면 다른 연락처는 있는지 확인해 드립니다)`;
+    return [`📧 ${label} 본선`, ...onboard.map(fmt)].join('\n');
+  }
+  const L = [];
+  if (onboard.length) L.push(`📧 ${label} 본선`, ...onboard.map(fmt));
+  if (contacts.length) { if (L.length) L.push(''); L.push(`✉ ${label} 관련 연락처`, ...contacts.map(fmt)); }
+  return L.join('\n');
+}
 
 // V8.60: 맛집 돌림판 안내 답변 — 첫 줄은 음성으로 읽힌다.
 export function generateFoodAnswer(slot) {

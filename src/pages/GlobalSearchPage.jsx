@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
 import { mirTone, mirSmallTalk } from '../mirChat.js';
@@ -144,6 +144,16 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       .catch((e) => { console.warn('[통합검색] 노드 읽기 실패 —', k, e); setChiefData((d) => ({ ...d, [k]: { __error: true } })); }));
   }, [debouncedQuery, chiefData]);
 
+  // TallyOne 2.41: 미르 — 선박 연락처(RTDB shipContacts). 수석·검수원 공용(chiefData와 별도 — isChief로 안 가른다).
+  //   물었을 때만 1회 GET하고 세션 캐시 — chiefData와 같은 방식(1.69).
+  const [shipContacts, setShipContacts] = useState(undefined);   // undefined=아직 안 물음, null=읽는 중
+  useEffect(() => {
+    if (!parsed.contactQuery) return;
+    if (shipContacts !== undefined) return;
+    setShipContacts(null);
+    fbGetSimple('shipContacts').then((v) => setShipContacts(v || {})).catch(() => setShipContacts({}));
+  }, [parsed.contactQuery, shipContacts]);
+
   // ── TallyOne 1.68: 배 이름 맥락 ──
   //   "STSE 출항 몇 시"·"HAYN 양하 자료 다 있어"처럼 질문에 배가 지정되면 그 항차를 맥락으로 잡는다.
   //   종전에는 배를 지정해도 무시하고 "항차 화면 가서 물어보세요"로 떠넘겼다(검수사 지적 2026-08-13).
@@ -259,6 +269,22 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       if (_sec?.ediContainers && _sec?.records) return `${shipCtx.info?.vsl || ''} ${_mode === 'loading' ? '선적' : '양하'} — EDI와 리스트가 딱 맞아요. 어긋나는 컨이 없어요 😺`;
     }
     if (p.mirHello) return '네, 미르예요 🐱 뭐 확인해 드릴까요?\n(예: "미르야 OBWH 브리핑" · "미르야 이번 선적 계획 어떻게 진행 될것 같아")';
+    // TallyOne 2.41: 미르 — 선박 연락처(이메일). «PCSZ 이메일»·«본선 메일»·«이 배 메일 주소 찾기».
+    //   검수사 원문 «본선 일항사와 메일로 컨펌» · «답만 해주면 됩니다»(발송·추적은 범위 밖).
+    //   ⚠ howToQuery·isChief 게이트보다 먼저 — "PCSZ 메일주소 뭐야"의 '뭐야'가 기능색인에 먹히면 안 된다.
+    if (p.contactQuery) {
+      if (shipContacts == null) return '연락처를 불러오는 중입니다 — 잠시 후 다시 물어봐 주세요.';
+      if (shipCtx) {
+        const code = String(shipCtx.info.vsl || '').toUpperCase();
+        const label = shipCtx.info.vslFull || shipCtx.info.vsl || '';
+        if (code) return generateContactAnswer(shipContacts[code] || null, label, p.contactQuery.onboardOnly);
+      }
+      const rawCand = p.contactQuery.code ? String(p.contactQuery.code).toUpperCase() : '';
+      if (rawCand && !/\s/.test(rawCand)) {
+        return generateContactAnswer(shipContacts[rawCand] || null, p.contactQuery.code, p.contactQuery.onboardOnly);
+      }
+      return '어느 배 말씀인지 배 이름을 붙여 주시면 연락처를 찾아 드립니다. (예: "PCSZ 이메일")';
+    }
     // 1.69-01: 검수원 진입(홈 검색) — 컨 조회·용어·기능 설명은 그대로 답하고,
     //   수석 전용 통계·자료현황은 1.69 유도 문구로 넘긴다(검수사 확정 계열).
     //   ⚠ 기능 질문("마감 텔리 어디서 만들어")까지 막지 않게, 수석 통계 분기와 같은 모양만 잡는다.
@@ -661,7 +687,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (p.timeQuery) { try { return generateTimeAnswer(); } catch { return null; } }
     if (p.introQuery) { try { return generateIntroAnswer(''); } catch { return null; } }
     return null;
-  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산 · 1.69-01: 검수원 게이트
+  }, [parsed, debouncedQuery, voyages, shipCtx, flat, portMisData, terminalWork, chiefData, heartbeat, isChief, shipContacts]);   // 1.68-01: 진행 실황·터미널 ETD · 1.69: 통계·계산 · 1.69-01: 검수원 게이트 · 2.41: 선박 연락처
 
   // 2.33: 출구 한 겹 — 데이터는 그대로, 종결어미만 미르 말투로(검수사 확정 «살짝 친근»).
   //   업무 인텐트 전부 침묵일 때만 잡담 그물(검수사 제공 대본)이 받는다 —

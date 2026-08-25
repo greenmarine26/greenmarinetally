@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery } from '../chiefAnswers.js';   // 1.90·1.91·1.92
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
@@ -16,7 +16,7 @@ import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer } from '../firebase.js';
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple } from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
 import HelpModal from './HelpModal.jsx';
@@ -864,6 +864,14 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const lastSpokenRef = useRef(null);
 
   const parsed = useMemo(() => parseNaturalQuery(query), [query]);
+  // TallyOne 2.41: 미르 — 선박 연락처(RTDB shipContacts). 물었을 때만 1회 GET하고 세션 캐시(GlobalSearchPage와 같은 방식).
+  const [shipContacts, setShipContacts] = useState(undefined);   // undefined=아직 안 물음, null=읽는 중
+  useEffect(() => {
+    if (!parsed.contactQuery) return;
+    if (shipContacts !== undefined) return;
+    setShipContacts(null);
+    fbGetSimple('shipContacts').then((v) => setShipContacts(v || {})).catch(() => setShipContacts({}));
+  }, [parsed.contactQuery, shipContacts]);
   // 1.69-05: 방금 물은 질문 기억 — 같은 질문 재제출(엔터·전송·음성) 판정용
   useEffect(() => { if (query.trim().length >= 2) lastAskRef.current = query.trim(); }, [query]);
   // V8.00: 인계 질문이 아니게 되면 메모 상태 리셋 (다른 질문으로 넘어갈 때)
@@ -919,6 +927,30 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     {
       const a = answerAboutAlert(query, diagAlerts);
       if (a) return a;
+    }
+    // TallyOne 2.41: 미르 — 선박 연락처(이메일). «PCSZ 이메일»·«본선 메일»·«이 배 메일 주소 찾기».
+    //   검수사 원문 «본선 일항사와 메일로 컨펌» · «답만 해주면 됩니다»(발송·추적은 범위 밖).
+    //   ⚠ howToQuery보다 먼저 — "PCSZ 메일주소 뭐야"의 '뭐야'가 기능색인에 먹히면 안 된다(위 answerAboutAlert 바로 다음).
+    if (parsed.contactQuery) {
+      if (shipContacts == null) return '연락처를 불러오는 중입니다 — 잠시 후 다시 물어봐 주세요.';
+      const info = voyage?.info || {};
+      const curCode = String(info.vsl || '').toUpperCase();
+      const curFull = String(info.vslFull || '').toUpperCase();
+      const curLabel = info.vslFull || info.vsl || '이 배';
+      const cq = parsed.contactQuery;
+      const rawCand = cq.code ? String(cq.code).toUpperCase() : '';
+      const candNoSp = rawCand.replace(/\s+/g, '');
+      //  이 화면이 보여주는 배(현재 항차)인지 — 코드 일치 또는 풀네임에 포함되면 "이 배"로 본다.
+      const isThisShip = !rawCand || candNoSp === curCode || (curFull && curFull.includes(rawCand));
+      if (isThisShip) {
+        if (!curCode) return '이 항차에 선박 코드가 없어 연락처를 찾을 수 없습니다.';
+        return generateContactAnswer(shipContacts[curCode] || null, curLabel, cq.onboardOnly);
+      }
+      //  다른 배 — 짧은 코드면 사전 없이도 바로 찾아본다. 풀네임(공백 포함)은 여기선 못 풀어 통합검색으로 안내.
+      if (!/\s/.test(rawCand)) {
+        return generateContactAnswer(shipContacts[candNoSp] || null, cq.code, cq.onboardOnly);
+      }
+      return `${cq.code} — 지금 보는 배(${curLabel})가 아닙니다. 다른 배 연락처는 통합검색에서 배 이름을 붙여 물어보세요.`;
     }
     // 1.69-02: **«진행» 질문은 두 갈래다** (검수사 확정 2026-08-14 — "그냥 진행 상태를 질문하면
     //   앱대상이 맞고, 실제 진행 상황을 물으면 수석대쉬보드에 실시간 작업보드처럼 알려줘야 함.
@@ -1071,7 +1103,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
       { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
-  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed]);
+  }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts]);   // 2.41: 선박 연락처
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합
     const raw = mirTone(_localAnswerRaw);
     const know = mirKnowledge(query);
