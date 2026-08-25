@@ -48,5 +48,16 @@ T(mergeWt(27600, 27.6) === 27600, '톤 표기도 리스트가 이긴다 (200 미
 T(mergeWt(0, 0) === 0, '둘 다 없으면 0 그대로 — 지어내지 않는다');
 T(mergeWt(0, 12000) === 12000, 'EDI 가 없고 리스트만 있으면 리스트');
 
+//  ③ ★ 2.52-04 — **인쇄 경로(PrintHubModal)도 같은 가드를 갖는가.**
+//    2.52-03 은 VoyagePage 만 고쳤고 이 세 번째 병합 경로를 안 봤다. 다른 클로드에게 전수 감사를 시켜 찾았다.
+//    나가는 곳이 대외 문서다 — VGM LIST 가 무게 칸에 «—» 를 찍고 미기재로 센다.
+//    ⚠ 병합 경로가 넷이다(SearchPanel · VoyagePage.containersBase · VoyagePage.allEdiContainersBase · PrintHubModal).
+//      새 경로를 만들거나 고칠 때는 **여기 검사를 같이 늘려라.**
+const PH = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'components', 'PrintHubModal.jsx'), 'utf8');
+T(/parseListWeightKg/.test(PH), '인쇄 경로에 톤 보정이 없다');
+const mph = PH.match(/if \(k === 'wt'\) \{([^}]*)\}/);
+T(!!mph, "인쇄 경로에 `if (k === 'wt')` 가드가 없다 — 리스트의 0 이 EDI 무게를 덮는다(VGM LIST 가 비어 나간다)");
+if (mph) T(/>\s*0/.test(mph[1]), '인쇄 경로 가드에 양수 조건이 없다');
+
 if (bad) { console.error(`✗ 무게 병합 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 무게 병합 연막검사 통과 (가드 3 · 병합 7)');
+console.log('✓ 무게 병합 연막검사 통과 (가드 3 · 병합 7 · 인쇄 경로 3)');

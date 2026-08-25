@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -85,6 +85,14 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
       const _flagUp = (k === 'rf' || k === 'fr' || k === 'ot' || k === 'tk' || k === 'dg' || k === 'oog') && v === true && e[k] !== true;
       if (k === 'tmp_missing' && v === true && e.tmp) return;   // 2.05-05: 자료 온도가 있으면 «미기재» 마킹을 얹지 않는다
       if (hasEdi && PROTECTED_EDI_FIELDS.has(k) && !_flagUp) return;
+      //  ★ 2.52-04 — **리스트 무게가 «빈칸/0» 이면 EDI 무게를 지우지 않는다.** 80행 가드는 `''`·null 만 걸러
+      //    `0` 이 그대로 통과하고, `wt` 는 PROTECTED 목록에도 없어 EDI 27,600kg 이 0 으로 덮이고 있었다.
+      //    ⚠ 나가는 곳이 하필 **대외 문서**다 — VGM LIST(inspectionList.js:350 `w > 0`)가 무게 칸에 «—» 를
+      //      찍고 미기재로 센다. NSFR 2616N 은 140대 전부가 그렇게 나갈 뻔했다(전 항차 1,032대).
+      //    ⚠ 2.52-03 이 VoyagePage 경로만 고치고 이 세 번째 병합 경로를 안 봤다 — 파급 검증의 구멍이었다.
+      //    규칙은 그대로다(1.23 «무게는 리스트가 기준») — 리스트에 **값이 있을 때** 하는 말이다.
+      //    0kg 컨테이너는 없다(타레만 2톤). 톤 보정도 VoyagePage 와 같은 벌로 건다.
+      if (k === 'wt') { const _w = parseListWeightKg(v); if (_w > 0) merged.wt = _w; return; }
       merged[k] = v;
     });
     // V8.86: 컨번호 없는 EDI 자리(배열 인덱스 키) → 배열 인덱스가 컨번호로 둔갑하지 않게 __SLOT_ 키 부여
