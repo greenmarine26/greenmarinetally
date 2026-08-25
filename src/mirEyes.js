@@ -87,6 +87,26 @@ function allGroups(all, pairs) {
   return [...seen].sort((a, b) => a - b);
 }
 
+//  ★ 2.49 — 세 갈래(글·카드·음성)가 **모두 침묵**하던 둘.
+//    ⚠ 무엇을 고칠지 고르는 기준이 2.47 에서 틀렸다. 이제는 **글·카드·음성을 다 재고**
+//      셋 다 조용할 때만 손댄다. 카드가 답하는 것은 답하는 것이다.
+const RE_BERTH_SIDE = /(접안|접현|현측).{0,8}(어느|어디|방향|쪽)|(좌현|우현).{0,4}(이야|인가|맞)/;
+const SIDE_KO = { starboard: '우현', port: '좌현' };
+
+/** 끝4자리를 뽑는다 — 「12번」·「베이 12」 같은 자리 숫자는 뺀다. */
+const RE_NOT_CN_AFTER = /^\s*(번|호기|선석|단|열|톤|장|대|%)/;
+function tailDigits(t) {
+  const re = /(?<![0-9])([0-9]{4})(?![0-9])/g;
+  let m;
+  while ((m = re.exec(t))) {
+    const after = t.slice(m.index + 4, m.index + 7);
+    const before = t.slice(Math.max(0, m.index - 3), m.index);
+    if (RE_NOT_CN_AFTER.test(after) || /(베이|호기|열|단)\s*$/.test(before)) continue;
+    return m[1];
+  }
+  return '';
+}
+
 /** 단계·제동 — 답할 수 있으면 문장, 아니면 null. */
 function mirStage(text, ctx) {
   const all = (ctx && ctx.containers) || [];
@@ -96,6 +116,35 @@ function mirStage(text, ctx) {
   if (!ctx || !ctx.info) return null;
   const pairs = (ctx && ctx.bayPairs) || {};
   const hatchDone = (ctx && ctx.info && ctx.info.hatchDone) || {};
+
+  //  ── 접안 방향 ──  자동가이드가 `info.berthSide` 에 저장한다(작업 순서가 여기서 뒤집힌다).
+  //    안 정했으면 **지어내지 않고** 어디서 정하는지 알려 준다.
+  if (RE_BERTH_SIDE.test(text)) {
+    const side = String((ctx.info && ctx.info.berthSide) || '').trim();
+    if (!side) return '접안 방향이 아직 안 정해져 있습니다.\n자동가이드를 켜면 좌현·우현을 묻고, 고르면 그 뒤 작업 순서가 그 기준으로 계산됩니다.';
+    return `${SIDE_KO[side] || side} 접안입니다. 작업 순서가 이 기준으로 나옵니다.`;
+  }
+
+  //  ── 끝4자리가 겹칠 때 ──  **카드는 한 대일 때만 뜬다.** 두 대면 화면·음성이 다 조용했다
+  //    (실측 NSFR — 「1109 온도」에 글·카드·음성 세 갈래가 전부 침묵. 1109 가 두 대다).
+  //    ⛔ 한 대면 손대지 않는다 — 그건 카드와 음성이 이미 완벽히 한다.
+  {
+    const d = tailDigits(text);
+    if (d) {
+      const hit = all.filter((c) => (c.l4 || String(c.cn || '').slice(-4)) === d);
+      if (hit.length > 1) {
+        const lines = hit.slice(0, 6).map((c) => {
+          const bits = [c.cn];
+          if (String(c.sl || '').trim()) bits.push(`실번호 ${c.sl}`);
+          if (c.tmp != null && String(c.tmp).trim() !== '') bits.push(`${c.tmp}°C`);
+          if (posOf(c)) bits.push(posOf(c));
+          if (c._xray || c.isXray) bits.push('X-RAY');
+          return `  · ${bits.join(' · ')}`;
+        });
+        return `끝자리 ${d} 가 ${hit.length}대입니다 — 어느 것입니까?\n${lines.join('\n')}\n\n전체 번호를 불러 주시면 그 한 대만 봅니다.`;
+      }
+    }
+  }
 
   //  ── 커버 장수 ──  베이사전이 안다. 모르면 «모른다»고 한다(지어내지 않는다).
   //  ⚠ **커버는 베이 하나가 아니라 해치 그룹 것이다.** 실측(NSFR) — 커버는 **홀수 베이에 붙는다**:

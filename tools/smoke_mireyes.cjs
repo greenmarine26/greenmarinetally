@@ -70,5 +70,23 @@ T('', null, '빈 말은 넘긴다');
 // ⑤ ⛔ 통합검색(배 여럿)에서는 단계 판단을 하지 않는다 — `info` 를 안 넘기는 것이 게이트다
 T('12번 커버 열어도 돼', null, '`info` 없으면 넘긴다', { containers, bayPairs: pairs, shipLib });
 
+// ⑥ 2.49 — 세 갈래(글·카드·음성)가 **모두 침묵**하던 둘
+//   ⚠ 고를 때 기준이 2.47 에서 틀렸다. 이제는 카드·음성까지 재고 **셋 다 조용할 때만** 손댄다.
+const dupC = [
+  { cn: 'FSCU5791109', l4: '1109', sl: 'NSL637295', tmp: '-23', rf: true, bay: '12', row: '02', tier: '82', _mode: 'discharge' },
+  { cn: 'GXYU5011109', l4: '1109', sl: 'NSL642228', bay: '12', row: '02', tier: '06', _mode: 'discharge' },
+  { cn: 'KMTU9331918', l4: '1918', sl: 'CF795302', bay: '12', row: '01', tier: '88', _mode: 'discharge' },
+];
+const dctx = (info) => ({ containers: dupC, bayPairs: pairs, info: info || { hatchDone: {} }, shipLib });
+T('접안 어느쪽이야', '아직 안 정해져', '안 정했으면 지어내지 않는다', dctx());
+T('접안 어느쪽이야', '우현 접안', '정해져 있으면 그것을 말한다', dctx({ berthSide: 'starboard', hatchDone: {} }));
+T('1109 온도', '2대입니다', '끝4자리가 겹치면 카드가 안 뜬다 — 되묻는다', dctx());
+T('1109 온도', '-23°C', '되물을 때 구별할 값을 같이 보인다', dctx());
+T('1109', '2대입니다', '숫자만 불러도 같다', dctx());
+//   ⛔ 한 대면 손대지 않는다 — 카드와 음성이 이미 완벽히 한다
+T('1918', null, '한 대는 카드·음성 몫', dctx());
+T('1918 실번호', null, '한 대는 카드·음성 몫', dctx());
+T('9999', null, '없는 번호는 넘긴다', dctx());
+
 if (bad) { console.error(`✗ 미르의 눈 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 미르의 눈 연막검사 통과 (단계·제동 11 · 안 가로챔 8)');
+console.log('✓ 미르의 눈 연막검사 통과 (단계·제동 11 · 세갈래침묵 5 · 안 가로챔 11)');
