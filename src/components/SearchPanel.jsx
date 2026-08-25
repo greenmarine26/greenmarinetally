@@ -25,7 +25,8 @@ import WrongAnswerModal from './WrongAnswerModal.jsx';
 import { logQuerySettled } from '../activityLog.js';   // TallyOne 1.3: 조회 활동 기록(음성 포함)
 import GuidedWorkPanel from './GuidedWorkPanel.jsx';   // V7.94: 자동 가이드 모드
 import { mirTone } from '../mirChat.js';
-import { mirKnowledge } from '../data/mirKnowledge.js';   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
+import { mirKnowledge } from '../data/mirKnowledge.js';
+import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹 — 못 보면 null 로 옛 미르에게 넘긴다   // 2.34: 검수 실무 기본 지식   // 2.33: 미르 말투 — 출구 한 겹
 import mirFaceUrl from '../assets/mir-face.png';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // 1.49: 브라우저 confirm() 은 화면을 얼린다 — 실측 2026-08-11
 import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
@@ -1104,8 +1105,15 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts]);   // 2.41: 선박 연락처
-  const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합
+  const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈
     const raw = mirTone(_localAnswerRaw);
+    //  ★ 2.47 — **한 대를 묻는 말은 새 겹이 먼저 본다.** 못 보면 null 이라 옛 미르가 그대로 답한다.
+    //    검수사 확정 «원본은 놔두고 사본을 이용하는것이 젤 좋다» — nlSearch·mirKnowledge 는 한 줄도 안 건드렸다.
+    //    ⚠ 터져도 앱은 안 멈춘다. 다만 조용히 넘기지 않고 콘솔에 남긴다(3금지 ③).
+    let eyes = null;
+    try { eyes = mirSee(query, { containers: allContainers }); }
+    catch (e) { console.warn('[미르의 눈] 실패 — 옛 미르로 넘깁니다:', e); }
+    if (eyes) return eyes;
     const know = mirKnowledge(query);
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw;

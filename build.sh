@@ -356,6 +356,16 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   #     그 위에 검수사가 확답한 12건은 절대 조항이라 기준표를 다시 떠도 통과 못 한다.
   #   ⚠ 「건너뜀」 금지 — X-RAY 검사가 2.41~2.44 동안 조용히 건너뛰어져 버그를 놓친 전례가 있다.
   node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
+  # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.
+  #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
+  #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).
+  SMOKE_ME=$(mktemp /tmp/_smokeme_XXXXXX.cjs)
+  if npx esbuild src/mirEyes.js --bundle --platform=node --format=cjs --outfile="$SMOKE_ME" --log-level=error; then
+    node tools/smoke_mireyes.cjs "$SMOKE_ME" || { echo "✗ 미르의 눈 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+  fi
+  rm -f "$SMOKE_ME"
 else
   echo "✗ 렌더 연막 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
 fi

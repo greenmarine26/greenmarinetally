@@ -7,7 +7,8 @@ import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, gener
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
 import { mirTone, mirSmallTalk } from '../mirChat.js';
-import { mirKnowledge } from '../data/mirKnowledge.js';   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
+import { mirKnowledge } from '../data/mirKnowledge.js';
+import { mirSee } from '../mirEyes.js';   // 2.47: 한 대를 보는 겹   // 2.34: 검수 실무 기본 지식(검수사 «기본 지식이 없어요»)   // 2.33: 미르 말투(출구 한 겹)·잡담 그물
 import mirFaceUrl from '../assets/mir-face.png';   // 2.33: 미르 얼굴 — 검수사 제공 그림
 import { fbGetDamagePhoto, fbAddClaudeMemo } from '../firebase.js';   // 2.03: 데미지 사진 단건 · 2.06: 무응답 자동 신고
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
@@ -696,10 +697,15 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   //   지식이 있으면 위에 붙이고 기존 앱 안내는 아래에 잇는다. 지식은 질문형에만 나선다(집계는 업무 몫).
   const _mirAnswer = useMemo(() => {
     const raw = mirTone(_localAnswerRaw);
+    //  ★ 2.47 — 한 대를 묻는 말은 새 겹이 먼저 본다(SearchPanel 과 같은 한 벌).
+    let eyes = null;
+    try { eyes = mirSee(debouncedQuery, { containers: flat }); }
+    catch (e) { console.warn('[미르의 눈] 실패 — 옛 미르로 넘깁니다:', e); }
+    if (eyes) return eyes;
     const know = mirKnowledge(debouncedQuery);
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw || mirSmallTalk(debouncedQuery);
-  }, [_localAnswerRaw, debouncedQuery]);
+  }, [_localAnswerRaw, debouncedQuery, flat]);
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
       실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
       ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */
