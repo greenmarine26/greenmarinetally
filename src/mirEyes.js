@@ -58,7 +58,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { buildGuidedQueue } from './guidedQueue.js';   // 순서는 화면이 쓰는 그 벌을 그대로 쓴다
 import { findTwinCandidate, getBayPairs } from './twin.js';
-import { bayGroupCenter } from './swapGrade.js';   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
+import { bayGroupCenter } from './swapGrade.js';
+import { getEquipNumber } from './utils.js';   // 호기는 앱이 쓰는 단일 소스(gm_equip_no)를 그대로 읽는다   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
 
 const RE_ORDER_START = /(순서대로|차례대로|순서\s*대로).{0,10}(양하|선적|하자|해줘|시작|가자|불러)|(양하|선적)\s*(하자|시작하자|가자)|다음\s*(컨|것|거)?\s*(뭐|알려|불러|줘)?$|^다음$/;
 const RE_NEXT = /^(다음|넥스트|next)\s*[.!?]?$|다음\s*(컨|것|거|번)/;
@@ -145,6 +146,23 @@ function sayCard(card, n) {
   return `${head} — ${one(c)}${card.fr ? '\n  ⚠ FR(플랫랙)입니다 — 치수·고정 확인' : ''}`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  ★ 2.52 — **«다음»이 내 베이를 이어간다.** (2.51 을 실선에서 눌러 보고 바로 드러난 구멍)
+//
+//  2.51 로 «24번 베이 양하하자» 는 됐다. 그런데 한 대 처리하고 «다음» 하면 베이 지정이 사라져
+//  **배 전체 1등(12베이)으로 튄다.** 4호기 검수사가 24베이를 내리는 중에 12베이를 부르는 것이라
+//  2.51 이 고친 그 사고가 두 번째 발화에서 그대로 되살아난다.
+//
+//  ⛔ 상태를 들고 있지 않는다. 모듈 변수에 «마지막 베이»를 기억시키면 배를 바꿔도 남고,
+//    창을 새로 열면 사라지고, 두 갱이 같은 폰을 쓰면 섞인다. **데이터로 안다** —
+//    내 갱이 마지막에 완료한 컨이 어느 묶음인지 보면 지금 어디를 하고 있는지 알 수 있다.
+//    (`GuidedWorkPanel.priorEquipOf` 도 완료 기록의 `equip` 으로 같은 판단을 한다.)
+//
+//  ★ 갱을 가린다. 실측 — 그날 NSFR 은 GC104 가 23·24·25 를, GC103 이 11·12·13+01 을 **동시에** 했다.
+//    시간순으로 두 갱 기록이 섞이므로, 갱을 안 보고 «마지막 완료»만 따라가면 남의 베이로 넘어간다.
+//    ⚠ `completed.equip` 은 선택 필드라 빈 기록이 있다 — 내 갱 기록이 하나도 없으면 갱을 안 가린다
+//      (혼자 작업하는 배·옛 기록에서 이어가기가 죽지 않게).
+// ─────────────────────────────────────────────────────────────────────────────
 export function mirSee(q, ctx) {
   const text = String(q || '').trim();
   if (text.length < 2) return null;
@@ -162,7 +180,7 @@ export function mirSee(q, ctx) {
   const mode = (ctx && ctx.mode) === 'loading' ? 'loading' : 'discharge';
   //  아직 안 한 평택분만이 대상이다 — 화면(`remaining`)과 같은 기준.
   const remaining = all.filter((c) => c && c._ptk !== false && !c._comp && (c._mode || mode) === mode);
-  if (!remaining.length) return `${mode === 'loading' ? '선적' : '양하'}은 남은 것이 없습니다.`;
+  if (!remaining.length) return `${mode === 'loading' ? '선적은' : '양하는'} 남은 것이 없습니다.`;
 
   const side = String(info.berthSide || '').trim();
   if (!side) return '접안 방향이 아직 안 정해져 있습니다.\n자동 가이드를 켜면 좌현·우현을 묻습니다 — 그것부터 정해야 순서가 나옵니다.';
@@ -176,7 +194,38 @@ export function mirSee(q, ctx) {
     try { pairs = getBayPairs(all, info.imo || '', info.vsl || '') || {}; } catch (e) { pairs = {}; }
   }
   const centerOf = (b) => { try { return bayGroupCenter(b, pairs); } catch (e) { return null; } };
-  let pool = remaining, center = null, head = '';
+  let pool = remaining, center = null, head = '', goneHere = null;
+
+  //  2.52: 베이를 안 댔으면 **내가 하던 베이를 이어간다.** 상태를 들지 않고 완료 기록으로 안다.
+  if (!wish) {
+    const doneAll = all.filter((c) => c && c._comp && (c._mode || mode) === mode);
+    if (doneAll.length) {
+      let myEq = ''; try { myEq = String(getEquipNumber() || '').trim(); } catch (e) { myEq = ''; }
+      const mine = myEq ? doneAll.filter((c) => String(c._comp.equip || '').trim() === myEq) : [];
+      const base = mine.length ? mine : doneAll;   // 내 갱 기록이 없으면 갱을 안 가린다
+      const last = base.reduce((a, b) => ((b._comp.at || 0) > (a._comp.at || 0) ? b : a));
+      const lc = centerOf(last.bay);
+      if (lc != null) {
+        const left = remaining.filter((c) => centerOf(c.bay) === lc);
+        const bays = [...new Set(all.filter((c) => centerOf(c.bay) === lc).map((c) => String(c.bay)))].sort();
+        const lbl = bays.length > 1 ? `${bays.join('·')}번 베이` : `${bays[0] || lc}번 베이`;
+        if (left.length) {
+          center = lc; pool = left;
+          const dk = left.filter((c) => parseInt(c.tier, 10) >= 80).length;
+          const st = (info.hatchDone || {})[`${mode}_${lc}`];
+          //  번호는 **이 묶음 기준**이다 — 배 전체 통산으로 세면 남의 갱이 내린 것까지 번호에 들어가
+          //  「4번째」가 이 베이의 2번째를 가리키게 된다(실측에서 바로 헷갈렸다).
+          goneHere = doneAll.filter((c) => centerOf(c.bay) === lc).length;
+          head = `${lbl} 이어서 — 이 베이 ${goneHere}대 완료 · 남은 ${left.length}대 (데크 ${dk} · 홀드 ${left.length - dk})`
+            //  데크가 다 빠졌으면 그 다음은 커버다 — 배너는 자동 가이드 화면에만 뜬다.
+            + (!dk && st !== 'open' ? `\n  ⚠ 데크는 비었습니다. 홀드로 들어가려면 **커버부터입니다** — 열렸나요?` : '');
+        } else {
+          head = `${lbl}는 끝났습니다 (${mode === 'loading' ? '선적' : '양하'} 남은 것 없음). 다음 베이로 갑니다.`;
+        }
+      }
+    }
+  }
+
   if (wish) {
     center = centerOf(String(wish.bay).padStart(2, '0'));
     if (center == null) return null;
@@ -232,9 +281,10 @@ export function mirSee(q, ctx) {
     lines.push(`${mode === 'loading' ? '선적' : '양하'} — 남은 ${remaining.length}대 (완료 ${done}대) · ${side === 'starboard' ? '우현' : '좌현'} 접안`
       + (b0 ? `\n  ${b0}번 베이부터입니다. 다른 베이면 «○번 베이 ${mode === 'loading' ? '선적' : '양하'}하자» 라고 하십시오.` : ''));
   }
-  lines.push(sayCard(queue[0], wish ? null : done + 1));
+  lines.push(sayCard(queue[0], wish ? null : (goneHere != null ? goneHere + 1 : done + 1)));
   //  다음 둘까지만 미리 알려 준다 — 갑판에서는 귀로 듣는다. 길면 안 들린다.
-  const peek = queue.slice(1, 3).map((c, i) => `  ${wish ? i + 2 : done + 2 + i}. ${l4(c.main)} ${posOf(c.main)}${c.twin ? ` + ${l4(c.twin)} (트윈)` : ''}`);
+  const nBase = wish ? 1 : (goneHere != null ? goneHere + 1 : done + 1);
+  const peek = queue.slice(1, 3).map((c, i) => `  ${nBase + 1 + i}. ${l4(c.main)} ${posOf(c.main)}${c.twin ? ` + ${l4(c.twin)} (트윈)` : ''}`);
   if (peek.length) lines.push('다음 예정\n' + peek.join('\n'));
   return lines.filter(Boolean).join('\n');
 }

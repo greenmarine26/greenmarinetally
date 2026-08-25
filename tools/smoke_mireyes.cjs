@@ -12,6 +12,25 @@
 //        «데크 양하 완료. 해치커버를 열까요, 다른 데크로 갈까요.»
 //        «홀드 선적 완료. 해치커버를 닫을까요, 다른 베이 홀드로 갈까요.»
 //   2.47 과 2.48 이 이 둘을 모르고 다시 만들었다가 걷어냈다. **화면과 음성을 재고 나서 판단하라.**
+//  ⚠ 2.52 — localStorage 를 여기서 세운다. 미르는 호기(gm_equip_no)를 앱과 같은 단일 소스에서 읽는데,
+//    Node 에는 그것이 없어 try/catch 가 빈 값으로 넘어간다. 그러면 **갱 구분 검사가 조용히 무력화**되고
+//    검사는 초록으로 통과한다 — 「건너뜀은 통과가 아니다」(작업표준 §2-2-M). 실제로 세워 놓고 잰다.
+if (typeof globalThis.localStorage === 'undefined') {
+  const _d = {};
+  globalThis.localStorage = {
+    getItem: (k) => (k in _d ? _d[k] : null),
+    setItem: (k, v) => { _d[k] = String(v); },
+    removeItem: (k) => { delete _d[k]; },
+  };
+}
+if (typeof globalThis.window === 'undefined') {
+  globalThis.window = { localStorage: globalThis.localStorage, addEventListener() {}, removeEventListener() {}, dispatchEvent() {} };
+}
+//  세운 것이 실제로 읽히는지 한 번 확인한다 — 이 줄이 없으면 폴리필이 깨져도 모른다.
+localStorage.setItem('__probe', 'x');
+if (localStorage.getItem('__probe') !== 'x') { console.error('✗ localStorage 폴리필 실패 — 갱 구분 검사가 무의미해진다'); process.exit(1); }
+localStorage.removeItem('__probe');
+
 const path = require('path');
 const OUT = process.argv[2];
 if (!OUT) { console.error('✗ 번들 경로가 없다'); process.exit(1); }
@@ -60,7 +79,7 @@ T('미르야 순서대로 양하하자', '다음 예정', '다음 둘까지 미�
 T('순서대로 양하하자', '접안 방향이 아직', '접안부터 정해야 순서가 나온다',
   { containers, info: { ...info, berthSide: '' }, mode: 'discharge' });
 // ④ 남은 것이 없으면 그렇게 말한다
-T('순서대로 양하하자', '남은 것이 없습니다', '끝났으면 끝났다고',
+T('순서대로 양하하자', '양하는 남은 것이 없습니다', '끝났으면 끝났다고 — 조사도 맞게(2.52)',
   { containers: containers.map((c) => ({ ...c, _comp: { at: 1 } })), info, mode: 'discharge' });
 // ⑤ ⛔ 가로채지 않는다 — 앱이 이미 하는 것에 손대지 않는다
 T('1918 실번호', null, '개체 조회는 카드·음성 몫');
@@ -117,5 +136,40 @@ T('순서대로 양하하자', null, '`info` 없으면 넘긴다', { containers,
   T('24번 베이', null, '베이만 덜렁 대면 아직 조회다', c2);
 }
 
+// ⑧ ★ 2.52 — **«다음»이 내 베이를 이어간다.** 상태를 안 들고 완료 기록으로 안다.
+{
+  const G = [
+    C('AAAU2400001', '24', '01', '86', { sl: 'S1' }),
+    C('AAAU2400002', '24', '02', '86', { sl: 'S2' }),
+    C('AAAU2400003', '24', '07', '08', { sl: 'S3' }),   // 24묶음 홀드
+    C('BBBU1200001', '12', '05', '88', { sl: 'S4' }),
+    C('BBBU1200002', '12', '03', '88', { sl: 'S5' }),
+  ];
+  const done = (cn, at, eq) => G.map((c) => (c.cn === cn ? { ...c, _comp: { at, by: '검수', equip: eq } } : c));
+  //  내 갱(GC104)이 24 를 하나 내렸고, 남의 갱(GC103)이 12 를 **더 나중에** 내렸다
+  const mixed = G.map((c) => c.cn === 'AAAU2400001' ? { ...c, _comp: { at: 100, by: 'ㄱ', equip: 'GC104' } }
+    : c.cn === 'BBBU1200001' ? { ...c, _comp: { at: 900, by: 'ㄴ', equip: 'GC103' } } : c);
+  const withEq = (eq, arr, hatch) => {
+    try { if (eq) localStorage.setItem('gm_equip_no', eq); else localStorage.removeItem('gm_equip_no'); } catch (e) {}
+    return { containers: arr, info: { ...info, hatchDone: hatch || {} }, mode: 'discharge' };
+  };
+  T('다음', 'AAAU2400002', '내 갱이 하던 24묶음을 이어간다 — 더 최근인 남의 12묶음을 안 따라간다', withEq('GC104', mixed));
+  T('다음', /24.25번 베이 이어서|24번 베이 이어서/, '이어간다고 말한다', withEq('GC104', mixed));
+  T('다음', '이 베이 1대 완료', '번호·집계는 이 묶음 기준 — 통산이면 남의 갱까지 센다', withEq('GC104', mixed));
+  T('다음', 'BBBU1200002', '갱이 다르면 그 갱 베이로', withEq('GC103', mixed));
+  //  갱 기록이 없으면 갱을 안 가린다(혼자 작업·옛 기록에서 이어가기가 죽지 않게)
+  T('다음', 'AAAU2400002', '갱 미지정이면 마지막 완료를 따라간다', withEq('', done('AAAU2400001', 100, '')));
+  //  데크가 비면 커버가 다음 관문이다
+  const deckDone = G.map((c) => (c.bay === '24' && parseInt(c.tier, 10) >= 80) ? { ...c, _comp: { at: 100, by: 'ㄱ', equip: 'GC104' } } : c);
+  T('다음', '커버부터입니다', '데크가 비면 커버를 짚는다', withEq('GC104', deckDone));
+  T('다음', 'AAAU2400003', '짚고 나서 홀드 첫 컨을 부른다 — 막지 않는다', withEq('GC104', deckDone));
+  T('다음', /^(?!.*커버부터)/s, '커버 열림 기록이 있으면 되묻지 않는다', withEq('GC104', deckDone, { discharge_24: 'open' }));
+  //  묶음을 끝내면 그렇게 말하고 다음 베이로
+  const allDone24 = G.map((c) => c.bay === '24' ? { ...c, _comp: { at: 100, by: 'ㄱ', equip: 'GC104' } } : c);
+  T('다음', '끝났습니다', '묶음이 끝나면 끝났다고', withEq('GC104', allDone24));
+  T('다음', 'BBBU1200001', '끝났으면 다음 베이를 부른다', withEq('GC104', allDone24));
+  try { localStorage.removeItem('gm_equip_no'); } catch (e) {}
+}
+
 if (bad) { console.error(`✗ 미르의 눈 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 미르의 눈 연막검사 통과 (순서 부르기 14 · 베이·커버 16 · 안 가로챔 11)');
+console.log('✓ 미르의 눈 연막검사 통과 (순서 부르기 14 · 베이·커버 16 · 이어가기 11 · 안 가로챔 11)');
