@@ -44,8 +44,8 @@ const containers = [
   C('TXGU5053315', '24', '01', '86', { sl: 'CG070244' }),
   C('TXGU6068372', '24', '02', '86', { sl: 'CG070327' }),
   C('SEKU6558610', '24', '04', '86', { sl: 'DYB396983' }),
-  C('TEMU0105882', '23', '05', '82', { sl: 'NS3656833', iso: '2200' }),
-  C('TLLU3027470', '25', '05', '82', { sl: 'NS3656367', iso: '2200' }),
+  C('TEMU0105882', '23', '05', '82', { sl: 'NS3656833', iso: '2200', wt: 27600 }),   // 실측 무게 — 둘이 55.1t
+  C('TLLU3027470', '25', '05', '82', { sl: 'NS3656367', iso: '2200', wt: 27500 }),
 ];
 const info = { vsl: 'NSFR', voy: '2616N', imo: '9884289', berthSide: 'starboard' };
 const ctx = { containers, info, mode: 'discharge' };
@@ -70,8 +70,10 @@ T('미르야 순서대로 양하하자', '우현 접안', '어느 쪽 접안인�
 T('미르야 순서대로 양하하자', '다음 예정', '다음 둘까지 미리 — 셋 넘으면 귀로 못 듣는다');
 // ② 트윈은 두 대를 함께 — 실측 NSFR 에 5쌍이 있었다(11↔13 · 23↔25)
 {
+  //  ⚠ 2.52-02 에서 이 픽스처에 **실측 무게**가 들어갔다(27.6t+27.5t=55.1t) — 그래서 여기는 이제
+  //    «못 드는 트윈» 이다. 「트윈입니다」는 아래 ⑩ 의 light 픽스처가 검사한다.
   const twinOnly = { containers: containers.slice(3), info, mode: 'discharge' };
-  T('순서대로 양하하자', '트윈입니다', '20피트 짝은 한 번에 두 대', twinOnly);
+  T('순서대로 양하하자', '트윈', '20피트 짝은 한 카드로 묶인다', twinOnly);
   T('순서대로 양하하자', 'TEMU0105882', '앞 컨', twinOnly);
   T('순서대로 양하하자', 'TLLU3027470', '뒤 컨', twinOnly);
 }
@@ -199,5 +201,27 @@ T('순서대로 양하하자', null, '`info` 없으면 넘긴다', { containers,
   try { localStorage.removeItem('gm_equip_no'); } catch (e) {}
 }
 
+// ⑩ ★ 2.52-02 — **못 드는 트윈을 «두 대 한 번에» 라고 부르지 않는다.**
+//   실선 18번째에서 나왔다 — 5882(27.6t) + 7470(27.5t) = 55.1t. 화면은 붉게 막는데 미르는 «두 대 한 번에» 라고 했다.
+//   그날 실작업도 이 둘을 **따로** 내렸다(시트: 25베이 05-82 · 23베이 05-82 다른 시각).
+//   ⛔ 판정은 새로 만들지 않는다 — `nlSearch` 의 TWIN_MAX_TOTAL_KG · twinDiffLimit 을 화면과 같은 벌로 쓴다.
+{
+  const heavy = { containers: containers.slice(3), info: { ...info, pier: 'PCTC' }, mode: 'discharge' };
+  T('순서대로 양하하자', '트윈 불가', '55톤을 넘으면 못 든다고', heavy);
+  T('순서대로 양하하자', '싱글로 한 대씩', '무엇을 하라는지까지', heavy);
+  T('순서대로 양하하자', /트윈 자리지만 한 번에 못 듭니다/, '«두 대 한 번에» 라고 말하지 않는다 — 그 말이 오작업 지시가 된다', heavy);
+  T('순서대로 양하하자', 'TEMU0105882', '그래도 두 대를 다 불러 준다(싱글로 내릴 것이므로)', heavy);
+  //  들 수 있는 트윈이면 종전대로
+  const light = { containers: containers.slice(3).map((c) => ({ ...c, wt: 12000 })), info: { ...info, pier: 'PCTC' }, mode: 'discharge' };
+  T('순서대로 양하하자', '두 대 한 번에', '들 수 있으면 트윈이라고', light);
+  T('순서대로 양하하자', /^(?!.*트윈 불가)/s, '들 수 있으면 막지 않는다', light);
+  //  무게차 — PCTC 한계 20톤
+  const imbal = { containers: [{ ...containers[3], wt: 5000 }, { ...containers[4], wt: 27000 }], info: { ...info, pier: 'PCTC' }, mode: 'discharge' };
+  T('순서대로 양하하자', '무게차', '수평이 안 맞으면 그렇게', imbal);
+  //  무게가 없으면 지어내지 않는다
+  const noWt = { containers: containers.slice(3).map((c) => ({ ...c, wt: 0 })), info: { ...info, pier: 'PCTC' }, mode: 'discharge' };
+  T('순서대로 양하하자', '무게가 없는 컨', '무게를 모르면 모른다고 — 눈으로 보라고', noWt);
+}
+
 if (bad) { console.error(`✗ 미르의 눈 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 미르의 눈 연막검사 통과 (순서 부르기 14 · 베이·커버 16 · 이어가기 11 · 완료 두 경로 7 · 안 가로챔 11)');
+console.log('✓ 미르의 눈 연막검사 통과 (순서 부르기 14 · 베이·커버 16 · 이어가기 11 · 완료 두 경로 7 · 트윈 하중 8 · 안 가로챔 11)');

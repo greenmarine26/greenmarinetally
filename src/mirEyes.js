@@ -59,7 +59,8 @@
 import { buildGuidedQueue } from './guidedQueue.js';   // 순서는 화면이 쓰는 그 벌을 그대로 쓴다
 import { findTwinCandidate, getBayPairs } from './twin.js';
 import { bayGroupCenter } from './swapGrade.js';
-import { getEquipNumber } from './utils.js';   // 호기는 앱이 쓰는 단일 소스(gm_equip_no)를 그대로 읽는다   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
+import { getEquipNumber, formatWt } from './utils.js';
+import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from './nlSearch.js';   // 트윈 무게 한계는 화면이 쓰는 그 상수를 그대로   // 호기는 앱이 쓰는 단일 소스(gm_equip_no)를 그대로 읽는다   // 베이 묶음도 화면이 쓰는 그 벌을 그대로 쓴다
 
 const RE_ORDER_START = /(순서대로|차례대로|순서\s*대로).{0,10}(양하|선적|하자|해줘|시작|가자|불러)|(양하|선적)\s*(하자|시작하자|가자)|다음\s*(컨|것|거)?\s*(뭐|알려|불러|줘)?$|^다음$/;
 const RE_NEXT = /^(다음|넥스트|next)\s*[.!?]?$|다음\s*(컨|것|거|번)/;
@@ -127,8 +128,37 @@ const posOf = (c) => (c?.bay && c?.row && c?.tier) ? `${c.bay}-${c.row}-${c.tier
 const l4 = (c) => c?.l4 || String(c?.cn || '').slice(-4);
 const feetOf = (iso) => { const h = String(iso || '')[0]; return h === '2' ? '20피트' : (h === '4' || h === 'L' || h === '9') ? '40피트' : ''; };
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  ★ 2.52-02 — **미르가 못 드는 트윈을 «두 대 한 번에» 라고 부르고 있었다.**
+//
+//  NSFR 24묶음을 17대까지 실제로 내리다가 18번째에서 나왔다 —
+//    앞 TEMU0105882 (23-05-82) · 뒤 TLLU3027470 (25-05-82) · 20피트 두 대
+//  화면은 붉게 막았다: **«🚫 합계 55.1t (55톤 초과) — 트윈 불가, 싱글 작업 검토»**
+//  그런데 **미르는 «트윈입니다. 두 대 한 번에» 라고 말한다.** 검수사가 그 말을 믿고 트윈으로 걸면 사고다.
+//
+//  ★ 그날 실작업이 앱 편이다 — 시트에서 25-05-82 와 23-05-82 는 **따로, 다른 시각에** 내려갔다.
+//    (GC104: …25베이 05-82 … 23베이 05-82) 트윈으로 묶이지 않았다.
+//
+//  ⛔ 판정을 새로 만들지 않는다. `nlSearch` 의 검증된 상수(`TWIN_MAX_TOTAL_KG` 55톤 ·
+//    `twinDiffLimit` 부두별 무게차 한계)를 **화면과 같은 벌로** 쓴다.
+//    (`GuidedWorkPanel.twinWtWarn` 이 쓰는 바로 그것.)
+// ─────────────────────────────────────────────────────────────────────────────
+
 /** 카드 한 장을 말로 — 트윈이면 두 대를 함께 부른다. */
-function sayCard(card, n) {
+function twinWarn(card, pier) {
+  if (!card || !card.twin) return '';
+  const wa = parseInt(card.main.wt, 10) || 0, wb = parseInt(card.twin.wt, 10) || 0;
+  if (!wa || !wb) return '\n  ⚠ 무게가 없는 컨이 있습니다 — 트윈 하중을 못 잽니다. 눈으로 확인하십시오.';
+  const total = wa + wb, diff = Math.abs(wa - wb);
+  if (total > TWIN_MAX_TOTAL_KG) {
+    return `\n  ⛔ **트윈 불가** — 합계 ${formatWt(total)} (55톤 초과). **싱글로 한 대씩** 내리십시오.`;
+  }
+  const limit = twinDiffLimit(pier);
+  if (diff > limit) return `\n  ⚠ 무게차 ${formatWt(diff)} (${pier || '부두 미상'} 한계 ${formatWt(limit)}) — 수평이 안 맞습니다.`;
+  return '';
+}
+
+function sayCard(card, n, pier) {
   if (!card) return null;
   const c = card.main, t = card.twin;
   const head = n ? `${n}번째` : '지금 차례';
@@ -142,7 +172,12 @@ function sayCard(card, n) {
     if (x._xray || x.isXray) bits.push('🔍 X-RAY');
     return bits.join(' · ');
   };
-  if (t) return `${head} — **트윈입니다. 두 대 한 번에.**\n  앞 ${one(c)}\n  뒤 ${one(t)}`;
+  if (t) {
+    const w = twinWarn(card, pier);
+    //  못 드는 트윈이면 «두 대 한 번에» 라고 말하지 않는다 — 그 말이 곧 오작업 지시가 된다.
+    const head2 = w.includes('트윈 불가') ? `${head} — **트윈 자리지만 한 번에 못 듭니다.**` : `${head} — **트윈입니다. 두 대 한 번에.**`;
+    return `${head2}\n  앞 ${one(c)}\n  뒤 ${one(t)}${w}`;
+  }
   return `${head} — ${one(c)}${card.fr ? '\n  ⚠ FR(플랫랙)입니다 — 치수·고정 확인' : ''}`;
 }
 
@@ -288,7 +323,7 @@ export function mirSee(q, ctx) {
     lines.push(`${mode === 'loading' ? '선적' : '양하'} — 남은 ${remaining.length}대 (완료 ${done}대) · ${side === 'starboard' ? '우현' : '좌현'} 접안`
       + (b0 ? `\n  ${b0}번 베이부터입니다. 다른 베이면 «○번 베이 ${mode === 'loading' ? '선적' : '양하'}하자» 라고 하십시오.` : ''));
   }
-  lines.push(sayCard(queue[0], wish ? null : (goneHere != null ? goneHere + 1 : done + 1)));
+  lines.push(sayCard(queue[0], wish ? null : (goneHere != null ? goneHere + 1 : done + 1), info.pier || ''));
   //  다음 둘까지만 미리 알려 준다 — 갑판에서는 귀로 듣는다. 길면 안 들린다.
   const nBase = wish ? 1 : (goneHere != null ? goneHere + 1 : done + 1);
   const peek = queue.slice(1, 3).map((c, i) => `  ${nBase + 1 + i}. ${l4(c.main)} ${posOf(c.main)}${c.twin ? ` + ${l4(c.twin)} (트윈)` : ''}`);
