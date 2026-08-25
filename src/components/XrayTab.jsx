@@ -89,6 +89,8 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       name: resolveShipDisplayName(info, portMisData, dict).name || code,
       callsign: cs,
       mrn,
+      //  2.41: 엑셀 「터미널」 열 — PCTC/PNCT. 인쇄물 머리에는 없고 엑셀에만 쓴다.
+      pier: info.pier || '',
     };
   }, [info, portMisData, mode]);
 

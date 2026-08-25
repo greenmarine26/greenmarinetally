@@ -1200,3 +1200,76 @@ function _download(buf, fname) {
   a.href = url; a.download = fname; a.click();
   URL.revokeObjectURL(url);
 }
+
+/* ══════════════════════════════════════════════════════════
+   ★ X-RAY 세관봉인 확인서 — **엑셀(.xlsx)** (TallyOne 2.41)
+
+   검수사 확정 2026-08-25 — *«XRAY 출력물중에 엑셀다운로드 파일 형식을 바꿔 주셔야 합니다»* ·
+   *«진짜 엑셀로 받아져야 합니다. 양식이 중요 하니까요»* · *«폰트는 굴림체 10입니다»*
+
+   ⚠ 종전에는 CSV 였다. CSV 는 글자만 담는 텍스트 파일이라 **폰트도 서식도 못 싣는다** —
+     버튼 이름만 「엑셀」이었지 실제로는 엑셀 파일이 아니었다.
+
+   ★ 열 구성은 검수사가 준 실물 샘플 그대로다(XRAY리스트_XINQUNDAO_2633E).
+       No. · 선박명 · 입항일자 · MRN · 터미널 · 컨테이너번호 · 봉인번호 · 봉인자
+     ⚠ 인쇄물(generateXrayListHTML)의 일곱 열과 **다르다.** 인쇄물은 세관에 내는 종이 양식이고,
+       이 엑셀은 그 뒤에 넘기는 자료다 — 서로 맞추려 들지 마라.
+
+   ★ 둘째 줄부터 선박명·입항일자·MRN·터미널은 **`"` 한 글자**다.
+     검수사 확답 — *«이건 위와 아래가 같다는 표시 입니다»*. 빈칸이 아니다.
+   ══════════════════════════════════════════════════════════ */
+const XRAY_FONT = { name: '굴림', size: 10 };
+const DITTO = '"';   // 위와 같음 — 검수사 표기
+
+export async function generateXrayExcel(rows, head = {}, opts = {}) {
+  const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'GREEN MARINE Tallyman Master';
+  const ws = wb.addWorksheet('XRAY');
+  ws.columns = [{ width: 5 }, { width: 16 }, { width: 12 }, { width: 15 },
+                { width: 9 }, { width: 15 }, { width: 12 }, { width: 10 }];
+
+  const HD = ['No.', '선박명', '입항일자', 'MRN', '터미널', '컨테이너번호', '봉인번호', '봉인자'];
+  HD.forEach((v, i) => { const c = ws.getRow(1).getCell(i + 1); c.value = v; c.font = XRAY_FONT; });
+
+  (rows || []).forEach((r, i) => {
+    const first = i === 0;
+    const vals = [i + 1,
+                  first ? (head.name || '') : DITTO,
+                  first ? (head.eta || '') : DITTO,
+                  first ? (head.mrn || '') : DITTO,
+                  first ? (head.pier || '') : DITTO,
+                  r.cn || '', r.cSeal || '', r.sealer || ''];
+    vals.forEach((v, c) => { const cell = ws.getRow(i + 2).getCell(c + 1); cell.value = v; cell.font = XRAY_FONT; });
+  });
+
+  /*  ── 둘째 장 「상세」 ──────────────────────────────────────
+      검수사 확정 — *«수석검수사는 둘다 있어야 할것입니다»*.
+      첫 장(세관제출)은 넘기는 자료라 열이 여덟뿐이다. 수석은 **화물구분·규격·선내위치**까지 봐야
+      어느 컨이 어디 있는지 짚는다 — 종전 CSV 가 담던 내용이 통째로 이 장으로 옮겨 왔다.
+      ⚠ 머리 일곱 칸도 그대로 남긴다. 표만 있으면 어느 배 것인지 모르는 종이가 된다. */
+  const ws2 = wb.addWorksheet('상세');
+  ws2.columns = [{ width: 5 }, { width: 16 }, { width: 14 }, { width: 12 },
+                 { width: 8 }, { width: 12 }, { width: 20 }, { width: 12 }];
+  const meta = [['선박명', head.name], ['항차/항공편명', head.voy], ['운항선사', head.carrier],
+                ['입항일자', head.eta], ['양륙항', head.pod], ['선박 호출부호', head.callsign],
+                ['MRN', head.mrn], ['터미널', head.pier]];
+  meta.forEach(([k, v], i) => {
+    const row = ws2.getRow(i + 1);
+    row.getCell(1).value = k; row.getCell(2).value = v || '';
+    row.getCell(1).font = { ...XRAY_FONT, bold: true }; row.getCell(2).font = XRAY_FONT;
+  });
+  const HD2 = ['No.', '컨테이너번호', '선사SEAL NO', '화물구분', '규격', '선내위치', '부착 세관봉인번호', '봉인자'];
+  const R0 = meta.length + 2;
+  HD2.forEach((v, i) => { const c = ws2.getRow(R0).getCell(i + 1); c.value = v; c.font = { ...XRAY_FONT, bold: true }; });
+  (rows || []).forEach((r, i) => {
+    const vals = [i + 1, r.cn || '', r.seal || '', r.kind || '', r.iso || '', r.pos || '', r.cSeal || '', r.sealer || ''];
+    vals.forEach((v, c) => { const cell = ws2.getRow(R0 + 1 + i).getCell(c + 1); cell.value = v; cell.font = XRAY_FONT; });
+  });
+
+  const fname = `XRAY리스트_${(head.name || '').replace(/\s+/g, '')}_${head.voy || ''}_`
+              + new Date().toISOString().slice(0, 10) + '.xlsx';
+  const buf = await wb.xlsx.writeBuffer();
+  if (opts.download !== false) _download(buf, fname);
+  return { fname, buf };
+}

@@ -460,7 +460,7 @@ th { background:#eee; font-weight:700; }
 </style></head><body>
 <div class="actions no-print">
   <button class="btn-print" onclick="window.print()">PDF 저장 / 인쇄</button>
-  <button class="btn-excel" onclick="window.__exportXrayCsv &amp;&amp; window.__exportXrayCsv()">엑셀(CSV) 받기</button>
+  <button class="btn-excel" onclick="window.__exportXrayXlsx &amp;&amp; window.__exportXrayXlsx()">📊 엑셀 받기</button>
   <button class="btn-close" onclick="window.close()">닫기</button>
 </div>${body}</body></html>`;
 }
@@ -470,29 +470,20 @@ export function openXrayListPrint(rows, head, perPage = 20) {
   if (!w) { alert('팝업 차단을 해제해주세요'); return; }
   w.document.write(generateXrayListHTML(rows, head, perPage));
   w.document.close();
-  //  엑셀(CSV) 내보내기 주입 — 검수 리스트(M6.71)와 같은 방식이다.
-  //  머리 여섯 칸까지 담는다. 표만 있으면 어느 배 것인지 모르는 종이가 된다.
-  w.__exportXrayCsv = function () {
-    const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const L = [];
-    L.push(['선박명', head.name].map(q).join(','));
-    L.push(['항차/항공편명', head.voy].map(q).join(','));
-    L.push(['운항선사', head.carrier].map(q).join(','));
-    L.push(['입항일자', head.eta].map(q).join(','));
-    L.push(['양륙항', head.pod].map(q).join(','));
-    L.push(['선박 호출부호', head.callsign].map(q).join(','));
-    L.push(['MRN', head.mrn].map(q).join(','));
-    L.push('');
-    L.push(['No.', '컨테이너번호', '선사SEAL NO', '화물구분', '규격', '선내위치', '부착 세관봉인번호', '봉인자'].map(q).join(','));
-    rows.forEach((r, i) => L.push([i + 1, r.cn, r.seal, r.kind, r.iso, r.pos, r.cSeal, r.sealer].map(q).join(',')));
-    const blob = new Blob(['\uFEFF' + L.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = w.document.createElement('a');
-    a.href = url;
-    a.download = 'XRAY리스트_' + (head.name || '') + '_' + (head.voy || '') + '_'
-               + new Date().toISOString().slice(0, 10) + '.csv';
-    w.document.body.appendChild(a); a.click(); w.document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  /*  ★ 2.41 — **진짜 엑셀(.xlsx)** 로 내보낸다.
+      검수사 확정 *«진짜 엑셀로 받아져야 합니다. 양식이 중요 하니까요»* · *«폰트는 굴림체 10입니다»*
+      종전 CSV 는 글자만 담는 텍스트라 폰트도 서식도 못 실었다 — 이름만 「엑셀」이었다.
+      ⚠ 열 구성은 인쇄물과 **다르다**(검수사 실물 샘플 기준). tallyExcel.generateXrayExcel 주석 참조.
+      ⚠ exceljs 는 1MB 라 **누를 때만** 동적 import 한다(마감 텔리와 같은 방식). */
+  w.__exportXrayXlsx = async function () {
+    try {
+      const { generateXrayExcel } = await import('./tallyExcel.js');
+      await generateXrayExcel(rows, head);
+    } catch (e) {
+      //  조용히 실패하지 않는다(3금지 ③) — 눌렀는데 아무 일도 안 나면 검수사는 앱을 의심한다.
+      try { w.alert('엑셀을 만들지 못했습니다 — ' + (e && e.message ? e.message : e)); }
+      catch (e2) { alert('엑셀을 만들지 못했습니다 — ' + (e && e.message ? e.message : e)); }
+    }
   };
 }
 
