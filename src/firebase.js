@@ -499,29 +499,59 @@ export async function fbUpdateRecordField(voyageKey, mode, cn, field, newValue, 
   }
 }
 
-// X-RAY 봉인 수정 — seal (세관봉인) + eseal (전자봉인) 2개 필드
-export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by) {
+// X-RAY 봉인 수정 — seal (세관봉인) + eseal (전자봉인) + sealer (봉인자)
+//
+//   ★ TallyOne 2.39 — 봉인자를 여기서 기록한다 (검수사 확정 2026-08-25).
+//     그 전까지 `sealer` 는 **읽기만 하고 쓰는 코드가 저장소에 한 곳도 없었다** —
+//     XrayTab 이 `xs.sealer` 를 읽는데 이 set() 에 그 키가 없어 영원히 빈 값이었고,
+//     매뉴얼(helpData)은 «저절로 들어갑니다»라고 이미 적어 두고 있었다.
+//     검수사 요구 — *«XRAY 실번호를 입력할때 봉인자 등록여부 체크칸을 만들어 주세요.
+//     컨테이너 양이 많으면 번호는 입력했더라도 현장에서 봉인을 다 못할수도 있기 때문입니다.»*
+//
+//   ⚠ `sealerOpt` 는 **맨 뒤 선택 인자**다 — 안 넘기는 호출부는 종전과 똑같이 동작하고
+//     기존 `sealer`·`sealerAt` 을 그대로 보존한다(`equip` 과 같은 규약).
+//       { register: true }  「봉인자 등록」 체크 → 지금 로그인한 사람(by)
+//       { register: false } 체크 해제 → 봉인자 지움
+//       { sealer: '이름' }  현장에서 단 사람이 달라 손으로 정정
+//
+//   ⚠ 종전 set() 은 **넘기지 않은 키를 통째로 날렸다.** 봉인자를 넣어 둬도 봉인번호를
+//     한 번 고치면 사라졌다. 그래서 sealer/sealerAt 을 명시적으로 실어 보존한다.
+export async function fbSetXraySeal(voyageKey, cn, seal, eseal, by, sealerOpt) {
   const r = ref(db, `voyages/${voyageKey}/discharge/xraySeals/${cn}`);
   const snap = await get(r);
   const cur = snap.val() || {};
   const oldSeal = cur.seal || '';
   const oldEseal = cur.eseal || '';
+  const oldSealer = cur.sealer || '';
   const sealOrig = cur.seal_orig != null ? cur.seal_orig : oldSeal;
   const esealOrig = cur.eseal_orig != null ? cur.eseal_orig : oldEseal;
 
-  if (oldSeal === seal && oldEseal === eseal) return;
+  //  봉인자를 이번 저장에서 «건드렸는가». 건드렸을 때만 sealerAt 을 새로 찍는다 —
+  //  그 시각이 완료 시각과의 선후를 가르는 유일한 근거다(utils.xraySealerOf).
+  const o = sealerOpt || {};
+  let nextSealer = oldSealer, touched = false;
+  if (o.sealer !== undefined) { nextSealer = o.sealer || ''; touched = true; }
+  else if (o.register === true) { nextSealer = by || ''; touched = true; }
+  else if (o.register === false) { nextSealer = ''; touched = true; }
 
+  //  ⚠ 봉인자만 바뀌어도 저장해야 한다. 종전엔 봉인번호만 견줘 조기 반환해서
+  //    «번호는 그대로 두고 봉인자만 고치기»가 통째로 막혀 있었다.
+  if (oldSeal === seal && oldEseal === eseal && oldSealer === nextSealer) return;
+
+  const now = Date.now();
   const history = Array.isArray(cur.history) ? [...cur.history] : [];
   history.push({
-    from: { seal: oldSeal, eseal: oldEseal },
-    to: { seal, eseal },
+    from: { seal: oldSeal, eseal: oldEseal, sealer: oldSealer },
+    to: { seal, eseal, sealer: nextSealer },
     by: by || '',
-    at: Date.now(),
+    at: now,
   });
 
   await set(r, {
     seal: seal || '',
     eseal: eseal || '',
+    sealer: nextSealer,
+    sealerAt: touched ? now : (cur.sealerAt || 0),
     seal_orig: sealOrig,
     eseal_orig: esealOrig,
     history,

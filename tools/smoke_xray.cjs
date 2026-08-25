@@ -35,9 +35,32 @@ setTimeout(() => {
     if (!t.includes(k)) { console.log('✗ 화물구분 «' + k + '» 이 화면에 없다'); process.exit(1); }
   }
 
-  // ③ 값이 없는 칸 — 봉인은 하나만 채웠으니 «미입력»이 반드시 보여야 한다
-  if (!/미입력/.test(t)) { console.log('✗ 값 없는 칸이 «미입력»으로 안 보인다 — 손으로 적을 자리를 못 찾는다'); process.exit(1); }
+  // ③ 값이 없는 칸 — 2.39 부터 양하에서는 **그 자리에서 친다**.
+  //    빈 봉인번호 칸은 «입력 ✏», 빈 봉인자는 «미등록». 손으로 적을 자리는 인쇄물이 밑줄로 맡는다.
+  if (!/입력/.test(t)) { console.log('✗ 빈 봉인번호 칸에 입력 자리가 없다'); process.exit(1); }
+  if (!/미등록/.test(t)) { console.log('✗ 봉인자가 빈 행이 «미등록»으로 안 보인다'); process.exit(1); }
   if (!/KC0012345/.test(t)) { console.log('✗ 입력된 세관봉인이 안 보인다'); process.exit(1); }
+
+  // ③-B 2.39 봉인자 — 「봉인자 등록」 체크칸이 행마다 있고, 봉인 진행이 머리에 뜬다.
+  const boxes = [...doc.querySelectorAll('tbody tr')].filter((tr) => !tr.closest('.xr-print'))
+    .map((tr) => tr.querySelector('input[type=checkbox]')).filter(Boolean);
+  if (boxes.length !== 6) {
+    console.log('✗ 「봉인자 등록」 체크칸이 행마다 없다 — ' + boxes.length + '/6'); process.exit(1);
+  }
+  //  봉인번호가 없는 행은 체크를 막고 이유를 남긴다(자리는 남기고 이유를 적는다 — 작업표준 2-0-D).
+  const locked = boxes.filter((b) => b.disabled);
+  if (!locked.length) { console.log('✗ 봉인번호 없는 행의 체크칸이 안 잠긴다'); process.exit(1); }
+  if (!/봉인번호를 먼저 입력/.test(locked[0].getAttribute('title') || '')) {
+    console.log('✗ 잠긴 체크칸이 «왜 못 누르는지»를 안 말한다'); process.exit(1);
+  }
+  //  픽스처: sealer 가 적힌 1건 + 완료자 폴백 1건 = 2/6
+  if (!/봉인\s*2\/6/.test(t)) {
+    console.log('✗ 봉인 진행(봉인 2/6)이 머리에 안 뜬다 — 제출본과 인계본을 못 가른다');
+    console.log('   화면: ' + (t.match(/봉인[^·]{0,20}/g) || []).slice(0, 3).join(' | ')); process.exit(1);
+  }
+  if (!/인계용/.test(t)) { console.log('✗ 미완인데 «인계용» 표시가 없다'); process.exit(1); }
+  if (!/김성일/.test(t)) { console.log('✗ 적힌 봉인자(김성일)가 안 보인다'); process.exit(1); }
+  if (!/박철민/.test(t)) { console.log('✗ 완료자 폴백 봉인자(박철민)가 안 보인다'); process.exit(1); }
   if (!/박철민/.test(t)) { console.log('✗ 봉인자 폴백(완료 기록의 검수자)이 안 붙었다'); process.exit(1); }
 
   // ④ 인쇄물 — **기존 양식 여섯 칸이 한 칸도 빠지면 안 된다** (검수사 실물 대조 2026-08-24)

@@ -1613,6 +1613,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {tab === 'xray' && (
         <XrayTab voyage={voyage} voyageKey={voyageKey} mode={mode} containers={containers}
+                 inspector={inspector}
                  xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap} portMisData={portMisData}/>
       )}
       {tab === 'report' && (

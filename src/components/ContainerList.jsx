@@ -7,7 +7,7 @@
 import React, { useState, useMemo } from 'react';
 import { Check, Edit3, Snowflake, AlertTriangle, AlertOctagon, X } from 'lucide-react';
 import { fbCompleteContainer, fbCancelComplete, fbToggleXray, fbUpdateRecordSeal, fbSetXraySeal, fbSetLuggConfirm, fbCancelLuggConfirm } from '../firebase.js';
-import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
+import { isoToLabel, formatWt, fmtPos, isReeferContainer, isBookingSlot, getEquipNumber, dupSealPartners, xraySealerOf } from '../utils.js';   // TallyOne 1.55: 갱(호기)은 완료 기록에 같이 남긴다   // 1.76-05: 실번호 중복 배지
 import { speakDone } from '../voice.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
 import ChoiceModal, { useChoice } from './ChoiceModal.jsx';   // TallyOne 1.53: 취소는 뜻이 둘 — 갈래를 고르게 한다.
@@ -375,6 +375,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
   const [sealVal, setSealVal] = useState(c.sl || '');
   const [xSealVal, setXSealVal] = useState(xraySeal?.seal || '');
   const [xEsealVal, setXEsealVal] = useState(xraySeal?.eseal || '');
+  const [xRegister, setXRegister] = useState(!!xraySeal?.sealer);   // 2.39: 「봉인자 등록」
   // M3.74: confirm() → ConfirmModal
   const [confirmState, askConfirm] = useConfirm();
   // TallyOne 1.53: 결과 알림도 앱 안에서 — 브라우저 alert/confirm 은 뜨는 순간 화면이 멈춘다(실측 2026-08-11).
@@ -474,7 +475,8 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
 
   const handleSaveXSeal = async (e) => {
     e?.stopPropagation();
-    await fbSetXraySeal(voyageKey, c.cn, xSealVal.trim(), xEsealVal.trim(), inspector);
+    await fbSetXraySeal(voyageKey, c.cn, xSealVal.trim(), xEsealVal.trim(), inspector,
+                        { register: xRegister });   // 2.39
     setEditingXSeal(false);
   };
 
@@ -655,8 +657,14 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                       placeholder="전자"
                       className="bg-ink-800 border border-purple-600 rounded px-1.5 py-0.5 text-xxs mono text-purple-200 w-20 focus:outline-none"
                       onKeyDown={e => e.key === 'Enter' && handleSaveXSeal(e)}/>
+                    {/*  2.39: 체크해야 출력물에 봉인자가 찍힌다(검수사 «봉인을 다 못할수도 있기 때문»). */}
+                    <label className="flex items-center gap-1 cursor-pointer select-none">
+                      <input type="checkbox" checked={xRegister} onChange={e => setXRegister(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-emerald-500"/>
+                      <span className="text-3xs text-dim-300">봉인자</span>
+                    </label>
                     <button onClick={handleSaveXSeal} className="text-emerald-400 text-xs px-1">저장</button>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="text-dim-400 text-xs px-1">×</button>
+                    <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(false); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); setXRegister(!!xraySeal?.sealer); }} className="text-dim-400 text-xs px-1">×</button>
                   </div>
                 ) : (
                   <button onClick={(e) => { e.stopPropagation(); setEditingXSeal(true); setXSealVal(xraySeal?.seal || ''); setXEsealVal(xraySeal?.eseal || ''); }} className="flex items-center gap-1 text-xxs mono">
@@ -670,6 +678,7 @@ function ContainerCard({ c, comp, isXray, xraySeal, mode, voyageKey, inspector, 
                       <span className={xSeal ? 'text-purple-200 font-bold' : 'text-dim-500 italic'}>
                         {xSeal || '미입력'}
                         {xraySeal?.eseal && <span className="text-cyan-300"> / {xraySeal.eseal}</span>}
+                        {xraySealerOf(xraySeal, comp) && <span className="text-emerald-300"> · 봉인자 {xraySealerOf(xraySeal, comp)}</span>}
                       </span>
                     )}
                     <Edit3 className="w-3 h-3 text-dim-500"/>
