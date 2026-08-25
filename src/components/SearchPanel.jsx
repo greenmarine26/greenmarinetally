@@ -1085,15 +1085,18 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const devRanRef = useRef('');
   useEffect(() => {
     const cmd = parsed.deviceCmd;
-    if (!cmd || !askedAt) { return; }
-    const key = String(askedAt) + '|' + JSON.stringify(cmd);
+    if (!cmd) { return; }
+    //  ⚠ 2.40-01: 종전엔 `askedAt`(전송 누름)을 요구했다. 그래서 검수사가 「미르야 화면이 너무 밝아」를
+    //    **치기만 하고** 전송을 안 누르자 아무 일도 안 일어났다 — 다른 조회는 치기만 해도 답이 나오는데.
+    //    ⇒ 디바운스된 질의로 곧장 실행한다. 같은 문장을 두 번 실행하지 않게 **질의+명령**을 키로 잠근다.
+    const key = String(query || '').trim() + '|' + JSON.stringify(cmd);
     if (devRanRef.current === key) return;
     devRanRef.current = key;
     let msg = null;
     try { msg = runDeviceCmd(cmd); }
     catch (e) { console.warn('[미르 조작] 실패', e); msg = '그건 지금 바꾸지 못했어요.'; }
     if (msg) { setDevAnswer(msg); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
-  }, [parsed.deviceCmd, askedAt]);
+  }, [parsed.deviceCmd, query]);
   //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
   useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, query]);
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.

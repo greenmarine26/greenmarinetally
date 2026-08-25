@@ -681,15 +681,18 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   const devRanRef = useRef('');
   useEffect(() => {
     const cmd = parsed.deviceCmd;
-    if (!cmd || !askedAt) { return; }
-    const key = String(askedAt) + '|' + JSON.stringify(cmd);
+    if (!cmd) { return; }
+    //  ⚠ 2.40-01: 종전엔 `askedAt`(전송 누름)을 요구했다. 그래서 검수사가 「미르야 화면이 너무 밝아」를
+    //    **치기만 하고** 전송을 안 누르자 아무 일도 안 일어났다 — 다른 조회는 치기만 해도 답이 나오는데.
+    //    ⇒ 디바운스된 질의로 곧장 실행한다. 같은 문장을 두 번 실행하지 않게 **질의+명령**을 키로 잠근다.
+    const key = String(debouncedQuery || '').trim() + '|' + JSON.stringify(cmd);
     if (devRanRef.current === key) return;
     devRanRef.current = key;
     let msg = null;
     try { msg = runDeviceCmd(cmd); }
     catch (e) { console.warn('[미르 조작] 실패', e); msg = '그건 지금 바꾸지 못했어요.'; }
     if (msg) { setDevAnswer(msg); try { speak(msg, { conversational: true }); } catch { /* 소리 꺼짐 */ } }
-  }, [parsed.deviceCmd, askedAt]);
+  }, [parsed.deviceCmd, debouncedQuery]);
   //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
   useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, debouncedQuery]);
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
@@ -723,8 +726,11 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   const _mirDontKnow = useMemo(() => {
     const q = String(debouncedQuery || '').trim();
     if (q.length < 4 || !/[가-힣]{2,}/.test(q)) return false;   // 문장형(한글)만 — 끝4·컨번호 조회는 제외
+    //  ⚠ 2.40-01: 조작 명령(밝기·소리)은 **할 수 있는 일**이다. 여기서 «못 한다»고 말하면
+    //    검수사가 되는 기능을 안 되는 줄 알고 접는다. 실제로 2.40 에서 그렇게 보였다.
+    if (parsed.deviceCmd) return false;
     return !localAnswer && !dmgQ && matches.length === 0;
-  }, [debouncedQuery, localAnswer, dmgQ, matches]);
+  }, [debouncedQuery, localAnswer, dmgQ, matches, parsed.deviceCmd]);
   const _reportedRef = useRef(new Set());
   useEffect(() => {
     // 질문이 «접수»(엔터·전송)된 것만 1회 자동 신고 — 타이핑 중 오발송 방지

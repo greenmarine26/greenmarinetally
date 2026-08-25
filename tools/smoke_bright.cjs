@@ -63,9 +63,30 @@ if (bundle && fs.existsSync(bundle)) {
                '화면 원래대로', '눈이 아파 화면 좀', '소리 좀 줄여줘', '볼륨 크게', '소리 꺼', '미르야 조용히 해'];
   const NO  = ['6653', '리퍼 몇대야', '엑스레이 몇대', '20베이 양하 몇개야', '베이플랜 어디서 봐',
                '실번호 어떻게 고쳐', '밝은 색 컨테이너 있어', '시프팅 알려줘', '봉인자 어떻게 등록해'];
+  //  2.40-01: 검수사가 실제로 친 문장 — 둘 다 2.40 에서 «할 수 없어요» 가 나왔다.
+  YES.push('미르야 화면이 너무 밝아', '미르야 화면 조금만 어둡게 해줘', '화면 어둡게 해줘');
   for (const q of YES) if (!m.parseNaturalQuery(q).deviceCmd) fail(`미르가 «${q}» 를 못 알아듣는다`);
   for (const q of NO)  if (m.parseNaturalQuery(q).deviceCmd) fail(`⛔ 미르가 업무 질문 «${q}» 를 가로챈다`);
   ok(`인텐트 ${YES.length}+${NO.length}`);
+
+  //  ★ 2.40-01 방향 검사 — 「어둡게」를 **치는 도중**에 반대로 밝아지면 안 된다.
+  //    타이핑은 한 글자씩 들어오고 디바운스마다 판정이 돈다. 중간 상태가 위험하다.
+  for (const [q, want] of [['미르야 화면이 너무 밝아', -1], ['미르야 화면 조금만 어둡게 해줘', -1],
+                           ['화면 어둡게', -1], ['화면 밝게', +1], ['화면이 어두운데', +1], ['화면이 어두워', +1]]) {
+    const c = m.parseNaturalQuery(q).deviceCmd;
+    if (!c || c.kind !== 'bright') fail(`«${q}» 가 밝기 명령으로 안 잡힌다`);
+    const dir = c.to != null ? (c.to === 4 ? +1 : -1) : c.dir;
+    if (dir !== want) fail(`⛔ «${q}» 가 ${want > 0 ? '밝게' : '어둡게'} 여야 하는데 반대로 간다`);
+  }
+  //  「화면 어둡게」를 치는 도중의 모든 앞자락이 **밝게로 돌지 않아야** 한다.
+  const typing = '화면 어둡게';
+  for (let i = 2; i <= typing.length; i++) {
+    const c = m.parseNaturalQuery(typing.slice(0, i)).deviceCmd;
+    if (c && c.kind === 'bright' && c.dir === +1) {
+      fail(`⛔ 「${typing}」 를 치는 도중 «${typing.slice(0, i)}» 에서 반대로 밝아진다`);
+    }
+  }
+  ok('방향 6종 + 타이핑 중간 상태');
 
   //  실행 — 올리고 내리고, 끝에서 더 못 가는 것까지
   m.applyBrightness(1);

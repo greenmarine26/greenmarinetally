@@ -470,8 +470,10 @@ export function parseNaturalQuery(text) {
       result.deviceCmd = RE_MAX.test(t) ? { kind: 'bright', to: 4 } : { kind: 'bright', dir: +1 };
     } else if (RE_DOWN.test(t) && (hasScreen || !RE_WORK.test(t))) {
       result.deviceCmd = RE_MIN.test(t) ? { kind: 'bright', to: 1 } : { kind: 'bright', dir: -1 };
-    } else if (hasScreen && /(어두|침침|캄캄|안\s*보여)/.test(t)) {
+    } else if (hasScreen && /(어두운|어두워|어둡다|어둡네|어둡습|침침|캄캄|안\s*보여)/.test(t)) {
       //  검수사 원문이 이 형태다 — *«미르야 화면이 어두운데?»*. 되묻지 말고 한 단계 올린다.
+      //  ⚠ 2.40-01: 여기를 «어두» 로 넓게 잡으면 안 된다 — 검수사가 「화면 어둡게」를 **치는 도중**
+      //    「화면 어두」 에서 걸려 **반대로 밝아진다.** 서술형(어두운·어두워)만 받고 명령형은 위 RE_DOWN 이 받는다.
       result.deviceCmd = { kind: 'bright', dir: +1 };
     } else if (hasScreen || /(눈이?\s*아프|눈\s*피로)/.test(t)) {
       //  ⚠ «눈이 아프다»는 **어두워서인지 눈부셔서인지 모른다.** 지어내지 말고 되묻는다(2-0-D).
