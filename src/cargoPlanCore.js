@@ -44,7 +44,15 @@ export function autoPairBays(matrixBays) {
   const usedEvens = new Set();
 
   for (const e of evens) {
-    if (byNum.has(e - 1) && byNum.has(e + 1)) {
+    //  ★ 2.55-02 — **이미 남의 짝인 홀수는 다시 쓰지 않는다.**
+    //    종전엔 양옆 홀수가 «있는가»만 보고 «비어 있는가»를 안 봐서 한 홀수가 두 트리오에 들어갔다.
+    //    실측 SWTD 9012E — 31 이 (30)31 과 (32)33 양쪽에 쓰여 **화면에 BAY 31 이 두 번** 그려지고,
+    //    선미의 32·33·34 가 각각 단독인데 (32)33 으로 붙었다.
+    //    근거는 CASP 도면(선사 적부 프로그램, 같은 .def 를 읽는다) — 01 · (02)03 … 29 · (30)31 · 32 · 33 · 34.
+    //    검수사 — *«32단독 33단독 34단독인데 31 32 33 으로 붙습니다»* · *«단독이라는 개념을 정확하게 적용은 안해서»*
+    //    ⚠ 전 선박 39척 전후 대조 — **바뀌는 배는 SWTD 하나뿐**(중복이 있던 배도 그 하나).
+    //      선박 전용 로직이 아니라 빠져 있던 가드다(3금지 ②).
+    if (byNum.has(e - 1) && byNum.has(e + 1) && !usedOdds.has(e - 1) && !usedOdds.has(e + 1)) {
       const topKey = String(e - 1).padStart(2, '0');
       const pairKey = `(${String(e).padStart(2, '0')})${String(e + 1).padStart(2, '0')}`;
       trios.push([topKey, pairKey]);
