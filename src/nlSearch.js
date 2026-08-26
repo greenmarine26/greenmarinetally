@@ -8,6 +8,7 @@ import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeong
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
+import { mirKnowledge } from './data/mirKnowledge.js';   // ★ 2.57: 뜻 갈래(asking=def)의 답안지 — 검수사 «답안지는 있는데 어떤 질문에 어떤 게 정답인지 안 알려줬다»
 import { HELP_DATA_CHIEF } from './data/helpDataChief.js';   // 2.30: 미르가 수석 권도 안다(가르치진 않고 «있다»고 알린다)
 
 // ─── 항구 코드 매핑 ───
@@ -103,6 +104,7 @@ export function parseNaturalQuery(text) {
     contactQuery: null,   // { code, onboardOnly } — code: 원문에서 뽑은 선박 코드/풀네임 후보(없으면 "이 배" 맥락)
   };
   if (!text) return result;
+  result._raw = String(text);   // ★ 2.57: 뜻 답안지(mirKnowledge·용어집)는 원문으로 찾는다
   let t = String(text).toLowerCase();
   // 1.91 (검수사 확정 «미르야 하면 네 하고 답변도 하고»): 호출어를 벗기고 나머지를 질문으로.
   {
@@ -358,7 +360,7 @@ export function parseNaturalQuery(text) {
         /옷\s*(?:차림|뭐)|겉옷|외투|점퍼\s*(?:필요|입)/i.test(t)
       )) result.weatherQuery = true;
   // V9.18: 선박 소개·이름 유래 — "이 배 뭐야", "선박 소개", "배 이름 뜻/유래", "무슨 배야"
-  if (/이\s*배\s*(뭐|무슨|어떤|소개)|선박\s*소개|배\s*소개|(?:배|선박)\s*이름\s*(?:뜻|유래|의미)|무슨\s*배|어떤\s*배(?:야|에요|예요|인가)/i.test(t)) result.shipIntroQuery = true;
+  if (/이\s*배\s*(?:가|는)?\s*(뭐|무슨|어떤|소개)|선박\s*소개|배\s*소개|(?:배|선박)\s*이름\s*(?:뜻|유래|의미)|무슨\s*배|어떤\s*배(?:야|에요|예요|인가)/i.test(t)) result.shipIntroQuery = true;   // 2.57: «이 배가 뭐야»(조사) 허용 — 종전엔 놓쳐 뜻 갈래로 오판
   if (/입출항|입항|출항(?!지)|접안|배\s*언제|언제\s*들어[오와]|언제\s*나가/i.test(t)) result.schedQuery = true;   // 1.69-05: "언제 들어와"도 입항 질문
   // V7.93: 트윈 작업 가능 질문 — "20번 베이 트윈 가능해" / "트윈 무게 확인"
   if (/트윈/.test(t) && /가능|되나|되니|돼|될까|불가|체크|점검|확인|문제|무게/i.test(t)) result.twinCheckQuery = true;
@@ -521,6 +523,32 @@ export function parseNaturalQuery(text) {
         .replace(/\s+/g, ' ');
       result.contactQuery = { code: cand ? cand.toUpperCase() : null, onboardOnly };
     }
+  }
+
+  // ★★★ 2.57: 갈래 판정 한 벌 — «무엇을 묻는가»를 마지막에 가린다 (검수사 확정 화법 규칙 2
+  //   «묻는 것에 답한다» — 같은 낱말이라도 ~이 뭐야/이란 = 뜻, 어디 = 위치, 몇 대 = 개수).
+  //   왜 여기냐 — 152~430 의 인텐트가 전부 확정된 뒤라야 «이미 잡힌 업무 인텐트»를 다 볼 수 있다.
+  //   종전 _weak(1.68)·_termQ(1.69) 가드가 dupL4Query(:420)·shiftingQuery(:430)·listQuery(:421)·isStat(:428)
+  //   **선언 전에** 검사해 한 번도 작동한 적 없던 자리다(2.57 전수 조사 실측).
+  //   ⚠ 갈래는 def(뜻) 하나만 새로 가린다 — 위치·개수·목록은 posQuery·isStat·listQuery 가 이미 그 역할이다.
+  {
+    //  뜻 어미 — «이란?» 은 지금까지 nlSearch 어디에도 없었다(mirKnowledge 게이트에만 있어 화면 따라 갈렸다).
+    const _defTail = /(?:이|가)?\s*(?:뭐야|뭐예요|뭐에요|뭐죠|뭐지|뭐냐|뭐니|뭔데|뭐임)\s*\?*\s*$|(?:이란|란)\s*\?*\s*$|무슨\s*뜻|뜻\s*이?\s*(?:뭐|무엇)|무슨\s*말|(?:이|가)\s*무엇/;
+    //  업무 인텐트가 이미 잡혔으면 뜻이 아니다 — «남은 거 뭐야»(진행)·«83건이 뭐야»(후속)·«중복이 뭐야»(중복 조회)
+    //  «빈자리가 뭐야»(빈자리) 류가 뜻으로 오판되면 기존 기능을 뺏는다(가로채기 0 이 최우선).
+    const _busy = !!(result.digits || result.bay || hasCountFollowCtx || result.isStat || result.isAll
+      || result.progressQuery || result.vacantQuery || result.capacityQuery || result.etaQuery
+      || result.weightSum || result.listQuery || result.posQuery || result.bayDistQuery
+      || result.bayBreakdown || result.tierStackQuery || result.tierPlaceCountQuery || result.tierInContextQuery
+      || result.bottomQuery || result.topQuery || result.dupL4Query || result.sealAuditQuery
+      || result.customsReportQuery || result.briefingQuery || result.handoverQuery || result.carrierQuery
+      || result.twinCheckQuery || result.movePathQuery || result.contactQuery || result.schedQuery
+      || result.timeQuery || result.wakeQuery || result.pilotQuery || result.foodQuery || result.weatherQuery
+      || result.introQuery || result.shipIntroQuery || result.dmgQuery || result.luggQuery || result.urgentQuery
+      || result.mirHello || result.deviceCmd);
+    //  ⚠ shiftingQuery·mode·type 은 일부러 안 막는다 — «시프팅이 뭐야»·«양하가 뭐야»·«FR이 뭐야»는 뜻이 정답
+    //    (검수사 실측 신고가 정확히 «FR이 뭐야 하니 위치를 알려준다» 였다).
+    result.asking = (!_busy && _defTail.test(t)) ? 'def' : null;
   }
 
   return result;
@@ -1050,6 +1078,18 @@ function formatMovePathAnswer(results, allContainers, ctx) {
 function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   // 1.91: «미르야» 단독 호출 — 네, 하고 대답한다(검수사 확정).
   if (parsed.mirHello) return '네, 미르예요 🐱 무엇을 확인해 드릴까요?\n(예: "미르야 이번 선적 계획 어떻게 진행 될것 같아" · "리퍼 몇개" · "브리핑")';
+  // ★★★ 2.57: 뜻을 물으면 뜻으로 답한다 — 화법 규칙 2 (검수사 확정 «답을 말하는 방법을 가르쳐 달라»).
+  //   종전엔 이 본체에 뜻 분기가 0건이라, 뜻 답안지(mirKnowledge 240선·용어집)를 바깥 겹으로 단
+  //   화면(통합검색·작업창)만 뜻이 나오고 양하·선적 탭은 «FR이 뭐야»에 위치를 답했다(검수사 실측).
+  //   본체에 넣으면 세 화면이 자동으로 같은 답을 낸다 — 화법 규칙 4 «어디서 물어도 같은 답».
+  if (parsed.asking === 'def') {
+    let d = null;
+    try { d = mirKnowledge(parsed._raw || ''); } catch (e) { console.warn('[2.57] 실무지식 답안지 실패:', e); }
+    if (!d) { try { d = generateHowToAnswer(parsed._raw || '', parsed); } catch (e) { console.warn('[2.57] 용어집 답안지 실패:', e); } }
+    if (d) return d;
+    //  화법 규칙 6 — 모르면 모른다고 하고, 지어내지 않는다.
+    return '그 말은 아직 못 배웠습니다 😿 지어내지 않을게요.\n뜻을 물으실 땐 «시프팅이 뭐야»처럼, 자리는 «FR 어디», 대수는 «리퍼 몇 대»처럼 말씀해 주시면 압니다.';
+  }
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);
 
@@ -1175,8 +1215,14 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
       if (parsed.type === 'lolo') return '🏗 갠트리(낙지) 지정 자료가 아직 없습니다 — 선사 덱플랜이 오면 대상이 여기 잡힙니다. 지금은 리스트 전체가 검수 대상입니다.';
       return `📭 ${desc} 없음`;
     }
-    return splitByModeAnswer(results, parsed,
+    const _sp = splitByModeAnswer(results, parsed,
       (rs) => (rs.length > 5 ? formatBayDist(desc, rs, parsed) : formatLocationList(desc, rs, parsed)));
+    //  ★ 2.57 화법 규칙 3 — 갈래 표시 없는 특수화물 한 낱말(«FR»)은 요약이 나간다. 전체가 필요하면
+    //    «목록» 한 마디면 된다(listQuery 가 이미 «목록»을 알아듣는다 — 상태 저장 없이 후속이 선다).
+    if (_sp && results.length > 5 && !parsed.listQuery && !parsed.posQuery && !parsed.bayDistQuery && !parsed.isStat) {
+      return _sp + '\n\n(전체 목록이 필요하면 «' + String(parsed.type || '').toUpperCase() + ' 목록» 이라고 말씀해 주세요)';
+    }
+    return _sp;
   }
   if (hasStrong && results.length >= 2) return formatLocationList(desc, results, parsed);
 

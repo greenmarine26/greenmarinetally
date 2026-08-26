@@ -714,13 +714,25 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     const raw = mirTone(_localAnswerRaw);
     //  ★ 2.47 — 한 대를 묻는 말은 새 겹이 먼저 본다(SearchPanel 과 같은 한 벌).
     let eyes = null;
-    try { eyes = mirSee(debouncedQuery, { containers: flat }); }
+    //  ★ 2.57: 종전엔 info 없이 불러 mirEyes 게이트(배가 안 정해지면 «순서»가 뜻이 없다)에서 항상 null —
+    //    이 화면에서 미르의 눈이 영구 침묵이었다. 질의 속 배 이름·심긴 항차(shipCtx)가 있으면 그 항차로
+    //    컨을 좁히고 info 를 준다. shipCtx 없으면 종전 그대로 침묵 — 배가 안 정해진 홈에서 순서를 부르면 안 된다.
+    try {
+      eyes = shipCtx
+        ? mirSee(debouncedQuery, {
+            containers: flat.filter((c) => c.voyageKey === shipCtx.key),   // flat 에 _mode·_comp·_ptk 가 실려 있어 mirEyes 판정이 그대로 선다
+            info: shipCtx.info,
+            mode: (shipCtx.v?.discharge ? 'discharge' : 'loading'),
+          })
+        : mirSee(debouncedQuery, { containers: flat });
+    }
     catch (e) { console.warn('[미르의 눈] 실패 — 옛 미르로 넘깁니다:', e); }
     if (eyes) return eyes;
-    const know = mirKnowledge(debouncedQuery);
+    //  ★ 2.57: 뜻 갈래(asking=def)는 본체가 이미 지식으로 답했다 — 여기서 또 붙이면 두 번 나온다.
+    const know = (parsed && parsed.asking === 'def') ? null : mirKnowledge(debouncedQuery);
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw || mirSmallTalk(debouncedQuery);
-  }, [_localAnswerRaw, debouncedQuery, flat]);
+  }, [_localAnswerRaw, debouncedQuery, flat, parsed, shipCtx]);   // ★ 2.57: shipCtx — 미르의 눈 배선
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
       실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
       ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */
@@ -729,9 +741,11 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   useEffect(() => {
     const cmd = parsed.deviceCmd;
     if (!cmd) { return; }
-    //  ⚠ 2.40-01: 종전엔 `askedAt`(전송 누름)을 요구했다. 그래서 검수사가 「미르야 화면이 너무 밝아」를
-    //    **치기만 하고** 전송을 안 누르자 아무 일도 안 일어났다 — 다른 조회는 치기만 해도 답이 나오는데.
-    //    ⇒ 디바운스된 질의로 곧장 실행한다. 같은 문장을 두 번 실행하지 않게 **질의+명령**을 키로 잠근다.
+    //  ⚠ 2.40-01 은 askedAt(전송 누름) 요구를 걷고 «치기만 해도 실행»으로 갔었다.
+    //  ★ 2.57 주석 정정 — 2.55-01(문장은 전송까지 대기) 뒤로 조작 문장도 전송(엔터·➤·음성)해야
+    //    debouncedQuery 에 들어오므로, 실동작은 다시 «전송해야 실행»이다. 동작은 이대로 둔다 —
+    //    치는 중에 밝기가 바뀌면 안 되고, 옛 주석을 믿을 다음 클로드가 헛디디지 않게 글만 고친다.
+    //    같은 문장을 두 번 실행하지 않는 **질의+명령** 키 잠금은 종전 그대로.
     const key = String(debouncedQuery || '').trim() + '|' + JSON.stringify(cmd);
     if (devRanRef.current === key) return;
     devRanRef.current = key;
@@ -778,10 +792,15 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (parsed.deviceCmd) return false;
     return !localAnswer && !dmgQ && matches.length === 0;
   }, [debouncedQuery, localAnswer, dmgQ, matches, parsed.deviceCmd]);
+  // ★ 2.57: «아직 못 배웠습니다» 답(뜻 질문에 지식이 없을 때 nlSearch 가 내는 솔직 답)도 무응답으로 친다.
+  //   답 카드가 떠서 _mirDontKnow 는 false 지만, 신고가 빠지면 «못 답한 질문 → 받은함 → 다음 클로드가
+  //   가르침» 파이프라인(2.06 mir_unanswered)이 끊긴다. 화면 카드는 그대로 — 신고 조건만 넓힌다.
+  //   ⚠ mirTone 이 «배웠습니다»를 «배웠어요»로 바꿔 내보내므로 어미 앞 «아직 못 배웠»까지만 본다.
+  const _unlearned = /아직 못 배웠/.test(String(localAnswer || ''));
   const _reportedRef = useRef(new Set());
   useEffect(() => {
     // 질문이 «접수»(엔터·전송)된 것만 1회 자동 신고 — 타이핑 중 오발송 방지
-    if (!_mirDontKnow || !askedAt) return;
+    if ((!_mirDontKnow && !_unlearned) || !askedAt) return;
     const q = String(debouncedQuery || '').trim();
     if (!q || _reportedRef.current.has(q)) return;
     _reportedRef.current.add(q);
@@ -790,7 +809,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       inspector: '미르(자동)',
       text: `미르 무응답 질문 — "${q}" (통합검색). 답할 수 있게 배워서 반영할 것.`,
     }).catch(() => { /* 신고 실패는 무해 — 다음 질문 때 재시도 */ });
-  }, [_mirDontKnow, askedAt, debouncedQuery]);
+  }, [_mirDontKnow, _unlearned, askedAt, debouncedQuery]);
 
 
   // Web Speech API
@@ -849,6 +868,13 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     setSettledQuery(t);
     logQuerySettled('nls', t, { voyageKey: shipCtx?.key || '' });   // 2.55-01: 홈·수석창도 남긴다(종전엔 안 불렀다)
   };
+  // ★ 2.57: initialQuery 가 문장이면 접수 경로로 — 2.55-01(문장은 전송까지 대기) 뒤로 문장은 디바운스를
+  //   안 타므로 useState 씨앗만으론 debouncedQuery 가 영영 비어 답이 안 나왔다(홈 검색 폼·수석 대시보드가
+  //   문장을 initialQuery 로 넘긴다). 숫자·컨번호는 종전 디바운스로 충분해 그대로 둔다.
+  //   submitNow 선언 **뒤**에 둔다 — 스코프·선언 순서 사고 이력(2.48·2.50-01)이 있는 저장소다.
+  useEffect(() => {
+    if (initialQuery && isSentenceQuery(initialQuery)) submitNow(initialQuery);
+  }, [initialQuery]);   // submitNow 는 렌더마다 새로 나므로 의존에 안 넣는다(안의 setter·ref 는 전부 안정)
 
   // 자동 음성 안내
   useEffect(() => {
@@ -1035,7 +1061,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           {/* 2.05-03 (검수사 확정): «내일 작업할 것을 브리핑할까요?» — [네][아니오] 선택 */}
           {/내일 작업할 것을 브리핑할까요/.test(localAnswer) && (
             <div className="flex gap-2 mt-3">
-              <button onClick={() => setQuery('내일 브리핑')}
+              <button onClick={() => submitNow('내일 브리핑')}   /* ★ 2.57: 2.55-01 뒤로 문장은 디바운스를 안 타 setQuery 만으론 답이 영영 안 나왔다 — submitNow 로 접수 */
                 className="flex-1 py-2.5 rounded-pill bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm">네 — 내일 브리핑</button>
               <button onClick={() => setQuery('')}
                 className="flex-1 py-2.5 rounded-pill bg-ink-800 hover:bg-ink-750 text-dim-200 font-bold text-sm border border-line-strong">아니오</button>
@@ -1047,7 +1073,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
             return _hs.length ? (
               <div className="flex gap-2 flex-wrap mt-3">
                 {_hs.map((h) => (
-                  <button key={h} onClick={() => setQuery(h)}
+                  <button key={h} onClick={() => submitNow(h)}   /* ★ 2.57: 유도 버튼도 접수 경로로 — setQuery 만으론 문장이 답을 못 받는다 */
                     className="flex-1 min-w-[110px] py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">🔍 {h} 보기</button>
                 ))}
               </div>
@@ -1072,7 +1098,14 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       {/* 일반 결과 */}
       {!localAnswer && !parsed.isStat && (
         <div className="space-y-1.5">
-          {matches.map(c => (
+          {/* ★ 2.57 (화법 규칙 ③ 쏟지 않기): 홈에서 FR 치면 카드 100장이 쏟아졌다(검수사 실측) — 30대까지만
+              그린다. 검색창 밑 «N개 일치» 표시는 종전 그대로 살아 있어 전체 수는 거기서 보인다. */}
+          {matches.length > 30 && (
+            <div className="text-xxs text-amber-300 bg-amber-950/30 border border-amber-800/40 rounded px-2 py-1.5">
+              전체 {matches.length}{matches.length === 100 ? '+' : ''}대 중 30대만 보여드려요 — 더 필요하면 조건을 좁히거나 «FR 목록»처럼 물어봐 주세요
+            </div>
+          )}
+          {matches.slice(0, 30).map(c => (
             <GlobalResultCard key={`${c.voyageKey}/${c.mode}/${c.cn}`} c={c} onOpen={() => onOpenContainer(c)} />
           ))}
         </div>

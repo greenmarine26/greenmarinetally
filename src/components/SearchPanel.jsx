@@ -1125,10 +1125,11 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     }
     catch (e) { console.warn('[미르의 눈] 실패 — 옛 미르로 넘깁니다:', e); }
     if (eyes) return eyes;
-    const know = mirKnowledge(query);
+    //  ★ 2.57: 뜻 갈래(asking=def)는 본체(_localAnswerCore)가 이미 지식으로 답했다 — 여기서 또 붙이면 두 번 나온다.
+    const know = (parsed && parsed.asking === 'def') ? null : mirKnowledge(query);
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw;
-  }, [_localAnswerRaw, query, allContainers, manualCtx, voyage, workFilter]);
+  }, [_localAnswerRaw, query, allContainers, manualCtx, voyage, workFilter, parsed]);
   /*  ★ 2.40 미르 조작 — 밝기·소리. **접수된 질문에서만** 실행한다(타이핑 중에 화면이 바뀌면 안 된다).
       실행은 utils.runDeviceCmd 한 벌이 한다(두 검색 화면이 같은 답을 낸다).
       ⚠ 같은 접수를 두 번 실행하지 않게 키로 막는다 — 재렌더마다 밝기가 계속 올라가면 안 된다. */

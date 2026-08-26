@@ -3,6 +3,7 @@ import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from 
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
 import { mirSee } from '../mirEyes.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
+import { mirTone } from '../mirChat.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.93-01
 import {
   ArrowDown, ArrowUp, Upload, Search as SearchIcon, ListChecks, MapPin,
@@ -966,13 +967,16 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    ⚠ `InlineAnswerCard` 는 `terminalWork` prop 을 안 받는다(briefCtx 만 받는다) — 여기 실어 보낸다.
     terminalWork: terminalWork || null,
     photos: voyage?.photos || null,   // 2.05: 조회 결과 컨의 사진(데미지·메일 사진)을 인라인 카드가 보여준다
+    //  ★ 2.57: 시프팅 맵 — 이 화면 ctx 에만 빠져 있어 시프팅 질문이 «없다»로 나왔다. SearchPanel:1109 와 같은 벌.
+    //    InlineAnswerCard 는 voyageKey·voyage 를 안 받으므로(1.98·2.50-01 교훈 — 부모 변수 직접 참조 금지) 여기 실어 내린다.
+    shiftMap: (() => { try { return shiftingMapForDisplay(voyageKey, voyage); } catch (e) { return null; } })(),
     pairs: (() => { try { return getBayPairs(containers, voyage?.info?.imo || '', voyage?.info?.vsl || ''); } catch (e) { return null; } })(),
     rfSkip: !!shipPolicy?.rfSkip,
     eseal: esealInfo ? {
       n: esealInfo.targets.length, byBay: esealInfo.byBay, ranges: esealInfo.ranges,
       poolN: esealInfo.pool.length, usedN: esealInfo.usedPairs.length, remainN: esealInfo.remain.length,
     } : null,
-  }), [containers, voyage, shipPolicy, esealInfo]);
+  }), [containers, voyage, shipPolicy, esealInfo, terminalWork, voyageKey]);   // ★ 2.57: terminalWork 가 빠져 실적 갱신이 답에 안 실렸다 · voyageKey 는 shiftMap 재료
 
   // 새 선박 정책 묻기 (M6.45: 1일 1회 — localStorage에 마지막 묻기 날짜 저장)
   //   - 정책 등록되면 shipPolicy 매칭되어 다시 안 뜸 (기존 동작)
@@ -2210,7 +2214,12 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
             type="text"
             value={search}
             inputMode={kb}
-            onChange={e => setSearch(e.target.value.toUpperCase())}
+            onChange={e => {
+              const v = e.target.value.toUpperCase();
+              setSearch(v);
+              // ★ 2.57: 고치면 다시 답한다(화법 규칙 5) — 새 입력이 보낸 질문과 다르면 옛 답 카드를 내린다(SearchPanel:1382 와 같은 정신)
+              setAsk(a => (a && v !== a.q ? null : a));
+            }}
             onKeyDown={e => {
               if (e.key === 'Enter' && search.trim().length >= 2 && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌
                 e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
@@ -2264,7 +2273,8 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
         ))}
       </div>
 
-      {(filter || search) ? (
+      {/* ★ 2.57: 다 듣고 말한다(화법 규칙 1) — 문장을 치는 동안 전량 목록을 뿌리지 않는다. 숫자·컨번호 즉답과 칩·전송된 답(ask)은 그대로 */}
+      {(filter || (search && !isSentenceQuery(search))) ? (
             <ContainerList
         list={filtered}
         compMap={compMap}
@@ -2521,13 +2531,15 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       //   누르는 불편함을 주어서는 안됩니다») — 브리핑·실번호 점검을 인라인에서 직접 낸다.
       //   containers 는 이미 현재 모드 병합본(VoyagePage :704)이라 SearchPanel 의 modeCs 와 같은 재료.
       if (parsed?.briefingQuery) {
-        return generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
-          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null, compMap: briefCtx?.comp || null });
+        //  ★ 2.57: 말투 출구 겹(mirTone) — 다른 화면(SearchPanel:1112)과 동일하게 여기도 입힌다
+        return mirTone(generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
+          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null, compMap: briefCtx?.comp || null }));
       }
-      if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
+      if (parsed?.sealAuditQuery) return mirTone(generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적'));   // ★ 2.57: 말투 한 겹
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
       //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
-      return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null }) : null;   // 2.05-01
+      //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
+      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null })) : null;   // 2.05-01
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q]);
   const readRef = useRef('');
@@ -2595,15 +2607,19 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
           </div>
         )}
         </>
-      ) : (
+      ) : onFallback ? (
+        // ★ 2.57: 릴레이 안내가 뜨는 조건(onFallback 있음)은 종전 그대로 — 새 갈래는 그 조건이 아닌 null 에만
         <div className="text-xs2 text-dim-300">
           이 질문은 여기서 바로 못 냅니다 — 아래 버튼으로 ▶ 작업 시작 탭에서 이어집니다.
-          {onFallback && (
-            <button onClick={() => { const _q = q; setAsk(null); onFallback(_q); }}
-              className="mt-2 w-full py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
-              ▶ 작업 시작 탭에서 답 보기
-            </button>
-          )}
+          <button onClick={() => { const _q = q; setAsk(null); onFallback(_q); }}
+            className="mt-2 w-full py-2.5 rounded-pill bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold text-sm">
+            ▶ 작업 시작 탭에서 답 보기
+          </button>
+        </div>
+      ) : (
+        // ★ 2.57: 모르면 모른다고 한다(화법 규칙 6) — 릴레이 대상도 아닌 null 은 빈 카드 대신 묻는 법을 알려준다
+        <div className="text-xs2 text-dim-300">
+          무슨 뜻인지 못 알아들었습니다 😿 «FR이 뭐야»(뜻) · «FR 어디»(자리) · «리퍼 몇 대»(대수)처럼 물어봐 주세요
         </div>
       )}
       {(uniq.length > 0 || (ask.stack || []).length > 0) && (
@@ -2745,7 +2761,12 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
             type="text"
             value={search}
             inputMode={kb}
-            onChange={e => setSearch(e.target.value.toUpperCase())}
+            onChange={e => {
+              const v = e.target.value.toUpperCase();
+              setSearch(v);
+              // ★ 2.57: 고치면 다시 답한다(화법 규칙 5) — 새 입력이 보낸 질문과 다르면 옛 답 카드를 내린다(SearchPanel:1382 와 같은 정신)
+              setAsk(a => (a && v !== a.q ? null : a));
+            }}
             onKeyDown={e => {
               if (e.key === 'Enter' && search.trim().length >= 2 && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌
                 e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
@@ -2793,7 +2814,8 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
           배에는 실었는데 지정 자리에 없는 경우 = <b>상대 항구 선적 과실</b>입니다. 실물 위치를 기록해 두세요.
         </div>
       )}
-      {(filter || search) ? (
+      {/* ★ 2.57: 다 듣고 말한다(화법 규칙 1) — 문장을 치는 동안 전량 목록을 뿌리지 않는다. 숫자·컨번호 즉답과 칩·전송된 답(ask)은 그대로 */}
+      {(filter || (search && !isSentenceQuery(search))) ? (
       <ContainerList
         list={filtered}
         compMap={compMap}

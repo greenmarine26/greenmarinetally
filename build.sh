@@ -381,6 +381,9 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     #  2.55: **두 숫자** — 대수를 물으면 실제(터미널)와 앱 기록이 둘 다 나오는가.
     #    같은 번들을 쓴다. 가로채지 않는 것까지 잰다(겹을 넓히는 판은 그쪽이 더 위험하다).
     node tools/smoke_bothcounts.cjs "$SMOKE_NS" || { echo "✗ 두 숫자 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.57: **미르 화법 시험지** — 뜻/위치/개수 갈래·요약+후속·가로채기 0·모른다 고백·세 화면 배선.
+    #    검수사 지시 «가르치고 시험하고 보강하고 재시험» — 이 시험이 매 빌드 그 반복을 강제한다.
+    node tools/smoke_mirspeak.cjs "$SMOKE_NS" "$(pwd)" || { echo "✗ 미르 화법 시험 실패 — 배포 금지"; exit 1; }
     #  2.55-01: **타자** — 문자를 칠 때는 다 받고 답하는가. 숫자 즉답은 살아 있는가.
     #    소스도 같이 본다(옛 판정 잔재 · 인자 하나짜리 기록 호출 = 조용히 실패하던 자리).
     SMOKE_UT=$(mktemp /tmp/_smokeut_XXXXXX.cjs)
