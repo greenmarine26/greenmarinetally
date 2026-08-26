@@ -162,9 +162,9 @@ const ask = (q) => {
   const ns = read('src/nlSearch.js');
   T(/asking === 'def'/.test(ns) && /mirKnowledge\(parsed\._raw/.test(ns), 'nlSearch 본체에 뜻 분기(asking=def)가 없다');
   const sp = read('src/components/SearchPanel.jsx');
-  T(/asking === 'def'\s*\)\s*\?\s*null\s*:\s*mirKnowledge/.test(sp), 'SearchPanel 겹 중복 게이트가 없다 — 뜻이 두 번 나온다');
+  T(/asking\s*\)\s*\?\s*null\s*:\s*mirKnowledge/.test(sp), 'SearchPanel 겹 중복 게이트가 없다 — 뜻·방법이 두 번 나온다 (2.59-01: def 만 거르면 how 가 두 번)');
   const gsp = read('src/pages/GlobalSearchPage.jsx');
-  T(/asking === 'def'\s*\)\s*\?\s*null\s*:\s*mirKnowledge/.test(gsp), 'GlobalSearchPage 겹 중복 게이트가 없다');
+  T(/asking\s*\)\s*\?\s*null\s*:\s*mirKnowledge/.test(gsp), 'GlobalSearchPage 겹 중복 게이트가 없다 (def·how 둘 다)');
   //  ★ 2.57-02 (검수사 시험 실측 — 홈과 양하 탭의 «FR이 뭐야» 답안지가 달랐다):
   //    홈도 뜻 갈래는 본체 한 벌을 부른다 — 그리고 그 호출이 기능 색인(howToQuery) 분기보다 앞이어야 한다.
   T(/asking === 'def'[\s\S]{0,220}generateLocalAnswer\(p, \[\], \[\], null\)/.test(gsp), '⛔ 홈이 뜻 갈래에 본체 한 벌을 안 부른다 — 화면마다 답안지가 갈린다');

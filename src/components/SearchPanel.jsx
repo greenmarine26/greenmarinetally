@@ -1126,7 +1126,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     catch (e) { console.warn('[미르의 눈] 실패 — 옛 미르로 넘깁니다:', e); }
     if (eyes) return eyes;
     //  ★ 2.57: 뜻 갈래(asking=def)는 본체(_localAnswerCore)가 이미 지식으로 답했다 — 여기서 또 붙이면 두 번 나온다.
-    const know = (parsed && parsed.asking === 'def') ? null : mirKnowledge(query);
+    const know = (parsed && parsed.asking) ? null : mirKnowledge(query);   /* 2.59-01: def 만 거르니 how 가 새서 본체 답과 겹으로 두 번 나왔다(라이브 실측) — asking 갈래(def·how)는 본체가 답하므로 겹은 물러난다 */
     if (know && raw) return know + '\n\n────────\n' + raw;
     return know || raw;
   }, [_localAnswerRaw, query, allContainers, manualCtx, voyage, workFilter, parsed]);
