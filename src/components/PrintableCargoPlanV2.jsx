@@ -1003,6 +1003,11 @@ export default function PrintableCargoPlanV2({
             //   짝수 N → 2자리 (별첨1 + 별첨2), 홀수 N → 1자리 (별첨1+2 통합)
             const topLen = layout[0]?.length || 0;
             const emptySlots = isLast && !isFirst ? Math.max(0, topLen - row.length) : 0;
+            // ★ 2.56-03 (검수사 확정 2026-08-26): 빈 칸이 하나뿐이면 별첨3 은 하단 줄의
+            //   **첫 단독 박스 빈 아래 반쪽**(cpv2-empty-half — 데크 전용 단독 베이 밑 빈 곳)으로 옮긴다.
+            //   원문 — «빈곳을 이용하라고 했는데 별첨 1과 2를 같이 놓고 3을 34번 베이 하단에 놓으면 보기 좋을텐데».
+            //   1.63 확정 «빈곳이 있으면 별첨 하나를 옮기면 됩니다» 의 «빈곳»에 단독 박스 아래 반쪽을 포함.
+            const leg3InBoxBi = (emptySlots === 1) ? row.findIndex(b => b.type !== 'trio') : -1;
             const slots = [];
             // M6.86.8.13: 별첨 구성 mode별
             //   양하: 별첨1(선사별 + 컬러), 별첨2(화물종류별, 흑백)
@@ -1073,6 +1078,11 @@ export default function PrintableCargoPlanV2({
               } else if (emptySlots === 2) {
                 slots.push(cell('leg1', [{ node: legend1, grow: true }]));
                 slots.push(cell('leg23', [{ node: legend2, grow: true }, { node: legend3, grow: false }]));
+              } else if (leg3InBoxBi >= 0) {
+                // 별첨3 은 아래 단독 박스 빈 반쪽으로 — 1·2 가 세로 두 단을 통째로 써서 한 단씩 커진다.
+                slots.push(cell('leg12', [
+                  { node: legend1, grow: true }, { node: legend2, grow: true },
+                ]));
               } else {
                 slots.push(cell('leg123', [
                   { node: legend1, grow: true }, { node: legend2, grow: true }, { node: legend3, grow: false },
@@ -1100,7 +1110,13 @@ export default function PrintableCargoPlanV2({
                     <div className="cpv2-single-half">
                       <BayBoxV2 data={sData} count={boxCounts[box.topKey]} colorMap={colorMap} gridCols={globalMaxCols} globalMaxTier={globalMaxTier} globalHatch={globalHatch} />
                     </div>
-                    <div className="cpv2-empty-half"></div>
+                    <div className="cpv2-empty-half">
+                      {bi === leg3InBoxBi && (
+                        <div className="cpv2-legend-box" style={{ '--lgf': `${legendFont}px`, height: '100%', marginTop: '3px' }}>
+                          <FeLegend fe={legends.feCounts} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               }
