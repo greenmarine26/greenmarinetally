@@ -414,7 +414,7 @@ export function parseNaturalQuery(text) {
   // ⚠ howToQuery 여도 아래 둘을 **끄지 않는다.** 기능 색인에서 못 찾으면(null) 종전 경로가 답해야 하기 때문이다.
   //    순서만 SearchPanel 에서 howTo 를 먼저 시도하는 것으로 정한다.
   if (/어디\s*(?:로)?\s*(?:갔|간|감|옮|이동|보냈|치웠)|왜\s*(?:옮|이동|바뀌|바꿨)|경로|이동\s*(?:이력|기록|경로)|무빙|어떻게\s*(?:옮|이동)/i.test(t)) result.movePathQuery = true;
-  if (/위치|어디|어딨|where/i.test(t)) result.posQuery = true;
+  if (/(?<!스)위치|어디|어딨|where/i.test(t)) result.posQuery = true;   // 2.59: «스위치 카고»의 위치 오탐 차단(자격 기출 채점 실측)
   // TallyOne 1.17: **끝 4자리 중복 조회** (검수사 오답 신고 2026-08-06 — "끝자리 4자리 중복인거 알려줘").
   //   종전엔 listQuery 하나로만 잡혀 '중복'을 못 읽고 전체를 나열했다.
   //   끝 4자리는 컨번호 조회의 기준이라, 겹치는 것이 있으면 반드시 짚어야 조회를 믿을 수 있다.
@@ -533,16 +533,18 @@ export function parseNaturalQuery(text) {
   //   ⚠ 갈래는 def(뜻) 하나만 새로 가린다 — 위치·개수·목록은 posQuery·isStat·listQuery 가 이미 그 역할이다.
   {
     //  뜻 어미 — «이란?» 은 지금까지 nlSearch 어디에도 없었다(mirKnowledge 게이트에만 있어 화면 따라 갈렸다).
-    const _defTail = /(?:이|가)?\s*(?:뭐야|뭐예요|뭐에요|뭐죠|뭐지|뭐냐|뭐니|뭔데|뭐임)\s*\?*\s*$|(?:이란|란)\s*\?*\s*$|무슨\s*뜻|뜻\s*이?\s*(?:뭐|무엇)|무슨\s*말|(?:이|가)\s*무엇/;
+    const _defTail = /(?:이|가)?\s*(?:뭐야|뭐예요|뭐에요|뭐죠|뭐지|뭐냐|뭐니|뭔데|뭐임)\s*\?*\s*$|(?:이란|란)\s*\?*\s*$|무슨\s*뜻|뜻\s*이?\s*(?:뭐|무엇)|무슨\s*말|(?:이|가)\s*무엇|(?:홀수|짝수)\s*(?:야|이야|인가요?|예요)|몇\s*(?:인치|센티|cm|미터)/;   // 2.59: 홀짝·단위 문답(자격 기출)
     //  업무 인텐트가 이미 잡혔으면 뜻이 아니다 — «남은 거 뭐야»(진행)·«83건이 뭐야»(후속)·«중복이 뭐야»(중복 조회)
     //  «빈자리가 뭐야»(빈자리) 류가 뜻으로 오판되면 기존 기능을 뺏는다(가로채기 0 이 최우선).
     //  ★ 2.58: dmgQuery 는 뺐다 — «씰 파손이 뭐야»·«웻 데미지가 뭐야»·«데미지가 뭐야»는 뜻이 정답인데
     //    /데미지|파손|손상/ 한 낱말 판정이 전부 이력 조회로 끌고 갔다(검수사 실측 — 초보티 목록 1번).
     //    이력을 정말 물을 때(«데미지 이력·기록·보여줘»)만 조회가 이긴다.
     const _histWord = /이력|내역|기록|보여|목록|건\s|사진/.test(t);
-    const _busy = !!(result.digits || result.bay || hasCountFollowCtx || result.isStat || result.isAll
+    //  ★ 2.59: isAll 도 뺐다 — «리퍼 컨테이너가 뭐야»·«컨테이너에 물이…» 의 «컨테이너» 가 isAll 로
+    //    오판돼 뜻을 막았다(자격 기출 채점 실측). «전체 보여줘/몇 대» 는 listQuery·isStat 이 지킨다.
+    const _busy = !!(result.digits || result.bay || hasCountFollowCtx || result.isStat
       || result.progressQuery || result.vacantQuery || result.capacityQuery || result.etaQuery
-      || result.weightSum || result.listQuery || result.posQuery || result.bayDistQuery
+      || result.weightSum || result.listQuery || result.bayDistQuery
       || result.bayBreakdown || result.tierStackQuery || result.tierPlaceCountQuery || result.tierInContextQuery
       || result.bottomQuery || result.topQuery || result.dupL4Query || result.sealAuditQuery
       || result.customsReportQuery || result.briefingQuery || result.handoverQuery || result.carrierQuery
@@ -555,11 +557,13 @@ export function parseNaturalQuery(text) {
     //  ★ 2.58: «어떻게(방법)» 갈래 — 검수사 실측 «물이 새는데 데미지 어떻게 잡아야 해» 에 세 화면이
     //    제각각(전체 이력·이 항차 사진·없음)으로 답했다. 방법을 물으면 방법이 답이다 — 실무 지식(원장) →
     //    기능 방법(매뉴얼) 순서로 본체 한 벌이 답하고, 못 찾으면 종전 경로로 흘려보낸다(조회 기능 안 막음).
-    const _howTail = /어떻게|어떡|어찌|무슨\s*방법|방법(?:이|을|은|으로|좀)?(?:\s|\?|$)|절차/;
+    const _howTail = /어떻게|어떡|어찌|무슨\s*방법|방법(?:이|을|은|으로|좀)?(?:\s|\?|$)|절차|(?:읽|보|하)는\s*법/;   // 2.59: «셀 넘버 읽는 법» 류
     //  ⚠ isAll 은 넣지 않는다 — «컨테이너에 물이 새는데…» 의 «컨테이너» 가 isAll 로 오판돼
     //    방법 갈래를 막았다(검수사 실측 문장 그대로). «전체 어떻게 봐» 도 방법 답이 자연스럽다.
+    //  ⚠ listQuery 도 뺐다 — «셀 넘버 읽는 법 알려줘» 의 «알려줘» 가 목록 판정을 켜 방법을 막았다.
+    //    «FR 목록» 류는 how 어미가 없어 그대로 목록으로 간다(시험 ②가 지킨다).
     const _howBusy = !!(result.digits || result.bay || hasCountFollowCtx || result.isStat
-      || result.listQuery || result.posQuery || result.bayDistQuery || result.progressQuery
+      || result.posQuery || result.bayDistQuery || result.progressQuery
       || result.contactQuery || result.schedQuery || result.timeQuery || result.mirHello || result.deviceCmd);
     result.asking = (!_busy && _defTail.test(t)) ? 'def'
       : ((!_howBusy && _howTail.test(t)) ? 'how' : null);
