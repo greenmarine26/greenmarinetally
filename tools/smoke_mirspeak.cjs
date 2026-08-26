@@ -131,6 +131,33 @@ const ask = (q) => {
   T(typeof NS.answerHowCore === 'function', 'answerHowCore 가 export 안 됐다 — 홈 배선이 죽는다');
 }
 
+// ── ④-3 (2.60) 클로드 지식 편입 — 국제 표준 9항목이 살아 있고, 조회를 안 뺏는다 ──
+{
+  //  검수사: «미르가 갖고 있는 지식중 클로드의 지식으로 넣어준게 무엇이 있습니까?» — 거의 없었다.
+  //  ISO 6346·IMDG·SOLAS 표준 9항목을 클로드 책임으로 편입 + 지식 어미(종류·기준·부위·라벨 색·타레) 그물.
+  const KNOW = [
+    ['체크디지트 어떻게 계산해', /2의 거듭제곱|가중치/],
+    ['컨테이너 타레 몇 키로야', /타레|2\.2|3\.7/],
+    ['위험물 클래스 종류 알려줘', /폭발물.*방사성|클래스는 아홉/],
+    ['위험물 라벨 색으로 클래스 알 수 있어', /빨강|라벨 색/],
+    ['냉동은 몇 도가 기준이야', /-18|Frozen/],
+    ['컨테이너 부위 이름 알려줘', /코너 포스트|사이드 레일/],
+    ['씰 종류가 뭐 있어', /볼트씰|케이블씰/],
+    ['VGM 어떻게 재', /방법1|계량/],
+    ['OOG 어떻게 실어', /오픈탑|플랫랙/],
+  ];
+  for (const [q, re] of KNOW) {
+    const p = NS.parseNaturalQuery(q);
+    const a = (p.asking === 'how') ? (NS.answerHowCore ? NS.answerHowCore(p) : null) : NS.generateLocalAnswer(p, [], [], null);
+    T(!!a && re.test(String(a)), `«${q}» 지식 답이 죽었다 (asking=${p.asking})`);
+  }
+  //  반례 — 지식 어미가 조회·집계를 뺏지 않는다 («전체 무게 몇 톤» 이 첫 판에서 뺏겼던 자리).
+  for (const q of ['전체 무게 몇 톤', '4777 몇 키로야', '리퍼 몇 대', 'FR 목록']) {
+    const p = NS.parseNaturalQuery(q);
+    T(p.asking !== 'def' && p.asking !== 'how', `⛔ «${q}» 조회를 지식 어미가 가로챘다 (asking=${p.asking})`);
+  }
+}
+
 // ── ⑤ 규칙 6 — 못 배운 말은 지어내지 않고 고백한다 ─────────────────────
 {
   const { p, a } = ask('수바이란?');

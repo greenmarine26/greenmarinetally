@@ -533,7 +533,7 @@ export function parseNaturalQuery(text) {
   //   ⚠ 갈래는 def(뜻) 하나만 새로 가린다 — 위치·개수·목록은 posQuery·isStat·listQuery 가 이미 그 역할이다.
   {
     //  뜻 어미 — «이란?» 은 지금까지 nlSearch 어디에도 없었다(mirKnowledge 게이트에만 있어 화면 따라 갈렸다).
-    const _defTail = /(?:이|가)?\s*(?:뭐야|뭐예요|뭐에요|뭐죠|뭐지|뭐냐|뭐니|뭔데|뭐임)\s*\?*\s*$|(?:이란|란)\s*\?*\s*$|무슨\s*뜻|뜻\s*이?\s*(?:뭐|무엇)|무슨\s*말|(?:이|가)\s*무엇|(?:홀수|짝수)\s*(?:야|이야|인가요?|예요)|몇\s*(?:인치|센티|cm|미터)/;   // 2.59: 홀짝·단위 문답(자격 기출)
+    const _defTail = /(?:이|가)?\s*(?:뭐야|뭐예요|뭐에요|뭐죠|뭐지|뭐냐|뭐니|뭔데|뭐임)\s*\?*\s*$|(?:이란|란)\s*\?*\s*$|무슨\s*뜻|뜻\s*이?\s*(?:뭐|무엇)|무슨\s*말|(?:이|가)\s*무엇|(?:홀수|짝수)\s*(?:야|이야|인가요?|예요)|몇\s*(?:인치|센티|cm|미터)|(?:종류|부위|명칭)(?:\s*(?:이름|명칭))?\s*(?:이|가|은|는)?\s*(?:뭐|무엇|알려|있)|기준\s*(?:이|가)?\s*(?:야|이야|예요|뭐|인가)|색(?:깔)?(?:으로|로)?[^]{0,8}(?:구분|알\s*수|뭐)|타레[^]{0,8}몇\s*(?:키로|킬로|kg|톤)|몇\s*도\s*(?:가|이)?\s*기준/;   // 2.59: 홀짝·단위 · 2.60: 지식 신호(종류·부위·기준·라벨 색·타레 몇 키로) — 검수사 «클로드의 지식으로 넣어준게 무엇이» 후속: 지식을 부어도 어미가 못 받으면 없는 것과 같다
     //  업무 인텐트가 이미 잡혔으면 뜻이 아니다 — «남은 거 뭐야»(진행)·«83건이 뭐야»(후속)·«중복이 뭐야»(중복 조회)
     //  «빈자리가 뭐야»(빈자리) 류가 뜻으로 오판되면 기존 기능을 뺏는다(가로채기 0 이 최우선).
     //  ★ 2.58: dmgQuery 는 뺐다 — «씰 파손이 뭐야»·«웻 데미지가 뭐야»·«데미지가 뭐야»는 뜻이 정답인데
@@ -544,7 +544,7 @@ export function parseNaturalQuery(text) {
     //    오판돼 뜻을 막았다(자격 기출 채점 실측). «전체 보여줘/몇 대» 는 listQuery·isStat 이 지킨다.
     const _busy = !!(result.digits || result.bay || hasCountFollowCtx || result.isStat
       || result.progressQuery || result.vacantQuery || result.capacityQuery || result.etaQuery
-      || result.weightSum || result.listQuery || result.bayDistQuery
+      || result.weightSum || (result.listQuery && !/종류|부위|명칭/.test(t)) || result.bayDistQuery   /* 2.60: «종류 알려줘»의 «알려줘»가 listQuery 를 켜 지식 답을 막았다 — 종류·부위·명칭이 있으면 지식 질문이다(«FR 목록»엔 이 낱말이 없어 목록 유지) */
       || result.bayBreakdown || result.tierStackQuery || result.tierPlaceCountQuery || result.tierInContextQuery
       || result.bottomQuery || result.topQuery || result.dupL4Query || result.sealAuditQuery
       || result.customsReportQuery || result.briefingQuery || result.handoverQuery || result.carrierQuery
