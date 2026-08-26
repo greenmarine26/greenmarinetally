@@ -378,8 +378,18 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
               oddBay: null,
               isStandalone: true,
             });
-          } else if (rightOddIn) {
-            // 표준 트리오 짝꿍 (짝수와 오른쪽 홀수)
+          } else if (rightOddIn && !usedOddBays.has(keyBay(n + 1))
+                     && (!leftOddIn || !usedOddBays.has(keyBay(n - 1)))) {
+            //  표준 트리오 짝꿍 (짝수와 오른쪽 홀수)
+            //  ★ 2.55-03 — **양쪽 홀수가 비어 있을 때만 묶는다.**
+            //    종전엔 오른쪽 홀수가 «있는가»만 보고, **왼쪽 홀수가 이미 남의 짝인지를 안 봤다.**
+            //    실측 SWTD 9012E — 31 이 (30)31 에 쓰였는데도 32 가 33 을 끌어와 (32)33 이 됐고,
+            //    32 의 40피트 44대가 **33 칸에 그림자로 찍혔다**(검수사 «짝수베이40피트 화물을 홀수베이에 표시»).
+            //    33 은 09열 한 줄짜리 단독 베이라 40피트가 들어갈 수 없는 자리다.
+            //    근거 = CASP 도면(같은 .def 를 읽는다): … 29 · (30)31 · 32 · 33 · 34.
+            //    ⚠ 선수 단독(01 없이 02 만 있는 배)은 종전대로 (02)03 으로 묶인다 — leftOddIn 이 없으면 통과.
+            //    ⚠ cargoPlanCore.autoPairBays 에 2.55-02 로 넣은 것과 **같은 규칙**이다.
+            //      이 파일이 제 벌을 따로 갖고 있어 카고플랜만 고쳐서는 베이플랜이 안 고쳐졌다.
             out.push({
               title: `BAY (${evenDisp})${dispBay(n + 1)}`,
               evenBay: evenKey,

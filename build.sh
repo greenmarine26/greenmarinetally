@@ -392,7 +392,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     #  2.55-02: **베이 짝** — 한 홀수 베이가 두 트리오에 들어가지 않는가(SWTD 선미 31 중복).
     SMOKE_CP=$(mktemp /tmp/_smokecp_XXXXXX.cjs)
     if npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CP" --log-level=error; then
-      node tools/smoke_baypair.cjs "$SMOKE_CP" || { echo "✗ 베이 짝 연막검사 실패 — 배포 금지"; exit 1; }
+      node tools/smoke_baypair.cjs "$SMOKE_CP" "$(pwd)" || { echo "✗ 베이 짝 연막검사 실패 — 배포 금지"; exit 1; }
     else
       echo "✗ 베이 짝 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
     fi

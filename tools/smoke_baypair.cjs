@@ -101,5 +101,21 @@ const dupOf = (r) => {
   }
 }
 
+// ── ⑥ ★ 같은 규칙이 두 벌인데 한 벌만 고치지 않았는가 (소스 전수) ─────
+//   2.55-02 는 cargoPlanCore 만 고쳤다. 그런데 BayPlan.jsx 가 **제 짝 짓기를 따로** 갖고 있어
+//   카고플랜은 고쳐졌는데 베이플랜은 그대로였다 — 검수사 «아직도 그대로 입니다».
+//   이 검사는 **두 곳이 다 가드를 갖고 있는지**를 소스에서 직접 본다.
+{
+  const fs = require('fs'), pathm = require('path');
+  const ROOT = process.argv[3] || process.cwd();
+  const read = (rel) => fs.readFileSync(pathm.join(ROOT, rel), 'utf8');
+  T(/!usedOdds\.has\(e - 1\)[\s\S]{0,40}!usedOdds\.has\(e \+ 1\)/.test(read('src/cargoPlanCore.js')),
+    '⛔ cargoPlanCore.autoPairBays 에 「이미 쓰인 홀수」 가드가 없다');
+  T(/!usedOddBays\.has\(keyBay\(n \+ 1\)\)/.test(read('src/components/BayPlan.jsx')),
+    '⛔ BayPlan.jsx 에 「이미 쓰인 홀수」 가드가 없다 — 카고플랜만 고치면 베이플랜이 안 고쳐진다');
+  T(/!usedOddBays\.has\(keyBay\(n - 1\)\)/.test(read('src/components/BayPlan.jsx')),
+    '⛔ BayPlan.jsx 가 왼쪽 홀수가 이미 남의 짝인지를 안 본다 — (32)33 이 다시 생긴다');
+}
+
 if (bad) { console.error(`\n✗ 베이 짝 연막검사 ${bad}건 실패`); process.exit(1); }
 console.log('✅ 베이 짝 연막검사 통과 — 두 번 쓰임 0 · SWTD=CASP 도면 · 보통 배 무변화 · 잃은 베이 0');
