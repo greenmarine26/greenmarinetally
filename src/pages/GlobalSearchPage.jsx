@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery} from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
@@ -442,6 +442,16 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (p.asking === 'def') {
       try { const _d = generateLocalAnswer(p, [], [], null); if (_d) return _d; }
       catch (e) { console.warn('[2.57-02] 뜻 본체 호출 실패 — 기능 색인으로 폴백:', e); }
+    }
+    // ★ 2.59-01 (검수사 실측 «천정에 구멍이 뚫렸다고 하는데 어떻게 처리해야 하지» — 답 없이 카드
+    //   100+대만 쏟아졌다): 방법 갈래(asking=how)도 본체와 같은 한 벌(answerHowCore)을 부른다.
+    //   ⚠ generateLocalAnswer 를 그대로 부르면 how 를 못 찾을 때 흘러내려 빈 컨 목록으로
+    //   «0대» 류 거짓 답이 나올 수 있어, how 답만 주는 한 벌을 쓴다. 홈은 조회 폴백이 없으므로
+    //   못 찾으면 고백한다 — «아직 못 배웠» 문구가 무응답 신고(mir_unanswered)에 잡힌다.
+    if (p.asking === 'how') {
+      try { const _h = answerHowCore(p); if (_h) return _h; }
+      catch (e) { console.warn('[2.59-01] 방법 본체 호출 실패:', e); }
+      return '그 방법은 아직 못 배웠습니다 😿 지어내지 않을게요. 개발자에게 전달해 둘게요.';
     }
     if (p.howToQuery) {
       const _a = generateHowToAnswer(debouncedQuery, p, { isChief });

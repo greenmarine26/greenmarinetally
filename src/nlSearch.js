@@ -1117,10 +1117,9 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     return '그 말은 아직 못 배웠습니다 😿 지어내지 않을게요.\n뜻을 물으실 땐 «시프팅이 뭐야»처럼, 자리는 «FR 어디», 대수는 «리퍼 몇 대»처럼 말씀해 주시면 압니다.';
   }
   //  ★ 2.58: 방법을 물으면 방법으로 — 실무 지식(상황 문답) → 기능 방법(매뉴얼) → 못 찾으면 종전 경로.
+  //  ★ 2.59-01: 답 한 벌을 answerHowCore 로 분리 — 통합검색(홈)도 같은 것을 부른다(화법 규칙 4).
   if (parsed.asking === 'how') {
-    let h = null;
-    try { h = mirKnowledge(parsed._raw || ''); } catch (e) { console.warn('[2.58] 실무지식(방법) 실패:', e); }
-    if (!h) { try { h = generateHowToAnswer(parsed._raw || '', parsed); } catch (e) { console.warn('[2.58] 기능방법 실패:', e); } }
+    const h = answerHowCore(parsed);
     if (h) return h;
     //  방법을 못 찾으면 고백하지 않고 흘려보낸다 — 아래 조회 인텐트가 답할 기회를 남긴다.
   }
@@ -3034,6 +3033,17 @@ export function generateContactAnswer(entry, shipLabel, onboardOnly = false) {
 export function generateFoodAnswer(slot) {
   const label = { breakfast: '아침', lunch: '점심', dinner: '저녁', night: '야식', any: '식사' }[slot] || '식사';
   return `🎰 ${label} 뭐 먹을지 돌림판으로 정해 드릴게요!\n\n음성이면 잠시 후 돌림판이 자동으로 열립니다. 아래 버튼으로 바로 돌릴 수도 있어요.\n(홈 화면 🍽 맛집 메뉴에서 식당 추가·별점도 가능합니다.)`;
+}
+
+
+//  ★ 2.59-01: 방법(how) 답 한 벌 — 본체(_localAnswerCore)와 통합검색(홈)이 같은 것을 부른다.
+//    검수사 실측 «천정에 구멍이 뚫렸다고 하는데 어떻게 처리해야 하지» — 홈은 how 배선이 없어
+//    답 없이 카드 100+대만 쏟아졌다(화법 규칙 3 위반). 실무 지식(원장) → 기능 방법(매뉴얼) 순.
+export function answerHowCore(parsed) {
+  let h = null;
+  try { h = mirKnowledge(parsed._raw || ''); } catch (e) { console.warn('[2.58] 실무지식(방법) 실패:', e); }
+  if (!h) { try { h = generateHowToAnswer(parsed._raw || '', parsed); } catch (e) { console.warn('[2.58] 기능방법 실패:', e); } }
+  return h;
 }
 
 export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {

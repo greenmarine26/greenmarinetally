@@ -93,6 +93,36 @@ const ask = (q) => {
   T(p83.asking !== 'def' && !p83.digits, '«83건이 뭐야» 판정이 무너졌다 (후속 문맥)');
 }
 
+// ── ④-2 (2.59-01) 손상 상황 how — 손상 낱말 전반이 데미지 절차로, 뜻은 안 뺏긴다 ──
+{
+  //  검수사 실측 «천정에 구멍이 뚫렸다고 하는데 어떻게 처리해야 하지» — 기능 매뉴얼(«한 대
+  //  처리하기»)이 나오고 홈은 답 없이 카드 100+대를 쏟았다. «물이 새는» 한 낱말만 넣은 것이
+  //  사례 패치였다 — 손상 낱말 전반 그물 + answerHowCore 한 벌 + 홈 배선을 이 블록이 지킨다.
+  const HOW_DMG = [
+    '케빈이 컨테이너 천정에 구멍이 뚫렸다고 하는데 어떻게 처리해야 하지',
+    '문짝이 찢어졌는데 어떻게 해야 돼',
+    '바닥이 부서졌는데 어떻게 기록하지',
+  ];
+  for (const q of HOW_DMG) {
+    const p = NS.parseNaturalQuery(q);
+    T(p.asking === 'how', `«${q}» 가 방법 갈래(how)로 안 잡힌다 (asking=${p.asking})`);
+    const h = NS.answerHowCore ? NS.answerHowCore(p) : null;
+    T(!!h && /데미지 보고|CARGO DAMAGE/.test(String(h)), `«${q}» 에 데미지 절차 답이 안 나온다`);
+    T(!(h && /한 대 처리하기|양하확인.*선적확인/.test(String(h).slice(0, 80))), `⛔ «${q}» 에 기능 매뉴얼(처리하기)이 나온다 — 2.59-01 사고 재발`);
+  }
+  //  물은 여전히 Wet — 새 그물이 물 답을 뺏지 않는다.
+  const pw = NS.parseNaturalQuery('컨테이너에 물이 새는데 데미지 어떻게 잡아야 해');
+  const hw = NS.answerHowCore ? NS.answerHowCore(pw) : null;
+  T(!!hw && /Wet Damage/.test(String(hw)), '«물이 새는데» 답이 Wet Damage 에서 이탈했다');
+  //  반례 — 손상 낱말 뜻 질문은 절차가 아니라 뜻이다.
+  for (const q of ['덴트가 뭐야', '크랙이 뭐야', '구멍이 뭐야']) {
+    const p = NS.parseNaturalQuery(q);
+    const a = NS.generateLocalAnswer(p, [], [], null);
+    T(p.asking === 'def' && !!a && !/데미지로 잡아요/.test(String(a)), `⛔ «${q}» 뜻을 손상 절차가 가로챘다`);
+  }
+  T(typeof NS.answerHowCore === 'function', 'answerHowCore 가 export 안 됐다 — 홈 배선이 죽는다');
+}
+
 // ── ⑤ 규칙 6 — 못 배운 말은 지어내지 않고 고백한다 ─────────────────────
 {
   const { p, a } = ask('수바이란?');
@@ -141,6 +171,7 @@ const ask = (q) => {
   T(gsp.indexOf("asking === 'def'") < gsp.indexOf('p.howToQuery'), '⛔ 홈의 뜻 본체 호출이 기능 색인보다 뒤다 — 기능 안내가 가로챈다');
   T(/submitNow\(/.test(gsp) && /slice\(0,\s*30\)/.test(gsp), 'GlobalSearchPage 버튼 제출·카드 상한 30 이 없다 (2.55-01 부작용·쏟기)');
   T(/아직 못 배웠/.test(gsp), 'GlobalSearchPage 무응답 신고가 «못 배웠습니다» 를 안 잡는다 — 반복 학습 관이 끊긴다');
+  T(/asking === 'how'/.test(gsp) && /answerHowCore/.test(gsp), 'GlobalSearchPage 에 how 갈래 본체 배선(answerHowCore)이 없다 — 질문에 카드만 쏟아진다 (2.59-01 사고)');
   T(/parsed\.asking\)\s*\?\s*null\s*:\s*parseDamageHistoryQuery/.test(gsp.replace(/\(parsed && parsed\.asking\)/,'parsed.asking)')), 'GlobalSearchPage 데미지 이력 카드에 갈래 게이트가 없다 — 방법 질문에 이력이 뜬다');
   const vp = read('src/pages/VoyagePage.jsx');
   T(/mirTone/.test(vp), 'VoyagePage 에 말투 겹(mirTone)이 없다');
