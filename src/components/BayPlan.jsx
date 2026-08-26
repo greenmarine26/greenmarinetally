@@ -1245,22 +1245,28 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
 
   // 좌표 기반 레이아웃: 데크/홀드 각자 자기 축으로 배치 (데크엔 00 자리 안 만듦).
   //   두 축의 '중심선'을 맞춰 정렬 → 데크 02|01 경계와 홀드 00이 같은 세로선. 데크에 빈 00 칸 안 생김.
+  // ★ 2.56-01: 이 페이지 실컨의 «열-단» 집합 — 차단 자리에 실데이터가 있으면 자리만 비우지 않고 그린다.
+  const pageCellCns = useMemo(() => {
+    const st = new Set();
+    for (const c of allContainers) {
+      if (c.row == null || c.tier == null) continue;
+      st.add(`${String(c.row).padStart(2, '0')}-${String(c.tier).padStart(2, '0')}`);
+    }
+    return st;
+  }, [allContainers]);
+
   const pageCoordLayout = useMemo(() => {
     if (!pageMatrixRender) return null;
     const deckRows = pageMatrixRender.deckRows.filter(r => !r.invisible);
     const holdRows = pageMatrixRender.holdRows.filter(r => !r.invisible);
-    // 데크 축: 데크 active row만 (00 없음)
-    const deckSet = new Set();
-    deckRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) deckSet.add(c.rowLbl); }));
-    const dEv = [...deckSet].filter(r => parseInt(r, 10) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
-    const dOd = [...deckSet].filter(r => parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
-    const deckAxis = [...dEv, ...dOd];                 // 00 없음
-    // 홀드 축: 홀드 active row만 (00 가운데)
-    const holdSet = new Set();
-    holdRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) holdSet.add(c.rowLbl); }));
-    const hEv = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
-    const hOd = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
-    const holdAxis = [...hEv, ...(holdSet.has('00') ? ['00'] : []), ...hOd];
+    // ★ 2.56-01: 축은 격자 한 벌의 rowPos 그대로 — 차단열(blockedCells)도 «자리»는 남긴다.
+    //   종전엔 active 셀의 rowLbl 만 모아 축을 만들어 차단열이 통째로 접혔다 — SWTD 09베이의
+    //   00·01(전단 차단)이 사라져 좌우 블록이 붙었고, 33베이의 09(우현 끝 한 줄)가 가운데로 왔다.
+    //   CASP 실물은 차단 자리를 비워 두고 좌우가 갈라진다. 검수사 «베이플랜은 바뀐게 없습니다» 의 원인.
+    //   rowPos 는 EDI 폴백 격자에도 있다(그땐 전 칸 active — 축이 종전과 같아 회귀 없음).
+    const deckAxis = deckRows.length > 0 ? (pageMatrixRender.deckRowPos || []).slice() : [];
+    // 홀드 단이 하나도 없으면(데크 전용 베이) 축도 비운다 — 라벨만 홀로 찍히지 않게.
+    const holdAxis = holdRows.length > 0 ? (pageMatrixRender.holdRowPos || []).slice() : [];
     const deckRowX = {}; deckAxis.forEach((r, i) => { deckRowX[r] = i; });
     const holdRowX = {}; holdAxis.forEach((r, i) => { holdRowX[r] = i; });
     // 중심선 정렬: 각 축의 중심(칸 수/2)을 맞춤.
@@ -1767,11 +1773,18 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
                   <React.Fragment key={`d-${ti}`}>
                     <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
                     <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
-                    {tr.cells.filter(c => c.active && c.rowLbl != null).map((c) => (
-                      <div key={`dc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
-                        {renderCell(c.rowLbl, String(tr.tier).padStart(2, '0'))}
-                      </div>
-                    ))}
+                    {tr.cells.map((c, ci) => {
+                      // ★ 2.56-01: 차단(blocked) 자리는 비워 둔다 — 단 실컨이 있으면 그린다(사전 오설정 안전장치).
+                      const lbl = c.rowLbl != null ? c.rowLbl : deckAxis[ci];
+                      if (lbl == null || deckRowX[lbl] == null) return null;
+                      const tier2 = String(tr.tier).padStart(2, '0');
+                      if (!(c.active || (c.blocked && pageCellCns.has(`${lbl}-${tier2}`)))) return null;
+                      return (
+                        <div key={`dc-${ti}-${lbl}`} style={{ position: 'absolute', left: (deckOff + deckRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
+                          {renderCell(lbl, tier2)}
+                        </div>
+                      );
+                    })}
                   </React.Fragment>
                 );
               })}
@@ -1788,11 +1801,18 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
                   <React.Fragment key={`h-${ti}`}>
                     <div style={{ position: 'absolute', left: -LBL, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
                     <div style={{ position: 'absolute', left: gridW + 2, top: y, width: LBL - 2, height: rowH, fontSize: 9, lineHeight: `${cellH}px`, display: 'flex', alignItems: 'center' }} className="text-dim-400 mono font-bold">{tr.tier}</div>
-                    {tr.cells.filter(c => c.active && c.rowLbl != null).map((c) => (
-                      <div key={`hc-${ti}-${c.rowLbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[c.rowLbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
-                        {renderCell(c.rowLbl, String(tr.tier).padStart(2, '0'))}
-                      </div>
-                    ))}
+                    {tr.cells.map((c, ci) => {
+                      // ★ 2.56-01: 차단 자리 비움 + 실컨 데이터 우선 (데크와 같은 규칙)
+                      const lbl = c.rowLbl != null ? c.rowLbl : holdAxis[ci];
+                      if (lbl == null || holdRowX[lbl] == null) return null;
+                      const tier2 = String(tr.tier).padStart(2, '0');
+                      if (!(c.active || (c.blocked && pageCellCns.has(`${lbl}-${tier2}`)))) return null;
+                      return (
+                        <div key={`hc-${ti}-${lbl}`} style={{ position: 'absolute', left: (holdOff + holdRowX[lbl]) * STEP, top: y, width: cellW, height: rowH, display: 'flex', alignItems: 'center' }}>
+                          {renderCell(lbl, tier2)}
+                        </div>
+                      );
+                    })}
                   </React.Fragment>
                 );
               })}

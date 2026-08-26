@@ -85,6 +85,15 @@ const dicts = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/baygrid
     T(g32 && g32.hatchCount === 0, `⛔ SWTD 32 해치 ${g32 && g32.hatchCount} (기대 0 — 데크 전용)`);
     // 카고플랜 BAY01 = CASP: 데크 7칸(00 포함) · 홀드 5칸 피라미드(5-3-3-1)
     T(g01 && g01.nDeckCols === 7, `⛔ SWTD 01 데크 폭 ${g01 && g01.nDeckCols} (CASP 7)`);
+    // ★ 2.56-01 앵커 — CASP 실물(SWTD9012EBAY.pdf 19면): 34베이는 00 포함 10칸, 좌현이 하나 더.
+    //   짝수 cellCount + 00 조합에서 좌현 끝 열(10)이 증발해 실컨 4대가 안 그려지던 사고의 기준표.
+    const g34 = CP.buildBayGrid(bayDef, '34');
+    T(g34 && JSON.stringify(g34.deckRowPos) === JSON.stringify(['10','08','06','04','02','00','01','03','05','07']),
+      `⛔ SWTD 34 데크 열이 CASP 실물과 다르다: ${g34 && JSON.stringify(g34.deckRowPos)}`);
+    // 33베이 = CASP: 09 한 줄(우현 끝) — 차단열 10칸은 자리만 남는다
+    const g33 = CP.buildBayGrid(bayDef, '33');
+    const act33 = g33 ? g33.deckRows.filter(r => !r.invisible).map(r => r.cells.map((c, i) => c.active ? g33.deckRowPos[i] : null).filter(Boolean).join(',')) : [];
+    T(act33.length > 0 && act33.every(x => x === '09'), `⛔ SWTD 33 이 09 한 줄이 아니다: ${JSON.stringify(act33)}`);
     const holdActive = g01 ? g01.holdRows.filter(t => !t.invisible).map(t => t.cells.filter(c => c.active).length) : [];
     T(JSON.stringify(holdActive) === JSON.stringify([5, 3, 3, 1]), `⛔ SWTD 01 홀드 단면 ${JSON.stringify(holdActive)} (CASP [5,3,3,1])`);
   }
@@ -107,6 +116,13 @@ const dicts = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/baygrid
   // 베이상세의 종전 buildBayPages 는 사전 없는 배 폴백으로만 남는다 — 정의는 있되 기본 경로가 아님
   const bd = fs.readFileSync(path.join(ROOT, 'src/components/PrintableBayDetail.jsx'), 'utf8');
   T(bd.includes('buildBayPagesFromSummary(dictData.bayDef)'), '⛔ PrintableBayDetail: allPages 가 core 짝을 쓰지 않는다');
+  // ★ 2.56-01: 좌표 축은 rowPos 그대로 — 차단열(blockedCells)의 «자리»가 접히면 안 된다.
+  //   active 셀만 모아 축을 만들면 SWTD 09베이 00·01 이 사라져 좌우 블록이 붙는다(CASP 실물과 다름).
+  for (const f of ['src/components/BayPlan.jsx', 'src/coneCargoPlan.entry.jsx']) {
+    const src2 = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    T(src2.includes('deckRowPos || []'), `⛔ ${f}: 좌표 축이 rowPos 를 쓰지 않는다 — 차단열이 접힌다`);
+    T(!src2.includes('deckSet.add(c.rowLbl)'), `⛔ ${f}: active 수집 축(deckSet)이 되살아났다 — 차단열이 접힌다`);
+  }
 }
 
 if (bad > 0) { console.error(`✗ 베이 격자 연막검사 실패 ${bad}건`); process.exit(1); }

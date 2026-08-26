@@ -460,16 +460,11 @@ export function buildConeBayGrid(containers, shipInfo) {
       if (!pageMatrixRender) return null;
       const deckRows = pageMatrixRender.deckRows.filter(r => !r.invisible);
       const holdRows = pageMatrixRender.holdRows.filter(r => !r.invisible);
-      const deckSet = new Set();
-      deckRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) deckSet.add(c.rowLbl); }));
-      const dEv = [...deckSet].filter(r => parseInt(r, 10) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
-      const dOd = [...deckSet].filter(r => parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
-      const deckAxis = [...dEv, ...dOd];
-      const holdSet = new Set();
-      holdRows.forEach(r => r.cells.forEach(c => { if (c.active && c.rowLbl) holdSet.add(c.rowLbl); }));
-      const hEv = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 0).sort((a, b) => parseInt(b) - parseInt(a));
-      const hOd = [...holdSet].filter(r => r !== '00' && parseInt(r, 10) % 2 === 1).sort((a, b) => parseInt(a) - parseInt(b));
-      const holdAxis = [...hEv, ...(holdSet.has('00') ? ['00'] : []), ...hOd];
+      // ★ ConeOne 2.4: 축은 격자 한 벌의 rowPos 그대로 — 차단열(blockedCells)도 «자리»는 남긴다.
+      //   active 만 모으면 차단열이 접혀 좌우 블록이 붙는다(SWTD 09베이 00·01 — 검수앱 2.56-01 과 같은 수리).
+      const deckAxis = deckRows.length > 0 ? (pageMatrixRender.deckRowPos || []).slice() : [];
+      // 홀드 단이 하나도 없으면(데크 전용 베이) 축도 비운다 — 라벨만 홀로 찍히지 않게.
+      const holdAxis = holdRows.length > 0 ? (pageMatrixRender.holdRowPos || []).slice() : [];
       const deckRowX = {}; deckAxis.forEach((r, i) => { deckRowX[r] = i; });
       const holdRowX = {}; holdAxis.forEach((r, i) => { holdRowX[r] = i; });
       const nCols = Math.max(deckAxis.length, holdAxis.length, globalGridCols || 0);
@@ -479,19 +474,32 @@ export function buildConeBayGrid(containers, shipInfo) {
     })();
 
     if (pageCoordLayout) {
-      // 좌표 모드: BayPlan.jsx 1775-1780·1806-1811 — active && rowLbl 셀만 그린다 (없는 칸은 아예 안 그림)
-      const packRows = (rows) => rows.map(tr => ({
-        tier: String(tr.tier).padStart(2, '0'),
-        rows: tr.cells.filter(c => c.active && c.rowLbl != null).map(c => c.rowLbl),
-      }));
+      // 좌표 모드 — active 셀 + «차단 자리에 실컨」(사전 오설정 안전장치)만 그린다. 차단 빈자리는 비움.
+      const _cellCns = new Set();
+      for (const c of allContainers) {
+        if (c.row == null || c.tier == null) continue;
+        _cellCns.add(String(c.row).padStart(2, '0') + '-' + String(c.tier).padStart(2, '0'));
+      }
+      const packRows = (rows, axis) => rows.map(tr => {
+        const tier2 = String(tr.tier).padStart(2, '0');
+        return {
+          tier: tier2,
+          rows: tr.cells.map((c, ci) => {
+            const lbl = c.rowLbl != null ? c.rowLbl : axis[ci];
+            if (lbl == null) return null;
+            if (c.active || (c.blocked && _cellCns.has(lbl + '-' + tier2))) return lbl;
+            return null;
+          }).filter(x => x != null),
+        };
+      });
       return {
         title: page.title, evenBay: page.evenBay, oddBay: page.oddBay,
         mode: 'coord',
         nCols: pageCoordLayout.nCols,
         deckAxis: pageCoordLayout.deckAxis, holdAxis: pageCoordLayout.holdAxis,
         deckOff: pageCoordLayout.deckOff, holdOff: pageCoordLayout.holdOff,
-        deckRows: packRows(pageCoordLayout.deckRows),
-        holdRows: packRows(pageCoordLayout.holdRows),
+        deckRows: packRows(pageCoordLayout.deckRows, pageCoordLayout.deckAxis),
+        holdRows: packRows(pageCoordLayout.holdRows, pageCoordLayout.holdAxis),
         xMarks: Array.from(xMarks),
         hatchCount,
       };

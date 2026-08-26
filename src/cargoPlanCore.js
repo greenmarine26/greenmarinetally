@@ -214,11 +214,18 @@ export function getRowPositions(cellCount, hasZero) {
   if (cellCount <= 0) return [];
   const pad = (n) => String(n).padStart(2, '0');
   if (hasZero) {
-    const half = Math.floor((cellCount - 1) / 2);
+    // ★ 2.56-01: cellCount 짝수 + 00 포함이면 짝수(좌현) 쪽이 하나 더 많다 — 종전 half 대칭 가정은
+    //   라벨을 cellCount-1 개만 만들어 좌현 끝 열이 증발했다(실측 SWTD 34베이: CASP 실물이
+    //   10 08 06 04 02 00 01 03 05 07 인데 앱은 10 열이 없어 그 열 실컨 4대가 안 그려졌다).
+    //   짝수 우선은 BayPlan 의 flex 폴백(buildGridRowsFromCells: leftCount=ceil)이 이미 쓰던 규약과 같다.
+    //   cellCount 홀수(대칭 배)는 종전과 동일 — 39척 전수에서 바뀌는 곳은 SWTD 34 · NSFR 3·4·5 뿐.
+    const nonZero = cellCount - 1;
+    const nEvens = Math.ceil(nonZero / 2);
+    const nOdds = nonZero - nEvens;
     const evens = [];
-    for (let n = half * 2; n > 0; n -= 2) evens.push(pad(n));
+    for (let n = nEvens * 2; n > 0; n -= 2) evens.push(pad(n));
     const odds = [];
-    for (let n = 1; n <= half * 2 - 1; n += 2) odds.push(pad(n));
+    for (let n = 1; n <= nOdds * 2 - 1; n += 2) odds.push(pad(n));
     return [...evens, '00', ...odds];
   } else {
     // has_zero=false: 홀수 cellCount면 odds가 1개 더, 짝수면 동수
