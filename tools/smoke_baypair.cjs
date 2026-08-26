@@ -111,10 +111,13 @@ const dupOf = (r) => {
   const read = (rel) => fs.readFileSync(pathm.join(ROOT, rel), 'utf8');
   T(/!usedOdds\.has\(e - 1\)[\s\S]{0,40}!usedOdds\.has\(e \+ 1\)/.test(read('src/cargoPlanCore.js')),
     '⛔ cargoPlanCore.autoPairBays 에 「이미 쓰인 홀수」 가드가 없다');
-  T(/!usedOddBays\.has\(keyBay\(n \+ 1\)\)/.test(read('src/components/BayPlan.jsx')),
-    '⛔ BayPlan.jsx 에 「이미 쓰인 홀수」 가드가 없다 — 카고플랜만 고치면 베이플랜이 안 고쳐진다');
-  T(/!usedOddBays\.has\(keyBay\(n - 1\)\)/.test(read('src/components/BayPlan.jsx')),
-    '⛔ BayPlan.jsx 가 왼쪽 홀수가 이미 남의 짝인지를 안 본다 — (32)33 이 다시 생긴다');
+  //  ★ 2.56: BayPlan 은 제 짝 짓기를 버리고 buildBayPagesFromSummary(= autoPairBays) 한 벌을 부른다.
+  //    가드가 「있는가」가 아니라 「한 벌에 위임했는가」를 본다 — 제 루프가 되살아나면 여기서 선다.
+  //    (세 화면 전체의 같은 검사는 tools/smoke_baygrid.cjs ③ 이 잰다.)
+  T(read('src/components/BayPlan.jsx').includes('buildBayPagesFromSummary'),
+    '⛔ BayPlan.jsx 가 짝 한 벌(buildBayPagesFromSummary)을 부르지 않는다');
+  T(!/leftOddIn/.test(read('src/components/BayPlan.jsx')),
+    '⛔ BayPlan.jsx 에 자체 짝 루프(leftOddIn)가 되살아났다 — 한 벌만 고치면 갈린다');
 }
 
 if (bad) { console.error(`\n✗ 베이 짝 연막검사 ${bad}건 실패`); process.exit(1); }

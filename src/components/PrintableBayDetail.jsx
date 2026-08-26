@@ -19,7 +19,8 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { normalizeBay, isoToPdfLabel, getContainerColorKey, buildContainerColorMap, isPyeongtaekPort, effectivePos } from '../utils.js';   // TallyOne 1.55: 이 종이는 실적이 기준이다
 import { getShipBayDictData } from '../shipStructure.js';
-import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
+import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
+import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';   // ★ 2.56: 사전 조회 신원 4개 통일용
 import { BayBoxV2, CARGO_V2_CSS } from './PrintableCargoPlanV2.jsx';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
@@ -219,7 +220,7 @@ export function formatCellLines(c) {
   }
 }
 
-function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true, uniformCell = null }) {
+function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipName, dictBay, dictBaysSummary = {}, dictBayDef = null, globalRowRange, globalTiers, dictShipMeta, colorMap = {}, isPrintTarget = true, uniformCell = null }) {
   // allConts 먼저 계산 (STD_ROWS가 union용으로 사용)
   const allConts = [
     ...(even != null && bayMap[String(even)] || []),
@@ -282,26 +283,20 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
     const isPair = even != null && odd != null;
     const primaryBn = even != null ? even : odd;
     if (primaryBn == null) return null;
-    const e = dictBaysSummary[parseInt(primaryBn, 10)];
-    const hasCells = !!e && (
-      (Array.isArray(e.deckCells) && e.deckCells.length > 0) ||
-      (Array.isArray(e.holdCells) && e.holdCells.length > 0)
-    );
-    if (!hasCells) return null;
-    // EDI has00 반영 (매트릭스 명시값 우선) — BayPlan/ChiefBayEdit과 동일 패턴
-    let ediHas00 = false;
-    for (const c of allConts) { if (parseInt(c.row, 10) === 0) { ediHas00 = true; break; } }
-    const effEntry = {
-      ...e,
-      deckHasZero: e.deckHasZero != null ? e.deckHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
-      holdHasZero: e.holdHasZero != null ? e.holdHasZero : (e.hasZero != null ? e.hasZero : ediHas00),
-    };
     const bayKey = isPair
       ? `(${String(even).padStart(2, '0')})${String(odd).padStart(2, '0')}`
       : String(primaryBn).padStart(2, '0');
-    try { return buildEmptyBayRenderData(effEntry, bayKey, isPair) || null; }
-    catch (e2) { return null; }
-  }, [even, odd, dictBaysSummary, allConts]);
+    // ★ 2.56: 격자는 cargoPlanCore.buildBayGrid 한 벌 — «자료만 받고 그림은 베이매트릭스대로».
+    //   종전엔 짝 박스 entry 를 짝수 키로 찾아(매트릭스는 홀수 키 저장) 놓치고 STD_ROWS 9칸 폴백으로
+    //   갈렸다(베이상세가 카고플랜과 다르던 근본 원인). blockedCells·hatchCount 도 짝수 entry 와 병합된다.
+    if (dictBayDef) {
+      try {
+        const g = buildBayGrid(dictBayDef, bayKey, { posMap: buildPosMap(allConts) });
+        if (g && g.nDeckCols > 0) return g;
+      } catch (e2) { console.warn('[2.56] buildBayGrid 실패 — STD_ROWS 폴백', bayKey, e2); }
+    }
+    return null;   // 사전 없음/미등록 베이 → STD_ROWS 폴백 (기존 그대로)
+  }, [even, odd, dictBayDef, allConts]);
 
   // M6.26: 베이플랜 로직 그대로 이식 — 페이지 두 베이의 dictBay tier union + 실제 컨 tier + 80 기준 분리
   //   사용자 지시: "베이플랜에 다 맞춰주세요. 지금 베이플랜만 아주 정확합니다."
@@ -323,13 +318,16 @@ function BayDetailPage({ even, odd, bayMap, mode, voyageInfo, voyageKey, shipNam
 
   // M6.94.15: 해치는 짝수(even)/단독 베이 기준. even 우선, 없으면 단독 odd.
   const hatchCount = useMemo(() => {
+    // ★ 2.56: 격자 한 벌(buildBayGrid)의 hatchCount 우선 — 짝수 우선·0 허용(카고플랜과 동일 규칙).
+    //   종전 falsy→1 강제는 해치 0장(데크 전용 베이)을 1장으로 그렸다.
+    if (matrixRender && typeof matrixRender.hatchCount === 'number') return matrixRender.hatchCount;
     for (const bn of [even, odd]) {
       if (bn == null) continue;
       const db = dictBaysSummary[parseInt(bn, 10)];
       if (db?.hatchCount) return Math.max(1, Math.min(3, db.hatchCount));
     }
     return 1;
-  }, [odd, even, dictBaysSummary]);
+  }, [matrixRender, odd, even, dictBaysSummary]);
   const allTiersSet = hasDictTiers
     ? Array.from(new Set([
         ...pageBayDictTiers.deck,
@@ -591,7 +589,10 @@ export default function PrintableBayDetail({
 
   const dictData = useMemo(() => {
     if (!shipImo && !shipName) return null;
-    const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount });
+    // ★ 2.56: 신원 4개(ediBayCount·vslCode·callsign·vslFull)로 조회 — 종전 {ediBayCount} 하나뿐이라
+    //   계열 대체에서 다른 배 사전이 잡힐 수 있었다(세 화면 사전 조회 인자 통일).
+    const _vslCode = (() => { try { return extractShipMetaFromVoyage({ info: voyageInfo })?.code || ''; } catch { return ''; } })();
+    const baseDict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '' });
     if (!baseDict) return null;
     // M6.94.0 사용자 원칙: source='user'면 enrichBayDef 보강 차단 (사용자 데이터 그대로)
     // TallyOne 1.11-01: 정본 판정은 조회 경로(source)가 아니라 항목 안쪽(isUserOwnedBayDict). Firebase 경유 정본이 자동 사전 취급되던 결함.
@@ -608,7 +609,7 @@ export default function PrintableBayDetail({
       bayDef: { ...enrichedEntry.bayDef, source: baseDict.source, _userOwned: _isUser },
       _enrichMeta: enrichedEntry._enrichMeta || baseDict._enrichMeta,
     };
-  }, [shipImo, shipName, containers]);
+  }, [shipImo, shipName, containers, voyageInfo]);
 
   const dictBayList = useMemo(() => {
     if (!dictData?.bayDef?.bayList) return null;
@@ -645,7 +646,23 @@ export default function PrintableBayDetail({
     return [...set].sort((a, b) => a - b);
   }, [dictBayList, dictBaysSummary, bayMap]);
 
-  const allPages = useMemo(() => buildBayPages(bayList, dictBaysSummary), [bayList, dictBaysSummary]);
+  // ★ 2.56: 짝 짓기는 cargoPlanCore.autoPairBays 한 벌 — 종전 buildBayPages(odd-1 규칙)가
+  //   (32)33 같은 잘못된 짝을 만들었다(SWTD 실측 — CASP 는 32·33·34 단독). 사전이 없을 때만 종전 폴백.
+  const allPages = useMemo(() => {
+    const core = dictData?.bayDef ? buildBayPagesFromSummary(dictData.bayDef) : null;
+    if (!core || core.length === 0) return buildBayPages(bayList, dictBaysSummary);
+    const covered = new Set();
+    core.forEach(p => { if (p.even != null) covered.add(p.even); if (p.odd != null) covered.add(p.odd); });
+    const pages = core.map(p => ({ even: p.even, odd: p.odd, key: (p.even != null && p.odd != null) ? `${p.even}-${p.odd}` : String(p.even != null ? p.even : p.odd) }));
+    // EDI에만 있는 베이(사전 미등록)는 단독으로 뒤에 — 데이터 손실 방지 (99/999 placeholder 제외)
+    for (const n of bayList) {
+      if (covered.has(n) || !(Number.isFinite(n) && n < 99)) continue;
+      pages.push(n % 2 === 0 ? { even: n, odd: null, key: String(n) } : { even: null, odd: n, key: String(n) });
+      covered.add(n);
+    }
+    pages.sort((a, b) => ((a.even != null && a.odd != null) ? a.even : (a.even != null ? a.even : a.odd)) - ((b.even != null && b.odd != null) ? b.even : (b.even != null ? b.even : b.odd)));
+    return pages;
+  }, [dictData, bayList, dictBaysSummary]);
 
   // V8.98-14: 카스피식 균일 셀 — 항차 전체(모든 인쇄 페이지)에 단일 셀 폭·행 높이.
   //   기존: 격자가 페이지를 flex로 채워 베이마다/행마다 셀 크기가 제각각 (+ 점유 셀 padding·border가
@@ -655,8 +672,8 @@ export default function PrintableBayDetail({
   const uniformCell = useMemo(() => {
     let gcMax = 0, rowsMax = 0;
     for (const p of allPages) {
-      const bn = p.even != null ? p.even : p.odd;
-      const e = dictBaysSummary[parseInt(bn, 10)];
+      // ★ 2.56: 짝 박스 entry 는 홀수 키가 정본(매트릭스 저장 방식) — 홀수 우선, 없으면 짝수.
+      const e = (p.odd != null ? dictBaysSummary[p.odd] : null) || (p.even != null ? dictBaysSummary[p.even] : null);
       if (!e) continue;
       const hasCells = (Array.isArray(e.deckCells) && e.deckCells.length > 0)
         || (Array.isArray(e.holdCells) && e.holdCells.length > 0);
@@ -817,6 +834,7 @@ export default function PrintableBayDetail({
                 voyageInfo={voyageInfo} voyageKey={voyageKey}
                 shipName={shipName} dictBay={dictBay}
                 dictBaysSummary={dictBaysSummary}
+                dictBayDef={dictData?.bayDef || null}
                 globalRowRange={effectiveRowRange}
                 globalTiers={globalTiers}
                 colorMap={colorMap}

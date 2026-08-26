@@ -10,7 +10,7 @@ import { getShipBayDictData } from './shipStructure.js';
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
 import { enrichBayDef } from './bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from './utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
-import { buildEmptyBayRenderData } from './cargoPlanCore.js';
+import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from './cargoPlanCore.js';   // ★ ConeOne 2.4: 격자·짝은 cargoPlanCore 한 벌
 import { extractShipMetaFromVoyage } from './shipMatrixBuilder.js';
 
 let _root = null;
@@ -167,6 +167,16 @@ export function buildConeBayGrid(containers, shipInfo) {
     return m;
   })();
 
+  // ★ ConeOne 2.4: 격자 한 벌(buildBayGrid)·짝 한 벌(buildBayPagesFromSummary)에 넘길 전체 bayDef.
+  const dictBayDefObj = (() => {
+    if (!dict || !dict.bayDef || !dict.bayDef.baysSummary) return null;
+    try {
+      const _isUser = isUserOwnedBayDict(dict);
+      const enrichedEntry = enrichBayDef({ bayDef: dict.bayDef }, dict._v5Matrix, containers, _isUser ? 'user' : dict.source);
+      return { ...enrichedEntry.bayDef, source: dict.source, _userOwned: _isUser, code: dict.code || '' };
+    } catch (e) { console.warn('[ConeOne 2.4] bayDef 구성 실패', e); return null; }
+  })();
+
   // BayPlan.jsx 289-300: globalGridCols — 전 베이 최대 그리드 폭 (베이 간 정렬 기준)
   const globalGridCols = (() => {
     let w = 1;
@@ -197,28 +207,21 @@ export function buildConeBayGrid(containers, shipInfo) {
       bayInts = bays.map(b => parseInt(b, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
     }
     if (bayInts.length === 0) return [];
-    const baySet = new Set(bayInts);
     const out = [];
     const usedOddBays = new Set();
     if (usingDictBays) {
-      for (const n of bayInts) {
-        if (n % 2 === 0) {
-          const evenKey = keyBay(n);
-          const evenDisp = dispBay(n);
-          const leftOddIn = baySet.has(n - 1);
-          const rightOddIn = baySet.has(n + 1);
-          if (!leftOddIn && !rightOddIn) {
-            out.push({ title: `BAY ${evenDisp}`, evenBay: evenKey, oddBay: null, isStandalone: true });
-          } else if (rightOddIn) {
-            out.push({ title: `BAY (${evenDisp})${dispBay(n + 1)}`, evenBay: evenKey, oddBay: keyBay(n + 1) });
-            usedOddBays.add(keyBay(n + 1));
+      // ★ ConeOne 2.4: 짝 짓기는 cargoPlanCore.autoPairBays 한 벌(buildBayPagesFromSummary).
+      //   종전 이 자리의 복사본은 2.55-03 가드(쓰인 홀수 재사용 금지)가 없어 SWTD 에서 (32)33 을 만들었다.
+      const corePages = dictBayDefObj ? buildBayPagesFromSummary(dictBayDefObj) : null;
+      if (corePages && corePages.length > 0) {
+        for (const p of corePages) {
+          if (p.even != null && p.odd != null) {
+            out.push({ title: `BAY (${dispBay(p.even)})${dispBay(p.odd)}`, evenBay: keyBay(p.even), oddBay: keyBay(p.odd) });
+            usedOddBays.add(keyBay(p.odd));
+          } else if (p.even != null) {
+            out.push({ title: `BAY ${dispBay(p.even)}`, evenBay: keyBay(p.even), oddBay: null, isStandalone: !!p.isStandalone });
           } else {
-            out.push({ title: `BAY ${evenDisp}`, evenBay: evenKey, oddBay: null });
-          }
-        } else {
-          const oddKey = keyBay(n);
-          if (!usedOddBays.has(oddKey)) {
-            out.push({ title: `BAY ${dispBay(n)}`, evenBay: null, oddBay: oddKey });
+            out.push({ title: `BAY ${dispBay(p.odd)}`, evenBay: null, oddBay: keyBay(p.odd) });
           }
         }
       }
@@ -380,10 +383,18 @@ export function buildConeBayGrid(containers, shipInfo) {
         ? `(${String(evenBn).padStart(2, '0')})${String(oddBn).padStart(2, '0')}`
         : String(primaryBn).padStart(2, '0');
 
-      let entry = dictBaysSummary[primaryBn];
+      // ★ ConeOne 2.4: 격자는 cargoPlanCore.buildBayGrid 한 벌 — «자료만 받고 그림은 베이매트릭스대로».
+      //   종전엔 짝 박스 entry 를 짝수 키로 찾아(매트릭스는 홀수 키 저장) EDI 폴백 격자가 그려졌다.
+      if (dictBayDefObj) {
+        try {
+          const g = buildBayGrid(dictBayDefObj, bayKey, { posMap: buildPosMap(allContainers) });
+          if (g) return g;
+        } catch (e) { console.warn('[ConeOne 2.4] buildBayGrid 실패 — EDI 폴백', bayKey, e); }
+      }
 
-      // BayPlan.jsx 1180-1197: 사전에 없으면 EDI 실데이터로 단면 골격 생성
-      if (!entry) {
+      // 사전에 이 베이가 없으면 EDI 실데이터로 단면 골격 생성 (신선박·미등록 베이 폴백)
+      let entry = null;
+      {
         if (!allContainers || allContainers.length === 0) return null;
         const deckTierSet = new Set(), holdTierSet = new Set();
         const deckRowsByTier = {}, holdRowsByTier = {};
@@ -435,7 +446,10 @@ export function buildConeBayGrid(containers, shipInfo) {
 
     // BayPlan.jsx 1694-1701: hatchCount
     let hatchCount = 1;
-    for (const bn of [page.evenBay, page.oddBay]) {
+    // ★ ConeOne 2.4: 해치 수는 격자 한 벌의 hatchCount — 짝수 우선·0 허용(카고플랜과 동일).
+    if (pageMatrixRender && typeof pageMatrixRender.hatchCount === 'number') {
+      hatchCount = pageMatrixRender.hatchCount;
+    } else for (const bn of [page.evenBay, page.oddBay]) {
       if (bn == null) continue;
       const db = dictBaysSummary[parseInt(bn, 10)];
       if (db && db.hatchCount) { hatchCount = Math.max(1, Math.min(3, db.hatchCount)); break; }

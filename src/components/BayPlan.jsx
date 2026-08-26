@@ -19,7 +19,7 @@ import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
-import { buildEmptyBayRenderData } from '../cargoPlanCore.js';
+import { buildEmptyBayRenderData, buildBayGrid, buildBayPagesFromSummary, buildPosMap } from '../cargoPlanCore.js';   // ★ 2.56: 격자·짝은 cargoPlanCore 한 벌
 import ShipProfileView from './ShipProfileView.jsx';
 import SlotPickerModal from './SlotPickerModal.jsx';
 import UnassignedListModal from './UnassignedListModal.jsx';
@@ -306,6 +306,17 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     return m;
   }, [shipImo, shipName, containers, _vslCode]);
 
+  // ★ 2.56: 격자 한 벌(buildBayGrid)·짝 한 벌(buildBayPagesFromSummary)에 넘길 전체 bayDef.
+  //   source/_userOwned 를 카고플랜(PrintableCargoPlanV2 dictData)과 같은 방식으로 붙인다.
+  const dictBayDefObj = useMemo(() => {
+    if (!shipImo && !shipName) return null;
+    const dict = getShipBayDictData(shipImo, shipName, { ediBayCount, vslCode: _vslCode, callsign: voyageInfo?.callsign || '', vslFull: voyageInfo?.vslFull || shipName || '' });
+    if (!dict?.bayDef?.baysSummary) return null;
+    const _isUser = isUserOwnedBayDict(dict);
+    const enrichedEntry = enrichBayDef({ bayDef: dict.bayDef }, dict._v5Matrix, containers, _isUser ? 'user' : dict.source);
+    return { ...enrichedEntry.bayDef, source: dict.source, _userOwned: _isUser, code: dict.code || '' };
+  }, [shipImo, shipName, containers, _vslCode]);
+
   // V7.52: 전 베이 최대 그리드 폭 — 베이 간 세로 정렬 기준 (사용자 확정).
   //   deck-only 베이(예: TMPZ BAY 01, 4칸)가 좌측 정렬돼 옆 베이(6칸)의 06 위치에
   //   04가 오던 문제 — 모든 베이를 전체 최대 폭 기준 가운데(0.5칸 단위)에 배치.
@@ -349,73 +360,23 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
 
     if (bayInts.length === 0) return [];
 
-    const baySet = new Set(bayInts);
     const out = [];
     const usedOddBays = new Set();
 
     if (usingDictBays) {
-      // .def 기반: 등록된 베이만 순회 (통로/건물 자동 생략)
-      for (const n of bayInts) {
-        if (n % 2 === 0) {
-          // 짝수 = 40ft 또는 20ft 트윈 슬롯
-          // M4.9c-fix: 사용자 도메인 지식 반영 — 선박 BOW/STERN 단독 베이라도
-          //   40ft(또는 20ft 트윈)를 넣을 수 있음. "20ft 전용" 같은 단정 라벨 제거.
-          //   라벨은 단순히 베이 번호만 표기, 슬롯 종류는 실제 컨테이너 데이터로 판단.
-          // M5.01 도메인 지식 보강: 짝수 단독 베이는 4곳에서 정상 —
-          //   (1) BOW 선수, (2) STERN 선미, (3) 선원건물 앞, (4) 선원건물 뒤
-          //   양옆 홀수 모두 없는 경우만이 아니라 한쪽만 있어도 정상.
-          //   .def 데이터 그대로 표시하는 게 원칙 (사용자 도메인 지식 우선).
-          const evenKey = keyBay(n);
-          const evenDisp = dispBay(n);
-          const leftOddIn = baySet.has(n - 1);
-          const rightOddIn = baySet.has(n + 1);
-
-          if (!leftOddIn && !rightOddIn) {
-            // 양쪽 홀수 모두 .def에 없음 — 단독 짝수 베이 (BOW/STERN/선원건물 앞뒤 가능)
-            out.push({
-              title: `BAY ${evenDisp}`,
-              evenBay: evenKey,
-              oddBay: null,
-              isStandalone: true,
-            });
-          } else if (rightOddIn && !usedOddBays.has(keyBay(n + 1))
-                     && (!leftOddIn || !usedOddBays.has(keyBay(n - 1)))) {
-            //  표준 트리오 짝꿍 (짝수와 오른쪽 홀수)
-            //  ★ 2.55-03 — **양쪽 홀수가 비어 있을 때만 묶는다.**
-            //    종전엔 오른쪽 홀수가 «있는가»만 보고, **왼쪽 홀수가 이미 남의 짝인지를 안 봤다.**
-            //    실측 SWTD 9012E — 31 이 (30)31 에 쓰였는데도 32 가 33 을 끌어와 (32)33 이 됐고,
-            //    32 의 40피트 44대가 **33 칸에 그림자로 찍혔다**(검수사 «짝수베이40피트 화물을 홀수베이에 표시»).
-            //    33 은 09열 한 줄짜리 단독 베이라 40피트가 들어갈 수 없는 자리다.
-            //    근거 = CASP 도면(같은 .def 를 읽는다): … 29 · (30)31 · 32 · 33 · 34.
-            //    ⚠ 선수 단독(01 없이 02 만 있는 배)은 종전대로 (02)03 으로 묶인다 — leftOddIn 이 없으면 통과.
-            //    ⚠ cargoPlanCore.autoPairBays 에 2.55-02 로 넣은 것과 **같은 규칙**이다.
-            //      이 파일이 제 벌을 따로 갖고 있어 카고플랜만 고쳐서는 베이플랜이 안 고쳐졌다.
-            out.push({
-              title: `BAY (${evenDisp})${dispBay(n + 1)}`,
-              evenBay: evenKey,
-              oddBay: keyBay(n + 1),
-            });
-            usedOddBays.add(keyBay(n + 1));
+      // ★ 2.56: 짝 짓기는 cargoPlanCore.autoPairBays 한 벌 — 페이지 목록을 buildBayPagesFromSummary 로 받는다.
+      //   종전 이 자리의 자체 루프가 «제 짝 짓기 규칙»을 따로 들고 있어 카고플랜과 갈렸다(2.55-02/-03 의 그 자리).
+      //   pairEven 만 있고 짝수 entry 가 없는 배(XTPG (08)09 등)도 이제 카고플랜과 같게 짝이 선다.
+      const corePages = dictBayDefObj ? buildBayPagesFromSummary(dictBayDefObj) : null;
+      if (corePages && corePages.length > 0) {
+        for (const p of corePages) {
+          if (p.even != null && p.odd != null) {
+            out.push({ title: `BAY (${dispBay(p.even)})${dispBay(p.odd)}`, evenBay: keyBay(p.even), oddBay: keyBay(p.odd) });
+            usedOddBays.add(keyBay(p.odd));
+          } else if (p.even != null) {
+            out.push({ title: `BAY ${dispBay(p.even)}`, evenBay: keyBay(p.even), oddBay: null, isStandalone: !!p.isStandalone });
           } else {
-            // leftOddIn만 있음 — 단독 짝수 (왼쪽 홀수는 별도 페이지)
-            //   예: 26-27 페어 후 28번. 27이 used라 28은 페어 못함.
-            //   이는 선원건물 앞/뒤의 단독 짝수일 가능성 높음 — .def 데이터 그대로 표시.
-            out.push({
-              title: `BAY ${evenDisp}`,
-              evenBay: evenKey,
-              oddBay: null,
-            });
-          }
-        } else {
-          // 홀수 베이 - 짝꿍 처리 안 됐으면 단독 페이지
-          //   M4.9c-fix: 단독 홀수도 BOW/STERN에선 40ft 가능 → "20ft" 라벨 제거
-          const oddKey = keyBay(n);
-          if (!usedOddBays.has(oddKey)) {
-            out.push({
-              title: `BAY ${dispBay(n)}`,
-              evenBay: null,
-              oddBay: oddKey,
-            });
+            out.push({ title: `BAY ${dispBay(p.odd)}`, evenBay: null, oddBay: keyBay(p.odd) });
           }
         }
       }
@@ -449,7 +410,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
     }
 
     return out;
-  }, [bayGroups, dictBayList]);
+  }, [bayGroups, dictBayList, dictBayDefObj]);
 
   // M6.92.0: 공통 색 함수 — 양하=선사(c.op), 선적=POD별 (카고플랜 V2와 동일 기준)
   const bayColorMap = useMemo(() => buildContainerColorMap(containers, mode), [containers, mode]);
@@ -909,6 +870,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             globalGridCols={globalGridCols}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
+                  dictBayDef={dictBayDefObj}
                   bayStructureMap={bayStructureMap}
                   pendingMove={pendingMove}
                   onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
@@ -950,6 +912,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             globalGridCols={globalGridCols}
                   globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
+            dictBayDef={dictBayDefObj}
             bayStructureMap={bayStructureMap}
             pendingMove={pendingMove}
             onEmptyCellClick={(bay, row, tier) => onCommitMove?.(bay, row, tier)}
@@ -1013,6 +976,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
             globalGridCols={globalGridCols}
             globalTiers={globalTiers}
                   dictBaysSummary={dictBaysSummary}
+            dictBayDef={dictBayDefObj}
             onClose={() => setPrintMode(null)}
           />
         </ErrorBoundary>
@@ -1031,7 +995,7 @@ function Legend({ color, label }) {
 }
 
 // V37 BaySection 100% 이식
-function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {},  // V9.57(I12): getCellBg 죽은 체인 제거
+function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shiftingMap, isPtk, onCellClick, cellW, cellH, fontSize, isMobile, cellColor, getOpColor, globalRowRange, globalGridCols = 0, bayStructureMap, globalTiers = [], dictBaysSummary = {}, dictBayDef = null,  // V9.57(I12): getCellBg 죽은 체인 제거
   // M4.9f 5단계: 이동 모드 (선적 모드 + pendingMove 활성)
   pendingMove, onEmptyCellClick,
   // M5.1 I: 영역 선택 모드 (선적 전용, PC)
@@ -1206,11 +1170,24 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       ? `(${String(evenBn).padStart(2, '0')})${String(oddBn).padStart(2, '0')}`
       : String(primaryBn).padStart(2, '0');
 
-    let entry = dictBaysSummary[primaryBn];
+    // ★ 2.56: 격자는 cargoPlanCore.buildBayGrid 한 벌 — «자료만 받고 그림은 베이매트릭스대로».
+    //   종전엔 짝 박스 entry 를 짝수 키로 찾았는데 매트릭스는 페어를 홀수 키에 저장한다 —
+    //   그래서 entry 를 놓치고 EDI 폴백 격자가 그려졌다(베이플랜이 카고플랜과 갈리던 근본 원인).
+    //   buildBayGrid 가 홀수 키로 정규화해 찾고 짝수 entry 의 blockedCells·hatchCount 를 합친다.
+    //   posMap 은 매트릭스에 00 명시값이 없을 때 EDI 폴백 판정에만 쓰인다(카고플랜과 같은 규칙).
+    if (dictBayDef) {
+      try {
+        const g = buildBayGrid(dictBayDef, bayKey, { posMap: buildPosMap(allContainers) });
+        if (g) return g;
+      } catch (e) {
+        console.warn('[2.56] buildBayGrid 실패 — EDI 폴백', bayKey, e);
+      }
+    }
 
-    // 사전(매트릭스)에 없으면 EDI 실데이터로 단면 골격 생성 (데크/홀드 00 분리 항상 적용).
+    // 사전(매트릭스)에 이 베이가 없으면 EDI 실데이터로 단면 골격 생성 (신선박·미등록 베이 폴백).
     //   "컨테이너 좌표가 있으니 그 자리에 넣으면 된다" — EDI 컨테이너로 tier별 cells(00 제외 row 수)를 직접 셈.
-    if (!entry) {
+    let entry = null;
+    {
       if (!allContainers || allContainers.length === 0) return null;
       const deckTierSet = new Set(), holdTierSet = new Set();
       const deckRowsByTier = {}, holdRowsByTier = {};
@@ -1264,7 +1241,7 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       console.warn('[V9.57] 베이 매트릭스 렌더 실패', bayKey, e);
       return null;
     }
-  }, [page.evenBay, page.oddBay, dictBaysSummary, pageRange, allContainers]);
+  }, [page.evenBay, page.oddBay, dictBayDef, pageRange, allContainers]);
 
   // 좌표 기반 레이아웃: 데크/홀드 각자 자기 축으로 배치 (데크엔 00 자리 안 만듦).
   //   두 축의 '중심선'을 맞춰 정렬 → 데크 02|01 경계와 홀드 00이 같은 세로선. 데크에 빈 00 칸 안 생김.
@@ -1761,7 +1738,10 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
         const gridW = nCols * STEP;
         const rowH = cellH + 2;
         let hc = 1;
-        for (const bn of [page.evenBay, page.oddBay]) {
+        // ★ 2.56: 해치 수는 격자 한 벌(buildBayGrid)의 hatchCount — 짝수 우선·0 허용(카고플랜과 동일).
+        if (pageMatrixRender && typeof pageMatrixRender.hatchCount === 'number') {
+          hc = pageMatrixRender.hatchCount;
+        } else for (const bn of [page.evenBay, page.oddBay]) {
           if (bn == null) continue;
           const db = dictBaysSummary[parseInt(bn, 10)];
           if (db?.hatchCount) { hc = Math.max(1, Math.min(3, db.hatchCount)); break; }
@@ -1853,7 +1833,10 @@ function BayPage({ page, bayGroups, completedMap, xrayList, dischargeCns, shifti
       {/* 해치커버 */}
       {(() => {
         let hc = 1;
-        for (const bn of [page.evenBay, page.oddBay]) {
+        // ★ 2.56: 해치 수는 격자 한 벌(buildBayGrid)의 hatchCount — 짝수 우선·0 허용(카고플랜과 동일).
+        if (pageMatrixRender && typeof pageMatrixRender.hatchCount === 'number') {
+          hc = pageMatrixRender.hatchCount;
+        } else for (const bn of [page.evenBay, page.oddBay]) {
           if (bn == null) continue;
           const db = dictBaysSummary[parseInt(bn, 10)];
           if (db?.hatchCount) { hc = Math.max(1, Math.min(3, db.hatchCount)); break; }

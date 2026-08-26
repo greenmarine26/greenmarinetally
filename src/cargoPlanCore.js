@@ -465,7 +465,13 @@ import { isoToLabel } from './utils.js';
 // M6.91.0: PDF STOWAGE INSTRUCTION에서 추출한 베이별 정답 데이터 사용 (DJCT/SWAT 우선).
 //   override가 있으면 추측 안 함. 없으면 베이사전 기본 fallback.
 
-export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shipBayDef, shipCode, shiftMap) {
+// ★ 2.56 (검수사 확정 2026-08-26): «자료만 받고 그림은 베이매트릭스대로.»
+//   격자(구조) 계산을 computeBayGridSpec 한 벌로 분리 — 카고플랜(computeBayRenderData)은 이 스펙 위에
+//   마크만 얹고, 베이플랜·베이상세·콘앱은 buildBayGrid 로 같은 스펙을 받아 그린다.
+//   짝 박스 (EE)OO 의 entry 는 여기서 홀수 키로 정규화해 찾는다(매트릭스는 페어를 홀수 키에 저장,
+//   짝수 키는 pairEven 으로만 존재 — shipMatrixBuilder.js:350 delete byBay[evenStr]).
+//   격자 규칙 수정은 이 파일 한 곳이다. 세 화면 동일성은 tools/smoke_baygrid.cjs 가 매 빌드 지킨다.
+export function computeBayGridSpec(bayKey, pdfBays, matrixBays, posMap, shipBayDef, shipCode) {
   // V8.98: 레이아웃이 자기 박스로 커버하는 베이 번호 집합 — "(EE)OO"는 EE·OO 둘 다, "NN"은 NN.
   const coveredBays = new Set();
   for (const k of Object.keys(pdfBays || {})) {
@@ -492,6 +498,8 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   // M6.93.10: 사용자가 매트릭스 빌더로 저장한 cells 우선 사용.
   //   bayData는 v5 matrixBays라 사용자 수정 cells 무시됨 (사용자 보고).
   //   shipBayDef.baysSummary에서 직접 lookup. 필드명 호환 (bayNo 2자리 / bay 3자리).
+  //   ★ 2.56: 짝 박스도 이 홀수 키 lookup 이 정본이다 — 짝수 키로 찾으면 매트릭스 빌더본에서
+  //     entry 를 놓쳐 폴백 격자가 그려진다(베이플랜·베이상세가 갈리던 근본 원인).
   const oddKey2 = String(oddNum).padStart(2, '0');
   const oddKey3 = String(oddNum).padStart(3, '0');
   const userBay = shipBayDef?.baysSummary?.find(b =>
@@ -525,7 +533,6 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   //   다른 베이 cells max로 추론(inferredMax)은 AI 임시 베이사전일 때만 적용.
   //   사용자가 BAY 11에 rowCount=8 입력 + BAY 23에 rowCount=10 입력하면, BAY 11은 8 그대로 (BAY 23의 10으로 추론 X).
   const userRowCount = (typeof userBay?.rowCount === 'number' && userBay.rowCount > 0) ? userBay.rowCount : null;
-  const isUserOwnedBay = isUserSource && userBay; // 이 베이는 사용자가 직접 저장한 베이
   const allBays = shipBayDef?.baysSummary || [];
   const allDeckCells = allBays.flatMap(b => Array.isArray(b.deckCells) ? b.deckCells : []).filter(c => c > 0);
   const allHoldCells = allBays.flatMap(b => Array.isArray(b.holdCells) ? b.holdCells : []).filter(c => c > 0);
@@ -684,12 +691,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   if (holdCells.length < nHold) holdCells = [...holdCells, ...new Array(nHold - holdCells.length).fill(holdRowMax)];
 
   // M6.94.1: deck/hold 그리드 통일 (사용자 정정 모델 — BayPlan의 pageBayDictGrid와 동일 정신)
-  //   기존 (M6.90.0): deck/hold 별도 폭 (deckRowMax vs holdRowMax) → 좌우 비대칭
-  //   변경: 그리드 폭 = max(deckRowMax, holdRowMax) → deck/hold 같은 폭 → 중앙선 일치
-  //   좁은 쪽(deck 또는 hold)은 align/padding으로 위치 결정 (홀 cells 안에서)
   // M6.94.7: deck/hold 폭 모두 cells 실제 max 기반 (rowCount/rowMax 아님 — 사용자 확정 원칙).
-  // 매트릭스 빌더에 입력한 deck/hold cells가 폭의 기준. rowCount 필드는 옛값일 수 있어 무시.
-  // 미리보기(buildEmptyBayRenderData)와 동일 계산 → 두 화면 일치.
   const _deckCellsMax = deckCells.map(Number).filter(v => v > 0).length ? Math.max(...deckCells.map(Number).filter(v => v > 0)) : deckRowMax;
   const _holdCellsMax = holdCells.map(Number).filter(v => v > 0).length ? Math.max(...holdCells.map(Number).filter(v => v > 0)) : holdRowMax;
   // V7.01 원본 방식 복원: cells_max가 곧 최종 폭(00 포함). +1 중복 금지(셀 늘어남 회귀).
@@ -699,7 +701,58 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const nDeckCols = deckRowPos.length;
   const nHoldCols = Math.min(holdRowPos.length, nDeckCols);
 
-  const { marks: bayMarks, xrays: bayXrays, shifts: bayShifts, urgents: bayUrgents, luggs: bayLuggs, colors: bayColors, throughs: bayThroughs, shadow20s: bayShadow20s, fulls: bayFulls } = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, coveredBays);
+  return {
+    bayKey,
+    isPair,
+    oddNum,
+    coveredBays,
+    hasEntry: !!(userBay || _evenBayForBlk),
+    deckTiers, holdTiers, nDeck, nHold,
+    hasZero, deckHasZero, holdHasZero,
+    deckCells, holdCells,
+    deckRowPos, holdRowPos, nDeckCols, nHoldCols,
+    blkDeck: _blkDeckC, blkHold: _blkHoldC,
+    // M6.94.0 사용자 시각 정렬/padding (BayBox에서 우선 적용)
+    deckAlign: userBay?.deckAlign || 'center',
+    deckPadLeft: typeof userBay?.deckPadLeft === 'number' ? userBay.deckPadLeft : 0,
+    deckPadRight: typeof userBay?.deckPadRight === 'number' ? userBay.deckPadRight : 0,
+    holdAlign: userBay?.holdAlign || 'center',
+    holdPadLeft: typeof userBay?.holdPadLeft === 'number' ? userBay.holdPadLeft : 0,
+    holdPadRight: typeof userBay?.holdPadRight === 'number' ? userBay.holdPadRight : 0,
+    // V7.57: 해치커버 수 복구. M6.94.15: 페어는 짝수(even) 베이 우선, 없으면 홀수(odd). M6.94.44: 0 허용, 홀드 없으면 0.
+    hatchCount: (() => {
+      const findBay = (n) => {
+        if (n == null || Number.isNaN(n)) return null;
+        const k2 = String(n).padStart(2, '0');
+        const k3 = String(n).padStart(3, '0');
+        return shipBayDef?.baysSummary?.find(b => b.bayNo === k2 || b.bay === k3 || b.bay === k2) || null;
+      };
+      const evenNum = isPair ? parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10) : null;
+      let src = null;
+      for (const n of [evenNum, oddNum]) {
+        const e = findBay(n);
+        if (e && typeof e.hatchCount === 'number') { src = e; break; }
+      }
+      return Math.max(0, Math.min(3, (typeof src?.hatchCount === 'number') ? src.hatchCount : ((holdTiers && holdTiers.length > 0) ? 1 : 0)));
+    })(),
+  };
+}
+
+// 스펙 + 마크 → tier별 셀 배열. marksBundle 이 null 이면 빈 격자(마크 없음 — 베이플랜·베이상세·콘앱용).
+export function assembleBayRows(spec, marksBundle) {
+  const _mb = marksBundle || {};
+  const bayMarks = _mb.marks || new Map();
+  const bayXrays = _mb.xrays || new Map();
+  const bayShifts = _mb.shifts || new Map();
+  const bayUrgents = _mb.urgents || new Map();
+  const bayLuggs = _mb.luggs || new Map();
+  const bayColors = _mb.colors || new Map();
+  const bayThroughs = _mb.throughs || new Map();
+  const bayShadow20s = _mb.shadow20s || new Map();
+  const bayFulls = _mb.fulls || new Map();
+  const { deckTiers, holdTiers, deckCells, holdCells, deckRowPos, holdRowPos, nDeckCols, nHoldCols } = spec;
+  const _blkDeckC = spec.blkDeck || new Set();
+  const _blkHoldC = spec.blkHold || new Set();
 
   // deck tier별 셀 배열 (자리 통일: STANDARD_DECK 6 tier 모두 렌더)
   const deckRows = STANDARD_DECK.map((stdT) => {
@@ -781,37 +834,123 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
     }
   });
 
+  return { deckRows, holdRows };
+}
+
+export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shipBayDef, shipCode, shiftMap) {
+  const spec = computeBayGridSpec(bayKey, pdfBays, matrixBays, posMap, shipBayDef, shipCode);
+  if (!spec) return null;
+
+  const marksBundle = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, spec.coveredBays);
+  const { deckRows, holdRows } = assembleBayRows(spec, marksBundle);
+
   return {
     bayKey,
     isPair: bayKey.startsWith('('),
-    deckTiers, holdTiers, nDeck, nHold, hasZero,
-    deckRowPos, holdRowPos, nDeckCols, nHoldCols,
+    deckTiers: spec.deckTiers, holdTiers: spec.holdTiers, nDeck: spec.nDeck, nHold: spec.nHold, hasZero: spec.hasZero,
+    deckRowPos: spec.deckRowPos, holdRowPos: spec.holdRowPos, nDeckCols: spec.nDeckCols, nHoldCols: spec.nHoldCols,
     deckRows, holdRows,
-    // M6.94.0 사용자 시각 정렬/padding (BayBox에서 우선 적용)
-    deckAlign: userBay?.deckAlign || 'center',
-    deckPadLeft: typeof userBay?.deckPadLeft === 'number' ? userBay.deckPadLeft : 0,
-    deckPadRight: typeof userBay?.deckPadRight === 'number' ? userBay.deckPadRight : 0,
-    holdAlign: userBay?.holdAlign || 'center',
-    holdPadLeft: typeof userBay?.holdPadLeft === 'number' ? userBay.holdPadLeft : 0,
-    holdPadRight: typeof userBay?.holdPadRight === 'number' ? userBay.holdPadRight : 0,
-    // V7.57: 해치커버 수 복구 — V7.05에서 computeBayRenderData를 V7.01 방식으로 원복할 때
-    //   M6.94.13의 hatchCount 반환이 함께 누락됨 (카고플랜만 해치 등분 안 됨 회귀).
-    //   M6.94.15: 페어는 짝수(even) 베이 우선, 없으면 홀수(odd). M6.94.44: 0 허용, 홀드 없으면 0.
-    hatchCount: (() => {
-      const findBay = (n) => {
-        if (n == null || Number.isNaN(n)) return null;
-        const k2 = String(n).padStart(2, '0');
-        const k3 = String(n).padStart(3, '0');
-        return shipBayDef?.baysSummary?.find(b => b.bayNo === k2 || b.bay === k3 || b.bay === k2) || null;
-      };
-      const evenNum = isPair ? parseInt(bayKey.replace('(', '').replace(')', '').slice(0, 2), 10) : null;
-      let src = null;
-      for (const n of [evenNum, oddNum]) {
-        const e = findBay(n);
-        if (e && typeof e.hatchCount === 'number') { src = e; break; }
-      }
-      return Math.max(0, Math.min(3, (typeof src?.hatchCount === 'number') ? src.hatchCount : ((holdTiers && holdTiers.length > 0) ? 1 : 0)));
-    })(),
+    deckAlign: spec.deckAlign,
+    deckPadLeft: spec.deckPadLeft,
+    deckPadRight: spec.deckPadRight,
+    holdAlign: spec.holdAlign,
+    holdPadLeft: spec.holdPadLeft,
+    holdPadRight: spec.holdPadRight,
+    hatchCount: spec.hatchCount,
+  };
+}
+
+// ------------------------------------------------------------
+// 6-B. ★ 2.56: 소비 화면용 격자 한 벌 — «자료만 받고 그림은 베이매트릭스대로»
+//   베이플랜(BayPlan)·베이상세(PrintableBayDetail)·콘앱(coneCargoPlan)이 부른다.
+//   사전 entry 가 없는 베이는 null — 호출자가 EDI 폴백(신선박·매트릭스 미등록)을 유지한다.
+// ------------------------------------------------------------
+
+// baysSummary → autoPairBays/generatePdfBays 가 먹는 matrixBays 모양.
+//   PrintableCargoPlanV2 의 «v5 없음 → baysSummary 폴백» 파생과 같은 규칙(요약본이 정답).
+export function summaryToMatrixBays(shipBayDef) {
+  const deckTiersAll = shipBayDef?.deckTiers || [];
+  const holdTiersAll = shipBayDef?.holdTiers || [];
+  const baysSummary = shipBayDef?.baysSummary || [];
+  return baysSummary.map((s) => {
+    const bayNum = Number(s.bayNo != null ? s.bayNo : s.bay);
+    const hasDeck = s.hasDeck !== false;
+    const hasHold = !!s.hasHold;
+    const summaryDeck = (s.deckTiers && s.deckTiers.length > 0) ? s.deckTiers
+      : ((s.deckTiersLocal && s.deckTiersLocal.length > 0) ? s.deckTiersLocal : null);
+    const summaryHold = (s.holdTiers && s.holdTiers.length > 0) ? s.holdTiers
+      : ((s.holdTiersLocal && s.holdTiersLocal.length > 0) ? s.holdTiersLocal : null);
+    const deckTiers = hasDeck ? (summaryDeck ? summaryDeck.map(Number) : deckTiersAll) : [];
+    const holdTiers = hasHold ? (summaryHold ? summaryHold.map(Number) : holdTiersAll) : [];
+    const deckCells = (s.deckCells && s.deckCells.length > 0) ? s.deckCells.slice(0, deckTiers.length).map(Number) : [];
+    const holdCells = (s.holdCells && s.holdCells.length > 0) ? s.holdCells.slice(0, holdTiers.length).map(Number) : [];
+    return {
+      bayNum, cells: [], hasDeck, hasHold,
+      deckCells, holdCells, deckTiers, holdTiers,
+      pairEven: s.pairEven || null,
+      isStandalone: !!s.isStandalone,
+    };
+  }).filter(b => Number.isFinite(b.bayNum) && b.bayNum > 0);
+}
+
+// 페이지(그리는 베이 목록 + 짝) — 짝 짓기는 autoPairBays 한 벌뿐이다.
+//   반환 [{ even, odd, bayKey, isStandalone }] (even/odd 는 정수 또는 null), 사전 없으면 null.
+export function buildBayPagesFromSummary(shipBayDef) {
+  const matrixBays = summaryToMatrixBays(shipBayDef);
+  if (matrixBays.length === 0) return null;
+  const byNum = new Set(matrixBays.map(b => b.bayNum));
+  const { trios, singles } = autoPairBays(matrixBays);
+  const pages = [];
+  for (const [topKey, pairKey] of (trios || [])) {
+    pages.push({ even: null, odd: parseInt(topKey, 10), bayKey: String(topKey), isStandalone: false });
+    const mm = String(pairKey).match(/^\((\d+)\)(\d+)$/);
+    if (mm) pages.push({ even: parseInt(mm[1], 10), odd: parseInt(mm[2], 10), bayKey: String(pairKey), isStandalone: false });
+  }
+  for (const s of (singles || [])) {
+    const n = parseInt(s, 10);
+    if (!Number.isFinite(n)) continue;
+    if (n % 2 === 0) pages.push({ even: n, odd: null, bayKey: String(s), isStandalone: !byNum.has(n - 1) && !byNum.has(n + 1) });
+    else pages.push({ even: null, odd: n, bayKey: String(s), isStandalone: false });
+  }
+  const prim = (p) => (p.even != null && p.odd != null) ? p.even : (p.even != null ? p.even : p.odd);
+  pages.sort((a, b) => prim(a) - prim(b));
+  return pages;
+}
+
+// 격자 한 벌 — 사전(shipBayDef)과 베이키만 주면 카고플랜과 같은 스펙으로 빈 격자를 그린다.
+//   opts.posMap: EDI 좌표(buildPosMap 결과) — 매트릭스에 명시값 없는 00 판정 폴백에만 쓰인다.
+//   opts.matrixBays / opts.pdfBays / opts.shipCode: 카고플랜 흐름에서 이미 있으면 재사용.
+export function buildBayGrid(shipBayDef, bayKey, opts = {}) {
+  if (!shipBayDef || !Array.isArray(shipBayDef.baysSummary) || shipBayDef.baysSummary.length === 0) return null;
+  let matrixBays = opts.matrixBays;
+  let pdfBays = opts.pdfBays;
+  if (!matrixBays) matrixBays = summaryToMatrixBays(shipBayDef);
+  if (!pdfBays) {
+    const { trios, singles } = autoPairBays(matrixBays);
+    pdfBays = generatePdfBays(matrixBays, trios, singles);
+  }
+  if (!pdfBays[bayKey]) {
+    // 호출자가 만든 키가 자동 짝 목록에 없으면 기본 골격만 채워 스펙 계산을 살린다
+    // (user 사전은 pdf 값을 쓰지 않으므로 그림에는 영향 없음 — entry 없으면 아래서 null).
+    pdfBays = { ...pdfBays, [bayKey]: { deck_t: [...FALLBACK_DECK6], hold_t: [...STANDARD_HOLD], has_zero: false } };
+  }
+  const spec = computeBayGridSpec(bayKey, pdfBays, matrixBays, opts.posMap || new Map(), shipBayDef, opts.shipCode || shipBayDef.code || '');
+  if (!spec || !spec.hasEntry) return null;   // 사전에 없는 베이 — 호출자 EDI 폴백
+  const { deckRows, holdRows } = assembleBayRows(spec, null);
+  return {
+    bayKey,
+    isPair: spec.isPair,
+    deckTiers: spec.deckTiers, holdTiers: spec.holdTiers, nDeck: spec.nDeck, nHold: spec.nHold, hasZero: spec.hasZero,
+    deckHasZero: spec.deckHasZero, holdHasZero: spec.holdHasZero,
+    deckRowPos: spec.deckRowPos, holdRowPos: spec.holdRowPos, nDeckCols: spec.nDeckCols, nHoldCols: spec.nHoldCols,
+    deckRows, holdRows,
+    deckAlign: spec.deckAlign,
+    deckPadLeft: spec.deckPadLeft,
+    deckPadRight: spec.deckPadRight,
+    holdAlign: spec.holdAlign,
+    holdPadLeft: spec.holdPadLeft,
+    holdPadRight: spec.holdPadRight,
+    hatchCount: spec.hatchCount,
   };
 }
 

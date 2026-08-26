@@ -393,6 +393,9 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     SMOKE_CP=$(mktemp /tmp/_smokecp_XXXXXX.cjs)
     if npx esbuild src/cargoPlanCore.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CP" --log-level=error; then
       node tools/smoke_baypair.cjs "$SMOKE_CP" "$(pwd)" || { echo "✗ 베이 짝 연막검사 실패 — 배포 금지"; exit 1; }
+      #  2.56: **베이 격자 한 벌** — 실사전 39척 전 베이에서 buildBayGrid ≡ 카고플랜, 짝 한 벌, SWTD=CASP,
+      #        소비 화면(베이플랜·베이상세·콘앱)에 옛 벌이 남지 않았는가. 한 벌만 고치면 여기서 선다.
+      node tools/smoke_baygrid.cjs "$SMOKE_CP" "$(pwd)" || { echo "✗ 베이 격자 연막검사 실패 — 배포 금지"; exit 1; }
     else
       echo "✗ 베이 짝 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
     fi
