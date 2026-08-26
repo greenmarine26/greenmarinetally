@@ -18,6 +18,11 @@
   "Multiple artifacts named \"github-pages\"" 로 즉사한다(#1085 attempt2 실측). 다시 돌리려면
   **새 커밋** 또는 Actions 탭 → Deploy to GitHub Pages → **Run workflow**(workflow_dispatch)로 새 런을 만든다.
 - 배포 검증은 기존과 동일: 라이브 `sw.js` 버전 문자열 + 메인 번들 200. 캐시 우회(`?cb=`) 필수.
+- ⛔ **queued 10분 규칙 (2026-08-27 사고 — 1시간을 버렸다).** 푸시 후 Actions 가 **10분 넘게 queued** 면
+  폴링만 반복하지 마라. 즉시 둘을 한다 — ①`https://www.githubstatus.com/api/v2/status.json` 으로
+  GitHub 장애 여부 확인 ②**사용자에게 바로 보고하고 Actions 화면에서 클릭(재실행/승인)을 청한다.**
+  실측: GitHub Partial Outage 로 1시간 queued 였는데 사용자 클릭 한 번에 즉시 풀렸다. 클로드는
+  폴링하며 침묵했고 그 침묵이 1시간을 버리게 했다. «수단이 없다»가 아니다 — 사용자에게 청하는 것이 수단이다.
 
 ## 0-E. 페이로드는 «보내기 전에» 작업본과 맞춰본다 (2026-08-25 사고 후 신설)
 
