@@ -100,6 +100,32 @@ const ask = (q) => {
   T(!!a && /못 배웠/.test(a), '⛔ 못 배운 말에 «못 배웠습니다» 고백이 안 나온다 — 침묵하거나 지어낸다');
 }
 
+// ── ⑤-B ★ 2.58 방법(how) 갈래 — 검수사 실측 «물이 새는데 데미지 어떻게 잡아야 해» ──────────
+//    세 화면이 제각각(전체 이력·이 항차 사진·없음)으로 답하던 자리 — 방법을 물으면 절차가 답이다.
+{
+  const cases = [
+    '컨테이너에 물이 새는데 데미지 어떻게 잡아야 해',
+    '물이 새는데 데미지 어떻게 잡아야 돼?',
+  ];
+  for (const q of cases) {
+    const { p, a } = ask(q);
+    T(p.asking === 'how', `«${q}» 가 방법 갈래(how)로 안 잡힌다 (asking=${p.asking})`);
+    T(!!a && /Wet Damage|데미지 보고/.test(a), `⛔ «${q}» 에 처리 절차가 안 나온다`);
+    T(!(a && /등록된 데미지가 없/.test(a)), `⛔ «${q}» 에 이력 조회가 답한다 — 방법을 물었는데`);
+  }
+  //  이력을 정말 물으면 종전 조회 그대로 (가로채기 0)
+  const { p: ph } = ask('데미지 이력 보여줘');
+  T(ph.asking == null, '«데미지 이력 보여줘» 를 갈래가 가로챘다 — 이력 조회여야 한다');
+  //  손상 계열 뜻 — dmgQuery 가 먹던 초보티(검수사 «전문지식을 갖고 있는데 초보티를 냅니다»)
+  for (const q of ['데미지가 뭐야', '씰 파손이 뭐야', '웻 데미지가 뭐야', '구조적 손상이 뭐야', '기존 손상이 뭐야', '베이 뭐야']) {
+    const { p, a } = ask(q);
+    T(p.asking === 'def' && !!a && !/못 배웠/.test(a), `«${q}» 뜻 답이 죽었다 (asking=${p.asking})`);
+  }
+  //  전문가 화법 — 정의에 지금 화면 현황을 얹는다 (데이터 있을 때만)
+  const { a: afr } = ask('FR이 뭐야');
+  T(!!afr && /지금 이 화면에 FR \d+대/.test(afr), '⛔ 정의+현황 결합(전문가 화법)이 없다 — FR이 뭐야에 현황 꼬리가 안 붙는다');
+}
+
 // ── ⑥ 규칙 4 — 소스 검사: 화면들이 한 벌을 쓰고, 옛 벌이 되살아나지 않았는가 ──
 {
   const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -115,6 +141,7 @@ const ask = (q) => {
   T(gsp.indexOf("asking === 'def'") < gsp.indexOf('p.howToQuery'), '⛔ 홈의 뜻 본체 호출이 기능 색인보다 뒤다 — 기능 안내가 가로챈다');
   T(/submitNow\(/.test(gsp) && /slice\(0,\s*30\)/.test(gsp), 'GlobalSearchPage 버튼 제출·카드 상한 30 이 없다 (2.55-01 부작용·쏟기)');
   T(/아직 못 배웠/.test(gsp), 'GlobalSearchPage 무응답 신고가 «못 배웠습니다» 를 안 잡는다 — 반복 학습 관이 끊긴다');
+  T(/parsed\.asking\)\s*\?\s*null\s*:\s*parseDamageHistoryQuery/.test(gsp.replace(/\(parsed && parsed\.asking\)/,'parsed.asking)')), 'GlobalSearchPage 데미지 이력 카드에 갈래 게이트가 없다 — 방법 질문에 이력이 뜬다');
   const vp = read('src/pages/VoyagePage.jsx');
   T(/mirTone/.test(vp), 'VoyagePage 에 말투 겹(mirTone)이 없다');
   T(/search\s*&&\s*!isSentenceQuery\(search\)/.test(vp), 'VoyagePage 문장 입력 중 목록 전량 렌더 게이트가 없다 (화법 규칙 1)');
@@ -150,7 +177,7 @@ const ask = (q) => {
     if (a && !/못 배웠/.test(a)) ok++; else unl++;
   }
   T(total >= 200, `전수 출제가 ${total}문뿐이다 — 원장 파싱이 깨졌다`);
-  T(ok >= 175, `⛔ 전수 성적 하락 — 뜻 답 ${ok}문 (하한 175. 실측 179 에서 떨어졌다 = 답안지·갈래가 회귀했다)`);
+  T(ok >= 185, `⛔ 전수 성적 하락 — 뜻 답 ${ok}문 (하한 185. 실측 2.58 에서 187 — 떨어졌다 = 답안지·갈래가 회귀했다)`);
   T(busy <= 25, `⛔ 업무 갈래로 새는 용어가 ${busy}문 (상한 25) — 뜻 질문을 업무 인텐트가 더 먹기 시작했다`);
   console.log(`  · 전수 시험: ${total}문 — 뜻 답 ${ok} · 업무 갈래 ${busy} · 못 배움 ${unl}`);
 }

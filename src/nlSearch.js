@@ -536,6 +536,10 @@ export function parseNaturalQuery(text) {
     const _defTail = /(?:이|가)?\s*(?:뭐야|뭐예요|뭐에요|뭐죠|뭐지|뭐냐|뭐니|뭔데|뭐임)\s*\?*\s*$|(?:이란|란)\s*\?*\s*$|무슨\s*뜻|뜻\s*이?\s*(?:뭐|무엇)|무슨\s*말|(?:이|가)\s*무엇/;
     //  업무 인텐트가 이미 잡혔으면 뜻이 아니다 — «남은 거 뭐야»(진행)·«83건이 뭐야»(후속)·«중복이 뭐야»(중복 조회)
     //  «빈자리가 뭐야»(빈자리) 류가 뜻으로 오판되면 기존 기능을 뺏는다(가로채기 0 이 최우선).
+    //  ★ 2.58: dmgQuery 는 뺐다 — «씰 파손이 뭐야»·«웻 데미지가 뭐야»·«데미지가 뭐야»는 뜻이 정답인데
+    //    /데미지|파손|손상/ 한 낱말 판정이 전부 이력 조회로 끌고 갔다(검수사 실측 — 초보티 목록 1번).
+    //    이력을 정말 물을 때(«데미지 이력·기록·보여줘»)만 조회가 이긴다.
+    const _histWord = /이력|내역|기록|보여|목록|건\s|사진/.test(t);
     const _busy = !!(result.digits || result.bay || hasCountFollowCtx || result.isStat || result.isAll
       || result.progressQuery || result.vacantQuery || result.capacityQuery || result.etaQuery
       || result.weightSum || result.listQuery || result.posQuery || result.bayDistQuery
@@ -544,11 +548,21 @@ export function parseNaturalQuery(text) {
       || result.customsReportQuery || result.briefingQuery || result.handoverQuery || result.carrierQuery
       || result.twinCheckQuery || result.movePathQuery || result.contactQuery || result.schedQuery
       || result.timeQuery || result.wakeQuery || result.pilotQuery || result.foodQuery || result.weatherQuery
-      || result.introQuery || result.shipIntroQuery || result.dmgQuery || result.luggQuery || result.urgentQuery
+      || result.introQuery || result.shipIntroQuery || (result.dmgQuery && _histWord) || result.luggQuery || result.urgentQuery
       || result.mirHello || result.deviceCmd);
     //  ⚠ shiftingQuery·mode·type 은 일부러 안 막는다 — «시프팅이 뭐야»·«양하가 뭐야»·«FR이 뭐야»는 뜻이 정답
     //    (검수사 실측 신고가 정확히 «FR이 뭐야 하니 위치를 알려준다» 였다).
-    result.asking = (!_busy && _defTail.test(t)) ? 'def' : null;
+    //  ★ 2.58: «어떻게(방법)» 갈래 — 검수사 실측 «물이 새는데 데미지 어떻게 잡아야 해» 에 세 화면이
+    //    제각각(전체 이력·이 항차 사진·없음)으로 답했다. 방법을 물으면 방법이 답이다 — 실무 지식(원장) →
+    //    기능 방법(매뉴얼) 순서로 본체 한 벌이 답하고, 못 찾으면 종전 경로로 흘려보낸다(조회 기능 안 막음).
+    const _howTail = /어떻게|어떡|어찌|무슨\s*방법|방법(?:이|을|은|으로|좀)?(?:\s|\?|$)|절차/;
+    //  ⚠ isAll 은 넣지 않는다 — «컨테이너에 물이 새는데…» 의 «컨테이너» 가 isAll 로 오판돼
+    //    방법 갈래를 막았다(검수사 실측 문장 그대로). «전체 어떻게 봐» 도 방법 답이 자연스럽다.
+    const _howBusy = !!(result.digits || result.bay || hasCountFollowCtx || result.isStat
+      || result.listQuery || result.posQuery || result.bayDistQuery || result.progressQuery
+      || result.contactQuery || result.schedQuery || result.timeQuery || result.mirHello || result.deviceCmd);
+    result.asking = (!_busy && _defTail.test(t)) ? 'def'
+      : ((!_howBusy && _howTail.test(t)) ? 'how' : null);
   }
 
   return result;
@@ -1086,9 +1100,25 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
     let d = null;
     try { d = mirKnowledge(parsed._raw || ''); } catch (e) { console.warn('[2.57] 실무지식 답안지 실패:', e); }
     if (!d) { try { d = generateHowToAnswer(parsed._raw || '', parsed); } catch (e) { console.warn('[2.57] 용어집 답안지 실패:', e); } }
-    if (d) return d;
+    if (d) {
+      //  ★ 2.58 전문가 화법 — 정의에 «지금 이 화면 현황» 한 줄을 얹는다(검수사 «전문지식을 갖고 있는데
+      //    초보티를 냅니다» — 전문가는 뜻을 답하며 지금 이 배 이야기로 잇는다). 데이터가 있을 때만 — 지어내지 않는다.
+      if (parsed.type && Array.isArray(results) && results.length > 0) {
+        const _lbl = ({ fr: 'FR', rf: '리퍼', dg: '위험물', ot: 'OT', tk: '탱크', xray: 'X-RAY', lolo: 'LOLO' })[parsed.type] || String(parsed.type).toUpperCase();
+        d += `\n\n(지금 이 화면에 ${_lbl} ${results.length}대가 있습니다 — «${_lbl} 어디»라고 물으시면 자리를 불러드려요)`;
+      }
+      return d;
+    }
     //  화법 규칙 6 — 모르면 모른다고 하고, 지어내지 않는다.
     return '그 말은 아직 못 배웠습니다 😿 지어내지 않을게요.\n뜻을 물으실 땐 «시프팅이 뭐야»처럼, 자리는 «FR 어디», 대수는 «리퍼 몇 대»처럼 말씀해 주시면 압니다.';
+  }
+  //  ★ 2.58: 방법을 물으면 방법으로 — 실무 지식(상황 문답) → 기능 방법(매뉴얼) → 못 찾으면 종전 경로.
+  if (parsed.asking === 'how') {
+    let h = null;
+    try { h = mirKnowledge(parsed._raw || ''); } catch (e) { console.warn('[2.58] 실무지식(방법) 실패:', e); }
+    if (!h) { try { h = generateHowToAnswer(parsed._raw || '', parsed); } catch (e) { console.warn('[2.58] 기능방법 실패:', e); } }
+    if (h) return h;
+    //  방법을 못 찾으면 고백하지 않고 흘려보낸다 — 아래 조회 인텐트가 답할 기회를 남긴다.
   }
   if (!hasAnyCondition(parsed)) return null;
   const desc = describeQuery(parsed);

@@ -174,7 +174,9 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   const ediPattern = useEdiPattern();   // 1.97
   const damageIndex = useDamageIndex();   // 2.03: 데미지 색인(메타만)
   const [dmgPhotoView, setDmgPhotoView] = useState(null);   // 2.03: { loading } | { imgs:[..], cn } | { err }
-  const dmgQ = useMemo(() => parseDamageHistoryQuery(debouncedQuery), [debouncedQuery]);
+  //  ★ 2.58: 뜻·방법 갈래(asking)가 잡힌 질문에는 이력 카드를 띄우지 않는다 — «물이 새는데 데미지
+  //    어떻게 잡아야 해» 에 남의 항차 이력 목록이 나오던 자리(검수사 실측). «데미지 이력 보여줘»는 그대로.
+  const dmgQ = useMemo(() => (parsed && parsed.asking) ? null : parseDamageHistoryQuery(debouncedQuery), [debouncedQuery, parsed]);
   const dmgHits = useMemo(() => (dmgQ ? filterDamageHits(damageIndex, dmgQ) : []), [damageIndex, dmgQ]);
   const openDmgPhoto = async (e) => {
     setDmgPhotoView({ loading: true });
