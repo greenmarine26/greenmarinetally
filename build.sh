@@ -378,8 +378,11 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.55: **두 숫자** — 대수를 물으면 실제(터미널)와 앱 기록이 둘 다 나오는가.
+    #    같은 번들을 쓴다. 가로채지 않는 것까지 잰다(겹을 넓히는 판은 그쪽이 더 위험하다).
+    node tools/smoke_bothcounts.cjs "$SMOKE_NS" || { echo "✗ 두 숫자 연막검사 실패 — 배포 금지"; exit 1; }
   else
-    echo "✗ 작업속도 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+    echo "✗ 작업속도·두 숫자 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
   #  ConeOne 2.3: **콘앱이 약신호에서 영영 멈추지 않는가** — 응답 없는 서버에 실제로 붙여서 잰다.
   node tools/smoke_cone_net.cjs || { echo "✗ 콘앱 약신호 연막검사 실패 — 배포 금지"; exit 1; }

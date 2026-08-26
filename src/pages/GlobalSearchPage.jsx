@@ -352,10 +352,14 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     if (shipCtx && /진행|얼마나\s*(?:했|됐)|어디까지|다\s*했|몇\s*프로|퍼센트|현황(?!\s*판)|끝났|몇\s*대\s*(?:했|됐)/.test(debouncedQuery)
         && !/자료/.test(debouncedQuery)) {
       const ship = shipCtx.info.vslFull || shipCtx.info.vsl;
+      // ★ 2.55: 항차 화면(SearchPanel)과 **같은 벌** — 어느 갈래로 가든 두 숫자가 다 나온다.
+      const _tw = (terminalWork || {})[String(shipCtx.info.vsl || '').toUpperCase()] || null;
+      const _pool = flat.filter((c) => c.voyageKey === shipCtx.key);
+      const _md = _pool.some((c) => c._mode === 'loading') && !_pool.some((c) => c._mode !== 'loading') ? 'loading' : 'discharge';
       if (isRealtimeProgressQuery(debouncedQuery)) {
-        return formatTerminalWorkAnswer(ship, (terminalWork || {})[String(shipCtx.info.vsl || '').toUpperCase()]);
+        return formatTerminalWorkAnswer(ship, _tw, _pool, _md);
       }
-      return formatAppTallyAnswer(ship, flat.filter((c) => c.voyageKey === shipCtx.key));
+      return formatAppTallyAnswer(ship, _pool, _tw, _md);
     }
     // 1.69-06: 완료·보관된 배의 진행 질문 — 보관소에서 찾아 «완료·보관됨»으로 결론부터 (검수사 신고 2026-08-14).
     if (!shipCtx && isChief
@@ -519,7 +523,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           if (wantMode && mode !== wantMode) continue;
           const arr = mine.filter((c) => c._mode === mode);
           if (!arr.length) continue;
-          try { parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null })); } catch (e) { /* 폴백 아래로 */ }
+          try { parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null })); } catch (e) { /* 폴백 아래로 */ }
         }
         if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
       }

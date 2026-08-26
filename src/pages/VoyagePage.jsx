@@ -2519,7 +2519,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       //   containers 는 이미 현재 모드 병합본(VoyagePage :704)이라 SearchPanel 의 modeCs 와 같은 재료.
       if (parsed?.briefingQuery) {
         return generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
-          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null });
+          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null, compMap: briefCtx?.comp || null });
       }
       if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).

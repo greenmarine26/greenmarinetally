@@ -250,6 +250,13 @@ export function parseNaturalQuery(text) {
     result.progressQuery = 'done';
   } else if (/남았|남은|안\s*한|안한|더\s*해야|더\s*들어가|더\s*실어|더\s*해|얼마나\s*남|할\s*일|미완료|남아|남나/i.test(t)) {
     result.progressQuery = 'pending';
+  } else if (/몇\s*(개|대|건)|갯수|개수|대수|수량/i.test(t) && /작업\s*한|작업\s*했|처리\s*한|처리\s*했|했어|했나|했지|했습니|했는지|한\s*거/i.test(t)
+             && !/씰|실번호|봉인|트윈|커버|해치|시프팅|사진|데미지|메모|오답|무게|중량|온도/i.test(t)) {
+    // ★ 2.55: 검수사 표준 표현 «작업한 갯수» · «몇 대 했어» 가 **하나도 안 걸리고 있었다**(실데이터 실측 — 답 자체가 안 나왔다).
+    //   윗줄 규칙에는 «다 했» 만 있어 «했어» 단독은 통과했다.
+    //   ⚠ «했어» 는 흔한 말이라 단독으로 쓰면 «어디 했어» 같은 위치 질문을 가로챈다(2.47 에서 겪은 병).
+    //   그래서 **대수를 묻는 맥락(몇 대·갯수·개수·대수·수량)일 때만** 진행 질문으로 본다.
+    result.progressQuery = 'done';
   }
 
   // M3.3: 단수
@@ -1114,7 +1121,7 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
   if (parsed.vacantQuery)    return formatVacant(parsed, allContainers);
   if (parsed.bayBreakdown)   return formatBayBreakdown(parsed, allContainers);
   if (parsed.tierStackQuery) return formatStack(parsed, allContainers);
-  if (parsed.progressQuery)  return formatProgress(parsed, results, allContainers);
+  if (parsed.progressQuery)  return formatProgress(parsed, results, allContainers, ctx);   // 2.55: 두 숫자(실제·앱)
 
   // 무게 합계
   if (parsed.weightSum) {
@@ -1438,7 +1445,12 @@ export function auditSeals(containers) {
 export function generateBriefing(containers, modeLabel, mode = 'discharge', pairsMap = null, pier = '', opts = null) {   // V7.93: pairsMap·pier — 트윈 무게 예견 · 1.86: opts.rfSkip(머스크류 — 리퍼 체크 안 함)
   // V7.90-07 재구성 (사용자 피드백): ① 평택분(작업 대상)만 집계 — 통과화물 포함 금지(7.1)
   //   ② 일반 통계 나열 대신 "검수원이 인지해야 할 특이사항" 중심, 행동 지향 문구.
-  const all = containers || [];
+  let all = containers || [];
+  //  2.55: 항차 화면은 완료를 `opts.compMap` 으로 따로 넘긴다(generateLocalAnswer 와 같은 구멍) —
+  //  안 입히면 브리핑 진행 줄이 «완료 0» 이 된다.
+  if (opts && opts.compMap && all.length && !all.some((c) => c && c._comp)) {
+    all = all.map((c) => (c && !c._comp && opts.compMap[c.cn] ? { ...c, _comp: opts.compMap[c.cn] } : c));
+  }
   const isPtk = (c) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
   const cs = all.filter(isPtk);
   const transit = all.filter(c => !isPtk(c));
@@ -1591,7 +1603,11 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   } else {
     lines.push(`📌 작업: ${total}대 (Full ${F} / Empty ${E} · ${szStr}) · 베이 ${bayArr[0]}~${bayArr[bayArr.length - 1]} (${bayArr.length}개) · 갑판 ${deck} / 홀드 ${hold}`);
   }
-  if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
+  // ★ 2.55: 브리핑의 진행 줄도 **두 숫자**다(검수사 확정). 대수를 내는 곳이 화면마다 다른 수를 내면
+  //   검수사가 어느 것을 믿을지 판단해야 한다 — 이 저장소가 무게·완료판정에서 이미 겪은 병이다.
+  const _bBrief = (opts && opts.tw) ? bothCounts(cs.map((c) => ({ ...c, _mode: mode, _ptk: true })), { tw: opts.tw }, mode) : null;
+  if (_bBrief && _bBrief.length) { lines.push('📈 진행 — 두 가지'); _bBrief.forEach((x) => lines.push('  ' + x)); }
+  else if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
   if (warns.length) {
     lines.push(`⚠ 주의사항`);
     for (const w of warns) lines.push(`  ${w.line}`);
@@ -2114,7 +2130,7 @@ function formatStack(parsed, allContainers) {
 }
 
 // M3.3: 진행 상황
-function formatProgress(parsed, results, allContainers) {
+function formatProgress(parsed, results, allContainers, ctx = null) {
   // 진행 상황 자체는 desc에서 빼고 깔끔하게
   const baseDesc = describeQuery({ ...parsed, progressQuery: null }) || '전체';
 
@@ -2126,7 +2142,22 @@ function formatProgress(parsed, results, allContainers) {
   const pct = totalCount > 0 ? Math.round(doneCount / totalCount * 100) : 0;
 
   const lines = [];
-  if (parsed.progressQuery === 'done') {
+  // ★ 2.55 (검수사 확정): 대수를 물으면 **실제(터미널)와 앱 기록 둘 다** 낸다.
+  //   조건 없는 질문(«몇 대 했어»·«얼마나 남았어»)에서만 세운다 — 베이·규격이 붙은 질문
+  //   («20번 베이 남은 거»)은 터미널 실적에 그 구분이 없어 두 수를 나란히 놓으면 거짓말이 된다.
+  const _plain = !parsed.bay && !parsed.size && !parsed.fe && !parsed.type && !parsed.temp
+    && !parsed.zone && !parsed.dgClass && !parsed.un && !parsed.pod && !parsed.pol
+    && !parsed.portAny && !parsed.digits && !parsed.bayTrio
+    && parsed.weightMin == null && parsed.weightMax == null;
+  let _both = null;
+  if (_plain) {
+    const _md = parsed.mode || (baseResults.length ? (baseResults[0]._mode || 'discharge') : 'discharge');
+    try { _both = bothCounts(baseResults, ctx, _md); } catch (e) { _both = null; }
+  }
+  if (_both && _both.length) {
+    lines.push(parsed.progressQuery === 'done' ? '✅ 작업한 대수 — 두 가지로 말씀드립니다.' : '⏳ 남은 대수 — 두 가지로 말씀드립니다.');
+    _both.forEach((l) => lines.push(l));
+  } else if (parsed.progressQuery === 'done') {
     lines.push(`✅ ${baseDesc} 완료: ${doneCount}대 / 전체 ${totalCount}대 (${pct}%)`);
     lines.push(`남은 작업: ${pendingCount}대`);
   } else {
@@ -2139,16 +2170,19 @@ function formatProgress(parsed, results, allContainers) {
     lines.push('더 자세히 물으실 수 있어요 — "지금 홀드 몇 개 남았어"로 상세 확인 · "몇 시에 끝나"로 상세 확인 · "몇 시간 걸릴까"로 상세 확인');
   }
 
-  if (results.length > 0 && results.length <= 50) {
-    lines.push('', `${parsed.progressQuery === 'done' ? '완료된' : '남은'} 컨 (${Math.min(results.length, 10)}대):`);
-    results.slice(0, 10).forEach((c, i) => {
+  //  2.55: 표본은 **baseResults 에서 다시 뽑는다.** 넘겨받은 results 는 완료가 입혀지기 전에 걸러진 것이라
+  //   항차 화면에서 «완료된 컨» 목록이 통째로 비어 있었다(숫자와 목록이 어긋난다).
+  const shown = baseResults.filter((c) => (parsed.progressQuery === 'done' ? !!c._comp : !c._comp));
+  if (shown.length > 0 && shown.length <= 50) {
+    lines.push('', `${parsed.progressQuery === 'done' ? '완료된' : '남은'} 컨 (${Math.min(shown.length, 10)}대):`);
+    shown.slice(0, 10).forEach((c, i) => {
       const tag = [];
       if (c.fe) tag.push(c.fe);
       if (c.rf && c.tmp) tag.push(`${c.tmp}°C`);
       if (c.dg) tag.push(`DG${c.dgc || ''}`);
       lines.push(`  ${i + 1}. ${c.cn?.slice(-4) || '?'} @ ${fmtPos(c) || '?'}${tag.length ? ' [' + tag.join(' ') + ']' : ''}`);
     });
-    if (results.length > 10) lines.push(`  ... 외 ${results.length - 10}대`);
+    if (shown.length > 10) lines.push(`  ... 외 ${shown.length - 10}대`);
   }
   return lines.join('\n');
 }
@@ -2158,10 +2192,69 @@ function formatProgress(parsed, results, allContainers) {
 //    실시간 작업보드처럼 알려줘야 함. 현 진행 상황은/실제 진행 상황은 — 2가지 다른 답이 나와야 함."
 //   항차 화면(SearchPanel)과 통합검색(GlobalSearchPage)이 이 함수들을 함께 쓴다 — 답의 근본은 하나.
 //   각 답 끝에 반대쪽 안내 한 줄을 붙여 두 갈래가 서로를 가리킨다.
+// ─── ★ 2.55 — 대수를 물으면 **두 숫자로 답한다** (검수사 확정 2026-08-26) ───
+//   *«이제 작업한 갯수를 물어보거나 남은갯수를 물어보면 두가지 답이 나와야 합니다.
+//     실제로 작업한거와 앱에 기록된거»* · *«당분간은 그렇게 가야합니다 앱으로 전부 작업할때까지는»*
+//
+//   ★ 왜 — 검수사 말고는 앱에 완료를 거의 안 찍는다. 실측(STSE 2665E · 08-26 10:00):
+//     터미널 실적 **181대**인데 앱 기록 **116대** — 65대가 안 찍혀 있다.
+//     한 숫자만 내면 어느 쪽을 내도 틀린 답이 된다. 그래서 둘 다 내고 **차이까지 말한다.**
+//   ⚠ 이것은 1.69-02(«실제» 라고 말해야 터미널 답이 나오는 두 갈래)를 **대체한다.**
+//     그때는 검수사가 «실제 진행 상황» 이라고 물어야 터미널 수를 봤다 — 그 말을 모르면 앱 수만 봤다.
+//     이제 묻는 말과 상관없이 둘 다 나온다. 두 갈래 함수는 남기되 서로의 숫자를 한 줄씩 싣는다.
+//   ⛔ 판정을 두 벌로 만들지 않는다 — 진행 답·앱 갈래·터미널 갈래·브리핑이 **전부 이 함수**를 부른다.
+export function twOfCtx(ctx) {
+  if (!ctx) return null;
+  if (ctx.tw && typeof ctx.tw === 'object') return ctx.tw;   // 두 갈래 함수는 레코드를 직접 넘긴다
+  const tws = ctx.terminalWork;
+  if (!tws || typeof tws !== 'object') return null;
+  const info = ctx.info || {};
+  const a = String(ctx.vsl || info.vsl || '').toUpperCase();
+  const b = String(ctx.vslFull || info.vslFull || '').toUpperCase();
+  const tw = (a && tws[a]) || (b && tws[b]) || null;
+  return (tw && typeof tw === 'object') ? tw : null;
+}
+
+//  두 숫자 블록을 줄 배열로 낸다. 낼 것이 없으면 null (있는 척하지 않는다).
+export function bothCounts(pool, ctx, mode) {
+  const md = mode === 'loading' ? 'loading' : 'discharge';
+  //  앱 기록 — 평택분만 센다(7.1). `_ptk` 가 아예 없는 화면도 있어 false 일 때만 뺀다.
+  const app = (pool || []).filter((c) => c && c._ptk !== false && (c._mode || 'discharge') === md);
+  const appTotal = app.length;
+  const appDone = app.filter((c) => !!c._comp).length;
+
+  //  터미널 실적 — 트레드링스 자료다. **앱과 무관하다**(검수원이 앱을 안 써도 여기엔 찍힌다).
+  const tw = twOfCtx(ctx);
+  const terDone = tw ? (Number(md === 'loading' ? tw.lodDone : tw.disDone) || 0) : 0;
+  const terPlan = tw ? (Number(md === 'loading' ? tw.lodPlan : tw.disPlan) || 0) : 0;
+  const hasTer = !!(tw && terPlan > 0);
+  if (!hasTer && !appTotal) return null;
+
+  const L = [];
+  if (hasTer) L.push(`🏗 실제(터미널) ${terDone}대 / ${terPlan}대 — 남은 ${Math.max(0, terPlan - terDone)}대`);
+  if (appTotal) L.push(`📱 앱 기록 ${appDone}대 / ${appTotal}대 — 남은 ${appTotal - appDone}대`);
+  else L.push('📱 앱 기록 없음 — 이 항차는 앱으로 검수하지 않았습니다.');
+
+  //  차이를 **말로** 짚는다. 숫자 두 줄만 던지면 어느 쪽을 믿을지 검수사가 판단해야 한다.
+  if (hasTer && appTotal) {
+    const gap = terDone - appDone;
+    if (gap > 0) L.push(`⚠ ${gap}대는 실제로 작업했는데 앱에 안 찍혔습니다 (전근무자 작업분 등).`);
+    else if (gap < 0) L.push(`⚠ 앱이 ${-gap}대 더 많습니다 — 터미널 피드가 아직 안 따라왔을 수 있어요.`);
+    else L.push('✅ 두 숫자가 같습니다 — 앱 기록이 실제와 맞습니다.');
+  } else if (!hasTer) {
+    L.push('⚠ 터미널 실적 피드가 아직 없어 «실제로 작업한 수»는 모릅니다.');
+  }
+  if (hasTer && tw.updatedAt) {
+    const m = Math.round((Date.now() - (Number(tw.updatedAt) || 0)) / 60000);
+    if (m >= 0 && m < 60 * 24) L.push(`   (터미널 피드 ${m}분 전 갱신)`);
+  }
+  return L;
+}
+
 export const isRealtimeProgressQuery = (q) => /실제|실시간|실황|터미널/.test(String(q || ''));
 
 // 터미널 실황 답 — 실시간 작업보드형 (양하 N/N · 선적 N/N · % · 지연 · 시작 · 터미널 ETD · 피드 나이)
-export function formatTerminalWorkAnswer(ship, tw) {
+export function formatTerminalWorkAnswer(ship, tw, containers = null, mode = 'discharge') {   // 2.55: 앱 기록도 같이
   if (!tw || !(tw.disPlan || tw.lodPlan)) {
     return `${ship} — 터미널 실황 피드가 아직 없습니다.\n앱 검수 기록은 «진행 상태»로 물어보세요.`;
   }
@@ -2181,15 +2274,24 @@ export function formatTerminalWorkAnswer(ship, tw) {
   if (tw.startAt) L.push(`작업 시작 ${String(tw.startAt).slice(5, 16)}`);
   if (tw.depEtd) L.push(`출항 예정 ${String(tw.depEtd).slice(5, 16)} (터미널 기준)`);
   if (tw.updatedAt) { const m = Math.round((Date.now() - tw.updatedAt) / 60000); L.push(`터미널 피드 ${m}분 전 갱신`); }
-  L.push('앱 검수 기록은 «진행 상태»로 물어보세요.');
+  // ★ 2.55: 앱 기록을 **묻지 않아도** 같이 낸다 — 검수사 확정 «두가지 답이 나와야 합니다».
+  //   종전에는 «앱 검수 기록은 «진행 상태»로 물어보세요» 라고 안내만 했다(그 말을 알아야 볼 수 있었다).
+  if (containers && containers.length) {
+    const _b = bothCounts(containers, { tw }, mode);
+    if (_b && _b.length) { L.push(''); _b.forEach((x) => L.push(x)); }
+  }
   return L.join('\n');
 }
 
 // 앱 검수 기록 답 — completed/전체 · % · 검수사별(기록에 by 가 있으면). 평택분 기준(7.1).
-export function formatAppTallyAnswer(ship, containers) {
+export function formatAppTallyAnswer(ship, containers, tw = null, mode = 'discharge') {   // 2.55: 터미널 실적도 같이
   const pool = (containers || []).filter((c) => c._ptk);
   const done = pool.filter((c) => c._comp);
+  // ★ 2.55: 앱 기록이 없어도 **터미널 실적으로는 답할 수 있다** — 검수사가 앱을 안 쓴 항차가 대부분이다.
+  //   종전에는 «앱 검수 기록 없음» 한 줄로 끝나 실제로 몇 대 내려갔는지 아무 데서도 못 봤다.
   if (!done.length) {
+    const _b0 = tw ? bothCounts(pool, { tw }, mode) : null;
+    if (_b0 && _b0.length) return `${ship} — 앱 검수 기록은 없지만 터미널 실적으로 말씀드립니다.\n` + _b0.join('\n');
     return `${ship} — 앱 검수 기록 없음(이 항차는 앱 검수 미사용).\n실제(터미널) 진행은 «실제 진행 상황»으로 물어보세요.`;
   }
   const seg = [];
@@ -2213,7 +2315,10 @@ export function formatAppTallyAnswer(ship, containers) {
   done.forEach((c) => { const n = c._comp && c._comp.by; if (n) by[n] = (by[n] || 0) + 1; });
   const names = Object.entries(by).sort((a, b) => b[1] - a[1]);
   if (names.length) out.push(`검수사별 — ${names.map(([n, k]) => `${n} ${k}대`).join(' · ')}`);
-  out.push('실제(터미널) 진행은 «실제 진행 상황»으로 물어보세요.');
+  // ★ 2.55: 터미널 실적을 **묻지 않아도** 같이 낸다(검수사 확정). 안내 문구로 미루지 않는다.
+  const _b = tw ? bothCounts(pool, { tw }, mode) : null;
+  if (_b && _b.length) { out.push(''); _b.forEach((x) => out.push(x)); }
+  else out.push('실제(터미널) 진행은 «실제 진행 상황»으로 물어보세요.');
   return out.join('\n');
 }
 
@@ -2852,6 +2957,18 @@ export function generateFoodAnswer(slot) {
 }
 
 export function generateLocalAnswer(parsed, results, allContainers, ctx = null) {
+  // ★ 2.55: **완료가 오는 길이 화면마다 다르다.** 통합검색(SearchPanel)의 컨에는 `_comp` 가 붙어 오는데,
+  //   항차 화면(VoyagePage)의 `containers` 에는 없고 완료는 `ctx.compMap` 으로 **따로** 온다.
+  //   2.52-01 은 이 구멍을 `mirEyes` 에서만 메웠다 — `nlSearch` 안에는 `compMap` 참조가 **0건**이라,
+  //   검수사가 실제로 쓰는 양하 탭에서 진행·잔여·페이스가 전부 «완료 0» 으로 나왔다
+  //   (실측 STSE 2665E — 앱에 116대가 찍혀 있는데 «완료 0대 / 남은 449대» 라고 답했다).
+  //   ⇒ **여기서 한 번만** 입혀 내린다. 그러면 formatProgress·generateBriefing·formatEta 가 같은 값을 본다.
+  const _cm = ctx && ctx.compMap;
+  if (_cm && Array.isArray(allContainers) && allContainers.length && !allContainers.some((c) => c && c._comp)) {
+    const _wear = (c) => (c && !c._comp && _cm[c.cn] ? { ...c, _comp: _cm[c.cn] } : c);
+    allContainers = allContainers.map(_wear);
+    if (Array.isArray(results)) results = results.map(_wear);
+  }
   const out = _localAnswerCore(parsed, results, allContainers, ctx);
   if (!out || typeof out !== 'string') return out;
   //  위치를 묻는 갈래에서만 본다 — 대수·온도 질문에까지 붙이면 잔소리가 된다.

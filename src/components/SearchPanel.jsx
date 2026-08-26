@@ -964,10 +964,16 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         && !/자료|브리핑|요약/.test(query)
         && !parsed.digits && parsed.bay == null && !parsed.zone && !parsed.size && !parsed.fe && !parsed.type) {
       const ship = voyage?.info?.vslFull || voyage?.info?.vsl || '';
+      // ★ 2.55 (검수사 확정 2026-08-26): 어느 갈래로 가든 **두 숫자가 다 나온다.**
+      //   *«이제 작업한 갯수를 물어보거나 남은갯수를 물어보면 두가지 답이 나와야 합니다»*
+      //   1.69-02 는 «실제» 라고 말해야 터미널 수를 보여 줬다 — 그 말을 모르면 앱 수만 봤고,
+      //   앱에 안 찍힌 전근무자 작업분(실측 65대)이 통째로 안 보였다.
+      const _tw = (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null;
+      const _md = workFilter === 'loading' ? 'loading' : 'discharge';
       if (isRealtimeProgressQuery(query)) {
-        return formatTerminalWorkAnswer(ship, (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()]);
+        return formatTerminalWorkAnswer(ship, _tw, allContainers, _md);
       }
-      return formatAppTallyAnswer(ship, allContainers);
+      return formatAppTallyAnswer(ship, allContainers, _tw, _md);
     }
     // 1.69-01: 브리핑 속 «N건» 후속 — "실 점검 필요 83건" 뒤 "83건이 뭐야"가 끝자리 검색으로
     //   빠졌다(검수사 신고). 직전 답 주제를 기억해 그 주제의 상세로 잇는다. howToQuery보다 앞.
@@ -1077,7 +1083,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (parsed.briefingQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
       const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');   // V7.93: 트윈 무게 예견
-      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '', { rfSkip, eseal: workFilter === 'loading' ? esealBrief : null, photos: voyage?.photos || null });   // 1.86·1.87·2.05-01(사전 데미지)
+      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '', { rfSkip, eseal: workFilter === 'loading' ? esealBrief : null, photos: voyage?.photos || null, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null });   // 1.86·1.87·2.05-01(사전 데미지)
     }
     // V7.90-05: 실번호 점검 (사용자 요청 — 씰 오류 사전 예측)
     if (parsed.sealAuditQuery) {
