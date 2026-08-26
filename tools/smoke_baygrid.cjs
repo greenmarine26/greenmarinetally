@@ -94,6 +94,23 @@ const dicts = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/baygrid
     const g33 = CP.buildBayGrid(bayDef, '33');
     const act33 = g33 ? g33.deckRows.filter(r => !r.invisible).map(r => r.cells.map((c, i) => c.active ? g33.deckRowPos[i] : null).filter(Boolean).join(',')) : [];
     T(act33.length > 0 && act33.every(x => x === '09'), `⛔ SWTD 33 이 09 한 줄이 아니다: ${JSON.stringify(act33)}`);
+    // ★ 2.56-02 앵커 — 이웃 베이(32·34)의 40피트 그림자(X)는 33의 차단칸을 뚫지 못한다.
+    //   검수사 실측: 카고플랜 33베이 차단열 10칸에 X 잔재(CASP 실물은 X 없음 — 09 한 줄뿐).
+    {
+      const mb = CP.summaryToMatrixBays(bayDef);
+      const pr = CP.autoPairBays(mb);
+      const pdfB = CP.generatePdfBays(mb, pr.trios, pr.singles);
+      const shadow = [];
+      for (const row of ['10', '08', '06', '04', '02', '01', '03', '05', '07']) {
+        shadow.push({ cn: `ADJX${row}82`, bay: '32', row, tier: '82', iso: '45G1', pod: 'KRPTK', fe: 'F' });
+      }
+      const r33 = CP.computeBayRenderData('33', pdfB, mb, CP.buildPosMap(shadow), 'KRPTK', CP.defaultGetSelfMark, {}, () => null, () => false, bayDef, 'SWTD', {});
+      const t82 = r33 && r33.deckRows.find(r => !r.invisible && Number(r.tier) === 82);
+      const xCnt = t82 ? t82.cells.filter(c => c.active && c.mark === 'X').length : -1;
+      const blkCnt = t82 ? t82.cells.filter(c => c.blocked).length : -1;
+      T(xCnt === 0, `⛔ SWTD 33 차단칸에 이웃 40ft X 가 ${xCnt}개 뚫고 들어왔다 (기대 0)`);
+      T(blkCnt === 10, `⛔ SWTD 33 82단 차단칸이 ${blkCnt}개 (기대 10 — 09 만 남는다)`);
+    }
     const holdActive = g01 ? g01.holdRows.filter(t => !t.invisible).map(t => t.cells.filter(c => c.active).length) : [];
     T(JSON.stringify(holdActive) === JSON.stringify([5, 3, 3, 1]), `⛔ SWTD 01 홀드 단면 ${JSON.stringify(holdActive)} (CASP [5,3,3,1])`);
   }

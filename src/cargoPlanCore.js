@@ -309,7 +309,7 @@ export function buildPosMap(containers) {
 // xrayMap: { cn: true } 형태. 해당 컨테이너 위치에 xray 플래그 표시.
 // getColorKeyFn(c): 컨테이너의 컬러 매핑 key 반환 (양하: 선사코드, 선적: POD 3자). 평택분 외엔 null.
 // isThroughFn(c): 통과화물 판정. 회색 셀 처리용.
-export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, coveredBays) {
+export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, coveredBays, blockedSets) {
   const marks = new Map();
   const xrays = new Map();
   const shifts = new Map();  // V8.98: 쉬프팅(재적부) 컨테이너 위치 플래그
@@ -432,6 +432,15 @@ export function buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getCo
           if (bb === adjEven) {
             const tierMap = ensureTier(tier);
             for (const [rowLbl, c] of rowMap.entries()) {
+              // ★ 2.56-02: 차단칸(선박 구조상 없는 자리)에는 **이웃 베이의 그림자를 그리지 않는다.**
+              //   실측 SWTD 33베이 — 09열 한 줄만 있는 베이인데 이웃 32·34의 40피트 44+40대가
+              //   차단열 10칸에 X 로 찍혔다(검수사 «왜 잔재가 보여야 하는지»). CASP 실물은 X 없음.
+              //   자기 베이 실컨이 차단칸을 뚫는 안전장치(사전 오설정 증거)는 그대로다 — 여기는
+              //   «남의 베이 컨의 그림자»라 자리가 없으면 그리지 않는 것이 물리적으로 맞다.
+              if (blockedSets) {
+                const _bSet = tier >= 80 ? blockedSets.deck : blockedSets.hold;
+                if (_bSet && _bSet.has(`${tier}-${rowLbl}`)) continue;
+              }
               // M6.91.2: ISO 6346 표준 사이즈 판정.
               //   isoToLabel로 정규화 (45GP → 40HC, L5G1 → 45HC, 45R1 → 40RF 등)
               //   → 양하/선적이 다른 표기로 들어와도 일관 분류.
@@ -848,7 +857,7 @@ export function computeBayRenderData(bayKey, pdfBays, matrixBays, posMap, pod, g
   const spec = computeBayGridSpec(bayKey, pdfBays, matrixBays, posMap, shipBayDef, shipCode);
   if (!spec) return null;
 
-  const marksBundle = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, spec.coveredBays);
+  const marksBundle = buildBayMarks(bayKey, posMap, pod, getSelfMarkFn, xrayMap, getColorKeyFn, isThroughFn, shiftMap, spec.coveredBays, { deck: spec.blkDeck, hold: spec.blkHold });
   const { deckRows, holdRows } = assembleBayRows(spec, marksBundle);
 
   return {
