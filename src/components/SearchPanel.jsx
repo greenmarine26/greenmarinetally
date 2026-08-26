@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw } from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, fullContainerNo, isSentenceQuery} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery } from '../chiefAnswers.js';   // 1.90·1.91·1.92
@@ -54,11 +54,8 @@ function useEquipNo() {
 //   끝 4자리 중복이 있는 배에서 유일하게 안전한 입력이 전체 번호다.
 //   ⚠ 조회창은 숫자 패드다(inputUtils 확정) — 영문 4자리를 못 치는 화면이 있으므로
 //     숫자부만(`3000276`) 쳐도 같은 한 대로 좁혀 준다.
-const CN_FULL_RE = /^[A-Z]{4}\d{6,7}$/;
-function fullCnOf(v) {
-  const s = String(v || '').replace(/[\s-]/g, '').toUpperCase();
-  return CN_FULL_RE.test(s) ? s : '';
-}
+//  2.55-01: 컨번호 정규식·판정은 utils 한 벌을 쓴다(여기 있던 사본을 걷어냈다).
+const fullCnOf = (v) => fullContainerNo(v);   // 2.55-01: utils 한 벌로 이관
 // 끝 4자리로 이미 좁혀진 목록을 **전체 번호(또는 숫자부)** 로 한 대까지 좁힌다.
 //   못 찾으면 원래 목록을 그대로 돌려준다 — 오타로 "없습니다"가 되지 않게(회귀 방지).
 function narrowByFullCn(list, q) {
@@ -806,7 +803,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     setReasked(q === lastAskRef.current);
     lastSpokenRef.current = null;
     setAskedAt(Date.now());
-    setDraft(q); setQuery(q); logQuerySettled(q);
+    setDraft(q); setQuery(q); logQuerySettled('nls', q, { voyageKey });
   };
   const followUp = (q) => {
     const cur = (draft || query || '').trim();
@@ -826,7 +823,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   }, [relayQuery]);
   // TallyOne 1.55: 전체 컨번호(DWSU3000276)는 **문장이 아니다.**
   //   종전엔 글자가 섞였다는 이유로 문장으로 갈려, 다 치고 전송키를 누르기 전까지 아무것도 안 나왔다.
-  const isSentence = (v) => !fullCnOf(v) && /[가-힣A-Za-z]/.test(String(v || '')) && !/^[\d\s-]+$/.test(String(v || ''));
+  const isSentence = (v) => isSentenceQuery(v);   // 2.55-01: 세 창이 같은 판정을 쓴다(utils 한 벌)
   // 1.69-05: 같은 질문 두 번 — 종전엔 setQuery(같은 문자열)가 무반응이었다(검수사 신고 2026-08-14
   //   "같은 질문 두 번 하면 반응 없음. 엔터 기능이 없어서 전달되었는지 모름").
   //   재제출이면 lastSpokenRef를 풀어 다시 말하고, 답 박스에 «다시 확인했습니다» 한 줄로 갱신을 보여준다.
@@ -835,7 +832,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     setReasked(v === lastAskRef.current);
     lastSpokenRef.current = null;
     setAskedAt(Date.now());
-    setQuery(v); logQuerySettled(v);
+    setQuery(v); logQuerySettled('nls', v, { voyageKey });
   };
   const [askedAt, setAskedAt] = useState(null);   // 1.69-05: 질문 접수 시각 — «질문 접수 HH:MM» + 재발화 트리거
   const [reasked, setReasked] = useState(false);  // 1.69-05: 같은 질문 재제출 표시
@@ -1200,10 +1197,10 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
         const alts = []; for (let i = 0; i < last.length; i++) alts.push(last[i].transcript);
         const t = pickSpeechAlternative(alts).trim();
         setTranscript(t);
-        if (t.length >= 2) { voiceQueryRef.current = t; setReasked(t === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(t); setQuery(t); logQuerySettled(t); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록   // 1.69-05: 같은 질문 다시 말해도 답한다
+        if (t.length >= 2) { voiceQueryRef.current = t; setReasked(t === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(t); setQuery(t); logQuerySettled('nls', t, { voyageKey }); }   // 1.22: 음성은 종전대로 즉답   // TallyOne 1.3: 음성 조회 기록   // 1.69-05: 같은 질문 다시 말해도 답한다
         else {
           const digits = parseSpokenDigits(text);
-          if (digits && digits.length >= 2) { setReasked(digits === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(digits); setQuery(digits); logQuerySettled(digits); }
+          if (digits && digits.length >= 2) { setReasked(digits === lastAskRef.current); lastSpokenRef.current = null; setAskedAt(Date.now()); setDraft(digits); setQuery(digits); logQuerySettled('lookup', digits, { voyageKey }); }
           else speak('인식 실패');
         }
       }
@@ -1237,7 +1234,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       setFixingVoice(false);
       if (fixed && fixed !== q) {
         const p2 = parseNaturalQuery(fixed);
-        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setDraft(fixed); setQuery(fixed); logQuerySettled(fixed); }
+        if (hasAnyCondition(p2)) { voiceQueryRef.current = fixed; setDraft(fixed); setQuery(fixed); logQuerySettled('nls', fixed, { voyageKey }); }
       }
     }).catch(() => { if (alive) setFixingVoice(false); });
     return () => { alive = false; };
@@ -1381,7 +1378,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
               setAskedAt(null); setReasked(false);           // 1.69-05: 새로 치는 중 — 접수 표시 해제
               if (!v.trim()) lastSpokenRef.current = null;   // 1.69-05: 지웠다가 다시 물으면 다시 말한다
               // 숫자·빈 입력은 즉답(종전 동작). 문장은 전송키를 누를 때까지 답하지 않는다.
-              if (!isSentence(v)) { setQuery(v); logQuerySettled(v); }
+              if (!isSentence(v)) { setQuery(v); logQuerySettled('lookup', v, { voyageKey }); }
               else if (query) setQuery('');
             }}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitDraft(); } }}

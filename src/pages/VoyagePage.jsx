@@ -12,7 +12,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay } from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -2134,7 +2134,10 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
     else if (filter === 'reeferTemp') arr = arr.filter(c =>
       (c.rf || /^..R/.test(c.iso || '')) && !c.rfdry && !c.mkcon &&
       (c.fe === 'F' || c.fe === '' || c.fe == null) && (!c.tmp || String(c.tmp).trim() === ''));
-    if (search) {
+    //  ★ 2.55-01: **문장은 치는 중에 거르지 않는다.** «FR» 이 컨번호로 잡혀 100대를 뿌리고 있었다
+    //    (검수사 신고 · activity_log 260826 12:34~35 에 8단계가 그대로 찍혀 있다).
+    //    숫자·컨번호는 종전대로 즉답 — 갑판에서 쓰는 빠른 길이라 막지 않는다.
+    if (search && !isSentenceQuery(search)) {
       const q = search.toUpperCase();
       arr = arr.filter(c => c.cn?.includes(q) || c.l4?.includes(q) || c.bay?.includes(q));
     }
@@ -2209,7 +2212,7 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
             inputMode={kb}
             onChange={e => setSearch(e.target.value.toUpperCase())}
             onKeyDown={e => {
-              if (e.key === 'Enter' && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
+              if (e.key === 'Enter' && search.trim().length >= 2 && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌
                 e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
               }
             }}
@@ -2675,7 +2678,10 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
     let arr = base;
     if (filter === 'done') arr = arr.filter(c => compMap[c.cn]);
     else if (filter === 'undone') arr = arr.filter(c => !compMap[c.cn]);
-    if (search) {
+    //  ★ 2.55-01: **문장은 치는 중에 거르지 않는다.** «FR» 이 컨번호로 잡혀 100대를 뿌리고 있었다
+    //    (검수사 신고 · activity_log 260826 12:34~35 에 8단계가 그대로 찍혀 있다).
+    //    숫자·컨번호는 종전대로 즉답 — 갑판에서 쓰는 빠른 길이라 막지 않는다.
+    if (search && !isSentenceQuery(search)) {
       const q = search.toUpperCase();
       const match = (c) => c.cn?.includes(q) || c.l4?.includes(q);
       const hit = arr.filter(match);
@@ -2741,7 +2747,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
             inputMode={kb}
             onChange={e => setSearch(e.target.value.toUpperCase())}
             onKeyDown={e => {
-              if (e.key === 'Enter' && search.trim().length >= 2 && !/^[0-9A-Z\s-]{1,15}$/.test(search.trim())) {
+              if (e.key === 'Enter' && search.trim().length >= 2 && isSentenceQuery(search.trim())) {   // 2.55-01: 판정 한 벌
                 e.preventDefault(); const q = search.trim(); setSearch(''); setAsk({ q, stack: [] });   // 1.85-05
               }
             }}

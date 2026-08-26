@@ -2,8 +2,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort } from '../utils.js';
+import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery} from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
 import { mirTone, mirSmallTalk } from '../mirChat.js';
@@ -69,10 +70,20 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
   // M6.10: debounce — 키 입력마다 즉시 검색하지 않고 200ms 후 검색
   //   대용량 (수천 대 컨테이너) 환경에서 입력 반응성 개선
   useEffect(() => {
+    // ★ 2.55-01 (검수사 신고 2026-08-26): **문장은 치는 중에 답하지 않는다.**
+    //   *«문자를 입력 받을때는 질문을 다 받고 답하는걸 가르치세요»* — 종전엔 200ms 마다
+    //   자동으로 답이 나가, 한 질문을 치는 동안 답이 서너 번 바뀌었다.
+    //   숫자·컨번호는 종전 그대로 즉답한다(갑판에서 쓰는 빠른 길).
+    if (!query.trim()) { lastSpokenRef.current = null; setDebouncedQuery(''); return; }
+    if (isSentenceQuery(query)) {
+      //  새 문장을 치기 시작하면 옛 답을 내린다 — 안 그러면 지난 답이 새 질문의 답처럼 보인다.
+      //  (작업창 SearchPanel 이 쓰는 검증된 방식과 같은 벌: else if (query) setQuery(''))
+      if (debouncedQuery && query.trim() !== debouncedQuery) setDebouncedQuery('');
+      return;                                          // 전송키(Enter)·음성이 submitNow 로 넣어 준다
+    }
     const t = setTimeout(() => setDebouncedQuery(query), 200);
-    if (!query.trim()) lastSpokenRef.current = null;   // 1.69-05: 지웠다가 다시 물으면 다시 말한다
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, debouncedQuery]);
   // 1.69-05: 방금 물어서 답이 붙은 질문을 기억 — 같은 질문 재제출(엔터·전송·음성) 판정용
   useEffect(() => { if (debouncedQuery.trim().length >= 2) lastAskRef.current = debouncedQuery.trim(); }, [debouncedQuery]);
 
@@ -836,6 +847,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     setQuery(t);
     setDebouncedQuery(t);
     setSettledQuery(t);
+    logQuerySettled('nls', t, { voyageKey: shipCtx?.key || '' });   // 2.55-01: 홈·수석창도 남긴다(종전엔 안 불렀다)
   };
 
   // 자동 음성 안내
