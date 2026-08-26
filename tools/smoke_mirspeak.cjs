@@ -208,6 +208,50 @@ const ask = (q) => {
   }
 }
 
+// ── ④-6 (2.61) 검수사 제공 실무 자료 18항목 — 검수·선적·양하 전 과정 + 타입별 심화 ──
+{
+  //  출처: 검수사 정리 텍스트 + OOG 체크리스트 xlsx(사본 C:\TALLYTEST\claude_ref\). 겹(mirKnowledge)
+  //  경유 답도 화면 흐름이므로 본체 null 이면 겹을 부른다(갈래 잡히면 겹은 물러남 — 2.59-02 게이트).
+  const _mk = require(path.join(ROOT, 'src/data/mirKnowledge.js'));
+  const mirK = _mk.mirKnowledge || _mk.default;
+  const scr = (q) => {
+    const p = NS.parseNaturalQuery(q);
+    const core = (p.asking === 'how') ? (NS.answerHowCore ? NS.answerHowCore(p) : null) : NS.generateLocalAnswer(p, [], [], null);
+    return core || ((p && p.asking) ? null : mirK(q));
+  };
+  const SURVEY = [
+    ['검수는 언제 해', /시점은 셋/],
+    ['컨테이너 검수 뭘 봐야 돼', /IICL 6면/],
+    ['검수 사진 몇 장 찍어야 돼', /8장/],
+    ['씰은 어디랑 대조해', /B\/L·패킹리스트·EIR|3곳/],
+    ['EIR에는 뭘 적어', /리마크/],
+    ['오픈탑 검수 포인트 알려줘', /타포린|루프보/],
+    ['타포린 분실하면 어떻게 돼', /150|접어서/],
+    ['플랫랙 검수 뭘 봐', /라싱아이/],
+    ['FR 번들로 반납하려면 어떻게 해', /7장/],
+    ['리퍼 검수 체크 항목 알려줘', /PTI/],
+    ['리퍼 온도 이탈 생기면 어떻게 해', /30분/],
+    ['탱크 검수 뭘 봐', /T코드|세척증명/],
+    ['OOG 승인 절차 알려줘', /슬롯 로스|7일/],
+    ['라싱 자재 뭐가 필요해', /Grade 80|턴버클/],
+    ['선적 전체 과정 알려줘', /부킹/],
+    ['양하 절차 알려줘', /매니페스트/],
+    ['평택항 특징이 뭐야', /조수간만/],
+    ['하이큐브 검수 주의할 게 뭐야', /2\.9m/],
+  ];
+  for (const [q, re] of SURVEY) {
+    const a = scr(q);
+    T(!!a && re.test(String(a)), `«${q}» 실무 자료 답이 죽었다 (${String(a || '(침묵)').slice(0, 30)})`);
+  }
+  //  반례 — 새 어미(뭘 봐·과정·어디랑 제외)가 조회를 안 뺏는다.
+  for (const [q, chk] of [['FR 어디', (p) => !!p.posQuery], ['4777 어디야', (p) => !!p.posQuery], ['씰 어디 있어', (p) => !!p.posQuery], ['리퍼 몇 대', (p) => !!p.isStat], ['FR 목록', (p) => !!p.listQuery]]) {
+    const p = NS.parseNaturalQuery(q);
+    T(chk(p) && !p.asking, `⛔ «${q}» 조회 인텐트가 죽거나 갈래에 뺏겼다 (asking=${p.asking})`);
+  }
+  //  원고 n199(사진 왜 중요)는 그대로 산다 — n403(8장)이 앞에 서도 «왜» 질문은 원고가 받는다.
+  T(/증빙자료/.test(String(scr('사진은 왜 중요해') || '')), '«사진은 왜 중요해» 원고 답이 죽었다');
+}
+
 // ── ⑤ 규칙 6 — 못 배운 말은 지어내지 않고 고백한다 ─────────────────────
 {
   const { p, a } = ask('수바이란?');
