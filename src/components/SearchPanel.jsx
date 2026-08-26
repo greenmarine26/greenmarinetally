@@ -1102,7 +1102,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       ? results.filter(c => (modeChoice === 'loading' ? c._mode === 'loading' : c._mode !== 'loading'))
       : results;
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
-      { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, pier: voyage?.info?.pier, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)
+      { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts]);   // 2.41: 선박 연락처
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈

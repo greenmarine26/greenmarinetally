@@ -8,7 +8,7 @@
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay } from './utils.js';
-import { addWorkMinutes, workMinutesBetween } from './nlSearch.js';   // 2.54: 지나간 실작업 시간
+import { addWorkMinutes, speedFromTerminal } from './nlSearch.js';   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
 const _ptk = (c, mode) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
@@ -478,31 +478,6 @@ export function isSpeedQuery(q) {
 //    메모의 «04시부터 06시30 08시부터» 가 곧 PCTC 야간 `[240,390]` 과 주간 `[480,720]` 이다.
 //  ⚠ 갱 수는 **2갱 기본** — 학습서 2-F′ *«기본 2갱으로 계산을 해주시면 됩니다. 만약 1갱이라면 ×2»*.
 //    답에 «2갱 기준»과 «1갱이면 ×2» 를 반드시 같이 말한다(검수사 확정).
-function _speedFromTerminal(info, terminalWork) {
-  const code = String(info.vsl || '').toUpperCase();
-  const tw = terminalWork && (terminalWork[code] || terminalWork[String(info.vslFull || '').toUpperCase()]);
-  if (!tw || typeof tw !== 'object') return null;
-  const st = _tsOf(tw.startAt);
-  if (!st) return null;                                   // 시작 시각이 없으면 잴 수가 없다
-  const done = (Number(tw.disDone) || 0) + (Number(tw.lodDone) || 0);
-  const plan = (Number(tw.disPlan) || 0) + (Number(tw.lodPlan) || 0);
-  if (done <= 0) return null;                             // 아직 한 대도 안 했으면 페이스가 없다
-  //  자료가 갱신된 시각까지만 센다 — «지금»으로 재면 수집기가 멈춘 동안이 작업 시간에 섞인다.
-  const upto = Number(tw.updatedAt) || Date.now();
-  const pier = String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC';
-  const workedMin = workMinutesBetween(st, upto, pier);
-  if (workedMin < 30) return null;                        // 너무 짧으면 페이스가 튄다
-  const perGangHour = (done / 2) / (workedMin / 60);      // 2갱 기준 — 갱당 시간당
-  if (!(perGangHour > 0)) return null;
-  return { st, upto, done, plan, left: Math.max(0, plan - done), workedMin, perGangHour, pier, tw };
-}
-function _tsOf(v) {
-  if (!v) return 0;
-  if (typeof v === 'number') return v;
-  const s = String(v).trim().replace(' ', 'T');
-  const t = Date.parse(s.length <= 16 ? s + ':00+09:00' : s);
-  return Number.isFinite(t) ? t : 0;
-}
 
 export function answerShipSpeed(voyage, shipSpeed, shipName = '', terminalWork = null) {
   if (!voyage) return null;
@@ -510,7 +485,7 @@ export function answerShipSpeed(voyage, shipSpeed, shipName = '', terminalWork =
   const vsl = String(info.vsl || '').toUpperCase();
 
   //  ① 터미널 실적이 있으면 그것이 진실이다(검수사 메모 2026-08-26).
-  const T = _speedFromTerminal(info, terminalWork);
+  const T = speedFromTerminal(info, terminalWork);
   if (T) {
     const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · 터미널 실적 기준`];
     const hh = Math.floor(T.workedMin / 60), mm = T.workedMin % 60;

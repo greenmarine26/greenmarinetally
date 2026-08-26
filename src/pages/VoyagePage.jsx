@@ -962,6 +962,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    보고 있어서 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다 — 실선에서 잡혔다.
     //    ⚠ SearchPanel 의 `allContainers` 는 `_comp` 가 붙어 오므로 그쪽은 안 넘긴다(그대로 동작).
     comp: compMap || null,
+    //  2.54-01: 터미널 실적(트레드링스) — 미르의 «얼마나 걸릴까» 가 앱 기록 대신 이것으로 잰다.
+    //    ⚠ `InlineAnswerCard` 는 `terminalWork` prop 을 안 받는다(briefCtx 만 받는다) — 여기 실어 보낸다.
+    terminalWork: terminalWork || null,
     photos: voyage?.photos || null,   // 2.05: 조회 결과 컨의 사진(데미지·메일 사진)을 인라인 카드가 보여준다
     pairs: (() => { try { return getBayPairs(containers, voyage?.info?.imo || '', voyage?.info?.vsl || ''); } catch (e) { return null; } })(),
     rfSkip: !!shipPolicy?.rfSkip,
@@ -2519,7 +2522,9 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
           briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null });
       }
       if (parsed?.sealAuditQuery) return generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적');
-      return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, pier, photos: briefCtx?.photos || null }) : null;   // 2.05-01
+      //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
+      //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
+      return parsed ? generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null }) : null;   // 2.05-01
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q]);
   const readRef = useRef('');

@@ -2255,6 +2255,37 @@ export function workMinutesBetween(aMs, bMs, pier) {
   return Math.round(total);
 }
 
+// ── ★ 2.54-01 — **터미널 실적으로 페이스를 재는 단 한 벌.**
+//  ⚠ 2.54 는 이것을 `chiefAnswers` 안에 두었다. 그런데 검수사가 실제로 쓰는 **양하 탭 검색바**는
+//    `answerShipSpeed` 를 아예 안 부르고 `formatEta` 로 간다 — 그래서 **완료 67대인 배가
+//    «아직 시작 전이에요» 라고 답했다**(2.54 라이브 실측). 절반만 고친 것이었다.
+//  ⇒ 계산을 여기로 옮겨 **양쪽이 같은 한 벌을 쓴다.** 판정을 두 벌로 만들면 반드시 갈린다.
+export function speedFromTerminal(info, terminalWork) {
+  const code = String(info.vsl || '').toUpperCase();
+  const tw = terminalWork && (terminalWork[code] || terminalWork[String(info.vslFull || '').toUpperCase()]);
+  if (!tw || typeof tw !== 'object') return null;
+  const st = _tsOf(tw.startAt);
+  if (!st) return null;                                   // 시작 시각이 없으면 잴 수가 없다
+  const done = (Number(tw.disDone) || 0) + (Number(tw.lodDone) || 0);
+  const plan = (Number(tw.disPlan) || 0) + (Number(tw.lodPlan) || 0);
+  if (done <= 0) return null;                             // 아직 한 대도 안 했으면 페이스가 없다
+  //  자료가 갱신된 시각까지만 센다 — «지금»으로 재면 수집기가 멈춘 동안이 작업 시간에 섞인다.
+  const upto = Number(tw.updatedAt) || Date.now();
+  const pier = String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC';
+  const workedMin = workMinutesBetween(st, upto, pier);
+  if (workedMin < 30) return null;                        // 너무 짧으면 페이스가 튄다
+  const perGangHour = (done / 2) / (workedMin / 60);      // 2갱 기준 — 갱당 시간당
+  if (!(perGangHour > 0)) return null;
+  return { st, upto, done, plan, left: Math.max(0, plan - done), workedMin, perGangHour, pier, tw };
+}
+function _tsOf(v) {
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim().replace(' ', 'T');
+  const t = Date.parse(s.length <= 16 ? s + ':00+09:00' : s);
+  return Number.isFinite(t) ? t : 0;
+}
+
 // startMs 시점부터 workMin(작업분)을 근무 창만 세며 전진해 끝나는 시각을 돌려준다.
 export function addWorkMinutes(startMs, workMin, pier) {
   const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
@@ -2284,6 +2315,27 @@ function formatEta(parsed, allContainers, ctx) {
     .sort((a, b) => a - b);
   const doneCount = allContainers.filter(c => !!c._comp).length;
   const remain = Math.max(0, total - doneCount);
+
+  //  ★ 2.54-01 — **터미널 실적이 있으면 그것이 먼저다.**
+  //    아래 앱 기록(`_comp`) 경로는 검수사 말고는 거의 안 찍어서 «아직 시작 전이에요» 를 낸다.
+  //    검수사 메모(2026-08-26) — *«앱으로 계산하면 틀립니다. 앱으로 작업을 잘안하니까요»*.
+  //    ⚠ 실측으로 이 자리에서 걸렸다 — 완료 67대인 STSE 가 «아직 시작 전이에요» 라고 답했다.
+  //      (양하 탭 검색바는 answerShipSpeed 를 안 부르고 여기로 온다 — 경로가 셋이다.)
+  try {
+    const _T = speedFromTerminal({ vsl: ctx?.vsl, vslFull: ctx?.vslFull, pier: ctx?.pier }, ctx?.terminalWork);
+    if (_T) {
+      const wh = Math.floor(_T.workedMin / 60), wm = _T.workedMin % 60;
+      const head = `터미널 실적으로 보면 지금까지 ${_T.done}대 했어요 — 실작업 ${wh}시간${wm ? ' ' + wm + '분' : ''}(쉬는 시간 뺀 것).`;
+      if (_T.left <= 0) return `${head}\n계획 ${_T.plan}대를 다 채웠습니다. 수고 많으셨어요.`;
+      const rMin = Math.round((_T.left / (_T.perGangHour * 2)) * 60);
+      const e = addWorkMinutes(Date.now(), rMin, _T.pier);
+      const p2 = (n) => String(n).padStart(2, '0');
+      const rh = Math.floor(rMin / 60), rm = rMin % 60;
+      return `${head}\n남은 ${_T.left}대 — 이 페이스면 **약 ${rh ? rh + '시간 ' : ''}${rm}분** 뒤, `
+        + `**${p2(e.getMonth() + 1)}-${p2(e.getDate())} ${p2(e.getHours())}:${p2(e.getMinutes())}** 쯤 끝나요.\n`
+        + `2갱 기준 갱당 시간당 ${_T.perGangHour.toFixed(1)}대 (1갱이면 ×2) · 중식·야식·티타임·조 경계는 빼고 계산했어요.`;
+    }
+  } catch (e) { /* 터미널 자료가 없으면 아래 앱 기록 경로로 */ }
 
   if (total > 0 && remain === 0) {
     return `작업 다 끝났어요. 수고 많으셨습니다.\n🎉 평택분 ${total}대 전부 완료했어요.`;

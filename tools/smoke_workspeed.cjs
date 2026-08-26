@@ -63,5 +63,35 @@ const tooShort = { STSE: { startAt: '2026-08-26 08:50', disDone: 5, disPlan: 100
 const s2 = CA.answerShipSpeed({ info }, {}, '', tooShort);
 T(!/터미널 실적 기준/.test(s2 || ''), '⛔ 10분치 기록으로 페이스를 냈다 — 튄 수를 믿게 된다');
 
+// ⑤ ★ 2.54-01 — **경로가 셋이다.** 검수사가 실제로 쓰는 «양하 탭 검색바» 는 answerShipSpeed 를
+//   부르지 않고 formatEta(generateLocalAnswer) 로 간다. 2.54 는 그 경로를 안 고쳐서
+//   **완료 67대인 배가 «아직 시작 전이에요» 라고 답했다**(라이브 실측).
+//   ⚠ 이 검사가 그 자리를 지킨다 — 앱 기록이 0건이어도 터미널 실적이 있으면 답해야 한다.
+{
+  const cont = Array.from({ length: 449 }, (_, i) => ({ cn: 'X' + i, _ptk: true }));   // _comp 없음 = 앱에 안 찍은 상태
+  const ctx = { mode: 'discharge', vsl: 'STSE', vslFull: 'SITC SENDAI', pier: 'PCTC', terminalWork: tw };
+  const out = NS.generateLocalAnswer({ etaQuery: true }, [], cont, ctx);
+  T(!!out, 'etaQuery 에 답이 없다');
+  T(!/아직 시작 전/.test(out || ''), '⛔ 터미널 실적이 있는데 «아직 시작 전» 이라고 답한다 — 2.54 가 놓친 그 자리다');
+  T(/터미널 실적/.test(out || ''), '무엇으로 계산했는지 안 밝힌다');
+  T(/2갱 기준/.test(out || '') && /1갱이면/.test(out || ''), '«2갱 기준»·«1갱이면 ×2» 를 안 말한다');
+  T(/쯤 끝나요|다 채웠습니다/.test(out || ''), '종료 시각을 안 말한다');
+  //  터미널 자료가 없으면 종전 경로로 — 터지지 않아야 한다
+  const out2 = NS.generateLocalAnswer({ etaQuery: true }, [], cont, { mode: 'discharge', vsl: 'STSE', pier: 'PCTC' });
+  T(typeof out2 === 'string' && out2.length > 0, '터미널 자료가 없을 때 답이 없다(폴백이 죽었다)');
+}
+
+// ⑥ 계산은 **한 벌**이어야 한다 — 두 벌이면 화면마다 다른 수가 나온다
+T(typeof NS.speedFromTerminal === 'function', 'speedFromTerminal 이 nlSearch 에 없다 — 판정이 두 벌이 된다');
+{
+  const a = NS.speedFromTerminal({ vsl: 'STSE', pier: 'PCTC' }, tw);
+  const b = CA.answerShipSpeed({ info: { vsl: 'STSE', pier: 'PCTC' } }, {}, '', tw);
+  T(!!a, 'speedFromTerminal 이 계산을 못 한다');
+  if (a && b) {
+    const m = b.match(/갱당 시간당 ([\d.]+)대/);
+    T(!!m && Math.abs(+m[1] - a.perGangHour) < 0.05, '두 경로가 다른 속도를 낸다 — 판정이 갈렸다');
+  }
+}
+
 if (bad) { console.error(`✗ 작업속도 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 작업속도 연막검사 통과 (쉬는시간 10 · 터미널 실적 8 · 폴백 2 · 지어내지 않음 1)');
+console.log('✓ 작업속도 연막검사 통과 (쉬는시간 10 · 터미널 실적 8 · 폴백 2 · 지어내지 않음 1 · 세 번째 경로 6 · 판정 한 벌 3)');
