@@ -122,8 +122,45 @@ const ask = (q) => {
   T(/shiftMap:\s*briefCtx/.test(vp), 'VoyagePage ctx 에 shiftMap 이 없다 — 시프팅 질문이 «없다»로 나온다');
 }
 
+// ── ⑦ ★ 전수 시험 — 용어 답안지 원장(mirKnowledge) 전 항목에서 자동 출제 (검수사 지시
+//      «계속 FR로만 테스트해도 이 모양입니다. 제가 만약 다른걸 물으면 어떨까요?») ─────────
+//    각 항목 패턴의 단독 한글 낱말로 «X 뭐야»를 만들어 코어 뜻 갈래에 전부 넣는다.
+//    성적 하한을 지킨다 — 실측 2026-08-27: 213문 중 뜻 답 179 · 업무 갈래 20 · 못 배움 14(대부분 보조 낱말 조각).
+//    답안지·갈래 수리로 성적이 «떨어지면» 여기서 배포가 선다. 오르면 하한을 올려 잠근다.
+{
+  const src2 = fs.readFileSync(path.join(ROOT, 'src/data/mirKnowledge.js'), 'utf8');
+  const items = [];
+  const re2 = /\{\s*(?:"n":\s*\d+,\s*)?(?:"t":\s*"[^"]*",\s*)?(?:p:\s*\/(.*?)\/[a-z]*|"p":\s*"((?:[^"\\]|\\.)*)")\s*,\s*(?:a:|"a":)/g;
+  let mm; while ((mm = re2.exec(src2))) items.push((mm[1] || mm[2] || ''));
+  let ok = 0, busy = 0, unl = 0, total = 0;
+  for (const pat of items) {
+    let kw = null;
+    for (const alt of pat.split('|')) {
+      if (/\{0?,\d+\}|\(\?/.test(alt)) continue;
+      const clean = alt.replace(/\\s\*?/g, ' ').replace(/[\\^$.*+?()\[\]{}]/g, '').trim();
+      if (/^[가-힣][가-힣 ]{1,12}$/.test(clean)) { kw = clean; break; }
+    }
+    if (!kw) continue;
+    total++;
+    const q = /뭐$|뭐야$/.test(kw) ? kw + (/뭐$/.test(kw) ? '야' : '') : kw + ' 뭐야';
+    let p2 = null, a = null;
+    try { p2 = NS.parseNaturalQuery(q); } catch (e) { continue; }
+    if (p2.asking !== 'def') { busy++; continue; }
+    try { a = NS.generateLocalAnswer(p2, [], [], null); } catch (e) { continue; }
+    if (a && !/못 배웠/.test(a)) ok++; else unl++;
+  }
+  T(total >= 200, `전수 출제가 ${total}문뿐이다 — 원장 파싱이 깨졌다`);
+  T(ok >= 175, `⛔ 전수 성적 하락 — 뜻 답 ${ok}문 (하한 175. 실측 179 에서 떨어졌다 = 답안지·갈래가 회귀했다)`);
+  T(busy <= 25, `⛔ 업무 갈래로 새는 용어가 ${busy}문 (상한 25) — 뜻 질문을 업무 인텐트가 더 먹기 시작했다`);
+  console.log(`  · 전수 시험: ${total}문 — 뜻 답 ${ok} · 업무 갈래 ${busy} · 못 배움 ${unl}`);
+}
+
 //  ⚠ 알고 있는 남은 오답 (이 판에서 안 고침 — 고치면 이 주석과 함께 문항으로 승격할 것)
 //    «오늘 작업 뭐야» → 기능 색인 «작업 중단» 이 잡힌다(현행과 동일 — 색인 매칭 문제, 갈래 문제 아님).
+//    ★ 초보티 목록 (검수사 2026-08-27 «전문지식을 갖고 있는데 초보티를 냅니다» — 다음 가르침 거리):
+//      손상 계열 뜻 질문(«씰 파손 뭐야»·«웻 데미지 뭐야»·«구조적 손상 뭐야»·«기존 손상 뭐야»)을
+//      데미지 이력 조회(dmgQuery)가 먹는다 · «베이 뭐야»(단독) 미답 · TOS «경고 뭐야» 미답 ·
+//      정의 답에 «지금 이 배 현황»을 연결해 얹는 전문가 화법(정의+조회 결합)은 아직 없다.
 //    «FR 실번호가 뭐야» → 용어집 «실번호» 뜻이 나온다(FR 의 씰 목록이 정답 — 주제 둘 겹침).
 //    트윈·해치·씰의 «몇 대/몇 장» 개수 답안지 부재, «탱크가 뭐야» 전용 항목 부재 — 인계함 참조.
 
