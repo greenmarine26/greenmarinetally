@@ -8,7 +8,7 @@
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay } from './utils.js';
-import { addWorkMinutes } from './nlSearch.js';
+import { addWorkMinutes, workMinutesBetween } from './nlSearch.js';   // 2.54: 지나간 실작업 시간
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
 const _ptk = (c, mode) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
@@ -464,15 +464,79 @@ export function isSpeedQuery(q) {
     || (/몇\s*시간/.test(Q) && !/남(?:았|아)/.test(Q));
 }
 
-export function answerShipSpeed(voyage, shipSpeed, shipName = '') {
+// ── ★ 2.54 — **앱 기록 말고 터미널이 보고한 실적으로 잰다.**
+//  검수사 메모(받은함 2026-08-26 09:13) —
+//    *«미르의 작업속도 계산법 수정. 앱으로 계산하면 틀립니다. 앱으로 작업을 잘안하니까요.
+//      그럼 수석대쉬보드에 보여주는 자료를 사용해야 합니다. 2갱기준으로 작업한 총갯수 나누기2
+//      시작이04시 부터 06시30 08시부터 현지시간으로 계산해서 나눠야 합니다.
+//      그걸로 작업종료 시간을 예측해야 합니다»*
+//  ★ 그 말이 맞다 — 실측(2026-08-25 활동 기록): 검수사 말고는 앱에 완료를 거의 안 찍는다.
+//    그러니 `completed` 로 페이스를 재면 «아직 시작 전» 이라고 답한다(실제로는 작업 중인데).
+//  ★ 대신 `terminal_work`(트레드링스 — 수석 대시보드가 보여주는 그것)를 쓴다.
+//    거기엔 터미널이 보고한 `startAt`·`disDone`·`lodDone`·`disPlan`·`lodPlan` 이 있고 **앱과 무관하다.**
+//  ⚠ 쉬는 시간은 지어내지 않는다 — `WORK_SHIFTS`(검수사 확정 2026-08-13)를 그대로 쓴다.
+//    메모의 «04시부터 06시30 08시부터» 가 곧 PCTC 야간 `[240,390]` 과 주간 `[480,720]` 이다.
+//  ⚠ 갱 수는 **2갱 기본** — 학습서 2-F′ *«기본 2갱으로 계산을 해주시면 됩니다. 만약 1갱이라면 ×2»*.
+//    답에 «2갱 기준»과 «1갱이면 ×2» 를 반드시 같이 말한다(검수사 확정).
+function _speedFromTerminal(info, terminalWork) {
+  const code = String(info.vsl || '').toUpperCase();
+  const tw = terminalWork && (terminalWork[code] || terminalWork[String(info.vslFull || '').toUpperCase()]);
+  if (!tw || typeof tw !== 'object') return null;
+  const st = _tsOf(tw.startAt);
+  if (!st) return null;                                   // 시작 시각이 없으면 잴 수가 없다
+  const done = (Number(tw.disDone) || 0) + (Number(tw.lodDone) || 0);
+  const plan = (Number(tw.disPlan) || 0) + (Number(tw.lodPlan) || 0);
+  if (done <= 0) return null;                             // 아직 한 대도 안 했으면 페이스가 없다
+  //  자료가 갱신된 시각까지만 센다 — «지금»으로 재면 수집기가 멈춘 동안이 작업 시간에 섞인다.
+  const upto = Number(tw.updatedAt) || Date.now();
+  const pier = String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : 'PCTC';
+  const workedMin = workMinutesBetween(st, upto, pier);
+  if (workedMin < 30) return null;                        // 너무 짧으면 페이스가 튄다
+  const perGangHour = (done / 2) / (workedMin / 60);      // 2갱 기준 — 갱당 시간당
+  if (!(perGangHour > 0)) return null;
+  return { st, upto, done, plan, left: Math.max(0, plan - done), workedMin, perGangHour, pier, tw };
+}
+function _tsOf(v) {
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).trim().replace(' ', 'T');
+  const t = Date.parse(s.length <= 16 ? s + ':00+09:00' : s);
+  return Number.isFinite(t) ? t : 0;
+}
+
+export function answerShipSpeed(voyage, shipSpeed, shipName = '', terminalWork = null) {
   if (!voyage) return null;
   const info = voyage.info || {};
   const vsl = String(info.vsl || '').toUpperCase();
+
+  //  ① 터미널 실적이 있으면 그것이 진실이다(검수사 메모 2026-08-26).
+  const T = _speedFromTerminal(info, terminalWork);
+  if (T) {
+    const L = [`작업 속도${shipName ? ' — ' + shipName : ''} · 터미널 실적 기준`];
+    const hh = Math.floor(T.workedMin / 60), mm = T.workedMin % 60;
+    L.push(`시작 ${String(T.tw.startAt || '').slice(5, 16)} — 지금까지 **실작업 ${hh}시간${mm ? ' ' + mm + '분' : ''}**(쉬는 시간 뺀 것) · ${T.done}대 처리`);
+    L.push(`**2갱 기준 갱당 시간당 ${T.perGangHour.toFixed(1)}대** (1갱이면 ×2 하시면 됩니다)`);
+    if (T.left > 0) {
+      const remainMin = Math.round((T.left / (T.perGangHour * 2)) * 60);
+      const eta = addWorkMinutes(Date.now(), remainMin, T.pier);
+      const rh = Math.floor(remainMin / 60), rm = remainMin % 60;
+      const p = (n) => String(n).padStart(2, '0');
+      L.push(`남은 ${T.left}대 — **약 ${rh ? rh + '시간 ' : ''}${rm}분** 뒤, `
+        + `**${p(eta.getMonth() + 1)}-${p(eta.getDate())} ${p(eta.getHours())}:${p(eta.getMinutes())}** 쯤 끝납니다`);
+      L.push('(쉬는 시간·조 경계를 건너뛰어 계산 — 중식·야식·티타임 포함)');
+    } else {
+      L.push(`계획 ${T.plan}대를 다 했습니다.`);
+    }
+    return L.join('\n');
+  }
+
+  //  ② 터미널 실적이 없을 때만 옛 방식(텔리 리포트 평균)으로 간다 — 그 사실을 밝힌다.
   if (!shipSpeed) return '작업 속도 자료를 아직 못 불러왔어요 — 잠시 후 다시 물어봐 주세요.';
   const pier = String(info.pier || '').toUpperCase().includes('PCTC') ? 'PCTC'
     : String(info.pier || '').toUpperCase().includes('PNCT') ? 'PNCT' : null;
   let rec = (pier && shipSpeed[`${vsl}_${pier}`]) || shipSpeed[`${vsl}_PNCT`] || shipSpeed[`${vsl}_PCTC`] || null;
-  const L = [`작업 속도${shipName ? ' — ' + shipName : ''}`];
+  const L = [`작업 속도${shipName ? ' — ' + shipName : ''}`,
+    '⚠ 터미널 실적이 아직 없어 **과거 평균**으로 말씀드립니다 — 실제와 다를 수 있어요.'];
   if (rec) {
     L.push(`${rec.vsl}(${rec.pier}) 평균 ${rec.movesPerCraneHour} 무브/크레인h — 표본 ${rec.voys}항차 ${rec.moves}무브${rec.voys < 3 ? ' ⚠ 표본 적음(참고치)' : ''}`);
   } else {

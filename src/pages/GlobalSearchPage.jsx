@@ -474,7 +474,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     }
     // 1.92-04 (검수사 실측 «SWSP 작업 얼마나 걸릴까?» 가 물량 답으로 빠짐): 속도 질문은 물량(isStat)보다 먼저.
     if (isSpeedQuery(debouncedQuery) && shipCtx) {
-      try { const a = answerShipSpeed(shipCtx.v, shipSpeed, shipCtx.info.vslFull || shipCtx.info.vsl); if (a) return a; } catch (e) { /* 아래로 */ }
+      try { const a = answerShipSpeed(shipCtx.v, shipSpeed, shipCtx.info.vslFull || shipCtx.info.vsl, terminalWork); if (a) return a; } catch (e) { /* 아래로 */ }   // 2.54: 터미널 실적 우선
     }
     // 1.68: 배가 지정된 물량 질문 — "STSE 양하 몇 개야" 를 여기서 바로 센다(평택분).
     if (shipCtx && (p.isStat || p.isAll || /몇\s*(?:개|대)/.test(debouncedQuery))) {

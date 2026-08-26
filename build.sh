@@ -373,6 +373,14 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   else
     echo "✗ 미르의 눈 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
   fi
+  #  2.54: **작업속도** — 앱 기록이 아니라 터미널 실적으로, 쉬는 시간을 빼고 재는가.
+  SMOKE_NS=$(mktemp /tmp/_smokens_XXXXXX.cjs); SMOKE_CA=$(mktemp /tmp/_smokeca_XXXXXX.cjs)
+  if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
+     && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
+    node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+  else
+    echo "✗ 작업속도 번들 실패 — 검사를 못 돌렸다. 배포 금지"; exit 1
+  fi
   #  ConeOne 2.3: **콘앱이 약신호에서 영영 멈추지 않는가** — 응답 없는 서버에 실제로 붙여서 잰다.
   node tools/smoke_cone_net.cjs || { echo "✗ 콘앱 약신호 연막검사 실패 — 배포 금지"; exit 1; }
   #  2.53: **복구 코드** — 소유자가 잠기면 아무도 못 여는 구멍을 막은 것이 실제로 도는가.

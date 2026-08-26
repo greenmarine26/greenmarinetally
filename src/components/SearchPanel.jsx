@@ -1058,7 +1058,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     }
     // 1.92 (검수사 확정 — PCTC 포함): «평균 속도»·«몇 시간 걸릴까» — 실측 shipSpeed 기반.
     if (isSpeedQuery(query)) {
-      try { const a = answerShipSpeed(voyage, shipSpeed, voyage?.info?.vslFull || voyage?.info?.vsl || ''); if (a) return a; } catch (e) { /* 아래로 */ }
+      try { const a = answerShipSpeed(voyage, shipSpeed, voyage?.info?.vslFull || voyage?.info?.vsl || '', terminalWork); if (a) return a; } catch (e) { /* 아래로 */ }   // 2.54: 터미널 실적 우선
     }
     // 1.91-01 (검수사 확정 «선적 계획을 알면 양하 계획도 알겠죠?»): 양하·선적 계획 전망 공용.
     if (isPlanOutlookQuery(query)) {

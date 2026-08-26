@@ -2229,6 +2229,32 @@ export const WORK_SHIFTS = {
   PCTC: [[60, 210], [240, 390], [480, 720], [780, 1050], [1140, 1440]],
   PNCT: [[60, 330], [480, 690], [780, 1050], [1140, 1410]],
 };
+// ── ★ 2.54 — **두 시각 사이의 «실제 일한 분».** `addWorkMinutes` 의 역이다.
+//  왜 없었나 — 지금까지는 «지금부터 N분 뒤» 만 필요했다. 그런데 검수사 메모(2026-08-26)가
+//  *«시작시간과 멈춤시간 재시작시간과 현재까지의 시간»* 으로 **지나간 시간**을 재라고 한다.
+//  그것이 없어서 `chiefAnswers.js:243` 이 «addWorkMinutes 역산 대신 … 근사» 로 때우고 있었다.
+//  ⚠ 쉬는 시간은 지어내지 않는다 — 바로 위 `WORK_SHIFTS`(검수사 확정 2026-08-13, 학습서 2-F′)를 그대로 쓴다.
+//    검수사 메모의 «04시부터 06시30 08시부터» 가 바로 PCTC 의 `[240,390]`·`[480,720]` 이다.
+export function workMinutesBetween(aMs, bMs, pier) {
+  const a = Number(aMs), b = Number(bMs);
+  if (!(b > a)) return 0;
+  const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
+  let total = 0;
+  const day = new Date(a); day.setHours(0, 0, 0, 0);
+  //  ⚠ 하루씩 전진하며 그날의 근무 창과 [a,b] 의 교집합만 더한다.
+  //    guard 는 무한 루프 방지 — 400일이면 어떤 기항보다 길다(조용히 도는 것보다 멈추는 게 낫다).
+  for (let guard = 0; day.getTime() < b && guard < 400; guard++) {
+    const base = day.getTime();
+    for (let i = 0; i < wins.length; i++) {
+      const lo = Math.max(base + wins[i][0] * 60000, a);
+      const hi = Math.min(base + wins[i][1] * 60000, b);
+      if (hi > lo) total += (hi - lo) / 60000;
+    }
+    day.setDate(day.getDate() + 1);
+  }
+  return Math.round(total);
+}
+
 // startMs 시점부터 workMin(작업분)을 근무 창만 세며 전진해 끝나는 시각을 돌려준다.
 export function addWorkMinutes(startMs, workMin, pier) {
   const wins = WORK_SHIFTS[String(pier || '').toUpperCase()] || WORK_SHIFTS.PCTC;
