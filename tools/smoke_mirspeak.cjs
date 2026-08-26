@@ -109,6 +109,10 @@ const ask = (q) => {
   T(/asking === 'def'\s*\)\s*\?\s*null\s*:\s*mirKnowledge/.test(sp), 'SearchPanel 겹 중복 게이트가 없다 — 뜻이 두 번 나온다');
   const gsp = read('src/pages/GlobalSearchPage.jsx');
   T(/asking === 'def'\s*\)\s*\?\s*null\s*:\s*mirKnowledge/.test(gsp), 'GlobalSearchPage 겹 중복 게이트가 없다');
+  //  ★ 2.57-02 (검수사 시험 실측 — 홈과 양하 탭의 «FR이 뭐야» 답안지가 달랐다):
+  //    홈도 뜻 갈래는 본체 한 벌을 부른다 — 그리고 그 호출이 기능 색인(howToQuery) 분기보다 앞이어야 한다.
+  T(/asking === 'def'[\s\S]{0,220}generateLocalAnswer\(p, \[\], \[\], null\)/.test(gsp), '⛔ 홈이 뜻 갈래에 본체 한 벌을 안 부른다 — 화면마다 답안지가 갈린다');
+  T(gsp.indexOf("asking === 'def'") < gsp.indexOf('p.howToQuery'), '⛔ 홈의 뜻 본체 호출이 기능 색인보다 뒤다 — 기능 안내가 가로챈다');
   T(/submitNow\(/.test(gsp) && /slice\(0,\s*30\)/.test(gsp), 'GlobalSearchPage 버튼 제출·카드 상한 30 이 없다 (2.55-01 부작용·쏟기)');
   T(/아직 못 배웠/.test(gsp), 'GlobalSearchPage 무응답 신고가 «못 배웠습니다» 를 안 잡는다 — 반복 학습 관이 끊긴다');
   const vp = read('src/pages/VoyagePage.jsx');

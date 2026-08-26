@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery} from '../utils.js';
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
 import { diffEdiList, explainEdiGap } from '../ediGap.js';   // 2.35: EDI↔리스트 대수 차이 자가 진단
@@ -432,6 +432,14 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         if (isXrayShiftQ) return answerXrayShifts(_voy, _bayDef, { shipName: _ship, pier: shipCtx.info.pier });
         if (isShiftBriefQ) return answerShiftBriefing(_voy, _bayDef, { shipName: _ship, voyages });
       }
+    }
+    // ★ 2.57-02 (검수사 시험 «두 곳에서 FR을 물었습니다. 답이 같았습니까?» — 달랐다):
+    //   뜻 갈래(asking=def)는 **본체(_localAnswerCore) 한 벌**이 답한다 — 종전엔 이 화면만
+    //   아래 기능 색인(howTo)이 먼저 답해, 양하 탭의 용어 200선 답과 **답안지가 갈렸다**.
+    //   본체의 def 분기는 컨·ctx 를 안 쓰므로 빈 값으로 불러도 세 화면이 같은 답이다.
+    if (p.asking === 'def') {
+      try { const _d = generateLocalAnswer(p, [], [], null); if (_d) return _d; }
+      catch (e) { console.warn('[2.57-02] 뜻 본체 호출 실패 — 기능 색인으로 폴백:', e); }
     }
     if (p.howToQuery) {
       const _a = generateHowToAnswer(debouncedQuery, p, { isChief });
