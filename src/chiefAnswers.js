@@ -8,7 +8,8 @@
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay } from './utils.js';
-import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
+import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';
+import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
 const _ptk = (c, mode) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
@@ -26,17 +27,21 @@ export function buildGangPlan(voyage, bayDef) {
   const byNo = {};
   bays.forEach((b) => { const n = parseInt(b.bayNo || b.bay, 10); if (Number.isFinite(n)) byNo[n] = b; });
   const nums = Object.keys(byNo).map(Number).sort((a, b) => a - b);
-  // 짝(even↔odd) — pairEven 은 홀수 베이에 «내 짝 짝수»로 적혀 있다
-  const evenOf = {};   // odd → even
-  nums.forEach((n) => { const p = parseInt(byNo[n].pairEven, 10); if (Number.isFinite(p)) evenOf[n] = p; });
-  const used = new Set();
+  //  ★ 2.63-01: 짝 판정을 **카고플랜 한 벌(autoPairBays)** 로 — 같은 판정 두 벌 금지.
+  //    수동 pairEven 루프는 사전 짝 누락 시 (22)23·(26)27 이 따로 서고(검수사 수열 «26:44, 22:23» 로 적발),
+  //    단순 «짝수+뒤홀수» 폴백은 CASP 확정 단독(32·33·34)을 (32)33 으로 잘못 묶는다.
+  //    autoPairBays 는 2.55-02 에서 CASP 도면과 전 선박 39척 대조로 검증된 판정이다.
+  const matrix = nums.map((n) => ({ bayNum: n, pairEven: byNo[n].pairEven }));
+  const ap = autoPairBays(matrix);
+  const keyMembers = (k) => String(k).startsWith('(')
+    ? [parseInt(String(k).slice(1, 3), 10), parseInt(String(k).slice(4), 10)]
+    : [parseInt(k, 10)];
+  const orderedKeys = [...ap.trios.flat(), ...ap.singles]
+    .sort((a, b) => Math.min(...keyMembers(a)) - Math.min(...keyMembers(b)));
   const groups = [];
-  for (const n of nums) {
-    if (used.has(n)) continue;
-    let members = [n];
-    if (evenOf[n] != null && byNo[evenOf[n]]) members = [evenOf[n], n];           // 홀수 → (짝수)홀수
-    else { const odd = nums.find((m) => evenOf[m] === n); if (odd != null) members = [n, odd]; }
-    members.forEach((m) => used.add(m));
+  for (const k of orderedKeys) {
+    const members = keyMembers(k).filter((m) => byNo[m]);
+    if (!members.length) continue;
     members.sort((a, b) => a - b);
     const defs = members.map((m) => byNo[m]).filter(Boolean);
     groups.push({
@@ -230,12 +235,14 @@ const _isDG = (c) => !!c.dg || !!c.dgc || !!c.un;
 function _gangHours(plan, voyage, perGangHour) {
   const idx = {};
   plan.cargo.forEach((g, i) => { g.frN = 0; g.rfN = 0; g.dgN = 0; g.members.forEach((m) => { idx[m] = i; }); });
+  plan.cargo.forEach((g) => { g.deckN = 0; g.holdN = 0; });
   for (const [mode] of [['discharge'], ['loading']]) {
     for (const c of _list(voyage?.[mode]?.ediContainers)) {
       if (!_ptk(c, mode)) continue;
       const g = plan.cargo[idx[_bayN(c)]];
       if (!g) continue;
       if (_isFRlike(c)) g.frN++; else if (_isRF(c)) g.rfN++; else if (_isDG(c)) g.dgN++;
+      if (_isDeck(c)) g.deckN++; else g.holdN++;   // 2.63-01: 데크 우선 소진용
     }
   }
   plan.cargo.forEach((g) => {
@@ -309,6 +316,9 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     const mv = g.dis + g.lod;
     g.restN = Math.max(0, mv - g.doneN);
     g.restH = mv > 0 ? g.hours * (g.restN / mv) : 0;
+    //  2.63-01: 완료는 데크부터 깎인 것으로 본다(현장 순서가 데크 먼저라 실제와 같다).
+    g.deckRest = Math.max(0, (g.deckN || 0) - g.doneN);
+    g.holdRest = Math.max(0, g.restN - g.deckRest);
   });
   //  분할은 «전체 예상시간» 기준(작업 중에 갱 경계가 출렁이지 않게), 소진은 «남은 것» 기준.
   const split = _splitGangs(plan.cargo, nGangs);
@@ -371,22 +381,39 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     const ordered = [...seg].reverse();
     const restGroups = ordered.filter((g) => g.restN > 0);
     if (!restGroups.length) return { no: gi + 1, done: true, cnt: 0, restTotal: 0 };
-    let left = availH, cnt = 0, fr = 0, rf = 0, dg = 0, lastLabel = restGroups[0].label, finish = true;
-    for (const g of restGroups) {
-      if (left <= 0.01) { finish = false; break; }
-      const use = Math.min(g.restH, left);
-      const frac = g.restH > 0 ? use / g.restH : 1;
-      cnt += Math.round(g.restN * frac);
-      const mv = g.dis + g.lod || 1;
-      fr += Math.round(g.frN * (g.restN / mv) * frac);
-      rf += Math.round(g.rfN * (g.restN / mv) * frac);
-      dg += Math.round(g.dgN * (g.restN / mv) * frac);
-      lastLabel = g.label + (use < g.restH - 0.001 ? '(중간)' : '');
-      left -= use;
-      if (use < g.restH - 0.001) { finish = false; break; }
-    }
+    //  ★ 2.63-01 (검수사 조언 «그림이 잘못되었습니다 … 선미 작업자는 22번 데크작업중 야간조 마무리 할듯
+    //    합니다. 데크우선 작업이기 때문이죠»): 소진은 그룹 통째가 아니라 **두 패스** — 구간의 데크를
+    //    뒤에서 앞으로 먼저 다 걷고(데크→커버→홀드 확정 규칙), 그다음 홀드를 뒤에서 앞으로.
+    //    실데이터 검증 — 2번 갱 199대 데크 우선 소진 = B23 데크 23/35대째(= (22)23 페어, 검수사 계산 일치).
+    //  총 처리량은 시간·특수 보정으로(availH / 구간 예상시간 × 잔여 대수), **위치 소진은 대수로**
+    //  — 검수사 «데크 계산만»: 40+4+44+44+44 를 세다 199 가 차는 자리가 도달점이다.
     const restTotal = restGroups.reduce((a, g) => a + g.restN, 0);
-    return { no: gi + 1, done: false, from: restGroups[0].label, to: lastLabel, cnt: Math.min(cnt, restTotal), fr, rf, dg, finish, restTotal,
+    const segH = restGroups.reduce((a, g) => a + g.restH, 0);
+    let budget = segH > 0 ? Math.min(restTotal, Math.round(restTotal * (availH / segH))) : 0;
+    const cnt0 = budget;
+    let fr = 0, rf = 0, dg = 0, lastLabel = restGroups[0].label + ' 데크', finish = true;
+    const reach = {};   //  label → {deck:'full|partial', hold:'full|partial'}
+    const passes = [['deck', 'deckRest', '데크'], ['hold', 'holdRest', '홀드']];
+    outer: for (const [pk, restKey, kr] of passes) {
+      for (const g of restGroups) {
+        const n = g[restKey] || 0;
+        if (n <= 0) continue;
+        if (budget <= 0) { finish = false; break outer; }
+        const take = Math.min(n, budget);
+        const frac = take / n;
+        const mv = g.dis + g.lod || 1;
+        fr += Math.round(g.frN * (n / mv) * frac);
+        rf += Math.round(g.rfN * (n / mv) * frac);
+        dg += Math.round(g.dgN * (n / mv) * frac);
+        reach[g.label] = reach[g.label] || {};
+        reach[g.label][pk] = frac >= 0.999 ? 'full' : 'partial';
+        lastLabel = g.label + ' ' + kr + (frac < 0.999 ? `(${take}/${n}대째)` : '');
+        budget -= take;
+        if (frac < 0.999) { finish = false; break outer; }
+      }
+    }
+    const cnt = cnt0;
+    return { no: gi + 1, done: false, from: restGroups[0].label + ' 데크', to: lastLabel, cnt: Math.min(cnt, restTotal), fr, rf, dg, finish, restTotal, reachMap: reach,
       fromBay: Math.min(...seg.flatMap((g) => g.members)), toBay: Math.max(...seg.flatMap((g) => g.members)) };
   });
   //  ★ 2.63(스트립): 카고플랜 조감용 그룹 상세 — 검수사 확정 «첫조는 일할 범위, 두번째조는 첫조가
@@ -410,12 +437,10 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     const k = compAt[cn] ? shiftKeyOf(compAt[cn]) : '이전';
     doneBy[g.i][k] = (doneBy[g.i][k] || 0) + 1; }
   const gangOfGroup = {}; split.segs.forEach((seg, gi) => seg.forEach((g) => { gangOfGroup[g.label] = gi + 1; }));
-  const reachOf = {}; gangs.forEach((g) => { if (g.done || !g.from) return;
-    //  도달 = from(뒤 끝)부터 to 까지 — 역방향이므로 라벨 목록을 다시 계산
-    const seg = split.segs[g.no - 1]; const ordered = [...seg].reverse().filter((x) => x.restN > 0);
-    const toL = String(g.to || '').replace('(중간)', '');
-    for (const x of ordered) { reachOf[x.label] = (x.label === toL && /중간/.test(String(g.to))) ? 'partial' : 'full'; if (x.label === toL) break; } });
+  //  2.63-01: 도달은 갱 소진(두 패스)이 이미 계산했다 — reachMap 을 그대로 쓴다(같은 판정 두 벌 금지).
+  const reachOf = {}; gangs.forEach((g) => { if (g.reachMap) Object.assign(reachOf, g.reachMap); });
   const strip = plan.cargo.map((g, i) => ({ label: g.label, members: g.members, mv: g.dis + g.lod, dis: g.dis, lod: g.lod,
+    deckN: g.deckN || 0, holdN: g.holdN || 0, deckRest: g.deckRest || 0, holdRest: g.holdRest || 0,
     gang: gangOfGroup[g.label] || 0, doneN: g.doneN, doneBy: doneBy[i], restN: g.restN,
     reach: reachOf[g.label] || null, fr: g.frN, rf: g.rfN, dg: g.dgN }));
   return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip };
