@@ -129,7 +129,9 @@ export function answerTotalMoves(voyage, shipName = '') {
 export function answerFirstStart(voyage, bayDef, shipName = '') {
   const p = buildGangPlan(voyage, bayDef);
   if (!p) return answerGangSplit(voyage, bayDef, shipName);   // 같은 정직 고지
-  const lg = p.left.groups[0];                                 // 선수 끝 그룹
+  //  2.62-03 (검수사 확정 «보통 선미와 중간부분부터 진행합니다»): 1번 갱은 자기 구간의 뒤쪽 끝(중간부분),
+  //  2번 갱은 선미 끝에서 시작해 앞으로 내려온다. 종전 «1번 선수 끝» 은 클로드 추론이었다 — 정정.
+  const lg = p.left.groups[p.left.groups.length - 1];          // 중간부분(앞 구간의 뒤 끝) 그룹
   const rg = p.right.groups[p.right.groups.length - 1];        // 선미 끝 그룹
   const nameOf = (g, outerBay) => {
     // 페어면 양하가 실제 실린 멤버 베이 이름으로 (예: (32)33 → 32번)
@@ -140,8 +142,8 @@ export function answerFirstStart(voyage, bayDef, shipName = '') {
   };
   const note = (g) => g.deckOnly && !g.hatch ? `, 데크 전용이라 커버 없이 바로 ${g.dis}무브` : '';
   const L = [];
-  L.push(`1번 갱은 ${nameOf(lg, lg.members[0])}번 베이 데크부터(선수 끝${note(lg)}), 2번 갱은 ${nameOf(rg, rg.members[rg.members.length - 1])}번 베이 데크부터(선미 끝${note(rg)}) — 양쪽 끝에서 가운데(${p.left.toBay}/${p.right.fromBay})로 좁혀 들어옵니다.`);
-  L.push('', '근거 — ① 각 구간 바깥 끝에서 안쪽으로(크레인 이격 최대) ② 데크부터(홀드는 커버 개방 후) ③ 커버 없는 데크 전용 베이가 구간 끝에 있으면 그쪽 우선.');
+  L.push(`1번 갱은 ${nameOf(lg, lg.members[lg.members.length - 1])}번 베이 데크부터(중간부분${note(lg)}), 2번 갱은 ${nameOf(rg, rg.members[rg.members.length - 1])}번 베이 데크부터(선미 끝${note(rg)}) — 각자 뒤쪽 끝에서 앞으로 내려옵니다.`);
+  L.push('', '근거 — ① 선미·중간부분부터 앞으로(트림 유지 — 검수사 확정) ② 데크부터(홀드는 커버 개방 후) ③ 커버 없는 데크 전용 베이가 구간 끝에 있으면 그쪽 우선.');
   L.push('최종은 포맨 지시가 우선입니다.');
   return L.join('\n');
 }
@@ -346,7 +348,14 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   if (availH <= 0.01) return null;
   //  갱별 소진 — 남은 그룹을 순서대로. from=첫 미완 그룹, to=조 끝에 닿는 그룹.
   const gangs = split.segs.map((seg, gi) => {
-    const restGroups = seg.filter((g) => g.restN > 0);
+    //  ★ 2.62-03 (검수사 확정 «보통 선미와 중간부분부터 진행합니다» — NSFR 실측 GC103=11~13·GC104=23~25 도
+    //    중간대 시작으로 일치): 모든 갱이 자기 구간의 **뒤쪽 끝(선미 쪽)부터 앞으로** 소진한다.
+    //    왜(검수사 원문) — «물때를 못맞추면 갱을 이동할때 선박 건물 높이로 인해 작업이 지장이 생깁니다.
+    //    다리를 들어서 이동해야 하기 때문에» : 크레인이 선미 건물(선교)을 넘으려면 붐을 들어야 하고,
+    //    조수에 따라 못 넘는 시간이 생긴다 — 건물 뒤쪽부터 해치우고 앞으로 나오면 다시 넘을 일이 없다.
+    //    트림(«1번베이부터 파먹으면 배가 뒤로 뒤집어진다»)도 같은 방향을 가리킨다.
+    const ordered = [...seg].reverse();
+    const restGroups = ordered.filter((g) => g.restN > 0);
     if (!restGroups.length) return { no: gi + 1, done: true, cnt: 0, restTotal: 0 };
     let left = availH, cnt = 0, fr = 0, rf = 0, dg = 0, lastLabel = restGroups[0].label, finish = true;
     for (const g of restGroups) {
@@ -377,7 +386,9 @@ export function gangBriefLines(gs) {
   const parts = gs.gangs.map((g) => {
     if (g.done) return `${g.no}번 갱 완료`;
     const sp = [g.fr ? `FR${g.fr}` : null, g.rf ? `리퍼${g.rf}` : null, g.dg ? `DG${g.dg}` : null].filter(Boolean).join('·');
-    return `${g.no}번 갱 ${g.from}→${g.to} 약 ${g.cnt}대${sp ? `(${sp})` : ''}${g.finish ? ' ✔끝' : ''}`;
+    //  2.62-03: 담당 구간(베이 범위)을 같이 — 조 도달점만 쓰면 «남은 베이는 임자 없나»로 읽힌다(검수사 실측).
+    const zone = (g.fromBay != null) ? `(${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')})` : '';
+    return `${g.no}번 갱${zone} ${g.from}→${g.to} 약 ${g.cnt}대${sp ? `(${sp})` : ''}${g.finish ? ' ✔끝' : ''}`;
   });
   return [`🏗 ${_nm}(${gs.shift.label}·${gs.nGangs}갱) — ` + parts.join(' / '), `"갱 배분"으로 상세 확인`];
 }
