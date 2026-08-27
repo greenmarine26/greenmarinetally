@@ -44,5 +44,12 @@ T(/\{!_sideCanc && <VoyageSummaryCard/.test(vpg), '캔슬인데 현황 요약(�
 T(/sideCancelled\(v\.info, mode,/.test(rd('src/pages/GlobalSearchPage.jsx')),
   '통합검색이 캔슬분을 그대로 검색한다 — 그 컨은 다른 배에 실리므로 끝 4자리 조회에 두 배가 걸린다');
 
+//  2.67-01 (검수사 «저걸로 인해 선적카드를 눌러보게 됩니다. 그후에야 캔슬사실을 알게 되죠»):
+//    홈 항차 카드에서도 숫자를 지우고 캔슬 한 줄만 — 누르기 **전에** 알아야 한다.
+const hp = rd('src/pages/HomePage.jsx');
+T(/function CancelledSide/.test(hp) && /전량 캔슬/.test(hp), '홈 항차 카드에 캔슬 줄이 없다');
+T(/sideCancelled\(voyage\.info, 'loading', _tw0\)/.test(hp), '홈 카드가 선적 캔슬을 모른다 — «선적평택 81·예상EDI 80» 이 그대로 뜬다');
+T(/sideCancelled\(voyage\.info, 'discharge', _tw0\)/.test(hp), '홈 카드가 양하 캔슬을 모른다');
+
 if (bad > 0) { console.error(`✗ 전량 캔슬 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 전량 캔슬 연막검사 통과 — 판정 7 · 브리핑 4 · 배선 9');
+console.log('✓ 전량 캔슬 연막검사 통과 — 판정 7 · 브리핑 4 · 배선 12');

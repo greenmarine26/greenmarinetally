@@ -4,7 +4,7 @@ import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyag
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -1694,8 +1694,15 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
 
       <div className="px-3 pb-3 space-y-2">
         {/* V8.81: 양하/선적 막대를 누르면 그 모드로 항차를 연다 (구: 둘 다 기본 모드로 열려 "반응 없음"처럼 보임). */}
-        {dis && <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>}
-        {loa && <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>}
+        {/*  ★ 2.67-01 (검수사): 캔슬인데 카드에 «선적평택 81 · 예상EDI 80 · 확정 대기» 가 그대로 떠서
+             *«저걸로 인해 선적카드를 눌러보게 됩니다. 그후에야 캔슬사실을 알게 되죠»* —
+             누르기 **전에** 알아야 한다. 숫자를 지우고 캔슬 한 줄만 남긴다. */}
+        {dis && (sideCancelled(voyage.info, 'discharge', _tw0) 
+          ? <CancelledSide label="양하"/>
+          : <SectionBar label="양하" color="blue" stats={disStats} onClick={() => onOpen('discharge')}/>)}
+        {loa && (sideCancelled(voyage.info, 'loading', _tw0)
+          ? <CancelledSide label="선적"/>
+          : <SectionBar label="선적" color="amber" stats={loaStats} onClick={() => onOpen('loading')}/>)}
         {/* 1.78: 한쪽이 통째로 없으면 «없음»의 근거를 말한다 (인계함 2026-08-17, TNJP 26359E 사건).
             한쪽이라도 자료가 있는 항차만 — 순수 예정 항차는 이미 「자료 없음」 한 줄로 충분하다. */}
         {(dis || loa) && !dis && <MissingSideNote label="양하" qty={voyage.info?.planDis}/>}
@@ -1908,6 +1915,17 @@ function MissingSideNote({ label, qty }) {
     <div className="text-xxs text-dim-500"
       title={`배정표에 수량 정보가 없는 부두(PNCT 등)라 자료 대기인지 ${label} 없음인지 판정할 수 없습니다.`}>
       {label} 자료 없음 · 배정 수량 미상
+    </div>
+  );
+}
+
+//  ★ 2.67-01: 전량 캔슬된 쪽 — 항차 카드에서 숫자를 아예 안 보여준다(누르기 전에 알아야 한다).
+function CancelledSide({ label }) {
+  return (
+    <div className="flex items-center gap-2 text-sm2 sm:text-xxs min-h-[36px] sm:min-h-0 opacity-90">
+      <span className="bg-st-bad/20 text-st-badHi border border-st-bad/40 px-2 sm:px-1.5 py-1 sm:py-0.5 rounded font-black leading-none">{label}</span>
+      <span className="font-black text-st-badHi">⛔ 전량 캔슬</span>
+      <span className="text-dim-500">— 배정목록 {label} 0대</span>
     </div>
   );
 }
