@@ -365,6 +365,7 @@ export default function App() {
       <div className="min-h-screen bg-ink-950 text-dim-100">
         <UpdatePrompt/>
         <LoginPage
+          pilotForecast={pilotForecast}   // 2.64: 로그인 타임라인 도선 마커
           current={inspector}
           inspectors={inspectors}
           voyages={voyages}

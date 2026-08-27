@@ -378,6 +378,11 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.64: **작업 타임라인** — 축 수식·배선(로그인 PC 하단, 검수사 확정 자리).
+    #  ⚠ /tmp 에 두면 external react 를 못 찾는다 — repo 안(node_modules 곁)에 임시로 둔다.
+    SMOKE_TL="tools/_smoketl_tmp.cjs"; trap 'rm -f "$SMOKE_TL"' EXIT
+    npx esbuild src/components/WorkTimeline.jsx --bundle --platform=node --format=cjs --external:react --loader:.jsx=jsx --jsx=automatic --outfile="$SMOKE_TL" --log-level=error \
+      && node tools/smoke_timeline.cjs "$SMOKE_TL" "$(pwd)" || { echo "✗ 타임라인 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.63-02: **PORT-MIS 매칭** — 자매선 앞5자 오매칭·낡은 자료 되살아남 금지.
     SMOKE_PM=$(mktemp /tmp/_smokepm_XXXXXX.cjs)
     npx esbuild src/portMisMatch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PM" --log-level=error \

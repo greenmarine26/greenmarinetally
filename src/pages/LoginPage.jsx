@@ -4,6 +4,7 @@
 //   InspectorModal.jsx는 삭제됨 (중복 두 벌 금지 — 이 파일이 유일한 로그인 진입점).
 //   앱 시작은 항상 이 화면(자동 로그인 없음). 로그인 성공 시 App이 역할별 해시로 보낸다.
 import React, { useState, useEffect, useCallback } from 'react';
+import WorkTimeline from '../components/WorkTimeline.jsx';   // 2.64: PC 로그인 하단 작업 타임라인(검수사 확정 자리)
 import { UserPlus, LogIn, ArrowLeft } from 'lucide-react';
 //  2.29-02: 로그인 화면 로고 — 검수사 «지금도 구버전 띄우셨네요».
 //    2.29 는 헤더만 바꿔서, **앱을 열면 제일 먼저 보는 이 화면**이 옛 닻 그대로였다.
@@ -23,7 +24,7 @@ import {
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 import { useBackHandler } from '../backHandler.js';
 
-export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {} }) {
+export default function LoginPage({ current = '', inspectors, extraStaff = {}, deletedStaff = {}, notice = '', onSelect, onCancel = null, voyages = {}, pilotForecast = {} }) {   // 2.64: pilotForecast — 타임라인 도선 마커
   const [newName, setNewName] = useState('');
   // TallyOne 1.0: 목록에서 이름을 고르면 선택만 되고, 하단 [로그인] 버튼으로 확정한다.
   const [selected, setSelected] = useState('');
@@ -610,6 +611,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         <div className="lg:hidden mt-2 text-center text-[10.5px] text-dim-500 font-medium">🔒 표시는 비밀번호를 한 번 확인합니다</div>
         </div>{/* 2.11: 하단 고정 바 닫기 */}
         </div>{/* 2.11: 폰 바텀시트 닫기 (PC 에서는 껍데기만) */}
+      </div>
+
+      {/* ── 2.64 (검수사 확정 «컴화면 로그인 화면에 공백이 있어 보입니다. 여기 밑부분을 정리하면 적당할듯»):
+          PC 하단 전폭 작업 타임라인 — 폰은 안 그린다(«폰은 지금도 좋은거 같아요»). */}
+      <div className="hidden lg:block lg:col-span-2">
+        <WorkTimeline ships={board.ships} pilotForecast={pilotForecast} />
       </div>
       </div>{/* 2.10: lg 2단 래퍼 닫기 — 게이트 오버레이는 fixed 라 바깥에 둔다 */}
 
