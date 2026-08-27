@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
-import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
+import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';
+import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
 import { mirSee } from '../mirEyes.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
 import { mirTone } from '../mirChat.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
@@ -958,6 +959,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    🔴 2.50-01 이 그 자리에서 `voyage?.info` 를 그대로 참조해 **앱 전체 크래시**를 냈다.
     //      898행 주석이 «시그니처 전부 갱신 (1.98 교훈)» 이라고 이미 경고하고 있었는데 또 밟았다.
     info: voyage?.info || null,
+    //  ★ 2.62: 조 단위 갱 배분 — **함수로** 싣는다(값으로 실으면 memo 가 낡아 «일이 끝나가도 답이 같다»).
+    //    InlineAnswerCard 는 voyage 를 안 받는다(1.98·2.50-01 교훈) — 여기서 클로저로 감싼다.
+    gangBrief: () => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return gangBriefLines(buildGangShift(voyage, de, { tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null, compMap: compMap || null })); } catch (e) { return null; } },
+    gangShift: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return answerGangShift(voyage, de, { nGangs: n || 2, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null, compMap: compMap || null }); } catch (e) { return null; } },
     //  ★ 2.52-01 — **완료 표를 같이 싣는다.** 이 화면의 `containers` 에는 `_comp` 가 없다.
     //    완료는 별도 `compMap` 으로 다니는데(GuidedWorkPanel 도 둘을 따로 받는다), 미르는 `_comp` 를
     //    보고 있어서 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다 — 실선에서 잡혔다.
@@ -2533,13 +2538,13 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       if (parsed?.briefingQuery) {
         //  ★ 2.57: 말투 출구 겹(mirTone) — 다른 화면(SearchPanel:1112)과 동일하게 여기도 입힌다
         return mirTone(generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
-          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null, compMap: briefCtx?.comp || null }));
+          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null, compMap: briefCtx?.comp || null, gang: (briefCtx?.gangBrief ? briefCtx.gangBrief() : null) }));   // 2.62: 호출 시점 계산 — 실시간
       }
       if (parsed?.sealAuditQuery) return mirTone(generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적'));   // ★ 2.57: 말투 한 겹
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
       //    ⚠ 이 화면의 `containers` 에는 `_comp` 가 없다(완료는 briefCtx.comp 로 따로 온다 — 2.52-01 교훈).
       //  ★ 2.57: shiftMap(briefCtx 편승) + mirTone 한 겹 — 시프팅 «없다» 오답과 딱딱한 말투를 같이 잡는다
-      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null })) : null;   // 2.05-01
+      return parsed ? mirTone(generateLocalAnswer(parsed, results, containers, { mode, carrierContacts, shipSpeed, vsl, vslFull: briefCtx?.info?.vslFull, pier, terminalWork: briefCtx?.terminalWork || null, compMap: briefCtx?.comp || null, photos: briefCtx?.photos || null, shiftMap: briefCtx?.shiftMap || null, gangShift: briefCtx?.gangShift || null })) : null;   // 2.05-01 · 2.62
     } catch (e) { return null; }
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q]);
   const readRef = useRef('');

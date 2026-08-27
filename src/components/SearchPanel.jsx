@@ -9,7 +9,7 @@ import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpee
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, fullContainerNo, isSentenceQuery} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
-import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery } from '../chiefAnswers.js';   // 1.90·1.91·1.92
+import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import { judgeMode } from '../dataReadiness.js';   // 1.69: 검수원 자료현황 질문 — 유무 한 줄 + 수석 유도
 import { isChief as _isChiefName } from '../staffList.js';   // 1.65: 수석 전용 기능인지 밝혀 답하려고
 import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 답변용 간이 매처
@@ -1076,11 +1076,15 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (isDataArrivalQuery(query)) {
       try { return answerDataArrival(voyage, voyage?.info?.vslFull || voyage?.info?.vsl || ''); } catch (e) { /* 아래로 */ }
     }
+    // ★ 2.62: 갱 배분 재료 — 사전은 전역 __fbShipBayDict, 완료는 buildGangShift 가 voyage 에서 직접 읽는다.
+    const _gangDe = (() => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; } catch (e) { return null; } })();
+    const _gangTw = (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null;
     // V7.90-04: 브리핑 — 현재 작업(탭 모드) 기준 요약 (음성 "브리핑" 한 마디)
     if (parsed.briefingQuery) {
       const modeCs = allContainers.filter(c => c._mode === workFilter);
       const pairs = getBayPairs(allContainers, voyage?.info?.imo || '', voyage?.info?.vsl || '');   // V7.93: 트윈 무게 예견
-      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '', { rfSkip, eseal: workFilter === 'loading' ? esealBrief : null, photos: voyage?.photos || null, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null });   // 1.86·1.87·2.05-01(사전 데미지)
+      const _gang = (() => { try { return gangBriefLines(buildGangShift(voyage, _gangDe, { tw: _gangTw })); } catch (e) { return null; } })();   // 2.62: 물을 때마다 «지금» 기준
+      return generateBriefing(modeCs, workFilter === 'discharge' ? '양하' : '선적', workFilter, pairs, voyage?.info?.pier || '', { rfSkip, eseal: workFilter === 'loading' ? esealBrief : null, photos: voyage?.photos || null, tw: _gangTw, gang: _gang });   // 1.86·1.87·2.05-01(사전 데미지) · 2.62 갱 줄
     }
     // V7.90-05: 실번호 점검 (사용자 요청 — 씰 오류 사전 예측)
     if (parsed.sealAuditQuery) {
@@ -1105,7 +1109,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       ? results.filter(c => (modeChoice === 'loading' ? c._mode === 'loading' : c._mode !== 'loading'))
       : results;
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
-      { ...manualCtx, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
+      { ...manualCtx, gangShift: (n) => { try { return answerGangShift(voyage, _gangDe, { nGangs: n || 2, tw: _gangTw }); } catch (e) { return null; } }, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts]);   // 2.41: 선박 연락처
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈

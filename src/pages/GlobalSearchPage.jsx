@@ -15,7 +15,7 @@ import { fbGetDamagePhoto, fbAddClaudeMemo } from '../firebase.js';   // 2.03: �
 import { buildReadiness, describeReadiness } from '../dataReadiness.js';   // 1.66-03: "어느 선박 자료 다 있어" · "어느 선사 것이 없지"
 import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 시" — 배 이름 맥락으로 즉답
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
-import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
+import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
@@ -433,6 +433,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         if (isFirstQ) return answerFirstStart(_voy, _bayDef, _ship);
         if (isXrayShiftQ) return answerXrayShifts(_voy, _bayDef, { shipName: _ship, pier: shipCtx.info.pier });
         if (isShiftBriefQ) return answerShiftBriefing(_voy, _bayDef, { shipName: _ship, voyages });
+        if (p.gangQuery) { try { const _a = answerGangShift(_voy, _bayDef, { nGangs: p.gangQuery.n || 2, tw: (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null }); if (_a) return `${_ship}\n` + _a; } catch (e) { /* 아래로 */ } }   // 2.62
       }
     }
     // ★ 2.57-02 (검수사 시험 «두 곳에서 FR을 물었습니다. 답이 같았습니까?» — 달랐다):
@@ -554,7 +555,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           if (wantMode && mode !== wantMode) continue;
           const arr = mine.filter((c) => c._mode === mode);
           if (!arr.length) continue;
-          try { parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null })); } catch (e) { /* 폴백 아래로 */ }
+          try { const _gde = (() => { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(shipCtx.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; })(); const _gtw = (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null; const _gg = (() => { try { return gangBriefLines(buildGangShift(shipCtx.v, _gde, { tw: _gtw })); } catch (e) { return null; } })(); parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: _gtw, gang: _gg })); } catch (e) { /* 폴백 아래로 */ }
         }
         if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
       }

@@ -307,6 +307,12 @@ export function parseNaturalQuery(text) {
   if (/몇\s*번\s*베이|어느\s*베이|무슨\s*베이|어떤\s*베이|어디\s*어디|베이\s*별/i.test(t)) result.bayDistQuery = true;   // V7.91-02: 어떤 베이
   // TallyOne 1.18: "상황 어때"·"어떻게 돼가"·"진행 어디까지" 도 브리핑으로. 현장에서 실제로 쓰는 말이다.
   if (/브리핑|브리핑\s*해|요약\s*해|작업\s*요약|상황\s*(?:어때|어떻|알려|보고)|어떻게\s*(?:돼|되)\s*가|진행\s*(?:상황|어디|어때|얼마)|어디까지\s*(?:했|왔|됐)/i.test(t)) result.briefingQuery = true;
+  //  ★ 2.62: 조(근무조) 단위 갱 배분 — «갱 배분»·«N갱이면»·«내 갱 (오늘) 얼마나».
+  //    계산은 chiefAnswers.buildGangShift 한 벌(순환 import 회피 — 화면이 ctx.gangShift 로 함수를 싣는다).
+  {
+    const _gm = t.match(/([2-4])\s*갱\s*(?:이면|으로|기준)/);
+    if (/갱\s*배분|배분\s*계획|내\s*갱/.test(t) || _gm) result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
+  }
   // 2.05-01 (검수사 «데미지·OOG도 버튼을 눌러 확인하게 — 재질문 감소»): 브리핑 후속 버튼용 로컬 인텐트 3종.
   if (/데미지|파손|손상/.test(t)) result.dmgQuery = true;
   if (/수화물/.test(t)) result.luggQuery = true;
@@ -1128,6 +1134,11 @@ function _localAnswerCore(parsed, results, allContainers, ctx = null) {
 
   // TallyOne 1.27: 시프팅 — 배정목록의 'N' 은 무브 수(양하 1 + 재선적 1)라 컨 대수의 2배다.
   // 2.05-01: 브리핑 후속 버튼 3종 — 수화물·긴급·데미지 (그 자리 즉답, 인라인 카드는 사진 썸네일 동반)
+  //  ★ 2.62: 갱 배분 — 조 단위 «내 작업량». ctx.gangShift 는 화면이 싣는 계산 함수(재료: 베이사전·완료·터미널).
+  if (parsed.gangQuery && ctx && typeof ctx.gangShift === 'function') {
+    try { const _ga = ctx.gangShift(parsed.gangQuery.n || null); if (_ga) return _ga; } catch (e) { console.warn('[2.62] 갱 배분 실패:', e); }
+    return '갱 배분을 내려면 베이사전이 필요해요 — 이 배의 베이 매트릭스가 아직 없습니다.';
+  }
   if (parsed.luggQuery && !parsed.digits) {
     const lug = (allContainers || []).filter((c) => c.lugg);
     if (!lug.length) return '🧳 이 항차에 수화물 컨 등록이 없습니다 (선사 메일 기준)';
@@ -1687,6 +1698,10 @@ export function generateBriefing(containers, modeLabel, mode = 'discharge', pair
   const _bBrief = (opts && opts.tw) ? bothCounts(cs.map((c) => ({ ...c, _mode: mode, _ptk: true })), { tw: opts.tw }, mode) : null;
   if (_bBrief && _bBrief.length) { lines.push('📈 진행 — 두 가지'); _bBrief.forEach((x) => lines.push('  ' + x)); }
   else if (done > 0) lines.push(`📈 진행: 완료 ${done} / 잔여 ${total - done} (${Math.round(done / total * 100)}%)`);
+    //  ★ 2.62 (검수사 확정 «제가 듣고싶은 브리핑은 출근시간부터 퇴근시까지의 작업할 내용입니다»):
+    //    조 단위 갱 배분 줄 — 호출부가 chiefAnswers.gangBriefLines 결과를 opts.gang 으로 싣는다.
+    //    물을 때마다 «지금» 기준 재계산이라 일이 끝나가면 남은 것만 말한다(«일이 끝나가도 답은 같았습니다» 해소).
+    if (opts && Array.isArray(opts.gang) && opts.gang.length) { opts.gang.forEach((g) => lines.push(g)); }
   if (warns.length) {
     lines.push(`⚠ 주의사항`);
     for (const w of warns) lines.push(`  ${w.line}`);

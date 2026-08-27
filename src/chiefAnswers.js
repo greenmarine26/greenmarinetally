@@ -8,7 +8,7 @@
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
 import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay } from './utils.js';
-import { addWorkMinutes, speedFromTerminal } from './nlSearch.js';   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다
+import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
 const _list = (x) => Array.isArray(x) ? x : (x && typeof x === 'object' ? Object.values(x) : []);
 const _ptk = (c, mode) => mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol);
@@ -212,6 +212,170 @@ export function answerXrayShifts(voyage, bayDef, opts = {}) {
 }
 
 // #100 교대 브리핑 — "교대 브리핑 해줘"
+// ─── 2.62: 조(근무조) 단위 갱 배분 — «내가 출근해서 퇴근까지 할 일» ───────────
+//   검수사 확정 2026-08-27: ①왜 — 검수사들이 자기가 할 작업량을 알고 싶다. 갱 총량이 아니라
+//   **출근~퇴근까지 작업할 범위**(어느 베이부터 어디까지·몇 대·특수 뭐가 있나)가 답이다.
+//   ②기본 2갱, 3갱 대비. ③FR 산식 — 스프레더 교체 왕복 10~20분 + 개당 1~5분(중간값 15분·3분).
+//   ④«지금의 브리핑은 일이 끝나가도 답은 같았습니다» — 물을 때마다 «지금» 기준 재계산:
+//   완료 기록(compMap)을 빼고, 지금~조 끝 남은 실근무시간(WORK_SHIFTS 한 벌)으로만 계산한다.
+//   크레인은 서로 못 넘는다 — 배정은 연속 구간 분할(예상시간 최균등 절단, 그룹 경계 위에서만).
+const _isFRlike = (c) => { const t = String(c.iso || ''); return !!c.fr || !!c.oog || (t.length > 2 && 'PU'.includes(t[2])); };
+const _isRF = (c) => { const t = String(c.iso || ''); return !!c.rf || (t.length > 2 && t[2] === 'R'); };
+const _isDG = (c) => !!c.dg || !!c.dgc || !!c.un;
+
+//  그룹별 특수 분류·예상시간(계획 모델: 일반 25/h · 리퍼/DG 15/h · FR류 그룹당 0.25h+개당 0.05h).
+//  실측 페이스(perGangHour)가 오면 그것이 이긴다 — 실측엔 특수 지연이 이미 녹아 있다.
+function _gangHours(plan, voyage, perGangHour) {
+  const idx = {};
+  plan.cargo.forEach((g, i) => { g.frN = 0; g.rfN = 0; g.dgN = 0; g.members.forEach((m) => { idx[m] = i; }); });
+  for (const [mode] of [['discharge'], ['loading']]) {
+    for (const c of _list(voyage?.[mode]?.ediContainers)) {
+      if (!_ptk(c, mode)) continue;
+      const g = plan.cargo[idx[_bayN(c)]];
+      if (!g) continue;
+      if (_isFRlike(c)) g.frN++; else if (_isRF(c)) g.rfN++; else if (_isDG(c)) g.dgN++;
+    }
+  }
+  plan.cargo.forEach((g) => {
+    const mv = g.dis + g.lod;
+    if (perGangHour > 0) g.hours = mv / perGangHour;
+    else {
+      const gen = Math.max(0, mv - g.frN - g.rfN - g.dgN);
+      g.hours = gen / 25 + (g.rfN + g.dgN) / 15 + (g.frN > 0 ? 0.25 + g.frN * 0.05 : 0);
+    }
+  });
+}
+
+//  연속 구간 N분할 — 절단점 전수(그룹 수십·N≤4 라 가볍다). 예상시간 차가 가장 작은 절단.
+function _splitGangs(cargo, N) {
+  const n = cargo.length;
+  if (n === 0) return null;
+  if (N >= n) return { segs: cargo.map((g) => [g]) };
+  const out = [];
+  const combos = (k, start, acc) => { if (k === 0) { out.push([...acc]); return; } for (let i = start; i <= n - 1 - k; i++) { acc.push(i); combos(k - 1, i + 1, acc); acc.pop(); } };
+  combos(N - 1, 0, []);
+  let best = null;
+  for (const cuts of out) {
+    const segs = []; let prev = 0;
+    for (const c of cuts) { segs.push(cargo.slice(prev, c + 1)); prev = c + 1; }
+    segs.push(cargo.slice(prev));
+    const hs = segs.map((sg) => sg.reduce((a, g) => a + g.hours, 0));
+    const spread = Math.max(...hs) - Math.min(...hs);
+    if (!best || spread < best.spread) best = { segs, spread };
+  }
+  return best;
+}
+
+//  «지금»이 속한(또는 다가오는) 조와 그 조의 끝 시각. 조 경계는 교대 브리핑과 같은 한 벌 —
+//  주간 08:00~17:30 · 야간 19:00~익일 06:30 (PCTC/PNCT 공통 경계, 실근무 창은 WORK_SHIFTS 가 가른다).
+function _currentShift(nowMs) {
+  const d = new Date(nowMs);
+  const mm = d.getHours() * 60 + d.getMinutes();
+  const at = (base, h, m) => { const x = new Date(base); x.setHours(h, m, 0, 0); return x.getTime(); };
+  if (mm >= 480 && mm < 1050) return { name: '주간조', label: '08:00~17:30', endMs: at(d, 17, 30) };
+  if (mm >= 1050 && mm < 1140) return { name: '야간조', label: '19:00~06:30', endMs: at(d, 6, 30) + 86400000, startMs: at(d, 19, 0) };   // 교대 사이 — 다가오는 야간
+  if (mm >= 1140) return { name: '야간조', label: '19:00~06:30', endMs: at(d, 6, 30) + 86400000 };
+  if (mm < 390) return { name: '야간조', label: '19:00~06:30', endMs: at(d, 6, 30) };
+  return { name: '주간조', label: '08:00~17:30', endMs: at(d, 17, 30), startMs: at(d, 8, 0) };   // 06:30~08:00 — 다가오는 주간
+}
+
+//  본체 — 조 단위 갱 배분. 반환 null(자료 없음) 또는 {shift, gangs[], nGangs, note}.
+export function buildGangShift(voyage, bayDef, opts = {}) {
+  const nGangs = Math.min(4, Math.max(1, opts.nGangs || 2));
+  const nowMs = opts.now || Date.now();
+  const pier = voyage?.info?.pier || '';
+  const plan = buildGangPlan(voyage, bayDef);
+  if (!plan) return null;
+  const sp = (opts.tw) ? speedFromTerminal(voyage?.info, opts.tw ? { [String(voyage?.info?.vsl || '').toUpperCase()]: opts.tw } : null) : null;
+  const perGangHour = sp && sp.perGangHour > 0 ? sp.perGangHour : 0;
+  _gangHours(plan, voyage, perGangHour);
+  //  완료 반영 — compMap(앱 기록)의 컨을 그룹에서 뺀다. «일이 끝나가도 답이 같던» 병의 해법.
+  //  안 실어 주면 voyage 의 completed 를 직접 읽는다 — 화면 배선을 가볍게(호출부가 재료를 몰라도 된다).
+  const comp = opts.compMap || { ...(voyage?.discharge?.completed || {}), ...(voyage?.loading?.completed || {}) };
+  const idx = {}; plan.cargo.forEach((g, i) => { g.doneN = 0; g.members.forEach((m) => { idx[m] = i; }); });
+  if (comp) {
+    const all = {};
+    for (const md of ['discharge', 'loading']) for (const c of _list(voyage?.[md]?.ediContainers)) all[String(c.cn || '').toUpperCase()] = c;
+    for (const cn of Object.keys(comp)) {
+      const c = all[String(cn).toUpperCase()];
+      if (!c) continue;
+      const g = plan.cargo[idx[_bayN(c)]];
+      if (g) g.doneN++;
+    }
+  }
+  plan.cargo.forEach((g) => {
+    const mv = g.dis + g.lod;
+    g.restN = Math.max(0, mv - g.doneN);
+    g.restH = mv > 0 ? g.hours * (g.restN / mv) : 0;
+  });
+  //  분할은 «전체 예상시간» 기준(작업 중에 갱 경계가 출렁이지 않게), 소진은 «남은 것» 기준.
+  const split = _splitGangs(plan.cargo, nGangs);
+  if (!split) return null;
+  //  조 창 — 지금(또는 조 시작, 또는 작업 시작 중 늦은 것)부터 조 끝까지 실근무시간.
+  const shift = _currentShift(nowMs);
+  let fromMs = Math.max(nowMs, shift.startMs || 0);
+  const ws = String(voyage?.info?.workStartAt || '').trim();
+  const wsM = ws.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  if (wsM) fromMs = Math.max(fromMs, new Date(+wsM[1], +wsM[2] - 1, +wsM[3], +wsM[4], +wsM[5]).getTime());
+  else if (voyage?.info && Object.prototype.hasOwnProperty.call(voyage.info, 'workStartAt') && !ws) {
+    //  터미널이 «아직 시작 안 함»이라고 말하는 상태 — planDate 앞자리(이미 작업시작 규약)로.
+    const m = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+    if (m) fromMs = Math.max(fromMs, new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime());
+  }
+  const availH = Math.max(0, workMinutesBetween(fromMs, shift.endMs, pier)) / 60;
+  //  갱별 소진 — 남은 그룹을 순서대로. from=첫 미완 그룹, to=조 끝에 닿는 그룹.
+  const gangs = split.segs.map((seg, gi) => {
+    const restGroups = seg.filter((g) => g.restN > 0);
+    if (!restGroups.length) return { no: gi + 1, done: true, cnt: 0, restTotal: 0 };
+    let left = availH, cnt = 0, fr = 0, rf = 0, dg = 0, lastLabel = restGroups[0].label, finish = true;
+    for (const g of restGroups) {
+      if (left <= 0.01) { finish = false; break; }
+      const use = Math.min(g.restH, left);
+      const frac = g.restH > 0 ? use / g.restH : 1;
+      cnt += Math.round(g.restN * frac);
+      const mv = g.dis + g.lod || 1;
+      fr += Math.round(g.frN * (g.restN / mv) * frac);
+      rf += Math.round(g.rfN * (g.restN / mv) * frac);
+      dg += Math.round(g.dgN * (g.restN / mv) * frac);
+      lastLabel = g.label + (use < g.restH - 0.001 ? '(중간)' : '');
+      left -= use;
+      if (use < g.restH - 0.001) { finish = false; break; }
+    }
+    const restTotal = restGroups.reduce((a, g) => a + g.restN, 0);
+    return { no: gi + 1, done: false, from: restGroups[0].label, to: lastLabel, cnt: Math.min(cnt, restTotal), fr, rf, dg, finish, restTotal,
+      fromBay: Math.min(...seg.flatMap((g) => g.members)), toBay: Math.max(...seg.flatMap((g) => g.members)) };
+  });
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0 };
+}
+
+//  브리핑용 요약 줄(1~2줄) — 음성 머리는 건드리지 않는다. 상세는 «갱 배분» 질문으로.
+export function gangBriefLines(gs) {
+  if (!gs || !gs.gangs || !gs.gangs.length) return null;
+  if (gs.availH <= 0.01) return null;
+  const parts = gs.gangs.map((g) => {
+    if (g.done) return `${g.no}번 갱 완료`;
+    const sp = [g.fr ? `FR${g.fr}` : null, g.rf ? `리퍼${g.rf}` : null, g.dg ? `DG${g.dg}` : null].filter(Boolean).join('·');
+    return `${g.no}번 갱 ${g.from}→${g.to} 약 ${g.cnt}대${sp ? `(${sp})` : ''}${g.finish ? ' ✔끝' : ''}`;
+  });
+  return [`🏗 ${gs.shift.name}(${gs.shift.label}·${gs.nGangs}갱) — ` + parts.join(' / '), `"갱 배분"으로 상세 확인`];
+}
+
+//  «갱 배분 (자세히)» · «3갱이면» 상세 답.
+export function answerGangShift(voyage, bayDef, opts = {}) {
+  const gs = buildGangShift(voyage, bayDef, opts);
+  if (!gs) return null;
+  const L = [`🏗 ${gs.shift.name}(${gs.shift.label}) 갱 배분 — ${gs.nGangs}갱 기준${gs.measured ? ' · 실측 페이스' : ' · 계획 페이스(일반 25/특수 15/h·FR 교체 15분+개당 3분)'}`];
+  L.push(`이 조 남은 실근무 약 ${gs.availH.toFixed(1)}시간 (쉬는 시간 제외)`);
+  gs.gangs.forEach((g) => {
+    if (g.done) { L.push(`${g.no}번 갱 — 맡은 구간 완료`); return; }
+    const sp = [g.fr ? `⊞FR ${g.fr}` : null, g.rf ? `❄리퍼 ${g.rf}` : null, g.dg ? `☣DG ${g.dg}` : null].filter(Boolean).join(' · ');
+    L.push(`${g.no}번 갱 (베이 ${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')}) — ${g.from} 부터 ${g.to} 까지 약 ${g.cnt}대${sp ? ` · ${sp}` : ''}${g.finish ? ' — 이 조에서 구간 마감 예상' : ` (구간 잔여 ${g.restTotal}대 중)`}`);
+  });
+  L.push(gs.nGangs === 2 ? '«3갱이면» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요.' : '«갱 배분» 이라고 물으시면 기본 2갱 기준이에요.');
+  L.push('최종 배분은 포맨 지시가 우선입니다.');
+  return L.join('\n');
+}
+
 export function answerShiftBriefing(voyage, bayDef, opts = {}) {
   const shipName = opts.shipName || voyage?.info?.vslFull || voyage?.info?.vsl || '이 배';
   const now = opts.now ? new Date(opts.now) : new Date();
