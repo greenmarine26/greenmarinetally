@@ -46,11 +46,16 @@ export function matchPortMis(portMisData, info) {
     const m = latest(hit);
     if (m) return m;
   }
-  // 2) 선박명 (앞 5자 포함 매칭)
+  // 2) 선박명 — 2.63-02: 앞 5자 매칭이 자매선(SAWASDEE 시리즈)을 오매칭(SWTD 에 SHANGHAI 6/11 울산)
+  //    → 양방향 통째 포함만 + 콜사인 상호 배제 + 7일 신선도(낡은 지난 기항 제외).
   if (myName && myName.length >= 5) {
     const hit = entries.filter(p => {
       const pn = norm(p.vesselName);
-      return pn.length >= 5 && (myName.includes(pn.slice(0, 5)) || pn.includes(myName.slice(0, 5)));
+      if (pn.length < 5 || !(myName.includes(pn) || pn.includes(myName))) return false;
+      const pc = String(p.callsign || '').toUpperCase().trim();
+      if (cs && pc && cs !== pc && !pc.startsWith(cs) && !cs.startsWith(pc)) return false;
+      if (p.updatedAt && Date.now() - p.updatedAt > 7 * 86400000) return false;
+      return true;
     });
     const m = latest(hit);
     if (m) return m;

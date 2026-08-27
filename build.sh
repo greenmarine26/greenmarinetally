@@ -378,6 +378,10 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.63-02: **PORT-MIS 매칭** — 자매선 앞5자 오매칭·낡은 자료 되살아남 금지.
+    SMOKE_PM=$(mktemp /tmp/_smokepm_XXXXXX.cjs)
+    npx esbuild src/portMisMatch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PM" --log-level=error \
+      && node tools/smoke_portmis.cjs "$SMOKE_PM" "$(pwd)" || { echo "✗ PORT-MIS 매칭 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.62: **갱 배분** — 조 단위 «내 작업량»이 실데이터에서 서고 실시간으로 줄어드는가.
     node tools/smoke_gangshift.cjs "$SMOKE_CA" "$(pwd)" "$SMOKE_NS" || { echo "✗ 갱 배분 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.55: **두 숫자** — 대수를 물으면 실제(터미널)와 앱 기록이 둘 다 나오는가.

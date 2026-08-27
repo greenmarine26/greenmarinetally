@@ -1824,11 +1824,20 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         // 5) M5.71 — 선박명 정규화 매칭 (공백/특수문자 제거 + 부분 단어)
         // M5.87: vslFull 우선 사용
         if (!pm && (vslFull || vsl)) {
+          //  ★ 2.63-02 (검수사 실측 — SWTD(SAWASDEE THAILAND) 카드에 SAWASDEE SHANGHAI 6/11 울산 자료):
+          //    앞 5자 슬라이스 매칭이 자매선 시리즈(SAWASDEE ×10척 전부 «SAWAS»)를 무차별로 붙였다.
+          //    6단계(dict-fullname)가 V7.99-13 에서 받은 그 수술과 동일 — **양방향 통째 포함만** 인정.
+          //    + 콜사인 상호 배제(둘 다 있고 다르면 남의 배) + 7일 신선도(낡은 지난 기항 표시 금지).
           const searchVsl = (vslFull || vsl).toUpperCase().replace(/[\s\-_\.]/g, '');
+          const _myCs = String(dictData?.callsign || '').toUpperCase().trim();
           const entry = Object.entries(portMisData).find(([k, p]) => {
             const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
-            if (!pn) return false;
-            return pn.length >= 5 && searchVsl.length >= 5 && (pn.includes(searchVsl.slice(0,5)) || searchVsl.includes(pn.slice(0,5)));
+            if (!pn || pn.length < 5 || searchVsl.length < 5) return false;
+            if (!(pn.includes(searchVsl) || searchVsl.includes(pn))) return false;
+            const pc = String(p.callsign || '').toUpperCase().trim();
+            if (_myCs && pc && _myCs !== pc) return false;
+            if (p.updatedAt && Date.now() - p.updatedAt > 7 * 86400000) return false;
+            return true;
           });
           if (entry) { pm = entry[1]; matchedBy = 'name-norm'; matchedKey = entry[0]; }
         }
