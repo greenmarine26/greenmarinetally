@@ -95,6 +95,10 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       ['discharge', 'loading'].forEach(mode => {
         const sec = v[mode];
         if (!sec) return;
+        //  ★ 2.66-01 (검수사 «이유는 다른선박에 실릴때 컨번호 중복이 일어납니다»):
+        //    전량 캔슬된 쪽 컨은 **검색에서도 빠져야 한다**. 그 컨들은 다른 배에 실리므로
+        //    남겨 두면 끝 4자리 조회에 두 배가 걸린다 — 검수사가 현장에서 엉뚱한 배를 본다.
+        if (sideCancelled(v.info, mode, (terminalWork || {})[String(v.info?.vsl || '').toUpperCase()] || null)) return;
         const ediMap = sec.ediContainers || {};
         const recMap = sec.records || {};
         const xrayMap = sec.xrayList || {};

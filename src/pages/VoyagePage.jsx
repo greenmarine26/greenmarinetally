@@ -148,6 +148,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 
   useEffect(() => { onModeChange?.(mode); }, [mode]);
 
+  //  ★ 2.66-01 (검수사 «다 지우고 이번항차 전량 캔슬이 표기 되어야 합니다»):
+  //    배정목록이 이 쪽 0 이면 이 화면은 **아무것도 안 보여준다** — 요약·시퀀스·목록·검증·예상EDI 전부.
+  //    ⚠ 이 파일은 컴포넌트가 여럿이다 — 이 상수는 **VoyagePage 안**에 있어야 한다(2.50-01 교훈:
+  //      ListTab 안에 두면 voyage 가 없어 렌더가 통째로 죽는다. 실제로 한 번 밟았다).
+  const _sideCanc = sideCancelled(voyage?.info, mode, (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null);
+
   // TallyOne 1.3: 열람 기록 — 항차 진입·탭 전환·모드 전환마다 1건.
   //   같은 대상(voyageKey+mode+tab) 30초 안 중복은 activityLog가 생략한다.
   useEffect(() => {
@@ -1202,10 +1208,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       })()}
 
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
-      <VoyageSummaryCard voyage={voyage} mode={mode}
+      {!_sideCanc && <VoyageSummaryCard voyage={voyage} mode={mode}
         reeferCheck={reefers.length > 0
           ? { total: reefers.length, unchecked: shipPolicy?.rfSkip ? 0 : rfUnchecked, onOpen: () => setShowReefer(true) }   // 1.86: rfSkip 배는 미확인 배지 끔
-          : null} />
+          : null} />}
 
       {/* M5.1 G: 작업 보고 + 마감 점검 두 큰 버튼 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
@@ -1229,7 +1235,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             시퀀스/액츄얼은 **일항사가 정하는 적재 방침**이다.
           한 번 답하면 끝이다(작업 흐름을 막지 않는다). 답이 있으면 작은 칩만 남고, 눌러서 바꿀 수 있다.
           답을 안 하면(미정) 앱은 **액츄얼**로 본다(firebase.js — 모르면 안 막는 쪽이 안전하다). */}
-      {mode === 'loading' && (tab === 'list' || tab === 'search' || tab === 'bay' || tab === 'lolo') && (() => {
+      {!_sideCanc && mode === 'loading' && (tab === 'list' || tab === 'search' || tab === 'bay' || tab === 'lolo') && (() => {
         // 작업하는 탭에서만 묻는다 — 업로드·통계·결과 탭에서까지 붙잡지 않는다.
         //   ⛔ `info.seqFull` 을 직접 읽지 않는다. 옛 항차는 `seqFull` 만 있고 새 항차는 `seqMode` 라
         //   두 모양을 아는 곳은 `resolveSeqMode` 하나뿐이다. 미정이면 null 이고 그때만 묻는 카드를 띄운다.
@@ -1384,19 +1390,25 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           검수사 원문: *"말 그대로 예보입니다. 선적 갯수를 리스트 형식에 맞춰 보여 줘야하고 덱 그림도 보여 줘야 합니다."*
           ⚠ 배치가 아니다 — *"덱에 넣으라는 이야기가 아니고요"*. 개수와 그림을 **보여주기만** 한다.
           리스트가 들어오면 이 카드는 사라지고 실자료가 그 자리를 대신한다. */}
-      {/* ★ 2.66 (검수사 확정): 배정목록이 «이 쪽 0» 이면 목록이 남아 있어도 **실리지 않는 물량**이다.
-          PCSZ 2626W — 캔슬 통보 메일에 리스트가 붙어 와 수집기가 그대로 먹었다. 자료는 지우지 않고 이유를 붙인다. */}
-      {sideCancelled(voyage?.info, mode, (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null) && (
-        <div className="mx-3 lg:mx-0 mb-2 rounded-btn border border-st-bad/40 bg-st-bad/10 px-3 py-2 text-xs2">
-          <b className="text-st-badHi">⛔ {mode === 'discharge' ? '양하' : '선적'} 없음 — 배정목록 {mode === 'discharge' ? '양하' : '선적'} 0대 (전량 캔슬)</b>
-          <div className="text-dim-300 mt-0.5">아래 목록은 취소된 물량입니다 — 자료는 참고로 남겨 둡니다. 배정목록이 다시 수량을 올리면 자동으로 풀립니다.</div>
+      {/* ★ 2.66-01 (검수사 확정): 캔슬이면 **이 쪽 화면은 이것 하나만** 남는다.
+          원문 — *«다 지우고 이번항차 전량 캔슬이 표기 되어야 합니다»* ·
+          이유 — *«다른선박에 실릴때 컨번호 중복이 일어납니다»* (그래서 통합검색 풀에서도 뺀다). */}
+      {_sideCanc && (
+        <div className="mx-3 lg:mx-0 rounded-card border border-st-bad/50 bg-st-bad/10 px-4 py-6 text-center">
+          <div className="text-2xl font-black text-st-badHi">⛔ 이번 항차 {mode === 'discharge' ? '양하' : '선적'} 전량 캔슬</div>
+          <div className="text-sm2 text-dim-200 mt-2">배정목록 {mode === 'discharge' ? '양하' : '선적'} <b>0대</b> — 이 배에 실을 화물이 없습니다.</div>
+          <div className="text-xs2 text-dim-400 mt-3 leading-relaxed">
+            받아 둔 리스트·EDI 는 <b>세지도 보여주지도 않습니다</b> — 그 컨테이너들은 다른 배에 실리므로<br/>
+            여기 남겨 두면 컨번호 조회에 두 배가 걸립니다.<br/>
+            <span className="text-dim-500">자료는 지우지 않았습니다. 배정목록이 다시 수량을 올리면 자동으로 풀립니다.</span>
+          </div>
         </div>
       )}
-      {tab === 'list' && <ForecastCard voyage={voyage} mode={mode} />}
-      {tab === 'list' && mode === 'loading' && esealInfo && (
+      {!_sideCanc && tab === 'list' && <ForecastCard voyage={voyage} mode={mode} />}
+      {!_sideCanc && tab === 'list' && mode === 'loading' && esealInfo && (
         <EsealRangeCard voyageKey={voyageKey} info={esealInfo} inspector={inspector} />
       )}
-      {tab === 'list' && (
+      {!_sideCanc && tab === 'list' && (
         <ListTab
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           voyageKey={voyageKey} mode={mode}
@@ -1425,7 +1437,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           ))}
         />
       )}
-      {tab === 'search' && (
+      {!_sideCanc && tab === 'search' && (
         // TallyOne 1.3: 조회(lookup)·자연어(nls) 기록 — 검색 실행부는 별도 파일
         //   (components/SearchPanel.jsx)이라 이번 판 수정 범위 밖. prop 계약을 건드리지 않고
         //   input 이벤트를 캡처해 질의를 기록한다. 숫자만이면 끝4 조회, 그 외는 자연어.
@@ -1481,7 +1493,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
         </div>
       )}
-      {tab === 'lolo' && (
+      {!_sideCanc && tab === 'lolo' && (
         <>
         <DeckPlanView
           plan={voyage?.[mode]?.stowagePlan}
@@ -1501,7 +1513,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         />
         </>
       )}
-      {tab === 'bay' && (() => {
+      {!_sideCanc && tab === 'bay' && (() => {
         // M4.9e 3단계: 자리 뺏긴 컨테이너 검출 (사용자 요청)
         //   컨 X가 actual 위치(11/11/11)로 이동 → 거기 원래 계획된 컨 Y는 자리 뺏김
         //   Y는 actual 없고, Y의 계획 위치를 다른 컨이 actual로 점유
@@ -1647,18 +1659,18 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           </div>
         );
       })()}
-      {tab === 'stats' && (
+      {!_sideCanc && tab === 'stats' && (
         <div className="space-y-3">
           {/* V9.15: BayDictVerifyWidget(자료 진단)은 업로드 탭으로 — 통계 탭 첫 화면은 통계여야 한다(전면 점검 2-5) */}
           <StatsTab containers={containers} compMap={compMap} xrayMap={xrayMap} mode={mode}/>
         </div>
       )}
-      {tab === 'xray' && (
+      {!_sideCanc && tab === 'xray' && (
         <XrayTab voyage={voyage} voyageKey={voyageKey} mode={mode} containers={containers}
                  inspector={inspector}
                  xrayMap={xrayMap} xraySeals={xraySeals} compMap={compMap} portMisData={portMisData}/>
       )}
-      {tab === 'report' && (
+      {!_sideCanc && tab === 'report' && (
         <div className="space-y-3">
           {/* V9.19-01: 마감 텔리 카드는 수석 대시보드로 이동 — 검수원이 보면 안 되는 서류(사용자 확정 2026-07-28) */}
           <ReportTab
@@ -1670,7 +1682,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           <WorkReportHistory voyageKey={voyageKey}/>
         </div>
       )}
-      {tab === 'data' && (
+      {!_sideCanc && tab === 'data' && (
         <div className="space-y-3">
           {/* V9.15: 자료 진단은 자료 화면에 — 통계 탭에서 이사 */}
           <BayDictVerifyWidget
