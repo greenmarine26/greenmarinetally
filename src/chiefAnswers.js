@@ -312,7 +312,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   const split = _splitGangs(plan.cargo, nGangs);
   if (!split) return null;
   //  조 창 — 지금(또는 조 시작, 또는 작업 시작 중 늦은 것)부터 조 끝까지 실근무시간.
-  const shift = _currentShift(nowMs);
+  let shift = _currentShift(nowMs);
   let fromMs = Math.max(nowMs, shift.startMs || 0);
   const ws = String(voyage?.info?.workStartAt || '').trim();
   const wsM = ws.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
@@ -322,7 +322,28 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     const m = String(voyage?.info?.planDate || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
     if (m) fromMs = Math.max(fromMs, new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime());
   }
-  const availH = Math.max(0, workMinutesBetween(fromMs, shift.endMs, pier)) / 60;
+  let availH = Math.max(0, workMinutesBetween(fromMs, shift.endMs, pier)) / 60;
+  //  ★ 2.62-01: 작업 시작이 이번 조 뒤면(낮에 야간 배를 물으면) 창이 0 — 다가오는 조로 굴려서
+  //    «출근 전 미리 보기»가 되게 한다. 최대 3조까지(그 너머는 자료가 더 확실해진 뒤 볼 일).
+  let rolled = 0;
+  while (availH <= 0.01 && rolled < 3) {
+    const nb = new Date(shift.endMs);
+    const nm = nb.getHours() * 60 + nb.getMinutes();
+    if (nm === 1050) { //  주간 끝 17:30 → 야간 19:00~익일 06:30
+      const st = new Date(shift.endMs); st.setHours(19, 0, 0, 0);
+      const en = new Date(shift.endMs); en.setHours(6, 30, 0, 0);
+      shift = { name: '야간조', label: '19:00~06:30', endMs: en.getTime() + 86400000, startMs: st.getTime() };
+    } else { //  야간 끝 06:30 → 주간 08:00~17:30
+      const st = new Date(shift.endMs); st.setHours(8, 0, 0, 0);
+      const en = new Date(shift.endMs); en.setHours(17, 30, 0, 0);
+      shift = { name: '주간조', label: '08:00~17:30', endMs: en.getTime(), startMs: st.getTime() };
+    }
+    shift.upcoming = true;
+    const f2 = Math.max(fromMs, shift.startMs || 0);
+    availH = Math.max(0, workMinutesBetween(f2, shift.endMs, pier)) / 60;
+    rolled++;
+  }
+  if (availH <= 0.01) return null;
   //  갱별 소진 — 남은 그룹을 순서대로. from=첫 미완 그룹, to=조 끝에 닿는 그룹.
   const gangs = split.segs.map((seg, gi) => {
     const restGroups = seg.filter((g) => g.restN > 0);
@@ -352,19 +373,20 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
 export function gangBriefLines(gs) {
   if (!gs || !gs.gangs || !gs.gangs.length) return null;
   if (gs.availH <= 0.01) return null;
+  const _nm = (gs.shift.upcoming ? '다가오는 ' : '') + gs.shift.name;
   const parts = gs.gangs.map((g) => {
     if (g.done) return `${g.no}번 갱 완료`;
     const sp = [g.fr ? `FR${g.fr}` : null, g.rf ? `리퍼${g.rf}` : null, g.dg ? `DG${g.dg}` : null].filter(Boolean).join('·');
     return `${g.no}번 갱 ${g.from}→${g.to} 약 ${g.cnt}대${sp ? `(${sp})` : ''}${g.finish ? ' ✔끝' : ''}`;
   });
-  return [`🏗 ${gs.shift.name}(${gs.shift.label}·${gs.nGangs}갱) — ` + parts.join(' / '), `"갱 배분"으로 상세 확인`];
+  return [`🏗 ${_nm}(${gs.shift.label}·${gs.nGangs}갱) — ` + parts.join(' / '), `"갱 배분"으로 상세 확인`];
 }
 
 //  «갱 배분 (자세히)» · «3갱이면» 상세 답.
 export function answerGangShift(voyage, bayDef, opts = {}) {
   const gs = buildGangShift(voyage, bayDef, opts);
   if (!gs) return null;
-  const L = [`🏗 ${gs.shift.name}(${gs.shift.label}) 갱 배분 — ${gs.nGangs}갱 기준${gs.measured ? ' · 실측 페이스' : ' · 계획 페이스(일반 25/특수 15/h·FR 교체 15분+개당 3분)'}`];
+  const L = [`🏗 ${gs.shift.upcoming ? '다가오는 ' : ''}${gs.shift.name}(${gs.shift.label}) 갱 배분 — ${gs.nGangs}갱 기준${gs.measured ? ' · 실측 페이스' : ' · 계획 페이스(일반 25/특수 15/h·FR 교체 15분+개당 3분)'}`];
   L.push(`이 조 남은 실근무 약 ${gs.availH.toFixed(1)}시간 (쉬는 시간 제외)`);
   gs.gangs.forEach((g) => {
     if (g.done) { L.push(`${g.no}번 갱 — 맡은 구간 완료`); return; }
