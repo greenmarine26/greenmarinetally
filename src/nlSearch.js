@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -1543,7 +1543,24 @@ export function briefingVoiceLines(txt) {
   const out = [];
   for (const raw of String(txt || '').split('\n')) {
     let s = raw;
-    if (!s.trim() || /"로 상세 확인/.test(s)) continue;          // 화면 유도 줄은 안 읽는다
+    if (!s.trim() || /상세 확인\s*$/.test(s.trim())) continue;   // 화면 유도 줄은 안 읽는다(«갱 배분»으로 상세 확인 포함)
+    if (/피드\s*\d+분 전 갱신/.test(s)) continue;                  // 자료 신선도는 화면 것 — 소리로는 군더더기
+    //  ★ 갱 배분 줄은 도달점(«(16)17 데크→(12)13 데크(13/27대째)»)을 빼고 읽는다 —
+    //    괄호·화살표를 소리로 옮기면 «16 17 데크 13 27대째» 처럼 뭉개진다. 상세는 «갱 배분»으로 화면에서.
+    if (/갱\)/.test(s) || /갱\s*\)/.test(s) || /번 갱\(/.test(s)) {
+      const head = (s.match(/([가-힣]+조)\(([^)]*)\)/) || []);
+      const gangs = [...s.matchAll(/(\d+)번 갱\((\d+)~(\d+)\)[\s\S]*?약 (\d+)대(\(([^)]*)\))?/g)]
+        .map((m) => `${m[1]}번 갱 ${parseInt(m[2], 10)}번에서 ${parseInt(m[3], 10)}번, 약 ${m[4]}대${m[6] ? `, ${m[6]}` : ''}`);
+      if (gangs.length) {
+        const line = `${head[1] || '이번 조'} ${(head[2] || '').replace(/·/g, ', ')}. ${gangs.join('. ')}`
+          .replace(/(\d{1,2}):(\d{2})/g, '$1시 $2분')
+          .replace(/(\d+시 \d+분) 시작~(\d+시 \d+분)/, '$1 시작, $2까지')
+          .replace(/~/g, '에서 ').replace(/\s+/g, ' ').trim();
+        out.push(line); continue;
+      }
+    }
+    s = s.replace(/(\d+)대\s*\/\s*(\d+)대/, '$1대 완료, 전체 $2대');   // 「32대 / 351대」 — 슬래시가 걷히기 전에
+    s = s.replace(/(\d{1,2}):(\d{2})/g, '$1시 $2분');                    // 「14:20」 → 「14시 20분」
     //  ⚠ 컨번호 나열 축약은 **기호를 걷기 전에** 한다 — 먼저 걷으면 앞의 「—」가 사라져 규칙이 안 걸린다.
     s = s.replace(/[—-]\s*([A-Z]{4}\d{7}|\d{4})(\s*,\s*(?:[A-Z]{4}\d{7}|\d{4}))+/g, ', 번호는 화면에');
     s = s.replace(/\p{Extended_Pictographic}/gu, ' ')
@@ -1557,9 +1574,10 @@ export function briefingVoiceLines(txt) {
     s = s.replace(/Full\s*(\d+)\s*Empty\s*0\b/i, '전부 풀')
          .replace(/Full\s*(\d+)/i, '풀 $1대').replace(/Empty\s*(\d+)/i, '엠티 $1대');
     s = s.replace(/갑판\s*(\d+)\s*홀드\s*(\d+)/, '갑판 $1대, 홀드 $2대');
+
     s = s.replace(/작업\s*:\s*\d+대/, '')
          .replace(/\s*-\s*/g, ', ').replace(/\s+/g, ' ').replace(/(,\s*)+/g, ', ')
-         .replace(/^,\s*|,\s*$/g, '').trim();
+         .replace(/^,\s*|,\s*$/g, '').replace(/\s+\.$/, '.').trim();
     if (s) out.push(s);
   }
   //  «주의사항» 홀로 선 줄에 건수를 실어 준다 — 소리로는 몇 개가 오는지 먼저 알아야 센다.
@@ -2368,7 +2386,10 @@ export function bothCounts(pool, ctx, mode) {
   //  차이를 **말로** 짚는다. 숫자 두 줄만 던지면 어느 쪽을 믿을지 검수사가 판단해야 한다.
   if (hasTer && appTotal) {
     const gap = terDone - appDone;
-    if (gap > 0) L.push(`⚠ ${gap}대는 실제로 작업했는데 앱에 안 찍혔습니다 (전근무자 작업분 등).`);
+    //  2.65-01 (검수사 교정): 원인을 **지어내지 않는다**. 종전 «전근무자 작업분 등» 은 틀린 짐작이었다 —
+    //    검수사 원문 *«지금 근무자가 앱에 기록안한것입니다. 전근무자는 없습니다. 지금 근무자들이 첫조입니다»*
+    //    *«그럴때 검수사들이 앱 미사용이라고 적어주세요»* · *«주간조 앱 미사용이 좋을듯 합니다»* ⇒ 조 이름 + 사실만.
+    if (gap > 0) L.push(`⚠ ${gap}대는 실제로 작업했는데 앱에 안 찍혔습니다 (${workingShiftName()} 앱 미사용).`);
     else if (gap < 0) L.push(`⚠ 앱이 ${-gap}대 더 많습니다 — 터미널 피드가 아직 안 따라왔을 수 있어요.`);
     else L.push('✅ 두 숫자가 같습니다 — 앱 기록이 실제와 맞습니다.');
   } else if (!hasTer) {

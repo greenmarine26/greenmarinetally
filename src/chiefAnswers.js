@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay } from './utils.js';
+import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
@@ -277,16 +277,8 @@ function _splitGangs(cargo, N) {
 
 //  «지금»이 속한(또는 다가오는) 조와 그 조의 끝 시각. 조 경계는 교대 브리핑과 같은 한 벌 —
 //  주간 08:00~17:30 · 야간 19:00~익일 06:30 (PCTC/PNCT 공통 경계, 실근무 창은 WORK_SHIFTS 가 가른다).
-function _currentShift(nowMs) {
-  const d = new Date(nowMs);
-  const mm = d.getHours() * 60 + d.getMinutes();
-  const at = (base, h, m) => { const x = new Date(base); x.setHours(h, m, 0, 0); return x.getTime(); };
-  if (mm >= 480 && mm < 1050) return { name: '주간조', label: '08:00~17:30', endMs: at(d, 17, 30) };
-  if (mm >= 1050 && mm < 1140) return { name: '야간조', label: '19:00~06:30', endMs: at(d, 6, 30) + 86400000, startMs: at(d, 19, 0) };   // 교대 사이 — 다가오는 야간
-  if (mm >= 1140) return { name: '야간조', label: '19:00~06:30', endMs: at(d, 6, 30) + 86400000 };
-  if (mm < 390) return { name: '야간조', label: '19:00~06:30', endMs: at(d, 6, 30) };
-  return { name: '주간조', label: '08:00~17:30', endMs: at(d, 17, 30), startMs: at(d, 8, 0) };   // 06:30~08:00 — 다가오는 주간
-}
+//  2.65-01: 조 경계는 utils 한 벌(currentShift) — 두 숫자 표기(nlSearch)도 같은 것을 본다.
+const _currentShift = currentShift;
 
 //  본체 — 조 단위 갱 배분. 반환 null(자료 없음) 또는 {shift, gangs[], nGangs, note}.
 export function buildGangShift(voyage, bayDef, opts = {}) {
