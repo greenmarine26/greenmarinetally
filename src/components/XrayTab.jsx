@@ -72,7 +72,21 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       const pcs = String(p?.callsign || '').toUpperCase();
       return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
     });
-    const mrn = pm ? ((mode === 'loading' ? pm.mrnOut : pm.mrnIn) || pm.mrn || '') : '';
+    //  ★ 2.71 (검수사 신고 2026-08-27 «XRAY 출력시 MRN 넘버가 기록이 안되었습니다»):
+    //    MRN 은 **PORT-MIS 에서만** 오는데 SWTD(D7EE)처럼 평택 PORT-MIS 에 등록이 없는 배는
+    //    가져올 곳이 아예 없어 머리표가 빈칸으로 나갔다(수집 자료 전수 확인 — MRN 0건).
+    //    ⇒ ①레그를 지킨다: 양하 서류는 I(입항), 선적 서류는 E(출항). PORT-MIS 가 반대 레그 번호만
+    //      갖고 있으면 **쓰지 않는다** — 실측 PCSZ 는 mrnIn 이 비고 mrnOut(26SNKO2809E)만 있어
+    //      양하 서류에 출항 번호가 찍히고 있었다. ②없으면 항차에 적어 둔 값(info.mrnIn/mrnOut)을 쓴다.
+    const _legOK = (v) => {
+      const t = String(v || '').trim().toUpperCase();
+      if (!t) return '';
+      return t.endsWith(mode === 'loading' ? 'E' : 'I') ? t : '';
+    };
+    const mrn = _legOK(pm && (mode === 'loading' ? pm.mrnOut : pm.mrnIn))
+      || _legOK(pm && pm.mrn)
+      || _legOK(mode === 'loading' ? info.mrnOut : info.mrnIn)
+      || '';
     //  입항일자 — PORT-MIS 입항일시가 1순위, 없으면 항차 작업창 앞자리. «2026.08.24» 형태.
     const rawEta = String(pm?.eta || info.planDate || '').trim();
     const md = rawEta.match(/(\d{4})[-.](\d{2})[-.](\d{2})/);

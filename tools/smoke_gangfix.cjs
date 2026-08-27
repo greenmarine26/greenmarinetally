@@ -50,7 +50,8 @@ T(P('2갱 갱배분').gangQuery?.n === 2, '«2갱 갱배분» 에서 갱 수를 
 T(P('2갱인데 내 작업량').gangQuery?.n === 2, '«2갱인데 내 작업량» 에서 갱 수를 못 읽는다');
 T(P('갱 배분').gangQuery && P('갱 배분').gangQuery.n == null, '«갱 배분» 만 물었는데 수가 붙는다 — 되물어야 한다');
 const ca = rd('src/chiefAnswers.js');
-T(/if \(!_gn\) return \{ askGangs: true/.test(ca), '갱 수를 모르는데 2갱으로 가정한다 — 되물어야 한다');
+T(/const _askGangs = !_gn;/.test(ca) && /if \(_askGangs\) return \{ askGangs: true/.test(ca),
+  '갱 수를 모르는데 2갱으로 가정한다 — 되물어야 한다(2.70-03: 되묻기는 조 라벨 보정 뒤에 낸다)');
 T(/몇 갱으로 작업하십니까/.test(ca), '되묻는 문구가 없다 — 침묵하면 안 된다');
 T(/gs\.askGangs\) return \[/.test(ca), '브리핑 줄이 모르는 갱 수로 숫자를 지어낸다');
 

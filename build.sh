@@ -378,6 +378,9 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.71: **MRN** — X-RAY 서류 머리표가 레그(입항 I·출항 E)를 지키는가.
+    node tools/smoke_mrn.cjs "$(pwd)" || { echo "✗ MRN 연막검사 실패 — 배포 금지"; exit 1; }
+
     #  2.68: **항차별 갱 수** — 근무배정으로 정해진 갱 수를 기억하는가.
     SMOKE_G="tools/_smokeg_tmp.cjs"
     npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_G" --log-level=error \
