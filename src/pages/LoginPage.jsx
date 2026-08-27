@@ -316,7 +316,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       {/* 2.4x (검수사 확정 -- 시안 "구조"만 채용, 데이터는 실물): 헤더 한 줄 통합.
           이 패널은 배경 · 테두리를 반드시 토큰(bg-ink-950 / border-line)으로만 그린다 -- 시안처럼
           hex 그라디언트를 박아두면 밝기 4단계(2.40)에서 이 패널만 항상 어둡게 남는 "섬"이 된다. */}
-      <div className="hidden lg:block rounded-card border border-line p-3.5 bg-ink-950 lg:min-h-0 lg:overflow-y-auto">
+      <div className="hidden lg:block rounded-card border border-line p-3 bg-ink-950 lg:min-h-0 lg:overflow-y-auto">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <img src={logoUrl} alt="TallyOne" draggable="false"
@@ -339,7 +339,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           </span>
         </div>
 
-        <div className="mt-3 bg-ink-950/60 border border-line rounded-card p-2.5">
+        <div className="mt-3 bg-ink-950/60 border border-line rounded-card p-2">
           <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
           {board.ships.length === 0 ? (
             <div className="text-xs2 text-dim-500">오늘·내일 작업 선박 없음</div>
@@ -353,7 +353,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 //   시작 전 배는 0명이 정상이라 절대 경고하지 않는다 (2026-08-25 NSFR 사고 재발 방지).
                 const zeroWarn = isWorking && !activeByShip[sp.key];
                 return (
-                  <div key={sp.key} className={`flex items-stretch gap-2 rounded-btn border px-2 py-1.5 ${
+                  <div key={sp.key} className={`flex items-stretch gap-2 rounded-btn border px-2 py-1 ${
                     zeroWarn ? 'border-st-bad/50 bg-st-bad/10' : 'border-line bg-ink-950/60'}`}>
                     <div className={`shrink-0 w-14 rounded-[10px] flex items-center justify-center text-center px-1 py-1 font-black text-xs2 leading-tight break-words border ${
                       isWorking ? 'bg-act/20 text-act-hi border-act/40' : 'bg-ink-800 text-dim-400 border-line-faint'}`}>
@@ -392,11 +392,11 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               ].filter(Boolean) },
             { n: working.length, cap: '작업 중 검수원', tag: 'LIVE', tone: 'text-st-disHi bg-st-dis/15' },
           ].map(st => (
-            <div key={st.cap} className="bg-ink-950/60 border border-line rounded-btn p-2.5">
-              <div className="flex justify-end mb-1">
+            <div key={st.cap} className="relative bg-ink-950/60 border border-line rounded-btn p-2">
+              <div className="absolute top-1.5 right-2">
                 <span className={`text-3xs font-black px-1.5 py-0.5 rounded ${st.tone}`}>{st.tag}</span>
               </div>
-              <div className="text-2xl font-black text-dim-100">{st.n}</div>
+              <div className="text-xl font-black text-dim-100">{st.n}</div>
               <div className="text-[10.5px] text-dim-400 mt-0.5">{st.cap}</div>
               {st.breakdown && st.breakdown.length > 0 && (
                 <div className="mt-1.5 pt-1.5 border-t border-line-faint flex flex-col gap-0.5">
@@ -445,7 +445,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
 
         {/* ── 2.11 폰 바텀시트 — PC 에서는 껍데기만 남고 종전 흐름 그대로 ── */}
         <div className="flex-1 flex flex-col bg-ink-900 rounded-t-[32px] -mt-3 relative z-20 overflow-hidden border-t border-white/5 shadow-[0_-12px_40px_rgba(0,0,0,0.45)]
-                        lg:bg-transparent lg:rounded-none lg:mt-0 lg:border-0 lg:overflow-visible lg:shadow-none lg:flex-none">
+                        lg:bg-transparent lg:rounded-none lg:mt-0 lg:border-0 lg:overflow-visible lg:shadow-none lg:flex-1 lg:min-h-0">
           <div className="lg:hidden flex justify-center pt-3 pb-2 shrink-0"><div className="w-9 h-[5px] rounded-full bg-ink-750"/></div>
           <div className="lg:hidden px-5 pb-2.5 flex items-center justify-between shrink-0">
             <h2 className="text-[18px] font-bold tracking-tight text-white">작업자 선택</h2>
@@ -494,7 +494,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           </div>
         )}
         {shownList.length > 0 && (
-          <div className="flex-1 overflow-y-auto px-3.5 pb-1 space-y-2 lg:flex-1 lg:min-h-0 lg:px-0 lg:space-y-0 lg:mb-3 lg:max-h-none lg:grid lg:grid-cols-2 lg:gap-2">
+          <div className="flex-1 overflow-y-auto px-3.5 pb-1 space-y-2 lg:flex-1 lg:min-h-0 lg:min-h-[86px] lg:px-0 lg:space-y-0 lg:mb-3 lg:max-h-none lg:grid lg:grid-cols-2 lg:gap-2">
             {shownList.map(i => {
               const role = displayRole(i.name);   // 1.71: 이사급 이상만 직급, 그 아래는 직책(없으면 검수)
               const chief = isChief(i.name);
