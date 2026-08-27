@@ -305,6 +305,32 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
       if (g) g.doneN++;
     }
   }
+  //  ★ 2.70 (검수사 메모 2026-08-27 19:19): *«작업중이던 선박에 갱배분을 물었을때 앱자료가 없을시
+  //    터미널 실작업량을 기준으로 알려줘야함»* — 앱에 완료를 안 찍고 작업하면(대부분이 그렇다)
+  //    앱 기록만 보고 나누어 **이미 내린 것까지 «남은 일»** 로 셌다. 실측 PCSZ: 터미널 120대 · 앱 0대.
+  //    ⇒ 터미널 실적이 앱 기록보다 많으면 그 차이를 **작업 순서대로**(데크 먼저·구간 뒤에서 앞으로)
+  //      이미 한 것으로 깎는다. ⚠ 어느 컨인지는 모른다 — **대수만** 반영하고 답에 그렇게 밝힌다.
+  let twGap = 0;
+  {
+    const _tw = opts.tw || null;
+    const _terDone = _tw ? (Number(_tw.disDone) || 0) + (Number(_tw.lodDone) || 0) : 0;
+    const _appDone = plan.cargo.reduce((t, g) => t + (g.doneN || 0), 0);
+    twGap = Math.max(0, _terDone - _appDone);
+    if (twGap > 0) {
+      //  순서: 구간을 뒤(선미)에서 앞으로 — 검수사 확정 진행 방향과 같은 벌.
+      const order = [...plan.cargo].sort((a, b) => Math.min(...b.members) - Math.min(...a.members));
+      let left = twGap;
+      for (const g of order) {
+        if (left <= 0) break;
+        const mv = g.dis + g.lod;
+        const room = Math.max(0, mv - (g.doneN || 0));
+        const take = Math.min(room, left);
+        g.doneN = (g.doneN || 0) + take;
+        left -= take;
+      }
+      twGap -= left;   //  실제로 반영된 만큼만 기록(전부 못 깎으면 그만큼만)
+    }
+  }
   plan.cargo.forEach((g) => {
     const mv = g.dis + g.lod;
     g.restN = Math.max(0, mv - g.doneN);
@@ -449,7 +475,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     deckN: g.deckN || 0, holdN: g.holdN || 0, deckRest: g.deckRest || 0, holdRest: g.holdRest || 0,
     gang: gangOfGroup[g.label] || 0, doneN: g.doneN, doneBy: doneBy[i], restN: g.restN,
     reach: reachOf[g.label] || null, fr: g.frN, rf: g.rfN, dg: g.dgN }));
-  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip,
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, twGap,
     shiftKey: _gKey, fixed: !opts.nGangs && (_gShift > 0 || _gBase > 0), fixedShift: !opts.nGangs && _gShift > 0 };
 }
 
@@ -485,6 +511,8 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
   }
   const L = [`🏗 ${gs.shift.upcoming ? '다가오는 ' : ''}${gs.shift.name}(${gs.shift.label}) 갱 배분 — ${gs.nGangs}갱 기준${gs.measured ? ' · 실측 페이스' : ' · 계획 페이스(일반 25/특수 15/h·FR 교체 15분+개당 3분)'}`];
   L.push(`이 조 남은 실근무 약 ${gs.availH.toFixed(1)}시간 (쉬는 시간 제외)`);
+  //  2.70: 터미널 실적으로 깎았으면 그 사실을 밝힌다 — 어디까지 했는지는 앱 기록이 없어 «대수만» 반영이다.
+  if (gs.twGap > 0) L.push(`⚠ 앱에 안 찍힌 ${gs.twGap}대는 터미널 실적으로 빼고 계산했어요 — 어느 컨인지는 몰라 대수만 반영입니다.`);
   gs.gangs.forEach((g) => {
     if (g.done) { L.push(`${g.no}번 갱 — 맡은 구간 완료`); return; }
     const sp = [g.fr ? `⊞FR ${g.fr}` : null, g.rf ? `❄리퍼 ${g.rf}` : null, g.dg ? `☣DG ${g.dg}` : null].filter(Boolean).join(' · ');

@@ -63,6 +63,21 @@ T(!!gd && /다가오는 야간조/.test((CA.gangBriefLines(gd) || [''])[0]), '�
   //  2.63-01 (검수사 수열 «34:40 33:4 32:44 30:44 26:44 22:23» — 8h·199대·데크 계산만):
   T(!!g21 && /\(22\)23 데크/.test(String(g21.gangs[1].to)), `⛔ 데크 우선 대수 소진이 아니다 (to=${g21 && g21.gangs[1].to}) — 검수사 수열과 어긋난다`);
 }
+// ★ 2.70 (검수사 메모 «작업중이던 선박에 갱배분을 물었을때 앱자료가 없을시 터미널 실작업량을 기준으로»):
+//    앱에 완료를 안 찍고 작업하면 이미 내린 것까지 «남은 일» 로 셌다. 터미널 실적으로 깎는다.
+{
+  const TW = { disPlan: 918, disDone: 200, lodPlan: 0, lodDone: 0 };
+  const g0 = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2 });
+  const gT = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2, tw: TW });
+  T(gT && gT.twGap === 200, `터미널 실적 200대를 안 깎는다 (twGap=${gT && gT.twGap})`);
+  const rest0 = g0.gangs.reduce((t, g) => t + (g.restTotal || 0), 0);
+  const restT = gT.gangs.reduce((t, g) => t + (g.restTotal || 0), 0);
+  T(restT === rest0 - 200, `구간 잔여가 200대 안 줄었다 (${rest0} → ${restT})`);
+  const ansT = CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2, tw: TW }) || '';
+  T(/앱에 안 찍힌 200대는 터미널 실적으로/.test(ansT), '터미널 실적으로 깎은 사실을 안 밝힌다 — 어디까지 했는지는 모르는 값이다');
+  T(!/안 찍힌/.test(CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2 }) || ''), '터미널 자료가 없는데도 그 문구가 뜬다');
+}
+
 // ⑤ 브리핑 줄
 const bl = CA.gangBriefLines(gs);
 T(Array.isArray(bl) && /^🏗 야간조/.test(bl[0]) && /갱 배분.*상세 확인/.test(bl[1]), '브리핑 줄 형식이 깨졌다');
@@ -102,4 +117,4 @@ T(/answerGangShift\(_voy, _bayDef/.test(read('src/pages/GlobalSearchPage.jsx')),
 const ns = read('src/nlSearch.js');
 T(/gangQuery/.test(ns) && /opts\.gang/.test(ns) && /ctx\.gangShift/.test(ns), 'nlSearch 갱 배선(파싱·브리핑 줄·본체 분기)이 없다');
 if (bad > 0) { console.error(`✗ 갱 배분 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 갱 배분 연막검사 통과 — 조 창·2/3갱·실시간(완료·시각)·브리핑 줄·상세·배선 3화면');
+console.log('✓ 갱 배분 연막검사 통과 — 조 창·2/3갱·실시간(완료·시각)·터미널 실적 반영·브리핑 줄·상세·배선 3화면');
