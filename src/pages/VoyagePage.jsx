@@ -2600,8 +2600,12 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   }, [parsed, results, containers, mode, carrierContacts, shipSpeed, vsl, pier, briefCtx, q]);
   const readRef = useRef('');
   useEffect(() => {
-    if (!answer || readRef.current === q + answer.length) return;
-    readRef.current = q + answer.length;
+    //  ⚠ 2.65-02 (라이브 실측): 브리핑은 **물을 때마다 지금 기준으로 다시 계산**된다(2.62) —
+    //    갱 몫이 33대→32대로 바뀌는 순간 답 문자열이 달라져 낭독이 **처음부터 다시** 시작됐다
+    //    (검수사 크롬에서 13토막이 두 번 큐에 쌓인 것을 잡았다). 브리핑의 「한 번」은 **질문 기준**이다.
+    const _readKey = parsed?.briefingQuery ? `brief:${q}` : q + answer.length;
+    if (!answer || readRef.current === _readKey) return;
+    readRef.current = _readKey;
     //  ★ 2.65: 브리핑은 끝까지 읽는다(SearchPanel:1272 와 같은 한 벌 — 화면마다 다르면 안 된다).
     if (parsed?.briefingQuery) {
       try { speakLong(briefingVoiceLines(answer)); } catch (e) { /* 낭독 실패 무시 */ }
