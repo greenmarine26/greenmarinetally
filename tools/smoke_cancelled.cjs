@@ -50,6 +50,8 @@ const hp = rd('src/pages/HomePage.jsx');
 T(/function CancelledSide/.test(hp) && /전량 캔슬/.test(hp), '홈 항차 카드에 캔슬 줄이 없다');
 T(/sideCancelled\(voyage\.info, 'loading', _tw0\)/.test(hp), '홈 카드가 선적 캔슬을 모른다 — «선적평택 81·예상EDI 80» 이 그대로 뜬다');
 T(/sideCancelled\(voyage\.info, 'discharge', _tw0\)/.test(hp), '홈 카드가 양하 캔슬을 모른다');
+T(/if \(sideCancelled\(_info, x\.mode\)\) return false;/.test(hp), '캔슬인데 «선적자료 대기중» 이 남는다 — 기다릴 자료가 아니다');
+T(/sideCancelled\(voyage\.info, 'loading', _tw0\) \? null : _rem\(loaStats\)/.test(hp), '캔슬인데 «선적 남음 81» 을 센다');
 
 if (bad > 0) { console.error(`✗ 전량 캔슬 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 전량 캔슬 연막검사 통과 — 판정 7 · 브리핑 4 · 배선 12');
+console.log('✓ 전량 캔슬 연막검사 통과 — 판정 7 · 브리핑 4 · 배선 14');

@@ -414,6 +414,9 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         //   MissingSideNote(1.78)와 같은 판정: 배정 수량이 «확인된 0»(null 아님) && 그 모드 자료 없음.
         const _srKept = _srAll.filter(x => {
           const q = x.mode === 'discharge' ? _info.planDis : _info.planLod;
+          //  2.67-02: 자료가 **와 있어도** 배정이 0 이면 기다릴 것이 아니다 — 전량 캔슬(PCSZ 2626W).
+          //    종전 조건은 «자료 없음» 일 때만 걸러서 캔슬 항차에 «⏳ 선적자료 대기중» 이 남았다.
+          if (sideCancelled(_info, x.mode)) return false;
           return !(q != null && Number(q) === 0 && !x.has);
         });
         const _sr = _srKept.length ? _srKept : _srAll;   // 전부 걸러지면 폴백(왜곡 방지)
@@ -1419,7 +1422,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const _hasLoad = !!(voyage.loading && (loaStats.total > 0 || loaStats.ptk > 0));
   const _rem = (st) => (st.total > 0 ? Math.max(0, st.total - st.done) : null);
   // 2.15: 우측 액션 패널의 «남은 수» — 좌측 총계와 다른 숫자라야 두 번 쓰는 값이 안 된다.
-  const remD = _rem(disStats), remL = _rem(loaStats);
+  //  2.67-02: 캔슬된 쪽은 «남음» 도 없다 — 남은 일이 아니라 없는 일이다.
+  const remD = sideCancelled(voyage.info, 'discharge', _tw0) ? null : _rem(disStats);
+  const remL = sideCancelled(voyage.info, 'loading', _tw0) ? null : _rem(loaStats);
   const departBadge = decideBadge({
     remainLoad: _rem(loaStats), remainDis: _rem(disStats), hasLoad: _hasLoad,
     terminalStatus: voyage.info?.terminalStatus || '',   // 판B(수집기)가 채우면 즉시 동작
