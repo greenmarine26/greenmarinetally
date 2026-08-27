@@ -21,9 +21,13 @@ T(/lg:shrink-0/.test(app.split('\n').filter((l) => l.includes('footer'))[0] || '
 T(/lg:grid-rows-\[minmax\(0,1fr\)_auto\]/.test(lp), '로그인 격자가 위 1fr · 아래 자동 이 아니다');
 T(/lg:flex-1[\s\S]{0,120}lg:overflow-hidden/.test(lp), '로그인 본체가 남는 높이를 안 먹거나 넘침을 안 막는다');
 T((lp.match(/lg:overflow-y-auto/g) || []).length >= 2, '두 판(현황판·로그인)이 안에서 구르지 않는다 — 짧은 화면에서 잘린다');
+//  2.64-02 — 좌측 현황판은 실측 552px 였다. 한 화면(짧은 노트북 650px)에 들어가려면 이 눌러 앉힘이 유지돼야 한다.
+T(/grid grid-cols-3 gap-1\.5/.test(lp), '선박 칸이 3단이 아니다 — 5척이 세 줄로 늘어 한 화면을 넘는다');
+T(/lg:flex-1 lg:min-h-0 lg:px-0/.test(lp), '검수사 목록이 남는 높이를 안 먹는다 — 사람이 늘면 로그인 판이 화면을 넘는다');
+T(!/text-4xl font-black/.test(lp) && !/rounded-btn p-3\.5/.test(lp), '현황판 글자·여백이 옛 큰 값으로 되돌아갔다');
 T(!/lg:items-start/.test(lp), 'lg:items-start 가 남아 있다 — 판이 화면 높이로 안 늘어난다');
 const tl = fs.readFileSync(path.join(ROOT, 'src/components/WorkTimeline.jsx'), 'utf8');
 T(/const ROW_H = 22;/.test(tl), '타임라인 칸 높이가 22 가 아니다 — 한 화면 계산이 어긋난다');
 
 if (bad > 0) { console.error(`✗ 타임라인 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 타임라인 연막검사 통과 — 축 수식 5 · 배선 3 · 한 화면 맞춤 6');
+console.log('✓ 타임라인 연막검사 통과 — 축 수식 5 · 배선 3 · 한 화면 맞춤 9');

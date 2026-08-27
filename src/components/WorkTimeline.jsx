@@ -35,8 +35,12 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
     gaps.push([day0 + d * 24 * H + 17.5 * H, day0 + d * 24 * H + 19 * H]);    // 17:30~19:00
   }
   return (
-    <div className="bg-ink-950/60 border border-line rounded-card p-3">
-      <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">■ 오늘 · 내일 작업 타임라인 — LIVE</div>
+    <div className="bg-ink-950/60 border border-line rounded-card p-2.5">
+      {/*  2.64-02: 제목과 범례를 한 줄에 — 한 화면 맞춤에서 20px 가 아깝다. */}
+      <div className="flex items-baseline justify-between gap-3 mb-1.5">
+        <div className="text-[10.5px] tracking-[0.16em] text-dim-300 font-bold shrink-0">■ 오늘 · 내일 작업 타임라인 — LIVE</div>
+        <div className="text-[10px] text-dim-400 truncate">빨간 선 = 지금 · 점선 = 조 경계(17:30 / 19:00) · 회색 밴드 = 교대 공백 · ⚓ = 도선 예보 · 초록 = 작업중 · 파랑 = 오늘 · 주황 = 내일</div>
+      </div>
       {/*  2.64-01: 한 화면에 맞추려고 칸 높이를 26→22 로 줄였다(글자 크기는 그대로). */}
       <div className="relative border border-line rounded overflow-hidden bg-ink-900/40" style={{ height: 26 + rows.length * ROW_H }}>
         {gaps.map(([a, b], i) => { const pa = tlPos(a, day0), pb = tlPos(b, day0); if (pa == null || pb == null || pb <= pa) return null;
@@ -78,7 +82,6 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
             <span key={i} className={`flex-1 px-1 ${i === 6 ? 'border-l border-line' : ''}`}>{t}</span>))}
         </div>
       </div>
-      <div className="text-[10px] text-dim-400 mt-1">빨간 선 = 지금 · 점선 = 조 경계(17:30 / 19:00) · 회색 밴드 = 교대 공백 · ⚓ = 도선 예보 · 초록 = 작업중 · 파랑 = 오늘 · 주황 = 내일</div>
     </div>
   );
 }

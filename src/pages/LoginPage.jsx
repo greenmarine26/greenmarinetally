@@ -316,13 +316,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       {/* 2.4x (검수사 확정 -- 시안 "구조"만 채용, 데이터는 실물): 헤더 한 줄 통합.
           이 패널은 배경 · 테두리를 반드시 토큰(bg-ink-950 / border-line)으로만 그린다 -- 시안처럼
           hex 그라디언트를 박아두면 밝기 4단계(2.40)에서 이 패널만 항상 어둡게 남는 "섬"이 된다. */}
-      <div className="hidden lg:block rounded-card border border-line p-5 bg-ink-950 lg:min-h-0 lg:overflow-y-auto">
+      <div className="hidden lg:block rounded-card border border-line p-3.5 bg-ink-950 lg:min-h-0 lg:overflow-y-auto">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <img src={logoUrl} alt="TallyOne" draggable="false"
-              className="w-[62px] h-[62px] rounded-card select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
+              className="w-[48px] h-[48px] rounded-card select-none shadow-[0_0_28px_rgba(212,175,55,0.22)]"/>
             <div>
-              <h1 className="text-4xl font-black tracking-tight text-dim-100">TallyOne</h1>
+              <h1 className="text-[26px] leading-tight font-black tracking-tight text-dim-100">TallyOne</h1>
               <div className="text-sm2 text-dim-300 mt-0.5">
                 평택항 컨테이너 검수 시스템 <span className="text-dim-500">·</span>{' '}
                 <span className="text-2xs text-dim-500 tracking-[0.18em]">CONTROL CENTER EDITION</span>
@@ -339,21 +339,21 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           </span>
         </div>
 
-        <div className="mt-6 bg-ink-950/60 border border-line rounded-card p-4">
-          <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-3 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
+        <div className="mt-3 bg-ink-950/60 border border-line rounded-card p-2.5">
+          <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
           {board.ships.length === 0 ? (
             <div className="text-xs2 text-dim-500">오늘·내일 작업 선박 없음</div>
           ) : (
             // 2.4x (검수사 확정 -- 시안 구조): 선박 2열 카드 그리드. 좌측 코드 박스(작업중=act 초록 /
             //   예정=회색) · 우측 상태 2줄(1줄 작업중·번선석 또는 예정 시각 / 2줄 수량 배지 + 인원 0 경고).
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {board.ships.slice(0, 12).map(sp => {
                 const isWorking = sp.rank === 0;
                 // ② 2.4x (검수사 확정): 시작 시각이 지난(=작업중) 배인데 활동 검수원이 0일 때만 경고.
                 //   시작 전 배는 0명이 정상이라 절대 경고하지 않는다 (2026-08-25 NSFR 사고 재발 방지).
                 const zeroWarn = isWorking && !activeByShip[sp.key];
                 return (
-                  <div key={sp.key} className={`flex items-stretch gap-2.5 rounded-btn border p-2.5 ${
+                  <div key={sp.key} className={`flex items-stretch gap-2 rounded-btn border px-2 py-1.5 ${
                     zeroWarn ? 'border-st-bad/50 bg-st-bad/10' : 'border-line bg-ink-950/60'}`}>
                     <div className={`shrink-0 w-14 rounded-[10px] flex items-center justify-center text-center px-1 py-1 font-black text-xs2 leading-tight break-words border ${
                       isWorking ? 'bg-act/20 text-act-hi border-act/40' : 'bg-ink-800 text-dim-400 border-line-faint'}`}>
@@ -379,7 +379,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-3 gap-2 mt-2.5">
           {[
             { n: board.total, cap: '진행 중 항차', tag: '진행', tone: 'text-act-hi bg-act/15' },
             { n: board.boxes.toLocaleString(), cap: '검수 대상 컨테이너', tag: '대기', tone: 'text-st-lodHi bg-st-lod/15',
@@ -392,14 +392,14 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
               ].filter(Boolean) },
             { n: working.length, cap: '작업 중 검수원', tag: 'LIVE', tone: 'text-st-disHi bg-st-dis/15' },
           ].map(st => (
-            <div key={st.cap} className="bg-ink-950/60 border border-line rounded-btn p-3.5">
-              <div className="flex justify-end mb-2">
+            <div key={st.cap} className="bg-ink-950/60 border border-line rounded-btn p-2.5">
+              <div className="flex justify-end mb-1">
                 <span className={`text-3xs font-black px-1.5 py-0.5 rounded ${st.tone}`}>{st.tag}</span>
               </div>
-              <div className="text-3xl font-black text-dim-100">{st.n}</div>
+              <div className="text-2xl font-black text-dim-100">{st.n}</div>
               <div className="text-[10.5px] text-dim-400 mt-0.5">{st.cap}</div>
               {st.breakdown && st.breakdown.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-line-faint flex flex-col gap-0.5">
+                <div className="mt-1.5 pt-1.5 border-t border-line-faint flex flex-col gap-0.5">
                   {st.breakdown.map(([label, n]) => (
                     <div key={label} className="flex items-center justify-between text-[10px] text-dim-400">
                       <span>{label}</span><span className="font-bold text-dim-200">{n.toLocaleString()}</span>
@@ -414,7 +414,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
 
       <div className="min-h-screen flex flex-col lg:min-h-0 lg:rounded-card lg:border lg:border-line lg:bg-ink-900/40 lg:p-5 lg:overflow-y-auto">
         {/* 2.10: PC 는 좌측 패널에 로고가 이미 크게 있다 — 시안대로 「작업자 선택」 제목으로 대체 */}
-        <div className="hidden lg:block mb-5">
+        <div className="hidden lg:block mb-3">
           <h2 className="text-2xl font-black text-dim-100">작업자 선택</h2>
           <div className="text-xs2 text-dim-400 mt-1">{list.length}명의 검수사 · 평택항 컨테이너 터미널</div>
         </div>
@@ -494,7 +494,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           </div>
         )}
         {shownList.length > 0 && (
-          <div className="flex-1 overflow-y-auto px-3.5 pb-1 space-y-2 lg:flex-none lg:px-0 lg:space-y-0 lg:mb-3 lg:max-h-none lg:grid lg:grid-cols-2 lg:gap-2">
+          <div className="flex-1 overflow-y-auto px-3.5 pb-1 space-y-2 lg:flex-1 lg:min-h-0 lg:px-0 lg:space-y-0 lg:mb-3 lg:max-h-none lg:grid lg:grid-cols-2 lg:gap-2">
             {shownList.map(i => {
               const role = displayRole(i.name);   // 1.71: 이사급 이상만 직급, 그 아래는 직책(없으면 검수)
               const chief = isChief(i.name);
