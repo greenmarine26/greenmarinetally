@@ -39,7 +39,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
       {/*  2.64-02: 제목과 범례를 한 줄에 — 한 화면 맞춤에서 20px 가 아깝다. */}
       <div className="flex items-baseline justify-between gap-3 mb-1.5">
         <div className="text-[10.5px] tracking-[0.16em] text-dim-300 font-bold shrink-0">■ 오늘 · 내일 작업 타임라인 — LIVE</div>
-        <div className="text-[10px] text-dim-400 truncate">빨간 선 = 지금 · 점선 = 조 경계(17:30 / 19:00) · 회색 밴드 = 교대 공백 · ⚓ = 도선 예보 · 초록 = 작업중 · 파랑 = 오늘 · 주황 = 내일</div>
+        <div className="text-[10px] text-dim-400 truncate">빨간 선 = 지금 · 막대 = 작업 구간(배정 시작~끝) · 점선 = 조 경계(17:30 / 19:00) · 회색 밴드 = 교대 공백 · ⚓ = 도선 예보 · 초록 = 작업중 · 파랑 = 오늘 · 주황 = 내일</div>
       </div>
       {/*  2.64-01: 한 화면에 맞추려고 칸 높이를 26→22 로 줄였다(글자 크기는 그대로). */}
       <div className="relative border border-line rounded overflow-hidden bg-ink-900/40" style={{ height: 26 + rows.length * ROW_H }}>
@@ -57,6 +57,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
         {rows.map((sp, i) => {
           const y = 12 + i * ROW_H;
           const start = tlPos(sp.ms, day0);
+          const span = sp.msEnd ? tlPos(sp.msEnd, day0) : null;   // 2.67: 작업 끝(배정 planDate 뒷자리)
           const pilotMs = pfArr(sp.vsl);
           const pilot = pilotMs ? tlPos(pilotMs, day0) : null;
           const working = sp.rank === 0;
@@ -66,6 +67,14 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
                 <div className="absolute h-px bg-sky-500/60" style={{ top: y + 9, left: pilot + '%', width: (start - pilot) + '%' }} />)}
               {pilot != null && (
                 <span className="absolute text-[9.5px] text-sky-300 whitespace-nowrap" style={{ top: y, left: pilot + '%' }} title={`도선 ${fmt(pilotMs)}`}>⚓{fmt(pilotMs)}</span>)}
+              {/*  ★ 2.67 (검수사 «표시 부분과 배의 작업시간이 안맞습니다. 13:00~23:00 에 걸쳐야 하는데
+                   표시선만 보면 이미 끝난것처럼 보입니다»): 시작점만 찍지 말고 **작업 구간**을 막대로 깐다.
+                   배정 planDate 의 «시작 ~ 끝» 그대로 — 지어낸 소요시간이 아니다. */}
+              {span != null && start != null && span > start && (
+                <div className={`absolute rounded-sm ${working ? 'bg-emerald-500/35 border border-emerald-400/50'
+                  : (sp.ms - day0 < 24 * H ? 'bg-sky-500/25 border border-sky-400/40' : 'bg-amber-500/20 border border-amber-500/35')}`}
+                  style={{ top: y + 2, height: ROW_H - 6, left: start + '%', width: Math.max(0.4, span - start) + '%' }}
+                  title={`${sp.vsl} 작업 ${fmt(sp.ms)} ~ ${fmt(sp.msEnd)}`} />)}
               {start != null && (
                 <span className={`absolute text-[10px] font-bold rounded px-1.5 py-0.5 whitespace-nowrap border ${working
                   ? 'bg-emerald-600/80 text-white border-emerald-400/50'

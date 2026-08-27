@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled} from '../utils.js';   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
+import { dayDiff, dayLabel, voyagePlanMs, voyagePlanEndMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled} from '../utils.js';   // 2.67: 끝 시각 — 타임라인 작업 구간   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -280,6 +280,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       else if (pier === 'PNCT') byPier.PNCT += vBoxes;
       else byPier.unknown += vBoxes;
       const ms = voyagePlanMs(v);
+      const msEnd = voyagePlanEndMs(v);   // 2.67: 배정 «13:00 ~ 23:00» 의 끝 — 타임라인이 구간으로 그린다
       const n = dayDiff(ms);
       //  2.40-02: 판정을 utils.isWorkingNow 한 벌로 옮겼다.
       //    종전 "시작이 2시간 이내면 작업중"(2.34-10)은 **시작 전 2시간을 통째로 작업중**으로 만들었다 --
@@ -301,7 +302,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           if (isReeferContainer(c)) rf++;
         }
         const xray = Object.keys(v?.discharge?.xrayList || {}).length;   // XRAY는 양하 전용
-        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, key: v.key, c20, mty, rf, xray });
+        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, msEnd, key: v.key, c20, mty, rf, xray });
       }
     }
     ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));

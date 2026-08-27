@@ -28,7 +28,11 @@ T(!/text-4xl font-black/.test(lp) && !/rounded-btn p-3\.5/.test(lp), '현황판 
 T(/lg:shadow-none lg:flex-1 lg:min-h-0/.test(lp), '로그인 판 본체가 남는 높이를 안 먹는다 — 판이 화면 밖으로 넘친다(2.64-03 실측)');
 T(!/lg:items-start/.test(lp), 'lg:items-start 가 남아 있다 — 판이 화면 높이로 안 늘어난다');
 const tl = fs.readFileSync(path.join(ROOT, 'src/components/WorkTimeline.jsx'), 'utf8');
+//  2.67 (검수사): 시작점만 찍으면 «이미 끝난 것처럼» 보인다 — 배정 시작~끝을 막대로 깐다.
+T(/const span = sp\.msEnd \? tlPos\(sp\.msEnd, day0\)/.test(tl), '타임라인이 작업 끝 시각을 안 본다 — 구간이 안 그려진다');
+T(/width: Math\.max\(0\.4, span - start\)/.test(tl), '작업 구간 막대가 없다');
+T(/voyagePlanEndMs/.test(fs.readFileSync(path.join(ROOT, 'src/pages/LoginPage.jsx'), 'utf8')), '로그인 화면이 끝 시각을 안 실어 준다');
 T(/const ROW_H = 22;/.test(tl), '타임라인 칸 높이가 22 가 아니다 — 한 화면 계산이 어긋난다');
 
 if (bad > 0) { console.error(`✗ 타임라인 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 타임라인 연막검사 통과 — 축 수식 5 · 배선 3 · 한 화면 맞춤 10');
+console.log('✓ 타임라인 연막검사 통과 — 축 수식 5 · 배선 3 · 한 화면 맞춤 10 · 작업 구간 3');
