@@ -1902,8 +1902,43 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           }
         }
 
+        //  ★ 2.63-03 (검수사 지시 «포트미스에 없을시 베이메트릭스에 자료와 도선사이트를 매칭해서 올려 노면
+        //    됩니다»): 도선 예보 매칭 한 벌 — 코드 키 직접, 없으면 **사전 콜사인**으로 도선사이트 항목을 찾는다.
+        const _pfMatch = (() => {
+          try {
+            //  2.63-03 보강 (검수사 «현실성 없는 정보를 올리는건 안되는것입니다»): 지나간 도선 시각은
+            //  현실이 아니다 — 미래(±12h 유예)인 예보만 올린다. 둘 다 낡았으면 카드를 안 올린다.
+            const _fresh = (p) => {
+              if (!p) return null;
+              const _t = (v) => { const m = String(v || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : null; };
+              const lim = Date.now() - 12 * 3600000;
+              const arrOk = _t(p.nextArr) != null && _t(p.nextArr) >= lim;
+              const depOk = _t(p.nextDep) != null && _t(p.nextDep) >= lim;
+              if (!arrOk && !depOk) return null;
+              return { ...p, nextArr: arrOk ? p.nextArr : '', nextArrBerth: arrOk ? p.nextArrBerth : '', nextDep: depOk ? p.nextDep : '', nextDepBerth: depOk ? p.nextDepBerth : '' };
+            };
+            const direct = _fresh(pilotForecast[vsl]);
+            if (direct) return direct;
+            const _cs = String(dictCallsign || voyage?.info?.callsign || '').toUpperCase().trim();
+            if (!_cs) return null;
+            const byCs = Object.values(pilotForecast || {}).find((p) => p && String(p.callsign || '').toUpperCase().trim() === _cs);
+            return _fresh(byCs);
+          } catch (e) { return null; }
+        })();
         // M5.71: 매칭 실패 시 디버그 카드 (어떤 선박이 안 잡히는지 보여줌)
         if (!pm) {
+          //  2.63-03: PORT-MIS 미등록이어도 도선 예보가 있으면 그것을 정식 카드로 — SWTD 류(등록 없는 배).
+          if (_pfMatch) {
+            const fmtPf = (v) => { if (!v) return ''; const [d, t] = String(v).split(' '); return `${(d || '').slice(5)} ${t || ''}`.trim(); };
+            return (
+              <div className="mb-3 bg-sky-950/50 border border-sky-800/50 rounded-pill px-3 py-2 text-sm">
+                <span className="text-sky-300 font-bold text-xs">⚓ 도선 예보 (평택도선사회)</span>
+                {_pfMatch.nextArr && <span className="text-dim-100 ml-2">입항 <b className="text-emerald-300">{fmtPf(_pfMatch.nextArr)}</b>{_pfMatch.nextArrBerth ? ` (${_pfMatch.nextArrBerth})` : ''}</span>}
+                {_pfMatch.nextDep && <span className="text-dim-100 ml-2">출항 <b className="text-amber-300">{fmtPf(_pfMatch.nextDep)}</b>{_pfMatch.nextDepBerth ? ` (${_pfMatch.nextDepBerth})` : ''}</span>}
+                <div className="text-2xs text-dim-400 mt-0.5">평택 PORT-MIS 미등록 — 베이사전 신원(콜사인 {String(dictCallsign || '?')})으로 도선사이트와 매칭 · 확정에 가까움</div>
+              </div>
+            );
+          }
           if (Object.keys(portMisData).length === 0) return null;
           // 현재 항차와 비슷한 PORT-MIS 후보 찾기
           const candidates = Object.values(portMisData).slice(0, 3).map(p =>
@@ -2018,7 +2053,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             {/* V9.33: 평택도선사회 도선 예보 (사용자 확정 2026-08-01 — "포트미스는 예보 성격,
                 도선사협회는 확정과 비슷"). PORT-MIS 값을 덮지 않고 아래 줄에 확정시각으로 함께 표시. */}
             {(() => {
-              const pf = pilotForecast[(voyage?.info?.vsl || '').toUpperCase()];
+              const pf = _pfMatch;   // 2.63-03: 코드 키 + 콜사인 폴백 한 벌
               if (!pf || (!pf.nextDep && !pf.nextArr)) return null;
               const fmtPf = (v) => {
                 if (!v) return '';
