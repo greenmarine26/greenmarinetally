@@ -189,11 +189,16 @@ export async function fbSetVoyageSeqMode(voyageKey, mode3, by) {
 //  ★ 2.68 (검수사 확정 2026-08-27 «SWTD 갱배분은 3갱으로 하시면 편할듯 합니다»):
 //    갱 수는 **항차마다 근무배정으로 정해진다** — 앱 기본 2갱을 매번 «3갱이면» 으로 덮어 물어야 했다.
 //    한 번 정해 두면 브리핑·갱 배분·내 몫 계산이 전부 그 수로 나온다.
-export async function fbSetVoyageGangs(voyageKey, n, by) {
+export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
   if (!voyageKey) return;
   const g = Math.min(4, Math.max(1, parseInt(n, 10) || 0));
   if (!g) throw new Error(`gangs must be 1..4 — got ${n}`);
-  await update(ref(db, `voyages/${voyageKey}/info`), { gangs: g, gangsAt: Date.now(), gangsBy: by || '' });
+  //  2.69: 조를 대고 말했으면 **그 조에만**(«내일 주간 2갱»), 안 댔으면 이 항차 기본값.
+  //    조 키는 「MM-DD 주간|야간」 — 점(.)·#·$·[·] 를 안 쓰므로 RTDB 키로 그대로 쓸 수 있다.
+  const patch = shiftKey
+    ? { [`gangsShift/${shiftKey}`]: g, gangsAt: Date.now(), gangsBy: by || '' }
+    : { gangs: g, gangsAt: Date.now(), gangsBy: by || '' };
+  await update(ref(db, `voyages/${voyageKey}/info`), patch);
   return g;
 }
 

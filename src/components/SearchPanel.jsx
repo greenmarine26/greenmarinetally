@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, fullContainerNo, isSentenceQuery, sideCancelled} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
@@ -1166,7 +1166,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     const key = `${voyageKey}|${g.n}`;
     if (gangSetRef.current === key) return;
     gangSetRef.current = key;
-    fbSetVoyageGangs(voyageKey, g.n, inspector || '')
+    fbSetVoyageGangs(voyageKey, g.n, inspector || '', gangKeyFromWords(g.dayOff, g.shift))
       .then(() => { try { speak(`이 항차 ${g.n}갱으로 기억했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
       .catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
   }, [parsed.gangSet, voyageKey, inspector]);

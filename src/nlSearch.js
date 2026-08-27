@@ -96,7 +96,7 @@ export function parseNaturalQuery(text) {
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
-    gangSet: null,     // 2.68: { n:1..4 } — 이 항차 갱 수를 기억시키는 명령
+    gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
     //  ★ 2.41: 미르가 선박 연락처(이메일)를 **답한다** — 발송·확답 추적은 범위 밖(검수사 확정).
     //    *«우리는 선박에 자료를 주고 확답을 받아야 합니다»*(본선 일항사와 메일로 컨펌) ·
     //    *«수석이 PCSZ 이메일이 뭐지 물으면 답만 해주면 됩니다»* · *«그 주소가 있을것이니까 같이 보인다»*
@@ -152,7 +152,10 @@ export function parseNaturalQuery(text) {
   // 특수 화물
   if (/리퍼|reefer|냉장|냉동/i.test(t) || /\brf\b/i.test(t)) result.type = 'rf';
   else if (/위험물|hazmat|imdg/i.test(t) || /\bdg\b/i.test(t)) result.type = 'dg';
-  else if (/엑스레이|x[\s.\-]*ray|xray/i.test(t)) result.type = 'xray';
+  //  ★ 2.69 (검수사 실측 2026-08-27 — 박진우 검수사가 «관리씰»·«관리» 로 조회): 현장에서 X-RAY 씰을
+  //    **«관리 씰»** 이라고 부르는 사람이 있다. 검수사 지적 *«이친구는 XRAY씰을 관리 씰이라고 부르는듯»*.
+  //    ⚠ «관리» 한 낱말만으로는 안 잡는다 — 관리자·인원 관리 같은 말과 겹친다. «관리씰» 일 때만.
+  else if (/엑스레이|x[\s.\-]*ray|xray|관리\s*씰/i.test(t)) result.type = 'xray';
   else if (/탱크|tank/i.test(t) || /\btk\b/i.test(t)) result.type = 'tk';
   else if (/플랫\s*랙|flat\s*rack/i.test(t) || /\bfr\b/i.test(t)) result.type = 'fr';
   else if (/오픈\s*탑|open\s*top/i.test(t) || /\bot\b/i.test(t)) result.type = 'ot';
@@ -314,9 +317,20 @@ export function parseNaturalQuery(text) {
     //  ★ 2.68 (검수사 «SWTD 갱배분은 3갱으로 하시면 편할듯 합니다»): 갱 수를 **이 항차에 기억**시킨다.
     //    «3갱으로 기억해»·«3갱으로 해»·«이 배 3갱이야» → 저장 명령. 저장 뒤 계산도 그 수로 나온다.
     const _gset = t.match(/([1-4])\s*갱\s*(?:으로|로)?\s*(?:기억|고정|정해|해줘|해|설정)/) || t.match(/(?:이\s*배|이\s*항차)\s*([1-4])\s*갱/);
-    if (_gset) result.gangSet = { n: parseInt(_gset[1], 10) };
-    const _gm = t.match(/([2-4])\s*갱\s*(?:이면|으로|기준)/);
-    if (/갱\s*배분|배분\s*계획|내\s*갱/.test(t) || _gm || _gset) result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
+    if (_gset) {
+      //  ★ 2.69: 조를 붙여 말하면 **그 조에만** 기억한다 — «내일 주간 2갱으로 기억해».
+      //    조를 안 붙이면 이 항차 기본값(종전 2.68 동작).
+      const _day = /모레/.test(t) ? 2 : /내일|다음\s*날/.test(t) ? 1 : /오늘|이번/.test(t) ? 0 : null;
+      const _sh = /야간|밤/.test(t) ? '야간' : /주간|낮/.test(t) ? '주간' : null;
+      result.gangSet = { n: parseInt(_gset[1], 10), dayOff: _day, shift: _sh };
+    }
+    //  ★ 2.69-01 (검수사): «내 작업량» 도 같은 질문이다. 그리고 «2갱인데 내 작업량»·«2갱 갱배분» 처럼
+    //    문장 **어디에 있든** N갱 을 수로 받는다(종전엔 «N갱이면/으로/기준» 꼴만 알아들었다).
+    const _gm = t.match(/([1-4])\s*갱/);
+    const _isGangQ = /갱\s*배분|배분\s*계획|내\s*갱|내\s*작업량|작업\s*량/.test(t);
+    if (_isGangQ || _gset || (_gm && /배분|작업량/.test(t))) {
+      result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
+    }
   }
   // 2.05-01 (검수사 «데미지·OOG도 버튼을 눌러 확인하게 — 재질문 감소»): 브리핑 후속 버튼용 로컬 인텐트 3종.
   if (/데미지|파손|손상/.test(t)) result.dmgQuery = true;

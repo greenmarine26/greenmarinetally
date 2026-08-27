@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, sideCancelled } from './utils.js';   // 2.65-01: 조 경계 한 벌
+import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, shiftGangKey, sideCancelled } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
@@ -284,8 +284,6 @@ const _currentShift = currentShift;
 
 //  본체 — 조 단위 갱 배분. 반환 null(자료 없음) 또는 {shift, gangs[], nGangs, note}.
 export function buildGangShift(voyage, bayDef, opts = {}) {
-  //  2.68: 물을 때 «3갱이면» 이 없으면 **이 항차에 정해 둔 갱 수**를 쓴다(근무배정) — 없으면 종전대로 2갱.
-  const nGangs = Math.min(4, Math.max(1, opts.nGangs || Number(voyage?.info?.gangs) || 2));
   const nowMs = opts.now || Date.now();
   const pier = voyage?.info?.pier || '';
   const plan = buildGangPlan(voyage, bayDef, { tw: opts.tw });
@@ -315,10 +313,8 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     g.deckRest = Math.max(0, (g.deckN || 0) - g.doneN);
     g.holdRest = Math.max(0, g.restN - g.deckRest);
   });
-  //  분할은 «전체 예상시간» 기준(작업 중에 갱 경계가 출렁이지 않게), 소진은 «남은 것» 기준.
-  const split = _splitGangs(plan.cargo, nGangs);
-  if (!split) return null;
   //  조 창 — 지금(또는 조 시작, 또는 작업 시작 중 늦은 것)부터 조 끝까지 실근무시간.
+  //  ⚠ 2.69: **조를 먼저 정한다** — 갱 수를 조별로 기억하므로(야간 3갱·내일 주간 2갱) 어느 조인지 알아야 몇 갱인지 안다.
   let shift = _currentShift(nowMs);
   let fromMs = Math.max(nowMs, shift.startMs || 0);
   const ws = String(voyage?.info?.workStartAt || '').trim();
@@ -351,6 +347,21 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     rolled++;
   }
   if (availH <= 0.01) return null;
+  //  ★ 2.69 (검수사 «야간은 3갱인데 내일 주간은 2갱이면 나머지를 2갱으로 계산해 주나요?»):
+  //    갱 수는 **조마다** 정해진다. ①물을 때 말한 수(«2갱이면») ②이 조에 기억시킨 수(info.gangsShift['08-28 주간'])
+  //    ③이 항차 기본(info.gangs) ④2갱 — 이 순서로 고른다.
+  const _gKey = shiftGangKey(shift);
+  const _gShift = Number(voyage?.info?.gangsShift?.[_gKey]) || 0;
+  const _gBase = Number(voyage?.info?.gangs) || 0;
+  //  ★ 2.69-01 (검수사 «갱 배분이나 내 작업량이라고 물어 보면 갱 갯수를 되묻게 하고,
+  //    2갱인데 내 작업량 또는 2갱 갱배분 이라고 하면 대답을 맞게»): **모르면 지어내지 않는다.**
+  //    말한 수도 없고 이 조에 기억시킨 수도 없으면 계산하지 말고 되묻는다.
+  const _gn = opts.nGangs || _gShift || _gBase || 0;
+  if (!_gn) return { askGangs: true, shift, shiftKey: _gKey };
+  const nGangs = Math.min(4, Math.max(1, _gn));
+  //  분할은 «전체 예상시간» 기준(작업 중에 갱 경계가 출렁이지 않게), 소진은 «남은 것» 기준.
+  const split = _splitGangs(plan.cargo, nGangs);
+  if (!split) return null;
   //  ★ 2.62-04 (검수사 실측 «입항계획 변경을 놓치신듯 — 앱은 판단을 했는데 미르는 앱과 틀린 답»):
   //    SWTD 가 19:00→21:00 으로 밀렸을 때 계산(availH 8.0h)은 21:00 을 반영했는데 **라벨이
   //    «19:00~06:30» 고정**이라 말이 옛 시각을 했다. 실제 시작이 조 명목 시작보다 늦으면 라벨에 쓴다.
@@ -438,11 +449,14 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     deckN: g.deckN || 0, holdN: g.holdN || 0, deckRest: g.deckRest || 0, holdRest: g.holdRest || 0,
     gang: gangOfGroup[g.label] || 0, doneN: g.doneN, doneBy: doneBy[i], restN: g.restN,
     reach: reachOf[g.label] || null, fr: g.frN, rf: g.rfN, dg: g.dgN }));
-  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, fixed: !opts.nGangs && Number(voyage?.info?.gangs) > 0 };
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip,
+    shiftKey: _gKey, fixed: !opts.nGangs && (_gShift > 0 || _gBase > 0), fixedShift: !opts.nGangs && _gShift > 0 };
 }
 
 //  브리핑용 요약 줄(1~2줄) — 음성 머리는 건드리지 않는다. 상세는 «갱 배분» 질문으로.
 export function gangBriefLines(gs) {
+  //  2.69-01: 갱 수를 모르면 브리핑에도 숫자를 지어내지 않는다 — 한 줄로 묻는다.
+  if (gs && gs.askGangs) return [`🏗 ${gs.shift?.name || '이번 조'} 갱 배분 — 몇 갱인지 알려주세요 («2갱 갱 배분» 처럼)`];
   if (!gs || !gs.gangs || !gs.gangs.length) return null;
   if (gs.availH <= 0.01) return null;
   const _nm = (gs.shift.upcoming ? '다가오는 ' : '') + gs.shift.name;
@@ -460,6 +474,15 @@ export function gangBriefLines(gs) {
 export function answerGangShift(voyage, bayDef, opts = {}) {
   const gs = buildGangShift(voyage, bayDef, opts);
   if (!gs) return null;
+  //  ★ 2.69-01 (검수사 확정): *«사용자가 갱지정을 안하면 되묻고, 지정을 해서 물어 보면 계산된 답을 하면 됩니다»*
+  //    ⇒ 모르면 **조용히 2갱으로 가정하지 않는다.** 짧게 되묻는다(침묵도 안 한다 — 물음이 곧 답이다).
+  if (gs.askGangs) {
+    return [
+      `🏗 ${gs.shift.upcoming ? '다가오는 ' : ''}${gs.shift.name}(${gs.shift.label}) — 몇 갱으로 작업하십니까?`,
+      `«2갱 갱 배분»·«3갱 내 작업량» 처럼 갱 수를 붙여 말씀하시면 그 기준으로 계산해 드려요.`,
+      `이 조가 계속 같은 갱 수면 «${gs.shiftKey ? gs.shiftKey.slice(-2) + ' ' : ''}3갱으로 기억해» — 다음부터 안 여쭙니다.`,
+    ].join('\n');
+  }
   const L = [`🏗 ${gs.shift.upcoming ? '다가오는 ' : ''}${gs.shift.name}(${gs.shift.label}) 갱 배분 — ${gs.nGangs}갱 기준${gs.measured ? ' · 실측 페이스' : ' · 계획 페이스(일반 25/특수 15/h·FR 교체 15분+개당 3분)'}`];
   L.push(`이 조 남은 실근무 약 ${gs.availH.toFixed(1)}시간 (쉬는 시간 제외)`);
   gs.gangs.forEach((g) => {
@@ -468,7 +491,8 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
     L.push(`${g.no}번 갱 (베이 ${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')}) — ${g.from} 부터 ${g.to} 까지 약 ${g.cnt}대${sp ? ` · ${sp}` : ''}${g.finish ? ' — 이 조에서 구간 마감 예상' : ` (구간 잔여 ${g.restTotal}대 중)`}`);
   });
   //  2.68: 이 항차에 정해 둔 갱 수가 있으면 그 사실을 밝힌다 — 어디서 온 수인지 알아야 믿는다.
-  L.push(gs.fixed ? `이 항차는 ${gs.nGangs}갱으로 정해 두셨어요 — 바꾸시려면 «2갱으로 기억해» 처럼 말씀하세요.`
+  L.push(gs.fixedShift ? `${gs.shiftKey} 조는 ${gs.nGangs}갱으로 정해 두셨어요 — 바꾸시려면 «${gs.shiftKey.slice(-2)} 2갱으로 기억해» 처럼 말씀하세요.`
+    : gs.fixed ? `이 항차는 ${gs.nGangs}갱으로 정해 두셨어요 — 조마다 다르면 «내일 주간 2갱으로 기억해» 처럼 조를 붙여 말씀하세요.`
     : (gs.nGangs === 2 ? '«3갱이면» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요. «3갱으로 기억해» 하시면 이 항차는 계속 3갱으로 냅니다.'
                        : '«갱 배분» 이라고 물으시면 기본 2갱 기준이에요.'));
   L.push('최종 배분은 포맨 지시가 우선입니다.');

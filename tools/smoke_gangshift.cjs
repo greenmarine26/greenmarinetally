@@ -10,8 +10,19 @@ let bad = 0; const T = (ok, why) => { if (!ok) { bad++; console.error('  ✗ ' +
 const fx = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/fixtures/gangshift_swtd.json'), 'utf8'));
 const voyage = { info: fx.info, discharge: { ediContainers: fx.ediContainers }, loading: {} };
 const NIGHT = new Date('2026-08-27T19:05:00+09:00').getTime();
+//  ★ 2.69 (검수사 «사용자가 갱지정을 안하면 되묻고»): 갱 수를 안 대면 계산하지 않고 되묻는다.
+//    아래 시험들은 «2갱일 때의 분할» 을 잠그는 것이라 수를 명시해서 부른다.
+{
+  const ask = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT });
+  T(!!ask && ask.askGangs === true && !ask.gangs, '갱 수를 안 댔는데 2갱으로 가정해 계산한다');
+  const ansAsk = CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT });
+  T(/몇 갱으로 작업하십니까/.test(String(ansAsk || '')), '되묻지 않고 침묵한다 — 어느 상황에서든 답해야 한다');
+  const fixedV = { ...voyage, info: { ...voyage.info, gangsShift: { '08-27 야간': 3 } } };
+  const g3 = CA.buildGangShift(fixedV, fx.bayDef, { now: NIGHT });
+  T(!!g3 && g3.nGangs === 3 && g3.fixedShift === true, '이 조에 기억시킨 3갱을 안 쓴다');
+}
 // ① 야간조 — 2갱, 각 약 240대, 시작은 구간 첫 그룹
-const gs = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT });
+const gs = CA.buildGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2 });
 T(!!gs && gs.gangs.length === 2, '2갱 결과가 없다');
 if (gs) {
   T(gs.shift.name === '야간조', `조 판정이 틀렸다 (${gs.shift.name})`);
@@ -31,22 +42,22 @@ T(!!g3 && g3.gangs.length === 3, '3갱 분할이 안 된다');
 // ③ 실시간 — 완료 240대를 반영하면 조 예상이 줄어든다
 const cns = Object.keys(fx.ediContainers).slice(0, 240); const comp = {}; cns.forEach((c) => { comp[c] = 1; });
 const MID = new Date('2026-08-28T00:10:00+09:00').getTime();
-const gm = CA.buildGangShift(voyage, fx.bayDef, { now: MID, compMap: comp });
+const gm = CA.buildGangShift(voyage, fx.bayDef, { now: MID, nGangs: 2, compMap: comp });
 T(!!gm && gm.availH < 6, `자정 이후 남은 창이 안 줄었다 (${gm && gm.availH})`);
 T(!!gm && gm.gangs.reduce((a, g) => a + (g.cnt || 0), 0) < gs.gangs.reduce((a, g) => a + g.cnt, 0), '완료를 반영해도 예상이 안 줄어든다 — «일이 끝나가도 답이 같다» 재발');
 // ④ voyage.completed 자동 흡수(compMap 미지정)
 const vc = { ...voyage, discharge: { ...voyage.discharge, completed: comp } };
-const ga = CA.buildGangShift(vc, fx.bayDef, { now: MID });
+const ga = CA.buildGangShift(vc, fx.bayDef, { now: MID , nGangs: 2 });
 T(!!ga && ga.gangs.reduce((a, g) => a + (g.cnt || 0), 0) === gm.gangs.reduce((a, g) => a + (g.cnt || 0), 0), 'voyage.completed 자동 흡수가 compMap 과 다르다');
 // ④-2 (2.62-01) 낮(주간조)에 물어도 작업 시작이 밤이면 «다가오는 야간조»로 미리 보기가 선다.
 const DAY = new Date('2026-08-27T10:30:00+09:00').getTime();
-const gd = CA.buildGangShift(voyage, fx.bayDef, { now: DAY });
+const gd = CA.buildGangShift(voyage, fx.bayDef, { now: DAY , nGangs: 2 });
 T(!!gd && gd.shift.name === '야간조' && gd.shift.upcoming === true, `낮 미리 보기가 안 선다 (${gd && gd.shift.name})`);
 T(!!gd && /다가오는 야간조/.test((CA.gangBriefLines(gd) || [''])[0]), '다가오는 조 표기가 없다');
 // ④-3 (2.62-04) 입항계획 변경 반영 — 시작이 밀리면(19:00→21:00) 라벨도 21:00 을 말한다.
 {
   const v21 = { ...voyage, info: { ...voyage.info, planDate: '2026-08-27 21:00 ~ 2026-08-28 21:00' } };
-  const g21 = CA.buildGangShift(v21, fx.bayDef, { now: new Date('2026-08-27T19:05:00+09:00').getTime() });
+  const g21 = CA.buildGangShift(v21, fx.bayDef, { now: new Date('2026-08-27T19:05:00+09:00').getTime() , nGangs: 2 });
   T(!!g21 && /21:00 시작/.test(g21.shift.label), `⛔ 밀린 시작(21:00)이 라벨에 없다 (${g21 && g21.shift.label}) — 계산만 맞고 말이 옛 시각(검수사 실측)`);
   T(!!g21 && g21.availH > 7.5 && g21.availH < 8.5, `21:00 시작 창 계산이 틀렸다 (${g21 && g21.availH})`);
   //  2.63-01 (검수사 수열 «34:40 33:4 32:44 30:44 26:44 22:23» — 8h·199대·데크 계산만):
@@ -57,7 +68,7 @@ const bl = CA.gangBriefLines(gs);
 T(Array.isArray(bl) && /^🏗 야간조/.test(bl[0]) && /갱 배분.*상세 확인/.test(bl[1]), '브리핑 줄 형식이 깨졌다');
 T(/1번 갱\(01~19\)/.test(bl[0]) && /2번 갱\(21~34\)/.test(bl[0]), '브리핑 줄에 담당 구간이 없다 — 조 도달점만 쓰면 3갱처럼 읽힌다(검수사 실측)');
 // ⑥ 상세 답
-const ans = CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT });
+const ans = CA.answerGangShift(voyage, fx.bayDef, { now: NIGHT, nGangs: 2 });   // 2.69: 수를 대야 계산 답
 T(!!ans && /포맨 지시가 우선/.test(ans) && /FR 교체 15분/.test(ans), '상세 답 골격이 깨졌다');
 // ⑥-2 (2.62-02) 본체 경유 — hasAnyCondition 이 gangQuery 를 알아야 본체가 답한다(라이브 무응답 실측).
 {
@@ -75,7 +86,7 @@ T(!!ans && /포맨 지시가 우선/.test(ans) && /FR 교체 15분/.test(ans), '
   const cns = Object.keys(fx.ediContainers).slice(0, 200); const comp = {};
   cns.forEach((c) => { comp[c] = { at: new Date('2026-08-27T23:50:00+09:00').getTime() }; });
   const v2 = { ...voyage, discharge: { ...voyage.discharge, completed: comp } };
-  const gm = CA.buildGangShift(v2, fx.bayDef, { now: new Date('2026-08-28T08:10:00+09:00').getTime() });
+  const gm = CA.buildGangShift(v2, fx.bayDef, { now: new Date('2026-08-28T08:10:00+09:00').getTime() , nGangs: 2 });
   T(!!gm && Array.isArray(gm.strip) && gm.strip.length > 15, '스트립 데이터가 없다');
   const withDone = gm.strip.filter((g) => g.doneN > 0);
   T(withDone.length > 0 && withDone.every((g) => (g.doneBy['8/27 야간조'] || 0) > 0), '조별 완료(8/27 야간조) 갈림이 죽었다 — 인계 표기가 안 선다');

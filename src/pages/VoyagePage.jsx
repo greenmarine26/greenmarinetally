@@ -15,7 +15,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -2176,7 +2176,7 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
     const key = `${voyageKey}|${g.n}|${q}`;
     if (gangSetRef.current === key) return;
     gangSetRef.current = key;
-    fbSetVoyageGangs(voyageKey, g.n, inspector || '').catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
+    fbSetVoyageGangs(voyageKey, g.n, inspector || '', gangKeyFromWords(g.dayOff, g.shift)).catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
   }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');        // 폰 자판: 작업(숫자) 기본, ⌨로 질문(문자)
   const [listening, setListening] = useState(false);
@@ -2766,7 +2766,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
     const key = `${voyageKey}|${g.n}|${q}`;
     if (gangSetRef.current === key) return;
     gangSetRef.current = key;
-    fbSetVoyageGangs(voyageKey, g.n, inspector || '').catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
+    fbSetVoyageGangs(voyageKey, g.n, inspector || '', gangKeyFromWords(g.dayOff, g.shift)).catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
   }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');
   const [listening, setListening] = useState(false);

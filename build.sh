@@ -381,8 +381,9 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
     #  2.68: **항차별 갱 수** — 근무배정으로 정해진 갱 수를 기억하는가.
     SMOKE_G="tools/_smokeg_tmp.cjs"
     npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_G" --log-level=error \
-      && node tools/smoke_gangfix.cjs "$SMOKE_G" "$(pwd)" || { rm -f "$SMOKE_G"; echo "✗ 갱 수 연막검사 실패 — 배포 금지"; exit 1; }
-    rm -f "$SMOKE_G"
+      && npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="tools/_smokegu_tmp.cjs" --log-level=error \
+      && node tools/smoke_gangfix.cjs "$SMOKE_G" "$(pwd)" "tools/_smokegu_tmp.cjs" || { rm -f "$SMOKE_G" tools/_smokegu_tmp.cjs; echo "✗ 갱 수 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_G" tools/_smokegu_tmp.cjs
 
     #  2.66: **전량 캔슬** — 배정목록이 0이라고 말하는 쪽을 앱이 세지 않는가.
     SMOKE_U="tools/_smokeu_tmp.cjs"; SMOKE_N="tools/_smoken_tmp.cjs"
