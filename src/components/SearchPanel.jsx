@@ -1164,14 +1164,16 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   const startSetRef = useRef('');
   useEffect(() => {
     if (!parsed.startSet || !voyageKey) return;
-    const ms = parseSpokenTimeMs(parsed.startSet.raw || query || '');
+    //  ★ 2.74: 호기별로 대면 호기마다 적는다(가장 이른 것이 항차 시작). 없으면 종전 한 시각.
+    const cr = parsed.startSet.cranes || [];
+    const ms = cr.length ? Math.min(...cr.map((c) => c.ms)) : parseSpokenTimeMs(parsed.startSet.raw || query || '');
     if (!ms) return;
-    const key = `${voyageKey}|${ms}`;
+    const key = `${voyageKey}|${ms}|${cr.map((c) => c.no + ':' + c.ms).join(',')}`;
     if (startSetRef.current === key) return;
     startSetRef.current = key;
-    fbSetVoyageWorkStart(voyageKey, ms, inspector || '')
-      .then((txt) => { try { speak(`${String(txt).slice(11)} 시작으로 다시 계산했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
-      .catch((e) => console.warn('[2.73] 시작 시각 저장 실패', e));
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr)
+      .then((txt) => { try { speak(cr.length ? `${String(txt)} 시작으로 다시 계산했어요` : `${String(txt).slice(11)} 시작으로 다시 계산했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
+      .catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
   }, [parsed.startSet, voyageKey, inspector, query]);
 
   const gangSetRef = useRef('');

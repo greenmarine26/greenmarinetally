@@ -345,10 +345,20 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   let fromMs = Math.max(nowMs, shift.startMs || 0);
   //  ★ 2.73: 검수사가 말로 알린 시작 시각이 있으면 **그 시각부터** 센다(창을 앞당기지는 않는다).
   //    수집기 workStartAt(터미널 실제 시작)이 오면 아래에서 그것이 다시 이긴다 — 정본이 우선.
+  const _asMs = (txt) => { const m = String(txt || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; };
   {
-    const wm = String(voyage?.info?.workStartManual || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
-    if (wm) fromMs = Math.max(fromMs, new Date(+wm[1], +wm[2] - 1, +wm[3], +wm[4], +wm[5]).getTime());
+    const wm = _asMs(voyage?.info?.workStartManual);
+    if (wm) fromMs = Math.max(fromMs, wm);
   }
+  //  ★ 2.74: 호기별 시작 — «2호기 23:15 · 3호기 23:20 · 4호기 23:25».
+  //    호기 번호 오름차순 = 갱 번호 오름차순이다. 근거는 앱 실기록 — SWTD 9012E 에서
+  //    4호기(가장 큰 호기)가 B30~34(가장 큰 베이) 144대를 했고, 갱 구간도 베이 오름차순으로 선다.
+  const _craneAt = {};
+  { const cs = voyage?.info?.craneStart || {};
+    for (const k of Object.keys(cs)) { const t = _asMs(cs[k]); if (t) _craneAt[String(parseInt(k, 10))] = t; } }
+  const _craneNos = Object.keys(_craneAt).map(Number).sort((a, b) => a - b);
+  //  가장 이른 호기 시작이 곧 그 조의 작업 시작이다 — 조 창·라벨이 그것을 쓴다(지나갔으면 지금이 기준).
+  if (_craneNos.length) fromMs = Math.max(fromMs, Math.min(..._craneNos.map((n) => _craneAt[n])));
   const ws = String(voyage?.info?.workStartAt || '').trim();
   const wsM = ws.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
   if (wsM) fromMs = Math.max(fromMs, new Date(+wsM[1], +wsM[2] - 1, +wsM[3], +wsM[4], +wsM[5]).getTime());
@@ -388,7 +398,10 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //  ★ 2.69-01 (검수사 «갱 배분이나 내 작업량이라고 물어 보면 갱 갯수를 되묻게 하고,
   //    2갱인데 내 작업량 또는 2갱 갱배분 이라고 하면 대답을 맞게»): **모르면 지어내지 않는다.**
   //    말한 수도 없고 이 조에 기억시킨 수도 없으면 계산하지 말고 되묻는다.
-  const _gn = opts.nGangs || _gShift || _gBase || 0;
+  //  ★ 2.74: 호기를 셋 대면 그것이 곧 «3갱» 이다 — 대 놓고 다시 몇 갱이냐고 묻지 않는다.
+  //    ⚠ 그 호기들이 **이 조**에 시작한 것일 때만(어젯밤 호기 시각이 오늘 주간을 정하지 않게).
+  const _crThisShift = _craneNos.filter((n) => _craneAt[n] >= (shift.startMs || 0) && _craneAt[n] <= shift.endMs);
+  const _gn = opts.nGangs || _gShift || _gBase || (_crThisShift.length >= 2 ? _crThisShift.length : 0) || 0;
   const _askGangs = !_gn;
   const nGangs = Math.min(4, Math.max(1, _gn || 2));
   //  분할은 «전체 예상시간» 기준(작업 중에 갱 경계가 출렁이지 않게), 소진은 «남은 것» 기준.
@@ -413,7 +426,18 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //    *«아직 SWTD 작업시작을 안했는데 19:00부터 계산함»*).
   if (_askGangs) return { askGangs: true, shift, shiftKey: _gKey, availH };
   //  갱별 소진 — 남은 그룹을 순서대로. from=첫 미완 그룹, to=조 끝에 닿는 그룹.
+  //  ★ 2.74: 갱마다 제 시작 시각이 있으면 제 창으로 센다(호기 수 = 갱 수일 때만 짝을 짓는다).
+  const _eqOf = (gi) => (_craneNos.length === nGangs ? _craneNos[gi] : null);
+  const _availOf = (gi) => {
+    const eq = _eqOf(gi);
+    if (eq == null) return availH;
+    const f = Math.max(fromMs, _craneAt[eq]);
+    if (f >= shift.endMs) return 0;
+    return Math.max(0, workMinutesBetween(f, shift.endMs, pier)) / 60;
+  };
   const gangs = split.segs.map((seg, gi) => {
+    const availH = _availOf(gi);   //  ⚠ 이 갱의 창 — 바깥 availH 를 가린다(의도).
+    const equip = _eqOf(gi);
     //  ★ 2.62-03 (검수사 확정 «보통 선미와 중간부분부터 진행합니다» — NSFR 실측 GC103=11~13·GC104=23~25 도
     //    중간대 시작으로 일치): 모든 갱이 자기 구간의 **뒤쪽 끝(선미 쪽)부터 앞으로** 소진한다.
     //    왜(검수사 원문) — «물때를 못맞추면 갱을 이동할때 선박 건물 높이로 인해 작업이 지장이 생깁니다.
@@ -422,7 +446,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     //    트림(«1번베이부터 파먹으면 배가 뒤로 뒤집어진다»)도 같은 방향을 가리킨다.
     const ordered = [...seg].reverse();
     const restGroups = ordered.filter((g) => g.restN > 0);
-    if (!restGroups.length) return { no: gi + 1, done: true, cnt: 0, restTotal: 0 };
+    if (!restGroups.length) return { no: gi + 1, equip, done: true, cnt: 0, restTotal: 0 };
     //  ★ 2.63-01 (검수사 조언 «그림이 잘못되었습니다 … 선미 작업자는 22번 데크작업중 야간조 마무리 할듯
     //    합니다. 데크우선 작업이기 때문이죠»): 소진은 그룹 통째가 아니라 **두 패스** — 구간의 데크를
     //    뒤에서 앞으로 먼저 다 걷고(데크→커버→홀드 확정 규칙), 그다음 홀드를 뒤에서 앞으로.
@@ -455,7 +479,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
       }
     }
     const cnt = cnt0;
-    return { no: gi + 1, done: false, from: restGroups[0].label + ' 데크', to: lastLabel, cnt: Math.min(cnt, restTotal), fr, rf, dg, finish, restTotal, reachMap: reach,
+    return { no: gi + 1, equip, availH, done: false, from: restGroups[0].label + ' 데크', to: lastLabel, cnt: Math.min(cnt, restTotal), fr, rf, dg, finish, restTotal, reachMap: reach,
       fromBay: Math.min(...seg.flatMap((g) => g.members)), toBay: Math.max(...seg.flatMap((g) => g.members)) };
   });
   //  ★ 2.63(스트립): 카고플랜 조감용 그룹 상세 — 검수사 확정 «첫조는 일할 범위, 두번째조는 첫조가
@@ -485,8 +509,15 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     deckN: g.deckN || 0, holdN: g.holdN || 0, deckRest: g.deckRest || 0, holdRest: g.holdRest || 0,
     gang: gangOfGroup[g.label] || 0, doneN: g.doneN, doneBy: doneBy[i], restN: g.restN,
     reach: reachOf[g.label] || null, fr: g.frN, rf: g.rfN, dg: g.dgN }));
-  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, twGap,
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, twGap, cranes: (_craneNos.length === nGangs ? _craneNos.slice() : []),
     shiftKey: _gKey, fixed: !opts.nGangs && (_gShift > 0 || _gBase > 0), fixedShift: !opts.nGangs && _gShift > 0 };
+}
+
+//  ★ 2.74: 갱을 부르는 이름 한 벌 — 호기를 알면 호기로 부른다.
+//    검수사도 완료 기록(equip)도 «4호기» 라고 부른다. «3번 갱» 은 앱만 쓰는 말이다.
+export function gangName(g, long = false) {
+  if (!g) return '';
+  return g.equip ? (long ? `${g.equip}호기(${g.no}번 갱)` : `${g.equip}호기`) : `${g.no}번 갱`;
 }
 
 //  브리핑용 요약 줄(1~2줄) — 음성 머리는 건드리지 않는다. 상세는 «갱 배분» 질문으로.
@@ -497,11 +528,11 @@ export function gangBriefLines(gs) {
   if (gs.availH <= 0.01) return null;
   const _nm = (gs.shift.upcoming ? '다가오는 ' : '') + gs.shift.name;
   const parts = gs.gangs.map((g) => {
-    if (g.done) return `${g.no}번 갱 완료`;
+    if (g.done) return `${gangName(g)} 완료`;
     const sp = [g.fr ? `FR${g.fr}` : null, g.rf ? `리퍼${g.rf}` : null, g.dg ? `DG${g.dg}` : null].filter(Boolean).join('·');
     //  2.62-03: 담당 구간(베이 범위)을 같이 — 조 도달점만 쓰면 «남은 베이는 임자 없나»로 읽힌다(검수사 실측).
     const zone = (g.fromBay != null) ? `(${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')})` : '';
-    return `${g.no}번 갱${zone} ${g.from}→${g.to} 약 ${g.cnt}대${sp ? `(${sp})` : ''}${g.finish ? ' ✔끝' : ''}`;
+    return `${gangName(g)}${zone} ${g.from}→${g.to} 약 ${g.cnt}대${sp ? `(${sp})` : ''}${g.finish ? ' ✔끝' : ''}`;
   });
   return [`🏗 ${_nm}(${gs.shift.label}·${gs.nGangs}갱) — ` + parts.join(' / '), `"갱 배분"으로 상세 확인`];
 }
@@ -516,20 +547,30 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
     return [
       `🏗 ${gs.shift.upcoming ? '다가오는 ' : ''}${gs.shift.name}(${gs.shift.label}) — 몇 갱으로 작업하십니까?`,
       `«2갱 갱 배분»·«3갱 내 작업량» 처럼 갱 수를 붙여 말씀하시면 그 기준으로 계산해 드려요.`,
+      `호기별로 «2호기는 23:15 3호기는 23:20 4호기는 23:25 시작» 처럼 알려 주셔도 그대로 계산합니다.`,
       `이 조가 계속 같은 갱 수면 «${gs.shiftKey ? gs.shiftKey.slice(-2) + ' ' : ''}3갱으로 기억해» — 다음부터 안 여쭙니다.`,
     ].join('\n');
   }
   const L = [`🏗 ${gs.shift.upcoming ? '다가오는 ' : ''}${gs.shift.name}(${gs.shift.label}) 갱 배분 — ${gs.nGangs}갱 기준${gs.measured ? ' · 실측 페이스' : ' · 계획 페이스(일반 25/특수 15/h·FR 교체 15분+개당 3분)'}`];
   L.push(`이 조 남은 실근무 약 ${gs.availH.toFixed(1)}시간 (쉬는 시간 제외)`);
+  //  ★ 2.74: 호기마다 시작이 다르면 갱마다 창이 다르다 — 그 사실을 숨기지 않는다.
+  if (gs.cranes && gs.cranes.length) {
+    const hs = gs.gangs.filter((g) => g.equip && g.availH != null);
+    //  ⚠ 셋 다 이미 붙었으면 남은 시간은 같다 — 같은 수를 셋 늘어놓지 않는다.
+    if (hs.length && Math.max(...hs.map((g) => g.availH)) - Math.min(...hs.map((g) => g.availH)) > 0.05) {
+      L.push(`아직 안 붙은 호기가 있어 창이 다릅니다 — ${hs.map((g) => `${g.equip}호기 ${g.availH.toFixed(1)}h`).join(' · ')}`);
+    }
+  }
   //  2.70: 터미널 실적으로 깎았으면 그 사실을 밝힌다 — 어디까지 했는지는 앱 기록이 없어 «대수만» 반영이다.
   if (gs.twGap > 0) L.push(`⚠ 앱에 안 찍힌 ${gs.twGap}대는 터미널 실적으로 빼고 계산했어요 — 어느 컨인지는 몰라 대수만 반영입니다.`);
   gs.gangs.forEach((g) => {
-    if (g.done) { L.push(`${g.no}번 갱 — 맡은 구간 완료`); return; }
+    if (g.done) { L.push(`${gangName(g, true)} — 맡은 구간 완료`); return; }
     const sp = [g.fr ? `⊞FR ${g.fr}` : null, g.rf ? `❄리퍼 ${g.rf}` : null, g.dg ? `☣DG ${g.dg}` : null].filter(Boolean).join(' · ');
-    L.push(`${g.no}번 갱 (베이 ${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')}) — ${g.from} 부터 ${g.to} 까지 약 ${g.cnt}대${sp ? ` · ${sp}` : ''}${g.finish ? ' — 이 조에서 구간 마감 예상' : ` (구간 잔여 ${g.restTotal}대 중)`}`);
+    L.push(`${gangName(g, true)} (베이 ${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')}) — ${g.from} 부터 ${g.to} 까지 약 ${g.cnt}대${sp ? ` · ${sp}` : ''}${g.finish ? ' — 이 조에서 구간 마감 예상' : ` (구간 잔여 ${g.restTotal}대 중)`}`);
   });
   //  2.68: 이 항차에 정해 둔 갱 수가 있으면 그 사실을 밝힌다 — 어디서 온 수인지 알아야 믿는다.
-  L.push(gs.fixedShift ? `${gs.shiftKey} 조는 ${gs.nGangs}갱으로 정해 두셨어요 — 바꾸시려면 «${gs.shiftKey.slice(-2)} 2갱으로 기억해» 처럼 말씀하세요.`
+  L.push(gs.cranes && gs.cranes.length ? `${gs.cranes.map((n) => n + '호기').join('·')} 시작을 알려 주셔서 ${gs.nGangs}갱으로 계산했어요 — 호기가 바뀌면 다시 알려 주세요.`
+    : gs.fixedShift ? `${gs.shiftKey} 조는 ${gs.nGangs}갱으로 정해 두셨어요 — 바꾸시려면 «${gs.shiftKey.slice(-2)} 2갱으로 기억해» 처럼 말씀하세요.`
     : gs.fixed ? `이 항차는 ${gs.nGangs}갱으로 정해 두셨어요 — 조마다 다르면 «내일 주간 2갱으로 기억해» 처럼 조를 붙여 말씀하세요.`
     : (gs.nGangs === 2 ? '«3갱이면» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요. «3갱으로 기억해» 하시면 이 항차는 계속 3갱으로 냅니다.'
                        : '«갱 배분» 이라고 물으시면 기본 2갱 기준이에요.'));

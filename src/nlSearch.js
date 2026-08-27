@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled, parseCraneStarts } from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -98,7 +98,7 @@ export function parseNaturalQuery(text) {
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
-    startSet: null,    // 2.73: { raw } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
+    startSet: null,    // 2.73/2.74: { raw, cranes:[{no,ms}] } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
     //  ★ 2.41: 미르가 선박 연락처(이메일)를 **답한다** — 발송·확답 추적은 범위 밖(검수사 확정).
     //    *«우리는 선박에 자료를 주고 확답을 받아야 합니다»*(본선 일항사와 메일로 컨펌) ·
@@ -342,8 +342,14 @@ export function parseNaturalQuery(text) {
       const _asking = /몇\s*시|언제/.test(t);
       const _startWord = !_asking && /시작|작업/.test(t);
       const _hasTime = /(\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시)/.test(t);
-      if (!/몇\s*시|언제/.test(t) && _hasTime && (_reCalc || _startWord || /(\d{1,2}\s*시(\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})\s*부터/.test(t))) {
-        result.startSet = { raw: t };
+      //  ★ 2.74 (검수사 실측 «미르야 2호기는 23:15 3호기는 23:20 4호기는 23:25 에 시작했어»):
+      //    호기마다 시각을 대면 그 자체가 시작 알림이다 — 호기+시각 짝이 둘 이상이면 «시작» 이란
+      //    낱말이 없어도 잡는다(검수사 실제 말투). 하나뿐이면 종전대로 시작·재계산 낱말을 요구한다.
+      const _cr = parseCraneStarts(t);
+      if (!_asking && (_cr.length >= 2 || (_cr.length === 1 && (_reCalc || _startWord)))) {
+        result.startSet = { raw: t, cranes: _cr };
+      } else if (!/몇\s*시|언제/.test(t) && _hasTime && (_reCalc || _startWord || /(\d{1,2}\s*시(\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})\s*부터/.test(t))) {
+        result.startSet = { raw: t, cranes: [] };
       }
     }
     if (_isGangQ || _gset || _bareGang || result.startSet || (_gm && /배분|작업량/.test(t))) {

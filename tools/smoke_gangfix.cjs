@@ -20,8 +20,9 @@ T(!P('한 갱만 남았어').gangSet, '엉뚱한 문장을 저장 명령으로 �
 const rd = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 T(/export async function fbSetVoyageGangs/.test(rd('src/firebase.js')), '갱 수 저장 함수가 없다');
 T(/gangs: g, gangsAt: Date\.now\(\), gangsBy/.test(rd('src/firebase.js')), '누가·언제 정했는지 안 남긴다');
-T(/const _gn = opts\.nGangs \|\| _gShift \|\| _gBase \|\| 0;/.test(rd('src/chiefAnswers.js')),
-  '계산이 «말한 수 → 이 조 → 이 항차» 순서를 안 본다 — 기억시켜도 안 쓰인다');
+//  2.74: 우선순위에 «이 조에 붙은 호기 수»가 끼었다 — 말한 수·기억한 수가 여전히 앞이다.
+T(/const _gn = opts\.nGangs \|\| _gShift \|\| _gBase \|\| \(_crThisShift\.length >= 2 \? _crThisShift\.length : 0\) \|\| 0;/.test(rd('src/chiefAnswers.js')),
+  '계산이 «말한 수 → 이 조 → 이 항차 → 이 조 호기 수» 순서를 안 본다 — 기억시켜도 안 쓰인다');
 T(/fixed: !opts\.nGangs && \(_gShift > 0 \|\| _gBase > 0\)/.test(rd('src/chiefAnswers.js')), '정해 둔 값인지 표시가 없다');
 T(/이 항차는 \$\{gs\.nGangs\}갱으로 정해 두셨어요/.test(rd('src/chiefAnswers.js')), '어디서 온 수인지 안 밝힌다');
 //  세 화면이 같은 한 벌 — 작업 시작 탭·양하 탭·LOLO 탭

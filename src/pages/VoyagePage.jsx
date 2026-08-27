@@ -2183,15 +2183,17 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
   useEffect(() => {
     const q = String(ask?.q || '').trim();
     if (!q || !voyageKey) return;
-    let hit = false;
-    try { hit = !!parseNaturalQuery(q).startSet; } catch (e) { hit = false; }
-    if (!hit) return;
-    const ms = parseSpokenTimeMs(q);
+    let ss = null;
+    try { ss = parseNaturalQuery(q).startSet; } catch (e) { ss = null; }
+    if (!ss) return;
+    //  ★ 2.74: «2호기는 23:15 3호기는 23:20» — 호기별 시작도 같은 자리에서 적는다.
+    const cr = ss.cranes || [];
+    const ms = cr.length ? Math.min(...cr.map((c) => c.ms)) : parseSpokenTimeMs(q);
     if (!ms) return;
     const key = `${voyageKey}|${ms}|${q}`;
     if (startSetRef.current === key) return;
     startSetRef.current = key;
-    fbSetVoyageWorkStart(voyageKey, ms, inspector || '').catch((e) => console.warn('[2.73] 시작 시각 저장 실패', e));
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
   }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');        // 폰 자판: 작업(숫자) 기본, ⌨로 질문(문자)
   const [listening, setListening] = useState(false);
@@ -2793,15 +2795,17 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
   useEffect(() => {
     const q = String(ask?.q || '').trim();
     if (!q || !voyageKey) return;
-    let hit = false;
-    try { hit = !!parseNaturalQuery(q).startSet; } catch (e) { hit = false; }
-    if (!hit) return;
-    const ms = parseSpokenTimeMs(q);
+    let ss = null;
+    try { ss = parseNaturalQuery(q).startSet; } catch (e) { ss = null; }
+    if (!ss) return;
+    //  ★ 2.74: «2호기는 23:15 3호기는 23:20» — 호기별 시작도 같은 자리에서 적는다.
+    const cr = ss.cranes || [];
+    const ms = cr.length ? Math.min(...cr.map((c) => c.ms)) : parseSpokenTimeMs(q);
     if (!ms) return;
     const key = `${voyageKey}|${ms}|${q}`;
     if (startSetRef.current === key) return;
     startSetRef.current = key;
-    fbSetVoyageWorkStart(voyageKey, ms, inspector || '').catch((e) => console.warn('[2.73] 시작 시각 저장 실패', e));
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '', cr).catch((e) => console.warn('[2.74] 시작 시각 저장 실패', e));
   }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');
   const [listening, setListening] = useState(false);

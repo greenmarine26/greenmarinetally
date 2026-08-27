@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName } from './utils.js';   // 1.40-01: 타항 저장 차단
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey } from './utils.js';   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 
@@ -204,13 +204,24 @@ export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
 
 //  ★ 2.73: 말로 알린 **작업 시작 시각**을 항차에 적어 둔다(배정목록·터미널이 아직 모를 때).
 //    ⚠ 수집기가 채우는 `workStartAt` 은 건드리지 않는다 — 그것이 오면 그것이 정본이다.
-export async function fbSetVoyageWorkStart(voyageKey, ms, by) {
+//  ★ 2.74: `cranes` 는 **맨 뒤 선택 인자**다 — 안 넘기면 종전과 똑같이 동작한다(호출부 셋 그대로).
+//    호기별 시작을 받으면 ①호기마다 시각을 적고(info.craneStart) ②그중 **가장 이른 것**을
+//    항차 시작(workStartManual)으로 삼고 ③**호기 수 = 갱 수**를 그 시각이 속한 조에 적는다.
+//    ⛔ 수집기 workStartAt(터미널 정본)은 안 건드린다.
+export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
   if (!voyageKey || !ms) return;
-  const d = new Date(ms);
   const p2 = (n) => String(n).padStart(2, '0');
-  const txt = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
-  await update(ref(db, `voyages/${voyageKey}/info`), { workStartManual: txt, workStartManualAt: Date.now(), workStartManualBy: by || '' });
-  return txt;
+  const fmt = (x) => { const d = new Date(x); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+  const list = Array.isArray(cranes) ? cranes.filter((c) => c && c.no && c.ms) : [];
+  const patch = { workStartManual: fmt(ms), workStartManualAt: Date.now(), workStartManualBy: by || '' };
+  if (list.length) {
+    const cs = {}; list.forEach((c) => { cs[String(c.no)] = fmt(c.ms); });
+    patch.craneStart = cs;
+    patch.craneStartBy = by || '';
+    patch[`gangsShift/${shiftGangKey(currentShift(ms))}`] = list.length;
+  }
+  await update(ref(db, `voyages/${voyageKey}/info`), patch);
+  return list.length ? list.map((c) => `${c.no}호기 ${fmt(c.ms).slice(11)}`).join(' · ') : fmt(ms);
 }
 
 // 양하/선적 섹션 데이터 저장 (mode = 'discharge' | 'loading')
