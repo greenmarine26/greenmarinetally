@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
-import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';
+import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
+import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer } from '../nlSearch.js';   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
@@ -2602,9 +2602,14 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   useEffect(() => {
     if (!answer || readRef.current === q + answer.length) return;
     readRef.current = q + answer.length;
+    //  ★ 2.65: 브리핑은 끝까지 읽는다(SearchPanel:1272 와 같은 한 벌 — 화면마다 다르면 안 된다).
+    if (parsed?.briefingQuery) {
+      try { speakLong(briefingVoiceLines(answer)); } catch (e) { /* 낭독 실패 무시 */ }
+      return;
+    }
     const first = (answer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();   // 1.92-02: 이모지 벗겨 읽기
     if (first) { try { speak(first); } catch (e) { /* 낭독 실패 무시 */ } }
-  }, [answer, q]);
+  }, [answer, q, parsed]);   // 2.65: parsed — 브리핑 갈래를 봐야 낭독으로 간다
   // 2.05 (검수사 «제질문은 FR 실위치를 물어봤습니다» · «그냥 FR 정보 알려줘 하면 다알려주고»):
   //   결과 컨(≤12)의 사진(데미지·메일 사진 — 씰 위치·FR 고정 등)을 답 아래 썸네일로. 탭하면 크게.
   const [photoView, setPhotoView] = useState(null);

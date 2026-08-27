@@ -135,6 +135,49 @@ export function speak(text, opts = {}) {
   } catch (e) { currentSpeakPriority = null; }
 }
 
+//  ★ 2.65 — **여러 토막을 차례로 끝까지 읽는다** (브리핑 낭독).
+//    ⚠ 크롬은 한 덩이가 길면 15초쯤에서 잘라 먹는다 — 그래서 한 문장에 몰아넣지 않고
+//      토막마다 발화를 만들어 **큐에 쌓는다**(엔진이 차례로 읽는다).
+//    ⚠ 크롬은 큐가 길면 스스로 멈추기도 한다 — 읽는 동안 resume() 을 8초마다 두드린다(keepalive).
+//    우선순위 'high' 로 잡아 진단·알림 음성이 낭독을 중간에 자르지 못하게 한다.
+//    검수사가 새 질문을 하면 그때는 stopSpeak() 로 멈추고 새 답을 읽는다.
+let _keepAlive = null;
+function _clearKeepAlive() { if (_keepAlive) { clearInterval(_keepAlive); _keepAlive = null; } }
+
+export function speakLong(lines, opts = {}) {
+  const arr = (Array.isArray(lines) ? lines : String(lines || '').split('\n')).map((x) => String(x || '').trim()).filter(Boolean);
+  if (!arr.length) return;
+  if (opts.volume == null && currentVolume() === 0) return;   // 2.40: 「소리 끔」이면 말하지 않는다
+  try {
+    stopSpeak();
+    currentSpeakPriority = 'high';
+    const kov = ensureKoVoice();
+    const vol = opts.volume != null ? opts.volume : currentVolume();
+    arr.forEach((line, i) => {
+      let spoken = spellPosString(line);
+      spoken = spoken.replace(/\d{4,}/g, (m) => m.split('').map((d) => NUM_KO[parseInt(d)]).join(' '));
+      const u = new SpeechSynthesisUtterance(spoken);
+      u.lang = 'ko-KR';
+      if (kov) u.voice = kov;
+      u.rate = opts.rate || 1.15;   // 낭독은 조회 안내(1.3)보다 조금 느리게 — 받아 적을 수 있게
+      u.pitch = opts.pitch || 1.0;
+      u.volume = vol;
+      if (i === arr.length - 1) {
+        u.onend = () => { _clearKeepAlive(); currentSpeakPriority = null; };
+        u.onerror = () => { _clearKeepAlive(); currentSpeakPriority = null; };
+      }
+      window.speechSynthesis.speak(u);
+    });
+    _clearKeepAlive();
+    _keepAlive = setInterval(() => {
+      try {
+        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) { _clearKeepAlive(); currentSpeakPriority = null; return; }
+        window.speechSynthesis.resume();
+      } catch (e) { _clearKeepAlive(); }
+    }, 8000);
+  } catch (e) { _clearKeepAlive(); currentSpeakPriority = null; }
+}
+
 // 컨테이너 음성 — V37 speakContainer 100% 이식
 // 컨번호, 실번호, 위치, X-RAY 모두 안내
 export function speakContainer(c, opts = {}) {
@@ -213,7 +256,8 @@ export function speakError(text) {
 }
 
 export function stopSpeak() {
-  try { window.speechSynthesis.cancel(); } catch {}
+  //  2.65: 낭독(speakLong) 의 keepalive 와 우선순위도 같이 내린다 — 안 내리면 다음 음성이 막힌다.
+  try { _clearKeepAlive(); currentSpeakPriority = null; window.speechSynthesis.cancel(); } catch { /* 무시 */ }
 }
 
 // 음성인식(STT) 항만 용어 교정 — 크롬 STT가 도메인 단어를 일반어로 오인식하는 것 보정 (V7.56)

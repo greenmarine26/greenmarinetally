@@ -378,6 +378,12 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.65: **브리핑 낭독** — 첫 줄만 읽고 끝나던 것 재발 금지(검수사: 한번은 정확히 들어야 합니다).
+    SMOKE_BV="tools/_smokebv_tmp.cjs"
+    npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_BV" --log-level=error \
+      && node tools/smoke_briefvoice.cjs "$SMOKE_BV" "$(pwd)" || { rm -f "$SMOKE_BV"; echo "✗ 브리핑 낭독 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_BV"
+
     #  2.64: **작업 타임라인** — 축 수식·배선(로그인 PC 하단, 검수사 확정 자리).
     #  ⚠ /tmp 에 두면 external react 를 못 찾는다 — repo 안(node_modules 곁)에 임시로 둔다.
     SMOKE_TL="tools/_smoketl_tmp.cjs"; trap 'rm -f "$SMOKE_TL"' EXIT

@@ -5,9 +5,9 @@
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
-import { parseSpokenDigits, speak, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';
+import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, fullContainerNo, isSentenceQuery} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
-import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
+import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
 import GangStrip from './GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립
@@ -1260,12 +1260,20 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
     if (!query || query.length < 2) return;
     if (aiLoading || aiAnswer) return; // AI 답변 중엔 안내 X
     if (chatMessages.length > 0) return;  // M5.80: 대화 중에도 안내 X (AI 답변에 자동 발음됨)
-    const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}-${localAnswer ? '1' : '0'}`;
+    //  2.65: 브리핑만 askedAt 을 섞는다 — 같은 «브리핑» 을 다시 말하면 처음부터 다시 읽어 준다(다시 듣기).
+    const sig = `${query}-${results.length}-${parsed.isStat}-${results[0]?.cn || 'none'}-${localAnswer ? '1' : '0'}${parsed.briefingQuery ? `-${askedAt}` : ''}`;
     if (lastSpokenRef.current === sig) return;
     lastSpokenRef.current = sig;
 
     // V7.80: 음성 답변 간결화 — 핵심 한 문장만 (상세는 화면). 0대면 "~없습니다" (사용자 확정 형식).
     if (localAnswer) {
+      //  ★ 2.65 (검수사 확정 «브리핑은 한번은 정확히 들어야 합니다. 보는것만으로는 지나칠수 있습니다»):
+      //    브리핑은 첫 줄만이 아니라 **끝까지** 읽는다. 머리에 안 실린 주의사항(탱크·OOG 등)은
+      //    종전엔 소리로는 존재조차 없었다(실측 PCSZ 2625E).
+      if (parsed.briefingQuery) {
+        try { speakLong(briefingVoiceLines(localAnswer)); } catch (e) { /* 낭독 실패 무시 */ }
+        return;
+      }
       // 1.92-02 (검수사: «미르야 하면 답변이 이상하게 들립니다») — 인사는 짧게, 이모지는 전부 벗겨 읽는다.
       const first = parsed.mirHello ? '네, 말씀하세요'
         : (localAnswer.split('\n').find(l => l.trim()) || '').replace(/\p{Extended_Pictographic}/gu, '').replace(/[•·⏱«»]/g, ' ').replace(/\s+/g, ' ').trim();

@@ -1533,6 +1533,41 @@ export function auditSeals(containers) {
 
 // V7.90-04: 작업 브리핑 (사용자 요청) — 검수 시작·중간에 현재 작업 핵심을 한눈에.
 //   첫 줄은 음성으로 읽히는 한 문장 요약. 이후 화면용 상세.
+//  ★ 2.65 (검수사 확정 «브리핑은 한번은 정확히 들어야 합니다. 보는것만으로는 지나칠수 있습니다»):
+//    브리핑을 **음성용으로** 정리한다. 화면 글(generateBriefing 결과)은 한 글자도 안 바꾼다.
+//    종전엔 화면 답의 **첫 줄 하나만** 읽고 끝나서(SearchPanel·VoyagePage 둘 다) 머리에 안 실린
+//    주의사항은 소리로는 존재조차 없었다 — 실측 PCSZ 2625E: 탱크 2대·OOG 11대를 못 듣는다.
+//    ⚠ 컨번호 나열은 읽지 않는다(끝 4자리 여덟 개면 숫자만 30초다) — «번호는 화면에».
+const _bvBays = (n) => n.split(',').map((x) => x.trim()).filter(Boolean).map((x) => x + '번').join(', ') + ' 베이';
+export function briefingVoiceLines(txt) {
+  const out = [];
+  for (const raw of String(txt || '').split('\n')) {
+    let s = raw;
+    if (!s.trim() || /"로 상세 확인/.test(s)) continue;          // 화면 유도 줄은 안 읽는다
+    //  ⚠ 컨번호 나열 축약은 **기호를 걷기 전에** 한다 — 먼저 걷으면 앞의 「—」가 사라져 규칙이 안 걸린다.
+    s = s.replace(/[—-]\s*([A-Z]{4}\d{7}|\d{4})(\s*,\s*(?:[A-Z]{4}\d{7}|\d{4}))+/g, ', 번호는 화면에');
+    s = s.replace(/\p{Extended_Pictographic}/gu, ' ')
+         .replace(/[^\p{Script=Hangul}\p{L}\p{N}\s.,:~%\-]/gu, ' ');   // ⊞ △ ☣ 같은 기호 걷기
+    s = s.replace(/베이\s*(\d+)\s*~\s*(\d+)\s*,?\s*(\d+)?개?/g,
+      (m, a, b, n) => '@@B@@ ' + a + '번에서 ' + b + '번까지' + (n ? ', ' + n + '개' : ''));
+    s = s.replace(/베이\s*(\d+(?:\s*,\s*\d+)*)/g, (m, n) => _bvBays(n));
+    s = s.replace(/@@B@@/g, '베이');
+    s = s.replace(/O\s*T\b/g, '오티').replace(/X\s*-?\s*RAY/gi, '엑스레이').replace(/cl\.?\s*(\d)/gi, '클래스 $1');
+    s = s.replace(/(\d+)\s*ft\s*(\d+)/gi, '$1피트 $2대');
+    s = s.replace(/Full\s*(\d+)\s*Empty\s*0\b/i, '전부 풀')
+         .replace(/Full\s*(\d+)/i, '풀 $1대').replace(/Empty\s*(\d+)/i, '엠티 $1대');
+    s = s.replace(/갑판\s*(\d+)\s*홀드\s*(\d+)/, '갑판 $1대, 홀드 $2대');
+    s = s.replace(/작업\s*:\s*\d+대/, '')
+         .replace(/\s*-\s*/g, ', ').replace(/\s+/g, ' ').replace(/(,\s*)+/g, ', ')
+         .replace(/^,\s*|,\s*$/g, '').trim();
+    if (s) out.push(s);
+  }
+  //  «주의사항» 홀로 선 줄에 건수를 실어 준다 — 소리로는 몇 개가 오는지 먼저 알아야 센다.
+  const i = out.indexOf('주의사항');
+  if (i >= 0) { const m = (out[0] || '').match(/주의 (\d+)건/); out[i] = m ? `주의사항 ${m[1]}건` : '주의사항'; }
+  return out;
+}
+
 export function generateBriefing(containers, modeLabel, mode = 'discharge', pairsMap = null, pier = '', opts = null) {   // V7.93: pairsMap·pier — 트윈 무게 예견 · 1.86: opts.rfSkip(머스크류 — 리퍼 체크 안 함)
   // V7.90-07 재구성 (사용자 피드백): ① 평택분(작업 대상)만 집계 — 통과화물 포함 금지(7.1)
   //   ② 일반 통계 나열 대신 "검수원이 인지해야 할 특이사항" 중심, 행동 지향 문구.
