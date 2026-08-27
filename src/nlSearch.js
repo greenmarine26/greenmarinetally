@@ -96,6 +96,7 @@ export function parseNaturalQuery(text) {
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
+    gangSet: null,     // 2.68: { n:1..4 } — 이 항차 갱 수를 기억시키는 명령
     //  ★ 2.41: 미르가 선박 연락처(이메일)를 **답한다** — 발송·확답 추적은 범위 밖(검수사 확정).
     //    *«우리는 선박에 자료를 주고 확답을 받아야 합니다»*(본선 일항사와 메일로 컨펌) ·
     //    *«수석이 PCSZ 이메일이 뭐지 물으면 답만 해주면 됩니다»* · *«그 주소가 있을것이니까 같이 보인다»*
@@ -310,8 +311,12 @@ export function parseNaturalQuery(text) {
   //  ★ 2.62: 조(근무조) 단위 갱 배분 — «갱 배분»·«N갱이면»·«내 갱 (오늘) 얼마나».
   //    계산은 chiefAnswers.buildGangShift 한 벌(순환 import 회피 — 화면이 ctx.gangShift 로 함수를 싣는다).
   {
+    //  ★ 2.68 (검수사 «SWTD 갱배분은 3갱으로 하시면 편할듯 합니다»): 갱 수를 **이 항차에 기억**시킨다.
+    //    «3갱으로 기억해»·«3갱으로 해»·«이 배 3갱이야» → 저장 명령. 저장 뒤 계산도 그 수로 나온다.
+    const _gset = t.match(/([1-4])\s*갱\s*(?:으로|로)?\s*(?:기억|고정|정해|해줘|해|설정)/) || t.match(/(?:이\s*배|이\s*항차)\s*([1-4])\s*갱/);
+    if (_gset) result.gangSet = { n: parseInt(_gset[1], 10) };
     const _gm = t.match(/([2-4])\s*갱\s*(?:이면|으로|기준)/);
-    if (/갱\s*배분|배분\s*계획|내\s*갱/.test(t) || _gm) result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
+    if (/갱\s*배분|배분\s*계획|내\s*갱/.test(t) || _gm || _gset) result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
   }
   // 2.05-01 (검수사 «데미지·OOG도 버튼을 눌러 확인하게 — 재질문 감소»): 브리핑 후속 버튼용 로컬 인텐트 3종.
   if (/데미지|파손|손상/.test(t)) result.dmgQuery = true;

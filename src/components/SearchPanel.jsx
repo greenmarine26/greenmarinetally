@@ -17,7 +17,7 @@ import { matchPortMis } from '../portMisMatch.js';   // V7.92: 입출항 질문 
 import { fixQuestionWithAI } from '../gemini.js';
 import { askGemini, isFreeFormQuestion } from '../gemini.js';
 import { findTwinCandidate, getBayPairs } from '../twin.js';   // V7.93: getBayPairs — 트윈 무게 점검
-import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple } from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
+import { fbCompleteContainer, fbCancelComplete, fbSetInspectorActivity, fbAddExtraContainer, fbRemoveExtraContainer, fbReassignContainerPosition, fbCompleteContainersAtomic, fbUnassignContainer, fbGetSimple, fbSetVoyageGangs} from '../firebase.js';   // 2.41: fbGetSimple — 선박 연락처(shipContacts) 1회 GET
 import BigResultCard from './BigResultCard.jsx';
 import RestoreOrigButton from './RestoreOrigButton.jsx';   // V9.51
 import HelpModal from './HelpModal.jsx';
@@ -1156,6 +1156,20 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   }, [parsed.deviceCmd, query]);
   //  조작이 아닌 새 질문이 오면 조작 답을 걷는다.
   useEffect(() => { if (!parsed.deviceCmd) setDevAnswer(null); }, [parsed.deviceCmd, query]);
+
+  //  ★ 2.68 (검수사 «SWTD 갱배분은 3갱으로 하시면 편할듯 합니다»): «3갱으로 기억해» 를 이 항차에 저장.
+  //    저장만 하고 답은 갱 배분 본체가 낸다 — 저장 뒤 계산이 그 수로 나오는지 바로 보인다.
+  const gangSetRef = useRef('');
+  useEffect(() => {
+    const g = parsed.gangSet;
+    if (!g || !voyageKey) return;
+    const key = `${voyageKey}|${g.n}`;
+    if (gangSetRef.current === key) return;
+    gangSetRef.current = key;
+    fbSetVoyageGangs(voyageKey, g.n, inspector || '')
+      .then(() => { try { speak(`이 항차 ${g.n}갱으로 기억했어요`, { conversational: true }); } catch { /* 소리 꺼짐 */ } })
+      .catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
+  }, [parsed.gangSet, voyageKey, inspector]);
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
   const localAnswer = devAnswer || _mirAnswer;
 

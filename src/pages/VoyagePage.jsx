@@ -25,7 +25,7 @@ import {
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
   , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
-  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple} from '../firebase.js';   // 1.87: 엠티실 범위 저장
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs} from '../firebase.js';   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -153,6 +153,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — 이 상수는 **VoyagePage 안**에 있어야 한다(2.50-01 교훈:
   //      ListTab 안에 두면 voyage 가 없어 렌더가 통째로 죽는다. 실제로 한 번 밟았다).
   const _sideCanc = sideCancelled(voyage?.info, mode, (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null);
+
+
 
   // TallyOne 1.3: 열람 기록 — 항차 진입·탭 전환·모드 전환마다 1건.
   //   같은 대상(voyageKey+mode+tab) 30초 안 중복은 activityLog가 생략한다.
@@ -2158,10 +2160,24 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null }) {   // 2.01: briefCtx — 인라인 브리핑 재료
+export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null }) {
+  //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
+  //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
+  const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
   const [filter, setFilter] = useState(null); // 1.84: null=목록 닫힘 — 평소엔 안 보여주고 필요할 때만(검수사 확정)
   // 1.84-01: 통합검색줄 상태 — 숫자판/문자 자판, 음성, 자동 읽기
   const [ask, setAsk] = useState(null);           // 1.85-05: 인라인 즉답 {q, stack[]} — 질문한 탭에서 바로 답
+  useEffect(() => {
+    const q = String(ask?.q || '').trim();
+    if (!q || !voyageKey) return;
+    let g = null;
+    try { g = parseNaturalQuery(q).gangSet; } catch (e) { g = null; }
+    if (!g) return;
+    const key = `${voyageKey}|${g.n}|${q}`;
+    if (gangSetRef.current === key) return;
+    gangSetRef.current = key;
+    fbSetVoyageGangs(voyageKey, g.n, inspector || '').catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
+  }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');        // 폰 자판: 작업(숫자) 기본, ⌨로 질문(문자)
   const [listening, setListening] = useState(false);
   const [autoRead, setAutoRead] = useState(true);  // 조회 결과 1건이면 위치를 읽어준다
@@ -2731,13 +2747,27 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   );
 }
 
-function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx — 인라인 브리핑 재료
+function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null }) {
+  //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
+  //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
+  const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
   // 1.85-03 (검수사 실측 «여기는 그대로 입니다»): ListTab 1.84와 같은 게이트 — 기본 미선택, 칩·검색 시에만 목록.
   const [filter, setFilter] = useState(null); // null(숨김) | all | done(누적) | undone
   const [search, setSearch] = useState('');
   // 1.85-02 (검수사 실측 «RZOR은 화면이 안바뀌었습니다. LOLO라 빠트리신듯» «검색창도 같이 바꿔 주세요»):
   //   ListTab 1.84-01 통합검색줄을 LOLO에도. ⚠ ListTab 과 복제 두 벌 — 공용 추출은 인계함.
   const [ask, setAsk] = useState(null);   // 1.85-05: 인라인 즉답
+  useEffect(() => {
+    const q = String(ask?.q || '').trim();
+    if (!q || !voyageKey) return;
+    let g = null;
+    try { g = parseNaturalQuery(q).gangSet; } catch (e) { g = null; }
+    if (!g) return;
+    const key = `${voyageKey}|${g.n}|${q}`;
+    if (gangSetRef.current === key) return;
+    gangSetRef.current = key;
+    fbSetVoyageGangs(voyageKey, g.n, inspector || '').catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
+  }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');
   const [listening, setListening] = useState(false);
   const [autoRead, setAutoRead] = useState(true);

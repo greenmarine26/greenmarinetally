@@ -284,7 +284,8 @@ const _currentShift = currentShift;
 
 //  본체 — 조 단위 갱 배분. 반환 null(자료 없음) 또는 {shift, gangs[], nGangs, note}.
 export function buildGangShift(voyage, bayDef, opts = {}) {
-  const nGangs = Math.min(4, Math.max(1, opts.nGangs || 2));
+  //  2.68: 물을 때 «3갱이면» 이 없으면 **이 항차에 정해 둔 갱 수**를 쓴다(근무배정) — 없으면 종전대로 2갱.
+  const nGangs = Math.min(4, Math.max(1, opts.nGangs || Number(voyage?.info?.gangs) || 2));
   const nowMs = opts.now || Date.now();
   const pier = voyage?.info?.pier || '';
   const plan = buildGangPlan(voyage, bayDef, { tw: opts.tw });
@@ -437,7 +438,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     deckN: g.deckN || 0, holdN: g.holdN || 0, deckRest: g.deckRest || 0, holdRest: g.holdRest || 0,
     gang: gangOfGroup[g.label] || 0, doneN: g.doneN, doneBy: doneBy[i], restN: g.restN,
     reach: reachOf[g.label] || null, fr: g.frN, rf: g.rfN, dg: g.dgN }));
-  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip };
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, fixed: !opts.nGangs && Number(voyage?.info?.gangs) > 0 };
 }
 
 //  브리핑용 요약 줄(1~2줄) — 음성 머리는 건드리지 않는다. 상세는 «갱 배분» 질문으로.
@@ -466,7 +467,10 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
     const sp = [g.fr ? `⊞FR ${g.fr}` : null, g.rf ? `❄리퍼 ${g.rf}` : null, g.dg ? `☣DG ${g.dg}` : null].filter(Boolean).join(' · ');
     L.push(`${g.no}번 갱 (베이 ${String(g.fromBay).padStart(2, '0')}~${String(g.toBay).padStart(2, '0')}) — ${g.from} 부터 ${g.to} 까지 약 ${g.cnt}대${sp ? ` · ${sp}` : ''}${g.finish ? ' — 이 조에서 구간 마감 예상' : ` (구간 잔여 ${g.restTotal}대 중)`}`);
   });
-  L.push(gs.nGangs === 2 ? '«3갱이면» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요.' : '«갱 배분» 이라고 물으시면 기본 2갱 기준이에요.');
+  //  2.68: 이 항차에 정해 둔 갱 수가 있으면 그 사실을 밝힌다 — 어디서 온 수인지 알아야 믿는다.
+  L.push(gs.fixed ? `이 항차는 ${gs.nGangs}갱으로 정해 두셨어요 — 바꾸시려면 «2갱으로 기억해» 처럼 말씀하세요.`
+    : (gs.nGangs === 2 ? '«3갱이면» 이라고 물으시면 3갱 기준으로 다시 계산해 드려요. «3갱으로 기억해» 하시면 이 항차는 계속 3갱으로 냅니다.'
+                       : '«갱 배분» 이라고 물으시면 기본 2갱 기준이에요.'));
   L.push('최종 배분은 포맨 지시가 우선입니다.');
   return L.join('\n');
 }
