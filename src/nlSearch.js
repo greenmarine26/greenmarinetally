@@ -63,6 +63,8 @@ export function portToKr(code) {
 
 // ─── 메인 파서 ───
 export function parseNaturalQuery(text) {
+  //  2.70-02: 마지막 질문을 남긴다 — 크래시 신고(ErrorBoundary)에 «무엇을 물었을 때» 가 실린다.
+  try { if (typeof window !== 'undefined') window.__lastQuery = String(text || ''); } catch (e) { /* 무시 */ }
   const result = {
     digits: '', size: null, fe: null, type: null, temp: null,
     bay: null, pol: null, pod: null, portAny: null, zone: null,
@@ -328,7 +330,9 @@ export function parseNaturalQuery(text) {
     //    문장 **어디에 있든** N갱 을 수로 받는다(종전엔 «N갱이면/으로/기준» 꼴만 알아들었다).
     const _gm = t.match(/([1-4])\s*갱/);
     const _isGangQ = /갱\s*배분|배분\s*계획|내\s*갱|내\s*작업량|작업\s*량/.test(t);
-    if (_isGangQ || _gset || (_gm && /배분|작업량/.test(t))) {
+    //  ★ 2.70-02 (검수사 실측): 되물었을 때 «2갱» 한마디로 답한다 — 그것만 치면 종전엔 답이 없었다.
+    const _bareGang = /^\s*[1-4]\s*갱\s*(?:이요|입니다|이야|요|다)?\s*[.!]?\s*$/.test(t);
+    if (_isGangQ || _gset || _bareGang || (_gm && /배분|작업량/.test(t))) {
       result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
     }
   }

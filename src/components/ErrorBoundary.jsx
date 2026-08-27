@@ -16,6 +16,25 @@ export default class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error(`[ErrorBoundary:${this.props.name || 'unknown'}]`, error, errorInfo);
     this.setState({ errorInfo });
+    //  ★ 2.70-02 (검수사 «앱 전체 크러쉬» — 나는 재현을 못 했고 검수사는 일하는 중이었다):
+    //    크래시가 **스스로 신고**한다. 검수사가 화면을 옮겨 적지 않아도 다음 클로드가 스택을 본다.
+    //    ⚠ 조용히 실패해도 화면은 그대로 — 신고 실패가 크래시 화면을 덮지 않게 전부 감싼다.
+    try {
+      const body = {
+        kind: 'crash',
+        at: Date.now(),
+        where: this.props.name || 'unknown',
+        msg: String(error?.message || error || '').slice(0, 300),
+        stack: String(error?.stack || '').split('\n').slice(0, 6).join('\n').slice(0, 1200),
+        comp: String(errorInfo?.componentStack || '').split('\n').slice(0, 6).join('\n').slice(0, 800),
+        route: (typeof window !== 'undefined' && window.location ? String(window.location.hash || '') : ''),
+        q: (() => { try { return String(window.__lastQuery || '').slice(0, 120); } catch (e) { return ''; } })(),
+        appVersion: (typeof window !== 'undefined' && window.__APPV) || '',
+        status: 'new',
+      };
+      const url = 'https://greenmarinetally-default-rtdb.asia-southeast1.firebasedatabase.app/claude_inbox.json';
+      if (typeof fetch === 'function') fetch(url, { method: 'POST', body: JSON.stringify(body) }).catch(() => {});
+    } catch (e) { /* 신고 실패는 조용히 — 화면이 우선이다 */ }
   }
 
   reset = () => {
