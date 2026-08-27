@@ -389,7 +389,36 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     return { no: gi + 1, done: false, from: restGroups[0].label, to: lastLabel, cnt: Math.min(cnt, restTotal), fr, rf, dg, finish, restTotal,
       fromBay: Math.min(...seg.flatMap((g) => g.members)), toBay: Math.max(...seg.flatMap((g) => g.members)) };
   });
-  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0 };
+  //  ★ 2.63(스트립): 카고플랜 조감용 그룹 상세 — 검수사 확정 «첫조는 일할 범위, 두번째조는 첫조가
+  //    어디까지 했는지+자기 몫, 마무리조는 조별 실적+잔여. 양하에서 선적까지 이어진다».
+  //    완료는 시각(at)으로 조를 갈라 «어느 조가 했나»까지 표시한다.
+  const shiftKeyOf = (ms) => {
+    const d = new Date(ms); const mm = d.getHours() * 60 + d.getMinutes();
+    const day = new Date(d); if (mm < 390) day.setDate(day.getDate() - 1);   // 새벽은 전날 야간조
+    const night = mm >= 1050 || mm < 390;
+    return `${day.getMonth() + 1}/${day.getDate()} ${night ? '야간' : '주간'}조`;
+  };
+  const compAt = {};
+  if (comp) { for (const cn of Object.keys(comp)) { const r = comp[cn]; compAt[String(cn).toUpperCase()] = (r && typeof r === 'object' && r.at) ? r.at : 0; } }
+  const cnGroup = {};
+  { const gidx = {}; plan.cargo.forEach((g, i) => g.members.forEach((m) => { gidx[m] = i; }));
+    for (const md of ['discharge', 'loading']) for (const c of _list(voyage?.[md]?.ediContainers)) {
+      if (!_ptk(c, md)) continue; const i = gidx[_bayN(c)]; if (i != null) cnGroup[String(c.cn || '').toUpperCase()] = { i, md };
+    } }
+  const doneBy = plan.cargo.map(() => ({}));
+  for (const cn of Object.keys(compAt)) { const g = cnGroup[cn]; if (!g) continue;
+    const k = compAt[cn] ? shiftKeyOf(compAt[cn]) : '이전';
+    doneBy[g.i][k] = (doneBy[g.i][k] || 0) + 1; }
+  const gangOfGroup = {}; split.segs.forEach((seg, gi) => seg.forEach((g) => { gangOfGroup[g.label] = gi + 1; }));
+  const reachOf = {}; gangs.forEach((g) => { if (g.done || !g.from) return;
+    //  도달 = from(뒤 끝)부터 to 까지 — 역방향이므로 라벨 목록을 다시 계산
+    const seg = split.segs[g.no - 1]; const ordered = [...seg].reverse().filter((x) => x.restN > 0);
+    const toL = String(g.to || '').replace('(중간)', '');
+    for (const x of ordered) { reachOf[x.label] = (x.label === toL && /중간/.test(String(g.to))) ? 'partial' : 'full'; if (x.label === toL) break; } });
+  const strip = plan.cargo.map((g, i) => ({ label: g.label, members: g.members, mv: g.dis + g.lod, dis: g.dis, lod: g.lod,
+    gang: gangOfGroup[g.label] || 0, doneN: g.doneN, doneBy: doneBy[i], restN: g.restN,
+    reach: reachOf[g.label] || null, fr: g.frN, rf: g.rfN, dg: g.dgN }));
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip };
 }
 
 //  브리핑용 요약 줄(1~2줄) — 음성 머리는 건드리지 않는다. 상세는 «갱 배분» 질문으로.

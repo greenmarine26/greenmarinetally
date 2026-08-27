@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak } from '../voice.js';   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, generateSealAuditAnswer } from '../nlSearch.js';
-import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
+import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
+import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
 import { mirSee } from '../mirEyes.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
 import { mirTone } from '../mirChat.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
@@ -963,6 +964,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     //    InlineAnswerCard 는 voyage 를 안 받는다(1.98·2.50-01 교훈) — 여기서 클로저로 감싼다.
     gangBrief: () => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return gangBriefLines(buildGangShift(voyage, de, { tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null, compMap: compMap || null })); } catch (e) { return null; } },
     gangShift: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return answerGangShift(voyage, de, { nGangs: n || 2, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null, compMap: compMap || null }); } catch (e) { return null; } },
+    //  2.63: 스트립용 구조 데이터 — 그림은 GangStrip 이 그린다(계산은 buildGangShift 한 벌).
+    gangShiftData: (n) => { try { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const de = d ? (d.bayDef || d) : null; return buildGangShift(voyage, de, { nGangs: n || 2, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null, compMap: compMap || null }); } catch (e) { return null; } },
     //  ★ 2.52-01 — **완료 표를 같이 싣는다.** 이 화면의 `containers` 에는 `_comp` 가 없다.
     //    완료는 별도 `compMap` 으로 다니는데(GuidedWorkPanel 도 둘을 따로 받는다), 미르는 `_comp` 를
     //    보고 있어서 한 대를 내린 직후에도 «남은 140대 (완료 0대)» 라고 답했다 — 실선에서 잡혔다.
@@ -2522,6 +2525,10 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   const parsed = useMemo(() => { try { return parseNaturalQuery(q); } catch (e) { return null; } }, [q]);
   const results = useMemo(() => { try { return parsed ? applyNLFilter(containers, parsed) : []; } catch (e) { return []; } },
     [containers, parsed]);
+  //  2.63: «갱 배분» 답에는 카고플랜 조감 스트립을 같이 그린다 — 인계가 그림 하나로 선다.
+  const gangGs = useMemo(() => {
+    try { return (parsed?.gangQuery && briefCtx?.gangShiftData) ? briefCtx.gangShiftData(parsed.gangQuery.n || null) : null; } catch (e) { return null; }
+  }, [parsed, briefCtx, q]);
   const answer = useMemo(() => {
     try {
       //  ★ 2.50-01 — **여기가 검수사가 실제로 쓰는 검색줄이다.**
@@ -2590,6 +2597,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       {answer ? (
         <>
         <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{answer}</div>
+        {gangGs ? <GangStrip gs={gangGs} /> : null}
         {resultPhotos.length > 0 && (
           <div className="pt-1">
             <div className="text-2xs font-black text-orange-300 mb-1">📷 사진 {resultPhotos.length}장 — 탭하면 크게 (씰 위치·고정 상태 등)</div>
