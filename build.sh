@@ -378,6 +378,15 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.73: **시작 시각 알림** — 말로 알린 작업 시작을 알아듣고 그 시각부터 계산하는가.
+    SMOKE_SU="tools/_smokesu_tmp.cjs"; SMOKE_SN="tools/_smokesn_tmp.cjs"; SMOKE_SC="tools/_smokesc_tmp.cjs"
+    npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="$SMOKE_SU" --log-level=error \
+      && npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_SN" --log-level=error \
+      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_SC" --log-level=error \
+      && node tools/smoke_startset.cjs "$SMOKE_SU" "$SMOKE_SN" "$SMOKE_SC" "$(pwd)" \
+      || { rm -f "$SMOKE_SU" "$SMOKE_SN" "$SMOKE_SC"; echo "✗ 시작 시각 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_SU" "$SMOKE_SN" "$SMOKE_SC"
+
     #  2.71: **MRN** — X-RAY 서류 머리표가 레그(입항 I·출항 E)를 지키는가.
     node tools/smoke_mrn.cjs "$(pwd)" || { echo "✗ MRN 연막검사 실패 — 배포 금지"; exit 1; }
 

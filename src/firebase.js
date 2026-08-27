@@ -202,6 +202,17 @@ export async function fbSetVoyageGangs(voyageKey, n, by, shiftKey = '') {
   return g;
 }
 
+//  ★ 2.73: 말로 알린 **작업 시작 시각**을 항차에 적어 둔다(배정목록·터미널이 아직 모를 때).
+//    ⚠ 수집기가 채우는 `workStartAt` 은 건드리지 않는다 — 그것이 오면 그것이 정본이다.
+export async function fbSetVoyageWorkStart(voyageKey, ms, by) {
+  if (!voyageKey || !ms) return;
+  const d = new Date(ms);
+  const p2 = (n) => String(n).padStart(2, '0');
+  const txt = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  await update(ref(db, `voyages/${voyageKey}/info`), { workStartManual: txt, workStartManualAt: Date.now(), workStartManualBy: by || '' });
+  return txt;
+}
+
 // 양하/선적 섹션 데이터 저장 (mode = 'discharge' | 'loading')
 export async function fbSaveSectionData(voyageKey, mode, data) {
   await update(sectionRef(voyageKey, mode), data);

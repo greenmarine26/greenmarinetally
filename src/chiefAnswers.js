@@ -343,6 +343,12 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //  ⚠ 2.69: **조를 먼저 정한다** — 갱 수를 조별로 기억하므로(야간 3갱·내일 주간 2갱) 어느 조인지 알아야 몇 갱인지 안다.
   let shift = _currentShift(nowMs);
   let fromMs = Math.max(nowMs, shift.startMs || 0);
+  //  ★ 2.73: 검수사가 말로 알린 시작 시각이 있으면 **그 시각부터** 센다(창을 앞당기지는 않는다).
+  //    수집기 workStartAt(터미널 실제 시작)이 오면 아래에서 그것이 다시 이긴다 — 정본이 우선.
+  {
+    const wm = String(voyage?.info?.workStartManual || '').match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+    if (wm) fromMs = Math.max(fromMs, new Date(+wm[1], +wm[2] - 1, +wm[3], +wm[4], +wm[5]).getTime());
+  }
   const ws = String(voyage?.info?.workStartAt || '').trim();
   const wsM = ws.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
   if (wsM) fromMs = Math.max(fromMs, new Date(+wsM[1], +wsM[2] - 1, +wsM[3], +wsM[4], +wsM[5]).getTime());

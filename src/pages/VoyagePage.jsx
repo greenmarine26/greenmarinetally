@@ -15,7 +15,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -25,7 +25,7 @@ import {
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
   , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
-  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs} from '../firebase.js';   // 1.87: 엠티실 범위 저장
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart} from '../firebase.js';   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -2178,6 +2178,21 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
     gangSetRef.current = key;
     fbSetVoyageGangs(voyageKey, g.n, inspector || '', gangKeyFromWords(g.dayOff, g.shift)).catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
   }, [ask, voyageKey, inspector]);
+  //  ★ 2.73: «22:00부터 재계산» — 말로 알린 시작 시각도 같은 자리에서 항차에 적는다.
+  const startSetRef = useRef('');
+  useEffect(() => {
+    const q = String(ask?.q || '').trim();
+    if (!q || !voyageKey) return;
+    let hit = false;
+    try { hit = !!parseNaturalQuery(q).startSet; } catch (e) { hit = false; }
+    if (!hit) return;
+    const ms = parseSpokenTimeMs(q);
+    if (!ms) return;
+    const key = `${voyageKey}|${ms}|${q}`;
+    if (startSetRef.current === key) return;
+    startSetRef.current = key;
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '').catch((e) => console.warn('[2.73] 시작 시각 저장 실패', e));
+  }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');        // 폰 자판: 작업(숫자) 기본, ⌨로 질문(문자)
   const [listening, setListening] = useState(false);
   const [autoRead, setAutoRead] = useState(true);  // 조회 결과 1건이면 위치를 읽어준다
@@ -2772,6 +2787,21 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
     if (gangSetRef.current === key) return;
     gangSetRef.current = key;
     fbSetVoyageGangs(voyageKey, g.n, inspector || '', gangKeyFromWords(g.dayOff, g.shift)).catch((e) => console.warn('[2.68] 갱 수 저장 실패', e));
+  }, [ask, voyageKey, inspector]);
+  //  ★ 2.73: «22:00부터 재계산» — 말로 알린 시작 시각도 같은 자리에서 항차에 적는다.
+  const startSetRef = useRef('');
+  useEffect(() => {
+    const q = String(ask?.q || '').trim();
+    if (!q || !voyageKey) return;
+    let hit = false;
+    try { hit = !!parseNaturalQuery(q).startSet; } catch (e) { hit = false; }
+    if (!hit) return;
+    const ms = parseSpokenTimeMs(q);
+    if (!ms) return;
+    const key = `${voyageKey}|${ms}|${q}`;
+    if (startSetRef.current === key) return;
+    startSetRef.current = key;
+    fbSetVoyageWorkStart(voyageKey, ms, inspector || '').catch((e) => console.warn('[2.73] 시작 시각 저장 실패', e));
   }, [ask, voyageKey, inspector]);
   const [kb, setKb] = useState('numeric');
   const [listening, setListening] = useState(false);

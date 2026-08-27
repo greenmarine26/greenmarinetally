@@ -98,6 +98,7 @@ export function parseNaturalQuery(text) {
     //    ⚠ 여기서는 «무엇을 하라»만 담는다. 실행은 화면(GlobalSearchPage·SearchPanel)이 한다 —
     //      nlSearch 는 순수 함수로 두고 부작용을 섞지 않는다(기존 foodQuery 와 같은 방식).
     deviceCmd: null,   // { kind:'bright'|'volume', dir:+1|-1, to:1..4|'off', ask:true }
+    startSet: null,    // 2.73: { raw } — 말로 알린 작업 시작 시각(시각은 utils.parseSpokenTimeMs 가 읽는다)
     gangSet: null,     // 2.68: { n:1..4 } · 2.69: { dayOff:0|1|2|null, shift:'주간'|'야간'|null } — 조를 붙이면 그 조에만
     //  ★ 2.41: 미르가 선박 연락처(이메일)를 **답한다** — 발송·확답 추적은 범위 밖(검수사 확정).
     //    *«우리는 선박에 자료를 주고 확답을 받아야 합니다»*(본선 일항사와 메일로 컨펌) ·
@@ -332,7 +333,20 @@ export function parseNaturalQuery(text) {
     const _isGangQ = /갱\s*배분|배분\s*계획|내\s*갱|내\s*작업량|작업\s*량/.test(t);
     //  ★ 2.70-02 (검수사 실측): 되물었을 때 «2갱» 한마디로 답한다 — 그것만 치면 종전엔 답이 없었다.
     const _bareGang = /^\s*[1-4]\s*갱\s*(?:이요|입니다|이야|요|다)?\s*[.!]?\s*$/.test(t);
-    if (_isGangQ || _gset || _bareGang || (_gm && /배분|작업량/.test(t))) {
+    //  ★ 2.73 (검수사 «아직 작업시작을 안했는데 19:00부터 계산함 — 22:00시 부터 재계산 해달라»):
+    //    **시작 시각을 말로 알린다.** «22:00부터 재계산»·«22시부터»·«22시에 시작»·«작업 22시 시작».
+    //    ⚠ 도선·입항·출항 시각 이야기는 아니다(그건 다른 답) — 그 낱말이 있으면 안 잡는다.
+    if (!/도선|입항|출항|접안|파일럿/.test(t)) {
+      const _reCalc = /재\s*계산|다시\s*계산|계산\s*다시/.test(t);
+      //  ⚠ «몇 시 시작이야»·«언제 시작» 은 **묻는 말**이다 — 알림이 아니다.
+      const _asking = /몇\s*시|언제/.test(t);
+      const _startWord = !_asking && /시작|작업/.test(t);
+      const _hasTime = /(\d{1,2}\s*:\s*\d{2}|\d{1,2}\s*시)/.test(t);
+      if (!/몇\s*시|언제/.test(t) && _hasTime && (_reCalc || _startWord || /(\d{1,2}\s*시(\s*\d{1,2}\s*분|\s*반)?|\d{1,2}\s*:\s*\d{2})\s*부터/.test(t))) {
+        result.startSet = { raw: t };
+      }
+    }
+    if (_isGangQ || _gset || _bareGang || result.startSet || (_gm && /배분|작업량/.test(t))) {
       result.gangQuery = { n: _gm ? parseInt(_gm[1], 10) : null };
     }
   }
