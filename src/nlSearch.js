@@ -4,7 +4,7 @@
 //  - M3.3 신규: 베이 용량(capacity), 베이별 분포(bayBreakdown),
 //               진행 상황(progress: done/pending),
 //               베이 단수(stack), 바닥/꼭대기(bottom/top), 빈자리(vacant)
-import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
+import { isoToLabel, fmtPos, normalizeBay, formatWt, isReeferContainer, isPyeongtaekPort, APP_VERSION, planWorkStart, pilotToWorkMin, getPierFromBerth, describeMovePath, dupSealMap, overDims, workingShiftName, sideCancelled} from './utils.js';   // TallyOne 1.22: 도선→작업개시   // 1.76-05: 실번호 중복 판정 단일 소스
 // TallyOne 1.65: 자연어가 앱 기능을 설명한다 — 매뉴얼·기능색인이 곧 지식원이다.
 import { FEATURE_INDEX, FEATURE_SYNONYMS } from './data/featureIndex.js';
 import { HELP_DATA, HELP_COURSE } from './data/helpData.js';
@@ -1589,6 +1589,13 @@ export function briefingVoiceLines(txt) {
 export function generateBriefing(containers, modeLabel, mode = 'discharge', pairsMap = null, pier = '', opts = null) {   // V7.93: pairsMap·pier — 트윈 무게 예견 · 1.86: opts.rfSkip(머스크류 — 리퍼 체크 안 함)
   // V7.90-07 재구성 (사용자 피드백): ① 평택분(작업 대상)만 집계 — 통과화물 포함 금지(7.1)
   //   ② 일반 통계 나열 대신 "검수원이 인지해야 할 특이사항" 중심, 행동 지향 문구.
+  //  ★ 2.66 (검수사 확정): 배정목록이 «그 쪽 0» 이라고 말하면 리스트가 남아 있어도 **일이 없는 것**이다.
+  //    PCSZ 2626W 전량 캔슬 실측 — 캔슬 통보 메일에 붙어 온 리스트 때문에 선적 63대를 브리핑하고 있었다.
+  if (opts && opts.cancelled) {
+    const nList = (containers || []).filter((c) => (mode === 'discharge' ? isPyeongtaekPort(c.pod) : isPyeongtaekPort(c.pol))).length;
+    return `⛔ ${modeLabel} 없음 — 배정목록 ${modeLabel} 0대 (전량 캔슬)`
+      + (nList ? `\n📌 받은 리스트 ${nList}대는 실리지 않습니다 — 자료는 참고로 남겨 둡니다` : '');
+  }
   let all = containers || [];
   //  2.55: 항차 화면은 완료를 `opts.compMap` 으로 따로 넘긴다(generateLocalAnswer 와 같은 구멍) —
   //  안 입히면 브리핑 진행 줄이 «완료 0» 이 된다.

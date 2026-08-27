@@ -7,7 +7,7 @@
 //
 // 답의 원칙 (학습서 0절): 결론부터 한 줄 · 데이터 없으면 정직 고지 · 계산 답에는 근거 한 줄과
 //   "최종은 포맨 지시가 우선" · 시간 답에는 "2갱 기준, 1갱이면 ×2".
-import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift } from './utils.js';   // 2.65-01: 조 경계 한 벌
+import { isPyeongtaekPort, normalizeBay, shiftingMapForDisplay, currentShift, sideCancelled } from './utils.js';   // 2.65-01: 조 경계 한 벌
 import { addWorkMinutes, speedFromTerminal, workMinutesBetween } from './nlSearch.js';
 import { autoPairBays } from './cargoPlanCore.js';   // 2.63-01: 짝 판정은 카고플랜 한 벌 — CASP 정본(32·33·34 단독)을 아는 그 판정   // 2.54: 지나간 실작업 시간   // 2.54-01: 판정 한 벌 — 계산은 nlSearch 에 둔다   // 2.62: 조(근무조) 창 계산도 같은 한 벌
 
@@ -21,7 +21,7 @@ const _hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinut
 // ─── 갱 분배의 공용 뿌리 ─────────────────────────────────────────────
 // 베이사전 baysSummary(pairEven)로 «장(시트) 그룹»을 만들고, 그룹별 평택분 무브수를 센다.
 // 크레인은 서로 못 넘으므로 절단은 그룹 경계 위 «연속 구간»으로만 한다(학습서 2-F #96).
-export function buildGangPlan(voyage, bayDef) {
+export function buildGangPlan(voyage, bayDef, opts = {}) {   // 2.66: opts.tw — 캔슬 판정에 터미널 실황을 같이 본다
   const bays = (bayDef && bayDef.baysSummary) || [];
   if (!bays.length) return null;
   const byNo = {};
@@ -57,6 +57,8 @@ export function buildGangPlan(voyage, bayDef) {
   groups.forEach((g, i) => g.members.forEach((m) => { idxOfBay[m] = i; }));
   // 평택분 무브 집계
   for (const [mode, kd, kz] of [['discharge', 'dis', true], ['loading', 'lod', false]]) {
+    //  2.66: 배정목록이 «그 쪽 0» 이면(전량 캔슬) 그 쪽은 갱 배분에서도 뺀다 — 없는 일을 나눌 수 없다.
+    if (sideCancelled(voyage?.info, mode, opts.tw)) continue;
     for (const c of _list(voyage?.[mode]?.ediContainers)) {
       if (!_ptk(c, mode)) continue;
       const g = groups[idxOfBay[_bayN(c)]];
@@ -285,7 +287,7 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   const nGangs = Math.min(4, Math.max(1, opts.nGangs || 2));
   const nowMs = opts.now || Date.now();
   const pier = voyage?.info?.pier || '';
-  const plan = buildGangPlan(voyage, bayDef);
+  const plan = buildGangPlan(voyage, bayDef, { tw: opts.tw });
   if (!plan) return null;
   const sp = (opts.tw) ? speedFromTerminal(voyage?.info, opts.tw ? { [String(voyage?.info?.vsl || '').toUpperCase()]: opts.tw } : null) : null;
   const perGangHour = sp && sp.perGangHour > 0 ? sp.perGangHour : 0;

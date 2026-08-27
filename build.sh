@@ -378,6 +378,13 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.66: **전량 캔슬** — 배정목록이 0이라고 말하는 쪽을 앱이 세지 않는가.
+    SMOKE_U="tools/_smokeu_tmp.cjs"; SMOKE_N="tools/_smoken_tmp.cjs"
+    npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="$SMOKE_U" --log-level=error \
+      && npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_N" --log-level=error \
+      && node tools/smoke_cancelled.cjs "$SMOKE_U" "$SMOKE_N" "$(pwd)" || { rm -f "$SMOKE_U" "$SMOKE_N"; echo "✗ 전량 캔슬 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_U" "$SMOKE_N"
+
     #  2.65: **브리핑 낭독** — 첫 줄만 읽고 끝나던 것 재발 금지(검수사: 한번은 정확히 들어야 합니다).
     SMOKE_BV="tools/_smokebv_tmp.cjs"
     npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_BV" --log-level=error \

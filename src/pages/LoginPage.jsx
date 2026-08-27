@@ -12,7 +12,7 @@ import logoUrl from '../assets/logo-tallyone.png';
 import { getStaffRole, isChief, STAFF_NAMES, displayRole, isHiddenStaff } from '../staffList.js';   // 1.71: 직책 표시 단일 소스
 import { inspectorStatus, WORKING_WINDOW_MS } from '../inspectorStatus.js';   // 2.4x: 인원 0 경고 - 판정은 이 상수 한 벌(새로 안 만든다)
 import { rememberMe, getMeToday } from '../meToday.js';   // 2.22: 오늘 로그인한 본인은 목록에 남는다
-import { dayDiff, dayLabel, voyagePlanMs, isWorkingNow, isoFeet, isReeferContainer } from '../utils.js';   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
+import { dayDiff, dayLabel, voyagePlanMs, isWorkingNow, isoFeet, isReeferContainer, sideCancelled} from '../utils.js';   // 2.10: PC 좌측 현황판 · 2.4x: 수량 배지(20FT·리퍼)
 import {
   MAX_TRUSTED_DEVICES,
   getAdminDeviceId, hashPassword, makeSalt, deviceLabel,
@@ -290,7 +290,11 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         //   iso·fe·rf 를 그대로 센다(판정은 전부 기존 utils 헬퍼 -- isoFeet·fe==='E'·isReeferContainer,
         //   새로 만들지 않는다).
         let c20 = 0, mty = 0, rf = 0;
-        const allC = [...(d ? Object.values(d) : []), ...(l ? Object.values(l) : [])];
+        //  2.66: 배정목록이 0이라고 말하는 쪽(전량 캔슬)은 배지에서 뺀다 — 실측 PCSZ 2626W:
+        //    «20FT 46» 중 28대·«MTY 1»·«리퍼 1» 이 전부 캔슬된 선적분이었다(양하는 엠티·리퍼 0).
+        const _cancL = sideCancelled(v?.info, 'loading');
+        const _cancD = sideCancelled(v?.info, 'discharge');
+        const allC = [...((d && !_cancD) ? Object.values(d) : []), ...((l && !_cancL) ? Object.values(l) : [])];
         for (const c of allC) {
           if (isoFeet(c?.iso) === 20) c20++;
           if (c?.fe === 'E') mty++;

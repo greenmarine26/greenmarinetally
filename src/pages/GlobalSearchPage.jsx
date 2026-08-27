@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
-import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery} from '../utils.js';
+import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled} from '../utils.js';
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateTimeAnswer, generateWakeAnswer, generateIntroAnswer, generateHowToAnswer, generateLocalAnswer, answerHowCore, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, generateBriefing, formatCarriers, generateContactAnswer } from '../nlSearch.js';   // 1.85: 통합검색 브리핑 즉답 · 1.89: 관련 선사 · 2.41: 선박 연락처
 import { logQuerySettled } from '../activityLog.js';   // 2.55-01: 홈·수석창 질문 기록
 import { useCarrierContacts, useShipSpeed, useEdiPattern, useDamageIndex } from '../useCarrierContacts.js';   // 1.89·1.92·1.97·2.03
@@ -555,7 +555,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           if (wantMode && mode !== wantMode) continue;
           const arr = mine.filter((c) => c._mode === mode);
           if (!arr.length) continue;
-          try { const _gde = (() => { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(shipCtx.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; })(); const _gtw = (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null; const _gg = (() => { try { return gangBriefLines(buildGangShift(shipCtx.v, _gde, { tw: _gtw })); } catch (e) { return null; } })(); parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: _gtw, gang: _gg })); } catch (e) { /* 폴백 아래로 */ }
+          try { const _gde = (() => { const d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(shipCtx.info?.vsl || '').toUpperCase()] : null; return d ? (d.bayDef || d) : null; })(); const _gtw = (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null; const _gg = (() => { try { return gangBriefLines(buildGangShift(shipCtx.v, _gde, { tw: _gtw })); } catch (e) { return null; } })(); parts.push(`【${kr}】\n` + generateBriefing(arr, kr, mode, null, '', { photos: shipCtx.v?.photos || null, tw: _gtw, gang: _gg, cancelled: sideCancelled(shipCtx.info || shipCtx.v?.info, mode, _gtw) })); } catch (e) { /* 폴백 아래로 */ }
         }
         if (parts.length) return `${ship}\n` + parts.join('\n\n') + '\n\n(상세 확인 버튼은 항차 화면 ▶ 작업 시작 탭에 있습니다)';
       }

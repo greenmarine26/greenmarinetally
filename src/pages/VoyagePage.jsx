@@ -15,7 +15,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -1384,6 +1384,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           검수사 원문: *"말 그대로 예보입니다. 선적 갯수를 리스트 형식에 맞춰 보여 줘야하고 덱 그림도 보여 줘야 합니다."*
           ⚠ 배치가 아니다 — *"덱에 넣으라는 이야기가 아니고요"*. 개수와 그림을 **보여주기만** 한다.
           리스트가 들어오면 이 카드는 사라지고 실자료가 그 자리를 대신한다. */}
+      {/* ★ 2.66 (검수사 확정): 배정목록이 «이 쪽 0» 이면 목록이 남아 있어도 **실리지 않는 물량**이다.
+          PCSZ 2626W — 캔슬 통보 메일에 리스트가 붙어 와 수집기가 그대로 먹었다. 자료는 지우지 않고 이유를 붙인다. */}
+      {sideCancelled(voyage?.info, mode, (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null) && (
+        <div className="mx-3 lg:mx-0 mb-2 rounded-btn border border-st-bad/40 bg-st-bad/10 px-3 py-2 text-xs2">
+          <b className="text-st-badHi">⛔ {mode === 'discharge' ? '양하' : '선적'} 없음 — 배정목록 {mode === 'discharge' ? '양하' : '선적'} 0대 (전량 캔슬)</b>
+          <div className="text-dim-300 mt-0.5">아래 목록은 취소된 물량입니다 — 자료는 참고로 남겨 둡니다. 배정목록이 다시 수량을 올리면 자동으로 풀립니다.</div>
+        </div>
+      )}
       {tab === 'list' && <ForecastCard voyage={voyage} mode={mode} />}
       {tab === 'list' && mode === 'loading' && esealInfo && (
         <EsealRangeCard voyageKey={voyageKey} info={esealInfo} inspector={inspector} />
@@ -2589,7 +2597,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
       if (parsed?.briefingQuery) {
         //  ★ 2.57: 말투 출구 겹(mirTone) — 다른 화면(SearchPanel:1112)과 동일하게 여기도 입힌다
         return mirTone(generateBriefing(containers, mode === 'discharge' ? '양하' : '선적', mode,
-          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null, compMap: briefCtx?.comp || null, gang: (briefCtx?.gangBrief ? briefCtx.gangBrief() : null) }));   // 2.62: 호출 시점 계산 — 실시간
+          briefCtx?.pairs || null, pier, { rfSkip: !!briefCtx?.rfSkip, eseal: mode === 'loading' ? (briefCtx?.eseal || null) : null, photos: briefCtx?.photos || null, tw: (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null, compMap: briefCtx?.comp || null, gang: (briefCtx?.gangBrief ? briefCtx.gangBrief() : null), cancelled: sideCancelled(briefCtx?.info, mode, (briefCtx?.terminalWork || {})[String(vsl || '').toUpperCase()] || null) }));   // 2.62: 호출 시점 계산 — 실시간
       }
       if (parsed?.sealAuditQuery) return mirTone(generateSealAuditAnswer(containers, mode === 'discharge' ? '양하' : '선적'));   // ★ 2.57: 말투 한 겹
       //  2.54-01: **터미널 실적**을 같이 넘긴다 — 앱 기록(_comp)만 보면 «아직 시작 전» 이 나온다(실측).
