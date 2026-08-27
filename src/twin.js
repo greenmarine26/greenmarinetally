@@ -57,19 +57,26 @@ function buildBayPairs(allContainers, shipImo = '', shipName = '') {
   //   ★ 짝수 베이 유무는 '실제 베이 구조(matrix/사전/EDI)' 기준이지 40ft 적재 여부가 아님.
   // M3.86 fix: pairs 키와 값을 정수 문자열로 통일
   const pairs = {}; // 'XX' → 'YY' or null (단독)
+  //  🔴 2.72 (검수사 실측 2026-08-28 «베이 29 (30)31이 되어야 하는데 잘못됨»):
+  //    **이미 남의 짝인 홀수는 다시 쓰지 않는다.** 2.55-02 가 카고플랜(autoPairBays)에 넣은 그 가드가
+  //    여기에는 없어서, SWTD 에서 29 가 31 을 데려간 뒤에도 31 이 33 을 또 데려갔다
+  //    → 자동 가이드 베이 묶음이 «B29·30 / B31·32·33» 으로 갈렸다(CASP 정답: 29·(30)31 · 32 · 33 · 34).
+  //    ⚠ 짝 짓기가 이 저장소에서 **네 번째로** 두 벌이었다(카고플랜·베이플랜·콘앱 다음이 여기).
+  //    작은 번호부터 순서대로 claim 한다 — 앞 짝수 우선(autoPairBays 와 같은 방향).
+  const usedOdds = new Set();
   for (const b of bayInts) {
     if (b % 2 === 0) continue;
-
     const bStr = String(b);
-
+    if (usedOdds.has(b)) { pairs[bStr] = pairs[bStr] || null; continue; }
     let pairBay = null;
-    if (baySet.has(b + 1) && baySet.has(b + 2)) {
+    if (baySet.has(b + 1) && baySet.has(b + 2) && !usedOdds.has(b + 2)) {
       pairBay = String(b + 2);
     }
-    else if (baySet.has(b - 1) && baySet.has(b - 2)) {
+    else if (baySet.has(b - 1) && baySet.has(b - 2) && !usedOdds.has(b - 2)) {
       pairBay = String(b - 2);
     }
     pairs[bStr] = pairBay;
+    if (pairBay) { usedOdds.add(b); usedOdds.add(parseInt(pairBay, 10)); pairs[pairBay] = bStr; }
   }
 
   if (!containerCache) cache.set(allContainers, {});

@@ -121,4 +121,31 @@ const dupOf = (r) => {
 }
 
 if (bad) { console.error(`\n✗ 베이 짝 연막검사 ${bad}건 실패`); process.exit(1); }
+//  ★ 2.72 (검수사 실측 2026-08-28 «베이 29 (30)31이 되어야 하는데 잘못됨»):
+//    **트윈 짝(twin.buildBayPairs)에도 같은 가드가 있어야 한다.** 여기 없어서 자동 가이드의 베이 묶음이
+//    «B29·30 / B31·32·33» 으로 갈렸다 — 29 가 31 을 데려간 뒤 31 이 33 을 또 데려갔기 때문.
+//    ⚠ 짝 짓기가 두 벌이던 자리가 이 저장소에서 네 번째다(카고플랜·베이플랜·콘앱 다음).
+{
+  const _fs = require('fs'), _p = require('path');
+  const twSrc = _fs.readFileSync(_p.join(process.argv[3] || process.cwd(), 'src/twin.js'), 'utf8');
+  T(/const usedOdds = new Set\(\);/.test(twSrc) && /!usedOdds\.has\(b \+ 2\)/.test(twSrc),
+    'twin.buildBayPairs 에 «이미 남의 짝인 홀수» 가드가 없다 — 자동 가이드 베이 묶음이 갈린다');
+  //  SWTD 실 베이(CASP 도면 그대로) 로 판정한다
+  const bays = [1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23,25,26,27,29,30,31,32,33,34];
+  const set = new Set(bays);
+  const used = new Set(); const p = {};
+  for (const b of bays) {
+    if (b % 2 === 0) continue;
+    const s2 = String(b);
+    if (used.has(b)) { p[s2] = p[s2] || null; continue; }
+    let q = null;
+    if (set.has(b + 1) && set.has(b + 2) && !used.has(b + 2)) q = String(b + 2);
+    else if (set.has(b - 1) && set.has(b - 2) && !used.has(b - 2)) q = String(b - 2);
+    p[s2] = q; if (q) { used.add(b); used.add(parseInt(q, 10)); p[q] = s2; }
+  }
+  T(p['29'] === '31', `SWTD 29 의 짝이 31 이 아니다 (${p['29']}) — «29 (30)31» 이 한 묶음이어야 한다`);
+  T(p['33'] === null, `SWTD 33 이 단독이 아니다 (${p['33']}) — CASP 도면은 32·33·34 각각 단독`);
+  T(p['25'] === '27' && p['27'] === '25', '보통 트리오(25·26·27)가 깨졌다 — 회귀');
+}
+
 console.log('✅ 베이 짝 연막검사 통과 — 두 번 쓰임 0 · SWTD=CASP 도면 · 보통 배 무변화 · 잃은 베이 0');
