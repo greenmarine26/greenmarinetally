@@ -437,7 +437,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
         if (isFirstQ) return answerFirstStart(_voy, _bayDef, _ship);
         if (isXrayShiftQ) return answerXrayShifts(_voy, _bayDef, { shipName: _ship, pier: shipCtx.info.pier });
         if (isShiftBriefQ) return answerShiftBriefing(_voy, _bayDef, { shipName: _ship, voyages });
-        if (p.gangQuery) { try { const _a = answerGangShift(_voy, _bayDef, { nGangs: p.gangQuery.n || 2, tw: (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null }); if (_a) return `${_ship}\n` + _a; } catch (e) { /* 아래로 */ } }   // 2.62
+        if (p.gangQuery) { try { const _a = answerGangShift(_voy, _bayDef, { nGangs: p.gangQuery.n || null, tw: (terminalWork || {})[String(shipCtx.info?.vsl || '').toUpperCase()] || null }); if (_a) return `${_ship}\n` + _a; } catch (e) { /* 아래로 */ } }   // 2.62
       }
     }
     // ★ 2.57-02 (검수사 시험 «두 곳에서 FR을 물었습니다. 답이 같았습니까?» — 달랐다):

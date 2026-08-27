@@ -58,5 +58,11 @@ T(/gs\.askGangs\) return \[/.test(ca), '브리핑 줄이 모르는 갱 수로 �
 T(P('관리씰').type === 'xray' && P('관리 씰 어디').type === 'xray', '«관리씰» 을 X-RAY 로 못 알아듣는다');
 T(P('인원 관리').type !== 'xray' && P('관리자 누구').type !== 'xray', '«관리» 한 낱말까지 X-RAY 로 먹는다');
 
+//  2.70-01: 호출부가 «|| 2» 로 못 박으면 기억·되묻기가 통째로 죽는다(라이브에서 그랬다).
+for (const f of ['src/pages/VoyagePage.jsx', 'src/components/SearchPanel.jsx', 'src/pages/GlobalSearchPage.jsx']) {
+  T(!/nGangs: [^,]*\|\| 2\b/.test(rd(f)), `${f} 가 갱 수를 2로 못 박는다 — 기억시킨 값도 되묻기도 안 먹는다`);
+}
+T(/gs\.askGangs \|\| !Array\.isArray\(gs\.strip\)/.test(rd('src/components/GangStrip.jsx')), '되묻는 상태에서 그림이 터질 수 있다');
+
 if (bad > 0) { console.error(`✗ 갱 수 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 갱 수 연막검사 통과 — 말 7 · 저장·반영 7 · 조별 8 · 되묻기 6 · 관리씰 2');
+console.log('✓ 갱 수 연막검사 통과 — 말 7 · 저장·반영 7 · 조별 8 · 되묻기 6 · 관리씰 2 · 호출부 4');

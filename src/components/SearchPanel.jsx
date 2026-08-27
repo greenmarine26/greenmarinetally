@@ -1110,7 +1110,8 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
       ? results.filter(c => (modeChoice === 'loading' ? c._mode === 'loading' : c._mode !== 'loading'))
       : results;
     return generateLocalAnswer(effParsed, effResults, allContainers.filter(c => c._ptk),
-      { ...manualCtx, gangShift: (n) => { try { return answerGangShift(voyage, _gangDe, { nGangs: n || 2, tw: _gangTw }); } catch (e) { return null; } }, carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
+      { ...manualCtx, gangShift: (n) => { try { return answerGangShift(voyage, _gangDe, { nGangs: n || null, tw: _gangTw, compMap: null }); } catch (e) { return null; } },   // 2.70-01: 2 로 못 박지 않는다 — 기억·되묻기가 살아야 한다
+        carrierContacts, shipSpeed, vsl: voyage?.info?.vsl, vslFull: voyage?.info?.vslFull, pier: voyage?.info?.pier, terminalWork, photos: voyage?.photos || null,   // 1.89·1.93-01·2.05-01(데미지 버튼)   // 2.54-01: 터미널 실적
         shiftMap: shiftingMapForDisplay(voyageKey, voyage) });   // V7.92-02: 집계는 평택분만 / V7.99-10: 작업 단 맥락 / 2.08-15: 확정 이적 0이면 허수 제외(한 벌)
   }, [parsed, results, allContainers, query, workFilter, weatherText, portMisData, voyage, manualCtx, handoverNote, handoverFinalized, inspector, diagAlerts, terminalWork, carrierContacts, modeChoice, shipSpeed, shipContacts]);   // 2.41: 선박 연락처
   const _mirAnswer = useMemo(() => {   // 2.33: 말투 출구 한 겹 · 2.34: 기본 지식 결합 · 2.47: 미르의 눈
@@ -1613,7 +1614,7 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
           </div>
           {reasked && askedAt && <div className="text-xxs text-emerald-300 font-bold mb-1">다시 확인했습니다 ({_hm(askedAt)} 기준)</div>}
           <div className="text-sm text-dim-100 whitespace-pre-wrap leading-relaxed mono">{localAnswer}</div>
-          {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || 2, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
+          {(() => { try { const _p = parsed; if (!_p?.gangQuery) return null; const _d = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[String(voyage?.info?.vsl || '').toUpperCase()] : null; const _de = _d ? (_d.bayDef || _d) : null; const _gs = buildGangShift(voyage, _de, { nGangs: _p.gangQuery.n || null, tw: (terminalWork || {})[String(voyage?.info?.vsl || '').toUpperCase()] || null }); return _gs ? <GangStrip gs={_gs} /> : null; } catch (e) { return null; } })()}
           {/* 1.91-02: 되묻기 버튼 — 양하/선적 선택 시간을 주고, 8초 무응답이면 둘 다 */}
           {needsModeChoice(parsed, results) && modeChoice === null && (
             <div className="mt-2 flex gap-2">

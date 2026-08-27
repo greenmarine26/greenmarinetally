@@ -8,7 +8,8 @@ const GANG_C = ['', '#378ADD', '#ea8a4a', '#8b7cf0', '#4ac0a8'];   // 1~4번 갱
 const GANG_LIGHT = ['', 'rgba(55,138,221,0.28)', 'rgba(234,138,74,0.28)', 'rgba(139,124,240,0.28)', 'rgba(74,192,168,0.28)'];
 
 export default function GangStrip({ gs }) {
-  if (!gs || !Array.isArray(gs.strip) || !gs.strip.length) return null;
+  //  2.70-01: 갱 수를 몰라 되묻는 상태(askGangs)면 그림이 없다 — gangs 까지 확인한다(48행이 map 한다).
+  if (!gs || gs.askGangs || !Array.isArray(gs.strip) || !gs.strip.length || !Array.isArray(gs.gangs)) return null;
   const doneShiftKeys = [...new Set(gs.strip.flatMap((g) => Object.keys(g.doneBy || {})))];
   return (
     <div className="mt-2 bg-ink-950 border border-line rounded-btn p-2">
