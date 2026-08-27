@@ -346,6 +346,20 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     rolled++;
   }
   if (availH <= 0.01) return null;
+  //  ★ 2.62-04 (검수사 실측 «입항계획 변경을 놓치신듯 — 앱은 판단을 했는데 미르는 앱과 틀린 답»):
+  //    SWTD 가 19:00→21:00 으로 밀렸을 때 계산(availH 8.0h)은 21:00 을 반영했는데 **라벨이
+  //    «19:00~06:30» 고정**이라 말이 옛 시각을 했다. 실제 시작이 조 명목 시작보다 늦으면 라벨에 쓴다.
+  {
+    const _end = new Date(shift.endMs);
+    const _nom = new Date(shift.endMs);
+    if (shift.name === '야간조') { _nom.setTime(shift.endMs - 86400000); _nom.setHours(19, 0, 0, 0); }
+    else _nom.setHours(8, 0, 0, 0);
+    const _f0 = Math.max(fromMs, shift.startMs || 0);
+    if (_f0 > _nom.getTime() + 25 * 60000) {
+      const f = new Date(_f0);
+      shift = { ...shift, label: `${String(f.getHours()).padStart(2, '0')}:${String(f.getMinutes()).padStart(2, '0')} 시작~${String(shift.label).split('~')[1]}` };
+    }
+  }
   //  갱별 소진 — 남은 그룹을 순서대로. from=첫 미완 그룹, to=조 끝에 닿는 그룹.
   const gangs = split.segs.map((seg, gi) => {
     //  ★ 2.62-03 (검수사 확정 «보통 선미와 중간부분부터 진행합니다» — NSFR 실측 GC103=11~13·GC104=23~25 도
