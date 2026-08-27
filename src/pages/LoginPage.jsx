@@ -553,13 +553,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         <div className="px-3.5 pb-2 shrink-0 lg:px-0">
           {hiddenCount > 0 && !showAll && (
             <button onClick={() => setShowAll(true)}
-              className="w-full h-11 rounded-[14px] border border-dashed border-line-faint text-xs2 font-bold text-dim-400 hover:text-dim-200 hover:border-line-strong">
+              className="w-full h-11 lg:h-9 rounded-[14px] border border-dashed border-line-faint text-xs2 font-bold text-dim-400 hover:text-dim-200 hover:border-line-strong">
               로그인 안 된 작업자 {hiddenCount}명 보기
             </button>
           )}
           {showAll && (
             <button onClick={() => setShowAll(false)}
-              className="w-full h-11 rounded-[14px] border border-dashed border-line-faint text-xs2 font-bold text-dim-400 hover:text-dim-200">
+              className="w-full h-11 lg:h-9 rounded-[14px] border border-dashed border-line-faint text-xs2 font-bold text-dim-400 hover:text-dim-200">
               로그인한 작업자만 보기
             </button>
           )}
@@ -567,7 +567,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
 
         {/* ── 직접 입력 + 로그인 — 2.11: 폰은 시트 하단에 고정(shrink-0), PC 는 종전 흐름 ── */}
         <div className="shrink-0 bg-ink-900 border-t border-line-faint px-3.5 pt-3.5 pb-3.5 shadow-[0_-8px_24px_rgba(0,0,0,0.25)]
-                        lg:bg-transparent lg:border-line lg:px-0 lg:pb-0 lg:shadow-none lg:mb-3">
+                        lg:bg-transparent lg:border-line lg:px-0 lg:pb-0 lg:shadow-none lg:mb-2">
           <div className="hidden lg:block text-xxs text-dim-300 mb-1.5 font-bold">목록에 없으면 이름 직접 입력</div>
           <div className="flex gap-2.5 items-center">
             <input
@@ -599,7 +599,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           disabled={!selected}
           className="w-full h-[60px] mt-3 rounded-[18px] font-black text-base flex items-center justify-center gap-2 transition-all active:scale-[0.99]
                      bg-gradient-to-r from-act-dn to-act-hi hover:brightness-110 shadow-[0_10px_24px_rgba(0,209,143,0.28)]
-                     disabled:bg-none disabled:bg-ink-800 disabled:text-dim-500 disabled:shadow-none text-act-on lg:h-auto lg:py-3.5 lg:rounded-btn lg:mt-0"
+                     disabled:bg-none disabled:bg-ink-800 disabled:text-dim-500 disabled:shadow-none text-act-on lg:h-auto lg:py-2.5 lg:rounded-btn lg:mt-2"
         >
           <LogIn className="w-5 h-5"/>{selected ? `${selected} 님으로 시작` : '작업자를 선택해주세요'}
         </button>
