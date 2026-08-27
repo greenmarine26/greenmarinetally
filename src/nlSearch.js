@@ -732,6 +732,7 @@ export function describeQuery(parsed) {
 
 export function hasAnyCondition(parsed) {
   return !!(parsed.shiftingQuery ||   // TallyOne 1.27
+            parsed.gangQuery ||   // 2.62-02: 갱 배분 — 이게 빠져 본체 도달 전에 null 로 잘렸다(라이브 실측: 질문 접수만 찍히고 무응답)
             parsed.digits || parsed.size || parsed.fe || parsed.type ||
             parsed.bay || parsed.pol || parsed.pod || parsed.portAny ||
             parsed.zone || parsed.dgClass || parsed.un || parsed.mode ||

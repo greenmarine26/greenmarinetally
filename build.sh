@@ -379,7 +379,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.62: **갱 배분** — 조 단위 «내 작업량»이 실데이터에서 서고 실시간으로 줄어드는가.
-    node tools/smoke_gangshift.cjs "$SMOKE_CA" "$(pwd)" || { echo "✗ 갱 배분 연막검사 실패 — 배포 금지"; exit 1; }
+    node tools/smoke_gangshift.cjs "$SMOKE_CA" "$(pwd)" "$SMOKE_NS" || { echo "✗ 갱 배분 연막검사 실패 — 배포 금지"; exit 1; }
     #  2.55: **두 숫자** — 대수를 물으면 실제(터미널)와 앱 기록이 둘 다 나오는가.
     #    같은 번들을 쓴다. 가로채지 않는 것까지 잰다(겹을 넓히는 판은 그쪽이 더 위험하다).
     node tools/smoke_bothcounts.cjs "$SMOKE_NS" || { echo "✗ 두 숫자 연막검사 실패 — 배포 금지"; exit 1; }
