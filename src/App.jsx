@@ -361,8 +361,11 @@ export default function App() {
   // ── TallyOne 1.0: 로그인 게이트 — 로그인 전에는 어떤 라우트도 렌더하지 않는다. ──
   //   로그인 상태에서 #/login에 오면 검수원 변경 화면(돌아가기 버튼 제공).
   if (!inspector || route.name === 'login') {
+    //  2.64-01 (검수사 «페이지 스크롤이 생기면 불편합니다 맞춤처럼 한화면에 보였으면»):
+    //    PC 는 화면 높이에 딱 맞춘다 — 겉은 절대 안 구르고(overflow-hidden), 화면이 짧으면
+    //    안쪽 판이 스스로 구른다. 폰(lg 미만)은 손대지 않았다.
     return (
-      <div className="min-h-screen bg-ink-950 text-dim-100">
+      <div className="min-h-screen bg-ink-950 text-dim-100 lg:h-screen lg:min-h-0 lg:overflow-hidden lg:flex lg:flex-col">
         <UpdatePrompt/>
         <LoginPage
           pilotForecast={pilotForecast}   // 2.64: 로그인 타임라인 도선 마커
@@ -384,7 +387,7 @@ export default function App() {
             onClose={handleCloseGreeting}
           />
         )}
-        <footer className="text-center text-[11px] text-dim-500 pb-8 pt-2 leading-relaxed">
+        <footer className="text-center text-[11px] text-dim-500 pb-8 pt-2 leading-relaxed lg:pb-1.5 lg:pt-0.5 lg:shrink-0">
           © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>
           <span className="opacity-70">{APP_VERSION}</span>
         </footer>

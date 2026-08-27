@@ -307,14 +307,16 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
   const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
 
   return (
-    <div className="min-h-screen bg-ink-950 text-dim-100 lg:bg-ink-950 lg:px-6 lg:py-8">
-      <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:max-w-[1500px] lg:mx-auto lg:items-start">
+    <div className="min-h-screen bg-ink-950 text-dim-100 lg:bg-ink-950 lg:px-6 lg:py-4 lg:min-h-0 lg:flex-1 lg:flex lg:flex-col lg:overflow-hidden">
+      {/*  2.64-01: 위 칸(현황판·로그인)은 남는 높이를 먹고, 아래 칸(타임라인)은 제 키만.
+          minmax(0,1fr) 이라야 안쪽 판이 넘칠 때 격자가 늘어나지 않고 판이 구른다. */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-4 lg:max-w-[1500px] lg:mx-auto lg:w-full lg:flex-1 lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_auto]">
 
       {/* == PC 전용 좌측 현황판 (폰에서는 숨김 -- 종전 화면 불변) == */}
       {/* 2.4x (검수사 확정 -- 시안 "구조"만 채용, 데이터는 실물): 헤더 한 줄 통합.
           이 패널은 배경 · 테두리를 반드시 토큰(bg-ink-950 / border-line)으로만 그린다 -- 시안처럼
           hex 그라디언트를 박아두면 밝기 4단계(2.40)에서 이 패널만 항상 어둡게 남는 "섬"이 된다. */}
-      <div className="hidden lg:block rounded-card border border-line p-7 bg-ink-950">
+      <div className="hidden lg:block rounded-card border border-line p-5 bg-ink-950 lg:min-h-0 lg:overflow-y-auto">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <img src={logoUrl} alt="TallyOne" draggable="false"
@@ -410,7 +412,7 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         </div>
       </div>
 
-      <div className="min-h-screen flex flex-col lg:min-h-0 lg:rounded-card lg:border lg:border-line lg:bg-ink-900/40 lg:p-7">
+      <div className="min-h-screen flex flex-col lg:min-h-0 lg:rounded-card lg:border lg:border-line lg:bg-ink-900/40 lg:p-5 lg:overflow-y-auto">
         {/* 2.10: PC 는 좌측 패널에 로고가 이미 크게 있다 — 시안대로 「작업자 선택」 제목으로 대체 */}
         <div className="hidden lg:block mb-5">
           <h2 className="text-2xl font-black text-dim-100">작업자 선택</h2>

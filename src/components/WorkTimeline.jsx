@@ -12,6 +12,8 @@ export function tlPos(ms, day0) {
   return p < 0 ? 0 : p > 100 ? 100 : p;
 }
 
+const ROW_H = 22;   //  배 한 척이 차지하는 세로 칸(2.64-01 — 한 화면 맞춤)
+
 export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(t); }, []);
@@ -33,9 +35,10 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
     gaps.push([day0 + d * 24 * H + 17.5 * H, day0 + d * 24 * H + 19 * H]);    // 17:30~19:00
   }
   return (
-    <div className="mt-5 bg-ink-950/60 border border-line rounded-card p-4">
-      <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-3 font-bold">■ 오늘 · 내일 작업 타임라인 — LIVE</div>
-      <div className="relative border border-line rounded overflow-hidden bg-ink-900/40" style={{ height: 28 + rows.length * 26 }}>
+    <div className="bg-ink-950/60 border border-line rounded-card p-3">
+      <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">■ 오늘 · 내일 작업 타임라인 — LIVE</div>
+      {/*  2.64-01: 한 화면에 맞추려고 칸 높이를 26→22 로 줄였다(글자 크기는 그대로). */}
+      <div className="relative border border-line rounded overflow-hidden bg-ink-900/40" style={{ height: 26 + rows.length * ROW_H }}>
         {gaps.map(([a, b], i) => { const pa = tlPos(a, day0), pb = tlPos(b, day0); if (pa == null || pb == null || pb <= pa) return null;
           return <div key={'g' + i} className="absolute top-0 bottom-0 bg-ink-700/25" style={{ left: pa + '%', width: (pb - pa) + '%' }} title="교대 공백 (06:30~08:00 · 17:30~19:00)" />; })}
         {[0, 1].map((d) => (
@@ -48,7 +51,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
           <span className="absolute top-0 left-0.5 text-[9px] text-red-400 font-bold whitespace-nowrap">NOW {fmt(now)}</span>
         </div>
         {rows.map((sp, i) => {
-          const y = 14 + i * 26;
+          const y = 12 + i * ROW_H;
           const start = tlPos(sp.ms, day0);
           const pilotMs = pfArr(sp.vsl);
           const pilot = pilotMs ? tlPos(pilotMs, day0) : null;
@@ -56,7 +59,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
           return (
             <React.Fragment key={sp.key}>
               {pilot != null && start != null && pilot < start && (
-                <div className="absolute h-px bg-sky-500/60" style={{ top: y + 10, left: pilot + '%', width: (start - pilot) + '%' }} />)}
+                <div className="absolute h-px bg-sky-500/60" style={{ top: y + 9, left: pilot + '%', width: (start - pilot) + '%' }} />)}
               {pilot != null && (
                 <span className="absolute text-[9.5px] text-sky-300 whitespace-nowrap" style={{ top: y, left: pilot + '%' }} title={`도선 ${fmt(pilotMs)}`}>⚓{fmt(pilotMs)}</span>)}
               {start != null && (
@@ -75,7 +78,7 @@ export default function WorkTimeline({ ships = [], pilotForecast = {} }) {
             <span key={i} className={`flex-1 px-1 ${i === 6 ? 'border-l border-line' : ''}`}>{t}</span>))}
         </div>
       </div>
-      <div className="text-[10px] text-dim-400 mt-1.5">빨간 선 = 지금 · 점선 = 조 경계(17:30 / 19:00) · 회색 밴드 = 교대 공백 · ⚓ = 도선 예보 · 초록 = 작업중 · 파랑 = 오늘 · 주황 = 내일</div>
+      <div className="text-[10px] text-dim-400 mt-1">빨간 선 = 지금 · 점선 = 조 경계(17:30 / 19:00) · 회색 밴드 = 교대 공백 · ⚓ = 도선 예보 · 초록 = 작업중 · 파랑 = 오늘 · 주황 = 내일</div>
     </div>
   );
 }

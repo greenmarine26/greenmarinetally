@@ -15,5 +15,15 @@ T(/WorkTimeline ships=\{board\.ships\} pilotForecast=\{pilotForecast\}/.test(lp)
 T(/pilotForecast = \{\}/.test(lp.split('\n').find((l) => l.includes('export default function LoginPage')) || ''), 'LoginPage 가 pilotForecast prop 을 안 받는다');
 const app = fs.readFileSync(path.join(ROOT, 'src/App.jsx'), 'utf8');
 T(/<LoginPage\n\s*pilotForecast=\{pilotForecast\}/.test(app), 'App 이 LoginPage 에 pilotForecast 를 안 넘긴다 — 도선 마커가 조용히 죽는다');
+//  2.64-01 «맞춤처럼 한화면에» — PC 로그인은 겉이 구르지 않는다. 이 배선이 하나라도 빠지면 페이지 스크롤이 돌아온다.
+T(/lg:h-screen[\s\S]{0,80}lg:overflow-hidden/.test(app), 'App 로그인 껍데기가 화면 높이에 안 묶였다 — 페이지 스크롤 재발');
+T(/lg:shrink-0/.test(app.split('\n').filter((l) => l.includes('footer'))[0] || ''), '푸터가 안 줄어든다 — 한 화면 밖으로 밀린다');
+T(/lg:grid-rows-\[minmax\(0,1fr\)_auto\]/.test(lp), '로그인 격자가 위 1fr · 아래 자동 이 아니다');
+T(/lg:flex-1[\s\S]{0,120}lg:overflow-hidden/.test(lp), '로그인 본체가 남는 높이를 안 먹거나 넘침을 안 막는다');
+T((lp.match(/lg:overflow-y-auto/g) || []).length >= 2, '두 판(현황판·로그인)이 안에서 구르지 않는다 — 짧은 화면에서 잘린다');
+T(!/lg:items-start/.test(lp), 'lg:items-start 가 남아 있다 — 판이 화면 높이로 안 늘어난다');
+const tl = fs.readFileSync(path.join(ROOT, 'src/components/WorkTimeline.jsx'), 'utf8');
+T(/const ROW_H = 22;/.test(tl), '타임라인 칸 높이가 22 가 아니다 — 한 화면 계산이 어긋난다');
+
 if (bad > 0) { console.error(`✗ 타임라인 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 타임라인 연막검사 통과 — 축 수식 5 · 배선 3');
+console.log('✓ 타임라인 연막검사 통과 — 축 수식 5 · 배선 3 · 한 화면 맞춤 6');
