@@ -383,8 +383,8 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
   //    2갱인데 내 작업량 또는 2갱 갱배분 이라고 하면 대답을 맞게»): **모르면 지어내지 않는다.**
   //    말한 수도 없고 이 조에 기억시킨 수도 없으면 계산하지 말고 되묻는다.
   const _gn = opts.nGangs || _gShift || _gBase || 0;
-  if (!_gn) return { askGangs: true, shift, shiftKey: _gKey };
-  const nGangs = Math.min(4, Math.max(1, _gn));
+  const _askGangs = !_gn;
+  const nGangs = Math.min(4, Math.max(1, _gn || 2));
   //  분할은 «전체 예상시간» 기준(작업 중에 갱 경계가 출렁이지 않게), 소진은 «남은 것» 기준.
   const split = _splitGangs(plan.cargo, nGangs);
   if (!split) return null;
@@ -402,6 +402,10 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
       shift = { ...shift, label: `${String(f.getHours()).padStart(2, '0')}:${String(f.getMinutes()).padStart(2, '0')} 시작~${String(shift.label).split('~')[1]}` };
     }
   }
+  //  🔴 2.70-03: 갱 수를 모를 때의 되묻기는 **라벨 보정 뒤**에 낸다 — 종전엔 이 위에서 돌려보내
+  //    «야간조(19:00~06:30)» 라고 말해, 21시 시작인 배를 19시부터 계산한 것처럼 읽혔다(검수사 실측:
+  //    *«아직 SWTD 작업시작을 안했는데 19:00부터 계산함»*).
+  if (_askGangs) return { askGangs: true, shift, shiftKey: _gKey, availH };
   //  갱별 소진 — 남은 그룹을 순서대로. from=첫 미완 그룹, to=조 끝에 닿는 그룹.
   const gangs = split.segs.map((seg, gi) => {
     //  ★ 2.62-03 (검수사 확정 «보통 선미와 중간부분부터 진행합니다» — NSFR 실측 GC103=11~13·GC104=23~25 도

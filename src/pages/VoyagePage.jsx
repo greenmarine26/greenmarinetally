@@ -2639,8 +2639,13 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
     //  ⚠ 2.65-02 (라이브 실측): 브리핑은 **물을 때마다 지금 기준으로 다시 계산**된다(2.62) —
     //    갱 몫이 33대→32대로 바뀌는 순간 답 문자열이 달라져 낭독이 **처음부터 다시** 시작됐다
     //    (검수사 크롬에서 13토막이 두 번 큐에 쌓인 것을 잡았다). 브리핑의 「한 번」은 **질문 기준**이다.
+    //  🔴 2.70-03 (검수사 실측 크래시 «Cannot read properties of null (reading 'length')»):
+    //    2.65-02 가 `_readKey` 를 **null 검사보다 먼저** 계산해서, 답이 없는 질문마다(«2갱»·
+    //    «22:00부터 재계산 해줄래?» 등) `answer.length` 가 터져 **앱 전체가 죽었다.**
+    //    종전 코드는 `!answer ||` 가 앞에 있어 단락됐다 — 순서를 되돌린다. **null 검사가 먼저다.**
+    if (!answer) return;
     const _readKey = parsed?.briefingQuery ? `brief:${q}` : q + answer.length;
-    if (!answer || readRef.current === _readKey) return;
+    if (readRef.current === _readKey) return;
     readRef.current = _readKey;
     //  ★ 2.65: 브리핑은 끝까지 읽는다(SearchPanel:1272 와 같은 한 벌 — 화면마다 다르면 안 된다).
     if (parsed?.briefingQuery) {

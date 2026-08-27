@@ -71,6 +71,9 @@ T(/주간조 앱 미사용/.test(all), '낭독에서 «주간조 앱 미사용»
 
 //  2.65-02: 브리핑 낭독은 답이 실시간으로 바뀌어도 다시 시작하지 않는다(질문 기준 한 번).
 const vp = fs.readFileSync(path.join(ROOT, 'src/pages/VoyagePage.jsx'), 'utf8');
+//  🔴 2.70-03: 답이 없는 질문에서 `answer.length` 가 터져 앱 전체가 죽었다 — null 검사가 **먼저**여야 한다.
+T(/if \(!answer\) return;\s*\n\s*const _readKey/.test(vp),
+  '답 없음 검사가 _readKey 계산보다 뒤에 있다 — 답 못 하는 질문마다 앱 전체 크래시(검수사 실측)');
 T(/brief:\$\{q\}/.test(vp), '낭독 「한 번」 기준이 답 길이다 — 갱 몫이 1대만 바뀌어도 처음부터 다시 읽는다');
 
 if (bad > 0) { console.error(`✗ 브리핑 낭독 연막검사 실패 ${bad}건`); process.exit(1); }
