@@ -1860,11 +1860,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             );
           }
           if (Object.keys(portMisData).length === 0) return null;
+          //  2.78-02 (검수사 «왜 아직도 선박명이 약자 MCSC인가요? 그걸로 조회가 되나요?»):
+          //    조회는 2.78부터 약자를 안 쓰는데 이 칸의 «선박명»이 4자 코드(vsl)를 보여주고 있었다.
+          //    베이매트릭스 풀네임을 보이고 약자는 괄호 참고로만. (사전 이름의 탭·전각공백도 걷는다)
+          const _cardNm = String(voyage?.info?.vslFull || dictData?.name || '').replace(/[\t\u3000]/g, ' ').replace(/\s+/g, ' ').trim();
           return (
             <div className="mb-3 bg-orange-950/40 border border-orange-700/50 rounded-pill px-3 py-2 text-xs">
               <span className="text-orange-300 font-bold">평택 PORT-MIS에 이 배 신고가 없습니다</span>
-              <span className="text-dim-200 ml-2">선박명: <b>{vsl}</b> · 콜사인: <b>{dictCallsign || '없음'}</b></span>
-              <div className="text-dim-400 text-2xs mt-0.5">수집기가 새 PORT-MIS 자료를 받으면 자동으로 다시 매칭됩니다</div>
+              <span className="text-dim-200 ml-2">선박명: <b>{_cardNm || vsl}</b>{_cardNm ? ` (${vsl})` : ''} · 콜사인: <b>{dictCallsign || '없음'}</b></span>
+              <div className="text-dim-400 text-2xs mt-0.5">PORT-MIS 자동 등록(하루 1회)이나 엑셀 업로드가 들어오면 자동으로 다시 매칭됩니다</div>
             </div>
           );
         }
