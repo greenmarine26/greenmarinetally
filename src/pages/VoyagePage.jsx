@@ -2326,16 +2326,10 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
               배정목록 이적이 확정 0이라 예측을 대수에서 뺐다. 그러나 **어느 커버 어느 자리를 의심했는지는 남긴다.** */}
           {shiftInfo?.meta?.truthZero > 0 && (
             <div className="px-3 py-1.5 text-xxs text-amber-100 bg-amber-950/40 border-b border-amber-800/50 space-y-0.5">
-              {/* 2.79 (검수사 확정 2026-08-28): *«시프팅은 평택분 양하에 방해되는 컨입니다. 홀드에 평택분이
-                  있어 데크에 컨을 시프팅 해야 되는데, 시프팅이 발생 안했다면 커버를 여는데도 방해가 안된다는
-                  이야기 입니다.»* — 즉 시프팅 0 은 **커버 모양에 대한 답**이다. 앱이 반박할 자리가 아니다. */}
-              <div>🔍 <b>커버 영역 확인 {shiftInfo.meta.truthZero}대</b> —
-                {shiftInfo?.truthChk?.srcAgree
-                  ? <> 앱은 커버 위로 봤는데 <b>선사·세관·배정 {shiftInfo.truthChk.srcs?.plan}대가 일치</b>해 시프팅이 없습니다.</>
-                  : <> 앱은 커버 위로 봤는데 <b>배정목록 이적은 확정 0모브</b>입니다.</>} 작업 대수에서는 뺐습니다.</div>
-              {shiftInfo?.truthChk?.srcAgree && (
-                <div className="text-2xs text-amber-200/80">시프팅이 없다는 것은 <b>이 자리들이 커버를 안 문다</b>는 뜻입니다 — 앱 커버 경계가 실제보다 넓게 잡혀 있습니다.</div>
-              )}
+              {/* ⚠ 2.79-02 (검수사 2026-08-28): **삼자가 일치하면 이 칸 자체가 안 뜬다.**
+                  *«MCSC에 기록한 시프팅 안내는 불필요 합니다. 혼란을 줍니다.»*
+                  아래 문구는 삼자 대조가 안 되는 배(배정표 이적만 0인 경우)에만 남는다. */}
+              <div>🔍 <b>커버 영역 확인 {shiftInfo.meta.truthZero}대</b> — 앱은 커버 위로 봤는데 <b>배정목록 이적은 확정 0모브</b>입니다. 작업 대수에서는 뺐습니다.</div>
               {(shiftInfo.meta.suspects || []).slice(0, 6).map(sp => (
                 <div key={sp.cn} className="mono text-2xs text-amber-300">
                   · {sp.cn} <b>{sp.pos || `${parseInt(sp.bay, 10)}-${sp.row}-${sp.tier}`}</b>
