@@ -478,6 +478,15 @@ TNJP 선적 EDI 는 `TNJP NNN.edi` 이고 **`W항차번호 − 26299 = NNN`** �
 
 ## 6. 작업 기록부 (앱에 손댄 기록 — 최신이 위, 반드시 추가)
 
+### 2026-08-28 19:1x — ★★ TallyOne 2.79 — **CATOS 터미널 실적 → 수석 승인 일괄 반영**
+
+- 검수사 확정 — «수석이 승인 버튼으로 일괄 반영» · «(결과물은) 베이플랜과 카고플랜» · *«제가 카토스만 로그인 해노면 자동으로 처리되게 해주세요»*. 수석 요청의 왜 — *«검수사가 앱으로 작업을 안했을때 앱에 적용하고 결과를 검수들이 자기가 작업한 내용이 맞는지 결과물로 확인 할수 있게»*.
+- 판정 한 벌 `utils.computeTermApply` — ①반입시각(at) 없는 것(Booking)은 제외 ②completed 기존 기록 **절대 안 덮음**(추가만) ③GC10x→«x호기»(실측 GC102=2호기·GC103=3호기·GC104=4호기) · 시각은 터미널 반입시각 · by=«터미널(CATOS)» 고정(인건비 보호 — `_tallyInspector` 미호출). 쓰기 `fbApplyTermWork` 는 누르는 순간 termWork·completed 를 **재독** — 작업 중 검수원과 경합 안전.
+- 화면 — 수석 대시보드 「📋 진행 상황」 항차 카드, 반영 대기>0일 때만 **[🏗 터미널 실적 반영 N]**(2단계 확인 · 수석 전용 · 비수석은 🔒 잠금 표시로 자리를 남김 2-0-D). 매뉴얼 helpDataChief 「🏗 터미널 실적 반영」 블록(why·never — «일괄 취소 버튼은 없다» 명시) 같은 판.
+- 검사 — `tools/smoke_termapply.cjs` 신설(절대 조항 4 + SWTD 실데이터 불변식 4, utils 실소스 esbuild 번들) → build.sh 연결. 시뮬 실측 SWTD 918 — 반입 824 · 앱 완료 140 전부 겹침 일치(모순 0) · **반영 대상 684**(2호기 194·3호기 343·4호기 147) · 주간 314·야간 324·그외 46.
+- ★ CATOS 실측(클로드 전용 크롬, 검수사 로그인 세션) — 검수 입력은 REST GET `/webip/rest/v1/inspectioncheck/searchItems?ixCd=I|E&vesselCode=&callYear=&callSeq=` 가 **전 행 JSON 한 방**(limit 무시 — SWTD 918행), 선박 스케줄은 `/webip/rest/v1/vesselschedule/vesselschedule?departStatus=1`(미출항 44척 — callSeq·MRN(userVoyage)·eta/etd·선석). 무쿠키 curl 401 = 로그인 필수. 필드는 엑셀과 1:1(inOutDate+inOutTime=반입시각, RTDB termWork 표본과 대조 일치). ⇒ **판 B(수집기 자동 수집)는 클릭 자동화가 아니라 수집기 크롬 CATOS 탭 안 fetch** — 인계함 등록.
+- 검증 — babel 4파일 미정의 0 · build PASS(전수 회귀·신설 검사 포함 전부 ✅) · 번들 grep(2.79·버튼 문구·«터미널(CATOS)») 전부 확인.
+
 ### 2026-08-28 18:4x — TallyOne 2.78-02 — **«선박명»은 풀네임으로 · 카드 안내문을 실상대로**
 
 - 검수사 — *«왜 아직도 선박명이 약자 MCSC인가요? 그걸로 조회가 되나요?»* → 조회(매처)는 2.78부터 약자를 안 쓰는데(portMisMatch.js:37 ⛔ 주석), **카드 «선박명» 칸이 4자 코드(vsl)를 보여주고** 있었다. 베이매트릭스 풀네임(`info.vslFull→dictData.name`, 탭·전각공백 정리)을 보이고 약자는 괄호 참고로. 전수 grep — 이 표시 병은 이 카드 한 곳뿐.

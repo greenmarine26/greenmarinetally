@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, CheckCircle2, Trash2, Lock, FileSpreadsheet, Truck, Send } from 'lucide-react';
-import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
+import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply } from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -1438,6 +1438,9 @@ function FeedbackRow({ feedback: f }) {
 function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotForecast = {}, portMisData = null, resolveBox }) {   // 1.55-01: resolveBox 미전달 ReferenceError — TALLYBOX 저장이 항상 다운로드로 떨어지던 원인   // 1.40-01: 🚢신고도착
   const [busyKey, setBusyKey] = useState(null);
   const [confirmKey, setConfirmKey] = useState(null);
+  //  2.79: 터미널 실적 반영 — 완료 저장과 같은 2단계 확인·수석 전용 패턴, 상태는 따로 둔다.
+  const [confirmTermKey, setConfirmTermKey] = useState(null);
+  const [termBusyKey, setTermBusyKey] = useState(null);
   // TallyOne 1.0(L5): 결과 통지 alert() → 섹션 안 인라인 알림(확인창 성격 window.confirm은 유지)
   const [notice, setNotice] = useState(null);
 
@@ -1453,6 +1456,9 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         key, vsl,
         voyD: info.voy_d || '', voyL: info.voy_l || '',
         discharge: dPtk, loading: lPtk,
+        //  2.79: CATOS 터미널 실적 반영 대기 수 — 판정은 utils.computeTermApply 한 벌(쓰기와 동일).
+        termApplyD: computeTermApply(v.discharge?.termWork, v.discharge?.completed).length,
+        termApplyL: computeTermApply(v.loading?.termWork, v.loading?.completed).length,
         // TallyOne 1.0(L3): 일정 정보 — 수집기가 채우는 planDate("ETA ~ ETD")·planSrc(출처 판단 결과)
         planDate: info.planDate || '', planSrc: info.planSrc || '',
         // 1.40-01: PORT-MIS 항 도착(세관 신고) 원본 — 콜사인 매칭. 도선과 다른 사건이라 따로 표기한다.
@@ -1476,6 +1482,37 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
     }
     return out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [voyages, portMisData]);   // 1.40-01: 신고도착이 늦게 도착해도 다시 계산
+
+  //  2.79: CATOS 터미널 실적을 completed 로 일괄 반영 (검수사 확정 — «수석이 승인 버튼으로 일괄 반영»).
+  //    fbApplyTermWork 가 누르는 순간 termWork·completed 를 새로 읽으므로, 그 사이 검수원이 찍은
+  //    컨은 자동으로 제외된다(현장 기록 보호 — 추가만, 덮어쓰기 없음).
+  const doApplyTerm = async (row) => {
+    if (!chief) {
+      alert('⚠️ 터미널 실적 반영 권한이 없습니다.\n\n반영은 수석검수사만 할 수 있습니다.\n(현재 로그인: ' + (inspector || '없음') + ')');
+      setConfirmTermKey(null);
+      return;
+    }
+    setTermBusyKey(row.key);
+    try {
+      const parts = [];
+      let total = 0;
+      for (const mode of ['discharge', 'loading']) {
+        const cnt = mode === 'discharge' ? row.termApplyD : row.termApplyL;
+        if (!cnt) continue;
+        const res = await fbApplyTermWork(row.key, mode);
+        total += res.applied;
+        parts.push(`${mode === 'discharge' ? '양하' : '선적'} ${res.applied}대`);
+      }
+      setNotice(total > 0
+        ? { kind: 'ok', text: `🏗 터미널 실적 반영 완료 — ${row.vsl} ${parts.join(' · ')} (완료자 «터미널(CATOS)», 시각은 터미널 반입시각). 베이플랜에서 초록·✔ 로 확인하세요.` }
+        : { kind: 'warn', text: `반영할 것이 없습니다 — ${row.vsl} 터미널 실적이 전부 앱 완료와 일치합니다.` });
+    } catch (e) {
+      //  조용한 실패 금지 — 실패는 화면에 드러낸다.
+      setNotice({ kind: 'err', text: `터미널 실적 반영 실패(${row.vsl}) — ${e?.message || e}` });
+    }
+    setTermBusyKey(null);
+    setConfirmTermKey(null);
+  };
 
   const doComplete = async (row) => {
     if (!chief) {   // V7.94-18: 수석검수/부수석만 완료 저장 가능
@@ -1704,6 +1741,40 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
                   </span>
                 )}
               </div>
+              {/* 2.79: CATOS 터미널 실적 반영 — 반영 대기(termWork 반입분 − 앱 완료)가 있을 때만.
+                  검수사 확정 «수석이 승인 버튼으로 일괄 반영». 수석이 아니면 잠금 표시(자리를 남긴다 — 2-0-D). */}
+              {(r.termApplyD + r.termApplyL) > 0 && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  {confirmTermKey === r.key ? (
+                    <>
+                      <span className="text-2xs text-amber-300">터미널 실적 {r.termApplyD + r.termApplyL}대를 완료로 반영?</span>
+                      <button
+                        onClick={() => doApplyTerm(r)}
+                        disabled={termBusyKey === r.key}
+                        style={{ minHeight: 36 }}
+                        className="text-xxs px-3 rounded bg-amber-600 hover:bg-amber-500 text-white font-bold disabled:opacity-50"
+                      >{termBusyKey === r.key ? '반영 중…' : '예'}</button>
+                      <button
+                        onClick={() => setConfirmTermKey(null)}
+                        style={{ minHeight: 36 }}
+                        className="text-xxs px-3 rounded bg-ink-750 hover:bg-ink-700 text-dim-100"
+                      >취소</button>
+                    </>
+                  ) : chief ? (
+                    <button
+                      onClick={() => setConfirmTermKey(r.key)}
+                      style={{ minHeight: 36 }}
+                      className="text-xxs px-3 rounded-pill bg-amber-900/40 hover:bg-amber-800/60 text-amber-200 border border-amber-700/50 font-bold"
+                      title="CATOS 검수 입력(터미널 실적) 중 앱에 완료가 안 찍힌 컨을 일괄 완료로 — 완료자 «터미널(CATOS)», 검수원 기록은 덮지 않음"
+                    >🏗 터미널 실적 반영 {r.termApplyD + r.termApplyL}{r.termApplyL > 0 ? ` (양하 ${r.termApplyD} · 선적 ${r.termApplyL})` : ''}</button>
+                  ) : (
+                    <span
+                      className="text-2xs px-2 py-1 rounded bg-ink-750/40 text-dim-300 border border-line-strong/40"
+                      title="터미널 실적 반영은 수석검수사만 할 수 있습니다"
+                    >🔒 터미널 실적 {r.termApplyD + r.termApplyL}대 대기 — 수석 전용</span>
+                  )}
+                </div>
+              )}
               {/* TallyOne 1.0(L3): 일정 정보 — 작업일자(출처 뱃지)·도선 입출항. 완료 저장 타이밍 판단 근거 */}
               <ScheduleLine planDate={r.planDate} planSrc={r.planSrc} pmEta={r.pmEta}
                 pf={(pilotForecast || {})[(r.vsl || '').toUpperCase()]} />

@@ -9,7 +9,7 @@ import { gateBayDictWrite } from './bayDictGuard.js';   // V9.05: 베이사전 �
 import {
   getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll
 } from 'firebase/storage';
-import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey } from './utils.js';   // 1.40-01: 타항 저장 차단
+import { isPyeongtaekPort, isPortCode, resolveShipKey, isPyeongtaekPortName, currentShift, shiftGangKey, computeTermApply } from './utils.js';   // 1.40-01: 타항 저장 차단
 import { activityDayKey, pickExpiredActivityBuckets } from './activityLog.js';   // TallyOne 1.3: 활동 로그 버킷 키(단일 소스)
 import { isAdminName } from './adminGuard.js';   // 1.41: dev_access 저장 권한 확인(관리자만). 순환 없음 — adminGuard 는 staffList 만 부른다
 
@@ -742,6 +742,26 @@ export async function fbCompleteContainersAtomic(voyageKey, mode, cns, by, equip
 // V7.99-16 / V8.04: 초과 컨(신고 리스트에 없는데 내려진 것) 기록.
 //   EDI/리스트에 없는 번호라 completed에 단독 기록 + extras 노드에 별도 보관(신고 점검이 모음).
 //   V8.04: 신고서 작성에 필요한 기본 정보(규격·F/E·타입·실번호·데미지 유무)를 함께 저장.
+
+// 2.79: CATOS 터미널 실적(termWork)을 수석 승인으로 completed 에 일괄 반영.
+//   검수사 확정 — «수석이 승인 버튼으로 일괄 반영». 대상 계산은 utils.computeTermApply 한 벌.
+//   ⛔ 현장 기록 보호 — 누르는 순간 termWork·completed 를 **새로 읽어**(get) 그 사이 검수원이
+//     찍은 컨을 덮지 않는다. 반영은 추가(add)뿐, 덮어쓰기(overwrite) 없음.
+//   ⚠ _tallyInspector·_markLoadedPos 는 부르지 않는다 — 터미널 반영분은 검수원 작업량이 아니다.
+export async function fbApplyTermWork(voyageKey, mode) {
+  const base = `voyages/${voyageKey}/${mode}`;
+  const [twSnap, compSnap] = await Promise.all([
+    get(ref(db, `${base}/termWork`)),
+    get(ref(db, `${base}/completed`)),
+  ]);
+  const entries = computeTermApply(twSnap.val() || {}, compSnap.val() || {});
+  if (!entries.length) return { ok: true, applied: 0 };
+  const patch = {};
+  for (const [cn, rec] of entries) patch[`${base}/completed/${cn}`] = rec;
+  await update(ref(db), patch);
+  return { ok: true, applied: entries.length };
+}
+
 export async function fbAddExtraContainer(voyageKey, mode, cn, by, info = {}, equip = '') {
   const at = Date.now();
   const eq = String(equip || '').trim();
