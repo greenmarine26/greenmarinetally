@@ -1844,7 +1844,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             return _fresh(byCs);
           } catch (e) { return null; }
         })();
-        // M5.71: 매칭 실패 시 디버그 카드 (어떤 선박이 안 잡히는지 보여줌)
+        // M5.71 디버그 카드 → 2.78-01: 후보 줄 제거(slice(0,3)은 후보가 아니라 목록 앞 3개였다 — MCSC 실물 보고).
+        //   문구도 «매칭 미확인»이 아니라 «신고가 없습니다»로 — 매처(2.78)는 제대로 돌았고 자료가 없는 것이다.
         if (!pm) {
           //  2.63-03: PORT-MIS 미등록이어도 도선 예보가 있으면 그것을 정식 카드로 — SWTD 류(등록 없는 배).
           if (_pfMatch) {
@@ -1859,16 +1860,11 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
             );
           }
           if (Object.keys(portMisData).length === 0) return null;
-          // 현재 항차와 비슷한 PORT-MIS 후보 찾기
-          const candidates = Object.values(portMisData).slice(0, 3).map(p =>
-            `${p.vesselName || '?'} (${p.callsign || 'no-callsign'})`
-          ).join(', ');
           return (
             <div className="mb-3 bg-orange-950/40 border border-orange-700/50 rounded-pill px-3 py-2 text-xs">
-              <span className="text-orange-300 font-bold">⚠ PORT-MIS 매칭 미확인</span>
+              <span className="text-orange-300 font-bold">평택 PORT-MIS에 이 배 신고가 없습니다</span>
               <span className="text-dim-200 ml-2">선박명: <b>{vsl}</b> · 콜사인: <b>{dictCallsign || '없음'}</b></span>
-              <div className="text-dim-300 mt-1">PORT-MIS 후보: {candidates}</div>
-              <div className="text-dim-400 text-2xs mt-0.5">베이사전 callsign 또는 선박명을 PORT-MIS와 일치시키면 자동 매칭됩니다</div>
+              <div className="text-dim-400 text-2xs mt-0.5">수집기가 새 PORT-MIS 자료를 받으면 자동으로 다시 매칭됩니다</div>
             </div>
           );
         }
