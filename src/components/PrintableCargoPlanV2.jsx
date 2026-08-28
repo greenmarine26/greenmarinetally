@@ -113,8 +113,14 @@ function getMarkV2(c, pod, mode) {
   else if (c.tk) specialLetter = 'TK';   // 2.38 (검수사): 탱크도 TK 2글자
   else if (c.ot || c.oog) specialLetter = 'A';
 
-  // 통과화물: 특수면 글자만 (회색 배경은 cell render), 일반은 빈
-  if (!ptk) return specialLetter || '';
+  // ★ 2.79-03 (검수사 확정 2026-08-28) — **통과화물은 글자를 안 쓴다. 회색 자리만 남긴다.**
+  //   원문 둘을 같이 읽어야 뜻이 맞는다:
+//     «타지역화물도 보여줘야 합니다. 선적시 빈곳을 찾기 위해서» → 자리(회색)는 그대로 둔다.
+//     «전부 지운다 — 평택분만 그린다»                          → 남의 짐이 무엇인지는 안 그린다.
+  //   즉 통과화물은 «차 있다»만 말하면 된다. 종전엔 DG·RF·FR·TK·A 글자를 그대로 찍어
+  //   **평택분이 0 인 베이가 남의 위험물·리퍼 글자로 가득 찼다**(실측 MCSC 633N 카고플랜 —
+  //   21칸 중 작업은 7칸인데 나머지 14칸이 DG·RF 로 덮여 있었다).
+  if (!ptk) return '';
   // PTK: 특수면 특수글자, 일반이면 F / 엠티는 e(20ft)·E(40·45ft)
   //   2.38 검수사 확정: 동그라미(ⓐ 모양)를 없앴다 — «그냥 소문자 e로 40피트는 그냥 E로».
   //   E·F 오독은 이제 «칠했나 아닌가»가 막는다(풀=색 채움·엠티=글자만).
@@ -1186,7 +1192,15 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
   // M6.94.x fix: carrier-bw(선사별 선적)는 mark 칼럼이 없음.
   //   헤더는 ['', 선사, 20',40',45',합] 6칸으로 들어오는데 본문은 mark 칸을 안 그려 5칸 → 글씨 밀림.
   //   → mark 칼럼 없으면 헤더 첫 빈 칸('')도 제거해 칸 수 일치.
-  const effHeaders = hasMarkColumn ? headers : headers.filter((h, i) => !(i === 0 && h === ''));
+  const effHeaders0 = hasMarkColumn ? headers : headers.filter((h, i) => !(i === 0 && h === ''));
+  //  ★ 2.79-03 — **45' 이 한 대도 없으면 그 열을 안 그린다.**
+  //    열이 여섯이면 숫자 칸이 15% 밖에 못 받아 세 자리(251·279)가 «2…» 로 잘렸다
+  //    (실측 MCSC 633N 인쇄물 — 별첨1 «28 2… 0 2…» · 별첨2 Reefer «0 1… 0 1…»).
+  //    45' 은 이 항만에서 드물다. 없으면 빼고 그 폭을 숫자 칸에 준다 — 숨기는 것이 아니라
+  //    **없는 것을 안 그리는 것**이고, 있으면 종전대로 여섯 열로 나온다.
+  const has45 = tot['45'] > 0;
+  const effHeaders = has45 ? effHeaders0 : effHeaders0.filter((h) => h !== "45'");
+  const numW = has45 ? '15%' : '20%';
   return (
     <div className="cpv2-legend">
       <div className="cpv2-legend-title">{title}</div>
@@ -1196,10 +1210,10 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
         <colgroup>
           {hasMarkColumn && <col style={{ width: '9%' }} />}
           <col style={{ width: hasMarkColumn ? '31%' : '40%' }} />
-          <col style={{ width: '15%' }} />
-          <col style={{ width: '15%' }} />
-          <col style={{ width: '15%' }} />
-          <col style={{ width: '15%' }} />
+          <col style={{ width: numW }} />
+          <col style={{ width: numW }} />
+          {has45 && <col style={{ width: numW }} />}
+          <col style={{ width: numW }} />
         </colgroup>
         <thead>
           <tr>{effHeaders.map((h, i) => <th key={i}>{h}</th>)}</tr>
@@ -1221,7 +1235,7 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
                 <td className="cpv2-legend-nm">{name}</td>
                 <td className="cpv2-legend-ct">{v['20']}</td>
                 <td className="cpv2-legend-ct">{v['40']}</td>
-                <td className="cpv2-legend-ct">{v['45']}</td>
+                {has45 && <td className="cpv2-legend-ct">{v['45']}</td>}
                 <td className="cpv2-legend-ct"><b>{v.total}</b></td>
               </tr>
             );
@@ -1232,7 +1246,7 @@ function Legend({ title, headers, rows, totalRow, kind, colorMap = {} }) {
               <td className="cpv2-legend-nm"><b>합계</b></td>
               <td className="cpv2-legend-ct"><b>{tot['20']}</b></td>
               <td className="cpv2-legend-ct"><b>{tot['40']}</b></td>
-              <td className="cpv2-legend-ct"><b>{tot['45']}</b></td>
+              {has45 && <td className="cpv2-legend-ct"><b>{tot['45']}</b></td>}
               <td className="cpv2-legend-ct"><b>{tot.total}</b></td>
             </tr>
           )}
