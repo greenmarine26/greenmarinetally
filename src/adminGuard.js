@@ -227,12 +227,34 @@ export function hasRecoveryCode(guard, name) {
 }
 
 /** 복구 코드 검증 — 결과를 «왜 안 되는지»까지 말한다(조용히 실패하지 않는다). */
+//  ★ 2.77 (검수사 신고 2026-08-27 «비밀번호 복구로 받은 비번이 적용이 안됩니다 몇번 시도하다
+//    포기했습니다»): 종전엔 «코드가 맞지 않습니다» 한 줄이라 **어느 코드를 봐야 하는지** 알 수 없었다.
+//    파일을 여러 번 만들었으면 옛 파일을 보고 있을 수 있다 — 지금 등록된 코드가 **언제 만든 것인지**
+//    말해 주면 검수사가 그 시각의 파일을 찾아 볼 수 있다. `madeAt` 은 처음부터 저장돼 있었는데
+//    **아무 데서도 읽지 않던 죽은 값**이었다(전수 grep — 쓰기 1곳, 읽기 0곳).
+//    ⛔ 코드 자체는 절대 내보이지 않는다 — 해시만 저장돼 있고 평문은 앱에도 없다.
+const _madeAtText = (ms) => {
+  const t = Number(ms) || 0;
+  if (!t) return '';
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+export function recoveryMadeAtText(guard, name) {
+  const r = guard && guard.recovery && guard.recovery[String(name || '').trim()];
+  return r ? _madeAtText(r.madeAt) : '';
+}
 export async function verifyRecoveryCode(guard, name, entered) {
   const r = guard && guard.recovery && guard.recovery[String(name || '').trim()];
   if (!r || !r.hash || !r.salt) return { ok: false, why: '복구 코드를 만든 적이 없습니다.' };
-  if (r.usedAt) return { ok: false, why: '이미 사용한 코드입니다. 새 코드를 만들어야 합니다.' };
+  const made = _madeAtText(r.madeAt);
+  const madeTail = made ? ` 지금 등록된 코드는 ${made} 에 만든 것입니다 — 그때 받은 파일을 보십시오.` : '';
+  if (r.usedAt) {
+    return { ok: false, why: `이미 사용한 코드입니다. 새 코드를 만들어야 합니다.${made ? ` (${made} 에 만든 코드)` : ''}` };
+  }
   const h = await hashPassword(normalizeRecoveryCode(entered), r.salt);
-  return h === r.hash ? { ok: true, why: '' } : { ok: false, why: '코드가 맞지 않습니다.' };
+  return h === r.hash ? { ok: true, why: '' }
+    : { ok: false, why: `코드가 맞지 않습니다.${madeTail}` };
 }
 
 /** 파일로 내려줄 내용 — 검수사가 인쇄하거나 안전한 곳에 보관한다. */

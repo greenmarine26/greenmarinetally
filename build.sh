@@ -378,6 +378,13 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.77: **밀린 버그 셋** — X-RAY MRN 입력 · 복구 코드 안내 · 컨 상세 두 값.
+    SMOKE_PD="tools/_smokepd_tmp.cjs"
+    npx esbuild src/adminGuard.js --bundle --platform=node --format=cjs --outfile="$SMOKE_PD" --log-level=error \
+      && node tools/smoke_pending.cjs "$SMOKE_PD" "$(pwd)" \
+      || { rm -f "$SMOKE_PD"; echo "✗ 밀린 버그 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_PD"
+
     #  2.76: **시프팅 판정 — 기본이 리스트다.**
     SMOKE_SF="tools/_smokesf_tmp.cjs"
     npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="$SMOKE_SF" --log-level=error \

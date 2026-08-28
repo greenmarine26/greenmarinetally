@@ -664,6 +664,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if ((CORE_FILL && (ediBase._virtualEdi || ediBase[k] === undefined || ediBase[k] === '')) || FLAG_FILL) {
             safeR[k] = v; return;
           }
+          //  ★ 2.77 (검수사 확정 2026-08-28 «앱의 판단도 틀리다고는 할수없습니다. 컨테이너
+          //    상세화면엔 분명히 목적지가 평택이 아니었으니»): EDI 가 이기는 것은 그대로 두되,
+          //    **리스트가 뭐라 했는지를 버리지 않는다.** 종전엔 이 줄에서 통째로 사라져
+          //    컨 상세에 EDI 값만 남았고, 검수사가 그것을 보고 «평택이 아닌데» 가 됐다.
+          //    ⚠ 판정은 바꾸지 않는다 — 보여 주기만 한다(2.76 판정은 리스트가 기본).
+          if (k === 'pod' && v && String(v).toUpperCase() !== String(ediBase[k] || '').toUpperCase()) {
+            safeR._podList = String(v).toUpperCase();
+            safeR._podEdi = String(ediBase[k] || '').toUpperCase();
+          }
           // EDI 매칭됨 → 핵심 필드는 보호, 보강 필드만 허용
           if (!ALLOWED_LIST_FIELDS.has(k)) return;  // 핵심 필드 무시
           // M6.94.32: EDI에 위치(bay)가 있으면 리스트 bay/row/tier가 덮지 못함.

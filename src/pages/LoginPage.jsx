@@ -20,6 +20,7 @@ import {
   verifyPasswordFor, needsPasswordSetup, hasSessionPassFor, setSessionPassFor,
   isLockedName, lockEntry, lockPath, ownerCanUnlock,
   hasRecoveryCode, verifyRecoveryCode,   // 2.53: 복구 코드 — 소유자가 잠겼을 때의 유일한 길
+  recoveryMadeAtText,                   // 2.77: 복구 코드를 언제 만든 것인지 알려 준다
 } from '../adminGuard.js';
 import { fbGetAdminGuard, fbUpdateAdminGuard } from '../firebase.js';
 import { useBackHandler } from '../backHandler.js';
@@ -661,6 +662,11 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                 통과하면 <b className="text-amber-300">이어서 새 비밀번호를 정합니다.</b><br />
                 소문자로 치셔도, 하이픈(-)을 빼고 치셔도 됩니다.
                 <span className="text-amber-300"> ⚠ 이 코드는 한 번 쓰면 소멸합니다.</span>
+                {/*  ★ 2.77 (검수사 «복구로 받은 비번이 적용이 안됩니다 몇번 시도하다 포기했습니다»):
+                     파일을 여러 번 만들었으면 **옛 파일**을 보고 있을 수 있다. 지금 등록된 코드가
+                     언제 만든 것인지 미리 알려 준다 — 틀린 뒤에 알려 주면 이미 몇 번 헛치고 난 뒤다. */}
+                {(() => { const t = recoveryMadeAtText(guard, gateName);
+                  return t ? <><br /><b className="text-emerald-300">지금 등록된 코드는 {t} 에 만든 것입니다</b> — 그때 받은 파일을 찾아 보십시오.</> : null; })()}
               </div>
             )}
             <input

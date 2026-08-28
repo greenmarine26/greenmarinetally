@@ -26,7 +26,7 @@
 import React, { useMemo, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
-import { fbSetXraySeal } from '../firebase.js';                     // 2.39: 표에서 바로 봉인번호·봉인자 저장
+import { fbSetXraySeal, fbUpdateVoyageInfo } from '../firebase.js';                     // 2.39: 표에서 바로 봉인번호·봉인자 저장
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.26-01: 선박 풀네임은 정본 한 벌로
 import { openXrayListPrint } from '../inspectionList.js';        // 2.26-02: 인쇄는 검수리스트·VGM 과 같은 벌(별도 문서)
 
@@ -52,6 +52,9 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
   //  편집 상태는 한 벌만 둔다(같은 순간에 두 칸을 고치지 않는다).
   const [edit, setEdit] = useState(null);      // { cn, field: 'seal' | 'sealer', val }
   const [busy, setBusy] = useState('');        // 저장 중인 컨 — 두 번 눌러 두 번 쓰는 것을 막는다
+  //  ★ 2.77: MRN 손입력 — PORT-MIS 에 없는 배(평택 미등록)는 여기서 적어 넣는다.
+  const [mrnEdit, setMrnEdit] = useState(null);   // null=닫힘 · 문자열=편집 중인 값
+  const [mrnBusy, setMrnBusy] = useState(false);
 
   const info = voyage?.info || {};
 
@@ -83,9 +86,13 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       if (!t) return '';
       return t.endsWith(mode === 'loading' ? 'E' : 'I') ? t : '';
     };
+    //  ★ 2.77: 항차에 **손으로 적어 둔 MRN** 은 레그 검사(_legOK)를 걸지 않는다.
+    //    PORT-MIS 값은 기계가 준 것이라 레그가 어긋나면 버리는 게 맞지만(2.71), 손입력은
+    //    검수사가 보고 고른 값이다. 걸러 버리면 «분명히 쳤는데 안 나온다» 가 된다.
+    //    ⚠ 레그가 어긋나면 버리지 말고 **입력 칸에서 경고**한다(아래 mrnWarn).
     const mrn = _legOK(pm && (mode === 'loading' ? pm.mrnOut : pm.mrnIn))
       || _legOK(pm && pm.mrn)
-      || _legOK(mode === 'loading' ? info.mrnOut : info.mrnIn)
+      || String((mode === 'loading' ? info.mrnOut : info.mrnIn) || '').trim().toUpperCase()
       || '';
     //  입항일자 — PORT-MIS 입항일시가 1순위, 없으면 항차 작업창 앞자리. «2026.08.24» 형태.
     const rawEta = String(pm?.eta || info.planDate || '').trim();
@@ -132,6 +139,29 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
 
   //  ★ 2.39 — 봉인번호·봉인자 저장. 조용히 실패하지 않는다(3금지 ③): 실패하면 화면에 띄운다.
   const canEdit = mode === 'discharge' && !!voyageKey;
+  //  ★ 2.77 (인계 건 — 2.71 에서 «화면에서 입력하는 칸은 다음 판» 으로 미룬 그것):
+  //    MRN 은 PORT-MIS 에서만 오는데 SWTD(D7EE)처럼 평택 PORT-MIS 미등록 배는 원천이 아예 없다.
+  //    그동안은 클로드가 RTDB 에 직접 넣어 줬다 — 검수사가 스스로 못 넣는 것은 기능이 없는 것이다.
+  //    ⇒ 항차에 적는다(voyages/{키}/info.mrnIn|mrnOut). 수집기가 주는 port_mis_data 는 안 건드린다.
+  const mrnField = mode === 'loading' ? 'mrnOut' : 'mrnIn';
+  const mrnLegChar = mode === 'loading' ? 'E' : 'I';
+  const mrnWarn = (v) => {
+    const t = String(v || '').trim().toUpperCase();
+    if (!t) return '';
+    if (!t.endsWith(mrnLegChar)) return `${mode === 'loading' ? '선적' : '양하'} 서류인데 ${mrnLegChar} 로 끝나지 않습니다 — 맞습니까?`;
+    return '';
+  };
+  async function saveMrn(v) {
+    if (!voyageKey) return;
+    setMrnBusy(true);
+    try {
+      await fbUpdateVoyageInfo(voyageKey, { [mrnField]: String(v || '').trim().toUpperCase(),
+        [`${mrnField}By`]: inspector || '', [`${mrnField}At`]: Date.now() });
+      setMrnEdit(null);
+    } catch (e) {
+      alert('MRN 을 저장하지 못했습니다 — ' + (e && e.message ? e.message : e) + '\n다시 시도해 주십시오.');
+    } finally { setMrnBusy(false); }
+  }
   async function saveXray(cn, seal, eseal, sealerOpt) {
     if (!canEdit) return;
     setBusy(cn);
@@ -195,12 +225,40 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
 
       {/*  2.26-05: MRN 이 비면 **왜 비었는지** 말한다 — 조용히 빈칸으로 두지 않는다(3금지 ③).
            PORT-MIS 엑셀을 2.26 이후에 다시 올려야 MRN 이 담긴다(그 전 레코드엔 필드가 없다). */}
-      {!head.mrn && !!rows.length && (
-        <div className="rounded-pill border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xxs text-amber-200">
-          ⚠ MRN 이 비어 있습니다 — <b>업로드 탭에서 PORT-MIS 엑셀을 다시 올리면</b> 채워집니다.
-          (2026-08-24 이전에 올린 자료에는 MRN 칸이 없습니다.)
+      {/*  ★ 2.77 — MRN 을 이 자리에서 적는다. 종전엔 «엑셀을 다시 올리세요» 라고만 했는데,
+           PORT-MIS 에 등록이 없는 배(SWTD 등)는 몇 번을 올려도 안 채워진다 — 원천이 없다.
+           그때 검수사가 스스로 넣을 길이 없어 클로드가 DB 에 직접 넣어 주고 있었다. */}
+      {!!rows.length && (mrnEdit !== null ? (
+        <div className="rounded-pill border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-1.5">
+          <div className="text-xxs font-bold text-amber-200">
+            MRN {mode === 'loading' ? '(출항 · E 로 끝남)' : '(입항 · I 로 끝남)'} — 서류 머리표에 찍힙니다
+          </div>
+          <div className="flex items-center gap-2">
+            <input autoFocus value={mrnEdit} disabled={mrnBusy}
+              onChange={(e) => setMrnEdit(e.target.value.toUpperCase())}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveMrn(mrnEdit); if (e.key === 'Escape') setMrnEdit(null); }}
+              placeholder="예: 26SNKO3084I"
+              className="flex-1 bg-ink-800 border border-amber-500 rounded px-2 py-1.5 mono text-amber-100 outline-none"/>
+            <button onClick={() => saveMrn(mrnEdit)} disabled={mrnBusy}
+              className="px-3 py-1.5 rounded-pill text-xs font-bold bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white">저장</button>
+            <button onClick={() => setMrnEdit(null)} disabled={mrnBusy}
+              className="px-2 py-1.5 rounded-pill text-xs bg-ink-800 text-dim-300">취소</button>
+          </div>
+          {!!mrnWarn(mrnEdit) && <div className="text-2xs text-rose-300">⚠ {mrnWarn(mrnEdit)}</div>}
         </div>
-      )}
+      ) : !head.mrn ? (
+        <button onClick={() => setMrnEdit('')} disabled={!voyageKey}
+          className="w-full text-left rounded-pill border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xxs text-amber-200 disabled:opacity-60">
+          ⚠ MRN 이 비어 있습니다 — <b>여기를 눌러 적어 넣으십시오</b>. PORT-MIS 에 이 배 등록이 없으면 엑셀을 다시 올려도 안 채워집니다.
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 text-xxs text-dim-300">
+          <span>MRN <b className="mono text-dim-100">{head.mrn}</b></span>
+          {!!info[mrnField] && <span className="text-2xs text-amber-300">· 손으로 적은 값{info[`${mrnField}By`] ? ` (${info[`${mrnField}By`]})` : ''}</span>}
+          <button onClick={() => setMrnEdit(head.mrn || '')} disabled={!voyageKey}
+            className="px-2 py-0.5 rounded-pill bg-ink-800 hover:bg-ink-700 text-dim-200 disabled:opacity-50">고치기 ✏</button>
+        </div>
+      ))}
       <div className="flex items-center gap-2">
         <div className="flex-1 flex items-center gap-2 bg-ink-900 border border-line rounded-pill px-3 h-11">
           <SearchIcon className="w-4 h-4 text-dim-400"/>

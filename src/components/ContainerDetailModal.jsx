@@ -1062,6 +1062,13 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             <Field label="검수업체" value={c.op || '-'} mono/>
             <Field label="POL" value={c.pol || '-'} mono/>
             <Field label="POD" value={c.pod || '-'} mono/>
+    {/*  ★ 2.77 (검수사 확정 «앱의 판단도 틀리다고는 할수없습니다. 컨테이너 상세화면엔
+         분명히 목적지가 평택이 아니었으니»): 자료가 서로 다르면 **둘 다** 보인다.
+         한쪽만 보이면 «앱이 틀렸다» 로 읽히지만 사실은 EDI 와 양하리스트가 다른 것이다.
+         ⚠ 판정은 리스트가 기본이다(2.76) — 여기는 보여 주기만 한다. */}
+    {!!c._podList && c._podList !== (c.pod || '').toUpperCase() && (
+      <Field label="리스트 POD" value={c._podList} mono highlight="amber"/>
+    )}
             {c.npod && <Field label="환적(76)" value={c.npod} mono/>}
             {/* M5.79: LOC+83 환적항 + LOC+97/98 최종 목적지 */}
             {c.tspot && c.tspot !== c.pod && (
@@ -1351,7 +1358,8 @@ function Badge({ color, children }) {
 }
 
 function Field({ label, value, mono, highlight }) {
-  const colors = { rose: 'text-rose-400' };
+  //  ★ 2.77: amber·purple 이 표에 없어 조용히 무채색으로 떨어지고 있었다(환적항·최종지도 같은 병).
+  const colors = { rose: 'text-rose-400', amber: 'text-amber-300', purple: 'text-purple-300', cyan: 'text-cyan-300' };
   return (
     <div>
       <div className="text-2xs text-dim-400 font-bold uppercase">{label}</div>
