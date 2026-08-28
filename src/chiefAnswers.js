@@ -509,7 +509,16 @@ export function buildGangShift(voyage, bayDef, opts = {}) {
     deckN: g.deckN || 0, holdN: g.holdN || 0, deckRest: g.deckRest || 0, holdRest: g.holdRest || 0,
     gang: gangOfGroup[g.label] || 0, doneN: g.doneN, doneBy: doneBy[i], restN: g.restN,
     reach: reachOf[g.label] || null, fr: g.frN, rf: g.rfN, dg: g.dgN }));
-  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, twGap, cranes: (_craneNos.length === nGangs ? _craneNos.slice() : []),
+  //  ★ 2.75: 보류 목록 — 사유별로 묶어 한 줄. 조가 끝나도 남으면 다음 조가 이어받아야 한다.
+  const heldLines = [];
+  { const byR = {};
+    for (const md of ['discharge', 'loading']) {
+      const h = voyage?.[md]?.held || {};
+      for (const cn of Object.keys(h)) { const r = h[cn]?.reason; if (r) (byR[r] = byR[r] || []).push(cn); }
+    }
+    for (const r of Object.keys(byR)) heldLines.push(`⏸ 보류 ${byR[r].length}대 — ${r} (${byR[r].slice(0, 3).join('·')}${byR[r].length > 3 ? ' 외' : ''})`);
+  }
+  return { shift, gangs, nGangs, availH, perGangHour, measured: perGangHour > 0, strip, twGap, heldLines, cranes: (_craneNos.length === nGangs ? _craneNos.slice() : []),
     shiftKey: _gKey, fixed: !opts.nGangs && (_gShift > 0 || _gBase > 0), fixedShift: !opts.nGangs && _gShift > 0 };
 }
 
@@ -563,6 +572,8 @@ export function answerGangShift(voyage, bayDef, opts = {}) {
   }
   //  2.70: 터미널 실적으로 깎았으면 그 사실을 밝힌다 — 어디까지 했는지는 앱 기록이 없어 «대수만» 반영이다.
   if (gs.twGap > 0) L.push(`⚠ 앱에 안 찍힌 ${gs.twGap}대는 터미널 실적으로 빼고 계산했어요 — 어느 컨인지는 몰라 대수만 반영입니다.`);
+  //  ★ 2.75: 보류(양하 불가)가 남아 있으면 인계에 보인다 — 완료도 아니고 남은 일도 아닌 것이 조용히 묻히면 안 된다.
+  if (gs.heldLines && gs.heldLines.length) gs.heldLines.forEach((x) => L.push(x));
   gs.gangs.forEach((g) => {
     if (g.done) { L.push(`${gangName(g, true)} — 맡은 구간 완료`); return; }
     const sp = [g.fr ? `⊞FR ${g.fr}` : null, g.rf ? `❄리퍼 ${g.rf}` : null, g.dg ? `☣DG ${g.dg}` : null].filter(Boolean).join(' · ');

@@ -378,6 +378,14 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   if npx esbuild src/nlSearch.js --bundle --platform=node --format=cjs --outfile="$SMOKE_NS" --log-level=error \
      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_CA" --log-level=error; then
     node tools/smoke_workspeed.cjs "$SMOKE_NS" "$SMOKE_CA" || { echo "✗ 작업속도 연막검사 실패 — 배포 금지"; exit 1; }
+    #  2.75: **자동 가이드 — 양하 불가(보류)·해제·되묻기·트윈 싱글 전환.**
+    SMOKE_GG="tools/_smokegg_tmp.cjs"; SMOKE_GC="tools/_smokegc_tmp.cjs"
+    npx esbuild src/guidedQueue.js --bundle --platform=node --format=cjs --outfile="$SMOKE_GG" --log-level=error \
+      && npx esbuild src/chiefAnswers.js --bundle --platform=node --format=cjs --outfile="$SMOKE_GC" --log-level=error \
+      && node tools/smoke_guided.cjs "$SMOKE_GG" "$SMOKE_GC" "$(pwd)" \
+      || { rm -f "$SMOKE_GG" "$SMOKE_GC"; echo "✗ 자동 가이드 연막검사 실패 — 배포 금지"; exit 1; }
+    rm -f "$SMOKE_GG" "$SMOKE_GC"
+
     #  2.73: **시작 시각 알림** — 말로 알린 작업 시작을 알아듣고 그 시각부터 계산하는가.
     SMOKE_SU="tools/_smokesu_tmp.cjs"; SMOKE_SN="tools/_smokesn_tmp.cjs"; SMOKE_SC="tools/_smokesc_tmp.cjs"
     npx esbuild src/utils.js --bundle --platform=node --format=cjs --outfile="$SMOKE_SU" --log-level=error \

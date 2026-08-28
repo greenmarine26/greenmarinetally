@@ -59,7 +59,22 @@ function rowRank(rowStr, { evenRowsSeaSide, landToSea }) {
   return landToSea ? -seaToLand : seaToLand;
 }
 
-export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null }) {
+//  ★ 2.75 — **해제한 컨을 바로 앞 순서로.** 검수사 확정: *«콘문제 해결후 양하불가 해제를 누르면
+//    바로 앞순서로 진행 이어가면 되게»*. ⚠ 순서 규칙은 한 줄도 안 건드린다 — 이미 정해진 큐에서
+//    그 컨이 든 카드만 맨 앞으로 끌어올릴 뿐이다(나머지 상대 순서는 그대로).
+function _frontFirst(cards, frontCns) {
+  if (!frontCns || !frontCns.length) return cards;
+  const want = new Set(frontCns.map((x) => String(x || '').toUpperCase()));
+  const hit = [], rest = [];
+  for (const c of cards) {
+    const mine = want.has(String(c.main?.cn || '').toUpperCase())
+      || (c.twin && want.has(String(c.twin.cn || '').toUpperCase()));
+    (mine ? hit : rest).push(c);
+  }
+  return hit.length ? [...hit, ...rest] : cards;
+}
+
+export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin = null, streamPref = null, frontCns = null }) {
   const landToSea = mode === 'discharge';
   const topFirst = mode === 'discharge';
 
@@ -188,8 +203,8 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
     //     게다가 꺼져도 화면에 아무 표시가 없어 검수사가 현장에서 순서를 볼 때까지 아무도 몰랐다.
     const base = [...pureFrs, ...reorder40FirstForDischarge(flow), ...pureSingles];
     // V8.50 ③: 고른 부류를 물리 종속 지키며 앞당김. FR 우선 양하는 그대로 고정.
-    if (streamPref) return [...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)];
-    return base;
+    if (streamPref) return _frontFirst([...pureFrs, ...pullStreamForward(base.slice(pureFrs.length), streamPref)], frontCns);
+    return _frontFirst(base, frontCns);
   }
   // ── 선적 (1.57 개편). 단 사이 순서는 종전대로 홀드 먼저 → 데크. ──
   //   폐기: "단 내부 = 20싱글 → 트윈 → 40ft" 고정.
@@ -210,7 +225,7 @@ export function buildGuidedQueue({ containers, mode, evenRowsSeaSide, findTwin =
   let body = [...holdOrdered, ...deckOrdered];
   if (streamPref) body = pullStreamForward(body, streamPref, 'below');
   // pureSingles(홀드 짝없는 20ft) → 홀드 → 데크 → FR·OT(마지막)
-  return [...pureSingles, ...body, ...pureFrs];
+  return _frontFirst([...pureSingles, ...body, ...pureFrs], frontCns);
 }
 
 // 카드의 대표 규격이 40ft인지 (트윈 카드는 20ft 짝이므로 20ft 취급)

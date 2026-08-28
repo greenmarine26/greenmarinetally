@@ -10,7 +10,7 @@ import { bayGroupCenter } from '../swapGrade.js';   // TallyOne 1.8-09: 해치 �
 import { getShipBayDictData } from '../shipStructure.js';
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
-import { fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
+import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
 import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
@@ -111,6 +111,12 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   const [hatchBusy, setHatchBusy] = useState(false);
   const [consecFix, setConsecFix] = useState(0);
   const [busy, setBusy] = useState(false);
+  //  ★ 2.75: 보류·해제·싱글 전환
+  const [resumeCns, setResumeCns] = useState([]);   // 해제 직후 한 번 맨 앞으로 끌어올릴 컨
+  const [holdOpen, setHoldOpen] = useState(false);  // 사유 고르는 칸 열림
+  const [holdNote, setHoldNote] = useState('');     // 직접 입력 사유
+  const [holdList, setHoldList] = useState(false);  // «⏸ 보류 N대» 줄 펼침
+  const [singleMode, setSingleMode] = useState(false);  // 트윈을 한 대씩
   const [voiceOn, setVoiceOn] = useState(true);
   // V7.94-05: 카드 내 실번호/XRAY 번호 인라인 입력 (검수사가 카드에서 바로 확인·입력)
   const [editSealCn, setEditSealCn] = useState(null);
@@ -321,19 +327,54 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     setSelectedGroup(g.center); setConsecFix(0); setDeckPromptDone(false); setFixOpen(false);
   };
 
+  //  ★ 2.75 **양하 불가(보류)** — 검수사 실측 2026-08-27, 자동 가이드가 그날 세 번 멈췄다.
+  //    *«콘이 잠겨 있어서 다음 컨테이너를 양하 하다 보니 자동가이드 멈추고»* — 멈추면 수동으로 가야 했고
+  //    수동으로 가면 순서 안내를 잃는다. ⇒ 못 하는 한 대만 빼고 큐는 계속 돈다.
+  //    ⚠ 보류는 **완료가 아니다** — 대수·인건비 집계에 안 섞인다(별도 노드 `held`).
+  const HOLD_ASK_AFTER = 3;          // 검수사 확정: *«보통은 컨테이너 3-5개 다른거 작업하고 있으면 라싱인력이 옵니다»*
+  const HOLD_LONG_MS = 60 * 60000;   // 검수사 확정: *«콘 잠김은 길어야 1시간이내입니다»* — 넘으면 매 카드마다 묻는다
+  const HOLD_REASONS = ['콘 잠김', '트윈 무게 초과', '컨 홀 불량(스프레더 안착 불가)'];
+  const held = useMemo(() => {
+    const h = voyage?.[mode]?.held || {};
+    return Object.keys(h).map((cn) => ({ cn: String(cn).toUpperCase(), ...(h[cn] || {}) }))
+      .filter((x) => x.reason).sort((a, b) => (a.at || 0) - (b.at || 0));
+  }, [voyage, mode]);
+  const heldSet = useMemo(() => new Set(held.map((x) => x.cn)), [held]);
+  //  이 모드의 완료 대수 — «몇 대 지났나»의 기준(새로고침해도 같은 수가 나온다).
+  const doneN = useMemo(() => allContainers.filter((c) => c._mode === mode && c._ptk && c._comp).length,
+    [allContainers, mode]);
+  //  되묻기 차례 — **콘 잠김만** 묻는다. 홀 불량·무게 초과는 기다린다고 풀리는 게 아니다.
+  const holdDue = useMemo(() => {
+    const now = Date.now();
+    for (const h of held) {
+      if (!/콘/.test(h.reason)) continue;
+      const need = (now - (h.at || now) > HOLD_LONG_MS) ? 0 : HOLD_ASK_AFTER;
+      if (doneN - (h.doneAt || 0) >= need) return h;
+    }
+    return null;
+  }, [held, doneN]);
+  const holdGroupOf = (h) => (h?.group ? String(h.group).split(',') : [h?.cn]).filter(Boolean);
+
   // 선택 그룹의 예측 큐 — V7.99-8 (메모6): 선택된 단(selectedTier)만 큐에 (홀드 작업=홀드만/데크 작업=데크만)
   const queue = useMemo(() => {
     if (selectedGroup == null) return [];
     let targets = remaining.filter(c => groupCenterOf(c.bay) === selectedGroup);
     if (selectedTier === 'deck') targets = targets.filter(c => parseInt(c.tier, 10) >= 80);
     else if (selectedTier === 'hold') targets = targets.filter(c => parseInt(c.tier, 10) < 80);
+    //  ★ 2.75: 보류한 컨은 큐에서 뺀다 — 단, 되묻기 차례가 된 것은 다시 넣고 맨 앞으로 끌어온다.
+    const dueCns = holdDue ? holdGroupOf(holdDue).map(x => String(x).toUpperCase()) : [];
+    targets = targets.filter(c => {
+      const cn = String(c.cn || '').toUpperCase();
+      return !heldSet.has(cn) || dueCns.includes(cn);
+    });
     return buildGuidedQueue({
       containers: targets, mode,
       evenRowsSeaSide: berthSide === 'starboard',           // 우현 접안 = 짝수 로우 해상쪽
       findTwin: (t, all, used) => findTwinCandidate(t, all, used, shipImo, shipName),
       streamPref,                                           // V8.50: 갈림 선택 부류
+      frontCns: dueCns.length ? dueCns : (resumeCns.length ? resumeCns : null),   // 2.75: 해제·되묻기는 맨 앞
     });
-  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref]);
+  }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns]);
 
   const card = queue[0] || null;
 
@@ -490,9 +531,56 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
       if (card.twin) await fbCompleteContainersAtomic(voyageKey, mode, [card.main.cn, card.twin.cn], inspector, equip);
       else await fbCompleteContainer(voyageKey, mode, card.main.cn, inspector, 'normal', '', equip);
       noteWorked(card.main);   // 1.57: 예측대로 친 것도 흐름 감지에 넣는다(감지 기준은 '실제로 무엇을 쳤나'다)
+      setResumeCns([]); setSingleMode(false);   // 2.75: 한 장 넘겼으니 맨 앞 고정도 푼다
       setConsecFix(0);
       setFixOpen(false); setFixQuery('');
     } finally { setBusy(false); }
+  };
+
+  //  ★ 2.75 — **한 대만 내린다(싱글).** 검수사 실측: *«무게 때문에 싱글로 작업하니 자동가이드 사용불가»*.
+  //    어느 쪽을 먼저 내릴지는 **캐빈이 정한다** — 검수사 확정 *«캐빈결정. 보통은 갱을 피해서 먼쪽부터»*.
+  //    앱은 순서를 정하지 않고 두 대를 나란히 놓고 고르게 한다. 고른 한 대만 완료되고 나머지는 다음 카드로.
+  const handleConfirmOne = async (which) => {
+    if (!card?.twin || busy) return;
+    if (blockIfXrayMissing()) return;
+    const one = which === 'twin' ? card.twin : card.main;
+    setBusy(true);
+    try {
+      await fbCompleteContainer(voyageKey, mode, one.cn, inspector, 'normal', '', equip);
+      noteWorked(one);
+      setConsecFix(0); setFixOpen(false); setFixQuery(''); setSingleMode(false); setResumeCns([]);
+    } finally { setBusy(false); }
+  };
+
+  //  ⏸ 양하 불가 — 트윈이면 두 대가 한 몸으로 보류된다(짝만 남으면 큐가 짝 없는 20ft 로 잘못 낸다).
+  const doHold = async (reason) => {
+    if (!card || busy || !reason) return;
+    const cns = [card.main.cn].concat(card.twin ? [card.twin.cn] : []);
+    setBusy(true);
+    try {
+      await fbHoldContainers(voyageKey, mode, cns, reason, inspector, equip, doneN);
+      setHoldOpen(false); setHoldNote(''); setSingleMode(false); setResumeCns([]);
+      try { speak(`${reason}. 보류했습니다. 다음 컨테이너로 갑니다.`, { conversational: true }); } catch { /* 소리 꺼짐 */ }
+    } finally { setBusy(false); }
+  };
+
+  //  ▶ 해제 — 검수사가 [해제]를 눌렀거나 되묻기에 «예»라고 답했을 때. 그 컨이 **바로 앞 순서로** 온다.
+  const doRelease = async (h) => {
+    if (!h || busy) return;
+    const cns = holdGroupOf(h);
+    setBusy(true);
+    try {
+      await fbReleaseHold(voyageKey, mode, cns);
+      setResumeCns(cns.map((x) => String(x).toUpperCase()));
+      setHoldList(false);
+    } finally { setBusy(false); }
+  };
+
+  //  «아직» — 지금 완료 대수를 기준점으로 다시 잡는다(3대 더 지나야 또 묻는다).
+  const doSnooze = async (h) => {
+    if (!h || busy) return;
+    setBusy(true);
+    try { await fbSnoozeHold(voyageKey, mode, holdGroupOf(h), doneN); } finally { setBusy(false); }
   };
 
   // 수정: 실제 나온 컨을 입력 → 그 컨을 완료 처리, 예측 컨은 큐에 남음
@@ -1256,6 +1344,34 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
         <div className="h-full bg-violet-600 transition-all" style={{ width: `${groupTotal ? (groupDone / groupTotal) * 100 : 0}%` }}/>
       </div>
 
+      {/* ★ 2.75 — ⏸ 보류 줄. 검수사가 먼저 풀렸으면 되묻기를 기다릴 것 없이 여기서 [해제] 하면
+          그 컨이 바로 앞 순서로 온다(검수사 확정 «해제 탭만 있으면 될듯»). */}
+      {held.length > 0 && (
+        <div className="bg-amber-950 border border-amber-700 rounded-xl">
+          <button onClick={() => setHoldList(v => !v)} className="w-full flex items-center justify-between px-3 py-2">
+            <span className="text-sm font-bold text-amber-200">⏸ 보류 {held.length}대</span>
+            <span className="text-xxs text-amber-300">
+              {held[0].reason}{held.length > 1 ? ` 외 ${held.length - 1}` : ''} · {Math.max(1, Math.round((Date.now() - (held[0].at || 0)) / 60000))}분째
+              {(Date.now() - (held[0].at || 0) > HOLD_LONG_MS) && <span className="text-rose-300"> · ⏱ 1시간 넘음</span>}
+            </span>
+          </button>
+          {holdList && (
+            <div className="px-2 pb-2 space-y-1">
+              {held.map((h) => (
+                <div key={h.cn} className="flex items-center justify-between gap-2 bg-ink-900 rounded-pill px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="mono text-sm text-dim-100 truncate">{h.cn}</div>
+                    <div className="text-xxs text-amber-300">{h.reason} · {Math.max(1, Math.round((Date.now() - (h.at || 0)) / 60000))}분째{h.equip ? ` · ${h.equip}` : ''}</div>
+                  </div>
+                  <button onClick={() => doRelease(h)} disabled={busy}
+                    className="shrink-0 px-3 py-1.5 rounded-pill text-xs font-bold bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white">해제</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* V8.50: 갈림 — 지금 내릴 수 있는 컨에 부류 혼재 시 선택 버튼 (기사 흐름 따라가기) */}
       {card && (forkChips || streamPref) && (
         <div className="flex flex-wrap items-center gap-1 bg-ink-900 border border-line rounded-pill px-2 py-1.5">
@@ -1389,11 +1505,76 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
 
-          <button onClick={handleConfirm} disabled={busy}
-            className="w-full py-4 rounded-pill font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
-            {busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}
-            {card.twin ? `트윈 한 번에 ${mode === 'discharge' ? '양하' : '선적'}확인` : `${mode === 'discharge' ? '양하' : '선적'}확인`}
-          </button>
+          {/* ★ 2.75 — **되묻기.** 검수사 확정: 콘은 «3-5개 다른거 작업하고 있으면 라싱인력이 온다».
+              그래서 검수사가 목록을 열 것 없이 앱이 먼저 꺼낸다. 1시간 넘으면 매 카드마다 묻는다. */}
+          {holdDue && (String(card.main.cn).toUpperCase() === String(holdDue.cn).toUpperCase()
+            || (card.twin && String(card.twin.cn).toUpperCase() === String(holdDue.cn).toUpperCase())) && (
+            <div className="bg-amber-950 border border-amber-600 rounded-xl p-2.5 space-y-2">
+              <div className="text-sm font-bold text-amber-200">
+                ⏸ 보류했던 컨테이너입니다 — {holdDue.reason}
+                {(Date.now() - (holdDue.at || 0) > HOLD_LONG_MS) && <span className="text-rose-300"> · ⏱ 1시간 넘음</span>}
+              </div>
+              <div className="text-xxs text-amber-300">{Math.max(1, Math.round((Date.now() - (holdDue.at || 0)) / 60000))}분째 · 그동안 {Math.max(0, doneN - (holdDue.doneAt || 0))}대 했습니다. 이제 됩니까?</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => doRelease(holdDue)} disabled={busy}
+                  className="py-2.5 rounded-pill font-bold text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white">예, 지금 합니다</button>
+                <button onClick={() => doSnooze(holdDue)} disabled={busy}
+                  className="py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-ink-700 disabled:opacity-50 text-amber-300">아직 — 나중에 다시</button>
+              </div>
+            </div>
+          )}
+
+          {/* ★ 2.75 — 트윈을 한 대씩. 55톤 초과면 «한 번에»는 잠근다(종전엔 경고만 띄우고 그대로 눌렸다). */}
+          {card.twin && singleMode ? (
+            <div className="bg-ink-900 border border-sky-700 rounded-xl p-2.5 space-y-2">
+              <div className="text-xxs text-sky-300 font-bold">한 대씩 — 캐빈에서 먼 쪽부터, 갱을 피해서 (어느 쪽인지는 캐빈이 정합니다)</div>
+              {[['main', card.main], ['twin', card.twin]].map(([k, c]) => (
+                <button key={k} onClick={() => handleConfirmOne(k)} disabled={busy}
+                  className="w-full py-3 rounded-pill font-bold text-sm bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white flex items-center justify-between px-4">
+                  <span className="mono">{c.cn}</span>
+                  <span className="text-xxs opacity-80">{c.bay}-{c.row}-{c.tier}{c.wt ? ` · ${formatWt(c.wt)}` : ' · 무게 미상'}</span>
+                  <span>이것부터</span>
+                </button>
+              ))}
+              <button onClick={() => setSingleMode(false)} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">트윈으로 돌아가기</button>
+            </div>
+          ) : (
+            <button onClick={handleConfirm} disabled={busy || (card.twin && !!twinWtWarn?.over)}
+              className="w-full py-4 rounded-pill font-bold text-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white flex items-center justify-center gap-2">
+              {busy ? <Loader2 className="w-5 h-5 animate-spin"/> : <Check className="w-6 h-6"/>}
+              {card.twin ? (twinWtWarn?.over ? '트윈 한 번에 — 무게 초과로 잠김' : `트윈 한 번에 ${mode === 'discharge' ? '양하' : '선적'}확인`) : `${mode === 'discharge' ? '양하' : '선적'}확인`}
+            </button>
+          )}
+
+          {card.twin && !singleMode && (
+            <button onClick={() => setSingleMode(true)}
+              className={`w-full py-2.5 rounded-pill font-bold text-sm flex items-center justify-center gap-2 ${twinWtWarn?.over ? 'bg-sky-700 hover:bg-sky-600 text-white' : 'bg-ink-800 hover:bg-ink-700 text-sky-300'}`}>
+              싱글로 한 대씩{twinWtWarn?.over ? ' — 이렇게 하십시오' : ''}
+            </button>
+          )}
+
+          {/* ★ 2.75 — ⏸ 양하 불가. 못 하는 한 대만 빼고 큐는 계속 돈다(멈추면 수동으로 가야 했다). */}
+          {!holdOpen ? (
+            <button onClick={() => setHoldOpen(true)} disabled={busy}
+              className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-rose-900 disabled:opacity-50 text-rose-300 flex items-center justify-center gap-2">
+              ⏸ 지금 {mode === 'discharge' ? '양하' : '선적'} 불가 — 다음 컨테이너로
+            </button>
+          ) : (
+            <div className="bg-ink-900 border border-rose-800 rounded-xl p-2.5 space-y-2">
+              <div className="text-xxs text-rose-300 font-bold">왜 못 합니까? (기록에 남습니다 — 완료로는 안 셉니다)</div>
+              {HOLD_REASONS.map((r) => (
+                <button key={r} onClick={() => doHold(r)} disabled={busy}
+                  className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-rose-800 disabled:opacity-50 text-dim-100">{r}</button>
+              ))}
+              <div className="flex gap-2">
+                <input value={holdNote} onChange={e => setHoldNote(e.target.value)} placeholder="직접 적기"
+                  className="flex-1 bg-ink-800 border border-line rounded px-2 py-2 text-sm text-dim-100"/>
+                <button onClick={() => doHold(holdNote.trim())} disabled={busy || !holdNote.trim()}
+                  className="px-3 rounded-pill text-sm font-bold bg-rose-800 disabled:opacity-40 text-white">보류</button>
+              </div>
+              <button onClick={() => { setHoldOpen(false); setHoldNote(''); }} className="w-full py-2 rounded-pill text-xxs bg-ink-800 text-dim-300">취소</button>
+            </div>
+          )}
 
           {!fixOpen ? (
             <button onClick={() => setFixOpen(true)}

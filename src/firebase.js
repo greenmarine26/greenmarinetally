@@ -224,6 +224,43 @@ export async function fbSetVoyageWorkStart(voyageKey, ms, by, cranes = null) {
   return list.length ? list.map((c) => `${c.no}호기 ${fmt(c.ms).slice(11)}`).join(' · ') : fmt(ms);
 }
 
+//  ★ TallyOne 2.75 — **양하 불가(보류).** 검수사 실측 2026-08-27: 자동 가이드가 그날 세 번 멈췄고,
+//    그때마다 수동으로 넘어가야 했다 — *«콘이 잠겨 있어서 다음 컨테이너를 양하 하다 보니 자동가이드 멈추고»*.
+//    보류는 **완료가 아니다.** `completed` 를 건드리지 않고 따로 남긴다(대수·인건비 집계에 안 섞인다).
+//    ⚠ 조·검수사가 바뀌어도 남아야 한다 — 화면 state 가 아니라 항차에 적는다.
+//    `doneAt` = 보류 당시 그 모드의 완료 대수. «몇 대 지났나»를 이것으로 센다(새로고침해도 유지).
+export async function fbHoldContainers(voyageKey, mode, cns, reason, by, equip = '', doneAt = 0) {
+  const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
+  if (!voyageKey || !list.length) return;
+  const at = Date.now();
+  const patch = {};
+  for (const cn of list) {
+    const rec = { reason: String(reason || '').slice(0, 60), by: by || '', at, doneAt: Number(doneAt) || 0 };
+    if (equip) rec.equip = equip;
+    if (list.length > 1) rec.group = list.join(',');   //  트윈은 두 대가 한 몸 — 해제도 같이
+    patch[`voyages/${voyageKey}/${mode}/held/${cn}`] = rec;
+  }
+  await update(ref(db), patch);
+}
+
+//  해제 — 검수사가 [해제]를 눌렀거나 되묻기에 «예»라고 답했을 때. 트윈은 짝까지 함께 푼다.
+export async function fbReleaseHold(voyageKey, mode, cns) {
+  const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
+  if (!voyageKey || !list.length) return;
+  const patch = {};
+  for (const cn of list) patch[`voyages/${voyageKey}/${mode}/held/${cn}`] = null;
+  await update(ref(db), patch);
+}
+
+//  «아직» — 되묻기를 뒤로 민다. 지금 완료 대수를 기준점으로 다시 잡아 그만큼 더 지나야 또 묻는다.
+export async function fbSnoozeHold(voyageKey, mode, cns, doneAt) {
+  const list = (Array.isArray(cns) ? cns : [cns]).map((x) => String(x || '').toUpperCase()).filter(Boolean);
+  if (!voyageKey || !list.length) return;
+  const patch = {};
+  for (const cn of list) patch[`voyages/${voyageKey}/${mode}/held/${cn}/doneAt`] = Number(doneAt) || 0;
+  await update(ref(db), patch);
+}
+
 // 양하/선적 섹션 데이터 저장 (mode = 'discharge' | 'loading')
 export async function fbSaveSectionData(voyageKey, mode, data) {
   await update(sectionRef(voyageKey, mode), data);
