@@ -8,6 +8,7 @@ import { buildGuidedQueue, availableCardsOf, conClassOf, cardMatchesPref } from 
 import { getBayPairs, findTwinCandidate } from '../twin.js';
 import { bayGroupCenter } from '../swapGrade.js';   // TallyOne 1.8-09: 해치 그룹 계산 단일 소스
 import { getShipBayDictData } from '../shipStructure.js';
+import { buildGangShift, gangName } from '../chiefAnswers.js';   // 2.80-02: «몇 호기 화물인가» 안내 — 계산은 한 벌
 import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
@@ -603,6 +604,44 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V8.70: 크로스베이 체인시프트 감안 — 그룹·단 제한을 "필터"에서 "정렬 우선순위"로 완화.
   //   (구 V7.99-8: 현재 단으로만 좁힘 → 다른 베이 계획 컨이 실제로 오면 후보 0건, 현장 진행 불가.)
   //   자기 카드의 반대편 컨도 후보 허용(앞뒤 얽힘: 뒤 예측 컨이 앞 자리에 오는 경우) — 그 칸 자신의 컨만 제외.
+  //  ★ 2.80-02 (검수사 확정 2026-08-28) — **다른 베이 화물이면 몇 번 베이·몇 호기 것인지 말한다.**
+  //    검수사 원문: *«34번 데크를 선적중인데 18번 데크에 갈 컨테이너 번호가 앱에 입력되면
+  //      18번 베이 화물이고 몇번갱이 실어야 될 화물입니다 라고 알려줘야 합니다. PDA는 그렇게 알려줍니다.
+  //      우리앱은 갱은 모르지만 베이는 압니다 … 내가 4호기일 때는 3호기로 가게 하라고 안내를 해야 합니다.»*
+  //    ⇒ 베이는 컨이 갖고 있고, 갱은 2.62 갱 배분(buildGangShift)이 이미 계산해 둔다. 둘을 잇기만 하면 된다.
+  //      갱 배분이 없는 배(사전 미비·갱 수 미정)면 베이만 말한다 — 모르면 «모른다», 지어내지 않는다.
+  const gangByBay = useMemo(() => {
+    try {
+      const gs = buildGangShift(voyage, getShipBayDictData(shipImo, shipName)?.bayDef || null);
+      if (!gs || gs.askGangs || !Array.isArray(gs.strip)) return null;
+      const m = {};
+      for (const g of gs.strip) {
+        const found = (gs.gangs || []).find((x) => x.no === g.gang);
+        for (const b of (g.members || [])) m[parseInt(b, 10)] = found ? gangName(found) : '';
+      }
+      return Object.keys(m).length ? m : null;
+    } catch (e) { return null; }
+  }, [voyage, shipImo, shipName]);
+
+  //  이 컨이 지금 작업 중인 베이 그룹 밖이면 «어디 화물인지» 한 줄로 만든다.
+  const otherBayNote = (c) => {
+    if (!c || !c.bay) return '';
+    const bn = parseInt(c.bay, 10);
+    if (!Number.isFinite(bn)) return '';
+    if (selectedGroup != null && groupCenterOf(c.bay) === selectedGroup) {
+      //  같은 베이 그룹인데 단(홀드/데크)이 다르면 그것만 짚는다.
+      const isDeck = parseInt(c.tier, 10) >= 80;
+      if (selectedTier === 'deck' && !isDeck) return `${bn}번 홀드 화물입니다`;
+      if (selectedTier === 'hold' && isDeck) return `${bn}번 데크 화물입니다`;
+      return '';
+    }
+    const tierTxt = parseInt(c.tier, 10) >= 80 ? '데크' : '홀드';
+    const g = gangByBay ? gangByBay[bn] : null;
+    if (g && equip && g !== equip) return `${bn}번 ${tierTxt} 화물입니다 — ${g}로 보내십시오`;
+    if (g) return `${bn}번 ${tierTxt} 화물입니다 (${g} 구간)`;
+    return `${bn}번 ${tierTxt} 화물입니다`;
+  };
+
   const inWorkTier = (c) => {
     if (selectedGroup != null && groupCenterOf(c.bay) !== selectedGroup) return false;
     if (selectedTier === 'deck') return parseInt(c.tier, 10) >= 80;
@@ -1048,6 +1087,27 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (xrayMissingByCn(c.cn)) {   // V8.09-06: 실제 컨이 XRAY 대상인데 실번호 미입력이면 차단
       alert(`XRAY 실번호를 먼저 입력하세요.\n${c.cn?.slice(-4)}은 XRAY 대상으로 실번호 입력 전까지 양하확인할 수 없습니다.`);
       return;
+    }
+    //  ★ 2.80-02: 다른 베이 화물이면 그 자리에서 막고 «어디로 가야 하는지» 말한다(검수사 확정 — PDA 와 같은 안내).
+    //    그래도 실었다면 **현장 절차를 그대로 띄운다.** 검수사 확정 2026-08-28 —
+    //      *«이미 실수로 실었을때 입니다. 포트가 같다면 통제실에 무전을 합니다. 18번베이 컨테이너를 선적했다고
+    //        알려주고 컨넘버를 불러줘야 합니다. 그러면 저희 베이에 남을 1개의 컨테이너를 그쪽 베이로 보내줍니다.»*
+    //    ⇒ 그 무전이 곧 **자리 맞바꿈**이다 — 앱이 하는 swapWith 와 같은 일이라 총량이 맞는다.
+    //    ⚠ POD 가 다르면 맞바꿈이 성립하지 않는다(그 배에서 내릴 항이 다르다) — 그때는 세게 경고한다.
+    {
+      const away = otherBayNote(c);
+      if (away) {
+        const samePod = String(c.pod || '').toUpperCase() === String(card.main.pod || '').toUpperCase();
+        const guide = samePod
+          ? `이미 실었다면 통제실에 무전하십시오.\n«${parseInt(c.bay, 10)}번 베이 ${c.cn} 를 실었다» 고 알리고 컨번호를 불러 주면,\n이 베이에 남을 컨 한 대를 그쪽으로 보내 줍니다.\n\n[그래도 넣는다] 를 누르면 앱도 두 자리를 맞바꿔 둡니다.`
+          : `⛔ 양하항이 다릅니다 — 여기는 ${card.main.pod || '?'}, 그 컨은 ${c.pod || '?'} 입니다.\n맞바꿔 담을 수 없으니 통제실에 먼저 무전해 확인하십시오.`;
+        const go = await ask({
+          title: '이 자리 화물이 아닙니다',
+          message: `${c.cn.slice(-4)} 는 ${away}.\n지금 자리는 ${card.pos} 입니다.\n\n${guide}`,
+          confirmLabel: '그래도 넣는다', cancelLabel: '취소',
+        });
+        if (!go) return;
+      }
     }
     if (!(await confirmIfDone(c))) return;   // V8.71: 완료 기록된 컨이면 오선적 안내 후 진행 (1.53: 모달이라 await)
     setBusy(true);
