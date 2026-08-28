@@ -2441,20 +2441,48 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
               검수사: *«조회 해보니 인천짐으로 되어 있지만 이선박은 인천엔 가지 않습니다. 그리고
               세관리스트에는 평택짐으로 양하목록에 포함되어 있습니다. 제생각엔 평택에서 양하후에
               다른선박으로 환적할것 같습니다. 고로 시프팅은 없는듯 합니다.»* */}
-          {(shiftInfo?.meta?.customsFixed || []).length > 0 && (
-            <div className="px-3 py-1.5 text-xxs text-cyan-100 bg-cyan-950/40 border-b border-cyan-800/50 space-y-0.5">
-              <div>🔁 <b>환적분 {shiftInfo.meta.customsFixed.length}대</b> — EDI 는 다른 항구 짐이라 하는데 <b>세관 양하리스트에는 평택짐</b>으로 들어 있습니다. 평택에서 내려 다른 배로 옮겨 싣는 것으로 보고 <b>시프팅에서 뺐습니다.</b></div>
-              {shiftInfo.meta.customsFixed.slice(0, 6).map(cf => (
-                <div key={cf.cn} className="mono text-2xs text-cyan-300">
-                  · {cf.cn} <b>{cf.pos}</b> {cf.iso} — EDI POD {cf.ediPod} → 세관 {cf.recPod}
-                </div>
-              ))}
-              {shiftInfo.meta.customsFixed.length > 6 && <div className="text-2xs text-cyan-400">… 외 {shiftInfo.meta.customsFixed.length - 6}대</div>}
-              <div className="text-2xs text-cyan-200/80">
-                EDI 의 POD 는 <b>옮겨 실은 뒤의 최종 목적지</b>라 배가 실제로 그 항구에 가는 것이 아닙니다. 짐은 평택에서 내립니다.
+          {/* ★ 2.76 (검수사 확정 2026-08-28) — **기본이 리스트다.** 양하 리스트에 실려 있으면 평택 양하로 본다.
+              ⛔ 화면에 근거를 늘어놓지 않는다 — 검수사 확정: *«화면에 넣으면 안됩니다.»*
+                 자료가 어떻게 어긋났는지(EDI 는 시프팅·배정표는 279·세관이 결론)는 **판단 근거이지 화면에 쓸 말이 아니다.**
+                 검수사가 화면에서 알아야 하는 것은 «몇 대가 왜 빠졌나» 뿐이다. */}
+          {/* ★ 2.76 (검수사 확정 2026-08-28) — **기본이 리스트다. 그리고 숫자 하나로 확인한다.**
+              *«기본이 리스트입니다. 리스트 목록에 앱이 말한 쉬프팅 대상 컨테이너랑 매칭이 된다면
+                시프팅 보다는 평택 양하가 맞다고 판단해야 할것입니다.»*
+              *«양하갯수가 평택항에서 확정이 되었습니다. 지금 리스트와 평택항 양하 대상을 맞추시면
+                됩니다. 그러면 바로 확인 가능 합니다.»* · *«47개만 비교하면 됩니다.»*
+              ⇒ **배정표 확정 양하 − EDI 평택분 = 모자란 수**. 그 수와 리스트에서 되찾은 수가 같으면 확정이다.
+                 MCSC 633N 실측: 279 − 232 = 47, 리스트에서 되찾은 것도 47 → 맞아떨어진다.
+              ⛔ 화면에 근거를 늘어놓지 않는다 — *«화면에 넣으면 안됩니다»* · *«그러면 앱의 판단력을
+                 믿지 않게 됩니다»*. 판단을 먼저 말하고 숫자 한 줄로 보인다. */}
+          {(shiftInfo?.meta?.customsFixed || []).length > 0 && (() => {
+            const cf = shiftInfo.meta.customsFixed;
+            const lm = shiftInfo.meta.listMeta || {};
+            const feTxt = Object.entries(lm.fe || {}).map(([k, v]) => `${k === 'E' ? '엠티' : k === 'F' ? '풀' : k} ${v}`).join(' · ');
+            const cc = shiftInfo.meta.count || {};   // 2.76: 대조는 utils 한 벌(ptkCountCheck)이 한다
+            const planDis = cc.plan || 0, ediPtk = cc.ediN || 0, gap = cc.gap || 0;
+            const sure = !!cc.known && gap === cf.length;
+            return (
+              <div className={`px-3 py-1.5 text-xxs space-y-0.5 border-b ${sure ? 'text-emerald-100 bg-emerald-950/40 border-emerald-800/50' : 'text-cyan-100 bg-cyan-950/40 border-cyan-800/50'}`}>
+                {sure ? (
+                  <div>✅ <b>평택 양하 {cf.length}대</b>{feTxt ? ` (${feTxt})` : ''} — 시프팅에서 뺐습니다.</div>
+                ) : (
+                  <div>❓ <b>평택 양하로 보입니다 — {cf.length}대</b>{feTxt ? ` (${feTxt})` : ''} · 양하리스트 기준으로 시프팅에서 뺐습니다.</div>
+                )}
+                {planDis > 0 && ediPtk > 0 && (
+                  <div className="text-2xs opacity-90">
+                    배정표 {planDis} · EDI {ediPtk} — 모자란 {gap}대
+                    {sure ? '가 리스트에 그대로 있습니다.' : `인데 리스트에서 ${cf.length}대를 찾았습니다 — ${Math.abs(gap - cf.length)}대가 안 맞습니다.`}
+                  </div>
+                )}
+                {cf.slice(0, 6).map(x => (
+                  <div key={x.cn} className="mono text-2xs opacity-80">
+                    · {x.cn} <b>{x.pos}</b> {x.iso} — EDI {x.ediPod} · 리스트 {x.recPod}
+                  </div>
+                ))}
+                {cf.length > 6 && <div className="text-2xs opacity-70">… 외 {cf.length - 6}대</div>}
               </div>
-            </div>
-          )}
+            );
+          })()}
           {shiftInfo?.truthChk && !shiftInfo.truthChk.pending && !shiftInfo.truthChk.ok && (
             <div className="px-3 py-1.5 text-xxs text-rose-200 bg-rose-950/40 border-b border-rose-800/40">
               ⛔ <b>배정표 이적 {shiftInfo.truthChk.truth}대</b>({shiftInfo.truthChk.moves}모브)인데 앱은 <b>{shiftInfo.truthChk.pred}대</b>를 냈습니다 — 어느 한쪽이 틀립니다.
