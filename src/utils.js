@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.80-03'   // 2.80-03 신규 취항선 RZSY(SMC YANTAI) 등재 - .def 디코드 19베이
+export const APP_VERSION = 'TallyOne 2.81'   // 2.81 시프팅 대수 - 배정표가 있으면 배정표가 정본
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -3681,7 +3681,44 @@ export function loadEdiIsDeparture(loadEdiMap) {
   return Object.values(loadEdiMap).some((c) => c && c.pol && isPyeongtaekPort(c.pol));
 }
 
-export function computeShiftingMap(dischEdiMap, loadEdiMap) {
+// ★★★ 2.81 (검수사 확정 2026-08-29, MCSC 633N) — **배정표가 있으면 배정표가 정본이다.**
+//
+//   검수사 원문 — *«시프팅 190번 즉 95개의 시프팅이 있다고 합니다. 앱은 166번 즉 83개 입니다»* ·
+//   *«카고플랜 양하와 선적을 비교 해보니 95개가 맞는듯 합니다 앱이 판정미스한게 보입니다»*
+//
+//   **무엇이 틀렸나.** 원시 대조(자리가 실제로 바뀐 통과화물)는 **정확히 95대**였다 — 배정표 190번÷2 와
+//   한 대도 안 틀린다. 그 뒤에 붙은 필터 둘이 29대를 깎아 66대로 만들었다.
+//     ① 동형 공컨 순열 제외 −13대 ② 방해 판정 −16대
+//
+//   ① 은 **판정 자체가 틀렸다.** 조건이 «from 이 그룹의 to 집합에 있고 to 가 그룹의 from 집합에 있다»
+//      인데, 45GE 공컨 그룹이 87대로 커지자 자리 집합이 넓어져 **순열이 아닌 것이 우연히 걸렸다.**
+//      실측 — 그 87대는 56곳을 비우고 56곳을 새로 채운다(베이 14·18·26 → 22·34·38 대량 재배치).
+//      빠진 13대만 봐도 출발전용 8곳·도착전용 8곳이라 **닫힌 순열이 아니다.**
+//      (XTPG 532 때는 맞교환 7쌍+3자 순환 2조로 진짜 순열이었고 그룹이 작아 우연 일치가 없었다.)
+//   ② 는 **예측에는 맞고 확정 대조에는 과하다.** 실측 — 베이 26 홀드 02단(맨 아래) 4대가
+//      데크 84단으로 올라갔는데, «아래에 평택 양하가 있어야» 조건이라 맨 아래 컨은 영영 안 걸린다.
+//      베이 18 데크 90단 12대도 «그 베이에 평택 작업 없음»으로 빠졌으나 **간 곳은 22·34·38**
+//      — 전부 평택 작업 베이다. 크레인이 실제로 들었고 터미널이 셌다.
+//
+//   ★ 검수사가 짚어 준 까닭 — *«시프팅 갯수가 늘어난것 선적자리 확보와도 관계가 있을것입니다»*
+//     빠진 29대를 모아 보면 그 말대로다. 베이 18 데크 90단 12대는 **베이 18 을 통째로 비운 것**이고
+//     베이 26 홀드 02단 4대는 **홀드 바닥을 비워 데크로 올린 것**이다. 둘 다 «내릴 것 위에 얹혀서»가
+//     아니라 **«실을 자리를 만들려고»** 옮긴 것이다.
+//     ⇒ 종전 방해 판정은 「양하에 걸리는가」를 주로 보고 **자리를 비우는 이동**을 못 본다.
+//       그 베이에 평택 선적분이 EDI 상 안 잡혀 있으면(베이 18 평택 선적 0) 판정이 통째로 헛돈다.
+//       판정을 더 정교하게 만들려 하지 말고, **터미널이 센 수(배정표)를 그대로 쓴다** — 그게 사실이다.
+//
+//   **그래서 규칙.** 배정표 이적(`info.berthShift`)이 **0보다 크고** 원시 대조 대수와 맞으면
+//   필터를 **건너뛴다**. 배정표는 터미널이 확정한 실작업 수이고, 원시 대조가 그와 같다는 것은
+//   «자리가 바뀌었다 = 크레인이 들었다»가 그대로 맞았다는 뜻이다. 앱이 이유를 더 추측할 이유가 없다.
+//   배정표가 0이거나 없거나 대수가 어긋나면 **종전 필터를 그대로 건다**(SWBT 2614S·XTPG 537E 보호).
+//
+//   전수 대조 (배정표 있는 항차 6건, 2026-08-29):
+//     KSKM 2615N 배정0 → 0 ✔ · MAMP 631N 배정2 → 1 ✔ · XTPG 536E 배정16 → 8 ✔
+//     XTPG 537E 배정0 → 0 ✔ · SWBT 2614S 배정0 → 0 ✔ · **MCSC 633N 배정190 → 95 ✔**
+//   종전 코드는 MCSC 만 66 으로 틀렸고, 필터를 통째로 걷으면 SWBT·XTPG537E 가 깨진다.
+//   이 규칙만이 6/6 을 맞힌다.
+export function computeShiftingMap(dischEdiMap, loadEdiMap, opts) {
   const out = {};
   if (!dischEdiMap || !loadEdiMap) return out;
   // TallyOne 1.69-10 (검수사 확정 2026-08-15, SWBT 2614S): 선적 EDI 가 아직 안 왔는데
@@ -3714,6 +3751,21 @@ export function computeShiftingMap(dischEdiMap, loadEdiMap) {
     const to = posOf(l);
     if (!from || !to) continue;
     if (from !== to) out[cn] = { from, to, _iso: d.iso || l.iso || '', _fe: (d.fe === 'E' && l.fe === 'E') ? 'E' : 'F' };
+  }
+  // ★ 2.81: 배정표가 정본인 경우 — 여기서 끝낸다(위 머리말 참조).
+  //   원시 대조 대수 × 2 == 배정표 이적(모브)이면 터미널 확정과 일치한 것이다.
+  //   필터는 «자리가 바뀌었는데 크레인이 안 들었을 것»을 걸러내는 장치인데,
+  //   터미널이 그만큼 들었다고 세었으면 걸러낼 것이 없다.
+  {
+    const bs = Number(opts && opts.berthShift);
+    if (Number.isFinite(bs) && bs > 0 && Object.keys(out).length * 2 === bs) {
+      for (const v of Object.values(out)) { delete v._iso; delete v._fe; }
+      try {
+        Object.defineProperty(out, '_meta', {
+          value: { source: 'berthShift', berthShift: bs }, enumerable: false });
+      } catch (e) { /* 표시 부가정보 실패는 계산에 영향 없음 */ }
+      return out;
+    }
   }
   // V9.04-05: 서류상 자리바꿈(동형 공컨 순열) 제외 — XTPG 532 사건(사용자 확정 2026-07-20).
   //   실측: 쉬프팅 26 중 20이 같은 규격 공컨끼리 자리만 맞바꾼 것(맞교환 7쌍 14 + 3자 순환 2조 6).
@@ -4806,7 +4858,9 @@ export function fullEdiMapOf(sec) {
 
 export function computeShiftingFromVoyage(voyage) {
   const mapOf = (sec) => ediMapFromRaw(sec) || sec?.ediContainers || null;
-  return computeShiftingMap(mapOf(voyage?.discharge), mapOf(voyage?.loading));
+  //  2.81: 배정표 이적(수집기가 배정목록에서 받아 적은 모브 수)을 같이 넘긴다 — 정본 판정용.
+  return computeShiftingMap(mapOf(voyage?.discharge), mapOf(voyage?.loading),
+                            { berthShift: voyage?.info?.berthShift });
 }
 
 // V8.98-03: 쉬프팅 계산 모듈 캐시 — 홈 카드(항차 여러 장)·항차 화면·출력허브가 공유.
@@ -4869,6 +4923,7 @@ export function computeShiftingMapCached(voyageKey, voyage) {
     d?.raw?.edi?.uploadedAt || 0, d?.raw?.edi?.sizeBytes || 0,
     l?.raw?.edi?.uploadedAt || 0, l?.raw?.edi?.sizeBytes || 0,
     Object.keys(d?.ediContainers || {}).length, Object.keys(l?.ediContainers || {}).length,
+    voyage?.info?.berthShift ?? '',   // 2.81: 배정표 이적이 나중에 들어와도 다시 계산한다
   ].join('|');
   const key = voyageKey || 'unknown';
   const hit = _shiftMapCache.get(key);

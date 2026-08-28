@@ -364,6 +364,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
 node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검사 실패 — 배포 금지"; exit 1; }
+node tools/smoke_shiftberth.cjs || { echo "✗ 시프팅 대수(배정표 정본) 연막검사 실패 — 배포 금지"; exit 1; }
 SMOKE_SL=$(mktemp /tmp/_smokesl_XXXXXX.js)
 #  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.
 #    그래서 firebase 를 메모리 스텁(tools/fb_stub_slotmode.js)으로 잠시 갈아 끼운다 — 실제 쓰기는 없다.
