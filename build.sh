@@ -364,11 +364,17 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
 node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검사 실패 — 배포 금지"; exit 1; }
 SMOKE_SL=$(mktemp /tmp/_smokesl_XXXXXX.js)
+#  ⚠ 이 검사는 «화면이 떴다»에서 멈추지 않고 **후보를 실제로 눌러** 무엇이 어떤 인자로 불렸는지 본다.
+#    그래서 firebase 를 메모리 스텁(tools/fb_stub_slotmode.js)으로 잠시 갈아 끼운다 — 실제 쓰기는 없다.
+#    2.80 사고의 재발 방지: 화면만 보고 «이론상 된다»로 넘기면 밀려난 계획 컨이 창고로 뜬다.
+cp src/firebase.js "$SMOKE_SL.fbbak" && cp tools/fb_stub_slotmode.js src/firebase.js
 if npx esbuild tools/smoke_slotmode.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
      --platform=browser --format=iife --log-level=error --outfile="$SMOKE_SL"; then
+  cp "$SMOKE_SL.fbbak" src/firebase.js && rm -f "$SMOKE_SL.fbbak"
   node tools/smoke_slotmode.cjs "$SMOKE_SL" || { echo "✗ 자리 확인 모드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SL"; exit 1; }
   rm -f "$SMOKE_SL"
 else
+  cp "$SMOKE_SL.fbbak" src/firebase.js; rm -f "$SMOKE_SL.fbbak"
   echo "✗ 자리 확인 모드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SL"; exit 1
 fi
   # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.

@@ -43,6 +43,28 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
   if (!/규격 다름/.test(t2)) fail('규격 다른 후보에 «규격 다름» 경고가 없다');
   if (!/끝자리 같은 컨 2대/.test(t2)) fail('끝4 중복 경고가 없다');
   if (!/계획대로 확인하는 방식으로 돌아가기/.test(t2)) fail('종전 방식으로 돌아가는 길이 없다');
-  console.log('✅ 자리 확인 모드 연막검사 통과 — 자동 켜짐 · 후보 2대 · 규격 경고 · 중복 경고 · 되돌아가기');
+  //  ★ 여기서 멈추지 않는다 — **실제로 눌러 본다.** (검수사 지적 2026-08-28:
+  //    «클로드들이 실 테스트를 안하고 코드르만 확인합니다. 열어 놓고 그냥 닫습니다 이론상은 가능하니»)
+  //    2.80 이 그래서 사고를 냈다 — 화면은 떴는데, 눌렀을 때 밀려난 계획 컨이 창고로 갔다.
+  //    이제 «무엇이 어떤 인자로 불렸는지»까지 본다. firebase 는 스텁이라 실제 쓰기는 없다.
+  const planned = ((t2.match(/계획:\s*([A-Z]{4}\d{7})/) || [])[1]) || '';
+  const slot = ((t2.match(/이 자리에 실제로 실은 컨테이너\s*(\d{2}-\d{2}-\d{2})/) || [])[1]) || '';
+  if (!planned) fail('화면에서 계획 컨 번호를 못 읽었다');
+  if (!slot) fail('화면에서 자리를 못 읽었다');
+  const cand = [...doc.querySelectorAll('button')].find(x => /BEAU2977719/.test(x.textContent || ''));
+  if (!cand) fail('후보 버튼을 못 찾았다');
+  cand.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  await wait(700);
+  const calls = dom.window.__calls || [];
+  const re = calls.find(c => c.fn === 'reassign');
+  if (!re) fail('눌렀는데 재배정이 안 불렸다');
+  if (re.cn !== 'BEAU2977719') fail('엉뚱한 컨을 옮긴다: ' + re.cn);
+  if (re.to !== slot) fail('화면이 부른 자리(' + slot + ')가 아니라 ' + re.to + ' 로 간다');
+  if (!re.opts || re.opts.swapWith !== planned)
+    fail('맞바꿈(swapWith=' + planned + ')이 안 넘어갔다 → 계획 컨이 창고로 뜬다. opts=' + JSON.stringify(re.opts));
+  if (!re.opts.actualWork) fail('actualWork 가 없다 — 계획만 있는 자리를 못 밀어낸다');
+  if (!calls.find(c => c.fn === 'complete' && c.cn === 'BEAU2977719')) fail('선적확인이 안 찍혔다');
+  console.log('✅ 자리 확인 모드 연막검사 통과 — 칸 자동 열림 · 후보 2대 · 규격/중복 경고 · 되돌아가기');
+  console.log('   눌러 본 결과: ' + re.cn + ' → ' + re.to + ' · 맞바꿈 상대 ' + planned + ' · 선적확인 찍힘');
   process.exit(0);
 })();

@@ -950,7 +950,18 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   1.54: 자리 배정이 안 되면 **완료를 찍지 않는다.** 돌려주는 값이 false 면 부르는 쪽이 멈춘다.
   const applyFixOne = async (actual, slot) => {
     if (mode === 'loading') {
-      const r = await reassignAsk(actual.cn, slot.bay, slot.row, slot.tier);
+      //  ★ 2.80-01 (검수사 실사용 보고 2026-08-28 21:0x) — **밀려난 계획 컨은 창고가 아니라 «온 컨의 옛 자리»로 간다.**
+      //    실측 사고: 28-07-82(계획 SKHU6475028)에 4172 를 넣자 5028 이 `planTaken` 으로 **창고**로 갔다.
+      //    검수사 — *«5028은 화면에서 사라져야 합니다. 8847 자리로 가서 대기 하고 있어야 합니다.
+      //      그런데도 아직도 화면에 남아 있어 그자리가 빈자리로 보이는것이고 그래서 4172를 눌렀더니
+      //      엉뚱한곳에 들어 가 있습니다.»*
+      //    ⇒ 자리 확인 모드에서 다른 컨을 넣는 것은 **두 컨의 자리 맞바꿈**이다(현장 뜻). `swapWith` 로 못 박는다.
+      //      이것이 없으면 밀려난 컨이 계획 자리를 든 채 창고로 떠 큐·그림에 유령으로 남는다.
+      //    ⚠ 맞바꿈은 «온 컨이 원래 자리를 갖고 있을 때»만 성립한다 — 미배정·창고에서 온 컨은 종전대로.
+      const canSwap = slotMode && !!actual.bay && !!actual.row && !!actual.tier
+        && String(actual.bay_actual ?? '') !== '__STG__';
+      const r = await reassignAsk(actual.cn, slot.bay, slot.row, slot.tier,
+        canSwap ? { swapWith: slot.cn, actualWork: true } : undefined);
       if (!r) return false;
     }
     await fbCompleteContainer(voyageKey, mode, actual.cn, inspector, 'normal', '', equip);   // 1.55: 갱(호기)

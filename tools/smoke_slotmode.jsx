@@ -3,6 +3,9 @@
 //   (2.80 — 검수사 «말로는 모르겠습니다. 실물을 사용해보고»)
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+//  ⚠ 실제로 눌러 본다 — 코드만 읽고 «이론상 된다»로 넘기지 않는다(검수사 지적 2026-08-28).
+//    firebase 를 메모리 스텁으로 갈아 끼워, 버튼을 눌렀을 때 **어떤 인자로 무엇이 불렸는지**를 잡는다.
+window.__calls = [];
 import GuidedWorkPanel from '../src/components/GuidedWorkPanel.jsx';
 
 window.__fbShipBayDict = { SMOKE: { name: 'SMOKE', code: 'SMOKE', callsign: 'SMOKE1', imo: '',
