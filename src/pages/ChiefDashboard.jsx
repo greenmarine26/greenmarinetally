@@ -3,6 +3,7 @@ import { Users, Anchor, ChevronRight, Clock, Library, Ship, AlertTriangle, Check
 import { fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolveFeedback, fbDeleteFeedback, fbClearFeedback, db, fbSubscribeAllReports, fbDeleteWorkReport, fbClearAllReports, fbClearAllReportsAllVoyages, fbClearAllActiveWork, tallyVoyagesByShip, fbArchiveVoyageBeforeDelete, fbDeleteVoyage, fbSubscribeBroadcast, fbSetBroadcast, fbClearBroadcast, fbSubscribeBroadcastReads, fbListArchive, fbListTallyPending, fbGetArchiveVoyage, fbRestoreVoyageFromArchive, fbCleanupArchive, fbIsOnline, fbGetActivityDays, fbCleanupActivityLog } from '../firebase.js';   // TallyOne 1.3: 활동 로그 조회·정리
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
+import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime } from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
@@ -1455,14 +1456,11 @@ function LiveProgressSection({ voyages, onOpenVoyage, chief, inspector, pilotFor
         // TallyOne 1.0(L3): 일정 정보 — 수집기가 채우는 planDate("ETA ~ ETD")·planSrc(출처 판단 결과)
         planDate: info.planDate || '', planSrc: info.planSrc || '',
         // 1.40-01: PORT-MIS 항 도착(세관 신고) 원본 — 콜사인 매칭. 도선과 다른 사건이라 따로 표기한다.
+        //  ★ 2.78: 콜사인 하나만 보던 것 → 베이매트릭스 신원(공용 매처 한 벌).
+        //    수집기가 콜사인을 못 싣는 배(RZOR 등)는 여기서 늘 빈칸이었다.
         pmEta: (() => {
-          const cs = String(info.callsign || '').toUpperCase();
-          if (!cs || !portMisData) return '';
-          const rec = portMisData[cs]
-            || Object.values(portMisData).find(x => {
-                 const p = String(x?.callsign || '').toUpperCase();
-                 return p && p.length >= 4 && (p.startsWith(cs) || cs.startsWith(p));
-               });
+          if (!portMisData) return '';
+          const rec = matchPortMis(portMisData, info);
           return (rec && rec.eta) || '';
         })(),
         imo: info.imo || '',

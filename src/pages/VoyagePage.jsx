@@ -3,6 +3,7 @@ import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakL
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer } from '../nlSearch.js';   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
 import GangStrip from '../components/GangStrip.jsx';   // 2.63: 카고플랜 조감 스트립   // 1.85-05: 질문한 탭에서 바로 답(인라인 즉답 카드) · 2.01: 브리핑·실번호 점검도 그 자리에서
+import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { getBayPairs } from '../twin.js';   // 2.01: 인라인 브리핑의 트윈 무게 예견
 import { mirSee } from '../mirEyes.js';   // 2.50-01: 미르가 순서를 부른다 — 못 보면 null 로 옛 미르에게 넘긴다
 import { mirTone } from '../mirChat.js';   // ★ 2.57: 말투 출구 겹 — 세 화면 중 여기만 없어 같은 답이 딱딱하게 나왔다(SearchPanel:27 과 같은 방식)
@@ -1187,10 +1188,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {(() => {
         try {
           const info = voyage?.info || {};
-          let pm = null;
-          const cs = String(info.callsign || '').toUpperCase();
-          if (cs && portMisData[cs]) pm = portMisData[cs];
-          if (!pm && info.imo) pm = Object.values(portMisData).find(x => x && String(x.imo || '') === String(info.imo));
+          //  ★ 2.78: 콜사인+IMO 손매칭 → 베이매트릭스 신원(공용 매처 한 벌).
+          //    콜사인이 비면 여기도 조용히 null 이라 출항 임박 경고가 아예 안 떴다.
+          const pm = matchPortMis(portMisData, info);
           if (!pm) return null;
           const etd = parsePortMisDateTime(pm.etd);
           if (!etd) return null;
@@ -1752,143 +1752,31 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         })();
         const dictCallsign = voyage?.info?.callsign || dictData?.callsign || dictData?.bayDef?.callsign || identData?.callsign || '';
         const dictImo = dictData?.imo || voyage?.info?.imo || identData?.imo || '';
-        let pm = null;
+        //  ★★ 2.78 (검수사 지시 2026-08-28) — **PORT-MIS 는 베이매트릭스 신원으로 부른다.**
+        //    *«포트미스 호출 자료를 베이메트릭스 자료로 호출 바랍니다. 자꾸 틀리게 호출하니
+        //      포트미스에 등록이 안되었다고 합니다»* · *«약자로 포트미스 조회하는 오류는 없었으면
+        //      합니다. 선박 풀네임으로 조회하세요»*
+        //
+        //    여기 있던 **6단계 손매칭 130줄**을 걷어내고 공용 매처(`portMisMatch.matchPortMis`)로
+        //    바꾼다. 그 130줄이 남긴 병이 셋이었다.
+        //      ① 4단계(선명 원문 부분포함)가 **정규화·콜사인배제·신선도 없이** 5단계보다 먼저 돌아
+        //         2.5-02 가 5단계에 채운 가드를 무력화했다.
+        //      ② `_nameMatchesPm` 이 **앞 5자 슬라이스**라 SAWASDEE 시리즈가 «SAWAS» 로 뭉갰다
+        //         (2.5-02 가 고친 그 병이 이 가드에 그대로 남아 있었다).
+        //      ③ 콜사인 배제에 `dictData.callsign` 만 써서, 애써 만든 `dictCallsign` 폴백을 안 봤다.
+        //    ⇒ 같은 규칙이 여덟 벌이던 것을 한 벌로 모은다(XrayTab·HomePage·ChiefDashboard·
+        //      ShipIntroCard·출항임박·질문기까지 전부 같은 함수를 부른다).
+        //    ⚠ 아래 평택 우선/폴백(M5.90)과 표시 문구는 **그대로 둔다** — 이번 판은 «찾는 법» 만 바꾼다.
         let matchedBy = '';
-
-        // 1) 콜사인 정확 매칭
-        let matchedKey = '';   // M5.83: 매칭된 Firebase 키 추적
-        // V7.30: 콜사인 매칭 신원 가드 — 콜사인이 맞아도 PORT-MIS 선박명이
-        //   우리 항차 선박명(EDI 풀네임)과 명백히 다르면 오염된 콜사인으로 보고 버림.
-        //   (사전에 잘못 저장된 콜사인(예: DJCT에 BSDU)이 PORT-MIS의 다른 배(XIN TAI PING)에
-        //    매칭되던 버그. EDI 풀네임이 있을 때만 검증 — 없으면 기존 동작 유지.)
-        const _nameMatchesPm = (pmRec) => {
-          const raw = String(vslFull || '');
-          const myName = raw.toUpperCase().replace(/[\s\-_.]/g, '');
-          const pmName = String(pmRec?.vesselName || '').toUpperCase().replace(/[\s\-_.]/g, '');
-          // V8.24-02: vslFull이 신뢰할 만한 '선박명'이 아니면(빈값·짧음·공백없는 코드형) 검증 불가 → 통과.
-          //   EDI 자동추출이 항구코드(예: CNYNT=중국 옌타이)를 vslFull에 잘못 넣으면, 정확 콜사인 매칭(D5MO4)까지
-          //   이 가드에 막혀 미매칭이 났다. 진짜 풀네임은 보통 공백(다단어)이거나 7자 이상 → 그 경우만 가드 적용.
-          const looksLikeName = /\s/.test(raw.trim()) || myName.length >= 7;
-          if (!myName || !looksLikeName || !pmName || pmName.length < 5) return true; // 검증 불가 → 통과
-          return myName.includes(pmName.slice(0, 5)) || pmName.includes(myName.slice(0, 5));
-        };
-        if (dictCallsign && portMisData[dictCallsign] && _nameMatchesPm(portMisData[dictCallsign])) {
-          pm = portMisData[dictCallsign];
-          matchedBy = 'callsign';
-          matchedKey = dictCallsign;
+        let matchedKey = '';
+        let pm = matchPortMis(portMisData, { ...(voyage?.info || {}),
+          //  베이매트릭스 신원을 매처에 그대로 넘긴다(매처도 스스로 찾지만, 화면이 이미 푼 값이 있으면 그것이 빠르다).
+          callsign: dictCallsign || voyage?.info?.callsign || '',
+          vslFull: voyage?.info?.vslFull || dictData?.name || '' });
+        if (pm) {
+          matchedKey = Object.keys(portMisData || {}).find((k) => portMisData[k] === pm) || '';
+          matchedBy = 'dict-identity';
         }
-        // 2) 콜사인 prefix 매칭 (D5RR5 ↔ D5RR5xx)
-        // M5.86: 여러 후보 중 vesselName이 베이사전 풀네임과 일치하는 것 우선
-        //   예: V7A545 → V7A5451(STARSHIP DRACO) + V7A5452(PEGASUS PROTO) 둘 다 prefix 매치
-        //       베이사전 name "DPRTPEGASUS PROTO V7A545"와 vesselName "PEGASUS PROTO" 비교 → V7A5452 우선
-        if (!pm && dictCallsign && dictCallsign.length >= 4) {
-          const cs = dictCallsign.toUpperCase();
-          const dictName = String(dictData?.name || voyage?.info?.vsl || '').toUpperCase().replace(/\s+/g, '');
-          // prefix 매칭 후보 모두 수집
-          const candidates = Object.entries(portMisData).filter(([k, p]) => {
-            const pcs = (p.callsign || '').toUpperCase();
-            return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
-          });
-          // V8.09-13 (사용자 보고 2026-06-18): 같은 선박이 여러 항차로 PORT-MIS에 있을 때
-          //   '저장 최신(updatedAt)'이 아니라 '다음 작업할 항차(가장 나중 일정)'를 골라야 한다.
-          //   증상: PACIFIC SHENZHEN이 6/19 입항 예정인데, 앱이 지난 6/17 항차를 집어
-          //     "정박중·부두표시"로 잘못 표시. 실제는 항해중(입항 전)이어야 함.
-          //   기준(현재시각 now 대비):
-          //     ① 아직 안 끝난 항차(ETD>=now) 우선 — 그중 ETA가 가장 늦은(가장 나중) 일정
-          //        (옛 항차가 출항 직전이라도, 미래 일정이 따로 있으면 그쪽이 다음 작업분)
-          //     ② 모두 끝났으면(ETD<now) 가장 최근 종료(ETD 최신)
-          //     ③ 시각 정보 없으면 updatedAt 최신
-          const _now = Date.now();
-          const _score = ([, p]) => {
-            const eta = parsePortMisDateTime(p?.eta);
-            const etd = parsePortMisDateTime(p?.etd);
-            if (eta == null && etd == null) return { tier: 2, key: p?.updatedAt || 0 };
-            const notEnded = (etd != null ? etd >= _now : (eta != null ? eta >= _now : false));
-            if (notEnded) return { tier: 0, key: (eta != null ? eta : etd) };  // 안 끝남: ETA 늦을수록 우선
-            return { tier: 1, key: (etd != null ? etd : eta) };                // 끝남: ETD 최신 우선
-          };
-          candidates.sort((a, b) => {
-            const sa = _score(a), sb = _score(b);
-            if (sa.tier !== sb.tier) return sa.tier - sb.tier;
-            return sb.key - sa.key;
-          });
-          // 베스트 후보 선택
-          let best = null;
-          if (candidates.length === 1) {
-            best = candidates[0];
-          } else if (candidates.length > 1 && dictName) {
-            // vesselName 매칭으로 정확한 후보 선택
-            for (const entry of candidates) {
-              const pn = String(entry[1].vesselName || '').toUpperCase().replace(/\s+/g, '');
-              if (!pn || pn.length < 4) continue;
-              // 베이사전 name 안에 vesselName 일부가 포함되는지
-              if (dictName.includes(pn.slice(0, 5)) || pn.includes(dictName.slice(4, 4 + Math.min(pn.length, 8)))) {
-                best = entry;
-                break;
-              }
-            }
-            // vesselName 매칭 못 찾으면 berth 있는 (M5.82 이후 새 데이터) 우선
-            if (!best) {
-              best = candidates.find(([k, p]) => p.berth) || candidates[0];
-            }
-          } else if (candidates.length > 1) {
-            // dictName 없으면 berth 있는 새 데이터 우선
-            best = candidates.find(([k, p]) => p.berth) || candidates[0];
-          }
-          if (best && _nameMatchesPm(best[1])) { pm = best[1]; matchedBy = 'callsign-prefix'; matchedKey = best[0]; }
-        }
-        // 3) IMO 매칭 (PORT-MIS 데이터에 IMO 컬럼 없을 수도 있어 보조)
-        if (!pm && dictImo && /^\d{7}$/.test(dictImo)) {
-          const entry = Object.entries(portMisData).find(([k, p]) => p.imo === dictImo);
-          if (entry) { pm = entry[1]; matchedBy = 'imo'; matchedKey = entry[0]; }
-        }
-        // 4) 선박명 부분 매칭 fallback
-        // M5.87: vslFull (EDI 추출 풀네임) 우선, 그 다음 vsl (사용자 입력 약자)
-        if (!pm && (vslFull || vsl)) {
-          const searchVsl = vslFull || vsl;
-          const entry = Object.entries(portMisData).find(([k, p]) => {
-            const pn = (p.vesselName || '').toUpperCase();
-            return pn && (searchVsl.includes(pn) || pn.includes(searchVsl));
-          });
-          if (entry) { pm = entry[1]; matchedBy = 'name'; matchedKey = entry[0]; }
-        }
-        // 5) M5.71 — 선박명 정규화 매칭 (공백/특수문자 제거 + 부분 단어)
-        // M5.87: vslFull 우선 사용
-        if (!pm && (vslFull || vsl)) {
-          //  ★ 2.63-02 (검수사 실측 — SWTD(SAWASDEE THAILAND) 카드에 SAWASDEE SHANGHAI 6/11 울산 자료):
-          //    앞 5자 슬라이스 매칭이 자매선 시리즈(SAWASDEE ×10척 전부 «SAWAS»)를 무차별로 붙였다.
-          //    6단계(dict-fullname)가 V7.99-13 에서 받은 그 수술과 동일 — **양방향 통째 포함만** 인정.
-          //    + 콜사인 상호 배제(둘 다 있고 다르면 남의 배) + 7일 신선도(낡은 지난 기항 표시 금지).
-          const searchVsl = (vslFull || vsl).toUpperCase().replace(/[\s\-_\.]/g, '');
-          const _myCs = String(dictData?.callsign || '').toUpperCase().trim();
-          const entry = Object.entries(portMisData).find(([k, p]) => {
-            const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
-            if (!pn || pn.length < 5 || searchVsl.length < 5) return false;
-            if (!(pn.includes(searchVsl) || searchVsl.includes(pn))) return false;
-            const pc = String(p.callsign || '').toUpperCase().trim();
-            if (_myCs && pc && _myCs !== pc) return false;
-            if (p.updatedAt && Date.now() - p.updatedAt > 7 * 86400000) return false;
-            return true;
-          });
-          if (entry) { pm = entry[1]; matchedBy = 'name-norm'; matchedKey = entry[0]; }
-        }
-        // 6) M5.72 — 베이사전 풀네임 매칭 (앱: 약자 DJCF / PORT-MIS: 풀네임 DONGJIN CONFIDENT)
-        // V7.99-13 (버그수정): 기존 두 번째 조건 `pn.includes(dictNameNorm.slice(4, 4+8))`이
-        //   너무 느슨해 무관한 선박이 오매칭됨(DXQD에 "그린오션호" 매칭 → 삭제해도 또 다른 오매칭).
-        //   → 한쪽이 다른 쪽을 "통째로" 포함할 때만(진짜 약자↔풀네임 관계). 부분 슬라이스 매칭 제거.
-        //   추가 가드: 포함되는 쪽 문자열이 충분히 길어야(≥5) 우연한 짧은 겹침 차단.
-        if (!pm && dictData?.name) {
-          const dictNameNorm = String(dictData.name).toUpperCase().replace(/\s+/g, '');
-          const entry = Object.entries(portMisData).find(([k, p]) => {
-            const pn = (p.vesselName || '').toUpperCase().replace(/\s+/g, '');
-            if (!pn || pn.length < 5 || dictNameNorm.length < 5) return false;
-            // 양방향 전체 포함만 인정 (긴 쪽이 짧은 쪽을 통째로 품을 때).
-            //   예: dict="DONGJINCONFIDENT" ⊇ pn="DONGJINCONFIDENT", 또는 약자↔풀네임 통짜 포함.
-            return dictNameNorm.includes(pn) || pn.includes(dictNameNorm);
-          });
-          if (entry) { pm = entry[1]; matchedBy = 'dict-fullname'; matchedKey = entry[0]; }
-        }
-
         // M5.90: 매칭 결과를 후처리 — 평택 우선, 평택 없으면 인천 fallback 표시
         //   - 같은 선박이 평택 + 인천 둘 다 있으면 평택 데이터 사용
         //   - 평택만 없으면 인천 데이터 사용하되 "인천 출항 정보" 명시

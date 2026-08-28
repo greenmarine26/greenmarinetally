@@ -4,6 +4,7 @@ import { fbSubscribeLaneInfo, fbSubscribeFeedback, fbCreateVoyage, fbDeleteVoyag
 import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 정책 수정 모드
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
+import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
 import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
@@ -301,28 +302,13 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
         // 2.08-10 (검수사 «PORT-MIS 매칭 미확인 RZOR — 여러번 수정한거 같은데 어디를 수정?»):
         //   항차 화면(dictCallsign)은 베이사전 콜사인 폴백이 있는데 홈 카드는 info.callsign 만 봤다.
         //   RZOR 처럼 수집기가 콜사인을 못 싣는 배는 사전(ship_bay_dict_v3/{VSL}.callsign)이 정본.
-        const _dict = (typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict : {};
-        const _vslKey = String(info.vsl || '').toUpperCase();
-        const callsign = info.callsign || _dict[_vslKey]?.callsign || _dict[_vslKey]?.bayDef?.callsign || '';
-        const imo = info.imo || '';
-        const vsl = (info.vsl || '').toUpperCase();
-        let pm = null;
-        if (callsign && portMisData[callsign]) pm = portMisData[callsign];
-        if (!pm && callsign) {
-          const cs = callsign.toUpperCase();
-          pm = Object.values(portMisData).find(p => {
-            const pcs = (p.callsign || '').toUpperCase();
-            return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
-          });
-        }
-        if (!pm && imo) pm = Object.values(portMisData).find(p => p.imo === imo);
-        if (!pm && vsl) {
-          const normVsl = vsl.replace(/[\s\-_\.]/g, '');
-          pm = Object.values(portMisData).find(p => {
-            const pn = (p.vesselName || '').toUpperCase().replace(/[\s\-_\.]/g, '');
-            return pn && pn.length >= 5 && (pn.includes(normVsl.slice(0, 5)) || normVsl.includes(pn.slice(0, 5)));
-          });
-        }
+        //  ★ 2.78 (검수사 «포트미스 호출 자료를 베이메트릭스 자료로 호출 바랍니다. 자꾸 틀리게
+        //    호출하니 포트미스에 등록이 안되었다고 합니다» · «약자로 포트미스 조회하는 오류는
+        //    없었으면 합니다. 선박 풀네임으로 조회하세요»):
+        //    ⛔ 여기가 **4자 선박코드(info.vsl)를 선명과 앞 5자로 비교**하던 자리다 —
+        //      SWTD 는 SAWASDEETHAILAND 와 영영 안 맞고 엉뚱한 배와 걸릴 수도 있었다.
+        //    ⇒ 손매칭 4단계를 걷어내고 베이매트릭스 신원으로 찾는 공용 매처 한 벌을 부른다.
+        const pm = matchPortMis(portMisData, info);
         // PORT-MIS 우선, 없으면 voyage.info 폴백
         // M6.18: 잘못된 berth 형식 (MBM 등) 필터링 — 표시 + 자동 정리
         const rawBerth = (pm && pm.berth) || info.berth || '';

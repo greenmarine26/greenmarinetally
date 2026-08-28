@@ -26,7 +26,8 @@
 import React, { useMemo, useState } from 'react';
 import { Printer, Search as SearchIcon, X } from 'lucide-react';
 import { sortByDischargePlan, xraySealerOf } from '../utils.js';   // 2.39: 봉인자 판정은 공용 한 벌
-import { fbSetXraySeal, fbUpdateVoyageInfo } from '../firebase.js';                     // 2.39: 표에서 바로 봉인번호·봉인자 저장
+import { fbSetXraySeal, fbUpdateVoyageInfo } from '../firebase.js';
+import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)                     // 2.39: 표에서 바로 봉인번호·봉인자 저장
 import { resolveShipDisplayName } from './ShipIntroCard.jsx';   // 2.26-01: 선박 풀네임은 정본 한 벌로
 import { openXrayListPrint } from '../inspectionList.js';        // 2.26-02: 인쇄는 검수리스트·VGM 과 같은 벌(별도 문서)
 
@@ -64,23 +65,15 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
        2.26 첫 판은 제목 한 줄과 MRN 만 찍어 **넷을 빠뜨렸다**(운항선사·입항일자·양륙항·호출부호).
        게다가 선박명을 `info.vsl`(코드 `OBWH`)로 써서 기존 풀네임 `OCEAN BLUE WHALE` 과 달랐다. */
   const head = useMemo(() => {
-    const dict = (typeof window !== 'undefined' && window.__fbShipBayDict) || null;   // 사전은 전역 한 벌
-    const code = String(info.vsl || '').toUpperCase();
-    //  호출부호 — info 에 없는 항차가 많다(실측 OBWH_2721E). 사전에서 코드로 찾는다.
-    const dictE = dict ? (dict[code] || Object.values(dict).find((e) => e
-                    && String(e.code || '').toUpperCase() === code)) : null;
-    const cs = String(info.callsign || dictE?.callsign || '').toUpperCase();
-    let pm = cs && portMisData[cs];
-    if (!pm && cs) pm = Object.values(portMisData).find((p) => {
-      const pcs = String(p?.callsign || '').toUpperCase();
-      return pcs && pcs.length >= 4 && (pcs.startsWith(cs) || cs.startsWith(pcs));
-    });
-    //  ★ 2.71 (검수사 신고 2026-08-27 «XRAY 출력시 MRN 넘버가 기록이 안되었습니다»):
-    //    MRN 은 **PORT-MIS 에서만** 오는데 SWTD(D7EE)처럼 평택 PORT-MIS 에 등록이 없는 배는
-    //    가져올 곳이 아예 없어 머리표가 빈칸으로 나갔다(수집 자료 전수 확인 — MRN 0건).
-    //    ⇒ ①레그를 지킨다: 양하 서류는 I(입항), 선적 서류는 E(출항). PORT-MIS 가 반대 레그 번호만
-    //      갖고 있으면 **쓰지 않는다** — 실측 PCSZ 는 mrnIn 이 비고 mrnOut(26SNKO2809E)만 있어
-    //      양하 서류에 출항 번호가 찍히고 있었다. ②없으면 항차에 적어 둔 값(info.mrnIn/mrnOut)을 쓴다.
+    //  ★ 2.78 (검수사 «포트미스 호출 자료를 베이메트릭스 자료로 호출 바랍니다»):
+    //    종전엔 **콜사인 하나로만** 찾았다 — 그런데 EDI 는 콜사인을 잘 안 준다(실측 16항차 중 1개).
+    //    콜사인이 비면 조회를 한 번도 안 하고 «미등록» 으로 떨어졌다. 그것이 2.71 이 «SWTD 는
+    //    평택 PORT-MIS 미등록» 이라고 **잘못 단정한** 경위다 — 실물은 있다(D7EE · 평택 · mrnOut).
+    //    ⇒ 베이매트릭스 신원(콜사인·IMO·풀네임·코드)으로 찾는 공용 매처 한 벌을 쓴다.
+    const code = String(info.vsl || '').toUpperCase();   // 2.78: 사전·표시용 선박코드
+    const pm = matchPortMis(portMisData, info);
+    //  2.71: PORT-MIS 가 준 MRN 은 **레그를 지킨다** — 양하 서류에 출항 번호(E)를 찍으면 안 된다.
+    //    실측 PCSZ 는 mrnIn 이 비고 mrnOut(26SNKO2809E)만 있어 양하 서류에 출항 번호가 나가고 있었다.
     const _legOK = (v) => {
       const t = String(v || '').trim().toUpperCase();
       if (!t) return '';
@@ -107,8 +100,9 @@ export default function XrayTab({ voyage, voyageKey, mode, containers = [], insp
       carrier: info.carrier || (mrn.length >= 6 ? mrn.slice(2, 6) : '') || info.lane || '',
       eta: md ? `${md[1]}.${md[2]}.${md[3]}` : '',
       pod: 'KRPTK',                                    // 평택항 앱이다 — 양륙항은 고정
-      name: resolveShipDisplayName(info, portMisData, dict).name || code,
-      callsign: cs,
+      //  2.78: 전역 사전은 resolveShipDisplayName 이 스스로 읽는다(인자 없으면 window.__fbShipBayDict).
+      name: resolveShipDisplayName(info, portMisData).name || code,
+      callsign: String(info.callsign || pm?.callsign || shipIdentityOf(info).callsign || '').toUpperCase(),
       mrn,
       //  2.41: 엑셀 「터미널」 열 — PCTC/PNCT. 인쇄물 머리에는 없고 엑셀에만 쓴다.
       pier: info.pier || '',

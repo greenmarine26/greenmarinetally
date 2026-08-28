@@ -6,17 +6,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Ship, Sparkles, RefreshCw } from 'lucide-react';
 import { fbGetShipIntro, fbSaveShipIntro, fbSubscribeShipBayDict } from '../firebase.js';
+import { matchPortMis, shipIdentityOf } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
 import { askShipIntro } from '../gemini.js';
 import { resolveShipKey } from '../utils.js';
 
 // V9.18-02: 표시/검색용 선박명 해석 — vslFull → PORT-MIS 선박명(콜사인 매칭) → 약자.
 //   약자(2~5자 코드, 예: DXQD)만 남으면 needsName=true — 검색이 "확인되지 않았습니다"로 끝나기 때문
 //   (사용자 보고). 이때 카드가 풀네임 입력칸을 연다. (순수 함수 — 시뮬 대상)
-export function resolveShipDisplayName(info, portMisData = {}, bayDict = null) {
+export function resolveShipDisplayName(info, portMisData = {}, bayDictArg = null) {
+  //  ★ 2.78: 사전을 안 넘겨도 **스스로 읽는다**(전역 한 벌). 호출부마다 사전을 들고 다니게 하면
+  //    한 곳만 빠져도 그 화면에서 조용히 폴백이 죽는다 — 실제로 XrayTab 이 그 자리였다.
+  const bayDict = bayDictArg
+    || ((typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict : null);
   const vslFull = String(info?.vslFull || '').trim();
   if (vslFull && !/^[A-Z0-9]{2,5}$/.test(vslFull)) return { name: vslFull, needsName: false, from: 'edi' };
-  const cs = String(info?.callsign || '').toUpperCase();
-  const pm = cs && portMisData[cs];
+  //  ★ 2.78: 콜사인 키 한 줄 → 베이매트릭스 신원(공용 매처 한 벌). EDI 가 콜사인을 안 주면
+  //    종전엔 PORT-MIS 이름을 아예 못 가져왔다(실측 16항차 중 15개가 info.callsign 공란).
+  const pm = matchPortMis(portMisData || {}, info || {});
+  const cs = shipIdentityOf(info || {}).callsign;   // 2.78: 아래 사전 스캔이 쓰는 콜사인 — 신원 한 벌에서.
   const pmName = String(pm?.vesselName || '').trim();
   if (pmName && pmName.length >= 6) return { name: pmName, needsName: false, from: 'portmis' };
   // TallyOne 1.39-02: **베이사전에도 풀네임이 있다.** 검수사 지적 2026-08-09 —
