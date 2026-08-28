@@ -363,6 +363,14 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   node tools/smoke_scope.cjs || { echo "✗ 스코프 전수 검사 실패 — 배포 금지"; exit 1; }
   node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
 node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검사 실패 — 배포 금지"; exit 1; }
+SMOKE_SL=$(mktemp /tmp/_smokesl_XXXXXX.js)
+if npx esbuild tools/smoke_slotmode.jsx --bundle --loader:.jsx=jsx --loader:.png=dataurl --jsx=automatic \
+     --platform=browser --format=iife --log-level=error --outfile="$SMOKE_SL"; then
+  node tools/smoke_slotmode.cjs "$SMOKE_SL" || { echo "✗ 자리 확인 모드 연막검사 실패 — 배포 금지"; rm -f "$SMOKE_SL"; exit 1; }
+  rm -f "$SMOKE_SL"
+else
+  echo "✗ 자리 확인 모드 번들 실패 — 검사를 못 돌렸다. 배포 금지"; rm -f "$SMOKE_SL"; exit 1
+fi
   # 2.47: **미르의 눈** — 「끝4자리 + 실번호/온도/중량」을 답하는가, 그리고 옛 미르를 안 가로채는가.
   #   ⚠ 뒤쪽 8건이 더 중요하다 — 겹을 앞에 세우면 **멀쩡하던 기능을 가로채는** 사고가 난다.
   #     실제로 첫 판이 「12번 베이」의 12 를 컨 끝자리로 읽어 베이 질문 다섯을 죽였다(파급 검증이 잡았다).

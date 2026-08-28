@@ -95,6 +95,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V8.50: 갈림 선택 — 검수사(또는 무언 적응)가 고른 부류 스트림. null = 기본 층 순서.
   const [streamPref, setStreamPref] = useState(null);
   const [fixOpen, setFixOpen] = useState(false);
+  //  ★ 2.80 «자리 확인» 모드 (검수사 확정 2026-08-28) — 엠티 선적에서 계획과 다른 것은 예외가 아니라 정상이다.
+  //    실측 STSE 2666W: 선적 456대 중 엠티 367대, 그중 262대(71%)가 계획 자리와 달랐다. 그런데 그것은
+  //    «맞바꿈»이 아니라 **줄줄이 밀린 사슬**(최장 76대)이었다 — 손에 잡히는 엠티를 그냥 실은 것.
+  //    ⇒ «이 컨을 어디에»가 아니라 **«이 자리에 무엇을»** 로 묻는다. PCTC PDA(Apron Checker)와 같은 방향이고,
+  //      앱은 거기에 규격·F/E 맞는 후보를 띄워 주므로 손이 더 적다.
+  //    끄고 켤 수 있다 — 풀 선적은 계획대로 들어가므로(실측 89대 중 0대 어긋남) 종전 방식이 낫다.
+  const [slotMode, setSlotMode] = useState(false);
+  const [slotUserSet, setSlotUserSet] = useState(false);   // 검수사가 직접 끄고 켠 뒤에는 자동 판단을 멈춘다
   const [fixQuery, setFixQuery] = useState('');
   // V7.94-08: 트윈 수정 — 앞/뒤 두 컨 번호 동시 수정 (사용자 메모 ⑤)
   const [fixQuery2, setFixQuery2] = useState('');
@@ -377,6 +385,14 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   }, [remaining, selectedGroup, selectedTier, mode, berthSide, bayPairs, shipImo, shipName, streamPref, heldSet, holdDue, resumeCns]);
 
   const card = queue[0] || null;
+
+  //  2.80: 선적 + 지금 카드가 엠티면 «자리 확인» 모드를 스스로 켠다(검수사가 직접 만진 뒤에는 그 뜻을 지킨다).
+  //    풀로 넘어가면 도로 끈다 — 풀은 계획대로 들어간다(실측).
+  useEffect(() => {
+    if (slotUserSet || mode !== 'loading' || !card?.main) return;
+    const isEmpty = String(card.main.fe || '').toUpperCase() === 'E';
+    setSlotMode(isEmpty);
+  }, [card, mode, slotUserSet]);
 
   // V8.50: 갈림 감지 — 지금 바로 내릴 수 있는 카드들에 부류가 섞여 있으면 선택 버튼 제시 (양하만).
   //   1.57: 선적에도 건다. 종전엔 양하 전용이라 선적은 고정 순서(20싱글→트윈→40)밖에 안 나왔다.
@@ -989,6 +1005,13 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   };
 
   const afterFix = () => {
+    //  2.80: «자리 확인» 모드에서는 계획과 다른 것이 정상이다 — 수정 횟수로 세지 않고 수동 전환도 안 한다.
+    //    (종전엔 3연속이면 자동 가이드가 꺼져, 엠티 구간에서 세 대마다 베이·단을 다시 골라야 했다.)
+    if (slotMode) {
+      setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null);
+      setConsecFix(0);
+      return;
+    }
     const n = consecFix + 1;
     setConsecFix(n);
     setFixOpen(false); setFixQuery(''); setFixQuery2(''); setFixPickFront(null); setFixPickBack(null);
@@ -1576,7 +1599,58 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
             </div>
           )}
 
-          {!fixOpen ? (
+          {/* ★ 2.80 «자리 확인» — 이 자리에 실제로 무엇을 실었는지 묻는다. 엠티 선적의 기본 경로.
+              계획 컨은 «참고»로만 보이고, 다른 컨을 넣어도 «수정»이 아니라 정상 입력이다. */}
+          {slotMode && !card.twin && (
+            <div className="bg-ink-900 border border-sky-700 rounded-xl p-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xxs text-sky-300 font-bold">이 자리에 실제로 실은 컨테이너</span>
+                <span className="text-2xs text-dim-400">{card.pos}</span>
+              </div>
+              <div className="text-2xs text-dim-400">
+                계획: <span className="mono text-dim-300">{card.main.cn}</span> — 이 컨이 아니어도 그냥 넣으세요
+              </div>
+              <input autoFocus value={fixQuery} onChange={e => setFixQuery(e.target.value)}
+                placeholder="끝 4자리"
+                inputMode="numeric" autoComplete="off"
+                className="w-full bg-ink-800 border border-sky-800 rounded px-2 py-2.5 text-base mono text-dim-100 text-center tracking-widest"/>
+              {fixMatches.length > 1 && (
+                <div className="text-xxs text-rose-300 font-bold bg-rose-950/40 border border-rose-800 rounded px-2 py-1 text-center">
+                  ⚠️ 끝자리 같은 컨 {fixMatches.length}대 — 위치 확인 후 선택
+                </div>
+              )}
+              {fixMatches.map(c => {
+                const sameSpec = String(c.fe || '') === String(card.main.fe || '')
+                  && String(c.iso || '').slice(0, 2) === String(card.main.iso || '').slice(0, 2);
+                return (
+                  <button key={c.cn} onClick={() => handleFixPick(c)} disabled={busy}
+                    className={`w-full flex justify-between items-center rounded px-2 py-2 text-xs ${sameSpec ? 'bg-emerald-950/50 border border-emerald-700 hover:bg-emerald-900' : 'bg-ink-800 border border-line hover:bg-amber-900'}`}>
+                    <span className="mono font-bold text-dim-100">{c.cn}</span>
+                    <span className="mono text-2xs text-dim-300">
+                      {c._comp && <span className="mr-1 px-1 rounded bg-rose-800 text-rose-200 font-bold">⚠ 완료기록</span>}
+                      {!sameSpec && <span className="mr-1 px-1 rounded bg-amber-800 text-amber-200 font-bold">규격 다름</span>}
+                      {c.bay ? `${parseInt(c.bay, 10)}-${c.row}-${c.tier}` : '미배정'}
+                    </span>
+                  </button>
+                );
+              })}
+              {fixQuery.length >= 3 && fixMatches.length === 0 && (
+                <div className="text-xxs text-dim-400 text-center py-1">남은 작업분에 그 번호가 없습니다</div>
+              )}
+              <button onClick={() => { setSlotMode(false); setSlotUserSet(true); setFixQuery(''); }}
+                className="w-full text-2xs text-dim-400 py-1">계획대로 확인하는 방식으로 돌아가기</button>
+            </div>
+          )}
+
+          {/* 2.80: 껐다가 다시 켜는 길 — 없으면 검수사가 한 번 끄고 영영 못 돌아온다(2-0-D). */}
+          {mode === 'loading' && !slotMode && !card.twin && (
+            <button onClick={() => { setSlotMode(true); setSlotUserSet(true); setFixOpen(false); }}
+              className="w-full py-2 rounded-pill font-bold text-xxs bg-ink-800 hover:bg-sky-900 text-sky-300">
+              📍 자리 확인 방식으로 — 이 자리에 실은 번호만 넣기
+            </button>
+          )}
+
+          {slotMode && !card.twin ? null : !fixOpen ? (
             <button onClick={() => setFixOpen(true)}
               className="w-full py-2.5 rounded-pill font-bold text-sm bg-ink-800 hover:bg-amber-800 text-amber-300 flex items-center justify-center gap-2">
               <Pencil className="w-4 h-4"/>다른 컨테이너가 나옴 (수정{card.twin ? ' — 앞·뒤 동시' : ''})
