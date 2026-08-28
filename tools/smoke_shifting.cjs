@@ -73,5 +73,34 @@ T(/모자란 \{gap\}대/.test(V), '모자란 수를 안 보여준다 — 그 숫
 T(!/EDI\(적부도\)/.test(V) && !/그것이 오면 결론이 납니다/.test(V), '화면에 근거를 늘어놓는다');
 T(/엠티/.test(V) && /feTxt/.test(V), '풀·엠티를 안 갈라 보인다');
 
+
+// ══════════════════════════════════════════════════════════════════
+//  2.79 — **삼자 대조(선사·세관·항만)** (검수사 확정 2026-08-28)
+//    원문: «이미 세관자료를 업로드 했습니다. 그래서 세군데가 일치 한다고 한것입니다.
+//           선사 세관 항만(배정) 그러므르 시프팅은 없습니다.»
+//    그리고 왜 그런지도 검수사가 말해 줬다 — «시프팅은 평택분 양하에 방해되는 컨입니다.
+//    홀드에 평택분이 있어 데크에 컨을 시프팅 해야 되는데, 시프팅이 발생 안했다면
+//    커버를 여는데도 방해가 안된다는 이야기 입니다.»
+//    ⇒ 시프팅 0 은 **커버 모양에 대한 답**이다. 앱의 물리 계산이 반박할 자리가 아니다.
+//    실측 MCSC 633N: 배정 279 · 세관리스트 279 · EDI 평택분 279 인데 앱 예측 75대.
+T(/export function dischargeSourcesAgree/.test(S), '삼자 대조가 한 벌로 없다');
+T(/agree: plan > 0 && list === plan && edi === plan/.test(S), '셋이 같은지 안 본다 — 하나라도 모르면 일치가 아니다');
+T(/const _src = dischargeSourcesAgree\(voyage\)/.test(S), 'shiftingTruthCheck 가 삼자 대조를 안 쓴다');
+{ //  삼자 일치 판정은 berthShift(배정표 이적) 유무보다 **먼저** 와야 한다 —
+  //  이적 값은 작업이 시작돼야 확정되는데(_TRUTH_READY) 검수사는 작업 전에 이미 답을 냈다.
+  const i = S.indexOf('export function shiftingTruthCheck');
+  const blk = S.slice(i, i + 1800);
+  T(blk.indexOf('dischargeSourcesAgree') >= 0 && blk.indexOf('dischargeSourcesAgree') < blk.indexOf('info?.berthShift'),
+    '이적 값을 먼저 본다 — 작업 시작 전에는 영영 판정이 안 난다');
+  T(/srcAgree: true/.test(blk), '삼자 일치 표식을 안 남긴다 — 화면이 «불일치»로 잘못 말하게 된다');
+}
+//  표시 관은 새로 만들지 않는다 — 2.08-15 것을 그대로 탄다(대수에서 빼고 «커버 영역 확인»으로).
+T(/if \(!\(tc && !tc\.pending && tc\.truth === 0\)\) return pred;/.test(S), '표시 관(shiftingMapForDisplay)이 truth 0 을 안 본다');
+T(/truthZero: n, suspects: susp/.test(S), '뺀 자리를 안 남긴다 — 검수사 지시는 «의심은 지우지 말고»였다');
+//  화면 — 삼자 일치는 ⛔ 불일치가 아니다.
+T(/shiftInfo\?\.truthChk\?\.srcAgree \?/.test(V), '화면이 삼자 일치를 안 가른다 — ⛔ 불일치로 뜬다');
+T(/시프팅 없음/.test(V), '삼자 일치인데 «시프팅 없음»을 안 말한다');
+T(/이 자리들이 커버를 안 문다/.test(V), '왜 0 인지(커버가 안 문다)를 안 알려 준다 — 검수사가 가르쳐 준 근거다');
+
 if (bad > 0) { console.error(`✗ 시프팅 판정 연막검사 실패 ${bad}건`); process.exit(1); }
-console.log('✓ 시프팅 판정 연막검사 통과 — 규칙 4 · 표시 6 · 대조 5 · 항구 2 · 화면 9');
+console.log('✓ 시프팅 판정 연막검사 통과 — 규칙 4 · 표시 6 · 대조 5 · 항구 2 · 화면 9 · 삼자 9');

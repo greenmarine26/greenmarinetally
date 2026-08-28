@@ -2299,7 +2299,13 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
         <div className="mt-3 bg-ink-900 border border-blue-800/50 rounded-pill overflow-hidden">
           <div className="px-3 py-2 bg-blue-950/60 text-blue-200 text-xs2 font-black flex items-center gap-1.5 flex-wrap">
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
-            {shiftInfo?.berthShift != null && (
+            {/* 2.79 (검수사 확정 2026-08-28): 삼자 일치는 «불일치»가 아니라 **결론이 난 것**이다.
+                *«선사 세관 항만(배정) 그러므르 시프팅은 없습니다»* — ⛔ 를 띄우면 안 된다. */}
+            {shiftInfo?.truthChk?.srcAgree ? (
+              <span className="text-emerald-300">
+                · 선사·세관·배정 {shiftInfo.truthChk.srcs?.plan}대 <b>일치</b> ✓ 시프팅 없음
+              </span>
+            ) : shiftInfo?.berthShift != null && (
               <span className={shiftInfo?.truthChk?.pending ? 'text-dim-300'
                 : (shiftInfo?.truthChk && !shiftInfo.truthChk.ok ? 'text-rose-300' : 'text-amber-300')}>
                 · 배정표 이적 {shiftInfo.berthShift}모브
@@ -2320,7 +2326,16 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
               배정목록 이적이 확정 0이라 예측을 대수에서 뺐다. 그러나 **어느 커버 어느 자리를 의심했는지는 남긴다.** */}
           {shiftInfo?.meta?.truthZero > 0 && (
             <div className="px-3 py-1.5 text-xxs text-amber-100 bg-amber-950/40 border-b border-amber-800/50 space-y-0.5">
-              <div>🔍 <b>커버 영역 확인 {shiftInfo.meta.truthZero}대</b> — 앱은 커버 위로 봤는데 <b>배정목록 이적은 확정 0모브</b>입니다. 작업 대수에서는 뺐습니다.</div>
+              {/* 2.79 (검수사 확정 2026-08-28): *«시프팅은 평택분 양하에 방해되는 컨입니다. 홀드에 평택분이
+                  있어 데크에 컨을 시프팅 해야 되는데, 시프팅이 발생 안했다면 커버를 여는데도 방해가 안된다는
+                  이야기 입니다.»* — 즉 시프팅 0 은 **커버 모양에 대한 답**이다. 앱이 반박할 자리가 아니다. */}
+              <div>🔍 <b>커버 영역 확인 {shiftInfo.meta.truthZero}대</b> —
+                {shiftInfo?.truthChk?.srcAgree
+                  ? <> 앱은 커버 위로 봤는데 <b>선사·세관·배정 {shiftInfo.truthChk.srcs?.plan}대가 일치</b>해 시프팅이 없습니다.</>
+                  : <> 앱은 커버 위로 봤는데 <b>배정목록 이적은 확정 0모브</b>입니다.</>} 작업 대수에서는 뺐습니다.</div>
+              {shiftInfo?.truthChk?.srcAgree && (
+                <div className="text-2xs text-amber-200/80">시프팅이 없다는 것은 <b>이 자리들이 커버를 안 문다</b>는 뜻입니다 — 앱 커버 경계가 실제보다 넓게 잡혀 있습니다.</div>
+              )}
               {(shiftInfo.meta.suspects || []).slice(0, 6).map(sp => (
                 <div key={sp.cn} className="mono text-2xs text-amber-300">
                   · {sp.cn} <b>{sp.pos || `${parseInt(sp.bay, 10)}-${sp.row}-${sp.tier}`}</b>
