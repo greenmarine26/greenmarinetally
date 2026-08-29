@@ -99,7 +99,24 @@
           border:1px solid var(--line); background:var(--panel2); color:#e2e8f0; font-size:20px;
           font-weight:800; cursor:pointer; display:none; box-shadow:0 4px 14px rgba(0,0,0,.5);}
   body.bv-fs-on{overflow:hidden;}
-  .bv-top{position:fixed; right:14px; bottom:18px; z-index:40; width:48px; height:48px;
+  /* ★ ConeOne 2.12 (검수사 2026-08-29) — *«닫기 버튼 크기로 해서 언제든지 누를수 있는 미르아이콘»*
+       얼굴은 지어내지 않고 **로그아웃 인사(intro.html)의 시안 원본**에서 그대로 잘라 왔다.
+       («미르 얼굴은 보기 힘들어요 낯을 가려서 오직 로그 아웃 할때만 잠시 나타나요» — 그 친구가 맞다.)
+       5.9KB 라 파일에 박아 둔다 — 현장은 신호가 약하다. 오프라인에서도 떠야 한다. */
+  .mir-fab{position:fixed; right:14px; bottom:18px; z-index:10001; width:48px; height:48px;
+           border-radius:50%; border:2px solid var(--accent); padding:0; cursor:pointer;
+           background:#f7f8fa center/cover no-repeat; box-shadow:0 4px 14px rgba(0,0,0,.45); display:none;}
+  .mir-fab:active{transform:scale(.94);}
+  .mir-sheet{position:fixed; left:0; right:0; bottom:0; z-index:10002; display:none;
+             background:var(--panel); border-top:2px solid var(--accent);
+             border-radius:14px 14px 0 0; padding:12px 12px 16px; box-shadow:0 -6px 24px rgba(0,0,0,.5);}
+  .mir-sheet .mir-hd{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+  .mir-sheet .mir-av{width:34px; height:34px; border-radius:50%; background:#f7f8fa center/cover no-repeat; flex:none;}
+  .mir-sheet .mir-ttl{font-size:13px; font-weight:800; color:var(--fg,#e2e8f0);}
+  .mir-sheet .mir-sub{font-size:11px; color:var(--dim);}
+  .mir-sheet .mir-out{display:none; margin-top:9px; padding:10px; border-radius:8px;
+                      background:var(--panel2); font-size:15px; line-height:1.55; font-weight:600; white-space:pre-line;}
+  .bv-top{position:fixed; right:74px; bottom:18px; z-index:40; width:48px; height:48px;
           border-radius:50%; border:1px solid var(--line); background:var(--panel2);
           color:#e2e8f0; font-size:11px; font-weight:800; cursor:pointer; display:none;
           box-shadow:0 4px 14px rgba(0,0,0,.45);}
@@ -336,7 +353,7 @@
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.11-04</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.12</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -755,7 +772,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 2.83-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.11-04';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 2.12';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1592,6 +1609,10 @@ function resultTabsHtml(active){
   return `<div class="result-tabs">${t('calc','📋','콘 작업표')}${t('cargo','📊','카고플랜')}${t('bay','🗺️','베이플랜')}</div>`;
 }
 function bindResultTabs(){
+  /* 2.12: 결과 화면이 그려질 때마다 미르와 TOP 을 함께 세운다.
+       ⚠ 종전에는 `renderBayView()` 안에서만 불러서 **베이플랜을 한 번 열어야** 떴다.
+         검수사 «언제든지 누를수 있는» 이 안 되던 자리다 — 세 탭이 다 이 함수를 지난다. */
+  try{ bindTopButton(); bindMirFab(); }catch(e){ console.warn('[콘앱] 미르·TOP 배선 실패:', e); }
   document.querySelectorAll('.result-tabs [data-rtab]').forEach(b=>{
     b.onclick=()=>{
       const id=b.getAttribute('data-rtab');
@@ -2789,11 +2810,69 @@ async function renderBayView(){
     window.addEventListener('resize', fit, {passive:true});
   })();
   bindTopButton();
+  bindMirFab();
   ra.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 /* ConeOne 2.9: TOP 버튼 — 결과 화면(작업표·카고플랜·베이플랜) 어디서나 맨 위로.
    결과 영역이 화면에 있을 때만 뜬다. 리스너는 한 벌만 둔다(렌더마다 쌓이면 스크롤이 무거워진다). */
+const MIR_FACE='data:image/webp;base64,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';
+
+/* ConeOne 2.12: 미르 아이콘 — 어느 탭에서 보고 있든 그 자리에서 묻는다.
+     ⚠ 답은 기존 `coneQaAnswer()` 를 그대로 부른다. **판정을 두 벌로 만들지 않는다.**
+       («작업표 탭의 질문바»도 그대로 둔다 — 쓰시던 자리를 없애면 또 찾게 된다.) */
+function bindMirFab(){
+  let fab=document.getElementById('mirFab');
+  let sheet=document.getElementById('mirSheet');
+  if(!fab){
+    fab=document.createElement('button');
+    fab.id='mirFab'; fab.className='mir-fab'; fab.type='button';
+    fab.setAttribute('aria-label','미르에게 묻기');
+    fab.style.backgroundImage='url('+MIR_FACE+')';
+    document.body.appendChild(fab);
+  }
+  if(!sheet){
+    sheet=document.createElement('div');
+    sheet.id='mirSheet'; sheet.className='mir-sheet';
+    sheet.innerHTML='<div class="mir-hd">'
+      +'<div class="mir-av" style="background-image:url('+MIR_FACE+')"></div>'
+      +'<div style="flex:1;min-width:0"><div class="mir-ttl">미르에게 묻기</div>'
+      +'<div class="mir-sub">"5번 베이" · "홀드콘" · "모자란 데" · "전체"</div></div>'
+      +'<button id="mirX" class="bv-zb" style="width:38px">✕</button></div>'
+      +'<div class="row" style="gap:6px">'
+      +'<input id="mirIn" type="text" placeholder="예: 7번 베이 콘" style="flex:1;min-width:0">'
+      +'<button id="mirMic" class="bv-zb" style="width:44px">🎤</button>'
+      +'<button id="mirGo" class="bv-zb" style="width:auto;padding:0 14px;background:var(--accent);color:#1a1206;font-weight:800">질문</button>'
+      +'</div><div id="mirOut" class="mir-out"></div>';
+    document.body.appendChild(sheet);
+  }
+  const inp=sheet.querySelector('#mirIn'), out=sheet.querySelector('#mirOut');
+  const show=(t)=>{ out.textContent=t||''; out.style.display=t?'block':'none'; };
+  const ask=()=>{
+    try{ show(coneQaAnswer(inp.value) || ''); }
+    catch(e){ show('답을 못 냈습니다. 작업표를 다시 만들어 주세요.'); console.warn('[콘앱] 미르 답변 실패:', e); }
+  };
+  fab.onclick=()=>{ sheet.style.display='block'; setTimeout(()=>inp.focus(),50); };
+  sheet.querySelector('#mirX').onclick=()=>{ sheet.style.display='none'; show(''); };
+  sheet.querySelector('#mirGo').onclick=ask;
+  inp.onkeydown=(e)=>{ if(e.key==='Enter') ask(); };
+  const mic=sheet.querySelector('#mirMic');
+  mic.onclick=()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ show('이 기기는 음성 인식을 지원하지 않습니다. 글로 적어 주세요.'); return; }
+    try{
+      const r=new SR(); r.lang='ko-KR'; r.interimResults=false; r.maxAlternatives=1;
+      mic.textContent='●';
+      r.onresult=(e)=>{ inp.value=(e.results[0][0].transcript||'').trim(); ask(); };
+      r.onend=()=>{ mic.textContent='🎤'; };
+      r.onerror=()=>{ mic.textContent='🎤'; show('못 알아들었습니다. 다시 말씀하시거나 글로 적어 주세요.'); };
+      r.start();
+    }catch(e){ mic.textContent='🎤'; console.warn('[콘앱] 음성 인식 실패:', e); }
+  };
+  const ra=document.getElementById('resultArea');
+  fab.style.display = (ra && ra.offsetParent!==null && ra.innerHTML.trim().length>0) ? 'block' : 'none';
+}
+
 function bindTopButton(){
   let t=document.getElementById('bvTop');
   if(!t){
