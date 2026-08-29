@@ -64,6 +64,11 @@ export default function App() {
   const [pilotForecast, setPilotForecast] = useState({});
   // V9.36: 터미널 작업 현황(진행률·출항 ETD) — 작업 마무리 시 출항시간 표기용
   const [terminalWork, setTerminalWork] = useState({});
+  /* ★ 2.87 (검수사 지시 2026-08-29) — 미르가 여는 플랜은 **덮개**다. 주소를 바꾸지 않는다.
+       «사용자가 원하지 않았는데 위치이동이 됩니다. 홈화면에서 물었으면 홈화면에서 보여주고
+         닫아도 홈화면이어야 합니다»
+     {voyageKey, mode, what:'bay'|'cargo', bay} | null */
+  const [mirPlan, setMirPlan] = useState(null);
   const [searchInitQ, setSearchInitQ] = useState('');   // 1.69-01: 홈 검색창 질문을 통합검색으로 들고 간다
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력 (TallyOne 1.0: 모달 → 로그인 화면으로 승격)
   const [inspector, setInspector] = useState('');
@@ -453,17 +458,10 @@ export default function App() {
             heartbeat={heartbeat}
             isChief={chiefOrOwner}
             initialQuery={searchInitQ}
-            /* ★ 2.86-01 — 홈 검색창은 제출하면 이 «검색 페이지»(#/search)로 넘어온다.
-                 2.86 은 ChiefDashboard 쪽만 이어 놓아 여기서는 플랜이 안 열렸다(실측).
-                 그 배로 이동하며 신호를 남긴다 — 받는 쪽은 VoyagePage·BayPlan 이 이미 갖고 있다. */
-            onOpenPlan={({ voyageKey, mode, what, bay }) => {
-              try {
-                if (what === 'cargo') window.__mirOpenCargo = Date.now();
-                if (bay != null) window.__mirGoBay = bay;
-                window.__mirOpenBayTab = Date.now();
-              } catch (e) {}
-              navigate(mode ? { voyageKey, mode } : { voyageKey });
-            }}
+            /* ★ 2.87 — 플랜은 **이동이 아니라 덮개**다 (검수사 지시 2026-08-29).
+                 «사용자가 원하지 않았는데 위치이동이 됩니다 … 닫아도 홈화면이어야 합니다»
+                 주소를 바꾸지 않으므로 뒤로가기 스택도, 이 화면의 검색 결과도 그대로 남는다. */
+            onOpenPlan={(p) => setMirPlan(p)}
           />
         )}
         {/* TallyOne 1.0 (K2): 수석 대시보드 게이트 (ChiefDashboard 내부 가드와 이중 방어) */}
@@ -478,6 +476,7 @@ export default function App() {
               onRefreshData={handleRefreshData} refreshing={refreshing} refreshedAt={refreshedAt}
               onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
               onGoHome={() => navigate('home')}
+              onMirPlan={(pl) => setMirPlan(pl)}   /* 2.87: 플랜은 덮개 — 수석 화면 그대로 둔다 */
               onOpenGlobalSearch={(q) => { setSearchInitQ(typeof q === 'string' ? q : ''); navigate('search'); }}   /* 2.03-01: 대시보드 검색창 질문을 들고 간다 */
             />
           ) : (
@@ -527,6 +526,31 @@ export default function App() {
           )
         )}
       </main>
+
+      {/* ★ 2.87 — 미르가 부른 플랜. 있던 화면은 **뒤에 그대로 살아 있다.**
+           닫으면 이 덮개만 걷히므로 홈에서 물었으면 홈, 수석 화면에서 물었으면 수석 화면이다.
+         ⚠ VoyagePage 는 주소(location.hash)를 전혀 쓰지 않는다(실측 0건). 그래서 이렇게 띄워도
+           라우팅과 싸우지 않는다 — 이 방법을 고른 근거다. */}
+      {mirPlan && voyages[mirPlan.voyageKey] && (
+        <div className="fixed inset-0 z-[65] bg-ink-950 overflow-auto">
+          <VoyagePage
+            key={'mirplan-' + mirPlan.voyageKey + '-' + (mirPlan.mode || '')}
+            mirPlan={mirPlan}
+            onMirPlanClose={() => setMirPlan(null)}
+            initModeOverride={mirPlan.mode || null}
+            voyageKey={mirPlan.voyageKey}
+            voyage={voyages[mirPlan.voyageKey]}
+            voyages={voyages}
+            terminalWork={terminalWork}
+            heartbeat={heartbeat}
+            inspector={inspector}
+            inspectors={inspectors}
+            portMisData={portMisData}
+            pilotForecast={pilotForecast}
+            onGoHome={() => setMirPlan(null)}
+          />
+        </div>
+      )}
 
       <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">
         © 2026 (주)그린마린(Green Marine) · 개발 연지아빠 · 저작권은 개발자 연지아빠에게 있습니다<br/>

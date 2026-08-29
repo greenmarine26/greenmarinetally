@@ -88,6 +88,7 @@ export function tallyTargetState(v, pfMap, twMap, now = Date.now()) {
 export const TALLY_LIST_SINCE = new Date('2026-08-04T00:00:00+09:00').getTime();
 
 export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenVoyage, onGoHome, onOpenGlobalSearch,
+  onMirPlan = null,   // 2.87: 미르 플랜 덮개 — 이 화면을 떠나지 않는다
   // TallyOne 1.0: 팀K가 App에서 전달하는 새 prop 3개 — 전부 옵셔널(미전달·null이어도 기존 화면 동작 불변)
   collectorHb = null, pilotForecast = null, terminalWork = null, portMisData = null,   // 1.40-01: 🚢신고도착
   onRefreshData, refreshing = false, refreshedAt = 0,   // TallyOne 1.5: 화면 데이터만 새로고침
@@ -644,16 +645,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
             voyages={voyages} portMisData={portMisData} terminalWork={terminalWork}
             heartbeat={collectorHb} isChief initialQuery={dashQ}
             onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}
-            /* 2.86 — 미르가 «플랜 보여줘» 하면 그 배로 이동하며 신호를 남긴다.
-                 항차 화면(VoyagePage)이 그 신호를 받아 베이 탭·카고플랜을 연다. */
-            onOpenPlan={({ voyageKey, mode, what, bay }) => {
-              try {
-                if (what === 'cargo') window.__mirOpenCargo = Date.now();
-                if (bay != null) window.__mirGoBay = bay;
-                window.__mirOpenBayTab = Date.now();
-              } catch (e) {}
-              onOpenVoyage?.(voyageKey, mode);
-            }}/>
+            /* ★ 2.87 — 플랜은 **이동이 아니라 덮개**다 (검수사 지시 2026-08-29).
+                 수석 화면에서 물었으면 닫았을 때 수석 화면이어야 한다. 덮개는 App 이 든다. */
+            onOpenPlan={(pl) => onMirPlan?.(pl)}/>
         </div>
       )}
 

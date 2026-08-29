@@ -70,7 +70,11 @@ import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 �
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1.8: 리퍼 온도 확인
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
-export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null }) {   // 2.36: voyages·heartbeat — 항차 화면 미르도 홈과 **같은 범위**로 답한다(검수사 «홈이든 작업중이든 수석화면이든 말그대로 통합검색»)   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
+export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null,
+  /* ★ 2.87 (검수사 지시 2026-08-29) — «홈화면에서 물었으면 홈화면에서 보여주고 닫아도 홈화면이어야 합니다».
+       홈 미르가 «플랜 보여줘» 하면 App 이 **주소를 바꾸지 않고** 홈 위에 이 화면을 덮어 띄운다.
+       그때 mirPlan={what,bay} 이 들어온다 — 플랜만 보이면 되므로 그 화면의 자동 팝업은 재운다. */
+  mirPlan = null, onMirPlanClose = null }) {   // 2.36: voyages·heartbeat — 항차 화면 미르도 홈과 **같은 범위**로 답한다(검수사 «홈이든 작업중이든 수석화면이든 말그대로 통합검색»)   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
   // 1.94 (검수사 실측 SWSP — 선적 243 매칭까지 된 배가 들어가면 빈 양하부터 열림): 노드 껍데기가 아니라
   //   **실자료(ediContainers·records) 유무**로 판정한다 — 양하 없는 배는 선적이 바로 열린다.
@@ -128,17 +132,42 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   /* ★ 2.85-01 — 미르가 «플랜 보여줘» 하면 여는 자리. **한 벌**로 두고 세 화면(ListTab·LoloTab·SearchPanel)이 쓴다.
        ⚠ 2.85 는 SearchPanel 에만 넣어 양하·선적 탭에서는 안 열렸다(실측).
        검수사 — «양하자리에 있으면 양하 것, 선적자리에서 말하면 선적 것» — 여는 것은 지금 탭 것이다. */
+  /* ★ 2.87 (검수사 지시 2026-08-29) — «홈화면에서 물었으면 홈화면에서 보여주고 닫아도 홈화면이어야 합니다»
+       종전엔 플랜을 열려고 **화면을 옮겼다**(탭 이동·항차 이동). 그래서 ① 리퍼 온도 모달 같은
+       그 화면의 자동 팝업이 끼어들었고 ② 닫으면 있던 자리가 아니라 베이 탭에 남았다.
+       ⇒ 이제 **아무 데도 안 간다.** 있던 화면 위에 플랜만 덮는다. 닫으면 그 자리 그대로다. */
+  const [planOv, setPlanOv] = useState(null);   // {what:'bay'|'cargo', bay:number|null} | null
   const _mirOpenPlan = React.useCallback(({ what, bay }) => {
-    setTab('bay');
-    if (what === 'cargo') { try { window.__mirOpenCargo = Date.now(); } catch (e) {} }
-    if (bay != null) { try { window.__mirGoBay = bay; } catch (e) {} }
+    /* BayPlan 은 마운트하며 이 신호를 읽는다 — 오버레이를 켜기 **직전**에 세운다(같은 tick). */
+    try {
+      if (what === 'cargo') window.__mirOpenCargo = Date.now();
+      if (bay != null) window.__mirGoBay = bay;
+    } catch (e) {}
+    setPlanOv({ what, bay: bay == null ? null : bay });
   }, []);
+  /* 홈에서 물은 경우 — App 이 mirPlan 을 넘긴다. 마운트하자마자 그 플랜을 덮는다. */
+  useEffect(() => {
+    if (!mirPlan) return;
+    try {
+      if (mirPlan.what === 'cargo') window.__mirOpenCargo = Date.now();
+      if (mirPlan.bay != null) window.__mirGoBay = mirPlan.bay;
+    } catch (e) {}
+    setPlanOv({ what: mirPlan.what, bay: mirPlan.bay == null ? null : mirPlan.bay });
+  }, [mirPlan]);
+  /* 닫기 — 홈에서 물었으면 **홈으로** 돌려주고(이 화면째 걷힌다), 항차 화면에서 물었으면
+     덮개만 걷어 있던 탭 그대로 남긴다. 어느 쪽이든 화면이 옮겨 가지 않는다. */
+  const _closePlanOv = React.useCallback(() => {
+    setPlanOv(null);
+    if (mirPlan && onMirPlanClose) onMirPlanClose();
+  }, [mirPlan, onMirPlanClose]);
   /* ★ 2.86 — 홈(수석 대시보드) 미르가 «플랜 보여줘» 하면 그 배로 넘어오면서 신호를 남긴다.
        여기서 받아 **베이 탭을 연다**(카고플랜은 BayPlan 이 이어받는다).
      ⚠ 신호는 한 번만 쓰고 지운다 — 안 지우면 이 항차에 올 때마다 베이 탭이 열린다. */
   useEffect(() => {
     try {
-      if (window.__mirOpenBayTab) { window.__mirOpenBayTab = 0; setTab('bay'); }
+      /* 2.87: 옛 판이 남긴 신호는 **지우기만** 한다 — 이제 플랜은 이동이 아니라 오버레이로 연다.
+         (지우지 않으면 이 항차에 올 때마다 베이 탭이 저 혼자 열린다) */
+      if (window.__mirOpenBayTab) { window.__mirOpenBayTab = 0; }
     } catch (e) { /* 못 열어도 화면은 그대로 */ }
   }, []);
   const [relayQ, setRelayQ] = useState('');   // 1.84-01: 양하 탭 검색창의 문장 질문을 「작업 시작」 탭으로 릴레이   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
@@ -857,7 +886,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (rfAutoRef.current === key) return;
     if (!reefers.length) return;          // 리퍼 자체가 없으면 아무 일 없다
     rfAutoRef.current = key;
-    if (rfUnchecked > 0 && !shipPolicy?.rfSkip) setShowReefer(true);   // 1.86: 리퍼 체크 안 함 배는 자동으로 안 띄움
+    /* 2.87: mirPlan — 홈 미르가 플랜만 보려고 덮어 띄운 화면이다. 여기서 온도 모달이 튀어나오면
+       검수사가 부른 적 없는 팝업이 플랜을 가린다(실측 KSKM 2617S — 카고플랜 위에 모달이 떴다). */
+    if (rfUnchecked > 0 && !shipPolicy?.rfSkip && !mirPlan) setShowReefer(true);   // 1.86: 리퍼 체크 안 함 배는 자동으로 안 띄움
   }, [voyageKey, mode, reefers.length, rfUnchecked]);
 
   // V8.06: LOLO/IFCSUM 선박 판정 — 컨테이너에 베이 위치가 하나도 없으면 LOLO 전용.
@@ -1403,6 +1434,33 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {showReefer && (
         <ReeferMemoModal containers={containers} voyageKey={voyageKey} mode={mode} inspector={inspector}
           onClose={() => setShowReefer(false)}/>
+      )}
+
+      {/* ★ 2.87 플랜 오버레이 (검수사 지시 2026-08-29) —
+           «사용자가 원하지 않았는데 위치이동이 됩니다. 홈화면에서 물었으면 홈화면에서 보여주고
+             닫아도 홈화면이어야 합니다»
+         있던 화면은 **그대로 뒤에 남는다.** 이것만 덮었다가 닫으면 있던 자리다.
+         ⚠ 리퍼 모달(z-50)보다 위에 둔다 — 플랜을 가리는 팝업이 다시 생기지 않게. */}
+      {planOv && (
+        <div className="fixed inset-0 z-[70] bg-ink-950 overflow-auto">
+          <div className="sticky top-0 z-[71] flex items-center gap-2 px-3 py-2 bg-ink-900 border-b border-line">
+            <div className="text-xs2 font-bold text-amber-300">
+              {voyage?.info?.vsl || ''} {mode === 'loading' ? '선적' : '양하'}
+              {planOv.what === 'cargo' ? ' 카고플랜' : (planOv.bay != null ? ` ${planOv.bay}번 베이` : ' 베이플랜')}
+            </div>
+            <button onClick={_closePlanOv}
+              className="ml-auto px-3 py-1.5 rounded-btn bg-ink-750 text-dim-200 text-xs2 font-bold">닫기</button>
+          </div>
+          <BayPlan
+            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
+            preGoneInfo={preGoneInfo}
+            onOpenContainer={(c) => setDetailC(c)}
+            shipImo={voyage?.info?.imo}
+            shipName={voyage?.info?.vsl}
+            voyageInfo={voyage?.info}
+            voyageKey={voyageKey}
+          />
+        </div>
       )}
       {/* TallyOne 1.15: **리퍼 온도 확인 배너 삭제** (검수사 신고 2026-08-06 — "중복 건입니다").
           바로 아래 현황 요약 줄에 이미 「리퍼 N대」 칩이 있고, 확인 유무까지 거기로 합쳤다.
