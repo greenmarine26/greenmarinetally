@@ -80,6 +80,22 @@ const fs = require('fs');
     ok(!!tc && tc.truth === 95 && tc.ok === true, `배정표 190모브 → 95대 · 확정 95 와 일치 (truth ${tc && tc.truth})`);
   }
 
+  console.log('[6] 호출부 전수 — 시프팅을 세는 곳이 **전부** 배정표를 넘기는가');
+  {
+    //  ⛔ 3금지① — 2.81 에서 utils 만 고치고 콘앱 호출부를 안 봐서 «콘앱 66 · 검수앱 95» 로 갈렸다
+    //    (검수사가 두 앱 카고플랜을 나란히 뽑아 잡아냈다, 2026-08-29).
+    //    computeShiftingMap 을 **직접** 부르는 곳은 둘뿐이다 — utils 의 래퍼와 콘앱. 둘 다 넘겨야 한다.
+    const u = fs.readFileSync(path.resolve('src/utils.js'), 'utf8');
+    const cone = fs.readFileSync(path.resolve('public/cone.html'), 'utf8');
+    ok(/_cs\(_dMap, _lMap, \{ berthShift: _v\.berthShift \}\)/.test(cone),
+       '콘앱: computeShiftingMap 에 배정표를 넘긴다');
+    ok(/berthShift: \(info\.berthShift!=null\?Number\(info\.berthShift\):null\)/.test(cone),
+       '콘앱: 항차 목록이 info.berthShift 를 담는다(안 담으면 넘길 값이 없다)');
+    //  직접 호출이 그 둘 말고 더 늘어나면 여기서 걸린다.
+    const direct = (u.match(/computeShiftingMap\(/g) || []).length;   // 정의 1 + 래퍼 1
+    ok(direct === 2, `utils 안 computeShiftingMap 등장 ${direct}곳(정의+래퍼) — 새 호출부가 늘면 배정표를 넘기는지 확인할 것`);
+  }
+
   console.log(fail ? `\n✗ 실패 ${fail}건` : '\n✓ 전부 통과');
   process.exit(fail ? 1 : 0);
 })();
