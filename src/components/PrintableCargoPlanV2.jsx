@@ -1000,7 +1000,12 @@ export default function PrintableCargoPlanV2({
             {shiftCount > 0 && (
               <>
                 <span style={{ color: '#1d4ed8' }}> · 쉬프팅 {shiftCount}</span>
-                <span> · 합 {_ptkCount + shiftCount}</span>
+                {/* 2.83-01 (검수사 문구 확정): «합»이 아니라 «작업분» —
+                    *«검수앱은 기존에다 시프팅만 따로 표기 해주면 됩니다.
+                      양하 279 시프팅 95 **작업분** 374 이런식으로»*
+                    ⚠ 검수앱은 양하 대수(279)를 **그대로 둔다**. 검수 리스트가 그 수이기 때문이다.
+                      시프팅을 대수에 **합치는 것은 콘앱만의 계산법**이다(내리고 싣는 것만 세므로). */}
+                <span> · 작업분 {_ptkCount + shiftCount}</span>
               </>
             )}
           </div>
