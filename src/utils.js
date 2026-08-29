@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.86'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
+export const APP_VERSION = 'TallyOne 2.86-01'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.

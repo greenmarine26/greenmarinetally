@@ -453,6 +453,17 @@ export default function App() {
             heartbeat={heartbeat}
             isChief={chiefOrOwner}
             initialQuery={searchInitQ}
+            /* ★ 2.86-01 — 홈 검색창은 제출하면 이 «검색 페이지»(#/search)로 넘어온다.
+                 2.86 은 ChiefDashboard 쪽만 이어 놓아 여기서는 플랜이 안 열렸다(실측).
+                 그 배로 이동하며 신호를 남긴다 — 받는 쪽은 VoyagePage·BayPlan 이 이미 갖고 있다. */
+            onOpenPlan={({ voyageKey, mode, what, bay }) => {
+              try {
+                if (what === 'cargo') window.__mirOpenCargo = Date.now();
+                if (bay != null) window.__mirGoBay = bay;
+                window.__mirOpenBayTab = Date.now();
+              } catch (e) {}
+              navigate(mode ? { voyageKey, mode } : { voyageKey });
+            }}
           />
         )}
         {/* TallyOne 1.0 (K2): 수석 대시보드 게이트 (ChiefDashboard 내부 가드와 이중 방어) */}
