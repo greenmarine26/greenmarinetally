@@ -18,18 +18,26 @@
 export function parseViewCommand(query) {
   const t = String(query || '').trim();
   if (!t) return null;
-  //  «보여줘/열어/띄워/가자/이동» 이 있어야 명령이다 — «5번 베이» 만 물으면 조회로 답해야 한다.
-  if (!/보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)) return null;
+  /* ★ 2.87-03 (검수사 2026-08-29 «MCSC LOADING 카고플랜 보여줘 미르가 영어를 몰라요»)
+       현장 서류는 전부 영어다 — LOADING PLAN · CARGO PLAN · DISCHARGE. 종이에 적힌 말로 물었는데
+       «일치 없음» 이 나왔다(실측 «KSKM LOADING PLAN»). 그래서 영어도 같이 알아듣는다.
+     ⚠ 영어는 PLAN 한 낱말만 있어도 «열어라»로 본다 — 한글의 «플랜»은 조회일 수 있지만
+       («5번 베이 플랜에 뭐 있어»), 영어로 PLAN 을 치는 자리는 도면을 볼 때뿐이다. */
+  const T = t.toUpperCase();
+  const isCmd = /보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)
+    || /\b(SHOW|OPEN|VIEW|DISPLAY)\b/.test(T)
+    || /\bPLANS?\b/.test(T);
+  if (!isCmd) return null;
 
-  const mode = /선적|싣|적하|로딩/.test(t) ? 'loading'
-    : (/양하|내림|내리|디스차지/.test(t) ? 'discharge' : null);
+  const mode = (/선적|싣|적하|로딩/.test(t) || /\b(LOADING|LOAD|LDG|LOA)\b/.test(T)) ? 'loading'
+    : ((/양하|내림|내리|디스차지/.test(t) || /\b(DISCHARGE|DISCH|DSCH|DIS|UNLOAD)\b/.test(T)) ? 'discharge' : null);
 
-  const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
-  const bay = m ? parseInt(m[1] || m[2], 10) : null;
+  const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/) || T.match(/\bBAY\s*(\d{1,3})\b/);
+  const bay = m ? parseInt(m[1] || m[2] || m[3], 10) : null;
 
   //  어느 화면을 여는가 — 카고플랜은 «전체 화물 비교», 베이플랜은 «양하·선적 비교»다.
-  const what = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t) ? 'cargo'
-    : (/베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || bay != null ? 'bay' : null);
+  const what = (/카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t) || /\bCARGO\b/.test(T)) ? 'cargo'
+    : ((/베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || /\bPLANS?\b/.test(T) || bay != null) ? 'bay' : null);
   if (!what) return null;
   return { mode, bay, what };
 }

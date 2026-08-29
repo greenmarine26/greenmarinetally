@@ -88,7 +88,13 @@ export default function App() {
         return v.length >= 3 && t.includes(v);
       });
     }
-    return hit.length === 1 ? hit[0] : null;   // 여럿이면 미르가 고르게 둔다
+    /* 2.87-03: 같은 약자로 두 항차가 열려 있으면(실측 TMPZ_2026E·TMPZ_2027E) 항차번호로 좁힌다.
+       그래도 못 좁히면 열지 않는다 — 엉뚱한 배를 여느니 미르가 되묻는 편이 낫다. */
+    if (hit.length > 1) {
+      const nar = hit.filter((k) => t.includes(String(k).split('_')[1].toUpperCase()));
+      if (nar.length === 1) hit = nar;
+    }
+    return hit.length === 1 ? hit[0] : null;
   }, [voyages]);
   const _askGlobal = React.useCallback((q) => {
     const text = typeof q === 'string' ? q : '';
