@@ -7,7 +7,7 @@
 // 보존: 검수앱 고유 마크 (AWK='A', OOG='A', Empty='E', Reefer 빈='r'), POD 컬러
 // 미통합 (다음 패치 예정): 선사별 별첨, 화물 종류별 별첨, 선적 모드 POD 컬러 매핑
 // ============================================================
-import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { getShipBayDictData } from '../shipStructure.js';
 import { extractShipMetaFromVoyage } from '../shipMatrixBuilder.js';
@@ -914,7 +914,47 @@ export default function PrintableCargoPlanV2({
   }, [renderDataMap]);
 
   // V8.25: 화면 핀치 줌 (인쇄 무관) — 카고플랜에 두 손가락 확대/축소 추가
-  const [zoom, setZoom] = useState(1);  // V8.26-02: 100% 시작
+  /* ★ ConeOne 2.11 (검수사 2026-08-29) — *«카고플랜 한장이 한 화면에 다 보이게»*
+       종전: 100% 로 열고, 「맞춤」은 `setZoom(0.22)` 로 **숫자가 박혀** 있었다 —
+             화면이 크든 작든 언제나 22%(폰 가로 실측 1200x737 → 264x162, 화면의 4분의 1도 못 썼다).
+       ⛔ 게다가 － ＋ 「맞춤」 세 버튼은 `!IS_TOUCH_DEVICE` 라 **폰에서는 아예 안 보인다.**
+          그래서 폰에서는 «열 때 저절로 맞는 것»이 유일한 길이다.
+       ⚠ 이 컴포넌트는 콘앱만 쓰는 것이 아니다 — 검수앱 인쇄허브·베이플랜·선적플랜편집·플랜에디터가
+          같이 쓴다. 네 곳의 「맞춤」도 함께 화면 기준으로 바뀐다(종전 22% 고정보다 낫다). */
+  const [zoom, setZoom] = useState(1);  // V8.26-02: 100% 시작 → 2.11: 마운트 직후 화면에 맞춘다
+  const zoomRef = useRef(1);
+  zoomRef.current = zoom;
+  const calcFit = () => {
+    try {
+      const pg = document.querySelector('.cpv2-overlay .cpv2-page');
+      if (!pg) return null;
+      const r = pg.getBoundingClientRect();
+      const z = zoomRef.current || 1;
+      const w = r.width / z, h = r.height / z;      // scale 을 되나눠 «자연 크기»를 얻는다(DOM 을 건드리지 않는다)
+      if (!(w > 0 && h > 0)) return null;
+      const bar = document.querySelector('.cpv2-overlay .cpv2-noprint');
+      const barH = bar ? bar.getBoundingClientRect().height + 12 : 44;
+      const fit = Math.min((window.innerWidth - 16) / w, (window.innerHeight - barH - 12) / h);
+      return Math.max(0.15, Math.min(1, +fit.toFixed(3)));   // 넓은 화면에서 100% 를 넘겨 키우지는 않는다
+    } catch (e) {
+      console.warn('[카고플랜] 맞춤 배율 계산 실패 — 배율을 그대로 둡니다:', e);   // 조용히 죽지 않는다
+      return null;
+    }
+  };
+  const fitRef = useRef(calcFit);
+  fitRef.current = calcFit;
+  useEffect(() => {
+    const apply = () => { const f = fitRef.current(); if (f) setZoom(f); };
+    const raf = requestAnimationFrame(apply);          // 첫 그림이 끝난 뒤 재야 크기가 나온다
+    const t = setTimeout(apply, 250);                  // 글꼴·줄바꿈이 자리잡은 뒤 한 번 더
+    window.addEventListener('resize', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      cancelAnimationFrame(raf); clearTimeout(t);
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('orientationchange', apply);
+    };
+  }, []);
   const pinchRef = useRef({ active: false, startDist: 0, startZoom: 1 });
   const onTouchStart = (e) => {
     if (e.touches && e.touches.length === 2) {
@@ -939,7 +979,7 @@ export default function PrintableCargoPlanV2({
       {!IS_TOUCH_DEVICE && (<>
         <button onClick={() => setZoom(z => Math.max(0.15, +(z - 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>−</button>
         <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>＋</button>
-        <button onClick={() => setZoom(0.22)} style={{ padding: '6px 10px', background: '#546e7a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>맞춤</button>
+        <button onClick={() => { const f = calcFit(); setZoom(f || 0.22); }} style={{ padding: '6px 10px', background: '#546e7a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>맞춤</button>
       </>)}
       <button onClick={() => window.print()} style={{ padding: '6px 10px', background: '#1565c0', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>🖨 인쇄</button>
       <button onClick={onClose} style={{ padding: '6px 10px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>✕ 닫기</button>
