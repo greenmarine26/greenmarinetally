@@ -25,6 +25,7 @@
 
 import {
   parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing,
+  generateIntroAnswer, generateTimeAnswer, describeQuery, hasAnyCondition,
 } from './nlSearch.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
 import { mirTone, mirSmallTalk } from './mirChat.js';
@@ -102,13 +103,52 @@ function _answerCore(query, ctx) {
     if (a) return a;
   } catch (e) { /* 마지막 안내로 */ }
 
+  /* ③-B 알아듣고도 답을 못 고르던 갈래들 — 검수앱 화면(GlobalSearchPage:290·730)이 따로 처리하던 것.
+       검수사 *«인력들이 검수에게 묻는것이 많습니다. 기록하다 일일이 답해줘야 합니다. 그걸 미르가 해야 합니다»*
+       — 현장에서 던지듯 묻는 말이 안내문으로 새면 결국 검수사에게 다시 묻게 된다. */
+  if (parsed) {
+    try {
+      /* «미르야 안녕» 은 mirHello 가 아니라 mirCalled 로 잡힌다(실측).
+         뒤에 일이 붙지 않은 부름만 인사로 받는다 — «미르야 브리핑» 을 가로채면 안 된다. */
+      const _bareCall = parsed.mirCalled && !hasAnyCondition(parsed)
+        && !parsed.briefingQuery && !parsed.progressQuery && !parsed.etaQuery
+        && !parsed.introQuery && !parsed.shipIntroQuery && !parsed.timeQuery;
+      if (parsed.mirHello || _bareCall) {
+        return '네, 미르예요 🐱 뭐 확인해 드릴까요?\n(예: "5번 베이 콘" · "얼마나 남았어" · "리퍼 몇대" · "22G1이 뭐야")';
+      }
+      if (parsed.introQuery || parsed.shipIntroQuery) {
+        const a = generateIntroAnswer(c.vslFull || c.vsl || '');
+        if (a) return a;
+      }
+      if (parsed.timeQuery) {
+        const a = generateTimeAnswer();
+        if (a) return a;
+      }
+      /* 조건은 잡혔는데(«40피트 풀») 어미가 없어 답이 안 나오는 말 — 결과를 세어 준다.
+         현장은 «40피트 풀 몇 대입니까»가 아니라 «40피트 풀»이라고 던진다. */
+      if (hasAnyCondition(parsed) && cs.length) {
+        const r2 = applyNLFilter(cs, parsed);
+        if (r2 && r2.length >= 0) {
+          let label = '';
+          try { label = describeQuery(parsed) || ''; } catch (e2) { label = ''; }
+          return '📊 ' + (label || '조회') + ': ' + r2.length + '대';
+        }
+      }
+    } catch (e) { /* 아래로 */ }
+  }
+
   /* ④ 용어 292선 · 실무지식 43개 — «22G1이 뭐야», «코너캐스팅».
        ⚠ 검수앱은 이것을 화면마다 따로 부르고 있다(GlobalSearchPage:758 · SearchPanel:1135 — **같은 줄이 두 벌**).
          여기로 모아 두면 2단계에서 그 두 화면이 `answerOne` 을 부르는 순간 한 벌이 된다.
        조회 질문을 가로채지 않도록 **기본 경로가 답을 못 냈을 때만** 본다(`parsed.asking` 게이트는 검수앱과 동일). */
   if (!(parsed && parsed.asking)) {
     try {
-      const k = mirKnowledge(q);
+      let k = mirKnowledge(q);
+      /* 낱말만 던진 말(«코너캐스팅»)도 뜻을 준다 — 현장은 «~이 뭐야»를 안 붙인다.
+         2~12자 한글/영문 한 낱말일 때만 «이 뭐야»를 붙여 한 번 더 물어본다. */
+      if (!k && /^[가-힣A-Za-z0-9]{2,12}$/.test(q)) {
+        try { k = mirKnowledge(q + '이 뭐야'); } catch (e2) { k = null; }
+      }
       if (k) return k;
     } catch (e) { /* 답안지가 막혀도 안내는 나간다 */ }
   }
