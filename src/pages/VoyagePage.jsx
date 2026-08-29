@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { speakContainer, parseSpokenDigits, pickSpeechAlternative, speak, speakLong } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독   // 1.84-01: 양하 탭 통합검색(음성·자동 읽기)
 import { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer } from '../nlSearch.js';   // 2.65: briefingVoiceLines
 import { buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 2.62: 조 단위 갱 배분 — 계산 한 벌
@@ -2674,14 +2675,11 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPla
     const t = (q || '').trim();
     if (!t || !onOpenPlan) return;
     if (planRanRef.current === t) return;
-    if (!/보여|보자|열어|띄워|가\s*자|이동|펼쳐/.test(t)) return;
-    const wantCargo = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t);
-    const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
-    const bay = m ? parseInt(m[1] || m[2], 10) : null;
-    const wantBay = /베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || bay != null;
-    if (!wantCargo && !wantBay) return;
+    /* 2.87-02: 판정은 src/planCommand.js 한 벌 — 다섯 번째 사본이던 자리다. */
+    const cmd = parseViewCommand(t);
+    if (!cmd) return;
     planRanRef.current = t;
-    try { onOpenPlan({ what: wantCargo ? 'cargo' : 'bay', bay, mode }); }
+    try { onOpenPlan({ what: cmd.what, bay: cmd.bay, mode: cmd.mode || mode }); }
     catch (e) { console.warn('[미르] 플랜 열기 실패:', e); }
   }, [q, onOpenPlan, mode]);
   const results = useMemo(() => { try { return parsed ? applyNLFilter(containers, parsed) : []; } catch (e) { return []; } },

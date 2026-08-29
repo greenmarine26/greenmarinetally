@@ -1,6 +1,7 @@
 // 그린마린 평택항 검수 — Master V1.1
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
+import { parseViewCommand } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { APP_VERSION, _storage, SK , setLaneRoutes } from './utils.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
@@ -69,6 +70,36 @@ export default function App() {
          닫아도 홈화면이어야 합니다»
      {voyageKey, mode, what:'bay'|'cargo', bay} | null */
   const [mirPlan, setMirPlan] = useState(null);
+  /* ★ 2.87-02 (검수사 2026-08-29) — «여기를 꼭 거쳐야 하나요? 창을 닫으면 여기에 있네요»
+       홈 검색창은 무엇을 묻든 통합검색 화면(#/search)으로 **넘겨** 버렸다. 그래서 플랜을 물으면
+       ① 화면이 통합검색으로 바뀌고 ② 거기서 컨테이너 목록까지 만들고 ③ 플랜을 닫으면 홈이 아니라
+       통합검색에 남았다. 검수사가 «버그가 양하를 인식하고 양하 컨테이너 목록을 만드는것입니다»
+       라고 한 것이 ②다 — 열어 달라고 했는데 찾기까지 한 것이다.
+     ⇒ 플랜 명령이고 배를 찾을 수 있으면 **아무 데도 가지 않고** 그 자리에서 덮개만 띄운다.
+     ⚠ 배를 못 찾으면 종전대로 통합검색으로 넘긴다 — 엉뚱한 배를 여는 것보다 낫다. */
+  const _voyFromQuery = React.useCallback((q) => {
+    const t = String(q || '').toUpperCase();
+    const keys = Object.keys(voyages || {});
+    //  약자(키 앞부분) 먼저 — KSKM_2616N 의 KSKM. 그다음 선박명(info.vsl).
+    let hit = keys.filter((k) => t.includes(String(k).split('_')[0].toUpperCase()));
+    if (!hit.length) {
+      hit = keys.filter((k) => {
+        const v = String(voyages[k]?.info?.vsl || '').toUpperCase();
+        return v.length >= 3 && t.includes(v);
+      });
+    }
+    return hit.length === 1 ? hit[0] : null;   // 여럿이면 미르가 고르게 둔다
+  }, [voyages]);
+  const _askGlobal = React.useCallback((q) => {
+    const text = typeof q === 'string' ? q : '';
+    const cmd = parseViewCommand(text);
+    if (cmd) {
+      const vk = _voyFromQuery(text);
+      if (vk) { setMirPlan({ voyageKey: vk, mode: cmd.mode, what: cmd.what, bay: cmd.bay }); return; }
+    }
+    setSearchInitQ(text); navigate('search');
+  }, [_voyFromQuery]);
+
   const [searchInitQ, setSearchInitQ] = useState('');   // 1.69-01: 홈 검색창 질문을 통합검색으로 들고 간다
   // M3.6: 자동 로그인 제거 - 매번 검수원 입력 (TallyOne 1.0: 모달 → 로그인 화면으로 승격)
   const [inspector, setInspector] = useState('');
@@ -433,7 +464,7 @@ export default function App() {
             onOpenChiefDashboard={() => navigate('chief')}
             heartbeat={heartbeat}
             onOpenAux={() => navigate('aux')}
-            onOpenGlobalSearch={(q) => { setSearchInitQ(typeof q === 'string' ? q : ''); navigate('search'); }}   /* 1.69-01: 홈 검색 진입 복원 */
+            onOpenGlobalSearch={_askGlobal}   /* 1.69-01: 홈 검색 진입 복원 */
           />
         )}
         {route.name === 'food' && (
@@ -477,7 +508,7 @@ export default function App() {
               onOpenVoyage={(voyageKey, mode) => navigate(mode ? { voyageKey, mode } : { voyageKey })}
               onGoHome={() => navigate('home')}
               onMirPlan={(pl) => setMirPlan(pl)}   /* 2.87: 플랜은 덮개 — 수석 화면 그대로 둔다 */
-              onOpenGlobalSearch={(q) => { setSearchInitQ(typeof q === 'string' ? q : ''); navigate('search'); }}   /* 2.03-01: 대시보드 검색창 질문을 들고 간다 */
+              onOpenGlobalSearch={_askGlobal}   /* 2.03-01: 대시보드 검색창 질문을 들고 간다 */
             />
           ) : (
             <DeniedChiefOnly onGoHome={() => navigate('home')}/>

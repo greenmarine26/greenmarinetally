@@ -4,6 +4,7 @@
 // - 결과 카드: 실번호 거대 + 완료 버튼
 // - Gemini API: 자연어 자유 질의
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
 import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
@@ -1203,14 +1204,12 @@ function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers,
     const q = (query || '').trim();
     if (!q || !onOpenPlan) return;
     if (planRanRef.current === q) return;          // 같은 질문으로 두 번 열지 않는다
-    if (!/보여|보자|열어|띄워|가\s*자|이동|펼쳐/.test(q)) return;
-    const wantCargo = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(q);
-    const m = q.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
-    const bay = m ? parseInt(m[1] || m[2], 10) : null;
-    const wantBay = /베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(q) || bay != null;
-    if (!wantCargo && !wantBay) return;
+    /* 2.87-02: 판정은 src/planCommand.js 한 벌이다 — 사본을 두면 홈·통합검색과 갈린다. */
+    const cmd = parseViewCommand(q);
+    if (!cmd) return;
     planRanRef.current = q;
-    try { onOpenPlan({ what: wantCargo ? 'cargo' : 'bay', bay, mode: workFilter }); }
+    //  여기서는 «보고 있던 쪽»이 기본이다 — 검수사 «양하자리에 있으면 양하…선적자리에서 말하면 선적꺼».
+    try { onOpenPlan({ what: cmd.what, bay: cmd.bay, mode: cmd.mode || workFilter }); }
     catch (e) { console.warn('[미르] 플랜 열기 실패:', e); }
   }, [query, onOpenPlan, workFilter]);
 

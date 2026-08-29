@@ -37,34 +37,10 @@ import { speak, stopSpeak } from './voice.js';
      ⛔ 새로 만들지 않는다 — 검수앱과 **같은 runDeviceCmd 한 벌**을 쓴다(단계·문구가 갈리면 안 된다). */
 import { runDeviceCmd } from './utils.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
+import { parseViewCommand } from './planCommand.js';
 
-/**
- * ★ 2.18 (검수사 요청 2026-08-29) — *«미르야 선적(양하)플랜 보여줘»* · *«미르야 선적(양하) 몇번 베이 보여줘»*
- *
- * 이것은 «답»이 아니라 «화면을 열어라»다. 그래서 엔진은 **무엇을 하라만 내고 실행하지 않는다** —
- * nlSearch.js 가 deviceCmd·startSet 을 다루는 방식 그대로다(그 파일 머리에 적혀 있다).
- * 화면 구조는 두 앱이 서로 다르니 **여는 일은 각 앱이 한다.** 해석만 한 벌로 둔다.
- *
- * 반환 { mode:'discharge'|'loading'|null, bay:number|null } · 명령이 아니면 null.
- */
-export function parseViewCommand(query) {
-  const t = String(query || '').trim();
-  if (!t) return null;
-  //  «보여줘/열어/띄워/가자/이동» 이 있어야 명령이다 — «5번 베이» 만 물으면 조회로 답해야 한다.
-  if (!/보여|보자|열어|띄워|가\s*자|이동|가\s*줘|펼쳐/.test(t)) return null;
-
-  const mode = /선적|싣|적하|로딩/.test(t) ? 'loading'
-    : (/양하|내림|내리|디스차지/.test(t) ? 'discharge' : null);
-
-  const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
-  const bay = m ? parseInt(m[1] || m[2], 10) : null;
-
-  //  어느 화면을 여는가 — 카고플랜은 «전체 화물 비교», 베이플랜은 «양하·선적 비교»다.
-  const what = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t) ? 'cargo'
-    : (/베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || bay != null ? 'bay' : null);
-  if (!what) return null;
-  return { mode, bay, what };
-}
+/* 2.87-02: parseViewCommand 는 src/planCommand.js 한 벌로 옮겼다 — 검수앱 화면들과 같은 판정을 쓰기 위해서다.
+   콘앱 번들은 여기서 그대로 다시 내보낸다(부르는 이름은 그대로). */
 
 /** 콘앱 행 → 미르가 읽는 컨테이너 모양. 콘앱은 `reefer/temp`, 엔진은 `rf/tmp` 를 본다. */
 export function toMirContainers(rows, mode) {
@@ -252,6 +228,7 @@ function _answerCore(query, ctx) {
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };
+export { parseViewCommand };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };

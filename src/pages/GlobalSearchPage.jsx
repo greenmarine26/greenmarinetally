@@ -1,5 +1,6 @@
 // 모든 항차 + 양/선적 통합 검색 + 음성 입력 + AI 자연어 (M1.9)
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, ArrowDown, ArrowUp, MapPin, ChevronRight, Snowflake, SendHorizontal } from 'lucide-react';   // 1.69-05: 전송 버튼
 import { speakContainer, parseSpokenDigits, speak, stopSpeak, spellKo } from '../voice.js';
 import { isoToLabel, fmtPos, isPyeongtaekPort, isSentenceQuery, sideCancelled} from '../utils.js';
@@ -267,16 +268,13 @@ export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenCon
     const t = String(debouncedQuery || '').trim();
     if (!t || !onOpenPlan) return;
     if (planRanRef.current === t) return;
-    if (!/보여|보자|열어|띄워|가\s*자|이동|펼쳐/.test(t)) return;
-    const wantCargo = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t);
-    const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
-    const bay = m ? parseInt(m[1] || m[2], 10) : null;
-    const wantBay = /베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || bay != null;
-    if (!wantCargo && !wantBay) return;
+    /* 2.87-02: 판정은 src/planCommand.js 한 벌이다 — 여기 사본을 두면 홈·항차 화면과 갈린다. */
+    const cmd = parseViewCommand(t);
+    if (!cmd) return;
     if (!shipCtx || !shipCtx.key) return;
     planRanRef.current = t;
-    const mode = /선적|싣|적하|로딩/.test(t) ? 'loading' : 'discharge';
-    try { onOpenPlan({ voyageKey: shipCtx.key, mode, what: wantCargo ? 'cargo' : 'bay', bay }); }
+    const mode = cmd.mode || 'discharge';
+    try { onOpenPlan({ voyageKey: shipCtx.key, mode, what: cmd.what, bay: cmd.bay }); }
     catch (e) { console.warn('[미르] 플랜 열기 실패:', e); }
   }, [debouncedQuery, shipCtx, onOpenPlan]);
 
