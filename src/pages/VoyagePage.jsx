@@ -125,6 +125,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const [closingOpen, setClosingOpen] = useState(false);
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
   const [listFilter, setListFilter] = useState(null);
+  /* ★ 2.85-01 — 미르가 «플랜 보여줘» 하면 여는 자리. **한 벌**로 두고 세 화면(ListTab·LoloTab·SearchPanel)이 쓴다.
+       ⚠ 2.85 는 SearchPanel 에만 넣어 양하·선적 탭에서는 안 열렸다(실측).
+       검수사 — «양하자리에 있으면 양하 것, 선적자리에서 말하면 선적 것» — 여는 것은 지금 탭 것이다. */
+  const _mirOpenPlan = React.useCallback(({ what, bay }) => {
+    setTab('bay');
+    if (what === 'cargo') { try { window.__mirOpenCargo = Date.now(); } catch (e) {} }
+    if (bay != null) { try { window.__mirGoBay = bay; } catch (e) {} }
+  }, []);
   const [relayQ, setRelayQ] = useState('');   // 1.84-01: 양하 탭 검색창의 문장 질문을 「작업 시작」 탭으로 릴레이   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
   // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
   const [seqEdit, setSeqEdit] = useState(false);
@@ -1422,6 +1430,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       )}
       {!_sideCanc && tab === 'list' && (
         <ListTab
+          onOpenPlan={_mirOpenPlan}
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           voyageKey={voyageKey} mode={mode}
           containers={containers} ediMap={ediMap} recMap={recMap}
@@ -1500,11 +1509,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                해석은 SearchPanel 이, 여는 것은 탭·인쇄 상태를 쥔 이 자리가 한다.
              검수사 — «양하자리에 있으면 양하 것, 선적자리에서 말하면 선적 것» — 지금 탭 것을 열면 된다.
              ⚠ 카고플랜은 베이 탭 안(BayPlan)의 인쇄 메뉴에 있다. 그래서 탭을 먼저 열고 신호를 남긴다. */
-          onOpenPlan={({ what, bay }) => {
-            setTab('bay');
-            if (what === 'cargo') { try { window.__mirOpenCargo = Date.now(); } catch (e) {} }
-            if (bay != null) { try { window.__mirGoBay = bay; } catch (e) {} }
-          }}
+          onOpenPlan={_mirOpenPlan}
           onPlaceUnassigned={(c) => {
             // V9.28: 미배정 = 빈자리가 있다는 뜻 — 검수원이 베이 탭 빈 칸에 직접 배치 (사용자 확정:
             //   "앱이 빈자리를 보여주고 거기에 맞는 컨을 넣어야 한다. 수석 편집은 오입력 교정용")
@@ -1523,6 +1528,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           onOpenContainer={(c) => setDetailC(c)}
         />
         <LoloTab
+          onOpenPlan={_mirOpenPlan}
           vsl={voyage?.info?.vsl || ''} pier={voyage?.info?.pier || ''}
           briefCtx={briefCtx}
           onAsk={(q) => { setRelayQ(q); setTab('search'); }}
@@ -2068,7 +2074,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
 }
 
 // === 리스트 탭 ===
-export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null }) {
+export function ListTab({ onOpenPlan = null, voyageKey, mode, containers, ediMap, recMap, xrayMap, xraySeals, compMap, inspector, onOpenContainer, externalFilter, shiftingList = [], shiftInfo = null, onAsk = null , vsl = '', pier = '', briefCtx = null, detailPanel = null }) {
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2266,7 +2272,7 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
       <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
         {[
@@ -2562,11 +2568,32 @@ function EsealRangeCard({ voyageKey, info, inspector }) {
 // 1.85-05 (검수사 확정 «양하화면에서 조회했는데 답은 작업시작 화면에서 나옴»): 질문한 탭에서 바로 답.
 //   ListTab·LoloTab 공용 — 로컬 즉답만(AI 폴백·오답 신고는 ▶ 작업 시작 탭). 후속 버튼·«← 이전 답으로» 는
 //   SearchPanel 1.84-03 과 같은 규칙(검수사: «브리핑에서 누른 버튼은 반드시 되돌아 가기 버튼»).
-function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx
+function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, onOpenPlan, vsl = '', pier = '', briefCtx = null }) {   // 2.01: briefCtx
   const carrierContacts = useCarrierContacts();   // 1.89: «관련 선사·담당자» 즉답용
   const shipSpeed = useShipSpeed();   // 1.93-01: 시작 전 «얼마나 걸릴까» 실측 예측
   const q = ask?.q || '';
   const parsed = useMemo(() => { try { return parseNaturalQuery(q); } catch (e) { return null; } }, [q]);
+
+  /* ★ 2.85-01 (검수사 실측) — *«미르야 베이플랜/카고플랜 보여줘»* 를 **여기서** 받는다.
+       2.85 는 `SearchPanel` 에만 넣었는데, 양하·선적 탭의 질문은 이 카드가 먼저 답한다.
+       못 답할 때만 «작업 시작» 탭으로 넘어가므로(onFallback) 거기까지 안 왔다 — 실측으로 확인.
+     검수사 — *«양하자리에 있으면 양하 것, 선적자리에서 말하면 선적 것»* — `mode` 가 곧 그 자리다.
+     ⚠ 화면은 부모가 연다(`onOpenPlan`). 여기서 탭을 직접 만지지 않는다. */
+  const planRanRef = useRef('');
+  useEffect(() => {
+    const t = (q || '').trim();
+    if (!t || !onOpenPlan) return;
+    if (planRanRef.current === t) return;
+    if (!/보여|보자|열어|띄워|가\s*자|이동|펼쳐/.test(t)) return;
+    const wantCargo = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t);
+    const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
+    const bay = m ? parseInt(m[1] || m[2], 10) : null;
+    const wantBay = /베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || bay != null;
+    if (!wantCargo && !wantBay) return;
+    planRanRef.current = t;
+    try { onOpenPlan({ what: wantCargo ? 'cargo' : 'bay', bay, mode }); }
+    catch (e) { console.warn('[미르] 플랜 열기 실패:', e); }
+  }, [q, onOpenPlan, mode]);
   const results = useMemo(() => { try { return parsed ? applyNLFilter(containers, parsed) : []; } catch (e) { return []; } },
     [containers, parsed]);
   //  2.63: «갱 배분» 답에는 카고플랜 조감 스트립을 같이 그린다 — 인계가 그림 하나로 선다.
@@ -2716,7 +2743,7 @@ function InlineAnswerCard({ ask, setAsk, containers, mode, onFallback, vsl = '',
   );
 }
 
-function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null }) {
+function LoloTab({ onOpenPlan = null, voyageKey, mode, containers, compMap, xrayMap, xraySeals, inspector, onOpenContainer, onAsk, vsl = '', pier = '', briefCtx = null }) {
   //  ★ 2.68: «3갱으로 기억해» — 이 탭에서 물어도 같은 한 벌로 이 항차에 저장한다(SearchPanel 과 동일).
   //    ⚠ 이 파일은 컴포넌트가 여럿이다 — `ask` 를 가진 **이 컴포넌트 안**에 둔다(2.50-01·2.66-01 교훈).
   const gangSetRef = useRef('');   // 2.01: briefCtx — 인라인 브리핑 재료
@@ -2895,7 +2922,7 @@ function LoloTab({ voyageKey, mode, containers, compMap, xrayMap, xraySeals, ins
         </button>
       </div>
 
-      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
+      {ask && <InlineAnswerCard ask={ask} setAsk={setAsk} containers={containers} mode={mode} onFallback={onAsk} onOpenPlan={onOpenPlan} vsl={vsl} pier={pier} briefCtx={briefCtx} />}
 
       <div className="flex gap-1.5 flex-wrap text-xs2 sm:text-xxs">
         {[
