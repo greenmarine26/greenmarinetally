@@ -924,6 +924,11 @@ export default function PrintableCargoPlanV2({
   const [zoom, setZoom] = useState(1);  // V8.26-02: 100% 시작 → 2.11: 마운트 직후 화면에 맞춘다
   const zoomRef = useRef(1);
   zoomRef.current = zoom;
+  const [rotated, setRotated] = useState(false);
+  //  돌릴 때 밀어 줄 거리 = 문서의 «자연 높이». 상수로 박으면 CSS(.cpv2-page height)가 바뀔 때 어긋난다.
+  const [natH, setNatH] = useState(737);
+  //  화면이 세로인데 문서가 가로면 돌린다. 둘 다 세로거나 둘 다 가로면 그대로가 크다.
+  const shouldRotate = (w, h) => (window.innerHeight > window.innerWidth) && (w > h);
   const calcFit = () => {
     try {
       const pg = document.querySelector('.cpv2-overlay .cpv2-page');
@@ -934,17 +939,37 @@ export default function PrintableCargoPlanV2({
       if (!(w > 0 && h > 0)) return null;
       const bar = document.querySelector('.cpv2-overlay .cpv2-noprint');
       const barH = bar ? bar.getBoundingClientRect().height + 12 : 44;
-      const fit = Math.min((window.innerWidth - 16) / w, (window.innerHeight - barH - 12) / h);
+      const availW = window.innerWidth - 16, availH = window.innerHeight - barH - 12;
+      const rot = shouldRotate(w, h);
+      // 돌리면 축이 바뀐다 — 문서의 «폭»이 화면 «높이»로 온다.
+      const fit = rot ? Math.min(availH / w, availW / h)
+                      : Math.min(availW / w, availH / h);
       return Math.max(0.15, Math.min(1, +fit.toFixed(3)));   // 넓은 화면에서 100% 를 넘겨 키우지는 않는다
     } catch (e) {
       console.warn('[카고플랜] 맞춤 배율 계산 실패 — 배율을 그대로 둡니다:', e);   // 조용히 죽지 않는다
       return null;
     }
   };
+  /* ★ 2.11-01 (검수사 2026-08-29) — *«카고플랜은 전체모드로 보이긴 하는데 세로화면에서 보입니다.
+       가로모드로 돌려주셨으면 합니다.»*
+     한 장은 1200x737 로 **가로로 긴 문서**다. 폰 세로(375x812)에 그대로 넣으면 31% 까지 줄어든다.
+     90도 돌리면 51% — 면적이 2.7배다. 그래서 «화면이 세로이고 문서가 가로면» 저절로 돌린다.
+     ⚠ 사람이 폰을 눕히면(가로 화면) 돌리지 않는다 — 그때는 안 돌리는 쪽이 크다. */
   const fitRef = useRef(calcFit);
   fitRef.current = calcFit;
   useEffect(() => {
-    const apply = () => { const f = fitRef.current(); if (f) setZoom(f); };
+    const apply = () => {
+      try {
+        const pg = document.querySelector('.cpv2-overlay .cpv2-page');
+        if (pg) {
+          const r = pg.getBoundingClientRect(), z = zoomRef.current || 1;
+          const w = r.width / z, h = r.height / z;
+          if (h > 0) setNatH(h);
+          setRotated(shouldRotate(w, h));
+        }
+      } catch (e) { console.warn('[카고플랜] 회전 판정 실패 — 돌리지 않습니다:', e); }
+      const f = fitRef.current(); if (f) setZoom(f);
+    };
     const raf = requestAnimationFrame(apply);          // 첫 그림이 끝난 뒤 재야 크기가 나온다
     const t = setTimeout(apply, 250);                  // 글꼴·줄바꿈이 자리잡은 뒤 한 번 더
     window.addEventListener('resize', apply);
@@ -1027,7 +1052,14 @@ export default function PrintableCargoPlanV2({
     <div className="cpv2-overlay" onWheel={(e) => { if (e.ctrlKey) { e.preventDefault(); setZoom(z => Math.min(3, Math.max(0.15, +(z - e.deltaY * 0.002).toFixed(3)))); } }} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <style>{CARGO_V2_CSS}</style>
       {closeBtn}
-      <div className="cpv2-zoom-wrap" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}>
+      <div
+        className="cpv2-zoom-wrap"
+        style={rotated
+          /* top-left 기준으로 돌리면 콘텐츠가 위로 빠지므로 문서 높이만큼 오른쪽으로 밀고 돌린다
+             (베이플랜 가로모드와 같은 셈법). 폭은 돌린 뒤의 가로폭을 준다. */
+          ? { transform: `translateX(${natH * zoom}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
+          : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
+      >
       <div className="cpv2-page">
         <div className="cpv2-page-header">
           <div className="col">VOY NO : {effVoyNo}</div>
