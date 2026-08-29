@@ -81,13 +81,38 @@ export function coneAnswer(qRaw, cone) {
   const q = (qRaw || '').trim();
   if (!q) return null;
   const rows = (cone && cone.rows) || [];
-  if (!rows.length) return '먼저 계산하기를 눌러 작업표를 만들어 주세요.';
+  if (!rows.length) {
+    /* ⛔ 종전엔 무엇을 물어도 «먼저 계산하기를» 이었다(검수사 실측 — *«모든 질문에 콘 계산기 먼저
+       누르라고 합니다»*). 콘 이야기가 아니면 **null 을 주고 미르에게 넘긴다.**
+       용어·조회·잡담은 작업표가 없어도 답할 수 있다. */
+    return isConeQuery(qRaw) || /베이|모자|부족|남는|반납|전체\s*가감/.test(String(qRaw || ''))
+      ? '아직 콘 작업표가 없어요. [③ 콘 계산하기]를 누르면 베이별로 답해 드릴게요.'
+      : null;
+  }
 
   const t = q.toLowerCase();
   const kind = /데크/.test(t) ? 'deck' : (/코끼리/.test(t) ? 'ele' : (/홀드/.test(t) ? 'hold' : null));
 
   // 브리핑 — 검수사 요청으로 2.13 신설
   if (/브리핑|요약\s*해|정리\s*해/.test(t)) return coneBriefing(cone);
+
+  /* ★ 2.15 — «작업량» 은 **컨테이너 대수**다. 콘 가감으로 답하지 않는다.
+       ⚠ 처음엔 682 를 «현장에 없는 수치» 로 잘못 봤다. 검수사 정정 —
+         *«맞는 답변 아닌가요? 콘 작업량이 아니고 작업량 컨테이너 682대»*
+         682 = 내림 374 + 실음 308 이고, 크레인이 드는 총 횟수다. 콘 작업자에게 그것이 작업량이다.
+       고칠 것은 숫자가 아니라 **어떻게 나온 682인지 안 보이는 것**이었다
+       (검수사가 오늘 정한 형식 — «양하 279 시프팅 95 작업분 374» 처럼 풀어서 보인다). */
+  if (/작업량|몇\s*대\s*(작업|해|하나|합니까)|작업\s*몇\s*대|물량/.test(t)) {
+    const nd = (cone && cone.dischRows || []).length;
+    const nl = (cone && cone.stowRows || []).length;
+    if (nd || nl) {
+      const L = ['📦 작업량 ' + (nd + nl) + '대'];
+      L.push('· 내림 ' + nd + ' + 실음 ' + nl);
+      L.push('  (시프팅 포함 — 크레인이 드는 횟수)');
+      L.push('\n"콘 작업 브리핑" 으로 콘 가감을 볼 수 있어요');
+      return L.join('\n');
+    }
+  }
 
   // ① 베이 질문
   const bayM = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})|^(\d{1,3})$/);
@@ -132,7 +157,9 @@ export function coneAnswer(qRaw, cone) {
   }
 
   // ③ 전체 요약
-  if (/전체|전부|모두|몽땅|싹\s*다|죄다|도합|통틀어|합쳐|합치|총|다\s*해서|(?:^|\s)다(?=\s|$|[?.!,])/.test(t)) {
+  /* «총» 만으로 콘 전체 요약을 내지 않는다 — «총 작업량은» 이 여기로 새던 것을 막는다(2.15). */
+  if (/전체|전부|모두|몽땅|싹\s*다|죄다|도합|통틀어|합쳐|합치|다\s*해서|(?:^|\s)다(?=\s|$|[?.!,])/.test(t)
+      || (/총/.test(t) && /콘|데크|코끼리|홀드|가감/.test(t))) {
     const ks = kind ? [kind] : KINDS;
     const seg = ks.map((k) => {
       const tot = rows.reduce((a, r) => a + (r[k] ? r[k].diff * PER_OF[k] : 0), 0);
