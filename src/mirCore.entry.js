@@ -27,6 +27,7 @@ import {
   parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing,
 } from './nlSearch.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
+import { mirTone, mirSmallTalk } from './mirChat.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
 
 /** 콘앱 행 → 미르가 읽는 컨테이너 모양. 콘앱은 `reefer/temp`, 엔진은 `rf/tmp` 를 본다. */
@@ -47,11 +48,26 @@ export function toMirContainers(rows, mode) {
  * 답을 못 내면 null.
  */
 export function answerOne(query, ctx) {
+  const _a = _answerCore(query, ctx);
+  /* 말투 출구 — 검수앱은 화면마다 `mirTone()` 으로 감싸고 있다(SearchPanel:1118 · VoyagePage:2582).
+       콘앱 미르만 이게 없어 딱딱하게 답했다. 여기 한 자리로 모은다. */
+  try { return _a == null ? null : mirTone(_a); } catch (e) { return _a; }
+}
+
+function _answerCore(query, ctx) {
   const q = String(query || '').trim();
   if (!q) return null;
   const c = ctx || {};
   const app = c.app || 'tally';
   const cs = c.containers || [];
+
+  /* ⓪ 잡담 — «미르야 뭐 잘 먹어?» 같은 것. 검수사 *«미르는 자기가 뭘 잘 먹는지도 알고 있습니다»*
+       ⚠ 이것을 안 실어서 콘앱 미르가 «기존 자연어 답 수준» 으로 보였다(2.13-02 에서 바로잡음).
+         `mirSmallTalk` 은 자기 게이트를 갖고 있어 조회 질문을 가로채지 않는다. */
+  try {
+    const st = mirSmallTalk(q);
+    if (st) return st;
+  } catch (e) { /* 잡담이 막혀도 일 이야기는 계속한다 */ }
 
   let parsed = null;
   try { parsed = parseNaturalQuery(q); } catch (e) { parsed = null; }
@@ -105,4 +121,4 @@ export function answerOne(query, ctx) {
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
-export { mirKnowledge };
+export { mirKnowledge, mirTone, mirSmallTalk };
