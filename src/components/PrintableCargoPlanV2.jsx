@@ -939,6 +939,7 @@ export default function PrintableCargoPlanV2({
   };
   //  돌릴 때 밀어 줄 거리 = 문서의 «자연 높이». 상수로 박으면 CSS(.cpv2-page height)가 바뀔 때 어긋난다.
   const [natH, setNatH] = useState(737);
+  const [natW, setNatW] = useState(1200);   // 2.13-01: 회전 후 «세로 길이» = 자연 폭. 가운데 정렬에 쓴다
   //  화면이 세로인데 문서가 가로면 돌린다. 둘 다 세로거나 둘 다 가로면 그대로가 크다.
   const shouldRotate = (w, h) => (window.innerHeight > window.innerWidth) && (w > h);
   const calcFit = () => {
@@ -976,6 +977,7 @@ export default function PrintableCargoPlanV2({
           const z = zoomRef.current || 1;
           const { w, h } = natSize(pg, z);
           if (h > 0) setNatH(h);
+          if (w > 0) setNatW(w);
           setRotated(shouldRotate(w, h));
         }
       } catch (e) { console.warn('[카고플랜] 회전 판정 실패 — 돌리지 않습니다:', e); }
@@ -1010,8 +1012,11 @@ export default function PrintableCargoPlanV2({
   };
   const onTouchEnd = (e) => { if (!e.touches || e.touches.length < 2) pinchRef.current.active = false; };
 
+  // 2.13-01: 돌아가 있으면 버튼을 **아래 여백**으로 내린다 — 위에 두면 도면을 덮는다(검수사 실측).
   const closeBtn = onClose ? (
-    <div className="cpv2-noprint" style={{ position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
+    <div className="cpv2-noprint" style={rotated
+      ? { position: 'fixed', bottom: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }
+      : { position: 'fixed', top: 8, right: 8, zIndex: 10, display: 'flex', gap: 6 }}>
       {!IS_TOUCH_DEVICE && (<>
         <button onClick={() => setZoom(z => Math.max(0.15, +(z - 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>−</button>
         <button onClick={() => setZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} style={{ padding: '6px 11px', background: '#37474f', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 15, fontWeight: 'bold' }}>＋</button>
@@ -1068,7 +1073,11 @@ export default function PrintableCargoPlanV2({
         style={rotated
           /* top-left 기준으로 돌리면 콘텐츠가 위로 빠지므로 문서 높이만큼 오른쪽으로 밀고 돌린다
              (베이플랜 가로모드와 같은 셈법). 폭은 돌린 뒤의 가로폭을 준다. */
-          ? { transform: `translateX(${natH * zoom}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
+          /* ★ 2.13-01 (검수사 실측) — *«밑에 여백이 있는데도 불구하고 한쪽으로 치우쳐 버튼과 겹칩니다»*
+               회전하면 도면 세로 길이 = 자연 «폭»(1200) × 배율. 폰 세로 812 에서 584 라 **220px 이 남는다.**
+               도면 비율(1200:737)이 화면보다 덜 길쭉해서 그 여백은 못 채운다 — 대신 **가운데로 놓는다.**
+               그러면 위아래로 갈라져 버튼과도 안 겹친다. */
+          ? { transform: `translate(${natH * zoom}px, ${Math.max(0, (window.innerHeight - natW * zoom) / 2)}px) rotate(90deg) scale(${zoom})`, transformOrigin: 'top left', width: 'max-content' }
           : { transform: `scale(${zoom})`, transformOrigin: 'top left', width: `${100 / zoom}%` }}
       >
       <div className="cpv2-page">
