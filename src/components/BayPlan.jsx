@@ -438,7 +438,15 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
       return 'bg-white text-ink-950 border-red-400';
     }
     if (compMap && compMap[c.cn]) return 'bg-emerald-100 text-dim-400 border-emerald-400';   // V8.85: 완료 = 초록 배경(연회색은 통과화물과 혼동 — 사용자 확답 2026-07-12)
-    if (mode === 'discharge' && shiftingMap?.shiftCns?.[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
+    /* ★ 2.84 (검수사 확정 2026-08-29) — **시프팅 칠하기는 정본(restowMap) 한 벌을 쓴다.**
+         종전엔 이 화면이 «내 양하분 위에 얹힌 것»을 그 자리에서 세어 칠했다(shiftingMap.shiftCns).
+         실측 MCSC 633N — 그렇게 세면 **50대**, 정본은 **95대**. 50 은 전부 95 안에 들어 있었고
+         (베이플랜에만 있는 것 0건) 나머지 45 는 «선적 자리를 비우려고 옮기는 컨»이라 안 칠해졌다.
+         검수사 — *«베이플랜의 50이 틀렸다가 맞습니다. 분명 시프팅 리스트가 있을 것입니다. 그걸 반영안했습니다»*
+       ⛔ 정본을 **이미 prop 으로 받고 있으면서**(restowMap) 카고플랜에 넘기기만 하고 자기 계산을 썼다 —
+         그래서 같은 항차 같은 화면 두 장이 시프팅을 50 과 95 로 다르게 셌다.
+       ⚠ `shiftingMap.needsShift`(⬆N 배지 — 이 컨 위에 몇 개 얹혔나)는 **다른 정보**라 그대로 둔다. */
+    if (mode === 'discharge' && restowMap && restowMap[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
     const isOurContainer = isPtk(c) || (!!c.cn && dischargeCns.has(c.cn));   // V9.39: undefined 오염 차단
     if (isOurContainer) return 'bg-white text-ink-950 border-line-strong';
     return 'bg-slate-50 text-dim-300 border-slate-200';
