@@ -59,10 +59,11 @@ export function parseViewCommand(query) {
   const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
   const bay = m ? parseInt(m[1] || m[2], 10) : null;
 
-  //  «플랜/도면/베이플랜» 이거나 베이 번호가 있으면 화면을 여는 말로 본다.
-  const wantsPlan = /플랜|플렌|도면|베이\s*플랜|계획도/.test(t) || bay != null;
-  if (!wantsPlan) return null;
-  return { mode, bay };
+  //  어느 화면을 여는가 — 카고플랜은 «전체 화물 비교», 베이플랜은 «양하·선적 비교»다.
+  const what = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t) ? 'cargo'
+    : (/베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || bay != null ? 'bay' : null);
+  if (!what) return null;
+  return { mode, bay, what };
 }
 
 /** 콘앱 행 → 미르가 읽는 컨테이너 모양. 콘앱은 `reefer/temp`, 엔진은 `rf/tmp` 를 본다. */

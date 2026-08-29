@@ -377,7 +377,7 @@
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.19</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.20</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -796,7 +796,7 @@ function showIosInstallGuide(generic){
 }
 
 window.__APPV='TallyOne 2.84-01';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.19';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__CONEV='ConeOne 2.20';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -2024,36 +2024,49 @@ async function mirTryOpen(q){
     const cmd=window.ConeMir.parseViewCommand(q);
     if(!cmd) return null;
     if(!state.voyageKey) return '어느 배인지 먼저 골라 주세요 — 배를 고르면 바로 열어 드릴게요.';
-    const pre=await mirEnsureCalc('브리핑');       // 베이플랜은 작업표가 있어야 그려진다
+    const pre=await mirEnsureCalc('브리핑');       // 두 플랜 다 작업표가 있어야 그려진다
     if(pre) return pre;
+    const side=cmd.mode==='loading'?'선적':(cmd.mode==='discharge'?'양하':null);
+
+    /* 2.20: 카고플랜 — «전체 화물 비교». 양/선을 고르면 그쪽을 바로 연다. */
+    if(cmd.what==='cargo'){
+      const cv=document.getElementById('cargoViewBtn');
+      if(cv){ cv.click(); await new Promise(r=>setTimeout(r,2500)); }
+      const want=cmd.mode==='loading'?'cpL':(cmd.mode==='discharge'?'cpD':null);
+      const btn=want?document.getElementById(want):null;
+      if(btn){ btn.click(); await new Promise(r=>setTimeout(r,3000));
+        return (side||'')+' 카고플랜 열었어요. 한 장이 화면에 맞게 나와요 — 손가락으로 키우고 줄일 수 있어요.'; }
+      return '카고플랜 열었어요. 양하·선적 중에 골라 주세요.';
+    }
+
+    /* 베이플랜 — 전체화면으로 준다. ⚠ 순서가 중요하다: 전체화면으로 바꾸면 좌표가 다시 잡히므로
+         **전체화면을 먼저 켜고 그 다음에 베이로 간다.** 2.18 은 반대라 칩만 골라지고 스크롤이 안 갔다. */
     await renderBayView();
     await new Promise(r=>setTimeout(r,900));
-    /* 2.18: 물어서 열었으면 **전체화면으로** 준다 — 검수사 *«이렇게 하면 전체 화면으로 열어 줄수 있게»*
-         작은 화면으로 열면 결국 ⛶ 를 또 눌러야 한다. 닫기는 ✕ 하나로 그대로 돌아온다. */
     try{
       const fs=document.getElementById('bvFsBtn');
-      if(fs && !document.querySelector('.bv-fs')){ fs.click(); await new Promise(r=>setTimeout(r,700)); }
+      if(fs && !document.querySelector('.bv-fs')){ fs.click(); await new Promise(r=>setTimeout(r,900)); }
     }catch(e){ console.warn('[콘앱] 전체화면 열기 실패 — 보통 화면으로 둡니다:', e); }
-    const side=cmd.mode==='loading'?'선적':(cmd.mode==='discharge'?'양하':null);
+
     if(cmd.bay!=null){
-      const box=document.getElementById('bvChips');
-      const chips=box?[...box.children]:[];
-      //  칩 라벨은 «22» 이거나 «(22)23» — 구간으로 본다(트리오는 가운데 짝수로 부른다)
-      const hit=chips.find(c=>{
-        const ns=(c.textContent||'').match(/\d+/g)||[];
-        if(!ns.length) return false;
-        const a=Math.min.apply(null,ns.map(Number)), b=Math.max.apply(null,ns.map(Number));
-        return cmd.bay>=a && cmd.bay<=b;
-      });
-      if(hit){ hit.click(); return (side?side+' ':'')+cmd.bay+'번 베이로 왔어요. 왼쪽이 양하, 오른쪽이 선적이에요.'; }
-      //  칩이 없거나(가로모드에서 숨김) 못 찾으면 베이 블록을 직접 찾아 간다
-      const blk=[...document.querySelectorAll('.bv-bay')].find(b=>{
-        const ns=((b.querySelector('.bv-bayhd')||{}).textContent||'').match(/\d+/g)||[];
-        if(!ns.length) return false;
+      const inRange=(txt)=>{
+        const ns=(txt||'').match(/\d+/g);
+        if(!ns||!ns.length) return false;
         const a=Math.min.apply(null,ns.map(Number)), z=Math.max.apply(null,ns.map(Number));
         return cmd.bay>=a && cmd.bay<=z;
-      });
-      if(blk){ blk.scrollIntoView({behavior:'smooth',block:'start'}); return (side?side+' ':'')+cmd.bay+'번 베이로 왔어요.'; }
+      };
+      const box=document.getElementById('bvChips');
+      const hit=box?[...box.children].find(c=>inRange(c.textContent)):null;
+      if(hit) hit.click();
+      //  칩이 숨었거나(가로모드) 눌러도 안 가면 베이 블록으로 직접 간다 — 전체화면에서는 이쪽이 확실하다.
+      const blk=[...document.querySelectorAll('.bv-bay')].find(b=>inRange((b.querySelector('.bv-bayhd')||{}).textContent));
+      if(blk){
+        await new Promise(r=>setTimeout(r,300));
+        blk.scrollIntoView({block:'start'});
+        await new Promise(r=>setTimeout(r,300));
+        blk.scrollIntoView({block:'start'});   // 전체화면 전환 뒤 한 번 더 — 좌표가 다시 잡힌다
+        return (side?side+' ':'')+cmd.bay+'번 베이로 왔어요. 왼쪽이 양하, 오른쪽이 선적이에요.';
+      }
       return cmd.bay+'번 베이는 작업표에 없어요. (콘 작업 없는 베이)';
     }
     return '베이플랜 열었어요'+(side?(' — '+side+'은 '+(cmd.mode==='loading'?'오른쪽':'왼쪽')+'이에요.'):'.')
