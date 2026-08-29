@@ -1496,6 +1496,15 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           diagAlerts={diagAlerts}
           mode={mode}
           onWorkFilterChange={(m) => setMode(m)}
+          /* ★ 2.85 — 미르가 «베이플랜/카고플랜 보여줘» 하면 **여기서 연다.**
+               해석은 SearchPanel 이, 여는 것은 탭·인쇄 상태를 쥔 이 자리가 한다.
+             검수사 — «양하자리에 있으면 양하 것, 선적자리에서 말하면 선적 것» — 지금 탭 것을 열면 된다.
+             ⚠ 카고플랜은 베이 탭 안(BayPlan)의 인쇄 메뉴에 있다. 그래서 탭을 먼저 열고 신호를 남긴다. */
+          onOpenPlan={({ what, bay }) => {
+            setTab('bay');
+            if (what === 'cargo') { try { window.__mirOpenCargo = Date.now(); } catch (e) {} }
+            if (bay != null) { try { window.__mirGoBay = bay; } catch (e) {} }
+          }}
           onPlaceUnassigned={(c) => {
             // V9.28: 미배정 = 빈자리가 있다는 뜻 — 검수원이 베이 탭 빈 칸에 직접 배치 (사용자 확정:
             //   "앱이 빈자리를 보여주고 거기에 맞는 컨을 넣어야 한다. 수석 편집은 오입력 교정용")

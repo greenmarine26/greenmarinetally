@@ -74,7 +74,7 @@ function narrowByFullCn(list, q) {
   return list;
 }
 
-export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, terminalWork = {}, relayQuery = '' }) {   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
+export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, onOpenContainer, shipLib = null, portMisData = {}, rfSkip = false, esealBrief = null, pilotForecast = {}, isLoloShip = false, diagAlerts = [], mode = null, onWorkFilterChange = null, onPlaceUnassigned = null, terminalWork = {}, relayQuery = '' }) {   // 1.84-01: 양하 탭 검색창에서 넘어온 질문   // TallyOne 1.22: pilotForecast — 도선→작업개시 답변용   // 1.23: diagAlerts — 경고 문장을 그대로 물으면 그 경고를 설명한다   // V9.28: 미배정→빈자리 배치   // V7.92: portMisData 추가 · V8.11: isLoloShip · V8.82: mode 동기화(상단 양하/선적 탭과 한 몸)
   const [searchMode, setSearchMode] = useState('single');
   // V9.49: 선적 트윈 방식 — 'auto'(양하와 같은 화면·기본) | 'manual'(위치 지정)
   const [loadTwinMode, setLoadTwinMode] = useState('auto');
@@ -484,6 +484,7 @@ export default function SearchPanel({ voyage, voyageKey, inspector, onOpenContai
         <GuidedWorkPanel
           slotGroups={manualGroups}
           onPlaceUnassigned={onPlaceUnassigned}
+          onOpenPlan={onOpenPlan}
           voyage={voyage} voyageKey={voyageKey} inspector={inspector}
           allContainers={allContainers} workFilter={workFilter}
           onSwitchManual={() => setGuideMode(false)}
@@ -780,7 +781,7 @@ function TwinPossibleHint({ c, allContainers, voyage }) {
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
-function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, terminalWork = {}, relayQuery = '', rfSkip = false, esealBrief = null }) {   // 1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해 «rfSkip is not defined» 전체 크래시(검수사 실측)   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
+function SingleSearch({ onOpenPlan, voyage, voyageKey, inspector, allContainers, workFilter = 'discharge', onOpenContainer, portMisData = {}, pilotForecast = {}, diagAlerts = [], manualCtx = null, terminalWork = {}, relayQuery = '', rfSkip = false, esealBrief = null }) {   // 1.98: rfSkip·esealBrief — 부모 prop인데 여기서 참조해 «rfSkip is not defined» 전체 크래시(검수사 실측)   // V7.92 / V7.99-10 manualCtx / 1.22 pilotForecast / 1.23 diagAlerts
   const [query, setQuery] = useState('');
   // TallyOne 1.22: **문장은 다 쓴 뒤에 답한다** (검수사 메모 2026-08-07 —
   //   "숫자가 아닌 텍스트가 입력이 될때는 대기 하고 전송키로 전송을 누르면 질문에 답을 해주게").
@@ -1189,6 +1190,29 @@ function SingleSearch({ voyage, voyageKey, inspector, allContainers, workFilter 
   }, [parsed.gangSet, voyageKey, inspector]);
   //  조작 답이 있으면 그것이 먼저다 — 방금 누른 결과를 보여 줘야 한다.
   const localAnswer = devAnswer || _mirAnswer;
+
+  /* ★ 2.85 (검수사 지시 2026-08-29) — *«미르야 베이플랜/카고플랜 보여줘»*
+       검수사 — *«검수앱은 간단 할것입니다. 양하자리에 있으면 양하 베이플랜 카고플랜을 열게 하면 되고
+       선적자리에서 말하면 선적꺼 올리면 되니까여»* — 지금 보고 있는 탭 것을 열면 되니 양/선을 말로 가릴 필요가 없다.
+     ⚠ **여기서 화면을 직접 열지 않는다.** 이 자리는 `SingleSearch` 안이라 탭·인쇄 상태가 없다
+       (그 스코프를 착각해 전체 크래시가 두 번 났다 — `rfSkip` · `manualBayPairs`).
+       부모가 내려준 `onOpenPlan` 만 부른다.
+     ⚠ **접수된 질문에서만** 연다(밝기와 같은 원칙) — 타이핑 중에 화면이 바뀌면 안 된다. */
+  const planRanRef = useRef('');
+  useEffect(() => {
+    const q = (query || '').trim();
+    if (!q || !onOpenPlan) return;
+    if (planRanRef.current === q) return;          // 같은 질문으로 두 번 열지 않는다
+    if (!/보여|보자|열어|띄워|가\s*자|이동|펼쳐/.test(q)) return;
+    const wantCargo = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(q);
+    const m = q.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
+    const bay = m ? parseInt(m[1] || m[2], 10) : null;
+    const wantBay = /베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(q) || bay != null;
+    if (!wantCargo && !wantBay) return;
+    planRanRef.current = q;
+    try { onOpenPlan({ what: wantCargo ? 'cargo' : 'bay', bay, mode: workFilter }); }
+    catch (e) { console.warn('[미르] 플랜 열기 실패:', e); }
+  }, [query, onOpenPlan, workFilter]);
 
 
   // 1.69-01: 직전 답 주제 캐시 — 브리핑·실 점검을 답했으면 기억해 둔다("N건이 뭐야" 후속용).

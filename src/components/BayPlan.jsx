@@ -42,6 +42,14 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   const [view3D, setView3D] = useState(false); // V7.97: 3D 입체 베이뷰 토글
   // M4.6: 인쇄 모달 상태
   const [printMode, setPrintMode] = useState(null);  // null | 'cargo' | 'detail'
+
+  /* ★ 2.85 — 미르가 «카고플랜 보여줘» 하면 부모가 베이 탭을 열고 신호를 남긴다. 여기서 받아 연다.
+       ⚠ 신호는 **한 번만** 쓰고 지운다 — 안 지우면 이 화면에 올 때마다 카고플랜이 다시 열린다. */
+  useEffect(() => {
+    try {
+      if (window.__mirOpenCargo) { window.__mirOpenCargo = 0; setPrintMode('cargo-v2'); }
+    } catch (e) { /* 못 열어도 화면은 그대로 */ }
+  }, []);
   // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [zoom, setZoom] = useState(() => {
