@@ -67,7 +67,8 @@ import { fbGetPendingDamage, fbPromotePendingDamage } from '../firebase.js';   /
 import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
-import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1.8: 리퍼 온도 확인
+import ReeferMemoModal from '../components/ReeferMemoModal.jsx';
+import PrintableCargoPlanV2 from '../components/PrintableCargoPlanV2.jsx';   // 2.87-01: 미르가 «카고플랜 보여줘» 하면 이것만 띄운다   // TallyOne 1.8: 리퍼 온도 확인
 import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null,
@@ -1195,6 +1196,49 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     );
   };
 
+  /* ★ 2.87-01 — 플랜 덮개를 한 군데서 만든다.
+       ⚠ 홈에서 물었을 때(mirPlan) 본문까지 그리면, App 쪽 덮개가 다시 카고플랜(포털·z-50)을
+         가린다 — 2.87 이 그렇게 깨졌다. 그래서 그때는 **플랜만** 돌려준다. 홈 화면은 뒤에 그대로 산다. */
+  const _planOverlay = planOv && (planOv.what === 'cargo' ? (
+        /* 카고플랜은 제 힘으로 화면을 덮는다(createPortal → body 직속, z-50).
+           ⛔ 그래서 덮개 «안»에 두면 안 된다 — 2.87 이 그렇게 해서 덮개(z-70)가 카고플랜을 가렸다.
+              제목만 「카고플랜」이고 화면은 베이플랜이었다(검수사 «카고플랜과 베이플랜 구분 못함?»).
+           ⇒ 카고플랜을 물으면 **덮개 없이 카고플랜만** 띄운다. 그 화면의 ✕ 닫기가 곧 되돌아가기다. */
+        <PrintableCargoPlanV2
+          /* BayPlan(995행)과 같은 변환 — 카고플랜은 «계획»이라 실체로 승격된 좌표를 계획으로 되돌린다.
+             ⚠ 여기를 고치면 저기도 본다. 두 벌이 갈리면 같은 배가 두 그림으로 나온다. */
+          containers={allEdiContainers.map(c => (c._edi_bay !== undefined && c._edi_bay !== '') ? { ...c, bay: c._edi_bay, row: c._edi_row, tier: c._edi_tier } : c)}
+          mode={mode}
+          voyageInfo={voyage?.info}
+          shipImo={voyage?.info?.imo}
+          shipName={voyage?.info?.vsl}
+          xrayMap={xrayMap}
+          shiftingMap={shiftingMap}
+          onClose={_closePlanOv}
+        />
+      ) : (
+        <div className="fixed inset-0 z-[70] bg-ink-950 overflow-auto">
+          <div className="sticky top-0 z-[71] flex items-center gap-2 px-3 py-2 bg-ink-900 border-b border-line">
+            <div className="text-xs2 font-bold text-amber-300">
+              {voyage?.info?.vsl || ''} {mode === 'loading' ? '선적' : '양하'}
+              {planOv.bay != null ? ` ${planOv.bay}번 베이` : ' 베이플랜'}
+            </div>
+            <button onClick={_closePlanOv}
+              className="ml-auto px-3 py-1.5 rounded-btn bg-ink-750 text-dim-200 text-xs2 font-bold">닫기</button>
+          </div>
+          <BayPlan
+            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
+            preGoneInfo={preGoneInfo}
+            onOpenContainer={(c) => setDetailC(c)}
+            shipImo={voyage?.info?.imo}
+            shipName={voyage?.info?.vsl}
+            voyageInfo={voyage?.info}
+            voyageKey={voyageKey}
+          />
+        </div>
+      ));
+  if (mirPlan) return _planOverlay;
+
   return (
     <div className="max-w-6xl mx-auto px-3 py-2">
       {/* 모드 탭 (둘 다 있을 때만) */}
@@ -1441,27 +1485,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
              닫아도 홈화면이어야 합니다»
          있던 화면은 **그대로 뒤에 남는다.** 이것만 덮었다가 닫으면 있던 자리다.
          ⚠ 리퍼 모달(z-50)보다 위에 둔다 — 플랜을 가리는 팝업이 다시 생기지 않게. */}
-      {planOv && (
-        <div className="fixed inset-0 z-[70] bg-ink-950 overflow-auto">
-          <div className="sticky top-0 z-[71] flex items-center gap-2 px-3 py-2 bg-ink-900 border-b border-line">
-            <div className="text-xs2 font-bold text-amber-300">
-              {voyage?.info?.vsl || ''} {mode === 'loading' ? '선적' : '양하'}
-              {planOv.what === 'cargo' ? ' 카고플랜' : (planOv.bay != null ? ` ${planOv.bay}번 베이` : ' 베이플랜')}
-            </div>
-            <button onClick={_closePlanOv}
-              className="ml-auto px-3 py-1.5 rounded-btn bg-ink-750 text-dim-200 text-xs2 font-bold">닫기</button>
-          </div>
-          <BayPlan
-            containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
-            preGoneInfo={preGoneInfo}
-            onOpenContainer={(c) => setDetailC(c)}
-            shipImo={voyage?.info?.imo}
-            shipName={voyage?.info?.vsl}
-            voyageInfo={voyage?.info}
-            voyageKey={voyageKey}
-          />
-        </div>
-      )}
+      {_planOverlay}
       {/* TallyOne 1.15: **리퍼 온도 확인 배너 삭제** (검수사 신고 2026-08-06 — "중복 건입니다").
           바로 아래 현황 요약 줄에 이미 「리퍼 N대」 칩이 있고, 확인 유무까지 거기로 합쳤다.
           다시 열기는 요약 줄의 「리퍼 확인」 칩을 누르면 된다 — 진입점은 유지된다.

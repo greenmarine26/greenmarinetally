@@ -532,7 +532,9 @@ export default function App() {
          ⚠ VoyagePage 는 주소(location.hash)를 전혀 쓰지 않는다(실측 0건). 그래서 이렇게 띄워도
            라우팅과 싸우지 않는다 — 이 방법을 고른 근거다. */}
       {mirPlan && voyages[mirPlan.voyageKey] && (
-        <div className="fixed inset-0 z-[65] bg-ink-950 overflow-auto">
+        /* ⛔ 여기에 덮개 div 를 두지 않는다 — 2.87 은 z-[65] 껍데기를 씌웠다가
+             카고플랜(createPortal → body 직속 z-50)을 **그 껍데기가 가렸다.**
+             VoyagePage 가 mirPlan 이면 플랜 하나만 돌려주므로 껍데기가 필요 없다. */
           <VoyagePage
             key={'mirplan-' + mirPlan.voyageKey + '-' + (mirPlan.mode || '')}
             mirPlan={mirPlan}
@@ -549,7 +551,6 @@ export default function App() {
             pilotForecast={pilotForecast}
             onGoHome={() => setMirPlan(null)}
           />
-        </div>
       )}
 
       <footer className="text-center text-[11px] text-dim-500 pb-24 pt-4 leading-relaxed">
