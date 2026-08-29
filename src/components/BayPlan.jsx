@@ -446,7 +446,15 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
        ⛔ 정본을 **이미 prop 으로 받고 있으면서**(restowMap) 카고플랜에 넘기기만 하고 자기 계산을 썼다 —
          그래서 같은 항차 같은 화면 두 장이 시프팅을 50 과 95 로 다르게 셌다.
        ⚠ `shiftingMap.needsShift`(⬆N 배지 — 이 컨 위에 몇 개 얹혔나)는 **다른 정보**라 그대로 둔다. */
-    if (mode === 'discharge' && restowMap && restowMap[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
+    /* ★ 2.84-01 (검수사 실측 2026-08-29) — **선적 베이플랜에도 칠한다.**
+         2.84 는 자료만 정본으로 바꾸고 `mode === 'discharge'` 를 그대로 뒀다 —
+         그래서 양하는 95, **선적은 0** 이었다.
+         검수사 — *«설마 양하는 고치고 선적은 그대로 놓아둘 클로드님이 아닐테니»*
+       시프팅은 «내렸다 다시 싣는 것»이라 선적 자리에도 그만큼 있다.
+       실측 MCSC — 시프팅 95대가 양하 EDI 95 · 선적 EDI 95 · **양쪽 다 95**.
+         표본 MRKU4002140 — 26/04/02 에서 내려 26/02/82 에 다시 실린다.
+       그러니 모드를 가리지 않고 같은 컨번호로 칠하면 양쪽이 맞는다. */
+    if (restowMap && restowMap[c.cn]) return 'bg-orange-50 text-ink-950 border-orange-500 ring-1 ring-orange-400';
     const isOurContainer = isPtk(c) || (!!c.cn && dischargeCns.has(c.cn));   // V9.39: undefined 오염 차단
     if (isOurContainer) return 'bg-white text-ink-950 border-line-strong';
     return 'bg-slate-50 text-dim-300 border-slate-200';
