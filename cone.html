@@ -300,7 +300,7 @@
 <body>
 <header>
   <h1><img src="./cone-icon-192.png" alt="" class="brand-logo" draggable="false">콘 계산기 <span class="badge">평택항 · 무료배포</span></h1>
-  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.3</span></div>
+  <div class="sub">양하·선적 플랜으로 고정장치 콘 자동 계산 <span style="opacity:.6">(주)그린마린 · ConeOne 2.4</span></div>
 </header>
 <div class="wrap" id="app"></div>
 <div class="footer-note">
@@ -718,8 +718,8 @@ function showIosInstallGuide(generic){
   m.addEventListener('click',(e)=>{ if(e.target===m||e.target.id==='iosGuideClose') m.remove(); });
 }
 
-window.__APPV='TallyOne 2.82-02';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
-window.__CONEV='ConeOne 2.3';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
+window.__APPV='TallyOne 2.82-03';  // V7.61: 콘앱 버전 — cone-cargoplan.js 캐시 갱신 키 (모듈 갱신 시 같이 올릴 것). ConeOne 1.2: ConeBayGrid 추가로 번들 갱신.
+window.__CONEV='ConeOne 2.4';   // 2.1-01: **양하 베이도 아닌 곳에 시프팅이 찍히던 것 수리.** 검수사 «콘앱에서는 양하베이도 아닌데 시프팅이 표기 됩니다. 파서에 뭔가 오염이 된곳이 있는듯합니다» — 파서는 멀쩡했다. 시프팅 계산이 정본의 **1차 체(통과화물)까지만** 복사돼 있었고 그 뒤 체 둘이 통째로 없었다. ①게이트0 loadEdiIsDeparture(선적 EDI 가 평택 출항본인가 · 1.69-10) ②2차 동형 공컨 순열 제외(V9.04-05) ③**3차 평택 작업 방해 판정(1.76-02)** — 검수사 정의 «양하대상을 양하할때 걸리는 화물, 또한 선적대상 자리에 있어도 시프팅». 빠진 ③이 정확히 이 증상이다. 실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는 17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다(베이 99 는 자리 없음 표식 0999999). ⇒ 번들이 computeShiftingMap 을 내보내고 콘앱은 그것을 부른다 — 1.9(파서·평택판정)와 같은 처방, **판정 두 벌 금지**. 정본이 없으면 허수를 그리느니 표기를 생략하고 콘솔에 알린다.  2.0: **화면 구성을 시안(cone-premium-100) 규격으로.** 검수사 «콘앱 화면 구성을 수정해주세요» — 앱을 바꾸라는 게 아니라 화면이다(수집기에서 한 것처럼). 마크업·로직은 **한 줄도 안 건드리고** CSS 토큰과 뼈대만 갈았다 — 셀렉터 187개가 그 토큰을 쓰므로 베이뷰·카고플랜까지 같이 따라온다. ①색 체계 교체(바닥 #020617 · 카드 #0F172A · 선 #1E293B · 추가 #10B981 · 반납 #F43F5E · 강조 #F59E0B) ②카드 모서리 14→20px · 여백 16→20px · 그림자(0 8px 24px) ③본문 max-width 1280 가운데(폰은 종전 그대로) ④터치 타겟 44px 보장(장갑 낀 손 — 세그먼트·탭) ⑤작업표 행 여백 7→11px(현장에서 읽는 표다) ⑥요약 카드 면색을 카드와 통일 ⑦헤더 톤.  1.9: **판정을 검수앱과 한 벌로.** 검수사 «같은 파서야만 하는데 파서가 틀리다는 이야기 인가요?» — 파서는 원래 같았다(ConeParse.parseBAPLIE 를 그대로 부르고, 실패하면 «간이 해석 모드» 경고). 갈린 것은 **파서 뒤의 평택 판정**이다. 번들이 파서 둘만 내보내서 콘앱이 자기 정규식 /(PTK|PYT|PYOTM|PYO)$/ 를 쓸 수밖에 없었고, 그래서 PTK02(부두번호 · 실측 407건)·PYEONGTAEK 철자를 **평택이 아니라고** 봤다 — TallyOne 1.11 이 511건 오판을 고친 그 수정이 안 넘어온 것이다. ⚠ 이 판정은 콘앱 **7곳**에서 쓰인다(평택분 집계·양하/선적 갈래·시프팅) — 시프팅만의 문제가 아니었다. 놓치면 그 컨이 콘 계산에서 통째로 빠진다. ⇒ 번들이 isPyeongtaekPort 도 내보내고, cone.html 은 그것을 쓴다(아직 안 실렸으면 종전 규칙 폴백 — 조용히 죽지 않는다). 시프팅의 자체 _isPtkCode 도 이 함수로 합쳤다 — 판정 두 벌 금지.  1.8: 콘 작업표 위에 **콘 소요 요약 4장**(검수사 시안 cone-premium-100 의 KPI). 콘박스에서 실어 올 개수·돌려보낼 개수·베이끼리 옮길 개수·총 작업량 — 전부 computeRoutes 가 이미 내던 값이라 지어낸 수가 없다. 시안의 「그대로 유지 N곳」은 «베이끼리 옮김»으로 바꿨다(현장에서 실제로 움직이는 수). ⛔ 시안 README 의 «cone.html 을 새 파일로 교체» 는 따르지 않았다 — 실제 콘앱은 2,859줄·함수 79개(EDI/ASC 파싱·베이사전·덱플랜·카고플랜·LOLO·동선표)이고 시안은 하드코딩 베이 8개짜리 그림이다. 바꿔 끼우면 전부 사라진다.  // 콘앱 화면 버전 — cone.html 바뀔 때마다 올림(자동 업데이트 감지 기준). 번들 키(__APPV)와 별개라 번들 재다운로드 없음.
 const state={ stow:null, disch:null, shipType:null, shipName:'', detected:false, multiCount:4,
   voyages:null, voyageKey:null, loadingVoyages:false, voyErr:'', resultMode:false, resultTab:'' };
 
@@ -1299,8 +1299,18 @@ function render(){
     listHtml='<p style="color:var(--rem);font-size:14px;line-height:1.6">⚠ '+state.voyErr+'</p>'
       +'<button class="btn-up" id="reloadVoy" style="margin-top:10px;flex:none;width:100%">🔄 다시 불러오기</button>';
   } else if(state.voyages&&state.voyages.length){
+    /* ★ ConeOne 2.4 (검수사 지시 2026-08-29) —
+         *«선박을 선택하면 그선박위주로 나와야 하는데 그 자료를 볼려면 다른 선박들을 다 위로
+           스크롤 해야 맨밑쪽에서 볼수가 있습니다»* ·
+         *«다른 선박을 볼려면 선박선택화면을 클릭하면 볼수있게 해주시면 좋을듯 합니다»*
+       종전엔 배를 골라도 **목록 전체가 그대로 남아** 있었다. 실측 활성 15척이면 카드가 15장이고
+       한 장이 4~5줄이라, 고른 배의 계산·결과를 보려면 그 밑까지 한참 굴려야 했다.
+       ⇒ 고르면 **그 배 한 장만** 남기고 접는다. 그 카드를 누르면 목록이 다시 열린다. */
+    const _cur = state.voyageKey ? state.voyages.find(v=>v.key===state.voyageKey) : null;
+    const _fold = !!_cur && !state.voyPickOpen;
+    const _items = _fold ? [_cur] : state.voyages;
     listHtml='<div class="voy-list">';
-    for(const v of state.voyages){
+    for(const v of _items){
       const sel = state.voyageKey===v.key;
       const tags=[];
       if(v.hasD) tags.push('<span class="vtag d">양하</span>');
@@ -1308,7 +1318,7 @@ function render(){
       if(v.noEdi) tags.push('<span class="vtag" style="background:#3a3f47;color:#9aa0aa">EDI 없음</span>');
       listHtml+=`<button class="voy-item ${sel?'sel':''}" data-vk="${v.key}" ${v.noEdi?'style="opacity:.55"':''}>
         <div class="vi-top"><b>${v.vsl}</b> ${tags.join('')}</div>
-        <div class="vi-sub">${v.voy?('항차 '+v.voy):''}${v.noEdi?' · 검수앱에서 EDI 업로드 후 계산 가능':''}</div>
+        <div class="vi-sub">${v.voy?('항차 '+v.voy):''}${v.noEdi?' · 검수앱에서 EDI 업로드 후 계산 가능':''}${_fold?' <span style="color:#7dd3fc">· 눌러서 다른 선박</span>':''}</div>
         ${(()=>{ // ConeOne 1.7(검수사 메모 2026-08-18): *"콘앱도 검수앱처럼 입출항 도선 작업예정시간
           //   양적하 갯수 터미널갯수 볼수있게 해주세요"* — 작업예정시간은 planDate 앞자리(이미 작업시작으로
           //   환산돼 온다, 수집기 _to_work_start). 뒷자리는 출항.
@@ -1369,7 +1379,10 @@ function render(){
       </button>`;
     }
     listHtml+='</div>';
-    listHtml+='<button class="btn-up" id="reloadVoy" style="margin-top:10px;flex:none;width:100%">🔄 목록 새로고침</button>';
+    /* 2.4: 접혀 있으면 «다른 선박» 버튼, 펼쳐져 있으면 종전 새로고침. */
+    listHtml += _fold
+      ? '<button class="btn-up" id="voyPickOpen" style="margin-top:10px;flex:none;width:100%">🔀 다른 선박 고르기 <span style="opacity:.65">(전체 '+state.voyages.length+'척)</span></button>'
+      : '<button class="btn-up" id="reloadVoy" style="margin-top:10px;flex:none;width:100%">🔄 목록 새로고침</button>';
   } else {
     listHtml='<button class="btn-up" id="reloadVoy" style="flex:none;width:100%">🔄 작업 목록 불러오기</button>';
   }
@@ -1411,8 +1424,16 @@ function bindEvents(){
   const mc4=document.getElementById('mc4'); if(mc4) mc4.onclick=()=>{ state.multiCount=4; render(); };
   const ch=document.getElementById('changeType'); if(ch) ch.onclick=()=>{ state.shipType=null; render(); };
   const rv=document.getElementById('reloadVoy'); if(rv) rv.onclick=()=>loadVoyageList();
+  const vpo=document.getElementById('voyPickOpen'); if(vpo) vpo.onclick=()=>{ state.voyPickOpen=true; render(); };
   document.querySelectorAll('.voy-item').forEach(btn=>{
-    btn.onclick=()=>selectVoyage(btn.getAttribute('data-vk'));
+    btn.onclick=()=>{
+      const vk=btn.getAttribute('data-vk');
+      /* 2.4: 접힌 상태에서 «지금 고른 배» 카드를 누르면 = 다른 배를 고르겠다는 뜻 → 목록을 편다.
+         (검수사 «선박선택화면을 클릭하면 볼수있게») */
+      if(state.voyageKey===vk && !state.voyPickOpen){ state.voyPickOpen=true; render(); return; }
+      state.voyPickOpen=false;   /* 골랐으면 다시 접는다 */
+      selectVoyage(vk);
+    };
   });
   const cb=document.getElementById('calcBtn'); if(cb) cb.onclick=runCalc;
   const cv=document.getElementById('cargoViewBtn'); if(cv) cv.onclick=openCargoPlanV2Auto;  // V7.45: 본체 카고플랜 V2

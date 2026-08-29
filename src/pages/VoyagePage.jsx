@@ -2303,7 +2303,9 @@ export function ListTab({ voyageKey, mode, containers, ediMap, recMap, xrayMap, 
             <span className="text-blue-400">◆</span> 쉬프팅(재적부) {shiftingList.length}
             {/* 2.79 (검수사 확정 2026-08-28): 삼자 일치는 «불일치»가 아니라 **결론이 난 것**이다.
                 *«선사 세관 항만(배정) 그러므르 시프팅은 없습니다»* — ⛔ 를 띄우면 안 된다. */}
-            {shiftInfo?.truthChk?.srcAgree ? (
+            {/* ⛔ 2.82-03: «시프팅 없음»은 **실제로 0일 때만** 쓴다. 목록에 95대를 띄워 놓고
+                그 옆에 «없음»을 적으면 검수사가 무엇을 믿어야 할지 모른다(2026-08-29 실물 보고). */}
+            {shiftingList.length === 0 && shiftInfo?.truthChk?.srcAgree ? (
               <span className="text-emerald-300">
                 · 선사·세관·배정 {shiftInfo.truthChk.srcs?.plan}대 <b>일치</b> ✓ 시프팅 없음
               </span>

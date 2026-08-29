@@ -61,6 +61,25 @@ const fs = require('fs');
     ok(/voyage\?\.info\?\.berthShift \?\? ''/.test(src), '캐시 서명에 berthShift 포함(나중에 들어와도 재계산)');
   }
 
+  console.log('[5] 2.82-03 — «시프팅 없음»을 시프팅이 있는데 말하지 않는가');
+  {
+    //  검수사 실물 2026-08-29: «◆쉬프팅(재적부) 95 · 선사·세관·배정 279대 일치 ✓ 시프팅 없음??»
+    //  삼자 일치(양하 **대수** 확정)와 시프팅(**모브**)은 다른 이야기다 — 붙여 놓으면 모순이 나온다.
+    const u = fs.readFileSync(path.resolve('src/utils.js'), 'utf8');
+    ok(/_src\.agree && !\(Number\.isFinite\(_bs0\) && _bs0 > 0\)/.test(u),
+       'shiftingTruthCheck: 배정표 이적>0 이면 삼자 일치로 덮지 않는다');
+    const vp = fs.readFileSync(path.resolve('src/pages/VoyagePage.jsx'), 'utf8');
+    ok(/shiftingList\.length === 0 && shiftInfo\?\.truthChk\?\.srcAgree/.test(vp),
+       'VoyagePage: «시프팅 없음» 문구는 목록이 실제로 0일 때만');
+    //  실데이터로 — MCSC 633N(배정 190) 이 «없음»으로 안 떨어지는지
+    const x = FX.MCSC_633N;
+    const v = { info: { berthShift: x.bs, terminalStatus: 'working' },
+                discharge: { ediContainers: expand(x.d, 'pod') }, loading: { ediContainers: expand(x.l, 'pol') } };
+    const tc = U.shiftingTruthCheck(v, 95);
+    ok(!!tc && !tc.srcAgree, `MCSC 633N — srcAgree 로 안 빠진다(${tc && tc.srcAgree ? '빠짐' : '정상'})`);
+    ok(!!tc && tc.truth === 95 && tc.ok === true, `배정표 190모브 → 95대 · 확정 95 와 일치 (truth ${tc && tc.truth})`);
+  }
+
   console.log(fail ? `\n✗ 실패 ${fail}건` : '\n✓ 전부 통과');
   process.exit(fail ? 1 : 0);
 })();

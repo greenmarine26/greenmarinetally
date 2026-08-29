@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.82-02'   // 2.82-02 스크롤 긴 화면 넷에 TOP 버튼 - 공용 한 벌
+export const APP_VERSION = 'TallyOne 2.82-03'   // 2.82-03 시프팅 문구 모순 수리 + 콘앱 선박 접기
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -4094,7 +4094,16 @@ export function shiftingTruthCheck(voyage, predCount) {
   //  2.79: 삼자가 일치하면 배정표 이적(berthShift)을 기다리지 않는다 — 그 값은 작업이 시작돼야
   //    확정되는데(_TRUTH_READY), 검수사는 **작업 전에** 세 자료로 이미 답을 냈다.
   const _src = dischargeSourcesAgree(voyage);
-  if (_src.agree) {
+  //  ⛔ 2.82-03 (검수사 실물 2026-08-29: «◆쉬프팅(재적부) 95 · 선사·세관·배정 279대 일치 ✓ 시프팅 없음??»)
+  //    **두 이야기가 한 판정에 묶여 있었다.**
+  //      · 삼자 일치 = «평택에서 내릴 짐이 279대로 확정됐다»(양하 **대수**)
+  //      · 배정표 이적 = «크레인이 옮긴 시프팅이 190모브(95대)»(시프팅 **모브**)
+  //    둘은 세는 것이 다른데 2.79 가 앞의 것으로 «시프팅 없음»을 단정했다. 그때는 예측이 허수라
+  //    맞아떨어졌지만, 2.81 로 확정 대조 95대가 실재하자 **95대를 띄우고 그 옆에 «시프팅 없음»**을
+  //    같이 적는 모순이 나왔다.
+  //    ⇒ 배정표가 시프팅을 «있다»고 말하면(>0) 그쪽이 먼저다. 삼자 일치로 덮지 않는다.
+  const _bs0 = Number(voyage?.info?.berthShift);
+  if (_src.agree && !(Number.isFinite(_bs0) && _bs0 > 0)) {
     return { truth: 0, pred, ok: pred === 0, moves: 0, srcAgree: true, srcs: _src,
              reason: `선사·세관·배정 세 자료가 모두 ${_src.plan} 대로 같다 — 평택에서 내릴 짐이 확정됐다` };
   }
