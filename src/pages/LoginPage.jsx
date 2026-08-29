@@ -286,7 +286,9 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       //  2.40-02: 판정을 utils.isWorkingNow 한 벌로 옮겼다.
       //    종전 "시작이 2시간 이내면 작업중"(2.34-10)은 **시작 전 2시간을 통째로 작업중**으로 만들었다 --
       //    13시 시작인 배가 12시 30분에 "작업중"으로 떠서 담당자가 준비도 못 한 채 볼 뻔했다.
-      const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
+      //  ★ 2.82-01: rank 3 = **모레**. 검수사 *«내일 아님 모레 작업이 있는 선박인데 …눌러야만 보여서»*
+      //    ⚠ 3 은 화면 목록에만 넣는다. 타임라인은 48시간 창이라 **rank<3 만** 받는다(아래 ships).
+      const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : n === 2 ? 3 : 9;
       //  ★ 2.82 (검수사 지시 2026-08-29) — *«오늘 작업이 없으면 차순으로 기본 6대를 보여 주세요.
       //    화면이 비어 보입니다»*. 종전엔 `rank < 9`(작업중·오늘·내일)만 담아서, 실측 2026-08-29
       //    활성 15항차 중 화면에 뜨는 것이 **단 2척**이었다(나머지는 D+2 이후라 통째로 버려졌다).
@@ -308,24 +310,54 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           if (isReeferContainer(c)) rf++;
         }
         const xray = Object.keys(v?.discharge?.xrayList || {}).length;   // XRAY는 양하 전용
-        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, msEnd, key: v.key, c20, mty, rf, xray });
+        //  2.82-01: boxes — 그 배의 컨 수. 목록에 안 보이는 나머지의 «일감»을 아래 한 줄로 말한다.
+        ships.push({ vsl: v?.info?.vsl || v.key, berth: v?.info?.berth || '', rank, ms, msEnd, key: v.key, c20, mty, rf, xray, boxes: vBoxes });
       }
     }
     ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));
     //  2.82: 종전 소비처(타임라인·작업중 척수)는 rank<9 만 본다 — 그 뜻을 바꾸지 않는다.
     //    `upcoming` 은 화면이 빌 때만 쓰는 «차순» 이다(작업일시 가까운 순, 위 정렬 그대로).
+    //  2.82-01: ships(rank<3) = 작업중·당일·명일 — **타임라인 48시간 창과 «오늘 N척 작업중» 이 쓰는 것.**
+    //    soon(rank 3) = 모레 — 화면 목록에는 **항상** 넣는다(검수사가 눌러야 보인다고 한 그 배들).
+    //    upcoming(rank 9) = 그 밖 — 6대에 모자랄 때만 채운다.
     return { total: vs.length, boxes, byPier,
-             ships: ships.filter(s => s.rank < 9),
+             ships: ships.filter(s => s.rank < 3),
+             soon: ships.filter(s => s.rank === 3),
              upcoming: ships.filter(s => s.rank === 9) };
   }, [voyages]);
   //  2.82: 화면에 실제로 그릴 목록 — 오늘·내일이 6대에 못 미치면 차순으로 채운다.
   //    ⚠ 6대 이상이면 종전 그대로(채우지 않는다). 타임라인에는 넘기지 않는다 — 48시간 창이라 안 들어간다.
+  //  2.82-01: 화면 목록 = 작업중·당일·명일 + **모레**. 그래도 6대에 못 미치면 차순으로 채운다.
+  //    ⛔ «지난 배»는 채움에서 뺀다 — 앞으로 올 배를 보려는 것이지 지나간 배를 보려는 게 아니다.
   const MIN_SHOWN = 6;
-  const boardShown = React.useMemo(() => (
-    board.ships.length >= MIN_SHOWN
-      ? board.ships
-      : [...board.ships, ...board.upcoming].slice(0, MIN_SHOWN)
-  ), [board]);
+  const boardShown = React.useMemo(() => {
+    const base = [...board.ships, ...board.soon];
+    if (base.length >= MIN_SHOWN) return base;
+    const now = Date.now();
+    const future = board.upcoming.filter(s => !(s.ms != null && s.ms < now));
+    return [...base, ...future].slice(0, MIN_SHOWN);
+  }, [board]);
+  //  ★ 2.82-01 (검수사 2026-08-29) — *«이것을 근무 배치 하는 사람이 보면 이번에는
+  //    **근무인원이 많이 필요 없는줄 압니다**»*. 목록이 짧으면 «일이 적다»로 읽힌다.
+  //    KPI 에 총 항차·총 컨은 이미 있지만 **선박 목록의 인상이 그것을 이긴다.**
+  //    ⇒ 목록 아래에 «안 보이는 나머지»를 숫자로 붙인다. 화면에 없는 일감이 있다는 것을 말한다.
+  //    ★★ 검수사가 무게를 짚어 줬다 — *«그 이유로 검수사들의 휴가요청을 다 받아준다면
+  //      그후의 일들은 **남은 검수사들이 고된 작업**을 하게 됩니다»*.
+  //      이 화면은 **사람을 몇 명 부를지 정하는 자리**다. «몇 척·몇 개·언제까지»가 다 보여야 한다.
+  const boardRest = React.useMemo(() => {
+    const shownKeys = new Set(boardShown.map(s => s.key));
+    const now = Date.now();
+    const rest = [...board.ships, ...board.soon, ...board.upcoming]
+      .filter(s => !shownKeys.has(s.key))
+      .filter(s => !(s.ms != null && s.ms < now));           // 지난 배는 «앞으로 올 일감»이 아니다
+    const days = rest.map(s => s.ms).filter(m => m != null).sort((a, b) => a - b);
+    const md = (m) => `${new Date(m).getMonth() + 1}/${new Date(m).getDate()}`;
+    return {
+      n: rest.length,
+      boxes: rest.reduce((a, s) => a + (s.boxes || 0), 0),
+      span: days.length ? (md(days[0]) === md(days[days.length - 1]) ? md(days[0]) : `${md(days[0])}~${md(days[days.length - 1])}`) : '',
+    };
+  }, [board, boardShown]);
   const hhmm = (ms) => (ms ? `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}` : '');
   const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
 
@@ -367,9 +399,13 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
           <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">
             {board.ships.length === 0
               ? '■ 다음 작업 예정 선박'
-              : boardShown.length > board.ships.length
-                ? '■ 오늘 · 내일 작업 선박 + 다음 예정 — LIVE'
-                : '■ 오늘 · 내일 작업 선박 — LIVE'}
+              : board.soon.length > 0 && boardShown.length > board.ships.length + board.soon.length
+                ? '■ 오늘 · 내일 · 모레 작업 선박 + 다음 예정 — LIVE'
+                : board.soon.length > 0
+                  ? '■ 오늘 · 내일 · 모레 작업 선박 — LIVE'
+                  : boardShown.length > board.ships.length
+                    ? '■ 오늘 · 내일 작업 선박 + 다음 예정 — LIVE'
+                    : '■ 오늘 · 내일 작업 선박 — LIVE'}
           </div>
           {boardShown.length === 0 ? (
             <div className="text-xs2 text-dim-500">등록된 항차가 없습니다</div>
@@ -405,6 +441,16 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
                   </div>
                 );
               })}
+            </div>
+          )}
+          {/* ★ 2.82-01 (검수사 2026-08-29): 목록이 짧으면 «일이 적다»로 읽힌다 —
+              *«이것을 근무 배치 하는 사람이 보면 이번에는 근무인원이 많이 필요 없는줄 압니다»*
+              화면에 못 담은 나머지를 숫자로 붙여, **안 보이는 일감이 있다는 것**을 말한다. */}
+          {boardRest.n > 0 && (
+            <div className="mt-1.5 text-3xs text-dim-400 font-bold">
+              그 밖 대기 {boardRest.n}척
+              {boardRest.boxes > 0 && <span className="text-dim-500 font-normal"> · 컨 {boardRest.boxes.toLocaleString()}개</span>}
+              {boardRest.span && <span className="text-dim-500 font-normal"> · {boardRest.span}</span>}
             </div>
           )}
         </div>

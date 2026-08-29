@@ -16,14 +16,21 @@ const fs = require('fs');
 
   console.log('[1] 배선 — 두 화면 다 6개를 바닥으로 깐다');
   ok(/const MIN_OPEN = 6;/.test(home), 'HomePage: MIN_OPEN = 6');
-  ok(/while \(o\.length < MIN_OPEN && f\.length\) o\.push\(f\.shift\(\)\);/.test(home),
-     'HomePage: 접힘 앞에서 끌어와 채운다(정렬 다시 안 한다)');
+  ok(/return n === 0 \|\| n === 1 \|\| n === 2;/.test(home),
+     'HomePage: isOpenVoyage 가 **모레(D+2)** 까지 연다 — 숫자가 아니라 날짜로');
+  ok(/_past\(v\)/.test(home) && /지난 배는 접힘에 그대로 둔다/.test(home),
+     'HomePage: 채울 때 지난 배는 건너뛴다');
+  ok(/while \(o\.length < MIN_OPEN && f\.length\)/.test(home) && /f\.shift\(\)/.test(home) && !/\.sort\(/.test(home.split('const { openList, foldList }')[1].split('}, [list]);')[0]),
+     'HomePage: 접힘 앞에서 끌어와 채운다(그 안에서 정렬을 다시 하지 않는다)');
   ok(/const MIN_SHOWN = 6;/.test(login), 'LoginPage: MIN_SHOWN = 6');
   ok(/boardShown/.test(login) && (login.match(/boardShown/g) || []).length >= 4,
      'LoginPage: boardShown 이 화면 목록에 배선됐다');
-  ok(/ships: ships\.filter\(s => s\.rank < 9\)/.test(login),
-     'LoginPage: board.ships 는 여전히 rank<9 만 — 타임라인·작업중 척수의 뜻이 안 바뀐다');
-  ok(/upcoming: ships\.filter\(s => s\.rank === 9\)/.test(login), 'LoginPage: 차순은 upcoming 으로 분리');
+  ok(/ships: ships\.filter\(s => s\.rank < 3\)/.test(login),
+     'LoginPage: board.ships 는 rank<3(작업중·당일·명일) — 타임라인 48시간 창의 뜻이 안 바뀐다');
+  ok(/soon: ships\.filter\(s => s\.rank === 3\)/.test(login), 'LoginPage: 모레는 soon 으로 분리(목록에 항상 넣는다)');
+  ok(/upcoming: ships\.filter\(s => s\.rank === 9\)/.test(login), 'LoginPage: 그 밖은 upcoming(6대 채울 때만)');
+  ok(/boardRest/.test(login) && /그 밖 대기 \{boardRest\.n\}척/.test(login),
+     'LoginPage: 안 보이는 나머지를 «그 밖 대기 N척» 으로 말한다(근무 배치가 일감을 오해하지 않게)');
   ok(/<WorkTimeline ships=\{board\.ships\}/.test(login),
      'LoginPage: 타임라인에는 차순을 안 넘긴다(48시간 창)');
 
@@ -41,7 +48,7 @@ const fs = require('fs');
   const isOpen = (v) => {
     if (U.isWorkingNow(v)) return true;
     const n = U.dayDiff(U.voyagePlanMs(v));
-    return n === 0 || n === 1;
+    return n === 0 || n === 1 || n === 2;   // 2.82-01: 모레까지
   };
   const fill = (arr, MIN) => {
     const o = [], f = [];
@@ -53,7 +60,8 @@ const fs = require('fs');
     // 실측 2026-08-29 그대로: 당일·명일 2척 + D+2~D+6 13척
     const arr = [mk(1), mk(1, 'working'), mk(2), mk(2), mk(2), mk(2), mk(2), mk(3), mk(3), mk(4), mk(5), mk(5), mk(5), mk(6), mk(-11)];
     const { o, f } = fill(arr, 6);
-    ok(o.length === 6, `펼침 6개 (${o.length}) · 접힘 ${f.length}개`);
+    //  2.82-01: 당일·명일 2 + 모레 5 = 7 이 전부 펼쳐져야 한다(6에서 안 자른다).
+    ok(o.length === 7, `실측 모양 — 당일·명일 2 + 모레 5 = 펼침 7개 (${o.length}) · 접힘 ${f.length}개`);
   }
   {
     // 6개보다 많으면 건드리지 않는다 — 오늘·내일이 8척이면 8척 그대로.

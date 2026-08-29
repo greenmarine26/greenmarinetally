@@ -33,7 +33,12 @@ function isOpenVoyage(v) {
   //  2.40-02: 종전엔 터미널 상태만 보고 **시각을 안 봤다** — 시작 전 배가 종일 «작업중»으로 펼쳐졌다.
   if (isWorkingNow(v)) return true;
   const n = dayDiff(v?._etaMs ?? v?._etdMs ?? null);
-  return n === 0 || n === 1;
+  //  ★ 2.82-01 (검수사가 이유를 밝혀 줌 2026-08-29) —
+  //    *«이렇게 바꾼이유는 **내일 아님 모레 작업이 있는 선박**인데 그밖의 선박을 눌러야만 보여서였습니다»*
+  //    2.82 는 «기본 6개»로만 막았는데, 실측에서 **모레(D+2) 5척 중 2척(TNJP·XTPG)이 6개에 잘려**
+  //    여전히 접혔다. 같은 날 작업인데 셋만 보이고 둘은 눌러야 보이는 꼴이었다.
+  //    ⇒ 숫자가 아니라 **날짜로 연다** — 당일·명일·**모레**까지. 6개 하한은 그 아래 보험으로 남긴다.
+  return n === 0 || n === 1 || n === 2;
 }
 
 function lastWorkAt(v) {
@@ -552,9 +557,18 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
     //    ⇒ 작업중·당일·명일이 6개에 못 미치면 **접힘 앞에서 끌어와** 6개를 채운다.
     //    `list` 는 이미 ①현 부두 우선(현장순) ②작업일시 순으로 서 있으므로 **앞에서 가져오면 순서가 맞다** —
     //    여기서 다시 정렬하지 않는다(정렬 두 벌 금지).
+    //  ⛔ 2.82-01: 채울 때 **이미 지난 배는 건너뛴다.** 실측 — TMPZ 2027E(작업 08-18, 열흘 전)가
+    //    채움에 끌려 목록 맨 위로 올라올 수 있었다. 검수사가 원한 것은 «앞으로 올 배»다.
     const MIN_OPEN = 6;
-    while (o.length < MIN_OPEN && f.length) o.push(f.shift());
-    return { openList: o, foldList: f };
+    const _now = Date.now();
+    const _past = (v) => { const t = v?._etdMs ?? v?._etaMs; return t != null && t < _now; };
+    const _rest = [];
+    while (o.length < MIN_OPEN && f.length) {
+      const v = f.shift();
+      if (_past(v)) { _rest.push(v); continue; }   // 지난 배는 접힘에 그대로 둔다
+      o.push(v);
+    }
+    return { openList: o, foldList: [..._rest, ...f] };
   }, [list]);
 
   const activeInspectors = useMemo(() => {
