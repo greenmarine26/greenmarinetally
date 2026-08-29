@@ -552,6 +552,12 @@ export default function PrintableCargoPlanV2({
   const effVoyNo = voyNo || _voyByMode || '-';
   const effShipName = shipName || voyageInfo?.shipName || '';
   const shiftCount = Object.keys(shiftingMap || {}).length;   // V8.98
+  //  ★ 2.83 (검수사 지시 2026-08-29) — *«카고플랜이던지 양하 선적등 갯수가 기록되는부분에
+  //    시프팅 갯수도 포함시켜 주시기 바랍니다. 양하279 시프팅95 합 374개 이런식으로.
+  //    그래야 **작업량 계산**도 편할것이고 **콘 작업하는 사람**도 콘계산 하는데 도움이 될것입니다»*
+  //    종전엔 머리에 «쉬프팅 95» 만 따로 떠 있어 평택분과 더해 보려면 사람이 암산해야 했다.
+  //    ⚠ 평택분 판정은 아래 matchPodC 와 **같은 규칙**이어야 한다 — 두 벌이 갈리면 합이 안 맞는다.
+  //      그래서 여기서 세지 않고, matchPodC 가 정의된 뒤(_ptkCount) 계산한다.
   // V9.03: 긴급/수화물 카운트 — 컨테이너 플래그(c.urgent/c.lugg) 기반 (예보 저장 시 태깅됨)
   const urgentCount = (containers || []).filter(c => c && c.urgent).length;
   const luggCount = (containers || []).filter(c => c && c.lugg).length;
@@ -771,6 +777,8 @@ export default function PrintableCargoPlanV2({
     if (c._inList) return true;  // 선적: 리스트 등록 = 평택
     return isPyeongtaekPort(c.pol);
   };
+  //  2.83: 머리 합계용 평택분 대수 — **별첨·베이 카운트와 같은 판정(matchPodC)** 을 쓴다.
+  const _ptkCount = (containers || []).filter((c) => c && matchPodC(c)).length;
   const boxCounts = useMemo(() => {
     const matchBay = (c, num) => Number(c.bay) === num;
     const byBay = new Map();
@@ -985,7 +993,17 @@ export default function PrintableCargoPlanV2({
           <div className="col">VOY NO : {effVoyNo}</div>
           <div className="title-center">{title}</div>
           <div className="col" style={{ fontSize: 8, color: '#555' }}>칠한 칸=풀(하늘색=일반, 특수화물은 제 색) · 안 칠한 칸=엠티 · e=20ft·E=40ft · X=옆 40ft가 차지 · 회색=통과{shiftCount > 0 ? ' · ◆=쉬프팅' : ''}{urgentCount > 0 ? ' · ▲=긴급' : ''}{luggCount > 0 ? ' · 보라테두리=수화물' : ''}</div>
-          {shiftCount > 0 && <div className="col" style={{ fontSize: 9, color: '#1d4ed8', fontWeight: 'bold' }}>쉬프팅 {shiftCount}</div>}
+          {/* 2.83 (검수사): «양하279 시프팅95 합 374개» — 작업량·콘 계산이 한눈에 서게 합을 적는다.
+              시프팅이 0이면 종전대로 대수만(없는 줄을 만들지 않는다). */}
+          <div className="col" style={{ fontSize: 9, color: '#111', fontWeight: 'bold' }}>
+            {mode === 'discharge' ? '양하' : '선적'} {_ptkCount}
+            {shiftCount > 0 && (
+              <>
+                <span style={{ color: '#1d4ed8' }}> · 쉬프팅 {shiftCount}</span>
+                <span> · 합 {_ptkCount + shiftCount}</span>
+              </>
+            )}
+          </div>
           {urgentCount > 0 && <div className="col" style={{ fontSize: 9, color: '#dc2626', fontWeight: 'bold' }}>긴급 {urgentCount}</div>}
           {luggCount > 0 && <div className="col" style={{ fontSize: 9, color: '#7c3aed', fontWeight: 'bold' }}>수화물 {luggCount}</div>}
           {/* V9.05: 어느 베이사전으로 그렸는지 표기 — 오매칭 즉시 식별 (2026-07-21 SWAT 사건 후속) */}

@@ -28,6 +28,16 @@ const fs = require('fs');
     ok(okv, `콘앱 버전이 2.4 이상 (${m ? m[1] + '.' + m[2] : '못 읽음'})`);
   }
 
+  console.log('[1-B] 2.6 — 콘 계산에 시프팅이 빠졌다는 것을 화면이 말하는가');
+  //   검수사 물음 «콘앱에 콘 계산도 시프팅 갯수도 포함되는게 맞는지요» — 맞는데 지금은 안 들어간다.
+  //   계산 엔진은 안 건드리고 **빠졌다는 사실**을 말한다(조용히 모자란 것보다 낫다).
+  ok(/function computeConeShiftInfo\(\)/.test(src), '시프팅 요약 함수가 있다');
+  ok(/window\.__coneShiftInfo = computeConeShiftInfo\(\);/.test(src), '계산 결과를 그릴 때 요약을 채운다');
+  ok(/이 콘 계산에 들어가 있지 않습니다/.test(src), '결과 화면이 «안 들어갔다»고 말한다');
+  ok(/다시 싣는 자리가 갑판/.test(src), '갑판에 다시 놓는 대수를 알려 준다(콘이 더 드는 몫)');
+  ok(/berthShift: _v\.berthShift/.test(src) && (src.match(/berthShift: _v\.berthShift/g) || []).length >= 2,
+     '요약도 배정표 정본을 쓴다(카고플랜과 같은 수를 말한다)');
+
   console.log('[2] 규칙 재현 — 15척에서 몇 장이 그려지는가');
   //   화면 함수를 통째로 못 부르므로 그 판정 두 줄만 그대로 옮겨 돌린다.
   const voyages = [...Array(15)].map((_, i) => ({ key: `SHIP${i}_100${i}E`, vsl: `SHIP${i}` }));
