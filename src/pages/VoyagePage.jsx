@@ -68,6 +68,7 @@ import { exportSectionToCSV } from '../components/CSVExport.jsx';
 import PrintHubModal from '../components/PrintHubModal.jsx';
 import TestLabModal from '../components/TestLabModal.jsx';   // V9.25: 검증 모드 — 성일님 전용
 import ReeferMemoModal from '../components/ReeferMemoModal.jsx';   // TallyOne 1.8: 리퍼 온도 확인
+import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
 export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, portMisData = {}, pilotForecast = {}, terminalWork = {}, onGoHome, onModeChange, initModeOverride = null, voyages = null, heartbeat = null }) {   // 2.36: voyages·heartbeat — 항차 화면 미르도 홈과 **같은 범위**로 답한다(검수사 «홈이든 작업중이든 수석화면이든 말그대로 통합검색»)   // 1.69-01: terminalWork — 진행 질문을 터미널 실황으로
   // 양하/선적 모드 — 둘 다 있으면 토글, 하나만 있으면 자동
@@ -2052,6 +2053,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
           if (target.filter) setListFilter(target.filter);   // V9.14: reeferTemp 필터 추가 — 리퍼 온도 미입력만
         }}
       />
+      <ScrollTopButton />   {/* 2.82-02: 스크롤이 긴 화면엔 TOP (검수사 지시 2026-08-29) */}
     </div>
   );
 }

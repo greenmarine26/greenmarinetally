@@ -25,6 +25,7 @@ import ConfirmModal, { useConfirm } from '../components/ConfirmModal.jsx';
 import ChiefBayEdit from '../components/ChiefBayEdit.jsx';
 import LoadingPlanEdit from '../components/LoadingPlanEdit.jsx';
 import GlobalSearchPage from './GlobalSearchPage.jsx';   // 2.03-02: 대시보드 안 인라인 통합검색(화면 전환 없음)
+import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: TOP 버튼 공용 한 벌(여기 있던 것을 올렸다)
 
 // TallyOne 1.0: null 방어용 고정 빈 객체 — prop이 null로 와도 참조가 안 바뀌어 useMemo가 헛돌지 않는다
 const _EMPTY_OBJ = {};
@@ -2738,22 +2739,3 @@ function ActivityLogSection({ voyages }) {
 }
 
 
-// ── TallyOne 1.81-01: TOP 버튼 (검수사 요청 2026-08-17 «TOP화면버튼») ──────────
-//   대시보드가 길어 아래에서 위로 돌아가기 힘들다. 300px 넘게 내려가면 우하단에 뜬다.
-function ScrollTopButton() {
-  const [show, setShow] = React.useState(false);
-  React.useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > 300);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-  if (!show) return null;
-  return (
-    <button onClick={() => { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); } }}
-      className="fixed bottom-5 right-4 z-40 w-12 h-12 rounded-full bg-purple-700/90 hover:bg-purple-600 active:scale-95 border border-purple-500/60 shadow-lg shadow-black/40 text-white font-black text-xxs leading-tight"
-      title="맨 위로">
-      ▲<br/>TOP
-    </button>
-  );
-}

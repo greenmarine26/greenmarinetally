@@ -17,6 +17,7 @@ import { matchPortMis } from '../portMisMatch.js';   // 1.68: "STSE 출항 몇 �
 import { fbGetSimple, fbListArchive } from '../firebase.js';   // 1.69: 오답·마감·월통계 — 물었을 때 1회 읽고 캐시
 import { answerFeedback, answerCollector, answerTallyPending, answerArchiveStats, answerOverlaps, answerDataArrival, answerHatchStatus, answerGangSplit, answerTotalMoves, answerFirstStart, answerXrayShifts, answerShiftBriefing, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, answerShipOverview, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.69: 수석 통계·이력·계산(96~100)
 import { runDeviceCmd } from '../utils.js';   // 2.40: 미르 조작(밝기·소리) 실행 단일 벌
+import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
 // 1.69-05: HH:MM 표기 — «질문 접수»·«다시 확인했습니다» 공용
 const _hm = (ts) => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -1135,6 +1136,7 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
           ))}
         </div>
       )}
+      <ScrollTopButton />   {/* 2.82-02: 스크롤이 긴 화면엔 TOP (검수사 지시 2026-08-29) */}
     </div>
   );
 }

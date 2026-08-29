@@ -13,6 +13,7 @@ import { decideBadge, DEPART_REMAIN_MAX, inWindow } from '../badgeRule.js';   //
 import RefreshDataButton from '../components/RefreshDataButton.jsx';   // TallyOne 1.5: 화면 데이터만 새로고침
 import { isChief, canOpenChief, isVisibleStaff } from '../staffList.js';   // 1.41: 수석 대시보드 버튼 노출 판정 단일화
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.19: 오답 미회신 줄은 소유자에게만   // V9.44: 수석 대시보드 버튼은 수석에게만  // V9.38: 배지 판정 단일 규칙(콘앱과 공용)
+import ScrollTopButton from '../components/ScrollTopButton.jsx';   // 2.82-02: 스크롤 긴 화면 TOP 버튼(공용 한 벌)
 
 // 항차의 마지막 작업 활동 시각(ms). 활동 증거가 하나도 없으면 0 반환 → 자동삭제 대상 제외.
 //   V8.01: 자동삭제 기준을 createdAt → 작업 활동 시각으로 바꾸기 위한 공용 헬퍼.
@@ -1276,6 +1277,7 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
       })()}
 
       {/* V9.57: PORT-MIS 캡처 모달 마운트 제거 — 여는 경로가 없는 고아 코드(ChiefDashboard에 이관됨) */}
+      <ScrollTopButton />   {/* 2.82-02: 스크롤이 긴 화면엔 TOP (검수사 지시 2026-08-29) */}
     </div>
   );
 }
