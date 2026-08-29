@@ -71,6 +71,16 @@ const voyages = {
     },
     discharge: { ediContainers: mkContainers([mkC('2200', 'F')]) },
   },
+  //  ★ 2.82 — «오늘·내일»이 아닌 **차순** 배들. 검수사 지시로 화면이 빌 때 이것으로 6대를 채운다.
+  //    D+3 부터라 종전 코드에서는 board.ships 에 아예 안 담겼다(화면에서 통째로 사라졌다).
+  ...Object.fromEntries([3, 4, 5, 6, 7].map((d, i) => [`FUTURE${i + 1}_100${i}E`, {
+    info: {
+      vsl: `FUTURE${i + 1}`, voy: `100${i}E`, berth: '동부두 5번선석', pier: 'PCTC',
+      terminalStatus: 'planned',
+      planDate: `${fmt(new Date(now + d * 86400e3))} ~ ${fmt(new Date(now + d * 86400e3 + 8 * 3600e3))}`,
+    },
+    discharge: { ediContainers: mkContainers([mkC('2200', 'F')]) },
+  }])),
 };
 
 createRoot(document.getElementById('root')).render(

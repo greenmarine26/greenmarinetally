@@ -546,6 +546,14 @@ export default function HomePage({ voyages, inspectors, inspector, portMisData =
   const { openList, foldList } = useMemo(() => {
     const o = [], f = [];
     for (const v of list) (isOpenVoyage(v) ? o : f).push(v);
+    //  ★ 2.82 (검수사 지시 2026-08-29) — *«검수앱 홈화면 항차 목록도 기본 6개는 보이게 해주세요.
+    //    작업 일시 순으로»*. 실측 2026-08-29: 활성 15항차 중 펼쳐지는 것이 **2개**뿐이었다
+    //    (나머지는 D+2 이후라 접힌 채였고, 화면이 비어 보였다).
+    //    ⇒ 작업중·당일·명일이 6개에 못 미치면 **접힘 앞에서 끌어와** 6개를 채운다.
+    //    `list` 는 이미 ①현 부두 우선(현장순) ②작업일시 순으로 서 있으므로 **앞에서 가져오면 순서가 맞다** —
+    //    여기서 다시 정렬하지 않는다(정렬 두 벌 금지).
+    const MIN_OPEN = 6;
+    while (o.length < MIN_OPEN && f.length) o.push(f.shift());
     return { openList: o, foldList: f };
   }, [list]);
 

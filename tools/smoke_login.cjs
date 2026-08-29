@@ -61,6 +61,28 @@ setTimeout(()=>{
   if (!t.includes('동방아이포트')) { console.log('✗ PNCT 분해 라벨(동방아이포트)이 안 보인다'); process.exit(1); }
   if (!t.includes('미상')) { console.log('✗ pier 미상 분해 라벨이 안 보인다'); process.exit(1); }
 
+  // ── ★ 2.82 (검수사 지시 2026-08-29): 오늘 작업이 없으면 **차순으로 기본 6대** ──
+  //   *«오늘 작업이 없으면 차순으로 기본 6대를 보여 주세요. 화면이 비어 보입니다»*
+  //   픽스처는 오늘 3척 + 차순(D+3~D+7) 5척. 6대를 채우면 FUTURE1·FUTURE2·FUTURE3 까지 보이고
+  //   FUTURE4·FUTURE5 는 안 보여야 한다(6대에서 끊는다 — 무한정 늘리지 않는다).
+  {
+    const shownFuture = [1, 2, 3, 4, 5].filter((i) => t.includes(`FUTURE${i}`));
+    if (shownFuture.length !== 3 || !t.includes('FUTURE1') || !t.includes('FUTURE2') || !t.includes('FUTURE3')) {
+      console.log(`✗ 차순 채움이 6대가 아니다 — 보이는 차순: ${shownFuture.map((i) => 'FUTURE' + i).join('·') || '없음'} (FUTURE1·2·3 만 나와야 한다)`);
+      process.exit(1);
+    }
+    //  타임라인·«작업중 척수» 는 종전대로 오늘·내일만 봐야 한다 — 차순이 섞이면 안 된다.
+    if (/오늘\s*\d+척 작업중/.test(t) && /오늘\s*[4-9]척 작업중/.test(t)) {
+      console.log('✗ 차순이 «오늘 N척 작업중» 수에 섞였다 — 그 문구는 rank<9 만 세야 한다');
+      process.exit(1);
+    }
+    //  섞였으면 제목이 그 사실을 말해야 한다(없는 작업을 있다고 하지 않는다).
+    if (!t.includes('다음 예정')) {
+      console.log('✗ 차순을 채웠는데 제목이 «+ 다음 예정» 을 말하지 않는다');
+      process.exit(1);
+    }
+  }
+
   // ── 2.4x: 토큰 밖 색(하드코딩 hex · slate · zinc) 0건 ──
   if (offTokenHits.length) {
     console.log('✗ 토큰 밖 색이 남아있다:', [...new Set(offTokenHits)].join(', '));
@@ -71,5 +93,6 @@ setTimeout(()=>{
   console.log('✓ PC 좌측 선박 카드 통과 — TESTSHIP(작업중·15번·수량배지 4종·인원0경고 O) · NSFR(시작전 → 작업중 X·경고 X) · THIRDSHIP(대조군 → 경고 X)');
   console.log('✓ KPI 터미널별 분해 통과 (평택컨테이너터미널·동방아이포트·미상 모두 렌더)');
   console.log('✓ 토큰 밖 색(bg-[#·slate-·zinc-) 0건');
+  console.log('✓ 2.82 차순 채움 통과 — 오늘 3척 + 차순 3척 = 6대 · FUTURE4·5 는 안 보임 · 제목에 «다음 예정»');
   process.exit(0);   // Firebase 구독이 이벤트 루프를 붙잡아 스스로 안 끝난다
 },800);

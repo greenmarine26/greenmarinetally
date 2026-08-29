@@ -287,7 +287,12 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       //    종전 "시작이 2시간 이내면 작업중"(2.34-10)은 **시작 전 2시간을 통째로 작업중**으로 만들었다 --
       //    13시 시작인 배가 12시 30분에 "작업중"으로 떠서 담당자가 준비도 못 한 채 볼 뻔했다.
       const rank = isWorkingNow(v) ? 0 : n === 0 ? 1 : n === 1 ? 2 : 9;
-      if (rank < 9) {
+      //  ★ 2.82 (검수사 지시 2026-08-29) — *«오늘 작업이 없으면 차순으로 기본 6대를 보여 주세요.
+      //    화면이 비어 보입니다»*. 종전엔 `rank < 9`(작업중·오늘·내일)만 담아서, 실측 2026-08-29
+      //    활성 15항차 중 화면에 뜨는 것이 **단 2척**이었다(나머지는 D+2 이후라 통째로 버려졌다).
+      //    ⇒ 먼 배도 담되 **rank 9 로 갈라 둔다.** 타임라인·«오늘 N척 작업중» 문구는 종전대로
+      //      `ships`(rank<9)만 쓰고, 화면 목록만 모자랄 때 `upcoming` 으로 채운다(아래 boardShown).
+      {
         // ① 2.4x (검수사 확정): 선박 카드 수량 배지 -- 추가 통신 0. 이미 받은 ediContainers 의
         //   iso·fe·rf 를 그대로 센다(판정은 전부 기존 utils 헬퍼 -- isoFeet·fe==='E'·isReeferContainer,
         //   새로 만들지 않는다).
@@ -307,8 +312,20 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
       }
     }
     ships.sort((a, b) => a.rank - b.rank || (a.ms || 9e15) - (b.ms || 9e15));
-    return { total: vs.length, boxes, byPier, ships };
+    //  2.82: 종전 소비처(타임라인·작업중 척수)는 rank<9 만 본다 — 그 뜻을 바꾸지 않는다.
+    //    `upcoming` 은 화면이 빌 때만 쓰는 «차순» 이다(작업일시 가까운 순, 위 정렬 그대로).
+    return { total: vs.length, boxes, byPier,
+             ships: ships.filter(s => s.rank < 9),
+             upcoming: ships.filter(s => s.rank === 9) };
   }, [voyages]);
+  //  2.82: 화면에 실제로 그릴 목록 — 오늘·내일이 6대에 못 미치면 차순으로 채운다.
+  //    ⚠ 6대 이상이면 종전 그대로(채우지 않는다). 타임라인에는 넘기지 않는다 — 48시간 창이라 안 들어간다.
+  const MIN_SHOWN = 6;
+  const boardShown = React.useMemo(() => (
+    board.ships.length >= MIN_SHOWN
+      ? board.ships
+      : [...board.ships, ...board.upcoming].slice(0, MIN_SHOWN)
+  ), [board]);
   const hhmm = (ms) => (ms ? `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}` : '');
   const berthNo = (b) => { const m = String(b || '').match(/(\d+)\s*번/); return m ? `${m[1]}번` : ''; };
 
@@ -346,14 +363,21 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
         </div>
 
         <div className="mt-3 bg-ink-950/60 border border-line rounded-card p-2">
-          <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">■ 오늘 · 내일 작업 선박 — LIVE</div>
-          {board.ships.length === 0 ? (
-            <div className="text-xs2 text-dim-500">오늘·내일 작업 선박 없음</div>
+          {/* 2.82: 차순으로 채웠으면 제목이 그 사실을 말한다 — 없는 작업을 있다고 하지 않는다. */}
+          <div className="text-[10.5px] tracking-[0.16em] text-dim-300 mb-1.5 font-bold">
+            {board.ships.length === 0
+              ? '■ 다음 작업 예정 선박'
+              : boardShown.length > board.ships.length
+                ? '■ 오늘 · 내일 작업 선박 + 다음 예정 — LIVE'
+                : '■ 오늘 · 내일 작업 선박 — LIVE'}
+          </div>
+          {boardShown.length === 0 ? (
+            <div className="text-xs2 text-dim-500">등록된 항차가 없습니다</div>
           ) : (
             // 2.4x (검수사 확정 -- 시안 구조): 선박 2열 카드 그리드. 좌측 코드 박스(작업중=act 초록 /
             //   예정=회색) · 우측 상태 2줄(1줄 작업중·번선석 또는 예정 시각 / 2줄 수량 배지 + 인원 0 경고).
             <div className="grid grid-cols-3 gap-1.5">
-              {board.ships.slice(0, 12).map(sp => {
+              {boardShown.slice(0, 12).map(sp => {
                 const isWorking = sp.rank === 0;
                 // ② 2.4x (검수사 확정): 시작 시각이 지난(=작업중) 배인데 활동 검수원이 0일 때만 경고.
                 //   시작 전 배는 0명이 정상이라 절대 경고하지 않는다 (2026-08-25 NSFR 사고 재발 방지).
@@ -457,11 +481,11 @@ export default function LoginPage({ current = '', inspectors, extraStaff = {}, d
             <h2 className="text-[18px] font-bold tracking-tight text-white">작업자 선택</h2>
             <span className="text-xs2 font-semibold px-2.5 h-[22px] rounded-full bg-ink-850 text-dim-200 border border-line-faint flex items-center">{list.length}명</span>
           </div>
-          {board.ships.length > 0 && (
+          {boardShown.length > 0 && (
             <div className="hidden mx-3.5 mb-2.5 bg-ink-900 border border-line-faint rounded-card px-3 py-2.5 shrink-0">
-              <div className="text-2xs font-bold tracking-[0.12em] text-dim-400 mb-2">■ 오늘 · 내일 작업 선박</div>
+              <div className="text-2xs font-bold tracking-[0.12em] text-dim-400 mb-2">{board.ships.length === 0 ? '■ 다음 작업 예정 선박' : '■ 오늘 · 내일 작업 선박'}</div>
               <div className="flex flex-wrap gap-1.5">
-                {board.ships.slice(0, 8).map(sp => (
+                {boardShown.slice(0, 8).map(sp => (
                   <span key={sp.key} className={`rounded-pill px-2.5 py-1 text-xxs font-black tracking-wide border ${
                     sp.rank === 0 ? 'bg-emerald-500/15 text-act-soft border-emerald-500/35'
                     : sp.rank === 1 ? 'bg-st-dis/15 text-st-disHi border-st-dis/35'
