@@ -29,6 +29,10 @@ import {
 } from './nlSearch.js';
 import { mirKnowledge } from './data/mirKnowledge.js';
 import { mirTone, mirSmallTalk } from './mirChat.js';
+/* ★ 2.17 — 미르 목소리. 검수사 *«콘앱의 미르는 말을 못합니다. 검수앱의 미르 목소리도 이쁜데»*
+     ⛔ 새로 만들지 않는다 — 새로 만들면 **목소리가 달라진다.** 검수앱과 같은 voice.js 한 벌을 싣는다.
+     (ko-KR · pitch 1.08 — «살짝 높여 덜 무뚝뚝하게» 가 그 파일에 적힌 뜻이다.) */
+import { speak, stopSpeak } from './voice.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
 
 /** 콘앱 행 → 미르가 읽는 컨테이너 모양. 콘앱은 `reefer/temp`, 엔진은 `rf/tmp` 를 본다. */
@@ -181,3 +185,4 @@ function _answerCore(query, ctx) {
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
+export { speak, stopSpeak };
