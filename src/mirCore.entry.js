@@ -33,6 +33,9 @@ import { mirTone, mirSmallTalk } from './mirChat.js';
      ⛔ 새로 만들지 않는다 — 새로 만들면 **목소리가 달라진다.** 검수앱과 같은 voice.js 한 벌을 싣는다.
      (ko-KR · pitch 1.08 — «살짝 높여 덜 무뚝뚝하게» 가 그 파일에 적힌 뜻이다.) */
 import { speak, stopSpeak } from './voice.js';
+/* ★ 2.19 — 화면 밝기 4단계·소리. 검수사 *«미르는 화면 밝기도 4단계로 조절도 할줄 압니다»*
+     ⛔ 새로 만들지 않는다 — 검수앱과 **같은 runDeviceCmd 한 벌**을 쓴다(단계·문구가 갈리면 안 된다). */
+import { runDeviceCmd } from './utils.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
 
 /**
@@ -137,6 +140,15 @@ function _answerCore(query, ctx) {
     } catch (e) { /* 콘 지식이 막혀도 미르는 계속 답한다 */ }
   }
 
+  /* ①-B 화면 밝기·소리 — 엔진이 «무엇을 하라»(deviceCmd)만 담고, 실행은 utils 한 벌이 한다.
+       검수앱은 화면에서 이걸 불렀다. 콘앱 미르만 못 하던 것을 여기 한 자리로 모은다. */
+  if (parsed && parsed.deviceCmd) {
+    try {
+      const r = runDeviceCmd(parsed.deviceCmd);
+      if (r) return r;
+    } catch (e) { console.warn('[미르] 화면 조절 실패:', e); }
+  }
+
   /* ② 브리핑 — 검수 자료. 엔진이 «알아듣기만» 하던 자리를 여기서 이어 준다. */
   if (parsed && parsed.briefingQuery && cs.length) {
     try {
@@ -212,4 +224,4 @@ function _answerCore(query, ctx) {
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
-export { speak, stopSpeak };
+export { speak, stopSpeak, runDeviceCmd };
