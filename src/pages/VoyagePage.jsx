@@ -133,6 +133,14 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
     if (what === 'cargo') { try { window.__mirOpenCargo = Date.now(); } catch (e) {} }
     if (bay != null) { try { window.__mirGoBay = bay; } catch (e) {} }
   }, []);
+  /* ★ 2.86 — 홈(수석 대시보드) 미르가 «플랜 보여줘» 하면 그 배로 넘어오면서 신호를 남긴다.
+       여기서 받아 **베이 탭을 연다**(카고플랜은 BayPlan 이 이어받는다).
+     ⚠ 신호는 한 번만 쓰고 지운다 — 안 지우면 이 항차에 올 때마다 베이 탭이 열린다. */
+  useEffect(() => {
+    try {
+      if (window.__mirOpenBayTab) { window.__mirOpenBayTab = 0; setTab('bay'); }
+    } catch (e) { /* 못 열어도 화면은 그대로 */ }
+  }, []);
   const [relayQ, setRelayQ] = useState('');   // 1.84-01: 양하 탭 검색창의 문장 질문을 「작업 시작」 탭으로 릴레이   // 1.84: 기본 미선택 — 목록은 칩을 눌러야 연다(검수사 확정)
   // TallyOne 1.54: 「풀 컨테이너 시퀀스 작업입니까?」를 다시 여는 스위치(이미 정해진 뒤 바꿀 때만).
   const [seqEdit, setSeqEdit] = useState(false);

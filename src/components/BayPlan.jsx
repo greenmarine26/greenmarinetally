@@ -48,6 +48,22 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   useEffect(() => {
     try {
       if (window.__mirOpenCargo) { window.__mirOpenCargo = 0; setPrintMode('cargo-v2'); }
+      /* 2.86: «N번 베이 보여줘» — 그 베이 장으로 옮긴다(BayPlan 이 쓰는 bay-page 앵커). */
+      if (window.__mirGoBay != null) {
+        const want = window.__mirGoBay; window.__mirGoBay = null;
+        setTimeout(() => {
+          try {
+            const el = document.getElementById('bay-page-' + want)
+              || [...document.querySelectorAll('[id^=bay-page-]')].find((n) => {
+                const ns = (n.textContent || '').match(/\d+/g) || [];
+                if (!ns.length) return false;
+                const a = Math.min(...ns.map(Number)), z = Math.max(...ns.map(Number));
+                return want >= a && want <= z;
+              });
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } catch (e) { /* 못 가도 화면은 열려 있다 */ }
+        }, 700);
+      }
     } catch (e) { /* 못 열어도 화면은 그대로 */ }
   }, []);
   // M5.0: 인쇄 드롭다운 열림 상태 (컨트롤 바 산뜻하게)

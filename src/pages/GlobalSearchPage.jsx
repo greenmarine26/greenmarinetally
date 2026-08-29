@@ -54,7 +54,7 @@ export function filterDamageHits(damageIndex, dq, now = new Date()) {
   });
 }
 
-export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '', embedded = false, ctxVoyageKey = null }) {   // 2.36: ctxVoyageKey — 항차 화면에 심을 때 배 이름을 안 붙여도 그 배로 답한다(검수사 «검색은 어디서든 같아야»)   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
+export default function GlobalSearchPage({ onOpenPlan = null, voyages, onOpenContainer, portMisData, terminalWork, heartbeat, isChief = true, initialQuery = '', embedded = false, ctxVoyageKey = null }) {   // 2.36: ctxVoyageKey — 항차 화면에 심을 때 배 이름을 안 붙여도 그 배로 답한다(검수사 «검색은 어디서든 같아야»)   // 2.03-02: embedded — 수석 대시보드 안에 심을 때(나가기 줄 숨김, 화면 전환 없음)   // 1.69: heartbeat — 수집기 상태 즉답 · 1.69-01: 검수원 진입(홈 검색) — isChief로 수석 전용 통계만 거른다
   const [query, setQuery] = useState(initialQuery || '');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -191,6 +191,13 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
       setDmgPhotoView(imgs.length ? { imgs, cn: e.cn } : { err: '사진을 찾지 못했습니다 — 보관에서 지워졌을 수 있습니다' });
     } catch (er) { setDmgPhotoView({ err: '사진 불러오기 실패: ' + (er?.message || er) }); }
   };
+  /* ★ 2.86 (검수사 실측 2026-08-29) — 홈(수석 대시보드) 미르도 플랜을 연다.
+       검수사 기록 — «20:29 질문 '카고플랜 보여줘'» → 열리지 않았다. 2.85-01 은 항차 화면에만 넣었고
+       이 화면은 다른 컴포넌트다.
+     ⚠ 여기는 **아직 배를 안 고른 자리**다. 그래서 질문에서 배를 찾아(shipCtx) 그 배를 열면서 신호를 남긴다.
+       배를 못 찾으면 아무것도 하지 않는다 — 엉뚱한 배를 여는 것보다 안 여는 편이 낫다. */
+  const planRanRef = useRef('');
+
   const shipCtx = useMemo(() => {
     const Q = String(debouncedQuery || '').toUpperCase();
     // 2.36: 항차 화면에 심긴 경우 — 질의에 배 이름이 없어도 **그 배**가 맥락이다.
@@ -251,6 +258,27 @@ export default function GlobalSearchPage({ voyages, onOpenContainer, portMisData
     }
     return best || _ctxFallback();
   }, [voyages, debouncedQuery, ctxVoyageKey]);
+
+  /* 2.86 — «플랜 보여줘» 면 그 배를 열면서 신호를 남긴다. 여는 것은 부모(onOpenPlan)가 한다.
+       ⚠ 홈은 **아직 배를 안 고른 자리**다. 질문에서 배를 못 찾으면(shipCtx 없음) 아무것도 열지 않는다 —
+         엉뚱한 배를 여는 것보다 안 여는 편이 낫다. 검수사도 «MCSC» 를 붙여 다시 물었다(20:29 기록).
+       양/선은 질문에 있으면 그것을, 없으면 양하를 기본으로 한다. */
+  useEffect(() => {
+    const t = String(debouncedQuery || '').trim();
+    if (!t || !onOpenPlan) return;
+    if (planRanRef.current === t) return;
+    if (!/보여|보자|열어|띄워|가\s*자|이동|펼쳐/.test(t)) return;
+    const wantCargo = /카고\s*플랜|카고플렌|적하도|화물\s*플랜/.test(t);
+    const m = t.match(/(\d{1,3})\s*(?:번)?\s*베이|베이\s*(\d{1,3})/);
+    const bay = m ? parseInt(m[1] || m[2], 10) : null;
+    const wantBay = /베이\s*플랜|베이플렌|플랜|플렌|도면|계획도/.test(t) || bay != null;
+    if (!wantCargo && !wantBay) return;
+    if (!shipCtx || !shipCtx.key) return;
+    planRanRef.current = t;
+    const mode = /선적|싣|적하|로딩/.test(t) ? 'loading' : 'discharge';
+    try { onOpenPlan({ voyageKey: shipCtx.key, mode, what: wantCargo ? 'cargo' : 'bay', bay }); }
+    catch (e) { console.warn('[미르] 플랜 열기 실패:', e); }
+  }, [debouncedQuery, shipCtx, onOpenPlan]);
 
   // ── 1.69-06: 진행 질문인데 배가 현재 항차에 없으면 — 보관소 메타 1회 GET (완료·보관 답 준비) ──
   //   검수사 신고(2026-08-14): "이미 완료된 작업을 물어보면 언제 작업 종료했는지 알려줘야 함."

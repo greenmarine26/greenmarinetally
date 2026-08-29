@@ -643,7 +643,17 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
           <GlobalSearchPage key={dashQ || '__open'} embedded
             voyages={voyages} portMisData={portMisData} terminalWork={terminalWork}
             heartbeat={collectorHb} isChief initialQuery={dashQ}
-            onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}/>
+            onOpenContainer={(c) => { if (c?.voyageKey) onOpenVoyage?.(c.voyageKey, c._mode); }}
+            /* 2.86 — 미르가 «플랜 보여줘» 하면 그 배로 이동하며 신호를 남긴다.
+                 항차 화면(VoyagePage)이 그 신호를 받아 베이 탭·카고플랜을 연다. */
+            onOpenPlan={({ voyageKey, mode, what, bay }) => {
+              try {
+                if (what === 'cargo') window.__mirOpenCargo = Date.now();
+                if (bay != null) window.__mirGoBay = bay;
+                window.__mirOpenBayTab = Date.now();
+              } catch (e) {}
+              onOpenVoyage?.(voyageKey, mode);
+            }}/>
         </div>
       )}
 
