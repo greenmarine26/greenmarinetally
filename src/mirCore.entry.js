@@ -100,10 +100,15 @@ function _answerCore(query, ctx) {
   /* ⓪ 잡담 — «미르야 뭐 잘 먹어?» 같은 것. 검수사 *«미르는 자기가 뭘 잘 먹는지도 알고 있습니다»*
        ⚠ 이것을 안 실어서 콘앱 미르가 «기존 자연어 답 수준» 으로 보였다(2.13-02 에서 바로잡음).
          `mirSmallTalk` 은 자기 게이트를 갖고 있어 조회 질문을 가로채지 않는다. */
-  try {
-    const st = mirSmallTalk(q);
-    if (st) return st;
-  } catch (e) { /* 잡담이 막혀도 일 이야기는 계속한다 */ }
+  /* ⚠ 잡담을 **맨 앞에 두는 것은 콘앱 기준**이다. 검수앱은 잡담을 맨 뒤에서 본다 —
+       앞에 두면 업무 질문을 잡담이 가로챌 수 있다(예: «미르야» 로 시작하는 조회).
+       그래서 순서를 `ctx.smallTalkLast` 로 가른다. 기본(콘앱)은 앞, 검수앱은 뒤. */
+  if (!c.smallTalkLast) {
+    try {
+      const st = mirSmallTalk(q);
+      if (st) return st;
+    } catch (e) { /* 잡담이 막혀도 일 이야기는 계속한다 */ }
+  }
 
   let parsed = null;
   try { parsed = parseNaturalQuery(q); } catch (e) { parsed = null; }
@@ -125,7 +130,16 @@ function _answerCore(query, ctx) {
           const sub = cs2.filter((x) => (m === 'loading' ? x._mode === 'loading' : x._mode !== 'loading'));
           if (!sub.length) continue;
           try {
-            const b = generateBriefing(sub, m === 'loading' ? '선적' : '양하', m, null, c.pier || '', c.opts || null);
+            /* 브리핑 재료를 **검수앱이 넘기던 만큼** 받는다(pairs·rfSkip·eseal·photos·tw·gang·cancelled).
+                 이걸 안 받으면 검수앱이 이 함수를 부르는 순간 브리핑이 지금보다 가난해진다. */
+            const bOpts = Object.assign({}, c.opts || null, {
+              pairsMap: c.pairsMap || null, rfSkip: c.rfSkip, esealBrief: c.esealBrief,
+              photos: c.photos || null, tw: c.tw || c.terminalWork || null,
+              gangShift: c.gangShift || null, cancelled: c.cancelled || false,
+              compMap: c.compMap || null, shiftMap: c.shiftMap || null,
+            });
+            const b = generateBriefing(sub, m === 'loading' ? '선적' : '양하', m,
+              c.pairsMap || null, c.pier || '', bOpts);
             if (b) parts.push('【' + (m === 'loading' ? '선적' : '양하') + '】\n' + b);
           } catch (e) { /* 한쪽이 막혀도 다른 쪽은 낸다 */ }
         }
@@ -144,10 +158,17 @@ function _answerCore(query, ctx) {
   /* ①-B 화면 밝기·소리 — 엔진이 «무엇을 하라»(deviceCmd)만 담고, 실행은 utils 한 벌이 한다.
        검수앱은 화면에서 이걸 불렀다. 콘앱 미르만 못 하던 것을 여기 한 자리로 모은다. */
   if (parsed && parsed.deviceCmd) {
-    try {
-      const r = runDeviceCmd(parsed.deviceCmd);
-      if (r) return r;
-    } catch (e) { console.warn('[미르] 화면 조절 실패:', e); }
+    /* ⛔ **여기서 함부로 실행하지 않는다.** 검수사 질문에 답하며 바로잡은 것 —
+         검수앱은 이 자리를 `useMemo` 안에서 지난다. useMemo 는 화면을 다시 그릴 때마다 도니
+         실행을 여기 두면 **밝기가 저절로 계속 올라간다.**
+       정본은 «해석은 엔진, 실행은 화면»(nlSearch 가 deviceCmd 를 다루는 원칙 그대로).
+       콘앱처럼 부작용을 여기서 처리해도 되는 곳만 `ctx.execDevice: true` 를 준다. */
+    if (c.execDevice) {
+      try {
+        const r = runDeviceCmd(parsed.deviceCmd);
+        if (r) return r;
+      } catch (e) { console.warn('[미르] 화면 조절 실패:', e); }
+    }
   }
 
   /* ② 브리핑 — 검수 자료. 엔진이 «알아듣기만» 하던 자리를 여기서 이어 준다. */
@@ -198,6 +219,14 @@ function _answerCore(query, ctx) {
         }
       }
     } catch (e) { /* 아래로 */ }
+  }
+
+  /* ③-C 잡담을 뒤에서 보는 앱(검수앱)은 여기서 본다 — 업무 질문을 다 거른 뒤다. */
+  if (c.smallTalkLast) {
+    try {
+      const st = mirSmallTalk(q);
+      if (st) return st;
+    } catch (e) { /* 잡담이 막혀도 안내는 나간다 */ }
   }
 
   /* ④ 용어 292선 · 실무지식 43개 — «22G1이 뭐야», «코너캐스팅».
