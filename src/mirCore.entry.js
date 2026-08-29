@@ -37,7 +37,7 @@ import { speak, stopSpeak } from './voice.js';
      ⛔ 새로 만들지 않는다 — 검수앱과 **같은 runDeviceCmd 한 벌**을 쓴다(단계·문구가 갈리면 안 된다). */
 import { runDeviceCmd } from './utils.js';
 import { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP } from './coneKnowledge.js';
-import { parseViewCommand } from './planCommand.js';
+import { parseViewCommand, pickVoyageKey } from './planCommand.js';
 
 /* 2.87-02: parseViewCommand 는 src/planCommand.js 한 벌로 옮겼다 — 검수앱 화면들과 같은 판정을 쓰기 위해서다.
    콘앱 번들은 여기서 그대로 다시 내보낸다(부르는 이름은 그대로). */
@@ -228,7 +228,7 @@ function _answerCore(query, ctx) {
 
 // 콘앱이 부르는 이름
 export { parseNaturalQuery, applyNLFilter, generateLocalAnswer, generateBriefing };
-export { parseViewCommand };
+export { parseViewCommand, pickVoyageKey };
 export { coneAnswer, coneBriefing, isConeQuery, CONE_QA_HELP };
 export { mirKnowledge, mirTone, mirSmallTalk };
 export { speak, stopSpeak, runDeviceCmd };

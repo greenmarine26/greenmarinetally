@@ -1,7 +1,7 @@
 // 그린마린 평택항 검수 — Master V1.1
 // TallyOne 1.0 (판2 팀K): 로그인 화면 강제 · 역할 게이트 · 해시 라우팅 수리(B-1/6/8/12)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';   // 1.41: useMemo — 접근 판정
-import { parseViewCommand } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
+import { parseViewCommand, pickVoyageKey } from './planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { APP_VERSION, _storage, SK , setLaneRoutes } from './utils.js';
 import {
   fbSubscribeVoyages, fbSubscribeInspectors, fbSetInspector,
@@ -77,25 +77,9 @@ export default function App() {
        라고 한 것이 ②다 — 열어 달라고 했는데 찾기까지 한 것이다.
      ⇒ 플랜 명령이고 배를 찾을 수 있으면 **아무 데도 가지 않고** 그 자리에서 덮개만 띄운다.
      ⚠ 배를 못 찾으면 종전대로 통합검색으로 넘긴다 — 엉뚱한 배를 여는 것보다 낫다. */
-  const _voyFromQuery = React.useCallback((q) => {
-    const t = String(q || '').toUpperCase();
-    const keys = Object.keys(voyages || {});
-    //  약자(키 앞부분) 먼저 — KSKM_2616N 의 KSKM. 그다음 선박명(info.vsl).
-    let hit = keys.filter((k) => t.includes(String(k).split('_')[0].toUpperCase()));
-    if (!hit.length) {
-      hit = keys.filter((k) => {
-        const v = String(voyages[k]?.info?.vsl || '').toUpperCase();
-        return v.length >= 3 && t.includes(v);
-      });
-    }
-    /* 2.87-03: 같은 약자로 두 항차가 열려 있으면(실측 TMPZ_2026E·TMPZ_2027E) 항차번호로 좁힌다.
-       그래도 못 좁히면 열지 않는다 — 엉뚱한 배를 여느니 미르가 되묻는 편이 낫다. */
-    if (hit.length > 1) {
-      const nar = hit.filter((k) => t.includes(String(k).split('_')[1].toUpperCase()));
-      if (nar.length === 1) hit = nar;
-    }
-    return hit.length === 1 ? hit[0] : null;
-  }, [voyages]);
+  const _voyFromQuery = React.useCallback(
+    (q) => pickVoyageKey(q, Object.keys(voyages || {}), (k) => voyages[k]?.info?.vsl),
+    [voyages]);
   const _askGlobal = React.useCallback((q) => {
     const text = typeof q === 'string' ? q : '';
     const cmd = parseViewCommand(text);

@@ -41,3 +41,37 @@ export function parseViewCommand(query) {
   if (!what) return null;
   return { mode, bay, what };
 }
+
+/**
+ * 질문에서 «어느 배냐»를 고른다. 검수앱은 항차 객체, 콘앱은 항차 배열이라 모양이 다르니
+ * **키 목록만** 받는다 — 그래야 두 앱이 같은 규칙으로 고른다.
+ *
+ * ★ 2.87-04 (검수사 2026-08-29 «콘앱도 선박명으로 메인에서 볼수있게 되겠져?»)
+ *   콘앱은 배를 먼저 손으로 고르지 않으면 «어느 배인지 먼저 골라 주세요» 로 끝났다.
+ *   검수앱 홈은 2.87-02 부터 질문 속 배 이름으로 찾아 여는데, 콘앱만 못 하면 쌍둥이 앱이 갈린다.
+ *
+ * @param keys   ['MCSC_635S', 'KSKM_2616N', ...]
+ * @param nameOf (key) => 선박명. 없어도 된다(약자로만 찾는다).
+ * @return 하나로 좁혀지면 그 키, 아니면 null — 엉뚱한 배를 여느니 안 여는 편이 낫다.
+ */
+export function pickVoyageKey(query, keys, nameOf) {
+  const t = String(query || '').toUpperCase();
+  const ks = (keys || []).map(String);
+  //  약자(키 앞부분) 먼저 — MCSC_635S 의 MCSC. 그다음 선박명.
+  let hit = ks.filter((k) => t.includes(k.split('_')[0].toUpperCase()));
+  if (!hit.length && typeof nameOf === 'function') {
+    hit = ks.filter((k) => {
+      const n = String(nameOf(k) || '').toUpperCase();
+      return n.length >= 3 && t.includes(n);
+    });
+  }
+  //  같은 약자로 두 항차가 열려 있으면(실측 TMPZ_2026E·TMPZ_2027E) 항차번호로 좁힌다.
+  if (hit.length > 1) {
+    const nar = hit.filter((k) => {
+      const p = k.split('_')[1];
+      return p && t.includes(p.toUpperCase());
+    });
+    if (nar.length === 1) hit = nar;
+  }
+  return hit.length === 1 ? hit[0] : null;
+}
