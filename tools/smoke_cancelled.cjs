@@ -9,15 +9,35 @@ const ROOT = process.argv[4] || process.cwd();
 let bad = 0; const T = (ok, why) => { if (!ok) { bad++; console.error('  ✗ ' + why); } };
 
 //  ── 판정 (실측 값 그대로) ──
-const pcsz = { planDis: 351, planLod: 0 };
+/*  ⚠ 2.87-05: 픽스처에 planSrc 를 넣는다. 실측 PCSZ 2626W 는 배정 **확정**(주황) 행이었고
+      수집기는 그때만 planSrc='plan' 을 붙인다(autoreg.decide_plan). 종전 픽스처엔 이 칸이 없어
+      «확정에서 온 0» 과 «예정이라 아직 0» 을 가리지 못했다 — 그 틈으로 ATPR 오탐이 나왔다. */
+const pcsz = { planSrc: 'plan', planDis: 351, planLod: 0 };
 const tw = { disPlan: 351, disDone: 120, lodPlan: 0, lodDone: 0 };
-T(U.sideCancelled(pcsz, 'loading', tw) === true, 'PCSZ 선적(배정 0·터미널 0)을 캔슬로 안 본다');
+T(U.sideCancelled(pcsz, 'loading', tw) === true, 'PCSZ 선적(배정 확정 0·터미널 0)을 캔슬로 안 본다');
 T(U.sideCancelled(pcsz, 'discharge', tw) === false, '양하 351대를 캔슬로 본다 — 오늘 일을 지운다');
-T(U.sideCancelled({ planDis: 918 }, 'loading', null) === false, '배정 수량이 **없는**(미상) 쪽을 캔슬로 본다 — 자료 미도착과 캔슬은 다르다');
-T(U.sideCancelled({ planLod: 0 }, 'loading', { lodPlan: 120 }) === false, '터미널이 선적 120대를 보고 있는데 캔슬로 본다');
-T(U.sideCancelled({ planLod: 0 }, 'loading', { lodPlan: 0, lodDone: 30 }) === false, '이미 30대 실었는데 캔슬로 본다');
-T(U.sideCancelled({ planLod: '0' }, 'loading', null) === true, '문자 «0» 을 못 알아본다(수집기가 문자로 넣을 수 있다)');
-T(U.sideCancelled({ planLod: 185 }, 'loading', null) === false, '선적 185대를 캔슬로 본다');
+T(U.sideCancelled({ planSrc: 'plan', planDis: 918 }, 'loading', null) === false, '배정 수량이 **없는**(미상) 쪽을 캔슬로 본다 — 자료 미도착과 캔슬은 다르다');
+T(U.sideCancelled({ planSrc: 'plan', planDis: 351, planLod: 0 }, 'loading', { lodPlan: 120 }) === false, '터미널이 선적 120대를 보고 있는데 캔슬로 본다');
+T(U.sideCancelled({ planSrc: 'plan', planDis: 351, planLod: 0 }, 'loading', { lodPlan: 0, lodDone: 30 }) === false, '이미 30대 실었는데 캔슬로 본다');
+T(U.sideCancelled({ planSrc: 'plan', planDis: 351, planLod: '0' }, 'loading', null) === true, '문자 «0» 을 못 알아본다(수집기가 문자로 넣을 수 있다)');
+T(U.sideCancelled({ planSrc: 'plan', planLod: 185 }, 'loading', null) === false, '선적 185대를 캔슬로 본다');
+
+/*  ── 2.87-05 회귀: 아직 안 들어온 배에 «전량 캔슬» 이 뜨면 안 된다 ──
+      검수사 실측 2026-08-30 ATPR 2639E — «이게 뭐죠?» · «입항예보가 있는데»
+      PORT-MIS «평택 항해중(입항예정)», 입항 08-30 19:00 인 배의 화면이 통째로 가려졌다.
+      그날 같은 오탐이 10항차 중 8척에 있었다(실 RTDB 대조). */
+T(U.sideCancelled({ planSrc: 'pilot|portmis', planDis: 0, planLod: 0 }, 'discharge', null) === false,
+  'ATPR 2639E — 도선·PORT-MIS 예정 등록의 0 을 캔슬로 본다(배정목록을 본 적도 없다)');
+T(U.sideCancelled({ planSrc: 'mail', planDis: 0, planLod: 0 }, 'discharge', null) === false,
+  'DXQD — 메일 출처의 0 을 캔슬로 본다');
+T(U.sideCancelled({ planSrc: 'portmis', planDis: 0, planLod: 0 }, 'loading', null) === false,
+  'TNJP — PORT-MIS 출처의 0 을 캔슬로 본다');
+T(U.sideCancelled({ planSrc: 'plan', planDis: 0, planLod: 0 }, 'discharge', null) === false,
+  'TMPZ 2026E — 양쪽 다 0(배정에 아직 안 적힘)을 캔슬로 본다. 그 배는 양하 EDI 74대가 와 있었다');
+T(U.sideCancelled({ planSrc: 'plan', planDis: 0, planLod: 200 }, 'discharge', null) === true,
+  '한쪽만 0(양하 0·선적 200)은 캔슬이다 — 이것까지 막으면 2.66 이 죽는다');
+T(U.sideCancelled({ planDis: 0, planLod: 200 }, 'discharge', null) === false,
+  'planSrc 가 아예 없으면 판정하지 않는다');
 
 //  ── 브리핑 (캔슬이면 허수를 세지 않는다) ──
 const list = [{ cn: 'A', pol: 'KRPTK', pod: 'CNSHA', iso: '22G1', fe: 'F' }, { cn: 'B', pol: 'KRPTK', pod: 'CNSHA', iso: '45R1', fe: 'F', rf: true }];

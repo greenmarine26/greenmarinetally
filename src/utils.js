@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.87-04'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
+export const APP_VERSION = 'TallyOne 2.87-05'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -3533,7 +3533,7 @@ export function overDims(c) {
     if (top > BOX_H_MM) {
       const d = top - BOX_H_MM;
       parts.push(`높이 +${d}mm(스프레더)`); short.push(`H+${cm(d)}`);
-      calc.push(`높이 ${H}${deck ? ` + 데크 ${deck}` : ''} = ${top} > ${BOX_H_MM}`);
+      calc.push(`높이 $»${deck ? ` + 데크 ${deck}` : ''} = ${top} > ${BOX_H_MM}`);
     }
   }
   if (W > BOX_W_MM) {
@@ -4513,11 +4513,42 @@ export function dayLabel(ms) {
 //    ⇒ 배정목록(정본)이 그 쪽 0 이고 터미널도 0 이면 **세지 않는다**. 자료는 지우지 않는다 —
 //      사본이 정본을 고칠 수 없고, 캔슬이 번복되면 배정목록이 먼저 알려 준다.
 //    ⚠ 배정 수량이 **없는**(null) 항차는 판정하지 않는다 — «미상» 과 «0» 은 다르다.
+/*  ★ 2.87-05 (검수사 실측 2026-08-30 ATPR 2639E — «이게 뭐죠?» · «입항예보가 있는데»)
+      **아직 안 들어온 배에 «전량 캔슬» 이 떴다.** 2.66 의 «미상은 판정 안 함» 은 옳았는데
+      **미상을 null 로만 봤다.** 도선·PORT-MIS 로 예정 등록할 때 planDis/planLod 가 **0 으로 적힌다** —
+      미상이 0 으로 둔갑해 캔슬로 읽혔다.
+      실측 ATPR: planSrc `pilot|portmis` · planDis 0 · planLod 0 · terminalStatus `planned` ·
+                 PORT-MIS «평택 항해중(입항예정)» · 입항 08-30 19:00 (아직 오지도 않았다).
+      같은 오탐이 그때 **10항차 중 8척**에 떠 있었다.
+
+    ⇒ 두 가지를 본다. 둘 다 «배정목록이 이 배 수량을 **적었는가**» 를 묻는 질문이다.
+
+    ① 배정목록이 **확정**일 때만 (`planSrc` 첫 조각 === 'plan')
+       수집기 계약이다 — `autoreg.decide_plan` 은 배정 행이 **주황(작업중)·초록(완료)** 일 때만
+       `'plan'` 을 돌려준다. 하늘색(예정)이면 도선이 이겨 `pilot`·`portmis` 가 붙는다.
+       검수사 원문(그 코드 주석) — *«배정목록은 계획이라 갱신이 늦다» 는 예정 행 이야기다.*
+       PCSZ 2626W 사건의 0 은 **확정** 0 이었다(지침서 기록). 그래서 그 건은 그대로 잡힌다.
+
+    ② 양하·선적이 **둘 다 0** 이면 판정 안 함
+       캔슬은 «한쪽 일이 없어지는 것»이다 — PCSZ 2626W 도 양하는 정상이고 선적만 0 이었다.
+       양쪽 다 0 인 배는 평택에서 아무 일도 안 한다는 뜻이라 배정목록에 남아 있을 이유가 없다.
+       그것은 캔슬이 아니라 **아직 안 적힌 것**이다.
+       실측으로도 갈렸다 — 0/0 인 넷(NSDC·RZOR·TMPZ 2026E·2027E)은 전부 입항 전이었고,
+       그중 TMPZ 2026E 는 **양하 EDI 74대가 이미 와 있는데** 화면이 통째로 가려지고 있었다.
+
+    ⚠ 이 값의 성격은 수집기가 못 박아 뒀다 — `terminal.py`:
+      *«이 수치는 근거 표시 전용이다 … 앱도 카운트 기준으로 쓰면 안 된다»*.
+      캔슬 판정은 «세는 것»이 아니라 «없다고 말하는 것»이라 더 엄해야 한다. */
 export function sideCancelled(info, mode, tw) {
   const key = mode === 'loading' ? 'planLod' : 'planDis';
   const raw = info && info[key];
   if (raw == null || raw === '') return false;          // 배정 미상 — 판정 안 함
   if (Number(raw) !== 0) return false;
+  //  ① 배정목록 확정에서 온 0 이 아니면 «아직 안 적힌 것»이다
+  if (String((info && info.planSrc) || '').split('|')[0] !== 'plan') return false;
+  //  ② 양쪽 다 0 이면 캔슬이 아니라 미기재다
+  const other = mode === 'loading' ? (info && info.planDis) : (info && info.planLod);
+  if (other != null && other !== '' && Number(other) === 0) return false;
   if (tw) {                                             // 터미널이 일감을 보고 있으면 캔슬이 아니다
     const tp = Number(mode === 'loading' ? tw.lodPlan : tw.disPlan) || 0;
     const td = Number(mode === 'loading' ? tw.lodDone : tw.disDone) || 0;

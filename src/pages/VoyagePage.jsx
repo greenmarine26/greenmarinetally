@@ -1507,7 +1507,8 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       {_sideCanc && (
         <div className="mx-3 lg:mx-0 rounded-card border border-st-bad/50 bg-st-bad/10 px-4 py-6 text-center">
           <div className="text-2xl font-black text-st-badHi">⛔ 이번 항차 {mode === 'discharge' ? '양하' : '선적'} 전량 캔슬</div>
-          <div className="text-sm2 text-dim-200 mt-2">배정목록 {mode === 'discharge' ? '양하' : '선적'} <b>0대</b> — 이 배에 실을 화물이 없습니다.</div>
+          {/* 2.87-05: 문구 오기 — 양하인데 «실을 화물» 이라고 적혀 있었다. 양하는 **내리는** 일이다. */}
+          <div className="text-sm2 text-dim-200 mt-2">배정목록 {mode === 'discharge' ? '양하' : '선적'} <b>0대</b> — 이 배에서 {mode === 'discharge' ? '내릴' : '실을'} 화물이 없습니다.</div>
           <div className="text-xs2 text-dim-400 mt-3 leading-relaxed">
             받아 둔 리스트·EDI 는 <b>세지도 보여주지도 않습니다</b> — 그 컨테이너들은 다른 배에 실리므로<br/>
             여기 남겨 두면 컨번호 조회에 두 배가 걸립니다.<br/>
