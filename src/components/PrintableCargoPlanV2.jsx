@@ -925,6 +925,18 @@ export default function PrintableCargoPlanV2({
   const zoomRef = useRef(1);
   zoomRef.current = zoom;
   const [rotated, setRotated] = useState(false);
+  /* ⛔ 2.11-02 (검수사 실측 «잘 보였다가 화면이 바뀝니다») —
+       **회전이 걸린 뒤에 다시 재면 가로·세로가 뒤바뀌어 잡힌다.**
+       getBoundingClientRect() 는 «돌아간 뒤의 바깥 상자»를 주기 때문이다.
+       그 값을 그대로 자연 크기로 쓰면 판정이 뒤집혀, 처음엔 제대로 나왔다가 250ms 뒤 틀어졌다.
+       → 잴 때마다 «지금 돌아 있는가»를 보고 되돌려서 읽는다. */
+  const rotRef = useRef(false);
+  rotRef.current = rotated;
+  const natSize = (pg, z) => {                 // 언제 재도 «안 돌아간 상태»의 크기를 준다
+    const r = pg.getBoundingClientRect();
+    const rot = rotRef.current;
+    return { w: (rot ? r.height : r.width) / z, h: (rot ? r.width : r.height) / z };
+  };
   //  돌릴 때 밀어 줄 거리 = 문서의 «자연 높이». 상수로 박으면 CSS(.cpv2-page height)가 바뀔 때 어긋난다.
   const [natH, setNatH] = useState(737);
   //  화면이 세로인데 문서가 가로면 돌린다. 둘 다 세로거나 둘 다 가로면 그대로가 크다.
@@ -933,9 +945,8 @@ export default function PrintableCargoPlanV2({
     try {
       const pg = document.querySelector('.cpv2-overlay .cpv2-page');
       if (!pg) return null;
-      const r = pg.getBoundingClientRect();
       const z = zoomRef.current || 1;
-      const w = r.width / z, h = r.height / z;      // scale 을 되나눠 «자연 크기»를 얻는다(DOM 을 건드리지 않는다)
+      const { w, h } = natSize(pg, z);              // scale·회전을 되돌린 «자연 크기»
       if (!(w > 0 && h > 0)) return null;
       const bar = document.querySelector('.cpv2-overlay .cpv2-noprint');
       const barH = bar ? bar.getBoundingClientRect().height + 12 : 44;
@@ -962,8 +973,8 @@ export default function PrintableCargoPlanV2({
       try {
         const pg = document.querySelector('.cpv2-overlay .cpv2-page');
         if (pg) {
-          const r = pg.getBoundingClientRect(), z = zoomRef.current || 1;
-          const w = r.width / z, h = r.height / z;
+          const z = zoomRef.current || 1;
+          const { w, h } = natSize(pg, z);
           if (h > 0) setNatH(h);
           setRotated(shouldRotate(w, h));
         }
