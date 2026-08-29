@@ -45,32 +45,68 @@ function bayRange(r) {
 
 /** 콘 작업 브리핑 — 검수 브리핑과 같은 짜임(한 줄 요약 → 할 일)으로 낸다.
  *  검수사 «콘앱에서 브리핑해줘 하면 콘앱 자료를». */
-export function coneBriefing(cone) {
+export function coneBriefing(cone, opts) {
   const rows = (cone && cone.rows) || [];
   if (!rows.length) return null;
+  const o = opts || {};
 
-  const totalOf = (k) => rows.reduce((a, r) => a + (r[k] ? r[k].diff * PER_OF[k] : 0), 0);
-  const need = [];
-  const back = [];
+  /* ★ 2.16 (검수사 확정 2026-08-29) — *«브리핑 말그대로 그날 할일을 요약해주는 것입니다.
+       계산기 대신 답하라는것만은 아닙니다»*
+     2.15 까지는 콘 가감표를 말로 옮긴 것에 지나지 않았다. 콘 작업자가 배에 오르기 전에
+     «오늘 뭘 하는지» 를 한 장으로 알아야 한다.
+     짜임은 검수앱 브리핑(generateBriefing)의 결을 그대로 따른다 —
+       한 줄 요약 → 작업 내역 → 주의사항 → 다음에 물을 말. */
+
+  const nd = (cone && cone.dischRows || []).length;
+  const nl = (cone && cone.stowRows || []).length;
+  const nShift = o.shiftN || 0;
+
+  //  콘은 «곳 수 × 곳당 개수». need·have·diff 는 곳 수이고 PER_OF 가 곳당 개수다.
+  const sum = (k, f) => rows.reduce((a, r) => a + (r[k] ? f(r[k]) * PER_OF[k] : 0), 0);
+  const needTot = {}, haveTot = {}, diffTot = {};
+  for (const k of KINDS) {
+    needTot[k] = sum(k, (x) => x.need);
+    haveTot[k] = sum(k, (x) => x.have);
+    diffTot[k] = sum(k, (x) => x.diff);
+  }
+
+  const bays = rows.map((r) => r.bay).join(', ');
+  const take = [], back = [];
   for (const r of rows) {
     for (const k of KINDS) {
       const d = r[k] ? r[k].diff * PER_OF[k] : 0;
-      if (d > 0) need.push('베이 ' + r.bay + ' ' + KIND_NAME[k] + ' ' + d + '개');
+      if (d > 0) take.push('베이 ' + r.bay + ' ' + KIND_NAME[k] + ' ' + d + '개');
       else if (d < 0) back.push('베이 ' + r.bay + ' ' + KIND_NAME[k] + ' ' + (-d) + '개');
     }
   }
-  const sum = KINDS.map((k) => {
-    const t = totalOf(k);
-    return KIND_NAME[k] + ' ' + (t > 0 ? '+' + t : t < 0 ? String(t) : '0');
-  }).join(' · ');
 
   const L = [];
-  const headWarn = need.length ? ' — 가져갈 콘 ' + need.length + '건' : (back.length ? ' — 반납 ' + back.length + '건' : '');
-  L.push('📋 콘 작업 브리핑 — 베이 ' + rows.length + '곳' + headWarn);
-  L.push('📌 가감: ' + sum + '  (곳당이 아니라 총개수)');
-  if (need.length) L.push('⚠ 가져갈 것 — ' + need.join(', '));
+  //  ① 한 줄 요약 — 오늘 무엇을 얼마나 하는가
+  const head = [];
+  if (nd) head.push('내림 ' + nd);
+  if (nl) head.push('실음 ' + nl);
+  const total = nd + nl;
+  L.push('📋 콘 작업 브리핑' + (o.vsl ? ' — ' + o.vsl : '')
+    + (total ? ' · ' + head.join(' + ') + ' = ' + total + '대' : ''));
+
+  //  ② 콘 총수량 — «가감»이 아니라 «몇 개 다는가». 이것이 없어 계산기를 다시 열어야 했다.
+  const coneLine = KINDS.map((k) => {
+    if (!needTot[k] && !haveTot[k]) return null;
+    return KIND_NAME[k] + ' ' + needTot[k] + '개';
+  }).filter(Boolean);
+  if (coneLine.length) L.push('📌 필요한 콘: ' + coneLine.join(' · '));
+
+  //  ③ 어디서 하는가
+  L.push('📌 작업 베이: ' + rows.length + '곳 — ' + bays);
+
+  //  ④ 챙길 것 / 돌려줄 것
+  if (take.length) L.push('⚠ 가져갈 것 — ' + take.join(', '));
   if (back.length) L.push('↩ 반납할 것 — ' + back.join(', '));
-  if (!need.length && !back.length) L.push('· 변동 없습니다 — 배에 있는 콘 그대로 씁니다.');
+  if (!take.length && !back.length) L.push('· 콘 변동 없습니다 — 배에 있는 것 그대로 씁니다.');
+
+  //  ⑤ 알아 둘 것
+  if (nShift) L.push('· 시프팅 ' + nShift + '대 포함 — 내렸다 다시 싣는 것이라 콘도 두 번 만집니다.');
+
   L.push('\n"모자란 데" · "남는 데" · "5번 베이" 로 더 물어보세요');
   return L.join('\n');
 }
@@ -94,7 +130,7 @@ export function coneAnswer(qRaw, cone) {
   const kind = /데크/.test(t) ? 'deck' : (/코끼리/.test(t) ? 'ele' : (/홀드/.test(t) ? 'hold' : null));
 
   // 브리핑 — 검수사 요청으로 2.13 신설
-  if (/브리핑|요약\s*해|정리\s*해/.test(t)) return coneBriefing(cone);
+  if (/브리핑|요약\s*해|정리\s*해/.test(t)) return coneBriefing(cone, cone && cone._opts);
 
   /* ★ 2.15 — «작업량» 은 **컨테이너 대수**다. 콘 가감으로 답하지 않는다.
        ⚠ 처음엔 682 를 «현장에 없는 수치» 로 잘못 봤다. 검수사 정정 —

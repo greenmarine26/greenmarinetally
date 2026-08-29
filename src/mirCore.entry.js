@@ -79,8 +79,27 @@ function _answerCore(query, ctx) {
   if (c.cone && (app === 'cone' || isConeQuery(q))) {
     try {
       if (parsed && parsed.briefingQuery) {
-        const b = coneBriefing(c.cone);
-        if (b) return b;
+        /* ★ 2.16 — 콘앱 브리핑 = **검수 브리핑 + 콘 몫**.
+             검수사가 검수앱 미르 브리핑을 보이며 *«미르는 정말 똑똑합니다»* —
+             리퍼가 어느 베이인지, 통과화물이 작업 베이에 섞였는지는 **콘 작업에 그대로 필요하다.**
+             그래서 검수앱 것(generateBriefing)을 그대로 부르고 콘 몫을 얹는다.
+             ⛔ 새로 쓰지 않는다 — 새로 쓰면 그날부터 브리핑이 두 벌이 된다. */
+        const parts = [];
+        const cs2 = c.containers || [];
+        for (const m of ['discharge', 'loading']) {
+          const sub = cs2.filter((x) => (m === 'loading' ? x._mode === 'loading' : x._mode !== 'loading'));
+          if (!sub.length) continue;
+          try {
+            const b = generateBriefing(sub, m === 'loading' ? '선적' : '양하', m, null, c.pier || '', c.opts || null);
+            if (b) parts.push('【' + (m === 'loading' ? '선적' : '양하') + '】\n' + b);
+          } catch (e) { /* 한쪽이 막혀도 다른 쪽은 낸다 */ }
+        }
+        const cb = coneBriefing(c.cone, { vsl: c.vslFull || c.vsl || '', shiftN: c.shiftN || 0 });
+        if (cb) parts.push('【콘】\n' + cb);
+        if (parts.length) {
+          const head = (c.vslFull || c.vsl) ? (c.vslFull || c.vsl) + '\n' : '';
+          return head + parts.join('\n\n');
+        }
       }
       const a = coneAnswer(q, c.cone);
       if (a) return a;
