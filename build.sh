@@ -157,6 +157,21 @@ node_modules/.bin/esbuild src/coneCargoPlan.entry.jsx --bundle --outfile=public/
 cp public/cone-cargoplan.js dist/ 2>/dev/null || true
 cp public/cone-cargoplan.js ./
 echo "✓ cone-cargoplan.js 생성·복사 ($(du -h public/cone-cargoplan.js | cut -f1))" 
+# ★ ConeOne 2.13: 미르 본체 번들 — 검수앱 엔진 + 콘 지식을 콘앱이 쓰게 한다.
+#   ⛔ `export * from utils.js` 로 싸지 마라 — **xlsx 엑셀 라이브러리 1,219KB** 가 딸려온다(실측).
+#     mirCore.entry.js 가 쓰는 것만 골라 import 하고 있으니 그 원칙을 깨지 말 것.
+#   ⚠ React 를 안 싣는다(엔진이 순수 JS다) — 그래서 카고플랜 번들보다 훨씬 작다.
+echo "[+] 미르 본체 번들 생성 (mir-core.js)..."
+node_modules/.bin/esbuild src/mirCore.entry.js --bundle --outfile=public/mir-core.js \
+  --format=iife --global-name=ConeMir --loader:.js=jsx --jsx=automatic \
+  --define:process.env.NODE_ENV='"production"' --minify --target=es2017 --log-level=error
+cp public/mir-core.js dist/ 2>/dev/null || true
+cp public/mir-core.js ./
+_MIRKB=$(du -k public/mir-core.js | cut -f1)
+echo "✓ mir-core.js 생성·복사 (${_MIRKB} KB)"
+if [ "$_MIRKB" -gt 900 ]; then
+  echo "  ⚠ 미르 번들이 900KB를 넘었다 — xlsx 같은 것이 딸려 들어왔는지 --analyze 로 확인할 것"
+fi
 # M7.18b: sw.js·manifest도 루트로 복사. 이게 빠져서 루트 sw.js가 V7.13에 멈춰
 #   새 배포해도 캐시 무효화가 안 되던 문제 해결. 서비스워커 버전 갱신은 루트 sw.js 기준.
 [ -f dist/sw.js ] && cp dist/sw.js ./ && echo "  ✓ 루트 sw.js 갱신 (캐시 무효화 반영)"
