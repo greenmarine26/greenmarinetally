@@ -333,7 +333,14 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
     eat(uni20, false); eat(uni40, true);
     // 1.95 (검수사 확정 «빈 칸 수 유지 + 병기» — SWSP 실측: 자동 94 vs 수동 103, 9대가 계획과 다른 자리에 실림):
     //   자동 가이드와 같은 기준(미완 컨 머릿수)을 contLeft 로 같이 센다 — 버튼에 «빈 칸 N · 남은 컨 M» 병기.
-    workList.forEach(c => {
+    /* ★ 2.88-02 (검수사 «수동작업시 베이 사라짐 · 앱은 이중인격자인가») —
+         **자동과 같은 큐를 본다.** 자동은 `_ptk || _shift`(GuidedWorkPanel:214 `_isWork`)인데
+         수동은 `_ptk` 만 봤다. 38번 데크에 실을 16대가 **전부 시프팅**이라(내렸다 다시 싣는 것)
+         수동 모집단에 아예 없었고, 그래서 빈 칸도 남은 컨도 0 이 되어 목록에서 사라졌다.
+       ⚠ 빈 칸(count)은 **종전 그대로 평택 계획 자리**로 센다 — 검수사 확정 «카운트는 섞지 않는다».
+         여기서 넓히는 것은 «남은 컨»(contLeft) 하나뿐이고, 그것이 자동이 세는 것과 같은 수다. */
+    const contList = allContainers.filter(c => c._mode === workFilter && (c._ptk || c._shift));
+    contList.forEach(c => {
       if (c._comp) return;
       const b = parseInt(c.bay, 10);
       const o = occ.get(`${Number.isFinite(b) ? b : c.bay}/${c.row}/${c.tier}`);
