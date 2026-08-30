@@ -13,7 +13,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor, buildOccupancy, posKey } from '../utils.js';   // 2.89-03: 점유 판정 한 벌   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -212,9 +212,22 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   //   ⚠ 넓히는 것은 **큐 입력 여기뿐**이다. `_shift` 컨의 `_ptk` 는 false 로 두어
   //     집계·마감텔리·수석 대시보드는 종전 그대로 둔다(검수사 확정 «카운트는 섞지 않는다»).
   const _isWork = (c) => !!(c._ptk || c._shift);
-  const remaining = useMemo(
-    () => allContainers.filter(c => c._mode === mode && _isWork(c) && !c._comp && c.bay && c.row && c.tier),
+  /* ★ 2.89-03 (검수사 2026-08-30 «수동이 한걸 자동이 모릅니다. 자동은 수동을 무시합니다») —
+       수동(번호 수정·직접 입력)이 계획 칸을 **다른 실컨으로 채워 완료**해도 계획 컨은 완료가 아니라서,
+       자동 큐가 이미 찬 칸을 또 내밀었다(실측 MCSC 38번 82단 — 5660 실은 칸에 계획컨 1603 재제시).
+       칸이 완료 실물로 찼으면 그 칸의 계획 컨은 이름을 빌려준 것(§5-Y-B) — 남은 작업이 아니다.
+       점유 판정은 buildOccupancy·posKey 한 벌(수동 SearchPanel 273행과 동일 소스). */
+  const _occDone = useMemo(
+    () => buildOccupancy(allContainers.filter(c => c._mode === mode), (c) => !!c._comp),
     [allContainers, mode]
+  );
+  const remaining = useMemo(
+    () => allContainers.filter(c => {
+      if (!(c._mode === mode && _isWork(c) && !c._comp && c.bay && c.row && c.tier)) return false;
+      const o = _occDone.get(posKey(c));
+      return !(o && o.done && o.cn !== c.cn);   // 완료 실물이 찬 칸의 계획 컨 제외
+    }),
+    [allContainers, mode, _occDone]
   );
   const modeAll = useMemo(
     () => allContainers.filter(c => c._mode === mode && _isWork(c) && c.bay),

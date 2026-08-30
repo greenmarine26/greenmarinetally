@@ -113,8 +113,12 @@ export default function PositionEditModal({
     const planView = src.map(c => (c && c._bay_planned
       ? { ...c, _edi_bay: c._bay_planned, _edi_row: c._row_planned, _edi_tier: c._tier_planned }
       : c));
+    /* ★ 2.89-03 (검수사 2026-08-30 «직접입력 말고 수동에서도 빈 좌표 선택이 되어야 합니다») —
+         `_ptk !== false` 가 시프팅(_shift) 행의 칸을 우주에서 버려, 재선적 칸뿐인 베이(B38 데크)는
+         «남은 자리가 없습니다 — 직접 입력을 사용하세요» 로 떨어졌다. 큐·목록과 같은 규칙으로 넓힌다
+         (_ptk || _shift — 1.76-05 원칙 «입력 쪽에서만 넓힌다»). */
     return buildSlotUniverse([...src, ...planView],
-      c => c._mode === container._mode && c._ptk !== false && is20(c) === targetIs20);
+      c => c._mode === container._mode && (c._ptk !== false || c._shift) && is20(c) === targetIs20);
   }, [open, container, slotSource, allContainers]);
 
   // 1.55: 지금 그 칸에 실제로 있는 컨 — 키는 `bay/row/tier`, 값은 `{ cn, done }`.
