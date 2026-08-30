@@ -7,7 +7,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseViewCommand } from '../planCommand.js';   // 2.87-02: 플랜 명령 판정 한 벌
 import { Search as SearchIcon, X, Volume2, VolumeX, Mic, MicOff, Truck, AlertOctagon, Snowflake, AlertTriangle, Check, RotateCcw, Sparkles, Loader2, Link2, HelpCircle, SendHorizontal } from 'lucide-react';   // TallyOne 1.22: 전송키
 import { parseSpokenDigits, speak, speakLong, stopSpeak, spellKo, fixSpeechDomain, pickSpeechAlternative, speakDone } from '../voice.js';   // 2.65: speakLong — 브리핑 낭독
-import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
+import { isoToLabel, fmtPos, isPyeongtaekPort, resolveShipKey, computeShiftingMapCached, shiftingMapForDisplay, effectivePos, formatWt, seqFullConfirmText, buildSlotUniverse, buildOccupancy, getEquipNumber, ediMapFromRaw, applySwapFix, swapFixList, fullContainerNo, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // TallyOne 1.53: 위치 판정은 effectivePos 하나로 · 트윈 안내 무게   // 1.54: 시퀀스 되묻기 문구(한 벌)
 import { parseNaturalQuery, applyNLFilter, describeQuery, hasAnyCondition, generateLocalAnswer, generateBriefing, briefingVoiceLines, generateSealAuditAnswer, generateIntroAnswer, generateTimeAnswer, generateWakeAnswer, generatePilotAnswer, generateTwinCheckAnswer, generateHandover, generateFoodAnswer, answerAboutAlert, generateHowToAnswer, isRealtimeProgressQuery, formatTerminalWorkAnswer, formatAppTallyAnswer, needsModeChoice, generateContactAnswer } from '../nlSearch.js';   // 1.23: answerAboutAlert · 1.65: generateHowToAnswer · 2.41: 선박 연락처
 import { useCarrierContacts, useShipSpeed } from '../useCarrierContacts.js';   // 1.89·1.92
 import { answerDataArrival, isDataArrivalQuery, answerPlanOutlook, answerPlanOutlookBoth, isPlanOutlookQuery, outlookModeOf, answerShipSpeed, isSpeedQuery, buildGangShift, gangBriefLines, answerGangShift } from '../chiefAnswers.js';   // 1.90·1.91·1.92 · 2.62 갱 배분
@@ -119,11 +119,12 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   }, [shiftMapAll, _rawSig]);
 
   const allContainers = useMemo(() => {
+    const _sw = swapFixList(voyage);   // 2.89-05: 맞교환 겹침 — 이 풀만 안 겹쳐 «자리 뺏김 20» 허깨비 그룹이 떴다
     const arr = [];
     ['discharge', 'loading'].forEach(m => {
       const sec = voyage?.[m];
       if (!sec) return;
-      const ediMap = sec.ediContainers || {};
+      const ediMap = applySwapFix(sec.ediContainers || {}, _sw);   // 2.89-05
       const recMap = sec.records || {};
       const xrayMap = sec.xrayList || {};
       const xraySeals = sec.xraySeals || {};
@@ -540,13 +541,13 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
             {manualGroups.map(g => g.noBay ? (
               <button key="nobay" onClick={() => { setManualBay(g.center); setManualTier('none'); }}
                 className="py-3 rounded-pill bg-amber-950/60 hover:bg-amber-800 border border-amber-600 text-amber-100 col-span-3">
-                <div className="font-bold text-base">⚠ 자리 미지정{g.displaced ? '·자리 뺏김' : ''}</div>
-                <div className="text-2xs text-amber-300">남은 {g.count}대{g.displaced ? ` (자리 뺏김 ${g.displaced} — 원자리에 다른 컨이 실렸습니다)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
+                <div className="font-bold text-base">⚠ 자리 미지정{g.displaced ? '·이름표 내려옴' : ''}</div>
+                <div className="text-2xs text-amber-300">남은 {g.count}대{g.displaced ? ` (이름표 내려옴 ${g.displaced} — 계획 칸에 실물이 실렸고 이 컨은 창고에 있습니다)` : ' — 리스트엔 있는데 적부 좌표가 없습니다'}</div>
                 <div className="text-2xs text-dim-300 mt-0.5">눌러서 목록 → 🅿 베이 빈자리에 배치</div>
                 {g.swapHints && g.swapHints.length > 0 && (
                   <div className="mt-1 text-left text-2xs text-emerald-300 mono">
                     {g.swapHints.slice(0, 6).map(h => (
-                      <div key={h.l4}>🔁 {h.l4} → {h.to} (뺏은 컨 {h.taker}의 원자리)</div>
+                      <div key={h.l4}>🔁 {h.l4} → {h.to} (그 칸을 채운 {h.taker}의 계획 자리)</div>
                     ))}
                     {g.swapHints.length > 6 && <div>… 외 {g.swapHints.length - 6}건</div>}
                   </div>

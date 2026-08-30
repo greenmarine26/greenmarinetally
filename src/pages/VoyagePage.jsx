@@ -637,11 +637,12 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   - ISO, rf, fe, dg, bay/row/tier 등 핵심 필드는 EDI 절대 우선
   //   - 리스트가 EDI 리퍼를 일반 컨으로 덮어쓰는 사고 방지
   const containersBase = useMemo(() => {
+    const _swL = swapFixList(voyage);   // 2.89-05: 맞교환 겹침 — 리스트·현황요약도 같은 한 벌
     const merged = {};
     // V8.86: 컨번호 없는 EDI = '실제 자리'(규격·자리 확정, 컨번호 미지정 — 예: 터미널 PRE) →
     //   컨번호 키로 뭉개지 말고 자리별 __SLOT_ 키로 각각 유지(그림에 그려지고, 별첨·검수집계에선 제외).
     let _slotSeq = 0;
-    Object.values(ediMap).forEach(c => {
+    Object.values(applySwapFix(ediMap, _swL)).forEach(c => {
       if (!isPtk(c)) return;
       if (c.cn) { merged[c.cn] = { ...c, _src: 'edi' }; return; }
       let k = `__SLOT_${c.bay || ''}_${c.row || ''}_${c.tier || ''}`;
@@ -845,7 +846,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       });
     }
     return baseContainers;
-  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap]);   // 1.76-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다
+  }, [ediMap, recMap, mode, sec.extras, shiftingConfirmed, fullEdiMap, voyage?.swapFix]);   // 1.76-05 · 2.89-05: 시프팅(확정)이 리스트에 들어가려면 의존에 있어야 한다
 
   // V9.03: 검수 리스트/검색/출력허브용 목록에 긴급/수화물 마커 주입
   const containers = useMemo(
