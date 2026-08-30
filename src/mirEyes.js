@@ -198,6 +198,15 @@ function sayCard(card, n, pier) {
 //    ⚠ `completed.equip` 은 선택 필드라 빈 기록이 있다 — 내 갱 기록이 하나도 없으면 갱을 안 가린다
 //      (혼자 작업하는 배·옛 기록에서 이어가기가 죽지 않게).
 // ─────────────────────────────────────────────────────────────────────────────
+/* ★ 2.88 (검수사 지시 2026-08-30) — 커버 상태를 읽는 한 벌.
+     검수사 — *«수동 보고를 하면 자동가이드 사용시 커버가 열린줄도 닫힌줄도 모른단 겁니다»*
+   커버는 배에 하나뿐이라 모드로 갈리지 않는다. 새 키(모드 없음)를 먼저 보고,
+   없으면 옛 키(`loading_N`·`discharge_N`)를 **양쪽 다** 받아 준다. */
+function _hatchState(info, center) {
+  const hd = (info && info.hatchDone) || {};
+  return hd[String(center)] ?? hd[`loading_${center}`] ?? hd[`discharge_${center}`];
+}
+
 export function mirSee(q, ctx) {
   const text = String(q || '').trim();
   if (text.length < 2) return null;
@@ -254,7 +263,7 @@ export function mirSee(q, ctx) {
         if (left.length) {
           center = lc; pool = left;
           const dk = left.filter((c) => parseInt(c.tier, 10) >= 80).length;
-          const st = (info.hatchDone || {})[`${mode}_${lc}`];
+          const st = _hatchState(info, lc);   // 2.88: 커버는 모드로 갈리지 않는다
           //  번호는 **이 묶음 기준**이다 — 배 전체 통산으로 세면 남의 갱이 내린 것까지 번호에 들어가
           //  「4번째」가 이 베이의 2번째를 가리키게 된다(실측에서 바로 헷갈렸다).
           goneHere = doneAll.filter((x) => centerOf(x.c.bay) === lc).length;
@@ -288,7 +297,7 @@ export function mirSee(q, ctx) {
           + `  데크부터입니다 — «${wish.bay}번 베이 데크» 라고 하시면 순서를 부르겠습니다.`;
       }
       if (!holdLeft) return `${lbl} 홀드 — 남은 것이 없습니다.`;
-      const st = (info.hatchDone || {})[`${mode}_${center}`];
+      const st = _hatchState(info, center);   // 2.88: 커버는 모드로 갈리지 않는다
       if (st !== 'open') head = `${lbl} 홀드 — 데크는 비었습니다. **커버는 열렸나요?** (앱에 열림 기록이 아직 없습니다)`;
       else head = `${lbl} 홀드 — 커버 열림 기록 있음. 시작합니다.`;
       pool = inGroup.filter((c) => parseInt(c.tier, 10) < 80);

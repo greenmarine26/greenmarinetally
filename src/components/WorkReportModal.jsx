@@ -331,12 +331,16 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     //   (검수사 신고 2026-08-05 — STMJ 2644W 베이 18을 수동으로 CLOSE 했는데 또 물음).
     //   ⚠ 실패해도 보고 자체는 이미 나갔으므로 막지 않는다. 다만 조용히 넘기지는 않는다.
     try {
-      const mode = equipModeOf(equip) === 'loading' ? 'loading' : 'discharge';
+      /* ★ 2.88 — 키에서 **모드를 뺀다**. 커버는 배에 하나뿐이다.
+           종전엔 `{mode}_{center}` 였고 그 mode 는 **장비**로 정했다(equipModeOf). 그래서
+           선적 중에 닫아도 장비가 양하로 잡히면 `discharge_38` 로 들어갔고, 선적 화면은
+           `loading_38` 을 찾아 **닫은 커버를 못 봤다**(실측 MCSC 633N 15:28).
+         ⚠ 옛 키는 지우지 않는다 — 읽는 쪽이 폴백으로 받는다. */
       const prev = voyage?.info?.hatchDone || {};
       const next = { ...prev };
       for (const b of bays) {
         const center = bayGroupCenter(b, bayPairsForHatch);
-        if (center != null) next[`${mode}_${center}`] = hatchAction;
+        if (center != null) next[String(center)] = hatchAction;
       }
       if (Object.keys(next).length !== Object.keys(prev).length ||
           JSON.stringify(next) !== JSON.stringify(prev)) {

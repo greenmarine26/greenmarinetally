@@ -231,10 +231,36 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
 
   // V7.99-9 (메모10): 해치 처리 영속 상태 — voyage.info.hatchDone["{mode}_{center}"] = 'open'|'close'
   //   모드 전환으로 재마운트돼도 voyage prop은 유지되므로 프롬프트가 다시 안 뜬다.
-  const hatchKeyOf = (center) => `${mode}_${center}`;
+  /* ★ 2.88 (검수사 지시 2026-08-30) — **커버는 배에 하나뿐이다. 모드로 가르지 않는다.**
+       검수사 — *«수동 보고를 하면 자동가이드 사용시 커버가 열린줄도 닫힌줄도 모른단 겁니다»*
+     실측 MCSC 633N — 15:28 에 **선적 작업 중** 38번 커버를 닫았는데 장비(4호기)가 양하로 잡혀
+     `discharge_38` 로 저장됐다. 선적 화면은 `loading_38` 을 찾으니 없다. 그래서 닫은 커버를
+     열린 것으로 알고 데크를 못 열었다(검수사 메모 «데크 선적해야 하는데 데크에 안보인다»).
+     ⇒ 키에서 모드를 뺀다. 옛 키는 읽기에서만 받아 준다(이미 쌓인 기록을 버리지 않는다). */
+  const hatchKeyOf = (center) => String(center);
+  /*  reports 는 시간순 사실이다 — **마지막 보고가 곧 지금 상태**다. */
+  const lastHatchAction = (center) => {
+    const reps = voyage?.reports;
+    if (!reps) return null;
+    let act = null, bestTs = -1;
+    for (const r of Object.values(reps)) {
+      if (!r || r.type !== 'hatch') continue;
+      const bs = Array.isArray(r.bays) ? r.bays : [];
+      if (!bs.some((b) => groupCenterOf(b) === center)) continue;
+      const ts = Number(r.ts) || 0;
+      if (ts >= bestTs) { bestTs = ts; act = r.action; }
+    }
+    return act;
+  };
   const isHatchDoneSaved = (center, action) => {
     if (center == null) return false;
-    if (voyage?.info?.hatchDone?.[hatchKeyOf(center)] === action) return true;
+    //  ① 보고 기록(시간순 마지막)이 진실이다
+    const last = lastHatchAction(center);
+    if (last) return last === action;
+    //  ② 보고가 없으면 표시를 본다 — 새 키(모드 없음) → 옛 키(모드별) 순
+    const hd = voyage?.info?.hatchDone || {};
+    const v = hd[String(center)] ?? hd[`loading_${center}`] ?? hd[`discharge_${center}`];
+    if (v === action) return true;
     // TallyOne 1.8-10: **보고 기록으로 소급 인식**한다.
     //   검수사 지적 2026-08-05 — "닫았는데 또 닫았다는 이야기인데 맞질 않습니다."
     //   1.8-09 는 앞으로의 수동 보고만 hatchDone 에 찍는다. 그러면 이미 보낸 옛 보고
@@ -247,7 +273,7 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
     if (reps) {
       for (const r of Object.values(reps)) {
         if (!r || r.type !== 'hatch' || r.action !== action) continue;
-        if (r.mode && r.mode !== mode) continue;
+        //  2.88: r.mode 로 거르지 않는다 — 커버는 배의 상태 하나다. 이 줄이 위 사고의 자리였다.
         const bs = Array.isArray(r.bays) ? r.bays : [];
         if (bs.some(b => groupCenterOf(b) === center)) return true;
       }
