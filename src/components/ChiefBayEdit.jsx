@@ -7,7 +7,7 @@
 //   저장 경로는 종전 그대로: 실체위치 fbSetActualPosition / 임시창고 fbBatchMoveToStorage.
 //   → 검수사 화면·실선적 EDI 근거(records.bay_actual)의 의미는 바뀌지 않는다.
 import React, { useMemo, useState, useCallback } from 'react';
-import { isoToLabel, isPyeongtaekPort, fullEdiMapOf } from '../utils.js';
+import { isoToLabel, isPyeongtaekPort, fullEdiMapOf, applySwapFix, swapFixList } from '../utils.js';
 import { fbSetActualPosition, fbBatchMoveToStorage, STORAGE_BAY } from '../firebase.js';
 import BayGridEditor from './BayGridEditor.jsx';
 import * as P from '../planEditCore.js';
@@ -31,8 +31,8 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
   const sec = voyage?.[mode] || {};
   // V9.07-03: 통과화물 포함 — ediContainers엔 다른 항에서 실린 화물이 없어
   //   빈 칸처럼 보이던 자리가 실은 차 있었다(이동 가부 판단 불가). raw EDI 전문이 단일 진실.
-  const ediMap = useMemo(() => fullEdiMapOf(sec),
-    [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, sec?.ediContainers]);
+  const ediMap = useMemo(() => applySwapFix(fullEdiMapOf(sec), swapFixList(voyage)),   // 2.89: 맞교환 겹침 — 편집기도 같은 그림을 본다
+    [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, sec?.ediContainers, voyage?.swapFix]);
   const recMap = sec.records || {};
   const compMap = sec.completed || {};
 

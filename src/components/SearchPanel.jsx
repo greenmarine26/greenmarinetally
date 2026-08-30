@@ -110,7 +110,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
   const shiftMapAll = useMemo(() => {
     try { return computeShiftingMapCached(voyageKey, voyage) || {}; }
     catch (e) { console.warn('[SearchPanel] 시프팅 확정 대조 실패 — 작업 카드에서 빠진다:', e); return {}; }
-  }, [voyageKey, _rawSig]);
+  }, [voyageKey, _rawSig, voyage?.swapFix]);   // 2.89: 맞교환 반영
   // 시프팅 컨의 규격·POD 등 — 통과화물이라 ediContainers 에 없다. raw 전문 재파싱본에서 가져온다.
   const shiftInfoAll = useMemo(() => {
     if (!Object.keys(shiftMapAll || {}).length) return {};

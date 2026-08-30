@@ -9,7 +9,7 @@ import { openWorkingReportPrint } from '../workingReport.js';
 import PrintableCargoPlanV2 from './PrintableCargoPlanV2.jsx';
 import PrintableBayDetail from './PrintableBayDetail.jsx';
 import ErrorBoundary from './ErrorBoundary.jsx';
-import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg } from '../utils.js';
+import { isPyeongtaekPort, computeShiftingMapCached, fullEdiMapOf, tagForecastMarks, effectivePos, parseListWeightKg, applySwapFix, swapFixList } from '../utils.js';
 
 export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // M5.64: voucher 출력 전 입력값 (선적 항차 + BERTH)
@@ -31,14 +31,14 @@ export default function PrintHubModal({ voyage, voyageKey, onClose }) {
   // V8.98-02: 카고플랜/베이상세는 선박 전체 적부도 — 수집기 등록 항차의 ediContainers엔 통과화물이 없어
   //   raw EDI 전문을 파싱해 전체 컨을 쓴다(저장본이 있는 키는 저장본 우선 — _slotKey 등 보존). raw 없으면 기존 그대로.
   // V9.07-03: 로직을 utils.fullEdiMapOf로 승격 — 편집기와 같은 소스를 쓴다
-  const fullEdiMap = useMemo(() => fullEdiMapOf(sec),
-    [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap]);
+  const fullEdiMap = useMemo(() => applySwapFix(fullEdiMapOf(sec), swapFixList(voyage)),   // 2.89: 맞교환 겹침 — 인쇄물도 같은 한 벌
+    [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap, voyage?.swapFix]);
   // V8.98-01: 쉬프팅(재적부) — raw EDI 원문 기반 대조 (ediContainers엔 통과화물 없음).
   //   uploadedAt 기준 메모 — 스냅샷마다 300KB 재파싱 방지.
   const shiftingMap = useMemo(
     () => computeShiftingMapCached(voyageKey, voyage),
     [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
-     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]
+     voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix]
   );
 
   const isPtk = (c) => {

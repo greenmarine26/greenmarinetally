@@ -4,7 +4,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PrintableCargoPlanV2 from './components/PrintableCargoPlanV2.jsx';
-import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture } from './utils.js';   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
+import { parseBAPLIE, parseAscFile, normalizeBay, isoToLabel, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList } from './utils.js';   // TallyOne 2.89: 맞교환도 한 벌   // V9.05-03: 콘앱 파서 통합용 + ConeOne 1.2: 격자 파생용 + ConeOne 2.1-01: 시프팅 정본
 // ConeOne 1.2: 베이뷰 격자 단일 소스 — 검수앱 BayPlan이 쓰는 바로 그 모듈들을 임포트해 재사용
 import { getShipBayDictData } from './shipStructure.js';
 import { isLoloShipByPolicy } from './shipPolicies.js';   // ConeOne 1.2-01: LOLO 판정 통합
@@ -50,7 +50,9 @@ window.ConeCargoPlan = { open, close };
 //   실측 MCSN 632N — 콘앱 5대(베이 6·3대 + 베이 99·2대)인데 평택 작업이 있는 홀드 베이는
 //   17 18 19 25 26 27 34 35 뿐이라 **다섯 대 전부 허수**였고 정본은 0대다.
 //   1.9 때 파서·평택판정을 합치면서 **시프팅만 빠뜨렸다** — 같은 처방을 여기에도 적용한다.
-window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture };
+// TallyOne 2.89 — **맞교환(swapFix)도 같이 내보낸다.** 검수앱이 두 컨 자리 기록을 맞바꾸면
+//   콘앱 시프팅도 같은 겹침을 봐야 한다 — 안 그러면 «콘앱 66 · 검수앱 95»(2.5 사고)가 재발한다.
+window.ConeParse = { parseBAPLIE, parseAscFile, isPyeongtaekPort, computeShiftingMap, loadEdiIsDeparture, applySwapFix, swapFixList };
 
 // ConeOne 1.2-01: LOLO 판정 단일 소스 — 검수앱 선박정책(lolo 플래그, RZOR 전용)을 콘앱에 노출.
 window.ConeShipPolicy = { isLolo: isLoloShipByPolicy };

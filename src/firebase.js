@@ -919,6 +919,19 @@ export async function fbClearActualPosition(voyageKey, mode, cn, by) {
 // M5.1 I: 보관함 처리 — bay_actual='__STG__' 로 마킹
 //   - 베이 그리드에서 숨겨지고 보관함 박스에만 표시
 //   - 일괄 처리 (영역 선택분 → 보관함)
+// TallyOne 2.89: 컨 맞교환(swapFix) — 검수사 확정 2026-08-30 «컨끼리 맞교환».
+//   기록↔실물 교정. EDI 원문·ediContainers·records·completed 는 건드리지 않는다 —
+//   겹쳐 보는 기록 한 줄이며, 지우면 그대로 되돌아간다. 게이트는 utils.swapFixGate 한 벌.
+export async function fbAddSwapFix(voyageKey, a, b, by) {
+  const r = push(ref(db, `voyages/${voyageKey}/swapFix`));
+  await set(r, { a: String(a).toUpperCase(), b: String(b).toUpperCase(), at: Date.now(), by: by || '' });
+  return r.key;
+}
+export async function fbRemoveSwapFix(voyageKey, id) {
+  if (!id) return;
+  await remove(ref(db, `voyages/${voyageKey}/swapFix/${id}`));
+}
+
 export const STORAGE_BAY = '__STG__';
 // 경로(moves)에 적는 창고 표기 — 좌표가 아니라 장소 이름이다. 화면 문구는 utils.js 가 읽는다.
 export const STORAGE_TXT = '창고';

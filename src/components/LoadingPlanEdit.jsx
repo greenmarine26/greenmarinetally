@@ -69,7 +69,7 @@ export default function LoadingPlanEdit({ voyage, voyageKey, inspector, onClose 
   // 쉬프팅(재적부) — 양하·선적 raw EDI 대조
   const shiftCns = useMemo(() => {
     try { return Object.keys(computeShiftingMapCached(voyageKey, voyage) || {}); } catch (e) { return []; }
-  }, [voyageKey, voyage]);
+  }, [voyageKey, voyage, voyage?.swapFix]);
 
   // 이동 가능 = 평택 선적분(리스트 등록 또는 POL 평택) 또는 쉬프팅. 그 외 통과 고정분.
   const lockedCns = useMemo(() => {

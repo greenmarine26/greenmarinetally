@@ -54,7 +54,7 @@ const ISO_OPTIONS = [
   { iso: '45T1', label: '40HC 탱크',                  flags: { tk: true } },
 ];
 
-export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null }) {
+export default function ContainerDetailModal({ variant = 'modal', c, comp, isXray, xraySeal, mode, voyageKey, voyageInfo, inspector, onClose, sealMode, allContainers = [], workBay = null, workTier = null, onStartSwap = null }) {
   const [editingSeal, setEditingSeal] = useState(false);
   const [editingXSeal, setEditingXSeal] = useState(false);
   const [editingIso, setEditingIso] = useState(false);
@@ -581,6 +581,16 @@ export default function ContainerDetailModal({ variant = 'modal', c, comp, isXra
             )}
           </div>
           <div className="text-2xs text-dim-400 mt-0.5">베이 / 열 / 단</div>
+
+          {/* TallyOne 2.89: 컨 맞교환(기록 교정) — 검수사 확정 2026-08-30 «컨끼리 맞교환».
+              전항이 기록과 다르게 실어 온 것을 검수원이 그 자리에서 바로잡는다. 양하·선적 공용.
+              게이트(같은 출발지·도착지·사이즈·풀/엠티, 풀은 무게+일항사)는 utils.swapFixGate 한 벌. */}
+          {onStartSwap && c.cn && /^[A-Z]{4}\d{7}$/.test(String(c.cn)) && (
+            <button onClick={() => onStartSwap(c)}
+              className="mt-2 bg-violet-800 hover:bg-violet-700 text-violet-50 px-2.5 py-1.5 rounded text-2xs font-black">
+              ⇄ 컨 맞교환 — 기록이 실물과 다를 때
+            </button>
+          )}
 
           {/* M4.9d-fix: 선적 실체 위치 — 사용자 도메인:
               선적 EDI 위치는 계획(예정), 선적확인 시 실체 발생.

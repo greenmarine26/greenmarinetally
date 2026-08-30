@@ -34,6 +34,7 @@ const IS_TOUCH_DEVICE = typeof window !== 'undefined' && (('ontouchstart' in win
 export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode, onOpenContainer, shipImo, shipName, voyageInfo, voyageKey,
   // M4.9f: 5단계(이동) + M5.1: 영역 선택 + 일괄 보관 (선적 전용)
   pendingMove, onCancelMove, onCommitMove,
+  pendingSwap, onCancelSwap,   // TallyOne 2.89: 컨 맞교환 상대 고르기(배너만 — 셀 가로채기는 VoyagePage onOpenContainer)
   enableSelection = false, onBatchToStorage,
   preGoneInfo = null   // 1.69-06: 전항 양하 예정(평택 도착 전 하선) — {ports:Set, list, origin} 또는 null
 }) {
@@ -111,6 +112,7 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
   useEffect(() => { if (!selectionMode) setSelectedCns(new Set()); }, [selectionMode]);
   useEffect(() => { if (isMobile && selectionMode) setSelectionMode(false); }, [isMobile, selectionMode]);
   useEffect(() => { if (pendingMove && selectionMode) setSelectionMode(false); }, [pendingMove, selectionMode]);
+  useEffect(() => { if (pendingSwap && selectionMode) setSelectionMode(false); }, [pendingSwap, selectionMode]);   // 2.89: 맞교환 중 선택모드 충돌 방지
 
   const toggleCnSelection = (cn) => {
     setSelectedCns(prev => {
@@ -604,6 +606,21 @@ export default function BayPlan({ containers, compMap, xrayMap, restowMap, mode,
           </div>
           <button onClick={() => onCancelMove && onCancelMove()}
             className="px-3 py-2 bg-ink-900 text-amber-200 hover:bg-ink-750 rounded text-xs font-black">
+            취소
+          </button>
+        </div>
+      )}
+
+      {/* TallyOne 2.89: 컨 맞교환 — 상대 고르기 배너. 같은 출발지·도착지·사이즈·풀/엠티만 허용(게이트는 utils.swapFixGate 한 벌) */}
+      {pendingSwap && (
+        <div className="bg-violet-600 text-white rounded-pill p-3 flex items-center gap-3 sticky top-0 z-30 shadow-lg border-2 border-violet-300">
+          <span className="text-xl">⇄</span>
+          <div className="flex-1">
+            <div className="text-sm font-black mono">{pendingSwap.cn}</div>
+            <div className="text-xxs font-bold leading-tight">맞바꿀 상대 컨의 셀을 누르세요 — 같은 출발지·도착지·사이즈·풀/엠티만 됩니다</div>
+          </div>
+          <button onClick={() => onCancelSwap && onCancelSwap()}
+            className="px-3 py-2 bg-ink-900 text-violet-200 hover:bg-ink-750 rounded text-xs font-black">
             취소
           </button>
         </div>

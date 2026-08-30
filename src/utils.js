@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.88-04'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
+export const APP_VERSION = 'TallyOne 2.89'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -4022,7 +4022,7 @@ export function hatchOpenableFor(voyage, mode, bayNo, dictEntry) {
       if (Number.isFinite(bn)) info[bn] = e;
     }
     const sec = voyage?.[mode] || {};
-    const conts = Object.values(fullEdiMapOf(sec) || {});
+    const conts = Object.values(applySwapFix(fullEdiMapOf(sec) || {}, swapFixList(voyage)) || {});   // 2.89: 맞교환 겹침
     if (!conts.length) return null;
     const comp = sec.completed || {};
     return hatchOpenable(conts, info, bayNo, (c) => !!comp[c.cn]);
@@ -4989,8 +4989,62 @@ export function fullEdiMapOf(sec) {
   return m;
 }
 
+
+// ── TallyOne 2.89: 컨 맞교환(swapFix) — 기록↔실물 교정 한 벌 (검수사 확정 2026-08-30) ──
+//   «교정은 앱이 해야 합니다. 같은 출발지 도착지 사이즈 같은 엠티라면 바꿀 수 있게.
+//    풀은 왠만하면 허용 안 합니다. 다만 무게까지 같다면 일항사와 상의 후 바꿀 수 있음.»
+//   §5-Y-B — 칸은 안 변한다. 두 컨의 자리 기록(이름표)만 서로 바꾼다. 컨은 움직인 적이 없다.
+//   저장: voyages/{key}/swapFix/{id} = { a, b, at, by } — 양하·선적 두 지도에 함께 겹친다.
+//   ⚠ 한쪽 지도에만 겹치면 배정표 정본(원시 대조×2=모브) 등식이 깨진다(실측 MCSC 95→66).
+export function swapFixList(voyage) {
+  const o = voyage?.swapFix;
+  if (!o || typeof o !== 'object') return [];
+  return Object.entries(o)
+    .filter(([, v]) => v && v.a && v.b)
+    .sort((x, y) => ((x[1].at || 0) - (y[1].at || 0)) || String(x[0]).localeCompare(String(y[0])))
+    .map(([id, v]) => ({ id, a: String(v.a).toUpperCase(), b: String(v.b).toUpperCase(), at: v.at || 0, by: v.by || '' }));
+}
+
+//  지도(컨번호→레코드)에 맞교환을 적용한다 — 위치(bay/row/tier)만 바꾸고 신원(실번호·씰 등)은 그대로.
+//  상대가 그 지도에 없으면(예: 선적 지도에 한쪽만 있음) 자리 기록이 통째로 상대에게 넘어간다 —
+//  게이트가 속성 동일을 보장하므로 있는 쪽 레코드를 빌려 만들되 신원 필드는 비운다.
+export function applySwapFix(map, swaps) {
+  if (!map || !swaps || !swaps.length) return map;
+  const m = { ...map };
+  const mv = (src, cn) => ({ ...src, cn, l4: String(cn).slice(-4), sl: '', sh: '', bl: '', _swapFix: true });
+  for (const s of swaps) {
+    const A = m[s.a], B = m[s.b];
+    if (!A && !B) continue;
+    if (A && B) {
+      m[s.a] = { ...A, bay: B.bay, row: B.row, tier: B.tier };
+      m[s.b] = { ...B, bay: A.bay, row: A.row, tier: A.tier };
+    } else if (A && !B) { m[s.b] = mv(A, s.b); delete m[s.a]; }
+    else { m[s.a] = mv(B, s.a); delete m[s.b]; }
+  }
+  return m;
+}
+
+//  맞교환 게이트 — 검수사 확정 그대로. 판정은 이 한 벌만 쓴다(화면·검사 공용).
+export function swapFixGate(a, b) {
+  if (!a || !b) return { ok: false, reason: '컨 정보를 찾지 못했습니다' };
+  const S = (v) => String(v ?? '').toUpperCase().trim();
+  if (S(a.fe) === '' || S(b.fe) === '') return { ok: false, reason: '풀/엠티 정보를 확인할 수 없습니다' };
+  if (S(a.pol) !== S(b.pol)) return { ok: false, reason: `출발지가 다릅니다 (${S(a.pol) || '?'} ≠ ${S(b.pol) || '?'})` };
+  if (S(a.pod) !== S(b.pod)) return { ok: false, reason: `도착지가 다릅니다 (${S(a.pod) || '?'} ≠ ${S(b.pod) || '?'})` };
+  if (S(a.iso) !== S(b.iso)) return { ok: false, reason: `사이즈·규격이 다릅니다 (${S(a.iso) || '?'} ≠ ${S(b.iso) || '?'})` };
+  if (S(a.fe) !== S(b.fe)) return { ok: false, reason: `풀/엠티가 다릅니다 (${S(a.fe)} ≠ ${S(b.fe)})` };
+  if (S(a.fe) === 'F') {
+    const wa = Number(a.wt || 0), wb = Number(b.wt || 0);
+    if (!wa || !wb || wa !== wb) return { ok: false, reason: `풀은 무게까지 같아야 바꿉니다 (${wa || '?'}kg ≠ ${wb || '?'}kg)` };
+    return { ok: true, chiefMate: true };   // 무게까지 같음 — 일항사와 상의 후 진행
+  }
+  return { ok: true };
+}
+
 export function computeShiftingFromVoyage(voyage) {
-  const mapOf = (sec) => ediMapFromRaw(sec) || sec?.ediContainers || null;
+  //  2.89: 맞교환을 양하·선적 두 지도에 함께 겹친다 — 한쪽만 겹치면 95→66 붕괴(위 주석).
+  const sw = swapFixList(voyage);
+  const mapOf = (sec) => applySwapFix(ediMapFromRaw(sec) || sec?.ediContainers || null, sw);
   //  2.81: 배정표 이적(수집기가 배정목록에서 받아 적은 모브 수)을 같이 넘긴다 — 정본 판정용.
   return computeShiftingMap(mapOf(voyage?.discharge), mapOf(voyage?.loading),
                             { berthShift: voyage?.info?.berthShift });
@@ -5057,6 +5111,7 @@ export function computeShiftingMapCached(voyageKey, voyage) {
     l?.raw?.edi?.uploadedAt || 0, l?.raw?.edi?.sizeBytes || 0,
     Object.keys(d?.ediContainers || {}).length, Object.keys(l?.ediContainers || {}).length,
     voyage?.info?.berthShift ?? '',   // 2.81: 배정표 이적이 나중에 들어와도 다시 계산한다
+    swapFixList(voyage).map((s) => s.id).join(','),   // 2.89: 맞교환이 더해지거나 되돌려지면 다시 계산한다
   ].join('|');
   const key = voyageKey || 'unknown';
   const hit = _shiftMapCache.get(key);

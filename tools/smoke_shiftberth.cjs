@@ -96,6 +96,42 @@ const fs = require('fs');
     ok(direct === 2, `utils 안 computeShiftingMap 등장 ${direct}곳(정의+래퍼) — 새 호출부가 늘면 배정표를 넘기는지 확인할 것`);
   }
 
+  console.log('[7] 맞교환(swapFix) — 검수사 확정: 2118 은 빠지고 5660 이 들어온다 (MCSC 633N 실데이터)');
+  {
+    const x = FX.MCSC_633N;
+    const D = expand(x.d, 'pod'), L = expand(x.l, 'pol');
+    const mk = (swapNode) => ({ discharge: { ediContainers: D }, loading: { ediContainers: L },
+                                info: { berthShift: x.bs }, swapFix: swapNode });
+    const A = 'CAAU6532118', B = 'MRSU6465660';
+    const base = U.computeShiftingFromVoyage(mk(null)) || {};
+    ok(Object.keys(base).length === 95 && !!base[A] && !base[B], '기준 95대 · 2118 시프팅 · 5660 아님');
+    const after = U.computeShiftingFromVoyage(mk({ k1: { a: A, b: B, at: 1 } })) || {};
+    const cnt = Object.keys(after).length;
+    ok(cnt === 95 && !after[A] && !!after[B], `맞교환 뒤 ${cnt}대(기대 95) · 2118 빠짐 · 5660 들어옴`);
+    const pairs = (m) => Object.entries(m).filter(([k]) => !k.startsWith('_')).map(([, v]) => `${v.from}>${v.to}`).sort().join('|');
+    ok(pairs(base) === pairs(after), '작업 칸쌍(from→to) 집합 동일 — 칸은 그대로, 번호만 바뀐다(§5-Y-B)');
+    //  양하 지도에만 겹치면 배정표 정본(95×2=190) 등식이 깨진다 — 한쪽 배선 실수를 여기서 잡는다.
+    const dOnly = U.computeShiftingMap(U.applySwapFix(D, [{ id: 't', a: A, b: B, at: 1 }]), L, { berthShift: x.bs }) || {};
+    ok(Object.keys(dOnly).length !== 95, `양하만 겹치면 ${Object.keys(dOnly).length}대로 무너진다(그래서 두 지도에 함께 겹친다)`);
+    //  게이트 — 검수사 확정: 엠티는 4조건, 풀은 무게까지 같아야 하고 일항사와 상의 후.
+    const g1 = U.swapFixGate({ ...D[A], pol: 'PHDVO' }, { ...D[B], pol: 'PHDVO' });
+    ok(g1.ok === true && !g1.chiefMate, '게이트: 같은 출발지·도착지·사이즈·엠티 → 허용');
+    const g2 = U.swapFixGate({ ...D[A], pol: 'PHDVO' }, { ...D[B], pol: 'PHDVO', pod: 'CNDLC' });
+    ok(g2.ok === false, '게이트: 도착지 다르면 차단');
+    const F1 = { pol: 'X', pod: 'Y', iso: '45G1', fe: 'F', wt: 1000 };
+    ok(U.swapFixGate(F1, { ...F1, wt: 2000 }).ok === false, '게이트: 풀 무게 다르면 차단');
+    const gF = U.swapFixGate(F1, { ...F1 });
+    ok(gF.ok === true && gF.chiefMate === true, '게이트: 풀 무게 같으면 일항사 상의 조건부 허용');
+    //  콘앱 배선 — 같은 한 벌을 콘앱 시프팅 3곳이 겹친다 (2.5 «콘앱 66·검수앱 95» 재발 방지)
+    const cone = fs.readFileSync(path.resolve('public/cone.html'), 'utf8');
+    ok((cone.match(/_applySwapFix2\(/g) || []).length >= 4, '콘앱: 맞교환 겹침이 3곳 호출부에 걸려 있다');
+    const entry = fs.readFileSync(path.resolve('src/coneCargoPlan.entry.jsx'), 'utf8');
+    ok(/applySwapFix/.test(entry) && /swapFixList/.test(entry), '콘앱 번들이 applySwapFix·swapFixList 를 내보낸다');
+    //  캐시 — 맞교환이 더해지면 서명이 바뀌어야 한다(조용한 미반영 방지)
+    ok(/swapFixList\(voyage\)\.map\(\(s\) => s\.id\)/.test(fs.readFileSync(path.resolve('src/utils.js'), 'utf8')),
+       '캐시 서명에 swapFix 리비전이 들어 있다');
+  }
+
   console.log(fail ? `\n✗ 실패 ${fail}건` : '\n✓ 전부 통과');
   process.exit(fail ? 1 : 0);
 })();

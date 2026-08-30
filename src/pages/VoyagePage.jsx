@@ -17,7 +17,7 @@ import {
 import {
   parseBAPLIE, parseAscFile, parseListExcel, parseXrayList, loadSheetJS,
   isoToLabel, isoCategory, formatWt, fmtPos, shipLuggageCount
-, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs} from '../utils.js';   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
+, formatBerth, isValidBerth, getShipStatus, parsePortMisDateTime, _storage, computeShiftingMapCached, ediMapFromRaw , tagForecastMarks, bayParityError, slotAdjacencyError, podZoneMismatch, ediOriginOf, ediNextPortOf, portsBeforePtk, loadEdiIsDeparture, shiftingTruthCheck, solveHatchRows, dupSealMap, shiftingMapForDisplay, isSentenceQuery, sideCancelled, gangKeyFromWords, parseSpokenTimeMs, swapFixList, applySwapFix, swapFixGate} from '../utils.js';   // 2.89: 컨 맞교환 한 벌   // 1.76: 배정표 이적 자가 대조 · 커버 역산   // 1.76-05: 실번호 중복 판정 단일 소스
 import {
   fbSaveEdiContainers, fbSaveListRecords, fbSaveXrayList,
   fbSaveEdiRaw, fbGetEdiRaw,
@@ -27,7 +27,7 @@ import {
   fbSetActualPosition, fbClearActualPosition,
   fbBatchMoveToStorage, fbBatchClearActual
   , fbSetVoyageSeqMode, resolveSeqMode, fbSetShipSeqPref, fbGetShipSeqPref   // TallyOne 1.55: 작업 개념은 셋. 1.56: 선박별 기억(검수사 확정 — 항차마다 다시 묻지 않게).
-  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart} from '../firebase.js';   // 1.87: 엠티실 범위 저장
+  , fbSubscribeWorkReports, fbSetStowagePlan , fbRequestProcessNow, fbSubscribeProcessDone, fbSetSimple, fbSetVoyageGangs, fbSetVoyageWorkStart, fbAddSwapFix, fbRemoveSwapFix} from '../firebase.js';   // 2.89: 컨 맞교환   // 1.87: 엠티실 범위 저장
 import { extractShipInfo, analyzeShipStructure, compareStructures, augmentStructureWithBayDict, isShipInBayDict, getShipBayDictData, getShipIdentity } from '../shipStructure.js';
 // M4.4: CASP .def 런타임 파서 + 사용자 베이사전
 import { analyzeDefFile, isCaspDefFile, analysisToBayDictEntry } from '../defParser.js';
@@ -127,6 +127,10 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   { cn, fromBay, fromRow, fromTier } 또는 null
   //   pendingMove 설정 시 → 베이그리드 빈 셀 클릭 → 그 자리로 fbSetActualPosition
   const [pendingMove, setPendingMove] = useState(null);
+  // TallyOne 2.89: 컨 맞교환(기록 교정) — 상대 컨 고르기 대기 + 방금 교환한 것 되돌리기
+  const [pendingSwap, setPendingSwap] = useState(null);   // { cn, bay, row, tier }
+  const [lastSwapFix, setLastSwapFix] = useState(null);   // { id, a, b }
+  useEffect(() => { setPendingSwap(null); setLastSwapFix(null); }, [mode, voyageKey]);
   // M5.1 G: 작업 마감 체크리스트 모달
   const [closingOpen, setClosingOpen] = useState(false);
   // M5.1: 리스트 탭 필터 외부 제어 (마감 체크리스트 점프용)
@@ -345,8 +349,9 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   //   베이플랜에만 이 allEdiContainers 전달 → 어떤 EDI 와도 베이 누락 X
   // V8.98-02: 베이플랜/카고플랜 소스 = raw EDI 전문(통과화물 포함). 저장본 키는 저장본 우선. raw 없으면 기존 ediMap.
   const fullEdiMap = useMemo(() => {
+    const _sw = swapFixList(voyage);   // 2.89: 맞교환 겹침 — 시프팅·커버·인쇄와 같은 한 벌
     const rawMap = ediMapFromRaw(sec);
-    if (!rawMap) return ediMap;
+    if (!rawMap) return applySwapFix(ediMap, _sw);
     // V8.98-04: raw(확정 EDI 전문)가 있으면 그것이 단일 진실.
     //   raw에 있는 키 = 저장본 필드 우선 병합(기존 동작). raw에 없는 저장본 키는
     //   실번호 형식(4영문+7숫자)이면 구판/가상(예: MAMP DUME 더미, pol=PTK) 잔재로 보고 표시에서 제외 —
@@ -356,8 +361,28 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       if (rawMap[k]) { m[k] = { ...rawMap[k], ...v }; continue; }
       if (!/^[A-Z]{4}\d{7}$/.test(String(k))) m[k] = v;
     }
-    return m;
-  }, [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap]);
+    return applySwapFix(m, _sw);
+  }, [sec?.raw?.edi?.uploadedAt, sec?.raw?.edi?.sizeBytes, ediMap, voyage?.swapFix]);
+
+  // TallyOne 2.89: 맞교환 상대가 골라졌다 — 게이트 한 벌 판정 → 확인 → swapFix 기록 (실행은 두 동작, §2-0-B).
+  const handleSwapTarget = async (c2) => {
+    const a = pendingSwap;
+    if (!a) return;
+    if (!c2?.cn || c2.cn === a.cn) { setPendingSwap(null); return; }
+    const ra = fullEdiMap[a.cn] || a, rb = fullEdiMap[c2.cn] || c2;
+    const g = swapFixGate(ra, rb);
+    if (!g.ok) { alert('⛔ 맞교환 불가 — ' + g.reason); return; }
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const q = g.chiefMate
+      ? `풀 맞교환입니다 — 무게가 같아 가능하지만 **일항사와 상의 후** 진행해야 합니다.\n일항사와 상의하셨습니까?\n\n${a.cn} ⇄ ${c2.cn}`
+      : `두 컨의 자리 기록을 맞바꿉니다 (양하·선적 함께).\n${a.cn} @ ${ra.bay || '?'}-${ra.row || '?'}-${ra.tier || '?'}\n${c2.cn} @ ${rb.bay || '?'}-${rb.row || '?'}-${rb.tier || '?'}\n\n칸은 그대로 — 번호만 바뀝니다. 진행하시겠습니까?`;
+    if (!confirm(q)) return;
+    try {
+      const id = await fbAddSwapFix(voyageKey, a.cn, c2.cn, inspector);
+      setLastSwapFix({ id, a: a.cn, b: c2.cn });
+      setPendingSwap(null);
+    } catch (e) { console.error(e); alert('맞교환 저장 실패: ' + (e?.message || e)); }
+  };
 
   // V8.98-05: 검수 리스트용 쉬프팅 목록 — shiftingMap + 컨 정보(규격/POD) 보강
   // 1.76-05: **작업 항목으로 승격할 수 있는 것 = 확정 대조뿐.** 예측은 알림·예보로만 쓴다.
@@ -366,7 +391,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
   const shiftingConfirmed = useMemo(() => {
     try { return computeShiftingMapCached(voyageKey, voyage) || {}; } catch (e) { return {}; }
   }, [voyage?.discharge?.raw?.edi?.uploadedAt, voyage?.loading?.raw?.edi?.uploadedAt,
-      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey]);
+      voyage?.discharge?.raw?.edi?.sizeBytes, voyage?.loading?.raw?.edi?.sizeBytes, voyageKey, voyage?.swapFix]);
 
   const shiftingList = useMemo(() => {
     const keys = Object.keys(shiftingMap || {});
@@ -1193,6 +1218,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
         sealMode={sealTargets.byCn[detailC.cn] || null}
         onClose={() => setDetailC(null)}
         allContainers={allContainersForMode}
+        onStartSwap={(cc) => { setDetailC(null); setTab('bay'); setPendingSwap({ cn: cc.cn, bay: cc.bay || '', row: cc.row || '', tier: cc.tier || '' }); }}
       />
     );
   };
@@ -1725,14 +1751,28 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
                 }}
               />
             )}
+            {/* TallyOne 2.89: 맞교환 직후 되돌리기 — 되돌릴 창을 화면에 보인다(§2-0-B) */}
+            {lastSwapFix && (
+              <div className="bg-violet-700 text-white rounded-pill p-3 flex items-center gap-3 mb-2 border-2 border-violet-300">
+                <span className="text-xl">⇄</span>
+                <div className="flex-1 text-xs font-bold leading-tight">
+                  <span className="mono">{lastSwapFix.a}</span> ⇄ <span className="mono">{lastSwapFix.b}</span> 맞교환했습니다 — 양하·선적 기록에 함께 적용됩니다.
+                </div>
+                <button onClick={async () => { try { await fbRemoveSwapFix(voyageKey, lastSwapFix.id); setLastSwapFix(null); } catch (e) { alert('되돌리기 실패: ' + (e?.message || e)); } }}
+                  className="px-3 py-2 bg-ink-900 text-violet-200 rounded text-xs font-black">되돌리기</button>
+                <button onClick={() => setLastSwapFix(null)} className="px-2 py-1 text-violet-200 text-xs font-black">✕</button>
+              </div>
+            )}
             <BayPlan
               containers={allEdiContainers} compMap={compMap} xrayMap={xrayMap} restowMap={shiftingMap} mode={mode}
               preGoneInfo={preGoneInfo}
-              onOpenContainer={(c) => setDetailC(c)}
+              onOpenContainer={(c) => { if (pendingSwap) { handleSwapTarget(c); return; } setDetailC(c); }}   // 2.89: 맞교환 상대 고르기 가로채기(SlotPicker 경유 포함)
               shipImo={voyage?.info?.imo}
               shipName={voyage?.info?.vsl}
               voyageInfo={voyage?.info}
               voyageKey={voyageKey}
+              pendingSwap={pendingSwap}
+              onCancelSwap={() => setPendingSwap(null)}
               pendingMove={pendingMove}
               onCancelMove={() => setPendingMove(null)}
               onCommitMove={async (bay, row, tier) => {
