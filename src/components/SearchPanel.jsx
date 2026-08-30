@@ -194,9 +194,21 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       //   순서는 따로 손대지 않는다 — 시프팅 컨은 물리적으로 걸린 화물 **위**에 있으므로
       //     «위 티어부터» 규칙이 알아서 먼저 내보낸다. 큐에 들어가기만 하면 된다.
       Object.entries(shiftMapAll || {}).forEach(([cn, s]) => {
-        if (!cn || cn.startsWith('__') || merged[cn]) return;
+        if (!cn || cn.startsWith('__')) return;
         const pos = m === 'discharge' ? (s.from || s.pos || '') : (s.to || '');
         if (!pos || pos.length < 7) return;   // 자리를 모르면 큐에 못 넣는다(조용히 빠지지 않게 아래 경고)
+        /* ★ 2.89-04 (검수사 실물 2026-08-30 — 자리확인 «1035» 에 UETU6801035 가 안 뜸) —
+             시프팅 컨에 리스트 기록(records)이 생기는 순간 merged 에 걸려 시프팅 행이 통째로
+             사라졌다. 기록이 있어도 시프팅 표식과 자리는 이어 준다 — 행을 지우지 않는다. */
+        if (merged[cn]) {
+          const row = arr.find(x => x._mode === m && x.cn === cn);
+          if (row) {
+            row._shift = m === 'discharge' ? 'out' : 'in';
+            row._shiftFrom = s.from || s.pos || ''; row._shiftTo = s.to || '';
+            if (!row.bay || !row.tier) { row.bay = pos.slice(0, 3); row.row = pos.slice(3, 5); row.tier = pos.slice(5, 7); }
+          }
+          return;
+        }
         const info = shiftInfoAll?.[cn] || {};
         arr.push({
           ...info, cn,
