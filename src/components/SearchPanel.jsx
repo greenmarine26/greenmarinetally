@@ -361,7 +361,12 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       if (Number.isFinite(_cb)) g.bays.add(_cb);
       //  남은 «컨» 기준 데크/홀드 — 빈 칸(g.deck/g.hold)과 다른 축이라 따로 센다.
       const _ct = parseInt((stolen && dest) ? dest.tier : c.tier, 10);
-      if (Number.isFinite(_ct)) { if (_ct >= 80) g.contDeck = (g.contDeck || 0) + 1; else g.contHold = (g.contHold || 0) + 1; }
+      //  2.89-02: 단 선택 화면이 컨 축으로도 서야 해서 규격(20/40)까지 나눠 센다 — 빈 칸 축과 섞지 않는다.
+      const _c40 = is40(c);
+      if (Number.isFinite(_ct)) {
+        if (_ct >= 80) { g.contDeck = (g.contDeck || 0) + 1; _c40 ? (g.contDeck40 = (g.contDeck40 || 0) + 1) : (g.contDeck20 = (g.contDeck20 || 0) + 1); }
+        else { g.contHold = (g.contHold || 0) + 1; _c40 ? (g.contHold40 = (g.contHold40 || 0) + 1) : (g.contHold20 = (g.contHold20 || 0) + 1); }
+      }
     });
     /*  빈 칸 0 인 묶음은 카드에서 내린다 — 끝난 베이가 목록에 남아 "다음"을 가리지 않게.
         ★ 2.88-01: 단 **남은 컨이 있으면 남긴다.** 진짜 끝난 베이는 contLeft 도 0 이라 그대로 빠진다.
@@ -563,14 +568,28 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
                 <button onClick={() => setManualBay(null)} className="text-xs text-dim-300 hover:text-amber-300">‹ 베이</button>
                 <div className="text-sm font-bold text-amber-300">{bayLbl} — 작업할 단을 선택하세요</div>
               </div>
-              <button disabled={!g || g.deck === 0} onClick={() => setManualTier('deck')}
-                className={`w-full py-4 rounded-pill border text-left px-4 ${!g || g.deck === 0 ? 'bg-ink-800/40 border-line text-dim-500' : 'bg-sky-950/40 border-sky-700 hover:bg-sky-900/50 text-sky-100'}`}>
-                <div className="flex items-center justify-between"><span className="font-bold text-base">🔵 데크 {g ? g.deck : 0}개</span><span className="text-xs mono text-sky-300">20FT:{g ? g.deck20 : 0} / 40FT:{g ? g.deck40 : 0}</span></div>
+              {/* ★ 2.89-02 (검수사 실물 «B38 데크 0·홀드 0» — 카드는 데크 16인데 열면 0) —
+                    베이 카드(2.88-01)는 빈 칸이 0이면 «남은 컨» 축으로 보여주는데 **이 화면만 빈 칸 축**이라
+                    시프팅 재선적분(계획 칸 없음)이 0으로 잠겼다. 같은 규칙으로 폴백한다 — 축은 섞지 않는다. */}
+              {(() => {
+                const dkPlan = g ? g.deck : 0, hdPlan = g ? g.hold : 0;
+                const dk = dkPlan > 0 ? dkPlan : (g?.contDeck || 0);
+                const hd = hdPlan > 0 ? hdPlan : (g?.contHold || 0);
+                const dk20 = dkPlan > 0 ? g.deck20 : (g?.contDeck20 || 0), dk40 = dkPlan > 0 ? g.deck40 : (g?.contDeck40 || 0);
+                const hd20 = hdPlan > 0 ? g.hold20 : (g?.contHold20 || 0), hd40 = hdPlan > 0 ? g.hold40 : (g?.contHold40 || 0);
+                return (<>
+              <button disabled={dk === 0} onClick={() => setManualTier('deck')}
+                className={`w-full py-4 rounded-pill border text-left px-4 ${dk === 0 ? 'bg-ink-800/40 border-line text-dim-500' : 'bg-sky-950/40 border-sky-700 hover:bg-sky-900/50 text-sky-100'}`}>
+                <div className="flex items-center justify-between"><span className="font-bold text-base">🔵 데크 {dk}개</span><span className="text-xs mono text-sky-300">20FT:{dk20} / 40FT:{dk40}</span></div>
+                {dkPlan === 0 && dk > 0 && <div className="text-2xs text-amber-400 mt-0.5">계획 칸 없음 — 남은 컨 축 · 실체 자리로 배치</div>}
               </button>
-              <button disabled={!g || g.hold === 0} onClick={() => setManualTier('hold')}
-                className={`w-full py-4 rounded-pill border text-left px-4 ${!g || g.hold === 0 ? 'bg-ink-800/40 border-line text-dim-500' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
-                <div className="flex items-center justify-between"><span className="font-bold text-base">🟠 홀드 {g ? g.hold : 0}개</span><span className="text-xs mono text-amber-300">20FT:{g ? g.hold20 : 0} / 40FT:{g ? g.hold40 : 0}</span></div>
+              <button disabled={hd === 0} onClick={() => setManualTier('hold')}
+                className={`w-full py-4 rounded-pill border text-left px-4 ${hd === 0 ? 'bg-ink-800/40 border-line text-dim-500' : 'bg-amber-950/40 border-amber-700 hover:bg-amber-900/50 text-amber-100'}`}>
+                <div className="flex items-center justify-between"><span className="font-bold text-base">🟠 홀드 {hd}개</span><span className="text-xs mono text-amber-300">20FT:{hd20} / 40FT:{hd40}</span></div>
+                {hdPlan === 0 && hd > 0 && <div className="text-2xs text-amber-400 mt-0.5">계획 칸 없음 — 남은 컨 축 · 실체 자리로 배치</div>}
               </button>
+                </>);
+              })()}
             </div>
           );
         })()
@@ -593,7 +612,7 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
         const noBay = !!g?.noBay;
         const bayLbl = noBay ? '자리 미지정' : (g ? [...g.bays].sort((a, b) => a - b).join('·') : String(manualBay));
         // V8.09-17 (메모5): 수동도 자동 가이드처럼 진행상태(잔여 N대)를 보이게. 현재 단의 미완료 잔여.
-        const remain = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? g.hold : g.deck) : 0);
+        const remain = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? (g.hold > 0 ? g.hold : (g.contHold || 0)) : (g.deck > 0 ? g.deck : (g.contDeck || 0))) : 0);   // 2.89-02: 컨 축 폴백
         return (
           <div className="flex items-center gap-2 text-xxs bg-ink-900 border border-line rounded-pill px-3 py-1.5">
             <span className="font-bold text-amber-300">📍 {noBay ? '⚠ 자리 미지정 작업 중' : `${bayLbl}번 ${manualTier === 'hold' ? '홀드' : '데크'} 작업 중`}</span>
@@ -641,11 +660,11 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       {workFilter !== 'completed' && !noWorkLeft && manualBay != null && manualTier && (() => {
         const g = manualGroups.find(x => x.center === manualBay);
         const noBay = !!g?.noBay;
-        const left = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? g.hold : g.deck) : 0);
+        const left = noBay ? (g?.count || 0) : (g ? (manualTier === 'hold' ? (g.hold > 0 ? g.hold : (g.contHold || 0)) : (g.deck > 0 ? g.deck : (g.contDeck || 0))) : 0);   // 2.89-02: 컨 축 폴백
         if (left > 0) return null;
         // 같은 베이의 다른 단이 남았으면 그쪽을 먼저 권한다(스프레더를 덜 바꾼다).
         const otherTier = manualTier === 'hold' ? 'deck' : 'hold';
-        const otherLeft = (!noBay && g) ? (otherTier === 'hold' ? g.hold : g.deck) : 0;
+        const otherLeft = (!noBay && g) ? (otherTier === 'hold' ? (g.hold > 0 ? g.hold : (g.contHold || 0)) : (g.deck > 0 ? g.deck : (g.contDeck || 0))) : 0;   // 2.89-02
         const nextG = manualGroups.find(x => x.center !== manualBay && !x.noBay && x.count > 0)
                    || manualGroups.find(x => x.center !== manualBay && x.count > 0);
         const lbl = (x) => (x.noBay ? '자리 미지정' : `B${[...x.bays].sort((a, b) => a - b).join('·')}`);
