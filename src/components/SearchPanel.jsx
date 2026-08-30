@@ -342,11 +342,24 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
       const dest = stolen ? swapDestByCn.get(c.cn) : null;
       const center = stolen ? (dest ? manualGroupCenterOf(dest.bay) : null) : manualGroupCenterOf(c.bay);
       if (center == null) return;
-      const g = map[center];
-      if (g) g.contLeft = (g.contLeft || 0) + 1;
+      /* ★ 2.88-01 (검수사 2026-08-30 «수동작업시 베이 사라짐 · 앱은 이중인격자인가») —
+           종전엔 `const g = map[center]; if (g)` 라 **빈 칸이 없어 map 에 없던 베이는 통째로 사라졌다.**
+         실측 MCSC 635S 선적 — 자동은 B3·14·22·26·30·34·38 일곱인데 수동은 B26·B38 이 없었다.
+         그 둘은 «빈 칸» 이 0 인 베이다. 38번은 실을 것이 **시프팅**(내렸다 다시 싣는 것)이라
+         계획 칸이 없어 빈 칸으로 안 잡힌다 — 그런데 실을 컨은 36대가 남아 있다.
+         ⇒ 여기서 묶음을 만들어 준다. 없는 베이가 아니라 «계획 칸이 없는 베이»다. */
+      const g = (map[center] ||= { center, bays: new Set(), count: 0, deck: 0, hold: 0, deck20: 0, deck40: 0, hold20: 0, hold40: 0 });
+      g.contLeft = (g.contLeft || 0) + 1;
+      const _cb = parseInt((stolen && dest) ? dest.bay : c.bay, 10);
+      if (Number.isFinite(_cb)) g.bays.add(_cb);
+      //  남은 «컨» 기준 데크/홀드 — 빈 칸(g.deck/g.hold)과 다른 축이라 따로 센다.
+      const _ct = parseInt((stolen && dest) ? dest.tier : c.tier, 10);
+      if (Number.isFinite(_ct)) { if (_ct >= 80) g.contDeck = (g.contDeck || 0) + 1; else g.contHold = (g.contHold || 0) + 1; }
     });
-    // 빈 칸 0 인 묶음은 카드에서 내린다 — 끝난 베이가 목록에 남아 "다음"을 가리지 않게.
-    return Object.values(map).filter(g => g.count > 0 || g.noBay).sort((a, b) => a.center - b.center);
+    /*  빈 칸 0 인 묶음은 카드에서 내린다 — 끝난 베이가 목록에 남아 "다음"을 가리지 않게.
+        ★ 2.88-01: 단 **남은 컨이 있으면 남긴다.** 진짜 끝난 베이는 contLeft 도 0 이라 그대로 빠진다.
+          이 한 줄이 B38·B26 을 수동에서 지우고 있었다(자동에는 남아 있어 «이중인격»으로 보였다). */
+    return Object.values(map).filter(g => g.count > 0 || (g.contLeft || 0) > 0 || g.noBay).sort((a, b) => a.center - b.center);
   }, [allContainers, workFilter, manualBayPairs]);
   // TallyOne 1.53: **작업이 끝나면 검색창까지 사라졌다.**
   //   실측 2026-08-12(선적 335대 완주) — 남은 작업이 0이 되자 수동 모드가
@@ -519,12 +532,16 @@ export default function SearchPanel({ onOpenPlan, voyage, voyageKey, inspector, 
               <button key={g.center} onClick={() => setManualBay(g.center)}
                 className="py-3 rounded-pill bg-ink-800 hover:bg-amber-800 border border-line text-dim-100">
                 <div className="font-bold text-base">B{[...g.bays].sort((a, b) => a - b).join('·')}</div>
-                <div className="text-2xs text-dim-300">빈 칸 {g.count} · 남은 컨 {g.contLeft || 0}대</div>
-                <div className="flex items-center justify-center gap-1.5 mt-0.5 text-2xs font-bold">
-                  {g.deck > 0 && <span className="text-sky-300">데크 {g.deck}</span>}
-                  {g.deck > 0 && g.hold > 0 && <span className="text-dim-500">·</span>}
-                  {g.hold > 0 && <span className="text-amber-300">홀드 {g.hold}</span>}
+                <div className="text-2xs text-dim-300">
+                  {g.count > 0 ? `빈 칸 ${g.count} · ` : ''}남은 컨 {g.contLeft || 0}대
                 </div>
+                {/* 2.88-01: 계획 칸이 없는 베이(시프팅으로 다시 싣는 자리 등)는 «남은 컨» 축으로 보여준다 */}
+                <div className="flex items-center justify-center gap-1.5 mt-0.5 text-2xs font-bold">
+                  {(g.count > 0 ? g.deck : (g.contDeck || 0)) > 0 && <span className="text-sky-300">데크 {g.count > 0 ? g.deck : g.contDeck}</span>}
+                  {(g.count > 0 ? g.deck : (g.contDeck || 0)) > 0 && (g.count > 0 ? g.hold : (g.contHold || 0)) > 0 && <span className="text-dim-500">·</span>}
+                  {(g.count > 0 ? g.hold : (g.contHold || 0)) > 0 && <span className="text-amber-300">홀드 {g.count > 0 ? g.hold : g.contHold}</span>}
+                </div>
+                {g.count === 0 && <div className="text-2xs text-amber-400 mt-0.5">계획 칸 없음 — 실체 자리로 배치</div>}
               </button>
             ))}
           </div>

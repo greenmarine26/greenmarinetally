@@ -662,6 +662,41 @@ export default function BayGridEditor({
     bump();
   };
 
+  /* ★ 2.88-01 맞바꾸기 (검수사 지시 2026-08-30) — *«클릭된 두 컨테이너 맞바꾸기 기능이면 됩니다»*
+
+       ── 왜 필요한가
+       한 개는 못 내리고 한 개는 계획에 없던 걸 내렸을 때, **목적지가 같으니 서로 맞바꾸면**
+       기록이 실물을 따라간다. 새 컨을 만들거나 리스트에 없는 번호를 넣는 것이 아니라
+       **이미 리스트에 있는 둘의 자리만** 교환한다.
+       실측 MCSC 633N 양하 BAY(34)35 단90 — 상대 검수사가 계획과 다르게 실어
+       실제 `02:5808 01:2118 03:5660 05:1419 07:3239 09:2124` 인데
+       앱은   `02:5660 01:5808 03:1419 05:3239 07:2124 09:2118` 로 그리고 있었다.
+
+       ── 왜 버튼인가
+       맞교환은 종전에도 있었지만 **끌어다 놓아야만** 됐다(dropAt). 현장은 폰이고 갑판이다.
+       셀을 두 번 눌러 고르고 버튼 한 번이면 끝나야 한다.
+     ⚠ 자리를 바꾸는 것은 placeAt 한 벌이 한다 — 점유자가 있으면 스스로 맞교환한다(planEditCore:132).
+       40/45ft 물리 가드도 거기 있다. 여기서 규칙을 새로 만들지 않는다. */
+  const swapSelected = () => {
+    if (!state) return;
+    const cns = [...selected];
+    if (cns.length !== 2) { setMsg('맞바꾸기는 **두 대**를 고른 뒤에 누르세요 (지금 ' + cns.length + '대)'); return; }
+    const [a, b] = cns;
+    const pb = state.pos[b];
+    if (!pb || pb.storage) { setMsg(`맞바꾸기 불가: ${b} 는 배에 자리가 없습니다(임시창고)`); return; }
+    if (!state.pos[a] || state.pos[a].storage) { setMsg(`맞바꾸기 불가: ${a} 는 배에 자리가 없습니다(임시창고)`); return; }
+    //  크기가 다르면 자리가 물리적으로 안 맞을 수 있다 — 막지는 않되 알린다(최종 판단은 placeAt).
+    const szOf = (cn) => String(state.byCn.get(cn)?.iso || '')[0];
+    const warn = (szOf(a) !== szOf(b)) ? ' ⚠ 규격이 다릅니다 — 자리가 맞는지 확인하세요' : '';
+    const res = P.placeAt(state, a, pb.bay, pb.row, pb.tier);
+    if (!res.ok) { setMsg(`맞바꾸기 불가: ${res.reason}`); return; }
+    setMsg(res.swappedWith === b
+      ? `${a} ↔ ${b} 자리 맞바꿈${warn}`
+      : `${a} → ${b} 자리로 이동${warn}`);
+    setSelected(new Set());
+    bump();
+  };
+
   const dropStorage = (e) => {
     e.preventDefault(); setStgOver(false); clearOver();
     const cn = e.dataTransfer.getData('text/plain');
@@ -966,10 +1001,14 @@ export default function BayGridEditor({
               <div style={{ padding: '8px 8px 4px', fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>
                 셀 <b style={{ color: '#e2e8f0' }}>클릭</b> = 하나씩 넣고 빼기<br />
                 <b style={{ color: '#e2e8f0' }}>Shift</b>+영역 = 추가 · <b style={{ color: '#e2e8f0' }}>Ctrl</b>(⌘)+영역 = 제외<br />
-                선택분 중 하나를 끌면 <b style={{ color: '#e2e8f0' }}>전체가 함께</b> 이동
+                선택분 중 하나를 끌면 <b style={{ color: '#e2e8f0' }}>전체가 함께</b> 이동<br />
+                두 대를 고르면 <b style={{ color: '#e2e8f0' }}>⇅ 맞바꾸기</b> — 자리를 서로 바꿉니다
               </div>
               <div style={{ padding: '0 8px 6px', display: 'flex', gap: 6 }}>
                 <button className="bge-btn p" style={{ flex: 1 }} disabled={!selected.size} onClick={sendSelected}>선택 {selected.size}대 보관</button>
+                {/* 2.88-01: 두 대를 고르면 버튼 하나로 자리를 맞바꾼다 (검수사 «클릭된 두 컨테이너 맞바꾸기») */}
+                <button className="bge-btn" disabled={selected.size !== 2} onClick={swapSelected}
+                  title={selected.size === 2 ? '고른 두 대의 자리를 서로 바꿉니다' : '두 대를 고르면 눌립니다'}>⇅ 맞바꾸기</button>
                 <button className="bge-btn" disabled={!selected.size} onClick={() => setSelected(new Set())}>전체 해제</button>
               </div>
               <div className="bge-list">

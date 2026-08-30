@@ -13,7 +13,7 @@ import { NUM_INPUT_PROPS } from '../inputUtils.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';   // TallyOne 1.53: 경고는 앱 안에서 띄운다.
 import { fbHoldContainers, fbReleaseHold, fbSnoozeHold, fbCompleteContainer, fbCompleteContainersAtomic, fbUpdateVoyageInfo, fbUpdateRecordSeal, fbSetXraySeal, fbReassignContainerPosition, fbAddWorkReport, fbSetInspectorActivity } from '../firebase.js';
 import { speak, spellKo } from '../voice.js';
-import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
+import { getEquipNumber, setEquipNumber, formatWt, getPierFromBerth, equipNumbersForPier, seqFullConfirmText , isHatchSkipShipInfo, dupSealMap, dupSealPartners, predictShiftingFromVoyage, shiftingTruthCheck, hatchOpenableFor } from '../utils.js';   // 1.54: 시퀀스 되묻기 문구는 한 벌만 둔다   // 1.76-05: 실번호 중복 판정 단일 소스
 import { buildHatchMessage, shareText } from '../kakaoShare.js';
 import { TWIN_MAX_TOTAL_KG, twinDiffLimit } from '../nlSearch.js';
 
@@ -731,7 +731,21 @@ export default function GuidedWorkPanel({ voyage, voyageKey, inspector, allConta
   // V7.99-6 (메모1): 같은 해치 묶음(트리오: 11·12·13 같은 페어 그룹)은 한 패널을 공유하므로
   //   베이별 hatchCount를 단순 합산하면 중복(2+2+2=6)된다. 같은 groupCenter끼리는 대표값(최댓값)을,
   //   서로 다른 그룹끼리만 합산한다.
+  /* ★ 2.88-01 (검수사 지시 2026-08-30) — **사전 장수가 아니라 «지금 열 수 있는 장수»다.**
+       검수사 — *«커버의 개념은 단 한개라도 해당 데크위에 화물이 있으면 열지 못한다.
+       단 해치커버별 로우범위를 인지해야 하고 그 범위 밖에 화물이 있다면 열고 닫을수 있다»*
+       *«그런데 앱 자동은 3장을 엽니다 무조건 3장»* · *«그걸 오늘 다 무시했습니다»*
+     실측 MCSC 633N — 38번은 3장 중 **1장**(양옆은 통과화물 80대가 얹혀 있다), 34번은 **2장**.
+     ⚠ 판정은 utils.hatchOpenableFor 한 벌이다 — 커버 로우 범위를 아는 _panelOf 를 그대로 쓴다.
+       구하지 못하면(사전 없음·자료 없음) 종전대로 사전 합산으로 돌아간다. */
   const hatchPanelsOf = (bays) => {
+    try {
+      const _open = (bays || []).reduce((sum, b) => {
+        const r = hatchOpenableFor(voyage, mode, parseInt(b, 10), getShipBayDictData(shipImo, shipName));
+        return r ? sum + r.openable : sum;
+      }, 0);
+      if (_open > 0) return _open;
+    } catch (e) { /* 아래 종전 경로 */ }
     try {
       const dict = getShipBayDictData(shipImo, shipName);
       const summary = dict?.bayDef?.baysSummary;

@@ -13,7 +13,7 @@ import { fbAddWorkReport, fbUpdateVoyageInfo } from '../firebase.js';
 // TallyOne 1.8-09: 수동 해치 보고도 자동 유도와 **같은** 그룹 계산·같은 표시를 쓰게 한다.
 import { bayGroupCenter } from '../swapGrade.js';
 import { getBayPairs } from '../twin.js';
-import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo } from '../utils.js';
+import { getPierFromBerth, equipNumbersForPier, reportShiftToShow, buildShiftReport, isPyeongtaekPort , isHatchSkipShipInfo, hatchOpenableFor } from '../utils.js';
 import { ref, set, get, onValue } from 'firebase/database';  // V9.57(I9): off 미사용 — 광역 해제 제거
 import { db } from '../firebase.js';
 import ConfirmModal, { useConfirm } from './ConfirmModal.jsx';
@@ -300,6 +300,29 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     if (ms && ms.length === 1) return ms[0].mode;
     return selectedMode;
   };
+
+  /* ★ 2.88-01 (검수사 지시 2026-08-30) — **장수를 묻지 않는다. 앱이 센다.**
+       검수사 — *«클로드님은 38번 베이에 커버를 몇장을 열어야 합니까»* → 답은 **1장**이었다.
+       사전은 3장이라 하지만 양옆 커버 위에 통과화물이 80대 얹혀 있어 실제로 열리는 것은 가운데 1장뿐이다.
+       V8.31 이 «자동계산 제거 — 검수사가 선택» 으로 돌린 뒤, 앱은 알 수 있는 것을 매번 물어 왔다.
+     ⚠ 판정 못 하면(사전 없음·자료 없음) null — 그때만 종전처럼 손으로 고른다. */
+  const hatchHint = useMemo(() => {
+    const bays = String(bayInput || '').split(/[,\s]+/).map((b) => parseInt(b, 10)).filter(Number.isFinite);
+    if (!bays.length) return null;
+    const md = selectedMode === 'loading' ? 'loading' : 'discharge';
+    const out = [];
+    for (const b of bays) {
+      const r = hatchOpenableFor(voyage, md, b, null);
+      if (r) out.push({ bay: b, ...r });
+    }
+    return out.length ? out : null;
+  }, [bayInput, voyage, selectedMode]);
+  //  센 값이 있으면 장수 버튼을 그 값으로 맞춰 둔다 — 검수사가 다르게 보면 눌러서 바꾼다.
+  useEffect(() => {
+    if (!hatchHint) return;
+    const sum = hatchHint.reduce((a, x) => a + x.openable, 0);
+    if (sum >= 1 && sum <= 3) setHatchPanels(sum);
+  }, [hatchHint]);
 
   const handleHatch = async () => {
     const equip = hatchEquip || Object.keys(activeByEquip)[0] || '';
@@ -768,9 +791,26 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
               />
             </div>
 
-            {/* V8.31: 해치커버 장수 수동 선택(1~3장) — 자동계산 제거 */}
+            {/* 2.88-01: 앱이 센 «열 수 있는 장수» 를 근거와 함께 보여준다 (검수사 «몇장을 열어야 합니까») */}
+            {hatchHint && (
+              <div className="rounded-card border border-cyan-700/50 bg-cyan-950/30 px-3 py-2 space-y-1">
+                {hatchHint.map((h) => (
+                  <div key={h.bay} className="text-xs2">
+                    <span className="font-black text-cyan-200">{h.bay}번 — {h.total}장 중 </span>
+                    <span className="font-black text-amber-300">{h.openable}장</span>
+                    <span className="text-dim-300"> 열 수 있습니다</span>
+                    {h.panels.filter((x) => x.blocked).map((x) => (
+                      <div key={x.idx} className="text-2xs text-dim-400 mt-0.5">
+                        · {x.idx + 1}번째 장 — 위에 화물 {x.blockers.length}대 (치워야 열립니다)
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* V8.31: 해치커버 장수 수동 선택(1~3장) — 2.88-01 부터 위 값으로 미리 맞춰 둔다 */}
             <div>
-              <div className="text-xs font-bold text-dim-200 mb-1">장수 선택</div>
+              <div className="text-xs font-bold text-dim-200 mb-1">장수 선택{hatchHint ? ' (앱이 센 값 — 다르면 눌러서 바꾸세요)' : ''}</div>
               <div className="grid grid-cols-3 gap-2">
                 {[1, 2, 3].map(n => (
                   <button key={n} onClick={() => setHatchPanels(n)}

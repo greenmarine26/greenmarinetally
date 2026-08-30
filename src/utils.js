@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.88'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
+export const APP_VERSION = 'TallyOne 2.88-01'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -3851,21 +3851,25 @@ const _isDeckTier = (tier) => {
   return Number.isFinite(t) && t >= 80;   // 80번대 이상 = 데크(지침 Ⅱ 데크/홀드 분리)
 };
 
-/** 양하 EDI 맵 하나로 시프팅(치워야 할 통과화물)을 예측한다.
- *  dischEdiMap: {cn: 컨} — **평택분만 거른 것이 아니라 전체**여야 한다(통과화물이 대상이므로).
- *  반환 {cn: {bay,row,tier,pos,iso,pod,_why}} */
-export function predictShifting(dischEdiMap, baysInfo) {
-  const out = {};
-  if (!dischEdiMap) return out;
-  const rows = Object.entries(dischEdiMap).filter(([cn, c]) => cn && cn.length === 11 && !cn.startsWith('__') && c);
-  // ── 1.69-06: 해치커버 **패널 모델** (검수사 현장 신고 2026-08-14, MAMP 631N) ──
-  //   *"지금 있는 곳은 중간 커버를 열지 않음."* — 커버는 현측 2장이 아니라 **베이당 hatchCount장**
-  //   (예: MAMP 3장 — 좌현/중앙/우현)으로 갈린다. 종전 E/O(짝홀 현측) 모델은 2장 가정이라,
-  //   MAMP 26번(홀드 양하 05~08열 = 좌·우 패널)에서 **중앙 패널 위** 통과분 8대를 오검출했다
-  //   (배정표 이적 0과도 어긋남 — 실측 재현 후 수정). 베이사전 hatchCount·rowCount 가 있으면
-  //   행을 물리 순서(짝수 내림→00→홀수 오름)로 세워 hatchCount 등분 — 홀드 양하분이 있는
-  //   패널만 연다. ⚠ 패널-열 경계의 실측 데이터는 없다(등분은 근사) — 사전에 hatchCount 가
-  //   없는 배는 종전 E/O 모델 그대로다(SWDN 오라클 경로 보존).
+/** ★ 2.88-01 — 해치커버 **패널 판정 한 벌** (검수사 지시 2026-08-30)
+ *
+ *  검수사 확정 개념 — *«커버의 개념은 단 한개라도 해당 데크위에 화물이 있으면 열지 못한다.
+ *  단 해치커버별 로우범위를 인지해야 하고 그 범위 밖에 화물이 있다면 열고 닫을수 있다»*
+ *
+ *  ── 왜 꺼냈나
+ *  이 판정(_panelOf 계열)은 `predictShifting` **안에 갇혀 있었다.** 시프팅 계산은 커버를 정확히
+ *  아는데, 정작 커버를 열고 닫는 화면들은 부를 수가 없어 **무조건 hatchCount 장**으로 답했다.
+ *  실측 MCSC 633N — 앱은 38·34번 둘 다 «3장», 실제는 38번 1장(통과화물이 좌우 2장 위에)·34번 2장.
+ *  검수사 — *«그걸 오늘 다 무시했습니다»*
+ *
+ *  ⚠ 코드는 **한 글자도 바꾸지 않고** 옮겼다. 시프팅 판정이 흔들리면 오늘 확정한 95대가 흔들린다
+ *    (smoke_shiftberth.cjs 가 배정표 6항차로 지킨다).
+ *
+ *  @param rows     [[cn, 컨], ...] — **통과화물 포함 전체**여야 한다. 평택분만 주면 커버가 비어 보인다.
+ *  @param baysInfo 베이사전 baysSummary 를 베이번호로 키한 것 (hatchCount·hatchRows·rowCount)
+ *  @returns {{ panelOf, groupAxis, groupOf, info }}
+ */
+export function makePanelResolver(rows, baysInfo) {
   const _info = baysInfo || {};
   // ── 1.69-08: 패널 축은 **홀드 행**으로 짠다 (검수사 현장 신고 2026-08-14, KKLC 30번) ──
   //   *"그곳은 커버를 열지 않는 곳"* — 커버가 덮는 것은 홀드다. 종전 축은 사전 rowCount(데크 폭)로
@@ -3942,6 +3946,109 @@ export function predictShifting(dischEdiMap, baysInfo) {
     for (let p = 0; p < n; p++) { cum += sizes[p]; if (i < cum) return p; }
     return n - 1;
   };
+  return { panelOf: _panelOf, groupAxis: _groupAxis, groupOf: _groupOf, info: _info };
+}
+
+/** ★ 2.88-01 — **지금 몇 장을 열 수 있는가.**
+ *
+ *  검수사 확정 — *«커버의 개념은 단 한개라도 해당 데크위에 화물이 있으면 열지 못한다.
+ *  단 해치커버별 로우범위를 인지해야 하고 그 범위 밖에 화물이 있다면 열고 닫을수 있다»*
+ *
+ *  ⚠ **모집단은 통과화물을 포함한 전체다.** 종전 커버 판정(mirEyes:284)은 평택분만 세서
+ *    통과화물이 4단씩 얹혀 있어도 «데크는 비었습니다» 라고 답했다 — 38번이 그 경우였다.
+ *  ⚠ 이미 내린 컨은 없는 것으로 친다(isGone).
+ *
+ *  실측 대조 (MCSC 633N)
+ *    38번 — 데크 12칸이 04·02·01·03(평택·내림 끝) + 나머지 8칸(통과·그대로).
+ *           3장 중 **가운데 1장**만 열린다. 검수사가 실제로 1장을 열었다.
+ *    34번 — 좌 4칸 전부 내림, 가운데 3칸 남음, 우 09단90 하나 남음 → **2장**.
+ *
+ *  @param conts   그 항차 컨 전부(통과분 포함) — [{bay,row,tier,cn}, ...]
+ *  @param baysInfo 베이사전 baysSummary 를 베이번호로 키한 것
+ *  @param bayNo   베이 번호
+ *  @param isGone  (c) => 이미 내렸는가. 없으면 전부 남은 것으로 본다.
+ *  @returns {{ total, openable, panels: [{idx, blocked, blockers:[cn]}] }}
+ */
+export function hatchOpenable(conts, baysInfo, bayNo, isGone) {
+  const bn = parseInt(bayNo, 10);
+  const inf = (baysInfo || {})[bn] || {};
+  const total = Math.max(1, parseInt(inf.hatchCount, 10) || 1);
+  const rows = (conts || [])
+    .filter((c) => c && (c.cn || c.bay != null))
+    .map((c) => [String(c.cn || ''), c]);
+  const R = makePanelResolver(rows, baysInfo);
+  const blockers = Array.from({ length: total }, () => []);
+  const gone = typeof isGone === 'function' ? isGone : () => false;
+  /*  ⚠ 커버 위 데크는 **홀드 묶음 전체**다 — 베이 하나만 보면 안 된다.
+      실측 MCSC 633N 38번: 데크 12칸 중 40ft 4칸(01·02·03·04)만 38번에 들어 있고,
+      양옆 8칸은 20ft 라 **37번·39번**으로 실려 있다. 화면이 «BAY (38)39» 로 묶어 그리는 그것이다.
+      베이 번호만 맞추면 좌우 통과화물 64대를 영영 못 보고 «3장 다 열림» 이라고 답한다(실측). */
+  const _g = R.groupOf(bn);
+  const _members = (_g % 2 === 0) ? [_g - 1, _g, _g + 1] : [_g];
+  for (const [, c] of rows) {
+    if (!_isDeckTier(c.tier)) continue;
+    const cb = normalizeBay(c.bay || '');
+    if (!_members.includes(parseInt(cb, 10))) continue;
+    if (gone(c)) continue;                       // 이미 내린 것은 커버를 막지 않는다
+    /*  ⚠ 패널 정보(hatchCount·hatchRows)는 사전에 **짝수 베이만** 있다(실측 MCSC: 022·030·034·038).
+        37·39 번으로 실린 20ft 데크를 그 번호로 물으면 «사전에 없음» → null → 전부 막힘이 되어
+        38번이 «0장» 으로 나왔다(실측). 열 판정에 쓰는 것은 row 이므로 **그룹 대표로 묻는다.** */
+    const p = R.panelOf(String(_g).padStart(2, '0'), c.row);
+    if (p == null) {                             // 어느 장인지 모르면 **보수적으로 전부 막는다**
+      for (let i = 0; i < total; i++) blockers[i].push(String(c.cn || ''));
+      continue;
+    }
+    if (blockers[p]) blockers[p].push(String(c.cn || ''));
+  }
+  const panels = blockers.map((b, i) => ({ idx: i, blocked: b.length > 0, blockers: b }));
+  return { total, openable: panels.filter((x) => !x.blocked).length, panels };
+}
+
+/** ★ 2.88-01 — 화면용 한 줄 진입점. 항차·모드·베이만 주면 «몇 장 열 수 있는가» 를 낸다.
+ *  ⚠ 컨 목록은 **fullEdiMapOf**(raw EDI)로 얻는다 — `ediContainers` 는 평택분만이라
+ *    통과화물이 4단씩 얹혀 있어도 커버가 비어 보인다(실측 MCSC 38번: 279대 중 16대만 보였다).
+ *  ⚠ 완료(내림)는 `completed` 노드로 본다 — 이미 내린 것은 커버를 막지 않는다.
+ *  못 구하면 null (사전 없음·자료 없음) — 부르는 쪽은 종전 동작으로 돌아간다.
+ */
+export function hatchOpenableFor(voyage, mode, bayNo, dictEntry) {
+  try {
+    const vsl = String(voyage?.info?.vsl || '').toUpperCase();
+    const de = dictEntry || ((typeof window !== 'undefined' && window.__fbShipBayDict) ? window.__fbShipBayDict[vsl] : null);
+    const bs = de?.bayDef?.baysSummary || de?.baysSummary;
+    if (!Array.isArray(bs) || !bs.length) return null;
+    const info = {};
+    for (const e of bs) {
+      const bn = parseInt(e?.bayNo ?? e?.bay, 10);
+      if (Number.isFinite(bn)) info[bn] = e;
+    }
+    const sec = voyage?.[mode] || {};
+    const conts = Object.values(fullEdiMapOf(sec) || {});
+    if (!conts.length) return null;
+    const comp = sec.completed || {};
+    return hatchOpenable(conts, info, bayNo, (c) => !!comp[c.cn]);
+  } catch (e) { return null; }
+}
+
+/** 양하 EDI 맵 하나로 시프팅(치워야 할 통과화물)을 예측한다.
+ *  dischEdiMap: {cn: 컨} — **평택분만 거른 것이 아니라 전체**여야 한다(통과화물이 대상이므로).
+ *  반환 {cn: {bay,row,tier,pos,iso,pod,_why}} */
+export function predictShifting(dischEdiMap, baysInfo) {
+  const out = {};
+  if (!dischEdiMap) return out;
+  const rows = Object.entries(dischEdiMap).filter(([cn, c]) => cn && cn.length === 11 && !cn.startsWith('__') && c);
+  // ── 1.69-06: 해치커버 **패널 모델** (검수사 현장 신고 2026-08-14, MAMP 631N) ──
+  //   *"지금 있는 곳은 중간 커버를 열지 않음."* — 커버는 현측 2장이 아니라 **베이당 hatchCount장**
+  //   (예: MAMP 3장 — 좌현/중앙/우현)으로 갈린다. 종전 E/O(짝홀 현측) 모델은 2장 가정이라,
+  //   MAMP 26번(홀드 양하 05~08열 = 좌·우 패널)에서 **중앙 패널 위** 통과분 8대를 오검출했다
+  //   (배정표 이적 0과도 어긋남 — 실측 재현 후 수정). 베이사전 hatchCount·rowCount 가 있으면
+  //   행을 물리 순서(짝수 내림→00→홀수 오름)로 세워 hatchCount 등분 — 홀드 양하분이 있는
+  //   패널만 연다. ⚠ 패널-열 경계의 실측 데이터는 없다(등분은 근사) — 사전에 hatchCount 가
+  //   없는 배는 종전 E/O 모델 그대로다(SWDN 오라클 경로 보존).
+  /*  ★ 2.88-01: 패널 판정은 makePanelResolver 한 벌이다(위로 승격 — 커버 화면들도 같은 답을 쓴다).
+      아래 로직은 종전과 **한 글자도 다르지 않다**. */
+  const _RES = makePanelResolver(rows, baysInfo);
+  const _panelOf = _RES.panelOf;
+  const _info = _RES.info;
   // ① 홀드에 평택 양하분이 있는 베이 → 열어야 할 커버 (패널 정보 있으면 패널, 없으면 현측)
   const openSides = {};
   const openPanels = {};
