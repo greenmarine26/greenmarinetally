@@ -32,7 +32,7 @@ export function isSentenceQuery(v) {
   return /[가-힣A-Za-z]/.test(s);                // 글자가 섞였다 = 말의 시작일 수 있다
 }
 
-export const APP_VERSION = 'TallyOne 2.89-05'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
+export const APP_VERSION = 'TallyOne 2.89-06'   // 2.83-01 콘앱 시프팅을 내림·실음 양쪽에 합침
 
 // ── 2.79: CATOS 터미널 실적(termWork) → 검수 완료(completed) 반영 대상 계산 ─────────────
 //   검수사 확정 (2026-08-28) — «수석이 승인 버튼으로 일괄 반영» · 결과물 확인은 베이플랜·카고플랜.
@@ -5101,6 +5101,14 @@ export function shiftingMapForDisplay(voyageKey, voyage, dictEntry) {
       value: { ...(pred._meta || {}), truthZero: n, suspects: susp }, enumerable: false });
   } catch (e) { /* 표시 부가정보 실패는 계산에 영향 없음 */ }
   return out;
+}
+
+//  2.89-06 (검수사 «그안에서만 작업하는데 컨테이너가 증식을 하나요?») — 시프팅은 평택 축에서 뺀다.
+//    1.76-05 확정 «시프팅은 진행률·리스트 총계에서 빼고 별도 칸» 이 홈카드·수석통계·요약카드의
+//    완료/총계 계산에는 안 걸려 있었다. 재선적 기록이 생기자 완료 374/281(133%) 로 «증식»해 보였다.
+export function shiftCnSetOf(voyageKey, voyage) {
+  try { return new Set(Object.keys(computeShiftingMapCached(voyageKey, voyage) || {}).filter((k) => !k.startsWith('_'))); }
+  catch (e) { return new Set(); }
 }
 
 export function computeShiftingMapCached(voyageKey, voyage) {

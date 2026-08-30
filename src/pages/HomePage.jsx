@@ -5,7 +5,7 @@ import ShipPolicyModal from '../components/ShipPolicyModal.jsx';   // 1.83: 실 
 import { fbSubscribeShipPolicies, policyComboLabel, DEFAULT_SHIP_POLICIES } from '../shipPolicies.js';   // 1.83: 선박 실 정책 판
 import { db as _fbdb } from '../firebase.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌(베이매트릭스 신원)
-import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
+import { detectPierByGps, getPierFromBerth, APP_VERSION, formatBerth, savePierCoord, getStoredPierCoords, isValidBerth, isPyeongtaekPort, ownDirCns, computeShiftingMapCached, parsePortMisDateTime, parseCargoForecast, isVirtualCn, isLuggageCn, shipLuggageCount, pilotToWorkMin, laneRouteOf, dayDiff, dayLabel, nextPortAfterPtk, normPortCode, isWorkingNow, sideCancelled, shiftCnSetOf} from '../utils.js';   // 1.77-02: 도선→작업시작 환산 · 2.24: 평택 다음 항
 import { healthSummary, heartbeatState } from '../health.js';  // V8.40: 항차 건강 요약
 // V9.57: PortMisCaptureModal 임포트 제거 — V9.42에서 홈 상단 카드가 ChiefDashboard로 이동한 뒤
 //   여는 버튼 없이 마운트만 남은 고아 코드였다(showPortMisCapture를 켜는 곳이 없음).
@@ -1383,8 +1383,9 @@ function VoyageCard({ voyage, activeInspectors, onOpen, onDelete, onComplete, in
   const dis = voyage.discharge;
   const loa = voyage.loading;
 
-  const disStats = computeStats(dis, 'discharge', voyage.info, voyage.key);
-  const loaStats = computeStats(loa, 'loading', voyage.info, voyage.key);   // V9.03: info.emptyConfirmed(엠티 확정) 표시용
+  const _shiftSet = shiftCnSetOf(voyage.key, voyage);   // 2.89-06: 평택 축에서 뺄 시프팅 컨
+  const disStats = computeStats(dis, 'discharge', voyage.info, voyage.key, _shiftSet);
+  const loaStats = computeStats(loa, 'loading', voyage.info, voyage.key, _shiftSet);   // V9.03: info.emptyConfirmed(엠티 확정) 표시용
   // 1.82(검수사 요청 2026-08-17): *"항차목록에 터미널과 수집량을 비교할 수 있도록"*
   //   수집기 1.6 이 PCTC·PNCT 배정목록에서 HTTP 로 직접 받아 info.planDis/planLod 에 실어 온다
   //   (1.6 전에는 PCTC 만 왔다 — 이제 양쪽 다 온다). 앱이 모은 수와 나란히 놓아 눈으로 대조한다.
@@ -2080,7 +2081,7 @@ function SectionBar({ label, color, stats, onClick }) {
   );
 }
 
-function computeStats(section, mode, info, voyageKey) {
+function computeStats(section, mode, info, voyageKey, shiftSet) {   // 2.89-06: 시프팅 제외 집합
   // V7.40: 평택분 판정 모드별 정확화 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0, virtual: false };
   const ediContainers = section.ediContainers || {};
@@ -2105,7 +2106,7 @@ function computeStats(section, mode, info, voyageKey) {
   //   메일함 폴더가 하나라 양하·선적 리스트가 섞여 들어와, 양하 카드가 두 리스트를 합산해
   //   `평택 778`(= 양하 371 + 선적 407) 로 나왔다(SWSP 2606N, 2026-08-06 실측).
   //   POL/POD 로 확정된 것만 뺀다 — 근거 없는 레코드는 그대로 센다.
-  const recordCns = new Set(ownDirCns(records, mode));
+  const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !shiftSet || !shiftSet.has(cn)));   // 2.89-06
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.04-01: 가상(더미) 자리는 '누락' 대상이 아님 — 실번호 미배정 엠티 자리(가상E)로 별도 표기.
   //   (MCSN 629S: 가상 187이 전부 누락으로 잡혀 '누락 187' 허수. dummyE는 아래에서 계산 — 선적만.)
@@ -2114,7 +2115,7 @@ function computeStats(section, mode, info, voyageKey) {
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
   const missing = Math.max(0, ptkCns.size - matched - dummyECount - planSlots);
   const total = recordCns.size > 0 ? recordCns.size : ptkCns.size;
-  const done = Object.keys(completed).length;
+  const done = Object.keys(completed).filter((cn) => !shiftSet || !shiftSet.has(cn)).length;   // 2.89-06: 시프팅 완료는 자기 칸(모브)에서 센다
   const virtual = ediValues.some(c => c && (c._virtualFromList || c._virtualFromPlan));   // V8.84-02: 플랜 가상도 배지
   // V9.37-03: 배지는 **출처별로** 나눈다(사용자 지적 2026-08-02 "가상/리스트?").
   //   '가상/리스트'는 리스트로 채운 가상(베이 없음)을 뜻하는데, 플랜 슬롯은 리스트가 아니라

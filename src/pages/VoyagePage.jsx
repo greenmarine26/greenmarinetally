@@ -1339,7 +1339,7 @@ export default function VoyagePage({ voyageKey, voyage, inspector, inspectors, p
       })()}
 
       {/* M5.0: 항차 요약 카드 — 진입 시 즉시 상황 파악 */}
-      {!_sideCanc && <VoyageSummaryCard voyage={voyage} mode={mode}
+      {!_sideCanc && <VoyageSummaryCard voyage={voyage} mode={mode} voyageKey={voyageKey}
         reeferCheck={reefers.length > 0
           ? { total: reefers.length, unchecked: shipPolicy?.rfSkip ? 0 : rfUnchecked, onOpen: () => setShowReefer(true) }   // 1.86: rfSkip 배는 미확인 배지 끔
           : null} />}

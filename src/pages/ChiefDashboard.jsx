@@ -4,7 +4,7 @@ import { fbApplyTermWork, fbSubscribeShipLibrary, fbSubscribeFeedback, fbResolve
 import { isOwnerName } from '../adminGuard.js';   // TallyOne 1.3: 활동 로그는 소유자 전용(판2 "저만 다 볼수있게")
 import { matchShipPolicy, applyPolicyToContainer, fbSubscribeShipPolicies, isLoloShipByPolicy } from '../shipPolicies.js';
 import { matchPortMis } from '../portMisMatch.js';   // 2.78: PORT-MIS 호출 한 벌
-import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply } from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
+import { isPyeongtaekPort, ownDirCns, isBookingSlot, emptySealSpec, equipNumbersForPier, parsePortMisDateTime, computeTermApply , shiftCnSetOf} from '../utils.js';   // V9.57: 장비 표 동적화(I1) // TallyOne 1.0: 일정 파싱(L3)  // 1.40-01: planWorkStart 제거(🛠 줄 삭제로 미사용)
 import { healthSummary, heartbeatState } from '../health.js';  // TallyOne 1.0(L1): 수집기 상태 배너 — HomePage 204행과 같은 판정 헬퍼
 import { inWindow } from '../badgeRule.js';  // TallyOne 1.0(L2): 터미널 자료 작업창(±12h) 귀속 가드 — HomePage 909행과 동일 규칙
 // TallyOne 1.7: 마감 서류 폴더 직결 — 다운로드를 거치지 않고 TALLYBOX에 바로 쓴다.
@@ -452,8 +452,9 @@ export default function ChiefDashboard({ voyages, inspectors, inspector, onOpenV
     return Object.entries(voyages || {})
       .filter(([k, v]) => v && v.info)
       .map(([k, v]) => {
-        const dis = computeStats(v.discharge, 'discharge');
-        const loa = computeStats(v.loading, 'loading');
+        const _ss = shiftCnSetOf(k, v);   // 2.89-06
+        const dis = computeStats(v.discharge, 'discharge', _ss);
+        const loa = computeStats(v.loading, 'loading', _ss);
         return {
           key: k,
           info: v.info,
@@ -2230,7 +2231,7 @@ function timeAgo(ts) {
   return `${Math.floor(sec/86400)}일 전`;
 }
 
-function computeStats(section, mode) {
+function computeStats(section, mode, shiftSet) {   // 2.89-06
   // V7.40: 평택분 판정을 모드별로 정확히 (지침 7.1 — 양하=POD평택, 선적=POL평택).
   //   이전: POL∨POD 평택이면 카운트 → 양하 EDI에서 평택발 타항행 컨까지 평택분으로 잡혀 과대 집계.
   if (!section) return { total: 0, done: 0, ptk: 0, matched: 0, missing: 0 };
@@ -2252,7 +2253,7 @@ function computeStats(section, mode) {
   //   메일함 폴더가 하나라 양하·선적 리스트가 섞여 들어와, 양하 카드가 두 리스트를 합산해
   //   `평택 778`(= 양하 371 + 선적 407) 로 나왔다(SWSP 2606N, 2026-08-06 실측).
   //   POL/POD 로 확정된 것만 뺀다 — 근거 없는 레코드는 그대로 센다.
-  const recordCns = new Set(ownDirCns(records, mode));
+  const recordCns = new Set(ownDirCns(records, mode).filter((cn) => !shiftSet || !shiftSet.has(cn)));   // 2.89-06
   const matched = [...ptkCns].filter(cn => recordCns.has(cn)).length;
   // V9.37-02: 플랜 슬롯(자리)은 누락이 아니다 — 컨번호는 NOLIST 담당.
   const planSlots = [...ptkCns].filter(cn => String(cn).startsWith('__SLOT_')).length;
@@ -2261,7 +2262,7 @@ function computeStats(section, mode) {
   // V9.57(I4): done을 completed 전체 개수로 세면 모수(리스트) 밖 완료(추가컨·리스트 교체 잔재)까지
   //   더해져 진행률이 100%를 넘었다. done은 모수(리스트 있으면 recordCns, 없으면 ptkCns)와의
   //   교집합으로 제한하고, 모수 밖 완료는 extra로 따로 센다(MiniBar "+N 초과" 표기).
-  const compKeys = Object.keys(completed);
+  const compKeys = Object.keys(completed).filter((cn) => !shiftSet || !shiftSet.has(cn));   // 2.89-06
   const baseSet = recordCns.size > 0 ? recordCns : ptkCns;
   const done = compKeys.filter(cn => baseSet.has(cn)).length;
   const extra = compKeys.length - done;
