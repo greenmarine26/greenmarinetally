@@ -376,6 +376,7 @@ if npx esbuild tools/smoke_entry.jsx --bundle --loader:.jsx=jsx --loader:.png=da
   #   ⚠ 두 번째는 스코프 검사를 돌리고도 통과했다 — `hasGlobal` 로 같은 파일 다른 컴포넌트의 같은 이름을 셌기 때문.
   #   ⇒ `hasBinding(name, noGlobals=true)` 로 엄격하게 본다. 작업표준 §2-2-D 가 요구하는 그 전수 대조다.
   node tools/smoke_scope.cjs || { echo "✗ 스코프 전수 검사 실패 — 배포 금지"; exit 1; }
+node tools/smoke_hooks.cjs || { echo "✗ 훅 순서 검사 실패 — 배포 금지"; exit 1; }
   node tools/smoke_voyage_state.cjs || { echo "✗ 작업중 판정 전수 회귀 실패 — 배포 금지"; exit 1; }
 node tools/smoke_termapply.cjs || { echo "✗ 터미널 실적 반영 연막검사 실패 — 배포 금지"; exit 1; }
 node tools/smoke_rzsy.cjs || { echo "✗ 신규 취항선(.def 사전) 연막검사 실패 — 배포 금지"; exit 1; }

@@ -114,6 +114,32 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     return getBayPairs(all, voyage?.info?.imo || '', voyage?.info?.vsl || '');
   }, [voyage]);
 
+  /* ⛔ 이 두 훅은 반드시 `if (!open) return null;` **앞**이다 — 2.88-01 에서 뒤에 놓아
+       React error #310 으로 **앱 전체가 죽었다.** 바로 위 1.26-02 주석이 같은 사고를 적어 둔
+       자리인데 그 아래에서 똑같이 반복했다. 훅은 최상단, 조기 반환은 훅 뒤. */
+  /* ★ 2.88-01 (검수사 지시 2026-08-30) — **장수를 묻지 않는다. 앱이 센다.**
+       검수사 — *«클로드님은 38번 베이에 커버를 몇장을 열어야 합니까»* → 답은 **1장**이었다.
+       사전은 3장이라 하지만 양옆 커버 위에 통과화물이 80대 얹혀 있어 실제로 열리는 것은 가운데 1장뿐이다.
+       V8.31 이 «자동계산 제거 — 검수사가 선택» 으로 돌린 뒤, 앱은 알 수 있는 것을 매번 물어 왔다.
+     ⚠ 판정 못 하면(사전 없음·자료 없음) null — 그때만 종전처럼 손으로 고른다. */
+  const hatchHint = useMemo(() => {
+    const bays = String(bayInput || '').split(/[,\s]+/).map((b) => parseInt(b, 10)).filter(Number.isFinite);
+    if (!bays.length) return null;
+    const md = selectedMode === 'loading' ? 'loading' : 'discharge';
+    const out = [];
+    for (const b of bays) {
+      const r = hatchOpenableFor(voyage, md, b, null);
+      if (r) out.push({ bay: b, ...r });
+    }
+    return out.length ? out : null;
+  }, [bayInput, voyage, selectedMode]);
+  //  센 값이 있으면 장수 버튼을 그 값으로 맞춰 둔다 — 검수사가 다르게 보면 눌러서 바꾼다.
+  useEffect(() => {
+    if (!hatchHint) return;
+    const sum = hatchHint.reduce((a, x) => a + x.openable, 0);
+    if (sum >= 1 && sum <= 3) setHatchPanels(sum);
+  }, [hatchHint]);
+
   if (!open) return null;
 
   const vsl = voyage?.info?.vsl || '';
@@ -300,29 +326,6 @@ export default function WorkReportModal({ open, voyageKey, voyage, onClose, last
     if (ms && ms.length === 1) return ms[0].mode;
     return selectedMode;
   };
-
-  /* ★ 2.88-01 (검수사 지시 2026-08-30) — **장수를 묻지 않는다. 앱이 센다.**
-       검수사 — *«클로드님은 38번 베이에 커버를 몇장을 열어야 합니까»* → 답은 **1장**이었다.
-       사전은 3장이라 하지만 양옆 커버 위에 통과화물이 80대 얹혀 있어 실제로 열리는 것은 가운데 1장뿐이다.
-       V8.31 이 «자동계산 제거 — 검수사가 선택» 으로 돌린 뒤, 앱은 알 수 있는 것을 매번 물어 왔다.
-     ⚠ 판정 못 하면(사전 없음·자료 없음) null — 그때만 종전처럼 손으로 고른다. */
-  const hatchHint = useMemo(() => {
-    const bays = String(bayInput || '').split(/[,\s]+/).map((b) => parseInt(b, 10)).filter(Number.isFinite);
-    if (!bays.length) return null;
-    const md = selectedMode === 'loading' ? 'loading' : 'discharge';
-    const out = [];
-    for (const b of bays) {
-      const r = hatchOpenableFor(voyage, md, b, null);
-      if (r) out.push({ bay: b, ...r });
-    }
-    return out.length ? out : null;
-  }, [bayInput, voyage, selectedMode]);
-  //  센 값이 있으면 장수 버튼을 그 값으로 맞춰 둔다 — 검수사가 다르게 보면 눌러서 바꾼다.
-  useEffect(() => {
-    if (!hatchHint) return;
-    const sum = hatchHint.reduce((a, x) => a + x.openable, 0);
-    if (sum >= 1 && sum <= 3) setHatchPanels(sum);
-  }, [hatchHint]);
 
   const handleHatch = async () => {
     const equip = hatchEquip || Object.keys(activeByEquip)[0] || '';
