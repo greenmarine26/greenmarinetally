@@ -16,6 +16,7 @@ import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom';
 import { X, Save, Undo2 } from 'lucide-react';
 import { getShipBayDictData } from '../shipStructure.js';
+import { swapFixGate } from '../utils.js';   // 2.89-01: 통과 고정분 맞교환 게이트 — 판정 한 벌
 import { enrichBayDef } from '../bayDictAutoEnrich.js';
 import { isUserOwnedBayDict } from '../utils.js';   // TallyOne 1.11-01: 정본 판정 단일 소스
 import { isoToLabel, buildContainerColorMap, getContainerColorKey, isPyeongtaekPort } from '../utils.js';
@@ -262,6 +263,7 @@ export default function BayGridEditor({
   shipImo, shipName, mode = 'loading',
   saving = false, saveLabel = '저장', onSave, onClose,
   headerExtra = null, sideExtra = null, onStateChange = null,
+  onSwapFix = null,   // 2.89-01: 통과 고정분 맞교환 — (a, b, gate) 를 받아 swapFix 기록으로 처리(ChiefBayEdit)
   lockHint = '통과 고정분',
 }) {
   const [state, setState] = useState(null);
@@ -685,6 +687,19 @@ export default function BayGridEditor({
     const pb = state.pos[b];
     if (!pb || pb.storage) { setMsg(`맞바꾸기 불가: ${b} 는 배에 자리가 없습니다(임시창고)`); return; }
     if (!state.pos[a] || state.pos[a].storage) { setMsg(`맞바꾸기 불가: ${a} 는 배에 자리가 없습니다(임시창고)`); return; }
+    /* ★ 2.89-01 (검수사 실물 2026-08-30 «통과분 고정 이동불가») — 통과 고정분끼리도
+       게이트(같은 출발지·도착지·사이즈·풀/엠티, 풀은 무게+일항사)를 통과하면 맞교환한다.
+       이동이 아니라 **이름표 교환**이라 칸 점유가 안 변한다(§5-Y-B) — placeAt(이동) 대신
+       swapFix 기록(onSwapFix)으로 즉시 반영하고, 양하·선적 두 지도에 함께 걸린다. */
+    const nk = (x) => String(x).replace(/\s/g, '').toUpperCase();
+    if (state.locked.has(nk(a)) || state.locked.has(nk(b))) {
+      const g = swapFixGate(state.byCn.get(nk(a)), state.byCn.get(nk(b)));
+      if (!g.ok) { setMsg('맞바꾸기 불가(통과 고정분): ' + g.reason); return; }
+      if (!onSwapFix) { setMsg('맞바꾸기 불가: 통과 고정분 — 이 화면에서는 기록 교환을 지원하지 않습니다'); return; }
+      onSwapFix(nk(a), nk(b), g);
+      setSelected(new Set());
+      return;
+    }
     //  크기가 다르면 자리가 물리적으로 안 맞을 수 있다 — 막지는 않되 알린다(최종 판단은 placeAt).
     const szOf = (cn) => String(state.byCn.get(cn)?.iso || '')[0];
     const warn = (szOf(a) !== szOf(b)) ? ' ⚠ 규격이 다릅니다 — 자리가 맞는지 확인하세요' : '';

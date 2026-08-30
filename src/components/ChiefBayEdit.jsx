@@ -8,7 +8,7 @@
 //   → 검수사 화면·실선적 EDI 근거(records.bay_actual)의 의미는 바뀌지 않는다.
 import React, { useMemo, useState, useCallback } from 'react';
 import { isoToLabel, isPyeongtaekPort, fullEdiMapOf, applySwapFix, swapFixList } from '../utils.js';
-import { fbSetActualPosition, fbBatchMoveToStorage, STORAGE_BAY } from '../firebase.js';
+import { fbSetActualPosition, fbBatchMoveToStorage, STORAGE_BAY, fbAddSwapFix } from '../firebase.js';   // 2.89-01: 통과분 맞교환
 import BayGridEditor from './BayGridEditor.jsx';
 import * as P from '../planEditCore.js';
 
@@ -78,6 +78,21 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
     return s;
   }, [containers, recMap, mode]);
 
+  /* 2.89-01: 통과 고정분 맞교환 — 검수사 실물(MCSC 34베이 90단)에서 «맞바꾸기 불가: 통과 고정분» 으로 막혔던 자리.
+     swapFix 기록은 즉시 적용(저장 버튼과 무관)이고, 같은 두 대를 다시 맞바꾸면 원상복구된다. */
+  const swapFix = useCallback(async (a, b, gate) => {
+    if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
+    const q = gate?.chiefMate
+      ? `풀 맞교환 — 무게가 같아 가능하지만 일항사와 상의 후 진행해야 합니다.\n일항사와 상의하셨습니까?\n\n${a} ⇄ ${b}`
+      : `통과 고정분 맞교환 — 두 컨의 자리 기록을 양하·선적 함께 바꿉니다.\n${a} ⇄ ${b}\n\n즉시 적용됩니다(저장 버튼과 무관). 되돌리려면 같은 두 대를 다시 맞바꾸면 됩니다.`;
+    if (!confirm(q)) return;
+    try {
+      await fbAddSwapFix(voyageKey, a, b, inspector);
+      alert(`⇄ ${a} ↔ ${b} 맞교환 기록 완료 — 편집기가 새 기준으로 다시 열립니다.`);
+      setSeq((n) => n + 1);
+    } catch (e) { console.error(e); alert('맞교환 실패: ' + (e?.message || e)); }
+  }, [inspector, voyageKey]);
+
   const save = useCallback(async (state) => {
     if (!inspector) { alert('검수원을 먼저 선택하세요'); return; }
     const changes = P.diffChanges(state);
@@ -128,6 +143,7 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
       shipName={voyage?.info?.vsl}
       mode={mode}
       lockHint="통과화물"
+      onSwapFix={swapFix}
       saving={saving}
       saveLabel="저장"
       onSave={save}
