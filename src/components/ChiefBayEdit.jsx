@@ -59,12 +59,20 @@ export default function ChiefBayEdit({ voyage, voyageKey, inspector, activeWorke
     return { containers: list, storageCns: stg };
   }, [ediMap, recMap, compMap, mode]);
 
-  // 오선적 정정 화면이므로 이동 대상은 평택 검수분.
-  //   양하=POD 평택 · 선적=리스트 등록 또는 POL 평택 (앱 전역 isPtk 규칙과 동일)
+  /* 오선적 정정 화면이므로 이동 대상은 평택 검수분.
+     ★ 2.88-04 (검수사 2026-08-30 «양하분이 읽힙니까?») — **양하도 리스트를 본다.**
+       종전 양하 판정은 `isPyeongtaekPort(c.pod)` 뿐이라, POD 가 평택이 아닌데 **선사 양하리스트에는
+       올라 있는** 컨이 통과화물로 잠겼다 — 맞바꾸기도 이동도 안 됐다.
+       실측 MCSC 633N `CAAU6532118` (검수사가 자리 어긋남으로 지목한 그 컨): pod=CNTXG 인데
+       양하 records 에 등록돼 있다. 잠겨 있으니 고칠 손이 없었다 —
+       검수사 *«다만 양하시에는 그 기능이 없었습니다»* 가 이 자리로 보인다.
+     ⚠ 앱 전역 isPtk 규칙이 원래 «POD 평택 ∨ 리스트 등록» 이다(지침 — MAMP 631N TCLU9762509 건에서
+       «두 조건이 다 false» 라고 적은 그 두 조건). 여기만 한쪽을 빠뜨리고 있었다. */
   const lockedCns = useMemo(() => {
     const s = new Set();
     for (const c of containers) {
-      const ptk = mode === 'discharge' ? isPyeongtaekPort(c.pod) : (!!recMap[c.cn] || isPyeongtaekPort(c.pol));
+      const ptk = mode === 'discharge' ? (!!recMap[c.cn] || isPyeongtaekPort(c.pod))
+                                       : (!!recMap[c.cn] || isPyeongtaekPort(c.pol));
       if (!ptk) s.add(String(c.cn).replace(/\s/g, '').toUpperCase());
     }
     return s;
